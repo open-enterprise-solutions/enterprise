@@ -17,7 +17,7 @@
       "parameters": "None.",
       "return_descr": "Table — empty, with no columns.",
       "example": "Sales = New Table();\nSales.Columns.AddColumn(\"Item\", New TypeDescription(\"String\"));\nSales.Columns.AddColumn(\"Amount\", New TypeDescription(\"Number\"));\nRow = Sales.Add();\nRow.Item = \"Paper\";\nRow.Amount = 12;\nMessage(Sales.Total(\"Amount\"));",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["cls.Table.Columns", "cls.Table.Add", "cls.Table.Row", "cls.Table.FindRows", "guide.linq"],
       "reviewed": false
     },
@@ -33,7 +33,7 @@
       "parameters": "",
       "return_descr": "The column collection.",
       "example": "Table.Columns.AddColumn(\"Code\", New TypeDescription(\"String\"));\nTable.Columns[0].Indexing = True;   // Find / FindRows by Code use an index",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["cls.Table.AddColumn", "cls.Table.RemoveColumn", "cls.Table.Find"],
       "reviewed": false
     },
@@ -49,7 +49,7 @@
       "parameters": "name — the column's name, as rows read it (`Row.<name>`).\ntype — a TypeDescription; left out, the column holds strings.\ncaption — the header shown in a form; left out, the name.\nwidth — the width in a form.",
       "return_descr": "The column's description (Name, Types, Caption, Width, Indexing).",
       "example": "Table.Columns.AddColumn(\"Amount\", New TypeDescription(\"Number\"), \"Amount, EUR\");",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["cls.Table.Columns", "cls.Table.RemoveColumn", "cls.Table.Total"],
       "reviewed": false
     },
@@ -65,7 +65,7 @@
       "parameters": "name — the column's name.",
       "return_descr": "",
       "example": "Table.Columns.RemoveColumn(\"Draft\");",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["cls.Table.Columns", "cls.Table.AddColumn"],
       "reviewed": false
     },
@@ -81,7 +81,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "Row = Table.Find(\"Paper\", \"Item\");\nRow.Amount = Row.Amount + 1;   // the table's row is changed",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["cls.Table", "cls.Table.Add", "cls.Table.Find"],
       "reviewed": false
     },
@@ -97,7 +97,7 @@
       "parameters": "None.",
       "return_descr": "The new row.",
       "example": "Row = Table.Add();\nRow.Item = \"Paper\";",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["cls.Table.Row", "cls.Table.Delete"],
       "reviewed": false
     },
@@ -113,7 +113,7 @@
       "parameters": "None.",
       "return_descr": "Number.",
       "example": "Last = Table[Table.Count() - 1];",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["cls.Table"],
       "reviewed": false
     },
@@ -129,7 +129,7 @@
       "parameters": "row — a row of this table, or its index from 0.",
       "return_descr": "",
       "example": "Row = Table.Find(\"Draft\", \"Status\");\nTable.Delete(Row);",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["cls.Table.Clear", "cls.Table.Add"],
       "reviewed": false
     },
@@ -145,7 +145,7 @@
       "parameters": "None.",
       "return_descr": "",
       "example": "Table.Clear();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["cls.Table.Delete"],
       "reviewed": false
     },
@@ -161,7 +161,7 @@
       "parameters": "value — what the field must equal.\ncolumn — the column's name.",
       "return_descr": "The row, or Undefined.",
       "example": "Row = Table.Find(\"Paper\", \"Item\");   // Undefined when no row has it",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["cls.Table.FindRows", "cls.Table.Columns"],
       "reviewed": false
     },
@@ -177,7 +177,7 @@
       "parameters": "filter — a Structure of column = value.",
       "return_descr": "Array of rows.",
       "example": "Rows = Sales.FindRows(New Structure(\"Item\", \"Paper\"));\nMessage(Rows.Count());",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["cls.Table.Find", "cls.Table.Columns", "guide.linq"],
       "reviewed": false
     },
@@ -193,7 +193,7 @@
       "parameters": "column — the column's name.",
       "return_descr": "Number.",
       "example": "Message(Sales.Total(\"Amount\"));",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["cls.Table.AddColumn", "cls.Table.UnloadColumn"],
       "reviewed": false
     },
@@ -209,7 +209,7 @@
       "parameters": "column — the column's name.\nascending — True (the default) for ascending, False for descending.",
       "return_descr": "",
       "example": "Sales.Sort(\"Amount\", False);   // largest first",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["kw.OrderBy", "guide.linq"],
       "reviewed": false
     },
@@ -225,7 +225,7 @@
       "parameters": "column — the column's name.",
       "return_descr": "Array.",
       "example": "Items = Sales.UnloadColumn(\"Item\");",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["cls.Table.Total"],
       "reviewed": false
     }

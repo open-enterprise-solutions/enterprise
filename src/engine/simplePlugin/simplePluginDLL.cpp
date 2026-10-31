@@ -41,7 +41,7 @@ public:
         m_count++;
     }
 
-    wxString m_lastMessage;
+    ibString m_lastMessage;
     int      m_count = 0;
 };
 
@@ -65,9 +65,9 @@ OES_PLUGIN_EXPORT int oes_plugin_initialize(void* host)
         return 1;   // a host older than ABI 2, or one with no lookup — cannot work
 
     s_diagnostics = static_cast<const ibPluginDiagnostics*>(
-        pluginHost->query(pluginHost, ibCapabilityDiagnostics, 1));
+        pluginHost->query(pluginHost, ibCapabilityDiagnostics, 2));
     s_script = static_cast<const ibPluginScript*>(
-        pluginHost->query(pluginHost, ibCapabilityScript, 1));
+        pluginHost->query(pluginHost, ibCapabilityScript, 2));
 
     // REFUSE RATHER THAN DEGRADE. A plugin that half-loads fails later, somewhere
     // else, as behaviour nobody can explain.

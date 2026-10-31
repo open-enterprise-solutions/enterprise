@@ -36,14 +36,14 @@ enum Func {
 
 void ibValueManagerDataObjectDocument::FillManagerMethods(ibMemberTable& helper) const
 {
-	helper.AppendFunc(wxT("CreateDocument"), wxT("CreateDocument()"));
-	helper.AppendFunc(wxT("Select"), wxT("Select()"));
-	helper.AppendFunc(wxT("FindByNumber"), 2, wxT("FindByNumber(number : string, date)"));
-	helper.AppendFunc(wxT("GetForm"), 3, wxT("GetForm(name : string, owner, id : guid)"));
-	helper.AppendFunc(wxT("GetListForm"), 3, wxT("GetListForm(name : string, owner : any, id : guid)"));
-	helper.AppendFunc(wxT("GetSelectForm"), 3, wxT("GetSelectForm(name : string, owner : any, id : guid)"));
-	helper.AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
-	helper.AppendFunc(wxT("EmptyRef"), wxT("EmptyRef()"));
+	helper.AppendFunc(ibT("CreateDocument"), ibT("CreateDocument()"));
+	helper.AppendFunc(ibT("Select"), ibT("Select()"));
+	helper.AppendFunc(ibT("FindByNumber"), 2, ibT("FindByNumber(number : string, date)"));
+	helper.AppendFunc(ibT("GetForm"), 3, ibT("GetForm(name : string, owner, id : guid)"));
+	helper.AppendFunc(ibT("GetListForm"), 3, ibT("GetListForm(name : string, owner : any, id : guid)"));
+	helper.AppendFunc(ibT("GetSelectForm"), 3, ibT("GetSelectForm(name : string, owner : any, id : guid)"));
+	helper.AppendFunc(ibT("GetTemplate"), 1, ibT("GetTemplate(name : string)"));
+	helper.AppendFunc(ibT("EmptyRef"), ibT("EmptyRef()"));
 }
 
 #include "selector/objectSelector.h"

@@ -32,7 +32,7 @@ public:
 
 private:
 
-	static wxVariantData* CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription());
+	static ibVariant CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription());
 	Level m_level = Level::Account;
 	// What the owner handed over: "my chart of accounts, or null while I stand on none".
 	std::function<const ibValueMetaObjectChartOfAccounts* ()> m_chartOfAccounts;
@@ -46,7 +46,7 @@ public:
 
 	ibPropertyAccountingKind(ibPropertyCategory* cat, Level level,
 		std::function<const ibValueMetaObjectChartOfAccounts* ()> chartOfAccounts,
-		const wxString& name, const wxString& label, const wxString& helpString)
+		const ibString& name, const ibString& label, const ibString& helpString)
 		: ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject()))
 		, m_level(level), m_chartOfAccounts(std::move(chartOfAccounts)) {}
 
@@ -61,7 +61,7 @@ protected:
 
 	// The family rule — a relationship arrives in whichever wrapper the caller was handed. See
 	// propertyRecord.h.
-	virtual void DoSetValue(const wxVariant& val) override;
+	virtual void DoSetValue(const ibVariant& val) override;
 
 public:
 

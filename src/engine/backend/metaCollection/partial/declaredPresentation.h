@@ -22,10 +22,10 @@
 
 // `CatalogRef.Goods` — the REFERENCE type's name, which is what a script writes and what the Type
 // column beside the value prints. `Catalog.Goods` is the OBJECT and would read as a different thing.
-inline wxString ibDeclaredTypeName(const ibValueMetaObjectRecordDataRef* metaObject)
+inline ibString ibDeclaredTypeName(const ibValueMetaObjectRecordDataRef* metaObject)
 {
 	if (metaObject == nullptr)
-		return wxEmptyString;
+		return ibEmptyString;
 	// ⚠ THE CTOR'S CLASS NAME IS ALREADY THE WHOLE THING — `EnumerationRef.Enumeration1` — because a
 	// dynamic type is named `<kind>Ref.<name>` at registration (objCtor.h). Appending the name again
 	// is how `EnumerationRef.Enumeration1.Enumeration1.Enum2` happened.
@@ -33,16 +33,16 @@ inline wxString ibDeclaredTypeName(const ibValueMetaObjectRecordDataRef* metaObj
 		metaObject->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_Reference);
 	return refCtor != nullptr
 		? refCtor->GetClassName()
-		: metaObject->GetClassName() + wxT(".") + metaObject->GetName();
+		: metaObject->GetClassName() + ibT(".") + metaObject->GetName();
 }
 
 // The one answer EVERY family gives the same way: the empty reference of the type. Empty string when
 // the guid names something — then the family says which of its declared values that is.
-inline wxString ibDeclaredEmptyRef(const ibValueMetaObjectRecordDataRef* metaObject, const ibGuid& guid)
+inline ibString ibDeclaredEmptyRef(const ibValueMetaObjectRecordDataRef* metaObject, const ibGuid& guid)
 {
 	if (metaObject == nullptr || guid.isValid())
-		return wxEmptyString;
-	return ibDeclaredTypeName(metaObject) + wxT(".") + ibRefMember::EmptyRef;
+		return ibEmptyString;
+	return ibDeclaredTypeName(metaObject) + ibT(".") + ibRefMember::EmptyRef;
 }
 
 #endif // _DECLARED_PRESENTATION_H__

@@ -1,0 +1,191 @@
+/*! Copyright 2026 Fonticons, Inc. - https://webawesome.com/license */
+import "../chunks/chunk.DL7HG4WM.js";
+import "../chunks/chunk.D5HA4OFX.js";
+import {
+  registerTranslation
+} from "../chunks/chunk.HOKYDFUG.js";
+import "../chunks/chunk.JHZRD2LV.js";
+
+// src/translations/sv.ts
+var translation = {
+  $code: "sv",
+  $name: "Svenska",
+  $dir: "ltr",
+  allTagsRemoved: "Alla taggar borttagna",
+  am: "FM",
+  autosizeColumn: "Anpassa kolumnbredd",
+  captions: "Undertexter",
+  carousel: "Karusell",
+  chooseDate: "V\xE4lj datum",
+  chooseDecade: "V\xE4lj decennium",
+  chooseMonth: "V\xE4lj m\xE5nad",
+  chooseTime: "V\xE4lj tid",
+  chooseYear: "V\xE4lj \xE5r",
+  clearEntry: "\xC5terst\xE4ll val",
+  clearFilter: "Rensa filter",
+  clearSort: "Rensa sortering",
+  close: "St\xE4ng",
+  closeCalendar: "St\xE4ng kalender",
+  closeTimeInput: "St\xE4ng tidsv\xE4ljare",
+  collapseRow: "D\xF6lj rad",
+  columnMenu: "Kolumnalternativ",
+  columnMovedToPosition: (label, position, total) => `${label} flyttad till position ${position} av ${total}`,
+  columns: "Kolumner",
+  compactPageXOfY: (page, total) => `${page} av ${total}`,
+  completed: "Slutf\xF6rd",
+  copied: "Kopierade",
+  copy: "Kopiera",
+  createOption: (value) => `Skapa "${value}"`,
+  currentlyPlaying: "spelas nu",
+  currentValue: "Nuvarande v\xE4rde",
+  date: "Datum",
+  datePickerKeyboardHelp: "Anv\xE4nd piltangenterna f\xF6r att \xE4ndra v\xE4rden; tryck Alt+Pil ned f\xF6r att \xF6ppna kalendern.",
+  day: "Dag",
+  dayPeriod: "FM/EM",
+  decrement: "Minska",
+  deselectAllRows: "Avmarkera alla rader",
+  disabled: "Inaktiverad",
+  dropFileHere: "Drop file here or click to browse",
+  dropFilesHere: "Drop files here or click to browse",
+  empty: "Tom",
+  endDate: "Slutdatum",
+  enterFullscreen: "G\xE5 till helsk\xE4rm",
+  error: "Fel",
+  exitFullscreen: "Avsluta helsk\xE4rm",
+  expandRow: "Visa rad",
+  filterByColumn: (label) => `Filtrera efter ${label}`,
+  filterFrom: "Fr\xE5n",
+  filterMax: "Max",
+  filterMin: "Min",
+  filterTo: "Till",
+  firstPage: "F\xF6rsta sidan",
+  goToSlide: (slide, count) => `G\xE5 till bild ${slide} av ${count}`,
+  hideColumn: "D\xF6lj kolumn",
+  hidePassword: "D\xF6lj l\xF6senord",
+  hour: "Timme",
+  incompleteDate: "Ange ett giltigt datum.",
+  increment: "\xD6ka",
+  jumpBackwardX: (count) => `Hoppa bak\xE5t ${count} sidor`,
+  jumpForwardX: (count) => `Hoppa fram\xE5t ${count} sidor`,
+  lastPage: "Sista sidan",
+  loading: "L\xE4ser in",
+  locked: "L\xE5st",
+  minute: "Minut",
+  month: "M\xE5nad",
+  moreOptions: "Fler alternativ",
+  mute: "St\xE4ng av ljud",
+  nextDecade: "N\xE4sta decennium",
+  nextMonth: "N\xE4sta m\xE5nad",
+  nextPage: "N\xE4sta sida",
+  nextSlide: "N\xE4sta bild",
+  nextVideo: "N\xE4sta video",
+  nextYear: "N\xE4sta \xE5r",
+  noData: "Inga data",
+  noOptions: "Inga alternativ",
+  noResults: "Inga matchande resultat",
+  notCompleted: "Inte slutf\xF6rd",
+  now: "Nu",
+  numCharacters: (num) => {
+    if (num === 1) return "1 tecken";
+    return `${num} tecken`;
+  },
+  numCharactersRemaining: (num) => {
+    if (num === 1) return "1 tecken kvar";
+    return `${num} tecken kvar`;
+  },
+  numOptionsAvailable: (num) => {
+    if (num === 0) return "Inga alternativ tillg\xE4ngliga";
+    if (num === 1) return "1 alternativ tillg\xE4ngligt";
+    return `${num} alternativ tillg\xE4ngliga`;
+  },
+  numOptionsSelected: (num) => {
+    if (num === 0) return "Inga alternativ har valts";
+    if (num === 1) return "1 alternativ valt";
+    return `${num} alternativ valda`;
+  },
+  numRowsCopied: (num) => num === 1 ? "1 rad kopierad" : `${num} rader kopierade`,
+  numRowsSelected: (num) => num === 1 ? "1 rad markerad" : `${num} rader markerade`,
+  optionPosition: (label, position, total) => `${label}, ${position} av ${total}`,
+  optionsLoadError: "Alternativen kunde inte l\xE4sas in",
+  pageXOfY: (page, total) => `Sida ${page} av ${total}`,
+  pagination: "Paginering",
+  pause: "Pausa",
+  pauseAnimation: "Pausa animation",
+  pictureInPicture: "Bild i bild",
+  pinLeft: "F\xE4st till v\xE4nster",
+  pinRight: "F\xE4st till h\xF6ger",
+  play: "Spela",
+  playAnimation: "Spela upp animation",
+  playbackSpeed: "Uppspelningshastighet",
+  playlist: "Spellista",
+  pm: "EM",
+  previousDecade: "F\xF6reg\xE5ende decennium",
+  previousMonth: "F\xF6reg\xE5ende m\xE5nad",
+  previousPage: "F\xF6reg\xE5ende sida",
+  previousSlide: "F\xF6reg\xE5ende bild",
+  previousVideo: "F\xF6reg\xE5ende video",
+  previousYear: "F\xF6reg\xE5ende \xE5r",
+  progress: "Framsteg",
+  rangeTooLong: (max) => {
+    if (max === 1) return "V\xE4lj ett intervall som inte \xE4r l\xE4ngre \xE4n 1 dag";
+    return `V\xE4lj ett intervall som inte \xE4r l\xE4ngre \xE4n ${max} dagar`;
+  },
+  rangeTooShort: (min) => {
+    if (min === 1) return "V\xE4lj ett intervall som \xE4r minst 1 dag l\xE5ngt";
+    return `V\xE4lj ett intervall som \xE4r minst ${min} dagar l\xE5ngt`;
+  },
+  readonly: "Skrivskyddad",
+  remove: "Ta bort",
+  resetColumns: "\xC5terst\xE4ll kolumner",
+  resize: "\xC4ndra storlek",
+  resizeColumn: "\xC4ndra kolumnbredd",
+  rowsPerPage: "Rader per sida",
+  scrollableRegion: "Scrollbart omr\xE5de",
+  scrollToEnd: "Skrolla till slutet",
+  scrollToStart: "Skrolla till b\xF6rjan",
+  search: "S\xF6k",
+  second: "Sekund",
+  seek: "S\xF6k",
+  seekProgress: (current, duration) => `${current} av ${duration}`,
+  selectAColorFromTheScreen: "V\xE4lj en f\xE4rg fr\xE5n sk\xE4rmen",
+  selectAllRows: "Markera alla rader",
+  selected: "Vald",
+  selectedDateLabel: (date) => `Valt: ${date}`,
+  selectedRangeLabel: (range) => `Valt intervall: ${range}`,
+  selectGroup: "Markera grupp",
+  selectionCleared: "Valet rensat",
+  selectRow: "Markera rad",
+  showingNofMRows: (shown, total) => `Visar ${shown} av ${total} rader`,
+  showingXtoYofZ: (start, end, total) => `${start}\u2013${end} av ${total}`,
+  showPassword: "Visa l\xF6senord",
+  slideNum: (slide) => `Bild ${slide}`,
+  sortAscending: "Sortera stigande",
+  sortColumn: "Sortera kolumn",
+  sortDescending: "Sortera fallande",
+  startDate: "Startdatum",
+  steps: "Steg",
+  stepXOfY: (step, total) => `Steg ${step} av ${total}`,
+  tagAdded: (tag) => `${tag} tillagd`,
+  tagAlreadyAdded: (tag) => `${tag} \xE4r redan tillagd`,
+  tagInputKeyboardHelp: "Tryck p\xE5 Backspace eller Delete f\xF6r att ta bort den h\xE4r taggen.",
+  tagRemoved: (tag) => `${tag} borttagen`,
+  time: "Tid",
+  timeInputKeyboardHelp: "Anv\xE4nd piltangenterna f\xF6r att \xE4ndra v\xE4rden; tryck Alt+Pil ned f\xF6r att \xF6ppna tidsv\xE4ljaren.",
+  today: "Idag",
+  toggleColorFormat: "V\xE4xla f\xE4rgformat",
+  tooFewTags: (min) => min === 1 ? "L\xE4gg till minst 1 tagg" : `L\xE4gg till minst ${min} taggar`,
+  tooManyTags: (max) => max === 1 ? "L\xE4gg till h\xF6gst 1 tagg" : `L\xE4gg till h\xF6gst ${max} taggar`,
+  unmute: "Sl\xE5 p\xE5 ljud",
+  unpin: "Ta bort f\xE4stning",
+  unpinColumn: "Ta bort f\xE4st kolumn",
+  videoPlayer: "Videospelare",
+  volume: "Volym",
+  year: "\xC5r",
+  zoomIn: "Zooma in",
+  zoomOut: "Zooma ut"
+};
+registerTranslation(translation);
+var sv_default = translation;
+export {
+  sv_default as default
+};

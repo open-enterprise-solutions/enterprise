@@ -1,6 +1,6 @@
 #include "informationRegister.h"
 
-void ibValueMetaObjectInformationRegister::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
+void ibValueMetaObjectInformationRegister::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
 {
 	if (GetWriteRegisterMode() == ibWriteRegisterMode::eSubordinateRecorder) {
 		(*m_propertyAttributeLineActive)->ClearFlag(metaDisableFlag);

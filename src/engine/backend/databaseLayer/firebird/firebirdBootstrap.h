@@ -6,7 +6,7 @@
 // Idempotent + thread-safe via std::call_once; later calls no-op.
 //
 // Goals:
-//   - User sees only enterprise.exe + a single hidden _fb/ folder
+//   - User sees only the programs + a single hidden _fb/ folder
 //     next to it; no firebird.conf / firebird.msg / fbclient.dll
 //     scattered in the bin root.
 //   - fbclient.dll is loaded from _fb/; engine13.dll loads from
@@ -35,7 +35,7 @@ public:
 
 	// Path to the _fb/ folder once Init has run. Empty string if
 	// Init never ran or detection failed.
-	static const wxString& GetFbRuntimeDir();
+	static const ibString& GetFbRuntimeDir();
 };
 
 #endif // __FIREBIRD_BOOTSTRAP_H__

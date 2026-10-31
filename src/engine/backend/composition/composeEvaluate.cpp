@@ -10,7 +10,7 @@
 #include "backend/compiler/procUnitState.h"      // GetCurrentRunContext — the caller's own frame
 #include "backend/compiler/procContext.h"        // ibRunContext — the frame it is given
 
-bool ibEvaluateInRoot(const wxString& expression, ibValue& produced, const ibMetaData* metaData)
+bool ibEvaluateInRoot(const ibString& expression, ibValue& produced, const ibMetaData* metaData)
 {
 	produced = ibValue();
 	if (expression.IsEmpty())
@@ -58,7 +58,7 @@ bool ibEvaluateInRoot(const wxString& expression, ibValue& produced, const ibMet
 	// expression that legitimately evaluated to empty — which is how a computed parameter comes to be
 	// silently ignored and the report merely look wrong.
 	if (!editUnit) {
-		produced = ibValue(_("there is no runtime in this process to evaluate against"));
+		produced = ibValue(ibString(_("there is no runtime in this process to evaluate against")));
 		return false;
 	}
 

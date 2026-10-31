@@ -6,7 +6,7 @@
 
 #include "frmserver/visualView/ctrl/window.h"
 #include "frmserver/visualView/ctrl/typeControl.h"
-#include "backend/sourceDescription.h"   // ibSourceDescription (full [head, field] binding path)
+#include "core/description/sourceDescription.h"   // ibSourceDescription (full [head, field] binding path)
 
 #include <deque>
 #include <map>
@@ -50,8 +50,8 @@ class ibValueEnumTableBoxSelectionMode :
 	public:
 	ibValueEnumTableBoxSelectionMode() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibDataViewSelectionMode::ibDataViewSelectCell, wxT("SelectCell"), _("Select cell"));
-		AddEnumeration(ibDataViewSelectionMode::ibDataViewSelectRow, wxT("SelectRow"), _("Select row"));
+		AddEnumeration(ibDataViewSelectionMode::ibDataViewSelectCell, ibT("SelectCell"), _("Select cell"));
+		AddEnumeration(ibDataViewSelectionMode::ibDataViewSelectRow, ibT("SelectRow"), _("Select row"));
 	}
 private:
 };
@@ -61,9 +61,9 @@ class ibValueEnumTableBoxViewMode :
 	public:
 	ibValueEnumTableBoxViewMode() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibDataViewViewMode::ibDataViewHierarchical, wxT("Hierarchical"), _("Hierarchical"));
-		AddEnumeration(ibDataViewViewMode::ibDataViewTree, wxT("Tree"), _("Tree"));
-		AddEnumeration(ibDataViewViewMode::ibDataViewList, wxT("List"), _("List"));
+		AddEnumeration(ibDataViewViewMode::ibDataViewHierarchical, ibT("Hierarchical"), _("Hierarchical"));
+		AddEnumeration(ibDataViewViewMode::ibDataViewTree, ibT("Tree"), _("Tree"));
+		AddEnumeration(ibDataViewViewMode::ibDataViewList, ibT("List"), _("List"));
 	}
 private:
 };
@@ -99,7 +99,7 @@ class ibValueModelTableBox : public ibValueWindowComposite,
 	// Single point: resolve a dot-path column's value for ONE row (asked per shown cell by the column's
 	// UpdateCell). First hop via the DUMB model (GetValueByMetaID), deeper hops walk the reference.
 	// Returns false for a plain column (model resolves it).
-	bool ResolveCellValue(const ibDataViewItem& item, const class ibValueModelTableBoxColumn* column, wxVariant& out) const;
+	bool ResolveCellValue(const ibDataViewItem& item, const class ibValueModelTableBoxColumn* column, ibVariant& out) const;
 
 	// A dot-path column — its binding reaches PAST the tablebox prefix + one row column. Such a
 	// column is resolved through the dot: read-only, so its cells take no editing (the column's ReadOnly).
@@ -115,7 +115,7 @@ class ibValueModelTableBox : public ibValueWindowComposite,
 	void FillControlMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
 	//support icons
-	static wxIcon GetIconGroup();
+	static ibPicture GetIconGroup();
 
 	//other
 	void AddColumn();
@@ -132,7 +132,7 @@ class ibValueModelTableBox : public ibValueWindowComposite,
 	//
 	// `created` (optional) says a group control was just made, which the designer needs in
 	// order to tell its editor about it.
-	ibValueFrame* GetColumnGroupHolder(const wxString& group, bool* created = nullptr);
+	ibValueFrame* GetColumnGroupHolder(const ibString& group, bool* created = nullptr);
 
 	// THE COLUMNS OF A MODEL THAT NAMES ITS OWN (AutoCreateColumn) — a value handed to the table from
 	// code: the column controls are rebuilt from the model's column collection. Not in the designer.
@@ -193,7 +193,7 @@ public:
 	//get ref class
 	virtual ibClassID GetSourceClassType() const;
 	//Get presentation
-	virtual wxString GetSourceCaption() const { return GetString(); }
+	virtual ibString GetSourceCaption() const { return GetString(); }
 
 #pragma endregion
 
@@ -216,38 +216,46 @@ public:
 
 	// ⭐ CREATED — the form has opened: the model taken again, the reader's own setting marked "restore on open"
 	// put on it, and a choice form's list standing on the value it was opened for. The window's OnCreated.
-	virtual void OnCreated(ibVisualHost* host) override;
+	// Just made by the designer (firstCreated), with no source — bound to a fresh attribute first (the desktop's).
+	virtual void OnCreated(ibVisualHost* host, bool firstCreated) override;
 	// …and the form closed: the table lets go of its model's view (the window's Cleanup).
 	virtual void OnCleanup(ibVisualHost* host) override;
 
 	//get title
-	virtual wxString GetControlTitle() const {
+	virtual ibString GetControlTitle() const {
 
 		if (!m_propertySource->IsEmptyProperty()) {
 			ibValue pvarPropVal;
 			if (m_propertySource->GetDataValue(pvarPropVal))
-				return _("TableBox") + wxT(": ") + stringUtils::GenerateSynonym(pvarPropVal.GetString());
+				return _("TableBox") + ibT(": ") + stringUtils::GenerateSynonym(pvarPropVal.GetString());
 		}
 
-		return _("TableBox") + wxT(": ") + _("<empty source>");
+		return _("TableBox") + ibT(": ") + _("<empty source>");
 	}
 
 	// The window's state and the command bar's, then what the table decides at run time: the
 	// current row as a handle the client was given (CurrentRow, absent while that row has not been
 	// handed out), the column the cursor stands on (CurrentColumn), the cell whose editor is open
 	// (Edit {Row, Column} — the client opens its editor there, and closes one the table did not take),
-	// ChoiceMode and ViewMode. The model's view is attached here, and a value just created from this
-	// list is looked for among the rows — what the window used to do whenever it was redrawn.
+	// ChoiceMode and ViewMode. When the Version is new, State may also carry Rows once — the first page,
+	// as Fetch would give it — so the frame that names that Version need not be followed by a fetch. A
+	// client that finds no Rows still asks Fetch, as before. The model's view is attached here, and a
+	// value just created from this list is looked for among the rows — what the window used to do
+	// whenever it was redrawn.
 	virtual void OnUpdate(ibDataNode& state, ibVisualHost* host) override;
 
 	// The table's own: Row — the cursor moved (Row: a handle; Column — across to it); Open without a
 	// Column — a row activated; Sort, Move and Resize — a column's header (Column). A CELL'S are its
 	// column's, the field's events on a row (OnCellEvent). Everything else is the composite's (the
 	// command bar).
-	virtual bool OnClientEvent(ibProtocolEvent event, const ibDataNode& args) override;
+	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) override;
+	// Input always — a cell's editor opens only when the table takes it (Edit in the frame that answers); Row while
+	// the script handles Selection. Nothing on the server reads the current row until the next call, which brings the
+	// held Row first.
+	virtual bool IsSubscribed(ibProtocol::ibEvent::ibKind event) const override;
 
-	// ⭐ THE ROWS A CLIENT SHOWS, written by the table itself. `request`: Direction (s32: 0 reset,
-	// 1 forward, -1 backward), Anchor (s32 row handle; 0 none), Count (s32, 1..500), Parent (s32 handle
+	// ⭐ THE ROWS A CLIENT SHOWS, written by the table itself. `request`: Direction (std::int32_t: 0 reset,
+	// 1 forward, -1 backward), Anchor (std::int32_t row handle; 0 none), Count (std::int32_t, 1..500), Parent (std::int32_t handle
 	// of the container whose children are asked for; 0 the top level). `response`: one child per row
 	// (metaId = its handle) with Container, Group (a group row's caption), ReadOnly (no cell of it can be
 	// edited) and one child per SHOWN column (metaId = the column's control id) carrying the cell (the
@@ -270,14 +278,14 @@ public:
 	virtual bool IsMainSourceBound() const override;
 
 	//support icons
-	virtual wxIcon GetIcon() const;
+	virtual ibPicture GetIcon() const;
 
 	/**
 	* Property events
 	*/
 	virtual void OnPropertyCreated(ibProperty* property);
-	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue);
-	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue);
+	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue);
+	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue);
 
 	//load & save object in control
 	virtual bool ReadData(const ibDataNode& node);
@@ -310,11 +318,11 @@ private:
 	// The cursor moved to a row: the script's Selection event, and unless it refuses (standard
 	// processing off), the row becomes the current line. True at once when it already is. False — an
 	// unknown handle, or refused.
-	bool OnCurrentRowChanged(s32 rowHandle);
+	bool OnCurrentRowChanged(std::int32_t rowHandle);
 	// ⭐ A CELL'S EVENT — Input, Change, Select, Open, Clear naming Row and Column: the field's events,
 	// and the column's. Its editor and its buttons work on the current line's value, as the window's
 	// did, so the row named becomes the current line first (unless the script refuses it).
-	bool OnCellEvent(ibProtocolEvent event, const ibDataNode& args);
+	bool OnCellEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args);
 	// …and the column it stands on across — what the by-column verbs and the Edit command read.
 	void OnCurrentColumnChanged(const ibFormID& columnId);
 	// A header clicked: sort by that column's field — flipped when it already is the sole sort — and
@@ -330,9 +338,9 @@ private:
 	// Double-click / Enter on a row, which becomes the current line: choice → the row is returned; a row
 	// with an editable cell → that cell's editor opens (Edit); a read-only row → the model opens the row's
 	// value (a list opens its object form). Then the script's OnActivateRow.
-	void OnRowActivated(s32 rowHandle);
+	void OnRowActivated(std::int32_t rowHandle);
 	// May the client open its inline editor on this cell?
-	bool OnCellEditStarting(s32 rowHandle, const ibFormID& columnId) const;
+	bool OnCellEditStarting(std::int32_t rowHandle, const ibFormID& columnId) const;
 
 	// What the model said happened to its rows — the model's view (ibTableModelView) calls these.
 	// A row appended or inserted becomes the current line and the script hears OnAddRow; a row deleted
@@ -385,19 +393,19 @@ private:
 
 	// THE ROWS HANDED OUT — a handle per row, from a counter, never another row's: a row handed out before a read anew
 	// (`handedBefore`) and read again as the same object takes its own handle again.
-	s32 HandRow(const ibDataViewItem& item, s32 parentHandle, bool& added,
-		const std::map<const ibDataViewObject*, s32>* handedBefore = nullptr);
-	ibDataViewItem FindRow(s32 handle) const;
+	std::int32_t HandRow(const ibDataViewItem& item, std::int32_t parentHandle, bool& added,
+		const std::map<const ibDataViewObject*, std::int32_t>* handedBefore = nullptr);
+	ibDataViewItem FindRow(std::int32_t handle) const;
 	// The handle of a row the client was given — by its object, else by its identity (a row re-read as a
 	// new object, a restore stub). 0 when it was not handed out.
-	s32 FindRowHandle(const ibDataViewItem& item) const;
-	void ForgetRow(s32 handle);           // …the row and the rows handed out under it
-	void ForgetChildRows(s32 handle);
+	std::int32_t FindRowHandle(const ibDataViewItem& item) const;
+	void ForgetRow(std::int32_t handle);           // …the row and the rows handed out under it
+	void ForgetChildRows(std::int32_t handle);
 	void ForgetAllRows();
 	// Over the limit, the rows furthest from where the client is reading go: the end opposite to the
 	// direction just fetched (`fromBack` after a backward fetch). `keep` — the top-level row the fetch was
 	// under, never forgotten by it.
-	void TrimRows(bool fromBack, s32 keep);
+	void TrimRows(bool fromBack, std::int32_t keep);
 
 	// The model's view, defined in tableBox.cpp.
 	class ibTableModelView;
@@ -406,48 +414,48 @@ private:
 	// fetched under it.
 	struct ibFetchedRow {
 		ibDataViewItem m_item;
-		s32 m_parent = 0;
-		std::vector<s32> m_children;
+		std::int32_t m_parent = 0;
+		std::vector<std::int32_t> m_children;
 	};
 
 #pragma region __property_define_h__
 
-	ibPropertyCategory* m_categoryInfo = ibPropertyObject::CreatePropertyCategory(wxT("Info"), _("Info"));
-	ibPropertyBoolean* m_propertyHeader = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryInfo, wxT("Header"), _("Header"),
+	ibPropertyCategory* m_categoryInfo = ibPropertyObject::CreatePropertyCategory(ibT("Info"), _("Info"));
+	ibPropertyBoolean* m_propertyHeader = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryInfo, ibT("Header"), _("Header"),
 		_("Whether the column headers are shown above the rows. On by default; clicking a header sorts by that column."), true);
-	ibPropertyUInteger* m_propertyHeaderHeight = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categoryInfo, wxT("HeaderHeight"), _("Header height"),
+	ibPropertyUInteger* m_propertyHeaderHeight = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categoryInfo, ibT("HeaderHeight"), _("Header height"),
 		_("The header's height in text lines. At least 1, and never less than the column groups need, so a grouped header always fits."), 1);
-	ibPropertyBoolean* m_propertyFooter = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryInfo, wxT("Footer"), _("Footer"),
+	ibPropertyBoolean* m_propertyFooter = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryInfo, ibT("Footer"), _("Footer"),
 		_("Whether a footer row is shown under the rows, carrying each column's footer text (a total, for example). Off by default."), false);
-	ibPropertyUInteger* m_propertyFooterHeight = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categoryInfo, wxT("FooterHeight"), _("Footer height"),
+	ibPropertyUInteger* m_propertyFooterHeight = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categoryInfo, ibT("FooterHeight"), _("Footer height"),
 		_("The footer's height in text lines, used when the footer is shown. Default 1."), 1);
-	ibPropertyUInteger* m_propertyFreezeRow = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categoryInfo, wxT("FrezeeRow"), _("Frezee row"),
+	ibPropertyUInteger* m_propertyFreezeRow = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categoryInfo, ibT("FrezeeRow"), _("Frezee row"),
 		_("How many leading rows stay in place while the rest scroll vertically. 0 (the default): none."), 0);
-	ibPropertyUInteger* m_propertyFreezeCol = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categoryInfo, wxT("FrezeeCol"), _("Frezee column"),
+	ibPropertyUInteger* m_propertyFreezeCol = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categoryInfo, ibT("FrezeeCol"), _("Frezee column"),
 		_("How many leading columns stay in place while the rest scroll horizontally - keeps a name column visible in a wide table. 0 (the default): none."), 0);
-	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
-	ibPropertySource* m_propertySource = ibPropertyObject::CreateProperty<ibPropertySource>(m_categoryData, wxT("Source"), _("Source"),
+	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(ibT("Data"), _("Data"));
+	ibPropertySource* m_propertySource = ibPropertyObject::CreateProperty<ibPropertySource>(m_categoryData, ibT("Source"), _("Source"),
 		_("The form attribute the table shows: a dynamic list, a value table or tree, or a tabular section of the form's object. The table's columns are bound to its fields, and its command bar gets the source's commands."));
-	ibPropertyEnum<ibValueEnumTableBoxSelectionMode>* m_propertyRowSelectionMode = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumTableBoxSelectionMode>>(m_categoryData, wxT("RowSelectionMode"), _("Row selection mode"),
+	ibPropertyEnum<ibValueEnumTableBoxSelectionMode>* m_propertyRowSelectionMode = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumTableBoxSelectionMode>>(m_categoryData, ibT("RowSelectionMode"), _("Row selection mode"),
 		_("What the cursor highlights. Select cell (the default): one cell, moved cell by cell - suits a table edited in place. Select row: the whole row - suits a list rows are picked or opened from."),
 		ibDataViewSelectionMode::ibDataViewSelectCell);
-	ibPropertyEnum<ibValueEnumTableBoxViewMode>* m_propertyViewMode = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumTableBoxViewMode>>(m_categoryData, wxT("ViewMode"), _("View mode"),
+	ibPropertyEnum<ibValueEnumTableBoxViewMode>* m_propertyViewMode = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumTableBoxViewMode>>(m_categoryData, ibT("ViewMode"), _("View mode"),
 		_("How a source with folders or parents is shown. Hierarchical (the default): one level at a time, entering a folder to see its contents. Tree: an expandable tree. List: every row flat, hierarchy ignored. The user can switch it at run time."),
 		ibDataViewViewMode::ibDataViewHierarchical);
 	// Value-picker flag: when set (or when the bound list-model is a picker), the Select command is composed FIRST.
-	ibPropertyBoolean* m_propertyChoiceMode = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, wxT("ChoiceMode"), _("Choice mode"),
+	ibPropertyBoolean* m_propertyChoiceMode = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, ibT("ChoiceMode"), _("Choice mode"),
 		_("Whether the table works as a picker: double-click or Enter hands the current row back to whoever opened the form, instead of opening or editing it, and a Select command leads its command bar. Set automatically on a choice form's list."),
 		false);
-	ibPropertyCategory* m_categoryEvent = ibPropertyObject::CreatePropertyCategory(wxT("Event"), _("Event"));
-	ibEventControl* m_eventSelection = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, wxT("Selection"), _("Selection"), _("On double mouse click or pressing of Enter."), wxArrayString{ wxT("Control"), wxT("RowSelected"), wxT("StandardProcessing") });
-	ibEventControl* m_eventOnActivateRow = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, wxT("OnActivateRow"), _("Activate row"), _("When row is activated"), wxArrayString{ {wxT("Control")} });
-	ibEventControl* m_eventBeforeAddRow = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, wxT("BeforeAddRow"), _("Before add row"), _("When row addition mode is called"), wxArrayString{ wxT("Control"), wxT("Cancel"), wxT("Clone") });
-	ibEventControl* m_eventBeforeDeleteRow = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, wxT("BeforeDeleteRow"), _("Before delete row"), _("When row deletion is called"), wxArrayString{ wxT("Control"), wxT("Cancel") });
+	ibPropertyCategory* m_categoryEvent = ibPropertyObject::CreatePropertyCategory(ibT("Event"), _("Event"));
+	ibEventControl* m_eventSelection = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, ibT("Selection"), _("Selection"), _("When the current row changes. Turning standard processing off keeps the row where it was."), std::vector<ibString>{ ibT("Control"), ibT("RowSelected"), ibT("StandardProcessing") });
+	ibEventControl* m_eventOnActivateRow = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, ibT("OnActivateRow"), _("Activate row"), _("On double mouse click or pressing of Enter."), std::vector<ibString>{ {ibT("Control")} });
+	ibEventControl* m_eventBeforeAddRow = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, ibT("BeforeAddRow"), _("Before add row"), _("When row addition mode is called"), std::vector<ibString>{ ibT("Control"), ibT("Cancel"), ibT("Clone") });
+	ibEventControl* m_eventBeforeDeleteRow = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, ibT("BeforeDeleteRow"), _("Before delete row"), _("When row deletion is called"), std::vector<ibString>{ ibT("Control"), ibT("Cancel") });
 	// After-add / after-delete pair — fires when the MODEL says a row was added / deleted (the model's
 	// view, ibTableModelView: whatever added it — a command, the script), so script observes creation
 	// regardless of source.
-	ibEventControl* m_eventOnAddRow = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, wxT("OnAddRow"), _("On add row"), _("When a new row has been inserted"), wxArrayString{ wxT("Control"), wxT("RowAdded") });
-	ibEventControl* m_eventOnDeleteRow = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, wxT("OnDeleteRow"), _("On delete row"), _("When a row has been deleted"), wxArrayString{ wxT("Control"), wxT("RowDeleted") });
+	ibEventControl* m_eventOnAddRow = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, ibT("OnAddRow"), _("On add row"), _("When a new row has been inserted"), std::vector<ibString>{ ibT("Control"), ibT("RowAdded") });
+	ibEventControl* m_eventOnDeleteRow = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, ibT("OnDeleteRow"), _("On delete row"), _("When a row has been deleted"), std::vector<ibString>{ ibT("Control"), ibT("RowDeleted") });
 
 #pragma endregion
 
@@ -461,10 +469,10 @@ private:
 
 	// THE ROWS HANDED OUT — by handle, by row object (the reverse lookup), and the top-level ones in display
 	// order (the ends a trim takes from). At most s_maxFetchedRows of them.
-	std::map<s32, ibFetchedRow> m_fetchedRows;
-	std::map<const ibDataViewObject*, s32> m_fetchedHandles;
-	std::deque<s32> m_topRows;
-	s32 m_nextRowHandle;
+	std::map<std::int32_t, ibFetchedRow> m_fetchedRows;
+	std::map<const ibDataViewObject*, std::int32_t> m_fetchedHandles;
+	std::deque<std::int32_t> m_topRows;
+	std::int32_t m_nextRowHandle;
 
 	// The folder the client has drilled into in the Hierarchical view (the Parent of its last reset) —
 	// where a new element is created, and what Output list is delimited by. Empty at the top.
@@ -473,11 +481,11 @@ private:
 	ibFormID m_currentColumn;
 	// The row the client's cursor stands on — as it told (OnCurrentRowChanged) or was told (CurrentRow): what the
 	// current row is not said back as. 0 = none yet.
-	s32 m_clientRow;
+	std::int32_t m_clientRow;
 	// ⭐ THE CELL WHOSE EDITOR IS OPEN — what the window's editor was: opened by a row activated, the Edit
 	// command or the client's own Input the table took; over with the text committed (Change) or the cursor
 	// moved off it (Row). 0 = none.
-	s32 m_editRow;
+	std::int32_t m_editRow;
 	ibFormID m_editColumn;
 	// A sort changed the order: the next reset reads from the top instead of around the current row,
 	// whose position was a position in the OLD order.
@@ -486,11 +494,11 @@ private:
 	// THE ROWS' VERSION — up whenever the model says its rows changed (a sort, a filter, a value written, a
 	// row added or deleted), written in the State: a client reads its rows again when it is another than it
 	// read them at. A fetch's own reads leave it as it is (m_fetching).
-	s32 m_rowsVersion = 1;
+	std::int32_t m_rowsVersion = 1;
+	// The Version whose Rows were last written into State — so the first page rides one frame, not every later one.
+	std::int32_t m_rowsSentVersion = -1;
 	bool m_fetching = false;
 	unsigned int m_formUpdates = 0;   // the form's updates this table has had its rows read again for
-	// The rows' pictures the client was sent — each once, with the first row of it handed out.
-	std::set<ibPictureID> m_sentPictures;
 
 	// (NO SETTING KEPT HERE — see the gridbox: the ACTIVE one lives on the model, in its composer.)
 };
@@ -507,9 +515,9 @@ class ibValueEnumTableBoxColumnGrouping :
 	public:
 	ibValueEnumTableBoxColumnGrouping() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibColumnGroupHorizontal, wxT("Horizontal"), _("Horizontal"));
-		AddEnumeration(ibColumnGroupVertical, wxT("Vertical"), _("Vertical"));
-		AddEnumeration(ibColumnGroupInCell, wxT("InCell"), _("In cell"));
+		AddEnumeration(ibColumnGroupHorizontal, ibT("Horizontal"), _("Horizontal"));
+		AddEnumeration(ibColumnGroupVertical, ibT("Vertical"), _("Vertical"));
+		AddEnumeration(ibColumnGroupInCell, ibT("InCell"), _("In cell"));
 	}
 private:
 };
@@ -539,7 +547,7 @@ public:
 	// Building a group from code takes exactly two things: what it is called and
 	// which way its columns run. (The title is READ through GetControlTitle, like
 	// every other control's — no second reader for it here.)
-	void SetCaption(const wxString& caption) { m_propertyTitle->SetValue(caption); }
+	void SetCaption(const ibString& caption) { m_propertyTitle->SetValue(caption); }
 	void SetGrouping(ibColumnGroupKind kind) { m_propertyGrouping->SetValue(kind); }
 	ibColumnGroupKind GetGrouping() const { return m_propertyGrouping->GetValueAsEnum(); }
 
@@ -547,7 +555,7 @@ public:
 	bool IsGroupShown() const;
 
 	//support icons
-	static wxIcon GetIconGroup();
+	static ibPicture GetIconGroup();
 
 public:
 
@@ -555,7 +563,7 @@ public:
 	virtual const ibMetaData* GetMetaData() const;
 
 	//get title
-	virtual wxString GetControlTitle() const;
+	virtual ibString GetControlTitle() const;
 
 	// Caption (its title, else its name) and Visible (IsGroupShown). Its kind, alignment and whether
 	// the title is shown are the schema's: the client reads them off the properties as saved.
@@ -565,7 +573,7 @@ public:
 	virtual int GetComponentType() const { return COMPONENT_TYPE_ABSTRACT; }
 
 	//support icons
-	virtual wxIcon GetIcon() const;
+	virtual ibPicture GetIcon() const;
 
 	//load & save object in control
 	virtual bool ReadData(const ibDataNode& node);
@@ -573,25 +581,25 @@ public:
 
 private:
 
-	ibPropertyCategory* m_categoryInfo = ibPropertyObject::CreatePropertyCategory(wxT("Info"), _("Info"));
-	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryInfo, wxT("Title"), _("Title"),
-		_("The group's title in the header, shown when Show title is on (an in-cell group always shows it as its one header cell). Can be written per language."), wxT(""));
+	ibPropertyCategory* m_categoryInfo = ibPropertyObject::CreatePropertyCategory(ibT("Info"), _("Info"));
+	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryInfo, ibT("Title"), _("Title"),
+		_("The group's title in the header, shown when Show title is on (an in-cell group always shows it as its one header cell). Can be written per language."), ibT(""));
 	// VERTICAL by default — stacking the columns is what a group is added FOR. Side by
 	// side is what they already do without one.
-	ibPropertyEnum<ibValueEnumTableBoxColumnGrouping>* m_propertyGrouping = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumTableBoxColumnGrouping>>(m_categoryInfo, wxT("Grouping"), _("Grouping"),
+	ibPropertyEnum<ibValueEnumTableBoxColumnGrouping>* m_propertyGrouping = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumTableBoxColumnGrouping>>(m_categoryInfo, ibT("Grouping"), _("Grouping"),
 		_("Where the group's columns go. Vertical (the default): stacked within one width, so the row grows taller instead of wider. Horizontal: side by side under the group's title. In cell: side by side but merged under one header cell, reading as one field. Groups nest."),
 		ibColumnGroupVertical);
 	// OFF by default: the plain use of a group is to STACK or MERGE its columns, and
 	// that needs no title. Turned on, the group takes a band of the header above them
 	// and they read as one thing under it.
-	ibPropertyBoolean* m_propertyShowTitle = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryInfo, wxT("ShowTitle"), _("Show title"),
+	ibPropertyBoolean* m_propertyShowTitle = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryInfo, ibT("ShowTitle"), _("Show title"),
 		_("Whether the group's title takes a band of the header above its columns. Off (the default): the group only arranges its columns and costs the header no height."),
 		false);
 
-	ibPropertyCategory* m_categoryStyle = ibPropertyObject::CreatePropertyCategory(wxT("Style"), _("Style"));
-	ibPropertyEnum<ibValueEnumHorizontalAlignment>* m_propertyHeaderAlign = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumHorizontalAlignment>>(m_categoryStyle, wxT("HeaderAlign"), _("Header align"),
+	ibPropertyCategory* m_categoryStyle = ibPropertyObject::CreatePropertyCategory(ibT("Style"), _("Style"));
+	ibPropertyEnum<ibValueEnumHorizontalAlignment>* m_propertyHeaderAlign = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumHorizontalAlignment>>(m_categoryStyle, ibT("HeaderAlign"), _("Header align"),
 		_("How the group's title is aligned in its header cell: left, center (the default) or right."), wxALIGN_CENTER);
-	ibPropertyBoolean* m_propertyVisible = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryStyle, wxT("Visible"), _("Visible"),
+	ibPropertyBoolean* m_propertyVisible = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryStyle, ibT("Visible"), _("Visible"),
 		_("Whether the group and all its columns are shown. Hidden columns keep their data and can be shown again from code."), true);
 };
 
@@ -629,21 +637,21 @@ public:
 
 	// The column's bound source as a composer FIELD — its dotted NAME (e.g. "Product.SKU"), row-relative to
 	// the bound table. Universal: whatever addresses a column by field (sort, filter, group) uses it. Straight
-	// off m_propertySource. MakeString renders the FULL form-rooted path; the composer's queryable is the bound
+	// off m_propertySource. GetString renders the FULL form-rooted path; the composer's queryable is the bound
 	// TABLE, so drop the tablebox's own prefix (one name segment per prefix id) to make it row-relative — the
 	// same seam ResolveCellValue uses. prefix 0 (model bound directly) drops nothing.
-	wxString GetSourceFieldName() const {
-		wxString name = m_propertySource->GetValueAsString();
+	ibString GetSourceFieldName() const {
+		ibString name = m_propertySource->GetValueAsString();
 		const ibValueModelTableBox* owner = GetOwner();
 		for (size_t prefix = owner != nullptr ? owner->GetSourcePath().size() : 0; prefix > 0; --prefix)
-			name = name.AfterFirst(wxT('.'));
+			name = name.AfterFirst(ibT('.'));
 		return name;
 	}
 
 	////////////////////////////////////////////////////////////////////////////////////////
 
-	void SetCaption(const wxString& caption) { return m_propertyTitle->SetValue(caption); }
-	wxString GetCaption() const { return m_propertyTitle->GetValueAsTranslateString(); }
+	void SetCaption(const ibString& caption) { return m_propertyTitle->SetValue(caption); }
+	ibString GetCaption() const { return m_propertyTitle->GetValueAsTranslateString(); }
 
 	void SetPasswordMode(bool caption) { return m_propertyPasswordMode->SetValue(caption); }
 	bool GetPasswordMode() const { return m_propertyPasswordMode->GetValueAsBoolean(); }
@@ -714,7 +722,7 @@ public:
 	bool IsCellEditable(const ibDataViewItem& item) const;
 
 	//support icons
-	static wxIcon GetIconGroup();
+	static ibPicture GetIconGroup();
 
 public:
 
@@ -743,7 +751,7 @@ public:
 	virtual ibTypeDescription& GetTypeDesc() const { return m_propertySource->GetValueAsTypeDesc(); }
 
 	//get title
-	virtual wxString GetControlTitle() const;
+	virtual ibString GetControlTitle() const;
 
 	// A column on a field this base does not use is not available — asked of the column's field (ibPropertySource).
 	// An empty binding is not a reason here: a column may stand on the model rather than a source (IsColumnShown).
@@ -767,14 +775,14 @@ public:
 	virtual int GetComponentType() const { return COMPONENT_TYPE_ABSTRACT; }
 
 	//support icons
-	virtual wxIcon GetIcon() const;
+	virtual ibPicture GetIcon() const;
 
 	/**
 	* Property events
 	*/
 	virtual void OnPropertyCreated(ibProperty* property);
 	virtual void OnPropertyRefresh() override;
-	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue);
+	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue);
 
 	//load & save object in control
 	virtual bool ReadData(const ibDataNode& node);
@@ -795,7 +803,7 @@ private:
 	// WHAT THE PERSON DID IN A CELL of this column — on the table's current row, which the client made
 	// current first. Reached through the table, which receives the events (a column gets none of its own).
 	// Typed text arrives as it stands and is parsed by the value's type; a read-only column takes none.
-	void OnTextEnter(const wxString& text);
+	void OnTextEnter(const ibString& text);
 	// …the edit is over: the form refreshes and the rows are read again (a row edited out of the filter,
 	// or into another group, moves).
 	void OnEditingDone();
@@ -805,70 +813,70 @@ private:
 	void OnClearButtonPressed();
 
 	// text processing
-	bool TextProcessing(const wxString& strData);
+	bool TextProcessing(const ibString& strData);
 	// …and a value the client sent with its type (ibValue::Serialize): the same commit.
 	bool ValueProcessing(const class ibDataNode& node);
 
 	ibFormID m_model_id;
 
-	ibPropertyCategory* m_categoryInfo = ibPropertyObject::CreatePropertyCategory(wxT("Info"), _("Info"));
-	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryInfo, wxT("Title"), _("Title"),
-		_("The column's header text. Empty: the synonym of the bound field, or the column's name when nothing is bound. Can be written per language."), wxT(""));
-	ibPropertyBoolean* m_propertyPasswordMode = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryInfo, wxT("PasswordMode"), _("Password mode"), _("Whether the cell editor hides what is typed behind placeholder characters, for secrets such as passwords. Off by default."), false);
-	ibPropertyBoolean* m_propertyMultilineMode = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryInfo, wxT("MultilineMode"), _("Multiline mode"), _("Whether the cell editor accepts several lines of text (Enter starts a new line). Off by default: Enter finishes the edit."), false);
-	ibPropertyBoolean* m_propertyTexteditMode = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryInfo, wxT("TexteditMode"), _("Textedit mode"), _("Whether the value can be typed into the cell. Off: it can only be picked with the Select button or cleared. On by default; a read-only column never takes typing."), true);
-	ibPropertyFormat* m_propertyFormat = ibPropertyObject::CreateProperty<ibPropertyFormat>(m_categoryInfo, wxT("Format"), _("Format"),
-		_("How the column shows its cells, written per language: digits after the point, separators, a date pattern. Empty: the bound attribute's format, and without one a number shows as many digits after the point as its type keeps."), wxT(""));
+	ibPropertyCategory* m_categoryInfo = ibPropertyObject::CreatePropertyCategory(ibT("Info"), _("Info"));
+	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryInfo, ibT("Title"), _("Title"),
+		_("The column's header text. Empty: the synonym of the bound field, or the column's name when nothing is bound. Can be written per language."), ibT(""));
+	ibPropertyBoolean* m_propertyPasswordMode = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryInfo, ibT("PasswordMode"), _("Password mode"), _("Whether the cell editor hides what is typed behind placeholder characters, for secrets such as passwords. Off by default."), false);
+	ibPropertyBoolean* m_propertyMultilineMode = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryInfo, ibT("MultilineMode"), _("Multiline mode"), _("Whether the cell editor accepts several lines of text (Enter starts a new line). Off by default: Enter finishes the edit."), false);
+	ibPropertyBoolean* m_propertyTexteditMode = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryInfo, ibT("TexteditMode"), _("Textedit mode"), _("Whether the value can be typed into the cell. Off: it can only be picked with the Select button or cleared. On by default; a read-only column never takes typing."), true);
+	ibPropertyFormat* m_propertyFormat = ibPropertyObject::CreateProperty<ibPropertyFormat>(m_categoryInfo, ibT("Format"), _("Format"),
+		_("How the column shows its cells, written per language: digits after the point, separators, a date pattern. Empty: the bound attribute's format, and without one a number shows as many digits after the point as its type keeps."), ibT(""));
 
-	ibPropertyTString* m_propertyFooterText = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryInfo, wxT("FooterText"), _("Footer text"),
-		_("The text in this column's footer cell, shown when the table's footer is on - a label or a total set from code. Can be written per language."), wxT(""));
+	ibPropertyTString* m_propertyFooterText = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryInfo, ibT("FooterText"), _("Footer text"),
+		_("The text in this column's footer cell, shown when the table's footer is on - a label or a total set from code. Can be written per language."), ibT(""));
 
-	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
-	ibPropertySource* m_propertySource = ibPropertyObject::CreateProperty<ibPropertySource>(m_categoryData, wxT("Source"), _("Source"),
+	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(ibT("Data"), _("Data"));
+	ibPropertySource* m_propertySource = ibPropertyObject::CreateProperty<ibPropertySource>(m_categoryData, ibT("Source"), _("Source"),
 		_("The field of the table's source this column shows and edits. A path through a reference (such as Owner.Description) is shown read-only."),
 		ibValueTypes::TYPE_STRING);
-	ibPropertyList* m_propertyChoiceForm = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryData, wxT("ChoiceForm"), _("Choice form"),
+	ibPropertyList* m_propertyChoiceForm = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryData, ibT("ChoiceForm"), _("Choice form"),
 		_("Which form opens when the user presses Select in the cell: one of the forms of the value's type. Empty: the type's default choice form."),
 		&ibValueModelTableBoxColumn::GetChoiceForm);
 
-	ibPropertyCategory* m_categoryButton = ibPropertyObject::CreatePropertyCategory(wxT("Button"), _("Button"));
-	ibPropertyBoolean* m_propertySelectButton = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryButton, wxT("ButtonSelect"), _("Select button"),
+	ibPropertyCategory* m_categoryButton = ibPropertyObject::CreatePropertyCategory(ibT("Button"), _("Button"));
+	ibPropertyBoolean* m_propertySelectButton = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryButton, ibT("ButtonSelect"), _("Select button"),
 		_("Whether the cell editor shows the Select button (...), which opens a choice form or list to pick the value from. On by default."), true);
-	ibPropertyBoolean* m_propertyClearButton = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryButton, wxT("ButtonClear"), _("Clear button"),
+	ibPropertyBoolean* m_propertyClearButton = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryButton, ibT("ButtonClear"), _("Clear button"),
 		_("Whether the cell editor shows the Clear button (X), which empties the value. On by default."), true);
-	ibPropertyBoolean* m_propertyOpenButton = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryButton, wxT("ButtonOpen"), _("Open button"),
+	ibPropertyBoolean* m_propertyOpenButton = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryButton, ibT("ButtonOpen"), _("Open button"),
 		_("Whether the cell editor shows the Open button, which opens the referenced object's form. Off by default."), false);
 
-	ibPropertyCategory* m_categoryStyle = ibPropertyObject::CreatePropertyCategory(wxT("Style"), _("Style"));
-	ibPropertyUInteger* m_propertyWidth = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categoryStyle, wxT("Width"), _("Width"),
+	ibPropertyCategory* m_categoryStyle = ibPropertyObject::CreatePropertyCategory(ibT("Style"), _("Style"));
+	ibPropertyUInteger* m_propertyWidth = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categoryStyle, ibT("Width"), _("Width"),
 		_("The column's starting width, in pixels. The user can change it when the column is resizable."), wxDVC_DEFAULT_WIDTH);
-	ibPropertyEnum<ibValueEnumHorizontalAlignment>* m_propertyHeaderAlign = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumHorizontalAlignment>>(m_categoryStyle, wxT("HeaderAlign"), _("Header align"),
+	ibPropertyEnum<ibValueEnumHorizontalAlignment>* m_propertyHeaderAlign = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumHorizontalAlignment>>(m_categoryStyle, ibT("HeaderAlign"), _("Header align"),
 		_("How the header text is aligned: left (the default), center or right."), wxALIGN_LEFT);
-	ibPropertyEnum<ibValueEnumHorizontalAlignment>* m_propertyFooterAlign = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumHorizontalAlignment>>(m_categoryStyle, wxT("FooterAlign"), _("Footer align"),
+	ibPropertyEnum<ibValueEnumHorizontalAlignment>* m_propertyFooterAlign = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumHorizontalAlignment>>(m_categoryStyle, ibT("FooterAlign"), _("Footer align"),
 		_("How the footer text is aligned: left (the default), center or right. Right suits a total under a numeric column."), wxALIGN_LEFT);
-	ibPropertyEnum<ibValueEnumRepresentation>* m_propertyRepresentation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumRepresentation>>(m_categoryStyle, wxT("Representation"), _("Representation"),
+	ibPropertyEnum<ibValueEnumRepresentation>* m_propertyRepresentation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumRepresentation>>(m_categoryStyle, ibT("Representation"), _("Representation"),
 		_("What the header and footer cells show: text, picture, or both. Auto: the title and the picture, whichever are set."),
 		ibRepresentation::ibRepresentation_Auto);
-	ibPropertyPicture* m_propertyHeaderPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_categoryStyle, wxT("HeaderPicture"), _("Header picture"),
+	ibPropertyPicture* m_propertyHeaderPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_categoryStyle, ibT("HeaderPicture"), _("Header picture"),
 		_("An icon in the column's header cell, beside or instead of the title (see Representation). A narrow flag column often shows only a picture."));
-	ibPropertyPicture* m_propertyFooterPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_categoryStyle, wxT("FooterPicture"), _("Footer picture"),
+	ibPropertyPicture* m_propertyFooterPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_categoryStyle, ibT("FooterPicture"), _("Footer picture"),
 		_("An icon in the column's footer cell, beside or instead of the footer text (see Representation)."));
 
-	ibPropertyBoolean* m_propertyVisible = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryStyle, wxT("Visible"), _("Visible"),
+	ibPropertyBoolean* m_propertyVisible = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryStyle, ibT("Visible"), _("Visible"),
 		_("Whether the column is shown. A hidden column keeps its data and can be shown again from code."), true);
-	ibPropertyBoolean* m_propertyResizable = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryStyle, wxT("Resizable"), _("Resizable"),
+	ibPropertyBoolean* m_propertyResizable = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryStyle, ibT("Resizable"), _("Resizable"),
 		_("Whether the user can change the column's width by dragging its header edge. On by default."), true);
-	//ibPropertyBoolean* m_propertySortable = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryStyle, wxT("Sortable"), _("Sortable"), false);
-	ibPropertyBoolean* m_propertyReorderable = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryStyle, wxT("Reorderable"), _("Reorderable"),
+	//ibPropertyBoolean* m_propertySortable = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryStyle, ibT("Sortable"), _("Sortable"), false);
+	ibPropertyBoolean* m_propertyReorderable = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryStyle, ibT("Reorderable"), _("Reorderable"),
 		_("Whether the user can move the column to another place by dragging its header. On by default."), true);
 
-	ibPropertyCategory* m_propertyEvent = ibPropertyObject::CreatePropertyCategory(wxT("Event"), _("Event"));
-	ibEventControl* m_eventOnChange = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("OnChange"), _("Change"), wxArrayString{ wxT("Control") });
-	ibEventControl* m_eventStartChoice = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("StartChoice"), _("Start choice"), wxArrayString{ wxT("Control"), wxT("StandardProcessing") });
-	ibEventControl* m_eventStartListChoice = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("StartListChoice"), _("Start list choice"), wxArrayString{ wxT("Control"), wxT("StandardProcessing") });
-	ibEventControl* m_eventClearing = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("Clearing"), _("Clearing"), wxArrayString{ wxT("Control"), wxT("StandardProcessing") });
-	ibEventControl* m_eventOpening = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("Opening"), _("Opening"), wxArrayString{ wxT("Control"), wxT("StandardProcessing") });
-	ibEventControl* m_eventChoiceProcessing = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("ChoiceProcessing"), _("Choice processing"), wxArrayString{ wxT("Control"), wxT("ValueSelected"), wxT("StandardProcessing") });
+	ibPropertyCategory* m_propertyEvent = ibPropertyObject::CreatePropertyCategory(ibT("Event"), _("Event"));
+	ibEventControl* m_eventOnChange = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, ibT("OnChange"), _("Change"), std::vector<ibString>{ ibT("Control") });
+	ibEventControl* m_eventStartChoice = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, ibT("StartChoice"), _("Start choice"), std::vector<ibString>{ ibT("Control"), ibT("StandardProcessing") });
+	ibEventControl* m_eventStartListChoice = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, ibT("StartListChoice"), _("Start list choice"), std::vector<ibString>{ ibT("Control"), ibT("StandardProcessing") });
+	ibEventControl* m_eventClearing = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, ibT("Clearing"), _("Clearing"), std::vector<ibString>{ ibT("Control"), ibT("StandardProcessing") });
+	ibEventControl* m_eventOpening = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, ibT("Opening"), _("Opening"), std::vector<ibString>{ ibT("Control"), ibT("StandardProcessing") });
+	ibEventControl* m_eventChoiceProcessing = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, ibT("ChoiceProcessing"), _("Choice processing"), std::vector<ibString>{ ibT("Control"), ibT("ValueSelected"), ibT("StandardProcessing") });
 
 	// The table receives the events of its cells and hands each to the column it was in.
 	friend class ibValueModelTableBox;

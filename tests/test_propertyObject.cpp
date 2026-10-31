@@ -23,9 +23,9 @@ class TestNode : public ibPropertyObject {
 public:
     int childChanged = 0;
 
-    wxString GetClassName() const override { return wxT("TestNode"); }
+    ibString GetClassName() const override { return wxT("TestNode"); }
     bool     IsEditable() const override { return true; }
-    wxString GetObjectTypeName() const override { return wxT("TestNode"); }
+    ibString GetObjectTypeName() const override { return wxT("TestNode"); }
 
     void OnChildChanged() override {
         ++childChanged;

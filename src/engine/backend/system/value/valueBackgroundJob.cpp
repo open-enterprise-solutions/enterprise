@@ -26,12 +26,12 @@ enum Proc {
 // table, so a swap here calls the wrong case below.
 void ibValueBackgroundJob_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendFunc(wxT("IsComplete"), wxT("IsComplete()"));
-	helper.AppendFunc(wxT("Wait"), 1, wxT("Wait(timeoutMs : number)"));
-	helper.AppendFunc(wxT("Result"), wxT("Result()"));
-	helper.AppendFunc(wxT("Error"), wxT("Error()"));
-	helper.AppendFunc(wxT("Activity"), wxT("Activity()"));
-	helper.AppendProc(wxT("Cancel"), wxT("Cancel()"));
+	helper.AppendFunc(ibT("IsComplete"), ibT("IsComplete()"));
+	helper.AppendFunc(ibT("Wait"), 1, ibT("Wait(timeoutMs : number)"));
+	helper.AppendFunc(ibT("Result"), ibT("Result()"));
+	helper.AppendFunc(ibT("Error"), ibT("Error()"));
+	helper.AppendFunc(ibT("Activity"), ibT("Activity()"));
+	helper.AppendProc(ibT("Cancel"), ibT("Cancel()"));
 }
 
 ibValueBackgroundJob::ibValueBackgroundJob()
@@ -54,12 +54,12 @@ ibValueBackgroundJob::~ibValueBackgroundJob()
 ibString ibValueBackgroundJob::GetString() const
 {
 	if (m_run == nullptr)
-		return wxT("BackgroundJob");
+		return ibT("BackgroundJob");
 	if (!m_run->IsComplete())
-		return m_run->Activity().IsEmpty() ? wxT("BackgroundJob: running")
+		return m_run->Activity().IsEmpty() ? ibString(ibT("BackgroundJob: running"))
 		                                   : m_run->Activity();
-	return m_run->Error().IsEmpty() ? wxT("BackgroundJob: done")
-	                                : wxT("BackgroundJob: failed");
+	return m_run->Error().IsEmpty() ? ibT("BackgroundJob: done")
+	                                : ibT("BackgroundJob: failed");
 }
 
 bool ibValueBackgroundJob::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,

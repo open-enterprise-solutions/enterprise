@@ -19,7 +19,7 @@ ibDatabaseParameterFirebirdCollection::~ibDatabaseParameterFirebirdCollection()
 	while (start != stop)
 	{
 		ibDatabaseParameterFirebird* pParameter = (ibDatabaseParameterFirebird*)(*start);
-		wxDELETE(pParameter);
+		delete pParameter;
 		(*start) = nullptr;
 		start++;
 	}
@@ -158,7 +158,7 @@ void ibDatabaseParameterFirebirdCollection::AllocateParameterSpace()
 			break;
 		case SQL_TYPE_TIME:
 			// Uniform array allocation across all paths so FreeParameterSpace
-			// can use a single wxDELETEA without type-mismatch UB (the
+			// can use a single delete[] without type-mismatch UB (the
 			// previous `(char*)new ISC_TIME` + scalar delete was a typed-vs-
 			// char* delete mismatch).
 			pVar->sqldata = new char[sizeof(ISC_TIME)];
@@ -228,10 +228,8 @@ void ibDatabaseParameterFirebirdCollection::FreeParameterSpace()
 				{
 				case SQL_ARRAY:
 				case SQL_BLOB:
-					//wxDELETE(pVar->sqldata);
 					break;
 				case SQL_TIMESTAMP:
-					//wxDELETE(pVar->sqldata);
 					break;
 				case SQL_TYPE_TIME:
 				case SQL_TYPE_DATE:
@@ -245,7 +243,8 @@ void ibDatabaseParameterFirebirdCollection::FreeParameterSpace()
 					// (type-mismatch UB), DATE was never freed (leak), INT64
 					// and INT128 used scalar delete on `new char[]` (array
 					// delete required).
-					wxDELETEA(pVar->sqldata);
+					delete[] pVar->sqldata;
+					pVar->sqldata = nullptr;
 					break;
 				case SQL_SHORT:
 				case SQL_LONG:
@@ -254,19 +253,16 @@ void ibDatabaseParameterFirebirdCollection::FreeParameterSpace()
 					// here.
 					break;
 				case SQL_FLOAT:
-					//wxDELETE(pVar->sqldata);
 					break;
 				case SQL_DOUBLE:
-					//wxDELETE(pVar->sqldata);
 					break;
 				default:
-					ibJournalError(wxT("db.firebird"),wxT("Error deleting unknown parameter type\n"));
+					ibJournalError(ibT("db.firebird"),ibT("Error deleting unknown parameter type\n"));
 					break;
 				}
 			}
 			//if (pVar->sqlind != 0)
 			  //delete pVar->sqlind;
-			//wxDELETE(pVar->sqlind);
 		}
 		// XSQLDA is allocated with malloc() in firebirdPreparedStatementWrapper;
 		// pair the release with free(). delete[] here was UB (undefined for

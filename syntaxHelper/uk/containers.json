@@ -21,7 +21,7 @@
       "parameters": "Немає.",
       "return_descr": "Container — порожній.",
       "example": "Rates = New Container();\nRates.Insert(\"fr\", 1);\nRates.Insert(\"FR\", 2);\nMessage(Rates[\"fr\"]);\nMessage(Rates.Get(\"de\"));\n\nForeach (Pair In Rates) {\n    Message(Pair.Key + \": \" + Pair.Value);\n}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.Container.Count",
         "cls.Container.Get",
@@ -49,7 +49,7 @@
       "parameters": "Немає.",
       "return_descr": "Number.",
       "example": "Rates = New Container();\nRates.Insert(\"fr\", 1);\nMessage(Rates.Count());",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.Container",
         "cls.Container.Clear"
@@ -71,7 +71,7 @@
       "parameters": "key — будь-яке значення. Два рядкові ключі — один ключ, коли це той самий текст; ключі іншого роду зводить порядок значень, а він ставить Undefined і Null в одне місце.",
       "return_descr": "Значення, пов'язане з ключем, або Undefined.",
       "example": "Rates = New Container();\nRates.Insert(\"fr\", 1);\nMessage(Rates.Get(\"fr\"));\nMessage(ValueIsFilled(Rates.Get(\"de\")));",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.Container",
         "cls.Container.Property",
@@ -94,7 +94,7 @@
       "parameters": "key — будь-яке значення.\nvalueFound — змінна, у яку повертається значення.",
       "return_descr": "Boolean — True, якщо ключ є.",
       "example": "Rate = Undefined;\nIf (Rates.Property(\"fr\", Rate)) {\n    Message(Rate);\n}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.Container",
         "cls.Container.Get"
@@ -116,7 +116,7 @@
       "parameters": "key — будь-яке значення.\nvalue — що з ним пов'язати.",
       "return_descr": "Немає.",
       "example": "Rates = New Container();\nRates.Insert(\"fr\", 1);\nRates[\"fr\"] = 2;",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.Container",
         "cls.Container.Delete",
@@ -139,7 +139,7 @@
       "parameters": "key — будь-яке значення. Два рядкові ключі — один ключ, коли це той самий текст; ключі іншого роду зводить порядок значень, а він ставить Undefined і Null в одне місце.",
       "return_descr": "Немає.",
       "example": "Rates.Delete(\"fr\");",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.Container",
         "cls.Container.Clear"
@@ -161,7 +161,7 @@
       "parameters": "Немає.",
       "return_descr": "Немає.",
       "example": "Rates.Clear();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.Container",
         "cls.Container.Delete"
@@ -186,7 +186,7 @@
       "parameters": "fields — String, імена полів через кому. Можна не вказувати.\nvalue1, value2, … — значення полів у тому самому порядку; поле без значення — Undefined.",
       "return_descr": "Structure — з оголошеними полями.",
       "example": "Line = New Structure(\"Item, Amount\", \"Paper\", 12);\nLine.Insert(\"Price\", 3);\nMessage(Line.item);\nMessage(Line.Get(\"Vat\"));\n\nForeach (Field In Line) {\n    Message(Field.Key + \": \" + Field.Value);\n}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.Structure.Count",
         "cls.Structure.Get",
@@ -214,7 +214,7 @@
       "parameters": "Немає.",
       "return_descr": "Number.",
       "example": "Line = New Structure(\"Item, Amount\", \"Paper\", 12);\nMessage(Line.Count());",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.Structure",
         "cls.Structure.Clear"
@@ -236,7 +236,7 @@
       "parameters": "name — String, ім'я поля. Регістр не важливий.",
       "return_descr": "Значення поля або Undefined.",
       "example": "Line = New Structure(\"Item, Amount\", \"Paper\", 12);\nMessage(Line.Get(\"item\"));\nMessage(ValueIsFilled(Line.Get(\"Vat\")));",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.Structure",
         "cls.Structure.Property"
@@ -258,7 +258,7 @@
       "parameters": "name — String, ім'я поля.\nvalueFound — змінна, у яку повертається значення.",
       "return_descr": "Boolean — True, якщо поле є.",
       "example": "Amount = Undefined;\nIf (Line.Property(\"Amount\", Amount)) {\n    Message(Amount);\n}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.Structure",
         "cls.Structure.Get"
@@ -280,7 +280,7 @@
       "parameters": "name — String, ім'я поля.\nvalue — його значення.",
       "return_descr": "Немає.",
       "example": "Line = New Structure();\nLine.Insert(\"Item\", \"Paper\");\nLine.Item = \"Ink\";",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.Structure",
         "cls.Structure.Delete"
@@ -302,7 +302,7 @@
       "parameters": "name — String, ім'я поля. Регістр не важливий.",
       "return_descr": "Немає.",
       "example": "Line.Delete(\"Amount\");",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.Structure",
         "cls.Structure.Clear"
@@ -324,7 +324,7 @@
       "parameters": "Немає.",
       "return_descr": "Немає.",
       "example": "Line.Clear();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.Structure",
         "cls.Structure.Delete"
@@ -349,7 +349,7 @@
       "parameters": "Немає.",
       "return_descr": "KeyValue.",
       "example": "Foreach (Pair In Rates) {\n    Message(Pair.Key + \": \" + Pair.Value);\n}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.KeyValue.Key",
         "cls.KeyValue.Value",
@@ -373,7 +373,7 @@
       "parameters": "Немає.",
       "return_descr": "Будь-яке значення.",
       "example": "Foreach (Pair In Rates) {\n    Message(Pair.Key);\n}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.KeyValue",
         "cls.KeyValue.Value"
@@ -395,7 +395,7 @@
       "parameters": "Немає.",
       "return_descr": "Будь-яке значення.",
       "example": "Foreach (Pair In Rates) {\n    Message(Pair.Value);\n}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.KeyValue",
         "cls.KeyValue.Key"

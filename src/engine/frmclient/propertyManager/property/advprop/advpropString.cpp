@@ -1,10 +1,25 @@
 ﻿#include "advpropString.h"
 
-#include "frmclient/backend/propertyManager/property/propertyString.h"
-#include "frmclient/backend/propertyManager/property/propertyFormat.h"
-#include "frmclient/backend/propertyManager/property/variant/variantTranslate.h"
+#include "frmclient/backend/propertyManager/propertyObject.h"                     // ibPropertyObject
+#include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the string's node
 #include "frmclient/propertyManager/property/private/prop.h"                 // wxPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
+
+namespace {
+
+// The text a value holds, as the server stores it (a String node) — a translated string's every language, raw…
+wxString ReadText(const wxVariant& value)
+{
+	return ibVariantDataSerializable::GetNodeValue(value).AsString();
+}
+
+// …and the value of another: the same property's, read as the words given.
+wxVariant WriteText(const wxVariant& value, const wxString& text, const wxString& words)
+{
+	return wxVariant(new ibVariantDataSerializable(value.GetType(), ibDataValue::String(text), words));
+}
+
+} // namespace
 
 // register frontend property
 class ibPropertyStringLoader
@@ -12,67 +27,61 @@ class ibPropertyStringLoader
 public:
 	ibPropertyStringLoader()
 	{
-		ibPropertyRegistry::Register([](ibPropertyString* prop) -> wxPGProperty* {
-			return new wxStringProperty(prop->GetLabel(), prop->GetName(), prop->GetValueAsString());
+		ibPropertyRegistry::Register(wxT("ibPropertyString"), [](ibBackendProperty* property) -> wxPGProperty* {
+			return new ibStringProperty(property->GetLabel(), property->GetName(), property->GetValue());
 		});
-		// ibPropertyUEString DERIVES from ibPropertyUString, so the base must be tried after
-		// it — otherwise the UString maker would swallow every UEString.
-		ibPropertyRegistry::Register([](ibPropertyUEString* prop) -> wxPGProperty* {
-			return new ibUEStringProperty(prop->GetLabel(), prop->GetName(), prop->GetValueAsString());
+		ibPropertyRegistry::Register(wxT("ibPropertyUEString"), [](ibBackendProperty* property) -> wxPGProperty* {
+			return new ibUEStringProperty(property->GetLabel(), property->GetName(), property->GetValue());
 		});
-		ibPropertyRegistry::Register([](ibPropertyUString* prop) -> wxPGProperty* {
-			return new ibUStringProperty(prop->GetLabel(), prop->GetName(), prop->GetValueAsString());
-		}, ibPropertyRegistry::Priority_Base);
-		// ibPropertyFormat DERIVES from ibPropertyTString — the same order as the two above.
-		ibPropertyRegistry::Register([](ibPropertyFormat* prop) -> wxPGProperty* {
-			return new wxFormatStringProperty(prop->GetPropertyObject(), prop->GetLabel(), prop->GetName(),
-				prop->GetValueAsFormatString());
+		ibPropertyRegistry::Register(wxT("ibPropertyUString"), [](ibBackendProperty* property) -> wxPGProperty* {
+			return new ibUStringProperty(property->GetLabel(), property->GetName(), property->GetValue());
 		});
-		ibPropertyRegistry::Register([](ibPropertyTString* prop) -> wxPGProperty* {
-			return new wxTStringProperty(prop->GetPropertyObject(), prop->GetLabel(), prop->GetName(),
-				prop->GetValueAsTranslate());
-		}, ibPropertyRegistry::Priority_Base);
-		ibPropertyRegistry::Register([](ibPropertyMString* prop) -> wxPGProperty* {
-			return new wxMStringProperty(prop->GetLabel(), prop->GetName(), prop->GetValueAsString());
+		ibPropertyRegistry::Register(wxT("ibPropertyFormat"), [](ibBackendProperty* property) -> wxPGProperty* {
+			return new wxFormatStringProperty(property->GetPropertyObject(), property->GetLabel(), property->GetName(),
+				property->GetValue());
+		});
+		ibPropertyRegistry::Register(wxT("ibPropertyTString"), [](ibBackendProperty* property) -> wxPGProperty* {
+			return new wxTStringProperty(property->GetPropertyObject(), property->GetLabel(), property->GetName(),
+				property->GetValue());
+		});
+		ibPropertyRegistry::Register(wxT("ibPropertyMString"), [](ibBackendProperty* property) -> wxPGProperty* {
+			return new wxMStringProperty(property->GetLabel(), property->GetName(), property->GetValue());
 		});
 	}
 }g_stringLoader;
 
 // -----------------------------------------------------------------------
+// ibStringProperty
+// -----------------------------------------------------------------------
+
+wxPG_IMPLEMENT_PROPERTY_CLASS(ibStringProperty, wxStringProperty, TextCtrl)
+
+ibStringProperty::ibStringProperty(const wxString& label, const wxString& name, const wxVariant& value)
+	: wxStringProperty(label, name)
+{
+	SetValue(value);
+}
+
+wxString ibStringProperty::ValueToString(wxVariant& value, wxPGPropValFormatFlags flags) const
+{
+	wxVariant held(ReadText(value));
+	return wxStringProperty::ValueToString(held, flags);
+}
+
+bool ibStringProperty::StringToValue(wxVariant& variant, const wxString& text, wxPGPropValFormatFlags flags) const
+{
+	wxVariant held(ReadText(variant));
+	if (!wxStringProperty::StringToValue(held, text, flags))
+		return false;
+	variant = WriteText(variant, held.GetString(), held.GetString());
+	return true;
+}
+
+// -----------------------------------------------------------------------
 // ibUStringProperty
 // -----------------------------------------------------------------------
 
-wxPG_IMPLEMENT_PROPERTY_CLASS(ibUStringProperty, wxStringProperty, TextCtrl)
-
-wxString ibUStringProperty::ValueToString(wxVariant& value, wxPGPropValFormatFlags flags) const
-{
-	wxString s = value.GetString();
-
-	if (HasAnyChild() && HasFlag(wxPGFlags::ComposedValue))
-	{
-		// Value stored in m_value is non-editable, non-full value
-		if (!!(flags & wxPGPropValFormatFlags::FullValue) ||
-			!!(flags & wxPGPropValFormatFlags::EditableValue) ||
-			s.empty())
-		{
-			// Calling this under incorrect conditions will fail
-			wxASSERT_MSG(!!(flags & wxPGPropValFormatFlags::ValueIsCurrent),
-				wxS("Sorry, currently default wxPGProperty::ValueToString() ")
-				wxS("implementation only works if value is m_value."));
-
-			DoGenerateComposedValue(s, flags);
-		}
-
-		return s;
-	}
-
-	// If string is password and value is for visual purposes,
-	// then return asterisks instead the actual string.
-	if (!!(m_flags & wxPGPropertyFlags_Password) && !(flags & (wxPGPropValFormatFlags::FullValue | wxPGPropValFormatFlags::EditableValue)))
-		return wxString(wxS('*'), s.length());
-
-	return s;
-}
+wxPG_IMPLEMENT_PROPERTY_CLASS(ibUStringProperty, ibStringProperty, TextCtrl)
 
 bool ibUStringProperty::StringToValue(wxVariant& variant,
 	const wxString& text,
@@ -83,20 +92,13 @@ bool ibUStringProperty::StringToValue(wxVariant& variant,
 		return false;
 	}
 
-	if (GetChildCount() && HasFlag(wxPGFlags::ComposedValue))
-		return wxPGProperty::StringToValue(variant, text, flags);
+	if (!ibStringProperty::StringToValue(variant, text, flags))
+		return false;
 
-	if (variant != text) {
+	if (m_strFlags == allow_empty)
+		return true;
 
-		variant = text;
-
-		if (m_strFlags == allow_empty)
-			return true;
-
-		return text.length() > 0;
-	}
-
-	return false;
+	return text.length() > 0;
 }
 
 // -----------------------------------------------------------------------
@@ -112,27 +114,36 @@ wxPG_IMPLEMENT_PROPERTY_CLASS(ibUEStringProperty, ibUStringProperty, TextCtrl)
 wxPG_IMPLEMENT_PROPERTY_CLASS(wxTStringProperty, wxLongStringProperty, TextCtrlAndButton)
 
 wxTStringProperty::wxTStringProperty(const ibPropertyObject* property, const wxString& label,
-	const wxString& name, const ibTranslateString& value)
+	const wxString& name, const wxVariant& value)
 	: wxLongStringProperty(label, name), m_ownerProperty(property)
 {
-	SetValue(
-		new ibVariantDataTranslate(value)
-	);
+	SetValue(value);
 }
+
+namespace {
+
+// The languages a value holds — its text, raw…
+ibTranslateString ReadTranslate(const wxVariant& value)
+{
+	return ibTranslateString(ibString(ReadText(value)));
+}
+
+// …and the value of others: the same property's, read as the language in force.
+wxVariant WriteTranslate(const wxVariant& value, const ibTranslateString& translate)
+{
+	return WriteText(value, translate.GetRawText(), translate.GetString());
+}
+
+} // namespace
 
 wxString wxTStringProperty::ValueToString(wxVariant& value, wxPGPropValFormatFlags flags) const
 {
-	ibVariantDataTranslate* translateVariant = property_cast(value, ibVariantDataTranslate);
-	wxASSERT(translateVariant);
-	return translateVariant->GetTranslate().GetString();
+	return ReadTranslate(value).GetString();
 }
 
 bool wxTStringProperty::StringToValue(wxVariant& variant, const wxString& text, wxPGPropValFormatFlags flags) const
 {
-	ibVariantDataTranslate* translateVariant = property_cast(variant, ibVariantDataTranslate);
-	wxASSERT(translateVariant);
-
-	const ibTranslateString& held = translateVariant->GetTranslate();
+	const ibTranslateString held = ReadTranslate(variant);
 	if (held.GetString() == text)
 		return false;
 
@@ -142,7 +153,7 @@ bool wxTStringProperty::StringToValue(wxVariant& variant, const wxString& text, 
 	ibTranslateString edited = held;
 	edited.SetTranslate(text);
 
-	variant = new ibVariantDataTranslate(edited);
+	variant = WriteTranslate(variant, edited);
 	return true;
 }
 
@@ -150,16 +161,12 @@ bool wxTStringProperty::StringToValue(wxVariant& variant, const wxString& text, 
 
 bool wxTStringProperty::DisplayEditorDialog(wxPropertyGrid* pg, wxVariant& value)
 {
-	ibVariantDataTranslate* translateVariant = property_cast(value, ibVariantDataTranslate);
-	wxASSERT_MSG(translateVariant, "Function called for incompatible property");
-
-	if (m_ownerProperty == nullptr)
-		return false;
-
 	// THE SAME WINDOW the code editor opens on a string literal — see translateConstructor.h for what
-	// OK does to the text, and the three rules the window this one replaced broke quietly.
+	// OK does to the text, and the three rules the window this one replaced broke quietly. Its languages are those of
+	// the configuration the property's owner holds (a metaobject: the one it was opened from).
 	ibDialogTranslateConstructor dlg(pg->GetPanel(), m_dlgTitle.empty() ? GetLabel() : m_dlgTitle,
-		translateVariant->GetTranslate(), m_ownerProperty->GetMetaData(), HasFlag(wxPGFlags::ReadOnly), m_maxLen,
+		ReadTranslate(value), m_ownerProperty != nullptr ? m_ownerProperty->GetMetaData() : nullptr,
+		HasFlag(wxPGFlags::ReadOnly), m_maxLen,
 		GetBoxEditor());
 	if (!wxPropertyGrid::IsSmallScreen())
 		dlg.Move(pg->GetGoodEditorDialogPosition(this, dlg.GetSize()));
@@ -168,7 +175,7 @@ bool wxTStringProperty::DisplayEditorDialog(wxPropertyGrid* pg, wxVariant& value
 		return false;
 
 	// ⚠ A NEW CELL, never an edit in place — see StringToValue.
-	value = new ibVariantDataTranslate(dlg.GetTranslate());
+	value = WriteTranslate(value, dlg.GetTranslate());
 	return true;
 }
 
@@ -191,10 +198,29 @@ ibDialogTranslateConstructor::ibBoxEditor wxFormatStringProperty::GetBoxEditor()
 
 wxPG_IMPLEMENT_PROPERTY_CLASS(wxMStringProperty, wxLongStringProperty, TextCtrlAndButton)
 
+wxMStringProperty::wxMStringProperty(const wxString& label, const wxString& name, const wxVariant& value)
+	: wxLongStringProperty(label, name)
+{
+	SetValue(value);
+}
+
+wxString wxMStringProperty::ValueToString(wxVariant& value, wxPGPropValFormatFlags flags) const
+{
+	wxVariant held(ReadText(value));
+	return wxLongStringProperty::ValueToString(held, flags);
+}
+
+bool wxMStringProperty::StringToValue(wxVariant& variant, const wxString& text, wxPGPropValFormatFlags flags) const
+{
+	wxVariant held(ReadText(variant));
+	if (!wxLongStringProperty::StringToValue(held, text, flags))
+		return false;
+	variant = WriteText(variant, held.GetString(), held.GetString());
+	return true;
+}
+
 bool wxMStringProperty::DisplayEditorDialog(wxPropertyGrid* pg, wxVariant& value)
 {
-	wxASSERT_MSG(value.IsType(wxS("string")), "Function called for incompatible property");
-
 	// launch editor dialog
 	wxDialog* dlg = new wxDialog(pg->GetPanel(), wxID_ANY,
 		m_dlgTitle.empty() ? GetLabel() : m_dlgTitle,
@@ -209,7 +235,7 @@ bool wxMStringProperty::DisplayEditorDialog(wxPropertyGrid* pg, wxVariant& value
 	long edStyle = wxTE_MULTILINE;
 	if (HasFlag(wxPGFlags::ReadOnly))
 		edStyle |= wxTE_READONLY;
-	wxTextCtrl* ed = new wxTextCtrl(dlg, wxID_ANY, value.GetString(),
+	wxTextCtrl* ed = new wxTextCtrl(dlg, wxID_ANY, ReadText(value),
 		wxDefaultPosition, wxDefaultSize, edStyle);
 	if (m_maxLen > 0)
 		ed->SetMaxLength(m_maxLen);
@@ -236,7 +262,7 @@ bool wxMStringProperty::DisplayEditorDialog(wxPropertyGrid* pg, wxVariant& value
 
 	if (res == wxID_OK)
 	{
-		value = ed->GetValue();
+		value = WriteText(value, ed->GetValue(), ed->GetValue());
 		dlg->Destroy();
 		return true;
 	}

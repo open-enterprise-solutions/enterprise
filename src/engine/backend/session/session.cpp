@@ -109,20 +109,20 @@ public:
 	// right — creating IS writing — and stays its own method because its restriction checks the row
 	// being made rather than filtering rows that already exist.
 	bool CheckSelect(ibDataQueryBuilder& query, const ibAccessStage& stage, long affected) const override
-	{ return Check(query, &ibValueMetaObjectGenericData::AccessRight_Show, wxT("Read"), stage, affected); }
+	{ return Check(query, &ibValueMetaObjectGenericData::AccessRight_Show, ibT("Read"), stage, affected); }
 
 	bool CheckCreate(ibDataQueryBuilder& query, const ibAccessStage& stage, long affected) const override
-	{ return Check(query, &ibValueMetaObjectGenericData::AccessRight_Modify, wxT("Create"), stage, affected); }
+	{ return Check(query, &ibValueMetaObjectGenericData::AccessRight_Modify, ibT("Create"), stage, affected); }
 
 	bool CheckUpdate(ibDataQueryBuilder& query, const ibAccessStage& stage, long affected) const override
-	{ return Check(query, &ibValueMetaObjectGenericData::AccessRight_Modify, wxT("Write"), stage, affected); }
+	{ return Check(query, &ibValueMetaObjectGenericData::AccessRight_Modify, ibT("Write"), stage, affected); }
 
 	bool CheckDelete(ibDataQueryBuilder& query, const ibAccessStage& stage, long affected) const override
-	{ return Check(query, &ibValueMetaObjectGenericData::AccessRight_Erase, wxT("Delete"), stage, affected); }
+	{ return Check(query, &ibValueMetaObjectGenericData::AccessRight_Erase, ibT("Delete"), stage, affected); }
 
 private:
 	// What the four share: the stage decides which question, the action decides which right answers.
-	bool Check(ibDataQueryBuilder& query, RightPredicate right, const wxString& operation,
+	bool Check(ibDataQueryBuilder& query, RightPredicate right, const ibString& operation,
 	           const ibAccessStage& stage, long affected) const
 	{
 		return stage == ibAccessStage::Table
@@ -222,7 +222,7 @@ private:
 	//
 	// It is asked even with no RLS module anywhere: a role can restrict nothing per-row and still
 	// have a flag cleared on a table.
-	bool Gate(ibDataQueryBuilder& query, RightPredicate right, const wxString& operation) const
+	bool Gate(ibDataQueryBuilder& query, RightPredicate right, const ibString& operation) const
 	{
 		if (!TablesAllowed(query, right))
 			return false;                                 // refused on a table — the filter never runs
@@ -287,14 +287,14 @@ private:
 	// the intersections, and the shape between the groups is fixed) — unlike an ACL with DENY.
 	// TODO(perf): the module is a per-query template — JIT-compile it (hot path); do NOT cache its RESULT.
 	void ApplyToSource(ibDataQueryBuilder& query, const ibBackendQueryable* source,
-	                   const wxString& operation) const
+	                   const ibString& operation) const
 	{
 		// The module identifies the source by its canonical FULL NAME ("Document.X" / "Catalog.X"),
 		// so pass GetFullName() (not the short GetQueryName()); fall back to the short name if the
 		// metaobject cannot be resolved.
 		const ibValueMetaObjectGenericData* srcMeta = FindSourceMetaObject(source);
-		const wxString sourceName = srcMeta != nullptr ? srcMeta->GetFullName() : source->GetQueryName();
-		const wxString handler = (operation == wxT("Read")) ? wxT("OnAccessRead") : wxT("OnAccessWrite");
+		const ibString sourceName = srcMeta != nullptr ? srcMeta->GetFullName() : source->GetQueryName();
+		const ibString handler = (operation == ibT("Read")) ? ibT("OnAccessRead") : ibT("OnAccessWrite");
 
 		// The restricting roles' module procUnits were resolved ONCE in the ctor (post-compile, pre-run)
 		// and cached for the session's life; Apply already returned when the list is empty, so at least one
@@ -316,6 +316,10 @@ private:
 				// session (GetAccessPolicy -> null), so reading the very source it restricts does NOT re-enter
 				// RLS. RAII restores enforcement on every exit, including the throw caught just below.
 				ibAccessTrustScope trust(m_session);
+				// OnAccessRead / OnAccessWrite may not ask the user. The scope names the handler so the
+				// frame's doors refuse, in every build, before the handler can park with m_applyMtx
+				// still held. SetSessionParameters is not wrapped here and may still ask.
+				ibRoleHandlerScope asking(m_session, handler);
 				// CallAsProc (comma-separated args) returns TRUE only if the procedure was FOUND and RAN; it
 				// returns FALSE — WITHOUT throwing and WITHOUT running anything — when there is no such handler.
 				// So absence is the bool, not an exception: no handler -> this role imposes no restriction ->
@@ -337,7 +341,7 @@ private:
 			// intersection role is a plain AND, which is what folding into the query already means.
 			switch (runRole(procs.front().m_proc, query)) {
 			case RoleOutcome::Failed:    // loud fail-closed deny — say which source and which operation
-				ibBackendAccessException::Error(wxString::Format(_("%s on '%s' was refused by the role's access policy"),
+				ibBackendAccessException::Error(ibString::Format(_("%s on '%s' was refused by the role's access policy"),
 					operation, sourceName));
 			case RoleOutcome::NoHandler:                                     // no restriction -> allow
 			case RoleOutcome::Succeeded: return;                            // fold (if any) already applied
@@ -379,16 +383,16 @@ private:
 			// the query language's `key IN (subquery)` lowering). No key to reduce onto -> fail closed.
 			const std::vector<const ibBackendQueryColumn*> keyCols = source->GetPrimaryKeyColumns();
 			if (keyCols.empty() || keyCols.front() == nullptr)
-				ibBackendAccessException::Error(wxString::Format(
+				ibBackendAccessException::Error(ibString::Format(
 					_("%s on '%s': the role restricts it through a join, but the source has no key to reduce onto"),
 					operation, sourceName));
 			const ibBackendQueryColumn* keyCol = keyCols.front();
-			scratch.Select(keyCol, wxT("v"));
+			scratch.Select(keyCol, ibT("v"));
 			ibDataQueryResult r = scratch.Execute(ibReadPageRequest{});
 			ibQueryPredicatePtr admitted;
 			while (r.Next()) {
 				ibQueryCondition c;
-				c.m_col = keyCol; c.m_value = r.GetColumn(wxT("v")); c.m_op = ibQueryFilterOp::Equal;
+				c.m_col = keyCol; c.m_value = r.GetColumn(ibT("v")); c.m_op = ibQueryFilterOp::Equal;
 				ibQueryPredicatePtr eq = ibQueryPredicate::Leaf(c);
 				admitted = admitted ? ibQueryPredicate::Compose(ibQueryPredicateKind::Or, admitted, eq) : eq;
 			}
@@ -419,7 +423,7 @@ private:
 				// or never granted must not RELAX the separator it stands for, so — unlike a failed union
 				// role, which merely contributes nothing — a failed intersection role denies outright.
 				if (outcome == RoleOutcome::Failed)
-					ibBackendAccessException::Error(wxString::Format(
+					ibBackendAccessException::Error(ibString::Format(
 						_("%s on '%s' was refused by a restricting role's access policy"), operation, sourceName));
 				if (pred)
 					intersectionPredicates.push_back(pred);
@@ -459,7 +463,7 @@ private:
 		// "every role that spoke refused"; only this frame knows which operation and which source to
 		// say it about.
 		if (verdict.m_failClosed)
-			ibBackendAccessException::Error(wxString::Format(
+			ibBackendAccessException::Error(ibString::Format(
 				_("%s on '%s' was refused by every role's access policy"), operation, sourceName));
 
 		if (verdict.m_union)
@@ -518,13 +522,12 @@ struct ibThreadBinding {
 	ibSession* m_session;   // nullptr: the thread had no binding at m_epoch
 };
 
-// Linux reaches it at a fixed offset, as the string pool (fstring.cpp) — from inside the shared library
-// the default model is a __tls_get_addr call per access.
-#if defined(__linux__)
-thread_local ibThreadBinding t_binding __attribute__((tls_model("initial-exec")));
-#else
+// 🛑 THE DEFAULT TLS MODEL, NOT initial-exec — the backend is LOADED, not only linked. A program opening a
+// file base dlopens libfileserver and the backend with it (the web server, the thin client on Linux), and one
+// initial-exec variable makes the library's whole TLS block (2.3 KB) static, of which a dlopened library gets
+// some 512 bytes: "libbackend.so: cannot allocate memory in static TLS block", the demo server's first night
+// (2026-10-30). The fixed offset is core's alone (memoryPool.cpp), which every program has from the start.
 thread_local ibThreadBinding t_binding;
-#endif
 
 void BindingsChanged() noexcept
 {
@@ -588,7 +591,7 @@ ibSession* ibSession::CurrentCached() noexcept
 	return cached.m_session;
 }
 
-ibSession::ibSession(wxString id, ibSessionKind kind)
+ibSession::ibSession(ibString id, ibSessionKind kind)
 	: m_id(std::move(id))
 	, m_kind(kind)
 	, m_workDate(ibDateTime::Now())
@@ -720,10 +723,13 @@ void ibSession::Teardown()
 	// The run's state only, not Cancel(): every session passes through here, a rented read once per scrolled
 	// page, and a close that is not a forced one lets a statement it is waiting on finish (OnClose).
 	m_procUnitState.m_runState = ibRunState::Cancelled;
-	{
+	// No memory to queue the task (the process at its limit) is no place to wait behind: as when the five seconds run out.
+	try {
 		std::future<void> drained = Submit([] {});
 		if (drained.valid())
 			drained.wait_for(std::chrono::seconds(5));
+	}
+	catch (const std::bad_alloc&) {
 	}
 	// Idle again: the teardown below still runs script-visible
 	// handlers (per-kind hooks, module OnDestroy through DestroyRoot),
@@ -808,7 +814,7 @@ void ibSession::Detach(std::chrono::milliseconds timeout)
 	WaitForAuth(Auth(), timeout);
 }
 
-void ibSession::SetActivity(const wxString& activity)
+void ibSession::SetActivity(const ibString& activity)
 {
 	ibSessionRegistry* const regPtr = RegistryOf(*this);
 	if (regPtr == nullptr) return;
@@ -820,6 +826,31 @@ void ibSession::SetActivity(const wxString& activity)
 	req.session  = shared_from_this();
 	req.activity = activity;
 	reg.Submit(std::move(req), ibPriority::Low);
+}
+
+bool ibSession::SetTokenHash(const ibString& tokenHash)
+{
+	ibSessionRegistry* const regPtr = RegistryOf(*this);
+	if (regPtr == nullptr || regPtr->IsFatal())
+		return false;
+
+	ibRegistryRequest req;
+	req.kind      = ibRegistryRequestKind::SetTokenHash;
+	req.session   = shared_from_this();
+	req.tokenHash = tokenHash;
+	req.written   = std::make_shared<std::promise<bool>>();
+	std::future<bool> written = req.written->get_future();
+	regPtr->Submit(std::move(req), ibPriority::Normal);
+
+	// As long as Add and Attach are waited for: a registry that has not answered by then is a busy server.
+	if (written.wait_for(std::chrono::seconds(20)) != std::future_status::ready)
+		return false;
+	try {
+		return written.get();
+	}
+	catch (const std::future_error&) {
+		return false;   // the registry stopped with the request still queued
+	}
 }
 
 void ibSession::SetExclusive(bool on)
@@ -916,8 +947,15 @@ bool ibSession::CompileRoot()
 	// are only live NOW — the policy ctor resolves + caches them once. Still before the session serves
 	// any user query (CompileRoot finishes first), so it is in place before anything it must guard.
 	// Designer never enforces (it runs off the edit-time manager, not this runtime root).
-	if (!m_accessPolicy && !appData->DesignerMode())
-		m_accessPolicy = std::make_unique<ibRuntimeAccessPolicy>(this, GetMetaData());
+	if (!m_accessPolicy && !appData->DesignerMode()) {
+		// The registry's session already holds the configuration it was let in on. A session
+		// built over a configuration it has not acquired yet (a test, a root created first)
+		// still enforces the roles of the configuration its root was compiled against.
+		const ibMetaData* meta = GetMetaData();
+		if (meta == nullptr && m_root != nullptr && m_root->GetMetaManager() != nullptr)
+			meta = m_root->GetMetaManager()->GetMetaData();
+		m_accessPolicy = std::make_unique<ibRuntimeAccessPolicy>(this, meta);
+	}
 
 	// Lambda executor — m_root's procUnit is live after AttachRuntime, so it is
 	// available to borrow from. ibValueFunction's Execute resolves this through
@@ -934,7 +972,7 @@ bool ibSession::CompileRoot()
 	return true;
 }
 
-bool ibSession::EvaluateInRoot(const wxString& expression, ibValue& produced)
+bool ibSession::EvaluateInRoot(const ibString& expression, ibValue& produced)
 {
 	produced = ibValue();
 	if (expression.IsEmpty())
@@ -944,7 +982,7 @@ bool ibSession::EvaluateInRoot(const wxString& expression, ibValue& produced)
 	const std::shared_ptr<ibProcUnit> rootUnit = root != nullptr ? root->GetProcUnit() : nullptr;
 
 	if (!rootUnit) {
-		produced = ibValue(_("this session has no root to evaluate against"));
+		produced = ibValue(ibString(_("this session has no root to evaluate against")));
 		return false;
 	}
 
@@ -989,7 +1027,22 @@ void ibSession::AcquireMetaData()
 {
 	if (m_metaData)
 		return;
-	if (ibMetaDataConfigurationBase* const active = ibApplicationInstance::GetActiveMetaData(GetApplicationInstance()))
+	// ⭐ A DESIGNER'S SESSION WORKS IN A WORLD OF ITS OWN (Max, 2026-10-20: *"the designer's metadata is held only
+	// by the designer's session; the rest live with the active one, by reference count"*) — the configuration it
+	// edits, made for it and held by it alone. The base's active one it leaves to the rest, and only an apply
+	// replaces it.
+	if (IsDesignerSessionKind(GetKind())) {
+
+		// Held BEFORE it loads — a session's own configuration is the first answer `activeMetaData` gives on its
+		// thread (ibApplicationInstance::GetActiveMetaData), and its loading asks for it. The session is bound to the
+		// thread for its bring-up (NotifyAuthenticated), so the rights checked and the language pinned are its user's.
+		m_metaData = ibMetaData::MakeShared<ibMetaDataConfigurationStorage>(ib::AppDataCtorToken{ GetApplicationInstance(), GetKind() });
+
+		// …and one that did not come up goes with the reference: nobody else holds it.
+		if (!m_metaData->OnInitialize(_app_start_default_flag) || !m_metaData->RunDatabase())
+			m_metaData.reset();
+	}
+	else if (ibMetaDataConfigurationBase* const active = ibApplicationInstance::GetActiveMetaData(GetApplicationInstance()))
 		m_metaData = std::static_pointer_cast<ibMetaDataConfigurationBase>(active->shared_from_this());
 }
 
@@ -1002,8 +1055,8 @@ void ibSession::ReleaseMetaData()
 void ibSession::EnsureRoot()
 {
 	// Wired by ibSessionRegistry::NotifyAuthenticated to land between
-	// OnFirstConnect (metadataCreate) and OnAuthenticated (RunDatabase /
-	// CompileRoot). CreateRoot itself is idempotent; this wrapper just
+	// AcquireMetaData and OnAuthenticated (CompileRoot).
+	// CreateRoot itself is idempotent; this wrapper just
 	// guards on the acquired configuration so headless sessions
 	// (Launcher, technical) without metadata don't fault.
 	if (m_root) return;
@@ -1018,6 +1071,16 @@ void ibSession::EnsureRoot()
 	// run, so its ctor can resolve the user's role-module procUnits (see there). The L3 door pulls it via
 	// GetAccessPolicy(); no query fires before CompileRoot, so it is always in place when needed.
 	CreateRoot(GetMetaData());
+}
+
+void ibSession::RefuseQuestionFromRoleHandler() const
+{
+	// Only OnAccessRead / OnAccessWrite set the name. A question anywhere else,
+	// including SetSessionParameters, is unchanged.
+	if (m_roleHandler == nullptr || m_roleHandler->IsEmpty())
+		return;
+	ibBackendCoreException::Error(
+		_("Role handler '%s' cannot ask the user"), *m_roleHandler);
 }
 
 const ibAccessPolicy* ibSession::GetAccessPolicy() const
@@ -1060,7 +1123,7 @@ void ibSession::Cancel()
 	ibJobManager* const jobs = ibApplicationInstance::GetJobManager(GetApplicationInstance());
 	const std::vector<std::shared_ptr<ibSession>> tenants =
 		jobs != nullptr ? jobs->TenantsOf(this) : std::vector<std::shared_ptr<ibSession>>();
-	ibJournalInfo(wxT("cancel"), wxT("session %s: cancel - its connection, its runtime, %u tenant(s)"),
+	ibJournalInfo(ibT("cancel"), ibT("session %s: cancel - its connection, its runtime, %u tenant(s)"),
 		GetId(), static_cast<unsigned>(tenants.size()));
 	// The database first, then the runtime: the statement running now answers with the interruption, and
 	// the runtime, told next, throws it again at every level until the run is out — and lowers it itself.
@@ -1079,8 +1142,9 @@ void ibSession::Cancel()
 		ibRunState running = ibRunState::Running;
 		m_procUnitState.m_runState.compare_exchange_strong(running, ibRunState::Cancelled);
 	}
-	// A script that waits for its client (ibWorkerPool::Await — a question on the web) hears it too: rung, it
-	// finds the run cancelled and throws the interruption up the script.
+	// Work that waits for its client (ibWorkerPool::Await — a question on the web) hears it too, a script's or the
+	// engine's own (the wait is a run of its own when no script is under it): rung, it finds the run cancelled and
+	// throws the interruption up the work that asked.
 	if (ibWorkerPool* const pool = GetWorkerPool())
 		pool->Wake(this);
 	for (const std::shared_ptr<ibSession>& tenant : tenants)
@@ -1207,7 +1271,7 @@ void ibSession::BindSessionToThread(ibSession* s, std::thread::id tid)
 {
 	std::unique_lock<std::shared_mutex> lk(s_currentMutex);
 	if (s != nullptr)
-		// weak_from_this is C++17, doesn't throw if the session isn't
+		// weak_from_this doesn't throw if the session isn't
 		// yet wrapped in a shared_ptr — returns expired weak_ptr in
 		// that case. All ibSession instances are made via make_shared
 		// in the registry's typed factory, so by the time anyone calls
@@ -1336,9 +1400,8 @@ void ibSession::WakeDebugLoop()
 	// Step 1 — set m_forceExit so ibProcUnit::Execute's opcode loop
 	// unwinds on the next iteration (after returning from DoDebugLoop)
 	// instead of resuming user script. We bypass RequestForceExit
-	// because its OnForceExit side effect (web → wfrontendCallProcessExitHook
-	// when wes was started in --debug mode) would kill the entire
-	// process; here we want to cancel only THIS session's interpreter.
+	// because its OnForceExit side effect (a host's exit hook) may kill
+	// the entire process; here we want to cancel only THIS session's interpreter.
 	// Direct atomic store; deduplication against a later RequestForceExit
 	// is fine since the destroy path doesn't follow up with one.
 	m_forceExit.store(true, std::memory_order_release);
@@ -1347,10 +1410,9 @@ void ibSession::WakeDebugLoop()
 	// returns immediately. Mirrors the per-session wake performed by
 	// ibDebuggerServer::WakeDebugSession on designer disconnect — same
 	// graceful LeaveLoop is sent on the wire when the loop unwinds.
-	if (m_debug == nullptr) return;
-	m_debug->m_debugLoop = false;
-	std::lock_guard<std::mutex> lk(m_debug->m_mutex);
-	m_debug->m_cv.notify_all();
+	m_debug.m_debugLoop = false;
+	std::lock_guard<std::mutex> lk(m_debug.m_mutex);
+	m_debug.m_cv.notify_all();
 }
 
 bool ibSession::OnClose(bool /*force*/)
@@ -1372,10 +1434,10 @@ bool ibSession::OnClose(bool /*force*/)
 			self->Teardown();
 		}
 		catch (const std::exception& err) {
-			ibJournalWarning(wxT("session"), wxT("a session's teardown ended with an exception: %s"), wxString::FromUTF8(err.what()));
+			ibJournalWarning(ibT("session"), ibT("a session's teardown ended with an exception: %s"), ibString::FromUTF8(err.what()));
 		}
 		catch (...) {
-			ibJournalWarning(wxT("session"), wxT("a session's teardown ended with an exception"));
+			ibJournalWarning(ibT("session"), ibT("a session's teardown ended with an exception"));
 		}
 	});
 	if (queued.valid() && queued.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
@@ -1438,19 +1500,19 @@ std::future<void> ibSession::Submit(std::function<void()> task)
 	return p.get_future();
 }
 
-wxString ibSession::Reason() const
+ibString ibSession::Reason() const
 {
 	std::lock_guard<std::mutex> lk(m_mtx);
 	return m_reason;
 }
 
-void ibSession::SetReason(const wxString& reason)
+void ibSession::SetReason(const ibString& reason)
 {
 	std::lock_guard<std::mutex> lk(m_mtx);
 	m_reason = reason;
 }
 
-void ibSession::Transition(ibSessionState next, const wxString& reason)
+void ibSession::Transition(ibSessionState next, const ibString& reason)
 {
 	{
 		std::lock_guard<std::mutex> lk(m_mtx);
@@ -1463,7 +1525,7 @@ void ibSession::Transition(ibSessionState next, const wxString& reason)
 	m_cv.notify_all();
 }
 
-void ibSession::TransitionAuth(ibAuthState next, const wxString& reason)
+void ibSession::TransitionAuth(ibAuthState next, const ibString& reason)
 {
 	{
 		std::lock_guard<std::mutex> lk(m_mtx);
@@ -1491,7 +1553,7 @@ ibAuthState ibSession::WaitForAuth(ibAuthState from, std::chrono::milliseconds t
 	return m_auth.load(std::memory_order_acquire);
 }
 
-ibSession::OpenResult ibSession::Open(const wxString& user, const wxString& password)
+ibSession::OpenResult ibSession::Open(const ibString& user, const ibString& password)
 {
 	// Must be Added (registry accepted the session); Anonymous or AuthFailed
 	// on the auth axis — either is a valid retry point.
@@ -1504,7 +1566,7 @@ ibSession::OpenResult ibSession::Open(const wxString& user, const wxString& pass
 
 	constexpr auto timeout = std::chrono::seconds(20);
 
-	auto submitAttach = [&](const wxString& u, const wxString& p) {
+	auto submitAttach = [&](const ibString& u, const ibString& p) {
 		// Reset auth axis so WaitForAuth below has a known "from" value —
 		// otherwise a prior AuthFailed state would trigger the wait
 		// immediately without the new Attach having been processed.
@@ -1518,14 +1580,14 @@ ibSession::OpenResult ibSession::Open(const wxString& user, const wxString& pass
 	ibAuthState res = submitAttach(user, password);
 	if (res == ibAuthState::Authenticated) {
 		// NotifyAuthenticated fires three phases in order:
-		//   1. OnFirstConnect listeners — process-level metadata bootstrap
-		//      (metadataCreate, populates the base's active one) on the first auth.
+		//   1. OnFirstConnect listeners, on the first auth (the base's
+		//      configuration ran as it opened, before anybody came in).
 		//   2. session->AcquireMetaData + EnsureRoot — the session's own reference
-		//      to it, and the per-session root mm allocated over it NOW so
-		//      step 3's listeners can rely on GetManagerModule() != null.
+		//      to it (a designer's: one of its own), and the per-session root mm
+		//      allocated over it NOW so step 3's listeners can rely on
+		//      GetManagerModule() != null.
 		//   3. OnAuthenticated listeners — per-session bring-up
-		//      (RunDatabase fires OnBefore/AfterRunMetaObject which read
-		//      session->mm; CompileRoot; AttachRuntime).
+		//      (CompileRoot; AttachRuntime).
 		// Note: NotifyAuthenticated binds this session for the bring-up
 		// (and gives the thread back after), so any breakpoint hit inside
 		// the listeners resolves Current() to THIS session (the registry-
@@ -1533,6 +1595,10 @@ ibSession::OpenResult ibSession::Open(const wxString& user, const wxString& pass
 		reg.NotifyAuthenticated(this);
 		return OpenResult::Authenticated;
 	}
+	// The registry did not answer at all: nothing was said of the creds, and a dialog would ask for a password that
+	// was never the question.
+	if (res == ibAuthState::Anonymous)
+		return OpenResult::Timeout;
 
 	// Interactive fallback — GUI override shows login dialog (shared for
 	// designer + enterprise via ibGUISession::OnShowAuthenticate). Pin
@@ -1558,7 +1624,7 @@ ibSession::OpenResult ibSession::Open(const wxString& user, const wxString& pass
 		reg.NotifyAuthenticated(this);
 		return OpenResult::Authenticated;
 	}
-	return OpenResult::Failed;
+	return res == ibAuthState::Anonymous ? OpenResult::Timeout : OpenResult::Failed;
 }
 
 // --- ibSessionThreadBinding --------------------------------------------

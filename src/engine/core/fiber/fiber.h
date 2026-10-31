@@ -15,7 +15,7 @@
 #include <cstddef>
 #include <exception>
 
-#if !defined(_WIN32)
+#if !defined(__IBMSW__)
 // The asm trampoline calls this. It has to reach RunEntry, which stays
 // private so a caller cannot run a fiber's body out from under the switch.
 extern "C" void ibFiberEnter();
@@ -25,18 +25,34 @@ class CORE_API ibFiber {
 public:
 	using Entry = void (*)(void* arg);
 
-	// One megabyte, the same reserve a worker thread has on Windows
-	// (the MSVC default). There is no interpreter recursion limit, so a
-	// fiber has to offer what the thread it replaces offered. The pages
-	// commit on touch; a parked question pays for what the script used,
-	// not for the whole reserve.
+	// 64-bit keeps the thread reserve (Common.props, StackReserveSize, 8 MB).
+	// MAX_REC_COUNT is 200 and ibProcUnit::Execute keeps about 9.4 KB per
+	// interpreted level, so that reserve is what lets the count be the
+	// limit a script sees. Past kStackCommit the pages commit on touch: a
+	// parked question pays for the stack the script used, not for the reserve.
 	//
-	// Win32 x86 (the shipping build) has a 2 GB user address space, 4 GB
-	// under WOW64 only when the exe is linked /LARGEADDRESSAWARE — this
-	// tree does not pass that flag. After the image, the heap and wx,
-	// roughly a gigabyte is left, which is about a thousand fibers at
-	// this reserve. x64 and arm64 are not address-space bound.
-	static constexpr std::size_t kStackReserve = 1024u * 1024u;
+	// A 32-bit process has about a gigabyte of user address space, and
+	// every lease takes a fiber, so the reserve there is the 2 MB the
+	// count needs. StackLow is what makes the smaller reserve safe: a
+	// frame that would not fit is refused before the guard page. Placing
+	// a fiber that does not fit throws bad_alloc; the pool refuses the
+	// task instead of claiming the same queue again.
+	static constexpr std::size_t kStackReserve =
+		sizeof(void*) >= 8 ? (8u * 1024u * 1024u) : (2u * 1024u * 1024u);
+
+	// Committed ahead of use, on a fiber and on a thread alike (the thread's is the linker's word: Common.props,
+	// StackCommitSize; CMakeLists.txt, /STACK). A stack page refused later is no exception but the end of the process:
+	// at the memory limit (backend.conf) the system has none to give, and an allocation refused there has to fit its
+	// unwinding. Change them together.
+	static constexpr std::size_t kStackCommit = 256u * 1024u;
+
+	// Left below the pointer so the refusal itself still fits. The depth
+	// counters stay the limit a script sees; this fires only when the
+	// native stack would run out first.
+	static constexpr std::size_t kStackSlack = 128u * 1024u;
+
+	// StackRemaining answers this when it cannot see the bounds. Not empty.
+	static constexpr std::size_t kUnknownStack = static_cast<std::size_t>(-1);
 
 	// The calling thread becomes its own scheduler fiber (the thread
 	// stack). Idempotent on a thread that already converted.
@@ -45,6 +61,15 @@ public:
 
 	static ibFiber* Current();
 	static ibFiber* Scheduler();
+
+	// Bytes still unused below the stack pointer: this fiber's reserve
+	// when one is current, otherwise the OS thread's stack.
+	static std::size_t StackRemaining() noexcept;
+	static bool StackLow() noexcept
+	{
+		const std::size_t left = StackRemaining();
+		return left != kUnknownStack && left < kStackSlack;
+	}
 
 	static ibFiber* Create(Entry entry, void* arg, std::size_t reserveBytes = kStackReserve);
 	static void Destroy(ibFiber* fiber);
@@ -66,7 +91,7 @@ private:
 	std::size_t m_stackAllocSize = 0;
 	void* m_stackBottom = nullptr;
 	std::size_t m_stackSize = 0;
-#if defined(_WIN32)
+#if defined(__IBMSW__)
 	void* m_osFiber = nullptr;
 #endif
 	bool m_scheduler = false;
@@ -80,13 +105,13 @@ private:
 	ibFiberLocals::Snapshot m_locals;
 
 	void RunEntry();
-#if !defined(_WIN32)
+#if !defined(__IBMSW__)
 	friend void ibFiberEnter();
 #endif
-#if !defined(_WIN32)
+#if !defined(__IBMSW__)
 	void InitPosixStack();
 #endif
-#if defined(_WIN32)
+#if defined(__IBMSW__)
 	// A Win32 fiber procedure (`VOID CALLBACK (LPVOID)`). CALLBACK is __stdcall; spelled out so this header needs
 	// no <windows.h>.
 	static void __stdcall FiberProc(void* arg);

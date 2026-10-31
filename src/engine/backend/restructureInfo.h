@@ -30,13 +30,13 @@ class BACKEND_API ibRestructureInfo {
 public:
 	struct Entry {
 		ibRestructure type;
-		wxString      descr;
+		ibString      descr;
 	};
 
 	// ---- mutators ------------------------------------------------------------
-	void AppendInfo   (const wxString& s) { m_entries.push_back({ ibRestructure::info,    s }); }
-	void AppendWarning(const wxString& s) { m_entries.push_back({ ibRestructure::warning, s }); ++m_warnings; }
-	void AppendError  (const wxString& s) { m_entries.push_back({ ibRestructure::error,   s }); ++m_errors;   }
+	void AppendInfo   (const ibString& s) { m_entries.push_back({ ibRestructure::info,    s }); }
+	void AppendWarning(const ibString& s) { m_entries.push_back({ ibRestructure::warning, s }); ++m_warnings; }
+	void AppendError  (const ibString& s) { m_entries.push_back({ ibRestructure::error,   s }); ++m_errors;   }
 
 	// Append all of another ledger's entries (preserving type + counters) — e.g. the config-save flow
 	// reads the structure builder's change log into the active config's ledger for the apply-change UI.

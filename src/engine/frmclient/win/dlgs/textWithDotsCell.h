@@ -34,13 +34,13 @@ public:
 	virtual bool HasEditorCtrl() const override { return true; }
 	bool EditOnSingleClick() const override { return true; }
 
-	virtual wxWindow* CreateEditorCtrl(wxWindow* dv, wxRect labelRect, const wxVariant& value) override {
+	virtual wxWindow* CreateEditorCtrl(wxWindow* dv, wxRect labelRect, const ibVariant& value) override {
 		m_text = value.GetString();
 
 		ibControlTextEditor* editor = new ibControlTextEditor;
 		editor->SetDVCMode(true);
 		editor->Show(false);
-		if (!editor->Create(dv, wxID_ANY, value, labelRect.GetPosition(), labelRect.GetSize()))
+		if (!editor->Create(dv, wxID_ANY, value.GetString().ToWxString(), labelRect.GetPosition(), labelRect.GetSize()))
 			return nullptr;
 
 		editor->ShowSelectButton(true);    // the "..." — room to write what does not fit
@@ -64,7 +64,7 @@ public:
 	// WHAT THE CELL COMMITS is whatever the box holds — typed or written in the dialog. With the box
 	// already gone (the dialog's own closing takes the editor with it), what it last held is what
 	// this renderer kept, so the written text is not lost with the window that wrote it.
-	virtual bool GetValueFromEditorCtrl(wxWindow* editor, wxVariant& value) override {
+	virtual bool GetValueFromEditorCtrl(wxWindow* editor, ibVariant& value) override {
 		if (ibControlTextEditor* box = dynamic_cast<ibControlTextEditor*>(editor)) {
 			m_text = box->GetValue();
 			value  = m_text;

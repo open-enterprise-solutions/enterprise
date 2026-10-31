@@ -1,0 +1,191 @@
+/*! Copyright 2026 Fonticons, Inc. - https://webawesome.com/license */
+import "../chunks/chunk.DL7HG4WM.js";
+import "../chunks/chunk.D5HA4OFX.js";
+import {
+  registerTranslation
+} from "../chunks/chunk.HOKYDFUG.js";
+import "../chunks/chunk.JHZRD2LV.js";
+
+// src/translations/nb.ts
+var translation = {
+  $code: "nb",
+  $name: "Norwegian Bokm\xE5l",
+  $dir: "ltr",
+  allTagsRemoved: "Alle tagger fjernet",
+  am: "AM",
+  autosizeColumn: "Tilpass kolonnebredde",
+  captions: "Teksting",
+  carousel: "Karusell",
+  chooseDate: "Velg dato",
+  chooseDecade: "Velg ti\xE5r",
+  chooseMonth: "Velg m\xE5ned",
+  chooseTime: "Velg klokkeslett",
+  chooseYear: "Velg \xE5r",
+  clearEntry: "T\xF8m felt",
+  clearFilter: "Fjern filter",
+  clearSort: "Fjern sortering",
+  close: "Lukk",
+  closeCalendar: "Lukk kalender",
+  closeTimeInput: "Lukk tidsvelger",
+  collapseRow: "Skjul rad",
+  columnMenu: "Kolonnealternativer",
+  columnMovedToPosition: (label, position, total) => `${label} flyttet til posisjon ${position} av ${total}`,
+  columns: "Kolonner",
+  compactPageXOfY: (page, total) => `${page} av ${total}`,
+  completed: "Fullf\xF8rt",
+  copied: "Kopiert",
+  copy: "Kopier",
+  createOption: (value) => `Opprett "${value}"`,
+  currentlyPlaying: "spilles n\xE5",
+  currentValue: "N\xE5v\xE6rende verdi",
+  date: "Dato",
+  datePickerKeyboardHelp: "Bruk piltastene for \xE5 endre verdier; trykk Alt+Pil ned for \xE5 \xE5pne kalenderen.",
+  day: "Dag",
+  dayPeriod: "AM/PM",
+  decrement: "Reduser",
+  deselectAllRows: "Fjern valg av alle rader",
+  disabled: "Deaktivert",
+  dropFileHere: "Drop file here or click to browse",
+  dropFilesHere: "Drop files here or click to browse",
+  empty: "Tom",
+  endDate: "Sluttdato",
+  enterFullscreen: "G\xE5 til fullskjerm",
+  error: "Feil",
+  exitFullscreen: "Avslutt fullskjerm",
+  expandRow: "Vis rad",
+  filterByColumn: (label) => `Filtrer etter ${label}`,
+  filterFrom: "Fra",
+  filterMax: "Maks",
+  filterMin: "Min",
+  filterTo: "Til",
+  firstPage: "F\xF8rste side",
+  goToSlide: (slide, count) => `G\xE5 til visning ${slide} av ${count}`,
+  hideColumn: "Skjul kolonne",
+  hidePassword: "Skjul passord",
+  hour: "Time",
+  incompleteDate: "Skriv inn en gyldig dato.",
+  increment: "\xD8k",
+  jumpBackwardX: (count) => `Hopp ${count} sider tilbake`,
+  jumpForwardX: (count) => `Hopp ${count} sider fremover`,
+  lastPage: "Siste side",
+  loading: "Laster",
+  locked: "L\xE5st",
+  minute: "Minutt",
+  month: "M\xE5ned",
+  moreOptions: "Flere alternativer",
+  mute: "Demp lyd",
+  nextDecade: "Neste ti\xE5r",
+  nextMonth: "Neste m\xE5ned",
+  nextPage: "Neste side",
+  nextSlide: "Neste visning",
+  nextVideo: "Neste video",
+  nextYear: "Neste \xE5r",
+  noData: "Ingen data",
+  noOptions: "Ingen alternativer",
+  noResults: "Ingen samsvarende resultater",
+  notCompleted: "Ikke fullf\xF8rt",
+  now: "N\xE5",
+  numCharacters: (num) => {
+    if (num === 1) return "1 tegn";
+    return `${num} tegn`;
+  },
+  numCharactersRemaining: (num) => {
+    if (num === 1) return "1 tegn gjenst\xE5r";
+    return `${num} tegn gjenst\xE5r`;
+  },
+  numOptionsAvailable: (num) => {
+    if (num === 0) return "Ingen tilgjengelige alternativer";
+    if (num === 1) return "Ett alternativ tilgjengelig";
+    return `${num} alternativer tilgjengelige`;
+  },
+  numOptionsSelected: (num) => {
+    if (num === 0) return "Ingen alternativer valgt";
+    if (num === 1) return "Ett alternativ valgt";
+    return `${num} alternativer valgt`;
+  },
+  numRowsCopied: (num) => num === 1 ? "1 rad kopiert" : `${num} rader kopiert`,
+  numRowsSelected: (num) => num === 1 ? "1 rad valgt" : `${num} rader valgt`,
+  optionPosition: (label, position, total) => `${label}, ${position} av ${total}`,
+  optionsLoadError: "Alternativene kunne ikke lastes",
+  pageXOfY: (page, total) => `Side ${page} av ${total}`,
+  pagination: "Paginering",
+  pause: "Pause",
+  pauseAnimation: "Sett animasjon p\xE5 pause",
+  pictureInPicture: "Bilde i bilde",
+  pinLeft: "Fest til venstre",
+  pinRight: "Fest til h\xF8yre",
+  play: "Spill av",
+  playAnimation: "Spill av animasjon",
+  playbackSpeed: "Avspillingshastighet",
+  playlist: "Spilleliste",
+  pm: "PM",
+  previousDecade: "Forrige ti\xE5r",
+  previousMonth: "Forrige m\xE5ned",
+  previousPage: "Forrige side",
+  previousSlide: "Forrige visning",
+  previousVideo: "Forrige video",
+  previousYear: "Forrige \xE5r",
+  progress: "Fremdrift",
+  rangeTooLong: (max) => {
+    if (max === 1) return "Velg et omr\xE5de som ikke er lengre enn 1 dag";
+    return `Velg et omr\xE5de som ikke er lengre enn ${max} dager`;
+  },
+  rangeTooShort: (min) => {
+    if (min === 1) return "Velg et omr\xE5de som er minst 1 dag langt";
+    return `Velg et omr\xE5de som er minst ${min} dager langt`;
+  },
+  readonly: "Skrivebeskyttet",
+  remove: "Fjern",
+  resetColumns: "Tilbakestill kolonner",
+  resize: "Endre st\xF8rrelse",
+  resizeColumn: "Endre kolonnebredde",
+  rowsPerPage: "Rader per side",
+  scrollableRegion: "Rullbar region",
+  scrollToEnd: "Rull til slutten",
+  scrollToStart: "Rull til starten",
+  search: "S\xF8k",
+  second: "Sekund",
+  seek: "S\xF8k",
+  seekProgress: (current, duration) => `${current} av ${duration}`,
+  selectAColorFromTheScreen: "Velg en farge fra skjermen",
+  selectAllRows: "Velg alle rader",
+  selected: "Valgt",
+  selectedDateLabel: (date) => `Valgt: ${date}`,
+  selectedRangeLabel: (range) => `Valgt omr\xE5de: ${range}`,
+  selectGroup: "Velg gruppe",
+  selectionCleared: "Valg fjernet",
+  selectRow: "Velg rad",
+  showingNofMRows: (shown, total) => `Viser ${shown} av ${total} rader`,
+  showingXtoYofZ: (start, end, total) => `${start}\u2013${end} av ${total}`,
+  showPassword: "Vis passord",
+  slideNum: (slide) => `Visning ${slide}`,
+  sortAscending: "Sorter stigende",
+  sortColumn: "Sorter kolonne",
+  sortDescending: "Sorter synkende",
+  startDate: "Startdato",
+  steps: "Trinn",
+  stepXOfY: (step, total) => `Trinn ${step} av ${total}`,
+  tagAdded: (tag) => `${tag} lagt til`,
+  tagAlreadyAdded: (tag) => `${tag} er allerede lagt til`,
+  tagInputKeyboardHelp: "Trykk p\xE5 Backspace eller Delete for \xE5 fjerne denne taggen.",
+  tagRemoved: (tag) => `${tag} fjernet`,
+  time: "Klokkeslett",
+  timeInputKeyboardHelp: "Bruk piltastene for \xE5 endre verdier; trykk Alt+Pil ned for \xE5 \xE5pne tidsvelgeren.",
+  today: "I dag",
+  toggleColorFormat: "Bytt fargeformat",
+  tooFewTags: (min) => min === 1 ? "Legg til minst 1 tagg" : `Legg til minst ${min} tagger`,
+  tooManyTags: (max) => max === 1 ? "Legg til h\xF8yst 1 tagg" : `Legg til h\xF8yst ${max} tagger`,
+  unmute: "Skru p\xE5 lyd",
+  unpin: "L\xF8sne",
+  unpinColumn: "L\xF8sne kolonne",
+  videoPlayer: "Videospiller",
+  volume: "Volum",
+  year: "\xC5r",
+  zoomIn: "Zoom inn",
+  zoomOut: "Zoom ut"
+};
+registerTranslation(translation);
+var nb_default = translation;
+export {
+  nb_default as default
+};

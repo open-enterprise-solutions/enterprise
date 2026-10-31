@@ -17,7 +17,7 @@
 
 ibValueMetaObjectDataProcessor::ibValueMetaObjectDataProcessor() : ibValueMetaObjectRecordDataExt()
 {
-	(*m_propertyManagerModule)->SetDefaultProcedure(wxT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { wxT("Form"), wxT("Cancel") });
+	(*m_propertyManagerModule)->SetDefaultProcedure(ibT("FormGetProcessing"), ibContentHelper::eProcedureHelper, { ibT("Form"), ibT("Cancel") });
 }
 
 ibValueMetaObjectDataProcessor::~ibValueMetaObjectDataProcessor()
@@ -103,7 +103,7 @@ bool ibValueMetaObjectDataProcessor::ReadData(const ibDataNode& node)
 	m_propertyObjectModule->SetNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
 	m_propertyManagerModule->SetNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
 
-	m_propertyDefFormObject->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormObject->GetName())));
+	m_propertyDefFormObject->SetValue(GetIdByGuid(node.GetValue<ibString>(m_propertyDefFormObject->GetName())));
 
 	return true;
 }

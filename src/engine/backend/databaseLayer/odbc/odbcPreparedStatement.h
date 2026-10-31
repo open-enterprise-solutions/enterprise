@@ -1,20 +1,8 @@
 #ifndef __ODBC_PREPARED_STATEMENT_H__
 #define __ODBC_PREPARED_STATEMENT_H__
 
-// For compilers that support precompilation, includes "wx.h".
-#include <wx/wxprec.h>
-
-#ifdef __BORLANDC__
-#pragma hdrstop
-#endif
-
-#ifndef WX_PRECOMP
-#include <wx/wx.h>
-#endif
-
-#include <wx/dynarray.h>
-
 #include <atomic>
+#include <vector>
 
 #include "backend/databaseLayer/preparedStatement.h"
 
@@ -23,8 +11,8 @@
 
 #include <sql.h>
 
-WX_DEFINE_ARRAY_PTR(SQLHSTMT, StatementVector);
-WX_DEFINE_ARRAY_PTR(ibDatabaseParameterODBC*, ArrayOfODBCParameters);
+typedef std::vector<SQLHSTMT> StatementVector;
+typedef std::vector<ibDatabaseParameterODBC*> ArrayOfODBCParameters;
 
 class ibDatabaseResultSet;
 

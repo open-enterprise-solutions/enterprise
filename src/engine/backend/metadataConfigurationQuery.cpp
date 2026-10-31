@@ -4,14 +4,11 @@
 #include "backend/databaseLayer/databaseErrorCodes.h"
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door: dialect-neutral DDL/DML + typed row reads (kills the PG/FB forks below)
 
-#include "backend/utils/md5.hpp"
+#include "core/utils/base64.h"   // ibBase64 — the configuration's bytes as the text its digest is taken of
+#include "core/utils/md5.hpp"
 #include "backend/appData.h"
 #include "backend/logger/logger.h"
 #include "backend/backend_exception.h"
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////
-#include <wx/base64.h>
-//////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // The restructure ledger lives on the CONFIGURATION; this static pulls the ACTIVE config's instance, so
 // this-less callers (static scaffold methods, the apply dialog) reach it without a metadata handle.
@@ -21,13 +18,13 @@ ibRestructureInfo& ibMetaDataConfigurationBase::GetRestructureInfo()
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
-#define config_table	  wxT("sys_config")
-#define config_save_table wxT("sys_config_save")
+#define config_table	  ibT("sys_config")
+#define config_save_table ibT("sys_config_save")
 //////////////////////////////////////////////////////////////////////////////////////////////////////
-#define config_name       wxT("sys.database")
+#define config_name       ibT("sys.database")
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 
-inline wxString GetCommonConfigTable(ibConfigType cfg_type) {
+inline ibString GetCommonConfigTable(ibConfigType cfg_type) {
 
 	switch (cfg_type)
 	{
@@ -39,7 +36,7 @@ inline wxString GetCommonConfigTable(ibConfigType cfg_type) {
 		break;      // a file configuration has no common table in the database
 	}
 
-	return wxEmptyString;
+	return ibEmptyString;
 }
 
 //**************************************************************************************************
@@ -58,7 +55,7 @@ bool ibMetaDataConfiguration::LoadDatabase(int flags)
 	// load config: SELECT binary_data, file_guid FROM <config table>
 	ibDatabaseQueryBuilder q;
 	ibQueryIR ir(ibProject(ibScan(GetCommonConfigTable(GetConfigType())),
-		{ { ibCol(wxT("binary_data")), wxEmptyString }, { ibCol(wxT("file_guid")), wxEmptyString } }));
+		{ { ibCol(ibT("binary_data")), ibEmptyString }, { ibCol(ibT("file_guid")), ibEmptyString } }));
 	ibQueryResult result = q.ExecuteIR(ir);   // RAII: closes cursor + statement
 
 	//load metadata from DB
@@ -70,9 +67,9 @@ bool ibMetaDataConfiguration::LoadDatabase(int flags)
 			return false;
 		}
 
-		wxMemoryBuffer binaryData;
-		result.GetResultBlob(wxT("binary_data"), binaryData);
-		ibReaderMemory metaReader(binaryData.GetData(), binaryData.GetBufSize());
+		ibMemoryBuffer binaryData;
+		result.GetResultBlob(ibT("binary_data"), binaryData);
+		ibReaderMemory metaReader(binaryData);
 
 		//check is file empty
 		if (metaReader.eof())
@@ -84,8 +81,10 @@ bool ibMetaDataConfiguration::LoadDatabase(int flags)
 
 		m_configNew = false;
 
-		m_metaGuid = ibGuid(result.GetResultString(wxT("file_guid")));
-		m_md5Hash = ibMD5::ComputeMd5(wxBase64Encode(binaryData.GetData(), binaryData.GetDataLen()));
+		m_metaGuid = ibGuid(result.GetResultString(ibT("file_guid")));
+		std::string text;
+		ibBase64::Append(text, binaryData.GetData(), binaryData.GetDataLen());
+		m_md5Hash = ibMD5::ComputeMd5(text.data(), text.size());
 	}
 
 	return true;
@@ -227,10 +226,10 @@ bool ibMetaDataConfigurationStorage::OnSaveDatabase(int flags)
 	// A real failure THROWS (caught below); the affected-row count is not inspected.
 	ibDatabaseQueryBuilder q_save;
 	q_save.Execute(ibUpsert(config_save_table, {
-			{ wxT("file_name"),   ibConst(ibValue(config_name)) },
-			{ wxT("binary_data"), ibConstBlob(writerData.pointer(), writerData.size()) },
-			{ wxT("file_guid"),   ibConst(ibValue(m_metaGuid.str())) },
-		}, { wxT("file_name") }));
+			{ ibT("file_name"),   ibConst(ibValue(config_name)) },
+			{ ibT("binary_data"), ibConstBlob(writerData.pointer(), writerData.size()) },
+			{ ibT("file_guid"),   ibConst(ibValue(m_metaGuid.str())) },
+		}, { ibT("file_name") }));
 
 	// ⭐⭐ RECOMPUTED ON EVERY SAVE, AND THAT IS THE AOT CACHE'S WHOLE CORRECTNESS STORY. A cached
 	// row is looked up by (descriptor, configuration digest), so bytecode compiled against an
@@ -248,9 +247,9 @@ bool ibMetaDataConfigurationStorage::OnSaveDatabase(int flags)
 	// about TEXT, not about the database: Modify() compares the edited configuration against the
 	// saved baseline, and the debugger verifies a connection by the configuration GUID and merely
 	// carries this along. What "the base has not got yet" is answered by database_diff.
-	m_md5Hash = ibMD5::ComputeMd5(
-		wxBase64Encode(writerData.pointer(), writerData.size())
-	);
+	std::string text;
+	ibBase64::Append(text, writerData.pointer(), writerData.size());
+	m_md5Hash = ibMD5::ComputeMd5(text.data(), text.size());
 
 	// ⭐⭐ THE ACTIVE CONFIGURATION IS *NOT* PUBLISHED HERE ANY MORE — see PublishConfiguration(),
 	// called after the schema is finished.
@@ -282,13 +281,13 @@ bool ibMetaDataConfigurationStorage::OnSaveDatabase(int flags)
 		// The reason travels with it. The exception is re-thrown unchanged (the caller still surfaces the
 		// chain); this only makes sure the base itself remembers what refused and when.
 		if (ibLog != nullptr && ibLog->IsEnabled(ibLogLevel::Audit)) {
-			wxString reason;
+			ibString reason;
 			try { throw; }
 			catch (const ibCoreException& err) { reason = err.GetErrorDescription(); }
-			catch (const std::exception& err)     { reason = wxString::FromUTF8(err.what()); }
+			catch (const std::exception& err)     { reason = ibString::FromUTF8(err.what()); }
 			catch (...)                           { reason = _("unknown exception"); }
-			ibLog->Audit(wxT("metadata"), wxT("apply_failed"),
-			             wxString::Format(wxT("flags=0x%X: %s"), flags, reason));
+			ibLog->Audit(ibT("metadata"), ibT("apply_failed"),
+			             ibString::Format(ibT("flags=0x%X: %s"), flags, reason));
 		}
 
 		// The exception skips OnAfterSaveDatabase, so close the build here through the builder — it rolls
@@ -308,11 +307,11 @@ bool ibMetaDataConfigurationStorage::OnAfterSaveDatabase(bool roolback, int flag
 	// distinguish admin-relevant DDL from background metadata-only writes.
 	if (ibLog && ibLog->IsEnabled(ibLogLevel::Audit)) {
 		const bool fullApply = (flags & saveConfigFlag) != 0;
-		const wxString evt = roolback
-			? wxT("apply_failed")
-			: (fullApply ? wxT("applied") : wxT("saved"));
-		ibLog->Audit(wxT("metadata"), evt,
-		             wxString::Format(wxT("flags=0x%X"), flags));
+		const ibString evt = roolback
+			? ibT("apply_failed")
+			: (fullApply ? ibT("applied") : ibT("saved"));
+		ibLog->Audit(ibT("metadata"), evt,
+		             ibString::Format(ibT("flags=0x%X"), flags));
 	}
 
 	// ⭐⭐ …AND WHAT ACTUALLY CHANGED, not only that something did.
@@ -331,11 +330,11 @@ bool ibMetaDataConfigurationStorage::OnAfterSaveDatabase(bool roolback, int flag
 	if (const ibRestructureInfo& ledger = ibMetaDataConfigurationBase::GetRestructureInfo();
 		ledger.Count() > 0) {
 
-		ibJournalInfo(wxT("metadata.apply"), wxT("%s: %u change(s)%s%s"),
-			roolback ? wxT("rolled back") : wxT("applied"),
+		ibJournalInfo(ibT("metadata.apply"), ibT("%s: %u change(s)%s%s"),
+			roolback ? ibT("rolled back") : ibT("applied"),
 			(unsigned)ledger.Count(),
-			ledger.HasWarnings() ? wxT(", with warnings") : wxT(""),
-			ledger.HasErrors()   ? wxT(", with errors")   : wxT(""));
+			ledger.HasWarnings() ? ibT(", with warnings") : ibT(""),
+			ledger.HasErrors()   ? ibT(", with errors")   : ibT(""));
 
 		// 🛑 AN ERROR HERE IS NOT LOGGED WITH A DIALOG — IT IS RAISED. ibJournalError echoes through
 		// wxLogError, and in a GUI process that is a MODAL: the person in front of the designer was
@@ -354,19 +353,19 @@ bool ibMetaDataConfigurationStorage::OnAfterSaveDatabase(bool roolback, int flag
 		//
 		// So the whole ledger goes to the FILE as it stands, each line carrying its own level as a
 		// word; nothing here opens a window.
-		wxString raised;
+		ibString raised;
 
 		for (const ibRestructureInfo::Entry& entry : ledger) {
 
-			const wxChar* level =
-				  entry.type == ibRestructure::error   ? wxT("error")
-				: entry.type == ibRestructure::warning ? wxT("warning")
-				                                       : wxT("info");
+			const ibChar* level =
+				  entry.type == ibRestructure::error   ? ibT("error")
+				: entry.type == ibRestructure::warning ? ibT("warning")
+				                                       : ibT("info");
 
-			ibJournalInfo(wxT("metadata.apply"), wxT("%s: %s"), level, entry.descr);
+			ibJournalInfo(ibT("metadata.apply"), ibT("%s: %s"), level, entry.descr);
 
 			if (entry.type == ibRestructure::error)
-				raised << (raised.IsEmpty() ? wxT("") : wxT("\n")) << entry.descr;
+				raised << (raised.IsEmpty() ? ibT("") : ibT("\n")) << entry.descr;
 		}
 
 		// 🛑 AND IT DOES NOT RAISE FROM HERE. Two reasons, and the second is the one that bites: a
@@ -465,13 +464,8 @@ bool ibMetaDataConfigurationStorage::OnAfterSaveDatabase(bool roolback, int flag
 			db_query->Commit();
 		txGuard.m_done = true;
 #endif
-		if (read) {
+		if (read)
 			m_configMetadata = published;
-			// …and the sessions to come get it: what the database publishes now is the base's active configuration —
-			// this very copy, read once. The sessions working in the one before keep it.
-			if (m_applicationInstance != nullptr && published->IsConfigOpen())
-				m_applicationInstance->ReplaceActiveMetaData(published);
-		}
 		Modify(false);
 
 		// One-time flag: the very first apply on a fresh DB runs the "create new database" path (DROP +
@@ -479,6 +473,15 @@ bool ibMetaDataConfigurationStorage::OnAfterSaveDatabase(bool roolback, int flag
 		// blob is committed — flips the next apply to configNew=0; otherwise every Update re-DROPs sys_const
 		// and a constant read mid-cycle hits its just-dropped column (FB -206 "column unknown FLDnnnn_TYPE").
 		m_configNew = false;
+
+		// …and the sessions to come get what the database publishes now: the base reads it as its own. This copy is the
+		// designer's, made with its token — handed to the base, it took the designer's compile cache to the runtime
+		// (Max, 2026-10-28: "the designer's metadata is held only by its session; the rest hold the main one"). Raised
+		// last, with the apply's own state written: the apply is done, the base still works in the one before.
+		if (read && published->IsConfigOpen() && m_applicationInstance != nullptr
+			&& !m_applicationInstance->ReplaceActiveMetaData())
+			ibBackendCoreException::Error(_("The configuration was applied, but the base could not read it: the sessions "
+				"to come work in the one before."));
 	}
 	else {
 		// ⭐ THE PAIR IS HOW THE LATCH IS CUT, and that is the FIRST call's whole job: `Modify(false)`
@@ -581,11 +584,11 @@ void ibMetaDataConfigurationStorage::CreateConfigTable() {
 		// picks per driver, so the PG/non-PG fork is gone. binary_data: BYTEA on PG, BLOB elsewhere.
 		ibDatabaseQueryBuilder q;
 		q.Execute(ibCreateTable(config_table, {
-			{ wxT("file_name"),   ibTypeString(128), false, true,  wxEmptyString },
-			{ wxT("file_guid"),   ibTypeGuid(),      true,  false, wxEmptyString },
-			{ wxT("binary_data"), ibTypeBlob(),      true,  false, wxEmptyString },
+			{ ibT("file_name"),   ibTypeString(128), false, true,  ibEmptyString },
+			{ ibT("file_guid"),   ibTypeGuid(),      true,  false, ibEmptyString },
+			{ ibT("binary_data"), ibTypeBlob(),      true,  false, ibEmptyString },
 		}));
-		q.Execute(ibCreateIndex(config_table, wxT("s_config_index"), { wxT("file_name") }));
+		q.Execute(ibCreateIndex(config_table, ibT("s_config_index"), { ibT("file_name") }));
 	}
 }
 
@@ -596,11 +599,11 @@ void ibMetaDataConfigurationStorage::CreateConfigSaveTable() {
 		// Same schema as config_table — GUID + blob columns resolve per driver via the dialect TYPE-MAP.
 		ibDatabaseQueryBuilder q;
 		q.Execute(ibCreateTable(config_save_table, {
-			{ wxT("file_name"),   ibTypeString(128), false, true,  wxEmptyString },
-			{ wxT("file_guid"),   ibTypeGuid(),      true,  false, wxEmptyString },
-			{ wxT("binary_data"), ibTypeBlob(),      true,  false, wxEmptyString },
+			{ ibT("file_name"),   ibTypeString(128), false, true,  ibEmptyString },
+			{ ibT("file_guid"),   ibTypeGuid(),      true,  false, ibEmptyString },
+			{ ibT("binary_data"), ibTypeBlob(),      true,  false, ibEmptyString },
 		}));
-		q.Execute(ibCreateIndex(config_save_table, wxT("s_config_save_index"), { wxT("file_name") }));
+		q.Execute(ibCreateIndex(config_save_table, ibT("s_config_save_index"), { ibT("file_name") }));
 	}
 }
 
@@ -615,13 +618,13 @@ void ibMetaDataConfigurationStorage::CreateConfigSequence()
 		// also the UPSERT match target in LoadSequenceFromBuffer (and replaces the old separate index).
 		ibDatabaseQueryBuilder q;
 		q.Execute(ibCreateTable(sequence_table, {
-			{ wxT("interval"),  ibTypeInteger(),  true, false, wxEmptyString },
-			{ wxT("meta_guid"), ibTypeString(36), true, false, wxEmptyString },
-			{ wxT("prefix"),    ibTypeString(24), true, false, wxEmptyString },
-			{ wxT("number"),    ibTypeInteger(),  true, false, wxEmptyString },
+			{ ibT("interval"),  ibTypeInteger(),  true, false, ibEmptyString },
+			{ ibT("meta_guid"), ibTypeString(36), true, false, ibEmptyString },
+			{ ibT("prefix"),    ibTypeString(24), true, false, ibEmptyString },
+			{ ibT("number"),    ibTypeInteger(),  true, false, ibEmptyString },
 		}));
-		q.Execute(ibCreateIndex(sequence_table, wxT("sequence_index"),
-			{ wxT("interval"), wxT("meta_guid"), wxT("prefix") }, /*unique*/true));
+		q.Execute(ibCreateIndex(sequence_table, ibT("sequence_index"),
+			{ ibT("interval"), ibT("meta_guid"), ibT("prefix") }, /*unique*/true));
 	}
 }
 
@@ -640,7 +643,7 @@ bool ibMetaDataConfigurationStorage::LoadSequenceFromBuffer(const ibReaderMemory
 	if (!db_query->TableExists(sequence_table))
 		return false;
 
-	u64 seq_idx = 0;
+	std::uint64_t seq_idx = 0;
 	ibReaderMemory* seqReaderPrev = nullptr;
 
 	while (true) {
@@ -651,19 +654,19 @@ bool ibMetaDataConfigurationStorage::LoadSequenceFromBuffer(const ibReaderMemory
 			break;
 
 		const int interval = seqReader->r_u32();
-		const wxString& strDocPath = seqReader->r_stringZ();
-		const wxString& strPrefix = seqReader->r_stringZ();
+		const ibString& strDocPath = seqReader->r_stringZ();
+		const ibString& strPrefix = seqReader->r_stringZ();
 		const int number = seqReader->r_u32();
 
 		// One UPSERT, values bound (not string-concatenated as before) — the door renders the
 		// ON CONFLICT / UPDATE OR INSERT … MATCHING fork from the match keys.
 		ibDatabaseQueryBuilder q;
 		q.Execute(ibUpsert(sequence_table, {
-			{ wxT("interval"),  ibConst(ibValue(interval)) },
-			{ wxT("meta_guid"), ibConst(ibValue(strDocPath)) },
-			{ wxT("prefix"),    ibConst(ibValue(strPrefix)) },
-			{ wxT("number"),    ibConst(ibValue(number)) },
-		}, { wxT("interval"), wxT("meta_guid"), wxT("prefix") }));
+			{ ibT("interval"),  ibConst(ibValue(interval)) },
+			{ ibT("meta_guid"), ibConst(ibValue(strDocPath)) },
+			{ ibT("prefix"),    ibConst(ibValue(strPrefix)) },
+			{ ibT("number"),    ibConst(ibValue(number)) },
+		}, { ibT("interval"), ibT("meta_guid"), ibT("prefix") }));
 
 		seqReaderPrev = seqReader;
 	};
@@ -679,10 +682,10 @@ bool ibMetaDataConfigurationStorage::SaveSequenceToBuffer(ibWriterMemory& writer
 	// save sequence: SELECT interval, meta_guid, prefix, number FROM sequence_table
 	ibDatabaseQueryBuilder q;
 	ibQueryIR ir(ibProject(ibScan(sequence_table), {
-		{ ibCol(wxT("interval")),  wxEmptyString },
-		{ ibCol(wxT("meta_guid")), wxEmptyString },
-		{ ibCol(wxT("prefix")),    wxEmptyString },
-		{ ibCol(wxT("number")),    wxEmptyString },
+		{ ibCol(ibT("interval")),  ibEmptyString },
+		{ ibCol(ibT("meta_guid")), ibEmptyString },
+		{ ibCol(ibT("prefix")),    ibEmptyString },
+		{ ibCol(ibT("number")),    ibEmptyString },
 	}));
 	ibQueryResult result = q.ExecuteIR(ir);   // RAII: closes cursor + statement
 
@@ -690,10 +693,10 @@ bool ibMetaDataConfigurationStorage::SaveSequenceToBuffer(ibWriterMemory& writer
 
 	while (result.Next()) {
 		ibWriterMemory seqWriter;
-		seqWriter.w_u32(result.GetResultInt(wxT("interval")));
-		seqWriter.w_stringZ(result.GetResultString(wxT("meta_guid")));
-		seqWriter.w_stringZ(result.GetResultString(wxT("prefix")));
-		seqWriter.w_u32(result.GetResultInt(wxT("number")));
+		seqWriter.w_u32(result.GetResultInt(ibT("interval")));
+		seqWriter.w_stringZ(result.GetResultString(ibT("meta_guid")));
+		seqWriter.w_stringZ(result.GetResultString(ibT("prefix")));
+		seqWriter.w_u32(result.GetResultInt(ibT("number")));
 		writer.w_chunk(idx++, seqWriter.buffer());
 	}
 

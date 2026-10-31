@@ -37,9 +37,9 @@ namespace {
 // their types — that is the whole point of the check.
 class DefaultsNode : public ibPropertyObject {
 public:
-	wxString GetClassName() const override { return wxT("DefaultsNode"); }
+	ibString GetClassName() const override { return wxT("DefaultsNode"); }
 	bool     IsEditable() const override { return true; }
-	wxString GetObjectTypeName() const override { return wxT("DefaultsNode"); }
+	ibString GetObjectTypeName() const override { return wxT("DefaultsNode"); }
 
 	// true / 8 / "on" — every one of them survives only if "absent" is not read
 	// as "the type's zero".
@@ -58,9 +58,9 @@ TEST(PropertyDefaults, AbsentValueKeepsDeclaredDefault) {
 	ibDataNode empty;   // a configuration written before these properties existed
 
 	// Exactly the call every metatype makes.
-	EXPECT_FALSE(node.m_propertyFlagOn->SetNodeValue(empty.GetProperty(wxT("FlagOn"))))
+	EXPECT_FALSE(node.m_propertyFlagOn->SetNodeValue(empty.GetProperty(ibT("FlagOn"))))
 		<< "nothing was read, and the door must say so";
-	EXPECT_FALSE(node.m_propertyShards->SetNodeValue(empty.GetProperty(wxT("Shards"))));
+	EXPECT_FALSE(node.m_propertyShards->SetNodeValue(empty.GetProperty(ibT("Shards"))));
 
 	EXPECT_TRUE(node.m_propertyFlagOn->GetValueAsBoolean())
 		<< "a default-true flag went false on load - this is the Correspondence / SplitTotals bug";
@@ -79,8 +79,8 @@ TEST(PropertyDefaults, PresentValueIsReadEvenWhenItIsTheTypeZero) {
 	stored.SetProperty(wxT("FlagOn"), ibDataValue::Bool(false));   // switched OFF on purpose
 	stored.SetProperty(wxT("Shards"), ibDataValue::Int(0));
 
-	EXPECT_TRUE(node.m_propertyFlagOn->SetNodeValue(stored.GetProperty(wxT("FlagOn"))));
-	EXPECT_TRUE(node.m_propertyShards->SetNodeValue(stored.GetProperty(wxT("Shards"))));
+	EXPECT_TRUE(node.m_propertyFlagOn->SetNodeValue(stored.GetProperty(ibT("FlagOn"))));
+	EXPECT_TRUE(node.m_propertyShards->SetNodeValue(stored.GetProperty(ibT("Shards"))));
 
 	EXPECT_FALSE(node.m_propertyFlagOn->GetValueAsBoolean())
 		<< "an explicit false must survive - otherwise the gate has merely moved the bug";
@@ -96,12 +96,12 @@ TEST(PropertyDefaults, DefaultFalseIsUnaffectedEitherWay) {
 	DefaultsNode node;
 	ibDataNode empty;
 
-	node.m_propertyFlagOff->SetNodeValue(empty.GetProperty(wxT("FlagOff")));
+	node.m_propertyFlagOff->SetNodeValue(empty.GetProperty(ibT("FlagOff")));
 	EXPECT_FALSE(node.m_propertyFlagOff->GetValueAsBoolean());
 
 	ibDataNode stored;
 	stored.SetProperty(wxT("FlagOff"), ibDataValue::Bool(true));
-	node.m_propertyFlagOff->SetNodeValue(stored.GetProperty(wxT("FlagOff")));
+	node.m_propertyFlagOff->SetNodeValue(stored.GetProperty(ibT("FlagOff")));
 	EXPECT_TRUE(node.m_propertyFlagOff->GetValueAsBoolean());
 }
 
@@ -118,8 +118,8 @@ TEST(PropertyDefaults, RoundTripThroughBothDoors) {
 	saved.SetProperty(wxT("Shards"), source.m_propertyShards->GetNodeValue());
 
 	DefaultsNode loaded;
-	loaded.m_propertyFlagOn->SetNodeValue(saved.GetProperty(wxT("FlagOn")));
-	loaded.m_propertyShards->SetNodeValue(saved.GetProperty(wxT("Shards")));
+	loaded.m_propertyFlagOn->SetNodeValue(saved.GetProperty(ibT("FlagOn")));
+	loaded.m_propertyShards->SetNodeValue(saved.GetProperty(ibT("Shards")));
 
 	EXPECT_FALSE(loaded.m_propertyFlagOn->GetValueAsBoolean());
 	EXPECT_EQ(loaded.m_propertyShards->GetValueAsInteger(), 3);

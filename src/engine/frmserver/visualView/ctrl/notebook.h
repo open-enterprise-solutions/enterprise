@@ -25,22 +25,24 @@ public:
 	ibValueNotebook();
 
 	//get title
-	virtual wxString GetControlTitle() const {
+	virtual ibString GetControlTitle() const {
 		return _("Notebook");
 	}
 
+	// Just made by the designer with no page: its first page goes on with it (the desktop's).
+	virtual void OnCreated(ibVisualHost* host, bool firstCreated) override;
 	// The window's state, and the page selected now (ActivePage, by its control id; 0 while no page is shown).
 	virtual void OnUpdate(ibDataNode& state, ibVisualHost* host) override;
 
 	// Page — a page picked (Page: its control id); Move — the active page's tab dragged (Position).
-	virtual bool OnClientEvent(ibProtocolEvent event, const ibDataNode& args) override;
+	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) override;
 
 	//methods
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) override;       //method call
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//load & save object in control
 	virtual bool ReadData(const ibDataNode& node);
@@ -50,6 +52,9 @@ public:
 	// is; null while none is. One answer for the frame and for the script's ActivePage(): asked in two places
 	// with two rules, a script read null for a page the person was plainly looking at.
 	ibValueNotebookPage* GetActivePage() const;
+
+	// A new page at the end of the notebook, built on the host as a control the designer has just made.
+	void AddNotebookPage(ibVisualHost* host);
 
 	void FillControlMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
@@ -65,12 +70,12 @@ private:
 	ibValueNotebookPage* m_activePage;
 	std::vector< ibValueNotebookPage*> m_pageArray;
 
-	ibPropertyCategory* m_categoryNotebook = ibPropertyObject::CreatePropertyCategory(wxT("Notebook"), _("Notebook"));
-	ibPropertyEnum<ibValueEnumOrientNotebookPage>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrientNotebookPage>>(m_categoryNotebook, wxT("OrientPage"), _("Orient page"),
-		_("Where the page tabs are drawn: above the pages (the default) or below them."),
-		wxAUI_NB_TOP);
-	ibPropertyCategory* m_categoryEvent = ibPropertyObject::CreatePropertyCategory(wxT("Event"), _("Event"));
-	ibEventControl* m_eventOnPageChanged = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, wxT("OnPageChanged"), _("Page changed"), wxArrayString{ wxT("Page") });
+	ibPropertyCategory* m_categoryNotebook = ibPropertyObject::CreatePropertyCategory(ibT("Notebook"), _("Notebook"));
+	ibPropertyEnum<ibValueEnumOrientNotebookPage>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrientNotebookPage>>(m_categoryNotebook, ibT("OrientPage"), _("Orient page"),
+		_("Where the page tabs are drawn: above the pages (the default), below them, or nowhere - then the notebook is a panel: only the active page shows, and code switches it (ActivePage)."),
+		ibTabLocation_Top);
+	ibPropertyCategory* m_categoryEvent = ibPropertyObject::CreatePropertyCategory(ibT("Event"), _("Event"));
+	ibEventControl* m_eventOnPageChanged = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, ibT("OnPageChanged"), _("Page changed"), std::vector<ibString>{ ibT("Page") });
 
 	friend class ibValueNotebookPage;
 };
@@ -89,7 +94,7 @@ public:
 	ibValueNotebookPage();
 
 	//get title
-	virtual wxString GetControlTitle() const {
+	virtual ibString GetControlTitle() const {
 		if (!m_propertyTitle->IsEmptyProperty())
 			return _("Page item: ") + m_propertyTitle->GetValueAsTranslateString();
 		return _("Page item: ") + _("<empty caption>");
@@ -107,8 +112,8 @@ public:
 	virtual int GetComponentType() const { return COMPONENT_TYPE_WINDOW; }
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//load & save object in control 
 	virtual bool ReadData(const ibDataNode& node);
@@ -120,18 +125,18 @@ private:
 	// switch off is off the notebook the way an invisible one is. Asked by the page and by its notebook.
 	bool IsPageShown() const { return m_propertyVisible->GetValueAsBoolean() && IsAvailable(); }
 
-	ibPropertyCategory* m_categoryPage = ibPropertyObject::CreatePropertyCategory(wxT("Page"), _("Page"));
-	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryPage, wxT("Title"), _("Title"),
-		_("The text on the page's tab. Can be written per language and changed from code while the form is open."), wxT("New page"));
-	ibPropertyBoolean* m_propertyVisible = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryPage, wxT("Visible"), _("Visible"),
+	ibPropertyCategory* m_categoryPage = ibPropertyObject::CreatePropertyCategory(ibT("Page"), _("Page"));
+	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryPage, ibT("Title"), _("Title"),
+		_("The text on the page's tab. Can be written per language and changed from code while the form is open."), ibT("New page"));
+	ibPropertyBoolean* m_propertyVisible = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryPage, ibT("Visible"), _("Visible"),
 		_("Whether the page's tab is shown. A hidden page keeps its controls and their data and can be shown again from code."), true);
-	ibPropertyEnum<ibValueEnumRepresentation>* m_propertyRepresentation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumRepresentation>>(m_categoryPage, wxT("Representation"), _("Representation"),
+	ibPropertyEnum<ibValueEnumRepresentation>* m_propertyRepresentation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumRepresentation>>(m_categoryPage, ibT("Representation"), _("Representation"),
 		_("What the page's tab shows: text, picture, or both. Auto: the title and the picture, whichever are set."),
 		ibRepresentation::ibRepresentation_Auto);
-	ibPropertyPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_categoryPage, wxT("Picture"), _("Picture"),
+	ibPropertyPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_categoryPage, ibT("Picture"), _("Picture"),
 		_("The icon on the page's tab, beside or instead of the title (see Representation)."));
-	ibPropertyCategory* m_categorySizer = ibPropertyObject::CreatePropertyCategory(wxT("Sizer"), _("Sizer"));
-	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categorySizer, wxT("Orient"), _("Orient"),
+	ibPropertyCategory* m_categorySizer = ibPropertyObject::CreatePropertyCategory(ibT("Sizer"), _("Sizer"));
+	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categorySizer, ibT("Orient"), _("Orient"),
 		_("How the page lays out the controls placed on it: vertically (the default, one under another) or horizontally (side by side)."),
 		wxVERTICAL);
 

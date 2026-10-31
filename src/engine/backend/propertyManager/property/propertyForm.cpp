@@ -8,31 +8,31 @@
 
 ////////////////////////////////////////////////////////////////////////
 
-wxVariantData* ibPropertyForm::CreateVariantData()
+ibVariant ibPropertyForm::CreateVariantData()
 {
-	return new ibVariantDataForm();
+	return ibVariant(new ibVariantForm());
 }
 
 ////////////////////////////////////////////////////////////////////////
 
-wxString ibPropertyForm::GetValueAsString() const
+ibString ibPropertyForm::GetValueAsString() const
 {
-	return get_cell_variant<ibVariantDataForm>()->GetModuleText();
+	return get_cell_variant<ibVariantForm>()->GetModuleText();
 }
 
-wxMemoryBuffer& ibPropertyForm::GetValueAsMemoryBuffer() const
+ibMemoryBuffer& ibPropertyForm::GetValueAsMemoryBuffer() const
 {
-	return get_cell_variant<ibVariantDataForm>()->GetFormData();
+	return get_cell_variant<ibVariantForm>()->GetFormData();
 }
 
-void ibPropertyForm::SetValue(const wxString& val)
+void ibPropertyForm::SetValue(const ibString& val)
 {
-	get_cell_variant<ibVariantDataForm>()->SetModuleText(val);
+	get_cell_variant<ibVariantForm>()->SetModuleText(val);
 }
 
-void ibPropertyForm::SetValue(const wxMemoryBuffer& val)
+void ibPropertyForm::SetValue(const ibMemoryBuffer& val)
 {
-	get_cell_variant<ibVariantDataForm>()->SetFormData(val);
+	get_cell_variant<ibVariantForm>()->SetFormData(val);
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -54,10 +54,10 @@ bool ibPropertyForm::GetDataValue(ibValue& pvarPropVal) const
 // its runtime blob, the metadata sees a transparent control-tree subtree.
 bool ibPropertyForm::ReadNodeValue(const ibDataValue& value)
 {
-	const std::shared_ptr<ibDataNode>& root = value.AsChild();
+	const auto root = value.AsChild();
 	if (root) {
-		ibPropertyForm::SetValue(ibValueMetaObjectFormBase::FormNodeToBlob(root->GetProperty(wxT("Layout"))));
-		ibPropertyForm::SetValue(root->GetValue<wxString>(wxT("Module")));
+		ibPropertyForm::SetValue(ibValueMetaObjectFormBase::FormNodeToBlob(root->GetProperty(ibT("Layout"))));
+		ibPropertyForm::SetValue(root->GetValue<ibString>(ibT("Module")));
 	}
 	return true;
 }
@@ -65,8 +65,8 @@ bool ibPropertyForm::ReadNodeValue(const ibDataValue& value)
 bool ibPropertyForm::WriteNodeValue(ibDataValue& value) const
 {
 	auto root = std::make_shared<ibDataNode>();
-	root->SetProperty(wxT("Layout"), ibValueMetaObjectFormBase::FormBlobToNode(GetValueAsMemoryBuffer()));
-	root->SetValue(wxT("Module"),    GetValueAsString());
+	root->SetProperty(ibT("Layout"), ibValueMetaObjectFormBase::FormBlobToNode(GetValueAsMemoryBuffer()));
+	root->SetValue(ibT("Module"),    GetValueAsString());
 	value = ibDataValue::Child(root);
 	return true;
 }
@@ -80,8 +80,8 @@ bool ibPropertyForm::CopyNodeValue(ibDataValue& value) const
 	ibValueMetaObjectFormBase* metaForm = dynamic_cast<ibValueMetaObjectFormBase*>(m_owner);
 	if (metaForm == nullptr) return false;
 	auto root = std::make_shared<ibDataNode>();
-	root->SetProperty(wxT("Layout"), metaForm->CopyFormData());
-	root->SetValue(wxT("Module"),    GetValueAsString());
+	root->SetProperty(ibT("Layout"), metaForm->CopyFormData());
+	root->SetValue(ibT("Module"),    GetValueAsString());
 	value = ibDataValue::Child(root);
 	return true;
 }
@@ -90,12 +90,22 @@ bool ibPropertyForm::PasteNodeValue(const ibDataValue& value)
 {
 	ibValueMetaObjectFormBase* metaForm = dynamic_cast<ibValueMetaObjectFormBase*>(m_owner);
 	if (metaForm == nullptr) return false;
-	const std::shared_ptr<ibDataNode>& root = value.AsChild();
+	const auto root = value.AsChild();
 	if (root) {
-		ibPropertyForm::SetValue(ibValueMetaObjectFormBase::FormNodeToBlob(root->GetProperty(wxT("Layout"))));
-		ibPropertyForm::SetValue(root->GetValue<wxString>(wxT("Module")));
+		ibPropertyForm::SetValue(ibValueMetaObjectFormBase::FormNodeToBlob(root->GetProperty(ibT("Layout"))));
+		ibPropertyForm::SetValue(root->GetValue<ibString>(ibT("Module")));
 	}
 	return metaForm->PasteFormData();
+}
+
+#include "protocol/protocol.h"   // ibProtocol::ibSchema::ibProperties::Object — what the link opens
+
+bool ibPropertyForm::GetProtocolValue(ibDataNode& row, ibReader reader)
+{
+	if (!ibProperty::GetProtocolValue(row, reader))
+		return false;
+	row.SetValue(ibProtocol::ibSchema::ibProperties::Object, static_cast<std::int32_t>(static_cast<const ibValueMetaObject*>(m_owner)->GetMetaID()));
+	return true;
 }
 
 //////////////////////////////////////////////////////////

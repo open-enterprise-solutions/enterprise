@@ -1,0 +1,13 @@
+# Every hour: the nightly is built after 23:00 UTC and published when every platform is done, so the demo takes it
+# within the hour that follows. An hour with nothing new costs one request to GitHub.
+
+[Unit]
+Description=OES demo - look for a new nightly every hour
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=1h
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target

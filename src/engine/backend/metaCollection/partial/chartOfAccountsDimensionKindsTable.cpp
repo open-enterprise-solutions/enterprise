@@ -13,7 +13,7 @@
 // BOUND TO ITS PARENT FOR LIFE — the section states that about ITSELF, at construction. It is a fact
 // about this class (a chart of accounts always has its analytics kinds), not about anything the chart
 // is configured with, so it does not belong in a method that applies a binding.
-ibValueMetaObjectAccountDimensionKindsTable::ibValueMetaObjectAccountDimensionKindsTable(const wxString& name, const wxString& synonym, const wxString& comment)
+ibValueMetaObjectAccountDimensionKindsTable::ibValueMetaObjectAccountDimensionKindsTable(const ibString& name, const ibString& synonym, const ibString& comment)
 	: ibValueMetaObjectTableDataRef()
 {
 	SetName(name);

@@ -50,11 +50,9 @@
 
 #include "backend/backend.h"
 
-#include <wx/string.h>
-
 #include <cstdint>
 
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 #include <windows.h>
 #endif
 
@@ -78,13 +76,13 @@ public:
 		uint64_t heartbeatUnixMs  = 0;
 		uint32_t leaderPid        = 0;
 		uint16_t leaderPort       = 0;
-		wxString leaderHost;
+		ibString leaderHost;
 		bool     valid            = false;  // false if file unreadable / wrong magic
 	};
 
 	// `dbPath` is the `.fdb` path; the lease file lives next to it
 	// at `<dbPath>.lease`.
-	explicit ibFirebirdLease(const wxString& dbPath);
+	explicit ibFirebirdLease(const ibString& dbPath);
 	~ibFirebirdLease();
 
 	ibFirebirdLease(const ibFirebirdLease&) = delete;
@@ -100,7 +98,7 @@ public:
 	// Bumps the generation counter so existing followers detect the
 	// change. Must hold the lock (caller has just succeeded in
 	// `TryAcquireExclusive`). Returns true on write success.
-	bool WriteSelfAsLeader(const wxString& host, uint16_t port);
+	bool WriteSelfAsLeader(const ibString& host, uint16_t port);
 
 	// Update the heartbeat timestamp in place. Call periodically
 	// (suggested every 5 s) so followers can detect stale leaders
@@ -148,11 +146,11 @@ public:
 	static constexpr unsigned long kLockSentinelOffset = 200;
 
 private:
-	wxString m_dbPath;
-	wxString m_leasePath;
+	ibString m_dbPath;
+	ibString m_leasePath;
 	bool     m_holdsLock = false;
 
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	HANDLE   m_hFile = INVALID_HANDLE_VALUE;
 #else
 	int      m_fd = -1;

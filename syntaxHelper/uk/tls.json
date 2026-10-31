@@ -21,7 +21,7 @@
       "parameters": "path — файл, як його називає файлова система. Він має бути на місці в мить створення значення, і саме це ім'я несе пізніша відмова.\npassword — відкриває закритий ключ, що лежить у файлі; не заданий — вважається, що ключа, який потребує пароля, у файлі немає. Задається один раз і назад не читається.",
       "return_descr": "CertificateFile — шлях і пароль, з якими його створено.",
       "example": "var trust = New CertificateFile(\"C:\\certs\\bank-ca.pem\");\nvar mine = New CertificateFile(\"C:\\certs\\client.pem\", \"key password\");\n\nvar secure = New SecureConnection(mine, trust);      // показати свій, довіряти лише цьому центру\nvar bank = New HTTPConnection(\"api.bank.example\");\nbank.SecureConnection = secure;                      // порт не задано: із захистом це 443\n\ntry {\n    var response = bank.Get(New HTTPRequest(\"/v1/balance\"));\n    Message(response.StatusCode);\n}\nexcept {\n    Message(ErrorDescription());   // ...the certificate file 'C:\\certs\\client.pem' could not be read...\n}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.CertificateFile.Path",
         "cls.SecureConnection",
@@ -48,7 +48,7 @@
       "parameters": "",
       "return_descr": "String — шлях.",
       "example": "var trust = New CertificateFile(\"C:\\certs\\bank-ca.pem\");\nvar secure = New SecureConnection();\nsecure.TrustedCertificates = trust;\nMessage(secure.TrustedCertificates.Path);   // повертається тим самим",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.CertificateFile",
         "cls.SecureConnection.TrustedCertificates",
@@ -74,7 +74,7 @@
       "parameters": "clientCertificate — сертифікат, який показує ця сторона, як CertificateFile із ним і його ключем; не заданий або Undefined — не показується нічого.\ntrustedCertificates — засвідчувальний центр, якому довіряти, як CertificateFile; не заданий або Undefined — власне сховище сертифікатів платформи.",
       "return_descr": "SecureConnection — нічого не показується, довіра платформи, перевірка ввімкнена.",
       "example": "var secure = New SecureConnection();                 // довіряти платформі, перевіряти сервер\nvar shop = New HTTPConnection(\"api.example\");\nshop.SecureConnection = secure;\nMessage(shop.Port);                                  // 443: порт ніхто не задавав\n\nvar bank = New HTTPConnection(\"api.bank.example\");   // ...а це довіряє одному центру\nbank.SecureConnection = New SecureConnection(\n    New CertificateFile(\"C:\\certs\\client.pem\", \"key password\"),\n    New CertificateFile(\"C:\\certs\\bank-ca.pem\"));\n\ntry {\n    var response = bank.Get(New HTTPRequest(\"/v1/balance\"));\n    Message(response.StatusCode);\n}\nexcept {\n    Message(ErrorDescription());   // не довіряємо, не той хост, файл не прочитано...\n}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.SecureConnection.ClientCertificate",
         "cls.SecureConnection.TrustedCertificates",
@@ -101,7 +101,7 @@
       "parameters": "",
       "return_descr": "CertificateFile або Undefined, коли не показується нічого.",
       "example": "var secure = New SecureConnection();\nsecure.ClientCertificate = New CertificateFile(\"C:\\certs\\client.pem\", \"key password\");\nvar till = New HTTPConnection(\"api.till.example\");\ntill.SecureConnection = secure;\nvar response = till.Post(New HTTPRequest(\"/v1/shift\"));",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.SecureConnection",
         "cls.CertificateFile",
@@ -126,7 +126,7 @@
       "parameters": "",
       "return_descr": "CertificateFile або Undefined, коли довіра — сховище платформи.",
       "example": "var secure = New SecureConnection();\nsecure.TrustedCertificates = New CertificateFile(\"C:\\certs\\bank-ca.pem\");\nvar bank = New HTTPConnection(\"api.bank.example\");\nbank.SecureConnection = secure;\n// сертифікат, підписаний будь-ким іншим, відкидається, хай яким добрим він був би",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.SecureConnection",
         "cls.SecureConnection.VerifyServerCertificate",
@@ -151,7 +151,7 @@
       "parameters": "",
       "return_descr": "Boolean — True, доки не присвоєно False.",
       "example": "var secure = New SecureConnection();\nMessage(secure.VerifyServerCertificate);   // True: іншого ніхто не казав\n\n// Стенд із самопідписаним сертифікатом. У роботі замість цього називають центр:\n//   secure.TrustedCertificates = New CertificateFile(\"C:\\certs\\stand-ca.pem\");\nsecure.VerifyServerCertificate = False;\nvar stand = New HTTPConnection(\"stand.local\");\nstand.SecureConnection = secure;",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.SecureConnection",
         "cls.SecureConnection.TrustedCertificates",
@@ -176,7 +176,7 @@
       "parameters": "",
       "return_descr": "SecureConnection або Undefined для звичайного http://.",
       "example": "var bank = New HTTPConnection(\"api.bank.example\");   // НЕ \"https://api.bank.example\"\nMessage(bank.Port);                                  // 80\nbank.SecureConnection = New SecureConnection();\nMessage(bank.Port);                                  // 443\n\nvar response = bank.Get(New HTTPRequest(\"/v1/balance\"));",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.HTTPConnection",
         "cls.SecureConnection",

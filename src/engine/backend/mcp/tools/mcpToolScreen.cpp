@@ -29,7 +29,7 @@
 #include "backend/debugger/debugClient.h"
 #include "backend/mcp/mcpDebugBridge.h"
 
-#include <wx/base64.h>
+#include "core/utils/base64.h"   // ibBase64 — the picture, written into the answer's text
 
 namespace {
 
@@ -37,7 +37,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 
 const ibArg& ArgReason()
 {
-	static const ibArg s_a(wxT("reason"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("reason"), ibArg::Kind::Text,
 		ibMcpText("What you are trying to see, in words the PERSON will read - it is shown to them in "
 		  "the question, so they agree to a purpose rather than to a verb. \"To see why the goods "
 		  "list shows no rows\" is a reason; \"debugging\" is not, and will be declined more often "
@@ -47,24 +47,24 @@ const ibArg& ArgReason()
 
 const ibArg& ArgArea()
 {
-	static const ibArg s_a(wxT("area"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("area"), ibArg::Kind::Text,
 		ibMcpText("What to photograph. focus - just around the control they clicked on, with a margin: the "
 		  "smallest picture and usually the right one, since somebody showing you something points at "
 		  "it first. active - the whole window being worked in (the default). main - the application "
 		  "main window. screen - the whole display, for when they move between windows."),
-			/*required*/ false, { wxT("focus"), wxT("active"), wxT("main"), wxT("screen") });
+			/*required*/ false, { ibT("focus"), ibT("active"), ibT("main"), ibT("screen") });
 	return s_a;
 }
 
 const ibArg& ArgFormat()
 {
-	static const ibArg s_a(wxT("format"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("format"), ibArg::Kind::Text,
 		ibMcpText("png is the default and is almost always right. MEASURED 2026-09-04 on this platform: a "
 		  "window came to 20 KB as png and 31 KB as jpeg - an interface is flat fills and sharp edges, "
 		  "which png compresses better while jpeg spends bits smearing the text. Reach for jpeg only "
 		  "when the screen is full of photographs or gradients. To make a picture SMALLER, narrow the "
 		  "area instead: focus is about a quarter the size of the whole window."),
-			/*required*/ false, { wxT("png"), wxT("jpeg") });
+			/*required*/ false, { ibT("png"), ibT("jpeg") });
 	return s_a;
 }
 
@@ -76,9 +76,9 @@ const ibArg& ArgFormat()
 class ibMcpToolScreenCapture : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("screen_capture"); }
+	ibString GetName() const override { return ibT("screen_capture"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ibMcpText("asking the person for a picture of their window");
 	}
@@ -94,7 +94,7 @@ public:
 	// asking, not the one being asked.
 	bool NeedsMainThread() const override { return false; }
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Ask the RUNNING APPLICATION for a picture of its window - the screen the "
 			"person is actually looking at. They are asked first, shown your reason, and may say "
@@ -120,7 +120,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		if (debugClient == nullptr) {
 			refusal = ibMcpText("This process has no debugger client.");
@@ -133,20 +133,20 @@ public:
 			return false;
 		}
 
-		const wxString reason = ArgReason().Text(params);
+		const ibString reason = ArgReason().Text(params);
 		if (reason.IsEmpty()) {
 			refusal = ibMcpText("Say what you are trying to see. The person is shown that sentence and "
 				"decides by it, so it cannot be left out.");
 			return false;
 		}
 
-		const wxString area = ArgArea().Given(params) ? ArgArea().Text(params) : wxString(wxT("active"));
+		const ibString area = ArgArea().Given(params) ? ArgArea().Text(params) : ibString(ibT("active"));
 
 		bool allowed = false;
-		wxMemoryBuffer png;
-		wxString focus;
+		ibMemoryBuffer png;
+		ibString focus;
 
-		const wxString format = ArgFormat().Given(params) ? ArgFormat().Text(params) : wxString(wxT("png"));
+		const ibString format = ArgFormat().Given(params) ? ArgFormat().Text(params) : ibString(ibT("png"));
 
 		if (!bridge->Screenshot(reason, area, format, allowed, png, focus)) {
 			refusal = ibMcpText("No answer from the running application. It has to be connected - "
@@ -168,18 +168,19 @@ public:
 		// ⭐⭐ HANDED BACK AS AN IMAGE, not as a description of one — the whole point is that it gets
 		// LOOKED AT. `image` is the field the server turns into an image block, so this arrives as a
 		// picture rather than as a wall of base64 inside a sentence.
-		result.SetValue(wxT("image"),
-			wxBase64Encode(png.GetData(), png.GetDataLen()));
-		result.SetValue(wxT("imageType"), wxString(format.IsSameAs(wxT("jpeg"), false) ? wxT("image/jpeg") : wxT("image/png")));
-		result.AddField(wxT("bytes"), ibDataValue::Int((s64)png.GetDataLen()));
+		ibString image;
+		ibBase64::Append(image, png.GetData(), png.GetDataLen());
+		result.SetValue(ibT("image"), image);
+		result.SetValue(ibT("imageType"), ibString(format.IsSameAs(ibT("jpeg"), false) ? ibT("image/jpeg") : ibT("image/png")));
+		result.AddField(ibT("bytes"), ibDataValue::Int((std::int64_t)png.GetDataLen()));
 
 		// ⭐⭐ WHAT THEY WERE POINTING AT. Somebody who cannot say what is wrong CAN click on it, and
 		// that click is the missing half of the sentence: the control holding the focus is ringed in
 		// the picture and named here, so "look, this row" arrives as an address rather than a gesture.
 		if (!focus.IsEmpty())
-			result.SetValue(wxT("focus"), focus);
+			result.SetValue(ibT("focus"), focus);
 
-		result.SetValue(wxT("note"),
+		result.SetValue(ibT("note"),
 			ibMcpText("The person allowed this and it is recorded in the registration journal. It is "
 			  "their screen: read what you asked for and do not keep it around."));
 

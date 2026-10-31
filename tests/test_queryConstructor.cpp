@@ -14,11 +14,11 @@
 #include <gtest/gtest.h>
 
 #include "backend/query/queryConstructorModel.h"
-#include "backend/query/queryParser.h"
+#include "core/query/queryParser.h"
 
 namespace {
 
-ibQueryPackage Package(const wxString& text)
+ibQueryPackage Package(const ibString& text)
 {
 	ibQueryParser parser;
 	return parser.ParsePackage(text);
@@ -35,17 +35,17 @@ ibQueryPackage SalesPackage()
 		wxT("SELECT Ref FROM Catalog.Products"));
 }
 
-std::vector<wxString> Names(const std::vector<ibQueryConstructorSource>& sources)
+std::vector<ibString> Names(const std::vector<ibQueryConstructorSource>& sources)
 {
-	std::vector<wxString> out;
+	std::vector<ibString> out;
 	for (const ibQueryConstructorSource& source : sources)
 		out.push_back(source.Text());
 	return out;
 }
 
-std::vector<wxString> Names(const std::vector<ibQueryConstructorField>& fields)
+std::vector<ibString> Names(const std::vector<ibQueryConstructorField>& fields)
 {
-	std::vector<wxString> out;
+	std::vector<ibString> out;
 	for (const ibQueryConstructorField& field : fields)
 		out.push_back(field.m_name);
 	return out;
@@ -64,7 +64,7 @@ TEST(QueryConstructorModel, TheFirstStatementSeesNoTempTable)
 
 TEST(QueryConstructorModel, AStatementSeesWhatTheOnesBeforeItLeft)
 {
-	const std::vector<wxString> names = Names(ibQueryConstructorModel::GetTempSources(SalesPackage(), 1));
+	const std::vector<ibString> names = Names(ibQueryConstructorModel::GetTempSources(SalesPackage(), 1));
 	ASSERT_EQ(1u, names.size());
 	EXPECT_EQ(wxT("Sales"), names[0]);
 }
@@ -104,7 +104,7 @@ TEST(QueryConstructorModel, ANestedTableAnswersWithItsOwnProjections)
 	ASSERT_NE(nullptr, outer->m_from.m_subquery);
 
 	ibQueryConstructorModel model(nullptr);
-	const std::vector<wxString> fields = Names(model.GetFields(outer->m_from, ibQueryPackage(), 0));
+	const std::vector<ibString> fields = Names(model.GetFields(outer->m_from, ibQueryPackage(), 0));
 
 	ASSERT_EQ(2u, fields.size());
 	EXPECT_EQ(wxT("Code"), fields[0]);
@@ -116,10 +116,10 @@ TEST(QueryConstructorModel, ANestedTableAnswersWithItsOwnProjections)
 // with its column; a text that says none comes back as it was, byte for byte.
 TEST(QueryConstructorModel, ACompositionReadsItsQueryWithoutTheRolesItSays)
 {
-	const wxString plain = wxT("SELECT T.Qty AS Qty FROM Catalog.Products AS T");
+	const ibString plain = wxT("SELECT T.Qty AS Qty FROM Catalog.Products AS T");
 	EXPECT_EQ(plain, ibQueryTextWithoutRoles(plain));
 
-	const wxString said =
+	const ibString said =
 		wxT("SELECT U.Start ROLE OPENING AS Start, U.Day ROLE PERIOD 2 AS Day ")
 		wxT("FROM (SELECT T.Qty ROLE CLOSING AS Start, T.Date AS Day FROM Catalog.Products AS T ")
 		wxT("      UNION ALL SELECT S.Qty ROLE DIMENSION, S.Date FROM Catalog.Stock AS S) AS U");
@@ -127,7 +127,7 @@ TEST(QueryConstructorModel, ACompositionReadsItsQueryWithoutTheRolesItSays)
 	EXPECT_TRUE(ibQueryDropRoles(package));
 	EXPECT_FALSE(ibQueryDropRoles(package)) << "a role was left somewhere the walk did not reach";
 
-	const wxString text = ibQueryTextWithoutRoles(said);
+	const ibString text = ibQueryTextWithoutRoles(said);
 	EXPECT_EQ(wxNOT_FOUND, text.Upper().Find(wxT("ROLE"))) << text.ToStdString();
 	// …and it still reads, its fields where they were.
 	const ibQueryPackage back = Package(text);
@@ -143,7 +143,7 @@ TEST(QueryConstructorModel, ANestedTableUsesTheAliasWhereTheAuthorGaveOne)
 	ASSERT_NE(nullptr, outer);
 
 	ibQueryConstructorModel model(nullptr);
-	const std::vector<wxString> fields = Names(model.GetFields(outer->m_from, ibQueryPackage(), 0));
+	const std::vector<ibString> fields = Names(model.GetFields(outer->m_from, ibQueryPackage(), 0));
 	ASSERT_EQ(1u, fields.size());
 	EXPECT_EQ(wxT("x"), fields[0]) << "the alias is what the outer query refers the column by";
 }
@@ -156,7 +156,7 @@ TEST(QueryConstructorModel, ATempTableAnswersWithTheProjectionsOfTheStatementTha
 	ASSERT_EQ(2u, package.m_statements.size());
 
 	ibQueryConstructorModel model(nullptr);
-	const std::vector<wxString> fields =
+	const std::vector<ibString> fields =
 		Names(model.GetFields(package.m_statements[1].m_select->m_from, package, 1));
 
 	ASSERT_EQ(2u, fields.size());
@@ -183,7 +183,7 @@ TEST(QueryConstructorModel, QualifiedFieldsCarryTheAliasTheQueryWrites)
 	ASSERT_NE(nullptr, outer);
 
 	ibQueryConstructorModel model(nullptr);
-	const std::vector<wxString> fields = Names(model.GetQualifiedFields(outer->m_from, ibQueryPackage(), 0));
+	const std::vector<ibString> fields = Names(model.GetQualifiedFields(outer->m_from, ibQueryPackage(), 0));
 	ASSERT_EQ(1u, fields.size());
 	EXPECT_EQ(wxT("p.Code"), fields[0]);
 }
@@ -205,7 +205,7 @@ TEST(QueryConstructorModel, WithNoConfigTheCatalogueIsEmptyRatherThanAFailure)
 
 namespace {
 
-ibQueryConstructorField Field(const wxString& name, bool available = true)
+ibQueryConstructorField Field(const ibString& name, bool available = true)
 {
 	ibQueryConstructorField field;
 	field.m_name      = name;
@@ -258,7 +258,7 @@ TEST(QueryConstructorModel, AHiddenStartHidesTheWalkPastAHopNobodyAnswers)
 
 namespace {
 
-ibQueryRamTable OneRow(const wxString& column, const ibValue& cell)
+ibQueryRamTable OneRow(const ibString& column, const ibValue& cell)
 {
 	ibQueryRamTable table;
 	table.AddColumn(1, column, ibTypeDescription());
@@ -273,7 +273,7 @@ TEST(QueryTempStore, AFreshStoreHoldsNothing)
 {
 	ibQueryTempTableStore store;
 	EXPECT_TRUE(store.Empty());
-	EXPECT_FALSE(store.Has(wxT("Sales")));
+	EXPECT_FALSE(store.Has(ibT("Sales")));
 	EXPECT_TRUE(store.Sources().empty());
 }
 
@@ -282,7 +282,7 @@ TEST(QueryTempStore, WhatIsPutInCanBeFoundByName)
 	ibQueryTempTableStore store;
 	store.Put(wxT("Sales"), OneRow(wxT("Ref"), ibValue(1)));
 
-	EXPECT_TRUE(store.Has(wxT("Sales")));
+	EXPECT_TRUE(store.Has(ibT("Sales")));
 	ASSERT_EQ(1u, store.Sources().size());
 	EXPECT_NE(nullptr, store.Sources().at(wxT("Sales")));
 }
@@ -295,7 +295,7 @@ TEST(QueryTempStore, ADroppedTableIsGoneFromBothTheNameAndTheRows)
 	store.Put(wxT("Sales"), OneRow(wxT("Ref"), ibValue(1)));
 
 	EXPECT_TRUE(store.Drop(wxT("Sales")));
-	EXPECT_FALSE(store.Has(wxT("Sales")));
+	EXPECT_FALSE(store.Has(ibT("Sales")));
 	EXPECT_TRUE(store.Empty());
 }
 
@@ -318,8 +318,8 @@ TEST(QueryTempStore, CloseReleasesEverythingAtOnce)
 
 	store.Close();
 	EXPECT_TRUE(store.Empty());
-	EXPECT_FALSE(store.Has(wxT("Sales")));
-	EXPECT_FALSE(store.Has(wxT("Orders")));
+	EXPECT_FALSE(store.Has(ibT("Sales")));
+	EXPECT_FALSE(store.Has(ibT("Orders")));
 }
 
 TEST(QueryTempStore, AStoredTableKeepsItsColumnsAndRows)
@@ -327,7 +327,7 @@ TEST(QueryTempStore, AStoredTableKeepsItsColumnsAndRows)
 	// The table is handed out BY COPY per read, because a temp table is read more than once by
 	// design — that is the point of putting it somewhere.
 	ibQueryTempTableStore store;
-	store.Put(wxT("Sales"), OneRow(wxT("Ref"), ibValue(wxString(wxT("A")))));
+	store.Put(wxT("Sales"), OneRow(wxT("Ref"), ibValue(ibString(wxT("A")))));
 
 	const ibBackendQueryable* source = store.Sources().at(wxT("Sales"));
 	ASSERT_NE(nullptr, source);
@@ -356,7 +356,7 @@ TEST(QueryTempStore, AnIndexedEqualityReadsOnlyTheMatchingRows)
 	table.AddColumn(1, wxT("Code"), ibTypeDescription());
 	for (const wxChar* code : { wxT("A"), wxT("B"), wxT("A"), wxT("C") }) {
 		const long row = table.AppendRow();
-		table.SetCell(row, 1, ibValue(wxString(code)));
+		table.SetCell(row, 1, ibValue(ibString(code)));
 	}
 
 	ibQueryTempTableStore store;
@@ -370,7 +370,7 @@ TEST(QueryTempStore, AnIndexedEqualityReadsOnlyTheMatchingRows)
 	ibQueryCondition equality;
 	equality.m_col   = columns[0];
 	equality.m_op    = ibQueryFilterOp::Equal;
-	equality.m_value = ibValue(wxString(wxT("A")));
+	equality.m_value = ibValue(ibString(wxT("A")));
 
 	const ibQueryRamTable matched = source->ComputeRows({ equality });
 	EXPECT_EQ(2, matched.RowCount()) << "two rows carry A";
@@ -385,7 +385,7 @@ TEST(QueryTempStore, AnIndexedValueNothingCarriesReadsNothing)
 	ibQueryRamTable table;
 	table.AddColumn(1, wxT("Code"), ibTypeDescription());
 	const long row = table.AppendRow();
-	table.SetCell(row, 1, ibValue(wxString(wxT("A"))));
+	table.SetCell(row, 1, ibValue(ibString(wxT("A"))));
 
 	ibQueryTempTableStore store;
 	store.Put(wxT("Sales"), std::move(table), { wxT("Code") });
@@ -394,7 +394,7 @@ TEST(QueryTempStore, AnIndexedValueNothingCarriesReadsNothing)
 	ibQueryCondition equality;
 	equality.m_col   = source->GetColumns()[0];
 	equality.m_op    = ibQueryFilterOp::Equal;
-	equality.m_value = ibValue(wxString(wxT("Z")));
+	equality.m_value = ibValue(ibString(wxT("Z")));
 
 	EXPECT_EQ(0, source->ComputeRows({ equality }).RowCount());
 }
@@ -406,7 +406,7 @@ TEST(QueryTempStore, WithoutAnIndexEveryRowIsStillReturned)
 	table.AddColumn(1, wxT("Code"), ibTypeDescription());
 	for (const wxChar* code : { wxT("A"), wxT("B") }) {
 		const long row = table.AppendRow();
-		table.SetCell(row, 1, ibValue(wxString(code)));
+		table.SetCell(row, 1, ibValue(ibString(code)));
 	}
 
 	ibQueryTempTableStore store;
@@ -416,7 +416,7 @@ TEST(QueryTempStore, WithoutAnIndexEveryRowIsStillReturned)
 	ibQueryCondition equality;
 	equality.m_col   = source->GetColumns()[0];
 	equality.m_op    = ibQueryFilterOp::Equal;
-	equality.m_value = ibValue(wxString(wxT("A")));
+	equality.m_value = ibValue(ibString(wxT("A")));
 
 	EXPECT_EQ(2, source->ComputeRows({ equality }).RowCount())
 		<< "the filter is applied downstream — the store hands back what it has";

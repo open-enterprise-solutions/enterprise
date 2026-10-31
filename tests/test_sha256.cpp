@@ -1,27 +1,27 @@
 // =============================================================================
 // OES Enterprise — SHA-256 tests
 //
-// ibSHA256 (backend/utils/sha256.hpp) is the primitive under PBKDF2 password
+// ibSHA256 (core/crypto/sha256.hpp) is the primitive under PBKDF2 password
 // hashing (see test_passwordHash.cpp). Pin it to the FIPS 180-4 known vectors,
 // confirm the incremental Update/Final path equals the one-shot Hash, and guard
 // determinism. A drift here silently changes every stored password hash.
 // =============================================================================
 
 #include <gtest/gtest.h>
-#include "backend/utils/sha256.hpp"
+#include "core/crypto/sha256.hpp"
 
 #include <cstdint>
 #include <cstring>
 
 namespace {
 
-wxString Hex(const uint8_t* d, size_t n) {
-    wxString s;
-    for (size_t i = 0; i < n; ++i) s += wxString::Format(wxT("%02x"), (unsigned)d[i]);
+ibString Hex(const uint8_t* d, size_t n) {
+    ibString s;
+    for (size_t i = 0; i < n; ++i) s += ibString::Format(wxT("%02x"), (unsigned)d[i]);
     return s;
 }
 
-wxString Sha256Hex(const char* msg) {
+ibString Sha256Hex(const char* msg) {
     uint8_t out[ibSHA256::DIGEST_SIZE];
     ibSHA256::Hash(reinterpret_cast<const uint8_t*>(msg), std::strlen(msg), out);
     return Hex(out, ibSHA256::DIGEST_SIZE);

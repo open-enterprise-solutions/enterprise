@@ -11,9 +11,9 @@ ibCompileModule::ibCompileModule(const ibValueMetaObjectModuleBase* moduleObject
 {
 	m_cByteCode.m_strModuleName = m_moduleObject->GetFullName();
 
-	m_strModuleName = m_moduleObject->GetFullName();
-	m_strDocPath = m_moduleObject->GetDocPath();
-	m_strFileName = m_moduleObject->GetFileName();
+	m_translateCode.SetModuleName(m_moduleObject->GetFullName());
+	m_translateCode.SetDocPath(m_moduleObject->GetDocPath());
+	m_translateCode.SetFileName(m_moduleObject->GetFileName());
 
 	Load(m_moduleObject->GetModuleText());
 
@@ -37,9 +37,9 @@ bool ibCompileModule::Compile()
 	if (m_moduleObject != nullptr &&
 		m_moduleObject->IsGlobalModule()) {
 
-		m_strModuleName = m_moduleObject->GetFullName();
-		m_strDocPath = m_moduleObject->GetDocPath();
-		m_strFileName = m_moduleObject->GetFileName();
+		m_translateCode.SetModuleName(m_moduleObject->GetFullName());
+		m_translateCode.SetDocPath(m_moduleObject->GetDocPath());
+		m_translateCode.SetFileName(m_moduleObject->GetFileName());
 
 		m_changedCode = false;
 
@@ -75,18 +75,18 @@ bool ibCompileModule::Compile()
 
 		if (m_parentModule != nullptr) {
 			m_cByteCode.m_parent = &m_parentModule->m_cByteCode;
-			m_rootContext->m_parentContext = m_parentModule->m_rootContext;
+			m_rootContext->m_parentContext = m_parentModule->GetContext();
 		}
 
-		m_strModuleName = m_moduleObject->GetFullName();
-		m_strDocPath = m_moduleObject->GetDocPath();
-		m_strFileName = m_moduleObject->GetFileName();
+		m_translateCode.SetModuleName(m_moduleObject->GetFullName());
+		m_translateCode.SetDocPath(m_moduleObject->GetDocPath());
+		m_translateCode.SetFileName(m_moduleObject->GetFileName());
 
 		Load(m_moduleObject->GetModuleText());
 	}
 
 	//prepare lexem
-	if (!PrepareLexem()) {
+	if (!Translate()) {
 		return false;
 	}
 
@@ -120,9 +120,9 @@ bool ibCompileModule::Recompile()
 		if (m_moduleObject != nullptr &&
 			m_moduleObject->IsGlobalModule()) {
 
-			m_strModuleName = m_moduleObject->GetFullName();
-			m_strDocPath = m_moduleObject->GetDocPath();
-			m_strFileName = m_moduleObject->GetFileName();
+			m_translateCode.SetModuleName(m_moduleObject->GetFullName());
+			m_translateCode.SetDocPath(m_moduleObject->GetDocPath());
+			m_translateCode.SetFileName(m_moduleObject->GetFileName());
 
 			m_changedCode = false;
 
@@ -139,18 +139,18 @@ bool ibCompileModule::Recompile()
 
 		if (m_parentModule) {
 			m_cByteCode.m_parent = &m_parentModule->m_cByteCode;
-			m_rootContext->m_parentContext = m_parentModule->m_rootContext;
+			m_rootContext->m_parentContext = m_parentModule->GetContext();
 		}
 
-		m_strModuleName = m_moduleObject->GetFullName();
-		m_strDocPath = m_moduleObject->GetDocPath();
-		m_strFileName = m_moduleObject->GetFileName();
+		m_translateCode.SetModuleName(m_moduleObject->GetFullName());
+		m_translateCode.SetDocPath(m_moduleObject->GetDocPath());
+		m_translateCode.SetFileName(m_moduleObject->GetFileName());
 
 		Load(m_moduleObject->GetModuleText());
 	}
 
 	//prepare lexem 
-	if (!PrepareLexem()) {
+	if (!Translate()) {
 		return false;
 	}
 

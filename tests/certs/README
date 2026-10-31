@@ -13,6 +13,10 @@ on 127.0.0.1 and a client can present a certificate to it.
                             trust when the server's certificate was NOT signed by it. Its private key is
                             not kept: nothing here serves with this identity, so the key would be a
                             private key in a public tree that no test needs
+  stranger.key              a private key of nobody's certificate, for tests/test_listener.cpp: named as
+                            server.pem's key, it is a well-formed key that is not the certificate's, which
+                            the listener must refuse (other.pem is a certificate, so it would be refused
+                            as "not a key" and prove less)
 
 Made with OpenSSL 3 (any version that knows -addext will do):
 
@@ -25,3 +29,4 @@ Made with OpenSSL 3 (any version that knows -addext will do):
   cat client.crt client.key.aes > client.pem
   openssl req -x509 -newkey rsa:2048 -nodes -days 36500 -keyout other.key.discarded -out other.pem \
       -subj "/CN=127.0.0.1" -addext "subjectAltName=IP:127.0.0.1"   # and other.key.discarded is deleted
+  openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out stranger.key

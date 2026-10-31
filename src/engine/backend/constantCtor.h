@@ -12,7 +12,7 @@ public:
 		m_classType = object_to_clsid(m_metaObject->GetMetaID(), clsid_metaclass(m_metaObject->GetClassType()));
 	}
 
-	wxString GetClassName() const {
+	ibString GetClassName() const {
 		return m_metaObject->GetClassName() + prefixObject +
 			m_metaObject->GetName();
 	}
@@ -43,7 +43,7 @@ public:
 		m_classType = manager_to_clsid(m_metaObject->GetMetaID(), clsid_metaclass(m_metaObject->GetClassType()));
 	}
 
-	virtual wxString GetClassName() const {
+	virtual ibString GetClassName() const {
 		return m_metaObject->GetClassName() + prefixManager + m_metaObject->GetName();
 	}
 

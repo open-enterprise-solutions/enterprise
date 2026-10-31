@@ -13,7 +13,7 @@
 #include "backend/backend_exception.h"   // a door that refuses does it by raising
 
 namespace {
-ibValue Key(const wxChar* k) { return ibValue(wxString(k)); }
+ibValue Key(const wxChar* k) { return ibValue(ibString(k)); }
 }
 
 TEST(ValueContainer, EmptyByDefault) {
@@ -116,7 +116,7 @@ TEST(ValueContainer, NumericKeyIsFoundByItsOwnValue) {
     c.Insert(Num(42), Key(wxT("answer")));
     ibValue out;
     ASSERT_TRUE(c.Property(Num(42), out));
-    EXPECT_EQ(out.GetString(), wxString(wxT("answer")));
+    EXPECT_EQ(out.GetString(), ibString(wxT("answer")));
 }
 
 TEST(ValueContainer, NegativeAndZeroNumericKeysRoundTrip) {
@@ -125,9 +125,9 @@ TEST(ValueContainer, NegativeAndZeroNumericKeysRoundTrip) {
     c.Insert(Num(0),   Key(wxT("zero")));
     ibValue out;
     ASSERT_TRUE(c.Property(Num(-42), out));
-    EXPECT_EQ(out.GetString(), wxString(wxT("neg")));
+    EXPECT_EQ(out.GetString(), ibString(wxT("neg")));
     ASSERT_TRUE(c.Property(Num(0), out));
-    EXPECT_EQ(out.GetString(), wxString(wxT("zero")));
+    EXPECT_EQ(out.GetString(), ibString(wxT("zero")));
     EXPECT_EQ(c.Count(), 2u);   // -42 and 0 did not fold together
 }
 
@@ -138,7 +138,7 @@ TEST(ValueContainer, WideNumericKeyRoundTrips) {
     c.Insert(Num(9007199254740993LL), Key(wxT("wide")));
     ibValue out;
     ASSERT_TRUE(c.Property(Num(9007199254740993LL), out));
-    EXPECT_EQ(out.GetString(), wxString(wxT("wide")));
+    EXPECT_EQ(out.GetString(), ibString(wxT("wide")));
 }
 
 // A NUMBER AND ITS SPELLING ARE TWO KEYS — fixed 2026-08-15 with the removal of
@@ -156,13 +156,13 @@ TEST(ValueContainer, NumberAndItsSpellingAreDifferentKeys) {
     ibValue out;
     EXPECT_FALSE(c.Property(Key(wxT("1")), out));   // the text "1" is not the number 1
     ASSERT_TRUE (c.Property(Num(1), out));
-    EXPECT_EQ(out.GetString(), wxString(wxT("one")));
+    EXPECT_EQ(out.GetString(), ibString(wxT("one")));
 
     // ...and both may live in one container at once, which the old rule made impossible.
     c.Insert(Key(wxT("1")), Key(wxT("text")));
     EXPECT_EQ(c.Count(), 2u);
     ASSERT_TRUE(c.Property(Key(wxT("1")), out));
-    EXPECT_EQ(out.GetString(), wxString(wxT("text")));
+    EXPECT_EQ(out.GetString(), ibString(wxT("text")));
 }
 
 // 1.0 and 1 are the same number, so they are the same key — canonicality is
@@ -172,7 +172,7 @@ TEST(ValueContainer, TrailingZeroIsNotASecondKey) {
     c.Insert(Num(1), Key(wxT("one")));
     ibValue out;
     ASSERT_TRUE(c.Property(ibValue(ibNumber(1.0)), out));
-    EXPECT_EQ(out.GetString(), wxString(wxT("one")));
+    EXPECT_EQ(out.GetString(), ibString(wxT("one")));
 }
 
 // The guard that earns the fast path: a truncating conversion would make 1.5
@@ -184,9 +184,9 @@ TEST(ValueContainer, FractionDoesNotCollideWithItsTruncation) {
     EXPECT_EQ(c.Count(), 2u);
     ibValue out;
     ASSERT_TRUE(c.Property(Num(1), out));
-    EXPECT_EQ(out.GetString(), wxString(wxT("whole")));
+    EXPECT_EQ(out.GetString(), ibString(wxT("whole")));
     ASSERT_TRUE(c.Property(ibValue(ibNumber(1.5)), out));
-    EXPECT_EQ(out.GetString(), wxString(wxT("fraction")));
+    EXPECT_EQ(out.GetString(), ibString(wxT("fraction")));
 }
 
 // ⚠ CHANGED 2026-09-23. A Container used to fold the case of a string key, as a
@@ -252,8 +252,8 @@ TEST(ValueContainer, AnEntryIsNamedByItsKeyAndWalkedInOrder) {
     c.Insert(date, Num(3));
     c.Insert(yes, Num(4));
 
-    EXPECT_EQ(c.GetPropName(0), wxString(wxT("Name")));
-    EXPECT_EQ(c.GetPropName(1), wxString(wxT("42")));
+    EXPECT_EQ(c.GetPropName(0), ibString(wxT("Name")));
+    EXPECT_EQ(c.GetPropName(1), ibString(wxT("42")));
     EXPECT_EQ(c.FindProp(c.GetPropName(0)), 0) << "a string key is found again by its name";
 
     const std::shared_ptr<ibValueIteratorState> iterator = c.CreateIterator();

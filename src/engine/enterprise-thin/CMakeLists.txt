@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-# The thin runtime — enterprise.exe as a thin client (mainApp.h says what it is). It links the thin client's core
+# The thin runtime — enterprise-thin.exe, the runtime as a thin client (mainApp.h says what it is). It links the thin client's core
 # alone; a file base's server half (fileserver) is loaded by it when one is opened.
 set(ENTERPRISE_THIN_SOURCES
     mainApp.cpp
@@ -13,7 +13,7 @@ set(ENTERPRISE_THIN_SOURCES
 add_executable(enterprise-thin ${ENTERPRISE_THIN_SOURCES})
 
 set_target_properties(enterprise-thin PROPERTIES
-    CXX_STANDARD 17
+    CXX_STANDARD 20
     CXX_STANDARD_REQUIRED ON
 )
 
@@ -41,5 +41,5 @@ target_include_directories(enterprise-thin PRIVATE
 target_link_libraries(enterprise-thin PRIVATE
     protocol
     frmclient
-    wx::core wx::aui wx::stc wx::adv wx::base
+    wx::core wx::aui wx::qa wx::base
 )

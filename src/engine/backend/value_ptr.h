@@ -36,7 +36,7 @@ class ibValuePtr : public ibValue {
 		}
 	}
 
-	inline void OnSetValueU(ibValue* ptr) {
+	inline void OnSetValueU(ibVariant* ptr) {
 		if (ptr != nullptr)
 			OnSetValueT(dynamic_cast<T*>(ptr));
 	}
@@ -50,7 +50,7 @@ public:
 
 	// copy ctor
 	ibValuePtr(const ibValue& to_copy) : ibValue() { OnSetValueU(to_copy.m_pRef); }
-	ibValuePtr(const ibValuePtr<T>& to_copy) : ibValue() { OnSetValueT(to_copy.m_pRef); }
+	ibValuePtr(const ibValuePtr<T>& to_copy) : ibValue() { OnSetValueT(to_copy.Ptr()); }
 
 	// generalized copy ctor: U must be convertible to T	
 	template <typename U>
@@ -71,7 +71,7 @@ public:
 
 	template <typename U>
 	void operator = (const ibValuePtr<U>& other) { OnSetValueU(other.m_pRef); }
-	void operator = (const ibValuePtr& other) { OnSetValueT(other.m_pRef); }
+	void operator = (const ibValuePtr& other) { OnSetValueT(other.Ptr()); }
 
 private:
 
@@ -83,49 +83,14 @@ inline bool operator==(const ibValuePtr<_Ty1>& _Left, const ibValuePtr<_Ty2>& _R
 	return _Left.m_pRef == _Right.m_pRef;
 }
 
-template <class _Ty1, class _Ty2>
-inline bool operator!=(const ibValuePtr<_Ty1>& _Left, const ibValuePtr<_Ty2>& _Right) noexcept {
-	return _Left.m_pRef != _Right.m_pRef;
-}
-
-template <class _Ty>
-inline bool operator==(nullptr_t, const ibValuePtr<_Ty>& _Right) noexcept {
-	return _Right.m_pRef == nullptr;
-}
-
-template <class _Ty>
-inline bool operator!=(nullptr_t, const ibValuePtr<_Ty>& _Right) noexcept {
-	return _Right.m_pRef != nullptr;
-}
-
 template <class _Ty>
 inline bool operator==(const ibValuePtr<_Ty>& _Left, nullptr_t) noexcept {
 	return _Left.m_pRef == nullptr;
 }
 
-template <class _Ty>
-inline bool operator!=(const ibValuePtr<_Ty>& _Left, nullptr_t) noexcept {
-	return _Left.m_pRef != nullptr;
-}
-
 template <class _Ty1, class _Ty2>
 inline bool operator==(const ibValuePtr<_Ty1>& _Left, _Ty2* _Right) noexcept {
 	return _Left.m_pRef == _Right;
-}
-
-template <class _Ty1, class _Ty2>
-inline bool operator==(_Ty1* _Left, const ibValuePtr<_Ty2>& _Right) noexcept {
-	return _Left == _Right.m_pRef;
-}
-
-template <class _Ty1, class _Ty2>
-inline bool operator!=(_Ty1* _Left, const ibValuePtr<_Ty2>& _Right) noexcept {
-	return _Left != _Right.m_pRef;
-}
-
-template <class _Ty1, class _Ty2>
-inline bool operator!=(const ibValuePtr<_Ty1>& _Left, _Ty2* _Right) noexcept {
-	return _Left.m_pRef != _Right;
 }
 
 #endif 

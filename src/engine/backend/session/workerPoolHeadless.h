@@ -18,9 +18,8 @@
 // parked fiber has saved its lease, so a submit from another session
 // on the same OS thread does not look reentrant.
 //
-// Used by wenterprise-server.exe (replaces today's per-session worker
-// thread in ibWebApplication) and the future oes-server.exe compute
-// server. See docs/private/compute-server-tiering.md Phase 2 for the bigger
+// Used by every host but the launcher (appHost.cpp) and the future
+// oes-server.exe compute server. See docs/private/compute-server-tiering.md Phase 2 for the bigger
 // picture.
 
 #include "workerPool.h"
@@ -97,10 +96,26 @@ private:
 
 	void WorkerLoop();
 
-	// Spawn a new detached worker thread. Re-checks alive-vs-cap under
-	// m_workersMtx to handle the race between two threads racing to
-	// spawn; bumps m_aliveWorkers atomically before std::thread::detach.
+	// Spawn a worker. Re-checks alive-vs-cap under m_workersMtx so two
+	// Submits cannot both pass the cap. m_aliveWorkers is bumped before
+	// the thread exists. The handle is kept: Stop joins it. A detached
+	// thread is still inside thread_local destructors after that counter
+	// hits zero, which is when Stop used to return.
+	//
+	// An idle self-exit is joined by the thread this function spawns,
+	// before that thread enters WorkerLoop — not by Submit. At the cap,
+	// or while stopping, the handle stays in m_workers for the next
+	// spawn or for Stop.
 	void TrySpawnWorker();
+
+	// m_workersMtx must be held. Move handles out so the caller can join
+	// them without the lock: a thread_local destructor can call back into
+	// the pool. The calling thread's own handle stays.
+	// TakeExitedLocked takes only workers whose WorkerLoop has returned,
+	// so a spawn does not join a thread that is still working;
+	// TakeJoinableLocked takes every other one, for Stop.
+	std::vector<std::thread> TakeExitedLocked();
+	std::vector<std::thread> TakeJoinableLocked();
 
 	// Find a session with pending tasks not currently leased and CAS
 	// the lease in. Returns the session pointer + queue, or {nullptr,
@@ -119,7 +134,6 @@ private:
 	static std::vector<ibParked>& ParkedFibers();
 
 	static void RunTask(ibSessionTask& item);
-	static void RegisterFiberLocals();
 
 	// Passed across the fiber entry. A nested type so the translation
 	// unit can name the queue (private) without a friend.
@@ -133,6 +147,9 @@ private:
 	void        DrainLease(ibSessionQueue* q);
 	void        StartLease(ibSession* session, ibSessionQueue* q);
 	void        FinishFiber(ibSession* session, ibSessionQueue* q, ibFiber* fiber);
+	// Create failed. Every task still queued is the refusal, and the
+	// queue is empty afterwards so the worker does not claim it again.
+	void        RefuseQueued(ibSessionQueue* q, const char* reason);
 	bool        ShouldInterrupt(ibSession* session) const;
 	// m_mtx must be held. True when a fiber parked on THIS thread should
 	// be resumed: it was woken, it has queued tasks, the pool is
@@ -142,13 +159,24 @@ private:
 	std::size_t              m_maxWorkers;
 	std::atomic<bool>        m_stop { false };
 
-	// Worker spawn coordination + join replacement (detached threads).
+	// Handles live until joined. m_aliveWorkers hits zero when WorkerLoop
+	// returns; the thread itself is still running thread_local
+	// destructors until join returns.
+	struct ibWorker {
+		// Set at the end of the thread function, before thread_local
+		// destructors. It means WorkerLoop has returned, not that join
+		// would return without waiting: join still waits those
+		// destructors out.
+		std::shared_ptr<std::atomic<bool>> exited;
+		std::thread                        thread;
+	};
 	std::mutex               m_workersMtx;
+	std::vector<ibWorker>    m_workers;
 	std::atomic<std::size_t> m_aliveWorkers { 0 };
 	// Idle-count drives lazy growth: zero idle + below cap = spawn.
 	std::atomic<std::size_t> m_idleWorkers  { 0 };
-	// Stop() waits on this until m_aliveWorkers reaches 0 (every
-	// detached worker has exited).
+	// Stop waits here until every WorkerLoop has returned, then joins
+	// the handles so thread_local destructors have run too.
 	std::mutex               m_stopMtx;
 	std::condition_variable  m_stopCv;
 

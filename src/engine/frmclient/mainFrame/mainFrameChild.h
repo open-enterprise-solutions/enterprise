@@ -8,7 +8,7 @@
 
 #include "frmclient/frmclient.h"
 
-// A TAB OF THE MAIN WINDOW — the desktop's (frontend/mainFrame/mainFrameChild.h) carried over: an MDI child that joins
+// A TAB OF THE MAIN WINDOW — the old desktop's, carried over: an MDI child that joins
 // the notebook when it is shown, keeps its icon for the page, and leaves the notebook when it is destroyed.
 class FRMCLIENT_API ibAuiChildFrame :
 	public wxAuiMDIChildFrame {

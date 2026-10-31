@@ -437,7 +437,7 @@ bool ibControlTextEditor::Enable(bool enable)
 	m_enabledIntent = enable;
 	// The thin client's process is one mode — the main window's: the designer's (sdesigner) or the runtime's.
 	const ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
-	const bool inDesigner = frame != nullptr && frame->GetMode() == ibProtocolMode::Designer;
+	const bool inDesigner = frame != nullptr && frame->GetMode() == ibProtocol::ibLogin::ibMode::Designer;
 
 	// Match the original "panel over the control" idiom: in designer mode the
 	// outer window stays enabled so clicks bubble up to the designer's
@@ -517,6 +517,12 @@ void ibControlTextEditor::LayoutControls()
 	if (textH > innerH || textH <= 0) textH = innerH;
 	int textY = innerY + (innerH - textH) / 2 + FromDIP(1);
 	if (textY + textH > innerY + innerH) textY = innerY + innerH - textH;
+	// A multiline editor takes the whole inner height: sized to one glyph line it
+	// shows a single, vertically centred line however tall the control is.
+	if (m_multilineMode) {
+		textY = innerY;
+		textH = innerH;
+	}
 	m_text->SetSize(innerX, textY, textW, textH);
 	m_textRect = wxRect(innerX, textY, textW, textH);
 }

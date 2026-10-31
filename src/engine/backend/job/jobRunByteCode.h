@@ -39,9 +39,9 @@
 // (tool, bridge, adapter, server) and four spellings of one list is four chances to put `said` where
 // `understood` goes. Both are strings; the compiler would not notice.
 struct BACKEND_API ibJobRunRequest {
-	wxString m_text;        // the code itself, in the configuration's own dialect
-	wxString m_said;        // one line for the activity row the person reads
-	wxString m_understood;  // the caller's own account of what committing will change
+	ibString m_text;        // the code itself, in the configuration's own dialect
+	ibString m_said;        // one line for the activity row the person reads
+	ibString m_understood;  // the caller's own account of what committing will change
 	bool     m_commit = false;
 
 	void Write(class ibWriterMemory& to) const;
@@ -55,7 +55,7 @@ struct BACKEND_API ibJobRunByteCodeState {
 	// ⭐ THE REQUEST'S VERDICT RIDES WITH THE RUN'S STATE: everything a caller learns is one object,
 	// so a new field costs one edit rather than four hand-matched ones.
 	bool     m_accepted = false;   // the far end took the request
-	wxString m_refusal;            // ...or why it did not
+	ibString m_refusal;            // ...or why it did not
 
 	// ⭐⭐ THE ONE NAME THIS RUN HAS — sys_session.session: the row in Active Users, the column every
 	// journal line is stamped with, and what status and cancel are addressed by. Empty when the run
@@ -64,17 +64,17 @@ struct BACKEND_API ibJobRunByteCodeState {
 	// 🛑 THERE WAS A SECOND ONE, a token this file minted ("fill1"), and it bought nothing: a caller
 	// holding it still needed the session to read the journal or to let a person stop the run. Two
 	// names for one thing is two things to keep in step.
-	wxString m_session;
-	wxString m_activity;   // where it says it has got to — the same line Active Users shows
-	wxString m_error;      // why it stopped, when it did
-	wxString m_result;     // what the code came out with, once it has finished
+	ibString m_session;
+	ibString m_activity;   // where it says it has got to — the same line Active Users shows
+	ibString m_error;      // why it stopped, when it did
+	ibString m_result;     // what the code came out with, once it has finished
 	bool     m_complete = false;
 	bool     m_known    = false;   // …because a token that names nothing is not a finished run
 
 	// ⭐ WHAT THE CODE SAID — its `Message` lines, which reach no window from a background session; the run
 	// keeps the last of them (ibBackgroundRun::Said). The level is the platform's ibStatusMessage, as a number.
 	struct ibLine {
-		wxString m_text;
+		ibString m_text;
 		int      m_status = 0;
 	};
 	std::vector<ibLine> m_output;
@@ -109,11 +109,11 @@ public:
 	// ⚠ THE REFUSAL RIDES IN THE STATE, so a false RETURN says only "read m_refusal".
 	static bool Start(const ibJobRunRequest& request, ibJobRunByteCodeState& state);
 
-	static bool Status(const wxString& token, ibJobRunByteCodeState& state);
+	static bool Status(const ibString& token, ibJobRunByteCodeState& state);
 
 	// Cooperative: the flag is raised and the code unwinds at its next loop boundary. ⚠ Whatever a
 	// committing run has already committed stays committed — stopping is not undoing.
-	static bool Cancel(const wxString& token, ibJobRunByteCodeState& state);
+	static bool Cancel(const ibString& token, ibJobRunByteCodeState& state);
 };
 
 #endif

@@ -9,7 +9,7 @@
 //*                                  Model                                          *
 //***********************************************************************************
 
-void ibValueModelTable::GetValueByRow(wxVariant& variant,
+void ibValueModelTable::GetValueByRow(ibVariant& variant,
 	const ibDataViewItem& row, unsigned int col) const
 {
 	ibComposerNode* node = GetViewData<ibComposerNode>(row);
@@ -17,21 +17,16 @@ void ibValueModelTable::GetValueByRow(wxVariant& variant,
 		return;
 	// Lazy retype (mirror GetValueByMetaID): render the cell as the column's CURRENT type, so a column whose
 	// Type was changed after its cells were written displays right without a one-off row sweep.
-	//
-	// AdjustValue returns a retyped TEMPORARY (not the node's stored cell), so the variant must OWN a copy:
-	// ValueToVariant wraps ibVariantDataValueImpl<ibValue> (by value). The const-ref ibVariantDataValueModel
-	// must NOT be used here — it would bind to the dying temporary and crash in GetType() on the next render
-	// (AV), which is exactly what adding a new row did (dataview Select -> renderer reads the fresh cell).
+	// AdjustValue answers a retyped value of its own, and the cell takes it as it is.
 	ibValue cell;
 	node->GetValue(col, cell);
-	ValueToVariant(variant,
-		ibValueTypeDescription::AdjustValue(m_tableColumnCollection->GetColumnType(col), cell));
+	variant = ibValueTypeDescription::AdjustValue(m_tableColumnCollection->GetColumnType(col), cell);
 }
 
-bool ibValueModelTable::SetValueByRow(const wxVariant& variant,
+bool ibValueModelTable::SetValueByRow(const ibVariant& variant,
 	const ibDataViewItem& row, unsigned int col)
 {
-	const wxString& strData = variant.GetString();
+	const ibString& strData = variant.GetString();
 	ibComposerNode* node = GetViewData<ibComposerNode>(row);
 	if (node == nullptr)
 		return false;

@@ -9,7 +9,7 @@ static const ibValueMetaObject* ResolveGateMeta(const ibBackendTypeSourceFactory
 
 ////////////////////////////////////////////////////////////////////////////
 
-void ibVariantDataAttributeSource::DoSetFromMetaId(const ibMetaID& id)
+void ibVariantAttributeSource::DoSetFromMetaId(const ibMetaID& id)
 {
 	// The binding head is a FORM attribute (the gate): its Type IS the attribute's own Type, not a metadata
 	// field lookup. A whole-attribute binding's leaf id equals the attribute id (a form-local id). A deeper
@@ -23,10 +23,10 @@ void ibVariantDataAttributeSource::DoSetFromMetaId(const ibMetaID& id)
 		}
 	}
 
-	ibVariantDataAttribute::DoSetFromMetaId(id);
+	ibVariantAttribute::DoSetFromMetaId(id);
 }
 
-void ibVariantDataAttributeSource::DoRefreshTypeDesc()
+void ibVariantAttributeSource::DoRefreshTypeDesc()
 {
 	if (m_ownerSrcProperty != nullptr) {
 
@@ -57,7 +57,7 @@ void ibVariantDataAttributeSource::DoRefreshTypeDesc()
 		if (!m_typeDesc.IsOk()) SetDefaultMetaType();
 	}
 
-	ibVariantDataAttribute::DoRefreshTypeDesc();
+	ibVariantAttribute::DoRefreshTypeDesc();
 }
 
 ////////////////////////////////////////////////////////////////////////////
@@ -101,25 +101,25 @@ static const ibValueMetaObject* ResolveGateMeta(const ibBackendTypeSourceFactory
 // The dot-walk lives on the OWNER factory (ibBackendTypeSourceFactory::WalkSource) — it owns the
 // source list + metadata. These accessors just hand it the source-id path.
 
-wxString ibVariantDataSource::MakeString() const
+ibString ibVariantSource::GetString() const
 {
 	bool valid = false;
-	wxString text;
+	ibString text;
 	if (m_ownerProperty != nullptr)
 		m_ownerProperty->WalkSource(m_sourceDesc, &valid, &text);
-	return valid ? text : _("<not selected>");
+	return valid ? text : ibString(_("<not selected>"));
 }
 
 ////////////////////////////////////////////////////////////////////////////
 
-ibMetaID ibVariantDataSource::GetIdByGuid(const ibGuid& guid) const
+ibMetaID ibVariantSource::GetIdByGuid(const ibGuid& guid) const
 {
 	if (!guid.isValid()) return wxNOT_FOUND;
 	const ibValueMetaObject* metaObject = ResolveMetaWide(m_ownerProperty, guid);
 	return metaObject != nullptr && metaObject->IsAllowed() ? metaObject->GetMetaID() : wxNOT_FOUND;
 }
 
-ibGuid ibVariantDataSource::GetGuidByID(const ibMetaID& id) const
+ibGuid ibVariantSource::GetGuidByID(const ibMetaID& id) const
 {
 	if (id == wxNOT_FOUND) return wxNullGuid;
 	const ibValueMetaObject* metaObject = ResolveMetaWide(m_ownerProperty, id);
@@ -130,7 +130,7 @@ ibGuid ibVariantDataSource::GetGuidByID(const ibMetaID& id) const
 
 ////////////////////////////////////////////////////////////////////////////
 
-bool ibVariantDataSource::IsEmptySource() const
+bool ibVariantSource::IsEmptySource() const
 {
 	bool valid = false;
 	if (m_ownerProperty != nullptr)
@@ -138,7 +138,7 @@ bool ibVariantDataSource::IsEmptySource() const
 	return !valid;
 }
 
-const ibBackendSourceColumn* ibVariantDataSource::GetSourceAttributeObject() const
+const ibBackendSourceColumn* ibVariantSource::GetSourceAttributeObject() const
 {
 	// Just hand the source-id path to the OWNER factory's dot — it resolves the leaf column
 	// (null for a whole-attribute binding or a broken path).
@@ -147,7 +147,7 @@ const ibBackendSourceColumn* ibVariantDataSource::GetSourceAttributeObject() con
 
 // The same walk the dot makes (WalkSource: the head gates to the form's attribute, the hops walk its explorer),
 // asked the one question more it answers on the way.
-bool ibVariantDataSource::IsSourceAvailable() const
+bool ibVariantSource::IsSourceAvailable() const
 {
 	const std::vector<ibSourceHop>& path = m_sourceDesc.GetPath();
 	if (m_ownerProperty == nullptr || path.size() < 2)
@@ -161,7 +161,7 @@ bool ibVariantDataSource::IsSourceAvailable() const
 
 ////////////////////////////////////////////////////////////////////////////
 
-void ibVariantDataSource::RefreshTypeFromSource() const
+void ibVariantSource::RefreshTypeFromSource() const
 {
 	// Type FOLLOWS the source through the explorer walk (metadata-agnostic). WalkSource gates path[0] to the
 	// holder and walks the explorer to the leaf column, whose GetTypeDesc() is authoritative — so a value-table
@@ -176,7 +176,7 @@ void ibVariantDataSource::RefreshTypeFromSource() const
 		m_attributeSource->SetFromMetaDesc(m_sourceDesc.GetFirst());
 }
 
-void ibVariantDataSource::SetSource(const ibMetaID& id, bool fillTypeDesc)
+void ibVariantSource::SetSource(const ibMetaID& id, bool fillTypeDesc)
 {
 	// Selecting a direct source resets the path to a single leaf.
 	if (id != wxNOT_FOUND)
@@ -190,22 +190,22 @@ void ibVariantDataSource::SetSource(const ibMetaID& id, bool fillTypeDesc)
 
 ////////////////////////////////////////////////////////////////////////////
 
-void ibVariantDataSource::SetSourceGuid(const ibGuid& guid, bool fillTypeDesc)
+void ibVariantSource::SetSourceGuid(const ibGuid& guid, bool fillTypeDesc)
 {
 	SetSource(GetIdByGuid(guid), fillTypeDesc);
 }
 
 ////////////////////////////////////////////////////////////////////////////
 
-void ibVariantDataSource::SetSourceTypeDesc(const ibTypeDescription& td)
+void ibVariantSource::SetSourceTypeDesc(const ibTypeDescription& td)
 {
 	ResetSource();
 	m_attributeSource->SetFromTypeDesc(td);
 }
 
-ibTypeDescription& ibVariantDataSource::GetSourceTypeDesc(bool fillTypeDesc) const
+ibTypeDescription& ibVariantSource::GetSourceTypeDesc(bool fillTypeDesc) const
 {
-	// Refresh INSIDE the getter (mirrors ibVariantDataAttribute::GetTypeDesc -> DoRefreshTypeDesc): the leaf's
+	// Refresh INSIDE the getter (mirrors ibVariantAttribute::GetTypeDesc -> DoRefreshTypeDesc): the leaf's
 	// type can change in place (a value-table column retyped keeps the same leaf id), so re-resolve through the
 	// source explorer on every access. This variant HOLDS the path (m_sourceDesc), so the resolution is correct
 	// for the control's own variant AND a picker temp/clone (each carries its own path). WalkSource on a small
@@ -217,7 +217,7 @@ ibTypeDescription& ibVariantDataSource::GetSourceTypeDesc(bool fillTypeDesc) con
 
 ////////////////////////////////////////////////////////////////////////////
 
-void ibVariantDataSource::ResetSource()
+void ibVariantSource::ResetSource()
 {
 	m_attributeSource->SetFromMetaDesc(wxNOT_FOUND);
 	m_sourceDesc.ClearSource();
@@ -225,7 +225,7 @@ void ibVariantDataSource::ResetSource()
 
 ////////////////////////////////////////////////////////////////////////////
 
-bool ibVariantDataSource::IsPropAllowed() const
+bool ibVariantSource::IsPropAllowed() const
 {
 	// The Type is editable ONLY while NO source is chosen — asked through the SAME source-backend dot
 	// (WalkSource) the rest of this variant resolves through. Richer than a raw leaf peek: it also

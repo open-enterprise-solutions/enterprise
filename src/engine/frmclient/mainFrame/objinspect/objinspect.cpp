@@ -34,9 +34,18 @@ public:
 		m_inspector = inspector;
 	}
 
-	virtual bool PropertyHidden(const ibProperty* property, bool hide) wxOVERRIDE
+	virtual bool SetState(const ibProperty* property, bool hide) wxOVERRIDE
 	{
 		return m_inspector->PropertyHidden(property, hide);
+	}
+
+	// …shown anew once the change that told it is done: told from inside it (the grid's edit, a dialog's), a rebuild
+	// would free the properties the change still holds.
+	virtual bool Cleared() wxOVERRIDE
+	{
+		ibObjectInspector* const inspector = m_inspector;
+		inspector->CallAfter([inspector]() { inspector->SelectObject(inspector->GetSelectedObject(), true); });
+		return true;
 	}
 
 private:
@@ -105,6 +114,12 @@ ibObjectInspector* ibObjectInspector::GetObjectInspector()
 
 void ibObjectInspector::Create(ibPropertyObject* object, bool force)
 {
+	// THE WINDOW TAKING ITS TABS DOWN (IsClosingWindow): what its parts select as they go is not the person's — the
+	// inspector lets go of what it shows and asks the server nothing. The tree, shown again as the tabs closed, asked its
+	// properties after the logout (2026-10-26); a part letting go of its own before it dies still clears the grid.
+	if (object != nullptr && mainFrame != nullptr && mainFrame->IsClosingWindow())
+		object = nullptr;
+
 	// The DEFERRED rebuild (the CallAfter below) reads m_pendingObject at FIRE time, so it must ALWAYS track the
 	// latest requested object — record it on EVERY call, not only when we defer. Otherwise a rebuild queued for object
 	// A that is then re-selected to B (e.g. a form closing hands the inspector to its metaobject) would still fire on
@@ -139,7 +154,20 @@ void ibObjectInspector::Create(ibPropertyObject* object, bool force)
 	// (the flicker bug). wxWindowUpdateLocker Thaws in its dtor at block exit.
 	wxWindowUpdateLocker updateLock(m_pg);
 
+	bool inGrid = false;
 	if (force || object != m_currentSel) {
+
+		// ⭐ THE PERSON'S PLACE, KEPT ACROSS THE REBUILD — frozen meanwhile, so the rebuild itself is not seen: the same
+		// object made anew (an edit's answer, a list that changed) comes back scrolled as it was, to the row they were on,
+		// and to its editor when they were in the grid; another object starts at its name. Asked before Clear — it takes
+		// the editor, the focus with it, and the scrolling.
+		const bool sameObject = object == m_currentSel;
+		if (!sameObject)
+			m_strSelPropItem.clear();
+		wxWindow* const focused = wxWindow::FindFocus();
+		inGrid = focused != nullptr && (focused == m_pg || m_pg->IsDescendant(focused));
+		int viewX = 0, viewY = 0;
+		m_pg->GetGrid()->GetViewStart(&viewX, &viewY);
 
 		// The object pushes its presentation through the notifier, so it must be registered on
 		// exactly the object we are showing — leave the old one first. A null owner means that
@@ -150,8 +178,13 @@ void ibObjectInspector::Create(ibPropertyObject* object, bool force)
 
 		m_currentSel = object;
 
+		// What it shows fetched as it is registered (ibPropertyObject::Fetch), then the grid filled — each timed apart.
+		ibJournalStopwatch fetched, filled;
+		fetched.Resume();
 		if (m_currentSel != nullptr)
 			m_currentSel->AddNotifier(m_notifier.get());
+		fetched.Pause();
+		filled.Resume();
 
 		const int pageNumber = m_pg->GetSelectedPage();
 
@@ -205,8 +238,13 @@ void ibObjectInspector::Create(ibPropertyObject* object, bool force)
 			m_currentSel->OnPropertyCreated();
 		}
 
+		if (sameObject)
+			m_pg->GetGrid()->Scroll(viewX, viewY);
 		m_pg->Refresh();
 		m_pg->Update();
+		filled.Pause();
+		ibJournalInfo(wxT("ui"), wxT("the inspector filled %lld ms, its rows fetched %lld ms: %u properties"),
+			filled.Ms(), fetched.Ms(), static_cast<unsigned int>(m_propMap.size()));
 	}
 
 	// ShownObject, not m_currentSel: asked again with the address of an object that has since died,
@@ -233,7 +271,7 @@ void ibObjectInspector::Create(ibPropertyObject* object, bool force)
 		}
 	}
 
-	RestoreLastSelectedPropItem();
+	RestoreLastSelectedPropItem(inGrid);
 }
 
 bool ibObjectInspector::IsShownInspector() const
@@ -307,9 +345,10 @@ bool ibObjectInspector::PropertyHidden(const ibProperty* property, bool hide)
 	// step (Clear() rebuilds it wholesale) than this walk costs to run.
 	for (const auto& prop : m_propMap) {
 		if (prop.second == property)
-			return HideProperty(prop.first, hide);   // recursive, as the wxPG default: these are
-	}                                                // the object's OWN leaf properties, and a
-	return false;                                    // composite's children stay its editor's business
+			return HideProperty(prop.first, hide,    // NOT recursive: the object's own property, and a
+				wxPGPropertyValuesFlags::DontRecurse); // composite's children stay its editor's business —
+	}                                                // a type revealed showed every qualifier, not its own
+	return false;                                    // (RefreshChildren hides those the type does not take)
 }
 
 wxPGProperty* ibObjectInspector::GetProperty(ibProperty* prop) const
@@ -370,7 +409,7 @@ void ibObjectInspector::OnPropertyGridChanging(wxPropertyGridEvent& event)
 		const wxString& helpString = prop_ptr->GetHelp();
 		if (!ModifyProperty(prop_ptr, event.GetPropertyValue()))
 			event.Veto();
-		const wxString& localized = wxGetTranslation(helpString);
+		const wxString& localized = ibGetTranslation(helpString);
 		m_pg->SetPropertyHelpString(propPtr, localized);
 		m_pg->SetDescription(propPtr->GetLabel(), localized);
 		return;
@@ -383,7 +422,7 @@ void ibObjectInspector::OnPropertyGridChanging(wxPropertyGridEvent& event)
 		const wxString& helpString = event_ptr->GetHelp();
 		if (!ModifyEvent(event_ptr, event.GetPropertyValue()))
 			event.Veto();
-		const wxString& localized = wxGetTranslation(helpString);
+		const wxString& localized = ibGetTranslation(helpString);
 		m_pg->SetPropertyHelpString(propPtr, localized);
 		m_pg->SetDescription(propPtr->GetLabel(), localized);
 		return;

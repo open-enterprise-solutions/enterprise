@@ -48,11 +48,11 @@
 namespace {
 
 using ibArg = ibMcpTool::ibMcpArgument;
-const ibArg& ArgName() { static const ibArg a(wxT("name"), ibArg::Kind::Text, ibMcpText("Which pattern to read. Alone it answers the summary and the list of topics inside; with `topic` it answers that part in full. Omit it to list what there is.")); return a; }
+const ibArg& ArgName() { static const ibArg a(ibT("name"), ibArg::Kind::Text, ibMcpText("Which pattern to read. Alone it answers the summary and the list of topics inside; with `topic` it answers that part in full. Omit it to list what there is.")); return a; }
 
 const ibArg& ArgTopic()
 {
-	static const ibArg a(wxT("topic"), ibArg::Kind::Text,
+	static const ibArg a(ibT("topic"), ibArg::Kind::Text,
 		ibMcpText("Which part of that pattern, by any words of its heading as the listing shows them. "
 		  "Omit for the table of contents; pass `all` for the whole entry."));
 	return a;
@@ -67,7 +67,7 @@ const ibArg& ArgTopic()
 // does not match is never opened - which is the whole point at a hundred kilobytes.
 const ibArg& ArgQuery()
 {
-	static const ibArg a(wxT("query"), ibArg::Kind::Text,
+	static const ibArg a(ibT("query"), ibArg::Kind::Text,
 		ibMcpText("Words of the problem - 'will not write off', 'close the month', 'column per "
 		  "warehouse'. THE CORPUS IS WRITTEN IN ENGLISH, so ask in English: if the person put it in "
 		  "another language, say it here in the words the trade uses in English rather than passing "
@@ -81,9 +81,9 @@ const ibArg& ArgQuery()
 
 // ONE ENTRY. `name` is the address, `summary` is what the listing shows, `text` is the whole of it.
 struct ibMcpPattern {
-	const wxChar* m_name;
-	wxString      m_summary;
-	wxString      m_text;
+	const ibChar* m_name;
+	ibString      m_summary;
+	ibString      m_text;
 };
 
 // ⚠ HELD AS A FUNCTION, not a file-scope table: a static built before the locale is set would
@@ -117,7 +117,7 @@ const std::vector<ibMcpPattern>& Patterns()
 {
 	static const std::vector<ibMcpPattern> s_patterns = {
 
-	{ wxT("shapes"),
+	{ ibT("shapes"),
 	  ibMcpText("Which metatype a described need asks for - and the words that give it away."),
 	  ibMcpText("READING A REQUEST FOR ITS SHAPE.\n"
 		"\n"
@@ -199,6 +199,8 @@ const std::vector<ibMcpPattern>& Patterns()
 		"* The same reasoning covers a person's position and salary, an item's tax rate, a\n"
 		"warehouse's responsible person, an agreement's settlement rules. A catalogue is what a\n"
 		"thing IS; a periodic register is what was TRUE about it at a time.\n"
+		"* HOW THAT IS BUILT - the document whose rows set the value, the register it posts to, the\n"
+		"list that reads it back by query - is `metadata-craft`.\n"
 		"\n"
 		"AND WHEN THE REQUEST IS A VERB RATHER THAN A THING - \"load the statement\", \"upload to the\n"
 		"portal\", \"recalculate the cost\", \"find and replace\", \"close the month\" - it is a DATA\n"
@@ -335,7 +337,192 @@ const std::vector<ibMcpPattern>& Patterns()
 		"(`query-craft`, `derived-registers`), and picking only one because they \"say the same thing\"\n"
 		"is how a monthly calculation ends up recomputing intervals on every line.") },
 
-	{ wxT("combining"),
+	{ ibT("metadata-craft"),
+	  ibMcpText("Salary, price, unit: a value with a history is set by a document's rows and kept in a register - never a field of the thing it describes."),
+	  ibMcpText("THE OBJECTS FOR A VALUE THAT CHANGES - A CHAIN, NOT A FIELD.\n"
+		"\n"
+		"STOP: THE MISTAKE THIS ENTRY EXISTS FOR. Asked for payroll, an assistant adds a Salary attribute to\n"
+		"the employee; asked for prices, a Price to the item. Both open, both save, and both are wrong the\n"
+		"first time the salary is raised: the old figure is gone, last month cannot be recomputed, and\n"
+		"nobody can say who changed it, when, or why. `shapes` states the rule - a catalogue is what a\n"
+		"thing IS, a periodic register what was TRUE about it at a time. This is how it is BUILT.\n"
+		"\n"
+		"KEY: THREE PIECES, ALWAYS.\n"
+		" 1. CATALOGUES FOR WHAT - the employee, the item, the kind of accrual, the price type. They hold\n"
+		" what does not change: a name, a code, what the thing is.\n"
+		" 2. A DOCUMENT THAT SETS THE VALUE - an event with a date, a number, an author and a reason. Its\n"
+		" HEADER holds what is common to the event (the date, the organisation, the price type every row\n"
+		" starts with); its TABULAR SECTION holds the values, one row per subject - employee, position,\n"
+		" amount; item, price. Values come IN A LIST, not one per document: a raise for forty people is\n"
+		" one document of forty rows.\n"
+		" 3. A PERIODIC REGISTER THE DOCUMENT POSTS TO (written by its recorder), keyed by the subject and\n"
+		" the kind, and READ as the latest record as of a date (`SliceLast`) by every calculation, report\n"
+		" and list that needs the value.\n"
+		"\n"
+		"WORKED EXAMPLE - SALARY.\n"
+		" HIRING is a document: header - date, organisation; rows - employee, department, position,\n"
+		" number of rates, schedule; and the planned accruals as rows too - employee, kind of accrual,\n"
+		" amount - because a person is paid by several kinds at once, and a kind with its amount is a ROW,\n"
+		" never a column per kind.\n"
+		" A TRANSFER is the same shape from a later date: the new department, position or amount. Its row\n"
+		" carries the date it takes effect - PER ROW, so one document moves people on different days -\n"
+		" and shows what WAS beside what BECOMES: previous department, position, rates and schedule\n"
+		" read-only next to the new ones. The accruals, taxes and benefits of each person are sections\n"
+		" of their own, linked to the employee's row; an accrual stops by unticking its \"in force\" flag,\n"
+		" which writes its end - it is never deleted.\n"
+		" DISMISSAL deletes nothing. It writes the same registers from its date with the rates at zero and\n"
+		" the accruals ended - the value stops being IN FORCE, and every month before it stays exactly as\n"
+		" it was paid.\n"
+		" The payroll run then asks the registers who is in force this month and at what; it never reads a\n"
+		" field of the employee (`payroll`).\n"
+		"\n"
+		"KEY: AN EMPLOYEE IS NOT A PERSON - IT IS AN EMPLOYMENT. Two catalogues:\n"
+		" THE INDIVIDUAL - the human being: name, date of birth, tax number, identity documents. Tied to NO\n"
+		" organisation: one record across every company and every role this person has ever had.\n"
+		" THE EMPLOYEE - one working relation with ONE organisation: the organisation, the personnel\n"
+		" number, the KIND OF EMPLOYMENT (main job, part-time inside the company, part-time from outside, a\n"
+		" civil-law contract), and a reference to the individual. One individual, several employees: a main\n"
+		" job and a second post, work for two companies of one group, a contractor, a re-hire after a\n"
+		" break.\n"
+		" So the question picks the key: positions, time and pay are kept BY EMPLOYEE; income tax, personal\n"
+		" reporting and \"everything this person earned\" BY INDIVIDUAL, across all their employments. One\n"
+		" catalogue for both cannot pay a part-timer twice or total their tax once. And even the name is\n"
+		" periodic - people change surnames - so it is a register by individual, not only an attribute.\n"
+		"\n"
+		"WORKED EXAMPLE - PRICES. A price-setting document: header - the date and the price type every row\n"
+		"starts with; rows - item, variant, unit, price type, price. Posted to a price register keyed by\n"
+		"price type and item (and variant). The price type is a catalogue carrying the currency, whether tax\n"
+		"is included and how to round (`pricing`). The item carries no price at all: its card SHOWS the\n"
+		"current prices, one line per price type read from the register, and when there are none says\n"
+		"\"prices not set\" beside a \"set the price\" link that opens a price-setting document for this item.\n"
+		"\n"
+		"WORKED EXAMPLE - A WORK SCHEDULE: THE RULE IN A CATALOGUE, THE DAYS IN A REGISTER. The schedule item\n"
+		"holds how to fill it - the production calendar whose holidays it honours, the method (by weeks, or\n"
+		"by cycles of any length counted from a start date), a template of days (day number, included or\n"
+		"not, and a timetable of start and end times per day), whether holidays are excluded, and a horizon\n"
+		"in months to keep filled ahead. The DAYS themselves are written to a register for the years\n"
+		"filled; a day changed by hand is kept and the years edited by hand are named, so a refill from the\n"
+		"template does not silently undo them.\n"
+		"\n"
+		"WORKED EXAMPLE - UNITS, the smallest case and the clearest. A CLASSIFIER catalogue of units - piece,\n"
+		"kilogram, metre - is enough for a simple base: the item points at its base unit. When packing\n"
+		"appears (a box of 12, a pallet of 40 boxes), units become a SUBORDINATE catalogue whose owner is the\n"
+		"item (ListOwner = the items catalogue), each carrying its classifier unit and a COEFFICIENT to the\n"
+		"base unit - a numerator and a denominator, so a third of a box stays exact. A goods row chooses its\n"
+		"unit among THIS item's units (`choice-links`: Owner = the row's item); stock is always kept in base\n"
+		"units, quantity times the coefficient. Changing the item or the unit recalculates the row\n"
+		"(`form-craft`).\n"
+		"\n"
+		"WORKED EXAMPLE - A FIXED ASSET, whose whole life is documents. Acceptance for accounting puts it\n"
+		"into service and sets its cost, useful life, method, department and responsible person; a movement\n"
+		"changes department and responsible from its date; a transfer or a sale hands it over; a write-off\n"
+		"ends it. Each is a document whose rows list the assets it acts on - so one movement moves twenty\n"
+		"chairs - and each posts the periodic registers of what it changed (`fixed-assets`). The asset itself\n"
+		"is only CHOSEN in those rows: the catalogue item holds its name and inventory number, and every\n"
+		"value it has is read as of a date. Employees and items work the same way: the catalogue item is\n"
+		"what gets picked, the documents carry what happens to it.\n"
+		"\n"
+		"KEY: THE HEADER'S CHAIN IS ORGANISATION, COUNTERPARTY, CONTRACT. All three sit in the header of\n"
+		"every document between two parties. The contract is a catalogue SUBORDINATE to the counterparty\n"
+		"(ListOwner) and carries the organisation it was signed by, so the contract field is narrowed by\n"
+		"both (`choice-links`: Owner = Counterparty, Organisation = Organisation), and the contract is where\n"
+		"the terms live - currency, price type, how settlements are kept (`settlements`). A contract chosen\n"
+		"from another organisation is the mistake the narrowing exists to make impossible.\n"
+		"\n"
+		"KEY: AND THE LIST SHOWS IT BY QUERY, NOT BY A FIELD. \"I want the salary in the employee list\" is\n"
+		"no reason to store it there. The list keeps the employee catalogue as its MAIN TABLE - the rows,\n"
+		"the commands and the choice stay the employee's - and an arbitrary query over it (the dynamic\n"
+		"list's Settings; form_control with `attribute` reads them) joins the register's latest record as\n"
+		"of today: one column, read, never copied. The same for a price column in the item list, for the\n"
+		"chosen price type, or a balance. `showing-a-value` is the rule; this is its commonest case, and\n"
+		"the picking dialogue's item list is its fullest (`picking`).\n"
+		"\n"
+		"THE DOCUMENT'S SHAPE FOLLOWS FROM THE SAME QUESTIONS.\n"
+		" WHAT IS COMMON TO THE EVENT goes to the header; WHAT VARIES PER SUBJECT goes to a row. A header\n"
+		" value a row may override - the order, the warehouse, the account - is the row's DEFAULT: the row\n"
+		" has its own column and starts with the header's value.\n"
+		" A DIFFERENT SET OF COLUMNS IS A DIFFERENT SECTION. Goods have variant, batch and unit; services\n"
+		" have a text and no unit; returnable packaging has its own accounts. Three sections - not one with\n"
+		" a kind flag and half its cells empty on every row.\n"
+		" THE KEY EVERY SECTION SHARES IS A SECTION OF ITS OWN: a payroll document lists its employees\n"
+		" once, and accruals, contributions, tax and withholdings are rows keyed by them.\n"
+		" A LIST THAT BELONGS TO A ROW (serial numbers of a line, components of a kit) is a section linked\n"
+		" to the row by a key column, not a field holding many values.\n"
+		" A ROW SAYS HOW IT GOT THERE - added by the fill, or a correction - so a refill replaces its own\n"
+		" rows and keeps what a person typed.\n"
+		" A ROW OF A SPENDING REPORT CARRIES ITS OWN ANALYTICS - cost item, order, department, warehouse,\n"
+		" cell - and the supplier's paper, incoming date and number, because one report gathers receipts\n"
+		" from many shops for many purposes.\n"
+		" A PAYMENT SCHEDULE IS A SECTION (date, percent, amount, tax) even where it usually has one row:\n"
+		" the second instalment is a row, not a second set of header fields.\n"
+		" THE EXCEPTION THAT PROVES THE RULE: A GRID SHAPED LIKE THE PAPER. A timesheet row is employee and\n"
+		" position, then for every day of the month, 1 to 31, up to three pairs (kind of time, hours) - a\n"
+		" column per day, because the statutory blank has that shape and a person fills it like the blank.\n"
+		" It is right ONLY because the axis is closed (31 days, three kinds a day) and because POSTING\n"
+		" UNPIVOTS it: a query built in a loop over the days and the pairs, one select per cell joined by\n"
+		" UNION, writes rows to the register - employee, kind of time, date = the month plus the day,\n"
+		" hours. The document keeps the grid for entering; the register keeps rows for reading. A second\n"
+		" section takes the same month as totals (kind, days, hours, six times) for those who do not keep\n"
+		" days, and a header switch says which of the two this document uses.\n"
+		" A PLAN IS A DOCUMENT OF DATED ROWS UNDER A PLANNING PERIOD. The header points at a planning\n"
+		" period - a catalogue item carrying its periodicity (day, week, decade, month, quarter, half-year,\n"
+		" year) and its start and end. Each row carries its own planning date, which the form ALIGNS to\n"
+		" the start of its bucket (the week's first day; the 1st, 11th or 21st for a decade; the month's\n"
+		" first day) and refuses outside the period. Posting writes the row's date as the register's\n"
+		" period: a year planned by month is one document whose rows are dated to month starts, and plan\n"
+		" against fact is two readings over the same dimensions (`planning`).\n"
+		" OPENING BALANCES ARE ONE DOCUMENT WITH A SECTION PER BALANCE, ONE AREA SHOWN AT A TIME. A header\n"
+		" field names the area being entered - property, stock, money, settlements with counterparties,\n"
+		" taxes, staff, advance holders, other, card acquiring - and pages without tabs show that area\n"
+		" alone; an area of several balances has tabs inside (own stock, direct costs, stock handed over,\n"
+		" stock taken in; suppliers, customers). Each row carries exactly the dimensions and resources of\n"
+		" the balance it opens - warehouse, cell, item, variant, batch, quantity, sum, order; counterparty,\n"
+		" contract, advance or not, the settlement document, the sum in currency and in money; employee,\n"
+		" sum, the month it belongs to - so posting writes it straight into the register on the\n"
+		" document's date. Every table loads from a spreadsheet, because opening balances arrive from the\n"
+		" old system in bulk (`filling-a-base`).\n"
+		" AN ORDER CARRIES ITS PROMISES PER ROW: the shipment date, the quantity reserved, the\n"
+		" specification it is made by - the header's shipment date is only the rows' default. Materials\n"
+		" the customer brings are a section of their own, with the date each is due to arrive\n"
+		" (`not-mine`). Its state is a catalogue the business names itself (new, in work, done), plus a\n"
+		" Closed flag - not an enumeration the developer froze.\n"
+		" CLOSING A MONTH IS A DOCUMENT WHOSE BODY IS ITS STEPS: one flag per step, in the order they run\n"
+		" - direct costs, allocation, actual cost, retail cost, exchange differences, the financial result.\n"
+		" Posting performs the ticked steps and writes their results as the document's movements, so\n"
+		" undoing a close is unposting it, and redoing one step is posting it with that step alone\n"
+		" (`closing-a-period`). The assistant that drives it posts ONE such document PER STEP: it\n"
+		" unposts the month's closing documents first, then reuses them in order - deletion mark lifted,\n"
+		" the other flags cleared, its one flag set - and creates the missing ones on the month's last\n"
+		" day, commented as made by the assistant. A re-run therefore starts clean and never doubles a\n"
+		" movement; depreciation stays a document of its own (`form-craft` has the monitor).\n"
+		" AN EXPORT THAT MUST BE PROVABLE IS A DOCUMENT TOO: its basis is the report being sent, its rows\n"
+		" are the forms in the package (send or not, name, code, declaration or appendix, the file name it\n"
+		" was written to), and its header holds the format's own parameters. Generate, show the text,\n"
+		" save the files are its commands; the errors open in a form of their own that leads to each\n"
+		" wrong cell (`regulated-forms`).\n"
+		" A REPORT TO A CONSIGNOR IS A ROW THAT JOINS TWO DEALS: what was sold (price, sum, tax, the\n"
+		" buyer, the date, the customer's order) beside what is owed for it (the receipt price, sum, tax,\n"
+		" the order to the supplier) and the commission between the two. It is filled from the sales of\n"
+		" that consignor's goods, and how the commission is computed - withheld or not, the method, the\n"
+		" percent, the tax rate - is a titled group of header fields (`not-mine`).\n"
+		" A COMPUTED VALUE KEEPS ITS INPUTS on the row: an accrual carries its period, the days and hours\n"
+		" worked and due and the indicators it used beside the result; a computed discount keeps its\n"
+		" REASONS in a section of their own (which condition granted it). Then the figure can be checked\n"
+		" and recomputed.\n"
+		" ONE DOCUMENT PER EVENT, WITH AN OPERATION KIND, while the operations share their columns - not a\n"
+		" document per operation. Parallel books are a GROUP OF HEADER FIELDS PER BOOK (department,\n"
+		" responsible, event) under \"reflect in\" flags, the rows shared (`parallel-accounting`).\n"
+		"\n"
+		"NOTE: THE SMALL CASE MAY STAY SMALL - AND SAY SO. A demo with one salary per person and no\n"
+		"history can keep it an attribute; say out loud what that gives up (no raise without losing the old\n"
+		"figure, no recomputed past) and build the chain the moment raises, groups or a second employment\n"
+		"appear.\n"
+		"NOTE: THE TEST BEFORE ANY NEW ATTRIBUTE. \"If it changes next month, must last month still show the\n"
+		"old value?\" Yes - a document's row and a periodic register. \"One per thing, or a list?\" A list -\n"
+		"a section. \"Can the list already reach it?\" Yes - a query, not a field. Only what passes all\n"
+		"three is an attribute.") },
+
+	{ ibT("combining"),
 	  ibMcpText("The handful of primitives every entry here is made of - and how a real request is assembled from several."),
 	  ibMcpText("THE SAME DOZEN MOVES, UNDER DIFFERENT NAMES.\n"
 		"\n"
@@ -602,7 +789,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"quietly ignoring it. It is also how a genuine improvement gets found - almost every one\n"
 		"begins as somebody asking why a step is there.") },
 
-	{ wxT("intake"),
+	{ ibT("intake"),
 	  ibMcpText("Taking a request: which questions to ask, in what order, and how to offer the options back."),
 	  ibMcpText("TAKING A REQUEST FROM SOMEBODY WHO KNOWS THE TRADE AND NOT THE SYSTEM.\n"
 		"\n"
@@ -703,7 +890,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"version of the feature - it is a system that cannot recompute a corrected month, and nobody\n"
 		"is told until the first correction. Say the limit, offer the honest smaller thing, and let\n"
 		"somebody decide.") },
-	{ wxT("choice-links"),
+	{ ibT("choice-links"),
 	  ibMcpText("Fields filled in terms of their neighbours - a list narrowed by what stands beside it, and a value whose TYPE is decided by a kind chosen next to it."),
 	  ibMcpText("TWO THINGS A FIELD CAN SAY ABOUT ITS NEIGHBOURS, AND THEY ARE DIFFERENT QUESTIONS.\n"
 		"\n"
@@ -780,7 +967,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"the list, and what a new item added there is born with.") },
 
 
-	{ wxT("where-behaviour-lives"),
+	{ ibT("where-behaviour-lives"),
 	  ibMcpText("\"Make it do X in the sales document\" - and X lives in a mechanism shared by twenty documents."),
 	  ibMcpText("THEY NAME THE DOCUMENT THEY SEE; THE BEHAVIOUR IS SOMEWHERE ELSE.\n"
 		"\n"
@@ -853,7 +1040,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"actually belongs, who else it will affect if put there, and - when the answer is the close\n"
 		"rather than the document - when the figure they want becomes knowable at all.") },
 
-	{ wxT("document-chains"),
+	{ ibT("document-chains"),
 	  ibMcpText("Intention, fact, reversal - the one chain behind every \"order, delivery, return\", whatever it is called."),
 	  ibMcpText("EVERY AREA IS THE SAME CHAIN OF THREE LINKS.\n"
 		"\n"
@@ -918,7 +1105,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"Lending: a facility, a drawdown, a repayment. Whenever three documents in a row are\n"
 		"described, check whether they are these three - they usually are.") },
 
-	{ wxT("unfamiliar-domain"),
+	{ ibT("unfamiliar-domain"),
 	  ibMcpText("A trade nobody here knows - logging, catering, haulage - is almost always a known pattern plus small differences."),
 	  ibMcpText("A TRADE YOU HAVE NEVER SEEN IS USUALLY ONE YOU HAVE.\n"
 		"\n"
@@ -1002,7 +1189,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"where your trade genuinely differs - the conversions, the norms, the limits. Asking for THAT\n"
 		"rather than for a description of the business gets a usable design in one conversation.") },
 
-	{ wxT("predefined"),
+	{ ibT("predefined"),
 	  ibMcpText("A particular item named in conversation has to exist as a predefined one."),
 	  ibMcpText("A NAMED INSTANCE IS A PREDEFINED ITEM.\n"
 		"\n"
@@ -1059,7 +1246,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"exemption is deliberate, and it is also how items reach a branch that was never supposed to\n"
 		"see them.") },
 
-	{ wxT("recipes"),
+	{ ibT("recipes"),
 	  ibMcpText("Building a whole area from nothing: what to create, in what order, for each classic subsystem."),
 	  ibMcpText("RECIPES FOR THE AREAS THAT ARE SOLD ELSEWHERE AS SEPARATE PRODUCTS.\n"
 		"\n"
@@ -1238,7 +1425,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"finished when its metaobjects exist, it is finished when a question it was built for gets\n"
 		"the right answer twice.") },
 
-	{ wxT("where-to-start"),
+	{ ibT("where-to-start"),
 	  ibMcpText("The order configurations actually grow in - useful for knowing what comes next."),
 	  ibMcpText("WHAT APPEARS, AND ROUGHLY IN WHAT ORDER.\n"
 		"\n"
@@ -1291,7 +1478,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"because everything hangs off it, not because it is where the work is. Anyone reading a build\n"
 		"order as an estimate gets both ends wrong.") },
 
-	{ wxT("building-an-erp"),
+	{ ibT("building-an-erp"),
 	  ibMcpText("The whole route: what is decided once at the start, what is built in what order, and what proves each step."),
 	  ibMcpText("HOW A WHOLE SYSTEM IS ASSEMBLED OUT OF THESE PATTERNS.\n"
 		"\n"
@@ -1377,7 +1564,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"and the bulk is breadth - which is exactly the part that can be built incrementally, by\n"
 		"area, with each area proved by its own DONE WHEN before the next begins.") },
 
-	{ wxT("proportions"),
+	{ ibT("proportions"),
 	  ibMcpText("How much of what a full ERP actually contains - counted, not guessed."),
 	  ibMcpText("THE SHAPE OF A FINISHED SYSTEM, BY THE NUMBERS.\n"
 		"\n"
@@ -1438,7 +1625,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"own a module or a form, and silently loses every simple one - which understated the\n"
 		"constants here by a factor of five and reported the functional options as zero.") },
 
-	{ wxT("planning"),
+	{ ibT("planning"),
 	  ibMcpText("Plans against facts, what is still needed, and covering a requirement from somewhere."),
 	  ibMcpText("PLANNING, AND THE THREE THINGS PEOPLE MEAN BY IT.\n"
 		"\n"
@@ -1538,7 +1725,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"into next year's plan, and which of the two it is doing is a setting rather than a second\n"
 		"mechanism.") },
 
-	{ wxT("bill-of-materials"),
+	{ ibT("bill-of-materials"),
 	  ibMcpText("What a product is made of: exploding it into requirements, and the traps in doing so."),
 	  ibMcpText("DESCRIBING WHAT A PRODUCT IS MADE OF, AND EXPLODING IT.\n"
 		"\n"
@@ -1663,7 +1850,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"route point participates in choosing WHICH specification applies, so the route decides whose\n"
 		"composition is used.") },
 
-	{ wxT("production"),
+	{ ibT("production"),
 	  ibMcpText("Costs, month-end close and work in progress - and why the close is several documents."),
 	  ibMcpText("PRODUCTION, COSTS AND CLOSING THE MONTH.\n"
 		"\n"
@@ -2051,7 +2238,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"differ only by fields and table names, DECLARE the differences and assemble the text\n"
 		"(`posting`) rather than hiding them in comments.") },
 
-	{ wxT("user-formulas"),
+	{ ibT("user-formulas"),
 	  ibMcpText("Letting people write the rule: indicators as data, expression evaluated at run time."),
 	  ibMcpText("WHEN THE RULE BELONGS TO THE PERSON, NOT TO THE PROGRAMMER.\n"
 		"\n"
@@ -2133,7 +2320,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"this much and 5 above it\" out of code, and it is the single most-asked-for shape after plain\n"
 		"arithmetic.") },
 
-	{ wxT("payroll"),
+	{ ibT("payroll"),
 	  ibMcpText("What payroll needs from a platform - and what it costs when those two metatypes are absent."),
 	  ibMcpText("PAYROLL IS ITS OWN WORLD, and the first honest thing to say is what it needs.\n"
 		"\n"
@@ -2348,7 +2535,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"the children; the income tax is 18 %. A full-time minimum wage is above the limit, so in\n"
 		"practice it reaches part-timers and parents - say that when asked \"why nobody gets it\".") },
 
-	{ wxT("vat"),
+	{ ibT("vat"),
 	  ibMcpText("Indirect tax: the designation that follows every line, and the earlier of two events."),
 	  ibMcpText("VAT IS TWO MECHANISMS, AND BOTH ARE EASY TO MISS UNTIL AN AUDIT.\n"
 		"\n"
@@ -2425,7 +2612,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"* THE FAILURE WITHOUT IT IS SILENT AND ONE-SIDED: the posting check refuses a value the form\n"
 		"was still offering, and the person reads it as the system contradicting itself.") },
 
-	{ wxT("cash-flow"),
+	{ ibT("cash-flow"),
 	  ibMcpText("Money: what is planned, what is promised and what actually moved."),
 	  ibMcpText("PLANNED MONEY AND REAL MONEY ARE DIFFERENT REGISTERS.\n"
 		"\n"
@@ -2500,7 +2687,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"payment\", \"we must not pay more than we planned\". None of them is answered by a balance of\n"
 		"cash, and all of them are cheap while the money registers are being designed.") },
 
-	{ wxT("roles"),
+	{ ibT("roles"),
 	  ibMcpText("Cutting roles: a job is not a role, and rights combine rather than nest."),
 	  ibMcpText("HOW RIGHTS ARE ACTUALLY CUT UP.\n"
 		"\n"
@@ -2631,7 +2818,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"deserves a check that reports the divergence rather than a session that silently gets the\n"
 		"wrong person's rights.") },
 
-	{ wxT("row-level-access"),
+	{ ibT("row-level-access"),
 	  ibMcpText("\"Only their own customers\": restricting which ROWS a person sees, and what it costs."),
 	  ibMcpText("SEEING ONLY YOUR OWN.\n"
 		"\n"
@@ -2755,7 +2942,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"hole nobody sees. Without the second, the restriction is decoration. The DATA side - access\n"
 		"groups, membership, inheritance down a hierarchy - is yours to build either way.") },
 
-	{ wxT("closing-a-period"),
+	{ ibT("closing-a-period"),
 	  ibMcpText("Freezing what has been reported: who may still edit, and what the guard must cover."),
 	  ibMcpText("CLOSING A PERIOD SO IT STOPS MOVING.\n"
 		"\n"
@@ -2772,6 +2959,24 @@ const std::vector<ibMcpPattern>& Patterns()
 		"* THE WHOLE TABLE IS FOLDED ONCE AT THE START OF A SESSION into a small map. If the person\n"
 		"has no prohibitions at all the map is simply absent, and every check exits on its first\n"
 		"line - the full-rights case costs nothing and needs no separate branch.\n"
+		"\n"
+		"KEY: THE DATE IS USUALLY A RULE, NOT A DATE. The editor offers an arbitrary date beside\n"
+		"RELATIVE ones - the end of last year, quarter, month or week, the previous day - recomputed\n"
+		"every day, so the closed period moves forward by itself and nobody has to remember to move it.\n"
+		"A relative date may carry a GRACE of N days, during which the previous period is still open,\n"
+		"and the editor SAYS IT under the setting as a sentence computed from today: \"until the 5th,\n"
+		"changes from 1 to 30 September are allowed; after the 5th, changes up to 30 September are\n"
+		"prohibited\" - or, once it has passed, \"the grace period expired on the 5th\". The previous day\n"
+		"takes no grace.\n"
+		"* AND A FULLER EDITOR KEYS THE TABLE WIDER: (section, object, who) -> rule. A section is an\n"
+		"area of the books with a date of its own, an object narrows it to one company or warehouse.\n"
+		"The editor asks first WHETHER there is a prohibition - none, the same for everybody, per\n"
+		"person - and then HOW it is set - one common date, by section, by object, by both - offering\n"
+		"only the ways the sections allow. The people stand on the left, each with a comment; on the\n"
+		"right \"nobody chosen\" or that person's setting, sections and objects as a tree with a date per\n"
+		"row. A report answers \"who may edit what, up to when\".\n"
+		"* MOVING THE COMMON DATE IS THE LAST STEP OF A CLOSE: the month-closing monitor offers it once\n"
+		"the month is closed (`form-craft`).\n"
 		"\n"
 		"KEY: CHECK THE OLD VERSION AND THE NEW ONE. Read the document as it stands in the base and\n"
 		"test the prohibition against BOTH dates. Otherwise the two interesting cases both slip\n"
@@ -2799,7 +3004,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"under a background job and an external connection; there it refuses silently and logs. A\n"
 		"refusal announced to an empty room is a refusal nobody can act on.") },
 
-	{ wxT("pricing"),
+	{ ibT("pricing"),
 	  ibMcpText("Prices, discounts and the four things a price is measured in."),
 	  ibMcpText("A PRICE IS NEVER JUST A NUMBER.\n"
 		"\n"
@@ -2974,7 +3179,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"inserted or deleted. A small integer issued on insertion is enough; the identity never\n"
 		"leaves the document.") },
 
-	{ wxT("promotions"),
+	{ ibT("promotions"),
 	  ibMcpText("Offers, gifts and kits: conditions, \"two plus one\", and splitting a set into its parts."),
 	  ibMcpText("OFFERS, GIFTS AND SETS - WHERE A DISCOUNT STOPS BEING A PERCENTAGE.\n"
 		"\n"
@@ -3051,7 +3256,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"given the extra working columns a document does not have, so ONE routine serves documents\n"
 		"with different attributes.") },
 
-	{ wxT("stock-control"),
+	{ ibT("stock-control"),
 	  ibMcpText("Refusing to go negative: free balance, reserves, and who may override it."),
 	  ibMcpText("CHECKING THERE IS ENOUGH BEFORE WRITING THE MOVEMENT.\n"
 		"\n"
@@ -3131,7 +3336,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"stay correct and only the printed price is wrong - which is precisely why a defect of this\n"
 		"shape survives for years.") },
 
-	{ wxT("derived-registers"),
+	{ ibT("derived-registers"),
 	  ibMcpText("A register kept only to make a question fast - and what owning one costs."),
 	  ibMcpText("A REGISTER THAT HOLDS NO NEW FACT, ONLY A FASTER ANSWER.\n"
 		"\n"
@@ -3260,7 +3465,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"width; reach for folding only when a measurement says the width is the problem, and only\n"
 		"when something else owns the interning.") },
 
-	{ wxT("not-mine"),
+	{ ibT("not-mine"),
 	  ibMcpText("Goods that are not yours, and yours that are not with you - commission and safekeeping."),
 	  ibMcpText("SOMEBODY ELSE'S GOODS IN YOUR WAREHOUSE, AND YOURS IN THEIRS.\n"
 		"\n"
@@ -3417,7 +3622,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"parallel. That is the honest cost of the symmetry, and it is worth knowing before promising\n"
 		"the second direction as \"the same thing mirrored\".") },
 
-	{ wxT("posting"),
+	{ ibT("posting"),
 	  ibMcpText("Writing a document's movements: sets, partial replacement, locks and refusals."),
 	  ibMcpText("HOW MOVEMENTS ARE ACTUALLY WRITTEN.\n"
 		"\n"
@@ -3656,7 +3861,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"routine. The same document posts different keys in a base that keeps lots per warehouse and\n"
 		"in one that does not, and both are correct.") },
 
-	{ wxT("deferred-posting"),
+	{ ibT("deferred-posting"),
 	  ibMcpText("When posting is too slow: doing the urgent part now and the heavy part in a batch."),
 	  ibMcpText("SPLITTING A POSTING IN TWO WHEN IT HAS BECOME TOO SLOW.\n"
 		"\n"
@@ -3700,7 +3905,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"what failed and why, how far it has got - a person has to be able to look. See\n"
 		"`scheduled-documents` for the shape of the job that drives it.") },
 
-	{ wxT("entered-from"),
+	{ ibT("entered-from"),
 	  ibMcpText("Making one document out of another: what carries over, what must not, and what wins."),
 	  ibMcpText("ENTERING ONE DOCUMENT FROM ANOTHER.\n"
 		"\n"
@@ -3754,7 +3959,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"`StandardProcessing = False` refusing the entry - and code asks the same with\n"
 		"`doc.Fill(source)`. The syntax helper's guide.basedOn has the handler written out.") },
 
-	{ wxT("traceability"),
+	{ ibT("traceability"),
 	  ibMcpText("Tracking an individual thing: serial numbers, certificates, shelf life, issued items."),
 	  ibMcpText("FOLLOWING ONE PARTICULAR THING, NOT A QUANTITY OF THEM.\n"
 		"\n"
@@ -3879,7 +4084,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"* THE COST IS THAT THE SENTINEL IS A LITERAL REPEATED IN EVERY QUERY THAT SORTS. Name it\n"
 		"once.") },
 
-	{ wxT("lot-accounting"),
+	{ ibT("lot-accounting"),
 	  ibMcpText("Lots and cost: one shared write-off, and cost resolved over a graph of movements."),
 	  ibMcpText("LOT ACCOUNTING.\n"
 		"\n"
@@ -4025,7 +4230,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"held on commission against goods owned outright. One fact, kept once, rather than a flag\n"
 		"beside it that can disagree.") },
 
-	{ wxT("sequences"),
+	{ ibT("sequences"),
 	  ibMcpText("The boundary of what is still true, once a document can be entered backdated."),
 	  ibMcpText("A BACKDATED DOCUMENT INVALIDATES EVERYTHING AFTER IT - THE BOUNDARY SAYS HOW MUCH.\n"
 		"\n"
@@ -4110,7 +4315,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"today\", and it needs its tolerance, its iteration cap and its acceptable deviation to be\n"
 		"settings a person can see rather than constants.") },
 
-	{ wxT("orders"),
+	{ ibT("orders"),
 	  ibMcpText("An order as a live obligation: both directions, closing it, changing it, where its state lives."),
 	  ibMcpText("AN ORDER IS AN OBLIGATION THAT STAYS OPEN UNTIL SOMETHING CLOSES IT.\n"
 		"\n"
@@ -4215,7 +4420,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"TWO CASES in the message - the order is fully covered, or the order was never posted. They\n"
 		"look identical and mean opposite things (`entered-from`).") },
 
-	{ wxT("settlements"),
+	{ ibT("settlements"),
 	  ibMcpText("Settlements with counterparties: contracts, and which currency the balance is in."),
 	  ibMcpText("MUTUAL SETTLEMENTS.\n"
 		"\n"
@@ -4383,7 +4588,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"promise the system knows nothing about. General form: a computed field that a person is\n"
 		"allowed to override must ask, not decide.") },
 
-	{ wxT("currency"),
+	{ ibT("currency"),
 	  ibMcpText("Currencies, rates with multiplicity, and why a document keeps its own copy."),
 	  ibMcpText("KEEPING ACCOUNTS IN MORE THAN ONE CURRENCY.\n"
 		"\n"
@@ -4433,7 +4638,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"when a debt meets a payment, not when a rate changes. A revaluation of open balances at a\n"
 		"period end is a separate, scheduled act.") },
 
-	{ wxT("fixed-assets"),
+	{ ibT("fixed-assets"),
 	  ibMcpText("Long-lived property: what is a register, how depreciation is shaped, recomputing the past."),
 	  ibMcpText("PROPERTY THAT IS USED FOR YEARS AND WRITTEN OFF A MONTH AT A TIME.\n"
 		"\n"
@@ -4631,7 +4836,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"company does not keep. This is the general form of a useful refusal in any system where one\n"
 		"subject lives in many places.") },
 
-	{ wxT("parallel-accounting"),
+	{ ibT("parallel-accounting"),
 	  ibMcpText("A second set of books - IFRS, budgeting - and the forks worth knowing before choosing."),
 	  ibMcpText("KEEPING A SECOND SET OF BOOKS.\n"
 		"\n"
@@ -4880,7 +5085,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"idempotent - running it twice doubles what it wrote - which is the same argument as the\n"
 		"period-owning document above, lost.") },
 
-	{ wxT("org-structure"),
+	{ ibT("org-structure"),
 	  ibMcpText("The company as it sees itself and as its papers see it - two trees, not one."),
 	  ibMcpText("THE COMPANY HAS TWO STRUCTURES, AND THEY ARE NOT THE SAME TREE.\n"
 		"\n"
@@ -4925,7 +5130,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"whose they are ON PAPER, are separate questions kept in separate registers. See\n"
 		"`stock-control`. It is the same distinction one floor down.") },
 
-	{ wxT("constants"),
+	{ ibT("constants"),
 	  ibMcpText("One value for the whole application, the same for everyone - and when it is not."),
 	  ibMcpText("WHAT A CONSTANT IS FOR.\n"
 		"\n"
@@ -5016,7 +5221,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"you can actually build, so the reading side has to be walked deliberately\n"
 		"(`where-behaviour-lives`).") },
 
-	{ wxT("numbering"),
+	{ ibT("numbering"),
 	  ibMcpText("Numbers and codes: prefixes as series, who may edit them, and what a blank number means."),
 	  ibMcpText("NUMBERING DOCUMENTS AND CODING ITEMS.\n"
 		"\n"
@@ -5086,7 +5291,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"is empty - the number is assigned when the object is saved - because a blank required-looking\n"
 		"field reads as a defect to everyone who has not been told.") },
 
-	{ wxT("object-history"),
+	{ ibT("object-history"),
 	  ibMcpText("Keeping who changed what: snapshots, when to write one, and reading a difference."),
 	  ibMcpText("KEEPING A HISTORY OF CHANGES.\n"
 		"\n"
@@ -5157,7 +5362,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"way round: the STORAGE is an afternoon, and the DIFFERENCE SHOWN SIDE BY SIDE - two versions\n"
 		"aligned, added, removed and changed rows coloured - is the week.") },
 
-	{ wxT("allocation"),
+	{ ibT("allocation"),
 	  ibMcpText("Spreading an amount over lines so the parts still add up to the whole."),
 	  ibMcpText("DISTRIBUTING AN AMOUNT ACROSS LINES - AND THE LEFTOVER PENNIES.\n"
 		"\n"
@@ -5256,7 +5461,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"the reconciliation that never converges. See `printing` for the two VAT schemes\n"
 		"themselves, which is a separate choice on top of this one.") },
 
-	{ wxT("printing"),
+	{ ibT("printing"),
 	  ibMcpText("Where a print command belongs, and what a commercial blank is made of."),
 	  ibMcpText("BUILDING A PRINTED FORM.\n"
 		"\n"
@@ -5515,9 +5720,29 @@ const std::vector<ibMcpPattern>& Patterns()
 		"written into, and it is the dotted line the editor draws at the bottom and the right - so\n"
 		"a break of your own goes ABOVE it. One asked for at the last line is the end of the sheet\n"
 		"rather than a page ending early, and `sheet_band` refuses it instead of placing something\n"
-		"that prints as nothing.") },
+		"that prints as nothing.\n"
+		"\n"
+		"KEY: ONE BLANK FOR SEVERAL KINDS OF DOCUMENT IS ONE PRINT ROUTINE AND A GATHERER PER KIND. A\n"
+		"waybill is printed from a sale, a sales correction, a stock transfer and a processing report:\n"
+		"each kind has a routine that reads its own document and answers the SAME structure (a header\n"
+		"record, a table of rows, named alike), and one routine prints that structure. A new kind is one\n"
+		"more gatherer; the blank is drawn once.\n"
+		"* WHAT THE DOCUMENT DOES NOT HOLD IS ASKED BEFORE PRINTING, in a small dialog of print data:\n"
+		"the carrier and its bank account, the delivery term, the driver, the vehicle and trailer, the\n"
+		"signers and their positions, the receiver's authority (number, date, issued by, person), and\n"
+		"the bank accounts of both sides - with \"remember\" so the next print starts from them. The\n"
+		"parties' details are read AS OF THE DOCUMENT'S DATE, not today's.\n"
+		"* A HEADER THAT CARRIES TOTALS IS PRINTED AFTER THE ROWS. Where the top of the blank says the\n"
+		"amount in words and the tax, the rows are first written to a temporary sheet while the totals\n"
+		"add up; then the header is filled and output, and the temporary sheet is appended under it.\n"
+		"* THE FOOTER NEVER STANDS ALONE ON A PAGE: count the pages the rows fill with the footer and\n"
+		"without it, and when the footer would start a page of its own, carry the last row over with\n"
+		"it. Totals are kept per page and per document at once, in the same loop.\n"
+		"* WHAT THE ROW PRINTS IS DECIDED FOR PAPER: the row's own text when it has one, else the item's\n"
+		"name with its variant and article; the quantity in base units (times the unit's coefficient);\n"
+		"the price derived from the total and that quantity, so the printed columns multiply out.") },
 
-	{ wxT("batch-printing"),
+	{ ibT("batch-printing"),
 	  ibMcpText("Printing fifty documents at once: sets, copies, going straight to the printer."),
 	  ibMcpText("PRINTING MANY DOCUMENTS IN ONE GO.\n"
 		"\n"
@@ -5658,7 +5883,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"attributes with a short table and a commission's several signatures. Recognise which one\n"
 		"is being asked for and the proportions follow; the skeleton does not move.") },
 
-	{ wxT("query-craft"),
+	{ ibT("query-craft"),
 	  ibMcpText("How accounting queries are actually written - the constructs and why those and not others."),
 	  ibMcpText("THE HABITS OF A WORKING QUERY, counted in a real configuration rather than guessed.\n"
 		"\n"
@@ -6002,7 +6227,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"and quietly matches nothing: the same silent-empty failure the untyped-column note above\n"
 		"describes for SQL, arriving by the other road.") },
 
-	{ wxT("query-by-name"),
+	{ ibT("query-by-name"),
 	  ibMcpText("Assembling a query text so one routine serves many kinds - and where that stops."),
 	  ibMcpText("ONE QUERY INSTEAD OF TEN NEARLY IDENTICAL ONES.\n"
 		"\n"
@@ -6339,7 +6564,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"query before the loop beats a hundred lookups inside it, and the difference is invisible\n"
 		"until the document has two hundred lines.") },
 
-	{ wxT("cross-cutting-hooks"),
+	{ ibT("cross-cutting-hooks"),
 	  ibMcpText("The mechanisms that must apply to every object - and why none of them lives inside one."),
 	  ibMcpText("WHAT MUST APPLY TO EVERYTHING, AND THEREFORE TO NOTHING IN PARTICULAR.\n"
 		"\n"
@@ -6401,7 +6626,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"raised when a KIND is registered gets you most of the way and covers the kind, not the\n"
 		"object.") },
 
-	{ wxT("look-first"),
+	{ ibT("look-first"),
 	  ibMcpText("Before building a mechanism, find out whether this base already has one."),
 	  ibMcpText("A REQUEST FOR A MECHANISM IS NOT EVIDENCE THAT IT IS MISSING.\n"
 		"\n"
@@ -6439,7 +6664,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"A rule that is written down but never read does not refuse; IT SILENTLY PERMITS, which is\n"
 		"the worst of the three possible failures.") },
 
-	{ wxT("naming"),
+	{ ibT("naming"),
 	  ibMcpText("Forming a name: say the whole thing, and only what is not already known."),
 	  ibMcpText("NAMING WHAT YOU CREATE.\n"
 		"\n"
@@ -6555,7 +6780,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"English, run together, technical - and that is what a user reads on the screen. It is the\n"
 		"cheapest visible defect in a configuration and the most common.") },
 
-	{ wxT("scheduled-documents"),
+	{ ibT("scheduled-documents"),
 	  ibMcpText("Documents the system creates by itself on a schedule - and how it avoids duplicates."),
 	  ibMcpText("WORK THAT HAPPENS WITHOUT ANYBODY ASKING.\n"
 		"\n"
@@ -6639,7 +6864,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"what it is supposed to be doing - which is the state in which \"it did not run last night\"\n"
 		"takes a day to diagnose.") },
 
-	{ wxT("external-data"),
+	{ ibT("external-data"),
 	  ibMcpText("Getting data out of another base or system - the door that already exists."),
 	  ibMcpText("DATA FROM SOMEWHERE ELSE.\n"
 		"\n"
@@ -6990,7 +7215,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"corrections will survive, which is worse than either rule applied consistently. Decide it\n"
 		"per field and say it on the screen.") },
 
-	{ wxT("data-exchange"),
+	{ ibT("data-exchange"),
 	  ibMcpText("Several bases that have to agree: what travels, who wins, and in what order."),
 	  ibMcpText("DATA THAT HAS TO AGREE ACROSS SEVERAL BASES.\n"
 		"\n"
@@ -7155,7 +7380,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"(`external-data`), or ONE base divided by row-level access (`row-level-access`). Both answer\n"
 		"most of what is asked for under the word \"exchange\", and neither needs any of the above.") },
 
-	{ wxT("showing-a-value"),
+	{ ibT("showing-a-value"),
 	  ibMcpText("Asked for a column: look for a path to it before adding a field."),
 	  ibMcpText("A COLUMN ASKED FOR IS NOT AUTOMATICALLY A FIELD TO ADD.\n"
 		"\n"
@@ -7187,7 +7412,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"changes, should this line change with it? Yes - walk the dot. No - store it, and say in\n"
 		"the object's notes that it is deliberately a snapshot.") },
 
-	{ wxT("form-to-areas"),
+	{ ibT("form-to-areas"),
 	  ibMcpText("Taking a paper form apart: which parts repeat, which are said once."),
 	  ibMcpText("READING A PRINTED FORM INTO AREAS.\n"
 		"\n"
@@ -7584,7 +7809,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"the footer and the optional column block - in that order, before a single cell is\n"
 		"touched.") },
 
-	{ wxT("long-operations"),
+	{ ibT("long-operations"),
 	  ibMcpText("Work that takes minutes: running it in the background and telling the person about it."),
 	  ibMcpText("WORK THAT TAKES LONGER THAN A PERSON WILL SIT STILL FOR.\n"
 		"\n"
@@ -7651,7 +7876,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"* The wider habit to watch: a routine whose signature promises it depends only on its\n"
 		"arguments, reading the current user, the current date or a session switch from inside.") },
 
-	{ wxT("filling-a-base"),
+	{ ibT("filling-a-base"),
 	  ibMcpText("Writing data through code - a load, test data, a repost: whether it is kept, and how to know."),
 	  ibMcpText("CODE THAT WRITES DATA - A LOAD FROM A FILE, TEST DATA, A PERIOD REPOSTED.\n"
 		"\n"
@@ -7678,9 +7903,29 @@ const std::vector<ibMcpPattern>& Patterns()
 		"a replacing write of what is left in memory deletes the pass before it. Measured: a payroll\n"
 		"run's bonus-correction pass, appended after a write without a read, took the month's thousand\n"
 		"salary lines with it - and the run reported success (`payroll`: the passes are written\n"
-		"between, and this is the price of that).") },
+		"between, and this is the price of that).\n"
+		"\n"
+		"KEY: DUPLICATES ARE MERGED, NOT DELETED - and finding them is a pass that compares each pair\n"
+		"once. Every load and every hurried search leaves a second copy of a counterparty or an item, and\n"
+		"documents then point at both. The working tool:\n"
+		" THE RULES ARE PER ATTRIBUTE: equal, similar, or ignored, over a list narrowed first by an\n"
+		" ordinary filter.\n"
+		" THE PASS: read the list ordered by reference; for each row, ask for candidates whose reference is\n"
+		" GREATER and whose equal-fields match - so a pair is looked at once, never twice - then run the\n"
+		" similar-fields through a string-similarity measure (a threshold around 80-90 per cent, at most\n"
+		" ten matches). A row already placed in a group is skipped.\n"
+		" THE CATALOGUE MAY HAVE A SAY: its manager declares extra fields and restrictions, and receives\n"
+		" the candidate pairs in portions of about a thousand to decide which really are the same thing.\n"
+		" THE ORIGINAL IS THE ONE IN USE: each candidate shows where it is used, the group pre-selects one\n"
+		" that is, and the person can mark another.\n"
+		" MERGING REPLACES EVERY REFERENCE to a duplicate with the original, then MARKS the duplicate for\n"
+		" deletion - the actual deletion is the ordinary two-step one, later. If any reference in a group\n"
+		" cannot be replaced, that whole group is left alone and shown with each failed place and its\n"
+		" error, because half a merge is worse than none.\n"
+		" BOTH the search and the replacement run in the background (`long-operations`); the form is a\n"
+		" wizard (`form-craft`).") },
 
-	{ wxT("user-settings"),
+	{ ibT("user-settings"),
 	  ibMcpText("Storing what a person set up for themselves: the address, who sees it, surviving a release."),
 	  ibMcpText("KEEPING WHAT A PERSON SET UP FOR THEMSELVES.\n"
 		"\n"
@@ -7756,7 +8001,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"renamed, removed, or the interface is translated. Storing a name instead of an identity buys\n"
 		"portability between bases and pays with a silent reset.") },
 
-	{ wxT("extensions"),
+	{ ibT("extensions"),
 	  ibMcpText("Adding a printed form or a fill button to a live system without editing the configuration."),
 	  ibMcpText("SOMEBODY ELSE'S CODE ATTACHED TO OUR OBJECTS.\n"
 		"\n"
@@ -7799,7 +8044,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"validating one was missing three kinds of object, so a name the executor would happily run\n"
 		"was reported as invalid in advance. One list, one place, and the validator calls it.") },
 
-	{ wxT("sections"),
+	{ ibT("sections"),
 	  ibMcpText("The command interface: how a person reaches anything at all."),
 	  ibMcpText("SECTIONS ARE THE APPLICATION AS A PERSON MEETS IT.\n"
 		"\n"
@@ -7916,7 +8161,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"gets stricter, not looser: build it where somebody genuinely works across kinds in date\n"
 		"order, never merely to gather related documents in one place.") },
 
-	{ wxT("picking"),
+	{ ibT("picking"),
 	  ibMcpText("The dialogue that fills a document: what it hands back, what it must subtract, when not to ask."),
 	  ibMcpText("THE SCREEN WHERE A DOCUMENT ACTUALLY GETS FILLED IN.\n"
 		"\n"
@@ -8046,15 +8291,40 @@ const std::vector<ibMcpPattern>& Patterns()
 		"NOTE: AND WHAT THE DIALOGUE SHOWS IS NOT WHAT THE DOCUMENT STORES. A picking screen may show\n"
 		"stock, reservations, prices of three kinds and the last purchase - none of which becomes an\n"
 		"attribute of the line unless it must be FROZEN (`showing-a-value`). Everything else is read\n"
-		"again when it is next needed.") },
+		"again when it is next needed.\n"
+		"\n"
+		"KEY: THE SHAPE OF THE FORM, AS THE WORKING ONES ARE DRAWN. Along the top, the context without\n"
+		"captions - organisation, warehouse, storage cell, each with its name as a hint - and a Settings\n"
+		"button. Below, three parts. On the left, a narrow read-only TREE of item groups with its own\n"
+		"search. In the middle, the ITEM LIST, which a command swaps for the list of the chosen item's\n"
+		"variants and batches and back (\"to variants\", \"back to items\" - two pages without tabs, each with\n"
+		"its own little bar). Underneath, the BASKET of what was picked, in the document's own columns,\n"
+		"under a bold line \"picked for the sum of ...\". OK says what it does: \"Transfer to the document\".\n"
+		"A double click adds one, or asks for quantity and price when that toggle is on; a row can also be\n"
+		"dragged from the list into the basket. Which price type applies is stated, one of three: the\n"
+		"company's, the counterparty's, or \"price type not set\".\n"
+		"\n"
+		"KEY: THE ITEM LIST IS A DYNAMIC LIST OVER THE ITEMS, WITH A QUERY ASSEMBLED FROM THE SETTINGS.\n"
+		"The main table is the items catalogue, so the rows, the commands and the choice stay the item's.\n"
+		"The query over it joins the balances register only when the person chose to see balances in the\n"
+		"table - by warehouse or overall, as the context says - and the price register's latest record for\n"
+		"the price type (the company's or the counterparty's) only when prices are shown. Each filter -\n"
+		"warehouse, cell, item kind, batch status - goes in only when it has a value; otherwise the\n"
+		"condition is TRUE. A column that is not shown is a literal 0, so the set of columns never\n"
+		"changes. Nothing of balance or price is an attribute of the item (`metadata-craft`).\n"
+		"* AND THE SECOND WAY OF SHOWING IT COSTS ONE READING, NOT ONE PER ROW: balances and price for the\n"
+		"CURRENT row only, in captions beside the list, read a fifth of a second after the row becomes\n"
+		"current, with the last row remembered. Scrolling through a thousand items then asks nothing until\n"
+		"the cursor rests.") },
 
-	{ wxT("form-layout"),
+	{ ibT("form-layout"),
 	  ibMcpText("Laying a document form out: where things go, and why that order."),
 	  ibMcpText("ARRANGING A FORM SOMEBODY WORKS IN ALL DAY.\n"
 		"\n"
 		"A generated form puts every field in one column in declaration order. It opens, it works,\n"
 		"and it is unusable for a person entering fifty documents a shift. What follows is the shape\n"
-		"a working document form actually has, top to bottom.\n"
+		"a working document form actually has, top to bottom; a form with many sections, drawn page\n"
+		"by page and column by column, is `form-craft`.\n"
 		"\n"
 		"1. THE DOCUMENT'S OWN COMMANDS along the top - post, post and close, print, and whatever\n"
 		" this document does that others do not (fill from another document, go to related\n"
@@ -8393,7 +8663,266 @@ const std::vector<ibMcpPattern>& Patterns()
 		"resets quantity is not a service; whatever a routine touches beyond its own subject has to\n"
 		"be deliberate and stated.") },
 
-	{ wxT("ledger-reports"),
+	{ ibT("form-craft"),
+	  ibMcpText("A document form with many sections, drawn as working ones are: a page per section, a key list above them, column groups, row flags, captions that open dialogs, the row recalculated by events."),
+	  ibMcpText("A DOCUMENT FORM IS DRAWN FROM ITS SECTIONS.\n"
+		"\n"
+		"`form-layout` says where things go and why. This is the recipe for a form with many sections,\n"
+		"as the working ones are drawn - and it starts from `metadata-craft`, because a form is only as\n"
+		"good as the sections under it: a salary typed into a field has no layout that rescues it.\n"
+		"\n"
+		"KEY: ONE PAGE PER SECTION, ORDERED BY HOW OFTEN IT IS TOUCHED. A Notebook under the header, a\n"
+		"NotebookPage per tabular section: the section filled every time first, then the other working\n"
+		"sections, then settings that have defaults (the settlement accounts, one titled group in two\n"
+		"columns), then an additional page (logistics: shipper and consignee as a pair, the delivery\n"
+		"address, rare tax flags, a switch that loosens a check in a group named after the check), and\n"
+		"LAST the print page - what only a printed blank needs: where it was drawn up, who allowed and who\n"
+		"made the release, the receiver and the authority they hold (kind, series, number, date, issued\n"
+		"by), grouped under the step each one signs. A stored commission is chosen by a button that fills\n"
+		"its member slots and its chairman.\n"
+		"\n"
+		"KEY: WHEN EVERY SECTION IS KEYED BY ONE THING, THAT THING IS A LIST ABOVE THE PAGES. A payroll\n"
+		"document: under the header, a small table of the employees alone (number, personnel number,\n"
+		"employee) with its own bar - add, pick people, fill. The pages go under it. The busiest page\n"
+		"(accruals, many rows per person) shows the rows OF THE EMPLOYEE STANDING IN THE LIST and has no\n"
+		"employee column - the list is its filter. The other pages (contributions, tax, withholdings,\n"
+		"loans) carry the employee as a column and show everyone. The last page is the payslip of the\n"
+		"result: a spreadsheet field inside the form, not a report somewhere else.\n"
+		"\n"
+		"EVERY TABLE PAGE HAS ITS OWN BAR: the row commands (add, copy, edit, delete, up, down, sort), then\n"
+		"the table's own - Fill (a menu: from what), Calculate, Pick (the selection window), Change (one\n"
+		"edit across many rows), Check.\n"
+		" A FLAG THAT CHANGES HOW THIS PAGE CALCULATES sits on this page at the end of its bar\n"
+		" (\"preliminary calculation\", \"this is a recalculation\"), not in the header.\n"
+		" A LIST THAT BELONGS TO A ROW - serial numbers, the components of a kit - opens from the bar for\n"
+		" the row under the cursor.\n"
+		" A TABLE THE CALCULATION FILLS and nobody types into (the reasons behind automatic discounts)\n"
+		" has no bar at all.\n"
+		"\n"
+		"KEY: COLUMNS READ LEFT TO RIGHT AS ORIGIN, IDENTITY, INPUT, ANSWER, BOOKKEEPING.\n"
+		" ORIGIN, narrow, first: two flag columns - added by the fill, a correction.\n"
+		" IDENTITY: item, variant, batch; or the employee; or the kind of accrual.\n"
+		" INPUT: quantity, unit, coefficient, price, manual and automatic discount %; or the period, days\n"
+		" and hours, indicators, base, rate.\n"
+		" THE ANSWER: sum, result, tax - one column per table, its header bold, where the eye goes first.\n"
+		" BOOKKEEPING at the right, scrolled to: accounts, tax purpose, the row's own order and warehouse.\n"
+		" TWO NUMBERS THAT ANSWER ONE QUESTION SHARE A HEADER - a TableboxColumnGroup: Period (start,\n"
+		" end), Worked (days, hours), Norm (days, hours), Base (total, of which vacation pay). Stacked, the\n"
+		" table keeps its width and the pair reads as one fact.\n"
+		" NUMERIC COLUMNS TOTAL IN THE TABLE'S FOOTER LINE, under themselves.\n"
+		"\n"
+		"THE HEADER IS TWO COLUMNS: the deal's chain down the left (number and date on one line,\n"
+		"organisation, counterparty, contract, order), its qualifiers down the right (\"reflect in\" flags\n"
+		"for the books, the storage place, the month a payroll is for, the document this one corrects). A\n"
+		"field that may hold one of several types is drawn as two: a narrow kind, then a wide value. The\n"
+		"comment is last, full width, outside the pages.\n"
+		" PARALLEL BOOKS are two titled groups of THE SAME fields side by side - \"for management\n"
+		" accounting\", \"for accounting\": department, responsible person, event - under the flags that\n"
+		" switch them (`parallel-accounting`).\n"
+		"\n"
+		"KEY: THE LAYOUT IS MADE OF GROUPS NOBODY SEES. Columns are a horizontal group of vertical groups,\n"
+		"neither framed nor titled; the children share the width equally, or the left one is narrow. A\n"
+		"group gets a frame and a title only where the title tells the reader something (\"settlement\n"
+		"accounts\", \"recipient\"). Fields that hold a short value do not stretch: date, number, operation\n"
+		"kind; in a table, rates, units and coefficients are about four characters wide and amounts about\n"
+		"thirteen, while references take what is left. A column group is HORIZONTAL when two narrow\n"
+		"columns share one caption side by side (\"packages: unit, count\") and STACKED when the caption\n"
+		"heads a family (accounts, tax details). A computed column is read-only - the automatic discount\n"
+		"%, the totals - so nobody types a figure the next recalculation overwrites.\n"
+		" THE FOOTER IS ONE MORE ROW OF GROUPS: details that qualify the whole document on the left\n"
+		" (\"included in a correcting return for period ...\", a register number and date), the totals on\n"
+		" the right, the comment under both.\n"
+		" A PAGE THAT ONLY INFORMS SAYS SO IN WORDS ABOVE ITS TABLE. A read-only table of what is still\n"
+		" owed, by rate, carries a label over it: shown for reference, cannot be changed, and what it is\n"
+		" recommended to do with it. Without that a person tries to edit it, or never understands it.\n"
+		" A TOTAL THE OBJECT DOES NOT STORE IS A FORM ATTRIBUTE (`form-layout`: a form has data of its\n"
+		" own): \"VAT total\" is summed from the tables' VAT columns on the client after each edit, and its\n"
+		" caption is assembled - \"Total, \" plus the document's currency, \"VAT (included)\" or \"VAT (on\n"
+		" top)\" by the tax mode - not typed once and left to disagree.\n"
+		"\n"
+		"KEY: THE NEWER HEADER KEEPS THE DOCUMENT'S OWN FACTS IN A NARROW FIXED COLUMN ON THE RIGHT. There,\n"
+		"at a fixed width: number and date on one line - the number captionless, with \"<Auto>\" as its hint,\n"
+		"so the person sees it will be assigned - then the organisation, then the prices-and-currency\n"
+		"caption that opens its dialog, a discount-card button beside it. On the left, stretching: whom the\n"
+		"document is with - counterparty, contract, \"plan the payment\"; or employee, organisation, purpose\n"
+		"of the advance. A one-character spacer stands between the two columns. Beside the counterparty, in\n"
+		"the same row, what they owe as a link - \"owes us 128 300.50\" - that opens the settlements\n"
+		"(`form-layout`: a live figure is paid for at every open).\n"
+		" A FIELD WHOSE CAPTION WOULD SAY THE OBVIOUS HAS NONE and carries a hint inside instead: the\n"
+		" comment, a storage cell beside its warehouse, the context fields along the top of a dialog.\n"
+		"\n"
+		"THE TABLE'S BAR COMES IN HEAPS: editing (add, copy, change, delete, end edit, find, cancel the\n"
+		"search), moving (up, down), ordering (sort both ways, output the list); then the equipment that\n"
+		"fills rows (barcode search, a data-collection terminal, scales), Pick, the automatic discounts,\n"
+		"copying and pasting ROWS between documents, and Change.\n"
+		" KEY: CHANGE OPENS A BULK-EDIT STRIP OVER THE TABLE: a mark column first in every row, set and\n"
+		" clear all marks, an ACTION (set the price, set a discount, recalculate the amounts, set the\n"
+		" warehouse...), the VALUE it takes, Execute - and Cancel, which restores the copy of the table\n"
+		" taken when the strip opened. One edit across forty rows, and a way back from it.\n"
+		" A SECTION THAT USUALLY HAS ONE ROW IS SHOWN AS THE FIELDS OF THAT ROW. A payment schedule is\n"
+		" normally one date and one sum, so its fields are bound to the table's current row, and a List\n"
+		" button swaps in the whole table (two pages without tabs). A choice of kind switches its fields\n"
+		" the same way: a tumbler \"cash / bank\" shows the cash desk or the bank account, never both.\n"
+		" THE FOOTER OF A TRADING DOCUMENT: the comment, two lines high and captionless; a discount on the\n"
+		" whole document - a percent with \"%\" after it, or an amount with the currency's symbol - spread\n"
+		" over the rows; the totals bound to the table's own totals (VAT, Total); and \"Basis: choose\" as\n"
+		" a link to the document this one was entered from. A report of spending shows the two totals\n"
+		" it exists to compare: issued, spent.\n"
+		" THE ADDITIONAL PAGE OF A NEWER FORM: department, a titled group of print details, the author\n"
+		" read-only, the responsible person, and a group for the attributes users add themselves.\n"
+		" AN ORDER SHOWS ITS STATE FIRST: a status line at the top of the left column, then the state with\n"
+		" a Closed flag beside it, then the counterparty with its debt link, the contract with a button\n"
+		" that looks the counterparty up, the shipment date and \"plan the payment\". A column with verbs\n"
+		" of its own gets a menu on the bar: Reserve - fill from balances, clear the column.\n"
+		" A HEADER-OR-ROW CHOICE IS A SETTING OF THE DOCUMENT: whether the shipment date, or the kind of\n"
+		" work, is one value in the header or a column per row is chosen under Settings on the bar, and\n"
+		" the form shows the one chosen.\n"
+		" ONE DOCUMENT MAY HAVE SEVERAL FORMS, chosen by its operation - an order, a work order and a\n"
+		" request are one document with three forms, because a workshop fills in something else than a\n"
+		" shop - and SEVERAL LIST FORMS, each answering one question: all orders, orders to be paid,\n"
+		" orders to be shipped.\n"
+		" A DOCUMENT WHOSE BODY IS STEPS IS A COLUMN OF CHECKBOXES, captions on the right, in the order the\n"
+		" steps run, under the organisation and the date.\n"
+		" A ROW OF CHANGES PAIRS WAS AND BECOMES UNDER ONE HEADER: department, position, rates, schedule -\n"
+		" each a column group of the old value, read-only, over the new one - after the employee (name\n"
+		" and code in one cell) and the date it takes effect. The detail pages (accruals, taxes,\n"
+		" benefits) open with a \"current employee\" field on top that chooses whose rows the table shows.\n"
+		" A MOVE BETWEEN TWO PLACES OF ONE KIND IS TWO EQUAL COLUMNS, FROM AND TO, in one framed group,\n"
+		" each with its own switch (cash / bank) and captionless fields under it. The amount with its\n"
+		" currency leads the header, because the amount is what the document is about; the plan it\n"
+		" carries out sits under it with a fill-from-it button.\n"
+		" A PICK WITH TWO SOURCES IS A MENU: Pick - by item, by the results of sales - each opening its\n"
+		" own selection form; and a fill that needs only the counterparty is a button right beside it.\n"
+		"\n"
+		"KEY: A TOOL THAT WALKS A PERSON THROUGH STEPS IS A WIZARD: PAGES WITHOUT TABS, ONE BAR. Each step\n"
+		"is a page - not searched yet, searching, choose what to keep, applying, done, partly failed,\n"
+		"nothing found - and a fixed bar at the bottom holds Back, Next and Cancel, whose CAPTIONS AND\n"
+		"VISIBILITY ARE PART OF THE STEP: \"Find duplicates >\", \"Delete duplicates >\", \"Repeat the\n"
+		"deletion >\", Cancel becoming \"Interrupt\" while a background step runs (Next hidden then), Back\n"
+		"becoming \"< New search\" on the last page. Each step declares what happens on entering it,\n"
+		"before Next, before Cancel, and on a timer while it waits for background work.\n"
+		" ITS SETTINGS ARE LINKS, NOT FORMS: what to search, which rows, which rules - each a field or a\n"
+		" caption that opens a small form of its own and shows back a one-line summary (\"all items\").\n"
+		" A RESULT TREE ON THE LEFT, ITS EXPLANATION ON THE RIGHT: the groups found, each row its name with\n"
+		" an \"original\" picture and a mark in one cell, the code, how many places use it; on the right,\n"
+		" where the current row is used, or a sentence about the group when a group row is current. A\n"
+		" status line under it counts what was found, beside a link to the full report of usages.\n"
+		" A FAILURE PAGE says what failed in one sentence with a warning picture, shows the failed items\n"
+		" with each place and its error, and says what was done about it: the operation was cancelled for\n"
+		" those groups until the cause is fixed.\n"
+		" A FORM OF SETTINGS AND ITS RESULT is the two-page case: \"Result >>\" and \"<< Settings\" swap\n"
+		" them. Every setting carries a grey sentence under it saying what it does (\"if the end date is\n"
+		" empty, the schedule is filled to the end of the calendar's year\"), and the result is shown in\n"
+		" the control that fits it - a year's calendar where a double click turns a day on or off - with\n"
+		" a status line and picture saying how far ahead it is filled.\n"
+		"\n"
+		"KEY: A DUTY THAT RECURS EVERY PERIOD IS A MONITOR: THE PERIODS ARE TABS, AND EACH WEARS ITS\n"
+		"STATE. Closing the month is the example. On top: the company (locked when the base keeps one),\n"
+		"the prohibition date as a link that opens its editor - the monitor listens for that editor\n"
+		"closing and re-reads the date - and the year as a label between two buttons captioned with the\n"
+		"neighbouring years (\"2025 <<\", \">> 2027\"), the forward one greyed past the current year. Under\n"
+		"it twelve month tabs down the left side, each with a state picture: GREY - not due yet (a future\n"
+		"month, also disabled) or not started; YELLOW - something due is not done, or done with errors;\n"
+		"GREEN - done, or nothing to do. The current month opens first.\n"
+		" INSIDE A MONTH, TWO PAGES WITHOUT TABS: the steps, and \"running\" - a picture, \"this may take\n"
+		" a while\", an Interrupt button - which replaces them IN PLACE while the background job runs\n"
+		" (`long-operations`). Meanwhile the commands are greyed, switching months is ignored, and closing\n"
+		" the window is refused with \"wait for it, or interrupt it\".\n"
+		" EACH STEP IS ONE ROW: a checkbox saying the step in words, a stretch, and a state picture that\n"
+		" is a link. Five states, and EACH HAS ITS SENTENCE, which the click shows: done (\"calculated\"),\n"
+		" not needed (nothing to compute this month), not run (a future month), needed and not done\n"
+		" (\"must be calculated\"), failed (the text the close itself recorded). When every step is \"not\n"
+		" needed\" the month says it in one line: closing is not required, there is no data to compute.\n"
+		" A step the base does not use at all - depreciation without fixed assets - is not drawn.\n"
+		" THE BAR: preliminary analysis (the accounting check, opened for this month and company), \"Close\n"
+		" the month\" as the primary command with picture and text, \"Undo the close\", and the report -\n"
+		" enabled only for a closed month. Closing a month inside the prohibited period is refused with a\n"
+		" sentence before anything runs; after a close the monitor offers to move the prohibition date to\n"
+		" the month's end, in a small question with \"do not ask again\" whose remembered answer is a\n"
+		" setting of the base, acted on silently next time (`closing-a-period`).\n"
+		"* THE STATE IS COMPUTED FROM DATA, NEVER STORED. \"Needed\" means the month has what the step\n"
+		"works on - stock movements, retail records, a currency rate, a fixed asset on the balance;\n"
+		"\"done\" means a posted closing document of that month carries the step's flag\n"
+		"(`metadata-craft`); \"failed\" means rows in the register of closing errors that the posting\n"
+		"wrote. One query over the year paints all twelve tabs and every step.\n"
+		"* AND THE DUTY ANNOUNCES ITSELF: the same \"due and not done\" question feeds the person's list\n"
+		"of things to do - an important item, \"Close the month\", counting the companies whose last\n"
+		"month has stock and no posted close, with a hint saying why it matters; pressing it opens the\n"
+		"monitor.\n"
+		"\n"
+		"KEY: THE NEWER CATALOGUE CARD IS ONE SCREEN OF BLOCKS, NOT PAGES. Top, framed: on the left the\n"
+		"identity - the kind as radio buttons, category, name, the name for printing (two lines), the\n"
+		"comment, then unit and parent beside article and code (\"<Auto>\"), the user-defined attributes,\n"
+		"and an \"add an attribute\" link; on the right the pictures as a carousel (arrows, \"make main\") and\n"
+		"the CURRENT PRICES read from the register, or \"prices not set\" with a \"set the price\" link.\n"
+		"Under it a strip of two charts - sales and prices over time - each headed by a period that is a\n"
+		"link and a little menu (by day, week, month, quarter, year; by quantity or sum; currency, unit).\n"
+		"Then the rare families of attributes as COLLAPSIBLE GROUPS, collapsed by default (accounting,\n"
+		"excise goods, purchase and production, storage, price list), beside the balances as a read-only\n"
+		"tree that says \"no balances\" when empty. The bar carries Sell and Buy menus that create the\n"
+		"documents from this item. A field that depends on a flag is greyed until it is ticked (\"new\n"
+		"until ...\").\n"
+		" A DOCUMENT FOR A MONTH SHOWS ITS MONTH, NOT ITS DATE: the period as text (\"October 2026\") with a\n"
+		" picker and arrows that step a month at a time; the date the document was made moves to the\n"
+		" additional page. A tumbler beside the month picks the way of entering - by days or totals for\n"
+		" the period - and the two sections stand on pages without tabs, one shown. In the by-days grid\n"
+		" each day is a column group headed by its number, holding three narrow pairs (kind code, hours)\n"
+		" one above another; the employee and their code share one cell.\n"
+		"\n"
+		"KEY: THE PRICES-AND-CURRENCY DIALOG IS ONE FORM FOR EVERY DOCUMENT. A warning row on top - a\n"
+		"picture and a sentence, shown when something needs attention - then three groups. Prices and\n"
+		"discounts: price type, discount type, discount card, \"refill the prices\", \"register the\n"
+		"supplier's prices\". Currency: each currency on one line with its rate and multiplicity, the rate\n"
+		"greyed where it is not the person's to change, \"recalculate the prices\" under them. Taxes: the\n"
+		"taxation, amount includes tax, tax into cost. For every value it keeps two more: whether the\n"
+		"calling document HAS such an attribute (if not, the field is not shown), and what it was when the\n"
+		"dialog opened - so the dialog hands back the difference (`form-layout`).\n"
+		"\n"
+		"KEY: A SETTING EDITED IN A DIALOG IS SHOWN BACK AS A LINK THAT OPENS IT. \"Prices and\n"
+		"currency...\" is a button on the bar; its result reads on the form as a caption that is a link -\n"
+		"\"by contract 250 USD, 1 USD = 30\" under the contract, \"wholesale prices, discount 20%\" under the\n"
+		"pages - and pressing the caption opens the same dialog. The document's totals (\"Total, USD\",\n"
+		"\"VAT included\") sit under the pages on the right, the same on every page. A prepayment page puts\n"
+		"its arithmetic under its table: total, prepaid, left to pay. A state line and the links to the\n"
+		"corrections (\"open corrections\", \"open the corrected document\") sit at the foot.\n"
+		"\n"
+		"BARS: the top one opens with the OPERATION kind (it decides which fields make sense), then the\n"
+		"dialog buttons, then ONE primary command in words - \"Fill and post\", \"Fill and calculate all\" -\n"
+		"then Fill and Calculate menus to redo one section, and the documents that follow from this one.\n"
+		"The bottom bar is the same on every document: Export, Print, OK (bold, the default), Save, Close;\n"
+		"a document that can be corrected adds Correct and Cancel correction.\n"
+		" AND EVERY DOCUMENT CARRIES THE SAME GROUP OF COMMON COMMANDS, bound to its reference: the\n"
+		" structure of related documents, the report of its movements, filling, the reports about this\n"
+		" object, change history, additional information, save as a template, remind me. Written once as\n"
+		" common commands, they stand on every form without being drawn on any (`form-layout`: a\n"
+		" command group).\n"
+		"\n"
+		"KEY: THE ROW IS RECALCULATED BY EVENTS, THROUGH ONE SHARED ROUTINE. The person changed the item:\n"
+		"the row takes the item's default unit and its coefficient, the price of the document's price type\n"
+		"for that item and unit, and the sum. They changed the unit: the price and the quantity in base\n"
+		"units move by the coefficient. Quantity, price or a discount: the sum. Hang each on its column's\n"
+		"change event, and let every one of them call ONE routine in a common module that takes the row's\n"
+		"values and the document's (price type, currency, tax mode) and returns what to fill. Then every\n"
+		"document with goods rows - receipt, sale, transfer, order - recalculates the same way, and a fill\n"
+		"from code calls the same routine instead of imitating a keystroke (`form-layout`: a line is an\n"
+		"equation; the server answers with values).\n"
+		" THE HANDLER ITSELF IS THREE LINES OF WORK. (1) Pack what the routine needs into a structure -\n"
+		" the row's item and variant, the document's tax flags, and the price fields (price type, date,\n"
+		" counterparty, currency, rate, contract) ONLY when a price type is set. (2) Call the server\n"
+		" WITHOUT the form's context - nothing but that structure travels - where the shared routine\n"
+		" answers with a structure: unit, coefficient, tax rate, price. (3) Fill the row from it by\n"
+		" matching names, then run the shared client arithmetic: packages, sum, tax.\n"
+		" A UNIT CHANGE KEEPS THE MONEY: the price becomes price x new coefficient / old coefficient.\n"
+		" ENDING A ROW'S EDIT OR DELETING A ROW recomputes the document's totals - the per-column\n"
+		" handlers keep the row right, these two keep the document right.\n"
+		" ONE PICK COMMAND PER TABLE; the form's choice handler receives what was picked and routes it\n"
+		" to the table it came for, so three tables share one road in.\n"
+		"\n"
+		"NOTE: BEFORE PROMISING A LOOK, ASK THE ENGINE. form_accepts says what a control of a class holds -\n"
+		"every property and every event - without adding one; form_control reads one that stands. Draw what\n"
+		"they answer: a property guessed from another product is refused at the first form_set.") },
+
+	{ ibT("ledger-reports"),
 	  ibMcpText("What an accountant expects over a ledger, and why it is one family and not ten reports."),
 	  ibMcpText("THE STANDARD REPORTS OVER AN ACCOUNTING REGISTER.\n"
 		"\n"
@@ -8455,6 +8984,24 @@ const std::vector<ibMcpPattern>& Patterns()
 		"built purely out of groupings cannot produce them, and their absence is the first thing an\n"
 		"accountant notices.\n"
 		"\n"
+		"KEY: THE GRAND TOTAL IS NOT THE COMPOSITION'S TOTAL. The output pass sums it over the TOP-LEVEL,\n"
+		"ON-BALANCE accounts only: adding the sub-accounts would count every figure twice, and the\n"
+		"off-balance accounts are single-entry, so including them breaks the one equality the row is\n"
+		"there to show - debit equals credit in each of the three pairs. With a filter on one account\n"
+		"there is no grand total at all.\n"
+		"* THE CURRENCY AMOUNT IS A ROW, NOT MORE COLUMNS. Switching it on adds a grouping by currency\n"
+		"under each account and prints the currency figures in the same six columns on those rows\n"
+		"only; an account kept in money alone gets no currency line.\n"
+		"* THE SAME REPORT READS THE PLAN. Where plan and actual share one ledger under a scenario\n"
+		"dimension, the scenario is a parameter defaulting to Actual - not a second report for the\n"
+		"budget.\n"
+		"* AND THE SMALL THINGS THAT ARE EXPECTED: the column header stays frozen while scrolling; a\n"
+		"period whose start is after its end is refused with a sentence before anything runs; amounts\n"
+		"are shown with cents, without, or in thousands, as one choice applied to every figure. A cell\n"
+		"offers three actions - drill down by another field, open the value (an account opens its\n"
+		"entry in the chart, a recorder its document), filter by it - and a drill opens the same\n"
+		"report in a new window with the settings it produced.\n"
+		"\n"
 		"WHAT THE READER IS GIVEN CONTROL OF, on a panel beside the result rather than in a dialog:\n"
 		" WHICH FIGURES - accounting data, tax data, the difference between them, the currency\n"
 		" amount - as tick boxes, because they are columns switched on and off.\n"
@@ -8480,7 +9027,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"sides that make it. The receiving report opens showing the same thing the reader was looking\n"
 		"at, which is the whole point of the family.") },
 
-	{ wxT("report-shapes"),
+	{ ibT("report-shapes"),
 	  ibMcpText("The four shapes a report takes on screen, and what each one is made of."),
 	  ibMcpText("WHAT A REPORT LOOKS LIKE WHEN IT IS RUN.\n"
 		"\n"
@@ -8726,7 +9273,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"new, and one that wants none simply does not implement it. An arrangement where the\n"
 		"framework drew the chrome ITSELF would make both of those a flag.") },
 
-	{ wxT("regulated-forms"),
+	{ ibT("regulated-forms"),
 	  ibMcpText("A statutory blank that is filled in rather than built: rules per cell, and edits that survive."),
 	  ibMcpText("A BLANK THAT IS FILLED IN, NOT BUILT.\n"
 		"\n"
@@ -8751,6 +9298,21 @@ const std::vector<ibMcpPattern>& Patterns()
 		"a comment; or neither. Three modes, declared in the same table as the rule.\n"
 		"* THE REASON MATTERS AS MUCH AS THE NUMBER. A statutory figure differing from the data\n"
 		"without a recorded reason is the thing an inspection asks about.\n"
+		"\n"
+		"KEY: THE ARITHMETIC BETWEEN LINES ROUNDS EACH OPERAND TO THE SHEET'S UNIT FIRST, so the lines\n"
+		"add up as printed. A difference is never printed negative: it lands on one of TWO lines - to\n"
+		"pay, or to reduce - with the other at nought, and a tax line is the rate times the positive\n"
+		"one. The recomputation runs after every change of a cell and after a row is deleted, never\n"
+		"while printing, and the person may switch it off - a setting stored with the return.\n"
+		"* THE FILL NAMES EVERY CELL IT OWNS, sets the ones it cannot compute to nought explicitly, and\n"
+		"then runs the same recomputation - so a refill leaves nothing stale. It reads a turnover\n"
+		"register whose rows carry the TAX PERIOD the amount belongs to beside their own date, and\n"
+		"splits by it: accrued for this period, paid now for an earlier one. Headcounts come from the\n"
+		"staff at the period's end, counted by kind of employment (`metadata-craft`).\n"
+		"* AND THE BREAKDOWN IS COLLECTED BY THE FILL, not recomputed by the drill: each cell's sources\n"
+		"are gathered as it is filled and, unless the person turned that off, saved with the return.\n"
+		"So Drill works on a return reopened a month later, and shows what the figure was made of\n"
+		"then rather than what the books say now.\n"
 		"\n"
 		"STOP: DO NOT ENCODE THE CELL'S MODE IN ITS COLOUR. In the system examined, whether a cell is\n"
 		"automatic, manual or either is told apart BY COMPARING BACKGROUND COLOURS against literal\n"
@@ -8863,6 +9425,18 @@ const std::vector<ibMcpPattern>& Patterns()
 		"filing: it belongs to the return, is stored with it, and is stated on the printout - never a\n"
 		"switch on a toolbar that the person can leave in either position.\n"
 		"\n"
+		"KEY: A RETURN OPENS FROM A SMALL STARTING FORM, AND THE PERIOD PICKS THE EDITION THERE. The\n"
+		"company; the periodicity, where the blank may be filed both monthly and quarterly; the period\n"
+		"stepped by two arrows across the periods the blank may be filed for; under them a grey\n"
+		"paragraph naming the act the chosen edition rests on. \"Choose the form...\" is enabled only\n"
+		"when more than one edition fits the period, and \"Open\" opens that edition.\n"
+		"* THE RETURN ITSELF IS A SECTION TREE AND A SHEET. On the left the sections and their pages as\n"
+		"a narrow read-only tree with no header; on the right the sheet of the current one; under it\n"
+		"Add page, Delete page, Delete all pages, Add row, Delete row - enabled only where the current\n"
+		"section repeats. Above it the signature date, below it a comment. The bar: Save, Fill, Clear,\n"
+		"Drill (enabled once there is a breakdown), Print - at once, or show the blank, with a\n"
+		"remembered \"the printer prints both sides\" -, Export, the return's parameters, Refresh, Close.\n"
+		"\n"
 		"KEY: FILING IS A DOCUMENT, AND WHAT IT CARRIES IS MORE THAN THE FIGURES. Which pages are\n"
 		"actually submitted is a TABLE on the return - decided in part by the filer's legal form, so\n"
 		"it is computed and then editable - and the completeness check looks only at those pages. That\n"
@@ -8887,7 +9461,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"that could work, and it is paid for exactly as `query-by-name` says: nothing checks the names\n"
 		"until the run.") },
 
-	{ wxT("report-common-settings"),
+	{ ibT("report-common-settings"),
 	  ibMcpText("The few fields a reader sets before every run - period, company, which books."),
 	  ibMcpText("THE PANEL OF SETTINGS THAT SITS ABOVE THE RESULT.\n"
 		"\n"
@@ -8953,7 +9527,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"NOTE: A PAGE HEADER AND FOOTER ARE ONE SETTING FOR THE WHOLE BASE, with substitutions for\n"
 		"the report name and the person printing. Individual reports do not own it; they apply it.") },
 
-	{ wxT("report-variants"),
+	{ ibT("report-variants"),
 	  ibMcpText("One report, several named views - and why that beats three reports."),
 	  ibMcpText("SEVERAL QUESTIONS, ONE REPORT.\n"
 		"\n"
@@ -9032,7 +9606,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"receiving report's own fields rather than copy them as filters. Recognising them by\n"
 		"comparing caption text works until somebody translates the interface.") },
 
-	{ wxT("same-shape-elsewhere"),
+	{ ibT("same-shape-elsewhere"),
 	  ibMcpText("The multiplier: a task in one trade answered by a mechanism already solved in another."),
 	  ibMcpText("THE SAME SHAPE, SOLVED SOMEWHERE ELSE ALREADY.\n"
 		"\n"
@@ -9198,7 +9772,7 @@ const std::vector<ibMcpPattern>& Patterns()
 		"is worked through, ask what it just taught the entries it borrowed from, and write that back\n"
 		"- that is what makes the corpus grow by more than one entry at a time.") },
 
-	{ wxT("body-map"),
+	{ ibT("body-map"),
 	  ibMcpText("The body of an ERP: which organs exist, how big each is, what it joins to, and where to look."),
 	  ibMcpText("THE BODY OF AN ERP - THE MAP TO NAVIGATE BY.\n"
 		"\n"
@@ -9327,16 +9901,16 @@ const std::vector<ibMcpPattern>& Patterns()
 // so the split follows the author's own emphasis - and a paragraph that is not marked stays with
 // the topic above it, which is the correct reading of an unmarked continuation.
 struct ibMcpTopic {
-	wxString m_title;
-	wxString m_body;
+	ibString m_title;
+	ibString m_body;
 };
 
-bool LooksLikeHeading(const wxString& line)
+bool LooksLikeHeading(const ibString& line)
 {
 	size_t at = 0;
 
 	// Past the indent and past whatever marker opens the line - a star, a stop sign, a bullet.
-	while (at < line.length() && !wxIsalpha(line[at]))
+	while (at < line.length() && !ibIsAlpha(line[at]))
 		at++;
 
 	int capitalised = 0;
@@ -9344,7 +9918,7 @@ bool LooksLikeHeading(const wxString& line)
 	while (at < line.length()) {
 
 		size_t start = at;
-		while (at < line.length() && wxIsalpha(line[at]))
+		while (at < line.length() && ibIsAlpha(line[at]))
 			at++;
 
 		const size_t length = at - start;
@@ -9371,27 +9945,27 @@ bool LooksLikeHeading(const wxString& line)
 		// most (caught by reading a live answer, 2026-09-02: the contents came back holding the
 		// ordinary paragraphs and none of the marked ones). So anything that is not a letter is
 		// stepped over between words; the run ends when a word is not in capitals.
-		while (at < line.length() && !wxIsalpha(line[at]))
+		while (at < line.length() && !ibIsAlpha(line[at]))
 			at++;
 	}
 
 	return capitalised >= 2;
 }
 
-std::vector<ibMcpTopic> TopicsOf(const wxString& text)
+std::vector<ibMcpTopic> TopicsOf(const ibString& text)
 {
 	std::vector<ibMcpTopic> topics;
 
-	wxString current;
-	wxString title = wxT("Overview");   // whatever stands before the first heading
+	ibString current;
+	ibString title = ibT("Overview");   // whatever stands before the first heading
 	bool paragraphStart = true;
 
 	size_t at = 0;
 
 	while (at <= text.length()) {
 
-		const size_t end = text.find(wxT('\n'), at);
-		const wxString line = text.Mid(at, (end == wxString::npos ? text.length() : end) - at);
+		const size_t end = text.find(ibT('\n'), at);
+		const ibString line = text.Mid(at, (end == ibString::npos ? text.length() : end) - at);
 
 		if (line.IsEmpty()) {
 			paragraphStart = true;
@@ -9408,9 +9982,9 @@ std::vector<ibMcpTopic> TopicsOf(const wxString& text)
 			paragraphStart = false;
 		}
 
-		current << line << wxT("\n");
+		current << line << ibT("\n");
 
-		if (end == wxString::npos)
+		if (end == ibString::npos)
 			break;
 		at = end + 1;
 	}
@@ -9424,12 +9998,12 @@ std::vector<ibMcpTopic> TopicsOf(const wxString& text)
 // How many lines a topic is - so a table of contents says the SIZE of what it offers and not only
 // its name. Without it, "WHAT A FULL CLOSE ACTUALLY CONTAINS" and a two-line aside look alike from
 // outside, and the only way to find out is to fetch one and see.
-size_t LinesIn(const wxString& body)
+size_t LinesIn(const ibString& body)
 {
 	size_t lines = 0;
 
 	for (size_t at = 0; at < body.length(); at++)
-		if (body[at] == wxT('\n'))
+		if (body[at] == ibT('\n'))
 			lines++;
 
 	return lines;
@@ -9439,13 +10013,13 @@ size_t LinesIn(const wxString& body)
 // searched the same way, so the rule lives where both reach it.)
 
 // The heading as a LABEL - the sentence a reader picks from, not the paragraph it opens.
-wxString TopicLabel(const wxString& title)
+ibString TopicLabel(const ibString& title)
 {
-	wxString label = title;
+	ibString label = title;
 	label.Trim(true).Trim(false);
 
 	// Cut at the first full stop or dash: the heading states its subject and then explains it.
-	for (const wxChar* stop : { wxT(". "), wxT(" - "), wxT(", ") }) {
+	for (const ibChar* stop : { ibT(". "), ibT(" - "), ibT(", ") }) {
 		const int at = label.Find(stop);
 		if (at != wxNOT_FOUND && at > 12) {
 			label = label.Left(at);
@@ -9454,12 +10028,12 @@ wxString TopicLabel(const wxString& title)
 	}
 
 	if (label.length() > 96)
-		label = label.Left(93) + wxT("...");
+		label = label.Left(93) + ibT("...");
 
 	return label;
 }
 
-const ibMcpPattern* FindPattern(const wxString& name)
+const ibMcpPattern* FindPattern(const ibString& name)
 {
 	for (const ibMcpPattern& pattern : Patterns())
 		if (name.IsSameAs(pattern.m_name, false))
@@ -9477,20 +10051,20 @@ const ibMcpPattern* FindPattern(const wxString& name)
 // build a menu) and ONE ENTRY BY NAME (to answer a choice from it). Handing out the vector would
 // let the next surface re-derive summaries, headings and search of its own, which is how the
 // corpus would end up with two readers disagreeing about what it says.
-std::vector<std::pair<wxString, wxString>> ibMcpPatternIndex()
+std::vector<std::pair<ibString, ibString>> ibMcpPatternIndex()
 {
-	std::vector<std::pair<wxString, wxString>> index;
+	std::vector<std::pair<ibString, ibString>> index;
 
 	for (const ibMcpPattern& pattern : Patterns())
-		index.emplace_back(wxString(pattern.m_name), pattern.m_summary);
+		index.emplace_back(ibString(pattern.m_name), pattern.m_summary);
 
 	return index;
 }
 
-wxString ibMcpPatternText(const wxString& name)
+ibString ibMcpPatternText(const ibString& name)
 {
 	const ibMcpPattern* found = FindPattern(name);
-	return found != nullptr ? found->m_text : wxString();
+	return found != nullptr ? found->m_text : ibString();
 }
 
 //---------------------------------------------------------------------------
@@ -9500,17 +10074,17 @@ wxString ibMcpPatternText(const wxString& name)
 class ibMcpToolPatternRead : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("pattern_read"); }
+	ibString GetName() const override { return ibT("pattern_read"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		const wxString name = ArgName().Text(params);
+		const ibString name = ArgName().Text(params);
 		return name.IsEmpty()
 			? ibMcpText("listing the patterns")
-			: wxString::Format(ibMcpText("reading the '%s' pattern"), name);
+			: ibString::Format(ibMcpText("reading the '%s' pattern"), name);
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("A translator from the language of the people who ask - accountants, warehouse "
 			"managers, anyone describing their work - into the shapes this platform has. They do "
@@ -9569,7 +10143,7 @@ public:
 	// there was, said as "3 of your 5 words" so a partial answer is never mistaken for a complete
 	// one. That is the difference between a search that fails politely and one that says "there is
 	// nothing about this" - which, about a corpus this size, is never true and always acted on.
-	void FindInside(const wxString& query, std::vector<ibDataValue>& places) const override
+	void FindInside(const ibString& query, std::vector<ibDataValue>& places) const override
 	{
 		if (query.IsEmpty())
 			return;
@@ -9586,8 +10160,8 @@ public:
 				// The pattern's NAME and SUMMARY count towards the topic's score: a caller asking
 				// "lots" should reach every part of the lots entry, not only the paragraphs that
 				// happen to repeat the word.
-				const wxString haystack = wxString(pattern.m_name) + wxT("\n")
-					+ pattern.m_summary + wxT("\n") + topic.m_body;
+				const ibString haystack = ibString(pattern.m_name) + ibT("\n")
+					+ pattern.m_summary + ibT("\n") + topic.m_body;
 
 				const size_t score = ibMcpWordsFound(haystack, query, &asked);
 				if (score == 0)
@@ -9612,17 +10186,17 @@ public:
 				break;
 
 			std::shared_ptr<ibDataNode> hit = std::make_shared<ibDataNode>();
-			hit->SetValue(wxT("pattern"), wxString(place.m_pattern->m_name));
-			hit->SetValue(wxT("topic"), TopicLabel(place.m_topic.m_title));
+			hit->SetValue(ibT("pattern"), ibString(place.m_pattern->m_name));
+			hit->SetValue(ibT("topic"), TopicLabel(place.m_topic.m_title));
 
 			if (partial)
-				hit->SetValue(wxT("matched"), wxString::Format(
+				hit->SetValue(ibT("matched"), ibString::Format(
 					ibMcpText("%i of your %i words"), (int)place.m_score, (int)asked));
 
 			// The line that matched, so a caller can judge the hit without fetching it.
-			const wxString line = ibMcpMatchingLine(place.m_topic.m_body, query);
+			const ibString line = ibMcpMatchingLine(place.m_topic.m_body, query);
 			if (!line.IsEmpty())
-				hit->SetValue(wxT("line"), line);
+				hit->SetValue(ibT("line"), line);
 
 			places.push_back(ibDataValue::Child(hit));
 		}
@@ -9634,10 +10208,10 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		const wxString name = ArgName().Text(params);
-		const wxString query = ArgQuery().Text(params);
+		const ibString name = ArgName().Text(params);
+		const ibString query = ArgQuery().Text(params);
 
 		// ⭐ SEARCH FIRST, IF THERE IS ONE. A caller with words and no name gets addresses back -
 		// pattern, topic, and the line that matched - and reads exactly the part that answered.
@@ -9647,7 +10221,7 @@ public:
 			FindInside(query, hits);
 
 			if (hits.empty()) {
-				refusal = wxString::Format(
+				refusal = ibString::Format(
 					ibMcpText("Not one word of '%s' appears in the patterns. THE CORPUS IS IN ENGLISH - "
 					  "if that query is in another language, ask again with the English words the "
 					  "trade uses for it. Otherwise say it in other words, or ask with no argument "
@@ -9656,9 +10230,9 @@ public:
 				return false;
 			}
 
-			result.AddField(wxT("found"), ibDataValue::Int((s64)hits.size()));
-			result.AddField(wxT("hits"), ibDataValue::Array(hits));
-			result.SetValue(wxT("note"), hits.size() >= 24
+			result.AddField(ibT("found"), ibDataValue::Int((std::int64_t)hits.size()));
+			result.AddField(ibT("hits"), ibDataValue::Array(hits));
+			result.SetValue(ibT("note"), hits.size() >= 24
 				? ibMcpText("Read one with {name, topic} - quoting the topic line above. This many "
 				  "addresses means the words are common ones: add a word to narrow it.")
 				: ibMcpText("Read one with {name, topic} - quoting the topic line above."));
@@ -9673,12 +10247,12 @@ public:
 
 			for (const ibMcpPattern& pattern : Patterns()) {
 				std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-				entry->SetValue(wxT("name"), wxString(pattern.m_name));
-				entry->SetValue(wxT("summary"), pattern.m_summary);
+				entry->SetValue(ibT("name"), ibString(pattern.m_name));
+				entry->SetValue(ibT("summary"), pattern.m_summary);
 				out.push_back(ibDataValue::Child(entry));
 			}
 
-			result.AddField(wxT("patterns"), ibDataValue::Array(out));
+			result.AddField(ibT("patterns"), ibDataValue::Array(out));
 
 			// ⭐⭐ A STRANGER SEES THE COUNT AND THE SHAPE BEFORE THE LIST. Sixty-odd name-and-summary
 			// pairs read as an undifferentiated heap: nothing in them says that seven are about
@@ -9686,22 +10260,22 @@ public:
 			// a trade can never reach. Naming them here, above the list, is what turns a first
 			// contact into a path — and the count is what tells the reader this is a body of work
 			// rather than a handful of notes.
-			result.AddField(wxT("count"), ibDataValue::Int((s64)out.size()));
+			result.AddField(ibT("count"), ibDataValue::Int((std::int64_t)out.size()));
 			{
-				static const wxChar* const s_start[] = {
-					wxT("intake"), wxT("combining"), wxT("same-shape-elsewhere"),
-					wxT("unfamiliar-domain"), wxT("document-chains"),
-					wxT("where-behaviour-lives"), wxT("building-an-erp"), wxT("body-map")
+				static const ibChar* const s_start[] = {
+					ibT("intake"), ibT("combining"), ibT("same-shape-elsewhere"),
+					ibT("unfamiliar-domain"), ibT("document-chains"),
+					ibT("where-behaviour-lives"), ibT("building-an-erp"), ibT("body-map")
 				};
 
 				std::vector<ibDataValue> start;
-				for (const wxChar* const nm : s_start)
-					start.push_back(ibDataValue::String(wxString(nm)));
+				for (const ibChar* const nm : s_start)
+					start.push_back(ibDataValue::String(ibString(nm)));
 
-				result.AddField(wxT("start_here"), ibDataValue::Array(start));
+				result.AddField(ibT("start_here"), ibDataValue::Array(start));
 			}
 
-			result.SetValue(wxT("note"),
+			result.SetValue(ibT("note"),
 				ibMcpText("`count` is how many there are; `start_here` names the few that are about USING "
 				  "the rest, and a search by the words of a trade will never land on them - so when "
 				  "what arrived is a whole task rather than a term, read those first. Everything "
@@ -9724,7 +10298,7 @@ public:
 			// the same failure as writing another language's syntax, one floor up: it looks right
 			// and does not fit. Named because it was observed, repeatedly (Max, 2026-08-31: "you
 			// keep telling me about currency accounting out of the SAP world").
-			result.SetValue(wxT("beware"),
+			result.SetValue(ibT("beware"),
 				ibMcpText("If you know other ERP systems, notice when an answer is coming from one of "
 				  "them. Their concepts have familiar names here and different edges, and a "
 				  "design imported wholesale looks reasonable until it meets the platform it is "
@@ -9740,28 +10314,28 @@ public:
 		// ⚠ NAMED AND NOT FOUND IS A REFUSAL, not an empty answer. A caller who mistyped a name
 		// and got `{}` back reads it as "there is no advice about this" and proceeds.
 		if (found == nullptr) {
-			wxString known;
+			ibString known;
 			for (const ibMcpPattern& pattern : Patterns()) {
 				if (!known.IsEmpty())
-					known += wxT(", ");
+					known += ibT(", ");
 				known += pattern.m_name;
 			}
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("There is no pattern called '%s'. There is: %s."), name, known);
 			return false;
 		}
 
-		result.SetValue(wxT("name"), wxString(found->m_name));
-		result.SetValue(wxT("summary"), found->m_summary);
+		result.SetValue(ibT("name"), ibString(found->m_name));
+		result.SetValue(ibT("summary"), found->m_summary);
 
 		const std::vector<ibMcpTopic> topics = TopicsOf(found->m_text);
-		const wxString wanted = ArgTopic().Text(params);
+		const ibString wanted = ArgTopic().Text(params);
 
 		// EVERYTHING, when asked for it - or when the entry is short enough that a table of
 		// contents would cost more than the text it describes.
-		if (wanted.IsSameAs(wxT("all"), false) || topics.size() < 3
+		if (wanted.IsSameAs(ibT("all"), false) || topics.size() < 3
 			|| found->m_text.length() < 2500) {
-			result.SetValue(wxT("text"), found->m_text);
+			result.SetValue(ibT("text"), found->m_text);
 			return true;
 		}
 
@@ -9778,17 +10352,17 @@ public:
 					continue;
 
 				std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-				entry->SetValue(wxT("topic"), TopicLabel(topic.m_title));
-				entry->SetValue(wxT("text"), topic.m_body);
+				entry->SetValue(ibT("topic"), TopicLabel(topic.m_title));
+				entry->SetValue(ibT("text"), topic.m_body);
 				parts.push_back(ibDataValue::Child(entry));
 			}
 
 			if (!parts.empty()) {
-				result.AddField(wxT("parts"), ibDataValue::Array(parts));
+				result.AddField(ibT("parts"), ibDataValue::Array(parts));
 				return true;
 			}
 
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("'%s' has no topic matching '%s'. Ask it without a topic to see what is in it, "
 				  "or with topic 'all'."), name, wanted);
 			return false;
@@ -9805,14 +10379,14 @@ public:
 			// which is which is to fetch them - which is precisely the cost this listing exists to
 			// avoid. The weight makes the next call a decision rather than a probe.
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-			entry->SetValue(wxT("topic"), TopicLabel(topic.m_title));
-			entry->AddField(wxT("lines"), ibDataValue::Int((s64)LinesIn(topic.m_body)));
+			entry->SetValue(ibT("topic"), TopicLabel(topic.m_title));
+			entry->AddField(ibT("lines"), ibDataValue::Int((std::int64_t)LinesIn(topic.m_body)));
 
 			contents.push_back(ibDataValue::Child(entry));
 		}
 
-		result.AddField(wxT("topics"), ibDataValue::Array(contents));
-		result.SetValue(wxT("note"),
+		result.AddField(ibT("topics"), ibDataValue::Array(contents));
+		result.SetValue(ibT("note"),
 			ibMcpText("Read one with `topic`, quoting any words of its line above; `topic: \"all\"` gives "
 			  "the whole entry. `lines` is how long each part is."));
 		return true;

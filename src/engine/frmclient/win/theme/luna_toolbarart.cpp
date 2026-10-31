@@ -131,6 +131,19 @@ int wxAuiLunaToolBarArt::GetTextOrientation()
 	return m_textOrientation;
 }
 
+// A COLOUR NOBODY SET IS NOT A COLOUR TO DRAW FROM. Since wxWidgets 3.3.4 a wxOSX window that was never given a
+// background answers GetBackgroundColour with wxTransparentColour (565553ee98, "Make default background color
+// transparent in wxOSX"): black, alpha 0. ChangeLightness knows nothing of alpha, so the gradient the background and
+// the pressed button are made of was black lightened — black — and the metadata tree's toolbar stood as a black band
+// in a light window (the thin designer on macOS, 2026-10-28; MSW and GTK still answer the button face there, so they
+// never saw it). A toolbar somebody coloured keeps its colour; one nobody did is drawn from the control face, as
+// wxAuiGenericToolBarArt draws every toolbar.
+wxColour wxAuiLunaToolBarArt::BaseColour(const wxWindow* wnd) const
+{
+	const wxColour colour = wnd->GetBackgroundColour();
+	return colour.IsOk() && colour.Alpha() != wxALPHA_TRANSPARENT ? colour : m_baseColour;
+}
+
 void wxAuiLunaToolBarArt::DrawBackground(
 	wxDC& dc,
 	wxWindow* wnd,
@@ -142,7 +155,7 @@ void wxAuiLunaToolBarArt::DrawBackground(
 	int startLightness = 150;
 	int endLightness = 90;
 
-	wxColour baseColour = wnd->GetBackgroundColour();
+	wxColour baseColour = BaseColour(wnd);
 
 	if ((baseColour.Red() < 75)
 		&& (baseColour.Green() < 75)
@@ -559,7 +572,7 @@ void wxAuiLunaToolBarArt::DrawSeparator(
 		rect.width = new_width;
 	}
 
-	wxColour baseColour = wnd->GetBackgroundColour();
+	wxColour baseColour = BaseColour(wnd);
 
 	wxColour startColour = baseColour.ChangeLightness(80);
 	wxColour endColour = baseColour.ChangeLightness(80);

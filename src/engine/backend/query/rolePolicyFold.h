@@ -11,7 +11,7 @@
 ////////////////////////////////////////////////////////////////////////////
 //
 // ⭐⭐ THE SECOND FOLD OF ONE RULE. A role declares how it combines
-// (ibRoleCompositionMode, roleHelper.h), and that declaration decides two
+// (ibRoleCompositionMode, core/roleCompositionMode.h), and that declaration decides two
 // different things: what the user may DO to an object — folded by
 // ibAccessObject::AccessRight, two passes over one list — and which ROWS they
 // may see, folded here. Same rule, two materials: a right is a bool, a row

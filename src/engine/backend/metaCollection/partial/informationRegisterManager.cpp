@@ -31,22 +31,22 @@ enum {
 
 void ibValueManagerDataObjectInformationRegister::FillManagerMethods(ibMemberTable& helper) const
 {
-	helper.AppendFunc(wxT("CreateRecordSet"), wxT("CreateRecordSet()"));
-	helper.AppendFunc(wxT("CreateRecordManager"), wxT("CreateRecordManager()"));
-	helper.AppendFunc(wxT("CreateRecordKey"), wxT("CreateRecordKey()"));
+	helper.AppendFunc(ibT("CreateRecordSet"), ibT("CreateRecordSet()"));
+	helper.AppendFunc(ibT("CreateRecordManager"), ibT("CreateRecordManager()"));
+	helper.AppendFunc(ibT("CreateRecordKey"), ibT("CreateRecordKey()"));
 	// TWO ARGUMENTS, because there are two forms: Get(filter) and Get(period, filter). Declared as
 	// one, the periodic form was unreachable — the interpreter refuses a call with more arguments
 	// than the helper declares, so the branch existed and could not be entered.
-	helper.AppendFunc(wxT("Get"), 2, wxT("Get(Period, Filter...)"));
-	helper.AppendFunc(wxT("GetFirst"), 3, wxT("GetFirst(beginOfPeriod, filter...)"));
-	helper.AppendFunc(wxT("GetLast"), 2, wxT("GetLast(endOfPeriod, filter...)"));
-	helper.AppendFunc(wxT("SliceFirst"), 2, wxT("SliceFirst(beginOfPeriod, filter...)"));
-	helper.AppendFunc(wxT("SliceLast"), 2, wxT("SliceLast(endOfPeriod, filter...)"));
-	helper.AppendFunc(wxT("Select"), wxT("Select()"));
-	helper.AppendFunc(wxT("GetForm"), 3, wxT("GetForm(string, owner, guid)"));
-	helper.AppendFunc(wxT("GetRecordForm"), 3, wxT("GetRecordForm(string, owner, guid)"));
-	helper.AppendFunc(wxT("GetListForm"), 3, wxT("GetListForm(string, owner, guid)"));
-	helper.AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(string)"));
+	helper.AppendFunc(ibT("Get"), 2, ibT("Get(Period, Filter...)"));
+	helper.AppendFunc(ibT("GetFirst"), 3, ibT("GetFirst(beginOfPeriod, filter...)"));
+	helper.AppendFunc(ibT("GetLast"), 2, ibT("GetLast(endOfPeriod, filter...)"));
+	helper.AppendFunc(ibT("SliceFirst"), 2, ibT("SliceFirst(beginOfPeriod, filter...)"));
+	helper.AppendFunc(ibT("SliceLast"), 2, ibT("SliceLast(endOfPeriod, filter...)"));
+	helper.AppendFunc(ibT("Select"), ibT("Select()"));
+	helper.AppendFunc(ibT("GetForm"), 3, ibT("GetForm(string, owner, guid)"));
+	helper.AppendFunc(ibT("GetRecordForm"), 3, ibT("GetRecordForm(string, owner, guid)"));
+	helper.AppendFunc(ibT("GetListForm"), 3, ibT("GetListForm(string, owner, guid)"));
+	helper.AppendFunc(ibT("GetTemplate"), 1, ibT("GetTemplate(string)"));
 }
 
 #include "selector/objectSelector.h"

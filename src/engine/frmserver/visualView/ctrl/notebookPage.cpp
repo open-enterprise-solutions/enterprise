@@ -1,5 +1,6 @@
 #include "notebook.h"
 #include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
+#include "backend/backend_picture.h"      // ibBackendPicture::SendPicture — the tab's picture, by its id
 
 //***********************************************************************************
 //*                              ibValueNotebookPage                                 *
@@ -18,10 +19,14 @@ void ibValueNotebookPage::OnUpdate(ibDataNode& state, ibVisualHost* host)
     // Auto carries both, as PictureAndText does: the title and the picture, whichever are set.
     const ibRepresentation representation = m_propertyRepresentation->GetValueAsEnum();
 
-    state.SetValue(wxT("Visible"), IsPageShown());
-    state.SetValue(wxT("Title"), representation != ibRepresentation::ibRepresentation_Picture ?
-        m_propertyTitle->GetValueAsTranslateString() : wxString());
-    state.SetValue(wxT("PictureVisible"), representation != ibRepresentation::ibRepresentation_Text);
+    state.SetValue(ibProtocol::ibForm::ibState::Visible, IsPageShown());
+    state.SetValue(ibProtocol::ibForm::ibState::Title, representation != ibRepresentation::ibRepresentation_Picture ?
+        m_propertyTitle->GetValueAsTranslateString() : ibString());
+    state.SetValue(ibProtocol::ibForm::ibNotebook::PictureVisible, representation != ibRepresentation::ibRepresentation_Text);
+    // The picture travels by its id, and only when the tab shows one.
+    const ibPictureDescription picture = m_propertyPicture->GetValueAsPictureDesc();
+    if (representation != ibRepresentation::ibRepresentation_Text && !picture.IsEmptyPicture())
+        state.SetValue(ibProtocol::ibForm::ibState::Picture, ibBackendPicture::SendPicture(picture, GetMetaData()));
 }
 
 void ibValueNotebookPage::OnSelected(ibVisualHost* host)

@@ -30,13 +30,13 @@ namespace ibLockKey {
 //
 // Throws ibBackendCoreException if a value type isn't supported as a
 // key. (Add new types here as call sites need them.)
-BACKEND_API wxString Hash(const std::vector<std::pair<wxString, ibValue>>& keyFields);
+BACKEND_API ibString Hash(const std::vector<std::pair<ibString, ibValue>>& keyFields);
 
 // Human-readable canonical text of the key — used as the keyData
 // payload on sys_lock for conflict-message rendering. Same sort and
 // type discipline as Hash, but emitted as "<name>=<value>;..." text
 // rather than hashed bytes. Empty for an empty keyFields vector.
-BACKEND_API wxString Canonicalize(const std::vector<std::pair<wxString, ibValue>>& keyFields);
+BACKEND_API ibString Canonicalize(const std::vector<std::pair<ibString, ibValue>>& keyFields);
 
 } // namespace ibLockKey
 

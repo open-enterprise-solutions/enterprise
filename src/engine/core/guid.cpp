@@ -20,6 +20,8 @@ THE SOFTWARE.
 
 #include "guid.h"
 
+#include <cstring>   // std::memcmp — MSVC's headers bring it along, GCC's do not
+
 #ifdef GUID_LIBUUID
 // libuuid — the header is <uuid/uuid.h> (package uuid-dev / libuuid-devel). It was written
 // as <guid/guid.h>, a path that exists nowhere; nothing caught it because this branch is
@@ -80,30 +82,30 @@ bool ibGuid::isValid() const
 }
 
 template <typename I>
-inline void hex_to_string(wxString& out, I& w, size_t hex_len = sizeof(I) << 1) {
+inline void hex_to_string(ibString& out, I& w, size_t hex_len = sizeof(I) << 1) {
 	static const char* digits = "0123456789abcdef";
 	for (size_t i = 0, j = (hex_len - 1) * 4; i < hex_len; ++i, j -= 4)
-		out.append(digits[(w >> j) & 0x0f]);
+		out += static_cast<ibChar>(digits[(w >> j) & 0x0f]);
 }
 
 // convert to string using std::snprintf() and std::string
-wxString ibGuid::str() const
+ibString ibGuid::str() const
 {
-	wxString out; out.reserve(36);
+	ibString out; out.reserve(36);
 	hex_to_string(out, _bytes[0]);
 	hex_to_string(out, _bytes[1]);
 	hex_to_string(out, _bytes[2]);
 	hex_to_string(out, _bytes[3]);
-	out.append('-');
+	out += ibT('-');
 	hex_to_string(out, _bytes[4]);
 	hex_to_string(out, _bytes[5]);
-	out.append('-');
+	out += ibT('-');
 	hex_to_string(out, _bytes[6]);
 	hex_to_string(out, _bytes[7]);
-	out.append('-');
+	out += ibT('-');
 	hex_to_string(out, _bytes[8]);
 	hex_to_string(out, _bytes[9]);
-	out.append('-');
+	out += ibT('-');
 	hex_to_string(out, _bytes[10]);
 	hex_to_string(out, _bytes[11]);
 	hex_to_string(out, _bytes[12]);
@@ -230,26 +232,28 @@ ibGuid::ibGuid(const std::string_view& fromString)
 	}
 }
 
-#if __WXWINDOWS__
 // create a guid from string
-ibGuid::ibGuid(const wxString& fromString)
+ibGuid::ibGuid(const ibString& fromString)
 {
+	if (!parse(fromString, *this))
+		zeroify();
+}
+
+bool ibGuid::parse(const ibString& text, ibGuid& guid)
+{
+	std::array<unsigned char, 16> bytes{};
 	char charOne = '\0';
 	char charTwo = '\0';
 	bool lookingForFirstChar = true;
 	unsigned nextByte = 0;
 
-	for (const wxUniChar& ch : fromString)
+	for (const ibChar& ch : text)
 	{
 		if (ch == '-')
 			continue;
 
 		if (nextByte >= 16 || !isValidHexChar(ch))
-		{
-			// Invalid string so bail
-			zeroify();
-			return;
-		}
+			return false;
 
 		if (lookingForFirstChar)
 		{
@@ -259,20 +263,18 @@ ibGuid::ibGuid(const wxString& fromString)
 		else
 		{
 			charTwo = ch;
-			auto byte = hexPairToChar(charOne, charTwo);
-			_bytes[nextByte++] = byte;
+			bytes[nextByte++] = hexPairToChar(charOne, charTwo);
 			lookingForFirstChar = true;
 		}
 	}
 
 	// if there were fewer than 16 bytes in the string then guid is bad
 	if (nextByte < 16)
-	{
-		zeroify();
-		return;
-	}
+		return false;
+
+	guid._bytes = bytes;
+	return true;
 }
-#endif
 
 ibGuid::ibGuid(const ibGuidImpl& guid)
 {
@@ -352,12 +354,6 @@ bool ibGuid::operator <= (const ibGuid& other) const
 bool ibGuid::operator==(const ibGuid& other) const
 {
 	return std::memcmp(_bytes.data(), other._bytes.data(), 16) == 0;
-}
-
-// overload inequality operator
-bool ibGuid::operator!=(const ibGuid& other) const
-{
-	return !((*this) == other);
 }
 
 // member swap function

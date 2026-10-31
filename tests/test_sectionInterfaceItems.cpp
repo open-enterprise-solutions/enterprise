@@ -39,7 +39,7 @@ struct SectionFix {
 			cfg.CreateMetaObject(g_metaSectionCLSID, root, /*runObject*/ false));
 	}
 
-	ibValueMetaObject* Include(const ibClassID& kind, const wxString& name, bool inSection = true) {
+	ibValueMetaObject* Include(const ibClassID& kind, const ibString& name, bool inSection = true) {
 		ibValueMetaObject* object = cfg.CreateMetaObject(kind, root, /*runObject*/ false);
 		if (object != nullptr) {
 			cfg.RenameMetaObject(object, name);
@@ -151,10 +151,10 @@ TEST(SectionInterfaceItems, AnEmptySection_ShowsNothing)
 
 namespace {
 
-ibValueMetaObject* IncludeCommand(SectionFix& f, const wxString& name, long group) {
+ibValueMetaObject* IncludeCommand(SectionFix& f, const ibString& name, long group) {
 	ibValueMetaObject* command = f.Include(g_metaCommonCommandCLSID, name);
 	if (command != nullptr)
-		command->GetProperty(wxT("Group"))->SetValue(wxVariant(group));
+		command->GetProperty(ibT("Group"))->SetValue(ibVariant(group));
 	return command;
 }
 
@@ -188,7 +188,7 @@ TEST(SectionInterfaceItems, ACommandInAFormCommandBarGroup_IsNotOnTheSectionPage
 	ibValueMetaObjectCommandGroup* group = dynamic_cast<ibValueMetaObjectCommandGroup*>(
 		f.cfg.CreateMetaObject(g_metaCommandGroupCLSID, f.root, /*runObject*/ false));
 	ASSERT_NE(nullptr, group);
-	group->GetProperty(wxT("Category"))->SetValue(wxVariant((long)ibCommandGroupCategory_FormCommandBar));
+	group->GetProperty(ibT("Category"))->SetValue(ibVariant((long)ibCommandGroupCategory_FormCommandBar));
 	ASSERT_EQ(ibCommandGroupCategory_FormCommandBar, group->GetCategory());
 	ibValueMetaObject* command = IncludeCommand(f, wxT("PrintInvoice"), group->GetMetaID());
 	ASSERT_NE(nullptr, command);

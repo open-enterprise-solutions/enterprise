@@ -8,11 +8,11 @@
 //*                             Events                              *
 //*******************************************************************
 
-bool ibValueCheckbox::OnClientEvent(ibProtocolEvent event, const ibDataNode& args)
+bool ibValueCheckbox::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args)
 {
-	if (event != ibProtocolEvent::Toggle)
+	if (event != ibProtocol::ibEvent::ibKind::Toggle)
 		return ibValueWindow::OnClientEvent(event, args);
-	OnClickedCheckbox(args.GetValue<bool>(wxT("Checked")));
+	OnClickedCheckbox(args.GetValue<bool>(ibProtocol::ibEvent::Checked));
 	return true;
 }
 

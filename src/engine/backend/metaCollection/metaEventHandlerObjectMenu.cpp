@@ -8,6 +8,6 @@
 bool ibValueMetaObjectEventHandler::CollectContextMenu(std::vector<ibMetaMenuItem>& items)
 {
 	if (ibValueMetaObjectManagerModule* module = m_propertyHandlerModule->GetMetaObject())
-		items.emplace_back(ibMetaMenuKind::Module, wxT("HandlerModule"), _("Open handler module"), module);
+		items.emplace_back(ibMetaMenuKind::Module, ibT("HandlerModule"), _("Open handler module"), module);
 	return false;
 }

@@ -16,8 +16,8 @@ class ibValueHTMLBox : public ibValueWindow {
 	virtual void OnUpdate(ibDataNode& state, ibVisualHost* host) override;
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//load & save object in control
 	virtual bool ReadData(const ibDataNode& node);
@@ -26,7 +26,7 @@ class ibValueHTMLBox : public ibValueWindow {
 private:
 
 	// Set from code only, never saved: the page lives as long as the form is open.
-	wxString m_page;
+	ibString m_page;
 };
 
 #endif // ! _HTMLBOX_H__

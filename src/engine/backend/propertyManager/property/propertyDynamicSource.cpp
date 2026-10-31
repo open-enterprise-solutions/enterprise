@@ -6,6 +6,8 @@
 #include "backend/query/queryable.h"
 #include "core/serialize/dataBuilder.h"
 #include "backend/compiler/value.h"
+#include "backend/backend_picture.h"           // ibBackendPicture::SendPicture — a source's picture, by its id
+#include "backend/metaCollection/genericData.h"  // ibValueMetaObjectGenericData — the metaobject a source reads
 
 
 // The factory the list resolves THROUGH — the metadata it runs ON BEHALF OF (its owner's config). Its per-config
@@ -21,7 +23,7 @@ static ibQueryableFactory* ibDynamicSourceFactory(const ibPropertyObject* owner)
 	return factory != nullptr ? factory : ibApplicationInstance::GetQueryableFactory();
 }
 
-void ibPropertyDynamicSource::SetSource(const wxString& ns, const wxString& name)
+void ibPropertyDynamicSource::SetSource(const ibString& ns, const ibString& name)
 {
 	if (ibQueryableFactory* factory = ibDynamicSourceFactory(m_owner))
 		SetQueryable(factory->Resolve(ns, name));
@@ -73,5 +75,34 @@ bool ibPropertyDynamicSource::WriteNodeValue(ibDataValue& value) const
 	if (tableId == wxNOT_FOUND)
 		return true;   // no source picked → nothing to write
 	value = ibDataValue::Int((int)tableId);
+	return true;
+}
+
+#include "protocol/protocol.h"   // ibProtocol::ibSchema::ibProperties — the row's keys
+
+bool ibPropertyDynamicSource::GetProtocolValue(ibDataNode& row, ibReader reader)
+{
+	if (!ibProperty::GetProtocolValue(row, reader))
+		return false;
+	ibQueryableFactory* const factory = ibDynamicSourceFactory(m_owner);
+	if (factory == nullptr)
+		return true;
+	for (ibQueryableSourceDescriptor* const descriptor : factory->GetDescriptors()) {
+		if (descriptor == nullptr)
+			continue;
+		const ibBackendQueryable* const queryable = factory->Resolve(descriptor->GetNamespace(), descriptor->GetName());
+		const ibMetaID tableId = queryable != nullptr ? queryable->GetQueryTableId() : 0;
+		if (tableId == 0 || tableId == wxNOT_FOUND)
+			continue;   // a source with no table id (temp, computed) cannot be stored
+		ibDataNode& choice = row.AddChild(0, static_cast<ibMetaID>(row.Children().size() + 1));
+		choice.SetValue(ibProtocol::ibSchema::ibProperties::Id, static_cast<std::int32_t>(tableId));
+		choice.SetValue(ibProtocol::ibSchema::ibProperties::Title, descriptor->GetNamespace() + ibT(".") + descriptor->GetName());
+		// …drawn as the desktop's drop-down draws it: the picture of the metaobject behind the source (its class's, as
+		// CreateValueList draws a metaobject); a source with no metaobject behind it goes without.
+		const ibValueMetaObjectGenericData* const metaObject = queryable->GetSourceMetaObject();
+		if (metaObject != nullptr)
+			choice.SetValue(ibProtocol::ibSchema::ibProperties::Picture,
+				ibBackendPicture::SendPicture(metaObject->GetClassType()));
+	}
 	return true;
 }

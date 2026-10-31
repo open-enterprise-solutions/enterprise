@@ -32,7 +32,7 @@ struct ibByteCode;
 // Declared opaque (`enum class ibRunState : uint8_t;`) by the headers that only hand its address on.
 enum class ibRunState : uint8_t {
 	Idle,        // nothing running — a cancel that finds this on a host session is for nothing
-	Running,     // a script is on the stack, there to hear a cancel
+	Running,     // a script is on the stack, or work waits there for the person (Await) — there to hear a cancel
 	Cancelled,   // …and it has been told: every level throws the interruption until the run is out
 };
 
@@ -163,7 +163,8 @@ struct ibProcUnitState {
 	short                       m_recCount = 0;
 
 	// ⭐ THE RUN AND ITS CANCEL, one value (ibRunState). The guard of the stack at empty makes it Running as a
-	// script starts and Idle as the last frame leaves (ibProcStackGuard); ibSession::Cancel, from any thread,
+	// script starts and Idle as the last frame leaves (ibProcStackGuard), and so does a wait for the person that no
+	// script is under (ibWorkerPool::Await) — each lowers only what it raised; ibSession::Cancel, from any thread,
 	// makes a Running one Cancelled — and a job's session Cancelled whatever it finds, a job's session being its
 	// run. Heard by the interpreter between opcodes and by the engine's long loops (ibRunCancelled), all of
 	// which throw the interruption; hearing it changes nothing, so every level that meets it throws again

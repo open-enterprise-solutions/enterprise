@@ -45,9 +45,9 @@
 // column it no longer had — `-206 Column unknown AMOUNT_TURNOVER`, "Fixed assets statement", measured
 // 2026-09-10. A base not applied since still had the old view and kept working, which is why it read as a
 // report that broke by itself.
-static wxString ibAccumFigureField(const wxString& resourceField, const wxString& figure)
+static ibString ibAccumFigureField(const ibString& resourceField, const ibString& figure)
 {
-	return resourceField + wxT("_") + figure;
+	return resourceField + ibT("_") + figure;
 }
 
 void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& out) const
@@ -70,13 +70,13 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 	// later. The warning is what makes the difference between "not finished yet" and "quietly
 	// broken" visible at the moment it is created.
 	if (GetResourceArrayObject().empty()) {
-		RestructureWarning(wxString::Format(
+		RestructureWarning(ibString::Format(
 			_("Register '%s' has no resources: no totals are maintained for it"), GetName()));
 		return;
 	}
 
-	const wxString totalsName  = GetRegisterTableNameDB();
-	const wxString periodField = ibRegValueField(GetRegisterPeriod());
+	const ibString totalsName  = GetRegisterTableNameDB();
+	const ibString periodField = ibRegValueField(GetRegisterPeriod());
 
 	// ⭐⭐ THE INACTIVE KIND'S TABLE IS DECLARED TOO — EMPTY, AND WITHOUT MAINTENANCE.
 	//
@@ -136,7 +136,8 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 	// index has a segment ceiling, a reference dimension is three physical fields, and five reference
 	// dimensions already pass Firebird's sixteen. Past the ceiling the identity moves into a hash
 	// column and the match still runs over the key columns themselves.
-	ibDeclareDerivedKey(t, totalsName, keyCols, totals->GetMetaID() | 0x40000000);
+	// The hash column, when there is one, is a virtual column of the totals object (ibRegDerivedColumnId).
+	ibDeclareDerivedKey(t, totalsName, keyCols, ibRegDerivedColumnId(totals->GetMetaID()));
 
 	// ⭐⭐ AND AN INDEX A READING CAN RIDE — the dimensions FIRST, the period after them.
 	//
@@ -159,7 +160,7 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 		std::vector<const ibBackendQueryColumn*> readCols;
 		for (const auto dimension : GetDimensionArrayObject())
 			readCols.push_back(dimension->GetQueryColumn());
-		ibDeclareLookupIndex(t, totalsName + wxT("_DL"), readCols, /*closing*/ periodCol);
+		ibDeclareLookupIndex(t, totalsName + ibT("_DL"), readCols, /*closing*/ periodCol);
 	}
 
 	ibSchemaMaterialize& m = t.Derived(GetQueryable());
@@ -183,7 +184,7 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 	// It wants to become a per-register property: a register posted once a month per key gains
 	// nothing from daily rows, and one that must answer hourly cannot use them. Introducing it later
 	// is a property plus a regeneration — the mechanism already reads this value rather than assuming.
-	m.Period(periodField, GetRegisterPeriod()->GetQueryColumn(), wxT("{row}.") + periodField, GetTotalsPeriodUnit());
+	m.Period(periodField, GetRegisterPeriod()->GetQueryColumn(), ibT("{row}.") + periodField, GetTotalsPeriodUnit());
 
 	// ⭐⭐ AN INACTIVE MOVEMENT EXISTS AND COUNTS FOR NOTHING.
 	//
@@ -222,30 +223,31 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 		m.Key(dimension->GetQueryColumn());
 
 	// --- the stored columns + what a movement contributes to each ------------------------------
-	struct Pair { wxString m_in, m_out, m_name; };
+	struct Pair { ibString m_in, m_out, m_name; };
 	std::vector<Pair> pairs;
 
 	for (const auto res : GetResourceArrayObject()) {
-		const wxString resField = ibRegValueField(res);
-		const wxString inName   = resField + wxT("_In");
-		const wxString outName  = resField + wxT("_Out");
+		const ibString resField = ibRegValueField(res);
+		const ibString inName   = resField + ibT("_In");
+		const ibString outName  = resField + ibT("_Out");
 
 		// Accumulating columns carry an IDENTITY (not scaffold), so the differ can add and drop them
 		// as the register gains resources or switches type. A scaffold field is created with its
 		// table and never migrated — which would mean a register whose resources changed kept a
 		// totals table shaped for the old ones. The two ids derive from the resource's own metaID,
-		// so they are stable across saves and unique within the table — the second one through a
-		// HIGH bit, which is the only range no metaID occupies (they are small sequential integers,
-		// so a low-bit tweak lands on the neighbouring metaobject's id).
+		// so they are stable across saves and unique within the table — the second one a VIRTUAL
+		// column's, synthetic (ibRegDerivedColumnId): negative, so no metaID can be it. (It was the
+		// metaID with a high bit set, a range nobody had claimed yet rather than one nobody can; the
+		// id is not stored, both snapshots compute it, so the change moved no column.)
 		// The figure is stored in the RESOURCE's own type (ibRegAccumulatorColumn) — declared flat it was
 		// NUMERIC(18,0), so a resource carrying a fraction lost it on the way INTO the totals.
 		const ibMetaID idIn  = res->GetMetaID();
-		const ibMetaID idOut = res->GetMetaID() | 0x40000000;
+		const ibMetaID idOut = ibRegDerivedColumnId(res->GetMetaID());
 
 		if (!withSign) {
 			// No record type — nothing signs a movement, so there is no expense side to keep apart.
 			const ibBackendQueryColumn* c = ibRegAccumulatorColumn(t, inName, idIn, res);
-			m.Accumulate(c, wxT("{row}.") + resField, ibQueryColumnExpr::Col(res->GetQueryColumn()));
+			m.Accumulate(c, ibT("{row}.") + resField, ibQueryColumnExpr::Col(res->GetQueryColumn()));
 			// 🛑 THE THIRD FIELD IS THE PHYSICAL BASE OF THE VIEW'S COLUMNS (ibAccumFigureField), so
 			// it becomes a REAL SQL IDENTIFIER in CREATE VIEW and must be ASCII. Spelled from the
 			// resource's USER name, a Cyrillic resource took the whole apply down on Firebird: the
@@ -257,7 +259,7 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 			// ⭐ The user name stays the LOGICAL query name on the read side — the query layer already
 			// maps it to the physical field, which is this file's own principle: the SQL layer does
 			// not know words.
-			pairs.push_back({ inName, wxString(), resField });
+			pairs.push_back({ inName, ibString(), resField });
 			continue;
 		}
 
@@ -275,9 +277,9 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 		//
 		// Spelled through the enum rather than a literal, so the two can no longer disagree: what
 		// goes into the receipt column is the movement whose record type IS Receipt.
-		const wxString recField = ibRegValueField(GetRegisterRecordType());
+		const ibString recField = ibRegValueField(GetRegisterRecordType());
 		const int receiptTag = static_cast<int>(ibRecordType::eReceipt);
-		const wxString receiptTagText = wxString::Format(wxT("%i"), receiptTag);
+		const ibString receiptTagText = ibString::Format(ibT("%i"), receiptTag);
 
 		// 🛑⭐⭐ THE REBUILD COMPARES A VALUE, AND IT HAS TO BE THE ENUM'S. The trigger text above reads the
 		// raw ordinal and is right; the rebuild's condition goes through the query layer, which compares a
@@ -289,12 +291,12 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 		// the rebuild and the trigger now count the same movement on the same side.
 		const ibValue receipt = ibValue::CreateEnumObject<ibValueEnumAccumulationRegisterRecordType>(ibRecordType::eReceipt);
 
-		m.Accumulate(cIn,  wxT("CASE WHEN {row}.") + recField + wxT(" = ") + receiptTagText + wxT(" THEN {row}.") + resField + wxT(" ELSE 0 END"),
+		m.Accumulate(cIn,  ibT("CASE WHEN {row}.") + recField + ibT(" = ") + receiptTagText + ibT(" THEN {row}.") + resField + ibT(" ELSE 0 END"),
 			ibQueryColumnExpr::Case(
 				{ { ibQueryPredicate::Leaf(ibQueryCondition{ GetRegisterRecordType()->GetQueryColumn(), ibQueryFilterOp::Equal, receipt }),
 				    ibQueryColumnExpr::Col(res->GetQueryColumn()) } },
 				ibQueryColumnExpr::Const(ibValue(0.0))));
-		m.Accumulate(cOut, wxT("CASE WHEN {row}.") + recField + wxT(" = ") + receiptTagText + wxT(" THEN 0 ELSE {row}.") + resField + wxT(" END"),
+		m.Accumulate(cOut, ibT("CASE WHEN {row}.") + recField + ibT(" = ") + receiptTagText + ibT(" THEN 0 ELSE {row}.") + resField + ibT(" END"),
 			ibQueryColumnExpr::Case(
 				{ { ibQueryPredicate::Leaf(ibQueryCondition{ GetRegisterRecordType()->GetQueryColumn(), ibQueryFilterOp::Equal, receipt }),
 				    ibQueryColumnExpr::Const(ibValue(0.0)) } },
@@ -356,12 +358,12 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 		}
 
 		for (const Pair& p : pairs) {
-			v.m_columns.push_back({ ibAccumFigureField(p.m_name, ibRegFigure::Receipt),  p.m_in,  wxString(), ibMaterializeAgg::Value });
+			v.m_columns.push_back({ ibAccumFigureField(p.m_name, ibRegFigure::Receipt),  p.m_in,  ibString(), ibMaterializeAgg::Value });
 			if (p.m_out.IsEmpty()) {
-				v.m_columns.push_back({ ibAccumFigureField(p.m_name, ibRegFigure::Turnover), p.m_in, wxString(), ibMaterializeAgg::Value });
+				v.m_columns.push_back({ ibAccumFigureField(p.m_name, ibRegFigure::Turnover), p.m_in, ibString(), ibMaterializeAgg::Value });
 				continue;
 			}
-			v.m_columns.push_back({ ibAccumFigureField(p.m_name, ibRegFigure::Expense),  p.m_out, wxString(), ibMaterializeAgg::Value });
+			v.m_columns.push_back({ ibAccumFigureField(p.m_name, ibRegFigure::Expense),  p.m_out, ibString(), ibMaterializeAgg::Value });
 			v.m_columns.push_back({ ibAccumFigureField(p.m_name, ibRegFigure::Turnover), p.m_in,  p.m_out,    ibMaterializeAgg::Difference });
 		}
 	}
@@ -441,7 +443,7 @@ bool ibValueMetaObjectAccumulationRegister::HasMaterializedViews() const
 }
 
 const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryable(
-	const wxString& viewName, ibViewShape shape) const
+	const ibString& viewName, ibViewShape shape) const
 {
 	// One question, asked once: the turnovers view carries the period column, the balance
 	// views do not. (There was a `withBalances` twin here, never read — it was just this
@@ -463,7 +465,7 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 	// columns — for the life of the session. It was not even a stable bug: WHO asks first decides, and
 	// declaring the virtual tables' parameters moved the first ask earlier, so a shape that had been
 	// right became empty with nothing said about columns changing.
-	wxString shapeNow;
+	ibString shapeNow;
 	ibRegSignAttribute(shapeNow, GetRegisterPeriod());
 	for (const auto dimension : GetDimensionArrayObject()) ibRegSignAttribute(shapeNow, dimension);
 	for (const auto resource  : GetResourceArrayObject())  ibRegSignAttribute(shapeNow, resource);
@@ -478,8 +480,8 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 		// says `Period`. Handing the storage name out as the column's name put the physical schema
 		// straight into the constructor's field list — `fld1124_D_TenDays` beside `Resource1_Receipt`
 		// — and made the table impossible to write against by hand.
-		const wxString periodName  = GetRegisterPeriod()->GetName();       // what a query writes
-		const wxString periodField = ibRegValueField(GetRegisterPeriod()); // what the table keeps
+		const ibString periodName  = GetRegisterPeriod()->GetName();       // what a query writes
+		const ibString periodField = ibRegValueField(GetRegisterPeriod()); // what the table keeps
 		// 🛑 …AND THE COLUMN IS THAT FIELD, SAID WITH THE KIND. `periodField` is already the period's
 		// value field (`fld1043_D`); left declared Composite, a reader spreads it a SECOND time and
 		// asks the database for `fld1043_D_D` beside a `fld1043_D_TYPE` that no view has — a role
@@ -496,7 +498,7 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 		columns.push_back(ibTempColumn(periodName, periodField,
 		                               GetRegisterPeriod()->GetTypeDesc(), ibRegDerivedColumnId(GetRegisterPeriod()->GetMetaID(), 1),
 		                               GetRegisterPeriod()->GetSynonym(),
-		                               ibBackendQueryColumn::Kind::Computed, GetRegisterPeriod()->GetColumnIcon())
+		                               ibBackendQueryColumn::Kind::Computed, GetRegisterPeriod()->GetColumnPicture())
 		                  .PlaysInBalance(ibBalanceRole::Moment, ibSourcePeriodRank(1)));
 
 		// The coarser projections the view exposes alongside the stored period. DERIVED from the
@@ -512,11 +514,11 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 		for (const auto& u : ibRegisterUnits())
 			if (u.first > GetTotalsPeriodUnit())
 				columns.push_back(ibTempColumn(periodName + u.second,
-				                               periodField + wxT("_") + u.second,
+				                               periodField + ibT("_") + u.second,
 				                               GetRegisterPeriod()->GetTypeDesc(),
 				                               ibRegDerivedColumnId(GetRegisterPeriod()->GetMetaID(), 2 + static_cast<unsigned int>(u.first)),
-				                               wxEmptyString, ibBackendQueryColumn::Kind::Computed,
-				                               GetRegisterPeriod()->GetColumnIcon())
+				                               ibEmptyString, ibBackendQueryColumn::Kind::Computed,
+				                               GetRegisterPeriod()->GetColumnPicture())
 				                  .PlaysInBalance(ibBalanceRole::Moment, ibSourcePeriodRank(1)));   // a grain of the same period
 	}
 
@@ -554,12 +556,12 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 	// (ibAccumFigureField) — the field the view keeps, not the word a query writes.
 	// …and numbered over its resource (ibRegDerivedColumnId, from 1), `figureNo` counting that resource's figures.
 	unsigned int figureNo = 0;
-	auto add = [&](const ibValueMetaObjectAttributeBase* res, const wxString& suffix) {
+	auto add = [&](const ibValueMetaObjectAttributeBase* res, const ibString& suffix) {
 		columns.push_back(ibTempColumn(res->GetName() + suffix,
 		                               ibAccumFigureField(ibRegValueField(res), suffix),
 		                               res->GetTypeDesc(), ibRegDerivedColumnId(res->GetMetaID(), ++figureNo),
 		                               ibRegColumnCaptionOf(res->GetSynonym(), ibRegFigureCaption(suffix)),
-		                               ibBackendQueryColumn::Kind::Computed, res->GetColumnIcon()).StandsFor(res)
+		                               ibBackendQueryColumn::Kind::Computed, res->GetColumnPicture()).StandsFor(res)
 		                  .PlaysInBalance(ibRegFigureBalanceRole(suffix)));
 	};
 

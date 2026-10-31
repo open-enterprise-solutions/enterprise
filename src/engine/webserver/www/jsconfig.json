@@ -1,0 +1,14 @@
+{
+	"compilerOptions": {
+		"checkJs": true,
+		"target": "ES2022",
+		"module": "ES2022",
+		"moduleResolution": "bundler",
+		"lib": ["ES2022", "DOM", "DOM.Iterable"],
+		"noEmit": true,
+		"paths": {
+			"tabulator": ["./vendor/tabulator/6.6.1/types/index.d.ts"]
+		}
+	},
+	"include": ["src/**/*.js", "vendor/webawesome/3.14.0/webawesome.d.ts"]
+}

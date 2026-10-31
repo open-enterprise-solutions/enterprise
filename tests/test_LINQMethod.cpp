@@ -37,8 +37,8 @@ TEST(LinqMethod, TableIsNonEmpty) {
 // Catches a name typo, a duplicate, or an enum/table reordering.
 TEST(LinqMethod, EveryTableEntryNameResolvesToItsId) {
     for (const ibValue::ibLinqMethodInfo& e : ibValue::GetLinqMethodTable()) {
-        EXPECT_EQ(ibValue::FindLinqMethodByName(wxString(e.name)), (long)e.id)
-            << "method name: " << wxString(e.name).ToStdString();
+        EXPECT_EQ(ibValue::FindLinqMethodByName(ibString(e.name)), (long)e.id)
+            << "method name: " << ibString(e.name).ToStdString();
     }
 }
 

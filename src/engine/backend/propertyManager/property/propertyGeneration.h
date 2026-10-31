@@ -6,7 +6,7 @@
 
 //base property for "generation"
 class BACKEND_API ibPropertyGeneration : public ibProperty {
-	static wxVariantData* CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription());
+	static ibVariant CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription());
 public:
 
 	ibMetaDescription& GetValueAsMetaDesc() const;
@@ -17,17 +17,17 @@ public:
 	virtual ibPropertyChoiceMode GetValueList(ibPropertyChoiceList& list) override;
 
 
-	ibPropertyGeneration(ibPropertyCategory* cat, const wxString& name)
+	ibPropertyGeneration(ibPropertyCategory* cat, const ibString& name)
 		: ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject()))
 	{
 	}
 
-	ibPropertyGeneration(ibPropertyCategory* cat, const wxString& name, const wxString& label)
+	ibPropertyGeneration(ibPropertyCategory* cat, const ibString& name, const ibString& label)
 		: ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject()))
 	{
 	}
 
-	ibPropertyGeneration(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString)
+	ibPropertyGeneration(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString)
 		: ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject()))
 	{
 	}
@@ -37,9 +37,9 @@ public:
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
 
 	// The same acceptance ibPropertyRecord makes, and for the same reason: CreateValueList wraps
-	// every candidate as ibVariantDataOwner whatever family asked for the list, so a property that
+	// every candidate as ibVariantOwner whatever family asked for the list, so a property that
 	// stores the neighbour's wrapper raises on every later read. See propertyRecord.h.
-	virtual void DoSetValue(const wxVariant& val) override;
+	virtual void DoSetValue(const ibVariant& val) override;
 
 	//load & save object in control 
 

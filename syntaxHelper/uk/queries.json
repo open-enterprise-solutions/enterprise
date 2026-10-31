@@ -18,7 +18,7 @@
    "parameters": "",
    "return_descr": "",
    "example": "// агрегація з групуванням\nvar q = New Query(\n    \"SELECT Виробник, SUM(Вага) AS ЗагальнаВага \" +\n    \"FROM Catalog.Товари GROUP BY Виробник HAVING SUM(Вага) > 50\");\nvar sel = q.Execute().Select();\nwhile (sel.Next())\n    Message(sel.Виробник + \" -> \" + sel.ЗагальнаВага);",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Тонкий клієнт, Сервер",
    "see_also": [
     "cls.Query",
     "cls.QueryResult",
@@ -46,7 +46,7 @@
    "parameters": "text — текст запиту (див. «Мова запитів — огляд»).",
    "return_descr": "Execute() повертає QueryResult.",
    "example": "// один розбір — багато виконань\nvar q = New Query(\"SELECT * FROM Catalog.Товари WHERE Ціна > &П\");\nq.SetParameter(\"П\", 100);\nvar дорогі = q.Execute();\nq.SetParameter(\"П\", 10);\nvar усі = q.Execute();",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Тонкий клієнт, Сервер",
    "see_also": [
     "guide.query",
     "cls.QueryResult",
@@ -68,7 +68,7 @@
    "parameters": "",
    "return_descr": "Select() повертає QuerySelect; Unload() — Table.",
    "example": "var q = New Query(\"SELECT G.Description AS Name, G.Price AS Price FROM Catalog.Goods AS G\");\nvar t = q.Execute().Unload();\nMessage(String(t.Count()) + \" товарів, усього \" + String(t.Total(\"Price\")));",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Тонкий клієнт, Сервер",
    "see_also": [
     "cls.Query",
     "cls.QuerySelect",
@@ -91,7 +91,7 @@
    "parameters": "",
    "return_descr": "",
    "example": "// рекурсивний обхід дерева підсумків\nProcedure Walk(sel, indent) {\n    while (sel.Next()) {\n        Message(indent + sel.Склад + \" = \" + sel.Кількість);\n        if (sel.HasChildren())\n            Walk(sel.Select(), indent + \"  \");\n    }\n}",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Тонкий клієнт, Сервер",
    "see_also": [
     "cls.QueryResult",
     "q.Totals"
@@ -112,7 +112,7 @@
    "parameters": "",
    "return_descr": "",
    "example": "",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Тонкий клієнт, Сервер",
    "see_also": [
     "q.From",
     "q.GroupBy",
@@ -135,7 +135,7 @@
    "parameters": "",
    "return_descr": "",
    "example": "// залишки на дату з відбором зовні\nSELECT Номенклатура, КількістьBalance\nFROM AccumulationRegister.Залишки.Balance(&Період)\nWHERE КількістьBalance > 0",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Тонкий клієнт, Сервер",
    "see_also": [
     "q.Join",
     "q.Select",
@@ -157,7 +157,7 @@
    "parameters": "",
    "return_descr": "",
    "example": "",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Тонкий клієнт, Сервер",
    "see_also": [
     "q.From",
     "q.Where",
@@ -180,7 +180,7 @@
    "parameters": "",
    "return_descr": "",
    "example": "// IN з підзапитом\nSELECT * FROM Document.Видаткова\nWHERE Контрагент IN (SELECT Ссилка FROM Catalog.Контрагенти WHERE Регіон = &Р)",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Тонкий клієнт, Сервер",
    "see_also": [
     "q.Params",
     "q.DotWalk",
@@ -202,7 +202,7 @@
    "parameters": "",
    "return_descr": "",
    "example": "",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Тонкий клієнт, Сервер",
    "see_also": [
     "q.Select",
     "q.Totals",
@@ -224,7 +224,7 @@
    "parameters": "",
    "return_descr": "",
    "example": "",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Тонкий клієнт, Сервер",
    "see_also": [
     "q.Select",
     "q.Union",
@@ -246,7 +246,7 @@
    "parameters": "",
    "return_descr": "",
    "example": "// обхід: вузли складів -> вузли товарів (за ієрархією) -> рядки\nvar sel = q.Execute().Select();\nwhile (sel.Next()) {\n    Message(\"Склад \" + sel.Склад + \": \" + sel.Кількість);\n    var заТоварами = sel.Select();\n    while (заТоварами.Next())\n        Message(\"  \" + заТоварами.Товар + \": \" + заТоварами.Кількість);\n}",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Тонкий клієнт, Сервер",
    "see_also": [
     "cls.QuerySelect",
     "q.GroupBy",
@@ -268,7 +268,7 @@
    "parameters": "",
    "return_descr": "",
    "example": "// залишок кожного товару на початок і кінець кожного місяця\nvar q = new Query(\"SELECT T.Item AS Item, T.Period AS Period, \"\n    + \"T.QuantityOpeningBalance AS Opening, T.QuantityClosingBalance AS Closing \"\n    + \"FROM AccumulationRegister.Stock.BalanceAndTurnovers(&B, &E, Day) AS T \"\n    + \"TOTALS SUM(Opening), SUM(Closing) BY Item, Period PERIODS(MONTH)\");\nq.SetParameter(\"B\", Date(2026, 1, 1));\nq.SetParameter(\"E\", Date(2026, 3, 31, 23, 59, 59));\nvar items = q.Execute().Select();\nwhile (items.Next()) {\n    var months = items.Select();\n    while (months.Next())\n        Message(items.Item + \" \" + months.Period + \": \" + months.Opening + \" -> \" + months.Closing);\n}",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Тонкий клієнт, Сервер",
    "see_also": [
     "q.Totals",
     "q.Select"
@@ -289,7 +289,7 @@
    "parameters": "",
    "return_descr": "",
    "example": "",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Тонкий клієнт, Сервер",
    "see_also": [
     "q.Select",
     "q.OrderBy"
@@ -310,7 +310,7 @@
    "parameters": "",
    "return_descr": "",
    "example": "",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Тонкий клієнт, Сервер",
    "see_also": [
     "cls.Query",
     "q.Where",
@@ -333,7 +333,7 @@
    "parameters": "",
    "return_descr": "",
    "example": "// позначити кожну гілку об'єднання визначеним елементом\nSELECT Ссилка, value(Catalog.ВидиДок.Прихід) AS Вид FROM Document.Прибуткова\nUNION ALL\nSELECT Ссилка, value(Catalog.ВидиДок.Видаток) AS Вид FROM Document.Видаткова",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Тонкий клієнт, Сервер",
    "see_also": [
     "q.Params",
     "q.Where",
@@ -355,7 +355,7 @@
    "parameters": "",
    "return_descr": "",
    "example": "// складене посилання: реквізит є лише в частини типів реєстратора\nSELECT Реєстратор.Контрагент AS Хто, SUM(Кількість) AS К\nFROM AccumulationRegister.Залишки\nGROUP BY Реєстратор.Контрагент",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Тонкий клієнт, Сервер",
    "see_also": [
     "q.Where",
     "q.Select",
@@ -377,7 +377,7 @@
    "parameters": "",
    "return_descr": "",
    "example": "// увесь пакет, результати за позицією\nvar q = New Query(\n    \"SELECT M.Товар AS Товар, SUM(M.Кількість) AS Кількість INTO Згорнуті \" +\n    \"FROM AccumulationRegister.ТовариНаСкладах AS M GROUP BY M.Товар; \" +\n    \"SELECT f.Товар AS Товар, f.Кількість AS Кількість FROM Згорнуті AS f\");\nvar results = q.ExecuteBatch();\nvar sel = results.Get(1).Select();          // [0] — рядок із кількістю записів запиту з INTO\nwhile (sel.Next())\n    Message(String(sel.Товар) + \" = \" + String(sel.Кількість));",
-   "availability": "Designer, codeRunner, daemon, wenterprise-server",
+   "availability": "Тонкий клієнт, Сервер",
    "see_also": [
     "q.From",
     "q.GroupBy",
@@ -399,7 +399,7 @@
    "parameters": "",
    "return_descr": "Number.",
    "example": "// how much left the warehouse per weekday\nSELECT WEEKDAY(M.Period) AS Weekday, SUM(M.Quantity) AS Qty\nFROM AccumulationRegister.Stock AS M\nGROUP BY WEEKDAY(M.Period)",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Тонкий клієнт, Сервер",
    "see_also": [
     "q.PeriodBounds",
     "q.DateAdd",
@@ -421,7 +421,7 @@
    "parameters": "",
    "return_descr": "Date.",
    "example": "// everything written this quarter\nSELECT Doc.Ref AS Doc\nFROM Document.Expense AS Doc\nWHERE Doc.Date BETWEEN BEGINOFPERIOD(&AsOf, Quarter) AND ENDOFPERIOD(&AsOf, Quarter)",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Тонкий клієнт, Сервер",
    "see_also": [
     "q.DateParts",
     "q.DateAdd",
@@ -443,7 +443,7 @@
    "parameters": "",
    "return_descr": "Date.",
    "example": "// invoices past their thirty days\nSELECT Doc.Ref AS Doc\nFROM Document.Expense AS Doc\nWHERE DATEADD(Doc.Date, Day, 30) < &Today",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Тонкий клієнт, Сервер",
    "see_also": [
     "q.DateDiff",
     "q.PeriodBounds"
@@ -464,7 +464,7 @@
    "parameters": "",
    "return_descr": "Number — whole periods.",
    "example": "// how long each price held\nSELECT P.Period AS Since,\n\tDATEDIFF(P.Period, ISNULL(MIN(N.Period), &Till), Day) AS Days\nFROM InformationRegister.Prices AS P\n\tLEFT JOIN InformationRegister.Prices AS N\n\t\tON N.Item = P.Item AND N.Period > P.Period\nGROUP BY P.Item, P.Period",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Тонкий клієнт, Сервер",
    "see_also": [
     "q.DateAdd",
     "q.DateParts"
@@ -485,7 +485,7 @@
    "parameters": "",
    "return_descr": "Date.",
    "example": "SELECT Doc.Ref AS Doc\nFROM Document.Expense AS Doc\nWHERE Doc.Date BETWEEN DATETIME(2026, 1, 1) AND DATETIME(2026, 3, 31, 23, 59, 59)",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Тонкий клієнт, Сервер",
    "see_also": [
     "q.PeriodBounds",
     "q.Params"
@@ -506,7 +506,7 @@
    "parameters": "",
    "return_descr": "String.",
    "example": "// how many items per code prefix\nSELECT SUBSTRING(G.Code, 1, 3) AS Prefix, COUNT(*) AS Items\nFROM Catalog.Goods AS G\nGROUP BY SUBSTRING(G.Code, 1, 3)",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Тонкий клієнт, Сервер",
    "see_also": [
     "q.Select"
    ],
@@ -526,7 +526,7 @@
    "parameters": "",
    "return_descr": "Boolean (a predicate).",
    "example": "// the number of the document behind each movement of one kind\nSELECT\n\tCAST(M.Recorder AS Document.Expense).Number AS ExpenseNo,\n\tM.Quantity AS Qty\nFROM AccumulationRegister.Stock AS M\nWHERE VALUETYPE(M.Recorder) = TYPE(Document.Expense)",
-   "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+   "availability": "Тонкий клієнт, Сервер",
    "see_also": [
     "q.Value",
     "q.DotWalk"

@@ -8,9 +8,9 @@
 
 bool ibValueMetaObjectChartOfCharacteristicTypes::CollectContextMenu(std::vector<ibMetaMenuItem>& items)
 {
-	items.emplace_back(ibMetaMenuKind::Module, wxT("ObjectModule"), _("Open object module"), m_propertyObjectModule->GetMetaObject());
-	items.emplace_back(ibMetaMenuKind::Module, wxT("ManagerModule"), _("Open manager module"), m_propertyManagerModule->GetMetaObject());
-	items.emplace_back(wxT("PredefinedValues"), _("Open predefined values"), ID_METATREE_EDIT_PREDEFINED, g_metaAttributeCLSID);
+	items.emplace_back(ibMetaMenuKind::Module, ibT("ObjectModule"), _("Open object module"), m_propertyObjectModule->GetMetaObject());
+	items.emplace_back(ibMetaMenuKind::Module, ibT("ManagerModule"), _("Open manager module"), m_propertyManagerModule->GetMetaObject());
+	items.emplace_back(ibT("PredefinedValues"), _("Open predefined values"), ID_METATREE_EDIT_PREDEFINED, g_metaAttributeCLSID);
 	return false;
 }
 

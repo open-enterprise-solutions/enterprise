@@ -44,7 +44,7 @@ void ibValueModuleManager::ibValueMetadataUnit::FillMembers(ibMemberTable& helpe
 {
 	// The clsid rides in the (long) property-tag slot only to distinguish these members; GetPropVal
 	// dispatches by ordinal and re-supplies the clsid itself, so the narrowing is intentional and
-	// lossless-in-practice. static_cast makes it explicit (silences C4305/C4309 on the u64 clsid).
+	// lossless-in-practice. static_cast makes it explicit (silences C4305/C4309 on the std::uint64_t clsid).
 	helper.AppendProp("CommonModules", true, false, static_cast<long>(g_metaCommonModuleCLSID));
 	helper.AppendProp("CommonForms", true, false, static_cast<long>(g_metaCommonFormCLSID));
 	helper.AppendProp("CommonTemplates", true, false, static_cast<long>(g_metaCommonTemplateCLSID));

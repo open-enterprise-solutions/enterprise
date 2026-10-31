@@ -1,6 +1,7 @@
 #include "byteCode.h"
 
-#include "codeDef.h"        // the opcode vocabulary — FindCaret reads the declaration opcodes
+#include "core/compiler/codeDef.h"   // the opcode vocabulary — FindCaret reads the declaration opcodes
+#include "compileContext.h"          // DEF_VAR_SKIP — a parameter declared without a default
 
 #include <shared_mutex>
 #include <unordered_map>
@@ -21,7 +22,7 @@
 
 namespace {
 	std::shared_mutex                          g_byteCodeRegistryMutex;
-	std::unordered_map<wxString, ibByteCode*>  g_byteCodeRegistry;
+	std::unordered_map<ibString, ibByteCode*>  g_byteCodeRegistry;
 }
 
 void ibByteCode::Register(ibByteCode* bc)
@@ -29,21 +30,21 @@ void ibByteCode::Register(ibByteCode* bc)
 	if (bc == nullptr) return;
 	if (!bc->m_id.isValid()) return;
 	std::unique_lock<std::shared_mutex> lk(g_byteCodeRegistryMutex);
-	g_byteCodeRegistry[wxString(bc->m_id)] = bc;
+	g_byteCodeRegistry[ibString(bc->m_id)] = bc;
 }
 
 void ibByteCode::Unregister(const ibGuid& descId)
 {
 	if (!descId.isValid()) return;
 	std::unique_lock<std::shared_mutex> lk(g_byteCodeRegistryMutex);
-	g_byteCodeRegistry.erase(wxString(descId));
+	g_byteCodeRegistry.erase(ibString(descId));
 }
 
 ibByteCode* ibByteCode::Find(const ibGuid& descId)
 {
 	if (!descId.isValid()) return nullptr;
 	std::shared_lock<std::shared_mutex> lk(g_byteCodeRegistryMutex);
-	auto it = g_byteCodeRegistry.find(wxString(descId));
+	auto it = g_byteCodeRegistry.find(ibString(descId));
 	return it != g_byteCodeRegistry.end() ? it->second : nullptr;
 }
 
@@ -104,11 +105,11 @@ ibByteBinder::ibByteBinder(const std::vector<ibByteCode::ibByteCodeVarInfo>& var
 {
 }
 
-void ibByteBinder::SetVar(const wxString& name, ibValue* value)
+void ibByteBinder::SetVar(const ibString& name, ibValue* value)
 {
 	for (const auto& v : m_vars) {
 		if (!v.IsBindable()) continue;
-		if (!stringUtils::CompareString(v.m_strRealName, name)) continue;
+		if (!stringUtils::IsSameAs(v.m_strRealName, name)) continue;
 		m_slots[v.m_slotIndex] = value;
 		return;
 	}
@@ -199,6 +200,18 @@ long ibByteCode::FindExportProcedure(const ibString& procName) const
 	return wxNOT_FOUND;
 }
 
+bool ibByteCode::GetParamDefValue(const long lCodeLine, const long lParamNum, ibValue& pvarParamDefValue) const
+{
+	const ibByteFunction* const function = FindFunctionByEntry(lCodeLine);
+	if (function == nullptr || lParamNum < 0 || lParamNum >= (long)function->m_listParam.size())
+		return false;
+	const ibParamRunUnit& def = function->m_listParam[static_cast<size_t>(lParamNum)].m_defaultValue;
+	if (def.m_numArray == DEF_VAR_SKIP || def.m_numIndex < 0 || def.m_numIndex >= (long)m_listConst.size())
+		return false;
+	pvarParamDefValue = m_listConst[static_cast<size_t>(def.m_numIndex)];
+	return true;
+}
+
 // Bytecode-driven cross-module symbol resolution. Recursive walk:
 // self (depth 0) → m_dependencies (depth+1) → m_parent chain
 // (depth+1 per step). First match wins. depth = "frames up to root
@@ -212,13 +225,13 @@ long ibByteCode::FindExportProcedure(const ibString& procName) const
 
 namespace {
 
-ibByteCode::ResolvedFunc ResolveFunctionAt(const ibByteCode* bc, const wxString& name, int depth, int fullVisDepth)
+ibByteCode::ResolvedFunc ResolveFunctionAt(const ibByteCode* bc, const ibString& name, int depth, int fullVisDepth)
 {
 	if (bc == nullptr) return {};
 	auto it = std::find_if(bc->m_listFunc.begin(), bc->m_listFunc.end(),
 		[&](const auto& fn) {
 			if (depth > fullVisDepth && fn.IsLocal()) return false;
-			return stringUtils::CompareString(name, fn.m_strRealName);
+			return stringUtils::IsSameAs(name, fn.m_strRealName);
 		});
 	if (it != bc->m_listFunc.end())
 		return { &(*it), depth };
@@ -232,7 +245,7 @@ ibByteCode::ResolvedFunc ResolveFunctionAt(const ibByteCode* bc, const wxString&
 
 } // anonymous
 
-ibByteCode::ResolvedFunc ibByteCode::ResolveFunction(const wxString& funcName, int fullVisDepth) const
+ibByteCode::ResolvedFunc ibByteCode::ResolveFunction(const ibString& funcName, int fullVisDepth) const
 {
 	return ResolveFunctionAt(this, funcName, 0, fullVisDepth);
 }

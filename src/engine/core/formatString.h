@@ -23,13 +23,11 @@
 #include <utility>
 #include <vector>
 
-#include <wx/string.h>
-
 #include "core/fdatetime.h"
 #include "core/fnumber.h"
-#include "core/types.h"   // ibValueTypes, ibDateFractions — what a type description is asked
+#include "core/core.h"    // ibValueTypes, ibDateFractions — what a type description is asked
 
-class ibAnyValue;
+class ibVariant;
 
 // Which values a code applies to.
 enum class ibFormatKind {
@@ -46,45 +44,53 @@ enum class ibFormatCode {
 	NumberGroupSeparator,      // NGS - the character between digit groups (groups of three unless NG)
 	NumberGroupSize,           // NG  - digits per group
 	NumberZero,                // NZ  - what a zero prints as
-	DatePattern,               // DF  - yyyy/yy year, mm/m month, dd/d day, HH/H hours, MM/M minutes, SS/S seconds
+	DatePattern,               // DF  - yyyy/yy/y year, MMMM/MMM/MM/M month, dddd/ddd/dd/d day,
+	                           //       HH/H hours (hh/h on a 12-hour clock), mm/m minutes, ss/s seconds, tt AM/PM
 	DateEmpty,                 // DE  - what an empty date prints as
 	BooleanTrue,               // BT  - what True prints as
 	BooleanFalse,              // BF  - what False prints as
+	// Appended, never inserted: a code's position is the order of the constructor's tabs.
+	NumberLeadingZero,         // NLZ - pad the whole part with zeros up to ND - NFD digits
+	DateLocalFormat,           // DLF - a preset: D, DD, T, DT, DDT (date, long date, time, both, long date and time)
+	Language,                  // L   - the language the names are said in (ru, uk_UA); the thread's when absent
 };
 
 // The patterns a date pattern is usually one of. `Custom` is any other.
 enum class ibDatePreset {
 	Custom,
-	Date,                      // dd.mm.yyyy
-	DateTime,                  // dd.mm.yyyy HH:MM:SS
-	Time,                      // HH:MM:SS
-	HoursMinutes,              // HH:MM
-	MonthYear,                 // mm.yyyy
+	Date,                      // dd.MM.yyyy
+	DateTime,                  // dd.MM.yyyy HH:mm:ss
+	Time,                      // HH:mm:ss
+	HoursMinutes,              // HH:mm
+	MonthYear,                 // MM.yyyy
 	Year,                      // yyyy
-	Sortable,                  // yyyy-mm-dd
+	Sortable,                  // yyyy-MM-dd
 };
 
 struct CORE_API ibNumberFormat {
 	std::optional<int>       m_digits;             // ND
 	std::optional<int>       m_fractionDigits;     // NFD
-	std::optional<wxUniChar> m_decimalSeparator;   // NDS
-	std::optional<wxUniChar> m_groupSeparator;     // NGS
+	std::optional<ibChar> m_decimalSeparator;   // NDS
+	std::optional<ibChar> m_groupSeparator;     // NGS
 	std::optional<int>       m_groupSize;          // NG
-	std::optional<wxString>  m_zero;               // NZ
+	std::optional<ibString>  m_zero;               // NZ
+	std::optional<ibString>  m_leadingZero;        // NLZ (present = pad; the value is not read)
 
 	bool operator == (const ibNumberFormat& other) const;
 };
 
 struct CORE_API ibDateFormat {
-	std::optional<wxString>  m_pattern;            // DF
-	std::optional<wxString>  m_empty;              // DE
+	std::optional<ibString>  m_pattern;            // DF
+	std::optional<ibString>  m_empty;              // DE
+	std::optional<ibString>  m_localFormat;        // DLF - used when DF is absent
+	std::optional<ibString>  m_language;           // L   - the language of the names MMMM, MMM, dddd, ddd spell
 
 	bool operator == (const ibDateFormat& other) const;
 };
 
 struct CORE_API ibBooleanFormat {
-	std::optional<wxString>  m_true;               // BT
-	std::optional<wxString>  m_false;              // BF
+	std::optional<ibString>  m_true;               // BT
+	std::optional<ibString>  m_false;              // BF
 
 	bool operator == (const ibBooleanFormat& other) const;
 };
@@ -97,14 +103,14 @@ public:
 	ibBooleanFormat m_boolean;
 
 	// The codes Format does not read, each as written - kept, and written back after the others.
-	std::vector<std::pair<wxString, wxString>> m_other;
+	std::vector<std::pair<ibString, ibString>> m_other;
 
 	// The text read and written: `CODE=value` pairs separated by `;`. A value that is all space is a
 	// space (`NGS= ` groups digits with one), any other is trimmed.
-	static ibFormatString Parse(const wxString& text);
+	static ibFormatString Parse(const ibString& text);
 	// …written into `formatString` in place, the codes the text names. False when it names none.
-	static bool Parse(const wxString& text, ibFormatString& formatString);
-	wxString Render() const;
+	static bool Parse(const ibString& text, ibFormatString& formatString);
+	ibString Render() const;
 
 	// ⭐ THE FORMAT A TYPE DESCRIPTION GIVES, written into `formatString` in place — for a number `NFD=2`
 	// from Number(15,2), as many digits after the point as the type keeps, so the figures of a column line
@@ -142,40 +148,39 @@ public:
 	}
 
 	// What Format(value, this) prints: a number, a date and a boolean each by their own codes, any
-	// other value as its plain string. The value is either side's — the engine's ibValue, the client's —
-	// asked what every value answers (anyValue.h: its kind, its number, date, flag, emptiness and text).
-	wxString Apply(const ibAnyValue& value) const;
+	// other value as its plain string. The value is a variant — the engine's ibValue is one, the client's too —
+	// asked what every value answers (variant.h: its kind, its number, date, flag, emptiness and text).
+	ibString Apply(const ibVariant& value) const;
 
 	// …THE SAME TEXT, WRITTEN INTO `result` — the form a caller showing many values uses (a column of a
 	// report goes through here once per cell): a string reused row after row grows once, an ordinary
 	// amount is laid out on the stack (ibNumber::ToString) and a date straight from its pattern. False when
 	// the value shows as nothing.
-	bool Apply(const ibAnyValue& value, wxString& result) const;
+	bool Apply(const ibVariant& value, ibString& result) const;
 
 	// A value that can be written at all: `;` ends a pair and `=` is not kept in one, so neither
 	// can stand in a text.
-	static bool IsWritable(const wxString& text);
+	static bool IsWritable(const ibString& text);
 
 	// ONE CODE AT A TIME — the door Parse and Render go through themselves, open to a caller that edits
 	// the string by code (the MCP verb `format_string`). Get answers the value in the form it is written
 	// in, and nothing when the code is absent; Set reads a value exactly as Parse does; Clear removes it.
-	std::optional<wxString> Get(ibFormatCode code) const;
-	void Set(ibFormatCode code, const wxString& value);
+	std::optional<ibString> Get(ibFormatCode code) const;
+	void Set(ibFormatCode code, const ibString& value);
 	void Clear(ibFormatCode code);
 
 	// Every code, in the order of the tabs; a code by the name it is written with; its spelling; the
 	// values it applies to.
 	static const std::vector<ibFormatCode>& Codes();
-	static bool FindCode(const wxString& name, ibFormatCode& code);
-	static const wxChar* CodeName(ibFormatCode code);
+	static bool FindCode(const ibString& name, ibFormatCode& code);
+	static const ibChar* CodeName(ibFormatCode code);
 	static ibFormatKind KindOf(ibFormatCode code);
 
 	// A preset's pattern (empty for Custom), and the preset a pattern is (Custom when none).
-	static wxString PresetPattern(ibDatePreset preset);
-	static ibDatePreset PresetOf(const wxString& pattern);
+	static ibString PresetPattern(ibDatePreset preset);
+	static ibDatePreset PresetOf(const ibString& pattern);
 
 	bool operator == (const ibFormatString& other) const;
-	bool operator != (const ibFormatString& other) const { return !(*this == other); }
 };
 
 #endif

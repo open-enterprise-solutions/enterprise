@@ -15,19 +15,19 @@ ibQueryableFactory::ibQueryableFactory(ib::AppDataCtorToken)
 {
 }
 
-wxString ibQueryableFactory::Key(const wxString& ns, const wxString& name)
+ibString ibQueryableFactory::Key(const ibString& ns, const ibString& name)
 {
-	return (ns + wxT("|") + name).Upper();   // namespace + name, case-insensitive
+	return (ns + ibT("|") + name).Upper();   // namespace + name, case-insensitive
 }
 
 void ibQueryableFactory::Register(ibQueryableSourceDescriptor* descriptor)
 {
 	if (descriptor == nullptr)
 		return;
-	const wxString ns = descriptor->GetNamespace();
+	const ibString ns = descriptor->GetNamespace();
 	if (ns.empty())                   // unsupported metaclass (no namespace) — not a query source
 		return;
-	const wxString key = Key(ns, descriptor->GetName());
+	const ibString key = Key(ns, descriptor->GetName());
 	UnindexById(key);                 // whatever stood under this name before is replaced
 	m_descriptors[key] = descriptor;  // non-owning
 	IndexById(key, descriptor);
@@ -37,7 +37,7 @@ void ibQueryableFactory::Unregister(ibQueryableSourceDescriptor* descriptor)
 {
 	if (descriptor == nullptr)
 		return;
-	const wxString key = Key(descriptor->GetNamespace(), descriptor->GetName());
+	const ibString key = Key(descriptor->GetNamespace(), descriptor->GetName());
 	auto it = m_descriptors.find(key);
 	if (it != m_descriptors.end() && it->second == descriptor) {   // same pointer only
 		UnindexById(key);
@@ -57,7 +57,7 @@ void ibQueryableFactory::Clear()
 }
 
 // The id is the one the walk reads — the descriptor's own queryable, asked with no arguments.
-void ibQueryableFactory::IndexById(const wxString& key, ibQueryableSourceDescriptor* descriptor)
+void ibQueryableFactory::IndexById(const ibString& key, ibQueryableSourceDescriptor* descriptor)
 {
 	const ibBackendQueryable* q = descriptor->CreateQueryable(nullptr, 0);
 	if (q == nullptr)
@@ -67,7 +67,7 @@ void ibQueryableFactory::IndexById(const wxString& key, ibQueryableSourceDescrip
 	m_tableIdOfKey[key] = tableId;
 }
 
-void ibQueryableFactory::UnindexById(const wxString& key)
+void ibQueryableFactory::UnindexById(const ibString& key)
 {
 	const auto filed = m_tableIdOfKey.find(key);
 	if (filed == m_tableIdOfKey.end())
@@ -81,23 +81,23 @@ void ibQueryableFactory::UnindexById(const wxString& key)
 	m_tableIdOfKey.erase(filed);
 }
 
-bool ibQueryableFactory::HasNamespace(const wxString& ns) const
+bool ibQueryableFactory::HasNamespace(const ibString& ns) const
 {
-	const wxString prefix = (ns + wxT("|")).Upper();
-	for (const std::pair<const wxString, ibQueryableSourceDescriptor*>& kv : m_descriptors)
+	const ibString prefix = (ns + ibT("|")).Upper();
+	for (const std::pair<const ibString, ibQueryableSourceDescriptor*>& kv : m_descriptors)
 		if (kv.first.StartsWith(prefix))
 			return true;
 	return false;
 }
 
-const ibBackendQueryable* ibQueryableFactory::Resolve(const wxString& ns, const wxString& objectName,
+const ibBackendQueryable* ibQueryableFactory::Resolve(const ibString& ns, const ibString& objectName,
                                                       ibValue** paParams, long lSizeArray) const
 {
 	auto it = m_descriptors.find(Key(ns, objectName));
 	return it != m_descriptors.end() ? it->second->CreateQueryable(paParams, lSizeArray) : nullptr;
 }
 
-ibQueryableSourceDescriptor* ibQueryableFactory::FindDescriptor(const wxString& ns, const wxString& objectName) const
+ibQueryableSourceDescriptor* ibQueryableFactory::FindDescriptor(const ibString& ns, const ibString& objectName) const
 {
 	const auto it = m_descriptors.find(Key(ns, objectName));
 	return it != m_descriptors.end() ? it->second : nullptr;
@@ -107,7 +107,7 @@ std::vector<ibQueryableSourceDescriptor*> ibQueryableFactory::GetDescriptors() c
 {
 	std::vector<ibQueryableSourceDescriptor*> result;
 	result.reserve(m_descriptors.size());
-	for (const std::pair<const wxString, ibQueryableSourceDescriptor*>& kv : m_descriptors)
+	for (const std::pair<const ibString, ibQueryableSourceDescriptor*>& kv : m_descriptors)
 		result.push_back(kv.second);
 	return result;
 }
@@ -127,7 +127,7 @@ ibQueryableSourceDescriptor* ibQueryableFactory::ResolveDescriptorById(ibMetaID 
 			return candidate;
 	}
 
-	for (const std::pair<const wxString, ibQueryableSourceDescriptor*>& kv : m_descriptors) {
+	for (const std::pair<const ibString, ibQueryableSourceDescriptor*>& kv : m_descriptors) {
 		const ibBackendQueryable* q = kv.second->CreateQueryable(nullptr, 0);
 		if (q != nullptr && q->GetQueryTableId() == tableId)
 			return kv.second;
@@ -145,7 +145,7 @@ const ibBackendQueryable* ibQueryableFactory::ResolveById(ibMetaID tableId) cons
 // ibMetaQueryableFactory — per-config: own registry FIRST, then DESCEND to the global factory on a miss.
 //////////////////////////////////////////////////////////////////////
 
-const ibBackendQueryable* ibMetaQueryableFactory::Resolve(const wxString& ns, const wxString& objectName,
+const ibBackendQueryable* ibMetaQueryableFactory::Resolve(const ibString& ns, const ibString& objectName,
                                                           ibValue** paParams, long lSizeArray) const
 {
 	if (const ibBackendQueryable* q = ibQueryableFactory::Resolve(ns, objectName, paParams, lSizeArray))
@@ -154,7 +154,7 @@ const ibBackendQueryable* ibMetaQueryableFactory::Resolve(const wxString& ns, co
 	return global != nullptr ? global->Resolve(ns, objectName, paParams, lSizeArray) : nullptr;
 }
 
-ibQueryableSourceDescriptor* ibMetaQueryableFactory::FindDescriptor(const wxString& ns, const wxString& objectName) const
+ibQueryableSourceDescriptor* ibMetaQueryableFactory::FindDescriptor(const ibString& ns, const ibString& objectName) const
 {
 	if (ibQueryableSourceDescriptor* own = ibQueryableFactory::FindDescriptor(ns, objectName))
 		return own;

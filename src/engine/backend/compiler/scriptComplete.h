@@ -91,8 +91,8 @@ enum class ibNameOrigin {
 // arrive from the same place and differ only in how far they reach. Both are read off the entry's
 // kind (ibVarKind / ibFnKind), so neither is a second saying of anything.
 struct ibCaretName {
-	wxString     m_name;
-	wxString     m_signature;              // callables only — the call form, built from the declared parameters
+	ibString     m_name;
+	ibString     m_signature;              // callables only — the call form, built from the declared parameters
 	ibNameOrigin m_origin = ibNameOrigin::Declared;
 	bool         m_callable = false;
 	bool         m_returnsValue = false;   // a procedure where a value is wanted is a compile error
@@ -156,9 +156,9 @@ struct ibCaretValue {
 // means to step further picks one — but neither is made to guess which branch it was given.
 //
 // Empty with a false return means nothing resolved; one entry is the ordinary case.
-BACKEND_API bool ibValueAtCaret(const wxString& text, unsigned int caret,
+BACKEND_API bool ibValueAtCaret(const ibString& text, unsigned int caret,
 	const ibValueMetaObject* moduleObject, std::vector<ibCaretValue>& outValues,
-	wxString* outRefusal = nullptr);
+	ibString* outRefusal = nullptr);
 
 // ONE DECLARED TYPE OF A FIELD: the class the metadata registered, and the name a script writes for
 // it. Both, because the two readers want different halves and neither can recover the other's — a
@@ -171,7 +171,7 @@ BACKEND_API bool ibValueAtCaret(const wxString& text, unsigned int caret,
 // took out every chain whose object had a reference attribute.
 struct ibFieldType {
 	ibClassID m_class = 0;
-	wxString  m_name;
+	ibString  m_name;
 };
 
 // ⭐⭐ WHAT A FIELD IS DECLARED AS — and it is the SAME question the walk asks when it widens, so it
@@ -187,7 +187,7 @@ struct ibFieldType {
 // False when the owner is not a thing with fields of its own, or has no such field — a platform
 // property rather than a declared one. `moduleObject` is the door to the metadata, as above.
 BACKEND_API bool ibFieldTypesOf(const ibValueMetaObject* moduleObject, const ibValue& owner,
-	const wxString& field, std::vector<ibFieldType>& outTypes);
+	const ibString& field, std::vector<ibFieldType>& outTypes);
 
 // ⭐ THE OTHER HALF OF THE SAME QUESTION, off the same compile: what may be written HERE when the
 // caret is not after a dot — every name in scope at that point. The two doors differ in what they
@@ -206,7 +206,7 @@ BACKEND_API bool ibFieldTypesOf(const ibValueMetaObject* moduleObject, const ibV
 // globals, the parent's exports and its protected, which is the ladder as the language draws it
 // (Max, 2026-09-07). Listing more than that would offer names that cannot compile, and a completion
 // list that suggests an error is worse than one that says nothing.
-BACKEND_API bool ibNamesAtCaret(const wxString& text, unsigned int caret,
+BACKEND_API bool ibNamesAtCaret(const ibString& text, unsigned int caret,
 	const ibValueMetaObject* moduleObject, std::vector<ibCaretName>& outNames);
 
 // ⭐⭐ WHAT THE COMPILER UNDERSTOOD ABOUT A QUERY — the third question off the same artefact.
@@ -227,12 +227,12 @@ BACKEND_API bool ibNamesAtCaret(const wxString& text, unsigned int caret,
 // the walk what fills that cell and the answer is a SAMPLE of the row — which is exactly what the
 // caret's own question asks one hop further along. Two doors, one machine, and neither can drift.
 struct ibQueryOutlineBinding {
-	wxString m_name;          // as the person wrote it
-	wxString m_origin;        // "from" · "let" · "join" · "group" · "restrict"
+	ibString m_name;          // as the person wrote it
+	ibString m_origin;        // "from" · "let" · "join" · "group" · "restrict"
 	// The frame cell the row lives in — the same number the instructions carry. Declared as the
 	// operand's own width (`wxLongLong_t`, byteCode.h) rather than a `long`, so the number that
 	// travels is the number that was written.
-	wxLongLong_t m_rowCell = 0;
+	long long m_rowCell = 0;
 
 	// ⭐⭐ WHAT THIS NAME OFFERS — the row's own fields, read by asking the source for a sample of
 	// what it yields, exactly as a `foreach` variable is answered after a dot. Empty when the source
@@ -243,12 +243,12 @@ struct ibQueryOutlineBinding {
 	// restriction's names are LAMBDA PARAMETERS — one set per clause — with no cell of the frame to
 	// resolve, and what fills them is decided by the pipeline verb that receives the lambda. The
 	// names, their origins and the text are what a restriction has to give, and it gives them.
-	std::vector<wxString> m_offers;
+	std::vector<ibString> m_offers;
 };
 
 struct ibQueryOutline {
 	std::vector<ibQueryOutlineBinding> m_bindings;
-	std::vector<wxString>              m_columns;    // what the answer's table will be made of
+	std::vector<ibString>              m_columns;    // what the answer's table will be made of
 
 	// WHICH OF THE TWO THINGS THIS IS — a query, or a `restrict` that narrows one. Said outright
 	// rather than left to be inferred from "it has no columns", which is also true of a query the
@@ -256,7 +256,7 @@ struct ibQueryOutline {
 	bool     m_isRestrict      = false;
 
 	bool     m_groups          = false;
-	wxString m_groupInto;                            // empty unless `group … into <name>`
+	ibString m_groupInto;                            // empty unless `group … into <name>`
 	bool     m_orders          = false;
 	// One per ordering key, in the order written: whether that key runs descending. Each key has its own
 	// way (`orderby a, b descending, c`), so one flag for the query could only have said one of them.
@@ -269,7 +269,7 @@ struct ibQueryOutline {
 	// text is not regenerated from the structure, it is HANDED BACK — the compiler noted where the
 	// query began and where it ended (byteCodeLINQ.h), and those numbers are what make editing a
 	// query and re-reading its shape one loop rather than two representations to keep in step.
-	wxString     m_text;
+	ibString     m_text;
 	unsigned int m_textFrom = 0;
 	unsigned int m_textTo   = 0;
 };
@@ -280,8 +280,8 @@ struct ibQueryOutline {
 //
 // `metaData` is the configuration the snippet is judged inside — passed, never reached for, since
 // several can be open. Null answers about the bare language.
-BACKEND_API std::vector<ibQueryOutline> ibOutlineScriptQueries(const wxString& text,
-	const wxString& moduleName = wxT("module"),
+BACKEND_API std::vector<ibQueryOutline> ibOutlineScriptQueries(const ibString& text,
+	const ibString& moduleName = ibT("module"),
 	const class ibMetaData* metaData = nullptr);
 
 #endif

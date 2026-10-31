@@ -106,7 +106,7 @@ void ibValueRecordDataObjectReport::FillDataMembers(ibMemberTable& helper) const
 	if (metaObject == nullptr)
 		return;
 
-	wxString objectName;
+	ibString objectName;
 	for (auto* metaComposer : metaObject->GetComposerArrayObject()) {
 		if (metaComposer == nullptr || metaComposer->IsDeleted())
 			continue;

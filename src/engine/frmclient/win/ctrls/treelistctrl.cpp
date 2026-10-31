@@ -18,10 +18,6 @@
 // headers
 // ---------------------------------------------------------------------------
 
-#if defined(__GNUG__) && !defined(__APPLE__)
-#pragma implementation "treelistctrl.h"
-#endif
-
 // For compilers that support precompilation, includes "wx.h".
 #include "wx/wxprec.h"
 
@@ -598,6 +594,8 @@ public:
 	// overridden base class virtuals
 	virtual bool SetBackgroundColour(const wxColour& colour);
 	virtual bool SetForegroundColour(const wxColour& colour);
+	// the content moved, by whatever scrolled it — the scrollbar, the keyboard, Scroll(): the header follows
+	virtual void ScrollWindow(int dx, int dy, const wxRect* rect = nullptr) override;
 
 	// drop over item
 	void SetDragItem(const wxTreeItemId& item = (wxTreeItemId*)nullptr);
@@ -3435,7 +3433,7 @@ void ibTreeListMainWindow::PaintItem(ibTreeListItem * item, wxDC & dc) {
 	int text_h = 0;
 	dc.GetTextExtent(item->GetText(GetMainColumn()).size() > 0
 		? item->GetText(GetMainColumn())
-		: _T("M"),  // dummy text to avoid zero height and no highlight width
+		: wxString(_T("M")),  // dummy text to avoid zero height and no highlight width
 		nullptr, &text_h);
 
 	// determine background and show it
@@ -4540,12 +4538,15 @@ void ibTreeListMainWindow::OnScroll(wxScrollWinEvent & event) {
 	// send event to ibTreeListCtrl (for user code)
 	if (m_owner->GetEventHandler()->ProcessEvent(event)) return; // handled (and not skipped) in user code
 
-	// HandleOnScroll() is wxScrollHelper's own handler and is what every port ends up in.
-	// The GTK branch used to call wxScrolledWindow::OnScroll(), which no longer exists —
-	// it was a passthrough to this same helper, so the split bought nothing.
-	HandleOnScroll(event);
+	// Skipped, the event goes on to wxScrollHelper, which scrolls — its HandleOnScroll() is private since wx 3.3.4.
+	event.Skip();
+}
 
-	if (event.GetOrientation() == wxHORIZONTAL) {
+void ibTreeListMainWindow::ScrollWindow(int dx, int dy, const wxRect* rect) {
+
+	wxScrolledWindow::ScrollWindow(dx, dy, rect);
+
+	if (dx != 0) {
 		m_owner->GetHeaderWindow()->Refresh();
 		m_owner->GetHeaderWindow()->Update();
 	}
@@ -4558,7 +4559,7 @@ void ibTreeListMainWindow::CalculateSize(ibTreeListItem * item, wxDC & dc) {
 	dc.SetFont(GetItemFont(item));
 	dc.GetTextExtent(item->GetText(m_main_column).size() > 0
 		? item->GetText(m_main_column)
-		: _T(" "),  // blank to avoid zero height and no highlight width
+		: wxString(_T(" ")),  // blank to avoid zero height and no highlight width
 		&text_w, &text_h);
 	// restore normal font
 	dc.SetFont(m_normalFont);

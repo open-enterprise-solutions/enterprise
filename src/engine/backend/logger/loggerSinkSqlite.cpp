@@ -3,14 +3,14 @@
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/databaseLayer/preparedStatement.h"
+#include "core/fileSystem.h"
 
 #include <wx/filename.h>
-#include <wx/log.h>
 
-ibLoggerSinkSqlite::ibLoggerSinkSqlite(const wxString& dir)
+ibLoggerSinkSqlite::ibLoggerSinkSqlite(const ibString& dir)
     : m_dir(dir)
 {
-    if (!m_dir.IsEmpty() && !wxFileName::DirExists(m_dir))
+    if (!m_dir.IsEmpty() && !ibDirExists(m_dir))
         wxFileName::Mkdir(m_dir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
 }
 
@@ -19,17 +19,17 @@ ibLoggerSinkSqlite::~ibLoggerSinkSqlite()
     CloseCurrent();
 }
 
-wxString ibLoggerSinkSqlite::BuildPath(int year, int month) const
+ibString ibLoggerSinkSqlite::BuildPath(int year, int month) const
 {
-    const wxString name = wxString::Format(wxT("oes_%04d_%02d.olg"), year, month);
-    return m_dir + wxFileName::GetPathSeparator() + name;
+    const ibString name = ibString::Format(ibT("oes_%04d_%02d.olg"), year, month);
+    return m_dir + ibFILE_SEP_PATH + name;
 }
 
 bool ibLoggerSinkSqlite::EnsureSchema()
 {
     if (!m_db || !m_db->IsOpen()) return false;
     try {
-        m_db->RunQuery(wxT(
+        m_db->RunQuery(ibT(
             "CREATE TABLE IF NOT EXISTS log_entry ("
             " id INTEGER PRIMARY KEY AUTOINCREMENT,"
             " ts_ms INTEGER NOT NULL,"
@@ -43,13 +43,13 @@ bool ibLoggerSinkSqlite::EnsureSchema()
             " ref_guid TEXT,"
             " ref_meta_id INTEGER,"
             " details BLOB)"));
-        m_db->RunQuery(wxT("CREATE INDEX IF NOT EXISTS ix_log_ts ON log_entry(ts_ms)"));
-        m_db->RunQuery(wxT("CREATE INDEX IF NOT EXISTS ix_log_level_ts ON log_entry(level, ts_ms)"));
+        m_db->RunQuery(ibT("CREATE INDEX IF NOT EXISTS ix_log_ts ON log_entry(ts_ms)"));
+        m_db->RunQuery(ibT("CREATE INDEX IF NOT EXISTS ix_log_level_ts ON log_entry(level, ts_ms)"));
         // Drill-down: "every audit row touching this object" — viewer
         // joins on ref_guid when admin clicks on a record-source row.
-        m_db->RunQuery(wxT("CREATE INDEX IF NOT EXISTS ix_log_ref ON log_entry(ref_guid)"));
-        m_db->RunQuery(wxT("PRAGMA journal_mode=WAL"));
-        m_db->RunQuery(wxT("PRAGMA synchronous=NORMAL"));
+        m_db->RunQuery(ibT("CREATE INDEX IF NOT EXISTS ix_log_ref ON log_entry(ref_guid)"));
+        m_db->RunQuery(ibT("PRAGMA journal_mode=WAL"));
+        m_db->RunQuery(ibT("PRAGMA synchronous=NORMAL"));
         return true;
     } catch (...) {
         return false;
@@ -74,7 +74,7 @@ bool ibLoggerSinkSqlite::EnsureOpenForMonth(int year, int month)
 
     CloseCurrent();
     m_db = std::make_shared<ibDatabaseLayerSQLite>();
-    const wxString path = BuildPath(year, month);
+    const ibString path = BuildPath(year, month);
     if (!m_db->Open(path)) {
         m_db.reset();
         return false;
@@ -109,14 +109,14 @@ void ibLoggerSinkSqlite::WriteBatch(const std::vector<ibLogEntry>& batch)
     // that must stay outside the main pool's bookkeeping.
     bool inTx = false;
     try {
-        m_db->RunQuery(wxT("BEGIN"));
+        m_db->RunQuery(ibT("BEGIN"));
         inTx = true;
-        ibPreparedStatement* raw = m_db->PrepareStatement(wxT(
+        ibPreparedStatement* raw = m_db->PrepareStatement(ibT(
             "INSERT INTO log_entry (ts_ms, level, session_id, user_name, host,"
             " source, event_type, message, ref_guid, ref_meta_id, details)"
             " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
         if (raw == nullptr) {
-            m_db->RunQuery(wxT("ROLLBACK"));
+            m_db->RunQuery(ibT("ROLLBACK"));
             return;
         }
         ibStatementGuard stmt(m_db.get(), raw);
@@ -141,11 +141,11 @@ void ibLoggerSinkSqlite::WriteBatch(const std::vector<ibLogEntry>& batch)
                 raw->SetParamNull(11);
             raw->RunQuery();
         }
-        m_db->RunQuery(wxT("COMMIT"));
+        m_db->RunQuery(ibT("COMMIT"));
         inTx = false;
     } catch (...) {
         if (inTx) {
-            try { m_db->RunQuery(wxT("ROLLBACK")); } catch (...) {}
+            try { m_db->RunQuery(ibT("ROLLBACK")); } catch (...) {}
         }
     }
 }
@@ -153,5 +153,5 @@ void ibLoggerSinkSqlite::WriteBatch(const std::vector<ibLogEntry>& batch)
 void ibLoggerSinkSqlite::Flush()
 {
     if (!m_db || !m_db->IsOpen()) return;
-    try { m_db->RunQuery(wxT("PRAGMA wal_checkpoint(PASSIVE)")); } catch (...) {}
+    try { m_db->RunQuery(ibT("PRAGMA wal_checkpoint(PASSIVE)")); } catch (...) {}
 }

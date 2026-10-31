@@ -16,8 +16,8 @@ class ibValueTextBox : public ibValueWindow {
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);                   //attribute value
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//load & save object in control
 	virtual bool ReadData(const ibDataNode& node);

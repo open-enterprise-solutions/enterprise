@@ -13,7 +13,6 @@
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/system/systemManager.h"
 
-#include "core/fileSystem/fs.h"
 //*********************************************************************************************
 //*                          ObjectChartOfCharacteristicTypesValue                             *
 //*********************************************************************************************
@@ -33,7 +32,7 @@ ibValueRecordDataObjectChartOfCharacteristicTypes::ibValueRecordDataObjectChartO
 const ibSourceExplorer* ibValueRecordDataObjectChartOfCharacteristicTypes::GetSourceExplorer() const
 {
 	if (!m_sourceExplorer.Reset(m_metaObject->GetMetaData()->GetFactoryCountChanges(),
-		wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
+		ibT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
 		false))
 		return &m_sourceExplorer;   // built at this version of the metadata already — read as it is
 
@@ -138,18 +137,18 @@ void ibValueRecordDataObjectChartOfCharacteristicTypes::FillMethods(ibMemberTabl
 	// as a moment -- for a period boundary, for an ordering, for "everything up to THIS one". The
 	// families with a date of their own add it; the rest carry the reference alone, which is an
 	// identity with no point on a timeline rather than a date invented to fill the slot.
-	helper.AppendFunc(wxT("PointInTime"), wxT("PointInTime()"));
-	helper.AppendFunc(wxT("IsNew"), wxT("IsNew()"));
-	helper.AppendFunc(wxT("Copy"), wxT("Copy()"));
-	helper.AppendFunc(wxT("Fill"), 1, wxT("Fill(object)"));
-	helper.AppendFunc(wxT("Write"), wxT("Write()"));
-	helper.AppendFunc(wxT("Delete"), wxT("Delete()"));
-	helper.AppendFunc(wxT("Modified"), wxT("Modified()"));
-	helper.AppendFunc(wxT("GetFormObject"), 3, wxT("GetFormObject(name : string, owner : any , id : guid)"));
-	helper.AppendFunc(wxT("GetTemplate"), 1, wxT("GetTemplate(name : string)"));
-	helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
-	helper.AppendProc(wxT("Lock"),   wxT("Lock()"));
-	helper.AppendProc(wxT("Unlock"), wxT("Unlock()"));
+	helper.AppendFunc(ibT("PointInTime"), ibT("PointInTime()"));
+	helper.AppendFunc(ibT("IsNew"), ibT("IsNew()"));
+	helper.AppendFunc(ibT("Copy"), ibT("Copy()"));
+	helper.AppendFunc(ibT("Fill"), 1, ibT("Fill(object)"));
+	helper.AppendFunc(ibT("Write"), ibT("Write()"));
+	helper.AppendFunc(ibT("Delete"), ibT("Delete()"));
+	helper.AppendFunc(ibT("Modified"), ibT("Modified()"));
+	helper.AppendFunc(ibT("GetFormObject"), 3, ibT("GetFormObject(name : string, owner : any , id : guid)"));
+	helper.AppendFunc(ibT("GetTemplate"), 1, ibT("GetTemplate(name : string)"));
+	helper.AppendFunc(ibT("GetMetadata"), ibT("GetMetadata()"));
+	helper.AppendProc(ibT("Lock"),   ibT("Lock()"));
+	helper.AppendProc(ibT("Unlock"), ibT("Unlock()"));
 }
 
 bool ibValueRecordDataObjectChartOfCharacteristicTypes::SetPropVal(const long lPropNum, const ibValue& varPropVal)

@@ -14,6 +14,7 @@
 
 #include "dataview.h"
 #include "frmclient/win/picture.h"   // ibProtocolPictureById — a row's state picture, by its id, as the client was sent it
+#include "frmclient/win/typeconv.h"  // ColourToWxColour — an item's colours are the model's data
 #ifndef WX_PRECOMP
 #ifdef __WXMSW__
 #include <wx/app.h>          // GetRegisteredClassName()
@@ -1132,20 +1133,20 @@ ibDataViewCustomRenderer::ibDataViewCustomRenderer(const wxString& varianttype,
 #if wxUSE_ACCESSIBILITY
 wxString ibDataViewCustomRenderer::GetAccessibleDescription() const
 {
-	wxVariant val;
+	ibVariant val;
 	GetValue(val);
 
 	wxString strVal;
-	if (val.IsType(wxS("bool")))
+	if (val.GetType() == ibValueTypes::TYPE_BOOLEAN)
 	{
 		/* TRANSLATORS: Name of Boolean true value */
-		strVal = val.GetBool() ? _("true")
+		strVal = val.GetBoolean() ? _("true")
 			/* TRANSLATORS: Name of Boolean false value */
 			: _("false");
 	}
 	else
 	{
-		strVal = val.MakeString();
+		strVal = val.GetString();
 	}
 
 	return strVal;
@@ -1195,7 +1196,7 @@ void ibDataViewTextRenderer::EnableMarkup(bool enable)
 }
 #endif // wxUSE_MARKUP
 
-bool ibDataViewTextRenderer::SetValue(const wxVariant& value)
+bool ibDataViewTextRenderer::SetValue(const ibVariant& value)
 {
 	m_text = value.GetString();
 
@@ -1207,7 +1208,7 @@ bool ibDataViewTextRenderer::SetValue(const wxVariant& value)
 	return true;
 }
 
-bool ibDataViewTextRenderer::GetValue(wxVariant& WXUNUSED(value)) const
+bool ibDataViewTextRenderer::GetValue(ibVariant& WXUNUSED(value)) const
 {
 	return false;
 }
@@ -1229,12 +1230,12 @@ bool ibDataViewTextRenderer::HasEditorCtrl() const
 }
 
 wxWindow* ibDataViewTextRenderer::CreateEditorCtrl(wxWindow* parent,
-	wxRect labelRect, const wxVariant& value)
+	wxRect labelRect, const ibVariant& value)
 {
-	return CreateEditorTextCtrl(parent, labelRect, value);
+	return CreateEditorTextCtrl(parent, labelRect, value.GetString());
 }
 
-bool ibDataViewTextRenderer::GetValueFromEditorCtrl(wxWindow* editor, wxVariant& value)
+bool ibDataViewTextRenderer::GetValueFromEditorCtrl(wxWindow* editor, ibVariant& value)
 {
 	wxTextCtrl* text = (wxTextCtrl*)editor;
 	value = text->GetValue();
@@ -1268,7 +1269,7 @@ wxSize ibDataViewTextRenderer::GetSize() const
 			ibDataViewCtrl* const view = GetView();
 			wxClientDC dc(view);
 			if (GetAttr().HasFont())
-				dc.SetFont(GetAttr().GetEffectiveFont(view->GetFont()));
+				dc.SetFont(ibEffectiveFont(GetAttr(), view->GetFont()));
 
 			return m_markupText->Measure(dc);
 		}
@@ -1293,44 +1294,17 @@ ibDataViewBitmapRenderer::ibDataViewBitmapRenderer(const wxString& varianttype,
 {
 }
 
-bool ibDataViewBitmapRenderer::SetValue(const wxVariant& value)
+bool ibDataViewBitmapRenderer::SetValue(const ibVariant& value)
 {
-	if (value.GetType() == wxT("wxBitmapBundle"))
-	{
-		m_bitmapBundle << value;
-	}
-	else if (value.GetType() == wxT("wxBitmap"))
-	{
-		wxBitmap bitmap;
-		bitmap << value;
-		m_bitmapBundle = wxBitmapBundle(bitmap);
-	}
-	else if (value.GetType() == wxT("wxIcon"))
-	{
-		wxIcon icon;
-		icon << value;
-		m_bitmapBundle = wxBitmapBundle(icon);
-	}
-	else
-	{
-		m_bitmapBundle.Clear();
-	}
-
+	// A picture in a cell is the picture of an icon text — its text is not shown here.
+	const ibDataViewIconText* const iconText = value.ConvertToType<ibDataViewIconText>();
+	m_bitmapBundle = iconText != nullptr ? iconText->GetBitmapBundle() : wxBitmapBundle();
 	return true;
 }
 
-bool ibDataViewBitmapRenderer::GetValue(wxVariant& WXUNUSED(value)) const
+bool ibDataViewBitmapRenderer::GetValue(ibVariant& WXUNUSED(value)) const
 {
 	return false;
-}
-
-bool
-ibDataViewBitmapRenderer::IsCompatibleVariantType(const wxString& variantType) const
-{
-	// We can accept values of any types checked by SetValue().
-	return variantType == wxS("wxBitmapBundle")
-		|| variantType == wxS("wxBitmap")
-		|| variantType == wxS("wxIcon");
 }
 
 #if wxUSE_ACCESSIBILITY
@@ -1375,14 +1349,14 @@ ibDataViewToggleRenderer::ibDataViewToggleRenderer(const wxString& varianttype,
 	m_radio = false;
 }
 
-bool ibDataViewToggleRenderer::SetValue(const wxVariant& value)
+bool ibDataViewToggleRenderer::SetValue(const ibVariant& value)
 {
-	m_toggle = value.GetBool();
+	m_toggle = value.GetBoolean();
 
 	return true;
 }
 
-bool ibDataViewToggleRenderer::GetValue(wxVariant& WXUNUSED(value)) const
+bool ibDataViewToggleRenderer::GetValue(ibVariant& WXUNUSED(value)) const
 {
 	return false;
 }
@@ -1468,9 +1442,9 @@ ibDataViewProgressRenderer::ibDataViewProgressRenderer(const wxString& label,
 	m_value = 0;
 }
 
-bool ibDataViewProgressRenderer::SetValue(const wxVariant& value)
+bool ibDataViewProgressRenderer::SetValue(const ibVariant& value)
 {
-	m_value = (long)value;
+	m_value = value.GetInteger();
 
 	if (m_value < 0) m_value = 0;
 	if (m_value > 100) m_value = 100;
@@ -1478,7 +1452,7 @@ bool ibDataViewProgressRenderer::SetValue(const wxVariant& value)
 	return true;
 }
 
-bool ibDataViewProgressRenderer::GetValue(wxVariant& value) const
+bool ibDataViewProgressRenderer::GetValue(ibVariant& value) const
 {
 	value = (long)m_value;
 	return true;
@@ -1496,7 +1470,7 @@ ibDataViewProgressRenderer::Render(wxRect rect, wxDC* dc, int WXUNUSED(state))
 {
 	const ibDataViewItemAttr& attr = GetAttr();
 	if (attr.HasColour())
-		dc->SetBackground(attr.GetColour());
+		dc->SetBackground(typeConv::ColourToWxColour(attr.GetColour()));
 
 	// This is a hack, but native renderers don't support using custom colours,
 	// but typically gauge colour is important (e.g. it's commonly green/red to
@@ -1538,13 +1512,14 @@ ibDataViewIconTextRenderer::ibDataViewIconTextRenderer(
 	SetAlignment(align);
 }
 
-bool ibDataViewIconTextRenderer::SetValue(const wxVariant& value)
+bool ibDataViewIconTextRenderer::SetValue(const ibVariant& value)
 {
-	m_value << value;
+	const ibDataViewIconText* const iconText = value.ConvertToType<ibDataViewIconText>();
+	m_value = iconText != nullptr ? *iconText : ibDataViewIconText(value.GetString());
 	return true;
 }
 
-bool ibDataViewIconTextRenderer::GetValue(wxVariant& WXUNUSED(value)) const
+bool ibDataViewIconTextRenderer::GetValue(ibVariant& WXUNUSED(value)) const
 {
 	return false;
 }
@@ -1590,15 +1565,14 @@ wxSize ibDataViewIconTextRenderer::GetSize() const
 	return dvc->FromDIP(wxSize(80, 20));
 }
 
-wxWindow* ibDataViewIconTextRenderer::CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const wxVariant& value)
+wxWindow* ibDataViewIconTextRenderer::CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const ibVariant& value)
 {
-	ibDataViewIconText iconText;
-	iconText << value;
+	const ibDataViewIconText* const iconText = value.ConvertToType<ibDataViewIconText>();
 
-	wxString text = iconText.GetText();
+	wxString text = iconText != nullptr ? iconText->GetText() : wxString(value.GetString());
 
 	// adjust the label rect to take the width of the icon into account
-	const wxBitmapBundle& bb = iconText.GetBitmapBundle();
+	const wxBitmapBundle bb = iconText != nullptr ? iconText->GetBitmapBundle() : wxBitmapBundle();
 	if (bb.IsOk())
 	{
 		wxWindow* const dvc = GetView();
@@ -1611,22 +1585,19 @@ wxWindow* ibDataViewIconTextRenderer::CreateEditorCtrl(wxWindow* parent, wxRect 
 	return CreateEditorTextCtrl(parent, labelRect, text);
 }
 
-bool ibDataViewIconTextRenderer::GetValueFromEditorCtrl(wxWindow* editor, wxVariant& value)
+bool ibDataViewIconTextRenderer::GetValueFromEditorCtrl(wxWindow* editor, ibVariant& value)
 {
 	wxTextCtrl* text = (wxTextCtrl*)editor;
 
 	// The icon can't be edited so get its old value and reuse it.
-	wxVariant valueOld;
+	ibVariant valueOld;
 	ibDataViewColumn* const col = GetOwner();
 	GetView()->GetModel()->GetValue(valueOld, m_item, col->GetModelColumn());
 
-	ibDataViewIconText iconText;
-	iconText << valueOld;
+	const ibDataViewIconText* const iconOld = valueOld.ConvertToType<ibDataViewIconText>();
 
 	// But replace the text with the value entered by user.
-	iconText.SetText(text->GetValue());
-
-	value << iconText;
+	value = new ibDataViewIconText(text->GetValue(), iconOld != nullptr ? iconOld->GetBitmapBundle() : wxBitmapBundle());
 	return true;
 }
 
@@ -7370,7 +7341,7 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 					{
 						wxRendererNative::Get().DrawFocusRect
 						(
-							this,
+							tableWindow,   // the window being painted: macOS draws a focus rect into its context
 							dc,
 							rowRect,
 							flags
@@ -7557,7 +7528,7 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 			// what I read as", and the row is that sentence: no per-column cells underneath it, so nothing
 			// can be painted twice in one place (Max, 2026-08-29: *"it must write across the whole row"* —
 			// and the defect this started from was the reference drawn twice, the caption over its column).
-			wxString grpCaptionProbe;
+			ibString grpCaptionProbe;
 			const bool isGroupRow = !IsVirtualList() && dataitem.GetGroupCaption(grpCaptionProbe);
 			const bool hasValue = !isGroupRow && cell->PrepareForItem(model, dataitem, col->GetModelColumn());
 
@@ -7684,7 +7655,7 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 		{
 			const int lh = GetLineHeight(item);
 			ibDataViewTreeNode* gnode = IsVirtualList() ? NULL : GetTreeNodeByRow(item);
-			wxString grpCaption;
+			ibString grpCaption;
 			if (gnode != NULL && gnode->GetItem().GetGroupCaption(grpCaption))
 			{
 				const ibDataViewItem gitem = gnode->GetItem();
@@ -7717,14 +7688,14 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 					ibDataViewItemAttr attr;
 					GetModel()->GetAttr(gitem, expander->GetModelColumn(), attr);
 					const wxColour fg = sel ? wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHTTEXT)
-					                  : attr.HasColour() ? attr.GetColour()
+					                  : attr.HasColour() ? typeConv::ColourToWxColour(attr.GetColour())
 					                  : GetForegroundColour();
 					int flags = 0;
 					if (sel)          flags |= wxCONTROL_SELECTED;
 					if (!IsEnabled()) flags |= wxCONTROL_DISABLED;
 					const wxRect capRect(capX, grp_line, rightX - capX, lh);
 					wxDCClipper     clip(dc, capRect);
-					wxDCFontChanger fontChg(dc, attr.HasFont() ? attr.GetEffectiveFont(GetFont()) : GetFont());
+					wxDCFontChanger fontChg(dc, attr.HasFont() ? ibEffectiveFont(attr, GetFont()) : GetFont());
 					dc.SetTextForeground(fg);
 					wxRendererNative::Get().DrawItemText(this, dc, grpCaption, capRect,
 						wxALIGN_LEFT | wxALIGN_CENTRE_VERTICAL, flags, wxELLIPSIZE_END);
@@ -8710,9 +8681,9 @@ wxAccStatus ibDataViewCtrlAccessible::GetName(int childId, wxString* name)
 			if (dvCol->IsHidden())
 				continue; // skip it
 
-			wxVariant value;
+			ibVariant value;
 			model->GetValue(value, item, dvCol->GetModelColumn());
-			if (value.IsNull() || value.IsType(wxS("bool")))
+			if (value.GetType() == ibValueTypes::TYPE_EMPTY || value.GetType() == ibValueTypes::TYPE_BOOLEAN)
 				continue; // Skip non-textual items
 
 			ibDataViewRenderer* r = dvCol->GetRenderer();
@@ -8731,7 +8702,7 @@ wxAccStatus ibDataViewCtrlAccessible::GetName(int childId, wxString* name)
 		{
 			// Return row number if no textual column found.
 			// Rows are numbered from 1.
-			*name = wxString::Format(_("Row %i"), childId);
+			*name = ibString::Format(_("Row %i"), childId);
 		}
 		else
 		{
@@ -8841,7 +8812,7 @@ wxAccStatus ibDataViewCtrlAccessible::GetDescription(int childId, wxString* desc
 
 	if (childId == wxACC_SELF)
 	{
-		*description = wxString::Format(_("%s (%d items)"),
+		*description = ibString::Format(_("%s (%d items)"),
 			dvCtrl->GetName().c_str(), dvCtrl->GetRowCount());
 	}
 	else
@@ -8870,7 +8841,7 @@ wxAccStatus ibDataViewCtrlAccessible::GetDescription(int childId, wxString* desc
 			if (dvCol->IsHidden())
 				continue; // skip it
 
-			wxVariant value;
+			ibVariant value;
 			model->GetValue(value, item, dvCol->GetModelColumn());
 
 			ibDataViewRenderer* r = dvCol->GetRenderer();
@@ -8879,7 +8850,7 @@ wxAccStatus ibDataViewCtrlAccessible::GetDescription(int childId, wxString* desc
 
 			wxString valStr = r->GetAccessibleDescription();
 			// Skip first textual item
-			if (!firstTextSkipped && !value.IsNull() && !value.IsType(wxS("bool")) && !valStr.empty())
+			if (!firstTextSkipped && value.GetType() != ibValueTypes::TYPE_EMPTY && value.GetType() != ibValueTypes::TYPE_BOOLEAN && !valStr.empty())
 			{
 				firstTextSkipped = true;
 				continue;
@@ -8892,7 +8863,7 @@ wxAccStatus ibDataViewCtrlAccessible::GetDescription(int childId, wxString* desc
 				if (colName.empty())
 				{
 					// Columns are numbered from 1.
-					colName = wxString::Format(_("Column %u"), col + 1);
+					colName = ibString::Format(_("Column %u"), col + 1);
 				}
 
 				if (!itemDesc.empty())

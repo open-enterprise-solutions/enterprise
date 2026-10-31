@@ -15,18 +15,18 @@ class BACKEND_API ibValueType : public ibValue {
 	ibValueType(const ibValue& cObject);
 	ibValueType(const ibValueType& typeObject);
 
-	ibValueType(const wxString& typeName);
+	ibValueType(const ibString& typeName);
 
 	virtual bool IsEmpty() const { return false; }
 
-	virtual bool CompareValueEQ(const ibValue& cParam) const {
+	virtual bool CompareValueEQ(const ibVariant& cParam) const {
 		const ibValueType* rValue = CastValue<ibValueType>(cParam);
 		wxASSERT(rValue);
 		return m_clsid == rValue->m_clsid;
 	}
 
 	//operator '!='
-	virtual bool CompareValueNE(const ibValue& cParam) const {
+	virtual bool CompareValueNE(const ibVariant& cParam) const {
 		const ibValueType* rValue = CastValue<ibValueType>(cParam);
 		wxASSERT(rValue);
 		return m_clsid != rValue->m_clsid;

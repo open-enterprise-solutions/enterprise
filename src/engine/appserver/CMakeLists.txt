@@ -9,7 +9,7 @@ set(APPSERVER_SOURCES
 add_executable(appserver ${APPSERVER_SOURCES})
 
 set_target_properties(appserver PROPERTIES
-    CXX_STANDARD 17
+    CXX_STANDARD 20
     CXX_STANDARD_REQUIRED ON
 )
 
@@ -28,7 +28,7 @@ target_include_directories(appserver PRIVATE
 target_link_libraries(appserver PRIVATE
     frmserver
     backend
-    wx::core wx::aui wx::html wx::propgrid wx::adv wx::stc wx::xrc wx::qa wx::base wx::net wx::xml
+    wx::base
 )
 
 find_package(Threads REQUIRED)

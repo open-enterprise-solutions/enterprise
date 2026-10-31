@@ -21,7 +21,7 @@ ibEventDispatcher* ibEventControl::GetDispatcher() const
 
 	// A named event set in the designer: materialise it ONCE from the stored name, cached in m_dispatcherValue.
 	// A non-throwing probe (dynamic_cast on the resolved ref), NOT ConvertToType — the controlled cast THROWS
-	// ERROR_TYPE_OPERATION on the empty first-fire value; "not built yet" must read as nullptr, not an exception.
+	// ibScriptError_TypeOperation on the empty first-fire value; "not built yet" must read as nullptr, not an exception.
 	ibValueEvent* ev = dynamic_cast<ibValueEvent*>(m_dispatcherValue.GetRef());
 	if (ev == nullptr) {   // not built yet (or the name changed) -> materialise the named event, kept alive here
 		m_dispatcherValue = ibValue::CreateObjectValue<ibValueEvent>(m_propValue.GetString());
@@ -31,7 +31,7 @@ ibEventDispatcher* ibEventControl::GetDispatcher() const
 }
 
 // A value (name) edit drops the cached dispatcher value so GetDispatcher rebuilds the named one from the new name.
-void ibEventControl::DoSetValue(const wxVariant& val)
+void ibEventControl::DoSetValue(const ibVariant& val)
 {
 	m_propValue = val;
 	m_dispatcherValue = ibValue();
@@ -50,7 +50,7 @@ bool ibEventControl::SetDataValue(const ibValue& varPropVal)
 	// CLASSIC named event -> store the name; the named dispatcher (an ibValueEvent) rebuilds from it lazily.
 	ibValueEvent* event = varPropVal.ConvertToType<ibValueEvent>();
 	if (event == nullptr) return false;
-	m_propValue = event->GetString();
+	m_propValue = ibVariant(event->GetString());
 	m_dispatcherValue = ibValue();   // invalidate so GetDispatcher rebuilds the named dispatcher from the new name
 	return true;
 }
@@ -63,26 +63,26 @@ bool ibEventControl::GetDataValue(ibValue& pvarPropVal) const
 		pvarPropVal = m_dispatcherValue;   // the assigned lambda
 		return true;
 	}
-	pvarPropVal = ibValue::CreateObjectValue<ibValueEvent>(m_propValue);
+	pvarPropVal = ibValue::CreateObjectValue<ibValueEvent>(ibString(m_propValue.GetString()));
 	return true;
 }
 
-// A child node with named properties (Name + handler Value) — no opaque bytes.
+// A child node with named properties (Name + handler Value) — no opaque bytes. Only the handler is read: the name is
+// the event's own, given when it was made and keyed by in its owner's events — a node pasted from another event, or a
+// client's edit that carries the handler alone, must not rename it.
 bool ibEventControl::ReadNodeValue(const ibDataValue& value)
 {
-	const std::shared_ptr<ibDataNode>& node = value.AsChild();
-	if (node) {
-		m_propName = node->GetValue<wxString>(wxT("Name"));
-		m_propValue = node->GetValue<wxString>(wxT("Value"));
-	}
+	const auto node = value.AsChild();
+	if (node)
+		m_propValue = ibVariant(node->GetValue<ibString>(ibT("Value")));
 	return true;
 }
 
 bool ibEventControl::WriteNodeValue(ibDataValue& value) const
 {
 	auto node = std::make_shared<ibDataNode>();
-	node->SetValue(wxT("Name"), m_propName);
-	node->SetValue(wxT("Value"), m_propValue.GetString());
+	node->SetValue(ibT("Name"), m_propName);
+	node->SetValue(ibT("Value"), ibString(m_propValue.GetString()));
 	value = ibDataValue::Child(node);
 	return true;
 }

@@ -36,42 +36,11 @@
 
 #include "backend/appDataCtorToken.h"
 #include "backend/compiler/value.h"
+#include "core/settings/settingsShelf.h"   // ibSettingsCategory — the tenant, part of every key
 
 #include <vector>
 
 class ibDataNode;
-
-// WHAT KIND OF SETTING THIS IS — the tenant, not a folder name. It is part of
-// the key, so one category's "MainForm" and another's are different rows.
-//
-// ⚠ APPENDED, NEVER INSERTED: the category is stored BY NUMBER, so a value
-// taken in the middle re-reads every existing row as a different tenant.
-enum class ibSettingsCategory : int {
-	Custom = 0,   // whatever script saves under a name of its own
-	Form,         // how a person arranged a window — sizes, columns, what was open
-	Composer,     // a report composer's user settings
-	// ⭐ A LIST ON A FORM IS ITS OWN TENANT (Max, 2026-08-26). It saves settings exactly as a report
-	// does — that part is NOT the variants question, where a list legitimately has none — but what it
-	// saves belongs to a control on a form, not to a composer declared in the configuration. Two
-	// addressing vocabularies, so two categories, and neither can collide with the other.
-	List,
-	// ⭐⭐ WHICH ONE COMES BACK BY ITSELF — a CATEGORY of its own rather than a column or a flag (Max,
-	// 2026-08-26: *"that is not in the table, that mark lives in the NODE… you add a separate
-	// category, the default setting"*). One row per object per person, holding the ID of the setting
-	// to restore when the object is merely opened. A pointer is a different KIND of thing from a
-	// setting, so it lives on its own shelf, and the storage still stores nothing but nodes.
-	Default,
-	// ⭐ THE PLATFORM ITSELF IS A TENANT. The MCP server's settings — whether it listens, and where —
-	// belong to A PERSON IN A BASE, not to the installation: every developer who opens the designer
-	// configures their own server, and two of them on one machine are two servers on two ports. The
-	// user half of the address already says exactly that, so this is a saved setting like any other
-	// rather than a file beside the executable. Its object key is the server's own well-known id:
-	// what is configured here is the platform, not something in the tree.
-	//
-	// ⚠ APPENDED, as the rule above requires — taken in the middle it would have re-read every
-	// Default row as this one.
-	Mcp,
-};
 
 // THE ADDRESS OF ONE SETTING. Four parts, each a question of its own, because a
 // single glued string would put the separator in every caller's hands — and the
@@ -167,7 +136,7 @@ private:
 	// column carries a compound address. (The DDL renderer spells PRIMARY KEY per
 	// column, and sys_lock already solved this the same way: keyHash beside the
 	// readable columns.)
-	static wxString HashKey(const ibSettingsKey& key);
+	static ibString HashKey(const ibSettingsKey& key);
 };
 
 #endif // !__SETTINGS_STORAGE_H__

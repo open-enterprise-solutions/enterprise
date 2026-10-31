@@ -18,7 +18,6 @@
 #include "backend/sheetFormat/sheetFormatDocx.h"
 #include "backend/backend_localization.h"   // a caption goes out in one language
 
-#include <wx/wfstream.h>
 #include <wx/zipstrm.h>
 
 #include <set>
@@ -27,20 +26,20 @@ namespace {
 
 // The same four characters, and the same refusal of control codes: Word rejects
 // the whole part rather than the character.
-wxString XmlText(const wxString& text)
+ibString XmlText(const ibString& text)
 {
-	wxString out;
+	ibString out;
 	out.reserve(text.length() + 16);
 
-	for (const wxUniChar ch : text) {
-		switch (ch.GetValue()) {
-		case '&':  out += wxT("&amp;");  break;
-		case '<':  out += wxT("&lt;");   break;
-		case '>':  out += wxT("&gt;");   break;
-		case '"':  out += wxT("&quot;"); break;
-		case '\'': out += wxT("&apos;"); break;
+	for (const ibChar ch : text) {
+		switch (ch) {
+		case '&':  out += ibT("&amp;");  break;
+		case '<':  out += ibT("&lt;");   break;
+		case '>':  out += ibT("&gt;");   break;
+		case '"':  out += ibT("&quot;"); break;
+		case '\'': out += ibT("&apos;"); break;
 		default:
-			if (ch.GetValue() >= 0x20 || ch == '\t' || ch == '\n' || ch == '\r')
+			if (ch >= 0x20 || ch == '\t' || ch == '\n' || ch == '\r')
 				out += ch;
 			break;
 		}
@@ -48,28 +47,28 @@ wxString XmlText(const wxString& text)
 	return out;
 }
 
-wxString HexOf(const wxColour& colour)
+ibString HexOf(const ibColour& colour)
 {
-	return wxString::Format(wxT("%02X%02X%02X"), colour.Red(), colour.Green(), colour.Blue());
+	return ibString::Format(ibT("%02X%02X%02X"), colour.m_red, colour.m_green, colour.m_blue);
 }
 
-void AddPart(wxZipOutputStream& zip, const wxString& name, const wxString& body)
+void AddPart(wxZipOutputStream& zip, const ibString& name, const ibString& body)
 {
 	zip.PutNextEntry(name);
-	const wxScopedCharBuffer utf8 = body.ToUTF8();
+	const std::string utf8 = body.ToUTF8();
 	zip.Write(utf8.data(), utf8.length());
 }
 
-wxString ContentTypes()
+ibString ContentTypes()
 {
-	return wxT("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>")
-		wxT("<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">")
-		wxT("<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>")
-		wxT("<Default Extension=\"xml\" ContentType=\"application/xml\"/>")
-		wxT("<Override PartName=\"/word/document.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml\"/>")
-		wxT("<Override PartName=\"/word/styles.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml\"/>")
-		wxT("<Override PartName=\"/word/settings.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml\"/>")
-		wxT("</Types>");
+	return ibT("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>")
+		ibT("<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">")
+		ibT("<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>")
+		ibT("<Default Extension=\"xml\" ContentType=\"application/xml\"/>")
+		ibT("<Override PartName=\"/word/document.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml\"/>")
+		ibT("<Override PartName=\"/word/styles.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml\"/>")
+		ibT("<Override PartName=\"/word/settings.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml\"/>")
+		ibT("</Types>");
 }
 
 // ⭐⭐ THE DOCUMENT DECLARES WHICH WORD IT IS FOR, and until it did Word opened it in COMPATIBILITY
@@ -79,15 +78,15 @@ wxString ContentTypes()
 // responding", with one core pegged).
 //
 // A part of four lines, and it is the whole statement: we write today's WordprocessingML.
-wxString Settings()
+ibString Settings()
 {
-	return wxT("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>")
-		wxT("<w:settings xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">")
-		wxT("<w:compat>")
-		wxT("<w:compatSetting w:name=\"compatibilityMode\"")
-		wxT(" w:uri=\"http://schemas.microsoft.com/office/word\" w:val=\"15\"/>")
-		wxT("</w:compat>")
-		wxT("</w:settings>");
+	return ibT("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>")
+		ibT("<w:settings xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">")
+		ibT("<w:compat>")
+		ibT("<w:compatSetting w:name=\"compatibilityMode\"")
+		ibT(" w:uri=\"http://schemas.microsoft.com/office/word\" w:val=\"15\"/>")
+		ibT("</w:compat>")
+		ibT("</w:settings>");
 }
 
 // ⭐⭐ AND WHAT A PARAGRAPH LOOKS LIKE WHEN NOBODY SAYS. With no styles part, Word applies its own
@@ -97,40 +96,40 @@ wxString Settings()
 //
 // The sheet's own default size is declared here too (half-points), so the runs below need only
 // speak when a cell DIFFERS from it — the common case then costs nothing to say.
-wxString Styles()
+ibString Styles()
 {
-	return wxString::Format(
-		wxT("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>")
-		wxT("<w:styles xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">")
-		wxT("<w:docDefaults>")
-		wxT("<w:rPrDefault><w:rPr><w:sz w:val=\"%d\"/></w:rPr></w:rPrDefault>")
-		wxT("<w:pPrDefault><w:pPr>")
-		wxT("<w:spacing w:before=\"0\" w:after=\"0\" w:line=\"240\" w:lineRule=\"auto\"/>")
-		wxT("</w:pPr></w:pPrDefault>")
-		wxT("</w:docDefaults>")
-		wxT("</w:styles>"),
+	return ibString::Format(
+		ibT("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>")
+		ibT("<w:styles xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">")
+		ibT("<w:docDefaults>")
+		ibT("<w:rPrDefault><w:rPr><w:sz w:val=\"%d\"/></w:rPr></w:rPrDefault>")
+		ibT("<w:pPrDefault><w:pPr>")
+		ibT("<w:spacing w:before=\"0\" w:after=\"0\" w:line=\"240\" w:lineRule=\"auto\"/>")
+		ibT("</w:pPr></w:pPrDefault>")
+		ibT("</w:docDefaults>")
+		ibT("</w:styles>"),
 		ibDefaultSpreadsheetFont().GetPointSize() * 2);
 }
 
-wxString RootRels()
+ibString RootRels()
 {
-	return wxT("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>")
-		wxT("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">")
-		wxT("<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"word/document.xml\"/>")
-		wxT("</Relationships>");
+	return ibT("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>")
+		ibT("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">")
+		ibT("<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"word/document.xml\"/>")
+		ibT("</Relationships>");
 }
 
-wxString DocumentRels()
+ibString DocumentRels()
 {
 	// The two parts the document leans on. It was empty here — required even then, because a
 	// document part with no relationships part is reported as corrupt rather than as a document
 	// with nothing linked — and the parts it now names are what keep Word out of compatibility mode
 	// and off its own paragraph defaults.
-	return wxT("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>")
-		wxT("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">")
-		wxT("<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles\" Target=\"styles.xml\"/>")
-		wxT("<Relationship Id=\"rId2\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings\" Target=\"settings.xml\"/>")
-		wxT("</Relationships>");
+	return ibT("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>")
+		ibT("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">")
+		ibT("<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles\" Target=\"styles.xml\"/>")
+		ibT("<Relationship Id=\"rId2\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings\" Target=\"settings.xml\"/>")
+		ibT("</Relationships>");
 }
 
 // ⭐ THE SAME FOUR EDGES AS THE WORKBOOK, in Word's vocabulary: a line name, a weight in EIGHTHS of
@@ -148,78 +147,78 @@ wxString DocumentRels()
 //
 // ⭐ The shape of the mistake: a defence built on top of a fact that had already been removed. The
 // table says nothing about borders now, so silence about an edge already means "no edge".
-wxString BordersOf(const ibSpreadsheetCellDescription* cell)
+ibString BordersOf(const ibSpreadsheetCellDescription* cell)
 {
 	if (cell == nullptr)
-		return wxEmptyString;
+		return ibEmptyString;
 
 	static const int           s_ours[4]  = { 2, 0, 3, 1 };   // top, left, bottom, right
-	static const wxChar* const s_names[4] = { wxT("top"), wxT("left"), wxT("bottom"), wxT("right") };
+	static const ibChar* const s_names[4] = { ibT("top"), ibT("left"), ibT("bottom"), ibT("right") };
 
-	wxString edges;
+	ibString edges;
 	for (int i = 0; i < 4; i++) {
 		const ibSpreadsheetBorderDescription& border = cell->m_borderAt[s_ours[i]];
-		if (border.m_style == wxPENSTYLE_TRANSPARENT)
+		if (border.m_style == ibPenStyle_Transparent)
 			continue;
 
-		const wxChar* line = wxT("single");
+		const ibChar* line = ibT("single");
 		switch (border.m_style) {
-		case wxPENSTYLE_DOT:        line = wxT("dotted");  break;
-		case wxPENSTYLE_SHORT_DASH:
-		case wxPENSTYLE_LONG_DASH:  line = wxT("dashed");  break;
-		case wxPENSTYLE_DOT_DASH:   line = wxT("dotDash"); break;
+		case ibPenStyle_Dot:        line = ibT("dotted");  break;
+		case ibPenStyle_ShortDash:
+		case ibPenStyle_LongDash:   line = ibT("dashed");  break;
+		case ibPenStyle_DotDash:    line = ibT("dotDash"); break;
 		default: break;
 		}
 
-		edges += wxString::Format(wxT("<w:%s w:val=\"%s\" w:sz=\"%d\" w:space=\"0\" w:color=\"%s\"/>"),
-			s_names[i], line, wxMax(border.m_width, 1) * 4, HexOf(border.m_colour));
+		edges += ibString::Format(ibT("<w:%s w:val=\"%s\" w:sz=\"%d\" w:space=\"0\" w:color=\"%s\"/>"),
+			s_names[i], line, std::max(border.m_width, 1) * 4, HexOf(border.m_colour));
 	}
 
-	return edges.IsEmpty() ? wxString() : wxT("<w:tcBorders>") + edges + wxT("</w:tcBorders>");
+	return edges.IsEmpty() ? ibString() : ibT("<w:tcBorders>") + edges + ibT("</w:tcBorders>");
 }
 
 // One cell's text, with the font and colours it had here.
-wxString RunOf(const ibSpreadsheetCellDescription* cell, const wxString& text)
+ibString RunOf(const ibSpreadsheetCellDescription* cell, const ibString& text)
 {
 	// ⚠ IN THE SCHEMA'S ORDER, which for a run is `rFonts → b → i → strike → color → sz → u`.
 	// `w:rPr` is a SEQUENCE and not a bag: a validator reads a member out of place as the element
 	// simply not being there, and the ones after it as unexpected.
-	wxString properties;
+	ibString properties;
 
 	if (cell != nullptr) {
-		const wxFont& font = cell->m_font;
+		const ibFont& font = cell->m_font;
 		if (font.IsOk()) {
-			if (!font.GetFaceName().IsEmpty())
-				properties += wxString::Format(
-					wxT("<w:rFonts w:ascii=\"%s\" w:hAnsi=\"%s\"/>"),
-					XmlText(font.GetFaceName()), XmlText(font.GetFaceName()));
-			if (font.GetWeight() >= wxFONTWEIGHT_BOLD)
-				properties += wxT("<w:b/>");
-			if (font.GetStyle() == wxFONTSTYLE_ITALIC)
-				properties += wxT("<w:i/>");
-			if (font.GetStrikethrough())
-				properties += wxT("<w:strike/>");
+			if (!font.m_faceName.IsEmpty())
+				properties += ibString::Format(
+					ibT("<w:rFonts w:ascii=\"%s\" w:hAnsi=\"%s\"/>"),
+					XmlText(font.m_faceName), XmlText(font.m_faceName));
+			if (font.m_weight >= ibFONTWEIGHT_BOLD)
+				properties += ibT("<w:b/>");
+			if (font.m_style == ibFONTSTYLE_ITALIC)
+				properties += ibT("<w:i/>");
+			if (font.m_strikethrough)
+				properties += ibT("<w:strike/>");
 		}
 
 		if (cell->m_textColour.IsOk())
-			properties += wxString::Format(wxT("<w:color w:val=\"%s\"/>"), HexOf(cell->m_textColour));
+			properties += ibString::Format(ibT("<w:color w:val=\"%s\"/>"), HexOf(cell->m_textColour));
 
 		if (font.IsOk()) {
 			// WORD COUNTS IN HALF-POINTS — and says nothing where the cell agrees with the size the
 			// styles part already declared for the whole document. On a sheet where every cell is
 			// the default size that is one element saved per cell, out of a hundred thousand.
 			if (font.GetPointSize() > 0 && font.GetPointSize() != ibDefaultSpreadsheetFont().GetPointSize())
-				properties += wxString::Format(wxT("<w:sz w:val=\"%d\"/>"), font.GetPointSize() * 2);
-			if (font.GetUnderlined())
-				properties += wxT("<w:u w:val=\"single\"/>");
+				properties += ibString::Format(ibT("<w:sz w:val=\"%d\"/>"), font.GetPointSize() * 2);
+			if (font.m_underlined)
+				properties += ibT("<w:u w:val=\"single\"/>");
 		}
 	}
 
-	wxString run = wxT("<w:r>");
+	ibString run = ibT("<w:r>");
 	if (!properties.IsEmpty())
-		run += wxT("<w:rPr>") + properties + wxT("</w:rPr>");
-	run += wxString::Format(wxT("<w:t xml:space=\"preserve\">%s</w:t>"), XmlText(text));
-	run += wxT("</w:r>");
+		run += ibT("<w:rPr>") + properties + ibT("</w:rPr>");
+	run += ibString::Format(ibT("<w:t xml:space=\"preserve\">%s</w:t>"), XmlText(text));
+	run += ibT("</w:r>");
 	return run;
 }
 
@@ -232,15 +231,15 @@ wxString RunOf(const ibSpreadsheetCellDescription* cell, const wxString& text)
 // ⚠ AND THE LAYOUT IS FIXED, or the widths below are advice. Left to `autofit`, Word re-measures
 // every column from its contents and the `w:tcW` we compute is ignored — the same table, two
 // different shapes, depending on what happened to be typed in it.
-wxString TableStart()
+ibString TableStart()
 {
-	return wxT("<w:tbl><w:tblPr>")
-		wxT("<w:tblW w:w=\"0\" w:type=\"auto\"/>")
-		wxT("<w:tblLayout w:type=\"fixed\"/>")
-		wxT("<w:tblCellMar>")
-		wxT("<w:left w:w=\"28\" w:type=\"dxa\"/><w:right w:w=\"28\" w:type=\"dxa\"/>")
-		wxT("</w:tblCellMar>")
-		wxT("</w:tblPr>");
+	return ibT("<w:tbl><w:tblPr>")
+		ibT("<w:tblW w:w=\"0\" w:type=\"auto\"/>")
+		ibT("<w:tblLayout w:type=\"fixed\"/>")
+		ibT("<w:tblCellMar>")
+		ibT("<w:left w:w=\"28\" w:type=\"dxa\"/><w:right w:w=\"28\" w:type=\"dxa\"/>")
+		ibT("</w:tblCellMar>")
+		ibT("</w:tblPr>");
 }
 
 // ⭐⭐ A TABLE IS LAID OUT AS ONE PIECE, so a long sheet is written as MANY TABLES. Word does not
@@ -254,12 +253,12 @@ const int s_rowsPerTable = 200;
 // back into one table when the document is opened — the split would be undone by the reader and
 // nothing gained. So a paragraph stands between them, and it is a HIDDEN one: a paragraph mark
 // marked `w:vanish` is not displayed, not printed and takes no height, so the tables still abut.
-wxString TableSeparator()
+ibString TableSeparator()
 {
-	return wxT("<w:p><w:pPr>")
-		wxT("<w:spacing w:before=\"0\" w:after=\"0\" w:line=\"1\" w:lineRule=\"exact\"/>")
-		wxT("<w:rPr><w:vanish/><w:sz w:val=\"2\"/></w:rPr>")
-		wxT("</w:pPr></w:p>");
+	return ibT("<w:p><w:pPr>")
+		ibT("<w:spacing w:before=\"0\" w:after=\"0\" w:line=\"1\" w:lineRule=\"exact\"/>")
+		ibT("<w:rPr><w:vanish/><w:sz w:val=\"2\"/></w:rPr>")
+		ibT("</w:pPr></w:p>");
 }
 
 // ⚠ AND THE SPLIT MUST NOT FALL THROUGH A MERGE. A `vMerge` continuation only means anything inside
@@ -277,7 +276,7 @@ bool ContinuesMerge(const ibSpreadsheetDescription& sheet, int row, int numCols)
 
 } // namespace
 
-bool ibSheetFormatDocx::Read(wxInputStream& WXUNUSED(input), ibSpreadsheetDescription& WXUNUSED(sheet)) const
+bool ibSheetFormatDocx::Read(wxInputStream& /*input*/, ibSpreadsheetDescription& /*sheet*/) const
 {
 	// See the header: a Word file is a flow, not a sheet. Refused plainly rather
 	// than half-guessed.
@@ -294,9 +293,9 @@ bool ibSheetFormatDocx::Write(wxOutputStream& output, const ibSpreadsheetDescrip
 	for (int i = 0; i < sheet.GetBrakeNumberRows(); i++)
 		pageBreaks.insert(sheet.GetRowBrakeByIdx(i));
 
-	wxString body = wxT("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>")
-		wxT("<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">")
-		wxT("<w:body>");
+	ibString body = ibT("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>")
+		ibT("<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">")
+		ibT("<w:body>");
 
 	// ⚠ THE GRID IS DECLARED FIRST and Word believes it over the cells: column
 	// widths live here, in twentieths of a point, and our pixels are 96 to the inch
@@ -304,17 +303,17 @@ bool ibSheetFormatDocx::Write(wxOutputStream& output, const ibSpreadsheetDescrip
 	// ⚠ AND EVERY TABLE CARRIES IT, not only the first. A page break closes the table and opens
 	// another, and the one after the break was opened without a grid at all — which is why its
 	// columns came out re-measured while the first page's held.
-	wxString grid = wxT("<w:tblGrid>");
+	ibString grid = ibT("<w:tblGrid>");
 	for (int col = 0; col <= numCols; col++)
-		grid += wxString::Format(wxT("<w:gridCol w:w=\"%d\"/>"), sheet.GetColSize(col) * 15);
-	grid += wxT("</w:tblGrid>");
+		grid += ibString::Format(ibT("<w:gridCol w:w=\"%d\"/>"), sheet.GetColSize(col) * 15);
+	grid += ibT("</w:tblGrid>");
 
-	wxString table = TableStart() + grid;
+	ibString table = TableStart() + grid;
 	int rowsInTable = 0;
 
 	for (int row = 0; row <= numRows; row++) {
 
-		wxString cells;
+		ibString cells;
 		for (int col = 0; col <= numCols; col++) {
 
 			const ibSpreadsheetCellDescription* cell = sheet.GetCell(row, col);
@@ -344,7 +343,7 @@ bool ibSheetFormatDocx::Write(wxOutputStream& output, const ibSpreadsheetDescrip
 				int ownerRows = 1, ownerCols = 1;
 				if (const ibSpreadsheetCellDescription* owner = sheet.GetCell(ownerRow, ownerCol))
 					owner->GetSize(&ownerRows, &ownerCols);
-				continuedCols = wxMax(ownerCols, 1);
+				continuedCols = std::max(ownerCols, 1);
 			}
 
 			// ⚠ THE WIDTH IS THE GRID'S TO STATE, and it states it once at the top of the table.
@@ -354,7 +353,7 @@ bool ibSheetFormatDocx::Write(wxOutputStream& output, const ibSpreadsheetDescrip
 			//
 			// …and on the FIRST row, which some readers of a fixed-layout table measure from
 			// instead of the grid. Six elements once, rather than six on every row.
-			wxString properties;
+			ibString properties;
 
 			const int spanned = (span == 1) ? spanCols : (span == -1 ? continuedCols : 1);
 
@@ -362,22 +361,22 @@ bool ibSheetFormatDocx::Write(wxOutputStream& output, const ibSpreadsheetDescrip
 				int width = 0;
 				for (int i = 0; i < spanned; i++)
 					width += sheet.GetColSize(col + i);
-				properties += wxString::Format(wxT("<w:tcW w:w=\"%d\" w:type=\"dxa\"/>"), width * 15);
+				properties += ibString::Format(ibT("<w:tcW w:w=\"%d\" w:type=\"dxa\"/>"), width * 15);
 			}
 
 			if (spanned > 1)
-				properties += wxString::Format(wxT("<w:gridSpan w:val=\"%d\"/>"), spanned);
+				properties += ibString::Format(ibT("<w:gridSpan w:val=\"%d\"/>"), spanned);
 
 			if (span == 1 && spanRows > 1)
-				properties += wxT("<w:vMerge w:val=\"restart\"/>");
+				properties += ibT("<w:vMerge w:val=\"restart\"/>");
 			else if (span == -1)
-				properties += wxT("<w:vMerge/>");
+				properties += ibT("<w:vMerge/>");
 
 			properties += BordersOf(cell);
 
 			if (cell != nullptr && cell->m_backgroundColour.IsOk())
-				properties += wxString::Format(
-					wxT("<w:shd w:val=\"clear\" w:color=\"auto\" w:fill=\"%s\"/>"),
+				properties += ibString::Format(
+					ibT("<w:shd w:val=\"clear\" w:color=\"auto\" w:fill=\"%s\"/>"),
 					HexOf(cell->m_backgroundColour));
 
 			// ⚠ AND `w:tcPr` IS A SEQUENCE TOO: `tcW → gridSpan → vMerge → tcBorders → shd →
@@ -386,41 +385,41 @@ bool ibSheetFormatDocx::Write(wxOutputStream& output, const ibSpreadsheetDescrip
 				// TEXT ORIENTATION — a direction here, a text FLOW there. Bottom-to-top is the one
 				// a sheet means by «vertical», the same rotation the workbook writes as 90°.
 				if (cell->m_textOrient == wxVERTICAL)
-					properties += wxT("<w:textDirection w:val=\"btLr\"/>");
+					properties += ibT("<w:textDirection w:val=\"btLr\"/>");
 
 				switch (cell->m_alignVert) {
-				case ibAlignmentVert_Center: properties += wxT("<w:vAlign w:val=\"center\"/>"); break;
-				case ibAlignmentVert_Bottom: properties += wxT("<w:vAlign w:val=\"bottom\"/>"); break;
+				case ibAlignmentVert_Center: properties += ibT("<w:vAlign w:val=\"center\"/>"); break;
+				case ibAlignmentVert_Bottom: properties += ibT("<w:vAlign w:val=\"bottom\"/>"); break;
 				default: break;
 				}
 			}
 
-			wxString paragraphProperties;
+			ibString paragraphProperties;
 			if (cell != nullptr) {
 				switch (cell->m_alignHorz) {
-				case ibAlignmentHorz_Center: paragraphProperties = wxT("<w:jc w:val=\"center\"/>"); break;
-				case ibAlignmentHorz_Right:  paragraphProperties = wxT("<w:jc w:val=\"right\"/>");  break;
+				case ibAlignmentHorz_Center: paragraphProperties = ibT("<w:jc w:val=\"center\"/>"); break;
+				case ibAlignmentHorz_Right:  paragraphProperties = ibT("<w:jc w:val=\"right\"/>");  break;
 				default: break;
 				}
 			}
 
 			// the text, not the stored form — see the xlsx writer
-			const wxString text = cell != nullptr ? ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), cell->GetValue()) : wxString();
+			const ibString text = cell != nullptr ? ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), cell->GetValue()) : ibString();
 
-			wxString paragraph = wxT("<w:p>");
+			ibString paragraph = ibT("<w:p>");
 			if (!paragraphProperties.IsEmpty())
-				paragraph += wxT("<w:pPr>") + paragraphProperties + wxT("</w:pPr>");
+				paragraph += ibT("<w:pPr>") + paragraphProperties + ibT("</w:pPr>");
 			if (!text.IsEmpty())
 				paragraph += RunOf(cell, text);
-			paragraph += wxT("</w:p>");
+			paragraph += ibT("</w:p>");
 
 			// ⚠ A CELL ALWAYS CARRIES A PARAGRAPH, even an empty one: Word reports a
 			// table cell without one as a damaged file. Its PROPERTIES are another matter — an
 			// empty `<w:tcPr></w:tcPr>` on every cell of a large sheet is a megabyte of nothing.
-			cells += wxT("<w:tc>");
+			cells += ibT("<w:tc>");
 			if (!properties.IsEmpty())
-				cells += wxT("<w:tcPr>") + properties + wxT("</w:tcPr>");
-			cells += paragraph + wxT("</w:tc>");
+				cells += ibT("<w:tcPr>") + properties + ibT("</w:tcPr>");
+			cells += paragraph + ibT("</w:tc>");
 
 			// A cell covered SIDEWAYS was already spoken for by the gridSpan above.
 			if (span == 1 && spanCols > 1)
@@ -443,22 +442,22 @@ bool ibSheetFormatDocx::Write(wxOutputStream& output, const ibSpreadsheetDescrip
 		// 🛑 AND A HEIGHT NEEDS ITS RULE. `w:hRule` defaults to `auto`, and under `auto` Word
 		// IGNORES the `w:val` beside it — the height was written, was valid, and did nothing.
 		// `atLeast` is what a sheet's row height means: this tall, taller if the text needs it.
-		wxString rowProperties;
+		ibString rowProperties;
 		if (height != s_defaultRowHeight && height > 0)
-			rowProperties = wxString::Format(
-				wxT("<w:trPr><w:trHeight w:hRule=\"atLeast\" w:val=\"%d\"/></w:trPr>"), height * 15);
+			rowProperties = ibString::Format(
+				ibT("<w:trPr><w:trHeight w:hRule=\"atLeast\" w:val=\"%d\"/></w:trPr>"), height * 15);
 
 		if (height > 0) {
-			table += wxT("<w:tr>") + rowProperties + cells + wxT("</w:tr>");
+			table += ibT("<w:tr>") + rowProperties + cells + ibT("</w:tr>");
 			rowsInTable++;
 		}
 
 		// ⭐ WHERE A PAGE ENDED HERE, A PAGE ENDS THERE. A break inside a table has to
 		// close it and open the next one — Word has no "break between these rows".
-		if (pageBreaks.find(row) != pageBreaks.end() && row < numRows) {
-			table += wxT("</w:tbl>");
+		if (pageBreaks.contains(row) && row < numRows) {
+			table += ibT("</w:tbl>");
 			body += table;
-			body += wxT("<w:p><w:r><w:br w:type=\"page\"/></w:r></w:p>");
+			body += ibT("<w:p><w:r><w:br w:type=\"page\"/></w:r></w:p>");
 			table = TableStart() + grid;
 			rowsInTable = 0;
 		}
@@ -467,7 +466,7 @@ bool ibSheetFormatDocx::Write(wxOutputStream& output, const ibSpreadsheetDescrip
 		// of one large one.
 		else if (rowsInTable >= s_rowsPerTable && row < numRows
 			&& !ContinuesMerge(sheet, row + 1, numCols)) {
-			table += wxT("</w:tbl>");
+			table += ibT("</w:tbl>");
 			body += table + TableSeparator();
 			table = TableStart() + grid;
 			rowsInTable = 0;
@@ -477,25 +476,25 @@ bool ibSheetFormatDocx::Write(wxOutputStream& output, const ibSpreadsheetDescrip
 	// ⚠ AND ONLY IF IT HOLDS ANYTHING. A split that fell on the very last row leaves a table opened
 	// and never filled, and a `<w:tbl>` with no rows in it is a table Word draws as a blank stub.
 	if (rowsInTable > 0) {
-		table += wxT("</w:tbl>");
+		table += ibT("</w:tbl>");
 		body += table;
 	}
 
 	// A trailing paragraph — a body that ends with a table leaves Word with nowhere
 	// to put the cursor after it.
-	body += wxT("<w:p/>");
-	body += wxT("</w:body></w:document>");
+	body += ibT("<w:p/>");
+	body += ibT("</w:body></w:document>");
 
 	wxZipOutputStream zip(output);
 	if (!zip.IsOk())
 		return false;
 
-	AddPart(zip, wxT("[Content_Types].xml"),          ContentTypes());
-	AddPart(zip, wxT("_rels/.rels"),                  RootRels());
-	AddPart(zip, wxT("word/_rels/document.xml.rels"), DocumentRels());
-	AddPart(zip, wxT("word/styles.xml"),              Styles());
-	AddPart(zip, wxT("word/settings.xml"),            Settings());
-	AddPart(zip, wxT("word/document.xml"),            body);
+	AddPart(zip, ibT("[Content_Types].xml"),          ContentTypes());
+	AddPart(zip, ibT("_rels/.rels"),                  RootRels());
+	AddPart(zip, ibT("word/_rels/document.xml.rels"), DocumentRels());
+	AddPart(zip, ibT("word/styles.xml"),              Styles());
+	AddPart(zip, ibT("word/settings.xml"),            Settings());
+	AddPart(zip, ibT("word/document.xml"),            body);
 
 	// The central directory is written on Close — a zip that is merely destructed
 	// is a file that exists and is not a zip.

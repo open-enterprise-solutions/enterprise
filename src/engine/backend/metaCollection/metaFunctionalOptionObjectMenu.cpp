@@ -5,6 +5,6 @@
 // value's module follows.
 bool ibValueMetaObjectFunctionalOption::CollectContextMenu(std::vector<ibMetaMenuItem>& items)
 {
-	items.emplace_back(ibMetaMenuKind::Object, wxT("Composition"), _("Open functional option composition"), this);
+	items.emplace_back(ibMetaMenuKind::Object, ibT("Composition"), _("Open functional option composition"), this);
 	return ibValueMetaObjectStoredValue::CollectContextMenu(items);
 }

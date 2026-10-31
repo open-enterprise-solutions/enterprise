@@ -12,7 +12,7 @@
 
 #include <gtest/gtest.h>
 
-#include "core/programFolder.h"
+#include "core/fileSystem.h"
 
 #include <wx/filename.h>
 #include <wx/stdpaths.h>
@@ -20,9 +20,9 @@
 
 namespace {
 
-void ExpectFolder(const wxString& executablePath, const wxString& folder)
+void ExpectFolder(const ibString& executablePath, const ibString& folder)
 {
-	const wxString got = ibProgramFolder(executablePath);
+	const ibString got = ibProgramFolder(executablePath);
 	EXPECT_TRUE(wxFileName::DirName(got).SameAs(wxFileName::DirName(folder)))
 		<< got.ToStdString() << " vs " << folder.ToStdString();
 }
@@ -69,11 +69,11 @@ TEST(ProgramFolder, TheBundleNamesAreCaseSensitive) {
 // The folder holds this process's binary, or the .app that holds it. Comparing
 // the two overloads of ibProgramFolder with each other would not.
 TEST(ProgramFolder, TheFolderHoldsThisBinaryOrItsApp) {
-	const wxString exe = wxStandardPaths::Get().GetExecutablePath();
+	const ibString exe = wxStandardPaths::Get().GetExecutablePath();
 	ASSERT_FALSE(exe.IsEmpty());
 
 	const wxFileName executable(exe);
-	const wxString folder = ibProgramFolder();
+	const ibString folder = ibProgramFolder();
 	const wxFileName beside(folder, executable.GetFullName());
 	const bool holdsBinary = beside.FileExists() && beside.SameAs(executable);
 
@@ -94,7 +94,7 @@ TEST(ProgramFolder, TheFolderHoldsThisBinaryOrItsApp) {
 // Off a bundle the diagnostics stay in the program folder. An installed bundle
 // on macOS uses ~/Library/Logs/OES, which this process is not.
 TEST(ProgramFolder, DiagnosticsFollowTheBundle) {
-	const wxString exe = wxStandardPaths::Get().GetExecutablePath();
+	const ibString exe = wxStandardPaths::Get().GetExecutablePath();
 	const wxFileName executable(exe);
 	const wxArrayString& dirs = executable.GetDirs();
 	bool bundle = false;

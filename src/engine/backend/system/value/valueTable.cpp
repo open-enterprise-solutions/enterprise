@@ -4,6 +4,9 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "valueTable.h"
+#include "core/stringTokenizer.h"
+#include <algorithm>
+#include <map>
 #include "backend/backend_exception.h"
 
 // L5-1 composer — full type to bind the base m_composer to this table's source in the ctor (the RAM
@@ -15,7 +18,7 @@
 
 //////////////////////////////////////////////////////////////////////
 
-ibDataViewItem ibValueModelTable::FindRowValue(const ibValue& varValue, const wxString& colName) const
+ibDataViewItem ibValueModelTable::FindRowValue(const ibValue& varValue, const ibString& colName) const
 {
 	ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo = m_tableColumnCollection->GetColumnByName(colName);
 	if (colInfo != nullptr) {
@@ -119,18 +122,21 @@ ibValueModelTable::~ibValueModelTable()
 
 void ibValueModelTable::FillMembers(ibMemberTable& helper) const
 {
-	helper.AppendFunc(wxT("Add"), wxT("Add()"));
-	helper.AppendFunc(wxT("Clone"), wxT("Clone()"));
-	helper.AppendFunc(wxT("Count"), wxT("Count()"));
-	helper.AppendFunc(wxT("Find"), 2, wxT("Find(value : any, column : string)"));
-	helper.AppendFunc(wxT("Delete"), 1, wxT("Delete(row : tableRow)"));
-	helper.AppendFunc(wxT("Clear"), wxT("Clear()"));
-	helper.AppendFunc(wxT("Sort"), 2, wxT("Sort(column : string, ascending = true : boolean)"));
-	helper.AppendFunc(wxT("UnloadColumn"), 1, wxT("UnloadColumn(column : string) : array"));
-	helper.AppendFunc(wxT("Total"), 1, wxT("Total(column : string) : number"));
-	helper.AppendFunc(wxT("FindRows"), 1, wxT("FindRows(filter : structure) : array"));
+	helper.AppendFunc(ibT("Add"), ibT("Add()"));
+	helper.AppendFunc(ibT("Clone"), ibT("Clone()"));
+	helper.AppendFunc(ibT("Count"), ibT("Count()"));
+	helper.AppendFunc(ibT("Find"), 2, ibT("Find(value : any, column : string)"));
+	helper.AppendFunc(ibT("Delete"), 1, ibT("Delete(row : tableRow)"));
+	helper.AppendFunc(ibT("Clear"), ibT("Clear()"));
+	helper.AppendFunc(ibT("Sort"), 2, ibT("Sort(column : string, ascending = true : boolean)"));
+	helper.AppendFunc(ibT("UnloadColumn"), 1, ibT("UnloadColumn(column : string) : array"));
+	helper.AppendFunc(ibT("Total"), 1, ibT("Total(column : string) : number"));
+	helper.AppendFunc(ibT("FindRows"), 1, ibT("FindRows(filter : structure) : array"));
+	helper.AppendFunc(ibT("Index"), 1, ibT("Index(row : tableRow) : number"));
+	helper.AppendFunc(ibT("GroupBy"), 2, ibT("GroupBy(groupColumns : string, sumColumns = \"\" : string)"));
+	helper.AppendFunc(ibT("FillValues"), 2, ibT("FillValues(value : any, columns = \"\" : string)"));
 
-	helper.AppendProp(wxT("Columns"));
+	helper.AppendProp(ibT("Columns"));
 }
 
 bool ibValueModelTable::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
@@ -143,6 +149,17 @@ bool ibValueModelTable::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 	}
 
 	return false;
+}
+
+void ibValueModelTable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibValue** args, long n)
+{
+	if (method == ibLinqMethod::GroupBy && n >= 1 && args != nullptr && args[0] != nullptr
+		&& args[0]->GetType() == ibValueTypes::TYPE_STRING
+		&& (n < 2 || (args[1] != nullptr && (args[1]->GetType() == ibValueTypes::TYPE_STRING || args[1]->GetType() == ibValueTypes::TYPE_EMPTY)))) {
+		GroupBy(ibString(args[0]->GetString()), n > 1 ? ibString(args[1]->GetString()) : ibString());
+		return;
+	}
+	ibValue::DispatchLinqMethod(method, ret, args, n);
 }
 
 bool ibValueModelTable::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
@@ -179,6 +196,9 @@ bool ibValueModelTable::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 		}
 		return true;
 	}
+	case enIndex:
+		pvarRetValue = static_cast<int>(IndexOf(*paParams[0]));
+		return true;
 	case enClear:
 		Clear();
 		return true;
@@ -220,7 +240,8 @@ bool ibValueModelTable::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 		return true;
 	}
 
-	// ⭐⭐ THE TOTAL OF A COLUMN and THE ROWS THAT MATCH - see the two methods below.
+	// ⭐⭐ THE TOTAL OF A COLUMN (the RAM base's TotalOf - a tabular section totals the same way) and THE ROWS THAT
+	// MATCH (FindRows below).
 	case enTotal:
 		pvarRetValue = TotalOf(paParams[0]->GetString());
 		return true;
@@ -234,6 +255,13 @@ bool ibValueModelTable::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 		pvarRetValue = FindRows(*filter);
 		return true;
 	}
+
+	case enGroupBy:
+		GroupBy(paParams[0]->GetString(), lSizeArray > 1 ? ibString(paParams[1]->GetString()) : ibString());
+		return true;
+	case enFillValues:
+		FillValues(*paParams[0], lSizeArray > 1 ? ibString(paParams[1]->GetString()) : ibString());
+		return true;
 	}
 
 	return false;
@@ -259,7 +287,7 @@ bool ibValueModelTable::GetAt(const ibValue& varKeyValue, ibValue& pvarValue)
 //////////////////////////////////////////////////////////////////////
 
 #include "core/serialize/dataBuilder.h"   // ibDataNode — column collection round-trip
-#include "backend/typeDescription.h"         // ibTypeDescriptionMemory — column type node round-trip
+#include "core/description/typeDescription.h"         // ibTypeDescriptionMemory — column type node round-trip
 #include "backend/metadataConfiguration.h"   // ibMetaDataConfigurationBase : ibMetaData — GetActiveMetaData() base cast
 
 const ibMetaData* ibValueModelTable::GetSourceMetaData() const
@@ -304,7 +332,7 @@ const ibSourceDataObject::ibSourceExplorer* ibValueModelTable::GetSourceExplorer
 
 // The value-table exposes no editable ibProperty of its own (its config IS its columns, edited through the
 // tablebox) — nothing to recompute when a property changes.
-void ibValueModelTable::OnPropertyChanged(ibProperty* /*property*/, const wxVariant& /*oldValue*/, const wxVariant& /*newValue*/)
+void ibValueModelTable::OnPropertyChanged(ibProperty* /*property*/, const ibVariant& /*oldValue*/, const ibVariant& /*newValue*/)
 {
 }
 
@@ -337,10 +365,10 @@ bool ibValueModelTable::WriteProperty(ibDataNode& node) const
 	// It rides with the COLUMNS because it is a fact about the same thing they are — what the designer
 	// declared. A table created in a SCRIPT is never written, keeps the minted one, and is unaddressable
 	// by design: nobody declared it, so nobody can have kept anything for it.
-	node.SetProp(wxT("Guid"), m_guid.GetGuid());
+	node.SetValue(ibT("Guid"), m_guid.GetGuid());
 
 	// One child node per column; the column-info serializes ITSELF through the unified property mechanism
-	// (its own WriteProperty — Name / Caption / Type via each property's GetNodeValue, + id / width). No
+	// (its own WriteProperty — Name / Caption / Type / Indexing via each property's GetNodeValue, + id / width). No
 	// hand-rolled field writing / ibTypeDescriptionMemory here — the same path ibFormAttribute uses.
 	for (auto& col : m_tableColumnCollection->m_listColumnInfo) {
 		if (col == nullptr)
@@ -356,7 +384,7 @@ bool ibValueModelTable::ReadProperty(const ibDataNode& node)
 	// …AND TAKEN BACK, so the table is the same table it was last time. Kept ONLY when something was
 	// written: a configuration saved before this existed carries no guid, and overwriting the minted one
 	// with a null would give every such table one shared address — which is worse than a fresh one.
-	const ibGuid stored = node.GetProp<ibGuid>(wxT("Guid"));
+	const ibGuid stored = node.GetValue<ibGuid>(ibT("Guid"));
 	if (stored.isValid())
 		m_guid = stored;
 
@@ -365,7 +393,7 @@ bool ibValueModelTable::ReadProperty(const ibDataNode& node)
 	// rows exist yet, so AddColumn's per-row cell-fill is a no-op).
 	m_tableColumnCollection->m_listColumnInfo.clear();
 	for (const ibDataNode& colNode : node.Children()) {
-		if (m_tableColumnCollection->AddColumn(wxEmptyString, ibTypeDescription(), wxEmptyString, wxDVC_DEFAULT_WIDTH) != nullptr)
+		if (m_tableColumnCollection->AddColumn(ibEmptyString, ibTypeDescription(), ibEmptyString, wxDVC_DEFAULT_WIDTH) != nullptr)
 			m_tableColumnCollection->m_listColumnInfo.back()->ReadProperty(colNode);
 	}
 	// The columns were emptied and each read its name and type AFTER it was added — so the rows' names and the
@@ -390,11 +418,9 @@ ibValueModelTable::ibValueModelTableColumnCollection::~ibValueModelTableColumnCo
 
 void ibValueModelTable::ibValueModelTableColumnCollection::FillMembers(ibMemberTable& helper) const
 {
-	// The verb's own name, and the DEFAULT said out loud: without a type the column holds text, and a
-	// filter over it compares as text. Both halves were missing — the text named `Add`, and nothing
-	// said what an omitted type means.
-	helper.AppendFunc(wxT("AddColumn"), 4, wxT("AddColumn(name : string, type : typeDescription = string, caption, width)"));
-	helper.AppendProc(wxT("RemoveColumn"), 1, wxT("RemoveColumn(name : string)"));
+	// The verb's own name. An omitted type names no type: the cell keeps whatever is written.
+	helper.AppendFunc(ibT("AddColumn"), 4, ibT("AddColumn(name : string, type : typeDescription = any, caption, width)"));
+	helper.AppendProc(ibT("RemoveColumn"), 1, ibT("RemoveColumn(name : string)"));
 }
 
 #include "valueType.h"
@@ -405,7 +431,7 @@ bool ibValueModelTable::ibValueModelTableColumnCollection::CallAsProc(const long
 	{
 	case enRemoveColumn:
 	{
-		const wxString columnName = paParams[0]->GetString();
+		const ibString columnName = paParams[0]->GetString();
 		if (ibValueModelColumnInfo* colInfo = GetColumnByName(columnName))
 			RemoveColumn(colInfo->GetColumnID());
 		return true;
@@ -420,32 +446,29 @@ bool ibValueModelTable::ibValueModelTableColumnCollection::CallAsFunc(const long
 	{
 	case enAddColumn:
 	{
-		ibValueType* valueType = nullptr;
-		if (lSizeArray > 1)
-			paParams[1]->ConvertToValue(valueType);
-		if (lSizeArray > 3)
-			pvarRetValue = AddColumn(paParams[0]->GetString(), valueType ? ibTypeDescription(valueType->GetOwnerTypeDescription()) : ibTypeDescription(*paParams[1]->ConvertToType<ibValueTypeDescription>()), paParams[2]->GetString(), paParams[3]->GetInteger());
-		else if (lSizeArray > 2)
-			pvarRetValue = AddColumn(paParams[0]->GetString(), valueType ? ibTypeDescription(valueType->GetOwnerTypeDescription()) : ibTypeDescription(*paParams[1]->ConvertToType<ibValueTypeDescription>()), paParams[2]->GetString(), wxDVC_DEFAULT_WIDTH);
-		else if (lSizeArray > 1)
-			pvarRetValue = AddColumn(paParams[0]->GetString(), valueType ? ibTypeDescription(valueType->GetOwnerTypeDescription()) : ibTypeDescription(*paParams[1]->ConvertToType<ibValueTypeDescription>()), paParams[0]->GetString(), wxDVC_DEFAULT_WIDTH);
-		else
-			// ⚠ NO TYPE GIVEN MEANS A STRING COLUMN, and that is a DECISION with consequences a
-			// caller has to know about: whatever is written into the cell, the column keeps saying
-			// it holds text, and everything that compares by the COLUMN's type then compares as
-			// text. `AddColumn("N")` + `row.N = 5` + `Where(x.N > 100)` keeps the row, because "5"
-			// sorts after "100" (measured 2026-09-04 — it reads as a broken filter and is not one).
-			//
-			// Left as it is on purpose: changing the default would change what every existing table
-			// holds. Say it in the signature instead, so the caller passes a type when they mean a
-			// number — `AddColumn("N", New TypeDescription("Number"))` compares as a number.
-			//
-			// ⚠ AND A STRING OF ANY LENGTH (Unqualified). The bare string type carried the designer's
-			// default of ten characters, so a cell kept the first ten of whatever was written into it
-			// (measured 2026-09-21).
-			pvarRetValue = AddColumn(paParams[0]->GetString(),
-				ibTypeDescription(g_valueStringCLSID, ibValueTypeDescription::Unqualified()),
-				paParams[0]->GetString(), wxDVC_DEFAULT_WIDTH);
+		// ⚠ NO TYPE GIVEN MEANS NO TYPE. `AddColumn("A")` used to build a string column, so a number
+		// written into the cell came back as text, and a filter compared it as text. A table built
+		// that way — the usual way in ported code — then stringified every number and date.
+		//
+		// An omitted type, and Undefined passed as the type, name nothing: the cell keeps the value
+		// that was written. A caller who wants the old text comparison passes
+		// `TypeDescription("String")`. A type that is neither a Type nor a TypeDescription still
+		// refuses, as it did.
+		ibTypeDescription type;
+		if (lSizeArray > 1 && paParams[1]->GetType() != ibValueTypes::TYPE_EMPTY) {
+			ibValueType* valueType = nullptr;
+			ibValueTypeDescription* described = nullptr;
+			if (paParams[1]->ConvertToValue(valueType))
+				type = valueType->GetOwnerTypeDescription();
+			else if (paParams[1]->ConvertToValue(described))
+				type = described->GetTypeDesc();
+			else
+				type = *paParams[1]->ConvertToType<ibValueTypeDescription>();
+		}
+		const ibString name = paParams[0]->GetString();
+		const ibString caption = lSizeArray > 2 ? ibString(paParams[2]->GetString()) : name;
+		const int width = lSizeArray > 3 ? paParams[3]->GetInteger() : wxDVC_DEFAULT_WIDTH;
+		pvarRetValue = AddColumn(name, type, caption, width);
 		return true;
 	}
 	}
@@ -479,7 +502,7 @@ bool ibValueModelTable::ibValueModelTableColumnCollection::GetAt(const ibValue& 
 ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColumnInfo::ibValueModelTableColumnInfo() : ibValueModelColumnInfo() {
 }
 
-ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColumnInfo::ibValueModelTableColumnInfo(unsigned int colID, const wxString& colName, const ibTypeDescription& typeDescription, const wxString& caption, int width) :
+ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColumnInfo::ibValueModelTableColumnInfo(unsigned int colID, const ibString& colName, const ibTypeDescription& typeDescription, const ibString& caption, int width) :
 	ibValueModelColumnInfo(), m_columnID(colID), m_columnWidth(width) {
 	// The property variants ARE the storage (no parallel members) — seed them from the ctor args.
 	m_propertyName->SetValue(colName);
@@ -497,7 +520,7 @@ const ibMetaData* ibValueModelTable::ibValueModelTableColumnCollection::ibValueM
 	return ibApplicationInstance::GetActiveMetaData();
 }
 
-void ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColumnInfo::OnPropertyChanged(ibProperty* /*property*/, const wxVariant& /*oldValue*/, const wxVariant& /*newValue*/)
+void ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColumnInfo::OnPropertyChanged(ibProperty* /*property*/, const ibVariant& /*oldValue*/, const ibVariant& /*newValue*/)
 {
 	// Nothing to sync: the property variants ARE the storage, so an inspector edit is already the live value
 	// every reader (GetColumnType / GetTypeDesc / GetSynonym / the source explorer) returns. A TYPE change is
@@ -511,21 +534,23 @@ bool ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColu
 	// Serialize through the UNIFIED property mechanism (each property writes itself via GetNodeValue —
 	// the same path ibFormAttribute uses, so the Type round-trips through ibPropertyType, not a hand-rolled
 	// ibTypeDescriptionMemory), plus the non-property id / width.
-	node.SetValue<s32>(wxT("id"), (s32)m_columnID);
-	node.SetValue<s32>(wxT("width"), m_columnWidth);
+	node.SetValue<std::int32_t>(ibT("id"), (std::int32_t)m_columnID);
+	node.SetValue<std::int32_t>(ibT("width"), m_columnWidth);
 	node.SetProperty(m_propertyName->GetName(), m_propertyName->GetNodeValue());
 	node.SetProperty(m_propertyCaption->GetName(), m_propertyCaption->GetNodeValue());
 	node.SetProperty(m_propertyType->GetName(), m_propertyType->GetNodeValue());
+	node.SetProperty(m_propertyIndexed->GetName(), m_propertyIndexed->GetNodeValue());
 	return ibPropertyObject::WriteProperty(node);
 }
 
 bool ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColumnInfo::ReadProperty(const ibDataNode& node)
 {
-	m_columnID = (unsigned int)node.GetValue<s32>(wxT("id"));
-	m_columnWidth = node.GetValue<s32>(wxT("width"));
+	m_columnID = (unsigned int)node.GetValue<std::int32_t>(ibT("id"));
+	m_columnWidth = node.GetValue<std::int32_t>(ibT("width"));
 	m_propertyName->SetNodeValue(node.GetProperty(m_propertyName->GetName()));
 	m_propertyCaption->SetNodeValue(node.GetProperty(m_propertyCaption->GetName()));
 	m_propertyType->SetNodeValue(node.GetProperty(m_propertyType->GetName()));
+	m_propertyIndexed->SetNodeValue(node.GetProperty(m_propertyIndexed->GetName()));
 	return ibPropertyObject::ReadProperty(node);
 }
 
@@ -567,22 +592,22 @@ namespace {
 // A filter line DETERMINES a value only when it SAYS one: an equality, switched on, on a plain column (a
 // dotted path walks into a reference — there is no cell of this table to write it into), against a literal
 // rather than another field. `>` / `LIKE` / `IN` narrow without deciding, and an OR-group decides nothing at
-// all — so neither contributes, and an OR is not walked into.
-void ibCollectFilterDefaults(const std::vector<ibFilterNodeDescription>& nodes,
-	std::vector<std::pair<wxString, ibValue>>& out)
+// all — so neither contributes, and an OR is not walked into. The literal is restored against `metaData`.
+void ibCollectFilterDefaults(const std::vector<ibFilterNodeDescription>& nodes, const ibMetaData* metaData,
+	std::vector<std::pair<ibString, ibValue>>& out)
 {
 	for (const ibFilterNodeDescription& node : nodes) {
 		if (!node.m_use)
 			continue;
 		if (node.m_kind == ibFilterNodeKind_Group) {
 			if (node.m_groupKind == ibFilterGroupKind_And)
-				ibCollectFilterDefaults(node.m_children, out);
+				ibCollectFilterDefaults(node.m_children, metaData, out);
 			continue;
 		}
 		if (node.m_comparison != ibComparisonKind_Equal) continue;
 		if (!node.m_left.IsField() || node.m_right.IsField()) continue;
-		if (node.m_left.m_path.Find(wxT('.')) != wxNOT_FOUND) continue;
-		out.emplace_back(node.m_left.m_path, node.m_right.m_value);
+		if (node.m_left.m_path.Find(ibT('.')) != wxNOT_FOUND) continue;
+		out.emplace_back(node.m_left.m_path, ibStoredValue(node.m_right.m_value, metaData));
 	}
 }
 }   // namespace
@@ -598,7 +623,7 @@ long ibValueModelTable::AppendRow(unsigned int before, const ibDataViewItem& con
 	// fill; filling it re-folds the view on the spot. Ungrouped → no dims → no-op; a dotted dim is skipped.
 	if (ibComposerNode* ctx = GetViewData<ibComposerNode>(contextRow)) {
 		for (size_t i = 0; i < GetModelComposer().GroupCount(); ++i) {
-			wxString field; ibQueryDimUnfold kind = ibQueryDimUnfold::Elements;
+			ibString field; ibQueryDimUnfold kind = ibQueryDimUnfold::Elements;
 			if (!GetModelComposer().GetGroupAt(i, field, kind) || field.IsEmpty()) continue;
 			const ibMetaID col = GetColumnIDByName(field);
 			if (col != wxNOT_FOUND)
@@ -610,9 +635,9 @@ long ibValueModelTable::AppendRow(unsigned int before, const ibDataViewItem& con
 	// does not pass it, and the RAM composer drops it from the order in the same breath — the row a person just
 	// added is gone before they see it. Filled HERE, before the notify, so the first order computed after the
 	// insert already contains the row. Adjusted to the COLUMN's type, like every other cell of this table.
-	std::vector<std::pair<wxString, ibValue>> defaults;
-	ibCollectFilterDefaults(GetModelComposer().GetCurrentFilterDesc().m_nodes, defaults);
-	for (const std::pair<wxString, ibValue>& one : defaults) {
+	std::vector<std::pair<ibString, ibValue>> defaults;
+	ibCollectFilterDefaults(GetModelComposer().GetCurrentFilterDesc().m_nodes, GetModelComposer().GetMetaData(), defaults);
+	for (const std::pair<ibString, ibValue>& one : defaults) {
 		const ibMetaID col = GetColumnIDByName(one.first);
 		if (col != wxNOT_FOUND)
 			rowData->AppendTableValue(col,
@@ -675,30 +700,84 @@ void ibValueModelTable::SortValue(const ibDataViewColumnItem& column, bool ascen
 	NotifyReset();
 }
 
-ibValue ibValueModelTable::TotalOf(const wxString& column) const
+// The columns a comma-separated list names, in the order it names them - asked alike by GroupBy and FillValues.
+// Blanks around a name and empty entries are nothing; a name that is not a column raises before anything changes.
+std::vector<ibMetaID> ibValueModelTable::ColumnsOf(const ibString& names) const
 {
-	const ibValueModelColumnCollection::ibValueModelColumnInfo* const colInfo =
-		m_tableColumnCollection != nullptr ? m_tableColumnCollection->GetColumnByName(column) : nullptr;
-	if (colInfo == nullptr)
-		ibBackendCoreException::Error(_("Table column '%s' not found"), column);
+	std::vector<ibMetaID> ids;
+	ibStringTokenizer tokens(names, ibT(","));
+	while (tokens.HasMoreTokens()) {
+		const ibString name = tokens.GetNextToken().Trim(true).Trim(false);
+		if (name.IsEmpty())
+			continue;
+		const ibValueModelColumnCollection::ibValueModelColumnInfo* const colInfo =
+			m_tableColumnCollection != nullptr ? m_tableColumnCollection->GetColumnByName(name) : nullptr;
+		if (colInfo == nullptr)
+			ibBackendCoreException::Error(_("Table column '%s' not found"), name);
+		ids.push_back(static_cast<ibMetaID>(colInfo->GetColumnID()));
+	}
+	return ids;
+}
 
-	const ibMetaID id = static_cast<ibMetaID>(colInfo->GetColumnID());
-	ibNumber total(0);
+// ⭐ GROUPBY - in place: the rows that hold equal values in every group column become one row, each sum column holds
+// the total of the rows it stands for, and every other column is gone. A name that is not a column is refused by
+// name; a column named as both is refused too. Rows keep the order in which their group was first met. A sum cell
+// that is not a number adds nothing.
+void ibValueModelTable::GroupBy(const ibString& groupColumns, const ibString& sumColumns)
+{
+	const std::vector<ibMetaID> groups = ColumnsOf(groupColumns);
+	const std::vector<ibMetaID> sums = ColumnsOf(sumColumns);
+	for (const ibMetaID id : sums)
+		if (std::find(groups.begin(), groups.end(), id) != groups.end())
+			ibBackendCoreException::Error(_("GroupBy: a column cannot be both grouped and summed"));
+
+	// A row finds its group by the group cells - ibValue is totally ordered (value.cpp, CompareValueLS) - not by a
+	// walk of every group found so far.
+	struct Group { std::vector<ibValue> m_keys; std::vector<ibNumber> m_sums; };
+	std::vector<Group> found;
+	std::map<std::vector<ibValue>, size_t> groupOf;
 	for (long row = 0; row < GetRowCount(); ++row) {
-		ibComposerNode* const node = GetViewData<ibComposerNode>(GetItem(row));
+		ibComposerNode* const node = Storage().GetNode(row);
 		if (node == nullptr)
 			continue;
-		const ibValue cell = node->GetTableValue(id);
-		if (cell.GetType() == ibValueTypes::TYPE_NUMBER) {
-			total += cell.GetNumber();
-			continue;
+		std::vector<ibValue> keys(groups.size());
+		for (size_t i = 0; i < groups.size(); ++i)
+			node->GetValue(groups[i], keys[i]);
+		const auto placed = groupOf.emplace(keys, found.size());
+		if (placed.second)
+			found.push_back(Group{ std::move(keys), std::vector<ibNumber>(sums.size(), ibNumber(0)) });
+		Group& into = found[placed.first->second];
+		for (size_t i = 0; i < sums.size(); ++i) {
+			ibValue cell;
+			if (node->GetValue(sums[i], cell) && cell.GetType() == ibValueTypes::TYPE_NUMBER)
+				into.m_sums[i] += cell.GetNumber();
 		}
-		if (cell.IsEmpty())
-			continue;   // nothing there adds nothing
-		ibBackendCoreException::Error(_("Table column '%s' holds a value that is not a number (row %d); a column added without a type holds text - declare it as a Number"),
-			column, static_cast<int>(row + 1));
 	}
-	return ibValue(total);
+
+	Clear();
+	std::vector<unsigned int> drop;
+	for (unsigned int i = 0; i < m_tableColumnCollection->GetColumnCount(); ++i) {
+		const ibValueModelColumnCollection::ibValueModelColumnInfo* const colInfo = m_tableColumnCollection->GetColumnInfo(i);
+		if (colInfo == nullptr)
+			continue;
+		const ibMetaID id = static_cast<ibMetaID>(colInfo->GetColumnID());
+		if (std::find(groups.begin(), groups.end(), id) == groups.end() && std::find(sums.begin(), sums.end(), id) == sums.end())
+			drop.push_back(colInfo->GetColumnID());
+	}
+	for (const unsigned int id : drop)
+		m_tableColumnCollection->RemoveColumn(id);
+
+	for (const Group& group : found) {
+		const long at = AppendRow();
+		ibComposerNode* const node = GetViewData<ibComposerNode>(GetItem(at));
+		if (node == nullptr)
+			continue;
+		for (size_t i = 0; i < groups.size(); ++i)
+			node->SetValue(groups[i], group.m_keys[i]);
+		for (size_t i = 0; i < sums.size(); ++i)
+			node->SetValue(sums[i], ibValue(group.m_sums[i]));
+	}
+	NotifyReset();   // the new rows' cells were written past the model - see FillValues
 }
 
 ibValue ibValueModelTable::FindRows(const ibValueContainer& filter)
@@ -708,7 +787,7 @@ ibValue ibValueModelTable::FindRows(const ibValueContainer& filter)
 	struct Term { ibMetaID m_id; ibValue m_value; bool m_indexed; };
 	std::vector<Term> terms;
 	for (const auto& entry : filter.Entries()) {
-		const wxString name = entry.key.GetString();
+		const ibString name = entry.key.GetString();
 		const ibValueModelColumnCollection::ibValueModelColumnInfo* const colInfo =
 			m_tableColumnCollection != nullptr ? m_tableColumnCollection->GetColumnByName(name) : nullptr;
 		if (colInfo == nullptr)
@@ -801,6 +880,24 @@ void ibValueModelTable::DeleteRow(const ibDataViewItem& row)
 		return;
 	if (!ibBackendException::IsEvalMode())
 		ibValueModelStorage::Remove(node);
+}
+
+void ibValueModelTable::FillValues(const ibValue& value, const ibString& columns)
+{
+	if (m_tableColumnCollection == nullptr)
+		return;
+	std::vector<ibMetaID> ids = ColumnsOf(columns);
+	if (ids.empty())
+		for (unsigned int i = 0; i < m_tableColumnCollection->GetColumnCount(); i++)
+			ids.push_back(static_cast<ibMetaID>(m_tableColumnCollection->GetColumnInfo(i)->GetColumnID()));
+	for (long row = 0; row < GetRowCount(); row++) {
+		ibComposerNode* const node = Storage().GetNode(row);
+		if (node == nullptr)
+			continue;
+		for (const ibMetaID id : ids)
+			node->SetValue(id, value);
+	}
+	NotifyReset();   // the cells were written past the model: an index or a view built before is stale now
 }
 
 void ibValueModelTable::Clear()

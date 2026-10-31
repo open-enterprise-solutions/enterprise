@@ -8,7 +8,7 @@
 
 bool ibValueMetaObjectEnumeration::CollectContextMenu(std::vector<ibMetaMenuItem>& items)
 {
-	items.emplace_back(ibMetaMenuKind::Module, wxT("ManagerModule"), _("Open manager module"), m_propertyManagerModule->GetMetaObject());
+	items.emplace_back(ibMetaMenuKind::Module, ibT("ManagerModule"), _("Open manager module"), m_propertyManagerModule->GetMetaObject());
 	return false;
 }
 

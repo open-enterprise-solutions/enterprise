@@ -68,7 +68,7 @@ const wxChar* kCreateMovements = wxT(
 // One side's totals table: keyed by the period and the account it is ABOUT, holding
 // that side's turnover. Two of them, because one movement is about two accounts and
 // two different keys cannot be one upsert.
-wxString CreateTotals(const wxString& table, const wxString& side)
+ibString CreateTotals(const ibString& table, const ibString& side)
 {
 	return wxT("CREATE TABLE ") + table + wxT(" ("
 		"  period_ TEXT NOT NULL, ") + side + wxT("_RTRef INTEGER NOT NULL, ") + side + wxT("_RRRef TEXT NOT NULL,"
@@ -81,7 +81,7 @@ wxString CreateTotals(const wxString& table, const wxString& side)
 // "in force" AND "this side names an account".
 ibMaterializeSpec CorrespondenceSide(bool creditSide)
 {
-	const wxString side = creditSide ? wxT("acccr") : wxT("accdr");
+	const ibString side = creditSide ? wxT("acccr") : wxT("accdr");
 
 	ibSchemaMaterialize m;
 	m.Guard(wxT("{row}.active_ <> 0"));
@@ -181,7 +181,7 @@ struct AcctFix : ::testing::Test
 	// ⚠ The query rides in as a %s ARGUMENT — the driver entry is a printf-style vararg, so a query
 	// carrying a '%' of its own would be read as a format string. And the LAYER closes the result set:
 	// closing it on the object alone leaves the layer's registry holding a dangling pointer.
-	double Figure(const wxString& table, const wxString& column)
+	double Figure(const ibString& table, const ibString& column)
 	{
 		double sum = 0.0;
 		ibDatabaseResultSet* rs = db.RunQueryWithResults(wxT("%s"),
@@ -193,7 +193,7 @@ struct AcctFix : ::testing::Test
 		return sum;
 	}
 
-	long Rows(const wxString& table)
+	long Rows(const ibString& table)
 	{
 		long n = -1;
 		ibDatabaseResultSet* rs = db.RunQueryWithResults(wxT("%s"), wxT("SELECT COUNT(*) FROM ") + table);
@@ -470,9 +470,9 @@ TEST(AcctGuard, GuardsCompose)
 
 namespace {
 
-wxString BackendPartialsDir()
+ibString BackendPartialsDir()
 {
-	wxFileName here(wxString::FromUTF8(__FILE__));
+	wxFileName here(ibString::FromUTF8(__FILE__));
 	here.SetFullName(wxEmptyString);
 	here.RemoveLastDir();                      // tests -> enterprise
 	here.AppendDir(wxT("src"));
@@ -483,9 +483,9 @@ wxString BackendPartialsDir()
 	return here.GetPath();
 }
 
-std::vector<wxString> ReadLines(const wxString& path)
+std::vector<ibString> ReadLines(const ibString& path)
 {
-	std::vector<wxString> lines;
+	std::vector<ibString> lines;
 	wxTextFile file;
 	if (!file.Open(path))
 		return lines;
@@ -497,7 +497,7 @@ std::vector<wxString> ReadLines(const wxString& path)
 
 // A guard is an EXPRESSION-condition. Any of these makes it one; a line carrying
 // none of them is naming a field and calling it a condition.
-bool CarriesAComparison(const wxString& text)
+bool CarriesAComparison(const ibString& text)
 {
 	return text.Contains(wxT("<>")) || text.Contains(wxT("="))
 	    || text.Contains(wxT(" IS ")) || text.Contains(wxT(">")) || text.Contains(wxT("<"));
@@ -515,14 +515,14 @@ TEST(AcctGuardSource, EveryDeclaredGuardComparesRatherThanNamingAField)
 		<< "the partial sources must be findable from the test's own location";
 
 	size_t guardsSeen = 0;
-	for (const wxString& path : files) {
-		const std::vector<wxString> lines = ReadLines(path);
+	for (const ibString& path : files) {
+		const std::vector<ibString> lines = ReadLines(path);
 		for (size_t i = 0; i < lines.size(); ++i) {
 			if (!lines[i].Contains(wxT(".Guard(")))
 				continue;
 			++guardsSeen;
 			// The expression may wrap onto the next line (the predicate half often does).
-			const wxString here = lines[i] + (i + 1 < lines.size() ? lines[i + 1] : wxString());
+			const ibString here = lines[i] + (i + 1 < lines.size() ? lines[i + 1] : ibString());
 			EXPECT_TRUE(CarriesAComparison(here))
 				<< "a guard rendered as a bare field fails CREATE TRIGGER on Firebird: "
 				<< wxFileName(path).GetFullName().ToStdString() << ":" << (i + 1);
@@ -541,9 +541,9 @@ TEST(AcctGuardSource, TheInForceRuleIsSpelledInExactlyOnePlace)
 	ASSERT_NE(0u, wxDir::GetAllFiles(BackendPartialsDir(), &files, wxT("*MetadataSchema.cpp"), wxDIR_FILES));
 
 	size_t callers = 0;
-	for (const wxString& path : files) {
-		const std::vector<wxString> lines = ReadLines(path);
-		for (const wxString& line : lines) {
+	for (const ibString& path : files) {
+		const std::vector<ibString> lines = ReadLines(path);
+		for (const ibString& line : lines) {
 			if (!line.Contains(wxT("GetRegisterActive(")))
 				continue;
 			EXPECT_TRUE(line.Contains(wxT("ibRegGuardInForce")))
@@ -556,7 +556,7 @@ TEST(AcctGuardSource, TheInForceRuleIsSpelledInExactlyOnePlace)
 
 	// …and the helper itself still writes the comparison.
 	wxFileName lowering(BackendPartialsDir(), wxT("registerQueryLowering.h"));
-	const std::vector<wxString> lines = ReadLines(lowering.GetFullPath());
+	const std::vector<ibString> lines = ReadLines(lowering.GetFullPath());
 	ASSERT_FALSE(lines.empty()) << "registerQueryLowering.h must be readable";
 
 	bool found = false;

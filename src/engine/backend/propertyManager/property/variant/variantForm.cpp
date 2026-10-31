@@ -1,6 +1,6 @@
 #include "variantForm.h"
 
-wxString ibVariantDataForm::MakeString() const
+ibString ibVariantForm::GetString() const
 {
 	return _("Form");
 }

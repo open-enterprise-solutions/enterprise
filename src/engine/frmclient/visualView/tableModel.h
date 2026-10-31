@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "frmclient/visualView/ctrl/frame.h"
-#include "frmclient/win/ctrls/dataview/tabularModelView.h"
+#include "core/tabular/tabularModelView.h"
 
 // A CELL of a table's row as the server wrote it: the text, a tick for a boolean, the right side for a number — and
 // how it looks, the conditional appearance the server's model gave it.
@@ -29,7 +29,7 @@ public:
 	// The same row — the same handle, whichever read made the object.
 	virtual bool IsEqualTo(const ibDataViewObject& other) const override;
 	virtual bool IsContainer() const override { return m_container; }
-	virtual bool GetGroupCaption(wxString& caption) const override;
+	virtual bool GetGroupCaption(ibString& caption) const override;
 	virtual ibDataViewItem GetParentItem() const override { return m_parent; }
 
 	long long GetHandle() const { return m_handle; }
@@ -57,11 +57,10 @@ private:
 class ibViewTableModel : public ibDataViewModel {
 public:
 
-	// What an answer leaves the UI to do — the current row it named, the pictures it carried (id, base64), drawn there:
-	// a wx image is made on the UI thread only.
+	// What an answer leaves the UI to do — the current row it named. A row's picture is its id alone, drawn from the
+	// client's pictures (ibProtocolPictureById) on the UI thread.
 	struct ibAnswer {
-		long long                                     currentRow = 0;
-		std::vector<std::pair<ibPictureID, wxString>> pictures;
+		long long currentRow = 0;
 	};
 	using ibAnswered = std::function<void(const ibAnswer& answer)>;
 
@@ -75,10 +74,10 @@ public:
 	// A cell — the model's column is the column's id (ibValueModelTableBoxColumn builds it so): a boolean as itself, anything else
 	// as the text the server wrote it in; a number stands right by its look. It has a value where the server wrote one: a
 	// folder's only in the first column.
-	virtual void GetValue(wxVariant& variant, const ibDataViewItem& item, unsigned int col) const override;
+	virtual void GetValue(ibVariant& variant, const ibDataViewItem& item, unsigned int col) const override;
 	virtual bool HasValue(const ibDataViewItem& item, unsigned col) const override;
 	virtual bool GetAttr(const ibDataViewItem& item, unsigned int col, ibDataViewItemAttr& attr) const override;
-	virtual bool SetValue(const wxVariant& variant, const ibDataViewItem& item, unsigned int col) override;
+	virtual bool SetValue(const ibVariant& variant, const ibDataViewItem& item, unsigned int col) override;
 	virtual ibDataViewItem GetParent(const ibDataViewItem& item) const override;
 
 	virtual unsigned int GetFirstFetch(const ibDataViewItem& parent, const ibDataViewItem& anchor, int count,
@@ -87,6 +86,9 @@ public:
 		ibDataViewItemArray& out) const override;
 	virtual unsigned int GetPrevFetch(const ibDataViewItem& parent, const ibDataViewItem& anchor, int count,
 		ibDataViewItemArray& out) const override;
+	// One fetch answering both sides of the anchor (Before).
+	virtual unsigned int GetAroundFetch(const ibDataViewItem& parent, const ibDataViewItem& anchor, int count, int before,
+		ibDataViewItemArray& out, unsigned int& above) const override;
 
 	virtual bool IsPagedModel() const override { return true; }
 	virtual bool HasKeyedRows() const override { return true; }
@@ -99,9 +101,12 @@ private:
 	// model's GetViewData).
 	static const ibViewTableRow* RowOf(const ibDataViewItem& item);
 
-	// A portion read — Direction 0 reset, 1 forward, -1 backward; the rows in `out`, how many read.
-	unsigned int Fetch(int direction, const ibDataViewItem& parent, const ibDataViewItem& anchor, int count,
-		ibDataViewItemArray& out) const;
+	// A portion read that way from the anchor; the rows in `out`, how many read.
+	unsigned int Fetch(ibProtocol::ibForm::ibTable::ibDirection direction, const ibDataViewItem& parent,
+		const ibDataViewItem& anchor, int count, ibDataViewItemArray& out) const;
+	// …with up to `before` rows ahead of it, first in `out`: `above` — how many came (the answer's Before).
+	unsigned int Fetch(ibProtocol::ibForm::ibTable::ibDirection direction, const ibDataViewItem& parent,
+		const ibDataViewItem& anchor, int count, int before, ibDataViewItemArray& out, unsigned int& above) const;
 
 	const ibViewFetcher m_fetcher;
 	const ibAnswered    m_answered;

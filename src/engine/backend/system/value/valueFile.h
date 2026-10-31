@@ -47,7 +47,7 @@ public:
 	virtual bool Init(ibValue **paParams, const long lSizeArray);
 
 private:
-	wxString m_fileName;
+	ibString m_fileName;
 };
 
 #endif 

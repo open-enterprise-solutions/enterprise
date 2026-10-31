@@ -22,7 +22,7 @@
 
 namespace {
 
-ibMcpServer* Server(wxString& refusal)
+ibMcpServer* Server(ibString& refusal)
 {
 	ibMcpServer* server = ibApplicationInstance::GetMcpServer();
 	if (server == nullptr) {
@@ -39,7 +39,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 // objects in Call, so the name a caller is told cannot drift from the name looked for.
 const ibArg& ArgLast()
 {
-	static const ibArg s_a(wxT("last"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("last"), ibArg::Kind::Whole,
 		ibMcpText("Only the last N turns. A long conversation read whole is mostly padding; the "
 		  "recent end is where the current task is. Omit for all of it."));
 	return s_a;
@@ -47,7 +47,7 @@ const ibArg& ArgLast()
 
 const ibArg& ArgText()
 {
-	static const ibArg s_a(wxT("text"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("text"), ibArg::Kind::Text,
 		ibMcpText("What to say. Markdown: a heading, a list, a fenced snippet - the emphasis you "
 			  "choose is the emphasis they see."), /*required*/ true);
 	return s_a;
@@ -61,12 +61,12 @@ const ibArg& ArgText()
 class ibMcpToolChatTake : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("chat_take"); }
+	ibString GetName() const override { return ibT("chat_take"); }
 
 	// …and hearing them back, which is where "I have answered it" arrives.
 	bool RunsWhileBusy() const override { return true; }
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Collect what the person at the designer has written in the assistant window, and "
 			"what has HAPPENED in their configuration while you were not looking. Answers empty "
@@ -86,25 +86,25 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& WXUNUSED(params), ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& /*params*/, ibDataNode& result, ibString& refusal) const override
 	{
 		ibMcpServer* server = Server(refusal);
 		if (server == nullptr)
 			return false;
 
 		std::vector<ibDataValue> messages;
-		for (const wxString& said : server->TakeSaid())
+		for (const ibString& said : server->TakeSaid())
 			messages.push_back(ibDataValue::String(said));
 
-		result.AddField(wxT("messages"), ibDataValue::Array(messages));
+		result.AddField(ibT("messages"), ibDataValue::Array(messages));
 
 		// …AND WHAT MERELY HAPPENED, under its own name — see the description for why the two are
 		// not one list.
 		std::vector<ibDataValue> observed;
-		for (const wxString& noted : server->TakeNoted())
+		for (const ibString& noted : server->TakeNoted())
 			observed.push_back(ibDataValue::String(noted));
 
-		result.AddField(wxT("observed"), ibDataValue::Array(observed));
+		result.AddField(ibT("observed"), ibDataValue::Array(observed));
 		return true;
 	}
 };
@@ -117,13 +117,13 @@ MCP_TOOL_REGISTER(ibMcpToolChatTake);
 class ibMcpToolChatSay : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("chat_say"); }
+	ibString GetName() const override { return ibT("chat_say"); }
 
 	// Telling the person what is happening is exactly what a caller must still be able to do while
 	// the application waits on a dialog — often to ask them to answer it.
 	bool RunsWhileBusy() const override { return true; }
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Say something to the person at the designer - it appears in their assistant "
 			"window. Write for a person: what you did and what you propose, not the shape of "
@@ -136,20 +136,20 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibMcpServer* server = Server(refusal);
 		if (server == nullptr)
 			return false;
 
-		const wxString text = ArgText().Text(params);
+		const ibString text = ArgText().Text(params);
 		if (text.IsEmpty()) {
 			refusal = ibMcpText("Nothing to say.");
 			return false;
 		}
 
 		server->Reply(text);
-		result.AddField(wxT("delivered"), ibDataValue::Bool(true));
+		result.AddField(ibT("delivered"), ibDataValue::Bool(true));
 		return true;
 	}
 };
@@ -178,14 +178,14 @@ MCP_TOOL_REGISTER(ibMcpToolChatSay);
 class ibMcpToolChatHistory : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("chat_history"); }
+	ibString GetName() const override { return ibT("chat_history"); }
 
-	wxString GetActivity(const ibDataNode& WXUNUSED(params)) const override
+	ibString GetActivity(const ibDataNode& /*params*/) const override
 	{
 		return ibMcpText("reading back the conversation");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("The whole conversation with the person at the designer, oldest first, WITHOUT "
 			"collecting anything - chat_take empties its queue, this does not. Read it when you "
@@ -200,7 +200,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		ibMcpServer* server = Server(refusal);
 		if (server == nullptr)
@@ -208,9 +208,9 @@ public:
 
 		const std::vector<ibMcpServer::Turn> conversation = server->GetConversation();
 
-		s32 last = (s32)ArgLast().Whole(params);
-		if (last <= 0 || last > (s32)conversation.size())
-			last = (s32)conversation.size();
+		std::int32_t last = (std::int32_t)ArgLast().Whole(params);
+		if (last <= 0 || last > (std::int32_t)conversation.size())
+			last = (std::int32_t)conversation.size();
 
 		std::vector<ibDataValue> turns;
 
@@ -223,19 +223,19 @@ public:
 
 			// WHO, as a word. "them" and "me" is what a reader needs to follow it; a boolean
 			// would make every consumer invent the same two words for itself.
-			entry->SetValue(wxT("from"), wxString(
-				conversation[index].fromPerson ? wxT("person") : wxT("assistant")));
-			entry->SetValue(wxT("text"), conversation[index].text);
+			entry->SetValue(ibT("from"), ibString(
+				conversation[index].fromPerson ? ibT("person") : ibT("assistant")));
+			entry->SetValue(ibT("text"), conversation[index].text);
 
 			turns.push_back(ibDataValue::Child(entry));
 		}
 
-		result.AddField(wxT("turns"), ibDataValue::Int((s64)turns.size()));
-		result.AddField(wxT("total"), ibDataValue::Int((s64)conversation.size()));
-		result.AddField(wxT("conversation"), ibDataValue::Array(turns));
+		result.AddField(ibT("turns"), ibDataValue::Int((std::int64_t)turns.size()));
+		result.AddField(ibT("total"), ibDataValue::Int((std::int64_t)conversation.size()));
+		result.AddField(ibT("conversation"), ibDataValue::Array(turns));
 
 		if (conversation.empty())
-			result.SetValue(wxT("note"),
+			result.SetValue(ibT("note"),
 				ibMcpText("Nothing has been said yet in this run of the designer."));
 
 		return true;

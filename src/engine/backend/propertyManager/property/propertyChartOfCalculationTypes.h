@@ -6,7 +6,7 @@
 
 //base property for "chart of calculation types" selection
 class BACKEND_API ibPropertyChartOfCalculationTypes : public ibProperty {
-	static wxVariantData* CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription());
+	static ibVariant CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription());
 public:
 
 	ibMetaDescription& GetValueAsMetaDesc() const;
@@ -18,11 +18,11 @@ public:
 	// sections may name (ibValueMetaObjectChartOfCalculationTypes::GetBaseCharts).
 	virtual ibPropertyChoiceMode GetValueList(ibPropertyChoiceList& list) override;
 
-	ibPropertyChartOfCalculationTypes(ibPropertyCategory* cat, const wxString& name) : ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject())) {}
-	ibPropertyChartOfCalculationTypes(ibPropertyCategory* cat, const wxString& name, const wxString& label) : ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject())) {}
-	ibPropertyChartOfCalculationTypes(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString) : ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())) {}
-	ibPropertyChartOfCalculationTypes(ibPropertyCategory* cat, const wxString& name, const wxString& label, ibPropertyChoiceMode mode) : ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject())), m_choiceMode(mode) {}
-	ibPropertyChartOfCalculationTypes(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, ibPropertyChoiceMode mode) : ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())), m_choiceMode(mode) {}
+	ibPropertyChartOfCalculationTypes(ibPropertyCategory* cat, const ibString& name) : ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject())) {}
+	ibPropertyChartOfCalculationTypes(ibPropertyCategory* cat, const ibString& name, const ibString& label) : ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject())) {}
+	ibPropertyChartOfCalculationTypes(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString) : ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())) {}
+	ibPropertyChartOfCalculationTypes(ibPropertyCategory* cat, const ibString& name, const ibString& label, ibPropertyChoiceMode mode) : ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject())), m_choiceMode(mode) {}
+	ibPropertyChartOfCalculationTypes(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString, ibPropertyChoiceMode mode) : ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())), m_choiceMode(mode) {}
 
 	// NOTHING CHOSEN — asked of the property itself, so a rule reads "is this binding empty" rather
 	// than reaching for a type count. A calculation register with this empty cannot type its
@@ -36,9 +36,9 @@ public:
 protected:
 
 	// The family rule: a relationship arrives in whichever wrapper the caller was handed —
-	// CreateValueList builds every candidate as ibVariantDataOwner — and a property that stores a
+	// CreateValueList builds every candidate as ibVariantOwner — and a property that stores a
 	// neighbour's wrapper raises on every later read. See propertyRecord.h.
-	virtual void DoSetValue(const wxVariant& val) override;
+	virtual void DoSetValue(const ibVariant& val) override;
 
 public:
 

@@ -5,18 +5,18 @@
 
 ////////////////////////////////////////////////////////////////////
 
-wxVariantData* ibPropertyRecord::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc)
+ibVariant ibPropertyRecord::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc)
 {
 	// No cast: the variant needs the owner only to reach GetMetaData, which ibPropertyObject answers.
-	return new ibVariantDataRecord(property, typeDesc);
+	return ibVariant(new ibVariantRecord(property, typeDesc));
 }
 
 ibMetaDescription& ibPropertyRecord::GetValueAsMetaDesc() const {
-	return get_cell_variant<ibVariantDataMetaDesc>()->GetMetaDesc();
+	return get_cell_variant<ibVariantMetaDesc>()->GetMetaDesc();
 }
 
-ibMetaDescription& ibPropertyRecord::GetValueAsMetaDesc(const wxVariant& val) const {
-	return get_cell_variant<ibVariantDataMetaDesc>(val)->GetMetaDesc();
+ibMetaDescription& ibPropertyRecord::GetValueAsMetaDesc(const ibVariant& val) const {
+	return get_cell_variant<ibVariantMetaDesc>(val)->GetMetaDesc();
 }
 
 void ibPropertyRecord::SetValue(const ibMetaDescription& val)
@@ -27,13 +27,13 @@ void ibPropertyRecord::SetValue(const ibMetaDescription& val)
 // See the header for why this exists: a value from a NEIGHBOUR of the relationship family carries
 // the right description in the wrong wrapper, and storing it as it comes makes every later read
 // raise. Taken apart and re-wrapped here, where the class this property holds is known.
-void ibPropertyRecord::DoSetValue(const wxVariant& val)
+void ibPropertyRecord::DoSetValue(const ibVariant& val)
 {
 	// Unconditionally, and that is the point: "is this already mine" is a question worth not
 	// asking. A relationship IS its description, so taking it out and wrapping it in this
 	// property's own class is right whichever wrapper it arrived in - and costs one copy of a
 	// short list of ids.
-	if (const ibVariantDataMetaDesc* carried = find_cell_variant<ibVariantDataMetaDesc>(val)) {
+	if (const ibVariantMetaDesc* carried = find_cell_variant<ibVariantMetaDesc>(val)) {
 		SetValue(carried->GetMetaDesc());
 		return;
 	}
@@ -83,7 +83,7 @@ bool ibPropertyRecord::SetDataValue(const ibValue& varPropVal)
 
 bool ibPropertyRecord::GetDataValue(ibValue& pvarPropVal) const
 {
-	const ibVariantDataRecord* gen = get_cell_variant<ibVariantDataRecord>();
+	const ibVariantRecord* gen = get_cell_variant<ibVariantRecord>();
 	wxASSERT(gen);
 	pvarPropVal = gen->GetDataValue();
 	return true;
@@ -91,11 +91,11 @@ bool ibPropertyRecord::GetDataValue(ibValue& pvarPropVal) const
 
 bool ibPropertyRecord::ReadNodeValue(const ibDataValue& value)
 {
-	return ibMetaDescriptionMemory::ReadNode(value, GetValueAsMetaDesc());
+	return ibBackendMetaDescriptionMemory::ReadNode(value, GetValueAsMetaDesc());
 }
 
 bool ibPropertyRecord::WriteNodeValue(ibDataValue& value) const
 {
 	const ibPropertyObject* owner = m_owner;   // CONST overload — the non-const one returns null (see propertyObject.h)
-	return ibMetaDescriptionMemory::WriteNode(value, GetValueAsMetaDesc(), owner->GetMetaData());
+	return ibBackendMetaDescriptionMemory::WriteNode(value, GetValueAsMetaDesc(), owner->GetMetaData());
 }

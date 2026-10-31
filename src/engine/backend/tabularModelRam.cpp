@@ -15,7 +15,7 @@
 
 // ibRamValueStorage::ColumnIdByName — resolve a field name → column id via the model's column collection
 // (re-pointed each fetch by RunComposerPage). wxNOT_FOUND for an unknown / dot-walk path (the composer skips it).
-ibMetaID ibRamValueStorage::ColumnIdByName(const wxString& name) const
+ibMetaID ibRamValueStorage::ColumnIdByName(const ibString& name) const
 {
 	if (m_columns == nullptr) return wxNOT_FOUND;
 	const ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* info = m_columns->GetColumnByName(name);
@@ -25,16 +25,16 @@ ibMetaID ibRamValueStorage::ColumnIdByName(const wxString& name) const
 // ibRamValueStorage::SplitField — cut a field path on '.' → HEAD storage column id + the dotted TAIL (reference
 // hops). wxNOT_FOUND head (the first segment is not a storage column) → false, the caller drops this spec.
 // Shared by the RAM composer's ComputeOrder (filter/sort) AND the model's grouping (RunComposerPage dims).
-bool ibRamValueStorage::SplitField(const wxString& path, ibMetaID& headCol, std::vector<wxString>& tail) const
+bool ibRamValueStorage::SplitField(const ibString& path, ibMetaID& headCol, std::vector<ibString>& tail) const
 {
-	const wxString head = path.BeforeFirst(wxT('.'));
+	const ibString head = path.BeforeFirst(ibT('.'));
 	headCol = ColumnIdByName(head.IsEmpty() ? path : head);
 	if (headCol == wxNOT_FOUND) return false;
 	tail.clear();
-	wxString remaining = path.AfterFirst(wxT('.'));
+	ibString remaining = path.AfterFirst(ibT('.'));
 	while (!remaining.IsEmpty()) {
-		tail.push_back(remaining.BeforeFirst(wxT('.')));
-		remaining = remaining.AfterFirst(wxT('.'));
+		tail.push_back(remaining.BeforeFirst(ibT('.')));
+		remaining = remaining.AfterFirst(ibT('.'));
 	}
 	return true;
 }
@@ -45,10 +45,10 @@ bool ibRamValueStorage::SplitField(const wxString& path, ibMetaID& headCol, std:
 // describes its columns through GetSourceExplorer (name → id) and fetches the next value by that id
 // (GetValueByMetaID, the very hop ResolvePath runs). A primitive mid-path / unknown segment ends the walk with
 // an empty value (an unevaluable filter passes; an unevaluable sort key sorts as empty — never a crash).
-ibValue ibRamValueStorage::ResolveField(long row, ibMetaID headCol, const std::vector<wxString>& tail) const
+ibValue ibRamValueStorage::ResolveField(long row, ibMetaID headCol, const std::vector<ibString>& tail) const
 {
 	ibValue current = GetCell(row, headCol);
-	for (const wxString& seg : tail) {
+	for (const ibString& seg : tail) {
 		ibSourceDataObject* source = nullptr;
 		current.ConvertToValue<ibSourceDataObject>(source);
 		if (source == nullptr)
@@ -118,12 +118,12 @@ unsigned int ibValueModel::RunStoragePage(ibRamValueStorage& storage, ibDataRamC
 	const bool flatView = (parent == s_constIgnoreParent);
 	struct RamDim {
 		ibMetaID              m_col = ibMetaID(wxNOT_FOUND);
-		std::vector<wxString> m_tail;
+		std::vector<ibString> m_tail;
 	};
 	std::vector<RamDim> dims;
 	if (!flatView) {
 		for (size_t i = 0; i < composer.GroupCount(); ++i) {
-			wxString field; ibQueryDimUnfold kind = ibQueryDimUnfold::Elements;
+			ibString field; ibQueryDimUnfold kind = ibQueryDimUnfold::Elements;
 			if (!composer.GetGroupAt(i, field, kind) || field.IsEmpty()) continue;
 			RamDim dim;
 			if (!storage.SplitField(field, dim.m_col, dim.m_tail))
@@ -199,7 +199,7 @@ unsigned int ibValueModel::RunStoragePage(ibRamValueStorage& storage, ibDataRamC
 	// ---- GROUP level: one synthetic group node per DISTINCT value of dims[depth] among the scoped rows, in the
 	//      (already sorted) scoped order. Each carries the parent path + its own dim value + a container flag ----
 	const ibMetaID dimCol = dims[depth].m_col;
-	const std::vector<wxString>& dimTail = dims[depth].m_tail;
+	const std::vector<ibString>& dimTail = dims[depth].m_tail;
 	std::vector<ibValue> groupValues;
 	for (const long idx : scoped) {
 		const ibValue v = storage.ResolveField(idx, dimCol, dimTail);
@@ -299,9 +299,9 @@ void ibValueModelStorage::BuildAncestorBreadcrumb(const ibDataViewItem& fromRow,
 	std::vector<ibValue> groupPath;
 	std::vector<ibComposerNode*> crumbs;
 	for (size_t i = 0; i < m_composer.GroupCount(); ++i) {
-		wxString field; ibQueryDimUnfold kind = ibQueryDimUnfold::Elements;
+		ibString field; ibQueryDimUnfold kind = ibQueryDimUnfold::Elements;
 		if (!m_composer.GetGroupAt(i, field, kind) || field.IsEmpty()) continue;
-		ibMetaID head; std::vector<wxString> tail;
+		ibMetaID head; std::vector<ibString> tail;
 		if (!m_storage.SplitField(field, head, tail)) continue;
 		const ibValue v = m_storage.ResolveField(idx, head, tail);
 		groupPath.push_back(v);

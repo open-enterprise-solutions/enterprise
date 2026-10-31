@@ -2,7 +2,6 @@
 #define __LAUNCHER_WND_H__
 
 #include <wx/artprov.h>
-#include <wx/xrc/xmlres.h>
 #include <wx/string.h>
 #include <wx/listbox.h>
 #include <wx/gdicmn.h>
@@ -17,6 +16,7 @@
 #include <wx/button.h>
 #include <wx/frame.h>
 #include <wx/bmpbndl.h>
+#include "core/localization/dictionary.h"   // _() — the dialog's words
 
 // ⭐ THE LAUNCHER'S OWN PICTURES. It links the backend alone, so the frontend's art provider — which answers the
 // stock ids in the set's manner in the designer and the running application — never reaches it, and a stock id

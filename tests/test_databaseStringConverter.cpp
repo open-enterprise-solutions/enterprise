@@ -24,22 +24,21 @@
 
 namespace {
 
-wxString Cp(std::initializer_list<int> cps)
+ibString Cp(std::initializer_list<int> cps)
 {
-    wxString s;
-    for (int cp : cps) s += wxUniChar(cp);
+    ibString s;
+    for (int cp : cps) s.AppendCodepoint(static_cast<uint32_t>(cp));
     return s;
 }
 
-wxString Read(const char* bytes)
+ibString Read(const char* bytes)
 {
     return ibDatabaseStringConverter::ConvertFromUnicodeStream(bytes);
 }
 
-std::string Write(const wxString& text)
+std::string Write(const ibString& text)
 {
-    const wxCharBuffer bytes = ibDatabaseStringConverter::ConvertToUnicodeStream(text);
-    return std::string(bytes.data(), bytes.length());
+    return ibDatabaseStringConverter::ConvertToUnicodeStream(text);
 }
 
 } // namespace
@@ -52,8 +51,8 @@ TEST(DatabaseStringConverter, AsciiComesThroughAsIs) {
 
 TEST(DatabaseStringConverter, EmptyIsEmpty) {
     EXPECT_TRUE(Read("").IsEmpty());
-    EXPECT_TRUE(Write(wxString()).empty());
-    EXPECT_EQ(ibDatabaseStringConverter::GetEncodedStreamLength(wxString()), 0u);
+    EXPECT_TRUE(Write(ibString()).empty());
+    EXPECT_EQ(ibDatabaseStringConverter::GetEncodedStreamLength(ibString()), 0u);
 }
 
 // A NULL FIELD HAS NO BYTES: SQLite (sqlite3_column_text) and MySQL answer a NULL column with a null
@@ -73,25 +72,20 @@ TEST(DatabaseStringConverter, ThreeByteSequence) {
 }
 
 TEST(DatabaseStringConverter, FourByteSequenceIsOneCharacter) {
-    const wxString s = Read("\xF0\x9F\x98\x80");   // U+1F600, past the BMP
-    const wchar_t* w = s.wc_str();
-    if (sizeof(wchar_t) == 2) {
-        ASSERT_EQ(s.length(), 2u);   // a surrogate pair where wchar_t is sixteen bits
-        EXPECT_EQ(static_cast<unsigned>(w[0]), 0xD83Du);
-        EXPECT_EQ(static_cast<unsigned>(w[1]), 0xDE00u);
-    } else {
-        ASSERT_EQ(s.length(), 1u);
-        EXPECT_EQ(static_cast<unsigned>(w[0]), 0x1F600u);
-    }
+    const ibString s = Read("\xF0\x9F\x98\x80");   // U+1F600, past the BMP
+    const ibChar* w = s.c_str();
+    ASSERT_EQ(s.length(), 2u);   // a surrogate pair: the string is UTF-16 on every OS
+    EXPECT_EQ(static_cast<unsigned>(w[0]), 0xD83Du);
+    EXPECT_EQ(static_cast<unsigned>(w[1]), 0xDE00u);
 }
 
 // Ill-formed input — a cut-off tail, an overlong form, a stray continuation byte — is not decoded
 // here: it comes out exactly as the converter's road always made it.
 TEST(DatabaseStringConverter, IllFormedInputTakesTheOldRoad) {
     for (const char* bytes : { "\xC3", "\xC0\xAF", "a\x80z" }) {
-        wxString old(wxConvUTF8.cMB2WC(bytes));
-        if (old == wxEmptyString)
-            old << wxString(bytes);
+        ibString old(wxString(wxConvUTF8.cMB2WC(bytes)));
+        if (old.IsEmpty())
+            old << ibString(bytes);
         EXPECT_EQ(Read(bytes), old) << "input of " << std::strlen(bytes) << " bytes";
     }
 }
@@ -108,13 +102,13 @@ TEST(DatabaseStringConverter, WritesEachWidthOfSequence) {
 // The length a parameter is bound with and the bytes it is bound from are asked for separately — they
 // must agree, byte for byte, or a value is cut short or read past its end.
 TEST(DatabaseStringConverter, TheLengthIsTheLengthOfTheBytes) {
-    for (const wxString& text : { wxString(wxT("x")), Cp({ 0x041A, 0x043E, 0x20, 0x0406 }),
+    for (const ibString& text : { ibString(wxT("x")), Cp({ 0x041A, 0x043E, 0x20, 0x0406 }),
                                   Cp({ 0x20AC, 0x35 }), Read("\xF0\x9F\x98\x80" "a") }) {
         EXPECT_EQ(ibDatabaseStringConverter::GetEncodedStreamLength(text), Write(text).size());
     }
 }
 
 TEST(DatabaseStringConverter, WhatIsWrittenReadsBackTheSame) {
-    const wxString text = Cp({ 0x0414, 0x0435, 0x043C, 0x0027, 0x044F, 0x043D, 0x0435, 0x043D, 0x043A, 0x043E, 0x20AC });
+    const ibString text = Cp({ 0x0414, 0x0435, 0x043C, 0x0027, 0x044F, 0x043D, 0x0435, 0x043D, 0x043A, 0x043E, 0x20AC });
     EXPECT_EQ(Read(Write(text).c_str()), text);
 }

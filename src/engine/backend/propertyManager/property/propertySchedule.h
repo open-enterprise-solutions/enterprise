@@ -10,26 +10,26 @@
 // what the manager reads.
 
 #include "backend/propertyManager/propertyObject.h"
-#include "backend/job/jobSchedule.h"
+#include "core/job/jobSchedule.h"
 
 class BACKEND_API ibPropertySchedule : public ibProperty {
-	static wxVariantData* CreateVariantData(const ibJobScheduleDescription& schedule = ibJobScheduleDescription());
+	static ibVariant CreateVariantData(const ibJobScheduleDescription& schedule = ibJobScheduleDescription());
 public:
 
 	ibJobScheduleDescription& GetValueAsSchedule() const;
 	void SetValue(const ibJobScheduleDescription& schedule);
 
-	ibPropertySchedule(ibPropertyCategory* cat, const wxString& name)
+	ibPropertySchedule(ibPropertyCategory* cat, const ibString& name)
 		: ibProperty(cat, name, CreateVariantData())
 	{
 	}
 
-	ibPropertySchedule(ibPropertyCategory* cat, const wxString& name, const wxString& label)
+	ibPropertySchedule(ibPropertyCategory* cat, const ibString& name, const ibString& label)
 		: ibProperty(cat, name, label, CreateVariantData())
 	{
 	}
 
-	ibPropertySchedule(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString)
+	ibPropertySchedule(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString)
 		: ibProperty(cat, name, label, helpString, CreateVariantData())
 	{
 	}

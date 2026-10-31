@@ -7,7 +7,7 @@
 #include <memory>   // std::shared_ptr (CreateIterator)
 #include <utility>  // std::forward — the two handovers below; transitive on MSVC, not on GCC/Clang
 
-#include "backend/tabularModelView.h"
+#include "core/tabular/tabularModelView.h"
 
 #include "backend/standardCommand.h"
 #include "backend/tabularDataObject.h"   // ibTabularDataObject — ibValueModel IS one (the table hop gate)
@@ -38,8 +38,8 @@ class ibFormatString;
 // ordering by it would order by the reference instead of by what the column shows (Max, 2026-08-29).
 // Empty name = the control has no current column, and a by-column verb has nothing to mean.
 struct ibDataViewColumnItem {
-	wxString            m_name;      // the column as a composer FIELD — its dotted name, hops included
-	wxString            m_synonym;   // …what a person reads on its header
+	ibString            m_name;      // the column as a composer FIELD — its dotted name, hops included
+	ibString            m_synonym;   // …what a person reads on its header
 	ibSourceDescription m_source;    // …and WHERE it reads from: the id path, with each hop's pinned type
 
 	bool IsOk() const { return !m_name.IsEmpty(); }
@@ -81,18 +81,13 @@ class BACKEND_API ibDataViewModelProvider : public ibDataViewModel {
 public:
 	virtual ~ibDataViewModelProvider() {}
 	virtual class ibValueModel* GetOwnerValueModel() const = 0;
+
+	// The thread is the model's, the base is the asker's: a fresh thread has no session and no base, and a
+	// read that reaches the database (a presentation, db_query) must reach the one the asking thread works for.
+	virtual void SubmitFetchAsync(std::function<void()> work) override;
 };
 #pragma endregion 
 
-class ibVariantDataValue :
-	public wxVariantData {
-public:
-	// THE VALUE THE CELL HOLDS — for the reader that shows it: a table box's renderer writes it through its
-	// column's format and draws a boolean as a tick.
-	virtual const ibValue& GetValue() const = 0;
-protected:
-	ibVariantDataValue() : wxVariantData() {}
-};
 
 //Common entity for tables, list, table trees
 class BACKEND_API ibValueModel : public ibValueDynamicMembers,
@@ -112,59 +107,6 @@ class BACKEND_API ibValueModel : public ibValueDynamicMembers,
 	// tabular section. Those say so themselves (see commonObject.h,
 	// tabularSection.h), and the distinction is ownership, not mutability.
 
-	template <typename T>
-	class ibVariantDataValueImpl :
-		public ibVariantDataValue {
-
-	public:
-
-		// 🛑 THE SAME MISSED HANDOVER AS AppendTableValue, one class up. `T` is the CLASS's parameter,
-		// so `T&&` is NOT a forwarding reference — it is a plain rvalue reference, and only a
-		// TEMPORARY can bind to it. `m_cValue(cValue)` then COPIED that temporary, because a named
-		// rvalue reference is an lvalue inside the function: `ValueToVariant` builds `ibValue(value)`
-		// expressly to hand it over, and the handover was a second copy.
-		//
-		// ⭐ `std::forward<T>` rather than `std::move`, because the class has TWO instantiations that
-		// mean different things: `<ibValue>` owns its value and wants the move, `<const ibValue&>`
-		// (the read-only view below) has a REFERENCE member and must keep binding one. forward is
-		// right for both; move would be meaningless for the second.
-		ibVariantDataValueImpl(T&& cValue)
-			:
-			m_cValue(std::forward<T>(cValue))
-		{
-		}
-
-		virtual const ibValue& GetValue() const override { return m_cValue; }
-
-		virtual bool Eq(wxVariantData& data) const {
-			ibVariantDataValueImpl* srcData = dynamic_cast<ibVariantDataValueImpl*>(&data);
-			if (srcData != nullptr)
-				return m_cValue == srcData->m_cValue;
-			return false;
-		}
-
-#if wxUSE_STD_IOSTREAM
-		virtual bool Write(wxSTD ostream& str) const {
-			str << m_cValue.GetString().ToWxString();
-			return true;
-		}
-#endif
-		virtual bool Write(wxString& str) const {
-			str = m_cValue.GetString();
-			return true;
-		}
-
-		// ONE NAME, whatever the value holds — the one a reader checks before it casts the data to this class.
-		// A name per value type ("bool", "string") is wxWidgets' own, and a reader that trusts it casts to wx's
-		// data class (wxVariant::GetBool does).
-		virtual wxString GetType() const {
-			return wxT("value");
-		}
-
-	private:
-
-		T m_cValue;
-	};
 
 
 #pragma region _data_model_h_
@@ -177,10 +119,10 @@ class BACKEND_API ibValueModel : public ibValueDynamicMembers,
 
 		virtual ibValueModel* GetOwnerValueModel() const { return m_ownerModel; }
 
-		// get value into a wxVariant
-		virtual void GetValue(wxVariant& variant,
-			const ibDataViewItem& item, unsigned int col) const {
-			return m_ownerModel->GetValue(variant, item, col);
+		// get value into the engine's ibValue
+		virtual void GetValue(ibVariant& value,
+			const ibDataViewItem& item, unsigned int col) const override {
+			return m_ownerModel->GetValue(value, item, col);
 		}
 
 		// return true if the given item has a value to display in the given
@@ -194,10 +136,10 @@ class BACKEND_API ibValueModel : public ibValueDynamicMembers,
 		// model to update the control, ChangeValue() does it on its own while
 		// SetValue() does not -- so while you will override SetValue(), you should
 		// be usually calling ChangeValue()
-		virtual bool SetValue(const wxVariant& variant,
+		virtual bool SetValue(const ibVariant& value,
 			const ibDataViewItem& item,
-			unsigned int col) {
-			return m_ownerModel->SetValue(variant, item, col);
+			unsigned int col) override {
+			return m_ownerModel->SetValue(value, item, col);
 		}
 
 		// Get text attribute, return false of default attributes should be used
@@ -327,27 +269,9 @@ class BACKEND_API ibValueModel : public ibValueDynamicMembers,
 
 #pragma endregion
 
-	class ibVariantDataValueModel :
-		public ibVariantDataValueImpl<const ibValue&> {
-	public:
-		ibVariantDataValueModel(const ibValue& v) :
-			ibVariantDataValueImpl(v)
-		{
-		}
-	};
 
 public:
 
-	// Wrap an ibValue into a dataview wxVariant for a FRONT-side resolver (a dot-path column's
-	// CheckedGetValue). Public so the front produces a cell value without reaching the protected
-	// nested types; the model itself stays a plain id→value source.
-	//
-	// Holds a COPY, NOT a reference. A row node uses ibVariantDataValueModel (a const-ref variant)
-	// because its value lives IN the node and outlives the variant. The resolver instead passes a
-	// TEMPORARY (the per-row resolved value) that dies when its scope ends — a ref variant would
-	// dangle and crash in GetType() on the next render (AV on 0xcccccccc). The owning instantiation
-	// keeps the value alive for the variant's lifetime.
-	static void ValueToVariant(wxVariant& variant, const ibValue& value) { variant = new ibVariantDataValueImpl<ibValue>(ibValue(value)); }
 
 	class BACKEND_API ibValueModelColumnCollection : public ibValueDynamicMembers {
 	public:
@@ -357,11 +281,11 @@ public:
 			virtual unsigned int GetColumnID() const = 0;
 			virtual void SetColumnID(unsigned int col) {}
 
-			virtual wxString GetColumnName() const = 0;
-			virtual void SetColumnName(const wxString& name) {}
+			virtual ibString GetColumnName() const = 0;
+			virtual void SetColumnName(const ibString& name) {}
 
-			virtual wxString GetColumnCaption() const = 0;
-			virtual void SetColumnCaption(const wxString& caption) {}
+			virtual ibString GetColumnCaption() const = 0;
+			virtual void SetColumnCaption(const ibString& caption) {}
 
 			virtual const ibTypeDescription GetColumnType() const = 0;
 			virtual void SetColumnType(const ibTypeDescription& typeData) {}
@@ -402,9 +326,9 @@ public:
 		};
 	public:
 
-		virtual ibValueModelColumnInfo* AddColumn(const wxString& colName,
+		virtual ibValueModelColumnInfo* AddColumn(const ibString& colName,
 			const ibTypeDescription& typeData,
-			const wxString& caption,
+			const ibString& caption,
 			int width = wxDVC_DEFAULT_WIDTH) {
 			return nullptr;
 		};
@@ -415,7 +339,7 @@ public:
 		}
 
 		virtual ibValueModelColumnInfo* GetColumnByID(unsigned int col) const;
-		virtual ibValueModelColumnInfo* GetColumnByName(const wxString& colName) const;
+		virtual ibValueModelColumnInfo* GetColumnByName(const ibString& colName) const;
 
 		// THE COLUMN'S TYPE BY ID — one body over GetColumnByID, and NOT virtual, because a column's type
 		// is a property of the column and not of the collection holding it. It used to be written three
@@ -549,7 +473,7 @@ public:
 		}
 
 		//operator '=='
-		virtual bool CompareValueEQ(const ibValue& cParam) const override {
+		virtual bool CompareValueEQ(const ibVariant& cParam) const override {
 			ibValueModelReturnLine* tableReturnLine = nullptr;
 			if (cParam.ConvertToValue(tableReturnLine)) {
 				if (GetOwnerModel() == tableReturnLine->GetOwnerModel()
@@ -561,7 +485,7 @@ public:
 		}
 
 		//operator '!='
-		virtual bool CompareValueNE(const ibValue& cParam) const override {
+		virtual bool CompareValueNE(const ibVariant& cParam) const override {
 			ibValueModelReturnLine* tableReturnLine = nullptr;
 			if (cParam.ConvertToValue(tableReturnLine)) {
 				if (GetOwnerModel() != tableReturnLine->GetOwnerModel()
@@ -781,7 +705,7 @@ public:
 	// and no sort-anchor — the restore matches within the fetched batch by KEY, never by a cursor tuple, so the
 	// old catalog/register anchor-reading was dead weight. In-memory tables (script `Find(value, col)`) override
 	// this with a real column search.
-	virtual ibDataViewItem FindRowValue(const ibValue& varValue, const wxString& colName = wxEmptyString) const {
+	virtual ibDataViewItem FindRowValue(const ibValue& varValue, const ibString& colName = ibEmptyString) const {
 		(void)colName;
 		if (varValue.IsEmpty()) return ibDataViewItem();
 		auto* stub = new ibComposerNode(std::vector<ibValue>{ varValue });
@@ -863,7 +787,7 @@ public:
 	}
 
 	//set meta/get meta
-	virtual ibMetaID GetColumnIDByName(const wxString colName) const {
+	virtual ibMetaID GetColumnIDByName(const ibString colName) const {
 		ibValueModelColumnCollection* colCollection = GetColumnCollection();
 		if (colCollection == nullptr)
 			return wxNOT_FOUND;
@@ -877,13 +801,13 @@ public:
 	// collection. Returns an empty string if no column carries that id (or there is
 	// no collection). Used to key the list-settings Filter (which is name-based) from
 	// a command that only knows the column id.
-	virtual wxString GetColumnNameByID(unsigned int colId) const {
+	virtual ibString GetColumnNameByID(unsigned int colId) const {
 		ibValueModelColumnCollection* colCollection = GetColumnCollection();
 		if (colCollection == nullptr)
-			return wxEmptyString;
+			return ibEmptyString;
 		ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo = colCollection->GetColumnByID(colId);
 		if (colInfo == nullptr)
-			return wxEmptyString;
+			return ibEmptyString;
 		return colInfo->GetColumnName();
 	};
 
@@ -1105,7 +1029,7 @@ public:
 		// PRESENTATION so the front paints it as the spanning group caption. The node's OWN (deepest) dimension
 		// value is m_groupPath.back(); a detail / key-only node has no group path → false (base default), so the
 		// front keeps per-column rendering.
-		virtual bool GetGroupCaption(wxString& caption) const override {
+		virtual bool GetGroupCaption(ibString& caption) const override {
 			if (!m_heading)
 				return false;
 			// ⭐ THE CAPTION IS THIS NODE'S OWN VALUE, and it lives in whichever of the two facts holds
@@ -1148,9 +1072,11 @@ public:
 		// rows THROUGH this (m_valueTable set → the storage IS the displayed row), so the edit lands directly; a
 		// DB-list COPY node (self-contained, m_valueTable null) just mirrors into the copy for the inline editor
 		// (the grid is read-only — a real edit goes via the object form). Out-of-line (non-trivial).
-		virtual bool SetValue(const ibMetaID& id, const ibValue& variant, bool notify = false);
+		// ⚠ EXPORTED BY ITSELF: a class nested in a BACKEND_API class is not exported with it on MSVC, and this one
+		// is defined out of line (tabularModel.cpp) — a caller outside the backend (test_tabularEnumPersist) did not link.
+		BACKEND_API virtual bool SetValue(unsigned int col, const ibValue& variant, bool notify = false);
 
-		bool SetValue(unsigned int col, const wxVariant& variant, bool notify = false) {
+		bool SetValue(unsigned int col, const ibVariant& variant, bool notify = false) {
 			try {
 				ibValue& cValue = m_nodeValues.at(col);
 				std::vector<ibValue> listValue;
@@ -1158,21 +1084,21 @@ public:
 					const ibValue& cFoundedValue = listValue.at(0);
 					if (notify && m_valueTable != nullptr && cValue != cFoundedValue)
 						m_valueTable->RowValueChanged(this, col);
-					cValue.SetValue(cFoundedValue);
+					// Plain assignment, not .SetValue(): a reference-kind cell (a chosen-or-not EnumRef,
+					// a Catalog/DocumentRef) is TYPE_REFFER over an object that is ALWAYS constructed
+					// read-only (ibValueReferenceDataObject's identity is immutable; re-choosing REPOINTS
+					// the cell, it does not edit the object in place). .SetValue() on a TYPE_REFFER value
+					// forwards into that object (`m_pRef->SetValue(...)`) and raised "Attempt to assign a
+					// value to a write-denied variable" the moment a grid cell committed a reference pick —
+					// every time, for any reference type, with the edit never reaching the row (#482).
+					// operator=() repoints the wrapper itself instead, which is what a cell swap means here.
+					cValue = cFoundedValue;
 				}
 				return true;
 			}
 			catch (std::out_of_range&) {
 			}
 			return false;
-		}
-
-		bool IsEmptyValue(const ibMetaID& col) const {
-			auto iterator = m_nodeValues.find(col);
-			if (iterator == m_nodeValues.end())
-				return true;
-			const ibValue& cValue = m_nodeValues.at(col);
-			return cValue.IsEmpty();
 		}
 
 		bool IsEmptyValue(unsigned int col) const {
@@ -1183,18 +1109,8 @@ public:
 			return cValue.IsEmpty();
 		}
 
-		bool HasColumnValue(const ibMetaID& id) const {
-			return m_nodeValues.find(id) != m_nodeValues.end();
-		}
-
 		bool HasColumnValue(unsigned int col) const {
 			return m_nodeValues.find(col) != m_nodeValues.end();
-		}
-
-		void EraseValue(const ibMetaID& id) {
-			auto iterator = m_nodeValues.find(id);
-			if (iterator != m_nodeValues.end())
-				m_nodeValues.erase(id);
 		}
 
 		void EraseValue(unsigned int col) {
@@ -1207,26 +1123,15 @@ public:
 
 		////////////////////////////////////////////////////////////////////////
 
-		const ibValue& GetTableValue(const ibMetaID& id) const {
-			return m_nodeValues.at(id);
+		const ibValue& GetTableValue(unsigned int col) const {
+			return m_nodeValues.at(col);
 		}
 
 		////////////////////////////////////////////////////////////////////////
 
-		bool GetValue(const ibMetaID& id, ibValue& variant) const {
+		bool GetValue(unsigned int col, ibVariant& variant) const {
 			try {
-				variant = GetTableValue(id);
-				return true;
-			}
-			catch (std::out_of_range&) {
-				return false;
-			}
-		}
-
-		bool GetValue(unsigned int col, wxVariant& variant) const {
-
-			try {
-				variant = new ibVariantDataValueModel(GetTableValue(col));
+				variant = GetTableValue(col);
 				return true;
 			}
 			catch (std::out_of_range&) {
@@ -1434,10 +1339,10 @@ public:
 
 		// derived classes should override these methods instead of
 	// {Get,Set}Value() and GetAttr() inherited from the base class
-	virtual void GetValueByRow(wxVariant& variant,
+	virtual void GetValueByRow(ibVariant& variant,
 		const ibDataViewItem& row, unsigned int col) const = 0;
 
-	virtual bool SetValueByRow(const wxVariant& variant,
+	virtual bool SetValueByRow(const ibVariant& variant,
 		const ibDataViewItem& row, unsigned int col) = 0;
 
 	// ⭐ A ROW'S CONDITIONAL APPEARANCE, handed to the grid as the attribute it draws with — converted, value for value,
@@ -1454,8 +1359,8 @@ public:
 	// is converted from, and what the cell's text is read off (GetValue).
 	bool GetCompositionAttrByRow(const ibDataViewItem& row, unsigned int col, ibCompositionAttr& attr) const;
 
-	virtual bool IsEnabledByRow(const ibDataViewItem& WXUNUSED(row),
-		unsigned int WXUNUSED(col)) const {
+	virtual bool IsEnabledByRow(const ibDataViewItem& /*row*/,
+		unsigned int /*col*/) const {
 		return true;
 	}
 
@@ -1466,10 +1371,10 @@ public:
 	// — these concrete versions took their place), so no `override`.
 	// …and what the cell SAYS under its conditional appearance — its text (GetCompositionAttrByRow), laid over
 	// what GetValueByRow read. Only what it shows: the row is untouched.
-	virtual void GetValue(wxVariant& variant,
+	virtual void GetValue(ibVariant& variant,
 		const ibDataViewItem& item, unsigned int col) const;
 
-	virtual bool SetValue(const wxVariant& variant,
+	virtual bool SetValue(const ibVariant& variant,
 		const ibDataViewItem& item, unsigned int col) {
 		return SetValueByRow(variant, item, col);
 	}
@@ -1664,14 +1569,14 @@ public:
 	// Column resolution for the composer (name → id) via the model's column collection (re-pointed each fetch).
 	void     SetColumns(ibValueModel::ibValueModelColumnCollection* cols) const { m_columns = cols; }
 	ibValueModel::ibValueModelColumnCollection* Columns() const { return m_columns; }
-	ibMetaID ColumnIdByName(const wxString& name) const;   // out-of-line (needs the column-collection type)
+	ibMetaID ColumnIdByName(const ibString& name) const;   // out-of-line (needs the column-collection type)
 
 	// Field-path resolution over the stored rows (shared by the RAM composer's ComputeOrder AND the model's
 	// grouping): SplitField cuts a path on '.' → HEAD storage column + dotted TAIL; ResolveField reads ONE row's
 	// value, walking references down the tail (a reference cell IS-A source → GetSourceExplorer name→id →
 	// GetValueByMetaID). Out-of-line (ResolveField needs the source-object type). See tabularModelRam.cpp.
-	bool    SplitField(const wxString& path, ibMetaID& headCol, std::vector<wxString>& tail) const;
-	ibValue ResolveField(long row, ibMetaID headCol, const std::vector<wxString>& tail) const;
+	bool    SplitField(const ibString& path, ibMetaID& headCol, std::vector<ibString>& tail) const;
+	ibValue ResolveField(long row, ibMetaID headCol, const std::vector<ibString>& tail) const;
 
 	// --- mutation (the RAM model's ops; take the model for the view notify) — target the root's children ---
 	// The model is CONST: notify=false just bumps the mutable view generation (BumpViewGeneration is const), so a
@@ -1835,14 +1740,14 @@ public:
 	// A RAM READ TAKES THE PLAIN THREAD, not a rented run: there is no database on
 	// the other end, so a session and a pooled connection would be minted for
 	// nothing. What it wants is exactly what a plain model gets —
-	// ibDataViewModel::SubmitFetchAsync, the model's own thread, under the same
-	// door lock.
+	// ibDataViewModelProvider::SubmitFetchAsync, the model's own thread working
+	// for the asker's base, under the same door lock.
 	//
 	// Reached through the bridge and QUALIFIED: ibValueModel does not derive
 	// ibDataViewModel, it owns a provider that does — and that provider's override
 	// forwards straight back here, so an unqualified call would loop forever.
 	void SubmitFetchAsync(std::function<void()> work) override {
-		GetDataViewModel()->ibDataViewModel::SubmitFetchAsync(std::move(work));
+		GetDataViewModel()->ibDataViewModelProvider::SubmitFetchAsync(std::move(work));
 	}
 
 	// RAM paged fetch: ComputeOrder over the storage's nodes → window by the anchor → return the LIVE nodes.
@@ -1906,6 +1811,15 @@ public:
 	// displayed-item → storage: the item IS a live storage node, so its index is its position in the storage.
 	long StorageIndexOf(const ibDataViewItem& item) const { return GetRow(item); }
 	ibComposerNode* StorageRowOf(const ibDataViewItem& item) const { return m_storage.GetNode(StorageIndexOf(item)); }
+
+	// The verbs a value table and a tabular section answer alike — the rows are held here, so the work is too.
+	//
+	// The position of a script's row among THIS model's rows, 0-based (Index(row)); -1 for a value that is not one.
+	long IndexOf(const ibValue& row) const;
+	// ⭐ THE TOTAL OF A COLUMN (Total(column)): its numbers added exactly (ibNumber, not a double), an empty cell adding
+	// nothing. A column that is not there raises - a wrong total that looks right is the worst answer a sum can give -
+	// and so does a cell holding something that is not a number, naming the row. No rows total zero.
+	ibValue TotalOf(const ibString& column) const;
 
 	// (NO GetSourceQueryable override — a RAM model has no queryable; the composer reads m_storage directly.
 	//  The base default returns null.)
@@ -1999,7 +1913,7 @@ public:
 
 	// The name door — what the script's Sort("Column") says. A plain column of this table, no hop: it must
 	// be one of ours, and then it resolves to the one road above.
-	bool SortRows(const wxString& colName, bool ascending) {
+	bool SortRows(const ibString& colName, bool ascending) {
 		if (GetColumnIDByName(colName) == wxNOT_FOUND)
 			return false;
 		ibDataViewColumnItem column;

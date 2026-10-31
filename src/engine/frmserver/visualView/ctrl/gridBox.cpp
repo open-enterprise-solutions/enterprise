@@ -6,6 +6,8 @@
 #include "frmserver/visualView/visualHost.h"              // IsDesignerHost — a form being drawn neither restores nor composes
 #include "frmserver/docView/templates/docViewSpreadsheet.h"   // the document it holds, and its view
 
+#include "protocol/protocol.h"   // ibProtocol::ibForm::ibSpreadsheet::ibComposeState — what the sheet is to its report
+
 //***********************************************************************************
 //*                           IMPLEMENT_DYNAMIC_CLASS                               *
 //***********************************************************************************
@@ -29,6 +31,7 @@ bool ibValueGridBox::SetControlValue(const ibValue& varControlVal)
 	// moves, so a client drops the sheet it holds and fetches the new one.
 	m_gridDocument->SetSpreadsheetDocument(model->GetSpreadsheetDocument());
 	++m_documentVersion;
+	m_composedSettings.reset();   // …composed elsewhere, if at all: nothing to say it is outdated against
 
 	return true;
 }
@@ -45,15 +48,15 @@ bool ibValueGridBox::GetControlValue(ibValue& pvarControlVal) const
 
 ibValueGridBox::ibValueGridBox() : ibValueWindowComposite(),
 m_spreadsheetModel(new ibValueSpreadsheetDocument()),   // nothing bound yet — a sheet of its own IS a model
-m_gridDocument(new ibSpreadsheetGridBoxDocument()),
-m_gridView(new ibSpreadsheetGridBoxView())
+m_gridDocument(new ibSheetGridBoxDocument()),
+m_gridView(new ibSheetGridBoxView())
 {
 	m_gridView->SetDocument(m_gridDocument);
 	m_gridDocument->SetSpreadsheetDocument(m_spreadsheetModel->GetSpreadsheetDocument());
 
 	m_members.Bind(this, &ibValueGridBox::FillControlMembers);
 	//set default params
-	m_propertyMinSize->SetValue(wxSize(150, 50));
+	m_propertyMinSize->SetValue(ibSize(150, 50));
 	// ⭐ THE SOURCE TAKES EXACTLY TWO TYPES (Max, 2026-08-19): a **spreadsheet document** — the
 	// hand-filled sheet, a printable form — and a **composition** — the report, which builds its own
 	// document and brings the two verbs with it. Declared here so the picker offers those and
@@ -82,8 +85,8 @@ ibValueGridBox::~ibValueGridBox()
 	if (m_spreadsheetModel)
 		m_spreadsheetModel->CancelFetch();
 
-	wxDELETE(m_gridView);   // the view first: it is the document's
-	wxDELETE(m_gridDocument);
+	delete m_gridView;   // the view first: it is the document's
+	delete m_gridDocument;
 }
 
 ibView* ibValueGridBox::GetControlView() const
@@ -99,12 +102,42 @@ void ibValueGridBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 {
 	ibValueWindowComposite::OnUpdate(state, host);
 
-	state.SetValue(wxT("Version"), m_documentVersion);
-	state.SetValue(wxT("Composing"), m_composeRuns > 0);
+	state.SetValue(ibProtocol::ibForm::ibSpreadsheet::Version, m_documentVersion);
+
+	// WHAT THE SHEET IS TO ITS REPORT — read each time, never kept: a run under way, else the setting it was composed
+	// with against the one that composes now.
+	ibProtocol::ibForm::ibSpreadsheet::ibComposeState composeState = ibProtocol::ibForm::ibSpreadsheet::ibComposeState::Composed;
+	if (m_composeRuns > 0)
+		composeState = ibProtocol::ibForm::ibSpreadsheet::ibComposeState::Composing;
+	else if (m_composedSettings.has_value() && m_spreadsheetModel != nullptr
+		&& !(*m_composedSettings == m_spreadsheetModel->GetModelComposer().GetCurrentSettingsDesc()))
+		composeState = ibProtocol::ibForm::ibSpreadsheet::ibComposeState::Outdated;
+	state.SetValue(ibProtocol::ibForm::ibSpreadsheet::ComposeState, static_cast<std::int32_t>(composeState));
+
+	// A COMPOSED SHEET RIDES THE FRAME THAT NAMES ITS VERSION — once. The client that reads Sheet here skips Fetch;
+	// one that does not still asks. While composing, or after the Version was already sent with its Sheet, State stays
+	// light: only Version and ComposeState, as before.
+	if (composeState == ibProtocol::ibForm::ibSpreadsheet::ibComposeState::Composed && m_gridDocument != nullptr
+		&& m_sheetSentVersion != m_documentVersion) {
+		ibDataNode fetched;
+		if (ibFetchSpreadsheet(m_gridDocument->GetSpreadsheet(), fetched)) {
+			if (auto sheet = fetched.FindField(ibProtocol::ibForm::ibSpreadsheet::Sheet))
+				state.SetField(ibProtocol::ibForm::ibSpreadsheet::Sheet, *sheet);
+			if (fetched.Has(ibProtocol::ibForm::ibSpreadsheet::ReadOnly))
+				state.SetValue(ibProtocol::ibForm::ibSpreadsheet::ReadOnly, fetched.GetValue<bool>(ibProtocol::ibForm::ibSpreadsheet::ReadOnly));
+			m_sheetSentVersion = m_documentVersion;
+		}
+	}
 }
 
-void ibValueGridBox::OnCreated(ibVisualHost* host)
+void ibValueGridBox::OnCreated(ibVisualHost* host, bool firstCreated)
 {
+	// A JUST-DROPPED BOX PROVISIONS ITS OWN ATTRIBUTE — the same door every source control uses. Its
+	// TYPE is the first type this box DECLARES it accepts (spreadsheet document), so there is nothing
+	// to state twice.
+	if (firstCreated)
+		AutoBindNewSource(this);
+
 	// THE BINDING IS HONOURED HERE TOO — the same moment every other source control takes its value
 	// (a checkbox, a textbox, a table all read the bound attribute as they are shown). The form has
 	// already handed it over at InitializeControl; taking it again is idempotent.
@@ -169,14 +202,14 @@ void ibValueGridBox::ApplyDefaultSettings()
 //*                                   Fetch                                        *
 //**********************************************************************************
 
-bool ibValueGridBox::Fetch(const ibDataNode& WXUNUSED(request), ibDataNode& response)
+bool ibValueGridBox::Fetch(const ibDataNode& /*request*/, ibDataNode& response)
 {
 	// Of which sheet: the client takes it as the one of that version.
-	response.SetValue(wxT("Version"), m_documentVersion);
+	response.SetValue(ibProtocol::ibForm::ibSpreadsheet::Version, m_documentVersion);
 	return ibFetchSpreadsheet(m_gridDocument->GetSpreadsheet(), response);
 }
 
-bool ibFetchSpreadsheet(const ibBackendSpreadsheetObject& document, ibDataNode& response)
+bool ibFetchSpreadsheet(const ibSpreadsheetObject& document, ibDataNode& response)
 {
 	// THE WHOLE SHEET, IN THE FORM A TEMPLATE IS STORED IN (ibSpreadsheetDescriptionMemory::WriteNode): a client reads
 	// it back the same way into a sheet of its own, and its editor shows that sheet as the desktop's shows its own.
@@ -186,25 +219,28 @@ bool ibFetchSpreadsheet(const ibBackendSpreadsheetObject& document, ibDataNode& 
 
 	// …each cell's text AS SHOWN — a caption in the document's language, a parameter by its value, a template filled in:
 	// the document's to say, and the client's sheet holds no parameters.
+	// A value is its bytes, read: the cells are written anew, each as it is or with its text as shown.
 	const ibSpreadsheetDescription& desc = document.GetSpreadsheetDesc();
-	if (const ibDataValue* cells = sheet.AsChild()->FindField(wxT("cells"))) {
+	ibDataNode written = *sheet.AsChild();
+	if (const auto cells = written.FindField(ibT("cells"))) {
+		std::vector<ibDataValue> shown;
 		for (const ibDataValue& entry : cells->AsArray()) {
-			ibDataNode& node = *entry.AsChild();
-			const ibSpreadsheetCellDescription* const cell = desc.GetCell(node.GetValue<s32>(wxT("row")), node.GetValue<s32>(wxT("col")));
-			if (cell == nullptr)
-				continue;
-			const wxString text = document.ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType);
-			if (text == cell->m_value && cell->m_fillSetType == ibSpreadsheetFillType::ibSpreadsheetFillType_StrText)
-				continue;
-			node.SetField(wxT("value"), ibDataValue::String(text));
-			node.SetField(wxT("fill"), ibDataValue::Int(static_cast<s64>(ibSpreadsheetFillType::ibSpreadsheetFillType_StrText)));
+			ibDataNode node = *entry.AsChild();
+			const ibSpreadsheetCellDescription* const cell = desc.GetCell(node.GetValue<std::int32_t>(ibT("row")), node.GetValue<std::int32_t>(ibT("col")));
+			const ibString text = cell != nullptr ? document.ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType) : ibString();
+			if (cell != nullptr && (text != cell->m_value || cell->m_fillSetType != ibSpreadsheetFillType::ibSpreadsheetFillType_StrText)) {
+				node.SetField(ibT("value"), ibDataValue::String(text));
+				node.SetField(ibT("fill"), ibDataValue::Int(static_cast<std::int64_t>(ibSpreadsheetFillType::ibSpreadsheetFillType_StrText)));
+			}
+			shown.push_back(ibDataValue::Child(std::make_shared<ibDataNode>(std::move(node))));
 		}
+		written.SetField(ibT("cells"), ibDataValue::Array(std::move(shown)));
 	}
 
-	response.SetField(wxT("Sheet"), sheet);
+	response.SetField(ibProtocol::ibForm::ibSpreadsheet::Sheet, ibDataValue::Child(std::make_shared<ibDataNode>(std::move(written))));
 	// …and its edit mode, which is the document's as the sheet is.
 	if (!document.IsEditable())
-		response.SetValue(wxT("ReadOnly"), true);
+		response.SetValue(ibProtocol::ibForm::ibSpreadsheet::ReadOnly, true);
 	return true;
 }
 
@@ -223,7 +259,7 @@ bool ibValueGridBox::ReadData(const ibDataNode& node)
 	// The sheet a designer typed into travels with the control — read into the sheet the MODEL holds,
 	// which with no source bound is the box's own document.
 	if (m_spreadsheetModel) {
-		ibSpreadsheetDescriptionMemory::ReadNode(node.GetProperty(wxT("Spreadsheet")),
+		ibSpreadsheetDescriptionMemory::ReadNode(node.GetProperty(ibT("Spreadsheet")),
 			m_spreadsheetModel->GetSpreadsheetDocument()->GetSpreadsheetDesc());
 	}
 	return ibValueWindowComposite::ReadData(node);
@@ -241,7 +277,7 @@ bool ibValueGridBox::WriteData(ibDataNode& node) const
 		ibDataValue spreadsheet;
 		ibSpreadsheetDescriptionMemory::WriteNode(spreadsheet,
 			m_spreadsheetModel->GetSpreadsheetDocument()->GetSpreadsheetDesc());
-		node.SetProperty(wxT("Spreadsheet"), spreadsheet);
+		node.SetProperty(ibT("Spreadsheet"), spreadsheet);
 	}
 	return ibValueWindowComposite::WriteData(node);
 }
@@ -253,7 +289,7 @@ enum prop {
 
 void ibValueGridBox::FillControlMembers(ibMemberTable& helper) const
 {
-	helper.AppendProp(wxT("Value"), eGridValue, eControl);
+	helper.AppendProp(ibT("Value"), eGridValue, eControl);
 }
 
 bool ibValueGridBox::SetPropVal(const long lPropNum, const ibValue& varPropVal)

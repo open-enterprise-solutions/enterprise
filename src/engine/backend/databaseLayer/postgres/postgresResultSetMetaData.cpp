@@ -59,9 +59,9 @@ int ibResultSetMetaDataPostgres::GetColumnSize(int i)
 	return m_pInterface->GetPQfsize()(m_pResult, i - 1);
 }
 
-wxString ibResultSetMetaDataPostgres::GetColumnName(int i)
+ibString ibResultSetMetaDataPostgres::GetColumnName(int i)
 {
-	wxString columnName = ConvertFromUnicodeStream(m_pInterface->GetPQfname()(m_pResult, i - 1));
+	ibString columnName = ConvertFromUnicodeStream(m_pInterface->GetPQfname()(m_pResult, i - 1));
 	return columnName;
 }
 

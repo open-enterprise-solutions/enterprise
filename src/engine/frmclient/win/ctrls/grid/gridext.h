@@ -1065,11 +1065,6 @@ public:
 		return (m_row == other.m_row && m_col == other.m_col);
 	}
 
-	bool operator!=(const ibGridCellCoords& other) const
-	{
-		return (m_row != other.m_row || m_col != other.m_col);
-	}
-
 	bool operator!() const
 	{
 		return (m_row == -1 && m_col == -1);
@@ -1183,11 +1178,6 @@ public:
 	{
 		return m_topRow == other.m_topRow && m_leftCol == other.m_leftCol &&
 			m_bottomRow == other.m_bottomRow && m_rightCol == other.m_rightCol;
-	}
-
-	bool operator!=(const ibGridBlockCoords& other) const
-	{
-		return !(*this == other);
 	}
 
 	bool operator!() const
@@ -1332,10 +1322,6 @@ public:
 		bool operator==(const iterator& it) const
 		{
 			return m_it == it.m_it;
-		}
-		bool operator!=(const iterator& it) const
-		{
-			return m_it != it.m_it;
 		}
 
 	private:

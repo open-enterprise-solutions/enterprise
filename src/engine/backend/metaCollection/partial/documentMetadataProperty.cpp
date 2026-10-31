@@ -12,12 +12,12 @@ void ibValueMetaObjectDocument::OnPropertyCreated(ibProperty* property)
 	ibValueMetaObjectRecordDataMutableRef::OnPropertyCreated(property);
 }
 
-bool ibValueMetaObjectDocument::OnPropertyChanging(ibProperty* property, const wxVariant& newValue)
+bool ibValueMetaObjectDocument::OnPropertyChanging(ibProperty* property, const ibVariant& newValue)
 {
 	return ibValueMetaObjectRecordDataMutableRef::OnPropertyChanging(property, newValue);
 }
 
-void ibValueMetaObjectDocument::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
+void ibValueMetaObjectDocument::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
 {
 	// ⭐ EITHER LIST SAYS THE SAME THING TO WHAT IT NAMES: "this document writes here". The registers
 	// it posts movements to and the sequences it registers in are two lists (they are two acts), and

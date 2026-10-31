@@ -31,9 +31,9 @@ void ibValueMetaObjectChartOfAccounts::ContributeTables(ibSchemaSnapshot& out) c
 	if (kindsTable == nullptr || kindsTable->IsDeleted())
 		return;
 
-	const wxString tableName = kindsTable->GetPhysicalTableName();
+	const ibString tableName = kindsTable->GetPhysicalTableName();
 	const unsigned int ceiling = GetMaxAccountDimensionCount();
-	const wxString chartName = GetName();
+	const ibString chartName = GetName();
 
 	out.Shared(kindsTable->GetMetaID(), tableName).m_beforeChange =
 		[tableName, ceiling, chartName](ibRestructureInfo* report) -> bool {
@@ -58,12 +58,12 @@ void ibValueMetaObjectChartOfAccounts::ContributeTables(ibSchemaSnapshot& out) c
 			{
 				ibQueryIR ir;
 				ir.m_root = ibAggregate(ibScan(tableName),
-					{ { ibFunc(wxT("COUNT"), { ibCol(ibOwnerRefField()) }), wxT("kindCount") } },
+					{ { ibFunc(ibT("COUNT"), { ibCol(ibOwnerRefField()) }), ibT("kindCount") } },
 					{ ibCol(ibOwnerRefField()) });
 
 				ibQueryResult rs = q.ExecuteIR(ir);
 				while (rs.Next()) {
-					if (rs.GetResultInt(wxT("kindCount")) > (int)ceiling)
+					if (rs.GetResultInt(ibT("kindCount")) > (int)ceiling)
 						++overfull;
 				}
 			}
@@ -72,7 +72,7 @@ void ibValueMetaObjectChartOfAccounts::ContributeTables(ibSchemaSnapshot& out) c
 				return true;
 
 			if (report != nullptr)
-				report->AppendError(wxString::Format(
+				report->AppendError(ibString::Format(
 					_("%s: %i account(s) hold more than %i analytics - remove the extra kinds from them before lowering the limit"),
 					chartName, overfull, (int)ceiling));
 			return false;

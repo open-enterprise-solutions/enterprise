@@ -26,6 +26,7 @@
 
 #include <gtest/gtest.h>
 
+#include "core/fstring.h"
 #include <wx/filename.h>
 #include <wx/textfile.h>
 #include <wx/tokenzr.h>
@@ -41,9 +42,9 @@ namespace {
 // The partials live beside the tests, two levels up; CMake runs the binary from
 // the build tree, so the path is resolved from the source location rather than
 // the cwd (the same trick test_scriptCorpus.cpp uses for its corpus).
-wxString PartialsDir()
+ibString PartialsDir()
 {
-	wxFileName here(wxString::FromUTF8(__FILE__));
+	wxFileName here(ibString::FromUTF8(__FILE__));
 	here.SetFullName(wxEmptyString);
 	here.RemoveLastDir();                      // tests -> enterprise
 	here.AppendDir(wxT("src"));
@@ -54,24 +55,24 @@ wxString PartialsDir()
 	return here.GetPath();
 }
 
-wxString ReadWhole(const wxString& path)
+ibString ReadWhole(const ibString& path)
 {
 	wxTextFile file;
 	if (!file.Open(path))
 		return wxEmptyString;
-	wxString out;
+	ibString out;
 	for (size_t i = 0; i < file.GetLineCount(); i++)
 		out += file[i] + wxT("\n");
 	return out;
 }
 
 // Every `m_propertyXxx` identifier mentioned in a text, in first-seen order.
-std::set<wxString> PropertyNames(const wxString& text)
+std::set<ibString> PropertyNames(const ibString& text)
 {
-	std::set<wxString> names;
+	std::set<ibString> names;
 	size_t pos = 0;
-	const wxString needle = wxT("m_property");
-	while ((pos = text.find(needle, pos)) != wxString::npos) {
+	const ibString needle = wxT("m_property");
+	while ((pos = text.find(needle, pos)) != ibString::npos) {
 		size_t end = pos + needle.length();
 		while (end < text.length()) {
 			const wxUniChar c = text[end];
@@ -91,24 +92,24 @@ std::set<wxString> PropertyNames(const wxString& text)
 // list (GetRelationProperties), so that a fourth section cannot be forgotten at one of the doors that
 // treat them alike. A list of what the members HOLD (`m_propertyX->GetMetaObject()`) is not a list of
 // properties, and does not count — reading a section is not writing the setting.
-std::map<wxString, std::vector<wxString>> PropertyLists(const wxString& text)
+std::map<ibString, std::vector<ibString>> PropertyLists(const ibString& text)
 {
-	std::map<wxString, std::vector<wxString>> lists;
-	const wxString needle = wxT("return {");
+	std::map<ibString, std::vector<ibString>> lists;
+	const ibString needle = wxT("return {");
 	size_t pos = 0;
-	while ((pos = text.find(needle, pos)) != wxString::npos) {
+	while ((pos = text.find(needle, pos)) != ibString::npos) {
 		const size_t open = pos + needle.length();
 		const size_t close = text.find(wxT('}'), open);
-		if (close == wxString::npos)
+		if (close == ibString::npos)
 			break;
 
-		std::vector<wxString> items;
+		std::vector<ibString> items;
 		bool bare = true;
 		wxStringTokenizer tokens(text.Mid(open, close - open), wxT(","));
 		while (bare && tokens.HasMoreTokens()) {
-			wxString item = tokens.GetNextToken();
+			ibString item = tokens.GetNextToken();
 			item.Trim().Trim(false);
-			const std::set<wxString> found = PropertyNames(item);
+			const std::set<ibString> found = PropertyNames(item);
 			bare = found.size() == 1 && *found.begin() == item;
 			items.push_back(item);
 		}
@@ -116,9 +117,9 @@ std::map<wxString, std::vector<wxString>> PropertyLists(const wxString& text)
 		// The function it is returned from: the identifier in front of the last '(' before it — unless
 		// that is a statement's (`if (x) return {…}`), which names no list and would credit every unit
 		// that happens to write `if(`.
-		static const std::set<wxString> statements = { wxT("if"), wxT("for"), wxT("while"), wxT("switch"), wxT("catch") };
+		static const std::set<ibString> statements = { wxT("if"), wxT("for"), wxT("while"), wxT("switch"), wxT("catch") };
 		const size_t paren = text.rfind(wxT('('), pos);
-		if (bare && !items.empty() && paren != wxString::npos) {
+		if (bare && !items.empty() && paren != ibString::npos) {
 			size_t begin = paren;
 			while (begin > 0) {
 				const wxUniChar c = text[begin - 1];
@@ -126,7 +127,7 @@ std::map<wxString, std::vector<wxString>> PropertyLists(const wxString& text)
 					break;
 				--begin;
 			}
-			const wxString function = text.Mid(begin, paren - begin);
+			const ibString function = text.Mid(begin, paren - begin);
 			if (!function.IsEmpty() && statements.count(function) == 0)
 				lists[function] = items;
 		}
@@ -141,16 +142,16 @@ std::map<wxString, std::vector<wxString>> PropertyLists(const wxString& text)
 // declared in `calculationRegister.h` and written in `calculationRegisterRecalculationMetadata.cpp` (until
 // 2026-09-14), which `calculationRegisterMetadata*.cpp` does not match. A unit whose class HAS a header stays that header's,
 // so a metatype is never credited with what a neighbour sharing its prefix writes.
-wxString OwnerOf(const wxString& unit, const std::set<wxString>& stems)
+ibString OwnerOf(const ibString& unit, const std::set<ibString>& stems)
 {
 	const int at = unit.Find(wxT("Metadata"));
 	if (at == wxNOT_FOUND)
 		return wxEmptyString;
-	const wxString unitStem = unit.Left(static_cast<size_t>(at));
+	const ibString unitStem = unit.Left(static_cast<size_t>(at));
 	if (stems.count(unitStem) != 0)
 		return unitStem;
-	wxString owner;
-	for (const wxString& stem : stems)
+	ibString owner;
+	for (const ibString& stem : stems)
 		if (unitStem.StartsWith(stem) && stem.length() > owner.length())
 			owner = stem;
 	return owner;
@@ -162,7 +163,7 @@ wxString OwnerOf(const wxString& unit, const std::set<wxString>& stems)
 // `<name>Metadata.cpp`. Both halves are hand-written and neither compiler nor
 // linker relates them — this test is what does.
 TEST(PropertySerialization, EveryDeclaredPropertyIsReadAndWritten) {
-	const wxString dir = PartialsDir();
+	const ibString dir = PartialsDir();
 	ASSERT_TRUE(wxDirExists(dir)) << "metatype partials not found at " << dir.ToStdString();
 
 	// ⚠ COLLECT FIRST, WALK AFTER. ONE wxDir cannot drive two traversals: the inner search for
@@ -170,32 +171,32 @@ TEST(PropertySerialization, EveryDeclaredPropertyIsReadAndWritten) {
 	// filter — so the outer loop would carry on over .cpp files instead of headers and stop after
 	// one step. It fell out as `checked == 0` on Linux (whose directory order differs) while
 	// Windows happened to check one header and pass, hiding it.
-	std::vector<wxString> headers;
+	std::vector<ibString> headers;
 	{
 		wxDir walker(dir);
 		ASSERT_TRUE(walker.IsOpened());
-		wxString header;
+		wxString header;   // wxDir's own: it writes each name into a wx string
 		for (bool more = walker.GetFirst(&header, wxT("*.h"), wxDIR_FILES); more;
 		     more = walker.GetNext(&header))
 			headers.push_back(header);
 	}
 	ASSERT_FALSE(headers.empty()) << "no metatype headers in " << dir.ToStdString();
 
-	std::vector<wxString> units;
+	std::vector<ibString> units;
 	{
 		wxDir walker(dir);                 // its OWN traversal — see the note above
 		ASSERT_TRUE(walker.IsOpened());
-		wxString unit;
+		wxString unit;   // wxDir's own: it writes each name into a wx string
 		for (bool more = walker.GetFirst(&unit, wxT("*Metadata*.cpp"), wxDIR_FILES); more;
 		     more = walker.GetNext(&unit))
 			units.push_back(unit);
 	}
-	std::set<wxString> stems;
-	for (const wxString& header : headers)
+	std::set<ibString> stems;
+	for (const ibString& header : headers)
 		stems.insert(wxFileName(header).GetName());
 
 	size_t checked = 0;
-	for (const wxString& header : headers) {
+	for (const ibString& header : headers) {
 		wxFileName headerFile(dir, header);
 
 		// ⚠ EVERY UNIT OF THE METATYPE, not just `<name>Metadata.cpp`.
@@ -207,29 +208,29 @@ TEST(PropertySerialization, EveryDeclaredPropertyIsReadAndWritten) {
 		// than no test, because the next real finding is read as noise too. The same happened on
 		// 2026-09-11 with the two shapes OwnerOf and PropertyLists describe: five properties of the
 		// calculation register and its chart, all written, reported as missing.
-		const wxString stem = headerFile.GetName();
-		wxString serialised;
-		for (const wxString& unit : units)
+		const ibString stem = headerFile.GetName();
+		ibString serialised;
+		for (const ibString& unit : units)
 			if (OwnerOf(unit, stems) == stem)
 				serialised += ReadWhole(wxFileName(dir, unit).GetFullPath());
 		if (serialised.IsEmpty())
 			continue;   // not a metatype with a serialisation unit of its own
 
-		const wxString headerText = ReadWhole(headerFile.GetFullPath());
-		const std::set<wxString> declared = PropertyNames(headerText);
+		const ibString headerText = ReadWhole(headerFile.GetFullPath());
+		const std::set<ibString> declared = PropertyNames(headerText);
 		if (declared.empty())
 			continue;
 
-		const std::map<wxString, std::vector<wxString>> lists = PropertyLists(headerText);
-		auto namedThroughList = [&](const wxString& name) {
-			for (const std::pair<const wxString, std::vector<wxString>>& list : lists)
+		const std::map<ibString, std::vector<ibString>> lists = PropertyLists(headerText);
+		auto namedThroughList = [&](const ibString& name) {
+			for (const std::pair<const ibString, std::vector<ibString>>& list : lists)
 				if (std::find(list.second.begin(), list.second.end(), name) != list.second.end()
 				    && serialised.Contains(list.first + wxT("(")))
 					return true;
 			return false;
 		};
 
-		for (const wxString& name : declared) {
+		for (const ibString& name : declared) {
 			// EXEMPT, and each for a reason of its own — not a convenience list:
 			//   * DefForm…  — the default-form bindings are stored by id through their own path;
 			//   * …Module   — carries the module OBJECT, serialised as a child, not as a value;

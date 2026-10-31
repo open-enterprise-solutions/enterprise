@@ -96,9 +96,10 @@
 #include <cstdint>
 #include <vector>
 
+#include "backend/backend_exception.h"
 #include "backend/compiler/compileCode.h"
 #include "backend/compiler/compileContext.h"   // CODE_VES / CODE_CES
-#include "backend/compiler/codeDef.h"
+#include "core/compiler/codeDef.h"
 #include "backend/compiler/byteCode.h"
 #include "backend/compiler/value.h"
 
@@ -116,17 +117,17 @@ namespace {
 // between two runs of the same binary would make the digest useless, so the
 // only inputs are the compiler's own integers, enums and names.
 
-void RenderParam(wxString& out, const wxChar* tag, const ibParamRunUnit& p)
+void RenderParam(ibString& out, const wxChar* tag, const ibParamRunUnit& p)
 {
 	out << tag << wxT("(") << p.m_numArray << wxT(",") << p.m_numIndex << wxT(")");
 }
 
-wxString RenderConst(const ibValue& v)
+ibString RenderConst(const ibValue& v)
 {
 	// Type tag first, so a constant that changes TYPE is caught even when its
 	// printed form happens to match (the empty string and an empty value both
 	// render as nothing).
-	wxString out;
+	ibString out;
 	out << wxT("t") << (int)v.GetType();
 	switch (v.GetType()) {
 	case ibValueTypes::TYPE_BOOLEAN:
@@ -143,9 +144,9 @@ wxString RenderConst(const ibValue& v)
 	return out;
 }
 
-wxString RenderByteCode(const ibByteCode& bc)
+ibString RenderByteCode(const ibByteCode& bc)
 {
-	wxString out;
+	ibString out;
 
 	out << wxT("module=")   << bc.m_strModuleName
 	    << wxT(" vars=")    << bc.m_lVarCount
@@ -202,9 +203,9 @@ wxString RenderByteCode(const ibByteCode& bc)
 
 // FNV-1a over the UTF-8 bytes of the rendering. Not cryptography — a compact
 // name for a text, so the expected value fits on one line.
-uint64_t Digest(const wxString& text)
+uint64_t Digest(const ibString& text)
 {
-	const wxScopedCharBuffer utf8 = text.utf8_str();
+	const std::string utf8 = text.utf8_str();
 	uint64_t h = 1469598103934665603ULL;
 	for (size_t i = 0; i < utf8.length(); i++) {
 		h ^= (uint64_t)(unsigned char)utf8.data()[i];
@@ -220,7 +221,7 @@ uint64_t Digest(const wxString& text)
 // so there is one workflow instead of two.
 constexpr uint64_t kUnrecorded = 0;
 
-void ExpectEmission(const wxChar* name, const wxString& src, uint64_t expected)
+void ExpectEmission(const wxChar* name, const ibString& src, uint64_t expected)
 {
 	ASSERT_EQ(ibCompileCode::GetCodeStyle(), CODE_VES)
 		<< "this suite's sources are VES; the global style environment did not run";
@@ -230,7 +231,7 @@ void ExpectEmission(const wxChar* name, const wxString& src, uint64_t expected)
 	// The compiler knows WHY it refused; throwing that away costs a manual re-run
 	// per red line. Keep the message and put it in the report.
 	bool     compiled = false;
-	wxString strWhy;
+	ibString strWhy;
 	try {
 		compiled = cc.Compile(src);
 		if (!compiled)
@@ -243,7 +244,7 @@ void ExpectEmission(const wxChar* name, const wxString& src, uint64_t expected)
 	ASSERT_TRUE(compiled) << name << ": source failed to compile — fix the corpus entry, "
 	                                 "it is meant to be valid. " << strWhy.ToStdString();
 
-	const wxString rendered = RenderByteCode(cc.m_cByteCode);
+	const ibString rendered = RenderByteCode(cc.m_cByteCode);
 	const uint64_t actual   = Digest(rendered);
 
 	if (actual == expected)
@@ -339,7 +340,10 @@ TEST(CompilerContract, ComparisonAndLogical) {
 		wxT("r = a < b And b > 0 Or a = b;\n")
 		wxT("r = a <> b;\n")
 		wxT("r = a <= b And a >= b;\n"),
-		11249210784232419991ULL);   // 2026-10-09: OPER_ITER removed; later opcodes and TYPE_DELTA shifted
+		15294174076167625395ULL);   // 2026-10-10: and/or short-circuit. `a < b And b > 0 Or a = b`
+		                           // is (a<b) and (b>0), then or (a=b). Each logical op still ends in one
+		                           // OPER_AND/OPER_OR. A false AND jumps over `b > 0` (that IF carries
+		                           // p4(-1,1), so a SQL NULL left does not skip). A true OR jumps over `a = b`.
 }
 
 // `x = a op b` emits ONE opcode writing `x`, not an opcode into a temp and a LET
@@ -458,7 +462,7 @@ TEST(CompilerContract, FunctionsAndForwardReference) {
 		wxT("Procedure Entry()\n")
 		wxT("  var r; r = Caller(3);\n")
 		wxT("EndProcedure\n"),
-		6612097246532263492ULL);   // 2026-10-09: OPER_ITER removed; later opcodes and TYPE_DELTA shifted
+		16592719761311645649ULL); // the outbound forward-call goto marks p2, so a try around it stays
 }
 
 TEST(CompilerContract, TypedParametersAndLocals) {

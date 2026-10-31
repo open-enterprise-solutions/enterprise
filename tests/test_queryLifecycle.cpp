@@ -53,13 +53,13 @@ public:
 	bool Next() override { return false; }
 	void Close() override { ++m_closeCount; }
 
-	int        LookupField(const wxString&) override { return -1; }
+	int        LookupField(const ibString&) override { return -1; }
 	int        GetResultInt(int) override { return 0; }
 	ibString   GetResultString(int) override { return ibString(); }
 	long long  GetResultLong(int) override { return 0; }
 	bool       GetResultBool(int) override { return false; }
 	ibDateTime GetResultDate(int) override { return ibDateTime(); }
-	void*      GetResultBlob(int, wxMemoryBuffer&) override { return nullptr; }
+	void*      GetResultBlob(int, ibMemoryBuffer&) override { return nullptr; }
 	double     GetResultDouble(int) override { return 0.0; }
 	ibNumber   GetResultNumber(int) override { return ibNumber(); }
 	bool       IsFieldNull(int) override { return true; }

@@ -4,12 +4,25 @@ set(CODERUNNER_SOURCES
     codeRunner.cpp
     mainApp.cpp
     outputMessage.cpp
+    artProvider/artProvider.cpp
+    mainFrame/settings/editorsettings.cpp
+    mainFrame/settings/fontcolorsettings.cpp
+    win/dlgs/functionSearcher/functionSearcher.cpp
+    win/dlgs/lineInput/lineInput.cpp
+    win/editor/codeEditor/codeEditor.cpp
+    win/editor/codeEditor/codeEditorLoader.cpp
+    win/editor/codeEditor/components/autoComplete.cpp
+    win/editor/codeEditor/components/callTip.cpp
+    win/editor/codeEditor/components/helpers/listBoxVisualData.cpp
+    win/editor/codeEditor/components/helpers/listBoxWnd.cpp
+    win/editor/codeEditor/components/helpers/popupWnd.cpp
+    win/picture.cpp
 )
 
 add_executable(codeRunner ${CODERUNNER_SOURCES})
 
 set_target_properties(codeRunner PROPERTIES
-    CXX_STANDARD 17
+    CXX_STANDARD 20
     CXX_STANDARD_REQUIRED ON
 )
 
@@ -22,18 +35,13 @@ target_compile_definitions(codeRunner PRIVATE NOPCH)
 target_include_directories(codeRunner PRIVATE
     ${CMAKE_SOURCE_DIR}/src/engine
     ${CMAKE_SOURCE_DIR}/src/engine/backend
-    ${CMAKE_SOURCE_DIR}/src/engine/frontend
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-# frontend, like designer and enterprise: codeRunner hosts the FULL code editor
-# (ibCodeEditor, plus the editor/font-colour settings types), which lives there —
-# codeRunner.cpp includes frontend/ headers directly. The .vcxproj has always
-# linked frontend.lib; this file had not, so the CMake build produced 21
-# unresolved externals the moment anything actually tried to link it. Nothing
-# did until CI started building the applications (2026-08-03).
+# THE CODE EDITOR IS ITS OWN — copied whole from the old desktop front, with the art, the settings and the two
+# dialogs it opens (win/, artProvider/, mainFrame/settings/), so this program links the backend and wx and nothing
+# else of ours, as the launcher does. wx::xml is the settings' reader.
 target_link_libraries(codeRunner PRIVATE
     backend
-    frontend
-    wx::core wx::aui wx::html wx::propgrid wx::adv wx::stc wx::xrc wx::qa wx::base wx::net wx::xml
+    wx::core wx::stc wx::qa wx::base wx::xml
 )

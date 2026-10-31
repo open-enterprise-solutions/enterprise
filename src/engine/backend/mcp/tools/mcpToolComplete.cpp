@@ -24,6 +24,7 @@
 #include "backend/mcp/mcpTool.h"
 
 #include "backend/backend_exception.h"              // ibEvalModeScope - which kind of evaluation this call is
+#include "backend/compiler/compileCode.h"           // GetCodeStyle - the syntax the text is read in
 #include "backend/compiler/scriptComplete.h"        // ibValueAtCaret / ibFieldTypesOf - off the bytecode and the metadata
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metaCollection/metaModuleObject.h"
@@ -32,8 +33,8 @@
 #include "backend/moduleManager/moduleManager.h"   // ibValueModuleManagerDesigner - AddCommonModule
 #include "backend/value_ptr.h"                     // ibValuePtr - metaobjects are reference-counted
 
-#include "backend/compiler/translateCode.h"        // the lexem stream - what the caret stands in
-#include "backend/compiler/scriptParseCode.h"
+#include "core/compiler/translateCode.h"        // the lexem stream - what the caret stands in
+#include "core/compiler/scriptParseCode.h"
 
 #include <memory>
 
@@ -79,8 +80,8 @@ public:
 	// check calls this text (ibCheckScript, mcpToolRunCode.cpp) and what the application compiles
 	// it as when it runs (jobRunByteCode.cpp), so a diagnostic about it reads the same wherever it
 	// was produced.
-	ibScratchModule(ibMetaData* metaData, const wxString& text)
-		: m_module(new ibValueMetaObjectCommonModule(wxT("JobCode")))
+	ibScratchModule(ibMetaData* metaData, const ibString& text)
+		: m_module(new ibValueMetaObjectCommonModule(ibT("JobCode")))
 	{
 		// The bridge to the configuration: through this the interpreter reaches the compile cache
 		// and the designer's own module manager, and from there every global name there is.
@@ -145,7 +146,7 @@ private:
 // objects in Call, so the name a caller is told cannot drift from the name looked for.
 const ibArg& ArgId()
 {
-	static const ibArg s_a(wxT("id"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("id"), ibArg::Kind::Whole,
 		ibMcpText("The module this text belongs to, as NodeId - metadata_get on the owning object "
 			  "lists its modules. The module decides what names are in scope, so pass it whenever "
 			  "the text HAS a home: inside a document's object module `Ref` and the document's own "
@@ -159,14 +160,14 @@ const ibArg& ArgId()
 
 const ibArg& ArgText()
 {
-	static const ibArg s_a(wxT("text"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("text"), ibArg::Kind::Text,
 		ibMcpText("The module text, as it would be after your edit. It is not stored."), /*required*/ true);
 	return s_a;
 }
 
 const ibArg& ArgPosition()
 {
-	static const ibArg s_a(wxT("position"), ibArg::Kind::Whole,
+	static const ibArg s_a(ibT("position"), ibArg::Kind::Whole,
 		ibMcpText("Character offset to stand at - just after the dot you want completed, or anywhere "
 			"in open code to be told what is in scope there. Pass 0 with empty `text` to ask what "
 			"a module starts with."), /*required*/ true);
@@ -187,18 +188,18 @@ const ibArg& ArgPosition()
 // that make THIS place different are what a caller is actually looking for, and without the origin
 // they sit in the middle of the alphabet indistinguishable from `Chars` and `BeginTransaction`.
 // Sorting is then the caller's to do, on a fact rather than on a guess about names.
-wxString ibOriginName(ibNameOrigin origin)
+ibString ibOriginName(ibNameOrigin origin)
 {
 	switch (origin) {
-	case ibNameOrigin::Platform:     return wxT("platform");
-	case ibNameOrigin::Global:       return wxT("global");
-	case ibNameOrigin::GlobalModule: return wxT("globalModule");
-	case ibNameOrigin::Context:      return wxT("context");
-	case ibNameOrigin::Bound:        return wxT("bound");
-	case ibNameOrigin::Member:       return wxT("member");
-	case ibNameOrigin::Inherited:    return wxT("inherited");
-	case ibNameOrigin::Keyword:      return wxT("keyword");
-	default:                         return wxT("declared");
+	case ibNameOrigin::Platform:     return ibT("platform");
+	case ibNameOrigin::Global:       return ibT("global");
+	case ibNameOrigin::GlobalModule: return ibT("globalModule");
+	case ibNameOrigin::Context:      return ibT("context");
+	case ibNameOrigin::Bound:        return ibT("bound");
+	case ibNameOrigin::Member:       return ibT("member");
+	case ibNameOrigin::Inherited:    return ibT("inherited");
+	case ibNameOrigin::Keyword:      return ibT("keyword");
+	default:                         return ibT("declared");
 	}
 }
 
@@ -216,17 +217,17 @@ wxString ibOriginName(ibNameOrigin origin)
 //
 // The other half of that debt is paid rather than guarded: what a field is DECLARED as is asked of
 // the METADATA now (ibFieldTypesOf), where it cannot touch a database at all.
-wxString ClassNameOf(const ibValue& value)
+ibString ClassNameOf(const ibValue& value)
 {
 	try {
 		return value.GetClassName();
 	}
 	catch (...) {
-		return wxEmptyString;
+		return ibEmptyString;
 	}
 }
 
-bool ibAnswerWithScope(const wxString& text, int caretPos,
+bool ibAnswerWithScope(const ibString& text, int caretPos,
 	const ibValueMetaObject* module, ibDataNode& result)
 {
 	std::vector<ibCaretName> found;
@@ -239,7 +240,7 @@ bool ibAnswerWithScope(const wxString& text, int caretPos,
 	for (const ibCaretName& name : found) {
 
 		std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-		entry->SetValue(wxT("name"), name.m_name);
+		entry->SetValue(ibT("name"), name.m_name);
 
 		// Function or procedure: calling a procedure where a value is wanted is a compile error,
 		// and this is what tells them apart — the same distinction the member answer carries as
@@ -247,12 +248,12 @@ bool ibAnswerWithScope(const wxString& text, int caretPos,
 		// wxString, not a bare literal: the ternary would settle on `const wchar_t*`, which the
 		// data-node codec has no encoding for — and outside MSVC the two branches are ambiguous
 		// against each other (portability.md §1.10, the same trap eight times over).
-		entry->SetValue(wxT("kind"), wxString(!name.m_callable ? wxT("variable")
-			: name.m_returnsValue ? wxT("function") : wxT("procedure")));
+		entry->SetValue(ibT("kind"), ibString(!name.m_callable ? ibT("variable")
+			: name.m_returnsValue ? ibT("function") : ibT("procedure")));
 
 		if (!name.m_signature.IsEmpty())
-			entry->SetValue(wxT("signature"), name.m_signature);
-		entry->AddField(wxT("exported"), ibDataValue::Bool(name.m_exported));
+			entry->SetValue(ibT("signature"), name.m_signature);
+		entry->AddField(ibT("exported"), ibDataValue::Bool(name.m_exported));
 
 		// ⭐ PROTECTED IS SAID ONLY WHEN IT IS TRUE, because it is the rare one and a field that is
 		// false on nine names in ten is noise on every one of them. It is not the opposite of
@@ -260,19 +261,19 @@ bool ibAnswerWithScope(const wxString& text, int caretPos,
 		// modules BELOW this one and stops there, and what a list must never do is offer a name
 		// that cannot be written — see ibNamesAtCaret's note on the runtime's own rule.
 		if (name.m_protected)
-			entry->AddField(wxT("protected"), ibDataValue::Bool(true));
+			entry->AddField(ibT("protected"), ibDataValue::Bool(true));
 
 		// TWO SEPARATE FACTS, kept apart on purpose. `origin` says where the name came FROM; `local`
 		// says it belongs to the body the caret is standing in rather than to the module. Folding
 		// "local" into the origin list would have made a frame position look like a source.
-		entry->SetValue(wxT("origin"), ibOriginName(name.m_origin));
+		entry->SetValue(ibT("origin"), ibOriginName(name.m_origin));
 		if (name.m_local)
-			entry->AddField(wxT("local"), ibDataValue::Bool(true));
+			entry->AddField(ibT("local"), ibDataValue::Bool(true));
 
 		names.push_back(ibDataValue::Child(entry));
 	}
 
-	result.AddField(wxT("names"), ibDataValue::Array(names));
+	result.AddField(ibT("names"), ibDataValue::Array(names));
 	return true;
 }
 
@@ -284,14 +285,14 @@ bool ibAnswerWithScope(const wxString& text, int caretPos,
 class ibMcpToolScriptComplete : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("script_complete"); }
+	ibString GetName() const override { return ibT("script_complete"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ibMcpText("asking the platform what can be written next");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("What may be written at a given place - the list the editor shows there. "
 			"Send the text you are about to write and the offset you are standing at, and WHERE YOU "
@@ -345,7 +346,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
 			refusal = ibMcpText("No configuration is open.");
@@ -359,12 +360,12 @@ public:
 		// mistaken for a watch or for ordinary work (backend_core.h, eval_complete).
 		const ibBackendException::ibEvalModeScope answering(eval_complete);
 
-		const wxString text = ArgText().Text(params);
-		s32 position = 0;
-		params.GetValue(wxT("position"), position);
+		const ibString text = ArgText().Text(params);
+		std::int32_t position = 0;
+		params.GetValue(ibT("position"), position);
 
 		if (position < 0 || (size_t)position > text.length()) {
-			refusal = wxString::Format(
+			refusal = ibString::Format(
 				ibMcpText("Position %d is outside a text of %u characters."),
 				(int)position, (unsigned)text.length());
 			return false;
@@ -377,8 +378,8 @@ public:
 		std::unique_ptr<ibScratchModule> scratch;
 		ibValueMetaObjectModuleBase* module = nullptr;
 
-		const ibDataValue* id = params.FindField(ArgId().Name());
-		if (id != nullptr && id->Kind() == ibDataKind::Number) {
+		auto id = params.FindField(ArgId().Name());
+		if (id && id->Kind() == ibDataKind::Number) {
 			ibValueMetaObject* object = ibFindMetaObjectById(activeMetaData, (ibMetaID)id->AsInt());
 			module = ibMcpModuleOf(object, refusal);
 			if (module == nullptr)
@@ -396,10 +397,10 @@ public:
 		// configuration is available.
 		//
 		// A lexer, not a compiler: what the text MEANS is asked below, of the compiler itself.
-		ibTranslateCode lexem;
+		ibTranslateCode lexem(ibCompileCode::GetCodeStyle());
 		lexem.SetLexemMode(ibLexemMode::Editing);
 		lexem.Load(text);
-		lexem.PrepareLexem();
+		lexem.Translate();
 
 		const ibTranslateCode::ibCaretText at = lexem.CaretAt((unsigned int)position);
 
@@ -409,17 +410,17 @@ public:
 		// remove. `place` names it outright; `word` is what a list filters by and `expression` what
 		// stands to the left, both of which a caller would otherwise re-derive from the text it
 		// already sent.
-		result.SetValue(wxT("place"),
-			at.m_place == ibTranslateCode::ibCaretPlace::AfterDot   ? wxString(wxT("afterDot"))
-			: at.m_place == ibTranslateCode::ibCaretPlace::InKeyword ? wxString(wxT("inKeyword"))
-			:                                                          wxString(wxT("openCode")));
+		result.SetValue(ibT("place"),
+			at.m_place == ibTranslateCode::ibCaretPlace::AfterDot   ? ibString(ibT("afterDot"))
+			: at.m_place == ibTranslateCode::ibCaretPlace::InKeyword ? ibString(ibT("inKeyword"))
+			:                                                          ibString(ibT("openCode")));
 
 		if (!at.m_word.IsEmpty())
-			result.SetValue(wxT("word"), at.m_word);
+			result.SetValue(ibT("word"), at.m_word);
 		if (!at.m_expression.IsEmpty())
-			result.SetValue(wxT("expression"), at.m_expression);
+			result.SetValue(ibT("expression"), at.m_expression);
 		if (!at.m_keyword.IsEmpty())
-			result.SetValue(wxT("keyword"), at.m_keyword);
+			result.SetValue(ibT("keyword"), at.m_keyword);
 
 		if (at.m_place != ibTranslateCode::ibCaretPlace::AfterDot)
 			return ibAnswerWithScope(text, (int)position, module, result);
@@ -439,16 +440,16 @@ public:
 		// — and tells the two faults apart, because they need different fixes: a text that would
 		// not compile, and a text that compiled while the chain stopped part way along it.
 		std::vector<ibCaretValue> values;
-		wxString refused;
+		ibString refused;
 		if (!ibValueAtCaret(text, (unsigned int)position, module, values, &refused)) {
 			refusal = refused.IsEmpty()
 				? ibMcpText("That text compiles, but the expression at that position does not "
 					"resolve to a value - so there is nothing to offer its members. Something in "
 					"the chain leads nowhere: a member that is not there, a method that returns "
 					"nothing, a name this module was never given.")
-				: wxString::Format(
+				: ibString::Format(
 					ibMcpText("Nothing at that position resolves to a value, and the text did not "
-						"compile up to it:%s%s"), wxT("\n"), refused);
+						"compile up to it:%s%s"), ibT("\n"), refused);
 			return false;
 		}
 
@@ -469,7 +470,7 @@ public:
 			// at the platform's built-in surface — and that is usually the first thing a reader
 			// wants to know. It is read off the STEP that produced the value, so it costs nothing
 			// and cannot be recovered anywhere else (scriptComplete.h).
-			branch->SetValue(wxT("origin"), ibOriginName(branchValue.m_origin));
+			branch->SetValue(ibT("origin"), ibOriginName(branchValue.m_origin));
 
 			// ⭐⭐ WHAT THE EXPRESSION TURNED OUT TO BE, AND IT IS SAID PER BRANCH. The members alone
 			// say what may be written next; they do not say WHAT is being written on, and a caller
@@ -478,23 +479,23 @@ public:
 			// everywhere else, so the value says its own name: it is the one fact the walk holds and
 			// nobody else can recover. Said once for the whole answer it would name the last branch
 			// and describe the others wrongly, which is worse than saying nothing.
-			const wxString className = ClassNameOf(value);
+			const ibString className = ClassNameOf(value);
 			if (!className.IsEmpty())
-				branch->SetValue(wxT("type"), className);
+				branch->SetValue(ibT("type"), className);
 
 			std::vector<ibDataValue> methods;
 			for (long i = 0; i < value.GetNMethods(); i++) {
 
 				std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-				entry->SetValue(wxT("name"), value.GetMethodName(i));
+				entry->SetValue(ibT("name"), value.GetMethodName(i));
 
-				const wxString helper = value.GetMethodHelper(i);
+				const ibString helper = value.GetMethodHelper(i);
 				if (!helper.IsEmpty())
-					entry->SetValue(wxT("signature"), helper);
+					entry->SetValue(ibT("signature"), helper);
 
 				// Function or procedure: calling a procedure where a value is wanted
 				// is a compile error, and only this tells them apart.
-				entry->AddField(wxT("returnsValue"), ibDataValue::Bool(value.HasRetVal(i)));
+				entry->AddField(ibT("returnsValue"), ibDataValue::Bool(value.HasRetVal(i)));
 				methods.push_back(ibDataValue::Child(entry));
 			}
 
@@ -513,7 +514,7 @@ public:
 				if (value.IsPropScoped(i))
 					continue;
 
-				const wxString name = value.GetPropName(i);
+				const ibString name = value.GetPropName(i);
 
 				std::vector<ibFieldType> types;
 				ibFieldTypesOf(module, value, name, types);
@@ -527,9 +528,9 @@ public:
 				if (!types.empty()) {
 					for (const ibFieldType& type : types) {
 						std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-						entry->SetValue(wxT("name"), name);
+						entry->SetValue(ibT("name"), name);
 						if (!type.m_name.IsEmpty())
-							entry->SetValue(wxT("type"), type.m_name);
+							entry->SetValue(ibT("type"), type.m_name);
 						properties.push_back(ibDataValue::Child(entry));
 					}
 					continue;
@@ -540,12 +541,12 @@ public:
 				properties.push_back(ibDataValue::String(name));
 			}
 
-			branch->AddField(wxT("methods"), ibDataValue::Array(methods));
-			branch->AddField(wxT("properties"), ibDataValue::Array(properties));
+			branch->AddField(ibT("methods"), ibDataValue::Array(methods));
+			branch->AddField(ibT("properties"), ibDataValue::Array(properties));
 			branches.push_back(ibDataValue::Child(branch));
 		}
 
-		result.AddField(wxT("values"), ibDataValue::Array(branches));
+		result.AddField(ibT("values"), ibDataValue::Array(branches));
 		return true;
 	}
 };
@@ -574,21 +575,21 @@ public:
 	// shared argument is required because script_complete beside it has nothing to fall back on.
 	static const ibArg& ArgOutlineText()
 	{
-		static const ibArg s_a(wxT("text"), ibArg::Kind::Text,
+		static const ibArg s_a(ibT("text"), ibArg::Kind::Text,
 			ibMcpText("The module text to read, when it is a DRAFT - work in progress, an edit you "
 				  "have not written yet, a snippet. Leave it out and pass `id` instead to read a "
 				  "module that is already saved."), /*required*/ false);
 		return s_a;
 	}
 
-	wxString GetName() const override { return wxT("module_outline"); }
+	ibString GetName() const override { return ibT("module_outline"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ibMcpText("looking at what a module is made of");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("What a module declares: its procedures, functions and variables, which of "
 			"them are exported, and the lines each one occupies. Does not compile - ask this before "
@@ -604,12 +605,12 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		// ⭐ AN ID IS WHAT EVERY OTHER MODULE VERB TAKES, and this one took only a text — so the
 		// question "what is in this module" had no answer that named the module, and a caller
 		// holding an id had to read the whole text first just to list what was in it (2026-09-09).
-		wxString text = ArgOutlineText().Text(params);
+		ibString text = ArgOutlineText().Text(params);
 
 		if (text.IsEmpty() && ArgId().Given(params)) {
 
@@ -627,7 +628,7 @@ public:
 			text = module->GetModuleText();
 		}
 
-		ibParseCode parser;
+		ibParseCode parser(ibCompileCode::GetCodeStyle());
 		if (!parser.ParseModule(text)) {
 			refusal = ibMcpText("The text could not be read far enough to list what it declares.");
 			return false;
@@ -636,37 +637,37 @@ public:
 		std::vector<ibDataValue> declared;
 		for (const ibModuleElement& element : parser.GetAllContent()) {
 
-			wxString kind;
+			ibString kind;
 			bool exported = false;
 
 			switch (element.m_eType) {
-			case eVariable:        kind = wxT("variable");  break;
-			case eExportVariable:  kind = wxT("variable");  exported = true; break;
-			case eProcedure:       kind = wxT("procedure"); break;
-			case eExportProcedure: kind = wxT("procedure"); exported = true; break;
-			case eFunction:        kind = wxT("function");  break;
-			case eExportFunction:  kind = wxT("function");  exported = true; break;
-			case eLambda:          kind = wxT("lambda");    break;
+			case eVariable:        kind = ibT("variable");  break;
+			case eExportVariable:  kind = ibT("variable");  exported = true; break;
+			case eProcedure:       kind = ibT("procedure"); break;
+			case eExportProcedure: kind = ibT("procedure"); exported = true; break;
+			case eFunction:        kind = ibT("function");  break;
+			case eExportFunction:  kind = ibT("function");  exported = true; break;
+			case eLambda:          kind = ibT("lambda");    break;
 			default: continue;
 			}
 
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-			entry->SetValue(wxT("name"), element.m_name);
-			entry->SetValue(wxT("kind"), kind);
-			entry->AddField(wxT("exported"), ibDataValue::Bool(exported));
+			entry->SetValue(ibT("name"), element.m_name);
+			entry->SetValue(ibT("kind"), kind);
+			entry->AddField(ibT("exported"), ibDataValue::Bool(exported));
 
 			// HOW IT IS CALLED, for the things that are called. The same one line the member
 			// surface publishes, so what is read here and what autocomplete offers cannot drift.
-			if (!element.m_params.empty() || kind != wxT("variable"))
-				entry->SetValue(wxT("declare"), ibModuleCallForm(element));
+			if (!element.m_params.empty() || kind != ibT("variable"))
+				entry->SetValue(ibT("declare"), ibModuleCallForm(element));
 
-			entry->AddField(wxT("lineFrom"), ibDataValue::Int((s64)(element.m_lineStart + 1)));
-			entry->AddField(wxT("lineTo"), ibDataValue::Int((s64)(element.m_lineEnd + 1)));
+			entry->AddField(ibT("lineFrom"), ibDataValue::Int((std::int64_t)(element.m_lineStart + 1)));
+			entry->AddField(ibT("lineTo"), ibDataValue::Int((std::int64_t)(element.m_lineEnd + 1)));
 
 			declared.push_back(ibDataValue::Child(entry));
 		}
 
-		result.AddField(wxT("declares"), ibDataValue::Array(declared));
+		result.AddField(ibT("declares"), ibDataValue::Array(declared));
 		return true;
 	}
 };

@@ -6,7 +6,7 @@
 
 //base property for "chart of accounts" selection
 class BACKEND_API ibPropertyChartOfAccounts : public ibProperty {
-	static wxVariantData* CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription());
+	static ibVariant CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription());
 public:
 
 	ibMetaDescription& GetValueAsMetaDesc() const;
@@ -15,9 +15,9 @@ public:
 	// WHICH CHART OF ACCOUNTS. Exactly one — said as a value now, not only in prose.
 	virtual ibPropertyChoiceMode GetValueList(ibPropertyChoiceList& list) override;
 
-	ibPropertyChartOfAccounts(ibPropertyCategory* cat, const wxString& name) : ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject())) {}
-	ibPropertyChartOfAccounts(ibPropertyCategory* cat, const wxString& name, const wxString& label) : ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject())) {}
-	ibPropertyChartOfAccounts(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString) : ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())) {}
+	ibPropertyChartOfAccounts(ibPropertyCategory* cat, const ibString& name) : ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject())) {}
+	ibPropertyChartOfAccounts(ibPropertyCategory* cat, const ibString& name, const ibString& label) : ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject())) {}
+	ibPropertyChartOfAccounts(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString) : ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())) {}
 
 	// NOTHING CHOSEN — asked of the property itself, the same way the characteristic-chart binding
 	// answers it, so a rule reads "is this binding empty" rather than reaching for a type count.
@@ -31,9 +31,9 @@ public:
 protected:
 
 	// The family rule, kept here too: a relationship arrives in whichever wrapper the caller was
-	// handed - CreateValueList builds every candidate as ibVariantDataOwner - and a property that
+	// handed - CreateValueList builds every candidate as ibVariantOwner - and a property that
 	// stores a neighbour's wrapper raises on every later read. See propertyRecord.h.
-	virtual void DoSetValue(const wxVariant& val) override;
+	virtual void DoSetValue(const ibVariant& val) override;
 
 public:
 

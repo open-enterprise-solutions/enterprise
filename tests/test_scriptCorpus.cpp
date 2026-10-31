@@ -23,17 +23,18 @@
 #include <wx/filename.h>
 #include <wx/textfile.h>
 
+#include "backend/backend_exception.h"
 #include "backend/compiler/compileCode.h"
 #include "backend/compiler/procUnit.h"
 #include "backend/system/systemManager.h"
 #include "backend/appData.h"   // a built-in reads appData before it dispatches
 
 #include <wx/init.h>
-#include <wx/image.h>  // wxInitAllImageHandlers — wx decodes nothing until registered
 #include <wx/log.h>    // wxLogStderr — a wx warning must not become a modal box
 #include <wx/tokenzr.h>   // wxStringTokenize — prefix bisection
 
 #include <cctype>   // std::isalnum — a run case is named after its file
+#include "core/fileSystem.h"   // ibFILE_SEP_PATH
 #include <cstdio>
 
 // =============================================================================
@@ -61,16 +62,16 @@ public:
 		const long lSizeArray) override {
 
 		if (IsMessage(lMethodNum) && lSizeArray > 0 && paParams[0] != nullptr) {
-			const wxString strText = paParams[0]->GetString();
+			const ibString strText = paParams[0]->GetString();
 			m_listMessage.push_back(strText);
-			std::printf("%s\n", (const char*)strText.ToUTF8());
+			std::printf("%s\n", strText.ToUTF8().c_str());
 			return true;
 		}
 
 		return ibValueSystemFunction::CallAsProc(lMethodNum, paParams, lSizeArray);
 	}
 
-	const std::vector<wxString>& GetMessages() const { return m_listMessage; }
+	const std::vector<ibString>& GetMessages() const { return m_listMessage; }
 	void ClearMessages()                            { m_listMessage.clear(); }
 
 private:
@@ -84,22 +85,22 @@ private:
 			->GetMethodName(lMethodNum).IsSameAs(wxT("Message"), false);
 	}
 
-	std::vector<wxString> m_listMessage;
+	std::vector<ibString> m_listMessage;
 };
 
 namespace {
 
 // The corpus lives beside the tests; CMake runs the binary from the build tree,
 // so the path is resolved from the source location rather than the cwd.
-wxString ScriptDir()
+ibString ScriptDir()
 {
-	wxFileName here(wxString::FromUTF8(__FILE__));
+	wxFileName here(ibString::FromUTF8(__FILE__));
 	here.SetFullName(wxEmptyString);
 	here.AppendDir(wxT("scripts"));
 	return here.GetPath();
 }
 
-wxString ReadWhole(const wxString& strPath)
+ibString ReadWhole(const ibString& strPath)
 {
 	// UTF-8 NAMED, not guessed. The string suite asserts on `Upper("Hello Мир")`
 	// and `StrLen("привет")`, so a mis-detected encoding does not fail as an
@@ -108,16 +109,16 @@ wxString ReadWhole(const wxString& strPath)
 	if (!file.Open(strPath, wxConvUTF8))
 		return wxEmptyString;
 
-	wxString strText;
+	ibString strText;
 	for (size_t i = 0; i < file.GetLineCount(); i++)
 		strText << file.GetLine(i) << wxT("\n");
 
 	return strText;
 }
 
-std::vector<wxString> CorpusFiles()
+std::vector<ibString> CorpusFiles()
 {
-	std::vector<wxString> listFile;
+	std::vector<ibString> listFile;
 
 	// Asked BEFORE wxDir opens it: the run cases are generated from this list at
 	// registration, before any fixture has set the log target, and a wxDir that
@@ -129,10 +130,10 @@ std::vector<wxString> CorpusFiles()
 	if (!dir.IsOpened())
 		return listFile;
 
-	wxString strName;
+	wxString strName;   // wxDir's own: it writes each name into a wx string
 	for (bool ok = dir.GetFirst(&strName, wxT("*.txt"), wxDIR_FILES); ok;
 	     ok = dir.GetNext(&strName))
-		listFile.push_back(ScriptDir() + wxFileName::GetPathSeparator() + strName);
+		listFile.push_back(ScriptDir() + ibFILE_SEP_PATH + strName);
 
 	std::sort(listFile.begin(), listFile.end());
 	return listFile;
@@ -159,7 +160,7 @@ struct ibCorpusHost {
 		compiler.AddContextVariable(wxT("EnumManager"), m_valueEnums, true);
 	}
 
-	const std::vector<wxString>& GetMessages() const { return m_valueSystem.GetMessages(); }
+	const std::vector<ibString>& GetMessages() const { return m_valueSystem.GetMessages(); }
 };
 
 // WHICH DIALECT the file is in is a property of the FILE, not of the run. CES
@@ -172,7 +173,7 @@ struct ibCorpusHost {
 // the first reports CES complaining about a VES source, a true sentence about
 // the wrong question.
 bool CompileEitherDialect(ibCompileCode& compiler, ibCorpusHost& host,
-	const wxString& strText, wxString& strError)
+	const ibString& strText, ibString& strError)
 {
 	for (short style : { (short)CODE_CES, (short)CODE_VES }) {
 
@@ -180,7 +181,7 @@ bool CompileEitherDialect(ibCompileCode& compiler, ibCorpusHost& host,
 		compiler.Reset();
 		host.Bind(compiler);
 
-		wxString strTry;
+		ibString strTry;
 		try {
 			if (compiler.Compile(strText))
 				return true;
@@ -215,8 +216,8 @@ struct ScriptCorpus : ::testing::Test {
 		// fixture. Both are process facts, so they moved to the one place each
 		// belongs: the log target to the global environment in test_compiler.cpp
 		// (it covers every backend test, whatever --gtest_filter picks), and the
-		// handler re-registration to tests/frontendFix.h, which runs on each wx
-		// cycle — the cycle is what wipes them (wxImageModule::OnExit).
+		// handler re-registration to whatever starts a wx cycle — the cycle is
+		// what wipes them (wxImageModule::OnExit).
 
 		if (ibApplicationInstance::Get() == nullptr
 		 && !ibApplicationInstance::CreateAppDataEnv(ibRunMode::eFILE_MODE))
@@ -243,15 +244,15 @@ TEST_F(ScriptCorpus, TheCorpusIsThere)
 
 TEST_F(ScriptCorpus, EveryScriptCompiles)
 {
-	const std::vector<wxString> listFile = CorpusFiles();
+	const std::vector<ibString> listFile = CorpusFiles();
 	ASSERT_FALSE(listFile.empty());
 
 	size_t numOk = 0;
-	wxString strFailures;
+	ibString strFailures;
 
-	for (const wxString& strPath : listFile) {
+	for (const ibString& strPath : listFile) {
 
-		const wxString strText = ReadWhole(strPath);
+		const ibString strText = ReadWhole(strPath);
 		if (strText.IsEmpty()) {
 			strFailures << wxT("\n  [unreadable] ") << strPath;
 			continue;
@@ -260,7 +261,7 @@ TEST_F(ScriptCorpus, EveryScriptCompiles)
 		ibCorpusHost host;
 		ibCompileCode compiler(wxFileName(strPath).GetName(), wxT("corpus"));
 
-		wxString strError;
+		ibString strError;
 		if (CompileEitherDialect(compiler, host, strText, strError)) {
 			EXPECT_FALSE(compiler.m_cByteCode.m_listCode.empty())
 				<< wxFileName(strPath).GetFullName().ToStdString();
@@ -300,25 +301,25 @@ TEST_F(ScriptCorpus, EveryScriptCompiles)
 // process of its own, so a case per file names the file and leaves the others
 // their own verdict.
 // =============================================================================
-struct ScriptCorpusRun : ScriptCorpus, ::testing::WithParamInterface<wxString> {};
+struct ScriptCorpusRun : ScriptCorpus, ::testing::WithParamInterface<ibString> {};
 
 TEST_P(ScriptCorpusRun, RunsToTheEnd)
 {
-	const wxString& strPath = GetParam();
-	const wxString  strName = wxFileName(strPath).GetFullName();
+	const ibString& strPath = GetParam();
+	const ibString  strName = wxFileName(strPath).GetFullName();
 
-	const wxString strText = ReadWhole(strPath);
+	const ibString strText = ReadWhole(strPath);
 	if (strText.IsEmpty())
 		GTEST_SKIP() << "unreadable; EveryScriptCompiles reports it";
 
 	ibCorpusHost host;
 	ibCompileCode compiler(wxFileName(strPath).GetName(), wxT("corpus"));
 
-	wxString strError;
+	ibString strError;
 	if (!CompileEitherDialect(compiler, host, strText, strError))
 		GTEST_SKIP() << "does not compile; EveryScriptCompiles reports it";   // not this case's question
 
-	wxString strRunError;
+	ibString strRunError;
 	try {
 		ibByteBinder binder = compiler.CreateBinder();
 		ibProcUnit   unit;
@@ -337,13 +338,13 @@ TEST_P(ScriptCorpusRun, RunsToTheEnd)
 	// Reported rather than asserted: which of the two it is belongs to the
 	// case that checks WHAT was printed, and that case is not written yet.
 	if (host.GetMessages().empty())
-		std::printf("[silent] %s\n", (const char*)strName.ToUTF8());
+		std::printf("[silent] %s\n", strName.ToUTF8().c_str());
 }
 
 // Named after the file, so a failure reads as the script it is:
 // Corpus/ScriptCorpusRun.RunsToTheEnd/test_aggregations_selector.
 INSTANTIATE_TEST_SUITE_P(Corpus, ScriptCorpusRun, ::testing::ValuesIn(CorpusFiles()),
-	[](const ::testing::TestParamInfo<wxString>& info) {
+	[](const ::testing::TestParamInfo<ibString>& info) {
 		std::string strName = wxFileName(info.param).GetName().ToStdString();
 		for (char& ch : strName)
 			if (!std::isalnum(static_cast<unsigned char>(ch)))
@@ -356,15 +357,15 @@ TEST_F(ScriptCorpus, EveryScriptDeclaresWhatItUses)
 	// A module that compiles but registers no symbols would mean the tree was
 	// read and then thrown away — the failure the m_listVar omission produced,
 	// which no other test caught until the binder asked.
-	for (const wxString& strPath : CorpusFiles()) {
+	for (const ibString& strPath : CorpusFiles()) {
 
-		const wxString strText = ReadWhole(strPath);
+		const ibString strText = ReadWhole(strPath);
 		if (strText.IsEmpty()) continue;
 
 		ibCorpusHost host;
 		ibCompileCode compiler(wxFileName(strPath).GetName(), wxT("corpus"));
 
-		wxString strError;
+		ibString strError;
 		if (!CompileEitherDialect(compiler, host, strText, strError))
 			continue;   // reported by the case above
 
@@ -391,9 +392,9 @@ TEST_F(ScriptCorpus, EveryScriptDeclaresWhatItUses)
 // =============================================================================
 TEST_F(ScriptCorpus, DISABLED_BisectFirstFailingLine)
 {
-	for (const wxString& strPath : CorpusFiles()) {
+	for (const ibString& strPath : CorpusFiles()) {
 
-		const wxString strWhole = ReadWhole(strPath);
+		const ibString strWhole = ReadWhole(strPath);
 		if (strWhole.IsEmpty()) continue;
 
 		wxArrayString listLine = wxStringTokenize(strWhole, wxT("\n"), wxTOKEN_RET_EMPTY_ALL);
@@ -402,7 +403,7 @@ TEST_F(ScriptCorpus, DISABLED_BisectFirstFailingLine)
 		{
 			ibCorpusHost host;
 			ibCompileCode compiler(wxFileName(strPath).GetName(), wxT("corpus"));
-			wxString strError;
+			ibString strError;
 			if (!CompileEitherDialect(compiler, host, strWhole, strError))
 				continue;   // a compile failure is the other case's business
 			try {
@@ -415,14 +416,14 @@ TEST_F(ScriptCorpus, DISABLED_BisectFirstFailingLine)
 
 		for (size_t n = 1; n <= listLine.GetCount(); n++) {
 
-			wxString strPrefix;
+			ibString strPrefix;
 			for (size_t i = 0; i < n; i++)
 				strPrefix << listLine[i] << wxT("\n");
 
 			ibCorpusHost host;
 			ibCompileCode compiler(wxFileName(strPath).GetName(), wxT("corpus"));
 
-			wxString strError;
+			ibString strError;
 			if (!CompileEitherDialect(compiler, host, strPrefix, strError))
 				continue;   // an incomplete prefix often cannot compile; keep going
 
@@ -443,7 +444,7 @@ TEST_F(ScriptCorpus, DISABLED_BisectFirstFailingLine)
 					(const char*)wxFileName(strPath).GetFullName().ToUTF8(),
 					(unsigned)n, (unsigned)n,
 					(const char*)listLine[n - 1].ToUTF8(),
-					(const char*)strError.ToUTF8());
+					strError.ToUTF8().c_str());
 
 				// NOW SHRINK IT. Five hand-written reconstructions of this line
 				// all ran; the line needs its neighbours and guessing which ones
@@ -459,7 +460,7 @@ TEST_F(ScriptCorpus, DISABLED_BisectFirstFailingLine)
 
 					listKeep[drop] = false;
 
-					wxString strTry;
+					ibString strTry;
 					for (size_t i = 0; i < n; i++)
 						if (listKeep[i]) strTry << listLine[i] << wxT("\n");
 
@@ -471,12 +472,12 @@ TEST_F(ScriptCorpus, DISABLED_BisectFirstFailingLine)
 					// is how a reduction step silently turns a runtime defect into
 					// a syntax error nobody sees. The compile message is READ and
 					// reported, never swallowed.
-					wxString strWhy;
+					ibString strWhy;
 					bool bStillFails = false;
 
 					if (!CompileEitherDialect(compilerTry, hostTry, strTry, strWhy)) {
 						std::printf("  drop line %u -> DOES NOT COMPILE: %s\n",
-							(unsigned)(drop + 1), (const char*)strWhy.ToUTF8());
+							(unsigned)(drop + 1), strWhy.ToUTF8().c_str());
 					}
 					else {
 						try {

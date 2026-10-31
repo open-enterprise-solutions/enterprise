@@ -1,20 +1,11 @@
 #ifndef __POSTGRESQL_PREPARED_STATEMENT_PARAMETER_COLLECTION_H__
 #define __POSTGRESQL_PREPARED_STATEMENT_PARAMETER_COLLECTION_H__
 
-// For compilers that support precompilation, includes "wx.h".
-#include <wx/wxprec.h>
-
-#ifdef __BORLANDC__
-#pragma hdrstop
-#endif
-
-#ifndef WX_PRECOMP
-#include <wx/wx.h>
-#endif
+#include <vector>
 
 #include "postgresParameter.h"
 
-WX_DECLARE_OBJARRAY(ibDatabaseParameterPostgres, ArrayOfPostgresParameters);
+typedef std::vector<ibDatabaseParameterPostgres> ArrayOfPostgresParameters;
 
 class ibPreparedStatementPostgresParameterCollection
 {

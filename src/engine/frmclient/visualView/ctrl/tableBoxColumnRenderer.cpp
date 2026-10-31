@@ -4,7 +4,7 @@
 
 wxWindow* ibDataViewValueRenderer::CreateEditorCtrl(wxWindow* dv,
 	wxRect labelRect,
-	const wxVariant& value)
+	const ibVariant& value)
 {
 	ibControlTextEditor* textEditor = new ibControlTextEditor;
 	textEditor->SetDVCMode(true);
@@ -12,7 +12,7 @@ wxWindow* ibDataViewValueRenderer::CreateEditorCtrl(wxWindow* dv,
 	// create the window hidden to prevent flicker
 	textEditor->Show(false);
 
-	bool result = textEditor->Create(dv, wxID_ANY, value,
+	bool result = textEditor->Create(dv, wxID_ANY, value.GetString(),
 		labelRect.GetPosition(),
 		labelRect.GetSize());
 
@@ -40,7 +40,7 @@ wxWindow* ibDataViewValueRenderer::CreateEditorCtrl(wxWindow* dv,
 	return textEditor;
 }
 
-bool ibDataViewValueRenderer::GetValueFromEditorCtrl(wxWindow* ctrl, wxVariant& value)
+bool ibDataViewValueRenderer::GetValueFromEditorCtrl(wxWindow* ctrl, ibVariant& value)
 {
 	ibControlTextEditor* textEditor = wxDynamicCast(ctrl, ibControlTextEditor);
 	if (textEditor == nullptr)

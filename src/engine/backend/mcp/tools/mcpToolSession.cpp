@@ -26,6 +26,7 @@
 #include "backend/mcp/mcpTool.h"
 
 #include "backend/appData.h"
+#include "backend/backend_exception.h"
 #include "backend/session/session.h"          // Current() — the one session we must not kick
 #include "backend/session/sessionRegistry.h"
 #include "backend/session/sessionSnapshot.h"
@@ -39,7 +40,7 @@ using ibArg = ibMcpTool::ibMcpArgument;
 // objects in Call, so the name a caller is told cannot drift from the name looked for.
 const ibArg& ArgFull()
 {
-	static const ibArg s_a(wxT("full"), ibArg::Kind::Flag,
+	static const ibArg s_a(ibT("full"), ibArg::Kind::Flag,
 		ibMcpText("Include roles and language for EVERY account. Costs one read per account, so it "
 		  "is off by default - but it is one call instead of one per person."));
 	return s_a;
@@ -48,14 +49,14 @@ const ibArg& ArgFull()
 
 const ibArg& ArgName()
 {
-	static const ibArg s_a(wxT("name"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("name"), ibArg::Kind::Text,
 		ibMcpText("One account, in full. Omit for the list."));
 	return s_a;
 }
 
 const ibArg& ArgSession()
 {
-	static const ibArg s_a(wxT("session"), ibArg::Kind::Text,
+	static const ibArg s_a(ibT("session"), ibArg::Kind::Text,
 		ibMcpText("Which one - the `session` handle from session_list or lock_list."), /*required*/ true);
 	return s_a;
 }
@@ -69,17 +70,17 @@ const ibArg& ArgSession()
 class ibMcpToolUserList : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("user_list"); }
+	ibString GetName() const override { return ibT("user_list"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
-		const wxString name = ArgName().Text(params);
+		const ibString name = ArgName().Text(params);
 		return name.IsEmpty()
-			? wxString(ibMcpText("looking at the accounts"))
-			: wxString::Format(ibMcpText("looking at the account '%s'"), name);
+			? ibString(ibMcpText("looking at the accounts"))
+			: ibString::Format(ibMcpText("looking at the account '%s'"), name);
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("The accounts of this installation - who exists, what roles they hold and which "
 			"language they read in, which together decide what each may see and how they are "
@@ -93,21 +94,34 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		const wxString name = ArgName().Text(params);
+		const ibString name = ArgName().Text(params);
 
 		if (name.IsEmpty()) {
 
 			const bool full = ArgFull().Flag(params);
 
+			std::vector<ibUserInfo::Brief> accounts;
+			try {
+				accounts = ibUserInfo::ListAll();
+			}
+			catch (const ibBackendInterruptException&) {
+				throw;
+			}
+			catch (const ibCoreException& err) {
+				refusal = ibString::Format(
+					_("The user list could not be read: %s"), err.GetErrorDescription());
+				return false;
+			}
+
 			std::vector<ibDataValue> users;
-			for (const ibUserInfo::Brief& brief : ibUserInfo::ListAll()) {
+			for (const ibUserInfo::Brief& brief : accounts) {
 				std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-				entry->SetValue(wxT("name"), brief.m_strUserName);
+				entry->SetValue(ibT("name"), brief.m_strUserName);
 				if (!brief.m_strUserFullName.IsEmpty()
 					&& brief.m_strUserFullName != brief.m_strUserName)
-					entry->SetValue(wxT("fullName"), brief.m_strUserFullName);
+					entry->SetValue(ibT("fullName"), brief.m_strUserFullName);
 
 				// THE SAME FACTS THE SINGLE-ACCOUNT BRANCH GIVES, read the same way. Written as
 				// one helper below rather than twice, because two renderings of one account are
@@ -118,14 +132,14 @@ public:
 				users.push_back(ibDataValue::Child(entry));
 			}
 
-			result.AddField(wxT("count"), ibDataValue::Int((s64)users.size()));
-			result.AddField(wxT("users"), ibDataValue::Array(users));
+			result.AddField(ibT("count"), ibDataValue::Int((std::int64_t)users.size()));
+			result.AddField(ibT("users"), ibDataValue::Array(users));
 
 			// AN EMPTY TABLE IS A MODE, NOT AN ABSENCE. With no accounts at all the
 			// installation is open to anyone, and reading "no users" as "the list
 			// failed" would be exactly backwards.
 			if (users.empty())
-				result.SetValue(wxT("note"),
+				result.SetValue(ibT("note"),
 					ibMcpText("No accounts at all - this installation opens without asking who you are."));
 
 			return true;
@@ -133,13 +147,13 @@ public:
 
 		const ibUserInfo info = ibUserInfo::Read(name);
 		if (!info.IsOk()) {
-			refusal = wxString::Format(ibMcpText("No account named '%s'."), name);
+			refusal = ibString::Format(ibMcpText("No account named '%s'."), name);
 			return false;
 		}
 
-		result.SetValue(wxT("name"), info.m_strUserName);
+		result.SetValue(ibT("name"), info.m_strUserName);
 		if (!info.m_strUserFullName.IsEmpty())
-			result.SetValue(wxT("fullName"), info.m_strUserFullName);
+			result.SetValue(ibT("fullName"), info.m_strUserFullName);
 
 		DescribeAccount(info, result);
 
@@ -169,17 +183,17 @@ private:
 					: role.m_strRoleName));
 		}
 
-		into.AddField(wxT("roles"), ibDataValue::Array(roles));
+		into.AddField(ibT("roles"), ibDataValue::Array(roles));
 
 		// NO ROLES IS THE MOST PERMISSIVE STATE, not the least, and it is worth a
 		// sentence because it reads the other way round at first glance.
 		if (roles.empty())
-			into.SetValue(wxT("rolesNote"),
+			into.SetValue(ibT("rolesNote"),
 				ibMcpText("No roles are assigned - nothing narrows what this account may do."));
 
 		if (info.IsSetLanguage()) {
-			into.SetValue(wxT("language"), info.m_strLanguageName);
-			into.SetValue(wxT("languageCode"), info.m_strLanguageCode);
+			into.SetValue(ibT("language"), info.m_strLanguageName);
+			into.SetValue(ibT("languageCode"), info.m_strLanguageCode);
 		}
 	}
 };
@@ -192,14 +206,14 @@ MCP_TOOL_REGISTER(ibMcpToolUserList);
 class ibMcpToolSessionList : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("session_list"); }
+	ibString GetName() const override { return ibT("session_list"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ibMcpText("looking at who is connected");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Who is connected right now: the user, the machine, the application they are "
 			"in, and when they started. Ask before anything that needs the installation to "
@@ -213,7 +227,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		if (appData == nullptr) {
 			refusal = ibMcpText("The application is not up.");
@@ -232,33 +246,33 @@ public:
 		for (unsigned int index = 0; index < snapshot.GetSessionCount(); ++index) {
 
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-			entry->SetValue(wxT("user"), snapshot.GetUserName(index));
-			entry->SetValue(wxT("computer"), snapshot.GetComputerName(index));
-			entry->SetValue(wxT("application"), snapshot.GetApplication(index));
+			entry->SetValue(ibT("user"), snapshot.GetUserName(index));
+			entry->SetValue(ibT("computer"), snapshot.GetComputerName(index));
+			entry->SetValue(ibT("application"), snapshot.GetApplication(index));
 
 			// Server or client — the same application name means different things
 			// on the two sides, and the label is already worked out for the
 			// designer's own Active Users list.
-			entry->SetValue(wxT("side"), snapshot.GetSessionKindDescr(index));
-			entry->SetValue(wxT("started"), snapshot.GetStartedDate(index));
+			entry->SetValue(ibT("side"), snapshot.GetSessionKindDescr(index));
+			entry->SetValue(ibT("started"), snapshot.GetStartedDate(index));
 
 			// ⭐ AND THE HANDLE THAT ADDRESSES IT. Without this the list could be read and
 			// nothing in it could be acted on — session_kick needs a name for one row, and
 			// lock_list reports the same value, so "who is holding this" and "are they still
 			// here" join up on one field rather than on a guess about the user's name.
-			entry->SetValue(wxT("session"), snapshot.GetSession(index));
+			entry->SetValue(ibT("session"), snapshot.GetSession(index));
 
 			sessions.push_back(ibDataValue::Child(entry));
 		}
 
-		result.AddField(wxT("count"), ibDataValue::Int((s64)sessions.size()));
-		result.AddField(wxT("sessions"), ibDataValue::Array(sessions));
+		result.AddField(ibT("count"), ibDataValue::Int((std::int64_t)sessions.size()));
+		result.AddField(ibT("sessions"), ibDataValue::Array(sessions));
 
 		// The snapshot is refreshed on a timer rather than read live, so a session
 		// that started a moment ago may not be in it yet. Saying so is cheaper than
 		// letting an empty list be read as an empty installation.
 		if (sessions.empty())
-			result.SetValue(wxT("note"),
+			result.SetValue(ibT("note"),
 				ibMcpText("Nobody listed. The snapshot refreshes every few seconds, so a session "
 				  "started just now may not have reached it."));
 
@@ -286,14 +300,14 @@ MCP_TOOL_REGISTER(ibMcpToolSessionList);
 class ibMcpToolSessionKick : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("session_kick"); }
+	ibString GetName() const override { return ibT("session_kick"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ibMcpText("disconnecting a session");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Ask a session to disconnect - the handle comes from session_list. Used "
 			"before something that needs the installation to itself, and to free a lock whose "
@@ -309,7 +323,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		if (appData == nullptr) {
 			refusal = ibMcpText("The application is not up.");
@@ -322,7 +336,7 @@ public:
 			return false;
 		}
 
-		const wxString wanted = ArgSession().Text(params);
+		const ibString wanted = ArgSession().Text(params);
 		if (wanted.IsEmpty()) {
 			refusal = ibMcpText("No session named. session_list lists them with their handles.");
 			return false;
@@ -342,7 +356,7 @@ public:
 
 		// WHO IT IS, read BEFORE the signal — afterwards the row may be gone, and a report that
 		// can only say a guid is a report nobody can check.
-		wxString user, computer;
+		ibString user, computer;
 		bool found = false;
 
 		const ibSessionSnapshot snapshot = registry->GetClusterSnapshot();
@@ -368,13 +382,13 @@ public:
 			return false;
 		}
 
-		result.SetValue(wxT("session"), wanted);
-		result.SetValue(wxT("user"), user);
-		result.SetValue(wxT("computer"), computer);
+		result.SetValue(ibT("session"), wanted);
+		result.SetValue(ibT("user"), user);
+		result.SetValue(ibT("computer"), computer);
 
 		// ⭐ "ASKED", NOT "DONE" — see the note above the class. The word is the whole report.
-		result.SetValue(wxT("asked"), wxString(wxT("disconnect")));
-		result.SetValue(wxT("note"),
+		result.SetValue(ibT("asked"), ibString(ibT("disconnect")));
+		result.SetValue(ibT("note"),
 			ibMcpText("The owning process acts on this within a few seconds. Read session_list again "
 			  "to see it gone."));
 
@@ -401,14 +415,14 @@ MCP_TOOL_REGISTER(ibMcpToolSessionKick);
 class ibMcpToolSessionReload : public ibMcpTool {
 public:
 
-	wxString GetName() const override { return wxT("session_reload"); }
+	ibString GetName() const override { return ibT("session_reload"); }
 
-	wxString GetActivity(const ibDataNode& params) const override
+	ibString GetActivity(const ibDataNode& params) const override
 	{
 		return ibMcpText("asking a server to re-login its clients");
 	}
 
-	wxString GetDescription() const override
+	ibString GetDescription() const override
 	{
 		return ibMcpText("Ask the process owning a session to evict ALL its web clients, so they log in "
 			"again and pick up the current configuration. Use after applying a change that web "
@@ -423,7 +437,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		if (appData == nullptr) {
 			refusal = ibMcpText("The application is not up.");
@@ -436,7 +450,7 @@ public:
 			return false;
 		}
 
-		const wxString wanted = ArgSession().Text(params);
+		const ibString wanted = ArgSession().Text(params);
 		if (wanted.IsEmpty()) {
 			refusal = ibMcpText("No session named. session_list lists them with their handles.");
 			return false;
@@ -447,9 +461,9 @@ public:
 			return false;
 		}
 
-		result.SetValue(wxT("session"), wanted);
-		result.SetValue(wxT("asked"), wxString(wxT("reload")));
-		result.SetValue(wxT("note"),
+		result.SetValue(ibT("session"), wanted);
+		result.SetValue(ibT("asked"), ibString(ibT("reload")));
+		result.SetValue(ibT("note"),
 			ibMcpText("Every web client of that process will be asked to log in again, within a few "
 			  "seconds."));
 

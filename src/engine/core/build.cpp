@@ -1,5 +1,5 @@
 #include "core/build.h"
-#include "core/fileSystem/types.h"
+#include <cstdint>
 
 #include <cstdio>
 #include <string>
@@ -55,7 +55,7 @@ void CalculateBuildId()
 		break;
 	}
 
-	u32 build_id = (years - start_year) * 365 + days - start_day;
+	std::uint32_t build_id = (years - start_year) * 365 + days - start_day;
 
 	for (int i = 0; i < months; ++i)
 		build_id += days_in_month[i];

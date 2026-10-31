@@ -33,13 +33,13 @@ const ibTypeDescription kNoType;
 // Minimal metadata-free column (name + model-id read key).
 class TestCol : public ibBackendQueryColumn {
 public:
-	TestCol(const wxString& name, ibMetaID id) : m_name(name), m_id(id) {}
-	wxString           GetName()         const override { return m_name; }
-	wxString           GetPhysicalName() const override { return m_name; }
+	TestCol(const ibString& name, ibMetaID id) : m_name(name), m_id(id) {}
+	ibString           GetName()         const override { return m_name; }
+	ibString           GetPhysicalName() const override { return m_name; }
 	ibTypeDescription& GetTypeDesc()     const override { return m_type; }
 	ibMetaID           GetColumnId()     const override { return m_id; }
 private:
-	wxString                  m_name;
+	ibString                  m_name;
 	ibMetaID                  m_id;
 	mutable ibTypeDescription m_type;
 };
@@ -60,7 +60,7 @@ public:
 // ResolveComputedDotWalks can walk + join.
 class ComputedQ : public ibBackendQueryable {
 public:
-	ComputedQ(const wxString& name, ibMetaID id) : m_name(name), m_id(id) {
+	ComputedQ(const ibString& name, ibMetaID id) : m_name(name), m_id(id) {
 		ibGuidImpl impl{}; impl.m_data1 = static_cast<unsigned long>(id); m_key = ibGuid(impl);
 	}
 	void AddCol(const ibBackendQueryColumn* c) { m_cols.push_back(c); }
@@ -78,7 +78,7 @@ public:
 		return m_pk != nullptr ? std::vector<const ibBackendQueryColumn*>{ m_pk }
 		                       : std::vector<const ibBackendQueryColumn*>{};
 	}
-	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override {
+	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override {
 		for (const ibBackendQueryColumn* c : m_cols) if (c->GetName() == name) return c;
 		return nullptr;
 	}
@@ -91,12 +91,12 @@ public:
 		auto it = m_refs.find(c);
 		return it != m_refs.end() ? it->second : nullptr;
 	}
-	wxString GetQueryTableName() const override { return m_name; }
+	ibString GetQueryTableName() const override { return m_name; }
 	ibMetaID GetQueryTableId()   const override { return m_id; }
 	const ibUniqueKey& GetQueryTableGuid() const override { return m_key; }
 	const ibMetaData* GetMetaData() const override { return nullptr; }
 private:
-	wxString m_name;
+	ibString m_name;
 	ibMetaID m_id;
 	ibUniqueKey m_key;   // its table guid, the id in the first word
 	std::vector<const ibBackendQueryColumn*> m_cols;
@@ -121,7 +121,7 @@ ibQueryRamTable BuildItems()
 	it.AddColumn(ITEM_KEY,    wxT("itemKey"), kNoType);
 	it.AddColumn(ITEM_NAME,   wxT("name"),    kNoType);
 	it.AddColumn(ITEM_COLOUR, wxT("colour"),  kNoType);
-	auto add = [&](const wxString& k, const wxString& n, const wxString& c) {
+	auto add = [&](const ibString& k, const ibString& n, const ibString& c) {
 		const long r = it.AppendRow();
 		it.SetCell(r, ITEM_KEY,    ibValue(k));
 		it.SetCell(r, ITEM_NAME,   ibValue(n));
@@ -140,7 +140,7 @@ ibQueryRamTable BuildBalance()
 	bal.AddColumn(BAL_ITEM,  wxT("item"),  kNoType);
 	bal.AddColumn(BAL_QTY,   wxT("qty"),   kNoType);
 	bal.AddColumn(BAL_PRICE, wxT("price"), kNoType);
-	auto add = [&](const wxString& item, long qty, long price) {
+	auto add = [&](const ibString& item, long qty, long price) {
 		const long r = bal.AppendRow();
 		bal.SetCell(r, BAL_ITEM,  ibValue(item));
 		bal.SetCell(r, BAL_QTY,   ibValue(ibNumber(qty)));
@@ -225,7 +225,7 @@ TEST_F(ComputedFix, DotWalk_Where)
 	ibDataQueryBuilder q(nullptr);
 	q.From(&balance);
 	q.Select(&balQty, wxT("qty"));
-	q.Where({ &balItem, &itemName }, ibQueryFilterOp::Equal, ibValue(wxString(wxT("Apple"))));
+	q.Where({ &balItem, &itemName }, ibQueryFilterOp::Equal, ibValue(ibString(wxT("Apple"))));
 	ibReadPageRequest page;
 	ibDataQueryResult res = q.Execute(page);
 
@@ -374,7 +374,7 @@ TEST_F(ComputedFix, DotWalk_BooleanWhere)
 	c1.m_col   = &itemName;
 	c1.m_path  = { &balItem, &itemName };
 	c1.m_op    = ibQueryFilterOp::Equal;
-	c1.m_value = ibValue(wxString(wxT("Pear")));
+	c1.m_value = ibValue(ibString(wxT("Pear")));
 	ibQueryCondition c2;
 	c2.m_col   = &balQty;
 	c2.m_op    = ibQueryFilterOp::Equal;

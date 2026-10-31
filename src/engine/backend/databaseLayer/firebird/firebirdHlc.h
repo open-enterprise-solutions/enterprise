@@ -79,7 +79,7 @@ public:
 
 	// Format an HLC value as `<ISO-timestamp>#<counter>/<nodeId>`
 	// for log lines.
-	static wxString Format(uint64_t hlc);
+	static ibString Format(uint64_t hlc);
 
 	// Bit layout — exposed for tests and external packing.
 	static constexpr int kNodeIdBits   = 4;

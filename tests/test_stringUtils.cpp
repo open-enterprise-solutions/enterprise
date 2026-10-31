@@ -21,9 +21,9 @@ using namespace stringUtils;
 
 namespace {
 // Build a wxString from Unicode code points — keeps this file ASCII-only.
-wxString Cp(std::initializer_list<int> cps) {
-    wxString s;
-    for (int cp : cps) s += wxUniChar(cp);
+ibString Cp(std::initializer_list<int> cps) {
+    ibString s;
+    for (int cp : cps) s.AppendCodepoint(static_cast<uint32_t>(cp));
     return s;
 }
 // Cyrillic fixtures (code points, no literals):
@@ -72,8 +72,8 @@ TEST(StringUtils, SynonymLeavesSingleWord) {
 TEST(StringUtils, SynonymSplitsCyrillicCamelCase) {
     // CamelCase split on a Cyrillic uppercase letter -> exercises the
     // upper->lower (+0x20) branch in GenerateSynonym.
-    const wxString in   = Cp({0x0418,0x043C,0x044F,0x0422,0x043E,0x0432,0x0430,0x0440,0x0430});
-    const wxString want = Cp({0x0418,0x043C,0x044F,0x0020,0x0442,0x043E,0x0432,0x0430,0x0440,0x0430});
+    const ibString in   = Cp({0x0418,0x043C,0x044F,0x0422,0x043E,0x0432,0x0430,0x0440,0x0430});
+    const ibString want = Cp({0x0418,0x043C,0x044F,0x0020,0x0442,0x043E,0x0432,0x0430,0x0440,0x0430});
     EXPECT_EQ(GenerateSynonym(in), want);
 }
 
@@ -87,24 +87,24 @@ TEST(StringUtils, MakeUpperFoldsAndTrims) {
 }
 
 TEST(StringUtils, CompareStringCaseInsensitiveByDefault) {
-    EXPECT_TRUE(CompareString(wxString(wxT("ABC")), wxT("abc")));
-    EXPECT_FALSE(CompareString(wxString(wxT("ABC")), wxT("abc"), /*case_sensitive*/true));
+    EXPECT_TRUE(IsSameAs(ibString(wxT("ABC")), wxT("abc")));
+    EXPECT_FALSE(IsSameAs(ibString(wxT("ABC")), wxT("abc"), /*case_sensitive*/true));
 }
 
 TEST(StringUtils, CompareStringLengthAndContent) {
-    EXPECT_FALSE(CompareString(wxString(wxT("abc")), wxT("abcd")));   // length differs
-    EXPECT_FALSE(CompareString(wxString(wxT("abc")), wxT("abd")));    // content differs
+    EXPECT_FALSE(IsSameAs(ibString(wxT("abc")), wxT("abcd")));   // length differs
+    EXPECT_FALSE(IsSameAs(ibString(wxT("abc")), wxT("abd")));    // content differs
 }
 
 // ---------------------------------------------------------------------------
-// ibCaseFoldLess — the ORDER that CompareString's equality belongs to, for a map
+// ibCaseFoldLess — the ORDER that IsSameAs's equality belongs to, for a map
 // whose names are matched without case (a document's parameters, the lexer's
-// keywords). Names CompareString calls equal must be ONE key of such a map.
+// keywords). Names IsSameAs calls equal must be ONE key of such a map.
 // ---------------------------------------------------------------------------
 
 TEST(StringUtils, CaseFoldLessNamesEqualWithoutCaseAreOneKey) {
     const ibCaseFoldLess less;
-    EXPECT_TRUE(CompareString(wxString(wxT("Partner")), wxT("PARTNER")));
+    EXPECT_TRUE(IsSameAs(ibString(wxT("Partner")), wxT("PARTNER")));
     EXPECT_FALSE(less(wxT("Partner"), wxT("PARTNER")));
     EXPECT_FALSE(less(wxT("PARTNER"), wxT("Partner")));
 }
@@ -136,7 +136,7 @@ TEST(StringUtils, CaseFoldLessShorterPrefixIsTheLesser) {
 }
 
 TEST(StringUtils, CaseFoldLessMapFindsANameInAnotherCase) {
-    std::map<wxString, int, ibCaseFoldLess> names;
+    std::map<ibString, int, ibCaseFoldLess> names;
     names[wxT("Partner")] = 1;
     names[wxT("PARTNER")] = 2;   // the same key, written again
     EXPECT_EQ(names.size(), 1u);
@@ -151,18 +151,18 @@ TEST(StringUtils, CaseFoldLessMapFindsANameInAnotherCase) {
 
 TEST(StringUtils, TrimVariants) {
     EXPECT_EQ(TrimAll(wxT("  hi  ")), wxT("hi"));
-    wxString l = wxT("xxhi");
-    wxString r = wxT("hixx");
-    EXPECT_EQ(TrimLeft(l, wxUniChar('x')), wxT("hi"));    // in-place (wxString&) overload
-    EXPECT_EQ(TrimRight(r, wxUniChar('x')), wxT("hi"));
+    ibString l = wxT("xxhi");
+    ibString r = wxT("hixx");
+    EXPECT_EQ(TrimLeft(l, ibT('x')), wxT("hi"));    // in-place (wxString&) overload
+    EXPECT_EQ(TrimRight(r, ibT('x')), wxT("hi"));
 }
 
 // Regression guard: the const-ref TrimRight overload used to return the original
 // string unchanged (returned strSource, not result) — a silent no-op. A const
 // lvalue binds to that overload, so this fails if the bug ever returns.
 TEST(StringUtils, TrimRightConstOverloadTrims) {
-    const wxString src = wxT("hixx");
-    EXPECT_EQ(TrimRight(src, wxUniChar('x')), wxT("hi"));
+    const ibString src = wxT("hixx");
+    EXPECT_EQ(TrimRight(src, ibT('x')), wxT("hi"));
 }
 
 // ---------------------------------------------------------------------------
@@ -182,12 +182,12 @@ TEST(StringUtils, NumericConversions) {
 // ---------------------------------------------------------------------------
 
 TEST(StringUtils, CharPredicates) {
-    EXPECT_TRUE(IsDigit(wxUniChar('5')));
-    EXPECT_FALSE(IsDigit(wxUniChar('a')));
-    EXPECT_TRUE(IsSpace(wxUniChar(' ')));
-    EXPECT_FALSE(IsSpace(wxUniChar('a')));
-    EXPECT_TRUE(IsSymbol(wxUniChar('!')));
-    EXPECT_FALSE(IsSymbol(wxUniChar('_')));   // '_' is explicitly not a symbol
-    EXPECT_FALSE(IsSymbol(wxUniChar('a')));
-    EXPECT_TRUE(IsWord(wxUniChar('a')));
+    EXPECT_TRUE(IsDigit(ibT('5')));
+    EXPECT_FALSE(IsDigit(ibT('a')));
+    EXPECT_TRUE(IsSpace(ibT(' ')));
+    EXPECT_FALSE(IsSpace(ibT('a')));
+    EXPECT_TRUE(IsSymbol(ibT('!')));
+    EXPECT_FALSE(IsSymbol(ibT('_')));   // '_' is explicitly not a symbol
+    EXPECT_FALSE(IsSymbol(ibT('a')));
+    EXPECT_TRUE(IsWord(ibT('a')));
 }

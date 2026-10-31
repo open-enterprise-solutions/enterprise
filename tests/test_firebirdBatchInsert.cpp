@@ -38,11 +38,11 @@
 
 namespace {
 
-wxString ScratchDbPath(const char* testName)
+ibString ScratchDbPath(const char* testName)
 {
 	const auto now = std::chrono::steady_clock::now().time_since_epoch().count();
 	return wxFileName(wxStandardPaths::Get().GetTempDir(),
-		wxString::Format(wxT("oes_fb_batch_%s_%lld.fdb"), testName, (long long)now)).GetFullPath();
+		ibString::Format(wxT("oes_fb_batch_%s_%lld.fdb"), testName, (long long)now)).GetFullPath();
 }
 
 // The failing table's shape, trimmed to the column KINDS that matter: the row
@@ -59,7 +59,7 @@ protected:
 	// shared_ptr, not a stack object: a statement holds a weak_ptr back to the
 	// layer, and a stack layer makes the first RunQuery throw bad_weak_ptr.
 	std::shared_ptr<ibDatabaseLayerFirebird> layer;
-	wxString dbPath;
+	ibString dbPath;
 
 	void SetUp() override {
 		dbPath = ScratchDbPath(::testing::UnitTest::GetInstance()->current_test_info()->name());
@@ -96,7 +96,7 @@ protected:
 
 	// Prepare only — -804 is a PREPARE failure, and preparing writes nothing.
 	// Empty string = the engine accepted it; otherwise its complaint.
-	std::string PrepareError(const wxString& sql) {
+	std::string PrepareError(const ibString& sql) {
 		try {
 			ibPreparedStatement* stmt = layer->PrepareStatement(wxT("%s"), sql);
 			if (stmt == nullptr) return "prepare returned null";
@@ -181,14 +181,14 @@ TEST_F(FirebirdBatchInsert, RenderedBatchWritesEveryRow)
 
 	const auto row = [](int n) {
 		return std::vector<ibQueryExprPtr>{
-			ibConst(ibValue(wxString::Format(wxT("owner-%d"), n))),
+			ibConst(ibValue(ibString::Format(wxT("owner-%d"), n))),
 			ibConst(ibValue(ibNumber(1))),
 			ibConst(ibValue(ibNumber(n))),
-			ibConst(ibValue(wxString::Format(wxT("line %d"), n))),
+			ibConst(ibValue(ibString::Format(wxT("line %d"), n))),
 		};
 	};
 	const std::vector<ibQueryExprPtr> first = row(0);
-	const wxString columns[] = { wxT("Row_RRRef"), wxT("fld_TYPE"), wxT("fld_N"), wxT("fld_S") };
+	const ibString columns[] = { wxT("Row_RRRef"), wxT("fld_TYPE"), wxT("fld_N"), wxT("fld_S") };
 	for (size_t k = 0; k < 4; ++k)
 		ins.m_assignments.push_back(ibDmlAssign{ columns[k], first[k] });
 	for (int r = 1; r < kRows; ++r)
@@ -226,12 +226,12 @@ TEST_F(FirebirdBatchInsert, RenderedBatchWritesEveryRow)
 TEST_F(FirebirdBatchInsert, ReexecutedStatementKeepsEveryString)
 {
 	ibPreparedStatement* stmt = layer->PrepareStatement(wxT("%s"),
-		wxString(wxT("INSERT INTO oes_batch_probe (Row_RRRef, fld_TYPE, fld_N, fld_S) VALUES (?, ?, ?, ?)")));
+		ibString(wxT("INSERT INTO oes_batch_probe (Row_RRRef, fld_TYPE, fld_N, fld_S) VALUES (?, ?, ?, ?)")));
 	ASSERT_NE(stmt, nullptr);
-	const wxString values[] = { wxT("E1"), wxT("E10"), wxT("a line longer than both") };
+	const ibString values[] = { wxT("E1"), wxT("E10"), wxT("a line longer than both") };
 	int n = 0;
-	for (const wxString& value : values) {
-		stmt->SetParamString(1, wxString::Format(wxT("owner-%d"), n));
+	for (const ibString& value : values) {
+		stmt->SetParamString(1, ibString::Format(wxT("owner-%d"), n));
 		stmt->SetParamNumber(2, ibNumber(1));
 		stmt->SetParamNumber(3, ibNumber(n++));
 		stmt->SetParamString(4, value);
@@ -242,7 +242,7 @@ TEST_F(FirebirdBatchInsert, ReexecutedStatementKeepsEveryString)
 
 	ibDatabaseResultSet* rs = layer->RunQueryWithResults(wxT("SELECT fld_S FROM oes_batch_probe ORDER BY fld_N"));
 	ASSERT_NE(rs, nullptr);
-	for (const wxString& value : values) {
+	for (const ibString& value : values) {
 		ASSERT_TRUE(rs->Next());
 		EXPECT_EQ(rs->GetResultString(1).ToStdString(), value.ToStdString());
 	}
@@ -265,10 +265,10 @@ TEST_F(FirebirdBatchInsert, WidestRealisticChunkStillPrepares)
 	const int kCols = 21;   // the reported catalog's own width
 	const int kRows = 50;   // dbTableProvider's kRowsPerStatement
 
-	wxString create = wxT("CREATE TABLE oes_batch_wide (Row_RRRef VARCHAR(36)");
-	std::vector<wxString> columns{ wxT("Row_RRRef") };
+	ibString create = wxT("CREATE TABLE oes_batch_wide (Row_RRRef VARCHAR(36)");
+	std::vector<ibString> columns{ wxT("Row_RRRef") };
 	for (int c = 1; c < kCols; ++c) {
-		const wxString name = wxString::Format(wxT("fld%d_S"), 1100 + c);   // real names are this long
+		const ibString name = ibString::Format(wxT("fld%d_S"), 1100 + c);   // real names are this long
 		columns.push_back(name);
 		create += wxT(", ") + name + wxT(" VARCHAR(150)");
 	}
@@ -280,7 +280,7 @@ TEST_F(FirebirdBatchInsert, WidestRealisticChunkStillPrepares)
 	const auto row = [&](int n) {
 		std::vector<ibQueryExprPtr> v;
 		for (int c = 0; c < kCols; ++c)
-			v.push_back(ibConst(ibValue(wxString::Format(wxT("r%dc%d"), n, c))));
+			v.push_back(ibConst(ibValue(ibString::Format(wxT("r%dc%d"), n, c))));
 		return v;
 	};
 	const std::vector<ibQueryExprPtr> first = row(0);

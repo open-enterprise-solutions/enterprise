@@ -103,7 +103,7 @@ TEST(FunctionalOption, TheSetAMemberKeepsSurvivesWriteAndRead)
 	ibWriterMemory writer;
 	ASSERT_TRUE(written.Save(writer));
 
-	const wxMemoryBuffer blob = writer.buffer();   // held: a reader never reads a buffer that is already gone
+	const ibMemoryBuffer blob = writer.buffer();   // held: a reader never reads a buffer that is already gone
 	ibReaderMemory reader(blob);
 	ibFunctionalOptionProbe read;
 	ASSERT_TRUE(read.Load(reader));
@@ -117,7 +117,7 @@ TEST(FunctionalOption, TheSetAMemberKeepsSurvivesWriteAndRead)
 // member made fresh belongs to nothing.
 TEST(FunctionalOption, AnAbsentChunkIsNotAnError)
 {
-	wxMemoryBuffer none;
+	ibMemoryBuffer none;
 	ibReaderMemory reader(none);
 	ibFunctionalOptionProbe read;
 	ASSERT_TRUE(read.Load(reader));

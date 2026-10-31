@@ -3,134 +3,191 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "core/formatString.h"
-#include "core/anyValue.h"   // ibAnyValue — what Apply asks of a value
-
-#include <wx/datetime.h>
-#include <wx/wxcrt.h>   // wxAtoi — a code's number read
-
-#include <algorithm>   // std::max / std::min — the spelling of a date letter
+#include "core/variant.h"   // ibVariant — what Apply asks of a value
+#include "core/localization/dictionary.h"   // ibDictionary — the language L names, the long date as it writes it
+#include <cwchar>      // std::wcstol — a code's number read
 
 namespace {
 
 struct ibFormatCodeInfo {
 	ibFormatCode  m_code;
-	const wxChar* m_name;
+	const ibChar* m_name;
 	ibFormatKind  m_kind;
 };
 
 // THE SPELLING, in one place: Parse reads by it, Render writes by it, the constructor labels by it.
 const ibFormatCodeInfo s_codes[] = {
-	{ ibFormatCode::NumberDigits,           wxT("ND"),  ibFormatKind::Number  },
-	{ ibFormatCode::NumberFractionDigits,   wxT("NFD"), ibFormatKind::Number  },
-	{ ibFormatCode::NumberDecimalSeparator, wxT("NDS"), ibFormatKind::Number  },
-	{ ibFormatCode::NumberGroupSeparator,   wxT("NGS"), ibFormatKind::Number  },
-	{ ibFormatCode::NumberGroupSize,        wxT("NG"),  ibFormatKind::Number  },
-	{ ibFormatCode::NumberZero,             wxT("NZ"),  ibFormatKind::Number  },
-	{ ibFormatCode::DatePattern,            wxT("DF"),  ibFormatKind::Date    },
-	{ ibFormatCode::DateEmpty,              wxT("DE"),  ibFormatKind::Date    },
-	{ ibFormatCode::BooleanTrue,            wxT("BT"),  ibFormatKind::Boolean },
-	{ ibFormatCode::BooleanFalse,           wxT("BF"),  ibFormatKind::Boolean },
+	{ ibFormatCode::NumberDigits,           ibT("ND"),  ibFormatKind::Number  },
+	{ ibFormatCode::NumberFractionDigits,   ibT("NFD"), ibFormatKind::Number  },
+	{ ibFormatCode::NumberDecimalSeparator, ibT("NDS"), ibFormatKind::Number  },
+	{ ibFormatCode::NumberGroupSeparator,   ibT("NGS"), ibFormatKind::Number  },
+	{ ibFormatCode::NumberGroupSize,        ibT("NG"),  ibFormatKind::Number  },
+	{ ibFormatCode::NumberZero,             ibT("NZ"),  ibFormatKind::Number  },
+	{ ibFormatCode::DatePattern,            ibT("DF"),  ibFormatKind::Date    },
+	{ ibFormatCode::DateEmpty,              ibT("DE"),  ibFormatKind::Date    },
+	{ ibFormatCode::BooleanTrue,            ibT("BT"),  ibFormatKind::Boolean },
+	{ ibFormatCode::BooleanFalse,           ibT("BF"),  ibFormatKind::Boolean },
+	{ ibFormatCode::NumberLeadingZero,      ibT("NLZ"), ibFormatKind::Number  },
+	{ ibFormatCode::DateLocalFormat,        ibT("DLF"), ibFormatKind::Date    },
+	{ ibFormatCode::Language,               ibT("L"),   ibFormatKind::Date    },
 };
 
 struct ibDatePresetInfo {
 	ibDatePreset  m_preset;
-	const wxChar* m_pattern;
+	const ibChar* m_pattern;
 };
 
 const ibDatePresetInfo s_presets[] = {
-	{ ibDatePreset::Date,         wxT("dd.mm.yyyy")          },
-	{ ibDatePreset::DateTime,     wxT("dd.mm.yyyy HH:MM:SS") },
-	{ ibDatePreset::Time,         wxT("HH:MM:SS")            },
-	{ ibDatePreset::HoursMinutes, wxT("HH:MM")               },
-	{ ibDatePreset::MonthYear,    wxT("mm.yyyy")             },
-	{ ibDatePreset::Year,         wxT("yyyy")                },
-	{ ibDatePreset::Sortable,     wxT("yyyy-mm-dd")          },
+	{ ibDatePreset::Date,         ibT("dd.MM.yyyy")          },
+	{ ibDatePreset::DateTime,     ibT("dd.MM.yyyy HH:mm:ss") },
+	{ ibDatePreset::Time,         ibT("HH:mm:ss")            },
+	{ ibDatePreset::HoursMinutes, ibT("HH:mm")               },
+	{ ibDatePreset::MonthYear,    ibT("MM.yyyy")             },
+	{ ibDatePreset::Year,         ibT("yyyy")                },
+	{ ibDatePreset::Sortable,     ibT("yyyy-MM-dd")          },
 };
 
-std::optional<wxUniChar> FirstChar(const wxString& value)
+std::optional<ibChar> FirstChar(const ibString& value)
 {
 	if (value.IsEmpty())
 		return std::nullopt;   // no character named: the number's own separator stands
 	return value[0];
 }
 
-// The letters of a date pattern: year, month, day, hours, minutes, seconds. ⚠ `mm` IS THE MONTH and `MM`
-// the minutes.
-int DateLetter(wxUniChar c)
+// The number the text starts with, 0 when it starts with none — what wxAtoi read.
+int FirstNumber(const ibString& value)
 {
-	switch (c.GetValue()) {
-	case L'y': return 0;
-	case L'm': return 1;
-	case L'd': return 2;
-	case L'H': return 3;
-	case L'M': return 4;
-	case L'S': return 5;
+	return static_cast<int>(std::wcstol(value.wc_str(), nullptr, 10));
+}
+
+// The letters of a date pattern. ⚠ `MM` IS THE MONTH and `mm` the minutes, as everywhere else they are written.
+enum ibDateLetter { eYear, eMonth, eDay, eHour24, eHour12, eMinute, eSecond, eAmPm, eNone };
+ibDateLetter DateLetter(ibChar c)
+{
+	switch (c) {
+	case L'y': return eYear;
+	case L'M': return eMonth;
+	case L'd': return eDay;
+	case L'H': return eHour24;
+	case L'h': return eHour12;
+	case L'm': return eMinute;
+	case L's': return eSecond;
+	case L't': return eAmPm;
 	}
-	return -1;
+	return eNone;
 }
 
-void AppendTwoDigits(int value, wxString& out)
+void AppendTwoDigits(int value, ibString& out)
 {
-	out += static_cast<wxChar>(L'0' + value / 10 % 10);
-	out += static_cast<wxChar>(L'0' + value % 10);
+	out += static_cast<ibChar>(L'0' + value / 10 % 10);
+	out += static_cast<ibChar>(L'0' + value % 10);
 }
 
-// ⭐ THE DATE PATTERN WRITTEN STRAIGHT INTO `out` — no strftime pattern is built and wxDateTime::Format is
-// not called, because both allocate once per date and a report prints a date per row.
-//
-// The reading is the one the strftime translation gave (yyyy the full year, yyy / yy / y two digits,
-// mm / m, dd / d, HH / H, MM / M, SS / S two digits each): a letter is taken by the LONGEST spelling the
-// pattern uses anywhere, every run of it is read in pieces of that length, and what is left over stands as
-// the letter — `yyyyy` is the year and a `y`. Every other character stands as it is.
-void WriteDate(const wxString& pattern, const ibDateTimeParts& tm, wxString& out)
+// A field of a date: below 100 always (a year comes as its last two digits), one digit when one is asked and
+// one is enough.
+void AppendNumber(int value, size_t width, ibString& out)
 {
-	static const int s_longest[6] = { 4, 2, 2, 2, 2, 2 };
+	if (width >= 2 || value >= 10) AppendTwoDigits(value, out);
+	else out += static_cast<ibChar>(L'0' + value);
+}
+
+// ⭐ THE DATE PATTERN WRITTEN STRAIGHT INTO `out`: a run of one letter is one field, its length picking the
+// form - `d` 1, `dd` 01, `ddd` Mon, `dddd` Monday; `M` 1, `MM` 01, `MMM` Oct, `MMMM` October; `y` 6, `yy` 26,
+// `yyyy` 2026; `H`/`HH` hours, `h`/`hh` on a 12-hour clock, `m`/`mm` minutes, `s`/`ss` seconds, `tt` AM/PM.
+// Text in single quotes stands as written; every other character stands as it is. The names are the date's
+// (ibDateTime::MonthName and the rest), in the language of `dictionary` - L's - or the thread's; `MMMM` after
+// a day is the month as it stands there, the genitive in a language with cases. No strftime pattern is built:
+// a report prints a date per row.
+void WriteDate(const ibString& pattern, const ibDateTimeParts& tm, const ibDictionary* dictionary, ibString& out)
+{
 	const size_t length = pattern.length();
-
-	int spelling[6] = { 0, 0, 0, 0, 0, 0 };
-	for (size_t i = 0; i < length;) {
-		size_t run = 1;
-		while (i + run < length && pattern[i + run] == pattern[i]) ++run;
-		const int letter = DateLetter(pattern[i]);
-		if (letter >= 0)
-			spelling[letter] = std::max(spelling[letter], std::min(static_cast<int>(run), s_longest[letter]));
-		i += run;
-	}
+	bool hasDay = false;
+	for (size_t i = 0; i < length; i++)
+		if (DateLetter(pattern[i]) == eDay) { hasDay = true; break; }
 
 	out.clear();
-	out.reserve(length + 4);
+	out.reserve(length + 8);
 	for (size_t i = 0; i < length;) {
-		const wxUniChar c = pattern[i];
+		const ibChar c = pattern[i];
+		if (c == L'\'') {
+			size_t close = i + 1;
+			while (close < length && pattern[close] != L'\'') ++close;
+			out += pattern.Mid(i + 1, close - i - 1);
+			i = close < length ? close + 1 : close;
+			continue;
+		}
 		size_t run = 1;
 		while (i + run < length && pattern[i + run] == c) ++run;
-		const int letter = DateLetter(c);
-		size_t at = 0;
-		if (letter >= 0) {
-			const size_t piece = static_cast<size_t>(spelling[letter]);
-			for (; at + piece <= run; at += piece) {
-				switch (letter) {
-				case 0:
-					if (piece == 4 && tm.m_year >= 0 && tm.m_year <= 9999) {
-						AppendTwoDigits(tm.m_year / 100, out);
-						AppendTwoDigits(tm.m_year % 100, out);
-					}
-					else if (piece == 4)
-						out << tm.m_year;
-					else
-						AppendTwoDigits((tm.m_year % 100 + 100) % 100, out);
-					break;
-				case 1: AppendTwoDigits(static_cast<int>(tm.m_month), out);  break;
-				case 2: AppendTwoDigits(static_cast<int>(tm.m_day), out);    break;
-				case 3: AppendTwoDigits(static_cast<int>(tm.m_hour), out);   break;
-				case 4: AppendTwoDigits(static_cast<int>(tm.m_minute), out); break;
-				case 5: AppendTwoDigits(static_cast<int>(tm.m_second), out); break;
-				}
+		switch (DateLetter(c)) {
+		case eYear:
+			if (run >= 3) {
+				if (tm.m_year >= 0 && tm.m_year <= 9999) { AppendTwoDigits(tm.m_year / 100, out); AppendTwoDigits(tm.m_year % 100, out); }
+				else out += ibString::Format(ibT("%d"), tm.m_year);
 			}
+			else AppendNumber((tm.m_year % 100 + 100) % 100, run, out);
+			break;
+		case eMonth:
+			if (run >= 4)      out += hasDay ? ibDateTime::MonthGenitiveName(tm.m_month, dictionary) : ibDateTime::MonthName(tm.m_month, dictionary);
+			else if (run == 3) out += ibDateTime::MonthShortName(tm.m_month, dictionary);
+			else               AppendNumber(static_cast<int>(tm.m_month), run, out);
+			break;
+		case eDay:
+			if (run >= 4)      out += ibDateTime::WeekDayName(tm.m_weekDay, dictionary);
+			else if (run == 3) out += ibDateTime::WeekDayShortName(tm.m_weekDay, dictionary);
+			else               AppendNumber(static_cast<int>(tm.m_day), run, out);
+			break;
+		case eHour24: AppendNumber(static_cast<int>(tm.m_hour), run, out); break;
+		case eHour12: AppendNumber(static_cast<int>(tm.m_hour % 12 == 0 ? 12 : tm.m_hour % 12), run, out); break;
+		case eMinute: AppendNumber(static_cast<int>(tm.m_minute), run, out); break;
+		case eSecond: AppendNumber(static_cast<int>(tm.m_second), run, out); break;
+		case eAmPm:   out += tm.m_hour < 12 ? ibT("AM") : ibT("PM"); break;
+		case eNone:   out.append(run, c); break;
 		}
-		if (at < run)
-			out.append(run - at, c);
 		i += run;
 	}
+}
+
+// The long date, `13 October 2026` - marked for the catalog here, said in the language asked: a language's
+// catalog gives the order and what follows the year, quoted where it is text ("d MMMM yyyy 'г.'").
+const char* const s_longDatePattern = ibTRANSLATE_IN_CONTEXT("date pattern", "d MMMM yyyy");
+
+// DLF: the presets named by letter - D, DD, T, DT, DDT. Empty when the value is none of them.
+ibString LocalFormatPattern(const ibString& preset, const ibDictionary* dictionary)
+{
+	ibString key = preset.Upper();
+	key.Trim(true).Trim(false);
+	const ibString longDate = ibGetTranslation(dictionary, ibString(s_longDatePattern), ibT("date pattern"));
+	if (key == ibT("D"))   return ibT("dd.MM.yyyy");
+	if (key == ibT("DD"))  return longDate;
+	if (key == ibT("T"))   return ibT("H:mm:ss");
+	if (key == ibT("DT"))  return ibT("dd.MM.yyyy H:mm:ss");
+	if (key == ibT("DDT")) return longDate + ibT(" H:mm:ss");
+	return ibString();
+}
+
+// ⚠ A VALUE IN QUOTES IS THE VALUE, the quotes only its fence: `DF='MM.yyyy'` is how a format is commonly written,
+// and the date pattern read the fence as a quoted literal and printed `MM.yyyy` itself (2026-10-30). A fence is
+// taken off only when no quote of its kind stands inside it - `'day' dd 'of' MMMM` is a pattern with two literals.
+ibString Unfenced(const ibString& value)
+{
+	const size_t length = value.length();
+	if (length < 2)
+		return value;
+	const ibChar quote = value[0];
+	if ((quote != L'\'' && quote != L'"') || value[length - 1] != quote)
+		return value;
+	const ibString inner = value.Mid(1, length - 2);
+	return inner.Find(quote) == wxNOT_FOUND ? inner : value;
+}
+
+void PadWholePart(ibString& text, int width)
+{
+	size_t start = (!text.IsEmpty() && text[0] == L'-') ? 1 : 0;
+	size_t end = start;
+	while (end < text.length() && text[end] >= L'0' && text[end] <= L'9') ++end;
+	const int digits = static_cast<int>(end - start);
+	if (digits < width)
+		text.insert(start, static_cast<size_t>(width - digits), L'0');
 }
 
 } // namespace
@@ -139,12 +196,13 @@ bool ibNumberFormat::operator == (const ibNumberFormat& other) const
 {
 	return m_digits == other.m_digits && m_fractionDigits == other.m_fractionDigits
 		&& m_decimalSeparator == other.m_decimalSeparator && m_groupSeparator == other.m_groupSeparator
-		&& m_groupSize == other.m_groupSize && m_zero == other.m_zero;
+		&& m_groupSize == other.m_groupSize && m_zero == other.m_zero && m_leadingZero == other.m_leadingZero;
 }
 
 bool ibDateFormat::operator == (const ibDateFormat& other) const
 {
-	return m_pattern == other.m_pattern && m_empty == other.m_empty;
+	return m_pattern == other.m_pattern && m_empty == other.m_empty && m_localFormat == other.m_localFormat
+		&& m_language == other.m_language;
 }
 
 bool ibBooleanFormat::operator == (const ibBooleanFormat& other) const
@@ -169,7 +227,7 @@ const std::vector<ibFormatCode>& ibFormatString::Codes()
 	return s_order;
 }
 
-bool ibFormatString::FindCode(const wxString& name, ibFormatCode& code)
+bool ibFormatString::FindCode(const ibString& name, ibFormatCode& code)
 {
 	for (const ibFormatCodeInfo& info : s_codes) {
 		if (name == info.m_name) { code = info.m_code; return true; }
@@ -177,13 +235,13 @@ bool ibFormatString::FindCode(const wxString& name, ibFormatCode& code)
 	return false;
 }
 
-std::optional<wxString> ibFormatString::Get(ibFormatCode code) const
+std::optional<ibString> ibFormatString::Get(ibFormatCode code) const
 {
 	const auto number = [](const std::optional<int>& value) {
-		return value ? std::optional<wxString>(wxString::Format(wxT("%d"), *value)) : std::nullopt;
+		return value ? std::optional<ibString>(ibString::Format(ibT("%d"), *value)) : std::nullopt;
 	};
-	const auto character = [](const std::optional<wxUniChar>& value) {
-		return value ? std::optional<wxString>(wxString(*value)) : std::nullopt;
+	const auto character = [](const std::optional<ibChar>& value) {
+		return value ? std::optional<ibString>(ibString(*value)) : std::nullopt;
 	};
 
 	switch (code) {
@@ -197,23 +255,29 @@ std::optional<wxString> ibFormatString::Get(ibFormatCode code) const
 	case ibFormatCode::DateEmpty:              return m_date.m_empty;
 	case ibFormatCode::BooleanTrue:            return m_boolean.m_true;
 	case ibFormatCode::BooleanFalse:           return m_boolean.m_false;
+	case ibFormatCode::NumberLeadingZero:      return m_number.m_leadingZero;
+	case ibFormatCode::DateLocalFormat:        return m_date.m_localFormat;
+	case ibFormatCode::Language:               return m_date.m_language;
 	}
 	return std::nullopt;
 }
 
-void ibFormatString::Set(ibFormatCode code, const wxString& value)
+void ibFormatString::Set(ibFormatCode code, const ibString& value)
 {
 	switch (code) {
-	case ibFormatCode::NumberDigits:           m_number.m_digits = wxAtoi(value); break;
-	case ibFormatCode::NumberFractionDigits:   m_number.m_fractionDigits = wxAtoi(value); break;
+	case ibFormatCode::NumberDigits:           m_number.m_digits = FirstNumber(value); break;
+	case ibFormatCode::NumberFractionDigits:   m_number.m_fractionDigits = FirstNumber(value); break;
 	case ibFormatCode::NumberDecimalSeparator: m_number.m_decimalSeparator = FirstChar(value); break;
 	case ibFormatCode::NumberGroupSeparator:   m_number.m_groupSeparator = FirstChar(value); break;
-	case ibFormatCode::NumberGroupSize:        m_number.m_groupSize = wxAtoi(value); break;
+	case ibFormatCode::NumberGroupSize:        m_number.m_groupSize = FirstNumber(value); break;
 	case ibFormatCode::NumberZero:             m_number.m_zero = value; break;
 	case ibFormatCode::DatePattern:            m_date.m_pattern = value; break;
 	case ibFormatCode::DateEmpty:              m_date.m_empty = value; break;
 	case ibFormatCode::BooleanTrue:            m_boolean.m_true = value; break;
 	case ibFormatCode::BooleanFalse:           m_boolean.m_false = value; break;
+	case ibFormatCode::NumberLeadingZero:      m_number.m_leadingZero = value; break;
+	case ibFormatCode::DateLocalFormat:        m_date.m_localFormat = value; break;
+	case ibFormatCode::Language:               m_date.m_language = value; break;
 	}
 }
 
@@ -230,15 +294,18 @@ void ibFormatString::Clear(ibFormatCode code)
 	case ibFormatCode::DateEmpty:              m_date.m_empty.reset(); break;
 	case ibFormatCode::BooleanTrue:            m_boolean.m_true.reset(); break;
 	case ibFormatCode::BooleanFalse:           m_boolean.m_false.reset(); break;
+	case ibFormatCode::NumberLeadingZero:      m_number.m_leadingZero.reset(); break;
+	case ibFormatCode::DateLocalFormat:        m_date.m_localFormat.reset(); break;
+	case ibFormatCode::Language:               m_date.m_language.reset(); break;
 	}
 }
 
-const wxChar* ibFormatString::CodeName(ibFormatCode code)
+const ibChar* ibFormatString::CodeName(ibFormatCode code)
 {
 	for (const ibFormatCodeInfo& info : s_codes) {
 		if (info.m_code == code) return info.m_name;
 	}
-	return wxT("");
+	return ibT("");
 }
 
 ibFormatKind ibFormatString::KindOf(ibFormatCode code)
@@ -249,15 +316,15 @@ ibFormatKind ibFormatString::KindOf(ibFormatCode code)
 	return ibFormatKind::Number;
 }
 
-wxString ibFormatString::PresetPattern(ibDatePreset preset)
+ibString ibFormatString::PresetPattern(ibDatePreset preset)
 {
 	for (const ibDatePresetInfo& info : s_presets) {
 		if (info.m_preset == preset) return info.m_pattern;
 	}
-	return wxString();
+	return ibString();
 }
 
-ibDatePreset ibFormatString::PresetOf(const wxString& pattern)
+ibDatePreset ibFormatString::PresetOf(const ibString& pattern)
 {
 	for (const ibDatePresetInfo& info : s_presets) {
 		if (pattern == info.m_pattern) return info.m_preset;
@@ -265,33 +332,33 @@ ibDatePreset ibFormatString::PresetOf(const wxString& pattern)
 	return ibDatePreset::Custom;
 }
 
-bool ibFormatString::IsWritable(const wxString& text)
+bool ibFormatString::IsWritable(const ibString& text)
 {
-	return text.Find(wxT(';')) == wxNOT_FOUND && text.Find(wxT('=')) == wxNOT_FOUND;
+	return text.Find(ibT(';')) == wxNOT_FOUND && text.Find(ibT('=')) == wxNOT_FOUND;
 }
 
-ibFormatString ibFormatString::Parse(const wxString& fmt)
+ibFormatString ibFormatString::Parse(const ibString& fmt)
 {
 	ibFormatString format;
 	Parse(fmt, format);
 	return format;
 }
 
-bool ibFormatString::Parse(const wxString& fmt, ibFormatString& format)
+bool ibFormatString::Parse(const ibString& fmt, ibFormatString& format)
 {
 	// The pairs, as Format has always read them: `;` ends one, the first `=` splits it, and a `=`
 	// after that is not kept.
-	std::vector<std::pair<wxString, wxString>> pairs;
-	wxString leftParam, rightParam;
+	std::vector<std::pair<ibString, ibString>> pairs;
+	ibString leftParam, rightParam;
 	bool bLeftParam = true;
 	// ⚠ A VALUE THAT IS ALL SPACE IS A SPACE, not nothing: `NGS= ` asks for a space between the digit
 	// groups - the help's own example - and trimming it to empty left the number ungrouped.
 	const auto commit = [&]() {
 		leftParam.Trim(true); leftParam.Trim(false);
-		const bool allSpace = !rightParam.IsEmpty() && wxString(rightParam).Trim(true).Trim(false).IsEmpty();
+		const bool allSpace = !rightParam.IsEmpty() && ibString(rightParam).Trim(true).Trim(false).IsEmpty();
 		rightParam.Trim(true); rightParam.Trim(false);
 		// A later pair of the same code wins, as it did when the pairs went into a map.
-		const wxString value = allSpace ? wxString(wxT(" ")) : rightParam;
+		const ibString value = allSpace ? ibString(ibT(" ")) : Unfenced(rightParam);
 		bool replaced = false;
 		for (auto& pair : pairs) {
 			if (pair.first == leftParam) { pair.second = value; replaced = true; break; }
@@ -301,7 +368,7 @@ bool ibFormatString::Parse(const wxString& fmt, ibFormatString& format)
 		bLeftParam = true; leftParam = ""; rightParam = "";
 	};
 	for (unsigned int i = 0; i < fmt.length(); i++) {
-		auto c = fmt.at(i);
+		auto c = fmt[i];
 		if (c == ';') {
 			commit();
 			continue;
@@ -333,17 +400,17 @@ bool ibFormatString::Parse(const wxString& fmt, ibFormatString& format)
 	return !pairs.empty();
 }
 
-wxString ibFormatString::Render() const
+ibString ibFormatString::Render() const
 {
-	wxString text;
-	const auto put = [&text](const wxString& name, const wxString& value) {
-		if (!text.IsEmpty()) text += wxT("; ");
-		text += name + wxT("=") + value;
+	ibString text;
+	const auto put = [&text](const ibString& name, const ibString& value) {
+		if (!text.IsEmpty()) text += ibT("; ");
+		text += name + ibT("=") + value;
 	};
 
 	// In the order of the tabs, each kind's codes in the order of the table; then what is only kept.
 	for (const ibFormatCode code : Codes()) {
-		if (const std::optional<wxString> value = Get(code))
+		if (const std::optional<ibString> value = Get(code))
 			put(CodeName(code), *value);
 	}
 	for (const auto& pair : m_other)
@@ -351,18 +418,18 @@ wxString ibFormatString::Render() const
 	return text;
 }
 
-wxString ibFormatString::Apply(const ibAnyValue& value) const
+ibString ibFormatString::Apply(const ibVariant& value) const
 {
-	wxString result;
+	ibString result;
 	Apply(value, result);
 	return result;
 }
 
-bool ibFormatString::Apply(const ibAnyValue& value, wxString& result) const
+bool ibFormatString::Apply(const ibVariant& value, ibString& result) const
 {
 	switch (value.GetType()) {
 	case ibValueTypes::TYPE_BOOLEAN: {
-		const std::optional<wxString>& said = value.GetBoolean() ? m_boolean.m_true : m_boolean.m_false;
+		const std::optional<ibString>& said = value.GetBoolean() ? m_boolean.m_true : m_boolean.m_false;
 		if (said)
 			result = *said;
 		else
@@ -389,18 +456,31 @@ bool ibFormatString::Apply(const ibAnyValue& value, wxString& result) const
 		if (m_number.m_groupSize)        numFmt.groupSize  = *m_number.m_groupSize;
 
 		number.ToString(numFmt, result);
+		// NLZ: the whole part padded with zeros to the digits ND leaves it (ND - NFD).
+		if (m_number.m_leadingZero && m_number.m_digits)
+			PadWholePart(result, *m_number.m_digits - m_number.m_fractionDigits.value_or(0));
 		return !result.IsEmpty();
 	}
 	case ibValueTypes::TYPE_DATE:
 		if (value.IsEmpty() && m_date.m_empty)
 			result = *m_date.m_empty;
-		else if (m_date.m_pattern) {
+		else {
+			// The language L names, its own dictionary; with none (or one this engine has no name for) the thread's.
+			const ibDictionary* const dictionary = m_date.m_language ? ibDictionary::ForLanguage(*m_date.m_language) : nullptr;
+			// DF first; DLF when there is no DF - a pattern written out wins over a preset named.
+			ibString pattern;
+			if (m_date.m_pattern)
+				pattern = *m_date.m_pattern;
+			else if (m_date.m_localFormat)
+				pattern = LocalFormatPattern(*m_date.m_localFormat, dictionary);
+			if (pattern.IsEmpty()) {
+				result = value.GetString();
+				return !result.IsEmpty();
+			}
 			ibDateTimeParts parts;
 			value.GetDate().ToParts(parts);
-			WriteDate(*m_date.m_pattern, parts, result);
+			WriteDate(pattern, parts, dictionary, result);
 		}
-		else
-			result = value.GetString();
 		return !result.IsEmpty();
 	default:
 		result = value.GetString();   // every other type formats as its plain string

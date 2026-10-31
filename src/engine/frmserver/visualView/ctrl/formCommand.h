@@ -46,21 +46,21 @@ public:
 	virtual bool IsLayerContainer() const override { return false; }   // a leaf — no children
 
 	// --- value identity ---
-	virtual wxString GetClassName() const override { return ibValue::GetClassName(); }   // registered value type
-	virtual wxString GetObjectTypeName() const override { return GetName(); }
+	virtual ibString GetClassName() const override { return ibValue::GetClassName(); }   // registered value type
+	virtual ibString GetObjectTypeName() const override { return GetName(); }
 	virtual bool IsEditable() const override;   // → owner form (a view-only form's commands aren't editable)
 	// Reject a duplicate Name — unique among the OWNER FORM's commands (the command-side twin of a bar item's Name
 	// guard). The inspector edits m_propertyName directly, bypassing RenameFormCommand, so the check lives here.
-	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue) override;
+	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue) override;
 
 	// The command's own look / behaviour (a projection reads these; its own Title/Picture win on top). The Action
 	// is the event whose VALUE names the form-runtime handler the command runs:
-	wxString GetName()      const { return m_propertyName->GetValueAsString(); }
+	ibString GetName()      const { return m_propertyName->GetValueAsString(); }
 	// The fully qualified name, the SAME scheme metaobject commands use (see ibValueMetaObject::GetFullName) — a
 	// form command is rooted at the form: "Form.<name>". One naming rule for menu, sections and form.
-	wxString GetFullName()  const { return wxT("Form.") + GetName(); }
-	wxString GetCaption()   const { return m_propertyCaption->IsEmptyProperty() ? GetName() : m_propertyCaption->GetValueAsTranslateString(); }
-	wxString GetProcedure() const { return m_eventCommand->GetValue().GetString(); }
+	ibString GetFullName()  const { return ibT("Form.") + GetName(); }
+	ibString GetCaption()   const { return m_propertyCaption->IsEmptyProperty() ? GetName() : m_propertyCaption->GetValueAsTranslateString(); }
+	ibString GetProcedure() const { return m_eventCommand->GetValue().GetString(); }
 	// The Action as the EVENT object (not just its name), so the fire path dispatches through
 	// GetDispatcher() -> named handler OR lambda, exactly like a control event. GetProcedure stays
 	// for the string view (serialize / inspector).
@@ -69,8 +69,8 @@ public:
 	bool     IsEmptyPicture()   const { return m_propertyPicture->IsEmptyProperty(); }
 	ibMetaID GetId() const { return m_commandId; }
 
-	void SetCommandName(const wxString& name) { m_propertyName->SetValue(name); }
-	void SetProcedure(const wxString& proc)   { m_eventCommand->SetValue(proc); }
+	void SetCommandName(const ibString& name) { m_propertyName->SetValue(name); }
+	void SetProcedure(const ibString& proc)   { m_eventCommand->SetValue(proc); }
 	void SetCommandId(const ibMetaID& id)     { m_commandId = id; }
 
 	// Serialize the properties + the Action event (base ibPropertyObject::WriteProperty covers only ATTACHED
@@ -84,16 +84,16 @@ private:
 	ibValueForm* m_ownerForm;
 	ibMetaID     m_commandId = wxNOT_FOUND;
 
-	ibPropertyCategory* m_categoryCommon = ibPropertyObject::CreatePropertyCategory(wxT("Common"), _("General"));
-	ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_categoryCommon, wxT("Name"), _("Name"), _("The command's name: how buttons and command bars on the form refer to it. Unique among the form's commands."), wxT(""));
-	ibPropertyTString* m_propertyCaption = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryCommon, wxT("Caption"), _("Caption"), _("The command's caption: the text of a button or menu item that runs it. Empty: made from the name. Can be written per language."), wxT(""));
-	ibPropertyPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_categoryCommon, wxT("Picture"), _("Picture"),
+	ibPropertyCategory* m_categoryCommon = ibPropertyObject::CreatePropertyCategory(ibT("Common"), _("General"));
+	ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_categoryCommon, ibT("Name"), _("Name"), _("The command's name: how buttons and command bars on the form refer to it. Unique among the form's commands."), ibT(""));
+	ibPropertyTString* m_propertyCaption = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryCommon, ibT("Caption"), _("Caption"), _("The command's caption: the text of a button or menu item that runs it. Empty: made from the name. Can be written per language."), ibT(""));
+	ibPropertyPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_categoryCommon, ibT("Picture"), _("Picture"),
 		_("The command's icon on buttons and command bars that show pictures."));
 
 	// The handler event — a parameterless form-runtime procedure (empty args → "Procedure <name>()"), run by the
 	// projection through the string CallAsEvent. The inspector's event editor generates / opens it in the form module.
-	ibPropertyCategory* m_categoryEvent = ibPropertyObject::CreatePropertyCategory(wxT("Event"), _("Event"));
-	ibEventControl* m_eventCommand = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, wxT("Action"), _("Action"), wxArrayString{});
+	ibPropertyCategory* m_categoryEvent = ibPropertyObject::CreatePropertyCategory(ibT("Event"), _("Event"));
+	ibEventControl* m_eventCommand = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, ibT("Action"), _("Action"), std::vector<ibString>{});
 };
 
 #endif // __FORM_COMMAND_H__

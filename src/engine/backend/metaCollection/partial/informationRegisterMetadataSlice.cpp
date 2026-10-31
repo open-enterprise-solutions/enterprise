@@ -39,16 +39,16 @@
 // The recorder's IDENTITY field — the reference id, asked by ROLE. Not "the first value field":
 // a reference spreads to _TYPE, _RTRef, _RRRef, and the one that identifies the row is the last of
 // those. Empty when the register has no recorder.
-static wxString RecorderIdField(const ibValueMetaObjectInformationRegister* meta)
+static ibString RecorderIdField(const ibValueMetaObjectInformationRegister* meta)
 {
 	const ibValueMetaObjectAttributeBase* recorder = meta->HasRecorder() ? meta->GetRegisterRecorder() : nullptr;
 	if (recorder == nullptr)
-		return wxString();
+		return ibString();
 
 	for (const ibColumnSlot& slot : DescribeColumnLayout(recorder->GetQueryColumn()))
 		if (slot.m_role == ibColumnRole::ReferenceId)
 			return slot.m_name;
-	return wxString();
+	return ibString();
 }
 
 // ⭐ WHERE THE SLICE STOPS — an instant, or an instant AND the document at it.
@@ -165,7 +165,7 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 			};
 			split(ibRegConditionOn(registerTable, cFilter, anyField));
 		}
-		const auto lowered = [&](const ibQueryPredicatePtr& condition, const wxString& qualifier) {
+		const auto lowered = [&](const ibQueryPredicatePtr& condition, const ibString& qualifier) {
 			return ibDbTableProvider::BuildPredicateIR(registerTable, condition, qualifier);
 		};
 
@@ -174,7 +174,7 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 		// dimension key (agg over the period, GROUP BY the keys), self-joined back to the
 		// register table for the full record, then the dimension filter. Values ride as
 		// bound Const — the renderer binds them; no per-DBMS SQL, no manual positional bind.
-		const wxString table = meta->GetPhysicalTableName();
+		const ibString table = meta->GetPhysicalTableName();
 		const ibValueMetaObjectAttributeBase* periodAttr = meta->GetRegisterPeriod();
 
 		// Field-list + composite-predicate lowering are shared across register managers
@@ -185,7 +185,7 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 		// two strings passed in separately, the pair could disagree — and the chain that parsed them
 		// defaulted silently, so a typo produced a wrong slice instead of a complaint.
 		const bool last = (end == ibSliceEnd::Last);
-		const wxString     aggregateFn = last ? wxT("MAX") : wxT("MIN");
+		const ibString     aggregateFn = last ? ibT("MAX") : ibT("MIN");
 
 		// ⭐⭐ A SLICE STOPS WHERE A BALANCE STOPS, so it reads its boundary the same way: a bare date,
 		// a moment naming a document, or a Boundary saying which side of that position is meant. One
@@ -221,7 +221,7 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 			// dimensions, the resources. Identical on purpose: partition the slice differently and the
 			// two roads stop answering the same question.
 			std::vector<ibQueryExprPtr> partitionBy;
-			std::vector<wxString>       sliceFields;
+			std::vector<ibString>       sliceFields;
 			std::vector<ibQuerySortKey> orderBy;
 
 			// The direction IS the reading: a last slice ranks the greatest period first, a first slice
@@ -229,7 +229,7 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 			// from `last` rather than taking two strings.
 			const ibQuerySortDir dir = last ? ibQuerySortDir::Desc : ibQuerySortDir::Asc;
 
-			const std::vector<wxString> rankPeriodFields = ibRegFieldsOf(periodAttr);
+			const std::vector<ibString> rankPeriodFields = ibRegFieldsOf(periodAttr);
 			for (size_t i = 0; i < rankPeriodFields.size(); ++i) {
 				sliceFields.push_back(rankPeriodFields[i]);
 				if (i == 0)   // _TYPE tag — a partition key, exactly as it is a GROUP BY key below
@@ -246,7 +246,7 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 			// them rank 1 (measured 2026-09-05). The rows are still PROJECTED, of course — the slice
 			// is read for its resources — they simply do not decide what a slice IS.
 			auto addSliceKey = [&](const ibValueMetaObjectAttributeBase* a, bool partitions) {
-				for (const wxString& f : ibRegFieldsOf(a)) {
+				for (const ibString& f : ibRegFieldsOf(a)) {
 					if (partitions) partitionBy.push_back(ibCol(f));
 					sliceFields.push_back(f);
 				}
@@ -257,7 +257,7 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 			// ⭐ THE TIE IS ONE MORE SORT KEY. Where the aggregate road needs a whole extra level to
 			// choose among the records sitting AT the boundary period, an ordered ranking already has
 			// somewhere to put that question: after the period, in the same direction.
-			const wxString rankRecorderId = RecorderIdField(meta);
+			const ibString rankRecorderId = RecorderIdField(meta);
 			if (!rankRecorderId.IsEmpty()) {
 				orderBy.push_back(ibQuerySortKey{ ibCol(rankRecorderId), dir });
 				sliceFields.push_back(rankRecorderId);
@@ -278,28 +278,28 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 				ranked.Where(lowered(byKey, table));
 
 			std::vector<ibQueryProjItem> rankedProj;
-			for (const wxString& f : sliceFields)
-				rankedProj.push_back(ibQueryProjItem{ ibCol(f), wxString() });
+			for (const ibString& f : sliceFields)
+				rankedProj.push_back(ibQueryProjItem{ ibCol(f), ibString() });
 			rankedProj.push_back(ibQueryProjItem{
-				ibWindowed(ibFunc(wxT("ROW_NUMBER")), { partitionBy, orderBy, ibQueryFrame::NoFrame }),
-				wxT("slice_rank") });
+				ibWindowed(ibFunc(ibT("ROW_NUMBER")), { partitionBy, orderBy, ibQueryFrame::NoFrame }),
+				ibT("slice_rank") });
 			ranked.Project(rankedProj);
 
 			// Rank 1 is the slice. The test lives OUTSIDE the ranking because a window is computed
 			// after WHERE — there is no such thing as a predicate on a rank in the same SELECT that
 			// produces it, and a HAVING would not do it either.
 			std::vector<ibQueryProjItem> sliceProj;
-			for (const wxString& f : sliceFields)
-				sliceProj.push_back(ibQueryProjItem{ ibCol(wxT("sliceTable"), f), f });
+			for (const ibString& f : sliceFields)
+				sliceProj.push_back(ibQueryProjItem{ ibCol(ibT("sliceTable"), f), f });
 
 			ibDatabaseQueryBuilder slice;
-			slice.From(ibSubquery(ranked.Build().m_root, wxT("sliceTable")))
+			slice.From(ibSubquery(ranked.Build().m_root, ibT("sliceTable")))
 			     .Where(ibBinOp(ibQueryBinOp::Eq,
-			                    ibCol(wxT("sliceTable"), wxT("slice_rank")), ibConst(ibValue(1))))
+			                    ibCol(ibT("sliceTable"), ibT("slice_rank")), ibConst(ibValue(1))))
 			     .Project(sliceProj);
 
 			if (overSlice)
-				slice.Where(lowered(overSlice, wxT("sliceTable")));
+				slice.Where(lowered(overSlice, ibT("sliceTable")));
 
 			sliceIr = slice.Build();
 		}
@@ -313,10 +313,10 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 		// break below: the boundary period alone does not name a single row there.
 		std::vector<ibQueryProjItem> l1proj;
 		std::vector<ibQueryExprPtr>  groupKeys;
-		const std::vector<wxString> periodFields = ibRegFieldsOf(periodAttr);
+		const std::vector<ibString> periodFields = ibRegFieldsOf(periodAttr);
 		for (size_t i = 0; i < periodFields.size(); ++i) {
 			if (i == 0) {   // _TYPE tag: grouped + projected bare
-				l1proj.push_back(ibQueryProjItem{ ibCol(periodFields[i]), wxString() });
+				l1proj.push_back(ibQueryProjItem{ ibCol(periodFields[i]), ibString() });
 				groupKeys.push_back(ibCol(periodFields[i]));
 			}
 			else {          // period value: aggregated (the boundary), NOT grouped
@@ -328,8 +328,8 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 		// per (key, value), which is every row that ever changed — the two roads were identically
 		// wrong, which is the one thing a pair of roads is supposed to make visible.
 		auto addKeyCols = [&](const ibValueMetaObjectAttributeBase* a) {
-			for (const wxString& f : ibRegFieldsOf(a)) {
-				l1proj.push_back(ibQueryProjItem{ ibCol(f), wxString() });
+			for (const ibString& f : ibRegFieldsOf(a)) {
+				l1proj.push_back(ibQueryProjItem{ ibCol(f), ibString() });
 				groupKeys.push_back(ibCol(f));
 			}
 		};
@@ -360,9 +360,9 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 		joinAttrs.push_back(periodAttr);
 		for (const auto object : meta->GetDimensionArrayObject()) joinAttrs.push_back(object);
 
-		std::vector<wxString> keyFields;
+		std::vector<ibString> keyFields;
 		for (const auto a : joinAttrs)
-			for (const wxString& f : ibRegFieldsOf(a))
+			for (const ibString& f : ibRegFieldsOf(a))
 				keyFields.push_back(f);
 
 		// ⭐⭐ THE PERIOD DOES NOT PICK A ROW WHEN THE REGISTER IS SUBORDINATE TO A RECORDER.
@@ -378,29 +378,29 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 		//
 		// An independent register never reaches this: its key IS the period plus the dimensions, so
 		// the boundary already names one row.
-		ibQueryRelPtr boundary = ibSubquery(l1.Build().m_root, wxT("T1"));
-		const wxString recorderId = RecorderIdField(meta);
+		ibQueryRelPtr boundary = ibSubquery(l1.Build().m_root, ibT("T1"));
+		const ibString recorderId = RecorderIdField(meta);
 
 		if (!recorderId.IsEmpty()) {
 			ibQueryExprPtr tiePred;
 			std::vector<ibQueryProjItem> tieProj;
 			std::vector<ibQueryExprPtr>  tieKeys;
-			for (const wxString& f : keyFields) {
-				ibQueryExprPtr eq = ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("B"), f), ibCol(wxT("R"), f));
+			for (const ibString& f : keyFields) {
+				ibQueryExprPtr eq = ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("B"), f), ibCol(ibT("R"), f));
 				tiePred = tiePred ? ibBinOp(ibQueryBinOp::And, tiePred, eq) : eq;
-				tieProj.push_back(ibQueryProjItem{ ibCol(wxT("B"), f), f });
-				tieKeys.push_back(ibCol(wxT("B"), f));
+				tieProj.push_back(ibQueryProjItem{ ibCol(ibT("B"), f), f });
+				tieKeys.push_back(ibCol(ibT("B"), f));
 			}
 			tieProj.push_back(ibQueryProjItem{
-				ibFunc(aggregateFn, { ibCol(wxT("R"), recorderId) }), recorderId });
+				ibFunc(aggregateFn, { ibCol(ibT("R"), recorderId) }), recorderId });
 
 			ibDatabaseQueryBuilder tie;
-			tie.From(ibSubquery(l1.Build().m_root, wxT("B")))
-			   .Join(ibScan(table, wxT("R")), tiePred, ibQueryJoinType::Inner)
+			tie.From(ibSubquery(l1.Build().m_root, ibT("B")))
+			   .Join(ibScan(table, ibT("R")), tiePred, ibQueryJoinType::Inner)
 			   .Project(tieProj);
 			for (const ibQueryExprPtr& gk : tieKeys) tie.GroupBy(gk);
 
-			boundary = ibSubquery(tie.Build().m_root, wxT("T1"));
+			boundary = ibSubquery(tie.Build().m_root, ibT("T1"));
 			keyFields.push_back(recorderId);   // the join below now equates the recorder too
 		}
 
@@ -409,22 +409,22 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 		// fields (aliased to the bare name -> materialise by name).
 		ibQueryExprPtr onPred;
 		std::vector<ibQueryProjItem> l2proj;
-		for (const wxString& f : keyFields) {
-			ibQueryExprPtr eq = ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("T1"), f), ibCol(wxT("T2"), f));
+		for (const ibString& f : keyFields) {
+			ibQueryExprPtr eq = ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("T1"), f), ibCol(ibT("T2"), f));
 			onPred = onPred ? ibBinOp(ibQueryBinOp::And, onPred, eq) : eq;
-			l2proj.push_back(ibQueryProjItem{ ibCol(wxT("T2"), f), f });
+			l2proj.push_back(ibQueryProjItem{ ibCol(ibT("T2"), f), f });
 		}
 
 		ibDatabaseQueryBuilder l2;
 		l2.From(boundary)
-		  .Join(ibScan(table, wxT("T2")), onPred, ibQueryJoinType::Inner)
+		  .Join(ibScan(table, ibT("T2")), onPred, ibQueryJoinType::Inner)
 		  .Project(l2proj);
 
 		// Level 3 — the rest of the condition over the joined slice: SELECT * FROM (l2) AS lastTable WHERE ….
 		ibDatabaseQueryBuilder l3;
-		l3.From(ibSubquery(l2.Build().m_root, wxT("lastTable")));
+		l3.From(ibSubquery(l2.Build().m_root, ibT("lastTable")));
 		if (overSlice)
-			l3.Where(lowered(overSlice, wxT("lastTable")));
+			l3.Where(lowered(overSlice, ibT("lastTable")));
 
 		sliceIr = l3.Build();
 

@@ -1,7 +1,7 @@
 #ifndef __COLUMN_TYPE_H__
 #define __COLUMN_TYPE_H__
 
-// Shared CANONICAL COLUMN TYPE — a pure leaf data type (no logic, no deps beyond wxString) in the LOW
+// Shared CANONICAL COLUMN TYPE — a pure leaf data type (no logic, no deps beyond ibString) in the LOW
 // tier (databaseLayer) so BOTH L2 and L3 include it downward, with no layer reaching across:
 //   * L2 — ibDdlColumn carries an ibColumnType; the dialect dictionary's TYPE-MAP renders it per DBMS.
 //   * L3 — the column-layout tier's ibColumnSlot carries one (the slot/role themselves live in

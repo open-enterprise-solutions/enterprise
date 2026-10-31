@@ -21,7 +21,7 @@
       "parameters": "path — файл, який читаємо. Файл, який не вдалося відкрити, — відмова, і в повідомленні названо його ім'я.\nencoding — член TextEncoding; якщо пропущено або порожній — UTF8, а він СУВОРИЙ: байти, які не UTF-8, відхиляються, а не читаються з дірками.",
       "return_descr": "TextReader.",
       "example": "Reader = New TextReader(\"C:\\in\\sales.csv\", TextEncoding.UTF8);\nLine = Reader.ReadLine();\nwhile (Line <> Undefined) {              // Undefined, а не \"\": порожній рядок — це рядок\n    if (Line <> \"\") {\n        Cut = Find(Line, \";\");\n        Code = Left(Line, Cut - 1);      // перше поле\n    }\n    Line = Reader.ReadLine();\n}\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.TextReader.ReadLine",
         "cls.TextReader.Read",
@@ -49,7 +49,7 @@
       "parameters": "path — файл, який читаємо.\nencoding — член TextEncoding; якщо пропущено або порожній — UTF8.",
       "return_descr": "",
       "example": "Reader = New TextReader(first);\nMessage(Reader.ReadLine());\nReader.Open(second);          // перший файл відпущено; читач стоїть на рядку 1 другого\nMessage(Reader.ReadLine());\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.TextReader",
         "cls.TextReader.Close",
@@ -73,7 +73,7 @@
       "parameters": "Немає.",
       "return_descr": "Рядок — або Undefined у кінці файлу.",
       "example": "Line = Reader.ReadLine();\nwhile (Line <> Undefined) {       // а не while (Line <> \"\")\n    Message(Line);\n    Line = Reader.ReadLine();\n}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.TextReader",
         "cls.TextReader.Read",
@@ -98,7 +98,7 @@
       "parameters": "Немає.",
       "return_descr": "Рядок — \"\", коли нічого не лишилося.",
       "example": "Header = Reader.ReadLine();       // перший рядок окремо\nBody = Reader.Read();             // усе, що після нього, разом із переведеннями рядків\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.TextReader",
         "cls.TextReader.ReadLine",
@@ -122,7 +122,7 @@
       "parameters": "Немає.",
       "return_descr": "Число.",
       "example": "Reader = New TextReader(path);\nfor (n = 1 To Reader.LineCount()) {\n    Message(Reader.GetLine(n));\n}\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.TextReader",
         "cls.TextReader.GetLine",
@@ -147,7 +147,7 @@
       "parameters": "line — номер рядка, рахуючи з одиниці. Менше за одиницю або за останнім — відповідь Undefined.",
       "return_descr": "Рядок — або Undefined, коли такого рядка немає.",
       "example": "Reader = New TextReader(path);\nMessage(Reader.GetLine(1));                    // рядок заголовка\nMessage(Reader.GetLine(Reader.LineCount()));   // останній\nMessage(Reader.ReadLine());                    // так само рядок 1: GetLine його не зсунув\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.TextReader",
         "cls.TextReader.LineCount",
@@ -172,7 +172,7 @@
       "parameters": "Немає.",
       "return_descr": "",
       "example": "Reader.Close();\nReader.Open(nextFile);        // той самий читач, інший файл",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.TextReader",
         "cls.TextReader.Open"
@@ -196,7 +196,7 @@
       "parameters": "path — файл, у який пишемо. Файл, який не вдалося відкрити на запис, — відмова, і в повідомленні названо його ім'я.\nencoding — член TextEncoding; якщо пропущено або порожнє — UTF8.\nappend — True дописує в кінець файлу; False, за замовчуванням, заміщує його.",
       "return_descr": "TextWriter.",
       "example": "Writer = New TextWriter(GetTempDir() + \"sales.csv\", TextEncoding.UTF8);\nWriter.WriteLine(\"code;name;qty\");\nWriter.WriteLine(\"00001;Папір;12\");\nWriter.Close();                      // вивантаження ціле лише після того, як це повернулося",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.TextWriter.Write",
         "cls.TextWriter.WriteLine",
@@ -223,7 +223,7 @@
       "parameters": "path — файл, у який пишемо.\nencoding — член TextEncoding; якщо пропущено або порожнє — UTF8.\nappend — True дописує в кінець файлу; False, за замовчуванням, заміщує його.",
       "return_descr": "",
       "example": "Writer = New TextWriter(first);\nWriter.WriteLine(\"one\");\nWriter.Open(second);          // перший файл ЗАКРИВАЄТЬСЯ тут — і про невдале закриття скажуть тут\nWriter.WriteLine(\"two\");\nWriter.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.TextWriter",
         "cls.TextWriter.Close",
@@ -247,7 +247,7 @@
       "parameters": "text — що покласти, як є.",
       "return_descr": "",
       "example": "Writer.Write(\"00001;\");\nWriter.Write(\"Папір;\");\nWriter.WriteLine(\"12\");        // переведення рядка, що завершує рядок файлу",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.TextWriter",
         "cls.TextWriter.WriteLine",
@@ -272,7 +272,7 @@
       "parameters": "text — що покласти; переведення рядка після нього додає саме це дієслово.",
       "return_descr": "",
       "example": "Writer.WriteLine(\"code;name;qty\");\nWriter.WriteLine(\"\");           // порожній рядок — теж рядок: лише переведення рядка",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.TextWriter",
         "cls.TextWriter.Write",
@@ -296,7 +296,7 @@
       "parameters": "Немає.",
       "return_descr": "",
       "example": "try {\n    Writer.Close();\n} except {\n    Message(\"вивантаження не дійшло до диска: \" + ErrorDescription());\n}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.TextWriter",
         "cls.TextWriter.Write",
@@ -315,18 +315,25 @@
         "runtime",
         "text_files"
       ],
-      "signature": "New BinaryData([base64 : string])",
-      "description": "Байти як значення — картинка, PDF, zip, файл, вміст якого взагалі не текст. Рядок для цього не годиться: текст читається назад у якомусь кодуванні, порівнюється як текст і мовчки псує все, що в ньому неприпустиме.\n\nRead(path) бере вміст файлу цілком, Write(path) кладе вміст у файл, Size() каже, скільки байтів. Ці три — вся поверхня: властивостей у двійкового значення немає.\n\nРЯДОК КОНСТРУКТОРА — ЦЕ BASE64, А НЕ ШЛЯХ, тому читання файлу зроблено методом: один аргумент, що означає дві речі, — це файл, який мовчки не розкодувався. Рядок, який не є суворим base64, відхиляється під час побудови значення — \"Error initializing object 'BinaryData'\", — а інше BinaryData, передане конструкторові, копіюється.\n\nТЕКСТ — ЦЕ ПРОЄКЦІЯ БАЙТІВ, а не їхнє сховище: записане в рядок, BinaryData показується як base64, а порожнє — як \"\". Два такі значення РІВНІ, коли тримають ті самі байти, — порівняння читає вміст, а не його текст; з усім іншим порівнюється саме текст. ValueIsFilled відповідає, чи є байти взагалі.\n\nФайл, який не вдалося відкрити, — відмова; файл, що не вміщається в пам'ять, — теж: частина файлу ніколи не віддається як файл цілком.",
-      "syntax_block": "Bytes = New BinaryData();\nBytes.Read(path);\nMessage(Bytes.Size());\nBytes.Write(otherPath);\n\nSame = New BinaryData(Text);      // the constructor's string is BASE64, never a path",
-      "parameters": "base64 — байти, записані в base64, у тій самій формі, якою значення показується як текст; суворо, усе інше відхиляється. Замість нього можна передати інше BinaryData — його буде скопійовано. Якщо аргумент пропущено, значення байтів не тримає.",
+      "signature": "New BinaryData([base64 : string])\nNew BinaryData(text : string, encoding : TextEncoding [, byteOrderMark : boolean])",
+      "description": "Байти як значення — картинка, PDF, zip, файл, вміст якого взагалі не текст. Рядок для цього не годиться: текст читається назад у якомусь кодуванні, порівнюється як текст і мовчки псує все, що в ньому неприпустиме.\n\nRead(path) бере вміст файлу цілком, Write(path) кладе вміст у файл, Size() каже, скільки байтів, GetString(encoding) читає їх як текст. Ці чотири — вся поверхня: властивостей у двійкового значення немає.\n\nТЕКСТ У КОДУВАННІ: New BinaryData(text, encoding) тримає байти, якими записано текст, а символ, для якого в кодуванні немає байтів, — відмова, а не знак питання. БЕЗ МІТКИ ПОРЯДКУ БАЙТІВ, ЯКЩО ЇЇ НЕ ПРОСИЛИ — перед JSON чи першим полем CSV саме на ній ламається читач на іншому боці. True третім аргументом ставить її попереду для UTF8 (EF BB BF) і UTF16 (FF FE); інші кодування її не мають. UTF16 — little-endian.\n\nHex і base64 — глобальні функції HexString і HexValue, Base64String і Base64Value. Геш байтів — справа DataHashing.\n\nОДИН РЯДОК — ЦЕ BASE64, А НЕ ШЛЯХ, тому читання файлу зроблено методом: один аргумент, що означає дві речі, — це файл, який мовчки не розкодувався. Пробіли й переведення рядка в ньому пропускаються. Рядок, який не є base64, відхиляється під час побудови значення — \"BinaryData: the text is not base64\", — а інше BinaryData, передане конструкторові, копіюється.\n\nТЕКСТ — ЦЕ ПРОЄКЦІЯ БАЙТІВ, а не їхнє сховище: записане в рядок, BinaryData показується як base64, з доповненням, без переведень рядка, а порожнє — як \"\". Два такі значення РІВНІ, коли тримають ті самі байти, — порівняння читає вміст, а не його текст; з усім іншим порівнюється саме текст. ValueIsFilled відповідає, чи є байти взагалі.\n\nФайл, який не вдалося відкрити, — відмова; файл, що не вміщається в пам'ять, — теж: частина файлу ніколи не віддається як файл цілком.",
+      "syntax_block": "Bytes = New BinaryData();\nBytes.Read(path);\nMessage(Bytes.Size());\nBytes.Write(otherPath);\n\nSame = New BinaryData(Text);      // the constructor's string is BASE64, never a path\n\nSpelled = New BinaryData(Text, TextEncoding.UTF8);\nMessage(Spelled.GetString(TextEncoding.UTF8));",
+      "parameters": "base64 — байти, записані в base64, у тій самій формі, якою значення показується як текст; усе інше відхиляється. Замість нього можна передати інше BinaryData — його буде скопійовано. Якщо аргумент пропущено, значення байтів не тримає.\ntext — рядок, який записуємо байтами.\nencoding — значення TextEncoding; рядок відхиляється.\nbyteOrderMark — True, щоб поставити мітку попереду; пропущено — False.",
       "return_descr": "BinaryData.",
       "example": "Bytes = New BinaryData();\nBytes.Read(\"C:\\in\\logo.png\");\nMessage(Bytes.Size());\nBytes.Write(GetTempDir() + \"logo.png\");",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.BinaryData.Size",
         "cls.BinaryData.Read",
         "cls.BinaryData.Write",
+        "cls.BinaryData.GetString",
         "cls.TextReader",
+        "enum.TextEncoding",
+        "fn.HexString",
+        "fn.HexValue",
+        "fn.Base64String",
+        "fn.Base64Value",
+        "cls.DataHashing",
         "guide.textFiles"
       ],
       "reviewed": false
@@ -347,7 +354,7 @@
       "parameters": "Немає.",
       "return_descr": "Число.",
       "example": "Bytes.Read(path);\nif (Bytes.Size() = 0) { Message(\"файл порожній\"); }",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.BinaryData",
         "cls.BinaryData.Read"
@@ -370,7 +377,7 @@
       "parameters": "path — файл, який читаємо.",
       "return_descr": "",
       "example": "Bytes = New BinaryData();\nBytes.Read(\"C:\\in\\price.zip\");\nMessage(Bytes.Size());",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.BinaryData",
         "cls.BinaryData.Write",
@@ -395,11 +402,35 @@
       "parameters": "path — файл, у який пишемо; він заміщується.",
       "return_descr": "",
       "example": "Bytes.Write(GetTempDir() + \"answer.bin\");",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "cls.BinaryData",
         "cls.BinaryData.Read",
         "cls.TextWriter.Close"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.BinaryData.GetString",
+      "name_local": "GetString",
+      "name_en": "GetString",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Bytes.GetString(encoding : TextEncoding) : string",
+      "description": "Текст, який байти записують у кодуванні. Мітка порядку байтів на початку читається як мітка й текстом не віддається, а мітка UTF-16 каже, який кінець іде першим.\n\nБайти, що не складають текст у цьому кодуванні, — ВІДМОВА, а не текст із дірками.\n\nКОДУВАННЯ ПИТАЮТЬ, бо String(Bytes) — інше: base64, єдиний текст, що повертає ті самі байти, якими б вони не були.",
+      "syntax_block": "Text = Bytes.GetString(encoding);",
+      "parameters": "encoding — значення TextEncoding; рядок відхиляється.",
+      "return_descr": "Рядок.",
+      "example": "Answer = Response.GetBodyAsBinaryData();\nText = Answer.GetString(TextEncoding.ANSI);",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "cls.BinaryData",
+        "enum.TextEncoding",
+        "cls.TextReader"
       ],
       "reviewed": false
     },
@@ -415,19 +446,20 @@
         "text_files"
       ],
       "signature": "TextEncoding.UTF8, .UTF16, .ANSI, .OEM, .System",
-      "description": "Як байти складаються в текст, сказане значенням: у TextEncoding п'ять членів — UTF8, UTF16, ANSI, OEM і System, — і член пишеться як TextEncoding.<Ім'я>. Скрипт такого значення не будує, і рядок \"utf-8\" ним теж не є: перелічення стоїть замість нього.\n\nЙОГО ЧИТАЮТЬ СКРІЗЬ, ДЕ БАЙТИ ЗУСТРІЧАЮТЬСЯ З ТЕКСТОМ, — New TextReader(path, encoding) і TextReader.Open, New TextWriter(path, encoding, append) і TextWriter.Open. Якщо пропущено або порожнє — UTF8.\n\nUTF-8 СУВОРИЙ: байти, які не UTF-8, — це відмова, а не текст із дірками. Під час читання мітка порядку байтів на початку файлу UTF-8 або UTF-16 читається як мітка і текстом не віддається, а мітка UTF-16 каже, який кінець іде першим; під час запису UTF-16 отримує мітку, UTF-8 — ні.\n\nANSI, OEM І System — ВЛАСНІ КОДУВАННЯ МАШИНИ, ЗАПИТАНІ В НЕЇ, а не припущені: база, що переїхала з машини на машину, читає файли тієї машини, на якій працює. У Windows це кодові сторінки, узяті ЗА НОМЕРОМ: ANSI і System — обидві сторінка ANSI системи, OEM — консольна. Поза Windows таке кодування одне — поточної локалі, — і всі три означають його. Байт, для якого в сторінки немає символа, і символ, для якого в неї немає байтів, — це відмови.",
+      "description": "Як байти складаються в текст, сказане значенням: у TextEncoding п'ять членів — UTF8, UTF16, ANSI, OEM і System, — і член пишеться як TextEncoding.<Ім'я>. Скрипт такого значення не будує, і рядок \"utf-8\" ним теж не є: перелічення стоїть замість нього.\n\nЙОГО ЧИТАЮТЬ СКРІЗЬ, ДЕ БАЙТИ ЗУСТРІЧАЮТЬСЯ З ТЕКСТОМ, — New TextReader(path, encoding) і TextReader.Open, New TextWriter(path, encoding, append) і TextWriter.Open, New BinaryData(text, encoding) і BinaryData.GetString(encoding). Якщо пропущено або порожнє — UTF8.\n\nUTF-8 СУВОРИЙ: байти, які не UTF-8, — це відмова, а не текст із дірками. Під час читання мітка порядку байтів на початку файлу UTF-8 або UTF-16 читається як мітка і текстом не віддається, а мітка UTF-16 каже, який кінець іде першим; під час запису UTF-16 отримує мітку, UTF-8 — ні.\n\nANSI, OEM І System — ВЛАСНІ КОДУВАННЯ МАШИНИ, ЗАПИТАНІ В НЕЇ, а не припущені: база, що переїхала з машини на машину, читає файли тієї машини, на якій працює. У Windows це кодові сторінки, узяті ЗА НОМЕРОМ: ANSI і System — обидві сторінка ANSI системи, OEM — консольна. Поза Windows таке кодування одне — поточної локалі, — і всі три означають його. Байт, для якого в сторінки немає символа, і символ, для якого в неї немає байтів, — це відмови.",
       "syntax_block": "Reader = New TextReader(path, TextEncoding.ANSI);\nWriter = New TextWriter(path, TextEncoding.UTF16);",
       "parameters": "",
       "return_descr": "",
       "example": "Reader = New TextReader(\"C:\\in\\export.txt\", TextEncoding.OEM);   // файл від консольної програми\nMessage(Reader.ReadLine());\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "enum.TextEncoding.UTF8",
         "enum.TextEncoding.UTF16",
         "enum.TextEncoding.ANSI",
         "cls.TextReader",
         "cls.TextWriter",
-        "guide.textFiles"
+        "guide.textFiles",
+        "cls.BinaryData"
       ],
       "reviewed": false
     },
@@ -447,7 +479,7 @@
       "parameters": "",
       "return_descr": "TextEncoding.",
       "example": "Reader = New TextReader(path, TextEncoding.UTF8);   // те саме, що New TextReader(path)",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "enum.TextEncoding",
         "cls.TextReader",
@@ -471,7 +503,7 @@
       "parameters": "",
       "return_descr": "TextEncoding.",
       "example": "Writer = New TextWriter(path, TextEncoding.UTF16);\nWriter.WriteLine(\"Привіт\");\nWriter.Close();\nReader = New TextReader(path, TextEncoding.UTF16);   // мітка каже, який кінець іде першим",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "enum.TextEncoding",
         "cls.TextReader",
@@ -495,7 +527,7 @@
       "parameters": "",
       "return_descr": "TextEncoding.",
       "example": "Reader = New TextReader(\"C:\\in\\export.txt\", TextEncoding.ANSI);\nMessage(Reader.ReadLine());\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "enum.TextEncoding",
         "enum.TextEncoding.OEM",
@@ -519,7 +551,7 @@
       "parameters": "",
       "return_descr": "TextEncoding.",
       "example": "Reader = New TextReader(\"C:\\in\\report.txt\", TextEncoding.OEM);   // записаний консольною програмою\nMessage(Reader.ReadLine());\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "enum.TextEncoding",
         "enum.TextEncoding.ANSI",
@@ -543,7 +575,7 @@
       "parameters": "",
       "return_descr": "TextEncoding.",
       "example": "Reader = New TextReader(path, TextEncoding.System);   // те, чим пише ця машина\nMessage(Reader.ReadLine());\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "enum.TextEncoding",
         "enum.TextEncoding.ANSI",

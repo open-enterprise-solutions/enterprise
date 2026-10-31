@@ -101,8 +101,7 @@ void* ibDatabaseParameterODBC::GetDataPtr()
 	{
 	case ibDatabaseParameterODBC::PARAM_STRING:
 		m_CharBufferValue = ConvertToUnicodeStream(m_strValue);
-		pReturn = m_CharBufferValue;
-		//wxPrintf(_("Parameter: '%s'\n"), m_strValue.c_str());
+		pReturn = m_CharBufferValue.c_str();
 		//pReturn = m_strValue.c_str();
 		break;
 	case ibDatabaseParameterODBC::PARAM_INT:

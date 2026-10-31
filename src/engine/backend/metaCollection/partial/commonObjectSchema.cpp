@@ -42,7 +42,7 @@ void ContributeAttributeIndexes(ibSchemaTable& t,
 		const ibIndexingMode mode = attr->GetIndexingMode();
 		if (mode == ibIndexingMode::ibIndexingMode_DontIndex)
 			continue;
-		const wxString name = wxString::Format(wxT("%s_%i_IX"), t.m_name, (int)attr->GetColumnId());
+		const ibString name = ibString::Format(ibT("%s_%i_IX"), t.m_name, (int)attr->GetColumnId());
 		const ibBackendQueryColumn* own = attr->GetQueryColumn();
 		if (mode == ibIndexingMode::ibIndexingMode_IndexWithAdditionalOrder && !order.empty()
 		    && std::find(order.begin(), order.end(), own) == order.end()) {
@@ -80,7 +80,7 @@ void ibValueMetaObjectRecordDataMutableRef::ContributeTables(ibSchemaSnapshot& o
 		t.Add(object->GetQueryColumn());
 
 	if (const ibValueMetaObjectAttributeBase* refAttr = GetDataReference())
-		t.Index(t.m_name + wxT("_REF_UQ"), { refAttr->GetQueryColumn() }, true);               // _REF_UQ — the identity, and the only one
+		t.Index(t.m_name + ibT("_REF_UQ"), { refAttr->GetQueryColumn() }, true);               // _REF_UQ — the identity, and the only one
 
 	// Per-attribute secondary indexes (plain + predefined: Code / Description / Parent / ...) —
 	// the row reference is the additional-order column. Each carries its own Indexing flag.
@@ -94,7 +94,7 @@ void ibValueMetaObjectRecordDataMutableRef::ContributeTables(ibSchemaSnapshot& o
 		const ibBackendQueryColumn* tabUuid = tt.Scaffold(ibOwnerRefColumn());
 		for (const auto object : tab->GetGenericAttributeArrayObject())
 			tt.Add(object->GetQueryColumn());
-		tt.Index(tt.m_name + wxT("_INDEX"), { tabUuid });                     // tabular uuid index — NOT unique (repeats per owner)
+		tt.Index(tt.m_name + ibT("_INDEX"), { tabUuid });                     // tabular uuid index — NOT unique (repeats per owner)
 		// Per-attribute secondary indexes on the section's own columns — no single row reference
 		// (browsing is per-owner by line), so the ordered variant degrades to a plain index here.
 		ContributeAttributeIndexes(tt, tab->GetGenericAttributeArrayObject());
@@ -123,7 +123,7 @@ void ibValueMetaObjectRecordDataEnumRef::ContributeTables(ibSchemaSnapshot& out)
 	// The data-reference unique key, as on the record side: each row's own reference, unique per row.
 	const ibValueMetaObjectAttributeBase* reference = GetDataReference();
 	if (reference != nullptr)
-		t.Index(t.m_name + wxT("_REF_UQ"), { reference->GetQueryColumn() }, true);
+		t.Index(t.m_name + ibT("_REF_UQ"), { reference->GetQueryColumn() }, true);
 
 	const ibValueMetaObjectAttributeBase* order = GetDataOrder();
 
@@ -181,7 +181,7 @@ void ibValueMetaObjectRegisterData::ContributeTables(ibSchemaSnapshot& out) cons
 			idxCols.push_back(object->GetQueryColumn());
 	}
 	if (!idxCols.empty())
-		t.Index(t.m_name + wxT("_INDEX"), idxCols, true);
+		t.Index(t.m_name + ibT("_INDEX"), idxCols, true);
 
 	// ⭐⭐ THE PERIOD IS A READ PATH, NOT A KEY — and a subordinate register had no index on it.
 	//
@@ -207,7 +207,7 @@ void ibValueMetaObjectRegisterData::ContributeTables(ibSchemaSnapshot& out) cons
 	if (HasRecorder() && HasPeriod() && GetRegisterPeriod() != nullptr && GetRegisterRecorder() != nullptr) {
 		listOrder = { GetRegisterPeriod()->GetQueryColumn(), GetRegisterRecorder()->GetQueryColumn(),
 			GetRegisterLineNumber()->GetQueryColumn() };
-		t.ListIndex(t.m_name + wxT("_PIX"), listOrder);
+		t.ListIndex(t.m_name + ibT("_PIX"), listOrder);
 	}
 
 	// Per-field secondary indexes. Dimensions, resources, attributes and predefined all carry the

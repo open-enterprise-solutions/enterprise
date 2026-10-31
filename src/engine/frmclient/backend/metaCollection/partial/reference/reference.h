@@ -13,19 +13,24 @@
 #include "protocol/protocolNode.h"
 
 class ibMetaData;
+class ibValue;
 
 class FRMCLIENT_API ibValueReferenceDataObject {
 public:
 
 	// The metaobjects these types point at — none for a type that is no reference (the engine's).
 	static std::vector<ibMetaID> ConvertToMetaIds(const std::vector<ibClassID>& clsids, const ibMetaData* metaData);
+	// …and the empty reference of one, as the server wrote it and reads it — `CatalogRef.Goods.EmptyRef` in the designer;
+	// Undefined for a type it said nothing of (the engine's managers' EmptyRef).
+	static ibValue EmptyRef(const ibClassID& clsid);
 
-	// …as the server answered for them: children Type (a class id as text) and Targets.
+	// …as the server answered for them: children Type (a class id as text), Targets and Value.
 	static void ReadReferences(const ibProtocolNode& references);
 
 private:
 
 	static std::map<ibClassID, std::vector<ibMetaID>>& Targets();
+	static std::map<ibClassID, ibDataNode>& EmptyRefs();
 };
 
 #endif
