@@ -58,6 +58,43 @@ oes-clientform > .content > * {
 	flex-shrink: 0;
 }
 
+/* The form's Width and Height (form.js): the narrowest and lowest its controls are laid out. A strut of that size
+   stands in the window they scroll in, so a window smaller scrolls; across, the controls themselves take it on. Its
+   VerticalScroll: a bar when needed (auto), always one, or none, what does not fit cut off. */
+oes-clientform > .content {
+	position: relative;
+}
+
+oes-clientform > .content::before {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: var(--oes-form-width, 0px);
+	height: var(--oes-form-height, 0px);
+	visibility: hidden;
+	pointer-events: none;
+}
+
+oes-clientform:not([orient="horizontal"]) > .content > * {
+	min-width: var(--oes-form-width, 0px);
+}
+
+oes-clientform[orient="horizontal"] > .content > * {
+	min-height: var(--oes-form-height, 0px);
+}
+
+/* On screen only: on paper the form is as long as what it holds (below). */
+@media screen {
+	oes-clientform[vertical-scroll="scroll"] > .content {
+		overflow-y: scroll;
+	}
+
+	oes-clientform[vertical-scroll="hidden"] > .content {
+		overflow-y: hidden;
+	}
+}
+
 oes-clientform[orient="horizontal"] > .content,
 oes-boxsizer[orient="horizontal"],
 oes-wrapsizer[orient="horizontal"],

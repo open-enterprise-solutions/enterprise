@@ -180,10 +180,21 @@ public:
 
 	static bool UpdateFormUniqueKey(const ibUniqueKeyPair& guid);
 
+	// HELD BY ANOTHER OPEN FORM of the current client (ibValueForm::IsBlocked): a form opened over this one that locks
+	// its owner's window, or a form that locks the whole interface and was not opened from this one, directly or
+	// further down. A form closing holds nothing from the moment it closes.
+	bool IsBlocked() const;
+	// …by this one form: the rule above, for one holder.
+	bool IsHeldBy(const ibFormVisualDocument* holder) const;
+
+	// Every open form drawn again — a form that holds others opened or closed, and which are held changed.
+	static void UpdateOpenForms();
+
 protected:
 	virtual ibView* DoCreateView() override;
 private:
 	ibValuePtr<ibValueForm> m_valueForm;
+	bool m_closed = false;   // OnCloseDocument ran: still listed until its views go, it holds nothing
 };
 
 class FRMSERVER_API ibFormVisualDocumentDemo : public ibFormVisualDocument {

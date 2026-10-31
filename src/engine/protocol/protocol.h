@@ -1748,11 +1748,21 @@ namespace ibProtocol {
 			inline constexpr const char* MinValue         = "MinValue";        // a slider's: its ends
 			inline constexpr const char* MaxValue         = "MaxValue";
 			inline constexpr const char* Value            = "Value";           // a gauge's, a slider's
+			inline constexpr const char* Width            = "Width";           // a form's: the narrowest its controls are
+			inline constexpr const char* Height           = "Height";          // laid out, in pixels; 0 — as they allow
+			inline constexpr const char* VerticalScroll   = "VerticalScroll";  // a form's: ibVerticalScroll
 
 			// Where a field's title stands (the server's ibTitleLocation).
 			enum class ibTitleLocation : int {
 				Left  = 1,
 				Right = 2,
+			};
+
+			// Whether a form's controls scroll up and down (the server's ibVerticalScroll).
+			enum class ibVerticalScroll : int {
+				UseIfNecessary = 0,   // a bar when they are taller than the window
+				Use            = 1,   // always a bar
+				DontUse        = 2,   // never: what does not fit is cut off
 			};
 
 		}

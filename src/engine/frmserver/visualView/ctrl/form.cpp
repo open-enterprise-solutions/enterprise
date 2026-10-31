@@ -117,6 +117,10 @@ bool ibValueForm::ReadData(const ibDataNode& node)
 	m_propertyFG->SetNodeValue(node.GetProperty(m_propertyFG->GetName()));
 	m_propertyBG->SetNodeValue(node.GetProperty(m_propertyBG->GetName()));
 	m_propertyEnabled->SetNodeValue(node.GetProperty(m_propertyEnabled->GetName()));
+	m_propertyWindowOpeningMode->SetNodeValue(node.GetProperty(m_propertyWindowOpeningMode->GetName()));
+	m_propertyWidth->SetNodeValue(node.GetProperty(m_propertyWidth->GetName()));
+	m_propertyHeight->SetNodeValue(node.GetProperty(m_propertyHeight->GetName()));
+	m_propertyVerticalScroll->SetNodeValue(node.GetProperty(m_propertyVerticalScroll->GetName()));
 
 	if (!ReadAttributes(node))
 		return false;
@@ -140,6 +144,10 @@ bool ibValueForm::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyFG->GetName(), m_propertyFG->GetNodeValue());
 	node.SetProperty(m_propertyBG->GetName(), m_propertyBG->GetNodeValue());
 	node.SetProperty(m_propertyEnabled->GetName(), m_propertyEnabled->GetNodeValue());
+	node.SetProperty(m_propertyWindowOpeningMode->GetName(), m_propertyWindowOpeningMode->GetNodeValue());
+	node.SetProperty(m_propertyWidth->GetName(), m_propertyWidth->GetNodeValue());
+	node.SetProperty(m_propertyHeight->GetName(), m_propertyHeight->GetNodeValue());
+	node.SetProperty(m_propertyVerticalScroll->GetName(), m_propertyVerticalScroll->GetNodeValue());
 
 	// An incomplete attribute refuses the write — after the form is written whole (WriteAttributes).
 	const bool attributes = WriteAttributes(node);
@@ -219,6 +227,13 @@ bool ibValueForm::IsEditable() const
 	return m_metaFormObject != nullptr ?
 		m_metaFormObject->IsEditable() :
 		true;
+}
+
+bool ibValueForm::IsBlocked() const
+{
+	// Only an open form is held — one not open has no other forms beside it.
+	const ibFormVisualDocument* const document = GetVisualDocument();
+	return document != nullptr && document->IsBlocked();
 }
 
 bool ibValueForm::IsViewOnly() const

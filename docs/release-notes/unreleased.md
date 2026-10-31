@@ -54,6 +54,16 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **An encoding is a member of `TextEncoding`.** `TextReader` and `TextWriter` took a string or another
   enumeration's member without a word; now it is refused, as `HTTPRequest` already refused a string.
 
+## Form windows
+
+- **A form says how it opens, how large it is laid out and whether it scrolls.** `WindowOpeningMode`:
+  Independent (the default), Lock owner window — the form it was opened from shows greyed and takes no
+  input until this one closes — or Lock whole interface, every other form but the ones opened from it.
+  `Width` and `Height`, in pixels: the narrowest and lowest the form's controls are laid out, so a
+  smaller window scrolls them (0, the default: as the controls allow). `VerticalScroll`: Use if
+  necessary (the default), Use, Don't use — what does not fit is cut off. In the thin client and the
+  browser alike; MCP: `form_set` on the form itself.
+
 ## The browser client
 
 - **The start**: the thin client's splash, with arrows and the stage of the start under it, is up from the first paint;

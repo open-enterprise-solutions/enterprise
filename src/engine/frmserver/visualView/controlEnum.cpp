@@ -8,6 +8,8 @@
 
 //add new enumeration
 ENUM_TYPE_REGISTER(ibValueEnumOrient, "WindowOrient", enum_to_clsid("EN_WORI"));
+ENUM_TYPE_REGISTER(ibValueEnumWindowOpeningMode, "WindowOpeningMode", enum_to_clsid("EN_WOPM"));
+ENUM_TYPE_REGISTER(ibValueEnumVerticalScroll, "VerticalScroll", enum_to_clsid("EN_VSCR"));
 ENUM_TYPE_REGISTER(ibValueEnumStretch, "WindowStretch", enum_to_clsid("EN_STRH"));
 ENUM_TYPE_REGISTER(ibValueEnumOrientNotebookPage, "WindowOrientNotebookPage", enum_to_clsid("EN_WNKP"));
 ENUM_TYPE_REGISTER(ibValueEnumHorizontalAlignment, "WindowHorizontalAlignment", enum_to_clsid("EN_WHGT"));

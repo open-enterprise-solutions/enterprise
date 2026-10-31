@@ -521,7 +521,12 @@ bool ibValueForm::ShowForm(ibDocument* docParent, bool createContext)
 			}
 		}
 
-		return CreateDocForm(docParent, createContext);
+		if (!CreateDocForm(docParent, createContext))
+			return false;
+		// Opened holding others — they are drawn again, held, with the frame this opening answers.
+		if (GetWindowOpeningMode() != ibWindowOpeningMode::ibWindowOpeningMode_Independent)
+			ibFormVisualDocument::UpdateOpenForms();
+		return true;
 	}
 
 	// Designer preview path — the form is not opened here.

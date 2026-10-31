@@ -13,6 +13,22 @@ enum ibRepresentation {
 	ibRepresentation_PictureAndText
 };
 
+// How a form opens beside the others: on its own, or holding its owner's window - or every window - until it closes.
+// The numbers are the ones a saved form holds.
+enum ibWindowOpeningMode {
+	ibWindowOpeningMode_Independent = 0,
+	ibWindowOpeningMode_LockOwnerWindow = 1,
+	ibWindowOpeningMode_LockWholeInterface = 2
+};
+
+// Whether a form's controls scroll up and down when they are taller than its window. The numbers are the ones a saved
+// form holds and the ones the client reads (ibProtocol::ibForm::ibProperty::ibVerticalScroll).
+enum ibVerticalScroll {
+	ibVerticalScroll_UseIfNecessary = 0,
+	ibVerticalScroll_Use = 1,
+	ibVerticalScroll_DontUse = 2
+};
+
 // Where a notebook's tabs are (its OrientPage) - none: the notebook is a panel, the active page alone. The numbers are
 // the ones a saved form holds (Top and Bottom were wx's flags) and the ones the client reads
 // (ibProtocol::ibForm::ibNotebook::ibTabLocation).
@@ -33,6 +49,30 @@ class FRMSERVER_API ibValueEnumOrient :
 	virtual void CreateEnumeration() {
 		AddEnumeration(wxHORIZONTAL, ibT("Horizontal"), _("Horizontal"));
 		AddEnumeration(wxVERTICAL, ibT("Vertical"), _("Vertical"));
+	}
+private:
+};
+
+class FRMSERVER_API ibValueEnumWindowOpeningMode :
+	public ibValueEnumeration<ibWindowOpeningMode> {
+	public:
+	ibValueEnumWindowOpeningMode() : ibValueEnumeration() {}
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibWindowOpeningMode::ibWindowOpeningMode_Independent, ibT("Independent"), _("Independent"));
+		AddEnumeration(ibWindowOpeningMode::ibWindowOpeningMode_LockOwnerWindow, ibT("LockOwnerWindow"), _("Lock owner window"));
+		AddEnumeration(ibWindowOpeningMode::ibWindowOpeningMode_LockWholeInterface, ibT("LockWholeInterface"), _("Lock whole interface"));
+	}
+private:
+};
+
+class FRMSERVER_API ibValueEnumVerticalScroll :
+	public ibValueEnumeration<ibVerticalScroll> {
+	public:
+	ibValueEnumVerticalScroll() : ibValueEnumeration() {}
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibVerticalScroll::ibVerticalScroll_UseIfNecessary, ibT("UseIfNecessary"), _("Use if necessary"));
+		AddEnumeration(ibVerticalScroll::ibVerticalScroll_Use, ibT("Use"), _("Use"));
+		AddEnumeration(ibVerticalScroll::ibVerticalScroll_DontUse, ibT("DontUse"), _("Don't use"));
 	}
 private:
 };

@@ -15,6 +15,9 @@ import { alignLabels } from './labels.js';
 // A box's orientation (wxHORIZONTAL).
 const horizontal = 4;
 
+// A form's VerticalScroll (ibVerticalScroll: UseIfNecessary, Use, DontUse), as the content's overflow.
+const verticalScroll = ['auto', 'scroll', 'hidden'];
+
 class ClientForm extends Control {
 	/** @param {ProtocolNode} node */
 	build(node) {
@@ -28,6 +31,11 @@ class ClientForm extends Control {
 	/** @param {ProtocolNode} node */
 	update(node) {
 		this.setAttribute('orient', node.Orient === horizontal ? 'horizontal' : 'vertical');
+		// The narrowest and lowest its controls are laid out (0 — as they allow): a window smaller scrolls them.
+		this.content.style.setProperty('--oes-form-width', `${node.Width > 0 ? node.Width : 0}px`);
+		this.content.style.setProperty('--oes-form-height', `${node.Height > 0 ? node.Height : 0}px`);
+		// Up and down: a bar when needed, always one, or none — then what does not fit is cut off.
+		this.setAttribute('vertical-scroll', verticalScroll[node.VerticalScroll ?? 0] ?? 'auto');
 		this.bar.update(this.state(node).CommandBar);
 		return true;
 	}
