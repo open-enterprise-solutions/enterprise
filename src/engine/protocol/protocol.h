@@ -847,6 +847,7 @@ namespace ibProtocol {
 			Assistant    = 17,   // the designer's assistant window (Administration) — shows nothing; command Open opens its
 			                     // tab (ibView::ibKind::Assistant). Allowed while the base's assistant access is running
 			ConfigCompare = 18,  // ibConfigCompare — the walk of two configurations; command Merge applies the ops chosen
+			Types        = 19,   // ibTypes
 		};
 
 		// A schema's own commands — `schema {Schema, Command, Args}`. All functions and Sections take the one: Open
@@ -1015,6 +1016,20 @@ namespace ibProtocol {
 		// ibLanguages); `Args: {Guid}` — that one's User {Guid, Name, FullName, Password — whether one is stored (never the
 		// stored one), Language — its guid, Roles (Guid)}; commands Save {Guid, Name, FullName, Language, Roles (Guid)[,
 		// Password — a new one, hashed by the server; absent: the stored one kept]}, Remove {Guid}.
+		// The designer's syntax helper, for the names its articles do not write up: the language's types, which only the
+		// server knows. Args Query — Types, a row each {Name}; Args Name — what that one offers: Methods {Name, Signature}
+		// and Properties {Name}, or Note, why it cannot be asked.
+		namespace ibTypes {
+
+			inline constexpr const char* Query      = "Query";
+			inline constexpr const char* Types      = "Types";
+			inline constexpr const char* Name       = "Name";
+			inline constexpr const char* Methods    = "Methods";
+			inline constexpr const char* Signature  = "Signature";
+			inline constexpr const char* Properties = "Properties";
+			inline constexpr const char* Note       = "Note";
+		}
+
 		namespace ibUserList {
 
 			inline constexpr const char* Users    = "Users";

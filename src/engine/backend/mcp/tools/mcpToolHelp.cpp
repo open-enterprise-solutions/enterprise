@@ -20,6 +20,8 @@
 //
 ////////////////////////////////////////////////////////////////////////////
 
+#include <algorithm>
+
 #include "backend/mcp/mcpTool.h"
 
 #include "backend/appData.h"
@@ -110,6 +112,30 @@ ibDataValue Brief(const ibHelpEntry& entry)
 	return ibDataValue::Child(node);
 }
 
+// THE NAMES THE CORPUS DOES NOT WRITE UP: what a script builds (Array, Structure), the platform's enumerations
+// (AccumulationRecordType), what it hands out (QueryResult). They are declared in the registry, so they are asked of it,
+// and nothing is kept: a second copy here could disagree with the first. One the search already answered with its article
+// is left out.
+std::vector<ibDataValue> Types(const ibString& query, const std::vector<const ibHelpEntry*>& written)
+{
+	std::vector<ibDataValue> registered;
+	ibMcpLanguageTypes(query, registered);
+
+	std::vector<ibDataValue> types;
+	for (const ibDataValue& type : registered) {
+		const auto row = type.AsChild();
+		if (!row)
+			continue;
+		const ibString name = row->GetValue<ibString>(ibT("name"));
+		const bool hasArticle = std::any_of(written.begin(), written.end(), [&name](const ibHelpEntry* entry) {
+			return entry != nullptr && entry->nameEn == name;
+		});
+		if (!hasArticle)
+			types.push_back(type);
+	}
+	return types;
+}
+
 using ibArg = ibMcpTool::ibMcpArgument;
 
 // The arguments this file's tools take — declared once, and read through the same
@@ -162,7 +188,9 @@ public:
 			"of.\nEvery answer also names the GUIDES (`guide.`) - short articles on what the "
 			"language offers rather than what a name is called, the query language among them. "
 			"Read them once before writing much code: they cover ground a name search cannot, "
-			"because you have to know a thing exists to search for it.\nIT IS NOT A SEARCH OVER "
+			"because you have to know a thing exists to search for it.\nThe types and enumerations "
+			"of the platform that have no article come back as `types`: syntax_get with the name "
+			"says what one offers.\nIT IS NOT A SEARCH OVER "
 			"THE CONFIGURATION, and does not pretend to be: what an "
 			"object holds is answered by metadata_tree / metadata_get, its fields by query_fields, "
 			"and how something is USUALLY BUILT here by pattern_read.");
@@ -177,44 +205,59 @@ public:
 	// The language is a body of text like any other. Answering here costs one search and makes the
 	// difference between "there is craft written about this" and "there are also WORDS for it".
 	//
-	// ⚠ IT ANSWERS WHAT IS THERE, AND NO MORE. Two families are not in this corpus yet - the
-	// creatable types outside the Query family, and the platform enumerations - so a hint about
-	// them still comes back empty. That is a gap in the CORPUS, not in this road, and it is stated
-	// where a caller meets it (the `nothing` line of a search).
 	void FindInside(const ibString& query, std::vector<ibDataValue>& places) const override
 	{
 		if (query.IsEmpty())
 			return;
 
-		ibString unused;
-		std::shared_ptr<const ibHelpCorpus> corpus = Corpus(unused);
-		if (!corpus)
-			return;
-
-		// The same two searches, in the same order and for the same reason: somebody who typed most
-		// of a name means that name, and falling straight to tokens buries it.
-		std::vector<const ibHelpEntry*> found = corpus->SearchPrefix(query);
-		if (found.empty())
-			found = corpus->SearchText(query);
-
 		// A HANDFUL. This is a hint riding somebody else's answer, not a search they asked for -
 		// a common word answers from dozens of entries, and that list arriving unbidden is noise.
 		// Whoever wants all of them asks syntax_search, which is what the hint says to do.
 		size_t taken = 0;
-		for (const ibHelpEntry* entry : found) {
 
-			if (entry == nullptr)
+		std::vector<const ibHelpEntry*> found;
+		ibString unused;
+		std::shared_ptr<const ibHelpCorpus> corpus = Corpus(unused);
+		if (corpus) {
+			// The same two searches, in the same order and for the same reason: somebody who typed most
+			// of a name means that name, and falling straight to tokens buries it.
+			found = corpus->SearchPrefix(query);
+			if (found.empty())
+				found = corpus->SearchText(query);
+
+			for (const ibHelpEntry* entry : found) {
+
+				if (entry == nullptr)
+					continue;
+				if (taken == 4)
+					return;
+				++taken;
+
+				std::shared_ptr<ibDataNode> hit = std::make_shared<ibDataNode>();
+				hit->SetValue(ibT("syntax"), entry->id);
+				hit->SetValue(ibT("name"), entry->nameLocal);
+				hit->SetValue(ibT("kind"), KindWord(entry->kind));
+
+				if (!entry->signature.IsEmpty())
+					hit->SetValue(ibT("signature"), entry->signature);
+
+				places.push_back(ibDataValue::Child(hit));
+			}
+		}
+
+		// No `id` on the hit: a place with one is an object of this configuration (mcp_search), and a type's is a
+		// class id.
+		for (const ibDataValue& type : Types(query, found)) {
+			if (taken == 4)
+				return;
+			const auto row = type.AsChild();
+			if (!row)
 				continue;
-			if (++taken > 4)
-				break;
+			++taken;
 
 			std::shared_ptr<ibDataNode> hit = std::make_shared<ibDataNode>();
-			hit->SetValue(ibT("syntax"), entry->id);
-			hit->SetValue(ibT("name"), entry->nameLocal);
-			hit->SetValue(ibT("kind"), KindWord(entry->kind));
-
-			if (!entry->signature.IsEmpty())
-				hit->SetValue(ibT("signature"), entry->signature);
+			hit->SetValue(ibT("type"), row->GetValue<ibString>(ibT("name")));
+			hit->SetValue(ibT("kind"), row->GetValue<ibString>(ibT("kind")));
 
 			places.push_back(ibDataValue::Child(hit));
 		}
@@ -261,6 +304,12 @@ public:
 		result.AddField(ibT("found"), ibDataValue::Int((std::int64_t)found.size()));
 		result.AddField(ibT("entries"), ibDataValue::Array(entries));
 
+		std::vector<ibDataValue> types = Types(query, found);
+		if ((std::int32_t)types.size() > limit)
+			types.resize(limit);
+		if (!types.empty())
+			result.AddField(ibT("types"), ibDataValue::Array(types));
+
 		// ⭐ THIS IS THE SYNTAX HELPER, AND ONLY THAT — the same corpus the designer shows beside the
 		// editor: how the LANGUAGE is written. It briefly also answered names out of the open
 		// configuration, and that was a mixing of two different questions: what a configuration
@@ -270,24 +319,11 @@ public:
 		//
 		// So a miss says where the other two live, rather than looking like a platform with no such
 		// word in it.
-		//
-		// ⚠ AND THE ISSUE NUMBER STAYS HERE, OUT OF THE ANSWER. What crosses the wire is read by a
-		// client that cannot open our tracker; the two missing families are NAMED below, which is
-		// the part a caller can act on, and a number would only stop being true the day the issue
-		// closes. See open-enterprise-solutions/enterprise#83.
-		if (entries.empty())
+		if (entries.empty() && types.empty())
 			result.SetValue(ibT("nothing"),
 				ibMcpText("Nothing in the syntax helper by that name. This is the LANGUAGE reference - "
 				  "functions, keywords, types. For what THIS configuration holds ask metadata_tree / "
-				  "metadata_get / query_fields; for how such a thing is usually built, pattern_read.\n"
-				  "AND TWO FAMILIES ARE NOT IN THIS CORPUS, so a miss on one of them is the wrong "
-				  "DOOR rather than a wrong word: the CREATABLE TYPES apart from the Query family "
-				  "(Array, Structure, Container, Table, TypeDescription, ...), the PLATFORM "
-				  "ENUMERATIONS (AccumulationRecordType, DocumentWriteMode, HierarchyType, ...), and "
-				  "the values the platform HANDS you rather than lets you build (SpreadsheetArea, "
-				  "QueryResult, LinqRow, ...). They are declared in the backend registries, not "
-				  "written up here - so ASK type_list FOR THE NAME AND type_members FOR WHAT IT "
-				  "OFFERS, which answers for all three with the members and their call forms."));
+				  "metadata_get / query_fields; for how such a thing is usually built, pattern_read."));
 
 		// The corpus's own digest. A caller that caches answers can tell whether
 		// what it remembers is still what the platform would say.
@@ -340,8 +376,9 @@ public:
 	{
 		return ibMcpText("One entry of the SYNTAX HELPER in full: signature, parameters, what it returns, "
 			"both syntax forms, worked examples, and which runtimes it is valid in. Ids come from "
-			"syntax_search - the language ones (`kw.`, `fn.`, `cls.`, `guide.`). An object of the "
-			"configuration has no article here; it is read with metadata_get.");
+			"syntax_search - the language ones (`kw.`, `fn.`, `cls.`, `guide.`) - and a name from its "
+			"`types` answers with what that type offers. An object of the configuration has no "
+			"article here; it is read with metadata_get.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -378,6 +415,15 @@ public:
 						  "query_fields."), id, (int)object->GetMetaID());
 					return false;
 				}
+			}
+
+			// A NAME FROM `types`: an article's id carries a dot, a type's name does not. It has no article, and what
+			// it offers is the answer, or why it cannot be asked.
+			const ibMcpTool* typeMembers = id.Contains(ibT(".")) ? nullptr : ibFindMcpTool(ibT("type_members"));
+			if (typeMembers != nullptr) {
+				ibDataNode asked;
+				asked.SetValue(ibT("name"), id);
+				return typeMembers->Call(asked, result, refusal);
 			}
 
 			refusal = ibString::Format(

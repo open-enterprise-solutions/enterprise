@@ -686,6 +686,10 @@ BACKEND_API void ibRegisterMcpTool(const ibMcpTool* tool);
 BACKEND_API const std::vector<const ibMcpTool*>& ibMcpTools();
 BACKEND_API const ibMcpTool* ibFindMcpTool(const ibString& name);
 
+// The types the LANGUAGE has, whose names match `query` (ibMcpWordsFound; none - all): what a script builds, the platform's
+// enumerations, what it hands out. Rows as type_list's: name, kind, id. Not the configuration's own.
+BACKEND_API void ibMcpLanguageTypes(const ibString& query, std::vector<ibDataValue>& types);
+
 //     MCP_TOOL_REGISTER(ibMcpToolScriptCheck);
 #define MCP_TOOL_REGISTER(tool_class)                                        \
 	namespace {                                                              \

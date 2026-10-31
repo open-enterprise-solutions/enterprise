@@ -238,6 +238,9 @@
     <ClCompile Include="schema\designer\properties.cpp">
       <Filter>schema\designer</Filter>
     </ClCompile>
+    <ClCompile Include="schema\designer\types.cpp">
+      <Filter>schema\designer</Filter>
+    </ClCompile>
     <ClCompile Include="schema\designer\userList.cpp">
       <Filter>schema\designer</Filter>
     </ClCompile>
@@ -704,6 +707,9 @@
       <Filter>schema\designer</Filter>
     </ClInclude>
     <ClInclude Include="schema\designer\properties.h">
+      <Filter>schema\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\designer\types.h">
       <Filter>schema\designer</Filter>
     </ClInclude>
     <ClInclude Include="schema\designer\userList.h">

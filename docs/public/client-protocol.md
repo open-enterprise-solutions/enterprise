@@ -309,6 +309,7 @@ A schema is a dialog of the desktop held as data: the client shows it however it
 | 7 Assistant access | the designer | the person's MCP server: `Enabled`, `Address`, `Port`, `Token`, `Running`, `Endpoint`, `Allowed` | 2 Start `{Enabled, Address, Port, Token}`, 3 Stop, 4 Save `{…}` | — |
 | 8 Users | the designer | `Users` (`Guid`, `Name`, `FullName`), and what a record is chosen from: `Roles` (`Guid`, `Name`, `Title`, `Mode`), `Languages` (`Guid`, `Title`, `Code`, and `Default` on the configuration's own language); with `Args {Guid}` — that one's `User` (`Guid`, `Name`, `FullName`, `Password` — whether one is stored, `Language`, `Roles`) | 4 Save `{Guid, Name, FullName, Language, Roles[, Password]}` — the password hashed by the server, absent: kept; 8 Remove `{Guid}` | data administration |
 | 18 ConfigCompare | the designer | with `Args {Mode, File, File2}` (`Mode` 1 the configuration and a file, 2 and the base's, 3 two files): `Records` — the walk of the two; a side that cannot be read is refused | 13 Merge `{Mode, File, File2, Pull, Ops}` — Add/Delete/Replace; what was applied and what was not, said to the person by the server | administration |
+| 19 Types | the designer | the language's types, for the syntax helper: with `Args {Query}` — `Types` (`Name`), whose names match; with `Args {Name}` — what that one offers: `Methods` (`Name`, `Signature`) and `Properties` (`Name`), or `Note`, why it cannot be asked | — | — |
 
 A schema the client's application does not have, or the person has no right to, is refused.
 

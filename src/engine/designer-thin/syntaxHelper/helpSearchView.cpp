@@ -49,14 +49,13 @@ void ibHelpSearchView::RefreshList(const wxString& query) {
 
 	const auto matches = m_corpus->SearchText(query);
 	const short mode = m_pane->GetCodeStyle();
-	size_t visible = 0;
 	for (const ibHelpEntry* e : matches) {
 		if (!e->AppliesToMode(mode)) continue;
 		m_list->Append(e->BilingualLabel());
 		m_ids.push_back(e->id);
-		++visible;
 	}
-	m_badge->SetLabel(ibString::Format(_("Found: %zu"), visible));
+	m_pane->AppendTypes(query, matches, m_list, m_ids);
+	m_badge->SetLabel(ibString::Format(_("Found: %zu"), m_ids.size()));
 }
 
 void ibHelpSearchView::OnQueryChanged(wxCommandEvent& event) {

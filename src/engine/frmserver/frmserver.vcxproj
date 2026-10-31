@@ -208,6 +208,7 @@
     <ClCompile Include="schema\designer\debugger.cpp" />
     <ClCompile Include="schema\designer\predefined.cpp" />
     <ClCompile Include="schema\designer\properties.cpp" />
+    <ClCompile Include="schema\designer\types.cpp" />
     <ClCompile Include="schema\designer\userList.cpp" />
     <ClCompile Include="schema\runtime\allFunctions.cpp" />
     <ClCompile Include="schema\runtime\debugging.cpp" />
@@ -366,6 +367,7 @@
     <ClInclude Include="schema\designer\debugger.h" />
     <ClInclude Include="schema\designer\predefined.h" />
     <ClInclude Include="schema\designer\properties.h" />
+    <ClInclude Include="schema\designer\types.h" />
     <ClInclude Include="schema\designer\userList.h" />
     <ClInclude Include="schema\runtime\allFunctions.h" />
     <ClInclude Include="schema\runtime\debugging.h" />

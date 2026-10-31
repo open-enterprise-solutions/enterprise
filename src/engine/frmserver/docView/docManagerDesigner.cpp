@@ -10,6 +10,7 @@
 #include "frmserver/schema/designer/objectText.h"
 #include "frmserver/schema/designer/predefined.h"
 #include "frmserver/schema/designer/properties.h"
+#include "frmserver/schema/designer/types.h"
 #include "frmserver/schema/designer/userList.h"
 
 //files
@@ -92,4 +93,6 @@ ibDocManagerDesigner::ibDocManagerDesigner()
 	// …and the window onto it — Administration → Assistant window.
 	RegisterSchema(ibProtocol::ibSchema::ibKind::Assistant, std::make_unique<ibSchemaAssistant>());
 	RegisterSchema(ibProtocol::ibSchema::ibKind::ConfigCompare, std::make_unique<ibSchemaConfigCompare>());
+	// The syntax helper's names that have no article.
+	RegisterSchema(ibProtocol::ibSchema::ibKind::Types, std::make_unique<ibSchemaTypes>());
 }

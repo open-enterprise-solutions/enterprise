@@ -106,6 +106,11 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   once a second. The person is told how long to wait, and the audit event is `login_throttled`. Behind
   a proxy that hides the client's address only the wait per name applies.
 
+- **The syntax helper finds the platform's types and enumerations.** A search for `Array`, `Structure`,
+  `AccumulationRecordType` or `QueryResult` came back empty. The server's registry is now asked: the
+  designer's pane lists them in Index and Search and shows what one offers, `syntax_search` answers with
+  `types`, and `syntax_get` takes such a name. One that has an article still shows the article.
+
 - **A value read from JSON no longer gains a `type` field.** The type's name the JSON view writes
   beside a value's type came back as a field, one more on each round.
 

@@ -50,6 +50,7 @@ void ibHelpIndexView::RefreshList(const wxString& prefix) {
 		m_list->Append(e->BilingualLabel());
 		m_ids.push_back(e->id);
 	}
+	m_pane->AppendTypes(prefix, matches, m_list, m_ids);
 }
 
 void ibHelpIndexView::OnFilterChanged(wxCommandEvent& event) {

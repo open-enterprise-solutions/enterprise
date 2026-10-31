@@ -23,6 +23,8 @@
 #include <memory>
 #include <vector>
 
+#include "core/syntaxHelper/helpEntry.h"
+
 class ibHelpCorpus;
 class ibHelpService;
 class ibHelpTreeView;
@@ -55,6 +57,15 @@ public:
 	// active corpus snapshot.
 	void ShowEntry(const wxString& entryId);
 
+	// The language's types whose names match `query` and that `written`, the tab's articles, do not name: rows of the
+	// tab's list and its ids. They are the server's, so it is asked each time and nothing is kept.
+	void AppendTypes(const wxString& query, const std::vector<const ibHelpEntry*>& written, class wxListBox* list,
+		std::vector<wxString>& ids);
+
+	// The entry of an id: an article of the corpus, or, for an id AppendTypes gave, what the server says that type
+	// offers, good until the next one is asked. Null - no such entry.
+	const ibHelpEntry* Entry(const wxString& entryId);
+
 	// History navigation — wired to Alt+← / Alt+→ accelerators owned
 	// by the host frame. NavigateBack pops the current entry onto the
 	// forward stack; NavigateForward does the reverse.
@@ -79,6 +90,7 @@ public:
 private:
 	std::unique_ptr<ibHelpService> m_helpService;
 	std::shared_ptr<const ibHelpCorpus> m_corpus;
+	ibHelpEntry m_typeEntry;   // the type Entry answered last
 
 	class wxToolBar* m_toolbar         = nullptr;
 	wxNotebook*       m_notebook       = nullptr;

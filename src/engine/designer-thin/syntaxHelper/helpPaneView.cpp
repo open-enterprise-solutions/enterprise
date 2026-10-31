@@ -18,7 +18,10 @@
 #include "core/syntaxHelper/helpResolver.h"
 #include "core/syntaxHelper/helpService.h"
 
+#include <algorithm>
+
 #include <wx/artprov.h>
+#include <wx/listbox.h>
 #include <wx/notebook.h>
 #include <wx/sizer.h>
 #include <wx/splitter.h>
@@ -36,6 +39,23 @@ constexpr int IDC_HelpReload  = wxID_HIGHEST + 4512;
 constexpr int IDC_HelpSync    = wxID_HIGHEST + 4513;
 constexpr int IDC_HelpZoomIn  = wxID_HIGHEST + 4514;
 constexpr int IDC_HelpZoomOut = wxID_HIGHEST + 4515;
+
+// A type's id in the tabs' lists: the types have no article, and no id of the corpus starts so.
+const wxChar* const kTypeId = wxT("type.");
+
+// Asked of the server, the refusal said to nobody: fewer names in a list is not a thing to stop a person for.
+bool ReadTypes(const ibProtocolNode& args, ibProtocolNode& answer)
+{
+	ibFrontendMainFrameDesigner* const frame = mainFrame;
+	if (frame == nullptr)
+		return false;
+	ibProtocolNode params;
+	params.SetValue(ibProtocol::ibSchema::Schema, static_cast<long long>(ibProtocol::ibSchema::ibKind::Types));
+	params.SetValue(ibProtocol::ibSchema::Args, args);
+	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
+	ibString error;
+	return frame->Call(ibProtocol::ibMethod::Schema, params, answer, refusal, error);
+}
 } // namespace
 
 ibHelpPaneView::ibHelpPaneView(wxWindow* parent, const wxString& locale)
@@ -130,7 +150,7 @@ short ibHelpPaneView::GetCodeStyle() const {
 
 void ibHelpPaneView::ShowEntry(const wxString& entryId) {
 	if (entryId.empty() || !m_corpus) return;
-	const ibHelpEntry* e = m_corpus->FindById(entryId);
+	const ibHelpEntry* e = Entry(entryId);
 	if (e == nullptr) return;
 
 	if (!m_currentId.empty() && m_currentId != entryId) {
@@ -142,6 +162,53 @@ void ibHelpPaneView::ShowEntry(const wxString& entryId) {
 	m_treeView->HighlightEntry(entryId);
 }
 
+void ibHelpPaneView::AppendTypes(const wxString& query, const std::vector<const ibHelpEntry*>& written, wxListBox* list,
+	std::vector<wxString>& ids) {
+	ibProtocolNode args, answer;
+	args.SetValue(ibProtocol::ibSchema::ibTypes::Query, ibString(query));
+	if (!ReadTypes(args, answer)) return;
+
+	for (const ibProtocolNode& row : answer.FindChild(ibProtocol::ibSchema::ibTypes::Types).Children()) {
+		const ibString name = row.GetString(ibProtocol::ibSchema::ibTypes::Name);
+		const bool hasArticle = std::any_of(written.begin(), written.end(), [&name](const ibHelpEntry* e) {
+			return e != nullptr && e->nameEn == name;
+		});
+		if (hasArticle) continue;
+		list->Append(name);
+		ids.push_back(wxString(kTypeId) + wxString(name));
+	}
+}
+
+const ibHelpEntry* ibHelpPaneView::Entry(const wxString& entryId) {
+	wxString name;
+	if (!entryId.StartsWith(kTypeId, &name))
+		return m_corpus ? m_corpus->FindById(entryId) : nullptr;
+
+	ibProtocolNode args, answer;
+	args.SetValue(ibProtocol::ibSchema::ibTypes::Name, ibString(name));
+	if (!ReadTypes(args, answer)) return nullptr;
+
+	wxString syntax;
+	for (const ibProtocolNode& row : answer.FindChild(ibProtocol::ibSchema::ibTypes::Methods).Children()) {
+		const ibString signature = row.GetString(ibProtocol::ibSchema::ibTypes::Signature);
+		syntax += !signature.IsEmpty() ? wxString(signature) : wxString(row.GetString(ibProtocol::ibSchema::ibTypes::Name));
+		syntax += wxT("\n");
+	}
+	for (const ibProtocolNode& row : answer.FindChild(ibProtocol::ibSchema::ibTypes::Properties).Children()) {
+		syntax += wxString(row.GetString(ibProtocol::ibSchema::ibTypes::Name));
+		syntax += wxT("\n");
+	}
+
+	m_typeEntry = ibHelpEntry();
+	m_typeEntry.id = entryId;
+	m_typeEntry.nameEn = name;
+	m_typeEntry.nameLocal = name;
+	m_typeEntry.kind = ibHelpKind::kCollection;
+	m_typeEntry.syntaxBlock = syntax;
+	m_typeEntry.description = answer.GetString(ibProtocol::ibSchema::ibTypes::Note);
+	return &m_typeEntry;
+}
+
 bool ibHelpPaneView::CanNavigateBack()    const { return !m_history.empty(); }
 bool ibHelpPaneView::CanNavigateForward() const { return !m_forward.empty(); }
 
@@ -151,7 +218,7 @@ void ibHelpPaneView::NavigateBack() {
 	m_history.pop_back();
 	if (!m_currentId.empty()) m_forward.push_back(m_currentId);
 
-	const ibHelpEntry* e = m_corpus ? m_corpus->FindById(prev) : nullptr;
+	const ibHelpEntry* e = Entry(prev);
 	if (e == nullptr) return;
 	m_currentId = prev;
 	m_detailView->ShowEntry(e);
@@ -164,7 +231,7 @@ void ibHelpPaneView::NavigateForward() {
 	m_forward.pop_back();
 	if (!m_currentId.empty()) m_history.push_back(m_currentId);
 
-	const ibHelpEntry* e = m_corpus ? m_corpus->FindById(next) : nullptr;
+	const ibHelpEntry* e = Entry(next);
 	if (e == nullptr) return;
 	m_currentId = next;
 	m_detailView->ShowEntry(e);

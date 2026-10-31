@@ -105,6 +105,15 @@ const ibArg& ArgTypeId()
 
 } // namespace
 
+void ibMcpLanguageTypes(const ibString& query, std::vector<ibDataValue>& types)
+{
+	for (const KindRow& row : s_kinds) {
+		if (row.m_kind == ibCtorObjectType_object_value || row.m_kind == ibCtorObjectType_object_enum
+			|| row.m_kind == ibCtorObjectType_object_system)
+			AppendKind(row, query, types);
+	}
+}
+
 //---------------------------------------------------------------------------
 // type_list
 //---------------------------------------------------------------------------

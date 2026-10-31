@@ -64,10 +64,8 @@ void ibHelpDetailView::SetFontSizeBoost(int boost) {
 	m_fontSizeBoost = boost;
 	ApplyFontScale();
 	if (!m_lastEntryId.IsEmpty() && m_pane) {
-		if (auto corpus = m_pane->GetCorpus()) {
-			if (const ibHelpEntry* e = corpus->FindById(m_lastEntryId))
-				m_html->SetPage(RenderHtml(*e));
-		}
+		if (const ibHelpEntry* e = m_pane->Entry(m_lastEntryId))
+			m_html->SetPage(RenderHtml(*e));
 	}
 }
 
@@ -79,10 +77,8 @@ void ibHelpDetailView::AdjustFontSize(int delta) {
 	// Re-render whatever was last shown so the new sizes take effect
 	// immediately — wxHtmlWindow doesn't auto-relayout on SetFonts.
 	if (!m_lastEntryId.IsEmpty() && m_pane) {
-		if (auto corpus = m_pane->GetCorpus()) {
-			if (const ibHelpEntry* e = corpus->FindById(m_lastEntryId))
-				m_html->SetPage(RenderHtml(*e));
-		}
+		if (const ibHelpEntry* e = m_pane->Entry(m_lastEntryId))
+			m_html->SetPage(RenderHtml(*e));
 	}
 }
 

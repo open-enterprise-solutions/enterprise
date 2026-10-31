@@ -783,6 +783,25 @@ TEST(McpSearch, APatternIsReadAsOne_ButAnOrdinaryBracketIsNot)
 	EXPECT_FALSE(ibMcpIsRegex(wxT("Catalog.Warehouses")));
 }
 
+// What the corpus does not write up is asked of the registry: a built type, an enumeration, a value handed out.
+TEST(McpSearch, ATypeTheSyntaxHelperDoesNotWriteUp_IsFoundInTheRegistry)
+{
+	const ibMcpTool* syntaxSearch = ibFindMcpTool(ibT("syntax_search"));
+	ASSERT_NE(syntaxSearch, nullptr);
+
+	for (const ibString& name : { ibString(ibT("Array")), ibString(ibT("AccumulationRecordType")), ibString(ibT("QueryResult")) }) {
+		std::vector<ibDataValue> places;
+		syntaxSearch->FindInside(name, places);
+
+		bool found = false;
+		for (const ibDataValue& place : places) {
+			const auto hit = place.AsChild();
+			found = found || (hit && hit->GetValue<ibString>(ibT("type")) == name);
+		}
+		EXPECT_TRUE(found) << name;
+	}
+}
+
 //---------------------------------------------------------------------------
 // the caller's own clipboard
 //---------------------------------------------------------------------------
