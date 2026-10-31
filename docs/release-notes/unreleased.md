@@ -213,3 +213,8 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   - On macOS, Start without debugging starts the thin client. The designer looked for a plain file and missed the
     client's bundle.
   - A composer has no "Composition data" row in the inspector.
+- **MCP: a common picture takes its image through `picture_set`** — `data` (base64 PNG) or `svg`, with a
+  `name`. A `Picture` object could be declared with `metadata_create` and never given anything to show:
+  `picture_set` refused it as having no picture of its own, and `metadata_set` on its `Picture` asked for
+  a structure. The image is kept in the configuration, the picture is listed under `picture_list` →
+  `configuration`, and `metadata_set` on that property now names `picture_set`.
