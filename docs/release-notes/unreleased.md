@@ -112,6 +112,19 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   to save.
 - **Help → About** is drawn: the build, the base, the application, the user, the locale, the plugins.
 
+## Forms
+
+- **A form field says how its value is chosen, over what its attribute says.** A text field and a
+  table column have `QuickChoice` (Auto — as the type says, Use, Don't use), `ChoiceFoldersAndItems`
+  (Auto — as the attribute's Select says, Items, Folders, Folders and items) and `ChoiceParameters`:
+  the attribute's table of rows, kept on the form. A row of the field's for the same parameter
+  replaces the attribute's row, the others are added to it, and a field chosen under a row of its
+  own is emptied when that row's field changes unless the row says Keep. MCP: `form_set {control,
+  property: "ChoiceParameters", value: {"Owner": "Counterparty"}}`, in the shape
+  `metadata_set_choice` takes, and `form_control` reads the three back.
+- **A choice narrowed by choice parameters opens the list form**, never the quick drop-down: the
+  drop-down holds every item of the type and was offered unnarrowed where a type has `QuickChoice`.
+
 ## Fixes
 
 - **A module nobody has compiled yet is compiled once.** Sessions entering a base together, with the

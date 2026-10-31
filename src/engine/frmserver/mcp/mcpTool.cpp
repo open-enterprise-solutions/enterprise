@@ -1076,6 +1076,127 @@ void ibMcpSayChoiceParameters(const ibPropertyObject* field, const ibChoiceParam
 	}
 }
 
+namespace {
+
+// The id a name stands for in one of the property's lists, and every name the list offers — for the refusal.
+ibMetaID ChoiceNamed(const ibPropertyChoiceList& list, const ibString& asked, ibString& offered)
+{
+	ibMetaID found = 0;
+	for (unsigned int idx = 0; idx < list.GetCount(); idx++) {
+		offered << (offered.IsEmpty() ? ibT("") : ibT(", ")) << list.GetName(idx);
+		if (list.GetName(idx).IsSameAs(asked, false))
+			found = list.GetId(idx);
+	}
+	return found;
+}
+
+} // namespace
+
+bool ibMcpReadChoiceParameters(const ibPropertyObject* field, ibPropertyChoiceParameters* property,
+	const ibString& named, const ibDataNode& rows, ibChoiceParametersDescription& paramsDesc, ibString& refusal)
+{
+	const ibMetaData* metaData = field != nullptr ? field->GetMetaData() : nullptr;
+	if (property == nullptr || metaData == nullptr) {
+		refusal = ibMcpText("There is no such property.");
+		return false;
+	}
+
+	// The neighbours a value may come from — the same list for every row, so it is asked once.
+	ibPropertyChoiceList sources;
+	property->GetSourceList(sources);
+
+	// …and the parameters, which are the TARGET's fields and so depend on which type it is.
+	ibPropertyChoiceList targets;
+	ibFieldReferenceTypes(field, targets);
+
+	paramsDesc.Clear();
+
+	// ⭐⭐ BOTH HALVES OF THE NODE, because a row may be written either way and the two do not
+	// land in the same place: a bare name is a FIELD, while `{from, on_change}` is a PROPERTY
+	// holding a child node — which is what ibDataNode::FindChild reads (dataBuilder.cpp).
+	//
+	// 🛑 THIS WALKED THE FIELDS ALONE, so the short form was written and the long one was
+	// DROPPED WITHOUT A WORD: the call came back reporting what was already set, which reads
+	// exactly like a call that asked to read. And the long form is the only way to say `keep`,
+	// so it could not be set at all — over a tool whose own description
+	// offers that spelling (found 2026-09-23, driving the tool over the wire).
+	std::vector<ibString> given;
+	for (const auto& entry : rows.Fields())
+		given.push_back(entry.first);
+
+	for (const ibString& parameter : given) {
+
+		ibChoiceParameterRowDescription row;
+
+		// The parameter, looked for in every type this field may hold: a composite field refers
+		// to more than one thing and they do not have the same fields.
+		ibString offeredParameters;
+		for (unsigned int type = 0; type < targets.GetCount() && row.m_parameter == 0; type++) {
+			ibPropertyChoiceList fields;
+			property->GetParameterList(metaData->GetIDObjectFromMetaID((ibMetaID)targets.GetId(type), ibCtorObjectMetaType::ibCtorObjectMetaType_Reference), fields);
+			ibString ofThisType;
+			row.m_parameter = ChoiceNamed(fields, parameter, ofThisType);
+			if (!ofThisType.IsEmpty())
+				offeredParameters << (offeredParameters.IsEmpty() ? ibT("") : ibT(", ")) << ofThisType;
+		}
+
+		if (row.m_parameter == 0) {
+			refusal = offeredParameters.IsEmpty()
+				? ibString::Format(ibMcpText("'%s' refers to nothing whose fields could be filtered - a choice "
+					"parameter narrows a list of something."), named)
+				: ibString::Format(ibMcpText("'%s' is not a field of what '%s' refers to. These are: %s."),
+					parameter, named, offeredParameters);
+			return false;
+		}
+
+		// The value's source, and optionally what becomes of an already chosen value.
+		auto cell = rows.FindChild(parameter);
+		auto said = cell ? cell->FindField(ibT("from")) : rows.FindField(parameter);
+		if (cell) {
+			if (auto mode = cell->FindField(ibT("on_change"))) {
+				const ibString word = mode->AsString();
+				if (word.IsSameAs(ibT("keep"), false)) row.m_onChange = ibChoiceParameterOnChange::Keep;
+				else if (!word.IsSameAs(ibT("clear"), false)) {
+					refusal = ibString::Format(
+						ibMcpText("'%s' is not what can become of a value: clear or keep."), word);
+					return false;
+				}
+			}
+		}
+
+		// 🛑 THE RIGHT SIDE IS A FIELD, NEVER A VALUE. A value written there (`"Closed": false`) used
+		// to read as an empty name, and an empty name removes the row: the call meant to add a
+		// condition took one away and answered as if it had done what it was asked.
+		if (said && said->Kind() != ibDataKind::String && said->Kind() != ibDataKind::Empty) {
+			refusal = ibString::Format(
+				ibMcpText("'%s' is given a value - a row takes its value from a FIELD beside '%s', by name, and "
+					"narrows by whatever that field holds. A fixed value has to stand in a field to narrow by it."),
+				parameter, named);
+			return false;
+		}
+		const ibString from = said ? said->AsString() : ibString();
+
+		// An empty source removes the row rather than writing a condition over nothing.
+		if (from.IsEmpty())
+			continue;
+
+		ibString offeredSources;
+		const ibMetaID source = ChoiceNamed(sources, from, offeredSources);
+		if (source == 0) {
+			refusal = offeredSources.IsEmpty()
+				? ibString::Format(ibMcpText("'%s' stands beside no other field to take a value from."), named)
+				: ibString::Format(ibMcpText("'%s' is not a field standing beside '%s'. These are: %s."),
+					from, named, offeredSources);
+			return false;
+		}
+
+		row.m_source.AppendSource(source);
+		paramsDesc.SetRow(row);
+	}
+
+	return true;
+}
+
 void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 	const ibString& only, bool editableOnly)
 {
@@ -1325,8 +1446,9 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 			entry->SetValue(ibT("kind"), ibString(ibT("choice")));
 			ibMcpSayChoiceParameters(object, rows->GetValueAsParametersDesc(), entry->Child(ibT("value")));
 			entry->SetValue(ibT("shape"), ibMcpText(
-				"Set through metadata_set_choice {id, parameters}, in this shape - the rows given replace the "
-				"table. A row whose field was deleted is dropped by itself; `<gone>` is a field this one can no "
+				"Set in this shape - through metadata_set_choice {id, parameters} on an attribute, through form_set "
+				"{control, property: ChoiceParameters, value} on a form field, whose rows stand over its attribute's. "
+				"The rows given replace the table. A row whose field was deleted is dropped by itself; `<gone>` is a field this one can no "
 				"longer name, and leaving it out of the rows sent removes it."));
 		}
 		else if (const ibPropertyCommandSource* wiring = dynamic_cast<const ibPropertyCommandSource*>(property)) {
@@ -1756,6 +1878,30 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 	// used to refuse every one of them as "not a caption", which closed that road to every composite property
 	// there is: a picture could be read here and not written back (found 2026-09-22 giving the Print group its
 	// printer; the way round built for it that day was the wrong fix, and this is the right one).
+	// ⭐ A CHOICE PARAMETERS TABLE TAKES ITS ROWS IN THE SHAPE IT IS READ IN — `{"Owner": "Counterparty"}` —
+	// through the one reading metadata_set_choice uses, whoever holds it: an attribute, or a form field whose
+	// rows stand over its attribute's (issue #259). An empty value empties the table.
+	if (ibPropertyChoiceParameters* asParameters = dynamic_cast<ibPropertyChoiceParameters*>(property)) {
+		ibChoiceParametersDescription paramsDesc;
+		if (auto rows = params.FindChild(ibMcpValueArgument().Name())) {
+			if (!ibMcpReadChoiceParameters(holder, asParameters, name, *rows, paramsDesc, refusal))
+				return false;
+		}
+		else if (auto said = params.FindField(ibMcpValueArgument().Name());
+			said && said->Kind() != ibDataKind::Empty && !said->AsString().IsEmpty()) {
+			refusal = ibMcpText("Choice parameters are rows, not a text: {\"<field of what is chosen>\": \"<field beside "
+				"this one>\"}, or {\"<field>\": {\"from\": \"<field>\", \"on_change\": \"keep\"}}. An empty value empties them.");
+			return false;
+		}
+
+		if (!ibMcpApplyByHand(property, ibVariant(new ibVariantChoiceParameters(holder, paramsDesc)), refusal))
+			return false;
+
+		result.SetValue(ibT("property"), name);
+		ibMcpSayChoiceParameters(holder, asParameters->GetValueAsParametersDesc(), result.Child(ibT("value")));
+		return true;
+	}
+
 	const ibPropertyTString* asCaption = dynamic_cast<const ibPropertyTString*>(property);
 	if (auto byLanguage = asCaption != nullptr ? params.FindChild(ibMcpValueArgument().Name()) : std::nullopt) {
 

@@ -208,6 +208,16 @@ bool ibValueTextCtrl::SetControlValue(const ibValue& varControlVal)
 		m_formOwner->SetValueByAttributePath(m_propertySource->GetValueAsSourceDesc(), varControlVal);
 	m_selValue = ibTypeControlFactory::AdjustValue(varControlVal);
 
+	// A field beside this one chosen under a row of its own that names this field is stale now.
+	if (column != nullptr && m_formOwner != nullptr) {
+		std::vector<ibTypeControlFactory*> neighbours;
+		for (ibValueControl* control : m_formOwner->GetControlList()) {
+			if (ibValueTextCtrl* field = dynamic_cast<ibValueTextCtrl*>(control))
+				neighbours.push_back(field);
+		}
+		ClearOwnLinked(neighbours);
+	}
+
 	// The text the field shows is formatted from the value on the next Update — nothing is pushed.
 	m_formOwner->RefreshForm();
 
@@ -217,6 +227,23 @@ bool ibValueTextCtrl::SetControlValue(const ibValue& varControlVal)
 ibChoiceHolder ibValueTextCtrl::GetChoiceHolder() const
 {
 	return m_formOwner != nullptr ? ibChoiceHolder(m_formOwner->GetSourceObject()) : ibChoiceHolder();
+}
+
+bool ibValueTextCtrl::HasQuickChoice() const
+{
+	ibValue current;
+	GetControlValue(current);
+	return ibTypeControlFactory::HasQuickChoice(m_propertyQuickChoice->GetValueAsEnum(),
+		ibValueWindow::HasQuickChoice(), current.GetClassType());
+}
+
+bool ibValueTextCtrl::GetOwnSelectMode(ibSelectMode& selectMode) const
+{
+	const ibChoiceFoldersAndItems own = m_propertyChoiceFoldersAndItems->GetValueAsEnum();
+	if (own == ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_Auto)
+		return false;
+	selectMode = static_cast<ibSelectMode>(own);
+	return true;
 }
 
 //*******************************************************************
@@ -235,6 +262,9 @@ bool ibValueTextCtrl::ReadData(const ibDataNode& node)
 	m_propertyClearButton->SetNodeValue(node.GetProperty(m_propertyClearButton->GetName()));
 	m_propertyChoiceForm->SetNodeValue(node.GetProperty(m_propertyChoiceForm->GetName()));
 	m_propertySource->SetNodeValue(node.GetProperty(m_propertySource->GetName()));
+	m_propertyQuickChoice->SetNodeValue(node.GetProperty(m_propertyQuickChoice->GetName()));
+	m_propertyChoiceFoldersAndItems->SetNodeValue(node.GetProperty(m_propertyChoiceFoldersAndItems->GetName()));
+	m_propertyChoiceParameters->SetNodeValue(node.GetProperty(m_propertyChoiceParameters->GetName()));
 
 	//events
 	m_eventOnChange->SetNodeValue(node.GetProperty(m_eventOnChange->GetName()));
@@ -259,6 +289,9 @@ bool ibValueTextCtrl::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyClearButton->GetName(), m_propertyClearButton->GetNodeValue());
 	node.SetProperty(m_propertyChoiceForm->GetName(), m_propertyChoiceForm->GetNodeValue());
 	node.SetProperty(m_propertySource->GetName(), m_propertySource->GetNodeValue());
+	node.SetProperty(m_propertyQuickChoice->GetName(), m_propertyQuickChoice->GetNodeValue());
+	node.SetProperty(m_propertyChoiceFoldersAndItems->GetName(), m_propertyChoiceFoldersAndItems->GetNodeValue());
+	node.SetProperty(m_propertyChoiceParameters->GetName(), m_propertyChoiceParameters->GetNodeValue());
 
 	//events
 	node.SetProperty(m_eventOnChange->GetName(), m_eventOnChange->GetNodeValue());
