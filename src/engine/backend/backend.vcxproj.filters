@@ -634,6 +634,9 @@
     <ClInclude Include="system\value\valueArray.h">
       <Filter>system\value</Filter>
     </ClInclude>
+    <ClInclude Include="system\value\valueList.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
     <ClInclude Include="system\value\valueColour.h">
       <Filter>system\value</Filter>
     </ClInclude>
@@ -1853,6 +1856,9 @@
       <Filter>system\value</Filter>
     </ClCompile>
     <ClCompile Include="system\value\valueArray.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
+    <ClCompile Include="system\value\valueList.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
     <ClCompile Include="system\value\valueColour.cpp">

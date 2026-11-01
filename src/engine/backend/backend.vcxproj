@@ -365,6 +365,7 @@
     <ClInclude Include="system\systemManager.h" />
     <ClInclude Include="system\systemManagerEnum.h" />
     <ClInclude Include="system\value\valueArray.h" />
+    <ClInclude Include="system\value\valueList.h" />
     <ClInclude Include="system\value\valueColour.h" />
     <ClInclude Include="system\value\valueEvent.h" />
     <ClInclude Include="system\value\valueBinaryData.h" />
@@ -861,6 +862,7 @@
     <ClCompile Include="system\systemManagerEnum.cpp" />
     <ClCompile Include="system\systemManagerFunc.cpp" />
     <ClCompile Include="system\value\valueArray.cpp" />
+    <ClCompile Include="system\value\valueList.cpp" />
     <ClCompile Include="system\value\valueColour.cpp" />
     <ClCompile Include="system\value\valueDatabasePrepareStatement.cpp" />
     <ClCompile Include="system\value\valueDatabaseResultSet.cpp" />

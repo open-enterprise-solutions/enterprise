@@ -150,6 +150,43 @@ long ibValueModelStorage::IndexOf(const ibValue& row) const
 	return row.ConvertToValue(line) ? GetRow(line->GetLineItem()) : wxNOT_FOUND;
 }
 
+// The work of a sort a script or a command asks for, shared by every model that holds its rows: a value table, a value
+// list (and whatever else keeps its rows here).
+void ibValueModelStorage::SeatRows(const ibString& column, bool ascending)
+{
+	// ⭐⭐ A SORT CHANGES THE DATA — the rows are re-seated, and that is the order the table then IS (Max,
+	// 2026-08-29: moving and sorting change the rows physically; a filter, a grouping or a setting is a layer
+	// ABOVE them and dies with the window). The composer's own sort is dropped again at the end: the rows now
+	// SIT in this order, and a read-order left on top would go on answering over them.
+	//
+	// L5-2 says WHAT the order is — nothing here compares — and the rows are then placed into it with the
+	// storage's own move. Sorting lives on L5, not in a loop.
+	ibDataRamComposer& composer = GetModelComposer();
+	composer.ClearSorts();
+	composer.Sort(column, ascending);
+	Storage().SetColumns(GetColumnCollection());
+	const std::vector<long> order = composer.ComputeOrder();
+	composer.ClearSorts();
+
+	// The rows in their new sequence, taken BEFORE anything moves — every move shifts the indices under it.
+	std::vector<ibComposerNode*> seated;
+	seated.reserve(order.size());
+	for (const long index : order)
+		if (ibComposerNode* node = Storage().GetNode(index))
+			seated.push_back(node);
+
+	// ⚠ Rows a FILTER hides are not in the order, so they come to rest AFTER the sorted ones, keeping their
+	// own relative order among themselves. Sorting what is shown cannot avoid saying something about what is not.
+	for (size_t position = 0; position < seated.size(); ++position) {
+		const long current = Storage().IndexOf(seated[position]);
+		if (current >= 0 && current != static_cast<long>(position))
+			Storage().MoveValue(this, seated[position],
+				static_cast<int>(static_cast<long>(position) - current), /*notify*/ false);
+	}
+
+	NotifyReset();
+}
+
 ibValue ibValueModelStorage::TotalOf(const ibString& column) const
 {
 	ibValueModelColumnCollection* const columns = GetColumnCollection();
