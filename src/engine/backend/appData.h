@@ -447,6 +447,7 @@ private:
 #ifdef OES_TESTING
 	friend struct LockSchemaAccess;   // the race test opens a base that already has sys_lock
 	friend struct JobSchemaAccess;    // the job runtime test writes job settings into a base it made
+	friend struct SettingsSchemaAccess;   // the full-text search test keeps its mode in a base it made itself
 #endif
 	// sys_job — the shared last-run clock for scheduled jobs and their settings (active / schedule).
 	static void CreateTableJob();
