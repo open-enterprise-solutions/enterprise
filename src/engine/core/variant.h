@@ -69,7 +69,7 @@ public:
 
 	// In the header, with the destructor: every value of the runtime is made and ended here, and the runtime is
 	// across a library's border from variant.cpp, where neither could be inlined.
-	ibVariant() : m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_refCount(0), m_dData() {}
+	ibVariant() noexcept : m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_refCount(0), m_dData() {}
 	ibVariant(const ibVariant& cParam);
 	ibVariant(ibVariant&& cParam);
 	ibVariant(ibVariant* pParam);
