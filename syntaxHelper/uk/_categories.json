@@ -39,6 +39,7 @@
     "metadata_enums": "Переліки об'єктів застосунку",
     "form_controls": "Елементи форми",
     "language_runtime": "Об'єкти виконання мови",
-    "application_runtime": "Об'єкти застосунку під час виконання"
+    "application_runtime": "Об'єкти застосунку під час виконання",
+    "full_text_search": "Повнотекстовий пошук"
   }
 }

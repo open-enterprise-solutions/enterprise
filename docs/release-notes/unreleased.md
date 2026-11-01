@@ -388,6 +388,11 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   default) - a row or a column, `Wrap` - a row that wraps, `Grid` - in `Cols` columns, `Group` - in a frame with a
   title. A decoration is a `Static`: `StaticView.Text`, its title, or `StaticView.Line`. A table column's `View` is
   `ColumnView.Input`, `Flag` - a check box for a Boolean, or `Label` - shown, not edited.
+- **`FullTextSearch`, the base's full-text search.** `GetFullTextSearchMode()` and
+  `SetFullTextSearchMode(FullTextSearchMode.Enable | Disable)` read and switch the mode, kept in the base
+  and changed with the *Data administration* right; a base where nobody switched it on answers `Disable`.
+  There is no index yet: `UpdateIndex(merge, portion)` and `ClearIndex()` succeed and do nothing,
+  `IndexTrue()` is `False` and `UpdateDate()` the empty date, so a module that keeps an index fresh runs.
 
 ## The browser client
 
