@@ -23,6 +23,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>OES</title>
 <link rel="icon" href="data:,">
+<!-- The machine's own theme before anything is drawn - the splash too; the person's, once the server has said it
+     (src/window/theme.js). -->
+<script>document.documentElement.dataset.theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';</script>
 <link rel="stylesheet" href="styles/tokens.css">
 <link rel="stylesheet" href="styles/splash.css">
 <script type="importmap">

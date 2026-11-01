@@ -57,6 +57,79 @@
 
 	/* A table's scrollbar over the window of rows it holds. */
 	--oes-pager: 12px;
+
+	/* A control's own look when its author picks none - the platform's (frmserver's default style): ink on cream. */
+	--oes-form-text: #3f5c77;
+	--oes-form-bg: #faf7f0;
+
+	/* What stands on a coloured fill - a message's mark, the offline strip. */
+	--oes-on-colour: #ffffff;
+	/* A form's colour named on one side alone - its text or its fill - is paired with the light theme's other side,
+	   whatever the theme: the author chose it against that one (control.js, sheet.js, rows.js). */
+	--oes-paper: #ffffff;
+	--oes-paper-text: #222222;
+	/* The light a command bar is lit by, from the top down. */
+	--oes-bar-shine-top: rgb(255 255 255 / 0.5);
+	--oes-bar-shine-bottom: rgb(0 0 0 / 0.05);
+	/* What a raised thing throws: a dialog, a menu, a sheet's editor. */
+	--oes-shadow: rgb(0 0 0 / 0.12);
+	--oes-shadow-strong: rgb(0 0 0 / 0.15);
+	/* What is laid over a window the session ended on. */
+	--oes-veil: rgb(255 255 255 / 0.9);
+}
+
+/* THE DARK THEME - the same palette, the window dark and the ink light (src/window/theme.js sets data-theme from the
+   person's choice, or from the machine's own when they chose the system's). Every colour our stylesheets paint with is
+   one of the tokens above, and the grid's own colours are laid over with them (form.css); Web Awesome's components
+   follow its wa-dark class. A colour a form names for itself stays what it named. On the screen alone: paper is
+   white, and a printout keeps the light ink. */
+@media screen {
+	:root[data-theme="dark"] {
+		color-scheme: dark;
+
+		--oes-window-bg: #1b1d21;
+		--oes-panel-bg: #24272c;
+		--oes-border: #3a3f46;
+		--oes-text: #e4e6ea;
+		--oes-muted: #9aa3ae;
+		--oes-accent: #8197e8;
+
+		--oes-table-bg: #24272c;
+		--oes-table-text: #e4e6ea;
+		--oes-table-border: #3a3f46;
+		--oes-table-header-bg: #2c3036;
+		--oes-table-header-text: #e4e6ea;
+		--oes-table-row-alt-bg: #282b30;
+		--oes-table-row-hover-bg: #30343a;
+		--oes-table-row-selected-bg: #2b4a6b;
+		--oes-sheet-cell-selected: rgb(129 151 232 / 0.25);
+
+		--oes-sections-bg: #1f2a33;
+		--oes-section-bg: #27333d;
+		--oes-section-border: #34444f;
+		--oes-section-text: #dfe6ec;
+		--oes-section-ink: #9cc3e6;
+
+		--oes-message-information: #5aa3e6;
+		--oes-message-warning: #e8b33a;
+		--oes-message-error: #e5675a;
+
+		--oes-splash-arrow: #3fb3ea;
+
+		--oes-table-cell-current-bg: #2f4d6e;
+		--oes-table-row-current-bg: #29425e;
+		--oes-table-crumb-bg: #2a3d4b;
+
+		--oes-form-text: #c9d6e2;
+		--oes-form-bg: #22262b;
+
+		--oes-on-colour: #16181b;
+		--oes-bar-shine-top: rgb(255 255 255 / 0.06);
+		--oes-bar-shine-bottom: rgb(0 0 0 / 0.2);
+		--oes-shadow: rgb(0 0 0 / 0.45);
+		--oes-shadow-strong: rgb(0 0 0 / 0.55);
+		--oes-veil: rgb(20 22 26 / 0.9);
+	}
 }
 
 /* THE PAGE'S SIZE — a desktop form's, as close as the thin client's: everything is in rem, so the root says it once. A

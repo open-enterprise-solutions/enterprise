@@ -124,7 +124,7 @@ oes-clientform [disabled] {
 	align-items: center;
 	gap: 2px;
 	padding: 0.125rem 0.25rem;
-	background-image: linear-gradient(to bottom, rgb(255 255 255 / 0.5), rgb(0 0 0 / 0.05));
+	background-image: linear-gradient(to bottom, var(--oes-bar-shine-top), var(--oes-bar-shine-bottom));
 	border-block: 1px solid var(--oes-border);
 }
 
@@ -351,6 +351,28 @@ oes-tablebox .tabulator .tabulator-header .tabulator-col {
 oes-tablebox .tabulator .tabulator-row {
 	background: var(--oes-table-bg);
 	min-height: var(--oes-touch);
+}
+
+/* The grid's own stylesheet paints the rows' holder, the totals under them, the footer and a column being dragged in
+   its colours, black on white; the cells' text is inherited from the holder. Ours instead, in either theme. The
+   totals' row is !important there, so it is here. */
+oes-tablebox .tabulator .tabulator-tableholder .tabulator-table {
+	background: var(--oes-table-bg);
+	color: var(--oes-table-text);
+}
+
+oes-tablebox .tabulator .tabulator-footer,
+oes-tablebox .tabulator .tabulator-calcs-holder,
+oes-tablebox .tabulator .tabulator-calcs-holder .tabulator-row {
+	background: var(--oes-table-header-bg) !important;
+	color: var(--oes-table-header-text);
+	border-color: var(--oes-table-border);
+}
+
+oes-tablebox .tabulator .tabulator-col.tabulator-moving {
+	background: var(--oes-table-header-bg);
+	color: var(--oes-table-header-text);
+	border-color: var(--oes-table-border);
 }
 
 /* A cell's text is not taken by a double click: a double click activates the row. */
@@ -610,7 +632,7 @@ oes-gridbox .compose-state {
 	background: var(--oes-window-bg);
 	border: 1px solid var(--oes-border);
 	border-radius: 6px;
-	box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+	box-shadow: 0 2px 8px var(--oes-shadow);
 }
 
 /* The figures taken, summed over the sheet's lower corner, clear of its scrollbars — as a spreadsheet program's status

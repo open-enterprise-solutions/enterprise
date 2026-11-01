@@ -13264,3 +13264,27 @@ msgstr ""
 #: src/engine/frmclient/mainFrame/settings/settingsdialog.cpp:39
 msgid "Debugging"
 msgstr ""
+
+#: src/engine/frmserver/client/clientFrameRuntime.cpp
+msgid "Theme..."
+msgstr ""
+
+#: src/engine/frmclient/mainFrame/mainFrame.cpp
+msgid "As the system is set"
+msgstr ""
+
+#: src/engine/frmclient/mainFrame/mainFrame.cpp
+msgid "Light"
+msgstr ""
+
+#: src/engine/frmclient/mainFrame/mainFrame.cpp
+msgid "Dark"
+msgstr ""
+
+#: src/engine/frmclient/mainFrame/mainFrame.cpp
+msgid "The theme the interface is painted in:"
+msgstr ""
+
+#: src/engine/frmserver/schema/style.cpp
+msgid "The theme could not be kept"
+msgstr ""
