@@ -1,0 +1,23 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "cls.UserMessage",
+      "name_local": "UserMessage",
+      "name_en": "UserMessage",
+      "kind": "class",
+      "category_keys": ["value_types"],
+      "signature": "New UserMessage(text, field, dataPath, dataKey)",
+      "description": "A message meant for one field. Text is what is said. Field, DataPath and DataKey name the control. Message() posts the text the way the global Message does. A form does not yet draw it beside the control.",
+      "syntax_block": "New UserMessage(text, field, dataPath, dataKey)",
+      "parameters": "text — the words. field — the control name. dataPath — the attribute path. dataKey — the row, when the field is in a table. All may be omitted.",
+      "return_descr": "UserMessage.",
+      "example": "msg = New UserMessage(\"Amount is empty\", \"Amount\");\nmsg.Message();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": ["fn.Message"],
+      "reviewed": true
+    }
+  ]
+}
