@@ -223,6 +223,7 @@
     <ClCompile Include="launchTicket.cpp" />
     <ClCompile Include="startProcess.cpp" />
     <ClCompile Include="stringTokenizer.cpp" />
+    <ClCompile Include="timeZone.cpp" />
     <ClCompile Include="typeName.cpp" />
     <ClCompile Include="variant.cpp" />
     <ClCompile Include="query\queryAggregates.cpp">
@@ -474,6 +475,7 @@
     <ClInclude Include="roleCompositionMode.h" />
     <ClInclude Include="selectorDataType.h" />
     <ClInclude Include="startProcess.h" />
+    <ClInclude Include="timeZone.h" />
     <ClInclude Include="typeName.h" />
     <ClInclude Include="variant.h" />
     <ClInclude Include="variant_ptr.h" />

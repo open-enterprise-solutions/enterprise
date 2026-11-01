@@ -71,11 +71,26 @@ Jobs, sessions, locks and settings keep `ibDateTime`. Where a span has to be rea
 liveness, a job's last run - it is `ElapsedSince`, measured through this machine's zone, so a change
 of the clocks between two readings is not an hour of silence.
 
+## Zones
+
+The value has no zone; a zone is asked only where a reading has to be told in another one. `ibTimeZone`
+(`core/timeZone.h`) is that one door: a zone by its IANA name (`Europe/Kyiv`), `ToLocal` and `ToUniversal`
+between universal time and its clock. A reading the clocks skip is the moment they skip at; one they show
+twice is the first of the two; the empty date stays empty; nothing is put before year 1. The rules are the IANA
+database's, none shipped: `std::chrono::tzdb` under MSVC (from Windows' ICU), the date library over the
+system's zoneinfo on Linux and macOS, where the toolchains have no C++20 tzdb yet - so a Linux or macOS server
+needs its `tzdata`. Past the last transition a zone file lists (they are written to 2037) its own POSIX rule
+answers, so summer time holds there as it does on Windows - except in the few zones whose rule changes the clocks
+at an hour outside 0..24 (Jerusalem, Nuuk, Gaza), which the library does not read: there it is the listed
+transitions alone, to 2037. A zone the database renamed is found by its old name
+and its new (`Europe/Kiev`, `Europe/Kyiv`): Windows answers some by the old, a stock Linux has only the new. On
+Linux and macOS the machine's zone is `TZ` first, as the C runtime's clock reads it. A name the rules have not is
+refused. On Windows the machine's zone is the system's setting; `TZ` is not read.
+
 ## Where it stops
 
-- The zone is not in the value. A base whose clients stand in different zones needs "now" read from
-  the base's own clock, in the base's zone; that answer belongs in `ibDateTime::Now()`, the one door
-  every caller already goes through.
+- The zone is not in the value. A session that stands in another zone than the server needs its own
+  "now" - the server's clock told in the session's zone, through `ibTimeZone`.
 - A reading before year 1 or past 9999 is counted and printed, by the general formatter.
 
 ## Tested across clocks
