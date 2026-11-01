@@ -406,13 +406,18 @@ bool ibValueMetaObjectCommonForm::WriteData(ibDataNode& node) const
 
 ibFormPtr<ibBackendValueForm> ibValueMetaObjectCommonForm::GetObjectForm(ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
 {
+	return GetObjectForm(ibFormRequest(ibString(), formGuid), ownerControl);
+}
+
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectCommonForm::GetObjectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
+{
 	if (!AccessRight_Use()) {
 		ibBackendAccessException::Error(ibString::Format(_("opening form '%s'"), GetSynonym()));
 		return nullptr;
 	}
 
 	return ibValueMetaObjectFormBase::CreateAndBuildForm(
-		ibFormRequest(ibString(), formGuid),
+		request,
 		this,
 		ownerControl,
 		nullptr

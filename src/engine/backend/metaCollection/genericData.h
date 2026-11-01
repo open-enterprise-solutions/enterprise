@@ -246,6 +246,12 @@ public:
 	//support form 
 	ibFormPtr<ibBackendValueForm> GetGenericForm(const ibFormRequest& request = ibFormRequest(),
 		ibBackendControlFrame* ownerControl = nullptr) const;
+
+	// A form of mine of the kind `form_id` (the request may name which one), over the source that kind
+	// implies — a new object for an object form, the list for a list form. How a form named by its full
+	// name is made (GetForm): the name says the kind, and the kind says the source.
+	ibFormPtr<ibBackendValueForm> GetFormOfType(const ibFormRequest& request, const ibFormID& form_id,
+		ibBackendControlFrame* ownerControl = nullptr) const;
 #pragma endregion
 
 #pragma region _form_creator_h_

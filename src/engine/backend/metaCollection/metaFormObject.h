@@ -303,6 +303,9 @@ class BACKEND_API ibValueMetaObjectCommonForm :
 	//support form
 	virtual ibFormPtr<ibBackendValueForm> GetObjectForm(ibBackendControlFrame* ownerControl = nullptr,
 		const ibUniqueKey& formGuid = wxNullGuid) const override;
+
+	// …and with a whole request: the window key in it, and the parameters the form reads as its Parameters.
+	ibFormPtr<ibBackendValueForm> GetObjectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const;
 #pragma endregion
 
 protected:

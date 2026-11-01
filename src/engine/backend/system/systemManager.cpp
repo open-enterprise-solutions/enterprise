@@ -135,7 +135,9 @@ enum
 	enHexString,
 	enHexValue,
 	enBase64String,
-	enBase64Value
+	enBase64Value,
+	//--- A form by its full name, with parameters: at the END, for the same reason.
+	enGetForm
 };
 
 void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
@@ -271,6 +273,7 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	helper.AppendFunc(ibT("HexValue"), 1, ibT("HexValue(text : string)"));
 	helper.AppendFunc(ibT("Base64String"), 1, ibT("Base64String(data : BinaryData)"));
 	helper.AppendFunc(ibT("Base64Value"), 1, ibT("Base64Value(text : string)"));
+	helper.AppendFunc(ibT("GetForm"), 4, ibT("GetForm(fullName : string, parameters : Structure, owner : any, uniqueness : any)"));
 };
 
 #include "backend/compiler/enumUnit.h"
@@ -464,6 +467,11 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 			return true;
 		case enGetCommonTemplate:
 			pvarRetValue = GetCommonTemplate(paParams[0]->GetString());
+			return true;
+		case enGetForm: pvarRetValue = GetForm(paParams[0]->GetString(),
+			lSizeArray > 1 ? *paParams[1] : ibValue(),
+			lSizeArray > 2 ? *paParams[2] : ibValue(),
+			lSizeArray > 3 ? *paParams[3] : ibValue());
 			return true;
 			//--- Transactions:
 		case enBeginTransaction: BeginTransaction(); return true;

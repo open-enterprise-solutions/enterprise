@@ -13264,3 +13264,48 @@ msgstr ""
 #: src/engine/frmclient/mainFrame/settings/settingsdialog.cpp:39
 msgid "Debugging"
 msgstr ""
+
+#: src/engine/backend/system/formName.cpp:92
+#, c-format
+msgid "'%s' is not a form name: a form is named Kind.Name.Form.FormName, Kind.Name.ObjectForm (or ListForm, ChoiceForm, GroupForm, GroupChoiceForm, RecordForm, Form) or CommonForm.Name"
+msgstr ""
+
+#: src/engine/backend/system/formName.cpp:118
+#, c-format
+msgid "'%s' is not a form name: '%s' is not a kind of object that has forms"
+msgstr ""
+
+#: src/engine/backend/system/formName.cpp:159
+#, c-format
+msgid "Form '%s' not found: there is no common form '%s'"
+msgstr ""
+
+#: src/engine/backend/system/formName.cpp:170
+#, c-format
+msgid "Form '%s' not found: there is no %s '%s'"
+msgstr ""
+
+#: src/engine/backend/system/formName.cpp:178
+#, c-format
+msgid "Form '%s' not found: %s '%s' has no form '%s'"
+msgstr ""
+
+#: src/engine/backend/system/formName.cpp:198
+#, c-format
+msgid "Form '%s' not found: %s '%s' has no form of this kind"
+msgstr ""
+
+#: src/engine/backend/system/systemManagerFunc.cpp:1055
+#, c-format
+msgid "GetForm: the parameters are a Structure, not %s"
+msgstr ""
+
+#: src/engine/backend/system/systemManagerFunc.cpp:1103
+#, c-format
+msgid "Form '%s': the Key parameter is not a reference to %s"
+msgstr ""
+
+#: src/engine/backend/system/systemManagerFunc.cpp:1108
+#, c-format
+msgid "Form '%s': the object of the Key parameter cannot be read"
+msgstr ""

@@ -1034,6 +1034,85 @@ void ibValueSystemFunction::ShowCommonForm(const ibFormRequest& request, ibBacke
 	if (valueForm != nullptr) valueForm->ShowForm();
 }
 
+#include <array>                                              // GetForm's key made of a value
+
+#include "backend/system/formName.h"
+#include "backend/system/value/valueGuid.h"
+#include "backend/system/value/valueMap.h"                    // GetForm's parameters
+#include "backend/metaCollection/partial/commonObject.h"      // …the object a Key opens
+#include "backend/metaCollection/partial/reference/reference.h"
+
+ibFormRequest ibValueSystemFunction::MakeFormRequest(const ibString& formName, const ibValue& parameters, const ibValue& uniqueness)
+{
+	ibFormRequest request(formName);
+
+	// ⭐ THE PARAMETERS ARE A STRUCTURE (or any name → value container), and nothing else: a value of
+	// another kind is refused by name rather than read as "no parameters", which would open a form that
+	// silently ignored what it was asked to show.
+	if (!parameters.IsEmpty()) {
+		ibValueContainer* container = nullptr;
+		if (!parameters.ConvertToValue(container))
+			ibBackendCoreException::Error(_("GetForm: the parameters are a Structure, not %s"), parameters.GetClassName());
+		for (long idx = 0; idx < container->GetNProps(); idx++) {
+			ibValue value;
+			if (container->GetPropVal(idx, value))
+				request.Set(container->GetPropName(idx), value);
+		}
+	}
+
+	// ⭐ ANY VALUE IS A KEY: a second request with an equal value finds the window the first one opened.
+	// A Guid is the key itself; any other value is made one from its type and its hash — the identity
+	// lives as long as the process does, which is as long as the windows it finds.
+	ibValueGuid* guid = nullptr;
+	if (uniqueness.ConvertToValue(guid)) {
+		request.m_formGuid = ibGuid(*guid);
+	}
+	else if (!uniqueness.IsEmpty()) {
+		const uint64_t kind = (uint64_t)uniqueness.GetClassType();
+		const uint64_t hash = (uint64_t)uniqueness.GetValueHash();
+		std::array<unsigned char, 16> bytes{};
+		for (size_t i = 0; i < 8; i++) {
+			bytes[i] = (unsigned char)(kind >> (8 * i));
+			bytes[8 + i] = (unsigned char)(hash >> (8 * i));
+		}
+		request.m_formGuid = ibGuid(bytes);
+	}
+
+	return request;
+}
+
+ibValue ibValueSystemFunction::GetForm(const ibString& fullName, const ibValue& parameters, const ibValue& owner, const ibValue& uniqueness)
+{
+	const ibFormName name = ibFormName::Resolve(activeMetaData, fullName);
+
+	const ibFormRequest request = MakeFormRequest(
+		name.m_form != nullptr ? name.m_form->GetName() : ibString(), parameters, uniqueness);
+
+	// Narrowed by the cast that refuses by itself: an owner that is not a window is a mistake to name.
+	ibBackendControlFrame* const ownerControl = !owner.IsEmpty() ? owner.ConvertToType<ibBackendControlFrame>() : nullptr;
+
+	if (name.m_commonForm != nullptr)
+		return name.m_commonForm->GetObjectForm(request, ownerControl);
+
+	// ⭐ A KEY OPENS THE OBJECT IT REFERS TO — in an object form, and only a reference to this form's own
+	// object: a key to something else is the caller's mistake, said with both names.
+	const ibValue key = request.Get(ibT("Key"));
+	if (name.IsObjectForm() && !key.IsEmpty()) {
+		ibValueReferenceDataObject* reference = nullptr;
+		if (!key.ConvertToValue(reference) || reference->GetSourceMetaObject() != name.m_owner)
+			ibBackendCoreException::Error(_("Form '%s': the Key parameter is not a reference to %s"),
+				fullName, name.m_owner->GetFullName());
+		if (!reference->IsEmptyRef()) {
+			const ibValuePtr<ibValueRecordDataObjectRef> object = reference->GetObject();
+			if (object == nullptr)
+				ibBackendCoreException::Error(_("Form '%s': the object of the Key parameter cannot be read"), fullName);
+			return object->GetFormValue(request, ownerControl);
+		}
+	}
+
+	return name.m_owner->GetFormOfType(request, name.m_formType, ownerControl);
+}
+
 #include "backend/system/value/valueSpreadsheet.h"
 
 ibValue ibValueSystemFunction::GetCommonTemplate(const ibString& strTemplateName)

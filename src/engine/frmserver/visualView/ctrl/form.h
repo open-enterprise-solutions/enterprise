@@ -568,6 +568,9 @@ private:
 	// re-opened with different parameters, it is made again.
 	ibFormRequest m_request;
 
+	// …and its values as the module reads them: ThisForm.Parameters, made from m_request on first read.
+	ibValue m_parameters;
+
 	// The form's typed source registry: each entry OWNS an attribute (its definition)
 	// and holds, separately, the runtime VALUE that attribute manages. Held by unique_ptr
 	// so a returned entry pointer stays valid across vector growth. The MAIN entry is the

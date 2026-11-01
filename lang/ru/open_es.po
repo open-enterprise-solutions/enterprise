@@ -13602,3 +13602,48 @@ msgstr "Ассистент с доступом к данным"
 #: src/engine/frmclient/mainFrame/settings/settingsdialog.cpp:39
 msgid "Debugging"
 msgstr "Отладка"
+
+#: src/engine/backend/system/formName.cpp:92
+#, c-format
+msgid "'%s' is not a form name: a form is named Kind.Name.Form.FormName, Kind.Name.ObjectForm (or ListForm, ChoiceForm, GroupForm, GroupChoiceForm, RecordForm, Form) or CommonForm.Name"
+msgstr "'%s' - не имя формы: форма называется Вид.Имя.Form.ИмяФормы, Вид.Имя.ObjectForm (или ListForm, ChoiceForm, GroupForm, GroupChoiceForm, RecordForm, Form) или CommonForm.Имя"
+
+#: src/engine/backend/system/formName.cpp:118
+#, c-format
+msgid "'%s' is not a form name: '%s' is not a kind of object that has forms"
+msgstr "'%s' - не имя формы: '%s' - не вид объекта, у которого есть формы"
+
+#: src/engine/backend/system/formName.cpp:159
+#, c-format
+msgid "Form '%s' not found: there is no common form '%s'"
+msgstr "Форма '%s' не найдена: нет общей формы '%s'"
+
+#: src/engine/backend/system/formName.cpp:170
+#, c-format
+msgid "Form '%s' not found: there is no %s '%s'"
+msgstr "Форма '%s' не найдена: нет объекта %s '%s'"
+
+#: src/engine/backend/system/formName.cpp:178
+#, c-format
+msgid "Form '%s' not found: %s '%s' has no form '%s'"
+msgstr "Форма '%s' не найдена: у объекта %s '%s' нет формы '%s'"
+
+#: src/engine/backend/system/formName.cpp:198
+#, c-format
+msgid "Form '%s' not found: %s '%s' has no form of this kind"
+msgstr "Форма '%s' не найдена: у объекта %s '%s' нет формы этого вида"
+
+#: src/engine/backend/system/systemManagerFunc.cpp:1055
+#, c-format
+msgid "GetForm: the parameters are a Structure, not %s"
+msgstr "GetForm: параметры задаются Структурой, а не %s"
+
+#: src/engine/backend/system/systemManagerFunc.cpp:1103
+#, c-format
+msgid "Form '%s': the Key parameter is not a reference to %s"
+msgstr "Форма '%s': параметр Key - не ссылка на %s"
+
+#: src/engine/backend/system/systemManagerFunc.cpp:1108
+#, c-format
+msgid "Form '%s': the object of the Key parameter cannot be read"
+msgstr "Форма '%s': объект из параметра Key не удаётся прочитать"

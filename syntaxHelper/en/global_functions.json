@@ -1858,6 +1858,25 @@
       "reviewed": true
     },
     {
+      "id": "fn.GetForm",
+      "name_local": "GetForm",
+      "name_en": "GetForm",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "GetForm(fullName : string, parameters : Structure, owner : any, uniqueness : any)",
+      "description": "Makes a form by its full name and RETURNS it without showing it, so it can be set up first — then opened, or used as a dialog. The name may be built at run time: Kind.Name.Form.FormName for a form the object declares, Kind.Name.ObjectForm (ListForm, ChoiceForm, GroupForm, GroupChoiceForm, RecordForm; plain Form is the object form) for the object's own form of that kind, CommonForm.Name for a common form. The kind is the metatype's name (Catalog, Document, Report, DataProcessor, …), or that name in Russian or Ukrainian.",
+      "syntax_block": "GetForm(fullName : string, parameters : Structure, owner : any, uniqueness : any)",
+      "parameters": "fullName — the form's full name. parameters — a Structure the form reads as its Parameters, from OnCreateAtServer on; a Key in it that refers to the object of an object form opens that object (optional). owner — the owning window (optional). uniqueness — any value; asking again with an equal one finds the form the first request made (optional).",
+      "return_descr": "The form. A name that names no form raises an error that quotes the name.",
+      "example": "var form = GetForm(\"Document.Invoice.ObjectForm\", New Structure(\"Key\", ref));\nform.Show();",
+      "availability": "Thin client, Server",
+      "see_also": ["fn.GetCommonForm", "fn.ShowCommonForm"],
+      "reviewed": true
+    },
+    {
       "id": "fn.BeginTransaction",
       "name_local": "BeginTransaction",
       "name_en": "BeginTransaction",
