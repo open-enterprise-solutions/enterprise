@@ -1,0 +1,248 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "uk",
+  "entries": [
+    {
+      "id": "cls.FullTextSearch",
+      "name_local": "FullTextSearch",
+      "name_en": "FullTextSearch",
+      "kind": "collection",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearch",
+      "description": "Повнотекстовий пошук бази: чи ввімкнено його, і обслуговування його індексу. Глобальне ім'я сервера.\n\nРЕЖИМ НАЛЕЖИТЬ БАЗІ — один для всіх сеансів і всіх людей, зберігається в базі, змінює його той, хто має право «Адміністрування даних». База, де пошук ніхто не вмикав, відповідає FullTextSearchMode.Disable.\n\nІНДЕКСУ ПОКИ НЕМАЄ. Доки платформа його не веде, обслуговування проходить успішно й нічого не робить: IndexTrue() — False, UpdateDate() — порожня дата, UpdateIndex() і ClearIndex() повертаються, нічого не змінивши, — за будь-якого режиму. Модуль, що лише підтримує індекс свіжим (регламентне завдання, форма адміністрування), компілюється й працює так само, як працюватиме, коли індекс з'явиться.",
+      "syntax_block": "If FullTextSearch.GetFullTextSearchMode() = FullTextSearchMode.Enable Then\n    FullTextSearch.UpdateIndex(False, True);\nEndIf;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "// a scheduled job keeping the index fresh\nif (FullTextSearch.GetFullTextSearchMode() = FullTextSearchMode.Enable) {\n    FullTextSearch.UpdateIndex(false, true);\n}",
+      "availability": "Сервер",
+      "see_also": [
+        "cls.FullTextSearch.GetFullTextSearchMode",
+        "cls.FullTextSearch.SetFullTextSearchMode",
+        "cls.FullTextSearch.IndexTrue",
+        "cls.FullTextSearch.UpdateIndex",
+        "cls.FullTextSearch.ClearIndex",
+        "cls.FullTextSearch.UpdateDate",
+        "enum.FullTextSearchMode"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearch.GetFullTextSearchMode",
+      "name_local": "GetFullTextSearchMode",
+      "name_en": "GetFullTextSearchMode",
+      "kind": "method",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearch.GetFullTextSearchMode() : FullTextSearchMode",
+      "description": "Режим повнотекстового пошуку бази, як він зберігається в базі. Якщо нічого не збережено — FullTextSearchMode.Disable. Режим, якого ця збірка не знає, відхиляється з його номером, а не читається як один із двох.",
+      "syntax_block": "Mode = FullTextSearch.GetFullTextSearchMode();",
+      "parameters": "",
+      "return_descr": "FullTextSearchMode.",
+      "example": "if (FullTextSearch.GetFullTextSearchMode() = FullTextSearchMode.Disable) {\n    Message(\"Full-text search is off\");\n}",
+      "availability": "Сервер",
+      "see_also": [
+        "cls.FullTextSearch",
+        "cls.FullTextSearch.SetFullTextSearchMode",
+        "enum.FullTextSearchMode"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearch.SetFullTextSearchMode",
+      "name_local": "SetFullTextSearchMode",
+      "name_en": "SetFullTextSearchMode",
+      "kind": "procedure",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearch.SetFullTextSearchMode(mode : FullTextSearchMode)",
+      "description": "Вмикає чи вимикає повнотекстовий пошук бази — для всіх сеансів. Потрібне право «Адміністрування даних»; без нього виклик відхиляється, і режим лишається попереднім. Режим, що не є значенням FullTextSearchMode (число, рядок), відхиляється. Якщо база не прийняла запис, виклик теж відхиляється, а журнал технології каже чому.",
+      "syntax_block": "FullTextSearch.SetFullTextSearchMode(FullTextSearchMode.Enable);",
+      "parameters": "mode — значення FullTextSearchMode: Enable або Disable.",
+      "return_descr": "",
+      "example": "FullTextSearch.SetFullTextSearchMode(FullTextSearchMode.Enable);\nMessage(FullTextSearch.GetFullTextSearchMode());",
+      "availability": "Сервер",
+      "see_also": [
+        "cls.FullTextSearch",
+        "cls.FullTextSearch.GetFullTextSearchMode",
+        "enum.FullTextSearchMode"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearch.IndexTrue",
+      "name_local": "IndexTrue",
+      "name_en": "IndexTrue",
+      "kind": "method",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearch.IndexTrue() : boolean",
+      "description": "Чи містить індекс усе, що є в базі. Доки платформа індекс не веде — False: нічого не проіндексовано, отже, нічого й не актуальне.",
+      "syntax_block": "Fresh = FullTextSearch.IndexTrue();",
+      "parameters": "",
+      "return_descr": "Булеве.",
+      "example": "if (!FullTextSearch.IndexTrue()) {\n    FullTextSearch.UpdateIndex();\n}",
+      "availability": "Сервер",
+      "see_also": [
+        "cls.FullTextSearch",
+        "cls.FullTextSearch.UpdateIndex",
+        "cls.FullTextSearch.UpdateDate"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearch.UpdateIndex",
+      "name_local": "UpdateIndex",
+      "name_en": "UpdateIndex",
+      "kind": "procedure",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearch.UpdateIndex(merge : boolean = false, portion : boolean = false)",
+      "description": "Приводить індекс у відповідність до бази. Доки платформа індекс не веде, проходить успішно й нічого не робить — за будь-якого режиму. Прапорець, що не є Булевим, відхиляється.",
+      "syntax_block": "FullTextSearch.UpdateIndex(merge, portion);",
+      "parameters": "merge — True, щоб злити частини індексу в одну. Не вказано — False.\nportion — True, щоб проіндексувати порцію змін і повернутися. Не вказано — False.",
+      "return_descr": "",
+      "example": "// a scheduled job: a portion at a time, merged at night\nFullTextSearch.UpdateIndex(false, true);",
+      "availability": "Сервер",
+      "see_also": [
+        "cls.FullTextSearch",
+        "cls.FullTextSearch.IndexTrue",
+        "cls.FullTextSearch.ClearIndex"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearch.ClearIndex",
+      "name_local": "ClearIndex",
+      "name_en": "ClearIndex",
+      "kind": "procedure",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearch.ClearIndex()",
+      "description": "Очищує індекс, щоб наступний UpdateIndex побудував його заново. Доки платформа індекс не веде, проходить успішно й нічого не робить. Режим не змінюється.",
+      "syntax_block": "FullTextSearch.ClearIndex();",
+      "parameters": "",
+      "return_descr": "",
+      "example": "FullTextSearch.ClearIndex();\nFullTextSearch.UpdateIndex();",
+      "availability": "Сервер",
+      "see_also": [
+        "cls.FullTextSearch",
+        "cls.FullTextSearch.UpdateIndex"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearch.UpdateDate",
+      "name_local": "UpdateDate",
+      "name_en": "UpdateDate",
+      "kind": "method",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearch.UpdateDate() : date",
+      "description": "Коли індекс востаннє було приведено в актуальний стан. Доки платформа індекс не веде — порожня дата: жодного разу.",
+      "syntax_block": "Updated = FullTextSearch.UpdateDate();",
+      "parameters": "",
+      "return_descr": "Дата.",
+      "example": "Message(FullTextSearch.UpdateDate());",
+      "availability": "Сервер",
+      "see_also": [
+        "cls.FullTextSearch",
+        "cls.FullTextSearch.UpdateIndex"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.FullTextSearchMode",
+      "name_local": "FullTextSearchMode",
+      "name_en": "FullTextSearchMode",
+      "kind": "enum_type",
+      "class_id": 428523194804503701,
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchMode.Enable, .Disable",
+      "description": "Чи веде база повнотекстовий пошук: два значення, пишуться FullTextSearchMode.<Ім'я>. Їх отримує SetFullTextSearchMode і повертає GetFullTextSearchMode.",
+      "syntax_block": "FullTextSearch.SetFullTextSearchMode(FullTextSearchMode.Enable);",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Message(FullTextSearch.GetFullTextSearchMode() = FullTextSearchMode.Enable);",
+      "availability": "Сервер",
+      "see_also": [
+        "enum.FullTextSearchMode.Enable",
+        "enum.FullTextSearchMode.Disable",
+        "cls.FullTextSearch"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.FullTextSearchMode.Enable",
+      "name_local": "Enable",
+      "name_en": "Enable",
+      "kind": "system_enum",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchMode.Enable",
+      "description": "Повнотекстовий пошук увімкнено.",
+      "syntax_block": "FullTextSearch.SetFullTextSearchMode(FullTextSearchMode.Enable);",
+      "parameters": "",
+      "return_descr": "FullTextSearchMode.",
+      "example": "FullTextSearch.SetFullTextSearchMode(FullTextSearchMode.Enable);",
+      "availability": "Сервер",
+      "see_also": [
+        "enum.FullTextSearchMode",
+        "cls.FullTextSearch.SetFullTextSearchMode"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.FullTextSearchMode.Disable",
+      "name_local": "Disable",
+      "name_en": "Disable",
+      "kind": "system_enum",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchMode.Disable",
+      "description": "Повнотекстовий пошук вимкнено — так само відповідає база, де його ніхто не вмикав.",
+      "syntax_block": "FullTextSearch.SetFullTextSearchMode(FullTextSearchMode.Disable);",
+      "parameters": "",
+      "return_descr": "FullTextSearchMode.",
+      "example": "FullTextSearch.SetFullTextSearchMode(FullTextSearchMode.Disable);",
+      "availability": "Сервер",
+      "see_also": [
+        "enum.FullTextSearchMode",
+        "cls.FullTextSearch.SetFullTextSearchMode"
+      ],
+      "reviewed": false
+    }
+  ]
+}

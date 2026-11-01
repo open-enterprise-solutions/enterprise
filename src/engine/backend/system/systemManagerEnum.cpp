@@ -23,3 +23,4 @@ ENUM_TYPE_REGISTER(ibValueEnumXmlNodeType, "XMLNodeType", enum_to_clsid("EN_XMNT
 ENUM_TYPE_REGISTER(ibValueEnumXmlSpace, "XMLSpace", enum_to_clsid("EN_XMSP"));
 
 ENUM_TYPE_REGISTER(ibValueEnumBackgroundJobState, "BackgroundJobState", enum_to_clsid("EN_BGJS"));
+ENUM_TYPE_REGISTER(ibValueEnumFullTextSearchMode, "FullTextSearchMode", enum_to_clsid("EN_FTSM"));

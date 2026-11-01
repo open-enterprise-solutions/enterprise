@@ -174,6 +174,16 @@ class ibValueEnumXmlNodeType : public ibValueEnumeration<ibXmlNodeType> {
 	}
 };
 
+class ibValueEnumFullTextSearchMode : public ibValueEnumeration<ibFullTextSearchMode> {
+	public:
+	ibValueEnumFullTextSearchMode() : ibValueEnumeration() {}
+
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibFullTextSearchMode::ibFullTextSearchMode_Enable, ibT("Enable"), _("Enable"));
+		AddEnumeration(ibFullTextSearchMode::ibFullTextSearchMode_Disable, ibT("Disable"), _("Disable"));
+	}
+};
+
 class ibValueEnumXmlSpace : public ibValueEnumeration<ibXmlSpace> {
 	public:
 	ibValueEnumXmlSpace() : ibValueEnumeration() {}

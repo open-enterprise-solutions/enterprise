@@ -27,6 +27,7 @@
     "jobs": "Scheduled and background jobs",
     "runtime": "Runtime",
     "guide": "Guide",
-    "sequences": "Sequences"
+    "sequences": "Sequences",
+    "full_text_search": "Full-text search"
   }
 }

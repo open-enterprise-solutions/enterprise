@@ -205,6 +205,11 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **A scheduled job's last pass.** A row of `ScheduledJobs.Predefined` has `LastJob`, and a parameterized
   job's manager `LastJob(job)`: the `BackgroundJob` of its last pass here, `Undefined` if none ran. A
   predefined job the base has no settings for reads as declared; it read as switched on, hourly.
+- **`FullTextSearch`, the base's full-text search.** `GetFullTextSearchMode()` and
+  `SetFullTextSearchMode(FullTextSearchMode.Enable | Disable)` read and switch the mode, kept in the base
+  and changed with the *Data administration* right; a base where nobody switched it on answers `Disable`.
+  There is no index yet: `UpdateIndex(merge, portion)` and `ClearIndex()` succeed and do nothing,
+  `IndexTrue()` is `False` and `UpdateDate()` the empty date, so a module that keeps an index fresh runs.
 
 ## The browser client
 
