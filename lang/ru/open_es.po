@@ -13602,3 +13602,57 @@ msgstr "Ассистент с доступом к данным"
 #: src/engine/frmclient/mainFrame/settings/settingsdialog.cpp:39
 msgid "Debugging"
 msgstr "Отладка"
+
+#: src/engine/frmserver/visualView/ctrl/form.cpp:539
+#, c-format
+msgid "AddAttribute takes the type as a TypeDescription, not as %s"
+msgstr "AddAttribute принимает тип как TypeDescription, а не как %s"
+
+#: src/engine/frmserver/visualView/ctrl/formAttribute.cpp:116
+#, c-format
+msgid "'%s' cannot be the name of a form attribute: it takes letters, digits and the symbol \"_\", and does not start with a digit"
+msgstr "'%s' не может быть именем реквизита формы: в имени допустимы буквы, цифры и символ \"_\", и оно не начинается с цифры"
+
+#: src/engine/frmserver/visualView/ctrl/formAttribute.cpp:121
+#, c-format
+msgid "The form already has an attribute '%s'"
+msgstr "У формы уже есть реквизит '%s'"
+
+#: src/engine/frmserver/visualView/ctrl/formAttribute.cpp:227
+#, c-format
+msgid "The form has no attribute '%s'"
+msgstr "У формы нет реквизита '%s'"
+
+#: src/engine/frmserver/visualView/ctrl/formAttribute.cpp:231
+#, c-format
+msgid "'%s' is an attribute the form was designed with - only one the module added with AddAttribute can be removed"
+msgstr "'%s' - реквизит, заданный при проектировании формы: удалить можно только реквизит, который модуль добавил через AddAttribute"
+
+#: src/engine/backend/backend_type.cpp:501
+#, c-format
+msgid "'%s' names no attribute this control can be bound to, and the form has no main attribute to start from"
+msgstr "'%s' не называет реквизит, к которому можно привязать этот элемент, а основного реквизита, с которого начать путь, у формы нет"
+
+#: src/engine/backend/backend_type.cpp:525
+#, c-format
+msgid "'%s' holds a value - nothing unfolds from it, so '%s' cannot follow"
+msgstr "'%s' хранит значение - из него ничего не раскрывается, поэтому '%s' дальше пути быть не может"
+
+#: src/engine/backend/backend_type.cpp:527
+#, c-format
+msgid "'%s' has no field called '%s'. It offers: %s"
+msgstr "У '%s' нет поля '%s'. Доступны: %s"
+
+#: src/engine/backend/backend_type.cpp:548
+#, c-format
+msgid "Nothing to bind to - the path names no field and no attribute"
+msgstr "Не к чему привязать: путь не называет ни поля, ни реквизита"
+
+#: src/engine/backend/propertyManager/property/propertySource.cpp:119
+#, c-format
+msgid "'%s' cannot be bound to '%s': %s"
+msgstr "'%s' нельзя привязать к '%s': %s"
+
+#: src/engine/backend/propertyManager/property/propertySource.cpp:120
+msgid "it binds to nothing"
+msgstr "путь ни к чему не привязывает"
