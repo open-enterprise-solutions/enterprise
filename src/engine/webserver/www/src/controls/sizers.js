@@ -1,7 +1,8 @@
 // THE SIZERS — how a form lays its controls out, as the desktop's sizers do: a box (a row or a column), a wrapping
 // row, a grid, a box with a frame and a caption; and an item, which says how the control it holds takes its place —
-// its share of the free space (Proportion), whether it stretches across (Stretch), the border around it. A box laid
-// as a row folds into a column on a narrow screen (styles/form.css): a form drawn for a desktop still reads on a phone.
+// its share of the free space (Proportion), whether it stretches across (Stretch), the border around it. A grid's cells
+// are all one size, as the desktop's are. A box laid as a row folds into a column on a narrow screen (styles/form.css):
+// a form drawn for a desktop still reads on a phone.
 
 import { Control, defineControl } from './control.js';
 
@@ -17,7 +18,11 @@ class SizerItem extends Control {
 	update(node) {
 		const proportion = node.Proportion ?? 0;
 		this.style.flexGrow = proportion > 0 ? String(proportion) : '';
-		this.style.alignSelf = ((node.Stretch ?? 0) & expand) !== 0 ? 'stretch' : 'flex-start';
+		const expanded = ((node.Stretch ?? 0) & expand) !== 0;
+		this.style.alignSelf = expanded ? 'stretch' : 'flex-start';
+		// In a grid's cell the other axis too: Shrink keeps the control's own width at the cell's start, as the desktop's
+		// grid places it. A box's item ignores it.
+		this.style.justifySelf = expanded ? 'stretch' : 'start';
 		const border = node.BorderSize ?? 0;
 		this.style.marginLeft = node.BorderLeft && border > 0 ? `${border}px` : '';
 		this.style.marginRight = node.BorderRight && border > 0 ? `${border}px` : '';
@@ -51,7 +56,17 @@ class Wrapsizer extends Boxsizer {}
 class Gridsizer extends Control {
 	/** @param {ProtocolNode} node */
 	update(node) {
-		this.style.gridTemplateColumns = `repeat(${Math.max(1, node.Cols ?? 1)}, auto)`;
+		// Every column the same, a share of the width rather than its widest content - and never narrower than what it
+		// holds (a 1fr track takes no less than its items' least width, styles/form.css): a form too narrow for them all
+		// gives the wide one its width rather than drawing it over its neighbour, and scrolls. The rows likewise. No Cols,
+		// and Rows given: as many columns as the items need in that many rows; Rows given, that many rows, an empty one
+		// keeping its place - as the desktop's grid counts them.
+		const cols = node.Cols ?? 0;
+		const rows = node.Rows ?? 0;
+		const count = (node.NodeChildren ?? []).length;
+		const columns = cols > 0 ? cols : rows > 0 ? Math.ceil(count / rows) : 1;
+		this.style.gridTemplateColumns = `repeat(${Math.max(1, columns)}, 1fr)`;
+		this.style.gridTemplateRows = rows > 0 ? `repeat(${rows}, 1fr)` : '';
 		return true;
 	}
 
