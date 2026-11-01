@@ -23,6 +23,7 @@
     "text_files": "Text files and bytes — reading and writing",
     "hashing": "Hashing, base64 and hex",
     "runtime": "Runtime",
-    "guide": "Guide"
+    "guide": "Guide",
+    "full_text_search": "Full-text search"
   }
 }

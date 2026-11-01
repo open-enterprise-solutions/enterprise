@@ -105,4 +105,12 @@ enum ibXmlSpace
 	ibXmlSpace_Preserve
 };
 
+// Whether the base keeps its full-text search - what FullTextSearch.SetFullTextSearchMode is told and
+// GetFullTextSearchMode answers. Stored by number in the base: appended, never inserted.
+enum ibFullTextSearchMode
+{
+	ibFullTextSearchMode_Enable = 1,
+	ibFullTextSearchMode_Disable
+};
+
 #endif

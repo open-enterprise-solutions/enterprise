@@ -111,7 +111,8 @@ enum
 	enSequences,
 	enScheduledJobs,
 	enSessionParameters,
-	enFunctionalOptions
+	enFunctionalOptions,
+	enFullTextSearch
 };
 
 void ibValueGlobalContextManager::FillMembers(ibMemberTable& helper) const
@@ -142,11 +143,14 @@ void ibValueGlobalContextManager::FillMembers(ibMemberTable& helper) const
 	// Whether a part of the configuration is used in this base — `FunctionalOptions.<Name>.Get()`. Each
 	// option IS a constant, so the manager a name yields is the constant's own (metaFunctionalOptionObject.h).
 	helper.AppendProp(ibT("FunctionalOptions"));
+	// The base's full-text search - its mode and its index (valueFullTextSearch.h).
+	helper.AppendProp(ibT("FullTextSearch"));
 }
 
 #include "backend/metaCollection/metaSessionParameterObject.h"   // the metatype AND the value it yields
 #include "backend/metaCollection/partial/dataProcessorManager.h"
 #include "backend/metaCollection/partial/dataReportManager.h"
+#include "backend/system/value/valueFullTextSearch.h"
 
 bool ibValueGlobalContextManager::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
@@ -208,6 +212,9 @@ bool ibValueGlobalContextManager::GetPropVal(const long lPropNum, ibValue& pvarP
 		return true;
 	case enFunctionalOptions:
 		pvarPropVal = new ibValueGlobalContextStructureManager(g_metaFunctionalOptionCLSID, m_metaData);
+		return true;
+	case enFullTextSearch:
+		pvarPropVal = new ibValueFullTextSearchManager();
 		return true;
 	}
 
