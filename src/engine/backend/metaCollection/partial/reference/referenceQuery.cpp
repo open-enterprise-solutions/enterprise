@@ -281,8 +281,10 @@ bool ibValueReferenceDataObject::FindValue(const ibString& findData, std::vector
 		// is searched by holds text (a catalog's and a chart's Code and Description), each is asked to
 		// CONTAIN it, joined by OR, and the ceiling below then counts matches, not rows. A kind searched
 		// by something else too (a document by its date) keeps the scan: text cannot be asked of a date.
-		// A NUMBER code (CodeType, #274) is asked to EQUAL the text where the text is a number, and is left
-		// out of the condition where it is not - the description still answers.
+		// A NUMBER code (CodeType, #274) is asked to BEGIN with the text where the text is digits, as the
+		// ranking below expects of a code: `12` is 12, 120..129, 1200..1299 … up to the code's length, one
+		// range per digit it may still have - no cast to text, so every engine and the code's index answer
+		// it. Where the text is not digits the number code is left out, and the description still answers.
 		std::vector<ibValueMetaObjectAttributeBase*> searched = m_metaObject->GetSearchedAttributeObjectArray();
 		const bool textOnly = !searched.empty() && std::all_of(searched.begin(), searched.end(),
 			[](const ibValueMetaObjectAttributeBase* attribute) {
@@ -290,18 +292,40 @@ bool ibValueReferenceDataObject::FindValue(const ibString& findData, std::vector
 					|| attribute->ContainType(ibValueTypes::TYPE_NUMBER));
 			});
 		if (!everything && textOnly) {
-			ibNumber wantedNumber;
-			const bool numeric = wantedNumber.FromString(findData);
+			const bool digits = std::all_of(findData.begin(), findData.end(),
+				[](ibChar c) { return c >= ibT('0') && c <= ibT('9'); });
+			const auto beginsWith = [&findData](const ibValueMetaObjectAttributeBase* attribute) -> ibQueryPredicatePtr {
+				size_t first = 0;
+				while (first + 1 < findData.length() && findData[first] == ibT('0'))
+					++first;   // a number keeps no leading zeros, so neither does what it begins with
+				const ibString typed = findData.Mid(first);
+				const size_t length = attribute->GetTypeDesc().GetPrecision();
+				if (typed.length() > length)
+					return nullptr;   // more digits than the code has: it begins with none of them
+				ibNumber low(typed);
+				ibNumber high = low;
+				ibQueryPredicatePtr ranges;
+				for (size_t more = 0; typed.length() + more <= length; ++more) {
+					const ibQueryPredicatePtr range = ibQueryPredicate::Compose(ibQueryPredicateKind::And,
+						ibQueryPredicate::Leaf(ibQueryCondition{ attribute->GetQueryColumn(), ibQueryFilterOp::GreaterEqual, ibValue(low) }),
+						ibQueryPredicate::Leaf(ibQueryCondition{ attribute->GetQueryColumn(), ibQueryFilterOp::LessEqual, ibValue(high) }));
+					ranges = ranges ? ibQueryPredicate::Compose(ibQueryPredicateKind::Or, ranges, range) : range;
+					if (low.IsZero())
+						break;   // `0` begins nothing longer than itself
+					low = low * ibNumber(10);
+					high = high * ibNumber(10) + ibNumber(9);
+				}
+				return ranges;
+			};
 			ibQueryPredicatePtr any;
 			for (const ibValueMetaObjectAttributeBase* attribute : searched) {
 				ibQueryPredicatePtr leaf;
 				if (attribute->ContainType(ibValueTypes::TYPE_STRING))
 					leaf = ibQueryPredicate::Leaf(
 						ibQueryCondition{ attribute->GetQueryColumn(), ibQueryFilterOp::Like, ibValue(ibT("%") + findData + ibT("%")) });
-				else if (numeric)
-					leaf = ibQueryPredicate::Leaf(
-						ibQueryCondition{ attribute->GetQueryColumn(), ibQueryFilterOp::Equal, ibValue(wantedNumber) });
-				else
+				else if (digits)
+					leaf = beginsWith(attribute);
+				if (!leaf)
 					continue;
 				any = any ? ibQueryPredicate::Compose(ibQueryPredicateKind::Or, any, leaf) : leaf;
 			}

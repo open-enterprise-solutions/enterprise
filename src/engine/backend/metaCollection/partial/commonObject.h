@@ -1489,9 +1489,15 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 		(*m_propertyAttributeDescription)->GetTypeDesc().SetDefaultMetaType(description);
 	}
 
-	// DOES A PREDEFINED ITEM FIT THE SHAPE? Asked wherever one is declared (predefined_add, the designer's
-	// list) and again by the apply, which is where a configuration that went wrong some other way - the
-	// length lowered after the items were declared - is stopped before any DDL. An empty code always
+	// IS THIS A SHAPE THE COLUMNS CAN HAVE? A type that is String or Number, a code length of 1 to
+	// GetMaxCodeLength(type), a description length of 1 to GetMaxDescriptionLength(). Asked of a value typed
+	// (OnPropertyChanging) and of a value read (ReadData, which raises), so a file cannot declare what a
+	// person cannot. Refused in words that name the object, false.
+	bool CheckCodeShape(ibCodeType type, unsigned int codeLength, unsigned int descriptionLength, ibString* refusal) const;
+
+	// DOES A PREDEFINED ITEM FIT THE SHAPE? AppendPredefinedValue and SetPredefinedValue ask it themselves
+	// and raise, so no road that declares an item has to remember to; the apply asks it again, which is
+	// where an item declared before the length was lowered is stopped before any DDL. An empty code always
 	// fits: it is generated on write. Refused in words that name the item, false.
 	bool CheckPredefinedValue(const ibString& name, const ibString& code, const ibString& description, ibString* refusal) const;
 
@@ -1628,6 +1634,9 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 
 protected:
 
+	// CheckPredefinedValue, raised - the refusal is the exception's description.
+	void RaiseUnlessPredefinedFits(const ibString& name, const ibString& code, const ibString& description) const;
+
 	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue) override;
 	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue) override;
 
@@ -1709,8 +1718,10 @@ protected:
 	// predefined item all ask the ATTRIBUTE, so none of them has to learn that the shape can be chosen.
 	// The defaults are what the two were before they could be (String(8), String(150)); a configuration
 	// saved before then reads back as it was. Changing one is a restructuring - config_apply alters the
-	// column, and refuses first when a predefined item or a stored value would not fit
-	// (open-enterprise-solutions/enterprise#274).
+	// column, and refuses first, naming the object, when a predefined item or a stored value would not fit
+	// (open-enterprise-solutions/enterprise#274). Where the stored values do fit, a lowering is the
+	// engine's to take: Firebird does not narrow a VARCHAR at all and SQLite changes no type in place, as
+	// for any string attribute.
 	ibPropertyEnum<ibValueEnumCodeType>* m_propertyCodeType = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumCodeType>>(m_categoryData, ibT("CodeType"), _("Code type"), _("What the code is made of. String (the default): any characters, and SetNewCode may give it a prefix. Number: digits only, numbered and ordered as a number. Switching it clears the codes already stored."), ibCodeType_String);
 	ibPropertyUInteger* m_propertyCodeLength = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categoryData, ibT("CodeLength"), _("Code length"), _("How long the code may be: characters for a string code (1 to 1024), digits for a number code (1 to 32). 8 by default. A generated string code is padded with zeros to this length."), 8);
 	ibPropertyUInteger* m_propertyDescriptionLength = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categoryData, ibT("DescriptionLength"), _("Description length"), _("How many characters the description may hold (1 to 1024). 150 by default."), 150);

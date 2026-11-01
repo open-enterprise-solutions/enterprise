@@ -3,8 +3,9 @@
 //
 // The declaration is restated on the two attributes, so the column, the generator and every check read
 // it off the attribute. It survives a save and a load, a length the column cannot have is refused where
-// it is typed, and a predefined item that does not fit is refused naming the item - when it is declared,
-// and again by the apply, before any DDL, instead of the engine's "string right truncation".
+// it is typed and raised where it is read, and a predefined item that does not fit is refused naming the
+// item - by AppendPredefinedValue / SetPredefinedValue themselves, and again by the apply, before any DDL,
+// instead of the engine's "string right truncation". So is a length lowered below the codes stored.
 
 #include <gtest/gtest.h>
 
@@ -28,6 +29,7 @@
 #include "backend/query/schemaSnapshot.h"
 #include "backend/restructureInfo.h"
 #include "core/clsid.h"
+#include "core/exception.h"
 
 namespace {
 
@@ -169,6 +171,64 @@ TEST(CodeLength, APredefinedItemThatDoesNotFitIsRefusedByName)
 	EXPECT_NE(refusal.Find(wxT("digits only")), wxNOT_FOUND) << refusal;
 }
 
+TEST(CodeLength, TheEngineRefusesAPredefinedItemThatDoesNotFit)
+{
+	ibMetaDataConfigurationFile cfg;
+	ibValueMetaObjectCatalog* firms = NewCatalog(cfg, wxT("Firms"));
+	ASSERT_NE(firms, nullptr);
+
+	// Every road that declares an item - predefined_add, the designer's list, a caller of its own - ends here.
+	try {
+		firms->AppendPredefinedValue(wxT("Main"), wxT("000000001"), wxT("Main firm"));
+		FAIL() << "a 9-character code was declared on a code of 8";
+	}
+	catch (const ibCoreException& err) {
+		EXPECT_NE(err.GetErrorDescription().Find(wxT("Main")), wxNOT_FOUND) << err.GetErrorDescription();
+	}
+	EXPECT_TRUE(firms->GetPredefinedValueArray().empty()) << "nothing was added";
+
+	firms->AppendPredefinedValue(wxT("Main"), wxT("00000001"), wxT("Main firm"));
+	ASSERT_EQ(firms->GetPredefinedValueArray().size(), 1u);
+	const ibGuid guid = firms->GetPredefinedValueArray().front()->GetPredefinedGuid();
+	EXPECT_THROW(firms->SetPredefinedValue(guid, wxT("Main"), wxT("000000001"), wxT("Main firm")), ibCoreException);
+	EXPECT_EQ(firms->GetPredefinedValueArray().front()->GetPredefinedCode(), wxT("00000001")) << "the item stands as it was";
+}
+
+TEST(CodeLength, ASavedLengthTheColumnCannotHaveRaisesNamingTheObject)
+{
+	ibMetaDataConfigurationFile cfg1;
+	ibValueMetaObjectCatalog* firms = NewCatalog(cfg1, wxT("Firms"));
+	ASSERT_NE(firms, nullptr);
+
+	const auto refused = [&](const ibString& property, const ibDataValue& value) -> ibString {
+		ibDataNode node;
+		if (!firms->SaveNode(node))
+			return wxT("not saved");
+		node.SetField(property, value);   // replaced: SetProperty appends, and the first one is read
+		ibMetaDataConfigurationFile cfg2;
+		ibValueMetaObjectCatalog* loaded = NewCatalog(cfg2, wxT("Other"));
+		try {
+			loaded->LoadNode(node);
+		}
+		catch (const ibCoreException& err) {
+			return err.GetErrorDescription();
+		}
+		return ibString();
+	};
+
+	// 70000 used to become a column of 4464 (an unsigned short), 300 digits a number of 44.
+	ibString refusal = refused(wxT("CodeLength"), ibDataValue::UInt(70000));
+	EXPECT_NE(refusal.Find(wxT("Firms")), wxNOT_FOUND) << refusal;
+	EXPECT_NE(refusal.Find(wxT("CodeLength")), wxNOT_FOUND) << refusal;
+	EXPECT_FALSE(refused(wxT("CodeLength"), ibDataValue::UInt(0)).IsEmpty());
+	EXPECT_FALSE(refused(wxT("DescriptionLength"), ibDataValue::UInt(2000)).IsEmpty());
+	EXPECT_TRUE(refused(wxT("CodeLength"), ibDataValue::UInt(30)).IsEmpty()) << "a length it can have reads";
+
+	ASSERT_TRUE(Set(firms, wxT("CodeType"), CodeTypeValue(ibCodeType_Number)));
+	refusal = refused(wxT("CodeLength"), ibDataValue::UInt(300));
+	EXPECT_NE(refusal.Find(wxT("number")), wxNOT_FOUND) << refusal;
+}
+
 // ─── the apply ────────────────────────────────────────────────────────────────────────────────────────
 
 class CodeLengthApply : public ::testing::Test {
@@ -248,9 +308,11 @@ protected:
 
 TEST_F(CodeLengthApply, APredefinedCodeTooLongIsRefusedBeforeAnyTableNamingTheItem)
 {
-	ASSERT_TRUE(m_cfg->RunDatabase());
-	// Declared past the check, as an item declared before the length was lowered stands.
+	// Declared while it fitted, then the length lowered under it - the one road the engine cannot refuse.
+	ASSERT_TRUE(Set(m_firms, wxT("CodeLength"), ibVariant(9u)));
 	m_firms->AppendPredefinedValue(wxT("Main"), wxT("000000001"), wxT("Main firm"));
+	ASSERT_TRUE(Set(m_firms, wxT("CodeLength"), ibVariant(8u)));
+	ASSERT_TRUE(m_cfg->RunDatabase());
 
 	ibRestructureInfo ledger;
 	EXPECT_NE(Create(ledger), 1);
@@ -297,6 +359,88 @@ TEST_F(CodeLengthApply, ANumberCodeIsStoredAsANumber)
 	ibQueryResult rows = ibDatabaseQueryBuilder().From(m_firms->GetPhysicalTableName()).Select({ field }).Execute();
 	ASSERT_TRUE(rows.Next());
 	EXPECT_EQ(rows.GetResultNumber(field).ToInt(), 42);
+}
+
+// ─── a length lowered below what is stored ───────────────────────────────────────────────────────────
+
+class CodeLengthLowered : public CodeLengthApply {
+protected:
+	// The table created with the shape as it is, a row with `code` in it, and the declaration as it was
+	// saved - what the next apply compares with.
+	void CreateHolding(const ibString& code, ibColumnRole role)
+	{
+		ASSERT_TRUE(m_cfg->RunDatabase());
+		ibRestructureInfo created;
+		ASSERT_EQ(Create(created), 1);
+
+		const ibString field = CodeField(role);
+		ASSERT_FALSE(field.IsEmpty());
+		const ibString literal = role == ibColumnRole::String ? wxT("'") + code + wxT("'") : code;
+		ASSERT_GE(db_query->RunQuery(wxT("%s"), ibString::Format(wxT("INSERT INTO %s (%s) VALUES (%s)"),
+			m_firms->GetPhysicalTableName(), field, literal)), 0);
+		if (db_query->IsActiveTransaction())
+			db_query->Commit();
+
+		ibMemoryBuffer saved;
+		ASSERT_TRUE(m_cfg->SaveConfigToBuffer(saved));
+		m_was = std::make_unique<ibMetaDataConfigurationFile>();
+		ASSERT_TRUE(m_was->LoadConfigFromBuffer(saved));
+		ASSERT_TRUE(m_was->RunDatabase());
+	}
+
+	// The apply refused, before any DDL, in words that name the object and `property`.
+	void ExpectRefusedNaming(const ibString& property)
+	{
+		const ibSchemaSnapshot before = m_was->BuildSchemaSnapshot();
+		ibRestructureInfo ledger;
+		EXPECT_NE(Apply(&before, m_cfg->BuildSchemaSnapshot(), ledger), 1);
+		bool named = false;
+		for (const ibRestructureInfo::Entry& entry : ledger)
+			if (entry.type == ibRestructure::error && entry.descr.Find(wxT("Firms")) != wxNOT_FOUND
+				&& entry.descr.Find(property) != wxNOT_FOUND)
+				named = true;
+		EXPECT_TRUE(named) << "the refusal names the object and " << property;
+	}
+
+	void TearDown() override
+	{
+		if (m_was) m_was->CloseDatabase();
+		m_was.reset();
+		CodeLengthApply::TearDown();
+	}
+
+	std::unique_ptr<ibMetaDataConfigurationFile> m_was;
+};
+
+TEST_F(CodeLengthLowered, AStringCodeLongerThanTheNewLengthIsRefusedByName)
+{
+	ASSERT_TRUE(Set(m_firms, wxT("CodeLength"), ibVariant(30u)));
+	CreateHolding(wxT("ABCDEFGHIJ"), ibColumnRole::String);
+
+	ASSERT_TRUE(Set(m_firms, wxT("CodeLength"), ibVariant(8u)));
+	ExpectRefusedNaming(wxT("CodeLength"));
+}
+
+TEST_F(CodeLengthLowered, ANumberCodeOfMoreDigitsThanTheNewLengthIsRefusedByName)
+{
+	ASSERT_TRUE(Set(m_firms, wxT("CodeLength"), ibVariant(9u)));
+	ASSERT_TRUE(Set(m_firms, wxT("CodeType"), CodeTypeValue(ibCodeType_Number)));
+	CreateHolding(wxT("12345"), ibColumnRole::Number);
+
+	ASSERT_TRUE(Set(m_firms, wxT("CodeLength"), ibVariant(4u)));
+	ExpectRefusedNaming(wxT("CodeLength"));
+}
+
+TEST_F(CodeLengthLowered, AnApplyThatLowersNothingReadsNoRows)
+{
+	// The same declaration on both sides: the rule compares with the table as it stands and passes.
+	ASSERT_TRUE(Set(m_firms, wxT("CodeLength"), ibVariant(30u)));
+	CreateHolding(wxT("ABCDEFGHIJ"), ibColumnRole::String);
+
+	const ibSchemaSnapshot before = m_was->BuildSchemaSnapshot();
+	ibRestructureInfo ledger;
+	EXPECT_EQ(Apply(&before, m_cfg->BuildSchemaSnapshot(), ledger), 1);
+	EXPECT_FALSE(ledger.HasErrors());
 }
 
 // ─── a longer code on a table that holds codes — the restructuring itself ─────────────────────────────

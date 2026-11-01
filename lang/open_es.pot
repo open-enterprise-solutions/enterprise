@@ -13264,3 +13264,82 @@ msgstr ""
 #: src/engine/frmclient/mainFrame/settings/settingsdialog.cpp:39
 msgid "Debugging"
 msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObject.h:1725
+msgid "Code type"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObject.h:1725
+msgid "What the code is made of. String (the default): any characters, and SetNewCode may give it a prefix. Number: digits only, numbered and ordered as a number. Switching it clears the codes already stored."
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObject.h:1726
+msgid "Code length"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObject.h:1726
+msgid "How long the code may be: characters for a string code (1 to 1024), digits for a number code (1 to 32). 8 by default. A generated string code is padded with zeros to this length."
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObject.h:1727
+msgid "Description length"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObject.h:1727
+msgid "How many characters the description may hold (1 to 1024). 150 by default."
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:1251
+#, c-format
+msgid "%s: the saved %s cannot be read"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:1274
+#, c-format
+msgid "%s: the predefined item %s has the code '%s', and the code of %s is a number - digits only"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:1284
+#, c-format
+msgid "%s: the predefined item %s has the code '%s' of %u digits, and the code length is %u - raise CodeLength or shorten the code"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:1289
+#, c-format
+msgid "%s: the predefined item %s has the code '%s' of %u characters, and the code length is %u - raise CodeLength or shorten the code"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:1296
+#, c-format
+msgid "%s: the predefined item %s has a description of %u characters, and the description length is %u - raise DescriptionLength or shorten the description"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:1318
+#, c-format
+msgid "%s: CodeType must be String or Number"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:1321
+#, c-format
+msgid "%s: CodeLength %u is not a length a number code can have - 1 to %u digits"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:1322
+#, c-format
+msgid "%s: CodeLength %u is not a length a string code can have - 1 to %u characters"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:1326
+#, c-format
+msgid "%s: DescriptionLength %u is not a length a description can have - 1 to %u characters"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectSchema.cpp:347
+#, c-format
+msgid "%s: %lld stored item(s) have a code longer than %u - shorten those codes before lowering CodeLength"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectSchema.cpp:354
+#, c-format
+msgid "%s: %lld stored item(s) have a description longer than %u - shorten those descriptions before lowering DescriptionLength"
+msgstr ""

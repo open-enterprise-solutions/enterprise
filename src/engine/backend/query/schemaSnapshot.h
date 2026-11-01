@@ -300,7 +300,11 @@ struct ibSchemaTable
 	// the rule attaches it while contributing, and the differ, which knows nothing about accounts,
 	// simply asks. Returning false appends its own error to the ledger (which greys Apply) and leaves
 	// the table alone. Empty = nothing to ask.
-	std::function<bool(class ibRestructureInfo*)> m_beforeChange;
+	//
+	// The second argument is the table AS IT STANDS (the baseline's declaration of the same id; null
+	// for a table not created yet) - what the rule compares with when the question is "is this a
+	// lowering", so a rule that reads data reads it only when something was actually lowered.
+	std::function<bool(class ibRestructureInfo*, const ibSchemaTable* standing)> m_beforeChange;
 
 	// AND ITS PAIR, AFTER. Symmetric by construction and asymmetric in power: BEFORE may refuse, AFTER
 	// may not — by then the table has been changed and there is nothing left to decline. It exists to

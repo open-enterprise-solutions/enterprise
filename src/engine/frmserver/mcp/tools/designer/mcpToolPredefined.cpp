@@ -304,12 +304,15 @@ public:
 		const ibString description = given.IsEmpty() ? name : given;
 
 		// A CODE THE OBJECT CANNOT HOLD IS REFUSED NOW, naming the item - not by the next apply, where the
-		// engine said "string right truncation" and nothing about which item (#274). The length and the
-		// type are the object's CodeLength / CodeType, set with metadata_set.
-		if (!owner->CheckPredefinedValue(name, code, description, &refusal))
+		// engine said "string right truncation" and nothing about which item (#274). The engine raises it;
+		// the length and the type are the object's CodeLength / CodeType, set with metadata_set.
+		try {
+			owner->AppendPredefinedValue(name, code, description, ArgFolder().Flag(params), parent);
+		}
+		catch (const ibCoreException& err) {
+			refusal = err.GetErrorDescription();
 			return false;
-
-		owner->AppendPredefinedValue(name, code, description, ArgFolder().Flag(params), parent);
+		}
 
 		// WHAT HAPPENED, in the caller's own words. Reporting the name back rather
 		// than a bare success means a caller never has to guess whether the item it

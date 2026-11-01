@@ -27,18 +27,15 @@ void ibValueMetaObjectRecordDataMutableRef::OnPropertyChanged(ibProperty* proper
 bool ibValueMetaObjectRecordDataHierarchyMutableRef::OnPropertyChanging(ibProperty* property, const ibVariant& newValue)
 {
 	if (property == m_propertyCodeLength) {
-		const unsigned int length = newValue.GetNumber().ToUInt();
-		if (length == 0 || length > GetMaxCodeLength(GetCodeType()))
+		if (!CheckCodeShape(GetCodeType(), newValue.GetNumber().ToUInt(), GetDescriptionLength(), nullptr))
 			return false;
 	}
 	else if (property == m_propertyCodeType) {
-		const ibCodeType type = static_cast<ibCodeType>(newValue.GetNumber().ToInt());
-		if (GetCodeLength() > GetMaxCodeLength(type))
+		if (!CheckCodeShape(static_cast<ibCodeType>(newValue.GetNumber().ToInt()), GetCodeLength(), GetDescriptionLength(), nullptr))
 			return false;
 	}
 	else if (property == m_propertyDescriptionLength) {
-		const unsigned int length = newValue.GetNumber().ToUInt();
-		if (length == 0 || length > GetMaxDescriptionLength())
+		if (!CheckCodeShape(GetCodeType(), GetCodeLength(), newValue.GetNumber().ToUInt(), nullptr))
 			return false;
 	}
 

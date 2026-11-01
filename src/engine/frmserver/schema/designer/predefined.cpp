@@ -76,12 +76,6 @@ bool ReadFields(const ibPredefinedOwner* owner, const ibDataNode& args, const wx
 		return false;
 	}
 
-	// …and a code and a description the object can hold (its CodeLength, CodeType, DescriptionLength).
-	if (!owner->CheckPredefinedValue(fields.m_name, fields.m_code, fields.m_description, &error)) {
-		refusal = ibProtocol::ibRefusal::BadParameter;
-		return false;
-	}
-
 	if (args.GetValue<ibString>(ibProtocol::ibSchema::ibPredefined::Parent).IsEmpty())
 		return true;
 	fields.m_parent = FindItem(owner, args, ibProtocol::ibSchema::ibPredefined::Parent, refusal, error);
