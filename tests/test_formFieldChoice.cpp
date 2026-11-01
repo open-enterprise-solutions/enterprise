@@ -11,7 +11,7 @@
 //     Keep (ibChoiceLinkResolver::ClearLinked with `rows`);
 //   * QuickChoice decides only for a reference — a number keeps its calculator, whatever the field says.
 //
-// And that the three survive the form's own save and load (ibValueTextCtrl::WriteData / ReadData).
+// And that the three survive the form's own save and load (the control's WriteData / ReadData).
 //
 // DB-FREE AND UI-FREE: a fresh ibMetaDataConfigurationFile that is never run, a source that answers hops from
 // a map (the shape test_sourceHopChain uses), and a control made with no form around it.
@@ -30,9 +30,11 @@
 #include "backend/srcDataObject.h"
 #include "backend/propertyManager/property/propertyChoiceLink.h"
 #include "core/serialize/dataBuilder.h"
+#include "backend/objCtor.h"                    // ibCtorAbstractType — a control made by its own ctor
 
-#include "frmserver/visualView/ctrl/widgets.h"   // ibValueTextCtrl
+#include "frmserver/visualView/ctrl/frame.h"         // ibValueFrame — what a control saves and loads through
 #include "frmserver/visualView/ctrl/typeControl.h"
+#include "frmserver/visualView/ctrl/widgets.h"       // g_controlTextCtrlCLSID
 
 namespace {
 
@@ -233,21 +235,40 @@ TEST(FormFieldQuickChoice, DecidesForAReferenceOnly)
 	EXPECT_FALSE(ibTypeControlFactory::HasQuickChoice(ibQuickChoiceMode_Use, false, number));
 }
 
+// A Textctrl made by its class's own ctor, the way the registry makes one, with no form around it (a form's
+// Init places it on that form, and there is none here). Asked through the exported classes it derives — the
+// frame saves and loads it, the factory answers its choice: the control's own class is not exported.
+ibValue MakeTextctrl()
+{
+	ibCtorAbstractType* ctor = ibValue::GetAvailableCtor(g_controlTextCtrlCLSID);
+	return ctor != nullptr ? ctor->CreateObject() : ibValue();
+}
+
+struct TextctrlUnderTest {
+	ibValue m_value = MakeTextctrl();
+	ibValueFrame* m_frame = dynamic_cast<ibValueFrame*>(m_value.GetRef());
+	ibTypeControlFactory* m_factory = dynamic_cast<ibTypeControlFactory*>(m_value.GetRef());
+
+	bool IsOk() const { return m_frame != nullptr && m_factory != nullptr; }
+	ibProperty* Property(const wxString& name) const { return m_frame->GetProperty(name); }
+};
+
 // The three properties go out with the form and come back with it.
 TEST_F(FormFieldChoiceFix, TextctrlProperties_SurviveSaveAndLoad)
 {
-	ibValuePtr<ibValueTextCtrl> written(new ibValueTextCtrl());
+	TextctrlUnderTest written;
+	ASSERT_TRUE(written.IsOk());
 
-	auto* quickChoice = dynamic_cast<ibPropertyEnumBase*>(written->GetProperty(wxT("QuickChoice")));
-	auto* foldersAndItems = dynamic_cast<ibPropertyEnumBase*>(written->GetProperty(wxT("ChoiceFoldersAndItems")));
-	auto* parameters = dynamic_cast<ibPropertyChoiceParameters*>(written->GetProperty(wxT("ChoiceParameters")));
+	auto* quickChoice = dynamic_cast<ibPropertyEnumBase*>(written.Property(wxT("QuickChoice")));
+	auto* foldersAndItems = dynamic_cast<ibPropertyEnumBase*>(written.Property(wxT("ChoiceFoldersAndItems")));
+	auto* parameters = dynamic_cast<ibPropertyChoiceParameters*>(written.Property(wxT("ChoiceParameters")));
 	ASSERT_NE(quickChoice, nullptr);
 	ASSERT_NE(foldersAndItems, nullptr);
 	ASSERT_NE(parameters, nullptr);
 
 	// Nothing said: the attribute's answer stands.
 	ibSelectMode mode = ibSelectMode::ibSelectMode_Items;
-	EXPECT_FALSE(written->GetOwnSelectMode(mode));
+	EXPECT_FALSE(written.m_factory->GetOwnSelectMode(mode));
 
 	quickChoice->SetValue(static_cast<int>(ibQuickChoiceMode_DontUse));
 	foldersAndItems->SetValue(static_cast<int>(ibChoiceFoldersAndItems_FoldersAndItems));
@@ -256,16 +277,17 @@ TEST_F(FormFieldChoiceFix, TextctrlProperties_SurviveSaveAndLoad)
 	parameters->SetValue(rows);
 
 	ibDataNode node;
-	ASSERT_TRUE(written->WriteData(node));
+	ASSERT_TRUE(written.m_frame->WriteData(node));
 
-	ibValuePtr<ibValueTextCtrl> read(new ibValueTextCtrl());
-	ASSERT_TRUE(read->ReadData(node));
+	TextctrlUnderTest read;
+	ASSERT_TRUE(read.IsOk());
+	ASSERT_TRUE(read.m_frame->ReadData(node));
 
-	EXPECT_EQ(dynamic_cast<ibPropertyEnumBase*>(read->GetProperty(wxT("QuickChoice")))->GetValueAsInteger(),
+	EXPECT_EQ(dynamic_cast<ibPropertyEnumBase*>(read.Property(wxT("QuickChoice")))->GetValueAsInteger(),
 		static_cast<int>(ibQuickChoiceMode_DontUse));
-	ASSERT_TRUE(read->GetOwnSelectMode(mode));
+	ASSERT_TRUE(read.m_factory->GetOwnSelectMode(mode));
 	EXPECT_EQ(mode, ibSelectMode::ibSelectMode_FoldersAndItems);
-	const ibChoiceParametersDescription* own = read->GetOwnChoiceParameters();
+	const ibChoiceParametersDescription* own = read.m_factory->GetOwnChoiceParameters();
 	ASSERT_NE(own, nullptr);
 	EXPECT_TRUE(*own == rows);
 }

@@ -480,7 +480,7 @@ FRMSERVER_API void ibMcpSayChoiceParameters(const class ibPropertyObject* field,
 // each checked against the property's own lists. One reading for metadata_set_choice (an attribute) and form_set (a
 // form field, whose lists are its bound attribute's), so the two cannot take the table two ways. The rows given
 // REPLACE `paramsDesc`; `named` is how the field is called in a refusal.
-BACKEND_API bool ibMcpReadChoiceParameters(const class ibPropertyObject* field, class ibPropertyChoiceParameters* property,
+FRMSERVER_API bool ibMcpReadChoiceParameters(const class ibPropertyObject* field, class ibPropertyChoiceParameters* property,
 	const ibString& named, const ibDataNode& rows, struct ibChoiceParametersDescription& paramsDesc, ibString& refusal);
 
 // ⭐ WHAT THE OBJECT ITSELF SAYS AGAINST BEING STORED — from BOTH places it may

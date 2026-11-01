@@ -20,13 +20,28 @@ namespace {
 // same table over the same neighbours — at run time it reads them from the same holder the attribute's are
 // read from (ibChoiceLinkResolver::Resolve) — so every list below is the bound attribute's. A field bound to
 // no attribute (a form attribute of its own, a list's column) has none to offer.
+//
+// ⚠ NOT BY THE BINDING'S WALK ALONE: on a form being edited the walk answers with its source's COLUMN, which
+// stands for the attribute and is not it. So the field is named as the run time names it — the leaf among the
+// fields of the form's source (ibChoiceLinkResolver::FieldOf) — and a table column, whose fields stand in a
+// row there is none of here, by the leaf's own metaID.
 const ibValueMetaObjectAttributeBase* SelfAttribute(const ibPropertyObject* owner)
 {
 	if (const ibValueMetaObjectAttributeBase* attribute = dynamic_cast<const ibValueMetaObjectAttributeBase*>(owner))
 		return attribute;
 	const ibBackendTypeSourceFactory* bound = dynamic_cast<const ibBackendTypeSourceFactory*>(owner);
-	return bound != nullptr
-		? dynamic_cast<const ibValueMetaObjectAttributeBase*>(bound->WalkSource(bound->GetSourceDesc())) : nullptr;
+	const ibSourceDescription* path = bound != nullptr ? &bound->GetSourceDesc() : nullptr;
+	if (path == nullptr || path->GetPath().size() < 2)
+		return nullptr;
+
+	ibBackendFormAttributeValue* head = bound->FindSourceHolder(path->GetFirst());
+	if (const ibValueMetaObjectAttributeBase* field = ibChoiceLinkResolver::FieldOf(
+			ibChoiceHolder(head != nullptr ? head->GetSourceValue() : nullptr), bound))
+		return field;
+
+	const ibMetaData* metaData = owner->GetMetaData();
+	return metaData != nullptr ? dynamic_cast<const ibValueMetaObjectAttributeBase*>(
+		metaData->FindAnyObjectByFilter(path->GetLeaf(), true)) : nullptr;
 }
 
 ibMetaID SelfId(const ibPropertyObject* owner)
