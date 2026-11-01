@@ -15,7 +15,7 @@
         "forms"
       ],
       "signature": "ButtonRepresentation.Auto, .Text, .Picture, .PictureAndText, .Tile",
-      "description": "Що показує кнопка: напис, картинку, те й інше або плитку. Властивість кнопки Representation зберігає значення, записується ButtonRepresentation.<Ім'я>. Чотири значення ті самі, що в колонки, сторінки та пункту командної панелі, - Auto, Text, Picture, PictureAndText, під тими самими номерами, - і Tile, яка є лише в кнопки.\n\nСкрипт читає й задає його в кнопки форми: `Controls.Button1.Representation = ButtonRepresentation.Tile;`. Спільне перелічення Representation - інший тип: його значення, присвоєне властивості кнопки, спричиняє виняток, а порівняння з ним дає False.",
+      "description": "Що показує кнопка: напис, картинку, те й інше або плитку. Властивість кнопки Representation зберігає значення, записується ButtonRepresentation.<Ім'я>. Чотири значення ті самі, що в колонки, сторінки та пункту командної панелі, - Auto, Text, Picture, PictureAndText, під тими самими номерами, - і Tile, яка є лише в кнопки.\n\nСкрипт читає й задає його в кнопки форми: `Controls.Button1.Representation = ButtonRepresentation.Tile;`. Спільне перелічення Representation - інший тип: його значення, присвоєне властивості кнопки, приймається за номером, але порівняння з ним дає False.",
       "syntax_block": "Controls.Button1.Representation = ButtonRepresentation.Tile;",
       "syntax_block_ves": "Controls.Button1.Representation = ButtonRepresentation.Tile;",
       "parameters": "",

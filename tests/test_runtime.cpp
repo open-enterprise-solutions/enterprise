@@ -3620,6 +3620,24 @@ TEST_F(TileForm, AButtonsRepresentationIsAButtonRepresentation) {
 	EXPECT_EQ(read.GetClassName(), ibString(ibT("ButtonRepresentation")));
 }
 
+// A module written before the button had its own enumeration sets it from the shared one, and is taken: the four they
+// share are under the same numbers.
+TEST_F(TileForm, AMemberOfTheSharedRepresentationIsTakenToo) {
+	ibValueFrame* const button = Button(ibT("Tea"), ibT("12 pcs"), ibButtonRepresentation_Tile);
+	ASSERT_NE(button, nullptr);
+	ibValuePtr<ibValueEnumRepresentation> shared(new ibValueEnumRepresentation());
+	shared->CreateEnumeration();
+	ibValue number(static_cast<int>(ibRepresentation_Picture));
+	ibValue* params[] = { &number, nullptr };
+	ASSERT_TRUE(shared->Init(params, 1));
+	const ibValue member = shared->GetEnumVariantValue();
+	const long property = button->FindProp(ibT("Representation"));
+	ASSERT_GE(property, 0);
+	ASSERT_TRUE(button->SetPropVal(property, member));
+	EXPECT_EQ(Number(State(*button), ibProtocol::ibForm::ibState::Representation),
+		static_cast<int>(ibProtocol::ibForm::ibState::ibRepresentation::Picture));
+}
+
 // The state a client draws from: a tile carries its note; any other representation shows none, so carries none.
 TEST_F(TileForm, TheStateCarriesTheNoteForATileAlone) {
 	ibValueFrame* const tile = Button(ibT("Tea"), ibT("12 pcs"), ibButtonRepresentation_Tile);

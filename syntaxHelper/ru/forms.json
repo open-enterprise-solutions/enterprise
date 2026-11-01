@@ -15,7 +15,7 @@
         "forms"
       ],
       "signature": "ButtonRepresentation.Auto, .Text, .Picture, .PictureAndText, .Tile",
-      "description": "Что показывает кнопка: надпись, картинку, то и другое или плитку. Свойство кнопки Representation хранит значение, записывается ButtonRepresentation.<Имя>. Четыре значения те же, что у колонки, страницы и пункта командной панели, - Auto, Text, Picture, PictureAndText, под теми же номерами, - и Tile, которая есть только у кнопки.\n\nСкрипт читает и задаёт его у кнопки формы: `Controls.Button1.Representation = ButtonRepresentation.Tile;`. Общее перечисление Representation - другой тип: его значение, присвоенное свойству кнопки, вызывает исключение, а сравнение с ним даёт False.",
+      "description": "Что показывает кнопка: надпись, картинку, то и другое или плитку. Свойство кнопки Representation хранит значение, записывается ButtonRepresentation.<Имя>. Четыре значения те же, что у колонки, страницы и пункта командной панели, - Auto, Text, Picture, PictureAndText, под теми же номерами, - и Tile, которая есть только у кнопки.\n\nСкрипт читает и задаёт его у кнопки формы: `Controls.Button1.Representation = ButtonRepresentation.Tile;`. Общее перечисление Representation - другой тип: его значение, присвоенное свойству кнопки, принимается по номеру, но сравнение с ним даёт False.",
       "syntax_block": "Controls.Button1.Representation = ButtonRepresentation.Tile;",
       "syntax_block_ves": "Controls.Button1.Representation = ButtonRepresentation.Tile;",
       "parameters": "",

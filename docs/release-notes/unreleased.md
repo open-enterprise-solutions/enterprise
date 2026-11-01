@@ -4,10 +4,10 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Breaking changes
 
-- **A button's `Representation` is a `ButtonRepresentation`.** A module that sets it from the shared
-  enumeration (`Controls.Button1.Representation = Representation.Picture`) now raises, and comparing it
-  with a member of `Representation` answers False: use `ButtonRepresentation`, which has the same four
-  members under the same numbers and `Tile`. Saved forms read as they were.
+- **A button's `Representation` is a `ButtonRepresentation`.** Comparing it with a member of the
+  shared `Representation` (`Controls.Button1.Representation = Representation.Picture` as a condition)
+  answers False: compare with `ButtonRepresentation`, which has the same four members under the same
+  numbers and `Tile`. Setting it from the shared one still works; saved forms read as they were.
 
 - **In a date pattern `MM` is the month and `mm` the minutes**, as everywhere else they are written;
   the seconds are `ss`. It was the other way round. A stored format such as `DF=dd.mm.yyyy` now

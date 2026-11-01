@@ -15,7 +15,7 @@
         "forms"
       ],
       "signature": "ButtonRepresentation.Auto, .Text, .Picture, .PictureAndText, .Tile",
-      "description": "What a button shows: its caption, its picture, both, or a tile. A button's Representation property holds a member, written ButtonRepresentation.<Name>. It has the four members a column, a page and a command bar item also show - Auto, Text, Picture, PictureAndText, under the same numbers - and Tile, which only a button has.\n\nA script reads and sets it on a button of the form: `Controls.Button1.Representation = ButtonRepresentation.Tile;`. The shared enumeration Representation is another type: a member of it given to a button's Representation raises, and compared with it answers False.",
+      "description": "What a button shows: its caption, its picture, both, or a tile. A button's Representation property holds a member, written ButtonRepresentation.<Name>. It has the four members a column, a page and a command bar item also show - Auto, Text, Picture, PictureAndText, under the same numbers - and Tile, which only a button has.\n\nA script reads and sets it on a button of the form: `Controls.Button1.Representation = ButtonRepresentation.Tile;`. The shared enumeration Representation is another type: a member of it set on a button's Representation is taken by its number, but compared with it answers False.",
       "syntax_block": "Controls.Button1.Representation = ButtonRepresentation.Tile;",
       "syntax_block_ves": "Controls.Button1.Representation = ButtonRepresentation.Tile;",
       "parameters": "",
