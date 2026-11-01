@@ -2729,6 +2729,9 @@
     <ClCompile Include="system\value\valueBackgroundJob.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
+    <ClCompile Include="system\value\valueScheduledJob.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
     <ClCompile Include="tabularDataObject.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -2763,6 +2766,9 @@
       <Filter>system\value\composition</Filter>
     </ClInclude>
     <ClInclude Include="system\value\valueBackgroundJob.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
+    <ClInclude Include="system\value\valueScheduledJob.h">
       <Filter>system\value</Filter>
     </ClInclude>
     <ClInclude Include="tabularDataObject.h" />

@@ -1968,7 +1968,7 @@
       "return_descr": "Запущене фонове завдання.",
       "example": "args = New Array();\nargs.Add(BegOfMonth(WorkingDate()));\njob = RunBackground(\"RecalculateTotals\", args);",
       "availability": "Тонкий клієнт, Сервер",
-      "see_also": ["fn.RunJob", "fn.RunScheduledJobs"],
+      "see_also": ["fn.RunJob", "fn.RunScheduledJobs", "cls.BackgroundJobs", "cls.BackgroundJob"],
       "reviewed": true
     },
     {

@@ -64,6 +64,7 @@
     <ClInclude Include="sheetFormat\sheetFormatNative.h" />
     <ClInclude Include="sheetFormat\sheetFormatDocx.h" />
     <ClInclude Include="system\value\valueBackgroundJob.h" />
+    <ClInclude Include="system\value\valueScheduledJob.h" />
     <ClInclude Include="backend_core.h" />
     <ClInclude Include="backend_mainFrame.h" />
     <ClInclude Include="backend_picture.h" />
@@ -449,6 +450,7 @@
     <ClCompile Include="sheetFormat\sheetFormatXlsxRead.cpp" />
     <ClCompile Include="sheetFormat\sheetFormatXlsxWrite.cpp" />
     <ClCompile Include="system\value\valueBackgroundJob.cpp" />
+    <ClCompile Include="system\value\valueScheduledJob.cpp" />
     <ClCompile Include="backend_mainFrame.cpp" />
     <ClCompile Include="backend_picture.cpp" />
     <ClCompile Include="backend_localization.cpp" />

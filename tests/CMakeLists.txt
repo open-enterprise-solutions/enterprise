@@ -541,6 +541,38 @@ set_target_properties(oes_job_tenancy_test PROPERTIES
 oes_discover_tests(oes_job_tenancy_test)
 
 # ---------------------------------------------------------------------------
+# Scheduled and background jobs at run time — BackgroundJobs, ScheduledJobs' verbs (integration scope).
+# The same bring-up as the tenancy target, plus a configuration run in memory and sys_job.
+#   cmake --build build --target oes_job_runtime_test --config Debug
+#   ./bin/oes_job_runtime_test
+# ---------------------------------------------------------------------------
+add_executable(oes_job_runtime_test test_jobRuntime.cpp)
+
+target_link_libraries(oes_job_runtime_test
+    PRIVATE
+        backend
+        GTest::gtest
+        GTest::gtest_main
+)
+
+target_compile_definitions(oes_job_runtime_test PRIVATE OES_TESTING)
+
+target_include_directories(oes_job_runtime_test PRIVATE
+    "${CMAKE_SOURCE_DIR}/src"
+    "${CMAKE_SOURCE_DIR}/src/engine"
+    "${CMAKE_SOURCE_DIR}/src/engine/backend"
+)
+
+set_target_properties(oes_job_runtime_test PROPERTIES
+    CXX_STANDARD          20
+    CXX_STANDARD_REQUIRED ON
+    BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
+    INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
+)
+
+oes_discover_tests(oes_job_runtime_test)
+
+# ---------------------------------------------------------------------------
 # Several bases in one process (ibApplicationHost) — integration scope.
 #
 # Opens two bases in the test process, each with its own in-memory SQLite, and

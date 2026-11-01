@@ -98,6 +98,17 @@ enum ibJsonFormatting
 	ibJsonFormatting_Indented
 };
 
+// WHERE A BACKGROUND JOB STANDS — BackgroundJob.State. A run that is not complete is Active; a complete one
+// says how it ended. Canceled is not Failed: the run did nothing wrong, somebody asked it to stop, and a list
+// of what broke must not fill up with every ordinary cancel.
+enum ibBackgroundJobState
+{
+	ibBackgroundJobState_Active = 1,
+	ibBackgroundJobState_Completed,
+	ibBackgroundJobState_Failed,
+	ibBackgroundJobState_Canceled
+};
+
 // What `xml:space` says where an XMLReader stands: whitespace is the reader's to drop, or the document's to keep.
 enum ibXmlSpace
 {
