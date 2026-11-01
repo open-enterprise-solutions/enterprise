@@ -401,6 +401,21 @@
         "cls.KeyValue.Key"
       ],
       "reviewed": false
+    },
+    {
+      "id": "cls.ValueList",
+      "name_local": "ValueList",
+      "name_en": "ValueList",
+      "kind": "collection",
+      "category_keys": ["value_types", "collections", "containers"],
+      "signature": "New ValueList()",
+      "description": "Список значень. Add(value, presentation, check) додає елемент і повертає його; Insert, Get, Count і Clear — за індексом від нуля. Delete приймає елемент цього списку або індекс і відмовляє в усьому іншому. FindByValue повертає елемент або Невизначено. UnloadValues копіює значення в новий Array. LoadValues замінює список значеннями масиву і очищає представлення та позначку. Copy створює новий список з новими елементами. SortByValue і SortByPresentation сортують на місці, за зростанням, якщо не передано true, і зберігають порядок рівних елементів. FillChecks ставить позначку всім елементам. Move(item, offset) зсуває елемент або елемент за індексом на offset позицій. list[index] — елемент за індексом, Index(item) — його позиція або -1 для елемента іншого списку. В елемента є Value, Presentation і Check. Обхід віддає елемент. Запит IN (&list) порівнює значення.",
+      "parameters": "Немає.",
+      "return_descr": "ValueList — порожній.",
+      "example": "list = New ValueList();\nlist.Add(1, \"one\", true);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": ["cls.Structure"],
+      "reviewed": true
     }
   ]
 }

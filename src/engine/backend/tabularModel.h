@@ -1911,6 +1911,11 @@ public:
 		return true;
 	}
 
+	// ORDER THE ROWS THEMSELVES BY ONE COLUMN — the composer says the order, and the rows are re-seated into it, so
+	// the stored order IS the sorted one afterwards and nothing is left on the composer. What a value table's Sort
+	// and a value list's SortByValue both do; the view-only sort above leaves the rows where they are.
+	void SeatRows(const ibString& column, bool ascending);
+
 	// The name door — what the script's Sort("Column") says. A plain column of this table, no hop: it must
 	// be one of ours, and then it resolves to the one road above.
 	bool SortRows(const ibString& colName, bool ascending) {
