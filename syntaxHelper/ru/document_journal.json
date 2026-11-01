@@ -1,0 +1,65 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "ru",
+  "entries": [
+    {
+      "id": "cls.DocumentJournal",
+      "name_local": "DocumentJournals",
+      "name_en": "DocumentJournals",
+      "kind": "collection",
+      "category_keys": [
+        "value_types"
+      ],
+      "signature": "DocumentJournals.<Name>",
+      "description": "Один список по документам нескольких видов. Его строки - строки самих документов: по одной на каждый записанный документ каждого перечисленного вида, с колонками, которые есть у любого документа: Ref, Date, Number, Posted и DeletionMark. Запрос читает их как DocumentJournal.<Name>, их же показывает форма списка журнала.",
+      "parameters": "None.",
+      "return_descr": "Менеджер журнала.",
+      "example": "refs = DocumentJournals.Sales.Select(BegOfMonth(CurrentDate()));",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "mth.DocumentJournal.Select",
+        "mth.DocumentJournal.GetListForm"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "mth.DocumentJournal.Select",
+      "name_local": "Select",
+      "name_en": "Select",
+      "kind": "method",
+      "category_keys": [
+        "value_types"
+      ],
+      "signature": "Select(From : date, To : date)",
+      "description": "Ссылки на документы, которые перечисляет журнал, по дате, между границами (обе включаются, любую можно опустить). Каждая ссылка - ссылка своего документа: счёт возвращается счётом.",
+      "parameters": "From - самая ранняя дата; To - самая поздняя. Любую можно опустить.",
+      "return_descr": "Массив ссылок на документы.",
+      "example": "refs = DocumentJournals.Sales.Select(From, To);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.DocumentJournal"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "mth.DocumentJournal.GetListForm",
+      "name_local": "GetListForm",
+      "name_en": "GetListForm",
+      "kind": "method",
+      "category_keys": [
+        "value_types"
+      ],
+      "signature": "GetListForm(Name : string, Owner, Key : guid)",
+      "description": "Форма списка журнала - основная форма списка, если она указана, иначе созданная по его колонкам. Открытие строки открывает её документ.",
+      "parameters": "Name - форма журнала или пусто для основной; Owner - форма-владелец; Key - ключ окна формы.",
+      "return_descr": "Форма.",
+      "example": "DocumentJournals.Sales.GetListForm().Open();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "cls.DocumentJournal"
+      ],
+      "reviewed": false
+    }
+  ]
+}

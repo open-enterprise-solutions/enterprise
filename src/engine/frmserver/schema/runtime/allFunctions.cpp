@@ -27,6 +27,7 @@ std::vector<ibFunctionGroup> FunctionGroups()
 		{ g_metaConstantCLSID,                   _("Constants") },
 		{ g_metaCatalogCLSID,                    _("Catalogs") },
 		{ g_metaDocumentCLSID,                   _("Documents") },
+		{ g_metaDocumentJournalCLSID,            _("Document journals") },
 		{ g_metaDataProcessorCLSID,              _("Data processors") },
 		{ g_metaReportCLSID,                     _("Reports") },
 		{ g_metaChartOfCharacteristicTypesCLSID, _("Charts of characteristic types") },

@@ -111,7 +111,8 @@ enum
 	enSequences,
 	enScheduledJobs,
 	enSessionParameters,
-	enFunctionalOptions
+	enFunctionalOptions,
+	enDocumentJournals
 };
 
 void ibValueGlobalContextManager::FillMembers(ibMemberTable& helper) const
@@ -142,6 +143,8 @@ void ibValueGlobalContextManager::FillMembers(ibMemberTable& helper) const
 	// Whether a part of the configuration is used in this base — `FunctionalOptions.<Name>.Get()`. Each
 	// option IS a constant, so the manager a name yields is the constant's own (metaFunctionalOptionObject.h).
 	helper.AppendProp(ibT("FunctionalOptions"));
+	// The journals of documents: `DocumentJournals.<Name>`.
+	helper.AppendProp(ibT("DocumentJournals"));
 }
 
 #include "backend/metaCollection/metaSessionParameterObject.h"   // the metatype AND the value it yields
@@ -208,6 +211,9 @@ bool ibValueGlobalContextManager::GetPropVal(const long lPropNum, ibValue& pvarP
 		return true;
 	case enFunctionalOptions:
 		pvarPropVal = new ibValueGlobalContextStructureManager(g_metaFunctionalOptionCLSID, m_metaData);
+		return true;
+	case enDocumentJournals:
+		pvarPropVal = new ibValueGlobalContextStructureManager(g_metaDocumentJournalCLSID, m_metaData);
 		return true;
 	}
 
