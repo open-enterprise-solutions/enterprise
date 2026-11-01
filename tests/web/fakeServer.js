@@ -8,7 +8,7 @@
 	const packet = import('/pub/src/protocol/packet.js');
 
 	// The events (ibEvent::ibKind) and the questions (ibRequest::ibKind) this server knows of.
-	const Event = { Command: 2, Open: 7 };
+	const Event = { Command: 2, Press: 3, Open: 7 };
 	const messageRequest = 1;
 	const viewModeRequest = 7;
 	const viewModeCommand = 700;
@@ -20,6 +20,18 @@
 	const cancel = 0x10;
 	// An item's Stretch (wxStretch): it fills its box across.
 	const expand = 0x2000;
+
+	/** The control of that id among the nodes and under them, or undefined. @param {any[]} nodes @param {number} id */
+	function controlOf(nodes, id) {
+		for (const node of nodes) {
+			if (node.ControlId === id)
+				return node;
+			const under = controlOf(node.NodeChildren ?? [], id);
+			if (under !== undefined)
+				return under;
+		}
+		return undefined;
+	}
 
 	class FakeServer {
 		constructor() {
@@ -115,8 +127,9 @@
 			return {
 				NodeType: 'ClientForm', ControlId: tab.id * 100, Key: `form${tab.id}`,
 				State: {},
-				// Laid as a saved form lays them: each control in a sizer's item, the table taking what is left.
-				NodeChildren: [...(tab.fields ?? []).map((field, place) => ({
+				// Laid as a saved form lays them: each control in a sizer's item, the table taking what is left. A tab's
+				// `controls` are nodes as the server writes them, put first as they are.
+				NodeChildren: [...(tab.controls ?? []), ...(tab.fields ?? []).map((field, place) => ({
 					NodeType: 'SizerItem', ControlId: 500 + place, Proportion: 0, Stretch: expand,
 					NodeChildren: [{
 						NodeType: 'Textctrl', ControlId: field.id, ButtonSelect: field.select ?? true, ButtonClear: field.clear ?? true,
@@ -206,7 +219,9 @@
 			case 'schema':
 				return scenario.schemas?.[params.Schema] ?? {};
 			case 'picture':
-				return { Pictures: [] };
+				// The scenario's pictures, each its id and its PNG's bytes (an array of numbers in the scenario).
+				return { Pictures: { NodeChildren: (scenario.pictures ?? []).filter((one) => params.Pictures?.includes(String(one.id)))
+					.map((one) => ({ Id: String(one.id), Picture: Uint8Array.from(one.png) })) } };
 			case 'logout':
 				return {};
 			default:
@@ -218,6 +233,10 @@
 			const table = this.tab()?.table;
 			if (params.Event === Event.Command && params.Args?.Id === viewModeCommand)
 				this.request = { Id: this.nextRequest++, Kind: viewModeRequest, Mode: table.viewMode };
+			// A press the scenario answers with a change of that control's State (`onPress`: by the control's id), as a
+			// server whose handler changed what the button says would: the next frame carries it.
+			else if (params.Event === Event.Press && scenario.onPress?.[params.Control] !== undefined)
+				Object.assign(controlOf(this.tab()?.controls ?? [], params.Control)?.State ?? {}, scenario.onPress[params.Control]);
 			else if (table !== undefined && scenario.opens !== undefined && params.Event === Event.Open && params.Args?.Column === undefined)
 				this.tabs.push({ id: this.tabs.length + 1, ...scenario.opens }), this.active = this.tabs.length;
 			return this.answerFrame();

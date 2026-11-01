@@ -45,17 +45,23 @@ void ibValueButton::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	}
 	// The button's OWN Representation wins; left on Auto it takes the bound COMMAND's default (picture-only for
 	// Close / Update, picture+text for Add / Post), and picture+text when nothing is bound. One resolved rep.
-	ibRepresentation rep = m_propertyRepresentation->GetValueAsEnum();
-	if (rep == ibRepresentation::ibRepresentation_Auto)
-		rep = (cmdResolved && !cmdPicAndText) ? ibRepresentation::ibRepresentation_Picture
-		                                      : ibRepresentation::ibRepresentation_PictureAndText;
+	ibButtonRepresentation rep = m_propertyRepresentation->GetValueAsEnum();
+	if (rep == ibButtonRepresentation::ibButtonRepresentation_Auto)
+		rep = (cmdResolved && !cmdPicAndText) ? ibButtonRepresentation::ibButtonRepresentation_Picture
+		                                      : ibButtonRepresentation::ibButtonRepresentation_PictureAndText;
 
 	// The caption is always written — it names the button even when only the picture is shown; the
 	// representation says which of the two are shown. The picture travels by its id, and only when it is shown at all.
 	state.SetValue(ibProtocol::ibForm::ibState::Caption, title);
 	state.SetValue(ibProtocol::ibForm::ibState::Representation, static_cast<std::int32_t>(rep));
-	if (rep != ibRepresentation::ibRepresentation_Text && !picture.IsEmptyPicture())
+	if (rep != ibButtonRepresentation::ibButtonRepresentation_Text && !picture.IsEmptyPicture())
 		state.SetValue(ibProtocol::ibForm::ibState::Picture, ibBackendPicture::SendPicture(picture, GetMetaData()));
+	// The number goes on the wire as it is: the button's own enumeration keeps the protocol's numbers.
+	static_assert(static_cast<int>(ibButtonRepresentation::ibButtonRepresentation_Tile)
+		== static_cast<int>(ibProtocol::ibForm::ibState::ibRepresentation::Tile), "a tile is 4 on the wire");
+	// A tile's note goes with it; no other representation shows one, so no other carries it.
+	if (rep == ibButtonRepresentation::ibButtonRepresentation_Tile)
+		state.SetValue(ibProtocol::ibForm::ibState::Note, m_propertyNote->GetValueAsTranslateString());
 
 	// A button carries ONLY a command — with none bound, OR the bound command DELETED (its path no longer resolves
 	// through the door), it has nothing to do, so it is NOT shown. The orphaned control still lives in the object
@@ -107,6 +113,7 @@ bool ibValueButton::ReadData(const ibDataNode& node)
 	m_propertyTitle->SetNodeValue(node.GetProperty(m_propertyTitle->GetName()));
 	m_propertyRepresentation->SetNodeValue(node.GetProperty(m_propertyRepresentation->GetName()));
 	m_propertyPicture->SetNodeValue(node.GetProperty(m_propertyPicture->GetName()));
+	m_propertyNote->SetNodeValue(node.GetProperty(m_propertyNote->GetName()));
 	m_propertyCommand->SetNodeValue(node.GetProperty(m_propertyCommand->GetName()));   // the button's ONLY binding (hop path)
 
 	return ibValueWindow::ReadData(node);
@@ -117,6 +124,7 @@ bool ibValueButton::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyTitle->GetName(), m_propertyTitle->GetNodeValue());
 	node.SetProperty(m_propertyRepresentation->GetName(), m_propertyRepresentation->GetNodeValue());
 	node.SetProperty(m_propertyPicture->GetName(), m_propertyPicture->GetNodeValue());
+	node.SetProperty(m_propertyNote->GetName(), m_propertyNote->GetNodeValue());
 	node.SetProperty(m_propertyCommand->GetName(), m_propertyCommand->GetNodeValue());   // the button's ONLY binding (hop path)
 
 	return ibValueWindow::WriteData(node);

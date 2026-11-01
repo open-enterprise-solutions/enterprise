@@ -35,7 +35,9 @@ namespace ibProtocol {
 	//      the key the first asks for, carries the debugger's commands, answered at once, and the server's `debug`
 	//      notifications — a stop, the stack, the locals — sent as they happen, not as a frame.
 	//   7  …and the assistant's MCP rides it the same way (ibMcp): a connection of its own, bound by a key of its own.
-	inline constexpr int Version = 7;
+	//   8  …and a button may be a TILE (its State's Representation Tile): its picture large over its caption, and a
+	//      Note under them. A client below 8 reads the number as picture and text.
+	inline constexpr int Version = 8;
 
 	// WHAT A CLIENT ASKS THE SERVER. On the wire a method is a name, as JSON-RPC has it; in code it is a type: the server
 	// reads the name once (MethodFromName) and nothing past it compares strings. A name is never changed; a new method
@@ -1793,6 +1795,7 @@ namespace ibProtocol {
 			inline constexpr const char* Caption        = "Caption";
 			inline constexpr const char* Picture        = "Picture";
 			inline constexpr const char* Representation = "Representation";   // ibRepresentation: a button's, a column's
+			inline constexpr const char* Note           = "Note";             // a tile's: the line under its caption
 			inline constexpr const char* Text           = "Text";
 			inline constexpr const char* Value          = "Value";            // a field's value with its type
 			inline constexpr const char* Checked        = "Checked";
@@ -1804,12 +1807,14 @@ namespace ibProtocol {
 			inline constexpr const char* ViewOnly       = "ViewOnly";         // opened for viewing only
 			inline constexpr const char* LockedBy       = "LockedBy";         // who holds its object's lock; absent: nobody
 
-			// What a control shows (Auto is resolved by the server before it is written).
+			// What a control shows (Auto is resolved by the server before it is written). Tile is a button's alone: the
+			// picture large over the caption, the Note under them, the whole filling what its item gives it.
 			enum class ibRepresentation : int {
 				Auto           = 0,
 				Text           = 1,
 				Picture        = 2,
 				PictureAndText = 3,
+				Tile           = 4,
 			};
 
 		}

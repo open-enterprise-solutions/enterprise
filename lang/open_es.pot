@@ -9893,7 +9893,7 @@ msgid "The text on the button. Can be written per language and changed from code
 msgstr ""
 
 #: src/engine/frmserver/visualView/ctrl/widgets.h:63
-msgid "What the button shows: text, picture, or both. Auto: what the bound command prefers (Close is a picture alone, Add a picture with text); picture and text when no command is bound."
+msgid "What the button shows: text, picture, or both. Auto: what the bound command prefers (Close is a picture alone, Add a picture with text); picture and text when no command is bound. Tile: the picture large over the text and the Note under them, the button filling what its sizer gives it - a big button for a finger; put tiles in a grid sizer for a panel of them."
 msgstr ""
 
 #: src/engine/frmserver/visualView/ctrl/widgets.h:66
@@ -13263,4 +13263,16 @@ msgstr ""
 
 #: src/engine/frmclient/mainFrame/settings/settingsdialog.cpp:39
 msgid "Debugging"
+msgstr ""
+
+#: src/engine/frmserver/visualView/controlEnum.h
+msgid "Tile"
+msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgid "Note"
+msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgid "The line under a tile's title - a price, a count, a state. Shown only when Representation is Tile. Can be written per language and changed from code while the form is open."
 msgstr ""

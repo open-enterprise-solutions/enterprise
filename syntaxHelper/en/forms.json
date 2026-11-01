@@ -1,0 +1,145 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "enum.ButtonRepresentation",
+      "name_local": "ButtonRepresentation",
+      "name_en": "ButtonRepresentation",
+      "kind": "enum_type",
+      "class_id": 398331834571618557,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "forms"
+      ],
+      "signature": "ButtonRepresentation.Auto, .Text, .Picture, .PictureAndText, .Tile",
+      "description": "What a button shows: its caption, its picture, both, or a tile. A button's Representation property holds a member, written ButtonRepresentation.<Name>. It has the four members a column, a page and a command bar item also show - Auto, Text, Picture, PictureAndText, under the same numbers - and Tile, which only a button has.\n\nA script reads and sets it on a button of the form: `Controls.Button1.Representation = ButtonRepresentation.Tile;`. The shared enumeration Representation is another type: a member of it set on a button's Representation is taken by its number, but compared with it answers False.",
+      "syntax_block": "Controls.Button1.Representation = ButtonRepresentation.Tile;",
+      "syntax_block_ves": "Controls.Button1.Representation = ButtonRepresentation.Tile;",
+      "parameters": "",
+      "return_descr": "ButtonRepresentation.",
+      "example": "Controls.Button1.Representation = ButtonRepresentation.Tile;\nControls.Button1.Note = \"12\";",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.ButtonRepresentation.Auto",
+        "enum.ButtonRepresentation.Text",
+        "enum.ButtonRepresentation.Picture",
+        "enum.ButtonRepresentation.PictureAndText",
+        "enum.ButtonRepresentation.Tile"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.ButtonRepresentation.Auto",
+      "name_local": "Auto",
+      "name_en": "Auto",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "forms"
+      ],
+      "signature": "ButtonRepresentation.Auto",
+      "description": "What the bound command prefers: a picture alone for Close or Update, a picture with text for Add or Post; picture and text when no command is bound. The default.",
+      "syntax_block": "Controls.Button1.Representation = ButtonRepresentation.Auto;",
+      "parameters": "",
+      "return_descr": "ButtonRepresentation.",
+      "example": "Controls.Button1.Representation = ButtonRepresentation.Auto;",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.ButtonRepresentation"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.ButtonRepresentation.Text",
+      "name_local": "Text",
+      "name_en": "Text",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "forms"
+      ],
+      "signature": "ButtonRepresentation.Text",
+      "description": "The caption alone; no picture is sent.",
+      "syntax_block": "Controls.Button1.Representation = ButtonRepresentation.Text;",
+      "parameters": "",
+      "return_descr": "ButtonRepresentation.",
+      "example": "Controls.Button1.Representation = ButtonRepresentation.Text;",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.ButtonRepresentation"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.ButtonRepresentation.Picture",
+      "name_local": "Picture",
+      "name_en": "Picture",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "forms"
+      ],
+      "signature": "ButtonRepresentation.Picture",
+      "description": "The picture alone. The caption still names the button - it is its tooltip.",
+      "syntax_block": "Controls.Button1.Representation = ButtonRepresentation.Picture;",
+      "parameters": "",
+      "return_descr": "ButtonRepresentation.",
+      "example": "Controls.Button1.Representation = ButtonRepresentation.Picture;",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.ButtonRepresentation"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.ButtonRepresentation.PictureAndText",
+      "name_local": "PictureAndText",
+      "name_en": "PictureAndText",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "forms"
+      ],
+      "signature": "ButtonRepresentation.PictureAndText",
+      "description": "The picture beside the caption.",
+      "syntax_block": "Controls.Button1.Representation = ButtonRepresentation.PictureAndText;",
+      "parameters": "",
+      "return_descr": "ButtonRepresentation.",
+      "example": "Controls.Button1.Representation = ButtonRepresentation.PictureAndText;",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.ButtonRepresentation"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.ButtonRepresentation.Tile",
+      "name_local": "Tile",
+      "name_en": "Tile",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "forms"
+      ],
+      "signature": "ButtonRepresentation.Tile",
+      "description": "A button for a finger: the picture large over the caption, the button's Note under them in a smaller face (a price, a count, a state), the whole filling what its sizer gives it. Put tiles in a grid sizer for a panel of them. A client older than protocol 8 shows a tile as picture and text.",
+      "syntax_block": "Controls.Button1.Representation = ButtonRepresentation.Tile;",
+      "parameters": "",
+      "return_descr": "ButtonRepresentation.",
+      "example": "Controls.Button1.Representation = ButtonRepresentation.Tile;",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.ButtonRepresentation"
+      ],
+      "reviewed": false
+    }
+  ]
+}

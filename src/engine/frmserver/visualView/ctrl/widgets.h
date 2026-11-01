@@ -15,6 +15,21 @@
 // read from its clsid, never via dynamic_cast.
 constexpr ibClassID g_controlButtonCLSID = control_to_clsid("CT_BUTN");
 
+// A button's Representation: a member of its own enumeration, and a member of the shared Representation a script sets
+// it to as well - the four they share are under the same numbers, so a module written before the button had its own
+// keeps working.
+class ibPropertyButtonRepresentation : public ibPropertyEnum<ibValueEnumButtonRepresentation> {
+public:
+	using ibPropertyEnum::ibPropertyEnum;
+	virtual bool SetDataValue(const ibValue& value) override {
+		if (const auto* const shared = dynamic_cast<const ibValueEnumerationVariantBase<ibRepresentation>*>(value.GetRef())) {
+			SetValue(static_cast<int>(shared->GetEnumValue()));
+			return true;
+		}
+		return ibPropertyEnum::SetDataValue(value);
+	}
+};
+
 class ibValueButton : public ibValueWindow, public ibFrontendCommandReceiver {
 	public:
 
@@ -59,11 +74,13 @@ private:
 	ibPropertyCategory* m_categoryButton = ibPropertyObject::CreatePropertyCategory(ibT("Button"), _("Button"));
 	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryButton, ibT("Title"), _("Title"),
 		_("The text on the button. Can be written per language and changed from code while the form is open."), ibT("Button"));
-	ibPropertyEnum<ibValueEnumRepresentation>* m_propertyRepresentation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumRepresentation>>(m_categoryButton, ibT("Representation"), _("Representation"),
-		_("What the button shows: text, picture, or both. Auto: what the bound command prefers (Close is a picture alone, Add a picture with text); picture and text when no command is bound."),
-		ibRepresentation::ibRepresentation_Auto);
+	ibPropertyButtonRepresentation* m_propertyRepresentation = ibPropertyObject::CreateProperty<ibPropertyButtonRepresentation>(m_categoryButton, ibT("Representation"), _("Representation"),
+		_("What the button shows: text, picture, or both. Auto: what the bound command prefers (Close is a picture alone, Add a picture with text); picture and text when no command is bound. Tile: the picture large over the text and the Note under them, the button filling what its sizer gives it - a big button for a finger; put tiles in a grid sizer for a panel of them."),
+		ibButtonRepresentation::ibButtonRepresentation_Auto);
 	ibPropertyPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_categoryButton, ibT("Picture"), _("Picture"),
 		_("The button's icon, beside or instead of the text (see Representation)."));
+	ibPropertyTString* m_propertyNote = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryButton, ibT("Note"), _("Note"),
+		_("The line under a tile's title - a price, a count, a state. Shown only when Representation is Tile. Can be written per language and changed from code while the form is open."), ibT(""));
 	// A button has NO event — it carries ONLY a bound COMMAND (command-source picker, the command-door twin of a
 	// control's data source). A press RUNS the command through ibFrontendCommandReceiver::ExecuteValueByPath. Internal
 	// name MUST differ from any category name (wxPropertyGrid keys both in one map); lives in the Button category.

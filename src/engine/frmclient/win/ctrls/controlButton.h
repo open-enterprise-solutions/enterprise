@@ -38,6 +38,14 @@ public:
 
 	virtual void SetLabel(const wxString& label) override;
 
+	// The line under the label of a button drawn as a tile - its bitmap on top (SetBitmap(bitmap, wxTOP)): a price, a
+	// count. Drawn in that layout alone, and not with wxBU_NOTEXT, which hides the label it stands under.
+	void SetNote(const wxString& note);
+	const wxString& GetNote() const { return m_note; }
+
+	// A sizer that gives the button a width first asks its height there - a tile's label wrapped into it.
+	virtual wxSize GetMinSizeFromKnownDirection(int direction, int size, int availableOtherDir) override;
+
 	// Mark the button as the default action on its dialog / form — drawn
 	// with a thicker accent border so it reads as the primary choice.
 	void SetDefault(bool isDefault = true) {
@@ -65,6 +73,7 @@ public:
 protected:
 
 	virtual wxSize DoGetBestClientSize() const override;
+	virtual int DoGetBestClientHeight(int width) const override;
 
 	// Bitmap support (inherited API from wxAnyButtonBase): remember the
 	// bundle for each state and refresh — we draw everything manually.
@@ -91,7 +100,8 @@ protected:
 
 private:
 
-	mutable wxSize m_cachedBestSize = wxSize(-1, -1);
+	wxString m_note;
+	wxFont   NoteFont() const { return GetFont().Smaller(); }
 
 	bool m_hovered = false;
 	bool m_pressed = false;
@@ -107,7 +117,6 @@ private:
 
 	wxBitmap BitmapForCurrentState() const;
 
-	void InvalidateCache() const { m_cachedBestSize = wxSize(-1, -1); }
 	void FireClick();
 
 	wxDECLARE_DYNAMIC_CLASS(ibControlButton);
