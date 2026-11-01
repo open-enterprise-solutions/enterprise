@@ -254,6 +254,7 @@
     <ClCompile Include="syntaxHelper\helpResolver.cpp" />
     <ClCompile Include="syntaxHelper\helpService.cpp" />
     <ClCompile Include="tabular\tabularModelView.cpp" />
+    <ClCompile Include="timeZone.cpp" />
     <ClCompile Include="typeName.cpp" />
     <ClCompile Include="variant.cpp" />
     <ClCompile Include="utils\base64.cpp" />
@@ -369,6 +370,7 @@
     <ClInclude Include="syntaxHelper\helpResolver.h" />
     <ClInclude Include="syntaxHelper\helpService.h" />
     <ClInclude Include="tabular\tabularModelView.h" />
+    <ClInclude Include="timeZone.h" />
     <ClInclude Include="typeName.h" />
     <ClInclude Include="variant.h" />
     <ClInclude Include="variant_ptr.h" />

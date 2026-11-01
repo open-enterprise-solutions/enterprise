@@ -364,6 +364,20 @@ endif()
 # drawn into pixels the core writes as a PNG. Nothing to build here.
 oes_require_submodule(nanosvg src/nanosvg.h)
 
+# THE CORE'S TIME ZONES (core/timeZone.cpp) — the IANA rules. MSVC has them (std::chrono::tzdb, from Windows' own
+# ICU); GCC before 14 and Apple's libc++ do not, so there the core takes Howard Hinnant's date library, the one
+# std::chrono::tzdb came from, reading the system's /usr/share/zoneinfo (USE_OS_TZDB): no rules are shipped. One
+# file of it, hidden like the libraries above. It goes when every toolchain the builds use has a C++20 tzdb.
+if(NOT MSVC)
+    oes_require_submodule(date include/date/tz.h)
+    add_library(date-tz STATIC "${OES_3RDPARTY_DIR}/date/src/tz.cpp")
+    target_include_directories(date-tz PUBLIC "${OES_3RDPARTY_DIR}/date/include")
+    # Its own chrono types throughout (HAS_CHRONO_20=0): libstdc++ 11 has no <format>, Apple libc++ no tzdb types.
+    target_compile_definitions(date-tz PUBLIC USE_OS_TZDB=1 HAS_REMOTE_API=0 HAS_CHRONO_20=0)
+    set_target_properties(date-tz PROPERTIES POSITION_INDEPENDENT_CODE ON CXX_VISIBILITY_PRESET hidden)
+    target_compile_options(date-tz PRIVATE -w)
+endif()
+
 if(WIN32)
     add_compile_definitions(
         WIN32
