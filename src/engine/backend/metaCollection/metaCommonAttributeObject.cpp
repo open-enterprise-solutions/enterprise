@@ -267,9 +267,19 @@ bool ibValueMetaObjectCommonAttributeColumn::OnBeforeRunMetaObject(int flags)
 	// declaration's — and the source explorer copies a node's type BY VALUE when it builds
 	// (ibSourceInfo::m_typeDesc). An unbound copy therefore yields a column with an empty
 	// type, and the form cannot build a control for it.
-	if (!m_source && m_sourceMetaId != 0 && m_metaData != nullptr)
+	if (!m_source && m_sourceMetaId != 0 && m_metaData != nullptr) {
+		// Walk into children. A declaration lives under the root; a search that
+		// stops at the root's own children still finds it, and the same call also
+		// finds one a group has nested. Stopping at the first level would leave
+		// that copy typeless for the whole run.
 		m_source = m_metaData->FindAnyObjectByFilter<ibValueMetaObjectCommonAttribute>(
-			m_sourceMetaId, g_metaCommonAttributeCLSID);
+			m_sourceMetaId, g_metaCommonAttributeCLSID, /*use_child_filter*/ true);
+		// Looked, and it is not there — removed while the configuration was closed.
+		// Clearing the id is what makes IsDeleted answer true from here on, so the
+		// column drops with no sweep of its own.
+		if (!m_source)
+			m_sourceMetaId = 0;
+	}
 
 	return ibValueMetaObjectAttribute::OnBeforeRunMetaObject(flags);
 }
