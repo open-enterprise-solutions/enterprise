@@ -13264,3 +13264,37 @@ msgstr ""
 #: src/engine/frmclient/mainFrame/settings/settingsdialog.cpp:39
 msgid "Debugging"
 msgstr ""
+
+#: src/engine/backend/system/systemManagerEnum.h
+msgid "Enable"
+msgstr ""
+
+#: src/engine/backend/system/systemManagerEnum.h
+msgid "Disable"
+msgstr ""
+
+#: src/engine/backend/system/value/valueFullTextSearch.cpp
+msgid "FullTextSearch: no base is open, so there is no full-text search mode to read or set"
+msgstr ""
+
+#: src/engine/backend/system/value/valueFullTextSearch.cpp
+#, c-format
+msgid "FullTextSearch.%s: %s is a Boolean"
+msgstr ""
+
+#: src/engine/backend/system/value/valueFullTextSearch.cpp
+#, c-format
+msgid "FullTextSearch: the base keeps a full-text search mode this build does not know (%d)"
+msgstr ""
+
+#: src/engine/backend/system/value/valueFullTextSearch.cpp
+msgid "FullTextSearch.SetFullTextSearchMode: the mode is a FullTextSearchMode value - FullTextSearchMode.Enable or FullTextSearchMode.Disable"
+msgstr ""
+
+#: src/engine/backend/system/value/valueFullTextSearch.cpp
+msgid "FullTextSearch.SetFullTextSearchMode: changing the full-text search mode needs the Data administration right"
+msgstr ""
+
+#: src/engine/backend/system/value/valueFullTextSearch.cpp
+msgid "FullTextSearch.SetFullTextSearchMode: the mode was not saved in the base (the technology journal says why)"
+msgstr ""

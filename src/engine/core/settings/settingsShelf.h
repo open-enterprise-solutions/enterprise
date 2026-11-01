@@ -40,6 +40,9 @@ enum class ibSettingsCategory : int {
 	// client of it, so the row has NO user (ReadLocale, backend/appData.cpp). One well-known object
 	// key, as the platform's above.
 	Regional,
+	// The base's full-text search: whether it is on (FullTextSearch.SetFullTextSearchMode), one row with NO user —
+	// the mode is the base's, as the locale above is (backend/system/value/valueFullTextSearch.cpp).
+	Search,
 };
 
 // ONE SAVED SETTING as a shelf shows it — the identity, the caption, and when it

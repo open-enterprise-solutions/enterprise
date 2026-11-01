@@ -81,6 +81,11 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   refused, not read as no bytes.
 - **An encoding is a member of `TextEncoding`.** `TextReader` and `TextWriter` took a string or another
   enumeration's member without a word; now it is refused, as `HTTPRequest` already refused a string.
+- **`FullTextSearch`, the base's full-text search.** `GetFullTextSearchMode()` and
+  `SetFullTextSearchMode(FullTextSearchMode.Enable | Disable)` read and switch the mode, kept in the base
+  and changed with the *Data administration* right; a base where nobody switched it on answers `Disable`.
+  There is no index yet: `UpdateIndex(merge, portion)` and `ClearIndex()` succeed and do nothing,
+  `IndexTrue()` is `False` and `UpdateDate()` the empty date, so a module that keeps an index fresh runs.
 
 ## The browser client
 

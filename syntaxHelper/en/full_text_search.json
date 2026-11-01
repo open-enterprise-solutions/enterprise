@@ -1,0 +1,248 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "cls.FullTextSearch",
+      "name_local": "FullTextSearch",
+      "name_en": "FullTextSearch",
+      "kind": "collection",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearch",
+      "description": "The base's full-text search: whether it is on, and the maintenance of its index. A global of the server, reached by name.\n\nTHE MODE IS THE BASE'S - one for every session and every person, kept in the base, written by whoever holds Data administration. A base where nobody switched it on answers FullTextSearchMode.Disable.\n\nTHERE IS NO INDEX YET. Until the platform keeps one, the maintenance succeeds and does nothing: IndexTrue() is False, UpdateDate() is the empty date, UpdateIndex() and ClearIndex() return having changed nothing - whatever the mode. A module that only keeps an index fresh (a scheduled job, an administration form) compiles and runs as it will when the index exists.",
+      "syntax_block": "If FullTextSearch.GetFullTextSearchMode() = FullTextSearchMode.Enable Then\n    FullTextSearch.UpdateIndex(False, True);\nEndIf;",
+      "parameters": "",
+      "return_descr": "",
+      "example": "// a scheduled job keeping the index fresh\nif (FullTextSearch.GetFullTextSearchMode() = FullTextSearchMode.Enable) {\n    FullTextSearch.UpdateIndex(false, true);\n}",
+      "availability": "Server",
+      "see_also": [
+        "cls.FullTextSearch.GetFullTextSearchMode",
+        "cls.FullTextSearch.SetFullTextSearchMode",
+        "cls.FullTextSearch.IndexTrue",
+        "cls.FullTextSearch.UpdateIndex",
+        "cls.FullTextSearch.ClearIndex",
+        "cls.FullTextSearch.UpdateDate",
+        "enum.FullTextSearchMode"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearch.GetFullTextSearchMode",
+      "name_local": "GetFullTextSearchMode",
+      "name_en": "GetFullTextSearchMode",
+      "kind": "method",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearch.GetFullTextSearchMode() : FullTextSearchMode",
+      "description": "The base's full-text search mode, as it is kept in the base. Nothing saved yet reads as FullTextSearchMode.Disable. A mode this build does not know is refused with its number, rather than read as one of the two.",
+      "syntax_block": "Mode = FullTextSearch.GetFullTextSearchMode();",
+      "parameters": "",
+      "return_descr": "FullTextSearchMode.",
+      "example": "if (FullTextSearch.GetFullTextSearchMode() = FullTextSearchMode.Disable) {\n    Message(\"Full-text search is off\");\n}",
+      "availability": "Server",
+      "see_also": [
+        "cls.FullTextSearch",
+        "cls.FullTextSearch.SetFullTextSearchMode",
+        "enum.FullTextSearchMode"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearch.SetFullTextSearchMode",
+      "name_local": "SetFullTextSearchMode",
+      "name_en": "SetFullTextSearchMode",
+      "kind": "procedure",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearch.SetFullTextSearchMode(mode : FullTextSearchMode)",
+      "description": "Switches the base's full-text search on or off, for every session. Needs the Data administration right; without it the call is refused and the mode stays. A mode that is not a member of FullTextSearchMode - a number, a string - is refused. A mode the base did not take is refused too, and the technology journal says why.",
+      "syntax_block": "FullTextSearch.SetFullTextSearchMode(FullTextSearchMode.Enable);",
+      "parameters": "mode - a member of FullTextSearchMode: Enable or Disable.",
+      "return_descr": "",
+      "example": "FullTextSearch.SetFullTextSearchMode(FullTextSearchMode.Enable);\nMessage(FullTextSearch.GetFullTextSearchMode());",
+      "availability": "Server",
+      "see_also": [
+        "cls.FullTextSearch",
+        "cls.FullTextSearch.GetFullTextSearchMode",
+        "enum.FullTextSearchMode"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearch.IndexTrue",
+      "name_local": "IndexTrue",
+      "name_en": "IndexTrue",
+      "kind": "method",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearch.IndexTrue() : boolean",
+      "description": "Whether the index holds everything the base has. While the platform keeps no index, False: nothing is indexed, so nothing is up to date.",
+      "syntax_block": "Fresh = FullTextSearch.IndexTrue();",
+      "parameters": "",
+      "return_descr": "Boolean.",
+      "example": "if (!FullTextSearch.IndexTrue()) {\n    FullTextSearch.UpdateIndex();\n}",
+      "availability": "Server",
+      "see_also": [
+        "cls.FullTextSearch",
+        "cls.FullTextSearch.UpdateIndex",
+        "cls.FullTextSearch.UpdateDate"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearch.UpdateIndex",
+      "name_local": "UpdateIndex",
+      "name_en": "UpdateIndex",
+      "kind": "procedure",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearch.UpdateIndex(merge : boolean = false, portion : boolean = false)",
+      "description": "Brings the index up to date with the base. While the platform keeps no index, succeeds and does nothing, whatever the mode. A flag that is not a Boolean is refused.",
+      "syntax_block": "FullTextSearch.UpdateIndex(merge, portion);",
+      "parameters": "merge - True to merge the parts of the index into one. Left out - False.\nportion - True to index a portion of the changes and return. Left out - False.",
+      "return_descr": "",
+      "example": "// a scheduled job: a portion at a time, merged at night\nFullTextSearch.UpdateIndex(false, true);",
+      "availability": "Server",
+      "see_also": [
+        "cls.FullTextSearch",
+        "cls.FullTextSearch.IndexTrue",
+        "cls.FullTextSearch.ClearIndex"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearch.ClearIndex",
+      "name_local": "ClearIndex",
+      "name_en": "ClearIndex",
+      "kind": "procedure",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearch.ClearIndex()",
+      "description": "Empties the index, so the next UpdateIndex builds it anew. While the platform keeps no index, succeeds and does nothing. The mode is not changed.",
+      "syntax_block": "FullTextSearch.ClearIndex();",
+      "parameters": "",
+      "return_descr": "",
+      "example": "FullTextSearch.ClearIndex();\nFullTextSearch.UpdateIndex();",
+      "availability": "Server",
+      "see_also": [
+        "cls.FullTextSearch",
+        "cls.FullTextSearch.UpdateIndex"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearch.UpdateDate",
+      "name_local": "UpdateDate",
+      "name_en": "UpdateDate",
+      "kind": "method",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearch.UpdateDate() : date",
+      "description": "When the index was last brought up to date. While the platform keeps no index, the empty date: it never was.",
+      "syntax_block": "Updated = FullTextSearch.UpdateDate();",
+      "parameters": "",
+      "return_descr": "Date.",
+      "example": "Message(FullTextSearch.UpdateDate());",
+      "availability": "Server",
+      "see_also": [
+        "cls.FullTextSearch",
+        "cls.FullTextSearch.UpdateIndex"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.FullTextSearchMode",
+      "name_local": "FullTextSearchMode",
+      "name_en": "FullTextSearchMode",
+      "kind": "enum_type",
+      "class_id": 428523194804503701,
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchMode.Enable, .Disable",
+      "description": "Whether the base keeps its full-text search: two members, written FullTextSearchMode.<Name>. What SetFullTextSearchMode is told and GetFullTextSearchMode answers.",
+      "syntax_block": "FullTextSearch.SetFullTextSearchMode(FullTextSearchMode.Enable);",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Message(FullTextSearch.GetFullTextSearchMode() = FullTextSearchMode.Enable);",
+      "availability": "Server",
+      "see_also": [
+        "enum.FullTextSearchMode.Enable",
+        "enum.FullTextSearchMode.Disable",
+        "cls.FullTextSearch"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.FullTextSearchMode.Enable",
+      "name_local": "Enable",
+      "name_en": "Enable",
+      "kind": "system_enum",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchMode.Enable",
+      "description": "Full-text search is on.",
+      "syntax_block": "FullTextSearch.SetFullTextSearchMode(FullTextSearchMode.Enable);",
+      "parameters": "",
+      "return_descr": "FullTextSearchMode.",
+      "example": "FullTextSearch.SetFullTextSearchMode(FullTextSearchMode.Enable);",
+      "availability": "Server",
+      "see_also": [
+        "enum.FullTextSearchMode",
+        "cls.FullTextSearch.SetFullTextSearchMode"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.FullTextSearchMode.Disable",
+      "name_local": "Disable",
+      "name_en": "Disable",
+      "kind": "system_enum",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchMode.Disable",
+      "description": "Full-text search is off - also what a base where nobody switched it on answers.",
+      "syntax_block": "FullTextSearch.SetFullTextSearchMode(FullTextSearchMode.Disable);",
+      "parameters": "",
+      "return_descr": "FullTextSearchMode.",
+      "example": "FullTextSearch.SetFullTextSearchMode(FullTextSearchMode.Disable);",
+      "availability": "Server",
+      "see_also": [
+        "enum.FullTextSearchMode",
+        "cls.FullTextSearch.SetFullTextSearchMode"
+      ],
+      "reviewed": false
+    }
+  ]
+}
