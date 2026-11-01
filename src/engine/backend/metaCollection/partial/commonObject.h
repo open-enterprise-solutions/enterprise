@@ -2,6 +2,7 @@
 #define __COMMON_OBJECT_H__
 
 #include "reference/reference.h"
+#include "core/serialize/dataBuilder.h"   // ibDataValue - the form a predefined item keeps a declared cell in
 #include "backend/uniqueKey.h"
 #include "backend/lock/lockHandle.h"
 #include "backend/lock/lockTypes.h"
@@ -1308,6 +1309,26 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 	public ibValueMetaObjectRecordDataMutableRef {
 	public:
 
+	// ⭐⭐ WHAT A PREDEFINED ITEM DECLARES BEYOND ITS NAME. A chart of characteristic types declares each
+	// characteristic's value Type; a chart of accounts each account's side, whether it is off-balance, the
+	// accounting flags it is kept by, and its analytics - the rows of its dimension-kinds section. These are
+	// cells of the item's row the DECLARATION owns, exactly as it owns the parent: set as data they do not
+	// travel with the configuration, and a base built from it has accounts nothing can be posted to (#278).
+	//
+	// Keyed by the ATTRIBUTE'S metaID - the same key the seed row binds a column by - and held in the form
+	// the configuration is written in (PackPredefinedCell): read back as a value only where one is needed, so
+	// loading a configuration never has to find the object a reference points into before it is loaded.
+	typedef std::map<ibMetaID, ibDataValue> ibPredefinedCells;
+
+	// One row of a tabular section the declaration owns - an account's analytics slot. The guid is the
+	// row's identity in the declaration and in the change ledger; the database knows a line by its owner
+	// and its position, which the order of this list is.
+	struct ibPredefinedLine {
+		ibGuid            m_id;
+		ibPredefinedCells m_cells;
+	};
+	typedef std::map<ibMetaID, std::vector<ibPredefinedLine>> ibPredefinedLines;   // table metaID -> its rows
+
 	class ibPredefinedValueObject : public ibDataViewObject {
 	public:
 
@@ -1357,6 +1378,9 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 		bool IsPredefinedFolder() const { return m_valueIsFolder; }
 		wxObjectDataPtr<ibPredefinedValueObject> GetPredefinedParent() const { return m_valueParent; }
 
+		const ibPredefinedCells& GetPredefinedCells() const { return m_cells; }
+		const ibPredefinedLines& GetPredefinedLines() const { return m_lines; }
+
 		friend class ibValueMetaObjectRecordDataHierarchyMutableRef;
 
 	private:
@@ -1370,6 +1394,9 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 		bool m_valueIsFolder;
 
 		wxObjectDataPtr<ibPredefinedValueObject> m_valueParent;
+
+		ibPredefinedCells m_cells;
+		ibPredefinedLines m_lines;
 	};
 
 	ibValueMetaObjectAttributePredefined* GetDataPredefinedName() const { return m_propertyAttributePredefined->GetMetaObject(); }
@@ -1562,6 +1589,27 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 
 	void DeletePredefinedValue(const ibGuid& predefinedGuid);
 
+	// What this kind's predefined items declare beyond the five above (see ibPredefinedCells): the
+	// attributes of the item's own row, and the tabular sections whose rows it owns. A catalog declares
+	// neither; the charts say what theirs are.
+	virtual std::vector<ibValueMetaObjectAttributeBase*> GetPredefinedCellAttributes() const { return {}; }
+	virtual std::vector<ibValueMetaObjectTableDataRef*> GetPredefinedLineTables() const { return {}; }
+
+	// The columns a row of such a section declares - every column but the line number, which is the
+	// row's position and not something said about it.
+	std::vector<ibValueMetaObjectAttributeBase*> GetPredefinedLineAttributes(const ibValueMetaObjectTableData* table) const;
+
+	// A declared value in the form the configuration keeps it, and back. A REFERENCE is kept as the
+	// object it points into and the guid - nothing read - so a configuration loads without asking for
+	// the row, and the seed binds it raw, as it binds the parent; anything else is the value packed.
+	ibDataValue PackPredefinedCell(const ibValue& value) const;
+	ibValue UnpackPredefinedCell(const ibDataValue& stored) const;
+
+	// Replace what an item declares beyond its name. Cells merge (an empty stored form removes one);
+	// lines replace the rows of each table named.
+	void SetPredefinedCells(const ibGuid& predefinedGuid, const ibPredefinedCells& cells,
+		const ibPredefinedLines& lines);
+
 	//find predefined value
 	wxObjectDataPtr<ibPredefinedValueObject> FindPredefinedValue(const ibGuid& predefinedGuid) const {
 
@@ -1595,6 +1643,12 @@ protected:
 	// Declare the main table (via the base) + the predefined values as its SEED rows (cells keyed by
 	// column id; the builder diffs by uuid + cells).
 	virtual void ContributeTables(ibSchemaSnapshot& out) const override;
+	// …and the rows of the sections they own (GetPredefinedLineTables), each OWNED by its item.
+	void ContributePredefinedLines(ibSchemaSnapshot& out) const;
+
+	// What a kind adds to an item's seed row that is not a cell of its own - a chart of accounts
+	// unfolds the declared analytics into the account's kind columns, as saving an account does.
+	virtual void ContributePredefinedRow(struct ibSchemaSeedRow& row, const ibPredefinedValueObject& item) const {}
 
 	//load & save metaData from DB 
 	virtual bool ReadData(const ibDataNode& node) override;

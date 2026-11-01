@@ -85,6 +85,11 @@ struct ibSchemaSeedRow
 	ibGuid                      m_id;      // identity (the row's guid) — the match key
 	ibString                    m_name;    // friendly name for the change ledger
 	std::map<ibMetaID, ibValue> m_values;  // cell map: column metaID -> value (empty for an enum: uuid only)
+	// ⭐ A LINE OF A SECTION, WHEN SET: the row a declared item owns in a tabular section (an account's
+	// analytics). A line has no key of its own - the owner and its position are its identity - so it is
+	// not upserted by m_id: the apply replaces the lines of each owner that declares any (DiffSeedInto).
+	// m_id stays the line's name in the change ledger. Invalid: an ordinary row, upserted by m_id.
+	ibGuid                      m_owner;
 
 	// Fluent cell binding: row.Set(qc, value) — the link between a column and its value in this row. The
 	// cell is keyed by the column's model id (== metaID for an attribute), so baseline/target rows from
@@ -99,6 +104,8 @@ struct ibSchemaSeedRow
 			m_values[qc->GetColumnId()] = value;
 		return *this;
 	}
+
+	ibSchemaSeedRow& OwnedBy(const ibGuid& owner) { m_owner = owner; return *this; }
 };
 
 // ==========================================================================

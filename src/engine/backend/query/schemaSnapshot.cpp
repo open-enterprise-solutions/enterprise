@@ -571,9 +571,95 @@ void EraseSeedRow(ibStructureBatch& batch, const ibSchemaTable& t, const ibSchem
 // The declared rows are a handful per table (enum values, predefined items), so re-asserting them costs
 // nothing measurable — and the ledger stays quiet about the ones that did not change, which is what keeps
 // the apply dialog honest.
+// ⭐ THE LINES A ROW OWNS (ibSchemaSeedRow::m_owner) — a tabular section's, which has no key of its own:
+// a line is its owner and its position. So an owner's declared lines are written the way saving the owner
+// writes its section — every line of that owner deleted, the declared ones inserted in order — in the same
+// batch as everything else. Only owners that declare lines, now or in the baseline, are touched: an owner
+// that declares none keeps the lines its data holds. Re-asserted on every apply, as the rows above are.
+void WriteOwnedSeed(ibStructureBatch& batch, const ibSchemaTable* old, const ibSchemaTable& cur,
+	ibRestructureInfo* report, ibDatabaseConnectionHolder* holder)
+{
+	std::map<ibGuid, std::vector<const ibSchemaSeedRow*>> now, was;
+	for (const ibSchemaSeedRow& row : cur.m_seed)
+		if (row.m_owner.isValid()) now[row.m_owner].push_back(&row);
+	if (old != nullptr)
+		for (const ibSchemaSeedRow& row : old->m_seed)
+			if (row.m_owner.isValid()) was[row.m_owner].push_back(&row);
+	if (now.empty() && was.empty())
+		return;
+
+	// The owner column is the section's scaffold — copied, because the snapshot is gone by the time a
+	// deferred write runs (see SeedKey).
+	if (cur.m_scaffold.empty() || cur.m_scaffold.front()->AsRawColumn() == nullptr)
+		return;
+	const std::shared_ptr<ibBackendColumnRawDB> ownerColumn =
+		std::make_shared<ibBackendColumnRawDB>(*cur.m_scaffold.front()->AsRawColumn());
+
+	const ibString table = cur.m_name;
+	const ibMetaData* metaData = cur.m_queryable != nullptr ? cur.m_queryable->GetMetaData() : nullptr;
+	ibDatabaseConnectionHolder* h = holder != nullptr ? holder : db_query->GetHolder();
+	const std::vector<ibString> ownerFields = ColumnFieldNames(ownerColumn.get());
+
+	std::vector<ibGuid> owners;
+	for (const auto& entry : now) owners.push_back(entry.first);
+	for (const auto& entry : was)
+		if (now.find(entry.first) == now.end()) owners.push_back(entry.first);
+
+	typedef std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> ibLineCells;
+	for (const ibGuid& owner : owners) {
+		const std::vector<const ibSchemaSeedRow*> none;
+		const auto nowIt = now.find(owner);
+		const auto wasIt = was.find(owner);
+		const std::vector<const ibSchemaSeedRow*>& current = nowIt != now.end() ? nowIt->second : none;
+		const std::vector<const ibSchemaSeedRow*>& previous = wasIt != was.end() ? wasIt->second : none;
+
+		std::vector<ibLineCells> lines;
+		for (const ibSchemaSeedRow* row : current) {
+			ibLineCells cells;
+			for (const auto& cell : row->m_values)
+				if (const ibSchemaColumn* c = FindColumn(cur.m_columns, cell.first))
+					cells.push_back({ c->m_column, cell.second });
+			lines.push_back(std::move(cells));
+
+			if (report != nullptr) {
+				const ibSchemaSeedRow* prior = old != nullptr ? FindSeedRow(old->m_seed, row->m_id) : nullptr;
+				if (prior == nullptr || !SeedRowsEqual(*prior, *row))
+					report->AppendInfo((prior != nullptr ? _("Change value ") : _("Add value ")) + row->m_name + _(" in ") + LedgerName(cur));
+			}
+		}
+		if (report != nullptr)
+			for (const ibSchemaSeedRow* orow : previous)
+				if (FindSeedRow(cur.m_seed, orow->m_id) == nullptr)
+					report->AppendWarning(_("Remove value ") + orow->m_name + _(" from ") + LedgerName(cur));
+
+		const ibValue ownerValue(ibValuePtr<ibValueGuid>(new ibValueGuid(owner)));
+		batch.Insert([table, ownerValue, ownerFields, ownerColumn, lines, metaData, h]() -> bool {
+			ibQueryStatement del(ibQueryStatement::Kind::Delete, table, ownerFields, {}, h);
+			int position = 1;
+			BindWriteValue(del, ownerColumn.get(), metaData, ownerValue, position);
+			del.RunQuery();
+			for (const ibLineCells& line : lines) {
+				std::vector<ibString> columns = ownerFields;
+				for (const auto& cell : line)
+					for (const ibString& f : ColumnFieldNames(cell.first))
+						columns.push_back(f);
+				ibQueryStatement ins(ibQueryStatement::Kind::Insert, table, columns, {}, h);
+				int at = 1;
+				BindWriteValue(ins, ownerColumn.get(), metaData, ownerValue, at);
+				for (const auto& cell : line)
+					BindWriteValue(ins, cell.first, metaData, cell.second, at);
+				ins.RunQuery();
+			}
+			return true;
+		});
+	}
+}
+
 int DiffSeedInto(ibStructureBatch& batch, const ibSchemaTable* old, const ibSchemaTable& cur, ibRestructureInfo* report, ibDatabaseConnectionHolder* holder)
 {
 	for (const ibSchemaSeedRow& row : cur.m_seed) {
+		if (row.m_owner.isValid())
+			continue;   // a line - WriteOwnedSeed below
 		const ibSchemaSeedRow* o = (old != nullptr) ? FindSeedRow(old->m_seed, row.m_id) : nullptr;
 		const bool unchanged = (o != nullptr) && SeedRowsEqual(*o, row);
 
@@ -583,13 +669,14 @@ int DiffSeedInto(ibStructureBatch& batch, const ibSchemaTable* old, const ibSche
 	}
 	if (old != nullptr) {
 		for (const ibSchemaSeedRow& orow : old->m_seed) {
-			if (FindSeedRow(cur.m_seed, orow.m_id) != nullptr)
+			if (orow.m_owner.isValid() || FindSeedRow(cur.m_seed, orow.m_id) != nullptr)
 				continue;
 			EraseSeedRow(batch, cur, orow, holder);
 			if (report != nullptr)
 				report->AppendWarning(_("Remove value ") + orow.m_name + _(" from ") + LedgerName(cur));
 		}
 	}
+	WriteOwnedSeed(batch, old, cur, report, holder);
 	return 1;
 }
 
