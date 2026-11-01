@@ -121,6 +121,51 @@ ibString ibBackgroundRun::Activity() const
 	return m_activity;
 }
 
+ibBackgroundLabel ibBackgroundRun::Label() const
+{
+	std::lock_guard<std::mutex> lk(m_mtx);
+	return m_label;
+}
+
+ibDateTime ibBackgroundRun::Begin() const
+{
+	std::lock_guard<std::mutex> lk(m_mtx);
+	return m_begin;
+}
+
+ibDateTime ibBackgroundRun::End() const
+{
+	std::lock_guard<std::mutex> lk(m_mtx);
+	return m_end;
+}
+
+ibBackgroundJobState ibBackgroundRun::State() const
+{
+	// Completion is published LAST (ibRunEnded), after the error and the cancel flag are stored, so a run
+	// read as complete already says how it ended.
+	if (!IsComplete())
+		return ibBackgroundJobState_Active;
+	if (m_cancelled.load(std::memory_order_acquire))
+		return ibBackgroundJobState_Canceled;
+	std::lock_guard<std::mutex> lk(m_mtx);
+	return m_error.IsEmpty() ? ibBackgroundJobState_Completed : ibBackgroundJobState_Failed;
+}
+
+std::shared_ptr<ibBackgroundRun> ibBackgroundRun::Recorded(const ibBackgroundLabel& label,
+	const ibDateTime& begin, const ibDateTime& end, ibBackgroundJobState state, const ibString& error)
+{
+	auto run = std::make_shared<ibBackgroundRun>();
+	run->m_label = label;
+	run->m_begin = begin;
+	run->m_end = end;
+	run->m_error = error;
+	if (state == ibBackgroundJobState_Failed && run->m_error.IsEmpty())
+		run->m_error = _("the run failed");
+	run->m_cancelled.store(state == ibBackgroundJobState_Canceled, std::memory_order_release);
+	run->m_done.store(state != ibBackgroundJobState_Active, std::memory_order_release);
+	return run;
+}
+
 ibBackgroundRun* ibBackgroundRun::Current()
 {
 	return t_currentRun;
@@ -178,10 +223,19 @@ void ibBackgroundRun::Cancel()
 std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(const ibString& procedureName,
                                                                const std::vector<ibValue>& args)
 {
+	ibBackgroundLabel label;
+	label.m_method = procedureName;
+	return StartBackground(args, label);
+}
+
+std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(const std::vector<ibValue>& args,
+                                                               const ibBackgroundLabel& label)
+{
 	// Gate first, before anything is created: a bad argument is the caller's
 	// mistake and they are still on the stack to hear about it.
 	CheckTransferable(args);
 
+	const ibString procedureName = label.m_method;
 	if (procedureName.IsEmpty())
 		ibBackendCoreException::Error(_("Background job: no procedure name given"));
 
@@ -264,15 +318,32 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(const ibString& p
 			                       static_cast<long>(callArgs.size()));
 			return result;
 		},
-		ibString::Format(ibT("background: %s"), procedureName));
+		ibString::Format(ibT("background: %s"), label.m_description.IsEmpty() ? procedureName : label.m_description),
+		ibJobTenancy::Standalone, &label);
 }
 
 std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(ibBackgroundBody body,
                                                                const ibString& activity,
-                                                               ibJobTenancy tenancy)
+                                                               ibJobTenancy tenancy,
+                                                               const ibBackgroundLabel* listed)
 {
 	if (!body)
 		ibBackendCoreException::Error(_("Background job: nothing to run"));
+
+	// ONE ACTIVE RUN PER KEY AND METHOD — asked before anything is created, so the refusal costs nothing.
+	// The key is the caller's name for the work; a second start of it while the first runs is the double
+	// click this exists for, and it is named rather than quietly let through.
+	if (listed != nullptr && !listed->m_key.IsEmpty()) {
+		std::lock_guard<std::mutex> lk(m_mtx);
+		for (const std::shared_ptr<ibBackgroundRun>& run : m_listed) {
+			if (run->IsComplete())
+				continue;
+			std::lock_guard<std::mutex> runLk(run->m_mtx);
+			if (run->m_label.m_key == listed->m_key && run->m_label.m_method == listed->m_method)
+				ibBackendCoreException::Error(_("Background job: '%s' with the key '%s' is already running"),
+					listed->m_method, listed->m_key);
+		}
+	}
 
 	// The run works in this manager's base — its registry, its pool — not in the base the calling thread
 	// happens to stand in.
@@ -323,6 +394,8 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(ibBackgroundBody 
 		launch->m_initiator = m_applicationInstance->GetUserInfo();
 
 	auto run = std::make_shared<ibBackgroundRun>();
+	if (listed != nullptr)
+		run->m_label = *listed;
 	if (tenant) {
 		// MINTED, NOT REGISTERED. The registry's Add exists to make a session
 		// visible and governable — a row, the policy chain, the lookup index — and a
@@ -435,6 +508,7 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(ibBackgroundBody 
 				{
 					std::lock_guard<std::mutex> lk(m_run->m_mtx);
 					m_run->m_activity.clear();
+					m_run->m_end = ibDateTime::Now();
 				}
 				// Published LAST, and only after the result / error are stored: a watcher that sees
 				// IsComplete() must find everything already there.
@@ -517,6 +591,7 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(ibBackgroundBody 
 			Journal(ibString::Format(_("Background job cancelled: %s"), l.m_activity),
 				ibStatusMessage_Warning);
 
+			run->m_cancelled.store(true, std::memory_order_release);
 			std::lock_guard<std::mutex> lk(run->m_mtx);
 			run->m_error = _("the run was cancelled");
 		}
@@ -579,8 +654,20 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(ibBackgroundBody 
 		// Adding after the sweep would leave the run in a list nobody reads again; leaving it out
 		// puts it back the way it was before this list owned runs — the task holds it, and it
 		// closes its own session when it ends.
-		if (!m_stopped)
+		if (!m_stopped) {
 			m_background.push_back(run);
+			if (listed != nullptr) {
+				m_listed.push_back(run);
+				// Keep the active ones whatever their number, and the last kKeptRuns that ended.
+				std::size_t ended = 0;
+				for (const std::shared_ptr<ibBackgroundRun>& kept : m_listed)
+					if (kept->IsComplete()) ++ended;
+				for (auto it = m_listed.begin(); ended > kKeptRuns && it != m_listed.end(); ) {
+					if ((*it)->IsComplete()) { it = m_listed.erase(it); --ended; }
+					else ++it;
+				}
+			}
+		}
 	}
 
 	// AND THE TICK MUST BE RUNNING, because the tick is now what gives the session back.
@@ -591,6 +678,21 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(ibBackgroundBody 
 	Start();
 
 	return run;
+}
+
+std::vector<std::shared_ptr<ibBackgroundRun>> ibJobManager::BackgroundRuns() const
+{
+	std::lock_guard<std::mutex> lk(m_mtx);
+	return std::vector<std::shared_ptr<ibBackgroundRun>>(m_listed.begin(), m_listed.end());
+}
+
+std::shared_ptr<ibBackgroundRun> ibJobManager::FindBackgroundRun(const ibGuid& uuid) const
+{
+	std::lock_guard<std::mutex> lk(m_mtx);
+	for (const std::shared_ptr<ibBackgroundRun>& run : m_listed)
+		if (run->UUID() == uuid)
+			return run;
+	return nullptr;
 }
 
 std::vector<std::shared_ptr<ibSession>> ibJobManager::TenantsOf(const ibSession* landlord) const

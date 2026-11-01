@@ -181,9 +181,24 @@ class BACKEND_API ibValuePredefinedJobs : public ibValueArray {
 		// survives a rename, an unload / reload and a copy onto another base, while a row keyed by
 		// the old name is an orphan that still says "switched off" while the job runs.
 		ibValueJobRow(const ibGuid& jobKey, const ibString& jobName);
+		// …starting from what the job DECLARES — what a base that has never written this job's row runs
+		// it with, and so what the row must say until somebody writes it.
+		ibValueJobRow(const ibGuid& jobKey, const ibString& jobName, bool declaredActive,
+			const ibJobScheduleDescription& declaredSchedule);
 		virtual ~ibValueJobRow() {}
 
 		bool ReadSettings();
+
+		// The same settings for C++ — what ScheduledJob (valueScheduledJob.h) reads and writes through.
+		const ibGuid& GetKey() const { return m_jobKey; }
+		bool IsActive() const { return m_active; }
+		void SetActive(bool active) { m_active = active; }
+		const ibJobScheduleDescription& GetSchedule() const { return m_schedule; }
+		void SetSchedule(const ibJobScheduleDescription& schedule) { m_schedule = schedule; }
+		const ibDateTime& GetLastRun() const { return m_lastRun; }
+
+		// Store the settings AND apply them to the registered job; throws when the base did not take them.
+		void WriteSettings();
 
 		virtual ibString GetString() const { return m_jobName; }
 		virtual bool IsEmpty() const { return !m_jobKey.isValid(); }

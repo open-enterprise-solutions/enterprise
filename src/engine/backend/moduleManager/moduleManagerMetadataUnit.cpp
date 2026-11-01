@@ -38,6 +38,8 @@ enum
 	enChartsOfCalculationTypes,
 	enCalculationRegisters,
 	enSequences,
+	enScheduledJobs,
+	enParameterizedJobs,
 };
 
 void ibValueModuleManager::ibValueMetadataUnit::FillMembers(ibMemberTable& helper) const
@@ -62,6 +64,9 @@ void ibValueModuleManager::ibValueMetadataUnit::FillMembers(ibMemberTable& helpe
 	helper.AppendProp("ChartsOfCalculationTypes", true, false, static_cast<long>(g_metaChartOfCalculationTypesCLSID));
 	helper.AppendProp("CalculationRegisters", true, false, static_cast<long>(g_metaCalculationRegisterCLSID));
 	helper.AppendProp("Sequences", true, false, static_cast<long>(g_metaSequenceCLSID));
+	// The two kinds of scheduled job — what ScheduledJobs.FindPredefined / CreateScheduledJob are handed.
+	helper.AppendProp("ScheduledJobs", true, false, static_cast<long>(g_metaScheduledJobCLSID));
+	helper.AppendProp("ParameterizedJobs", true, false, static_cast<long>(g_metaParameterizedJobCLSID));
 }
 
 //****************************************************************************
@@ -167,6 +172,18 @@ bool ibValueModuleManager::ibValueMetadataUnit::GetPropVal(const long lPropNum, 
 	}
 	case enSequences: {
 		for (const auto object : m_metaData->GetAnyArrayObject(g_metaSequenceCLSID)) {
+			valStruct->SetAt(object->GetName(), object);
+		}
+		break;
+	}
+	case enScheduledJobs: {
+		for (const auto object : m_metaData->GetAnyArrayObject(g_metaScheduledJobCLSID)) {
+			valStruct->SetAt(object->GetName(), object);
+		}
+		break;
+	}
+	case enParameterizedJobs: {
+		for (const auto object : m_metaData->GetAnyArrayObject(g_metaParameterizedJobCLSID)) {
 			valStruct->SetAt(object->GetName(), object);
 		}
 		break;

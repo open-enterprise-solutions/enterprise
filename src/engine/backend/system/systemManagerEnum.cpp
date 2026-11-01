@@ -21,3 +21,5 @@ ENUM_TYPE_REGISTER(ibValueEnumJsonValueType, "JSONValueType", enum_to_clsid("EN_
 ENUM_TYPE_REGISTER(ibValueEnumJsonFormatting, "JSONFormatting", enum_to_clsid("EN_JSFM"));
 ENUM_TYPE_REGISTER(ibValueEnumXmlNodeType, "XMLNodeType", enum_to_clsid("EN_XMNT"));
 ENUM_TYPE_REGISTER(ibValueEnumXmlSpace, "XMLSpace", enum_to_clsid("EN_XMSP"));
+
+ENUM_TYPE_REGISTER(ibValueEnumBackgroundJobState, "BackgroundJobState", enum_to_clsid("EN_BGJS"));

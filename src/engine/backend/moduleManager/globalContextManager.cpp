@@ -6,6 +6,8 @@
 #include "globalContextManager.h"
 #include "backend/system/value/valueMap.h"
 #include "backend/system/value/valueJob.h"   // ScheduledJobs.Predefined — the collection, its row and the schedule
+#include "backend/system/value/valueScheduledJob.h"    // ScheduledJobs' verbs — one job, either kind
+#include "backend/system/value/valueBackgroundJob.h"   // BackgroundJobs
 
 
 #include "backend/objCtor.h"
@@ -71,24 +73,63 @@ private:
 // would put the platform's own member and a configuration's job in one namespace, where the first
 // job called Predefined shadows the way to reach every other one. Naming both sides also says
 // which kind one is looking at, which is the question a reader of the script actually has.
-class ibValueScheduledJobsManager : public ibValueStructure {
+//
+// …AND THE VERBS THAT ASK BOTH AT ONCE — GetScheduledJobs, FindPredefined, FindByUUID,
+// CreateScheduledJob. Each answers with a ScheduledJob (valueScheduledJob.h), the one value both kinds
+// are read and written through, so an administration list walks one array whatever declared its rows.
+void ibValueScheduledJobsManager_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
+{
+	helper.AppendProp(ibT("Predefined"), true, false, wxNOT_FOUND);
+	helper.AppendProp(ibT("Parameterized"), true, false, wxNOT_FOUND);
+
+	helper.AppendFunc(ibT("GetScheduledJobs"), 1, ibT("GetScheduledJobs(filter : Structure)"));
+	helper.AppendFunc(ibT("FindPredefined"), 1, ibT("FindPredefined(metadata : MetaObject)"));
+	helper.AppendFunc(ibT("FindByUUID"), 1, ibT("FindByUUID(uuid : UUID)"));
+	helper.AppendFunc(ibT("CreateScheduledJob"), 1, ibT("CreateScheduledJob(metadata : MetaObject)"));
+}
+
+class ibValueScheduledJobsManager : public ibValueStaticMembers<&ibValueScheduledJobsManager_BindNames> {
+	enum Prop { enPredefined = 0, enParameterized };
+	enum Func { enGetScheduledJobs = 0, enFindPredefined, enFindByUUID, enCreateScheduledJob };
 public:
 	ibValueScheduledJobsManager(ibMetaData* metaData)
-		: ibValueStructure(true)   // read-only: the forks are the platform's, not a caller's map
+		: ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true), m_metaData(metaData)
 	{
-		ibValuePtr<ibValuePredefinedJobs> predefined(new ibValuePredefinedJobs(metaData));
-		ibValueStructure::Insert(ibT("Predefined"), predefined);
+		m_predefined = ibValuePtr<ibValuePredefinedJobs>(new ibValuePredefinedJobs(metaData));
 
 		// The parameterized fork is the SAME parameterised manager every other metatype gets —
 		// handed this metatype's clsid. Nothing about jobs is special on this side, and that is
 		// the point: a job's rows select exactly like a catalog's.
-		ibValuePtr<ibValueGlobalContextStructureManager> parameterized(
+		m_parameterized = ibValuePtr<ibValueGlobalContextStructureManager>(
 			new ibValueGlobalContextStructureManager(g_metaParameterizedJobCLSID, metaData));
-		ibValueStructure::Insert(ibT("Parameterized"), parameterized);
 	}
 
 	virtual ibString GetClassName() const { return ibT("ScheduledJobsManager"); }
 	virtual ibString GetString() const { return ibT("ScheduledJobsManager"); }
+
+	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override {
+		switch (lPropNum) {
+		case enPredefined: pvarPropVal = m_predefined; return true;
+		case enParameterized: pvarPropVal = m_parameterized; return true;
+		}
+		return false;
+	}
+
+	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) override {
+		const ibValue argument = lSizeArray > 0 ? *paParams[0] : ibValue();
+		switch (lMethodNum) {
+		case enGetScheduledJobs: pvarRetValue = ibValueScheduledJob::GetScheduledJobs(m_metaData, argument); return true;
+		case enFindPredefined: pvarRetValue = ibValueScheduledJob::FindPredefined(m_metaData, argument); return true;
+		case enFindByUUID: pvarRetValue = ibValueScheduledJob::FindByUUID(m_metaData, argument); return true;
+		case enCreateScheduledJob: pvarRetValue = ibValueScheduledJob::CreateScheduledJob(m_metaData, argument); return true;
+		}
+		return false;
+	}
+
+private:
+	ibMetaData* m_metaData;
+	ibValuePtr<ibValuePredefinedJobs> m_predefined;
+	ibValuePtr<ibValueGlobalContextStructureManager> m_parameterized;
 };
 
 enum
@@ -111,7 +152,8 @@ enum
 	enSequences,
 	enScheduledJobs,
 	enSessionParameters,
-	enFunctionalOptions
+	enFunctionalOptions,
+	enBackgroundJobs
 };
 
 void ibValueGlobalContextManager::FillMembers(ibMemberTable& helper) const
@@ -142,6 +184,9 @@ void ibValueGlobalContextManager::FillMembers(ibMemberTable& helper) const
 	// Whether a part of the configuration is used in this base — `FunctionalOptions.<Name>.Get()`. Each
 	// option IS a constant, so the manager a name yields is the constant's own (metaFunctionalOptionObject.h).
 	helper.AppendProp(ibT("FunctionalOptions"));
+	// Work started to run on its own — `BackgroundJobs.Execute(…)`, listed and found again by its UUID.
+	// Not metadata: the jobs are the base's, whatever the configuration declares.
+	helper.AppendProp(ibT("BackgroundJobs"));
 }
 
 #include "backend/metaCollection/metaSessionParameterObject.h"   // the metatype AND the value it yields
@@ -208,6 +253,9 @@ bool ibValueGlobalContextManager::GetPropVal(const long lPropNum, ibValue& pvarP
 		return true;
 	case enFunctionalOptions:
 		pvarPropVal = new ibValueGlobalContextStructureManager(g_metaFunctionalOptionCLSID, m_metaData);
+		return true;
+	case enBackgroundJobs:
+		pvarPropVal = new ibValueBackgroundJobsManager();
 		return true;
 	}
 

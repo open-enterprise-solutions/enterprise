@@ -8,6 +8,7 @@
 #include "backend/job/jobManager.h"
 #include "backend/metaData.h"
 #include "backend/metaCollection/metaObject.h"   // g_metaScheduledJobCLSID
+#include "backend/metaCollection/metaScheduledJobObject.h"   // the declared Use and Schedule a row starts from
 
 //////////////////////////////////////////////////////////////////////
 
@@ -181,7 +182,10 @@ ibValuePredefinedJobs::ibValuePredefinedJobs(ibMetaData* metaData)
 	for (const auto object : metaData->GetAnyArrayObject(g_metaScheduledJobCLSID)) {
 		if (object->IsDeleted())
 			continue;
-		ibValuePtr<ibValueJobRow> row(new ibValueJobRow(object->GetGuid(), object->GetName()));
+		const ibValueMetaObjectScheduledJob* const job = dynamic_cast<const ibValueMetaObjectScheduledJob*>(object);
+		ibValuePtr<ibValueJobRow> row(job != nullptr
+			? new ibValueJobRow(job->GetGuid(), job->GetName(), job->IsUsed(), job->GetSchedule())
+			: new ibValueJobRow(object->GetGuid(), object->GetName()));
 		Add(row);
 	}
 }
@@ -201,6 +205,14 @@ ibValuePredefinedJobs::ibValueJobRow::ibValueJobRow(const ibGuid& jobKey, const 
 	ReadSettings();
 }
 
+ibValuePredefinedJobs::ibValueJobRow::ibValueJobRow(const ibGuid& jobKey, const ibString& jobName,
+	bool declaredActive, const ibJobScheduleDescription& declaredSchedule)
+	: ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_jobKey(jobKey), m_jobName(jobName),
+	m_active(declaredActive), m_schedule(declaredSchedule)
+{
+	ReadSettings();
+}
+
 bool ibValuePredefinedJobs::ibValueJobRow::ReadSettings()
 {
 	if (!m_jobKey.isValid())
@@ -210,13 +222,46 @@ bool ibValuePredefinedJobs::ibValueJobRow::ReadSettings()
 	// defaults stand — the same values the manager seeds it with on the next registration.
 	const ibJobManager::ibJobSettings stored = ibJobManager::ReadSharedSettings(m_jobKey);
 
-	m_active = stored.m_active;
+	// Only a row that IS there speaks — "not found" carries the defaults of a settings struct, not this
+	// job's declaration, and adopting them would show a job declared off as switched on.
+	if (stored.m_found) {
+		m_active = stored.m_active;
+		if (ibJobScheduleRules::IsValid(stored.m_schedule))
+			m_schedule = stored.m_schedule;
+	}
 	m_lastRun = stored.m_lastRun;
 	m_computer = stored.m_computer;
-	if (ibJobScheduleRules::IsValid(stored.m_schedule))
-		m_schedule = stored.m_schedule;
 
 	return stored.m_found;
+}
+
+void ibValuePredefinedJobs::ibValueJobRow::WriteSettings()
+{
+	ibJobManager::ibJobSettings settings;
+	settings.m_key = m_jobKey;
+	settings.m_name = m_jobName;
+	settings.m_active = m_active;
+	settings.m_schedule = m_schedule;
+
+	// BOTH halves, in this order: the row is what survives a restart, the live entry is what
+	// the next tick reads. Writing only the row would leave a job running on a schedule nobody
+	// can see any more; applying only in memory would lose the change on close.
+	//
+	// ⚠ AND THE ROW MUST TAKE, or the in-memory half is a lie with a lifetime. Discarding the
+	// result meant `job.Write()` answered TRUE over a setting that had not been stored: the
+	// schedule looked changed until the next restart put the old one back. Applying the live
+	// half after a failed write would make that lie last exactly one session.
+	// Both non-Written outcomes raise here, and that is not the seed's rule.
+	// A seed is the platform offering a starting value; this is a PERSON having
+	// asked for a change and being answered `true`. "There was no base to write
+	// to" is just as much a lie to them as "the base refused" — the setting is
+	// not stored either way, and the live half below would outlive it by one session.
+	if (ibJobManager::WriteSharedSettings(settings) != ibJobManager::ibWriteOutcome::Written)
+		ibBackendCoreException::Error(
+			_("the schedule of '%s' could not be written to the base"), m_jobName);
+
+	if (ibJobManager* const manager = ibApplicationInstance::GetJobManager())
+		manager->ApplySettings(m_jobKey, m_active, m_schedule);
 }
 
 void ibValueJobRow_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
@@ -241,39 +286,11 @@ bool ibValuePredefinedJobs::ibValueJobRow::CallAsFunc(const long lMethodNum, ibV
 		pvarRetValue = ReadSettings();
 		return true;
 	case enWrite:
-	{
 		if (!m_jobKey.isValid())
 			return false;
-
-		ibJobManager::ibJobSettings settings;
-		settings.m_key = m_jobKey;
-		settings.m_name = m_jobName;
-		settings.m_active = m_active;
-		settings.m_schedule = m_schedule;
-
-		// BOTH halves, in this order: the row is what survives a restart, the live entry is what
-		// the next tick reads. Writing only the row would leave a job running on a schedule nobody
-		// can see any more; applying only in memory would lose the change on close.
-		//
-		// ⚠ AND THE ROW MUST TAKE, or the in-memory half is a lie with a lifetime. Discarding the
-		// result meant `job.Write()` answered TRUE over a setting that had not been stored: the
-		// schedule looked changed until the next restart put the old one back. Applying the live
-		// half after a failed write would make that lie last exactly one session.
-		// Both non-Written outcomes raise here, and that is not the seed's rule.
-		// A seed is the platform offering a starting value; this is a PERSON having
-		// asked for a change and being answered `true`. "There was no base to write
-		// to" is just as much a lie to them as "the base refused" — the setting is
-		// not stored either way, and the live half below would outlive it by one session.
-		if (ibJobManager::WriteSharedSettings(settings) != ibJobManager::ibWriteOutcome::Written)
-			ibBackendCoreException::Error(
-				_("the schedule of '%s' could not be written to the base"), m_jobName);
-
-		if (ibJobManager* const manager = ibApplicationInstance::GetJobManager())
-			manager->ApplySettings(m_jobKey, m_active, m_schedule);
-
+		WriteSettings();
 		pvarRetValue = true;
 		return true;
-	}
 	case enExecute:
 	{
 		// RUN IT NOW — ignoring the calendar AND the switch. Switching a job off takes it off the
