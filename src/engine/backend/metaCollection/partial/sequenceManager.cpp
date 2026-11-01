@@ -21,6 +21,7 @@ enum {
 	eSelect,
 	eGetBorder,
 	eSetBorder,
+	eRestore,
 	eGetListForm,
 };
 
@@ -33,6 +34,9 @@ void ibValueManagerDataObjectSequence::FillManagerMethods(ibMemberTable& helper)
 	// out, a sequence that keeps no dimensions has its one border.
 	helper.AppendFunc(ibT("GetBorder"), 1, ibT("GetBorder(Key : structure)"));
 	helper.AppendFunc(ibT("SetBorder"), 2, ibT("SetBorder(Border, Key : structure)"));
+	// Posts again, in sequence order, every registered document after the border up to the boundary (all
+	// of them, left out), of the keys the structure names (every key, left out) — ibSequenceRestore.
+	helper.AppendProc(ibT("Restore"), 2, ibT("Restore(Boundary : date|pointInTime|boundary, Key : structure)"));
 	helper.AppendFunc(ibT("GetListForm"), 3, ibT("GetListForm(string, owner, guid)"));
 }
 
@@ -44,32 +48,44 @@ void ibValueManagerDataObjectSequence::FillManagerMethods(ibMemberTable& helper)
 // ibRegFilterPredicate keeps, and for the same reason: a dropped key is a wrong answer that looks
 // right. A dimension the structure leaves out is empty, which is a value like any other: the border
 // of "no organisation named" is its own row.
-static std::vector<ibValue> KeyFromStructure(const ibValueMetaObjectSequence* seq, const ibValue& filter)
+//
+// The dimensions the structure names, each with its value — in the structure's order.
+static ibSequenceKeyFilter NamedDimensions(const ibValueMetaObjectSequence* seq, const ibValue& filter)
 {
-	std::vector<ibValue> key;
+	ibSequenceKeyFilter named;
 	ibValueStructure* structure = nullptr;
-	const bool given = filter.ConvertToValue(structure) && structure != nullptr;
+	if (!filter.ConvertToValue(structure) || structure == nullptr)
+		return named;
 
-	for (long at = 0; given && at < structure->GetNProps(); ++at) {
+	for (long at = 0; at < structure->GetNProps(); ++at) {
 		const ibString name = structure->GetPropName(at);
-		bool named = false;
+		const ibValueMetaObjectDimension* found = nullptr;
 		for (const ibValueMetaObjectDimension* dimension : seq->GetDimensionArrayObject())
 			if (dimension != nullptr && stringUtils::IsSameAs(name, dimension->GetName())) {
-				named = true;
+				found = dimension;
 				break;
 			}
-		if (!named)
+		if (found == nullptr)
 			ibBackendCoreException::Error(_("the key names '%s', which is not a dimension of '%s'"), name, seq->GetName());
+		ibValue value;
+		structure->GetPropVal(at, value);
+		named.emplace_back(found, value);
 	}
+	return named;
+}
 
+// The whole key, a value per dimension in the sequence's order — what one border is addressed by.
+static std::vector<ibValue> KeyFromStructure(const ibValueMetaObjectSequence* seq, const ibValue& filter)
+{
+	const ibSequenceKeyFilter named = NamedDimensions(seq, filter);
+	std::vector<ibValue> key;
 	for (const ibValueMetaObjectDimension* dimension : seq->GetDimensionArrayObject()) {
 		ibValue value;
-		if (given)
-			for (long at = 0; at < structure->GetNProps(); ++at)
-				if (structure->GetPropName(at).IsSameAs(dimension->GetName(), false)) {
-					structure->GetPropVal(at, value);
-					break;
-				}
+		for (const auto& [one, given] : named)
+			if (one == dimension) {
+				value = given;
+				break;
+			}
 		key.push_back(value);
 	}
 	return key;
@@ -98,6 +114,12 @@ bool ibValueManagerDataObjectSequence::CallAsFunc(const long lMethodNum, ibValue
 		ibSequenceBorderSet(m_metaObject,
 			KeyFromStructure(m_metaObject, lSizeArray > 1 ? *paParams[1] : ibValue()),
 			lSizeArray > 0 ? *paParams[0] : ibValue());
+		return true;
+	case eRestore:
+		// Here, unlike the border's key, a dimension left out is NOT looked at: the run narrows by what is
+		// named, and `Restore()` restores every key.
+		ibSequenceRestore(m_metaObject, lSizeArray > 0 ? *paParams[0] : ibValue(),
+			NamedDimensions(m_metaObject, lSizeArray > 1 ? *paParams[1] : ibValue()));
 		return true;
 	case eGetListForm:
 	{

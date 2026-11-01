@@ -48,6 +48,28 @@ BACKEND_API void ibSequenceBorderCleared(const ibValueMetaObjectSequence* seq, c
 BACKEND_API void ibSequenceBorderSet(const ibValueMetaObjectSequence* seq, const std::vector<ibValue>& key, const ibValue& moment);
 BACKEND_API ibValue ibSequenceBorderGet(const ibValueMetaObjectSequence* seq, const std::vector<ibValue>& key);
 
+// ---- the restoring run (sequenceBorderRules.cpp) ----------------------------------------------------
+//
+// ⭐ RESTORING IS POSTING AGAIN, IN ORDER — nothing else. Every registered document after its key's
+// border, up to `boundary`, is posted again by its own posting handler, one after another in sequence
+// order, each in a transaction of its own; the border follows by the rule above (a document posted in
+// its turn takes it one step forward). So a run that stops halfway is not a broken state: the border
+// stands on the last document that went through, and a second run carries on from there.
+//
+// The FIRST FAILURE STOPS THE RUN and is raised with the document's name. Posting the rest past it
+// would walk the border over a document that is not right, which is the one thing a border must not do.
+//
+// The filter narrows the run to the keys whose named dimensions hold these values; a dimension it does
+// not name is not looked at. Empty, every key is restored. `boundary` is a date, a moment or a
+// Boundary (Including / Excluding); empty, everything registered is.
+class ibValueMetaObjectDimension;
+using ibSequenceKeyFilter = std::vector<std::pair<const ibValueMetaObjectDimension*, ibValue>>;
+// Posting one recorder again. Left out, it is the document's own posting (WriteObject, Posting).
+using ibSequenceRepost = std::function<void(const ibValue& recorder)>;
+// Answers how many documents were posted again.
+BACKEND_API size_t ibSequenceRestore(const ibValueMetaObjectSequence* seq, const ibValue& boundary,
+	const ibSequenceKeyFilter& filter, const ibSequenceRepost& repost = ibSequenceRepost());
+
 // ⭐⭐ THE REGISTRATIONS' READING SURFACE — the register's, and the MOMENT beside it.
 //
 // The same shape the document takes, and for the same reason: a metaobject holds what it DECLARES,
@@ -215,6 +237,14 @@ public:
 	//support form
 	virtual ibFormPtr<ibBackendValueForm> GetListForm(const ibFormRequest& request = ibFormRequest(),
 		ibBackendControlFrame* ownerControl = nullptr) const override;
+
+	// The registrations' list offers the one thing a person does with a sequence: RESTORE it — every key,
+	// up to the end — which is `Sequences.<Name>.Restore()` with nothing narrowed (sequenceManager.cpp).
+	enum {
+		eRestoreValue = 5,
+	};
+	virtual void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const override;
+	virtual void CallAsCommand(ibActionID id, const ibUniqueKey& anchor, const ibUniqueKey& key, ibBackendValueForm* srcForm) const override;
 
 	// ⭐ WHO TAKES THE BORDER BACK. On (the default) the platform does it itself, by the rows the
 	// document already carries. Off, it does not — and the configuration says when the sequence is

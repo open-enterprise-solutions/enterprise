@@ -5,14 +5,16 @@
 
 // `Sequences.<Name>` — where the border is read and said.
 //
-// The two verbs are the whole manager, and they are deliberate ones: `GetBorder` answers the moment
-// a key has got to, `SetBorder` says it outright ("up to here we consider everything in order").
-// Everything else about a sequence happens where the rows are written — the document's posting
-// handler — or by itself, when the engine moves the border along the registrations that are already
-// there (docs/private/sequence-arc.md).
+// The border's two verbs are deliberate ones: `GetBorder` answers the moment a key has got to,
+// `SetBorder` says it outright ("up to here we consider everything in order"). Everything else about
+// a sequence happens where the rows are written — the document's posting handler — or by itself, when
+// the engine moves the border along the registrations that are already there
+// (docs/private/sequence-arc.md).
 //
-// (No Restore: reposting everything after the border is a loop with filters, transactions and
-// progress, and the platform has scheduled jobs to run a configuration's own loop in.)
+// `Restore` is the third, and it adds no rule of its own: it posts the documents after the border
+// again, in their order, and the border follows them by the rule it always follows (ibSequenceRestore).
+// Its loop is the platform's because the order, the stop at the first failure and the transaction per
+// document are what make it safe, and a configuration writing that loop itself gets them wrong.
 class ibValueManagerDataObjectSequence : public ibValueManagerDataObject {
 public:
 

@@ -2,6 +2,9 @@
 #include "sequenceManager.h"
 
 #include "backend/metaData.h"
+#include "backend/backend_exception.h"
+#include "backend/system/systemManager.h"   // ibValueSystemFunction::Message — how the run ended
+#include "core/picturePredefined.h"         // g_picPostCLSID — the command
 #include "core/serialize/dataBuilder.h"
 #include "backend/system/value/valueDynamicList.h"   // ibCreateList — the list form rides the universal dynamic list
 
@@ -169,6 +172,34 @@ ibFormPtr<ibBackendValueForm> ibValueMetaObjectSequence::GetListForm(const ibFor
 		ibValueMetaObjectSequence::eFormList,
 		ownerControl, ibCreateList(request.m_create, GetQueryable(), GetRegisterPeriod()->GetQueryColumn())
 	);
+}
+
+// The list's commands: the register's own (none — a registration belongs to its document), and Restore.
+void ibValueMetaObjectSequence::GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const
+{
+	ibValueMetaObjectRegisterData::GetCommandCollection(formType, commands);
+	commands.emplace_back(eRestoreValue, ibT("Restore"), _("Restore"), g_picPostCLSID, true);
+}
+
+// Restore from the list: every key, up to the end — `Sequences.<Name>.Restore()`. The person is told how
+// many documents went through, or where the run stopped and why.
+void ibValueMetaObjectSequence::CallAsCommand(ibActionID id, const ibUniqueKey& anchor, const ibUniqueKey& key, ibBackendValueForm* srcForm) const
+{
+	if (id != eRestoreValue) {
+		ibValueMetaObjectRegisterData::CallAsCommand(id, anchor, key, srcForm);
+		return;
+	}
+	try {
+		const size_t posted = ibSequenceRestore(this, ibValue(), ibSequenceKeyFilter());
+		ibValueSystemFunction::Message(ibString::Format(_("Sequence '%s' is restored: %zu document(s) posted again"),
+			GetSynonym(), posted));
+	}
+	catch (const ibBackendInterruptException&) {}   // the user stopped it — the border stands where the run left it
+	catch (const ibCoreException& err) {
+		ibValueSystemFunction::Message(err.GetErrorDescription(), ibStatusMessage::ibStatusMessage_Error);
+	}
+	if (srcForm != nullptr)
+		srcForm->UpdateForm();
 }
 
 ibValuePtr<ibValueManagerDataObject> ibValueMetaObjectSequence::CreateManagerDataObjectValue() const

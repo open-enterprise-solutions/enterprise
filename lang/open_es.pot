@@ -13264,3 +13264,28 @@ msgstr ""
 #: src/engine/frmclient/mainFrame/settings/settingsdialog.cpp:39
 msgid "Debugging"
 msgstr ""
+
+#: src/engine/backend/metaCollection/partial/sequenceBorderRules.cpp
+#, c-format
+msgid "%s is not a document"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/sequenceBorderRules.cpp
+#, c-format
+msgid "%s cannot be read"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/sequenceBorderRules.cpp
+#, c-format
+msgid "%s was not posted"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/sequenceBorderRules.cpp
+#, c-format
+msgid "Sequence '%s': restoring stopped at %s - %s"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/sequenceMetadata.cpp
+#, c-format
+msgid "Sequence '%s' is restored: %zu document(s) posted again"
+msgstr ""
