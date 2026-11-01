@@ -253,6 +253,11 @@ struct BACKEND_API ibJobState {
 	// system-clock adjustment cannot make a job fire twice or stall for hours;
 	// these two are the human-readable projection of that, not its source.
 	ibDateTime   m_lastRunAt;
+	// When that run ENDED — empty while it is running and before it ever ran. Wall clock, for display.
+	ibDateTime   m_lastEndAt;
+	// Is a run of it going on in this process right now? m_outcome is the LAST run's verdict, so it cannot
+	// say that.
+	bool         m_running = false;
 	// COMPUTED, never stored: last run + interval. Empty when the job has not run
 	// yet (it is due immediately) or when work remained from the previous pass
 	// (due on the next tick). A stored "next run" would be one more thing that can
@@ -263,6 +268,20 @@ struct BACKEND_API ibJobState {
 	// from the same fields an editor shows, so a settings list and this list say
 	// the same thing without either restating the rules.
 	ibString     m_schedule;
+};
+
+// WHAT A SCRIPT SAID ABOUT A RUN IT STARTED — BackgroundJobs.Execute(method, parameters, key, description).
+// A run started with one of these is LISTED: BackgroundJobs.GetBackgroundJobs and FindByUUID find it, for a
+// while after it ended too. A run started without one (a form's read, an engine body) is nobody's business
+// but its caller's and is not listed.
+//
+// The key is the caller's own name for the work: while a listed run with a key is active, a second one
+// with the same method and the same key is refused — the guard a "run it now" button needs against a
+// double click.
+struct BACKEND_API ibBackgroundLabel {
+	ibString m_method;        // ModuleName.MethodName, as given
+	ibString m_key;
+	ibString m_description;
 };
 
 // ONE background run, shared between the worker executing it and whoever is
@@ -291,6 +310,24 @@ public:
 	// Set by the worker as the run proceeds; also written to
 	// sys_session.currentActivity, so the same text shows in Active Users.
 	ibString Activity() const;
+
+	// ITS IDENTITY AND ITS LABEL — minted when the run is created, never reused: BackgroundJob.UUID,
+	// what BackgroundJobs.FindByUUID is asked with. The label is what the script said (ibBackgroundLabel).
+	const ibGuid&     UUID()  const { return m_uuid; }
+	ibBackgroundLabel Label() const;
+
+	// When it was created and when it ended (empty while it runs) — wall clock.
+	ibDateTime        Begin() const;
+	ibDateTime        End()   const;
+
+	// Where it stands — read off what it recorded: done or not, and how it ended.
+	ibBackgroundJobState State() const;
+
+	// A RECORD OF A RUN THAT HAPPENED ELSEWHERE — a scheduled job's last run, which the manager keeps as
+	// an outcome rather than as a run. Complete unless `state` is Active, holds no session (Cancel has
+	// nothing to reach), and answers every question above the way a real run would.
+	static std::shared_ptr<ibBackgroundRun> Recorded(const ibBackgroundLabel& label,
+		const ibDateTime& begin, const ibDateTime& end, ibBackgroundJobState state, const ibString& error);
 
 	// ⭐⭐ WHICH SESSION IS DOING IT — sys_session.session, the row a person sees in Active Users.
 	// A background run has a session of its own, so it already HAS an identity in the platform's
@@ -327,6 +364,13 @@ private:
 	ibString           m_activity;
 	std::deque<ibSaid> m_said;
 	std::atomic<bool>  m_done { false };
+	// Set by the run's own interrupt arm — the run stopped because somebody asked, not because it broke.
+	std::atomic<bool>  m_cancelled { false };
+
+	const ibGuid       m_uuid = ibGuid::newGuid();
+	ibBackgroundLabel  m_label;
+	ibDateTime         m_begin = ibDateTime::Now();
+	ibDateTime         m_end;
 };
 
 class BACKEND_API ibJobManager {
@@ -420,6 +464,11 @@ public:
 	std::shared_ptr<ibBackgroundRun> StartBackground(const ibString& procedureName,
 	                                                 const std::vector<ibValue>& args = {});
 
+	// THE SAME RUN, LISTED — BackgroundJobs.Execute. The label's method is the procedure; its key, when
+	// not empty, is refused while a listed run of the same method with the same key is still active.
+	std::shared_ptr<ibBackgroundRun> StartBackground(const std::vector<ibValue>& args,
+	                                                 const ibBackgroundLabel& label);
+
 	// THE SAME RUN, described in C++ instead of by name.
 	//
 	// Everything that makes a background run what it is — its own session, the
@@ -450,7 +499,17 @@ public:
 	using ibBackgroundBody = std::function<ibValue(ibSession* session)>;
 	std::shared_ptr<ibBackgroundRun> StartBackground(ibBackgroundBody body,
 	                                                 const ibString& activity,
-	                                                 ibJobTenancy tenancy = ibJobTenancy::Standalone);
+	                                                 ibJobTenancy tenancy = ibJobTenancy::Standalone,
+	                                                 const ibBackgroundLabel* listed = nullptr);
+
+	// THE LISTED RUNS — every run started with a label, oldest first: the active ones, and the last
+	// kKeptRuns that ended, so a script that asks about its job a moment after it finished still finds it.
+	// A snapshot by value.
+	std::vector<std::shared_ptr<ibBackgroundRun>> BackgroundRuns() const;
+	std::shared_ptr<ibBackgroundRun>              FindBackgroundRun(const ibGuid& uuid) const;
+
+	// How many ENDED listed runs are kept for BackgroundRuns.
+	static constexpr std::size_t kKeptRuns = 256;
 
 	// The rented runs still reading for `landlord` — the sessions whose host it is. Asked by ibSession::Cancel,
 	// so a cancel reaches the reads done on a session's behalf and not only the session itself. Read off the
@@ -567,6 +626,7 @@ private:
 		// back around.
 		ibJobOutcome                          m_outcome = ibJobOutcome::Never;
 		ibDateTime                            m_lastRunAt;
+		ibDateTime                            m_lastEndAt;
 		ibString                              m_error;
 	};
 
@@ -740,6 +800,10 @@ private:
 	// will close, against a database that is being torn down — Stop() cancels them
 	// and waits.
 	std::vector<std::shared_ptr<ibBackgroundRun>> m_background;
+
+	// The LISTED runs (ibBackgroundLabel) — held past their end, unlike m_background, which lets a run go
+	// the tick after it finishes. Only the handle stays: the session went with m_background.
+	std::deque<std::shared_ptr<ibBackgroundRun>>  m_listed;
 
 	// Keys that EXIST but are not registered — switched-off rows and jobs whose Use flag is clear.
 	// Kept only so the orphan sweep can tell "nobody declared this" from "declared, switched off";

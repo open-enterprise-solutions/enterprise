@@ -81,6 +81,18 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   refused, not read as no bytes.
 - **An encoding is a member of `TextEncoding`.** `TextReader` and `TextWriter` took a string or another
   enumeration's member without a word; now it is refused, as `HTTPRequest` already refused a string.
+- **Scheduled jobs from code.** `ScheduledJobs.GetScheduledJobs(filter)`, `FindPredefined(metadata)`,
+  `FindByUUID(id)` and `CreateScheduledJob(metadata)` answer with a `ScheduledJob` — a predefined job's
+  settings or a parameterized job's row — with `Use`, `Schedule`, `Parameters`, `Key`, `Description`,
+  `LastJob`, `LastRun`, `Write()` and `Delete()`. `ScheduledJobs.Predefined` and `.Parameterized` stay.
+  `Metadata.ScheduledJobs` and `Metadata.ParameterizedJobs` name the metaobjects. A predefined job that
+  the base has no settings for now reads as declared; it read as switched on, hourly.
+- **Background jobs: `BackgroundJobs`.** `Execute(method, parameters, key, description)` starts what
+  `RunBackground` starts, and refuses a second job of the same method under a key that is still running.
+  `GetBackgroundJobs(filter)` and `FindByUUID(id)` find them again, for a while after they ended too. A
+  `BackgroundJob` says `State` (`BackgroundJobState`: `Active`, `Completed`, `Failed`, `Canceled`),
+  `Begin`, `End` and `ErrorInfo`, and has `WaitForExecutionCompletion(timeout)`. `Cancel()` did nothing
+  when called as a statement; it cancels now.
 
 ## The browser client
 
@@ -113,6 +125,9 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **Help → About** is drawn: the build, the base, the application, the user, the locale, the plugins.
 
 ## Fixes
+
+- **A scheduled job switched off stays off.** Its `Active = False` was written to the base and read back
+  as on, so the job came back on its schedule at the next start.
 
 - **A module nobody has compiled yet is compiled once.** Sessions entering a base together, with the
   bytecode cache empty, each compiled the same modules. The first now holds a lock in the database,

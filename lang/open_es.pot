@@ -13264,3 +13264,151 @@ msgstr ""
 #: src/engine/frmclient/mainFrame/settings/settingsdialog.cpp:39
 msgid "Debugging"
 msgstr ""
+
+#: src/engine/backend/job/jobBackground.cpp
+msgid "the run failed"
+msgstr ""
+
+#: src/engine/backend/job/jobBackground.cpp
+#, c-format
+msgid "Background job: '%s' with the key '%s' is already running"
+msgstr ""
+
+#: src/engine/backend/system/systemManagerEnum.h
+msgid "Completed"
+msgstr ""
+
+#: src/engine/backend/system/systemManagerEnum.h
+msgid "Failed"
+msgstr ""
+
+#: src/engine/backend/system/systemManagerEnum.h
+msgid "Canceled"
+msgstr ""
+
+#: src/engine/backend/system/value/valueBackgroundJob.cpp
+#, c-format
+msgid "Background job: the timeout cannot be negative (%ld seconds)"
+msgstr ""
+
+#: src/engine/backend/system/value/valueBackgroundJob.cpp
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "%s: '%s' is not a UUID"
+msgstr ""
+
+#: src/engine/backend/system/value/valueBackgroundJob.cpp
+#, c-format
+msgid "GetBackgroundJobs: the filter has no field '%s' (UUID, Key, Description, MethodName, State, Begin, End)"
+msgstr ""
+
+#: src/engine/backend/system/value/valueBackgroundJob.cpp
+#, c-format
+msgid "Background job: the parameters of '%s' must be an Array"
+msgstr ""
+
+#: src/engine/backend/system/value/valueBackgroundJob.cpp
+msgid "GetBackgroundJobs: the filter must be a Structure"
+msgstr ""
+
+#: src/engine/backend/system/value/valueBackgroundJob.cpp
+msgid "FindByUUID: no UUID given"
+msgstr ""
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "%s: '%s' is not a scheduled job"
+msgstr ""
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "%s: '%s' is not a scheduled job of this configuration"
+msgstr ""
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "the job row '%s' of '%s' could not be read"
+msgstr ""
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+msgid "Scheduled jobs: no configuration is open"
+msgstr ""
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "the job row of '%s' did not take '%s'"
+msgstr ""
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "the parameters of '%s' are its attributes: give them as a Structure"
+msgstr ""
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "'%s' is a predefined job: it takes no parameters"
+msgstr ""
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "'%s' has no attribute '%s' to take it as a parameter"
+msgstr ""
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "the schedule of '%s' must be a JobSchedule, not a '%s'"
+msgstr ""
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "'%s' is a predefined job: its key is its name"
+msgstr ""
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "'%s' is a predefined job: its description is its synonym, changed in the designer"
+msgstr ""
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "the job row '%s' of '%s' was not written"
+msgstr ""
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "'%s' is a predefined job: it is declared, not stored, and cannot be deleted - switch it off with Use"
+msgstr ""
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "the job row of '%s' was never written: there is nothing to delete"
+msgstr ""
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "the job row '%s' of '%s' was not deleted"
+msgstr ""
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+msgid "GetScheduledJobs: the filter must be a Structure"
+msgstr ""
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "GetScheduledJobs: the filter has no field '%s' (Metadata, Predefined, Use, Key, Description, UUID)"
+msgstr ""
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "FindPredefined: '%s' is a parameterized job - its jobs are rows, found with GetScheduledJobs or FindByUUID"
+msgstr ""
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "CreateScheduledJob: '%s' is a predefined job - it exists once, find it with FindPredefined"
+msgstr ""
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "CreateScheduledJob: a row of '%s' could not be created"
+msgstr ""

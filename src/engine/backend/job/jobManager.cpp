@@ -203,6 +203,8 @@ void ibJobManager::HarvestFinished(ibJobEntry& e, std::vector<std::shared_ptr<ib
 			e.m_retryAt = ibDateTime();
 		}
 
+		e.m_lastEndAt = ibDateTime::Now();
+
 		std::lock_guard<std::mutex> lk(e.m_result->m_mtx);
 		e.m_error = e.m_result->m_error;
 		if (!ok)
@@ -963,6 +965,9 @@ std::vector<ibJobState> ibJobManager::Snapshot() const
 		state.m_active    = e.m_desc.m_active;
 		state.m_outcome   = e.m_outcome;
 		state.m_lastRunAt = e.m_lastRunAt;
+		// A run in flight has not ended — its last one's end would read as this one's.
+		state.m_running   = IsRunning(e);
+		state.m_lastEndAt = state.m_running ? ibDateTime() : e.m_lastEndAt;
 		state.m_error     = e.m_error;
 
 		state.m_schedule = ibJobScheduleRules::Describe(e.m_desc.m_schedule);
@@ -1015,9 +1020,13 @@ void ibJobManager::Stop()
 	// anyone means the waits overlap instead of queueing.
 	{
 		std::vector<std::shared_ptr<ibBackgroundRun>> alive;
+		// The listed handles go too: a run that was not harvested still holds its session, and the
+		// list must not keep it past the registry it belongs to.
+		std::deque<std::shared_ptr<ibBackgroundRun>> listed;
 		{
 			std::lock_guard<std::mutex> lk(m_mtx);
 			alive.swap(m_background);
+			listed.swap(m_listed);
 		}
 		for (auto& run : alive) run->Cancel();
 		for (auto& run : alive) run->Wait();

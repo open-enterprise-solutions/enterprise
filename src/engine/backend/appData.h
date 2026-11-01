@@ -447,6 +447,7 @@ private:
 	static void CreateTableLock();
 #ifdef OES_TESTING
 	friend struct LockSchemaAccess;   // the race test opens a base that already has sys_lock
+	friend struct JobSchemaAccess;    // the job runtime test writes job settings into a base it made
 #endif
 	// Additive — creates sys_job if missing. The shared last-run clock for
 	// scheduled jobs; independent table, not part of TableAlreadyCreated()'s

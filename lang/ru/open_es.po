@@ -13602,3 +13602,151 @@ msgstr "Ассистент с доступом к данным"
 #: src/engine/frmclient/mainFrame/settings/settingsdialog.cpp:39
 msgid "Debugging"
 msgstr "Отладка"
+
+#: src/engine/backend/job/jobBackground.cpp
+msgid "the run failed"
+msgstr "запуск завершился ошибкой"
+
+#: src/engine/backend/job/jobBackground.cpp
+#, c-format
+msgid "Background job: '%s' with the key '%s' is already running"
+msgstr "Фоновое задание: '%s' с ключом '%s' уже выполняется"
+
+#: src/engine/backend/system/systemManagerEnum.h
+msgid "Completed"
+msgstr "Завершено"
+
+#: src/engine/backend/system/systemManagerEnum.h
+msgid "Failed"
+msgstr "Завершено с ошибкой"
+
+#: src/engine/backend/system/systemManagerEnum.h
+msgid "Canceled"
+msgstr "Отменено"
+
+#: src/engine/backend/system/value/valueBackgroundJob.cpp
+#, c-format
+msgid "Background job: the timeout cannot be negative (%ld seconds)"
+msgstr "Фоновое задание: таймаут не может быть отрицательным (%ld с)"
+
+#: src/engine/backend/system/value/valueBackgroundJob.cpp
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "%s: '%s' is not a UUID"
+msgstr "%s: '%s' - не UUID"
+
+#: src/engine/backend/system/value/valueBackgroundJob.cpp
+#, c-format
+msgid "GetBackgroundJobs: the filter has no field '%s' (UUID, Key, Description, MethodName, State, Begin, End)"
+msgstr "GetBackgroundJobs: в отборе нет поля '%s' (UUID, Key, Description, MethodName, State, Begin, End)"
+
+#: src/engine/backend/system/value/valueBackgroundJob.cpp
+#, c-format
+msgid "Background job: the parameters of '%s' must be an Array"
+msgstr "Фоновое задание: параметры '%s' должны быть массивом (Array)"
+
+#: src/engine/backend/system/value/valueBackgroundJob.cpp
+msgid "GetBackgroundJobs: the filter must be a Structure"
+msgstr "GetBackgroundJobs: отбор должен быть структурой (Structure)"
+
+#: src/engine/backend/system/value/valueBackgroundJob.cpp
+msgid "FindByUUID: no UUID given"
+msgstr "FindByUUID: UUID не указан"
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "%s: '%s' is not a scheduled job"
+msgstr "%s: '%s' - не регламентное задание"
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "%s: '%s' is not a scheduled job of this configuration"
+msgstr "%s: '%s' - не регламентное задание этой конфигурации"
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "the job row '%s' of '%s' could not be read"
+msgstr "строку задания '%s' в '%s' не удалось прочитать"
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+msgid "Scheduled jobs: no configuration is open"
+msgstr "Регламентные задания: конфигурация не открыта"
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "the job row of '%s' did not take '%s'"
+msgstr "строка задания '%s' не приняла '%s'"
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "the parameters of '%s' are its attributes: give them as a Structure"
+msgstr "параметры '%s' - это его реквизиты: передайте их структурой (Structure)"
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "'%s' is a predefined job: it takes no parameters"
+msgstr "'%s' - предопределённое задание: параметров у него нет"
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "'%s' has no attribute '%s' to take it as a parameter"
+msgstr "у '%s' нет реквизита '%s', чтобы принять его как параметр"
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "the schedule of '%s' must be a JobSchedule, not a '%s'"
+msgstr "расписание '%s' должно быть JobSchedule, а не '%s'"
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "'%s' is a predefined job: its key is its name"
+msgstr "'%s' - предопределённое задание: его ключ - это его имя"
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "'%s' is a predefined job: its description is its synonym, changed in the designer"
+msgstr "'%s' - предопределённое задание: его наименование - это синоним, он меняется в конфигураторе"
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "the job row '%s' of '%s' was not written"
+msgstr "строка задания '%s' в '%s' не записана"
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "'%s' is a predefined job: it is declared, not stored, and cannot be deleted - switch it off with Use"
+msgstr "'%s' - предопределённое задание: оно объявлено, а не хранится, и удалить его нельзя - выключите его через Use"
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "the job row of '%s' was never written: there is nothing to delete"
+msgstr "строка задания '%s' ни разу не записывалась: удалять нечего"
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "the job row '%s' of '%s' was not deleted"
+msgstr "строка задания '%s' в '%s' не удалена"
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+msgid "GetScheduledJobs: the filter must be a Structure"
+msgstr "GetScheduledJobs: отбор должен быть структурой (Structure)"
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "GetScheduledJobs: the filter has no field '%s' (Metadata, Predefined, Use, Key, Description, UUID)"
+msgstr "GetScheduledJobs: в отборе нет поля '%s' (Metadata, Predefined, Use, Key, Description, UUID)"
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "FindPredefined: '%s' is a parameterized job - its jobs are rows, found with GetScheduledJobs or FindByUUID"
+msgstr "FindPredefined: '%s' - параметризуемое задание: его задания - строки, их находят GetScheduledJobs или FindByUUID"
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "CreateScheduledJob: '%s' is a predefined job - it exists once, find it with FindPredefined"
+msgstr "CreateScheduledJob: '%s' - предопределённое задание: оно существует в одном экземпляре, найдите его через FindPredefined"
+
+#: src/engine/backend/system/value/valueScheduledJob.cpp
+#, c-format
+msgid "CreateScheduledJob: a row of '%s' could not be created"
+msgstr "CreateScheduledJob: строку '%s' не удалось создать"
