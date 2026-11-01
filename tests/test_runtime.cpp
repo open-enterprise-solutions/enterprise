@@ -34,6 +34,7 @@
 #include "backend/backend_mainFrame.h"               // a frame so the form can be born
 #include "backend/metaCollection/metaModuleObject.h" // a form module, so the bind has somewhere to live
 #include "backend/metadataConfiguration.h"           // the module's file name is asked of its metadata
+#include "backend/metaCollection/metaFormObject.h"  // a common form: what a tile's form is created by
 #include "backend/moduleManager/moduleManager.h"
 #include "backend/system/value/valueDynamicList.h"
 
@@ -3502,12 +3503,14 @@ TEST_F(FormRuntime, AFormScriptWritesThroughDataSource) {
 // A BUTTON AS A TILE - the representation a finger presses: the picture large over the caption and a note under
 // them. What the server says of it: the member of the button's own Representation, the note saved with the button,
 // and the state a client draws from - the note going with a tile alone. The buttons are made by a form born against
-// the session's frame, through the factory the designer's comes to (NewObject), and read through what every control
-// answers; they stand on the form itself, with no sizer between - their state does not ask for one.
+// the session's frame, with the metadata a form lives on - a common form of a configuration is its creator - through
+// the factory the designer's comes to (NewObject), and read through what every control answers; they stand on the
+// form itself, with no sizer between - their state does not ask for one.
 struct TileForm : FormRuntime {
 	std::shared_ptr<FramedSession> m_session;
 	std::unique_ptr<KeyFrame> m_frame;
 	std::unique_ptr<ibSessionScope> m_scope;
+	std::unique_ptr<ibMetaDataConfigurationFile> m_configuration;
 	ibValuePtr<ibValueForm> m_form;
 
 	void SetUp() override {
@@ -3518,10 +3521,16 @@ struct TileForm : FormRuntime {
 		m_frame = std::make_unique<KeyFrame>(ibApplicationInstance::GetSessionRegistry()->MintUnlisted(m_session));
 		m_session->Attach(m_frame.get());
 		m_scope = std::make_unique<ibSessionScope>(m_session.get());
-		m_form = ibValuePtr<ibValueForm>(new ibValueForm());
+		m_configuration = std::make_unique<ibMetaDataConfigurationFile>();
+		const ibValueMetaObjectFormBase* const creator = dynamic_cast<const ibValueMetaObjectFormBase*>(
+			m_configuration->CreateMetaObject(g_metaCommonFormCLSID, m_configuration->GetCommonMetaObject(), false));
+		ASSERT_NE(creator, nullptr);
+		m_form = ibValuePtr<ibValueForm>(new ibValueForm(ibFormRequest(), creator));
+		ASSERT_EQ(m_form->GetMetaData(), m_configuration.get());
 	}
 	void TearDown() override {
 		m_form = ibValuePtr<ibValueForm>();
+		m_configuration.reset();
 		m_scope.reset();
 		m_frame.reset();
 		m_session.reset();
