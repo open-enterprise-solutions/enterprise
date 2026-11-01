@@ -1,4 +1,5 @@
 #include "propertySource.h"
+#include "backend/backend_exception.h"   // a path that does not resolve raises
 #include "backend/propertyManager/property/variant/variantSource.h"   // GetGuidByID / GetIdByGuid — the hop <-> guid resolve
 #include "core/serialize/dataBuilder.h"   // ibDataValue — node value (Binary)
 #include "core/description/sourceDescription.h"       // ibSourceDescription / ibSourceHop (the id path the variant holds)
@@ -100,10 +101,28 @@ bool ibPropertySource::IsAvailable() const {
 ////////////////////////////////////////////////////////////////////////
 
 //base property for "source"
+// ⭐ A SCRIPT BINDS BY THE PATH IT READS — the dotted text GetDataValue answers with (`Control.Source = "List.Price"`),
+// resolved by the control's own ResolveSource, the walk MCP form_bind takes too. An empty text unbinds. A path that
+// does not resolve RAISES: left quietly unchanged, the control would go on showing what it showed before.
 bool ibPropertySource::SetDataValue(const ibValue& varPropVal)
 {
-	//varPropVal.GetString();
-	return false;
+	const ibString path = varPropVal.GetString();
+	if (path.IsEmpty()) {
+		SetValue(ibSourceDescription());
+		return true;
+	}
+
+	const ibBackendTypeSourceFactory* factory = dynamic_cast<const ibBackendTypeSourceFactory*>(m_owner);
+	ibSourceDescription desc;
+	ibString refusal;
+	if (factory == nullptr || !factory->ResolveSource(path, desc, refusal)) {
+		ibBackendCoreException::Error(_("'%s' cannot be bound to '%s': %s"), GetName(), path,
+			refusal.IsEmpty() ? ibString(_("it binds to nothing")) : refusal);
+		return false;
+	}
+
+	SetValue(desc);
+	return true;
 }
 
 bool ibPropertySource::GetDataValue(ibValue& pvarPropVal) const

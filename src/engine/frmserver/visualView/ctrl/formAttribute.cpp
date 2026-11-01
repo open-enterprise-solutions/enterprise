@@ -19,6 +19,8 @@
 #include "backend/metadataConfiguration.h"                   // ibMetaDataConfigurationBase : ibMetaData (upcast)
 #include "core/clsid.h"
 #include "backend/metaCollection/metaFormObject.h"            // ibValueMetaObjectFormBase::SaveFormData — the live form back into its blob
+#include "backend/backend_exception.h"                       // ibBackendCoreException — a module asked for an attribute it cannot have
+
 
 //*********************************************************************************************
 //*   ibValueForm attribute store / path resolve (relocated here from form.cpp)              *
@@ -69,6 +71,9 @@ bool ibValueForm::WriteAttributes(ibDataNode& node) const
 	ibDataNode& attrsNode = node.Child(ibProtocol::ibView::ibFormDesigner::Attributes);
 	bool complete = true;
 	for (const auto& av : m_attributes) {
+		// One the MODULE added lives as long as the open form — it is not part of what the form was designed with.
+		if (av->IsAddedByModule())
+			continue;
 		ibDataNode& attrNode = attrsNode.AddChild(av->GetClassType(), av->GetId());
 		// WriteProperty returns false when the attribute is INCOMPLETE (a dynamic list with no
 		// source picked) — FAIL the whole write so a broken definition is never persisted (the
@@ -103,6 +108,27 @@ ibFormAttributeValue* ibValueForm::AddAttribute(const ibString& name, const ibCl
 {
 	// Name + Type are mandatory — an attribute is never empty. Make + attach in one step.
 	return AttachAttribute(MakeAttribute(name, type, value));
+}
+
+ibFormAttributeValue* ibValueForm::AddAttribute(const ibString& name, const ibTypeDescription& typeDesc)
+{
+	if (name.IsEmpty() || stringUtils::CheckCorrectName(name) != wxNOT_FOUND || (name[0] >= ibT('0') && name[0] <= ibT('9'))) {
+		ibBackendCoreException::Error(_("'%s' cannot be the name of a form attribute: it takes letters, digits and "
+			"the symbol \"_\", and does not start with a digit"), name);
+		return nullptr;
+	}
+	if (const ibFormAttributeValue* taken = GetAttribute(name)) {
+		ibBackendCoreException::Error(_("The form already has an attribute '%s'"), taken->GetName());
+		return nullptr;
+	}
+
+	// Made as every other attribute is — the form builds the entry — then typed with the whole description: the value
+	// it materialises follows from that.
+	ibValuePtr<ibFormAttributeValue> holder = MakeAttribute(name);
+	holder->m_attribute->SetDefaultMetaType(typeDesc);
+	holder->m_attribute->SetAddedByModule(true);
+	holder->Refresh();
+	return AttachAttribute(std::move(holder));
 }
 
 ibMetaID ibValueForm::AddAutoAttribute(const ibString& name, const ibTypeDescription& typeDesc)
@@ -194,6 +220,21 @@ void ibValueForm::DeleteAttribute(unsigned int idx)
 	}
 }
 
+void ibValueForm::RemoveAttribute(const ibString& name)
+{
+	ibFormAttributeValue* entry = GetAttribute(name);
+	if (entry == nullptr) {
+		ibBackendCoreException::Error(_("The form has no attribute '%s'"), name);
+		return;
+	}
+	if (!entry->IsAddedByModule()) {
+		ibBackendCoreException::Error(_("'%s' is an attribute the form was designed with - only one the module "
+			"added with AddAttribute can be removed"), entry->GetName());
+		return;
+	}
+	DetachAttribute(entry);
+}
+
 void ibValueForm::BindAttributeVariable(ibFormAttributeValue* entry)
 {
 	if (entry == nullptr)
@@ -223,7 +264,7 @@ void ibValueForm::DropAttributeBinds(ibFormAttributeValue* entry)
 bool ibValueForm::IsAttributeNameUnique(const ibString& name, const ibFormAttributeValue* except) const
 {
 	for (const auto& av : m_attributes)
-		if (av != except && av->GetName() == name)
+		if (av != except && stringUtils::IsSameAs(av->GetName(), name))   // the rule GetAttribute finds by
 			return false;
 	return true;
 }
@@ -373,10 +414,12 @@ ibFormAttributeValue* ibValueForm::PasteAttribute(const ibDataNode& node)
 	return AttachAttribute(std::move(holder));
 }
 
+// ⭐ A NAME IS ASKED THE WAY A MODULE MEETS IT — case-insensitively: `ThisForm.flag` and `ThisForm.Flag` are one
+// member, so two attributes that differ only in case would be two the module could never tell apart.
 ibFormAttributeValue* ibValueForm::GetAttribute(const ibString& name) const
 {
 	for (const auto& av : m_attributes)
-		if (av->GetName() == name)
+		if (stringUtils::IsSameAs(av->GetName(), name))
 			return av;
 	return nullptr;
 }

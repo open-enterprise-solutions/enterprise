@@ -217,6 +217,12 @@ public:
 	// entity carrying the attribute (its hidden private description) AND its value. Never
 	// a raw attribute. An attribute is NEVER empty: name + Type + value.
 	ibFormAttributeValue* AddAttribute(const ibString& name, const ibClassID& type, const ibValue& value);
+	// ⭐ …AND THE ONE A MODULE ADDS while the form is open — `ThisForm.AddAttribute(name, type)`: a value table of
+	// columns only known at run time, a list a control is then bound to. Typed with the WHOLE description (a string's
+	// length, a number's digits), not only its first class, and marked as the module's (IsAddedByModule), so it is not
+	// stored with the form and RemoveAttribute may take it again. Raises for a name that is not a name or that another
+	// attribute already has.
+	ibFormAttributeValue* AddAttribute(const ibString& name, const ibTypeDescription& typeDesc);
 	// The MAIN entry (the source object lands here) — guards that no other main exists.
 	ibFormAttributeValue* AddMainAttribute(const ibString& name, const ibClassID& type, ibSourceDataObject* value);
 
@@ -248,6 +254,10 @@ public:
 
 	void DeleteAttribute(const ibString& name);
 	void DeleteAttribute(unsigned int idx);
+	// The module's removal — `ThisForm.RemoveAttribute(name)`: only an attribute the module added. One the form was
+	// designed with is what the compiled module and the controls are bound to, and taking it from under them is not a
+	// script's call; that raises, as a name the form has no attribute for does.
+	void RemoveAttribute(const ibString& name);
 	// Bind `entry` into the form module: its value cell as a LOCAL named <attrName>, and —
 	// when it is the MAIN — the exported DataSource too. Self-managed by the attribute's
 	// lifecycle / main flag: add and become-main bind, delete and lose-main unbind, so no
@@ -298,6 +308,7 @@ public:
 	// it does NOT raise, because a form is somebody standing in front of a window and the caller
 	// decides what an empty field costs. Reachable from a script as `ThisForm.CheckFilling()`.
 	bool CheckFilling() const;
+
 	// Next free attribute id (max existing + 1) — PUBLIC so the holder's nested description can
 	// stamp itself on construction (a nested class does not inherit the enclosing class's friends).
 	ibMetaID NextAttributeId() const;

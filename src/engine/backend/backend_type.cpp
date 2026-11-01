@@ -454,3 +454,101 @@ ibBackendFormAttributeValue* ibBackendTypeSourceFactory::FindSourceHolder(const 
 			return holder;
 	return nullptr;
 }
+
+#include "backend/srcDataObject.h"                         // ibSourceExplorer — what a path is resolved through
+#include "backend/metaCollection/partial/reference/reference.h"   // an empty reference — where a reference leads
+#include "core/stringTokenizer.h"
+#include "core/stringUtils.h"
+
+ibSourceDataObject* ibBackendTypeSourceFactory::PointedAt(const ibMetaData* metaData, const ibClassID& clsid,
+	std::vector<ibValue>& held)
+{
+	const ibCtorMetaValueType* type = metaData != nullptr ? metaData->GetTypeCtor(clsid) : nullptr;
+	const ibValueMetaObject* object = type != nullptr ? type->GetMetaObject() : nullptr;
+	ibValueReferenceDataObject* reference = object != nullptr
+		? ibValueReferenceDataObject::Create(metaData, object->GetMetaID()) : nullptr;
+	if (reference == nullptr)
+		return nullptr;
+
+	held.emplace_back(reference);
+	ibSourceDataObject* source = nullptr;
+	held.back().ConvertToValue(source);
+	return source;
+}
+
+bool ibBackendTypeSourceFactory::ResolveSource(const ibString& path, ibSourceDescription& desc, ibString& refusal) const
+{
+	std::vector<ibBackendFormAttributeValue*> holders;
+	GetSourceList(holders);
+
+	// THE HEAD — an attribute the path opens with, by name as a module meets it; else the MAIN one, which is the
+	// form holding its object, so the path's first segment is already a field of it.
+	const ibString first = path.BeforeFirst(ibT('.'));
+	ibBackendFormAttributeValue* head = nullptr;
+	bool named = false;
+	for (ibBackendFormAttributeValue* holder : holders) {
+		if (holder != nullptr && stringUtils::IsSameAs(holder->GetName(), first)) {
+			head = holder;
+			named = true;
+			break;
+		}
+	}
+	for (unsigned int index = 0; head == nullptr && index < holders.size(); ++index)
+		if (holders[index] != nullptr && holders[index]->IsMain())
+			head = holders[index];
+
+	if (head == nullptr) {
+		refusal = ibString::Format(_("'%s' names no attribute this control can be bound to, and the form has no main "
+			"attribute to start from"), first);
+		return false;
+	}
+
+	ibSourceDescription walk(head->GetId());
+	ibString walked = named ? head->GetName() : ibString();
+	ibSourceDataObject* source = head->GetSourceValue();
+	const ibSourceExplorer* explorer = source != nullptr ? source->GetSourceExplorer() : nullptr;
+	std::vector<ibValue> held;   // the references stepped into (PointedAt)
+
+	ibStringTokenizer segments(named ? path.AfterFirst(ibT('.')) : path, ibT("."));
+	while (segments.HasMoreTokens()) {
+
+		const ibString segment = segments.GetNextToken();
+		const ibSourceExplorer* next = explorer != nullptr ? explorer->FindByName(segment) : nullptr;
+
+		if (next == nullptr) {
+			ibString available;
+			for (unsigned int index = 0; explorer != nullptr && index < explorer->GetHelperCount(); ++index) {
+				if (const ibSourceExplorer* field = explorer->GetHelper(index))
+					available << (available.IsEmpty() ? ibT("") : ibT(", ")) << field->GetSourceName();
+			}
+			refusal = available.IsEmpty()
+				? ibString::Format(_("'%s' holds a value - nothing unfolds from it, so '%s' cannot follow"),
+					walked.IsEmpty() ? head->GetName() : walked, segment)
+				: ibString::Format(_("'%s' has no field called '%s'. It offers: %s"),
+					walked.IsEmpty() ? head->GetName() : walked, segment, available);
+			return false;
+		}
+
+		// The hop RECORDS the type it expects to find there: a later walk notices the configuration drifted under
+		// it, rather than reading a field that is no longer the one the binding meant.
+		walk.AppendSource(next->GetSourceId(), next->GetTypeDesc().GetFirstClsid());
+		walked = walked.IsEmpty() ? segment : walked + ibT(".") + segment;
+
+		if (next->GetHelperCount() > 0)
+			explorer = next;   // a section — its columns are nodes
+		else if (ibSourceDataObject* pointed = IsReference(next->GetTypeDesc().GetFirstClsid())
+			? PointedAt(GetMetaData(), next->GetTypeDesc().GetFirstClsid(), held) : nullptr)
+			explorer = pointed->GetSourceExplorer();   // across the reference — its own fields
+		else
+			explorer = nullptr;   // a leaf; a further segment refuses
+	}
+
+	// The MAIN head alone is not a binding — it is the form holding the object.
+	if (walk.GetHopCount() < 2 && !named) {
+		refusal = _("Nothing to bind to - the path names no field and no attribute");
+		return false;
+	}
+
+	desc = walk;
+	return true;
+}

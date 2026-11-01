@@ -102,6 +102,9 @@ class FRMSERVER_API ibFormAttributeValue :
 		// tooltip comes from the field synonym, not a per-attribute comment). Its header IS the Synonym.
 		ibString GetComment() const { return ibEmptyString; }
 		bool     IsMain() const { return m_isMain; }
+		// Added by the form's MODULE while it is open (ibValueForm::AddAttribute(name, typeDesc)) rather than designed:
+		// not stored with the form, and the only kind a module may remove.
+		bool     IsAddedByModule() const { return m_isAddedByModule; }
 		ibMetaID GetId() const { return m_attributeId; }
 
 		// Holder-only (NOT on the interface) — reached through friendship from the holder / form:
@@ -109,6 +112,7 @@ class FRMSERVER_API ibFormAttributeValue :
 		bool IsTypeProperty(const ibProperty* prop) const { return prop == m_propertyType; }
 		void SetAttributeName(const ibString& name) { m_propertyName->SetValue(name); }
 		void SetMainAttribute(bool main) { m_isMain = main; }
+		void SetAddedByModule(bool added) { m_isAddedByModule = added; }
 		ibValueForm* GetOwnerForm() const { return m_ownerForm; }
 		void SetOwnerForm(ibValueForm* ownerForm) { m_ownerForm = ownerForm; }
 		void FillMembers(ibMemberTable& helper) const;   // bound in ctor
@@ -133,6 +137,7 @@ class FRMSERVER_API ibFormAttributeValue :
 
 		ibValueForm* m_ownerForm;
 		bool         m_isMain = false;
+		bool         m_isAddedByModule = false;
 		ibMetaID     m_attributeId = wxNOT_FOUND;
 
 		ibPropertyCategory* m_categoryCommon = ibPropertyObject::CreatePropertyCategory(ibT("Common"), _("General"));
@@ -197,6 +202,7 @@ public:
 	ibString GetComment() const override { return m_attribute->GetComment(); }
 	ibMetaID GetId() const override { return m_attribute->GetId(); }
 	bool     IsMain() const override { return m_attribute->IsMain(); }
+	bool     IsAddedByModule() const { return m_attribute->IsAddedByModule(); }
 	const ibTypeDescription& GetTypeDesc() const override { return m_attribute->GetTypeDesc(); }
 	// …and what it asks of its filling — read by the form's own pass (ibValueForm::CheckFilling).
 	ibFormAttributeFillCheck GetFillCheck() const { return m_attribute->GetFillCheck(); }

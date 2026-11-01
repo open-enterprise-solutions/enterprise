@@ -460,30 +460,6 @@ ibFormAttributeValue* PathHead(const ibValueForm* form, const ibString& path, ib
 	return named ? head : form->GetMainAttribute();
 }
 
-// ⭐⭐ WHERE A REFERENCE LEADS — an empty reference to what its type points at, as a SOURCE: its explorer is the
-// fields the designer's own tree offers under that reference (docViewFormEditAttribute.cpp opens it the same way),
-// references again among them, so a path goes on as deep as it is written. The reference is kept in `held` while
-// its explorer is read. Null for a barrier (`AnyRef`, `CatalogRef`), which points at no one object, and for a type
-// the configuration does not register.
-//
-// 🛑 IT ANSWERED THE METAOBJECT, and each tool walked its CHILDREN from there — a road of its own beside the
-// engine's: the fields offered took in the object's modules and forms, and a second reference ended the walk
-// ("'Goods.Goods.Parent' has no field called 'Description'. It offers: .", 2026-10-28).
-ibSourceDataObject* PointedAt(const ibMetaData* metaData, const ibClassID& clsid, std::vector<ibValue>& held)
-{
-	const ibCtorMetaValueType* type = metaData != nullptr ? metaData->GetTypeCtor(clsid) : nullptr;
-	const ibValueMetaObject* object = type != nullptr ? type->GetMetaObject() : nullptr;
-	ibValueReferenceDataObject* reference = object != nullptr
-		? ibValueReferenceDataObject::Create(metaData, object->GetMetaID()) : nullptr;
-	if (reference == nullptr)
-		return nullptr;
-
-	held.emplace_back(reference);
-	ibSourceDataObject* source = nullptr;
-	held.back().ConvertToValue(source);
-	return source;
-}
-
 } // namespace
 
 //---------------------------------------------------------------------------
@@ -1465,7 +1441,7 @@ public:
 		// path written `Supplier.region` silently stopped matching `Region`).
 		ibString walked = named ? head->GetName() : ibString();
 		ibString across;             // the object a reference stepped into, while the walk stands at its fields
-		std::vector<ibValue> held;   // the references stepped into (PointedAt)
+		std::vector<ibValue> held;   // the references stepped into (ibBackendTypeSourceFactory::PointedAt)
 
 		if (!path.IsEmpty()) {
 			ibStringTokenizer segments(path, ibT("."));
@@ -1498,11 +1474,11 @@ public:
 				// ⭐⭐ A REFERENCE HOP IS NOT A CHILD LOOKUP. A section's columns are nodes of the explorer; the
 				// fields of what a REFERENCE points at are not — the target is another object entirely, and
 				// materialising it eagerly is what makes the tree infinite. So the walk steps into it only when
-				// the path names it: the explorer of what it points at (PointedAt), and on from there, a
+				// the path names it: the explorer of what it points at (ibBackendTypeSourceFactory::PointedAt), and on from there, a
 				// reference again or not, as deep as the path is written.
 				ibSourceDataObject* const pointed = next->GetHelperCount() == 0
 					&& IsReference(next->GetTypeDesc().GetFirstClsid())
-					? PointedAt(activeMetaData, next->GetTypeDesc().GetFirstClsid(), held) : nullptr;
+					? ibBackendTypeSourceFactory::PointedAt(activeMetaData, next->GetTypeDesc().GetFirstClsid(), held) : nullptr;
 				const ibSourceExplorer* const into = pointed != nullptr ? pointed->GetSourceExplorer() : nullptr;
 
 				explorer = into != nullptr ? into : next;
@@ -1793,107 +1769,26 @@ public:
 			return false;
 		}
 
-		// THE PATH, RESOLVED HOP BY HOP — the same descent form_source makes, and
-		// the same one the form makes at run time.
+		// ⭐⭐ THE PATH, RESOLVED BY THE CONTROL ITSELF — ibBackendTypeSourceFactory::ResolveSource, the walk a script's
+		// `Control.Source = "…"` takes too: its head is one of the attributes THIS control can show (the main one unless
+		// the path opens with another's name — a table to a list, a grid box to a composition, by the name alone), then
+		// every segment through the source's own explorers, across references, as deep as the path goes. A segment that
+		// does not resolve is refused with what that level offers, because the caller's next move is to pick one.
+		//
+		// 🛑 IT WAS WALKED HERE, a road of its own beside the engine's, and a script had none at all: its Source write
+		// was dropped (ibPropertySource::SetDataValue answered false and did nothing).
+		const ibBackendTypeSourceFactory* factory = dynamic_cast<const ibBackendTypeSourceFactory*>(control);
 		ibSourceDescription description;
-
-		// ⭐⭐ THE HEAD OF A BINDING IS AN ATTRIBUTE, not the first field of the source — the
-		// form's MAIN one, unless the path opens with another's name (PathHead).
-		//
-		// A path is read from the FORM outward: the form holds the object in its
-		// main attribute, and every hop after that walks inside what that attribute
-		// holds. The generated layout writes exactly this — SetSource({ mainAttrId,
-		// field }) — so a binding that starts at the field instead is one hop short
-		// and resolves to nothing. It stored correctly, read back correctly, and
-		// showed as "<not selected>" in the designer: right shape, wrong root.
-		//
-		// The id is form-local, which is why it is not in the source explorer at
-		// all — the explorer describes what the attribute POINTS AT.
-		//
-		// ⭐ AND A NAMED HEAD ALONE IS A BINDING — a table to a list, a grid box to a composition:
-		// the control shows the attribute itself, which is what the designer's drag of an
-		// attribute's root row writes.
-		ibString path;
-		bool named = false;
-		const ibFormAttributeValue* head = PathHead(form, ArgPath().Text(params), path, named);
-		if (head == nullptr) {
-			refusal = ibMcpText("This form has no main attribute to bind through - start the path with one of "
-				"its attributes (form_get lists them).");
+		if (factory == nullptr || !factory->ResolveSource(ArgPath().Text(params), description, refusal)) {
+			if (refusal.IsEmpty())
+				refusal = ibString::Format(ibMcpText("'%s' binds to no source."), control->GetControlName());
 			form->DecrRef();
 			return false;
 		}
 
-		description.AppendSource(head->GetId());
-
-		ibString walked = named ? head->GetName() : ibString();
-		ibSourceDataObject* source = head->GetSourceValue();
-		const ibSourceExplorer* explorer =
-			source != nullptr ? source->GetSourceExplorer() : nullptr;
-
-		// ⭐⭐ ONE WALK, THROUGH THE SOURCE'S OWN EXPLORERS, as deep as the path goes. A segment
-		// naming a field or a tabular section is a node of the explorer it stands in; a segment
-		// naming a REFERENCE steps into what it points at — the explorer of an empty reference to it
-		// (PointedAt), the tree the designer offers under that reference — and the next segment is
-		// one of ITS fields, a reference again or not. The hop ids are the explorers' on every level,
-		// which is what the form resolves at run time (ibSourceDataObject::ResolvePath).
-		//
-		// 🛑 IT CROSSED INTO METADATA at the first reference and walked the object's children from
-		// there — a second road: modules and forms were offered as fields, and a second reference
-		// ended the walk, `Goods.Goods.Parent.Description` refused with "It offers: ." (2026-10-28).
-		std::vector<ibValue> held;   // the references stepped into (PointedAt)
-
-		ibStringTokenizer segments(path, ibT("."));
-		while (segments.HasMoreTokens()) {
-
-			const ibString segment = segments.GetNextToken();
-			const ibSourceExplorer* next = explorer != nullptr
-				? explorer->FindByName(segment) : nullptr;
-
-			if (next == nullptr) {
-
-				ibString available;
-				if (explorer != nullptr) {
-					for (unsigned int index = 0; index < explorer->GetHelperCount(); ++index) {
-						if (const ibSourceExplorer* field = explorer->GetHelper(index))
-							available << (available.IsEmpty() ? ibT("") : ibT(", "))
-								<< field->GetSourceName();
-					}
-				}
-
-				refusal = available.IsEmpty()
-					? ibString::Format(ibMcpText("'%s' holds a value - nothing unfolds from it, so '%s' cannot follow."),
-						walked.IsEmpty() ? head->GetName() : walked, segment)
-					: ibString::Format(ibMcpText("'%s' has no field called '%s'. It offers: %s."),
-						walked.IsEmpty() ? head->GetName() : walked, segment, available);
-				form->DecrRef();
-				return false;
-			}
-
-			// The hop RECORDS the type it expects to find there. That is what lets a
-			// later walk notice the configuration drifted under it, rather than
-			// reading a field that is no longer the one the binding meant.
-			description.AppendSource(next->GetSourceId(), next->GetTypeDesc().GetFirstClsid());
-			walked = walked.IsEmpty() ? segment : walked + ibT(".") + segment;
-
-			if (next->GetHelperCount() > 0) {
-				explorer = next;            // a section — its columns are nodes
-			}
-			else if (ibSourceDataObject* pointed = IsReference(next->GetTypeDesc().GetFirstClsid())
-				? PointedAt(activeMetaData, next->GetTypeDesc().GetFirstClsid(), held) : nullptr) {
-				explorer = pointed->GetSourceExplorer();   // across the reference — its own fields
-			}
-			else {
-				explorer = nullptr;         // a leaf; a further segment will refuse
-			}
-		}
-
-		// The MAIN head alone is not a binding — it is the form holding the object.
-		// A path of one hop that did not name its head means nothing was named.
-		if (description.GetHopCount() < 2 && !named) {
-			refusal = ibMcpText("Nothing to bind to - pass a path such as 'Warehouse.Code', or an attribute's name.");
-			form->DecrRef();
-			return false;
-		}
+		// The path as a PERSON reads it — the binding's own rendering, as the designer shows it.
+		ibString walked;
+		factory->WalkSource(description, nullptr, &walked);
 
 		binding->SetValue(description);
 

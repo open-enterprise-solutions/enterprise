@@ -8,6 +8,8 @@
 #include "core/description/sourceDescription.h"     // ibSourceDescription — control's bound source path (GetSourceDesc / SetDefaultSourceType)
 #include "core/selectorDataType.h"                  // ibSelectorDataType — the shape a type is picked in (GetFilterDataType)
 
+class BACKEND_API ibValue;   // the references a path is walked across are held as values (PointedAt)
+
 //////////////////////////////////////////////////////////////
 
 // ⭐ A BINDING'S DOOR ON THIS SIDE — the core one writes every id as it is held; this one writes against the
@@ -240,6 +242,20 @@ public:
 	// display "Attr.Field.Sub". Takes the wrapper (not a bare vector) — resolution is source-explorer-driven.
 	const ibBackendSourceColumn* WalkSource(const ibSourceDescription& desc,
 		bool* valid = nullptr, ibString* outText = nullptr) const;
+
+	// ⭐ THE PATH IN WORDS, read into the hops a binding stores — the inverse of WalkSource, and the one walk a
+	// script (`Control.Source = "List.Price"`) and an assistant (MCP form_bind) both go through. The head is one of
+	// THIS context's source attributes (GetSourceList), by name; a path that does not open with one starts at the
+	// MAIN attribute. Every segment after it is a field of the explorer it stands in — a tabular section's columns,
+	// or, across a REFERENCE, the fields of what it points at, as deep as the path is written. False with the
+	// reason when a segment names nothing there (and what that level offers), or the path names nothing at all.
+	bool ResolveSource(const ibString& path, ibSourceDescription& desc, ibString& refusal) const;
+
+	// WHERE A REFERENCE LEADS — an empty reference to what `clsid` points at, as a source: its explorer is the fields
+	// a path goes on through. The reference is kept in `held` while it is read. Null for a barrier (`AnyRef`,
+	// `CatalogRef`), which points at no one object, and for a type the configuration does not register.
+	static class ibSourceDataObject* PointedAt(const class ibMetaData* metaData, const ibClassID& clsid,
+		std::vector<ibValue>& held);
 
 	// The source HOLDER whose attribute id matches — the ONE lookup shared by the dot-walk and the
 	// path / type resolvers (instead of re-scanning GetSourceList at every site). Null = no such

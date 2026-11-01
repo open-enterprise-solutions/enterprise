@@ -26,6 +26,7 @@
 #include "backend/system/value/valueMap.h"  // ibValueStructure, g_valueStructureCLSID
 #include "frmserver/visualView/ctrl/form.h"          // a real form, DataSource bound on it
 #include "frmserver/visualView/ctrl/formAttribute.h" // the attribute cell the bind points at
+#include "frmserver/visualView/ctrl/tableBox.h"     // a table bound to a value table the module added
 #include "backend/backend_mainFrame.h"               // a frame so the form can be born
 #include "backend/metaCollection/metaModuleObject.h" // a form module, so the bind has somewhere to live
 #include "backend/metadataConfiguration.h"           // the module's file name is asked of its metadata
@@ -3546,6 +3547,129 @@ TEST_F(FormRuntime, AFormScriptWritesThroughDataSource) {
 	ibValue got;
 	ASSERT_TRUE(object->GetPropVal(object->FindProp(wxT("B")), got));
 	EXPECT_EQ(got.GetInteger(), 3);
+}
+
+// A module adds an attribute to its open form — a value table of columns a file decides, a flag — and
+// reaches it as ThisForm.<name> from then on. The form builds it; the script says only a name and a type.
+// It can take away what it added and nothing else: the attribute the form was designed with stays.
+TEST_F(FormRuntime, AFormScriptAddsAndRemovesAnAttribute) {
+	auto session = std::make_shared<FramedSession>(wxT("form-add-attribute"), ibSessionKind::Enterprise);
+	ibSessionHolder holder = ibApplicationInstance::GetSessionRegistry()->MintUnlisted(session);
+	KeyFrame frame(std::move(holder));
+	session->Attach(&frame);
+	ibSessionScope scope(session.get());
+
+	// HELD, unlike the form above: a METHOD call on ThisForm takes a reference and gives it back, and a form
+	// at count zero is deleted by that release - the next ThisForm.<member> would read a freed object.
+	ibValuePtr<ReadableForm> form(new ReadableForm());
+	ASSERT_NE(form->AddAttribute(wxT("Designed"), g_valueStructureCLSID, ibValue()), nullptr);
+
+	const short savedStyle = ibCompileCode::GetCodeStyle();
+	ibCompileCode::SetCodeStyle(CODE_VES);
+	struct StyleRestore {
+		short saved;
+		~StyleRestore() { ibCompileCode::SetCodeStyle(saved); }
+	} styleRestore{ savedStyle };
+
+	ibCompileCode cc(wxT("caller"), wxT("memory"), false);
+	const ibValue formValue(static_cast<ibValue*>(static_cast<ReadableForm*>(form)));
+	cc.AddContextVariable(wxT("ThisForm"), formValue);
+	// The global API as a transparent scope (Type), as a form module has it.
+	ibValuePtr<ibValueSystemFunction> valueSystem(new ibValueSystemFunction());
+	cc.AddContextVariable(wxT("System"), valueSystem, true);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("Function Add()\n")
+		wxT("  Made = ThisForm.AddAttribute(\"Flag\", New TypeDescription(\"Boolean\"));\n")
+		wxT("  ThisForm.Flag = Not Made;\n")
+		wxT("  Return ThisForm.Flag;\n")
+		wxT("EndFunction\n")
+		wxT("Procedure AddAgain(Name)\n")
+		wxT("  ThisForm.AddAttribute(Name, New TypeDescription(\"String\"));\n")
+		wxT("EndProcedure\n")
+		wxT("Procedure AddUntyped()\n")
+		wxT("  ThisForm.AddAttribute(\"Loose\", \"Boolean\");\n")
+		wxT("EndProcedure\n")
+		wxT("Procedure Remove(Name)\n")
+		wxT("  ThisForm.RemoveAttribute(Name);\n")
+		wxT("EndProcedure\n")
+		// What the attribute is FOR: a value of a complex type a control is bound to and shows.
+		wxT("Procedure BindTable(Table)\n")
+		wxT("  Prices = ThisForm.AddAttribute(\"Prices\", New TypeDescription(\"Table\"));\n")
+		wxT("  Prices.Columns.AddColumn(\"Price\", New TypeDescription(\"Number\"));\n")
+		wxT("  Row = Prices.Add();\n")
+		wxT("  Row.Price = 42;\n")
+		wxT("  Table.Source = \"Prices\";\n")
+		wxT("EndProcedure\n")
+		wxT("Procedure BindNowhere(Control)\n")
+		wxT("  Control.Source = \"Prices.Nowhere\";\n")
+		wxT("EndProcedure\n")));
+
+	ibProcUnit pu;
+	ibString err;
+	ASSERT_TRUE(RunBound(cc, pu, err)) << err.ToStdString();
+
+	// A Boolean attribute is born False, and the module wrote its negation through ThisForm.Flag.
+	ibValue ret;
+	ASSERT_TRUE(pu.CallAsFunc(wxT("Add"), ret));
+	EXPECT_EQ(ret.GetType(), ibValueTypes::TYPE_BOOLEAN);
+	EXPECT_TRUE(ret.GetBoolean());
+	ibFormAttributeValue* flag = form->GetAttribute(wxT("Flag"));
+	ASSERT_NE(flag, nullptr);
+	EXPECT_FALSE(flag->IsMain());
+	ibValue held;
+	ASSERT_TRUE(flag->GetValue(held));
+	EXPECT_TRUE(held.GetBoolean());
+
+	// A name the form has already, in any case, a name that is not one, and a type that is not a description.
+	ibValue name(ibT("flag"));
+	EXPECT_THROW(pu.CallAsProc(wxT("AddAgain"), name), ibBackendCoreException);
+	ibValue notAName(ibT("2nd"));
+	EXPECT_THROW(pu.CallAsProc(wxT("AddAgain"), notAName), ibBackendCoreException);
+	EXPECT_THROW(pu.CallAsProc(wxT("AddUntyped")), ibBackendCoreException);
+	EXPECT_EQ(form->GetAttributeCount(), 2u);
+
+	// The designed one stays; the added one goes.
+	ibValue designed(ibT("Designed"));
+	EXPECT_THROW(pu.CallAsProc(wxT("Remove"), designed), ibBackendCoreException);
+	ibValue added(ibT("Flag"));
+	ASSERT_TRUE(pu.CallAsProc(wxT("Remove"), added));
+	EXPECT_EQ(form->GetAttribute(wxT("Flag")), nullptr);
+	EXPECT_NE(form->GetAttribute(wxT("Designed")), nullptr);
+	EXPECT_THROW(pu.CallAsProc(wxT("Remove"), added), ibBackendCoreException);
+
+	// The table is bound by the path the script wrote, and what it shows is the attribute's own table, row and all.
+	// The table is made as ThisForm.Controls.CreateControl makes it: `Type("Tablebox")` would ask a configuration,
+	// and this form has none.
+	ibValueModelTableBox* table = dynamic_cast<ibValueModelTableBox*>(form->CreateControl(ibT("Tablebox"), form));
+	ASSERT_NE(table, nullptr);
+	ibValue shown(static_cast<ibValue*>(table));
+	ASSERT_TRUE(pu.CallAsProc(wxT("BindTable"), shown));
+	ibValue tableValue, attributeValue;
+	ASSERT_TRUE(table->GetControlValue(tableValue));
+	ibFormAttributeValue* prices = form->GetAttribute(wxT("Prices"));
+	ASSERT_NE(prices, nullptr);
+	ASSERT_TRUE(prices->GetValue(attributeValue));
+	ibValueModel* tableModel = nullptr;
+	ibValueModel* attributeModel = nullptr;
+	ASSERT_TRUE(tableValue.ConvertToValue(tableModel));
+	ASSERT_TRUE(attributeValue.ConvertToValue(attributeModel));
+	EXPECT_EQ(tableModel, attributeModel);
+	EXPECT_EQ(table->GetSourceDesc().GetHopCount(), 1u);
+
+	// A path that names nothing there raises - and the binding stays the one the table had.
+	EXPECT_THROW(pu.CallAsProc(wxT("BindNowhere"), shown), ibBackendCoreException);
+	EXPECT_EQ(table->GetSourceDesc().GetHopCount(), 1u);
+
+	// What the module added is not part of what the form was designed with: it is not written with it.
+	ibDataNode written;
+	form->WriteData(written);
+	const auto attributes = written.FindChild(ibProtocol::ibView::ibFormDesigner::Attributes);
+	ASSERT_TRUE(attributes.has_value());
+	std::vector<ibMetaID> stored;
+	for (const ibDataNode& one : attributes->Children())
+		stored.push_back(one.GetMetaId());
+	ASSERT_EQ(stored.size(), 1u);   // Designed only - not Prices
+	EXPECT_EQ(stored.front(), form->GetAttribute(wxT("Designed"))->GetId());
 }
 
 // A list form's DataSource is a dynamic list. It already knows its source

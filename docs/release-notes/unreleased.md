@@ -42,6 +42,14 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Script language
 
+- **A form module adds an attribute to its open form and binds a control to it.**
+  `ThisForm.AddAttribute(name, type)` takes a `TypeDescription` and answers the new attribute's value,
+  so a table gets its columns on the next line; from then on it is `ThisForm.<name>`. It lives as long
+  as the form and is not stored with it. `ThisForm.RemoveAttribute(name)` removes one the module
+  added, and raises for one the form was designed with. `Control.Source = "Prices"` binds a control by
+  the dotted path it reads, `"Goods.Product.Supplier"` across references, the same way `form_bind`
+  does; a path that names nothing there raises. A form attribute's name is now matched without regard
+  to case, as a module meets it.
 - **`Tstr(text)` without a language reads the user's language.** It read the first language
   written in the text, so every user saw the same one. A language the text does not carry still
   falls back to the first written; a named language is read as before.
@@ -113,6 +121,9 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **Help → About** is drawn: the build, the base, the application, the user, the locale, the plugins.
 
 ## Fixes
+
+- **`ThisForm.<attribute> = value` writes into the attribute.** It overwrote the attribute's own entry,
+  and the attribute kept its old value.
 
 - **A module nobody has compiled yet is compiled once.** Sessions entering a base together, with the
   bytecode cache empty, each compiled the same modules. The first now holds a lock in the database,
