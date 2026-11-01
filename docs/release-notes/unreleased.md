@@ -81,6 +81,13 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   refused, not read as no bytes.
 - **An encoding is a member of `TextEncoding`.** `TextReader` and `TextWriter` took a string or another
   enumeration's member without a word; now it is refused, as `HTTPRequest` already refused a string.
+- **`GetForm(fullName, parameters, owner, uniqueness)`: a form by its full name, made and not shown.**
+  The name is `Document.Invoice.ObjectForm` (or `ListForm`, `ChoiceForm`, `GroupForm`,
+  `GroupChoiceForm`, `RecordForm`, `Form`), `Report.Sales.Form.Main` or `CommonForm.Settings`; the
+  kind may be written in Russian or Ukrainian too, so a name built at run time is read whatever words
+  it is built of. `parameters` is a Structure the form reads as `Parameters` from `OnCreateAtServer`
+  on; a `Key` in it that refers to the object of an object form opens that object. A name that names
+  nothing is refused with the name in the sentence.
 
 ## The browser client
 

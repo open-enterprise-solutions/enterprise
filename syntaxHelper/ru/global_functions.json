@@ -1858,6 +1858,25 @@
       "reviewed": true
     },
     {
+      "id": "fn.GetForm",
+      "name_local": "GetForm",
+      "name_en": "GetForm",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "GetForm(fullName : string, parameters : Structure, owner : any, uniqueness : any)",
+      "description": "Создаёт форму по полному имени и ВОЗВРАЩАЕТ её, не показывая, — чтобы сначала настроить, а потом открыть или показать как диалог. Имя можно собрать во время выполнения: Вид.Имя.Form.ИмяФормы — форма, которую объявляет объект; Вид.Имя.ObjectForm (ListForm, ChoiceForm, GroupForm, GroupChoiceForm, RecordForm; просто Form — форма объекта) — собственная форма объекта этого вида; CommonForm.Имя — общая форма. Вид — имя метатипа (Catalog, Document, Report, DataProcessor, …) или то же имя по-русски или по-украински.",
+      "syntax_block": "GetForm(fullName : string, parameters : Structure, owner : any, uniqueness : any)",
+      "parameters": "fullName — полное имя формы. parameters — Структура, которую форма читает как свои Parameters, начиная с OnCreateAtServer; Key в ней, ссылающийся на объект формы объекта, открывает этот объект (необязательно). owner — окно-владелец (необязательно). uniqueness — любое значение; повторный запрос с равным значением находит форму, созданную первым (необязательно).",
+      "return_descr": "Форма. Имя, не называющее ни одной формы, вызывает ошибку, в которой это имя приведено.",
+      "example": "var form = GetForm(\"Document.Invoice.ObjectForm\", New Structure(\"Key\", ref));\nform.Show();",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": ["fn.GetCommonForm", "fn.ShowCommonForm"],
+      "reviewed": true
+    },
+    {
       "id": "fn.BeginTransaction",
       "name_local": "BeginTransaction",
       "name_en": "BeginTransaction",

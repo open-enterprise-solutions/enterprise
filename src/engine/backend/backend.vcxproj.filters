@@ -565,6 +565,9 @@
     <ClInclude Include="system\systemEnum.h">
       <Filter>system</Filter>
     </ClInclude>
+    <ClInclude Include="system\formName.h">
+      <Filter>system</Filter>
+    </ClInclude>
     <ClInclude Include="system\systemManager.h">
       <Filter>system</Filter>
     </ClInclude>
@@ -1777,6 +1780,9 @@
       <Filter>compiler</Filter>
     </ClCompile>
     <ClCompile Include="choiceLinkResolver.cpp" />
+    <ClCompile Include="system\formName.cpp">
+      <Filter>system</Filter>
+    </ClCompile>
     <ClCompile Include="system\systemManager.cpp">
       <Filter>system</Filter>
     </ClCompile>

@@ -190,6 +190,15 @@ public:
 
 	static ibValue GetCommonTemplate(const ibString& strTemplateName);
 
+	// A form by its full name (ibFormName), made and not shown. `parameters` (a Structure) is what the
+	// form reads as its Parameters from OnCreateAtServer on; a Key in it that refers to the object of an
+	// object form opens that object. `owner` and `uniqueness` as GetCommonForm's: the owning window, and
+	// the key a second request for the same form finds the first one by.
+	static ibValue GetForm(const ibString& fullName, const ibValue& parameters, const ibValue& owner, const ibValue& uniqueness);
+
+	// The request GetForm makes the form with: the parameters by name, the window key from `uniqueness`.
+	static ibFormRequest MakeFormRequest(const ibString& formName, const ibValue& parameters, const ibValue& uniqueness);
+
 	static void BeginTransaction();
 	static void CommitTransaction();
 	static void RollBackTransaction();

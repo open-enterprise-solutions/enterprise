@@ -3548,6 +3548,107 @@ TEST_F(FormRuntime, AFormScriptWritesThroughDataSource) {
 	EXPECT_EQ(got.GetInteger(), 3);
 }
 
+// GetForm is a global the compiler knows: a module that asks for a form by a name it builds at run time
+// compiles, with the parameters as a Structure — the call a migrated common module makes most.
+TEST_F(BuiltInRuntime, GetFormCompilesWithAStructureOfParameters) {
+	struct StyleGuard {
+		const short saved = ibCompileCode::GetCodeStyle();
+		~StyleGuard() { ibCompileCode::SetCodeStyle(saved); }
+	} guard;
+	ibCompileCode::SetCodeStyle(CODE_CES);
+
+	ibCompileCode cc(ibT("test"), ibT("memory"), false);
+	ibValuePtr<ibValueSystemFunction> valueSystem(new ibValueSystemFunction());
+	cc.AddContextVariable(ibT("System"), valueSystem, true);
+	EXPECT_TRUE(TryCompile(cc,
+		ibT("var ref; var kind = \"X\";\n")
+		ibT("var f = GetForm(\"Document.X.ObjectForm\", New Structure(\"Key\", ref));\n")
+		ibT("var g = GetForm(\"Document.\" + kind + \".ListForm\", New Structure, f, kind);\n")
+		ibT("var h = GetForm(\"CommonForm.Settings\");\n")));
+}
+
+// ⭐ WHAT GetForm IS GIVEN, THE FORM READS AS ITS Parameters — from its constructor on, so a module's
+// OnCreateAtServer sees them. The request is made by the same function GetForm makes it with.
+struct ParameterForm : ibValueForm {
+	using ibValueForm::ibValueForm;
+};
+
+TEST_F(FormRuntime, GetFormParametersAreTheFormsParameters) {
+	auto session = std::make_shared<FramedSession>(ibT("form-parameters"), ibSessionKind::Enterprise);
+	ibSessionHolder holder = ibApplicationInstance::GetSessionRegistry()->MintUnlisted(session);
+	KeyFrame frame(std::move(holder));
+	session->Attach(&frame);
+	ibSessionScope scope(session.get());
+
+	ibValuePtr<ibValueStructure> parameters(new ibValueStructure());
+	parameters->Insert(ibValue(ibT("Key")), ibValue(42));
+	parameters->Insert(ibValue(ibT("Mode")), ibValue(ibT("Copy")));
+	const ibValue held(static_cast<ibValue*>(static_cast<ibValueStructure*>(parameters)));
+
+	const ibFormRequest request = ibValueSystemFunction::MakeFormRequest(ibString(), held, ibValue());
+	EXPECT_EQ(request.Get(ibT("Key")).GetInteger(), 42);
+	EXPECT_EQ(request.Get(ibT("Mode")).GetString(), ibString(ibT("Copy")));
+
+	ParameterForm* form = new ParameterForm(request);
+	const ibValue formValue(static_cast<ibValue*>(form));
+
+	const short savedStyle = ibCompileCode::GetCodeStyle();
+	ibCompileCode::SetCodeStyle(CODE_VES);
+	struct StyleRestore {
+		short saved;
+		~StyleRestore() { ibCompileCode::SetCodeStyle(saved); }
+	} styleRestore{ savedStyle };
+
+	ibCompileCode cc(ibT("caller"), ibT("memory"), false);
+	cc.AddContextVariable(ibT("ThisForm"), formValue);
+	ASSERT_TRUE(TryCompile(cc,
+		ibT("Function Read()\n")
+		ibT("  ThisForm.Parameters.Insert(\"Seen\", ThisForm.Parameters.Mode);\n")
+		ibT("  Return ThisForm.Parameters.Key;\n")
+		ibT("EndFunction\n")));
+
+	ibProcUnit pu;
+	ibString err;
+	ASSERT_TRUE(RunBound(cc, pu, err)) << err.ToStdString();
+
+	ibValue got;
+	ASSERT_TRUE(pu.CallAsFunc(ibT("Read"), got));
+	EXPECT_EQ(got.GetInteger(), 42);
+
+	// One structure for the form's life: what the module wrote into it is there on the next read.
+	ibValue again;
+	ASSERT_TRUE(form->GetPropVal(form->FindProp(ibT("Parameters")), again));
+	ibValueStructure* read = again.ConvertToType<ibValueStructure>();
+	ASSERT_NE(read, nullptr);
+	ibValue seen;
+	ASSERT_TRUE(read->Property(ibValue(ibT("Seen")), seen));
+	EXPECT_EQ(seen.GetString(), ibString(ibT("Copy")));
+}
+
+// The parameters are a Structure; anything else is refused by name rather than read as "none".
+TEST_F(BuiltInRuntime, GetFormRefusesParametersThatAreNotAStructure) {
+	try {
+		ibValueSystemFunction::MakeFormRequest(ibString(), ibValue(ibT("Key")), ibValue());
+		FAIL() << "a string was taken for parameters";
+	}
+	catch (const ibCoreException& err) {
+		EXPECT_TRUE(err.GetErrorDescription().Contains(ibT("Structure"))) << err.GetErrorDescription().ToStdString();
+	}
+}
+
+// Uniqueness: an equal value finds the same window, a different one another, none leaves it to the source.
+TEST_F(BuiltInRuntime, GetFormUniquenessIsAKeyMadeOfTheValue) {
+	const ibFormRequest a = ibValueSystemFunction::MakeFormRequest(ibString(), ibValue(), ibValue(ibT("Sales")));
+	const ibFormRequest b = ibValueSystemFunction::MakeFormRequest(ibString(), ibValue(), ibValue(ibT("Sales")));
+	const ibFormRequest c = ibValueSystemFunction::MakeFormRequest(ibString(), ibValue(), ibValue(ibT("Stock")));
+	const ibFormRequest none = ibValueSystemFunction::MakeFormRequest(ibString(), ibValue(), ibValue());
+
+	EXPECT_TRUE(a.m_formGuid.isValid());
+	EXPECT_TRUE(a.m_formGuid == b.m_formGuid);
+	EXPECT_FALSE(a.m_formGuid == c.m_formGuid);
+	EXPECT_FALSE(none.m_formGuid.isValid());
+}
+
 // A list form's DataSource is a dynamic list. It already knows its source
 // metaobject; the script could not ask, because FillMembers was never bound
 // and named no such method. An empty list (no source) answers empty.

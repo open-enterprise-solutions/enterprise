@@ -41,6 +41,12 @@ ibFormPtr<ibBackendValueForm> ibValueMetaObjectGenericData::GetGenericForm(const
 {
 	return CreateAndBuildForm(request, defaultFormType, ownerControl, nullptr);
 }
+
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectGenericData::GetFormOfType(const ibFormRequest& request, const ibFormID& form_id, ibBackendControlFrame* ownerControl) const
+{
+	const ibSourcePtr<ibSourceDataObject> source = CreateSourceObject(request.m_create, form_id);   // held across the build
+	return CreateAndBuildForm(request, form_id, ownerControl, source);
+}
 #pragma endregion
 #pragma region _form_creator_h_
 ibFormPtr<ibBackendValueForm> ibValueMetaObjectGenericData::CreateObjectForm(const ibValueMetaObjectFormBase* metaForm, const ibUniqueKey& formGuid) const

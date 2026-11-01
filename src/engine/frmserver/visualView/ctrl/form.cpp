@@ -8,6 +8,7 @@
 #include "frmserver/visualView/visualHost.h"   // ibFormVisualEditView — the host an event's form is held by
 #include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "backend/metaCollection/partial/commonObject.h"
+#include "backend/system/value/valueMap.h"        // Parameters — a Structure
 
 //****************************************************************************
 //*                              Frame                                       *
@@ -278,7 +279,8 @@ enum Prop {
 	eCloseOnChoice,
 	eCloseOnOwnerClose,
 	eReadOnly,
-	eCurrentItem
+	eCurrentItem,
+	eParameters
 };
 
 enum Func
@@ -312,6 +314,7 @@ void ibValueForm::FillFormMembers(ibMemberTable& helper) const
 	helper.AppendProp(ibT("CloseOnOwnerClose"), eCloseOnOwnerClose, eSystem);
 	helper.AppendProp(ibT("ReadOnly"), eReadOnly, eSystem);   // runtime read/write — open a form read-only (or read the mode)
 	helper.AppendProp(ibT("CurrentItem"), eCurrentItem, eSystem);   // the control in focus (read only)
+	helper.AppendProp(ibT("Parameters"), eParameters, eSystem);     // what it was opened with (GetForm's parameters), from OnCreateAtServer on
 
 	helper.AppendProc(ibT("Show"), ibT("Show()"));
 	helper.AppendProc(ibT("Activate"), ibT("Activate()"));
@@ -451,6 +454,18 @@ bool ibValueForm::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 			return true;
 		case eCurrentItem:
 			pvarPropVal = static_cast<ibValue*>(GetActiveControl());
+			return true;
+		case eParameters:
+			// ONE structure for the form's life, made on the first read: a module that writes into it in
+			// OnCreateAtServer reads what it wrote, not the request again.
+			// Writable — the map constructor makes a read-only one.
+			if (m_parameters.IsEmpty()) {
+				ibValueStructure* const parameters = new ibValueStructure();
+				m_parameters = parameters;
+				for (const auto& [name, value] : m_request.m_values)
+					parameters->Insert(ibValue(name), value);
+			}
+			pvarPropVal = m_parameters;
 			return true;
 		}
 	}
