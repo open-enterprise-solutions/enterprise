@@ -1833,7 +1833,7 @@
       "syntax_block": "GetCommonForm(name : string, owner : any, id : guid)",
       "parameters": "name — the common form's name. owner — the owning window (optional). id — a key that identifies this form, so asking twice reuses one window (optional).",
       "return_descr": "The form.",
-      "example": "form = GetCommonForm(\"Settings\");\nform.Open();",
+      "example": "form = GetCommonForm(\"Settings\");\nform.Show();",
       "availability": "Thin client, Server",
       "see_also": ["fn.ShowCommonForm", "fn.ActiveWindow", "fn.GetCommonTemplate"],
       "reviewed": true
