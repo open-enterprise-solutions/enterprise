@@ -81,6 +81,11 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   refused, not read as no bytes.
 - **An encoding is a member of `TextEncoding`.** `TextReader` and `TextWriter` took a string or another
   enumeration's member without a word; now it is refused, as `HTTPRequest` already refused a string.
+- **`Sequences.<Name>.Restore(boundary, key)`.** It posts again, in sequence order and each in its own
+  transaction, every registered document after its key's border, up to the boundary (a date, a moment
+  or a `Boundary`; all when left out) and for the dimension values the structure names (every key when
+  left out); the border follows each one. The first failure stops the run, keeps the border before that
+  document and raises its error with the document's name. A sequence's list has a *Restore* command.
 
 ## The browser client
 

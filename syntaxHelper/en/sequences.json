@@ -1,0 +1,26 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "mgr.Sequence.Restore",
+      "name_local": "Restore",
+      "name_en": "Restore",
+      "kind": "procedure",
+      "category_keys": [
+        "global_context",
+        "sequences"
+      ],
+      "signature": "Sequences.<Name>.Restore(boundary : Date | PointInTime | Boundary = Undefined, key : Structure = Undefined)",
+      "description": "Posts again, in sequence order, every registered document that stands after its key's border - up to the boundary, for the keys the structure names - and so brings the border forward over them.\n\nEACH DOCUMENT GOES THROUGH ITS OWN POSTING HANDLER, in a transaction of its own, and the border follows by the rule it always follows: a document posted in its turn takes it one step forward. Restore adds no rule of its own; what it leaves is what posting those documents by hand in that order would leave.\n\nTHE FIRST FAILURE STOPS THE RUN. The border stays on the last document that went through, and the error is raised with the name of the document that failed - posting the rest past it would vouch for a document that is not right. A second run carries on from where the first stopped.\n\nTHE BOUNDARY is a date (everything at that date and before it), a PointInTime (that document and everything before it) or a Boundary (Including / Excluding says whether the position itself is in). Left out, every registered document is posted.\n\nTHE KEY narrows the run to the registrations whose named dimensions hold these values; a dimension the structure does not name is not looked at. A name that is not a dimension of the sequence is refused. Left out, every key is restored.\n\nIn the client the same run, for every key and up to the end, is the Restore command of the sequence's list.",
+      "syntax_block": "Sequences.<Name>.Restore(Boundary, Key);",
+      "parameters": "boundary - a date, a PointInTime or a Boundary; left out, everything registered.\nkey - a Structure, dimension name to value; left out, every key.",
+      "return_descr": "",
+      "example": "// everything registered, every key\nSequences.Costing.Restore();\n\n// one warehouse, up to the end of the month\nSequences.Costing.Restore(EndOfMonth(Period), New Structure(\"Warehouse\", Warehouse));",
+      "availability": "Server",
+      "see_also": [],
+      "reviewed": true
+    }
+  ]
+}

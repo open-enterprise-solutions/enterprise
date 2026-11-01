@@ -37,6 +37,8 @@
 #include "backend/metaCollection/partial/reference/reference.h"
 #include "backend/query/columnLayout.h"
 #include "backend/system/value/valuePointInTime.h"
+#include "backend/system/value/valueBoundary.h"
+#include "backend/backend_exception.h"
 
 #include "activeMetaDataAccess.h"
 
@@ -255,6 +257,147 @@ TEST_F(SequenceBorderFix, RepostingInOrderWalksTheBorderToTheEnd) {
 	Clear(r2); Post(r2, kDay2, wxT("kitchen"));
 	EXPECT_TRUE(Same(Border(wxT("kitchen")), Moment(kDay2, r2)));
 	Clear(r3); Post(r3, kDay3, wxT("kitchen"));
+	EXPECT_TRUE(Same(Border(wxT("kitchen")), Moment(kDay3, r3)));
+}
+
+// =============================================================================
+// THE RESTORING RUN — Sequences.<Name>.Restore(boundary, key), driven through ibSequenceRestore with a
+// posting of the test's own: what a document's Posting handler does to its registrations (they are
+// cleared, then written again), and a refusal where a test asks for one.
+// =============================================================================
+
+namespace {
+
+struct SequenceRestoreFix : SequenceBorderFix {
+	struct Document {
+		ibValue    m_ref;
+		ibDateTime m_when;
+		ibString   m_warehouse;
+	};
+	std::vector<Document> documents;
+	std::vector<ibValue>  reposted;   // in the order the run posted them
+
+	ibValue Register(const ibDateTime& when, const ibString& warehouse) {
+		Document one{ NewDocument(), when, warehouse };
+		documents.push_back(one);
+		Post(one.m_ref, when, warehouse);
+		return one.m_ref;
+	}
+
+	ibSequenceRepost Repost(const ibValue& refusing = ibValue()) {
+		return [this, refusing](const ibValue& recorder) {
+			if (!refusing.IsEmpty() && refusing.CompareValueLS(recorder) == 0)
+				ibBackendCoreException::Error(wxT("the Posting handler refused"));
+			reposted.push_back(recorder);
+			for (const Document& one : documents)
+				if (one.m_ref.CompareValueLS(recorder) == 0) {
+					Clear(recorder);
+					Post(recorder, one.m_when, one.m_warehouse);
+					return;
+				}
+			ADD_FAILURE() << "the run posted a recorder nobody registered";
+		};
+	}
+
+	ibSequenceKeyFilter Warehouse(const ibString& warehouse) const {
+		return { { seq->GetDimensionArrayObject().front(), ibValue(warehouse) } };
+	}
+
+	static bool SameOrder(const std::vector<ibValue>& got, const std::vector<ibValue>& expected) {
+		if (got.size() != expected.size())
+			return false;
+		for (size_t at = 0; at < got.size(); ++at)
+			if (got[at].CompareValueLS(expected[at]) != 0)
+				return false;
+		return true;
+	}
+};
+
+} // namespace
+
+// R1, R2, R3 in turn, then a document dated behind R2: the border is back at R1. Restored with nothing
+// narrowed, the three after it are posted again IN THEIR ORDER, and the border ends on the last one.
+TEST_F(SequenceRestoreFix, EverythingAfterTheBorderIsPostedAgainInOrder) {
+	const ibValue r1 = Register(kDay1, wxT("kitchen"));
+	const ibValue r2 = Register(kDay2, wxT("kitchen"));
+	const ibValue r3 = Register(kDay3, wxT("kitchen"));
+	const ibValue late = Register(kDay1Later, wxT("kitchen"));
+	ASSERT_TRUE(Same(Border(wxT("kitchen")), Moment(kDay1, r1)));
+
+	EXPECT_EQ(ibSequenceRestore(seq, ibValue(), ibSequenceKeyFilter(), Repost()), 3u);
+	EXPECT_TRUE(SameOrder(reposted, { late, r2, r3 })) << "R1 is behind the border and is not touched";
+	EXPECT_TRUE(Same(Border(wxT("kitchen")), Moment(kDay3, r3)));
+
+	reposted.clear();
+	EXPECT_EQ(ibSequenceRestore(seq, ibValue(), ibSequenceKeyFilter(), Repost()), 0u) << "a restored sequence has nothing to do";
+	EXPECT_TRUE(reposted.empty());
+}
+
+// Up to a boundary: a moment includes its own document, a date the whole of that instant, a Boundary
+// Excluding stops just before it.
+TEST_F(SequenceRestoreFix, TheRunStopsAtTheBoundary) {
+	Register(kDay1, wxT("kitchen"));
+	const ibValue r2 = Register(kDay2, wxT("kitchen"));
+	const ibValue r3 = Register(kDay3, wxT("kitchen"));
+	const ibValue late = Register(kDay1Later, wxT("kitchen"));
+
+	EXPECT_EQ(ibSequenceRestore(seq, ibValue(new ibValueBoundary(Moment(kDay2, r2), ibBoundaryKind_Excluding)),
+		ibSequenceKeyFilter(), Repost()), 1u);
+	EXPECT_TRUE(SameOrder(reposted, { late }));
+	EXPECT_TRUE(Same(Border(wxT("kitchen")), Moment(kDay1Later, late)));
+
+	EXPECT_EQ(ibSequenceRestore(seq, ibValue(kDay2), ibSequenceKeyFilter(), Repost()), 1u);
+	EXPECT_TRUE(SameOrder(reposted, { late, r2 })) << "a date reaches the document standing at it";
+	EXPECT_TRUE(Same(Border(wxT("kitchen")), Moment(kDay2, r2)));
+
+	EXPECT_EQ(ibSequenceRestore(seq, Moment(kDay3, r3), ibSequenceKeyFilter(), Repost()), 1u);
+	EXPECT_TRUE(Same(Border(wxT("kitchen")), Moment(kDay3, r3)));
+}
+
+// By key: the kitchen is restored, the bar - broken the same way - is left exactly as it was.
+TEST_F(SequenceRestoreFix, AKeyRestoresOnlyItsOwnDocuments) {
+	Register(kDay1, wxT("kitchen"));
+	const ibValue k2 = Register(kDay2, wxT("kitchen"));
+	const ibValue kLate = Register(kDay1Later, wxT("kitchen"));
+	const ibValue b1 = Register(kDay1, wxT("bar"));
+	const ibValue b2 = Register(kDay2, wxT("bar"));
+	const ibValue bLate = Register(kDay1Later, wxT("bar"));
+	ASSERT_TRUE(Same(Border(wxT("bar")), Moment(kDay1, b1)));
+
+	EXPECT_EQ(ibSequenceRestore(seq, ibValue(), Warehouse(wxT("kitchen")), Repost()), 2u);
+	EXPECT_TRUE(SameOrder(reposted, { kLate, k2 }));
+	EXPECT_TRUE(Same(Border(wxT("kitchen")), Moment(kDay2, k2)));
+	EXPECT_TRUE(Same(Border(wxT("bar")), Moment(kDay1, b1))) << "the bar was not asked for";
+
+	reposted.clear();
+	EXPECT_EQ(ibSequenceRestore(seq, ibValue(), Warehouse(wxT("bar")), Repost()), 2u);
+	EXPECT_TRUE(SameOrder(reposted, { bLate, b2 }));
+	EXPECT_TRUE(Same(Border(wxT("bar")), Moment(kDay2, b2)));
+}
+
+// 🛑 The first failure stops the run: nothing after it is posted, the border stays on the last document
+// that went through, and the error names the sequence and says why. A second run carries on from there.
+TEST_F(SequenceRestoreFix, AFailureStopsTheRunAndTheBorderStaysBeforeIt) {
+	Register(kDay1, wxT("kitchen"));
+	const ibValue r2 = Register(kDay2, wxT("kitchen"));
+	const ibValue r3 = Register(kDay3, wxT("kitchen"));
+	const ibValue late = Register(kDay1Later, wxT("kitchen"));
+
+	bool raised = false;
+	try {
+		ibSequenceRestore(seq, ibValue(), ibSequenceKeyFilter(), Repost(r2));
+	}
+	catch (const ibCoreException& err) {
+		raised = true;
+		EXPECT_TRUE(err.GetErrorDescription().Contains(seq->GetName())) << err.GetErrorDescription();
+		EXPECT_TRUE(err.GetErrorDescription().Contains(wxT("the Posting handler refused"))) << err.GetErrorDescription();
+	}
+	EXPECT_TRUE(raised) << "a run that failed must say so";
+	EXPECT_TRUE(SameOrder(reposted, { late })) << "R3 stands after the failure and is not posted";
+	EXPECT_TRUE(Same(Border(wxT("kitchen")), Moment(kDay1Later, late)));
+
+	EXPECT_EQ(ibSequenceRestore(seq, ibValue(), ibSequenceKeyFilter(), Repost()), 2u);
+	EXPECT_TRUE(SameOrder(reposted, { late, r2, r3 }));
 	EXPECT_TRUE(Same(Border(wxT("kitchen")), Moment(kDay3, r3)));
 }
 
