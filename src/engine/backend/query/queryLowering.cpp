@@ -29,6 +29,7 @@
 #include "core/fiber/fiber.h"             // StackLow — a nested query is native recursion with no count
 #include "backend/system/value/valueType.h"   // ibValueTypeDescription::AdjustValue — a field's empty value, for a NULL key
 #include "core/query/queryAggregates.h"   // ibQueryAggregatesFor — CheckNames refuses what a type does not admit
+#include "backend/tabularModel.h"         // ibValueModelStorage — IN (&list) reads a model's column, not its rows
 
 // ⚠ NAMED, NOT INHERITED. std::find / std::remove_if arrived in this file with the grouping and
 // prune passes; MSVC hands <algorithm> over transitively and GCC/Clang do not, so the Windows build
@@ -2146,6 +2147,18 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
 			// array works as an IN set. A scalar / literal goes in as-is (CreateIterator == null).
 			for (const ibQueryAstExprPtr& item : e.m_list) {
 				ibValue v = EvalValue(*item, params);
+				// A model that holds its rows walks as ROWS, and IN wants values: it gives the values of its first
+				// column, as a value list gives the values its items hold.
+				ibValueModelStorage* model = nullptr;
+				if (v.ConvertToValue(model)) {
+					const ibValueModel::ibValueModelColumnCollection* const columns = model->GetColumnCollection();
+					const ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* const first =
+						columns != nullptr ? columns->GetColumnInfo(0) : nullptr;
+					if (first != nullptr)
+						for (long row = 0; row < model->GetRowCount(); ++row)
+							values.push_back(model->Storage().GetCell(row, static_cast<ibMetaID>(first->GetColumnID())));
+					continue;
+				}
 				if (std::shared_ptr<ibValueIteratorState> it = v.CreateIterator()) {
 					ibValue elem;
 					while (it->MoveNext(elem))

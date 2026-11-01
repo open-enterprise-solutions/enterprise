@@ -256,6 +256,7 @@ ibClassID ibBackendTypeConfigFactory::GetDefaultTypeByFilter(ibSelectorDataType 
 #include "backend/metaCtor.h"                          // ib_find_meta_any_kind — a metatype's family of a kind
 #include "backend/metaCollection/metaEventHandlerObject.h"   // g_eventSourceKinds — what raises events
 #include "backend/system/value/valueDynamicList.h"     // g_valueDynamicListCLSID
+#include "backend/system/value/valueList.h"            // g_valueListCLSID
 #include "backend/system/value/valueDataComposition.h" // g_valueDataCompositionCLSID
 #include "backend/system/value/valueSpreadsheet.h"     // g_valueSpreadsheetCLSID
 
@@ -333,6 +334,7 @@ void ibBackendTypeConfigFactory::GetTypesByFilter(ibSelectorDataType filterDataT
 	// something a configuration declares.
 	if (anyType || filterDataType == ibSelectorDataType::ibSelectorDataType_table) {
 		out.push_back(g_valueTableCLSID);
+		out.push_back(g_valueListCLSID);
 		out.push_back(g_valueDynamicListCLSID);
 		out.push_back(g_valueDataCompositionCLSID);
 		// …and the document a gridbox shows: the control creates the variable, so the variable has to
