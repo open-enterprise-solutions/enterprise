@@ -81,7 +81,12 @@ oes-wrapsizer {
 
 oes-gridsizer {
 	display: grid;
+	grid-auto-rows: 1fr;   /* every row as tall as the tallest */
 	gap: 0.25rem;
+}
+
+oes-gridsizer > oes-sizeritem {
+	min-width: auto;   /* oes-sizeritem's 0 would let a column go narrower than what it holds, over its neighbour */
 }
 
 oes-staticboxsizer {
@@ -771,6 +776,7 @@ oes-gridbox .selection-summary {
 
 	oes-sizeritem {
 		align-self: stretch !important;
+		justify-self: stretch !important;
 		margin-left: 0 !important;
 		margin-right: 0 !important;
 	}
