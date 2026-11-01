@@ -47,6 +47,7 @@ public:
 			clsid == g_metaCommandGroupCLSID ||
 			clsid == g_metaScheduledJobCLSID ||
 			clsid == g_metaEventHandlerCLSID ||
+			clsid == g_metaHttpServiceCLSID ||
 			clsid == g_metaSessionParameterCLSID ||
 			clsid == g_metaFunctionalOptionCLSID ||
 			clsid == g_metaCommonAttributeCLSID ||

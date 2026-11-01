@@ -7,6 +7,7 @@
 #include "backend/system/value/valueTextFile.h"   // ibTextToBytes / ibTextFromBytes - the doors between a TextEncoding and bytes
 
 #include "core/net/httpClient.h"                   // the transport - the core's, with its TLS
+#include "core/net/httpServer.h"                   // ibHttpRequest, ibHttpResponse - an HTTP service's, as the server reads and writes them
 #include "core/utils/base64.h"                     // ibBase64 - the user and password of Basic, in bytes
 
 #include <wx/ffile.h>
@@ -134,6 +135,24 @@ bool ibHttpIsToken(const std::string& name)
 	return true;
 }
 
+// The headers a message came with, as a Structure. A name met twice is joined with ", " (RFC 9110, 5.3) - except
+// Set-Cookie, whose values hold commas of their own: the last one stays. A value that is not UTF-8 is read byte by byte.
+ibValuePtr<ibValueStructure> ibHttpHeaders(const std::vector<std::pair<std::string, std::string>>& fields)
+{
+	const ibValuePtr<ibValueStructure> headers(new ibValueStructure());
+	for (const auto& field : fields) {
+		const ibString key = ibString::FromUTF8(field.first.data(), field.first.size());
+		ibString value = ibString::FromUTF8(field.second.data(), field.second.size());
+		if (value.empty() && !field.second.empty())
+			value = wxString::From8BitData(field.second.data(), field.second.size());
+		const long held = headers->FindProp(key);
+		if (held >= 0 && !key.IsSameAs(ibT("Set-Cookie"), false))
+			value = headers->Entries()[static_cast<size_t>(held)].value.GetString() + ibT(", ") + value;
+		headers->SetAt(ibValue(key), ibValue(value));
+	}
+	return headers;
+}
+
 // What cannot stand in a request target goes out as %XX of its UTF-8; what is already there - a '%', a '?',
 // an '&' - is the script's and stays: an address is encoded once and by one rule.
 std::string ibHttpTarget(const ibString& resource)
@@ -155,19 +174,6 @@ std::string ibHttpTarget(const ibString& resource)
 	return target;
 }
 
-const char* ibHttpMethodName(ibHttpMethod method)
-{
-	switch (method) {
-	case ibHttpMethod_Get: return "GET";
-	case ibHttpMethod_Post: return "POST";
-	case ibHttpMethod_Put: return "PUT";
-	case ibHttpMethod_Patch: return "PATCH";
-	case ibHttpMethod_Delete: return "DELETE";
-	case ibHttpMethod_Head: return "HEAD";
-	case ibHttpMethod_Options: return "OPTIONS";
-	}
-	return nullptr;
-}
 
 // A certificate file's text - read here, by its name in whatever script, and handed to the client as text; false
 // when it cannot be read.
@@ -185,6 +191,21 @@ bool ibHttpReadPem(const ibString& path, std::string& text)
 }
 
 } // namespace
+
+const char* ibHttpMethodName(ibHttpMethod method)
+{
+	switch (method) {
+	case ibHttpMethod_Get: return "GET";
+	case ibHttpMethod_Post: return "POST";
+	case ibHttpMethod_Put: return "PUT";
+	case ibHttpMethod_Patch: return "PATCH";
+	case ibHttpMethod_Delete: return "DELETE";
+	case ibHttpMethod_Head: return "HEAD";
+	case ibHttpMethod_Options: return "OPTIONS";
+	case ibHttpMethod_Any: break;   // a service method's: no name of its own, whatever the request's is
+	}
+	return nullptr;
+}
 
 //////////////////////////////////////////////////////////////////////
 // HTTPRequest
@@ -628,21 +649,8 @@ ibValue ibValueHttpConnection::Send(ibHttpMethod method, const ibValueHttpReques
 			ibString::FromUTF8(name), ibString(secure ? ibT("https") : ibT("http")), m_host, Port(), request.ResourceAddress(), why);
 	}
 
-	// The headers as a Structure. A name met twice is joined with ", " (RFC 9110, 5.3) - except Set-Cookie,
-	// whose values hold commas of their own: the last one stays.
-	const ibValuePtr<ibValueStructure> headers(new ibValueStructure());
-	for (const auto& field : result.m_headers) {
-		const ibString key = ibString::FromUTF8(field.first.data(), field.first.size());
-		ibString value = ibString::FromUTF8(field.second.data(), field.second.size());
-		if (value.empty() && !field.second.empty())
-			value = wxString::From8BitData(field.second.data(), field.second.size());
-		const long held = headers->FindProp(key);
-		if (held >= 0 && !key.IsSameAs(ibT("Set-Cookie"), false))
-			value = headers->Entries()[static_cast<size_t>(held)].value.GetString() + ibT(", ") + value;
-		headers->SetAt(ibValue(key), ibValue(value));
-	}
-
-	const ibValuePtr<ibValueHttpResponse> response(new ibValueHttpResponse(result.m_status, headers, std::move(result.m_body)));
+	const ibValuePtr<ibValueHttpResponse> response(new ibValueHttpResponse(result.m_status, ibHttpHeaders(result.m_headers),
+		std::move(result.m_body)));
 	return response;
 }
 
@@ -713,6 +721,215 @@ bool ibValueHttpConnection::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 	return true;
 }
 
+//////////////////////////////////////////////////////////////////////
+// HTTPServiceRequest
+//////////////////////////////////////////////////////////////////////
+
+void ibValueHttpServiceRequest_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
+{
+	helper.AppendProp(ibT("HTTPMethod"), true, false, wxNOT_FOUND);
+	helper.AppendProp(ibT("BaseURL"), true, false, wxNOT_FOUND);
+	helper.AppendProp(ibT("RelativeURL"), true, false, wxNOT_FOUND);
+	helper.AppendProp(ibT("Headers"), true, false, wxNOT_FOUND);
+	helper.AppendProp(ibT("QueryOptions"), true, false, wxNOT_FOUND);
+	helper.AppendProp(ibT("URLParameters"), true, false, wxNOT_FOUND);
+
+	helper.AppendFunc(ibT("GetBodyAsString"), 1, ibT("GetBodyAsString(encoding : TextEncoding = UTF8)"));
+	helper.AppendFunc(ibT("GetBodyAsBinaryData"), ibT("GetBodyAsBinaryData()"));
+}
+
+ibValueHttpServiceRequest::ibValueHttpServiceRequest()
+	: ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true), m_headers(new ibValueStructure()),
+	m_queryOptions(new ibValueStructure()), m_urlParameters(new ibValueStructure())
+{
+}
+
+ibValueHttpServiceRequest::ibValueHttpServiceRequest(const ibHttpRequest& request, const ibString& baseUrl, const ibString& relativeUrl,
+	const std::vector<std::pair<ibString, ibString>>& urlParameters)
+	: ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true), m_method(ibString::FromUTF8(request.m_method)), m_baseUrl(baseUrl),
+	m_relativeUrl(relativeUrl), m_headers(ibHttpHeaders(request.m_headers)), m_queryOptions(new ibValueStructure()),
+	m_urlParameters(new ibValueStructure()), m_body(request.m_body)
+{
+	// A query option given twice keeps the last, as a form posting a field twice means the one it sent last.
+	for (const auto& option : request.GetParameters())
+		m_queryOptions->SetAt(ibValue(ibString::FromUTF8(option.first)), ibValue(ibString::FromUTF8(option.second)));
+	for (const auto& parameter : urlParameters)
+		m_urlParameters->SetAt(ibValue(parameter.first), ibValue(parameter.second));
+}
+
+ibValueHttpServiceRequest::~ibValueHttpServiceRequest() {}
+
+bool ibValueHttpServiceRequest::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
+{
+	switch (lPropNum) {
+	case enHttpMethod:
+		pvarPropVal = m_method;
+		return true;
+	case enBaseUrl:
+		pvarPropVal = m_baseUrl;
+		return true;
+	case enRelativeUrl:
+		pvarPropVal = m_relativeUrl;
+		return true;
+	case enHeaders:
+		pvarPropVal = m_headers;
+		return true;
+	case enQueryOptions:
+		pvarPropVal = m_queryOptions;
+		return true;
+	case enUrlParameters:
+		pvarPropVal = m_urlParameters;
+		return true;
+	}
+	return false;
+}
+
+bool ibValueHttpServiceRequest::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
+{
+	switch (lMethodNum) {
+	case enGetBodyAsString:
+		pvarRetValue = ibHttpDecode(m_body, ibTextEncodingAt(paParams, lSizeArray, 0), ibT("HTTPServiceRequest"));
+		return true;
+	case enGetBodyAsBinaryData: {
+		const ibValuePtr<ibValueBinaryData> data(new ibValueBinaryData(m_body.data(), m_body.size()));
+		pvarRetValue = data;
+		return true;
+	}
+	}
+	return false;
+}
+
+//////////////////////////////////////////////////////////////////////
+// HTTPServiceResponse
+//////////////////////////////////////////////////////////////////////
+
+void ibValueHttpServiceResponse_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
+{
+	helper.AppendConstructor(1, ibT("HTTPServiceResponse(statusCode : number)"));
+	helper.AppendConstructor(2, ibT("HTTPServiceResponse(statusCode : number, headers : structure)"));
+
+	helper.AppendProp(ibT("StatusCode"), true, true, wxNOT_FOUND);
+	helper.AppendProp(ibT("Headers"), true, true, wxNOT_FOUND);
+
+	helper.AppendFunc(ibT("SetBodyFromString"), 2, ibT("SetBodyFromString(text : string, encoding : TextEncoding = UTF8)"));
+	helper.AppendFunc(ibT("SetBodyFromBinaryData"), 1, ibT("SetBodyFromBinaryData(data : binaryData)"));
+	helper.AppendFunc(ibT("GetBodyAsString"), 1, ibT("GetBodyAsString(encoding : TextEncoding = UTF8)"));
+	helper.AppendFunc(ibT("GetBodyAsBinaryData"), ibT("GetBodyAsBinaryData()"));
+}
+
+ibValueHttpServiceResponse::ibValueHttpServiceResponse()
+	: ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true), m_headers(new ibValueStructure())
+{
+}
+
+ibValueHttpServiceResponse::~ibValueHttpServiceResponse() {}
+
+bool ibValueHttpServiceResponse::Init(ibValue** paParams, const long lSizeArray)
+{
+	if (!ibHttpGiven(paParams, lSizeArray, 0))
+		ibBackendCoreException::Error(_("HTTPServiceResponse: a response says its status code - New HTTPServiceResponse(200)"));
+	SetStatusCode(static_cast<long>(paParams[0]->GetInteger()));
+	if (ibHttpGiven(paParams, lSizeArray, 1)) {
+		ibValueStructure* const given = ibHttpHeld<ibValueStructure>(*paParams[1]);
+		if (given == nullptr)
+			ibBackendCoreException::Error(_("HTTPServiceResponse: the headers are a Structure - a name and its value"));
+		m_headers = given;
+	}
+	return true;
+}
+
+void ibValueHttpServiceResponse::SetStatusCode(long status)
+{
+	if (status < 100 || status > 599)
+		ibBackendCoreException::Error(_("HTTPServiceResponse: a status code is from 100 to 599: %d was given"), static_cast<int>(status));
+	m_status = static_cast<int>(status);
+}
+
+ibHttpResponse ibValueHttpServiceResponse::ToResponse() const
+{
+	ibHttpResponse response;
+	response.m_status = m_status;
+	response.m_body = m_body;
+	// ⚠ A HEADER THAT WOULD BREAK THE MESSAGE IS REFUSED BY NAME, as a request's is: the framing is the server's.
+	for (const auto& entry : m_headers->Entries()) {
+		const ibString key = entry.key.GetString();
+		const std::string field = ibHttpUtf8(key);
+		if (!ibHttpIsToken(field))
+			ibBackendCoreException::Error(_("HTTPServiceResponse: '%s' is not a header name"), key);
+		for (const ibChar* const owned : kOwnedHeaders) {
+			if (key.IsSameAs(owned, false))
+				ibBackendCoreException::Error(_("HTTPServiceResponse: the header '%s' says how the message is carried, and that is not a script's to set"), key);
+		}
+		const ibValueTypes kind = entry.value.GetType();
+		if (kind != ibValueTypes::TYPE_STRING && kind != ibValueTypes::TYPE_NUMBER)
+			ibBackendCoreException::Error(_("HTTPServiceResponse: the value of the header '%s' is a string or a number"), key);
+		const ibString value = ibHttpTrimmed(entry.value.GetString());
+		if (ibHttpHoldsControl(value))
+			ibBackendCoreException::Error(_("HTTPServiceResponse: the value of the header '%s' holds a line break or a control character"), key);
+		response.m_headers.emplace_back(field, ibHttpUtf8(value));
+	}
+	return response;
+}
+
+bool ibValueHttpServiceResponse::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
+{
+	switch (lPropNum) {
+	case enStatusCode:
+		pvarPropVal = m_status;
+		return true;
+	case enHeaders:
+		pvarPropVal = m_headers;
+		return true;
+	}
+	return false;
+}
+
+bool ibValueHttpServiceResponse::SetPropVal(const long lPropNum, const ibValue& varPropVal)
+{
+	switch (lPropNum) {
+	case enStatusCode:
+		SetStatusCode(static_cast<long>(varPropVal.GetInteger()));
+		return true;
+	case enHeaders: {
+		ibValueStructure* const given = ibHttpHeld<ibValueStructure>(varPropVal);
+		if (given == nullptr)
+			ibBackendCoreException::Error(_("HTTPServiceResponse: the headers are a Structure - a name and its value"));
+		m_headers = given;
+		return true;
+	}
+	}
+	return false;
+}
+
+bool ibValueHttpServiceResponse::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
+{
+	switch (lMethodNum) {
+	case enSetBodyFromString:
+		if (lSizeArray < 1)
+			return false;
+		m_body = ibHttpEncode(paParams[0]->GetString(), ibTextEncodingAt(paParams, lSizeArray, 1));
+		return true;
+	case enSetBodyFromBinaryData: {
+		if (lSizeArray < 1)
+			return false;
+		const ibValueBinaryData* const data = ibHttpHeld<ibValueBinaryData>(*paParams[0]);
+		if (data == nullptr)
+			ibBackendCoreException::Error(_("HTTPServiceResponse: SetBodyFromBinaryData takes a BinaryData"));
+		m_body.assign(static_cast<const char*>(data->GetBuffer().GetData()), data->GetLength());
+		return true;
+	}
+	case enGetBodyAsString:
+		pvarRetValue = ibHttpDecode(m_body, ibTextEncodingAt(paParams, lSizeArray, 0), ibT("HTTPServiceResponse"));
+		return true;
+	case enGetBodyAsBinaryData: {
+		const ibValuePtr<ibValueBinaryData> data(new ibValueBinaryData(m_body.data(), m_body.size()));
+		pvarRetValue = data;
+		return true;
+	}
+	}
+	return false;
+}
+
 //**********************************************************************
 //*                       Runtime register                             *
 //**********************************************************************
@@ -720,3 +937,5 @@ bool ibValueHttpConnection::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 VALUE_TYPE_REGISTER(ibValueHttpConnection, "HTTPConnection", value_to_clsid("VL_HTCN"));
 VALUE_TYPE_REGISTER(ibValueHttpRequest, "HTTPRequest", value_to_clsid("VL_HTRQ"));
 SYSTEM_TYPE_REGISTER(ibValueHttpResponse, "HTTPResponse", system_to_clsid("VL_HTRS"));
+SYSTEM_TYPE_REGISTER(ibValueHttpServiceRequest, "HTTPServiceRequest", system_to_clsid("VL_HSRQ"));
+VALUE_TYPE_REGISTER(ibValueHttpServiceResponse, "HTTPServiceResponse", value_to_clsid("VL_HSRS"));

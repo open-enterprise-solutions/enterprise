@@ -761,6 +761,368 @@
         "cls.HTTPResponse.Headers"
       ],
       "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceRequest",
+      "name_local": "HTTPServiceRequest",
+      "name_en": "HTTPServiceRequest",
+      "kind": "collection",
+      "class_id": 289446731127891128,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Function Handler(Request) : HTTPServiceResponse",
+      "description": "То, с чем пришёл запрос к HTTP-сервису конфигурации. СКРИПТ ЕГО НЕ СОЗДАЁТ — платформа передаёт его обработчику метода, функции модуля сервиса: Function <Handler>(Request).\n\nСвойства только для чтения. Заголовки названы строчными буквами, как их читает сервер; ключи Structure не различают регистр, поэтому Request.Headers[\"Content-Type\"] находит их так же. Тело держится в памяти целиком, до 4 МБ веб-сервера.",
+      "syntax_block": "Request.HTTPMethod   Request.BaseURL   Request.RelativeURL\nRequest.Headers   Request.QueryOptions   Request.URLParameters\nRequest.GetBodyAsString()   Request.GetBodyAsBinaryData()",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Function TransferReset(Request) {\n    var id = Request.URLParameters.id;\n    var response = New HTTPServiceResponse(200);\n    response.SetBodyFromString(\"reset \" + id);\n    return response;\n}",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceResponse",
+        "cls.HTTPServiceRequest.HTTPMethod",
+        "cls.HTTPServiceRequest.BaseURL",
+        "cls.HTTPServiceRequest.RelativeURL",
+        "guide.http"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceRequest.HTTPMethod",
+      "name_local": "HTTPMethod",
+      "name_en": "HTTPMethod",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.HTTPMethod : string",
+      "description": "Метод запроса, как он был отправлен: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS. Нужен в методе, который отвечает на Any.",
+      "syntax_block": "Request.HTTPMethod",
+      "parameters": "",
+      "return_descr": "Строка.",
+      "example": "if (Request.HTTPMethod = \"OPTIONS\") { return New HTTPServiceResponse(204); }",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceRequest"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceRequest.BaseURL",
+      "name_local": "BaseURL",
+      "name_en": "BaseURL",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.BaseURL : string",
+      "description": "Адрес до корня сервиса вместе с публикацией: /trade/hs/desk.",
+      "syntax_block": "Request.BaseURL",
+      "parameters": "",
+      "return_descr": "Строка.",
+      "example": "Message(Request.BaseURL);   // /trade/hs/desk",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceRequest"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceRequest.RelativeURL",
+      "name_local": "RelativeURL",
+      "name_en": "RelativeURL",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.RelativeURL : string",
+      "description": "Остаток пути после корня, как его сопоставил шаблон: /Transfer/12/reset. Сам корень — \"\" или \"/\".",
+      "syntax_block": "Request.RelativeURL",
+      "parameters": "",
+      "return_descr": "Строка.",
+      "example": "Message(Request.RelativeURL);   // /Transfer/12/reset",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceRequest"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceRequest.Headers",
+      "name_local": "Headers",
+      "name_en": "Headers",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.Headers : structure",
+      "description": "Заголовки запроса, Structure по имени. Имя, пришедшее дважды, соединяется через \", \".",
+      "syntax_block": "Request.Headers[\"Content-Type\"]",
+      "parameters": "",
+      "return_descr": "Structure.",
+      "example": "var type = Request.Headers[\"Content-Type\"];",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceRequest"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceRequest.QueryOptions",
+      "name_local": "QueryOptions",
+      "name_en": "QueryOptions",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.QueryOptions : structure",
+      "description": "Параметры после '?', раскодированные, Structure по имени: ?page=2&q=a%20b даёт page = \"2\" и q = \"a b\". Из повторённого имени остаётся последнее.",
+      "syntax_block": "Request.QueryOptions.page",
+      "parameters": "",
+      "return_descr": "Structure.",
+      "example": "var page = Number(Request.QueryOptions.page);",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceRequest"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceRequest.URLParameters",
+      "name_local": "URLParameters",
+      "name_en": "URLParameters",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.URLParameters : structure",
+      "description": "{Параметры} шаблона по имени: /Transfer/{id} для /Transfer/12 даёт id = \"12\". Каждое значение — строка.",
+      "syntax_block": "Request.URLParameters.id",
+      "parameters": "",
+      "return_descr": "Structure.",
+      "example": "var id = Request.URLParameters.id;",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceRequest"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceRequest.GetBodyAsString",
+      "name_local": "GetBodyAsString",
+      "name_en": "GetBodyAsString",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.GetBodyAsString(encoding : TextEncoding = UTF8) : string",
+      "description": "Тело как текст в указанной кодировке — UTF-8, если TextEncoding не задан. Байты, не являющиеся текстом в этой кодировке, отклоняются: берите их через GetBodyAsBinaryData().",
+      "syntax_block": "Request.GetBodyAsString()",
+      "parameters": "encoding — TextEncoding: UTF8 (по умолчанию), UTF16, ANSI, OEM, System.",
+      "return_descr": "Строка.",
+      "example": "var text = Request.GetBodyAsString();",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceRequest"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceRequest.GetBodyAsBinaryData",
+      "name_local": "GetBodyAsBinaryData",
+      "name_en": "GetBodyAsBinaryData",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.GetBodyAsBinaryData() : binaryData",
+      "description": "Тело как байты, что бы в нём ни было.",
+      "syntax_block": "Request.GetBodyAsBinaryData()",
+      "parameters": "",
+      "return_descr": "BinaryData.",
+      "example": "var data = Request.GetBodyAsBinaryData();",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceRequest"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceResponse",
+      "name_local": "HTTPServiceResponse",
+      "name_en": "HTTPServiceResponse",
+      "kind": "collection",
+      "class_id": 145333742075291678,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "New HTTPServiceResponse(statusCode : number [, headers : structure])",
+      "description": "То, чем отвечает обработчик HTTP-сервиса: код состояния, заголовки и тело. Обработчик его ВОЗВРАЩАЕТ; если он вернул что-то другое или вызвал исключение, ответ — 500, а причина пишется в журнал базы, не вызывающему.\n\nСлова после кода (OK, Not Found) — сервера, по коду. Заголовки, которые говорят, как передаётся сообщение (Content-Length, Transfer-Encoding, Connection и подобные), тоже сервера: ответ, где такой задан, отклоняется с именем заголовка.",
+      "syntax_block": "Response = New HTTPServiceResponse(201);\nResponse.Headers.Insert(\"Content-Type\", \"application/json\");\nResponse.SetBodyFromString(text);",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Function ClientDetails(Request) {\n    var response = New HTTPServiceResponse(200);\n    response.Headers.Insert(\"Content-Type\", \"application/json; charset=utf-8\");\n    response.SetBodyFromString(\"{\\\"ok\\\": true}\");\n    return response;\n}",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceRequest",
+        "cls.HTTPServiceResponse.StatusCode",
+        "cls.HTTPServiceResponse.Headers",
+        "cls.HTTPServiceResponse.SetBodyFromString",
+        "guide.http"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceResponse.StatusCode",
+      "name_local": "StatusCode",
+      "name_en": "StatusCode",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Response.StatusCode : number",
+      "description": "Код состояния ответа, от 100 до 599 — другой отклоняется.",
+      "syntax_block": "Response.StatusCode = 404",
+      "parameters": "",
+      "return_descr": "Число.",
+      "example": "Response.StatusCode = 404;",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceResponse"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceResponse.Headers",
+      "name_local": "Headers",
+      "name_en": "Headers",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Response.Headers : structure",
+      "description": "Заголовки ответа, Structure: имя и значение — строка или число.",
+      "syntax_block": "Response.Headers.Insert(name, value)",
+      "parameters": "",
+      "return_descr": "Structure.",
+      "example": "Response.Headers.Insert(\"Content-Type\", \"application/json\");",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceResponse"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceResponse.SetBodyFromString",
+      "name_local": "SetBodyFromString",
+      "name_en": "SetBodyFromString",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Response.SetBodyFromString(text : string, encoding : TextEncoding = UTF8)",
+      "description": "Тело из текста в указанной кодировке — UTF-8, если TextEncoding не задан, без метки порядка байтов. Content-Type задайте сами.",
+      "syntax_block": "Response.SetBodyFromString(text)",
+      "parameters": "text — текст.\nencoding — TextEncoding: UTF8 (по умолчанию), UTF16, ANSI, OEM, System.",
+      "return_descr": "",
+      "example": "Response.SetBodyFromString(\"{\\\"ok\\\": true}\");",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceResponse"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceResponse.SetBodyFromBinaryData",
+      "name_local": "SetBodyFromBinaryData",
+      "name_en": "SetBodyFromBinaryData",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Response.SetBodyFromBinaryData(data : binaryData)",
+      "description": "Тело из байтов, как они есть.",
+      "syntax_block": "Response.SetBodyFromBinaryData(data)",
+      "parameters": "data — BinaryData.",
+      "return_descr": "",
+      "example": "Response.SetBodyFromBinaryData(picture);",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceResponse"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceResponse.GetBodyAsString",
+      "name_local": "GetBodyAsString",
+      "name_en": "GetBodyAsString",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Response.GetBodyAsString(encoding : TextEncoding = UTF8) : string",
+      "description": "Заданное тело, прочитанное как текст в указанной кодировке.",
+      "syntax_block": "Response.GetBodyAsString()",
+      "parameters": "encoding — TextEncoding: UTF8 (по умолчанию).",
+      "return_descr": "Строка.",
+      "example": "Message(Response.GetBodyAsString());",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceResponse"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceResponse.GetBodyAsBinaryData",
+      "name_local": "GetBodyAsBinaryData",
+      "name_en": "GetBodyAsBinaryData",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Response.GetBodyAsBinaryData() : binaryData",
+      "description": "Заданное тело как байты.",
+      "syntax_block": "Response.GetBodyAsBinaryData()",
+      "parameters": "",
+      "return_descr": "BinaryData.",
+      "example": "var data = Response.GetBodyAsBinaryData();",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceResponse"
+      ],
+      "reviewed": false
     }
   ]
 }

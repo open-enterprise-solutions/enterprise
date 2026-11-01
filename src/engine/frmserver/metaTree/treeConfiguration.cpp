@@ -43,6 +43,7 @@
 #define objectComposersName _("Composers")
 #define objectTablesName _("Tables")
 #define objectEnumerationsName _("Enums")
+#define objectUrlTemplatesName _("URL templates")
 
 namespace {
 
@@ -70,6 +71,7 @@ const ibMetaTreeGroupDef s_groups[] = {
 	{ g_metaParameterizedJobCLSID, 0, ibMetaRow::Item },
 	{ g_metaScheduledJobCLSID,     g_metaParameterizedJobCLSID, ibMetaRow::Item },
 	{ g_metaEventHandlerCLSID,     0, ibMetaRow::Item },
+	{ g_metaHttpServiceCLSID,      0, ibMetaRow::Item },
 
 	{ g_metaSessionParameterCLSID, 0, ibMetaRow::Item },
 	{ g_metaFunctionalOptionCLSID, 0, ibMetaRow::Item },
@@ -625,6 +627,23 @@ void ibConfigurationTree::AddReportItem(ibValueMetaObject* metaObject, ibDataNod
 		metaReport->GetComposerArrayObject());
 }
 
+// AN HTTP SERVICE — its URL templates, each one the group of its methods, as a table is of its columns.
+void ibConfigurationTree::AddHttpServiceItem(ibValueMetaObject* metaObject, ibDataNode& hParentID)
+{
+	ibDataNode& group = AppendGroupItem(hParentID, g_metaUrlTemplateCLSID, objectUrlTemplatesName);
+	for (unsigned int idx = 0; idx < metaObject->GetChildCount(); idx++) {
+		ibValueMetaObject* const urlTemplate = metaObject->GetChild(idx);
+		if (urlTemplate == nullptr || !urlTemplate->IsAcceptedByParent())
+			continue;
+		ibDataNode& hTemplate = AppendGroupItem(group, g_metaHttpServiceMethodCLSID, urlTemplate);
+		for (unsigned int at = 0; at < urlTemplate->GetChildCount(); at++) {
+			ibValueMetaObject* const method = urlTemplate->GetChild(at);
+			if (method != nullptr && method->IsAcceptedByParent())
+				AppendItem(hTemplate, method);
+		}
+	}
+}
+
 // A REGISTER — dimensions and resources where a reference object has tabular sections.
 void ibConfigurationTree::AddInformationRegisterItem(ibValueMetaObject* metaObject, ibDataNode& hParentID)
 {
@@ -693,6 +712,7 @@ void ibConfigurationTree::ExpandMetaItem(ibValueMetaObject* metaItem, ibDataNode
 	else if (clsid == g_metaCalculationRegisterCLSID)        AddCalculationRegisterItem(metaItem, item);
 	else if (clsid == g_metaSequenceCLSID)                   AddSequenceItem(metaItem, item);
 	else if (clsid == g_metaSectionCLSID)                    AddInterfaceItem(metaItem, item);
+	else if (clsid == g_metaHttpServiceCLSID)                AddHttpServiceItem(metaItem, item);
 
 	// A LANGUAGE SAYS ITS CODE — what a translated text is keyed by: the translation window's boxes are the languages',
 	// each by its code (ibDialogTranslateConstructor).

@@ -54,6 +54,7 @@
     <ClInclude Include="lock\lockManager.h" />
     <ClInclude Include="job\jobManager.h" />
     <ClInclude Include="job\jobRunByteCode.h" />
+    <ClInclude Include="httpService\httpServiceCall.h" />
     <ClInclude Include="rpc\rpcMessage.h" />
     <ClInclude Include="job\platformJobs.h" />
     <ClInclude Include="settings\settingsStorage.h" />
@@ -179,6 +180,7 @@
     <ClInclude Include="metaCollection\metaCommandObject.h" />
     <ClInclude Include="metaCollection\metaCommandGroupObject.h" />
     <ClInclude Include="metaCollection\metaScheduledJobObject.h" />
+    <ClInclude Include="metaCollection\metaHttpServiceObject.h" />
     <ClInclude Include="metaCollection\metaEventHandlerObject.h" />
     <ClInclude Include="metaCollection\metaSessionParameterObject.h" />
     <ClInclude Include="metaCollection\metaFunctionalOptionObject.h" />
@@ -437,6 +439,7 @@
     <ClCompile Include="rpc\rpcMessage.cpp" />
     <ClCompile Include="job\jobBackground.cpp" />
     <ClCompile Include="job\jobRunByteCode.cpp" />
+    <ClCompile Include="httpService\httpServiceCall.cpp" />
     <ClCompile Include="job\jobRegister.cpp" />
     <ClCompile Include="job\platformJobs.cpp" />
     <ClCompile Include="query\queryable.cpp" />
@@ -565,6 +568,7 @@
     <ClCompile Include="metaCollection\metaCommandGroupObject.cpp" />
     <ClCompile Include="metaCollection\metaCommandGroupObject_res.cpp" />
     <ClCompile Include="metaCollection\metaScheduledJobObject.cpp" />
+    <ClCompile Include="metaCollection\metaHttpServiceObject.cpp" />
     <ClCompile Include="metaCollection\metaSessionParameterObject.cpp" />
     <ClCompile Include="metaCollection\metaSessionParameterObject_res.cpp" />
     <ClCompile Include="metaCollection\metaFunctionalOptionObject.cpp" />
@@ -581,7 +585,9 @@
     <ClCompile Include="metaCollection\metaCommonAttributeObjectMenu.cpp" />
     <ClCompile Include="metaCollection\metaCommonAttributeObject_res.cpp" />
     <ClCompile Include="metaCollection\metaScheduledJobObjectMenu.cpp" />
+    <ClCompile Include="metaCollection\metaHttpServiceObjectMenu.cpp" />
     <ClCompile Include="metaCollection\metaScheduledJobObject_res.cpp" />
+    <ClCompile Include="metaCollection\metaHttpServiceObject_res.cpp" />
     <ClCompile Include="metaCollection\metaEventHandlerObject.cpp" />
     <ClCompile Include="metaCollection\metaEventHandlerObjectMenu.cpp" />
     <ClCompile Include="metaCollection\metaEventHandlerObject_res.cpp" />

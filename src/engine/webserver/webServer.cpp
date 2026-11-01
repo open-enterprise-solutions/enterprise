@@ -123,6 +123,51 @@ bool WantsDeflate(const ibHttpRequest& request)
 	return request.GetParameter("compress") == "deflate";
 }
 
+// A REQUEST TO AN HTTP SERVICE OF THE BASE — what came to <publication>/hs/…, as the base's `http` asks for it
+// (ibProtocol::ibHttp): the request as it came, none of it read here. Who is asking is the base's question too.
+ibProtocolNode HttpServiceCall(const ibHttpRequest& request, const std::string& prefix)
+{
+	ibDataNode params;
+	params.SetValue(ibProtocol::ibHttp::Method, ibString::FromUTF8(request.m_method));
+	params.SetValue(ibProtocol::ibHttp::Path, ibString::FromUTF8(request.m_path.substr(prefix.size())));
+	params.SetValue(ibProtocol::ibHttp::Query, ibString::FromUTF8(request.m_query));
+	params.SetValue(ibProtocol::ibHttp::Prefix, ibString::FromUTF8(prefix));
+	ibDataNode& headers = params.Child(ibProtocol::ibHttp::Headers);
+	for (const auto& header : request.m_headers) {
+		ibDataNode& written = headers.AddChild(0, static_cast<ibMetaID>(headers.Children().size() + 1));
+		written.SetValue(ibProtocol::ibHttp::Name, ibString::FromUTF8(header.first));
+		written.SetValue(ibProtocol::ibHttp::Value, ibString::FromUTF8(header.second));
+	}
+	params.SetValue(ibProtocol::ibHttp::Body, ibMemoryBuffer(request.m_body.data(), request.m_body.size()));
+
+	ibProtocolNode call;
+	call.SetValue(ibProtocol::ibRpc::Id, 1)
+		.SetValue(ibProtocol::ibRpc::Method, ibProtocol::MethodName(ibProtocol::ibMethod::Http))
+		.SetValue(ibProtocol::ibRpc::Params, ibProtocolNode(params));
+	return call;
+}
+
+// …and the base's answer, as the server sends it on. No answer — a base that did not take the call — is 502.
+ibHttpResponse HttpServiceAnswer(const ibProtocolNode& answered)
+{
+	ibHttpResponse response;
+	const ibProtocolNode result = answered.FindChild(ibProtocol::ibRpc::Result);
+	const ibDataNode* const body = result.IsNode() ? result.GetBody() : nullptr;
+	if (body == nullptr) {
+		response.m_status = 502;
+		return response;
+	}
+	response.m_status = body->GetValue<std::int32_t>(ibProtocol::ibHttp::Status);
+	if (const std::optional<ibDataNode> headers = body->FindChild(ibProtocol::ibHttp::Headers)) {
+		for (const ibDataNode& header : headers->Children())
+			response.m_headers.emplace_back(Utf8(header.GetValue<ibString>(ibProtocol::ibHttp::Name)),
+				Utf8(header.GetValue<ibString>(ibProtocol::ibHttp::Value)));
+	}
+	const ibMemoryBuffer bytes = body->GetValue<ibMemoryBuffer>(ibProtocol::ibHttp::Body);
+	response.m_body.assign(static_cast<const char*>(bytes.GetData()), bytes.GetDataLen());
+	return response;
+}
+
 // A BROWSER'S SOCKET TO A FILE BASE — the base is the server here: the relay is the connection its clients log in
 // through, told what the base says to them, and they leave with it. Packets both ways (OES-RPC), the base's own: the
 // socket hands them over as they are (and deflates one of some size, when the browser asked).
@@ -277,6 +322,8 @@ bool ibWebServer::Publish(const ibWebPublication& publication)
 		return false;
 	}
 	const std::string path = "/" + Utf8(name) + "/client";
+	// …and the base's HTTP services, every method, under /hs/ (ibHttpServiceCall).
+	const std::string services = "/" + Utf8(name) + "/hs";
 
 	if (publication.m_kind == ibT("firebird")) {
 		// THE FILE BASE, OPENED HERE — the request ibFileBaseOpen reads.
@@ -327,6 +374,19 @@ bool ibWebServer::Publish(const ibWebPublication& publication)
 			}
 			respond(std::move(response));
 		});
+		m_http.Route(services + "/", [held, services](const ibHttpRequest& request, ibHttpResponder respond) {
+			ibMemoryBuffer packet, answer;
+			ibString error;
+			HttpServiceCall(request, services).Write(packet);
+			ibProtocolNode answered;
+			if (!held->Call(packet, nullptr, request.m_address, answer, error) || !ibProtocolNode::Read(answer, answered)) {
+				ibHttpResponse response;
+				response.m_status = 503;
+				respond(std::move(response));
+				return;
+			}
+			respond(HttpServiceAnswer(answered));
+		});
 		return true;
 	}
 
@@ -372,6 +432,21 @@ bool ibWebServer::Publish(const ibWebPublication& publication)
 						response.SetContent(std::move(body), "application/json");
 				}
 				respond(std::move(response));
+			});
+	});
+	m_http.Route(services + "/", [&io, server, serverPort, tls, target, name, services](const ibHttpRequest& request, ibHttpResponder respond) {
+		ibHttpPost(io, server, serverPort, tls, target, Utf8(HttpServiceCall(request, services).Write()), "application/json", kPostWait,
+			[respond, name](int status, std::string body, const std::string& error) {
+				ibProtocolNode answered;
+				if (status != 200 || !ibProtocolNode::Read(ibString::FromUTF8(body), answered)) {
+					if (status == 0)
+						ibWebServerSay(ibJournalMark::Warning, ibT("publication '%s': %s"), name, ibString::FromUTF8(error));
+					ibHttpResponse response;
+					response.m_status = 502;
+					respond(std::move(response));
+					return;
+				}
+				respond(HttpServiceAnswer(answered));
 			});
 	});
 	// Not a file base: nothing is held for it but the routes.

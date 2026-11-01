@@ -761,6 +761,368 @@
         "cls.HTTPResponse.Headers"
       ],
       "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceRequest",
+      "name_local": "HTTPServiceRequest",
+      "name_en": "HTTPServiceRequest",
+      "kind": "collection",
+      "class_id": 289446731127891128,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Function Handler(Request) : HTTPServiceResponse",
+      "description": "Те, з чим прийшов запит до HTTP-сервісу конфігурації. СКРИПТ ЙОГО НЕ СТВОРЮЄ — платформа передає його обробникові методу, функції модуля сервісу: Function <Handler>(Request).\n\nВластивості лише для читання. Заголовки названі малими літерами, як їх читає сервер; ключі Structure не розрізняють регістр, тому Request.Headers[\"Content-Type\"] знаходить їх так само. Тіло тримається в пам'яті цілком, до 4 МБ веб-сервера.",
+      "syntax_block": "Request.HTTPMethod   Request.BaseURL   Request.RelativeURL\nRequest.Headers   Request.QueryOptions   Request.URLParameters\nRequest.GetBodyAsString()   Request.GetBodyAsBinaryData()",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Function TransferReset(Request) {\n    var id = Request.URLParameters.id;\n    var response = New HTTPServiceResponse(200);\n    response.SetBodyFromString(\"reset \" + id);\n    return response;\n}",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceResponse",
+        "cls.HTTPServiceRequest.HTTPMethod",
+        "cls.HTTPServiceRequest.BaseURL",
+        "cls.HTTPServiceRequest.RelativeURL",
+        "guide.http"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceRequest.HTTPMethod",
+      "name_local": "HTTPMethod",
+      "name_en": "HTTPMethod",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.HTTPMethod : string",
+      "description": "Метод запиту, як його було надіслано: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS. Потрібен у методі, що відповідає на Any.",
+      "syntax_block": "Request.HTTPMethod",
+      "parameters": "",
+      "return_descr": "Рядок.",
+      "example": "if (Request.HTTPMethod = \"OPTIONS\") { return New HTTPServiceResponse(204); }",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceRequest"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceRequest.BaseURL",
+      "name_local": "BaseURL",
+      "name_en": "BaseURL",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.BaseURL : string",
+      "description": "Адреса до кореня сервісу разом із публікацією: /trade/hs/desk.",
+      "syntax_block": "Request.BaseURL",
+      "parameters": "",
+      "return_descr": "Рядок.",
+      "example": "Message(Request.BaseURL);   // /trade/hs/desk",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceRequest"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceRequest.RelativeURL",
+      "name_local": "RelativeURL",
+      "name_en": "RelativeURL",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.RelativeURL : string",
+      "description": "Залишок шляху після кореня, як його зіставив шаблон: /Transfer/12/reset. Сам корінь — \"\" або \"/\".",
+      "syntax_block": "Request.RelativeURL",
+      "parameters": "",
+      "return_descr": "Рядок.",
+      "example": "Message(Request.RelativeURL);   // /Transfer/12/reset",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceRequest"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceRequest.Headers",
+      "name_local": "Headers",
+      "name_en": "Headers",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.Headers : structure",
+      "description": "Заголовки запиту, Structure за іменем. Ім'я, що прийшло двічі, з'єднується через \", \".",
+      "syntax_block": "Request.Headers[\"Content-Type\"]",
+      "parameters": "",
+      "return_descr": "Structure.",
+      "example": "var type = Request.Headers[\"Content-Type\"];",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceRequest"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceRequest.QueryOptions",
+      "name_local": "QueryOptions",
+      "name_en": "QueryOptions",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.QueryOptions : structure",
+      "description": "Параметри після '?', розкодовані, Structure за іменем: ?page=2&q=a%20b дає page = \"2\" і q = \"a b\". З повтореного імені лишається останнє.",
+      "syntax_block": "Request.QueryOptions.page",
+      "parameters": "",
+      "return_descr": "Structure.",
+      "example": "var page = Number(Request.QueryOptions.page);",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceRequest"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceRequest.URLParameters",
+      "name_local": "URLParameters",
+      "name_en": "URLParameters",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.URLParameters : structure",
+      "description": "{Параметри} шаблону за іменем: /Transfer/{id} для /Transfer/12 дає id = \"12\". Кожне значення — рядок.",
+      "syntax_block": "Request.URLParameters.id",
+      "parameters": "",
+      "return_descr": "Structure.",
+      "example": "var id = Request.URLParameters.id;",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceRequest"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceRequest.GetBodyAsString",
+      "name_local": "GetBodyAsString",
+      "name_en": "GetBodyAsString",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.GetBodyAsString(encoding : TextEncoding = UTF8) : string",
+      "description": "Тіло як текст у вказаному кодуванні — UTF-8, якщо TextEncoding не задано. Байти, що не є текстом у цьому кодуванні, відхиляються: беріть їх через GetBodyAsBinaryData().",
+      "syntax_block": "Request.GetBodyAsString()",
+      "parameters": "encoding — TextEncoding: UTF8 (за замовчуванням), UTF16, ANSI, OEM, System.",
+      "return_descr": "Рядок.",
+      "example": "var text = Request.GetBodyAsString();",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceRequest"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceRequest.GetBodyAsBinaryData",
+      "name_local": "GetBodyAsBinaryData",
+      "name_en": "GetBodyAsBinaryData",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.GetBodyAsBinaryData() : binaryData",
+      "description": "Тіло як байти, хоч би що в ньому було.",
+      "syntax_block": "Request.GetBodyAsBinaryData()",
+      "parameters": "",
+      "return_descr": "BinaryData.",
+      "example": "var data = Request.GetBodyAsBinaryData();",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceRequest"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceResponse",
+      "name_local": "HTTPServiceResponse",
+      "name_en": "HTTPServiceResponse",
+      "kind": "collection",
+      "class_id": 145333742075291678,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "New HTTPServiceResponse(statusCode : number [, headers : structure])",
+      "description": "Те, чим відповідає обробник HTTP-сервісу: код стану, заголовки й тіло. Обробник його ПОВЕРТАЄ; якщо він повернув щось інше або збудив виняток, відповідь — 500, а причина пишеться в журнал бази, не тому, хто викликав.\n\nСлова після коду (OK, Not Found) — сервера, за кодом. Заголовки, що кажуть, як передається повідомлення (Content-Length, Transfer-Encoding, Connection та подібні), теж сервера: відповідь, де такий задано, відхиляється з іменем заголовка.",
+      "syntax_block": "Response = New HTTPServiceResponse(201);\nResponse.Headers.Insert(\"Content-Type\", \"application/json\");\nResponse.SetBodyFromString(text);",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Function ClientDetails(Request) {\n    var response = New HTTPServiceResponse(200);\n    response.Headers.Insert(\"Content-Type\", \"application/json; charset=utf-8\");\n    response.SetBodyFromString(\"{\\\"ok\\\": true}\");\n    return response;\n}",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceRequest",
+        "cls.HTTPServiceResponse.StatusCode",
+        "cls.HTTPServiceResponse.Headers",
+        "cls.HTTPServiceResponse.SetBodyFromString",
+        "guide.http"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceResponse.StatusCode",
+      "name_local": "StatusCode",
+      "name_en": "StatusCode",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Response.StatusCode : number",
+      "description": "Код стану відповіді, від 100 до 599 — інший відхиляється.",
+      "syntax_block": "Response.StatusCode = 404",
+      "parameters": "",
+      "return_descr": "Число.",
+      "example": "Response.StatusCode = 404;",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceResponse"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceResponse.Headers",
+      "name_local": "Headers",
+      "name_en": "Headers",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Response.Headers : structure",
+      "description": "Заголовки відповіді, Structure: ім'я й значення — рядок або число.",
+      "syntax_block": "Response.Headers.Insert(name, value)",
+      "parameters": "",
+      "return_descr": "Structure.",
+      "example": "Response.Headers.Insert(\"Content-Type\", \"application/json\");",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceResponse"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceResponse.SetBodyFromString",
+      "name_local": "SetBodyFromString",
+      "name_en": "SetBodyFromString",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Response.SetBodyFromString(text : string, encoding : TextEncoding = UTF8)",
+      "description": "Тіло з тексту у вказаному кодуванні — UTF-8, якщо TextEncoding не задано, без мітки порядку байтів. Content-Type задайте самі.",
+      "syntax_block": "Response.SetBodyFromString(text)",
+      "parameters": "text — текст.\nencoding — TextEncoding: UTF8 (за замовчуванням), UTF16, ANSI, OEM, System.",
+      "return_descr": "",
+      "example": "Response.SetBodyFromString(\"{\\\"ok\\\": true}\");",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceResponse"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceResponse.SetBodyFromBinaryData",
+      "name_local": "SetBodyFromBinaryData",
+      "name_en": "SetBodyFromBinaryData",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Response.SetBodyFromBinaryData(data : binaryData)",
+      "description": "Тіло з байтів, як вони є.",
+      "syntax_block": "Response.SetBodyFromBinaryData(data)",
+      "parameters": "data — BinaryData.",
+      "return_descr": "",
+      "example": "Response.SetBodyFromBinaryData(picture);",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceResponse"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceResponse.GetBodyAsString",
+      "name_local": "GetBodyAsString",
+      "name_en": "GetBodyAsString",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Response.GetBodyAsString(encoding : TextEncoding = UTF8) : string",
+      "description": "Задане тіло, прочитане як текст у вказаному кодуванні.",
+      "syntax_block": "Response.GetBodyAsString()",
+      "parameters": "encoding — TextEncoding: UTF8 (за замовчуванням).",
+      "return_descr": "Рядок.",
+      "example": "Message(Response.GetBodyAsString());",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceResponse"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceResponse.GetBodyAsBinaryData",
+      "name_local": "GetBodyAsBinaryData",
+      "name_en": "GetBodyAsBinaryData",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Response.GetBodyAsBinaryData() : binaryData",
+      "description": "Задане тіло як байти.",
+      "syntax_block": "Response.GetBodyAsBinaryData()",
+      "parameters": "",
+      "return_descr": "BinaryData.",
+      "example": "var data = Response.GetBodyAsBinaryData();",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceResponse"
+      ],
+      "reviewed": false
     }
   ]
 }

@@ -430,7 +430,14 @@ public:
 			"id in the `HandlerModule` property - is prepared with the procedure, named as the event and "
 			"taking `Source` before the event's own arguments: `Procedure BeforeWrite(Source, Cancel)`. "
 			"It runs after the source's own module, with the same arguments, so a `Cancel` set in it "
-			"cancels the write.");
+			"cancels the write.\n"
+			"AN ADDRESS ANOTHER SYSTEM CALLS - a webhook, a REST endpoint - is an `HTTPService`, a "
+			"top-level kind: its `RootURL` is the segment after /hs/ in the address the web server "
+			"publishes the base under. Inside it go `URLTemplate`s (`Template`: `/Transfer/{id}`, `/*`) "
+			"and inside each template its `HTTPServiceMethod`s (`HTTPMethod`: Get, Post, ... or Any; "
+			"`Handler`: a function of the service's own module, the id in its `ServiceModule` property, "
+			"which is prepared with `Function <Handler>(Request)`). The handler is given an "
+			"HTTPServiceRequest and returns an HTTPServiceResponse; pattern_read `http-services` says the rest.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
