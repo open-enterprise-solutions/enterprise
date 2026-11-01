@@ -217,6 +217,12 @@ public:
 	// entity carrying the attribute (its hidden private description) AND its value. Never
 	// a raw attribute. An attribute is NEVER empty: name + Type + value.
 	ibFormAttributeValue* AddAttribute(const ibString& name, const ibClassID& type, const ibValue& value);
+	// ⭐ …AND THE ONE A MODULE ADDS while the form is open — `ThisForm.AddAttribute(name, type)`: a value table of
+	// columns only known at run time, a list a control is then bound to. Typed with the WHOLE description (a string's
+	// length, a number's digits), not only its first class, and marked as the module's (IsAddedByModule), so it is not
+	// stored with the form and RemoveAttribute may take it again. Raises for a name that is not a name or that another
+	// attribute already has.
+	ibFormAttributeValue* AddAttribute(const ibString& name, const ibTypeDescription& typeDesc);
 	// The MAIN entry (the source object lands here) — guards that no other main exists.
 	ibFormAttributeValue* AddMainAttribute(const ibString& name, const ibClassID& type, ibSourceDataObject* value);
 
@@ -248,6 +254,10 @@ public:
 
 	void DeleteAttribute(const ibString& name);
 	void DeleteAttribute(unsigned int idx);
+	// The module's removal — `ThisForm.RemoveAttribute(name)`: only an attribute the module added. One the form was
+	// designed with is what the compiled module and the controls are bound to, and taking it from under them is not a
+	// script's call; that raises, as a name the form has no attribute for does.
+	void RemoveAttribute(const ibString& name);
 	// Bind `entry` into the form module: its value cell as a LOCAL named <attrName>, and —
 	// when it is the MAIN — the exported DataSource too. Self-managed by the attribute's
 	// lifecycle / main flag: add and become-main bind, delete and lose-main unbind, so no
@@ -299,16 +309,6 @@ public:
 	// decides what an empty field costs. Reachable from a script as `ThisForm.CheckFilling()`.
 	bool CheckFilling() const;
 
-	// ⭐ AN ATTRIBUTE THE MODULE MAKES ITSELF, while the form is open — `ThisForm.AddAttribute(name, type)`:
-	// a value table of columns only known at run time, a flag a loaded file decides. The form builds the entry,
-	// as it builds every attribute (never a bare description handed in), and answers its value, so the caller
-	// fills it at once; afterwards it is `ThisForm.<name>`. Not stored: it lives as long as this form does.
-	// Refused, by raising, for a name that is not a name or that another attribute already has.
-	ibFormAttributeValue* AddScriptAttribute(const ibString& name, const ibTypeDescription& typeDesc);
-	// …and takes one of THOSE away again. Only one the module made: an attribute the form was designed with is
-	// what the compiled module and the controls are bound to, and pulling it from under them is not a script's
-	// call — refused by raising, as is a name the form has no attribute for.
-	void RemoveScriptAttribute(const ibString& name);
 	// Next free attribute id (max existing + 1) — PUBLIC so the holder's nested description can
 	// stamp itself on construction (a nested class does not inherit the enclosing class's friends).
 	ibMetaID NextAttributeId() const;
@@ -585,8 +585,6 @@ private:
 	// one whose attribute carries the Main flag — no separate pointer (single source of
 	// truth = the flag).
 	std::vector<ibValuePtr<ibFormAttributeValue>> m_attributes;
-	// The ids of the attributes the module added (AddScriptAttribute) — the only ones RemoveScriptAttribute takes.
-	std::vector<ibMetaID> m_scriptAttributes;
 
 	// FORM COMMANDS — form-local events (NOT metaobjects), managed like m_attributes: each is an ibFormCommandValue
 	// property object, held ref-counted, serialized with the form data, listed in the navigator's "Form commands".

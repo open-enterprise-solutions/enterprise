@@ -328,7 +328,7 @@ void ibValueForm::FillFormMembers(ibMemberTable& helper) const
 	// ⭐ IS EVERY REQUIRED ATTRIBUTE FILLED — see ibValueForm::CheckFilling. A FUNCTION, because the
 	// answer is the point: it reports what is missing and lets the caller decide to stop.
 	helper.AppendFunc(ibT("CheckFilling"), ibT("CheckFilling()"));
-	// ⭐ AN ATTRIBUTE MADE AT RUN TIME — see ibValueForm::AddScriptAttribute. A FUNCTION: what it answers is the new
+	// ⭐ AN ATTRIBUTE MADE AT RUN TIME — see ibValueForm::AddAttribute(name, typeDesc). A FUNCTION: what it answers is the new
 	// attribute's value, so a value table is given its columns, or a flag its value, in the next line.
 	helper.AppendFunc(ibT("AddAttribute"), 2, ibT("AddAttribute(name : string, type : TypeDescription)"));
 	helper.AppendProc(ibT("RemoveAttribute"), 1, ibT("RemoveAttribute(name : string)"));
@@ -510,7 +510,7 @@ bool ibValueForm::CallAsProc(const long lMethodNum, ibValue** paParams, const lo
 		NotifyChoice(*paParams[0]);
 		return true;
 	case enRemoveAttribute:
-		RemoveScriptAttribute(paParams[0]->GetString());
+		RemoveAttribute(paParams[0]->GetString());
 		return true;
 	}
 
@@ -540,7 +540,7 @@ bool ibValueForm::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibVal
 				paParams[1]->GetClassName());
 			return false;
 		}
-		ibFormAttributeValue* entry = AddScriptAttribute(paParams[0]->GetString(), type->GetTypeDesc());
+		ibFormAttributeValue* entry = AddAttribute(paParams[0]->GetString(), type->GetTypeDesc());
 		return entry != nullptr && entry->GetValue(pvarRetValue);
 	}
 	}
