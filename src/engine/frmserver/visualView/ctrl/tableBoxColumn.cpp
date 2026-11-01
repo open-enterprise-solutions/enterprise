@@ -157,9 +157,8 @@ void ibValueModelTableBoxColumn::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	// The representation the header and the footer are drawn in — Auto shows both, the title and the
 	// picture, whichever are set. The caption is always written: it names the column even when only the
 	// picture is shown, and the representation says which of the two are.
-	// A column is no tile: that one shows both too.
 	ibRepresentation rep = m_propertyRepresentation->GetValueAsEnum();
-	if (rep == ibRepresentation::ibRepresentation_Auto || rep == ibRepresentation::ibRepresentation_Tile)
+	if (rep == ibRepresentation::ibRepresentation_Auto)
 		rep = ibRepresentation::ibRepresentation_PictureAndText;
 
 	state.SetValue(ibProtocol::ibForm::ibState::Caption, GetControlTitle());

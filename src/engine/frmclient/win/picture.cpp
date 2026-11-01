@@ -113,14 +113,6 @@ void PicturesOf(const ibDataNode& node, std::vector<wxString>& ids)
 		PicturesOf(child, ids);
 }
 
-// A picture fitted into a square once per picture and size: a tile is drawn on every frame that touches it, and a panel
-// is many tiles. Kept by the picture the wire names, the guid before its version, as Pictures() keeps them: one of
-// another version takes its place. Under the same lock.
-std::map<wxString, ibKeptPicture>& FittedPictures()
-{
-	static std::map<wxString, ibKeptPicture>* const s_fitted = new std::map<wxString, ibKeptPicture>();   // never destroyed, as Pictures()
-	return *s_fitted;
-}
 } // namespace
 
 wxBitmap ibProtocolPicture(const ibProtocolNode& node, const char* name)
@@ -143,18 +135,13 @@ wxBitmap ibProtocolPicture(const ibProtocolNode& node, const char* name, int pix
 	if (!value)
 		return wxBitmap();
 	if (value->Kind() == ibDataKind::Binary)
-		return FittedInto(ibProtocolImage(value->AsBinary()), pixels);   // a picture with no id: nothing to keep it by
+		return FittedInto(ibProtocolImage(value->AsBinary()), pixels);   // a picture sent whole, with no id
 	if (value->Kind() != ibDataKind::String)
 		return wxBitmap();
+	// Scaled each time it is asked, nothing kept: it is asked when the server's state changes, not when the button is
+	// drawn, which draws the bitmap it was given. The engine's own from its master, which has the size to spare; any
+	// other from what the client keeps of it.
 	const wxString id(value->AsString());
-	const wxString key = wxString::Format(wxT("%s@%d"), id.BeforeFirst(wxT('#')), pixels);
-	{
-		std::lock_guard<std::mutex> lock(s_picturesLock);
-		const auto kept = FittedPictures().find(key);
-		if (kept != FittedPictures().end() && kept->second.id == id)
-			return kept->second.bitmap;
-	}
-	// The engine's own from its master, which has the size to spare; any other from what the client keeps of it.
 	const wxImage master = EngineMaster(id);
 	wxBitmap fitted;
 	if (master.IsOk()) {
@@ -164,10 +151,6 @@ wxBitmap ibProtocolPicture(const ibProtocolNode& node, const char* name, int pix
 		const wxBitmap kept = ibProtocolPicture(id);
 		if (kept.IsOk())
 			fitted = FittedInto(kept.ConvertToImage(), pixels);
-	}
-	if (fitted.IsOk()) {
-		std::lock_guard<std::mutex> lock(s_picturesLock);
-		FittedPictures()[key] = { id, fitted };
 	}
 	return fitted;
 }

@@ -15,15 +15,11 @@
 // read from its clsid, never via dynamic_cast.
 constexpr ibClassID g_controlButtonCLSID = control_to_clsid("CT_BUTN");
 
-// Exported: the tests build one by hand and read the state it writes (tests/test_buttonTile.cpp).
-class FRMSERVER_API ibValueButton : public ibValueWindow, public ibFrontendCommandReceiver {
+class ibValueButton : public ibValueWindow, public ibFrontendCommandReceiver {
 	public:
 
 	void SetCaption(const ibString& caption) { return m_propertyTitle->SetValue(caption); }
 	ibString GetCaption() const { return m_propertyTitle->GetValueAsTranslateString(); }
-	// The line under a tile's caption - a price, a count, a state; shown by a tile alone.
-	void SetNote(const ibString& note) { return m_propertyNote->SetValue(note); }
-	ibString GetNote() const { return m_propertyNote->GetValueAsTranslateString(); }
 
 	ibValueButton();
 
@@ -63,9 +59,9 @@ private:
 	ibPropertyCategory* m_categoryButton = ibPropertyObject::CreatePropertyCategory(ibT("Button"), _("Button"));
 	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryButton, ibT("Title"), _("Title"),
 		_("The text on the button. Can be written per language and changed from code while the form is open."), ibT("Button"));
-	ibPropertyEnum<ibValueEnumRepresentation>* m_propertyRepresentation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumRepresentation>>(m_categoryButton, ibT("Representation"), _("Representation"),
+	ibPropertyEnum<ibValueEnumButtonRepresentation>* m_propertyRepresentation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumButtonRepresentation>>(m_categoryButton, ibT("Representation"), _("Representation"),
 		_("What the button shows: text, picture, or both. Auto: what the bound command prefers (Close is a picture alone, Add a picture with text); picture and text when no command is bound. Tile: the picture large over the text and the Note under them, the button filling what its sizer gives it - a big button for a finger; put tiles in a grid sizer for a panel of them."),
-		ibRepresentation::ibRepresentation_Auto);
+		ibButtonRepresentation::ibButtonRepresentation_Auto);
 	ibPropertyPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_categoryButton, ibT("Picture"), _("Picture"),
 		_("The button's icon, beside or instead of the text (see Representation)."));
 	ibPropertyTString* m_propertyNote = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryButton, ibT("Note"), _("Note"),

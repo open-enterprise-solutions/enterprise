@@ -1,5 +1,5 @@
-"""A button as a tile - the picture large over the caption and a note under them - and a grid whose cells are one
-size: what a panel for a finger is made of."""
+"""A button as a tile - the picture large over the caption and a note under them, filling its cell: what a panel for
+a finger is made of."""
 import struct
 import unittest
 import zlib
@@ -92,27 +92,6 @@ class ATile(PageTest):
         page.wait_for_function("document.querySelector('oes-button.tile .tile-note')?.textContent === '11 pcs'")
 
 
-class AGrid(PageTest):
-    def test_gives_every_cell_the_same_size(self):
-        page = self.start(scenario())
-        page.wait_for_selector('oes-gridsizer')
-        columns = page.locator('oes-gridsizer').evaluate('(grid) => getComputedStyle(grid).gridTemplateColumns')
-        widths = [float(width[:-2]) for width in columns.split()]
-        self.assertEqual(len(widths), 2)
-        self.assertLess(abs(widths[0] - widths[1]), 1, columns)
-        # Every cell the same height too: the row of plain buttons as tall as the row of tiles.
-        cells = page.locator('oes-gridsizer > oes-sizeritem').evaluate_all('(cells) => cells.map((cell) => cell.getBoundingClientRect().height)')
-        self.assertEqual(len(cells), 4)
-        self.assertLess(max(cells) - min(cells), 1, cells)
-        self.assertGreater(cells[0], 40)
-        # ...and no lower than what it holds: a row grows rather than a cell spilling into the next one.
-        self.assertEqual(page.locator('oes-gridsizer > oes-sizeritem').first.evaluate('(cell) => getComputedStyle(cell).minHeight'), 'auto')
-        # The tiles fill their cells, face and all: the one with the short caption is no shorter than its neighbour.
-        faces = page.locator('oes-button.tile wa-button').evaluate_all(f'(buttons) => buttons.map({FACE_HEIGHT})')
-        self.assertLess(abs(faces[0] - faces[1]), 1, faces)
-        self.assertLess(abs(faces[0] - cells[0]), 2, (faces, cells))
-
-
 class AGroupTile(PageTest):
     """A tile bound to a group of commands: it fills its cell as any tile, and opens the group's commands."""
 
@@ -128,10 +107,8 @@ class AGroupTile(PageTest):
         page.wait_for_selector('oes-button.tile wa-dropdown')
         cells = page.locator('oes-gridsizer > oes-sizeritem').evaluate_all('(cells) => cells.map((cell) => cell.getBoundingClientRect().height)')
         faces = page.locator('oes-button.tile wa-button').evaluate_all(f'(buttons) => buttons.map({FACE_HEIGHT})')
-        widths = page.locator('oes-button.tile wa-button').evaluate_all("(buttons) => buttons.map((button) => button.shadowRoot.querySelector('[part~=base]').getBoundingClientRect().width)")
         self.assertLess(abs(faces[0] - faces[1]), 1, faces)
         self.assertLess(abs(faces[0] - cells[0]), 2, (faces, cells))
-        self.assertLess(abs(widths[0] - widths[1]), 1, widths)
         group = page.locator('oes-button.tile').first
         self.assertEqual(group.locator('.tile-note').inner_text(), '3 kinds')
 

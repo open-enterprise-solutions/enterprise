@@ -13,6 +13,8 @@
 
 #include <gtest/gtest.h>
 
+#include <memory>
+
 #include "backend/backend_exception.h"
 #include "backend/compiler/compileCode.h"
 #include "backend/compiler/procUnit.h"
@@ -26,6 +28,9 @@
 #include "backend/system/value/valueMap.h"  // ibValueStructure, g_valueStructureCLSID
 #include "frmserver/visualView/ctrl/form.h"          // a real form, DataSource bound on it
 #include "frmserver/visualView/ctrl/formAttribute.h" // the attribute cell the bind points at
+#include "core/serialize/dataBuilder.h"                // a control's saved node and its state
+#include "frmserver/visualView/controlEnum.h"         // a button's Representation, a tile among it
+#include "protocol/protocol.h"                       // the state a client reads a tile from
 #include "backend/backend_mainFrame.h"               // a frame so the form can be born
 #include "backend/metaCollection/metaModuleObject.h" // a form module, so the bind has somewhere to live
 #include "backend/metadataConfiguration.h"           // the module's file name is asked of its metadata
@@ -3492,6 +3497,140 @@ TEST_F(FormRuntime, AFormScriptWritesThroughDataSource) {
 	ibValue got;
 	ASSERT_TRUE(object->GetPropVal(object->FindProp(wxT("B")), got));
 	EXPECT_EQ(got.GetInteger(), 3);
+}
+
+// A BUTTON AS A TILE - the representation a finger presses: the picture large over the caption and a note under
+// them. What the server says of it: the member of the button's own Representation, the note saved with the button,
+// and the state a client draws from - the note going with a tile alone. The buttons are made by a form born against
+// the session's frame, through the factory the designer's comes to (NewObject), and read through what every control
+// answers; they stand on the form itself, with no sizer between - their state does not ask for one.
+struct TileForm : FormRuntime {
+	std::shared_ptr<FramedSession> m_session;
+	std::unique_ptr<KeyFrame> m_frame;
+	std::unique_ptr<ibSessionScope> m_scope;
+	ibValuePtr<ibValueForm> m_form;
+
+	void SetUp() override {
+		FormRuntime::SetUp();
+		if (IsSkipped() || HasFatalFailure())
+			return;
+		m_session = std::make_shared<FramedSession>(wxT("tile"), ibSessionKind::Enterprise);
+		m_frame = std::make_unique<KeyFrame>(ibApplicationInstance::GetSessionRegistry()->MintUnlisted(m_session));
+		m_session->Attach(m_frame.get());
+		m_scope = std::make_unique<ibSessionScope>(m_session.get());
+		m_form = ibValuePtr<ibValueForm>(new ibValueForm());
+	}
+	void TearDown() override {
+		m_form = ibValuePtr<ibValueForm>();
+		m_scope.reset();
+		m_frame.reset();
+		m_session.reset();
+		FormRuntime::TearDown();
+	}
+
+	// A button given its title, its note and its representation the way a saved form gives them: through its node.
+	ibValueFrame* Button(const ibString& title, const ibString& note, ibButtonRepresentation representation) {
+		ibValueFrame* const button = m_form->NewObject(ibString(ibT("Button")), static_cast<ibValueForm*>(m_form));
+		EXPECT_NE(button, nullptr);
+		if (button == nullptr)
+			return nullptr;
+		ibDataNode saved;
+		EXPECT_TRUE(button->WriteData(saved));
+		saved.SetField(ibT("Title"), ibDataValue::String(title));   // replaces; SetProperty would add a second
+		saved.SetField(ibT("Note"), ibDataValue::String(note));
+		saved.SetField(ibT("Representation"), ibDataValue::Int(static_cast<int>(representation)));
+		EXPECT_TRUE(button->ReadData(saved));
+		return button;
+	}
+
+	static ibDataNode State(ibValueFrame& control) {
+		ibDataNode state;
+		control.OnUpdate(state, nullptr);
+		return state;
+	}
+	static ibString Text(const ibDataNode& state, const char* name) {
+		const auto value = state.FindField(name);
+		return value ? value->AsString() : ibString();
+	}
+	static int Number(const ibDataNode& state, const char* name) {
+		const auto value = state.FindField(name);
+		return value ? static_cast<int>(value->AsInt()) : -1;
+	}
+};
+
+// The button's own enumeration: the four every control has, under their numbers, and a tile after them, under the
+// number the client reads it by. The shared one - a column's, a page's - has no tile, so neither can hold one.
+TEST(ButtonTile, TileIsTheButtonsAloneUnderItsNumber) {
+	ibValueEnumButtonRepresentation button;
+	button.CreateEnumeration();
+	ASSERT_EQ(button.GetEnumCount(), 5u);
+	EXPECT_EQ(button.GetEnumName(4), ibString(ibT("Tile")));
+	EXPECT_EQ(static_cast<int>(button.GetEnumValue(4)), static_cast<int>(ibProtocol::ibForm::ibState::ibRepresentation::Tile));
+	EXPECT_EQ(static_cast<int>(ibButtonRepresentation_PictureAndText), static_cast<int>(ibRepresentation_PictureAndText));
+
+	ibValueEnumRepresentation shared;
+	shared.CreateEnumeration();
+	EXPECT_EQ(shared.GetEnumCount(), 4u);
+}
+
+// Saved with the button, as its title is, and read back by one the form makes anew.
+TEST_F(TileForm, TheNoteIsSavedWithTheButtonAndReadBack) {
+	ibValueFrame* const written = Button(ibT("Tea"), ibT("12 pcs"), ibButtonRepresentation_Tile);
+	ASSERT_NE(written, nullptr);
+	ibDataNode node;
+	ASSERT_TRUE(written->WriteData(node));
+
+	ibValueFrame* const read = m_form->NewObject(ibString(ibT("Button")), static_cast<ibValueForm*>(m_form));
+	ASSERT_NE(read, nullptr);
+	ASSERT_TRUE(read->ReadData(node));
+	const ibDataNode state = State(*read);
+	EXPECT_EQ(Text(state, ibProtocol::ibForm::ibState::Caption), ibString(ibT("Tea")));
+	EXPECT_EQ(Text(state, ibProtocol::ibForm::ibState::Note), ibString(ibT("12 pcs")));
+	EXPECT_EQ(Number(state, ibProtocol::ibForm::ibState::Representation), 4);
+
+	// A form saved before there was a note - its node has no Note field at all - reads back with none.
+	ibDataNode older;
+	for (const auto& [name, value] : node.Fields())
+		if (name != ibT("Note"))
+			older.AddField(name, value);
+	ibValueFrame* const old = m_form->NewObject(ibString(ibT("Button")), static_cast<ibValueForm*>(m_form));
+	ASSERT_NE(old, nullptr);
+	ASSERT_TRUE(old->ReadData(older));
+	EXPECT_EQ(Text(State(*old), ibProtocol::ibForm::ibState::Note), ibString());
+}
+
+// The button's property is of the button's own enumeration - a script reading it gets a ButtonRepresentation member,
+// which is what keeps a tile off a column and a page.
+TEST_F(TileForm, AButtonsRepresentationIsAButtonRepresentation) {
+	ibValueFrame* const button = Button(ibT("Tea"), ibT("12 pcs"), ibButtonRepresentation_Tile);
+	ASSERT_NE(button, nullptr);
+	const long property = button->FindProp(ibT("Representation"));
+	ASSERT_GE(property, 0);
+	ibValue read;
+	ASSERT_TRUE(button->GetPropVal(property, read));
+	EXPECT_EQ(read.GetClassName(), ibString(ibT("ButtonRepresentation")));
+}
+
+// The state a client draws from: a tile carries its note; any other representation shows none, so carries none.
+TEST_F(TileForm, TheStateCarriesTheNoteForATileAlone) {
+	ibValueFrame* const tile = Button(ibT("Tea"), ibT("12 pcs"), ibButtonRepresentation_Tile);
+	ASSERT_NE(tile, nullptr);
+	const ibDataNode tiled = State(*tile);
+	EXPECT_EQ(Number(tiled, ibProtocol::ibForm::ibState::Representation), static_cast<int>(ibProtocol::ibForm::ibState::ibRepresentation::Tile));
+	EXPECT_EQ(Text(tiled, ibProtocol::ibForm::ibState::Caption), ibString(ibT("Tea")));
+	EXPECT_EQ(Text(tiled, ibProtocol::ibForm::ibState::Note), ibString(ibT("12 pcs")));
+
+	ibValueFrame* const plain = Button(ibT("Tea"), ibT("12 pcs"), ibButtonRepresentation_PictureAndText);
+	ASSERT_NE(plain, nullptr);
+	const ibDataNode flat = State(*plain);
+	EXPECT_EQ(Number(flat, ibProtocol::ibForm::ibState::Representation), static_cast<int>(ibProtocol::ibForm::ibState::ibRepresentation::PictureAndText));
+	EXPECT_FALSE(flat.FindField(ibProtocol::ibForm::ibState::Note).has_value()) << "a note is a tile's";
+
+	// Auto stays what it was: a button with nothing bound shows picture and text, not a tile.
+	ibValueFrame* const automatic = Button(ibT("Tea"), ibT("12 pcs"), ibButtonRepresentation_Auto);
+	ASSERT_NE(automatic, nullptr);
+	EXPECT_EQ(Number(State(*automatic), ibProtocol::ibForm::ibState::Representation),
+		static_cast<int>(ibProtocol::ibForm::ibState::ibRepresentation::PictureAndText));
 }
 
 // A list form's DataSource is a dynamic list. It already knows its source

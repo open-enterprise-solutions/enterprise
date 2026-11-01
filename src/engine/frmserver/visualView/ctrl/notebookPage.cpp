@@ -16,8 +16,7 @@ ibValueNotebookPage::ibValueNotebookPage() : ibValueControl()
 
 void ibValueNotebookPage::OnUpdate(ibDataNode& state, ibVisualHost* host)
 {
-    // Auto carries both, as PictureAndText does - and so does Tile, a page being no tile: the title and the picture,
-    // whichever are set.
+    // Auto carries both, as PictureAndText does: the title and the picture, whichever are set.
     const ibRepresentation representation = m_propertyRepresentation->GetValueAsEnum();
 
     state.SetValue(ibProtocol::ibForm::ibState::Visible, IsPageShown());

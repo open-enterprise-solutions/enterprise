@@ -84,13 +84,6 @@ oes-gridsizer {
 	gap: 0.25rem;
 }
 
-/* A column's share, not its widest content - but a row no lower than what it holds: a cell taller than its share grows
-   the row rather than spilling into the next, as the desktop's grid does. */
-oes-gridsizer > oes-sizeritem {
-	min-width: 0;
-	min-height: auto;   /* oes-sizeritem's 0 would let an equal row squeeze it */
-}
-
 oes-staticboxsizer {
 	border: 1px solid var(--oes-border);
 	border-radius: 6px;

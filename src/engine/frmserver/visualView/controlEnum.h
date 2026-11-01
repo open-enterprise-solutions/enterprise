@@ -6,15 +6,22 @@ enum ibTitleLocation {
 	eRight
 };
 
-// What a control shows of its caption and its picture. Tile is a button's: the picture large over the caption and a
-// note under them - a column or a page shows it as picture and text. The numbers are the ones a saved form holds and
-// the client reads (ibProtocol::ibForm::ibState::ibRepresentation).
 enum ibRepresentation {
 	ibRepresentation_Auto,
 	ibRepresentation_Text,
 	ibRepresentation_Picture,
-	ibRepresentation_PictureAndText,
-	ibRepresentation_Tile
+	ibRepresentation_PictureAndText
+};
+
+// What a BUTTON shows: the four of every control, and a tile - a button's alone, so a column or a page cannot hold
+// one. The numbers are ibRepresentation's, which a saved form holds and the client reads
+// (ibProtocol::ibForm::ibState::ibRepresentation).
+enum ibButtonRepresentation {
+	ibButtonRepresentation_Auto = ibRepresentation_Auto,
+	ibButtonRepresentation_Text = ibRepresentation_Text,
+	ibButtonRepresentation_Picture = ibRepresentation_Picture,
+	ibButtonRepresentation_PictureAndText = ibRepresentation_PictureAndText,
+	ibButtonRepresentation_Tile
 };
 
 // Where a notebook's tabs are (its OrientPage) - none: the notebook is a panel, the active page alone. The numbers are
@@ -108,7 +115,20 @@ class FRMSERVER_API ibValueEnumRepresentation :
 		AddEnumeration(ibRepresentation::ibRepresentation_Text, ibT("Text"), _("Text"));
 		AddEnumeration(ibRepresentation::ibRepresentation_Picture, ibT("Picture"), _("Picture"));
 		AddEnumeration(ibRepresentation::ibRepresentation_PictureAndText, ibT("PictureAndText"), _("Picture and text"));
-		AddEnumeration(ibRepresentation::ibRepresentation_Tile, ibT("Tile"), _("Tile"));
+	}
+private:
+};
+
+class FRMSERVER_API ibValueEnumButtonRepresentation :
+	public ibValueEnumeration<ibButtonRepresentation> {
+	public:
+	ibValueEnumButtonRepresentation() : ibValueEnumeration() {}
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibButtonRepresentation::ibButtonRepresentation_Auto, ibT("Auto"), _("Auto"));
+		AddEnumeration(ibButtonRepresentation::ibButtonRepresentation_Text, ibT("Text"), _("Text"));
+		AddEnumeration(ibButtonRepresentation::ibButtonRepresentation_Picture, ibT("Picture"), _("Picture"));
+		AddEnumeration(ibButtonRepresentation::ibButtonRepresentation_PictureAndText, ibT("PictureAndText"), _("Picture and text"));
+		AddEnumeration(ibButtonRepresentation::ibButtonRepresentation_Tile, ibT("Tile"), _("Tile"));
 	}
 private:
 };

@@ -1,0 +1,145 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "uk",
+  "entries": [
+    {
+      "id": "enum.ButtonRepresentation",
+      "name_local": "ButtonRepresentation",
+      "name_en": "ButtonRepresentation",
+      "kind": "enum_type",
+      "class_id": 398331834571618557,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "forms"
+      ],
+      "signature": "ButtonRepresentation.Auto, .Text, .Picture, .PictureAndText, .Tile",
+      "description": "Що показує кнопка: напис, картинку, те й інше або плитку. Властивість кнопки Representation зберігає значення, записується ButtonRepresentation.<Ім'я>. Чотири значення ті самі, що в колонки, сторінки та пункту командної панелі, - Auto, Text, Picture, PictureAndText, під тими самими номерами, - і Tile, яка є лише в кнопки.\n\nСкрипт читає й задає його в кнопки форми: `Controls.Button1.Representation = ButtonRepresentation.Tile;`. Спільне перелічення Representation - інший тип: його значення, присвоєне властивості кнопки, спричиняє виняток, а порівняння з ним дає False.",
+      "syntax_block": "Controls.Button1.Representation = ButtonRepresentation.Tile;",
+      "syntax_block_ves": "Controls.Button1.Representation = ButtonRepresentation.Tile;",
+      "parameters": "",
+      "return_descr": "ButtonRepresentation.",
+      "example": "Controls.Button1.Representation = ButtonRepresentation.Tile;\nControls.Button1.Note = \"12\";",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "enum.ButtonRepresentation.Auto",
+        "enum.ButtonRepresentation.Text",
+        "enum.ButtonRepresentation.Picture",
+        "enum.ButtonRepresentation.PictureAndText",
+        "enum.ButtonRepresentation.Tile"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.ButtonRepresentation.Auto",
+      "name_local": "Auto",
+      "name_en": "Auto",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "forms"
+      ],
+      "signature": "ButtonRepresentation.Auto",
+      "description": "Як віддає перевагу прив'язана команда: лише картинка для Close чи Update, картинка з текстом для Add чи Post; картинка й текст, якщо команду не прив'язано. Значення за замовчуванням.",
+      "syntax_block": "Controls.Button1.Representation = ButtonRepresentation.Auto;",
+      "parameters": "",
+      "return_descr": "ButtonRepresentation.",
+      "example": "Controls.Button1.Representation = ButtonRepresentation.Auto;",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "enum.ButtonRepresentation"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.ButtonRepresentation.Text",
+      "name_local": "Text",
+      "name_en": "Text",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "forms"
+      ],
+      "signature": "ButtonRepresentation.Text",
+      "description": "Лише напис; картинка не надсилається.",
+      "syntax_block": "Controls.Button1.Representation = ButtonRepresentation.Text;",
+      "parameters": "",
+      "return_descr": "ButtonRepresentation.",
+      "example": "Controls.Button1.Representation = ButtonRepresentation.Text;",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "enum.ButtonRepresentation"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.ButtonRepresentation.Picture",
+      "name_local": "Picture",
+      "name_en": "Picture",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "forms"
+      ],
+      "signature": "ButtonRepresentation.Picture",
+      "description": "Лише картинка. Напис усе одно називає кнопку - це її підказка.",
+      "syntax_block": "Controls.Button1.Representation = ButtonRepresentation.Picture;",
+      "parameters": "",
+      "return_descr": "ButtonRepresentation.",
+      "example": "Controls.Button1.Representation = ButtonRepresentation.Picture;",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "enum.ButtonRepresentation"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.ButtonRepresentation.PictureAndText",
+      "name_local": "PictureAndText",
+      "name_en": "PictureAndText",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "forms"
+      ],
+      "signature": "ButtonRepresentation.PictureAndText",
+      "description": "Картинка поруч із написом.",
+      "syntax_block": "Controls.Button1.Representation = ButtonRepresentation.PictureAndText;",
+      "parameters": "",
+      "return_descr": "ButtonRepresentation.",
+      "example": "Controls.Button1.Representation = ButtonRepresentation.PictureAndText;",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "enum.ButtonRepresentation"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.ButtonRepresentation.Tile",
+      "name_local": "Tile",
+      "name_en": "Tile",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "forms"
+      ],
+      "signature": "ButtonRepresentation.Tile",
+      "description": "Кнопка під палець: велика картинка над написом, під ними Note кнопки дрібнішим шрифтом (ціна, кількість, стан), і все це заповнює те, що дає сайзер. Плитки в сайзері-сітці складаються в панель. Клієнт, старший за протокол 8, показує плитку як картинку з текстом.",
+      "syntax_block": "Controls.Button1.Representation = ButtonRepresentation.Tile;",
+      "parameters": "",
+      "return_descr": "ButtonRepresentation.",
+      "example": "Controls.Button1.Representation = ButtonRepresentation.Tile;",
+      "availability": "Тонкий клієнт, Сервер",
+      "see_also": [
+        "enum.ButtonRepresentation"
+      ],
+      "reviewed": false
+    }
+  ]
+}

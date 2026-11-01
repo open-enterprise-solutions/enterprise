@@ -4,6 +4,11 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Breaking changes
 
+- **A button's `Representation` is a `ButtonRepresentation`.** A module that sets it from the shared
+  enumeration (`Controls.Button1.Representation = Representation.Picture`) now raises, and comparing it
+  with a member of `Representation` answers False: use `ButtonRepresentation`, which has the same four
+  members under the same numbers and `Tile`. Saved forms read as they were.
+
 - **In a date pattern `MM` is the month and `mm` the minutes**, as everywhere else they are written;
   the seconds are `ss`. It was the other way round. A stored format such as `DF=dd.mm.yyyy` now
   prints the minutes where the month was, and nothing reports it: change `mm` to `MM` (and `MM` to
@@ -86,9 +91,9 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 - **A button as a tile.** `Representation = Tile` draws the picture large over the caption and the new `Note`
   under them - a price, a count, a state - and the button fills what its sizer gives it: a button for a finger,
-  in both clients. Tiles in a grid sizer make a panel of them; the browser's grid now gives every cell the same
-  size, as the thin client's does. A column, a page or a command bar item given Tile shows picture and text. The
-  protocol is 8. A form saved with a tile and opened by an earlier designer shows the representation blank, and
+  in both clients. Tiles in a grid sizer make a panel of them. Tile is a member of the button's own
+  enumeration, `ButtonRepresentation`, which keeps the four it shares with a column, a page and a command
+  bar item under their numbers; those cannot hold a tile (see Breaking changes). The protocol is 8. A form saved with a tile and opened by an earlier designer shows the representation blank, and
   saved there it loses its note.
 
 ## The browser client
