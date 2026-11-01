@@ -27,10 +27,8 @@ file(GLOB_RECURSE BACKEND_SOURCES CONFIGURE_DEPENDS
 # Remove platform-specific / optional sources that must be gated
 # ---------------------------------------------------------------------------
 
-# valueOLE.cpp uses COM/OLE — Windows only
-if(NOT WIN32)
-    list(FILTER BACKEND_SOURCES EXCLUDE REGEX "system/value/valueOLE\\.cpp$")
-endif()
+# valueOLE.cpp is built everywhere: COM itself is Windows only (inside #ifdef __WXMSW__), but the
+# ComObject type is registered on every platform so a module that creates one compiles there too.
 
 # Firebird driver
 if(NOT OES_USE_FIREBIRD)

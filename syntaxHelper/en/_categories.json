@@ -22,6 +22,7 @@
     "xml": "XML — reading and writing",
     "text_files": "Text files and bytes — reading and writing",
     "hashing": "Hashing, base64 and hex",
+    "com": "COM objects and add-ins",
     "runtime": "Runtime",
     "guide": "Guide"
   }
