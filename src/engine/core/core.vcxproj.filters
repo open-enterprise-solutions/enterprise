@@ -58,6 +58,9 @@
     <Filter Include="spreadsheet">
       <UniqueIdentifier>{e4a19d36-82c7-4f5b-a0d3-6f2b7c8e91a5}</UniqueIdentifier>
     </Filter>
+    <Filter Include="style">
+      <UniqueIdentifier>{8dc92978-c85e-4771-86ed-2e665e011601}</UniqueIdentifier>
+    </Filter>
     <Filter Include="syntaxHelper">
       <UniqueIdentifier>{1a4f8e02-7b66-4f9b-9d3a-6c2e8b1d5f04}</UniqueIdentifier>
     </Filter>
@@ -162,6 +165,9 @@
     <ClCompile Include="fnumber.cpp" />
     <ClCompile Include="formatString.cpp" />
     <ClCompile Include="fstring.cpp" />
+    <ClCompile Include="graphics\border.cpp">
+      <Filter>graphics</Filter>
+    </ClCompile>
     <ClCompile Include="graphics\colour.cpp">
       <Filter>graphics</Filter>
     </ClCompile>
@@ -222,6 +228,12 @@
     <ClCompile Include="pictureRegistry.cpp" />
     <ClCompile Include="launchTicket.cpp" />
     <ClCompile Include="startProcess.cpp" />
+    <ClCompile Include="style\style.cpp">
+      <Filter>style</Filter>
+    </ClCompile>
+    <ClCompile Include="style\styleItem.cpp">
+      <Filter>style</Filter>
+    </ClCompile>
     <ClCompile Include="stringTokenizer.cpp" />
     <ClCompile Include="typeName.cpp" />
     <ClCompile Include="variant.cpp" />
@@ -402,6 +414,9 @@
     <ClInclude Include="fnumber.h" />
     <ClInclude Include="formatString.h" />
     <ClInclude Include="fstring.h" />
+    <ClInclude Include="graphics\border.h">
+      <Filter>graphics</Filter>
+    </ClInclude>
     <ClInclude Include="graphics\colour.h">
       <Filter>graphics</Filter>
     </ClInclude>
@@ -566,6 +581,12 @@
     </ClInclude>
     <ClInclude Include="spreadsheet\spreadsheetObject.h">
       <Filter>spreadsheet</Filter>
+    </ClInclude>
+    <ClInclude Include="style\style.h">
+      <Filter>style</Filter>
+    </ClInclude>
+    <ClInclude Include="style\styleItem.h">
+      <Filter>style</Filter>
     </ClInclude>
     <ClInclude Include="stringTokenizer.h" />
     <ClInclude Include="stringUtils.h" />

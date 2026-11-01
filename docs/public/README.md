@@ -51,6 +51,7 @@ Add a row to the table below when you add a document, so this folder can be read
 | [http-client.md](http-client.md) | HTTP and HTTPS from a script: the values, what they guarantee, where they stop |
 | [json.md](json.md) | JSON from a script: what reading gives, what the writer guarantees, where it stops |
 | [xml.md](xml.md) | XML from a script: the reader node by node, the writer, the encodings, what nothing outside the document can reach |
+| [style.md](style.md) | The style: the items the look is painted with, a light and a dark value for each, the platform's style and one lying over it |
 | [thin-client.md](thin-client.md) | The thin client: its parts, who does what, the document/view skeleton, spreadsheets, printing, a file base, what it guarantees |
 | [translations.md](translations.md) | The engine's own translations: one dictionary per language, chosen per thread by the base it works for; the base's locale; a language's name |
 | [vocabulary.md](vocabulary.md) | The words the engine is built in: door, owner, road, holder, refusal…; each with its rule and one place in the code where it holds |
