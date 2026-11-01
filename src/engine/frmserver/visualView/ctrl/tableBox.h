@@ -157,6 +157,9 @@ public:
 
 	virtual ~ibValueModelTableBox();
 
+	// Every column of this table, wherever it hangs (groups included).
+	std::vector<class ibValueModelTableBoxColumn*> GetColumns() const;
+
 	// Designer: rebuild the DEFAULT columns from the bound source explorer (walks the path to the leaf
 	// section / list). Shared by the drag-to-create drop and the inspector's Source-change refill.
 	virtual void RefillFromSource() override;
@@ -795,6 +798,13 @@ public:
 	// A column stands on the ROW being edited: its neighbours are the other cells of that row.
 	virtual ibChoiceHolder GetChoiceHolder() const override;
 
+	// What this column says about its choice over its attribute (issue #259) — as a form field says it.
+	virtual bool HasQuickChoice() const override;
+	virtual const ibChoiceParametersDescription* GetOwnChoiceParameters() const override {
+		return &m_propertyChoiceParameters->GetValueAsParametersDesc();
+	}
+	virtual bool GetOwnSelectMode(ibSelectMode& selectMode) const override;
+
 	//choice processing
 	virtual void ChoiceProcessing(ibValue& vSelected);
 
@@ -838,6 +848,14 @@ private:
 	ibPropertyList* m_propertyChoiceForm = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryData, ibT("ChoiceForm"), _("Choice form"),
 		_("Which form opens when the user presses Select in the cell: one of the forms of the value's type. Empty: the type's default choice form."),
 		&ibValueModelTableBoxColumn::GetChoiceForm);
+	ibPropertyEnum<ibValueEnumQuickChoiceMode>* m_propertyQuickChoice = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumQuickChoiceMode>>(m_categoryData, ibT("QuickChoice"), _("Quick choice"),
+		_("How a reference is picked into the cell when Select is pressed. Auto: as its type says (the catalog's or the document's own Quick choice). Use: a drop-down of the matching items. Don't use: the list form. A choice narrowed by choice parameters always opens the list form."),
+		ibQuickChoiceMode::ibQuickChoiceMode_Auto);
+	ibPropertyEnum<ibValueEnumChoiceFoldersAndItems>* m_propertyChoiceFoldersAndItems = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumChoiceFoldersAndItems>>(m_categoryData, ibT("ChoiceFoldersAndItems"), _("Choice folders and items"),
+		_("For a column referring to a hierarchical catalog: what may be picked into its cells - items, folders, or both. Auto: what the bound attribute's Select says."),
+		ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_Auto);
+	ibPropertyChoiceParameters* m_propertyChoiceParameters = ibPropertyObject::CreateProperty<ibPropertyChoiceParameters>(m_categoryData, ibT("ChoiceParameters"), _("Choice parameters"),
+		_("What is shown in the list, on this form: a row per parameter - which field of the chosen object it filters, which cell of the row or field of the object gives the value, and what becomes of a chosen value when it changes. The rows stand over the bound attribute's: a row for the same parameter replaces the attribute's, the others are added to them."));
 
 	ibPropertyCategory* m_categoryButton = ibPropertyObject::CreatePropertyCategory(ibT("Button"), _("Button"));
 	ibPropertyBoolean* m_propertySelectButton = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryButton, ibT("ButtonSelect"), _("Select button"),

@@ -22,6 +22,25 @@ enum ibTabLocation {
 	ibTabLocation_Bottom = 8
 };
 
+// How a form field is filled, over what its type says (the metaobject's QuickChoice): Auto takes the type's answer,
+// Use offers the drop-down of the matching items for a reference whose type does not, DontUse opens the list form for
+// one whose type does. A field of a number or a date keeps its own window either way.
+enum ibQuickChoiceMode {
+	ibQuickChoiceMode_Auto = 0,
+	ibQuickChoiceMode_Use,
+	ibQuickChoiceMode_DontUse
+};
+
+// What a form field may be given from a hierarchical catalog, over what its attribute says (the attribute's Select):
+// Auto takes the attribute's answer. The other three are ibSelectMode's own numbers, so the field's answer is that
+// mode as it stands.
+enum ibChoiceFoldersAndItems {
+	ibChoiceFoldersAndItems_Auto = 0,
+	ibChoiceFoldersAndItems_Items = 1,
+	ibChoiceFoldersAndItems_Folders,
+	ibChoiceFoldersAndItems_FoldersAndItems
+};
+
 #include "frmserver/frmserver.h"
 
 #pragma region enumeration
@@ -104,6 +123,31 @@ class FRMSERVER_API ibValueEnumRepresentation :
 		AddEnumeration(ibRepresentation::ibRepresentation_Text, ibT("Text"), _("Text"));
 		AddEnumeration(ibRepresentation::ibRepresentation_Picture, ibT("Picture"), _("Picture"));
 		AddEnumeration(ibRepresentation::ibRepresentation_PictureAndText, ibT("PictureAndText"), _("Picture and text"));
+	}
+private:
+};
+
+class FRMSERVER_API ibValueEnumQuickChoiceMode :
+	public ibValueEnumeration<ibQuickChoiceMode> {
+	public:
+	ibValueEnumQuickChoiceMode() : ibValueEnumeration() {}
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibQuickChoiceMode::ibQuickChoiceMode_Auto, ibT("Auto"), _("Auto"));
+		AddEnumeration(ibQuickChoiceMode::ibQuickChoiceMode_Use, ibT("Use"), _("Use"));
+		AddEnumeration(ibQuickChoiceMode::ibQuickChoiceMode_DontUse, ibT("DontUse"), _("Don't use"));
+	}
+private:
+};
+
+class FRMSERVER_API ibValueEnumChoiceFoldersAndItems :
+	public ibValueEnumeration<ibChoiceFoldersAndItems> {
+	public:
+	ibValueEnumChoiceFoldersAndItems() : ibValueEnumeration() {}
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_Auto, ibT("Auto"), _("Auto"));
+		AddEnumeration(ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_Items, ibT("Items"), _("Items"));
+		AddEnumeration(ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_Folders, ibT("Folders"), _("Folders"));
+		AddEnumeration(ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_FoldersAndItems, ibT("FoldersAndItems"), _("Folders and items"));
 	}
 private:
 };

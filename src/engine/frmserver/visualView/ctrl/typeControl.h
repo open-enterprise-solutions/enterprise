@@ -111,6 +111,22 @@ public:
 	// Empty by default: a control bound to nothing — a filter cell, a script's value — holds no fields
 	// and nothing is chosen within it.
 	virtual ibChoiceHolder GetChoiceHolder() const { return ibChoiceHolder(); }
+
+	// ⭐ WHAT THE FIELD ITSELF SAYS ABOUT ITS CHOICE, over what its attribute says (issue #259) — the choice
+	// parameters of its own, and what may be picked from a hierarchy. Both default to "nothing": the attribute's
+	// answer stands. A text field and a table column carry them as properties.
+	virtual const ibChoiceParametersDescription* GetOwnChoiceParameters() const { return nullptr; }
+	virtual bool GetOwnSelectMode(ibSelectMode& selectMode) const { return false; }
+
+	// The field's QuickChoice (ibQuickChoiceMode) over what the type answers: Use offers the drop-down for a
+	// reference whose type does not, DontUse takes it from one whose type does. A number, a date and a boolean keep
+	// their own windows either way — it is a question about lists of items.
+	static bool HasQuickChoice(int quickChoiceMode, bool byType, const ibClassID& clsid);
+
+	// ⭐ THIS FIELD'S VALUE CHANGED — a field beside it, chosen under a row of its OWN choice parameters that names
+	// this one, is emptied as the attribute's rows empty it (ibChoiceLinkResolver::ClearLinked). `neighbours` are the
+	// fields standing in the same holder: the form's fields for a form field, the table's columns for a column.
+	void ClearOwnLinked(const std::vector<ibTypeControlFactory*>& neighbours) const;
 };
 
 #endif

@@ -1,6 +1,7 @@
 #include "variantChoiceLink.h"   // …and, beside these two classes, the two name lookups they draw with
 #include "backend/propertyManager/property/propertyChoiceLink.h"   // ibFieldReferenceTypes, ibChoiceOwnerRow — declared there
 #include "backend/choiceLinkResolver.h"                    // CanGovern — the reading this offer must agree with
+#include "backend/backend_type.h"                          // ibBackendTypeSourceFactory — a form field, asked as its attribute
 #include "backend/metaData.h"                              // …and the counter a configuration moves when something is removed
 #include "backend/objCtor.h"                               // ibCtorMetaValueType — what a reference type names, by its id
 #include "backend/metaCollection/partial/commonObject.h"   // the objects and their fields
@@ -14,9 +15,33 @@ namespace {
 // The property family hands its owner over as an ibPropertyObject, so somebody has to say what that
 // owner is; saying it in five places is five chances for the five to stop agreeing (Max, 2026-09-23,
 // reading this file: "you have thrown casts about here").
+//
+// ⭐ A FORM FIELD IS ASKED AS THE ATTRIBUTE IT IS BOUND TO (issue #259). Its own choice parameters are the
+// same table over the same neighbours — at run time it reads them from the same holder the attribute's are
+// read from (ibChoiceLinkResolver::Resolve) — so every list below is the bound attribute's. A field bound to
+// no attribute (a form attribute of its own, a list's column) has none to offer.
+//
+// ⚠ NOT BY THE BINDING'S WALK ALONE: on a form being edited the walk answers with its source's COLUMN, which
+// stands for the attribute and is not it. So the field is named as the run time names it — the leaf among the
+// fields of the form's source (ibChoiceLinkResolver::FieldOf) — and a table column, whose fields stand in a
+// row there is none of here, by the leaf's own metaID.
 const ibValueMetaObjectAttributeBase* SelfAttribute(const ibPropertyObject* owner)
 {
-	return dynamic_cast<const ibValueMetaObjectAttributeBase*>(owner);
+	if (const ibValueMetaObjectAttributeBase* attribute = dynamic_cast<const ibValueMetaObjectAttributeBase*>(owner))
+		return attribute;
+	const ibBackendTypeSourceFactory* bound = dynamic_cast<const ibBackendTypeSourceFactory*>(owner);
+	const ibSourceDescription* path = bound != nullptr ? &bound->GetSourceDesc() : nullptr;
+	if (path == nullptr || path->GetPath().size() < 2)
+		return nullptr;
+
+	ibBackendFormAttributeValue* head = bound->FindSourceHolder(path->GetFirst());
+	if (const ibValueMetaObjectAttributeBase* field = ibChoiceLinkResolver::FieldOf(
+			ibChoiceHolder(head != nullptr ? head->GetSourceValue() : nullptr), bound))
+		return field;
+
+	const ibMetaData* metaData = owner->GetMetaData();
+	return metaData != nullptr ? dynamic_cast<const ibValueMetaObjectAttributeBase*>(
+		metaData->FindAnyObjectByFilter(path->GetLeaf(), true)) : nullptr;
 }
 
 ibMetaID SelfId(const ibPropertyObject* owner)

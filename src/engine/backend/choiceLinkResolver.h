@@ -96,6 +96,12 @@ public:
 	static ibChoiceCondition Resolve(const ibChoiceHolder& holder,
 		const ibValueMetaObjectAttributeBase* field);
 
+	// ⭐ …AND A FORM FIELD MAY SAY MORE THAN ITS ATTRIBUTE. Its own rows are the same table, read against the
+	// same holder; a row naming a parameter the attribute also names replaces the attribute's row, the others
+	// are added to them. Empty rows: exactly the attribute's answer above (issue #259).
+	static ibChoiceCondition Resolve(const ibChoiceHolder& holder,
+		const ibValueMetaObjectAttributeBase* field, const ibChoiceParametersDescription& own);
+
 	// ⭐⭐ A NEW RECORD MADE IN A NARROWED LIST IS BORN MATCHING IT. The list a person pressed Add in
 	// shows only contracts of one counterparty; a new row without that counterparty is not merely
 	// inconvenient, it VANISHES from the list the moment it is written — created in front of somebody
@@ -118,6 +124,12 @@ public:
 	// as stale. The walk carries on until nothing more is emptied — a chain nobody would think to write
 	// a handler for, and the first one a person builds by accident.
 	static void ClearLinked(ibChoiceHolder& holder, const ibMetaID& edited);
+
+	// ⭐ THE SAME EMPTYING, ASKED BY A FORM FIELD'S OWN ROWS: `field` stands in `holder` and was chosen under
+	// `rows`, and `edited` just changed there. Emptied the way the attribute's own rows empty it, unless every
+	// row that names `edited` says Keep. A form's rows are the form's, so it is the form's edit that asks.
+	static void ClearLinked(ibChoiceHolder& holder, const ibMetaID& edited,
+		const ibValueMetaObjectAttributeBase* field, const ibChoiceParametersDescription& rows);
 
 	// ⭐⭐ THE VALUE, ADJUSTED TO WHAT ITS LINK SETTLES ON — the ONE line a holder writes through. A
 	// field's CONTOUR (what it may ever hold) is the attribute's own answer and needs nobody's help;

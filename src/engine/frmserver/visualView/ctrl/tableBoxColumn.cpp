@@ -315,8 +315,33 @@ bool ibValueModelTableBoxColumn::SetControlValue(const ibValue& varControlVal)
 	if (currentLine != nullptr)
 		currentLine->SetValueByMetaID(GetModelColumn(), varControlVal);
 
+	// A cell of the same row chosen under a row of its column's own that names this column is stale now.
+	if (currentLine != nullptr) {
+		if (const ibValueModelTableBox* table = GetOwner()) {
+			const std::vector<ibValueModelTableBoxColumn*> columns = table->GetColumns();
+			ClearOwnLinked(std::vector<ibTypeControlFactory*>(columns.begin(), columns.end()));
+		}
+	}
+
 	if (m_formOwner != nullptr)
 		m_formOwner->RefreshForm();
+	return true;
+}
+
+bool ibValueModelTableBoxColumn::HasQuickChoice() const
+{
+	ibValue current;
+	GetControlValue(current);
+	return ibTypeControlFactory::HasQuickChoice(m_propertyQuickChoice->GetValueAsEnum(),
+		ibValueControl::HasQuickChoice(), current.GetClassType());
+}
+
+bool ibValueModelTableBoxColumn::GetOwnSelectMode(ibSelectMode& selectMode) const
+{
+	const ibChoiceFoldersAndItems own = m_propertyChoiceFoldersAndItems->GetValueAsEnum();
+	if (own == ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_Auto)
+		return false;
+	selectMode = static_cast<ibSelectMode>(own);
 	return true;
 }
 
@@ -376,6 +401,9 @@ bool ibValueModelTableBoxColumn::ReadData(const ibDataNode& node)
 	m_propertyReorderable->SetNodeValue(node.GetProperty(m_propertyReorderable->GetName()));
 	m_propertyChoiceForm->SetNodeValue(node.GetProperty(m_propertyChoiceForm->GetName()));
 	m_propertySource->SetNodeValue(node.GetProperty(m_propertySource->GetName()));
+	m_propertyQuickChoice->SetNodeValue(node.GetProperty(m_propertyQuickChoice->GetName()));
+	m_propertyChoiceFoldersAndItems->SetNodeValue(node.GetProperty(m_propertyChoiceFoldersAndItems->GetName()));
+	m_propertyChoiceParameters->SetNodeValue(node.GetProperty(m_propertyChoiceParameters->GetName()));
 
 	//events
 	m_eventOnChange->SetNodeValue(node.GetProperty(m_eventOnChange->GetName()));
@@ -411,6 +439,9 @@ bool ibValueModelTableBoxColumn::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyReorderable->GetName(), m_propertyReorderable->GetNodeValue());
 	node.SetProperty(m_propertyChoiceForm->GetName(), m_propertyChoiceForm->GetNodeValue());
 	node.SetProperty(m_propertySource->GetName(), m_propertySource->GetNodeValue());
+	node.SetProperty(m_propertyQuickChoice->GetName(), m_propertyQuickChoice->GetNodeValue());
+	node.SetProperty(m_propertyChoiceFoldersAndItems->GetName(), m_propertyChoiceFoldersAndItems->GetNodeValue());
+	node.SetProperty(m_propertyChoiceParameters->GetName(), m_propertyChoiceParameters->GetNodeValue());
 
 	//events
 	node.SetProperty(m_eventOnChange->GetName(), m_eventOnChange->GetNodeValue());

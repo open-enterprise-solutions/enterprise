@@ -271,6 +271,22 @@ ibChoiceCondition ibChoiceLinkResolver::Resolve(const ibChoiceHolder& holder,
 	return condition;
 }
 
+ibChoiceCondition ibChoiceLinkResolver::Resolve(const ibChoiceHolder& holder,
+	const ibValueMetaObjectAttributeBase* field, const ibChoiceParametersDescription& own)
+{
+	if (!own.IsOk())
+		return Resolve(holder, field);
+
+	// The attribute's rows, then the field's over them — SetRow replaces a row of the same parameter.
+	ibChoiceParametersDescription merged = field != nullptr ? field->GetChoiceParameters() : ibChoiceParametersDescription();
+	for (const ibChoiceParameterRowDescription& row : own.m_rows)
+		merged.SetRow(row);
+
+	ibChoiceCondition condition;
+	ResolveParameters(merged, holder, condition);
+	return condition;
+}
+
 ibValue ibChoiceLinkResolver::Adjust(const ibChoiceHolder& holder,
 	const ibValueMetaObjectAttributeBase* field, const ibValue& value)
 {
@@ -321,6 +337,49 @@ ibValue ibChoiceLinkResolver::Adjust(const ibChoiceHolder& holder,
 	return adjusted;
 }
 
+namespace {
+
+// ⭐ ONE FIELD EMPTIED BECAUSE `edited` CHANGED UNDER IT — the step both ClearLinked below take, the
+// attribute's rows and a form field's alike, so the two cannot empty a field two different ways.
+void EmptyField(ibChoiceHolder& holder, const ibMetaData* metaData,
+	const ibValueMetaObjectAttributeBase* field, const ibMetaID& edited)
+{
+	// ⭐ THE EMPTY VALUE OF ITS OWN TYPE, not a bare undefined: a field declared as one reference
+	// shows an empty reference of it, which is what the control was showing before anything was
+	// chosen. A composite field has no single such value, and undefined is the honest one there.
+	// What the field may HOLD decides it, not what it declares: a characteristic declares one type
+	// and holds its chart's several.
+	const ibTypeDescription& typeDesc = field->GetTypeValueDesc();
+	const ibValue empty = typeDesc.GetClsidCount() == 1 ? metaData->CreateObject(typeDesc.GetFirstClsid()) : ibValue();
+
+	// ⭐ ALREADY CLEARED IS NOT CLEARED AGAIN — but "cleared" means what the write WOULD store, and that
+	// is the empty value narrowed by the field's own link: a characteristic under a numeric kind is 0,
+	// not undefined. Writing the row's kind into a new row used to empty an already empty cell all the
+	// same — a write per row for no change (2026-09-24, the write bench). Judged by the raw empty value
+	// instead, the skip left a new row's characteristic UNDEFINED under a chosen kind, so clicking it
+	// asked for a type the kind had already settled (Max, 2026-09-24: "I re-choose the kind, and the
+	// value on the right still offers the type choice").
+	const ibValue cleared = ibChoiceLinkResolver::Adjust(holder, field, empty);
+	ibSourceDescription at;
+	at.AppendSource(field->GetMetaID());
+	ibValue current;
+	if (holder.GetValue(at, current) && current.GetClassType() == cleared.GetClassType() && current == cleared)
+		return;
+
+	// ⚠ SAID ONLY WHEN SOMETHING WAS THERE. An empty cell getting its kind's empty value lost nothing —
+	// it is a new row typed, and in a posting pass that is every row: the line alone was 3 s of 7 on
+	// twenty thousand register lines given a kind (2026-09-24, the write bench, Debug).
+	if (!current.IsEmpty())
+		ibJournalInfo(ibT("choice.clear"), ibT("'%s' (#%d) emptied - #%d changed under it"),
+			field->GetName(), field->GetMetaID(), edited);
+
+	// Written through the source's own hop gate — the door every kind of source answers, so a
+	// row and an object are not told apart here either.
+	holder.SetValue(field->GetMetaID(), cleared);
+}
+
+}
+
 // ⭐⭐ THE SOURCE'S OWN FIELDS, EMPTIED WHERE THEY WERE CHOSEN WITHIN THE EDITED ONE. Everything this
 // needs is already written down and asked of whoever holds it: the source names its metaobject, the
 // metaobject lists its fields, and each field says what governs it. No cast, and no second idea of
@@ -356,37 +415,22 @@ void ibChoiceLinkResolver::ClearLinked(ibChoiceHolder& holder, const ibMetaID& e
 		if (!clear)
 			continue;
 
-		// ⭐ THE EMPTY VALUE OF ITS OWN TYPE, not a bare undefined: a field declared as one reference
-		// shows an empty reference of it, which is what the control was showing before anything was
-		// chosen. A composite field has no single such value, and undefined is the honest one there.
-		// What the field may HOLD decides it, not what it declares: a characteristic declares one type
-		// and holds its chart's several.
-		const ibTypeDescription& typeDesc = field->GetTypeValueDesc();
-		const ibValue empty = typeDesc.GetClsidCount() == 1 ? metaData->CreateObject(typeDesc.GetFirstClsid()) : ibValue();
-
-		// ⭐ ALREADY CLEARED IS NOT CLEARED AGAIN — but "cleared" means what the write WOULD store, and that
-		// is the empty value narrowed by the field's own link: a characteristic under a numeric kind is 0,
-		// not undefined. Writing the row's kind into a new row used to empty an already empty cell all the
-		// same — a write per row for no change (2026-09-24, the write bench). Judged by the raw empty value
-		// instead, the skip left a new row's characteristic UNDEFINED under a chosen kind, so clicking it
-		// asked for a type the kind had already settled (Max, 2026-09-24: "I re-choose the kind, and the
-		// value on the right still offers the type choice").
-		const ibValue cleared = Adjust(holder, field, empty);
-		ibSourceDescription at;
-		at.AppendSource(field->GetMetaID());
-		ibValue current;
-		if (holder.GetValue(at, current) && current.GetClassType() == cleared.GetClassType() && current == cleared)
-			continue;
-
-		// ⚠ SAID ONLY WHEN SOMETHING WAS THERE. An empty cell getting its kind's empty value lost nothing —
-		// it is a new row typed, and in a posting pass that is every row: the line alone was 3 s of 7 on
-		// twenty thousand register lines given a kind (2026-09-24, the write bench, Debug).
-		if (!current.IsEmpty())
-			ibJournalInfo(ibT("choice.clear"), ibT("'%s' (#%d) emptied - #%d changed under it"),
-				field->GetName(), field->GetMetaID(), edited);
-
-		// Written through the source's own hop gate — the door every kind of source answers, so a
-		// row and an object are not told apart here either.
-		holder.SetValue(field->GetMetaID(), cleared);
+		EmptyField(holder, metaData, field, edited);
 	}
+}
+
+void ibChoiceLinkResolver::ClearLinked(ibChoiceHolder& holder, const ibMetaID& edited,
+	const ibValueMetaObjectAttributeBase* field, const ibChoiceParametersDescription& rows)
+{
+	const ibMetaData* metaData = holder.GetMetaData();
+	if (field == nullptr || field->IsDeleted() || metaData == nullptr || edited == 0 || field->GetMetaID() == edited)
+		return;
+
+	bool clear = false;
+	for (const ibChoiceParameterRowDescription& row : rows.m_rows) {
+		if (row.m_source.GetLeaf() == edited && row.m_onChange != ibChoiceParameterOnChange::Keep)
+			clear = true;
+	}
+	if (clear)
+		EmptyField(holder, metaData, field, edited);
 }
