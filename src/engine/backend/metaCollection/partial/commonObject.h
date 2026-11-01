@@ -1461,6 +1461,50 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 		return GetReferencePresentation() == ibDataPresentation_Code ? GetDataCode() : GetDataDescription();
 	}
 
+	// THE SHAPE OF THE CODE AND OF THE DESCRIPTION - see m_propertyCodeType.
+	ibCodeType GetCodeType() const { return m_propertyCodeType->GetValueAsEnum(); }
+	unsigned int GetCodeLength() const { return m_propertyCodeLength->GetValueAsUInteger(); }
+	unsigned int GetDescriptionLength() const { return m_propertyDescriptionLength->GetValueAsUInteger(); }
+
+	// The longest a code / a description may be declared: a number holds MAX_PRECISION_NUMBER digits,
+	// a string MAX_LENGTH_STRING characters. Whether an index of that width fits the base is the
+	// apply's question (IndexKeyFitsOrSay), not this one.
+	static unsigned int GetMaxCodeLength(ibCodeType type) {
+		return type == ibCodeType_Number ? MAX_PRECISION_NUMBER : MAX_LENGTH_STRING;
+	}
+	static unsigned int GetMaxDescriptionLength() { return MAX_LENGTH_STRING; }
+
+	// TURN THE DECLARATION INTO THE TWO ATTRIBUTES IT GOVERNS, as ApplyHierarchyType does for Parent.
+	// Restated whenever it changes and after a load, so the attribute never says anything else.
+	void ApplyCodeShape() {
+		ibTypeDescription code;
+		if (GetCodeType() == ibCodeType_Number)
+			code.SetNumber((unsigned char)GetCodeLength(), 0, /*nonNegative*/ true);
+		else
+			code.SetString((unsigned short)GetCodeLength());
+		(*m_propertyAttributeCode)->GetTypeDesc().SetDefaultMetaType(code);
+
+		ibTypeDescription description;
+		description.SetString((unsigned short)GetDescriptionLength());
+		(*m_propertyAttributeDescription)->GetTypeDesc().SetDefaultMetaType(description);
+	}
+
+	// IS THIS A SHAPE THE COLUMNS CAN HAVE? A type that is String or Number, a code length of 1 to
+	// GetMaxCodeLength(type), a description length of 1 to GetMaxDescriptionLength(). Asked of a value typed
+	// (OnPropertyChanging) and of a value read (ReadData, which raises), so a file cannot declare what a
+	// person cannot. Refused in words that name the object, false.
+	bool CheckCodeShape(ibCodeType type, unsigned int codeLength, unsigned int descriptionLength, ibString* refusal) const;
+
+	// DOES A PREDEFINED ITEM FIT THE SHAPE? AppendPredefinedValue and SetPredefinedValue ask it themselves
+	// and raise, so no road that declares an item has to remember to; the apply asks it again, which is
+	// where an item declared before the length was lowered is stopped before any DDL. An empty code always
+	// fits: it is generated on write. Refused in words that name the item, false.
+	bool CheckPredefinedValue(const ibString& name, const ibString& code, const ibString& description, ibString* refusal) const;
+
+	// The code as the column stores it - a number for a number code. A code that does not read as one
+	// is empty (CheckPredefinedValue refuses it first).
+	ibValue GetPredefinedCodeValue(const ibString& code) const;
+
 	// A catalog / chart IS hierarchical by its class — it returns its parent attribute (the record queryable forwards
 	// here, no cast). Body in commonObjectMetaQuery.cpp (attribute→column upcast complete there).
 	virtual const ibBackendQueryColumn* GetHierarchyColumn() const override;
@@ -1590,6 +1634,10 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 
 protected:
 
+	// CheckPredefinedValue, raised - the refusal is the exception's description.
+	void RaiseUnlessPredefinedFits(const ibString& name, const ibString& code, const ibString& description) const;
+
+	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue) override;
 	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue) override;
 
 	// Declare the main table (via the base) + the predefined values as its SEED rows (cells keyed by
@@ -1663,6 +1711,20 @@ protected:
 
 	// HOW AN ITEM READS wherever a reference to it is shown - see ibDataPresentation.
 	ibPropertyEnum<ibValueEnumDataPresentation>* m_propertyDataPresentation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumDataPresentation>>(m_categoryPresentation, ibT("DataPresentation"), _("Data presentation"), _("How a reference to an item reads wherever it is shown - in a field, a list, a report: by its Description (the default for a catalog) or by its Code (the default for a chart of accounts, whose accounts are named by their numbers)."), ibDataPresentation_Description);
+
+	// WHAT THE CODE AND THE DESCRIPTION ARE - the shape of the two attributes every item has. Declared on
+	// the kind, as the hierarchy type is, and restated on the attributes themselves (ApplyCodeShape): the
+	// column, the generator's zero padding, the narrowing of an assigned value and the check of a
+	// predefined item all ask the ATTRIBUTE, so none of them has to learn that the shape can be chosen.
+	// The defaults are what the two were before they could be (String(8), String(150)); a configuration
+	// saved before then reads back as it was. Changing one is a restructuring - config_apply alters the
+	// column, and refuses first, naming the object, when a predefined item or a stored value would not fit
+	// (open-enterprise-solutions/enterprise#274). Where the stored values do fit, a lowering is the
+	// engine's to take: Firebird does not narrow a VARCHAR at all and SQLite changes no type in place, as
+	// for any string attribute.
+	ibPropertyEnum<ibValueEnumCodeType>* m_propertyCodeType = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumCodeType>>(m_categoryData, ibT("CodeType"), _("Code type"), _("What the code is made of. String (the default): any characters, and SetNewCode may give it a prefix. Number: digits only, numbered and ordered as a number. Switching it clears the codes already stored."), ibCodeType_String);
+	ibPropertyUInteger* m_propertyCodeLength = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categoryData, ibT("CodeLength"), _("Code length"), _("How long the code may be: characters for a string code (1 to 1024), digits for a number code (1 to 32). 8 by default. A generated string code is padded with zeros to this length."), 8);
+	ibPropertyUInteger* m_propertyDescriptionLength = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categoryData, ibT("DescriptionLength"), _("Description length"), _("How many characters the description may hold (1 to 1024). 150 by default."), 150);
 
 	//create default attributes
 	ibPropertyContainer<>* m_propertyAttributePredefined = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateString(ibT("PredefinedName"), _("Predefined name"), _("The name of an item the configuration itself declares (a predefined item) - what code refers to it by, as Catalogs.<Name>.<PredefinedName>. Empty for items created by users; a predefined item cannot be deleted."), 150, ibItemMode::ibItemMode_Folder_Item));

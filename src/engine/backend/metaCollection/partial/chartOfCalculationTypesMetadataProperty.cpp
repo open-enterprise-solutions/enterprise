@@ -9,7 +9,7 @@ void ibValueMetaObjectChartOfCalculationTypes::OnPropertyCreated(ibProperty* pro
 
 bool ibValueMetaObjectChartOfCalculationTypes::OnPropertyChanging(ibProperty* property, const ibVariant& newValue)
 {
-	return ibValueMetaObjectRecordDataMutableRef::OnPropertyChanging(property, newValue);
+	return ibValueMetaObjectRecordDataHierarchyMutableRef::OnPropertyChanging(property, newValue);
 }
 
 void ibValueMetaObjectChartOfCalculationTypes::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)

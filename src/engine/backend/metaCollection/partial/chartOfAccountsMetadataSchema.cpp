@@ -36,7 +36,7 @@ void ibValueMetaObjectChartOfAccounts::ContributeTables(ibSchemaSnapshot& out) c
 	const ibString chartName = GetName();
 
 	out.Shared(kindsTable->GetMetaID(), tableName).m_beforeChange =
-		[tableName, ceiling, chartName](ibRestructureInfo* report) -> bool {
+		[tableName, ceiling, chartName](ibRestructureInfo* report, const ibSchemaTable*) -> bool {
 			// Rows per account, counted by the DATABASE; the comparison is done HERE. Filtering the
 			// aggregate in SQL would mean HAVING over an alias, which not every dialect renders — and a
 			// rule that cannot run must not be the thing deciding whether a change is allowed. So it asks

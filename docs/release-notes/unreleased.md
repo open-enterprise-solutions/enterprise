@@ -112,6 +112,26 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   to save.
 - **Help → About** is drawn: the build, the base, the application, the user, the locale, the plugins.
 
+## Metadata
+
+- **The code and the description of a catalog or a chart have a length and a type of their own.**
+  `CodeType` (String or Number), `CodeLength` and `DescriptionLength`, under Data, in the designer and
+  through `metadata_set`; until now every code was `String(8)` and every description `String(150)`,
+  which is still the default, so a saved configuration reads back as it was. A number code holds
+  digits only and is numbered and ordered as a number; the quick choice finds it by its beginning, as
+  it does a string code (`12` offers `123`). Changing one is a restructuring: `config_apply` alters the
+  column. Switching the type clears the codes already stored, as any change of type does. A length
+  lowered below codes or descriptions already stored is refused naming the object and how many items
+  hold more, before any table is touched; where they do fit, narrowing the column is the engine's, as
+  for any string attribute — Firebird does not narrow a VARCHAR, SQLite changes no type in place. A
+  saved length no column can have (0, or past 1024 characters or 32 digits) is refused at the load,
+  naming the object, instead of being cut down to fit a smaller integer.
+- **A predefined item whose code or description does not fit is refused naming the item** — by the
+  engine as it is declared, whichever road declares it (`predefined_add`, the designer's list), and by
+  `config_apply` before any table is touched, for an item declared before the length was lowered. It
+  used to reach the engine and come back as `string right truncation, expected length 8, actual 9`,
+  with no object and no item (#274).
+
 ## Fixes
 
 - **A module nobody has compiled yet is compiled once.** Sessions entering a base together, with the

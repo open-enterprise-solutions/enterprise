@@ -146,6 +146,7 @@ add_executable(oes_tests
     test_accountingTotals.cpp
     test_sequenceBorder.cpp
     test_typeChangeLedger.cpp
+    test_codeLength.cpp
     test_acceptanceCatalogs.cpp
     test_tabularEnumPersist.cpp
     test_acceptanceAccumulation.cpp

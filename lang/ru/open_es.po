@@ -13602,3 +13602,82 @@ msgstr "Ассистент с доступом к данным"
 #: src/engine/frmclient/mainFrame/settings/settingsdialog.cpp:39
 msgid "Debugging"
 msgstr "Отладка"
+
+#: src/engine/backend/metaCollection/partial/commonObject.h:1725
+msgid "Code type"
+msgstr "Тип кода"
+
+#: src/engine/backend/metaCollection/partial/commonObject.h:1725
+msgid "What the code is made of. String (the default): any characters, and SetNewCode may give it a prefix. Number: digits only, numbered and ordered as a number. Switching it clears the codes already stored."
+msgstr "Из чего состоит код. Строка (по умолчанию): любые символы, и SetNewCode может дать ему префикс. Число: только цифры, код нумеруется и упорядочивается как число. При переключении уже сохранённые коды очищаются."
+
+#: src/engine/backend/metaCollection/partial/commonObject.h:1726
+msgid "Code length"
+msgstr "Длина кода"
+
+#: src/engine/backend/metaCollection/partial/commonObject.h:1726
+msgid "How long the code may be: characters for a string code (1 to 1024), digits for a number code (1 to 32). 8 by default. A generated string code is padded with zeros to this length."
+msgstr "Какой длины может быть код: символов для строкового кода (от 1 до 1024), цифр для числового (от 1 до 32). По умолчанию 8. Сгенерированный строковый код дополняется нулями до этой длины."
+
+#: src/engine/backend/metaCollection/partial/commonObject.h:1727
+msgid "Description length"
+msgstr "Длина наименования"
+
+#: src/engine/backend/metaCollection/partial/commonObject.h:1727
+msgid "How many characters the description may hold (1 to 1024). 150 by default."
+msgstr "Сколько символов может содержать наименование (от 1 до 1024). По умолчанию 150."
+
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:1251
+#, c-format
+msgid "%s: the saved %s cannot be read"
+msgstr "%s: сохранённое значение %s не читается"
+
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:1274
+#, c-format
+msgid "%s: the predefined item %s has the code '%s', and the code of %s is a number - digits only"
+msgstr "%s: у предопределённого элемента %s код '%s', а код %s - число: допустимы только цифры"
+
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:1284
+#, c-format
+msgid "%s: the predefined item %s has the code '%s' of %u digits, and the code length is %u - raise CodeLength or shorten the code"
+msgstr "%s: у предопределённого элемента %s код '%s' из %u цифр, а длина кода - %u: увеличьте CodeLength или сократите код"
+
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:1289
+#, c-format
+msgid "%s: the predefined item %s has the code '%s' of %u characters, and the code length is %u - raise CodeLength or shorten the code"
+msgstr "%s: у предопределённого элемента %s код '%s' из %u символов, а длина кода - %u: увеличьте CodeLength или сократите код"
+
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:1296
+#, c-format
+msgid "%s: the predefined item %s has a description of %u characters, and the description length is %u - raise DescriptionLength or shorten the description"
+msgstr "%s: у предопределённого элемента %s наименование из %u символов, а длина наименования - %u: увеличьте DescriptionLength или сократите наименование"
+
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:1318
+#, c-format
+msgid "%s: CodeType must be String or Number"
+msgstr "%s: CodeType должен быть String или Number"
+
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:1321
+#, c-format
+msgid "%s: CodeLength %u is not a length a number code can have - 1 to %u digits"
+msgstr "%s: CodeLength %u - недопустимая длина числового кода: от 1 до %u цифр"
+
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:1322
+#, c-format
+msgid "%s: CodeLength %u is not a length a string code can have - 1 to %u characters"
+msgstr "%s: CodeLength %u - недопустимая длина строкового кода: от 1 до %u символов"
+
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:1326
+#, c-format
+msgid "%s: DescriptionLength %u is not a length a description can have - 1 to %u characters"
+msgstr "%s: DescriptionLength %u - недопустимая длина наименования: от 1 до %u символов"
+
+#: src/engine/backend/metaCollection/partial/commonObjectSchema.cpp:347
+#, c-format
+msgid "%s: %lld stored item(s) have a code longer than %u - shorten those codes before lowering CodeLength"
+msgstr "%s: у %lld сохранённых элементов код длиннее %u - сократите эти коды, прежде чем уменьшать CodeLength"
+
+#: src/engine/backend/metaCollection/partial/commonObjectSchema.cpp:354
+#, c-format
+msgid "%s: %lld stored item(s) have a description longer than %u - shorten those descriptions before lowering DescriptionLength"
+msgstr "%s: у %lld сохранённых элементов наименование длиннее %u - сократите эти наименования, прежде чем уменьшать DescriptionLength"

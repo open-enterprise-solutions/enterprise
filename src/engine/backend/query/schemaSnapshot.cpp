@@ -906,7 +906,7 @@ int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& targ
 	// sees every objection at once instead of one per attempt.
 	bool refused = false;
 	for (const ibSchemaTable& cur : target.Tables()) {
-		if (cur.m_beforeChange && !cur.m_beforeChange(report))
+		if (cur.m_beforeChange && !cur.m_beforeChange(report, baseline != nullptr ? baseline->Find(cur.m_id) : nullptr))
 			refused = true;
 	}
 

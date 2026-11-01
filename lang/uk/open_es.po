@@ -13599,3 +13599,82 @@ msgstr "Асистент із доступом до даних"
 #: src/engine/frmclient/mainFrame/settings/settingsdialog.cpp:39
 msgid "Debugging"
 msgstr "Налагодження"
+
+#: src/engine/backend/metaCollection/partial/commonObject.h:1725
+msgid "Code type"
+msgstr "Тип коду"
+
+#: src/engine/backend/metaCollection/partial/commonObject.h:1725
+msgid "What the code is made of. String (the default): any characters, and SetNewCode may give it a prefix. Number: digits only, numbered and ordered as a number. Switching it clears the codes already stored."
+msgstr "З чого складається код. Рядок (за замовчуванням): будь-які символи, і SetNewCode може дати йому префікс. Число: лише цифри, код нумерується і впорядковується як число. Під час перемикання вже збережені коди очищаються."
+
+#: src/engine/backend/metaCollection/partial/commonObject.h:1726
+msgid "Code length"
+msgstr "Довжина коду"
+
+#: src/engine/backend/metaCollection/partial/commonObject.h:1726
+msgid "How long the code may be: characters for a string code (1 to 1024), digits for a number code (1 to 32). 8 by default. A generated string code is padded with zeros to this length."
+msgstr "Якої довжини може бути код: символів для рядкового коду (від 1 до 1024), цифр для числового (від 1 до 32). За замовчуванням 8. Згенерований рядковий код доповнюється нулями до цієї довжини."
+
+#: src/engine/backend/metaCollection/partial/commonObject.h:1727
+msgid "Description length"
+msgstr "Довжина найменування"
+
+#: src/engine/backend/metaCollection/partial/commonObject.h:1727
+msgid "How many characters the description may hold (1 to 1024). 150 by default."
+msgstr "Скільки символів може містити найменування (від 1 до 1024). За замовчуванням 150."
+
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:1251
+#, c-format
+msgid "%s: the saved %s cannot be read"
+msgstr "%s: збережене значення %s не читається"
+
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:1274
+#, c-format
+msgid "%s: the predefined item %s has the code '%s', and the code of %s is a number - digits only"
+msgstr "%s: у визначеного елемента %s код '%s', а код %s - число: допустимі лише цифри"
+
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:1284
+#, c-format
+msgid "%s: the predefined item %s has the code '%s' of %u digits, and the code length is %u - raise CodeLength or shorten the code"
+msgstr "%s: у визначеного елемента %s код '%s' з %u цифр, а довжина коду - %u: збільште CodeLength або скоротіть код"
+
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:1289
+#, c-format
+msgid "%s: the predefined item %s has the code '%s' of %u characters, and the code length is %u - raise CodeLength or shorten the code"
+msgstr "%s: у визначеного елемента %s код '%s' з %u символів, а довжина коду - %u: збільште CodeLength або скоротіть код"
+
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:1296
+#, c-format
+msgid "%s: the predefined item %s has a description of %u characters, and the description length is %u - raise DescriptionLength or shorten the description"
+msgstr "%s: у визначеного елемента %s найменування з %u символів, а довжина найменування - %u: збільште DescriptionLength або скоротіть найменування"
+
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:1318
+#, c-format
+msgid "%s: CodeType must be String or Number"
+msgstr "%s: CodeType має бути String або Number"
+
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:1321
+#, c-format
+msgid "%s: CodeLength %u is not a length a number code can have - 1 to %u digits"
+msgstr "%s: CodeLength %u - неприпустима довжина числового коду: від 1 до %u цифр"
+
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:1322
+#, c-format
+msgid "%s: CodeLength %u is not a length a string code can have - 1 to %u characters"
+msgstr "%s: CodeLength %u - неприпустима довжина рядкового коду: від 1 до %u символів"
+
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:1326
+#, c-format
+msgid "%s: DescriptionLength %u is not a length a description can have - 1 to %u characters"
+msgstr "%s: DescriptionLength %u - неприпустима довжина найменування: від 1 до %u символів"
+
+#: src/engine/backend/metaCollection/partial/commonObjectSchema.cpp:347
+#, c-format
+msgid "%s: %lld stored item(s) have a code longer than %u - shorten those codes before lowering CodeLength"
+msgstr "%s: у %lld збережених елементів код довший за %u - скоротіть ці коди, перш ніж зменшувати CodeLength"
+
+#: src/engine/backend/metaCollection/partial/commonObjectSchema.cpp:354
+#, c-format
+msgid "%s: %lld stored item(s) have a description longer than %u - shorten those descriptions before lowering DescriptionLength"
+msgstr "%s: у %lld збережених елементів найменування довше за %u - скоротіть ці найменування, перш ніж зменшувати DescriptionLength"

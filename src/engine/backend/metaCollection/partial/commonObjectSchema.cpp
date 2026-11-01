@@ -15,10 +15,78 @@
 #include "backend/metaCollection/partial/tabularSection/tabularSection.h"
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject - the seed's reference cells
+#include "backend/databaseLayer/databaseQueryBuilder.h"           // the L2 door - the count of stored codes a lowered length cannot hold
 #include "backend/query/columnLayout.h"                           // ibOwnerRefColumn / ibFieldSuffix - the scaffold + field names
 #include "backend/query/schemaSnapshot.h"                         // ibSchemaSnapshot / ibSchemaTable - what a declaration is
+#include "backend/restructureInfo.h"                               // ibRestructureInfo - where a predefined item that does not fit is said
 
 #include <algorithm>   // std::find - an attribute that is itself one of the list order's columns
+
+namespace {
+// HOW MANY STORED VALUES A LOWERED LENGTH CANNOT HOLD - 0 when nothing was lowered. `now` is the field as the
+// target declares it; the same field in the table as it stands (`standing`, null for a table not created yet)
+// says what it was. Asked only of a field that keeps its name and role and gets narrower: a field that changes
+// type is laid out anew and its values are cleared (the ledger says how many), so there is nothing to strand.
+//
+// The count is the DATABASE's and needs no function an engine may lack: a string longer than N has a
+// character at N+1 (SUBSTRING, which every dialect renders), a number of more than N digits is at least 10^N.
+long long CountStoredBeyond(const ibString& table, const ibSchemaTable* standing, ibMetaID id, const ibColumnSlot& now)
+{
+	if (standing == nullptr)
+		return 0;
+	const ibBackendQueryColumn* was = nullptr;
+	for (const ibSchemaColumn& c : standing->m_columns)
+		if (c.m_id == id)
+			was = c.m_column;
+	if (was == nullptr)
+		return 0;
+
+	for (const ibColumnSlot& s : DescribeColumnLayout(was)) {
+		if (s.m_name != now.m_name || s.m_role != now.m_role)
+			continue;
+
+		ibQueryExprPtr beyond;
+		if (now.m_role == ibColumnRole::String) {
+			if (s.m_type.m_length != 0 && s.m_type.m_length <= now.m_type.m_length)
+				return 0;
+			beyond = ibBinOp(ibQueryBinOp::Ne,
+				ibSubstring(ibCol(now.m_name), ibConst(ibValue(now.m_type.m_length + 1)), ibConst(ibValue(1))),
+				ibConst(ibValue(ibString())));
+		}
+		else if (now.m_role == ibColumnRole::Number) {
+			if (s.m_type.m_precision <= now.m_type.m_precision)
+				return 0;
+			ibString power(ibT("1"));
+			for (int i = 0; i < now.m_type.m_precision; ++i)
+				power += ibT("0");
+			beyond = ibBinOp(ibQueryBinOp::Or,
+				ibBinOp(ibQueryBinOp::Ge, ibCol(now.m_name), ibConst(ibValue(ibNumber(power)))),
+				ibBinOp(ibQueryBinOp::Le, ibCol(now.m_name), ibConst(ibValue(ibNumber(ibT("-") + power)))));
+		}
+		else {
+			return 0;
+		}
+
+		ibQueryIR ir;
+		ir.m_root = ibAggregate(ibFilter(ibScan(table), beyond),
+			{ { ibFunc(ibT("COUNT"), { ibCol(now.m_name) }), ibT("beyond") } }, {});
+		ibDatabaseQueryBuilder q;
+		ibQueryResult rs = q.ExecuteIR(ir);
+		return rs.Next() ? rs.GetResultInt(ibT("beyond")) : 0;
+	}
+	return 0;
+}
+
+// The slot of `column` that holds a value of `role` - the String slot of a string code, the Number slot of a
+// number one. A copy, so the rule that carries it outlives the declaration it was read from.
+ibColumnSlot ValueSlotOf(const ibBackendQueryColumn* column, ibColumnRole role)
+{
+	for (const ibColumnSlot& slot : DescribeColumnLayout(column))
+		if (slot.m_role == role)
+			return slot;
+	return ibColumnSlot();
+}
+}
 
 // (SnapshotOf removed: building a snapshot is just `common->ContributeTables(snap)` — the metadata side
 //  does it directly where it drives the builder, keeping the builder itself config-agnostic.)
@@ -238,6 +306,58 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 	// _RRRef so the data-reference unique index (_REF_UQ) does not see N rows colliding on the NULL default.
 	ibSchemaTable& t = out.Shared(GetMetaID(), GetPhysicalTableName());   // the main table the base just created
 
+	// A PREDEFINED ITEM THE CODE OR THE DESCRIPTION CANNOT HOLD is refused here, before any DDL, naming
+	// the object and the item. Otherwise the seed row reached the engine and came back as "string right
+	// truncation, expected length 8, actual 9" - no object, no item, and the apply rolled back
+	// (open-enterprise-solutions/enterprise#274). predefined_add refuses such an item as it is declared;
+	// this is for the one declared before the length was lowered, or brought in by a loaded configuration.
+	std::vector<ibString> unfit;
+	for (const auto& object : m_predefinedObjectVector) {
+		ibString refusal;
+		if (!CheckPredefinedValue(object->GetPredefinedName(), object->GetPredefinedCode(), object->GetPredefinedDescription(), &refusal))
+			unfit.push_back(refusal);
+	}
+	// …and A LENGTH LOWERED BELOW WHAT IS STORED, the same way: counted before any DDL and refused naming the
+	// object, rather than left to the engine - which refuses it in its own words or, where it truncates,
+	// does not refuse it at all. Only a lowering reads data (CountStoredBeyond compares with the table as it
+	// stands); an apply that leaves the lengths alone costs nothing here.
+	const ibString name = GetName();
+	const ibString table = GetPhysicalTableName();
+	const ibMetaID codeId = GetDataCode()->GetMetaID();
+	const ibMetaID descriptionId = GetDataDescription()->GetMetaID();
+	const ibColumnSlot code = ValueSlotOf(GetDataCode()->GetQueryColumn(),
+		GetCodeType() == ibCodeType_Number ? ibColumnRole::Number : ibColumnRole::String);
+	const ibColumnSlot description = ValueSlotOf(GetDataDescription()->GetQueryColumn(), ibColumnRole::String);
+	const unsigned int codeLength = GetCodeLength();
+	const unsigned int descriptionLength = GetDescriptionLength();
+
+	t.m_beforeChange = [unfit, earlier = t.m_beforeChange, name, table, codeId, descriptionId, code, description, codeLength, descriptionLength]
+		(ibRestructureInfo* report, const ibSchemaTable* standing) -> bool {
+			bool allowed = true;
+			if (earlier && !earlier(report, standing))
+				allowed = false;
+			for (const ibString& refusal : unfit) {
+				if (report != nullptr)
+					report->AppendError(refusal);
+				allowed = false;
+			}
+			if (const long long beyond = CountStoredBeyond(table, standing, codeId, code); beyond > 0) {
+				if (report != nullptr)
+					report->AppendError(ibString::Format(
+						_("%s: %lld stored item(s) have a code longer than %u - shorten those codes before lowering CodeLength"),
+						name, beyond, codeLength));
+				allowed = false;
+			}
+			if (const long long beyond = CountStoredBeyond(table, standing, descriptionId, description); beyond > 0) {
+				if (report != nullptr)
+					report->AppendError(ibString::Format(
+						_("%s: %lld stored item(s) have a description longer than %u - shorten those descriptions before lowering DescriptionLength"),
+						name, beyond, descriptionLength));
+				allowed = false;
+			}
+			return allowed;
+		};
+
 	// (No rule on retiring Parent / IsFolder any more, 2026-10-05: a hierarchy switched off takes those
 	//  columns the way deleting any attribute takes its own — the list stops declaring them, the differ
 	//  drops them and the apply ledger says "Remove …". The rule that refused it kept its own idea of which
@@ -262,7 +382,7 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 				ibValuePtr<ibValueReferenceDataObject>(
 					ibValueReferenceDataObject::Create(this, object->GetPredefinedGuid(), ibReferenceLoad::OnDemand)))
 			.Set(m_propertyAttributePredefined->GetMetaObject()->GetQueryColumn(), ibValue(object->GetPredefinedName()))
-			.Set(m_propertyAttributeCode->GetMetaObject()->GetQueryColumn(), ibValue(object->GetPredefinedCode()))
+			.Set(m_propertyAttributeCode->GetMetaObject()->GetQueryColumn(), GetPredefinedCodeValue(object->GetPredefinedCode()))
 			.Set(m_propertyAttributeDescription->GetMetaObject()->GetQueryColumn(), ibValue(object->GetPredefinedDescription()))
 			.Set(m_propertyAttributeIsFolder->GetMetaObject()->GetQueryColumn(), ibValue(object->IsPredefinedFolder()))
 			.Set(m_propertyAttributeDeletionMark->GetMetaObject()->GetQueryColumn(), ibValue(false))

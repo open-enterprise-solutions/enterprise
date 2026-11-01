@@ -9,7 +9,7 @@ void ibValueMetaObjectCatalog::OnPropertyCreated(ibProperty* property)
 
 bool ibValueMetaObjectCatalog::OnPropertyChanging(ibProperty* property, const ibVariant& newValue)
 {
-	return ibValueMetaObjectRecordDataMutableRef::OnPropertyChanging(property, newValue);
+	return ibValueMetaObjectRecordDataHierarchyMutableRef::OnPropertyChanging(property, newValue);
 }
 
 void ibValueMetaObjectCatalog::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
