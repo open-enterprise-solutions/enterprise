@@ -8,11 +8,6 @@
 // THE RUNTIME'S VALUE WITHOUT ITS RUNTIME — backend/compiler/value.cpp as it is, the lifecycle and the readings; what
 // needs the factory (a class's name, an object made of a node) is the side's.
 
-ibVariant::ibVariant()
-	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_refCount(0), m_dData()
-{
-}
-
 //copy constructor:
 ibVariant::ibVariant(const ibVariant& varValue)
 	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_refCount(0), m_dData()
@@ -123,16 +118,6 @@ ibVariant::ibVariant(const wxString& cParam)
 	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_refCount(0), m_dData()
 {
 	m_sData = ibString(cParam);
-}
-
-ibVariant::~ibVariant()
-{
-	if (m_typeClass == ibValueTypes::TYPE_REFFER && m_pRef && m_pRef != this)
-		m_pRef->DecrRef();
-	else if (m_typeClass == ibValueTypes::TYPE_STRING)
-		m_sData.~ibString();   // ONLY if STRING — the word aliases m_pRef in the union
-	else if (m_typeClass == ibValueTypes::TYPE_NUMBER)
-		m_fData.~ibNumber();   // a heap-tier number lets go of its BigImpl
 }
 
 // The write-denied refusal, OUT OF LINE. Built inside Reset, its message — a translation lookup and three

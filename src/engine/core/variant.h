@@ -67,7 +67,9 @@ public:
 	};
 public:
 
-	ibVariant();
+	// In the header, with the destructor: every value of the runtime is made and ended here, and the runtime is
+	// across a library's border from variant.cpp, where neither could be inlined.
+	ibVariant() : m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_refCount(0), m_dData() {}
 	ibVariant(const ibVariant& cParam);
 	ibVariant(ibVariant&& cParam);
 	ibVariant(ibVariant* pParam);
@@ -96,7 +98,14 @@ public:
 			!std::derived_from<T, ibVariant>)
 	ibVariant(T*) = delete;
 
-	virtual ~ibVariant();
+	virtual ~ibVariant() {
+		if (m_typeClass == ibValueTypes::TYPE_REFFER && m_pRef && m_pRef != this)
+			m_pRef->DecrRef();
+		else if (m_typeClass == ibValueTypes::TYPE_STRING)
+			m_sData.~ibString();   // ONLY if STRING — the word aliases m_pRef in the union
+		else if (m_typeClass == ibValueTypes::TYPE_NUMBER)
+			m_fData.~ibNumber();   // a heap-tier number lets go of its BigImpl
+	}
 
 	void Reset();
 

@@ -561,11 +561,6 @@ void ibNumber::StoreHeap(SharedBig* p) noexcept
 
 // ---- ctors / dtor / assignment -------------------------------------------------------
 
-ibNumber::ibNumber() noexcept
-	: m_payload(PackImmediate(0, 0))
-{
-}
-
 ibNumber::ibNumber(int v) noexcept
 	: m_payload(PackImmediate(v, 0))
 {
@@ -677,11 +672,6 @@ ibNumber::ibNumber(ibNumber&& o) noexcept
 	: m_payload(o.m_payload)
 {
 	o.m_payload = PackImmediate(0, 0);
-}
-
-ibNumber::~ibNumber()
-{
-	Clear();
 }
 
 ibNumber& ibNumber::operator=(const ibNumber& o) noexcept

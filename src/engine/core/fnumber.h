@@ -61,7 +61,9 @@ class ibString;       // core/fstring.h
 class CORE_API ibNumber
 {
 public:
-	ibNumber() noexcept;
+	// In the header, with the destructor: an immediate number makes and ends in one word and one test, and
+	// across a library's border neither can be inlined from fnumber.cpp.
+	ibNumber() noexcept : m_payload(PackImmediate(0, 0)) {}
 
 	// Integer constructors are declared over the LANGUAGE types, not over the <cstdint>
 	// aliases, and that is deliberate: `long` and `long long` are DISTINCT types even where
@@ -83,7 +85,7 @@ public:
 	explicit ibNumber(const ibString& s);
 	ibNumber(const ibNumber& o) noexcept;   // a heap-tier number is shared, not copied
 	ibNumber(ibNumber&& o) noexcept;
-	~ibNumber();
+	~ibNumber() { if (IsHeap()) Clear(); }
 
 	ibNumber& operator=(const ibNumber& o) noexcept;
 	ibNumber& operator=(ibNumber&& o) noexcept;
