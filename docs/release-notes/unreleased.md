@@ -79,6 +79,12 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   write them as hex and read them, `Base64String(data)` and `Base64Value(text)` as base64. `String(data)`
   and `New BinaryData(text)` stay base64, and now skip line breaks. Text that is not base64 or hex is
   refused, not read as no bytes.
+- **`COMObject` compiles everywhere and is complete on Windows.** `New COMObject(progId)` compiles on
+  macOS and Linux too, and is refused there when it runs ("COM objects are available on Windows only").
+  On Windows it works on the application server's threads as well as in the client; arrays, CY and
+  DECIMAL numbers, by-reference arguments and omitted ones cross over; `For Each` walks a COM
+  collection; `obj.AddEventHandler(name, function)` receives the object's events. A failed call
+  names the object and the member. `obj <> Undefined` is True for a COM object; it was False.
 - **An encoding is a member of `TextEncoding`.** `TextReader` and `TextWriter` took a string or another
   enumeration's member without a word; now it is refused, as `HTTPRequest` already refused a string.
 

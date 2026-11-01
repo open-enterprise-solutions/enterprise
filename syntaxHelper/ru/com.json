@@ -1,0 +1,78 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "ru",
+  "entries": [
+    {
+      "id": "cls.ComObject",
+      "name_local": "COMObject",
+      "name_en": "COMObject",
+      "kind": "collection",
+      "class_id": 160799310230636402,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "com"
+      ],
+      "signature": "New COMObject(progId : string)",
+      "description": "Объект другой программы, получаемый по имени из реестра Windows (ProgID, например \"ADODB.Connection\" или имя драйвера фискального регистратора). Свойства и методы ищутся в момент обращения, поэтому при компиляции модуля об объекте ничего знать не нужно.\n\nТОЛЬКО WINDOWS. Тип есть на всех платформах, поэтому модуль, который его создаёт, компилируется и на macOS и Linux; там `New COMObject` отказывает при выполнении: \"COM objects are available on Windows only\". На Windows работает в тонком клиенте и на сервере приложений.\n\nЗНАЧЕНИЯ ПЕРЕХОДЯТ В ОБЕ СТОРОНЫ по виду: число уходит целым, если оно целое (иначе — double), и возвращается точно, включая CY и DECIMAL; строка, булево, дата, Null и Undefined — как есть; Array уходит массивом, массив возвращается Array (вложенным для нескольких измерений); другой COM-объект — сам собой. Значение, у которого нет COM-записи (ссылка, структура), — отказ с названием типа.\n\nАРГУМЕНТ, объявленный членом как выходной, записывается обратно в переменную вызывающего. Пропущенный аргумент (`Obj.Method(a, , c)`) передаётся как отсутствующий, и объект берёт своё значение по умолчанию.\n\nFOR EACH обходит коллекцию объекта (ADO `Fields`, списки узлов MSXML, ключи `Scripting.Dictionary`).\n\nНЕУДАЧНЫЙ ВЫЗОВ — ошибка, в которой названы объект, член и собственное описание ошибки от объекта.",
+      "syntax_block": "var Connection = New COMObject(\"ADODB.Connection\");\nConnection.Open(ConnectionString);\nvar Records = Connection.Execute(\"SELECT Name FROM Goods\");\nwhile (Not Records.EOF) {\n    Message(Records.Fields(\"Name\").Value);\n    Records.MoveNext();\n}\nConnection.Close();",
+      "syntax_block_ves": "Connection = New COMObject(\"ADODB.Connection\");\nConnection.Open(ConnectionString);\nRecords = Connection.Execute(\"SELECT Name FROM Goods\");\nWhile Not Records.EOF Do\n    Message(Records.Fields(\"Name\").Value);\n    Records.MoveNext();\nEndDo;\nConnection.Close();",
+      "parameters": "progId — имя, под которым класс зарегистрирован. Незарегистрированное — отказ, имя названо в сообщении.",
+      "return_descr": "COMObject.",
+      "example": "var Dictionary = New COMObject(\"Scripting.Dictionary\");\nDictionary.Add(\"a\", 1);\nDictionary.Add(\"b\", 2);\nforeach (Key In Dictionary) {         // the object's own enumerator\n    Message(Key + \" = \" + Dictionary.Item(Key));\n}\nKeys = Dictionary.Keys();             // a SAFEARRAY comes back as an Array",
+      "availability": "Тонкий клиент, Сервер (Windows)",
+      "see_also": [
+        "cls.ComObject.AddEventHandler",
+        "cls.ComObject.RemoveEventHandler"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.ComObject.AddEventHandler",
+      "name_local": "AddEventHandler",
+      "name_en": "AddEventHandler",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "com"
+      ],
+      "signature": "Obj.AddEventHandler(eventName : string, handler : function)",
+      "description": "Вызывает `handler` каждый раз, когда объект генерирует событие `eventName`. События — из интерфейса событий объекта по умолчанию; объект без событий или без события с таким именем — отказ.\n\nОбработчик получает аргументы события по порядку; аргумент, переданный объектом по ссылке, получает значение, оставленное в нём обработчиком.\n\nСобытие обрабатывается в потоке, которому принадлежит объект: пока скрипт внутри вызова объекта, а в тонком клиенте — и в простое. Ошибка в обработчике поднимается из того вызова, во время которого пришло событие.",
+      "syntax_block": "Obj.AddEventHandler(\"EventName\", Function(Arg) { ... });",
+      "parameters": "eventName — имя события, как его объявляет объект.\nhandler — функция: `Function(arg1, arg2) { ... }`.",
+      "return_descr": "",
+      "example": "var Terminal = New COMObject(\"Acquiring.Terminal\");\nTerminal.AddEventHandler(\"StatusChanged\", Function(Code, Text) {\n    Message(\"Терминал: \" + Text);\n});\nTerminal.Pay(Amount);",
+      "availability": "Тонкий клиент, Сервер (Windows)",
+      "see_also": [
+        "cls.ComObject",
+        "cls.ComObject.RemoveEventHandler"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.ComObject.RemoveEventHandler",
+      "name_local": "RemoveEventHandler",
+      "name_en": "RemoveEventHandler",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "com"
+      ],
+      "signature": "Obj.RemoveEventHandler(eventName : string)",
+      "description": "Перестаёт вызывать обработчик события `eventName`. Когда обработчиков не осталось, платформа отключается от событий объекта.",
+      "syntax_block": "Obj.RemoveEventHandler(\"EventName\");",
+      "parameters": "eventName — имя события.",
+      "return_descr": "",
+      "example": "Terminal.RemoveEventHandler(\"StatusChanged\");",
+      "availability": "Тонкий клиент, Сервер (Windows)",
+      "see_also": [
+        "cls.ComObject",
+        "cls.ComObject.AddEventHandler"
+      ],
+      "reviewed": false
+    }
+  ]
+}

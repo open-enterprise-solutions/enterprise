@@ -1,0 +1,78 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "uk",
+  "entries": [
+    {
+      "id": "cls.ComObject",
+      "name_local": "COMObject",
+      "name_en": "COMObject",
+      "kind": "collection",
+      "class_id": 160799310230636402,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "com"
+      ],
+      "signature": "New COMObject(progId : string)",
+      "description": "Об'єкт іншої програми, отриманий за іменем з реєстру Windows (ProgID, наприклад \"ADODB.Connection\" або ім'я драйвера фіскального реєстратора). Властивості й методи шукаються в момент звернення, тож під час компіляції модуля про об'єкт нічого знати не потрібно.\n\nЛИШЕ WINDOWS. Тип є на всіх платформах, тому модуль, що його створює, компілюється й на macOS та Linux; там `New COMObject` відмовляє під час виконання: \"COM objects are available on Windows only\". На Windows працює в тонкому клієнті та на сервері застосунків.\n\nЗНАЧЕННЯ ПЕРЕХОДЯТЬ В ОБИДВА БОКИ за видом: число йде цілим, якщо воно ціле (інакше — double), і повертається точно, включно з CY та DECIMAL; рядок, булеве, дата, Null і Undefined — як є; Array йде масивом, масив повертається Array (вкладеним для кількох вимірів); інший COM-об'єкт — сам собою. Значення без COM-запису (посилання, структура) — відмова з назвою типу.\n\nАРГУМЕНТ, оголошений членом як вихідний, записується назад у змінну того, хто викликає. Пропущений аргумент (`Obj.Method(a, , c)`) передається як відсутній, і об'єкт бере своє значення за замовчуванням.\n\nFOR EACH обходить колекцію об'єкта (ADO `Fields`, списки вузлів MSXML, ключі `Scripting.Dictionary`).\n\nНЕВДАЛИЙ ВИКЛИК — помилка, у якій названо об'єкт, член і власний опис помилки від об'єкта.",
+      "syntax_block": "var Connection = New COMObject(\"ADODB.Connection\");\nConnection.Open(ConnectionString);\nvar Records = Connection.Execute(\"SELECT Name FROM Goods\");\nwhile (Not Records.EOF) {\n    Message(Records.Fields(\"Name\").Value);\n    Records.MoveNext();\n}\nConnection.Close();",
+      "syntax_block_ves": "Connection = New COMObject(\"ADODB.Connection\");\nConnection.Open(ConnectionString);\nRecords = Connection.Execute(\"SELECT Name FROM Goods\");\nWhile Not Records.EOF Do\n    Message(Records.Fields(\"Name\").Value);\n    Records.MoveNext();\nEndDo;\nConnection.Close();",
+      "parameters": "progId — ім'я, під яким клас зареєстровано. Незареєстроване — відмова, ім'я назване в повідомленні.",
+      "return_descr": "COMObject.",
+      "example": "var Dictionary = New COMObject(\"Scripting.Dictionary\");\nDictionary.Add(\"a\", 1);\nDictionary.Add(\"b\", 2);\nforeach (Key In Dictionary) {         // the object's own enumerator\n    Message(Key + \" = \" + Dictionary.Item(Key));\n}\nKeys = Dictionary.Keys();             // a SAFEARRAY comes back as an Array",
+      "availability": "Тонкий клієнт, Сервер (Windows)",
+      "see_also": [
+        "cls.ComObject.AddEventHandler",
+        "cls.ComObject.RemoveEventHandler"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.ComObject.AddEventHandler",
+      "name_local": "AddEventHandler",
+      "name_en": "AddEventHandler",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "com"
+      ],
+      "signature": "Obj.AddEventHandler(eventName : string, handler : function)",
+      "description": "Викликає `handler` щоразу, коли об'єкт генерує подію `eventName`. Події — з інтерфейсу подій об'єкта за замовчуванням; об'єкт без подій або без події з таким ім'ям — відмова.\n\nОбробник отримує аргументи події по порядку; аргумент, переданий об'єктом за посиланням, отримує значення, залишене в ньому обробником.\n\nПодія обробляється в потоці, якому належить об'єкт: поки скрипт усередині виклику об'єкта, а в тонкому клієнті — і в простої. Помилка в обробнику піднімається з того виклику, під час якого надійшла подія.",
+      "syntax_block": "Obj.AddEventHandler(\"EventName\", Function(Arg) { ... });",
+      "parameters": "eventName — ім'я події, як його оголошує об'єкт.\nhandler — функція: `Function(arg1, arg2) { ... }`.",
+      "return_descr": "",
+      "example": "var Terminal = New COMObject(\"Acquiring.Terminal\");\nTerminal.AddEventHandler(\"StatusChanged\", Function(Code, Text) {\n    Message(\"Термінал: \" + Text);\n});\nTerminal.Pay(Amount);",
+      "availability": "Тонкий клієнт, Сервер (Windows)",
+      "see_also": [
+        "cls.ComObject",
+        "cls.ComObject.RemoveEventHandler"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.ComObject.RemoveEventHandler",
+      "name_local": "RemoveEventHandler",
+      "name_en": "RemoveEventHandler",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "com"
+      ],
+      "signature": "Obj.RemoveEventHandler(eventName : string)",
+      "description": "Припиняє викликати обробник події `eventName`. Коли обробників не лишилося, платформа від'єднується від подій об'єкта.",
+      "syntax_block": "Obj.RemoveEventHandler(\"EventName\");",
+      "parameters": "eventName — ім'я події.",
+      "return_descr": "",
+      "example": "Terminal.RemoveEventHandler(\"StatusChanged\");",
+      "availability": "Тонкий клієнт, Сервер (Windows)",
+      "see_also": [
+        "cls.ComObject",
+        "cls.ComObject.AddEventHandler"
+      ],
+      "reviewed": false
+    }
+  ]
+}
