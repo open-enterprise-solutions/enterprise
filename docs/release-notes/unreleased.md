@@ -88,8 +88,11 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   type — a number, a string, a date, or a member of an enumeration or True / False, chosen by its
   name. Radio buttons bound to the same field are one switch: each is selected while the field holds
   its value, a click writes it in, and `OnChange` is raised. An unbound one is as before: its
-  `Selected` decides, and a click selects it among the unbound radio buttons beside it. MCP:
-  `form_bind` for the source, `form_set {property: "ChoiceValue"}` for the value.
+  `Selected` decides, and a click selects it among the unbound radio buttons beside it. In the form
+  designer `ChoiceValue` is a drop-down of the values (True / False, an enumeration's members) or is
+  typed in; MCP: `form_bind` for the source, `form_set {property: "ChoiceValue"}` for the value. A
+  value a saved form can no longer read — a member deleted since — is said when the form is read,
+  with the button it belonged to; the button then stands for none.
 
 ## The browser client
 

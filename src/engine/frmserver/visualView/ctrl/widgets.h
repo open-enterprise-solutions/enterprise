@@ -577,6 +577,9 @@ private:
 	// it not. Then OnChange.
 	void OnClickedRadioButton();
 
+	// Its ChoiceValue from the saved form — one that cannot be read leaves it standing for none, and says so.
+	void ReadChoiceValue(const ibDataValue& value);
+
 	ibPropertyCategory* m_categoryRadioButton = ibPropertyObject::CreatePropertyCategory(ibT("RadioButton"), _("Radio button"));
 	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryRadioButton, ibT("Title"), _("Title"),
 		_("The radio button's caption. Can be written per language."), ibT("Radio button"));

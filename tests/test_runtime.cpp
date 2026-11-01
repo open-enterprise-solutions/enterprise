@@ -3738,3 +3738,53 @@ TEST_F(FormRuntime, RadioButtonChoiceValueSurvivesASave) {
 		EXPECT_TRUE(got == value) << got.GetString().ToStdString();
 	}
 }
+
+// A VALUE THAT CANNOT BE READ IS SAID, NOT DROPPED IN SILENCE — a member of an enumeration deleted since the form was
+// saved. The form still reads (one button must not take the form with it); the button stands for none, and the
+// refusal goes to the person (ibValueRadioButton::ReadChoiceValue). The property itself raises rather than answering
+// false.
+TEST_F(FormRuntime, RadioButtonValueThatCannotBeReadStandsForNone) {
+	auto session = std::make_shared<FramedSession>(wxT("radio-unread"), ibSessionKind::Enterprise);
+	KeyFrame frame(ibApplicationInstance::GetSessionRegistry()->MintUnlisted(session));
+	session->Attach(&frame);
+	ibSessionScope scope(session.get());
+
+	// A value of a type nobody has — as a member deleted since reads.
+	auto nobodys = std::make_shared<ibDataNode>();
+	nobodys->SetValue(kValueFieldClsid, ibString(wxT("12345")));
+	ibDataNode node;
+	node.SetProperty(wxT("ChoiceValue"), ibDataValue::Child(nobodys));
+
+	ibValuePtr<ibValueRadioButton> read(new ibValueRadioButton());
+	EXPECT_NO_THROW(EXPECT_TRUE(read->ReadData(node)));
+	EXPECT_TRUE(read->GetChoiceValue().IsEmpty());
+
+	ibValuePtr<ibValueRadioButton> direct(new ibValueRadioButton());
+	EXPECT_THROW(direct->GetProperty(wxT("ChoiceValue"))->SetNodeValue(ibDataValue::Child(nobodys)), ibCoreException);
+}
+
+// THE INSPECTOR NAMES A CHOICE BY ITS ID — a boolean's True / False, an enumeration's member — and an empty text is no
+// value at all.
+TEST_F(FormRuntime, RadioButtonChoiceValueIsChosenByItsId) {
+	auto session = std::make_shared<FramedSession>(wxT("radio-choice"), ibSessionKind::Enterprise);
+	KeyFrame frame(ibApplicationInstance::GetSessionRegistry()->MintUnlisted(session));
+	session->Attach(&frame);
+	ibSessionScope scope(session.get());
+
+	ibValuePtr<ibValueForm> form(new ibValueForm());
+	ibFormAttributeValue* const flag = form->AddAttribute(wxT("Flag"), g_valueBooleanCLSID, ibValue());
+	ASSERT_NE(flag, nullptr);
+	ibValueRadioButton* const radio = dynamic_cast<ibValueRadioButton*>(form->NewObject(wxT("Radiobutton"), static_cast<ibValueForm*>(form)));
+	ASSERT_NE(radio, nullptr);
+	radio->SetSource(std::vector<ibSourceId>{ flag->GetId() });
+
+	ibProperty* const value = radio->GetProperty(wxT("ChoiceValue"));
+	auto chosen = std::make_shared<ibDataNode>();
+	chosen->SetValue(ibT("Id"), static_cast<std::int32_t>(1));
+	ASSERT_TRUE(value->SetNodeValue(ibDataValue::Child(chosen)));
+	EXPECT_EQ(radio->GetChoiceValue().GetType(), ibValueTypes::TYPE_BOOLEAN);
+	EXPECT_TRUE(radio->GetChoiceValue().GetBoolean());
+
+	ASSERT_TRUE(value->SetNodeValue(ibDataValue::String(wxT(""))));
+	EXPECT_TRUE(radio->GetChoiceValue().IsEmpty());
+}

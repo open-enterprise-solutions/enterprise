@@ -4,6 +4,7 @@
 #include "backend/appData.h"
 #include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "backend/compiler/procUnit.h"
+#include "backend/system/systemManager.h"   // ibValueSystemFunction::Message — a value not read, said
 
 
 //****************************************************************************
@@ -80,6 +81,26 @@ void ibValueRadioButton::OnUpdate(ibDataNode& state, ibVisualHost* host)
 //*                             Property                            *
 //*******************************************************************
 
+void ibValueRadioButton::ReadChoiceValue(const ibDataValue& value)
+{
+	// ⭐ A VALUE THAT IS NOT READ IS SAID, with the button it belonged to. The form opens all the same — one button
+	// of a switch must not take the form with it — but a button standing for no value can never be selected, and
+	// without this line the person sees a switch that stopped working and nothing to say why.
+	ibString reason;
+	try {
+		if (value.IsEmpty() || m_propertyChoiceValue->SetNodeValue(value))
+			return;
+	}
+	catch (const ibCoreException& err) {
+		reason = err.GetErrorDescription();
+	}
+	m_propertyChoiceValue->SetValue(ibValue());
+	ibValueSystemFunction::Message(reason.IsEmpty()
+		? ibString::Format(_("The radio button \"%s\" stands for a value that could not be read: it stands for none now."), GetControlName())
+		: ibString::Format(_("The radio button \"%s\" stands for a value that could not be read (%s): it stands for none now."), GetControlName(), reason),
+		ibStatusMessage::ibStatusMessage_Warning);
+}
+
 bool ibValueRadioButton::ReadData(const ibDataNode& node)
 {
 	// The caption and the starting selection are the radio button's own, so they travel with it - without
@@ -88,7 +109,7 @@ bool ibValueRadioButton::ReadData(const ibDataNode& node)
 	m_propertySelected->SetNodeValue(node.GetProperty(m_propertySelected->GetName()));
 	// The source first: the value it stands for is read as a value of the source's type.
 	m_propertySource->SetNodeValue(node.GetProperty(m_propertySource->GetName()));
-	m_propertyChoiceValue->SetNodeValue(node.GetProperty(m_propertyChoiceValue->GetName()));
+	ReadChoiceValue(node.GetProperty(m_propertyChoiceValue->GetName()));
 
 	//events
 	m_onChange->SetNodeValue(node.GetProperty(m_onChange->GetName()));

@@ -10248,8 +10248,8 @@ msgid "Selected"
 msgstr "Вибрано"
 
 #: src/engine/frmserver/visualView/ctrl/widgets.h:548
-msgid "Whether the radio button is shown selected. A radio button has no data source of its own."
-msgstr "Чи показується перемикач вибраним. Перемикач не має власного джерела даних."
+msgid "Whether an unbound radio button is shown selected; a click selects it among the unbound radio buttons beside it. A bound one is selected by its source's value instead (Choice value)."
+msgstr "Чи показується неприв'язаний перемикач вибраним; клацання вибирає його серед неприв'язаних перемикачів поруч. Прив'язаний вибирається за значенням свого джерела (Значення вибору)."
 
 #: src/engine/frmserver/visualView/ctrl/widgets.h:565
 msgid "Static line"
@@ -13599,3 +13599,30 @@ msgstr "Асистент із доступом до даних"
 #: src/engine/frmclient/mainFrame/settings/settingsdialog.cpp:39
 msgid "Debugging"
 msgstr "Налагодження"
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgid "Optional: the value the radio button stands among - a form attribute or a field of the form's object. Radio buttons bound to the same field are one switch: each is selected while the field holds its Choice value, and a click writes that value in. Bound through a reference path, or on a view-only form, it shows the value but cannot be clicked."
+msgstr "Необов'язково: значення, серед якого стоїть перемикач, - реквізит форми або поле її об'єкта. Перемикачі, прив'язані до одного поля, - один перемикач: кожен вибраний, доки поле зберігає його значення вибору, а клацання записує це значення. Прив'язаний через посилання або на формі лише для перегляду, він показує значення, але не натискається."
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgid "Choice value"
+msgstr "Значення вибору"
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgid "The value this radio button stands for, of its source's type: a number, a string, a date, True or False, a member of an enumeration (chosen by its name)."
+msgstr "Значення, за яке стоїть цей перемикач, типу його джерела: число, рядок, дата, Істина або Хибність, значення переліку (вибирається за іменем)."
+
+#: src/engine/backend/propertyManager/property/propertyValue.cpp
+#, c-format
+msgid "'%s' is none of the values it may take: %s"
+msgstr "'%s' не є жодним із допустимих значень: %s"
+
+#: src/engine/frmserver/visualView/ctrl/radiobutton.cpp
+#, c-format
+msgid "The radio button \"%s\" stands for a value that could not be read: it stands for none now."
+msgstr "Перемикач \"%s\" стоїть за значенням, яке не вдалося прочитати: тепер він не стоїть за жодним."
+
+#: src/engine/frmserver/visualView/ctrl/radiobutton.cpp
+#, c-format
+msgid "The radio button \"%s\" stands for a value that could not be read (%s): it stands for none now."
+msgstr "Перемикач \"%s\" стоїть за значенням, яке не вдалося прочитати (%s): тепер він не стоїть за жодним."

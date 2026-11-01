@@ -10251,8 +10251,8 @@ msgid "Selected"
 msgstr "Выбранный"
 
 #: src/engine/frmserver/visualView/ctrl/widgets.h:548
-msgid "Whether the radio button is shown selected. A radio button has no data source of its own."
-msgstr "Показывается ли радиокнопка выбранной. У радиокнопки нет собственного источника данных."
+msgid "Whether an unbound radio button is shown selected; a click selects it among the unbound radio buttons beside it. A bound one is selected by its source's value instead (Choice value)."
+msgstr "Показывается ли непривязанная радиокнопка выбранной; щелчок выбирает её среди непривязанных радиокнопок рядом. Привязанная выбирается по значению своего источника (Выбираемое значение)."
 
 #: src/engine/frmserver/visualView/ctrl/widgets.h:565
 msgid "Static line"
@@ -13602,3 +13602,30 @@ msgstr "Ассистент с доступом к данным"
 #: src/engine/frmclient/mainFrame/settings/settingsdialog.cpp:39
 msgid "Debugging"
 msgstr "Отладка"
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgid "Optional: the value the radio button stands among - a form attribute or a field of the form's object. Radio buttons bound to the same field are one switch: each is selected while the field holds its Choice value, and a click writes that value in. Bound through a reference path, or on a view-only form, it shows the value but cannot be clicked."
+msgstr "Необязательно: значение, среди которого стоит радиокнопка, - реквизит формы или поле её объекта. Радиокнопки, привязанные к одному полю, - один переключатель: каждая выбрана, пока поле хранит её выбираемое значение, а щелчок записывает это значение. Привязанная через ссылку или на форме только для просмотра, она показывает значение, но не нажимается."
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgid "Choice value"
+msgstr "Выбираемое значение"
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgid "The value this radio button stands for, of its source's type: a number, a string, a date, True or False, a member of an enumeration (chosen by its name)."
+msgstr "Значение, за которое стоит эта радиокнопка, типа её источника: число, строка, дата, Истина или Ложь, значение перечисления (выбирается по имени)."
+
+#: src/engine/backend/propertyManager/property/propertyValue.cpp
+#, c-format
+msgid "'%s' is none of the values it may take: %s"
+msgstr "'%s' не является ни одним из допустимых значений: %s"
+
+#: src/engine/frmserver/visualView/ctrl/radiobutton.cpp
+#, c-format
+msgid "The radio button \"%s\" stands for a value that could not be read: it stands for none now."
+msgstr "Радиокнопка \"%s\" стоит за значением, которое не удалось прочитать: теперь она не стоит ни за каким."
+
+#: src/engine/frmserver/visualView/ctrl/radiobutton.cpp
+#, c-format
+msgid "The radio button \"%s\" stands for a value that could not be read (%s): it stands for none now."
+msgstr "Радиокнопка \"%s\" стоит за значением, которое не удалось прочитать (%s): теперь она не стоит ни за каким."

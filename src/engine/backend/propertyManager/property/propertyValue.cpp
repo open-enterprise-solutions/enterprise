@@ -6,6 +6,8 @@
 #include "backend/metaCollection/partial/commonObject.h"        // ibValueMetaObjectRecordDataEnumRef — its members
 #include "backend/metaCollection/partial/reference/reference.h" // ibValueReferenceDataObject — a member as a value
 #include "backend/system/value/valueType.h"                     // ibValueTypeDescription::AdjustValue
+#include "backend/backend_exception.h"                          // ibBackendCoreException — a value that cannot be read
+#include "protocol/protocol.h"                                   // ibProtocol::ibSchema::ibProperties::Id — a choice by its id
 
 namespace {
 
@@ -77,15 +79,26 @@ bool ibPropertyValue::ReadNodeValue(const ibDataValue& value)
 	// A value that is no scalar — a member of an enumeration, a reference — comes as its node, through the door it was
 	// written by.
 	if (value.Kind() == ibDataKind::Child) {
+		// ⚠ A VALUE THAT CANNOT BE READ RAISES — a member of an enumeration deleted since, a type nobody has. The
+		// refusal says what was missing; the owner says whose value it was (ibValueRadioButton::ReadData).
 		const std::optional<ibDataNode> node = value.AsChild();
 		if (!node)
 			return false;
-		try {
-			SetValue(metaData != nullptr ? metaData->Deserialize(*node) : ibValue::FromNode(*node));
+		// …or ONE OF ITS CHOICES NAMED BY ITS ID, as the inspector's drop-down names it (its Id, no type of a value):
+		// a scalar would not do, a member held being a node (ibBackendProperty::SetNodeValue keeps a node a node).
+		if (node->FindField(ibProtocol::ibSchema::ibProperties::Id)) {
+			const long id = node->GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Id);
+			ibPropertyChoiceList choices;
+			GetValueList(choices);
+			for (unsigned int idx = 0; idx < choices.GetCount(); ++idx) {
+				if (choices.GetId(idx) == id) {
+					SetValue(ibValue(choices.GetValue(idx)));
+					return true;
+				}
+			}
+			ibBackendCoreException::Error(_("There is no value %d among the ones it may take"), static_cast<int>(id));
 		}
-		catch (const ibCoreException&) {
-			return false;
-		}
+		SetValue(metaData != nullptr ? metaData->Deserialize(*node) : ibValue::FromNode(*node));
 		return true;
 	}
 
@@ -96,6 +109,12 @@ bool ibPropertyValue::ReadNodeValue(const ibDataValue& value)
 	case ibDataKind::String: scalar = value.AsString(); break;
 	case ibDataKind::Date: scalar = value.AsDate(); break;
 	default: return false;
+	}
+
+	// An empty text is no value: the button stands for none.
+	if (scalar.GetType() == ibValueTypes::TYPE_STRING && scalar.GetString().IsEmpty()) {
+		SetValue(ibValue());
+		return true;
 	}
 
 	// ⭐ A CHOSEN TYPE TAKES ONE OF ITS CHOICES — by its name or its label, as a caller writes one; a word that names
@@ -112,7 +131,10 @@ bool ibPropertyValue::ReadNodeValue(const ibDataValue& value)
 				return true;
 			}
 		}
-		return false;
+		ibString allowed;
+		for (unsigned int idx = 0; idx < choices.GetCount(); ++idx)
+			allowed << (idx > 0 ? ibT(", ") : ibT("")) << choices.GetName(idx);
+		ibBackendCoreException::Error(_("'%s' is none of the values it may take: %s"), scalar.GetString(), allowed);
 	}
 
 	// Any other type takes the scalar as a field of it would: a "5" for a number is 5. Without a source there is no
