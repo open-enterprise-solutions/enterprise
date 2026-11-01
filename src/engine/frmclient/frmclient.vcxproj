@@ -247,6 +247,7 @@
     <ClCompile Include="propertyManager\property\advprop\advpropColour.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropSize.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropList.cpp" />
+    <ClCompile Include="propertyManager\property\advprop\advpropValue.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropChartBinding.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropSchedule.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropEvent.cpp" />
@@ -590,6 +591,7 @@
     <ClInclude Include="propertyManager\property\advprop\advpropEvent.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropEventTool.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropList.h" />
+    <ClInclude Include="propertyManager\property\advprop\advpropValue.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropChartBinding.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropSchedule.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropType.h" />
