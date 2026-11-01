@@ -15,6 +15,9 @@ class ibPropertySource;
 //
 // A boolean and an enumeration are CHOSEN (GetValueList: True / False, or the members); any other type takes a scalar
 // of its own shape, adjusted to the source's type.
+//
+// ⚠ A VALUE THAT CANNOT BE READ RAISES (ibCoreException): a member deleted since, a word that names none of the
+// choices. Never a quiet empty — a button standing for no value looks exactly like one nobody set.
 class BACKEND_API ibPropertyValue : public ibProperty {
 public:
 
