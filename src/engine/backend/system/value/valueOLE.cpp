@@ -757,7 +757,9 @@ void ibValueOLE::GetInterfaceAndReleaseStream()
 #endif
 }
 
+#ifdef __WXMSW__
 static bool createStreamForDispatch = false;
+#endif
 
 void ibValueOLE::CreateStreamForDispatch() {
 #ifdef __WXMSW__
