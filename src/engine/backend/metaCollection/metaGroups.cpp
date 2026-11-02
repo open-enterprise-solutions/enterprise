@@ -29,6 +29,7 @@ const ibMetaGroupRow s_groups[] = {
 	{ g_metaParameterizedJobCLSID, ibTRANSLATE("Scheduled jobs"),     ibMetaGroupBand::Common },
 	{ g_metaScheduledJobCLSID,     ibTRANSLATE("Predefined jobs"),    ibMetaGroupBand::Common },
 	{ g_metaEventHandlerCLSID,     ibTRANSLATE("Event handlers"),     ibMetaGroupBand::Common },
+	{ g_metaHttpServiceCLSID,      ibTRANSLATE("HTTP services"),      ibMetaGroupBand::Common },
 	{ g_metaSessionParameterCLSID, ibTRANSLATE("Session parameters"), ibMetaGroupBand::Common },
 	{ g_metaFunctionalOptionCLSID, ibTRANSLATE("Functional options"), ibMetaGroupBand::Common },
 	{ g_metaCommonAttributeCLSID,  ibTRANSLATE("Common attributes"),  ibMetaGroupBand::Common },
@@ -78,6 +79,9 @@ const ibMetaGroupRow s_groups[] = {
 	{ g_metaFormCLSID,                           ibTRANSLATE("Forms"),       ibMetaGroupBand::Inner },
 	{ g_metaCommandCLSID,                        ibTRANSLATE("Commands"),    ibMetaGroupBand::Inner },
 	{ g_metaTemplateCLSID,                       ibTRANSLATE("Templates"),   ibMetaGroupBand::Inner },
+	// …and a service's: its URL templates, each with its methods.
+	{ g_metaUrlTemplateCLSID,                    ibTRANSLATE("URL templates"), ibMetaGroupBand::Inner },
+	{ g_metaHttpServiceMethodCLSID,              ibTRANSLATE("Methods"),     ibMetaGroupBand::Inner },
 	{ g_metaComposerCLSID,                       ibTRANSLATE("Composers"),   ibMetaGroupBand::Inner },
 	{ g_metaModuleCLSID,                         ibTRANSLATE("Modules"),     ibMetaGroupBand::Inner },
 	{ g_metaManagerCLSID,                        ibTRANSLATE("Manager modules"), ibMetaGroupBand::Inner },

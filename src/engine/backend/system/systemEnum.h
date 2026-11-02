@@ -57,6 +57,7 @@ enum ibHashFunction
 // (and a string is also how a second request gets written ahead of the real one).
 enum ibHttpMethod
 {
+	ibHttpMethod_Any = 0,   // an HTTP service method's alone: it answers whatever the request's is. A call names one
 	ibHttpMethod_Get = 1,
 	ibHttpMethod_Post,
 	ibHttpMethod_Put,

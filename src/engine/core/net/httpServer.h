@@ -47,6 +47,8 @@ struct CORE_API ibHttpRequest {
 	std::string GetHeader(const std::string& name) const;
 	// One parameter of the query, decoded; empty when there is none.
 	std::string GetParameter(const std::string& name) const;
+	// …and every one, decoded, in their order — a pair whose name does not decode is left out.
+	std::vector<std::pair<std::string, std::string>> GetParameters() const;
 	// The path escaped again and its query — what a request carried on to another server is written with
 	// (ibWebSocketClient::Open, ibHttpPost).
 	std::string GetTarget() const;
@@ -174,6 +176,9 @@ public:
 	// is answered 404. Said before Start.
 	void Get(const std::string& path, ibHttpHandler handler);
 	void Post(const std::string& path, ibHttpHandler handler);
+	// …and by the path's PREFIX (/trade/hs/), every method — asked before the routes above and the files: whatever
+	// path under it is asked for, and by whatever method, is the handler's to answer, 404 and 405 included.
+	void Route(const std::string& prefix, ibHttpHandler handler);
 	void WebSocket(const std::string& path, ibWebSocketOpening opening);
 	void EventStream(const std::string& path, ibEventStreamOpening opening);
 	// The files of `directory` under the path `prefix` — GET and HEAD, a folder answered by its index.html, nothing

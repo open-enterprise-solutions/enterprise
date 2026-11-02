@@ -12,6 +12,8 @@
 //                                 address's; the page's own files beside it (/<publication>/js/…)
 //   WS   /<publication>/client    a connection: each text message one JSON-RPC request, answered by its response
 //   POST /<publication>/client    one request, its response
+//   *    /<publication>/hs/…      the base's HTTP services, every method: carried to the base as the protocol's
+//                                 `http` (ibProtocol::ibHttp), answered as the service answers it
 //
 // Started by hand it narrates in its console and stays until Ctrl+C; later it becomes a service.
 //

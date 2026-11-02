@@ -7215,6 +7215,44 @@ const std::vector<ibMcpPattern>& Patterns()
 		"corrections will survive, which is worse than either rule applied consistently. Decide it\n"
 		"per field and say it on the screen.") },
 
+	{ ibT("http-services"),
+	  ibMcpText("Another system calls this base: a webhook, a REST surface, a page that is not a client."),
+	  ibMcpText("ANOTHER SYSTEM CALLS THIS BASE - A MESSENGER'S WEBHOOK, A WORKSTATION'S REST, A PARTNER'S PUSH.\n"
+		"\n"
+		"KEY: THAT IS AN `HTTPService`, A TOP-LEVEL KIND UNDER COMMON. It answers at\n"
+		"<publication>/hs/<RootURL>/... on the web server that publishes the base, over the web server's own\n"
+		"HTTP or HTTPS. Its children are `URLTemplate`s (Template: `/Transfer/{id}/reset`, `/*`), and each\n"
+		"template's children are `HTTPServiceMethod`s (HTTPMethod: Get, Post, ... or Any; Handler: a function\n"
+		"of the service's own module). Create them with metadata_create, parent by parent; the service module\n"
+		"(`ServiceModule`) is prepared with one function per method, and module_write fills it:\n"
+		"    Function TransferReset(Request) {\n"
+		"        var response = New HTTPServiceResponse(200);\n"
+		"        response.Headers.Insert(\"Content-Type\", \"application/json\");\n"
+		"        response.SetBodyFromString(\"{\\\"id\\\": \\\"\" + Request.URLParameters.id + \"\\\"}\");\n"
+		"        return response;\n"
+		"    }\n"
+		"* Request carries HTTPMethod, BaseURL, RelativeURL, Headers, QueryOptions, URLParameters and the body\n"
+		"(GetBodyAsString, GetBodyAsBinaryData). The header names are lower case; a Structure finds them\n"
+		"whatever case is asked.\n"
+		"\n"
+		"KEY: THE MOST PARTICULAR TEMPLATE ANSWERS. A literal segment before a {parameter}, a parameter before\n"
+		"`*`, read from the left; among equals the one declared first. So `/Transfer/list` beside\n"
+		"`/Transfer/{id}` needs no ordering, and a catch-all `/*` with Any is a safe last word (a CORS\n"
+		"preflight, OPTIONS, is answered there in one place).\n"
+		"\n"
+		"KEY: WHO IS CALLING IS A USER OF THE BASE. Each request is a session of its own, logged in by its\n"
+		"`Authorization: Basic` - the same names and passwords the people use, the same roles and row-level\n"
+		"access. A base with no users lets anybody in, as its login does. For a webhook, make a user of its own\n"
+		"with exactly the rights the hook needs, and give the messenger that user's credentials.\n"
+		"\n"
+		"STOP: A HANDLER'S ERROR IS NOT THE CALLER'S TO READ. A handler that raises, or returns anything but an\n"
+		"HTTPServiceResponse, is answered 500 and its words go to the base's journal (journal_read). A caller\n"
+		"that needs a reason gets one only from a response the handler built: say 400 with a body yourself.\n"
+		"* No template matches: 404; the template has no such method: 405 with Allow; nobody let in: 401.\n"
+		"\n"
+		"Where it stops: one session per request (none kept between them), a body held in memory within the\n"
+		"web server's 4 MB, and no streaming either way.") },
+
 	{ ibT("data-exchange"),
 	  ibMcpText("Several bases that have to agree: what travels, who wins, and in what order."),
 	  ibMcpText("DATA THAT HAS TO AGREE ACROSS SEVERAL BASES.\n"

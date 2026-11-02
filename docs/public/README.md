@@ -49,6 +49,7 @@ Add a row to the table below when you add a document, so this folder can be read
 | [event-handlers.md](event-handlers.md) | Event handlers: one event of many objects handled in one module, the call order, the composite rule, the manager events |
 | [functional-options.md](functional-options.md) | Functional options: a constant that decides what is shown, membership kept on the member, the one rule, where it stops |
 | [http-client.md](http-client.md) | HTTP and HTTPS from a script: the values, what they guarantee, where they stop |
+| [http-services.md](http-services.md) | HTTP services: a configuration answering a request — the three kinds, the match, the handler, the session, where it stops |
 | [json.md](json.md) | JSON from a script: what reading gives, what the writer guarantees, where it stops |
 | [xml.md](xml.md) | XML from a script: the reader node by node, the writer, the encodings, what nothing outside the document can reach |
 | [thin-client.md](thin-client.md) | The thin client: its parts, who does what, the document/view skeleton, spreadsheets, printing, a file base, what it guarantees |

@@ -120,6 +120,9 @@ enum class ibSessionKind : int {
 	// …working in the configuration — the thin designer. A designer as the desktop's is (IsDesignerSessionKind):
 	// no runtime, the one designer of the base.
 	ThinDesigner  = 105,
+	// ONE REQUEST TO AN HTTP SERVICE of the configuration (backend/httpService/httpServiceCall.h): made for the
+	// request, under the identity it came with, and ended once it is answered. Nobody sits at it.
+	HttpService   = 106,
 
 };
 

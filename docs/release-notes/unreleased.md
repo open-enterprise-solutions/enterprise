@@ -40,6 +40,15 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **An assistant's connection comes back by itself.** After a dropped connection its next call opens a
   new one. The call that was under way is not repeated, and the assistant is told to check its result.
 
+## Configuration
+
+- **HTTP services: a configuration answers an HTTP request.** A new kind under Common, `HTTPService`,
+  with `URLTemplate`s (`/Transfer/{id}/reset`, `/*`) and their `HTTPServiceMethod`s (Get, Post, …
+  or Any). A request to `<publication>/hs/<RootURL>/…` on the web server is answered by a function
+  of the service's own module, given an `HTTPServiceRequest` and returning an `HTTPServiceResponse`.
+  Each request is a session of its own, logged in by its `Authorization: Basic`. See
+  [http-services.md](../public/http-services.md).
+
 ## Script language
 
 - **`Tstr(text)` without a language reads the user's language.** It read the first language

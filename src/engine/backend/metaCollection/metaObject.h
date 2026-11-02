@@ -50,6 +50,11 @@ constexpr ibClassID g_metaSessionParameterCLSID = metadata_to_clsid("MD_SPRM");
 // and the objects and fields it governs. Switched off, they stay in the metadata and in every query, and are
 // simply not available (metaFunctionalOptionObject.h).
 constexpr ibClassID g_metaFunctionalOptionCLSID = metadata_to_clsid("MD_FOPT");
+// AN HTTP SERVICE — the addresses a configuration answers under its root, and the module whose functions answer
+// them; its URL templates are its children, and each template's methods are the template's (metaHttpServiceObject.h).
+constexpr ibClassID g_metaHttpServiceCLSID = metadata_to_clsid("MD_HTTPS");
+constexpr ibClassID g_metaUrlTemplateCLSID = metadata_to_clsid("MD_HTTPT");
+constexpr ibClassID g_metaHttpServiceMethodCLSID = metadata_to_clsid("MD_HTTPM");
 
 constexpr ibClassID g_metaRoleCLSID = metadata_to_clsid("MD_ROLE");
 constexpr ibClassID g_metaSectionCLSID = metadata_to_clsid("MD_SSYST");

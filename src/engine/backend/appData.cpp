@@ -158,6 +158,7 @@ ibString DescribeSessionKind(ibSessionKind k) {
 	case ibSessionKind::SystemJob:     return ibT("SystemJob");
 	case ibSessionKind::ThinClient:    return ibT("ThinClient");
 	case ibSessionKind::ThinDesigner:  return ibT("ThinDesigner");
+	case ibSessionKind::HttpService:   return ibT("HttpService");
 	case ibSessionKind::Unknown:       return ibT("Unknown");
 	}
 	return ibT("Unknown");

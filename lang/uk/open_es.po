@@ -13599,3 +13599,123 @@ msgstr "Асистент із доступом до даних"
 #: src/engine/frmclient/mainFrame/settings/settingsdialog.cpp:39
 msgid "Debugging"
 msgstr "Налагодження"
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:32
+msgid "HTTP services"
+msgstr "HTTP-сервіси"
+
+#: src/engine/frmserver/metaTree/treeConfiguration.cpp:46 src/engine/backend/metaCollection/metaGroups.cpp:83
+msgid "URL templates"
+msgstr "Шаблони URL"
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:84
+msgid "Methods"
+msgstr "Методи"
+
+#: src/engine/backend/metaCollection/metaHttpServiceObject.h:107 src/engine/backend/session/sessionSnapshot.cpp:55
+msgid "HTTP service"
+msgstr "HTTP-сервіс"
+
+#: src/engine/backend/metaCollection/metaHttpServiceObject.h:108
+msgid "Root URL"
+msgstr "Кореневий URL"
+
+#: src/engine/backend/metaCollection/metaHttpServiceObject.h:109
+msgid "The service's address: one segment after /hs/ in the address the web server publishes the base under - <publication>/hs/<root URL>/... Unique in the configuration."
+msgstr "Адреса сервісу: один сегмент після /hs/ в адресі, під якою веб-сервер публікує базу, - <публікація>/hs/<кореневий URL>/... Унікальна в конфігурації."
+
+#: src/engine/backend/metaCollection/metaHttpServiceObject.h:114
+msgid "Service module"
+msgstr "Модуль сервісу"
+
+#: src/engine/backend/metaCollection/metaHttpServiceObject.h:114
+msgid "The service's code: a function for each method, named by its Handler, given the HTTPServiceRequest and returning an HTTPServiceResponse."
+msgstr "Код сервісу: функція для кожного методу, названа його обробником; отримує HTTPServiceRequest і повертає HTTPServiceResponse."
+
+#: src/engine/backend/metaCollection/metaHttpServiceObject.h:164
+msgid "URL template"
+msgstr "Шаблон URL"
+
+#: src/engine/backend/metaCollection/metaHttpServiceObject.h:166
+msgid "The paths this template answers, after the service's root: segments that are literal (/Transfer), a parameter in braces (/{id} - one segment, given to the handler in URLParameters), or * as the last one (the rest of the path). /Transfer/{id}/reset, /*. The most particular template a path matches answers it."
+msgstr "Шляхи, на які відповідає шаблон, після кореня сервісу: сегменти - буквальні (/Transfer), параметр у фігурних дужках (/{id} - один сегмент, передається обробникові в URLParameters) або * останнім (залишок шляху). /Transfer/{id}/reset, /*. Відповідає найчастковіший із шаблонів, що підходять до шляху."
+
+#: src/engine/backend/metaCollection/metaHttpServiceObject.h:205
+msgid "HTTP service method"
+msgstr "Метод HTTP-сервісу"
+
+#: src/engine/backend/metaCollection/metaHttpServiceObject.h:206
+msgid "HTTP method"
+msgstr "HTTP-метод"
+
+#: src/engine/backend/metaCollection/metaHttpServiceObject.h:207
+msgid "The request method this answers on its template: Get, Post, Put, Patch, Delete, Head, Options - or Any, every method the template has no method of its own for."
+msgstr "Метод запиту, на який він відповідає у своєму шаблоні: Get, Post, Put, Patch, Delete, Head, Options - або Any, будь-який метод, для якого в шаблоні немає власного."
+
+#: src/engine/backend/metaCollection/metaHttpServiceObject.h:208
+msgid "Handler"
+msgstr "Обробник"
+
+#: src/engine/backend/metaCollection/metaHttpServiceObject.h:209
+msgid "The function of the service module that answers: Function <Handler>(Request), given the HTTPServiceRequest and returning an HTTPServiceResponse."
+msgstr "Функція модуля сервісу, яка відповідає: Function <Обробник>(Request); отримує HTTPServiceRequest і повертає HTTPServiceResponse."
+
+#: src/engine/backend/metaCollection/metaHttpServiceObjectMenu.cpp:11
+msgid "Open service module"
+msgstr "Відкрити модуль сервісу"
+
+#: src/engine/backend/session/sessionSnapshot.cpp:96
+msgid "HTTP request"
+msgstr "HTTP-запит"
+
+#: src/engine/backend/httpService/httpServiceCall.cpp:91
+#, c-format
+msgid "the module of the HTTP service '%s' is not registered in this session"
+msgstr "модуль HTTP-сервісу '%s' не зареєстровано в цьому сеансі"
+
+#: src/engine/backend/httpService/httpServiceCall.cpp:101
+#, c-format
+msgid "the handler '%s' of the HTTP service '%s' gave no HTTPServiceResponse - a function of that name in the service module returns one"
+msgstr "обробник '%s' HTTP-сервісу '%s' не повернув HTTPServiceResponse - його повертає функція з цим іменем у модулі сервісу"
+
+#: src/engine/backend/httpService/httpServiceCall.cpp:143
+#, c-format
+msgid "HTTP service %s %s: %s"
+msgstr "HTTP-сервіс %s %s: %s"
+
+#: src/engine/backend/system/value/valueHttp.cpp:830
+msgid "HTTPServiceResponse: a response says its status code - New HTTPServiceResponse(200)"
+msgstr "HTTPServiceResponse: відповідь має код стану - New HTTPServiceResponse(200)"
+
+#: src/engine/backend/system/value/valueHttp.cpp:835 src/engine/backend/system/value/valueHttp.cpp:896
+msgid "HTTPServiceResponse: the headers are a Structure - a name and its value"
+msgstr "HTTPServiceResponse: заголовки - це Structure: ім'я та значення"
+
+#: src/engine/backend/system/value/valueHttp.cpp:844
+#, c-format
+msgid "HTTPServiceResponse: a status code is from 100 to 599: %d was given"
+msgstr "HTTPServiceResponse: код стану - від 100 до 599, передано %d"
+
+#: src/engine/backend/system/value/valueHttp.cpp:917
+msgid "HTTPServiceResponse: SetBodyFromBinaryData takes a BinaryData"
+msgstr "HTTPServiceResponse: SetBodyFromBinaryData приймає BinaryData"
+
+#: src/engine/backend/system/value/valueHttp.cpp:858
+#, c-format
+msgid "HTTPServiceResponse: '%s' is not a header name"
+msgstr "HTTPServiceResponse: '%s' - не ім'я заголовка"
+
+#: src/engine/backend/system/value/valueHttp.cpp:861
+#, c-format
+msgid "HTTPServiceResponse: the header '%s' says how the message is carried, and that is not a script's to set"
+msgstr "HTTPServiceResponse: заголовок '%s' каже, як передається повідомлення, і задавати його не скрипту"
+
+#: src/engine/backend/system/value/valueHttp.cpp:865
+#, c-format
+msgid "HTTPServiceResponse: the value of the header '%s' is a string or a number"
+msgstr "HTTPServiceResponse: значення заголовка '%s' - рядок або число"
+
+#: src/engine/backend/system/value/valueHttp.cpp:868
+#, c-format
+msgid "HTTPServiceResponse: the value of the header '%s' holds a line break or a control character"
+msgstr "HTTPServiceResponse: у значенні заголовка '%s' є переведення рядка або керівний символ"

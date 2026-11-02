@@ -284,6 +284,27 @@ std::string ibHttpRequest::GetParameter(const std::string& name) const
 	return std::string();
 }
 
+std::vector<std::pair<std::string, std::string>> ibHttpRequest::GetParameters() const
+{
+	std::vector<std::pair<std::string, std::string>> parameters;
+	std::size_t from = 0;
+	while (from < m_query.size()) {
+		std::size_t amp = m_query.find('&', from);
+		if (amp == std::string::npos)
+			amp = m_query.size();
+		const std::string pair = m_query.substr(from, amp - from);
+		const std::size_t equals = pair.find('=');
+		std::string key, value;
+		if (!pair.empty() && Decode(pair.substr(0, equals), true, key)) {
+			if (equals == std::string::npos || !Decode(pair.substr(equals + 1), true, value))
+				value.clear();
+			parameters.emplace_back(std::move(key), std::move(value));
+		}
+		from = amp + 1;
+	}
+	return parameters;
+}
+
 std::string ibHttpRequest::GetTarget() const
 {
 	// Every byte of the path but the unreserved and the separators escaped — what Decode read, written back.
@@ -543,6 +564,7 @@ struct ibHttpServerState {
 
 	std::map<std::string, ibHttpHandler>      m_get;
 	std::map<std::string, ibHttpHandler>      m_post;
+	std::vector<std::pair<std::string, ibHttpHandler>> m_prefixes;   // the longest first
 	std::map<std::string, ibWebSocketOpening> m_sockets;
 	std::map<std::string, ibEventStreamOpening> m_streams;
 	struct ibMount {
@@ -941,22 +963,34 @@ private:
 			return;
 		}
 		const bool head = method == "HEAD";
-		const std::map<std::string, ibHttpHandler>* routes = nullptr;
-		if (method == "GET" || head)
-			routes = &m_server.m_get;
-		else if (method == "POST")
-			routes = &m_server.m_post;
-		else {
-			ibReply reply = Plain(405, "Method Not Allowed");
-			reply.m_headers.emplace_back("Allow", "GET, HEAD, POST");
-			Answer(std::move(reply));
-			return;
+		// THE ROUTES BY PREFIX FIRST — every method, whatever path is under it: what they answer is theirs to say.
+		const ibHttpHandler* routed = nullptr;
+		for (const auto& route : m_server.m_prefixes) {
+			if (m_request.m_path.compare(0, route.first.size(), route.first) == 0) {
+				routed = &route.second;
+				break;
+			}
+		}
+		if (routed == nullptr) {
+			const std::map<std::string, ibHttpHandler>* routes = nullptr;
+			if (method == "GET" || head)
+				routes = &m_server.m_get;
+			else if (method == "POST")
+				routes = &m_server.m_post;
+			else {
+				ibReply reply = Plain(405, "Method Not Allowed");
+				reply.m_headers.emplace_back("Allow", "GET, HEAD, POST");
+				Answer(std::move(reply));
+				return;
+			}
+			const auto route = routes->find(m_request.m_path);
+			if (route != routes->end())
+				routed = &route->second;
 		}
 
 		auto self = shared_from_this();
 		const auto request = std::make_shared<const ibHttpRequest>(m_request);
-		const auto route = routes->find(request->m_path);
-		if (route != routes->end()) {
+		if (routed != nullptr) {
 			// THE ANSWER, ONCE — a handler that answers twice is heard the first time.
 			const auto answered = std::make_shared<std::atomic<bool>>(false);
 			ibHttpResponder respond = [self, answered, head](ibHttpResponse response) {
@@ -968,7 +1002,7 @@ private:
 					self->Answer(std::move(reply));
 				});
 			};
-			const ibHttpHandler handler = route->second;
+			const ibHttpHandler handler = *routed;
 			asio::post(*m_server.m_workers, [request, handler, respond]() {
 				try {
 					handler(*request, respond);
@@ -1754,6 +1788,15 @@ void ibHttpServer::Get(const std::string& path, ibHttpHandler handler)
 void ibHttpServer::Post(const std::string& path, ibHttpHandler handler)
 {
 	m_state->m_post[path] = std::move(handler);
+}
+
+void ibHttpServer::Route(const std::string& prefix, ibHttpHandler handler)
+{
+	// The longest first: /trade/hs/ before /trade/.
+	auto& prefixes = m_state->m_prefixes;
+	prefixes.emplace_back(prefix, std::move(handler));
+	std::stable_sort(prefixes.begin(), prefixes.end(),
+		[](const auto& a, const auto& b) { return a.first.size() > b.first.size(); });
 }
 
 void ibHttpServer::WebSocket(const std::string& path, ibWebSocketOpening opening)

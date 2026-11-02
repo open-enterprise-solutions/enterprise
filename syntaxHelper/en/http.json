@@ -761,6 +761,368 @@
         "cls.HTTPResponse.Headers"
       ],
       "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceRequest",
+      "name_local": "HTTPServiceRequest",
+      "name_en": "HTTPServiceRequest",
+      "kind": "collection",
+      "class_id": 289446731127891128,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Function Handler(Request) : HTTPServiceResponse",
+      "description": "What a request to an HTTP service of the configuration brought. A SCRIPT NEVER MAKES ONE - the platform hands it to the method's handler, a function of the service module: Function <Handler>(Request).\n\nIts properties are read-only. The headers are named in lower case, as the server reads them; a Structure's keys fold case, so Request.Headers[\"Content-Type\"] finds them all the same. The body is held in memory whole, up to the web server's 4 MB.",
+      "syntax_block": "Request.HTTPMethod   Request.BaseURL   Request.RelativeURL\nRequest.Headers   Request.QueryOptions   Request.URLParameters\nRequest.GetBodyAsString()   Request.GetBodyAsBinaryData()",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Function TransferReset(Request) {\n    var id = Request.URLParameters.id;\n    var response = New HTTPServiceResponse(200);\n    response.SetBodyFromString(\"reset \" + id);\n    return response;\n}",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceResponse",
+        "cls.HTTPServiceRequest.HTTPMethod",
+        "cls.HTTPServiceRequest.BaseURL",
+        "cls.HTTPServiceRequest.RelativeURL",
+        "guide.http"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceRequest.HTTPMethod",
+      "name_local": "HTTPMethod",
+      "name_en": "HTTPMethod",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.HTTPMethod : string",
+      "description": "The request's method as it was sent - GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS. Useful in a method that answers Any.",
+      "syntax_block": "Request.HTTPMethod",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "if (Request.HTTPMethod = \"OPTIONS\") { return New HTTPServiceResponse(204); }",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceRequest"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceRequest.BaseURL",
+      "name_local": "BaseURL",
+      "name_en": "BaseURL",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.BaseURL : string",
+      "description": "The address up to the service's root, the publication included: /trade/hs/desk.",
+      "syntax_block": "Request.BaseURL",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "Message(Request.BaseURL);   // /trade/hs/desk",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceRequest"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceRequest.RelativeURL",
+      "name_local": "RelativeURL",
+      "name_en": "RelativeURL",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.RelativeURL : string",
+      "description": "The rest of the path after the root, as the template matched it: /Transfer/12/reset. The root itself is \"\" or \"/\".",
+      "syntax_block": "Request.RelativeURL",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "Message(Request.RelativeURL);   // /Transfer/12/reset",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceRequest"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceRequest.Headers",
+      "name_local": "Headers",
+      "name_en": "Headers",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.Headers : structure",
+      "description": "The headers the request came with, a Structure by name. A name sent twice is joined with \", \".",
+      "syntax_block": "Request.Headers[\"Content-Type\"]",
+      "parameters": "",
+      "return_descr": "Structure.",
+      "example": "var type = Request.Headers[\"Content-Type\"];",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceRequest"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceRequest.QueryOptions",
+      "name_local": "QueryOptions",
+      "name_en": "QueryOptions",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.QueryOptions : structure",
+      "description": "The query after the '?', decoded, a Structure by name: ?page=2&q=a%20b gives page = \"2\" and q = \"a b\". A name given twice keeps the last.",
+      "syntax_block": "Request.QueryOptions.page",
+      "parameters": "",
+      "return_descr": "Structure.",
+      "example": "var page = Number(Request.QueryOptions.page);",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceRequest"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceRequest.URLParameters",
+      "name_local": "URLParameters",
+      "name_en": "URLParameters",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.URLParameters : structure",
+      "description": "The template's {parameters}, by name: /Transfer/{id} matched by /Transfer/12 gives id = \"12\". Every value is a string.",
+      "syntax_block": "Request.URLParameters.id",
+      "parameters": "",
+      "return_descr": "Structure.",
+      "example": "var id = Request.URLParameters.id;",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceRequest"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceRequest.GetBodyAsString",
+      "name_local": "GetBodyAsString",
+      "name_en": "GetBodyAsString",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.GetBodyAsString(encoding : TextEncoding = UTF8) : string",
+      "description": "The body as text, in the encoding said - UTF-8 unless a TextEncoding is given. Bytes that are not text in that encoding are refused: take them with GetBodyAsBinaryData().",
+      "syntax_block": "Request.GetBodyAsString()",
+      "parameters": "encoding - a TextEncoding: UTF8 (the default), UTF16, ANSI, OEM, System.",
+      "return_descr": "String.",
+      "example": "var text = Request.GetBodyAsString();",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceRequest"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceRequest.GetBodyAsBinaryData",
+      "name_local": "GetBodyAsBinaryData",
+      "name_en": "GetBodyAsBinaryData",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Request.GetBodyAsBinaryData() : binaryData",
+      "description": "The body as bytes, whatever it holds.",
+      "syntax_block": "Request.GetBodyAsBinaryData()",
+      "parameters": "",
+      "return_descr": "BinaryData.",
+      "example": "var data = Request.GetBodyAsBinaryData();",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceRequest"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceResponse",
+      "name_local": "HTTPServiceResponse",
+      "name_en": "HTTPServiceResponse",
+      "kind": "collection",
+      "class_id": 145333742075291678,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "New HTTPServiceResponse(statusCode : number [, headers : structure])",
+      "description": "What a handler of an HTTP service answers with: its status, its headers and its body. The handler RETURNS it; a handler that returns anything else - or raises - is answered 500, and why goes to the base's journal, not to the caller.\n\nThe words after a status code (OK, Not Found) are the server's, said by the code. The headers that say how a message is carried (Content-Length, Transfer-Encoding, Connection and the like) are the server's too: a response that sets one is refused by name.",
+      "syntax_block": "Response = New HTTPServiceResponse(201);\nResponse.Headers.Insert(\"Content-Type\", \"application/json\");\nResponse.SetBodyFromString(text);",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Function ClientDetails(Request) {\n    var response = New HTTPServiceResponse(200);\n    response.Headers.Insert(\"Content-Type\", \"application/json; charset=utf-8\");\n    response.SetBodyFromString(\"{\\\"ok\\\": true}\");\n    return response;\n}",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceRequest",
+        "cls.HTTPServiceResponse.StatusCode",
+        "cls.HTTPServiceResponse.Headers",
+        "cls.HTTPServiceResponse.SetBodyFromString",
+        "guide.http"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceResponse.StatusCode",
+      "name_local": "StatusCode",
+      "name_en": "StatusCode",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Response.StatusCode : number",
+      "description": "The status the response is sent with, 100 to 599 - anything else is refused.",
+      "syntax_block": "Response.StatusCode = 404",
+      "parameters": "",
+      "return_descr": "Number.",
+      "example": "Response.StatusCode = 404;",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceResponse"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceResponse.Headers",
+      "name_local": "Headers",
+      "name_en": "Headers",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Response.Headers : structure",
+      "description": "The headers the response is sent with, a Structure: a name and its value, a string or a number.",
+      "syntax_block": "Response.Headers.Insert(name, value)",
+      "parameters": "",
+      "return_descr": "Structure.",
+      "example": "Response.Headers.Insert(\"Content-Type\", \"application/json\");",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceResponse"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceResponse.SetBodyFromString",
+      "name_local": "SetBodyFromString",
+      "name_en": "SetBodyFromString",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Response.SetBodyFromString(text : string, encoding : TextEncoding = UTF8)",
+      "description": "The body set from text, written in the encoding said - UTF-8 unless a TextEncoding is given, with no byte-order mark. Say the Content-Type yourself.",
+      "syntax_block": "Response.SetBodyFromString(text)",
+      "parameters": "text - the text.\nencoding - a TextEncoding: UTF8 (the default), UTF16, ANSI, OEM, System.",
+      "return_descr": "",
+      "example": "Response.SetBodyFromString(\"{\\\"ok\\\": true}\");",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceResponse"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceResponse.SetBodyFromBinaryData",
+      "name_local": "SetBodyFromBinaryData",
+      "name_en": "SetBodyFromBinaryData",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Response.SetBodyFromBinaryData(data : binaryData)",
+      "description": "The body set from bytes, as they are.",
+      "syntax_block": "Response.SetBodyFromBinaryData(data)",
+      "parameters": "data - a BinaryData.",
+      "return_descr": "",
+      "example": "Response.SetBodyFromBinaryData(picture);",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceResponse"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceResponse.GetBodyAsString",
+      "name_local": "GetBodyAsString",
+      "name_en": "GetBodyAsString",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Response.GetBodyAsString(encoding : TextEncoding = UTF8) : string",
+      "description": "The body set so far, read back as text in the encoding said.",
+      "syntax_block": "Response.GetBodyAsString()",
+      "parameters": "encoding - a TextEncoding: UTF8 (the default).",
+      "return_descr": "String.",
+      "example": "Message(Response.GetBodyAsString());",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceResponse"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.HTTPServiceResponse.GetBodyAsBinaryData",
+      "name_local": "GetBodyAsBinaryData",
+      "name_en": "GetBodyAsBinaryData",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "http"
+      ],
+      "signature": "Response.GetBodyAsBinaryData() : binaryData",
+      "description": "The body set so far, as bytes.",
+      "syntax_block": "Response.GetBodyAsBinaryData()",
+      "parameters": "",
+      "return_descr": "BinaryData.",
+      "example": "var data = Response.GetBodyAsBinaryData();",
+      "availability": "Server",
+      "see_also": [
+        "cls.HTTPServiceResponse"
+      ],
+      "reviewed": false
     }
   ]
 }
