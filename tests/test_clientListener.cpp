@@ -74,8 +74,8 @@ const std::string& PingPacket()
 {
 	static const std::string packet = [] {
 		ibDataNode request;
-		request.SetValue(wxT("id"), 1);
-		request.SetValue(wxT("method"), ibString(wxT("ping")));
+		request.SetValue(ibT("id"), 1);
+		request.SetValue(ibT("method"), ibString(wxT("ping")));
 		ibMemoryBuffer bytes;
 		ibBinaryProvider().Write(request, bytes);
 		return std::string(static_cast<const char*>(bytes.GetData()), bytes.GetDataLen());

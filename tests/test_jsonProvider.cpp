@@ -63,12 +63,12 @@ ibDataNode Parse(const ibMemoryBuffer& text,
 // decimal on both sides, so a value wider than a double survives untouched.
 TEST(JsonProvider, Scalars_SurviveRoundTrip) {
 	ibDataNode n;
-	n.AddField(wxT("name"), ibDataValue::String(wxT("RootName")));
-	n.AddField(wxT("flag"), ibDataValue::Bool(true));
-	n.AddField(wxT("off"),  ibDataValue::Bool(false));
-	n.AddField(wxT("id"),   ibDataValue::Int(-42));
-	n.AddField(wxT("wide"), ibDataValue::Number(ibNumber(wxT("123456789012345678901234567890.125"))));
-	n.AddField(wxT("none"), ibDataValue());
+	n.AddField(ibT("name"), ibDataValue::String(wxT("RootName")));
+	n.AddField(ibT("flag"), ibDataValue::Bool(true));
+	n.AddField(ibT("off"),  ibDataValue::Bool(false));
+	n.AddField(ibT("id"),   ibDataValue::Int(-42));
+	n.AddField(ibT("wide"), ibDataValue::Number(ibNumber(wxT("123456789012345678901234567890.125"))));
+	n.AddField(ibT("none"), ibDataValue());
 
 	const ibDataNode back = Parse(Emit(n));
 
@@ -90,7 +90,7 @@ TEST(JsonProvider, Scalars_SurviveRoundTrip) {
 TEST(JsonProvider, String_EscapesSurviveRoundTrip) {
 	const ibString tricky = wxT("quote:\" back\\slash tab:\t nl:\n unicode:é中");
 	ibDataNode n;
-	n.AddField(wxT("s"), ibDataValue::String(tricky));
+	n.AddField(ibT("s"), ibDataValue::String(tricky));
 
 	EXPECT_EQ(Parse(Emit(n)).GetValue<ibString>(ibT("s")), tricky);
 }
@@ -98,7 +98,7 @@ TEST(JsonProvider, String_EscapesSurviveRoundTrip) {
 // Binary rides as "base64:…" — the one string shape that reads back as Binary.
 TEST(JsonProvider, Binary_SurvivesAsBinaryNotString) {
 	ibDataNode n;
-	n.AddField(wxT("blob"), ibDataValue::Binary(Blob("bytes\0with\0nulls")));
+	n.AddField(ibT("blob"), ibDataValue::Binary(Blob("bytes\0with\0nulls")));
 
 	// Hold the parsed node in a NAMED local: FindField hands back a pointer INTO it, so
 	// `Parse(...).FindField(...)` would leave that pointer dangling at the end of the
@@ -129,8 +129,8 @@ TEST(JsonProvider, Array_KeepsOrderAndKinds) {
 	items.push_back(ibDataValue::Bool(true));
 
 	ibDataNode n;
-	n.AddField(wxT("list"), ibDataValue::Array(items));
-	n.AddField(wxT("empty"), ibDataValue::Array({}));
+	n.AddField(ibT("list"), ibDataValue::Array(items));
+	n.AddField(ibT("empty"), ibDataValue::Array({}));
 
 	const ibDataNode back = Parse(Emit(n));   // named — FindField points into it
 
@@ -172,7 +172,7 @@ TEST(JsonProvider, Children_RecurseWithIdentity) {
 // comes back into the property area, so FindChild finds it again.
 TEST(JsonProvider, ChildValue_ReturnsToPropertyArea) {
 	ibDataNode n(1001, 1);
-	n.Child(ibT("Type")).AddField(wxT("typeName"), ibDataValue::String(wxT("String")));
+	n.Child(ibT("Type")).AddField(ibT("typeName"), ibDataValue::String(wxT("String")));
 
 	const ibDataNode back = Parse(Emit(n));
 	auto sub = back.FindChild(ibT("Type"));
@@ -256,7 +256,7 @@ TEST(JsonProvider, ReadEntry_PlacesKeysAsTheTextReaderDoes) {
 // wire it is indistinguishable from a string that looks like a date.
 TEST(JsonProvider, Date_DegradesToString_ByDesign) {
 	ibDataNode n;
-	n.AddField(wxT("when"), ibDataValue::Date(ibDateTime(2023, 11, 14, 22, 13, 20)));
+	n.AddField(ibT("when"), ibDataValue::Date(ibDateTime(2023, 11, 14, 22, 13, 20)));
 
 	const ibDataNode back = Parse(Emit(n));   // named — FindField points into it
 	auto v = back.FindField(ibT("when"));
@@ -269,7 +269,7 @@ TEST(JsonProvider, Date_DegradesToString_ByDesign) {
 TEST(JsonProvider, Guid_DegradesToString_ByDesign) {
 	const ibGuid key(ibString(wxT("0f8fad5b-d9cb-469f-a165-70867728950e")));
 	ibDataNode n;
-	n.AddField(wxT("key"), ibDataValue::Guid(key));
+	n.AddField(ibT("key"), ibDataValue::Guid(key));
 
 	const ibDataNode back = Parse(Emit(n));   // named — FindField points into it
 	auto v = back.FindField(ibT("key"));
@@ -285,7 +285,7 @@ TEST(JsonProvider, TypeDesc_IsDroppedNotMaterialised) {
 	ibJsonProvider provider;
 	provider.SetTypeResolver([](ibClassID) { return ibString(wxT("String")); });
 	ibDataNode n;
-	n.AddField(wxT("typeId"), ibDataValue::UInt(777));
+	n.AddField(ibT("typeId"), ibDataValue::UInt(777));
 	ibWriterMemory w;
 	provider.Write(n, w);
 

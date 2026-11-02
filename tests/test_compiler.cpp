@@ -1029,7 +1029,7 @@ TEST(ValueSerialize, UnknownTypeInANodeIsRefused) {
 	// empty would be indistinguishable from a value that legitimately IS empty,
 	// and would surface far away as a blank field nobody can explain.
 	ibDataNode node(0, 0);
-	node.SetValue(wxT("t"), ibString(wxT("8613303245920547140")));   // no such registered type
+	node.SetValue(ibT("t"), ibString(wxT("8613303245920547140")));   // no such registered type
 
 	EXPECT_THROW(ibValue::FromNode(node), ibBackendException);
 }
@@ -1184,7 +1184,7 @@ TEST(MetaDataSerialize, ATypeNOBODYHasIsRefused) {
 	StandInMetaData metaData;
 
 	ibDataNode node(0, 0);
-	node.SetValue(wxT("t"), ibString(wxT("8613303245920547140")));
+	node.SetValue(ibT("t"), ibString(wxT("8613303245920547140")));
 
 	EXPECT_THROW(metaData.Deserialize(node), ibBackendException);
 }
