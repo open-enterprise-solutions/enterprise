@@ -13309,3 +13309,41 @@ msgstr ""
 #, c-format
 msgid "Nothing to bind to - the path names no field and no attribute"
 msgstr ""
+
+#: src/engine/frmserver/visualView/controlEnum.h
+msgid "Tile"
+msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgid "Note"
+msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgid "The line under a tile's title - a price, a count, a state. Shown only when the picture location is Tile. Can be written per language and changed from code while the form is open."
+msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgctxt "button"
+msgid "View"
+msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgid "How the button is drawn: a button, or a hyperlink - no face and no frame, its caption underlined. Pressed the same way, and its picture, its representation and its command are the same."
+msgstr ""
+
+#: src/engine/frmserver/visualView/controlEnum.h
+msgctxt "button view"
+msgid "Button"
+msgstr ""
+
+#: src/engine/frmserver/visualView/controlEnum.h
+msgid "Hyperlink"
+msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgid "Picture location"
+msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgid "Where the picture stands. Auto: where the button puts it, on the left of the text. Left, Right: on that side of the text. Tile: the picture large over the text and the Note under them, the button filling what its sizer gives it - a big button for a finger; put tiles in a grid sizer for a panel of them."
+msgstr ""

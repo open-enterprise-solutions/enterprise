@@ -401,6 +401,12 @@ made after the answer's frame was drawn (a report composed in the background) is
 A notification begins `{"jsonrpc":"2.0","method":` — where an answer has its `id` — and a client tells the two apart
 by that, whatever the length.
 
+From protocol 8 a button's node says where its picture stands, `PictureLocation`: 0 where the button puts it (on the
+left), 1 left, 2 right of its `Caption`, 3 a tile — its picture large over its `Caption`, and `Note` (a line under them
+— a price, a count) beside them in the state; a tile fills what its sizer item gives it. Its `View` says how it is
+drawn: 0 a button, 1 a hyperlink — no face and no frame, its caption underlined. A client before 8 draws a button
+with its picture on the left, and the note is not shown.
+
 ## The debugger
 
 From protocol 6 a designer debugs through the server's debugger — the one connected to the runtimes. The client's

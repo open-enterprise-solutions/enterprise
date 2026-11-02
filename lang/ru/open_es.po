@@ -13647,3 +13647,41 @@ msgstr "У '%s' нет поля '%s'. Доступны: %s"
 #, c-format
 msgid "Nothing to bind to - the path names no field and no attribute"
 msgstr "Не к чему привязать: путь не называет ни поля, ни реквизита"
+
+#: src/engine/frmserver/visualView/controlEnum.h
+msgid "Tile"
+msgstr "Плитка"
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgid "Note"
+msgstr "Подпись"
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgid "The line under a tile's title - a price, a count, a state. Shown only when the picture location is Tile. Can be written per language and changed from code while the form is open."
+msgstr "Строка под заголовком плитки - цена, количество, состояние. Показывается только при положении картинки «Плитка». Может быть написана на каждом языке и меняться из кода, пока форма открыта."
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgctxt "button"
+msgid "View"
+msgstr "Вид"
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgid "How the button is drawn: a button, or a hyperlink - no face and no frame, its caption underlined. Pressed the same way, and its picture, its representation and its command are the same."
+msgstr "Как рисуется кнопка: обычной кнопкой или гиперссылкой - без фона и рамки, с подчёркнутой надписью. Нажимается так же, картинка, представление и команда те же."
+
+#: src/engine/frmserver/visualView/controlEnum.h
+msgctxt "button view"
+msgid "Button"
+msgstr "Обычная кнопка"
+
+#: src/engine/frmserver/visualView/controlEnum.h
+msgid "Hyperlink"
+msgstr "Гиперссылка"
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgid "Picture location"
+msgstr "Положение картинки"
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgid "Where the picture stands. Auto: where the button puts it, on the left of the text. Left, Right: on that side of the text. Tile: the picture large over the text and the Note under them, the button filling what its sizer gives it - a big button for a finger; put tiles in a grid sizer for a panel of them."
+msgstr "Где стоит картинка. Авто: там, куда её ставит кнопка, слева от текста. Лево, Право: с этой стороны от текста. Плитка: картинка крупно над текстом и подпись под ними, кнопка заполняет то, что ей даёт сайзер, - крупная кнопка под палец; плитки в сетке образуют панель."

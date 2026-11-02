@@ -35,7 +35,10 @@ namespace ibProtocol {
 	//      the key the first asks for, carries the debugger's commands, answered at once, and the server's `debug`
 	//      notifications — a stop, the stack, the locals — sent as they happen, not as a frame.
 	//   7  …and the assistant's MCP rides it the same way (ibMcp): a connection of its own, bound by a key of its own.
-	inline constexpr int Version = 7;
+	//   8  …and a button says where its picture stands (its PictureLocation): left or right of its caption, or a TILE -
+	//      its picture large over its caption, and its State's Note under them - and how it is drawn (its View): a
+	//      button or a hyperlink. A client below 8 draws a button with its picture on the left.
+	inline constexpr int Version = 8;
 
 	// WHAT A CLIENT ASKS THE SERVER. On the wire a method is a name, as JSON-RPC has it; in code it is a type: the server
 	// reads the name once (MethodFromName) and nothing past it compares strings. A name is never changed; a new method
@@ -1763,6 +1766,8 @@ namespace ibProtocol {
 			inline constexpr const char* Rows             = "Rows";            // a grid sizer's
 			inline constexpr const char* Cols             = "Cols";
 			inline constexpr const char* TitleLocation    = "TitleLocation";   // ibTitleLocation
+			inline constexpr const char* PictureLocation  = "PictureLocation"; // ibPictureLocation: a button's
+			inline constexpr const char* View             = "View";            // ibButtonView: a button's
 			inline constexpr const char* PasswordMode     = "PasswordMode";
 			inline constexpr const char* MultilineMode    = "MultilineMode";
 			inline constexpr const char* ButtonSelect     = "ButtonSelect";
@@ -1777,6 +1782,22 @@ namespace ibProtocol {
 			enum class ibTitleLocation : int {
 				Left  = 1,
 				Right = 2,
+			};
+
+			// Where a button's picture stands (the server's ibPictureLocation): Auto where the button puts it, on the left;
+			// Tile, its picture large over its caption and its State's Note under them, the whole filling what its item
+			// gives it.
+			enum class ibPictureLocation : int {
+				Auto  = 0,
+				Left  = 1,
+				Right = 2,
+				Tile  = 3,
+			};
+
+			// How a button is drawn (the server's ibButtonView): a hyperlink has no face and no frame, its caption underlined.
+			enum class ibButtonView : int {
+				Button    = 0,
+				Hyperlink = 1,
 			};
 
 		}
@@ -1795,6 +1816,7 @@ namespace ibProtocol {
 			inline constexpr const char* Caption        = "Caption";
 			inline constexpr const char* Picture        = "Picture";
 			inline constexpr const char* Representation = "Representation";   // ibRepresentation: a button's, a column's
+			inline constexpr const char* Note           = "Note";             // a tile's: the line under its caption
 			inline constexpr const char* Text           = "Text";
 			inline constexpr const char* Value          = "Value";            // a field's value with its type
 			inline constexpr const char* Checked        = "Checked";

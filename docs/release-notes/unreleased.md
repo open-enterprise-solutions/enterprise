@@ -93,6 +93,16 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **An encoding is a member of `TextEncoding`.** `TextReader` and `TextWriter` took a string or another
   enumeration's member without a word; now it is refused, as `HTTPRequest` already refused a string.
 
+## Forms
+
+- **Where a button's picture stands, a button as a tile, a button as a hyperlink.** A button's new `PictureLocation`
+  puts its picture on the left (`Auto`, `Left`) or the right of its caption, or makes it a tile (`Tile`): the picture
+  large over the caption and the new `Note` under them - a price, a count, a state - the button filling what its
+  sizer gives it: a button for a finger, in both clients. Tiles in a grid sizer make a panel of them. Its new `View`
+  draws it as a button or as a hyperlink - no face and no frame, its caption underlined - pressed the same way. What
+  the button shows is still its `Representation`. The protocol is 8. A form saved with them and opened by an earlier
+  designer shows a button with its picture on the left, and saved there it loses its location, its view and its note.
+
 ## The browser client
 
 - **A grid sizer's cells are one size, as in the thin client.** Every column takes an equal share of

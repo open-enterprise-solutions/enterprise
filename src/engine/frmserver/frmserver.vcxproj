@@ -274,6 +274,7 @@
     <ClCompile Include="visualView\ctrl\boxsizer_res.cpp" />
     <ClCompile Include="visualView\ctrl\button.cpp" />
     <ClCompile Include="visualView\ctrl\buttonEvent.cpp" />
+    <ClCompile Include="visualView\ctrl\buttonProperty.cpp" />
     <ClCompile Include="visualView\ctrl\button_res.cpp" />
     <ClCompile Include="visualView\ctrl\chartBox.cpp" />
     <ClCompile Include="visualView\ctrl\chartBox_res.cpp" />

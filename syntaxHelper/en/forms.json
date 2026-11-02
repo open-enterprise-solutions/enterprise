@@ -1,0 +1,192 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "enum.ButtonView",
+      "name_local": "ButtonView",
+      "name_en": "ButtonView",
+      "kind": "enum_type",
+      "class_id": 431239117940110366,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "forms"
+      ],
+      "signature": "ButtonView.Button, .Hyperlink",
+      "description": "How a button is drawn: a button, or a hyperlink - the same button with no face and no frame, its caption underlined. A button's View property holds a member, written ButtonView.<Name>. Pressed the same way either way; its picture, where the picture stands and its command do not change.\n\nA script reads and sets it on a button of the form: `Controls.Button1.View = ButtonView.Hyperlink;`.",
+      "syntax_block": "Controls.Button1.View = ButtonView.Hyperlink;",
+      "syntax_block_ves": "Controls.Button1.View = ButtonView.Hyperlink;",
+      "parameters": "",
+      "return_descr": "ButtonView.",
+      "example": "Controls.Button1.View = ButtonView.Hyperlink;",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.ButtonView.Button",
+        "enum.ButtonView.Hyperlink",
+        "enum.PictureLocation"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.ButtonView.Button",
+      "name_local": "Button",
+      "name_en": "Button",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "forms"
+      ],
+      "signature": "ButtonView.Button",
+      "description": "A button: its face and its frame. The default.",
+      "syntax_block": "Controls.Button1.View = ButtonView.Button;",
+      "parameters": "",
+      "return_descr": "ButtonView.",
+      "example": "Controls.Button1.View = ButtonView.Button;",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.ButtonView"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.ButtonView.Hyperlink",
+      "name_local": "Hyperlink",
+      "name_en": "Hyperlink",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "forms"
+      ],
+      "signature": "ButtonView.Hyperlink",
+      "description": "A hyperlink: no face and no frame, the caption underlined in a link's colour, a hand over it. A client older than protocol 8 draws a button.",
+      "syntax_block": "Controls.Button1.View = ButtonView.Hyperlink;",
+      "parameters": "",
+      "return_descr": "ButtonView.",
+      "example": "Controls.Button1.View = ButtonView.Hyperlink;",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.ButtonView"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.PictureLocation",
+      "name_local": "PictureLocation",
+      "name_en": "PictureLocation",
+      "kind": "enum_type",
+      "class_id": 402851473462030947,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "forms"
+      ],
+      "signature": "PictureLocation.Auto, .Left, .Right, .Tile",
+      "description": "Where a button's picture stands: where the button puts it, on the left or the right of its caption, or a tile. A button's PictureLocation property holds a member, written PictureLocation.<Name>. What the button shows - its caption, its picture or both - is its Representation, as for every control.\n\nA script reads and sets it on a button of the form: `Controls.Button1.PictureLocation = PictureLocation.Tile;`.",
+      "syntax_block": "Controls.Button1.PictureLocation = PictureLocation.Tile;",
+      "syntax_block_ves": "Controls.Button1.PictureLocation = PictureLocation.Tile;",
+      "parameters": "",
+      "return_descr": "PictureLocation.",
+      "example": "Controls.Button1.PictureLocation = PictureLocation.Tile;\nControls.Button1.Note = \"12\";",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.PictureLocation.Auto",
+        "enum.PictureLocation.Left",
+        "enum.PictureLocation.Right",
+        "enum.PictureLocation.Tile"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.PictureLocation.Auto",
+      "name_local": "Auto",
+      "name_en": "Auto",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "forms"
+      ],
+      "signature": "PictureLocation.Auto",
+      "description": "Where the button puts it: on the left of the caption. The default.",
+      "syntax_block": "Controls.Button1.PictureLocation = PictureLocation.Auto;",
+      "parameters": "",
+      "return_descr": "PictureLocation.",
+      "example": "Controls.Button1.PictureLocation = PictureLocation.Auto;",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.PictureLocation"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.PictureLocation.Left",
+      "name_local": "Left",
+      "name_en": "Left",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "forms"
+      ],
+      "signature": "PictureLocation.Left",
+      "description": "On the left of the caption.",
+      "syntax_block": "Controls.Button1.PictureLocation = PictureLocation.Left;",
+      "parameters": "",
+      "return_descr": "PictureLocation.",
+      "example": "Controls.Button1.PictureLocation = PictureLocation.Left;",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.PictureLocation"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.PictureLocation.Right",
+      "name_local": "Right",
+      "name_en": "Right",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "forms"
+      ],
+      "signature": "PictureLocation.Right",
+      "description": "On the right of the caption. A client older than protocol 8 shows it on the left.",
+      "syntax_block": "Controls.Button1.PictureLocation = PictureLocation.Right;",
+      "parameters": "",
+      "return_descr": "PictureLocation.",
+      "example": "Controls.Button1.PictureLocation = PictureLocation.Right;",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.PictureLocation"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.PictureLocation.Tile",
+      "name_local": "Tile",
+      "name_en": "Tile",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "forms"
+      ],
+      "signature": "PictureLocation.Tile",
+      "description": "A button for a finger: the picture large over the caption, the button's Note under them in a smaller face (a price, a count, a state), the whole filling what its sizer gives it. Put tiles in a grid sizer for a panel of them. A client older than protocol 8 shows the picture on the left and no note.",
+      "syntax_block": "Controls.Button1.PictureLocation = PictureLocation.Tile;",
+      "parameters": "",
+      "return_descr": "PictureLocation.",
+      "example": "Controls.Button1.PictureLocation = PictureLocation.Tile;",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.PictureLocation"
+      ],
+      "reviewed": false
+    }
+  ]
+}

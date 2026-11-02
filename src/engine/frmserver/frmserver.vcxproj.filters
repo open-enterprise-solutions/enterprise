@@ -442,6 +442,9 @@
     <ClCompile Include="visualView\ctrl\buttonEvent.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
+    <ClCompile Include="visualView\ctrl\buttonProperty.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
     <ClCompile Include="visualView\ctrl\button_res.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>

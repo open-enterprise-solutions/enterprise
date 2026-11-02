@@ -15,6 +15,10 @@ namespace {
 // The ids a group's popup gives its commands — each the command's place among the group's, as the press names it.
 constexpr int kFirstMemberId = wxID_HIGHEST + 1;
 
+// A tile's picture, in DIP: twice the 16 of a button's - the engine's masters have four times to give. Handed to wx at
+// this size and at twice it, as a bundle: wx draws the one the window's DPI asks for, scaled no further.
+constexpr int kTilePicture = 32;
+
 } // namespace
 
 void ibValueButton::Create(wxWindow* parent, const ibProtocolNode& /*node*/)
@@ -30,22 +34,31 @@ void ibValueButton::Update(const ibProtocolNode& node)
 	// The server has resolved what is shown — the button's own caption and picture, or its command's — and which of
 	// the two; the caption names the button even when only the picture is shown.
 	const wxString caption = state.GetString(ibProtocol::ibForm::ibState::Caption);
-	const wxBitmap picture = ibProtocolPicture(state, ibProtocol::ibForm::ibState::Picture);
 	const ibProtocol::ibForm::ibState::ibRepresentation representation = static_cast<ibProtocol::ibForm::ibState::ibRepresentation>(
 		state.GetInt(ibProtocol::ibForm::ibState::Representation, static_cast<long long>(ibProtocol::ibForm::ibState::ibRepresentation::PictureAndText)));
 
-	if (representation == ibProtocol::ibForm::ibState::ibRepresentation::Picture) {
-		m_button->SetLabel(wxEmptyString);
-		m_button->SetBitmap(picture);
+	// Where the picture stands is the button's own, as it was saved: beside the caption, on the left unless the right is
+	// asked for, or a tile - the picture large on top, the caption, the note - filling what its item gives it. The
+	// bitmap's place is given WITH the bitmap: SetBitmap puts it on the left unless told otherwise.
+	const ibProtocol::ibForm::ibProperty::ibPictureLocation location = static_cast<ibProtocol::ibForm::ibProperty::ibPictureLocation>(
+		node.GetInt(ibProtocol::ibForm::ibProperty::PictureLocation, static_cast<long long>(ibProtocol::ibForm::ibProperty::ibPictureLocation::Auto)));
+	const bool tile = location == ibProtocol::ibForm::ibProperty::ibPictureLocation::Tile;
+	const wxDirection side = tile ? wxTOP : location == ibProtocol::ibForm::ibProperty::ibPictureLocation::Right ? wxRIGHT : wxLEFT;
+	m_button->SetNote(tile ? wxString(state.GetString(ibProtocol::ibForm::ibState::Note)) : wxString());
+	// …and how it is drawn: a hyperlink is the same button with no face and no frame.
+	m_button->SetHyperlink(node.GetInt(ibProtocol::ibForm::ibProperty::View, static_cast<long long>(ibProtocol::ibForm::ibProperty::ibButtonView::Button))
+		== static_cast<long long>(ibProtocol::ibForm::ibProperty::ibButtonView::Hyperlink));
+
+	m_button->SetLabel(representation == ibProtocol::ibForm::ibState::ibRepresentation::Picture ? wxString() : caption);
+	if (representation == ibProtocol::ibForm::ibState::ibRepresentation::Text)
+		m_button->SetBitmap(wxNullBitmap, side);
+	else if (tile) {
+		const wxBitmap normal = ibProtocolPicture(state, ibProtocol::ibForm::ibState::Picture, kTilePicture);
+		const wxBitmap twice = ibProtocolPicture(state, ibProtocol::ibForm::ibState::Picture, 2 * kTilePicture);
+		m_button->SetBitmap(normal.IsOk() ? wxBitmapBundle::FromBitmaps(normal, twice) : wxBitmapBundle(), side);
 	}
-	else if (representation == ibProtocol::ibForm::ibState::ibRepresentation::Text) {
-		m_button->SetLabel(caption);
-		m_button->SetBitmap(wxNullBitmap);
-	}
-	else {
-		m_button->SetLabel(caption);
-		m_button->SetBitmap(picture);
-	}
+	else
+		m_button->SetBitmap(ibProtocolPicture(state, ibProtocol::ibForm::ibState::Picture), side);
 
 	const ibProtocolNode members = state.FindChild(ibProtocol::ibForm::ibButton::Members);
 	m_members = members.IsNode() ? members.Clone() : ibProtocolNode();
