@@ -75,7 +75,8 @@ public:
 
 	ibProgramSyntax GetCompileSyntax() const { return m_propertySyntax->GetValueAsEnum(); }
 
-	void SetVersion(const ibVersionID& version) { m_propertyVersion->SetValue(static_cast<ibProgramVersion>(version)); }
+	// As a number: a version read from a file may be no rung of the enumeration, and casting it to one is undefined.
+	void SetVersion(const ibVersionID& version) { m_propertyVersion->SetValue(static_cast<int>(version)); }
 	ibVersionID GetVersion() const { return m_propertyVersion->GetValueAsInteger(); }
 
 	void SetLanguage(const ibMetaID& id) { m_propertyDefLanguage->SetValue(id); }
