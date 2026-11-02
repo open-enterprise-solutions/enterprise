@@ -103,7 +103,7 @@ same process, and wx keeps one class table.
   The form's root carries its own properties (`Title`, `Orient`, …); the tree's captions are the server's.
 - **The desktop's windows, drawn here, decided there.** The list settings window (`ListSettings`, a table's Filter
   command), the report's settings window (`ComposerSettings`, a report's Settings command), the calculator and
-  calendar (`SimpleChoice`), the error window over a script's failure (`Error`), the schedule's editor (`Schedule`)
+  calendar (`SimpleChoice`), a reference's quick choice (`Choice`, `Quick`), the error window over a script's failure (`Error`), the schedule's editor (`Schedule`)
   and a script's printed sheet (`Print`) are the desktop's, copied. The client draws them over what the request
   carries; the server reads, checks and puts on what comes back.
 - **The desktop's controls.** Besides fields, tables, buttons and the rest: notebooks and their pages, radio buttons,

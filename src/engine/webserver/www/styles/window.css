@@ -671,6 +671,25 @@ wa-dialog.answered-only::part(close-button) {
 	padding-left: 2.25rem;
 }
 
+/* A quick choice — a menu's items dropped under the field pressed, the one the field holds marked. */
+.quick-choice {
+	min-width: 0;
+	max-height: min(80dvh, calc(var(--oes-touch) * 8 + 0.5rem));
+}
+
+.quick-choice button {
+	padding-left: 0.75rem;
+}
+
+.quick-choice button.selected {
+	font-weight: 600;
+}
+
+.quick-choice button:focus-visible {
+	outline: none;
+	background: var(--oes-table-row-hover-bg);
+}
+
 /* A number's calculator and a date's calendar — dropped under the field pressed, the keys a finger's size. */
 .simple-choice {
 	position: fixed;

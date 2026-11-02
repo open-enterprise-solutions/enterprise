@@ -53,7 +53,7 @@
 #include "frmclient/backend/serialize/dataProtocol.h"   // a value as the server's question carries it
 #include "frmclient/backend/metaCollection/metaObject.h"  // the inspector's rows an answer brought, kept for their object
 #include "frmclient/backend/backend_localization.h"     // the session's language — the frame says it
-#include "frmclient/visualView/ctrl/typeControl.h"      // ibTypeControlFactory::SimpleChoice — the calculator, the calendar
+#include "frmclient/visualView/ctrl/typeControl.h"      // ibTypeControlFactory::ChooseValue — the calculator, the calendar, the list
 #include "frmclient/visualView/ctrl/frame.h"            // ibControlFrame — what they are drawn over
 #include "frmclient/win/ctrls/controlTextEditor.h"      // ibControlTextEditor — the field they drop under
 #include "frmclient/backend/composition/dataComposer.h"
@@ -220,12 +220,13 @@ void AppendMenuItems(wxMenu& menu, const std::vector<ibProtocolNode>& items, std
 	}
 }
 
-// A FIELD'S VALUE FOR THE SERVER'S QUESTION — what the desktop's SimpleChoice is drawn over: the value the question carries,
-// the one chosen kept, and the wait ended when the calculator or the calendar goes (ibProtocol::ibRequest::ibKind::SimpleChoice).
-class ibSimpleChoiceHolder : public ibControlFrame {
+// A FIELD'S VALUE FOR THE SERVER'S QUESTION — what the desktop's SimpleChoice and QuickChoice are drawn over: the value the
+// question carries, the one chosen kept, and the wait ended when the calculator, the calendar or the list goes
+// (ibProtocol::ibRequest::ibKind::SimpleChoice; a Choice asked Quick).
+class ibChoiceHolder : public ibControlFrame {
 public:
 
-	explicit ibSimpleChoiceHolder(const ibValue& value) : m_value(value) {}
+	explicit ibChoiceHolder(const ibValue& value) : m_value(value) {}
 
 	virtual bool GetControlValue(ibValue& pvarControlVal) const override { pvarControlVal = m_value; return true; }
 	virtual bool SetControlValue(const ibValue& varControlVal = ibValue()) override {
@@ -245,7 +246,6 @@ public:
 			m_loop->Exit();
 	}
 
-	const ibValue& GetValue() const { return m_value; }
 	bool HasChosen() const { return m_hasChosen; }
 	const ibValue& GetChosen() const { return m_chosen; }
 
@@ -1566,6 +1566,22 @@ void ibFrontendMainFrame::ShowRequest(const ibProtocolNode& request, ibProtocolN
 				ticked.Add(static_cast<int>(i));
 			}
 		}
+		// QUICK — the desktop's ibTypeControlFactory::QuickChoice, no window: the items dropped under the field pressed, each
+		// standing for its order; the one picked answered by its Id, a list dismissed with none.
+		if (request.GetBool(ibProtocol::ibRequest::ibChoice::Quick)) {
+			ibChooseValueRequest offered;
+			for (std::size_t i = 0; i < items.size(); ++i)
+				offered.m_values.emplace_back(static_cast<int>(i));
+			offered.m_captions = captions;
+			offered.m_selected = ticked.IsEmpty() ? wxNOT_FOUND : selected;
+			ibChoiceHolder holder{ ibValue() };
+			if (ibTypeControlFactory::ChooseValue(&holder, offered, FocusedEditor(this)))
+				holder.Wait();
+			const int picked = holder.HasChosen() ? holder.GetChosen().GetInteger() : -1;
+			if (picked >= 0 && picked < static_cast<int>(items.size()))
+				response.SetValue(ibProtocol::ibRequest::ibChoice::Id, items[picked].GetInt(ibProtocol::ibRequest::ibChoice::Id));
+			break;
+		}
 		// SEVERAL — the desktop's wxMultiChoiceDialog, those Selected ticked; cancelled — answered with no Ids.
 		if (request.GetBool(ibProtocol::ibRequest::ibChoice::Multiple)) {
 			wxMultiChoiceDialog dialog(parent, request.GetString(ibProtocol::ibRequest::ibChoice::Caption), request.GetString(ibProtocol::ibRequest::ibChoice::Caption),
@@ -1650,8 +1666,8 @@ void ibFrontendMainFrame::ShowRequest(const ibProtocolNode& request, ibProtocolN
 		// under the field pressed; the value chosen is the answer, a window closed with none — none.
 		ibDataNode stored;
 		ibReadProtocolNode(request.FindChild(ibProtocol::ibRequest::ibSimpleChoice::Value), stored);
-		ibSimpleChoiceHolder holder(ibValue::FromNode(stored));
-		if (ibTypeControlFactory::SimpleChoice(&holder, holder.GetValue().GetClassType(), FocusedEditor(this)))
+		ibChoiceHolder holder(ibValue::FromNode(stored));
+		if (ibTypeControlFactory::ChooseValue(&holder, {}, FocusedEditor(this)))
 			holder.Wait();
 		if (holder.HasChosen()) {
 			ibDataNode chosen;

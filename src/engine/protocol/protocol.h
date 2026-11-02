@@ -583,7 +583,8 @@ namespace ibProtocol {
 		}
 
 		// Caption and children Id, Caption, Picture, Selected → Id — one of those offered; none — cancelled. With Multiple →
-		// Ids — those of them ticked.
+		// Ids — those of them ticked. With Quick — no window: the desktop's quick choice, the items dropped under the field
+		// pressed (a reference's, or those that match what was typed); none — dismissed.
 		namespace ibChoice {
 
 			inline constexpr const char* Caption  = "Caption";
@@ -592,6 +593,7 @@ namespace ibProtocol {
 			inline constexpr const char* Selected = "Selected";
 			inline constexpr const char* Multiple = "Multiple";   // several may be chosen — answered with Ids
 			inline constexpr const char* Ids      = "Ids";
+			inline constexpr const char* Quick    = "Quick";      // dropped under the field pressed, not a window
 
 		}
 

@@ -7,7 +7,7 @@
 #include <algorithm>   // std::find — a type offered once, whichever "any" named it
 
 #include "frmserver/visualView/ctrl/frame.h"
-#include "frmserver/visualView/choiceRequest.h"                      // ibRequestChoice — "pick one of these"
+#include "frmserver/visualView/choiceRequest.h"                      // ibRequestChoice, ibRequestQuickChoice — "pick one of these"
 #include "backend/backend_mainFrame.h"                                    // the frame a request to the person goes through
 #include "core/serialize/dataBuilder.h"                                // the request and its answer
 #include "protocol/protocol.h"                                            // ibProtocol::ibRequest::ibKind::SimpleChoice
@@ -142,7 +142,7 @@ bool ibTypeControlFactory::QuickChoice(ibControlFrame* ownerValue, const ibClass
 		items.push_back(ibChoiceItem{ static_cast<std::int32_t>(idx), values[idx].GetString(), ibPictureDescription(), values[idx] == current });
 
 	std::int32_t chosen = 0;
-	if (ibRequestChoice(ibString(), items, chosen))
+	if (ibRequestQuickChoice(items, chosen))
 		ownerValue->ChoiceProcessing(values[static_cast<size_t>(chosen)]);
 	return true;   // the type has a quick choice — offered, whatever the person did with it
 }
@@ -178,7 +178,7 @@ void ibTypeControlFactory::QuickChoice(ibControlFrame* controlValue, ibValue& ne
 	// typed text up (the field goes back to what it held) or to pick after all.
 	for (;;) {
 		std::int32_t chosen = 0;
-		if (ibRequestChoice(ibString(), items, chosen)) {
+		if (ibRequestQuickChoice(items, chosen)) {
 			controlValue->ChoiceProcessing(values[static_cast<size_t>(chosen)]);
 			return;
 		}

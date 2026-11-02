@@ -126,6 +126,10 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **Sessions logging in together no longer bring the web server down.** Each visitor rewrote the MCP
   server's settings as if it owned the process.
 
+- **A reference's quick choice drops under the field again**, in the thin client and in the browser, where it
+  came up as a window of its own. The same goes for the list offered for text typed into a field. A choice closed
+  without one picked no longer picks the first item, such as «Select data type».
+
 - **The process has a memory limit.** `MemoryLimit` in `backend.conf`, in megabytes; 0 is none but the
   operating system's. At 80% no new client or window is let in, at 90% nothing is done but closing a
   window and logging out, and the person is told the server is full. On Windows the system refuses
