@@ -13,8 +13,8 @@ class BACKEND_API ibEventDispatcher;   // backend/eventDispatcher.h — the face
 
 class BACKEND_API ibProperty;
 class BACKEND_API ibEvent;
-class BACKEND_API ibDataNode;   // serialize/dataBuilder.h — universal structure node
-class BACKEND_API ibDataValue;  // serialize/dataBuilder.h — a node value (scalar / Child)
+class ibDataNode;   // serialize/dataBuilder.h — universal structure node
+class ibDataValue;  // serialize/dataBuilder.h — a node value (scalar / Child)
 
 ///////////////////////////////////////////////////////////////////////////////
 

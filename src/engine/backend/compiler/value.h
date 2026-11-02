@@ -94,10 +94,25 @@ public:
 
 // (The primitives' class ids — g_valueBooleanCLSID … g_valueNullCLSID — are the core's too: core/core.h.)
 
+// THE LIVING VALUES COUNTED, IN DEBUG — by every constructor and the destructor below, which are in this header, so
+// the count is kept behind ibValue::DebugValueCreate / DebugValueDelete (value.cpp, where the trace is). In Release
+// both are nothing: a value is made and ended where it is used.
+#if defined(DEBUG)
+#define DEBUG_VALUE_CREATE() ibValue::DebugValueCreate()
+#define DEBUG_VALUE_DELETE() ibValue::DebugValueDelete()
+#else
+#define DEBUG_VALUE_CREATE()
+#define DEBUG_VALUE_DELETE()
+#endif
+
 //simple type date
 // THE VALUE ITSELF IS THE VARIANT'S (core/variant.h): the kind, the read-only flag, the count and the one word, with
 // their lifecycle. What this class adds is the runtime — the factory, the members, the calls.
-class BACKEND_API ibValue : public ibVariant {
+//
+// EXPORTED MEMBER BY MEMBER, as ibString is (core/fstring.h says why): marked as a class, its constructors and
+// destructor were calls through the import table in every module of forms (frmserver.dll, Release x64, 2026-11-02).
+// What has no body here carries BACKEND_API itself.
+class ibValue : public ibVariant {
 public:
 
 	class BACKEND_API ibMemberTable {
@@ -865,37 +880,41 @@ public:
 
 	//METHODS:
 	 //constructors:
-	ibValue();
-	ibValue(const ibValue& cParam);
-	ibValue(ibValue&& cParam);
-	ibValue(ibValue* pParam);
-	ibValue(ibBackendValue* pParam);
-	ibValue(ibValueTypes nType, bool readOnly = false);
+	// THE LIFECYCLE IS THE VARIANT'S (core/variant.h), in the header as it is: a runtime value adds its count of the
+	// living (DEBUG_VALUE_CREATE above) and nothing else — noexcept where the variant's is.
+	ibValue() noexcept : ibVariant() { DEBUG_VALUE_CREATE(); }
+	ibValue(const ibValue& cParam) noexcept : ibVariant(cParam) { DEBUG_VALUE_CREATE(); }
+	ibValue(ibValue&& cParam) noexcept : ibVariant(std::move(cParam)) { DEBUG_VALUE_CREATE(); }
+	ibValue(ibValue* pParam) noexcept : ibVariant(static_cast<ibVariant*>(pParam)) { DEBUG_VALUE_CREATE(); }
+	ibValue(ibBackendValue* pParam)
+		: ibVariant(static_cast<ibVariant*>(pParam ? pParam->GetImplValueRef() : nullptr)) { DEBUG_VALUE_CREATE(); }
+	ibValue(ibValueTypes nType, bool readOnly = false) noexcept : ibVariant(nType, readOnly) { DEBUG_VALUE_CREATE(); }
 
 	//copy constructors:
-	ibValue(bool cParam); //boolean
-	ibValue(signed int cParam); //number
-	ibValue(unsigned int cParam); //number
-	ibValue(double cParam); //number
-	ibValue(const ibNumber& cParam); //number
-	ibValue(const ibDateTime& cParam); //date
-	ibValue(int nYear, int nMonth, int nDay, unsigned short nHour = 0, unsigned short nMinute = 0, unsigned short nSecond = 0); //date
+	ibValue(bool cParam) noexcept : ibVariant(cParam) { DEBUG_VALUE_CREATE(); } //boolean
+	ibValue(signed int cParam) noexcept : ibVariant(cParam) { DEBUG_VALUE_CREATE(); } //number
+	ibValue(unsigned int cParam) noexcept : ibVariant(cParam) { DEBUG_VALUE_CREATE(); } //number
+	ibValue(double cParam) : ibVariant(cParam) { DEBUG_VALUE_CREATE(); } //number
+	ibValue(const ibNumber& cParam) noexcept : ibVariant(cParam) { DEBUG_VALUE_CREATE(); } //number
+	ibValue(const ibDateTime& cParam) noexcept : ibVariant(cParam) { DEBUG_VALUE_CREATE(); } //date
+	ibValue(int nYear, int nMonth, int nDay, unsigned short nHour = 0, unsigned short nMinute = 0, unsigned short nSecond = 0)
+		: ibVariant(nYear, nMonth, nDay, nHour, nMinute, nSecond) { DEBUG_VALUE_CREATE(); } //date
 
 	// CONST char pointers, and that const is load-bearing. Declared as `char*` these
 	// did not match a `const char*` argument at all, so `ibValue v = wxEmptyString`
 	// (wxEmptyString IS a `const wxChar*`) fell through to ibValue(bool) — pointer-to-bool
 	// is a STANDARD conversion and beats the user-defined one to wxString — and the value
 	// became Boolean TRUE. Same trap, same shape, as the const ibValue* overload below.
-	ibValue(const char* sParam); //string
-	ibValue(const ibChar* sParam); //string
-	ibValue(const std::wstring& sParam); //string
-	ibValue(const ibString& sParam); //string
-	ibValue(ibString&& sParam); //string — native move (runtime string functions)
+	ibValue(const char* sParam) : ibVariant(sParam) { DEBUG_VALUE_CREATE(); } //string
+	ibValue(const ibChar* sParam) : ibVariant(sParam) { DEBUG_VALUE_CREATE(); } //string
+	ibValue(const std::wstring& sParam) : ibVariant(sParam) { DEBUG_VALUE_CREATE(); } //string
+	ibValue(const ibString& sParam) noexcept : ibVariant(sParam) { DEBUG_VALUE_CREATE(); } //string
+	ibValue(ibString&& sParam) noexcept : ibVariant(std::move(sParam)) { DEBUG_VALUE_CREATE(); } //string — native move (runtime string functions)
 
 	// A VARIANT AS IT IS — a constant as the translator read it (ibLexem::m_valData), the door through which the
 	// compiler puts one into the bytecode; a property's value; a cell or a sheet's parameter read back. Explicit: a
 	// variant is not a runtime value until it is asked to be.
-	explicit ibValue(const ibVariant& variant);
+	BACKEND_API explicit ibValue(const ibVariant& variant);
 
 	// ⭐⭐ ANY OTHER POINTER IS A MISTAKE, AND IT USED TO BECOME `TRUE`.
 	//
@@ -918,7 +937,7 @@ public:
 			!std::derived_from<T, ibValue> && !std::derived_from<T, ibBackendValue>)
 	ibValue(T*) = delete;
 
-	virtual ~ibValue();
+	virtual ~ibValue() { DEBUG_VALUE_DELETE(); }
 
 	// 🛑⭐⭐ THIS OWNERSHIP CANNOT BE FENCED OFF BY ACCESS CONTROL, and the reason is not a detail of
 	// which member to hide — it is what ibValue IS. Three attempts, 2026-09-06, kept so that nobody
@@ -947,34 +966,38 @@ public:
 	// needed (query/queryColumn.h). (docs/private/ownership-authority.md)
 
 	//operators:
-	void operator = (const ibValue& cParam);
-	void operator = (ibValue&& cParam);
+	// THE ASSIGNMENTS ARE THE VARIANT'S, each straight through — declared here because the runtime's own (`ibValue*`,
+	// `ibBackendValue*`) would hide them otherwise.
+	void operator = (const ibValue& cParam) noexcept { ibVariant::operator=(cParam); }
+	void operator = (ibValue&& cParam) noexcept { ibVariant::operator=(std::move(cParam)); }
 
-	void operator = (bool cParam);
-	void operator = (short cParam);
-	void operator = (unsigned short cParam);
-	void operator = (int cParam);
-	void operator = (unsigned int cParam);
-	void operator = (float cParam);
-	void operator = (double cParam);
-	void operator = (const ibNumber& cParam);
-	void operator = (const ibDateTime& cParam);
-	void operator = (const ibString& cParam);
+	void operator = (bool cParam) { ibVariant::operator=(cParam); }
+	void operator = (short cParam) { ibVariant::operator=(cParam); }
+	void operator = (unsigned short cParam) { ibVariant::operator=(cParam); }
+	void operator = (int cParam) { ibVariant::operator=(cParam); }
+	void operator = (unsigned int cParam) { ibVariant::operator=(cParam); }
+	void operator = (float cParam) { ibVariant::operator=(cParam); }
+	void operator = (double cParam) { ibVariant::operator=(cParam); }
+	void operator = (const ibNumber& cParam) { ibVariant::operator=(cParam); }
+	void operator = (const ibDateTime& cParam) { ibVariant::operator=(cParam); }
+	void operator = (const ibString& cParam) { ibVariant::operator=(cParam); }
 	// Character pointers — see the ctor note above. A string literal or wxEmptyString
 	// on the right-hand side has no wxString overload to bind to without these, and
 	// pointer-to-bool wins the resolution.
-	void operator = (const char* cParam);
-	void operator = (const ibChar* cParam);
-	void operator = (ibString&& cParam);   // native string assign — the text taken over, no wxString round-trip
+	void operator = (const char* cParam) { ibVariant::operator=(cParam); }
+	void operator = (const ibChar* cParam) { ibVariant::operator=(cParam); }
+	void operator = (ibString&& cParam) { ibVariant::operator=(std::move(cParam)); }   // native string assign — the text taken over, no wxString round-trip
 
-	void operator = (ibValueTypes cParam);
-	void operator = (ibBackendValue* pParam);
-	void operator = (ibValue* pParam);
+	void operator = (ibValueTypes cParam) { ibVariant::operator=(cParam); }
+	void operator = (ibBackendValue* pParam) {
+		ibVariant::operator=(static_cast<ibVariant*>(pParam ? pParam->GetImplValueRef() : nullptr));
+	}
+	void operator = (ibValue* pParam) { ibVariant::operator=(static_cast<ibVariant*>(pParam)); }
 	// const source (e.g. a const ibValueMetaObject* returned by GetMetaObject()):
 	// store a READ-ONLY reference — mutation through this value is blocked
 	// (m_bReadOnly). Without this overload `value = constPtr` silently picked
 	// operator=(bool) (const ptr → bool) and the object became a Boolean.
-	void operator = (const ibValue* pParam);
+	void operator = (const ibValue* pParam) { ibVariant::operator=(static_cast<const ibVariant*>(pParam)); }
 	// Any other pointer — the deleted constructor's other half, and the same exemptions. Closing
 	// the constructor alone left `value = wxT("text")` (a `wchar_t*` since ibChar is char16_t)
 	// arriving through operator=(bool) as TRUE.
@@ -983,12 +1006,12 @@ public:
 			!std::derived_from<T, ibValue> && !std::derived_from<T, ibBackendValue>)
 	void operator = (T*) = delete;
 
-	const ibValue& operator+(const ibValue& cParam);
-	const ibValue& operator-(const ibValue& cParam);
+	BACKEND_API const ibValue& operator+(const ibValue& cParam);
+	BACKEND_API const ibValue& operator-(const ibValue& cParam);
 
 	// Comparison — the variant's family (core/variant.h: '<' the three-way primitive, '==' type-strict); an object
 	// of the runtime is equal by its presentation AND its class, which only the factory knows.
-	virtual bool CompareValueEQ(const ibVariant& cParam) const override;
+	BACKEND_API virtual bool CompareValueEQ(const ibVariant& cParam) const override;
 
 	// GetValueHash — declared with GetHashKey, near GetString: the two are the
 	// value's two IDENTITIES and belong together. See the note there.
@@ -1030,7 +1053,7 @@ public:
 	static ibValue CreateObject(ibValue** paParams = nullptr, const long lSizeArray = 0) {
 		return CreateObject(typeid(T), paParams, lSizeArray);
 	}
-	static ibValue CreateObject(const ibClassID& clsid, ibValue** paParams = nullptr, const long lSizeArray = 0);
+	BACKEND_API static ibValue CreateObject(const ibClassID& clsid, ibValue** paParams = nullptr, const long lSizeArray = 0);
 	static ibValue CreateObject(const std::type_info& typeInfo, ibValue** paParams = nullptr, const long lSizeArray = 0) {
 		const ibClassID& clsid = GetTypeIDByRef(typeInfo);
 		return CreateObject(clsid, paParams, lSizeArray);
@@ -1051,35 +1074,35 @@ public:
 	template<typename T, typename valT>
 	static ibValue CreateEnumObject(const valT& v);
 
-	static void RegisterCtor(ibCtorAbstractType* typeCtor);
-	static void UnRegisterCtor(ibCtorAbstractType*& typeCtor);
-	static void UnRegisterCtor(const ibString& className);
+	BACKEND_API static void RegisterCtor(ibCtorAbstractType* typeCtor);
+	BACKEND_API static void UnRegisterCtor(ibCtorAbstractType*& typeCtor);
+	BACKEND_API static void UnRegisterCtor(const ibString& className);
 
 	// (No unregister-by-clsid and no name invalidation here on purpose: THIS registry holds the
 	//  STATIC types, whose names are compile-time constants and cannot drift. The metaobject types
 	//  — the ones whose name is computed from a renameable object — live in the metadata's own
 	//  registry, which is where both live: ibMetaData::UnRegisterCtor / InvalidateCtorNames.)
 
-	static bool IsRegisterCtor(const ibString& className);
-	static bool IsRegisterCtor(const ibString& className, ibCtorObjectType objectType);
-	static bool IsRegisterCtor(const ibClassID& clsid);
+	BACKEND_API static bool IsRegisterCtor(const ibString& className);
+	BACKEND_API static bool IsRegisterCtor(const ibString& className, ibCtorObjectType objectType);
+	BACKEND_API static bool IsRegisterCtor(const ibClassID& clsid);
 
-	static ibClassID GetTypeIDByRef(const std::type_info& typeInfo);
-	static ibClassID GetTypeIDByRef(const ibValue* objectRef);
+	BACKEND_API static ibClassID GetTypeIDByRef(const std::type_info& typeInfo);
+	BACKEND_API static ibClassID GetTypeIDByRef(const ibValue* objectRef);
 
-	static ibClassID GetIDObjectFromString(const ibString& className);
+	BACKEND_API static ibClassID GetIDObjectFromString(const ibString& className);
 	static bool CompareObjectName(const ibString& className, ibValueTypes valueType) {
 		return stringUtils::IsSameAs(className, GetNameObjectFromVT(valueType));
 	}
 
-	static ibString GetNameObjectFromID(const ibClassID& clsid, bool upper = false);
-	static ibString GetNameObjectFromVT(ibValueTypes valueType, bool upper = false);
+	BACKEND_API static ibString GetNameObjectFromID(const ibClassID& clsid, bool upper = false);
+	BACKEND_API static ibString GetNameObjectFromVT(ibValueTypes valueType, bool upper = false);
 	// A class's kind — an enumeration's or an object's, which only the factory tells apart (GetIDByVT is the variant's).
-	static ibValueTypes GetVTByID(const ibClassID& clsid);
+	BACKEND_API static ibValueTypes GetVTByID(const ibClassID& clsid);
 
-	static ibCtorAbstractType* GetAvailableCtor(const ibString& className);
-	static ibCtorAbstractType* GetAvailableCtor(const ibClassID& clsid);
-	static ibCtorAbstractType* GetAvailableCtor(const std::type_info& typeInfo);
+	BACKEND_API static ibCtorAbstractType* GetAvailableCtor(const ibString& className);
+	BACKEND_API static ibCtorAbstractType* GetAvailableCtor(const ibClassID& clsid);
+	BACKEND_API static ibCtorAbstractType* GetAvailableCtor(const std::type_info& typeInfo);
 
 	// Static type-trait: do values of this class form a TABLE (a row source rendered as a
 	// tablebox), or a scalar attribute? Default = attribute (false). ibValueModel flips the
@@ -1091,14 +1114,14 @@ public:
 	static bool IsTableValue() { return false; }
 
 
-	static std::vector<ibCtorAbstractType*> GetListCtorsByType(ibCtorObjectType objectType = ibCtorObjectType::ibCtorObjectType_object_value);
+	BACKEND_API static std::vector<ibCtorAbstractType*> GetListCtorsByType(ibCtorObjectType objectType = ibCtorObjectType::ibCtorObjectType_object_value);
 
 	//static event 
 	static void OnRegisterObject(const ibString& className, ibCtorAbstractType* typeCtor) {}
 	static void OnUnRegisterObject(const ibString& className) {}
 
-	//factory version 
-	static unsigned int GetFactoryCountChanges();
+	//factory version
+	BACKEND_API static unsigned int GetFactoryCountChanges();
 
 public:
 
@@ -1119,8 +1142,8 @@ public:
 	//
 	// A value is BLIND to metadata: it packs and unpacks ITSELF and never reaches
 	// for a configuration.
-	bool Serialize(class ibDataNode& node) const;
-	bool Deserialize(const class ibDataNode& node);
+	BACKEND_API bool Serialize(class ibDataNode& node) const;
+	BACKEND_API bool Deserialize(const class ibDataNode& node);
 
 	// CREATING a value from a node — THE mechanism, in one place.
 	//
@@ -1137,14 +1160,14 @@ public:
 	// THROWS when the type is registered nowhere, when creation fails, or when
 	// the value cannot read its own contents. An empty would be
 	// indistinguishable from a value that legitimately IS empty.
-	static ibValue FromNode(const class ibDataNode& node);
+	BACKEND_API static ibValue FromNode(const class ibDataNode& node);
 #pragma endregion
 
 	// (THE KIND, THE EMPTY AND THE NULL — SetType, GetType, IsEmpty, IsNull — are the variant's. IsNull is the SQL null
 	//  the query layer keys on: the `Null` literal and a NULL DB column, distinct from Undefined.)
 
-	virtual ibString GetClassName() const;
-	virtual ibClassID GetClassType() const override;
+	BACKEND_API virtual ibString GetClassName() const;
+	BACKEND_API virtual ibClassID GetClassType() const override;
 
 	// Beside its overload with parameters, which would hide the variant's otherwise.
 	virtual bool Init() override {
@@ -1161,9 +1184,9 @@ public:
 
 	// (SetValue, SetData and SetBoolean / SetNumber / SetDate / SetString — a text read as the kind — are the variant's.)
 
-	virtual bool FindValue(const ibString& findData, std::vector<ibValue>& listValue) const;
+	BACKEND_API virtual bool FindValue(const ibString& findData, std::vector<ibValue>& listValue) const;
 
-	virtual ibValue GetValue(bool getThis = false) const;
+	BACKEND_API virtual ibValue GetValue(bool getThis = false) const;
 
 	// A FRESH, INDEPENDENT COPY — the verb behind `Val`.
 	//
@@ -1196,13 +1219,13 @@ public:
 	// are extension points already (DoSerialize / DoDeserialize) with IsTransferable as the refusal
 	// — so most types never touch this. But a type is allowed to state a copy of its own, and that
 	// is a declared contract with a test behind it (ValueClone.ATypeMayStateItsOwnCopy).
-	virtual ibValue CloneValue() const;
+	BACKEND_API virtual ibValue CloneValue() const;
 
 	// (GetBoolean / GetNumber / GetDate / GetInteger / GetDouble are the variant's.)
 
 	// THE VALUE AS TEXT — the variant's, and an object of the runtime reads as its class's name, which only the
 	// factory knows.
-	virtual ibString GetString() const override;
+	BACKEND_API virtual ibString GetString() const override;
 
 	// ============================ IDENTITY ==================================
 	// ONE OF THEM. There used to be a second — `GetHashKey()`, a wxString the
@@ -1229,12 +1252,12 @@ public:
 	// — the two answer one question between them. A class that changes what
 	// counts as equal and leaves this behind puts equal values in different
 	// buckets, which no test of the comparator alone would catch.
-	virtual size_t GetValueHash() const;
+	BACKEND_API virtual size_t GetValueHash() const;
 
 	/////////////////////////////////////////////////////////////////////////
 
 	// The object held — a runtime one, as everything a runtime value holds is.
-	virtual ibValue* GetRef() const override;
+	BACKEND_API virtual ibValue* GetRef() const override;
 
 	/////////////////////////////////////////////////////////////////////////
 
@@ -1244,7 +1267,7 @@ public:
 	// editing, and that window is the one that says so (the schedule editor marks the form on OK).
 	// A caller here cannot tell "the value changed" from "somebody looked at a linked object and
 	// closed it" — a reference opens a whole card and is the same reference afterwards.
-	virtual void ShowValue();
+	BACKEND_API virtual void ShowValue();
 
 	/////////////////////////////////////////////////////////////////////////
 
@@ -1289,28 +1312,28 @@ public:
 	/**
 	*  @return number of properties
 	*/
-	virtual long GetNProps() const;
+	BACKEND_API virtual long GetNProps() const;
 
 	/// Finds property by name
 	/**
 	 *  @param wsPropName - property name
 	 *  @return property index or -1, if iterator is not found
 	 */
-	virtual long FindProp(const ibString& strPropName) const;
+	BACKEND_API virtual long FindProp(const ibString& strPropName) const;
 
 	/// Returns property name
 	/**
 	 *  @param lPropNum - property index (starting with 0)
 	 *  @return proeprty name or 0 if iterator is not found
 	 */
-	virtual const ibString& GetPropName(const long lPropNum) const;
+	BACKEND_API virtual const ibString& GetPropName(const long lPropNum) const;
 
 	/// Returns property value
 	/**
 	 *  @param lPropNum - property index (starting with 0)
 	 *  @return the result of
 	 */
-	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);
+	BACKEND_API virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);
 
 	/// Sets the property value
 	/**
@@ -1318,59 +1341,59 @@ public:
 	 *  @param varPropVal - the pointer to a variable for property value
 	 *  @return the result of
 	 */
-	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);
+	BACKEND_API virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);
 
 	/// Is property readable?
 	/**
 	 *  @param lPropNum - property index (starting with 0)
 	 *  @return true if property is readable
 	 */
-	virtual bool IsPropReadable(const long lPropNum) const;
+	BACKEND_API virtual bool IsPropReadable(const long lPropNum) const;
 
 	/// Is property writable?
 	/**
 	 *  @param lPropNum - property index (starting with 0)
 	 *  @return true if property is writable
 	 */
-	virtual bool IsPropWritable(const long lPropNum) const;
+	BACKEND_API virtual bool IsPropWritable(const long lPropNum) const;
 
 	/// Is property scope-local (bc-local — invisible to children
 	/// through cross-bc resolution; ThisObject / ThisForm / etc.)?
-	virtual bool IsPropScoped(const long lPropNum) const;
+	BACKEND_API virtual bool IsPropScoped(const long lPropNum) const;
 
 	/// Returns number of component methods
 	/**
 	 *  @return number of component  methods
 	 */
-	virtual long GetNMethods() const;
+	BACKEND_API virtual long GetNMethods() const;
 
-	/// Finds a method by name 
+	/// Finds a method by name
 	/**
 	 *  @param wsMethodName - method name
 	 *  @return - method index
 	 */
-	virtual long FindMethod(const ibString& strMethodName) const;
+	BACKEND_API virtual long FindMethod(const ibString& strMethodName) const;
 
 	/// Returns method name
 	/**
 	 *  @param lMethodNum - method index(starting with 0)
 	 *  @return method name or 0 if method is not found
 	 */
-	virtual const ibString& GetMethodName(const long lMethodNum) const;
+	BACKEND_API virtual const ibString& GetMethodName(const long lMethodNum) const;
 
 	/// Returns method helper
 	/**
 	*  @param lMethodNum - method index(starting with 0)
 	*  @return method name or 0 if method is not found
 	*/
-	virtual const ibString& GetMethodHelper(const long lMethodNum) const;
+	BACKEND_API virtual const ibString& GetMethodHelper(const long lMethodNum) const;
 
 	/// Returns number of method parameters
 	/**
 	 *  @param lMethodNum - method index (starting with 0)
 	 *  @return number of parameters
 	 */
-	virtual long GetNParams(const long lMethodNum) const;
+	BACKEND_API virtual long GetNParams(const long lMethodNum) const;
 
 	/// Returns default value of method parameter
 	/**
@@ -1379,7 +1402,7 @@ public:
 	 *  @param pvarParamDefValue - the pointer to a variable for default value
 	 *  @return the result of
 	 */
-	virtual bool GetParamDefValue(const long lMethodNum,
+	BACKEND_API virtual bool GetParamDefValue(const long lMethodNum,
 		const long lParamNum,
 		ibValue& pvarParamDefValue) const;
 
@@ -1388,7 +1411,7 @@ public:
 	 *  @param lMethodNum - method index (starting with 0)
 	 *  @return true if the method has a return value
 	 */
-	virtual bool HasRetVal(const long lMethodNum) const;
+	BACKEND_API virtual bool HasRetVal(const long lMethodNum) const;
 
 	// LINQ — universal pipeline ops (Where / Select / OrderBy / ...) on
 	// every iterable value. Resolved at compile time by name via
@@ -1471,14 +1494,14 @@ public:
 		const ibChar*  name;
 		const ibChar*  helper;
 	};
-	static const std::vector<ibLinqMethodInfo>& GetLinqMethodTable();
+	BACKEND_API static const std::vector<ibLinqMethodInfo>& GetLinqMethodTable();
 
 	// Compile-time resolver — script method name → enum value (or
 	// -1 if not a LINQ method). Used by the chain-method emit path
 	// (compileCode.cpp) to decide OPER_CALL_METHOD (per-class) vs
 	// OPER_CALL_LINQ (universal pipeline op). Case-insensitive match
 	// per OES convention. Implemented in terms of GetLinqMethodTable().
-	static long FindLinqMethodByName(const ibString& strMethodName);
+	BACKEND_API static long FindLinqMethodByName(const ibString& strMethodName);
 
 	// LINQ dispatch entry point — virtual so subclasses can override
 	// kind-specific behavior (e.g. ibValueQuery extending an existing
@@ -1492,8 +1515,8 @@ public:
 	// vtable bloat down — per-method virtuals can be lifted later
 	// when concrete override pressure surfaces (Phase 2 of the
 	// virtual-dispatch arc).
-	virtual void DispatchLinqMethod(ibLinqMethod method, ibValue& ret,
-	                                ibValue** args, long n);
+	BACKEND_API virtual void DispatchLinqMethod(ibLinqMethod method, ibValue& ret,
+	                                            ibValue** args, long n);
 
 	/// Calls the method as a procedure
 	/**
@@ -1502,7 +1525,7 @@ public:
 	 *  @param lSizeArray - the size of array
 	 *  @return the result of
 	 */
-	virtual bool CallAsProc(const long lMethodNum,
+	BACKEND_API virtual bool CallAsProc(const long lMethodNum,
 		ibValue** paParams,
 		const long lSizeArray);
 
@@ -1514,7 +1537,7 @@ public:
 	 *  @param lSizeArray - the size of array
 	 *  @return the result of
 	 */
-	virtual bool CallAsFunc(const long lMethodNum,
+	BACKEND_API virtual bool CallAsFunc(const long lMethodNum,
 		ibValue& pvarRetValue,
 		ibValue** paParams,
 		const long lSizeArray);
@@ -1524,11 +1547,11 @@ public:
 	ibValue* GetThis() { return this; }
 
 	//support icons
-	virtual ibPicture GetIcon() const;
-	static ibPicture GetIconGroup();
+	BACKEND_API virtual ibPicture GetIcon() const;
+	BACKEND_API static ibPicture GetIconGroup();
 
-	virtual bool SetAt(const ibValue& varKeyValue, const ibValue& varValue);
-	virtual bool GetAt(const ibValue& varKeyValue, ibValue& pvarValue);
+	BACKEND_API virtual bool SetAt(const ibValue& varKeyValue, const ibValue& varValue);
+	BACKEND_API virtual bool GetAt(const ibValue& varKeyValue, ibValue& pvarValue);
 
 	ibValue operator[](const ibValue& varKeyValue) {
 		ibValue retValue;
@@ -1546,7 +1569,7 @@ public:
 	// `For Each` overrides this with its own walker. The state's
 	// PeekSample() doubles as the IntelliSense type hint, so there's
 	// no separate "empty element" surface on ibValue.
-	virtual std::shared_ptr<ibValueIteratorState> CreateIterator();
+	BACKEND_API virtual std::shared_ptr<ibValueIteratorState> CreateIterator();
 #pragma endregion
 
 	// ⭐⭐ BRING THAT VALUE TO WHAT THIS ONE ALLOWS, AND SAY WHETHER YOU COULD — the whole of a link by
@@ -1585,7 +1608,7 @@ public:
 	//   * an ordinary value narrows to ITS OWN CLASS (this default);
 	//   * a type description narrows to WHAT IT DESCRIBES, qualifiers included;
 	//   * a reference passes the question to the metaobject that governs it.
-	virtual bool AdjustOutValue(const ibValue& varValue, ibValue& out) const;
+	BACKEND_API virtual bool AdjustOutValue(const ibValue& varValue, ibValue& out) const;
 
 protected:
 
@@ -1603,10 +1626,17 @@ protected:
 	//
 	// Returns false when this value has no packed form: said out loud rather
 	// than written as something else.
-	virtual bool DoSerialize(class ibDataNode& node) const;
-	virtual bool DoDeserialize(const class ibDataNode& node);
+	BACKEND_API virtual bool DoSerialize(class ibDataNode& node) const;
+	BACKEND_API virtual bool DoDeserialize(const class ibDataNode& node);
 
 #pragma endregion
+
+#if defined(DEBUG)
+private:
+	// The count of the living values and its trace (value.cpp) — reached through DEBUG_VALUE_CREATE / DELETE above.
+	BACKEND_API static void DebugValueCreate() noexcept;
+	BACKEND_API static void DebugValueDelete() noexcept;
+#endif
 };
 
 // ---------------------------------------------------------------------------

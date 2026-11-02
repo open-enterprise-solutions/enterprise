@@ -119,7 +119,8 @@ constexpr long long ibDaysFromCivil(long long year, unsigned month, unsigned day
 	return era * 146097 + static_cast<long long>(doe) - 719468;
 }
 
-class CORE_API ibDateTime
+// EXPORTED MEMBER BY MEMBER, as ibString is (fstring.h says why): what has no body here carries CORE_API itself.
+class ibDateTime
 {
 public:
 	// The empty date, 0001-01-01 00:00:00.
@@ -140,11 +141,11 @@ public:
 	// NOW: what the machine's clock on the wall shows - the clock's reading in the machine's zone, by its
 	// parts, to the millisecond, with no wx on the way. The one door the engine asks "now" through, so the
 	// day "now" becomes the base's clock it changes here and nowhere else.
-	static ibDateTime Now();
+	CORE_API static ibDateTime Now();
 
 	// AN INSTANT'S READING on this machine's clock: milliseconds of real time since 1970-01-01 UTC, read by the
 	// machine's zone into its parts - what Now does with the clock's own instant.
-	static ibDateTime OfInstant(long long unixMilliseconds);
+	CORE_API static ibDateTime OfInstant(long long unixMilliseconds);
 
 	constexpr bool IsEmpty() const noexcept { return m_value == 0; }
 
@@ -165,16 +166,16 @@ public:
 	// The calendar's names, in the language of the thread (core/localization/dictionary.h) - not the machine's:
 	// a base speaks its own - or in the language of `dictionary` when one is named (Format's `L=ru`). Empty
 	// outside the range. A month 1..12; a weekday 1..7, Monday first.
-	static ibString MonthName(unsigned month, const ibDictionary* dictionary = nullptr);
+	CORE_API static ibString MonthName(unsigned month, const ibDictionary* dictionary = nullptr);
 	// …as it stands after a day, "13 October": a language with cases says it in the genitive.
-	static ibString MonthGenitiveName(unsigned month, const ibDictionary* dictionary = nullptr);
-	static ibString MonthShortName(unsigned month, const ibDictionary* dictionary = nullptr);
-	static ibString WeekDayName(unsigned weekDay, const ibDictionary* dictionary = nullptr);
-	static ibString WeekDayShortName(unsigned weekDay, const ibDictionary* dictionary = nullptr);
+	CORE_API static ibString MonthGenitiveName(unsigned month, const ibDictionary* dictionary = nullptr);
+	CORE_API static ibString MonthShortName(unsigned month, const ibDictionary* dictionary = nullptr);
+	CORE_API static ibString WeekDayName(unsigned weekDay, const ibDictionary* dictionary = nullptr);
+	CORE_API static ibString WeekDayShortName(unsigned weekDay, const ibDictionary* dictionary = nullptr);
 
 	// The parts. Defined for any count: a reading before year 1 or past 9999 gets the year the calendar
 	// gives it (0, -1, 10000), so a caller printing it sees where it is.
-	void ToParts(ibDateTimeParts& parts) const noexcept;
+	CORE_API void ToParts(ibDateTimeParts& parts) const noexcept;
 
 	// Whole days from the empty date - the day this reading falls on, counted down from its midnight.
 	constexpr long long GetDays() const noexcept {
@@ -203,7 +204,7 @@ public:
 	// forward, not an hour - and liveness, which asks exactly this, must not mistake a live peer for a dead
 	// one. The one question besides Now that asks the machine; outside the machine's calendar (a year it
 	// cannot place) it answers the wall's span.
-	long long ElapsedSince(const ibDateTime& earlier) const noexcept;
+	CORE_API long long ElapsedSince(const ibDateTime& earlier) const noexcept;
 
 	// ⭐⭐ THE CALENDAR, ASKED OF THE DATE. The script's BegOfMonth / AddMonth / Year, the query's
 	// BEGINOFPERIOD / DATEADD / DATEDIFF / YEAR and the RAM twins of the dialect's expressions all read
@@ -214,24 +215,24 @@ public:
 	// years, the ten-day bucket that ends a month) rather than approximating with fixed-length steps.
 
 	// The period holding the reading, at its start - `BEGINOFPERIOD(x, Month)`, BegOfMonth.
-	ibDateTime BeginOfPeriod(ibTotalsPeriod period) const noexcept;
+	CORE_API ibDateTime BeginOfPeriod(ibTotalsPeriod period) const noexcept;
 	// The start of the NEXT period - the first reading a stored row of that grain no longer covers. A
 	// read whose lower boundary falls inside a grain cannot use that grain's stored row (it holds the
 	// part before the boundary too), so it starts here and takes the head from the movements instead.
-	ibDateTime BeginOfNextPeriod(ibTotalsPeriod period) const noexcept;
+	CORE_API ibDateTime BeginOfNextPeriod(ibTotalsPeriod period) const noexcept;
 	// The LAST second the period still covers - `ENDOFPERIOD(x, Month)`, EndOfMonth: the start of the
 	// next period less one second, said ONCE so no road can disagree about whether the boundary belongs
 	// to the period (it does).
-	ibDateTime EndOfPeriod(ibTotalsPeriod period) const noexcept;
+	CORE_API ibDateTime EndOfPeriod(ibTotalsPeriod period) const noexcept;
 	// Moved by whole periods - `DATEADD(x, Month, 3)`, AddMonth. A month after the 31st of a 31-day
 	// month is the last day of a shorter one, which is what a person means by "a month later"; the time
 	// of day travels with the date.
-	ibDateTime AddPeriods(ibTotalsPeriod period, long count) const noexcept;
+	CORE_API ibDateTime AddPeriods(ibTotalsPeriod period, long count) const noexcept;
 	// How many WHOLE periods lie from this reading to `to` - `DATEDIFF(x, to, Day)`. Negative when `to`
 	// is earlier, zero when both fall in the same period.
-	long PeriodsUntil(const ibDateTime& to, ibTotalsPeriod period) const noexcept;
+	CORE_API long PeriodsUntil(const ibDateTime& to, ibTotalsPeriod period) const noexcept;
 	// One piece as a number - `YEAR(x)`, `WEEKDAY(x)`, Year / WeekOfYear; the week is ISO 8601's.
-	long GetPart(ibDatePart part) const noexcept;
+	CORE_API long GetPart(ibDatePart part) const noexcept;
 
 	friend constexpr bool operator==(const ibDateTime& a, const ibDateTime& b) noexcept { return a.m_value == b.m_value; }
 	friend constexpr bool operator< (const ibDateTime& a, const ibDateTime& b) noexcept { return a.m_value <  b.m_value; }
@@ -244,7 +245,7 @@ public:
 	// Parts a person or a program hands over (a script's Date(y, m, d, …), a value built from parts) are
 	// checked against the calendar first: a 30th of February or a 25th hour is refused and the date left
 	// alone - never rolled over into the day after, and never whatever a rolled-over clock makes of it.
-	bool FromParts(int year, int month, int day, int hour = 0, int minute = 0, int second = 0, int millisecond = 0) noexcept;
+	CORE_API bool FromParts(int year, int month, int day, int hour = 0, int minute = 0, int second = 0, int millisecond = 0) noexcept;
 
 	// A text. The engine's own forms are read by their DIGITS and judged by them alone: `dd.mm.yyyy[ hh:mm:ss]`
 	// (one or two digits a piece, four for the year), `yyyymmdd`, `yyyymmddhhmmss`, and ISO 8601 as the engines
@@ -253,14 +254,14 @@ public:
 	// does not have is refused, never guessed. A text in none of these forms is read free-form,
 	// as a person writes it (FromFreeForm, fdatetimeParse.cpp). Refused: the date is left alone. The one door for "this
 	// text as a date" - a value's string, a driver's TIMESTAMP text, a script's Date("…").
-	bool FromString(const ibString& text);
+	CORE_API bool FromString(const ibString& text);
 
 	// `dd.mm.yyyy hh:mm:ss` - the text a date value gives.
-	ibString ToString() const;
+	CORE_API ibString ToString() const;
 	// …and the text a FORMAT asks for, as wxDateTime::Format writes it: strftime's specifiers (`%Y-%m-%d %H:%M:%S`),
 	// and `%l` for the milliseconds. A stamp the program writes for itself (a file's name, a journal's line) - the
 	// text a person's date is shown in is the value's (ToString) or the script's Format.
-	ibString Format(const ibString& format) const;
+	CORE_API ibString Format(const ibString& format) const;
 
 private:
 	// The digit forms of FromString: read, refused (the text IS one of them and names no date), or not theirs.

@@ -74,7 +74,7 @@ enum ibHierarchyType {
 // allocation, contiguous lookup and no per-entry RB-node overhead. See rowValues.h.
 // (Alias only — ibValue is forward-declared inline; instantiated at member sites
 // where value.h is complete.)
-typedef ibRowValues<ibMetaID, class BACKEND_API ibValue> ibRowMetaValues;
+typedef ibRowValues<ibMetaID, class ibValue> ibRowMetaValues;
 
 //*******************************************************************************************
 //*                                 Declare special var                                     *

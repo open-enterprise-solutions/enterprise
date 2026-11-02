@@ -23,7 +23,7 @@ class BACKEND_API ibValueMetaObjectFormBase;
 
 class BACKEND_API ibSourceDataObject;
 class BACKEND_API ibValueRecordDataObject;
-class BACKEND_API ibDataNode;   // serialize/dataBuilder.h — universal node (control -> node)
+class ibDataNode;   // serialize/dataBuilder.h — universal node (control -> node)
 
 class FRMSERVER_API ibValueForm;
 class FRMSERVER_API ibVisualHost;   // visualHost.h — who holds the form; every step of a control's life is told it

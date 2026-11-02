@@ -58,11 +58,14 @@ class ibString;       // core/fstring.h
 //     mirroring the contract of std::vector / wxString. Use a different
 //     instance per worker, or a mutex around the shared one.
 
-class CORE_API ibNumber
+// ⭐ EXPORTED MEMBER BY MEMBER, as ibString is (fstring.h says why): a class marked dllimport has its constructors
+// and destructor called through the import table even where their bodies are here. What has no body here carries
+// CORE_API itself.
+class ibNumber
 {
 public:
-	// In the header, with the destructor: an immediate number makes and ends in one word and one test, and
-	// across a library's border neither can be inlined from fnumber.cpp.
+	// In the header, with the destructor and the copies: an immediate number makes, copies and ends in one word
+	// and one test, and across a library's border none of them can be inlined from fnumber.cpp.
 	ibNumber() noexcept : m_payload(PackImmediate(0, 0)) {}
 
 	// Integer constructors are declared over the LANGUAGE types, not over the <cstdint>
@@ -75,20 +78,34 @@ public:
 	// nothing: int, long and double all sat equally far away and the conversion was ambiguous.
 	// Spelling all four signed/unsigned widths closes it on every platform at once, with no
 	// per-callsite casts and no #ifdef, because no two of them collide anywhere.
-	ibNumber(int v) noexcept;
-	ibNumber(unsigned int v) noexcept;
-	ibNumber(long v) noexcept;
-	ibNumber(unsigned long v) noexcept;
-	ibNumber(long long v) noexcept;
-	ibNumber(unsigned long long v) noexcept;
-	ibNumber(double v);
-	explicit ibNumber(const ibString& s);
-	ibNumber(const ibNumber& o) noexcept;   // a heap-tier number is shared, not copied
-	ibNumber(ibNumber&& o) noexcept;
+	ibNumber(int v) noexcept : m_payload(PackImmediate(v, 0)) {}
+	ibNumber(unsigned int v) noexcept : m_payload(PackImmediate(static_cast<int64_t>(v), 0)) {}   // 2^32 - 1 fits 47 bits
+	CORE_API ibNumber(long v) noexcept;
+	CORE_API ibNumber(unsigned long v) noexcept;
+	CORE_API ibNumber(long long v) noexcept;
+	CORE_API ibNumber(unsigned long long v) noexcept;
+	CORE_API ibNumber(double v);
+	CORE_API explicit ibNumber(const ibString& s);
+	ibNumber(const ibNumber& o) noexcept : m_payload(o.m_payload) { if (IsHeap()) Hold(); }   // a heap-tier number is shared, not copied
+	ibNumber(ibNumber&& o) noexcept : m_payload(o.m_payload) { o.m_payload = PackImmediate(0, 0); }
 	~ibNumber() { if (IsHeap()) Clear(); }
 
-	ibNumber& operator=(const ibNumber& o) noexcept;
-	ibNumber& operator=(ibNumber&& o) noexcept;
+	ibNumber& operator=(const ibNumber& o) noexcept {
+		if (this != &o) {
+			if (o.IsHeap()) o.Hold();   // first — `o` may share ours
+			if (IsHeap()) Clear();
+			m_payload = o.m_payload;
+		}
+		return *this;
+	}
+	ibNumber& operator=(ibNumber&& o) noexcept {
+		if (this != &o) {
+			if (IsHeap()) Clear();
+			m_payload = o.m_payload;
+			o.m_payload = PackImmediate(0, 0);
+		}
+		return *this;
+	}
 
 	// Hot/cold split, same shape as Compare below. The immediate-integer path is
 	// a gate plus one int64 op and lands in the header so any caller can inline
@@ -128,11 +145,11 @@ public:
 		}
 		return MulBig(rhs);
 	}
-	ibNumber& operator/=(const ibNumber& rhs);
-	ibNumber& operator%=(const ibNumber& rhs);
-	ibNumber& operator++();           // pre-increment
-	ibNumber  operator++(int);        // post-increment
-	ibNumber  operator-() const;
+	CORE_API ibNumber& operator/=(const ibNumber& rhs);
+	CORE_API ibNumber& operator%=(const ibNumber& rhs);
+	CORE_API ibNumber& operator++();           // pre-increment
+	CORE_API ibNumber  operator++(int);        // post-increment
+	CORE_API ibNumber  operator-() const;
 
 	friend ibNumber operator+(ibNumber a, const ibNumber& b) { a += b; return a; }
 	friend ibNumber operator-(ibNumber a, const ibNumber& b) { a -= b; return a; }
@@ -166,16 +183,33 @@ public:
 	bool operator<=(const ibNumber& r) const { return Compare(r) <= 0; }
 	bool operator>=(const ibNumber& r) const { return Compare(r) >= 0; }
 
-	bool         IsZero()    const;
-	bool         IsHeap()    const { return (m_payload & 1ULL) != 0; }
-	bool         IsNan()     const { return false; } // exact decimal — no NaN state
-	bool         IsSign()    const; // true if value is negative
-	void         ChangeSign();      // flip sign in place
-	ibNumber     Abs()       const; // |value|
-	void         SetZero();
-	void         FromInt(int v);
-	int          ToInt()     const; // truncates fractional part; clamped on overflow
-	unsigned int ToUInt()    const; // truncates fractional part; clamped on overflow
+	CORE_API bool         IsZero()    const noexcept;
+	bool                  IsHeap()    const noexcept { return (m_payload & 1ULL) != 0; }
+	bool                  IsNan()     const noexcept { return false; } // exact decimal — no NaN state
+	CORE_API bool         IsSign()    const noexcept; // true if value is negative
+	CORE_API void         ChangeSign();      // flip sign in place
+	CORE_API ibNumber     Abs()       const; // |value|
+	CORE_API void         SetZero() noexcept;
+	CORE_API void         FromInt(int v) noexcept;
+	// Truncates the fractional part; clamped on overflow. Hot/cold split, as Compare's: an immediate integer — every
+	// index, count and position a script hands a function — is its mantissa, clamped, read in the caller. Through
+	// a BigImpl it was a std::vector, an allocation and a free for every GetInteger; and out of line, even with
+	// that gone, the call saved five registers and a frame for the cold path before it asked (the disassembly of
+	// a Release core.dll, 2026-11-02). The rest is ToIntBig / ToUIntBig.
+	int ToInt() const {
+		if (IsImmediateInteger()) {
+			const int64_t v = ImmMantissa();
+			return v > INT32_MAX ? INT32_MAX : v < INT32_MIN ? INT32_MIN : static_cast<int>(v);
+		}
+		return ToIntBig();
+	}
+	unsigned int ToUInt() const {
+		if (IsImmediateInteger()) {
+			const int64_t v = ImmMantissa();
+			return v < 0 ? 0u : v > static_cast<int64_t>(UINT32_MAX) ? UINT32_MAX : static_cast<unsigned int>(v);
+		}
+		return ToUIntBig();
+	}
 	// Out-parameter form: 0 on success, 1 on overflow (ttmath-compat). Declared over the
 	// LANGUAGE types for the same reason as the constructors above — `long` and `long long`
 	// are distinct types, and an int64_t/uint64_t pair only ever names one of the two. A
@@ -184,13 +218,13 @@ public:
 	//
 	// Where the target is NARROWER than 64 bits (Windows `long`), a value that does not fit
 	// reports overflow rather than truncating silently — same contract as the 64-bit form.
-	int ToInt(long&               out) const;
-	int ToInt(long long&          out) const;
-	int ToInt(unsigned long&      out) const;
-	int ToInt(unsigned long long& out) const;
-	int64_t      ToInt64()   const; // throws on overflow / non-integer
-	double       ToDouble()  const; // lossy for values outside double's precision
-	float        ToFloat()   const; // lossy; truncated double
+	CORE_API int ToInt(long&               out) const;
+	CORE_API int ToInt(long long&          out) const;
+	CORE_API int ToInt(unsigned long&      out) const;
+	CORE_API int ToInt(unsigned long long& out) const;
+	CORE_API int64_t      ToInt64()   const; // throws on overflow / non-integer
+	CORE_API double       ToDouble()  const; // lossy for values outside double's precision
+	CORE_API float        ToFloat()   const; // lossy; truncated double
 	// ⭐⭐ THE EXPONENT A DECODED NUMBER MAY CARRY — and it is not a matter of taste.
 	//
 	// This type is EXACT DECIMAL: every value it holds must be writable as digits, and a value with
@@ -228,25 +262,25 @@ public:
 	// declining to invent more of it.
 	static constexpr int32_t kMaxDivFracDigits = 100;
 
-	ibString     ToString()  const;
+	CORE_API ibString     ToString()  const;
 	// …the same text, written into the engine's string — no wxString on the way.
-	void ToString(ibString& out) const;
+	CORE_API void ToString(ibString& out) const;
 
 	// Formatted decimal output. Pass field-by-field; defaults give the same
 	// result as the bare ToString() above. Defined below the class.
 	struct Format;
-	ibString ToString(const Format& fmt) const;
+	CORE_API ibString ToString(const Format& fmt) const;
 
 	// …THE SAME TEXT, WRITTEN INTO `out` — the form a caller showing many values uses: one string reused
 	// row after row grows once, and an immediate-tier figure (every ordinary amount) is laid out on the
 	// stack, with no BigImpl, no vector and no temporary string. A report of a hundred thousand rows with a
 	// format on a column goes through here once per cell (docs/private/format-property.md).
-	void ToString(const Format& fmt, ibString& out) const;
+	CORE_API void ToString(const Format& fmt, ibString& out) const;
 
 	// Rounding (round-half-away-from-zero).
-	ibNumber Round() const;          // to nearest integer
-	ibNumber Round(int n) const;     // to n decimal places (n >= 0)
-	ibNumber Trunc() const;          // truncate fractional part toward zero
+	CORE_API ibNumber Round() const;          // to nearest integer
+	CORE_API ibNumber Round(int n) const;     // to n decimal places (n >= 0)
+	CORE_API ibNumber Trunc() const;          // truncate fractional part toward zero
 
 	// Transcendental / power math. Computed on the EXACT decimal tier (~34
 	// significant digits) — NOT through double:
@@ -257,24 +291,24 @@ public:
 	//   Log(base)  — Ln(x)/Ln(base).
 	//   Pow(frac)  — exp(n*ln x), x > 0.
 	// double is used only to SEED the iterations / for out-of-range fallbacks.
-	ibNumber Pow(int n) const;
-	ibNumber Pow(const ibNumber& n) const;
-	ibNumber Sqrt() const;
-	ibNumber Log(const ibNumber& base) const;
-	ibNumber Ln() const;
-	ibNumber Exp() const;
+	CORE_API ibNumber Pow(int n) const;
+	CORE_API ibNumber Pow(const ibNumber& n) const;
+	CORE_API ibNumber Sqrt() const;
+	CORE_API ibNumber Log(const ibNumber& base) const;
+	CORE_API ibNumber Ln() const;
+	CORE_API ibNumber Exp() const;
 
 	// Parses a decimal string ("123", "-1.5", "1.2e3"). Returns false if the
 	// input has no digits or is otherwise unparseable; on failure value is
 	// reset to zero.
-	bool FromString(const ibString& s);
+	CORE_API bool FromString(const ibString& s);
 
 	// 128-bit raw integer extraction / loading. Bytes are little-endian
 	// two's-complement. Used by DB layers (e.g. Firebird SQL_INT128). Caller is
 	// responsible for ensuring the value is integer (use Round/Trunc or
 	// pre-scale via *= 10 if there's a column scale factor).
-	void To128Bytes(uint8_t out[16]) const;
-	void From128Bytes(const uint8_t bytes[16]);
+	CORE_API void To128Bytes(uint8_t out[16]) const;
+	CORE_API void From128Bytes(const uint8_t bytes[16]);
 
 	// ⭐ THE DECIMAL POINT MOVED, NOT DIVIDED FOR — the value times 10^exp10, exactly. A scaled integer
 	// column (NUMERIC(18,6) is an int64 and a scale of -6) IS its digits times 10^scale, and the readers
@@ -282,7 +316,7 @@ public:
 	// money cell a report read (MEASURED 2026-09-12, Debug stack samples: GetResultNumber -> operator/=).
 	// Here the exponent moves and the fraction's trailing zeros are trimmed, which is the very number —
 	// and the very form — those divisions left behind: each was exact and trimmed its own zeros.
-	void ShiftDecimal(int32_t exp10);
+	CORE_API void ShiftDecimal(int32_t exp10);
 
 	// Binary buffer accessor — value-as-bytes, in OES property-getter style
 	// (mirrors propertyForm's GetValueAsMemoryBuffer / SetValue pair).
@@ -299,13 +333,13 @@ public:
 	//     first, then writes. For tight loops over many numbers:
 	//         ibMemoryBuffer buf;
 	//         for (...) { n.GetBuffer(buf); writer.w_chunk(id, buf); }
-	ibMemoryBuffer GetBuffer() const;
-	void           GetBuffer(ibMemoryBuffer& out) const;
-	bool           GetBuffer(ibWriterMemory& writer) const; // chunked stream write
+	CORE_API ibMemoryBuffer GetBuffer() const;
+	CORE_API void           GetBuffer(ibMemoryBuffer& out) const;
+	CORE_API bool           GetBuffer(ibWriterMemory& writer) const; // chunked stream write
 
-	bool SetBuffer(const ibMemoryBuffer& in);
-	bool SetBuffer(const void* data, size_t len);
-	bool SetBuffer(const ibReaderMemory& reader); // chunked stream read
+	CORE_API bool SetBuffer(const ibMemoryBuffer& in);
+	CORE_API bool SetBuffer(const void* data, size_t len);
+	CORE_API bool SetBuffer(const ibReaderMemory& reader); // chunked stream read
 
 	// BigImpl is opaque to callers — fully defined in number.cpp.
 	struct BigImpl;
@@ -323,9 +357,16 @@ private:
 	static constexpr int     kImmExpMax  = (1   << (kImmExpBits  - 1)) - 1;       //  +32767
 	static constexpr int     kImmExpMin  = -(1  << (kImmExpBits  - 1));           //  -32768
 
-	void Clear() noexcept;
+	// The heap tier's owners, cold: a copy of a heap-tier number is one more (Hold), and the last to go frees it
+	// (Clear) — fnumber.cpp, where the count is. An immediate number never reaches either.
+	CORE_API void Hold() const noexcept;
+	CORE_API void Clear() noexcept;
 
-	bool     IsImmediate() const { return (m_payload & 1ULL) == 0; }
+	bool     IsImmediate() const noexcept { return (m_payload & 1ULL) == 0; }
+	// …AND AN INTEGER (exp10 0): the tag and the exponent are the low 17 bits, both zero — ONE test of the word. As
+	// IsImmediate() && ImmExp() == 0 the compiler sign-extended the exponent first, six instructions at the gate of
+	// every arithmetic fast path and every ToInt (the disassembly of a Release core.dll, 2026-11-02).
+	bool     IsImmediateInteger() const noexcept { return (m_payload & ((1ULL << kImmMantShift) - 1)) == 0; }
 	// Inline, NOT out-of-line: TryImmInts below calls ImmExp() twice and
 	// ImmMantissa() twice, and TryImmInts is the gate of every arithmetic and
 	// comparison fast path — so a body left in the .cpp costs four cross-module
@@ -333,12 +374,12 @@ private:
 	// and a mask. Whole-program optimisation removes those calls, but only where
 	// it is enabled (MSVC Release); the header form holds on every toolchain and
 	// every configuration, which is the point.
-	int64_t ImmMantissa() const {
+	int64_t ImmMantissa() const noexcept {
 		// Arithmetic right-shift on int64_t sign-extends, restoring the 47-bit
 		// signed mantissa to a full int64_t value.
 		return static_cast<int64_t>(m_payload) >> kImmMantShift;
 	}
-	int ImmExp() const {
+	int ImmExp() const noexcept {
 		const uint64_t mask = (1ULL << kImmExpBits) - 1;
 		int64_t e = static_cast<int64_t>((m_payload >> kImmExpShift) & mask);
 		if (e & (1LL << (kImmExpBits - 1))) e -= (1LL << kImmExpBits);
@@ -357,7 +398,7 @@ private:
 	// (a, b). Shared gate for the immediate-integer fast paths in the
 	// arithmetic / comparison operators (operator+=, *=, /=, Compare, ...).
 	bool TryImmInts(const ibNumber& rhs, int64_t& a, int64_t& b) const {
-		if (IsImmediate() && rhs.IsImmediate() && ImmExp() == 0 && rhs.ImmExp() == 0) {
+		if (IsImmediateInteger() && rhs.IsImmediateInteger()) {
 			a = ImmMantissa();
 			b = rhs.ImmMantissa();
 			return true;
@@ -404,7 +445,11 @@ private:
 	}
 
 	// Cold half of Compare — both operands are not plain immediate integers.
-	int CompareBig(const ibNumber& rhs) const;
+	CORE_API int CompareBig(const ibNumber& rhs) const;
+
+	// Cold halves of ToInt / ToUInt — a fraction, a power of ten or the heap tier.
+	CORE_API int          ToIntBig()  const;
+	CORE_API unsigned int ToUIntBig() const;
 
 	// Inline for the same reason as ImmMantissa / ImmExp above: they are the
 	// STORE half of every arithmetic fast path (operator+= and friends, now
@@ -428,9 +473,9 @@ private:
 	// BigImpl machinery (LoadBig / AlignExp / StoreBig) runs. Deliberately left
 	// out of line: inlining a decimal long-add into every call site would trade
 	// the rare case against the instruction cache the common case lives in.
-	ibNumber& AddBig(const ibNumber& rhs);
-	ibNumber& SubBig(const ibNumber& rhs);
-	ibNumber& MulBig(const ibNumber& rhs);
+	CORE_API ibNumber& AddBig(const ibNumber& rhs);
+	CORE_API ibNumber& SubBig(const ibNumber& rhs);
+	CORE_API ibNumber& MulBig(const ibNumber& rhs);
 	void StoreHeap(SharedBig* p) noexcept;
 
 	// One body per signedness, shared by the long / long long constructor pair above.

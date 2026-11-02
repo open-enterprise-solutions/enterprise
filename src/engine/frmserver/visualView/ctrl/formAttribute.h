@@ -36,7 +36,7 @@
 #include "core/stringUtils.h"         // stringUtils::GenerateSynonym (Synonym fallback, mirrors metaObject)
 
 class BACKEND_API ibSourceDataObject;
-class BACKEND_API ibDataNode;
+class ibDataNode;
 class BACKEND_API ibMetaData;
 class FRMSERVER_API ibValueForm;
 

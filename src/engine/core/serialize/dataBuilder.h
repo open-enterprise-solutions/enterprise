@@ -33,6 +33,7 @@
 #include <iterator>
 #include <memory>
 #include <optional>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -43,7 +44,7 @@
 #include "core/memory/memoryStream.h"          // ibWriterMemory / ibReaderMemory, std::uint32_t/std::uint64_t, ibMemoryBuffer
 #include "core/fnumber.h"                // ibNumber — codec specialization
 
-class CORE_API ibDataNode;   // a value can BE a child node (composite) — see ibDataKind::Child
+class ibDataNode;   // a value can BE a child node (composite) — see ibDataKind::Child
 
 ////////////////////////////////////////////////////////////////////////////
 // ibDataRange — WHAT A NODE HOLDS, WALKED WHERE IT LIES: a node's entries, its children, a list's items, each one
@@ -128,7 +129,8 @@ enum class ibDataKind : std::uint8_t {
 	Guid = 9,  // a guid — its 16 bytes; a text form writes its text. 8 is taken: a Number written whole (dataBuilder.cpp)
 };
 
-class CORE_API ibDataValue {
+// EXPORTED MEMBER BY MEMBER, as ibString is (core/fstring.h says why): what has no body here carries CORE_API itself.
+class ibDataValue {
 public:
 	ibDataValue() = default;
 	ibDataValue(const ibDataValue&) = default;
@@ -136,42 +138,42 @@ public:
 	ibDataValue& operator=(const ibDataValue&) = default;
 	ibDataValue& operator=(ibDataValue&&) noexcept = default;
 
-	ibDataKind Kind() const;
+	CORE_API ibDataKind Kind() const noexcept;
 	bool IsEmpty() const { return Kind() == ibDataKind::Empty; }
 
-	static ibDataValue String(const ibString& text);
-	static ibDataValue Bool(bool value);
-	static ibDataValue Number(const ibNumber& value); // exact decimal (the full numeric payload)
-	static ibDataValue Int(std::int64_t value);    // small-int convenience over Number
-	static ibDataValue UInt(std::uint64_t value);   // unsigned-int convenience over Number
-	static ibDataValue Date(const ibDateTime& date);   // date/time scalar (the wall-clock reading, fdatetime.h)
-	static ibDataValue Guid(const ibGuid& guid);       // its 16 bytes
-	static ibDataValue Binary(const ibMemoryBuffer& data);
-	static ibDataValue Child(const std::shared_ptr<ibDataNode>& child);   // its bytes copied in; null — Empty
-	static ibDataValue Array(const std::vector<ibDataValue>& items);
-	static ibDataValue Array(std::vector<ibDataValue>&& items);
+	CORE_API static ibDataValue String(const ibString& text);
+	CORE_API static ibDataValue Bool(bool value);
+	CORE_API static ibDataValue Number(const ibNumber& value); // exact decimal (the full numeric payload)
+	CORE_API static ibDataValue Int(std::int64_t value);    // small-int convenience over Number
+	CORE_API static ibDataValue UInt(std::uint64_t value);   // unsigned-int convenience over Number
+	CORE_API static ibDataValue Date(const ibDateTime& date);   // date/time scalar (the wall-clock reading, fdatetime.h)
+	CORE_API static ibDataValue Guid(const ibGuid& guid);       // its 16 bytes
+	CORE_API static ibDataValue Binary(const ibMemoryBuffer& data);
+	CORE_API static ibDataValue Child(const std::shared_ptr<ibDataNode>& child);   // its bytes copied in; null — Empty
+	CORE_API static ibDataValue Array(const std::vector<ibDataValue>& items);
+	CORE_API static ibDataValue Array(std::vector<ibDataValue>&& items);
 
 	// Typed accessors — each checks the signature and THROWS (ibBackendException) on a wrong kind, so a mis-read fails
 	// loud instead of returning garbage. An Empty value (an absent field) reads as the kind's default. By value: a
 	// text is made of the characters where they lie; a sub-node and a list are handles into the same bytes.
-	ibString                  AsString() const;   // …and a guid's text: a guid read as a string is its text
-	bool                      AsBool()   const;
-	ibNumber                  AsNumber() const;
-	std::int64_t              AsInt()    const;
-	std::uint64_t             AsUInt()   const;
-	ibDateTime                AsDate()   const;
-	ibGuid                    AsGuid()   const;   // …and its text, where a text form carried it, as AsDate a date's
-	ibMemoryBuffer            AsBinary() const;
-	std::optional<ibDataNode> AsChild()  const;   // none — not a sub-node
-	ibDataRange<ibDataValue>  AsArray()  const;
+	CORE_API ibString                  AsString() const;   // …and a guid's text: a guid read as a string is its text
+	CORE_API bool                      AsBool()   const;
+	CORE_API ibNumber                  AsNumber() const;
+	CORE_API std::int64_t              AsInt()    const;
+	CORE_API std::uint64_t             AsUInt()   const;
+	CORE_API ibDateTime                AsDate()   const;
+	CORE_API ibGuid                    AsGuid()   const;   // …and its text, where a text form carried it, as AsDate a date's
+	CORE_API ibMemoryBuffer            AsBinary() const;
+	CORE_API std::optional<ibDataNode> AsChild()  const;   // none — not a sub-node
+	CORE_API ibDataRange<ibDataValue>  AsArray()  const;
 
 	// ⭐ TWO PACKED VALUES ARE THE SAME VALUE WHEN THEIR BYTES ARE (Max, 2026-08-29: "you can compare the node — that
 	// is how you check the value for equality"). A value has one spelling of each kind (a whole number is always
 	// written whole), so the bytes compared are the answer.
-	bool operator==(const ibDataValue& other) const;
+	CORE_API bool operator==(const ibDataValue& other) const;
 
 	// HOW MUCH IT SAYS — the bytes it takes.
-	std::size_t Weight() const;
+	CORE_API std::size_t Weight() const noexcept;
 
 private:
 	friend class ibDataNode;
@@ -230,11 +232,16 @@ template<> struct ibDataCodec<ibDataValue> {      // a value whose kind it says 
 
 ////////////////////////////////////////////////////////////////////////////
 // ibDataKey — AN ENTRY'S NAME AS IT IS ASKED FOR — a protocol's word, a literal, either string — with no text made of
-// it: what a lookup compares a field's name with, where it lies.
+// it: what a lookup compares a field's name with, where it lies, and what a write copies into the bytes.
 ////////////////////////////////////////////////////////////////////////////
-struct CORE_API ibDataKey {
-	ibDataKey(const char* ascii) noexcept;
-	ibDataKey(const ibChar* text) noexcept;
+// ⭐ ALL IN THE HEADER, AND NOT EXPORTED: a key is made at the call, and a literal's length is counted by the compiler
+// (char_traits is constexpr). Out of line every key was a call into the core to count it — 257 of them in backend.dll
+// once AddField took keys (Release x64, 2026-11-02); marked as a class, the one from a string was a call as well.
+struct ibDataKey {
+	ibDataKey(const char* ascii) noexcept
+		: m_ascii(ascii != nullptr ? ascii : ""), m_length(std::char_traits<char>::length(m_ascii)) {}
+	ibDataKey(const ibChar* text) noexcept
+		: m_utf16(text != nullptr ? text : ibT("")), m_length(std::char_traits<ibChar>::length(m_utf16)) {}
 	ibDataKey(const ibString& text) noexcept : m_utf16(text.c_str()), m_length(text.length()) {}
 
 	const char*    m_ascii = nullptr;   // one of the two
@@ -258,22 +265,24 @@ struct CORE_API ibDataKey {
 // being filled (Child, AddChild) is a handle into its root's buffer, good while the root is; a node read out
 // (FindChild, Children, AsChild) is the bytes held and its place — a change to it makes it a node of its own.
 ////////////////////////////////////////////////////////////////////////////
-class CORE_API ibDataNode {
+// EXPORTED MEMBER BY MEMBER, as ibString is (core/fstring.h says why): marked as a class, even `ibDataNode()` below was
+// a call through the import table. What has no body here carries CORE_API itself.
+class ibDataNode {
 public:
 	ibDataNode() = default;
-	ibDataNode(ibClassID clsid, ibMetaID metaId);
+	CORE_API ibDataNode(ibClassID clsid, ibMetaID metaId);
 	// A copy is the same bytes, one more owner of them; a change to either makes its own.
-	ibDataNode(const ibDataNode& other);
-	ibDataNode(ibDataNode&& other) noexcept;
-	ibDataNode& operator=(const ibDataNode& other);
-	ibDataNode& operator=(ibDataNode&& other) noexcept;
-	~ibDataNode();
+	CORE_API ibDataNode(const ibDataNode& other);
+	CORE_API ibDataNode(ibDataNode&& other) noexcept;
+	CORE_API ibDataNode& operator=(const ibDataNode& other);
+	CORE_API ibDataNode& operator=(ibDataNode&& other) noexcept;
+	CORE_API ~ibDataNode();
 
 	// --- identity ---------------------------------------------------------
-	ibClassID GetClsid()  const;
-	ibMetaID  GetMetaId() const;
-	void      SetClsid(ibClassID clsid);
-	void      SetMetaId(ibMetaID metaId);
+	CORE_API ibClassID GetClsid()  const noexcept;
+	CORE_API ibMetaID  GetMetaId() const noexcept;
+	CORE_API void      SetClsid(ibClassID clsid);
+	CORE_API void      SetMetaId(ibMetaID metaId);
 
 	// --- typed values, templated (explicit, readable) --------------------
 	// Save uses the non-const Set* (writes the node); Load uses the const Get*
@@ -285,7 +294,7 @@ public:
 	// An absent name yields a default-constructed T — forward-compatible with
 	// add / drop / reorder. (No SetProp/GetProp: <windows.h> renames SetProp to
 	// SetPropW wherever it is seen first, and the call stops matching the declaration.)
-	template<class T> void SetValue(const ibString& name, const T& value) { AddField(name, ibDataCodec<T>::To(value)); }
+	template<class T> void SetValue(const ibDataKey& name, const T& value) { AddField(name, ibDataCodec<T>::To(value)); }
 	template<class T> T    GetValue(const ibDataKey& name) const {
 		if (const auto v = FindField(name)) return ibDataCodec<T>::From(*v);
 		return T();
@@ -295,7 +304,10 @@ public:
 	}
 
 	// --- named-field primitives (internals of Field) ----------------------
-	void AddField(const ibString& name, const ibDataValue& value);
+	// ⭐ THE NAME AS A KEY, AS A READ TAKES IT: its characters are copied into the bytes from where they lie. As an
+	// ibString a literal name was a text made, allocated and freed for every field written — 461 of them in
+	// frmserver.dll alone, a frame's every field (Release x64, 2026-11-02). Child, AddItem and SetField the same.
+	CORE_API void AddField(const ibDataKey& name, const ibDataValue& value);
 
 	// ⭐ REPLACE-OR-ADD, for a node that is a VIEW rather than a record. AddField appends, which is
 	// right for a blob written once in order — reading it back finds the first and nothing repeats a
@@ -306,38 +318,38 @@ public:
 	// "object"` and each appending to `required` — so a seven-argument tool published seven `type`
 	// keys and two `required` arrays, and a strict client would have taken the wrong one of them
 	// (found 2026-09-01, reading a schema back off the running server).
-	void SetField(const ibString& name, const ibDataValue& value);
+	CORE_API void SetField(const ibDataKey& name, const ibDataValue& value);
 	// …and the field taken out — a word a reader kept for later, once it is answered (ibJsonProvider::LookupTypes).
-	void RemoveField(const ibDataKey& name);
+	CORE_API void RemoveField(const ibDataKey& name);
 	// The field under the name — none when the name is absent: a new field against an old blob defaults, never errors.
 	// The name as it is handed, compared where the field's lies: a lookup makes no text.
-	std::optional<ibDataValue> FindField(const ibDataKey& name) const;
+	CORE_API std::optional<ibDataValue> FindField(const ibDataKey& name) const;
 	// …and whether there is one — a name given or not (the question ibProtocolNode::Has asks one storey up).
-	bool Has(const ibDataKey& name) const;
+	CORE_API bool Has(const ibDataKey& name) const;
 	// The fields in the order they were written — each a name and its value.
-	ibDataRange<std::pair<ibString, ibDataValue>> Fields() const;
+	CORE_API ibDataRange<std::pair<ibString, ibDataValue>> Fields() const;
 
 	// --- the property walk's names for the same set ------------------------
 	// Filled by the generic property walk (ibPropertyObject::DescribeProperties).
-	void SetProperty(const ibString& name, const ibDataValue& value) { AddField(name, value); }
+	void SetProperty(const ibDataKey& name, const ibDataValue& value) { AddField(name, value); }
 	std::optional<ibDataValue> FindProperty(const ibDataKey& name) const { return FindField(name); }
 	// value by name (empty if absent) — pass straight into a property's ReadNodeValue
-	ibDataValue GetProperty(const ibDataKey& name) const;
+	CORE_API ibDataValue GetProperty(const ibDataKey& name) const;
 
 	// …and the same question one storey up: two nodes are equal when their bytes are — the type, the identity, the
 	// fields in their order, the raw block and the children.
-	bool operator==(const ibDataNode& other) const;
+	CORE_API bool operator==(const ibDataNode& other) const;
 
 	// …and its weight: the bytes it takes.
-	std::size_t Weight() const;
+	CORE_API std::size_t Weight() const noexcept;
 
 	// --- transitional opaque data ----------------------------------------
 	// The not-yet-decomposed remainder of this node (today: the eDataBlock
 	// blob = SaveMeta output). Empty once a node is fully Described into
 	// named fields. Kept separate so byte-identity holds during migration.
-	ibMemoryBuffer RawData() const;
-	void           SetRawData(const ibMemoryBuffer& data);
-	bool           HasRawData() const;
+	CORE_API ibMemoryBuffer RawData() const;
+	CORE_API void           SetRawData(const ibMemoryBuffer& data);
+	CORE_API bool           HasRawData() const noexcept;
 
 	// --- composite value as a named CHILD sub-node (Type / interface / form …) -
 	// A composite fills its OWN values into this sub-node — that is how Type,
@@ -346,28 +358,28 @@ public:
 	//   save: ibDataNode& sub = node.Child("Type");      // the sub-node under the name — made when there is none —
 	//                                                     // filled where it lies
 	//   load: if (const auto sub = node.FindChild("Type")) ...   // reads it
-	ibDataNode&               Child(const ibString& name);
-	std::optional<ibDataNode> FindChild(const ibDataKey& name) const;
+	CORE_API ibDataNode&               Child(const ibDataKey& name);
+	CORE_API std::optional<ibDataNode> FindChild(const ibDataKey& name) const;
 
 	// --- metaobject children (recursion over the object tree) ------------
-	ibDataNode& AddChild(ibClassID clsid, ibMetaID metaId);
+	CORE_API ibDataNode& AddChild(ibClassID clsid, ibMetaID metaId);
 	// …and one made already, its bytes copied in (a reader's, ParseNode's).
-	ibDataNode& AddChild(const ibDataNode& child);
-	ibDataRange<ibDataNode> Children() const;
+	CORE_API ibDataNode& AddChild(const ibDataNode& child);
+	CORE_API ibDataRange<ibDataNode> Children() const;
 	// …and all of them taken out.
-	void RemoveChildren();
+	CORE_API void RemoveChildren();
 
 	// --- a list under a name (Array), added to at its end ------------------
 	// A node at the end of the list — the list made when there is none — filled where it lies, as a Child is.
-	ibDataNode& AddItem(const ibString& name);
+	CORE_API ibDataNode& AddItem(const ibDataKey& name);
 	// …and a value at its end, its bytes copied in.
-	void        AddItem(const ibString& name, const ibDataValue& value);
+	CORE_API void        AddItem(const ibDataKey& name, const ibDataValue& value);
 
 	// --- a part it holds already, to fill where it lies ---------------------
 	// A node read out of this one as it is now — a sub-node under a name (FindChild), a child (Children), a node in a
 	// list — as a handle, as Child, AddChild and AddItem give one. This one a root or a handle; a handle to a part a
 	// change took out is an empty node of its own.
-	ibDataNode& Handle(const ibDataNode& part);
+	CORE_API ibDataNode& Handle(const ibDataNode& part);
 
 private:
 	friend class ibDataValue;
@@ -391,7 +403,7 @@ private:
 	// A handle to a sub-node being filled — kept by the root, so a reference to it stays good while the root does.
 	ibDataNode& Handle(std::uint32_t at, bool inField);
 	// The list under the name — made empty when there is none — and the place past its last item, to add at.
-	std::uint32_t ListEnd(const ibString& name, std::uint32_t& list);
+	std::uint32_t ListEnd(const ibDataKey& name, std::uint32_t& list);
 
 	ibMemoryBuffer m_bytes;                      // a root's, or the bytes a node read out is in
 	std::uint32_t  m_at = 0;                     // its place there; 0 — no bytes yet (a new, empty node)

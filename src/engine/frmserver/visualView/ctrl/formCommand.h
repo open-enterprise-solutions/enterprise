@@ -23,7 +23,7 @@
 #include "frmserver/visualView/layerObject.h"                     // ibValueLayerObject — the shared base
 #include "backend/propertyManager/property/eventControl.h"       // ibEventControl — the Action event
 
-class BACKEND_API ibDataNode;
+class ibDataNode;
 class FRMSERVER_API ibValueForm;
 
 // Form-command ids are allocated from this HIGH base so a form-command hop id never collides with a standard action

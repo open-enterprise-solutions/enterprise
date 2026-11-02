@@ -11,6 +11,10 @@
 // ibReaderMemory is a cursor over the bytes a writer wrote. Made on a buffer it HOLDS it — one more owner of its
 // bytes, so a buffer handed over as a temporary stays alive as long as the reader, and a chunk it opens holds the
 // same bytes; made on a pointer it borrows them. A read past the end of the block is refused, not performed.
+//
+// ⭐ Both EXPORTED MEMBER BY MEMBER, as ibString is (core/fstring.h says why): marked as classes, the constructors and
+// destructors the compiler writes for them were calls through the import table — ~290 of them in backend.dll
+// (Release x64, 2026-11-02).
 /////////////////////////////////////////////////////////////////////////////
 
 #include "core/core.h"
@@ -28,11 +32,11 @@ class ibString;   // core/fstring.h — the ibString overloads of w_stringZ / r_
 // Write
 //------------------------------------------------------------------------------------
 
-class CORE_API ibWriterMemory
+class ibWriterMemory
 {
 public:
 	// kernel
-	void			w(const void* ptr, std::uint32_t count);
+	CORE_API void			w(const void* ptr, std::uint32_t count);
 
 	void			seek(std::uint32_t pos) const { m_pos = pos; }
 	std::uint32_t				tell() const { return m_pos; }
@@ -50,23 +54,23 @@ public:
 	inline void			w_string(const char* p) { w(p, (std::uint32_t)strlen(p)); w_u8(13); w_u8(10); }
 	inline void			w_stringZ(const char* p) { w(p, (std::uint32_t)strlen(p) + 1); }
 	inline void			w_stringZ(const std::string& p) { w(p.c_str() ? p.c_str() : "", (std::uint32_t)p.size()); w_u8(0); }
-	void				w_stringZ(const ibString& p);
-	void				w_stringZ(const wchar_t* p);   // a wide literal — one of the two above would both take it
+	CORE_API void				w_stringZ(const ibString& p);
+	CORE_API void				w_stringZ(const wchar_t* p);   // a wide literal — one of the two above would both take it
 
 #ifdef _MSC_VER
-	void	__cdecl  	w_printf(const char* format, ...);
+	CORE_API void	__cdecl  	w_printf(const char* format, ...);
 #else
-	void	w_printf(const char* format, ...);
+	CORE_API void	w_printf(const char* format, ...);
 #endif
 
 	// generalized chunking
-	void			open_chunk(std::uint64_t type);
-	void			close_chunk();
-	std::uint32_t				chunk_size() const; // returns size of currently opened chunk, 0 otherwise
-	void			w_compressed(void* ptr, std::uint32_t count);
-	void			w_compressed(const ibMemoryBuffer& data);
-	void			w_chunk(std::uint64_t type, void* m_data, std::uint32_t size);
-	void			w_chunk(std::uint64_t type, const ibMemoryBuffer& data);
+	CORE_API void			open_chunk(std::uint64_t type);
+	CORE_API void			close_chunk();
+	CORE_API std::uint32_t				chunk_size() const; // returns size of currently opened chunk, 0 otherwise
+	CORE_API void			w_compressed(void* ptr, std::uint32_t count);
+	CORE_API void			w_compressed(const ibMemoryBuffer& data);
+	CORE_API void			w_chunk(std::uint64_t type, void* m_data, std::uint32_t size);
+	CORE_API void			w_chunk(std::uint64_t type, const ibMemoryBuffer& data);
 
 	// What was written, handed over without a copy.
 	ibMemoryBuffer	buffer() const { return m_buffer; }
@@ -85,7 +89,7 @@ private:
 // Read
 //------------------------------------------------------------------------------------
 
-class CORE_API ibReaderMemory
+class ibReaderMemory
 {
 public:
 
@@ -120,7 +124,7 @@ public:
 	}
 
 	inline bool			eof()	const { return elapsed() <= 0; }
-	void			r(void* p, int cnt) const;
+	CORE_API void			r(void* p, int cnt) const;
 
 	inline std::uint64_t			r_u64() const { std::uint64_t   tmp;	r(&tmp, sizeof(tmp)); return tmp; }
 	inline std::uint32_t			r_u32() const { std::uint32_t   tmp;	r(&tmp, sizeof(tmp)); return tmp; }
@@ -134,7 +138,7 @@ public:
 
 	// Set file pointer to start of chunk m_data (0 for root chunk)
 	inline	void		rewind() const { seek(0); }
-	std::uint64_t 			    find_chunk(std::uint64_t ID, bool* bCompressed = nullptr) const;
+	CORE_API std::uint64_t 			    find_chunk(std::uint64_t ID, bool* bCompressed = nullptr) const;
 
 	// A chunk's content (8-byte id, 8-byte size, the content) into `dest`.
 	inline	bool		r_chunk(std::uint64_t ID, void* dest) const {
@@ -183,24 +187,24 @@ public:
 		return false;
 	}
 
-	void			r_string(char* dest, std::uint32_t tgt_sz) const;
-	void			r_string(std::string& dest) const;
-	void			r_string(ibString& dest) const;
+	CORE_API void			r_string(char* dest, std::uint32_t tgt_sz) const;
+	CORE_API void			r_string(std::string& dest) const;
+	CORE_API void			r_string(ibString& dest) const;
 
-	void			skip_stringZ() const;
+	CORE_API void			skip_stringZ() const;
 
-	ibString		r_stringZ() const;
+	CORE_API ibString		r_stringZ() const;
 
-	void			r_stringZ(char* dest, std::uint32_t tgt_sz) const;
-	void			r_stringZ(std::string& dest) const;
-	void			r_stringZ(ibString& dest) const;
+	CORE_API void			r_stringZ(char* dest, std::uint32_t tgt_sz) const;
+	CORE_API void			r_stringZ(std::string& dest) const;
+	CORE_API void			r_stringZ(ibString& dest) const;
 
 	// A chunk opened as a reader of its own — holding the same bytes — or nullptr when there is none.
-	ibReaderMemory*	open_chunk(std::uint64_t ID) const;
+	CORE_API ibReaderMemory*	open_chunk(std::uint64_t ID) const;
 	// iterators
-	ibReaderMemory*	open_chunk_iterator(std::uint64_t& ID, ibReaderMemory* previous = nullptr) const;	// nullptr=first
+	CORE_API ibReaderMemory*	open_chunk_iterator(std::uint64_t& ID, ibReaderMemory* previous = nullptr) const;	// nullptr=first
 
-	void			close();
+	CORE_API void			close();
 
 private:
 
@@ -210,14 +214,14 @@ private:
 	{
 	}
 
-	std::uint32_t 			advance_term_string() const;
+	CORE_API std::uint32_t 			advance_term_string() const;
 
 	// The byte length of the C string at the cursor, not counting its NUL.
 	// Does not move the cursor. No NUL in the bytes still left is a refusal.
-	int				MeasureStringZ(const char*& start) const;
+	CORE_API int				MeasureStringZ(const char*& start) const;
 
-	void			RefuseSeek(int ptr) const;
-	void			RefuseAdvance(int cnt) const;
+	CORE_API void			RefuseSeek(int ptr) const;
+	CORE_API void			RefuseAdvance(int cnt) const;
 
 	ibMemoryBuffer		m_bytes;		// the bytes read, held; empty when they are borrowed
 	char*				m_data;

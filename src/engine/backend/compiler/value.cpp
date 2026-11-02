@@ -56,94 +56,26 @@ static bool TraceValues()
 	return s_traceValues;
 }
 
-#define DEBUG_VALUE_CREATE() \
-	{ const unsigned int alive = s_nCreateCount.fetch_add(1) + 1; \
-	  if (TraceValues()) DebugValueEmit("Create", alive); }
-#define DEBUG_VALUE_DELETE() \
-	{ const unsigned int alive = s_nCreateCount.fetch_sub(1) - 1; \
-	  if (TraceValues()) DebugValueEmit("Delete", alive); }
-#else
-#define DEBUG_VALUE_CREATE()
-#define DEBUG_VALUE_DELETE()
+// What DEBUG_VALUE_CREATE / DEBUG_VALUE_DELETE (value.h) reach from every constructor and the destructor.
+void ibValue::DebugValueCreate() noexcept
+{
+	const unsigned int alive = s_nCreateCount.fetch_add(1) + 1;
+	if (TraceValues()) DebugValueEmit("Create", alive);
+}
+
+void ibValue::DebugValueDelete() noexcept
+{
+	const unsigned int alive = s_nCreateCount.fetch_sub(1) - 1;
+	if (TraceValues()) DebugValueEmit("Delete", alive);
+}
 #endif
 
 //**********************************************************************
 BACKEND_API const ibValue wxEmptyValue;
 //**********************************************************************
 
-// THE LIFECYCLE IS THE VARIANT'S (core/variant.cpp): the word, the count, the copy that makes a reference, the
-// write-denied refusal. A runtime value adds its count of the living (DEBUG_VALUE) and nothing else here.
-ibValue::ibValue()
-	: ibVariant()
-{
-	DEBUG_VALUE_CREATE();
-}
-
-ibValue::ibValue(const ibValue& varValue)
-	: ibVariant(varValue)
-{
-	DEBUG_VALUE_CREATE();
-}
-
-ibValue::ibValue(ibValue&& varValue)
-	: ibVariant(std::move(varValue))
-{
-	DEBUG_VALUE_CREATE();
-}
-
-ibValue::ibValue(ibValue* pValue)
-	: ibVariant(static_cast<ibVariant*>(pValue))
-{
-	DEBUG_VALUE_CREATE();
-}
-
-ibValue::ibValue(ibBackendValue* pParam)
-	: ibVariant(static_cast<ibVariant*>(pParam ? pParam->GetImplValueRef() : nullptr))
-{
-	DEBUG_VALUE_CREATE();
-}
-
-ibValue::ibValue(int nYear, int nMonth, int nDay, unsigned short nHour, unsigned short nMinute, unsigned short nSecond)
-	: ibVariant(nYear, nMonth, nDay, nHour, nMinute, nSecond)
-{
-	DEBUG_VALUE_CREATE();
-}
-
-ibValue::ibValue(ibValueTypes type, bool readOnly)
-	: ibVariant(type, readOnly)
-{
-	DEBUG_VALUE_CREATE();
-}
-
-//Constructors by types:
-#define CVALUE_BYTYPE(v_parclass) \
-ibValue::ibValue (v_parclass cParam) \
-    : ibVariant(cParam) \
-{\
-	DEBUG_VALUE_CREATE();\
-}
-
-CVALUE_BYTYPE(bool);
-
-CVALUE_BYTYPE(signed int);
-CVALUE_BYTYPE(unsigned int);
-CVALUE_BYTYPE(double);
-CVALUE_BYTYPE(const ibNumber&);
-
-CVALUE_BYTYPE(const ibDateTime&);
-
-CVALUE_BYTYPE(const char*);
-CVALUE_BYTYPE(const ibChar*);
-CVALUE_BYTYPE(const std::wstring&);
-CVALUE_BYTYPE(const ibString&);
-
-#undef CVALUE_BYTYPE
-
-ibValue::ibValue(ibString&& cParam)   // native — takes the text over (runtime string functions)
-	: ibVariant(std::move(cParam))
-{
-	DEBUG_VALUE_CREATE();
-}
+// THE LIFECYCLE IS THE VARIANT'S, and the constructors, the destructor and the assignments that pass it on are in
+// value.h with it. Here only the one that refuses something.
 
 // A VARIANT INTO THE RUNTIME — its word as it is. An object comes along only when it is one of the runtime's own:
 // GetRef here answers with an ibValue, and an object made elsewhere (a property's live one) has no members to call.
@@ -158,38 +90,6 @@ ibValue::ibValue(const ibVariant& variant)
 	Copy(variant);
 	DEBUG_VALUE_CREATE();
 }
-
-ibValue::~ibValue()
-{
-	DEBUG_VALUE_DELETE();
-}
-
-// THE ASSIGNMENTS ARE THE VARIANT'S. Declared here because the runtime's own (`ibValue*`, `ibBackendValue*`) would
-// hide them otherwise; each goes straight through.
-void ibValue::operator = (bool cParam) { ibVariant::operator=(cParam); }
-void ibValue::operator = (short cParam) { ibVariant::operator=(cParam); }
-void ibValue::operator = (unsigned short cParam) { ibVariant::operator=(cParam); }
-void ibValue::operator = (int cParam) { ibVariant::operator=(cParam); }
-void ibValue::operator = (unsigned int cParam) { ibVariant::operator=(cParam); }
-void ibValue::operator = (float cParam) { ibVariant::operator=(cParam); }
-void ibValue::operator = (double cParam) { ibVariant::operator=(cParam); }
-void ibValue::operator = (const ibNumber& cParam) { ibVariant::operator=(cParam); }
-void ibValue::operator = (const ibDateTime& cParam) { ibVariant::operator=(cParam); }
-void ibValue::operator = (const ibString& cParam) { ibVariant::operator=(cParam); }
-void ibValue::operator = (const char* cParam) { ibVariant::operator=(cParam); }
-void ibValue::operator = (const ibChar* cParam) { ibVariant::operator=(cParam); }
-void ibValue::operator = (ibString&& cParam) { ibVariant::operator=(std::move(cParam)); }
-void ibValue::operator = (const ibValue& cParam) { ibVariant::operator=(cParam); }
-void ibValue::operator = (ibValue&& cParam) { ibVariant::operator=(std::move(cParam)); }
-void ibValue::operator = (ibValueTypes type) { ibVariant::operator=(type); }
-
-void ibValue::operator = (ibBackendValue* pValue)
-{
-	ibVariant::operator=(static_cast<ibVariant*>(pValue ? pValue->GetImplValueRef() : nullptr));
-}
-
-void ibValue::operator = (ibValue* pValue) { ibVariant::operator=(static_cast<ibVariant*>(pValue)); }
-void ibValue::operator = (const ibValue* pValue) { ibVariant::operator=(static_cast<const ibVariant*>(pValue)); }
 
 bool ibValue::FindValue(const ibString& findData, std::vector<ibValue>& listValue) const
 {
