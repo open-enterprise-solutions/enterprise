@@ -84,6 +84,11 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## The browser client
 
+- **A grid sizer's cells are one size, as in the thin client.** Every column takes an equal share of
+  the width rather than the width of its widest content, and every row is as tall as the tallest. An
+  item that does not stretch keeps its own width at the start of its cell, as there; given `Rows`,
+  the grid keeps that many rows, and with no `Cols` counts its columns from them. A column is never
+  narrower than what it holds: a form too narrow for them all widens that one and scrolls.
 - **The start**: the thin client's splash, with arrows and the stage of the start under it, is up from the first paint;
   a login asked takes its place, and it stays until the first window has its rows. The window's title has the OES logo
   beside the configuration's name.

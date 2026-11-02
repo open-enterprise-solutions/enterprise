@@ -115,8 +115,9 @@
 			return {
 				NodeType: 'ClientForm', ControlId: tab.id * 100, Key: `form${tab.id}`,
 				State: {},
-				// Laid as a saved form lays them: each control in a sizer's item, the table taking what is left.
-				NodeChildren: [...(tab.fields ?? []).map((field, place) => ({
+				// Laid as a saved form lays them: each control in a sizer's item, the table taking what is left. A tab's
+				// `controls` are nodes as the server writes them, put first as they are.
+				NodeChildren: [...(tab.controls ?? []), ...(tab.fields ?? []).map((field, place) => ({
 					NodeType: 'SizerItem', ControlId: 500 + place, Proportion: 0, Stretch: expand,
 					NodeChildren: [{
 						NodeType: 'Textctrl', ControlId: field.id, ButtonSelect: field.select ?? true, ButtonClear: field.clear ?? true,
