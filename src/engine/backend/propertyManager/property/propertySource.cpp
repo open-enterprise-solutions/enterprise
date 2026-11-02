@@ -1,4 +1,5 @@
 #include "propertySource.h"
+#include "backend/backend_exception.h"   // a path that does not resolve raises
 #include "backend/propertyManager/property/variant/variantSource.h"   // GetGuidByID / GetIdByGuid — the hop <-> guid resolve
 #include "core/serialize/dataBuilder.h"   // ibDataValue — node value (Binary)
 #include "core/description/sourceDescription.h"       // ibSourceDescription / ibSourceHop (the id path the variant holds)
@@ -100,15 +101,28 @@ bool ibPropertySource::IsAvailable() const {
 ////////////////////////////////////////////////////////////////////////
 
 //base property for "source"
+// ⭐ A SCRIPT BINDS BY THE PATH IT READS — the dotted text GetDataValue answers with (`Control.Source = "List.Price"`),
+// walked by the control's own WalkSource, the walk MCP form_bind takes too (it writes through this door). An
+// empty text unbinds. A path that does not resolve RAISES: left quietly unchanged, the control would go on showing
+// what it showed before.
 bool ibPropertySource::SetDataValue(const ibValue& varPropVal)
 {
-	//varPropVal.GetString();
-	return false;
+	const ibString path = varPropVal.GetString();
+	if (path.IsEmpty()) {
+		SetValue(ibSourceDescription());
+		return true;
+	}
+
+	const ibBackendTypeSourceFactory* const factory = get_cell_variant<ibVariantSource>()->GetSourceFactory();
+	SetValue(factory->WalkSource(path));
+	return true;
 }
 
+// …and an UNBOUND one reads as no path at all, the text that unbinds: `A.Source = B.Source` carries an unbound B over
+// as it is. "<not selected>" is the inspector's sentence for a person, not a path.
 bool ibPropertySource::GetDataValue(ibValue& pvarPropVal) const
 {
-	pvarPropVal = ibString(m_propValue.GetString());
+	pvarPropVal = IsEmptyProperty() ? ibString() : m_propValue.GetString();
 	return true;
 }
 

@@ -326,13 +326,11 @@ ibString ibValueMetaObject::GetFileName() const
 //*                              Support methods                             *
 //****************************************************************************
 
+#include "backend/propertyManager/propertyMembers.h"
+
 void ibValueMetaObject::FillMembers(ibMemberTable& helper) const
 {
-	for (unsigned idx = 0; idx < ibPropertyObject::GetPropertyCount(); idx++) {
-		ibProperty* property = ibPropertyObject::GetProperty(idx);
-		if (property == nullptr) continue;
-		helper.AppendProp(property->GetName(), true, false, idx);
-	}
+	ibAppendPropertyMembers(helper, *this, false);
 }
 
 bool ibValueMetaObject::SetPropVal(const long lPropNum, const ibValue& varPropVal)

@@ -476,6 +476,9 @@
     <ClInclude Include="propertyManager\propertyObject.h">
       <Filter>propertyManager</Filter>
     </ClInclude>
+    <ClInclude Include="propertyManager\propertyMembers.h">
+      <Filter>propertyManager</Filter>
+    </ClInclude>
     <ClInclude Include="propertyManager\property\propertyBoolean.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>

@@ -217,6 +217,12 @@ public:
 	// entity carrying the attribute (its hidden private description) AND its value. Never
 	// a raw attribute. An attribute is NEVER empty: name + Type + value.
 	ibFormAttributeValue* AddAttribute(const ibString& name, const ibClassID& type, const ibValue& value);
+	// ⭐ …AND THE ONE A MODULE ADDS while the form is open — `ThisForm.Attributes.Add(name, type)`: a value table of
+	// columns only known at run time, a list a control is then bound to. Typed with the WHOLE description (a string's
+	// length, a number's digits), not only its first class, and marked as the module's (IsAddedByModule), so it is not
+	// stored with the form and RemoveAttribute may take it again. Raises for a name that is not a name or that another
+	// attribute already has.
+	ibFormAttributeValue* AddAttribute(const ibString& name, const ibTypeDescription& typeDesc);
 	// The MAIN entry (the source object lands here) — guards that no other main exists.
 	ibFormAttributeValue* AddMainAttribute(const ibString& name, const ibClassID& type, ibSourceDataObject* value);
 
@@ -246,8 +252,11 @@ public:
 	// Make entry the SOLE main attribute (sets its flag, clears it on all others).
 	void SetMainAttribute(ibFormAttributeValue* entry);
 
-	void DeleteAttribute(const ibString& name);
 	void DeleteAttribute(unsigned int idx);
+	// The module's removal — `ThisForm.Attributes.Remove(attribute)`: only an attribute the module added. One the form
+	// was designed with is what the compiled module and the controls are bound to, and taking it from under them is not
+	// a script's call; that raises, as an attribute of another form does, and one a control still shows.
+	void RemoveAttribute(ibFormAttributeValue* entry);
 	// Bind `entry` into the form module: its value cell as a LOCAL named <attrName>, and —
 	// when it is the MAIN — the exported DataSource too. Self-managed by the attribute's
 	// lifecycle / main flag: add and become-main bind, delete and lose-main unbind, so no
@@ -298,7 +307,7 @@ public:
 	// it does NOT raise, because a form is somebody standing in front of a window and the caller
 	// decides what an empty field costs. Reachable from a script as `ThisForm.CheckFilling()`.
 	bool CheckFilling() const;
-	// Next free attribute id (max existing + 1) — PUBLIC so the holder's nested description can
+	// Next free attribute id (one past the highest ever given out, m_lastAttributeId) — PUBLIC so the holder's nested description can
 	// stamp itself on construction (a nested class does not inherit the enclosing class's friends).
 	ibMetaID NextAttributeId() const;
 
@@ -422,6 +431,43 @@ public:
 		ibValueForm* m_formOwner;
 	};
 
+	// ⭐ THE FORM'S ATTRIBUTES AS A SCRIPT WALKS THEM — `ThisForm.Attributes`, as `Controls` walks the controls: an
+	// element is the attribute's STRUCTURE (its name, caption, type, fill check, its value's own settings), not its
+	// value, which the module reads by the attribute's name. Add / Remove are the module's own attributes only.
+	class ibValueFormCollectionAttribute : public ibValueDynamicMembers {
+	public:
+		explicit ibValueFormCollectionAttribute(ibValueForm* ownerForm);
+
+		void FillMembers(ibMemberTable& helper) const;   // bound in ctor
+
+		virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray) override;
+		virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) override;
+
+		virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;
+		virtual bool GetAt(const ibValue& varKeyValue, ibValue& pvarValue) override;
+
+		virtual std::shared_ptr<ibValueIteratorState> CreateIterator() override;
+	private:
+		ibValueForm* m_formOwner;
+	};
+
+	// …AND ITS COMMANDS — `ThisForm.Commands`: an element is the command's structure (name, caption, picture).
+	class ibValueFormCollectionCommand : public ibValueDynamicMembers {
+	public:
+		explicit ibValueFormCollectionCommand(ibValueForm* ownerForm);
+
+		void FillMembers(ibMemberTable& helper) const;   // bound in ctor
+
+		virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) override;
+
+		virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;
+		virtual bool GetAt(const ibValue& varKeyValue, ibValue& pvarValue) override;
+
+		virtual std::shared_ptr<ibValueIteratorState> CreateIterator() override;
+	private:
+		ibValueForm* m_formOwner;
+	};
+
 public:
 
 	ibValueFrame* CreateControl(const ibString& classControl, ibValueFrame* control = nullptr);
@@ -432,6 +478,8 @@ public:
 	// (whose SetOwnerForm erase-bookkeeping was a teardown hazard). Cold path -
 	// script Controls collection + design-time name-conflict; the form tree is small.
 	std::vector<ibValueControl*> GetControlList() const;
+	// The control bound to the attribute `id` (its source path starts there) — null when none shows it.
+	ibValueControl* FindControlByAttributeId(const ibMetaID& id) const;
 
 public:
 
@@ -574,6 +622,9 @@ private:
 	// one whose attribute carries the Main flag — no separate pointer (single source of
 	// truth = the flag).
 	std::vector<ibValuePtr<ibFormAttributeValue>> m_attributes;
+	// The highest attribute id ever given out on this form — an id freed by a removal is not handed out again
+	// (NextAttributeId), so a binding that still names it cannot land on a newcomer.
+	ibMetaID m_lastAttributeId = 0;
 
 	// FORM COMMANDS — form-local events (NOT metaobjects), managed like m_attributes: each is an ibFormCommandValue
 	// property object, held ref-counted, serialized with the form data, listed in the navigator's "Form commands".
@@ -592,6 +643,8 @@ private:
 	std::map<ibString, ibIdleHandler> m_idleHandlerArray;
 
 	ibValuePtr<ibValueFormCollectionControl> m_formCollectionControl;
+	ibValuePtr<ibValueFormCollectionAttribute> m_formCollectionAttribute;
+	ibValuePtr<ibValueFormCollectionCommand> m_formCollectionCommand;
 
 	ibPropertyCategory* m_categoryFrame = ibPropertyObject::CreatePropertyCategory(ibT("Frame"), _("Frame"));
 	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryFrame, ibT("Title"), _("Title"),
@@ -611,6 +664,8 @@ private:
 
 	friend class ibValueControl;
 	friend class ibValueFormCollectionControl;
+	friend class ibValueFormCollectionAttribute;
+	friend class ibValueFormCollectionCommand;
 
 	friend class ibFormAttributeValue;
 

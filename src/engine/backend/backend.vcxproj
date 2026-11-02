@@ -299,6 +299,7 @@
     <ClInclude Include="objCtor.h" />
     <ClInclude Include="propertyManager\propertyManager.h" />
     <ClInclude Include="propertyManager\propertyObject.h" />
+    <ClInclude Include="propertyManager\propertyMembers.h" />
     <ClInclude Include="propertyManager\property\eventControl.h" />
     <ClInclude Include="propertyManager\property\eventAction.h" />
     <ClInclude Include="propertyManager\property\propertyBoolean.h" />

@@ -445,12 +445,65 @@ const ibBackendSourceColumn* ibBackendTypeSourceFactory::WalkSource(
 	return resolved ? leaf : nullptr;
 }
 
+#include "backend/srcDataObject.h"         // ibSourceDataObject::WalkColumns — the walk the words go through
+#include "backend/backend_exception.h"     // a path that names nothing raises
+
+ibSourceDescription ibBackendTypeSourceFactory::WalkSource(const ibString& path) const
+{
+	// THE HEAD — an attribute the path opens with, by name as a module meets it; else the MAIN one, which is the
+	// form holding its object, so the path's first segment is already a field of it.
+	const ibString first = path.BeforeFirst(ibT('.'));
+	ibBackendFormAttributeValue* head = FindSourceHolder(first);
+	const bool named = head != nullptr;
+	if (head == nullptr) {
+		std::vector<ibBackendFormAttributeValue*> holders;
+		GetSourceList(holders);
+		for (ibBackendFormAttributeValue* holder : holders) {
+			if (holder != nullptr && holder->IsMain()) {
+				head = holder;
+				break;
+			}
+		}
+	}
+	if (head == nullptr)
+		ibBackendCoreException::Error(_("'%s' names no attribute this control can be bound to, and the form has no main "
+			"attribute to start from"), first);
+
+	ibSourceDescription walk(head->GetId());
+	const ibString rest = named ? path.AfterFirst(ibT('.')) : path;
+	if (const ibSourceDataObject* source = head->GetSourceValue()) {
+		std::vector<ibValue> held;
+		source->WalkColumns(rest, named ? head->GetName() : ibString(), walk, held);
+	}
+	else if (!rest.IsEmpty())
+		ibBackendCoreException::Error(_("'%s' holds a value - nothing unfolds from it, so '%s' cannot follow"),
+			head->GetName(), rest.BeforeFirst(ibT('.')));
+
+	// The MAIN head alone is not a binding — it is the form holding the object.
+	if (walk.GetHopCount() < 2 && !named)
+		ibBackendCoreException::Error(_("Nothing to bind to - the path names no field and no attribute"));
+
+	return walk;
+}
+
 ibBackendFormAttributeValue* ibBackendTypeSourceFactory::FindSourceHolder(const ibMetaID& id) const
 {
 	std::vector<ibBackendFormAttributeValue*> holders;
 	GetSourceList(holders);
 	for (ibBackendFormAttributeValue* holder : holders)
 		if (holder != nullptr && id == holder->GetId())
+			return holder;
+	return nullptr;
+}
+
+#include "core/stringUtils.h"
+
+ibBackendFormAttributeValue* ibBackendTypeSourceFactory::FindSourceHolder(const ibString& name) const
+{
+	std::vector<ibBackendFormAttributeValue*> holders;
+	GetSourceList(holders);
+	for (ibBackendFormAttributeValue* holder : holders)
+		if (holder != nullptr && stringUtils::IsSameAs(holder->GetName(), name))
 			return holder;
 	return nullptr;
 }

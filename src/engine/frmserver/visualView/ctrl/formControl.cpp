@@ -50,6 +50,18 @@ std::vector<ibValueControl*> ibValueForm::GetControlList() const
 	return list;
 }
 
+#include "frmserver/visualView/ctrl/typeControl.h"
+
+ibValueControl* ibValueForm::FindControlByAttributeId(const ibMetaID& id) const
+{
+	for (ibValueControl* control : GetControlList()) {
+		const ibTypeControlFactory* factory = dynamic_cast<const ibTypeControlFactory*>(control);
+		if (factory != nullptr && factory->GetSourceDesc().GetFirst() == id)
+			return control;
+	}
+	return nullptr;
+}
+
 std::shared_ptr<ibValueIteratorState> ibValueForm::ibValueFormCollectionControl::CreateIterator()
 {
 	using ListT = std::vector<ibValueControl*>;

@@ -36,7 +36,7 @@ public:
 	virtual bool IsTreeExpanded() const { return true; }
 	virtual void SetTreeExpanded(bool value) {}
 
-	// ibValue concrete requirements — shared (a layer object exposes no script members).
+	// ibValue concrete requirements — shared (a layer object exposes no script members, unless it says otherwise).
 	virtual bool Init(ibValue** paParams, const long lSizeArray) override { return true; }
 	virtual bool IsEmpty() const override { return false; }
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override { return false; }

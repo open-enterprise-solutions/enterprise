@@ -13599,3 +13599,48 @@ msgstr "Асистент із доступом до даних"
 #: src/engine/frmclient/mainFrame/settings/settingsdialog.cpp:39
 msgid "Debugging"
 msgstr "Налагодження"
+
+#: src/engine/frmserver/visualView/ctrl/formAttribute.cpp:121
+#, c-format
+msgid "'%s' cannot be the name of a form attribute: it takes letters, digits and the symbol \"_\", and does not start with a digit"
+msgstr "'%s' не може бути ім'ям реквізиту форми: в імені допустимі літери, цифри та символ \"_\", і воно не починається з цифри"
+
+#: src/engine/frmserver/visualView/ctrl/formAttribute.cpp:126
+#, c-format
+msgid "The form already has an attribute '%s'"
+msgstr "Форма вже має реквізит '%s'"
+
+#: src/engine/frmserver/visualView/ctrl/formAttribute.cpp:224
+#, c-format
+msgid "The form has no attribute '%s'"
+msgstr "Форма не має реквізиту '%s'"
+
+#: src/engine/frmserver/visualView/ctrl/formAttribute.cpp:228
+#, c-format
+msgid "'%s' is an attribute the form was designed with - only one the module added with Attributes.Add can be removed"
+msgstr "'%s' - реквізит, заданий під час проєктування форми: видалити можна лише реквізит, який модуль додав через Attributes.Add"
+
+#: src/engine/frmserver/visualView/ctrl/formAttribute.cpp:234
+#, c-format
+msgid "'%s' is shown by the control '%s' - unbind the control first"
+msgstr "'%s' показує елемент '%s' - спочатку відв'яжіть елемент"
+
+#: src/engine/backend/backend_type.cpp:469
+#, c-format
+msgid "'%s' names no attribute this control can be bound to, and the form has no main attribute to start from"
+msgstr "'%s' не називає реквізит, до якого можна прив'язати цей елемент, а основного реквізиту, з якого почати шлях, форма не має"
+
+#: src/engine/backend/backend_type.cpp:479 src/engine/backend/srcDataObject.cpp:148
+#, c-format
+msgid "'%s' holds a value - nothing unfolds from it, so '%s' cannot follow"
+msgstr "'%s' зберігає значення - з нього нічого не розкривається, тому '%s' далі шляху бути не може"
+
+#: src/engine/backend/srcDataObject.cpp:150
+#, c-format
+msgid "'%s' has no field called '%s'. It offers: %s"
+msgstr "'%s' не має поля '%s'. Доступні: %s"
+
+#: src/engine/backend/backend_type.cpp:484
+#, c-format
+msgid "Nothing to bind to - the path names no field and no attribute"
+msgstr "Немає до чого прив'язати: шлях не називає ні поля, ні реквізиту"
