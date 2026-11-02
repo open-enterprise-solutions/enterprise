@@ -29,8 +29,10 @@
 
 class ibDataNode;
 
-// EXPORTED MEMBER BY MEMBER, as ibString is (fstring.h says why): what has no body here carries CORE_API itself.
-class ibVariant {
+// EXPORTED MEMBER BY MEMBER, as ibString is (fstring.h says why): what has no body here carries CORE_API itself. Its
+// vtable and type info are the class's own, so the class carries CORE_API_VTABLE (coreApi.h) — on Linux and macOS
+// they are otherwise hidden inside core.
+class CORE_API_VTABLE ibVariant {
 public:
 	//ATTRIBUTES:
 	ibValueTypes m_typeClass;  // 1 byte (enum : unsigned char)

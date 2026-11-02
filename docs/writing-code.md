@@ -150,7 +150,10 @@ second base.
 places and dropped the selection condition silently.
 
 **A function called across a DLL boundary is exported before you build** (`BACKEND_API`, as its
-neighbours do); the miss shows up as LNK2019 at the end of a wide build. A new source file is
+neighbours do); the miss shows up as LNK2019 at the end of a wide build. A class exported member
+by member that has a vtable carries its module's `*_API_VTABLE` too (`class CORE_API_VTABLE
+ibVariant`): on Linux and macOS its vtable is only as visible as the class, and the miss is a link
+error there alone. A new source file is
 registered in its `.vcxproj` and `.filters`: CMake's glob forgives the miss, MSBuild does not.
 
 **Keep wide headers quiet.** Explanations go at the definition in the `.cpp`, and a file-static

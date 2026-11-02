@@ -14,5 +14,6 @@
 #else
 #define FILESERVER_API IB_IMPORT
 #endif
+#define FILESERVER_API_VTABLE IB_EXPORT_VTABLE
 
 #endif

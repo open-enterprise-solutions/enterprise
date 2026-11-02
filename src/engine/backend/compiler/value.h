@@ -111,8 +111,8 @@ public:
 //
 // EXPORTED MEMBER BY MEMBER, as ibString is (core/fstring.h says why): marked as a class, its constructors and
 // destructor were calls through the import table in every module of forms (frmserver.dll, Release x64, 2026-11-02).
-// What has no body here carries BACKEND_API itself.
-class ibValue : public ibVariant {
+// What has no body here carries BACKEND_API itself, and the class BACKEND_API_VTABLE for its vtable (core/coreApi.h).
+class BACKEND_API_VTABLE ibValue : public ibVariant {
 public:
 
 	class BACKEND_API ibMemberTable {
