@@ -51,6 +51,7 @@
 #include "frmserver/visualView/ctrl/form.h"
 #include "frmserver/visualView/ctrl/formAttribute.h"   // the main attribute — the head of every binding
 #include "frmserver/visualView/ctrl/formCommand.h"     // …and what the form can DO
+#include "frmserver/visualView/layers/commandBar.h"    // GatherFormCommands — the commands a button may run, as offered
 
 namespace {
 using ibArg = ibMcpTool::ibMcpArgument;
@@ -152,7 +153,9 @@ const ibArg& ArgProperty()
 const ibArg& ArgPropertyToBind()
 {
 	static const ibArg s_a(ibT("property"), ibArg::Kind::Text,
-		ibMcpText("Which binding property. Omitted: Source - what a field or a table shows. A Button's is Command."));
+		ibMcpText("Which binding property. Omitted: Source - what a field or a table shows. A Button's is Command, and "
+			  "`path` names the command as the designer's picker offers it: a standard action 'Form.Close', a table's "
+			  "'Form.<table>.Add', a form command or a configuration's command by its name."));
 	return s_a;
 }
 
@@ -1643,37 +1646,16 @@ public:
 			ibCommandDescription command;
 			ibString available;
 
-			// The FORM'S own commands first — they are the ones a button on this
-			// form most often runs.
-			for (const ibValuePtr<ibFormCommandValue>& entry : form->GetFormCommands()) {
-				if (!entry)
-					continue;
-
-				available << (available.IsEmpty() ? ibT("") : ibT(", ")) << entry->GetName();
-				if (entry->GetName().IsSameAs(wanted, false))
-					command.AppendCommand(entry->GetId());
-			}
-
-			// …then the ones the OBJECT declares, which every form of it inherits.
-			if (!command.IsOk()) {
-				if (ibValueMetaObject* owner = ibFindMetaObjectById(activeMetaData,
-						(ibMetaID)(std::int32_t)ArgForm().Whole(params))) {
-
-					if (ibValueMetaObject* holder = owner->GetParent()) {
-						for (unsigned int index = 0; index < holder->GetChildCount(); ++index) {
-
-							ibValueMetaObject* child = holder->GetChild(index);
-							if (child == nullptr || child->IsDeleted()
-								|| child->GetClassType() != g_metaCommandCLSID)
-								continue;
-
-							available << (available.IsEmpty() ? ibT("") : ibT(", "))
-								<< child->GetName();
-							if (child->GetName().IsSameAs(wanted, false))
-								command.AppendCommand(child->GetMetaID());
-						}
-					}
-				}
+			// ⭐⭐ THE COMMANDS THE INSPECTOR OFFERS — the form's one gather (GatherFormCommands), the picker's and the
+			// navigator's: the form's own, the standard actions of the form and of its tables, the configuration's.
+			// Named by its path, as the button's cell shows it ('Form.Close', 'Form.<table>.Add'), or by its name in
+			// the tree; the first in the gather's order wins, the form's own first. A list of its own here offered the
+			// form's commands and the object's alone (2026-11-02: "Update" - "Available: none").
+			for (const ibCommandSourceEntry& entry : GatherFormCommands(form)) {
+				const ibString& path = entry.fullName.IsEmpty() ? entry.label : entry.fullName;
+				available << (available.IsEmpty() ? ibT("") : ibT(", ")) << path;
+				if (!command.IsOk() && (path.IsSameAs(wanted, false) || entry.label.IsSameAs(wanted, false)))
+					command = entry.desc;
 			}
 
 			if (!command.IsOk()) {
