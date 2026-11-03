@@ -89,6 +89,14 @@
 // kept their numbers (the `op=1` / `op=8` / `op=9` / `op=14` rows in the failures).
 // The AOT format version moved with them (byteCodeAOT.cpp, 35 → 36): a stored blob
 // holds the old numbers and would dispatch the wrong handler.
+//
+// AND ALL SIXTEEN MOVED 2026-11-03 (#644). An expression's temporary is an operand
+// kind of its own now — `DEF_VAR_TEMP_MOVE` (-4), which an assignment takes by move,
+// beside `DEF_VAR_TEMP_COPY` (-3), the cells the compiler keeps for itself
+// (compileContext.h) — so an operand that named one renders `(-4,n)` where it rendered
+// `(-3,n)`. Every source here has an expression, so every digest moved; the failures
+// were read on macOS, the first job to run them. A function's line also says
+// `captured=` (the variables a lambda names) where it said `heap=`.
 // =============================================================================
 
 #include <gtest/gtest.h>
@@ -321,7 +329,7 @@ TEST(CompilerContract, ArithmeticPrecedence) {
 		wxT("a = 1 + 2 * 3 - 4 / 2;\n")
 		wxT("b = (1 + 2) * (3 - 4);\n")
 		wxT("c = 10 % 3 + a * b;\n"),
-		8448001462682893779ULL);   // 2026-10-09: OPER_ITER removed; later opcodes and TYPE_DELTA shifted
+		14360045504664503652ULL);   // 2026-11-03: an expression's temporary renders (-4,n) — #644
 }
 
 TEST(CompilerContract, UnaryAndNot) {
@@ -330,7 +338,7 @@ TEST(CompilerContract, UnaryAndNot) {
 		wxT("a = -5;\n")
 		wxT("b = 2 * -a;\n")
 		wxT("b = Not (a > b);\n"),
-		2950024576718926863ULL);   // 2026-10-09: OPER_ITER removed; later opcodes and TYPE_DELTA shifted
+		26355683664696183ULL);   // 2026-11-03: an expression's temporary renders (-4,n) — #644
 }
 
 TEST(CompilerContract, ComparisonAndLogical) {
@@ -340,7 +348,7 @@ TEST(CompilerContract, ComparisonAndLogical) {
 		wxT("r = a < b And b > 0 Or a = b;\n")
 		wxT("r = a <> b;\n")
 		wxT("r = a <= b And a >= b;\n"),
-		15294174076167625395ULL);   // 2026-10-10: and/or short-circuit. `a < b And b > 0 Or a = b`
+		5505351386607809711ULL);   // 2026-10-10: and/or short-circuit. `a < b And b > 0 Or a = b`
 		                           // is (a<b) and (b>0), then or (a=b). Each logical op still ends in one
 		                           // OPER_AND/OPER_OR. A false AND jumps over `b > 0` (that IF carries
 		                           // p4(-1,1), so a SQL NULL left does not skip). A true OR jumps over `a = b`.
@@ -359,7 +367,7 @@ TEST(CompilerContract, CompoundAssignmentFusion) {
 		wxT("i = i * 2;\n")
 		wxT("s = \"a\";\n")
 		wxT("s = s + \"b\";\n"),
-		1790108512806842433ULL);   // 2026-10-09: OPER_ITER removed; later opcodes and TYPE_DELTA shifted
+		6973028228264857422ULL);   // 2026-11-03: an expression's temporary renders (-4,n) — #644
 }
 
 TEST(CompilerContract, NestedExpressionTemporaries) {
@@ -367,7 +375,7 @@ TEST(CompilerContract, NestedExpressionTemporaries) {
 		wxT("var a; var b; var c; var d; var r;\n")
 		wxT("a = 1; b = 2; c = 3; d = 4;\n")
 		wxT("r = (a + b) * (c - d) + (a * c) / (b + 1);\n"),
-		11759659650775318486ULL);   // 2026-10-09: OPER_ITER removed; later opcodes and TYPE_DELTA shifted
+		12231929820552094021ULL);   // 2026-11-03: an expression's temporary renders (-4,n) — #644
 }
 
 // ===========================================================================
@@ -397,7 +405,7 @@ TEST(CompilerContract, IfElseIfElse) {
 		// long as the break was steady. The emission was read before this number was replaced —
 		// the two conditionals now jump to 7 and 11, both arms jump to 12, and instruction 0
 		// carries a clean operand.
-		9124729449200840891ULL);   // 2026-10-09: OPER_ITER removed; later opcodes and TYPE_DELTA shifted
+		7920198540765974609ULL);   // 2026-11-03: an expression's temporary renders (-4,n) — #644
 }
 
 TEST(CompilerContract, WhileWithTwoBreaksAndTwoContinues) {
@@ -411,7 +419,7 @@ TEST(CompilerContract, WhileWithTwoBreaksAndTwoContinues) {
 		wxT("  If i = 30 Then Break; EndIf;\n")
 		wxT("  If i = 40 Then Break; EndIf;\n")
 		wxT("EndDo;\n"),
-		18263727229462172402ULL);   // 2026-10-09: OPER_ITER removed; later opcodes and TYPE_DELTA shifted
+		7096522683382644132ULL);   // 2026-11-03: an expression's temporary renders (-4,n) — #644
 }
 
 TEST(CompilerContract, ForLoop) {
@@ -421,7 +429,7 @@ TEST(CompilerContract, ForLoop) {
 		wxT("For i = 1 To 10 Do\n")
 		wxT("  s = s + i;\n")
 		wxT("EndDo;\n"),
-		7309648572648208764ULL);   // 2026-10-09: OPER_ITER removed; later opcodes and TYPE_DELTA shifted
+		3760069384932659873ULL);   // 2026-11-03: an expression's temporary renders (-4,n) — #644
 }
 
 TEST(CompilerContract, ForeachLoop) {
@@ -432,7 +440,7 @@ TEST(CompilerContract, ForeachLoop) {
 		wxT("Foreach it In arr Do\n")
 		wxT("  s = s + 1;\n")
 		wxT("EndDo;\n"),
-		17681444340034192045ULL);   // 2026-10-09: OPER_ITER removed; later opcodes and TYPE_DELTA shifted
+		10645253739609398733ULL);   // 2026-11-03: an expression's temporary renders (-4,n) — #644
 }
 
 TEST(CompilerContract, TryExcept) {
@@ -443,7 +451,7 @@ TEST(CompilerContract, TryExcept) {
 		wxT("Except\n")
 		wxT("  r = 0;\n")
 		wxT("EndTry;\n"),
-		14799822321381933800ULL);   // 2026-10-09: OPER_ITER removed; later opcodes and TYPE_DELTA shifted
+		9194334640944616622ULL);   // 2026-11-03: an expression's temporary renders (-4,n) — #644
 }
 
 // ===========================================================================
@@ -462,7 +470,7 @@ TEST(CompilerContract, FunctionsAndForwardReference) {
 		wxT("Procedure Entry()\n")
 		wxT("  var r; r = Caller(3);\n")
 		wxT("EndProcedure\n"),
-		16592719761311645649ULL); // the outbound forward-call goto marks p2, so a try around it stays
+		11745726115199783428ULL); // the outbound forward-call goto marks p2, so a try around it stays
 }
 
 TEST(CompilerContract, TypedParametersAndLocals) {
@@ -472,7 +480,7 @@ TEST(CompilerContract, TypedParametersAndLocals) {
 		wxT("  label = \"x\";\n")
 		wxT("  If cancel Then depth = depth + 1; EndIf;\n")
 		wxT("EndProcedure\n"),
-		16328009134746159344ULL);   // 2026-10-09: OPER_ITER removed; later opcodes and TYPE_DELTA shifted
+		13116129363301937994ULL);   // 2026-11-03: an expression's temporary renders (-4,n) — #644
 }
 
 TEST(CompilerContract, MethodCallChain) {
@@ -482,7 +490,7 @@ TEST(CompilerContract, MethodCallChain) {
 		wxT("  arr.Add(1); arr.Add(2);\n")
 		wxT("  Return arr.Count();\n")
 		wxT("EndFunction\n"),
-		16792428074418362447ULL);   // 2026-10-09: OPER_ITER removed; later opcodes and TYPE_DELTA shifted
+		1361021572925664730ULL);   // 2026-11-03: an expression's temporary renders (-4,n) — #644
 }
 
 // ===========================================================================
@@ -496,7 +504,7 @@ TEST(CompilerContract, LambdaWithCapture) {
 		wxT("           Return x + n;\n")
 		wxT("         EndFunction;\n")
 		wxT("EndFunction\n"),
-		16538828517165381097ULL);   // 2026-10-09: OPER_ITER removed; later opcodes and TYPE_DELTA shifted
+		17992123729645153703ULL);   // 2026-11-03: an expression's temporary renders (-4,n) — #644
 }
 
 TEST(CompilerContract, LambdaWithoutCapture) {
@@ -506,7 +514,7 @@ TEST(CompilerContract, LambdaWithoutCapture) {
 		wxT("           Return x * 2;\n")
 		wxT("         EndFunction;\n")
 		wxT("EndFunction\n"),
-		14736460406722046680ULL);   // 2026-10-09: OPER_ITER removed; later opcodes and TYPE_DELTA shifted
+		4367070882734020541ULL);   // 2026-11-03: an expression's temporary renders (-4,n) — #644
 }
 
 TEST(CompilerContract, MethodStyleLinqPipeline) {
@@ -515,5 +523,5 @@ TEST(CompilerContract, MethodStyleLinqPipeline) {
 		wxT("  Return arr.Where(Function(x) Return x > 100 EndFunction)")
 		wxT(".Select(Function(x) Return x * 2 EndFunction).Count();\n")
 		wxT("EndFunction\n"),
-		7989586976537065504ULL);   // 2026-10-09: OPER_ITER removed; later opcodes and TYPE_DELTA shifted
+		15679672095198512530ULL);   // 2026-11-03: an expression's temporary renders (-4,n) — #644
 }

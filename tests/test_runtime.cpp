@@ -2700,11 +2700,17 @@ TEST(RuntimeTest, ALambdaInsideAPipelineLambdaSeesTheOuterParameter) {
 // answers with that row, not the last one.
 // ===========================================================================
 TEST(RuntimeTest, ALambdaWrittenInAFoldedBodyKeepsItsRow) {
+	struct StyleGuard {
+		const short saved = ibCompileCode::GetCodeStyle();
+		~StyleGuard() { ibCompileCode::SetCodeStyle(saved); }
+	} guard;
+	ibCompileCode::SetCodeStyle(CODE_CES);   // the fold is the braces dialect's road
+
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	ASSERT_TRUE(TryCompile(cc,
-		wxT("var r public; var f public; var g public;\n")
 		wxT("Function Crossed(a, b) { return a.SelectMany(Function(x) { return b.Select(Function(y) { return x + y; }); }).ToArray(); }\n")
 		wxT("Function Rows(a) { return a.Select(Function(x) { return Function() { return x; }; }).ToArray(); }\n")
+		wxT("var r public; var f public; var g public;\n")
 		wxT("var a = New Array; a.Add(10); a.Add(20);\n")
 		wxT("var b = New Array; b.Add(1); b.Add(2);\n")
 		wxT("r = \"\";\n")
@@ -2735,6 +2741,12 @@ TEST(RuntimeTest, ALambdaWrittenInAFoldedBodyKeepsItsRow) {
 // answered with the first group's row.
 // ===========================================================================
 TEST(RuntimeTest, AFoldedChainInALoopStartsWithNoAnswer) {
+	struct StyleGuard {
+		const short saved = ibCompileCode::GetCodeStyle();
+		~StyleGuard() { ibCompileCode::SetCodeStyle(saved); }
+	} guard;
+	ibCompileCode::SetCodeStyle(CODE_CES);   // the fold is the braces dialect's road
+
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	ASSERT_TRUE(TryCompile(cc,
 		wxT("var maxes public; var nones public;\n")
