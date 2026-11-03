@@ -308,7 +308,7 @@ Cleared out on 2026-08-02, from 3,513 GCC warnings down to a couple of hundred:
 | `-Wreorder` | 1,812 in 58 sites | lists reordered — see §1.8. One header (`compileContext.h`) accounted for 1,008 of them: it is included by every TU, so a single constructor was reported over and over. Count sites, not lines |
 | `-Wwrite-strings` | 1,374 | XPM arrays are `const char*` now (31 files). Also a real fix: they feed a `const char**` field, and `char*[]` → `const char**` is not a conversion the standard allows. The 9 that remain are inside wx's own `wxT()` macro |
 | `-Wparentheses` | 35 | `(BASE + level) | FLAG` in the fold-level code. Precedence already grouped it that way — the parentheses only say so |
-| `C4706` (MSVC) | 3 | `if (hr = Call())` in `valueOLE.cpp`. The idiom was deliberate but is spelled exactly like a mistyped `==`, which is why the warning exists; now `(hr = Call()) != S_OK` |
+| `C4706` (MSVC) | 3 | `if (hr = Call())` in `valueCOM.cpp`. The idiom was deliberate but is spelled exactly like a mistyped `==`, which is why the warning exists; now `(hr = Call()) != S_OK` |
 | `-Wswitch` | 83 in 13 sites | left as is — each is a deliberately narrow switch with a fallback return after it |
 | `C4244` (MSVC) | 305 | left as is — every one is in `3rdparty/` (libwebp, wx). Our own code is clean at `/W4` |
 

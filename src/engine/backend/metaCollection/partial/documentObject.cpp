@@ -196,6 +196,21 @@ bool ibValueRecordDataObjectDocument::GetPropVal(const long lPropNum, ibValue& p
 	return false;
 }
 
+bool ibValueRecordDataObjectDocument::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
+{
+	switch (lMethodNum)
+	{
+	case Func::eLock:
+		TryAcquireFormLock();
+		return true;
+	case Func::eUnlock:
+		ReleaseFormLock();
+		return true;
+	}
+
+	return ibValueRecordDataObjectRecorderRef::CallAsProc(lMethodNum, paParams, lSizeArray);
+}
+
 bool ibValueRecordDataObjectDocument::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
 	switch (lMethodNum)
@@ -243,12 +258,6 @@ bool ibValueRecordDataObjectDocument::CallAsFunc(const long lMethodNum, ibValue&
 		return true;
 	case Func::eGetMetadata:
 		pvarRetValue = m_metaObject;
-		return true;
-	case Func::eLock:
-		TryAcquireFormLock();
-		return true;
-	case Func::eUnlock:
-		ReleaseFormLock();
 		return true;
 	}
 

@@ -5,7 +5,7 @@
 //   * Compile resolves `n` past lambda boundary, emits OPER_GET
 //     with m_numArray = 1 (lambda's m_pppArrayList[1] = captured
 //     outer frame in Phase B layout).
-//   * makeAdder's ibByteFunction.m_needsHeapFrame == true.
+//   * makeAdder's ibByteFunction.m_listCaptured lists `n` (depth 0).
 //
 // Runtime stays broken — Phase B wires m_pppArrayList[1]. Until
 // then, calling add5(10) would read from a null/wrong frame.

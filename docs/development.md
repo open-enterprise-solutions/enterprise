@@ -30,6 +30,11 @@ taken one at a time, in the order they build on each other.
 the check caught (§4), or it builds a second road to something the engine already answers (§3).
 A declined request is not a verdict on the person; the reply names what would make it acceptable.
 
+**A pull request brings a need, not a copy.** Its description says what a person could not do and
+now can. "Another product does it this way" is not a reason, and a mechanism carried over in part —
+its properties without the reading side, its options without the rule behind them — is declined
+whole: half of it is a second road the next change has to work around.
+
 **Your first pull request waits for CI.** GitHub holds workflows from first-time contributors
 until a maintainer approves the run. A pending check on a first request says nothing about the
 change.
@@ -143,6 +148,16 @@ adding a sender, check the journal: the signal is usually sent already and nobod
 what. A caller catches the type it can handle and lets everything else pass; matching on message
 text breaks with the first translation.
 
+**One question, one property.** What a button shows (`Representation`), where its picture stands
+(`PictureLocation`) and how it is drawn (`View`) are three questions and three properties. A new
+mode goes to the property whose question it answers, not into the nearest enumeration as one more
+member: a tile is where the picture stands, a hyperlink is how the button is drawn.
+
+**A new choice is a registered enumeration under the stock property.** `ENUM_TYPE_REGISTER` and
+`ibPropertyEnum<T>`, nothing more. The designer's inspector picks an editor by the property's
+class name, so a subclass of a stock property is a class it has never seen, and the cell shows a
+bare number. Compatibility glue in a property subclass is a second road.
+
 **Meaning is a type, not bits, branches or lists.** A new category ("any reference") is a
 registered type with its own rule, not a pattern in unused bits of an id or a special case in
 every consumer. A hand-maintained list of what the system already knows is a defect. Two flags
@@ -155,6 +170,15 @@ answer, not an error. It is legitimate only in the running application and in th
 
 **A reference is identified by its metadata id, never by its name**, and a value is not done
 until it survives serialisation and a restart.
+
+**A value crosses the wire one way:** `ibSerializeValue`, and `ibDeserializeValue(node, metaData)`
+with the configuration passed by whoever knows it. A property, a control or a tool does not parse
+protocol ids or build a value from a node by itself.
+
+**An assistant comes in through the same doors.** MCP is a second entrance, not a second engine:
+its tools reach the session, the rights and the doors a person's click reaches. A tool that keeps
+a list of its own drifts from what the designer offers — `form_bind` once offered a button only
+its form's commands while the inspector's picker offered the standard ones too.
 
 **A description holds no live runtime objects.** Descriptions (types, compositions, sources) are
 data: copyable, comparable, storable as versions. A live reference inside one comes back as

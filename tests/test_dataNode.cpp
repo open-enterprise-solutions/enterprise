@@ -19,9 +19,9 @@ ibMemoryBuffer Blob(const char* s) {
 // grandchild. Blobs stand in for the per-node SaveMeta payload (stage 1).
 ibDataNode MakeTree() {
 	ibDataNode root(1001, 1);
-	root.AddField(wxT("name"), ibDataValue::String(wxT("RootName")));
-	root.AddField(wxT("id"), ibDataValue::Int(99));
-	root.AddField(wxT("flag"), ibDataValue::Bool(true));
+	root.AddField(ibT("name"), ibDataValue::String(wxT("RootName")));
+	root.AddField(ibT("id"), ibDataValue::Int(99));
+	root.AddField(ibT("flag"), ibDataValue::Bool(true));
 	root.SetRawData(Blob("ROOT-DATA"));
 	// Both children first, then the first one, read out, filled where it lies (Handle) — a child read out is its bytes,
 	// and a write to it alone would make a node of its own.
@@ -119,7 +119,7 @@ TEST(DataNode, ANewNodeKeepsTheIdentityItIsGiven) {
 	ibDataNode root;
 	root.SetClsid(1001);
 	root.SetMetaId(1);
-	root.AddField(wxT("name"), ibDataValue::String(wxT("RootName")));
+	root.AddField(ibT("name"), ibDataValue::String(wxT("RootName")));
 	root.AddChild(2002, 2);
 	EXPECT_EQ(root.GetClsid(), (ibClassID)1001);
 	EXPECT_EQ(root.GetMetaId(), (ibMetaID)1);
@@ -137,9 +137,9 @@ TEST(DataNode, ANewNodeKeepsTheIdentityItIsGiven) {
 // Typed values: SetValue<T> writes, GetValue<T> reads back (round-trip).
 TEST(DataNode, NamedFields_TypedValues_RoundTrip) {
 	ibDataNode n;
-	n.SetValue(wxT("name"), ibString(wxT("Catalog1")));
-	n.SetValue(wxT("flag"), true);
-	n.SetValue(wxT("num"), (std::int32_t)-42);
+	n.SetValue(ibT("name"), ibString(wxT("Catalog1")));
+	n.SetValue(ibT("flag"), true);
+	n.SetValue(ibT("num"), (std::int32_t)-42);
 
 	EXPECT_EQ(n.GetValue<ibString>(ibT("name")), wxT("Catalog1"));
 	EXPECT_TRUE(n.GetValue<bool>(ibT("flag")));
@@ -150,8 +150,8 @@ TEST(DataNode, NamedFields_TypedValues_RoundTrip) {
 // date as the empty date - by the scalar and through the typed codec alike.
 TEST(DataNode, ADateIsStoredAsItself) {
 	ibDataNode written(1001, 7);
-	written.AddField(wxT("is_empty"), ibDataValue::Date(ibDateTime()));
-	written.AddField(wxT("a_date"),   ibDataValue::Date(ibDateTime(2026, 3, 29, 2, 30)));
+	written.AddField(ibT("is_empty"), ibDataValue::Date(ibDateTime()));
+	written.AddField(ibT("a_date"),   ibDataValue::Date(ibDateTime(2026, 3, 29, 2, 30)));
 
 	ibClassID clsid = 0; ibMetaID metaId = 0;
 	const ibDataNode read = ReadFull(WriteFull(written), clsid, metaId);
@@ -162,8 +162,8 @@ TEST(DataNode, ADateIsStoredAsItself) {
 	EXPECT_EQ(ibDateTime(2026, 3, 29, 2, 30), read.GetValue<ibDateTime>(ibT("a_date")));
 	EXPECT_TRUE(read.GetValue<ibDateTime>(ibT("is_empty")).IsEmpty());
 	ibDataNode again;
-	again.SetValue(wxT("d"), ibDateTime(2025, 1, 15, 10, 30));
-	again.SetValue(wxT("none"), ibDateTime());
+	again.SetValue(ibT("d"), ibDateTime(2025, 1, 15, 10, 30));
+	again.SetValue(ibT("none"), ibDateTime());
 	EXPECT_EQ(ibDateTime(2025, 1, 15, 10, 30), again.FindField(ibT("d"))->AsDate());
 	EXPECT_TRUE(again.FindField(ibT("none"))->AsDate().IsEmpty());
 }
@@ -173,9 +173,9 @@ TEST(DataNode, ADateIsStoredAsItself) {
 TEST(DataNode, AGuidIsStoredAsItsSixteenBytes) {
 	const ibGuid key(ibString(wxT("0f8fad5b-d9cb-469f-a165-70867728950e")));
 	ibDataNode written(1001, 7);
-	written.AddField(wxT("key"), ibDataValue::Guid(key));
+	written.AddField(ibT("key"), ibDataValue::Guid(key));
 	ibDataNode none(1001, 7);
-	none.AddField(wxT("key"), ibDataValue());
+	none.AddField(ibT("key"), ibDataValue());
 	EXPECT_EQ(WriteFull(written).GetDataLen() - WriteFull(none).GetDataLen(), 16u);
 
 	ibClassID clsid = 0; ibMetaID metaId = 0;
@@ -195,7 +195,7 @@ TEST(DataNode, AGuidIsStoredAsItsSixteenBytes) {
 // as it is; a version this end does not know yet is refused, naming both.
 TEST(DataNode, APacketOfVersionOneIsRead_ANewerOneRefused) {
 	ibDataNode root(1001, 7);
-	root.AddField(wxT("name"), ibDataValue::String(wxT("Goods")));
+	root.AddField(ibT("name"), ibDataValue::String(wxT("Goods")));
 	ibMemoryBuffer packet;
 	ASSERT_TRUE(ibBinaryProvider().Write(root, packet));
 	ASSERT_GE(packet.GetDataLen(), 6u);
@@ -216,9 +216,9 @@ TEST(DataNode, APacketOfVersionOneIsRead_ANewerOneRefused) {
 // Optimistic cursor: out-of-order access still resolves; absent name defaults.
 TEST(DataNode, NamedFields_OptimisticCursor_ReorderedAndMissing) {
 	ibDataNode n;
-	n.SetValue(wxT("a"), ibString(wxT("A")));
-	n.SetValue(wxT("b"), ibString(wxT("B")));
-	n.SetValue(wxT("c"), ibString(wxT("C")));
+	n.SetValue(ibT("a"), ibString(wxT("A")));
+	n.SetValue(ibT("b"), ibString(wxT("B")));
+	n.SetValue(ibT("c"), ibString(wxT("C")));
 
 	EXPECT_EQ(n.GetValue<ibString>(ibT("c")), wxT("C"));
 	EXPECT_EQ(n.GetValue<ibString>(ibT("a")), wxT("A"));

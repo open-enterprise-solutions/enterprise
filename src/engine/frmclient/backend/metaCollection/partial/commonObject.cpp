@@ -1,5 +1,7 @@
 #include "commonObject.h"
 #include "frmclient/backend/metaData.h"
+#include "frmclient/backend/compiler/value.h"           // ibValue::ReadClasses — the types a type is picked from, named
+#include "frmclient/backend/serialize/dataProtocol.h"   // ibReadProtocolValue / ibWriteProtocolNode — what an item declares, as it travels
 #include "frmclient/mainFrame/mainFrame.h"
 #include "protocol/protocol.h"       // ibProtocol::ibSchema::ibKind::Predefined — the editor the server holds
 #include "protocol/protocolNode.h"
@@ -36,42 +38,32 @@ bool Command(const ibValueMetaObject* object, ibProtocol::ibSchema::ibCommand co
 	return frame->Call(ibProtocol::ibMethod::Schema, params, answer);
 }
 
-typedef ibValueMetaObjectRecordDataHierarchyMutableRef::ibPredefinedValueObject ibPredefinedItem;
-
-// What an item is given, as Create and Set take it.
-ibProtocolNode ItemArgs(const ibString& strPredefinedName, const ibString& strCode, const ibString& strDescription,
-	bool valueIsFolder, const wxObjectDataPtr<ibPredefinedItem>& valueParent)
+// What an item is given, as Create and Set take it: the item in the node form of the one schema
+// (ibPredefinedItemDescriptionMemory) — its fields and the whole of what it declares; a section not there leaves
+// its rows the data's.
+ibProtocolNode ItemArgs(const ibPredefinedItemDescription& item)
 {
+	ibDataValue written;
+	ibPredefinedItemDescriptionMemory::WriteNode(written, item);
 	ibProtocolNode args;
-	args.SetValue(ibProtocol::ibSchema::ibPredefined::Name, strPredefinedName);
-	args.SetValue(ibProtocol::ibSchema::ibPredefined::Code, strCode);
-	args.SetValue(ibProtocol::ibSchema::ibPredefined::Description, strDescription);
-	args.SetValue(ibProtocol::ibSchema::ibPredefined::IsFolder, valueIsFolder);
-	if (valueParent != nullptr)
-		args.SetValue(ibProtocol::ibSchema::ibPredefined::Parent, valueParent->GetPredefinedGuid().str());
+	ibWriteProtocolNode(*written.AsChild(), args);
 	return args;
 }
 
 } // namespace
 
-void ibValueMetaObjectRecordDataHierarchyMutableRef::AppendPredefinedValue(const ibString& strPredefinedName,
-	const ibString& strCode, const ibString& strDescription,
-	bool valueIsFolder, const wxObjectDataPtr<ibPredefinedValueObject>& valueParent)
+bool ibValueMetaObjectRecordDataHierarchyMutableRef::AppendPredefinedValue(const ibPredefinedItemDescription& item)
 {
-	Command(this, ibProtocol::ibSchema::ibCommand::Create,
-		ItemArgs(strPredefinedName, strCode, strDescription, valueIsFolder, valueParent));
+	const bool done = Command(this, ibProtocol::ibSchema::ibCommand::Create, ItemArgs(item));
 	ReadPredefinedValues();
+	return done;
 }
 
-void ibValueMetaObjectRecordDataHierarchyMutableRef::SetPredefinedValue(const ibGuid& predefinedGuid,
-	const ibString& strPredefinedName,
-	const ibString& strCode, const ibString& strDescription,
-	bool valueIsFolder, const wxObjectDataPtr<ibPredefinedValueObject>& valueParent)
+bool ibValueMetaObjectRecordDataHierarchyMutableRef::SetPredefinedValue(const ibPredefinedItemDescription& item)
 {
-	ibProtocolNode args = ItemArgs(strPredefinedName, strCode, strDescription, valueIsFolder, valueParent);
-	args.SetValue(ibProtocol::ibSchema::ibPredefined::Guid, predefinedGuid.str());
-	Command(this, ibProtocol::ibSchema::ibCommand::Set, args);
+	const bool done = Command(this, ibProtocol::ibSchema::ibCommand::Set, ItemArgs(item));
 	ReadPredefinedValues();
+	return done;
 }
 
 void ibValueMetaObjectRecordDataHierarchyMutableRef::DeletePredefinedValue(const ibGuid& predefinedGuid) {
@@ -91,16 +83,16 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ReadPredefinedValues()
 	if (frame == nullptr || !frame->Call(ibProtocol::ibMethod::Schema, PredefinedParams(this, ibProtocolNode()), shown))
 		return;
 
-	// The parent is linked once every item is read, as the engine's ReadData links it.
-	std::vector<std::pair<wxObjectDataPtr<ibPredefinedValueObject>, ibString>> parents;
-	for (const ibProtocolNode& row : shown.FindChild(ibProtocol::ibSchema::ibPredefined::Items).Children()) {
-		m_predefinedObjectVector.emplace_back(
-			new ibPredefinedValueObject(ibGuid(row.GetString(ibProtocol::ibSchema::ibPredefined::Guid)),
-				row.GetString(ibProtocol::ibSchema::ibPredefined::Name), row.GetString(ibProtocol::ibSchema::ibPredefined::Code),
-				row.GetString(ibProtocol::ibSchema::ibPredefined::Description), row.GetBool(ibProtocol::ibSchema::ibPredefined::IsFolder)));
-		if (row.Has(ibProtocol::ibSchema::ibPredefined::Parent))
-			parents.emplace_back(m_predefinedObjectVector.back(), row.GetString(ibProtocol::ibSchema::ibPredefined::Parent));
-	}
-	for (const auto& parent : parents)
-		parent.first->m_valueParent = FindPredefinedValue(ibGuid(parent.second));
+	ibDataValue declares;
+	m_predefinedDesc = ibPredefinedDescription();
+	if (ibReadProtocolValue(shown, ibProtocol::ibSchema::ibPredefined::Declares, declares))
+		ibPredefinedDescriptionMemory::ReadNode(declares, m_predefinedDesc);
+	ibValue::ReadClasses(shown.FindChild(ibProtocol::ibSchema::ibPredefined::Classes));
+
+	// The schema's items as rows of the tree; the parent is linked once every row is made, as an item may stand under a
+	// later one.
+	for (const ibPredefinedItemDescription& item : m_predefinedDesc.m_items)
+		m_predefinedObjectVector.emplace_back(new ibPredefinedItem(item));
+	for (const wxObjectDataPtr<ibPredefinedItem>& row : m_predefinedObjectVector)
+		row->m_valueParent = FindPredefinedValue(row->m_item.m_parent);
 }

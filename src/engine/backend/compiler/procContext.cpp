@@ -4,6 +4,8 @@
 #include "backend/backend_exception.h"
 #include "session/session.h" // ibSession::GetPUState — whose stack that is
 
+#include <algorithm>             // std::max — what a closure took is as wide as its furthest cell
+
 //*************************************************************************************************
 //*                                          RunStack                                             *
 //*************************************************************************************************
@@ -162,20 +164,64 @@ void ibRunContext::Enter(const ibByteCode::ibByteFunction* function, const ibByt
 			ibBackendCoreException::Error(_("Missing required argument '%s'"),
 				function->m_listParam[static_cast<size_t>(i)].m_strName);
 	}
+
+	Capture(function->m_listCaptured);
+}
+
+void ibRunContext::Capture(const long slot)
+{
+	if (slot < 0 || slot >= GetLocalCount() || m_pRefLocVars[slot] != &m_pLocVars[slot])
+		return;
+
+	ibValue* const cell = new ibValue(std::move(m_pLocVars[slot]));
+	m_pLocVars[slot] = ibValue(cell);   // the slot holds the cell, and lets go of it when the frame ends
+	m_pRefLocVars[slot] = cell;
+}
+
+void ibRunContext::Capture(const std::vector<ibParamRunUnit>& captured)
+{
+	// Sorted by depth, so the frame's own entries come first and the rest are a lambda's outer ones.
+	for (const ibParamRunUnit& variable : captured) {
+		if (variable.m_numArray != 0)
+			break;
+		Capture((long)variable.m_numIndex);
+	}
 }
 
 //*************************************************************************************************
 //*                                     RunCaptureContext                                         *
 //*************************************************************************************************
 
+ibRunCaptureContext::ibRunCaptureContext(ibRunContext& outer, const std::vector<ibParamRunUnit>& captured, const long long depth)
+	: ibRunContext(wxNOT_FOUND, ibRunLifetime::Captured)
+{
+	// The names come along for whoever reads them — the debugger's closure view, the query fold.
+	m_procUnit = outer.m_procUnit;
+	m_currentFunction = outer.m_currentFunction;
+
+	long width = 0;
+	for (const ibParamRunUnit& variable : captured) {
+		if (variable.m_numArray == depth && variable.m_numIndex < outer.GetLocalCount())
+			width = std::max(width, (long)variable.m_numIndex + 1);
+	}
+	SetLocalCount(width);
+
+	for (const ibParamRunUnit& variable : captured) {
+		const long slot = (long)variable.m_numIndex;
+		if (variable.m_numArray != depth || slot >= width)
+			continue;
+		outer.Capture(slot);
+		m_pLocVars[slot] = outer.m_pLocVars[slot];   // the cell — or nothing, for the caller's variable
+		m_pRefLocVars[slot] = outer.m_pRefLocVars[slot];
+	}
+}
+
 ibRunCaptureContext::~ibRunCaptureContext()
 {
 	m_destroying = true;
-	// Our own slots go first, and a lambda living in one of them dies here and lets go of us —
-	// which the flag above absorbs. Letting go of the frames THAT lambda held is then its own
-	// business, so the chain comes apart from the inside out without this frame knowing the shape
-	// of it. DestroyLocals is idempotent by design (see its note), so the base destructor running
-	// it again is fine.
+	// The cells go first, and a lambda living in one of them dies here and lets go of us — which
+	// the flag above absorbs. DestroyLocals is idempotent by design (see its note), so the base
+	// destructor running it again is fine.
 	DestroyLocals();
 }
 
@@ -187,30 +233,6 @@ void ibRunCaptureContext::DecrRef()
 	wxASSERT_MSG(m_refCount.load(std::memory_order_relaxed) > 0, "invalid frame reference count");
 	if (m_refCount.fetch_sub(1, std::memory_order_acq_rel) == 1)
 		delete this;
-}
-
-void ibRunCaptureContext::ReleaseTemporarySlots()
-{
-	if (m_currentFunction == nullptr || m_pLocVars == nullptr)
-		return;
-
-	// ⭐ THE BYTECODE ALREADY SAYS WHICH SLOTS ARE TEMPORARY, by leaving them out: compileCode.cpp
-	// skips `m_bTempVar` entries when it writes m_listLocals, so a slot that no entry claims — and
-	// is not a parameter — is one the compiler minted for an expression. Nothing is matched by name.
-	for (long slot = m_lParamCount; slot < m_lVarCount; slot++) {
-
-		if (m_pLocVars[slot].m_bReadOnly)
-			continue;
-
-		bool named = false;
-		for (const ibByteCode::ibByteCodeVarInfo& local : m_currentFunction->m_listLocals) {
-			if (local.m_slotIndex == slot) { named = true; break; }
-		}
-		if (named)
-			continue;
-
-		m_pLocVars[slot].Reset();
-	}
 }
 
 const ibByteCode* ibRunContext::GetByteCode() const

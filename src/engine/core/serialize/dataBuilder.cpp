@@ -108,6 +108,17 @@ void ToUtf16(const ibString& text, unsigned char* to) noexcept
 		std::memcpy(to, text.c_str(), text.length() * 2);
 }
 
+// …and a name's, as a key has it: a protocol's word one unit a letter, as NameIs reads it back.
+void ToUtf16(const ibDataKey& key, unsigned char* to) noexcept
+{
+	if (key.m_ascii != nullptr) {
+		for (std::size_t i = 0; i < key.m_length; ++i)
+			Wr(to, 2 * static_cast<std::uint32_t>(i), static_cast<std::uint16_t>(static_cast<unsigned char>(key.m_ascii[i])));
+	}
+	else if (key.m_length != 0)
+		std::memcpy(to, key.m_utf16, key.m_length * 2);
+}
+
 ibString FromUtf16(const unsigned char* at, std::uint32_t units)
 {
 	return ibString(reinterpret_cast<const ibChar*>(at), units);   // the characters as they lie, at an even place
@@ -171,19 +182,12 @@ void PacketHeader(unsigned char* at, std::uint32_t length) noexcept
 
 } // namespace
 
-////////////////////////////////////////////////////////////////////////////
-// ibDataKey
-////////////////////////////////////////////////////////////////////////////
-
-ibDataKey::ibDataKey(const char* ascii) noexcept : m_ascii(ascii != nullptr ? ascii : ""), m_length(std::strlen(m_ascii)) {}
-ibDataKey::ibDataKey(const ibChar* text) noexcept
-	: m_utf16(text != nullptr ? text : ibT("")), m_length(std::char_traits<ibChar>::length(m_utf16)) {}
 
 ////////////////////////////////////////////////////////////////////////////
 // ibDataValue
 ////////////////////////////////////////////////////////////////////////////
 
-ibDataKind ibDataValue::Kind() const
+ibDataKind ibDataValue::Kind() const noexcept
 {
 	if (m_bytes.IsEmpty())
 		return ibDataKind::Empty;
@@ -336,7 +340,7 @@ bool ibDataValue::operator==(const ibDataValue& other) const
 		&& std::memcmp(Base() + value, other.Base() + otherValue, size) == 0;
 }
 
-std::size_t ibDataValue::Weight() const
+std::size_t ibDataValue::Weight() const noexcept
 {
 	return m_bytes.IsEmpty() ? 4 : NextField(Base(), m_at) - m_at;
 }
@@ -663,12 +667,12 @@ ibDataNode& ibDataNode::Handle(std::uint32_t at, bool inField)
 // ibDataNode — read where it lies
 ////////////////////////////////////////////////////////////////////////////
 
-ibClassID ibDataNode::GetClsid() const
+ibClassID ibDataNode::GetClsid() const noexcept
 {
 	return m_at != 0 ? static_cast<ibClassID>(Rd<std::uint64_t>(Base(), m_at + kClsid)) : 0;
 }
 
-ibMetaID ibDataNode::GetMetaId() const
+ibMetaID ibDataNode::GetMetaId() const noexcept
 {
 	return m_at != 0 ? static_cast<ibMetaID>(Rd<std::int32_t>(Base(), m_at + kMetaId)) : 0;
 }
@@ -737,7 +741,7 @@ ibMemoryBuffer ibDataNode::RawData() const
 	return data;
 }
 
-bool ibDataNode::HasRawData() const
+bool ibDataNode::HasRawData() const noexcept
 {
 	return m_at != 0 && Rd<std::uint32_t>(Base(), m_at + kRawLength) != 0;
 }
@@ -752,7 +756,7 @@ bool ibDataNode::operator==(const ibDataNode& other) const
 	return length == Rd<std::uint32_t>(two, kLength) && std::memcmp(one, two, length) == 0;
 }
 
-std::size_t ibDataNode::Weight() const
+std::size_t ibDataNode::Weight() const noexcept
 {
 	return m_at != 0 ? NodeLength(Base(), m_at) : kNodeHeader;
 }
@@ -775,7 +779,7 @@ void ibDataNode::SetMetaId(ibMetaID metaId)
 	Wr(base, m_at + kMetaId, static_cast<std::int32_t>(metaId));
 }
 
-void ibDataNode::AddField(const ibString& name, const ibDataValue& value)
+void ibDataNode::AddField(const ibDataKey& name, const ibDataValue& value)
 {
 	Root();
 	// The value's bytes held — a value read out of this very node lies in the block a write moves: held, it stays put
@@ -785,7 +789,7 @@ void ibDataNode::AddField(const ibString& name, const ibDataValue& value)
 	const std::uint32_t from = source.IsEmpty() ? 0 : value.ValueAt();
 	const std::uint32_t size = source.IsEmpty() ? 0 : ValueSize(value.Base(), kind, from);
 
-	const std::uint32_t units = static_cast<std::uint32_t>(name.length());
+	const std::uint32_t units = static_cast<std::uint32_t>(name.m_length);
 	unsigned char* const field = Insert(ChildrenOf(Base(), m_at), 4 + 2 * units + size, true);
 	field[0] = kind;
 	field[1] = 0;
@@ -798,7 +802,7 @@ void ibDataNode::AddField(const ibString& name, const ibDataValue& value)
 	Wr(base, m_at + kFieldCount, Rd<std::uint32_t>(base, m_at + kFieldCount) + 1);
 }
 
-void ibDataNode::SetField(const ibString& name, const ibDataValue& value)
+void ibDataNode::SetField(const ibDataKey& name, const ibDataValue& value)
 {
 	if (m_at == 0) {
 		AddField(name, value);
@@ -807,7 +811,7 @@ void ibDataNode::SetField(const ibString& name, const ibDataValue& value)
 	const unsigned char* b = Base();
 	std::uint32_t field = FieldsOf(b, m_at);
 	std::uint32_t i = Rd<std::uint32_t>(b, m_at + kFieldCount);
-	for (; i != 0 && !NameIs(b, field, ibDataKey(name)); --i)
+	for (; i != 0 && !NameIs(b, field, name); --i)
 		field = NextField(b, field);
 	if (i == 0) {
 		AddField(name, value);
@@ -874,7 +878,7 @@ void ibDataNode::SetRawData(const ibMemoryBuffer& data)
 	Wr(base, m_at + kRawLength, size);
 }
 
-ibDataNode& ibDataNode::Child(const ibString& name)
+ibDataNode& ibDataNode::Child(const ibDataKey& name)
 {
 	Root();
 	// The one under the name already, filled on where it lies (a writer that comes back to it: a schema's arguments).
@@ -882,12 +886,12 @@ ibDataNode& ibDataNode::Child(const ibString& name)
 		const unsigned char* const b = Base();
 		std::uint32_t field = FieldsOf(b, m_at);
 		for (std::uint32_t i = Rd<std::uint32_t>(b, m_at + kFieldCount); i != 0; --i) {
-			if (b[field] == static_cast<unsigned char>(ibDataKind::Child) && NameIs(b, field, ibDataKey(name)))
+			if (b[field] == static_cast<unsigned char>(ibDataKind::Child) && NameIs(b, field, name))
 				return Handle(ValueOf(b, field), true);
 			field = NextField(b, field);
 		}
 	}
-	const std::uint32_t units = static_cast<std::uint32_t>(name.length());
+	const std::uint32_t units = static_cast<std::uint32_t>(name.m_length);
 	const std::uint32_t at = ChildrenOf(Base(), m_at);
 	unsigned char* const field = Insert(at, 4 + 2 * units + kNodeHeader, true);
 	field[0] = static_cast<unsigned char>(ibDataKind::Child);
@@ -938,14 +942,14 @@ void ibDataNode::RemoveChildren()
 	Wr(base, m_at + kChildCount, static_cast<std::uint32_t>(0));
 }
 
-std::uint32_t ibDataNode::ListEnd(const ibString& name, std::uint32_t& list)
+std::uint32_t ibDataNode::ListEnd(const ibDataKey& name, std::uint32_t& list)
 {
 	Root();
 	const unsigned char* b = Base();
 	std::uint32_t field = FieldsOf(b, m_at);
 	std::uint32_t i = Rd<std::uint32_t>(b, m_at + kFieldCount);
 	for (; i != 0; --i) {
-		if (b[field] == static_cast<unsigned char>(ibDataKind::Array) && NameIs(b, field, ibDataKey(name)))
+		if (b[field] == static_cast<unsigned char>(ibDataKind::Array) && NameIs(b, field, name))
 			break;
 		field = NextField(b, field);
 	}
@@ -958,7 +962,7 @@ std::uint32_t ibDataNode::ListEnd(const ibString& name, std::uint32_t& list)
 	return list + Rd<std::uint32_t>(b, list);
 }
 
-ibDataNode& ibDataNode::AddItem(const ibString& name)
+ibDataNode& ibDataNode::AddItem(const ibDataKey& name)
 {
 	std::uint32_t list = 0;
 	const std::uint32_t at = ListEnd(name, list);
@@ -976,7 +980,7 @@ ibDataNode& ibDataNode::AddItem(const ibString& name)
 	return handle;
 }
 
-void ibDataNode::AddItem(const ibString& name, const ibDataValue& value)
+void ibDataNode::AddItem(const ibDataKey& name, const ibDataValue& value)
 {
 	// The value's bytes held, as AddField holds them.
 	const ibMemoryBuffer source = value.m_bytes;

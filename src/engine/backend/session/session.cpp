@@ -964,7 +964,7 @@ bool ibSession::CompileRoot()
 	// BorrowScopeFrom is the whole of what the session knows about frame layout.
 	if (m_lambdaRuntime == nullptr) {
 		if (auto rootPu = m_root->GetProcUnit()) {
-			m_lambdaRuntime = std::make_unique<ibProcUnit>();
+			m_lambdaRuntime = std::make_shared<ibProcUnit>();
 			m_lambdaRuntime->BorrowScopeFrom(rootPu.get());
 		}
 	}
@@ -1174,8 +1174,9 @@ ibSession* ibSession::Current()
 
 	// ⭐⭐ A THREAD THAT BOUND ITSELF MEANS IT — and it is asked FIRST, before the debug redirect below,
 	// because a binding is a STATEMENT and the redirect is a GUESS. A debug handler that has been told
-	// which stop it is working on binds that session for the length of the work (EvalInParkedSession in
-	// debugServer.cpp); one that has not been told falls through to the guess, as everything did before.
+	// which stop it is working on binds that session for the length of the work; one that has not been
+	// told falls through to the guess, as everything did before. (The evaluations need neither now: they
+	// run on the stopped thread itself — RunInParkedSession in debugServer.cpp.)
 	//
 	// 🛑 THE GUESS USED TO WIN. With two runtimes stopped — an application at its own startup breakpoint
 	// and a background run inside a print — every evaluation was worked out in the FIRST of them, while

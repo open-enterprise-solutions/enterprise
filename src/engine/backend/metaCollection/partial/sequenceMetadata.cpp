@@ -192,7 +192,7 @@ void ibValueMetaObjectSequence::CallAsCommand(ibActionID id, const ibUniqueKey& 
 	try {
 		const size_t posted = ibSequenceRestore(this, ibValue(), ibSequenceKeyFilter());
 		ibValueSystemFunction::Message(ibString::Format(_("Sequence '%s' is restored: %zu document(s) posted again"),
-			GetSynonym(), posted));
+			GetName(), posted));   // by its name, as the run's own refusal names it
 	}
 	catch (const ibBackendInterruptException&) {}   // the user stopped it — the border stands where the run left it
 	catch (const ibCoreException& err) {

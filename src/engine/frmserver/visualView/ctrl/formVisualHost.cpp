@@ -88,25 +88,6 @@ bool ibValueFrame::HasHandler(const ibEvent* event) const
 	return dispatcher != nullptr && !dispatcher->IsEmpty();
 }
 
-#include "frmserver/visualView/ctrl/typeControl.h"   // ibTypeControlFactory — a control's bound SOURCE head (command descend)
-
-// A descendant control whose bound source PATH starts with `sourceId` — a command hop DESCENDS into it (a tablebox,
-// itself command-capable). Recurses the frame tree; a control's source is its ibTypeControlFactory head.
-static const ibValueFrame* FindControlBySourceHead(const ibValueFrame* root, const ibMetaID& sourceId)
-{
-	if (root == nullptr)
-		return nullptr;
-	if (const ibTypeControlFactory* factory = dynamic_cast<const ibTypeControlFactory*>(root)) {
-		const std::vector<ibSourceHop>& path = factory->GetSourceDesc().GetPath();
-		if (!path.empty() && path.front().m_id == sourceId)
-			return root;
-	}
-	for (unsigned int i = 0; i < root->GetChildCount(); i++)
-		if (const ibValueFrame* found = FindControlBySourceHead(root->GetChild(i), sourceId))
-			return found;
-	return nullptr;
-}
-
 const ibValueMetaObjectGenericData* ibValueForm::GetMetaObject() const
 {
 	// The form's data object is ALWAYS its MAIN attribute's object — the one flagged main. Nothing else, no
@@ -162,7 +143,7 @@ bool ibValueForm::GetCommandByHop(const ibCommandHop& hop, ibValue& out)
 			return true;
 		}
 	// (4) DESCEND into a bound child control (a composite — a tablebox, itself command-capable; the next hop runs there).
-	if (const ibValueFrame* child = FindControlBySourceHead(this, hop.m_id)) {
+	if (const ibValueFrame* child = FindControlByAttributeId(hop.m_id)) {
 		out = static_cast<const ibValue*>(child);
 		return true;
 	}

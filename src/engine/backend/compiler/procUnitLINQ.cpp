@@ -85,29 +85,23 @@ static void CallLambdaWithArgs(ibValueFunction& fn, ibValue** argPtrs,
 	const long lambdaVarCount   = bfn->m_lVarCount;
 
 
-	// A FRAME THAT CAN BE CAPTURED MUST OWN ITS ARGUMENTS.
+	// A LAMBDA WHOSE PARAMETERS A LAMBDA INSIDE IT TAKES MUST OWN ITS ARGUMENTS.
 	//
 	// `SelectMany(x => src.Where(y => y > x))` — the inner lambda reads the outer
 	// one's parameter, which is what a query block's second binding compiles to.
-	// The capture is established at OPER_LFUNC by walking the frame chain and
-	// keeping every ancestor of the captured kind; an ordinary frame is not one,
-	// so a lambda materialised under a pipeline captured nothing and `x` arrived
-	// empty.
 	//
-	// Promotion alone was tried twice and crashed the corpus, which is why the
-	// note here used to say "not the fix". The missing half was the ARGUMENTS.
-	// Below, the fast path binds each parameter to the caller's ibValue by
-	// POINTER — and under a pipeline those point into the iterator state
-	// (`ibValueJoinState::m_curOuter` and friends), objects that die with the
-	// pipeline. A captured frame outlives it, so the pointer dangles: the AV was
-	// the frame reading its own parameters after the pipeline had gone, not the
-	// capture machinery downstream.
+	// The fast path binds each parameter to the caller's ibValue by POINTER — and
+	// under a pipeline those point into the iterator state (`ibValueJoinState::
+	// m_curOuter` and friends), objects that die with the pipeline. A parameter
+	// bound by pointer is the caller's variable, and a lambda takes it as that
+	// pointer (ibRunContext::Capture), so the inner lambda read the iterator state
+	// after the pipeline had gone: an AV, not the capture machinery downstream.
 	//
-	// So the promoted frame COPIES its arguments into its own slots instead of
-	// pointing at the caller's. It costs one ibValue copy per argument on the path
-	// that needs it, and nothing at all on the path that does not — a lambda with
-	// no inner lambda is not flagged and still binds by pointer.
-	const bool bHeapFrame = bfn->m_needsHeapFrame;
+	// So such a lambda COPIES its arguments into its own slots instead of pointing
+	// at the caller's, and the frame makes cells of them on entry. It costs one
+	// ibValue copy per argument on the path that needs it, and nothing at all on
+	// the path that does not. The frame's own entries come first in the sorted list.
+	const bool bOwnsArguments = !bfn->m_listCaptured.empty() && bfn->m_listCaptured.front().m_numArray == 0;
 
 	// 🛑 THE FRAME IS BUILT PER CALL, AND REUSING IT IS NOT A ONE-LINE SAVING. Tried and taken out
 	// the same hour (2026-09-08): a pipeline calls this once per row, so a frame built per row is
@@ -121,21 +115,14 @@ static void CallLambdaWithArgs(ibValueFunction& fn, ibValue** argPtrs,
 	// The saving is real and the way to it is not a reset list that has to stay complete forever —
 	// it is for the body to have NO FRAME OF ITS OWN, compiled into the caller's the way a loop body
 	// is (docs/private/linq.md §0.2g). Then there is nothing to reuse and nothing to reset.
-	ibRunCallFrame spHeapCtx;
-	// The stack frame leases its slots; the capture frame cannot, because it is
-	// the case that OUTLIVES the call — a lambda took it. procUnitState.h, ibRunStack.
-	ibRunContext                  stackCtx(bHeapFrame ? wxNOT_FOUND : (int)lambdaVarCount,
-	                                       ibRunLifetime::PerCall);
-	if (bHeapFrame)
-		spHeapCtx.Reset(new ibRunCaptureContext((int)lambdaVarCount));
-
-	ibRunContext& cRunContext = bHeapFrame ? *spHeapCtx : stackCtx;
+	// The frame leases its slots from the run stack: it is the call (procUnitState.h, ibRunStack).
+	ibRunContext cRunContext((int)lambdaVarCount, ibRunLifetime::PerCall);
 
 	cRunContext.m_lStart          = bfn->m_lCodeLine + 1;
 	cRunContext.m_lParamCount     = lambdaParamCount;
 
 	for (long i = 0; i < argCount; ++i) {
-		if (bHeapFrame)
+		if (bOwnsArguments)
 			CopyValue(cRunContext.m_pLocVars[i], *argPtrs[i]);   // the frame owns it
 		else
 			cRunContext.m_pRefLocVars[i] = argPtrs[i];

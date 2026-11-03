@@ -17,7 +17,7 @@ namespace {
 ibDataValue CrossTheWire(const ibDataValue& value)
 {
 	ibDataNode root;
-	root.SetProperty(wxT("Value"), value);
+	root.SetProperty(ibT("Value"), value);
 	ibWriterMemory writer;
 	ibJsonProvider().Write(root, writer);
 	ibMemoryBuffer bytes = writer.buffer();

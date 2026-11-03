@@ -863,7 +863,7 @@ TEST(McpClipboard, ASlot_KeepsWhatWasPutInItUntilItIsReplaced)
 	slot.m_kind = ibMcpClipboardKind::Metadata;
 	slot.m_name = wxT("GoodsReceipt");
 	slot.m_what = wxT("Document");
-	slot.m_payload.SetValue(wxT("marker"), ibString(wxT("first")));
+	slot.m_payload.SetValue(ibT("marker"), ibString(wxT("first")));
 
 	// The SAME slot is handed back — a copy would make copy/paste two verbs over
 	// two different things.
@@ -945,18 +945,18 @@ TEST(MetadataBind, ASharedNameResolvesAmongTheBindingsCandidates) {
 	const auto bind = [&](auto setTarget, bool remove, ibString& refusal) {
 		ibDataNode params;
 		ibDataNode result;
-		params.SetValue(wxT("id"), (std::int32_t)document->GetMetaID());
-		params.SetValue(wxT("property"), ibString(wxT("ListRegisterRecord")));
+		params.SetValue(ibT("id"), (std::int32_t)document->GetMetaID());
+		params.SetValue(ibT("property"), ibString(wxT("ListRegisterRecord")));
 		setTarget(params);
 		if (remove)
-			params.SetValue(wxT("remove"), true);
+			params.SetValue(ibT("remove"), true);
 		const bool ok = tool->Call(params, result, refusal);
 		return ok;
 	};
 
 	ibString refusal;
 	ASSERT_TRUE(bind([&](ibDataNode& params) {
-		params.SetValue(wxT("target"), ibString(wxT("Cars")));
+		params.SetValue(ibT("target"), ibString(wxT("Cars")));
 	}, false, refusal)) << refusal.ToStdString();
 
 	ibValueMetaObjectRegisterData* asRegister = dynamic_cast<ibValueMetaObjectRegisterData*>(registerOne);
@@ -966,7 +966,7 @@ TEST(MetadataBind, ASharedNameResolvesAmongTheBindingsCandidates) {
 
 	refusal.clear();
 	EXPECT_TRUE(bind([&](ibDataNode& params) {
-		params.SetValue(wxT("target"), ibString(wxT("AccumulationRegister.Cars")));
+		params.SetValue(ibT("target"), ibString(wxT("AccumulationRegister.Cars")));
 	}, false, refusal)) << refusal.ToStdString();
 
 	ibValueMetaObject* registerTwo = cfg->CreateMetaObject(g_metaAccumulationRegisterCLSID, root, false);
@@ -975,7 +975,7 @@ TEST(MetadataBind, ASharedNameResolvesAmongTheBindingsCandidates) {
 
 	refusal.clear();
 	EXPECT_FALSE(bind([&](ibDataNode& params) {
-		params.SetValue(wxT("target"), ibString(wxT("Cars")));
+		params.SetValue(ibT("target"), ibString(wxT("Cars")));
 	}, false, refusal));
 	EXPECT_TRUE(refusal.Contains(ibString::Format(wxT("#%ld"), (long)registerOne->GetMetaID())));
 	EXPECT_TRUE(refusal.Contains(ibString::Format(wxT("#%ld"), (long)registerTwo->GetMetaID())));
@@ -983,7 +983,7 @@ TEST(MetadataBind, ASharedNameResolvesAmongTheBindingsCandidates) {
 
 	refusal.clear();
 	ASSERT_TRUE(bind([&](ibDataNode& params) {
-		params.SetValue(wxT("target"), ibString::Format(wxT("%ld"), (long)registerTwo->GetMetaID()));
+		params.SetValue(ibT("target"), ibString::Format(wxT("%ld"), (long)registerTwo->GetMetaID()));
 	}, false, refusal)) << refusal.ToStdString();
 
 	ibValueMetaObjectRegisterData* second = dynamic_cast<ibValueMetaObjectRegisterData*>(registerTwo);
@@ -992,7 +992,7 @@ TEST(MetadataBind, ASharedNameResolvesAmongTheBindingsCandidates) {
 
 	refusal.clear();
 	ASSERT_TRUE(bind([&](ibDataNode& params) {
-		params.SetValue(wxT("target"), (std::int32_t)registerTwo->GetMetaID());
+		params.SetValue(ibT("target"), (std::int32_t)registerTwo->GetMetaID());
 	}, true, refusal)) << refusal.ToStdString();
 	EXPECT_FALSE(second->GetRegisterRecorder()->GetTypeDesc().ContainType(documentRef));
 }

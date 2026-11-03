@@ -262,13 +262,13 @@ bool ibJobRunByteCode::Start(const ibJobRunRequest& request, ibJobRunByteCodeSta
 			// ⭐ SO THE RUN GETS A UNIT OF ITS OWN, parented on the root — exactly the shape a common
 			// module's unit has (`SetParent(moduleManager)` in its ctor, moduleManagerUnit.cpp). It
 			// is a local: the program runs once and the frame goes with it.
-			ibProcUnit runner;
-			runner.SetParent(unit.get());
+			const std::shared_ptr<ibProcUnit> runner = std::make_shared<ibProcUnit>();
+			runner->SetParent(unit.get());
 
 			// ⚠ delta TRUE — the module BODY is what runs. A common module's top level is only
 			// declarations and is registered without running; this is the opposite kind of code, a
 			// body written to be executed once.
-			runner.Execute(compiler.m_cByteCode, answer, /*delta*/ true);
+			runner->Execute(compiler.m_cByteCode, answer, /*delta*/ true);
 
 			// ⭐⭐ AND WHAT IT CAME OUT WITH — the variable called `Result`, which is the word the
 			// sandbox already uses for exactly this ("the last value, or `Result`, comes back as the
@@ -305,7 +305,7 @@ bool ibJobRunByteCode::Start(const ibJobRunRequest& request, ibJobRunByteCodeSta
 					continue;
 
 				ibValue produced;
-				if (runner.GetPropVal((long)declared, produced))
+				if (runner->GetPropVal((long)declared, produced))
 					answer = produced;
 				break;
 			}

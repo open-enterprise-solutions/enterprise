@@ -29,7 +29,7 @@ wxVariant WriteHandler(const wxVariant& value, const wxString& handler)
 {
 	const auto held = ibVariantDataSerializable::GetNodeValue(value).AsChild();
 	auto node = held ? std::make_shared<ibDataNode>(*held) : std::make_shared<ibDataNode>();
-	node->SetValue(wxT("Value"), ibString(handler));
+	node->SetValue(ibT("Value"), ibString(handler));
 	return wxVariant(new ibVariantDataSerializable(value.GetType(), ibDataValue::Child(node), handler));
 }
 

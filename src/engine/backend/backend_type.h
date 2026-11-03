@@ -241,10 +241,19 @@ public:
 	const ibBackendSourceColumn* WalkSource(const ibSourceDescription& desc,
 		bool* valid = nullptr, ibString* outText = nullptr) const;
 
+	// ⭐ …AND THE PATH IN WORDS, walked the same way into the hops a binding stores — the one walk a script
+	// (`Control.Source = "List.Price"`) and an assistant (MCP form_bind) both go through. The head is one of THIS
+	// context's source attributes, by name; a path that does not open with one starts at the MAIN attribute. The rest
+	// is the source's own walk (ibSourceDataObject::WalkColumns). RAISES, saying why, when a segment names nothing
+	// there (and what that level offers), or the path names nothing at all.
+	ibSourceDescription WalkSource(const ibString& path) const;
+
 	// The source HOLDER whose attribute id matches — the ONE lookup shared by the dot-walk and the
 	// path / type resolvers (instead of re-scanning GetSourceList at every site). Null = no such
 	// attribute in this context.
 	ibBackendFormAttributeValue* FindSourceHolder(const ibMetaID& id) const;
+	// …and the one a written path opens with, by name (case-insensitively, as a module meets it).
+	ibBackendFormAttributeValue* FindSourceHolder(const ibString& name) const;
 };
 
 #endif

@@ -323,6 +323,8 @@ bool ibValueForm::InitializeFormModule()
 	// linkage flows through the parent chain (descriptor → root → session).
 	BindContextVariable(thisForm, this);                                          // contextual
 	BindExportVariable(ibT("Controls"), m_formCollectionControl);                 // exported
+	BindExportVariable(ibT("Attributes"), m_formCollectionAttribute);             // …the attributes' structure
+	BindExportVariable(ibT("Commands"), m_formCollectionCommand);                 // …and the commands'
 	// Bind each source attribute as a form-module variable: its value cell as a LOCAL named
 	// <attrName>, and — for the MAIN — the exported DataSource. Same self-managed path that
 	// designer add / become-main reuse (BindAttributeVariable), so the wiring is one place.

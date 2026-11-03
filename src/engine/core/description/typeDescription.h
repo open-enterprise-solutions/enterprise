@@ -448,7 +448,7 @@ public:
 	}
 };
 
-class CORE_API ibDataValue;   // serialize/dataBuilder.h — node value (Child / Array)
+class ibDataValue;   // serialize/dataBuilder.h — node value (Child / Array)
 
 class CORE_API ibTypeDescriptionMemory {
 public:

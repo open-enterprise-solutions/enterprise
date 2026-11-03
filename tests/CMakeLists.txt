@@ -72,6 +72,7 @@ add_executable(oes_tests
     test_metadataPasteIdentity.cpp
     test_propertySerialized.cpp
     test_metadataTree.cpp
+    test_predefinedCells.cpp
     test_numberPeriodicity.cpp
     test_pictureVersion.cpp
     test_commonAttribute.cpp
@@ -187,6 +188,7 @@ add_executable(oes_tests
     test_md5.cpp
     test_sha256.cpp
     test_dataHashing.cpp
+    test_comObject.cpp
     test_stringUtils.cpp
     test_guid.cpp
     test_dbTransaction.cpp

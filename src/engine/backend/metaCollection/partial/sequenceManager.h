@@ -23,12 +23,15 @@ public:
 	}
 	virtual ~ibValueManagerDataObjectSequence() {}
 
-	// The sequence's own manager module: its Public methods are this manager's too, beside the two verbs.
+	// The sequence's own manager module: its Public methods are this manager's too, beside its own verbs.
 	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const override { return m_metaObject->GetManagerModule(); }
 	virtual const ibValueMetaObjectSequence* GetMetaObject() const override { return m_metaObject; }
 
-	void FillManagerMethods(ibMemberTable& helper) const;
+	// Restore is a procedure: it answers nothing, and a procedure is carried out here, not in CallAsFunc.
+	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray) override;
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) override;
+
+	void FillManagerMethods(ibMemberTable& helper) const;
 
 protected:
 	const ibValueMetaObjectSequence* m_metaObject;

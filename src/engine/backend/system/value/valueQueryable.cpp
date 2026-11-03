@@ -53,10 +53,11 @@ bool ResolveCapturedAt(const ibValueFunction* fn, long frame, long slot, ibValue
 	return true;
 }
 
-// Resolve a captured outer local BY NAME from the lambda's captured frames —
-// each frame knows its function (m_currentFunction) whose m_listLocals carries
-// name -> slot. Module-body frames (null function) are skipped; an unresolved
-// name makes the whole fold bail to RAM.
+// Resolve a captured outer local BY NAME from what the lambda took from its
+// outer frames — each knows its function (m_currentFunction) whose m_listLocals
+// carries name -> slot, and a slot it did not take still points at its own empty
+// storage. Module-body frames (null function) are skipped; an unresolved name
+// makes the whole fold bail to RAM.
 //
 // ⚠ STILL HERE FOR THE TREE THAT HAS NO COORDINATES: an AST that came back from an older AOT blob,
 // or one the text query language built, carries a name and nothing else. A lambda compiled by this
@@ -70,7 +71,8 @@ bool ResolveCapturedByName(const ibValueFunction* fn, const ibString& name, ibVa
 		for (const ibByteCode::ibByteCodeVarInfo& local : frame->m_currentFunction->m_listLocals) {
 			if (local.m_strRealName.CmpNoCase(name) != 0)
 				continue;
-			if (local.m_slotIndex < 0 || local.m_slotIndex >= frame->GetLocalCount())
+			if (local.m_slotIndex < 0 || local.m_slotIndex >= frame->GetLocalCount()
+				|| frame->m_pRefLocVars[local.m_slotIndex] == &frame->m_pLocVars[local.m_slotIndex])
 				return false;
 			out = *frame->m_pRefLocVars[local.m_slotIndex];
 			return true;

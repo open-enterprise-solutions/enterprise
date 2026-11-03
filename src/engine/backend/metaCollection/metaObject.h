@@ -21,8 +21,8 @@
 //*******************************************************************************
 class BACKEND_API ibMetaData;
 class BACKEND_API ibValueMetaObject;
-class BACKEND_API ibDataNode;   // serialize/dataBuilder.h — universal structure node
-class BACKEND_API ibDataValue;  // serialize/dataBuilder.h — a node value (Child for a nested object)
+class ibDataNode;   // serialize/dataBuilder.h — universal structure node
+class ibDataValue;  // serialize/dataBuilder.h — a node value (Child for a nested object)
 //*******************************************************************************
 
 //*******************************************************************************

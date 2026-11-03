@@ -315,9 +315,11 @@ public:
 			"take the base exclusively. With confirm=false it goes all the way and then rolls "
 			"back, answering with the ledger of every CREATE, ALTER and DROP it would have made - "
 			"which is the only way to see the schema changes in advance, because the engine has "
-			"no rehearsal mode by design. Saving first costs nothing here - config_save stores the "
-			"configuration without touching the structure, so the ledger this hands back still "
-			"holds everything the base has not got.");
+			"no rehearsal mode by design. What is rolled back is the structure: the configuration "
+			"itself is stored first either way, as the designer's button stores it, and survives "
+			"closing the designer - config_rollback takes the database's copy back. Saving first "
+			"costs nothing here - config_save stores the configuration without touching the "
+			"structure, so the ledger this hands back still holds everything the base has not got.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -429,11 +431,17 @@ public:
 		// ⚠ BUT ONLY IF THERE WAS A DECISION TO DECLINE. Everything that stops the apply before
 		// `decide` is a refusal with the engine's own words behind it, and it falls through.
 		if (decisionReached && (!commit || sawErrors)) {
+			// ⚠ THE CONFIGURATION ITSELF WAS STORED, whatever came of the rest: the apply's step 1 stores it
+			// before the restructure is decided (ApplyConfiguration). "Nothing was written" read as "closing the
+			// designer loses these edits" and a rehearsal's objects were in the stored copy at the next start
+			// (2026-11-03).
 			result.SetValue(ibT("note"), sawErrors
-				? ibMcpText("Rolled back: the ledger carries errors, so nothing was written whatever was "
-					"confirmed.")
-				: ibMcpText("Rolled back as asked - nothing was written. The ledger above is what "
-					"confirm: true would have done."));
+				? ibMcpText("Rolled back: the ledger carries errors, so the database structure is untouched "
+					"whatever was confirmed. The configuration itself was stored, as applying stores it "
+					"first - config_rollback takes the database's copy back.")
+				: ibMcpText("Rolled back as asked - the database structure is untouched; the ledger above is "
+					"what confirm: true would have done. The configuration itself was stored, as applying "
+					"stores it first - config_rollback takes the database's copy back."));
 			return true;
 		}
 
@@ -446,6 +454,16 @@ MCP_TOOL_REGISTER_DESIGNER(ibMcpToolConfigApply);
 //---------------------------------------------------------------------------
 // config_rollback
 //---------------------------------------------------------------------------
+
+namespace {
+const ibArg& ArgRollbackConfirm()
+{
+	static const ibArg argument(ibT("confirm"), ibArg::Kind::Flag,
+		ibMcpText("true discards every edit since the last apply and takes the database's copy back. "
+			"false refuses and changes nothing."), true);
+	return argument;
+}
+}
 
 class ibMcpToolConfigRollback : public ibMcpTool {
 public:
@@ -467,7 +485,7 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgConfirm() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgRollbackConfirm() };
 		return s_arguments;
 	}
 
@@ -477,7 +495,7 @@ public:
 		if (config == nullptr)
 			return false;
 
-		if (!ArgConfirm().Flag(params)) {
+		if (!ArgRollbackConfirm().Flag(params)) {
 			refusal = ibMcpText("This discards every edit since the last apply and cannot be undone. Pass "
 				"confirm: true if that is what you mean; database_diff lists what would go.");
 			return false;

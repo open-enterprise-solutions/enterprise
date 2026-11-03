@@ -83,7 +83,7 @@ public:
 	}
 
 	virtual bool HasEnumValue(long value) const override {
-		return m_enumCreator->HasEnumValue(static_cast<valueEnumType>(value));
+		return m_enumCreator->HasEnumValue(value);
 	}
 
 	// set/get property data

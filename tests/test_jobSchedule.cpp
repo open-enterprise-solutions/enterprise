@@ -282,7 +282,7 @@ TEST(JobSchedule, Serialization_AbsentFieldsKeepTheirDefaults)
 	// existed must read back as "not restricted" — never as "restricted to
 	// nothing", which would be a job that silently never runs.
 	auto root = std::make_shared<ibDataNode>();
-	root->SetValue(wxT("IntervalSeconds"), (std::int32_t)3600);   // an old blob knowing one field
+	root->SetValue(ibT("IntervalSeconds"), (std::int32_t)3600);   // an old blob knowing one field
 	const ibDataValue value = ibDataValue::Child(root);
 
 	ibJobScheduleDescription s;
@@ -305,10 +305,10 @@ TEST(JobSchedule, Serialization_ReadsDatesThatCrossedTheWireAsText)
 	// (jsonProvider.h), the empty date as "". The thin designer's schedule cell reads such a node and
 	// writes one back, so the reader takes either kind; a text that names no date leaves the default.
 	auto root = std::make_shared<ibDataNode>();
-	root->SetValue(wxT("IntervalSeconds"), (std::int32_t)7200);
-	root->SetValue(wxT("PeriodAnchor"), ibString(wxT("2026-01-05 12:00:00")));
-	root->SetValue(wxT("ActiveFrom"),   ibString());
-	root->SetValue(wxT("ActiveTo"),     ibString(wxT("not a date")));
+	root->SetValue(ibT("IntervalSeconds"), (std::int32_t)7200);
+	root->SetValue(ibT("PeriodAnchor"), ibString(wxT("2026-01-05 12:00:00")));
+	root->SetValue(ibT("ActiveFrom"),   ibString());
+	root->SetValue(ibT("ActiveTo"),     ibString(wxT("not a date")));
 	const ibDataValue value = ibDataValue::Child(root);
 
 	ibJobScheduleDescription s;

@@ -344,6 +344,21 @@ TEST(ByteCodeAOT, ListVarAllKinds) {
 	EXPECT_EQ(dst.m_listVar[4].m_clsid, (ibClassID)0x12345);
 }
 
+// An eval block's variables a lambda takes ride on the bytecode itself (v37) — the block's frame has no function to
+// carry them, and makes them cells when it is built.
+TEST(ByteCodeAOT, ListCapturedOfTheModule) {
+	ibByteCode src;
+	src.m_id      = MakeGuid(14);
+	src.m_version = MakeGuid(15);
+	src.m_listCaptured = { ibParamRunUnit{ 0, 3 }, ibParamRunUnit{ 0, 7 } };
+
+	ibByteCode dst;
+	ASSERT_TRUE(RoundTrip(src, dst));
+	ASSERT_EQ(dst.m_listCaptured.size(), 2u);
+	EXPECT_EQ(dst.m_listCaptured[0].m_numIndex, 3);
+	EXPECT_EQ(dst.m_listCaptured[1].m_numIndex, 7);
+}
+
 // ===========================================================================
 // m_listFunc round-trip — including m_listParam (with default values),
 // m_listParamRealName, and embedded m_listLocals
@@ -360,14 +375,15 @@ TEST(ByteCodeAOT, ListFuncWithLocalsAndParams) {
 	fn.m_lVarCount       = 5;
 	fn.m_returnClsid     = 0xABCDEF;
 	fn.m_kind            = ibFnKind::Export;
-	// THREE flags that default FALSE and have to be RESTORED rather than derived —
+	// THREE fields that default EMPTY and have to be RESTORED rather than derived —
 	// exactly the shape that goes missing without a symptom, and all three went
-	// missing in turn. m_needsHeapFrame was never written until v21, so a module
-	// served from the cache came back with it cleared on every function; m_valueCached
-	// went the same way; m_valueVariadic was not carried at all until v23, which made
-	// every built-in of negative arity — Max, Min — REFUSE EVERY CALL it was given
-	// the moment a name resolved through bytecode instead of a live compile context.
-	fn.m_needsHeapFrame  = true;
+	// missing in turn. m_needsHeapFrame (now m_listCaptured) was never written until
+	// v21, so a module served from the cache came back with it cleared on every
+	// function; m_valueCached went the same way; m_valueVariadic was not carried at
+	// all until v23, which made every built-in of negative arity — Max, Min — REFUSE
+	// EVERY CALL it was given the moment a name resolved through bytecode instead of
+	// a live compile context.
+	fn.m_listCaptured    = { ibParamRunUnit{ 0, 1 }, ibParamRunUnit{ 2, 4 } };
 	fn.m_valueCached     = true;
 	fn.m_valueVariadic   = true;
 	fn.m_strRealName     = wxT("Calculate");
@@ -417,7 +433,11 @@ TEST(ByteCodeAOT, ListFuncWithLocalsAndParams) {
 	EXPECT_EQ(a.m_lVarCount,       5);
 	EXPECT_EQ(a.m_returnClsid,     (ibClassID)0xABCDEF);
 	EXPECT_EQ(a.m_kind,            ibFnKind::Export);
-	EXPECT_TRUE(a.m_needsHeapFrame) << "the heap-frame flag did not survive the round trip";
+	ASSERT_EQ(a.m_listCaptured.size(), 2u) << "what the function's lambdas take did not survive the round trip";
+	EXPECT_EQ(a.m_listCaptured[0].m_numArray, 0);
+	EXPECT_EQ(a.m_listCaptured[0].m_numIndex, 1);
+	EXPECT_EQ(a.m_listCaptured[1].m_numArray, 2);
+	EXPECT_EQ(a.m_listCaptured[1].m_numIndex, 4);
 	EXPECT_TRUE(a.m_valueCached)    << "the Cached modifier did not survive the round trip";
 	EXPECT_TRUE(a.m_valueVariadic)  << "the variadic flag did not survive the round trip - a negative-arity "
 	                                   "built-in resolved through bytecode then refuses every call it is given";

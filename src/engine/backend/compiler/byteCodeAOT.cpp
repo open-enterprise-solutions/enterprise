@@ -25,6 +25,7 @@
 //   <m_listCode>
 //   <m_listConst>
 //   <m_listVar>
+//   <m_listCaptured>
 //   <m_listFunc>
 //   <m_dependencyIds>
 //   <m_dependencyVersions>
@@ -247,6 +248,10 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 //    branches are no longer computed before the choice. Dropping the enumerator moves every opcode
 //    from OPER_GT through OPER_END, and TYPE_DELTA with them. A v35 blob stores the old numbers and
 //    would dispatch the wrong handler on every instruction after that slot.
+// 🛑 36 -> 37 (2026-11-03): A LAMBDA TAKES THE VARIABLES IT REFERENCES, NOT THE FRAMES. A function carries
+//    m_listCaptured (depth, slot) where it carried the m_needsHeapFrame byte, an eval block's bytecode carries
+//    its own, and OPER_CALL_CLOSURE left the opcode list — which moves every opcode after OPER_CALL_METHOD and
+//    TYPE_DELTA with them.
 // The constant itself is kAOTFormatVersion in byteCodeFormat.h. It moved out of this
 // file so the cache key can name the same number the blob header writes.
 [[maybe_unused]] constexpr uint16_t kAOTFlagPortable = 0x0001;   // reserved — host-endian today, no reader yet
@@ -450,13 +455,6 @@ bool WriteFunction(ibWriterMemory& w, const ibByteCode::ibByteFunction& f) {
 	w.w_s32((int32_t)f.m_lVarCount);
 	w.w_u64((uint64_t)f.m_returnClsid);
 	w.w_u8((uint8_t)f.m_kind);
-	// m_needsHeapFrame was NOT written before v21, and a default-false bool that
-	// the reconstruction path has to restore is exactly the shape of a silent
-	// defect: a module served from the cache came back with the flag cleared on
-	// every function, so a cross-module call to an exported function holding an
-	// inner lambda emitted OPER_CALL instead of OPER_CALL_CLOSURE and the capture
-	// dangled — only on the runs that hit the cache.
-	w.w_u8(f.m_needsHeapFrame ? 1 : 0);
 	w.w_u8(f.m_valueCached ? 1 : 0);
 	w.w_u8(f.m_valueVariadic ? 1 : 0);   // v23 - see the note on the constant
 	w.w_s32((int32_t)f.m_parentRef);
@@ -474,6 +472,13 @@ bool WriteFunction(ibWriterMemory& w, const ibByteCode::ibByteFunction& f) {
 	for (const auto& v : f.m_listLocals)
 		WriteVarInfo(w, v);
 
+	// m_listCaptured — what a lambda takes (v37). Its absence is the shape of a silent defect, as
+	// m_needsHeapFrame's was before v21: a cached module would come back with nothing captured, and
+	// its lambdas would read empty slots where their outer variables should be.
+	w.w_u32((uint32_t)f.m_listCaptured.size());
+	for (const auto& c : f.m_listCaptured)
+		WriteParamRun(w, c);
+
 	// ⭐ NOTHING IS WRITTEN FOR THE QUERY TREE. It used to travel here as a presence byte plus a
 	// recursive dump, gated by a whitelist — and an unserialisable tree was stored as ABSENT, which
 	// read downstream as "this predicate cannot be translated". It is derived from the instructions
@@ -488,7 +493,6 @@ bool ReadFunction(const ibReaderMemory& r, ibByteCode::ibByteFunction& f) {
 	f.m_lVarCount       = (long)r.r_s32();
 	f.m_returnClsid     = (ibClassID)r.r_u64();
 	f.m_kind            = (ibFnKind)r.r_u8();
-	f.m_needsHeapFrame  = (r.r_u8() != 0);
 	f.m_valueCached     = (r.r_u8() != 0);
 	f.m_valueVariadic   = (r.r_u8() != 0);   // v23
 	f.m_parentRef       = (long)r.r_s32();
@@ -507,6 +511,11 @@ bool ReadFunction(const ibReaderMemory& r, ibByteCode::ibByteFunction& f) {
 	for (uint32_t i = 0; i < localsCount; ++i)
 		ReadVarInfo(r, f.m_listLocals[i]);
 
+	uint32_t capturedCount = r.r_u32();
+	if (capturedCount > kAOTSanityMax) return false;
+	f.m_listCaptured.resize(capturedCount);
+	for (uint32_t i = 0; i < capturedCount; ++i)
+		ReadParamRun(r, f.m_listCaptured[i]);
 
 	return true;
 }
@@ -546,6 +555,11 @@ bool ibByteCode::SerializeAOT(ibWriterMemory& w) const
 	for (const auto& v : m_listVar) {
 		if (!WriteVarInfo(w, v)) return false;
 	}
+
+	// m_listCaptured — an eval block's (v37); a module's is empty.
+	w.w_u32((uint32_t)m_listCaptured.size());
+	for (const auto& c : m_listCaptured)
+		WriteParamRun(w, c);
 
 	// m_listFunc.
 	w.w_u32((uint32_t)m_listFunc.size());
@@ -618,6 +632,13 @@ bool ibByteCode::DeserializeAOT(const ibReaderMemory& r)
 	m_listVar.resize(varCount);
 	for (uint32_t i = 0; i < varCount; ++i)
 		ReadVarInfo(r, m_listVar[i]);
+
+	// m_listCaptured.
+	uint32_t capturedCount = r.r_u32();
+	if (capturedCount > kAOTSanityMax) return false;
+	m_listCaptured.resize(capturedCount);
+	for (uint32_t i = 0; i < capturedCount; ++i)
+		ReadParamRun(r, m_listCaptured[i]);
 
 	// m_listFunc.
 	uint32_t funcCount = r.r_u32();

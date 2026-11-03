@@ -65,8 +65,8 @@ class FRMSERVER_API ibMetaDocument;
 class ibDocChildFrameAnyBase;
 class ibClientFrame;
 
-class BACKEND_API ibDataNode;
-class BACKEND_API ibValue;
+class ibDataNode;
+class ibValue;
 class BACKEND_API ibValueMetaObject;
 class BACKEND_API ibValueMetaObjectRecordData;
 class BACKEND_API ibValueMetaObjectModule;

@@ -316,21 +316,11 @@ std::vector<ibDmlAssign> AssignmentsFor(const ibBackendQueryColumn* column, cons
 // ---- the restoring run ------------------------------------------------------------------------------
 
 // Is `moment` inside the run's reach? A date is reached by the date alone, as a bare date has always
-// meant everything at that instant; a moment by its order; a Boundary says which side of it is meant.
-bool WithinBoundary(const ibValue& moment, const ibValue& boundary)
+// meant everything at that instant; a moment by its order; `kind` says which side of the position is meant.
+bool WithinBoundary(const ibValue& moment, const ibValue& position, ibBoundaryKind kind)
 {
-	if (boundary.IsEmpty())
+	if (position.IsEmpty())
 		return true;
-	ibValue position = boundary;
-	ibBoundaryKind kind = ibBoundaryKind_Including;
-	{
-		ibValueBoundary* wrapped = nullptr;
-		ibValue value = boundary;
-		if (value.ConvertToValue(wrapped) && wrapped != nullptr) {
-			position = wrapped->m_value;
-			kind = wrapped->m_kind;
-		}
-	}
 	const int order = position.GetType() == ibValueTypes::TYPE_DATE
 		? PeriodOf(moment).CompareValueLS(position)
 		: moment.CompareValueLS(position);
@@ -345,63 +335,6 @@ ibValue RecorderOf(const ibValue& moment)
 	if (value.ConvertToValue(point) && point != nullptr)
 		return point->m_reference;
 	return ibValue();
-}
-
-// ⭐ WHAT A RUN HAS TO POST AGAIN, IN ITS ORDER: every registration that counts, of the keys the filter
-// names, standing after its own key's border and within the boundary — one entry per recorder, at the
-// earliest moment it holds. The database sifts by the filter and by the boundary's period; the border
-// and the exact order are settled in memory, where a moment compares itself.
-std::vector<ibValue> PendingRecorders(const ibValueMetaObjectSequence* seq, const ibValue& boundary,
-	const ibSequenceKeyFilter& filter)
-{
-	const ibMetaData* metaData = seq->GetMetaData();
-	ibQueryExprPtr where;
-	const auto also = [&where](const ibQueryExprPtr& one) {
-		if (one) where = where ? ibBinOp(ibQueryBinOp::And, where, one) : one;
-	};
-	for (const auto& [dimension, value] : filter)
-		also(ibRegCompositeIR(dimension->GetQueryColumn(), metaData, value, ibQueryBinOp::Eq, kRows));
-	if (!boundary.IsEmpty()) {
-		ibValue position = boundary;
-		ibValueBoundary* wrapped = nullptr;
-		ibValue value = boundary;
-		if (value.ConvertToValue(wrapped) && wrapped != nullptr)
-			position = wrapped->m_value;
-		also(ibRegCompositeIR(seq->GetRegisterPeriod()->GetQueryColumn(), metaData, PeriodOf(position), ibQueryBinOp::Le, kRows));
-	}
-
-	struct ibKeyBorder {
-		std::vector<ibValue> m_key;
-		ibValue              m_border;
-	};
-	std::vector<ibKeyBorder> borders;   // read once per key: the run has not moved anything yet
-	const auto borderOf = [&](const std::vector<ibValue>& key) -> const ibValue& {
-		for (const ibKeyBorder& one : borders)
-			if (std::equal(one.m_key.begin(), one.m_key.end(), key.begin(), key.end(), ibValueEqual()))
-				return one.m_border;
-		borders.push_back(ibKeyBorder{ key, BorderOf(seq, key) });
-		return borders.back().m_border;
-	};
-
-	std::vector<ibValue> moments;
-	for (const ibSequenceRegistration& row : RegistrationsWhere(seq, where)) {
-		const ibValue& border = borderOf(row.m_key);
-		if (!border.IsEmpty() && row.m_moment.CompareValueLS(border) <= 0)
-			continue;   // done already: the border vouches for it
-		if (WithinBoundary(row.m_moment, boundary))
-			moments.push_back(row.m_moment);
-	}
-	std::stable_sort(moments.begin(), moments.end(),
-		[](const ibValue& a, const ibValue& b) { return a.CompareValueLS(b) < 0; });
-
-	std::vector<ibValue> recorders;
-	std::unordered_set<ibValue, ibValueHash, ibValueEqual> seen;
-	for (const ibValue& moment : moments) {
-		const ibValue recorder = RecorderOf(moment);
-		if (!recorder.IsEmpty() && seen.insert(recorder).second)
-			recorders.push_back(recorder);
-	}
-	return recorders;
 }
 
 // The run's own way of posting a document again: its object, written in the posting mode — the
@@ -506,21 +439,79 @@ ibValue ibSequenceBorderGet(const ibValueMetaObjectSequence* seq, const std::vec
 	return seq != nullptr ? BorderOf(seq, key) : ibValue();
 }
 
+// ⭐ WHAT A RUN HAS TO POST AGAIN, IN ITS ORDER: every registration that counts, of the keys the filter
+// names, standing after its own key's border and within the boundary — one entry per recorder, at the
+// earliest moment it holds. The database sifts by the filter and by the boundary's period; the border
+// and the exact order are settled in memory, where a moment compares itself.
+std::vector<ibValue> ibSequencePendingRecorders(const ibValueMetaObjectSequence* seq, const ibValue& boundary,
+	const ibSequenceKeyFilter& filter)
+{
+	if (seq == nullptr || !seq->HasBorders())
+		return {};
+
+	// The boundary, read once: where the run stops, and — said by a Boundary — which side of it is meant.
+	ibValue position = boundary;
+	ibBoundaryKind kind = ibBoundaryKind_Including;
+	ibValueBoundary* wrapped = nullptr;
+	if (boundary.ConvertToValue(wrapped) && wrapped != nullptr) {
+		position = wrapped->m_value;
+		kind = wrapped->m_kind;
+	}
+
+	const ibMetaData* metaData = seq->GetMetaData();
+	ibQueryExprPtr where;
+	const auto also = [&where](const ibQueryExprPtr& one) {
+		if (one) where = where ? ibBinOp(ibQueryBinOp::And, where, one) : one;
+	};
+	for (const auto& [dimension, value] : filter)
+		also(ibRegCompositeIR(dimension->GetQueryColumn(), metaData, value, ibQueryBinOp::Eq, kRows));
+	if (!position.IsEmpty())
+		also(ibRegCompositeIR(seq->GetRegisterPeriod()->GetQueryColumn(), metaData, PeriodOf(position), ibQueryBinOp::Le, kRows));
+
+	struct ibKeyBorder {
+		std::vector<ibValue> m_key;
+		ibValue              m_border;
+	};
+	std::vector<ibKeyBorder> borders;   // read once per key: the run has not moved anything yet
+	const auto borderOf = [&](const std::vector<ibValue>& key) -> const ibValue& {
+		for (const ibKeyBorder& one : borders)
+			if (std::equal(one.m_key.begin(), one.m_key.end(), key.begin(), key.end(), ibValueEqual()))
+				return one.m_border;
+		borders.push_back(ibKeyBorder{ key, BorderOf(seq, key) });
+		return borders.back().m_border;
+	};
+
+	std::vector<ibValue> moments;
+	for (const ibSequenceRegistration& row : RegistrationsWhere(seq, where)) {
+		const ibValue& border = borderOf(row.m_key);
+		if (!border.IsEmpty() && row.m_moment.CompareValueLS(border) <= 0)
+			continue;   // done already: the border vouches for it
+		if (WithinBoundary(row.m_moment, position, kind))
+			moments.push_back(row.m_moment);
+	}
+	std::stable_sort(moments.begin(), moments.end(),
+		[](const ibValue& a, const ibValue& b) { return a.CompareValueLS(b) < 0; });
+
+	std::vector<ibValue> recorders;
+	std::unordered_set<ibValue, ibValueHash, ibValueEqual> seen;
+	for (const ibValue& moment : moments) {
+		const ibValue recorder = RecorderOf(moment);
+		if (!recorder.IsEmpty() && seen.insert(recorder).second)
+			recorders.push_back(recorder);
+	}
+	return recorders;
+}
+
 // ⭐⭐ THE RUN. Each document goes through its own posting, and its posting moves the border — the run
 // moves nothing by itself, so whatever it leaves behind is exactly what the rules above would say of
 // those documents posted by hand in that order.
 size_t ibSequenceRestore(const ibValueMetaObjectSequence* seq, const ibValue& boundary,
-	const ibSequenceKeyFilter& filter, const ibSequenceRepost& repost)
+	const ibSequenceKeyFilter& filter)
 {
-	if (seq == nullptr || !seq->HasBorders())
-		return 0;
 	size_t posted = 0;
-	for (const ibValue& recorder : PendingRecorders(seq, boundary, filter)) {
+	for (const ibValue& recorder : ibSequencePendingRecorders(seq, boundary, filter)) {
 		try {
-			if (repost)
-				repost(recorder);
-			else
-				PostAgain(recorder);
+			PostAgain(recorder);
 		}
 		catch (const ibBackendInterruptException&) {
 			throw;   // the user stopped it — the border stands where the last document left it

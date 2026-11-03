@@ -16,6 +16,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <set>
 #include <vector>
 
@@ -38,7 +39,6 @@
 #include "backend/query/columnLayout.h"
 #include "backend/system/value/valuePointInTime.h"
 #include "backend/system/value/valueBoundary.h"
-#include "backend/backend_exception.h"
 
 #include "activeMetaDataAccess.h"
 
@@ -261,9 +261,12 @@ TEST_F(SequenceBorderFix, RepostingInOrderWalksTheBorderToTheEnd) {
 }
 
 // =============================================================================
-// THE RESTORING RUN — Sequences.<Name>.Restore(boundary, key), driven through ibSequenceRestore with a
-// posting of the test's own: what a document's Posting handler does to its registrations (they are
-// cleared, then written again), and a refusal where a test asks for one.
+// THE RESTORING RUN — what Sequences.<Name>.Restore(boundary, key) posts again, in its order
+// (ibSequencePendingRecorders), posted here the way a document's Posting handler does it - its
+// registrations cleared, then written again - and where the border lands after it.
+//
+// The stop at the first failure is the run's own loop around a REAL posting, which a configuration
+// in memory with no document tables cannot carry out: it is checked on the stand.
 // =============================================================================
 
 namespace {
@@ -275,7 +278,6 @@ struct SequenceRestoreFix : SequenceBorderFix {
 		ibString   m_warehouse;
 	};
 	std::vector<Document> documents;
-	std::vector<ibValue>  reposted;   // in the order the run posted them
 
 	ibValue Register(const ibDateTime& when, const ibString& warehouse) {
 		Document one{ NewDocument(), when, warehouse };
@@ -284,19 +286,15 @@ struct SequenceRestoreFix : SequenceBorderFix {
 		return one.m_ref;
 	}
 
-	ibSequenceRepost Repost(const ibValue& refusing = ibValue()) {
-		return [this, refusing](const ibValue& recorder) {
-			if (!refusing.IsEmpty() && refusing.CompareValueLS(recorder) == 0)
-				ibBackendCoreException::Error(wxT("the Posting handler refused"));
-			reposted.push_back(recorder);
-			for (const Document& one : documents)
-				if (one.m_ref.CompareValueLS(recorder) == 0) {
-					Clear(recorder);
-					Post(recorder, one.m_when, one.m_warehouse);
-					return;
-				}
-			ADD_FAILURE() << "the run posted a recorder nobody registered";
-		};
+	// What the run does to each, in the order given: the document posted again.
+	void Repost(const std::vector<ibValue>& recorders) {
+		for (const ibValue& recorder : recorders) {
+			const auto one = std::find_if(documents.begin(), documents.end(),
+				[&recorder](const Document& d) { return d.m_ref.CompareValueLS(recorder) == 0; });
+			ASSERT_NE(one, documents.end()) << "the run posts a recorder nobody registered";
+			Clear(recorder);
+			Post(recorder, one->m_when, one->m_warehouse);
+		}
 	}
 
 	ibSequenceKeyFilter Warehouse(const ibString& warehouse) const {
@@ -324,13 +322,12 @@ TEST_F(SequenceRestoreFix, EverythingAfterTheBorderIsPostedAgainInOrder) {
 	const ibValue late = Register(kDay1Later, wxT("kitchen"));
 	ASSERT_TRUE(Same(Border(wxT("kitchen")), Moment(kDay1, r1)));
 
-	EXPECT_EQ(ibSequenceRestore(seq, ibValue(), ibSequenceKeyFilter(), Repost()), 3u);
-	EXPECT_TRUE(SameOrder(reposted, { late, r2, r3 })) << "R1 is behind the border and is not touched";
+	const std::vector<ibValue> pending = ibSequencePendingRecorders(seq, ibValue(), ibSequenceKeyFilter());
+	EXPECT_TRUE(SameOrder(pending, { late, r2, r3 })) << "R1 is behind the border and is not touched";
+	Repost(pending);
 	EXPECT_TRUE(Same(Border(wxT("kitchen")), Moment(kDay3, r3)));
 
-	reposted.clear();
-	EXPECT_EQ(ibSequenceRestore(seq, ibValue(), ibSequenceKeyFilter(), Repost()), 0u) << "a restored sequence has nothing to do";
-	EXPECT_TRUE(reposted.empty());
+	EXPECT_TRUE(ibSequencePendingRecorders(seq, ibValue(), ibSequenceKeyFilter()).empty()) << "a restored sequence has nothing to do";
 }
 
 // Up to a boundary: a moment includes its own document, a date the whole of that instant, a Boundary
@@ -341,16 +338,20 @@ TEST_F(SequenceRestoreFix, TheRunStopsAtTheBoundary) {
 	const ibValue r3 = Register(kDay3, wxT("kitchen"));
 	const ibValue late = Register(kDay1Later, wxT("kitchen"));
 
-	EXPECT_EQ(ibSequenceRestore(seq, ibValue(new ibValueBoundary(Moment(kDay2, r2), ibBoundaryKind_Excluding)),
-		ibSequenceKeyFilter(), Repost()), 1u);
-	EXPECT_TRUE(SameOrder(reposted, { late }));
+	std::vector<ibValue> pending = ibSequencePendingRecorders(seq,
+		ibValue(new ibValueBoundary(Moment(kDay2, r2), ibBoundaryKind_Excluding)), ibSequenceKeyFilter());
+	EXPECT_TRUE(SameOrder(pending, { late }));
+	Repost(pending);
 	EXPECT_TRUE(Same(Border(wxT("kitchen")), Moment(kDay1Later, late)));
 
-	EXPECT_EQ(ibSequenceRestore(seq, ibValue(kDay2), ibSequenceKeyFilter(), Repost()), 1u);
-	EXPECT_TRUE(SameOrder(reposted, { late, r2 })) << "a date reaches the document standing at it";
+	pending = ibSequencePendingRecorders(seq, ibValue(kDay2), ibSequenceKeyFilter());
+	EXPECT_TRUE(SameOrder(pending, { r2 })) << "a date reaches the document standing at it";
+	Repost(pending);
 	EXPECT_TRUE(Same(Border(wxT("kitchen")), Moment(kDay2, r2)));
 
-	EXPECT_EQ(ibSequenceRestore(seq, Moment(kDay3, r3), ibSequenceKeyFilter(), Repost()), 1u);
+	pending = ibSequencePendingRecorders(seq, Moment(kDay3, r3), ibSequenceKeyFilter());
+	EXPECT_TRUE(SameOrder(pending, { r3 })) << "a moment includes its own document";
+	Repost(pending);
 	EXPECT_TRUE(Same(Border(wxT("kitchen")), Moment(kDay3, r3)));
 }
 
@@ -364,41 +365,16 @@ TEST_F(SequenceRestoreFix, AKeyRestoresOnlyItsOwnDocuments) {
 	const ibValue bLate = Register(kDay1Later, wxT("bar"));
 	ASSERT_TRUE(Same(Border(wxT("bar")), Moment(kDay1, b1)));
 
-	EXPECT_EQ(ibSequenceRestore(seq, ibValue(), Warehouse(wxT("kitchen")), Repost()), 2u);
-	EXPECT_TRUE(SameOrder(reposted, { kLate, k2 }));
+	std::vector<ibValue> pending = ibSequencePendingRecorders(seq, ibValue(), Warehouse(wxT("kitchen")));
+	EXPECT_TRUE(SameOrder(pending, { kLate, k2 }));
+	Repost(pending);
 	EXPECT_TRUE(Same(Border(wxT("kitchen")), Moment(kDay2, k2)));
 	EXPECT_TRUE(Same(Border(wxT("bar")), Moment(kDay1, b1))) << "the bar was not asked for";
 
-	reposted.clear();
-	EXPECT_EQ(ibSequenceRestore(seq, ibValue(), Warehouse(wxT("bar")), Repost()), 2u);
-	EXPECT_TRUE(SameOrder(reposted, { bLate, b2 }));
+	pending = ibSequencePendingRecorders(seq, ibValue(), Warehouse(wxT("bar")));
+	EXPECT_TRUE(SameOrder(pending, { bLate, b2 }));
+	Repost(pending);
 	EXPECT_TRUE(Same(Border(wxT("bar")), Moment(kDay2, b2)));
-}
-
-// 🛑 The first failure stops the run: nothing after it is posted, the border stays on the last document
-// that went through, and the error names the sequence and says why. A second run carries on from there.
-TEST_F(SequenceRestoreFix, AFailureStopsTheRunAndTheBorderStaysBeforeIt) {
-	Register(kDay1, wxT("kitchen"));
-	const ibValue r2 = Register(kDay2, wxT("kitchen"));
-	const ibValue r3 = Register(kDay3, wxT("kitchen"));
-	const ibValue late = Register(kDay1Later, wxT("kitchen"));
-
-	bool raised = false;
-	try {
-		ibSequenceRestore(seq, ibValue(), ibSequenceKeyFilter(), Repost(r2));
-	}
-	catch (const ibCoreException& err) {
-		raised = true;
-		EXPECT_TRUE(err.GetErrorDescription().Contains(seq->GetName())) << err.GetErrorDescription();
-		EXPECT_TRUE(err.GetErrorDescription().Contains(wxT("the Posting handler refused"))) << err.GetErrorDescription();
-	}
-	EXPECT_TRUE(raised) << "a run that failed must say so";
-	EXPECT_TRUE(SameOrder(reposted, { late })) << "R3 stands after the failure and is not posted";
-	EXPECT_TRUE(Same(Border(wxT("kitchen")), Moment(kDay1Later, late)));
-
-	EXPECT_EQ(ibSequenceRestore(seq, ibValue(), ibSequenceKeyFilter(), Repost()), 2u);
-	EXPECT_TRUE(SameOrder(reposted, { late, r2, r3 }));
-	EXPECT_TRUE(Same(Border(wxT("kitchen")), Moment(kDay3, r3)));
 }
 
 // The driver itself, asked directly. A whole number a double cannot carry - a kind-typed class id is sixty bits -

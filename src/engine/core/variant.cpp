@@ -8,27 +8,7 @@
 // THE RUNTIME'S VALUE WITHOUT ITS RUNTIME — backend/compiler/value.cpp as it is, the lifecycle and the readings; what
 // needs the factory (a class's name, an object made of a node) is the side's.
 
-//copy constructor:
-ibVariant::ibVariant(const ibVariant& varValue)
-	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_refCount(0), m_dData()
-{
-	Copy(varValue);
-}
-
-ibVariant::ibVariant(ibVariant&& varValue)
-	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_refCount(0), m_dData()
-{
-	Move(std::move(varValue));
-}
-
-ibVariant::ibVariant(ibVariant* pValue)
-	: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_refCount(0), m_pRef(pValue)
-{
-	if (m_pRef != nullptr) {
-		m_typeClass = ibValueTypes::TYPE_REFFER;
-		m_pRef->IncrRef();
-	}
-}
+// The copy and the move, the object held, the kind alone and the flag, number, date and text by value are in variant.h.
 
 ibVariant::ibVariant(int nYear, int nMonth, int nDay, unsigned short nHour, unsigned short nMinute, unsigned short nSecond)
 	: m_typeClass(ibValueTypes::TYPE_DATE), m_bReadOnly(false), m_refCount(0), m_dData()
@@ -36,45 +16,11 @@ ibVariant::ibVariant(int nYear, int nMonth, int nDay, unsigned short nHour, unsi
 	m_dData.FromParts(nYear, nMonth, nDay, nHour, nMinute, nSecond);   // no such day leaves the empty date
 }
 
-ibVariant::ibVariant(ibValueTypes type, bool readOnly)
-	: m_typeClass(type), m_bReadOnly(readOnly), m_refCount(0), m_dData()
+ibVariant::ibVariant(double cParam)
+	: m_typeClass(ibValueTypes::TYPE_NUMBER), m_bReadOnly(false), m_refCount(0), m_dData()
 {
-	switch (type)
-	{
-	case ibValueTypes::TYPE_BOOLEAN:
-		m_bData = false;
-		break;
-	case ibValueTypes::TYPE_NUMBER:
-		m_fData.SetZero();
-		break;
-	case ibValueTypes::TYPE_DATE:
-		break;      // the zeroed word IS the empty date
-	case ibValueTypes::TYPE_STRING:
-		break;      // the zeroed word IS the empty string
-	default:
-		m_pRef = nullptr;
-		break;
-	}
+	m_fData = cParam;
 }
-
-//Constructors by types:
-#define CVARIANT_BYTYPE(v_parclass, v_type, v_value) \
-ibVariant::ibVariant (v_parclass cParam) \
-    : m_typeClass(v_type), m_bReadOnly(false), m_refCount(0), m_dData() \
-{\
-	v_value = cParam;\
-}
-
-CVARIANT_BYTYPE(bool, ibValueTypes::TYPE_BOOLEAN, m_bData);
-
-CVARIANT_BYTYPE(signed int, ibValueTypes::TYPE_NUMBER, m_fData);
-CVARIANT_BYTYPE(unsigned int, ibValueTypes::TYPE_NUMBER, m_fData);
-CVARIANT_BYTYPE(double, ibValueTypes::TYPE_NUMBER, m_fData);
-CVARIANT_BYTYPE(const ibNumber&, ibValueTypes::TYPE_NUMBER, m_fData);
-
-CVARIANT_BYTYPE(const ibDateTime&, ibValueTypes::TYPE_DATE, m_dData);
-
-#undef CVARIANT_BYTYPE
 
 ibVariant::ibVariant(long cParam)
 	: m_typeClass(ibValueTypes::TYPE_NUMBER), m_bReadOnly(false), m_refCount(0), m_dData()
@@ -100,18 +46,6 @@ ibVariant::ibVariant(const std::wstring& cParam)
 	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_refCount(0), m_dData()
 {
 	m_sData = ibString(cParam.c_str());
-}
-
-ibVariant::ibVariant(const ibString& cParam)
-	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_refCount(0), m_dData()
-{
-	m_sData = cParam;
-}
-
-ibVariant::ibVariant(ibString&& cParam)
-	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_refCount(0), m_dData()
-{
-	m_sData = std::move(cParam);
 }
 
 ibVariant::ibVariant(const wxString& cParam)
@@ -203,6 +137,13 @@ void ibVariant::Move(ibVariant&& cOld)
 {
 	if (this == &cOld)
 		return;
+
+	// A READ-ONLY VALUE IS COPIED, NOT EMPTIED: emptying it is a write into it, which Reset refuses — and a move must
+	// not throw (variant.h: a vector moving the values it holds as it grows would end the process).
+	if (cOld.m_bReadOnly) {
+		Copy(cOld);
+		return;
+	}
 
 	Reset();
 
@@ -352,18 +293,6 @@ void ibVariant::operator = (ibString&& cParam)
 	Reset();
 	m_typeClass = ibValueTypes::TYPE_STRING;
 	m_sData = std::move(cParam);   // take the text over
-}
-
-void ibVariant::operator = (const ibVariant& cParam)
-{
-	if (this != &cParam && !m_bReadOnly)
-		Copy(cParam);
-}
-
-void ibVariant::operator = (ibVariant&& cParam)
-{
-	if (this != &cParam && !m_bReadOnly)
-		Move(std::move(cParam));
 }
 
 void ibVariant::operator = (ibValueTypes type)

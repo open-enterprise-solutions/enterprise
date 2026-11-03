@@ -14,8 +14,8 @@
 //                       OPER_FOREACH to detect a fresh entry vs Break
 //                       re-entry.
 //   - ibValueFunction   (TYPE_FUNCTION) — lambda value. Stores
-//                       (parentBc, funcIndex) + captured-frame vector +
-//                       m_needsHeapFrame mirror. Dispatch goes through
+//                       (parentBc, funcIndex) + what it took from each
+//                       outer frame. Dispatch goes through
 //                       the session's lambda runtime; access to
 //                       ibProcUnit's protected/private members is
 //                       granted via friend declaration in procUnit.h.
@@ -139,8 +139,8 @@ class ibValueFunction : public ibValue, public ibEventDispatcher {
 	}
 
 	// ⭐⭐ THE CHAIN AS THIS LAMBDA SAW IT, and that is why it is kept HERE. Filled at OPER_LFUNC
-	// materialise: [0] is the frame the lambda was written in, [1] the one outside it, down to the
-	// root — the depths the compiler emitted, counted at that moment. The shim wires
+	// materialise: [0] is what it took from the frame it was written in, [1] from the one outside
+	// it, down to the root — the depths the compiler emitted, counted at that moment. The shim wires
 	// m_ppArrayContext[k + 1] to CapturedAt(k) for the call duration.
 	//
 	// 🛑 IT CANNOT LIVE ON THE FRAMES. A link in the frame (`m_outer`) was tried and crashed the
@@ -149,8 +149,9 @@ class ibValueFunction : public ibValue, public ibEventDispatcher {
 	// reads the wrong layer — 0xcdcdcdcd in an operand, procUnit.cpp:1308, inside a Where lambda
 	// (2026-09-24). The depth is a fact about the LAMBDA, not about the frames it walks.
 	//
-	// Each entry is a hold, so the frames stay alive exactly as long as some lambda needs them;
-	// only frames a closure may take are in it (ibRunLifetime::Captured).
+	// Each entry is a hold on the cells this lambda references in that frame and nothing else
+	// (ibRunCaptureContext): the frames themselves are not kept, so a lambda stored beside an
+	// object it does not reference no longer keeps that object alive (2026-11-03, Excel after `Quit`).
 	std::vector<ibRunCapturePtr> m_capturedFrames;
 
 	ibRunCaptureContext* GetCaptured() const {
@@ -186,14 +187,6 @@ class ibValueFunction : public ibValue, public ibEventDispatcher {
 	// This value already may not outlive its session (IsTransferable is false, and the note above
 	// says why); this adds no lifetime that was not already there.
 	ibRunContext* m_moduleFrame = nullptr;
-
-	// Cached at OPER_LFUNC materialise from the bytecode-side fn's
-	// m_needsHeapFrame. OPER_CALL_LAMBDA reads it as a single field
-	// access on the lambda value, no need to dereference through
-	// m_parentBc->m_listFunc[m_funcIndex]. True ⇒ this lambda's own
-	// frame must be a capture frame at invoke time (some inner lambda
-	// captures from it).
-	bool m_needsHeapFrame = false;
 
 	// Dispatch the lambda body. Resolves the session's lambda runtime
 	// (root mm's procUnit when session-bound; current dispatching
@@ -513,8 +506,8 @@ inline void CopyValue(ibValue& cValue1, const ibValue& cValue2)
 
 // 🛑 A MOVE LETS GO OF WHAT THE DESTINATION HELD — a string buffer it owned, or the object it referenced —
 // as ibValue::Move always did (through Reset) and the const CopyValue above does now. This one stamped the
-// new value over both, the same defect as the LET road. It has no caller today, which is how it outlived
-// that fix; it is kept correct so the next caller does not inherit the leak. Both are carried by guards
+// new value over both, the same defect as the LET road. It had no caller until an assignment learned to move
+// a temporary (compileContext.h, DEF_VAR_TEMP_MOVE), which is how it outlived that fix. Both are carried by guards
 // and go when the function does — after the source is reset, since a source that lives inside the object
 // the destination held must not be reset in freed memory.
 inline void MoveValue(ibValue&& cValue1, ibValue&& cValue2)
@@ -553,8 +546,10 @@ inline void MoveValue(ibValue&& cValue1, ibValue&& cValue2)
 		cValue1.m_dData = std::move(cValue2.m_dData);
 		break;
 	case ibValueTypes::TYPE_REFFER:
+		// The reference itself passes: the source is left empty without letting go of it, so the object is
+		// counted neither up nor down.
 		cValue1.m_pRef = cValue2.m_pRef;
-		cValue1.m_pRef->IncrRef();
+		cValue2.m_typeClass = ibValueTypes::TYPE_EMPTY;
 		break;
 	case ibValueTypes::TYPE_CONST_REFFER:
 		// weak non-owning const ref — share the pointer, NO IncrRef. Object-write
@@ -566,10 +561,11 @@ inline void MoveValue(ibValue&& cValue1, ibValue&& cValue2)
 	case ibValueTypes::TYPE_VALUE:
 	case ibValueTypes::TYPE_FUNCTION:
 	case ibValueTypes::TYPE_ITERATOR:
+		// The source IS the object, so there is nothing to empty: it is referenced, as the copy above does.
 		cValue1.m_typeClass = ibValueTypes::TYPE_REFFER;
-		cValue1.m_pRef = &cValue2;
+		cValue1.m_pRef = cValue2.GetRef();
 		cValue1.m_pRef->IncrRef();
-		break;
+		return;
 	default: cValue1.m_typeClass = ibValueTypes::TYPE_EMPTY;
 	}
 

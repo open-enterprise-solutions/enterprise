@@ -195,8 +195,10 @@ public:
 	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue);
 
 	// Declares this chart's tables AND attaches the analytics-ceiling rule to the kinds section, so the
-	// differ can refuse a lowering the data cannot survive before it touches anything. Body in
-	// chartOfAccountsMetadata.cpp.
+	// differ can refuse a lowering the data cannot survive before it touches anything; a declared account's
+	// analytics are unfolded into its kind columns as an account's save unfolds them, and checked on top of
+	// the base's check of the accounts table — as many as the chart takes, each a kind its chart declares. Body
+	// in chartOfAccountsMetadataSchema.cpp.
 	virtual void ContributeTables(class ibSchemaSnapshot& out) const override;
 
 	// Give the analytics-kinds column the reference type its binding names. Called on LOAD, on the user's
@@ -412,6 +414,7 @@ public:
 	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);
 
+	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray) override;
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
 
 	//support source data

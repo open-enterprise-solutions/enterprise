@@ -81,7 +81,12 @@ oes-wrapsizer {
 
 oes-gridsizer {
 	display: grid;
+	grid-auto-rows: 1fr;   /* every row as tall as the tallest */
 	gap: 0.25rem;
+}
+
+oes-gridsizer > oes-sizeritem {
+	min-width: auto;   /* oes-sizeritem's 0 would let a column go narrower than what it holds, over its neighbour */
 }
 
 oes-staticboxsizer {
@@ -143,6 +148,51 @@ oes-button wa-button img,
 wa-tab img {
 	width: 16px;
 	height: 16px;
+}
+
+/* A TILE - a button for a finger: its picture large over its caption, the note under them, the whole filling its cell. */
+oes-button.tile {
+	display: flex;
+}
+
+oes-button.tile wa-button {
+	flex: 1 1 auto;
+	width: 100%;
+}
+
+oes-button.tile wa-button::part(base) {
+	height: 100%;
+	min-height: calc(var(--oes-touch) * 2);
+	padding: 0.5rem;
+	white-space: normal;
+}
+
+oes-button.tile .tile-face {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 0.25rem;
+	text-align: center;
+}
+
+oes-button.tile wa-button img {
+	width: var(--oes-tile-picture);
+	height: var(--oes-tile-picture);
+}
+
+oes-button.tile .tile-note {
+	font-size: 0.85em;
+	opacity: 0.75;
+}
+
+/* A HYPERLINK - the same button with no face and no frame (appearance plain), its caption underlined in a link's colour.
+   Plain still fills on hover and sinks while pressed; a link does neither (the page's rule outranks the button's own). */
+oes-button.hyperlink wa-button::part(base) {
+	color: var(--wa-color-text-link);
+	text-decoration: underline;
+	background-color: transparent;
+	transform: none;
 }
 
 .command-bar .separator {
@@ -771,6 +821,7 @@ oes-gridbox .selection-summary {
 
 	oes-sizeritem {
 		align-self: stretch !important;
+		justify-self: stretch !important;
 		margin-left: 0 !important;
 		margin-right: 0 !important;
 	}

@@ -450,7 +450,7 @@ TEST(CompileTree, ADeclaredFunctionIsRegisteredSoACallResolves) {
 	EXPECT_EQ(bc.m_listFunc[0].m_strRealName, ibT("Twice"));
 	EXPECT_TRUE(bc.m_listFunc[0].m_bCodeRet);
 	EXPECT_EQ(bc.m_listFunc[0].m_listParam.size(), 1u);
-	EXPECT_GT(CountOpcode(bc, OPER_CALL) + CountOpcode(bc, OPER_CALL_CLOSURE), 0u)
+	EXPECT_GT(CountOpcode(bc, OPER_CALL), 0u)
 		<< "the call never resolved\n" << Listing(bc).ToStdString();
 }
 
@@ -890,7 +890,7 @@ TEST(CompileTree, ARecursiveCallIsDeferredNotEmittedInline) {
 	const ibByteCode& bc = compiler.m_cByteCode;
 	ASSERT_EQ(bc.m_listFunc.size(), 1u);
 	EXPECT_GT(bc.m_listFunc[0].m_lVarCount, 0);
-	EXPECT_GT(CountOpcode(bc, OPER_CALL) + CountOpcode(bc, OPER_CALL_CLOSURE), 0u)
+	EXPECT_GT(CountOpcode(bc, OPER_CALL), 0u)
 		<< "the recursive call never resolved\n" << Listing(bc).ToStdString();
 }
 

@@ -1133,7 +1133,10 @@ bool ibValueDataComposition::CallAsProc(const long lMethodNum, ibValue** paParam
 		ibValueSpreadsheetDocument* value = CastValue<ibValueSpreadsheetDocument>(paParams[0]);
 		if (value == nullptr)
 			return false;
-		return Compose(value->GetSpreadsheetDocument().get());
+		// Done, whatever it put there: a report that found nothing to show is an empty report, not a call that
+		// failed (Compose answers whether any output was read).
+		Compose(value->GetSpreadsheetDocument().get());
+		return true;
 	}
 	}
 	return false;

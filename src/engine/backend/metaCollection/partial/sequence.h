@@ -59,16 +59,22 @@ BACKEND_API ibValue ibSequenceBorderGet(const ibValueMetaObjectSequence* seq, co
 // The FIRST FAILURE STOPS THE RUN and is raised with the document's name. Posting the rest past it
 // would walk the border over a document that is not right, which is the one thing a border must not do.
 //
+// ⚠ Inside a transaction somebody else opened — a period-closing document restoring from its posting —
+// each posting joins that transaction (ibConnectionScope inherits an open one), and the run is all or
+// nothing: a failure rolls back the documents before it too, and the border with them.
+//
 // The filter narrows the run to the keys whose named dimensions hold these values; a dimension it does
 // not name is not looked at. Empty, every key is restored. `boundary` is a date, a moment or a
 // Boundary (Including / Excluding); empty, everything registered is.
 class ibValueMetaObjectDimension;
 using ibSequenceKeyFilter = std::vector<std::pair<const ibValueMetaObjectDimension*, ibValue>>;
-// Posting one recorder again. Left out, it is the document's own posting (WriteObject, Posting).
-using ibSequenceRepost = std::function<void(const ibValue& recorder)>;
-// Answers how many documents were posted again.
+// What a run posts again, in the order it posts them: the recorders after their keys' borders, within
+// the boundary, of the keys the filter names. Nothing is posted by asking.
+BACKEND_API std::vector<ibValue> ibSequencePendingRecorders(const ibValueMetaObjectSequence* seq,
+	const ibValue& boundary, const ibSequenceKeyFilter& filter);
+// Posts them, each by the document's own posting (WriteObject, Posting). Answers how many went through.
 BACKEND_API size_t ibSequenceRestore(const ibValueMetaObjectSequence* seq, const ibValue& boundary,
-	const ibSequenceKeyFilter& filter, const ibSequenceRepost& repost = ibSequenceRepost());
+	const ibSequenceKeyFilter& filter);
 
 // ⭐⭐ THE REGISTRATIONS' READING SURFACE — the register's, and the MOMENT beside it.
 //

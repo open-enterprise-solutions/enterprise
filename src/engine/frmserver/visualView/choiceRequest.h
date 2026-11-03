@@ -27,6 +27,9 @@ FRMSERVER_API bool ibRequestChoice(const ibString& caption, const std::vector<ib
 // …and SEVERAL of a list (Multiple → Ids), those `selected` ticked to begin with. False: none chosen — cancelled, none
 // ticked, or nobody to ask.
 FRMSERVER_API bool ibRequestChoice(const ibString& caption, const std::vector<ibChoiceItem>& items, std::vector<std::int32_t>& chosen);
+// …and the QUICK CHOICE (Quick): no window and no caption, the items dropped under the field pressed, as the desktop's
+// list was. False: dismissed, or nobody to ask.
+FRMSERVER_API bool ibRequestQuickChoice(const std::vector<ibChoiceItem>& items, std::int32_t& chosen);
 
 // A POPUP MENU AT THE CURSOR — the desktop's wxMenu shown by GetPopupMenuSelectionFromUser, put to the person through
 // the session's frame (ibProtocol::ibRequest::ibKind::Menu): an item's id and caption, its tick, greyed out, and its own items — a

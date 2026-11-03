@@ -23,7 +23,7 @@
 #include "frmserver/visualView/layerObject.h"                     // ibValueLayerObject — the shared base
 #include "backend/propertyManager/property/eventControl.h"       // ibEventControl — the Action event
 
-class BACKEND_API ibDataNode;
+class ibDataNode;
 class FRMSERVER_API ibValueForm;
 
 // Form-command ids are allocated from this HIGH base so a form-command hop id never collides with a standard action
@@ -53,6 +53,9 @@ public:
 	// guard). The inspector edits m_propertyName directly, bypassing RenameFormCommand, so the check lives here.
 	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue) override;
 
+	// --- the command's STRUCTURE as a script reads it (`ThisForm.Commands`) — its properties, read-only ---
+	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;
+
 	// The command's own look / behaviour (a projection reads these; its own Title/Picture win on top). The Action
 	// is the event whose VALUE names the form-runtime handler the command runs:
 	ibString GetName()      const { return m_propertyName->GetValueAsString(); }
@@ -72,6 +75,9 @@ public:
 	void SetCommandName(const ibString& name) { m_propertyName->SetValue(name); }
 	void SetProcedure(const ibString& proc)   { m_eventCommand->SetValue(proc); }
 	void SetCommandId(const ibMetaID& id)     { m_commandId = id; }
+
+	// One member per property — what GetPropVal reads (bound in ctor).
+	void FillMembers(ibMemberTable& helper) const;
 
 	// Serialize the properties + the Action event (base ibPropertyObject::WriteProperty covers only ATTACHED
 	// objects — each own property/event is written by hand, exactly as a control / attribute does) PLUS the

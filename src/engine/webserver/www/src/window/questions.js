@@ -39,7 +39,7 @@ export class Questions {
 		/** where the person last pressed — a menu is asked there */
 		this.pointer = { x: 0, y: 0 };
 		/**
-		 * @type {Element | null} the field the person last pressed in — a calculator or a calendar drops under it. Taken
+		 * @type {Element | null} the field the person last pressed in — a calculator, a calendar or a list drops under it. Taken
 		 * at the press: a table's cell editor is gone by the time the question comes, its cell is not.
 		 */
 		this.pressed = null;
@@ -100,6 +100,10 @@ export class Questions {
 
 	/** @param {ProtocolNode} request */
 	choice(request) {
+		if (request.Quick === true) {
+			this.quickChoice(request);
+			return;
+		}
 		const items = request.NodeChildren ?? [];
 		const list = document.createElement('div');
 		list.className = 'choice-list';
@@ -172,6 +176,42 @@ export class Questions {
 			// Sent as a number again: exact while it has no more than 15 digits, as a field's figures do.
 			? calculator(numberText(value.v), (chosen) => take(Number(chosen)))
 			: calendar(String(value.v ?? ''), take));
+		this.dropUnder(popup);
+	}
+
+	/**
+	 * A choice asked Quick: a reference's items, or those that match what was typed, dropped under the field pressed and
+	 * as wide as it (the thin client's quick choice). A click or Enter picks one, answered by its Id; the arrows go
+	 * between them. Dismissed — a press outside it, Escape — it is answered with no Id.
+	 * @param {ProtocolNode} request
+	 */
+	quickChoice(request) {
+		const items = request.NodeChildren ?? [];
+		const { popup, pick } = this.popup(request, 'popup-menu quick-choice');
+		const buttons = menuItems(items, (id) => pick({ Id: id }));
+		popup.append(...buttons);
+		popup.addEventListener('keydown', (/** @type {KeyboardEvent} */ event) => {
+			const step = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0;
+			if (step === 0)
+				return;
+			event.preventDefault();
+			const at = buttons.indexOf(/** @type {HTMLElement} */ (document.activeElement));
+			buttons[Math.max(0, Math.min(buttons.length - 1, at + step))]?.focus();
+		});
+		if (this.pressed?.isConnected)
+			popup.style.minWidth = `${this.pressed.getBoundingClientRect().width}px`;
+		this.dropUnder(popup);
+		const selected = items.findIndex((item) => item.Selected === true);
+		buttons[selected]?.classList.add('selected');
+		(buttons[selected] ?? buttons[0])?.focus();
+	}
+
+	/**
+	 * A popup shown under the field pressed, its right edge on the field's (the thin client's); above it when there is
+	 * no room below, and where the person pressed when the field is gone.
+	 * @param {any} popup
+	 */
+	dropUnder(popup) {
 		popup.showPopover();
 		const under = this.pressed?.isConnected
 			? this.pressed.getBoundingClientRect() : new DOMRect(this.pointer.x, this.pointer.y, 0, 0);

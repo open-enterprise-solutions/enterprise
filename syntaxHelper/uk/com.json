@@ -1,0 +1,330 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "uk",
+  "entries": [
+    {
+      "id": "cls.ComObject",
+      "name_local": "COMObject",
+      "name_en": "COMObject",
+      "kind": "collection",
+      "class_id": 160799310230636402,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "com"
+      ],
+      "signature": "New COMObject(progId : string)",
+      "description": "Об'єкт іншої програми, отриманий за іменем з реєстру Windows (ProgID, наприклад \"ADODB.Connection\" або ім'я драйвера фіскального реєстратора). Властивості й методи шукаються в момент звернення, тож під час компіляції модуля про об'єкт нічого знати не потрібно.\n\nЛИШЕ WINDOWS. Тип є на всіх платформах, тому модуль, що його створює, компілюється й на macOS та Linux; там `New COMObject` відмовляє під час виконання: \"COM objects are available on Windows only\". На Windows працює в тонкому клієнті та на сервері застосунків.\n\nЗНАЧЕННЯ ПЕРЕХОДЯТЬ В ОБИДВА БОКИ за видом: число йде цілим, якщо воно ціле, інакше — double, а якщо цифр більше, ніж тримає double, — DECIMAL; повертається точно, включно з CY та DECIMAL; рядок, булеве, дата, Null і Undefined — як є; Array йде масивом VARIANT — рядки однієї довжини одним масивом кількох вимірів, таблицею, яку чекають електронні таблиці; COMSafeArray — сам собою, зі своїм типом елементів і межами; BinaryData — масивом байтів; інший COM-об'єкт — сам собою. МАСИВ ПОВЕРТАЄТЬСЯ COMSafeArray, завжди, — `Unload()` дає його як Array. Значення без COM-запису (посилання, структура) — відмова з назвою типу.\n\nАРГУМЕНТ, оголошений членом як вихідний, записується назад у змінну того, хто викликає. Об'єкт, що не описує своїх членів, отримує кожен аргумент за посиланням, як передає VBScript, і змінна, яку член змінив, отримує нове значення. Пропущений аргумент (`Obj.Method(a, , c)`) передається як відсутній, і об'єкт бере своє значення за замовчуванням.\n\nFOR EACH обходить колекцію об'єкта (ADO `Fields`, списки вузлів MSXML, ключі `Scripting.Dictionary`).\n\nНЕВДАЛИЙ ВИКЛИК — помилка, у якій названо об'єкт, член і власний опис помилки від об'єкта.",
+      "syntax_block": "var Connection = New COMObject(\"ADODB.Connection\");\nConnection.Open(ConnectionString);\nvar Records = Connection.Execute(\"SELECT Name FROM Goods\");\nwhile (Not Records.EOF) {\n    Message(Records.Fields(\"Name\").Value);\n    Records.MoveNext();\n}\nConnection.Close();",
+      "syntax_block_ves": "Connection = New COMObject(\"ADODB.Connection\");\nConnection.Open(ConnectionString);\nRecords = Connection.Execute(\"SELECT Name FROM Goods\");\nWhile Not Records.EOF Do\n    Message(Records.Fields(\"Name\").Value);\n    Records.MoveNext();\nEndDo;\nConnection.Close();",
+      "parameters": "progId — ім'я, під яким клас зареєстровано. Незареєстроване — відмова, ім'я назване в повідомленні.",
+      "return_descr": "COMObject.",
+      "example": "var Dictionary = New COMObject(\"Scripting.Dictionary\");\nDictionary.Add(\"a\", 1);\nDictionary.Add(\"b\", 2);\nforeach (Key In Dictionary) {         // the object's own enumerator\n    Message(Key + \" = \" + Dictionary.Item(Key));\n}\nKeys = Dictionary.Keys().Unload();    // масив повертається COMSafeArray",
+      "availability": "Тонкий клієнт, Сервер (Windows)",
+      "see_also": [
+        "cls.ComObject.AddEventHandler",
+        "cls.ComObject.RemoveEventHandler",
+        "cls.ComSafeArray"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.ComObject.AddEventHandler",
+      "name_local": "AddEventHandler",
+      "name_en": "AddEventHandler",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "com"
+      ],
+      "signature": "Obj.AddEventHandler(eventName : string, handler : function | string)",
+      "description": "Викликає `handler` щоразу, коли об'єкт генерує подію `eventName`. Події — з інтерфейсу подій об'єкта за замовчуванням; об'єкт без подій або без події з таким ім'ям — відмова.\n\nОбробник отримує аргументи події по порядку, стільки, скільки оголосив, — за тим самим правилом, що й обробник події форми; аргумент, переданий об'єктом за посиланням, отримує значення, залишене в ньому обробником.\n\nПодія обробляється в потоці, якому належить об'єкт: поки скрипт усередині виклику об'єкта, а в тонкому клієнті — і в простої. Помилка в обробнику піднімається з того виклику, під час якого надійшла подія.",
+      "syntax_block": "Obj.AddEventHandler(\"EventName\", Function(Arg) { ... });",
+      "parameters": "eventName — ім'я події, як його оголошує об'єкт.\nhandler — функція: `Function(arg1, arg2) { ... }`; або ім'я процедури модуля, який підписується (приймається й `New Event(\"Ім'я\")`), — вона викликається через цей модуль. Невідоме ім'я — відмова одразу.",
+      "return_descr": "",
+      "example": "var Terminal = New COMObject(\"Acquiring.Terminal\");\nTerminal.AddEventHandler(\"StatusChanged\", Function(Code, Text) {\n    Message(\"Термінал: \" + Text);\n});\nTerminal.Pay(Amount);",
+      "availability": "Тонкий клієнт, Сервер (Windows)",
+      "see_also": [
+        "cls.ComObject",
+        "cls.ComObject.RemoveEventHandler"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.ComObject.RemoveEventHandler",
+      "name_local": "RemoveEventHandler",
+      "name_en": "RemoveEventHandler",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "com"
+      ],
+      "signature": "Obj.RemoveEventHandler(eventName : string)",
+      "description": "Припиняє викликати обробник події `eventName`. Коли обробників не лишилося, платформа від'єднується від подій об'єкта.",
+      "syntax_block": "Obj.RemoveEventHandler(\"EventName\");",
+      "parameters": "eventName — ім'я події.",
+      "return_descr": "",
+      "example": "Terminal.RemoveEventHandler(\"StatusChanged\");",
+      "availability": "Тонкий клієнт, Сервер (Windows)",
+      "see_also": [
+        "cls.ComObject",
+        "cls.ComObject.AddEventHandler"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.ComSafeArray",
+      "name_local": "COMSafeArray",
+      "name_en": "COMSafeArray",
+      "kind": "collection",
+      "class_id": 164250146089109842,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "com"
+      ],
+      "signature": "New COMSafeArray(elementType : string, size1 : number [, ..., sizeN : number])    New COMSafeArray(values : Array, elementType : string [, size1 : number, ..., sizeN : number])    New COMSafeArray(source : COMSafeArray)",
+      "description": "Масив у тому вигляді, в якому його тримає COM (SAFEARRAY): елементи одного типу, стільки вимірів, скільки задано під час створення, у кожного своя нижня межа. Його приймає COM-метод, що оголошує масив певного типу — `SAFEARRAY(long)`, `SAFEARRAY(BSTR)`, — і його ж віддає `Range.Value` електронної таблиці, з нумерацією від 1.\n\nМАСИВ, ЯКИЙ ПОВЕРТАЄ COM-ОБ'ЄКТ, — ЗАВЖДИ COMSafeArray: результат методу, властивість, вихідний аргумент, аргумент події — у тому вигляді, в якому надійшов. `Unload()` дає його як Array.\n\nДО COM-МЕТОДУ він іде сам собою, зі своїм типом елементів і межами. Array теж іде сам — масивом VARIANT; COMSafeArray потрібен методу, якому потрібен інший тип елементів або інші межі.\n\nВИМІРИ нумеруються з 0; перший — той, яким іде перший індекс (рядки діапазону електронної таблиці). ІНДЕКС — власний індекс масиву, від нижньої межі до верхньої.\n\nЛИШЕ WINDOWS, як COMObject: тип є на всіх платформах, а `New` на інших відмовляє.",
+      "syntax_block": "var Table = New COMSafeArray(\"VT_VARIANT\", 2, 3);\nTable.SetValue(0, 0, \"Найменування\");\nSheet.Range(\"A1:C2\").Value = Table;",
+      "parameters": "elementType — ім'я типу елементів в автоматизації: \"VT_I1\", \"VT_I2\", \"VT_I4\", \"VT_I8\", \"VT_UI1\", \"VT_UI2\", \"VT_UI4\", \"VT_UI8\", \"VT_INT\", \"VT_UINT\", \"VT_R4\", \"VT_R8\", \"VT_CY\", \"VT_DECIMAL\", \"VT_DATE\", \"VT_BSTR\", \"VT_BOOL\", \"VT_ERROR\", \"VT_VARIANT\", \"VT_DISPATCH\", \"VT_UNKNOWN\". Інше ім'я — відмова.\nsize1, ..., sizeN — кількість елементів кожного виміру, починаючи з першого; або один Array з ними. Кожен вимір починається з 0, кожен елемент — порожнє значення свого типу.\nvalues — Array елементів: масиви в масивах на стільки рівнів, скільки вимірів. Без розмірів береться у своїй формі — рядки однієї довжини дають ще один вимір; з розмірами має мати рівно таку форму.\nsource — COMSafeArray, який копіюється.",
+      "return_descr": "COMSafeArray.",
+      "example": "var Numbers = New COMSafeArray(\"VT_I4\", 2);\nNumbers.SetValue(0, 23);\nNumbers.SetValue(1, 13.5);            // зберігається 14: це VT_I4\nDriver.ProcessArray(Numbers);\n\nvar Data = Sheet.UsedRange.Value;     // COMSafeArray з нумерацією від 1\nMessage(Data.GetValue(1, 1));\nvar Rows = Data.Unload();             // Array рядків",
+      "availability": "Тонкий клієнт, Сервер (Windows)",
+      "see_also": [
+        "cls.ComObject",
+        "cls.ComSafeArray.GetValue",
+        "cls.ComSafeArray.Unload"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.ComSafeArray.GetDimensions",
+      "name_local": "GetDimensions",
+      "name_en": "GetDimensions",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "com"
+      ],
+      "signature": "Arr.GetDimensions()",
+      "description": "Кількість вимірів масиву.",
+      "syntax_block": "Count = Arr.GetDimensions();",
+      "parameters": "",
+      "return_descr": "Число.",
+      "example": "Message(Data.GetDimensions());        // 2 для діапазону електронної таблиці",
+      "availability": "Тонкий клієнт, Сервер (Windows)",
+      "see_also": [
+        "cls.ComSafeArray",
+        "cls.ComSafeArray.GetLength"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.ComSafeArray.GetLength",
+      "name_local": "GetLength",
+      "name_en": "GetLength",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "com"
+      ],
+      "signature": "Arr.GetLength(dimension : number)",
+      "description": "Кількість елементів виміру.",
+      "syntax_block": "Length = Arr.GetLength(0);",
+      "parameters": "dimension — номер виміру з 0, перший першим. Вимір, якого в масиві немає, — відмова.",
+      "return_descr": "Число.",
+      "example": "Rows = Data.GetLength(0);\nColumns = Data.GetLength(1);",
+      "availability": "Тонкий клієнт, Сервер (Windows)",
+      "see_also": [
+        "cls.ComSafeArray.GetLowerBound",
+        "cls.ComSafeArray.GetUpperBound"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.ComSafeArray.GetLowerBound",
+      "name_local": "GetLowerBound",
+      "name_en": "GetLowerBound",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "com"
+      ],
+      "signature": "Arr.GetLowerBound(dimension : number)",
+      "description": "Індекс, з якого починається вимір: 0 у масиву, створеного в модулі, 1 у діапазону електронної таблиці.",
+      "syntax_block": "First = Arr.GetLowerBound(0);",
+      "parameters": "dimension — номер виміру з 0, перший першим. Вимір, якого в масиві немає, — відмова.",
+      "return_descr": "Число.",
+      "example": "Message(Data.GetLowerBound(0));       // 1",
+      "availability": "Тонкий клієнт, Сервер (Windows)",
+      "see_also": [
+        "cls.ComSafeArray.GetUpperBound",
+        "cls.ComSafeArray.GetLength"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.ComSafeArray.GetUpperBound",
+      "name_local": "GetUpperBound",
+      "name_en": "GetUpperBound",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "com"
+      ],
+      "signature": "Arr.GetUpperBound(dimension : number)",
+      "description": "Індекс, яким закінчується вимір: нижня межа плюс довжина, мінус один.",
+      "syntax_block": "Last = Arr.GetUpperBound(0);",
+      "parameters": "dimension — номер виміру з 0, перший першим. Вимір, якого в масиві немає, — відмова.",
+      "return_descr": "Число.",
+      "example": "LastRow = Data.GetUpperBound(0);",
+      "availability": "Тонкий клієнт, Сервер (Windows)",
+      "see_also": [
+        "cls.ComSafeArray.GetLowerBound",
+        "cls.ComSafeArray.GetLength"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.ComSafeArray.GetType",
+      "name_local": "GetType",
+      "name_en": "GetType",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "com"
+      ],
+      "signature": "Arr.GetType()",
+      "description": "Тип елементів, ім'ям автоматизації: \"VT_I4\", \"VT_BSTR\", \"VT_VARIANT\" тощо.",
+      "syntax_block": "ElementType = Arr.GetType();",
+      "parameters": "",
+      "return_descr": "Рядок.",
+      "example": "Message(Data.GetType());              // VT_VARIANT у діапазону електронної таблиці",
+      "availability": "Тонкий клієнт, Сервер (Windows)",
+      "see_also": [
+        "cls.ComSafeArray"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.ComSafeArray.GetValue",
+      "name_local": "GetValue",
+      "name_en": "GetValue",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "com"
+      ],
+      "signature": "Arr.GetValue(index1 : number, ..., indexN : number)",
+      "description": "Елемент за індексами — по одному на вимір, перший вимір першим. Індекс — власний індекс масиву, від його нижньої межі; індекс поза межами — відмова \"Index goes beyond array\", як і виклик з іншою кількістю індексів. Елемент, який сам є масивом, — COMSafeArray.",
+      "syntax_block": "Value = Arr.GetValue(Row, Column);",
+      "parameters": "index1, ..., indexN — індекс елемента в кожному вимірі.",
+      "return_descr": "Значення елемента.",
+      "example": "Value = Data.GetValue(1, 2);          // рядок 1, колонка 2 діапазону",
+      "availability": "Тонкий клієнт, Сервер (Windows)",
+      "see_also": [
+        "cls.ComSafeArray.SetValue",
+        "cls.ComSafeArray.Unload"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.ComSafeArray.SetValue",
+      "name_local": "SetValue",
+      "name_en": "SetValue",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "com"
+      ],
+      "signature": "Arr.SetValue(index1 : number, ..., indexN : number, value : any)",
+      "description": "Записує значення за індексами. Значення іншого виду зводиться до типу елементів так, як зводить автоматизація, — 13.5 у VT_I4 дає 14, текст \"12\" у VT_R8 дає 12; те, що звести не можна, — відмова з назвою типу елементів.",
+      "syntax_block": "Arr.SetValue(Row, Column, Value);",
+      "parameters": "index1, ..., indexN — індекс елемента в кожному вимірі, як у GetValue.\nvalue — що записати.",
+      "return_descr": "",
+      "example": "Table.SetValue(0, 0, \"Найменування\");\nTable.SetValue(0, 1, 100);",
+      "availability": "Тонкий клієнт, Сервер (Windows)",
+      "see_also": [
+        "cls.ComSafeArray.GetValue"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.ComSafeArray.IsResizable",
+      "name_local": "IsResizable",
+      "name_en": "IsResizable",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "com"
+      ],
+      "signature": "Arr.IsResizable()",
+      "description": "Чи може Resize змінити масив: масив, створений у модулі, може; масив, розмір якого закріпив COM-об'єкт, — ні.",
+      "syntax_block": "Resizable = Arr.IsResizable();",
+      "parameters": "",
+      "return_descr": "Булеве.",
+      "example": "Message(Numbers.IsResizable());        // True",
+      "availability": "Тонкий клієнт, Сервер (Windows)",
+      "see_also": [
+        "cls.ComSafeArray.Resize"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.ComSafeArray.Resize",
+      "name_local": "Resize",
+      "name_en": "Resize",
+      "kind": "procedure",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "com"
+      ],
+      "signature": "Arr.Resize(size : number)",
+      "description": "Змінює кількість елементів ОСТАННЬОГО виміру — єдиного, який COM-масив може змінити. Уже записані елементи лишаються на своїх місцях; нові — порожні значення свого типу.",
+      "syntax_block": "Arr.Resize(10);",
+      "parameters": "size — нова кількість елементів останнього виміру, 0 або більше.",
+      "return_descr": "",
+      "example": "var Table = New COMSafeArray(\"VT_VARIANT\", 2, 3);\nTable.Resize(5);                      // 2 рядки по 5",
+      "availability": "Тонкий клієнт, Сервер (Windows)",
+      "see_also": [
+        "cls.ComSafeArray.IsResizable",
+        "cls.ComSafeArray.GetLength"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.ComSafeArray.Unload",
+      "name_local": "Unload",
+      "name_en": "Unload",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "com"
+      ],
+      "signature": "Arr.Unload()",
+      "description": "Елементи як Array: масиви в масивах, перший вимір — зовнішній; для діапазону електронної таблиці — Array рядків, кожен — Array значень рядка.",
+      "syntax_block": "Values = Arr.Unload();",
+      "parameters": "",
+      "return_descr": "Array.",
+      "example": "Rows = Sheet.UsedRange.Value.Unload();\nMessage(Rows[0][1]);                  // рядок 1, колонка 2",
+      "availability": "Тонкий клієнт, Сервер (Windows)",
+      "see_also": [
+        "cls.ComSafeArray.GetValue"
+      ],
+      "reviewed": false
+    }
+  ]
+}

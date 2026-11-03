@@ -339,7 +339,7 @@ while the number stays: clicking an object again, or walking back to it, before 
 | Kind | Asks | `respond` with |
 |---|---|---|
 | 1 Message | `Text`, `Caption`, `Style` | `Button`: 2 Yes, 8 No, 4 OK, 16 Cancel |
-| 2 Choice | `Caption` and items: `Id`, `Caption`, `Picture`, `Selected` | `Id` — one of those offered |
+| 2 Choice | `Caption` and items: `Id`, `Caption`, `Picture`, `Selected`; `Quick` — dropped under the field pressed, not a window | `Id` — one of those offered |
 | 4 Edit | `Command` (7–11): done to the field under the client's focus | nothing |
 | 5 File | `Caption` and items: `Title`, `Mask` — a file of the person's chosen and uploaded | `File` — its id; none — cancelled |
 | 6 Generation | `Picture` and items: `Id`, `Caption`, `Picture` — the objects this one generates | `Id` — the one to base a new one on; none — cancelled |
@@ -374,7 +374,9 @@ A ComposerSettings window acts the same way. The setting taken becomes the repor
 composed again — its gridbox says `ComposeState` 2 until the person composes it.
 
 A SimpleChoice is a number's calculator or a date's calendar, dropped under the field pressed. The server asks it from
-the field's Select, after the field's choice event — the event runs on the server, the client only draws.
+the field's Select, after the field's choice event — the event runs on the server, the client only draws. A Choice
+asked `Quick` drops the same way: a reference's items on its Select, or those that match the text typed into it. A
+client that does not know `Quick` asks it in a window.
 
 The server's code waits for the answer where it asked. A call made while a question is pending runs inside that
 wait; which calls a person can make meanwhile is the client's to say.
@@ -398,6 +400,12 @@ made after the answer's frame was drawn (a report composed in the background) is
 
 A notification begins `{"jsonrpc":"2.0","method":` — where an answer has its `id` — and a client tells the two apart
 by that, whatever the length.
+
+From protocol 8 a button's node says where its picture stands, `PictureLocation`: 0 where the button puts it (on the
+left), 1 left, 2 right of its `Caption`, 3 a tile — its picture large over its `Caption`, and `Note` (a line under them
+— a price, a count) beside them in the state; a tile fills what its sizer item gives it. Its `View` says how it is
+drawn: 0 a button, 1 a hyperlink — no face and no frame, its caption underlined. A client before 8 draws a button
+with its picture on the left, and the note is not shown.
 
 ## The debugger
 

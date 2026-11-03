@@ -42,6 +42,17 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Script language
 
+- **A form module adds an attribute to its open form and binds a control to it.**
+  `ThisForm.Attributes` lists the form's attributes as `ThisForm.Controls` lists its controls: by index,
+  by name and in `Foreach`, each one with its `Name`, `Caption`, `Type` and `FillCheck`.
+  `Attributes.Add(name, type)` takes a `TypeDescription` and answers the new attribute; its value is
+  `ThisForm.<name>` from then on. It lives as long as the form and is not stored with it.
+  `Attributes.Remove(attribute)` removes one the module added, and raises for one the form was
+  designed with or one a control still shows. `ThisForm.Commands` lists the form's commands the same
+  way. `Control.Source = "Prices"` binds a control by the dotted path it reads,
+  `"Goods.Product.Supplier"` across references, the same way `form_bind` does; a path that names
+  nothing there raises, saying what that level offers, and a table bound so gets the columns of what it
+  shows. A form attribute's name is now matched without regard to case, as a module meets it.
 - **`Tstr(text)` without a language reads the user's language.** It read the first language
   written in the text, so every user saw the same one. A language the text does not carry still
   falls back to the first written; a named language is read as before.
@@ -79,6 +90,36 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   write them as hex and read them, `Base64String(data)` and `Base64Value(text)` as base64. `String(data)`
   and `New BinaryData(text)` stay base64, and now skip line breaks. Text that is not base64 or hex is
   refused, not read as no bytes.
+- **`COMObject` compiles everywhere and is complete on Windows.** `New COMObject(progId)` compiles on
+  macOS and Linux too, and is refused there when it runs ("COM objects are available on Windows only").
+  On Windows it works on the application server's threads as well as in the client; arrays (an `Array` with
+  rows of one length as one table of as many dimensions), `BinaryData` as bytes, CY and DECIMAL numbers (a
+  fraction longer than a double keeps goes as DECIMAL), by-reference arguments — every one, as VBScript passes
+  them, to an object that does not describe its members — and omitted ones cross over; `For Each` walks a COM
+  collection; `obj.AddEventHandler(name, function or procedure name)` receives the object's events. A failed
+  call names the object and the member. `obj <> Undefined` is True for a COM object; it was False.
+- **`COMSafeArray` — an array as COM holds it.** `New COMSafeArray("VT_I4", 2, 3)`, or from an `Array` with an
+  element type and sizes; `GetValue` / `SetValue` by the array's own indices, `GetLength`, `GetLowerBound`,
+  `GetUpperBound`, `Resize`, `Unload()` to an `Array`. An array a COM object returns is always one — a
+  spreadsheet's `Range.Value` keeps its bounds from 1 — and one goes to a method with its own element type.
+- **A procedure a value does not carry out is refused.** A call such as `Obj.Lock()` went through without a word
+  when the value had not done it; now it raises "The procedure '…' was not carried out by this value". The
+  calls that had been silently lost now work: `Lock()` and `Unlock()` of catalog, document, chart and job
+  objects, and an export procedure of an object's module called from outside it.
+- **A function value keeps only the variables it refers to.** It kept every variable of the procedure it
+  was written in, for as long as it lived; one stored in a variable of that same procedure kept them
+  until the application closed. A COM application among them did not exit after `Quit`. Now the variables it
+  does not name are released when the procedure ends.
+- **A function value written inside another one passed to `Where`, `Select` or `SelectMany` sees that one's
+  parameter.** `a.SelectMany(Function(x) { return b.Select(Function(y) { return x + y; }); }).ToArray()`
+  closed the application, or answered with `Undefined` for `x`.
+- **An assignment lets go of what the expression made.** `x = New COMObject(…)` or `x = Obj.Member` left a
+  second hold on the value until the procedure ended, so `x = Undefined` released nothing: an Excel stayed
+  running after `Quit`. Now it is released at once, and so is an object taken on the way — `Excel.Workbooks`
+  in `Excel.Workbooks.Count`.
+- **`First`, `Last`, `Min`, `Max`, `Single` and `ElementAt` in a loop answer for this pass.** With a function
+  passed to `Where` or `Select` before them, a pass that found nothing answered with the previous pass's
+  value, and `Max` of a group was compared with the group before.
 - **An encoding is a member of `TextEncoding`.** `TextReader` and `TextWriter` took a string or another
   enumeration's member without a word; now it is refused, as `HTTPRequest` already refused a string.
 - **`Sequences.<Name>.Restore(boundary, key)`.** It posts again, in sequence order and each in its own
@@ -87,8 +128,23 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   left out); the border follows each one. The first failure stops the run, keeps the border before that
   document and raises its error with the document's name. A sequence's list has a *Restore* command.
 
+## Forms
+
+- **Where a button's picture stands, a button as a tile, a button as a hyperlink.** A button's new `PictureLocation`
+  puts its picture on the left (`Auto`, `Left`) or the right of its caption, or makes it a tile (`Tile`): the picture
+  large over the caption and the new `Note` under them - a price, a count, a state - the button filling what its
+  sizer gives it: a button for a finger, in both clients. Tiles in a grid sizer make a panel of them. Its new `View`
+  draws it as a button or as a hyperlink - no face and no frame, its caption underlined - pressed the same way. What
+  the button shows is still its `Representation`. The protocol is 8. A form saved with them and opened by an earlier
+  designer shows a button with its picture on the left, and saved there it loses its location, its view and its note.
+
 ## The browser client
 
+- **A grid sizer's cells are one size, as in the thin client.** Every column takes an equal share of
+  the width rather than the width of its widest content, and every row is as tall as the tallest. An
+  item that does not stretch keeps its own width at the start of its cell, as there; given `Rows`,
+  the grid keeps that many rows, and with no `Cols` counts its columns from them. A column is never
+  narrower than what it holds: a form too narrow for them all widens that one and scrolls.
 - **The start**: the thin client's splash, with arrows and the stage of the start under it, is up from the first paint;
   a login asked takes its place, and it stays until the first window has its rows. The window's title has the OES logo
   beside the configuration's name.
@@ -117,7 +173,33 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   to save.
 - **Help → About** is drawn: the build, the base, the application, the user, the locale, the plugins.
 
+## Metadata
+
+- **A predefined item declares what it is, not only what it is called.** A predefined characteristic
+  of a chart of characteristic types declares its value `Type`; a predefined account declares its
+  `AccountType`, whether it is `OffBalance`, the chart's accounting flags and its analytics — the rows
+  of its `AccountDimensionKinds` section, each naming a predefined characteristic. They are kept in
+  the configuration with the item and written by the apply, as its parent is: set only as data, they
+  did not travel with the configuration. The analytics are unfolded into the account's kind columns
+  as saving an account does, and an account that declares none keeps the rows its data holds. Over
+  MCP: `predefined_add` takes `values` and `lines`, `predefined_set` changes them on an item already
+  declared (`lines: {Section: null}` stops declaring a section), `predefined_get` shows one item whole and
+  what it may declare — each attribute and column with the types or values it `takes`. In the designer a
+  type, a reference and an enumeration are picked through "...": a characteristic's `Type` among its
+  chart's types of characteristics, a declared value in the designer's window for one.
+- **The apply refuses a predefined item that does not say what it must**, before a statement, naming
+  the item in the ledger: an item with no code or description (whichever the object is presented
+  by), a characteristic with no `Type` or with one its chart's types of characteristics do not take (a
+  type deleted since included), an account with more analytics than its chart takes or a line
+  naming a kind its chart of characteristic types no longer declares, a calculation type whose
+  `Displacing`, `Base` or `Leading` line names no type the section may name, a new declared line
+  where the base already holds one (remove the lines held there first). A line the configuration
+  stops declaring stays, an ordinary line.
+
 ## Fixes
+
+- **`ThisForm.<attribute> = value` writes into the attribute.** It overwrote the attribute's own entry,
+  and the attribute kept its old value.
 
 - **A module nobody has compiled yet is compiled once.** Sessions entering a base together, with the
   bytecode cache empty, each compiled the same modules. The first now holds a lock in the database,
@@ -125,6 +207,10 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 - **Sessions logging in together no longer bring the web server down.** Each visitor rewrote the MCP
   server's settings as if it owned the process.
+
+- **A reference's quick choice drops under the field again**, in the thin client and in the browser, where it
+  came up as a window of its own. The same goes for the list offered for text typed into a field. A choice closed
+  without one picked no longer picks the first item, such as «Select data type».
 
 - **The process has a memory limit.** `MemoryLimit` in `backend.conf`, in megabytes; 0 is none but the
   operating system's. At 80% no new client or window is let in, at 90% nothing is done but closing a

@@ -19,6 +19,8 @@
 #include "backend/metadataConfiguration.h"                   // ibMetaDataConfigurationBase : ibMetaData (upcast)
 #include "core/clsid.h"
 #include "backend/metaCollection/metaFormObject.h"            // ibValueMetaObjectFormBase::SaveFormData — the live form back into its blob
+#include "backend/backend_exception.h"                       // ibBackendCoreException — a module asked for an attribute it cannot have
+
 
 //*********************************************************************************************
 //*   ibValueForm attribute store / path resolve (relocated here from form.cpp)              *
@@ -69,6 +71,9 @@ bool ibValueForm::WriteAttributes(ibDataNode& node) const
 	ibDataNode& attrsNode = node.Child(ibProtocol::ibView::ibFormDesigner::Attributes);
 	bool complete = true;
 	for (const auto& av : m_attributes) {
+		// One the MODULE added lives as long as the open form — it is not part of what the form was designed with.
+		if (av->IsAddedByModule())
+			continue;
 		ibDataNode& attrNode = attrsNode.AddChild(av->GetClassType(), av->GetId());
 		// WriteProperty returns false when the attribute is INCOMPLETE (a dynamic list with no
 		// source picked) — FAIL the whole write so a broken definition is never persisted (the
@@ -83,7 +88,10 @@ bool ibValueForm::WriteAttributes(ibDataNode& node) const
 
 ibMetaID ibValueForm::NextAttributeId() const
 {
-	ibMetaID nextId = 1;   // form-unique = max existing + 1
+	// ⭐ FORM-UNIQUE, AND NEVER ONE THE FORM HAS ALREADY GIVEN OUT while it is open — above every attribute it holds
+	// and every one it has held: a control bound to a removed attribute keeps that id in its source, and a new
+	// attribute under the same id would be what it silently shows.
+	ibMetaID nextId = m_lastAttributeId + 1;
 	for (const auto& av : m_attributes)
 		if (av->GetId() >= nextId)
 			nextId = av->GetId() + 1;
@@ -93,16 +101,41 @@ ibMetaID ibValueForm::NextAttributeId() const
 void ibValueForm::WireAttribute(ibFormAttributeValue* entry)
 {
 	// A bind is an entry in the form's maps, so it is made at once, whatever the form is in the middle of:
-	// script and editor see it from here. The member surface (ThisForm.<attr>) is refreshed with it.
+	// script and editor see it from here. The member surfaces (ThisForm.<attr>, ThisForm.Attributes.<attr>) are
+	// refreshed with it.
 	BindAttributeVariable(entry);
 
 	InvalidateNames();
+	m_formCollectionAttribute->InvalidateNames();
 }
 
 ibFormAttributeValue* ibValueForm::AddAttribute(const ibString& name, const ibClassID& type, const ibValue& value)
 {
 	// Name + Type are mandatory — an attribute is never empty. Make + attach in one step.
 	return AttachAttribute(MakeAttribute(name, type, value));
+}
+
+ibFormAttributeValue* ibValueForm::AddAttribute(const ibString& name, const ibTypeDescription& typeDesc)
+{
+	if (name.IsEmpty() || stringUtils::CheckCorrectName(name) != wxNOT_FOUND || (name[0] >= ibT('0') && name[0] <= ibT('9'))) {
+		ibBackendCoreException::Error(_("'%s' cannot be the name of a form attribute: it takes letters, digits and "
+			"the symbol \"_\", and does not start with a digit"), name);
+		return nullptr;
+	}
+	if (const ibFormAttributeValue* taken = GetAttribute(name)) {
+		ibBackendCoreException::Error(_("The form already has an attribute '%s'"), taken->GetName());
+		return nullptr;
+	}
+
+	// Made as every other attribute is — the form builds the entry — then typed with the whole description, and it
+	// holds that description's EMPTY value: the entry was made a String, and its "" is not converted into a Number
+	// (which refuses it).
+	ibValuePtr<ibFormAttributeValue> holder = MakeAttribute(name);
+	holder->m_attribute->SetDefaultMetaType(typeDesc);
+	holder->m_attribute->SetAddedByModule(true);
+	holder->SetHeldValue(holder->m_attribute->AdjustValue());
+	holder->Refresh();
+	return AttachAttribute(std::move(holder));
 }
 
 ibMetaID ibValueForm::AddAutoAttribute(const ibString& name, const ibTypeDescription& typeDesc)
@@ -138,6 +171,8 @@ ibFormAttributeValue* ibValueForm::AttachAttribute(ibValuePtr<ibFormAttributeVal
 		return nullptr;
 	ibFormAttributeValue* entry = holder;
 	m_attributes.emplace_back(std::move(holder));   // form co-owns it (ref-counted)
+	if (entry->GetId() > m_lastAttributeId)
+		m_lastAttributeId = entry->GetId();         // given out — NextAttributeId does not hand it out again
 	WireAttribute(entry);                            // module bind (if live) + InvalidateNames
 	return entry;
 }
@@ -150,6 +185,7 @@ ibValuePtr<ibFormAttributeValue> ibValueForm::DetachAttribute(ibFormAttributeVal
 			ibValuePtr<ibFormAttributeValue> holder = std::move(*it);
 			m_attributes.erase(it);
 			InvalidateNames();
+			m_formCollectionAttribute->InvalidateNames();
 			return holder;                                          // ref handed to the caller (undo stack co-owns)
 		}
 	}
@@ -174,24 +210,34 @@ ibFormAttributeValue* ibValueForm::AddMainAttribute(const ibString& name, const 
 	return AttachAttribute(std::move(holder));     // registers + wires
 }
 
-void ibValueForm::DeleteAttribute(const ibString& name)
-{
-	for (auto it = m_attributes.begin(); it != m_attributes.end(); ++it)
-		if ((*it)->GetName() == name) {
-			DropAttributeBinds(*it);
-			m_attributes.erase(it);
-			InvalidateNames();
-			return;
-		}
-}
-
 void ibValueForm::DeleteAttribute(unsigned int idx)
 {
 	if (idx < m_attributes.size()) {
 		DropAttributeBinds(m_attributes[idx]);
 		m_attributes.erase(m_attributes.begin() + idx);
 		InvalidateNames();
+		m_formCollectionAttribute->InvalidateNames();
 	}
+}
+
+void ibValueForm::RemoveAttribute(ibFormAttributeValue* entry)
+{
+	if (std::find(m_attributes.begin(), m_attributes.end(), entry) == m_attributes.end()) {
+		ibBackendCoreException::Error(_("The form has no attribute '%s'"), entry->GetName());
+		return;
+	}
+	if (!entry->IsAddedByModule()) {
+		ibBackendCoreException::Error(_("'%s' is an attribute the form was designed with - only one the module "
+			"added with Attributes.Add can be removed"), entry->GetName());
+		return;
+	}
+	// …and not from under a control that shows it: it would go on holding the id of nothing.
+	if (const ibValueControl* control = FindControlByAttributeId(entry->GetId())) {
+		ibBackendCoreException::Error(_("'%s' is shown by the control '%s' - unbind the control first"),
+			entry->GetName(), control->GetControlName());
+		return;
+	}
+	DetachAttribute(entry);
 }
 
 void ibValueForm::BindAttributeVariable(ibFormAttributeValue* entry)
@@ -223,7 +269,7 @@ void ibValueForm::DropAttributeBinds(ibFormAttributeValue* entry)
 bool ibValueForm::IsAttributeNameUnique(const ibString& name, const ibFormAttributeValue* except) const
 {
 	for (const auto& av : m_attributes)
-		if (av != except && av->GetName() == name)
+		if (av != except && stringUtils::IsSameAs(av->GetName(), name))   // the rule GetAttribute finds by
 			return false;
 	return true;
 }
@@ -283,6 +329,7 @@ ibFormCommandValue* ibValueForm::AddFormCommand(const ibString& name, const ibSt
 	holder->SetCommandName(name);
 	holder->SetProcedure(procedure);
 	m_formCommands.emplace_back(holder);
+	m_formCollectionCommand->InvalidateNames();   // ThisForm.Commands.<name>
 	return holder;
 }
 
@@ -303,7 +350,7 @@ ibFormCommandValue* ibValueForm::FindFormCommandById(const ibMetaID& id) const
 void ibValueForm::DeleteFormCommand(const ibString& name)
 {
 	for (auto it = m_formCommands.begin(); it != m_formCommands.end(); ++it)
-		if ((*it)->GetName() == name) { m_formCommands.erase(it); return; }
+		if ((*it)->GetName() == name) { m_formCommands.erase(it); m_formCollectionCommand->InvalidateNames(); return; }
 }
 
 bool ibValueForm::RenameFormCommand(ibFormCommandValue* entry, const ibString& newName)
@@ -311,6 +358,7 @@ bool ibValueForm::RenameFormCommand(ibFormCommandValue* entry, const ibString& n
 	if (entry == nullptr || newName.IsEmpty() || !IsFormCommandNameUnique(newName, entry))
 		return false;
 	entry->SetCommandName(newName);
+	m_formCollectionCommand->InvalidateNames();
 	return true;
 }
 
@@ -346,6 +394,7 @@ ibFormCommandValue* ibValueForm::PasteFormCommand(const ibDataNode& node)
 	holder->SetCommandName(MakeUniqueFormCommandName(holder->GetName()));   // keep names unique
 	holder->SetCommandId(NextFormCommandId());
 	m_formCommands.emplace_back(holder);
+	m_formCollectionCommand->InvalidateNames();
 	return holder;
 }
 
@@ -373,10 +422,12 @@ ibFormAttributeValue* ibValueForm::PasteAttribute(const ibDataNode& node)
 	return AttachAttribute(std::move(holder));
 }
 
+// ⭐ A NAME IS ASKED THE WAY A MODULE MEETS IT — case-insensitively: `ThisForm.flag` and `ThisForm.Flag` are one
+// member, so two attributes that differ only in case would be two the module could never tell apart.
 ibFormAttributeValue* ibValueForm::GetAttribute(const ibString& name) const
 {
 	for (const auto& av : m_attributes)
-		if (av->GetName() == name)
+		if (stringUtils::IsSameAs(av->GetName(), name))
 			return av;
 	return nullptr;
 }
@@ -565,13 +616,192 @@ bool ibValueForm::SetValueByAttributePath(const ibSourceDescription& desc, const
 }
 
 //*********************************************************************************************
+//*           the module's walk over them: ThisForm.Attributes / ThisForm.Commands            *
+//*********************************************************************************************
+
+#include "backend/system/value/valueMap.h"   // ibValueContainer::ibValueReturnContainer — an element of a walk
+
+namespace {
+
+// ONE WALK OVER A FORM'S LIST — over a copy of it, so an element removed while the module walks stays alive until it
+// is passed. Each element comes as a Controls walk gives one: its name, and the element itself.
+template <class T>
+class ibFormListWalk : public ibValueIteratorState {
+public:
+	explicit ibFormListWalk(const std::vector<ibValuePtr<T>>& list) : m_list(list), m_it(m_list.begin()) {}
+	bool MoveNext(ibValue& current) override {
+		if (m_started) ++m_it; else m_started = true;
+		if (m_it == m_list.end()) return false;
+		T* const entry = *m_it;
+		ibValue element(entry);
+		current = ibValue(static_cast<ibValue*>(
+			new ibValueContainer::ibValueReturnContainer(entry->GetName(), element)));
+		return true;
+	}
+	void Reset() override { m_it = m_list.begin(); m_started = false; }
+	bool PeekSample(ibValue& current) const override {
+		current = ibValue(static_cast<ibValue*>(new ibValueContainer::ibValueReturnContainer()));
+		return true;
+	}
+private:
+	const std::vector<ibValuePtr<T>> m_list;
+	typename std::vector<ibValuePtr<T>>::const_iterator m_it;
+	bool m_started = false;
+};
+
+}
+
+ibValueForm::ibValueFormCollectionAttribute::ibValueFormCollectionAttribute(ibValueForm* ownerForm)
+	: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true), m_formOwner(ownerForm)
+{
+	m_members.Bind(this, &ibValueFormCollectionAttribute::FillMembers);
+}
+
+enum
+{
+	enAttributeAdd,
+	enAttributeRemove,
+	enAttributeFind,
+	enAttributeCount
+};
+
+void ibValueForm::ibValueFormCollectionAttribute::FillMembers(ibMemberTable& helper) const
+{
+	helper.AppendFunc(ibT("Add"), 2, ibT("Add(name : string, type : TypeDescription)"));
+	helper.AppendProc(ibT("Remove"), 1, ibT("Remove(attribute : FormAttributeValue)"));
+	helper.AppendFunc(ibT("Find"), 1, ibT("Find(name : string)"));
+	helper.AppendFunc(ibT("Count"), ibT("Count()"));
+
+	// …and each attribute by its name. The data is its id, which a removal does not shift (as for ThisForm.<name>).
+	for (const auto& av : m_formOwner->m_attributes)
+		helper.AppendProp(av->GetName(), true, false, av->GetId());
+}
+
+bool ibValueForm::ibValueFormCollectionAttribute::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
+{
+	switch (lMethodNum)
+	{
+	case enAttributeRemove:
+		// The cast raises on anything but an attribute — except in the designer's session, where it answers null.
+		if (ibFormAttributeValue* const entry = paParams[0]->ConvertToType<ibFormAttributeValue>())
+			m_formOwner->RemoveAttribute(entry);
+		return true;
+	}
+	return false;
+}
+
+bool ibValueForm::ibValueFormCollectionAttribute::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
+{
+	switch (lMethodNum)
+	{
+	case enAttributeAdd:
+		if (const ibValueTypeDescription* const type = paParams[1]->ConvertToType<ibValueTypeDescription>())
+			pvarRetValue = m_formOwner->AddAttribute(paParams[0]->GetString(), type->GetTypeDesc());
+		return true;
+	case enAttributeFind:
+		if (ibFormAttributeValue* const entry = m_formOwner->GetAttribute(paParams[0]->GetString()))
+			pvarRetValue = entry;
+		else
+			pvarRetValue = ibValue();
+		return true;
+	case enAttributeCount:
+		pvarRetValue = m_formOwner->GetAttributeCount();
+		return true;
+	}
+	return false;
+}
+
+bool ibValueForm::ibValueFormCollectionAttribute::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
+{
+	ibFormAttributeValue* const entry = m_formOwner->FindAttributeById(m_members.GetPropData(lPropNum));
+	if (entry == nullptr)
+		return false;
+	pvarPropVal = entry;
+	return true;
+}
+
+bool ibValueForm::ibValueFormCollectionAttribute::GetAt(const ibValue& varKeyValue, ibValue& pvarValue)
+{
+	ibFormAttributeValue* const entry = m_formOwner->GetAttribute(varKeyValue.GetNumber().ToUInt());
+	if (entry == nullptr)
+		return false;
+	pvarValue = entry;
+	return true;
+}
+
+std::shared_ptr<ibValueIteratorState> ibValueForm::ibValueFormCollectionAttribute::CreateIterator()
+{
+	return std::make_shared<ibFormListWalk<ibFormAttributeValue>>(m_formOwner->m_attributes);
+}
+
+ibValueForm::ibValueFormCollectionCommand::ibValueFormCollectionCommand(ibValueForm* ownerForm)
+	: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true), m_formOwner(ownerForm)
+{
+	m_members.Bind(this, &ibValueFormCollectionCommand::FillMembers);
+}
+
+enum
+{
+	enCommandFind,
+	enCommandCount
+};
+
+void ibValueForm::ibValueFormCollectionCommand::FillMembers(ibMemberTable& helper) const
+{
+	helper.AppendFunc(ibT("Find"), 1, ibT("Find(name : string)"));
+	helper.AppendFunc(ibT("Count"), ibT("Count()"));
+
+	for (const auto& fc : m_formOwner->m_formCommands)
+		helper.AppendProp(fc->GetName(), true, false, fc->GetId());
+}
+
+bool ibValueForm::ibValueFormCollectionCommand::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
+{
+	switch (lMethodNum)
+	{
+	case enCommandFind:
+		if (ibFormCommandValue* const entry = m_formOwner->GetFormCommand(paParams[0]->GetString()))
+			pvarRetValue = entry;
+		else
+			pvarRetValue = ibValue();
+		return true;
+	case enCommandCount:
+		pvarRetValue = static_cast<unsigned int>(m_formOwner->m_formCommands.size());
+		return true;
+	}
+	return false;
+}
+
+bool ibValueForm::ibValueFormCollectionCommand::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
+{
+	ibFormCommandValue* const entry = m_formOwner->FindFormCommandById(m_members.GetPropData(lPropNum));
+	if (entry == nullptr)
+		return false;
+	pvarPropVal = entry;
+	return true;
+}
+
+bool ibValueForm::ibValueFormCollectionCommand::GetAt(const ibValue& varKeyValue, ibValue& pvarValue)
+{
+	const unsigned int idx = varKeyValue.GetNumber().ToUInt();
+	if (idx >= m_formOwner->m_formCommands.size())
+		return false;
+	pvarValue = static_cast<ibFormCommandValue*>(m_formOwner->m_formCommands[idx]);
+	return true;
+}
+
+std::shared_ptr<ibValueIteratorState> ibValueForm::ibValueFormCollectionCommand::CreateIterator()
+{
+	return std::make_shared<ibFormListWalk<ibFormCommandValue>>(m_formOwner->m_formCommands);
+}
+
+//*********************************************************************************************
 //*                                   construction                                          *
 //*********************************************************************************************
 
 ibFormAttributeValue::ibFormAttribute::ibFormAttribute(ibValueForm* ownerForm)
 	: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true), m_ownerForm(ownerForm), m_attributeId(ownerForm ? ownerForm->NextAttributeId() : 0)   // true = no-register internal value
 {
-	m_members.Bind(this, &ibFormAttributeValue::ibFormAttribute::FillMembers);
 }
 
 ibFormAttributeValue::ibFormAttribute::~ibFormAttribute()
@@ -605,6 +835,7 @@ ibFormAttributeValue::ibFormAttributeValue(ibValueForm* ownerForm)
 	// it so those standard properties surface through the holder. The generated value is attached by
 	// Refresh (when it is set, or its Type changes).
 	AttachPropertyObject(m_attribute);
+	m_members.Bind(this, &ibFormAttributeValue::FillMembers);
 }
 
 ibFormAttributeValue::~ibFormAttributeValue()
@@ -625,6 +856,7 @@ void ibFormAttributeValue::Refresh()
 	AttachPropertyObject(m_attribute);
 	if (ibPropertyObject* po = GetValueAsProperty())
 		AttachPropertyObject(po);
+	InvalidateNames();   // the members are what is attached
 }
 
 // (THE PROPERTY ASPECT LIVES IN formAttributeProperty.cpp — OnPropertyChanged, OnChildChanged and
@@ -744,11 +976,24 @@ ibSourceDataType ibFormAttributeValue::ibFormAttribute::GetSourceDataType() cons
 //*                              runtime member surface                                      *
 //*********************************************************************************************
 
-void ibFormAttributeValue::ibFormAttribute::FillMembers(ibMemberTable& helper) const
+#include "backend/propertyManager/propertyMembers.h"
+
+// The member's alias is which attached object the property is of (the description first, then the value), its data
+// the property's index there.
+void ibFormAttributeValue::FillMembers(ibMemberTable& helper) const
 {
-	// A simple-type attribute surfaces its own value; an assigned source
-	// surfaces the source's members. Member dispatch is staged with the
-	// type-driven dispatch — left minimal for the first slice.
+	const std::vector<ibPropertyObject*>& attached = GetAttachedObjects();
+	for (unsigned int idx = 0; idx < attached.size(); idx++)
+		ibAppendPropertyMembers(helper, *attached[idx], false, idx);
+}
+
+bool ibFormAttributeValue::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
+{
+	const std::vector<ibPropertyObject*>& attached = GetAttachedObjects();
+	const long idx = m_members.GetPropAlias(lPropNum);
+	const ibProperty* property = idx >= 0 && idx < static_cast<long>(attached.size())
+		? attached[idx]->GetPropertyByIndex(m_members.GetPropData(lPropNum)) : nullptr;
+	return property != nullptr && property->GetDataValue(pvarPropVal);
 }
 
 //*********************************************************************************************
@@ -791,3 +1036,6 @@ SYSTEM_TYPE_REGISTER(ibFormAttributeValue, "FormAttributeValue");
 // The nested description is also a runtime property object (the inspector can reach it via GetClassName on a
 // re-select), so it must be registered too — a SYSTEM type (no ctor; the holder creates it programmatically).
 SYSTEM_TYPE_REGISTER(ibFormAttributeValue::ibFormAttributeImpl, "FormAttribute");
+// …and the form's lists of them, as a module walks them (ThisForm.Attributes / ThisForm.Commands).
+SYSTEM_TYPE_REGISTER(ibValueForm::ibValueFormCollectionAttribute, "FormAttributes");
+SYSTEM_TYPE_REGISTER(ibValueForm::ibValueFormCollectionCommand, "FormCommands");

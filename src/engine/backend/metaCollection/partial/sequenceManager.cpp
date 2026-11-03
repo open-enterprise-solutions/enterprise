@@ -91,6 +91,21 @@ static std::vector<ibValue> KeyFromStructure(const ibValueMetaObjectSequence* se
 	return key;
 }
 
+bool ibValueManagerDataObjectSequence::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
+{
+	switch (BuiltinMethodNum(lMethodNum))
+	{
+	case eRestore:
+		// Here, unlike the border's key, a dimension left out is NOT looked at: the run narrows by what is
+		// named, and `Restore()` restores every key.
+		ibSequenceRestore(m_metaObject, lSizeArray > 0 ? *paParams[0] : ibValue(),
+			NamedDimensions(m_metaObject, lSizeArray > 1 ? *paParams[1] : ibValue()));
+		return true;
+	}
+
+	return ibValueManagerDataObject::CallAsProc(lMethodNum, paParams, lSizeArray);
+}
+
 bool ibValueManagerDataObjectSequence::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
 	switch (BuiltinMethodNum(lMethodNum))
@@ -114,12 +129,6 @@ bool ibValueManagerDataObjectSequence::CallAsFunc(const long lMethodNum, ibValue
 		ibSequenceBorderSet(m_metaObject,
 			KeyFromStructure(m_metaObject, lSizeArray > 1 ? *paParams[1] : ibValue()),
 			lSizeArray > 0 ? *paParams[0] : ibValue());
-		return true;
-	case eRestore:
-		// Here, unlike the border's key, a dimension left out is NOT looked at: the run narrows by what is
-		// named, and `Restore()` restores every key.
-		ibSequenceRestore(m_metaObject, lSizeArray > 0 ? *paParams[0] : ibValue(),
-			NamedDimensions(m_metaObject, lSizeArray > 1 ? *paParams[1] : ibValue()));
 		return true;
 	case eGetListForm:
 	{
