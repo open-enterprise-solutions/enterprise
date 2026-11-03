@@ -244,6 +244,10 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   same words, before anything is saved. A sequence with no dimensions has one border and is saved;
   it is not reported.
 
+- **A register or sequence a document is set to write to in the designer's properties takes it as its
+  recorder.** The list changed in place, so the document was never added, and the save refused the
+  sequence: "no recorder".
+
 - **A list filtered by «contains» finds the rows that contain the value.** On a list read from the
   base the condition reached the database as `LIKE 'value'`, an exact match, so "Comment contains
   Оплат" showed nothing and only "%Оплат%" worked. The value is now wrapped as `%value%`, as the

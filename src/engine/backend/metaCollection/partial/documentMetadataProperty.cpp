@@ -24,30 +24,22 @@ void ibValueMetaObjectDocument::OnPropertyChanged(ibProperty* property, const ib
 	// what happens when one of them changes is one act — each named table's Recorder learns or
 	// forgets this document's reference. Written once for both, or a sequence declared on a running
 	// configuration would refuse to save: "no recorder" (2026-09-18).
-	ibPropertyRecord* named = nullptr;
-	if (m_propertyRegisterRecord == property) named = m_propertyRegisterRecord;
-	if (m_propertySequenceRecord == property) named = m_propertySequenceRecord;
-
-	if (named != nullptr) {
-		const ibMetaDescription& old_metaDesc = named->GetValueAsMetaDesc(oldValue);
-		const ibMetaDescription& new_metaDesc = named->GetValueAsMetaDesc(newValue);
-		for (unsigned int idx = 0; idx < old_metaDesc.GetTypeCount(); idx++) {
-			if (new_metaDesc.ContainMetaType(old_metaDesc.GetByIdx(idx))) continue;
-			const ibValueMetaObjectRegisterData* registerData = m_metaData->FindAnyObjectByFilter<ibValueMetaObjectRegisterData>(old_metaDesc.GetByIdx(idx));
-			if (registerData != nullptr) {
-				ibValueMetaObjectAttributePredefined* infoRecorder = registerData->GetRegisterRecorder();
-				wxASSERT(infoRecorder);
-				infoRecorder->GetTypeDesc().ClearMetaType((*m_propertyAttributeReference)->GetTypeDesc());
-			}
-		}
-		for (unsigned int idx = 0; idx < new_metaDesc.GetTypeCount(); idx++) {
-			if (old_metaDesc.ContainMetaType(new_metaDesc.GetByIdx(idx))) continue;
-			ibValueMetaObjectRegisterData* registerData = m_metaData->FindAnyObjectByFilter<ibValueMetaObjectRegisterData>(new_metaDesc.GetByIdx(idx));
-			if (registerData != nullptr) {
-				ibValueMetaObjectAttributePredefined* infoRecorder = registerData->GetRegisterRecorder();
-				wxASSERT(infoRecorder);
+	//
+	// ⭐ BY WHAT THE LISTS SAY NOW, not by what changed between two values. The inspector writes a list IN PLACE
+	// (SetNodeValue, propertyObject.cpp: "a cell read in place"), so the value before the change IS the value after
+	// it, and the difference of the two was empty: a sequence bound from the inspector never learned this document
+	// and refused to save — "no recorder" (2026-11-03). Every register and sequence is told by BOTH lists at once:
+	// a register named in one must not lose this document because the other one changed.
+	if (m_propertyRegisterRecord == property || m_propertySequenceRecord == property) {
+		const ibMetaDescription& movements = GetRecordDescription(ibRecorderWrites::Movements);
+		const ibMetaDescription& sequences = GetRecordDescription(ibRecorderWrites::Sequences);
+		for (ibValueMetaObjectRegisterData* registerData : m_metaData->GetAnyArrayObject<ibValueMetaObjectRegisterData>()) {
+			ibValueMetaObjectAttributePredefined* infoRecorder = registerData->GetRegisterRecorder();
+			wxASSERT(infoRecorder);
+			if (movements.ContainMetaType(registerData->GetMetaID()) || sequences.ContainMetaType(registerData->GetMetaID()))
 				infoRecorder->GetTypeDesc().AppendMetaType((*m_propertyAttributeReference)->GetTypeDesc());
-			}
+			else
+				infoRecorder->GetTypeDesc().ClearMetaType((*m_propertyAttributeReference)->GetTypeDesc());
 		}
 	}
 
