@@ -9,6 +9,7 @@
 #include "backend/appData.h"
 #include "backend/logger/logger.h"
 #include "backend/backend_exception.h"
+#include "backend/system/systemManager.h"   // ibValueSystemFunction::Message — a refusal's reason, to whoever asked
 
 // The restructure ledger lives on the CONFIGURATION; this static pulls the ACTIVE config's instance, so
 // this-less callers (static scaffold methods, the apply dialog) reach it without a metadata handle.
@@ -353,8 +354,11 @@ bool ibMetaDataConfigurationStorage::OnAfterSaveDatabase(bool roolback, int flag
 		//
 		// So the whole ledger goes to the FILE as it stands, each line carrying its own level as a
 		// word; nothing here opens a window.
-		ibString raised;
-
+		//
+		// ⭐ …AND EACH ERROR TO THE PANE OF WHOEVER ASKED — it is the reason the write did not happen. Read by the
+		// file and the apply dialog alone it never reached the person: an enumeration with no values, a register with
+		// no recorder, and all they were shown was "Failed to save the configuration." (2026-11-03). The pane is not a
+		// window: the line lands with the session that asked for this save (its frame), interrupting nobody.
 		for (const ibRestructureInfo::Entry& entry : ledger) {
 
 			const ibChar* level =
@@ -365,7 +369,7 @@ bool ibMetaDataConfigurationStorage::OnAfterSaveDatabase(bool roolback, int flag
 			ibJournalInfo(ibT("metadata.apply"), ibT("%s: %s"), level, entry.descr);
 
 			if (entry.type == ibRestructure::error)
-				raised << (raised.IsEmpty() ? ibT("") : ibT("\n")) << entry.descr;
+				ibValueSystemFunction::Message(entry.descr, ibStatusMessage::ibStatusMessage_Error);
 		}
 
 		// 🛑 AND IT DOES NOT RAISE FROM HERE. Two reasons, and the second is the one that bites: a
@@ -374,10 +378,8 @@ bool ibMetaDataConfigurationStorage::OnAfterSaveDatabase(bool roolback, int flag
 		// transaction below, so leaving through it would abandon the commit-or-rollback that has to
 		// happen either way.
 		//
-		// The ledger IS the answer, and it stays where both roads already read it: the apply dialog
-		// greys its button out of it, and a tool reads it into its result. Nothing is lost by not
-		// throwing - what would have been thrown is sitting in `ledger` for whoever asked.
-		(void)raised;
+		// The ledger IS the answer, and it stays where every road reads it: the pane above, the apply
+		// dialog that greys its button out of it, and a tool that reads it into its result.
 	}
 
 	// The L3-2 builder OWNS the close of the restructuring transaction: rollback if asked, else commit the

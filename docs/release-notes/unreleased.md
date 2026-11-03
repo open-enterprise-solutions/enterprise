@@ -248,6 +248,10 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   recorder.** The list changed in place, so the document was never added, and the save refused the
   sequence: "no recorder".
 
+- **A refused save says why in Messages.** The designer showed "Failed to save the configuration." and
+  nothing else; each object the save refuses, such as an enumeration with no values or a register with no
+  recorder, is now a line there.
+
 - **A list filtered by «contains» finds the rows that contain the value.** On a list read from the
   base the condition reached the database as `LIKE 'value'`, an exact match, so "Comment contains
   Оплат" showed nothing and only "%Оплат%" worked. The value is now wrapped as `%value%`, as the
