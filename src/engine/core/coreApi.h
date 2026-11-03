@@ -19,9 +19,14 @@
 #if defined(_WIN32)
 #  define IB_EXPORT __declspec(dllexport)
 #  define IB_IMPORT __declspec(dllimport)
+#  define IB_EXPORT_VTABLE
 #else
+// A class exported MEMBER BY MEMBER (fstring.h says why) that has a vtable is still seen WHOLE outside its module on
+// ELF and Mach-O: its vtable and type info follow the class's own visibility there, and the modules are built hidden —
+// what Boost calls BOOST_SYMBOL_VISIBLE. On Windows a mark on the class is the import table again, so there it is none.
 #  define IB_EXPORT __attribute__((visibility("default")))
 #  define IB_IMPORT __attribute__((visibility("default")))
+#  define IB_EXPORT_VTABLE __attribute__((visibility("default")))
 #endif
 
 #if defined(CORE_EXPORTS)
@@ -29,6 +34,7 @@
 #else
 #define CORE_API IB_IMPORT
 #endif
+#define CORE_API_VTABLE IB_EXPORT_VTABLE
 
 // THE ENGINE'S CHARACTER — what an ibString (fstring.h) is made of, and what wx calls wxChar. Here, not in
 // fstring.h, because headers under it (core.h, the number's separators, the boolean's words) name it too.

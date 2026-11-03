@@ -121,7 +121,7 @@ void SetNodeProperty(ibProtocolNode node, const wxString& name, const ibDataValu
 {
 	node.Remove(name.utf8_str());
 	ibDataNode entries;
-	entries.SetProperty(name, value);
+	entries.SetProperty(ibString(name), value);
 	ibWriteProtocolNode(entries, node);
 }
 

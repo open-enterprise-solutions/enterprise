@@ -10,5 +10,6 @@
 #else
 #define BACKEND_API IB_IMPORT
 #endif
+#define BACKEND_API_VTABLE IB_EXPORT_VTABLE
 
 #endif

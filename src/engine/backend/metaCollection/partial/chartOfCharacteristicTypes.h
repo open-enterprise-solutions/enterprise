@@ -49,12 +49,6 @@ public:
 	ibTypeDescription& GetTypesOfCharacteristics() const { return m_propertyTypesOfCharacteristics->GetValueAsTypeDesc(); }
 
 	ibValueMetaObjectAttributePredefined* GetDataType() const { return m_propertyAttributeType->GetMetaObject(); }
-
-	// ⭐ A PREDEFINED CHARACTERISTIC DECLARES ITS TYPE (#278) - the one thing code asks of it besides its name,
-	// and what a field typed by it holds.
-	virtual std::vector<ibValueMetaObjectAttributeBase*> GetPredefinedCellAttributes() const override {
-		return { GetDataType() };
-	}
 	virtual bool IsDataType(const ibMetaID& id) const { return id == (*m_propertyAttributeType)->GetMetaID(); }
 
 	// ⭐⭐ A KIND OF THIS CHART LIMITS WHAT ITS VALUE MAY BE, and here that is said to the runtime. The
@@ -123,6 +117,10 @@ public:
 	virtual void OnPropertyCreated(ibProperty* property);
 	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue);
 	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue);
+
+	// Declares this chart's tables, and adds to the base's check of its table what a predefined characteristic must
+	// declare (#278): its Type, filled in. Body in chartOfCharacteristicTypesMetadataSchema.cpp.
+	virtual void ContributeTables(class ibSchemaSnapshot& out) const override;
 
 protected:
 

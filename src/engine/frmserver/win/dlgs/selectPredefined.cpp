@@ -5,7 +5,6 @@
 #include "selectPredefined.h"
 
 #include <algorithm>
-#include <set>
 #include <vector>
 
 #include "backend/backend_mainFrame.h"                                   // ibBackendDocFrame::Request — the client's window
@@ -23,10 +22,6 @@
 
 // The window's own parts — nothing outside this file has business with a branch or a value's number.
 namespace {
-
-// The predefined value lives INSIDE the hierarchy metaobject — named once here rather than spelled
-// out at every use.
-using ibPredefinedValue = ibValueMetaObjectRecordDataHierarchyMutableRef::ibPredefinedValueObject;
 
 // THE ANSWER IS A NUMBER: which type, and which value of it, kept here under the number the client's tree names it by.
 // A null guid IS the empty reference of that type, so every answer is the same kind and the window has one road out.
@@ -76,24 +71,15 @@ void ibFillOneTypeBranch(ibDataNode& branch, std::vector<ibDesignerRefItem>& val
 		// items of a subordinate folder — all of it selectable"). The array is FLAT and says nothing
 		// about who comes first, so each folder is written with what lies under it, from the top: a node
 		// of the question is not a place to come back to — the next one appended beside it may move it.
-		std::vector<const ibPredefinedValue*> items;
-		for (const auto& item : hierarchy->GetPredefinedValueArray())
-			if (item)
-				items.push_back(item.get());
-		const std::set<const ibPredefinedValue*> declared(items.begin(), items.end());
-
+		//
 		// A parent that is not itself predefined leaves its children homeless — they still belong to
 		// the type, so they stand at the top rather than disappearing.
-		const auto folderOf = [&declared](const ibPredefinedValue* item) -> const ibPredefinedValue* {
-			const ibPredefinedValue* under = item->GetPredefinedParent().get();
-			return declared.contains(under) ? under : nullptr;
-		};
-		const auto writeUnder = [&](auto&& self, ibDataNode& at, const ibPredefinedValue* folder) -> void {
-			for (const ibPredefinedValue* item : items) {
-				if (folderOf(item) != folder)
+		const auto writeUnder = [&](auto&& self, ibDataNode& at, const ibPredefinedItemDescription* folder) -> void {
+			for (const ibPredefinedItemDescription& item : hierarchy->GetPredefinedValueArray()) {
+				if (hierarchy->FindPredefinedValue(item.m_parent) != folder)
 					continue;
-				ibDataNode& value = ibAppendValue(at, values, recordRef, item->GetPredefinedGuid(), item->GetPredefinedName());
-				self(self, value, item);
+				ibDataNode& value = ibAppendValue(at, values, recordRef, item.m_guid, item.m_name);
+				self(self, value, &item);
 			}
 		};
 		writeUnder(writeUnder, branch, nullptr);

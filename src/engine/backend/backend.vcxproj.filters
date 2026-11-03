@@ -476,6 +476,9 @@
     <ClInclude Include="propertyManager\propertyObject.h">
       <Filter>propertyManager</Filter>
     </ClInclude>
+    <ClInclude Include="propertyManager\propertyMembers.h">
+      <Filter>propertyManager</Filter>
+    </ClInclude>
     <ClInclude Include="propertyManager\property\propertyBoolean.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
@@ -1281,6 +1284,9 @@
     <ClCompile Include="metaCollection\partial\commonObjectMetaQuery.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
+    <ClCompile Include="metaCollection\partial\commonObjectPredefined.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
     <ClCompile Include="metaCollection\partial\commonObjectSchema.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
@@ -1419,6 +1425,9 @@
     <ClCompile Include="metaCollection\partial\chartOfCalculationTypesMetadataProperty.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfCalculationTypesMetadataSchema.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
     <ClCompile Include="metaCollection\partial\chartOfCalculationTypesMetadata_res.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
@@ -1528,6 +1537,9 @@
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesMetadataProperty.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesMetadataSchema.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesObject.cpp">

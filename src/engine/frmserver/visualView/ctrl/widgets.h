@@ -42,6 +42,12 @@ class ibValueButton : public ibValueWindow, public ibFrontendCommandReceiver {
 	virtual bool ReadData(const ibDataNode& node);
 	virtual bool WriteData(ibDataNode& node) const;
 
+	/**
+	* Property events
+	*/
+	// Note is offered on a tile alone, the one picture location that draws it.
+	virtual void OnPropertyRefresh() override;
+
 private:
 
 	// The press — runs the bound command.
@@ -57,6 +63,9 @@ private:
 		std::vector<ibCommandDescription>& leaves, ibDataNode* node) const;
 
 	ibPropertyCategory* m_categoryButton = ibPropertyObject::CreatePropertyCategory(ibT("Button"), _("Button"));
+	ibPropertyEnum<ibValueEnumButtonView>* m_propertyView = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumButtonView>>(m_categoryButton, ibT("View"), ibGETTEXT_IN_CONTEXT("button", "View"),
+		_("How the button is drawn: a button, or a hyperlink - no face and no frame, its caption underlined. Pressed the same way, and its picture, its representation and its command are the same."),
+		ibButtonView::ibButtonView_Button);
 	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryButton, ibT("Title"), _("Title"),
 		_("The text on the button. Can be written per language and changed from code while the form is open."), ibT("Button"));
 	ibPropertyEnum<ibValueEnumRepresentation>* m_propertyRepresentation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumRepresentation>>(m_categoryButton, ibT("Representation"), _("Representation"),
@@ -64,6 +73,11 @@ private:
 		ibRepresentation::ibRepresentation_Auto);
 	ibPropertyPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_categoryButton, ibT("Picture"), _("Picture"),
 		_("The button's icon, beside or instead of the text (see Representation)."));
+	ibPropertyEnum<ibValueEnumPictureLocation>* m_propertyPictureLocation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumPictureLocation>>(m_categoryButton, ibT("PictureLocation"), _("Picture location"),
+		_("Where the picture stands. Auto: where the button puts it, on the left of the text. Left, Right: on that side of the text. Tile: the picture large over the text and the Note under them, the button filling what its sizer gives it - a big button for a finger; put tiles in a grid sizer for a panel of them."),
+		ibPictureLocation::ibPictureLocation_Auto);
+	ibPropertyTString* m_propertyNote = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryButton, ibT("Note"), _("Note"),
+		_("The line under a tile's title - a price, a count, a state. Shown only when the picture location is Tile. Can be written per language and changed from code while the form is open."), ibT(""));
 	// A button has NO event — it carries ONLY a bound COMMAND (command-source picker, the command-door twin of a
 	// control's data source). A press RUNS the command through ibFrontendCommandReceiver::ExecuteValueByPath. Internal
 	// name MUST differ from any category name (wxPropertyGrid keys both in one map); lives in the Button category.
@@ -282,6 +296,10 @@ class ibValueTextCtrl : public ibValueWindow,
 	virtual ibPicture GetIcon() const;
 	static ibPicture GetIconGroup();
 
+	//load & save object in control
+	virtual bool ReadData(const ibDataNode& node);
+	virtual bool WriteData(ibDataNode& node) const;
+
 	/**
 	* Property events
 	*/
@@ -290,10 +308,7 @@ class ibValueTextCtrl : public ibValueWindow,
 
 	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue);
 
-	//load & save object in control
-	virtual bool ReadData(const ibDataNode& node);
-	virtual bool WriteData(ibDataNode& node) const;
-
+	
 public:
 
 	virtual bool HasValueInControl() const {

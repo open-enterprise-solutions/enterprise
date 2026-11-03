@@ -38,6 +38,7 @@
 #include "core/description/commandDescription.h"
 #include "backend/propertyManager/property/propertyCommandSource.h"
 #include "backend/propertyManager/property/propertySource.h"
+#include "backend/backend_exception.h"   // a path the binding refuses — said back as the refusal
 #include "core/description/sourceDescription.h"
 #include "backend/backend_localization.h"   // a caption is an array by language
 #include "backend/propertyManager/property/propertyString.h"   // ibPropertyTString
@@ -50,8 +51,7 @@
 #include "frmserver/visualView/ctrl/form.h"
 #include "frmserver/visualView/ctrl/formAttribute.h"   // the main attribute — the head of every binding
 #include "frmserver/visualView/ctrl/formCommand.h"     // …and what the form can DO
-
-#include "core/stringTokenizer.h"
+#include "frmserver/visualView/layers/commandBar.h"    // GatherFormCommands — the commands a button may run, as offered
 
 namespace {
 using ibArg = ibMcpTool::ibMcpArgument;
@@ -153,7 +153,9 @@ const ibArg& ArgProperty()
 const ibArg& ArgPropertyToBind()
 {
 	static const ibArg s_a(ibT("property"), ibArg::Kind::Text,
-		ibMcpText("Which binding property. Omitted: Source - what a field or a table shows. A Button's is Command."));
+		ibMcpText("Which binding property. Omitted: Source - what a field or a table shows. A Button's is Command, and "
+			  "`path` names the command as the designer's picker offers it: a standard action 'Form.Close', a table's "
+			  "'Form.<table>.Add', a form command or a configuration's command by its name."));
 	return s_a;
 }
 
@@ -458,30 +460,6 @@ ibFormAttributeValue* PathHead(const ibValueForm* form, const ibString& path, ib
 	named = head != nullptr;
 	rest = named ? path.AfterFirst(ibT('.')) : path;
 	return named ? head : form->GetMainAttribute();
-}
-
-// ⭐⭐ WHERE A REFERENCE LEADS — an empty reference to what its type points at, as a SOURCE: its explorer is the
-// fields the designer's own tree offers under that reference (docViewFormEditAttribute.cpp opens it the same way),
-// references again among them, so a path goes on as deep as it is written. The reference is kept in `held` while
-// its explorer is read. Null for a barrier (`AnyRef`, `CatalogRef`), which points at no one object, and for a type
-// the configuration does not register.
-//
-// 🛑 IT ANSWERED THE METAOBJECT, and each tool walked its CHILDREN from there — a road of its own beside the
-// engine's: the fields offered took in the object's modules and forms, and a second reference ended the walk
-// ("'Goods.Goods.Parent' has no field called 'Description'. It offers: .", 2026-10-28).
-ibSourceDataObject* PointedAt(const ibMetaData* metaData, const ibClassID& clsid, std::vector<ibValue>& held)
-{
-	const ibCtorMetaValueType* type = metaData != nullptr ? metaData->GetTypeCtor(clsid) : nullptr;
-	const ibValueMetaObject* object = type != nullptr ? type->GetMetaObject() : nullptr;
-	ibValueReferenceDataObject* reference = object != nullptr
-		? ibValueReferenceDataObject::Create(metaData, object->GetMetaID()) : nullptr;
-	if (reference == nullptr)
-		return nullptr;
-
-	held.emplace_back(reference);
-	ibSourceDataObject* source = nullptr;
-	held.back().ConvertToValue(source);
-	return source;
 }
 
 } // namespace
@@ -1443,11 +1421,9 @@ public:
 		ibString path;
 		bool named = false;
 		const ibFormAttributeValue* head = PathHead(form, ArgPath().Text(params), path, named);
-		ibSourceDataObject* source = head != nullptr ? head->GetSourceValue() : nullptr;
-		const ibSourceExplorer* explorer =
-			source != nullptr ? source->GetSourceExplorer() : nullptr;
+		const ibSourceDataObject* source = head != nullptr ? head->GetSourceValue() : nullptr;
 
-		if (explorer == nullptr) {
+		if (source == nullptr) {
 			// NOTHING TO UNFOLD is a state rather than a fault: a common form has no main attribute, and an
 			// attribute of a primitive type is a leaf a control binds to as it is.
 			result.SetValue(ibT("note"), named
@@ -1459,65 +1435,39 @@ public:
 			return true;
 		}
 
-		// ⭐ ONE STEP PER SEGMENT, by NAME and case-insensitively — the same
-		// resolution the model layer uses everywhere (FindByName exists because
-		// three call sites wrote this loop by hand and one compared exactly, so a
-		// path written `Supplier.region` silently stopped matching `Region`).
-		ibString walked = named ? head->GetName() : ibString();
-		ibString across;             // the object a reference stepped into, while the walk stands at its fields
-		std::vector<ibValue> held;   // the references stepped into (PointedAt)
-
-		if (!path.IsEmpty()) {
-			ibStringTokenizer segments(path, ibT("."));
-			while (segments.HasMoreTokens()) {
-
-				const ibString segment = segments.GetNextToken();
-				const ibSourceExplorer* next = explorer->FindByName(segment);
-
-				if (next == nullptr) {
-					// A MISS IS A REFUSAL WITH THE ALTERNATIVES, because the caller's
-					// next move is to pick one of them — and a value has none to pick.
-					ibString available;
-					for (unsigned int index = 0; index < explorer->GetHelperCount(); ++index) {
-						if (const ibSourceExplorer* field = explorer->GetHelper(index))
-							available << (available.IsEmpty() ? ibT("") : ibT(", "))
-								<< field->GetSourceName();
-					}
-
-					refusal = available.IsEmpty()
-						? ibString::Format(ibMcpText("'%s' holds a value - nothing unfolds from it, so '%s' cannot follow."),
-							walked, segment)
-						: ibString::Format(ibMcpText("'%s' has no field called '%s'. It offers: %s."),
-							walked.IsEmpty() ? explorer->GetSourceName() : walked, segment, available);
-					form->DecrRef();
-					return false;
-				}
-
-				walked = walked.IsEmpty() ? segment : walked + ibT(".") + segment;
-
-				// ⭐⭐ A REFERENCE HOP IS NOT A CHILD LOOKUP. A section's columns are nodes of the explorer; the
-				// fields of what a REFERENCE points at are not — the target is another object entirely, and
-				// materialising it eagerly is what makes the tree infinite. So the walk steps into it only when
-				// the path names it: the explorer of what it points at (PointedAt), and on from there, a
-				// reference again or not, as deep as the path is written.
-				ibSourceDataObject* const pointed = next->GetHelperCount() == 0
-					&& IsReference(next->GetTypeDesc().GetFirstClsid())
-					? PointedAt(activeMetaData, next->GetTypeDesc().GetFirstClsid(), held) : nullptr;
-				const ibSourceExplorer* const into = pointed != nullptr ? pointed->GetSourceExplorer() : nullptr;
-
-				explorer = into != nullptr ? into : next;
-				across = into != nullptr && pointed->GetSourceMetaObject() != nullptr
-					? pointed->GetSourceMetaObject()->GetName() : ibString();
-			}
+		// ⭐ THE SOURCE'S OWN WALK, by name — the one a script's `Control.Source = "…"` and form_bind take
+		// (ibSourceDataObject::WalkColumns): a section's columns, across a REFERENCE the fields of what it points at,
+		// as deep as the path is written and no deeper (stepping in eagerly is what makes the tree infinite). A name
+		// that is not there raises with what that level offers — said back as the refusal.
+		//
+		// 🛑 IT WAS WALKED HERE TOO, a third copy beside the engine's two, stepping across a reference through an
+		// empty reference built from the ACTIVE configuration rather than through the object the walk stood on.
+		const ibString walked = !named ? path
+			: path.IsEmpty() ? head->GetName() : head->GetName() + ibT(".") + path;
+		ibSourceDescription hops;
+		std::vector<ibValue> held;   // what the walk stepped into, alive while its level is read
+		const ibSourceExplorer* explorer = nullptr;
+		try {
+			explorer = source->WalkColumns(path, named ? head->GetName() : ibString(), hops, held);
+		}
+		catch (const ibBackendInterruptException&) {
+			form->DecrRef();
+			throw;
+		}
+		catch (const ibCoreException& thrown) {
+			refusal = thrown.GetErrorDescription();
+			form->DecrRef();
+			return false;
 		}
 
-		result.SetValue(ibT("source"), across.IsEmpty() ? explorer->GetSourceName() : across);
+		// THE LEVEL IS NAMED AS IT WAS WRITTEN — the field the path ends on; what that field is (a section, a
+		// reference and to what) the level above already said in its type.
+		result.SetValue(ibT("source"), !walked.IsEmpty() ? walked.AfterLast(ibT('.'))
+			: explorer != nullptr ? explorer->GetSourceName() : ibString());
 		if (!walked.IsEmpty())
 			result.SetValue(ibT("path"), walked);
-		if (!across.IsEmpty())
-			result.AddField(ibT("throughReference"), ibDataValue::Bool(true));
 
-		const std::vector<ibDataValue> fields = Fields(explorer);
+		const std::vector<ibDataValue> fields = explorer != nullptr ? Fields(explorer) : std::vector<ibDataValue>();
 		result.AddField(ibT("fields"), ibDataValue::Array(fields));
 
 		// A LEAF IS AN ANSWER TOO. A field with nothing under it is where a binding
@@ -1696,37 +1646,16 @@ public:
 			ibCommandDescription command;
 			ibString available;
 
-			// The FORM'S own commands first — they are the ones a button on this
-			// form most often runs.
-			for (const ibValuePtr<ibFormCommandValue>& entry : form->GetFormCommands()) {
-				if (!entry)
-					continue;
-
-				available << (available.IsEmpty() ? ibT("") : ibT(", ")) << entry->GetName();
-				if (entry->GetName().IsSameAs(wanted, false))
-					command.AppendCommand(entry->GetId());
-			}
-
-			// …then the ones the OBJECT declares, which every form of it inherits.
-			if (!command.IsOk()) {
-				if (ibValueMetaObject* owner = ibFindMetaObjectById(activeMetaData,
-						(ibMetaID)(std::int32_t)ArgForm().Whole(params))) {
-
-					if (ibValueMetaObject* holder = owner->GetParent()) {
-						for (unsigned int index = 0; index < holder->GetChildCount(); ++index) {
-
-							ibValueMetaObject* child = holder->GetChild(index);
-							if (child == nullptr || child->IsDeleted()
-								|| child->GetClassType() != g_metaCommandCLSID)
-								continue;
-
-							available << (available.IsEmpty() ? ibT("") : ibT(", "))
-								<< child->GetName();
-							if (child->GetName().IsSameAs(wanted, false))
-								command.AppendCommand(child->GetMetaID());
-						}
-					}
-				}
+			// ⭐⭐ THE COMMANDS THE INSPECTOR OFFERS — the form's one gather (GatherFormCommands), the picker's and the
+			// navigator's: the form's own, the standard actions of the form and of its tables, the configuration's.
+			// Named by its path, as the button's cell shows it ('Form.Close', 'Form.<table>.Add'), or by its name in
+			// the tree; the first in the gather's order wins, the form's own first. A list of its own here offered the
+			// form's commands and the object's alone (2026-11-02: "Update" - "Available: none").
+			for (const ibCommandSourceEntry& entry : GatherFormCommands(form)) {
+				const ibString& path = entry.fullName.IsEmpty() ? entry.label : entry.fullName;
+				available << (available.IsEmpty() ? ibT("") : ibT(", ")) << path;
+				if (!command.IsOk() && (path.IsSameAs(wanted, false) || entry.label.IsSameAs(wanted, false)))
+					command = entry.desc;
 			}
 
 			if (!command.IsOk()) {
@@ -1793,109 +1722,27 @@ public:
 			return false;
 		}
 
-		// THE PATH, RESOLVED HOP BY HOP — the same descent form_source makes, and
-		// the same one the form makes at run time.
-		ibSourceDescription description;
-
-		// ⭐⭐ THE HEAD OF A BINDING IS AN ATTRIBUTE, not the first field of the source — the
-		// form's MAIN one, unless the path opens with another's name (PathHead).
+		// ⭐⭐ WRITTEN AS A SCRIPT WRITES IT — through the binding's own door, ibPropertySource::SetDataValue, which reads
+		// the path with the control's WalkSource: its head is one of the attributes THIS control can show (the main one
+		// unless the path opens with another's name — a table to a list, a grid box to a composition, by the name alone),
+		// then every segment through the source's own explorers, across references, as deep as the path goes. A segment
+		// that does not resolve raises with what that level offers — said back as the refusal, because the caller's next
+		// move is to pick one. An empty path unbinds, as it does for a script.
 		//
-		// A path is read from the FORM outward: the form holds the object in its
-		// main attribute, and every hop after that walks inside what that attribute
-		// holds. The generated layout writes exactly this — SetSource({ mainAttrId,
-		// field }) — so a binding that starts at the field instead is one hop short
-		// and resolves to nothing. It stored correctly, read back correctly, and
-		// showed as "<not selected>" in the designer: right shape, wrong root.
-		//
-		// The id is form-local, which is why it is not in the source explorer at
-		// all — the explorer describes what the attribute POINTS AT.
-		//
-		// ⭐ AND A NAMED HEAD ALONE IS A BINDING — a table to a list, a grid box to a composition:
-		// the control shows the attribute itself, which is what the designer's drag of an
-		// attribute's root row writes.
-		ibString path;
-		bool named = false;
-		const ibFormAttributeValue* head = PathHead(form, ArgPath().Text(params), path, named);
-		if (head == nullptr) {
-			refusal = ibMcpText("This form has no main attribute to bind through - start the path with one of "
-				"its attributes (form_get lists them).");
+		// 🛑 IT WAS WALKED HERE, a road of its own beside the engine's, and a script had none at all: its Source write
+		// was dropped (ibPropertySource::SetDataValue answered false and did nothing).
+		try {
+			binding->SetDataValue(ibValue(ArgPath().Text(params)));
+		}
+		catch (const ibBackendInterruptException&) {
+			form->DecrRef();
+			throw;
+		}
+		catch (const ibCoreException& thrown) {
+			refusal = thrown.GetErrorDescription();
 			form->DecrRef();
 			return false;
 		}
-
-		description.AppendSource(head->GetId());
-
-		ibString walked = named ? head->GetName() : ibString();
-		ibSourceDataObject* source = head->GetSourceValue();
-		const ibSourceExplorer* explorer =
-			source != nullptr ? source->GetSourceExplorer() : nullptr;
-
-		// ⭐⭐ ONE WALK, THROUGH THE SOURCE'S OWN EXPLORERS, as deep as the path goes. A segment
-		// naming a field or a tabular section is a node of the explorer it stands in; a segment
-		// naming a REFERENCE steps into what it points at — the explorer of an empty reference to it
-		// (PointedAt), the tree the designer offers under that reference — and the next segment is
-		// one of ITS fields, a reference again or not. The hop ids are the explorers' on every level,
-		// which is what the form resolves at run time (ibSourceDataObject::ResolvePath).
-		//
-		// 🛑 IT CROSSED INTO METADATA at the first reference and walked the object's children from
-		// there — a second road: modules and forms were offered as fields, and a second reference
-		// ended the walk, `Goods.Goods.Parent.Description` refused with "It offers: ." (2026-10-28).
-		std::vector<ibValue> held;   // the references stepped into (PointedAt)
-
-		ibStringTokenizer segments(path, ibT("."));
-		while (segments.HasMoreTokens()) {
-
-			const ibString segment = segments.GetNextToken();
-			const ibSourceExplorer* next = explorer != nullptr
-				? explorer->FindByName(segment) : nullptr;
-
-			if (next == nullptr) {
-
-				ibString available;
-				if (explorer != nullptr) {
-					for (unsigned int index = 0; index < explorer->GetHelperCount(); ++index) {
-						if (const ibSourceExplorer* field = explorer->GetHelper(index))
-							available << (available.IsEmpty() ? ibT("") : ibT(", "))
-								<< field->GetSourceName();
-					}
-				}
-
-				refusal = available.IsEmpty()
-					? ibString::Format(ibMcpText("'%s' holds a value - nothing unfolds from it, so '%s' cannot follow."),
-						walked.IsEmpty() ? head->GetName() : walked, segment)
-					: ibString::Format(ibMcpText("'%s' has no field called '%s'. It offers: %s."),
-						walked.IsEmpty() ? head->GetName() : walked, segment, available);
-				form->DecrRef();
-				return false;
-			}
-
-			// The hop RECORDS the type it expects to find there. That is what lets a
-			// later walk notice the configuration drifted under it, rather than
-			// reading a field that is no longer the one the binding meant.
-			description.AppendSource(next->GetSourceId(), next->GetTypeDesc().GetFirstClsid());
-			walked = walked.IsEmpty() ? segment : walked + ibT(".") + segment;
-
-			if (next->GetHelperCount() > 0) {
-				explorer = next;            // a section — its columns are nodes
-			}
-			else if (ibSourceDataObject* pointed = IsReference(next->GetTypeDesc().GetFirstClsid())
-				? PointedAt(activeMetaData, next->GetTypeDesc().GetFirstClsid(), held) : nullptr) {
-				explorer = pointed->GetSourceExplorer();   // across the reference — its own fields
-			}
-			else {
-				explorer = nullptr;         // a leaf; a further segment will refuse
-			}
-		}
-
-		// The MAIN head alone is not a binding — it is the form holding the object.
-		// A path of one hop that did not name its head means nothing was named.
-		if (description.GetHopCount() < 2 && !named) {
-			refusal = ibMcpText("Nothing to bind to - pass a path such as 'Warehouse.Code', or an attribute's name.");
-			form->DecrRef();
-			return false;
-		}
-
-		binding->SetValue(description);
 
 		if (!StoreForm(creator, form, result, refusal, ibMcpText("The binding was set"))) {
 			form->DecrRef();
@@ -1904,15 +1751,17 @@ public:
 
 		activeMetaData->Modify(true);
 
-		result.AddField(ibT("bound"), ibDataValue::Bool(true));
+		result.AddField(ibT("bound"), ibDataValue::Bool(!binding->IsEmptyProperty()));
 		SayControl(control, result);
 		result.SetValue(ibT("property"), name);
 
-		// The path as a PERSON reads it, beside the binding as it is STORED. The walked string is
-		// this verb's own rendering and belongs to the answer; the binding itself is said by
-		// ibSourceDescriptionMemory, which is what a form loads and therefore what stays in step —
-		// hop count and all, without this file counting anything.
-		result.SetValue(ibT("path"), walked);
+		// The path as a PERSON reads it — what the binding reads back as, the text a script gets — beside the binding
+		// as it is STORED, said by ibSourceDescriptionMemory, which is what a form loads and therefore what stays in
+		// step — hop count and all, without this file counting anything.
+		ibValue walked;
+		binding->GetDataValue(walked);
+		result.SetValue(ibT("path"), walked.GetString());
+		const ibSourceDescription& description = binding->GetValueAsSourceDesc();
 
 		ibDataValue described;
 		if (!ibSourceDescriptionMemory::WriteNode(described, description)) {

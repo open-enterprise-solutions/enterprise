@@ -55,6 +55,10 @@
 	/* Something to press is at least this tall — a finger, not a pointer, on a touch screen. */
 	--oes-touch: 1.75rem;
 
+	/* A tile's picture: twice a button's 16px at the desktop's root size (13px), 40px on a touch screen (16px) - the
+	   engine's masters, drawn at 64, have the size to give. The thin client draws it at 32 DIP. */
+	--oes-tile-picture: 2.5rem;
+
 	/* A table's scrollbar over the window of rows it holds. */
 	--oes-pager: 12px;
 }

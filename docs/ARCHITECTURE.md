@@ -83,7 +83,7 @@ factories, no checks: a schema stores ids and structure.
 
 | Unit | Holds |
 |---|---|
-| `coreApi.h` | what every header of the core stands on, with no include of its own: `IB_EXPORT` / `IB_IMPORT` (every module's API macro is spelled with them), `CORE_API` / `CORE_EXPORTS`, `IB_FORCEINLINE` / `IB_NOINLINE`, the platform — `__IBMSW__` / `__IBOSX__` / `__IBGTK__` — and the string's character and literal, `ibChar` (`char16_t` on every OS) / `ibT("…")` (`u"…"`) |
+| `coreApi.h` | what every header of the core stands on, with no include of its own: `IB_EXPORT` / `IB_IMPORT` (every module's API macro is spelled with them) and `IB_EXPORT_VTABLE` (every module's `*_API_VTABLE`), `CORE_API` / `CORE_API_VTABLE` / `CORE_EXPORTS`, `IB_FORCEINLINE` / `IB_NOINLINE`, the platform — `__IBMSW__` / `__IBOSX__` / `__IBGTK__` — and the string's character and literal, `ibChar` (`char16_t` on every OS) / `ibT("…")` (`u"…"`) |
 | `core.h` | `coreApi.h`, and id typedefs (`ibRoleID`, `ibMetaID`, `ibSourceId`, `ibFormID`, `ibActionID`, `ibPictureID`, `ibVersionID`), `ibValueTypes`, `ibDateFractions`, `ibCtorObjectType`, the primitives' class ids (`g_valueUndefinedCLSID`, `g_valueBooleanCLSID` … `g_valueNullCLSID`) and `GetIDByVT`, `COMPONENT_TYPE_*`, the packed value node's field names `kValueFieldClsid` "t" / `kValueFieldData` "v" |
 | `variant`, `variant_ptr.h` | `ibVariant` — THE value of the system: a flag, a number, a date, a text, or a counted reference to an object derived from it; its lifecycle, node serialization, the compare family (`CompareValueEQ` …). No base class, no factory; copying a value (`CloneValue`) and looking one up by text (`FindValue`) are the runtime's, not the variant's. A literal, a property's value, a cell, a sheet parameter are each one; the engine's `ibValue` (+ runtime, factory) and the thin client's (+ a small factory) derive from it. `ibVariantPtr<T>` — a counted, typed holder |
 | `clsid.h`, `fstring`, `fnumber`, `fdatetime`, `fboolean`, `guid`, `stringUtils.h` | `ibClassID`, `ibString` (+ pool, `ibEmptyString`), `ibNumber`, `ibDateTime` (a wall-clock reading, no wx; free-form text read by `fdatetimeParse.cpp` — [date-model.md](public/date-model.md)), `ibBoolean`, `ibGuid`. The core's text is `ibString` throughout; `wxString` meets it only in `fstring.h`, the conversion both ways |
@@ -482,13 +482,17 @@ file each — `accumulationRegisterMetadataTotals.cpp`, `informationRegisterMeta
 **The rule for new code:** everything a metaobject contributes to the database SCHEMA —
 `ContributeTables` and the `m_beforeChange` / `m_afterChange` rules attached to the tables it
 declares — goes in `<metatype>MetadataSchema.cpp`, so "what does this become in the database" is one
-file per metatype rather than a section of a large one. Seven exist: `commonObjectSchema.cpp` (the
-record / enum / register / hierarchy families), `accumulationRegisterMetadataSchema.cpp` (the derived
+file per metatype rather than a section of a large one. Eight exist: `commonObjectSchema.cpp` (the
+record / enum / register / hierarchy families; predefined items and their section lines, and what every
+item must declare), `accumulationRegisterMetadataSchema.cpp` (the derived
 totals bundle), `accountingRegisterMetadataSchema.cpp` (the two-sided totals bundle and its views),
-`chartOfAccountsMetadataSchema.cpp` (the analytics-ceiling rule),
-`constantMetadataSchema.cpp` (one column in the shared external `sys_const`),
+`chartOfAccountsMetadataSchema.cpp` (the analytics-ceiling rule; a predefined account's analytics),
+`chartOfCharacteristicTypesMetadataSchema.cpp` (a predefined characteristic's `Type`),
+`chartOfCalculationTypesMetadataSchema.cpp` (a predefined calculation type's relation lines),
+`metaStoredValueObjectSchema.cpp` (a constant: one column in the shared external `sys_const`),
 `calculationRegisterMetadataSchema.cpp` (the lookup indexes `_DIX` / `_RIX`, and the recalculation's marks
-where `UseRecalculation` is on). Declaring the table and
+where `UseRecalculation` is on). Each level adds its own rule to a table (`m_beforeChange += …`); the
+differ asks them all. Declaring the table and
 declaring the rule that guards it are the same statement, so they cannot drift apart —
 [query-engine-layers.md](private/query-engine-layers.md) § L3.
 

@@ -36,7 +36,7 @@
 #include "core/stringUtils.h"         // stringUtils::GenerateSynonym (Synonym fallback, mirrors metaObject)
 
 class BACKEND_API ibSourceDataObject;
-class BACKEND_API ibDataNode;
+class ibDataNode;
 class BACKEND_API ibMetaData;
 class FRMSERVER_API ibValueForm;
 
@@ -102,6 +102,9 @@ class FRMSERVER_API ibFormAttributeValue :
 		// tooltip comes from the field synonym, not a per-attribute comment). Its header IS the Synonym.
 		ibString GetComment() const { return ibEmptyString; }
 		bool     IsMain() const { return m_isMain; }
+		// Added by the form's MODULE while it is open (ibValueForm::AddAttribute(name, typeDesc)) rather than designed:
+		// not stored with the form, and the only kind a module may remove.
+		bool     IsAddedByModule() const { return m_isAddedByModule; }
 		ibMetaID GetId() const { return m_attributeId; }
 
 		// Holder-only (NOT on the interface) — reached through friendship from the holder / form:
@@ -109,9 +112,9 @@ class FRMSERVER_API ibFormAttributeValue :
 		bool IsTypeProperty(const ibProperty* prop) const { return prop == m_propertyType; }
 		void SetAttributeName(const ibString& name) { m_propertyName->SetValue(name); }
 		void SetMainAttribute(bool main) { m_isMain = main; }
+		void SetAddedByModule(bool added) { m_isAddedByModule = added; }
 		ibValueForm* GetOwnerForm() const { return m_ownerForm; }
 		void SetOwnerForm(ibValueForm* ownerForm) { m_ownerForm = ownerForm; }
-		void FillMembers(ibMemberTable& helper) const;   // bound in ctor
 		virtual bool ReadProperty(const ibDataNode& node) override;
 		virtual bool WriteProperty(ibDataNode& node) const override;
 		void SetAttributeId(const ibMetaID& id) { m_attributeId = id; }
@@ -133,6 +136,7 @@ class FRMSERVER_API ibFormAttributeValue :
 
 		ibValueForm* m_ownerForm;
 		bool         m_isMain = false;
+		bool         m_isAddedByModule = false;
 		ibMetaID     m_attributeId = wxNOT_FOUND;
 
 		ibPropertyCategory* m_categoryCommon = ibPropertyObject::CreatePropertyCategory(ibT("Common"), _("General"));
@@ -186,9 +190,15 @@ public:
 	virtual bool ReadProperty(const ibDataNode& node) override;
 	virtual bool WriteProperty(ibDataNode& node) const override;
 
+	// --- ibValue: the attribute's STRUCTURE as a script reads it (`ThisForm.Attributes`) — the properties of what it
+	// accumulates (its description, and its value's when that has any), read-only. Its VALUE is read by its name.
+	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;
+
 	// Re-accumulate: detach all, attach the attribute, then the held value (if it is a
 	// property-object). Called on construction and whenever the value / Type changes.
 	void Refresh();
+	// …and the members are what it accumulates: one per property of each attached object (bound in ctor).
+	void FillMembers(ibMemberTable& helper) const;
 
 	// ibBackendFormAttributeValue FAÇADE — outside code reads name / id / type through the HOLDER;
 	// the concrete description (ibFormAttribute) is never exposed. The holder forwards internally.
@@ -198,7 +208,10 @@ public:
 	ibMetaID GetId() const override { return m_attribute->GetId(); }
 	bool     IsMain() const override { return m_attribute->IsMain(); }
 	const ibTypeDescription& GetTypeDesc() const override { return m_attribute->GetTypeDesc(); }
-	// …and what it asks of its filling — read by the form's own pass (ibValueForm::CheckFilling).
+
+	// …and, past the interface: whether the module added it (ibValueForm::AddAttribute(name, typeDesc)), and what it
+	// asks of its filling — read by the form's own pass (ibValueForm::CheckFilling).
+	bool     IsAddedByModule() const { return m_attribute->IsAddedByModule(); }
 	ibFormAttributeFillCheck GetFillCheck() const { return m_attribute->GetFillCheck(); }
 
 	// The value this entry manages — kept in sync with the attribute's Type on every get/set

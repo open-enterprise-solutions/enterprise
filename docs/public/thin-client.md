@@ -103,11 +103,13 @@ same process, and wx keeps one class table.
   The form's root carries its own properties (`Title`, `Orient`, …); the tree's captions are the server's.
 - **The desktop's windows, drawn here, decided there.** The list settings window (`ListSettings`, a table's Filter
   command), the report's settings window (`ComposerSettings`, a report's Settings command), the calculator and
-  calendar (`SimpleChoice`), the error window over a script's failure (`Error`), the schedule's editor (`Schedule`)
+  calendar (`SimpleChoice`), a reference's quick choice (`Choice`, `Quick`), the error window over a script's failure (`Error`), the schedule's editor (`Schedule`)
   and a script's printed sheet (`Print`) are the desktop's, copied. The client draws them over what the request
   carries; the server reads, checks and puts on what comes back.
 - **The desktop's controls.** Besides fields, tables, buttons and the rest: notebooks and their pages, radio buttons,
-  sliders, gauges, HTML boxes. A chart box is drawn empty.
+  sliders, gauges, HTML boxes. A chart box is drawn empty. A button's picture stands where its `PictureLocation` says;
+  as a tile (`PictureLocation = Tile`) it stacks its picture, large, over its caption and the `Note` under them, and
+  fills what its sizer gives it. A button whose `View` is `Hyperlink` has no face and no frame, its caption underlined.
 - **The focus brings its tab up.** A click into a form whose tab is not selected (the notebook split in two) selects
   it, as the desktop's did.
 

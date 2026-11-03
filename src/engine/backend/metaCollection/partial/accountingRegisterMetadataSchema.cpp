@@ -79,8 +79,8 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 		const ibString registerName = GetName();
 		const unsigned int chartCount = m_propertyChartOfAccounts->GetValueAsMetaDesc().GetTypeCount();
 
-		out.Shared(GetMetaID(), GetPhysicalTableName()).m_beforeChange =
-			[registerName, chartCount](ibRestructureInfo* report) -> bool {
+		out.Shared(GetMetaID(), GetPhysicalTableName()).m_beforeChange +=
+			[registerName, chartCount](const ibSchemaTable*, ibRestructureInfo* report) -> bool {
 				if (chartCount == 1)
 					return true;
 				if (report != nullptr) {

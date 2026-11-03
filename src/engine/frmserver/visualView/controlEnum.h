@@ -6,6 +6,23 @@ enum ibTitleLocation {
 	eRight
 };
 
+// Where a button's picture stands: Auto where the button puts it (on the left), on the left or the right of its caption,
+// or a tile - the picture large over the caption and the Note under them. The numbers are the ones a saved form holds
+// and the client reads (ibProtocol::ibForm::ibProperty::ibPictureLocation).
+enum ibPictureLocation {
+	ibPictureLocation_Auto,
+	ibPictureLocation_Left,
+	ibPictureLocation_Right,
+	ibPictureLocation_Tile
+};
+
+// How a button is drawn: a button, or a hyperlink - the same button with no face and no frame, its caption underlined.
+// The numbers are the ones a saved form holds and the client reads (ibProtocol::ibForm::ibProperty::ibButtonView).
+enum ibButtonView {
+	ibButtonView_Button,
+	ibButtonView_Hyperlink
+};
+
 enum ibRepresentation {
 	ibRepresentation_Auto,
 	ibRepresentation_Text,
@@ -91,6 +108,30 @@ class FRMSERVER_API ibValueEnumTitleLocation :
 	virtual void CreateEnumeration() {
 		AddEnumeration(ibTitleLocation::eLeft, ibT("Left"), _("Left"));
 		AddEnumeration(ibTitleLocation::eRight, ibT("Right"), _("Right"));
+	}
+private:
+};
+
+class FRMSERVER_API ibValueEnumPictureLocation :
+	public ibValueEnumeration<ibPictureLocation> {
+	public:
+	ibValueEnumPictureLocation() : ibValueEnumeration() {}
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibPictureLocation::ibPictureLocation_Auto, ibT("Auto"), _("Auto"));
+		AddEnumeration(ibPictureLocation::ibPictureLocation_Left, ibT("Left"), _("Left"));
+		AddEnumeration(ibPictureLocation::ibPictureLocation_Right, ibT("Right"), _("Right"));
+		AddEnumeration(ibPictureLocation::ibPictureLocation_Tile, ibT("Tile"), _("Tile"));
+	}
+private:
+};
+
+class FRMSERVER_API ibValueEnumButtonView :
+	public ibValueEnumeration<ibButtonView> {
+	public:
+	ibValueEnumButtonView() : ibValueEnumeration() {}
+	virtual void CreateEnumeration() {
+		AddEnumeration(ibButtonView::ibButtonView_Button, ibT("Button"), ibGETTEXT_IN_CONTEXT("button view", "Button"));
+		AddEnumeration(ibButtonView::ibButtonView_Hyperlink, ibT("Hyperlink"), _("Hyperlink"));
 	}
 private:
 };

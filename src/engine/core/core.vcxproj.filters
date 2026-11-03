@@ -125,6 +125,9 @@
     <ClCompile Include="description\pictureDescription.cpp">
       <Filter>description</Filter>
     </ClCompile>
+    <ClCompile Include="description\predefinedDescription.cpp">
+      <Filter>description</Filter>
+    </ClCompile>
     <ClCompile Include="description\sourceDescription.cpp">
       <Filter>description</Filter>
     </ClCompile>
@@ -358,6 +361,9 @@
       <Filter>description</Filter>
     </ClInclude>
     <ClInclude Include="description\pictureDescription.h">
+      <Filter>description</Filter>
+    </ClInclude>
+    <ClInclude Include="description\predefinedDescription.h">
       <Filter>description</Filter>
     </ClInclude>
     <ClInclude Include="description\sourceDescription.h">

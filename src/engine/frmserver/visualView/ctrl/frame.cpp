@@ -439,29 +439,15 @@ ibFormVisualDocument* ibValueFrame::GetVisualDocument() const
 //*                              Support methods                             *
 //****************************************************************************
 
+#include "backend/propertyManager/propertyMembers.h"
+
 void ibValueFrame::FillMembers(ibMemberTable& helper) const
 {
-	{
-		ibString propertyName;
-		for (unsigned int idx = 0; idx < ibPropertyObject::GetPropertyCount(); idx++) {
-			ibProperty* property = ibPropertyObject::GetProperty(idx);
-			if (property == nullptr)
-				continue;
-			property->GetName(propertyName);
-			helper.AppendProp(propertyName, idx, eProperty);
-		}
-		//if we have sizerItem then call him
-		ibValueFrame* sizeritem = GetParent();
-		if (sizeritem != nullptr && sizeritem->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
-			for (unsigned int idx = 0; idx < sizeritem->GetPropertyCount(); idx++) {
-				ibProperty* property = sizeritem->GetProperty(idx);
-				if (property == nullptr)
-					continue;
-				property->GetName(propertyName);
-				helper.AppendProp(propertyName, idx, eSizerItem);
-			}
-		}
-	}
+	ibAppendPropertyMembers(helper, *this, true, eProperty);
+	//if we have sizerItem then call him
+	ibValueFrame* sizeritem = GetParent();
+	if (sizeritem != nullptr && sizeritem->GetComponentType() == COMPONENT_TYPE_SIZERITEM)
+		ibAppendPropertyMembers(helper, *sizeritem, true, eSizerItem);
 
 	helper.AppendProp(ibT("Events"), true, false, 0, eEvent);
 }

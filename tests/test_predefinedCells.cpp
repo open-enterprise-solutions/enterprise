@@ -12,11 +12,14 @@
 #include "backend/appData.h"
 #include "backend/compiler/compileCode.h"
 #include "backend/metadataConfiguration.h"
+#include "backend/metadataSerialization.h"   // ibDeserializeValue - a declared value, as the configuration keeps it
 #include "backend/metaCollection/partial/chartOfAccounts.h"
 #include "backend/metaCollection/partial/chartOfCharacteristicTypes.h"
 #include "backend/metaCollection/accountingKind/metaAccountingKindObject.h"
 #include "backend/metaCollection/partial/reference/reference.h"
 #include "backend/query/schemaSnapshot.h"
+#include "backend/restructureInfo.h"
+#include "backend/system/value/valueGuid.h"
 #include "backend/system/value/valueType.h"
 #include "core/clsid.h"
 
@@ -81,6 +84,16 @@ const ibSchemaSeedRow* SeedNamed(const ibSchemaSnapshot& snapshot, ibMetaID tabl
 std::shared_ptr<ibDataNode> Node()
 {
 	return std::make_shared<ibDataNode>();
+}
+
+// An item that declares nothing beyond its name, its code and its description — the door's own form.
+ibPredefinedItemDescription Item(const ibString& name, const ibString& code)
+{
+	ibPredefinedItemDescription item;
+	item.m_name = name;
+	item.m_code = code;
+	item.m_description = name;
+	return item;
 }
 
 } // namespace
@@ -148,12 +161,13 @@ TEST(PredefinedCells, ACharacteristicsTypeIsDeclaredSavedAndWritten) {
 	ASSERT_NE(loaded, nullptr);
 	ASSERT_TRUE(loaded->LoadNode(saved));
 	ASSERT_EQ(loaded->GetPredefinedValueArray().size(), 1u);
-	const auto& cells = loaded->GetPredefinedValueArray().front()->GetPredefinedCells();
-	const auto kept = cells.find(chart->GetDataType()->GetMetaID());
-	ASSERT_NE(kept, cells.end());
+	const auto& declared = loaded->GetPredefinedValueArray().front().m_row;
+	const auto kept = declared.find(chart->GetDataType()->GetMetaID());
+	ASSERT_NE(kept, declared.end());
+	const ibValue keptValue = ibDeserializeValue(kept->second.m_value, cfg);
 	ibValueTypeDescription* keptType = nullptr;
-	const ibValue keptValue = loaded->UnpackPredefinedCell(kept->second);
 	ASSERT_TRUE(keptValue.ConvertToValue(keptType));
+	ASSERT_NE(keptType, nullptr);
 	EXPECT_EQ(keptType->GetTypeDesc().GetPrecision(), 15u);
 
 	// A word that is no type is refused, naming the word.
@@ -244,10 +258,93 @@ TEST(PredefinedCells, AnAccountsSideAndFlagsAreDeclaredAndWritten) {
 	EXPECT_TRUE(refused(chart->GetMetaID(), wxT("AccountType"), ibDataValue::String(wxT("Sideways"))).Contains(wxT("Sideways")));
 	EXPECT_TRUE(refused(chart->GetMetaID(), wxT("Currency"), ibDataValue::Bool(true)).Contains(wxT("Currency")));
 	EXPECT_TRUE(refused(catalog->GetMetaID(), wxT("AccountType"), ibDataValue::String(wxT("Active"))).Contains(wxT("Warehouses")));
+	// The side is required: not declaring it is refused, not taken as "the data's".
+	EXPECT_TRUE(refused(chart->GetMetaID(), wxT("AccountType"), ibDataValue()).Contains(wxT("AccountType")));
+
+	// ⚠ `false` IS DECLARED, as surely as `true`: an account said not to be off-balance keeps the cell, and the seed
+	// writes it — taken for "not declared", the column would keep whatever the data holds.
+	{
+		ibDataNode params, result;
+		params.SetValue(wxT("id"), (std::int32_t)chart->GetMetaID());
+		params.SetValue(wxT("name"), ibString(wxT("Capital")));
+		auto values = Node();
+		values->SetValue(wxT("OffBalance"), false);
+		params.AddField(wxT("values"), ibDataValue::Child(values));
+		ASSERT_TRUE(CallTool(wxT("predefined_set"), params, result, refusal)) << refusal.ToStdString();
+	}
+	const ibSchemaSnapshot after = cfg->BuildSchemaSnapshot();
+	const ibSchemaSeedRow* capital = SeedNamed(after, chart->GetMetaID(), wxT("Capital"));
+	ASSERT_NE(capital, nullptr);
+	const ibValue* notOffBalance = SeedCell(*capital, chart->GetOffBalance());
+	ASSERT_NE(notOffBalance, nullptr);
+	EXPECT_FALSE(notOffBalance->GetBoolean());
+
+	// An account added without a side is born with the chart's default one — whoever adds it.
+	{
+		ibDataNode params, result;
+		params.SetValue(wxT("id"), (std::int32_t)chart->GetMetaID());
+		params.SetValue(wxT("name"), ibString(wxT("Cash")));
+		params.SetValue(wxT("code"), ibString(wxT("50")));
+		ASSERT_TRUE(CallTool(wxT("predefined_add"), params, result, refusal)) << refusal.ToStdString();
+		const auto item = result.FindChild(ibT("item"));
+		ASSERT_TRUE(item);
+		const auto said = item->FindChild(ibT("values"));
+		ASSERT_TRUE(said);
+		EXPECT_EQ(said->GetValue<ibString>(ibT("AccountType")), ibString(wxT("Active")));
+	}
 }
 
-// An account's analytics are rows of its kinds section: written as lines OWNED by the account, and unfolded
-// into its kind columns, the way saving an account writes them.
+// What an item declares is what the object holds: a catalog's own attribute is declared like an account's side, and
+// written by the apply - but never required, so an item that does not declare it leaves it the data's.
+TEST(PredefinedCells, ACatalogsOwnAttributeIsDeclaredAndWritten) {
+	wxInitializer wx;
+	if (!wx.IsOk())
+		GTEST_SKIP() << "wxBase init failed (no wxApp host)";
+	ActiveConfiguration active;
+	if (!active.m_ok)
+		GTEST_SKIP() << "appData env unavailable headless";
+	ibMetaDataConfigurationFile* cfg = active.m_cfg.get();
+
+	auto* catalog = dynamic_cast<ibValueMetaObjectRecordDataHierarchyMutableRef*>(
+		cfg->CreateMetaObject(g_metaCatalogCLSID, cfg->GetCommonMetaObject(), false));
+	ASSERT_NE(catalog, nullptr);
+	catalog->SetName(wxT("Warehouses"));
+	ibValueMetaObject* address = cfg->CreateMetaObject(g_metaAttributeCLSID, catalog, false);
+	ASSERT_NE(address, nullptr);
+	address->SetName(wxT("Address"));
+	ASSERT_TRUE(cfg->RunDatabase());
+
+	ibString refusal;
+	{
+		ibDataNode params, result;
+		params.SetValue(wxT("id"), (std::int32_t)catalog->GetMetaID());
+		params.SetValue(wxT("name"), ibString(wxT("Main")));
+		auto values = Node();
+		values->SetValue(wxT("Address"), ibString(wxT("1 Harbour Road")));
+		params.AddField(wxT("values"), ibDataValue::Child(values));
+		ASSERT_TRUE(CallTool(wxT("predefined_add"), params, result, refusal)) << refusal.ToStdString();
+	}
+	{
+		ibDataNode params, result;
+		params.SetValue(wxT("id"), (std::int32_t)catalog->GetMetaID());
+		params.SetValue(wxT("name"), ibString(wxT("Transit")));
+		ASSERT_TRUE(CallTool(wxT("predefined_add"), params, result, refusal)) << refusal.ToStdString();
+	}
+
+	const ibSchemaSnapshot snapshot = cfg->BuildSchemaSnapshot();
+	const ibSchemaSeedRow* main = SeedNamed(snapshot, catalog->GetMetaID(), wxT("Main"));
+	const ibSchemaSeedRow* transit = SeedNamed(snapshot, catalog->GetMetaID(), wxT("Transit"));
+	ASSERT_NE(main, nullptr);
+	ASSERT_NE(transit, nullptr);
+	const auto* attribute = catalog->FindAnyAttributeObjectByFilter(address->GetMetaID());
+	const ibValue* written = SeedCell(*main, attribute);
+	ASSERT_NE(written, nullptr);
+	EXPECT_EQ(written->GetString(), ibString(wxT("1 Harbour Road")));
+	EXPECT_EQ(SeedCell(*transit, attribute), nullptr);
+}
+
+// An account's analytics are rows of its kinds section: seed rows of the section's own table, found by the account
+// and the position (the section's key), and unfolded into its kind columns, the way saving an account writes them.
 TEST(PredefinedCells, AnAccountsAnalyticsAreLinesItOwns) {
 	wxInitializer wx;
 	if (!wx.IsOk())
@@ -261,7 +358,7 @@ TEST(PredefinedCells, AnAccountsAnalyticsAreLinesItOwns) {
 		cfg->CreateMetaObject(g_metaChartOfCharacteristicTypesCLSID, cfg->GetCommonMetaObject(), false));
 	ASSERT_NE(analytics, nullptr);
 	analytics->SetName(wxT("Analytics"));
-	analytics->AppendPredefinedValue(wxT("Counterparties"), wxT("1"), wxT("Counterparties"));
+	analytics->AppendPredefinedValue(Item(wxT("Counterparties"), wxT("1")));
 
 	auto* chart = dynamic_cast<ibValueMetaObjectChartOfAccounts*>(
 		cfg->CreateMetaObject(g_metaChartOfAccountsCLSID, cfg->GetCommonMetaObject(), false));
@@ -269,7 +366,7 @@ TEST(PredefinedCells, AnAccountsAnalyticsAreLinesItOwns) {
 	chart->SetName(wxT("Balance"));
 	chart->GetChartOfCharacteristicTypes()->SetValue(ibMetaDescription(analytics->GetMetaID()));
 	chart->ApplyAccountDimensionKindType();
-	chart->AppendPredefinedValue(wxT("Settlements"), wxT("60"), wxT("Settlements"));
+	chart->AppendPredefinedValue(Item(wxT("Settlements"), wxT("60")));
 	ASSERT_TRUE(cfg->RunDatabase());
 
 	ibValueMetaObjectAccountDimensionKindsTable* kinds = chart->GetAccountDimensionKindsTable();
@@ -290,17 +387,23 @@ TEST(PredefinedCells, AnAccountsAnalyticsAreLinesItOwns) {
 	};
 	ASSERT_TRUE(declare(wxT("Counterparties"), refusal)) << refusal.ToStdString();
 
-	const ibGuid counterparties = analytics->GetPredefinedValueArray().front()->GetPredefinedGuid();
-	const ibGuid settlements = chart->FindPredefinedValue(wxT("Settlements"))->GetPredefinedGuid();
+	const ibGuid counterparties = analytics->GetPredefinedValueArray().front().m_guid;
+	const ibGuid settlements = chart->FindPredefinedValue(wxT("Settlements"))->m_guid;
 
 	const ibSchemaSnapshot snapshot = cfg->BuildSchemaSnapshot();
 
-	// The section's row, owned by the account, at position 1.
+	// The section's row, the account's, at position 1 — the two cells its key is.
 	const ibSchemaTable* section = snapshot.Find(kinds->GetMetaID());
 	ASSERT_NE(section, nullptr);
+	ASSERT_EQ(section->m_seedKey.size(), 2u);
 	ASSERT_EQ(section->m_seed.size(), 1u);
 	const ibSchemaSeedRow& line = section->m_seed.front();
-	EXPECT_EQ(line.m_owner, settlements);
+	const auto owner = line.m_values.find(section->m_seedKey.front()->GetColumnId());
+	ASSERT_NE(owner, line.m_values.end());
+	ibValueGuid* ownerGuid = nullptr;
+	ASSERT_TRUE(owner->second.ConvertToValue(ownerGuid));
+	ASSERT_NE(ownerGuid, nullptr);
+	EXPECT_EQ(static_cast<ibGuid>(*ownerGuid), settlements);
 	const ibValue* number = SeedCell(line, kinds->GetNumberLine());
 	const ibValue* kindCell = SeedCell(line, kinds->GetAccountDimensionKind());
 	const ibValue* summary = SeedCell(line, kinds->GetSummaryOnly());
@@ -330,16 +433,56 @@ TEST(PredefinedCells, AnAccountsAnalyticsAreLinesItOwns) {
 		cfg->CreateMetaObject(g_metaChartOfAccountsCLSID, cfg->GetCommonMetaObject(), false));
 	ASSERT_NE(loaded, nullptr);
 	ASSERT_TRUE(loaded->LoadNode(saved));
-	const auto& keptLines = loaded->FindPredefinedValue(wxT("Settlements"))->GetPredefinedLines();
-	const auto keptKinds = keptLines.find(kinds->GetMetaID());
-	ASSERT_NE(keptKinds, keptLines.end());
+	const auto& keptTables = loaded->FindPredefinedValue(wxT("Settlements"))->m_tables;
+	const auto keptKinds = keptTables.find(kinds->GetMetaID());
+	ASSERT_NE(keptKinds, keptTables.end());
 	ASSERT_EQ(keptKinds->second.size(), 1u);
-	EXPECT_EQ(keptKinds->second.front().m_id, line.m_id);
+	EXPECT_EQ(keptKinds->second.front().count(kinds->GetAccountDimensionKind()->GetMetaID()), 1u);
 
 	// A kind that is not a predefined item of the bound chart is refused, naming it.
 	refusal.clear();
 	EXPECT_FALSE(declare(wxT("Nobody"), refusal));
 	EXPECT_TRUE(refusal.Contains(wxT("Nobody"))) << refusal.ToStdString();
+
+	// ⭐ MORE ROWS THAN THE CHART TAKES (MaxAccountDimensionCount, 3 by default) REFUSE THE APPLY before a statement: the
+	// accounts table's check before the update says it in the ledger, naming the account.
+	{
+		ibDataNode params, result;
+		params.SetValue(wxT("id"), (std::int32_t)chart->GetMetaID());
+		params.SetValue(wxT("name"), ibString(wxT("Settlements")));
+		std::vector<ibDataValue> rows;
+		for (unsigned int idx = 0; idx <= chart->GetMaxAccountDimensionCount(); idx++) {
+			auto row = Node();
+			row->SetValue(wxT("AccountDimensionKind"), ibString(wxT("Counterparties")));
+			rows.push_back(ibDataValue::Child(row));
+		}
+		auto lines = Node();
+		lines->AddField(kinds->GetName(), ibDataValue::Array(rows));
+		params.AddField(wxT("lines"), ibDataValue::Child(lines));
+		refusal.clear();
+		ASSERT_TRUE(CallTool(wxT("predefined_set"), params, result, refusal)) << refusal.ToStdString();
+
+		const ibSchemaSnapshot overfull = cfg->BuildSchemaSnapshot();
+		const ibSchemaTable* accounts = overfull.Find(chart->GetMetaID());
+		ASSERT_NE(accounts, nullptr);
+		ibRestructureInfo report;
+		EXPECT_FALSE(accounts->m_beforeChange(nullptr, &report));
+		ASSERT_TRUE(report.HasErrors());
+		EXPECT_TRUE(report.At(0).descr.Contains(wxT("Settlements"))) << report.At(0).descr.ToStdString();
+
+		ASSERT_TRUE(declare(wxT("Counterparties"), refusal)) << refusal.ToStdString();   // back to the one row
+	}
+
+	// ⭐ A KIND THE ANALYTICS NAME, REMOVED FROM ITS CHART, REFUSES THE APPLY before a statement — not half way through:
+	// the accounts table's event before the update starts says it in the ledger, naming the account.
+	analytics->DeletePredefinedValue(counterparties);
+	const ibSchemaSnapshot stale = cfg->BuildSchemaSnapshot();
+	const ibSchemaTable* accounts = stale.Find(chart->GetMetaID());
+	ASSERT_NE(accounts, nullptr);
+	ibRestructureInfo report;
+	EXPECT_FALSE(accounts->m_beforeChange(nullptr, &report));
+	ASSERT_TRUE(report.HasErrors());
+	EXPECT_TRUE(report.At(0).descr.Contains(wxT("Settlements"))) << report.At(0).descr.ToStdString();
 }
 
 // A type description travels packed, as any other value does.

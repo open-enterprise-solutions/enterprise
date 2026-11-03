@@ -12,5 +12,6 @@
 #else
 #define PROTOCOL_API IB_IMPORT
 #endif
+#define PROTOCOL_API_VTABLE IB_EXPORT_VTABLE
 
 #endif

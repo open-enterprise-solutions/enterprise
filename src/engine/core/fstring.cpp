@@ -71,7 +71,10 @@ struct ibString::Impl : ibString::Shared
 	bool Alone() const noexcept { return m_refCount.load(std::memory_order_acquire) == 1; }
 };
 
-void ibString::Free(Shared* shared) noexcept
+// ⭐ NEVER INLINED: the last owner's going is the rare case, and Release (the header) runs on every one. Pasted into it,
+// the pool's TLS path made Release too big to inline — the core called it from ~ibString, from ibVariant's Reset and Copy
+// (listing, Release x64, 2026-11-02) — so even an empty string's end was a call and a jump.
+IB_NOINLINE void ibString::Free(Shared* shared) noexcept
 {
 	Impl* const impl = Impl::Of(shared);
 	const size_t bytes = Impl::BytesFor(impl->m_cap);

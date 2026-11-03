@@ -42,6 +42,17 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Script language
 
+- **A form module adds an attribute to its open form and binds a control to it.**
+  `ThisForm.Attributes` lists the form's attributes as `ThisForm.Controls` lists its controls: by index,
+  by name and in `Foreach`, each one with its `Name`, `Caption`, `Type` and `FillCheck`.
+  `Attributes.Add(name, type)` takes a `TypeDescription` and answers the new attribute; its value is
+  `ThisForm.<name>` from then on. It lives as long as the form and is not stored with it.
+  `Attributes.Remove(attribute)` removes one the module added, and raises for one the form was
+  designed with or one a control still shows. `ThisForm.Commands` lists the form's commands the same
+  way. `Control.Source = "Prices"` binds a control by the dotted path it reads,
+  `"Goods.Product.Supplier"` across references, the same way `form_bind` does; a path that names
+  nothing there raises, saying what that level offers, and a table bound so gets the columns of what it
+  shows. A form attribute's name is now matched without regard to case, as a module meets it.
 - **`Tstr(text)` without a language reads the user's language.** It read the first language
   written in the text, so every user saw the same one. A language the text does not carry still
   falls back to the first written; a named language is read as before.
@@ -82,8 +93,23 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **An encoding is a member of `TextEncoding`.** `TextReader` and `TextWriter` took a string or another
   enumeration's member without a word; now it is refused, as `HTTPRequest` already refused a string.
 
+## Forms
+
+- **Where a button's picture stands, a button as a tile, a button as a hyperlink.** A button's new `PictureLocation`
+  puts its picture on the left (`Auto`, `Left`) or the right of its caption, or makes it a tile (`Tile`): the picture
+  large over the caption and the new `Note` under them - a price, a count, a state - the button filling what its
+  sizer gives it: a button for a finger, in both clients. Tiles in a grid sizer make a panel of them. Its new `View`
+  draws it as a button or as a hyperlink - no face and no frame, its caption underlined - pressed the same way. What
+  the button shows is still its `Representation`. The protocol is 8. A form saved with them and opened by an earlier
+  designer shows a button with its picture on the left, and saved there it loses its location, its view and its note.
+
 ## The browser client
 
+- **A grid sizer's cells are one size, as in the thin client.** Every column takes an equal share of
+  the width rather than the width of its widest content, and every row is as tall as the tallest. An
+  item that does not stretch keeps its own width at the start of its cell, as there; given `Rows`,
+  the grid keeps that many rows, and with no `Cols` counts its columns from them. A column is never
+  narrower than what it holds: a form too narrow for them all widens that one and scrolls.
 - **The start**: the thin client's splash, with arrows and the stage of the start under it, is up from the first paint;
   a login asked takes its place, and it stays until the first window has its rows. The window's title has the OES logo
   beside the configuration's name.
@@ -122,9 +148,23 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   did not travel with the configuration. The analytics are unfolded into the account's kind columns
   as saving an account does, and an account that declares none keeps the rows its data holds. Over
   MCP: `predefined_add` takes `values` and `lines`, `predefined_set` changes them on an item already
-  declared, `predefined_get` shows one item whole and what it may declare.
+  declared (`lines: {Section: null}` stops declaring a section), `predefined_get` shows one item whole and
+  what it may declare — each attribute and column with the types or values it `takes`. In the designer a
+  type, a reference and an enumeration are picked through "...": a characteristic's `Type` among its
+  chart's types of characteristics, a declared value in the designer's window for one.
+- **The apply refuses a predefined item that does not say what it must**, before a statement, naming
+  the item in the ledger: an item with no code or description (whichever the object is presented
+  by), a characteristic with no `Type` or with one its chart's types of characteristics do not take (a
+  type deleted since included), an account with more analytics than its chart takes or a line
+  naming a kind its chart of characteristic types no longer declares, a calculation type whose
+  `Displacing`, `Base` or `Leading` line names no type the section may name, a new declared line
+  where the base already holds one (remove the lines held there first). A line the configuration
+  stops declaring stays, an ordinary line.
 
 ## Fixes
+
+- **`ThisForm.<attribute> = value` writes into the attribute.** It overwrote the attribute's own entry,
+  and the attribute kept its old value.
 
 - **A module nobody has compiled yet is compiled once.** Sessions entering a base together, with the
   bytecode cache empty, each compiled the same modules. The first now holds a lock in the database,
@@ -132,6 +172,10 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 - **Sessions logging in together no longer bring the web server down.** Each visitor rewrote the MCP
   server's settings as if it owned the process.
+
+- **A reference's quick choice drops under the field again**, in the thin client and in the browser, where it
+  came up as a window of its own. The same goes for the list offered for text typed into a field. A choice closed
+  without one picked no longer picks the first item, such as «Select data type».
 
 - **The process has a memory limit.** `MemoryLimit` in `backend.conf`, in megabytes; 0 is none but the
   operating system's. At 80% no new client or window is let in, at 90% nothing is done but closing a
@@ -157,6 +201,13 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **A selection reads a row's standard attributes.** `Catalogs.X.Select()` and the selections of the
   charts published only `Ref` and the attributes a person added, so reading `Code`, `Description`,
   `DeletionMark` or `IsFolder` from a row was "field not found".
+
+- **`config_check` names a register that the save would refuse**: a register with nothing in it, or one
+  written by a recorder that no document posts into, sequences included. The save refuses the whole
+  configuration over one of them, so every other change made in a session waited behind it, and the
+  first sign of it was that refusal. The check asks the question the save asks and reports it in the
+  same words, before anything is saved. A sequence with no dimensions has one border and is saved;
+  it is not reported.
 
 - **A list filtered by «contains» finds the rows that contain the value.** On a list read from the
   base the condition reached the database as `LIKE 'value'`, an exact match, so "Comment contains
@@ -218,3 +269,8 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   - On macOS, Start without debugging starts the thin client. The designer looked for a plain file and missed the
     client's bundle.
   - A composer has no "Composition data" row in the inspector.
+- **MCP: a common picture takes its image through `picture_set`** — `data` (base64 PNG) or `svg`, with a
+  `name`. A `Picture` object could be declared with `metadata_create` and never given anything to show:
+  `picture_set` refused it as having no picture of its own, and `metadata_set` on its `Picture` asked for
+  a structure. The image is kept in the configuration, the picture is listed under `picture_list` →
+  `configuration`, and `metadata_set` on that property now names `picture_set`.

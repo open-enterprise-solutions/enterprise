@@ -2012,18 +2012,15 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 		return false;
 	}
 
-	// A VALUE IS EITHER A SCALAR OR A SHAPE. The parser puts scalars in the field
-	// area and objects in the properties area as a child, so both are looked for —
-	// a caller sending back what it read should not have to know which it holds.
+	// A VALUE IS EITHER A SCALAR OR A SHAPE — one field either way: a node's fields and its children are one set, a
+	// child a field of its own kind (dataBuilder.h, FindChild).
 	ibDataValue value;
-	if (auto scalar = params.FindField(ibMcpValueArgument().Name()))
-		value = *scalar;
-	else if (auto composite = params.FindChild(ibMcpValueArgument().Name())) {
-		value = ibDataValue::Child(std::make_shared<ibDataNode>(*composite));
-		// …and a picture's id comes back as the digits this door sent out — turned into a number here,
-		// because the property stores one (mcpTool.h, ibMcpPictureIdAsText).
-		ibMcpPictureIdAsNumber(value);
-	}
+	if (auto given = params.FindField(ibMcpValueArgument().Name()))
+		value = *given;
+	// …and a picture's id comes back as the digits this door sent out — turned into a number here, because the property
+	// stores one (mcpTool.h, ibMcpPictureIdAsText). Asked of a shape found as a child alone, it was asked of none since
+	// the two sets became one: a picture of the engine's was refused in the shape form_control gives it (2026-11-02).
+	ibMcpPictureIdAsNumber(value);
 
 	// 🛑⭐⭐ A CAPTION IN ONE LANGUAGE, WHERE THE CONFIGURATION DECLARES SEVERAL, IS REFUSED — every
 	// session meets this door, which is the only way every session knows the rule (Max, 2026-09-10:
@@ -2103,6 +2100,16 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 				  "DynamicList, as type_list names them - when a field of its kind may hold it. A length, a "
 				  "precision and scale, a composite: metadata_set_type. It holds %s now."),
 				name, holds.IsEmpty() ? ibMcpText("nothing") : holds);
+			return false;
+		}
+
+		// ⭐ AND THE IMAGE A CONFIGURATION'S PICTURE OBJECT HOLDS has a verb too: picture_set takes it as base64
+		// PNG bytes or as SVG, and measures it itself - the {Name, Buffer, Width, Height} it reads back in is not
+		// a shape to assemble by hand (#190).
+		if (dynamic_cast<const ibPropertyExternalPicture*>(property) != nullptr) {
+			refusal = refused + ibT(' ') + ibString::Format(
+				ibMcpText("'%s' is the image itself: picture_set takes it, with `data` (base64 PNG bytes) or "
+				  "`svg`, and a `name`."), name);
 			return false;
 		}
 

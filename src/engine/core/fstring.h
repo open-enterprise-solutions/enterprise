@@ -76,7 +76,11 @@ struct ibWideBuffer : std::wstring {
 
 // --- ibString ---------------------------------------------------------------
 
-class CORE_API ibString
+// ⭐ EXPORTED MEMBER BY MEMBER, NOT AS A CLASS. A class marked dllimport has its constructor and destructor CALLED
+// through the import table by MSVC even where their bodies are here (measured 2026-11-02: `~ibString` was 32 920 such
+// calls in a Release backend.dll); a member marked alone leaves the rest of the class to be inlined. What has no body
+// here carries CORE_API itself.
+class ibString
 {
 public:
 	static constexpr size_t npos = static_cast<size_t>(-1);
@@ -85,15 +89,15 @@ public:
 	// An empty string holds no text at all; anything else makes the text once, and a COPY of an
 	// ibString is one more owner of that text — no characters are copied until somebody writes.
 	ibString() noexcept = default;
-	ibString(const ibChar* s);
-	ibString(const ibChar* s, size_t n);
-	explicit ibString(ibChar c, size_t count = 1);  // wxString(ch, count), explicit: a character is not a string
+	CORE_API ibString(const ibChar* s);
+	CORE_API ibString(const ibChar* s, size_t n);
+	CORE_API explicit ibString(ibChar c, size_t count = 1);  // wxString(ch, count), explicit: a character is not a string
 	// The wide boundary — a wxT("…") literal, std::wstring: its characters as they are where wchar_t is two
 	// bytes, a character past the basic plane made a surrogate pair where it is four.
-	ibString(const wchar_t* ws);
-	ibString(const wchar_t* ws, size_t n);
-	ibString(const std::wstring& ws);
-	ibString(const char* utf8);
+	CORE_API ibString(const wchar_t* ws);
+	CORE_API ibString(const wchar_t* ws, size_t n);
+	CORE_API ibString(const std::wstring& ws);
+	CORE_API ibString(const char* utf8);
 
 	// Copy, assign and let go INLINE: a copy is one more owner (an atomic step on the count the facade
 	// knows), and only the last owner's going reaches into the module (Free).
@@ -115,8 +119,8 @@ public:
 	// --- the wx boundary (the only place wxString is touched) ---
 	// Both directions implicit: ibString IS the value type, wxString the
 	// boundary — call sites that expect a wxString get one transparently.
-	ibString(const wxString& s);
-	wxString ToWxString() const;
+	CORE_API ibString(const wxString& s);
+	CORE_API wxString ToWxString() const;
 	operator wxString() const { return ToWxString(); }
 
 	// --- the wide boundary: the OS's wide calls, the C library's, wx's ---
@@ -125,7 +129,7 @@ public:
 #if WCHAR_MAX <= 0xFFFF
 	const wchar_t* wc_str() const noexcept { return reinterpret_cast<const wchar_t*>(c_str()); }
 #else
-	ibWideBuffer   wc_str() const;
+	CORE_API ibWideBuffer wc_str() const;
 #endif
 
 	// --- other conversions (native) ---
@@ -134,34 +138,34 @@ public:
 	const ibChar* c_str() const noexcept { return m_impl != nullptr ? m_impl->Chars() : ibT(""); }
 
 	// UTF-8 form for DB / serialization / wire — native codec, no wxString.
-	std::string ToUtf8() const;
-	void SetUtf8(const char* p, size_t n);
+	CORE_API std::string ToUtf8() const;
+	CORE_API void SetUtf8(const char* p, size_t n);
 
 	// --- query / element access / iteration (no conversion) ---
 	bool   IsEmpty() const noexcept { return m_impl == nullptr || m_impl->m_len == 0; }
 	// True when the string is empty or contains only whitespace. No
 	// allocation — scans the buffer directly (cf. IsBlankString).
-	bool   IsBlank() const noexcept;
+	CORE_API bool IsBlank() const noexcept;
 	size_t Len()     const noexcept { return m_impl != nullptr ? m_impl->m_len : 0; }   // UTF-16 units
 	size_t Length()  const noexcept { return Len(); }  // wxString-name alias (migration convenience)
 	// A text this string owns alone is emptied where it is, and keeps its capacity for what comes next;
 	// a shared one is let go.
-	void   Clear() noexcept;
+	CORE_API void Clear() noexcept;
 	ibString& Empty()      { Clear(); return *this; }   // wx's Empty() CLEARS; IsEmpty() asks
 	// Read at the terminator too: s[Len()] is '\0'.
 	ibChar operator[](size_t i) const { return c_str()[i]; }
 	// ⚠ A WRITABLE CHARACTER makes the text this string's own first; the reference is good until the
 	// string is next copied or changed — held across a copy, it would write into both.
-	ibChar& operator[](size_t i);
+	CORE_API ibChar& operator[](size_t i);
 	ibChar GetChar(size_t i) const { return c_str()[i]; }
-	void     SetChar(size_t i, ibChar c);
+	CORE_API void SetChar(size_t i, ibChar c);
 	ibChar Last() const { return View().back(); }
 	using const_iterator = const ibChar*;
 	using iterator       = ibChar*;
 	const ibChar* begin() const noexcept { return c_str(); }
 	const ibChar* end()   const noexcept { return c_str() + Len(); }
-	ibChar*       begin();   // ⚠ as operator[] above
-	ibChar*       end();
+	CORE_API ibChar* begin();   // ⚠ as operator[] above
+	CORE_API ibChar* end();
 
 	// --- the std::basic_string spelling: positions, npos = not found ---
 	bool   empty()  const noexcept { return IsEmpty(); }
@@ -172,29 +176,29 @@ public:
 	size_t find(ibChar c, size_t start = 0) const          { return View().find(c, start); }
 	size_t rfind(const ibString& sub, size_t start = npos) const { return View().rfind(sub.View(), start); }
 	size_t rfind(ibChar c, size_t start = npos) const         { return View().rfind(c, start); }
-	size_t find_first_of(const ibString& set, size_t start = 0) const;
+	CORE_API size_t find_first_of(const ibString& set, size_t start = 0) const;
 	size_t find_first_of(ibChar c, size_t start = 0) const             { return View().find(c, start); }
-	size_t find_last_of(const ibString& set, size_t start = npos) const;
-	size_t find_first_not_of(const ibString& set, size_t start = 0) const;
+	CORE_API size_t find_last_of(const ibString& set, size_t start = npos) const;
+	CORE_API size_t find_first_not_of(const ibString& set, size_t start = 0) const;
 	size_t find_first_not_of(ibChar c, size_t start = 0) const         { return View().find_first_not_of(c, start); }
 	size_t find_last_not_of(ibChar c, size_t start = npos) const       { return View().find_last_not_of(c, start); }
-	ibString substr(size_t pos = 0, size_t count = npos) const;
-	ibString& erase(size_t pos = 0, size_t count = npos);
-	ibString& insert(size_t pos, const ibString& s);
+	CORE_API ibString substr(size_t pos = 0, size_t count = npos) const;
+	CORE_API ibString& erase(size_t pos = 0, size_t count = npos);
+	CORE_API ibString& insert(size_t pos, const ibString& s);
 	ibString& insert(size_t pos, size_t count, ibChar c) { return insert(pos, ibString(c, count)); }
 	ibString& replace(size_t pos, size_t count, const ibString& s) { erase(pos, count); return insert(pos, s); }
 	ibString& append(const ibString& s) { return *this += s; }
-	ibString& append(const ibChar* s, size_t n);
+	CORE_API ibString& append(const ibChar* s, size_t n);
 	ibString& append(size_t count, ibChar c) { return Append(c, count); }
-	void push_back(ibChar c);
-	void reserve(size_t n);
-	void resize(size_t n, ibChar c = ibT('\0'));
+	CORE_API void push_back(ibChar c);
+	CORE_API void reserve(size_t n);
+	CORE_API void resize(size_t n, ibChar c = ibT('\0'));
 	void swap(ibString& o) noexcept { Shared* const held = m_impl; m_impl = o.m_impl; o.m_impl = held; }
 
 	// --- slicing / search (unit-indexed — wxString's names and answers) ---
-	ibString Mid(size_t first, size_t count = npos) const;
-	ibString Left(size_t count) const;
-	ibString Right(size_t count) const;
+	CORE_API ibString Mid(size_t first, size_t count = npos) const;
+	CORE_API ibString Left(size_t count) const;
+	CORE_API ibString Right(size_t count) const;
 	// Characters from..to INCLUSIVE, as wx has it.
 	ibString SubString(size_t from, size_t to) const { return Mid(from, to - from + 1); }
 	// wx's Find: an int, wxNOT_FOUND (-1) when absent, and a CHARACTER may be sought from the end.
@@ -202,55 +206,55 @@ public:
 	int    Find(const ibString& sub) const { return AsFound(View().find(sub.View())); }
 	int    Find(ibChar c, bool fromEnd = false) const { return AsFound(fromEnd ? View().rfind(c) : View().find(c)); }
 	bool   Contains(const ibString& sub) const { return find(sub) != npos; }
-	size_t Freq(ibChar c) const;
-	bool   StartsWith(const ibString& p, ibString* rest = nullptr) const;
-	bool   EndsWith(const ibString& s, ibString* rest = nullptr) const;
+	CORE_API size_t Freq(ibChar c) const;
+	CORE_API bool StartsWith(const ibString& p, ibString* rest = nullptr) const;
+	CORE_API bool EndsWith(const ibString& s, ibString* rest = nullptr) const;
 	// wx's four, with wx's answers when the character is absent: BeforeFirst / AfterLast give the whole
 	// string, AfterFirst / BeforeLast give nothing.
-	ibString BeforeFirst(ibChar c, ibString* rest = nullptr) const;
-	ibString AfterFirst(ibChar c) const;
-	ibString BeforeLast(ibChar c, ibString* rest = nullptr) const;
-	ibString AfterLast(ibChar c) const;
+	CORE_API ibString BeforeFirst(ibChar c, ibString* rest = nullptr) const;
+	CORE_API ibString AfterFirst(ibChar c) const;
+	CORE_API ibString BeforeLast(ibChar c, ibString* rest = nullptr) const;
+	CORE_API ibString AfterLast(ibChar c) const;
 	// Shell-style mask — `*` any run, `?` one character — ported from wxString::Matches.
-	bool Matches(const ibString& mask) const;
+	CORE_API bool Matches(const ibString& mask) const;
 
 	// --- case: per-char loop ported from wxString::MakeLower/MakeUpper. ---
-	ibString Lower() const;
-	ibString Upper() const;
-	ibString& MakeLower();
-	ibString& MakeUpper();
+	CORE_API ibString Lower() const;
+	CORE_API ibString Upper() const;
+	CORE_API ibString& MakeLower();
+	CORE_API ibString& MakeUpper();
 
 	// --- trim / pad: IN PLACE, as wxString has them ---
 	// Nothing to cut leaves a shared text shared.
-	ibString& Trim(bool fromRight = true);
+	CORE_API ibString& Trim(bool fromRight = true);
 	// Both ends, as a COPY — the runtime's TrimAll, for a string that is not to be changed.
-	ibString TrimAll() const;
+	CORE_API ibString TrimAll() const;
 	enum stripType { leading = 0x1, trailing = 0x2, both = 0x3 };
-	ibString Strip(int how = trailing) const;
-	ibString& Pad(size_t count, ibChar c = ibT(' '), bool fromRight = true);
-	ibString& Truncate(size_t len);
-	ibString& RemoveLast(size_t n = 1);
+	CORE_API ibString Strip(int how = trailing) const;
+	CORE_API ibString& Pad(size_t count, ibChar c = ibT(' '), bool fromRight = true);
+	CORE_API ibString& Truncate(size_t len);
+	CORE_API ibString& RemoveLast(size_t n = 1);
 	ibString& Remove(size_t pos, size_t len = npos) { return erase(pos, len); }
 
 	// --- numbers: wxString::ToLong & co — the WHOLE string must be the number, as wx requires ---
-	bool IsNumber() const;
-	bool ToLong(long* val, int base = 10) const;
-	bool ToULong(unsigned long* val, int base = 10) const;
-	bool ToLongLong(long long* val, int base = 10) const;
-	bool ToULongLong(unsigned long long* val, int base = 10) const;
-	bool ToInt(int* val, int base = 10) const;
-	bool ToUInt(unsigned int* val, int base = 10) const;
-	bool ToDouble(double* val) const;    // the current locale's decimal point, as wx
-	bool ToCDouble(double* val) const;   // always '.', whatever the locale
+	CORE_API bool IsNumber() const;
+	CORE_API bool ToLong(long* val, int base = 10) const;
+	CORE_API bool ToULong(unsigned long* val, int base = 10) const;
+	CORE_API bool ToLongLong(long long* val, int base = 10) const;
+	CORE_API bool ToULongLong(unsigned long long* val, int base = 10) const;
+	CORE_API bool ToInt(int* val, int base = 10) const;
+	CORE_API bool ToUInt(unsigned int* val, int base = 10) const;
+	CORE_API bool ToDouble(double* val) const;    // the current locale's decimal point, as wx
+	CORE_API bool ToCDouble(double* val) const;   // always '.', whatever the locale
 
 	// --- mutation / concat ---
 	// Appending to nothing is taking the other text as it is — one more owner, no characters copied.
-	ibString& operator+=(const ibString& o);
-	ibString& operator+=(const ibChar* s);
-	ibString& operator+=(const wchar_t* s);
-	ibString& operator+=(ibChar c);
+	CORE_API ibString& operator+=(const ibString& o);
+	CORE_API ibString& operator+=(const ibChar* s);
+	CORE_API ibString& operator+=(const wchar_t* s);
+	CORE_API ibString& operator+=(ibChar c);
 	ibString& Append(const ibString& o)     { return *this += o; }
-	ibString& Append(ibChar c, size_t count = 1);
+	CORE_API ibString& Append(ibChar c, size_t count = 1);
 	ibString& Prepend(const ibString& o)    { return insert(0, o); }
 	// A text on the left is read, not taken: taken by value it was counted up only for the append to copy it out
 	// of the shared block and count it down again — two atomic steps per `a + b`. One block of both lengths
@@ -289,7 +293,7 @@ public:
 
 	// …and wx's own string where it still meets ours — a translation `_("…")`, a wx call's answer. Exact,
 	// so the mix is not ambiguous (the two convert into each other), and what comes out is OURS.
-	ibString& operator+=(const wxString& s);
+	CORE_API ibString& operator+=(const wxString& s);
 	friend ibString operator+(ibString a, const wxString& b) { a += b; return a; }
 	friend ibString operator+(const wxString& a, const ibString& b) { ibString r(a); r += b; return r; }
 
@@ -312,7 +316,7 @@ public:
 	// Replace `from` with `to`, in place over the buffer — every occurrence, or the first only
 	// (wxString::Replace semantics). Returns the count. Empty `from` is a no-op (as wxString — it
 	// would otherwise loop forever). Nothing found leaves a shared text shared.
-	size_t Replace(const ibString& from, const ibString& to, bool replaceAll = true);
+	CORE_API size_t Replace(const ibString& from, const ibString& to, bool replaceAll = true);
 
 	// --- comparison (native; case-insensitive folds per-char via ibToLower) ---
 	bool operator==(const ibString& o) const noexcept { return m_impl == o.m_impl || View() == o.View(); }
@@ -322,31 +326,31 @@ public:
 	bool operator>=(const ibString& o) const noexcept { return !(*this < o); }
 	// …and against a literal, exact — see operator+ above for why.
 	bool operator==(const ibChar* s) const noexcept { return View().compare(s != nullptr ? s : ibT("")) == 0; }
-	bool operator==(const wchar_t* s) const;
-	bool operator==(const wxString& s) const;
+	CORE_API bool operator==(const wchar_t* s) const;
+	CORE_API bool operator==(const wxString& s) const;
 	// …and against UTF-8 — a protocol's word, a narrow literal: the bytes decoded as they are compared, no text made of
 	// them (either string would make one, and the two of them made the comparison ambiguous).
-	bool operator==(const char* utf8) const noexcept;
-	bool IsSameAs(const ibString& o, bool caseSensitive = true) const;
+	CORE_API bool operator==(const char* utf8) const noexcept;
+	CORE_API bool IsSameAs(const ibString& o, bool caseSensitive = true) const;
 	// …and exact for a literal and for wx's own string (a bytecode's names), read where they lie —
 	// the ones operator== has, and for the same reason.
-	bool IsSameAs(const ibChar* s, bool caseSensitive = true) const;
-	bool IsSameAs(const wchar_t* s, bool caseSensitive = true) const;
-	bool IsSameAs(const wxString& s, bool caseSensitive = true) const;
-	bool IsSameAs(ibChar c, bool caseSensitive = true) const;
+	CORE_API bool IsSameAs(const ibChar* s, bool caseSensitive = true) const;
+	CORE_API bool IsSameAs(const wchar_t* s, bool caseSensitive = true) const;
+	CORE_API bool IsSameAs(const wxString& s, bool caseSensitive = true) const;
+	CORE_API bool IsSameAs(ibChar c, bool caseSensitive = true) const;
 	int  Cmp(const ibString& o) const noexcept {
 		if (m_impl == o.m_impl) return 0;
 		const int r = View().compare(o.View());
 		return r < 0 ? -1 : (r > 0 ? 1 : 0);
 	}
-	int  CmpNoCase(const ibString& o) const;
-	bool IsAscii() const noexcept;
+	CORE_API int  CmpNoCase(const ibString& o) const;
+	CORE_API bool IsAscii() const noexcept;
 
 	// --- wx spellings of the conversions above ---
 	std::string  ToStdString()  const { return ToUtf8(); }   // UTF-8: the core has no other narrow encoding
 	std::string  ToUTF8()       const { return ToUtf8(); }
 	std::string  utf8_str()     const { return ToUtf8(); }
-	static ibString FromUTF8(const char* s, size_t n = npos);
+	CORE_API static ibString FromUTF8(const char* s, size_t n = npos);
 	static ibString FromUTF8(const std::string& s) { return FromUTF8(s.data(), s.size()); }
 	template <class... Args>
 	int Printf(const ibString& format, const Args&... args) { *this = Format(format, args...); return static_cast<int>(Len()); }
@@ -361,7 +365,7 @@ public:
 	static ibString Format(const ibString& format, const Args&... args);
 
 	// One Unicode code point, as one unit or (past the basic plane) a surrogate pair — a `\uXXXX` in JSON.
-	void AppendCodepoint(uint32_t cp);
+	CORE_API void AppendCodepoint(uint32_t cp);
 
 private:
 	// ⭐ THE BLOCK'S HEADER is what the facade knows of its text: the owners' count — enough to copy a string
@@ -386,7 +390,7 @@ private:
 		if (shared != nullptr && shared->m_refCount.fetch_sub(1, std::memory_order_acq_rel) == 1)
 			Free(shared);
 	}
-	static void Free(Shared* shared) noexcept;    // the last owner went: the text is destroyed — fstring.cpp
+	CORE_API static void Free(Shared* shared) noexcept;   // the last owner went: the text is destroyed — fstring.cpp
 
 	// A write goes to a text this string owns alone, with room for `room` characters at least: Own copies it
 	// first when anybody else holds it, and grows it when it has no room. SetLength says how much was written.

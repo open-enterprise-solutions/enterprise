@@ -9,6 +9,9 @@ class BACKEND_API ibValueMetaObjectPicture : public ibValueMetaObject {
 	ibPicture GetValueAsPicture() const { return m_propertyPicture->GetValueAsPicture(); }
 	// Which picture it holds — new with each its Picture is given: what its id carries (ibBackendPicture::SendPicture).
 	ibGuid GetValueAsVersion() const { return m_propertyPicture->GetValueAsVersion(); }
+	const ibExternalPictureDescription& GetValueAsPictureDesc() const { return m_propertyPicture->GetValueAsPictureDesc(); }
+	void SetValue(const ibExternalPictureDescription& val) { m_propertyPicture->SetValue(val); }
+	bool IsEmptyPicture() const { return m_propertyPicture->IsEmptyProperty(); }
 
 	ibValueMetaObjectPicture(const ibString& name = ibEmptyString, const ibString& synonym = ibEmptyString, const ibString& comment = ibEmptyString);
 

@@ -76,8 +76,8 @@ TEST(PropertyDefaults, AbsentValueKeepsDeclaredDefault) {
 TEST(PropertyDefaults, PresentValueIsReadEvenWhenItIsTheTypeZero) {
 	DefaultsNode node;
 	ibDataNode stored;
-	stored.SetProperty(wxT("FlagOn"), ibDataValue::Bool(false));   // switched OFF on purpose
-	stored.SetProperty(wxT("Shards"), ibDataValue::Int(0));
+	stored.SetProperty(ibT("FlagOn"), ibDataValue::Bool(false));   // switched OFF on purpose
+	stored.SetProperty(ibT("Shards"), ibDataValue::Int(0));
 
 	EXPECT_TRUE(node.m_propertyFlagOn->SetNodeValue(stored.GetProperty(ibT("FlagOn"))));
 	EXPECT_TRUE(node.m_propertyShards->SetNodeValue(stored.GetProperty(ibT("Shards"))));
@@ -100,7 +100,7 @@ TEST(PropertyDefaults, DefaultFalseIsUnaffectedEitherWay) {
 	EXPECT_FALSE(node.m_propertyFlagOff->GetValueAsBoolean());
 
 	ibDataNode stored;
-	stored.SetProperty(wxT("FlagOff"), ibDataValue::Bool(true));
+	stored.SetProperty(ibT("FlagOff"), ibDataValue::Bool(true));
 	node.m_propertyFlagOff->SetNodeValue(stored.GetProperty(ibT("FlagOff")));
 	EXPECT_TRUE(node.m_propertyFlagOff->GetValueAsBoolean());
 }
@@ -114,8 +114,8 @@ TEST(PropertyDefaults, RoundTripThroughBothDoors) {
 	source.m_propertyShards->SetValue(3);
 
 	ibDataNode saved;
-	saved.SetProperty(wxT("FlagOn"), source.m_propertyFlagOn->GetNodeValue());
-	saved.SetProperty(wxT("Shards"), source.m_propertyShards->GetNodeValue());
+	saved.SetProperty(ibT("FlagOn"), source.m_propertyFlagOn->GetNodeValue());
+	saved.SetProperty(ibT("Shards"), source.m_propertyShards->GetNodeValue());
 
 	DefaultsNode loaded;
 	loaded.m_propertyFlagOn->SetNodeValue(saved.GetProperty(ibT("FlagOn")));

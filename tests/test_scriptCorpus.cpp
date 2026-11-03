@@ -148,7 +148,7 @@ std::vector<ibString> CorpusFiles()
 // it binds Manager: without it a script that adds two numbers compiles and one
 // that takes a square root does not, which measures the host and not the reader.
 struct ibCorpusHost {
-	ibValueCorpusOutput m_valueSystem;
+	ibValuePtr<ibValueCorpusOutput> m_valueSystem{ new ibValueCorpusOutput() };
 
 	// The system ENUMERATIONS - RoundMode, Chars, TextEncoding - reach a script the same way: a host binds
 	// `EnumManager` as a transparent scope (moduleManager.cpp does it for every context type). Taken out of
@@ -156,11 +156,11 @@ struct ibCorpusHost {
 	ibValue m_valueEnums = ibValue::CreateObject(wxT("EnumManager"));
 
 	void Bind(ibCompileCode& compiler) {
-		compiler.AddContextVariable(wxT("System"), &m_valueSystem, true);
+		compiler.AddContextVariable(wxT("System"), m_valueSystem, true);
 		compiler.AddContextVariable(wxT("EnumManager"), m_valueEnums, true);
 	}
 
-	const std::vector<ibString>& GetMessages() const { return m_valueSystem.GetMessages(); }
+	const std::vector<ibString>& GetMessages() const { return m_valueSystem->GetMessages(); }
 };
 
 // WHICH DIALECT the file is in is a property of the FILE, not of the run. CES

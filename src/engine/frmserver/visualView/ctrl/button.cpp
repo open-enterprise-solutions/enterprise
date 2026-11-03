@@ -56,6 +56,9 @@ void ibValueButton::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	state.SetValue(ibProtocol::ibForm::ibState::Representation, static_cast<std::int32_t>(rep));
 	if (rep != ibRepresentation::ibRepresentation_Text && !picture.IsEmptyPicture())
 		state.SetValue(ibProtocol::ibForm::ibState::Picture, ibBackendPicture::SendPicture(picture, GetMetaData()));
+	// A tile's note goes with it; no other picture location shows one, so no other carries it.
+	if (m_propertyPictureLocation->GetValueAsEnum() == ibPictureLocation::ibPictureLocation_Tile)
+		state.SetValue(ibProtocol::ibForm::ibState::Note, m_propertyNote->GetValueAsTranslateString());
 
 	// A button carries ONLY a command — with none bound, OR the bound command DELETED (its path no longer resolves
 	// through the door), it has nothing to do, so it is NOT shown. The orphaned control still lives in the object
@@ -104,9 +107,12 @@ void ibValueButton::WalkGroup(const std::vector<ibFrontendCommandReceiver::ibCom
 
 bool ibValueButton::ReadData(const ibDataNode& node)
 {
+	m_propertyView->SetNodeValue(node.GetProperty(m_propertyView->GetName()));
 	m_propertyTitle->SetNodeValue(node.GetProperty(m_propertyTitle->GetName()));
 	m_propertyRepresentation->SetNodeValue(node.GetProperty(m_propertyRepresentation->GetName()));
 	m_propertyPicture->SetNodeValue(node.GetProperty(m_propertyPicture->GetName()));
+	m_propertyPictureLocation->SetNodeValue(node.GetProperty(m_propertyPictureLocation->GetName()));
+	m_propertyNote->SetNodeValue(node.GetProperty(m_propertyNote->GetName()));
 	m_propertyCommand->SetNodeValue(node.GetProperty(m_propertyCommand->GetName()));   // the button's ONLY binding (hop path)
 
 	return ibValueWindow::ReadData(node);
@@ -114,9 +120,12 @@ bool ibValueButton::ReadData(const ibDataNode& node)
 
 bool ibValueButton::WriteData(ibDataNode& node) const
 {
+	node.SetProperty(m_propertyView->GetName(), m_propertyView->GetNodeValue());
 	node.SetProperty(m_propertyTitle->GetName(), m_propertyTitle->GetNodeValue());
 	node.SetProperty(m_propertyRepresentation->GetName(), m_propertyRepresentation->GetNodeValue());
 	node.SetProperty(m_propertyPicture->GetName(), m_propertyPicture->GetNodeValue());
+	node.SetProperty(m_propertyPictureLocation->GetName(), m_propertyPictureLocation->GetNodeValue());
+	node.SetProperty(m_propertyNote->GetName(), m_propertyNote->GetNodeValue());
 	node.SetProperty(m_propertyCommand->GetName(), m_propertyCommand->GetNodeValue());   // the button's ONLY binding (hop path)
 
 	return ibValueWindow::WriteData(node);

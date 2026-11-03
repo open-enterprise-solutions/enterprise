@@ -12,8 +12,8 @@ ibFormCommandValue::ibFormCommandValue(ibValueForm* ownerForm)
 	: m_ownerForm(ownerForm),
 	  m_commandId(ownerForm != nullptr ? ownerForm->NextFormCommandId() : 0)
 {
-	// The base ibValueLayerObject is a non-member value (no script members of its own) — a form command is RUN
-	// by name (its Action event), not read as a value.
+	// A form command is RUN by name (its Action event); what a script reads of it is its STRUCTURE (ThisForm.Commands).
+	m_members.Bind(this, &ibFormCommandValue::FillMembers);
 }
 
 ibValueFrame* ibFormCommandValue::GetOwnerFrame() const
@@ -33,6 +33,19 @@ bool ibFormCommandValue::OnPropertyChanging(ibProperty* property, const ibVarian
 	if (property == m_propertyName && m_ownerForm != nullptr && !m_ownerForm->IsFormCommandNameUnique(newValue.GetString(), this))
 		return false;
 	return true;
+}
+
+#include "backend/propertyManager/propertyMembers.h"
+
+void ibFormCommandValue::FillMembers(ibMemberTable& helper) const
+{
+	ibAppendPropertyMembers(helper, *this, false);
+}
+
+bool ibFormCommandValue::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
+{
+	const ibProperty* property = GetPropertyByIndex(m_members.GetPropData(lPropNum));
+	return property != nullptr && property->GetDataValue(pvarPropVal);
 }
 
 bool ibFormCommandValue::WriteProperty(ibDataNode& node) const

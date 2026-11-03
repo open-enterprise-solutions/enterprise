@@ -28,6 +28,26 @@ ibDataNode ChoiceRequest(const ibString& caption, const std::vector<ibChoiceItem
 	return request;
 }
 
+// …put to the person, and the ONE item chosen read back.
+bool RequestOne(ibBackendDocFrame& frame, const ibDataNode& request, const std::vector<ibChoiceItem>& items, std::int32_t& chosen)
+{
+	ibDataNode response;
+	if (!frame.Request(request, response))
+		return false;
+
+	// Cancelled is answered with no Id — not item 0, which the first item offered usually is ("Select data type").
+	const auto id = response.FindField(ibProtocol::ibRequest::ibChoice::Id);
+	if (!id || id->Kind() != ibDataKind::Number)
+		return false;
+	for (const ibChoiceItem& item : items) {
+		if (item.id == id->AsInt()) {
+			chosen = item.id;
+			return true;
+		}
+	}
+	return false;
+}
+
 } // namespace
 
 bool ibRequestChoice(const ibString& caption, const std::vector<ibChoiceItem>& items, std::int32_t& chosen)
@@ -36,19 +56,7 @@ bool ibRequestChoice(const ibString& caption, const std::vector<ibChoiceItem>& i
 	if (frame == nullptr || items.empty())
 		return false;
 
-	ibDataNode request = ChoiceRequest(caption, items, frame->GetSession()->GetMetaData());
-	ibDataNode response;
-	if (!frame->Request(request, response))
-		return false;
-
-	const std::int32_t id = response.GetValue<std::int32_t>(ibProtocol::ibRequest::ibChoice::Id);
-	for (const ibChoiceItem& item : items) {
-		if (item.id == id) {
-			chosen = id;
-			return true;
-		}
-	}
-	return false;
+	return RequestOne(*frame, ChoiceRequest(caption, items, frame->GetSession()->GetMetaData()), items, chosen);
 }
 
 bool ibRequestChoice(const ibString& caption, const std::vector<ibChoiceItem>& items, std::vector<std::int32_t>& chosen)
@@ -77,6 +85,17 @@ bool ibRequestChoice(const ibString& caption, const std::vector<ibChoiceItem>& i
 		}
 	}
 	return !chosen.empty();
+}
+
+bool ibRequestQuickChoice(const std::vector<ibChoiceItem>& items, std::int32_t& chosen)
+{
+	ibBackendDocFrame* const frame = ibSession::CurrentFrame();
+	if (frame == nullptr || items.empty())
+		return false;
+
+	ibDataNode request = ChoiceRequest(ibString(), items, frame->GetSession()->GetMetaData());
+	request.SetValue(ibProtocol::ibRequest::ibChoice::Quick, true);
+	return RequestOne(*frame, request, items, chosen);
 }
 
 namespace {

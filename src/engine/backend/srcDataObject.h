@@ -429,6 +429,13 @@ public:
 	bool WalkColumns(const std::vector<ibSourceHop>& path, size_t from, const ibBackendSourceColumn*& leaf,
 		ibString* outText = nullptr, bool* outLeafIsTable = nullptr, bool* outContainerIsTable = nullptr,
 		bool* outAvailable = nullptr) const;
+	// …AND THE SAME WALK READ FROM WORDS: `text` is a dotted path as a module writes it (`Supplier.Region`), the node on
+	// each level found BY NAME, and a hop appended to `path` for each, as the picker writes one. Returns the level the
+	// walk stands on past the last name — a section's columns, the fields of what a reference points at, or the plain
+	// value's own node with nothing under it — kept alive in `held` while the caller reads it. RAISES for a name its
+	// level has nothing called, saying what that level offers; `walked` is what the path before `text` is called.
+	const ibSourceExplorer* WalkColumns(const ibString& text, const ibString& walked, ibSourceDescription& path,
+		std::vector<ibValue>& held) const;
 
 protected:
 	
@@ -442,6 +449,13 @@ protected:
 	// Per-instance self-description — created WITH the source, owner-bound at construction. ONLY
 	// subclasses fill it (each source builds its own nodes); external code reads it via GetSourceExplorer.
 	mutable ibSourceExplorer m_sourceExplorer;
+
+private:
+
+	// ONE STEP DOWN THE EXPLORER TREE — the one both walks (WalkColumns) take: from `node`, found on the level the walk
+	// stands on, to the level the next segment is looked up on. Null when the hop no longer resolves.
+	static const ibSourceExplorer* StepInto(const ibSourceExplorer* node, const ibSourceHop& hop,
+		const class ibTabularDataObject*& table, std::vector<ibValue>& held);
 };
 
 // ----------------------------------------------------------------------------

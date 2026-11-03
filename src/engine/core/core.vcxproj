@@ -175,6 +175,7 @@
     <ClCompile Include="description\homePageDescription.cpp" />
     <ClCompile Include="description\jobScheduleDescription.cpp" />
     <ClCompile Include="description\pictureDescription.cpp" />
+    <ClCompile Include="description\predefinedDescription.cpp" />
     <ClCompile Include="description\sourceDescription.cpp" />
     <ClCompile Include="description\spreadsheetDescription.cpp" />
     <ClCompile Include="description\standardCommandDescription.cpp" />
@@ -284,6 +285,7 @@
     <ClInclude Include="description\homePageDescription.h" />
     <ClInclude Include="description\jobScheduleDescription.h" />
     <ClInclude Include="description\pictureDescription.h" />
+    <ClInclude Include="description\predefinedDescription.h" />
     <ClInclude Include="description\sourceDescription.h" />
     <ClInclude Include="description\spreadsheetDescription.h" />
     <ClInclude Include="description\standardCommandDescription.h" />

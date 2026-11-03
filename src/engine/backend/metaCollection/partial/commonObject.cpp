@@ -14,6 +14,8 @@
 
 #include "backend/metaCollection/partial/reference/reference.h"
 #include "backend/metaCollection/partial/declaredPresentation.h"   // how a reference reads in the designer
+#include "backend/system/value/composition/valueComposerField.h"   // ibMaterializeCompositionValue - a declared line's cell, made live
+#include "backend/metadataSerialization.h"                         // ibDeserializeValue - that cell, read with its configuration
 
 //***********************************************************************
 //*								 metaData                               *
@@ -459,6 +461,34 @@ bool ibValueMetaObjectRecordDataRef::GenerateDataDesc(const ibValueDataObject* o
 	const ibString& second = field.GetString();
 	out.append(parameter.m_separator).append(second.c_str(), second.Len());
 	return true;
+}
+
+ibValue ibValueMetaObjectRecordDataRef::GenerateIdentifier(const ibNumber& counter, const ibString& prefix) const
+{
+	const ibValueMetaObjectAttributeBase* attribute = GetAttributeForCode();
+	if (attribute == nullptr)
+		return ibValue();
+
+	if (attribute->ContainType(ibValueTypes::TYPE_NUMBER))
+		return counter;
+
+	if (attribute->ContainType(ibValueTypes::TYPE_STRING)) {
+		// "<prefix><zero-padded number>" — width derived from the attribute's length.
+		// Defensive else: if length was shrunk in the designer below
+		// what the prefix already takes, drop the prefix and pad the
+		// number to prefix-width so the output keeps a stable size.
+		// Uses ibNumber::Format directly — no int64 cap, big counters OK.
+		const size_t prefLen = prefix.length();
+		const size_t totLen  = (size_t)attribute->GetTypeDesc().GetLength();
+		ibNumber::Format fmt;
+		fmt.minIntDigits = (int)((prefLen < totLen) ? totLen - prefLen : prefLen);
+		return (prefLen < totLen ? prefix : ibString()) + counter.ToString(fmt);
+	}
+
+	wxASSERT_MSG(false, "m_metaAttribute->GetClsidList() != ibValueTypes::TYPE_NUMBER"
+		"|| m_metaAttribute->GetClsidList() != ibValueTypes::TYPE_STRING");
+
+	return wxEmptyValue;
 }
 
 //***********************************************************************
@@ -1050,9 +1080,9 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::GenerateDataDesc(const ibVa
 			out = empty;
 			return true;
 		}
-		for (const auto& item : GetPredefinedValueArray())
-			if (item != nullptr && item->GetPredefinedGuid() == objValue->GetGuid()) {
-				out = ibDeclaredTypeName(this) + ibT(".") + item->GetPredefinedName();
+		for (const ibPredefinedItemDescription& item : GetPredefinedValueArray())
+			if (item.m_guid == objValue->GetGuid()) {
+				out = ibDeclaredTypeName(this) + ibT(".") + item.m_name;
 				return true;
 			}
 	}
@@ -1105,272 +1135,7 @@ ibValuePtr<ibValueRecordDataObjectHierarchyRef> ibValueMetaObjectRecordDataHiera
 	return created;
 }
 
-//***************************************************************************
-//*                       Predefined values                                 *
-//***************************************************************************
-
-#define predefinedBlock 0x1234532
-
-//append predefined value
-void ibValueMetaObjectRecordDataHierarchyMutableRef::AppendPredefinedValue(const ibString& strPredefinedName,
-	const ibString& strCode, const ibString& strDescription,
-	bool valueIsFolder, const wxObjectDataPtr<ibPredefinedValueObject>& valueParent)
-{
-	m_predefinedObjectVector.emplace_back(
-		new ibPredefinedValueObject(wxNewUniqueGuid, strPredefinedName,
-			strCode, strDescription, valueIsFolder, valueParent));
-
-	m_metaData->Modify(true);
-}
-
-void ibValueMetaObjectRecordDataHierarchyMutableRef::SetPredefinedValue(const ibGuid& predefinedGuid,
-	const ibString& strPredefinedName,
-	const ibString& strCode, const ibString& strDescription,
-	bool valueIsFolder, const wxObjectDataPtr<ibPredefinedValueObject>& valueParent)
-{
-	wxObjectDataPtr<ibPredefinedValueObject> foundedPredefinedValue = FindPredefinedValue(predefinedGuid);
-
-	if (foundedPredefinedValue != nullptr) {
-		
-		foundedPredefinedValue->m_strPredefinedName = strPredefinedName;
-		foundedPredefinedValue->m_strCode = strCode;
-		foundedPredefinedValue->m_strDescription = strDescription;
-		foundedPredefinedValue->m_valueIsFolder = valueIsFolder;
-		foundedPredefinedValue->m_valueParent = valueParent;
-		
-		m_metaData->Modify(true);
-		return;
-	}
-
-	m_predefinedObjectVector.emplace_back(
-		new ibPredefinedValueObject(predefinedGuid, strPredefinedName,
-			strCode, strDescription, valueIsFolder, valueParent));
-
-	m_metaData->Modify(true);
-}
-
-void ibValueMetaObjectRecordDataHierarchyMutableRef::DeletePredefinedValue(const ibGuid& predefinedGuid) {
-	
-	std::erase_if(m_predefinedObjectVector,
-		[predefinedGuid](const auto value) { return predefinedGuid == value->GetPredefinedGuid(); });
-
-	m_metaData->Modify(true);
-}
-
-std::vector<ibValueMetaObjectAttributeBase*> ibValueMetaObjectRecordDataHierarchyMutableRef::GetPredefinedLineAttributes(
-	const ibValueMetaObjectTableData* table) const
-{
-	std::vector<ibValueMetaObjectAttributeBase*> columns;
-	if (table == nullptr)
-		return columns;
-	for (ibValueMetaObjectAttributeBase* column : table->GetGenericAttributeArrayObject())
-		if (column != nullptr && !column->IsDeleted() && column != table->GetNumberLine())
-			columns.push_back(column);
-	return columns;
-}
-
-namespace {
-const ibString kCellReferenceOf   = ibT("Of");     // the object a declared reference points into
-const ibString kCellReferenceItem = ibT("Item");   // …and the guid of what it points at
-
-// Declared cells, as written: an Array of { Id - the attribute's metaID, Value - its stored form }.
-ibDataValue WriteCells(const ibValueMetaObjectRecordDataHierarchyMutableRef::ibPredefinedCells& cells)
-{
-	std::vector<ibDataValue> written;
-	for (const auto& cell : cells) {
-		auto entry = std::make_shared<ibDataNode>();
-		entry->SetValue(ibT("Id"), (std::int32_t)cell.first);
-		entry->AddField(ibT("Value"), cell.second);
-		written.push_back(ibDataValue::Child(entry));
-	}
-	return ibDataValue::Array(written);
-}
-
-ibValueMetaObjectRecordDataHierarchyMutableRef::ibPredefinedCells ReadCells(const ibDataValue& written)
-{
-	ibValueMetaObjectRecordDataHierarchyMutableRef::ibPredefinedCells cells;
-	if (written.Kind() != ibDataKind::Array)
-		return cells;
-	for (const ibDataValue& item : written.AsArray()) {
-		const auto entry = item.AsChild();
-		const auto value = entry ? entry->FindField(ibT("Value")) : std::nullopt;
-		if (value && value->Kind() == ibDataKind::Child)
-			cells.insert_or_assign((ibMetaID)entry->GetValue<std::int32_t>(ibT("Id")), *value);
-	}
-	return cells;
-}
-}
-
-ibDataValue ibValueMetaObjectRecordDataHierarchyMutableRef::PackPredefinedCell(const ibValue& value) const
-{
-	std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
-
-	ibValueReferenceDataObject* reference = nullptr;
-	if (value.ConvertToValue(reference) && reference != nullptr && reference->GetMetaObject() != nullptr) {
-		node->SetValue(kCellReferenceOf, (std::int32_t)reference->GetMetaObject()->GetMetaID());
-		node->SetValue(kCellReferenceItem, ibGuid(reference->GetGuid()));
-		return ibDataValue::Child(node);
-	}
-
-	m_metaData->Serialize(value, *node);
-	return ibDataValue::Child(node);
-}
-
-ibValue ibValueMetaObjectRecordDataHierarchyMutableRef::UnpackPredefinedCell(const ibDataValue& stored) const
-{
-	const std::optional<ibDataNode> node = stored.AsChild();
-	if (!node)
-		return ibValue();
-
-	// RAW, as the seed's own references are (commonObjectSchema.cpp): the identity, nothing read.
-	if (node->Has(kCellReferenceItem))
-		return ibValuePtr<ibValueReferenceDataObject>(ibValueReferenceDataObject::Create(m_metaData,
-			(ibMetaID)node->GetValue<std::int32_t>(kCellReferenceOf), node->GetValue<ibGuid>(kCellReferenceItem),
-			ibReferenceLoad::OnDemand));
-
-	return m_metaData->Deserialize(*node);
-}
-
-void ibValueMetaObjectRecordDataHierarchyMutableRef::SetPredefinedCells(const ibGuid& predefinedGuid,
-	const ibPredefinedCells& cells, const ibPredefinedLines& lines)
-{
-	const wxObjectDataPtr<ibPredefinedValueObject> item = FindPredefinedValue(predefinedGuid);
-	if (item == nullptr)
-		return;
-
-	for (const auto& cell : cells) {
-		if (cell.second.Kind() == ibDataKind::Child)
-			item->m_cells.insert_or_assign(cell.first, cell.second);
-		else
-			item->m_cells.erase(cell.first);
-	}
-
-	for (const auto& table : lines) {
-		if (table.second.empty())
-			item->m_lines.erase(table.first);
-		else
-			item->m_lines.insert_or_assign(table.first, table.second);
-	}
-
-	m_metaData->Modify(true);
-}
-
-//***************************************************************************
-//*                       Save & load metaData                              *
-//***************************************************************************
-
-bool ibValueMetaObjectRecordDataHierarchyMutableRef::WriteData(ibDataNode& node) const
-{
-	// predefined values -> an Array of Child{ guid, name, code, description, isFolder, parent — its guid, absent at the top }
-	std::vector<ibDataValue> predefined;
-	for (const auto& value : m_predefinedObjectVector) {
-		auto pv = std::make_shared<ibDataNode>();
-		pv->SetValue(ibT("Guid"), value->GetPredefinedGuid());
-		pv->SetValue(ibT("Name"), value->GetPredefinedName());
-		pv->SetValue(ibT("Code"), value->GetPredefinedCode());
-		pv->SetValue(ibT("Description"), value->GetPredefinedDescription());
-		pv->SetValue(ibT("IsFolder"), (bool)value->IsPredefinedFolder());
-		if (value->GetPredefinedParent() != nullptr)
-			pv->SetValue(ibT("Parent"), value->GetPredefinedParent()->GetPredefinedGuid());
-		// What it declares beyond that (ibPredefinedCells) - absent where it declares nothing, so an item
-		// of a catalog is written exactly as before.
-		if (!value->GetPredefinedCells().empty())
-			pv->AddField(ibT("Cells"), WriteCells(value->GetPredefinedCells()));
-		if (!value->GetPredefinedLines().empty()) {
-			std::vector<ibDataValue> tables;
-			for (const auto& table : value->GetPredefinedLines()) {
-				std::vector<ibDataValue> rows;
-				for (const ibPredefinedLine& line : table.second) {
-					auto row = std::make_shared<ibDataNode>();
-					row->SetValue(ibT("Guid"), line.m_id);
-					row->AddField(ibT("Cells"), WriteCells(line.m_cells));
-					rows.push_back(ibDataValue::Child(row));
-				}
-				auto entry = std::make_shared<ibDataNode>();
-				entry->SetValue(ibT("Table"), (std::int32_t)table.first);
-				entry->AddField(ibT("Rows"), ibDataValue::Array(rows));
-				tables.push_back(ibDataValue::Child(entry));
-			}
-			pv->AddField(ibT("Lines"), ibDataValue::Array(tables));
-		}
-		predefined.push_back(ibDataValue::Child(pv));
-	}
-	node.SetProperty(ibT("Predefined"), ibDataValue::Array(predefined));
-
-	node.SetProperty(m_propertyAttributePredefined->GetName(), m_propertyAttributePredefined->GetNodeValue());
-	node.SetProperty(m_propertyAttributeCode->GetName(), m_propertyAttributeCode->GetNodeValue());
-	node.SetProperty(m_propertyAttributeDescription->GetName(), m_propertyAttributeDescription->GetNodeValue());
-	node.SetProperty(m_propertyAttributeParent->GetName(), m_propertyAttributeParent->GetNodeValue());
-	node.SetProperty(m_propertyAttributeIsFolder->GetName(), m_propertyAttributeIsFolder->GetNodeValue());
-	// A property absent from this pair does not survive the session that set it, and the failure is
-	// silent because the default keeps working.
-	node.SetProperty(m_propertyHierarchyType->GetName(), m_propertyHierarchyType->GetNodeValue());
-	node.SetProperty(m_propertyDataPresentation->GetName(), m_propertyDataPresentation->GetNodeValue());
-
-	return ibValueMetaObjectRecordDataMutableRef::WriteData(node);
-}
-
-bool ibValueMetaObjectRecordDataHierarchyMutableRef::ReadData(const ibDataNode& node)
-{
-	const ibDataValue predefinedVal = node.GetProperty(ibT("Predefined"));
-	if (predefinedVal.Kind() == ibDataKind::Array) {
-		// The parent is linked once every item is read: an item edited to sit under a later one stands before it.
-		std::vector<std::pair<wxObjectDataPtr<ibPredefinedValueObject>, ibGuid>> parents;
-		for (const ibDataValue& item : predefinedVal.AsArray()) {
-			const auto pv = item.AsChild();
-			if (!pv)
-				continue;
-			const ibGuid valueGuid = pv->GetValue<ibGuid>(ibT("Guid"));
-			ibString valueName = pv->GetValue<ibString>(ibT("Name"));
-			ibString valueCode = pv->GetValue<ibString>(ibT("Code"));
-			ibString valueDescription = pv->GetValue<ibString>(ibT("Description"));
-			const bool valueIsFolder = pv->GetValue<bool>(ibT("IsFolder"));
-			m_predefinedObjectVector.emplace_back(
-				new ibPredefinedValueObject(valueGuid, valueName, valueCode, valueDescription, valueIsFolder));
-			ibPredefinedValueObject* const read = m_predefinedObjectVector.back().get();
-			if (const auto cells = pv->FindField(ibT("Cells")))
-				read->m_cells = ReadCells(*cells);
-			if (const auto tables = pv->FindField(ibT("Lines")); tables && tables->Kind() == ibDataKind::Array) {
-				for (const ibDataValue& table : tables->AsArray()) {
-					const auto entry = table.AsChild();
-					const auto rows = entry ? entry->FindField(ibT("Rows")) : std::nullopt;
-					if (!rows || rows->Kind() != ibDataKind::Array)
-						continue;
-					std::vector<ibPredefinedLine>& lines = read->m_lines[(ibMetaID)entry->GetValue<std::int32_t>(ibT("Table"))];
-					for (const ibDataValue& row : rows->AsArray()) {
-						const auto line = row.AsChild();
-						if (!line)
-							continue;
-						const auto lineCells = line->FindField(ibT("Cells"));
-						lines.push_back({ line->GetValue<ibGuid>(ibT("Guid")),
-							lineCells ? ReadCells(*lineCells) : ibPredefinedCells() });
-					}
-				}
-			}
-			if (pv->Has(ibT("Parent")))
-				parents.emplace_back(m_predefinedObjectVector.back(), pv->GetValue<ibGuid>(ibT("Parent")));
-		}
-		for (const auto& parent : parents)
-			parent.first->m_valueParent = FindPredefinedValue(parent.second);
-	}
-
-	m_propertyAttributePredefined->SetNodeValue(node.GetProperty(m_propertyAttributePredefined->GetName()));
-	m_propertyAttributeCode->SetNodeValue(node.GetProperty(m_propertyAttributeCode->GetName()));
-	m_propertyAttributeDescription->SetNodeValue(node.GetProperty(m_propertyAttributeDescription->GetName()));
-	m_propertyAttributeParent->SetNodeValue(node.GetProperty(m_propertyAttributeParent->GetName()));
-	m_propertyAttributeIsFolder->SetNodeValue(node.GetProperty(m_propertyAttributeIsFolder->GetName()));
-
-	m_propertyHierarchyType->SetNodeValue(node.GetProperty(m_propertyHierarchyType->GetName()));
-	// Restate it on the Parent field at once: everything that asks what a parent may be asks the
-	// FIELD, so a configuration loaded and never edited must already say what it declares.
-	ApplyHierarchyType();
-
-	// Absent from a configuration saved before it existed: the kind's own default stands (SetNodeValue
-	// leaves an empty value alone) - Description for a catalog, Code for a chart of accounts.
-	m_propertyDataPresentation->SetNodeValue(node.GetProperty(m_propertyDataPresentation->GetName()));
-
-	return ibValueMetaObjectRecordDataMutableRef::ReadData(node);
-}
+// The predefined items — declared, checked, written and read — are commonObjectPredefined.cpp's.
 
 //***********************************************************************
 //*                           read & save events                        *
@@ -2035,8 +1800,8 @@ void ibValueManagerDataObjectPredefined::FillPredefined(ibMemberTable& helper) c
 	wxASSERT(valueMetaObject);
 
 	//fill custom values
-	for (const auto& object : valueMetaObject->GetPredefinedValueArray()) {
-		helper.AppendProp(object->GetPredefinedName(), true, false);
+	for (const ibPredefinedItemDescription& object : valueMetaObject->GetPredefinedValueArray()) {
+		helper.AppendProp(object.m_name, true, false);
 	}
 }
 
@@ -2050,11 +1815,11 @@ bool ibValueManagerDataObjectPredefined::GetPropVal(const long lPropNum, ibValue
 	const ibValueMetaObjectRecordDataHierarchyMutableRef* valueMetaObject = GetMetaObject();
 	wxASSERT(valueMetaObject);
 
-	const auto& predefinedValue =
+	const ibPredefinedItemDescription* const predefinedValue =
 		valueMetaObject->FindPredefinedValue(m_members.GetPropName(lPropNum));
 	if (predefinedValue == nullptr)
 		return false;
-	pvarPropVal = ibValueReferenceDataObject::Create(valueMetaObject, predefinedValue->GetPredefinedGuid());
+	pvarPropVal = ibValueReferenceDataObject::Create(valueMetaObject, predefinedValue->m_guid);
 	return true;
 }
 
@@ -3111,6 +2876,45 @@ void ibValueRecordDataObjectHierarchyRef::PrepareEmptyObject(const ibValueRecord
 // virtual dispatch lets the same body serve all three.
 //----------------------------------------------------------------------
 
+namespace {
+
+// ⭐ THE LINES A PREDEFINED ITEM'S DECLARATION HOLDS ARE THE CONFIGURATION'S, NOT THE PERSON'S — an account's analytics.
+// Lines 1..K of a section stand as declared (the cells it declares; a column it leaves out is the data's); a person adds
+// after them. A write that removed, moved or changed one of them is refused here (WriteObject). A line is its position
+// (the seed writes the declared ones at 1..K), so a removed or moved line shows as a changed one: what stands at N is
+// compared with what the declaration holds at N.
+void CheckPredefinedTables(const ibValueRecordDataObjectHierarchyRef& object)
+{
+	const ibValueMetaObjectRecordDataHierarchyMutableRef* const metaObject = object.GetMetaObject();
+	const ibGuid guid = object.GetGuid();
+	const ibPredefinedItemDescription* const predefined = metaObject->FindPredefinedValue(guid);
+	if (predefined == nullptr)
+		return;
+
+	const ibMetaData* const metaData = metaObject->GetMetaData();
+	const auto& tables = predefined->m_tables;
+	for (const auto table : metaObject->GetGenericTableArrayObject()) {
+		const auto declared = tables.find(table->GetMetaID());
+		ibValue held;
+		ibValueTabularSectionDataObjectBase* section = nullptr;
+		if (declared == tables.end() || !object.GetValueByMetaID(table->GetMetaID(), held) || !held.ConvertToValue(section))
+			continue;
+		for (std::size_t idx = 0; idx < declared->second.size(); idx++) {
+			bool kept = static_cast<long>(idx) < section->GetRowCount();
+			for (auto cell = declared->second[idx].begin(); kept && cell != declared->second[idx].end(); ++cell) {
+				ibValue value;   // a column the configuration no longer has is not asked
+				if (section->GetValueByMetaID(section->GetItem(static_cast<long>(idx)), cell->first, value))
+					kept = value.CompareValueEQ(ibMaterializeCompositionValue(ibDeserializeValue(cell->second.m_value, metaData), metaData));
+			}
+			if (!kept)
+				ibBackendCoreException::Error(_("%s: line %i of the %s list is declared by the configuration and cannot be removed, moved or changed"),
+					object.GetSourceCaption(), static_cast<int>(idx) + 1, table->GetSynonym());
+		}
+	}
+}
+
+} // namespace
+
 bool ibValueRecordDataObjectHierarchyRef::WriteObject()
 {
 	ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
@@ -3143,6 +2947,10 @@ bool ibValueRecordDataObjectHierarchyRef::WriteObject()
 		if (standartProcessing.GetBoolean())
 			GenerateUniqueIdentifier(prefix.GetString());
 	}
+
+	// After the handlers, which may have touched the lines too; the designer writes no data (DeleteObject).
+	if (!appData->DesignerMode())
+		CheckPredefinedTables(*this);
 
 	if (!SaveData())
 		return refuse(_("%s: failed to save the object data"));

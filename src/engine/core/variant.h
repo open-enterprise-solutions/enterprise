@@ -29,7 +29,10 @@
 
 class ibDataNode;
 
-class CORE_API ibVariant {
+// EXPORTED MEMBER BY MEMBER, as ibString is (fstring.h says why): what has no body here carries CORE_API itself. Its
+// vtable and type info are the class's own, so the class carries CORE_API_VTABLE (coreApi.h) — on Linux and macOS
+// they are otherwise hidden inside core.
+class CORE_API_VTABLE ibVariant {
 public:
 	//ATTRIBUTES:
 	ibValueTypes m_typeClass;  // 1 byte (enum : unsigned char)
@@ -67,27 +70,50 @@ public:
 	};
 public:
 
-	ibVariant();
-	ibVariant(const ibVariant& cParam);
-	ibVariant(ibVariant&& cParam);
-	ibVariant(ibVariant* pParam);
-	ibVariant(ibValueTypes nType, bool readOnly = false);
-	ibVariant(bool cParam); //boolean
-	ibVariant(signed int cParam); //number
-	ibVariant(unsigned int cParam); //number
-	ibVariant(long cParam); //number
-	ibVariant(double cParam); //number
-	ibVariant(const ibNumber& cParam); //number
-	ibVariant(const ibDateTime& cParam); //date
-	ibVariant(int nYear, int nMonth, int nDay, unsigned short nHour = 0, unsigned short nMinute = 0, unsigned short nSecond = 0); //date
-	ibVariant(const char* sParam); //string
-	ibVariant(const ibChar* sParam); //string
-	ibVariant(const std::wstring& sParam); //string
-	ibVariant(const ibString& sParam); //string
-	ibVariant(ibString&& sParam); //string — native move
+	// In the header, with the destructor: every value of the runtime is made, copied and ended here, and the runtime
+	// is across a library's border from variant.cpp, where none of it could be inlined. The constructors that take a
+	// flag, a number, a date or a text write it over the zeroed word, which is every kind's empty value.
+	// ⭐ noexcept WHERE NOTHING IS MADE: a copy is one more owner, a move takes the word over, and the new value is
+	// never read-only, so the write-denied refusal (Reset) cannot be met; a vector moves its values when it grows only
+	// when the move cannot throw. What makes a text or a number of its own (a pointer, a double, a date's parts) may.
+	ibVariant() noexcept : m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_refCount(0), m_dData() {}
+	ibVariant(const ibVariant& cParam) noexcept
+		: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_refCount(0), m_dData() { Copy(cParam); }
+	ibVariant(ibVariant&& cParam) noexcept
+		: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_refCount(0), m_dData() { Move(std::move(cParam)); }
+	ibVariant(ibVariant* pParam) noexcept
+		: m_typeClass(ibValueTypes::TYPE_EMPTY), m_bReadOnly(false), m_refCount(0), m_dData() {
+		if (pParam != nullptr) {
+			m_typeClass = ibValueTypes::TYPE_REFFER;
+			m_pRef = pParam;
+			m_pRef->IncrRef();
+		}
+	}
+	ibVariant(ibValueTypes nType, bool readOnly = false) noexcept   // the zeroed word is the empty value of every kind
+		: m_typeClass(nType), m_bReadOnly(readOnly), m_refCount(0), m_dData() {}
+	ibVariant(bool cParam) noexcept //boolean
+		: m_typeClass(ibValueTypes::TYPE_BOOLEAN), m_bReadOnly(false), m_refCount(0), m_dData() { m_bData = cParam; }
+	ibVariant(signed int cParam) noexcept //number
+		: m_typeClass(ibValueTypes::TYPE_NUMBER), m_bReadOnly(false), m_refCount(0), m_dData() { m_fData = cParam; }
+	ibVariant(unsigned int cParam) noexcept //number
+		: m_typeClass(ibValueTypes::TYPE_NUMBER), m_bReadOnly(false), m_refCount(0), m_dData() { m_fData = cParam; }
+	CORE_API ibVariant(long cParam); //number
+	CORE_API ibVariant(double cParam); //number
+	ibVariant(const ibNumber& cParam) noexcept //number
+		: m_typeClass(ibValueTypes::TYPE_NUMBER), m_bReadOnly(false), m_refCount(0), m_dData() { m_fData = cParam; }
+	ibVariant(const ibDateTime& cParam) noexcept //date
+		: m_typeClass(ibValueTypes::TYPE_DATE), m_bReadOnly(false), m_refCount(0), m_dData() { m_dData = cParam; }
+	CORE_API ibVariant(int nYear, int nMonth, int nDay, unsigned short nHour = 0, unsigned short nMinute = 0, unsigned short nSecond = 0); //date
+	CORE_API ibVariant(const char* sParam); //string
+	CORE_API ibVariant(const ibChar* sParam); //string
+	CORE_API ibVariant(const std::wstring& sParam); //string
+	ibVariant(const ibString& sParam) noexcept //string
+		: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_refCount(0), m_dData() { m_sData = sParam; }
+	ibVariant(ibString&& sParam) noexcept //string — native move
+		: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_refCount(0), m_dData() { m_sData = std::move(sParam); }
 	// …and a wx text, the one a window hands in: without it `ibVariant(wxs)` is ambiguous on GCC and Clang — wxString
 	// reaches ibString, `const wchar_t*` and bool alike, each one user conversion away.
-	ibVariant(const wxString& sParam); //string
+	CORE_API ibVariant(const wxString& sParam); //string
 
 	// ANY OTHER POINTER IS A MISTAKE, the runtime's rule: pointer-to-bool is a standard conversion, and an unrelated
 	// pointer would arrive as TRUE. Only an object (derived from this class) and a text are taken.
@@ -96,36 +122,44 @@ public:
 			!std::derived_from<T, ibVariant>)
 	ibVariant(T*) = delete;
 
-	virtual ~ibVariant();
+	virtual ~ibVariant() {
+		if (m_typeClass == ibValueTypes::TYPE_REFFER && m_pRef && m_pRef != this)
+			m_pRef->DecrRef();
+		else if (m_typeClass == ibValueTypes::TYPE_STRING)
+			m_sData.~ibString();   // ONLY if STRING — the word aliases m_pRef in the union
+		else if (m_typeClass == ibValueTypes::TYPE_NUMBER)
+			m_fData.~ibNumber();   // a heap-tier number lets go of its BigImpl
+	}
 
-	void Reset();
+	CORE_API void Reset();
 
 	// Counted, as the runtime counts its own.
-	virtual void IncrRef() { m_refCount.fetch_add(1, std::memory_order_relaxed); }
-	virtual void DecrRef() {
+	virtual void IncrRef() noexcept { m_refCount.fetch_add(1, std::memory_order_relaxed); }
+	virtual void DecrRef() noexcept {
 		if (m_refCount.fetch_sub(1, std::memory_order_acq_rel) == 1) delete this;
 	}
 
-	void operator = (const ibVariant& cParam);
-	void operator = (ibVariant&& cParam);
-	void operator = (bool cParam);
-	void operator = (short cParam);
-	void operator = (unsigned short cParam);
-	void operator = (int cParam);
-	void operator = (unsigned int cParam);
-	void operator = (long cParam);
-	void operator = (float cParam);
-	void operator = (double cParam);
-	void operator = (const ibNumber& cParam);
-	void operator = (const ibDateTime& cParam);
-	void operator = (const ibString& cParam);
-	void operator = (const wxString& cParam);
-	void operator = (const char* cParam);
-	void operator = (const ibChar* cParam);
-	void operator = (ibString&& cParam);
-	void operator = (ibValueTypes cParam);
-	void operator = (ibVariant* pParam);
-	void operator = (const ibVariant* pParam);
+	// …and so are these two: a read-only value is not written at all.
+	void operator = (const ibVariant& cParam) noexcept { if (this != &cParam && !m_bReadOnly) Copy(cParam); }
+	void operator = (ibVariant&& cParam) noexcept { if (this != &cParam && !m_bReadOnly) Move(std::move(cParam)); }
+	CORE_API void operator = (bool cParam);
+	CORE_API void operator = (short cParam);
+	CORE_API void operator = (unsigned short cParam);
+	CORE_API void operator = (int cParam);
+	CORE_API void operator = (unsigned int cParam);
+	CORE_API void operator = (long cParam);
+	CORE_API void operator = (float cParam);
+	CORE_API void operator = (double cParam);
+	CORE_API void operator = (const ibNumber& cParam);
+	CORE_API void operator = (const ibDateTime& cParam);
+	CORE_API void operator = (const ibString& cParam);
+	CORE_API void operator = (const wxString& cParam);
+	CORE_API void operator = (const char* cParam);
+	CORE_API void operator = (const ibChar* cParam);
+	CORE_API void operator = (ibString&& cParam);
+	CORE_API void operator = (ibValueTypes cParam);
+	CORE_API void operator = (ibVariant* pParam);
+	CORE_API void operator = (const ibVariant* pParam);
 
 	bool operator > (const ibVariant& cParam) const { return CompareValueGT(cParam) > 0; }
 	bool operator >= (const ibVariant& cParam) const { return CompareValueGE(cParam); }
@@ -135,15 +169,15 @@ public:
 	bool operator != (const ibVariant& cParam) const { return CompareValueNE(cParam); }
 
 	// The runtime's compare family: '<' is the three-way primitive, '==' type-strict, '!=' its negation.
-	virtual int  CompareValueLS(const ibVariant& cParam) const;
-	virtual int  CompareValueGT(const ibVariant& cParam) const;
-	virtual bool CompareValueGE(const ibVariant& cParam) const;
-	virtual bool CompareValueLE(const ibVariant& cParam) const;
-	virtual bool CompareValueEQ(const ibVariant& cParam) const;
-	virtual bool CompareValueNE(const ibVariant& cParam) const;
+	CORE_API virtual int  CompareValueLS(const ibVariant& cParam) const;
+	CORE_API virtual int  CompareValueGT(const ibVariant& cParam) const;
+	CORE_API virtual bool CompareValueGE(const ibVariant& cParam) const;
+	CORE_API virtual bool CompareValueLE(const ibVariant& cParam) const;
+	CORE_API virtual bool CompareValueEQ(const ibVariant& cParam) const;
+	CORE_API virtual bool CompareValueNE(const ibVariant& cParam) const;
 
 	// The object held — or this one, holding none.
-	virtual ibVariant* GetRef() const;
+	CORE_API virtual ibVariant* GetRef() const;
 
 	template <typename T> inline bool ConvertToValue(T*& ptr) const {
 		if (IsReference()) {
@@ -170,15 +204,15 @@ public:
 	}
 
 	//special copy & move function
-	void Copy(const ibVariant& cOld);
-	void Move(ibVariant&& cOld);
+	CORE_API void Copy(const ibVariant& cOld);
+	CORE_API void Move(ibVariant&& cOld);
 
 	// INTO A NODE AND BACK — the runtime's form ({clsid, data}): the header is the base's, the contents the value's own
 	// (DoSerialize). FromNode makes a primitive of a primitive's node; an object is made by the side that knows its
 	// class (the core has no factory), and here reads as empty.
-	bool Serialize(ibDataNode& node) const;
-	bool Deserialize(const ibDataNode& node);
-	static ibVariant FromNode(const ibDataNode& node);
+	CORE_API bool Serialize(ibDataNode& node) const;
+	CORE_API bool Deserialize(const ibDataNode& node);
+	CORE_API static ibVariant FromNode(const ibDataNode& node);
 
 	// May this value cross into ANOTHER session?
 	//
@@ -215,14 +249,14 @@ public:
 		return true;
 	}
 
-	virtual void SetType(ibValueTypes type);
-	virtual ibValueTypes GetType() const;
+	CORE_API virtual void SetType(ibValueTypes type);
+	CORE_API virtual ibValueTypes GetType() const;
 
-	virtual bool IsEmpty() const;
+	CORE_API virtual bool IsEmpty() const;
 	bool IsNull() const { return GetType() == ibValueTypes::TYPE_NULL; }
 
 	// Its class — a primitive's by its kind, an object's its own (0 when it names none).
-	virtual ibClassID GetClassType() const;
+	CORE_API virtual ibClassID GetClassType() const;
 
 	virtual bool Init() {
 		if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
@@ -230,30 +264,30 @@ public:
 		return true;
 	}
 
-	virtual void SetValue(const ibVariant& varValue);
+	CORE_API virtual void SetValue(const ibVariant& varValue);
 
-	virtual bool SetBoolean(const ibString& strValue);
-	virtual bool SetNumber(const ibString& strValue);
-	virtual bool SetDate(const ibString& strValue);
-	virtual bool SetString(const ibString& strValue);
-	virtual bool SetString(ibString&& strValue);
+	CORE_API virtual bool SetBoolean(const ibString& strValue);
+	CORE_API virtual bool SetNumber(const ibString& strValue);
+	CORE_API virtual bool SetDate(const ibString& strValue);
+	CORE_API virtual bool SetString(const ibString& strValue);
+	CORE_API virtual bool SetString(ibString&& strValue);
 	bool SetString(const char* sParam) { return SetString(ibString(sParam)); }
 	bool SetString(const ibChar* sParam) { return SetString(ibString(sParam)); }
 
-	void SetData(const ibVariant& varValue); //setting the value without changing the type
+	CORE_API void SetData(const ibVariant& varValue); //setting the value without changing the type
 
-	virtual bool GetBoolean() const;
-	virtual ibNumber GetNumber() const;
-	virtual ibString GetString() const;
-	virtual ibDateTime GetDate() const;
+	CORE_API virtual bool GetBoolean() const;
+	CORE_API virtual ibNumber GetNumber() const;
+	CORE_API virtual ibString GetString() const;
+	CORE_API virtual ibDateTime GetDate() const;
 
 	int GetInteger() const { return GetNumber().ToInt(); }
 	unsigned int GetUInteger() const { return GetNumber().ToUInt(); }
 	double GetDouble() const { return GetNumber().ToDouble(); }
 
 	// The primitives' types by their class ids, both ways — the core's table (core/core.h).
-	static ibClassID GetIDByVT(const ibValueTypes& valueType);
-	static ibValueTypes GetVTByID(const ibClassID& clsid);
+	CORE_API static ibClassID GetIDByVT(const ibValueTypes& valueType);
+	CORE_API static ibValueTypes GetVTByID(const ibClassID& clsid);
 
 	// A MEMBER OF AN ENUMERATION as a value — made by the side's enumeration, where T is complete.
 	template <class T, typename valT = typename T::valEnumType>
@@ -262,8 +296,8 @@ public:
 protected:
 
 	// How an object writes itself into a node and reads itself back — its own.
-	virtual bool DoSerialize(ibDataNode& node) const;
-	virtual bool DoDeserialize(const ibDataNode& node);
+	CORE_API virtual bool DoSerialize(ibDataNode& node) const;
+	CORE_API virtual bool DoDeserialize(const ibDataNode& node);
 };
 
 #endif

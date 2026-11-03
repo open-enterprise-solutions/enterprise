@@ -25,7 +25,7 @@ void WriteControl(const ibValueFrame* control, long long position, ibProtocolNod
 		const ibProperty* const property = control->GetProperty(name);
 		ibDataValue value;
 		if (property != nullptr && property->CopyNodeValue(value))
-			properties.SetProperty(name, value);
+			properties.SetProperty(ibString(name), value);
 	}
 	ibWriteProtocolNode(properties, node);
 

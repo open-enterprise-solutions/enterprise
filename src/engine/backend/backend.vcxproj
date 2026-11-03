@@ -299,6 +299,7 @@
     <ClInclude Include="objCtor.h" />
     <ClInclude Include="propertyManager\propertyManager.h" />
     <ClInclude Include="propertyManager\propertyObject.h" />
+    <ClInclude Include="propertyManager\propertyMembers.h" />
     <ClInclude Include="propertyManager\property\eventControl.h" />
     <ClInclude Include="propertyManager\property\eventAction.h" />
     <ClInclude Include="propertyManager\property\propertyBoolean.h" />
@@ -650,6 +651,7 @@
     <ClCompile Include="metaCollection\partial\chartOfCalculationTypesMetadata.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfCalculationTypesMetadataMenu.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfCalculationTypesMetadataProperty.cpp" />
+    <ClCompile Include="metaCollection\partial\chartOfCalculationTypesMetadataSchema.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfCalculationTypesMetadata_res.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfCalculationTypesObject.cpp" />
     <ClCompile Include="metaCollection\partial\calculationRegisterRecalculationMetadata.cpp" />
@@ -683,6 +685,7 @@
     <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesMetadata.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesMetadataMenu.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesMetadataProperty.cpp" />
+    <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesMetadataSchema.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesMetadata_res.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfCharacteristicTypesObject.cpp" />
     <ClCompile Include="metaCollection\partial\constantManager.cpp" />
@@ -764,6 +767,7 @@
     <ClCompile Include="metaCollection\partial\commonObjectModel.cpp" />
     <ClCompile Include="metaCollection\partial\commonObjectProperty.cpp" />
     <ClCompile Include="metaCollection\partial\commonObjectMetaQuery.cpp" />
+    <ClCompile Include="metaCollection\partial\commonObjectPredefined.cpp" />
     <ClCompile Include="metaCollection\partial\commonObjectSchema.cpp" />
     <ClCompile Include="metaCollection\partial\commonObjectRefQuery.cpp" />
     <ClCompile Include="metaCollection\partial\commonObjectManagerQuery.cpp" />

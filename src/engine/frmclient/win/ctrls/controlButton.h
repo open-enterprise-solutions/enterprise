@@ -38,6 +38,14 @@ public:
 
 	virtual void SetLabel(const wxString& label) override;
 
+	// The line under the label of a button drawn as a tile - its bitmap on top (SetBitmap(bitmap, wxTOP)): a price, a
+	// count. Drawn in that layout alone, and not with wxBU_NOTEXT, which hides the label it stands under.
+	void SetNote(const wxString& note);
+	const wxString& GetNote() const { return m_note; }
+
+	// A sizer that gives the button a width first asks its height there - a tile's label wrapped into it.
+	virtual wxSize GetMinSizeFromKnownDirection(int direction, int size, int availableOtherDir) override;
+
 	// Mark the button as the default action on its dialog / form — drawn
 	// with a thicker accent border so it reads as the primary choice.
 	void SetDefault(bool isDefault = true) {
@@ -46,6 +54,16 @@ public:
 		Refresh();
 	}
 	bool IsDefault() const { return m_isDefault; }
+
+	// Drawn as a HYPERLINK: no face and no frame, the label underlined in a link's colour and a hand over it - the same
+	// button, its bitmap where it was and pressed the same way.
+	void SetHyperlink(bool isHyperlink = true) {
+		if (m_isHyperlink == isHyperlink) return;
+		m_isHyperlink = isHyperlink;
+		SetCursor(isHyperlink ? wxCursor(wxCURSOR_HAND) : wxNullCursor);
+		Refresh();
+	}
+	bool IsHyperlink() const { return m_isHyperlink; }
 
 	virtual bool AcceptsFocus() const override { return m_enabledIntent && IsShown(); }
 	virtual bool AcceptsFocusFromKeyboard() const override { return AcceptsFocus(); }
@@ -65,6 +83,7 @@ public:
 protected:
 
 	virtual wxSize DoGetBestClientSize() const override;
+	virtual int DoGetBestClientHeight(int width) const override;
 
 	// Bitmap support (inherited API from wxAnyButtonBase): remember the
 	// bundle for each state and refresh — we draw everything manually.
@@ -91,13 +110,18 @@ protected:
 
 private:
 
-	mutable wxSize m_cachedBestSize = wxSize(-1, -1);
+	wxString m_note;
+	wxFont   NoteFont() const { return GetFont().Smaller(); }
+	// The note as this button draws it, measured in its face — a zero size where it draws none: only a button stacked
+	// with its bitmap on top and its text shown has a line under the label (SetNote).
+	wxSize   GetNoteExtent() const;
 
 	bool m_hovered = false;
 	bool m_pressed = false;
 	bool m_hasFocus = false;
 	bool m_keyPressed = false;    // Space/Enter currently held
 	bool m_isDefault = false;
+	bool m_isHyperlink = false;
 	bool m_enabledIntent = true;
 
 	// Bitmap state (one bundle per wxAnyButton::State).
@@ -107,7 +131,6 @@ private:
 
 	wxBitmap BitmapForCurrentState() const;
 
-	void InvalidateCache() const { m_cachedBestSize = wxSize(-1, -1); }
 	void FireClick();
 
 	wxDECLARE_DYNAMIC_CLASS(ibControlButton);
