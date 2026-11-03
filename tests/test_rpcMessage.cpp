@@ -200,7 +200,7 @@ TEST(RpcMessage,ParseRequest_TheReportedCrashDepth_IsAParseError)
 TEST(RpcMessage,WriteResult_CarriesTheIdBackVerbatim)
 {
 	ibDataNode result;
-	result.SetValue(wxT("answer"), ibString(wxT("yes")));
+	result.SetValue(ibT("answer"), ibString(wxT("yes")));
 
 	const ibString numeric = ibRpcWriteResult(ibDataValue::Int(7), result);
 	EXPECT_NE(numeric.Find(wxT("\"id\":7")), wxNOT_FOUND) << numeric.ToStdString();
@@ -240,9 +240,9 @@ TEST(RpcMessage,WriteError_AndWriteResult_AreToldApart)
 TEST(RpcMessage,RenderNode_WritesTheFieldsACallerWillRead)
 {
 	ibDataNode node;
-	node.SetValue(wxT("name"), ibString(wxT("Goods")));
-	node.AddField(wxT("count"), ibDataValue::Int(3));
-	node.AddField(wxT("ok"), ibDataValue::Bool(true));
+	node.SetValue(ibT("name"), ibString(wxT("Goods")));
+	node.AddField(ibT("count"), ibDataValue::Int(3));
+	node.AddField(ibT("ok"), ibDataValue::Bool(true));
 
 	const ibString json = ibRpcRenderNode(node);
 
@@ -257,7 +257,7 @@ TEST(RpcMessage,RenderNode_EscapesWhatWouldOtherwiseBreakTheEnvelope)
 	// quote or a newline. Unescaped, they end the string early and the client
 	// reads a parse error instead of the sentence that explains its mistake.
 	ibDataNode node;
-	node.SetValue(wxT("message"), ibString(wxT("he said \"no\"\nand left")));
+	node.SetValue(ibT("message"), ibString(wxT("he said \"no\"\nand left")));
 
 	const ibString json = ibRpcRenderNode(node);
 
@@ -270,7 +270,7 @@ TEST(RpcMessage,RenderNode_KeepsNonAsciiReadable)
 	// Tool descriptions and engine refusals are localised; a caller has to get
 	// the sentence, not a row of question marks.
 	ibDataNode node;
-	node.SetValue(wxT("message"), ibString::FromUTF8("\xD0\x9E\xD1\x88\xD0\xB8\xD0\xB1\xD0\xBA\xD0\xB0"));
+	node.SetValue(ibT("message"), ibString::FromUTF8("\xD0\x9E\xD1\x88\xD0\xB8\xD0\xB1\xD0\xBA\xD0\xB0"));
 
 	const ibString json = ibRpcRenderNode(node);
 
@@ -288,7 +288,7 @@ TEST(RpcMessage,AnAnswer_IsReadableAsOne)
 	// two halves of one protocol. And a RESPONSE is told from a REQUEST by one
 	// fact: it names no method.
 	ibDataNode result;
-	result.SetValue(wxT("answer"), ibString(wxT("yes")));
+	result.SetValue(ibT("answer"), ibString(wxT("yes")));
 
 	const ibString written = ibRpcWriteResult(ibDataValue::Int(11), result);
 

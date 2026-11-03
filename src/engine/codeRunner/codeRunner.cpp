@@ -191,7 +191,7 @@ ibFrameCodeRunner::ibFrameCodeRunner(wxWindow* parent, wxWindowID id, const wxSt
 	// loud; the base class has no default constructor precisely so that
 	// "no session" is a statement, never an omission.
 	ibBackendDocFrame(ibSessionHolder()),
-	wxFrame(parent, id, title, pos, size, style), m_compileCode(new ibCompileCode), m_procUnit(new ibProcUnit)
+	wxFrame(parent, id, title, pos, size, style), m_compileCode(new ibCompileCode), m_procUnit(std::make_shared<ibProcUnit>())
 {
 	this->SetSizeHints(wxDefaultSize, wxDefaultSize);
 
@@ -354,5 +354,4 @@ ibFrameCodeRunner::ibFrameCodeRunner(wxWindow* parent, wxWindowID id, const wxSt
 ibFrameCodeRunner::~ibFrameCodeRunner()
 {
 	wxDELETE(m_compileCode);
-	wxDELETE(m_procUnit);
 }

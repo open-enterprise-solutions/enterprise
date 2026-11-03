@@ -1,0 +1,192 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "uk",
+  "entries": [
+    {
+      "id": "enum.ButtonView",
+      "name_local": "ButtonView",
+      "name_en": "ButtonView",
+      "kind": "enum_type",
+      "class_id": 431239117940110366,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "forms"
+      ],
+      "signature": "ButtonView.Button, .Hyperlink",
+      "description": "Як малюється кнопка: звичайною кнопкою або гіперпосиланням - та сама кнопка без фону й рамки, з підкресленим написом. Властивість кнопки View зберігає значення, записується ButtonView.<Ім'я>. Натискається однаково; картинка, її положення й команда не змінюються.\n\nСкрипт читає й задає його в кнопки форми: `Controls.Button1.View = ButtonView.Hyperlink;`.",
+      "syntax_block": "Controls.Button1.View = ButtonView.Hyperlink;",
+      "syntax_block_ves": "Controls.Button1.View = ButtonView.Hyperlink;",
+      "parameters": "",
+      "return_descr": "ButtonView.",
+      "example": "Controls.Button1.View = ButtonView.Hyperlink;",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.ButtonView.Button",
+        "enum.ButtonView.Hyperlink",
+        "enum.PictureLocation"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.ButtonView.Button",
+      "name_local": "Button",
+      "name_en": "Button",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "forms"
+      ],
+      "signature": "ButtonView.Button",
+      "description": "Звичайна кнопка: з фоном і рамкою. Значення за замовчуванням.",
+      "syntax_block": "Controls.Button1.View = ButtonView.Button;",
+      "parameters": "",
+      "return_descr": "ButtonView.",
+      "example": "Controls.Button1.View = ButtonView.Button;",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.ButtonView"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.ButtonView.Hyperlink",
+      "name_local": "Hyperlink",
+      "name_en": "Hyperlink",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "forms"
+      ],
+      "signature": "ButtonView.Hyperlink",
+      "description": "Гіперпосилання: без фону й рамки, напис підкреслено кольором посилання, над ним курсор-рука. Клієнт, старший за протокол 8, малює звичайну кнопку.",
+      "syntax_block": "Controls.Button1.View = ButtonView.Hyperlink;",
+      "parameters": "",
+      "return_descr": "ButtonView.",
+      "example": "Controls.Button1.View = ButtonView.Hyperlink;",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.ButtonView"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.PictureLocation",
+      "name_local": "PictureLocation",
+      "name_en": "PictureLocation",
+      "kind": "enum_type",
+      "class_id": 402851473462030947,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "forms"
+      ],
+      "signature": "PictureLocation.Auto, .Left, .Right, .Tile",
+      "description": "Де стоїть картинка кнопки: там, куди її ставить кнопка, ліворуч чи праворуч від напису, або плиткою. Властивість кнопки PictureLocation зберігає значення, записується PictureLocation.<Ім'я>. Що показує кнопка - напис, картинку чи те й інше, - вирішує її Representation, як у будь-якого елемента.\n\nСкрипт читає й задає його в кнопки форми: `Controls.Button1.PictureLocation = PictureLocation.Tile;`.",
+      "syntax_block": "Controls.Button1.PictureLocation = PictureLocation.Tile;",
+      "syntax_block_ves": "Controls.Button1.PictureLocation = PictureLocation.Tile;",
+      "parameters": "",
+      "return_descr": "PictureLocation.",
+      "example": "Controls.Button1.PictureLocation = PictureLocation.Tile;\nControls.Button1.Note = \"12\";",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.PictureLocation.Auto",
+        "enum.PictureLocation.Left",
+        "enum.PictureLocation.Right",
+        "enum.PictureLocation.Tile"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.PictureLocation.Auto",
+      "name_local": "Auto",
+      "name_en": "Auto",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "forms"
+      ],
+      "signature": "PictureLocation.Auto",
+      "description": "Там, куди її ставить кнопка: ліворуч від напису. Значення за замовчуванням.",
+      "syntax_block": "Controls.Button1.PictureLocation = PictureLocation.Auto;",
+      "parameters": "",
+      "return_descr": "PictureLocation.",
+      "example": "Controls.Button1.PictureLocation = PictureLocation.Auto;",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.PictureLocation"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.PictureLocation.Left",
+      "name_local": "Left",
+      "name_en": "Left",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "forms"
+      ],
+      "signature": "PictureLocation.Left",
+      "description": "Ліворуч від напису.",
+      "syntax_block": "Controls.Button1.PictureLocation = PictureLocation.Left;",
+      "parameters": "",
+      "return_descr": "PictureLocation.",
+      "example": "Controls.Button1.PictureLocation = PictureLocation.Left;",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.PictureLocation"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.PictureLocation.Right",
+      "name_local": "Right",
+      "name_en": "Right",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "forms"
+      ],
+      "signature": "PictureLocation.Right",
+      "description": "Праворуч від напису. Клієнт, старший за протокол 8, показує її ліворуч.",
+      "syntax_block": "Controls.Button1.PictureLocation = PictureLocation.Right;",
+      "parameters": "",
+      "return_descr": "PictureLocation.",
+      "example": "Controls.Button1.PictureLocation = PictureLocation.Right;",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.PictureLocation"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "enum.PictureLocation.Tile",
+      "name_local": "Tile",
+      "name_en": "Tile",
+      "kind": "system_enum",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "forms"
+      ],
+      "signature": "PictureLocation.Tile",
+      "description": "Кнопка під палець: велика картинка над написом, під ними Note кнопки дрібнішим шрифтом (ціна, кількість, стан), і все це заповнює те, що дає сайзер. Плитки в сайзері-сітці складаються в панель. Клієнт, старший за протокол 8, показує картинку ліворуч і без примітки.",
+      "syntax_block": "Controls.Button1.PictureLocation = PictureLocation.Tile;",
+      "parameters": "",
+      "return_descr": "PictureLocation.",
+      "example": "Controls.Button1.PictureLocation = PictureLocation.Tile;",
+      "availability": "Thin client, Server",
+      "see_also": [
+        "enum.PictureLocation"
+      ],
+      "reviewed": false
+    }
+  ]
+}

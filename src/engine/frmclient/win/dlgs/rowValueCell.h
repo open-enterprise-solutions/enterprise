@@ -31,7 +31,7 @@
 #include "frmclient/backend/system/value/composition/valueComposerSettings.h"           // ibValueCompositionField — the one value with a picker
 #include "frmclient/backend/system/value/valueType.h"                 // ibValueTypeDescription::AdjustValue — text shaped by the declared type
 #include "frmclient/win/ctrls/controlTextEditor.h"
-#include "frmclient/visualView/ctrl/typeControl.h"           // ibTypeControlFactory::QuickChoice
+#include "frmclient/visualView/ctrl/typeControl.h"           // ibTypeControlFactory::ChooseValue
 #include "frmclient/visualView/ctrl/frame.h"                 // ibControlFrame
 #include "frmclient/visualView/ctrl/tableBoxColumnRenderer.h" // ibDataViewValueRenderer — the TABLE's own renderer
 
@@ -202,7 +202,7 @@ private:
 			//
 			// So the difference is not guessed from which window opened: it is READ off the value.
 			ibValue before; GetControlValue(before);
-			if (ibTypeControlFactory::ChooseValue(this, nullptr, GetEditorCtrl())) {
+			if (ibTypeControlFactory::ChooseValue(this, {}, GetEditorCtrl())) {
 				ibValue after; GetControlValue(after);
 				if (before != after) {
 					FinishSelecting();
@@ -232,7 +232,7 @@ private:
 			}
 			return;
 		}
-		ibTypeControlFactory::QuickChoice(this, current.GetClassType(), GetEditorCtrl());
+		ibTypeControlFactory::ChooseValue(this, {}, GetEditorCtrl());
 	}
 
 	// ⭐⭐ CLEARING ANSWERS THE DECLARATION. A cell that admits ONE type still holds a value of that

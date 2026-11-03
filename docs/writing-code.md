@@ -150,8 +150,13 @@ second base.
 places and dropped the selection condition silently.
 
 **A function called across a DLL boundary is exported before you build** (`BACKEND_API`, as its
-neighbours do); the miss shows up as LNK2019 at the end of a wide build. A new source file is
-registered in its `.vcxproj` and `.filters`: CMake's glob forgives the miss, MSBuild does not.
+neighbours do); the miss shows up as LNK2019 at the end of a wide build. A value class of the core
+is exported member by member, never as `class CORE_API`: a class export sends even its inline
+constructor and destructor through the import table, at every place a value is made. A class
+exported member by member that has a vtable carries its module's `*_API_VTABLE` too (`class
+CORE_API_VTABLE ibVariant`): on Linux and macOS its vtable is only as visible as the class, and the
+miss is a link error there alone. A new source file is registered in its `.vcxproj` and `.filters`:
+CMake's glob forgives the miss, MSBuild does not.
 
 **Keep wide headers quiet.** Explanations go at the definition in the `.cpp`, and a file-static
 there beats a new member. A header costs its transitive closure, not its direct includers: `form.h`
@@ -183,6 +188,10 @@ another process.
 **Identify a type by its class id, never by its registered name:** `GetClassType() == g_<x>CLSID`,
 not `GetClassName() == wxT("SizerItem")`. A global id is a `constexpr` in a header, not a map
 filled at static initialisation.
+
+**A cast branch that rescues one case means the shared road assumes something false.** The sixth
+`dynamic_cast` in a walk is not a sixth special case: find the assumption the walk makes (that a
+child is a metaobject) and fix it, or go through the door that already answers.
 
 **Do not widen a base with a virtual to avoid one cast.** One registry lookup and a `dynamic_cast`
 of a pointer you already hold is fine, and so is a cast to build a value of the class you need. A
@@ -288,6 +297,12 @@ at `CreateSession(kind)` (`ibSessionKind`), not derived from the run mode and an
 **A value describes itself:** `property->GetDataValue(v)` for the human value,
 `ibValue::Serialize(node)` for a schema. No hand loop over typed getters, no switch on the number.
 
+**A property's serializer reads what it wrote, not words.** `ReadNodeValue` reads the shape
+`WriteNodeValue` stored; loading, pasting and the protocol all go through it, so a second shape
+taught to it is read where nobody expects one. A word a person or an assistant gives (a type named
+"String") is turned into that shape at the input door — `ibMcpSetProperty`, the inspector — by the
+neighbour that already finds by name (`GetAvailableCtor`).
+
 **An optional script argument travels as `const ibValue&`.** An empty `ibValue()` means "not
 passed", the default is decided once, in the body, and the test is `GetType() == TYPE_EMPTY` (an
 explicit `False` is "empty" too).
@@ -340,6 +355,11 @@ command entry, and the factory never calls back into them.
 **Navigation lives with the data it walks, and a conversion from a type is that type's member**
 (`ibQueryRamTable::ToValueTable()`). Callbacks such as `next()` and `read(i)` mean a middle
 structure is missing.
+
+**The system manager only calls.** A new global script function is an entry in its enumeration, an
+`AppendFunc` row and a `case` calling a static of the class whose data it works on
+(`ibValueBinaryData::HexString`, `Base64String`). The body never goes into the manager: its header
+is wide, and every body there rebuilds the backend.
 
 **Core holds structure and data only.** Every schema (an `ib…Description` with its
 `ib…DescriptionMemory`) lives in `core/description/`, even with one copy, and reading and writing
@@ -690,5 +710,11 @@ by their root (an include, a door, an overload) and fix the root. Then check by 
 compiler cannot see: rewritten comments, silent non-overrides (C4263/C4264), lifetimes of
 temporaries. A mass replacement is never wider than asked, file renames and entity renames are
 separate operations, and a scripted edit reads and writes UTF-8 explicitly.
+
+**Removing an overload, walk every call — not only the ones that stop compiling.** A call that
+still compiles may have found a conversion with another meaning: with `AddContextVariable(name,
+ibValue*)` gone, `&valueSystem` became a temporary `ibValue` that deleted its stack target on the
+way out (52 failing tests on Linux). A compile error is fixed after reading what the door will do,
+never with a cast.
 
 **Claim no more than you measured.**

@@ -135,6 +135,10 @@ public:
 	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue);
 	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue);
 
+	// Declares this chart's tables, and adds to the base's check of its table what a predefined calculation type's
+	// relations must be: each line naming a type its section may name. Body in chartOfCalculationTypesMetadataSchema.cpp.
+	virtual void ContributeTables(class ibSchemaSnapshot& out) const override;
+
 protected:
 
 	//get metadata
@@ -306,6 +310,7 @@ public:
 	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);
 
+	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray) override;
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
 
 	//support source data

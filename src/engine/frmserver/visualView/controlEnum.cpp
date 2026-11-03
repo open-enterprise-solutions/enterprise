@@ -13,4 +13,6 @@ ENUM_TYPE_REGISTER(ibValueEnumOrientNotebookPage, "WindowOrientNotebookPage", en
 ENUM_TYPE_REGISTER(ibValueEnumHorizontalAlignment, "WindowHorizontalAlignment", enum_to_clsid("EN_WHGT"));
 ENUM_TYPE_REGISTER(ibValueEnumVerticalAlignment, "WindowVerticalAlignment", enum_to_clsid("EN_WAGT"));
 ENUM_TYPE_REGISTER(ibValueEnumTitleLocation, "TitleLocation", enum_to_clsid("EN_TILC"));
+ENUM_TYPE_REGISTER(ibValueEnumPictureLocation, "PictureLocation", enum_to_clsid("EN_PCLC"));
+ENUM_TYPE_REGISTER(ibValueEnumButtonView, "ButtonView", enum_to_clsid("EN_BTVW"));
 ENUM_TYPE_REGISTER(ibValueEnumRepresentation, "Representation", enum_to_clsid("EN_RPRT"));

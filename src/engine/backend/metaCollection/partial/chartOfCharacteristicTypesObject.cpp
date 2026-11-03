@@ -192,6 +192,21 @@ bool ibValueRecordDataObjectChartOfCharacteristicTypes::GetPropVal(const long lP
 	return false;
 }
 
+bool ibValueRecordDataObjectChartOfCharacteristicTypes::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
+{
+	switch (lMethodNum)
+	{
+	case Func::enLock:
+		TryAcquireFormLock();
+		return true;
+	case Func::enUnlock:
+		ReleaseFormLock();
+		return true;
+	}
+
+	return ibValueRecordDataObjectHierarchyRef::CallAsProc(lMethodNum, paParams, lSizeArray);
+}
+
 bool ibValueRecordDataObjectChartOfCharacteristicTypes::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
 	switch (lMethodNum)
@@ -228,12 +243,6 @@ bool ibValueRecordDataObjectChartOfCharacteristicTypes::CallAsFunc(const long lM
 		return true;
 	case Func::enGetMetadata:
 		pvarRetValue = m_metaObject;
-		return true;
-	case Func::enLock:
-		TryAcquireFormLock();
-		return true;
-	case Func::enUnlock:
-		ReleaseFormLock();
 		return true;
 	}
 

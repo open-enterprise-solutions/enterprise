@@ -75,12 +75,6 @@ bool operator<(const ibGuid& lhs, const ibGuid& rhs)
 	return lhs.bytes() < rhs.bytes();
 }
 
-bool ibGuid::isValid() const
-{
-	ibGuid empty;
-	return *this != empty;
-}
-
 template <typename I>
 inline void hex_to_string(ibString& out, I& w, size_t hex_len = sizeof(I) << 1) {
 	static const char* digits = "0123456789abcdef";
@@ -116,7 +110,7 @@ ibString ibGuid::str() const
 }
 
 // conversion operator for ibGuidImpl
-ibGuid::operator ibGuidImpl() const
+ibGuid::operator ibGuidImpl() const noexcept
 {
 	ibGuidImpl guid;
 	guid.m_data1 = _bytes[0] << 24 ^ _bytes[1] << 16 ^ _bytes[2] << 8 ^ _bytes[3];
@@ -133,19 +127,13 @@ ibGuid::operator ibGuidImpl() const
 	return guid;
 }
 
-// Access underlying bytes
-const std::array<unsigned char, 16>& ibGuid::bytes() const
-{
-	return _bytes;
-}
-
 // create a guid from vector of bytes
-ibGuid::ibGuid(const std::array<unsigned char, 16>& bytes) : _bytes(bytes)
+ibGuid::ibGuid(const std::array<unsigned char, 16>& bytes) noexcept : _bytes(bytes)
 {
 }
 
 // create a guid from vector of bytes
-ibGuid::ibGuid(const std::array<unsigned char, 16>&& bytes) : _bytes(std::move(bytes))
+ibGuid::ibGuid(const std::array<unsigned char, 16>&& bytes) noexcept : _bytes(std::move(bytes))
 {
 }
 
@@ -276,7 +264,7 @@ bool ibGuid::parse(const ibString& text, ibGuid& guid)
 	return true;
 }
 
-ibGuid::ibGuid(const ibGuidImpl& guid)
+ibGuid::ibGuid(const ibGuidImpl& guid) noexcept
 {
 	_bytes = {
 		(unsigned char)((guid.m_data1 >> 24) & 0xFF),
@@ -301,13 +289,8 @@ ibGuid::ibGuid(const ibGuidImpl& guid)
 	};
 }
 
-// create empty guid
-ibGuid::ibGuid() : _bytes{ {0} }
-{
-}
-
 // set all bytes to zero
-void ibGuid::zeroify()
+void ibGuid::zeroify() noexcept
 {
 	std::fill(_bytes.begin(), _bytes.end(), static_cast<unsigned char>(0));
 }
@@ -330,34 +313,28 @@ inline int guidValueCompare(const std::array<unsigned char, 16>& x, const std::a
 }
 }
 
-bool ibGuid::operator > (const ibGuid& other) const
+bool ibGuid::operator > (const ibGuid& other) const noexcept
 {
 	return guidValueCompare(_bytes, other._bytes) > 0;
 }
 
-bool ibGuid::operator >= (const ibGuid& other) const
+bool ibGuid::operator >= (const ibGuid& other) const noexcept
 {
 	return guidValueCompare(_bytes, other._bytes) >= 0;
 }
 
-bool ibGuid::operator < (const ibGuid& other) const
+bool ibGuid::operator < (const ibGuid& other) const noexcept
 {
 	return guidValueCompare(_bytes, other._bytes) < 0;
 }
 
-bool ibGuid::operator <= (const ibGuid& other) const
+bool ibGuid::operator <= (const ibGuid& other) const noexcept
 {
 	return guidValueCompare(_bytes, other._bytes) <= 0;
 }
 
-// overload equality operator
-bool ibGuid::operator==(const ibGuid& other) const
-{
-	return std::memcmp(_bytes.data(), other._bytes.data(), 16) == 0;
-}
-
 // member swap function
-void ibGuid::swap(ibGuid& other)
+void ibGuid::swap(ibGuid& other) noexcept
 {
 	_bytes.swap(other._bytes);
 }

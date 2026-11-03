@@ -411,6 +411,11 @@ msgstr "'%s' - глобальная функция - она не принадл�
 msgid "Nothing can follow a group without a name: its answer is the groups themselves, each with Key and Values. To go on - Select, Where, OrderBy - name the group: '%s <name>'."
 msgstr "После группы без имени ничего не может идти: её ответ - сами группы, у каждой Key и Values. Чтобы продолжить - Select, Where, OrderBy - дайте группе имя: '%s <имя>'."
 
+#: src/engine/backend/backend_exception.cpp:217
+#, c-format
+msgid "The procedure '%s' was not carried out by this value"
+msgstr "Значение не выполнило процедуру '%s'"
+
 #: src/engine/backend/backend_exception.cpp:696
 msgid "Context functions are not available: this is a server, and a server has no forms."
 msgstr "Контекстные функции недоступны: это сервер, а у сервера нет форм."
@@ -13549,86 +13554,331 @@ msgstr "Ассистент с доступом к данным"
 msgid "Debugging"
 msgstr "Отладка"
 
-#: src/engine/backend/system/value/valueOLE.cpp:107
+#: src/engine/frmserver/visualView/ctrl/formAttribute.cpp:121
+#, c-format
+msgid "'%s' cannot be the name of a form attribute: it takes letters, digits and the symbol \"_\", and does not start with a digit"
+msgstr "'%s' не может быть именем реквизита формы: в имени допустимы буквы, цифры и символ \"_\", и оно не начинается с цифры"
+
+#: src/engine/frmserver/visualView/ctrl/formAttribute.cpp:126
+#, c-format
+msgid "The form already has an attribute '%s'"
+msgstr "У формы уже есть реквизит '%s'"
+
+#: src/engine/frmserver/visualView/ctrl/formAttribute.cpp:224
+#, c-format
+msgid "The form has no attribute '%s'"
+msgstr "У формы нет реквизита '%s'"
+
+#: src/engine/frmserver/visualView/ctrl/formAttribute.cpp:228
+#, c-format
+msgid "'%s' is an attribute the form was designed with - only one the module added with Attributes.Add can be removed"
+msgstr "'%s' - реквизит, заданный при проектировании формы: удалить можно только реквизит, который модуль добавил через Attributes.Add"
+
+#: src/engine/frmserver/visualView/ctrl/formAttribute.cpp:234
+#, c-format
+msgid "'%s' is shown by the control '%s' - unbind the control first"
+msgstr "'%s' показывает элемент '%s' - сначала отвяжите элемент"
+
+#: src/engine/backend/backend_type.cpp:469
+#, c-format
+msgid "'%s' names no attribute this control can be bound to, and the form has no main attribute to start from"
+msgstr "'%s' не называет реквизит, к которому можно привязать этот элемент, а основного реквизита, с которого начать путь, у формы нет"
+
+#: src/engine/backend/backend_type.cpp:479 src/engine/backend/srcDataObject.cpp:148
+#, c-format
+msgid "'%s' holds a value - nothing unfolds from it, so '%s' cannot follow"
+msgstr "'%s' хранит значение - из него ничего не раскрывается, поэтому '%s' дальше пути быть не может"
+
+#: src/engine/backend/srcDataObject.cpp:150
+#, c-format
+msgid "'%s' has no field called '%s'. It offers: %s"
+msgstr "У '%s' нет поля '%s'. Доступны: %s"
+
+#: src/engine/backend/backend_type.cpp:484
+#, c-format
+msgid "Nothing to bind to - the path names no field and no attribute"
+msgstr "Не к чему привязать: путь не называет ни поля, ни реквизита"
+
+#: src/engine/frmserver/visualView/controlEnum.h
+msgid "Tile"
+msgstr "Плитка"
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgid "Note"
+msgstr "Подпись"
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgid "The line under a tile's title - a price, a count, a state. Shown only when the picture location is Tile. Can be written per language and changed from code while the form is open."
+msgstr "Строка под заголовком плитки - цена, количество, состояние. Показывается только при положении картинки «Плитка». Может быть написана на каждом языке и меняться из кода, пока форма открыта."
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgctxt "button"
+msgid "View"
+msgstr "Вид"
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgid "How the button is drawn: a button, or a hyperlink - no face and no frame, its caption underlined. Pressed the same way, and its picture, its representation and its command are the same."
+msgstr "Как рисуется кнопка: обычной кнопкой или гиперссылкой - без фона и рамки, с подчёркнутой надписью. Нажимается так же, картинка, представление и команда те же."
+
+#: src/engine/frmserver/visualView/controlEnum.h
+msgctxt "button view"
+msgid "Button"
+msgstr "Обычная кнопка"
+
+#: src/engine/frmserver/visualView/controlEnum.h
+msgid "Hyperlink"
+msgstr "Гиперссылка"
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgid "Picture location"
+msgstr "Положение картинки"
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgid "Where the picture stands. Auto: where the button puts it, on the left of the text. Left, Right: on that side of the text. Tile: the picture large over the text and the Note under them, the button filling what its sizer gives it - a big button for a finger; put tiles in a grid sizer for a panel of them."
+msgstr "Где стоит картинка. Авто: там, куда её ставит кнопка, слева от текста. Лево, Право: с этой стороны от текста. Плитка: картинка крупно над текстом и подпись под ними, кнопка заполняет то, что ей даёт сайзер, - крупная кнопка под палец; плитки в сетке образуют панель."
+
+#: src/engine/backend/metaCollection/partial/chartOfAccountsMetadataSchema.cpp:142
+#, c-format
+msgid "%s.%s: %i analytics are declared, the chart takes %i"
+msgstr "%s.%s: объявлено аналитик: %i, план счетов принимает %i"
+
+#: src/engine/backend/metaCollection/partial/chartOfAccountsMetadataSchema.cpp:147
+#, c-format
+msgid "%s.%s: analytics line %i names no kind its chart of characteristic types declares"
+msgstr "%s.%s: строка аналитики %i указывает вид, которого нет среди объявленных в его плане видов характеристик"
+
+#: src/engine/backend/metaCollection/partial/chartOfCalculationTypesMetadataSchema.cpp:60
+#, c-format
+msgid "%s.%s: %s line %i names no calculation type the section may name"
+msgstr "%s.%s: %s, строка %i: указан вид расчёта, который в этом разделе указывать нельзя"
+
+#: src/engine/backend/metaCollection/partial/chartOfCharacteristicTypesMetadataSchema.cpp:36
+#, c-format
+msgid "%s.%s: the characteristic declares no Type"
+msgstr "%s.%s: у характеристики не указан Тип"
+
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:2910
+#, c-format
+msgid "%s: line %i of the %s list is declared by the configuration and cannot be removed, moved or changed"
+msgstr "%s: строка %i списка %s объявлена конфигурацией - её нельзя удалить, переместить или изменить"
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:57
+#, c-format
+msgid "'%s': '%s' keeps no folders"
+msgstr "'%s': в '%s' нет папок"
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:61
+#, c-format
+msgid "'%s' holds '%s', so it stays a folder"
+msgstr "'%s' содержит '%s', поэтому остаётся папкой"
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:66
+#, c-format
+msgid "'%s': the items of '%s' do not stand under one another"
+msgstr "'%s': элементы '%s' не подчиняются друг другу"
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:69
+#, c-format
+msgid "'%s': '%s' has no predefined item to sit under"
+msgstr "'%s': в '%s' нет предопределённого элемента, которому он мог бы подчиняться"
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:71
+#, c-format
+msgid "'%s' is not a folder, so nothing can sit under it"
+msgstr "'%s' - не папка, поэтому ей ничего не может подчиняться"
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:74
+#, c-format
+msgid "'%s' cannot sit under itself"
+msgstr "'%s' не может подчиняться самому себе"
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:183
+#, c-format
+msgid "'%s': '%s' is not a value '%s' may be given"
+msgstr "'%s': '%s' - не то значение, которое можно задать для '%s'"
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:189
+#, c-format
+msgid "'%s': '%s' may not name the type '%s'"
+msgstr "'%s': '%s' не может указывать тип '%s'"
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:195
+#, c-format
+msgid "'%s': '%s' takes no value of the type '%s'"
+msgstr "'%s': '%s' не принимает значения типа '%s'"
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:227
+#, c-format
+msgid "'%s': a predefined item of '%s' declares no attribute #%d"
+msgstr "'%s': предопределённый элемент '%s' не объявляет реквизит #%d"
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:232
+#, c-format
+msgid "'%s': a predefined item of '%s' declares no section #%d"
+msgstr "'%s': предопределённый элемент '%s' не объявляет табличную часть #%d"
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:236
+#, c-format
+msgid "'%s': '%s' has no column #%d"
+msgstr "'%s': в '%s' нет колонки #%d"
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:373
+#, c-format
+msgid "'%s': its predefined items cannot be read"
+msgstr "'%s': не удалось прочитать его предопределённые элементы"
+
+#: src/engine/backend/metaCollection/partial/commonObjectSchema.cpp:265
+#, c-format
+msgid "%s.%s: the predefined item has no %s"
+msgstr "%s.%s: у предопределённого элемента не заполнено: %s"
+
+#: src/engine/backend/metaCollection/partial/commonObjectSchema.cpp:322
+#, c-format
+msgid "%s: the declared lines cannot be written - the table names no owner"
+msgstr "%s: объявленные строки нельзя записать - в таблице не указан владелец"
+
+#: src/engine/backend/metaCollection/partial/commonObjectSchema.cpp:399
+#, c-format
+msgid "%s.%s %i: the configuration declares this line where the base already holds one - remove the lines held there first"
+msgstr "%s.%s %i: конфигурация объявляет эту строку там, где в базе уже есть строка - сначала удалите строки, которые там стоят"
+
+#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:172
+#, c-format
+msgid "\"%s\" must be filled in"
+msgstr "Поле \"%s\" должно быть заполнено"
+
+#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:352
+msgid "Declared by the configuration"
+msgstr "Объявлено конфигурацией"
+
+#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:531
+#, c-format
+msgid "%s, row %u"
+msgstr "%s, строка %u"
+
+#: src/engine/backend/metaCollection/partial/chartOfCharacteristicTypesMetadataSchema.cpp:49
+#, c-format
+msgid "%s.%s: the characteristic's Type holds a type the chart does not take - pick it again among its Types of characteristics"
+msgstr "%s.%s: в Типе характеристики есть тип, которого план не принимает - выберите его заново среди Видов характеристик"
+
+#: src/engine/backend/system/value/valueCOM.cpp:107
 #, c-format
 msgid "COM object \"%s\" returned a value that cannot be read: %s"
 msgstr "COM-объект \"%s\" вернул значение, которое не удалось прочитать: %s"
 
-#: src/engine/backend/system/value/valueOLE.cpp:195
+#: src/engine/backend/system/value/valueCOM.cpp:195
 #, c-format
 msgid "COM object \"%s\" returned a date that cannot be read"
 msgstr "COM-объект \"%s\" вернул дату, которую не удалось прочитать"
 
-#: src/engine/backend/system/value/valueOLE.cpp:214
+#: src/engine/backend/system/value/valueCOM.cpp:214
 #, c-format
 msgid "COM object \"%s\" returned an interface that cannot be called by name"
 msgstr "COM-объект \"%s\" вернул интерфейс, к которому нельзя обратиться по имени"
 
-#: src/engine/backend/system/value/valueOLE.cpp:221
+#: src/engine/backend/system/value/valueCOM.cpp:221
 #, c-format
 msgid "COM object \"%s\" returned a value of a kind the language does not have (VARTYPE %d)"
 msgstr "COM-объект \"%s\" вернул значение вида, которого нет в языке (VARTYPE %d)"
 
-#: src/engine/backend/system/value/valueOLE.cpp:241
+#: src/engine/backend/system/value/valueCOM.cpp:241
 #, c-format
 msgid "COM object \"%s\" returned an array of structures, which the language does not have"
 msgstr "COM-объект \"%s\" вернул массив структур, которых нет в языке"
 
-#: src/engine/backend/system/value/valueOLE.cpp:354
+#: src/engine/backend/system/value/valueCOM.cpp:354
 #, c-format
 msgid "The date %s cannot be passed to a COM object"
 msgstr "Дату %s нельзя передать COM-объекту"
 
-#: src/engine/backend/system/value/valueOLE.cpp:375
+#: src/engine/backend/system/value/valueCOM.cpp:375
 #, c-format
 msgid "An array of %d elements cannot be passed to a COM object"
 msgstr "Массив из %d элементов нельзя передать COM-объекту"
 
-#: src/engine/backend/system/value/valueOLE.cpp:393
+#: src/engine/backend/system/value/valueCOM.cpp:393
 #, c-format
 msgid "A value of type \"%s\" cannot be passed to a COM object"
 msgstr "Значение типа \"%s\" нельзя передать COM-объекту"
 
-#: src/engine/backend/system/value/valueOLE.cpp:699
+#: src/engine/backend/system/value/valueCOM.cpp:699
 #, c-format
-msgid "The handler of event \"%s\" must be a function"
-msgstr "Обработчик события \"%s\" должен быть функцией"
+msgid "The handler of event \"%s\" must be a function or a procedure name"
+msgstr "Обработчик события \"%s\" должен быть функцией или именем процедуры"
 
-#: src/engine/backend/system/value/valueOLE.cpp:705
+#: src/engine/backend/system/value/valueSafeArray.cpp:56
+#, c-format
+msgid "ComSafeArray: \"%s\" is not an element type"
+msgstr "ComSafeArray: \"%s\" не является типом элементов"
+
+#: src/engine/backend/system/value/valueSafeArray.cpp:77
+#, c-format
+msgid "ComSafeArray: the array has no dimension %d"
+msgstr "ComSafeArray: у массива нет измерения %d"
+
+#: src/engine/backend/system/value/valueSafeArray.cpp:82
+#, c-format
+msgid "ComSafeArray: %s"
+msgstr "ComSafeArray: %s"
+
+#: src/engine/backend/system/value/valueSafeArray.cpp:91
+msgid "ComSafeArray: a size is a whole number, 0 or more"
+msgstr "ComSafeArray: размер — целое число, 0 или больше"
+
+#: src/engine/backend/system/value/valueSafeArray.cpp:115
+#, c-format
+msgid "ComSafeArray: the array has %d dimensions, and %d indices were given"
+msgstr "ComSafeArray: у массива измерений %d, а индексов передано %d"
+
+#: src/engine/backend/system/value/valueSafeArray.cpp:190
+#, c-format
+msgid "ComSafeArray: a value of type \"%s\" cannot be stored as %s"
+msgstr "ComSafeArray: значение типа \"%s\" нельзя записать как %s"
+
+#: src/engine/backend/system/value/valueSafeArray.cpp:200
+msgid "ComSafeArray: the array does not have the sizes given"
+msgstr "ComSafeArray: у массива не те размеры, что заданы"
+
+#: src/engine/backend/system/value/valueCOM.cpp:705
 #, c-format
 msgid "COM object \"%s\" has no events"
 msgstr "У COM-объекта \"%s\" нет событий"
 
-#: src/engine/backend/system/value/valueOLE.cpp:716
+#: src/engine/backend/system/value/valueCOM.cpp:716
 #, c-format
 msgid "COM object \"%s\" has no event \"%s\""
 msgstr "У COM-объекта \"%s\" нет события \"%s\""
 
-#: src/engine/backend/system/value/valueOLE.cpp:820
+#: src/engine/backend/system/value/valueCOM.cpp:593
+#, c-format
+msgid "The module that handles event \"%s\" of COM object \"%s\" is gone"
+msgstr "Модуля, который обрабатывает событие \"%s\" COM-объекта \"%s\", больше нет"
+
+#: src/engine/backend/system/value/valueCOM.cpp:820
 #, c-format
 msgid "COM object \"%s\" could not be created: %s"
 msgstr "Не удалось создать COM-объект \"%s\": %s"
 
-#: src/engine/backend/system/value/valueOLE.cpp:884
+#: src/engine/backend/system/value/valueCOM.cpp:884
 #, c-format
 msgid "argument %d: %s"
 msgstr "аргумент %d: %s"
 
-#: src/engine/backend/system/value/valueOLE.cpp:893
+#: src/engine/backend/system/value/valueCOM.cpp:893
 #, c-format
 msgid "COM object \"%s\", member \"%s\": %s"
 msgstr "COM-объект \"%s\", член \"%s\": %s"
 
-#: src/engine/backend/system/value/valueOLE.cpp:965
+#: src/engine/backend/system/value/valueCOM.cpp:965
 #, c-format
 msgid "No COM class is registered as \"%s\""
 msgstr "COM-класс \"%s\" не зарегистрирован"
 
-#: src/engine/backend/system/value/valueOLE.cpp:1014
+#: src/engine/backend/system/value/valueCOM.cpp:1014
 msgid "COM objects are available on Windows only"
 msgstr "COM-объекты доступны только в Windows"
 
-#: src/engine/backend/system/value/valueOLE.cpp:1435
+#: src/engine/backend/system/value/valueCOM.cpp:1435
 #, c-format
 msgid "COM object \"%s\" cannot be walked with For Each"
 msgstr "COM-объект \"%s\" нельзя обойти циклом For Each"

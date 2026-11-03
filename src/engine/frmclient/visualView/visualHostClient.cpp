@@ -277,7 +277,7 @@ void ibVisualHostClient::Draw(const ibProtocolNode& view, const ibProtocolNode& 
 		const auto found = m_controls.find(view.GetId());
 		if (found != m_controls.end() && !found->second->IsPlaceholder()) {
 			wxWindow* const childParent = found->second->GetChildParent();
-			UpdateChildren(view, ibProtocolNode(), found->second, childParent != nullptr ? childParent : GetBackgroundWindow(),
+			UpdateChildren(view, patch, found->second, childParent != nullptr ? childParent : GetBackgroundWindow(),
 				found->second->GetSizer());
 		}
 	}
@@ -649,7 +649,10 @@ bool ibVisualHostClient::UpdateChildren(const ibProtocolNode& node, const ibProt
 		if (drawn == nullptr)
 			continue;
 		const ibProtocolNode& child = children[idx];
-		ibProtocolNode changed;
+		// No patch — none down it either. A node made here is a node of no entries, not none: handed down as a patch it
+		// skipped every control under this one, and a column dropped on a table was drawn only when the form was opened
+		// again (2026-11-02).
+		ibProtocolNode changed = patch;
 		if (patch.IsNode()) {
 			const auto named = std::find_if(changes.begin(), changes.end(),
 				[&child](const ibProtocolNode& change) { return change.GetId() == child.GetId(); });

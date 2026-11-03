@@ -36,6 +36,42 @@ bool ibSourceDataObject::GetValueByPath(const std::vector<ibSourceHop>& path, ib
 }
 
 
+const ibSourceDataObject::ibSourceExplorer* ibSourceDataObject::StepInto(const ibSourceExplorer* node,
+	const ibSourceHop& hop, const ibTabularDataObject*& table, std::vector<ibValue>& held)
+{
+	if (node->GetHelperCount() > 0) {
+		// CONTAINER node (a tabular section) — its columns are CHILDREN in the SAME explorer, and the
+		// section itself is a field of its owner, so STEP INTO IT: from here its columns are ITS
+		// business, and the object it yields is what the next turns ask.
+		ibValue stepped;
+		ibSourceDataObject* owner = node->GetOwner();
+		if (owner != nullptr && owner->GetValueBySourceHop(hop, stepped)) {
+			held.push_back(stepped);            // park it so the object outlives the walk
+			stepped.ConvertToValue(table);
+		}
+		return node;
+	}
+
+	// REFERENCE field — hop into the target. Whoever the walk is STANDING ON answers: the table it
+	// stepped into (its column, no row needed), else the node's owner. srcDataObject stays
+	// METADATA-FREE either way — the override resolves the id and, for a composite / empty field,
+	// hands back the pinned type's empty twin (CoerceHopType lives on the value side, not here).
+	ibValue next;
+	const bool stepped = (table != nullptr)
+		? table->GetValueBySourceHop(hop, next)
+		: (node->GetOwner() != nullptr && node->GetOwner()->GetValueBySourceHop(hop, next));
+	if (!stepped)
+		return nullptr;
+
+	ibSourceDataObject* nextSrc = nullptr;
+	next.ConvertToValue<ibSourceDataObject>(nextSrc);
+	if (nextSrc == nullptr)
+		return node;   // a PLAIN value — nothing under it, and its own node (no children) says so
+	held.push_back(next);
+	table = nullptr;   // left the table, standing on what its column referenced
+	return nextSrc->GetSourceExplorer();
+}
+
 // THE structure-resolve hop — the design-time twin of ResolvePath. Walks the path through the source
 // EXPLORER TREE: a node with CHILDREN (a tabular SECTION) descends into them in the SAME explorer (the
 // section's columns live under the section node — a section is an ibTabularObject, NOT an ibSourceDataObject,
@@ -59,10 +95,10 @@ bool ibSourceDataObject::WalkColumns(const std::vector<ibSourceHop>& path, size_
 	const ibTabularDataObject* table = nullptr;
 	for (size_t i = from; i < path.size(); ++i) {
 		if (explorer == nullptr)
-			return false;   // ran out of columns mid-path (a primitive can't be dotted into)
+			return false;   // the previous hop no longer resolves
 		const ibSourceExplorer* node = explorer->FindById(path[i].m_id);
 		if (node == nullptr)
-			return false;   // not a column at this level -> broken binding
+			return false;   // not a column at this level (a plain value has none) -> broken binding
 		if (outText != nullptr) { *outText += ibT("."); *outText += node->GetSourceName(); }
 		leaf = node->GetColumn();
 		if (outAvailable != nullptr && leaf != nullptr && !leaf->IsAvailable()) *outAvailable = false;
@@ -75,40 +111,53 @@ bool ibSourceDataObject::WalkColumns(const std::vector<ibSourceHop>& path, size_
 			if (outContainerIsTable != nullptr) *outContainerIsTable = explorer->IsTableSection();
 			break;
 		}
-		if (node->GetHelperCount() > 0) {
-			// CONTAINER node (a tabular section) — its columns are CHILDREN in the SAME explorer, and the
-			// section itself is a field of its owner, so STEP INTO IT: from here its columns are ITS
-			// business, and the object it yields is what the next turns ask.
-			ibValue stepped;
-			ibSourceDataObject* owner = node->GetOwner();
-			if (owner != nullptr && owner->GetValueBySourceHop(path[i], stepped)) {
-				refHolders.push_back(stepped);            // park it so the object outlives the walk
-				stepped.ConvertToValue(table);
-			}
-			explorer = node;
-		}
-		else {
-			// REFERENCE field — hop into the target. Whoever the walk is STANDING ON answers: the table it
-			// stepped into (its column, no row needed), else the node's owner. srcDataObject stays
-			// METADATA-FREE either way — the override resolves the id and, for a composite / empty field,
-			// hands back the pinned type's empty twin (CoerceHopType lives on the value side, not here).
-			ibValue next;
-			const bool stepped = (table != nullptr)
-				? table->GetValueBySourceHop(path[i], next)
-				: (node->GetOwner() != nullptr && node->GetOwner()->GetValueBySourceHop(path[i], next));
-			if (!stepped)
-				return false;
-
-			ibSourceDataObject* nextSrc = nullptr;
-			next.ConvertToValue<ibSourceDataObject>(nextSrc);
-			if (nextSrc == nullptr)
-				return false;
-			refHolders.push_back(next);
-			explorer = nextSrc->GetSourceExplorer();
-			table = nullptr;   // left the table, standing on what its column referenced
-		}
+		explorer = StepInto(node, path[i], table, refHolders);
 	}
 	return true;
+}
+
+#include "backend/backend_exception.h"   // a name that names nothing raises
+#include "core/stringTokenizer.h"
+
+const ibSourceDataObject::ibSourceExplorer* ibSourceDataObject::WalkColumns(const ibString& text, const ibString& walked,
+	ibSourceDescription& path, std::vector<ibValue>& held) const
+{
+	const ibSourceExplorer* explorer = GetSourceExplorer();
+	const ibTabularDataObject* table = nullptr;
+	ibString written = walked;
+
+	ibStringTokenizer segments(text, ibT("."));
+	while (segments.HasMoreTokens()) {
+
+		const ibString segment = segments.GetNextToken();
+		const ibSourceExplorer* node = explorer != nullptr ? explorer->FindByName(segment) : nullptr;
+
+		if (node == nullptr) {
+			// A MISS IS A REFUSAL WITH THE ALTERNATIVES — the caller's next move is to pick one of them, and a
+			// plain value has none to pick.
+			ibString offered;
+			for (unsigned int index = 0; explorer != nullptr && index < explorer->GetHelperCount(); ++index) {
+				if (const ibSourceExplorer* field = explorer->GetHelper(index))
+					offered << (offered.IsEmpty() ? ibT("") : ibT(", ")) << field->GetSourceName();
+			}
+			const ibString at = !written.IsEmpty() ? written
+				: explorer != nullptr ? explorer->GetSourceName() : ibString();
+			if (offered.IsEmpty())
+				ibBackendCoreException::Error(_("'%s' holds a value - nothing unfolds from it, so '%s' cannot follow"),
+					at, segment);
+			ibBackendCoreException::Error(_("'%s' has no field called '%s'. It offers: %s"), at, segment, offered);
+		}
+
+		// A REFERENCE IS STEPPED INTO BY ITS TYPE: a table has no row to answer with, and steps into its column by that
+		// type alone (CoerceHopType). The path keeps the type only where it goes on through, as the picker pins the
+		// branch it opened; a reference the path ends on is written as the picker leaves it.
+		const ibClassID type = node->GetTypeDesc().GetFirstClsid();
+		const ibSourceHop hop = { node->GetSourceId(), ::IsReference(type) ? type : g_valueUndefinedCLSID };
+		path.AppendSource(hop.m_id, segments.HasMoreTokens() ? hop.m_type : g_valueUndefinedCLSID);
+		written = written.IsEmpty() ? segment : written + ibT(".") + segment;
+		explorer = StepInto(node, hop, table, held);
+	}
+	return explorer;
 }
 
 

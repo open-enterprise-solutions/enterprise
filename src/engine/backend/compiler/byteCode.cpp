@@ -70,6 +70,7 @@ void ibByteCode::Reset()
 	m_listCode.clear();
 	m_listConst.clear();
 	m_listVar.clear();
+	m_listCaptured.clear();
 	m_listFunc.clear();
 	m_dependencies.clear();
 	m_dependencyIds.clear();

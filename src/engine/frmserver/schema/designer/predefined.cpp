@@ -3,14 +3,15 @@
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/partial/commonObject.h"   // ibValueMetaObjectRecordDataHierarchyMutableRef — what declares them
 #include "backend/session/session.h"
+#include "core/description/predefinedDescription.h"        // ibPredefinedDescription — the items and what one is entered with
 #include "core/serialize/dataBuilder.h"
 
 #include "frmserver/schema/designer/metaData.h"   // ibSchemaMetaData — whose tree, which object
+#include "frmserver/win/dlgs/settings/settingsRequest.h"   // ibWriteSettingsClasses — the types a type is picked from, named
 
 namespace {
 
 typedef ibValueMetaObjectRecordDataHierarchyMutableRef ibPredefinedOwner;
-typedef ibPredefinedOwner::ibPredefinedValueObject     ibPredefinedItem;
 
 // The object Id names, in Tab's tree — refused, null, when there is no such, or it is one that cannot declare any.
 ibPredefinedOwner* FindOwner(const ibSession& session, const ibDataNode& args, ibProtocol::ibRefusal& refusal, ibString& error)
@@ -30,12 +31,11 @@ ibPredefinedOwner* FindOwner(const ibSession& session, const ibDataNode& args, i
 }
 
 // The item `name` names by its Guid — refused, null, when the owner has none of it.
-wxObjectDataPtr<ibPredefinedItem> FindItem(const ibPredefinedOwner* owner, const ibDataNode& args, const ibString& name,
+const ibPredefinedItemDescription* FindItem(const ibPredefinedOwner* owner, const ibDataNode& args, const ibString& name,
 	ibProtocol::ibRefusal& refusal, ibString& error)
 {
 	const ibString guid = args.GetValue<ibString>(name);
-	wxObjectDataPtr<ibPredefinedItem> item = !guid.IsEmpty()
-		? owner->FindPredefinedValue(ibGuid(guid)) : wxObjectDataPtr<ibPredefinedItem>();
+	const ibPredefinedItemDescription* const item = !guid.IsEmpty() ? owner->FindPredefinedValue(ibGuid(guid)) : nullptr;
 	if (item == nullptr) {
 		refusal = ibProtocol::ibRefusal::NotFound;
 		error = ibString::Format(ibT("'%s' has no predefined item '%s'"), owner->GetName(), guid);
@@ -43,52 +43,29 @@ wxObjectDataPtr<ibPredefinedItem> FindItem(const ibPredefinedOwner* owner, const
 	return item;
 }
 
-// What an item is given — Name, Code, Description, IsFolder and Parent.
-struct ibPredefinedFields {
-	ibString m_name;
-	ibString m_code;
-	ibString m_description;
-	bool m_isFolder = false;
-	wxObjectDataPtr<ibPredefinedItem> m_parent;
-};
-
-// …read, and checked as the dialog checked them: a name, one no other item of the owner has (`self` — the item
-// edited, or none), and a parent (none: the top) that may hold it — a folder, where the owner keeps folders apart.
-// Refused, false, otherwise.
-bool ReadFields(const ibPredefinedOwner* owner, const ibDataNode& args, const wxObjectDataPtr<ibPredefinedItem>& self,
-	ibPredefinedFields& fields, ibProtocol::ibRefusal& refusal, ibString& error)
+// WHAT A COMMAND IS GIVEN — an item in its node form (ibPredefinedItemDescriptionMemory: the
+// window sends it as it was shown), checked as the dialog checked it: a name, one no other item of the owner has.
+// Refused, false, otherwise. Whether the kind's hierarchy holds it there and what it declares is the engine's door to
+// say (AppendPredefinedValue / SetPredefinedValue).
+bool ReadGiven(const ibPredefinedOwner* owner, const ibDataNode& args, ibPredefinedItemDescription& item,
+	ibProtocol::ibRefusal& refusal, ibString& error)
 {
-	fields.m_name = args.GetValue<ibString>(ibProtocol::ibSchema::ibPredefined::Name);
-	fields.m_code = args.GetValue<ibString>(ibProtocol::ibSchema::ibPredefined::Code);
-	fields.m_description = args.GetValue<ibString>(ibProtocol::ibSchema::ibPredefined::Description);
-	fields.m_isFolder = args.GetValue<bool>(ibProtocol::ibSchema::ibPredefined::IsFolder);
+	if (!ibPredefinedItemDescriptionMemory::ReadNode(ibDataValue::Child(std::make_shared<ibDataNode>(args)), item)) {
+		refusal = ibProtocol::ibRefusal::BadParameter;
+		error = ibT("the predefined item given cannot be read");
+		return false;
+	}
 
-	if (fields.m_name.IsEmpty()) {
+	if (item.m_name.IsEmpty()) {
 		refusal = ibProtocol::ibRefusal::BadParameter;
 		error = ibT("a predefined item needs a name");
 		return false;
 	}
 
-	const wxObjectDataPtr<ibPredefinedItem> named = owner->FindPredefinedValue(fields.m_name);
-	if (named != nullptr && (self == nullptr || named->GetPredefinedGuid() != self->GetPredefinedGuid())) {
+	const ibPredefinedItemDescription* const named = owner->FindPredefinedValue(item.m_name);
+	if (named != nullptr && named->m_guid != item.m_guid) {
 		refusal = ibProtocol::ibRefusal::BadParameter;
-		error = ibString::Format(ibT("'%s' already has a predefined item named '%s'"), owner->GetName(), fields.m_name);
-		return false;
-	}
-
-	if (args.GetValue<ibString>(ibProtocol::ibSchema::ibPredefined::Parent).IsEmpty())
-		return true;
-	fields.m_parent = FindItem(owner, args, ibProtocol::ibSchema::ibPredefined::Parent, refusal, error);
-	if (fields.m_parent == nullptr)
-		return false;
-	if (self != nullptr && fields.m_parent->GetPredefinedGuid() == self->GetPredefinedGuid()) {
-		refusal = ibProtocol::ibRefusal::BadParameter;
-		error = ibString::Format(ibT("'%s' cannot sit under itself"), self->GetPredefinedName());
-		return false;
-	}
-	if (owner->HasFolders() && !fields.m_parent->IsPredefinedFolder()) {
-		refusal = ibProtocol::ibRefusal::BadParameter;
-		error = ibString::Format(ibT("'%s' is not a folder"), fields.m_parent->GetPredefinedName());
+		error = ibString::Format(ibT("'%s' already has a predefined item named '%s'"), owner->GetName(), item.m_name);
 		return false;
 	}
 	return true;
@@ -106,24 +83,29 @@ void ibSchemaPredefined::Build(const ibSession& session, const ibDataNode& args,
 {
 	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
 	ibString error;
-	const ibPredefinedOwner* const owner = FindOwner(session, args, refusal, error);
+	ibPredefinedOwner* const owner = FindOwner(session, args, refusal, error);
 	if (owner == nullptr)
 		return;
 
 	result.SetValue(ibProtocol::ibSchema::ibPredefined::Type, ibString::Format(ibT("%llu"), static_cast<unsigned long long>(owner->GetClassType())));
 
-	// Each item as the engine stores it (WriteData), and the item it sits under by its Guid.
-	ibDataNode& items = result.Child(ibProtocol::ibSchema::ibPredefined::Items);
-	for (const wxObjectDataPtr<ibPredefinedItem>& item : owner->GetPredefinedValueArray()) {
-		ibDataNode& row = items.AddChild(0, static_cast<ibMetaID>(items.Children().size() + 1));
-		row.SetValue(ibProtocol::ibSchema::ibPredefined::Guid, item->GetPredefinedGuid().str());
-		row.SetValue(ibProtocol::ibSchema::ibPredefined::Name, item->GetPredefinedName());
-		row.SetValue(ibProtocol::ibSchema::ibPredefined::Code, item->GetPredefinedCode());
-		row.SetValue(ibProtocol::ibSchema::ibPredefined::Description, item->GetPredefinedDescription());
-		row.SetValue(ibProtocol::ibSchema::ibPredefined::IsFolder, item->IsPredefinedFolder());
-		if (item->GetPredefinedParent() != nullptr)
-			row.SetValue(ibProtocol::ibSchema::ibPredefined::Parent, item->GetPredefinedParent()->GetPredefinedGuid().str());
-	}
+	// ⭐ THE ONE SCHEMA — the items as the configuration keeps them and what an item of this kind is entered with
+	// (GetPredefinedDesc); the window is built of it and knows no kind.
+	const ibPredefinedDescription& described = owner->GetPredefinedDesc();
+	ibDataValue declares;
+	ibPredefinedDescriptionMemory::WriteNode(declares, described);
+	result.AddField(ibProtocol::ibSchema::ibPredefined::Declares, declares);
+
+	// …and the types a type is picked from, named: the client's picker names them as the server does.
+	std::vector<ibTypeDescription> offered;
+	for (const ibPredefinedAttributeDescription& attribute : described.m_attributes)
+		if (attribute.m_holdsType)
+			offered.emplace_back(attribute.m_offered);
+	for (const ibPredefinedTableDescription& table : described.m_tables)
+		for (const ibPredefinedAttributeDescription& column : table.m_columns)
+			if (column.m_holdsType)
+				offered.emplace_back(column.m_offered);
+	ibWriteSettingsClasses(result.Child(ibProtocol::ibSchema::ibPredefined::Classes), offered, owner->GetMetaData());
 }
 
 std::function<void()> ibSchemaPredefined::Command(const ibSession& session, std::int32_t command,
@@ -135,33 +117,30 @@ std::function<void()> ibSchemaPredefined::Command(const ibSession& session, std:
 
 	switch (static_cast<ibProtocol::ibSchema::ibCommand>(command)) {
 	case ibProtocol::ibSchema::ibCommand::Create: {
-		ibPredefinedFields fields;
-		if (!ReadFields(owner, args, wxObjectDataPtr<ibPredefinedItem>(), fields, refusal, error))
+		ibPredefinedItemDescription item;
+		if (!ReadGiven(owner, args, item, refusal, error))
 			return nullptr;
-		return [owner, fields]() {
-			owner->AppendPredefinedValue(fields.m_name, fields.m_code, fields.m_description, fields.m_isFolder, fields.m_parent);
-		};
+		// Its fields and what it declares, through the one door: made whole, or refused and nothing made.
+		return [owner, item]() { owner->AppendPredefinedValue(item); };
 	}
 	case ibProtocol::ibSchema::ibCommand::Set: {
 		// A Guid the owner has not — one more item of it, as the engine's SetPredefinedValue makes it (the dialog's Copy).
-		const ibGuid guid(args.GetValue<ibString>(ibProtocol::ibSchema::ibPredefined::Guid));
-		if (!guid.isValid()) {
+		ibPredefinedItemDescription item;
+		if (!ReadGiven(owner, args, item, refusal, error))
+			return nullptr;
+		if (!item.m_guid.isValid()) {
 			refusal = ibProtocol::ibRefusal::BadParameter;
 			error = ibT("which predefined item - its Guid");
 			return nullptr;
 		}
-		ibPredefinedFields fields;
-		if (!ReadFields(owner, args, owner->FindPredefinedValue(guid), fields, refusal, error))
-			return nullptr;
-		return [owner, guid, fields]() {
-			owner->SetPredefinedValue(guid, fields.m_name, fields.m_code, fields.m_description, fields.m_isFolder, fields.m_parent);
-		};
+		// Its fields and what it declares, through the one door: changed whole, or refused and the item as it was.
+		return [owner, item]() { owner->SetPredefinedValue(item); };
 	}
 	case ibProtocol::ibSchema::ibCommand::Remove: {
-		const wxObjectDataPtr<ibPredefinedItem> item = FindItem(owner, args, ibProtocol::ibSchema::ibPredefined::Guid, refusal, error);
+		const ibPredefinedItemDescription* const item = FindItem(owner, args, ibProtocol::ibSchema::ibPredefined::Guid, refusal, error);
 		if (item == nullptr)
 			return nullptr;
-		const ibGuid guid = item->GetPredefinedGuid();
+		const ibGuid guid = item->m_guid;
 		return [owner, guid]() { owner->DeletePredefinedValue(guid); };
 	}
 	default:

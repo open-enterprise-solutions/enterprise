@@ -228,6 +228,15 @@ bool ibValueRecordDataObjectChartOfAccounts::GetPropVal(const long lPropNum, ibV
 	return false;
 }
 
+bool ibValueRecordDataObjectChartOfAccounts::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
+{
+	switch (lMethodNum) {
+	case Func::enLock:   TryAcquireFormLock(); return true;
+	case Func::enUnlock: ReleaseFormLock();    return true;
+	}
+	return ibValueRecordDataObjectHierarchyRef::CallAsProc(lMethodNum, paParams, lSizeArray);
+}
+
 bool ibValueRecordDataObjectChartOfAccounts::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
 	switch (lMethodNum) {
@@ -243,8 +252,6 @@ bool ibValueRecordDataObjectChartOfAccounts::CallAsFunc(const long lMethodNum, i
 	case Func::enGetForm: pvarRetValue = GetFormValue(lSizeArray > 0 ? ibFormRequest(paParams[0]->GetString()) : ibFormRequest(), lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr); return true;
 	case Func::enGetTemplate: pvarRetValue = m_metaObject->GetTemplate(paParams[0]->GetString()); return true;
 	case Func::enGetMetadata: pvarRetValue = m_metaObject; return true;
-	case Func::enLock:   TryAcquireFormLock(); return true;
-	case Func::enUnlock: ReleaseFormLock();    return true;
 	}
 	return ibRuntimeModuleDataObject::ExecAsFunc(GetMethodName(lMethodNum), pvarRetValue, paParams, lSizeArray);
 }

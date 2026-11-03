@@ -10,10 +10,10 @@
 
 #ifdef __WXMSW__
 #include <windows.h>   // the service manager — the cluster's service started, and its end read
-#include <wx/log.h>    // wxSysErrorMsgStr
 #endif
 
 #include "core/diagnostics/crashGuard.h"   // ibCrashGuard::Install — the process's journal and dumps
+#include "core/exception.h"                // ibSysErrorMsgStr — the service manager's refusals
 #include "core/net/httpClient.h"
 #include "core/fileSystem.h"
 #include "core/server/listener.h"   // ibTlsFiles — whether the cluster's port speaks TLS
@@ -60,7 +60,7 @@ bool StartClusterService(bool& installed, ibString& error)
 		if (code == ERROR_SERVICE_DOES_NOT_EXIST)
 			return false;
 		installed = true;
-		error = ibString::Format(_("The cluster's service is not opened: %s"), wxSysErrorMsgStr(code));
+		error = ibString::Format(_("The cluster's service is not opened: %s"), ibSysErrorMsgStr(code));
 		return false;
 	}
 	installed = true;
@@ -70,7 +70,7 @@ bool StartClusterService(bool& installed, ibString& error)
 	::CloseServiceHandle(manager);
 	if (started || code == ERROR_SERVICE_ALREADY_RUNNING)
 		return true;
-	error = ibString::Format(_("The cluster's service is not started: %s"), wxSysErrorMsgStr(code));
+	error = ibString::Format(_("The cluster's service is not started: %s"), ibSysErrorMsgStr(code));
 	return false;
 }
 

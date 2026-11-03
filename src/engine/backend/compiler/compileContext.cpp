@@ -11,10 +11,15 @@
 * Create a new variable identifier
 */
 
-ibParamUnit ibCompileContext::CreateVariable(const ibString& strPrefix)
+ibParamUnit ibCompileContext::CreateVariable(long long numArray)
+{
+	return CreateVariable(ibT("@temp_"), numArray);
+}
+
+ibParamUnit ibCompileContext::CreateVariable(const ibString& strPrefix, long long numArray)
 {
 	if (m_numReturn == RETURN_BLOCK) {
-		return m_parentContext->CreateVariable(strPrefix);
+		return m_parentContext->CreateVariable(strPrefix, numArray);
 	}
 
 	const ibString& strTempName =
@@ -22,7 +27,7 @@ ibParamUnit ibCompileContext::CreateVariable(const ibString& strPrefix)
 
 	ibParamUnit variable =
 		GetVariable(strTempName, false, false, false, true); //we look for a temporary variable only in the local context
-	variable.m_numArray = DEF_VAR_TEMP; //flag of a temporary local variable
+	variable.m_numArray = numArray; //DEF_VAR_TEMP_MOVE or DEF_VAR_TEMP_COPY — which of the two temporaries it is
 
 	return variable;
 }
@@ -111,9 +116,26 @@ ibParamUnit ibCompileContext::GetVariable(const ibString& strVarName, bool bFind
 		bool isLambdaFunction = IsReturnLambda(m_numReturn);
 		bool crossedLambda    = isLambdaFunction;
 
+		// ⭐⭐ WHAT EACH LAMBDA TAKES (ibByteFunction::m_listCaptured). The lambdas the walk has crossed, each
+		// with the depth of its own frame counted from here: a variable found further out is that much nearer to
+		// each of them, and each takes it — the inner one because it reads it, the outer ones because the inner
+		// one is made while they run and takes it out of what they took.
+		std::vector<std::pair<ibFunction*, long long>> crossedLambdas;
+		if (isLambdaFunction && m_functionContext != nullptr)
+			crossedLambdas.emplace_back(m_functionContext, 0);
+
+		// Sorted by (depth, slot), each entry once — the frame's own entries come first (ibRunContext::Capture).
+		const auto capture = [](std::vector<ibParamRunUnit>& captured, const long long depth, const long long slot) {
+			auto at = captured.begin();
+			while (at != captured.end() && (at->m_numArray < depth || (at->m_numArray == depth && at->m_numIndex < slot)))
+				++at;
+			if (at == captured.end() || at->m_numArray != depth || at->m_numIndex != slot)
+				captured.insert(at, ibParamRunUnit{ depth, slot });
+		};
+
 		// Visibility check + emit. Depth is the runtime frame index
 		// (m_pppArrayList layer); blockReturn switches it to
-		// DEF_VAR_TEMP for through-block reach. Returns true (with
+		// DEF_VAR_TEMP_COPY for through-block reach. Returns true (with
 		// `out` filled) only if visibility budget allows.
 		//
 		// Closure capture bypass: once the walk has crossed at least
@@ -164,7 +186,7 @@ ibParamUnit ibCompileContext::GetVariable(const ibString& strVarName, bool bFind
 			if (!(m_numReturn == RETURN_BLOCK || numCanUseLocalInParent > 0 || crossedLambda
 			      || !cur->IsLocal()))
 				return false;
-			out.m_numArray = blockReturn ? (long long)DEF_VAR_TEMP : (long long)depth;
+			out.m_numArray = blockReturn ? (long long)DEF_VAR_TEMP_COPY : (long long)depth;
 			out.m_numIndex = cur->m_numVariable;
 			out.m_clsid = cur->m_clsid;
 			return true;
@@ -180,9 +202,8 @@ ibParamUnit ibCompileContext::GetVariable(const ibString& strVarName, bool bFind
 			// for top-level lambda body code. Block scopes inside the
 			// lambda hit the boundary by walking up to the containing
 			// functionContext (RETURN_LAMBDA_*). Closure capture is
-			// stamped lazily on the resolved fn's m_needsHeapFrame
-			// when crossedLambda is true at the time of FindVariable
-			// hit.)
+			// recorded lazily, when crossedLambda is true at the time of
+			// a FindVariable hit.)
 
 			// 1. Compile-context chain (block → function → root of own
 			//    ibCompileCode, then up through parent compile-contexts
@@ -200,14 +221,20 @@ ibParamUnit ibCompileContext::GetVariable(const ibString& strVarName, bool bFind
 					ibParamUnit variable;
 					if (tryEmit(currentVariable, numParent - numContext,
 					            pCurContext->m_numReturn == RETURN_BLOCK, variable)) {
-						// Closure capture mark — stamp the ENCLOSING
-						// function's ibFunction (m_functionContext)
-						// directly. Module-body / block ctxs have
-						// m_functionContext == nullptr; skip them
-						// (block-locals delegate to fn frame anyway,
-						// module body lives in stable descriptor frame).
-						if (crossedLambda && pCurContext->m_functionContext)
-							pCurContext->m_functionContext->m_needsHeapFrame = true;
+						// Closure capture — the variable is taken by every lambda crossed, and the frame it
+						// lives in makes it a cell on entry (depth 0): a function's frame, or an eval block's.
+						// A module's own variables are not taken: the module's frame outlives every lambda made
+						// in it, and a lambda reads them there (ibValueFunction::m_moduleFrame).
+						if (crossedLambda && variable.m_numArray >= 0) {
+							std::vector<ibParamRunUnit>* const own = pCurContext->m_functionContext != nullptr
+								? &pCurContext->m_functionContext->m_listCaptured
+								: (m_compileModule->IsExpressionOnly() ? &m_compileModule->m_cByteCode.m_listCaptured : nullptr);
+							if (own != nullptr) {
+								capture(*own, 0, variable.m_numIndex);
+								for (const auto& [lambda, at] : crossedLambdas)
+									capture(lambda->m_listCaptured, variable.m_numArray - at, variable.m_numIndex);
+							}
+						}
 						return variable;
 					}
 				}
@@ -216,6 +243,8 @@ ibParamUnit ibCompileContext::GetVariable(const ibString& strVarName, bool bFind
 				if (IsReturnLambda(pCurContext->m_numReturn)) {
 					isLambdaFunction = true;
 					crossedLambda    = true;
+					if (pCurContext->m_functionContext != nullptr)
+						crossedLambdas.emplace_back(pCurContext->m_functionContext, numParent - numContext);
 				}
 			}
 
@@ -235,6 +264,10 @@ ibParamUnit ibCompileContext::GetVariable(const ibString& strVarName, bool bFind
 					ibParamUnit variable;
 					variable.m_numArray = (numParent - numContext) + 1;
 					variable.m_numIndex = fIt->m_slotIndex;
+					// A lambda made in the eval takes it from the host's frame, which was entered long before
+					// and makes it a cell when taken (ibRunContext::Capture) — there is nothing to mark there.
+					for (const auto& [lambda, at] : crossedLambdas)
+						capture(lambda->m_listCaptured, variable.m_numArray - at, variable.m_numIndex);
 					return variable;
 				}
 				numParent++;  // function frame layer occupied even on miss
@@ -331,7 +364,7 @@ ibParamUnit ibCompileContext::GetVariable(const ibString& strVarName, bool bFind
 	// binding) goes through GetVariable's bytecode fallback below
 	// where found.depth is preserved on ibParamUnit::m_numArray.
 	if (m_numReturn == RETURN_BLOCK)
-		variable.m_numArray = DEF_VAR_TEMP;
+		variable.m_numArray = DEF_VAR_TEMP_COPY;
 	else
 		variable.m_numArray = 0;
 

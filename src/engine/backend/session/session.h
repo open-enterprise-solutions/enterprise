@@ -945,6 +945,12 @@ public:
 		std::condition_variable m_cv;
 		std::mutex              m_mutex;
 
+		// The debugger's work for this stop — an evaluation and the reading of its answer — handed over
+		// by the debug thread and run by the stopped thread itself between two waits (DoDebugLoop): the
+		// frame, the session and the objects the work touches are that thread's. Valid while waiting to
+		// be taken; guarded by m_mutex.
+		std::packaged_task<void()> m_work;
+
 		// Per-session watch expressions (id -> source). Breakpoints
 		// stay process-level on ibDebuggerServer because module bytecode
 		// is shared across sessions.
@@ -1075,7 +1081,7 @@ private:
 	// Lambda executor — see GetLambdaRuntime() for semantics. Allocated
 	// in CreateRoot; SetParent(m_root's procUnit) is wired lazily on
 	// first GetLambdaRuntime() call once m_root's procUnit exists.
-	std::unique_ptr<ibProcUnit> m_lambdaRuntime;
+	std::shared_ptr<ibProcUnit> m_lambdaRuntime;
 
 	// Per-session state, keyed by the asking type — see Local() above. The list holds the only owning
 	// pointer, so everything parked here is released when the session goes.

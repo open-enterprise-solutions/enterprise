@@ -22,15 +22,16 @@
 #include <atomic>
 #include <cstddef>
 
-class CORE_API ibMemoryBuffer
+// EXPORTED MEMBER BY MEMBER, as ibString is (fstring.h says why): what has no body here carries CORE_API itself.
+class ibMemoryBuffer
 {
 public:
 	// Nothing held, nothing allocated.
 	ibMemoryBuffer() noexcept = default;
 	// Room for `size` bytes, none of them data yet.
-	explicit ibMemoryBuffer(size_t size);
+	CORE_API explicit ibMemoryBuffer(size_t size);
 	// …and `len` bytes copied in — AppendData on a new buffer.
-	ibMemoryBuffer(const void* data, size_t len);
+	CORE_API ibMemoryBuffer(const void* data, size_t len);
 
 	ibMemoryBuffer(const ibMemoryBuffer& o) noexcept : m_impl(o.m_impl) { Hold(m_impl); }
 	ibMemoryBuffer(ibMemoryBuffer&& o) noexcept : m_impl(o.m_impl) { o.m_impl = nullptr; }
@@ -53,8 +54,8 @@ public:
 	bool IsEmpty() const noexcept { return GetDataLen() == 0; }
 
 	void SetBufSize(size_t size) { Own(size); }
-	void SetDataLen(size_t len);
-	void Clear() noexcept;
+	CORE_API void SetDataLen(size_t len);
+	CORE_API void Clear() noexcept;
 
 	// Room for `sizeNeeded` bytes from the start, and the length once they are written.
 	void* GetWriteBuf(size_t sizeNeeded) { return Own(sizeNeeded); }
@@ -64,8 +65,8 @@ public:
 	void* GetAppendBuf(size_t sizeNeeded) { const size_t len = GetDataLen(); return static_cast<char*>(Own(len + sizeNeeded)) + len; }
 	void UngetAppendBuf(size_t sizeUsed) { SetDataLen(GetDataLen() + sizeUsed); }
 
-	void AppendByte(char data);
-	void AppendData(const void* data, size_t len);
+	CORE_API void AppendByte(char data);
+	CORE_API void AppendData(const void* data, size_t len);
 
 	operator const char* () const noexcept { return static_cast<const char*>(GetData()); }
 
@@ -90,11 +91,11 @@ private:
 		if (shared != nullptr && shared->m_refCount.fetch_sub(1, std::memory_order_acq_rel) == 1)
 			Free(shared);
 	}
-	static void Free(Shared* shared) noexcept;    // the last owner went: the block goes back to the pool
+	CORE_API static void Free(Shared* shared) noexcept;    // the last owner went: the block goes back to the pool
 
 	// To WRITE: the bytes, made this buffer's own, with room for `room` at least — copied first when anybody
 	// else holds them, grown when they have no room.
-	char* Own(size_t room);
+	CORE_API char* Own(size_t room);
 
 	Shared* m_impl = nullptr;   // nullptr = empty: no bytes, nothing allocated
 };

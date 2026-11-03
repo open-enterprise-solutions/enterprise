@@ -19,7 +19,9 @@ ibValueForm::ibValueForm(const ibFormRequest& request, const ibValueMetaObjectFo
 	m_formType(defaultFormType), m_formModified(false),
 	m_closeOnChoice(true), m_closeOnOwnerClose(true),
 	m_metaFormObject(nullptr), m_controlOwner(nullptr), m_request(request),
-	m_formCollectionControl(new ibValueFormCollectionControl(this))
+	m_formCollectionControl(new ibValueFormCollectionControl(this)),
+	m_formCollectionAttribute(new ibValueFormCollectionAttribute(this)),
+	m_formCollectionCommand(new ibValueFormCollectionCommand(this))
 {
 	// Frame surface (properties + Events) comes from ibValueFrame::FillMembers, bound
 	// by the base ctor. The form ADDS its own members on top (FillFormMembers); module
@@ -400,7 +402,10 @@ bool ibValueForm::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 	}
 	else if (lPropAlias == eFormAttribute) {
 		if (ibFormAttributeValue* attr = FindAttributeById(m_members.GetPropData(lPropNum))) {
-			attr->SetValue(varPropVal);
+			// INTO THE VALUE THE ATTRIBUTE HOLDS — the cell the module's bare <name> writes through its bind.
+			// SetValue is the variant's own, inherited by the holder: it copied the value over the HOLDER, so
+			// `ThisForm.<name> = …` turned the entry into the primitive and the attribute never saw it.
+			attr->SetHeldValue(varPropVal);
 			return true;
 		}
 	}

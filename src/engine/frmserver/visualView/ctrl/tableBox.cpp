@@ -1572,6 +1572,15 @@ bool ibValueModelTableBox::SetPropVal(const long lPropNum, const ibValue& varPro
 			}
 		}
 	}
+	else if (lPropAlias == eProperty) {
+		// …and a SOURCE written at run time (`Table.Source = "Prices"`) is a new table too: the change makes the model
+		// anew (OnPropertyChanged), and its columns are built below, as a written Value's are.
+		const unsigned int idx = m_members.GetPropData(lPropNum);
+		if (GetPropertyByIndex(idx) == m_propertySource) {
+			m_tableCurrentLine.Reset();
+			refreshColumn = true;
+		}
+	}
 
 	bool result = ibValueFrame::SetPropVal(lPropNum, varPropVal);
 

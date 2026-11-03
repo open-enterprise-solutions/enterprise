@@ -368,7 +368,16 @@ public:
 		return it->first;
 	}
 
-	bool HasEnumValue(const valT& v) const { return m_listEnumData.contains(v); }
+	// A NUMBER — a property's, read from a file — asked before it is taken for a member, and never by casting it: a
+	// number no member has is no value of an enumeration without a fixed type, and the cast is undefined (UBSan stopped
+	// on version 99 read as ibProgramVersion).
+	bool HasEnumValue(long v) const {
+		for (const auto& e : m_listEnumData) {
+			if (static_cast<long>(e.first) == v)
+				return true;
+		}
+		return false;
+	}
 
 	unsigned int GetEnumCount() const { return m_listEnumData.size(); }
 

@@ -577,8 +577,6 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 	const ibNumberSeriesKey series = NumberSeriesKey();
 	const int interval = series.m_interval;
 
-	const ibTypeDescription& typeDesc = attribute->GetTypeDesc();
-
 	// The counter's column in the data table: the per-type sub-column, asked of the layout by its ROLE.
 	// GetSQLFieldName() returns the composite "<fld>_TYPE,<fld>_<X>" shape used by SaveData, and spelling
 	// the suffix here made this a second writer of the lettering — one that would keep compiling after a
@@ -642,28 +640,9 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 		return maxFound;
 	};
 
-	// The value the attribute stores for counter `n`.
+	// The value the attribute stores for counter `n` — spelled by the metaobject, as a predefined item's code is.
 	const auto codeOf = [&](const ibNumber& n) -> ibValue {
-		if (attribute->ContainType(ibValueTypes::TYPE_NUMBER))
-			return n;
-
-		if (attribute->ContainType(ibValueTypes::TYPE_STRING)) {
-			// "<prefix><zero-padded number>" — width derived from typeDesc.
-			// Defensive else: if length was shrunk in the designer below
-			// what the prefix already takes, drop the prefix and pad the
-			// number to prefix-width so the output keeps a stable size.
-			// Uses ibNumber::Format directly — no int64 cap, big counters OK.
-			const size_t prefLen = strPrefix.length();
-			const size_t totLen  = (size_t)typeDesc.GetLength();
-			ibNumber::Format fmt;
-			fmt.minIntDigits = (int)((prefLen < totLen) ? totLen - prefLen : prefLen);
-			return (prefLen < totLen ? strPrefix : ibString()) + n.ToString(fmt);
-		}
-
-		wxASSERT_MSG(false, "m_metaAttribute->GetClsidList() != ibValueTypes::TYPE_NUMBER"
-			"|| m_metaAttribute->GetClsidList() != ibValueTypes::TYPE_STRING");
-
-		return wxEmptyValue;
+		return m_metaObject->GenerateIdentifier(n, strPrefix);
 	};
 
 	// Does a row of the series already hold `code`?

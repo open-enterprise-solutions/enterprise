@@ -2,11 +2,11 @@
 //
 // Verifies:
 //   * Lambda WRITES into outer fn's captured slot (`i = i + 1`).
-//   * Outer fn returns — its heap frame survives via lambda's
-//     m_capturedFrames shared_ptr.
+//   * Outer fn returns — `i` survives in its cell, which the lambda
+//     took (m_capturedFrames).
 //   * Subsequent invokes see updated state (i = 1, 2, 3 ...).
 //   * Two independent counter instances don't share state
-//     (each counter() call creates its own heap frame).
+//     (each counter() call makes its own cell).
 
 function counter()
     var i = 0

@@ -41,3 +41,11 @@ std::string ibErrorText(const std::error_code& code)
 #endif
 	return code.message();
 }
+
+ibString ibSysErrorMsgStr(const unsigned long code)
+{
+	const std::string text = ibErrorText(std::error_code(static_cast<int>(code), std::system_category()));
+	if (text.empty())
+		return ibString::Format(ibT("0x%08lX"), code);
+	return ibString::FromUTF8(text.data(), text.size());
+}

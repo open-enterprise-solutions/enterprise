@@ -1833,7 +1833,7 @@
       "syntax_block": "GetCommonForm(name : string, owner : any, id : guid)",
       "parameters": "name — имя общей формы. owner — окно-владелец (необязательно). id — ключ, опознающий эту форму, чтобы повторный запрос переиспользовал одно окно (необязательно).",
       "return_descr": "Форма.",
-      "example": "form = GetCommonForm(\"Settings\");\nform.Open();",
+      "example": "form = GetCommonForm(\"Settings\");\nform.Show();",
       "availability": "Тонкий клиент, Сервер",
       "see_also": ["fn.ShowCommonForm", "fn.ActiveWindow", "fn.GetCommonTemplate"],
       "reviewed": true

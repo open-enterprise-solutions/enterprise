@@ -11,8 +11,7 @@
 
 #include <windows.h>
 
-#include <wx/log.h>   // wxSysErrorMsgStr
-
+#include "core/exception.h"               // ibSysErrorMsgStr
 #include "core/server/clusterControl.h"   // ibClusterControl::ServiceName
 
 namespace {
@@ -34,7 +33,7 @@ std::function<void()>   s_stop;
 
 ibString Refusal(const ibChar* what, DWORD code)
 {
-	return ibString::Format(ibT("%s: %s"), what, wxSysErrorMsgStr(code));
+	return ibString::Format(ibT("%s: %s"), what, ibSysErrorMsgStr(code));
 }
 
 void Report(DWORD state, DWORD code = 0)

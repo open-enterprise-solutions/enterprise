@@ -397,6 +397,11 @@ msgstr ""
 msgid "Nothing can follow a group without a name: its answer is the groups themselves, each with Key and Values. To go on - Select, Where, OrderBy - name the group: '%s <name>'."
 msgstr ""
 
+#: src/engine/backend/backend_exception.cpp:217
+#, c-format
+msgid "The procedure '%s' was not carried out by this value"
+msgstr ""
+
 #: src/engine/backend/backend_exception.cpp:696
 msgid "Context functions are not available: this is a server, and a server has no forms."
 msgstr ""
@@ -13211,86 +13216,331 @@ msgstr ""
 msgid "Debugging"
 msgstr ""
 
-#: src/engine/backend/system/value/valueOLE.cpp:107
+#: src/engine/frmserver/visualView/ctrl/formAttribute.cpp:121
+#, c-format
+msgid "'%s' cannot be the name of a form attribute: it takes letters, digits and the symbol \"_\", and does not start with a digit"
+msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/formAttribute.cpp:126
+#, c-format
+msgid "The form already has an attribute '%s'"
+msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/formAttribute.cpp:224
+#, c-format
+msgid "The form has no attribute '%s'"
+msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/formAttribute.cpp:228
+#, c-format
+msgid "'%s' is an attribute the form was designed with - only one the module added with Attributes.Add can be removed"
+msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/formAttribute.cpp:234
+#, c-format
+msgid "'%s' is shown by the control '%s' - unbind the control first"
+msgstr ""
+
+#: src/engine/backend/backend_type.cpp:469
+#, c-format
+msgid "'%s' names no attribute this control can be bound to, and the form has no main attribute to start from"
+msgstr ""
+
+#: src/engine/backend/backend_type.cpp:479 src/engine/backend/srcDataObject.cpp:148
+#, c-format
+msgid "'%s' holds a value - nothing unfolds from it, so '%s' cannot follow"
+msgstr ""
+
+#: src/engine/backend/srcDataObject.cpp:150
+#, c-format
+msgid "'%s' has no field called '%s'. It offers: %s"
+msgstr ""
+
+#: src/engine/backend/backend_type.cpp:484
+#, c-format
+msgid "Nothing to bind to - the path names no field and no attribute"
+msgstr ""
+
+#: src/engine/frmserver/visualView/controlEnum.h
+msgid "Tile"
+msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgid "Note"
+msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgid "The line under a tile's title - a price, a count, a state. Shown only when the picture location is Tile. Can be written per language and changed from code while the form is open."
+msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgctxt "button"
+msgid "View"
+msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgid "How the button is drawn: a button, or a hyperlink - no face and no frame, its caption underlined. Pressed the same way, and its picture, its representation and its command are the same."
+msgstr ""
+
+#: src/engine/frmserver/visualView/controlEnum.h
+msgctxt "button view"
+msgid "Button"
+msgstr ""
+
+#: src/engine/frmserver/visualView/controlEnum.h
+msgid "Hyperlink"
+msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgid "Picture location"
+msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h
+msgid "Where the picture stands. Auto: where the button puts it, on the left of the text. Left, Right: on that side of the text. Tile: the picture large over the text and the Note under them, the button filling what its sizer gives it - a big button for a finger; put tiles in a grid sizer for a panel of them."
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/chartOfAccountsMetadataSchema.cpp:142
+#, c-format
+msgid "%s.%s: %i analytics are declared, the chart takes %i"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/chartOfAccountsMetadataSchema.cpp:147
+#, c-format
+msgid "%s.%s: analytics line %i names no kind its chart of characteristic types declares"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/chartOfCalculationTypesMetadataSchema.cpp:60
+#, c-format
+msgid "%s.%s: %s line %i names no calculation type the section may name"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/chartOfCharacteristicTypesMetadataSchema.cpp:36
+#, c-format
+msgid "%s.%s: the characteristic declares no Type"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:2910
+#, c-format
+msgid "%s: line %i of the %s list is declared by the configuration and cannot be removed, moved or changed"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:57
+#, c-format
+msgid "'%s': '%s' keeps no folders"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:61
+#, c-format
+msgid "'%s' holds '%s', so it stays a folder"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:66
+#, c-format
+msgid "'%s': the items of '%s' do not stand under one another"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:69
+#, c-format
+msgid "'%s': '%s' has no predefined item to sit under"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:71
+#, c-format
+msgid "'%s' is not a folder, so nothing can sit under it"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:74
+#, c-format
+msgid "'%s' cannot sit under itself"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:183
+#, c-format
+msgid "'%s': '%s' is not a value '%s' may be given"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:189
+#, c-format
+msgid "'%s': '%s' may not name the type '%s'"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:195
+#, c-format
+msgid "'%s': '%s' takes no value of the type '%s'"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:227
+#, c-format
+msgid "'%s': a predefined item of '%s' declares no attribute #%d"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:232
+#, c-format
+msgid "'%s': a predefined item of '%s' declares no section #%d"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:236
+#, c-format
+msgid "'%s': '%s' has no column #%d"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:373
+#, c-format
+msgid "'%s': its predefined items cannot be read"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectSchema.cpp:265
+#, c-format
+msgid "%s.%s: the predefined item has no %s"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectSchema.cpp:322
+#, c-format
+msgid "%s: the declared lines cannot be written - the table names no owner"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectSchema.cpp:399
+#, c-format
+msgid "%s.%s %i: the configuration declares this line where the base already holds one - remove the lines held there first"
+msgstr ""
+
+#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:172
+#, c-format
+msgid "\"%s\" must be filled in"
+msgstr ""
+
+#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:352
+msgid "Declared by the configuration"
+msgstr ""
+
+#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:531
+#, c-format
+msgid "%s, row %u"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/chartOfCharacteristicTypesMetadataSchema.cpp:49
+#, c-format
+msgid "%s.%s: the characteristic's Type holds a type the chart does not take - pick it again among its Types of characteristics"
+msgstr ""
+
+#: src/engine/backend/system/value/valueCOM.cpp:107
 #, c-format
 msgid "COM object \"%s\" returned a value that cannot be read: %s"
 msgstr ""
 
-#: src/engine/backend/system/value/valueOLE.cpp:195
+#: src/engine/backend/system/value/valueCOM.cpp:195
 #, c-format
 msgid "COM object \"%s\" returned a date that cannot be read"
 msgstr ""
 
-#: src/engine/backend/system/value/valueOLE.cpp:214
+#: src/engine/backend/system/value/valueCOM.cpp:214
 #, c-format
 msgid "COM object \"%s\" returned an interface that cannot be called by name"
 msgstr ""
 
-#: src/engine/backend/system/value/valueOLE.cpp:221
+#: src/engine/backend/system/value/valueCOM.cpp:221
 #, c-format
 msgid "COM object \"%s\" returned a value of a kind the language does not have (VARTYPE %d)"
 msgstr ""
 
-#: src/engine/backend/system/value/valueOLE.cpp:241
+#: src/engine/backend/system/value/valueCOM.cpp:241
 #, c-format
 msgid "COM object \"%s\" returned an array of structures, which the language does not have"
 msgstr ""
 
-#: src/engine/backend/system/value/valueOLE.cpp:354
+#: src/engine/backend/system/value/valueCOM.cpp:354
 #, c-format
 msgid "The date %s cannot be passed to a COM object"
 msgstr ""
 
-#: src/engine/backend/system/value/valueOLE.cpp:375
+#: src/engine/backend/system/value/valueCOM.cpp:375
 #, c-format
 msgid "An array of %d elements cannot be passed to a COM object"
 msgstr ""
 
-#: src/engine/backend/system/value/valueOLE.cpp:393
+#: src/engine/backend/system/value/valueCOM.cpp:393
 #, c-format
 msgid "A value of type \"%s\" cannot be passed to a COM object"
 msgstr ""
 
-#: src/engine/backend/system/value/valueOLE.cpp:699
+#: src/engine/backend/system/value/valueCOM.cpp:699
 #, c-format
-msgid "The handler of event \"%s\" must be a function"
+msgid "The handler of event \"%s\" must be a function or a procedure name"
 msgstr ""
 
-#: src/engine/backend/system/value/valueOLE.cpp:705
+#: src/engine/backend/system/value/valueSafeArray.cpp:56
+#, c-format
+msgid "ComSafeArray: \"%s\" is not an element type"
+msgstr ""
+
+#: src/engine/backend/system/value/valueSafeArray.cpp:77
+#, c-format
+msgid "ComSafeArray: the array has no dimension %d"
+msgstr ""
+
+#: src/engine/backend/system/value/valueSafeArray.cpp:82
+#, c-format
+msgid "ComSafeArray: %s"
+msgstr ""
+
+#: src/engine/backend/system/value/valueSafeArray.cpp:91
+msgid "ComSafeArray: a size is a whole number, 0 or more"
+msgstr ""
+
+#: src/engine/backend/system/value/valueSafeArray.cpp:115
+#, c-format
+msgid "ComSafeArray: the array has %d dimensions, and %d indices were given"
+msgstr ""
+
+#: src/engine/backend/system/value/valueSafeArray.cpp:190
+#, c-format
+msgid "ComSafeArray: a value of type \"%s\" cannot be stored as %s"
+msgstr ""
+
+#: src/engine/backend/system/value/valueSafeArray.cpp:200
+msgid "ComSafeArray: the array does not have the sizes given"
+msgstr ""
+
+#: src/engine/backend/system/value/valueCOM.cpp:705
 #, c-format
 msgid "COM object \"%s\" has no events"
 msgstr ""
 
-#: src/engine/backend/system/value/valueOLE.cpp:716
+#: src/engine/backend/system/value/valueCOM.cpp:716
 #, c-format
 msgid "COM object \"%s\" has no event \"%s\""
 msgstr ""
 
-#: src/engine/backend/system/value/valueOLE.cpp:820
+#: src/engine/backend/system/value/valueCOM.cpp:593
+#, c-format
+msgid "The module that handles event \"%s\" of COM object \"%s\" is gone"
+msgstr ""
+
+#: src/engine/backend/system/value/valueCOM.cpp:820
 #, c-format
 msgid "COM object \"%s\" could not be created: %s"
 msgstr ""
 
-#: src/engine/backend/system/value/valueOLE.cpp:884
+#: src/engine/backend/system/value/valueCOM.cpp:884
 #, c-format
 msgid "argument %d: %s"
 msgstr ""
 
-#: src/engine/backend/system/value/valueOLE.cpp:893
+#: src/engine/backend/system/value/valueCOM.cpp:893
 #, c-format
 msgid "COM object \"%s\", member \"%s\": %s"
 msgstr ""
 
-#: src/engine/backend/system/value/valueOLE.cpp:965
+#: src/engine/backend/system/value/valueCOM.cpp:965
 #, c-format
 msgid "No COM class is registered as \"%s\""
 msgstr ""
 
-#: src/engine/backend/system/value/valueOLE.cpp:1014
+#: src/engine/backend/system/value/valueCOM.cpp:1014
 msgid "COM objects are available on Windows only"
 msgstr ""
 
-#: src/engine/backend/system/value/valueOLE.cpp:1435
+#: src/engine/backend/system/value/valueCOM.cpp:1435
 #, c-format
 msgid "COM object \"%s\" cannot be walked with For Each"
 msgstr ""

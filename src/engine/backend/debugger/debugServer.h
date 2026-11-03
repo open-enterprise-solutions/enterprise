@@ -169,7 +169,7 @@ public:
 	// "Is the debug-thread-current session parked in DoDebugLoop?" Resolves
 	// the per-session m_debugLoop via ibSession::Current() (body in .cpp —
 	// the header only forward-declares ibSession). Advisory fast-path for the
-	// command handlers; EvalInParkedSession re-checks authoritatively.
+	// command handlers; RunInParkedSession re-checks authoritatively.
 	bool IsDebugLooped() const;
 
 	// ⭐ IS ANYBODY WATCHING THIS RUN AT ALL — asked before handing anything to the debug channel.
@@ -206,8 +206,8 @@ protected:
 
 	//special functions:
 	// Both take the parked frame explicitly — sourced from the per-session
-	// dbg.m_runContext at the call site (worker owns it in DoDebugLoop; the
-	// SetStack handler resolves + holds dbg.m_mutex). No server-global mirror.
+	// dbg.m_runContext, and both run on the stopped thread (DoDebugLoop itself,
+	// or the SetStack handler's work through RunInParkedSession). No server-global mirror.
 	inline void SendExpressions(ibRunContext* runContext);
 	inline void SendLocalVariables(ibRunContext* runContext);
 	inline void SendStack();

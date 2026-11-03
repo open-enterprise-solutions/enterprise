@@ -20,7 +20,9 @@ class ibString;          // core/fstring.h - the flag's text; the family meets i
 inline constexpr const ibChar* g_booleanTrue  = ibT("True");
 inline constexpr const ibChar* g_booleanFalse = ibT("False");
 
-class CORE_API ibBoolean
+// EXPORTED MEMBER BY MEMBER, as ibString is (fstring.h says why): marked as a class, its `operator bool` was a call
+// through the import table on the runtime's path (the disassembly of a Release backend.dll, 2026-11-02).
+class ibBoolean
 {
 public:
 	constexpr ibBoolean() noexcept = default;
@@ -30,8 +32,8 @@ public:
 
 	// READ FROM A TEXT: `True` / `False` in any case, the spaces around it aside. False when the text is
 	// neither — and the flag is then false.
-	bool FromString(const ibString& text);
-	ibString ToString() const;
+	CORE_API bool FromString(const ibString& text);
+	CORE_API ibString ToString() const;
 
 private:
 	bool m_flag = false;

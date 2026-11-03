@@ -3,18 +3,20 @@
 //	Description : OLE-supporter
 ////////////////////////////////////////////////////////////////////////////
 
-#include "valueOLE.h"
+#include "valueCOM.h"
 #include "valueArray.h"
+#include "valueBinaryData.h"
+#include "valueEvent.h"                         // ibValueEvent — a handler by name, the platform's named dispatcher
+#include "valueSafeArray.h"                     // ibValueSafeArray — an array, both ways
 #include "backend/backend_exception.h"
-#include "backend/compiler/procUnit.h"          // InvokeLambda — an event handler is a lambda
-#include "backend/compiler/procUnitLambda.h"    // AsFunction
+#include "backend/compiler/procUnitLambda.h"    // AsFunction — a handler as a lambda; the session, GetPUState with it
 
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 #include <ocidl.h>      // IConnectionPointContainer, IProvideClassInfo
-#include <wx/log.h>     // wxSysErrorMsgStr
 
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <exception>
 #include <mutex>
 #include <thread>
@@ -33,27 +35,8 @@ static constexpr long s_methodRemoveEventHandler = 0x7FFFFF02;
 // arguments: the interpreter sizes the frame by this bound, and refuses a call that passes more.
 static constexpr long s_comArgsBound = 64;
 
-#ifdef __WXMSW__
-static std::map<IDispatch*, ibValueOLE*> gs_valueOLE;
-
-//*********************************************************************************************************************
-//*                                                      Apartment                                                    *
-//*********************************************************************************************************************
-
-// ⭐ A THREAD ENTERS A COM APARTMENT BEFORE IT TOUCHES AN OBJECT. The thin client's main thread is in one
-// already (wx initialises OLE), but a session on the application server runs on a worker thread that never
-// asked: CoCreateInstance there answered CO_E_NOTINITIALIZED. A single-threaded apartment, so an object
-// and its events stay on the thread that made them; balanced when the thread ends. A thread that is in the
-// multithreaded apartment already (the debugger's) keeps it — RPC_E_CHANGED_MODE is not ours to undo.
-static void EnterComApartment()
-{
-	struct ibComApartment {
-		const HRESULT m_hr = ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-		~ibComApartment() { if (SUCCEEDED(m_hr)) ::CoUninitialize(); }
-	};
-	thread_local ibComApartment s_apartment;
-	(void)s_apartment;
-}
+#ifdef __IBMSW__
+using Microsoft::WRL::ComPtr;
 
 //*********************************************************************************************************************
 //*                                                      Strings                                                      *
@@ -72,20 +55,13 @@ static ibString FromBSTR(const BSTR bstr)
 	return ibString(bstr, ::SysStringLen(bstr));
 }
 
-static ibString HResultText(const HRESULT hr)
-{
-	return ibString(wxSysErrorMsgStr(static_cast<unsigned long>(hr)));
-}
-
 //*********************************************************************************************************************
 //*                                                      Conversion                                                   *
 //*********************************************************************************************************************
 
-static ibValue FromSafeArray(SAFEARRAY* psa, const VARTYPE elementType, const ibString& objectName);
-
 static ibString InterfaceName(IDispatch* dispatch, const ibString& fallback)
 {
-	ITypeInfo* typeInfo = nullptr;
+	ComPtr<ITypeInfo> typeInfo;
 	if (FAILED(dispatch->GetTypeInfo(0, LOCALE_USER_DEFAULT, &typeInfo)) || typeInfo == nullptr)
 		return fallback;
 	BSTR name = nullptr;
@@ -93,11 +69,10 @@ static ibString InterfaceName(IDispatch* dispatch, const ibString& fallback)
 	if (SUCCEEDED(typeInfo->GetDocumentation(MEMBERID_NIL, &name, nullptr, nullptr, nullptr)) && name != nullptr)
 		result = FromBSTR(name);
 	::SysFreeString(name);
-	typeInfo->Release();
 	return result;
 }
 
-void ibValueOLE::FromVariant(const VARIANT& oleVariant, ibValue& value, const ibString& objectName)
+void ibValueCOM::FromVariant(const VARIANT& oleVariant, ibValue& value, const ibString& objectName)
 {
 	// BY REFERENCE: read what it points at — VariantCopyInd takes every kind of reference apart.
 	if ((oleVariant.vt & VT_BYREF) != 0) {
@@ -105,7 +80,7 @@ void ibValueOLE::FromVariant(const VARIANT& oleVariant, ibValue& value, const ib
 		::VariantInit(&direct);
 		const HRESULT hr = ::VariantCopyInd(&direct, const_cast<VARIANT*>(&oleVariant));
 		if (FAILED(hr))
-			ibBackendCoreException::Error(_("COM object \"%s\" returned a value that cannot be read: %s"), objectName, HResultText(hr));
+			ibBackendCoreException::Error(_("COM object \"%s\" returned a value that cannot be read: %s"), objectName, ibSysErrorMsgStr(hr));
 		try {
 			FromVariant(direct, value, objectName);
 		}
@@ -117,8 +92,13 @@ void ibValueOLE::FromVariant(const VARIANT& oleVariant, ibValue& value, const ib
 		return;
 	}
 
+	// AN ARRAY IS A ComSafeArray, a copy of it as it came: nothing is read until the script asks.
 	if ((oleVariant.vt & VT_ARRAY) != 0) {
-		value = FromSafeArray(oleVariant.parray, oleVariant.vt & VT_TYPEMASK, objectName);
+		if (oleVariant.parray == nullptr) {
+			value.Reset();
+			return;
+		}
+		value = new ibValueSafeArray(oleVariant);
 		return;
 	}
 
@@ -135,54 +115,54 @@ void ibValueOLE::FromVariant(const VARIANT& oleVariant, ibValue& value, const ib
 		value = ibValue(oleVariant.boolVal != VARIANT_FALSE);
 		return;
 	case VT_I1:
-		value = ibValue(ibNumber(static_cast<int>(oleVariant.cVal)));
+		value = ibNumber(oleVariant.cVal);
 		return;
 	case VT_UI1:
-		value = ibValue(ibNumber(static_cast<unsigned int>(oleVariant.bVal)));
+		value = ibNumber(oleVariant.bVal);
 		return;
 	case VT_I2:
-		value = ibValue(ibNumber(static_cast<int>(oleVariant.iVal)));
+		value = ibNumber(oleVariant.iVal);
 		return;
 	case VT_UI2:
-		value = ibValue(ibNumber(static_cast<unsigned int>(oleVariant.uiVal)));
+		value = ibNumber(oleVariant.uiVal);
 		return;
 	case VT_I4:
-		value = ibValue(ibNumber(static_cast<long>(oleVariant.lVal)));
+		value = ibNumber(oleVariant.lVal);
 		return;
 	case VT_UI4:
-		value = ibValue(ibNumber(static_cast<unsigned long>(oleVariant.ulVal)));
+		value = ibNumber(oleVariant.ulVal);
 		return;
 	case VT_INT:
-		value = ibValue(ibNumber(static_cast<int>(oleVariant.intVal)));
+		value = ibNumber(oleVariant.intVal);
 		return;
 	case VT_UINT:
-		value = ibValue(ibNumber(static_cast<unsigned int>(oleVariant.uintVal)));
+		value = ibNumber(oleVariant.uintVal);
 		return;
 	case VT_I8:
-		value = ibValue(ibNumber(static_cast<long long>(oleVariant.llVal)));
+		value = ibNumber(oleVariant.llVal);
 		return;
 	case VT_UI8:
-		value = ibValue(ibNumber(static_cast<unsigned long long>(oleVariant.ullVal)));
+		value = ibNumber(oleVariant.ullVal);
 		return;
 	case VT_R4:
-		value = ibValue(ibNumber(static_cast<double>(oleVariant.fltVal)));
+		value = ibNumber(oleVariant.fltVal);
 		return;
 	case VT_R8:
-		value = ibValue(ibNumber(oleVariant.dblVal));
+		value = ibNumber(oleVariant.dblVal);
 		return;
 	case VT_CY:
 		// Currency is an integer of ten-thousandths: divided exactly, never through a double.
-		value = ibValue(ibNumber(static_cast<long long>(oleVariant.cyVal.int64)) / ibNumber(10000));
+		value = ibNumber(oleVariant.cyVal.int64) / ibNumber(10000);
 		return;
 	case VT_DECIMAL: {
 		// 96 bits and a scale — written out in the invariant locale and read back exactly.
 		BSTR text = nullptr;
 		const HRESULT hr = ::VarBstrFromDec(const_cast<DECIMAL*>(&oleVariant.decVal), LOCALE_INVARIANT, 0, &text);
 		if (FAILED(hr))
-			ibBackendCoreException::Error(_("COM object \"%s\" returned a value that cannot be read: %s"), objectName, HResultText(hr));
+			ibBackendCoreException::Error(_("COM object \"%s\" returned a value that cannot be read: %s"), objectName, ibSysErrorMsgStr(hr));
 		const ibString digits = FromBSTR(text);
 		::SysFreeString(text);
-		value = ibValue(ibNumber(digits));
+		value = ibNumber(digits);
 		return;
 	}
 	case VT_BSTR:
@@ -201,7 +181,7 @@ void ibValueOLE::FromVariant(const VARIANT& oleVariant, ibValue& value, const ib
 		if (oleVariant.pdispVal == nullptr)
 			value.Reset();
 		else
-			value = new ibValueOLE(CLSID_NULL, oleVariant.pdispVal, InterfaceName(oleVariant.pdispVal, objectName));
+			value = new ibValueCOM(CLSID_NULL, oleVariant.pdispVal, InterfaceName(oleVariant.pdispVal, objectName));
 		return;
 	case VT_UNKNOWN: {
 		// An interface that answers IDispatch is an object like any other; one that does not cannot be
@@ -210,11 +190,10 @@ void ibValueOLE::FromVariant(const VARIANT& oleVariant, ibValue& value, const ib
 			value.Reset();
 			return;
 		}
-		IDispatch* dispatch = nullptr;
-		if (FAILED(oleVariant.punkVal->QueryInterface(IID_IDispatch, reinterpret_cast<void**>(&dispatch))) || dispatch == nullptr)
+		ComPtr<IDispatch> dispatch;
+		if (FAILED(oleVariant.punkVal->QueryInterface(IID_IDispatch, reinterpret_cast<void**>(dispatch.GetAddressOf()))) || dispatch == nullptr)
 			ibBackendCoreException::Error(_("COM object \"%s\" returned an interface that cannot be called by name"), objectName);
-		value = new ibValueOLE(CLSID_NULL, dispatch, InterfaceName(dispatch, objectName));
-		dispatch->Release();
+		value = new ibValueCOM(CLSID_NULL, dispatch.Get(), InterfaceName(dispatch.Get(), objectName));
 		return;
 	}
 	}
@@ -223,77 +202,22 @@ void ibValueOLE::FromVariant(const VARIANT& oleVariant, ibValue& value, const ib
 		objectName, static_cast<int>(oleVariant.vt));
 }
 
-// One element of an array, read into a VARIANT of its own whatever the array holds. The element's storage
-// is the VARIANT's union (8 bytes in) for every kind but DECIMAL, which takes the whole VARIANT.
-static void ReadSafeArrayElement(SAFEARRAY* psa, LONG* indices, const VARTYPE elementType, VARIANT& element, const ibString& objectName)
+// The significant digits of a number's text — the leading zeros do not count.
+static size_t SignificantDigits(const ibString& text)
 {
-	::VariantInit(&element);
-	HRESULT hr = S_OK;
-	if (elementType == VT_VARIANT) {
-		hr = ::SafeArrayGetElement(psa, indices, &element);
-	}
-	else if (elementType == VT_DECIMAL) {
-		DECIMAL dec = {};
-		hr = ::SafeArrayGetElement(psa, indices, &dec);
-		element.decVal = dec;
-		element.vt = VT_DECIMAL;      // after the copy: a DECIMAL's first word is where vt lives
-	}
-	else if (elementType == VT_RECORD) {
-		ibBackendCoreException::Error(_("COM object \"%s\" returned an array of structures, which the language does not have"), objectName);
-	}
-	else {
-		hr = ::SafeArrayGetElement(psa, indices, &element.llVal);
-		element.vt = elementType;
-	}
-	if (FAILED(hr))
-		ibBackendCoreException::Error(_("COM object \"%s\" returned a value that cannot be read: %s"), objectName, HResultText(hr));
-}
-
-// Dimension `dim` (1 = the left-most, the outer array) of a SAFEARRAY. SafeArrayGetElement counts its
-// indices the other way round — the right-most dimension is indices[0] — hence `dims - dim`.
-static ibValue FromSafeArrayDimension(SAFEARRAY* psa, const VARTYPE elementType, const UINT dim, const UINT dims,
-	std::vector<LONG>& indices, const ibString& objectName)
-{
-	LONG lower = 0, upper = -1;
-	::SafeArrayGetLBound(psa, dim, &lower);
-	::SafeArrayGetUBound(psa, dim, &upper);
-
-	ibValueArray* const arr = new ibValueArray();
-	ibValue result = arr;
-	for (LONG i = lower; i <= upper; i++) {
-		indices[dims - dim] = i;
-		if (dim < dims) {
-			arr->Add(FromSafeArrayDimension(psa, elementType, dim + 1, dims, indices, objectName));
+	size_t count = 0;
+	bool started = false;
+	for (const ibChar c : text) {
+		if (c < ibT('0') || c > ibT('9'))
 			continue;
-		}
-		VARIANT element;
-		ReadSafeArrayElement(psa, indices.data(), elementType, element, objectName);
-		ibValue item;
-		try {
-			ibValueOLE::FromVariant(element, item, objectName);
-		}
-		catch (...) {
-			::VariantClear(&element);
-			throw;
-		}
-		::VariantClear(&element);
-		arr->Add(item);
+		started = started || c != ibT('0');
+		if (started)
+			++count;
 	}
-	return result;
+	return count;
 }
 
-static ibValue FromSafeArray(SAFEARRAY* psa, const VARTYPE elementType, const ibString& objectName)
-{
-	if (psa == nullptr)
-		return ibValue(new ibValueArray());
-	const UINT dims = ::SafeArrayGetDim(psa);
-	if (dims == 0)
-		return ibValue(new ibValueArray());
-	std::vector<LONG> indices(dims, 0);
-	return FromSafeArrayDimension(psa, elementType, 1, dims, indices, objectName);
-}
-
-void ibValueOLE::ToVariant(const ibValue& value, VARIANT& oleVariant)
+void ibValueCOM::FromValue(const ibValue& value, VARIANT& oleVariant)
 {
 	::VariantInit(&oleVariant);
 
@@ -311,7 +235,9 @@ void ibValueOLE::ToVariant(const ibValue& value, VARIANT& oleVariant)
 		return;
 	case ibValueTypes::TYPE_NUMBER: {
 		// An integer goes as the integer automation reads everywhere (VT_I4), a larger one as VT_I8, and
-		// a fraction as a double — an old server refuses VT_I8 outright, and every one reads VT_R8.
+		// a fraction as a double — an old server refuses VT_I8 outright, and every one reads VT_R8 — unless
+		// it has more digits than a double keeps (15): then as a DECIMAL, which keeps 28. A double took
+		// 12345678901234.123456 into a DECIMAL field as 12345678901234.1.
 		const ibNumber number = value.GetNumber();
 		long long integer = 0;
 		if (number == number.Round() && number.ToInt(integer) == 0) {
@@ -323,6 +249,11 @@ void ibValueOLE::ToVariant(const ibValue& value, VARIANT& oleVariant)
 				oleVariant.vt = VT_I8;
 				oleVariant.llVal = integer;
 			}
+			return;
+		}
+		const ibString text = number.ToString();
+		if (SignificantDigits(text) > 15 && SUCCEEDED(::VarDecFromStr(text.wc_str(), LOCALE_INVARIANT, 0, &oleVariant.decVal))) {
+			oleVariant.vt = VT_DECIMAL;      // after the value: a DECIMAL's first word is where vt lives
 			return;
 		}
 		oleVariant.vt = VT_R8;
@@ -360,34 +291,37 @@ void ibValueOLE::ToVariant(const ibValue& value, VARIANT& oleVariant)
 		break;
 	}
 
-	ibValueOLE* valueOLE = nullptr;
-	if (value.ConvertToValue(valueOLE) && valueOLE != nullptr && valueOLE->m_dispatch != nullptr) {
+	ibValueCOM* valueCOM = nullptr;
+	if (value.ConvertToValue(valueCOM) && valueCOM != nullptr && valueCOM->m_dispatch != nullptr) {
 		oleVariant.vt = VT_DISPATCH;
-		oleVariant.pdispVal = valueOLE->m_dispatch;
-		oleVariant.pdispVal->AddRef();
+		valueCOM->m_dispatch.CopyTo(&oleVariant.pdispVal);
 		return;
 	}
 
+	ibValueBinaryData* binaryData = nullptr;
+	if (value.ConvertToValue(binaryData) && binaryData != nullptr) {
+		// Bytes go as automation's own array of bytes, the way a file or a picture is passed.
+		const ibMemoryBuffer& bytes = binaryData->GetBuffer();
+		SAFEARRAY* psa = ::SafeArrayCreateVector(VT_UI1, 0, static_cast<ULONG>(bytes.GetDataLen()));
+		if (psa == nullptr)
+			ibBackendCoreException::Error(_("An array of %d elements cannot be passed to a COM object"), static_cast<int>(bytes.GetDataLen()));
+		if (!bytes.IsEmpty())
+			std::memcpy(psa->pvData, bytes.GetData(), bytes.GetDataLen());
+		oleVariant.vt = VT_ARRAY | VT_UI1;
+		oleVariant.parray = psa;
+		return;
+	}
+
+	ibValueSafeArray* safeArray = nullptr;
+	if (value.ConvertToValue(safeArray) && safeArray != nullptr) {
+		safeArray->CopyTo(oleVariant);
+		return;
+	}
+
+	// An Array as VARIANTs, rows of one length as one table (ibValueSafeArray::FromValueArray).
 	ibValueArray* valueArray = nullptr;
 	if (value.ConvertToValue(valueArray) && valueArray != nullptr) {
-		const std::vector<ibValue>& items = valueArray->Values();
-		SAFEARRAY* psa = ::SafeArrayCreateVector(VT_VARIANT, 0, static_cast<ULONG>(items.size()));
-		if (psa == nullptr)
-			ibBackendCoreException::Error(_("An array of %d elements cannot be passed to a COM object"), static_cast<int>(items.size()));
-		for (LONG i = 0; i < static_cast<LONG>(items.size()); i++) {
-			VARIANT element;
-			try {
-				ToVariant(items[i], element);
-			}
-			catch (...) {
-				::SafeArrayDestroy(psa);
-				throw;
-			}
-			::SafeArrayPutElement(psa, &i, &element);   // copies it
-			::VariantClear(&element);
-		}
-		oleVariant.vt = VT_ARRAY | VT_VARIANT;
-		oleVariant.parray = psa;
+		oleVariant = ibValueSafeArray::FromValueArray(valueArray, VT_VARIANT, {});
 		return;
 	}
 
@@ -400,17 +334,23 @@ static void WriteByRef(VARIANT& target, const ibValue& value)
 	const VARTYPE vt = target.vt & ~VT_BYREF;
 	if (vt == VT_VARIANT) {
 		::VariantClear(target.pvarVal);
-		ibValueOLE::ToVariant(value, *target.pvarVal);
+		ibValueCOM::FromValue(value, *target.pvarVal);
 		return;
 	}
 
 	VARIANT source, typed;
-	ibValueOLE::ToVariant(value, source);
+	ibValueCOM::FromValue(value, source);
 	::VariantInit(&typed);
 	const HRESULT hr = ::VariantChangeType(&typed, &source, 0, vt);
 	::VariantClear(&source);
 	if (FAILED(hr))
 		return;     // the kind the caller declared cannot hold it: the argument keeps what it had
+
+	if ((vt & VT_ARRAY) != 0) {
+		::SafeArrayDestroy(*target.pparray);
+		*target.pparray = typed.parray;         // the array moves over, not copied
+		return;
+	}
 
 	switch (vt)
 	{
@@ -450,8 +390,8 @@ static void WriteByRef(VARIANT& target, const ibValue& value)
 
 // ⭐⭐ THE OBJECT'S EVENTS, as calls into a sink the platform hands it. The sink is an IDispatch advised on
 // the object's DEFAULT SOURCE interface (IProvideClassInfo, or the coclass in the object's type library);
-// an event arrives as Invoke(DISPID), is named through the source interface's type information, and runs
-// the handler the script gave for that name.
+// a handler is kept by the DISPID its event's name has in the source interface (EventId), and an event that
+// arrives as Invoke(DISPID) runs the one kept for it.
 //
 // ⭐ ON THE THREAD THAT OWNS THE OBJECT. In a single-threaded apartment COM guarantees it: an event comes
 // while the thread is inside a call to the object (an in-process server raising it synchronously) or
@@ -464,20 +404,14 @@ class ibComEventSink : public IDispatch {
 public:
 	ibComEventSink(const IID& iid, ITypeInfo* typeInfo, const ibString& objectName)
 		: m_iid(iid), m_typeInfo(typeInfo), m_objectName(objectName), m_ownerThread(::GetCurrentThreadId()) {
-		m_typeInfo->AddRef();
 	}
 
 	bool Advise(IDispatch* source) {
-		IConnectionPointContainer* container = nullptr;
-		if (FAILED(source->QueryInterface(IID_IConnectionPointContainer, reinterpret_cast<void**>(&container))) || container == nullptr)
+		ComPtr<IConnectionPointContainer> container;
+		if (FAILED(source->QueryInterface(IID_IConnectionPointContainer, reinterpret_cast<void**>(container.GetAddressOf()))) || container == nullptr)
 			return false;
-		const HRESULT hrFind = container->FindConnectionPoint(m_iid, &m_point);
-		container->Release();
-		if (FAILED(hrFind) || m_point == nullptr)
-			return false;
-		if (FAILED(m_point->Advise(this, &m_cookie))) {
-			m_point->Release();
-			m_point = nullptr;
+		if (FAILED(container->FindConnectionPoint(m_iid, &m_point)) || m_point == nullptr || FAILED(m_point->Advise(this, &m_cookie))) {
+			m_point.Reset();
 			return false;
 		}
 		return true;
@@ -487,18 +421,33 @@ public:
 		if (m_point == nullptr)
 			return;
 		m_point->Unadvise(m_cookie);
-		m_point->Release();
-		m_point = nullptr;
+		m_point.Reset();
 	}
 
-	void SetHandler(const ibString& eventName, const ibValue& handler) { m_handlers[eventName.Lower()] = handler; }
-	void RemoveHandler(const ibString& eventName) { m_handlers.erase(eventName.Lower()); }
+	void SetHandler(const DISPID dispid, const ibValue& dispatcher, const std::weak_ptr<ibProcUnit>& runtime) {
+		m_handlers[dispid] = { dispatcher, runtime };
+	}
+	void RemoveHandler(const DISPID dispid) { m_handlers.erase(dispid); }
 	bool HasHandlers() const { return !m_handlers.empty(); }
 
-	bool HasEvent(const ibString& eventName) const {
-		LPOLESTR name = const_cast<LPOLESTR>(eventName.wc_str());
-		MEMBERID memid = MEMBERID_NIL;
-		return SUCCEEDED(m_typeInfo->GetIDsOfNames(&name, 1, &memid));
+	// The event's DISPID by its name, in any case; DISPID_UNKNOWN when the object has no such event. Read off the
+	// source interface's functions one by one, not asked of ITypeInfo::GetIDsOfNames: that one is [local] in oaidl.idl
+	// and fails on the proxy an out-of-process server's type information is (2026-11-03: no Excel event was found).
+	DISPID EventId(const ibString& eventName) const {
+		TYPEATTR* attr = nullptr;
+		if (FAILED(m_typeInfo->GetTypeAttr(&attr)) || attr == nullptr)
+			return DISPID_UNKNOWN;
+		DISPID found = DISPID_UNKNOWN;
+		for (UINT i = 0; i < attr->cFuncs && found == DISPID_UNKNOWN; i++) {
+			FUNCDESC* func = nullptr;
+			if (FAILED(m_typeInfo->GetFuncDesc(i, &func)) || func == nullptr)
+				continue;
+			if (EventName(func->memid).IsSameAs(eventName, false))
+				found = func->memid;
+			m_typeInfo->ReleaseFuncDesc(func);
+		}
+		m_typeInfo->ReleaseTypeAttr(attr);
+		return found;
 	}
 
 	// Raised on the owner's thread, after the call that let the event in has returned.
@@ -549,7 +498,10 @@ public:
 	STDMETHODIMP GetTypeInfoCount(UINT* count) override { if (count != nullptr) *count = 0; return S_OK; }
 	STDMETHODIMP GetTypeInfo(UINT, LCID, ITypeInfo**) override { return E_NOTIMPL; }
 	STDMETHODIMP GetIDsOfNames(REFIID, LPOLESTR* names, UINT count, LCID, DISPID* dispids) override {
-		return m_typeInfo->GetIDsOfNames(names, count, dispids);
+		if (names == nullptr || dispids == nullptr || count != 1)
+			return DISP_E_UNKNOWNNAME;
+		dispids[0] = EventId(ibString(names[0]));
+		return dispids[0] != DISPID_UNKNOWN ? S_OK : DISP_E_UNKNOWNNAME;
 	}
 	STDMETHODIMP Invoke(DISPID dispid, REFIID, LCID, WORD, DISPPARAMS* params, VARIANT* result, EXCEPINFO*, UINT*) override {
 		if (result != nullptr)
@@ -580,9 +532,15 @@ private:
 		std::vector<VARIANT> m_args;
 	};
 
+	// A handler: the value that dispatches the event (ibEventDispatcher — a lambda, or a named event) and the
+	// module a named one is called through, held weakly (procUnit.h): a form that closed takes its module with it.
+	// A lambda finds its own runtime, and its m_runtime stays empty.
+	struct ibHandler {
+		ibValue m_dispatcher;
+		std::weak_ptr<ibProcUnit> m_runtime;
+	};
+
 	~ibComEventSink() {
-		Unadvise();
-		m_typeInfo->Release();
 		for (ibQueuedEvent& event : m_queue)
 			for (VARIANT& arg : event.m_args)
 				::VariantClear(&arg);
@@ -599,7 +557,7 @@ private:
 	}
 
 	void Fire(DISPID dispid, DISPPARAMS& params) {
-		const auto handler = m_handlers.find(EventName(dispid).Lower());
+		const auto handler = m_handlers.find(dispid);
 		if (handler == m_handlers.end())
 			return;
 		try {
@@ -608,11 +566,24 @@ private:
 			std::vector<ibValue> args(count);
 			std::vector<ibValue*> argPtrs(count);
 			for (UINT i = 0; i < count; i++) {
-				ibValueOLE::FromVariant(params.rgvarg[count - 1 - i], args[i], m_objectName);
+				ibValueCOM::FromVariant(params.rgvarg[count - 1 - i], args[i], m_objectName);
 				argPtrs[i] = &args[i];
 			}
-			ibValue callable = handler->second, ret;
-			InvokeLambda(callable, argPtrs.data(), static_cast<long>(count), ret);
+			// Through the platform's own road for an event (ibEventDispatcher), the one a form's event takes: a lambda
+			// is its own dispatcher, a named event calls its procedure through the module that subscribed it, and
+			// either takes as many of the event's arguments as it declares.
+			ibEventDispatcher* dispatcher = AsFunction(handler->second.m_dispatcher);
+			ibValueEvent* named = nullptr;
+			if (dispatcher == nullptr && handler->second.m_dispatcher.ConvertToValue(named))
+				dispatcher = named;
+			// A named handler whose module is gone — the object outlived the form that subscribed — is refused, as a
+			// handler's own error is, from the call the event came in.
+			const std::shared_ptr<ibProcUnit> runtime = handler->second.m_runtime.lock();
+			if (named != nullptr && runtime == nullptr)
+				ibBackendCoreException::Error(_("The module that handles event \"%s\" of COM object \"%s\" is gone"),
+					EventName(dispid), m_objectName);
+			ibValue cancel;
+			dispatcher->Dispatch(runtime.get(), argPtrs.data(), static_cast<long>(count), cancel);
 			for (UINT i = 0; i < count; i++) {
 				VARIANT& arg = params.rgvarg[count - 1 - i];
 				if ((arg.vt & VT_BYREF) != 0)
@@ -627,44 +598,45 @@ private:
 
 	LONG m_refCount = 1;
 	const IID m_iid;
-	ITypeInfo* m_typeInfo = nullptr;
+	const ComPtr<ITypeInfo> m_typeInfo;
 	const ibString m_objectName;
 	const DWORD m_ownerThread;
-	IConnectionPoint* m_point = nullptr;
+	ComPtr<IConnectionPoint> m_point;
 	DWORD m_cookie = 0;
-	std::map<ibString, ibValue> m_handlers;     // by the event's name, lower-cased
+	std::map<DISPID, ibHandler> m_handlers;       // by the event's DISPID (EventId)
 	std::exception_ptr m_pendingError;
 	std::mutex m_queueLock;
 	std::vector<ibQueuedEvent> m_queue;
 };
 
+void ibComEventSinkRelease::operator()(ibComEventSink* sink) const
+{
+	sink->Unadvise();
+	sink->Release();
+}
+
 // The object's default source interface: the coclass says which of the interfaces it implements is the
 // one it CALLS rather than answers. From the object itself (IProvideClassInfo), or from its type library
 // by the class it was created as.
-static ITypeInfo* FindSourceInterface(IDispatch* dispatch, const CLSID& clsId, IID& iid)
+static ComPtr<ITypeInfo> FindSourceInterface(IDispatch* dispatch, const CLSID& clsId, IID& iid)
 {
-	ITypeInfo* classInfo = nullptr;
-	IProvideClassInfo* provide = nullptr;
-	if (SUCCEEDED(dispatch->QueryInterface(IID_IProvideClassInfo, reinterpret_cast<void**>(&provide))) && provide != nullptr) {
+	ComPtr<ITypeInfo> classInfo;
+	ComPtr<IProvideClassInfo> provide;
+	if (SUCCEEDED(dispatch->QueryInterface(IID_IProvideClassInfo, reinterpret_cast<void**>(provide.GetAddressOf()))) && provide != nullptr)
 		provide->GetClassInfo(&classInfo);
-		provide->Release();
-	}
 	if (classInfo == nullptr && clsId != CLSID_NULL) {
-		ITypeInfo* typeInfo = nullptr;
+		ComPtr<ITypeInfo> typeInfo;
 		if (SUCCEEDED(dispatch->GetTypeInfo(0, LOCALE_USER_DEFAULT, &typeInfo)) && typeInfo != nullptr) {
-			ITypeLib* typeLib = nullptr;
+			ComPtr<ITypeLib> typeLib;
 			UINT index = 0;
-			if (SUCCEEDED(typeInfo->GetContainingTypeLib(&typeLib, &index)) && typeLib != nullptr) {
+			if (SUCCEEDED(typeInfo->GetContainingTypeLib(&typeLib, &index)) && typeLib != nullptr)
 				typeLib->GetTypeInfoOfGuid(clsId, &classInfo);
-				typeLib->Release();
-			}
-			typeInfo->Release();
 		}
 	}
 	if (classInfo == nullptr)
 		return nullptr;
 
-	ITypeInfo* sourceInfo = nullptr;
+	ComPtr<ITypeInfo> sourceInfo;
 	TYPEATTR* classAttr = nullptr;
 	if (SUCCEEDED(classInfo->GetTypeAttr(&classAttr)) && classAttr != nullptr) {
 		for (UINT i = 0; i < classAttr->cImplTypes && sourceInfo == nullptr; i++) {
@@ -680,57 +652,71 @@ static ITypeInfo* FindSourceInterface(IDispatch* dispatch, const CLSID& clsId, I
 		}
 		classInfo->ReleaseTypeAttr(classAttr);
 	}
-	classInfo->Release();
 	if (sourceInfo == nullptr)
 		return nullptr;
 
 	TYPEATTR* sourceAttr = nullptr;
-	if (FAILED(sourceInfo->GetTypeAttr(&sourceAttr)) || sourceAttr == nullptr) {
-		sourceInfo->Release();
+	if (FAILED(sourceInfo->GetTypeAttr(&sourceAttr)) || sourceAttr == nullptr)
 		return nullptr;
-	}
 	iid = sourceAttr->guid;
 	sourceInfo->ReleaseTypeAttr(sourceAttr);
 	return sourceInfo;
 }
 
-void ibValueOLE::AddEventHandler(const ibString& eventName, const ibValue& handler)
+void ibValueCOM::AddEventHandler(const ibString& eventName, const ibValue& handler)
 {
-	if (AsFunction(handler) == nullptr)
-		ibBackendCoreException::Error(_("The handler of event \"%s\" must be a function"), eventName);
+	// ⭐ A LAMBDA, OR A PROCEDURE OF THE MODULE THAT SUBSCRIBES — by its name, or as the named event a form's
+	// handler is (`New Event("Name")`); either is one of the platform's event dispatchers (ibEventDispatcher).
+	// The named one is called through that module, so the module is taken now — and an unknown name is refused
+	// now, where it was written, rather than ignored when the event comes.
+	ibValue dispatcher;
+	std::weak_ptr<ibProcUnit> runtime;
+	ibValueEvent* named = nullptr;
+	if (AsFunction(handler) != nullptr) {
+		dispatcher = handler;
+	}
+	else if (handler.GetType() == ibValueTypes::TYPE_STRING || handler.ConvertToValue(named)) {
+		const ibString procName = named != nullptr ? named->GetString() : handler.GetString();
+		ibProcUnitState* const state = ibSession::GetPUState();
+		ibProcUnit* const module = state != nullptr ? state->GetCurrentRunModule() : nullptr;
+		if (module == nullptr)
+			ibBackendCoreException::Error(_("Procedure or function \"%s\" not found!"), procName);
+		module->FindMethod(procName, /*bError*/ true);
+		runtime = module->weak_from_this();
+		dispatcher = named != nullptr ? handler : ibValue::CreateObjectValue<ibValueEvent>(procName);
+	}
+	else {
+		ibBackendCoreException::Error(_("The handler of event \"%s\" must be a function or a procedure name"), eventName);
+	}
 
 	if (m_eventSink == nullptr) {
 		IID iid = IID_NULL;
-		ITypeInfo* sourceInfo = FindSourceInterface(m_currentDispatch, m_clsId, iid);
+		const ComPtr<ITypeInfo> sourceInfo = FindSourceInterface(m_dispatch.Get(), m_clsId, iid);
 		if (sourceInfo == nullptr)
 			ibBackendCoreException::Error(_("COM object \"%s\" has no events"), m_objectName);
-		ibComEventSink* const sink = new ibComEventSink(iid, sourceInfo, m_objectName);
-		sourceInfo->Release();
-		if (!sink->Advise(m_currentDispatch)) {
-			sink->Release();
+		std::unique_ptr<ibComEventSink, ibComEventSinkRelease> sink(new ibComEventSink(iid, sourceInfo.Get(), m_objectName));
+		if (!sink->Advise(m_dispatch.Get()))
 			ibBackendCoreException::Error(_("COM object \"%s\" has no events"), m_objectName);
-		}
-		m_eventSink = sink;
+		m_eventSink = std::move(sink);
 	}
 
-	if (!m_eventSink->HasEvent(eventName))
+	const DISPID dispid = m_eventSink->EventId(eventName);
+	if (dispid == DISPID_UNKNOWN)
 		ibBackendCoreException::Error(_("COM object \"%s\" has no event \"%s\""), m_objectName, eventName);
-	m_eventSink->SetHandler(eventName, handler);
+	m_eventSink->SetHandler(dispid, dispatcher, runtime);
 }
 
-void ibValueOLE::RemoveEventHandler(const ibString& eventName)
+void ibValueCOM::RemoveEventHandler(const ibString& eventName)
 {
 	if (m_eventSink == nullptr)
 		return;
-	m_eventSink->RemoveHandler(eventName);
+	m_eventSink->RemoveHandler(m_eventSink->EventId(eventName));
 	if (m_eventSink->HasHandlers())
 		return;
-	m_eventSink->Unadvise();
-	m_eventSink->Release();
-	m_eventSink = nullptr;
+	m_eventSink.reset();
 }
 
-void ibValueOLE::DeliverQueuedEvents()
+void ibValueCOM::DeliverQueuedEvents()
 {
 	if (m_eventSink != nullptr)
 		m_eventSink->DeliverQueued();
@@ -742,72 +728,9 @@ void ibValueOLE::DeliverQueuedEvents()
 //*                                                      OLE Value                                                    *
 //*********************************************************************************************************************
 
-void ibValueOLE::GetInterfaceAndReleaseStream()
-{
-#ifdef __WXMSW__
-	for (auto dispOle : gs_valueOLE) {
-		ibValueOLE* oleValue = dispOle.second;
-		if (!oleValue->m_streamDispatch)
-			continue;
-		HRESULT hr = ::CoGetInterfaceAndReleaseStream(oleValue->m_streamDispatch, IID_IDispatch, (void**)&oleValue->m_currentDispatch);
-		if (SUCCEEDED(hr)) {
-			oleValue->m_streamDispatch = nullptr;
-		}
-	}
-#endif
-}
+#ifdef __IBMSW__
 
-#ifdef __WXMSW__
-static bool createStreamForDispatch = false;
-#endif
-
-void ibValueOLE::CreateStreamForDispatch() {
-#ifdef __WXMSW__
-	for (auto dispOle : gs_valueOLE) {
-		ibValueOLE* oleValue = dispOle.second;
-		if (oleValue->m_streamDispatch)
-			continue;
-		HRESULT hr = ::CoMarshalInterThreadInterfaceInStream(IID_IDispatch, oleValue->m_dispatch, &oleValue->m_streamDispatch);
-		if (FAILED(hr)) oleValue->m_streamDispatch = nullptr;
-	}
-	createStreamForDispatch = true;
-#endif
-}
-
-void ibValueOLE::ReleaseStreamForDispatch()
-{
-#ifdef __WXMSW__
-	if (createStreamForDispatch) {
-		for (auto dispOle : gs_valueOLE) {
-			ibValueOLE* oleValue = dispOle.second;
-			oleValue->m_currentDispatch->Release();
-			oleValue->m_currentDispatch = oleValue->m_dispatch;
-		}
-		createStreamForDispatch = false;
-	}
-#endif
-}
-
-void ibValueOLE::ReleaseComObjects()
-{
-#ifdef __WXMSW__
-	for (auto dispOle : gs_valueOLE) {
-		ibValueOLE* oleValue = dispOle.second;
-		if (!oleValue->m_dispatch)
-			continue;
-		unsigned int countRef = oleValue->m_dispatch->Release();
-		for (unsigned int i = 0; i < countRef; i++) {
-			oleValue->m_dispatch->Release();
-		}
-		oleValue->m_dispatch = nullptr;
-	}
-	createStreamForDispatch = false;
-#endif
-}
-
-#ifdef __WXMSW__
-
-IDispatch* ibValueOLE::DoCreateInstance()
+IDispatch* ibValueCOM::DoCreateInstance()
 {
 	// get the server IDispatch interface
 	//
@@ -820,145 +743,35 @@ IDispatch* ibValueOLE::DoCreateInstance()
 		IID_IDispatch, (void**)&pDispatch);
 
 	if (FAILED(hr))
-		ibBackendCoreException::Error(_("COM object \"%s\" could not be created: %s"), m_objectName, HResultText(hr));
+		ibBackendCoreException::Error(_("COM object \"%s\" could not be created: %s"), m_objectName, ibSysErrorMsgStr(hr));
 
 	return pDispatch;
 }
 
-ibString ibValueOLE::MemberName(const long dispid) const
-{
-	const auto it = m_memberNames.find(dispid);
-	return it != m_memberNames.end() ? it->second : ibString::Format(ibT("%ld"), dispid);
-}
-
-const std::vector<bool>& ibValueOLE::ByRefArgs(const long dispid) const
-{
-	const auto known = m_byRefArgs.find(dispid);
-	if (known != m_byRefArgs.end())
-		return known->second;
-
-	std::vector<bool>& byRef = m_byRefArgs[dispid];
-	ITypeInfo* typeInfo = nullptr;
-	if (m_currentDispatch == nullptr || FAILED(m_currentDispatch->GetTypeInfo(0, LOCALE_USER_DEFAULT, &typeInfo)) || typeInfo == nullptr)
-		return byRef;
-
-	TYPEATTR* typeAttr = nullptr;
-	if (SUCCEEDED(typeInfo->GetTypeAttr(&typeAttr)) && typeAttr != nullptr) {
-		for (UINT f = 0; f < typeAttr->cFuncs && byRef.empty(); f++) {
-			FUNCDESC* funcDesc = nullptr;
-			if (FAILED(typeInfo->GetFuncDesc(f, &funcDesc)) || funcDesc == nullptr)
-				continue;
-			if (funcDesc->memid == dispid && (funcDesc->invkind == INVOKE_FUNC || funcDesc->invkind == INVOKE_PROPERTYGET)) {
-				byRef.resize(funcDesc->cParams, false);
-				for (SHORT p = 0; p < funcDesc->cParams; p++) {
-					const ELEMDESC& param = funcDesc->lprgelemdescParam[p];
-					byRef[p] = (param.paramdesc.wParamFlags & PARAMFLAG_FOUT) != 0 || param.tdesc.vt == VT_PTR;
-				}
-			}
-			typeInfo->ReleaseFuncDesc(funcDesc);
-		}
-		typeInfo->ReleaseTypeAttr(typeAttr);
-	}
-	typeInfo->Release();
-	return byRef;
-}
-
-void ibValueOLE::Invoke(const long dispid, unsigned short flags, DISPPARAMS& params, VARIANT* result) const
-{
-	EXCEPINFO excepInfo = {};
-	UINT argErr = 0;
-	const HRESULT hr = m_currentDispatch->Invoke(dispid, IID_NULL, LOCALE_USER_DEFAULT, flags, &params, result, &excepInfo, &argErr);
-	if (m_eventSink != nullptr)
-		m_eventSink->RaisePendingError();
-	if (SUCCEEDED(hr))
-		return;
-
-	// The server's own words when it has some (DISP_E_EXCEPTION, filled in now if it deferred that);
-	// otherwise what the system says the code means. Either way the object and the member are named.
-	ibString description;
-	if (hr == DISP_E_EXCEPTION) {
-		if (excepInfo.pfnDeferredFillIn != nullptr)
-			excepInfo.pfnDeferredFillIn(&excepInfo);
-		description = FromBSTR(excepInfo.bstrDescription);
-		if (description.IsEmpty())
-			description = HResultText(excepInfo.scode != 0 ? excepInfo.scode : hr);
-	}
-	else if (hr == DISP_E_TYPEMISMATCH || hr == DISP_E_PARAMNOTFOUND) {
-		description = ibString::Format(_("argument %d: %s"), static_cast<int>(params.cArgs - argErr), HResultText(hr));
-	}
-	else {
-		description = HResultText(hr);
-	}
-	::SysFreeString(excepInfo.bstrSource);
-	::SysFreeString(excepInfo.bstrDescription);
-	::SysFreeString(excepInfo.bstrHelpFile);
-
-	ibBackendCoreException::Error(_("COM object \"%s\", member \"%s\": %s"), m_objectName, MemberName(dispid), description);
-}
-
-#endif
-
-#ifdef __WXMSW__
-ibValueOLE::ibValueOLE() : ibValueDynamicMembers(ibValueTypes::TYPE_OLE),
-m_clsId(CLSID_NULL), m_dispatch(nullptr), m_currentDispatch(nullptr),
+ibValueCOM::ibValueCOM() : ibValueDynamicMembers(ibValueTypes::TYPE_OLE),
+m_clsId(CLSID_NULL),
 m_objectName(ibEmptyString)
 {
-	m_members.Bind(this, &ibValueOLE::FillMembers);
+	m_members.Bind(this, &ibValueCOM::FillMembers);
 }
 
-ibValueOLE::ibValueOLE(const CLSID& clsId, IDispatch* dispatch, const ibString& objectName) : ibValueDynamicMembers(ibValueTypes::TYPE_OLE),
-m_clsId(clsId), m_dispatch(dispatch), m_currentDispatch(nullptr),
+ibValueCOM::ibValueCOM(const CLSID& clsId, IDispatch* dispatch, const ibString& objectName) : ibValueDynamicMembers(ibValueTypes::TYPE_OLE),
+m_clsId(clsId), m_dispatch(dispatch),
 m_objectName(objectName)
 {
-	m_members.Bind(this, &ibValueOLE::FillMembers);
-	if (m_dispatch != nullptr) {
-		m_dispatch->AddRef();
-	}
-	if (createStreamForDispatch) {
-		if (m_dispatch != nullptr) {
-			HRESULT marshalHr =
-				::CoMarshalInterThreadInterfaceInStream(IID_IDispatch, m_dispatch, &m_streamDispatch);
-			if (FAILED(marshalHr))
-				m_streamDispatch = nullptr;
-		}
-		if (m_streamDispatch != nullptr) {
-			HRESULT unmarshalHr = ::CoGetInterfaceAndReleaseStream(m_streamDispatch, IID_IDispatch, (void**)&m_currentDispatch);
-			if (SUCCEEDED(unmarshalHr)) {
-				m_streamDispatch = nullptr;
-			}
-		}
-	}
-	else {
-		m_currentDispatch = m_dispatch;
-	}
+	m_members.Bind(this, &ibValueCOM::FillMembers);
 }
 #else
-ibValueOLE::ibValueOLE() : ibValueDynamicMembers(ibValueTypes::TYPE_OLE), m_objectName(ibEmptyString) {
-	m_members.Bind(this, &ibValueOLE::FillMembers);
+ibValueCOM::ibValueCOM() : ibValueDynamicMembers(ibValueTypes::TYPE_OLE), m_objectName(ibEmptyString) {
+	m_members.Bind(this, &ibValueCOM::FillMembers);
 }
 #endif
 
-ibValueOLE::~ibValueOLE()
-{
-#ifdef __WXMSW__
-	if (m_eventSink != nullptr) {
-		m_eventSink->Unadvise();
-		m_eventSink->Release();
-		m_eventSink = nullptr;
-	}
-	if (m_dispatch != nullptr) {
-		// Only the entry that is this value's: an object a member handed back may share the interface
-		// pointer, and dropping it must not unregister the object it came from.
-		const auto registered = gs_valueOLE.find(m_dispatch);
-		if (registered != gs_valueOLE.end() && registered->second == this)
-			gs_valueOLE.erase(registered);
-		m_dispatch->Release();
-		m_dispatch = nullptr;
-	}
-#endif
-}
+// Nothing is let go by hand: the sink disconnected (ibComEventSinkRelease), then the object (ComPtr) — the
+// reverse of their declaration.
+ibValueCOM::~ibValueCOM() = default;
 
-bool ibValueOLE::Init(ibValue** paParams, const long lSizeArray)
+bool ibValueCOM::Init(ibValue** paParams, const long lSizeArray)
 {
 	if (lSizeArray < 1)
 		return false;
@@ -969,7 +782,7 @@ bool ibValueOLE::Init(ibValue** paParams, const long lSizeArray)
 	return true;
 }
 
-bool ibValueOLE::Create(const ibString& strOleName)
+bool ibValueCOM::Create(const ibString& strOleName)
 {
 	// THE CARET'S WALK FOR COMPLETION STARTS NO COM SERVER: it builds `New COMObject("…")` to list its members,
 	// and that must not launch the application named. Asked of the evaluation, not of the process — the
@@ -977,40 +790,20 @@ bool ibValueOLE::Create(const ibString& strOleName)
 	if (ibBackendException::IsEvalComplete())
 		return true;
 
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	if (m_dispatch != nullptr)
 		return false;
 
-	EnterComApartment();
-
+	// The thread is in a single-threaded apartment already, entered by its owner: a worker of the session pool
+	// (workerPoolHeadless.cpp), or a client's main thread, where wx initialises OLE. An object and its events stay on
+	// the thread that made them — the debugger's work comes to that thread too (RunInParkedSession, debugServer.cpp).
 	HRESULT hr = ::CLSIDFromProgID(strOleName.wc_str(), &m_clsId);
 	if (FAILED(hr))
 		return false;
 
 	m_objectName = strOleName;
-	m_dispatch = DoCreateInstance();
+	m_dispatch.Attach(DoCreateInstance());
 	InvalidateNames();   // COM surface depends on the freshly created dispatch
-	if (createStreamForDispatch) {
-		if (m_dispatch != nullptr) {
-			HRESULT marshalHr =
-				::CoMarshalInterThreadInterfaceInStream(IID_IDispatch, m_dispatch, &m_streamDispatch);
-			if (FAILED(marshalHr)) {
-				m_streamDispatch = nullptr;
-			}
-		}
-		if (m_streamDispatch != nullptr) {
-			HRESULT unmarshalHr = ::CoGetInterfaceAndReleaseStream(m_streamDispatch, IID_IDispatch, (void**)&m_currentDispatch);
-			if (SUCCEEDED(unmarshalHr)) {
-				m_streamDispatch = nullptr;
-			}
-		}
-		if (m_currentDispatch == nullptr)
-			return false;
-	}
-	else {
-		m_currentDispatch = m_dispatch;
-	}
-	gs_valueOLE.insert_or_assign(m_dispatch, this);
 	return m_dispatch != nullptr;
 #else
 	// The type is here so that a module which creates one compiles on every platform; the object is not.
@@ -1018,12 +811,27 @@ bool ibValueOLE::Create(const ibString& strOleName)
 #endif
 }
 
-void ibValueOLE::FillMembers(ibMemberTable& helper) const
+bool ibValueCOM::CompareValueEQ(const ibVariant& cParam) const
 {
-	helper.AppendProc(ibT("AddEventHandler"), 2, ibT("AddEventHandler(eventName : string, handler : function)"), s_methodAddEventHandler);
+#ifdef __IBMSW__
+	const ibValueCOM* rhs = dynamic_cast<const ibValueCOM*>(cParam.GetRef());
+	if (rhs != nullptr)
+		return m_dispatch == rhs->m_dispatch;
+#endif
+	return false;
+}
+
+bool ibValueCOM::CompareValueNE(const ibVariant& cParam) const
+{
+	return !CompareValueEQ(cParam);
+}
+
+void ibValueCOM::FillMembers(ibMemberTable& helper) const
+{
+	helper.AppendProc(ibT("AddEventHandler"), 2, ibT("AddEventHandler(eventName : string, handler : function | string)"), s_methodAddEventHandler);
 	helper.AppendProc(ibT("RemoveEventHandler"), 1, ibT("RemoveEventHandler(eventName : string)"), s_methodRemoveEventHandler);
 
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	if (m_dispatch == nullptr)
 		return;
 	unsigned int count = 0;
@@ -1032,17 +840,15 @@ void ibValueOLE::FillMembers(ibMemberTable& helper) const
 	for (unsigned int i = 0; i < count; i++) {
 
 		HRESULT hr = S_OK;
-		ITypeInfo* typeInfo = nullptr; TYPEATTR* typeAttr = nullptr;
+		ComPtr<ITypeInfo> typeInfo; TYPEATTR* typeAttr = nullptr;
 
 		hr = m_dispatch->GetTypeInfo(i, LOCALE_SYSTEM_DEFAULT, &typeInfo);
 		if (hr != S_OK)
 			continue;
 
 		hr = typeInfo->GetTypeAttr(&typeAttr);
-		if (hr != S_OK) {
-			typeInfo->Release();
+		if (hr != S_OK)
 			continue;
-		}
 
 		if (typeAttr->typekind == TKIND_INTERFACE ||
 			typeAttr->typekind == TKIND_DISPATCH) {
@@ -1139,12 +945,11 @@ void ibValueOLE::FillMembers(ibMemberTable& helper) const
 			}
 		}
 		typeInfo->ReleaseTypeAttr(typeAttr);
-		typeInfo->Release();
 	}
 #endif
 }
 
-long ibValueOLE::FindMethod(const ibString& strMethodName) const
+long ibValueCOM::FindMethod(const ibString& strMethodName) const
 {
 	if (strMethodName.IsSameAs(ibT("AddEventHandler"), false))
 		return s_methodAddEventHandler;
@@ -1153,15 +958,20 @@ long ibValueOLE::FindMethod(const ibString& strMethodName) const
 	return FindProp(strMethodName);
 }
 
-long ibValueOLE::FindProp(const ibString& strPropName) const
+long ibValueCOM::FindProp(const ibString& strPropName) const
 {
-#ifdef __WXMSW__
-	if (m_currentDispatch == nullptr)
+#ifdef __IBMSW__
+	if (m_dispatch == nullptr)
 		return wxNOT_FOUND;
 	LPOLESTR name = const_cast<LPOLESTR>(strPropName.wc_str());
 	DISPID dispid = DISPID_UNKNOWN;
-	if (FAILED(m_currentDispatch->GetIDsOfNames(IID_NULL, &name, 1, LOCALE_USER_DEFAULT, &dispid)))
+	const HRESULT hr = m_dispatch->GetIDsOfNames(IID_NULL, &name, 1, LOCALE_USER_DEFAULT, &dispid);
+	if (hr == DISP_E_UNKNOWNNAME || hr == DISP_E_MEMBERNOTFOUND)
 		return wxNOT_FOUND;
+	// Any other failure is the server's answer, not "no such member": one that rejected the call — busy, a dialog of its
+	// own open — is named with its reason (2026-11-03: an Excel behind its activation wizard read as "field not found").
+	if (FAILED(hr))
+		ibBackendCoreException::Error(_("COM object \"%s\", member \"%s\": %s"), m_objectName, strPropName, ibSysErrorMsgStr(hr));
 	m_memberNames[dispid] = strPropName;
 	return dispid;
 #else
@@ -1169,7 +979,17 @@ long ibValueOLE::FindProp(const ibString& strPropName) const
 #endif
 }
 
-long ibValueOLE::GetNParams(const long lMethodNum) const
+#ifdef __IBMSW__
+
+ibString ibValueCOM::MemberName(const long dispid) const
+{
+	const auto it = m_memberNames.find(dispid);
+	return it != m_memberNames.end() ? it->second : ibString::Format(ibT("%ld"), dispid);
+}
+
+#endif
+
+long ibValueCOM::GetNParams(const long lMethodNum) const
 {
 	if (lMethodNum == s_methodAddEventHandler)
 		return 2;
@@ -1178,14 +998,14 @@ long ibValueOLE::GetNParams(const long lMethodNum) const
 	return s_comArgsBound;
 }
 
-bool ibValueOLE::HasRetVal(const long lMethodNum) const
+bool ibValueCOM::HasRetVal(const long lMethodNum) const
 {
 	return lMethodNum != s_methodAddEventHandler && lMethodNum != s_methodRemoveEventHandler;
 }
 
-bool ibValueOLE::GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const
+bool ibValueCOM::GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const
 {
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	// A HOLE IN THE CALL (`f(a, , c)`) — the interpreter asks for its default and this is the only moment
 	// the object hears of it. Noted, and sent as the automation "missing" rather than as an Undefined.
 	m_omittedArgs.push_back(lParamNum);
@@ -1193,7 +1013,40 @@ bool ibValueOLE::GetParamDefValue(const long lMethodNum, const long lParamNum, i
 	return false;
 }
 
-#ifdef __WXMSW__
+#ifdef __IBMSW__
+
+void ibValueCOM::Invoke(const long dispid, unsigned short flags, DISPPARAMS& params, VARIANT* result) const
+{
+	EXCEPINFO excepInfo = {};
+	UINT argErr = 0;
+	const HRESULT hr = m_dispatch->Invoke(dispid, IID_NULL, LOCALE_USER_DEFAULT, flags, &params, result, &excepInfo, &argErr);
+	if (m_eventSink != nullptr)
+		m_eventSink->RaisePendingError();
+	if (SUCCEEDED(hr))
+		return;
+
+	// The server's own words when it has some (DISP_E_EXCEPTION, filled in now if it deferred that);
+	// otherwise what the system says the code means. Either way the object and the member are named.
+	ibString description;
+	if (hr == DISP_E_EXCEPTION) {
+		if (excepInfo.pfnDeferredFillIn != nullptr)
+			excepInfo.pfnDeferredFillIn(&excepInfo);
+		description = FromBSTR(excepInfo.bstrDescription);
+		if (description.IsEmpty())
+			description = ibSysErrorMsgStr(excepInfo.scode != 0 ? excepInfo.scode : hr);
+	}
+	else if (hr == DISP_E_TYPEMISMATCH || hr == DISP_E_PARAMNOTFOUND) {
+		description = ibString::Format(_("argument %d: %s"), static_cast<int>(params.cArgs - argErr), ibSysErrorMsgStr(hr));
+	}
+	else {
+		description = ibSysErrorMsgStr(hr);
+	}
+	::SysFreeString(excepInfo.bstrSource);
+	::SysFreeString(excepInfo.bstrDescription);
+	::SysFreeString(excepInfo.bstrHelpFile);
+
+	ibBackendCoreException::Error(_("COM object \"%s\", member \"%s\": %s"), m_objectName, MemberName(dispid), description);
+}
 
 static HRESULT PutProperty(
 	IDispatch* pDisp,
@@ -1238,17 +1091,17 @@ static HRESULT PutProperty(
 
 #endif
 
-bool ibValueOLE::SetPropVal(const long lPropNum, const ibValue& varPropVal)
+bool ibValueCOM::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-#ifdef __WXMSW__
-	if (m_currentDispatch == nullptr)
+#ifdef __IBMSW__
+	if (m_dispatch == nullptr)
 		return false;
 	DeliverQueuedEvents();
 
 	VARIANT oleVariant;
-	ToVariant(varPropVal, oleVariant);
+	FromValue(varPropVal, oleVariant);
 	EXCEPINFO excepInfo = {};
-	const HRESULT hr = PutProperty(m_currentDispatch, lPropNum, &oleVariant, &excepInfo);
+	const HRESULT hr = PutProperty(m_dispatch.Get(), lPropNum, &oleVariant, &excepInfo);
 	::VariantClear(&oleVariant);
 	if (m_eventSink != nullptr)
 		m_eventSink->RaisePendingError();
@@ -1257,7 +1110,7 @@ bool ibValueOLE::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 			excepInfo.pfnDeferredFillIn(&excepInfo);
 		ibString description = FromBSTR(excepInfo.bstrDescription);
 		if (description.IsEmpty())
-			description = HResultText(hr);
+			description = ibSysErrorMsgStr(hr);
 		::SysFreeString(excepInfo.bstrSource);
 		::SysFreeString(excepInfo.bstrDescription);
 		::SysFreeString(excepInfo.bstrHelpFile);
@@ -1269,10 +1122,10 @@ bool ibValueOLE::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 #endif
 }
 
-bool ibValueOLE::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
+bool ibValueCOM::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-#ifdef __WXMSW__
-	if (m_currentDispatch == nullptr)
+#ifdef __IBMSW__
+	if (m_dispatch == nullptr)
 		return false;
 	DeliverQueuedEvents();
 
@@ -1294,14 +1147,53 @@ bool ibValueOLE::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 #endif
 }
 
-bool ibValueOLE::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
+#ifdef __IBMSW__
+
+const std::vector<bool>& ibValueCOM::ByRefArgs(const long dispid) const
 {
-#ifdef __WXMSW__
-	std::vector<long> omitted;
-	omitted.swap(m_omittedArgs);
+	const auto known = m_byRefArgs.find(dispid);
+	if (known != m_byRefArgs.end())
+		return known->second;
+
+	std::vector<bool>& byRef = m_byRefArgs[dispid];
+	ComPtr<ITypeInfo> typeInfo;
+	if (m_dispatch == nullptr || FAILED(m_dispatch->GetTypeInfo(0, LOCALE_USER_DEFAULT, &typeInfo)) || typeInfo == nullptr)
+		return byRef;
+
+	TYPEATTR* typeAttr = nullptr;
+	if (SUCCEEDED(typeInfo->GetTypeAttr(&typeAttr)) && typeAttr != nullptr) {
+		for (UINT f = 0; f < typeAttr->cFuncs && byRef.empty(); f++) {
+			FUNCDESC* funcDesc = nullptr;
+			if (FAILED(typeInfo->GetFuncDesc(f, &funcDesc)) || funcDesc == nullptr)
+				continue;
+			if (funcDesc->memid == dispid && (funcDesc->invkind == INVOKE_FUNC || funcDesc->invkind == INVOKE_PROPERTYGET)) {
+				byRef.resize(funcDesc->cParams, false);
+				// [out], or a pointer that declares no direction (a Visual Basic ByRef). A pointer declared [in]
+				// only is not written back: Scripting.Dictionary.Add takes `[in] VARIANT* Item`, and the
+				// array a script added came back into its variable as the dictionary's copy.
+				for (SHORT p = 0; p < funcDesc->cParams; p++) {
+					const ELEMDESC& param = funcDesc->lprgelemdescParam[p];
+					const USHORT direction = param.paramdesc.wParamFlags & (PARAMFLAG_FIN | PARAMFLAG_FOUT);
+					byRef[p] = (direction & PARAMFLAG_FOUT) != 0 || (param.tdesc.vt == VT_PTR && direction == 0);
+				}
+			}
+			typeInfo->ReleaseFuncDesc(funcDesc);
+		}
+		typeInfo->ReleaseTypeAttr(typeAttr);
+	}
+	return byRef;
+}
+
+#endif
+
+// The object's own two members are procedures (HasRetVal), and the interpreter calls a procedure here.
+bool ibValueCOM::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
+{
+#ifdef __IBMSW__
+	m_omittedArgs.clear();
 
 	if (lMethodNum == s_methodAddEventHandler) {
-		if (m_currentDispatch == nullptr)
+		if (m_dispatch == nullptr)
 			return false;
 		AddEventHandler(paParams[0]->GetString(), *paParams[1]);
 		return true;
@@ -1310,16 +1202,28 @@ bool ibValueOLE::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValu
 		RemoveEventHandler(paParams[0]->GetString());
 		return true;
 	}
+#endif
+	return false;
+}
 
-	if (m_currentDispatch == nullptr)
+bool ibValueCOM::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
+{
+#ifdef __IBMSW__
+	std::vector<long> omitted;
+	omitted.swap(m_omittedArgs);
+
+	if (m_dispatch == nullptr)
 		return false;
 	DeliverQueuedEvents();
 
 	// rgvarg runs right to left: the first argument is the last VARIANT. An argument the member declares
-	// [out] goes as a reference to a VARIANT of its own, and what the object wrote there comes back to the
-	// caller's variable; the rest go by value.
+	// [out] goes as a reference to a VARIANT of its own — and so does every argument of a member the object
+	// describes no types for, the way a script engine passes its variables (VBScript does); the rest go by
+	// value. What the object CHANGED there comes back to the caller's variable, and nothing else: an array it
+	// only read stays the caller's Array.
 	const std::vector<bool>& byRefDeclared = ByRefArgs(lMethodNum);
-	std::vector<VARIANT> args(lSizeArray), byRefValues(lSizeArray);
+	const bool undescribed = byRefDeclared.empty();
+	std::vector<VARIANT> args(lSizeArray), byRefValues(lSizeArray), sent(lSizeArray);
 	std::vector<bool> byRef(lSizeArray, false);
 	for (long arg = 0; arg < lSizeArray; arg++) {
 		::VariantInit(&args[arg]);
@@ -1344,21 +1248,22 @@ bool ibValueOLE::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValu
 				slot.scode = DISP_E_PARAMNOTFOUND;
 				continue;
 			}
-			if (arg < static_cast<long>(byRefDeclared.size()) && byRefDeclared[arg]) {
-				ToVariant(*paParams[arg], byRefValues[arg]);
+			if (undescribed || (arg < static_cast<long>(byRefDeclared.size()) && byRefDeclared[arg])) {
+				FromValue(*paParams[arg], byRefValues[arg]);
+				sent[arg] = byRefValues[arg];     // the bits as they went, to tell what the object changed
 				slot.vt = VT_BYREF | VT_VARIANT;
 				slot.pvarVal = &byRefValues[arg];
 				byRef[lSizeArray - arg - 1] = true;
 				continue;
 			}
-			ToVariant(*paParams[arg], slot);
+			FromValue(*paParams[arg], slot);
 		}
 
 		DISPPARAMS params = { lSizeArray > 0 ? args.data() : nullptr, nullptr, static_cast<UINT>(lSizeArray), 0 };
 		Invoke(lMethodNum, DISPATCH_METHOD | DISPATCH_PROPERTYGET, params, &result);
 
 		for (long arg = 0; arg < lSizeArray; arg++) {
-			if (byRef[lSizeArray - arg - 1])
+			if (byRef[lSizeArray - arg - 1] && std::memcmp(&byRefValues[arg], &sent[arg], sizeof(VARIANT)) != 0)
 				FromVariant(byRefValues[arg], *paParams[arg], m_objectName);
 		}
 		FromVariant(result, pvarRetValue, m_objectName);
@@ -1376,16 +1281,13 @@ bool ibValueOLE::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValu
 #endif
 }
 
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 
 // `For Each` over the object: its _NewEnum, walked one VARIANT at a time.
 class ibComEnumState : public ibValueIteratorState {
 public:
-	ibComEnumState(IEnumVARIANT* enumerator, const ibString& objectName)
+	ibComEnumState(const ComPtr<IEnumVARIANT>& enumerator, const ibString& objectName)
 		: m_enumerator(enumerator), m_objectName(objectName) {
-	}
-	~ibComEnumState() override {
-		m_enumerator->Release();
 	}
 	bool MoveNext(ibValue& current) override {
 		VARIANT item;
@@ -1394,7 +1296,7 @@ public:
 		if (m_enumerator->Next(1, &item, &fetched) != S_OK || fetched == 0)
 			return false;
 		try {
-			ibValueOLE::FromVariant(item, current, m_objectName);
+			ibValueCOM::FromVariant(item, current, m_objectName);
 		}
 		catch (...) {
 			::VariantClear(&item);
@@ -1407,31 +1309,31 @@ public:
 		m_enumerator->Reset();
 	}
 private:
-	IEnumVARIANT* m_enumerator;
+	const ComPtr<IEnumVARIANT> m_enumerator;
 	const ibString m_objectName;
 };
 
 #endif
 
-std::shared_ptr<ibValueIteratorState> ibValueOLE::CreateIterator()
+std::shared_ptr<ibValueIteratorState> ibValueCOM::CreateIterator()
 {
-#ifdef __WXMSW__
-	if (m_currentDispatch == nullptr)
+#ifdef __IBMSW__
+	if (m_dispatch == nullptr)
 		return nullptr;
 
 	VARIANT result;
 	::VariantInit(&result);
 	DISPPARAMS params = { nullptr, nullptr, 0, 0 };
 	EXCEPINFO excepInfo = {};
-	const HRESULT hr = m_currentDispatch->Invoke(DISPID_NEWENUM, IID_NULL, LOCALE_USER_DEFAULT,
+	const HRESULT hr = m_dispatch->Invoke(DISPID_NEWENUM, IID_NULL, LOCALE_USER_DEFAULT,
 		DISPATCH_METHOD | DISPATCH_PROPERTYGET, &params, &result, &excepInfo, nullptr);
 	::SysFreeString(excepInfo.bstrSource);
 	::SysFreeString(excepInfo.bstrDescription);
 	::SysFreeString(excepInfo.bstrHelpFile);
 
-	IEnumVARIANT* enumerator = nullptr;
+	ComPtr<IEnumVARIANT> enumerator;
 	if (SUCCEEDED(hr) && (result.vt == VT_UNKNOWN || result.vt == VT_DISPATCH) && result.punkVal != nullptr)
-		result.punkVal->QueryInterface(IID_IEnumVARIANT, reinterpret_cast<void**>(&enumerator));
+		result.punkVal->QueryInterface(IID_IEnumVARIANT, reinterpret_cast<void**>(enumerator.GetAddressOf()));
 	::VariantClear(&result);
 
 	if (enumerator == nullptr)
@@ -1442,10 +1344,29 @@ std::shared_ptr<ibValueIteratorState> ibValueOLE::CreateIterator()
 #endif
 }
 
+void ibValueCOM::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibValue** args, long n)
+{
+	// ⭐ THE SERVER'S OWN MEMBER WINS. The compiler emits every `.Sum(` or `.Select(` as a LINQ operator, and LINQ asks
+	// for the enumerator first — but a COM object's names are its server's: Excel's `Range.Select()` selects, and
+	// `WorksheetFunction.Sum(…)` adds. A name the object does not have stays LINQ over its _NewEnum (2026-11-03:
+	// `WorksheetFunction.Sum` was refused as "cannot be walked with For Each").
+	for (const ibLinqMethodInfo& info : GetLinqMethodTable()) {
+		if (info.id != method)
+			continue;
+		const long own = FindMethod(info.name);
+		if (own >= 0) {
+			CallAsFunc(own, ret, args, n);
+			return;
+		}
+		break;
+	}
+	ibValueDynamicMembers::DispatchLinqMethod(method, ret, args, n);
+}
+
 #pragma warning(pop)
 
 //**********************************************************************
 //*                       Runtime register                             *
 //**********************************************************************
 
-VALUE_TYPE_REGISTER(ibValueOLE, "ComObject", value_to_clsid("VL_OLE"));
+VALUE_TYPE_REGISTER(ibValueCOM, "ComObject", value_to_clsid("VL_OLE"));

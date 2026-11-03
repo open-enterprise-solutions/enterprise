@@ -20,7 +20,7 @@ namespace {
 // A frame's bulk that does not change — so the patch is lighter than the frame, the only patch the server sends.
 void Ballast(ibDataNode& node)
 {
-	node.SetValue(wxT("Ballast"), ibString(wxT('x'), 400));
+	node.SetValue(ibT("Ballast"), ibString(wxT('x'), 400));
 }
 
 // The node as the port writes it, read as the thin client reads it.
@@ -48,8 +48,8 @@ void ExpectApplied(const ibDataNode& from, const ibDataNode& to)
 ibDataNode& Control(ibDataNode& parent, ibMetaID id, const ibString& caption)
 {
 	ibDataNode& control = parent.AddChild(0, id);
-	control.SetValue(wxT("Caption"), caption);
-	control.Child(ibT("State")).SetValue(wxT("Visible"), true);
+	control.SetValue(ibT("Caption"), caption);
+	control.Child(ibT("State")).SetValue(ibT("Visible"), true);
 	return control;
 }
 
@@ -59,15 +59,15 @@ TEST(ClientFrameApply, EntrySetAddedRemoved)
 {
 	ibDataNode from;
 	Ballast(from);
-	from.SetValue(wxT("Title"), ibString(wxT("Goods")));
-	from.SetValue(wxT("Status"), ibString(wxT("ready")));
-	from.SetValue(wxT("ActiveTab"), 1);
+	from.SetValue(ibT("Title"), ibString(wxT("Goods")));
+	from.SetValue(ibT("Status"), ibString(wxT("ready")));
+	from.SetValue(ibT("ActiveTab"), 1);
 
 	ibDataNode to;
 	Ballast(to);
-	to.SetValue(wxT("Title"), ibString(wxT("Goods: list")));
-	to.SetValue(wxT("ActiveTab"), 1);
-	to.SetValue(wxT("Modified"), true);
+	to.SetValue(ibT("Title"), ibString(wxT("Goods: list")));
+	to.SetValue(ibT("ActiveTab"), 1);
+	to.SetValue(ibT("Modified"), true);
 
 	ExpectApplied(from, to);
 }
@@ -77,16 +77,16 @@ TEST(ClientFrameApply, NodeEntryMergedNotReplaced)
 	ibDataNode from;
 	Ballast(from);
 	ibDataNode& view = from.Child(ibT("View"));
-	view.SetValue(wxT("Key"), ibString(wxT("form-1")));
-	view.Child(ibT("State")).SetValue(wxT("Title"), ibString(wxT("Receipt")));
-	view.Child(ibT("State")).SetValue(wxT("Modified"), false);
+	view.SetValue(ibT("Key"), ibString(wxT("form-1")));
+	view.Child(ibT("State")).SetValue(ibT("Title"), ibString(wxT("Receipt")));
+	view.Child(ibT("State")).SetValue(ibT("Modified"), false);
 
 	ibDataNode to;
 	Ballast(to);
 	ibDataNode& now = to.Child(ibT("View"));
-	now.SetValue(wxT("Key"), ibString(wxT("form-1")));
-	now.Child(ibT("State")).SetValue(wxT("Title"), ibString(wxT("Receipt")));
-	now.Child(ibT("State")).SetValue(wxT("Modified"), true);
+	now.SetValue(ibT("Key"), ibString(wxT("form-1")));
+	now.Child(ibT("State")).SetValue(ibT("Title"), ibString(wxT("Receipt")));
+	now.Child(ibT("State")).SetValue(ibT("Modified"), true);
 
 	ExpectApplied(from, to);
 }
@@ -106,7 +106,7 @@ TEST(ClientFrameApply, ChildrenByIdChangedRemovedInsertedReordered)
 	Control(to, 1, wxT("Number"));
 	Control(to, 5, wxT("Comment"));
 	ibDataNode& changed = Control(to, 3, wxT("Supplier"));
-	changed.Child(ibT("State")).SetValue(wxT("ReadOnly"), true);
+	changed.Child(ibT("State")).SetValue(ibT("ReadOnly"), true);
 
 	ExpectApplied(from, to);
 }
@@ -115,13 +115,13 @@ TEST(ClientFrameApply, AnotherNodeUnderTheSameIdComesWhole)
 {
 	ibDataNode from;
 	Ballast(from);
-	from.AddChild(101, 1).SetValue(wxT("Caption"), ibString(wxT("A field")));
-	from.AddChild(101, 2).SetValue(wxT("Caption"), ibString(wxT("Stays")));
+	from.AddChild(101, 1).SetValue(ibT("Caption"), ibString(wxT("A field")));
+	from.AddChild(101, 2).SetValue(ibT("Caption"), ibString(wxT("Stays")));
 
 	ibDataNode to;
 	Ballast(to);
-	to.AddChild(202, 1).SetValue(wxT("Title"), ibString(wxT("A table now")));
-	to.AddChild(101, 2).SetValue(wxT("Caption"), ibString(wxT("Stays")));
+	to.AddChild(202, 1).SetValue(ibT("Title"), ibString(wxT("A table now")));
+	to.AddChild(101, 2).SetValue(ibT("Caption"), ibString(wxT("Stays")));
 
 	ExpectApplied(from, to);
 }
@@ -133,11 +133,11 @@ TEST(ClientFrameApply, AnotherNodeUnderTheSameNameComesWhole)
 	Ballast(from);
 	ibDataNode& sheet = from.Child(ibT("View"));
 	sheet.SetClsid(303);
-	sheet.Child(ibT("State")).SetValue(wxT("RowCount"), 10);
+	sheet.Child(ibT("State")).SetValue(ibT("RowCount"), 10);
 
 	ibDataNode to;
 	Ballast(to);
-	to.Child(ibT("View")).SetValue(wxT("Text"), ibString(wxT("a text")));
+	to.Child(ibT("View")).SetValue(ibT("Text"), ibString(wxT("a text")));
 
 	ExpectApplied(from, to);
 }
@@ -147,15 +147,15 @@ TEST(ClientFrameApply, ChildrenWithoutIdsComeWhole)
 	ibDataNode from;
 	Ballast(from);
 	ibDataNode& menu = from.Child(ibT("Menu"));
-	menu.AddChild(0, 0).SetValue(wxT("Title"), ibString(wxT("File")));
-	menu.AddChild(0, 0).SetValue(wxT("Title"), ibString(wxT("Edit")));
+	menu.AddChild(0, 0).SetValue(ibT("Title"), ibString(wxT("File")));
+	menu.AddChild(0, 0).SetValue(ibT("Title"), ibString(wxT("Edit")));
 
 	ibDataNode to;
 	Ballast(to);
 	ibDataNode& now = to.Child(ibT("Menu"));
-	now.AddChild(0, 0).SetValue(wxT("Title"), ibString(wxT("File")));
-	now.AddChild(0, 0).SetValue(wxT("Title"), ibString(wxT("Edit")));
-	now.AddChild(0, 0).SetValue(wxT("Title"), ibString(wxT("Help")));
+	now.AddChild(0, 0).SetValue(ibT("Title"), ibString(wxT("File")));
+	now.AddChild(0, 0).SetValue(ibT("Title"), ibString(wxT("Edit")));
+	now.AddChild(0, 0).SetValue(ibT("Title"), ibString(wxT("Help")));
 
 	ExpectApplied(from, to);
 }
@@ -301,10 +301,10 @@ TEST(ClientFrameApply, CloneOfAPartIsWalkedWhole)
 	Ballast(frame);
 	ibDataNode& tree = frame.Child(ibT("Tree"));
 	tree.SetMetaId(1);
-	tree.Child(ibT("First")).SetValue(wxT("Picture"), ibString(wxT("1")));
-	tree.Child(ibT("Second")).SetValue(wxT("Picture"), ibString(wxT("2")));
-	tree.AddChild(0, 2).SetValue(wxT("Picture"), ibString(wxT("3")));
-	tree.AddChild(0, 3).SetValue(wxT("Picture"), ibString(wxT("4")));
+	tree.Child(ibT("First")).SetValue(ibT("Picture"), ibString(wxT("1")));
+	tree.Child(ibT("Second")).SetValue(ibT("Picture"), ibString(wxT("2")));
+	tree.AddChild(0, 2).SetValue(ibT("Picture"), ibString(wxT("3")));
+	tree.AddChild(0, 3).SetValue(ibT("Picture"), ibString(wxT("4")));
 
 	const ibProtocolNode cloned = Wire(frame).FindChild("Tree").Clone();
 	std::vector<ibString> pictures;

@@ -14,5 +14,6 @@
 #else
 #define FRMCLIENT_API IB_IMPORT
 #endif
+#define FRMCLIENT_API_VTABLE IB_EXPORT_VTABLE
 
 #endif

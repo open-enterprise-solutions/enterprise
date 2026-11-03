@@ -503,8 +503,11 @@ bool ibValueSpreadsheetDocument::CallAsProc(const long lMethodNum, ibValue** paP
 		return true;
 	}
 	else if (lMethodNum == ePrint) {
-		if (auto* frame = ibSession::CurrentFrame())
-			return frame->PrintSpreadsheetDocument(m_spreadsheetDoc, lSizeArray > 0 ? paParams[0]->GetBoolean() : false);
+		// Done either way: what the window answers — printed, or the person cancelled — is theirs, not a failed call.
+		if (auto* frame = ibSession::CurrentFrame()) {
+			frame->PrintSpreadsheetDocument(m_spreadsheetDoc, lSizeArray > 0 ? paParams[0]->GetBoolean() : false);
+			return true;
+		}
 		// SAME RULE AS EVERY OTHER FRAMELESS REFUSAL, so it is the same TYPE: printing needs a
 		// window, and a process without one is a process this code cannot run in. Raised as a core
 		// exception it was indistinguishable from any other engine failure.
@@ -512,8 +515,10 @@ bool ibValueSpreadsheetDocument::CallAsProc(const long lMethodNum, ibValue** paP
 		return false;
 	}
 	else if (lMethodNum == eShow) {
-		if (auto* frame = ibSession::CurrentFrame())
-			return frame->ShowSpreadsheetDocument(paParams[0]->GetString(), m_spreadsheetDoc);
+		if (auto* frame = ibSession::CurrentFrame()) {
+			frame->ShowSpreadsheetDocument(paParams[0]->GetString(), m_spreadsheetDoc);
+			return true;
+		}
 		ibBackendFormException::Error(_("showing a spreadsheet"));
 		return false;
 	}

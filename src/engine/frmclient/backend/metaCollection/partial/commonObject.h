@@ -2,9 +2,11 @@
 #define _FRMCLIENT_BACKEND_COMMON_OBJECT_H__
 
 #include <algorithm>
+#include <map>
 #include <vector>
 
 #include "core/guid.h"
+#include "core/description/predefinedDescription.h"   // ibPredefinedDescription — what an item of the kind is entered with
 #include "core/tabular/tabularModelView.h"   // ibDataViewObject — a predefined value is a row of the predefined editor
 
 #include "frmclient/backend/backend_picture.h"
@@ -19,7 +21,9 @@ class FRMCLIENT_API ibValueMetaObjectRecordDataHierarchyMutableRef : public ibVa
 public:
 	using ibValueMetaObject::ibValueMetaObject;
 
-	class ibPredefinedValueObject : public ibDataViewObject {
+	// AN ITEM AS A ROW OF THE EDITOR'S TREE — the item as the server keeps it (ibPredefinedItemDescription: what it
+	// declares, each value as it travels, held as it comes and sent back as it is held), and the row it stands under.
+	class ibPredefinedItem : public ibDataViewObject {
 	public:
 
 		// Folder/leaf flag is stored on the predefined value itself
@@ -27,22 +31,11 @@ public:
 		// a tree, so the data-view item asks the row "are you a
 		// container?" directly.  Keeps the dialog free of model-side
 		// IsContainer overrides.
-		virtual bool IsContainer() const override { return m_valueIsFolder; }
+		virtual bool IsContainer() const override { return m_item.m_folder; }
 
-		ibPredefinedValueObject(
-			const ibGuid& predefinedGuid, const ibString& strPredefinedName,
-			const ibString& strCode, const ibString& strDescription,
-			bool valueIsFolder = false, const wxObjectDataPtr<ibPredefinedValueObject>& valueParent = wxObjectDataPtr<ibPredefinedValueObject>())
-			:
-			m_predefinedItemGuid(predefinedGuid),
-			m_strPredefinedName(strPredefinedName),
-			m_strCode(strCode), m_strDescription(strDescription),
-			m_valueIsFolder(valueIsFolder),
-			m_valueParent(valueParent)
-		{
-		}
+		explicit ibPredefinedItem(const ibPredefinedItemDescription& item) : m_item(item) {}
 
-		ibGuid GetPredefinedGuid() const { return m_predefinedItemGuid; }
+		ibGuid GetPredefinedGuid() const { return m_item.m_guid; }
 
 		ibString GetPredefinedParentName() const {
 			if (m_valueParent != nullptr)
@@ -50,46 +43,37 @@ public:
 			return ibT("");
 		}
 
-		const ibString& GetPredefinedName() const { return m_strPredefinedName; }
-		const ibString& GetPredefinedCode() const { return m_strCode; }
-		const ibString& GetPredefinedDescription() const { return m_strDescription; }
+		const ibString& GetPredefinedName() const { return m_item.m_name; }
+		const ibString& GetPredefinedCode() const { return m_item.m_code; }
+		const ibString& GetPredefinedDescription() const { return m_item.m_description; }
 
-		bool IsPredefinedFolder() const { return m_valueIsFolder; }
-		wxObjectDataPtr<ibPredefinedValueObject> GetPredefinedParent() const { return m_valueParent; }
+		bool IsPredefinedFolder() const { return m_item.m_folder; }
+		wxObjectDataPtr<ibPredefinedItem> GetPredefinedParent() const { return m_valueParent; }
+
+		const ibPredefinedRowDescription& GetPredefinedRow() const { return m_item.m_row; }
+		const std::map<ibMetaID, ibPredefinedRowDescriptionVector>& GetPredefinedTables() const { return m_item.m_tables; }
 
 		friend class ibValueMetaObjectRecordDataHierarchyMutableRef;
 
 	private:
 
-		ibGuid m_predefinedItemGuid;
-
-		ibString m_strPredefinedName;
-		ibString m_strCode;
-		ibString m_strDescription;
-
-		bool m_valueIsFolder;
-
-		wxObjectDataPtr<ibPredefinedValueObject> m_valueParent;
+		ibPredefinedItemDescription m_item;
+		wxObjectDataPtr<ibPredefinedItem> m_valueParent;
 	};
 
 	//is predefined value?
 	bool HasPredefinedValue(const ibGuid& valueGuid) const { return FindPredefinedValue(valueGuid) != nullptr; }
 	bool HasPredefinedValue(const ibString& strPredefinedName) const { return FindPredefinedValue(strPredefinedName) != nullptr; }
 
-	//append predefined value
-	void AppendPredefinedValue(const ibString& strPredefinedName,
-		const ibString& strCode, const ibString& strDescription,
-		bool valueIsFolder = false, const wxObjectDataPtr<ibPredefinedValueObject>& valueParent = wxObjectDataPtr<ibPredefinedValueObject>());
-
-	void SetPredefinedValue(const ibGuid& predefinedGuid,
-		const ibString& strPredefinedName,
-		const ibString& strCode, const ibString& strDescription,
-		bool valueIsFolder = false, const wxObjectDataPtr<ibPredefinedValueObject>& valueParent = wxObjectDataPtr<ibPredefinedValueObject>());
+	// An item made, or the item of its Guid given this one (none of it: one more, of that Guid) — in the node form of the
+	// one schema, in one command, which the server takes whole or refuses. False: refused, and the person told why.
+	bool AppendPredefinedValue(const ibPredefinedItemDescription& item);
+	bool SetPredefinedValue(const ibPredefinedItemDescription& item);
 
 	void DeletePredefinedValue(const ibGuid& predefinedGuid);
 
 	//find predefined value
-	wxObjectDataPtr<ibPredefinedValueObject> FindPredefinedValue(const ibGuid& predefinedGuid) const {
+	wxObjectDataPtr<ibPredefinedItem> FindPredefinedValue(const ibGuid& predefinedGuid) const {
 
 		auto iterator = std::find_if(m_predefinedObjectVector.begin(), m_predefinedObjectVector.end(),
 			[predefinedGuid](const auto& value) { return predefinedGuid == value->GetPredefinedGuid(); });
@@ -97,10 +81,10 @@ public:
 		if (iterator != m_predefinedObjectVector.end())
 			return *iterator;
 
-		return wxObjectDataPtr<ibPredefinedValueObject>();
+		return wxObjectDataPtr<ibPredefinedItem>();
 	}
 
-	wxObjectDataPtr<ibPredefinedValueObject> FindPredefinedValue(const ibString& predefinedName) const {
+	wxObjectDataPtr<ibPredefinedItem> FindPredefinedValue(const ibString& predefinedName) const {
 
 		auto iterator = std::find_if(m_predefinedObjectVector.begin(), m_predefinedObjectVector.end(),
 			[predefinedName](const auto& value) { return predefinedName == value->GetPredefinedName(); });
@@ -108,18 +92,23 @@ public:
 		if (iterator != m_predefinedObjectVector.end())
 			return *iterator;
 
-		return wxObjectDataPtr<ibPredefinedValueObject>();
+		return wxObjectDataPtr<ibPredefinedItem>();
 	}
 
 	//predefined values
-	const std::vector<wxObjectDataPtr<ibPredefinedValueObject>>& GetPredefinedValueArray() const { return m_predefinedObjectVector; }
+	const std::vector<wxObjectDataPtr<ibPredefinedItem>>& GetPredefinedValueArray() const { return m_predefinedObjectVector; }
+
+	// THE ONE SCHEMA, as the server said it (the engine's GetPredefinedDesc): the items and what one is entered with —
+	// the window is built of it, its sections and their columns whatever the server says this time.
+	const ibPredefinedDescription& GetPredefinedDesc() const { return m_predefinedDesc; }
 
 	// …as the server's editor holds them (ibProtocol::ibSchema::ibKind::Predefined), read anew — when the editor opens and after
 	// each of its edits; the array keeps what was read till then.
 	void ReadPredefinedValues();
 
 private:
-	std::vector<wxObjectDataPtr<ibPredefinedValueObject>> m_predefinedObjectVector;
+	std::vector<wxObjectDataPtr<ibPredefinedItem>> m_predefinedObjectVector;   // the schema's items, as rows of the tree
+	ibPredefinedDescription m_predefinedDesc;
 };
 
 #endif

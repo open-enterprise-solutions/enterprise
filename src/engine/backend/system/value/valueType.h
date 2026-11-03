@@ -181,6 +181,12 @@ public:
 	// on. One verb, three answers.
 	virtual bool AdjustOutValue(const ibValue& varValue, ibValue& out) const override;
 
+	// ⭐ A PACKED FORM — the node the description is written in everywhere else (ibTypeDescriptionMemory),
+	// so a description travels as any other value does: a predefined characteristic declares its Type
+	// with one (#278), and value_pack can make one.
+	virtual bool DoSerialize(class ibDataNode& node) const override;
+	virtual bool DoDeserialize(const class ibDataNode& node) override;
+
 public:
  
 	bool ContainType(const ibValue& cType) const;

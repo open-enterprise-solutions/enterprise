@@ -12,8 +12,8 @@ class FRMCLIENT_API ibEventDispatcher;   // backend/eventDispatcher.h — the fa
 
 class FRMCLIENT_API ibProperty;
 class FRMCLIENT_API ibEvent;
-class FRMCLIENT_API ibDataNode;   // serialize/dataBuilder.h — universal structure node
-class FRMCLIENT_API ibDataValue;  // serialize/dataBuilder.h — a node value (scalar / Child)
+class ibDataNode;                 // serialize/dataBuilder.h — universal structure node
+class ibDataValue;                // serialize/dataBuilder.h — a node value (scalar / Child)
 class ibProtocolNode;             // protocol/protocolNode.h — what the server answered
 
 ///////////////////////////////////////////////////////////////////////////////

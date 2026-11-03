@@ -35,7 +35,10 @@ namespace ibProtocol {
 	//      the key the first asks for, carries the debugger's commands, answered at once, and the server's `debug`
 	//      notifications — a stop, the stack, the locals — sent as they happen, not as a frame.
 	//   7  …and the assistant's MCP rides it the same way (ibMcp): a connection of its own, bound by a key of its own.
-	inline constexpr int Version = 7;
+	//   8  …and a button says where its picture stands (its PictureLocation): left or right of its caption, or a TILE -
+	//      its picture large over its caption, and its State's Note under them - and how it is drawn (its View): a
+	//      button or a hyperlink. A client below 8 draws a button with its picture on the left.
+	inline constexpr int Version = 8;
 
 	// WHAT A CLIENT ASKS THE SERVER. On the wire a method is a name, as JSON-RPC has it; in code it is a type: the server
 	// reads the name once (MethodFromName) and nothing past it compares strings. A name is never changed; a new method
@@ -583,7 +586,8 @@ namespace ibProtocol {
 		}
 
 		// Caption and children Id, Caption, Picture, Selected → Id — one of those offered; none — cancelled. With Multiple →
-		// Ids — those of them ticked.
+		// Ids — those of them ticked. With Quick — no window: the desktop's quick choice, the items dropped under the field
+		// pressed (a reference's, or those that match what was typed); none — dismissed.
 		namespace ibChoice {
 
 			inline constexpr const char* Caption  = "Caption";
@@ -592,6 +596,7 @@ namespace ibProtocol {
 			inline constexpr const char* Selected = "Selected";
 			inline constexpr const char* Multiple = "Multiple";   // several may be chosen — answered with Ids
 			inline constexpr const char* Ids      = "Ids";
+			inline constexpr const char* Quick    = "Quick";      // dropped under the field pressed, not a window
 
 		}
 
@@ -1231,23 +1236,20 @@ namespace ibProtocol {
 		}
 
 		// The desktop's predefined values editor over an object of the designer's tree: `schema {Schema, Args: {Id[, Tab]}}`
-		// shows Type (the object's class) and Items, each as the engine stores it
-		// (ibValueMetaObjectRecordDataHierarchyMutableRef::WriteData): Guid, Name, Code, Description, IsFolder, Parent (the
-		// Guid of the item it sits under; absent: the top); commands Create {Id, Name, Code, Description, IsFolder,
-		// Parent}, Set {Id, Guid, …} — the item of that Guid given these (none of it: one more, of that Guid), Remove {Id,
-		// Guid}. Each with Tab — an external file's tree, as ibMetaData's.
+		// shows Type (the object's class), Declares — the one schema of the object's predefined items
+		// (ibPredefinedDescriptionMemory: the items as the configuration keeps them and what an item is entered with; the
+		// window is built of it) — and Classes — the types a type is picked from, named as ibProperties' rows name them.
+		// Commands Create {Id, an item in its node form (ibPredefinedItemDescriptionMemory)}, Set {Id, the item with
+		// its Guid} — the item of that Guid given this one (none of it: one more, of that Guid), Remove {Id, Guid}. Each
+		// with Tab — an external file's tree, as ibMetaData's.
 		namespace ibPredefined {
 
 			inline constexpr const char* Id          = "Id";
 			inline constexpr const char* Tab         = "Tab";
 			inline constexpr const char* Type        = "Type";
-			inline constexpr const char* Items       = "Items";
+			inline constexpr const char* Declares    = "Declares";
+			inline constexpr const char* Classes     = "Classes";
 			inline constexpr const char* Guid        = "Guid";
-			inline constexpr const char* Name        = "Name";
-			inline constexpr const char* Code        = "Code";
-			inline constexpr const char* Description = "Description";
-			inline constexpr const char* IsFolder    = "IsFolder";
-			inline constexpr const char* Parent      = "Parent";
 
 		}
 
@@ -1761,6 +1763,8 @@ namespace ibProtocol {
 			inline constexpr const char* Rows             = "Rows";            // a grid sizer's
 			inline constexpr const char* Cols             = "Cols";
 			inline constexpr const char* TitleLocation    = "TitleLocation";   // ibTitleLocation
+			inline constexpr const char* PictureLocation  = "PictureLocation"; // ibPictureLocation: a button's
+			inline constexpr const char* View             = "View";            // ibButtonView: a button's
 			inline constexpr const char* PasswordMode     = "PasswordMode";
 			inline constexpr const char* MultilineMode    = "MultilineMode";
 			inline constexpr const char* ButtonSelect     = "ButtonSelect";
@@ -1775,6 +1779,22 @@ namespace ibProtocol {
 			enum class ibTitleLocation : int {
 				Left  = 1,
 				Right = 2,
+			};
+
+			// Where a button's picture stands (the server's ibPictureLocation): Auto where the button puts it, on the left;
+			// Tile, its picture large over its caption and its State's Note under them, the whole filling what its item
+			// gives it.
+			enum class ibPictureLocation : int {
+				Auto  = 0,
+				Left  = 1,
+				Right = 2,
+				Tile  = 3,
+			};
+
+			// How a button is drawn (the server's ibButtonView): a hyperlink has no face and no frame, its caption underlined.
+			enum class ibButtonView : int {
+				Button    = 0,
+				Hyperlink = 1,
 			};
 
 		}
@@ -1793,6 +1813,7 @@ namespace ibProtocol {
 			inline constexpr const char* Caption        = "Caption";
 			inline constexpr const char* Picture        = "Picture";
 			inline constexpr const char* Representation = "Representation";   // ibRepresentation: a button's, a column's
+			inline constexpr const char* Note           = "Note";             // a tile's: the line under its caption
 			inline constexpr const char* Text           = "Text";
 			inline constexpr const char* Value          = "Value";            // a field's value with its type
 			inline constexpr const char* Checked        = "Checked";

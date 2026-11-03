@@ -45,7 +45,9 @@ ibMemoryBuffer::ibMemoryBuffer(const void* data, size_t len)
 	AppendData(data, len);
 }
 
-void ibMemoryBuffer::Free(Shared* shared) noexcept
+// NEVER INLINED, as ibString::Free (fstring.cpp says why): the pool's path pasted into Release would keep Release
+// itself out of every caller.
+IB_NOINLINE void ibMemoryBuffer::Free(Shared* shared) noexcept
 {
 	Impl* const impl = Impl::Of(shared);
 	const size_t bytes = Impl::BytesFor(impl->m_cap);

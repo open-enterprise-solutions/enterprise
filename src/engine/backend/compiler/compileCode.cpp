@@ -1338,19 +1338,14 @@ bool ibCompileCode::PushCallFunction(const std::shared_ptr<ibCallFunction>& call
 		code.m_param3.m_numArray = numDefCount;	// number of parameters
 	}
 	else {
-		// OPER_CALL vs OPER_CALL_CLOSURE — same operand layout, different
-		// runtime path. The closure variant builds the callee frame as an
-		// ibRunCaptureContext (it counts its own holders) so inner lambdas
-		// materialised during the call can take it. m_needsHeapFrame is settled
-		// by the time we get here: backward refs see the fully-compiled
-		// callee directly; forward refs land in m_listCallFunc and
-		// PushCallFunction reruns at finalize when all bodies are done.
-		// `Cached` is NOT a call opcode. The modifier is applied at the callee's
-		// entry opcode, where every road into a body arrives — a direct call, a
-		// call through a module value, a handler fired from C++ — so the caller
-		// emits the ordinary call and the callee decides. An opcode here would
-		// have covered only the calls this emitter can see.
-		code.m_numOper = foundedFunc->m_needsHeapFrame ? OPER_CALL_CLOSURE : OPER_CALL;
+		// ONE CALL OPCODE, whatever the callee's body holds. A lambda made in it takes the variables it
+		// references as cells, made at the callee's entry opcode (ibRunContext::Enter) — never the frame,
+		// so no call has to build a frame that outlives it (OPER_CALL_CLOSURE did, until 2026-11-03).
+		// `Cached` is NOT a call opcode either, for the same reason: the modifier is applied at the
+		// callee's entry opcode, where every road into a body arrives — a direct call, a call through a
+		// module value, a handler fired from C++ — so the caller emits the ordinary call and the callee
+		// decides. An opcode here would have covered only the calls this emitter can see.
+		code.m_numOper = OPER_CALL;
 		code.m_param1 = callFunction->m_puRetValue;	// variable into which the value is returned
 		code.m_param2.m_numArray = numModule;		// module number
 		code.m_param2.m_numIndex = foundedFunc->m_nStart;	// starting position
@@ -1800,10 +1795,9 @@ bool ibCompileCode::EmitFunctionBody(ibCompileContext* /*context*/,
 	// false for Lambda kind so cross-bc resolvers ignore them).
 	// FindFunctionByEntry sees them — that's what makes the debugger
 	// stack and eval host detection work for anonymous bodies.
-	// m_needsHeapFrame travels into byteFn via the templated ctor's
-	// initializer list (src.m_needsHeapFrame → byteFn.m_needsHeapFrame).
-	// Compile-side ibFunction was lazily stamped by GetVariable when
-	// an inner lambda captured a local from this frame.
+	// m_listCaptured travels into byteFn via the templated ctor's
+	// initializer list. Compile-side ibFunction was filled lazily by
+	// GetVariable as the body (and the lambdas inside it) compiled.
 	ibByteCode::ibByteFunction byteFn(lAddress, *createdFunction);
 	for (const auto& v : functionContext->m_listVariable) {
 		if (!v || v->m_bTempVar) continue;
@@ -1839,10 +1833,9 @@ ibParamUnit ibCompileCode::CompileLambdaExpression(ibCompileContext* context)
 	// the lambda boundary `break` in GetVariable was lifted at the
 	// same time). Previously this line nullified m_parentContext,
 	// enforcing the strict isolation discipline that has been
-	// superseded by the per-frame heap-promotion design (see
-	// docs/private/closure-capture.md). Phase B (runtime frame capture) landed
-	// alongside — see procUnit.cpp OPER_LFUNC / OPER_CALL_LAMBDA, which build the
-	// frame as an ibRunCaptureContext and hand the lambda its link to it.
+	// superseded by closure capture (see docs/private/closure-capture.md).
+	// The runtime half is procUnit.cpp OPER_LFUNC: the lambda takes from each
+	// outer frame the variables it references, as cells (ibRunCaptureContext).
 	std::shared_ptr<ibCompileContext::ibFunction> createdFunction;
 	std::unique_ptr<ibCompileContext> functionContextOwner;
 	int errorPlace = 0;
@@ -1855,11 +1848,11 @@ ibParamUnit ibCompileCode::CompileLambdaExpression(ibCompileContext* context)
 	ibCompileContext* functionContext = functionContextOwner.get();
 	functionContext->m_parentContext = context;
 
-	// Closure capture marking is lazy — see ibCompileContext::GetVariable.
+	// Closure capture is recorded lazily — see ibCompileContext::GetVariable.
 	// When an identifier resolves past a lambda boundary into some outer
-	// ctx, GetVariable stamps that ctx's m_needsHeapFrame = true. No
-	// eager walk here: ctxs that nothing captures from stay unmarked
-	// regardless of how many lambdas they enclose.
+	// ctx, GetVariable adds it to m_listCaptured of that ctx's function and
+	// of every lambda crossed. No eager walk here: a variable nothing
+	// references from a lambda is taken by none.
 
 	// L4-2 pushdown — the body's lexeme span starts right after the signature
 	// (captured BEFORE EmitFunctionBody consumes it); the recorder re-reads
@@ -1887,7 +1880,7 @@ ibParamUnit ibCompileCode::CompileLambdaExpression(ibCompileContext* context)
 	// Allocate the dest slot in CALLER's context — that's where the
 	// ibValueFunction value lands at runtime. The follow-on consumer
 	// (OPER_LET / OPER_SET / OPER_CALL arg) reads from this slot.
-	ibParamUnit target = context->CreateVariable();
+	ibParamUnit target = context->CreateVariable(DEF_VAR_TEMP_MOVE);
 
 	// Back-patch OPER_LFUNC's operands. Frame shape lives on the
 	// just-pushed ibByteFunction in m_listFunc; we stamp the index here
@@ -2392,7 +2385,7 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 						// so `taken` got 6 (the incremented value, not the old one) and
 						// `i` was never stored at all — both halves of `x++` wrong from
 						// one missing question.
-						if (DEF_VAR_TEMP == expression.m_numArray) { //reduce only temporary variables
+						if (DEF_VAR_TEMP_MOVE == expression.m_numArray) { //reduce only an expression's temporaries — this too is a move
 							n = m_cByteCode.m_listCode.size() - 1;
 							if (n >= 0
 							 && m_cByteCode.m_listCode[n].m_param1.m_numArray == expression.m_numArray
@@ -2574,7 +2567,7 @@ bool ibCompileCode::CompileNewObject(ibCompileContext* context)
 	// The name stays in the const pool: a refusal has to be able to say which class it was.
 	code.m_param3.m_numIndex = (long long)ibValue::GetIDObjectFromString(strClassName);
 
-	ibParamUnit variable = context->CreateVariable();
+	ibParamUnit variable = context->CreateVariable(DEF_VAR_TEMP_MOVE);
 	code.m_param1 = variable;// variable into which the value is returned
 	m_cByteCode.m_listCode.emplace_back(std::move(code));
 
@@ -2681,7 +2674,7 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 			code.m_param2 = context->GetVariable(foundedFunc->m_strContext, true, false, true);
 			code.m_param3.m_numIndex = numConst;//number of the called method from the list of encountered methods
 			code.m_param3.m_numArray = listParam.size();// number of parameters
-			variable = context->CreateVariable();
+			variable = context->CreateVariable(DEF_VAR_TEMP_MOVE);
 			code.m_param1 = variable;// variable into which the value is returned
 			m_cByteCode.m_listCode.emplace_back(std::move(code));
 
@@ -2761,7 +2754,7 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 				ibByteUnit code;
 				StampSource(code);
 				code.m_numOper = OPER_CALL_LAMBDA;
-				variable = context->CreateVariable();
+				variable = context->CreateVariable(DEF_VAR_TEMP_MOVE);
 				code.m_param1 = variable;                                  // return-value dest
 				code.m_param4 = context->GetVariable(strRealName, true, false);  // source callable slot
 				// m_param2.m_numIndex = caller-supplied arg count. Runtime
@@ -2825,7 +2818,7 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 				code.m_numOper = OPER_GET_SCOPE;
 				code.m_param2 = context->GetVariable(foundedVar->m_strContext, true, false, true);//scope-provider binding
 				code.m_param3.m_numIndex = numConst;//member name const index
-				variable = context->CreateVariable();
+				variable = context->CreateVariable(DEF_VAR_TEMP_MOVE);
 				code.m_param1 = variable;// dest temp
 				m_cByteCode.m_listCode.emplace_back(std::move(code));
 			}
@@ -2846,7 +2839,7 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 			else {
 				code.m_numOper = getOp;
 				code.m_param2 = context->GetVariable(strRealName, true, false);//handle slot
-				variable = context->CreateVariable();
+				variable = context->CreateVariable(DEF_VAR_TEMP_MOVE);
 				code.m_param1 = variable;// dest temp
 				m_cByteCode.m_listCode.emplace_back(std::move(code));
 			}
@@ -2899,7 +2892,7 @@ loopLabel:
 			code.m_numOper = OPER_GET_ARRAY;
 			code.m_param2 = variable;//variable - array
 			code.m_param3 = variableKey;//array index (more precisely key since associative array is used)
-			variable = context->CreateVariable();
+			variable = context->CreateVariable(DEF_VAR_TEMP_MOVE);
 			code.m_param1 = variable;// variable into which the value is returned
 			CorrectTypeDef(variableKey);// check value type ��������� ����������
 			m_cByteCode.m_listCode.emplace_back(std::move(code));
@@ -2948,7 +2941,7 @@ loopLabel:
 			code.m_numOper = OPER_GET_A;
 			code.m_param2 = variable;                                 // the receiver, still in hand
 			code.m_param3.m_numIndex = GetConstString(ibEmptyString);  // the name nobody typed yet
-			variable = context->CreateVariable();
+			variable = context->CreateVariable(DEF_VAR_TEMP_MOVE);
 			code.m_param1 = variable;
 
 			// ⭐⭐ AND THE COMPILER SAYS WHICH INSTRUCTION IT IS, rather than leaving a reader to find
@@ -3013,7 +3006,7 @@ loopLabel:
 				code.m_param3.m_numIndex = numConst;//number of the called method from the list of encountered methods
 				code.m_param3.m_numArray = listParam.size();// number of parameters
 			}
-			variable = context->CreateVariable();
+			variable = context->CreateVariable(DEF_VAR_TEMP_MOVE);
 			code.m_param1 = variable;// variable into which the value is returned
 			m_cByteCode.m_listCode.emplace_back(std::move(code));
 			for (unsigned int i = 0; i < listParam.size(); i++) {
@@ -3047,7 +3040,7 @@ loopLabel:
 				code.m_numOper = OPER_GET_A;
 				code.m_param2 = variable;//variable for which the attribute is called
 				code.m_param3.m_numIndex = numConst;//number of the called attribute from the list of encountered attributes and methods
-				variable = context->CreateVariable();
+				variable = context->CreateVariable(DEF_VAR_TEMP_MOVE);
 				code.m_param1 = variable;// variable into which the value is returned
 				m_cByteCode.m_listCode.emplace_back(std::move(code));
 			}
@@ -3534,7 +3527,7 @@ ibParamUnit ibCompileCode::GetCallFunction(ibCompileContext* context, const ibSt
 	callFunc->m_numString = code.m_numString;
 	callFunc->m_numLine = code.m_numLine;
 	callFunc->m_strModuleName = code.m_strModuleName;
-	callFunc->m_puRetValue = context->CreateVariable();
+	callFunc->m_puRetValue = context->CreateVariable(DEF_VAR_TEMP_MOVE);
 
 	callFunc->m_numIsSet = numIsSet;
 
@@ -3648,7 +3641,7 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 	// first we process Left operators
 	if ((lex.m_lexType == KEYWORD && lex.m_numData == KEY_NOT) || (lex.m_lexType == DELIMITER && lex.m_numData == '!')) {
 
-		variable = context->CreateVariable();
+		variable = context->CreateVariable(DEF_VAR_TEMP_MOVE);
 		variable.m_clsid = g_valueBooleanCLSID;
 
 		// ⚠ NO GATE ON THE OPERATOR'S OWN CELL. OPER_SET_TYPE used to MAKE the cell Boolean; it is a gate now (it
@@ -3721,7 +3714,7 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 		// The id, decided here — see the twin emitter above for why.
 		code.m_param3.m_numIndex = (long long)ibValue::GetIDObjectFromString(strObjectName);
 
-		variable = context->CreateVariable();
+		variable = context->CreateVariable(DEF_VAR_TEMP_MOVE);
 		code.m_param1 = variable;// variable into which the value is returned
 		m_cByteCode.m_listCode.emplace_back(std::move(code));
 
@@ -3774,7 +3767,7 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 		// died on Undefined. The shape below is CompileIf's: test the
 		// condition, write the chosen value into the result, jump over the
 		// other branch. The branch not taken is in the tape and is not executed.
-		variable = context->CreateVariable();
+		variable = context->CreateVariable(DEF_VAR_TEMP_MOVE);
 
 		ExpectDelimiter('(');
 
@@ -3840,7 +3833,7 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 			ExpectDelimiter(incOp);
 			ibParamUnit target = context->GetVariable(strRealName, true, true); // lvalue, must exist
 			// expression value = a temp holding the OLD value (captured before the store)
-			variable = context->CreateVariable();
+			variable = context->CreateVariable(DEF_VAR_TEMP_MOVE);
 			ibByteUnit getOld;
 			StampSource(getOld);
 			getOld.m_numOper = OPER_LET;
@@ -3925,7 +3918,7 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 			}
 
 			code.m_param2 = variable;
-			variable = context->CreateVariable();
+			variable = context->CreateVariable(DEF_VAR_TEMP_MOVE);
 			variable.m_clsid = g_valueNumberCLSID;
 			AddTypeSet(variable);
 			code.m_param1 = variable;
@@ -3985,7 +3978,7 @@ delimOperation:
 
 						const ibParamUnit item = GetExpression(context, numCurPriority);
 
-						ibParamUnit same = context->CreateVariable();
+						ibParamUnit same = context->CreateVariable(DEF_VAR_TEMP_MOVE);
 						same.m_clsid = g_valueBooleanCLSID;
 						{
 							ibByteUnit c; StampSource(c);
@@ -4002,7 +3995,7 @@ delimOperation:
 							continue;
 						}
 
-						ibParamUnit either = context->CreateVariable();
+						ibParamUnit either = context->CreateVariable(DEF_VAR_TEMP_MOVE);
 						either.m_clsid = g_valueBooleanCLSID;
 						{
 							ibByteUnit c; StampSource(c);
@@ -4063,9 +4056,9 @@ delimOperation:
 				else if (next_lex.m_numData == KEY_AND || next_lex.m_numData == KEY_OR) {
 					const bool isOr = next_lex.m_numData == KEY_OR;
 
-					ibParamUnit result = context->CreateVariable();
+					ibParamUnit result = context->CreateVariable(DEF_VAR_TEMP_MOVE);
 					result.m_clsid = g_valueBooleanCLSID;
-					ibParamUnit rhsSlot = context->CreateVariable();
+					ibParamUnit rhsSlot = context->CreateVariable(DEF_VAR_TEMP_MOVE);
 
 					const ibValue decisive(isOr);
 					{
@@ -4105,7 +4098,7 @@ delimOperation:
 					}
 
 					const ibParamUnit right = GetExpression(context, numCurPriority);
-					if (right.m_numArray != DEF_VAR_TEMP && right.m_numArray != DEF_VAR_CONST
+					if (right.m_numArray != DEF_VAR_TEMP_COPY && right.m_numArray != DEF_VAR_TEMP_MOVE && right.m_numArray != DEF_VAR_CONST
 						&& variable.m_clsid == g_valueStringCLSID) {
 						Refuse(ibScriptError_TypeOperation);
 						return ibParamUnit();
@@ -4200,11 +4193,11 @@ delimOperation:
 					return ibParamUnit();
 				}
 
-				ibParamUnit puVariable1 = context->CreateVariable();
+				ibParamUnit puVariable1 = context->CreateVariable(DEF_VAR_TEMP_MOVE);
 				ibParamUnit puVariable2 = variable;
 				ibParamUnit puVariable3 = GetExpression(context, numCurPriority);
 
-				if (puVariable3.m_numArray != DEF_VAR_TEMP && puVariable3.m_numArray != DEF_VAR_CONST) { // extra. checking for prohibited operations
+				if (puVariable3.m_numArray != DEF_VAR_TEMP_COPY && puVariable3.m_numArray != DEF_VAR_TEMP_MOVE && puVariable3.m_numArray != DEF_VAR_CONST) { // extra. checking for prohibited operations
 					if (puVariable2.m_clsid == g_valueStringCLSID) {
 						if (OPER_DIV == code.m_numOper
 							|| OPER_MOD == code.m_numOper
@@ -4234,7 +4227,7 @@ delimOperation:
 				const bool bAnswersBoolean = (code.m_numOper >= OPER_GT && code.m_numOper <= OPER_NE)
 					|| code.m_numOper == OPER_AND || code.m_numOper == OPER_OR;
 
-				if (puVariable2.m_numArray != DEF_VAR_CONST && puVariable2.m_numArray != DEF_VAR_TEMP) { // constants are not checked - because they are typified by default
+				if (puVariable2.m_numArray != DEF_VAR_CONST && puVariable2.m_numArray != DEF_VAR_TEMP_COPY && puVariable2.m_numArray != DEF_VAR_TEMP_MOVE) { // constants are not checked - because they are typified by default
 					CheckTypeDef(puVariable3, puVariable2.m_clsid);
 				}
 

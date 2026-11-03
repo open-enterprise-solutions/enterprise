@@ -56,21 +56,23 @@ static_assert(sizeof(ibGuidImpl) == 16, "ibGuidImpl must stay a portable 16-byte
 // 16 byte value that can be passed around by value. It also supports
 // conversion to string (via the stream operator <<) and conversion from a
 // string via constructor.
-class CORE_API ibGuid
+//
+// EXPORTED MEMBER BY MEMBER, as ibString is (fstring.h says why): what has no body here carries CORE_API itself.
+class ibGuid
 {
 public:
 
 	// EXPLICIT: wrapping raw bytes into a guid is a deliberate act (`ibGuid g(ibGuid::newGuid());`). The
 	// IMPLICIT conversion is reserved for ibGuidImpl (the storage dupe, ctor below), so an ibGuidImpl flows
 	// into an ibGuid freely while a bare array does not.
-	explicit ibGuid(const std::array<unsigned char, 16>& bytes);
-	explicit ibGuid(const std::array<unsigned char, 16>&& bytes);
-	explicit ibGuid(const std::string_view& fromString);
+	CORE_API explicit ibGuid(const std::array<unsigned char, 16>& bytes) noexcept;
+	CORE_API explicit ibGuid(const std::array<unsigned char, 16>&& bytes) noexcept;
+	CORE_API explicit ibGuid(const std::string_view& fromString);
 
-	ibGuid();
-	ibGuid(const ibGuidImpl& bytes);   // IMPLICIT on purpose: the storage dupe flows into an ibGuid freely
-	                                   // (the metaclass patches Data1 on an ibGuidImpl, then returns it as a guid)
-	ibGuid(const ibString& fromString);
+	ibGuid() noexcept : _bytes{ {0} } {}
+	CORE_API ibGuid(const ibGuidImpl& bytes) noexcept;   // IMPLICIT on purpose: the storage dupe flows into an ibGuid freely
+	                                            // (the metaclass patches Data1 on an ibGuidImpl, then returns it as a guid)
+	CORE_API ibGuid(const ibString& fromString);
 
 	ibGuid(const ibGuid& other) = default;
 	ibGuid& operator=(const ibGuid& other) = default;
@@ -80,37 +82,37 @@ public:
 	// Mint a fresh guid in its STORAGE form (ibGuidImpl, the dupe): it flows implicitly into an ibGuid
 	// (`ibGuid g = ibGuid::newGuid();`). A reference key is just this guid — pure identity, no type baked in
 	// (the type is the _RTRef column); ibGuid stays a primitive that mints guids, it does not know metaIDs.
-	static ibGuidImpl newGuid(short version = GUID_RANDOM);
+	CORE_API static ibGuidImpl newGuid(short version = GUID_RANDOM);
 
 	// Read a guid from its text: 32 hex digits, hyphens anywhere. False, and `guid` untouched, when the text
 	// is not a guid; the nil guid's text is one. The constructor from text answers the nil guid for both.
-	static bool parse(const ibString& text, ibGuid& guid);
+	CORE_API static bool parse(const ibString& text, ibGuid& guid);
 
-	bool operator > (const ibGuid& other) const;
-	bool operator >= (const ibGuid& other) const;
-	bool operator < (const ibGuid& other) const;
-	bool operator <= (const ibGuid& other) const;
+	CORE_API bool operator > (const ibGuid& other) const noexcept;
+	CORE_API bool operator >= (const ibGuid& other) const noexcept;
+	CORE_API bool operator < (const ibGuid& other) const noexcept;
+	CORE_API bool operator <= (const ibGuid& other) const noexcept;
 
 	// overload equality operator
-	bool operator==(const ibGuid& other) const;
+	bool operator==(const ibGuid& other) const noexcept { return _bytes == other._bytes; }
 
-	operator ibGuidImpl() const;
+	CORE_API operator ibGuidImpl() const noexcept;
 
 	// convert to string using std::snprintf() and wxString
-	ibString str() const;
+	CORE_API ibString str() const;
 
 	// conversion operator for string
 	operator ibString() const { return str(); }
 
-	const std::array<unsigned char, 16>& bytes() const;
-	void swap(ibGuid& other);
-	bool isValid() const;
+	const std::array<unsigned char, 16>& bytes() const noexcept { return _bytes; }
+	CORE_API void swap(ibGuid& other) noexcept;
+	bool isValid() const noexcept { return *this != ibGuid(); }
 
-	void reset() { zeroify(); }
+	void reset() noexcept { zeroify(); }
 
 private:
 
-	void zeroify();
+	CORE_API void zeroify() noexcept;
 
 	// actual data
 	std::array<unsigned char, 16> _bytes;

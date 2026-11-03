@@ -497,8 +497,7 @@ private:
 		// so it is picked exactly like a comparison is: the runtime's quick choice
 		// over the registered enumeration, not a list spelled out here.
 		if (GetSelectedGroup() != nullptr || GetSelectedRoot() != nullptr) {
-			ibValue kind; GetControlValue(kind);
-			ibTypeControlFactory::QuickChoice(this, kind.GetClassType(), GetEditorCtrl());
+			ibTypeControlFactory::ChooseValue(this, {}, GetEditorCtrl());
 			return;
 		}
 
@@ -541,7 +540,7 @@ private:
 		// the popup with it — which is exactly why a boolean's drop-down appeared
 		// for an instant and vanished. The editor closes when the value arrives
 		// (ChoiceProcessing), like it does for every other control.
-		ibTypeControlFactory::ChooseValue(this, nullptr, GetEditorCtrl());
+		ibTypeControlFactory::ChooseValue(this, {}, GetEditorCtrl());
 	}
 
 	// CLEARING IS THE SAME ONE CALL every control makes — SetControlValue with

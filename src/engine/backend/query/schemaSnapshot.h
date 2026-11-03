@@ -37,6 +37,8 @@
 class ibBackendQueryable;
 class ibMetaData;
 class ibDatabaseConnectionHolder;
+class ibRestructureInfo;
+struct ibSchemaTable;
 
 // The L3 expression a delta carries for REGENERATION (query/queryable.h). Forward-declared rather
 // than included: a shared_ptr member needs no complete type, and pulling the whole queryable header
@@ -259,6 +261,24 @@ struct ibSchemaMaterialize
 	ibSchemaMaterialize& Split(unsigned int shards)  { m_shards = shards > 0 ? shards : 1; return *this; }
 };
 
+// THE CHECKS A TABLE CARRIES BEFORE IT IS TOUCHED — one per level that has a rule. A level adds its own (+=), the
+// differ asks them all (each one runs, each refusal is said): false when any refused.
+class ibSchemaEvent {
+public:
+	typedef std::function<bool(const ibSchemaTable* baseline, ibRestructureInfo*)> ibHandler;
+
+	ibSchemaEvent& operator+=(ibHandler handler) { m_handlers.push_back(std::move(handler)); return *this; }
+	bool operator()(const ibSchemaTable* baseline, ibRestructureInfo* report) const {
+		bool passed = true;
+		for (const ibHandler& handler : m_handlers)
+			passed = handler(baseline, report) && passed;
+		return passed;
+	}
+
+private:
+	std::vector<ibHandler> m_handlers;
+};
+
 // One table's declared structure. Produced by a metaobject's DescribeTable(); consumed by DiffSnapshots.
 struct ibSchemaTable
 {
@@ -299,8 +319,13 @@ struct ibSchemaTable
 	// The check belongs to the declaration for the same reason the columns do — the object that knows
 	// the rule attaches it while contributing, and the differ, which knows nothing about accounts,
 	// simply asks. Returning false appends its own error to the ledger (which greys Apply) and leaves
-	// the table alone. Empty = nothing to ask.
-	std::function<bool(class ibRestructureInfo*)> m_beforeChange;
+	// the table alone. Empty = nothing to ask. Asked with the table as the applied configuration
+	// declared it (`baseline`; null: a table new to it) — what a check that compares needs.
+	//
+	// ⭐ SEVERAL, ONE PER LEVEL THAT HAS A RULE: every level adds its own (+=) — a catalog's item its
+	// presentation, a chart of accounts its analytics on top — and the differ asks every one. One function
+	// that each level had to wrap around the one below was erased by the first level that assigned it.
+	ibSchemaEvent m_beforeChange;
 
 	// AND ITS PAIR, AFTER. Symmetric by construction and asymmetric in power: BEFORE may refuse, AFTER
 	// may not — by then the table has been changed and there is nothing left to decline. It exists to
@@ -314,6 +339,10 @@ struct ibSchemaTable
 	std::vector<ibSchemaIndex>               m_indexes;
 	// Declared DATA rows (enum / predefined values) — diffed by uuid, applied/erased through the batch.
 	std::vector<ibSchemaSeedRow>            m_seed;
+	// …FOUND BY THESE where no unique index holds a row: a tabular section's line is its owner and its position, and a
+	// declared line (a predefined item's) is matched and written by their cells — the line the key holds updated, or
+	// one inserted where none stands; one no longer declared stays, the data's. Empty: a row is its uuid (SeedKeyColumn).
+	std::vector<const ibBackendQueryColumn*> m_seedKey;
 
 
 	// Own a raw column and return a stable pointer to it (for scaffold / index use).

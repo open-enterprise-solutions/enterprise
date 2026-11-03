@@ -40,4 +40,8 @@ private:
 // error_code::message(): on Windows that is the system's text in the ANSI code page.
 std::string ibErrorText(const std::error_code& code);
 
+// The same for a code the system gave by number — an HRESULT, GetLastError's, errno — or the code itself when it has
+// no words: a COM server's own error is numbered and nothing more.
+CORE_API ibString ibSysErrorMsgStr(const unsigned long code);
+
 #endif
