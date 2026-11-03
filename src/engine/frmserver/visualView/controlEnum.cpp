@@ -16,3 +16,5 @@ ENUM_TYPE_REGISTER(ibValueEnumTitleLocation, "TitleLocation", enum_to_clsid("EN_
 ENUM_TYPE_REGISTER(ibValueEnumPictureLocation, "PictureLocation", enum_to_clsid("EN_PCLC"));
 ENUM_TYPE_REGISTER(ibValueEnumButtonView, "ButtonView", enum_to_clsid("EN_BTVW"));
 ENUM_TYPE_REGISTER(ibValueEnumRepresentation, "Representation", enum_to_clsid("EN_RPRT"));
+ENUM_TYPE_REGISTER(ibValueEnumQuickChoiceMode, "QuickChoiceMode", enum_to_clsid("EN_QCMO"));
+ENUM_TYPE_REGISTER(ibValueEnumChoiceFoldersAndItems, "ChoiceFoldersAndItems", enum_to_clsid("EN_CFAI"));

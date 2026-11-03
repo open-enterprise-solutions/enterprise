@@ -62,6 +62,17 @@ ibValueControl* ibValueForm::FindControlByAttributeId(const ibMetaID& id) const
 	return nullptr;
 }
 
+void ibValueForm::ClearLinked(ibChoiceHolder& holder, const ibMetaID& edited)
+{
+	for (ibValueControl* control : GetControlList()) {
+		const ibTypeControlFactory* factory = dynamic_cast<const ibTypeControlFactory*>(control);
+		if (factory == nullptr || !factory->GetChoiceParameters().IsOk() || !(factory->GetChoiceHolder() == holder))
+			continue;
+		ibChoiceLinkResolver::ClearLinked(holder, edited,
+			ibChoiceLinkResolver::FieldOf(holder, factory), factory->GetChoiceParameters());
+	}
+}
+
 std::shared_ptr<ibValueIteratorState> ibValueForm::ibValueFormCollectionControl::CreateIterator()
 {
 	using ListT = std::vector<ibValueControl*>;

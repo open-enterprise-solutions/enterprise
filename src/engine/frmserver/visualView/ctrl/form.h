@@ -493,6 +493,10 @@ public:
 
 	virtual void NotifyChoice(ibValue& vSelected);
 
+	// A field of the source changed: the fields standing in that holder under rows of their own that name it are
+	// emptied (ibChoiceLinkResolver::ClearLinked tells the form, whatever wrote the value).
+	virtual void ClearLinked(ibChoiceHolder& holder, const ibMetaID& edited) override;
+
 	ibValue CreateControl(const ibValueType* classControl, const ibValue& vControl);
 	ibValue FindControl(const ibValue& vControl);
 	void RemoveControl(const ibValue& vControl);
