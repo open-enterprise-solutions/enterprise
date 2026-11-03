@@ -43,6 +43,7 @@ These keep their own licenses. Nothing in LICENSE.md changes or overrides them.
 | LodePNG | `src/3rdparty/lodepng` (submodule) | zlib |
 | NanoSVG | `src/3rdparty/nanosvg` (submodule) | zlib |
 | Expat | `src/3rdparty/expat` (submodule) | MIT |
+| date (Howard Hinnant) | `src/3rdparty/date` (submodule; built on Linux and macOS only) | MIT |
 | SQLite | `src/engine/backend/databaseLayer/sqllite/engine` | public domain |
 | Firebird client headers | `src/engine/backend/databaseLayer/firebird/engine` | InterBase Public License 1.0 / IDPL, per file header |
 

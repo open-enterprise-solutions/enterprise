@@ -31,3 +31,6 @@
 [submodule "src/3rdparty/expat"]
 	path = src/3rdparty/expat
 	url = https://github.com/libexpat/libexpat.git
+[submodule "src/3rdparty/date"]
+	path = src/3rdparty/date
+	url = https://github.com/HowardHinnant/date.git

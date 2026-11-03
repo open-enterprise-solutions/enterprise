@@ -38,6 +38,7 @@ add_executable(oes_tests
     test_fdatetime.cpp
     test_dictionary.cpp
     test_driverDates.cpp
+    test_timeZone.cpp
     test_formatString.cpp
     test_tstr.cpp
     test_blockSyntaxLINQ.cpp
