@@ -1018,7 +1018,7 @@ ibXmlWriter::ibXmlWriter(const ibString& who, ibXmlCodePage page) : m_who(who), 
 // ⭐ ALL OR NOTHING: a write the writer refuses leaves it as it was before the call - no half tag, no half value,
 // no element it began - so a script that catches the refusal writes on into a document that still parses. What a
 // write can change is the text after its end, the open elements' count, the innermost element and the flags.
-template <typename F>
+template <std::invocable F>
 void ibXmlWriter::Atomically(F&& write)
 {
 	// The innermost element's lists only grow during a write, so their lengths are its snapshot - no copy.

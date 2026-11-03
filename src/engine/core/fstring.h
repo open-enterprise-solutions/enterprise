@@ -36,6 +36,7 @@
 // =============================================================================
 
 #include <atomic>        // the owners' count the facade knows (copy / let go inline)
+#include <concepts>      // std::same_as, std::floating_point — how Format tells an argument's kind
 #include <cstddef>
 #include <cstdint>
 #include <cwchar>        // std::swprintf — ibString::Format; WCHAR_MAX — how wide the boundary's character is
@@ -463,19 +464,18 @@ inline int Hold(const wxUniChar& c) noexcept { return static_cast<int>(c.GetValu
 inline int Hold(const wxUniCharRef& c) noexcept { return static_cast<int>(wxUniChar(c).GetValue()); }
 
 template <class T>
+	requires (std::is_arithmetic_v<T> || std::is_enum_v<T> || std::is_pointer_v<T>)
 inline auto Hold(const T& v) noexcept {
-	static_assert(std::is_arithmetic<T>::value || std::is_enum<T>::value || std::is_pointer<T>::value,
-		"ibString::Format takes text, numbers, enums and pointers");
-	if constexpr (std::is_enum<T>::value)
-		return Hold(static_cast<typename std::underlying_type<T>::type>(v));
-	else if constexpr (std::is_floating_point<T>::value)
+	if constexpr (std::is_enum_v<T>)
+		return Hold(static_cast<std::underlying_type_t<T>>(v));
+	else if constexpr (std::floating_point<T>)
 		return static_cast<double>(v);
-	else if constexpr (std::is_pointer<T>::value)
+	else if constexpr (std::is_pointer_v<T>)
 		return static_cast<const void*>(v);
 	else if constexpr (sizeof(T) > sizeof(int))
-		return static_cast<typename std::conditional<std::is_signed<T>::value, long long, unsigned long long>::type>(v);
+		return static_cast<std::conditional_t<std::is_signed_v<T>, long long, unsigned long long>>(v);
 	else
-		return static_cast<typename std::conditional<std::is_signed<T>::value, int, unsigned int>::type>(v);
+		return static_cast<std::conditional_t<std::is_signed_v<T>, int, unsigned int>>(v);
 }
 
 // …and what swprintf is handed: a held string by its buffer, anything else as it is.
@@ -485,9 +485,9 @@ inline T Pass(T v) noexcept { return v; }
 
 template <class P>
 constexpr Kind KindOf() noexcept {
-	if constexpr (std::is_same<P, const wchar_t*>::value) return Kind::Text;
-	else if constexpr (std::is_same<P, double>::value)    return Kind::Real;
-	else if constexpr (std::is_same<P, const void*>::value) return Kind::Pointer;
+	if constexpr (std::same_as<P, const wchar_t*>) return Kind::Text;
+	else if constexpr (std::same_as<P, double>)    return Kind::Real;
+	else if constexpr (std::same_as<P, const void*>) return Kind::Pointer;
 	else return sizeof(P) > sizeof(int) ? Kind::Int64 : Kind::Int;
 }
 

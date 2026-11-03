@@ -182,9 +182,9 @@ TEST(ValueTest, LiteralIsStringNotBoolean) {
 
 // A WIDE literal is no longer a string to a value at all - since the text is char16_t, `wchar_t*` is just
 // another pointer, and the deleted constructor refuses it at compile time rather than letting it turn TRUE.
-static_assert(!std::is_constructible<ibValue, const wchar_t*>::value,
+static_assert(!std::is_constructible_v<ibValue, const wchar_t*>,
     "a wide literal must not become a value - write it as ibT(\"...\")");
-static_assert(!std::is_assignable<ibValue&, const wchar_t*>::value,
+static_assert(!std::is_assignable_v<ibValue&, const wchar_t*>,
     "a wide literal must not be assigned to a value - write it as ibT(\"...\")");
 
 TEST(ValueTest, NarrowLiteralIsStringNotBoolean) {

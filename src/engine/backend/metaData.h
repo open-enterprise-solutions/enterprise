@@ -351,7 +351,8 @@ public:
 	// two-arg (metaValue, refType) overload above — no ambiguity.)
 	template <typename Key> ibCtorMetaValueType* FindCtor(const Key& key) const { return m_factoryCtors.Find(key); }
 	template <typename Key> bool                 HasCtor(const Key& key)  const { return m_factoryCtors.Find(key) != nullptr; }
-	template <typename Fn>   void                ForEachCtor(Fn&& fn)     const { m_factoryCtors.ForEach(std::forward<Fn>(fn)); }
+	template <std::invocable<ibCtorMetaValueType*> Fn>
+	void ForEachCtor(Fn&& fn) const { m_factoryCtors.ForEach(std::forward<Fn>(fn)); }
 
 	// A METAOBJECT WAS RENAMED — the names its ctors compute have changed. This registry is the
 	// one that holds them (the global value factory holds the STATIC types, whose names never
@@ -434,7 +435,7 @@ public:
 
 	// ⭐ HOW A METADATA IS MADE — std::make_shared's twin, with one difference: its last holder closes what is still
 	// open before it goes (Dispose), on their own thread, working for its base meanwhile.
-	template <class T, class... Args>
+	template <std::derived_from<ibMetaData> T, class... Args>
 	static std::shared_ptr<T> MakeShared(Args&&... args) {
 		return std::shared_ptr<T>(new T(std::forward<Args>(args)...), &ibMetaData::Dispose);
 	}
@@ -679,7 +680,7 @@ public:
 	//
 	// ⚠ WRITTEN ONCE, HERE. Five broadcasts went through five identical loops, and a rule kept in
 	// five places is a rule the sixth broadcast is written without.
-	template <class _Say>
+	template <std::invocable<ibMetaDataNotifier*> _Say>
 	void SayToNotifiers(_Say say) const {
 
 		for (ibMetaDataNotifier* watching : m_notifiers)

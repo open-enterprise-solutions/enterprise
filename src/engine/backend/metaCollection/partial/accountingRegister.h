@@ -12,6 +12,7 @@
 #include "backend/metaCollection/partial/registerQueryLowering.h"
 
 #include <algorithm>
+#include <concepts>
 #include <map>
 #include <memory>
 #include <unordered_map>
@@ -628,7 +629,7 @@ public:
 	//
 	// So there is one list, and it is this. A slot added, a side added, a predefined attribute added —
 	// every walker learns about it at once, because there is nothing else to teach.
-	template <typename TVisitor>
+	template <std::predicate<ibValueMetaObjectAttributePredefined*, ibOwnAttributeRole> TVisitor>
 	bool ForEachOwnAttribute(TVisitor visit) const {
 		for (ibValueMetaObjectAttributePredefined* slot : m_accountDimensionKinds)   if (!visit(slot, ibOwnAttributeRole::DimensionKind))  return false;
 		for (ibValueMetaObjectAttributePredefined* slot : m_accountDimensionSlots)   if (!visit(slot, ibOwnAttributeRole::DimensionValue)) return false;

@@ -4,6 +4,7 @@
 #include "backend/appDataCtorToken.h"
 
 #include <atomic>
+#include <concepts>   // std::derived_from — the session class CreateSession builds
 #include <functional>
 #include <memory>
 #include <string>
@@ -202,7 +203,7 @@ public:
 	//      that builds SessionT instead of the plain base, of the kind said.
 	//   2. The holder comes back to the caller, which moves it into the
 	//      window it builds. An empty holder means Connect failed.
-	template<class SessionT>
+	template<std::derived_from<ibSession> SessionT>
 	ibSessionHolder CreateSession(ibSessionKind kind = ibSessionKind{});
 
 	// A visitor's session — a wes tab (WebClient), a client of the protocol (ThinClient, ThinDesigner). Caller
@@ -213,7 +214,7 @@ public:
 	// recent WebServer-kind session in the process and attaches subsequent
 	// non-server sessions to it. Single-session apps never register a
 	// WebServer session so their Server() stays null.
-	template<class SessionT>
+	template<std::derived_from<ibSession> SessionT>
 	ibSessionHolder CreateSession(ibSessionKind kind,
 	                              const ibString& presetGuid,
 	                              const ibString& address);

@@ -3,6 +3,8 @@
 #include "firebirdBlobCompression.h"
 #include "backend/databaseLayer/databaseLayerException.h"
 
+#include <bit>   // std::bit_cast — an unsigned BIGINT written with its bits as they are
+
 void ibDatabaseParameterFirebird::RequireParameterBuffer() const
 {
 	if (m_pParameter != nullptr && m_pParameter->sqldata != nullptr)
@@ -176,7 +178,7 @@ void ibDatabaseParameterFirebird::Set(const ibNumber& dblValue)
 					_("Firebird: the value does not fit the BIGINT column it is written to (scaled: %s)"),
 					m_numValue.ToString());
 			}
-			memcpy(&int64val, &bits, sizeof(int64val));
+			int64val = std::bit_cast<int64_t>(bits);
 		}
 		// The same guard the string setter carries, for the same reason: these two branches are
 		// the only numeric ones that write into a buffer the DESCRIBE allocated rather than pointing

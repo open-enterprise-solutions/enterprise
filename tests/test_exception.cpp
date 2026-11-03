@@ -24,11 +24,11 @@
 
 // --- the structural claim, checked at compile time ----------------------------
 TEST(BackendException, IsAStdException) {
-	static_assert(std::is_base_of<std::exception, ibBackendException>::value,
+	static_assert(std::is_base_of_v<std::exception, ibBackendException>,
 		"a generic boundary catches std::exception — a project exception that is not one is invisible there");
-	static_assert(std::is_base_of<ibBackendException, ibBackendCoreException>::value, "");
-	static_assert(std::is_base_of<ibBackendException, ibBackendInterruptException>::value, "");
-	static_assert(std::is_base_of<ibBackendException, ibBackendAccessException>::value, "");
+	static_assert(std::is_base_of_v<ibBackendException, ibBackendCoreException>, "");
+	static_assert(std::is_base_of_v<ibBackendException, ibBackendInterruptException>, "");
+	static_assert(std::is_base_of_v<ibBackendException, ibBackendAccessException>, "");
 	SUCCEED();
 }
 

@@ -35,7 +35,7 @@ TEST(SessionHolder, IsNotADatabaseConnectionHolder) {
     // Composition over inheritance — ibSession should NOT be derived from
     // ibDatabaseConnectionHolder. The holder is a member, accessed via
     // Holder().
-    EXPECT_FALSE((std::is_base_of<ibDatabaseConnectionHolder, ibSession>::value));
+    EXPECT_FALSE((std::is_base_of_v<ibDatabaseConnectionHolder, ibSession>));
 }
 
 TEST(SessionHolder, HolderAccessorReturnsNonNull) {

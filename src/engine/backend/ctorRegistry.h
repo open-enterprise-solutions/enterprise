@@ -1,6 +1,7 @@
 #ifndef __CTOR_REGISTRY_H__
 #define __CTOR_REGISTRY_H__
 
+#include <concepts>   // std::invocable — what ForEach calls on each ctor
 #include <unordered_map>
 #include <typeindex>
 #include <typeinfo>
@@ -172,7 +173,7 @@ public:
 
 	// Iterate every registered ctor (order-independent — a caller that needs a
 	// sorted result sorts it itself). For the rare type / category filters.
-	template <typename Fn> void ForEach(Fn&& fn) const {
+	template <std::invocable<T*> Fn> void ForEach(Fn&& fn) const {
 		for (const auto& entry : m_byClsid) fn(entry.second.get());
 	}
 };

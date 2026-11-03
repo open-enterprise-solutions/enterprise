@@ -349,7 +349,7 @@ void ibGuid::swap(ibGuid& other) noexcept
 ibGuidImpl ibGuid::newGuid(short /*version*/)
 {
 	std::array<unsigned char, 16> data;
-	static_assert(std::is_same<unsigned char[16], uuid_t>::value, "Wrong type!");
+	static_assert(std::is_same_v<unsigned char[16], uuid_t>, "Wrong type!");
 	uuid_generate(data.data());
 	return ibGuid{ std::move(data) };
 }

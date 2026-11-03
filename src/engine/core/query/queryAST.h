@@ -24,6 +24,7 @@
 #include "core/query/queryBalanceRole.h"  // ibBalanceRole — what a projected field is in a balance (ROLE)
 #include "core/query/queryAstExpr.h"      // ibQueryAstExprPtr — the expression's name, which every side hands about
 
+#include <concepts>   // std::invocable — what a walk calls on each child
 #include <vector>
 #include <memory>
 
@@ -192,7 +193,7 @@ struct ibQueryAstExpr
 // deliberately NOT a child — an aggregate inside a nested SELECT folds THAT query's rows and says
 // nothing about this one, and every reader needs that exception.
 // ==========================================================================
-template <typename Fn>
+template <std::invocable<const ibQueryAstExprPtr&> Fn>
 void ibQueryForEachChild(const ibQueryAstExpr& e, Fn visit)
 {
 	for (const ibQueryAstExprPtr& child : { e.m_lhs, e.m_rhs, e.m_arg, e.m_low, e.m_high, e.m_else })
@@ -205,7 +206,7 @@ void ibQueryForEachChild(const ibQueryAstExpr& e, Fn visit)
 	}
 }
 
-template <typename Fn>
+template <std::invocable<ibQueryAstExprPtr&> Fn>
 void ibQueryForEachChild(ibQueryAstExpr& e, Fn visit)
 {
 	for (ibQueryAstExprPtr* child : { &e.m_lhs, &e.m_rhs, &e.m_arg, &e.m_low, &e.m_high, &e.m_else })
@@ -223,7 +224,7 @@ void ibQueryForEachChild(ibQueryAstExpr& e, Fn visit)
 // visible to the column readers as columns: `SUM(DATEDIFF(a, b, Day))` was refused with `Day`
 // unknown (measured 2026-09-10 on the payroll demo). A reader of COLUMNS walks this; CloneExpr keeps
 // the full walk above, because a copy copies the words too.
-template <typename Fn>
+template <std::invocable<const ibQueryAstExprPtr&> Fn>
 void ibQueryForEachOperand(const ibQueryAstExpr& e, Fn visit)
 {
 	ibQueryForEachChild(e, [&e, &visit](const ibQueryAstExprPtr& child) {

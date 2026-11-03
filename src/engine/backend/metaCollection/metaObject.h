@@ -3,6 +3,7 @@
 
 #include "backend/propertyManager/propertyManager.h"
 
+#include <concepts>   // std::derived_from — what the finders hand back, what is made a child
 #include <vector>   // ibMetaMenuItem arrives as a vector of these — see CollectContextMenu
 
 #include "backend/backend_form.h"
@@ -695,7 +696,7 @@ public:
 #pragma region __array_h__
 
 	//any
-	template <typename _T1 = ibValueMetaObject>
+	template <std::derived_from<ibValueMetaObject> _T1 = ibValueMetaObject>
 	std::vector<_T1*> GetAnyArrayObject(
 		std::vector<_T1*> array = std::vector<_T1*>()) const {
 		FillArrayObjectByFilter<_T1>(array, {});
@@ -706,14 +707,14 @@ public:
 #pragma region __filter_h__
 
 	//any
-	template <typename _T1 = ibValueMetaObject, typename _T2>
+	template <std::derived_from<ibValueMetaObject> _T1 = ibValueMetaObject, typename _T2>
 	_T1* FindAnyObjectByFilter(const _T2& id) const {
 		return FindObjectByFilter<_T1>(id, {});
 	}
 
 #pragma endregion
 
-	template<typename T, typename... Args>
+	template<std::derived_from<ibValueMetaObject> T, typename... Args>
 	T* CreateMetaObjectAndSetParent(Args&&... args) {
 		const ibValuePtr<T> createdObject = ibValue::CreateObjectValue<T>(args...);
 		wxASSERT(createdObject);

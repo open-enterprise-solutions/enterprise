@@ -66,10 +66,9 @@ public:
 		void (*restore)(const void* src));
 
 	template <typename T>
+		requires std::is_trivially_copyable_v<T> && std::is_trivially_destructible_v<T>
 	static void RegisterTrivial(void (*save)(void* dst), void (*restore)(const void* src))
 	{
-		static_assert(std::is_trivially_copyable<T>::value, "RegisterTrivial wants a trivial type");
-		static_assert(std::is_trivially_destructible<T>::value, "RegisterTrivial wants a trivial type");
 		Register(
 			sizeof(T), alignof(T),
 			[](void* dst) { new (dst) T(); },

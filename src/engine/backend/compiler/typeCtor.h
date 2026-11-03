@@ -3,6 +3,7 @@
 
 #include "backend/backend_core.h"   // ibClassID, ib_clsid_hash, g_valueUndefinedCLSID, ibCtorObjectType
 #include "backend/compiler/value.h"  // every ctor answers with the owner of what it made — a complete ibValue
+#include <concepts>             // std::derived_from — what a ctor makes, what a register holds
 #include <typeinfo>             // std::type_info — Phase 3 pilot (typeid registry)
 #include <type_traits>          // std::is_default_constructible_v — does this type HAVE an empty form
 
@@ -10,7 +11,7 @@ class ibCtorAbstractType;
 
 /////////////////////////////////////////////////////////////////////////
 
-template<typename typeCtor>
+template<std::derived_from<ibCtorAbstractType> typeCtor>
 class value_register {
 	class ibCtorAbstractType* m_so;
 public:
@@ -106,7 +107,7 @@ public:
 /////////////////////////////////////////////////////////////////////////
 // value_register — after the ctor it registers is complete (the refusal names it)
 
-template<typename typeCtor>
+template<std::derived_from<ibCtorAbstractType> typeCtor>
 value_register<typeCtor>::value_register(typeCtor* so) : m_so(so) {
 	try {
 		if (m_so != nullptr) {
@@ -122,7 +123,7 @@ value_register<typeCtor>::value_register(typeCtor* so) : m_so(so) {
 	}
 }
 
-template<typename typeCtor>
+template<std::derived_from<ibCtorAbstractType> typeCtor>
 value_register<typeCtor>::~value_register() {
 	try {
 		if (m_so != nullptr) {
@@ -171,7 +172,7 @@ public:
 };
 
 //simple types
-template <class T>
+template <std::derived_from<ibValue> T>
 class ibCtorPrimitiveType : public ibCtorSingleType {
 	ibValueTypes m_valType;
 
@@ -202,8 +203,8 @@ GENERATE_REGISTER(class_name, wxMAKE_UNIQUE_NAME(s_cs_reg_s_), new ibCtorPrimiti
 PRIMITIVE_TYPE_REGISTER_4(class_info, class_name, class_type, primitive_to_clsid(class_name))
 #define PRIMITIVE_TYPE_REGISTER(...) IB_DISPATCH(PRIMITIVE_TYPE_REGISTER_, __VA_ARGS__)
 
-// object value register - array, struct, etc.. 
-template <class T>
+// object value register - array, struct, etc..
+template <std::derived_from<ibValue> T>
 class ibCtorValueType : public ibCtorValueTypeBase {
 
 public:
@@ -237,7 +238,7 @@ VALUE_TYPE_REGISTER_3(class_info, class_name, value_to_clsid(class_name))
 #define VALUE_TYPE_REGISTER(...) IB_DISPATCH(VALUE_TYPE_REGISTER_, __VA_ARGS__)
 
 // object with non-create object
-template <class T>
+template <std::derived_from<ibValue> T>
 class ibCtorSystemType : public ibCtorValueTypeBase {
 
 public:
@@ -293,7 +294,7 @@ SYSTEM_TYPE_REGISTER_3(class_info, class_name, system_to_clsid(class_name))
 #define SYSTEM_TYPE_REGISTER(...) IB_DISPATCH(SYSTEM_TYPE_REGISTER_, __VA_ARGS__)
 
 //enumeration register - windowOrient, etc...
-template <class T>
+template <std::derived_from<ibValue> T>
 class ibCtorEnumType : public ibCtorSingleType {
 
 public:
@@ -329,7 +330,7 @@ ENUM_TYPE_REGISTER_3(class_info, class_name, enum_to_clsid(class_name))
 // A CONTEXT TYPE's object (EnumManager, SystemManager) is MADE for whoever asks — a module manager, for its main module —
 // never kept in here: one object per process was every session's and every configuration's at once, and 1000 sessions
 // raced on it (2026-10-20).
-template <class T>
+template <std::derived_from<ibValue> T>
 class ibCtorContextType : public ibCtorSingleType {
 public:
 	ibCtorContextType(const ibString& className, const ibClassID& clsid) :

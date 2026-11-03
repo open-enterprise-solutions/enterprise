@@ -30,13 +30,13 @@ TEST(ModuleManagerSplit, RuntimeManagerDerivesLightweightBase) {
     // The heavy runtime manager is-a lightweight base — the base carries the
     // editor-facing surface (context, FindCommonModule), the runtime branch
     // adds ProcUnit spin-up / Attach.
-    EXPECT_TRUE((std::is_base_of<ibValueModuleManager, ibValueModuleRuntimeManager>::value));
+    EXPECT_TRUE((std::is_base_of_v<ibValueModuleManager, ibValueModuleRuntimeManager>));
 }
 
 TEST(ModuleManagerSplit, RuntimeConfigurationDerivesRuntimeManager) {
     // The per-session root mm is a runtime configuration — three levels deep.
-    EXPECT_TRUE((std::is_base_of<ibValueModuleRuntimeManager, ibValueModuleManagerRuntimeConfiguration>::value));
-    EXPECT_TRUE((std::is_base_of<ibValueModuleManager, ibValueModuleManagerRuntimeConfiguration>::value));
+    EXPECT_TRUE((std::is_base_of_v<ibValueModuleRuntimeManager, ibValueModuleManagerRuntimeConfiguration>));
+    EXPECT_TRUE((std::is_base_of_v<ibValueModuleManager, ibValueModuleManagerRuntimeConfiguration>));
 }
 
 TEST(ModuleManagerSplit, DesignerHolderDerivesLightweightBaseNotRuntime) {
@@ -44,22 +44,22 @@ TEST(ModuleManagerSplit, DesignerHolderDerivesLightweightBaseNotRuntime) {
     // manager — it owns no ProcUnit / runtime common-module registry. This is
     // the whole point of the split: the editor's read path never touches a
     // fragile runtime unit.
-    EXPECT_TRUE((std::is_base_of<ibValueModuleManager, ibValueModuleManagerDesigner>::value));
-    EXPECT_FALSE((std::is_base_of<ibValueModuleRuntimeManager, ibValueModuleManagerDesigner>::value));
+    EXPECT_TRUE((std::is_base_of_v<ibValueModuleManager, ibValueModuleManagerDesigner>));
+    EXPECT_FALSE((std::is_base_of_v<ibValueModuleRuntimeManager, ibValueModuleManagerDesigner>));
 }
 
 TEST(ModuleManagerSplit, ExternalManagersDeriveRuntimeManager) {
     // External data-processor / report managers are runtime managers (they run
     // the .otl/.orp object's script).
-    EXPECT_TRUE((std::is_base_of<ibValueModuleRuntimeManager, ibValueModuleRuntimeManagerExternalDataProcessor>::value));
-    EXPECT_TRUE((std::is_base_of<ibValueModuleRuntimeManager, ibValueModuleRuntimeManagerExternalReport>::value));
+    EXPECT_TRUE((std::is_base_of_v<ibValueModuleRuntimeManager, ibValueModuleRuntimeManagerExternalDataProcessor>));
+    EXPECT_TRUE((std::is_base_of_v<ibValueModuleRuntimeManager, ibValueModuleRuntimeManagerExternalReport>));
 }
 
 TEST(ModuleManagerSplit, BaseIsAbstract_FindCommonModulePureVirtual) {
     // FindCommonModule was lifted onto the base as a pure virtual (designer and
     // runtime resolve it from their own registries). The base must therefore be
     // abstract — never instantiated directly.
-    EXPECT_TRUE(std::is_abstract<ibValueModuleManager>::value);
+    EXPECT_TRUE(std::is_abstract_v<ibValueModuleManager>);
 }
 
 // ---------------------------------------------------------------------------

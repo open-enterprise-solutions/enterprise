@@ -2,6 +2,7 @@
 #define __DEBUGGER_CLIENT_H__
 
 #include <atomic>   // the flags a connection's thread sets and any thread reads
+#include <concepts>   // std::invocable — what ForEachConnection calls on each connection
 #include <condition_variable>   // the client's end waits for its connections to go
 #include <functional>   // std::function — the deferred call the pack below is wrapped in
 #include <memory>   // the adapter owns its bridges; the client's adapter, watched by what is queued for it
@@ -344,7 +345,7 @@ public:
 	// ⭐ EACH CONNECTION, VISITED UNDER THE LIST'S LOCK — a connection is a thread that deletes itself when it is done,
 	// and its going waits on this lock (DeleteConnection): a connection visited is one alive. It was the list itself,
 	// handed out by reference with the lock already let go, and walked on any thread while its entries died.
-	template <typename Fn> void ForEachConnection(Fn&& visit) const {
+	template <std::invocable<const ibDebuggerClientConnection&> Fn> void ForEachConnection(Fn&& visit) const {
 		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		for (const ibDebuggerClientConnection* connection : m_listConnection)
 			visit(*connection);
@@ -505,7 +506,7 @@ public:
 	// 🛑 THE CLOSURE WATCHES THE ADAPTER, IT DOES NOT POINT AT IT. A connection's thread ends with OnSessionEnd, queued as
 	// the client goes; it ran after the destructor had deleted the adapter and waited on its freed lock — the designer
 	// hung on exit (2026-10-26). An adapter gone tells nobody.
-	template <typename T, typename... TArgs, typename... PArgs>
+	template <std::derived_from<ibDebuggerClientAdapter> T, typename... TArgs, typename... PArgs>
 	void CallAfter(void (T::* method)(TArgs...), PArgs... args) {
 		if (m_adapter != nullptr) {
 			const std::weak_ptr<ibDebuggerClientAdapter> watched = m_adapter;

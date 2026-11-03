@@ -5,6 +5,7 @@
 #include "core/fstring.h"   // ibString - names, values, refusals
 #include "core/xml/xmlNodeType.h"
 
+#include <concepts>
 #include <cstddef>
 #include <deque>
 #include <memory>
@@ -250,7 +251,7 @@ private:
 		bool     m_preserveSpace = false;                       // xml:space="preserve" here: no layout inside
 	};
 
-	template <typename F> void Atomically(F&& write);          // a refused write is undone (xmlText.cpp)
+	template <std::invocable F> void Atomically(F&& write);    // a refused write is undone (xmlText.cpp)
 
 	void CloseStartTag();
 	bool BeforeNode();                                          // the line and the tabs, where they belong

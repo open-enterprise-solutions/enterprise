@@ -22,7 +22,7 @@ public:
 };
 
 // object with non-create object
-template <class T>
+template <std::derived_from<ibValue> T>
 class ibCtorControlType : public ibCtorControlTypeBase {
 public:
 
@@ -30,33 +30,33 @@ public:
 		: ibCtorControlTypeBase(className, classType, typeid(T), clsid) {
 	}
 
-	virtual ibPicture GetClassIcon() const {
+	virtual ibPicture GetClassIcon() const override {
 		return T::GetIconGroup();
 	}
 
-	virtual ibCtorObjectType GetObjectTypeCtor() const {
+	virtual ibCtorObjectType GetObjectTypeCtor() const override {
 		return ibCtorObjectType::ibCtorObjectType_object_control;
 	}
 
-	virtual void CallAsEvent(ibCtorObjectTypeEvent event) {
+	virtual void CallEvent(ibCtorObjectTypeEvent event) override {
 		if (event == ibCtorObjectTypeEvent::ibCtorObjectTypeEvent_Register)
 			T::OnRegisterObject(GetClassName(), this);
 		else if (event == ibCtorObjectTypeEvent::ibCtorObjectTypeEvent_UnRegister)
 			T::OnUnRegisterObject(GetClassName());
 	}
 
-	virtual ibValue CreateObject() const {
+	virtual ibValue CreateObject() const override {
 		return ibValuePtr<T>(new T());   // a form is also an ibBackendValue — the holder says which side answers
 	}
 };
 
-template <class T>
+template <std::derived_from<ibValue> T>
 class ibCtorSystemControlType : public ibCtorControlType<T> {
 public:
 	ibCtorSystemControlType(const ibString& className, const ibString& classType, const ibClassID& clsid)
 		: ibCtorControlType<T>(className, classType, clsid) {
 	}
-	virtual bool IsControlSystem() const {
+	virtual bool IsControlSystem() const override {
 		return true;
 	}
 };

@@ -33,6 +33,7 @@
 #include <atomic>
 #include <chrono>
 #include <climits>
+#include <concepts>
 #include <condition_variable>
 #include <deque>
 #include <functional>
@@ -42,7 +43,6 @@
 #include <shared_mutex>
 #include <string>
 #include <thread>
-#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -852,7 +852,7 @@ private:
 
 namespace ib_detail {
 
-template<class SessionT>
+template<std::derived_from<ibSession> SessionT>
 inline std::shared_ptr<ibSession> MakeSessionFactory(ibString id, ibSessionKind kind)
 {
 	return std::make_shared<SessionT>(std::move(id), kind);
@@ -864,24 +864,18 @@ inline std::shared_ptr<ibSession> MakeSessionFactory(ibString id, ibSessionKind 
 // post-construction hook, no downcast, no failure branch of its own: an
 // empty holder is the failure, and letting it die is the cleanup.
 
-template<class SessionT>
+template<std::derived_from<ibSession> SessionT>
 ibSessionHolder ibApplicationInstance::CreateSession(ibSessionKind kind)
 {
-	static_assert(std::is_base_of<ibSession, SessionT>::value,
-		"CreateSession<T>: T must derive from ibSession");
-
 	return m_sessionRegistry->CreateSessionOfKind(
 		m_runMode, m_strComputer, kind, &ib_detail::MakeSessionFactory<SessionT>);
 }
 
-template<class SessionT>
+template<std::derived_from<ibSession> SessionT>
 ibSessionHolder ibApplicationInstance::CreateSession(ibSessionKind kind,
                                                  const ibString& presetGuid,
                                                  const ibString& address)
 {
-	static_assert(std::is_base_of<ibSession, SessionT>::value,
-		"CreateSession<T>: T must derive from ibSession");
-
 	return m_sessionRegistry->CreateSessionWithFactory(
 		m_runMode, m_strComputer, kind, presetGuid, address,
 		&ib_detail::MakeSessionFactory<SessionT>);

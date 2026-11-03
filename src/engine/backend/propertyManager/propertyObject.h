@@ -32,6 +32,8 @@ template <class T> class ibValuePtr;
 #include "core/propertyChoiceMode.h"               // ibPropertyChoiceMode — how many of the choices are held
 #include "backend/backend_exception.h"   // ibBackendCoreException — a cell that is not what it is asked for raises
 
+#include <concepts>   // std::derived_from — what CreateProperty and CreateEvent make
+
 ///////////////////////////////////////////////////////////////////////////////
 
 #define propertyDefName		ibT("propertyEvent")
@@ -512,11 +514,11 @@ private:
 class BACKEND_API ibPropertyObject {
 protected:
 
-	template <typename typeProp, typename... Args>
+	template <std::derived_from<ibProperty> typeProp, typename... Args>
 	inline typeProp* CreateProperty(ibPropertyCategory* cat, Args&&... args) {
 		return new typeProp(cat, std::forward<Args>(args)...);
 	}
-	template <typename typeEvent, typename... Args>
+	template <std::derived_from<ibEvent> typeEvent, typename... Args>
 	inline typeEvent* CreateEvent(ibPropertyCategory* cat, Args&&... args) {
 		return new typeEvent(cat, std::forward<Args>(args)...);
 	}

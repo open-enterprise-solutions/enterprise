@@ -2,6 +2,7 @@
 #define __DEBUGGER_CLIENT_H__
 
 #include <algorithm>
+#include <concepts>   // std::invocable — what ForEachConnection calls on each connection
 #include <map>
 #include <memory>   // the adapter owns its bridges
 #include <vector>
@@ -162,7 +163,7 @@ public:
 	void DetachConnection(const wxString& hostName, unsigned short port, bool kill = false) const;
 
 	// Each runtime as the last SearchServer() listed it — the engine's word; here the list is this window's own.
-	template <typename Fn> void ForEachConnection(Fn&& visit) const {
+	template <std::invocable<const ibDebuggerClientConnection&> Fn> void ForEachConnection(Fn&& visit) const {
 		for (const ibDebuggerClientConnection& connection : m_listConnection)
 			visit(connection);
 	}

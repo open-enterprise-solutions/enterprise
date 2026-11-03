@@ -31,6 +31,7 @@ template <class T> class ibValuePtr;
 #include "frmclient/backend/backend_exception.h"   // ibBackendCoreException — a cell that is not what it is asked for raises
 #include "core/propertyChoiceMode.h"               // ibPropertyChoiceMode — how many of the choices are held
 
+#include <concepts>   // std::derived_from — what CreateProperty and CreateEvent make
 #include <memory>   // enable_shared_from_this — a reference to the one shown, kept by an editor
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -437,11 +438,11 @@ private:
 class FRMCLIENT_API ibPropertyObject : public std::enable_shared_from_this<ibPropertyObject> {
 protected:
 
-	template <typename typeProp, typename... Args>
+	template <std::derived_from<ibProperty> typeProp, typename... Args>
 	inline typeProp* CreateProperty(ibPropertyCategory* cat, Args&&... args) {
 		return new typeProp(cat, std::forward<Args>(args)...);
 	}
-	template <typename typeEvent, typename... Args>
+	template <std::derived_from<ibEvent> typeEvent, typename... Args>
 	inline typeEvent* CreateEvent(ibPropertyCategory* cat, Args&&... args) {
 		return new typeEvent(cat, std::forward<Args>(args)...);
 	}

@@ -321,7 +321,7 @@ public:
 		}
 		// Rebuilds the list minus whatever `drop` selects. Order is preserved,
 		// which matters: Build() runs contributors in bind order.
-		template<class Pred>
+		template<std::predicate<const ibBoundNames&> Pred>
 		void RemoveBinderIf(Pred drop) {
 			std::vector<ibBoundNames> kept;
 			kept.reserve(m_binderCount);
@@ -333,7 +333,7 @@ public:
 			for (const auto& e : kept) AddBinder(e);
 			m_buildState = kStale;
 		}
-		template<class F>
+		template<std::invocable<const ibBoundNames&> F>
 		void ForEachBinder(F&& f) const {
 			if (m_binderCount > 0) f(m_binder0);
 			for (const auto& e : m_binders) f(e);
@@ -499,14 +499,14 @@ public:
 		// exactly (ibBackendValueForm was first) and was reordered ibValueFrame-first.
 		// The wxASSERT below catches any future violator on its first bind.
 		template<class C, class M>
+			requires std::derived_from<C, M> && std::derived_from<M, ibValue>
 		void Bind(const C* obj, void (M::*fn)(ibMemberTable&) const) {
-			static_assert(std::is_base_of<M, C>::value || std::is_same<M, C>::value,
-				"Bind: the filler's class must be the object's class or a base of it");
 			wxASSERT_MSG(static_cast<const void*>(static_cast<const ibValue*>(obj)) == static_cast<const void*>(obj),
 				wxT("ibValue must be the FIRST base (offset 0) of a member-binding class - see PROJECT INVARIANT above; make the ibValue-holding base first"));
 			AddBinder(ibBoundNames{ static_cast<const ibValue*>(obj), nullptr, static_cast<ibNameFiller>(fn) });
 		}
 		template<class C, class M>
+			requires std::derived_from<C, M> && std::derived_from<M, ibValue>
 		void Unbind(const C* obj, void (M::*fn)(ibMemberTable&) const) {
 			const ibBoundNames b{ static_cast<const ibValue*>(obj), nullptr, static_cast<ibNameFiller>(fn) };
 			RemoveBinderIf([&b](const ibBoundNames& e) { return e == b; });
@@ -1062,7 +1062,7 @@ public:
 		const ibClassID& clsid = GetIDObjectFromString(className);
 		return CreateObject(clsid, paParams, lSizeArray);
 	}
-	template<typename T, typename... Args>
+	template<std::derived_from<ibValue> T, typename... Args>
 	static ibValue CreateObjectValue(Args&&... args) {
 		const ibClassID& clsid = ibValue::GetTypeIDByRef(typeid(T));
 		if (ibValue::IsRegisterCtor(clsid))

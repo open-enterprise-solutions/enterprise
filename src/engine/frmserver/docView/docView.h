@@ -41,6 +41,7 @@
   #include "wx/stream.h"
 #endif
 
+#include <concepts>   // std::derived_from — what CreateDocument makes
 #include <list>
 #include <vector>
 #include <map>
@@ -548,7 +549,7 @@ public:
     // callers that need the metadata-aware downcast use this directly.
     ibMetaDocument*    GetCurrentMetaDocument() const;
 
-    template <typename T, typename... Args>
+    template <std::derived_from<ibDocument> T, typename... Args>
     T* CreateDocument(Args&&... args) const
     {
         ibDocTemplate* docTemplate = FindTemplateByDocClassInfo(CLASSINFO(T));

@@ -61,9 +61,9 @@ bool ibJobScheduleDescriptionMemory::ReadNode(const ibDataValue& value, ibJobSch
 	// Has before reading, so an absent name leaves the member at its default. That is the
 	// whole forward-compatibility story: a blob written before a field existed must load as "not
 	// restricted", never as "restricted to nothing".
-	const auto readInt = [&root](const ibString& name, auto& target) {
+	const auto readInt = [&root]<typename T>(const ibString& name, T& target) {
 		if (root->Has(name))
-			target = static_cast<typename std::remove_reference<decltype(target)>::type>(root->GetValue<std::int32_t>(name));
+			target = static_cast<T>(root->GetValue<std::int32_t>(name));
 	};
 
 	readInt(ibT("IntervalSeconds"),    s.m_intervalSeconds);
@@ -215,10 +215,10 @@ bool ibJobScheduleDescriptionMemory::ReadBuffer(const void* data, size_t length,
 	// carry, rather than a mix of the caller's previous value and this one.
 	ibJobScheduleDescription read;
 
-	const auto takeInt = [&cursor](auto& target) {
+	const auto takeInt = [&cursor]<typename T>(T& target) {
 		std::uint32_t raw = 0;
 		if (!cursor.Take(raw)) return false;
-		target = static_cast<typename std::remove_reference<decltype(target)>::type>(raw);
+		target = static_cast<T>(raw);
 		return true;
 	};
 

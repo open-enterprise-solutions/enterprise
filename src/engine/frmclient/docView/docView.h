@@ -45,6 +45,7 @@
 
 #include "wx/fdrepdlg.h"
 
+#include <concepts>   // std::derived_from — what CreateDocument makes
 #include <list>
 #include <vector>
 #include <map>
@@ -522,7 +523,7 @@ public:
 
     ibFrontendDocTemplate*     FindTemplateByDocClassInfo(const wxClassInfo* classInfo) const;
 
-    template <typename T, typename... Args>
+    template <std::derived_from<ibFrontendDocument> T, typename... Args>
     T* CreateDocument(Args&&... args) const
     {
         ibFrontendDocTemplate* docTemplate = FindTemplateByDocClassInfo(CLASSINFO(T));
