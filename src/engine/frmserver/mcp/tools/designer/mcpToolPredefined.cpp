@@ -74,7 +74,9 @@ const ibArg& ArgDescription()
 const ibArg& ArgCode()
 {
 	static const ibArg s_a(ibT("code"), ibArg::Kind::Text,
-		ibMcpText("The item's code, when the object has a code at all."));
+		ibMcpText("The item's code, when the object has a code at all. It must fit the object's CodeLength "
+		          "and CodeType (digits only for a Number code) - one that does not is refused by config_apply, naming the "
+		          "item. Empty, it is numbered when the item is declared: the next after the codes the items have."));
 	return s_a;
 }
 
