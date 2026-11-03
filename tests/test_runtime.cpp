@@ -2018,17 +2018,18 @@ TEST(RuntimeTest, ALambdaTakesOnlyTheVariablesItReferences) {
 	// `small` is taken, `big` is not — by the slots Make's own table gives them.
 	const ibRunCaptureContext* const rung = takesSmall->CapturedAt(0);
 	ASSERT_NE(rung->m_currentFunction, nullptr);
-	long big = -1, small = -1;
+	// Not `small`: <windows.h> (rpcndr.h) defines it as `char`.
+	long bigSlot = -1, smallSlot = -1;
 	for (const auto& local : rung->m_currentFunction->m_listLocals) {
-		if (local.m_strRealName.IsSameAs(wxT("big"), false)) big = local.m_slotIndex;
-		if (local.m_strRealName.IsSameAs(wxT("small"), false)) small = local.m_slotIndex;
+		if (local.m_strRealName.IsSameAs(wxT("big"), false)) bigSlot = local.m_slotIndex;
+		if (local.m_strRealName.IsSameAs(wxT("small"), false)) smallSlot = local.m_slotIndex;
 	}
-	ASSERT_GE(big, 0);
-	ASSERT_GE(small, 0);
-	ASSERT_LT(small, rung->GetLocalCount());
-	EXPECT_NE(rung->m_pRefLocVars[small], &rung->m_pLocVars[small]) << "'small' was not taken";
-	EXPECT_EQ(rung->m_pRefLocVars[small]->GetInteger(), 5);
-	EXPECT_TRUE(big >= rung->GetLocalCount() || rung->m_pRefLocVars[big] == &rung->m_pLocVars[big])
+	ASSERT_GE(bigSlot, 0);
+	ASSERT_GE(smallSlot, 0);
+	ASSERT_LT(smallSlot, rung->GetLocalCount());
+	EXPECT_NE(rung->m_pRefLocVars[smallSlot], &rung->m_pLocVars[smallSlot]) << "'small' was not taken";
+	EXPECT_EQ(rung->m_pRefLocVars[smallSlot]->GetInteger(), 5);
+	EXPECT_TRUE(bigSlot >= rung->GetLocalCount() || rung->m_pRefLocVars[bigSlot] == &rung->m_pLocVars[bigSlot])
 		<< "'big' was taken though nothing references it";
 }
 
