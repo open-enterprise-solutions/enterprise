@@ -82,7 +82,7 @@ void ibDataProcessorTree::FillData(ibDataNode& root)
 	// forms
 	ibDataNode& forms = AppendGroupItem(root, g_metaFormCLSID, _("Forms"));
 	for (auto metaForm : commonMetadata->GetFormArrayObject()) {
-		if (metaForm->IsDeleted() || metaForm == m_askedForm)   // gone, or not made yet: its kind is being asked
+		if (metaForm->IsDeleted() || metaForm == m_askedObject)   // gone, or not made yet: its kind is being asked
 			continue;
 		AppendItem(forms, metaForm);
 	}

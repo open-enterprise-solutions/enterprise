@@ -23,7 +23,6 @@
 #include "frmserver/docView/templates/designer/docViewInterfaceEdit.h"
 #include "frmserver/docView/templates/designer/docViewModuleEdit.h"
 #include "frmserver/docView/templates/designer/docViewRoleEdit.h"
-#include "frmserver/docView/templates/designer/docViewComposerEdit.h"
 #include "frmserver/docView/templates/designer/docViewSpreadsheetEdit.h"
 
 #include "core/fileKind.h"   // extensions live in one table, not at each call site
@@ -46,17 +45,16 @@ ibDocManagerDesigner::ibDocManagerDesigner()
 	// …and a form — a common form and an object's: its module's text and the form itself, edited by the client.
 	AddDocTemplate(g_metaCommonFormCLSID, CLASSINFO(ibFormDesignDocument), CLASSINFO(ibFormDesignView));
 	AddDocTemplate(g_metaFormCLSID, CLASSINFO(ibFormDesignDocument), CLASSINFO(ibFormDesignView));
-	// …and a template's sheet — a common template and an object's.
-	AddDocTemplate(g_metaCommonTemplateCLSID, CLASSINFO(ibSpreadsheetTemplateDocument), CLASSINFO(ibSpreadsheetTemplateView));
-	AddDocTemplate(g_metaTemplateCLSID, CLASSINFO(ibSpreadsheetTemplateDocument), CLASSINFO(ibSpreadsheetTemplateView));
+	// …and a template — a common template and an object's: its sheet, or a report's composer's composition panel over its
+	// description, as the desktop's designer opened it (ibTemplateDocument makes its kind's view).
+	AddDocTemplate(g_metaCommonTemplateCLSID, CLASSINFO(ibTemplateDocument), CLASSINFO(ibSpreadsheetTemplateView));
+	AddDocTemplate(g_metaTemplateCLSID, CLASSINFO(ibTemplateDocument), CLASSINFO(ibSpreadsheetTemplateView));
 	// …and the checkable trees over a metaobject — a section's objects; a common attribute opens on its composition and
 	// a functional option on its members, the same gesture; a role on its rights.
 	AddDocTemplate(g_metaSectionCLSID, CLASSINFO(ibInterfaceCompositionDocument), CLASSINFO(ibInterfaceCompositionView));
 	AddDocTemplate(g_metaCommonAttributeCLSID, CLASSINFO(ibCommonAttributeCompositionDocument), CLASSINFO(ibCommonAttributeCompositionView));
 	AddDocTemplate(g_metaFunctionalOptionCLSID, CLASSINFO(ibFunctionalOptionMembersDocument), CLASSINFO(ibFunctionalOptionMembersView));
 	AddDocTemplate(g_metaRoleCLSID, CLASSINFO(ibRoleRightsDocument), CLASSINFO(ibRoleRightsView));
-	// …and a report's composer — the composition panel over its description, as the desktop's designer opened it.
-	AddDocTemplate(g_metaComposerCLSID, CLASSINFO(ibComposerCompositionDocument), CLASSINFO(ibComposerCompositionView));
 
 	// The configuration tree — its doors; the rows are the frame's (ibClientFrameDesigner).
 	RegisterSchema(ibProtocol::ibSchema::ibKind::MetaData, std::make_unique<ibSchemaMetaData>());

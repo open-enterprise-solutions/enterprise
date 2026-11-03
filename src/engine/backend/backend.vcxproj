@@ -188,8 +188,7 @@
     <ClInclude Include="metaCollection\metaCommonAttributeObject.h" />
     <ClInclude Include="metaCollection\metaObjectComposite.h" />
     <ClInclude Include="metaCollection\metaFormObject.h" />
-    <ClInclude Include="metaCollection\metaComposerObject.h" />
-    <ClInclude Include="metaCollection\metaSpreadsheetObject.h" />
+    <ClInclude Include="metaCollection\metaTemplateObject.h" />
     <ClInclude Include="metaCollection\metaModuleObject.h" />
     <ClInclude Include="metaCollection\metaDiff.h" />
     <ClInclude Include="metaCollection\metaGroups.h" />
@@ -308,7 +307,6 @@
     <ClInclude Include="propertyManager\property\propertyEnum.h" />
     <ClInclude Include="propertyManager\property\propertyFont.h" />
     <ClInclude Include="propertyManager\property\propertyForm.h" />
-    <ClInclude Include="propertyManager\property\propertyComposition.h" />
     <ClInclude Include="propertyManager\property\propertyDataComposition.h" />
     <ClInclude Include="propertyManager\property\propertyDynamicList.h" />
     <ClInclude Include="propertyManager\property\propertyDynamicSource.h" />
@@ -334,7 +332,7 @@
     <ClInclude Include="propertyManager\property\propertySource.h" />
     <ClInclude Include="propertyManager\property\propertyString.h" />
     <ClInclude Include="propertyManager\property\propertyFormat.h" />
-    <ClInclude Include="propertyManager\property\propertySpreadsheet.h" />
+    <ClInclude Include="propertyManager\property\propertyTemplate.h" />
     <ClInclude Include="propertyManager\property\propertyType.h" />
     <ClInclude Include="propertyManager\property\variant\variantAction.h" />
     <ClInclude Include="propertyManager\property\variant\variantComposition.h" />
@@ -352,7 +350,7 @@
     <ClInclude Include="propertyManager\property\variant\variantRecord.h" />
     <ClInclude Include="propertyManager\property\variant\variantCommandSource.h" />
     <ClInclude Include="propertyManager\property\variant\variantSource.h" />
-    <ClInclude Include="propertyManager\property\variant\variantSpreadsheet.h" />
+    <ClInclude Include="propertyManager\property\variant\variantTemplate.h" />
     <ClInclude Include="propertyManager\property\variant\variantTranslate.h" />
     <ClInclude Include="propertyManager\property\variant\variantType.h" />
     <ClInclude Include="roleHelper.h" />
@@ -554,12 +552,9 @@
     <ClCompile Include="metaCollection\metaFormObjectMenu.cpp" />
     <ClCompile Include="metaCollection\metaFormObjectProperty.cpp" />
     <ClCompile Include="metaCollection\metaFormObject_res.cpp" />
-    <ClCompile Include="metaCollection\metaComposerObject.cpp" />
-    <ClCompile Include="metaCollection\metaComposerObjectMenu.cpp" />
-    <ClCompile Include="metaCollection\metaComposerObject_res.cpp" />
-    <ClCompile Include="metaCollection\metaSpreadsheetObject.cpp" />
-    <ClCompile Include="metaCollection\metaSpreadsheetObjectMenu.cpp" />
-    <ClCompile Include="metaCollection\metaSpreadsheetObject_res.cpp" />
+    <ClCompile Include="metaCollection\metaTemplateObject.cpp" />
+    <ClCompile Include="metaCollection\metaTemplateObjectMenu.cpp" />
+    <ClCompile Include="metaCollection\metaTemplateObject_res.cpp" />
     <ClCompile Include="metaCollection\metaSectionObject.cpp" />
     <ClCompile Include="metaCollection\metaCommandObject.cpp" />
     <ClCompile Include="metaCollection\metaCommandObjectMenu.cpp" />
@@ -813,7 +808,6 @@
     <ClCompile Include="propertyManager\property\propertyEnum.cpp" />
     <ClCompile Include="propertyManager\property\propertyFont.cpp" />
     <ClCompile Include="propertyManager\property\propertyForm.cpp" />
-    <ClCompile Include="propertyManager\property\propertyComposition.cpp" />
     <ClCompile Include="propertyManager\property\propertyDataComposition.cpp" />
     <ClCompile Include="propertyManager\property\propertyDynamicList.cpp" />
     <ClCompile Include="propertyManager\property\propertyDynamicSource.cpp" />
@@ -839,7 +833,7 @@
     <ClCompile Include="propertyManager\property\propertySource.cpp" />
     <ClCompile Include="propertyManager\property\propertyString.cpp" />
     <ClCompile Include="propertyManager\property\propertyStringExt.cpp" />
-    <ClCompile Include="propertyManager\property\propertySpreadsheet.cpp" />
+    <ClCompile Include="propertyManager\property\propertyTemplate.cpp" />
     <ClCompile Include="propertyManager\property\propertyType.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantAction.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantDynamicSource.cpp" />
@@ -856,7 +850,7 @@
     <ClCompile Include="propertyManager\property\variant\variantSize.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantRecord.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantSource.cpp" />
-    <ClCompile Include="propertyManager\property\variant\variantSpreadsheet.cpp" />
+    <ClCompile Include="propertyManager\property\variant\variantTemplate.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantType.cpp" />
     <ClCompile Include="roleHelper.cpp" />
     <ClCompile Include="interfaceHelper.cpp" />

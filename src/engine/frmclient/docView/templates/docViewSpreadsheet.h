@@ -63,7 +63,7 @@ protected:
 // ibTextDocument: ibFrontendDocument and wxTextCtrl married
 // ----------------------------------------------------------------------------
 
-#include "frmclient/backend/metaCollection/metaSpreadsheetObject.h"
+#include "frmclient/backend/metaCollection/metaTemplateObject.h"
 
 class FRMCLIENT_API ibSpreadsheetDocument : public ibMetaDocument {
 public:

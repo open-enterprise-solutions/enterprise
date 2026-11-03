@@ -7,7 +7,7 @@
 #include "backend/metaCollection/metaObjectComposite.h"   // ibValueMetaObjectCompositeData (base) + FillArrayObjectByFilter templates
 #include "backend/metaCollection/metaFormObject.h"        // ibValueMetaObjectFormBase + ibBackendCommandItem (bases), ibBackendValueForm, defaultFormType (ibSelectorDataType comes transitively via backend_type.h)
 #include "backend/metaCollection/metaCommandObject.h"      // ibValueMetaObjectCommand — GetCommandArrayObject returns the real command type
-#include "backend/metaCollection/metaSpreadsheetObject.h" // ibValueMetaObjectSpreadsheetBase
+#include "backend/metaCollection/metaTemplateObject.h"    // ibValueMetaObjectTemplateBase
 
 class BACKEND_API ibSourceDataObject;
 class BACKEND_API ibValueDataObject;                       // the element a metaobject is asked to limit a value by (valueInfo.h)
@@ -192,9 +192,9 @@ public:
 	}
 
 	//grid
-	std::vector<ibValueMetaObjectSpreadsheetBase*> GetTemplateArrayObject(
-		std::vector<ibValueMetaObjectSpreadsheetBase*> array = std::vector<ibValueMetaObjectSpreadsheetBase*>()) const {
-		FillArrayObjectByFilter<ibValueMetaObjectSpreadsheetBase>(array, { g_metaTemplateCLSID });
+	std::vector<ibValueMetaObjectTemplateBase*> GetTemplateArrayObject(
+		std::vector<ibValueMetaObjectTemplateBase*> array = std::vector<ibValueMetaObjectTemplateBase*>()) const {
+		FillArrayObjectByFilter<ibValueMetaObjectTemplateBase>(array, { g_metaTemplateCLSID });
 		return array;
 	}
 
@@ -212,8 +212,8 @@ public:
 
 	//grid
 	template <typename _T1>
-	ibValueMetaObjectSpreadsheetBase* FindTemplateObjectByFilter(const _T1& id) const {
-		return FindObjectByFilter<ibValueMetaObjectSpreadsheetBase>(id, { g_metaCommonTemplateCLSID, g_metaTemplateCLSID });
+	ibValueMetaObjectTemplateBase* FindTemplateObjectByFilter(const _T1& id) const {
+		return FindObjectByFilter<ibValueMetaObjectTemplateBase>(id, { g_metaCommonTemplateCLSID, g_metaTemplateCLSID });
 	}
 
 #pragma endregion 
@@ -257,7 +257,8 @@ public:
 
 #pragma region _template_builder_h_
 
-	class ibValueSpreadsheetDocument* GetTemplate(const ibString& strTemplateName) const;
+	// A fresh value of the template's kind — a spreadsheet document, or a report's composition.
+	ibValue GetTemplate(const ibString& strTemplateName) const;
 
 #pragma endregion
 

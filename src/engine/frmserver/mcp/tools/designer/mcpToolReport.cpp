@@ -38,7 +38,7 @@
 #include "core/description/spreadsheetDescription.h"             // …said against the report's own (ibDefaultSpreadsheetFont())
 #include "backend/composition/drivers/compositionDriver.h"    // …as the parts it changes (ibCompositionFont)
 #include "backend/system/value/valueSpreadsheet.h"   // …and an alignment, the sheet's own enumeration
-#include "backend/metaCollection/metaComposerObject.h"
+#include "backend/metaCollection/metaTemplateObject.h"
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metaCollection/genericData.h"   // ResolveQueryConstant — a named item as a value
 #include "backend/objCtor.h"                      // ibCtorMetaValueType — a type looked up by name
@@ -63,8 +63,8 @@ using ibArg = ibMcpTool::ibMcpArgument;
 const ibArg& ArgId()
 {
 	static const ibArg s_a(ibT("id"), ibArg::Kind::Whole,
-		ibMcpText("The composer's NodeId - a report declares one, metadata_get on the report "
-			  "lists it among its children."), /*required*/ true);
+		ibMcpText("The composer's NodeId - a template of the composer kind, under a report or any other object; "
+			  "metadata_get on its owner lists it among its children."), /*required*/ true);
 	return s_a;
 }
 
@@ -381,22 +381,13 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibValueMetaObject* object = ibMcpObjectNamed(params, refusal);
-		if (object == nullptr)
+		ibValueMetaObjectTemplate* composer = ibMcpComposerNamed(params, refusal);
+		if (composer == nullptr)
 			return false;
 
-		ibValueMetaObjectComposer* composer =
-			object->ConvertToType<ibValueMetaObjectComposer>();
-		if (composer == nullptr) {
-			refusal = ibString::Format(
-				ibMcpText("'%s' is not a composer. A report declares one under itself."),
-				object->GetName());
-			return false;
-		}
+		const ibCompositionDescription& composition = composer->GetTemplateDesc().GetCompositionDesc();
 
-		const ibCompositionDescription& composition = composer->GetCompositionDesc();
-
-		result.SetValue(ibT("composer"), object->GetName());
+		result.SetValue(ibT("composer"), composer->GetName());
 
 		// ⭐⭐ THE COMPOSITION SAYS ITSELF, AND SERIALISATION LIVES IN ONE PLACE.
 		//
@@ -423,7 +414,7 @@ public:
 		if (!ibCompositionDescriptionMemory::WriteNode(result, composition)) {
 			refusal = ibString::Format(
 				ibMcpText("'%s' could not describe itself. The composition is there; reading it out failed."),
-				object->GetName());
+				composer->GetName());
 			return false;
 		}
 
@@ -454,23 +445,6 @@ std::vector<ibQueryConstructorField> FieldsOf(const ibCompositionDescription& co
 	ibString& fault)
 {
 	return ibQueryFieldsOfText(composition.m_query, activeMetaData, &fault);
-}
-
-// The composer a caller named, with the refusals said in words.
-ibValueMetaObjectComposer* FindComposer(const ibDataNode& params, ibString& refusal)
-{
-	ibValueMetaObject* object = ibMcpObjectNamed(params, refusal);
-	if (object == nullptr)
-		return nullptr;
-
-	ibValueMetaObjectComposer* composer = object->ConvertToType<ibValueMetaObjectComposer>();
-	if (composer == nullptr) {
-		refusal = ibString::Format(
-			ibMcpText("'%s' is not a composer. A report declares one under itself."), object->GetName());
-		return nullptr;
-	}
-
-	return composer;
 }
 
 // ⭐⭐ THE REFUSAL THAT MATTERS. A grouping by a path the query never projected is
@@ -527,7 +501,7 @@ bool PathIsOffered(const ibCompositionDescription& composition,
 // with these verbs (Max, 2026-09-02: *"you keep missing them - you do not name the variant, and
 // you do not say the selected fields"*):
 //   · a variant with NO NAME - nothing for a person to pick, and the configuration will refuse to
-//     save (ibValueMetaObjectComposer::OnSaveMetaObject);
+//     save (ibValueMetaObjectTemplate::OnSaveMetaObject);
 //   · NO SELECTED FIELDS - a report that groups and totals and shows no columns at all.
 // Neither is an error at the moment it happens, which is exactly why it survives to the end: the
 // composer is valid, the calls all succeeded, and the emptiness appears in front of a user.
@@ -980,13 +954,13 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibValueMetaObjectComposer* composer = FindComposer(params, refusal);
+		ibValueMetaObjectTemplate* composer = ibMcpComposerNamed(params, refusal);
 		if (composer == nullptr)
 			return false;
 
 		ibString fault;
 		const std::vector<ibQueryConstructorField> fields =
-			FieldsOf(composer->GetCompositionDesc(), fault);
+			FieldsOf(composer->GetTemplateDesc().GetCompositionDesc(), fault);
 
 		std::vector<ibDataValue> out;
 		for (const ibQueryConstructorField& field : fields) {
@@ -1064,11 +1038,11 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibValueMetaObjectComposer* composer = FindComposer(params, refusal);
+		ibValueMetaObjectTemplate* composer = ibMcpComposerNamed(params, refusal);
 		if (composer == nullptr)
 			return false;
 
-		ibCompositionDescription composition = composer->GetCompositionDesc();
+		ibCompositionDescription composition = composer->GetTemplateDesc().GetCompositionDesc();
 
 		ibVariantDescription* variant =
 			VariantOf(composition, ArgVariant().Text(params), refusal);
@@ -1145,7 +1119,7 @@ public:
 		}
 
 		if (tree || !path.IsEmpty()) {
-			composer->SetCompositionDesc(composition);
+			composer->SetTemplateDesc(composition);
 			activeMetaData->Modify(true);
 		}
 
@@ -1194,11 +1168,11 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibValueMetaObjectComposer* composer = FindComposer(params, refusal);
+		ibValueMetaObjectTemplate* composer = ibMcpComposerNamed(params, refusal);
 		if (composer == nullptr)
 			return false;
 
-		ibCompositionDescription composition = composer->GetCompositionDesc();
+		ibCompositionDescription composition = composer->GetTemplateDesc().GetCompositionDesc();
 
 		ibVariantDescription* variant =
 			VariantOf(composition, ArgVariant().Text(params), refusal);
@@ -1238,7 +1212,7 @@ public:
 				lines.push_back({ path, ascending });
 		}
 
-		composer->SetCompositionDesc(composition);
+		composer->SetTemplateDesc(composition);
 		activeMetaData->Modify(true);
 
 		std::vector<ibDataValue> order;
@@ -1364,11 +1338,11 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibValueMetaObjectComposer* composer = FindComposer(params, refusal);
+		ibValueMetaObjectTemplate* composer = ibMcpComposerNamed(params, refusal);
 		if (composer == nullptr)
 			return false;
 
-		ibCompositionDescription composition = composer->GetCompositionDesc();
+		ibCompositionDescription composition = composer->GetTemplateDesc().GetCompositionDesc();
 
 		ibVariantDescription* variant =
 			VariantOf(composition, ArgVariant().Text(params), refusal);
@@ -1416,7 +1390,7 @@ public:
 			said->Say(word.first, !word.second.IsEmpty(), ibStoreValue(word.second));
 
 		if (!words.empty()) {
-			composer->SetCompositionDesc(composition);
+			composer->SetTemplateDesc(composition);
 			activeMetaData->Modify(true);
 		}
 
@@ -1647,11 +1621,11 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibValueMetaObjectComposer* composer = FindComposer(params, refusal);
+		ibValueMetaObjectTemplate* composer = ibMcpComposerNamed(params, refusal);
 		if (composer == nullptr)
 			return false;
 
-		ibCompositionDescription composition = composer->GetCompositionDesc();
+		ibCompositionDescription composition = composer->GetTemplateDesc().GetCompositionDesc();
 
 		ibVariantDescription* variant =
 			VariantOf(composition, ArgVariant().Text(params), refusal);
@@ -1766,7 +1740,7 @@ public:
 		}
 
 		if (changed) {
-			composer->SetCompositionDesc(composition);
+			composer->SetTemplateDesc(composition);
 			activeMetaData->Modify(true);
 		}
 
@@ -1846,12 +1820,12 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibValueMetaObjectComposer* composer = FindComposer(params, refusal);
+		ibValueMetaObjectTemplate* composer = ibMcpComposerNamed(params, refusal);
 		if (composer == nullptr)
 			return false;
 
 		ibMetaData* metaData = activeMetaData;
-		ibCompositionDescription composition = composer->GetCompositionDesc();
+		ibCompositionDescription composition = composer->GetTemplateDesc().GetCompositionDesc();
 
 		const ibString name = ArgName().Text(params);
 
@@ -1944,7 +1918,7 @@ public:
 				ibStoreValue(found->m_value, given);
 		}
 
-		composer->SetCompositionDesc(composition);
+		composer->SetTemplateDesc(composition);
 		activeMetaData->Modify(true);
 
 		std::vector<ibDataValue> declared;
@@ -2011,11 +1985,11 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibValueMetaObjectComposer* composer = FindComposer(params, refusal);
+		ibValueMetaObjectTemplate* composer = ibMcpComposerNamed(params, refusal);
 		if (composer == nullptr)
 			return false;
 
-		ibCompositionDescription composition = composer->GetCompositionDesc();
+		ibCompositionDescription composition = composer->GetTemplateDesc().GetCompositionDesc();
 
 		ibVariantDescription* variant =
 			VariantOf(composition, ArgVariant().Text(params), refusal);
@@ -2105,7 +2079,7 @@ public:
 		if (!refused.empty())
 			result.AddField(ibT("refused"), ibDataValue::Array(refused));
 
-		composer->SetCompositionDesc(composition);
+		composer->SetTemplateDesc(composition);
 		activeMetaData->Modify(true);
 
 		// ANSWERED WITH THE WHOLE ORDER, because that is what was changed - a caller adding three
@@ -2199,11 +2173,11 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibValueMetaObjectComposer* composer = FindComposer(params, refusal);
+		ibValueMetaObjectTemplate* composer = ibMcpComposerNamed(params, refusal);
 		if (composer == nullptr)
 			return false;
 
-		ibCompositionDescription composition = composer->GetCompositionDesc();
+		ibCompositionDescription composition = composer->GetTemplateDesc().GetCompositionDesc();
 
 		const ibString path = ArgOnePath().Text(params);
 		if (path.IsEmpty()) {
@@ -2276,7 +2250,7 @@ public:
 				format.IsEmpty() ? ibDataNode() : ibStoreValue(ibValue(format)));
 		}
 
-		composer->SetCompositionDesc(composition);
+		composer->SetTemplateDesc(composition);
 		activeMetaData->Modify(true);
 
 		result.SetValue(ibT("path"), path);
@@ -2304,7 +2278,7 @@ MCP_TOOL_REGISTER_DESIGNER(ibMcpToolReportField);
 //
 // 🛑 THE NAME IS NOT DECORATION, which is why this verb exists at all. It is the whole of what a
 // variant adds to a setting, and a nameless one is a variant nobody can choose - so the composer
-// now refuses to save with one (ibValueMetaObjectComposer::OnSaveMetaObject). A rule with no door
+// now refuses to save with one (ibValueMetaObjectTemplate::OnSaveMetaObject). A rule with no door
 // to satisfy it would be a trap; this is the door.
 class ibMcpToolReportVariant : public ibMcpTool {
 public:
@@ -2337,11 +2311,11 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibValueMetaObjectComposer* composer = FindComposer(params, refusal);
+		ibValueMetaObjectTemplate* composer = ibMcpComposerNamed(params, refusal);
 		if (composer == nullptr)
 			return false;
 
-		ibCompositionDescription composition = composer->GetCompositionDesc();
+		ibCompositionDescription composition = composer->GetTemplateDesc().GetCompositionDesc();
 
 		const ibString name = ArgName().Text(params);
 		const ibString synonym = ArgSynonym().Text(params);
@@ -2422,7 +2396,7 @@ public:
 				variant->m_synonym = synonym;
 		}
 
-		composer->SetCompositionDesc(composition);
+		composer->SetTemplateDesc(composition);
 		activeMetaData->Modify(true);
 
 		// ANSWERED WITH THE WHOLE LIST, so a caller sees what the picker will show without asking
@@ -2471,11 +2445,11 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibValueMetaObjectComposer* composer = FindComposer(params, refusal);
+		ibValueMetaObjectTemplate* composer = ibMcpComposerNamed(params, refusal);
 		if (composer == nullptr)
 			return false;
 
-		ibCompositionDescription composition = composer->GetCompositionDesc();
+		ibCompositionDescription composition = composer->GetTemplateDesc().GetCompositionDesc();
 
 		ibVariantDescription* variant =
 			VariantOf(composition, ArgVariant().Text(params), refusal);
@@ -2500,7 +2474,7 @@ public:
 
 			structure.erase(found);
 
-			composer->SetCompositionDesc(composition);
+			composer->SetTemplateDesc(composition);
 			activeMetaData->Modify(true);
 
 			result.AddField(ibT("removed"), ibDataValue::Bool(true));
@@ -2520,7 +2494,7 @@ public:
 		output.m_name = name;
 		variant->m_settings.m_structure.push_back(output);
 
-		composer->SetCompositionDesc(composition);
+		composer->SetTemplateDesc(composition);
 		activeMetaData->Modify(true);
 
 		result.AddField(ibT("added"), ibDataValue::Bool(true));
@@ -2576,11 +2550,11 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibValueMetaObjectComposer* composer = FindComposer(params, refusal);
+		ibValueMetaObjectTemplate* composer = ibMcpComposerNamed(params, refusal);
 		if (composer == nullptr)
 			return false;
 
-		ibCompositionDescription composition = composer->GetCompositionDesc();
+		ibCompositionDescription composition = composer->GetTemplateDesc().GetCompositionDesc();
 
 		ibVariantDescription* variant =
 			VariantOf(composition, ArgVariant().Text(params), refusal);
@@ -2658,7 +2632,7 @@ public:
 				return false;
 			}
 
-			composer->SetCompositionDesc(composition);
+			composer->SetTemplateDesc(composition);
 			activeMetaData->Modify(true);
 
 			result.AddField(ibT("removed"), ibDataValue::Int((std::int64_t)(before - levels.size())));
@@ -2718,7 +2692,7 @@ public:
 
 		levels.push_back(level);
 
-		composer->SetCompositionDesc(composition);
+		composer->SetTemplateDesc(composition);
 		activeMetaData->Modify(true);
 
 		result.AddField(ibT("added"), ibDataValue::Bool(true));
@@ -2783,11 +2757,11 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibValueMetaObjectComposer* composer = FindComposer(params, refusal);
+		ibValueMetaObjectTemplate* composer = ibMcpComposerNamed(params, refusal);
 		if (composer == nullptr)
 			return false;
 
-		ibCompositionDescription composition = composer->GetCompositionDesc();
+		ibCompositionDescription composition = composer->GetTemplateDesc().GetCompositionDesc();
 
 		const ibString function = ArgFunction().Text(params);
 		const ibString path = ArgPath().Text(params);
@@ -2809,7 +2783,7 @@ public:
 
 			resources.erase(found);
 
-			composer->SetCompositionDesc(composition);
+			composer->SetTemplateDesc(composition);
 			activeMetaData->Modify(true);
 
 			result.AddField(ibT("removed"), ibDataValue::Bool(true));
@@ -2845,7 +2819,7 @@ public:
 		else
 			composition.m_resources.push_back(resource);
 
-		composer->SetCompositionDesc(composition);
+		composer->SetTemplateDesc(composition);
 		activeMetaData->Modify(true);
 
 		result.AddField(replaced ? ibT("replaced") : ibT("added"), ibDataValue::Bool(true));
@@ -2911,7 +2885,7 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibValueMetaObjectComposer* composer = FindComposer(params, refusal);
+		ibValueMetaObjectTemplate* composer = ibMcpComposerNamed(params, refusal);
 		if (composer == nullptr)
 			return false;
 
@@ -2989,9 +2963,9 @@ public:
 			}
 		}
 
-		ibCompositionDescription composition = composer->GetCompositionDesc();
+		ibCompositionDescription composition = composer->GetTemplateDesc().GetCompositionDesc();
 		composition.m_query = text;
-		composer->SetCompositionDesc(composition);
+		composer->SetTemplateDesc(composition);
 
 		activeMetaData->Modify(true);
 
@@ -3066,18 +3040,9 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibValueMetaObject* object = ibMcpObjectNamed(params, refusal);
-		if (object == nullptr)
+		ibValueMetaObjectTemplate* composer = ibMcpComposerNamed(params, refusal);
+		if (composer == nullptr)
 			return false;
-
-		ibValueMetaObjectComposer* composer =
-			object->ConvertToType<ibValueMetaObjectComposer>();
-		if (composer == nullptr) {
-			refusal = ibString::Format(
-				ibMcpText("'%s' is not a composer. A report declares one under itself."),
-				object->GetName());
-			return false;
-		}
 
 		auto given = params.FindChild(ArgComposition().Name());
 		if (!given) {
@@ -3096,14 +3061,14 @@ public:
 			return false;
 		}
 
-		composer->SetCompositionDesc(composition);
+		composer->SetTemplateDesc(composition);
 		activeMetaData->Modify(true);
 
 		// ANSWERED WITH WHAT IT NOW HOLDS, read back off the composer rather than echoed from the
 		// argument: what was asked for and what was taken are different facts.
 		result.SetValue(ibT("composer"), composer->GetName());
 
-		if (!ibCompositionDescriptionMemory::WriteNode(result, composer->GetCompositionDesc())) {
+		if (!ibCompositionDescriptionMemory::WriteNode(result, composer->GetTemplateDesc().GetCompositionDesc())) {
 			refusal = ibMcpText("The composition was placed, but could not be read back to confirm it.");
 			return false;
 		}

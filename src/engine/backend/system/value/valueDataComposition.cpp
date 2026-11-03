@@ -1076,10 +1076,14 @@ ibString ibValueDataComposition::GetSourceCaption() const
 	// ⭐ A COMPOSITION OVER A QUERY HAS NO OBJECT TO BE NAMED AFTER — a person knows it by its report,
 	// and the name the report carries for them is its variant's, in their language. It answered with
 	// its own class name, so every report built on a query opened under the heading "DataComposition"
-	// (the payroll demo, 2026-09-10).
+	// (the payroll demo, 2026-09-10). The variant is captioned the way its picker captions it — its synonym,
+	// else its name: a name is still the report's word, the class name is nobody's (2026-11-03).
 	const ibCompositionDescription& desc = GetCompositionDesc();
-	if (!desc.m_variants.empty() && !desc.m_variants.front().m_synonym.IsEmpty())
-		return ibVariantCaption(desc.m_variants.front());
+	if (!desc.m_variants.empty()) {
+		const ibString caption = ibVariantCaption(desc.m_variants.front());
+		if (!caption.IsEmpty())
+			return caption;
+	}
 
 	return GetClassName();
 }

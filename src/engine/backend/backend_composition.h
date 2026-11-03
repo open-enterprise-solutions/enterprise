@@ -9,6 +9,7 @@
 #include "backend/backend_core.h"
 #include "backend/compiler/value.h"
 #include "core/description/compositionDescription.h"
+#include "core/description/templateDescription.h"
 
 // ⭐ THE TWO DOORS BETWEEN A STORE AND A RUNTIME VALUE — the only places where one becomes the other.
 // Reading needs the configuration the value is read against (references and enum members are built
@@ -29,6 +30,12 @@ class BACKEND_API ibBackendCompositionDescriptionMemory : public ibCompositionDe
 public:
 	static bool ReadNode(const class ibDataValue& value, ibCompositionDescription& composition, const class ibMetaData* metaData = nullptr);
 	static bool ReadNode(const ibDataNode& node, ibCompositionDescription& composition, const class ibMetaData* metaData = nullptr);
+};
+
+// …and a template's, whose composition — when it holds one — is read the same way.
+class BACKEND_API ibBackendTemplateDescriptionMemory : public ibTemplateDescriptionMemory {
+public:
+	static bool ReadNode(const class ibDataValue& value, ibTemplateDescription& templateDesc, const class ibMetaData* metaData = nullptr);
 };
 
 // ⭐ WHAT A PERSON READS OF A VARIANT — the synonym IN THE CONFIGURATION'S LANGUAGE, else the name. The synonym

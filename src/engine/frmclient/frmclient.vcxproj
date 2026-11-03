@@ -197,7 +197,7 @@
     <ClCompile Include="win\dlgs\authorization.cpp" />
     <ClCompile Include="win\dlgs\errorDialog.cpp" />
     <ClCompile Include="win\dlgs\formEditor.cpp" />
-    <ClCompile Include="win\dlgs\formSelector\formSelector.cpp" />
+    <ClCompile Include="win\dlgs\kindSelector\kindSelector.cpp" />
     <ClCompile Include="win\dlgs\generation.cpp" />
     <ClCompile Include="win\dlgs\jobSchedule\jobScheduleSettings.cpp" />
     <ClCompile Include="win\dlgs\choiceLink\choiceLink.cpp" />
@@ -504,7 +504,7 @@
     <ClInclude Include="win\dlgs\authorization.h" />
     <ClInclude Include="win\dlgs\errorDialog.h" />
     <ClInclude Include="win\dlgs\formEditor.h" />
-    <ClInclude Include="win\dlgs\formSelector\formSelector.h" />
+    <ClInclude Include="win\dlgs\kindSelector\kindSelector.h" />
     <ClInclude Include="win\dlgs\generation.h" />
     <ClInclude Include="win\dlgs\jobSchedule\jobScheduleSettings.h" />
     <ClInclude Include="win\dlgs\choiceLink\choiceLink.h" />
@@ -571,8 +571,7 @@
     <ClInclude Include="win\dlgs\formatConstructor\formatConstructor.h" />
     <ClInclude Include="win\dlgs\linqConstructor\linqConstructor.h" />
     <ClInclude Include="backend\metadataConfiguration.h" />
-    <ClInclude Include="backend\metaCollection\metaSpreadsheetObject.h" />
-    <ClInclude Include="backend\metaCollection\metaComposerObject.h" />
+    <ClInclude Include="backend\metaCollection\metaTemplateObject.h" />
     <ClInclude Include="backend\metaCollection\resource\metaResourceObject.h" />
     <ClInclude Include="backend\logger\loggerReader.h" />
     <ClInclude Include="backend\metaCollection\metaObject.h" />

@@ -48,7 +48,7 @@
 #include "frmserver/mcp/mcpTool.h"
 
 #include "core/description/compositionDescription.h"
-#include "backend/metaCollection/metaComposerObject.h"
+#include "backend/metaCollection/metaTemplateObject.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/composition/dataComposer.h"                  // ibDataDBComposer — folding the settings
 #include "backend/composition/composeRunSchema.h"                     // …and the field names the far end reads
@@ -75,11 +75,11 @@ using ibArg = ibMcpTool::ibMcpArgument;
 const ibArg& ArgId(bool required)
 {
 	static const ibArg s_optional(ibT("id"), ibArg::Kind::Whole,
-		ibMcpText("The composer's NodeId - a report declares one, metadata_get on the report lists it "
-			  "among its children. Give this OR `schema`, not both."), /*required*/ false);
+		ibMcpText("The composer's NodeId - a template of the composer kind, under a report or any other object; "
+			  "metadata_get on its owner lists it among its children. Give this OR `schema`, not both."), /*required*/ false);
 	static const ibArg s_required(ibT("id"), ibArg::Kind::Whole,
-		ibMcpText("The composer's NodeId - a report declares one, metadata_get on the report lists it "
-			  "among its children."), /*required*/ true);
+		ibMcpText("The composer's NodeId - a template of the composer kind, under a report or any other object; "
+			  "metadata_get on its owner lists it among its children."), /*required*/ true);
 	return required ? s_required : s_optional;
 }
 
@@ -489,9 +489,9 @@ public:
 		// does. Nothing new was built for it: it is a second source for one field.
 		ibCompositionDescription description;
 		ibString                 subject;
-		// The report this came from, when it came from one — kept because a SAVED SETTING is stored
+		// The composer this came from, when it came from one — kept because a SAVED SETTING is stored
 		// against its key and would otherwise have to be looked up a second time further down.
-		ibValueMetaObject*       object = nullptr;
+		ibValueMetaObjectTemplate* object = nullptr;
 
 		auto givenSchema = params.FindChild(ArgSchema().Name());
 		const bool        namedReport = params.Has(ArgId(false).Name());
@@ -557,18 +557,11 @@ public:
 			subject = ibMcpText("the schema given");
 		}
 		else {
-			object = ibMcpObjectNamed(params, refusal);
+			object = ibMcpComposerNamed(params, refusal);
 			if (object == nullptr)
 				return false;
 
-			ibValueMetaObjectComposer* composerObject = object->ConvertToType<ibValueMetaObjectComposer>();
-			if (composerObject == nullptr) {
-				refusal = ibString::Format(
-					ibMcpText("'%s' is not a composer. metadata_get on the report lists the composer among "
-						  "its children."), object->GetName());
-				return false;
-			}
-			description = composerObject->GetCompositionDesc();
+			description = object->GetTemplateDesc().GetCompositionDesc();
 			subject     = object->GetName();
 		}
 
@@ -833,17 +826,9 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibValueMetaObject* object = ibMcpObjectNamed(params, refusal);
+		ibValueMetaObjectTemplate* object = ibMcpComposerNamed(params, refusal);
 		if (object == nullptr)
 			return false;
-
-		ibValueMetaObjectComposer* composerObject = object->ConvertToType<ibValueMetaObjectComposer>();
-		if (composerObject == nullptr) {
-			refusal = ibString::Format(
-				ibMcpText("'%s' is not a composer. metadata_get on the report lists the composer among "
-					  "its children."), object->GetName());
-			return false;
-		}
 
 		ibUserInfo owner;
 		if (!UserNamed(params, ArgUser(), owner, refusal))
@@ -888,8 +873,7 @@ public:
 		// the wrong one" or "this one is not what I expect". report_variant lists them too; they are
 		// here because a diagnosis needs both sides in one look: what the report can be run AS, and
 		// what this person saved for themselves. Two different ways to end up seeing something else.
-		const ibCompositionDescription& description =
-			composerObject != nullptr ? composerObject->GetCompositionDesc() : ibCompositionDescription();
+		const ibCompositionDescription& description = object->GetTemplateDesc().GetCompositionDesc();
 		std::vector<ibDataValue> variants;
 		variants.reserve(description.m_variants.size());
 		for (size_t i = 0; i < description.m_variants.size(); ++i) {

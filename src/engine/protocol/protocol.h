@@ -571,7 +571,7 @@ namespace ibProtocol {
 			Print            = 15,   // ibPrint
 			Schedule         = 16,   // ibSchedule
 			ApplyChange      = 17,   // ibApplyChange
-			FormType         = 18,   // ibFormType
+			ObjectKind       = 18,   // ibObjectKind
 			PredefinedSelector = 19, // ibPredefinedSelector
 		};
 
@@ -818,11 +818,12 @@ namespace ibProtocol {
 
 		}
 
-		// The desktop's ibDialogSelectTypeForm over a form just made, asked inside the Create that made it: Caption, Name,
-		// Synonym, Comment — the form's — and children Id, Caption, Name — the kinds its owner offers, each with the name
-		// the form takes with it → Id, Name, Synonym, Comment — the kind chosen and what the person typed; none —
-		// cancelled, and the form taken away again before the Create answers.
-		namespace ibFormType {
+		// The desktop's ibDialogSelectTypeForm over a form just made, and a template's the same way (ibDialogSelectKind),
+		// asked inside the Create that made it: Caption — the window's, Name, Synonym, Comment — the object's — and
+		// children Id, Caption, Name — the kinds it is offered, each with the name the object takes with it → Id, Name,
+		// Synonym, Comment — the kind chosen and what the person typed; none — cancelled, and the object taken away again
+		// before the Create answers.
+		namespace ibObjectKind {
 
 			inline constexpr const char* Caption = "Caption";
 			inline constexpr const char* Name    = "Name";
@@ -1089,6 +1090,7 @@ namespace ibProtocol {
 			inline constexpr const char* Code       = "Code";
 			inline constexpr const char* Mode       = "Mode";
 			inline constexpr const char* FormType   = "FormType";     // a form's row: its kind (the owner's form type)
+			inline constexpr const char* TemplateData = "TemplateData";   // a template's: what it holds, of its kind
 			// …the root row's: the configuration's state, as the engine answers it — Modified (ibMetaData::IsModified),
 			// Edited (IsEdited: somebody edited it), ConfigSave (ibMetaDataConfigurationBase::IsConfigSave: the database
 			// holds it), Syntax — the code style its modules are written in.

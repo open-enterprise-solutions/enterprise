@@ -78,7 +78,6 @@ const ibMetaGroupRow s_groups[] = {
 	{ g_metaFormCLSID,                           ibTRANSLATE("Forms"),       ibMetaGroupBand::Inner },
 	{ g_metaCommandCLSID,                        ibTRANSLATE("Commands"),    ibMetaGroupBand::Inner },
 	{ g_metaTemplateCLSID,                       ibTRANSLATE("Templates"),   ibMetaGroupBand::Inner },
-	{ g_metaComposerCLSID,                       ibTRANSLATE("Composers"),   ibMetaGroupBand::Inner },
 	{ g_metaModuleCLSID,                         ibTRANSLATE("Modules"),     ibMetaGroupBand::Inner },
 	{ g_metaManagerCLSID,                        ibTRANSLATE("Manager modules"), ibMetaGroupBand::Inner },
 };

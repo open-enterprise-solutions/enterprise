@@ -65,7 +65,7 @@ void ibValueRecordDataObjectReport::PrepareEmptyObject()
 		// declared one out, read it back into a fresh object — which is serialisation standing in
 		// for assignment: slower, and free to differ from a real save the moment the paths part.
 		ibValuePtr<ibValueDataComposition> composition(new ibValueDataComposition());
-		composition->SetCompositionDesc(metaComposer->GetCompositionDesc());
+		composition->SetCompositionDesc(metaComposer->GetTemplateDesc().GetCompositionDesc());
 		m_listObjectValue.insert_or_assign(metaComposer->GetMetaID(), composition);
 	}
 }

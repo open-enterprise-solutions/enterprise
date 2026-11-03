@@ -24,15 +24,21 @@ public:
 	wxDECLARE_DYNAMIC_CLASS(ibSpreadsheetTemplateView);
 };
 
-// Its document — the template metaobject's (ibMetaDocument::GetMetaObject); nothing of its own to hold.
-class FRMSERVER_API ibSpreadsheetTemplateDocument : public ibMetaDocument {
+// Its document — the template metaobject's (ibMetaDocument::GetMetaObject); nothing of its own to hold. Its view is
+// its kind's: the sheet above, or a composer's composition panel (ibComposerCompositionView).
+class FRMSERVER_API ibTemplateDocument : public ibMetaDocument {
 public:
 
-	ibSpreadsheetTemplateDocument() : ibMetaDocument() {}
+	ibTemplateDocument() : ibMetaDocument() {}
 
-	ibSpreadsheetTemplateDocument(const ibSpreadsheetTemplateDocument&) = delete;
-	ibSpreadsheetTemplateDocument& operator=(const ibSpreadsheetTemplateDocument&) = delete;
-	wxDECLARE_DYNAMIC_CLASS(ibSpreadsheetTemplateDocument);
+	ibTemplateDocument(const ibTemplateDocument&) = delete;
+	ibTemplateDocument& operator=(const ibTemplateDocument&) = delete;
+
+protected:
+
+	virtual ibView* DoCreateView() override;
+
+	wxDECLARE_DYNAMIC_CLASS(ibTemplateDocument);
 };
 
 #endif

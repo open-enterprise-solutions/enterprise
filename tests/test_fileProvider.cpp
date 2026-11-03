@@ -6,6 +6,7 @@
 #include "backend/compiler/value.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaModuleObject.h"
+#include "backend/metaCollection/metaTemplateObject.h"   // a report's composer — a template of that kind
 #include "backend/metaCollection/metaDiff.h"
 
 #include <cstring>
@@ -392,7 +393,9 @@ TEST_F(FileProvider, SaveLoadFiles_MetadataIntoFreshConfiguration_IsIdempotent)
 	for (const ibClassID type : {g_metaAttributeCLSID, g_metaFormCLSID, g_metaTemplateCLSID, g_metaTableRefCLSID})
 		ASSERT_NE(original.CreateMetaObject(type, catalog, false), nullptr);
 	ibValueMetaObject* report = original.GetAnyArrayObject(g_metaReportCLSID).front();
-	ASSERT_NE(original.CreateMetaObject(g_metaComposerCLSID, report, false), nullptr);
+	ibValueMetaObject* composer = original.CreateMetaObject(g_metaTemplateCLSID, report, false);
+	ASSERT_NE(composer, nullptr);
+	composer->ConvertToType<ibValueMetaObjectTemplate>()->SetTemplateDesc(ibTemplateDescription(ibTemplateType::Composer));
 	ASSERT_TRUE(original.SaveConfigToFiles(Directory()));
 
 	// Each part in its name's folder, under its type's.

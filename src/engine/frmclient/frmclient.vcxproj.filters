@@ -217,8 +217,8 @@
     <ClCompile Include="win\dlgs\formEditor.cpp">
       <Filter>win\dlgs</Filter>
     </ClCompile>
-    <ClCompile Include="win\dlgs\formSelector\formSelector.cpp">
-      <Filter>win\dlgs\formSelector</Filter>
+    <ClCompile Include="win\dlgs\kindSelector\kindSelector.cpp">
+      <Filter>win\dlgs\kindSelector</Filter>
     </ClCompile>
     <ClCompile Include="win\dlgs\generation.cpp">
       <Filter>win\dlgs</Filter>
@@ -629,8 +629,8 @@
     <ClInclude Include="win\dlgs\formEditor.h">
       <Filter>win\dlgs</Filter>
     </ClInclude>
-    <ClInclude Include="win\dlgs\formSelector\formSelector.h">
-      <Filter>win\dlgs\formSelector</Filter>
+    <ClInclude Include="win\dlgs\kindSelector\kindSelector.h">
+      <Filter>win\dlgs\kindSelector</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\generation.h">
       <Filter>win\dlgs</Filter>
@@ -997,7 +997,7 @@
     <Filter Include="win\dlgs\functionSearcher">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5059}</UniqueIdentifier>
     </Filter>
-    <Filter Include="win\dlgs\formSelector">
+    <Filter Include="win\dlgs\kindSelector">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f505a}</UniqueIdentifier>
     </Filter>
     <Filter Include="win\dlgs\translateConstructor">
@@ -1083,10 +1083,7 @@
     <ClCompile Include="backend\metaCollection\metaObjectMetadata.cpp">
       <Filter>backend\metaCollection</Filter>
     </ClCompile>
-    <ClInclude Include="backend\metaCollection\metaSpreadsheetObject.h">
-      <Filter>backend\metaCollection</Filter>
-    </ClInclude>
-    <ClInclude Include="backend\metaCollection\metaComposerObject.h">
+    <ClInclude Include="backend\metaCollection\metaTemplateObject.h">
       <Filter>backend\metaCollection</Filter>
     </ClInclude>
     <ClInclude Include="backend\metaCollection\resource\metaResourceObject.h">

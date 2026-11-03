@@ -153,7 +153,7 @@ protected:
 	// debugger made over its store as the login read it, over the base's schemas.
 	virtual void ShowSchema(ibProtocol::ibSchema::ibKind schema, const ibProtocolNode& shown) override;
 	// …and the questions only the designer is asked — the restructure's ledger (the desktop's ibDialogApplyChange), the
-	// kind of a form just made (ibDialogSelectTypeForm); the rest — the base's.
+	// kind of a form or a template just made (ibDialogSelectKind); the rest — the base's.
 	virtual void ShowRequest(const ibProtocolNode& request, ibProtocolNode& response) override;
 
 	// The designer's Configuration, Debug and Help — the desktop's — over the base's File and Edit.

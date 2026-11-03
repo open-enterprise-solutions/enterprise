@@ -25,7 +25,7 @@
 //special object
 #include "backend/metaCollection/metaModuleObject.h"
 #include "backend/metaCollection/metaFormObject.h"
-#include "backend/metaCollection/metaSpreadsheetObject.h"
+#include "backend/metaCollection/metaTemplateObject.h"
 
 //interface
 #include "backend/metaCollection/metaSectionObject.h"

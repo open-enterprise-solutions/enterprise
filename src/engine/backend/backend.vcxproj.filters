@@ -290,10 +290,7 @@
     <ClInclude Include="metaCollection\metaFormObject.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
-    <ClInclude Include="metaCollection\metaComposerObject.h">
-      <Filter>metaCollection</Filter>
-    </ClInclude>
-    <ClInclude Include="metaCollection\metaSpreadsheetObject.h">
+    <ClInclude Include="metaCollection\metaTemplateObject.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
     <ClInclude Include="metaCollection\metaModuleObject.h">
@@ -497,9 +494,6 @@
     <ClInclude Include="propertyManager\property\propertyDataComposition.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
-    <ClInclude Include="propertyManager\property\propertyComposition.h">
-      <Filter>propertyManager\property</Filter>
-    </ClInclude>
     <ClInclude Include="propertyManager\property\propertyEnum.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
@@ -646,7 +640,7 @@
     <ClInclude Include="propertyManager\property\propertyModule.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
-    <ClInclude Include="propertyManager\property\propertySpreadsheet.h">
+    <ClInclude Include="propertyManager\property\propertyTemplate.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
     <ClInclude Include="propertyManager\property\propertyForm.h">
@@ -791,7 +785,7 @@
       <Filter>system\value</Filter>
     </ClInclude>
     <ClInclude Include="spreadsheetModel.h" />
-    <ClInclude Include="propertyManager\property\variant\variantSpreadsheet.h">
+    <ClInclude Include="propertyManager\property\variant\variantTemplate.h">
       <Filter>propertyManager\property\variant</Filter>
     </ClInclude>
     <ClInclude Include="system\value\valueDatabase.h">
@@ -1194,22 +1188,13 @@
     <ClCompile Include="metaCollection\metaFormObjectProperty.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\metaComposerObject.cpp">
+    <ClCompile Include="metaCollection\metaTemplateObject.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\metaComposerObjectMenu.cpp">
+    <ClCompile Include="metaCollection\metaTemplateObject_res.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\metaComposerObject_res.cpp">
-      <Filter>metaCollection</Filter>
-    </ClCompile>
-    <ClCompile Include="metaCollection\metaSpreadsheetObject.cpp">
-      <Filter>metaCollection</Filter>
-    </ClCompile>
-    <ClCompile Include="metaCollection\metaSpreadsheetObject_res.cpp">
-      <Filter>metaCollection</Filter>
-    </ClCompile>
-    <ClCompile Include="metaCollection\metaSpreadsheetObjectMenu.cpp">
+    <ClCompile Include="metaCollection\metaTemplateObjectMenu.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\metaModuleObject.cpp">
@@ -1713,9 +1698,6 @@
     <ClCompile Include="propertyManager\property\propertyDataComposition.cpp">
       <Filter>propertyManager\property</Filter>
     </ClCompile>
-    <ClCompile Include="propertyManager\property\propertyComposition.cpp">
-      <Filter>propertyManager\property</Filter>
-    </ClCompile>
     <ClCompile Include="propertyManager\property\propertyNumber.cpp">
       <Filter>propertyManager\property</Filter>
     </ClCompile>
@@ -1879,7 +1861,7 @@
     <ClCompile Include="propertyManager\property\propertyModule.cpp">
       <Filter>propertyManager\property</Filter>
     </ClCompile>
-    <ClCompile Include="propertyManager\property\propertySpreadsheet.cpp">
+    <ClCompile Include="propertyManager\property\propertyTemplate.cpp">
       <Filter>propertyManager\property</Filter>
     </ClCompile>
     <ClCompile Include="propertyManager\property\propertyForm.cpp">
@@ -2066,7 +2048,7 @@
     <ClCompile Include="system\value\valueSpreadsheetDetails.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
-    <ClCompile Include="propertyManager\property\variant\variantSpreadsheet.cpp">
+    <ClCompile Include="propertyManager\property\variant\variantTemplate.cpp">
       <Filter>propertyManager\property\variant</Filter>
     </ClCompile>
     <ClCompile Include="compiler\valueSerialization.cpp">

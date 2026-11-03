@@ -537,6 +537,11 @@ FRMSERVER_API bool ibMcpSetProperty(class ibProperty* property,
 FRMSERVER_API class ibValueMetaObject* ibMcpObjectNamed(const ibDataNode& params,
 	ibString& refusal, const ibString& field = ibT("id"));
 
+// …and the composer it names: a template of the composer kind, refused in words when it is not one. Five
+// places asked it by hand, two of them in another file, each with its own words for the refusal.
+FRMSERVER_API class ibValueMetaObjectTemplate* ibMcpComposerNamed(const ibDataNode& params,
+	ibString& refusal, const ibString& field = ibT("id"));
+
 FRMSERVER_API std::vector<ibString> ibMcpComplaints(class ibValueMetaObject* object);
 
 // ⭐ THE FACTS THAT DECIDE HOW TO WRITE ANYTHING — dialect, languages, compatibility version,

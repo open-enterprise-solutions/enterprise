@@ -24,7 +24,7 @@
 //metaobject property
 #include "backend/propertyManager/property/propertyModule.h"
 #include "backend/propertyManager/property/propertyForm.h"
-#include "backend/propertyManager/property/propertySpreadsheet.h"
+#include "backend/propertyManager/property/propertyTemplate.h"
 
 //form property
 #include "backend/propertyManager/property/propertyPicture.h"

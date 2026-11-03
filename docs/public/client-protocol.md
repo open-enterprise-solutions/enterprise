@@ -354,7 +354,7 @@ while the number stays: clicking an object again, or walking back to it, before 
 | 15 Print | a script's sheet: `Sheet`, as a gridbox's `fetch` gives it | `Done` — printed; false — the print dialog cancelled, or the printer failed |
 | 16 Schedule | a form's schedule: `Schedule`, in its stored form | `Schedule` — the one edited, and the form is modified; none — cancelled |
 | 17 ApplyChange | the restructure's ledger: `Picture` and items `Level`, `Text` | `Done` — applied; none — cancelled, rolled back |
-| 18 FormType | a form just made: `Caption`, `Name`, `Synonym`, `Comment` and items `Id`, `Caption`, `Name` — the kinds its owner offers | `Id`, `Name`, `Synonym`, `Comment` — the kind chosen; none — cancelled, form taken away |
+| 18 ObjectKind | a form or a template just made: `Caption` (the window's), `Name`, `Synonym`, `Comment` and items `Id`, `Caption`, `Name` — the kinds it is offered | `Id`, `Name`, `Synonym`, `Comment` — the kind chosen; none — cancelled, the object taken away |
 | 19 PredefinedSelector | the designer's declared values of a reference, its type asked before it as a Choice: `Types` — a branch per admitted reference (`Title`), its values as children (`Name`, `Id`), each with what is declared under it | `Id` — the value chosen; none — closed |
 
 A SavedSettings window stays open through its acts: each act is a `respond`, done by the server, which asks again with

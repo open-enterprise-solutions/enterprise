@@ -61,7 +61,7 @@ void ibFrontendMainFrameDesigner::CreateGUI()
 }
 
 #include "frmclient/win/dlgs/applyChange.h"
-#include "frmclient/win/dlgs/formSelector/formSelector.h"
+#include "frmclient/win/dlgs/kindSelector/kindSelector.h"
 #include "frmclient/win/dlgs/selectPredefined.h"
 
 void ibFrontendMainFrameDesigner::ShowRequest(const ibProtocolNode& request, ibProtocolNode& response)
@@ -73,10 +73,10 @@ void ibFrontendMainFrameDesigner::ShowRequest(const ibProtocolNode& request, ibP
 		if (ibDialogApplyChange::ShowApplyChange(request, this))
 			response.SetValue(ibProtocol::ibRequest::ibApplyChange::Done, true);
 		break;
-	case ibProtocol::ibRequest::ibKind::FormType: {
-		// THE DESKTOP'S ibDialogSelectTypeForm over a form just made. Cancelled — answered with no Id: the form taken
-		// away again.
-		ibDialogSelectTypeForm dialog(request);
+	case ibProtocol::ibRequest::ibKind::ObjectKind: {
+		// THE DESKTOP'S ibDialogSelectTypeForm over a form just made, and a template's the same way. Cancelled — answered
+		// with no Id: the object taken away again.
+		ibDialogSelectKind dialog(request);
 		dialog.ShowModal(response);
 		break;
 	}

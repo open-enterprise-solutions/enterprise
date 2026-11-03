@@ -3,7 +3,7 @@
 #include "backend/backend_type.h"                        // GetTypesByFilter — what a parameter may be given
 #include "backend/compiler/scriptCheck.h"                // ibCheckExpression — a parameter's expression, compiled, not run
 #include "backend/metaData.h"
-#include "backend/metaCollection/metaComposerObject.h"   // the composer — its description, its configuration
+#include "backend/metaCollection/metaTemplateObject.h"   // the composer — its description, its configuration
 #include "backend/query/queryConstructorModel.h"         // ibQueryFieldsOfText — the fields its query offers
 #include "backend/query/queryableFactory.h"              // a list's main table — its descriptor
 #include "backend/srcDataObject.h"                       // …which describes itself (ibSourceExplorer)
@@ -108,8 +108,8 @@ ibComposerCompositionView::~ibComposerCompositionView()
 
 void ibComposerCompositionView::OnDraw(ibDataNode& frame)
 {
-	const ibValueMetaObjectComposer* const metaComposer =
-		GetDocument()->ConvertMetaObjectToType<ibValueMetaObjectComposer>();
+	const ibValueMetaObjectTemplate* const metaComposer =
+		GetDocument()->ConvertMetaObjectToType<ibValueMetaObjectTemplate>();
 	if (metaComposer == nullptr)
 		return;
 
@@ -117,7 +117,7 @@ void ibComposerCompositionView::OnDraw(ibDataNode& frame)
 	ibDataNode& state = frame.Child(ibProtocol::ibView::State);
 	state.SetValue(ibProtocol::ibView::ibComposer::ReadOnly, !metaComposer->IsEditable());
 
-	const ibCompositionDescription& composition = metaComposer->GetCompositionDesc();
+	const ibCompositionDescription& composition = metaComposer->GetTemplateDesc().GetCompositionDesc();
 	ibCompositionDescriptionMemory::WriteNode(frame.Child(ibProtocol::ibView::ibComposer::Composition), composition);
 	WriteQueryFields(frame, composition.m_query, metaComposer->GetMetaData(), composition.m_parameters);
 
@@ -128,8 +128,8 @@ void ibComposerCompositionView::OnDraw(ibDataNode& frame)
 
 bool ibComposerCompositionView::Fetch(const ibDataNode& request, ibDataNode& response)
 {
-	const ibValueMetaObjectComposer* const metaComposer =
-		GetDocument()->ConvertMetaObjectToType<ibValueMetaObjectComposer>();
+	const ibValueMetaObjectTemplate* const metaComposer =
+		GetDocument()->ConvertMetaObjectToType<ibValueMetaObjectTemplate>();
 	return metaComposer != nullptr
 		&& (ibFetchQueryConstructorRequest(request, response, metaComposer->GetMetaData())
 		    || ibFetchComposerRequest(request, response, metaComposer->GetMetaData()));
@@ -138,7 +138,7 @@ bool ibComposerCompositionView::Fetch(const ibDataNode& request, ibDataNode& res
 bool ibComposerCompositionView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args)
 {
 	ibMetaDocument* const document = GetDocument();
-	ibValueMetaObjectComposer* const metaComposer = document->ConvertMetaObjectToType<ibValueMetaObjectComposer>();
+	ibValueMetaObjectTemplate* const metaComposer = document->ConvertMetaObjectToType<ibValueMetaObjectTemplate>();
 	if (metaComposer == nullptr || !metaComposer->IsEditable())
 		return false;
 
@@ -153,7 +153,7 @@ bool ibComposerCompositionView::OnClientEvent(ibProtocol::ibEvent::ibKind event,
 			return false;
 		// Where the desktop's panel wrote — the composer's own description — and the configuration modified
 		// (ibComposerEditor::MarkModified).
-		metaComposer->SetCompositionDesc(composition);
+		metaComposer->SetTemplateDesc(composition);
 		document->Modify(true);
 		return true;
 	}
@@ -167,12 +167,6 @@ bool ibComposerCompositionView::OnClientEvent(ibProtocol::ibEvent::ibKind event,
 		return false;
 	}
 }
-
-// ----------------------------------------------------------------------------
-// ibComposerCompositionDocument implementation
-// ----------------------------------------------------------------------------
-
-wxIMPLEMENT_DYNAMIC_CLASS(ibComposerCompositionDocument, ibMetaDocument);
 
 // ----------------------------------------------------------------------------
 // ibFetchComposerRequest

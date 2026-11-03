@@ -178,6 +178,13 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Metadata
 
+- **A report's composer is a template of the *Data composer* kind.** A template added to any object asks
+  what it holds, a spreadsheet document or a data composer, the way a new form asks its kind; a common
+  template is a spreadsheet. The kind is chosen once; the template's row in the properties reads it and
+  opens its editor. The report's *Composers* group is gone: its composers are among its
+  templates, and `GetTemplate(name)` returns a composer's composition, a new one each time. A configuration
+  or an external report written before opens with its composers as such templates. Over MCP
+  `metadata_create` with the kind `Composer` still makes one.
 - **A predefined item declares what it is, not only what it is called.** A predefined characteristic
   of a chart of characteristic types declares its value `Type`; a predefined account declares its
   `AccountType`, whether it is `OffBalance`, the chart's accounting flags and its analytics — the rows

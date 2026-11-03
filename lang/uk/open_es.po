@@ -10814,6 +10814,24 @@ msgstr "Не вдалося скинути налаштування форми."
 msgid " form wizard"
 msgstr " майстер форм"
 
+msgid " template wizard"
+msgstr " майстер шаблонів"
+
+msgid "Select kind"
+msgstr "Виберіть вид"
+
+msgid "What the template holds, its kind chosen when it is added: a spreadsheet document (cells, named areas and parameters a print form is assembled from) or a data composer (its query, resources, parameters, structure and settings variants). Code gets a fresh value of it with the owner's GetTemplate(name), a common one with GetCommonTemplate(name)."
+msgstr "Що зберігає шаблон, вид обирається під час додавання: табличний документ (комірки, іменовані області та параметри, з яких збирається друкована форма) або компонувальник даних (його запит, ресурси, параметри, структура та варіанти налаштувань). Код отримує нове значення функцією GetTemplate(name) власника, загального шаблону — GetCommonTemplate(name)."
+
+msgid "The template is not a spreadsheet document"
+msgstr "Шаблон — не табличний документ"
+
+msgid "The template is not a data composer"
+msgstr "Шаблон — не компонувальник даних"
+
+msgid "The template's kind %i is not one this version knows"
+msgstr "Вид шаблону %i невідомий цій версії"
+
 msgid "Select form type"
 msgstr "Виберіть тип форми"
 

@@ -282,13 +282,13 @@ void ibValueMetaObjectReport::OnCreateFormObject(ibValueMetaObjectFormBase* meta
 // ⭐ THE FIRST COMPOSER IS THE DEFAULT ONE. A report declares a composer because it wants a report;
 // making them then hunt for a "default composer" property to fill in would be asking a question
 // whose answer is already obvious. The same pair of hooks the default FORM has, for the same reason.
-void ibValueMetaObjectReport::OnCreateComposerObject(ibValueMetaObjectComposer* metaComposer)
+void ibValueMetaObjectReport::OnCreateComposerObject(ibValueMetaObjectTemplate* metaComposer)
 {
 	if (metaComposer != nullptr && m_propertyDefComposer->GetValueAsInteger() == wxNOT_FOUND)
 		m_propertyDefComposer->SetValue(metaComposer->GetMetaID());
 }
 
-void ibValueMetaObjectReport::OnRemoveComposerObject(ibValueMetaObjectComposer* metaComposer)
+void ibValueMetaObjectReport::OnRemoveComposerObject(ibValueMetaObjectTemplate* metaComposer)
 {
 	if (metaComposer != nullptr && m_propertyDefComposer->GetValueAsInteger() == metaComposer->GetMetaID())
 		m_propertyDefComposer->SetValue(wxNOT_FOUND);

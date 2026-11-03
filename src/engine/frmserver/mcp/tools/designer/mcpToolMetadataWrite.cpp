@@ -18,7 +18,7 @@
 #include "frmserver/mcp/tools/mcpToolMetadata.h"
 #include "backend/metaCollection/attribute/metaAttributeObject.h"   // anything that DECLARES a type
 #include "backend/metaCollection/genericData.h"        // the owner lays a new form out
-#include "backend/metaCollection/metaComposerObject.h" // …and a query is the other place a name is said
+#include "backend/metaCollection/metaTemplateObject.h" // …a template's kind, and a query is the other place a name is said
 #include "backend/metaCollection/partial/dataReport.h"  // …whose owner is told about it, as with a form
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/metaCollection/metaIntrospect.h"
@@ -446,7 +446,10 @@ public:
 			return false;
 
 		const ibString kind = ArgKind().Text(params);
-		const ibClassID clsid = ibResolveMetaKind(metaData, kind);
+		// ⚠ A COMPOSER IS A TEMPLATE OF THE COMPOSER KIND since 2026-11-03 — the word stays, for whoever learnt it, and
+		// makes a template of that kind (its kind, set below).
+		const bool composerKind = kind.IsSameAs(ibT("Composer"), false);
+		const ibClassID clsid = composerKind ? g_metaTemplateCLSID : ibResolveMetaKind(metaData, kind);
 		if (clsid == 0) {
 			refusal = ibString::Format(
 				ibMcpText("'%s' is not a kind of metadata object in this configuration."), kind);
@@ -632,6 +635,28 @@ public:
 			}
 		}
 
+		// ⚠ AND A TEMPLATE IS MADE WITH ITS KIND — the composer one when the word asked for it, a spreadsheet when nobody
+		// said: announced with none, it would put the designer's template wizard in front of a person the way a form
+		// would. Of the kinds the property offers (ibPropertyTemplate::GetValueList) and through the same door, so a
+		// composer under a report is told to it (ibValueMetaObjectTemplate::OnPropertyChanged).
+		if (ibProperty* templateData = created->GetProperty(ibT("TemplateData")); templateData != nullptr
+			&& templateData->IsEmptyProperty()) {
+			const long wanted = static_cast<long>(composerKind ? ibTemplateType::Composer : ibTemplateType::Spreadsheet);
+			ibPropertyChoiceList kinds;
+			templateData->GetValueList(kinds);
+			ibString why = ibMcpText("not a kind the template offers");
+			bool placed = false;
+			for (unsigned int idx = 0; idx < kinds.GetCount() && !placed; idx++) {
+				if (kinds.GetId(idx) == wanted)
+					placed = ibMcpApplyByHand(templateData, kinds.GetValue(idx), why);
+			}
+			if (!placed) {
+				metaData->RemoveMetaObject(created, parent);
+				refusal = ibString::Format(ibMcpText("The template's kind was refused (%s). Nothing was created."), why);
+				return false;
+			}
+		}
+
 		// ⚠ AND THE STEP THAT STANDS BESIDE THE DIALOG. For a form, choosing the kind and BUILDING
 		// the initial layout are two statements in the same branch of the click path: skipping the
 		// ask skipped the build too, and the form came out standing in the tree with nothing inside
@@ -648,16 +673,9 @@ public:
 					owner->OnCreateFormObject(form);
 			}
 
-			// ⭐⭐ AND A COMPOSER IS THE OTHER HALF OF THE SAME RULE. The click path fires both from
-			// OnCreateMetaObject under the NEW flag; this road passes the paste flag, so both are
-			// said here or not at all. The FIRST composer is the report default - and a report with
-			// no default opens as an EMPTY WINDOW, with every check passing (2026-09-03).
-			if (ibValueMetaObjectReport* report =
-					parent->ConvertToType<ibValueMetaObjectReport>()) {
-				if (ibValueMetaObjectComposer* composer =
-						created->ConvertToType<ibValueMetaObjectComposer>())
-					report->OnCreateComposerObject(composer);
-			}
+			// (A COMPOSER IS THE OTHER HALF OF THE SAME RULE — the FIRST composer is the report's default, and a
+			//  report with no default opens as an EMPTY WINDOW with every check passing (2026-09-03). Its report
+			//  is told by the composer itself when its kind is set, above: the same road the click takes.)
 		}
 
 		// The object was created under a generated name — CreateMetaObject guarantees one that does

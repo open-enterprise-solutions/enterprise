@@ -28,7 +28,7 @@
 #include "backend/metaCollection/metaDiff.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/attribute/metaAttributeObject.h"   // a field with no type
-#include "backend/metaCollection/metaComposerObject.h"              // …and a composer with no name
+#include "backend/metaCollection/metaTemplateObject.h"              // …and a composer with no name
 #include "backend/metaCollection/partial/dataReport.h"              // …and a report with no composer
 #include "backend/metaCollection/metaSectionObject.h"                // …and an object no section leads to
 #include "backend/metaCollection/partial/commonObject.h"             // …and a register the save would refuse
@@ -883,11 +883,11 @@ public:
 			// hidden only because this server runs inside the designer — the one process where
 			// that check stays quiet (caught by Max asking whether ConvertToType throws, after I
 			// had "improved" these four casts into it — 2026-09-02).
-			const ibValueMetaObjectComposer* composer = nullptr;
-			if (object->ConvertToValue(composer)) {
+			const ibValueMetaObjectTemplate* composer = nullptr;
+			if (object->ConvertToValue(composer) && composer->GetTemplateDesc().GetType() == ibTemplateType::Composer) {
 
 				std::vector<ibString> missing;
-				ibMcpComposerComplaints(composer->GetCompositionDesc(), missing);
+				ibMcpComposerComplaints(composer->GetTemplateDesc().GetCompositionDesc(), missing);
 
 				for (const ibString& one : missing)
 					complain(object, one);
@@ -930,10 +930,10 @@ public:
 				for (unsigned int index = 0; index < object->GetChildCount(); index++) {
 
 					const ibValueMetaObject* child = object->GetChild(index);
-					const ibValueMetaObjectComposer* inside = nullptr;
+					const ibValueMetaObjectTemplate* inside = nullptr;
 
 					anyComposer = anyComposer
-						|| (child != nullptr && child->ConvertToValue(inside));
+						|| (child != nullptr && child->ConvertToValue(inside) && inside->GetTemplateDesc().GetType() == ibTemplateType::Composer);
 				}
 
 				if (!anyComposer) {

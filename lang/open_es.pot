@@ -10520,6 +10520,24 @@ msgstr ""
 msgid " form wizard"
 msgstr ""
 
+msgid " template wizard"
+msgstr ""
+
+msgid "Select kind"
+msgstr ""
+
+msgid "What the template holds, its kind chosen when it is added: a spreadsheet document (cells, named areas and parameters a print form is assembled from) or a data composer (its query, resources, parameters, structure and settings variants). Code gets a fresh value of it with the owner's GetTemplate(name), a common one with GetCommonTemplate(name)."
+msgstr ""
+
+msgid "The template is not a spreadsheet document"
+msgstr ""
+
+msgid "The template is not a data composer"
+msgstr ""
+
+msgid "The template's kind %i is not one this version knows"
+msgstr ""
+
 msgid "Select form type"
 msgstr ""
 

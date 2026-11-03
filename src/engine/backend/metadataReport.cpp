@@ -5,7 +5,7 @@
 
 #include "metadataReport.h"
 #include "backend/appData.h"
-#include "backend/metaCollection/metaComposerObject.h"     // the composer ibOpenReportOver declares
+#include "backend/metaCollection/metaTemplateObject.h"     // the composer ibOpenReportOver declares
 
 ibMetaDataReport::ibMetaDataReport() : ibMetaData(),
 m_ownerMeta(nullptr),
@@ -568,17 +568,17 @@ bool ibOpenReportOver(const ibCompositionDescription& desc, const ibString& name
 
 	// …AND THE COMPOSER IT DECLARES. A report's main node IS its default composer, which is what puts
 	// a gridbox on the generated form without anybody drawing one.
-	ibValueMetaObjectComposer* composer =
-		root->CreateMetaObjectAndSetParent<ibValueMetaObjectComposer>();
+	ibValueMetaObjectTemplate* composer =
+		root->CreateMetaObjectAndSetParent<ibValueMetaObjectTemplate>();
 	if (composer == nullptr)
 		return false;
+	composer->SetTemplateDesc(desc);
 
 	// REGISTERED LIKE ANY OTHER METAOBJECT — an external report's tree is registered as it is built
 	// (Max: "as an external report it still has to be registered"), and a node that skipped it has no
 	// ctor behind its class.
 	composer->OnCreateMetaObject(detailMeta.get(), newObjectFlag);
 	composer->OnLoadMetaObject(detailMeta.get());
-	composer->SetCompositionDesc(desc);
 
 	// ⭐ COMPOSED AS IT OPENS: what is opened here has nothing left to ask — a detail carries the reader's
 	// parameters, an assistant's report was written whole. The run opens the form and hands it this.

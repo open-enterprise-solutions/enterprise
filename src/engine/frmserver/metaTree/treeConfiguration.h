@@ -57,6 +57,8 @@ protected:
 	// A form is asked what kind it is — the desktop's wizard, put to the person as a choice. False when the person
 	// refused: the form is not wanted, and it has been taken away again.
 	bool AskFormKind(ibValueMetaObject* object);
+	// …and a template, the same way, when its owner offers it more than one kind.
+	bool AskTemplateKind(ibValueMetaObject* object);
 
 	// The open editors of this client — each re-gathers; those over this metadata close; those over the object and
 	// what is under it close (what the row stood for); the one over the object.
@@ -78,8 +80,9 @@ protected:
 
 	ibClientFrame* const m_frame;   // borrowed: it outlives the tree
 
-	// The form whose kind the person is being asked (AskFormKind) — no row until it is answered.
-	const ibValueMetaObject* m_askedForm = nullptr;
+	// The form or template whose kind the person is being asked (AskFormKind, AskTemplateKind) — no row until it is
+	// answered.
+	const ibValueMetaObject* m_askedObject = nullptr;
 
 private:
 
@@ -120,7 +123,6 @@ private:
 	void AddDocumentItem(ibValueMetaObject* obj, ibDataNode& item);
 	void AddEnumerationItem(ibValueMetaObject* obj, ibDataNode& item);
 	void AddDataProcessorItem(ibValueMetaObject* obj, ibDataNode& item);
-	void AddReportItem(ibValueMetaObject* obj, ibDataNode& item);
 	void AddInformationRegisterItem(ibValueMetaObject* obj, ibDataNode& item);
 	void AddAccumulationRegisterItem(ibValueMetaObject* obj, ibDataNode& item);
 	void AddCalculationRegisterItem(ibValueMetaObject* obj, ibDataNode& item);

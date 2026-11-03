@@ -61,10 +61,9 @@ constexpr ibClassID g_metaAttributeCLSID = metadata_to_clsid("MD_ATTR");
 constexpr ibClassID g_metaFormCLSID = metadata_to_clsid("MD_FRM");
 constexpr ibClassID g_metaTemplateCLSID = metadata_to_clsid("MD_TMPL");
 constexpr ibClassID g_metaCommandCLSID       = metadata_to_clsid("MD_OCMD");   // OBJECT command (under a business object, like Form)
-// A COMPOSER — what a report READS and how it is LAID OUT, declared inside the report the way a
-// form, a template or a tabular section is. It is not an attribute somebody adds by hand: it lives
-// in the object, so declaring it is what makes `Object.<Name>` exist (Max, 2026-08-20). The report's
-// DEFAULT composer is what the generated form is built from — a report with one needs no form at all.
+// A COMPOSER AS IT WAS STORED before it became a template of the composer kind (2026-11-03,
+// ibTemplateType::Composer) — no class answers it any more; a file's node of it is read as a template
+// (ApplyDataNode).
 constexpr ibClassID g_metaComposerCLSID      = metadata_to_clsid("MD_CMPS");
 constexpr ibClassID g_metaModuleCLSID = metadata_to_clsid("MD_MOD");
 constexpr ibClassID g_metaManagerCLSID = metadata_to_clsid("MD_MNGR");

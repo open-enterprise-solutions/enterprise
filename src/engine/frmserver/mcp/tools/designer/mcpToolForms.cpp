@@ -42,8 +42,7 @@
 #include "core/description/sourceDescription.h"
 #include "backend/backend_localization.h"   // a caption is an array by language
 #include "backend/propertyManager/property/propertyString.h"   // ibPropertyTString
-#include "backend/propertyManager/property/propertyComposition.h"       // a composition, wherever it is held
-#include "backend/propertyManager/property/propertyDataComposition.h"   // …the report's own
+#include "backend/propertyManager/property/propertyDataComposition.h"   // a composition, wherever it is held: the report's own
 #include "backend/propertyManager/property/propertyDynamicList.h"       // …and the list's, judged by list rules
 #include "core/description/compositionDescription.h"
 #include "core/stringUtils.h"   // GenerateSynonym — the caption the platform makes from a name
@@ -2130,8 +2129,8 @@ class ibMcpAuditForms : public ibMcpAudit {
 	// report every list in the configuration as broken, which is how an audit teaches people to
 	// ignore it.
 	// ⭐ THE COMPOSITION A PROPERTY CARRIES, ASKED ONCE — and with it the second fact the caller
-	// needs: which rules to judge it by. Three classes carry one, and two of them are report-shaped
-	// while a dynamic list is judged as a list.
+	// needs: which rules to judge it by. Two classes on a control carry one: a report's composition,
+	// and a dynamic list judged as a list.
 	//
 	// 🛑 IT WAS THREE CASTS IN A ROW AT THE CALLSITE, which is the same question asked three times
 	// and answered in three places. Each cast BINDS its name and is used inside its own branch —
@@ -2139,12 +2138,6 @@ class ibMcpAuditForms : public ibMcpAudit {
 	// a composition will be added to this function, and every caller has it at once.
 	static const ibCompositionDescription* CompositionIn(const ibProperty* property, bool& asReport)
 	{
-		if (const ibPropertyComposition* asComposition =
-				dynamic_cast<const ibPropertyComposition*>(property)) {
-			asReport = true;
-			return &asComposition->GetValueAsCompositionDesc();
-		}
-
 		if (const ibPropertyDataComposition* asData =
 				dynamic_cast<const ibPropertyDataComposition*>(property)) {
 			asReport = true;

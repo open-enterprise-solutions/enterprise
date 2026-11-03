@@ -30,7 +30,7 @@ public:
 // ibSheetDocument: ibDocument and its sheet married
 // ----------------------------------------------------------------------------
 
-#include "backend/metaCollection/metaSpreadsheetObject.h"
+#include "backend/metaCollection/metaTemplateObject.h"
 
 class FRMSERVER_API ibSheetDocument : public ibMetaDocument {
 public:

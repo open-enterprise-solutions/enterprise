@@ -2,10 +2,11 @@
 #define _DESIGNER_COMPOSER_EDIT_H__
 
 // A REPORT'S COMPOSER AS THE DESIGNER EDITS IT — the desktop designer's ibComposerEditDocument and ibComposerEditView
-// (designer/docManager/templates/docViewComposer.h): a tab of its own over the composer metaobject, whose content — the
-// query, the resources, the parameters, the structure and its settings — is edited by the composition panel
-// (ibComposerSettingsPanel). The panel is the client's (ViewKind Composer); this view says what it edits — the
+// (designer/docManager/templates/docViewComposer.h): a tab of its own over a template of the composer kind, whose
+// content — the query, the resources, the parameters, the structure and its settings — is edited by the composition
+// panel (ibComposerSettingsPanel). The panel is the client's (ViewKind Composer); this view says what it edits — the
 // composition in its node form and the fields its query offers — and takes back what was edited (Change {Composition}).
+// Its document is the template's (ibTemplateDocument, docViewSpreadsheetEdit.h), which makes this view for the kind.
 // Not the desktop's names — see docViewModuleEdit.h.
 
 #include "frmserver/docView/docView.h"
@@ -38,18 +39,6 @@ private:
 	ibListSettingsChoice* m_choosing = nullptr;   // the cell a value is being chosen for (Select), counted
 
 	wxDECLARE_DYNAMIC_CLASS(ibComposerCompositionView);
-};
-
-// Its document — the composer metaobject's (ibMetaDocument::GetMetaObject); the composition lives in the composer,
-// saved with the configuration — nothing of its own to hold; its Save is the configuration's (see
-// docViewInterfaceEdit.h).
-class FRMSERVER_API ibComposerCompositionDocument : public ibMetaDocument {
-public:
-	ibComposerCompositionDocument() : ibMetaDocument() {}
-
-	ibComposerCompositionDocument(const ibComposerCompositionDocument&) = delete;
-	ibComposerCompositionDocument& operator=(const ibComposerCompositionDocument&) = delete;
-	wxDECLARE_DYNAMIC_CLASS(ibComposerCompositionDocument);
 };
 
 // WHAT A COMPOSITION'S PANEL ASKS OF THE CONFIGURATION, on whichever designer tab it is — a composer's own, or a form's

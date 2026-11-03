@@ -22,7 +22,7 @@
 #include "frmclient/win/editor/codeEditor/codeEditor.h"  // the script editor behind a parameter expression
 #include "frmclient/mainFrame/mainFrame.h"                // the shared editor / font-colour settings
 #include "frmclient/docView/docView.h"                    // ibMetaDocument — the composer editor's document mode
-#include "frmclient/backend/metaCollection/metaComposerObject.h"   // ibValueMetaObjectComposer — what a composer document was opened ON
+#include "frmclient/backend/metaCollection/metaTemplateObject.h"   // ibValueMetaObjectTemplate — what a composer document was opened ON
 #include "frmclient/backend/appData.h"                              // the ACTIVE configuration, when the composition names none
 #include "frmclient/backend/system/value/composition/valueComposerField.h"   // a declaration becomes a value for the reader
 #include "frmclient/backend/metaData.h"                             // the compile cache the parent module comes from
@@ -2028,14 +2028,14 @@ bool ibComposerSettingsPanel::Commit()
 //
 // Free functions rather than methods because the BASE CONSTRUCTOR needs both answers, and a virtual
 // call during base construction dispatches to the base.
-static ibValueMetaObjectComposer* ComposerOf(ibMetaDocument* document)
+static ibValueMetaObjectTemplate* ComposerOf(ibMetaDocument* document)
 {
-	return document != nullptr ? document->ConvertMetaObjectToType<ibValueMetaObjectComposer>() : nullptr;
+	return document != nullptr ? document->ConvertMetaObjectToType<ibValueMetaObjectTemplate>() : nullptr;
 }
 
 static const ibMetaData* MetaDataOf(ibMetaDocument* document)
 {
-	const ibValueMetaObjectComposer* metaComposer = ComposerOf(document);
+	const ibValueMetaObjectTemplate* metaComposer = ComposerOf(document);
 	return metaComposer != nullptr ? metaComposer->GetMetaData() : nullptr;
 }
 
@@ -2043,12 +2043,12 @@ static const ibMetaData* MetaDataOf(ibMetaDocument* document)
 // long as the tab lives.
 //
 // ⚠ THE STAND-IN. A composer tab with no composer metaobject cannot happen through the document
-// manager — the template is registered against the composer metatype — but the panel has to bind to
+// manager — the tab is made for a template of the composer kind alone — but the panel has to bind to
 // something, so it binds to an empty description here. Nothing written into it is ever saved, which is
 // the truth about a tab that is editing nothing.
 static ibCompositionDescription CompositionOf(ibMetaDocument* document)
 {
-	const ibValueMetaObjectComposer* metaComposer = ComposerOf(document);
+	const ibValueMetaObjectTemplate* metaComposer = ComposerOf(document);
 
 	return metaComposer != nullptr ? metaComposer->GetCompositionDesc() : ibCompositionDescription();
 }

@@ -26,7 +26,7 @@
 #include "backend/session/session.h"     // ibSession::CurrentFrame — and whether there is one at all
 
 #include "backend/metaCollection/metaIntrospect.h"
-#include "backend/metaCollection/metaSpreadsheetObject.h"
+#include "backend/metaCollection/metaTemplateObject.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/sheetFormat/sheetFormat.h"   // a format registers itself and says what it reads
 #include "core/description/spreadsheetDescription.h"
@@ -35,7 +35,7 @@
 namespace {
 
 // The template a caller named, refused in words when it is something else.
-ibValueMetaObjectSpreadsheetBase* FindTemplate(const ibDataNode& params, ibString& refusal)
+ibValueMetaObjectTemplateBase* FindTemplate(const ibDataNode& params, ibString& refusal)
 {
 	// The configuration check, the missing-argument refusal and the not-found refusal, in one
 	// call — see ibMcpObjectNamed for why they belong together.
@@ -43,12 +43,20 @@ ibValueMetaObjectSpreadsheetBase* FindTemplate(const ibDataNode& params, ibStrin
 	if (object == nullptr)
 		return nullptr;
 
-	ibValueMetaObjectSpreadsheetBase* sheet =
-		dynamic_cast<ibValueMetaObjectSpreadsheetBase*>(object);
+	ibValueMetaObjectTemplateBase* sheet =
+		dynamic_cast<ibValueMetaObjectTemplateBase*>(object);
 	if (sheet == nullptr) {
 		refusal = ibString::Format(
 			ibMcpText("'%s' is not a template. Create one with metadata_create kind=Template under an "
 			  "object, or kind=CommonTemplate under Common."), object->GetName());
+		return nullptr;
+	}
+
+	// …and a composer's holds a composition, no sheet: the report_* tools edit it.
+	if (sheet->GetTemplateDesc().GetType() != ibTemplateType::Spreadsheet) {
+		refusal = ibString::Format(
+			ibMcpText("'%s' is a composer template - it holds a composition, not a sheet; the report_* tools "
+			  "edit it."), object->GetName());
 		return nullptr;
 	}
 
@@ -550,11 +558,11 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibValueMetaObjectSpreadsheetBase* sheet = FindTemplate(params, refusal);
+		ibValueMetaObjectTemplateBase* sheet = FindTemplate(params, refusal);
 		if (sheet == nullptr)
 			return false;
 
-		const ibSpreadsheetDescription& desc = sheet->GetSpreadsheetDesc();
+		const ibSpreadsheetDescription& desc = sheet->GetTemplateDesc().GetSpreadsheetDesc();
 
 		// ⭐ HOW BIG IT IS, AND HOW MUCH OF IT FITS — the questions anything
 		// generating a sheet has to ask and cannot answer for itself.
@@ -877,7 +885,7 @@ public:
 			return true;
 		}
 
-		ibValueMetaObjectSpreadsheetBase* sheet = FindTemplate(params, refusal);
+		ibValueMetaObjectTemplateBase* sheet = FindTemplate(params, refusal);
 		if (sheet == nullptr)
 			return false;
 
@@ -890,7 +898,7 @@ public:
 			return false;
 		}
 
-		ibSpreadsheetDescription desc = sheet->GetSpreadsheetDesc();
+		ibSpreadsheetDescription desc = sheet->GetTemplateDesc().GetSpreadsheetDesc();
 
 		ibSpreadsheetCellDescription* cell = desc.GetOrCreateCell(row, col);
 		if (cell == nullptr) {
@@ -1122,7 +1130,7 @@ public:
 		if (params.Has(ArgReadOnly().Name()))
 			cell->m_isReadOnly = ArgReadOnly().Flag(params);
 
-		sheet->SetSpreadsheetDesc(desc);
+		sheet->SetTemplateDesc(desc);
 		activeMetaData->Modify(true);
 
 		result.AddField(ibT("row"), ibDataValue::Int(LineOut(row)));
@@ -1206,7 +1214,7 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibValueMetaObjectSpreadsheetBase* sheet = FindTemplate(params, refusal);
+		ibValueMetaObjectTemplateBase* sheet = FindTemplate(params, refusal);
 		if (sheet == nullptr)
 			return false;
 
@@ -1230,7 +1238,7 @@ public:
 			return false;
 		}
 
-		ibSpreadsheetDescription desc = sheet->GetSpreadsheetDesc();
+		ibSpreadsheetDescription desc = sheet->GetTemplateDesc().GetSpreadsheetDesc();
 
 		// ⭐⭐ ROWS OR COLUMNS, BECAUSE A TEMPLATE IS CUT BOTH WAYS AND THIS DOOR COULD ONLY CUT ONE.
 		// The description has carried column areas all along - AddColArea beside AddRowArea, with
@@ -1266,7 +1274,7 @@ public:
 			if (columns) desc.DeleteColArea(name);
 			else         desc.DeleteRowArea(name);
 
-			sheet->SetSpreadsheetDesc(desc);
+			sheet->SetTemplateDesc(desc);
 			activeMetaData->Modify(true);
 
 			result.AddField(ibT("removed"), ibDataValue::Bool(true));
@@ -1287,7 +1295,7 @@ public:
 			else         desc.AddRowArea(name, start, end);
 		}
 
-		sheet->SetSpreadsheetDesc(desc);
+		sheet->SetTemplateDesc(desc);
 		activeMetaData->Modify(true);
 
 		result.AddField(exists ? ibT("moved") : ibT("added"), ibDataValue::Bool(true));
@@ -1347,7 +1355,7 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibValueMetaObjectSpreadsheetBase* sheet = FindTemplate(params, refusal);
+		ibValueMetaObjectTemplateBase* sheet = FindTemplate(params, refusal);
 		if (sheet == nullptr)
 			return false;
 
@@ -1383,7 +1391,7 @@ public:
 			return false;
 		}
 
-		sheet->SetSpreadsheetDesc(desc);
+		sheet->SetTemplateDesc(desc);
 		activeMetaData->Modify(true);
 
 		result.AddField(ibT("imported"), ibDataValue::Bool(true));
@@ -1448,7 +1456,7 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibValueMetaObjectSpreadsheetBase* sheet = FindTemplate(params, refusal);
+		ibValueMetaObjectTemplateBase* sheet = FindTemplate(params, refusal);
 		if (sheet == nullptr)
 			return false;
 
@@ -1477,7 +1485,7 @@ public:
 			return false;
 		}
 
-		ibSpreadsheetDescription desc = sheet->GetSpreadsheetDesc();
+		ibSpreadsheetDescription desc = sheet->GetTemplateDesc().GetSpreadsheetDesc();
 
 		// 🛑 0 IS "PUT IT BACK", as the argument says - and it was written down as a size of nothing, which
 		// is how a HIDDEN band is stored (sheet_get says `hidden` for it): a band put back disappeared.
@@ -1494,7 +1502,7 @@ public:
 			else         desc.SetColSize(col, size);
 		}
 
-		sheet->SetSpreadsheetDesc(desc);
+		sheet->SetTemplateDesc(desc);
 		activeMetaData->Modify(true);
 
 		result.SetValue(ibT("band"), ibString(rowSaid > 0 ? ibT("row") : ibT("column")));
@@ -1570,7 +1578,7 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibValueMetaObjectSpreadsheetBase* sheet = FindTemplate(params, refusal);
+		ibValueMetaObjectTemplateBase* sheet = FindTemplate(params, refusal);
 		if (sheet == nullptr)
 			return false;
 
@@ -1578,7 +1586,7 @@ public:
 		const bool columns = ArgColumns().Flag(params);
 		const bool remove = ArgRemove().Flag(params);
 
-		ibSpreadsheetDescription desc = sheet->GetSpreadsheetDesc();
+		ibSpreadsheetDescription desc = sheet->GetTemplateDesc().GetSpreadsheetDesc();
 
 		if (what.IsSameAs(ibT("break"), false)) {
 
@@ -1686,7 +1694,7 @@ public:
 			return false;
 		}
 
-		sheet->SetSpreadsheetDesc(desc);
+		sheet->SetTemplateDesc(desc);
 		activeMetaData->Modify(true);
 
 		result.SetValue(ibT("band"), ibString(columns ? ibT("columns") : ibT("rows")));
@@ -1743,7 +1751,7 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibValueMetaObjectSpreadsheetBase* sheet = FindTemplate(params, refusal);
+		ibValueMetaObjectTemplateBase* sheet = FindTemplate(params, refusal);
 		if (sheet == nullptr)
 			return false;
 
@@ -1760,7 +1768,7 @@ public:
 			return false;
 		}
 
-		const ibSpreadsheetDescription& desc = sheet->GetSpreadsheetDesc();
+		const ibSpreadsheetDescription& desc = sheet->GetTemplateDesc().GetSpreadsheetDesc();
 
 		std::vector<ibDataValue> cells;
 
@@ -1842,7 +1850,7 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibValueMetaObjectSpreadsheetBase* sheet = FindTemplate(params, refusal);
+		ibValueMetaObjectTemplateBase* sheet = FindTemplate(params, refusal);
 		if (sheet == nullptr)
 			return false;
 
@@ -1881,7 +1889,7 @@ public:
 			return false;
 		}
 
-		ibSpreadsheetDescription desc = sheet->GetSpreadsheetDesc();
+		ibSpreadsheetDescription desc = sheet->GetTemplateDesc().GetSpreadsheetDesc();
 
 		int written = 0;
 
@@ -1932,7 +1940,7 @@ public:
 			}
 		}
 
-		sheet->SetSpreadsheetDesc(desc);
+		sheet->SetTemplateDesc(desc);
 		activeMetaData->Modify(true);
 
 		result.SetValue(ibT("row"), row);
@@ -1994,7 +2002,7 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibValueMetaObjectSpreadsheetBase* sheet = FindTemplate(params, refusal);
+		ibValueMetaObjectTemplateBase* sheet = FindTemplate(params, refusal);
 		if (sheet == nullptr)
 			return false;
 
@@ -2009,7 +2017,7 @@ public:
 		}
 
 		std::shared_ptr<ibSpreadsheetObject> shown(
-			std::make_shared<ibSpreadsheetObject>(sheet->GetSpreadsheetDesc()));
+			std::make_shared<ibSpreadsheetObject>(sheet->GetTemplateDesc().GetSpreadsheetDesc()));
 
 		// ⚠ READ-ONLY, BECAUSE IT IS A COPY. Typing into it would change nothing and look as though
 		// it had - the window holds its own description, not the template's.
@@ -2073,7 +2081,7 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibValueMetaObjectSpreadsheetBase* sheet = FindTemplate(params, refusal);
+		ibValueMetaObjectTemplateBase* sheet = FindTemplate(params, refusal);
 		if (sheet == nullptr)
 			return false;
 
@@ -2107,7 +2115,7 @@ public:
 		// having this here: the file then answers for what the CONFIGURATION holds, and a
 		// difference between this file and one saved from an editor says the editor's road is
 		// where something is lost.
-		if (!format->WriteFile(fileName, sheet->GetSpreadsheetDesc())) {
+		if (!format->WriteFile(fileName, sheet->GetTemplateDesc().GetSpreadsheetDesc())) {
 			refusal = ibString::Format(ibMcpText("'%s' could not be written."), fileName);
 			return false;
 		}

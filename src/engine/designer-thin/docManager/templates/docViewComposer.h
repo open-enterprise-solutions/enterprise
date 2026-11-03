@@ -1,9 +1,9 @@
 #ifndef _COMPOSER_DOC_H__
 #define _COMPOSER_DOC_H__
 
-// A COMPOSER OPENS ON A TAB OF ITS OWN, like a form or a template — THE DESKTOP'S
+// A COMPOSER OPENS ON A TAB OF ITS OWN, like a form or a spreadsheet template — THE DESKTOP'S
 // (designer/docManager/templates/docViewComposer.h) IN A TAB THE SERVER RAISED (Kind Composer): the document is the
-// server's (frmserver ibComposerCompositionDocument). What it declares — the query, the resources, the parameters, the
+// server's (frmserver ibTemplateDocument, a composer template's). What it declares — the query, the resources, the parameters, the
 // output structure — is edited by the same panel a composition on a form is edited by (ibComposerSettingsPanel), over
 // the composition the tab's view brought; what the panel holds goes back whole (Change {Composition}), on each edit and
 // when the tab is saved or closed — accepting the tab is Commit() on the panel, as the desktop's.

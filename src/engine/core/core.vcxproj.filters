@@ -137,6 +137,9 @@
     <ClCompile Include="description\standardCommandDescription.cpp">
       <Filter>description</Filter>
     </ClCompile>
+    <ClCompile Include="description\templateDescription.cpp">
+      <Filter>description</Filter>
+    </ClCompile>
     <ClCompile Include="description\typeDescription.cpp">
       <Filter>description</Filter>
     </ClCompile>
@@ -374,6 +377,9 @@
       <Filter>description</Filter>
     </ClInclude>
     <ClInclude Include="description\standardCommandDescription.h">
+      <Filter>description</Filter>
+    </ClInclude>
+    <ClInclude Include="description\templateDescription.h">
       <Filter>description</Filter>
     </ClInclude>
     <ClInclude Include="description\typeDescription.h">

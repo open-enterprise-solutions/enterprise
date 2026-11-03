@@ -1040,11 +1040,11 @@ ibValue ibValueSystemFunction::GetCommonTemplate(const ibString& strTemplateName
 {
 	if (!strTemplateName.IsEmpty()) {
 
-		const ibValueMetaObjectCommonSpreadsheet* creator =
-			activeMetaData->FindAnyObjectByFilter<ibValueMetaObjectCommonSpreadsheet>(strTemplateName, g_metaCommonTemplateCLSID);
+		const ibValueMetaObjectCommonTemplate* creator =
+			activeMetaData->FindAnyObjectByFilter<ibValueMetaObjectCommonTemplate>(strTemplateName, g_metaCommonTemplateCLSID);
 
 		if (creator != nullptr)
-			return new ibValueSpreadsheetDocument(creator->GetSpreadsheetDesc());
+			return creator->GetTemplateProvider().GetDataValue(creator->GetTemplateDesc(), creator->GetMetaData());
 	}
 
 	// ⭐⭐ AN EDITOR WORKING OUT WHAT IS AT A CARET IS NOT ASKING FOR THIS TEMPLATE — it is asking

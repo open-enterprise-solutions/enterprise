@@ -2,7 +2,7 @@
 #define __REPORT_H__
 
 #include "commonObject.h"
-#include "backend/metaCollection/metaComposerObject.h"   // the report's own composers
+#include "backend/system/value/valueDataComposition.h"   // what the object carries for each composer
 
 // ⭐ WHAT A REPORT'S FORM IS OPENED WITH — the report's own, so the report names it; each rides in the form's
 // request (ibFormRequest::Set / Get), or in the run's (ibRuntimeRequest), which hands it to the form it opens.
@@ -44,27 +44,24 @@ public:
 		m_propertyDefFormObject->SetValue(id);
 	}
 
-	// ⭐ A REPORT HOSTS COMPOSERS, and only a report does. The owner is what decides which kinds it
-	// accepts (ResolveChild) — the tree, the copy walkers and the serializer all ask this one
-	// question, so a metatype missing from here exists but can never be created under anything.
-	virtual ibClassID ResolveChild(const ibClassID& clsid) const override {
-		if (clsid == g_metaComposerCLSID)
-			return clsid;
-		return ibValueMetaObjectRecordDataExt::ResolveChild(clsid);
-	}
-
-	// ⭐ THE COMPOSERS THIS REPORT DECLARES — the report's own children, like its forms and its
-	// templates. Declaring one is what makes `Report.<Name>` exist; nobody adds an attribute beside
-	// it (Max, 2026-08-20: "an attribute you add by hand; this one lives in the object").
-	std::vector<ibValueMetaObjectComposer*> GetComposerArrayObject(
-		std::vector<ibValueMetaObjectComposer*> array = std::vector<ibValueMetaObjectComposer*>()) const {
-		FillArrayObjectByFilter<ibValueMetaObjectComposer>(array, { g_metaComposerCLSID });
+	// ⭐ THE COMPOSERS THIS REPORT DECLARES — its templates of the composer kind. Declaring one is what makes
+	// `Report.<Name>` exist; nobody adds an attribute beside it (Max, 2026-08-20: "an attribute you add
+	// by hand; this one lives in the object").
+	std::vector<ibValueMetaObjectTemplate*> GetComposerArrayObject(
+		std::vector<ibValueMetaObjectTemplate*> array = std::vector<ibValueMetaObjectTemplate*>()) const {
+		std::vector<ibValueMetaObjectTemplate*> templates;
+		FillArrayObjectByFilter<ibValueMetaObjectTemplate>(templates, { g_metaTemplateCLSID });
+		for (ibValueMetaObjectTemplate* metaTemplate : templates) {
+			if (metaTemplate->GetTemplateDesc().GetType() == ibTemplateType::Composer)
+				array.push_back(metaTemplate);
+		}
 		return array;
 	}
 
 	template <typename _T1>
-	ibValueMetaObjectComposer* FindComposerObjectByFilter(const _T1& id) const {
-		return FindObjectByFilter<ibValueMetaObjectComposer>(id, { g_metaComposerCLSID });
+	ibValueMetaObjectTemplate* FindComposerObjectByFilter(const _T1& id) const {
+		ibValueMetaObjectTemplate* founded = FindObjectByFilter<ibValueMetaObjectTemplate>(id, { g_metaTemplateCLSID });
+		return founded != nullptr && founded->GetTemplateDesc().GetType() == ibTemplateType::Composer ? founded : nullptr;
 	}
 
 	// THE DEFAULT COMPOSER — what makes the report a report. The generated form is built from it
@@ -82,8 +79,8 @@ public:
 	// The FIRST composer declared becomes the default one, and removing the default one clears it —
 	// the same two hooks a form already has (OnCreateFormObject / OnRemoveMetaForm), so a person
 	// never has to know that "default" is a separate property to fill in.
-	void OnCreateComposerObject(ibValueMetaObjectComposer* metaComposer);
-	void OnRemoveComposerObject(ibValueMetaObjectComposer* metaComposer);
+	void OnCreateComposerObject(ibValueMetaObjectTemplate* metaComposer);
+	void OnRemoveComposerObject(ibValueMetaObjectTemplate* metaComposer);
 
 	ibValueMetaObjectReport();
 	virtual ~ibValueMetaObjectReport();

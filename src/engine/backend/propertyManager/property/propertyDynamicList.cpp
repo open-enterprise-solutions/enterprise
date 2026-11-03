@@ -28,7 +28,7 @@ void ibPropertyDynamicList::SetValue(const ibCompositionDescription& val) {
 bool ibPropertyDynamicList::ReadNodeValue(const ibDataValue& value)
 {
 	// …and the same door, for the same reason: a list's saved filter compares against references.
-	// CONST owner — the non-const GetMetaData overload answers null (see ibPropertyComposition).
+	// CONST owner — the non-const GetMetaData overload answers null (see ibPropertyDataComposition).
 	const ibPropertyObject* owner = m_owner;
 	return ibBackendCompositionDescriptionMemory::ReadNode(value, GetValueAsCompositionDesc(),
 		owner != nullptr ? owner->GetMetaData() : nullptr);

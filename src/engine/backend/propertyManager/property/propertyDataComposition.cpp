@@ -26,8 +26,14 @@ void ibPropertyDataComposition::SetValue(const ibCompositionDescription& val) {
 // and so is what a list saves — so the pair that reads and writes one is the pair that runs here.
 bool ibPropertyDataComposition::ReadNodeValue(const ibDataValue& value)
 {
-	// …AND THE CONFIGURATION IT IS READ AGAINST — see ibPropertyComposition::ReadNodeValue for what
-	// goes wrong without it, and why the owner is taken CONST here.
+	// …AND THE CONFIGURATION IT IS READ AGAINST. What is read back holds references and enum members
+	// — a filter's right side, a parameter's value — and those types exist only in the configuration's
+	// own registry: without it the value factory raises "Unknown value type '<id>'" on a record saved
+	// perfectly well, the id being a metaobject's (Max, 2026-08-28).
+	//
+	// ⚠⚠ THROUGH A CONST OWNER. `GetMetaData` has two overloads and only the CONST one answers — the
+	// other asserts and returns null (propertyObject.h) — so from a non-const method like this one
+	// the door came back empty and the read failed exactly as if it had never been handed in.
 	const ibPropertyObject* owner = m_owner;
 	return ibBackendCompositionDescriptionMemory::ReadNode(value, GetValueAsCompositionDesc(),
 		owner != nullptr ? owner->GetMetaData() : nullptr);

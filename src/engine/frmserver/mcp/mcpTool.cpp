@@ -22,6 +22,7 @@
 #include "backend/metaCollection/metaLanguageObject.h"         // …and the languages are the config's own
 #include "backend/metaCollection/metaModuleObject.h"           // ibValueMetaObjectModuleBase — the module behind an id
 #include "backend/metaCollection/metaRoleObject.h"             // what an account's role is called
+#include "backend/metaCollection/metaTemplateObject.h"         // ibValueMetaObjectTemplate — the composer behind an id
 
 #include "core/stringTokenizer.h"   // a query is words, and the finder counts how many of them landed
 #include <wx/regex.h>     // …unless it is written as a pattern, which is also a way to ask
@@ -1439,6 +1440,24 @@ ibValueMetaObject* ibMcpObjectNamed(const ibDataNode& params, ibString& refusal,
 	}
 
 	return object;
+}
+
+ibValueMetaObjectTemplate* ibMcpComposerNamed(const ibDataNode& params, ibString& refusal,
+	const ibString& field)
+{
+	ibValueMetaObject* object = ibMcpObjectNamed(params, refusal, field);
+	if (object == nullptr)
+		return nullptr;
+
+	ibValueMetaObjectTemplate* composer = object->ConvertToType<ibValueMetaObjectTemplate>();
+	if (composer == nullptr || composer->GetTemplateDesc().GetType() != ibTemplateType::Composer) {
+		refusal = ibString::Format(
+			ibMcpText("'%s' is not a composer - a template of the composer kind is, under a report or any other "
+				  "object; metadata_get on its owner lists it among its children."), object->GetName());
+		return nullptr;
+	}
+
+	return composer;
 }
 
 // ⭐ WHAT THE CALL CARRIED, WHEN THE TOOL HAS NOTHING BETTER TO SHOW.

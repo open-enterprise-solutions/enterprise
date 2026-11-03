@@ -373,7 +373,7 @@ bool ibValueMetaObjectAccountingRegister::OnSaveMetaObject(int flags)
 	// write transaction closes normally and the next save is not met by a deadlock — which is the
 	// whole reason the rule above lives elsewhere.
 	if (m_propertyChartOfAccounts->IsEmptyProperty()) {
-		// Into the LEDGER — see metaComposerObject.cpp. The ledger is what restructuring fills as it
+		// Into the LEDGER — see metaTemplateObject.cpp. The ledger is what restructuring fills as it
 		// goes, and both readers already take it from there.
 		RestructureError(ibString::Format(
 			_("%s: a chart of accounts is required - the account type, the number of analytics and their type all come from it"), GetName()));

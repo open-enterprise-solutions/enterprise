@@ -208,8 +208,9 @@ bool ibValueMetaObject::ApplyDataNode(const ibDataNode& node, bool resetId)
 		// that lends its metaobject node to something meant for a VALUE breaks it — and that is a
 		// real defect, not a variation: it put `CompositionVariant` nodes keyed by LOOP INDEX where a
 		// (clsid, metaId) pair means an object's identity, and a report saved with a composer could
-		// then be written and never opened again (2026-08-20; the door was fixed in
-		// metaComposerObject.cpp, this is the guard that keeps a whole file from being lost to it).
+		// then be written and never opened again (2026-08-20; the door was fixed in the composer's
+		// serialisation, metaTemplateObject.cpp now, this is the guard that keeps a whole file from
+		// being lost to it).
 		//
 		// ⭐ RAISED, NOT SKIPPED (Max, 2026-08-20: "a spreadsheet document does all of this properly;
 		// a composer has to pass the same way. Give me an exception when it is not a metaobject —
@@ -221,9 +222,13 @@ bool ibValueMetaObject::ApplyDataNode(const ibDataNode& node, bool resetId)
 				  "children ARE metaobjects; its own data belongs in a named sub-node"),
 				GetName(), (long long)childNode.GetClsid());
 
+		// ⚠ A COMPOSER IS A TEMPLATE OF THE COMPOSER KIND since 2026-11-03 — a file written before keeps its
+		// MD_CMPS nodes, read as templates; the template tells its kind by the data it carries (ReadData).
+		const ibClassID clsid = childNode.GetClsid() == g_metaComposerCLSID ? g_metaTemplateCLSID : childNode.GetClsid();
+
 		ibValue* ppParams[] = { this };
 		const ibValuePtr<ibValueMetaObject> newMetaObject =
-			ibValue::CreateObject(childNode.GetClsid(), ppParams, 1);   // this node's child vector keeps it
+			ibValue::CreateObject(clsid, ppParams, 1);   // this node's child vector keeps it
 		if (newMetaObject == nullptr)
 			ibBackendCoreException::Error(
 				_("Unknown metadata class id %lld while loading subtree of '%s'"),

@@ -179,6 +179,7 @@
     <ClCompile Include="description\sourceDescription.cpp" />
     <ClCompile Include="description\spreadsheetDescription.cpp" />
     <ClCompile Include="description\standardCommandDescription.cpp" />
+    <ClCompile Include="description\templateDescription.cpp" />
     <ClCompile Include="description\typeDescription.cpp" />
     <ClCompile Include="diagnostics\crashGuard.cpp" />
     <ClCompile Include="diagnostics\journal.cpp" />
@@ -290,6 +291,7 @@
     <ClInclude Include="description\sourceDescription.h" />
     <ClInclude Include="description\spreadsheetDescription.h" />
     <ClInclude Include="description\standardCommandDescription.h" />
+    <ClInclude Include="description\templateDescription.h" />
     <ClInclude Include="description\typeDescription.h" />
     <ClInclude Include="diagnostics\crashGuard.h" />
     <ClInclude Include="diagnostics\debugTrace.h" />

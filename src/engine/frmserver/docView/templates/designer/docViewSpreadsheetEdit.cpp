@@ -1,6 +1,7 @@
 #include "docViewSpreadsheetEdit.h"
+#include "docViewComposerEdit.h"   // a composer template's view
 
-#include "backend/metaCollection/metaSpreadsheetObject.h"
+#include "backend/metaCollection/metaTemplateObject.h"
 #include "core/description/spreadsheetDescription.h"   // ibSpreadsheetDescriptionMemory — the sheet as it is stored
 #include "core/serialize/dataBuilder.h"
 
@@ -24,13 +25,13 @@ void ibSpreadsheetTemplateView::OnDraw(ibDataNode& frame)
 
 bool ibSpreadsheetTemplateView::Fetch(const ibDataNode& /*request*/, ibDataNode& response)
 {
-	const ibValueMetaObjectSpreadsheetBase* const creator =
-		GetDocument()->ConvertMetaObjectToType<ibValueMetaObjectSpreadsheetBase>();
+	const ibValueMetaObjectTemplateBase* const creator =
+		GetDocument()->ConvertMetaObjectToType<ibValueMetaObjectTemplateBase>();
 	if (creator == nullptr)
 		return false;
 
 	ibDataValue sheet;
-	if (!ibSpreadsheetDescriptionMemory::WriteNode(sheet, creator->GetSpreadsheetDesc()))
+	if (!ibSpreadsheetDescriptionMemory::WriteNode(sheet, creator->GetTemplateDesc().GetSpreadsheetDesc()))
 		return false;
 	response.SetField(ibProtocol::ibForm::ibSpreadsheet::Sheet, sheet);
 	// …and read-only where the configuration may not be edited, as the desktop's editor was.
@@ -42,8 +43,8 @@ bool ibSpreadsheetTemplateView::Fetch(const ibDataNode& /*request*/, ibDataNode&
 bool ibSpreadsheetTemplateView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args)
 {
 	ibMetaDocument* const document = GetDocument();
-	ibValueMetaObjectSpreadsheetBase* const creator =
-		document->ConvertMetaObjectToType<ibValueMetaObjectSpreadsheetBase>();
+	ibValueMetaObjectTemplateBase* const creator =
+		document->ConvertMetaObjectToType<ibValueMetaObjectTemplateBase>();
 	if (creator == nullptr)
 		return false;
 
@@ -56,7 +57,7 @@ bool ibSpreadsheetTemplateView::OnClientEvent(ibProtocol::ibEvent::ibKind event,
 		if (!creator->IsEditable() || !ibSpreadsheetDescriptionMemory::ReadNode(args.GetProperty(ibProtocol::ibForm::ibSpreadsheet::Sheet), sheet))
 			return false;
 		// Where the desktop's editor wrote — the metaobject's sheet — and the configuration modified (ibMetaDocument::Modify).
-		creator->SetSpreadsheetDesc(sheet);
+		creator->SetTemplateDesc(sheet);
 		document->Modify(true);
 		return true;
 	}
@@ -66,7 +67,15 @@ bool ibSpreadsheetTemplateView::OnClientEvent(ibProtocol::ibEvent::ibKind event,
 }
 
 // ----------------------------------------------------------------------------
-// ibSpreadsheetTemplateDocument implementation
+// ibTemplateDocument implementation
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibSpreadsheetTemplateDocument, ibMetaDocument);
+wxIMPLEMENT_DYNAMIC_CLASS(ibTemplateDocument, ibMetaDocument);
+
+ibView* ibTemplateDocument::DoCreateView()
+{
+	const ibValueMetaObjectTemplateBase* const creator = ConvertMetaObjectToType<ibValueMetaObjectTemplateBase>();
+	if (creator != nullptr && creator->GetTemplateDesc().GetType() == ibTemplateType::Composer)
+		return new ibComposerCompositionView();
+	return ibMetaDocument::DoCreateView();
+}

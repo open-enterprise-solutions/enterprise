@@ -107,9 +107,9 @@ ibFormPtr<ibBackendValueForm> ibValueMetaObjectGenericData::CreateAndBuildForm(c
 #pragma endregion
 #pragma region _template_builder_h_
 
-ibValueSpreadsheetDocument* ibValueMetaObjectGenericData::GetTemplate(const ibString& strTemplateName) const
+ibValue ibValueMetaObjectGenericData::GetTemplate(const ibString& strTemplateName) const
 {
-	ibValueMetaObjectSpreadsheetBase* creator = nullptr;
+	ibValueMetaObjectTemplateBase* creator = nullptr;
 
 	if (!strTemplateName.IsEmpty()) {
 
@@ -117,18 +117,15 @@ ibValueSpreadsheetDocument* ibValueMetaObjectGenericData::GetTemplate(const ibSt
 
 		if (creator == nullptr) {
 			ibBackendCoreException::Error(_("Template not found '%s'"), strTemplateName);
-			return nullptr;
+			return ibValue();
 		}
 
-		ibValueSpreadsheetDocument* valueSpreadsheetDocument =
-			new ibValueSpreadsheetDocument(creator->GetSpreadsheetDesc());
-
-		valueSpreadsheetDocument->InvalidateNames();
-		return valueSpreadsheetDocument;
+		// A fresh value of its kind — the provider of the kind makes it (ibTemplateProvider).
+		return creator->GetTemplateProvider().GetDataValue(creator->GetTemplateDesc(), creator->GetMetaData());
 	}
 
 	ibBackendCoreException::Error(_("Template not found!"));
-	return nullptr;
+	return ibValue();
 }
 
 #pragma endregion
@@ -1449,7 +1446,7 @@ bool ibValueMetaObjectRegisterData::OnSaveMetaObject(int flags)
 	// chart of accounts' missing binding — the message belongs in the pane under the editor, the save
 	// refuses, and no exception leaves the configuration write transaction open.
 	if (HasRecorder() && (*m_propertyAttributeRecorder)->IsEmptyTypeDesc()) {
-		// Into the LEDGER — see the note in metaComposerObject.cpp: one road for a refusal, read by
+		// Into the LEDGER — see the note in metaTemplateObject.cpp: one road for a refusal, read by
 		// whoever asked. Printed here it also stayed on the screen after a probe that only asked.
 		RestructureError(ibString::Format(
 			_("%s: no recorder - declare a document that posts into this register, or it can never be written to"), GetName()));

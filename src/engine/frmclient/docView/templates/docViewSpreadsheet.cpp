@@ -87,7 +87,7 @@ bool ibSpreadsheetEditView::OnCreate(ibFrontendDocument* docBase, long flags)
 	ibMetaDocument* doc = GetDocument();
 	m_gridEditor = new ibGridEditor(doc, m_viewFrame, wxID_ANY);
 	m_gridEditor->EnableEditing(flags != ibDOC_READONLY);
-	m_gridEditor->EnableGridArea(doc->ConvertMetaObjectToType<ibValueMetaObjectSpreadsheetBase>());
+	m_gridEditor->EnableGridArea(doc->ConvertMetaObjectToType<ibValueMetaObjectTemplateBase>());
 	// Its grid's zoom (Ctrl+wheel) heard from the grid itself, not from a frame: a grid box's view is no frame's — the
 	// form's view stands in front of it — and its choice stayed at 100% over a sheet at 150% (2026-10-20).
 	m_gridEditor->Bind(wxEVT_GRID_ZOOM, &ibSpreadsheetEditView::OnGridZoomChanged, this);
@@ -159,8 +159,8 @@ wxMenuBar* ibSpreadsheetEditView::CreateMenuBar() const
 		menuItem = menu->AppendCheckItem(wxID_SHOW_AREA, _("Show area"));
 		menuItem->Check(m_gridEditor->GridAreaEnabled());
 
-		const ibValueMetaObjectSpreadsheetBase* doc = 
-			GetDocument()->ConvertMetaObjectToType<ibValueMetaObjectSpreadsheetBase>();
+		const ibValueMetaObjectTemplateBase* doc = 
+			GetDocument()->ConvertMetaObjectToType<ibValueMetaObjectTemplateBase>();
 
 		menuItem = menu->AppendCheckItem(wxID_EDITABLE, _("Editable"));
 		menuItem->Enable(doc ? doc->IsEditable() : true);
@@ -494,7 +494,7 @@ bool ibSpreadsheetEditDocument::OnCreate(const wxString& path, long flags)
 	if (!ibMetaDocument::OnCreate(path, flags))
 		return false;
 
-	const ibValueMetaObjectSpreadsheetBase* creator = m_metaObject->ConvertToType<ibValueMetaObjectSpreadsheetBase>();
+	const ibValueMetaObjectTemplateBase* creator = m_metaObject->ConvertToType<ibValueMetaObjectTemplateBase>();
 	if (creator != nullptr)
 		return GetGridCtrl()->LoadDocument(creator->GetSpreadsheetDesc());
 
@@ -507,7 +507,7 @@ bool ibSpreadsheetEditDocument::SaveAs()
 	if (!docTemplate)
 		return false;
 
-	const ibValueMetaObjectSpreadsheetBase* creator = m_metaObject->ConvertToType<ibValueMetaObjectSpreadsheetBase>();
+	const ibValueMetaObjectTemplateBase* creator = m_metaObject->ConvertToType<ibValueMetaObjectTemplateBase>();
 	if (creator == nullptr)
 		return false;
 

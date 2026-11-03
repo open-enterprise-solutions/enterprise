@@ -140,6 +140,15 @@ bool ibBackendCompositionDescriptionMemory::ReadNode(const ibDataNode& node, ibC
 	return true;
 }
 
+bool ibBackendTemplateDescriptionMemory::ReadNode(const ibDataValue& value, ibTemplateDescription& templateDesc, const ibMetaData* metaData)
+{
+	if (!ibTemplateDescriptionMemory::ReadNode(value, templateDesc))
+		return false;
+	if (metaData != nullptr && templateDesc.GetType() == ibTemplateType::Composer)
+		CheckStoredValue(templateDesc.GetCompositionDesc(), metaData);
+	return true;
+}
+
 // A VARIANT'S CAPTION, in the CONFIGURATION's language — see the note beside the declaration. The
 // synonym is stored as a translated text; a language missing from it is answered inside the localizer,
 // and a synonym written plainly (no languages in it at all) is its own caption.

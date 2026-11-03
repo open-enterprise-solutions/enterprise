@@ -272,7 +272,7 @@ void ibGridEditor::ShowComposeState(ibProtocol::ibForm::ibSpreadsheet::ibCompose
 
 #pragma endregion
 
-#include "frmclient/backend/metaCollection/metaSpreadsheetObject.h"
+#include "frmclient/backend/metaCollection/metaTemplateObject.h"
 
 void ibGridEditor::GetCellDetailsParameter(int row, int col, wxString& s) const
 {
@@ -287,7 +287,7 @@ void ibGridEditor::SetCellDetailsParameter(int row, int col, const wxString& s)
 {
 	if (m_document != nullptr) {
 
-		ibValueMetaObjectSpreadsheetBase* creator = m_document->ConvertMetaObjectToType<ibValueMetaObjectSpreadsheetBase>();
+		ibValueMetaObjectTemplateBase* creator = m_document->ConvertMetaObjectToType<ibValueMetaObjectTemplateBase>();
 
 		if (creator != nullptr) {
 			ibSpreadsheetDescription& spreadsheetDescription = creator->GetSpreadsheetDesc();
@@ -512,7 +512,7 @@ void ibGridEditor::OnGridRowSize(ibGridSizeEvent& event)
 
 	if (m_document != nullptr) {
 
-		ibValueMetaObjectSpreadsheetBase* creator = m_document->ConvertMetaObjectToType<ibValueMetaObjectSpreadsheetBase>();
+		ibValueMetaObjectTemplateBase* creator = m_document->ConvertMetaObjectToType<ibValueMetaObjectTemplateBase>();
 
 		if (creator != nullptr) {
 			ibSpreadsheetDescription& spreadsheetDescription = creator->GetSpreadsheetDesc();
@@ -538,7 +538,7 @@ void ibGridEditor::OnGridColSize(ibGridSizeEvent& event)
 
 	if (m_document != nullptr) {
 
-		ibValueMetaObjectSpreadsheetBase* creator = m_document->ConvertMetaObjectToType<ibValueMetaObjectSpreadsheetBase>();
+		ibValueMetaObjectTemplateBase* creator = m_document->ConvertMetaObjectToType<ibValueMetaObjectTemplateBase>();
 
 		if (creator != nullptr) {
 			ibSpreadsheetDescription& spreadsheetDescription = creator->GetSpreadsheetDesc();
@@ -563,7 +563,7 @@ void ibGridEditor::OnGridRowBrake(ibGridSizeEvent& event)
 {
 	if (m_document != nullptr) {
 
-		ibValueMetaObjectSpreadsheetBase* creator = m_document->ConvertMetaObjectToType<ibValueMetaObjectSpreadsheetBase>();
+		ibValueMetaObjectTemplateBase* creator = m_document->ConvertMetaObjectToType<ibValueMetaObjectTemplateBase>();
 
 		if (creator != nullptr) {
 			ibSpreadsheetDescription& spreadsheetDescription = creator->GetSpreadsheetDesc();
@@ -595,7 +595,7 @@ void ibGridEditor::OnGridColBrake(ibGridSizeEvent& event)
 {
 	if (m_document != nullptr) {
 
-		ibValueMetaObjectSpreadsheetBase* creator = m_document->ConvertMetaObjectToType<ibValueMetaObjectSpreadsheetBase>();
+		ibValueMetaObjectTemplateBase* creator = m_document->ConvertMetaObjectToType<ibValueMetaObjectTemplateBase>();
 
 		if (creator != nullptr) {
 			ibSpreadsheetDescription& spreadsheetDescription = creator->GetSpreadsheetDesc();
@@ -627,7 +627,7 @@ void ibGridEditor::OnGridRowArea(ibGridAreaEvent& event)
 {
 	if (m_document != nullptr) {
 
-		ibValueMetaObjectSpreadsheetBase* creator = m_document->ConvertMetaObjectToType<ibValueMetaObjectSpreadsheetBase>();
+		ibValueMetaObjectTemplateBase* creator = m_document->ConvertMetaObjectToType<ibValueMetaObjectTemplateBase>();
 
 		if (creator != nullptr) {
 			ibSpreadsheetDescription& spreadsheetDescription = creator->GetSpreadsheetDesc();
@@ -663,7 +663,7 @@ void ibGridEditor::OnGridColArea(ibGridAreaEvent& event)
 {
 	if (m_document != nullptr) {
 
-		ibValueMetaObjectSpreadsheetBase* creator = m_document->ConvertMetaObjectToType<ibValueMetaObjectSpreadsheetBase>();
+		ibValueMetaObjectTemplateBase* creator = m_document->ConvertMetaObjectToType<ibValueMetaObjectTemplateBase>();
 
 		if (creator != nullptr) {
 			ibSpreadsheetDescription& spreadsheetDescription = creator->GetSpreadsheetDesc();
@@ -699,7 +699,7 @@ void ibGridEditor::OnGridRowFreeze(ibGridSizeEvent& event)
 {
 	if (m_document != nullptr) {
 
-		ibValueMetaObjectSpreadsheetBase* creator = m_document->ConvertMetaObjectToType<ibValueMetaObjectSpreadsheetBase>();
+		ibValueMetaObjectTemplateBase* creator = m_document->ConvertMetaObjectToType<ibValueMetaObjectTemplateBase>();
 
 		if (creator != nullptr) {
 			ibSpreadsheetDescription& spreadsheetDescription = creator->GetSpreadsheetDesc();
@@ -721,7 +721,7 @@ void ibGridEditor::OnGridColFreeze(ibGridSizeEvent& event)
 {
 	if (m_document != nullptr) {
 
-		ibValueMetaObjectSpreadsheetBase* creator = m_document->ConvertMetaObjectToType<ibValueMetaObjectSpreadsheetBase>();
+		ibValueMetaObjectTemplateBase* creator = m_document->ConvertMetaObjectToType<ibValueMetaObjectTemplateBase>();
 
 		if (creator != nullptr) {
 			ibSpreadsheetDescription& spreadsheetDescription = creator->GetSpreadsheetDesc();
@@ -767,7 +767,7 @@ void ibGridEditor::OnGridTableModified(ibGridEvent& event)
 
 	if (m_document != nullptr) {
 
-		ibValueMetaObjectSpreadsheetBase* creator = m_document->ConvertMetaObjectToType<ibValueMetaObjectSpreadsheetBase>();
+		ibValueMetaObjectTemplateBase* creator = m_document->ConvertMetaObjectToType<ibValueMetaObjectTemplateBase>();
 
 		if (creator != nullptr) {
 			ibSpreadsheetDescription& spreadsheetDescription = creator->GetSpreadsheetDesc();
@@ -800,7 +800,7 @@ void ibGridEditor::OnGridTableAttrModified(ibGridEvent& event)
 
 	if (m_document != nullptr) {
 
-		ibValueMetaObjectSpreadsheetBase* creator = m_document->ConvertMetaObjectToType<ibValueMetaObjectSpreadsheetBase>();
+		ibValueMetaObjectTemplateBase* creator = m_document->ConvertMetaObjectToType<ibValueMetaObjectTemplateBase>();
 
 		if (creator != nullptr) {
 
@@ -1230,8 +1230,8 @@ void ibGridEditor::OnRowHeight(wxCommandEvent& event)
 
 		// A height typed here reaches the document the way a drag does — through the size event
 		// (OnGridRowSize). Only GIVING one UP has to be said here, because there is no event for it.
-		ibValueMetaObjectSpreadsheetBase* creator = m_document != nullptr ?
-			m_document->ConvertMetaObjectToType<ibValueMetaObjectSpreadsheetBase>() : nullptr;
+		ibValueMetaObjectTemplateBase* creator = m_document != nullptr ?
+			m_document->ConvertMetaObjectToType<ibValueMetaObjectTemplateBase>() : nullptr;
 
 		for (auto cell : ibGrid::GetSelectedBlocks()) {
 			if (rowHeight->IsAutoHeight()) {
@@ -1271,8 +1271,8 @@ void ibGridEditor::OnColWidth(wxCommandEvent& event)
 
 		// As with a row's height: a width typed here reaches the document through the size event
 		// (OnGridColSize), and only GIVING one UP has to be said here.
-		ibValueMetaObjectSpreadsheetBase* creator = m_document != nullptr ?
-			m_document->ConvertMetaObjectToType<ibValueMetaObjectSpreadsheetBase>() : nullptr;
+		ibValueMetaObjectTemplateBase* creator = m_document != nullptr ?
+			m_document->ConvertMetaObjectToType<ibValueMetaObjectTemplateBase>() : nullptr;
 
 		for (auto cell : ibGrid::GetSelectedBlocks()) {
 			if (colWidth->IsDefaultWidth()) {

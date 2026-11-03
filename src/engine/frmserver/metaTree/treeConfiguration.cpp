@@ -2,22 +2,20 @@
 
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaCommandObject.h"   // ibValueMetaObjectCommand::GetSubCommands — commands nest
-#include "backend/metaCollection/metaComposerObject.h"  // the report's composers, as rows
 #include "backend/metaCollection/metaGroups.h"          // what a group is called, where it stands, its band
 #include "backend/metaCollection/metaLanguageObject.h"  // ibValueMetaObjectLanguage::GetLangCode — a language's row
 #include "backend/metaCollection/metaObjectMetadata.h"  // ibValueMetaObjectConfiguration::GetCompileSyntax — the root's row
 #include "backend/metaCollection/metaRoleObject.h"      // ibValueMetaObjectRole::GetRoleCompositionMode — a role's row
 #include "backend/metaCollection/partial/chartOfAccounts.h"   // the chart's own two branches — AddChartOfAccountsItem
 #include "backend/metaCollection/partial/commonObject.h"
-#include "backend/metaCollection/partial/dataReport.h"  // ibValueMetaObjectReport — AddReportItem
 #include "backend/backend_picture.h"                    // ibBackendPicture::SendPicture — the rows' pictures, by their ids
 #include "core/fileKind.h"                              // ibFileExtension — the file a data processor or a report is kept in
 #include "core/serialize/dataBuilder.h"
 
 #include "frmserver/client/clientFrame.h"
 #include "frmserver/docView/docView.h"
-#include "frmserver/win/dlgs/formSelector.h"   // ibDialogSelectTypeForm — the form's kind, asked
-#include "protocol/protocol.h"                  // ibProtocol::ibSchema::ibMetaData::FormType — the form's kind, its property
+#include "frmserver/win/dlgs/kindSelector.h"   // ibDialogSelectKind — the form's kind and the template's, asked
+#include "protocol/protocol.h"                  // ibProtocol::ibSchema::ibMetaData::FormType, TemplateData — the kinds, their properties
 
 #include <algorithm>    // std::stable_sort — the groups in the declared order
 #include <functional>   // std::function — a group fills its nested groups first
@@ -40,7 +38,6 @@
 #define objectDimensionsName _("Dimensions")
 #define objectResourcesName _("Resources")
 
-#define objectComposersName _("Composers")
 #define objectTablesName _("Tables")
 #define objectEnumerationsName _("Enums")
 
@@ -232,11 +229,11 @@ void ibMetaTreeBase::MetaObjectChanged(ibMetaDataNotifier::ibMetaStage stage, ib
 		}
 		return;
 
-	// BORN — a form asked its kind, and every open editor re-gathers: a form's command navigator lists what the
-	// metadata holds.
+	// BORN — a form or a template asked its kind, and every open editor re-gathers: a form's command navigator lists
+	// what the metadata holds.
 	case ibMetaDataNotifier::ibMetaStage::Created:
 		if (object != nullptr && !object->IsDeleted()) {
-			if (!AskFormKind(object))
+			if (!AskFormKind(object) || !AskTemplateKind(object))
 				return;   // refused and taken away again — its Removed has come and gone
 			NotifyDocuments();
 		}
@@ -247,7 +244,7 @@ void ibMetaTreeBase::MetaObjectChanged(ibMetaDataNotifier::ibMetaStage stage, ib
 	}
 }
 
-// ⭐ A FORM IS ASKED WHAT KIND IT IS — the desktop's wizard (ibDialogSelectTypeForm), its window the client's: the
+// ⭐ A FORM IS ASKED WHAT KIND IT IS — the desktop's wizard (ibDialogSelectKind), its window the client's: the
 // kinds its owner offers, and the form's Name, Synonym and Comment. Asked inside the Create that made the form — the
 // client's call answers once it is answered. Only a form that has no kind yet: a paste, a copy and a tool-made form
 // already know what they are.
@@ -272,15 +269,17 @@ bool ibMetaTreeBase::AskFormKind(ibValueMetaObject* object)
 	if (owner == nullptr)
 		return true;
 
-	ibDialogSelectTypeForm dlg(owner, form);
+	ibDialogSelectKind dlg(form, owner->GetSynonym() + _(" form wizard"));
 	const ibFormTypeList optList = owner->GetFormType();
 	for (unsigned int idx = 0; idx < optList.GetItemCount(); idx++)
-		dlg.AppendTypeForm(optList.GetItemName(idx), optList.GetItemLabel(idx), optList.GetItemId(idx));
+		dlg.AppendKind(optList.GetItemName(idx), optList.GetItemLabel(idx), optList.GetItemId(idx));
+	// …and the desktop's last button, a generic form: the kind no owner lists (CreateSelector put it after them).
+	dlg.AppendKind(formDefaultName, _("Generic form"), defaultFormType);
 
 	int chosen = defaultFormType;
 	{
-		m_askedForm = form;
-		wxON_BLOCK_EXIT_NULL(m_askedForm);
+		m_askedObject = form;
+		wxON_BLOCK_EXIT_NULL(m_askedObject);
 		if (!dlg.ShowModal(chosen)) {
 			GetMetaData()->RemoveMetaObject(form);
 			return false;
@@ -300,6 +299,51 @@ bool ibMetaTreeBase::AskFormKind(ibValueMetaObject* object)
 
 	// …AND THE LAYOUT, which the owner builds once the kind is known.
 	owner->OnCreateFormObject(form);
+	return true;
+}
+
+// ⭐ …AND A TEMPLATE, THE SAME WAY (2026-11-03): what it holds, of the kinds it offers (its TemplateData) — a
+// spreadsheet or a composer, under any owner. Only a template with no kind yet, as a form; and asked only where there
+// is a choice: one kind is put on it without a question. Refused — it goes again, as a form does. Every kind keeps the
+// name the template was made with (Template1): a template is named alike whatever it holds.
+bool ibMetaTreeBase::AskTemplateKind(ibValueMetaObject* object)
+{
+	ibProperty* const templateData = object != nullptr ? object->GetProperty(ibProtocol::ibSchema::ibMetaData::TemplateData) : nullptr;
+	if (templateData == nullptr || !templateData->IsEmptyProperty())
+		return true;
+
+	ibPropertyChoiceList kinds;
+	templateData->GetValueList(kinds);
+	if (kinds.GetCount() == 0)
+		return true;
+
+	unsigned int chosen = 0;
+	if (kinds.GetCount() > 1) {
+		const ibValueMetaObject* const owner = object->GetParent();
+		ibDialogSelectKind dlg(object, (owner != nullptr ? owner->GetSynonym() : ibString()) + _(" template wizard"));
+		for (unsigned int idx = 0; idx < kinds.GetCount(); idx++)
+			dlg.AppendKind(object->GetName(), kinds.GetLabel(idx), kinds.GetId(idx));
+
+		int answer = wxNOT_FOUND;
+		m_askedObject = object;
+		wxON_BLOCK_EXIT_NULL(m_askedObject);
+		if (!dlg.ShowModal(answer)) {
+			GetMetaData()->RemoveMetaObject(object);
+			return false;
+		}
+		for (unsigned int idx = 0; idx < kinds.GetCount(); idx++) {
+			if (kinds.GetId(idx) == answer)
+				chosen = idx;
+		}
+	}
+
+	// Placed the way the object inspector places one — an empty description of the kind; the template tells its
+	// report what it became (OnPropertyChanged).
+	const ibVariant before = templateData->GetValue();
+	if (object->OnPropertyChanging(templateData, kinds.GetValue(chosen))) {
+		templateData->SetValue(kinds.GetValue(chosen));
+		object->OnPropertyChanged(templateData, before, templateData->GetValue());
+	}
 	return true;
 }
 
@@ -480,7 +524,7 @@ void ibConfigurationTree::AppendObjectGroup(ibDataNode& parent, const ibClassID&
 	for (auto object : objects) {
 		if (!object->IsAcceptedByParent())   // gone, or a kind its owner does not host — one question
 			continue;
-		if (object == m_askedForm)            // not made yet: the person is asked what kind it is
+		if (object == m_askedObject)          // not made yet: the person is asked what kind it is
 			continue;
 		AppendItem(group, object);
 	}
@@ -613,18 +657,6 @@ void ibConfigurationTree::AddDataProcessorItem(ibValueMetaObject* metaObject, ib
 		metaObjectValue->GetTemplateArrayObject());
 }
 
-// A REPORT is a data processor plus its COMPOSERS.
-void ibConfigurationTree::AddReportItem(ibValueMetaObject* metaObject, ibDataNode& hParentID)
-{
-	AddDataProcessorItem(metaObject, hParentID);   // same shape, down to the RAM tabular sections
-
-	ibValueMetaObjectReport* metaReport = metaObject->ConvertToType<ibValueMetaObjectReport>();
-	wxASSERT(metaReport);
-
-	AppendObjectGroup(hParentID, g_metaComposerCLSID, objectComposersName,
-		metaReport->GetComposerArrayObject());
-}
-
 // A REGISTER — dimensions and resources where a reference object has tabular sections.
 void ibConfigurationTree::AddInformationRegisterItem(ibValueMetaObject* metaObject, ibDataNode& hParentID)
 {
@@ -682,7 +714,7 @@ void ibConfigurationTree::ExpandMetaItem(ibValueMetaObject* metaItem, ibDataNode
 	else if (clsid == g_metaDocumentCLSID)                   AddDocumentItem(metaItem, item);
 	else if (clsid == g_metaEnumerationCLSID)                AddEnumerationItem(metaItem, item);
 	else if (clsid == g_metaDataProcessorCLSID)              AddDataProcessorItem(metaItem, item);
-	else if (clsid == g_metaReportCLSID)                     AddReportItem(metaItem, item);
+	else if (clsid == g_metaReportCLSID)                     AddDataProcessorItem(metaItem, item);   // its composers are templates
 	else if (clsid == g_metaInformationRegisterCLSID)        AddInformationRegisterItem(metaItem, item);
 	else if (clsid == g_metaAccumulationRegisterCLSID)       AddAccumulationRegisterItem(metaItem, item);
 	else if (clsid == g_metaParameterizedJobCLSID)           AddCatalogItem(metaItem, item);

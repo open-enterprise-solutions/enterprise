@@ -502,12 +502,20 @@ designer sees everything it EDITS; a composer answers as the application whereve
 was ever written (read from the value column's raw type tag — the decoded value of an untagged cell is
 its type's empty, a False). Reached as `FunctionalOptions.<Name>.Get()` ([docs/public/functional-options.md](docs/public/functional-options.md)).
 
-Six further registered metatypes are **not** top-level business objects: `ExternalDataProcessor`,
-`ExternalReport`, `Composer` (2026-08-20, `MD_CMPS` — a **data composer declared inside a report**,
-beside its forms and templates: what to read and how to fold it. The report names one of them
-`DefaultComposer`, and a report that declares one needs no form — the generated form is a gridbox
-bound to that composer. Embedded and external reports both have them, being the same metaobject.
-See [docs/private/report-engine.md](docs/private/report-engine.md) §4f),
+A report's **composer** — a data composer declared inside the report: what to read and how to fold it — is
+a `Template` of the `Composer` kind. What a template holds is ONE `ibTemplateDescription`
+(core/description/templateDescription.h): its kind and the live schema of that kind, written by the schema's own
+`*Memory` with the kind added; the other kind's schema asked for raises (2026-11-03; a composer was a metatype of
+its own, `MD_CMPS`, whose file nodes are read as templates). What a template of a kind DOES — its events, its
+menu, the value code is handed — is the kind's `ibTemplateProvider` (metaTemplateObject.h), not an `if` in the
+template. The kind is chosen in a dialog when the template is added, as a form's is, and once — under any
+owner, a document's or a data processor's too; `GetTemplate(name)` returns a fresh composition. The report names one
+of them `DefaultComposer`, and a report that declares one needs no form — the generated form is a gridbox
+bound to that composer. Embedded and external reports both have them, being the same metaobject. See
+[docs/private/report-engine.md](docs/private/report-engine.md) §4f.
+
+Five further registered metatypes are **not** top-level business objects: `ExternalDataProcessor`,
+`ExternalReport`,
 `AccountDimensionKindsTable` (renamed from `SubcontoKindsTable` on 2026-08-12 —
 *subconto* was a calque; the concept is an **account dimension**, and its KIND is a
 characteristic. The CLSID key `MD_SKTB` stayed, being an opaque body key rather than a name),

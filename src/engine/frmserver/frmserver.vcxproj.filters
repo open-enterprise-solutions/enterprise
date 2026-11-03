@@ -403,7 +403,7 @@
     <ClCompile Include="win\dlgs\formEditor.cpp">
       <Filter>win\dlgs</Filter>
     </ClCompile>
-    <ClCompile Include="win\dlgs\formSelector.cpp">
+    <ClCompile Include="win\dlgs\kindSelector.cpp">
       <Filter>win\dlgs</Filter>
     </ClCompile>
     <ClCompile Include="win\dlgs\generation.cpp">
@@ -898,7 +898,7 @@
     <ClInclude Include="win\dlgs\formEditor.h">
       <Filter>win\dlgs</Filter>
     </ClInclude>
-    <ClInclude Include="win\dlgs\formSelector.h">
+    <ClInclude Include="win\dlgs\kindSelector.h">
       <Filter>win\dlgs</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\generation.h">

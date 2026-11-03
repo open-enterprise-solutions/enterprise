@@ -19,7 +19,7 @@
 // window leads with the output structure. Two windows, because they are two questions — over one
 // ibCompositionDescription, so nothing about what a setting IS can differ between them.
 class BACKEND_API ibPropertyDynamicList : public ibProperty {
-	// ONE maker with a default, the way ibPropertySpreadsheet has one over its description — a second
+	// ONE maker with a default, the way ibPropertyTemplate has one over its description — a second
 	// overload for "no value yet" would be the empty description spelled twice.
 	static ibVariant CreateVariantData(ibPropertyObject* property,
 	                                        const ibCompositionDescription& val = ibCompositionDescription());

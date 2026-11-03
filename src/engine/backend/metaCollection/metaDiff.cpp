@@ -5,7 +5,7 @@
 #include "backend/propertyManager/property/propertyModule.h"
 #include "backend/propertyManager/property/propertyPicture.h"
 #include "backend/propertyManager/property/propertySource.h"
-#include "backend/propertyManager/property/propertySpreadsheet.h"
+#include "backend/propertyManager/property/propertyTemplate.h"
 
 #include <algorithm>
 #include <unordered_set>
@@ -42,7 +42,7 @@ ibString StringifyPropertyValue(const ibProperty* prop) {
 }
 
 // Heavy / structural property classes whose value is the object itself
-// (script text, binary form data, picture bytes, spreadsheet cells).
+// (script text, binary form data, picture bytes, a template's sheet or composition).
 // Listing them inline in the Properties group would duplicate what the
 // containing object row already represents — its Same/Changed status
 // already reflects any difference in these payloads.
@@ -50,7 +50,7 @@ bool IsStructuralProperty(const ibProperty* prop) {
 	return dynamic_cast<const ibPropertyModule*>(prop) != nullptr
 		|| dynamic_cast<const ibPropertyForm*>(prop) != nullptr
 		|| dynamic_cast<const ibPropertyPicture*>(prop) != nullptr
-		|| dynamic_cast<const ibPropertySpreadsheet*>(prop) != nullptr
+		|| dynamic_cast<const ibPropertyTemplate*>(prop) != nullptr
 		|| dynamic_cast<const ibPropertySource*>(prop) != nullptr;
 }
 
