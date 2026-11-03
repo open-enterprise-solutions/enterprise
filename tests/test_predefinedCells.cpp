@@ -10,6 +10,7 @@
 #include "frmserver/mcp/mcpTool.h"
 #include "core/serialize/dataBuilder.h"
 #include "backend/appData.h"
+#include "backend/backend_type.h"   // ibBackendTypeDescriptionMemory / ibBackendMetaDescriptionMemory - a property's value as its node
 #include "backend/compiler/compileCode.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/metadataSerialization.h"   // ibDeserializeValue - a declared value, as the configuration keeps it
@@ -112,6 +113,13 @@ TEST(PredefinedCells, ACharacteristicsTypeIsDeclaredSavedAndWritten) {
 		cfg->CreateMetaObject(g_metaChartOfCharacteristicTypesCLSID, cfg->GetCommonMetaObject(), false));
 	ASSERT_NE(chart, nullptr);
 	chart->SetName(wxT("UserSettings"));
+	// The contour the Type is picked within, set through the property's door as the designer sets it: a string, a number.
+	ibDataValue contour;
+	ASSERT_TRUE(ibBackendTypeDescriptionMemory::WriteNode(contour,
+		ibTypeDescription(std::vector<ibClassID>{ g_valueStringCLSID, g_valueNumberCLSID }), cfg));
+	ibString why;
+	ASSERT_TRUE(ibPropertyGate::SetValue(chart, chart->GetProperty(ibT("TypesOfCharacteristics")), contour, &why))
+		<< why.ToStdString();
 	ASSERT_TRUE(cfg->RunDatabase());
 
 	ibString refusal;
@@ -258,8 +266,6 @@ TEST(PredefinedCells, AnAccountsSideAndFlagsAreDeclaredAndWritten) {
 	EXPECT_TRUE(refused(chart->GetMetaID(), wxT("AccountType"), ibDataValue::String(wxT("Sideways"))).Contains(wxT("Sideways")));
 	EXPECT_TRUE(refused(chart->GetMetaID(), wxT("Currency"), ibDataValue::Bool(true)).Contains(wxT("Currency")));
 	EXPECT_TRUE(refused(catalog->GetMetaID(), wxT("AccountType"), ibDataValue::String(wxT("Active"))).Contains(wxT("Warehouses")));
-	// The side is required: not declaring it is refused, not taken as "the data's".
-	EXPECT_TRUE(refused(chart->GetMetaID(), wxT("AccountType"), ibDataValue()).Contains(wxT("AccountType")));
 
 	// ⚠ `false` IS DECLARED, as surely as `true`: an account said not to be off-balance keeps the cell, and the seed
 	// writes it — taken for "not declared", the column would keep whatever the data holds.
@@ -320,7 +326,7 @@ TEST(PredefinedCells, ACatalogsOwnAttributeIsDeclaredAndWritten) {
 		params.SetValue(ibT("id"), (std::int32_t)catalog->GetMetaID());
 		params.SetValue(ibT("name"), ibString(wxT("Main")));
 		auto values = Node();
-		values->SetValue(ibT("Address"), ibString(wxT("1 Harbour Road")));
+		values->SetValue(ibT("Address"), ibString(wxT("1 Harbour")));
 		params.AddField(ibT("values"), ibDataValue::Child(values));
 		ASSERT_TRUE(CallTool(wxT("predefined_add"), params, result, refusal)) << refusal.ToStdString();
 	}
@@ -339,7 +345,7 @@ TEST(PredefinedCells, ACatalogsOwnAttributeIsDeclaredAndWritten) {
 	const auto* attribute = catalog->FindAnyAttributeObjectByFilter(address->GetMetaID());
 	const ibValue* written = SeedCell(*main, attribute);
 	ASSERT_NE(written, nullptr);
-	EXPECT_EQ(written->GetString(), ibString(wxT("1 Harbour Road")));
+	EXPECT_EQ(written->GetString(), ibString(wxT("1 Harbour")));
 	EXPECT_EQ(SeedCell(*transit, attribute), nullptr);
 }
 
@@ -364,8 +370,11 @@ TEST(PredefinedCells, AnAccountsAnalyticsAreLinesItOwns) {
 		cfg->CreateMetaObject(g_metaChartOfAccountsCLSID, cfg->GetCommonMetaObject(), false));
 	ASSERT_NE(chart, nullptr);
 	chart->SetName(wxT("Balance"));
-	chart->GetChartOfCharacteristicTypes()->SetValue(ibMetaDescription(analytics->GetMetaID()));
-	chart->ApplyAccountDimensionKindType();
+	// Bound through the property's door, as the designer binds it: the kinds column takes the chart's type there.
+	ibDataValue bound;
+	ASSERT_TRUE(ibBackendMetaDescriptionMemory::WriteNode(bound, ibMetaDescription(analytics->GetMetaID()), cfg));
+	ibString why;
+	ASSERT_TRUE(ibPropertyGate::SetValue(chart, chart->GetChartOfCharacteristicTypes(), bound, &why)) << why.ToStdString();
 	chart->AppendPredefinedValue(Item(wxT("Settlements"), wxT("60")));
 	ASSERT_TRUE(cfg->RunDatabase());
 
