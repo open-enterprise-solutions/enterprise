@@ -13685,3 +13685,127 @@ msgstr "Положение картинки"
 #: src/engine/frmserver/visualView/ctrl/widgets.h
 msgid "Where the picture stands. Auto: where the button puts it, on the left of the text. Left, Right: on that side of the text. Tile: the picture large over the text and the Note under them, the button filling what its sizer gives it - a big button for a finger; put tiles in a grid sizer for a panel of them."
 msgstr "Где стоит картинка. Авто: там, куда её ставит кнопка, слева от текста. Лево, Право: с этой стороны от текста. Плитка: картинка крупно над текстом и подпись под ними, кнопка заполняет то, что ей даёт сайзер, - крупная кнопка под палец; плитки в сетке образуют панель."
+
+#: src/engine/backend/metaCollection/partial/chartOfAccountsMetadataSchema.cpp:142
+#, c-format
+msgid "%s.%s: %i analytics are declared, the chart takes %i"
+msgstr "%s.%s: объявлено аналитик: %i, план счетов принимает %i"
+
+#: src/engine/backend/metaCollection/partial/chartOfAccountsMetadataSchema.cpp:147
+#, c-format
+msgid "%s.%s: analytics line %i names no kind its chart of characteristic types declares"
+msgstr "%s.%s: строка аналитики %i указывает вид, которого нет среди объявленных в его плане видов характеристик"
+
+#: src/engine/backend/metaCollection/partial/chartOfCalculationTypesMetadataSchema.cpp:60
+#, c-format
+msgid "%s.%s: %s line %i names no calculation type the section may name"
+msgstr "%s.%s: %s, строка %i: указан вид расчёта, который в этом разделе указывать нельзя"
+
+#: src/engine/backend/metaCollection/partial/chartOfCharacteristicTypesMetadataSchema.cpp:36
+#, c-format
+msgid "%s.%s: the characteristic declares no Type"
+msgstr "%s.%s: у характеристики не указан Тип"
+
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:2910
+#, c-format
+msgid "%s: line %i of the %s list is declared by the configuration and cannot be removed, moved or changed"
+msgstr "%s: строка %i списка %s объявлена конфигурацией - её нельзя удалить, переместить или изменить"
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:57
+#, c-format
+msgid "'%s': '%s' keeps no folders"
+msgstr "'%s': в '%s' нет папок"
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:61
+#, c-format
+msgid "'%s' holds '%s', so it stays a folder"
+msgstr "'%s' содержит '%s', поэтому остаётся папкой"
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:66
+#, c-format
+msgid "'%s': the items of '%s' do not stand under one another"
+msgstr "'%s': элементы '%s' не подчиняются друг другу"
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:69
+#, c-format
+msgid "'%s': '%s' has no predefined item to sit under"
+msgstr "'%s': в '%s' нет предопределённого элемента, которому он мог бы подчиняться"
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:71
+#, c-format
+msgid "'%s' is not a folder, so nothing can sit under it"
+msgstr "'%s' - не папка, поэтому ей ничего не может подчиняться"
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:74
+#, c-format
+msgid "'%s' cannot sit under itself"
+msgstr "'%s' не может подчиняться самому себе"
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:183
+#, c-format
+msgid "'%s': '%s' is not a value '%s' may be given"
+msgstr "'%s': '%s' - не то значение, которое можно задать для '%s'"
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:189
+#, c-format
+msgid "'%s': '%s' may not name the type '%s'"
+msgstr "'%s': '%s' не может указывать тип '%s'"
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:195
+#, c-format
+msgid "'%s': '%s' takes no value of the type '%s'"
+msgstr "'%s': '%s' не принимает значения типа '%s'"
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:227
+#, c-format
+msgid "'%s': a predefined item of '%s' declares no attribute #%d"
+msgstr "'%s': предопределённый элемент '%s' не объявляет реквизит #%d"
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:232
+#, c-format
+msgid "'%s': a predefined item of '%s' declares no section #%d"
+msgstr "'%s': предопределённый элемент '%s' не объявляет табличную часть #%d"
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:236
+#, c-format
+msgid "'%s': '%s' has no column #%d"
+msgstr "'%s': в '%s' нет колонки #%d"
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:373
+#, c-format
+msgid "'%s': its predefined items cannot be read"
+msgstr "'%s': не удалось прочитать его предопределённые элементы"
+
+#: src/engine/backend/metaCollection/partial/commonObjectSchema.cpp:265
+#, c-format
+msgid "%s.%s: the predefined item has no %s"
+msgstr "%s.%s: у предопределённого элемента не заполнено: %s"
+
+#: src/engine/backend/metaCollection/partial/commonObjectSchema.cpp:322
+#, c-format
+msgid "%s: the declared lines cannot be written - the table names no owner"
+msgstr "%s: объявленные строки нельзя записать - в таблице не указан владелец"
+
+#: src/engine/backend/metaCollection/partial/commonObjectSchema.cpp:399
+#, c-format
+msgid "%s.%s %i: the configuration declares this line where the base already holds one - remove the lines held there first"
+msgstr "%s.%s %i: конфигурация объявляет эту строку там, где в базе уже есть строка - сначала удалите строки, которые там стоят"
+
+#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:172
+#, c-format
+msgid "\"%s\" must be filled in"
+msgstr "Поле \"%s\" должно быть заполнено"
+
+#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:352
+msgid "Declared by the configuration"
+msgstr "Объявлено конфигурацией"
+
+#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:531
+#, c-format
+msgid "%s, row %u"
+msgstr "%s, строка %u"
+
+#: src/engine/backend/metaCollection/partial/chartOfCharacteristicTypesMetadataSchema.cpp:49
+#, c-format
+msgid "%s.%s: the characteristic's Type holds a type the chart does not take - pick it again among its Types of characteristics"
+msgstr "%s.%s: в Типе характеристики есть тип, которого план не принимает - выберите его заново среди Видов характеристик"

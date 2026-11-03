@@ -482,13 +482,17 @@ file each — `accumulationRegisterMetadataTotals.cpp`, `informationRegisterMeta
 **The rule for new code:** everything a metaobject contributes to the database SCHEMA —
 `ContributeTables` and the `m_beforeChange` / `m_afterChange` rules attached to the tables it
 declares — goes in `<metatype>MetadataSchema.cpp`, so "what does this become in the database" is one
-file per metatype rather than a section of a large one. Seven exist: `commonObjectSchema.cpp` (the
-record / enum / register / hierarchy families), `accumulationRegisterMetadataSchema.cpp` (the derived
+file per metatype rather than a section of a large one. Eight exist: `commonObjectSchema.cpp` (the
+record / enum / register / hierarchy families; predefined items and their section lines, and what every
+item must declare), `accumulationRegisterMetadataSchema.cpp` (the derived
 totals bundle), `accountingRegisterMetadataSchema.cpp` (the two-sided totals bundle and its views),
-`chartOfAccountsMetadataSchema.cpp` (the analytics-ceiling rule),
-`constantMetadataSchema.cpp` (one column in the shared external `sys_const`),
+`chartOfAccountsMetadataSchema.cpp` (the analytics-ceiling rule; a predefined account's analytics),
+`chartOfCharacteristicTypesMetadataSchema.cpp` (a predefined characteristic's `Type`),
+`chartOfCalculationTypesMetadataSchema.cpp` (a predefined calculation type's relation lines),
+`metaStoredValueObjectSchema.cpp` (a constant: one column in the shared external `sys_const`),
 `calculationRegisterMetadataSchema.cpp` (the lookup indexes `_DIX` / `_RIX`, and the recalculation's marks
-where `UseRecalculation` is on). Declaring the table and
+where `UseRecalculation` is on). Each level adds its own rule to a table (`m_beforeChange += …`); the
+differ asks them all. Declaring the table and
 declaring the rule that guards it are the same statement, so they cannot drift apart —
 [query-engine-layers.md](private/query-engine-layers.md) § L3.
 

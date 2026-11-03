@@ -118,6 +118,10 @@ public:
 	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue);
 	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue);
 
+	// Declares this chart's tables, and adds to the base's check of its table what a predefined characteristic must
+	// declare (#278): its Type, filled in. Body in chartOfCharacteristicTypesMetadataSchema.cpp.
+	virtual void ContributeTables(class ibSchemaSnapshot& out) const override;
+
 protected:
 
 	//get type desc

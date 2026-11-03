@@ -15,10 +15,19 @@
 #include "backend/metaCollection/partial/tabularSection/tabularSection.h"
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject - the seed's reference cells
+#include "backend/metadataSerialization.h"                        // ibDeserializeValue - a declared value, read with this configuration
+#include "backend/system/value/composition/valueComposerField.h"  // ibMaterializeCompositionValue - a declared value made live
+#include "backend/system/value/valueGuid.h"                       // ibValueGuid - a declared line's owner, its key
+#include "backend/backend_exception.h"                            // ibBackendCoreException - a section that cannot take its lines
 #include "backend/query/columnLayout.h"                           // ibOwnerRefColumn / ibFieldSuffix - the scaffold + field names
 #include "backend/query/schemaSnapshot.h"                         // ibSchemaSnapshot / ibSchemaTable - what a declaration is
+#include "backend/restructureInfo.h"                              // ibRestructureInfo - where a predefined item's refusal is said
+#include "backend/databaseLayer/databaseQueryBuilder.h"           // the L2 door - the lines a section's owner already holds
+#include "backend/valueInfo.h"                                    // ibReference - a line's owner, read back as stored
+#include "core/memory/memoryBuffer.h"                             // ibMemoryBuffer - the owner's bytes
 
-#include <algorithm>   // std::find - an attribute that is itself one of the list order's columns
+#include <algorithm>   // std::find - an attribute that is itself one of the list order's columns; std::find_if - a line's column
+#include <map>         // the lines each owner already holds
 
 // (SnapshotOf removed: building a snapshot is just `common->ContributeTables(snap)` — the metadata side
 //  does it directly where it drives the builder, keeping the builder itself config-agnostic.)
@@ -95,6 +104,8 @@ void ibValueMetaObjectRecordDataMutableRef::ContributeTables(ibSchemaSnapshot& o
 		for (const auto object : tab->GetGenericAttributeArrayObject())
 			tt.Add(object->GetQueryColumn());
 		tt.Index(tt.m_name + ibT("_INDEX"), { tabUuid });                     // tabular uuid index — NOT unique (repeats per owner)
+		// A line is its owner and its position — the key a declared line is found and written by (a predefined item's).
+		tt.m_seedKey = { tabUuid, tab->GetNumberLine()->GetQueryColumn() };
 		// Per-attribute secondary indexes on the section's own columns — no single row reference
 		// (browsing is per-owner by line), so the ordered variant degrades to a plain index here.
 		ContributeAttributeIndexes(tt, tab->GetGenericAttributeArrayObject());
@@ -232,11 +243,31 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 	// cells and writes generically. DeletionMark = false here, so a re-added value reactivates on the next
 	// apply. A reference cell MUST be a reference-typed value — the column codec extracts the reference
 	// binary FROM a reference value (a plain guid string would write NULL); wxNullGuid = a null reference.
+	// IsFolder and Parent are set for every kind: where the arrangement has none, its column is switched off
+	// (ApplyHierarchyType) and Set passes over a column that is not allowed — the gate the columns are built by.
 	//
 	// The DATA-REFERENCE cell is the row's OWN reference (guid = its predefined guid = its uuid, this
 	// metaID): it (a) makes the predefined value referenceable by its key, and (b) gives each row a UNIQUE
 	// _RRRef so the data-reference unique index (_REF_UQ) does not see N rows colliding on the NULL default.
 	ibSchemaTable& t = out.Shared(GetMetaID(), GetPhysicalTableName());   // the main table the base just created
+
+	// ⭐ WHAT EVERY PREDEFINED ITEM MUST HAVE, WHATEVER ITS KIND — what it is presented by (DataPresentation: its Code
+	// for a chart of accounts, its Description for a catalog), filled in. The table's check before the update starts
+	// (m_beforeChange), each refusal into the ledger naming the item; every level adds its own on top of it (a
+	// characteristic its Type, an account its analytics).
+	t.m_beforeChange += [this](const ibSchemaTable*, ibRestructureInfo* report) -> bool {
+		bool passed = true;
+		const bool byCode = GetReferencePresentation() == ibDataPresentation_Code;
+		for (const ibPredefinedItemDescription& object : m_predefinedDesc.m_items) {
+			if (!(byCode ? object.m_code : object.m_description).IsEmpty())
+				continue;
+			if (report != nullptr)
+				report->AppendError(ibString::Format(_("%s.%s: the predefined item has no %s"), GetName(), object.m_name,
+					GetDataPresentationAttribute()->GetSynonym()));
+			passed = false;
+		}
+		return passed;
+	};
 
 	// (No rule on retiring Parent / IsFolder any more, 2026-10-05: a hierarchy switched off takes those
 	//  columns the way deleting any attribute takes its own — the list stops declaring them, the differ
@@ -254,21 +285,128 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 	//
 	// It is also the schema-authority rule (docs/private/schema-authority.md): what DDL to emit is decided by
 	// the two configurations, never by asking the database what it currently holds.
-	for (const auto& object : m_predefinedObjectVector) {
-		const wxObjectDataPtr<ibPredefinedValueObject>& parent = object->GetPredefinedParent();
-
-		t.AddRow(object->GetPredefinedGuid(), object->GetPredefinedName())
-			.Set(GetDataReference()->GetQueryColumn(),
+	for (const ibPredefinedItemDescription& object : m_predefinedDesc.m_items) {
+		ibSchemaSeedRow& row = t.AddRow(object.m_guid, object.m_name);
+		row.Set(GetDataReference()->GetQueryColumn(),
 				ibValuePtr<ibValueReferenceDataObject>(
-					ibValueReferenceDataObject::Create(this, object->GetPredefinedGuid(), ibReferenceLoad::OnDemand)))
-			.Set(m_propertyAttributePredefined->GetMetaObject()->GetQueryColumn(), ibValue(object->GetPredefinedName()))
-			.Set(m_propertyAttributeCode->GetMetaObject()->GetQueryColumn(), ibValue(object->GetPredefinedCode()))
-			.Set(m_propertyAttributeDescription->GetMetaObject()->GetQueryColumn(), ibValue(object->GetPredefinedDescription()))
-			.Set(m_propertyAttributeIsFolder->GetMetaObject()->GetQueryColumn(), ibValue(object->IsPredefinedFolder()))
+					ibValueReferenceDataObject::Create(this, object.m_guid, ibReferenceLoad::OnDemand)))
+			.Set(m_propertyAttributePredefined->GetMetaObject()->GetQueryColumn(), ibValue(object.m_name))
+			.Set(m_propertyAttributeCode->GetMetaObject()->GetQueryColumn(), ibValue(object.m_code))
+			.Set(m_propertyAttributeDescription->GetMetaObject()->GetQueryColumn(), ibValue(object.m_description))
+			.Set(m_propertyAttributeIsFolder->GetMetaObject()->GetQueryColumn(), ibValue(object.m_folder))
 			.Set(m_propertyAttributeDeletionMark->GetMetaObject()->GetQueryColumn(), ibValue(false))
 			.Set(m_propertyAttributeParent->GetMetaObject()->GetQueryColumn(),
 				ibValuePtr<ibValueReferenceDataObject>(
-					ibValueReferenceDataObject::Create(this, parent != nullptr ? parent->GetPredefinedGuid() : wxNullGuid,
-						ibReferenceLoad::OnDemand)));
+					ibValueReferenceDataObject::Create(this, object.m_parent, ibReferenceLoad::OnDemand)));
+
+		// …AND EVERY OTHER VALUE IT DECLARES, into the column of the same id, read with this configuration and a declared
+		// reference made live here (ibMaterializeCompositionValue). Only the cells it names: a cell it never declared stays
+		// whatever the data holds, as before. A cell of an attribute deleted since is not written - the item still says it,
+		// the table no longer has it. What the item must declare is the table's check above, and each kind's on top of it.
+		for (const auto& cell : object.m_row)
+			if (const ibValueMetaObjectAttributeBase* attribute = FindAnyAttributeObjectByFilter(cell.first))
+				row.Set(attribute->GetQueryColumn(),
+					ibMaterializeCompositionValue(ibDeserializeValue(cell.second.m_value, m_metaData), m_metaData));
+
+		// ⭐ …AND THE LINES OF THE SECTIONS IT DECLARES, as seed rows of the section's own table, each found by the key
+		// every line of a section has: its owner and its position (m_seedKey). The apply diffs them as it diffs the items
+		// — a line added or changed; a line no longer declared, and the lines of a section it does not declare, stay the
+		// data's.
+		for (const auto& declared : object.m_tables) {
+			const ibValueMetaObjectTableData* table = FindTableObjectByFilter(declared.first);
+			if (table == nullptr)
+				continue;
+			const ibBackendQueryable* const queryable = table->GetQueryable();   // the one the base declared the section by
+			ibSchemaTable& lines = out.Shared(queryable->GetQueryTableId(), queryable->GetQueryTableName());
+			if (lines.m_seedKey.empty())
+				ibBackendCoreException::Error(_("%s: the declared lines cannot be written - the table names no owner"),
+					table->GetName());
+
+			// A cell into its column out of the list the section's table was built from (a chart of accounts' breakdown
+			// kinds are columns there, objects of the chart).
+			const std::vector<ibValueMetaObjectAttributeBase*> listed = table->GetGenericAttributeArrayObject();
+			int number = 1;
+			for (const auto& line : declared.second) {
+				ibSchemaSeedRow& lineRow = lines.AddRow(wxNullGuid,
+					ibString::Format(ibT("%s.%s %i"), object.m_name, table->GetName(), number));
+				lineRow.Set(lines.m_seedKey.front(), ibValuePtr<ibValueGuid>(new ibValueGuid(object.m_guid)))
+					.Set(table->GetNumberLine()->GetQueryColumn(), ibValue(number));
+				for (const auto& cell : line) {
+					const auto column = std::find_if(listed.begin(), listed.end(),
+						[&cell](const ibValueMetaObjectAttributeBase* attribute) { return attribute->GetMetaID() == cell.first; });
+					if (column != listed.end())
+						lineRow.Set((*column)->GetQueryColumn(),
+							ibMaterializeCompositionValue(ibDeserializeValue(cell.second.m_value, m_metaData), m_metaData));
+				}
+				++number;
+			}
+		}
+	}
+
+	// ⭐ A DECLARED LINE TAKES ITS PLACE ONLY WHERE NOTHING STANDS. A line is found by its owner and its position, so one the
+	// applied configuration did not declare is written over whatever the base holds at that place: a line a person entered
+	// after the declared ones, or one the configuration declared once and let go (the apply keeps those). Both are the data's,
+	// and nothing would say they were lost; so the section's check before the update refuses, naming the line, for the old
+	// ones to be taken out first (Max, 2026-11-02). A section's lines stand at 1..N with no gap (its save numbers them, the
+	// seed writes 1..K): the places declared before are the first as many as the baseline declared for the owner, and the
+	// next one is taken when the base holds more lines than that.
+	for (const auto section : GetTableArrayObject()) {
+		const ibBackendQueryable* const queryable = section->GetQueryable();
+		ibSchemaTable& lines = out.Shared(queryable->GetQueryTableId(), queryable->GetQueryTableName());
+		if (lines.m_seedKey.empty())
+			continue;
+		lines.m_beforeChange += [this, section, tableName = queryable->GetQueryTableName()](
+			const ibSchemaTable* baseline, ibRestructureInfo* report) -> bool {
+			// The items that declare more lines here than the applied configuration did, and how many it did.
+			std::vector<std::pair<const ibPredefinedItemDescription*, std::size_t>> anew;
+			for (const ibPredefinedItemDescription& item : m_predefinedDesc.m_items) {
+				const auto declared = item.m_tables.find(section->GetMetaID());
+				if (declared == item.m_tables.end())
+					continue;
+				std::size_t before = 0;
+				if (baseline != nullptr && !baseline->m_seedKey.empty())
+					for (const ibSchemaSeedRow& row : baseline->m_seed) {
+						const auto owner = row.m_values.find(baseline->m_seedKey.front()->GetColumnId());
+						ibValueGuid* guid = nullptr;
+						if (owner != row.m_values.end() && owner->second.ConvertToValue(guid) && guid != nullptr
+							&& static_cast<ibGuid>(*guid) == item.m_guid)
+							++before;
+					}
+				if (declared->second.size() > before)
+					anew.emplace_back(&item, before);
+			}
+			if (anew.empty())
+				return true;
+
+			ibDatabaseQueryBuilder q;
+			if (!q.TableExists(tableName))
+				return true;   // nothing has ever been applied here; nothing stands
+
+			std::map<ibGuid, int> held;
+			ibQueryIR ir;
+			ir.m_root = ibAggregate(ibScan(tableName),
+				{ { ibFunc(ibT("COUNT"), { ibCol(ibOwnerRefField()) }), ibT("lineCount") } },
+				{ ibCol(ibOwnerRefField()) });
+			ibQueryResult rs = q.ExecuteIR(ir);
+			while (rs.Next()) {
+				ibMemoryBuffer bytes;
+				rs.GetResultBlob(ibOwnerRefField(), bytes);
+				if (bytes.GetDataLen() >= sizeof(ibReference))
+					held[ibGuid(static_cast<const ibReference*>(bytes.GetData())->m_guid)] = rs.GetResultInt(ibT("lineCount"));
+			}
+
+			bool passed = true;
+			for (const auto& [item, before] : anew) {
+				const auto found = held.find(item->m_guid);
+				if (found == held.end() || found->second <= static_cast<int>(before))
+					continue;
+				if (report != nullptr)
+					report->AppendError(ibString::Format(
+						_("%s.%s %i: the configuration declares this line where the base already holds one - remove the lines held there first"),
+						item->m_name, section->GetName(), static_cast<int>(before) + 1));
+				passed = false;
+			}
+			return passed;
+		};
 	}
 }

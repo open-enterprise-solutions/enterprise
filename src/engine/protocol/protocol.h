@@ -1236,23 +1236,20 @@ namespace ibProtocol {
 		}
 
 		// The desktop's predefined values editor over an object of the designer's tree: `schema {Schema, Args: {Id[, Tab]}}`
-		// shows Type (the object's class) and Items, each as the engine stores it
-		// (ibValueMetaObjectRecordDataHierarchyMutableRef::WriteData): Guid, Name, Code, Description, IsFolder, Parent (the
-		// Guid of the item it sits under; absent: the top); commands Create {Id, Name, Code, Description, IsFolder,
-		// Parent}, Set {Id, Guid, …} — the item of that Guid given these (none of it: one more, of that Guid), Remove {Id,
-		// Guid}. Each with Tab — an external file's tree, as ibMetaData's.
+		// shows Type (the object's class), Declares — the one schema of the object's predefined items
+		// (ibPredefinedDescriptionMemory: the items as the configuration keeps them and what an item is entered with; the
+		// window is built of it) — and Classes — the types a type is picked from, named as ibProperties' rows name them.
+		// Commands Create {Id, an item in its node form (ibPredefinedItemDescriptionMemory)}, Set {Id, the item with
+		// its Guid} — the item of that Guid given this one (none of it: one more, of that Guid), Remove {Id, Guid}. Each
+		// with Tab — an external file's tree, as ibMetaData's.
 		namespace ibPredefined {
 
 			inline constexpr const char* Id          = "Id";
 			inline constexpr const char* Tab         = "Tab";
 			inline constexpr const char* Type        = "Type";
-			inline constexpr const char* Items       = "Items";
+			inline constexpr const char* Declares    = "Declares";
+			inline constexpr const char* Classes     = "Classes";
 			inline constexpr const char* Guid        = "Guid";
-			inline constexpr const char* Name        = "Name";
-			inline constexpr const char* Code        = "Code";
-			inline constexpr const char* Description = "Description";
-			inline constexpr const char* IsFolder    = "IsFolder";
-			inline constexpr const char* Parent      = "Parent";
 
 		}
 

@@ -13347,3 +13347,127 @@ msgstr ""
 #: src/engine/frmserver/visualView/ctrl/widgets.h
 msgid "Where the picture stands. Auto: where the button puts it, on the left of the text. Left, Right: on that side of the text. Tile: the picture large over the text and the Note under them, the button filling what its sizer gives it - a big button for a finger; put tiles in a grid sizer for a panel of them."
 msgstr ""
+
+#: src/engine/backend/metaCollection/partial/chartOfAccountsMetadataSchema.cpp:142
+#, c-format
+msgid "%s.%s: %i analytics are declared, the chart takes %i"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/chartOfAccountsMetadataSchema.cpp:147
+#, c-format
+msgid "%s.%s: analytics line %i names no kind its chart of characteristic types declares"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/chartOfCalculationTypesMetadataSchema.cpp:60
+#, c-format
+msgid "%s.%s: %s line %i names no calculation type the section may name"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/chartOfCharacteristicTypesMetadataSchema.cpp:36
+#, c-format
+msgid "%s.%s: the characteristic declares no Type"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObject.cpp:2910
+#, c-format
+msgid "%s: line %i of the %s list is declared by the configuration and cannot be removed, moved or changed"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:57
+#, c-format
+msgid "'%s': '%s' keeps no folders"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:61
+#, c-format
+msgid "'%s' holds '%s', so it stays a folder"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:66
+#, c-format
+msgid "'%s': the items of '%s' do not stand under one another"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:69
+#, c-format
+msgid "'%s': '%s' has no predefined item to sit under"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:71
+#, c-format
+msgid "'%s' is not a folder, so nothing can sit under it"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:74
+#, c-format
+msgid "'%s' cannot sit under itself"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:183
+#, c-format
+msgid "'%s': '%s' is not a value '%s' may be given"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:189
+#, c-format
+msgid "'%s': '%s' may not name the type '%s'"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:195
+#, c-format
+msgid "'%s': '%s' takes no value of the type '%s'"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:227
+#, c-format
+msgid "'%s': a predefined item of '%s' declares no attribute #%d"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:232
+#, c-format
+msgid "'%s': a predefined item of '%s' declares no section #%d"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:236
+#, c-format
+msgid "'%s': '%s' has no column #%d"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectPredefined.cpp:373
+#, c-format
+msgid "'%s': its predefined items cannot be read"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectSchema.cpp:265
+#, c-format
+msgid "%s.%s: the predefined item has no %s"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectSchema.cpp:322
+#, c-format
+msgid "%s: the declared lines cannot be written - the table names no owner"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/commonObjectSchema.cpp:399
+#, c-format
+msgid "%s.%s %i: the configuration declares this line where the base already holds one - remove the lines held there first"
+msgstr ""
+
+#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:172
+#, c-format
+msgid "\"%s\" must be filled in"
+msgstr ""
+
+#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:352
+msgid "Declared by the configuration"
+msgstr ""
+
+#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:531
+#, c-format
+msgid "%s, row %u"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/chartOfCharacteristicTypesMetadataSchema.cpp:49
+#, c-format
+msgid "%s.%s: the characteristic's Type holds a type the chart does not take - pick it again among its Types of characteristics"
+msgstr ""

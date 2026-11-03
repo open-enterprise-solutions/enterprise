@@ -99,8 +99,8 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::ResolveQueryConstant(const 
 {
 	if (ibValueMetaObjectRecordDataRef::ResolveQueryConstant(member, out))
 		return true;
-	if (const wxObjectDataPtr<ibPredefinedValueObject> pv = FindPredefinedValue(member)) {
-		out = ibValue(ibValueReferenceDataObject::Create(this, pv->GetPredefinedGuid()));
+	if (const ibPredefinedItemDescription* const pv = FindPredefinedValue(member)) {
+		out = ibValue(ibValueReferenceDataObject::Create(this, pv->m_guid));
 		return true;
 	}
 	return false;

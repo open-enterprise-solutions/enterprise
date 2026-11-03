@@ -138,6 +138,29 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   to save.
 - **Help → About** is drawn: the build, the base, the application, the user, the locale, the plugins.
 
+## Metadata
+
+- **A predefined item declares what it is, not only what it is called.** A predefined characteristic
+  of a chart of characteristic types declares its value `Type`; a predefined account declares its
+  `AccountType`, whether it is `OffBalance`, the chart's accounting flags and its analytics — the rows
+  of its `AccountDimensionKinds` section, each naming a predefined characteristic. They are kept in
+  the configuration with the item and written by the apply, as its parent is: set only as data, they
+  did not travel with the configuration. The analytics are unfolded into the account's kind columns
+  as saving an account does, and an account that declares none keeps the rows its data holds. Over
+  MCP: `predefined_add` takes `values` and `lines`, `predefined_set` changes them on an item already
+  declared (`lines: {Section: null}` stops declaring a section), `predefined_get` shows one item whole and
+  what it may declare — each attribute and column with the types or values it `takes`. In the designer a
+  type, a reference and an enumeration are picked through "...": a characteristic's `Type` among its
+  chart's types of characteristics, a declared value in the designer's window for one.
+- **The apply refuses a predefined item that does not say what it must**, before a statement, naming
+  the item in the ledger: an item with no code or description (whichever the object is presented
+  by), a characteristic with no `Type` or with one its chart's types of characteristics do not take (a
+  type deleted since included), an account with more analytics than its chart takes or a line
+  naming a kind its chart of characteristic types no longer declares, a calculation type whose
+  `Displacing`, `Base` or `Leading` line names no type the section may name, a new declared line
+  where the base already holds one (remove the lines held there first). A line the configuration
+  stops declaring stays, an ordinary line.
+
 ## Fixes
 
 - **`ThisForm.<attribute> = value` writes into the attribute.** It overwrote the attribute's own entry,

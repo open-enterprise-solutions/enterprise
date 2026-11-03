@@ -18,7 +18,7 @@ class ibValueModelTableBoxColumn;
 // theirs: a value's text, a flag as a tick, edited through the text editor. The desktop's also served a table's column,
 // asking it for its format and its editor's buttons and refreshing its form; a settings window hands it no column (the
 // client's table draws its own cells, tableBox.cpp), so what was asked of the column is not here.
-class ibDataViewValueRenderer :
+class FRMCLIENT_API ibDataViewValueRenderer :
 	public ibDataViewCustomRenderer {
 public:
 

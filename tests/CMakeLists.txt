@@ -72,6 +72,7 @@ add_executable(oes_tests
     test_metadataPasteIdentity.cpp
     test_propertySerialized.cpp
     test_metadataTree.cpp
+    test_predefinedCells.cpp
     test_numberPeriodicity.cpp
     test_pictureVersion.cpp
     test_commonAttribute.cpp

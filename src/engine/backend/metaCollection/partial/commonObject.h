@@ -51,6 +51,9 @@
 #include "backend/valueInfo.h"
 #include "backend/tabularModel.h"
 
+// the predefined items a hierarchy keeps — the one schema of them (m_predefinedDesc)
+#include "core/description/predefinedDescription.h"
+
 // L3 data-navigation interface — ibValueMetaObjectRecordDataRef and
 // ibValueMetaObjectRegisterData implement it so the query builder is family-blind.
 #include "backend/query/queryable.h"
@@ -728,6 +731,12 @@ public:
 	//special functions for DB
 	virtual ibString GetPhysicalTableName() const;
 
+	// What the code attribute (GetAttributeForCode) stores for counter `n`: a number as it is, a string as the prefix
+	// and the number padded with zeros to the attribute's length. One spelling for every generated code — the
+	// write's (ibValueRecordDataObjectRef::GenerateNextIdentifier) and a predefined item's (AppendPredefinedValue).
+	// An empty value where the kind has no code.
+	ibValue GenerateIdentifier(const ibNumber& counter, const ibString& prefix = ibEmptyString) const;
+
 protected:
 
 
@@ -1308,70 +1317,6 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 	public ibValueMetaObjectRecordDataMutableRef {
 	public:
 
-	class ibPredefinedValueObject : public ibDataViewObject {
-	public:
-
-		// Folder/leaf flag is stored on the predefined value itself
-		// — the designer's predefined-list dialog renders these as
-		// a tree, so the data-view item asks the row "are you a
-		// container?" directly.  Keeps the dialog free of model-side
-		// IsContainer overrides.
-		virtual bool IsContainer() const override { return m_valueIsFolder; }
-
-		ibPredefinedValueObject(bool valueIsFolder = false,
-			const wxObjectDataPtr<ibPredefinedValueObject>& valueParent = wxObjectDataPtr<ibPredefinedValueObject>())
-			:
-			m_predefinedItemGuid(wxNewUniqueGuid),
-			m_strPredefinedName(),
-			m_strCode(), m_strDescription(),
-			m_valueIsFolder(valueIsFolder),
-			m_valueParent(nullptr)
-		{
-		}
-
-		ibPredefinedValueObject(
-			const ibGuid& predefinedGuid, const ibString& strPredefinedName,
-			const ibString& strCode, const ibString& strDescription,
-			bool valueIsFolder = false, const wxObjectDataPtr<ibPredefinedValueObject>& valueParent = wxObjectDataPtr<ibPredefinedValueObject>())
-			:
-			m_predefinedItemGuid(predefinedGuid),
-			m_strPredefinedName(strPredefinedName),
-			m_strCode(strCode), m_strDescription(strDescription),
-			m_valueIsFolder(valueIsFolder),
-			m_valueParent(valueParent)
-		{
-		}
-
-		ibGuid GetPredefinedGuid() const { return m_predefinedItemGuid; }
-
-		ibString GetPredefinedParentName() const {
-			if (m_valueParent != nullptr)
-				return m_valueParent->GetPredefinedName();
-			return ibT("");
-		}
-
-		const ibString& GetPredefinedName() const { return m_strPredefinedName; }
-		const ibString& GetPredefinedCode() const { return m_strCode; }
-		const ibString& GetPredefinedDescription() const { return m_strDescription; }
-
-		bool IsPredefinedFolder() const { return m_valueIsFolder; }
-		wxObjectDataPtr<ibPredefinedValueObject> GetPredefinedParent() const { return m_valueParent; }
-
-		friend class ibValueMetaObjectRecordDataHierarchyMutableRef;
-
-	private:
-
-		ibGuid m_predefinedItemGuid;
-
-		ibString m_strPredefinedName;
-		ibString m_strCode;
-		ibString m_strDescription;
-
-		bool m_valueIsFolder;
-
-		wxObjectDataPtr<ibPredefinedValueObject> m_valueParent;
-	};
-
 	ibValueMetaObjectAttributePredefined* GetDataPredefinedName() const { return m_propertyAttributePredefined->GetMetaObject(); }
 	virtual bool IsDataPredefinedName(const ibMetaID& id) const { return id == (*m_propertyAttributePredefined)->GetMetaID(); }
 
@@ -1550,53 +1495,40 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 	virtual ibFormPtr<ibBackendValueForm> GetFolderSelectForm(const ibFormRequest& request = ibFormRequest(), ibBackendControlFrame* ownerControl = nullptr) const = 0;
 #pragma endregion 
 
-	//append predefined value
-	void AppendPredefinedValue(const ibString& strPredefinedName,
-		const ibString& strCode, const ibString& strDescription,
-		bool valueIsFolder = false, const wxObjectDataPtr<ibPredefinedValueObject>& valueParent = wxObjectDataPtr<ibPredefinedValueObject>());
-
-	void SetPredefinedValue(const ibGuid& predefinedGuid,
-		const ibString& strPredefinedName,
-		const ibString& strCode, const ibString& strDescription,
-		bool valueIsFolder = false, const wxObjectDataPtr<ibPredefinedValueObject>& valueParent = wxObjectDataPtr<ibPredefinedValueObject>());
-
+	// ⭐ THE DOOR AN ITEM IS DECLARED THROUGH — given in the node form of the one schema (the window's, MCP's): its fields
+	// and the whole of what it declares beyond them (no cell, nothing declared; no section, its rows the data's), checked
+	// against the columns its kind offers (GetPredefinedDesc) and against where its hierarchy lets it stand BEFORE anything
+	// changes: refused, it raises naming the item, and every item is as it was. Append makes one more item and says which:
+	// its guid; it declares its kind's default where it must declare and was given nothing, and with no code it takes the
+	// one after the greatest declared. Set changes the item of that guid whole, or makes one more of it (the designer's Copy).
+	ibGuid AppendPredefinedValue(const ibPredefinedItemDescription& item);
+	void SetPredefinedValue(const ibPredefinedItemDescription& item);
 	void DeletePredefinedValue(const ibGuid& predefinedGuid);
 
-	//find predefined value
-	wxObjectDataPtr<ibPredefinedValueObject> FindPredefinedValue(const ibGuid& predefinedGuid) const {
+	// The item of that guid, or of that name, as the configuration keeps it — null when none.
+	const ibPredefinedItemDescription* FindPredefinedValue(const ibGuid& predefinedGuid) const { return m_predefinedDesc.FindItem(predefinedGuid); }
+	const ibPredefinedItemDescription* FindPredefinedValue(const ibString& predefinedName) const { return m_predefinedDesc.FindItem(predefinedName); }
 
-		auto iterator = std::find_if(m_predefinedObjectVector.begin(), m_predefinedObjectVector.end(),
-			[predefinedGuid](const auto& value) { return predefinedGuid == value->GetPredefinedGuid(); });
+	//predefined values
+	const std::vector<ibPredefinedItemDescription>& GetPredefinedValueArray() const { return m_predefinedDesc.m_items; }
 
-		if (iterator != m_predefinedObjectVector.end())
-			return *iterator;
-
-		return wxObjectDataPtr<ibPredefinedValueObject>();
-	}
-
-	wxObjectDataPtr<ibPredefinedValueObject> FindPredefinedValue(const ibString& predefinedName) const {
-
-		auto iterator = std::find_if(m_predefinedObjectVector.begin(), m_predefinedObjectVector.end(),
-			[predefinedName](const auto& value) { return predefinedName == value->GetPredefinedName(); });
-
-		if (iterator != m_predefinedObjectVector.end())
-			return *iterator;
-
-		return wxObjectDataPtr<ibPredefinedValueObject>();
-	}
-
-	//predefined values 
-	const std::vector<wxObjectDataPtr<ibPredefinedValueObject>>& GetPredefinedValueArray() const { return m_predefinedObjectVector; }
+	// ⭐⭐ THE ONE SCHEMA OF THE PREDEFINED ITEMS, AS ASKED NOW — the description kept (m_predefinedDesc), its form written
+	// into it first, read off the tables this object declares at this moment: a parent where the items stand under one
+	// another, folders where they are told apart, the next code, every attribute of its row and every section, and the
+	// types a type is chosen among. Asked by everything that declares or shows an item: the door, the designer's window,
+	// MCP. What it answered may be behind by the next question; the apply's check judges the facts (ContributeTables).
+	const ibPredefinedDescription& GetPredefinedDesc();
 
 protected:
 
 	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue) override;
 
-	// Declare the main table (via the base) + the predefined values as its SEED rows (cells keyed by
-	// column id; the builder diffs by uuid + cells).
+	// Declare the main table (via the base) + the predefined items as its SEED rows, read straight off the description
+	// kept (m_predefinedDesc: cells keyed by column id; the builder diffs by uuid + cells), and the rows of the sections
+	// they declare.
 	virtual void ContributeTables(ibSchemaSnapshot& out) const override;
 
-	//load & save metaData from DB 
+	//load & save metaData from DB
 	virtual bool ReadData(const ibDataNode& node) override;
 	virtual bool WriteData(ibDataNode& node) const override;
 
@@ -1671,8 +1603,15 @@ protected:
 	ibPropertyContainer<>* m_propertyAttributeParent = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateEmptyType(ibT("Parent"), _("Parent"), _("The folder or item this one sits under. What it may point to follows the hierarchy type: a folder in a folders-and-items hierarchy, any item in an items hierarchy. Empty: the item is at the top level."), ibItemMode::ibItemMode_Folder_Item, ibSelectMode::ibSelectMode_Folders, ibIndexingMode::ibIndexingMode_Index));
 	ibPropertyContainer<>* m_propertyAttributeIsFolder = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateBoolean(ibT("IsFolder"), _("Is folder"), _("Set on a folder of a folders-and-items hierarchy: a folder only holds other items and folders, and carries only the attributes whose use says folders. Decided when the object is created and not changed afterwards."), ibItemMode::ibItemMode_Folder_Item));
 
-	//predefinded vector
-	std::vector<wxObjectDataPtr<ibPredefinedValueObject>> m_predefinedObjectVector;
+	// ⭐⭐ THE PREDEFINED ITEMS — ONE DESCRIPTION, the configuration's: read and written with it (ReadData / WriteData),
+	// the seed built of it (ContributeTables), shown and checked through GetPredefinedDesc. Its items are what a
+	// declaration owns beyond the name — a characteristic's Type, an account's side, flags and analytics, a calculation
+	// type's related types: set as data they do not travel with the configuration (#278). A reference is held as what it
+	// is in a configuration, a DECLARATION (ibValueCompositionPredefined), packed as every value travels, so loading a
+	// configuration never builds runtime; the seed makes it live (ibMaterializeCompositionValue). Kept whole and written
+	// whole, the configuration's and the wire's alike: the items, and the form they are declared with as it was last
+	// asked (GetPredefinedDesc writes it); what they must declare is each kind's check before the update (ContributeTables).
+	ibPredefinedDescription m_predefinedDesc;
 
 	// …and this kind's own source descriptor — typed to the HIERARCHY kind, registered by it
 	// (a catalogue, a chart of accounts, a chart of characteristic types, a job all read through it).

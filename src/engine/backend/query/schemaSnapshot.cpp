@@ -14,6 +14,8 @@
 #include "appData.h"                                        // db_query — the local channel the seed writes target
 #include "backend/system/value/valueGuid.h"                 // ibValueGuid — the row key bound as the guid it is
 
+#include <algorithm>   // std::find / std::all_of — a column among the key's, a row of the same key
+
 ibSchemaMaterialize& ibSchemaMaterialize::Guard(const ibString& expr, const ibQueryPredicatePtr& regenExpr)
 {
 	// BOTH forms compose, and they must compose together: the trigger reads the text, the regeneration
@@ -553,6 +555,90 @@ void EraseSeedRow(ibStructureBatch& batch, const ibSchemaTable& t, const ibSchem
 	});
 }
 
+// ⭐ THE SECOND SEED SCHEME — a section's declared lines, found by their place (ibSchemaTable::m_seedKey: the owner and
+// the position), not by a uuid. No unique index holds a line, so there is no upsert: the two configurations decide, as
+// they decide the structure — a line declared before is UPDATED (the cells it declares written, a cell it does not
+// declare left the data's, as an item's is), a new one INSERTED. A place is not an identity: a line the configuration
+// stops declaring is not erased, it stays the data's, an ordinary line (Max, 2026-11-02). Whether a place may be taken
+// is not the write's question: it is the owner's check before the update (m_beforeChange).
+int DiffSeedLinesInto(ibStructureBatch& batch, const ibSchemaTable* old, const ibSchemaTable& cur, ibRestructureInfo* report, ibDatabaseConnectionHolder* holder)
+{
+	const ibString    table    = cur.m_name;
+	const ibMetaData* metaData = cur.m_queryable != nullptr ? cur.m_queryable->GetMetaData() : nullptr;
+	ibDatabaseConnectionHolder* h = holder != nullptr ? holder : db_query->GetHolder();
+
+	// The key's columns, a scaffold among them copied — the write runs past the snapshot (see SeedKey).
+	std::vector<const ibBackendQueryColumn*> key;
+	std::vector<std::shared_ptr<ibBackendColumnRawDB>> owned;
+	std::vector<ibString> keyFields;
+	for (const ibBackendQueryColumn* src : cur.m_seedKey) {
+		if (const ibBackendColumnRawDB* const raw = src->AsRawColumn()) {
+			owned.push_back(std::make_shared<ibBackendColumnRawDB>(*raw));
+			key.push_back(owned.back().get());
+		}
+		else {
+			key.push_back(src);
+		}
+		for (const ibString& f : ColumnFieldNames(key.back()))
+			keyFields.push_back(f);
+	}
+
+	// The same place: the same cells under the key, each asked by the id the row binds it by.
+	const auto samePlace = [&key](const ibSchemaSeedRow& a, const ibSchemaSeedRow& b) {
+		return std::all_of(key.begin(), key.end(), [&a, &b](const ibBackendQueryColumn* col) {
+			const auto lhs = a.m_values.find(col->GetColumnId());
+			const auto rhs = b.m_values.find(col->GetColumnId());
+			return lhs != a.m_values.end() && rhs != b.m_values.end() && lhs->second.CompareValueLS(rhs->second) == 0;
+		});
+	};
+
+	for (const ibSchemaSeedRow& row : cur.m_seed) {
+		const ibSchemaSeedRow* o = nullptr;
+		if (old != nullptr)
+			for (const ibSchemaSeedRow& orow : old->m_seed)
+				if (samePlace(orow, row)) {
+					o = &orow;
+					break;
+				}
+		if (report != nullptr && (o == nullptr || !SeedRowsEqual(*o, row)))
+			report->AppendInfo((o != nullptr ? _("Change value ") : _("Add value ")) + row.m_name + _(" in ") + LedgerName(cur));
+
+		std::vector<ibValue> keyValues;
+		for (const ibBackendQueryColumn* col : key) {
+			const auto cell = row.m_values.find(col->GetColumnId());
+			keyValues.push_back(cell != row.m_values.end() ? cell->second : ibValue());
+		}
+		std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> cells;
+		for (const auto& cell : row.m_values)
+			if (const ibSchemaColumn* c = FindColumn(cur.m_columns, cell.first))
+				if (std::find(key.begin(), key.end(), c->m_column) == key.end())
+					cells.push_back({ c->m_column, cell.second });
+
+		const bool stands = o != nullptr;   // declared before: the line is there
+		if (stands && cells.empty())
+			continue;   // …and declares nothing to write into it
+
+		batch.Insert([table, key, owned, keyFields, keyValues, cells, stands, metaData, h]() -> bool {
+			std::vector<ibString> columns = keyFields;
+			for (const auto& cell : cells)
+				for (const ibString& f : ColumnFieldNames(cell.first))
+					columns.push_back(f);
+
+			// UPDATE … SET the cells WHERE the key, or INSERT the key and the cells — the key's fields are the match.
+			ibQueryStatement stmt(stands ? ibQueryStatement::Kind::Update : ibQueryStatement::Kind::Insert, table, columns,
+				stands ? keyFields : std::vector<ibString>(), h);
+			int position = 1;
+			for (size_t idx = 0; idx < key.size(); idx++)
+				BindWriteValue(stmt, key[idx], metaData, keyValues[idx], position);
+			for (const auto& cell : cells)
+				BindWriteValue(stmt, cell.first, metaData, cell.second, position);
+			stmt.RunQuery();   // a real failure THROWS
+			return true;
+		});
+	}
+	return 1;
+}
+
 // SEED application: every declared row is RE-ASSERTED, poured into the SAME batch as the structure so a
 // row seeded into a just-created table defers past the DDL commit (FB barrier). The baseline is compared
 // only to decide what the change ledger SAYS:
@@ -573,6 +659,9 @@ void EraseSeedRow(ibStructureBatch& batch, const ibSchemaTable& t, const ibSchem
 // the apply dialog honest.
 int DiffSeedInto(ibStructureBatch& batch, const ibSchemaTable* old, const ibSchemaTable& cur, ibRestructureInfo* report, ibDatabaseConnectionHolder* holder)
 {
+	if (!cur.m_seedKey.empty())
+		return DiffSeedLinesInto(batch, old, cur, report, holder);   // a section's lines — found by their place, above
+
 	for (const ibSchemaSeedRow& row : cur.m_seed) {
 		const ibSchemaSeedRow* o = (old != nullptr) ? FindSeedRow(old->m_seed, row.m_id) : nullptr;
 		const bool unchanged = (o != nullptr) && SeedRowsEqual(*o, row);
@@ -906,7 +995,7 @@ int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& targ
 	// sees every objection at once instead of one per attempt.
 	bool refused = false;
 	for (const ibSchemaTable& cur : target.Tables()) {
-		if (cur.m_beforeChange && !cur.m_beforeChange(report))
+		if (!cur.m_beforeChange(baseline != nullptr ? baseline->Find(cur.m_id) : nullptr, report))
 			refused = true;
 	}
 
