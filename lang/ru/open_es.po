@@ -13882,3 +13882,28 @@ msgstr "COM-объекты доступны только в Windows"
 #, c-format
 msgid "COM object \"%s\" cannot be walked with For Each"
 msgstr "COM-объект \"%s\" нельзя обойти циклом For Each"
+
+#: src/engine/backend/metaCollection/partial/sequenceBorderRules.cpp
+#, c-format
+msgid "%s is not a document"
+msgstr "%s - не документ"
+
+#: src/engine/backend/metaCollection/partial/sequenceBorderRules.cpp
+#, c-format
+msgid "%s cannot be read"
+msgstr "%s не удаётся прочитать"
+
+#: src/engine/backend/metaCollection/partial/sequenceBorderRules.cpp
+#, c-format
+msgid "%s was not posted"
+msgstr "%s не проведён"
+
+#: src/engine/backend/metaCollection/partial/sequenceBorderRules.cpp
+#, c-format
+msgid "Sequence '%s': restoring stopped at %s - %s"
+msgstr "Последовательность '%s': восстановление остановлено на %s - %s"
+
+#: src/engine/backend/metaCollection/partial/sequenceMetadata.cpp
+#, c-format
+msgid "Sequence '%s' is restored: %zu document(s) posted again"
+msgstr "Последовательность '%s' восстановлена: перепроведено документов: %zu"
