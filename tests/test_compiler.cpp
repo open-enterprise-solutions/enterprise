@@ -1122,8 +1122,8 @@ public:
 	void SetVersion(const ibVersionID& version) override { m_version = version; }
 	ibVersionID GetVersion() const override { return m_version; }
 	ibString GetLangCode() const override { return wxT("en"); }
-	bool RunDatabase(int flags = defaultFlag) override { return true; }
-	bool CloseDatabase(int flags = defaultFlag) override { return true; }
+	bool RunDatabase(const ibRuntimeRequest& request = ibRuntimeRequest()) override { return true; }
+	bool CloseDatabase(const ibRuntimeRequest& request = ibRuntimeRequest()) override { return true; }
 
 	// THE CONFIGURATION'S OWN REGISTRY, stood in for: a real one holds the
 	// reference and enum types whose ids come from metaIDs. Claiming a class id

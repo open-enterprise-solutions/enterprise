@@ -2,6 +2,7 @@
 #include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "backend/system/value/valueDataComposition.h"   // the source that turns this box into a report
 #include "backend/settings/settingsComposer.h"            // the setting marked "restore on open" goes on here
+#include "backend/metaCollection/partial/dataReport.h"   // ibReportParameter::ComposeOnOpen — read off the form's request
 #include "backend/system/systemManager.h"                 // ibValueSystemFunction::Message — the platform's own way to speak
 #include "frmserver/visualView/visualHost.h"              // IsDesignerHost — a form being drawn neither restores nor composes
 #include "frmserver/docView/templates/docViewSpreadsheet.h"   // the document it holds, and its view
@@ -159,10 +160,15 @@ void ibValueGridBox::OnCreated(ibVisualHost* host, bool firstCreated)
 	// once per opened form: OnUpdate runs again for every frame a client is sent, and a report re-reading
 	// the database because a form was drawn again is not a feature.
 	//
+	// ⭐ A PARAMETER OF THE OPENING, NOT A PROPERTY OF THE CONTROL (Max, 2026-11-03): whoever opens the form knows
+	// whether anything is left to ask — a report opened over a schema (ibOpenReportOver), one on the start page —
+	// and says so in its request. The control only reads it.
+	//
 	// Through the control's own command rather than the model's verb, so it takes exactly the road
 	// the button takes: the progress indicator, the background read, the failure message.
-	if (m_propertyComposeOnOpen->GetValueAsBoolean())
-		CallAsAction(ibSpreadsheetModelCommand_Compose, GetOwnerForm());
+	ibValueForm* const form = GetOwnerForm();
+	if (form != nullptr && form->GetFormRequest().Get(ibReportParameter::ComposeOnOpen).GetBoolean())
+		CallAsAction(ibSpreadsheetModelCommand_Compose, form);
 }
 
 void ibValueGridBox::OnCleanup(ibVisualHost* host)

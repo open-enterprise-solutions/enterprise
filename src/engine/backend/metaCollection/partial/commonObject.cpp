@@ -45,7 +45,7 @@ ibFormPtr<ibBackendValueForm> ibValueMetaObjectGenericData::GetGenericForm(const
 }
 #pragma endregion
 #pragma region _form_creator_h_
-ibFormPtr<ibBackendValueForm> ibValueMetaObjectGenericData::CreateObjectForm(const ibValueMetaObjectFormBase* metaForm, const ibUniqueKey& formGuid) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectGenericData::CreateObjectForm(const ibValueMetaObjectFormBase* metaForm, const ibFormRequest& request) const
 {
 	// ⭐⭐ ONE PLACE MAKES A FORM'S SOURCE, and it is asked by the KIND of form — which is what it
 	// switched on all along (`metaObject->GetTypeForm()`), so handing it the metaform was handing it a
@@ -54,9 +54,12 @@ ibFormPtr<ibBackendValueForm> ibValueMetaObjectGenericData::CreateObjectForm(con
 	// in the same file (Max, 2026-09-23: "you gave it already — you have to change it all the way").
 	const ibFormID form_id = metaForm != nullptr ? metaForm->GetTypeForm() : defaultFormType;
 
-	const ibSourcePtr<ibSourceDataObject> source = CreateSourceObject(ibCreateRequest(), form_id);   // held across the build
+	const ibSourcePtr<ibSourceDataObject> source = CreateSourceObject(request.m_create, form_id);   // held across the build
+
+	ibFormRequest formRequest = request;
+	formRequest.m_formName = metaForm != nullptr ? metaForm->GetName() : ibString();
 	return CreateAndBuildForm(
-		ibFormRequest(metaForm != nullptr ? metaForm->GetName() : ibString(), formGuid),
+		formRequest,
 		form_id,
 		nullptr,
 		source

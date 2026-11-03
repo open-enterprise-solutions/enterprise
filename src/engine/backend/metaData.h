@@ -754,9 +754,9 @@ public:
 	// Answered from what the metadata KNOWS — nobody is asked. See SetReadOnly above.
 	bool IsEditable() const { return !m_metaReadOnly; }
 
-	//run/close 
-	virtual bool RunDatabase(int flags = defaultFlag) = 0;
-	virtual bool CloseDatabase(int flags = defaultFlag) = 0;
+	//run/close
+	virtual bool RunDatabase(const ibRuntimeRequest& request = ibRuntimeRequest()) = 0;
+	virtual bool CloseDatabase(const ibRuntimeRequest& request = ibRuntimeRequest()) = 0;
 
 	//metaobject
 	ibValueMetaObject* CreateMetaObject(const ibClassID& clsid,

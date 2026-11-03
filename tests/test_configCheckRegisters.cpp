@@ -84,7 +84,7 @@ TEST(ConfigCheckRegisters, NamesWhatTheSaveWouldRefuseAndOnlyThat) {
 	ibMetaDataConfigurationBase* cfg = session->GetMetaData();
 	ASSERT_NE(cfg, nullptr);
 	if (cfg->IsConfigOpen()) {
-		ASSERT_TRUE(cfg->CloseDatabase(forceCloseFlag));
+		ASSERT_TRUE(cfg->CloseDatabase(ibRuntimeRequest(forceCloseFlag)));
 	}
 
 	ibValueMetaObjectConfiguration* root = cfg->GetCommonMetaObject();

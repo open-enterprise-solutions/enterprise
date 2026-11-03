@@ -348,10 +348,10 @@ public:
 	virtual bool DestroyMainModule() override = 0;
 
 	//start common module
-	virtual bool StartMainModule(bool force = false) = 0;
+	virtual bool StartMainModule(const ibRuntimeRequest& request = ibRuntimeRequest()) = 0;
 
 	//exit common module
-	virtual bool ExitMainModule(bool force = false) = 0;
+	virtual bool ExitMainModule(const ibRuntimeRequest& request = ibRuntimeRequest()) = 0;
 
 	// common modules — runtime-side mutation API. Metadata's
 	// AddCommonModule/RenameCommonModule/RemoveCommonModule forwards
@@ -425,10 +425,10 @@ public:
 	virtual bool DestroyMainModule();
 
 	//start common module
-	virtual bool StartMainModule(bool force = false);
+	virtual bool StartMainModule(const ibRuntimeRequest& request = ibRuntimeRequest());
 
 	//exit common module
-	virtual bool ExitMainModule(bool force = false);
+	virtual bool ExitMainModule(const ibRuntimeRequest& request = ibRuntimeRequest());
 
 };
 

@@ -39,7 +39,7 @@ bool ibDataProcessorFileDocument::OnCreate(const ibString& path, long flags)
 
 bool ibDataProcessorFileDocument::OnCloseDocument()
 {
-	if (!m_metaData->CloseDatabase(forceCloseFlag)) {
+	if (!m_metaData->CloseDatabase(ibRuntimeRequest(forceCloseFlag))) {
 		return false;
 	}
 

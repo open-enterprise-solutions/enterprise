@@ -392,7 +392,7 @@ bool ibApplicationInstance::ReplaceActiveMetaData()
 	// apply's copy is read, the mirror of the database (loadConfigFlag).
 	const std::shared_ptr<ibMetaDataConfiguration> metaData =
 		ibMetaData::MakeShared<ibMetaDataConfiguration>(ib::AppDataCtorToken{ this });
-	if (!metaData->LoadDatabase(onlyLoadFlag) || !metaData->RunDatabase(loadConfigFlag))
+	if (!metaData->LoadDatabase(onlyLoadFlag) || !metaData->RunDatabase(ibRuntimeRequest(loadConfigFlag)))
 		return false;
 	ReplaceActiveMetaData(metaData);
 	return true;

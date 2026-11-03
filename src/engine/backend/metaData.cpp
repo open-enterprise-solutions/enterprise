@@ -36,7 +36,7 @@ void ibMetaData::Dispose(ibMetaData* metaData)
 		if (metaData->IsConfigOpen()) {
 			ibJournalInfo(ibT("metadata"), ibT("'%s' %s closed: its last holder let it go"), name,
 				metaData->GetConfigMD5());
-			metaData->CloseDatabase(forceCloseFlag);
+			metaData->CloseDatabase(ibRuntimeRequest(forceCloseFlag));
 		}
 	}
 	catch (const ibCoreException& err) {

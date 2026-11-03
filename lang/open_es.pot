@@ -9195,14 +9195,6 @@ msgstr ""
 msgid "The form attribute the grid shows: a spreadsheet document, or a composition (a report) whose result the grid displays. Empty: the grid keeps a spreadsheet document of its own."
 msgstr ""
 
-#: src/engine/frmserver/visualView/ctrl/gridBox.h:241
-msgid "Compose on open"
-msgstr ""
-
-#: src/engine/frmserver/visualView/ctrl/gridBox.h:242
-msgid "Whether a report bound to the grid builds itself once when the control is created, without the user pressing Compose. Off (the default) suits a report whose parameters are set first; on suits one with nothing left to ask, such as a report on a desktop."
-msgstr ""
-
 #: src/engine/frmserver/visualView/ctrl/gridBox.h:264
 msgid "On detail processing"
 msgstr ""

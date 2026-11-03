@@ -1016,7 +1016,7 @@ ibValue ibValueSystemFunction::GetCommonForm(const ibFormRequest& request, ibBac
 			activeMetaData->FindAnyObjectByFilter<ibValueMetaObjectCommonForm>(request.m_formName, g_metaCommonFormCLSID);
 
 		if (creator != nullptr)
-			return creator->GetObjectForm(ownerControl, unique ? ((ibGuid)*unique) : ibGuid());
+			return creator->GetObjectForm(ibFormRequest(ibString(), unique ? ((ibGuid)*unique) : ibGuid()), ownerControl);
 	}
 
 	ibBackendCoreException::Error(_("Common form not found '%s'"), request.m_formName);

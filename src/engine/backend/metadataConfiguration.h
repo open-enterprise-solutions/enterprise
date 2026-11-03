@@ -246,8 +246,8 @@ public:
 	virtual bool IsFullAccess() const;
 
 	//run/close
-	virtual bool RunDatabase(int flags = defaultFlag);
-	virtual bool CloseDatabase(int flags = defaultFlag);
+	virtual bool RunDatabase(const ibRuntimeRequest& request = ibRuntimeRequest());
+	virtual bool CloseDatabase(const ibRuntimeRequest& request = ibRuntimeRequest());
 
 	virtual bool ClearDatabase();
 
@@ -390,22 +390,24 @@ public:
 	//run/close
 	// The database's copy runs as the mirror it is (loadConfigFlag), once: after an apply it is the base's active
 	// configuration as well, running already.
-	virtual bool RunDatabase(int flags = defaultFlag) {
+	virtual bool RunDatabase(const ibRuntimeRequest& request = ibRuntimeRequest()) {
 
-		if (!ibMetaDataConfiguration::RunDatabase(flags))
+		if (!ibMetaDataConfiguration::RunDatabase(request))
 			return false;
 
-		return m_configMetadata->IsConfigOpen() || m_configMetadata->RunDatabase(flags | loadConfigFlag);
+		ibRuntimeRequest mirrorRequest = request;
+		mirrorRequest.m_flags |= loadConfigFlag;
+		return m_configMetadata->IsConfigOpen() || m_configMetadata->RunDatabase(mirrorRequest);
 	}
 
 	// …and closes with this one only while nobody else holds it; held by the base and its sessions, it goes with
 	// the last of them.
-	virtual bool CloseDatabase(int flags = defaultFlag) {
-		if (!ibMetaDataConfiguration::CloseDatabase(flags))
+	virtual bool CloseDatabase(const ibRuntimeRequest& request = ibRuntimeRequest()) {
+		if (!ibMetaDataConfiguration::CloseDatabase(request))
 			return false;
 		if (m_configMetadata.use_count() > 1 || !m_configMetadata->IsConfigOpen())
 			return true;
-		return m_configMetadata->CloseDatabase(flags);
+		return m_configMetadata->CloseDatabase(request);
 	}
 
 	//Check is full access 

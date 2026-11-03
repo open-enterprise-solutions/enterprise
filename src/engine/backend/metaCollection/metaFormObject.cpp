@@ -327,7 +327,7 @@ bool ibValueMetaObjectForm::OnDeleteMetaObject()
 	return ibValueMetaObjectFormBase::OnDeleteMetaObject();
 }
 
-ibFormPtr<ibBackendValueForm> ibValueMetaObjectForm::GetObjectForm(ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectForm::GetObjectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	// The owner is what knows the source a form of this kind must be bound to (and it checks
 	// the access right on the way, exactly as the common form's own answer does). A form with
@@ -335,7 +335,7 @@ ibFormPtr<ibBackendValueForm> ibValueMetaObjectForm::GetObjectForm(ibBackendCont
 	const ibValueMetaObjectGenericData* const owner =
 		dynamic_cast<const ibValueMetaObjectGenericData*>(GetParent());
 
-	return owner != nullptr ? owner->CreateObjectForm(this, formGuid) : nullptr;
+	return owner != nullptr ? owner->CreateObjectForm(this, request) : nullptr;
 }
 
 bool ibValueMetaObjectForm::OnBeforeRunMetaObject(int flags)
@@ -404,7 +404,7 @@ bool ibValueMetaObjectCommonForm::WriteData(ibDataNode& node) const
 
 #include "backend/system/systemManager.h"
 
-ibFormPtr<ibBackendValueForm> ibValueMetaObjectCommonForm::GetObjectForm(ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+ibFormPtr<ibBackendValueForm> ibValueMetaObjectCommonForm::GetObjectForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl) const
 {
 	if (!AccessRight_Use()) {
 		ibBackendAccessException::Error(ibString::Format(_("opening form '%s'"), GetSynonym()));
@@ -412,7 +412,7 @@ ibFormPtr<ibBackendValueForm> ibValueMetaObjectCommonForm::GetObjectForm(ibBacke
 	}
 
 	return ibValueMetaObjectFormBase::CreateAndBuildForm(
-		ibFormRequest(ibString(), formGuid),
+		request,
 		this,
 		ownerControl,
 		nullptr

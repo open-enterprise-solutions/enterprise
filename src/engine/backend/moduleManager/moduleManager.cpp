@@ -451,9 +451,9 @@ bool ibValueModuleManagerRuntimeConfiguration::DestroyMainModule()
 }
 
 //main module - initialize
-bool ibValueModuleManagerRuntimeConfiguration::StartMainModule(bool force)
+bool ibValueModuleManagerRuntimeConfiguration::StartMainModule(const ibRuntimeRequest& request)
 {
-	if (force)
+	if (request.m_flags & forceRunFlag)
 		return true;
 
 	if (!m_initialized)
@@ -472,9 +472,9 @@ bool ibValueModuleManagerRuntimeConfiguration::StartMainModule(bool force)
 }
 
 //main module - destroy
-bool ibValueModuleManagerRuntimeConfiguration::ExitMainModule(bool force)
+bool ibValueModuleManagerRuntimeConfiguration::ExitMainModule(const ibRuntimeRequest& request)
 {
-	if (force)
+	if (request.m_flags & forceCloseFlag)
 		return true;
 
 	if (!m_initialized)

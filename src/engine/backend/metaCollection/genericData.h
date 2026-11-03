@@ -231,8 +231,8 @@ public:
 	// Build the form value of one of MY form metaobjects, bound to the source its kind implies
 	// (a list form gets the list, an object form a NEW object).
 	//
-	// `formGuid` is the FORM KEY. It defaults to EMPTY — the runtime meaning — so a plain
-	// CreateObjectForm(metaForm) does the safe thing: the key falls back to the SOURCE
+	// The request's `m_formGuid` is the FORM KEY (its name is the metaform's, whatever it says). It defaults to
+	// EMPTY — the runtime meaning — so a plain CreateObjectForm(metaForm) does the safe thing: the key falls back to the SOURCE
 	// object's guid, which is how everything finds a live form afterwards
 	// (ibValueRecordDataObject::GetForm / Modify / the write notify all call
 	// FindFormByUniqueKey(m_objGuid)). Only the DESIGNER's compile cache passes a guid — the
@@ -240,7 +240,7 @@ public:
 	// metaform, a runtime form would be invisible to the lookups above and Save / Refresh
 	// would have nothing to act on. (Out of line: it holds the source, which is only declared here.)
 	virtual ibFormPtr<ibBackendValueForm> CreateObjectForm(const ibValueMetaObjectFormBase* metaForm,
-		const ibUniqueKey& formGuid = wxNullGuid) const;
+		const ibFormRequest& request = ibFormRequest()) const;
 
 #pragma region _form_builder_h_
 	//support form 

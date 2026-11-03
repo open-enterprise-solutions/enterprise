@@ -182,8 +182,9 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::DestroyMainModule()
 	ResetByteCode();
 	m_procUnit.reset();
 
-	//set proc unit
-	m_objectValue->m_procUnit = nullptr;
+	//set proc unit — the object is gone already when nobody took it (StartMainModule)
+	if (m_objectValue != nullptr)
+		m_objectValue->m_procUnit = nullptr;
 
 	//Setup common modules — best-effort: destroy every module even if one
 	//fails, so teardown never leaks the remainder; report the aggregate.
@@ -198,12 +199,22 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::DestroyMainModule()
 }
 
 //main module - initialize
-bool ibValueModuleRuntimeManagerExternalDataProcessor::StartMainModule(bool force)
+bool ibValueModuleRuntimeManagerExternalDataProcessor::StartMainModule(const ibRuntimeRequest& request)
 {
 	if (!m_initialized)
 		return false;
 
 	// (incrRef - for control delete: taken in CreateMainModule, before the module ran)
+
+	// THE FORM IS OPENED WITH THE RUN'S PARAMETERS — whoever ran it knows them, and the run is what opens it.
+	ibFormRequest formRequest;
+	formRequest.m_values = request.m_values;
+
+	// ⭐ WHETHER A FORM TOOK THE OBJECT. At runtime nothing else holds it, so when none did the run's reference is
+	// the last one and the object goes with it — and the pointer to it is cleared, not left dangling (Max,
+	// 2026-11-03): ExternalDataProcessors.Create then hands back nothing instead of a freed object. In the designer
+	// the manager holds it (ctor), so it never goes here.
+	bool taken = false;
 
 	const ibValueMetaObjectRecordData* commonObject = m_objectValue->GetMetaObject();
 	wxASSERT(commonObject);
@@ -222,14 +233,16 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::StartMainModule(bool forc
 
 		if (!cc || !cc->FindCompileModule(defFormObject, cached)) {
 
-			const ibFormPtr<ibBackendValueForm> result = ibValueMetaObjectFormBase::CreateAndBuildForm(ibFormRequest(), defFormObject, nullptr, m_objectValue);
+			const ibFormPtr<ibBackendValueForm> result = ibValueMetaObjectFormBase::CreateAndBuildForm(formRequest, defFormObject, nullptr, m_objectValue);
 
 			if (result) {
 				result->ShowForm();
+				taken = true;
 			}
 			else if (!appData->DesignerMode()) {
 				//decrRef - for control delete
 				m_objectValue->DecrRef();
+				m_objectValue = nullptr;
 				return false;
 			}
 
@@ -252,16 +265,19 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::StartMainModule(bool forc
 	//	}
 	//}
 
-	//decrRef - for control delete 
+	//decrRef - for control delete
 	m_objectValue->DecrRef();
+	
+	if (!taken && !appData->DesignerMode())
+		m_objectValue = nullptr;
 
 	return true;
 }
 
 //main module - destroy
-bool ibValueModuleRuntimeManagerExternalDataProcessor::ExitMainModule(bool force)
+bool ibValueModuleRuntimeManagerExternalDataProcessor::ExitMainModule(const ibRuntimeRequest& request)
 {
-	if (force)
+	if (request.m_flags & forceCloseFlag)
 		return true;
 
 	if (!m_initialized)
@@ -423,8 +439,9 @@ bool ibValueModuleRuntimeManagerExternalReport::DestroyMainModule()
 	ResetByteCode();
 	m_procUnit.reset();
 
-	//set proc unit
-	m_objectValue->m_procUnit = nullptr;
+	//set proc unit — the object is gone already when nobody took it (StartMainModule)
+	if (m_objectValue != nullptr)
+		m_objectValue->m_procUnit = nullptr;
 
 	//Setup common modules — best-effort: destroy every module even if one
 	//fails, so teardown never leaks the remainder; report the aggregate.
@@ -439,12 +456,19 @@ bool ibValueModuleRuntimeManagerExternalReport::DestroyMainModule()
 }
 
 //main module - initialize
-bool ibValueModuleRuntimeManagerExternalReport::StartMainModule(bool force)
+bool ibValueModuleRuntimeManagerExternalReport::StartMainModule(const ibRuntimeRequest& request)
 {
 	if (!m_initialized)
 		return false;
 
 	// (incrRef - for control delete: taken in CreateMainModule, before the module ran)
+
+	// The form is opened with the run's parameters — see the data processor's twin above.
+	ibFormRequest formRequest;
+	formRequest.m_values = request.m_values;
+
+	// Whether a form took the object — see the twin: when none did, the object goes and its pointer is cleared.
+	bool taken = false;
 
 	// THE METAOBJECT IS A REPORT'S, and it says so — so both questions below are asked of it
 	// directly: which form is the default one, and which composer is.
@@ -462,14 +486,16 @@ bool ibValueModuleRuntimeManagerExternalReport::StartMainModule(bool force)
 		ibCompileValueCache* cc = defFormObject->GetMetaData()->GetCompileCache();
 		if (!cc || !cc->FindCompileModule(defFormObject, cached)) {
 
-			const ibFormPtr<ibBackendValueForm> result = ibValueMetaObjectFormBase::CreateAndBuildForm(ibFormRequest(), defFormObject, nullptr, m_objectValue);
+			const ibFormPtr<ibBackendValueForm> result = ibValueMetaObjectFormBase::CreateAndBuildForm(formRequest, defFormObject, nullptr, m_objectValue);
 
 			if (result) {
 				result->ShowForm();
+				taken = true;
 			}
 			else if (!appData->DesignerMode()) {
 				//decrRef - for control delete
 				m_objectValue->DecrRef();
+				m_objectValue = nullptr;
 				return false;
 			}
 		}
@@ -484,31 +510,36 @@ bool ibValueModuleRuntimeManagerExternalReport::StartMainModule(bool force)
 	else if (commonObject->GetDefComposer() != wxNOT_FOUND) {
 		// No key in the request — the form is generated, so it takes a fresh key of its own.
 		const ibFormPtr<ibBackendValueForm> valueForm =
-			ibBackendValueForm::CreateNewForm(ibFormRequest(), nullptr, nullptr, m_objectValue);
+			ibBackendValueForm::CreateNewForm(formRequest, nullptr, nullptr, m_objectValue);
 		valueForm->BuildForm(ibValueMetaObjectReport::eFormReport);
 		try {
 			valueForm->ShowForm();
+			taken = true;
 		}
 		catch (...) {
 			// A form that failed to show goes with its holder — nobody else took it.
 			if (appData->EnterpriseMode() || appData->ServiceMode()) {
 				//decrRef - for control delete
 				m_objectValue->DecrRef();
+				m_objectValue = nullptr;
 				return false;
 			}
 		}
 	}
 
-	//decrRef - for control delete 
+	//decrRef - for control delete
 	m_objectValue->DecrRef();
+	
+	if (!taken && !appData->DesignerMode())
+		m_objectValue = nullptr;
 
 	return true;
 }
 
 //main module - destroy
-bool ibValueModuleRuntimeManagerExternalReport::ExitMainModule(bool force)
+bool ibValueModuleRuntimeManagerExternalReport::ExitMainModule(const ibRuntimeRequest& request)
 {
-	if (force)
+	if (request.m_flags & forceCloseFlag)
 		return true;
 
 	if (!m_initialized)

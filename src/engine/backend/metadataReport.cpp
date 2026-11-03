@@ -143,7 +143,7 @@ std::unique_ptr<ibCompileValueCache> ibMetaDataReport::CreateDesignerCache()
 	return cache;
 }
 
-bool ibMetaDataReport::RunDatabase(int flags)
+bool ibMetaDataReport::RunDatabase(const ibRuntimeRequest& request)
 {
 	// RunSubtree fires the root's own OnBeforeRun/OnAfterRun + every descendant.
 	// CreateMainModule/StartMainModule stay interleaved between the two phases.
@@ -167,7 +167,7 @@ bool ibMetaDataReport::RunDatabase(int flags)
 		// The designer module-manager (for the report's compile cache) was already
 		// built by the image ctor via CreateDesignerModuleManager() — common modules
 		// register into it during RunSubtree(true) below.
-		if (!m_commonObject->RunSubtree(flags, ibValueMetaObject::ibRunPhase::Before))
+		if (!m_commonObject->RunSubtree(request.m_flags, ibValueMetaObject::ibRunPhase::Before))
 			return false;
 
 		if (auto* cc = GetCompileCache()) {
@@ -176,9 +176,9 @@ bool ibMetaDataReport::RunDatabase(int flags)
 		}
 
 		if (m_moduleManager->CreateMainModule()) {
-			if (!m_commonObject->RunSubtree(flags, ibValueMetaObject::ibRunPhase::After))
+			if (!m_commonObject->RunSubtree(request.m_flags, ibValueMetaObject::ibRunPhase::After))
 				return false;
-			if (!m_moduleManager->StartMainModule())
+			if (!m_moduleManager->StartMainModule(request))
 				return false;
 			load.Commit();   // keep the image → report is now open
 			return true;
@@ -187,10 +187,10 @@ bool ibMetaDataReport::RunDatabase(int flags)
 	}
 	else if (!m_commonObject->IsExternalCreate()) {
 
-		if (!m_commonObject->RunSubtree(flags, ibValueMetaObject::ibRunPhase::Before))
+		if (!m_commonObject->RunSubtree(request.m_flags, ibValueMetaObject::ibRunPhase::Before))
 			return false;
 
-		if (!m_commonObject->RunSubtree(flags, ibValueMetaObject::ibRunPhase::After))
+		if (!m_commonObject->RunSubtree(request.m_flags, ibValueMetaObject::ibRunPhase::After))
 			return false;
 
 		load.Commit();
@@ -203,7 +203,7 @@ bool ibMetaDataReport::RunDatabase(int flags)
 	return false;
 }
 
-bool ibMetaDataReport::CloseDatabase(int flags)
+bool ibMetaDataReport::CloseDatabase(const ibRuntimeRequest& request)
 {
 	// 🛑 A FAILED OPEN IS CLOSED BY THE SAME ROAD, and it must not be a trap (Max, 2026-08-20: "it
 	// crashes so that you cannot even close the base afterwards"). When LoadFromFile refuses — an
@@ -224,7 +224,7 @@ bool ibMetaDataReport::CloseDatabase(int flags)
 	// that used to run inside every object's OnAfterCloseMetaObject.
 	MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Closed, GetCommonMetaObject());
 
-	if (!ExitMainModule((flags & forceCloseFlag) != 0))
+	if (!ExitMainModule(request))
 		return false;
 
 	// CloseSubtree closes every descendant then the root's own hook (bottom-up);
@@ -350,7 +350,7 @@ bool ibMetaDataReport::LoadFromBuffer(const ibMemoryBuffer& buffer, const ibStri
 	// the old root, and the manager references it via m_objectValue (use-after-free if
 	// the manager outlives the root). Then swap (the assignment releases old + adopts
 	// fresh); the run builds the manager on the fresh root (RunDatabase).
-	if (IsConfigOpen() && !CloseDatabase(forceCloseFlag))
+	if (IsConfigOpen() && !CloseDatabase(ibRuntimeRequest(forceCloseFlag)))
 		return false; // fresh discarded automatically
 
 	// Release the old manager first (its dtor runs DestroyMainModule via RAII) while
@@ -580,17 +580,9 @@ bool ibOpenReportOver(const ibCompositionDescription& desc, const ibString& name
 	composer->OnLoadMetaObject(detailMeta.get());
 	composer->SetCompositionDesc(desc);
 
-	if (!detailMeta->RunDatabase())
-		return false;
-
-	// …and the object holds the container from its run on (the module manager RunDatabase builds hands it over), so
-	// this reference may go: the form's life is what keeps the report alive.
-	if (ibValueModuleRuntimeManagerExternalReport* manager = detailMeta->GetManagerModule()) {
-		if (ibValueRecordDataObjectReport* object =
-				dynamic_cast<ibValueRecordDataObjectReport*>(manager->GetObjectValue())) {
-			object->ShowFormValue();
-			return true;
-		}
-	}
-	return false;
+	// ⭐ COMPOSED AS IT OPENS: what is opened here has nothing left to ask — a detail carries the reader's
+	// parameters, an assistant's report was written whole. The run opens the form and hands it this.
+	ibRuntimeRequest request;
+	request.Set(ibReportParameter::ComposeOnOpen, true);
+	return detailMeta->RunDatabase(request);
 }

@@ -68,7 +68,7 @@ bool ibMetadataFileDocument::OnCreate(const ibString& path, long flags)
 
 bool ibMetadataFileDocument::OnCloseDocument()
 {
-	if (!m_metaData->CloseDatabase(forceCloseFlag))
+	if (!m_metaData->CloseDatabase(ibRuntimeRequest(forceCloseFlag)))
 		return false;
 	return ibMetaDocument::OnCloseDocument();
 }
@@ -90,7 +90,7 @@ bool ibMetadataFileDocument::DoOpenDocument(const ibString& filename)
 	SetFilename(temp.GetName(), true);
 
 	m_metaData->SetReadOnly(true);
-	if (!m_metaData->RunDatabase(onlyLoadFlag))
+	if (!m_metaData->RunDatabase(ibRuntimeRequest(onlyLoadFlag)))
 		return false;
 
 	if (ibConfigurationTree* const tree = GetMetaTree()) {

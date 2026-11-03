@@ -9399,14 +9399,6 @@ msgstr "Не вдалося вставити елемент '%s' у '%s' (іде
 msgid "The form attribute the grid shows: a spreadsheet document, or a composition (a report) whose result the grid displays. Empty: the grid keeps a spreadsheet document of its own."
 msgstr "Реквізит форми, який показує поле табличного документа: табличний документ або компонування (звіт), результат якого виводиться в полі. Якщо порожньо, поле зберігає власний табличний документ."
 
-#: src/engine/frmserver/visualView/ctrl/gridBox.h:241
-msgid "Compose on open"
-msgstr "Формувати під час відкриття"
-
-#: src/engine/frmserver/visualView/ctrl/gridBox.h:242
-msgid "Whether a report bound to the grid builds itself once when the control is created, without the user pressing Compose. Off (the default) suits a report whose parameters are set first; on suits one with nothing left to ask, such as a report on a desktop."
-msgstr "Чи формується прив'язаний до поля звіт один раз під час створення елемента, без натискання користувачем кнопки Сформувати. Вимкнено (за замовчуванням) підходить для звіту, параметри якого спершу задаються; увімкнено - для звіту, якому більше нічого питати, наприклад звіту на робочому столі."
-
 #: src/engine/frmserver/visualView/ctrl/gridBox.h:264
 msgid "On detail processing"
 msgstr "Обробка розшифровки"

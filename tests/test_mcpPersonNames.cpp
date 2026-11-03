@@ -125,7 +125,7 @@ struct McpPersonNames : ::testing::Test {
 		ibMetaDataConfigurationBase* const cfg = m_holder->GetMetaData();
 		ASSERT_NE(cfg, nullptr);
 		if (cfg->IsConfigOpen()) {
-			ASSERT_TRUE(cfg->CloseDatabase(forceCloseFlag));
+			ASSERT_TRUE(cfg->CloseDatabase(ibRuntimeRequest(forceCloseFlag)));
 		}
 		ASSERT_NO_FATAL_FAILURE(Fill(cfg));
 		ASSERT_TRUE(cfg->RunDatabase());

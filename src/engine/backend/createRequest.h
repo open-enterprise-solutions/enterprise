@@ -164,4 +164,32 @@ struct ibFormRequest {
 	void Set(const ibString& name, const ibValue& value) { m_values[name] = value; }
 };
 
+// ⭐ WHAT A RUN IS STARTED AND STOPPED WITH (Max, 2026-11-03) — a metadata's (RunDatabase / CloseDatabase) and its
+// module manager's (StartMainModule / ExitMainModule) alike: the flags, and the parameters of whoever runs it. It
+// knows nothing about forms; a run that opens one hands the parameters on to it.
+struct ibRuntimeRequest {
+
+	// metaObjectFlags (metaObject.h) — onlyLoadFlag, loadConfigFlag, forceRunFlag, forceCloseFlag…
+	int m_flags = 0;
+
+	// …and the parameters, by name: what a report is opened with (ibReportParameter).
+	std::map<ibString, ibValue> m_values;
+
+	ibRuntimeRequest() = default;
+
+	// EXPLICIT, for the reason the form request's name is: flags are PART of a request, and
+	// `RunDatabase(request.m_flags)` must not compile as passing the request on.
+	explicit ibRuntimeRequest(int flags) : m_flags(flags) {}
+
+	// A named value, or an empty one — as the form request's.
+	ibValue Get(const ibString& name) const {
+		const std::map<ibString, ibValue>::const_iterator found = m_values.find(name);
+		return found != m_values.end() ? found->second : ibValue();
+	}
+
+	bool Has(const ibString& name) const { return m_values.contains(name); }
+
+	void Set(const ibString& name, const ibValue& value) { m_values[name] = value; }
+};
+
 #endif // !__CREATE_REQUEST_H__

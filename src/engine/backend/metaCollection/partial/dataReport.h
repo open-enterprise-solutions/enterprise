@@ -4,6 +4,15 @@
 #include "commonObject.h"
 #include "backend/metaCollection/metaComposerObject.h"   // the report's own composers
 
+// ⭐ WHAT A REPORT'S FORM IS OPENED WITH — the report's own, so the report names it; each rides in the form's
+// request (ibFormRequest::Set / Get), or in the run's (ibRuntimeRequest), which hands it to the form it opens.
+namespace ibReportParameter {
+
+	// Set by whoever opens one with nothing left to ask — a report over a schema (ibOpenReportOver, through its
+	// run), the start page — and read by the grid showing it (ibValueGridBox::OnCreated).
+	inline constexpr const ibChar* ComposeOnOpen = ibT("ComposeOnOpen");
+}
+
 class BACKEND_API ibValueMetaObjectReport : public ibValueMetaObjectRecordDataExt {
 	public:
 

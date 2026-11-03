@@ -145,7 +145,7 @@ std::unique_ptr<ibCompileValueCache> ibMetaDataDataProcessor::CreateDesignerCach
 	return cache;
 }
 
-bool ibMetaDataDataProcessor::RunDatabase(int flags)
+bool ibMetaDataDataProcessor::RunDatabase(const ibRuntimeRequest& request)
 {
 	// RunSubtree fires the root's own OnBeforeRun/OnAfterRun + every descendant.
 	// CreateMainModule/StartMainModule stay interleaved between the two phases.
@@ -169,7 +169,7 @@ bool ibMetaDataDataProcessor::RunDatabase(int flags)
 		// The designer module-manager (for the DP's own compile cache) was already
 		// built by the image ctor via CreateDesignerModuleManager() — common modules
 		// register into it during RunSubtree(true) below.
-		if (!m_commonObject->RunSubtree(flags, ibValueMetaObject::ibRunPhase::Before))
+		if (!m_commonObject->RunSubtree(request.m_flags, ibValueMetaObject::ibRunPhase::Before))
 			return false;
 
 		if (auto* cc = GetCompileCache()) {
@@ -178,9 +178,9 @@ bool ibMetaDataDataProcessor::RunDatabase(int flags)
 		}
 
 		if (m_moduleManager->CreateMainModule()) {
-			if (!m_commonObject->RunSubtree(flags, ibValueMetaObject::ibRunPhase::After))
+			if (!m_commonObject->RunSubtree(request.m_flags, ibValueMetaObject::ibRunPhase::After))
 				return false;
-			if (!m_moduleManager->StartMainModule())
+			if (!m_moduleManager->StartMainModule(request))
 				return false;
 			load.Commit();   // keep the image → DP is now open
 			return true;
@@ -189,9 +189,9 @@ bool ibMetaDataDataProcessor::RunDatabase(int flags)
 	}
 	else if (!m_commonObject->IsExternalCreate()) {
 
-		if (!m_commonObject->RunSubtree(flags, ibValueMetaObject::ibRunPhase::Before))
+		if (!m_commonObject->RunSubtree(request.m_flags, ibValueMetaObject::ibRunPhase::Before))
 			return false;
-		if (!m_commonObject->RunSubtree(flags, ibValueMetaObject::ibRunPhase::After))
+		if (!m_commonObject->RunSubtree(request.m_flags, ibValueMetaObject::ibRunPhase::After))
 			return false;
 
 		load.Commit();
@@ -204,7 +204,7 @@ bool ibMetaDataDataProcessor::RunDatabase(int flags)
 	return false;
 }
 
-bool ibMetaDataDataProcessor::CloseDatabase(int flags)
+bool ibMetaDataDataProcessor::CloseDatabase(const ibRuntimeRequest& request)
 {
 	// The assert warns (Debug), the close happens anyway — see the report's twin
 	// (metadataReport.cpp): a refused open is rolled back through this very road, and a bad file
@@ -219,7 +219,7 @@ bool ibMetaDataDataProcessor::CloseDatabase(int flags)
 	// that used to run inside every object's OnAfterCloseMetaObject.
 	MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Closed, GetCommonMetaObject());
 
-	if (!ExitMainModule((flags & forceCloseFlag) != 0))
+	if (!ExitMainModule(request))
 		return false;
 
 	// CloseSubtree closes every descendant then the root's own hook (bottom-up);
@@ -345,7 +345,7 @@ bool ibMetaDataDataProcessor::LoadFromBuffer(const ibMemoryBuffer& buffer, const
 	// the old root, and the manager references it via m_objectValue (use-after-free if
 	// the manager outlives the root). Then swap (the assignment releases old + adopts
 	// fresh); the run builds the manager on the fresh root (RunDatabase).
-	if (IsConfigOpen() && !CloseDatabase(forceCloseFlag))
+	if (IsConfigOpen() && !CloseDatabase(ibRuntimeRequest(forceCloseFlag)))
 		return false; // fresh discarded automatically
 
 	// Release the old manager first (its dtor runs DestroyMainModule via RAII) while

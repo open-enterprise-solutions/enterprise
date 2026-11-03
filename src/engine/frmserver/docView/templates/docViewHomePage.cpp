@@ -12,6 +12,7 @@
 #include "core/fnumber.h"                               // the column's share, a fraction
 #include "backend/metaCollection/metaObjectMetadata.h"     // GetHomePage()
 #include "backend/metaCollection/metaFormObject.h"         // ibValueMetaObjectFormBase / ibValueMetaObjectCommonForm
+#include "backend/metaCollection/partial/dataReport.h"     // ibReportParameter::ComposeOnOpen — a report on the page opens built
 #include "backend/metaData.h"                              // FindAnyObjectByFilter
 #include "backend/backend_exception.h"                     // ibBackendException — a cell that fails must not take the page down
 #include "backend/backend_picture.h"                       // ibBackendPicture::SendPicture — the page's icon, by its id
@@ -259,13 +260,17 @@ ibValuePtr<ibValueForm> ibHomePageView::CreateFormValue(const ibValueMetaObjectF
 	// the menu would merely activate the page's copy — a cell, so nothing would appear. It is also what lets the
 	// same form sit on the page twice. Nothing outside the page is affected: an object still finds ITS form by
 	// source (ibValueRecordDataObject::GetForm).
-	const ibUniqueKey formKey = wxNewUniqueGuid;
+	ibFormRequest request(ibString(), wxNewUniqueGuid);
+
+	// ⭐ A REPORT ON THE PAGE IS READ ALREADY BUILT: nobody opened it to set its parameters first, and a page of
+	// empty reports with a Compose button each is a page that shows nothing.
+	request.Set(ibReportParameter::ComposeOnOpen, true);
 
 	try {
 		// One verb, answered by the form's own kind — an object form asks the object that owns it, a common form
 		// stands alone, and the access right comes back with the same call. No branch here, no cast: the page does
 		// not care which kind it is holding.
-		backendForm = metaForm->GetObjectForm(nullptr, formKey);
+		backendForm = metaForm->GetObjectForm(request);
 	}
 	catch (const ibCoreException&) {
 		// A form that refuses to build (access denied, a broken source) must not take the whole start page down

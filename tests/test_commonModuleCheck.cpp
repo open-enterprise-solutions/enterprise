@@ -96,7 +96,7 @@ TEST_F(CommonModuleCheck, ConfigCheckReportsABrokenModuleAndOneThatWasNeverCompi
 	ASSERT_NE(cfg, nullptr);
 	ASSERT_EQ(activeMetaData, cfg);
 	if (cfg->IsConfigOpen()) {
-		ASSERT_TRUE(cfg->CloseDatabase(forceCloseFlag));
+		ASSERT_TRUE(cfg->CloseDatabase(ibRuntimeRequest(forceCloseFlag)));
 	}
 
 	ibValueMetaObjectConfiguration* root = cfg->GetCommonMetaObject();
@@ -192,7 +192,7 @@ TEST_F(CommonModuleCheck, AGlobalModuleIsReadWithTheTextThatBindsIt)
 	ibMetaDataConfigurationBase* cfg = session->GetMetaData();
 	ASSERT_NE(cfg, nullptr);
 	if (cfg->IsConfigOpen()) {
-		ASSERT_TRUE(cfg->CloseDatabase(forceCloseFlag));
+		ASSERT_TRUE(cfg->CloseDatabase(ibRuntimeRequest(forceCloseFlag)));
 	}
 
 	ibValueMetaObjectConfiguration* root = cfg->GetCommonMetaObject();

@@ -228,24 +228,6 @@ private:
 	ibPropertySource*   m_propertySource = ibPropertyObject::CreateProperty<ibPropertySource>(m_categoryData, ibT("Source"), _("Source"),
 		_("The form attribute the grid shows: a spreadsheet document, or a composition (a report) whose result the grid displays. Empty: the grid keeps a spreadsheet document of its own."));
 
-	// ⭐⭐ COMPOSE ON OPEN — the report builds itself as the control is first shown, with no press of
-	// Compose (Max, 2026-08-26). A report normally waits because the reader sets its parameters
-	// first and a read fired before that reads the wrong thing; but a report put on a DESKTOP, or
-	// opened already answered, has nothing left to be asked, and the button is then a step that
-	// means nothing.
-	//
-	// ⚠ A PROPERTY OF THE CONTROL, not of the schema. What to read is the composition's business;
-	// WHEN to read it on screen is this control's, and the two were nearly merged — putting it in the
-	// description would have leaked a form's behaviour into the data layer (Max caught it).
-	//
-	// ⚠ AND IT FIRES WHEN THE BOX IS CREATED, ONCE (OnCreated). Not on OnUpdate: every frame a client is
-	// sent passes through there, and a report that re-read itself on each of them would be reading the
-	// database because a form was drawn again.
-	ibPropertyBoolean*  m_propertyComposeOnOpen = ibPropertyObject::CreateProperty<ibPropertyBoolean>(
-		m_categoryData, ibT("ComposeOnOpen"), _("Compose on open"),
-		_("Whether a report bound to the grid builds itself once when the control is created, without the user pressing Compose. Off (the default) suits a report whose parameters are set first; on suits one with nothing left to ask, such as a report on a desktop."),
-		false);
-
 	// ⭐⭐ DETAIL PROCESSING — the first event this control has ever had, and it is named after the
 	// QUESTION rather than after the gesture that asks it (Max, 2026-08-26: "there is no such event
 	// as left-click and right-click; you simply call it detail processing").

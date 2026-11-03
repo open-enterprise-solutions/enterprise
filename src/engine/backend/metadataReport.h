@@ -61,8 +61,8 @@ public:
 	virtual ibString GetLangCode() const;
 
 	//run/close
-	virtual bool RunDatabase(int flags = defaultFlag);
-	virtual bool CloseDatabase(int flags = defaultFlag);
+	virtual bool RunDatabase(const ibRuntimeRequest& request = ibRuntimeRequest());
+	virtual bool CloseDatabase(const ibRuntimeRequest& request = ibRuntimeRequest());
 
 	// Designer infrastructure (cache + manager) — built by the image ctor; cache in
 	// designer mode, manager only for an external report.
@@ -80,8 +80,8 @@ public:
 	virtual ibValueMetaObject* GetCommonMetaObject();
 
 	//start/exit module
-	virtual bool StartMainModule() { return m_moduleManager ? m_moduleManager->StartMainModule() : false; }
-	virtual bool ExitMainModule(bool force = false) { return m_moduleManager ? m_moduleManager->ExitMainModule(force) : false; }
+	virtual bool StartMainModule(const ibRuntimeRequest& request = ibRuntimeRequest()) { return m_moduleManager ? m_moduleManager->StartMainModule(request) : false; }
+	virtual bool ExitMainModule(const ibRuntimeRequest& request = ibRuntimeRequest()) { return m_moduleManager ? m_moduleManager->ExitMainModule(request) : false; }
 
 protected:
 

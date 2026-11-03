@@ -261,12 +261,12 @@ bool ibMetaDataConfigurationFile::IsFullAccess() const
 
 ////////////////////////////////////////////////////////////////////
 
-bool ibMetaDataConfigurationFile::RunDatabase(int flags)
+bool ibMetaDataConfigurationFile::RunDatabase(const ibRuntimeRequest& request)
 {
 
 	wxASSERT(!IsConfigOpen());
 
-	if ((flags & loadConfigFlag) == 0)
+	if ((request.m_flags & loadConfigFlag) == 0)
 		ibCompileCode::SetCodeStyle(m_commonObject->GetCompileSyntax());
 
 	// Transactional open as RAII (image presence == open): LoadGuard CREATES the
@@ -288,7 +288,7 @@ bool ibMetaDataConfigurationFile::RunDatabase(int flags)
 	// catch it to log + return false so it doesn't escape onto the worker thread.
 	try {
 		// Phase 1 — REGISTER: every object announces its identity / type ctor.
-		if (!m_commonObject->RunSubtree(flags, ibValueMetaObject::ibRunPhase::Before))
+		if (!m_commonObject->RunSubtree(request.m_flags, ibValueMetaObject::ibRunPhase::Before))
 			return false;
 
 		// Seed the editor's context (Manager + Catalogs/Documents/Enums + globals)
@@ -302,7 +302,7 @@ bool ibMetaDataConfigurationFile::RunDatabase(int flags)
 
 		// Phase 2 — RESOLVE: cross-object references + source registration + forms /
 		// object-module values (all identities now present).
-		if (!m_commonObject->RunSubtree(flags, ibValueMetaObject::ibRunPhase::After))
+		if (!m_commonObject->RunSubtree(request.m_flags, ibValueMetaObject::ibRunPhase::After))
 			return false;
 	}
 	catch (const ibCoreException& err) {
@@ -329,7 +329,7 @@ bool ibMetaDataConfigurationFile::RunDatabase(int flags)
 	return true;
 }
 
-bool ibMetaDataConfigurationFile::CloseDatabase(int flags)
+bool ibMetaDataConfigurationFile::CloseDatabase(const ibRuntimeRequest& request)
 {
 
 	// The assert warns (Debug), the close happens anyway — see the report's twin
@@ -345,7 +345,7 @@ bool ibMetaDataConfigurationFile::CloseDatabase(int flags)
 	// that used to run inside every object's OnAfterCloseMetaObject.
 	MetaObjectStage(ibMetaDataNotifier::ibMetaStage::Closed, GetCommonMetaObject());
 
-	//if (!ExitMainModule((flags & forceCloseFlag) != 0))
+	//if (!ExitMainModule(request))
 	//	return false;
 
 	// CloseSubtree closes every descendant then the root's own hook (bottom-up),
@@ -395,7 +395,7 @@ bool ibMetaDataConfigurationFile::LoadConfigFromBuffer(const ibMemoryBuffer& buf
 	// only swaps it in on success, so a failed load leaves the old tree's data
 	// in place (all-or-nothing) instead of wiping it up front.
 	if (IsConfigOpen()) {
-		if (!CloseDatabase(forceCloseFlag)) {
+		if (!CloseDatabase(ibRuntimeRequest(forceCloseFlag))) {
 			wxASSERT_MSG(false, "CloseDatabase() == false");
 			return false;
 		}
@@ -653,7 +653,7 @@ bool ibMetaDataConfigurationStorage::LoadDatabase(int flags)
 
 		//close if opened
 		if (ibMetaDataConfiguration::IsConfigOpen()
-			&& !CloseDatabase(forceCloseFlag)) {
+			&& !CloseDatabase(ibRuntimeRequest(forceCloseFlag))) {
 			return false;
 		}
 

@@ -48,7 +48,7 @@ bool ibMetaDataConfiguration::LoadDatabase(int flags)
 {
 	//close if opened
 	if (ibMetaDataConfiguration::IsConfigOpen()) {
-		if (!CloseDatabase(forceCloseFlag)) {
+		if (!CloseDatabase(ibRuntimeRequest(forceCloseFlag))) {
 			return false;
 		}
 	}
@@ -451,7 +451,7 @@ bool ibMetaDataConfigurationStorage::OnAfterSaveDatabase(bool roolback, int flag
 		// runs it.
 		const std::shared_ptr<ibMetaDataConfiguration> published = MakeShared<ibMetaDataConfiguration>(m_owner);
 		const bool read = published->LoadDatabase(onlyLoadFlag)
-			&& (m_configNew || published->RunDatabase(loadConfigFlag));
+			&& (m_configNew || published->RunDatabase(ibRuntimeRequest(loadConfigFlag)));
 		if (!read) {
 #if _USE_SAVE_METADATA_IN_TRANSACTION == 1
 			db_query->RollBack();
@@ -552,7 +552,7 @@ bool ibMetaDataConfigurationStorage::RollbackDatabase()
 	q.Execute(ibInsertSelect(config_save_table, {}, ibProject(ibScan(config_table))));
 	//close data 
 	if (ibMetaDataConfiguration::IsConfigOpen()) {
-		if (!CloseDatabase(forceCloseFlag)) {
+		if (!CloseDatabase(ibRuntimeRequest(forceCloseFlag))) {
 			wxASSERT_MSG(false, "CloseDatabase() == false");
 			return false;
 		}

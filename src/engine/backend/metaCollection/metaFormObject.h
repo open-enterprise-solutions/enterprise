@@ -90,11 +90,11 @@ public:
 	// A caller never asks "which kind are you" and then casts to say it; the access right is
 	// answered by the same call.
 	//
-	// `formGuid` is the form's IDENTITY: empty lets it fall back to the source (the ordinary
-	// open), a supplied one gives this instance an identity of its own — what an element placed
-	// on the start page needs, since it may sit there beside a twin.
-	virtual ibFormPtr<ibBackendValueForm> GetObjectForm(ibBackendControlFrame* ownerControl = nullptr,
-		const ibUniqueKey& formGuid = wxNullGuid) const = 0;
+	// What it is opened with is the request, as every form getter takes it. Its `m_formGuid` is the form's
+	// IDENTITY: empty lets it fall back to the source (the ordinary open), a supplied one gives this instance an
+	// identity of its own — what an element placed on the start page needs, since it may sit there beside a twin.
+	virtual ibFormPtr<ibBackendValueForm> GetObjectForm(const ibFormRequest& request = ibFormRequest(),
+		ibBackendControlFrame* ownerControl = nullptr) const = 0;
 #pragma endregion
 
 	//set module code — see the two implementations below: a form's cell holds this text AND the
@@ -219,8 +219,8 @@ public:
 	// An object form belongs to a business object, and THAT object knows which source my kind
 	// implies — a list form gets the list, an object form a NEW object. Body out-of-line: the
 	// owner's type must be complete.
-	virtual ibFormPtr<ibBackendValueForm> GetObjectForm(ibBackendControlFrame* ownerControl = nullptr,
-		const ibUniqueKey& formGuid = wxNullGuid) const override;
+	virtual ibFormPtr<ibBackendValueForm> GetObjectForm(const ibFormRequest& request = ibFormRequest(),
+		ibBackendControlFrame* ownerControl = nullptr) const override;
 #pragma endregion
 
 protected:
@@ -301,8 +301,8 @@ class BACKEND_API ibValueMetaObjectCommonForm :
 
 #pragma region _form_builder_h_
 	//support form
-	virtual ibFormPtr<ibBackendValueForm> GetObjectForm(ibBackendControlFrame* ownerControl = nullptr,
-		const ibUniqueKey& formGuid = wxNullGuid) const override;
+	virtual ibFormPtr<ibBackendValueForm> GetObjectForm(const ibFormRequest& request = ibFormRequest(),
+		ibBackendControlFrame* ownerControl = nullptr) const override;
 #pragma endregion
 
 protected:

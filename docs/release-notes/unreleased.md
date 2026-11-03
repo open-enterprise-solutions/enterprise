@@ -137,6 +137,9 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   draws it as a button or as a hyperlink - no face and no frame, its caption underlined - pressed the same way. What
   the button shows is still its `Representation`. The protocol is 8. A form saved with them and opened by an earlier
   designer shows a button with its picture on the left, and saved there it loses its location, its view and its note.
+- **A report on the start page, a cell's detail and a report an assistant shows build themselves as they open.**
+  Whether to compose at once is said by whoever opens the form, not by the grid: the grid's `ComposeOnOpen`
+  property is gone, and a form that had it set now waits for Compose.
 
 ## The browser client
 
@@ -317,3 +320,8 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   `picture_set` refused it as having no picture of its own, and `metadata_set` on its `Picture` asked for
   a structure. The image is kept in the configuration, the picture is listed under `picture_list` →
   `configuration`, and `metadata_set` on that property now names `picture_set`.
+- **A fold that opens on a module's first line has its marker**, in the designer's code editor and in the code
+  runner's. The editors wrote the fold levels from the second line on.
+- **`ExternalDataProcessors.Create` and `ExternalReports.Create` no longer hand back a freed object.** A data
+  processor with no form, or a report with neither a form nor a composer, unloaded at the end of its own start,
+  and the call returned what was left of it; it now returns nothing.

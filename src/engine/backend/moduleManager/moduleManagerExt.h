@@ -29,10 +29,10 @@ class BACKEND_API ibValueModuleRuntimeManagerExternalDataProcessor : public ibVa
 	virtual bool DestroyMainModule();
 
 	//start common module
-	virtual bool StartMainModule(bool force = false);
+	virtual bool StartMainModule(const ibRuntimeRequest& request = ibRuntimeRequest());
 
 	//exit common module
-	virtual bool ExitMainModule(bool force = false);
+	virtual bool ExitMainModule(const ibRuntimeRequest& request = ibRuntimeRequest());
 
 	// Copies the external object value's surface; module exports follow as the
 	// helper's tail (descriptor autobind). Bound in the ctor (was PrepareNames).
@@ -75,10 +75,10 @@ class BACKEND_API ibValueModuleRuntimeManagerExternalReport : public ibValueModu
 	virtual bool DestroyMainModule();
 
 	//start common module
-	virtual bool StartMainModule(bool force = false);
+	virtual bool StartMainModule(const ibRuntimeRequest& request = ibRuntimeRequest());
 
 	//exit common module
-	virtual bool ExitMainModule(bool force = false);
+	virtual bool ExitMainModule(const ibRuntimeRequest& request = ibRuntimeRequest());
 
 	// Copies the external object value's surface; module exports follow as the
 	// helper's tail (descriptor autobind). Bound in the ctor (was PrepareNames).

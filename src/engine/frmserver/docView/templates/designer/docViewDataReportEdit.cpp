@@ -78,7 +78,7 @@ bool ibReportEditDocument::OnNewDocument()
 
 bool ibReportEditDocument::OnCloseDocument()
 {
-	if (!m_metaData->CloseDatabase(forceCloseFlag)) {
+	if (!m_metaData->CloseDatabase(ibRuntimeRequest(forceCloseFlag))) {
 		return false;
 	}
 	return ibMetaDocument::OnCloseDocument();
