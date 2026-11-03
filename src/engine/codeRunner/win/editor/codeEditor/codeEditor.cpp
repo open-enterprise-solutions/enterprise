@@ -874,6 +874,7 @@ void ibCodeEditor::UpdateFoldLevel()
 	if (!m_fp.UpdateFoldLevel(m_tc, GetLineCount(), levels))
 		return;
 
-	for (int line = 1; line < static_cast<int>(levels.size()); line++)
+	// From the FIRST line — a module opening a fold on it (`Procedure OnOpen() {`) folds there too.
+	for (int line = 0; line < static_cast<int>(levels.size()); line++)
 		SetFoldLevel(line, levels[line]);
 }
