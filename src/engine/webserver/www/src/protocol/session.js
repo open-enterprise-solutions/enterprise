@@ -196,7 +196,7 @@ export class Session extends EventTarget {
 	/**
 	 * What the person did with a control. A state event waits for the next call unless the control's State says the
 	 * server is subscribed to it; anything else goes at once, and its answer is the frame.
-	 * @param {{Control: number, Event: number, Args?: object, Form?: string, Tab?: number}} event
+	 * @param {{Control?: number, Event: number, Args?: object, Form?: string, Tab?: number}} event
 	 * @param {number[]} [subscribed] the control's State's Subscribed
 	 */
 	send(event, subscribed = []) {
@@ -209,7 +209,7 @@ export class Session extends EventTarget {
 
 	/**
 	 * Held: the latest per control and event — Move and Resize per column — in the order last done.
-	 * @param {{Control: number, Event: number, Args?: any}} event
+	 * @param {{Control?: number, Event: number, Args?: any}} event
 	 */
 	hold(event) {
 		const column = (one) => (one.Event === 11 || one.Event === 15) ? one.Args?.Column : undefined;

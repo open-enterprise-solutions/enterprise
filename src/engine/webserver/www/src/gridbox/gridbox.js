@@ -33,6 +33,8 @@ class Gridbox extends Control {
 		this.append(this.bar.element, this.host, this.composing, summary);
 		/** @type {number | undefined} the Version of the sheet on show */
 		this.version = undefined;
+		/** whether a sheet was asked for at all — a document's tab says no Version, and its sheet is read once */
+		this.read = false;
 		this.composeState = ComposeState.Composed;
 		this.update(node);
 	}
@@ -50,8 +52,9 @@ class Gridbox extends Control {
 	drawChildren(node) {
 		const state = this.state(node);
 		this.showComposeState(state.ComposeState ?? ComposeState.Composed);
-		if (state.Version === this.version)
+		if (this.read && state.Version === this.version)
 			return;
+		this.read = true;
 		this.version = state.Version;
 		if (state.Sheet !== undefined)
 			this.draw(state.Sheet, state.GridLines === true);

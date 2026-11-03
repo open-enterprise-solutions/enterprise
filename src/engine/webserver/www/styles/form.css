@@ -633,6 +633,13 @@ oes-gridbox {
 	min-width: 0;
 }
 
+/* …and a spreadsheet document in a tab of its own (a list output, a sheet shown by code): the tab's whole height. */
+.views > oes-gridbox.tab-sheet {
+	height: 100%;
+	box-sizing: border-box;
+	padding: 0.25rem 0.5rem 0.5rem;
+}
+
 oes-gridbox .sheet-host {
 	flex: 1 1 auto;
 	min-height: 8rem;

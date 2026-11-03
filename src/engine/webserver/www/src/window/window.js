@@ -21,7 +21,8 @@ import { showAbout } from './about.js';
 const allFunctions = 1;
 const about = 4;
 
-// What a tab's view shows when it is no form (ibView::ibKind): the start page.
+// What a tab's view shows when it is no form (ibView::ibKind): a spreadsheet document, the start page.
+const spreadsheet = 3;
 const homePage = 16;
 
 // How long a call is waited on before the window says it waits: a quick answer shows nothing.
@@ -375,9 +376,19 @@ export class ClientWindow {
 			return;
 		}
 		const existing = this.tabViews.get(active) ?? null;
-		const isHomePage = frame.Tabs?.NodeChildren?.find((tab) => tab.NodeId === active)?.Kind === homePage;
+		const kind = frame.Tabs?.NodeChildren?.find((tab) => tab.NodeId === active)?.Kind;
+		const isHomePage = kind === homePage;
+		if (kind === spreadsheet) {
+			// A SPREADSHEET DOCUMENT — a list output, a sheet shown by code: a gridbox's node, drawn by the gridbox a form's
+			// sheet is drawn with; its sheet fetched and its cells pressed by the tab.
+			const sheet = reconcile(this.views, /** @type {any} */ (existing), view, this.tabContextOf(active));
+			sheet.classList.add('tab-sheet');
+			this.tabViews.set(active, sheet);
+			this.showView(active);
+			return;
+		}
 		if (view.NodeType !== 'ClientForm' && !isHomePage) {
-			// A view that is no form — a text, a spreadsheet, the journal — is not drawn here yet.
+			// A view that is no form — a text, the journal — is not drawn here yet.
 			const placeholder = existing ?? document.createElement('div');
 			placeholder.className = 'view-placeholder';
 			placeholder.textContent = 'This view is not in the browser yet.';
@@ -475,6 +486,23 @@ export class ClientWindow {
 				.send({ Control: control, Event: kind, ...(args !== undefined ? { Args: args } : {}), Form: key }, subscribed)
 				.catch((error) => this.refused(error)),
 			fetch: (control, request) => this.session.call('fetch', { Control: control, Request: request, Form: key }),
+			picture: (picture) => this.pictures.url(picture),
+			fetchPictures: (node) => this.pictures.fetchFor(node).catch(() => {}),
+		};
+	}
+
+	/**
+	 * …and those of a tab's view that is no form: it is the tab the server knows it by, not a control of a form.
+	 * @param {number} tab
+	 * @returns {FormContext}
+	 */
+	tabContextOf(tab) {
+		return {
+			key: '',
+			send: (_control, kind, args) => this.session
+				.send({ Tab: tab, Event: kind, ...(args !== undefined ? { Args: args } : {}) })
+				.catch((error) => this.refused(error)),
+			fetch: (_control, request) => this.session.call('fetch', { Tab: tab, Request: request }),
 			picture: (picture) => this.pictures.url(picture),
 			fetchPictures: (node) => this.pictures.fetchFor(node).catch(() => {}),
 		};

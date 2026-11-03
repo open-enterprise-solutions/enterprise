@@ -345,7 +345,7 @@ void ibValueModelTableBox::Command_OutputList()
 			continue;   // a hidden column is not on the screen; a column bound to nothing has no field to print
 		ibChoiceItem item;
 		item.id = static_cast<std::int32_t>(offered.size());
-		item.caption = column->GetCaption().IsEmpty() ? column->GetSourceFieldName() : column->GetCaption();
+		item.caption = column->GetControlTitle();   // what its header says
 		item.selected = true;   // everything shown, ticked — the answer most people want is the default
 		names.push_back(item);
 		offered.push_back(column);

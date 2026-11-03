@@ -175,6 +175,8 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **Escape closes what stands on top**: a cell's editor, a menu, a dialog, then the active tab, asking first about what is left
   to save.
 - **Help → About** is drawn: the build, the base, the application, the user, the locale, the plugins.
+- **Output list works**: the columns are asked as in the thin client, each ticked or not, with OK and Cancel, and the list
+  opens in a tab as a spreadsheet. A question that picks one of a list offers its items to choose, then OK.
 
 ## Metadata
 
@@ -207,6 +209,8 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   stops declaring stays, an ordinary line.
 
 ## Fixes
+
+- **Output list names a column by its header**, the field's synonym, not by the field's name.
 
 - **`ThisForm.<attribute> = value` writes into the attribute.** It overwrote the attribute's own entry,
   and the attribute kept its old value.

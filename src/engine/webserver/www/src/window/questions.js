@@ -98,22 +98,49 @@ export class Questions {
 			request, closed !== undefined ? { Button: closed.code } : null);
 	}
 
-	/** @param {ProtocolNode} request */
+	/**
+	 * One of a list, as the thin client asks it (wxSingleChoiceDialog): the one Selected chosen to begin with, else the
+	 * first; OK — or a double click on an item — answers with it, Cancel and closing with none. SEVERAL (Multiple, the
+	 * thin client's wxMultiChoiceDialog): each ticked or not, those Selected ticked to begin with; OK answers with the
+	 * ticked ones' Ids in the order offered — none ticked, none.
+	 * @param {ProtocolNode} request
+	 */
 	choice(request) {
 		if (request.Quick === true) {
 			this.quickChoice(request);
 			return;
 		}
 		const items = request.NodeChildren ?? [];
+		const several = request.Multiple === true;
 		const list = document.createElement('div');
 		list.className = 'choice-list';
-		const dialog = this.dialog(request.Caption ?? '', '', [{ caption: 'Cancel', answer: {} }], request);
+		const ticked = several ? items.filter((item) => item.Selected === true) : [];
+		const first = items.find((item) => item.Selected === true) ?? items[0];
+		/** @type {{Id?: number, Ids?: number[]}} */
+		const answer = several ? { Ids: ticked.map((item) => item.Id) } : first !== undefined ? { Id: first.Id } : {};
+		const dialog = this.dialog(request.Caption ?? '', '', [
+			{ caption: 'OK', answer, preferred: true },
+			{ caption: 'Cancel', answer: {} },
+		], request);
+		/** @type {HTMLInputElement[]} */
+		const inputs = [];
 		for (const item of items) {
-			const button = document.createElement('wa-button');
-			button.setAttribute('appearance', 'plain');
-			button.textContent = item.Caption ?? '';
-			button.addEventListener('click', () => this.answer(dialog, request, { Id: item.Id }));
-			list.append(button);
+			const label = document.createElement('label');
+			const input = document.createElement('input');
+			input.type = several ? 'checkbox' : 'radio';
+			input.name = 'choice';
+			input.checked = several ? ticked.includes(item) : item === first;
+			input.addEventListener('change', () => {
+				if (several)
+					answer.Ids = items.filter((_, at) => inputs[at].checked).map((one) => one.Id);
+				else
+					answer.Id = item.Id;
+			});
+			inputs.push(input);
+			label.append(input, item.Caption ?? '');
+			if (!several)
+				label.addEventListener('dblclick', () => this.answer(dialog, request, { Id: item.Id }));
+			list.append(label);
 		}
 		dialog.querySelector('.text')?.replaceWith(list);
 	}

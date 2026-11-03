@@ -591,9 +591,27 @@ wa-dialog.answered-only::part(close-button) {
 	display: none;
 }
 
+/* One of a list or several (the thin client's wxSingleChoiceDialog, wxMultiChoiceDialog): an item a line, its mark before
+   its caption; a long list scrolls inside the dialog. */
 .choice-list {
 	display: grid;
-	gap: 0.25rem;
+	gap: 0.125rem;
+	max-height: 60dvh;
+	overflow: auto;
+}
+
+.choice-list label {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.25rem 0.5rem;
+	border-radius: var(--wa-border-radius-s, 3px);
+	cursor: pointer;
+	user-select: none;
+}
+
+.choice-list label:hover {
+	background: var(--oes-table-row-hover-bg);
 }
 
 /* A popup menu the server asks — where the person pressed; a submenu opens in place, indented. */
