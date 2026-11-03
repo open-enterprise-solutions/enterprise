@@ -51,7 +51,11 @@ inline bool IsReturnFunction(short numReturn) {
 enum {
 	DEF_VAR_SKIP = -1,// missing parameter
 	DEF_VAR_DEFAULT = -2,//default parameter
-	DEF_VAR_TEMP = -3,//flag of a temporary local variable
+	DEF_VAR_TEMP_COPY = -3,//a cell the compiler keeps for itself (a pipeline's row, counter, bucket) — copied
+	// ⭐ AN EXPRESSION'S TEMPORARY — an assignment MOVES it (OPER_LET, procUnit.cpp): it only carries a value between
+	// real ones. A copy left it holding the value until the frame ended, so after `Excel = Undefined` an application
+	// stayed alive in it (2026-11-03). Cheaper as well: nothing is counted up to be counted down.
+	DEF_VAR_TEMP_MOVE = -4,
 	DEF_VAR_NORET = -7,//function (procedure) does not return values
 	DEF_VAR_CONST = 1000,//loading constants
 };
@@ -227,17 +231,11 @@ struct ibCompileContext {
 			// constructed in, whatever this list says.
 			: m_kind(fn.m_kind),
 			  m_bCodeRet(fn.m_bCodeRet),
-			  // Same class of bug as the context-method m_bCodeRet gap:
-			  // a default-false flag the reconstruction path must restore.
-			  // A cross-module call to an exported function whose body has
-			  // an inner lambda capturing locals needs OPER_CALL_CLOSURE;
-			  // dropping this here would emit a plain OPER_CALL and dangle
-			  // the capture (compileCode.cpp:1165 reads m_needsHeapFrame).
-			  m_needsHeapFrame(fn.m_needsHeapFrame),
-			  // Same reason as the line above — and here it is not a dangling
-			  // capture but a silent loss of the modifier: a cross-module call
-			  // to a cached function would emit a plain OPER_CALL and quietly
-			  // stop memoising, with nothing to see but the time.
+			  // Same class of bug as the context-method m_bCodeRet gap: a
+			  // default-false flag the reconstruction path must restore — here
+			  // a silent loss of the modifier: a cross-module call to a cached
+			  // function would emit a plain OPER_CALL and quietly stop
+			  // memoising, with nothing to see but the time.
 			  m_valueCached(fn.m_valueCached),
 			  // And the third of the same kind — without it a built-in of negative
 			  // arity resolved through bytecode refuses every call it is given.
@@ -282,16 +280,11 @@ struct ibCompileContext {
 		// carry the return-kind.
 		bool m_bCodeRet = false;
 
-		// Closure capture — set lazily by GetVariable when an
-		// identifier resolves into this function's m_listVariable
-		// past a crossed lambda boundary. PushCallFunction reads it
-		// directly to choose OPER_CALL vs OPER_CALL_CLOSURE (heap-frame
-		// variant). Mirrored to ibByteFunction::m_needsHeapFrame at
-		// EmitFunctionBody finalize via the templated ctor; the bc-
-		// side mirror is what OPER_CALL_LAMBDA reads at runtime to
-		// decide heap-promotion for a dynamically-called lambda
-		// whose body has its own inner-lambda capture chain.
-		bool m_needsHeapFrame = false;
+		// Closure capture — filled by GetVariable when an identifier resolves
+		// past a crossed lambda boundary; mirrored to ibByteFunction::
+		// m_listCaptured (see there) at EmitFunctionBody finalize via the
+		// templated ctor. Kept sorted by (depth, slot), each entry once.
+		std::vector<ibParamRunUnit> m_listCaptured;
 
 		// `Cached` — memoise the result per argument tuple. A SECOND axis
 		// beside m_access (Private Cached / Public Cached both parse), and
@@ -436,7 +429,8 @@ struct ibCompileContext {
 
 	void CreateLabels();
 
-	ibParamUnit CreateVariable(const ibString& strPrefix = ibT("@temp_"));
+	ibParamUnit CreateVariable(long long numArray);
+	ibParamUnit CreateVariable(const ibString& strPrefix = ibT("@temp_"), long long numArray = DEF_VAR_TEMP_COPY);
 	ibParamUnit AddVariable(const ibString& strVarName, const ibClassID& typeClsid = 0, bool bExport = false, bool bContext = false, bool bTempVar = false);
 	ibParamUnit GetVariable(const ibString& strVarName, bool bFindInParent = true, bool bCheckError = false, bool bContext = false, bool bTempVar = false);
 

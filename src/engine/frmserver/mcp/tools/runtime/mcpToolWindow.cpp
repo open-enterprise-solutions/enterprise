@@ -128,16 +128,16 @@ public:
 				return false;
 			}
 
-			ibProcUnit runner;
-			runner.SetParent(rootUnit.get());
-			runner.Execute(compiler.m_cByteCode, /*delta*/ true);
+			const std::shared_ptr<ibProcUnit> runner = std::make_shared<ibProcUnit>();
+			runner->SetParent(rootUnit.get());
+			runner->Execute(compiler.m_cByteCode, /*delta*/ true);
 
 			// What it came out with: the variable `Result`, the word code_run and the sandbox answer with.
 			for (const auto& declared : compiler.m_cByteCode.m_listVar) {
 				if ((!declared.IsLocal() && !declared.IsExport()) || !stringUtils::IsSameAs(ibT("Result"), declared.m_strRealName))
 					continue;
 				ibValue produced;
-				if (runner.GetPropVal((long)declared, produced))
+				if (runner->GetPropVal((long)declared, produced))
 					answer = produced.GetString();
 				break;
 			}

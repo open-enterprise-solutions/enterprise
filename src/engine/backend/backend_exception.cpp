@@ -209,6 +209,12 @@ static ibString gs_listErrorString[] =
 	// on its first word - true, and no help: the author wrote a Select and was told about a semicolon.
 	_("Nothing can follow a group without a name: its answer is the groups themselves, each with Key and Values. "
 	  "To go on - Select, Where, OrderBy - name the group: '%s <name>'."),//ibScriptError_LinqAfterUnnamedGroup
+
+	// --- runtime, appended — lock-step with the enum ----
+	// A PROCEDURE THE VALUE DID NOT CARRY OUT was silence: a value that registered it and answered false - no
+	// CallAsProc at all, or its case written in CallAsFunc - did nothing, and the module went on (2026-11-03:
+	// COMObject.AddEventHandler, ComSafeArray.SetValue, Lock and Unlock of every object).
+	_("The procedure '%s' was not carried out by this value"),//ibScriptError_ProcedureNotDone
 };
 
 //////////////////////////////////////////////////////////////////////

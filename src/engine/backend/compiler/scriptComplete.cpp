@@ -30,9 +30,9 @@ using ibCompileChain = std::vector<const ibCompileCode*>;
 
 // THE FRAME AN OPERAND NAMES, AS THE RUNTIME READS IT (procUnit.cpp, ResolveRead/ResolveWrite —
 // the authority, because it is what actually runs). Everything at or below zero is THIS frame: a
-// temp carries DEF_VAR_TEMP rather than a depth, and a variable reached through a block scope
-// carries it too (compileContext.cpp: `blockReturn ? DEF_VAR_TEMP : depth`), yet all three land on
-// the same cell. Reading the marker literally would make one cell look like three.
+// temp carries DEF_VAR_TEMP_COPY or DEF_VAR_TEMP_MOVE rather than a depth, and a variable reached
+// through a block scope carries the first too (compileContext.cpp: `blockReturn ? DEF_VAR_TEMP_COPY :
+// depth`), yet all of them land on the same cell. Reading the marker literally would make one cell look like three.
 long long FrameOf(const ibParamRunUnit& p)
 {
 	return p.m_numArray <= 0 ? 0 : p.m_numArray;
@@ -235,7 +235,7 @@ public:
 
 		// 🛑 A PRODUCER IN ANOTHER FRAME IS NOT A PRODUCER, and without saying so this search reads
 		// the whole tape as if it were one. Slot numbers are per FRAME and `FrameOf` deliberately
-		// folds a temp onto "this frame" (a temp carries DEF_VAR_TEMP, not a depth) — so temp #5
+		// folds a temp onto "this frame" (a temp carries DEF_VAR_TEMP_COPY or _MOVE, not a depth) — so temp #5
 		// inside a procedure and cell #5 of the module are the same key here, and the scan happily
 		// took one for the other.
 		//
@@ -865,7 +865,6 @@ private:
 		// is allowed exactly where running one is not (see the header). A body that returns
 		// something the walk cannot resolve simply answers nothing, at no risk.
 		case OPER_CALL:
-		case OPER_CALL_CLOSURE:
 			return CallStep(code, ip, out, depth, outOrigin);
 
 		default:

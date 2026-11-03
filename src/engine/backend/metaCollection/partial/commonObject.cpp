@@ -2178,7 +2178,7 @@ bool ibValueRecordDataObject::GetPropVal(const long lPropNum, ibValue& pvarPropV
 
 bool ibValueRecordDataObject::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
 {
-	const long lMethodAlias = m_members.GetPropAlias(lMethodNum);
+	const long lMethodAlias = m_members.GetMethodAlias(lMethodNum);
 	if (lMethodAlias == eProcUnit) {
 		return ibRuntimeModuleDataObject::ExecAsProc(
 			GetMethodName(lMethodNum), paParams, lSizeArray
@@ -2190,7 +2190,7 @@ bool ibValueRecordDataObject::CallAsProc(const long lMethodNum, ibValue** paPara
 
 bool ibValueRecordDataObject::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	const long lMethodAlias = m_members.GetPropAlias(lMethodNum);
+	const long lMethodAlias = m_members.GetMethodAlias(lMethodNum);
 	if (lMethodAlias == eProcUnit) {
 		return ibRuntimeModuleDataObject::ExecAsFunc(
 			GetMethodName(lMethodNum), pvarRetValue, paParams, lSizeArray

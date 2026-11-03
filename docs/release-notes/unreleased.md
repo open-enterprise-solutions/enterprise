@@ -90,6 +90,36 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   write them as hex and read them, `Base64String(data)` and `Base64Value(text)` as base64. `String(data)`
   and `New BinaryData(text)` stay base64, and now skip line breaks. Text that is not base64 or hex is
   refused, not read as no bytes.
+- **`COMObject` compiles everywhere and is complete on Windows.** `New COMObject(progId)` compiles on
+  macOS and Linux too, and is refused there when it runs ("COM objects are available on Windows only").
+  On Windows it works on the application server's threads as well as in the client; arrays (an `Array` with
+  rows of one length as one table of as many dimensions), `BinaryData` as bytes, CY and DECIMAL numbers (a
+  fraction longer than a double keeps goes as DECIMAL), by-reference arguments — every one, as VBScript passes
+  them, to an object that does not describe its members — and omitted ones cross over; `For Each` walks a COM
+  collection; `obj.AddEventHandler(name, function or procedure name)` receives the object's events. A failed
+  call names the object and the member. `obj <> Undefined` is True for a COM object; it was False.
+- **`COMSafeArray` — an array as COM holds it.** `New COMSafeArray("VT_I4", 2, 3)`, or from an `Array` with an
+  element type and sizes; `GetValue` / `SetValue` by the array's own indices, `GetLength`, `GetLowerBound`,
+  `GetUpperBound`, `Resize`, `Unload()` to an `Array`. An array a COM object returns is always one — a
+  spreadsheet's `Range.Value` keeps its bounds from 1 — and one goes to a method with its own element type.
+- **A procedure a value does not carry out is refused.** A call such as `Obj.Lock()` went through without a word
+  when the value had not done it; now it raises "The procedure '…' was not carried out by this value". The
+  calls that had been silently lost now work: `Lock()` and `Unlock()` of catalog, document, chart and job
+  objects, and an export procedure of an object's module called from outside it.
+- **A function value keeps only the variables it refers to.** It kept every variable of the procedure it
+  was written in, for as long as it lived; one stored in a variable of that same procedure kept them
+  until the application closed. A COM application among them did not exit after `Quit`. Now the variables it
+  does not name are released when the procedure ends.
+- **A function value written inside another one passed to `Where`, `Select` or `SelectMany` sees that one's
+  parameter.** `a.SelectMany(Function(x) { return b.Select(Function(y) { return x + y; }); }).ToArray()`
+  closed the application, or answered with `Undefined` for `x`.
+- **An assignment lets go of what the expression made.** `x = New COMObject(…)` or `x = Obj.Member` left a
+  second hold on the value until the procedure ended, so `x = Undefined` released nothing: an Excel stayed
+  running after `Quit`. Now it is released at once, and so is an object taken on the way — `Excel.Workbooks`
+  in `Excel.Workbooks.Count`.
+- **`First`, `Last`, `Min`, `Max`, `Single` and `ElementAt` in a loop answer for this pass.** With a function
+  passed to `Where` or `Select` before them, a pass that found nothing answered with the previous pass's
+  value, and `Max` of a group was compared with the group before.
 - **An encoding is a member of `TextEncoding`.** `TextReader` and `TextWriter` took a string or another
   enumeration's member without a word; now it is refused, as `HTTPRequest` already refused a string.
 

@@ -16,7 +16,7 @@
 // second guard: the hash moves by itself when those sources move, and
 // this number is what a person sets when the meaning changes.
 //
-// 36: OPER_ITER left the opcode list (the ternary is If's shape now).
-constexpr std::uint16_t kAOTFormatVersion = 36;
+// 37: OPER_CALL_CLOSURE left the opcode list (a lambda takes cells, not frames).
+constexpr std::uint16_t kAOTFormatVersion = 37;
 
 #endif // __BYTE_CODE_FORMAT_H__

@@ -192,6 +192,21 @@ bool ibValueRecordDataObjectCatalog::GetPropVal(const long lPropNum, ibValue& pv
 	return false;
 }
 
+bool ibValueRecordDataObjectCatalog::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
+{
+	switch (lMethodNum)
+	{
+	case Func::enLock:
+		TryAcquireFormLock();
+		return true;
+	case Func::enUnlock:
+		ReleaseFormLock();
+		return true;
+	}
+
+	return ibValueRecordDataObjectHierarchyRef::CallAsProc(lMethodNum, paParams, lSizeArray);
+}
+
 bool ibValueRecordDataObjectCatalog::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
 	switch (lMethodNum)
@@ -228,12 +243,6 @@ bool ibValueRecordDataObjectCatalog::CallAsFunc(const long lMethodNum, ibValue& 
 		return true;
 	case Func::enGetMetadata:
 		pvarRetValue = m_metaObject;
-		return true;
-	case Func::enLock:
-		TryAcquireFormLock();
-		return true;
-	case Func::enUnlock:
-		ReleaseFormLock();
 		return true;
 	}
 

@@ -613,7 +613,10 @@
     <ClInclude Include="system\value\valueMap.h">
       <Filter>system\value</Filter>
     </ClInclude>
-    <ClInclude Include="system\value\valueOLE.h">
+    <ClInclude Include="system\value\valueCOM.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
+    <ClInclude Include="system\value\valueSafeArray.h">
       <Filter>system\value</Filter>
     </ClInclude>
     <ClInclude Include="system\value\valuePoint.h">
@@ -1837,7 +1840,10 @@
     <ClCompile Include="system\value\valueMap.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
-    <ClCompile Include="system\value\valueOLE.cpp">
+    <ClCompile Include="system\value\valueCOM.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
+    <ClCompile Include="system\value\valueSafeArray.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
     <ClCompile Include="system\value\valuePoint.cpp">

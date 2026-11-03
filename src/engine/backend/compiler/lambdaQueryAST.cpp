@@ -57,7 +57,7 @@ struct CodeCur {
 	}
 
 	// A slot at or below zero is THIS frame (procUnit.cpp, ResolveRead) — a temp carries
-	// DEF_VAR_TEMP rather than a depth, and both land on the same cell.
+	// DEF_VAR_TEMP_COPY or DEF_VAR_TEMP_MOVE rather than a depth, and all land on the same cell.
 	static long long FrameOf(const ibParamRunUnit& p) {
 		return p.m_numArray <= 0 ? 0 : p.m_numArray;
 	}

@@ -23,6 +23,7 @@
     "text_files": "Text files and bytes — reading and writing",
     "hashing": "Hashing, base64 and hex",
     "forms": "Forms — what a form shows",
+    "com": "COM objects and add-ins",
     "runtime": "Runtime",
     "guide": "Guide"
   }

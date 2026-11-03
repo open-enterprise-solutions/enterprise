@@ -12,6 +12,10 @@
 #include <new>
 #include <stdexcept>
 
+#ifdef __IBMSW__
+#include <objbase.h>   // CoInitializeEx — a worker's COM apartment
+#endif
+
 namespace {
 
 // Which session this fiber is leasing. Submit uses it to spot a
@@ -201,7 +205,20 @@ void ibWorkerPoolHeadless::TrySpawnWorker()
 				std::thread([this, exited, toJoin]() {
 					if (toJoin)
 						JoinWorkers(std::move(*toJoin));
+#ifdef __IBMSW__
+					// ⭐ A WORKER IS IN A COM APARTMENT, entered and left HERE by the pool that owns the thread: a script's
+					// COMObject is made and called on it (valueCOM.cpp). A single-threaded one, so an object and its events
+					// stay on this thread. Left after the loop, outside the loader lock: the object once left it from a
+					// thread_local's destructor, which runs under that lock, and CoUninitialize there released an
+					// out-of-process server's proxies while the RPC thread carrying the answer waited for the same lock —
+					// the process hung on exit (2026-11-03, Excel).
+					const HRESULT apartment = ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+#endif
 					WorkerLoop();
+#ifdef __IBMSW__
+					if (SUCCEEDED(apartment))
+						::CoUninitialize();
+#endif
 					// Still before thread_local destructors. The next
 					// spawn joins an idle self-exit that has stored
 					// this; Stop joins every handle, and that join is

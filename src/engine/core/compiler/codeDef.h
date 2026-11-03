@@ -63,14 +63,6 @@ enum { //instruction types
 	OPER_GET_A,
 	OPER_ENTER_A,
 	OPER_CALL_METHOD,
-	OPER_CALL_CLOSURE,    // function call where target has m_needsHeapFrame:
-	                      // build the callee frame as an ibRunCaptureContext,
-	                      // which counts its own holders, so that inner lambdas
-	                      // materialised during the call can take the frame and
-	                      // keep it past the return. Operand layout is
-	                      // identical to OPER_CALL; the split avoids a
-	                      // per-OPER_CALL FindFunctionByEntry probe + flag
-	                      // check on the hot non-closure path.
 	OPER_CALL_LINQ,       // universal pipeline method on an iterable receiver
 	                      // (Where / Select / OrderBy / GroupBy / Join /
 	                      // Skip / Take / Aggregate / ...). Compile detects
@@ -467,6 +459,9 @@ enum ibScriptError { //Error message numbers
 
 	// --- compiler, appended after the runtime block so no code above changes its number ------
 	ibScriptError_LinqAfterUnnamedGroup,
+
+	// --- runtime, appended ------
+	ibScriptError_ProcedureNotDone,
 
 	ibScriptError_Count
 };

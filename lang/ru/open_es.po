@@ -411,6 +411,11 @@ msgstr "'%s' - глобальная функция - она не принадл�
 msgid "Nothing can follow a group without a name: its answer is the groups themselves, each with Key and Values. To go on - Select, Where, OrderBy - name the group: '%s <name>'."
 msgstr "После группы без имени ничего не может идти: её ответ - сами группы, у каждой Key и Values. Чтобы продолжить - Select, Where, OrderBy - дайте группе имя: '%s <имя>'."
 
+#: src/engine/backend/backend_exception.cpp:217
+#, c-format
+msgid "The procedure '%s' was not carried out by this value"
+msgstr "Значение не выполнило процедуру '%s'"
+
 #: src/engine/backend/backend_exception.cpp:696
 msgid "Context functions are not available: this is a server, and a server has no forms."
 msgstr "Контекстные функции недоступны: это сервер, а у сервера нет форм."
@@ -7094,60 +7099,6 @@ msgstr "Ошибка преобразования значения. Должно
 msgid "Structure ctor: first argument must be a comma-separated field name string"
 msgstr "Конструктор Structure: первый аргумент должен быть строкой имён полей через запятую"
 
-#: src/engine/backend/system/value/valueOLE.cpp:462
-#, c-format
-msgid "Failed to create an instance of \"%s\""
-msgstr "Не удалось создать экземпляр \"%s\"."
-
-#: src/engine/backend/system/value/valueOLE.cpp:530
-#, c-format
-msgid "Failed to create an instance of '%s'"
-msgstr "Не удалось создать экземпляр '%s'."
-
-#: src/engine/backend/system/value/valueOLE.cpp:894
-msgid "The number of elements provided to DISPPARAMS is different from the number of arguments accepted by the method or property."
-msgstr "Количество элементов, передаваемых в DISPPARAMS, отличается от количества аргументов, принимаемых методом или свойством."
-
-#: src/engine/backend/system/value/valueOLE.cpp:897
-msgid "One of the arguments in rgvarg is not a valid variant type. "
-msgstr "Один из аргументов в rgvarg не является допустимым типом варианта."
-
-#: src/engine/backend/system/value/valueOLE.cpp:900
-msgid "The requested member does not exist, or the call to Invoke tried to set the value of a read-only property."
-msgstr "Запрошенный элемент не существует, или же вызов функции Invoke попытался установить значение свойства, доступного только для чтения."
-
-#: src/engine/backend/system/value/valueOLE.cpp:903
-msgid "This implementation of IDispatch does not support named arguments."
-msgstr "Данная реализация IDispatch не поддерживает именованные аргументы."
-
-#: src/engine/backend/system/value/valueOLE.cpp:906
-msgid "One of the arguments in rgvarg could not be coerced to the specified type."
-msgstr "Один из аргументов в rgvarg не удалось преобразовать к указанному типу."
-
-#: src/engine/backend/system/value/valueOLE.cpp:909
-msgid "One of the parameter DISPIDs does not correspond to a parameter on the method. In this case, puArgErr should be set to the first argument that contains the error."
-msgstr "Один из параметров DISPID не соответствует параметру метода. В этом случае puArgErr следует установить равным первому аргументу, содержащему ошибку."
-
-#: src/engine/backend/system/value/valueOLE.cpp:912
-msgid "One or more of the arguments could not be coerced. The index within rgvarg of the first parameter with the incorrect type is returned in the puArgErr parameter."
-msgstr "Один или несколько аргументов не удалось преобразовать в нужный тип. В параметре puArgErr возвращается индекс первого параметра с некорректным типом в пределах rgvarg."
-
-#: src/engine/backend/system/value/valueOLE.cpp:915
-msgid "The interface identifier passed in riid is not IID_NULL.)"
-msgstr "Идентификатор интерфейса, переданный в riid, не равен IID_NULL."
-
-#: src/engine/backend/system/value/valueOLE.cpp:918
-msgid "The member being invoked interprets string arguments according to the LCID, and the LCID is not recognized. If the LCID is not needed to interpret arguments, this error should not be returned."
-msgstr "Вызываемый член интерпретирует строковые аргументы в соответствии с LCID, но LCID не распознан. Если LCID не нужен для интерпретации аргументов, эта ошибка не должна возвращаться."
-
-#: src/engine/backend/system/value/valueOLE.cpp:921
-msgid "A required parameter was omitted."
-msgstr "Был пропущен обязательный параметр."
-
-#: src/engine/backend/system/value/valueOLE.cpp:924
-msgid "Error: get method return unknown code"
-msgstr "Ошибка: метод get возвращает неизвестный код"
-
 #: src/engine/backend/system/value/valueQuery.cpp:255
 msgid "TempTablesManager expects a TempTablesManager value"
 msgstr "TempTablesManager ожидает значение TempTablesManager"
@@ -13809,3 +13760,125 @@ msgstr "%s, строка %u"
 #, c-format
 msgid "%s.%s: the characteristic's Type holds a type the chart does not take - pick it again among its Types of characteristics"
 msgstr "%s.%s: в Типе характеристики есть тип, которого план не принимает - выберите его заново среди Видов характеристик"
+
+#: src/engine/backend/system/value/valueCOM.cpp:107
+#, c-format
+msgid "COM object \"%s\" returned a value that cannot be read: %s"
+msgstr "COM-объект \"%s\" вернул значение, которое не удалось прочитать: %s"
+
+#: src/engine/backend/system/value/valueCOM.cpp:195
+#, c-format
+msgid "COM object \"%s\" returned a date that cannot be read"
+msgstr "COM-объект \"%s\" вернул дату, которую не удалось прочитать"
+
+#: src/engine/backend/system/value/valueCOM.cpp:214
+#, c-format
+msgid "COM object \"%s\" returned an interface that cannot be called by name"
+msgstr "COM-объект \"%s\" вернул интерфейс, к которому нельзя обратиться по имени"
+
+#: src/engine/backend/system/value/valueCOM.cpp:221
+#, c-format
+msgid "COM object \"%s\" returned a value of a kind the language does not have (VARTYPE %d)"
+msgstr "COM-объект \"%s\" вернул значение вида, которого нет в языке (VARTYPE %d)"
+
+#: src/engine/backend/system/value/valueCOM.cpp:241
+#, c-format
+msgid "COM object \"%s\" returned an array of structures, which the language does not have"
+msgstr "COM-объект \"%s\" вернул массив структур, которых нет в языке"
+
+#: src/engine/backend/system/value/valueCOM.cpp:354
+#, c-format
+msgid "The date %s cannot be passed to a COM object"
+msgstr "Дату %s нельзя передать COM-объекту"
+
+#: src/engine/backend/system/value/valueCOM.cpp:375
+#, c-format
+msgid "An array of %d elements cannot be passed to a COM object"
+msgstr "Массив из %d элементов нельзя передать COM-объекту"
+
+#: src/engine/backend/system/value/valueCOM.cpp:393
+#, c-format
+msgid "A value of type \"%s\" cannot be passed to a COM object"
+msgstr "Значение типа \"%s\" нельзя передать COM-объекту"
+
+#: src/engine/backend/system/value/valueCOM.cpp:699
+#, c-format
+msgid "The handler of event \"%s\" must be a function or a procedure name"
+msgstr "Обработчик события \"%s\" должен быть функцией или именем процедуры"
+
+#: src/engine/backend/system/value/valueSafeArray.cpp:56
+#, c-format
+msgid "ComSafeArray: \"%s\" is not an element type"
+msgstr "ComSafeArray: \"%s\" не является типом элементов"
+
+#: src/engine/backend/system/value/valueSafeArray.cpp:77
+#, c-format
+msgid "ComSafeArray: the array has no dimension %d"
+msgstr "ComSafeArray: у массива нет измерения %d"
+
+#: src/engine/backend/system/value/valueSafeArray.cpp:82
+#, c-format
+msgid "ComSafeArray: %s"
+msgstr "ComSafeArray: %s"
+
+#: src/engine/backend/system/value/valueSafeArray.cpp:91
+msgid "ComSafeArray: a size is a whole number, 0 or more"
+msgstr "ComSafeArray: размер — целое число, 0 или больше"
+
+#: src/engine/backend/system/value/valueSafeArray.cpp:115
+#, c-format
+msgid "ComSafeArray: the array has %d dimensions, and %d indices were given"
+msgstr "ComSafeArray: у массива измерений %d, а индексов передано %d"
+
+#: src/engine/backend/system/value/valueSafeArray.cpp:190
+#, c-format
+msgid "ComSafeArray: a value of type \"%s\" cannot be stored as %s"
+msgstr "ComSafeArray: значение типа \"%s\" нельзя записать как %s"
+
+#: src/engine/backend/system/value/valueSafeArray.cpp:200
+msgid "ComSafeArray: the array does not have the sizes given"
+msgstr "ComSafeArray: у массива не те размеры, что заданы"
+
+#: src/engine/backend/system/value/valueCOM.cpp:705
+#, c-format
+msgid "COM object \"%s\" has no events"
+msgstr "У COM-объекта \"%s\" нет событий"
+
+#: src/engine/backend/system/value/valueCOM.cpp:716
+#, c-format
+msgid "COM object \"%s\" has no event \"%s\""
+msgstr "У COM-объекта \"%s\" нет события \"%s\""
+
+#: src/engine/backend/system/value/valueCOM.cpp:593
+#, c-format
+msgid "The module that handles event \"%s\" of COM object \"%s\" is gone"
+msgstr "Модуля, который обрабатывает событие \"%s\" COM-объекта \"%s\", больше нет"
+
+#: src/engine/backend/system/value/valueCOM.cpp:820
+#, c-format
+msgid "COM object \"%s\" could not be created: %s"
+msgstr "Не удалось создать COM-объект \"%s\": %s"
+
+#: src/engine/backend/system/value/valueCOM.cpp:884
+#, c-format
+msgid "argument %d: %s"
+msgstr "аргумент %d: %s"
+
+#: src/engine/backend/system/value/valueCOM.cpp:893
+#, c-format
+msgid "COM object \"%s\", member \"%s\": %s"
+msgstr "COM-объект \"%s\", член \"%s\": %s"
+
+#: src/engine/backend/system/value/valueCOM.cpp:965
+#, c-format
+msgid "No COM class is registered as \"%s\""
+msgstr "COM-класс \"%s\" не зарегистрирован"
+
+#: src/engine/backend/system/value/valueCOM.cpp:1014
+msgid "COM objects are available on Windows only"
+msgstr "COM-объекты доступны только в Windows"
+
+#: src/engine/backend/system/value/valueCOM.cpp:1435
+#, c-format
+msgid "COM object \"%s\" cannot be walked with For Each"
+msgstr "COM-объект \"%s\" нельзя обойти циклом For Each"

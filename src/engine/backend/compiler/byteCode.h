@@ -275,14 +275,16 @@ struct ibByteCode {
 		// helpers (IsContextMethod / IsExport).
 		ibFnKind  m_kind         = ibFnKind::Local;
 
-		// Closure capture — true when this function contains at least
-		// one inner lambda (any nesting depth). Set on the compile-side
-		// ibFunction during lambda body parse, mirrored here at compile
-		// finalize. At Phase B runtime drives heap-allocation of the
-		// frame on function entry so escaping lambdas can hold a
-		// shared_ptr to it; until Phase B lands, the field is a no-op
-		// marker (Phase A is compile-only).
-		bool      m_needsHeapFrame = false;
+		// ⭐⭐ THE VARIABLES A LAMBDA TAKES — (depth, slot) as the body addresses them, sorted by depth,
+		// each once:
+		//   - depth 0 — this function's own variables a lambda inside it references: the frame makes
+		//     them cells on entry (ibRunContext::Enter);
+		//   - depth 1 and further — for a lambda, the outer variables it takes: the ones it references,
+		//     and the ones a lambda inside it does, which is made while this one runs and takes them out
+		//     of what this one took (OPER_LFUNC, ibRunCaptureContext).
+		// Filled by the compiler's GetVariable. Until 2026-11-03 this was `m_needsHeapFrame`: the frame
+		// was built on the heap and a lambda took it whole, with every variable in it.
+		std::vector<ibParamRunUnit> m_listCaptured;
 
 		// `Cached` — the result is kept per argument tuple, on the ProcUnit
 		// that owns this function. THE LIFETIME IS OWNERSHIP, not a clock:
@@ -298,7 +300,7 @@ struct ibByteCode {
 		// this says otherwise (compileCode.cpp's two arity checks read it).
 		//
 		// ⚠ THE THIRD FLAG ON THIS RECORD TO BE FORGOTTEN BY THE RECONSTRUCTION PATH,
-		// after m_needsHeapFrame and m_valueCached above — and the symptom is the
+		// after m_needsHeapFrame (now m_listCaptured) and m_valueCached above — and the symptom is the
 		// same shape every time: the compile-context registration set it, the
 		// bytecode did not carry it, and everything worked until a build resolved
 		// the name through bytecode instead. Here that made `Max(3, 9)` answer
@@ -380,7 +382,7 @@ struct ibByteCode {
 			  m_lVarCount(src.m_lVarCount),
 			  m_returnClsid(src.m_clsid),
 			  m_kind(src.m_kind),
-			  m_needsHeapFrame(src.m_needsHeapFrame),
+			  m_listCaptured(src.m_listCaptured),
 			  m_valueCached(src.m_valueCached),
 			  m_valueVariadic(src.m_valueVariadic),
 			  m_strRealName(src.m_strRealName),
@@ -821,6 +823,11 @@ public:
 	// m_parentRef (index into this vector, populated at compile
 	// finalize).
 	std::vector<ibByteCodeVarInfo> m_listVar;
+	// An eval block's variables a lambda in it references — depth-0 entries, as
+	// ibByteFunction::m_listCaptured has them: the block's frame has no function to
+	// carry them, and makes them cells when it is built (ibProcUnit::Evaluate). A
+	// module leaves it empty: its frame outlives every lambda made in it.
+	std::vector<ibParamRunUnit>    m_listCaptured;
 	// Unified function table — m_kind discriminates {Local, Export,
 	// ContextMethod}. Replaces the historical trio
 	// m_listFunc / m_listExportFunc / m_listContextFunc. Storage is a

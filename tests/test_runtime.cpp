@@ -18,6 +18,7 @@
 #include "backend/backend_exception.h"
 #include "backend/compiler/compileCode.h"
 #include "backend/compiler/procUnit.h"
+#include "backend/compiler/procUnitLambda.h"   // ibValueFunction — what a lambda took, read off it
 #include "backend/compiler/byteCode.h"
 #include "backend/compiler/value.h"
 #include "backend/system/systemManager.h"   // ibValueSystemFunction — IsNull / ValueIsFilled impls
@@ -1931,7 +1932,7 @@ TEST(RuntimeTest, NewAsAStatementPassesItsArguments) {
 // A CLOSURE WRITING BACK INTO ITS CAPTURED SLOT
 //
 // `i = i + 1` inside a lambda, where `i` belongs to the enclosing function's
-// heap-promoted frame. It is the one assignment whose destination is NOT in the
+// frame — a cell the lambda took. It is the one assignment whose destination is NOT in the
 // current frame, so it is the one that tells whether writing an operation's
 // result straight into its destination (compileCode.cpp, EmitAssign) survives
 // the outer-frame walk — every other assignment resolves through
@@ -1970,6 +1971,65 @@ TEST(RuntimeTest, ClosureWritesBackIntoItsCapturedSlot) {
 	// lambda and a dead capture.
 	EXPECT_EQ(valA.GetInteger(), 1);
 	EXPECT_EQ(valB.GetInteger(), 2);
+}
+
+// ===========================================================================
+// A LAMBDA TAKES THE VARIABLES IT REFERENCES, NOT THE FRAME (2026-11-03)
+//
+// It took the frame whole, and with it every variable of the frame. A lambda
+// stored in a variable of that frame was then a ring nothing released, and an
+// Excel object beside it outlived `Quit` until the thread ended (leak6.ces in
+// the session that found it). What a lambda keeps is read off the lambda: its
+// first rung is what it took from Make's frame, and `big` is not in it.
+// ===========================================================================
+
+TEST(RuntimeTest, ALambdaTakesOnlyTheVariablesItReferences) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var none public; var one public; var sum public;\n")
+		wxT("Function Make()\n")
+		wxT("  var big; big = 7;\n")
+		wxT("  var small; small = 5;\n")
+		wxT("  none = Function(x) Return x EndFunction;\n")
+		wxT("  one = Function(x) Return x + small EndFunction;\n")
+		wxT("EndFunction\n")
+		wxT("Make();\n")
+		wxT("sum = one(1);\n")));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue none, one, sum;
+	ASSERT_TRUE(pu.GetPropVal(wxT("none"), none));
+	ASSERT_TRUE(pu.GetPropVal(wxT("one"), one));
+	ASSERT_TRUE(pu.GetPropVal(wxT("sum"), sum));
+	EXPECT_EQ(sum.GetInteger(), 6) << "the lambda lost 'small' when Make's frame ended";
+
+	const ibValueFunction* const takesNothing = AsFunction(none);
+	const ibValueFunction* const takesSmall = AsFunction(one);
+	ASSERT_NE(takesNothing, nullptr);
+	ASSERT_NE(takesSmall, nullptr);
+	ASSERT_EQ(takesNothing->CapturedDepth(), 1u) << "one rung: Make's frame";
+	ASSERT_EQ(takesSmall->CapturedDepth(), 1u);
+
+	EXPECT_EQ(takesNothing->CapturedAt(0)->GetLocalCount(), 0)
+		<< "a lambda that references nothing took Make's variables";
+
+	// `small` is taken, `big` is not — by the slots Make's own table gives them.
+	const ibRunCaptureContext* const rung = takesSmall->CapturedAt(0);
+	ASSERT_NE(rung->m_currentFunction, nullptr);
+	long big = -1, small = -1;
+	for (const auto& local : rung->m_currentFunction->m_listLocals) {
+		if (local.m_strRealName.IsSameAs(wxT("big"), false)) big = local.m_slotIndex;
+		if (local.m_strRealName.IsSameAs(wxT("small"), false)) small = local.m_slotIndex;
+	}
+	ASSERT_GE(big, 0);
+	ASSERT_GE(small, 0);
+	ASSERT_LT(small, rung->GetLocalCount());
+	EXPECT_NE(rung->m_pRefLocVars[small], &rung->m_pLocVars[small]) << "'small' was not taken";
+	EXPECT_EQ(rung->m_pRefLocVars[small]->GetInteger(), 5);
+	EXPECT_TRUE(big >= rung->GetLocalCount() || rung->m_pRefLocVars[big] == &rung->m_pLocVars[big])
+		<< "'big' was taken though nothing references it";
 }
 
 // ===========================================================================
@@ -2015,6 +2075,98 @@ TEST(RuntimeTest, AStringSumIntoASlotHoldingAReferenceReleasesItOnce) {
 	ibValue slot;
 	ASSERT_TRUE(pu.GetPropVal(wxT("slot"), slot));
 	EXPECT_EQ(slot.GetString(), ibString(wxT("n=1")));
+}
+
+// ===========================================================================
+// AN ASSIGNMENT MOVES ITS TEMPORARY (2026-11-03)
+//
+// `slot = Source.Next` reads the value into a temporary, and the assignment
+// COPIED it, so the temporary held the object until the frame ended:
+// `slot = Undefined` let go of one holder of two. An out-of-process Excel stayed
+// alive that way after `Quit` (excelclosure3.ces in the session that found it).
+// The module's frame is still alive when the test looks — a temporary that kept
+// the probe would be in it.
+// ===========================================================================
+
+namespace {
+// A probe a chain can go through: `Value` answers 7.
+class ProbeLink : public ReleaseProbe {
+public:
+	explicit ProbeLink(int* destroyed) : ReleaseProbe(destroyed) {}
+	long FindProp(const ibString& strPropName) const override {
+		return strPropName.IsSameAs(wxT("Value"), false) ? 0 : wxNOT_FOUND;
+	}
+	bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override {
+		pvarPropVal = 7;
+		return true;
+	}
+};
+
+// Answers a new probe each time `Next` is read, and a new link each time `Link` is.
+class ProbeSource : public ibValue {
+public:
+	explicit ProbeSource(int* destroyed)
+		: ibValue(ibValueTypes::TYPE_VALUE, false), m_destroyed(destroyed) {}
+	long FindProp(const ibString& strPropName) const override {
+		if (strPropName.IsSameAs(wxT("Next"), false)) return 0;
+		if (strPropName.IsSameAs(wxT("Link"), false)) return 1;
+		return wxNOT_FOUND;
+	}
+	bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override {
+		if (lPropNum == 1)
+			pvarPropVal = ibValue(static_cast<ibValue*>(new ProbeLink(m_destroyed)));
+		else
+			pvarPropVal = ibValue(static_cast<ibValue*>(new ReleaseProbe(m_destroyed)));
+		return true;
+	}
+private:
+	int* m_destroyed;
+};
+} // namespace
+
+TEST(RuntimeTest, AnAssignmentMovesItsTemporary) {
+	int destroyed = 0;
+	ibValuePtr<ProbeSource> source(new ProbeSource(&destroyed));
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	cc.AddContextVariable(wxT("Source"), source, false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var held = Source.Next;\n")
+		wxT("var slot public;\n")
+		wxT("held = Undefined;\n")
+		wxT("slot = Source.Next;\n")
+		wxT("slot = Undefined;\n")));
+
+	ibProcUnit pu;
+	ibString error;
+	ASSERT_TRUE(RunBound(cc, pu, error)) << error.ToStdString();
+	EXPECT_EQ(destroyed, 2) << "a temporary still holds what an assignment or a declaration took from it";
+}
+
+// ===========================================================================
+// A LINK OF A CHAIN LETS GO OF THE LINK BEFORE (2026-11-03)
+//
+// `Source.Link.Value` reads the link into a temporary and the value out of it;
+// the link stayed in the temporary until the frame ended. That is how
+// `Excel.Workbooks.Count` kept a Workbooks, and with it Excel, alive after
+// `Quit` (excelclosure3.ces). The module's frame is alive when the test looks.
+// ===========================================================================
+
+TEST(RuntimeTest, AChainLetsGoOfTheLinkBefore) {
+	int destroyed = 0;
+	ibValuePtr<ProbeSource> source(new ProbeSource(&destroyed));
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	cc.AddContextVariable(wxT("Source"), source, false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var n public;\n")
+		wxT("n = Source.Link.Value;\n")));
+
+	ibProcUnit pu;
+	ibString error;
+	ASSERT_TRUE(RunBound(cc, pu, error)) << error.ToStdString();
+	EXPECT_EQ(destroyed, 1) << "a temporary still holds the link the chain went through";
+	ibValue n;
+	ASSERT_TRUE(pu.GetPropVal(wxT("n"), n));
+	EXPECT_EQ(n.GetInteger(), 7);
 }
 
 // ===========================================================================
@@ -2487,11 +2639,11 @@ TEST_F(BuiltInRuntime, AModuleVarAfterAPipelineLambda) {
 // `test_linq_nested_join.txt` dies on it with "a variable is not an aggregate
 // object", i.e. the captured row arrives as nothing.
 //
-// The suspected cause is that the pipeline invoke path (procUnitLINQ.cpp,
-// CallLambdaWithArgs) builds a C-stack frame and never honours
-// `m_needsHeapFrame`, so the outer frame is an ordinary one and the inner
-// lambda finds nothing it may capture. Promoting it was tried once and made things worse; the
-// note there says not to re-apply without a repro that fails first.
+// The suspected cause was that the pipeline invoke path (procUnitLINQ.cpp,
+// CallLambdaWithArgs) builds a C-stack frame and never honoured the heap-frame
+// flag of the day, so the outer frame was an ordinary one and the inner
+// lambda found nothing it may capture. Promoting it was tried once and made things worse; the
+// note there said not to re-apply without a repro that fails first.
 //
 // This is that repro.
 // ===========================================================================
@@ -2503,15 +2655,15 @@ TEST_F(BuiltInRuntime, AModuleVarAfterAPipelineLambda) {
 // invoke path binds each parameter to the caller's `ibValue` by POINTER, and under
 // a pipeline those point into the iterator state, which dies before a captured
 // frame does. A promoted frame then read its own parameters through a dangling
-// pointer — that was the access violation, not the capture machinery. A frame that
-// can be captured now COPIES its arguments (`procUnitLINQ.cpp`,
-// `CallLambdaWithArgs`).
+// pointer — that was the access violation, not the capture machinery. A lambda
+// whose parameters a lambda inside it takes now COPIES its arguments
+// (`procUnitLINQ.cpp`, `CallLambdaWithArgs`), and the frame makes cells of them.
 //
 // The emission side was verified separately rather than inferred from this test
-// going green: `RuntimeBench.DISABLED_DumpNestedLambda` shows the compiler flags
-// only the OUTER lambda `m_needsHeapFrame`, and that the inner body reads `x` at
-// frame depth 1 — exactly where `ibValueFunction::Execute` installs
-// `m_capturedFrames[0]`. The two halves agree by construction.
+// going green: `RuntimeBench.DISABLED_DumpNestedLambda` shows what each lambda's
+// `m_listCaptured` holds, and that the inner body reads `x` at frame depth 1 —
+// exactly where `ibValueFunction::Execute` installs `m_capturedFrames[0]`. The
+// two halves agree by construction.
 TEST(RuntimeTest, ALambdaInsideAPipelineLambdaSeesTheOuterParameter) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	ASSERT_TRUE(TryCompile(cc,
@@ -2534,6 +2686,77 @@ TEST(RuntimeTest, ALambdaInsideAPipelineLambdaSeesTheOuterParameter) {
 	ASSERT_TRUE(pu.GetPropVal(wxT("r"), v));
 	EXPECT_EQ(v.GetInteger(), 1)
 		<< "4 means the inner lambda never saw the outer lambda's x";
+}
+
+// ===========================================================================
+// A LAMBDA WRITTEN INSIDE A BODY THE CHAIN WOULD FOLD (2026-11-03)
+//
+// The same reading of the outer parameter, on the road that compiles a chain as
+// a loop in the caller's frame — the braces dialect and a terminal `ToArray`.
+// The fold bound `x` on its block scope, the inner lambda read it as its own
+// frame's slot, and `Crossed` died of an access violation on the stand. Such a
+// body now keeps the dispatcher road (compileCodeLINQ.cpp, IsFoldableLambdaBody),
+// where each call owns its row — which `Rows` checks: a lambda kept past its row
+// answers with that row, not the last one.
+// ===========================================================================
+TEST(RuntimeTest, ALambdaWrittenInAFoldedBodyKeepsItsRow) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var r public; var f public; var g public;\n")
+		wxT("Function Crossed(a, b) { return a.SelectMany(Function(x) { return b.Select(Function(y) { return x + y; }); }).ToArray(); }\n")
+		wxT("Function Rows(a) { return a.Select(Function(x) { return Function() { return x; }; }).ToArray(); }\n")
+		wxT("var a = New Array; a.Add(10); a.Add(20);\n")
+		wxT("var b = New Array; b.Add(1); b.Add(2);\n")
+		wxT("r = \"\";\n")
+		wxT("foreach (v in Crossed(a, b)) { r = r + v + \";\"; }\n")
+		wxT("var fs = Rows(a);\n")
+		wxT("var f0 = fs[0]; f = f0();\n")
+		wxT("var f1 = fs[1]; g = f1();\n")));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue r, f, g;
+	ASSERT_TRUE(pu.GetPropVal(wxT("r"), r));
+	ASSERT_TRUE(pu.GetPropVal(wxT("f"), f));
+	ASSERT_TRUE(pu.GetPropVal(wxT("g"), g));
+	EXPECT_EQ(r.GetString(), wxT("11;12;21;22;"));
+	EXPECT_EQ(f.GetInteger(), 10) << "the first row's lambda answers with a row that is not its own";
+	EXPECT_EQ(g.GetInteger(), 20);
+}
+
+// ===========================================================================
+// A FOLDED CHAIN IN A LOOP STARTS EVERY RUN WITH NO ANSWER (2026-11-03)
+//
+// The answer of `First` / `Last` / `Min` / `Max` / `Single` / `ElementAt` lives in
+// one slot of the frame, and the fold took it as empty — true on the first run
+// only. In a loop the slot kept the run before's answer: the second group's
+// `Max` was measured against the first group's, and a `First` that found nothing
+// answered with the first group's row.
+// ===========================================================================
+TEST(RuntimeTest, AFoldedChainInALoopStartsWithNoAnswer) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var maxes public; var nones public;\n")
+		wxT("var a = New Array; a.Add(9); a.Add(4);\n")
+		wxT("var b = New Array; b.Add(2); b.Add(3);\n")
+		wxT("var groups = New Array; groups.Add(a); groups.Add(b);\n")
+		wxT("maxes = \"\"; nones = 0;\n")
+		wxT("foreach (gr in groups) {\n")
+		wxT("  var m = gr.Where(Function(x) { return x > 0; }).Max();\n")
+		wxT("  maxes = maxes + m + \";\";\n")
+		wxT("  var f = gr.Where(Function(x) { return x > 5; }).First();\n")
+		wxT("  if (f = Undefined) { nones = nones + 1; }\n")
+		wxT("}\n")));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue maxes, nones;
+	ASSERT_TRUE(pu.GetPropVal(wxT("maxes"), maxes));
+	ASSERT_TRUE(pu.GetPropVal(wxT("nones"), nones));
+	EXPECT_EQ(maxes.GetString(), wxT("9;3;")) << "the second group's Max was measured against the first group's";
+	EXPECT_EQ(nones.GetInteger(), 1) << "a First that found nothing answered with the group before's row";
 }
 
 // ===========================================================================
@@ -3328,8 +3551,8 @@ TEST_F(BuiltInRuntime, DateArithmeticIgnoresTheClockChange) {
 // The flag that says otherwise (ibFunction::m_valueVariadic) was set at
 // registration and never carried in the bytecode, so it survived only while a
 // LIVE compile context resolved the name — and a cache hit is precisely the
-// case where none exists. Third field of this shape after m_needsHeapFrame and
-// m_valueCached.
+// case where none exists. Third field of this shape after m_needsHeapFrame (now
+// m_listCaptured) and m_valueCached.
 //
 // ⚠ WHAT THIS TEST DOES NOT DO, said plainly so nobody trusts it for that: it
 // CANNOT catch the defect it was written after. Here the context is live — the

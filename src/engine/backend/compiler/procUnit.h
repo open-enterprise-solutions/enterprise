@@ -81,7 +81,10 @@ BACKEND_API bool ibLinqNamedColumns(const ibValue& row, std::vector<ibString>& o
 // group was all a reader got before, and after `g.Key.` it could offer nothing.
 BACKEND_API void ibLinqGroupedSample(ibValue& out, const ibValue& key = ibValue(), const ibValue* row = nullptr);
 
-class BACKEND_API ibProcUnit {
+// ⭐ A UNIT LIVES ON A shared_ptr — every owner makes it with make_shared. One that is called back later than the call
+// that made the subscription (a COM object's event handler by procedure name) keeps a weak_ptr: a form that closed
+// takes its unit, and so its variables and the object in them, with it; the late caller finds it gone and says so.
+class BACKEND_API ibProcUnit : public std::enable_shared_from_this<ibProcUnit> {
 public:
 
 	friend class ibValueFunction;

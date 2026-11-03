@@ -6,6 +6,7 @@
 #include "debugServer.h"
 
 #include <chrono>                             // steady_clock — how long a sandbox run actually took
+#include <future>                             // packaged_task — the debugger's work, run by the stopped thread
 #include <system_error>                       // std::system_error — a thread the system would not start
 
 #include "core/net/httpServer.h"              // the port the designer reaches this process by
@@ -38,30 +39,6 @@ ibDebuggerServer* ibDebuggerServer::ms_debugServer = nullptr;
 ///////////////////////////////////////////////////////////////////////
 
 namespace {
-// Run a watch / tooltip / expand eval against the run context of the session
-// currently stopped at a breakpoint, holding that session's debug mutex for
-// the whole compile+run.
-//
-// Replaces the old `IsDebugLooped() + ibSession::CurrentRunContext()` pattern
-// at every debug-server-thread eval site. That pattern gated on the
-// *server-global* loop flag but dereferenced the *per-session* run-context
-// pointer — a TOCTOU. A script worker resuming (Continue / Step / Cancel /
-// destroy) unwinds its ibRunContext (a worker-stack object) while a
-// concurrent Expand / ToolTip eval on the debug-server thread was still
-// reading it → use-after-free; the freed frame reads back as 0xdddddddd.
-// Hit 2026-06-05 expanding `thisForm` in the watch (ibProcUnit::Evaluate →
-// pRunContext->m_listEval on a dead frame).
-//
-// The fix makes "is anyone parked", "which frame", and "use the frame" one
-// atomic step under ibDebugSession::m_mutex. The worker's resume teardown
-// (DoDebugLoop leave block) takes the same mutex and stamps m_debugLoop=false
-// alongside the pointer clear, so an eval either:
-//   - acquires first: the worker blocks on the teardown lock until the eval
-//     finishes against a still-live frame, then unwinds; or
-//   - acquires after: sees m_debugLoop == false and skips.
-// `evalMode` separates the two callers this has: a TOOLTIP, which must change nothing, and the
-// SANDBOX, whose purpose is to change things and have them rolled back. They used to share one
-// answer through eval mode, and the sandbox's writes were refused in silence (2026-09-02).
 // ⭐⭐ THE SESSION AN EVALUATION IS ABOUT — NAMED, not guessed. The designer knows which stop it is
 // showing (every loop-entry packet carries the session's id, and the designer keeps it), and it says the
 // name back on every step. An evaluation is a question about THE SAME stop, so it says it too.
@@ -97,27 +74,50 @@ bool IsSessionParked(const ibString& sessionGuid)
 	return sess && sess->Debug().m_debugLoop.load(std::memory_order_acquire);
 }
 
-bool EvalInParkedSession(const ibString& sessionGuid, const ibString& expr, ibValue& vResult, bool compileBlock,
-	ibEvalMode evalMode = eval_watch)
+// ⭐⭐ THE DEBUGGER'S WORK RUNS ON THE STOPPED THREAD, not on this one: handed to the session parked in
+// DoDebugLoop, run there between two waits with the frame the stop shows, and waited for here — what it
+// throws is thrown here. An evaluation and the reading of its answer are one piece of work, and so is the
+// answer's end: a value made there is let go there.
+//
+// That thread is where everything the frame touches belongs. Its session answers the questions a frame does
+// not — watch or sandbox (the eval mode), cancelled or not, whose rights, which connection the sandbox's
+// transaction must be on; an error is kept by the thread that raised it (GetLastError); and an object of
+// another program answers only on the thread that made it — reading a COM object from here took every one
+// of them marshalled into this thread on every frame (#644).
+//
+// And the frame cannot go while the work runs: the thread that would unwind it is the one running it. (It
+// used to be this thread holding the debug mutex across the evaluation — against the use-after-free of
+// 2026-06-05, `thisForm` expanded as the worker resumed, read back from a dead frame as 0xdddddddd.)
+//
+// False when that session is not parked, or leaves its stop before taking the work: nothing ran.
+bool RunInParkedSession(const ibString& sessionGuid, const std::function<void(ibRunContext*)>& work)
 {
 	auto sess = ParkedSession(sessionGuid);
 	if (!sess)
 		return false;
 
 	ibSession::ibDebugSession& dbg = sess->Debug();
-	std::lock_guard<std::mutex> lock(dbg.m_mutex);
-	if (!dbg.m_debugLoop.load(std::memory_order_acquire) || dbg.m_runContext == nullptr)
-		return false;
+	std::future<void> done;
+	{
+		std::unique_lock<std::mutex> lock(dbg.m_mutex);
+		if (!dbg.m_debugLoop.load(std::memory_order_acquire) || dbg.m_runContext == nullptr)
+			return false;
 
-	// ⭐ AND STAND IN THAT SESSION WHILE IT IS WORKED OUT. Evaluate does not take the frame alone — it
-	// asks the CURRENT session for the things that are not in a frame: whether this is a watch or a
-	// sandbox (the eval-mode flag lives on the session), whether the run has been cancelled, whose
-	// rights the reads go through. Taking the frame from one session while standing in another would
-	// leave those answers belonging to somebody else's stop — a watch reported as an error in the
-	// person's message window, a write refused or allowed by the wrong rule.
-	ibSessionScope scope(sess.get());
+		ibRunContext* const runContext = dbg.m_runContext;
+		dbg.m_work = std::packaged_task<void()>([&work, runContext]() { work(runContext); });
+		done = dbg.m_work.get_future();
+		dbg.m_cv.notify_all();
 
-	return ibProcUnit::Evaluate(expr, dbg.m_runContext, vResult, compileBlock, evalMode);
+		dbg.m_cv.wait(lock, [&dbg]() {
+			return !dbg.m_work.valid() || !dbg.m_debugLoop.load(std::memory_order_acquire);
+		});
+		if (dbg.m_work.valid()) {
+			dbg.m_work = std::packaged_task<void()>();   // the stop ended first: taken back, never run
+			return false;
+		}
+	}
+	done.get();
+	return true;
 }
 } // namespace
 
@@ -242,7 +242,6 @@ void ibDebuggerServer::ShutdownServer()
 	// Otherwise the connection's end stops its thread and waits it out (~ibDebuggerServerConnection).
 }
 
-#include "backend/system/value/valueOLE.h"
 #include "backend/backend_mainFrame.h"
 
 void ibDebuggerServer::ClearCollectionBreakpoint()
@@ -306,7 +305,7 @@ bool ibDebuggerServer::IsDebugLooped() const
 	// redirects to the front-of-queue parked session (session registry's
 	// debug queue), which is the one any incoming Eval/Step command targets.
 	// Advisory only — the eval path re-checks under dbg.m_mutex in
-	// EvalInParkedSession; the step path re-routes via WakeDebugSession(sid).
+	// RunInParkedSession; the step path re-routes via WakeDebugSession(sid).
 	ibSession* sess = ibSession::Current();
 	return sess != nullptr && sess->Debug().m_debugLoop.load(std::memory_order_acquire);
 }
@@ -385,11 +384,6 @@ void ibDebuggerServer::DoDebugLoop(const ibString& strDocPath, const ibString& s
 	if (auto* reg = ibApplicationInstance::GetSessionRegistry(GetApplicationInstance()))
 		reg->EnterDebugLoop(sess);
 
-	//create stream for this loop
-#ifdef __WXMSW__
-	ibValueOLE::CreateStreamForDispatch();
-#endif
-
 	// event-driven wait: woken immediately by Continue/StepInto/StepOver/Detach/Destroy.
 	// CV/mutex live on the per-session ibDebugSession so a sibling tab's
 	// step doesn't unpark this script thread by accident.
@@ -400,11 +394,20 @@ void ibDebuggerServer::DoDebugLoop(const ibString& strDocPath, const ibString& s
 	// wake (WakeAllDebugSessions) reaches the sessions bound to a thread, and a desktop's stopped in its start
 	// (BeforeStart, inside its window's Show) is not one: a designer closed while it stood there left it parked
 	// for good, its window never shown and no designer able to attach (2026-10-21).
+	//
+	// ⭐ THE DEBUGGER'S WORK IS DONE HERE, on this thread, between two waits (RunInParkedSession): taken under
+	// the lock, run outside it — what it runs may come back to this session's debug state.
 	while (dbg.m_debugLoop.load(std::memory_order_acquire) && m_bUseDebug.load()) {
 		std::unique_lock<std::mutex> lock(dbg.m_mutex);
 		dbg.m_cv.wait_for(lock, std::chrono::milliseconds(250), [this, &dbg]() {
-			return !dbg.m_debugLoop.load(std::memory_order_acquire) || !m_bUseDebug.load();
+			return !dbg.m_debugLoop.load(std::memory_order_acquire) || !m_bUseDebug.load() || dbg.m_work.valid();
 		});
+		if (dbg.m_work.valid()) {
+			std::packaged_task<void()> work = std::move(dbg.m_work);
+			dbg.m_cv.notify_all();      // taken: the debug thread waits for the outcome now, not for the stop
+			lock.unlock();
+			work();
+		}
 	}
 
 	// (No store here. The loop above exits once the flag reads false or the debugger is gone, and the ONE
@@ -417,10 +420,6 @@ void ibDebuggerServer::DoDebugLoop(const ibString& strDocPath, const ibString& s
 	// above for the post-teardown case.
 	if (auto* reg = ibApplicationInstance::GetSessionRegistry(GetApplicationInstance()))
 		reg->LeaveDebugLoop(sess);
-
-#ifdef __WXMSW__
-	ibValueOLE::ReleaseStreamForDispatch();
-#endif
 
 	// Re-snapshot — the socket worker may have gone away during the pause.
 	if (ibDebuggerServerConnection* const leaveThread = m_socketConnectionThread.get();
@@ -443,18 +442,15 @@ void ibDebuggerServer::DoDebugLoop(const ibString& strDocPath, const ibString& s
 	if (auto* frame = ibSession::CurrentFrame())
 		frame->RaiseFrame();
 
-	// Drop the eval-visible run context under the per-session debug mutex.
-	// A concurrent watch / expand eval (EvalInParkedSession) holds this same
-	// mutex across ibProcUnit::Evaluate; acquiring it here blocks our return
-	// — and therefore the Execute-side unwind of this frame — until any
-	// in-flight eval has finished using it. m_debugLoop is re-stamped false
-	// inside the lock so the eval's gate (flag + pointer) observes one
-	// consistent state. Prevents the 0xdd use-after-free hit expanding
-	// `thisForm` as the worker resumed.
+	// Drop the eval-visible run context under the per-session debug mutex. m_debugLoop is re-stamped false
+	// inside the lock so the gate of RunInParkedSession (flag + pointer) observes one consistent state, and
+	// the debug thread waiting there with work this loop never took is told the stop is over — it takes
+	// the work back instead of waiting for a thread that has gone on.
 	{
 		std::lock_guard<std::mutex> lock(dbg.m_mutex);
 		dbg.m_debugLoop = false;
 		dbg.m_runContext = nullptr;
+		dbg.m_cv.notify_all();
 	}
 }
 
@@ -735,13 +731,19 @@ void ibDebuggerServer::SendLocalVariables(ibRunContext* runContext)
 		return info.m_scopeDepth <= runContext->m_currentScopeDepth;
 	};
 
-	// Closure capture (Phase F) — show captured outer frames as
-	// additional Locals entries with "<fn>.<var>" labels. Walks
+	// Closure capture (Phase F) — show what the lambda took from its outer
+	// frames as additional Locals entries with "<fn>.<var>" labels. Walks
 	// m_parentRunContext chain (set in OPER_CALL_LAMBDA to the lexical
 	// parent for lambdas); each ancestor of the CAPTURED kind
-	// (ibRunCaptureContext = a frame a closure took) contributes its
-	// UserLocal entries. Ordinary parents (regular call callers) are
-	// skipped — they belong to the call stack view, not Locals.
+	// (ibRunCaptureContext = what a closure took from one frame) contributes
+	// the UserLocal entries it took — a slot it did not take still points at
+	// its own empty storage, and showing it empty would say the variable is.
+	// Ordinary parents (regular call callers) are skipped — they belong to
+	// the call stack view, not Locals.
+	auto isTaken = [](const ibRunContext* ctx, const ibByteCode::ibByteCodeVarInfo& v) {
+		return v.IsUserLocal() && v.m_slotIndex >= 0 && v.m_slotIndex < ctx->GetLocalCount()
+			&& ctx->m_pRefLocVars[v.m_slotIndex] != &ctx->m_pLocVars[v.m_slotIndex];
+	};
 	auto emitFromCtx = [&](ibRunContext* ctx, const ibString& prefix) {
 		const std::vector<ibByteCode::ibByteCodeVarInfo>* pTable = nullptr;
 		if (ctx->m_currentFunction != nullptr)
@@ -749,11 +751,9 @@ void ibDebuggerServer::SendLocalVariables(ibRunContext* runContext)
 		else if (const ibByteCode* bc = ctx->GetByteCode())
 			pTable = &bc->m_listVar;
 		if (pTable == nullptr) return;
-		const long pVarCount = ctx->GetLocalCount();
 		for (const auto& v : *pTable) {
-			if (!v.IsUserLocal()) continue;
-			const bool inRange = v.m_slotIndex >= 0 && v.m_slotIndex < pVarCount;
-			ibValue* locRefValue = inRange ? ctx->m_pRefLocVars[v.m_slotIndex] : nullptr;
+			if (!isTaken(ctx, v)) continue;
+			ibValue* const locRefValue = ctx->m_pRefLocVars[v.m_slotIndex];
 			const ibString rendered = prefix.IsEmpty()
 				? v.m_strRealName
 				: (prefix + ibT(".") + v.m_strRealName);
@@ -774,7 +774,7 @@ void ibDebuggerServer::SendLocalVariables(ibRunContext* runContext)
 			? &p->m_currentFunction->m_listLocals
 			: (p->GetByteCode() != nullptr ? &p->GetByteCode()->m_listVar : nullptr);
 		if (pTable == nullptr) continue;
-		for (const auto& v : *pTable) if (v.IsUserLocal()) ++emitCount;
+		for (const auto& v : *pTable) if (isTaken(p, v)) ++emitCount;
 	}
 	commandChannel.w_u32(emitCount);
 
@@ -1035,24 +1035,12 @@ void ibDebuggerServer::ibDebuggerServerConnection::Entry()
 			? ibApplicationInstance::GetSessionRegistry(ms_debugServer->GetApplicationInstance()) : nullptr)
 		reg->RegisterDebugThread(debugTid);
 
-	{
-#ifdef __WXMSW__
-		// COM for an OLE value, initialised on this thread for as long as it reads.
-		struct ibComApartment {
-			const HRESULT m_hr = ::CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-			~ibComApartment() { if (SUCCEEDED(m_hr)) ::CoUninitialize(); }
-		} com;
-		if (FAILED(com.m_hr))
-			ibJournalSysError(ibT("debugger"), com.m_hr, _("Failed to initialise COM on the debug thread"));
-#endif // !_WXMSW
-
-		// An escape ends the connection, not the process — out of a std::thread it would terminate it.
-		try {
-			EntryClient();
-		}
-		catch (...) {
-			ibJournalError(ibT("debugger"), ibT("debug server: the connection's thread left by an exception"));
-		}
+	// An escape ends the connection, not the process — out of a std::thread it would terminate it.
+	try {
+		EntryClient();
+	}
+	catch (...) {
+		ibJournalError(ibT("debugger"), ibT("debug server: the connection's thread left by an exception"));
 	}
 
 	// Symmetric unregister — tolerate a teardown that's already nulled
@@ -1140,9 +1128,6 @@ void ibDebuggerServer::ibDebuggerServerConnection::EntryClient()
 			// of whoever is logged in, and with nobody logged in it worked for no base: `code_run` on a web server nobody
 			// had opened raised "works for no base" and the raise read as a bad frame, closing the debugger's connection.
 			const ibApplicationInstanceScope working(debugServer != nullptr ? debugServer->GetApplicationInstance() : nullptr);
-#ifdef __WXMSW__
-			ibValueOLE::GetInterfaceAndReleaseStream();
-#endif
 #if _USE_NET_COMPRESSOR == 1
 			BYTE* dest = nullptr; unsigned int dest_sz = 0;
 			_decompressLZ(&dest, &dest_sz, command.data(), length);
@@ -1293,7 +1278,6 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 		commandChannel.w_u32(1); // first elements
 
 		if (IsSessionParked(sid)) {
-			ibValue vResult;
 			//header
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
 			commandChannel.w_u64(id);
@@ -1302,18 +1286,23 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 #endif
 			//variable
 			commandChannel.w_stringZ(strExpression);
-			if (EvalInParkedSession(sid, strExpression, vResult, false)) {
-				commandChannel.w_stringZ(vResult.GetString());
-				commandChannel.w_stringZ(vResult.GetClassName());
-				//count of elemetns
-				commandChannel.w_u32(vResult.GetNProps());
-			}
-			else {
-				commandChannel.w_stringZ(ibBackendException::GetLastError());
-				commandChannel.w_stringZ(ibT("<error>"));
-				//count of elemetns
-				commandChannel.w_u32(0);
-			}
+			ibString strValue, strType = ibT("<error>");
+			unsigned int propCount = 0;
+			RunInParkedSession(sid, [&](ibRunContext* runContext) {
+				ibValue vResult;
+				if (ibProcUnit::Evaluate(strExpression, runContext, vResult, false)) {
+					strValue = vResult.GetString();
+					strType = vResult.GetClassName();
+					propCount = vResult.GetNProps();
+				}
+				else {
+					strValue = ibBackendException::GetLastError();
+				}
+			});
+			commandChannel.w_stringZ(strValue);
+			commandChannel.w_stringZ(strType);
+			//count of elemetns
+			commandChannel.w_u32(propCount);
 			//send expression
 			SendCommand(commandChannel.pointer(), commandChannel.size());
 			//set expression in map
@@ -1346,13 +1335,16 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 		ibString strExpression;
 		commandReader.r_stringZ(strExpression);
 		if (IsSessionParked(sid)) {
-			ibValue vResult;
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
 			unsigned long long id = commandReader.r_u64();
 #else
 			unsigned int id = commandReader.r_u32();
 #endif
-			if (EvalInParkedSession(sid, strExpression, vResult, false)) {
+			// Worked out and read on the stopped thread — see RunInParkedSession.
+			RunInParkedSession(sid, [&](ibRunContext* runContext) {
+				ibValue vResult;
+				if (!ibProcUnit::Evaluate(strExpression, runContext, vResult, false))
+					return;
 				ibWriterMemory commandChannel;
 				commandChannel.w_u16(CommandId_ExpandExpression);
 				commandChannel.w_stringZ(strAsker);
@@ -1443,12 +1435,12 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 						commandChannel.w_stringZ(strPropName);
 						commandChannel.w_stringZ(ibT("<not found>"));
 						commandChannel.w_stringZ(ibT("<error>"));
-						//count of attribute   
+						//count of attribute
 						commandChannel.w_u32(0);
 					}
 				}
 				SendCommand(commandChannel.pointer(), commandChannel.size());
-			}
+			});
 		}
 	}
 	else if (commandFromClient == CommandId_RemoveExpression) {
@@ -1484,9 +1476,17 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 			// and "could not be evaluated" arrives as "the runtime did not answer in time", which
 			// points at the connection instead of at the expression (2026-09-01, stopped inside
 			// Posting: `1 + 2 * 3` timed out exactly like a broken link).
-			ibValue vResult;
 			const bool parked = IsSessionParked(sid);
-			const bool evaluated = parked && EvalInParkedSession(sid, strExpression, vResult, false);
+			bool evaluated = false;
+			ibString strValue;
+			if (parked) {
+				RunInParkedSession(sid, [&](ibRunContext* runContext) {
+					ibValue vResult;
+					evaluated = ibProcUnit::Evaluate(strExpression, runContext, vResult, false);
+					if (evaluated)
+						strValue = vResult.GetString();
+				});
+			}
 
 			ibWriterMemory commandChannel;
 			commandChannel.w_u16(CommandId_EvalToolTip);
@@ -1494,7 +1494,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 			commandChannel.w_stringZ(strModuleName);
 			commandChannel.w_stringZ(strExpression);
 			commandChannel.w_stringZ(evaluated
-				? vResult.GetString()
+				? strValue
 				: ibString(parked ? _("<cannot be evaluated here>")
 				                  : _("<the runtime is not parked at a breakpoint>")));
 
@@ -1584,22 +1584,26 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 			// It also explains the hang that found it: asking the pool for a second connection to a
 			// file base, while the parked worker holds the first, waits out the checkout timeout —
 			// thirty seconds, exactly the length of the caller's wait (2026-09-02).
-			std::shared_ptr<ibDatabaseLayer> layer;
+			//
+			// All of it runs on the stopped thread (RunInParkedSession): `Current()` there is that session.
+			RunInParkedSession(sid, [&](ibRunContext* runContext) {
+				std::shared_ptr<ibDatabaseLayer> layer;
 
-			try {
-				ibSession* parked = ibSession::Current();
-				if (parked != nullptr)
-					layer = parked->EnsureConnection();
-			}
-			catch (...) {
-				layer = nullptr;
-			}
+				try {
+					ibSession* parked = ibSession::Current();
+					if (parked != nullptr)
+						layer = parked->EnsureConnection();
+				}
+				catch (...) {
+					layer = nullptr;
+				}
 
-			if (layer == nullptr) {
-				answer = _("The parked session has no open connection, so there is nothing to run the "
-					"code against and no transaction to undo it with. Nothing was run.");
-			}
-			else {
+				if (layer == nullptr) {
+					answer = _("The parked session has no open connection, so there is nothing to run the "
+						"code against and no transaction to undo it with. Nothing was run.");
+					return;
+				}
+
 				// ⚠ THE ROLLBACK IS OUTSIDE EVERY EXIT. A throw is the LIKELY end of a piece of code
 				// somebody is testing, and a transaction left open by a failed experiment would hold
 				// locks on a live base until the application closed.
@@ -1615,7 +1619,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 					//  arrives at the caller BEFORE this reply does, in the order it was printed.
 					//  Gathering it a second time into this answer would be the same fact on two
 					//  roads, and two roads diverge.)
-					ran = EvalInParkedSession(sid, code, vResult, /*compileBlock*/ true, eval_sandbox);
+					ran = ibProcUnit::Evaluate(code, runContext, vResult, /*compileBlock*/ true, eval_sandbox);
 
 					// 🛑 THE REASON IS IN THE VALUE, and it was being thrown away. A failed
 					// evaluation writes `<error: …>` into the result slot rather than raising
@@ -1685,7 +1689,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 				//  and never appear there, so a second send would repeat what the caller has and
 				//  still miss what it asked for — Max, 2026-09-02, weighing this exact addition.
 				//  What the code wants seen, it prints, and that lands in the window as it runs.)
-			}
+			});
 
 			// ⭐⭐ AND THE PERSON SEES HOW IT ENDED, not only that it started. Announcing the start
 			// and then going quiet is the worst of both: they know something ran in their session
@@ -1741,22 +1745,21 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 			// Repoint the parked session's debug run context to the
 			// caller-selected stack frame, under the per-session debug mutex
 			// and gated on m_debugLoop — same discipline as
-			// EvalInParkedSession and the DoDebugLoop leave block. Without
+			// RunInParkedSession and the DoDebugLoop leave block. Without
 			// the gate a SetStack racing a force-exit / destroy resume would
 			// publish a frame the worker is about to unwind, and the
 			// SendExpressions eval below would dereference it (0xdd UAF).
 			if (sess) {
 				ibSession::ibDebugSession& dbg = sess->Debug();
 				std::lock_guard<std::mutex> lock(dbg.m_mutex);
-				if (dbg.m_debugLoop.load(std::memory_order_acquire)) {
+				if (dbg.m_debugLoop.load(std::memory_order_acquire))
 					dbg.m_runContext = newRunContext;
-					// Send under the per-session lock against the just-published
-					// frame — the worker is parked, so newRunContext stays live
-					// for the duration of these sends.
-					ms_debugServer->SendExpressions(newRunContext);
-					ms_debugServer->SendLocalVariables(newRunContext);
-				}
 			}
+			// …and the watch and the locals worked out again in it, by the stopped thread.
+			RunInParkedSession(sid, [](ibRunContext* runContext) {
+				ms_debugServer->SendExpressions(runContext);
+				ms_debugServer->SendLocalVariables(runContext);
+			});
 		}
 	}
 	else if (commandFromClient == CommandId_EvalAutocomplete) {
@@ -1773,8 +1776,11 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 
 		std::int32_t currPos = commandReader.r_s32();
 		if (IsSessionParked(sid)) {
-			ibValue vResult;
-			if (EvalInParkedSession(sid, strExpression, vResult, false)) {
+			// Worked out and read on the stopped thread — see RunInParkedSession.
+			RunInParkedSession(sid, [&](ibRunContext* runContext) {
+				ibValue vResult;
+				if (!ibProcUnit::Evaluate(strExpression, runContext, vResult, false))
+					return;
 
 				ibWriterMemory commandChannel;
 				commandChannel.w_u16(CommandId_EvalAutocomplete);
@@ -1803,7 +1809,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 				}
 
 				SendCommand(commandChannel.pointer(), commandChannel.size());
-			}
+			});
 		}
 	}
 	else if (commandFromClient == CommandId_Continue) {
@@ -2080,9 +2086,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 		// connected. Drop the gate and force-exit the parked session —
 		// its Teardown → NotifyDisconnect cascade is
 		// what drives the OnLastDisconnect / wes exit hook chain.
-		// Note: CoUninitialize() is already done in Entry() epilogue
-		// (line ~472). Doing it again here would give a double-uninit
-		// on the worker thread. The forced close breaks the parked script
+		// The forced close breaks the parked script
 		// out of its loop and takes the window down with it — desktop
 		// closes its main frame, a web tab kicks itself, a thin client is
 		// told to go (ibClientSession::OnClose → Exit).

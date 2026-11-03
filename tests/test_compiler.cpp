@@ -380,11 +380,14 @@ TEST(CompilerAOT, RealCompileOutputRoundTrips) {
 // Verifies:
 //   * Lambda body references outer-fn local — compile succeeds (was
 //     ibScriptError_VarNotFound pre-Phase-A).
-//   * Outer fn's ibByteFunction.m_needsHeapFrame = true after lambda
-//     captures one of its locals.
+//   * Outer fn's ibByteFunction.m_listCaptured lists the local an inner
+//     lambda references (depth 0), and the lambda's lists it as its own
+//     outer one (depth 1) — and an outer lambda lists what a lambda inside
+//     it references, one frame nearer.
 //   * Bytecode dump shows OPER_GET inside lambda body reading at
 //     m_numArray ≥ 1 (m_pppArrayList depth past lambda's own frame).
-//   * Functions with NO inner lambda stay at m_needsHeapFrame = false.
+//   * Functions with NO inner lambda, and lambdas that reference nothing
+//     outside, list nothing.
 
 namespace {
 
@@ -417,7 +420,7 @@ TEST(ClosureCapture, LambdaReferencingOuterLocalCompiles) {
 	EXPECT_TRUE(TryCompile(cc, src)) << "lambda capturing outer 'n' should compile";
 }
 
-TEST(ClosureCapture, OuterFnMarkedNeedsHeapFrameAfterCapture) {
+TEST(ClosureCapture, OuterFnListsTheVariableItsLambdaTakes) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	const ibString src =
 		wxT("Function makeAdder(n)\n")
@@ -429,13 +432,21 @@ TEST(ClosureCapture, OuterFnMarkedNeedsHeapFrameAfterCapture) {
 
 	const auto* outer = FindFnByName(cc.m_cByteCode, wxT("makeAdder"));
 	ASSERT_NE(outer, nullptr) << "makeAdder missing from m_listFunc";
-	EXPECT_TRUE(outer->m_needsHeapFrame)
-		<< "makeAdder must be marked: its 'n' is captured by inner lambda";
+	ASSERT_EQ(outer->m_listCaptured.size(), 1u)
+		<< "makeAdder must list its 'n': the inner lambda references it";
+	EXPECT_EQ(outer->m_listCaptured[0].m_numArray, 0) << "its own variable is at depth 0";
+	EXPECT_EQ(outer->m_listCaptured[0].m_numIndex, 0) << "'n' is its first slot";
+
+	const auto* lambda = FindFirstLambda(cc.m_cByteCode);
+	ASSERT_NE(lambda, nullptr);
+	ASSERT_EQ(lambda->m_listCaptured.size(), 1u) << "the lambda takes 'n' and nothing else";
+	EXPECT_EQ(lambda->m_listCaptured[0].m_numArray, 1) << "one frame out";
+	EXPECT_EQ(lambda->m_listCaptured[0].m_numIndex, 0);
 }
 
-TEST(ClosureCapture, NoCaptureLeavesNeedsHeapFrameFalse) {
+TEST(ClosureCapture, NoCaptureLeavesTheListEmpty) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
-	// No inner lambda → no capture → no heap-frame requirement.
+	// No inner lambda → nothing taken.
 	const ibString src =
 		wxT("Function plainAdd(a, b)\n")
 		wxT("  Return a + b;\n")
@@ -444,8 +455,60 @@ TEST(ClosureCapture, NoCaptureLeavesNeedsHeapFrameFalse) {
 
 	const auto* fn = FindFnByName(cc.m_cByteCode, wxT("plainAdd"));
 	ASSERT_NE(fn, nullptr);
-	EXPECT_FALSE(fn->m_needsHeapFrame)
-		<< "fn without inner lambda must NOT be heap-promoted";
+	EXPECT_TRUE(fn->m_listCaptured.empty())
+		<< "a function without an inner lambda has nothing taken from it";
+}
+
+// ⭐ A LAMBDA THAT REFERENCES NOTHING OUTSIDE TAKES NOTHING, whatever its frame holds (2026-11-03): it used to
+// take the frame whole, and kept an Excel object beside it alive after `Quit`.
+TEST(ClosureCapture, ALambdaReferencingNothingOutsideTakesNothing) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const ibString src =
+		wxT("Function keep()\n")
+		wxT("  var big; big = 1;\n")
+		wxT("  Return Function(x)\n")
+		wxT("           Return x;\n")
+		wxT("         EndFunction;\n")
+		wxT("EndFunction\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	const auto* outer = FindFnByName(cc.m_cByteCode, wxT("keep"));
+	ASSERT_NE(outer, nullptr);
+	EXPECT_TRUE(outer->m_listCaptured.empty()) << "nothing references 'big' from a lambda";
+	const auto* lambda = FindFirstLambda(cc.m_cByteCode);
+	ASSERT_NE(lambda, nullptr);
+	EXPECT_TRUE(lambda->m_listCaptured.empty()) << "the lambda references nothing outside itself";
+}
+
+// ⭐ AN OUTER LAMBDA TAKES WHAT A LAMBDA INSIDE IT REFERENCES — one frame nearer: the inner one is made while
+// the outer one runs, and takes the variable out of what the outer one took.
+TEST(ClosureCapture, AnOuterLambdaTakesWhatItsInnerLambdaReferences) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const ibString src =
+		wxT("Function outer(s)\n")
+		wxT("  Return Function()\n")
+		wxT("           Return Function()\n")
+		wxT("                    Return s;\n")
+		wxT("                  EndFunction;\n")
+		wxT("         EndFunction;\n")
+		wxT("EndFunction\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	const auto* fn = FindFnByName(cc.m_cByteCode, wxT("outer"));
+	ASSERT_NE(fn, nullptr);
+	ASSERT_EQ(fn->m_listCaptured.size(), 1u);
+	EXPECT_EQ(fn->m_listCaptured[0].m_numArray, 0);
+
+	// Two lambdas: the depth each lists 's' at says which is which.
+	long long middle = -1, inner = -1;
+	for (const auto& f : cc.m_cByteCode.m_listFunc) {
+		if (!f.IsLambda())
+			continue;
+		ASSERT_EQ(f.m_listCaptured.size(), 1u) << "each lambda takes 's' and nothing else";
+		(f.m_listCaptured[0].m_numArray == 1 ? middle : inner) = f.m_listCaptured[0].m_numArray;
+	}
+	EXPECT_EQ(middle, 1) << "the middle lambda takes 's' from outer's frame, one out";
+	EXPECT_EQ(inner, 2) << "the inner lambda reads 's' two frames out";
 }
 
 TEST(ClosureCapture, LambdaBodyEmitsDepthGreaterOrEqualOneForCapturedVar) {

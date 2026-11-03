@@ -1,6 +1,7 @@
 #ifndef __CODE_RUNNER_H__
 #define __CODE_RUNNER_H__
 
+#include <memory>
 #include <vector>
 
 #include <wx/string.h>
@@ -31,7 +32,7 @@ class ibFrameCodeRunner : public ibBackendDocFrame, public wxFrame {
 protected:
 
 	class ibCompileCode* m_compileCode;
-	class ibProcUnit* m_procUnit;
+	std::shared_ptr<class ibProcUnit> m_procUnit;
 
 	// the context types' objects (EnumManager, ValueOutput, …) made for this runner — its compile module only
 	// references them

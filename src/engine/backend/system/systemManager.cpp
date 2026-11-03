@@ -546,6 +546,15 @@ bool ibValueSystemFunction::CallAsProc(const long lMethodNum, ibValue** paParams
 				lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr,
 				lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueGuid>() : nullptr);
 			return true;
+			// In the designer these are deliberately nothing — no running configuration's messages, journal or
+			// transaction — and a call to one is done, not refused.
+		case enMessage:
+		case enWriteJournalEvent:
+		case enSetExclusive:
+		case enBeginTransaction:
+		case enCommitTransaction:
+		case enRollBackTransaction:
+			return true;
 		}
 	}
 

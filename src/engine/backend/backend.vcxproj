@@ -380,7 +380,8 @@
     <ClInclude Include="system\value\valueXml.h" />
     <ClInclude Include="system\value\valueJob.h" />
     <ClInclude Include="system\value\valueMap.h" />
-    <ClInclude Include="system\value\valueOLE.h" />
+    <ClInclude Include="system\value\valueCOM.h" />
+    <ClInclude Include="system\value\valueSafeArray.h" />
     <ClInclude Include="system\value\valuePicture.h" />
     <ClInclude Include="system\value\valuePoint.h" />
     <ClInclude Include="system\value\valuePointInTime.h" />
@@ -881,7 +882,8 @@
     <ClCompile Include="system\value\valueXml.cpp" />
     <ClCompile Include="system\value\valueJob.cpp" />
     <ClCompile Include="system\value\valueMap.cpp" />
-    <ClCompile Include="system\value\valueOLE.cpp" />
+    <ClCompile Include="system\value\valueCOM.cpp" />
+    <ClCompile Include="system\value\valueSafeArray.cpp" />
     <ClCompile Include="system\value\valuePicture.cpp" />
     <ClCompile Include="system\value\valuePoint.cpp" />
     <ClCompile Include="system\value\valuePointInTime.cpp" />

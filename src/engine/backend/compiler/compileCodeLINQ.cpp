@@ -602,6 +602,13 @@ bool IsLinqVerbCompiled(long verb)
 // loop's, so the walk up finds it — while the same tokens on the dispatcher road are a refusal
 // ("outside a loop"), a lambda being its own function there. One text, two meanings, and the faster
 // road the one that quietly changes it. Refused here, the text keeps the road that says no.
+//
+// 🛑 A LAMBDA WRITTEN INSIDE THE BODY IS THE SAME CASE (2026-11-03). On the dispatcher road the
+// parameter is the call's own and a lambda made in the body takes that one; folded, it is one cell of
+// the caller's frame for the whole loop (BindParamToOwnCell), so a lambda kept past its row would
+// read whichever row came last. It never got that far: the name sits on the fold's block scope, a
+// block reads as the frame in hand (DEF_VAR_TEMP_COPY), and `SelectMany(x => b.Select(y => x + y))
+// .ToArray()` read `x` past the end of the inner lambda's own frame — an access violation.
 bool IsFoldableLambdaBody(const ibTranslateCode& translateCode, size_t brace, bool& singleReturn)
 {
 	singleReturn = false;
@@ -630,6 +637,8 @@ bool IsFoldableLambdaBody(const ibTranslateCode& translateCode, size_t brace, bo
 		}
 		if (isKey(i, KEY_BREAK) || isKey(i, KEY_CONTINUE) || isKey(i, KEY_GOTO))
 			return false;                    // see above — these would mean the caller's loop
+		if (isKey(i, KEY_FUNCTION))
+			return false;                    // see above — a lambda made here would take the loop's one cell
 		if (depth == 0 && isDelim(i, ibT(';'))) {
 			if (semis++ == 0) firstSemi = i;
 		}
@@ -1391,8 +1400,17 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		c.m_param2.m_numIndex = 0;
 		m_cByteCode.m_listCode.emplace_back(std::move(c));
 	}
-	// terminalFirst / Last / Min / Max: the slot starts EMPTY, which IS the answer for a source with
-	// no rows — and for Min and Max it is also what makes the first row win without a special case.
+	else if (terminalFirst || terminalLast || terminalMin || terminalMax || terminalOnly || terminalAt) {
+		// The slot starts EMPTY, which IS the answer for a source with no rows — and for Min and Max it is
+		// also what makes the first row win without a special case. On EVERY run, not only the first: a
+		// chain in a loop runs in the same slot, and it kept the run before's answer — `First` of nothing
+		// answered with the last group's row, `Max` of a group was measured against the group before.
+		ibByteUnit c; StampSource(c);
+		c.m_numOper = OPER_LET;
+		c.m_param1  = outResult;
+		c.m_param2  = FindConst(ibValue());
+		m_cByteCode.m_listCode.emplace_back(std::move(c));
+	}
 
 	// ⭐ ONE SLOT, AND NOTHING BUILT BY NAME. Rows kept, keys to order by and rows already seen all
 	// live in LINQ's own collection (procUnitLINQ.cpp, ibValueLinqRows), which the runtime makes in
@@ -2700,7 +2718,7 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 
 			// ORDERBY clause — compile key expression per-row, optional
 			// ASCENDING/DESCENDING. The expression's natural result slot
-			// may carry DEF_VAR_TEMP marker (for compound expressions like
+			// may carry DEF_VAR_TEMP_MOVE marker (for compound expressions like
 			// `o * -1`) which can interact badly with subsequent
 			// OPER_SET arg loads. Copy into a stable regular slot via
 			// OPER_LET so __keys.Add reads it as a normal variable.

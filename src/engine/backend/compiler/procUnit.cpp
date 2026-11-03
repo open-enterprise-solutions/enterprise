@@ -251,11 +251,11 @@ IB_FORCEINLINE const ibValue& ResolveRead(int slot, int idx,
 
 // ONE DEFINITION OF "AN ARGUMENT THAT IS A CONSTANT", for every call-family loop.
 //
-// Five loops load arguments — OPER_NEW, OPER_CALL, OPER_CALL_CLOSURE,
-// OPER_CALL_METHOD, OPER_CALL_LINQ, plus phase 1 of OPER_CALL_LAMBDA. Their ELSE
-// branches genuinely differ (a `Val` clone, a parameter default, whether a
-// read-only REFERENCE is copied or bound) and are left alone: forcing one shape
-// on all six would be a rule that is not right for any of them.
+// Four loops load arguments — OPER_NEW, OPER_CALL, OPER_CALL_METHOD,
+// OPER_CALL_LINQ, plus phase 1 of OPER_CALL_LAMBDA. Their ELSE branches
+// genuinely differ (a `Val` clone, a parameter default, whether a read-only
+// REFERENCE is copied or bound) and are left alone: forcing one shape on all
+// five would be a rule that is not right for any of them.
 //
 // This branch does NOT differ, and every divergence in it has been a defect:
 //   - a negative index is the DEF_VAR_DEFAULT sentinel, not a constant. A call
@@ -1319,7 +1319,12 @@ start_label:
 			case OPER_MULT + TYPE_DELTA4: MultValue(variable1, cvariable2, cvariable3); break;
 			case OPER_LET + TYPE_DELTA3:
 			case OPER_LET + TYPE_DELTA4:
-			case OPER_LET: CopyValue(variable1, cvariable2); break;
+			case OPER_LET:
+				if (array2 == DEF_VAR_TEMP_MOVE)   // an expression's temporary — compileContext.h
+					MoveValue(std::move(variable1), std::move(variable2));
+				else
+					CopyValue(variable1, cvariable2);
+				break;
 			case OPER_INVERT + TYPE_DELTA3:
 			case OPER_INVERT + TYPE_DELTA4:
 			case OPER_INVERT: SetTypeNumber(variable1, -cvariable2.GetNumber()); break;
@@ -1527,6 +1532,8 @@ start_label:
 				if (lPropNum < 0) CheckAndError(variable1, strPropName);
 				if (!variable1.IsPropWritable(lPropNum)) Raise(ibScriptError_PropNotWritable, strPropName);
 				variable1.SetPropVal(lPropNum, GetValue(cvariable3));
+				if (array1 == DEF_VAR_TEMP_MOVE)
+					variable1.Reset();   // the link before is let go — see OPER_GET_A
 			} break;
 			case OPER_GET_A://get attribute
 			case OPER_GET_SCOPE://bare member of a scope binding — identical parent+prop resolve
@@ -1550,6 +1557,13 @@ start_label:
 					*pRetValue = vRet;
 				else if (result)
 					CopyValue(*pRetValue, vRet);
+				// ⭐ A LINK LETS GO OF THE LINK BEFORE when that one is an expression's temporary
+				// (compileContext.h, DEF_VAR_TEMP_MOVE) — read once, it carried the value here and nothing
+				// reads it again. It held the object until the frame ended, so `Excel.Workbooks.Count` kept
+				// a Workbooks, and with it Excel, alive after `Quit` (2026-11-03). The same in every link:
+				// a method, an index, a member or an element written.
+				if (array2 == DEF_VAR_TEMP_MOVE)
+					variable2.Reset();
 				break;
 			}
 			case OPER_GET_EXTERN://named binder handle (export) — value staged in the slot (m_param2)
@@ -1575,6 +1589,8 @@ start_label:
 			{
 				ibValue* pRetValue = &variable1;
 				ibValue* pVariable2 = &variable2;
+				// Asked here: loading the arguments below moves curCode to the last of them.
+				const bool receiverMoves = array2 == DEF_VAR_TEMP_MOVE;
 
 				const ibString& funcName = m_pByteCode->m_listConst[index3].m_sData;
 				// Resolve method number on every call. Bytecode is a const
@@ -1743,9 +1759,14 @@ start_label:
 						if (static_cast<const ibValue*>(pRetValue) == pNextVariable1)
 							Raise(ibScriptError_UseProcedureAsFunction, funcName, funcName);
 					}
-					pVariable2->CallAsProc(lMethodNum, cRunContext.m_pRefLocVars, realParamCount);
-				} break;
-			}
+					// ⭐ A PROCEDURE THE VALUE DID NOT CARRY OUT IS REFUSED, not passed over: false is how a value says
+					// it did nothing, and the module went on as if it had (backend_exception.cpp says where).
+					if (!pVariable2->CallAsProc(lMethodNum, cRunContext.m_pRefLocVars, realParamCount))
+						Raise(ibScriptError_ProcedureNotDone, funcName);
+				}
+				if (receiverMoves)
+					pVariable2->Reset();   // the link before is let go — see OPER_GET_A
+			} break;
 			// ⭐⭐ THE LOOP OFFERS ITS PREDICATE TO THE SOURCE — see OPER_LINQ_NARROW in codeDef.h.
 			//
 			// The tree is READ off the instructions standing right here, so nothing had to be stored
@@ -1878,9 +1899,8 @@ start_label:
 				break;
 			}
 			case OPER_CALL:
-			{ //call a regular function — stack-frame fast path (target
-				// has no inner lambda, m_needsHeapFrame=false). Compile
-				// emits OPER_CALL_CLOSURE instead when heap promotion needed.
+			{ //call a regular function. Its frame is the call and ends with it — a lambda made in the
+				// body takes the variables it references as cells (ibRunContext::Enter), never the frame.
 				const long lModuleNumber = array2;
 				ibRunContext cRunContext(index3, ibRunLifetime::PerCall);
 				cRunContext.m_lStart = index2;
@@ -1928,41 +1948,6 @@ start_label:
 				m_ppArrayCode[lModuleNumber]->Execute(&cRunContext, pRetValue, false);
 				break;
 			}
-			case OPER_CALL_CLOSURE:
-			{ //function call — capture-frame variant. Target has
-				// m_needsHeapFrame=true (some inner lambda captures
-				// a local from it), so the callee's frame is one that
-				// can be TAKEN at OPER_LFUNC materialise time and kept
-				// past the return. Operand layout identical to OPER_CALL.
-				const long lModuleNumber = array2;
-				// A captured frame counts its own holders; this hold is the call, and it ends
-				// where the call does — including an exception on the way out.
-				ibRunCallFrame heapCtx(new ibRunCaptureContext(index3));
-				heapCtx->m_lStart = index2;
-				heapCtx->m_lParamCount = array3;
-				heapCtx->m_parentRunContext = &m_ppArrayCode[lModuleNumber]->m_cCurContext;   // its module (OPER_CALL)
-				ibValue* pRetValue = &variable1;
-				//load parameters — same SET/SETCONST tape as OPER_CALL
-				for (long i = 0; i < heapCtx->m_lParamCount; i++) {
-					lCodeLine++;
-					if (curCode.m_numOper == OPER_SETCONST) {
-						LOAD_ARG_CONST(heapCtx->m_pLocVars[i]);
-					}
-					else {
-						if (index2 == 1) {
-							CopyValue(heapCtx->m_pLocVars[i], cvariable1.CloneValue());
-						}
-						else if (cvariable1.m_bReadOnly) {
-							CopyValue(heapCtx->m_pLocVars[i], cvariable1);
-						}
-						else {
-							heapCtx->m_pRefLocVars[i] = &variable1;
-						}
-					}
-				}
-				m_ppArrayCode[lModuleNumber]->Execute(heapCtx.Get(), pRetValue, false);
-				break;
-			}
 			case OPER_SET_ARRAY:
 			case OPER_SET_ARRAY + TYPE_DELTA1:
 			case OPER_SET_ARRAY + TYPE_DELTA2:
@@ -1970,6 +1955,8 @@ start_label:
 			case OPER_SET_ARRAY + TYPE_DELTA4:
 				if (!SetArrayValue(variable1, cvariable2, GetValue(cvariable3)))
 					Raise(ibScriptError_ArraySet, cvariable3);
+				if (array1 == DEF_VAR_TEMP_MOVE)
+					variable1.Reset();   // the link before is let go — see OPER_GET_A
 				break; //setting the array value
 			case OPER_GET_ARRAY:
 			case OPER_GET_ARRAY + TYPE_DELTA1:
@@ -1978,6 +1965,8 @@ start_label:
 			case OPER_GET_ARRAY + TYPE_DELTA4:
 				if (!GetArrayValue(variable1, variable2, cvariable3))
 					Raise(ibScriptError_ArrayGet, cvariable3);
+				if (array2 == DEF_VAR_TEMP_MOVE)
+					variable2.Reset();   // the link before is let go — see OPER_GET_A
 				break; //getting the array value
 			case OPER_GOTO: case OPER_ENDTRY:
 			{
@@ -2171,64 +2160,40 @@ start_label:
 					RuntimeError("Cannot create function value (invalid lambda operands)");
 				}
 				ibValueFunction* newFn = new ibValueFunction(m_pByteCode, funcIdx);
-				// Cache m_needsHeapFrame from the bytecode fn once at
-				// materialise so OPER_CALL_LAMBDA doesn't have to go
-				// through m_parentBc->m_listFunc[funcIdx] each invoke.
-				{
-					const auto* bfnLfunc = (funcIdx >= 0 && funcIdx < (long)m_pByteCode->m_listFunc.size())
-						? &m_pByteCode->m_listFunc[funcIdx] : nullptr;
-					if (bfnLfunc) newFn->m_needsHeapFrame = bfnLfunc->m_needsHeapFrame;
-				}
-				// Closure capture (Phase B) — walk the LEXICAL chain via
-				// m_parentRunContext (a named function's outside is its
-				// module, a lambda's the frame it was written in — every
-				// road that builds a frame says so); every ancestor of the CAPTURED
-				// kind becomes a link of the chain the lambda keeps, each
-				// link holding the next. An ordinary frame cannot be
-				// taken (it dies on return; no inner lambda read its
-				// locals, so no capture frame was built for it) — it
-				// keeps its rung, empty (below).
-				//
-				// Order: the nearest link is the direct enclosing frame
-				// (the one the lambda is written in), its outer is the
-				// next one out. Matches the depth math from Phase A's GetVariable
-				// (numParent - numContext counting): emit depth = 1
-				// reads CapturedAt(0), depth = 2 reads CapturedAt(1), etc.
+				const std::vector<ibParamRunUnit>& captured = m_pByteCode->m_listFunc[funcIdx].m_listCaptured;
+				// ⭐⭐ THE LAMBDA TAKES THE VARIABLES IT REFERENCES, NOT THE FRAMES (2026-11-03). Walk the LEXICAL
+				// chain via m_parentRunContext — a named function's outside is its module, a lambda's the frame it
+				// was written in, every road that builds a frame says so — and take from each frame on it the
+				// entries of m_listCaptured at its depth: the nearest is depth 1, the next depth 2, the depths the
+				// compiler emitted (GetVariable, numParent - numContext). Each is a cell, shared with the frame
+				// and with every other lambda that took it (ibRunCaptureContext).
+				ibRunCaptureContext* outermost = nullptr;
 				for (ibRunContext* p = pContext; p != nullptr; p = p->m_parentRunContext) {
 
-					// Ask the frame what KIND it is — an ordinary one ends with its call and cannot
-					// be captured. Recorded in the order walked, which IS the depth order the
-					// compiler emitted: this lambda's own view of the chain, taken now.
-					// ⚠ ASKED FIRST: an empty rung (below) runs no function, and asked "module body?"
-					// it said yes — a lambda made inside a lambda took its outer's empty rung for the
-					// module and read the module's variables out of a frame of no slots (2026-10-28).
-					if (ibRunCaptureContext* captured = AsCaptureContext(p))
-						newFn->m_capturedFrames.emplace_back(captured);
-
-					// ⭐⭐ THE MODULE BODY'S FRAME IS TAKEN SEPARATELY, and it has to be: it is
-					// Retained rather than captured, so the question above answers no for it, and a
-					// lambda was left unable to read the module's own variables — see
-					// ibValueFunction::m_moduleFrame for the measurement. The FIRST one found wins:
-					// walking further would reach a parent module, whose variables this lambda
-					// reaches by name through the bytecode chain, not by frame depth.
-					else if (p->IsModuleBody()) {
+					// ⭐⭐ THE MODULE BODY'S FRAME IS NOT A RUNG: it lives as long as the module, and the lambda
+					// reaches it by its own road — see ibValueFunction::m_moduleFrame for the measurement. Asked
+					// by its KIND, which a function's frame, a lambda's, an eval block's and what a lambda took
+					// are not. The FIRST one found wins: walking further would reach a parent module, whose
+					// variables this lambda reaches by name through the bytecode chain, not by frame depth.
+					if (p->GetLifetime() == ibRunLifetime::Retained) {
 						if (newFn->m_moduleFrame == nullptr)
 							newFn->m_moduleFrame = p;
+						continue;
 					}
-					// ⭐ …AND A FRAME NOT TAKEN STILL HOLDS ITS RUNG, EMPTY. The compiler counts every
-					// function the text nests the lambda in; it flags one for capture only when the
-					// lambda reads ITS locals. Left out, the rung went with it and everything further
-					// out was read one frame short: a module variable as the root's `Data`, a global
-					// function not found (a lambda in a function reading only the module, 2026-10-28).
-					// A FRAME, not a null, linked to the one outside it: this lambda's own call hangs
-					// below its first rung (OPER_CALL_LAMBDA), and a lambda made in that call walks
-					// the links — a null there sent it straight to the module, past every rung after.
-					else {
-						ibRunCaptureContext* const rung = new ibRunCaptureContext(0);
-						rung->m_parentRunContext = p->m_parentRunContext;
-						newFn->m_capturedFrames.emplace_back(rung);
-					}
+
+					// ⭐ A RUNG STAYS EVEN WHEN NOTHING IS TAKEN FROM IT: the compiler counts every function the
+					// text nests the lambda in, and a rung left out read everything further out one frame short
+					// (a module variable as the root's `Data`, 2026-10-28). Linked to the next rung, not to the
+					// frame it was taken from: a lambda made while this one runs walks these links, and the frame
+					// may be gone by then.
+					ibRunCaptureContext* const rung = new ibRunCaptureContext(*p, captured, (long long)newFn->m_capturedFrames.size() + 1);
+					if (outermost != nullptr)
+						outermost->m_parentRunContext = rung;
+					newFn->m_capturedFrames.emplace_back(rung);
+					outermost = rung;
 				}
+				if (outermost != nullptr)
+					outermost->m_parentRunContext = newFn->m_moduleFrame;
 				CopyValue(variable1, ibValue(newFn));
 				// Skip past the body — body opcodes are inert at
 				// module-init walk and reached only via OPER_CALL_LAMBDA
@@ -2271,34 +2236,18 @@ start_label:
 					RuntimeError("Too many arguments to function value: passed %ld, expected at most %ld",
 						callerArgCount, lambdaParamCount);
 
-				// Heap-promote the lambda's frame when its body captures
-				// from yet-deeper enclosing fns. Read the flag directly
-				// off the ibValueFunction value — cached at OPER_LFUNC
-				// materialise; one indirection, no detour through
-				// m_parentBc->m_listFunc[funcIdx].
-				const bool useHeapFrame = fn->m_needsHeapFrame;
-				ibRunCallFrame heapCtx;
-				// Declared with the slot stack but no width — SetLocalCount below
-				// leases through the pool it was given. The captured branch
-				// takes none: that frame is the one that outlives the call.
-				ibRunContext  stackCtx(wxNOT_FOUND, ibRunLifetime::PerCall);
-				ibRunContext* pNewCtx = nullptr;
-				if (useHeapFrame) {
-					heapCtx.Reset(new ibRunCaptureContext(lambdaVarCount));
-					pNewCtx = heapCtx.Get();
-				} else {
-					stackCtx.SetLocalCount(lambdaVarCount);
-					pNewCtx = &stackCtx;
-				}
+				// The lambda's frame is the call, as a named function's is: a lambda made in its body takes the
+				// variables it references as cells (ibRunContext::Enter), never the frame.
+				ibRunContext  stackCtx(lambdaVarCount, ibRunLifetime::PerCall);
+				ibRunContext* const pNewCtx = &stackCtx;
 				pNewCtx->m_lStart          = lambdaEntryIp + 1;  // first body opcode
 				pNewCtx->m_lParamCount     = lambdaParamCount;
 				// For OPER_LFUNC chain-walks inside this lambda body to
 				// reach the lambda's LEXICAL outer scope (not its dynamic
-				// caller), wire m_parentRunContext to the first captured
-				// frame. The lambda holds the enclosing frame it was
-				// written in and that one holds the next outwards — the
-				// closure's defining scope. No capture at all
-				// (top-level lambda with no captures) falls back to the
+				// caller), wire m_parentRunContext to the first rung of what
+				// the lambda took — the frame it was written in; each rung
+				// links to the next outwards, the closure's defining scope.
+				// No rung at all (a top-level lambda) falls back to the
 				// dynamic caller so debugger / stack-walk still sees
 				// something sensible.
 				ibRunContext* const lexicalOuter = fn->GetCaptured();
@@ -2901,17 +2850,11 @@ void ibProcUnit::CallAsProc(const long lCodeLine, ibValue** ppParams, const long
 	// the heap on its own.
 	const ibByteUnit* const codeBase = m_pByteCode->m_listCode.data();   // what `curCode` reads (index3 / array3)
 
-	// ⭐⭐ THE FRAME THE SCRIPT'S OWN CALL BUILDS (OPER_CALL / OPER_CALL_CLOSURE): one a lambda may take when the body
-	// makes one, and its module outside it. This road built a plain frame with nothing outside, so a lambda made in a
-	// handler — `OnOpen` putting one on a control's event, a pipeline in a posting — lost two rungs of the chain the
-	// compiler counted: a module variable read as some other slot, a global function was not found at all (2026-10-28).
-	const ibByteCode::ibByteFunction* const function = m_pByteCode->FindFunctionByEntry(lCodeLine);
-	const bool captured = function != nullptr && function->m_needsHeapFrame;
-	ibRunCallFrame captureFrame;
-	ibRunContext plainFrame(captured ? wxNOT_FOUND : (int)index3, ibRunLifetime::PerCall);// number of local variables
-	if (captured)
-		captureFrame.Reset(new ibRunCaptureContext(index3));
-	ibRunContext& cRunContext = captured ? *captureFrame : plainFrame;
+	// ⭐⭐ THE FRAME THE SCRIPT'S OWN CALL BUILDS (OPER_CALL), and its module outside it. This road built a frame with
+	// nothing outside, so a lambda made in a handler — `OnOpen` putting one on a control's event, a pipeline in a
+	// posting — lost two rungs of the chain the compiler counted: a module variable read as some other slot, a global
+	// function was not found at all (2026-10-28).
+	ibRunContext cRunContext(index3, ibRunLifetime::PerCall);// number of local variables
 
 	cRunContext.m_lParamCount = array3;//number of formal parameters
 	cRunContext.m_lStart = lCodeLine;
@@ -2949,13 +2892,7 @@ void ibProcUnit::CallAsFunc(const long lCodeLine, ibValue& pvarRetValue, ibValue
 	const ibByteUnit* const codeBase = m_pByteCode->m_listCode.data();   // what `curCode` reads (index3 / array3)
 
 	// The frame the script's own call builds — see CallAsProc.
-	const ibByteCode::ibByteFunction* const function = m_pByteCode->FindFunctionByEntry(lCodeLine);
-	const bool captured = function != nullptr && function->m_needsHeapFrame;
-	ibRunCallFrame captureFrame;
-	ibRunContext plainFrame(captured ? wxNOT_FOUND : (int)index3, ibRunLifetime::PerCall);// number of local variables
-	if (captured)
-		captureFrame.Reset(new ibRunCaptureContext(index3));
-	ibRunContext& cRunContext = captured ? *captureFrame : plainFrame;
+	ibRunContext cRunContext(index3, ibRunLifetime::PerCall);// number of local variables
 
 	cRunContext.m_lParamCount = array3;//number of formal parameters
 	cRunContext.m_lStart = lCodeLine;
@@ -3172,14 +3109,13 @@ bool ibProcUnit::Evaluate(const ibString& strExpression, ibRunContext* pRunConte
 	// SetParent → GetParent loop). bDelta=false aligns the emitted
 	// depth chain (own=0, parent=1, parent²=2, …) with this layout
 	// directly — no +1 shift in pppArrayList[depth + (bDelta?1:0)].
-	// ⭐⭐ AN EVAL BLOCK RUNS IN A HEAP FRAME, so a lambda made inside it can CAPTURE it.
+	// ⭐⭐ AN EVAL BLOCK RUNS IN A FRAME OF ITS OWN — the call's, not the member — so a lambda made inside it
+	// finds it as a rung of its chain and takes from it the variables it references.
 	//
-	// Capture is decided by the KIND a frame carries (procContext.h): only ibRunCaptureContext is
-	// capturable, which no frame that is a MEMBER can be, as `m_cCurContext` is one. A lambda
-	// materialised in an eval block therefore captured NOTHING, and the depths the compiler had
-	// emitted no longer pointed
-	// where it meant: depth 1 was supposed to reach the block's own frame and instead landed on the
-	// host's, one layer further out.
+	// The member frame (`m_cCurContext`) is the module's kind (ibRunLifetime::Retained), and the capture walk
+	// reads that kind as "the module": a lambda materialised in an eval block therefore took NOTHING from it,
+	// and the depths the compiler had emitted no longer pointed where it meant: depth 1 was supposed to reach
+	// the block's own frame and instead landed on the host's, one layer further out.
 	//
 	// 🛑 That is a WRONG VALUE, not an error: `wanted = "Bolt"; f = Function(x) { Return x = wanted; }`
 	// compared against somebody else's slot — `f("Bolt")` answered False, `Where(f)` answered 0, and
@@ -3187,24 +3123,27 @@ bool ibProcUnit::Evaluate(const ibString& strExpression, ibRunContext* pRunConte
 	// N = 0 captured frames, then CompareValueEQ on 0x0077002e). Everything worked in an ordinary
 	// module frame, so it read as "LINQ is broken in the sandbox" for an hour.
 	//
-	// The block gets a real heap frame. The lambda then captures it as index 0 — exactly the depth
-	// the compiler emitted — and the frame outlives this call for as long as some lambda holds it,
-	// which is what a closure IS. Watch expressions (bCompileBlock == false) are a single expression
-	// with no place to declare anything, so they keep the member frame and pay nothing.
+	// The block's variables a lambda references are cells from the start (ibByteCode::m_listCaptured), so they
+	// outlive this call for as long as some lambda holds them — and the block's others go with it: an Excel
+	// object beside a lambda that does not reference it is released here (2026-11-03). Watch expressions
+	// (bCompileBlock == false) are a single expression with no place to declare anything, so they keep the
+	// member frame and pay nothing.
 	//
 	// ⚠ `m_ppArrayContext[0]` still points at the member frame and that is correct: depth 0 is read
 	// straight from `m_pRefLocVars` (procUnitLambda.h), so slot 0 of the list is unused in normal
 	// execution — the note there says so, and this relies on it rather than restating it.
-	ibRunCallFrame spBlockFrame;
+	const ibByteCode* const evalBc = runEvaluate->GetByteCode();
+	ibRunContext blockFrame(compileBlock
+		? (evalBc != nullptr ? (int)evalBc->m_lVarCount : (int)runEvaluate->m_cCurContext.GetLocalCount())
+		: wxNOT_FOUND, ibRunLifetime::PerCall);
 	ibRunContext* pEvalFrame = &runEvaluate->m_cCurContext;
 	if (compileBlock) {
-		const ibByteCode* evalBc = runEvaluate->GetByteCode();
-		spBlockFrame.Reset(new ibRunCaptureContext(
-			evalBc != nullptr ? (int)evalBc->m_lVarCount : (int)runEvaluate->m_cCurContext.GetLocalCount()));
-		spBlockFrame->m_procUnit         = runEvaluate.get();
-		spBlockFrame->m_parentRunContext = pRunContext;   // the host frame, for the capture walk
-		spBlockFrame->m_lStart           = runEvaluate->m_cCurContext.m_lStart;
-		pEvalFrame = spBlockFrame.Get();
+		blockFrame.m_procUnit         = runEvaluate.get();
+		blockFrame.m_parentRunContext = pRunContext;   // the host frame, for the capture walk
+		blockFrame.m_lStart           = runEvaluate->m_cCurContext.m_lStart;
+		if (evalBc != nullptr)
+			blockFrame.Capture(evalBc->m_listCaptured);
+		pEvalFrame = &blockFrame;
 	}
 
 	try {

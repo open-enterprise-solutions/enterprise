@@ -192,7 +192,7 @@ ibString RenderByteCode(const ibByteCode& bc)
 		    << wxT(" entry=")  << f.m_lCodeLine
 		    << wxT(" ret=")    << (f.m_bCodeRet ? 1 : 0)
 		    << wxT(" vars=")   << f.m_lVarCount
-		    << wxT(" heap=")   << (f.m_needsHeapFrame ? 1 : 0)
+		    << wxT(" captured=") << (long)f.m_listCaptured.size()
 		    << wxT(" params=") << (long)f.m_listParam.size()
 		    << wxT(" locals=") << (long)f.m_listLocals.size()
 		    << wxT("\n");
