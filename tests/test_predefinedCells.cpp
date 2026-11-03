@@ -117,26 +117,26 @@ TEST(PredefinedCells, ACharacteristicsTypeIsDeclaredSavedAndWritten) {
 	ibString refusal;
 	{
 		ibDataNode params, result;
-		params.SetValue(wxT("id"), (std::int32_t)chart->GetMetaID());
-		params.SetValue(wxT("name"), ibString(wxT("MainWarehouse")));
+		params.SetValue(ibT("id"), (std::int32_t)chart->GetMetaID());
+		params.SetValue(ibT("name"), ibString(wxT("MainWarehouse")));
 		auto values = Node();
-		values->SetValue(wxT("Type"), ibString(wxT("String")));
-		params.AddField(wxT("values"), ibDataValue::Child(values));
+		values->SetValue(ibT("Type"), ibString(wxT("String")));
+		params.AddField(ibT("values"), ibDataValue::Child(values));
 		ASSERT_TRUE(CallTool(wxT("predefined_add"), params, result, refusal)) << refusal.ToStdString();
 	}
 
 	// …and changed afterwards, to a whole description: a number of fifteen digits, two after the point.
 	{
 		ibDataNode params, result;
-		params.SetValue(wxT("id"), (std::int32_t)chart->GetMetaID());
-		params.SetValue(wxT("name"), ibString(wxT("MainWarehouse")));
+		params.SetValue(ibT("id"), (std::int32_t)chart->GetMetaID());
+		params.SetValue(ibT("name"), ibString(wxT("MainWarehouse")));
 		auto described = Node();
-		described->AddField(wxT("Types"), ibDataValue::Array({ ibDataValue::String(wxT("Number")) }));
-		described->SetValue(wxT("Precision"), (std::int32_t)15);
-		described->SetValue(wxT("Scale"), (std::int32_t)2);
+		described->AddField(ibT("Types"), ibDataValue::Array({ ibDataValue::String(wxT("Number")) }));
+		described->SetValue(ibT("Precision"), (std::int32_t)15);
+		described->SetValue(ibT("Scale"), (std::int32_t)2);
 		auto values = Node();
-		values->AddField(wxT("Type"), ibDataValue::Child(described));
-		params.AddField(wxT("values"), ibDataValue::Child(values));
+		values->AddField(ibT("Type"), ibDataValue::Child(described));
+		params.AddField(ibT("values"), ibDataValue::Child(values));
 		ASSERT_TRUE(CallTool(wxT("predefined_set"), params, result, refusal)) << refusal.ToStdString();
 	}
 
@@ -173,11 +173,11 @@ TEST(PredefinedCells, ACharacteristicsTypeIsDeclaredSavedAndWritten) {
 	// A word that is no type is refused, naming the word.
 	{
 		ibDataNode params, result;
-		params.SetValue(wxT("id"), (std::int32_t)chart->GetMetaID());
-		params.SetValue(wxT("name"), ibString(wxT("MainWarehouse")));
+		params.SetValue(ibT("id"), (std::int32_t)chart->GetMetaID());
+		params.SetValue(ibT("name"), ibString(wxT("MainWarehouse")));
 		auto values = Node();
-		values->SetValue(wxT("Type"), ibString(wxT("NoSuchType")));
-		params.AddField(wxT("values"), ibDataValue::Child(values));
+		values->SetValue(ibT("Type"), ibString(wxT("NoSuchType")));
+		params.AddField(ibT("values"), ibDataValue::Child(values));
 		refusal.clear();
 		EXPECT_FALSE(CallTool(wxT("predefined_set"), params, result, refusal));
 		EXPECT_TRUE(refusal.Contains(wxT("NoSuchType"))) << refusal.ToStdString();
@@ -210,14 +210,14 @@ TEST(PredefinedCells, AnAccountsSideAndFlagsAreDeclaredAndWritten) {
 	ibString refusal;
 	{
 		ibDataNode params, result;
-		params.SetValue(wxT("id"), (std::int32_t)chart->GetMetaID());
-		params.SetValue(wxT("name"), ibString(wxT("Capital")));
-		params.SetValue(wxT("code"), ibString(wxT("80")));
+		params.SetValue(ibT("id"), (std::int32_t)chart->GetMetaID());
+		params.SetValue(ibT("name"), ibString(wxT("Capital")));
+		params.SetValue(ibT("code"), ibString(wxT("80")));
 		auto values = Node();
-		values->SetValue(wxT("AccountType"), ibString(wxT("Passive")));
-		values->SetValue(wxT("OffBalance"), true);
-		values->SetValue(wxT("Quantitative"), true);
-		params.AddField(wxT("values"), ibDataValue::Child(values));
+		values->SetValue(ibT("AccountType"), ibString(wxT("Passive")));
+		values->SetValue(ibT("OffBalance"), true);
+		values->SetValue(ibT("Quantitative"), true);
+		params.AddField(ibT("values"), ibDataValue::Child(values));
 		ASSERT_TRUE(CallTool(wxT("predefined_add"), params, result, refusal)) << refusal.ToStdString();
 
 		// The answer says it back in the words it was said in.
@@ -246,11 +246,11 @@ TEST(PredefinedCells, AnAccountsSideAndFlagsAreDeclaredAndWritten) {
 	// Refusals name what was wrong: a side that is none, a flag the chart does not declare, a catalog.
 	const auto refused = [&](ibMetaID id, const ibString& field, const ibDataValue& value) {
 		ibDataNode params, result;
-		params.SetValue(wxT("id"), (std::int32_t)id);
-		params.SetValue(wxT("name"), ibString(wxT("Capital")));
+		params.SetValue(ibT("id"), (std::int32_t)id);
+		params.SetValue(ibT("name"), ibString(wxT("Capital")));
 		auto values = Node();
 		values->AddField(field, value);
-		params.AddField(wxT("values"), ibDataValue::Child(values));
+		params.AddField(ibT("values"), ibDataValue::Child(values));
 		ibString why;
 		EXPECT_FALSE(CallTool(id == chart->GetMetaID() ? wxT("predefined_set") : wxT("predefined_add"), params, result, why));
 		return why;
@@ -265,11 +265,11 @@ TEST(PredefinedCells, AnAccountsSideAndFlagsAreDeclaredAndWritten) {
 	// writes it — taken for "not declared", the column would keep whatever the data holds.
 	{
 		ibDataNode params, result;
-		params.SetValue(wxT("id"), (std::int32_t)chart->GetMetaID());
-		params.SetValue(wxT("name"), ibString(wxT("Capital")));
+		params.SetValue(ibT("id"), (std::int32_t)chart->GetMetaID());
+		params.SetValue(ibT("name"), ibString(wxT("Capital")));
 		auto values = Node();
-		values->SetValue(wxT("OffBalance"), false);
-		params.AddField(wxT("values"), ibDataValue::Child(values));
+		values->SetValue(ibT("OffBalance"), false);
+		params.AddField(ibT("values"), ibDataValue::Child(values));
 		ASSERT_TRUE(CallTool(wxT("predefined_set"), params, result, refusal)) << refusal.ToStdString();
 	}
 	const ibSchemaSnapshot after = cfg->BuildSchemaSnapshot();
@@ -282,9 +282,9 @@ TEST(PredefinedCells, AnAccountsSideAndFlagsAreDeclaredAndWritten) {
 	// An account added without a side is born with the chart's default one — whoever adds it.
 	{
 		ibDataNode params, result;
-		params.SetValue(wxT("id"), (std::int32_t)chart->GetMetaID());
-		params.SetValue(wxT("name"), ibString(wxT("Cash")));
-		params.SetValue(wxT("code"), ibString(wxT("50")));
+		params.SetValue(ibT("id"), (std::int32_t)chart->GetMetaID());
+		params.SetValue(ibT("name"), ibString(wxT("Cash")));
+		params.SetValue(ibT("code"), ibString(wxT("50")));
 		ASSERT_TRUE(CallTool(wxT("predefined_add"), params, result, refusal)) << refusal.ToStdString();
 		const auto item = result.FindChild(ibT("item"));
 		ASSERT_TRUE(item);
@@ -317,17 +317,17 @@ TEST(PredefinedCells, ACatalogsOwnAttributeIsDeclaredAndWritten) {
 	ibString refusal;
 	{
 		ibDataNode params, result;
-		params.SetValue(wxT("id"), (std::int32_t)catalog->GetMetaID());
-		params.SetValue(wxT("name"), ibString(wxT("Main")));
+		params.SetValue(ibT("id"), (std::int32_t)catalog->GetMetaID());
+		params.SetValue(ibT("name"), ibString(wxT("Main")));
 		auto values = Node();
-		values->SetValue(wxT("Address"), ibString(wxT("1 Harbour Road")));
-		params.AddField(wxT("values"), ibDataValue::Child(values));
+		values->SetValue(ibT("Address"), ibString(wxT("1 Harbour Road")));
+		params.AddField(ibT("values"), ibDataValue::Child(values));
 		ASSERT_TRUE(CallTool(wxT("predefined_add"), params, result, refusal)) << refusal.ToStdString();
 	}
 	{
 		ibDataNode params, result;
-		params.SetValue(wxT("id"), (std::int32_t)catalog->GetMetaID());
-		params.SetValue(wxT("name"), ibString(wxT("Transit")));
+		params.SetValue(ibT("id"), (std::int32_t)catalog->GetMetaID());
+		params.SetValue(ibT("name"), ibString(wxT("Transit")));
 		ASSERT_TRUE(CallTool(wxT("predefined_add"), params, result, refusal)) << refusal.ToStdString();
 	}
 
@@ -375,14 +375,14 @@ TEST(PredefinedCells, AnAccountsAnalyticsAreLinesItOwns) {
 	ibString refusal;
 	const auto declare = [&](const ibString& kind, ibString& why) {
 		ibDataNode params, result;
-		params.SetValue(wxT("id"), (std::int32_t)chart->GetMetaID());
-		params.SetValue(wxT("name"), ibString(wxT("Settlements")));
+		params.SetValue(ibT("id"), (std::int32_t)chart->GetMetaID());
+		params.SetValue(ibT("name"), ibString(wxT("Settlements")));
 		auto line = Node();
-		line->SetValue(wxT("AccountDimensionKind"), kind);
-		line->SetValue(wxT("SummaryOnly"), true);
+		line->SetValue(ibT("AccountDimensionKind"), kind);
+		line->SetValue(ibT("SummaryOnly"), true);
 		auto lines = Node();
 		lines->AddField(kinds->GetName(), ibDataValue::Array({ ibDataValue::Child(line) }));
-		params.AddField(wxT("lines"), ibDataValue::Child(lines));
+		params.AddField(ibT("lines"), ibDataValue::Child(lines));
 		return CallTool(wxT("predefined_set"), params, result, why);
 	};
 	ASSERT_TRUE(declare(wxT("Counterparties"), refusal)) << refusal.ToStdString();
@@ -448,17 +448,17 @@ TEST(PredefinedCells, AnAccountsAnalyticsAreLinesItOwns) {
 	// accounts table's check before the update says it in the ledger, naming the account.
 	{
 		ibDataNode params, result;
-		params.SetValue(wxT("id"), (std::int32_t)chart->GetMetaID());
-		params.SetValue(wxT("name"), ibString(wxT("Settlements")));
+		params.SetValue(ibT("id"), (std::int32_t)chart->GetMetaID());
+		params.SetValue(ibT("name"), ibString(wxT("Settlements")));
 		std::vector<ibDataValue> rows;
 		for (unsigned int idx = 0; idx <= chart->GetMaxAccountDimensionCount(); idx++) {
 			auto row = Node();
-			row->SetValue(wxT("AccountDimensionKind"), ibString(wxT("Counterparties")));
+			row->SetValue(ibT("AccountDimensionKind"), ibString(wxT("Counterparties")));
 			rows.push_back(ibDataValue::Child(row));
 		}
 		auto lines = Node();
 		lines->AddField(kinds->GetName(), ibDataValue::Array(rows));
-		params.AddField(wxT("lines"), ibDataValue::Child(lines));
+		params.AddField(ibT("lines"), ibDataValue::Child(lines));
 		refusal.clear();
 		ASSERT_TRUE(CallTool(wxT("predefined_set"), params, result, refusal)) << refusal.ToStdString();
 
