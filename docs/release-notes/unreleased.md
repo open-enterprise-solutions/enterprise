@@ -233,6 +233,12 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   and the attribute kept its old value.
 - **A scheduled job switched off stays off.** Its `Active = False` was written to the base and read back
   as on, so the job came back on its schedule at the next start.
+- **A breakpoint in an external processing's or report's module stops the run in the designer.** It was
+  refused as a line the running application does not have.
+- **Breakpoints moved by an edit are all kept when the module is saved.** Of two breakpoints moved by
+  lines inserted above them, the base kept one.
+- **Save in a module of an external processing or report writes its file.** It saved nothing to the
+  file. The module is checked first, as a configuration's module is.
 
 - **A module nobody has compiled yet is compiled once.** Sessions entering a base together, with the
   bytecode cache empty, each compiled the same modules. The first now holds a lock in the database,

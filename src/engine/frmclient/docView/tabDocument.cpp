@@ -158,15 +158,8 @@ bool ibTabDocument::Fetch(const ibProtocolNode& request, ibProtocolNode& answer)
 
 void ibTabDocument::Post(ibProtocol::ibEvent::ibKind event, const ibProtocolNode& args) const
 {
-	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
-	if (frame == nullptr)
-		return;
-
-	ibProtocolNode params;
-	params.SetValue(ibProtocol::ibEvent::Tab, m_tabId)
-		.SetValue(ibProtocol::ibEvent::Event, static_cast<int>(event))
-		.SetValue(ibProtocol::ibEvent::Args, args);
-	frame->Post(ibProtocol::ibMethod::Event, params);
+	if (ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame())
+		frame->Post(ibProtocol::ibMethod::Event, EventOf(event, args));
 }
 
 void ibTabDocument::Hold(ibProtocol::ibEvent::ibKind event, const ibProtocolNode& args) const
@@ -174,11 +167,23 @@ void ibTabDocument::Hold(ibProtocol::ibEvent::ibKind event, const ibProtocolNode
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
 	if (frame == nullptr)
 		return;
+	const ibProtocolNode params = EventOf(event, args);
+	if (!frame->Hold(params))
+		frame->Post(ibProtocol::ibMethod::Event, params);
+}
 
+bool ibTabDocument::Call(ibProtocol::ibEvent::ibKind event, const ibProtocolNode& args) const
+{
+	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
+	ibProtocolNode answer;
+	return frame != nullptr && frame->Call(ibProtocol::ibMethod::Event, EventOf(event, args), answer);
+}
+
+ibProtocolNode ibTabDocument::EventOf(ibProtocol::ibEvent::ibKind event, const ibProtocolNode& args) const
+{
 	ibProtocolNode params;
 	params.SetValue(ibProtocol::ibEvent::Tab, m_tabId)
 		.SetValue(ibProtocol::ibEvent::Event, static_cast<int>(event))
 		.SetValue(ibProtocol::ibEvent::Args, args);
-	if (!frame->Hold(params))
-		frame->Post(ibProtocol::ibMethod::Event, params);
+	return params;
 }

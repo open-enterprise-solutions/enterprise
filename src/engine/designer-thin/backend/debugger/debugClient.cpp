@@ -23,52 +23,6 @@ ibDebuggerClient* ibDebuggerClient::ms_debugClient = nullptr;
 
 namespace {
 
-// The offset in either map's entry: the offset map holds it bare, the breakpoint map beside a condition.
-static int& OffsetOf(int& entry) { return entry; }
-static int& OffsetOf(ibDebuggerClient::ibBreakpoint& entry) { return entry.m_offset; }
-
-// Module maps (m_listBreakpoint / m_listOffsetBreakpoint) are keyed by module GUID, matched
-// case-insensitively via stringUtils::IsSameAs — so map::find can't be used. This is the
-// one lookup the methods here kept inlining. Returns the inner (line -> entry) map, or null.
-template <typename Entry>
-static std::map<unsigned int, Entry>* FindModuleLines(
-	std::map<wxString, std::map<unsigned int, Entry>>& modules, const wxString& guid)
-{
-	auto it = std::find_if(modules.begin(), modules.end(),
-		[&guid](const auto& pair) { return stringUtils::IsSameAs(pair.first, guid); });
-	return it != modules.end() ? &it->second : nullptr;
-}
-
-// Shift one module's (committedLine -> entry) map by `line_offset` lines for an edit at editor
-// `line`. Each entry's CURRENT editor line is its committed line + its offset. A breakpoint's
-// condition rides in the entry, so it moves with the line and needs nothing of its own.
-//   atLineStart        — the edit was at column 0 of `line` (the whole line moved), so an entry
-//                        sitting ON `line` shifts too; an edit later in the line leaves it in place.
-//   collapseCollisions — on insert, when a following entry now lands on the same editor line as the
-//                        one just shifted: true ERASES it (two breakpoints on one line collapse to
-//                        one), false shifts it too (two committed lines must both keep moving).
-template <typename Entry>
-static void ShiftLineMap(std::map<unsigned int, Entry>& lines, unsigned int line, int line_offset,
-                         bool atLineStart, bool collapseCollisions)
-{
-	auto it = lines.begin();
-	while (it != lines.end()) {
-
-		const unsigned int calc_line = it->first + OffsetOf(it->second);
-
-		if (calc_line > line || (atLineStart && calc_line == line))
-			OffsetOf(it->second) += line_offset;
-
-		it = std::next(it);
-
-		while (line_offset > 0 && it != lines.end() && (it->first + OffsetOf(it->second)) == calc_line) {
-			if (collapseCollisions)
-				it = lines.erase(it);
-			else { OffsetOf(it->second) += line_offset; it = std::next(it); }
-		}
-	}
-}
-
 // THE STANDARD DOOR, the engine's ibValueSystemFunction::Message at Error: the designer's messages.
 static void Message(const wxString& said)
 {
@@ -163,13 +117,13 @@ void ibDebuggerClient::Listen()
 void ibDebuggerClient::Receive(const ibProtocolNode& news)
 {
 	// Where a piece of news is of — the runtime's session, the file, the module by its address — and its line where the
-	// editor's edits since have moved it: the server's debugger says the committed one.
-	const auto lineOf = [this, &news]() {
+	// editor's edits since have moved it: the server's debugger moved it, by its one map (GetLineOffset there).
+	const auto lineOf = [&news]() {
 		ibDebugLineData data;
 		data.m_sessionGuid = news.GetString(ibProtocol::ibDebug::Session);
 		data.m_fileName = news.GetString(ibProtocol::ibDebug::File);
 		data.m_moduleName = news.GetString(ibProtocol::ibDebug::Module);
-		data.m_line = GetLineOffset(data.m_moduleName, static_cast<int>(news.GetInt(ibProtocol::ibDebug::Line)));
+		data.m_line = static_cast<unsigned int>(news.GetInt(ibProtocol::ibDebug::Line));
 		return data;
 	};
 
@@ -208,11 +162,9 @@ void ibDebuggerClient::Receive(const ibProtocolNode& news)
 	case ibProtocol::ibDebug::ibEvent::Stack: {
 		// Each call's line in its module, where the editor's edits since have moved it — as the stop's.
 		ibStackData stackData;
-		for (const ibProtocolNode& row : news.FindChild(ibProtocol::ibDebug::Rows).Children()) {
-			const wxString module = row.GetString(ibProtocol::ibDebug::Module);
-			stackData.AppendStack(module, row.GetString(ibProtocol::ibDebug::Name),
-				static_cast<unsigned int>(GetLineOffset(module, static_cast<int>(row.GetInt(ibProtocol::ibDebug::Line)))));
-		}
+		for (const ibProtocolNode& row : news.FindChild(ibProtocol::ibDebug::Rows).Children())
+			stackData.AppendStack(row.GetString(ibProtocol::ibDebug::Module), row.GetString(ibProtocol::ibDebug::Name),
+				static_cast<unsigned int>(row.GetInt(ibProtocol::ibDebug::Line)));
 		m_adapter->OnSetStack(stackData);
 		break;
 	}
@@ -302,133 +254,11 @@ void ibDebuggerClient::Pause()
 	Send(ibProtocol::ibDebug::ibCommand::Pause);
 }
 
-std::map<wxString, std::map<unsigned int, wxString>> ibDebuggerClient::GetBreakpoints() const
-{
-	std::map<wxString, std::map<unsigned int, wxString>> out;
-
-	for (const auto& module : m_listBreakpoint) {
-
-		std::map<unsigned int, wxString>& lines = out[module.first];
-
-		// THE SUM IS THE ADDRESS. A row is (committed line -> offset the edits since have moved it
-		// by); either half alone points at a line nobody is looking at. Same arithmetic ShiftLineMap
-		// does when it decides which rows an edit moves.
-		for (const auto& line : module.second)
-			lines[line.first + line.second.m_offset] = line.second.m_condition;
-	}
-
-	// A module whose last breakpoint was taken off keeps an empty row in the map, and reporting it
-	// would read as "something is set here" — which is the one thing this must never say wrongly.
-	for (auto it = out.begin(); it != out.end(); ) {
-		if (it->second.empty()) it = out.erase(it);
-		else ++it;
-	}
-
-	return out;
-}
-
 void ibDebuggerClient::Stop(bool kill)
 {
 	ibProtocolNode params;
 	params.SetValue(ibProtocol::ibDebug::Kill, kill);
 	Send(ibProtocol::ibDebug::ibCommand::Stop, params);
-}
-
-void ibDebuggerClient::InitializeModule(const wxString& strModuleName, unsigned int line_count)
-{
-	m_listOffsetBreakpoint[strModuleName].clear();
-	for (unsigned int i = 0; i < line_count; i++)
-		m_listOffsetBreakpoint[strModuleName].emplace(i, 0);
-
-	LoadBreakpointCollection(strModuleName);
-}
-
-// THE EDITOR'S LINES MOVED — its breakpoints and the committed lines' places with them, here alone: the runtime counts
-// the committed lines (debugServer.cpp, CommandId_ToggleBreakpoint), and the server is told those.
-void ibDebuggerClient::PatchModule(const wxString& strModuleName, unsigned int line, int line_offset, bool atLineStart)
-{
-	// Two maps shift the same way for this edit, differing only in collision handling:
-	// breakpoints collapse onto one line; the dense committed<->editor offset map keeps all lines.
-	if (auto* breakpoints = FindModuleLines(m_listBreakpoint, strModuleName))
-		ShiftLineMap(*breakpoints, line, line_offset, atLineStart, /*collapseCollisions*/ true);
-
-	if (auto* offsets = FindModuleLines(m_listOffsetBreakpoint, strModuleName))
-		ShiftLineMap(*offsets, line, line_offset, atLineStart, /*collapseCollisions*/ false);
-}
-
-bool ibDebuggerClient::SaveModule(const wxString& strModuleName, unsigned int line_count)
-{
-	//initialize breakpoint
-	auto breakpoint_iterator = std::find_if(m_listBreakpoint.begin(), m_listBreakpoint.end(),
-		[&strModuleName](const auto& pair) { return stringUtils::IsSameAs(pair.first, strModuleName); });
-
-	if (breakpoint_iterator != m_listBreakpoint.end()) {
-
-		std::map<unsigned int, ibBreakpoint>& list_breakpoint = breakpoint_iterator->second, moduleBreakpointsNew;
-		for (auto it = list_breakpoint.begin(); it != list_breakpoint.end(); it++) {
-			if (!OffsetBreakpointInDB(breakpoint_iterator->first, it->first, it->second.m_offset, it->second.m_condition))
-				return false;
-			moduleBreakpointsNew.emplace(it->first + it->second.m_offset, ibBreakpoint{ 0, it->second.m_condition });
-		}
-
-		list_breakpoint = std::move(moduleBreakpointsNew);
-	}
-
-	// THE MODULE'S LENGTH IS THE TEXT SAVED (line_count), not one worked out from the offsets map: the map knows where
-	// the committed lines went, not the lines added after the last of them — and in a server's client, where nobody
-	// edits, it never moved at all, so a module kept the length it was loaded with and every line past it was refused
-	// as "the running application does not have this line" (2026-10-14).
-	auto module_offset_iterator = std::find_if(m_listOffsetBreakpoint.begin(), m_listOffsetBreakpoint.end(),
-		[&strModuleName](const auto& pair) { return stringUtils::IsSameAs(pair.first, strModuleName); });
-
-	InitializeModule(module_offset_iterator != m_listOffsetBreakpoint.end() ? module_offset_iterator->first : strModuleName,
-		line_count);
-	return true;
-}
-
-void ibDebuggerClient::RemoveModule(const wxString& strModuleName)
-{
-	auto breakpoint_iterator = std::find_if(m_listBreakpoint.begin(), m_listBreakpoint.end(),
-		[&strModuleName](const auto& pair) { return stringUtils::IsSameAs(pair.first, strModuleName); });
-	if (breakpoint_iterator != m_listBreakpoint.end())
-		m_listBreakpoint[breakpoint_iterator->first].clear();
-
-	auto module_offset_iterator = std::find_if(m_listOffsetBreakpoint.begin(), m_listOffsetBreakpoint.end(),
-		[&strModuleName](const auto& pair) { return stringUtils::IsSameAs(pair.first, strModuleName); });
-	if (module_offset_iterator != m_listOffsetBreakpoint.end())
-		m_listOffsetBreakpoint[module_offset_iterator->first].clear();
-}
-
-bool ibDebuggerClient::SaveAllBreakpoints()
-{
-	//initialize breakpoint
-	for (auto breakpoint_iterator = m_listBreakpoint.begin(); breakpoint_iterator != m_listBreakpoint.end(); breakpoint_iterator++) {
-		std::map<unsigned int, ibBreakpoint>& list_breakpoint = breakpoint_iterator->second, moduleBreakpointsNew;
-		for (auto it = list_breakpoint.begin(); it != list_breakpoint.end(); it++) {
-			if (!OffsetBreakpointInDB(breakpoint_iterator->first, it->first, it->second.m_offset, it->second.m_condition))
-				return false;
-			moduleBreakpointsNew.emplace(it->first + it->second.m_offset, ibBreakpoint{ 0, it->second.m_condition });
-		}
-		list_breakpoint = std::move(moduleBreakpointsNew);
-	}
-
-	// The modules as applied — their lengths from the store, which read the saved text (SaveModule there); the offsets
-	// map would miss the lines added after the last committed one.
-	LoadModuleCollection();
-	return true;
-}
-
-std::map<unsigned int, int>::iterator ibDebuggerClient::ResolveOriginalLine(
-	std::map<unsigned int, int>& list_module_offset, unsigned int line) const
-{
-	unsigned int startLine = line; int locOffsetPrev = 0, locOffsetCurr = 0;
-	for (auto it = list_module_offset.begin(); it != list_module_offset.end(); it++) {
-		if (it->second < 0 && (int)it->first < -it->second) { locOffsetPrev = it->second; continue; }
-		locOffsetCurr = it->second;
-		if ((it->first + locOffsetPrev) <= line && (it->first + locOffsetCurr) >= line) { startLine = it->first; break; }
-		locOffsetPrev = it->second;
-	}
-	return list_module_offset.find(startLine);
 }
 
 // 🛑⭐⭐ THE REASON GOES TO WHOEVER ASKED, and it used to go to a MODAL BOX instead.
@@ -444,66 +274,36 @@ std::map<unsigned int, int>::iterator ibDebuggerClient::ResolveOriginalLine(
 // Now the sentence travels with the answer and the caller decides what to do with it: the code
 // editor shows it, the tool returns it.
 //
-// The runtimes are told by the store's command — the server's debugger sets it on its own, and tells them.
+// The line is the editor's: the server's debugger finds it in its map — the one the editor's edits moved — and refuses
+// a line the running application does not have, with the reason; it tells the runtimes itself.
 bool ibDebuggerClient::ToggleBreakpoint(const wxString& strModuleName, unsigned int line,
 	wxString* refusal, const wxString& condition)
 {
-	std::map<unsigned int, int>& list_module_offset = m_listOffsetBreakpoint[strModuleName];
-	std::map<unsigned int, int>::iterator itOffset = ResolveOriginalLine(list_module_offset, line);
-	if (itOffset == list_module_offset.end() || line != (itOffset->first + itOffset->second)) {
-
-		const wxString said =
-			_("The running application does not have this line: the module has been edited "
-			  "and not applied, so its copy is a different text. Apply the configuration, "
-			  "or set the breakpoint on a line both copies share.");
-
-		// ⭐ AND WHEN NOBODY ASKED FOR THE REASON, IT GOES OUT THE STANDARD DOOR — the platform's own
-		// `Message`, which already knows how to reach whoever is on the other side: it asks the
-		// SESSION for its frame, and a web client's frame queues while a desktop one shows
-		// (systemManagerFunc.cpp). Reaching for the frame here would be that same code written a
-		// second time, minus the eval-mode guard that keeps autocomplete from talking out loud
-		// (Max, 2026-09-02: *"the standard message function knows how to deliver to the client"*).
-		if (refusal != nullptr)
-			*refusal = said;
-		else
-			Message(said);
-
-		return false;
-	}
-	std::map<unsigned int, ibBreakpoint>& list_breakpoint = m_listBreakpoint[strModuleName];
-	auto breakpoint_iterator = list_breakpoint.find(itOffset->first);
-	const unsigned int currLine = itOffset->first;
-	const int offset = breakpoint_iterator != list_breakpoint.end() ? breakpoint_iterator->second.m_offset : itOffset->second;
-
-	// Already there, with this very condition: nothing to write and nothing to tell the runtime.
-	if (breakpoint_iterator != list_breakpoint.end() && breakpoint_iterator->second.m_condition == condition)
+	wxString said;
+	if (ToggleBreakpointInDB(strModuleName, line, condition, said))
 		return true;
 
-	// A NEW BREAKPOINT, OR THE SAME ONE WITH ANOTHER CONDITION - one row and one message either way: the
-	// store upserts by (module, line), and the runtime keeps one condition per line, the last it was sent.
-	if (!ToggleBreakpointInDB(strModuleName, currLine, condition))
-		return false;
+	// ⭐ AND WHEN NOBODY ASKED FOR THE REASON, IT GOES OUT THE STANDARD DOOR — the platform's own
+	// `Message`, which already knows how to reach whoever is on the other side: it asks the
+	// SESSION for its frame, and a web client's frame queues while a desktop one shows
+	// (systemManagerFunc.cpp). Reaching for the frame here would be that same code written a
+	// second time, minus the eval-mode guard that keeps autocomplete from talking out loud
+	// (Max, 2026-09-02: *"the standard message function knows how to deliver to the client"*).
+	if (refusal != nullptr)
+		*refusal = said;
+	else
+		Message(said);
 
-	list_breakpoint[currLine] = ibBreakpoint{ offset, condition };
-	return true;
+	return false;
 }
 
 bool ibDebuggerClient::RemoveBreakpoint(const wxString& strModuleName, unsigned int line)
 {
-	std::map<unsigned int, int>& list_module_offset = m_listOffsetBreakpoint[strModuleName];
-	std::map<unsigned int, int>::iterator itOffset = ResolveOriginalLine(list_module_offset, line);
-	if (itOffset == list_module_offset.end())
-		return false;
-	std::map<unsigned int, ibBreakpoint>& list_breakpoint = m_listBreakpoint[strModuleName];
-	auto breakpoint_iterator = list_breakpoint.find(itOffset->first);
-	unsigned int currLine = itOffset->first;
-	if (breakpoint_iterator != list_breakpoint.end()) {
-		if (RemoveBreakpointInDB(strModuleName, currLine))
-			list_breakpoint.erase(breakpoint_iterator);
-		else
-			return false;
-	}
-	return true;
+	wxString said;
+	if (RemoveBreakpointInDB(strModuleName, line, said))
+		return true;
+	Message(said);
+	return false;
 }
 
 // 🛑 THE SAME LEFTOVER, ONE FLOOR ALONG — and this one showed a person a C++ SIGNATURE. "Error in :
@@ -516,7 +316,6 @@ bool ibDebuggerClient::RemoveBreakpoint(const wxString& strModuleName, unsigned 
 bool ibDebuggerClient::RemoveAllBreakpoint(wxString* refusal)
 {
 	if (RemoveAllBreakpointInDB()) {
-		m_listBreakpoint.clear();
 		// The engine's frame->RefreshFrame(): every module's editor draws its breakpoints again.
 		for (ibFrontendDocument* doc : docManager->GetDocumentsVector()) {
 			const ibModuleEditDocument* moduleDoc = dynamic_cast<ibModuleEditDocument*>(doc);
@@ -597,13 +396,4 @@ void ibDebuggerClient::EvaluateToolTip(const wxString& strFileName, const wxStri
 			.SetValue(ibProtocol::ibDebug::Expression, strExpression);
 		Send(ibProtocol::ibDebug::ibCommand::ToolTip, params);
 	}
-}
-
-std::map<unsigned int, wxString> ibDebuggerClient::GetDebugList(const wxString& strModuleName)
-{
-	std::map<unsigned int, wxString> listBreakpoint;
-	if (auto* breakpoints = FindModuleLines(m_listBreakpoint, strModuleName))
-		for (const auto& breakpoint : *breakpoints)
-			listBreakpoint[breakpoint.first + breakpoint.second.m_offset] = breakpoint.second.m_condition;
-	return listBreakpoint;
 }

@@ -1289,15 +1289,13 @@ namespace ibProtocol {
 		}
 
 		// The designer's debugger's store — the debugger is the server's (ibDebug), and the configuration and its sys_dbg
-		// are here: shows the configuration's Guid and Rows (Module — a module by its address, Count — its lines,
-		// Breakpoints (Line, Condition)); `Args: {Module}` — that module's Breakpoints. A module view's State says its
-		// Module too (ibView::ibModule).
+		// are here: shows the configuration's Guid; `Args: {Module}` — that module's Breakpoints (Line, Condition), at the
+		// editor's lines: the server's debugger keeps the one map, moved by the edits a module's Change carries
+		// (ibView::ibModule). A module view's State says its Module too.
 		namespace ibDebugger {
 
 			inline constexpr const char* Guid        = "Guid";
-			inline constexpr const char* Rows        = "Rows";
 			inline constexpr const char* Module      = "Module";
-			inline constexpr const char* Count       = "Count";
 			inline constexpr const char* Breakpoints = "Breakpoints";
 			inline constexpr const char* Line        = "Line";
 			inline constexpr const char* Condition   = "Condition";
@@ -1376,8 +1374,9 @@ namespace ibProtocol {
 
 		// The designer's editor of a module: State {Syntax, ReadOnly, Modified — the configuration the module is in,
 		// Module}; the text fetched by the tab (fetch {Tab} — {Text}; what else — ibRequest); what was typed — event
-		// {Tab, Event: Input} on the first key while not Modified, then {Tab, Event: Change, Args: {Text}}; its commands —
-		// event {Tab, Event: Command, Args: {Id}} (ibCommand).
+		// {Tab, Event: Input} on the first key while not Modified, then {Tab, Event: Change, Args: {Text[, Line, Offset,
+		// AtLineStart]}} — with the edit that moved its lines, when one did: the server's debugger moves its breakpoints
+		// there (ibDebuggerClient::PatchModule); its commands — event {Tab, Event: Command, Args: {Id}} (ibCommand).
 		namespace ibModule {
 
 			inline constexpr const char* Syntax   = "Syntax";
@@ -1391,6 +1390,10 @@ namespace ibProtocol {
 			inline constexpr const char* Help     = "Help";
 			inline constexpr const char* Args     = "Args";
 			inline constexpr const char* Id       = "Id";
+			// …a Change's edit that moved the lines:
+			inline constexpr const char* Line        = "Line";          // the line it was at, from 0
+			inline constexpr const char* Offset      = "Offset";        // the lines it added (removed, below 0)
+			inline constexpr const char* AtLineStart = "AtLineStart";   // at the line's start: the line itself moved
 
 			// WHAT A MODULE'S TAB IS ASKED besides its text — `fetch {Tab, Request: {Kind, Text, Position}}`: what the
 			// desktop's code editor asked the configuration itself. Text — the editor's text as it is now (not handed back

@@ -215,11 +215,19 @@ bool ibDebuggerClient::SaveModule(const ibString& strModuleName, unsigned int li
 
 	if (breakpoint_iterator != m_listBreakpoint.end()) {
 
+		// THE MOVED ROWS TAKEN OUT FIRST, ALL OF THEM, and only then written at their new lines: moved one by one, a row
+		// moved onto the line of one still to move went out with it (5→7, then 7→9 left 9 alone).
+		const ibString& module = breakpoint_iterator->first;
 		std::map<unsigned int, ibBreakpoint>& list_breakpoint = breakpoint_iterator->second, moduleBreakpointsNew;
-		for (auto it = list_breakpoint.begin(); it != list_breakpoint.end(); it++) {
-			if (!OffsetBreakpointInDB(breakpoint_iterator->first, it->first, it->second.m_offset, it->second.m_condition))
+		for (const auto& [line, breakpoint] : list_breakpoint) {
+			if (breakpoint.m_offset != 0 && !RemoveBreakpointInDB(module, line))
 				return false;
-			moduleBreakpointsNew.emplace(it->first + it->second.m_offset, ibBreakpoint{ 0, it->second.m_condition });
+		}
+		for (const auto& [line, breakpoint] : list_breakpoint) {
+			const unsigned int saved = line + breakpoint.m_offset;
+			if (breakpoint.m_offset != 0 && !ToggleBreakpointInDB(module, saved, breakpoint.m_condition))
+				return false;
+			moduleBreakpointsNew[saved] = ibBreakpoint{ 0, breakpoint.m_condition };   // the one the store kept, the last
 		}
 
 		list_breakpoint = std::move(moduleBreakpointsNew);
@@ -249,36 +257,6 @@ void ibDebuggerClient::RemoveModule(const ibString& strModuleName)
 		[&strModuleName](const auto& pair) { return stringUtils::IsSameAs(pair.first, strModuleName); });
 	if (module_offset_iterator != m_listOffsetBreakpoint.end())
 		m_listOffsetBreakpoint[module_offset_iterator->first].clear();
-}
-
-bool ibDebuggerClient::SaveAllBreakpoints()
-{
-	std::lock_guard<std::recursive_mutex> lock(m_breakpointsMutex);
-
-	//initialize breakpoint
-	for (auto breakpoint_iterator = m_listBreakpoint.begin(); breakpoint_iterator != m_listBreakpoint.end(); breakpoint_iterator++) {
-		std::map<unsigned int, ibBreakpoint>& list_breakpoint = breakpoint_iterator->second, moduleBreakpointsNew;
-		for (auto it = list_breakpoint.begin(); it != list_breakpoint.end(); it++) {
-			if (!OffsetBreakpointInDB(breakpoint_iterator->first, it->first, it->second.m_offset, it->second.m_condition))
-				return false;
-			moduleBreakpointsNew.emplace(it->first + it->second.m_offset, ibBreakpoint{ 0, it->second.m_condition });
-		}
-		list_breakpoint = std::move(moduleBreakpointsNew);
-	}
-
-	//initialize offsets 
-	for (auto module_offset_iterator = m_listOffsetBreakpoint.begin(); module_offset_iterator != m_listOffsetBreakpoint.end(); module_offset_iterator++) {
-		auto& list_module_offset = module_offset_iterator->second;
-		std::map<unsigned int, int> ::iterator it = list_module_offset.begin(); std::advance(it, list_module_offset.size() - 1);
-		if (it != list_module_offset.end()) {
-			InitializeModule(module_offset_iterator->first, it->first + it->second + 1);
-		}
-		else {
-			InitializeModule(module_offset_iterator->first, 1);
-		}
-	}
-
-	return true;
 }
 
 std::map<unsigned int, int>::iterator ibDebuggerClient::ResolveOriginalLine(

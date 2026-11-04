@@ -43,8 +43,10 @@ public:
 
 	ibModuleTextDocument() : ibMetaDocument() {}
 
-	// The module's check, at the gate of a close — asked in the close's work, once (m_closeAllowed).
+	// The module's check, at the gate of a close — asked in the close's work, once (m_closeAllowed) — and before a save:
+	// its own, or its owner's of the file it lives in (a module of an external processing).
 	virtual bool OnSaveModified() override;
+	virtual bool CanSave() const override;
 	virtual bool Save() override;
 
 	// THE DESKTOP EDITOR'S CHECK (ibCodeEditor::SyntaxControl), where the module is compiled — the session's

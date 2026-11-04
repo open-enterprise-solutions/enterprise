@@ -69,6 +69,10 @@ public:
 	// hands back without the person asking for anything yet (a module's text as the focus leaves it). Posted where the
 	// server takes none held.
 	void Hold(ibProtocol::ibEvent::ibKind event, const ibProtocolNode& args = ibProtocolNode()) const;
+	// …or made now, its answer settled before this returns: what is asked next depends on it — a module's edit that moved
+	// its lines, its breakpoints drawn again right after (ibCodeEditor::SaveModule). Held, a later one took its place;
+	// posted, the question went first.
+	bool Call(ibProtocol::ibEvent::ibKind event, const ibProtocolNode& args = ibProtocolNode()) const;
 
 	// The State of the view in the frame that opened the tab — set while its views are made (OnCreate), empty after:
 	// what a view reads as it is made may ride there.
@@ -80,6 +84,9 @@ protected:
 	virtual bool DoSaveDocument(const wxString& file) override;
 
 private:
+
+	// The event as the server reads it, whichever way it goes: event {Tab, Event, Args}.
+	ibProtocolNode EventOf(ibProtocol::ibEvent::ibKind event, const ibProtocolNode& args) const;
 
 	const long long m_tabId;
 	ibProtocolNode m_openingState;

@@ -1,16 +1,13 @@
 #include "debugger.h"
 
 #include "backend/debugger/debugClient.h"
-#include "backend/metaCollection/metaModuleObject.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/session/session.h"
 #include "core/serialize/dataBuilder.h"
 
-#include <algorithm>
-
 namespace {
 
-// A module's breakpoints, as the store keeps them — a row each: Line, Condition.
+// A module's breakpoints at the editor's lines, as the session's client has them — a row each: Line, Condition.
 void WriteBreakpoints(const ibString& module, ibDataNode& node)
 {
 	ibDataNode& breakpoints = node.Child(ibProtocol::ibSchema::ibDebugger::Breakpoints);
@@ -44,17 +41,6 @@ void ibSchemaDebugger::Build(const ibSession& session, const ibDataNode& args, i
 	if (metaData == nullptr)
 		return;
 	result.SetValue(ibProtocol::ibSchema::ibDebugger::Guid, metaData->GetConfigGuid().str());
-
-	// Each module with its lines, as the desktop's tree told its debugger at load (OnBeforeRunMetaObject) — and its
-	// breakpoints, so the client's load is one exchange, not one more for each module.
-	ibDataNode& modules = result.Child(ibProtocol::ibSchema::ibDebugger::Rows);
-	for (const ibValueMetaObjectModuleBase* moduleObject : metaData->GetAnyArrayObject<ibValueMetaObjectModuleBase>(true)) {
-		const ibString& text = moduleObject->GetModuleText();
-		ibDataNode& row = modules.AddChild(0, 0);
-		row.SetValue(ibProtocol::ibSchema::ibDebugger::Module, moduleObject->GetDocPath());
-		row.SetValue(ibProtocol::ibSchema::ibDebugger::Count, static_cast<std::int32_t>(1 + std::count(text.begin(), text.end(), ibT('\n'))));
-		WriteBreakpoints(moduleObject->GetDocPath(), row);
-	}
 }
 
 std::function<void()> ibSchemaDebugger::Command(const ibSession& /*session*/, std::int32_t command,
@@ -66,8 +52,8 @@ std::function<void()> ibSchemaDebugger::Command(const ibSession& /*session*/, st
 		return nullptr;
 	}
 
-	// The lines are the committed ones — the client resolved its editor's (ResolveOriginalLine); here nothing is edited,
-	// so the session's client takes them as they are and keeps its rows the same as the base's.
+	// The lines are the editor's — the session's client finds them in its map, which the editor's edits moved where its
+	// text arrives (ibModuleTextView, Change): one map, as the desktop's one process had it.
 	const ibString module = args.GetValue<ibString>(ibProtocol::ibSchema::ibDebugger::Module);
 	const unsigned int line = static_cast<unsigned int>(args.GetValue<std::int32_t>(ibProtocol::ibSchema::ibDebugger::Line));
 

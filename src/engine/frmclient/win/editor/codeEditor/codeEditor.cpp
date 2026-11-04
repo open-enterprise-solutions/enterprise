@@ -405,6 +405,25 @@ bool ibCodeEditor::SaveModule()
 	return m_document != nullptr;
 }
 
+bool ibCodeEditor::SaveModule(int line, int linesAdded, bool atLineStart)
+{
+	if (m_document == nullptr)
+		return false;
+
+	// MADE NOW, not held as the text alone is: a Change held later took this one's place, its edit with it, and the
+	// breakpoints drawn again right after the edit ask the server where they now are (RefreshBreakpoint).
+	const wxString text = GetText();
+	ibProtocolNode args;
+	args.SetValue(ibProtocol::ibView::ibModule::Text, text)
+		.SetValue(ibProtocol::ibView::ibModule::Line, static_cast<long long>(line))
+		.SetValue(ibProtocol::ibView::ibModule::Offset, static_cast<long long>(linesAdded))
+		.SetValue(ibProtocol::ibView::ibModule::AtLineStart, atLineStart);
+	if (!m_document->Call(ibProtocol::ibEvent::ibKind::Change, args))
+		return false;
+	m_moduleText = text;
+	return true;
+}
+
 void ibCodeEditor::SetCodeStyle(short codeStyle)
 {
 	if (m_tc.GetCodeStyle() == codeStyle)

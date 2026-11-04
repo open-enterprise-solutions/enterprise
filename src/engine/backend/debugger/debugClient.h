@@ -245,6 +245,7 @@ class BACKEND_API ibDebuggerClient {
 	// current one" (docs/private/multi-base-process.md).
 	explicit ibDebuggerClient(class ibMetaDataConfigurationBase* metaData);
 	friend class ibMetaDataConfigurationStorage;
+	friend class ibStandaloneDebuggerClient;   // a test's client with no configuration around it (test_debugClient.cpp)
 
 public:
 
@@ -429,8 +430,6 @@ public:
 	bool SaveModule(const ibString& strModuleName, unsigned int line_count);
 	void RemoveModule(const ibString& strModuleName);
 
-	bool SaveAllBreakpoints();
-
 	// One breakpoint, as the maps below keep it: the offset the edits since the last save have moved it by
 	// (its committed line is the map's key - see ShiftLineMap), and the CONDITION it stops on. An empty
 	// condition stops every time; any other is an expression of the language, evaluated in the frame that
@@ -536,7 +535,6 @@ protected:
 
 	bool ToggleBreakpointInDB(const ibString& strModuleName, unsigned int line, const ibString& condition);
 	bool RemoveBreakpointInDB(const ibString& strModuleName, unsigned int line);
-	bool OffsetBreakpointInDB(const ibString& strModuleName, unsigned int line, int offset, const ibString& condition);
 	bool RemoveAllBreakpointInDB();
 
 	//commands:

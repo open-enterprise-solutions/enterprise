@@ -9,12 +9,14 @@
 
 // THE STORE IS THE SERVER'S — the engine's sys_dbg, of the base the configuration is in (ibSchemaDebugger,
 // frmserver/schema/designer/debugger.cpp): what the engine's client asked its builder here is asked of the schema, by the
-// same verbs. The server keeps its own client's rows the same (its apply rewrites them by its own map).
+// same verbs. And so are the lines: the server's client keeps the breakpoints at the editor's lines, moved by the edits
+// the editor's text carries (ibModuleTextView, Change) — one map, as the desktop's one process had it; none here.
 
 namespace {
 
-	// The schema's Debugger: its Build (no command) or one of its commands, with its arguments.
-	bool AskStore(ibProtocolNode args, ibProtocolNode& answer, int command = 0)
+	// The schema's Debugger: its Build (no command) or one of its commands, with its arguments — refused with the store's
+	// reason (`said`): no debugger, a line the running application does not have.
+	bool AskStore(ibProtocolNode args, ibProtocolNode& answer, int command, wxString& said)
 	{
 		ibFrontendMainFrameDesigner* const frame = mainFrame;
 		if (frame == nullptr)
@@ -24,44 +26,45 @@ namespace {
 		if (command != 0)
 			params.SetValue(ibProtocol::ibSchema::Command, static_cast<long long>(command));
 		params.SetValue(ibProtocol::ibSchema::Args, args);
-		return frame->Call(ibProtocol::ibMethod::Schema, params, answer);
+		ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
+		ibString error;
+		if (frame->Call(ibProtocol::ibMethod::Schema, params, answer, refusal, error))
+			return true;
+		said = error;
+		return false;
 	}
 
-	bool AskStore(ibProtocol::ibSchema::ibDebugger::ibCommand command, ibProtocolNode args)
+	bool AskStore(ibProtocol::ibSchema::ibDebugger::ibCommand command, ibProtocolNode args, wxString& said)
 	{
 		ibProtocolNode answer;
-		return AskStore(args, answer, static_cast<int>(command));
-	}
-
-	// A module's breakpoints as the store says them (Breakpoints — Line, Condition), in place of those held.
-	void ReadBreakpoints(const ibProtocolNode& node, std::map<unsigned int, ibDebuggerClient::ibBreakpoint>& breakpoints)
-	{
-		breakpoints.clear();
-		for (const ibProtocolNode& breakpoint : node.FindChild(ibProtocol::ibSchema::ibDebugger::Breakpoints).Children())
-			breakpoints[static_cast<unsigned int>(breakpoint.GetInt(ibProtocol::ibSchema::ibDebugger::Line))] =
-				ibDebuggerClient::ibBreakpoint{ 0, breakpoint.GetString(ibProtocol::ibSchema::ibDebugger::Condition) };
+		return AskStore(args, answer, static_cast<int>(command), said);
 	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////
 
+// THE CONFIGURATION THE DEBUGGER IS OF: its guid, the runtime's verify — asked of the store…
 ibDebuggerClient::ibDebuggerClient() :
 	m_adapter(new ibDebuggerClientAdapter)
 {
 	ibDebuggerClient::CreateBreakpointDatabase();
 	ms_debugClient = this;
 
-	LoadModuleCollection();
+	ibProtocolNode store;
+	wxString said;
+	if (AskStore(ibProtocolNode(), store, 0, said))
+		m_configGuid = ibGuid(store.GetString(ibProtocol::ibSchema::ibDebugger::Guid));
 	Listen();
 }
 
+// …or as the login read it (the designer's GetStartSchemas).
 ibDebuggerClient::ibDebuggerClient(const ibProtocolNode& store) :
 	m_adapter(new ibDebuggerClientAdapter)
 {
 	ibDebuggerClient::CreateBreakpointDatabase();
 	ms_debugClient = this;
 
-	LoadModuleCollection(store);
+	m_configGuid = ibGuid(store.GetString(ibProtocol::ibSchema::ibDebugger::Guid));
 	Listen();
 }
 
@@ -80,69 +83,43 @@ bool ibDebuggerClient::CreateBreakpointDatabase()
 
 //db support
 
-// THE CONFIGURATION THE DEBUGGER IS OF, as the engine's was given it: its guid (the runtime's verify) and every module,
-// read with its lines — what the desktop's tree did for each module at load (OnBeforeRunMetaObject), and its modules
-// again at an apply (OnSaveMetaObject).
-void ibDebuggerClient::LoadModuleCollection()
-{
-	ibProtocolNode answer;
-	if (AskStore(ibProtocolNode(), answer))
-		LoadModuleCollection(answer);
-}
-
-// …from the store's answer, asked or read in the login already (the designer's GetStartSchemas) — empty when the
-// configuration has no debugger: a start was a call of its own for an empty answer.
-void ibDebuggerClient::LoadModuleCollection(const ibProtocolNode& store)
-{
-	m_configGuid = ibGuid(store.GetString(ibProtocol::ibSchema::ibDebugger::Guid));
-	// InitializeModule over the one answer: each row brings its module's breakpoints, where InitializeModule would ask
-	// the store for them a module at a time — a call each, 71 at a designer's start: ten seconds 130 ms from the
-	// server (2026-10-15).
-	for (const ibProtocolNode& module : store.FindChild(ibProtocol::ibSchema::ibDebugger::Rows).Children()) {
-		const wxString strModuleName = module.GetString(ibProtocol::ibSchema::ibDebugger::Module);
-		std::map<unsigned int, int>& list_module_offset = m_listOffsetBreakpoint[strModuleName];
-		list_module_offset.clear();
-		for (unsigned int i = 0; i < static_cast<unsigned int>(module.GetInt(ibProtocol::ibSchema::ibDebugger::Count)); i++)
-			list_module_offset.emplace(i, 0);
-		ReadBreakpoints(module, m_listBreakpoint[strModuleName]);
-	}
-}
-
-void ibDebuggerClient::LoadBreakpointCollection(const wxString& strModuleName)
+// The module's breakpoints at the editor's lines, as the server's client has them now — the edits held with the text
+// carried ahead of the question (ibCodeEditor::SaveModule).
+std::map<unsigned int, wxString> ibDebuggerClient::GetDebugList(const wxString& strModuleName)
 {
 	ibProtocolNode args, answer;
 	args.SetValue(ibProtocol::ibSchema::ibDebugger::Module, strModuleName);
-	AskStore(args, answer);   // not answered — none held
-	ReadBreakpoints(answer, m_listBreakpoint[strModuleName]);
+	std::map<unsigned int, wxString> breakpoints;
+	wxString said;
+	if (!AskStore(args, answer, 0, said))
+		return breakpoints;   // not answered — none drawn
+	for (const ibProtocolNode& breakpoint : answer.FindChild(ibProtocol::ibSchema::ibDebugger::Breakpoints).Children())
+		breakpoints[static_cast<unsigned int>(breakpoint.GetInt(ibProtocol::ibSchema::ibDebugger::Line))] =
+			breakpoint.GetString(ibProtocol::ibSchema::ibDebugger::Condition);
+	return breakpoints;
 }
 
-bool ibDebuggerClient::ToggleBreakpointInDB(const wxString& strModuleName, unsigned int line, const wxString& condition)
+bool ibDebuggerClient::ToggleBreakpointInDB(const wxString& strModuleName, unsigned int line, const wxString& condition,
+	wxString& said)
 {
 	ibProtocolNode args;
 	args.SetValue(ibProtocol::ibSchema::ibDebugger::Module, strModuleName);
 	args.SetValue(ibProtocol::ibSchema::ibDebugger::Line, static_cast<long long>(line));
 	args.SetValue(ibProtocol::ibSchema::ibDebugger::Condition, condition);
-	return AskStore(ibProtocol::ibSchema::ibDebugger::ibCommand::ToggleBreakpoint, args);
+	return AskStore(ibProtocol::ibSchema::ibDebugger::ibCommand::ToggleBreakpoint, args, said);
 }
 
-bool ibDebuggerClient::RemoveBreakpointInDB(const wxString& strModuleName, unsigned int line)
+bool ibDebuggerClient::RemoveBreakpointInDB(const wxString& strModuleName, unsigned int line, wxString& said)
 {
 	ibProtocolNode args;
 	args.SetValue(ibProtocol::ibSchema::ibDebugger::Module, strModuleName);
 	args.SetValue(ibProtocol::ibSchema::ibDebugger::Line, static_cast<long long>(line));
-	return AskStore(ibProtocol::ibSchema::ibDebugger::ibCommand::RemoveBreakpoint, args);
-}
-
-bool ibDebuggerClient::OffsetBreakpointInDB(const wxString& strModuleName, unsigned int lineFrom, int offset, const wxString& condition)
-{
-	// Move a breakpoint from lineFrom to lineFrom+offset: delete the old row, upsert the new one - with its
-	// condition, which moves with the line.
-	return RemoveBreakpointInDB(strModuleName, lineFrom)
-		&& ToggleBreakpointInDB(strModuleName, static_cast<unsigned int>(lineFrom + offset), condition);
+	return AskStore(ibProtocol::ibSchema::ibDebugger::ibCommand::RemoveBreakpoint, args, said);
 }
 
 bool ibDebuggerClient::RemoveAllBreakpointInDB()
 {
-	AskStore(ibProtocol::ibSchema::ibDebugger::ibCommand::RemoveAllBreakpoint, ibProtocolNode());   // best-effort
+	wxString said;
+	AskStore(ibProtocol::ibSchema::ibDebugger::ibCommand::RemoveAllBreakpoint, ibProtocolNode(), said);   // best-effort
 	return true;
 }

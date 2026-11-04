@@ -157,10 +157,9 @@ void ibFrontendMainFrameDesigner::OnUpdateConfiguration(wxCommandEvent& WXUNUSED
 	// it when the exclusive cannot be taken — the desktop's Try again / Update dynamically choice is not ported).
 
 	// …and the last question is the ledger itself, which the server puts to the person (ShowRequest, ApplyChange).
-	// Applied — the configuration no longer differs from the base's — the breakpoints are written at the lines they
-	// moved to, as the desktop's modules wrote theirs on the apply (ibValueMetaObjectModuleBase::OnSaveMetaObject).
-	if (m_metaWindow->ApplyConfiguration() && !m_metaWindow->IsModified() && debugClient != nullptr)
-		debugClient->SaveAllBreakpoints();
+	// The breakpoints go where the edits moved them with each module the apply saves — in the server's debugger, its one
+	// map (ibValueMetaObjectModuleBase::OnSaveMetaObject), as at an external file's save: nothing here.
+	m_metaWindow->ApplyConfiguration();
 }
 
 

@@ -214,6 +214,7 @@ add_executable(oes_tests
     test_metadataMove.cpp
     test_sectionInterfaceItems.cpp
     test_debugServer.cpp
+    test_debugClient.cpp
     test_commonModuleCheck.cpp
     test_configCheckRegisters.cpp
     test_mcpPictureSet.cpp

@@ -163,6 +163,9 @@ public:
 	// …from an answer already fetched — a form's tab opens its form and its module in one (Text).
 	bool LoadModule(const ibProtocolNode& answer);
 	bool SaveModule();
+	// …with the edit that moved its lines (OnPatchModule) — {Change {Text, Line, Offset, AtLineStart}}: where the text
+	// arrives, the server's debugger moves its breakpoints.
+	bool SaveModule(int line, int linesAdded, bool atLineStart);
 
 	// THE SYNTAX THE MODULE IS WRITTEN IN — the desktop's editor read it of the process (ibCompileCode::GetCodeStyle); here
 	// it is the tab's (View.State.Syntax): the text is read again in it and coloured anew.
@@ -261,7 +264,7 @@ protected:
 	// Multi-line edit (paste / cut) just shifted code by linesAdded
 	// at `line`. `atLineStart` = the edit happened at column 0 of `line`
 	// (the whole line moved), which decides whether a breakpoint sitting
-	// ON `line` shifts too. Override forwards the shift to debugClient->PatchModule.
+	// ON `line` shifts too. The designer's sends it with the text (SaveModule).
 	virtual void OnPatchModule(int line, int linesAdded, bool atLineStart) {}
 
 	// The tooltip handler wants the debugger to evaluate an expression against the running session — the module is

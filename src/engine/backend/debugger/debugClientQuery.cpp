@@ -109,26 +109,6 @@ bool ibDebuggerClient::RemoveBreakpointInDB(const ibString& strModuleName, unsig
 	return true;
 }
 
-bool ibDebuggerClient::OffsetBreakpointInDB(const ibString& strModuleName, unsigned int lineFrom, int offset, const ibString& condition)
-{
-	// Move a breakpoint from lineFrom to lineFrom+offset: delete the old row, upsert the new one - with its
-	// condition, which moves with the line.
-	try {
-		ibDatabaseQueryBuilder q;
-		q.Execute(ibDelete(dbg_table,
-			ibBinOp(ibQueryBinOp::And,
-				ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("moduleName")), ibConst(ibValue(strModuleName))),
-				ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("moduleLine")), ibConst(ibValue(lineFrom))))));
-		q.Execute(ibUpsert(dbg_table, {
-			{ ibT("moduleName"),    ibConst(ibValue(strModuleName)) },
-			{ ibT("moduleLine"),    ibConst(ibValue(static_cast<unsigned int>(lineFrom + offset))) },
-			{ ibT("lineCondition"), ibConst(ibValue(condition)) },
-		}, { ibT("moduleName"), ibT("moduleLine") }));
-	}
-	catch (...) { wxASSERT_MSG(false, "error in OffsetBreakpointInDB"); return false; }
-	return true;
-}
-
 bool ibDebuggerClient::RemoveAllBreakpointInDB()
 {
 	try {

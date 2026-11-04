@@ -15,9 +15,8 @@ public:
 	// The right to edit the configuration — the tree's (ibSchemaMetaData): debugging is the designer's.
 	virtual bool AccessRight(const ibSession& session) const override;
 
-	// The configuration's Guid (what a runtime is verified by) and Rows — its modules: Module (the address a runtime
-	// stops at), Count (its lines); with Module — that module's Breakpoints (Line, from 0, as the editor's margin;
-	// Condition).
+	// The configuration's Guid (what a runtime is verified by); with Module (the address a runtime stops at) — that
+	// module's Breakpoints (Line, from 0, as the editor's margin has it now; Condition).
 	virtual void Build(const ibSession& session, const ibDataNode& args, ibDataNode& result) const override;
 
 	// The store's verbs (ibProtocol::ibSchema::ibDebugger::ibCommand). Refused: no debugger, a breakpoint on a line the configuration does

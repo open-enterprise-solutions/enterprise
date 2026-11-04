@@ -157,6 +157,9 @@ public:
     virtual bool Save();
     virtual bool SaveAs();
     virtual bool Revert();
+    // May it be saved now — its own check, asked before it is saved: by its Save, and by Save as of its tab, when the
+    // file is its owner's (ibClientFrame::GetSaveAsDocument). None: it may.
+    virtual bool CanSave() const { return true; }
 
 #if wxUSE_STD_IOSTREAM
     virtual std::ostream& SaveObject(std::ostream& stream);

@@ -225,7 +225,8 @@ public:
 	// tab's.
 	bool IsCommandEnabled(ibDocCommand command, std::size_t tab) const;
 	// THE DOCUMENT SAVE AS IS ASKED OF — the desktop's (ibFormVisualEditView::OnActiveControlCommand): the one behind the
-	// form's active control while it holds a view of its own, a grid box's sheet; the tab's otherwise.
+	// form's active control while it holds a view of its own, a grid box's sheet; a metaobject's owner, the external file
+	// its module is saved in; the tab's otherwise.
 	ibDocument* GetSaveAsDocument(std::size_t tab) const;
 
 	// The menu — the application's, as the desktop's main frame had its menu bar beside File and Edit: those are the

@@ -66,7 +66,10 @@ public:
 
 	// What was typed goes before the server saves or closes the tab — as the desktop wrote the module on save.
 	virtual bool Close() override;
+	// …and a module of an external file is saved as the file is, by the tab of it — its parent, where the person keeps
+	// it: the desktop's Save went to the parent first (ibMetaDocument::Save). A module of the configuration has none.
 	virtual bool Save() override;
+	virtual bool SaveAs() override;
 
 	// The view's State: the syntax the module is written in, read-only where the configuration may not be edited, and
 	// whether the configuration is modified.

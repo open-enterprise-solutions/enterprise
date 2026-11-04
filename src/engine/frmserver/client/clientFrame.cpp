@@ -660,7 +660,13 @@ ibDocument* ibClientFrame::GetSaveAsDocument(std::size_t i) const
 	const ibValueFrame* const control = form != nullptr ? form->GetActiveControl() : nullptr;
 	if (const ibView* const view = control != nullptr ? control->GetControlView() : nullptr)
 		return view->GetDocument();
-	return tab != nullptr ? tab->GetDocument() : nullptr;
+	// A METAOBJECT'S HAS NO FILE OF ITS OWN (ibMetaDocument::OnSaveDocument) — it is saved in its owner's, the desktop's
+	// Save going to the parent first (ibMetaDocument::Save): a module of an external processing as the processing.
+	ibDocument* const document = tab != nullptr ? tab->GetDocument() : nullptr;
+	const ibMetaDocument* const metaDocument = dynamic_cast<const ibMetaDocument*>(document);
+	if (metaDocument != nullptr && metaDocument->GetMetaObject() != nullptr && metaDocument->GetParent() != nullptr)
+		return metaDocument->GetParent();
+	return document;
 }
 
 bool ibClientFrame::DoCommand(ibDocCommand command, const ibString& name)
@@ -694,7 +700,10 @@ bool ibClientFrame::DoCommand(ibDocCommand command, const ibString& name)
 	case ibDocCommand::Save:
 		return document->Save();
 	case ibDocCommand::SaveAs: {
-		// A NEW FILE OF THE SESSION'S TEMPORARY STORAGE, of the name the client chose — written as its name says
+		// The tab's own asked first — a module checked before the file it lives in is saved (ibDocument::CanSave)…
+		if (!document->CanSave())
+			return false;
+		// …and A NEW FILE OF THE SESSION'S TEMPORARY STORAGE, of the name the client chose — written as its name says
 		// (OnSaveDocument), and taken down by the client by its id, the tab's File.
 		ibSession* const session = ibSession::Current();
 		ibTempStorage* const storage = session != nullptr

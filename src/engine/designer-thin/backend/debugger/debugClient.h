@@ -14,9 +14,9 @@
 // (backend/debugger/debugClient.h) is the one connected to the runtimes, and this is its facade, in its words, so the
 // windows ask what they always asked: a command goes as debug {Command} on the debugger's own connection
 // (ibCommunicator::Debug), and what the engine says comes back as news (ibCommunicator::ListenDebug), told the
-// listeners here on the window's loop. A web designer listens the same way. What is the editor's stays here: the
-// breakpoints at the editor's lines and the lines its edits moved — the runtime counts committed lines, and the
-// server is told those. The store the breakpoints are kept in is the server's, schema Debugger (debugClientQuery.cpp).
+// listeners here on the window's loop. A web designer listens the same way. The breakpoints are that client's too, at
+// the editor's lines: one map, as the desktop's one process had it, moved by the edits the editor's text carries
+// (ibModuleTextView, Change), and asked of the store, schema Debugger (debugClientQuery.cpp) — none kept here.
 //
 // Lifecycle: owned by the designer's main frame as a unique_ptr field (private ctor + friend), made once it is logged
 // in. Designer / codeEditor hot paths read the static slot directly through the macro.
@@ -84,11 +84,10 @@ class ibDebuggerClient {
 		std::vector<std::unique_ptr<ibDebuggerClientBridge> > m_debugBridges;
 	};
 
-	// THE CONFIGURATION IS THE SERVER'S: its guid and its modules, each initialized as the desktop's configuration did as
-	// it loaded (ibValueMetaObjectModuleBase::OnBeforeRunMetaObject) — asked of schema Debugger here, once; and the
-	// debugger's news listened to from then on (Listen).
+	// THE CONFIGURATION IS THE SERVER'S: its guid, asked of schema Debugger; and the debugger's news listened to from then
+	// on (Listen).
 	ibDebuggerClient();
-	// …or over its store as the login read it (the designer's GetStartSchemas): nothing asked.
+	// …or of its store as the login read it (the designer's GetStartSchemas): nothing asked.
 	explicit ibDebuggerClient(const class ibProtocolNode& store);
 	friend class ibFrontendMainFrameDesigner;
 
@@ -193,7 +192,8 @@ public:
 	//evaluate for tooltip
 	void EvaluateToolTip(const wxString& strFileName, const wxString& strModuleName, const wxString& strExpression);
 
-	// The module's breakpoints as the editor draws them: editor line (from 0) -> condition (empty stops always).
+	// The module's breakpoints as the editor draws them: editor line (from 0) -> condition (empty stops always) — asked of
+	// the store.
 	std::map<unsigned int, wxString> GetDebugList(const wxString& strModuleName);
 
 	//special functions:
@@ -204,25 +204,8 @@ public:
 	void Pause();
 	void Stop(bool kill);
 
-	//for breakpoints and offsets
-	void InitializeModule(const wxString& strModuleName, unsigned int line_count);
-	// atLineStart: the edit was at column 0 of `line` (whole line moved), so an
-	// entry sitting ON `line` shifts too — fixes "Enter at line start" not moving a breakpoint.
-	void PatchModule(const wxString& strModuleName, unsigned int line, int line_offset, bool atLineStart);
-	bool SaveModule(const wxString& strModuleName, unsigned int line_count);
-	void RemoveModule(const wxString& strModuleName);
-
-	bool SaveAllBreakpoints();
-
-	// One breakpoint, as the maps below keep it: the offset the edits since the last save have moved it by
-	// (its committed line is the map's key - see ShiftLineMap), and the CONDITION it stops on. An empty
-	// condition stops every time; any other is an expression of the language, evaluated in the frame that
-	// reaches the line, and the run stops only when it is true.
-	struct ibBreakpoint {
-		int      m_offset = 0;
-		wxString m_condition;
-	};
-
+	// The line is the editor's, as the margin has it. A CONDITION is an expression of the language, evaluated in the
+	// frame that reaches the line, and the run stops only when it is true; an empty one stops every time.
 	// `refusal`, when given, comes back carrying WHY it was refused — the engine states the reason
 	// and the caller decides whether that is a dialog, a log line or an answer over a socket.
 	// Sets the breakpoint, or gives one already there the condition passed (an empty one stops always).
@@ -238,38 +221,14 @@ public:
 
 	bool IsEnterLoop() const { return m_enterLoop; }
 
-	// ⭐⭐ WHAT IS SET, AND WHERE — because a breakpoint OUTLIVES the run that needed it, and the
-	// next run it stops is somebody else's. Read back as (module guid -> lines), with the editor
-	// line each one currently sits on: the map stores a committed line plus the offset edits have
-	// moved it by, and only their sum is an address anybody can use.
-	//
-	// 🛑 Measured on myself, 2026-09-04: a forgotten breakpoint parked a run on its second line, I
-	// read "only the first message arrived", and spent several turns building a theory about a lost
-	// channel. The state was knowable the whole time and nothing offered it.
-	//
-	// (module guid -> (editor line -> condition)); the lines count from 0, as the editor's do.
-	std::map<wxString, std::map<unsigned int, wxString>> GetBreakpoints() const;
-
 protected:
 
 	static bool TableAlreadyCreated();
 	static bool CreateBreakpointDatabase();
 
-	// Resolve the offset-map entry for the original (committed) line that the
-	// editor line `line` currently maps to. Shared by Toggle/RemoveBreakpoint
-	// (the resolution loop was duplicated verbatim in both). Returns end() when
-	// `line` falls in an inserted, not-yet-committed region.
-	std::map<unsigned int, int>::iterator ResolveOriginalLine(
-		std::map<unsigned int, int>& list_module_offset, unsigned int line) const;
-
-	//db support
-	void LoadModuleCollection();
-	void LoadModuleCollection(const class ibProtocolNode& store);
-	void LoadBreakpointCollection(const wxString& strModuleName);
-
-	bool ToggleBreakpointInDB(const wxString& strModuleName, unsigned int line, const wxString& condition);
-	bool RemoveBreakpointInDB(const wxString& strModuleName, unsigned int line);
-	bool OffsetBreakpointInDB(const wxString& strModuleName, unsigned int line, int offset, const wxString& condition);
+	//db support — the store's verbs at the editor's lines; refused with its reason (`said`)
+	bool ToggleBreakpointInDB(const wxString& strModuleName, unsigned int line, const wxString& condition, wxString& said);
+	bool RemoveBreakpointInDB(const wxString& strModuleName, unsigned int line, wxString& said);
 	bool RemoveAllBreakpointInDB();
 
 private:
@@ -281,27 +240,6 @@ private:
 	// …and one piece of news received: the state it says kept, and the listeners told it, in their words.
 	void Receive(const ibProtocolNode& news);
 
-	// A committed line, where the editor's edits since have moved it.
-	int GetLineOffset(const wxString& strModuleName, const int current_line) const {
-
-		auto iterator_module_offset = std::find_if(
-			m_listOffsetBreakpoint.begin(),
-			m_listOffsetBreakpoint.end(),
-			[strModuleName](const auto pair) {
-				return stringUtils::IsSameAs(pair.first, strModuleName);
-			}
-		);
-
-		if (iterator_module_offset != m_listOffsetBreakpoint.end()) {
-			auto& list_module_offset = iterator_module_offset->second;
-			auto iterator_list_module_offset = list_module_offset.find(current_line - 1);
-			if (iterator_list_module_offset != list_module_offset.end())
-				return current_line + iterator_list_module_offset->second;
-		}
-
-		return current_line;
-	}
-
 	static ibDebuggerClient* ms_debugClient;
 
 	ibGuid m_configGuid;
@@ -310,9 +248,6 @@ private:
 
 	// The runtimes as the server last listed them (SearchServer).
 	std::vector<ibDebuggerClientConnection> m_listConnection;
-
-	std::map <wxString, std::map<unsigned int, ibBreakpoint>> m_listBreakpoint; //list of points: committed line -> offset + condition
-	std::map <wxString, std::map<unsigned int, int>> m_listOffsetBreakpoint; //list of changed transitions
 
 	// What the server's debugger last said of itself — a runtime attached (SessionStart, SessionEnd), and one stopped
 	// (EnterLoop, LeaveLoop).

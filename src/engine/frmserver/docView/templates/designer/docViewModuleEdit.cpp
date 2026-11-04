@@ -3,6 +3,7 @@
 #include "backend/metaCollection/metaModuleObject.h"
 #include "backend/compiler/compileCode.h"   // ibCompileCode::GetCodeStyle — the syntax the session writes in
 #include "backend/compiler/compileModule.h"
+#include "backend/debugger/debugClient.h"   // PatchModule — the breakpoints, where the edit moved them
 #include "backend/metaData.h"   // GetCompileCache — where the module is compiled to be checked
 #include "backend/moduleInfo.h"
 #include "backend/system/systemManager.h"   // ibValueSystemFunction::Message — "no errors", to the output
@@ -645,6 +646,13 @@ bool ibModuleTextView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ib
 		// Where the desktop's editor wrote on save (ibCodeEditorDesigner::SaveModule) — the metaobject's text — and the
 		// configuration modified (ibMetaDocument::Modify).
 		creator->SetModuleText(args.GetValue<ibString>(ibProtocol::ibView::ibModule::Text));
+		// …AND THE EDIT THAT MOVED ITS LINES, where the text arrives: the breakpoints move in the debugger's one map, as
+		// the desktop's editor moved them in it (OnPatchModule) — the editor keeps none of its own.
+		if (args.FindField(ibProtocol::ibView::ibModule::Offset) && debugClient != nullptr)
+			debugClient->PatchModule(creator->GetDocPath(),
+				static_cast<unsigned int>(args.GetValue<std::int32_t>(ibProtocol::ibView::ibModule::Line)),
+				args.GetValue<std::int32_t>(ibProtocol::ibView::ibModule::Offset),
+				args.GetValue<bool>(ibProtocol::ibView::ibModule::AtLineStart));
 		document->Modify(true);
 		return true;
 	default:
@@ -669,23 +677,22 @@ bool ibModuleTextDocument::OnSaveModified()
 	if (frame == nullptr || frame->IsClosingWindow() || m_closeAllowed)
 		return true;
 
-	const ibValueMetaObject* const metaObject = GetMetaObject();
-	if (metaObject != nullptr && metaObject->IsEditable()) {
-		if (!SyntaxControl(false))
-			return false;
-	}
+	if (!CanSave())
+		return false;
 	m_closeAllowed = true;
 	return ibMetaDocument::OnSaveModified();
 }
 
+bool ibModuleTextDocument::CanSave() const
+{
+	// One that takes edits compiled first, as the desktop's Save did (ibModuleDocument::Save).
+	const ibValueMetaObject* const metaObject = GetMetaObject();
+	return metaObject == nullptr || !metaObject->IsEditable() || SyntaxControl(false);
+}
+
 bool ibModuleTextDocument::Save()
 {
-	const ibValueMetaObject* const metaObject = GetMetaObject();
-	if (metaObject != nullptr && metaObject->IsEditable()) {
-		if (!SyntaxControl(false))
-			return false;
-	}
-	return ibMetaDocument::Save();
+	return CanSave() && ibMetaDocument::Save();
 }
 
 bool ibModuleTextDocument::SyntaxControl(bool throwMessage) const

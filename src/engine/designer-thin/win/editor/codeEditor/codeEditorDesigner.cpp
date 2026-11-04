@@ -40,11 +40,11 @@ void ibCodeEditorDesigner::OnEditDebugPoint(int line)
 	}
 }
 
+// The edit goes to the server with the text, and the server's debugger moves the breakpoints where it arrives
+// (ibModuleTextView, Change) — the one map, as the desktop's editor moved them in its own process.
 void ibCodeEditorDesigner::OnPatchModule(int line, int linesAdded, bool atLineStart)
 {
-	if (debugClient == nullptr || m_moduleDocument == nullptr)
-		return;
-	debugClient->PatchModule(m_moduleDocument->GetDocPath(), line, linesAdded, atLineStart);
+	SaveModule(line, linesAdded, atLineStart);
 }
 
 void ibCodeEditorDesigner::OnEvaluateToolTip(const wxString& expression)
