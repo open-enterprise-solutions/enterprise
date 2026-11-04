@@ -14050,3 +14050,23 @@ msgstr "Перемикач \"%s\" стоїть за значенням, яке �
 #, c-format
 msgid "The radio button \"%s\" stands for a value that could not be read (%s): it stands for none now."
 msgstr "Перемикач \"%s\" стоїть за значенням, яке не вдалося прочитати (%s): тепер він не стоїть за жодним."
+
+#: src/engine/frmserver/visualView/ctrl/radiobutton.cpp
+#, c-format
+msgid "The radio button \"%s\" stands for %s, which its source cannot hold: choose its value again"
+msgstr "Перемикач \"%s\" стоїть за значенням %s, яке його джерело не може зберігати: виберіть його значення заново"
+
+#: src/engine/frmserver/visualView/ctrl/radiobutton.cpp
+#, c-format
+msgid "The radio button \"%s\" stands for a value that cannot be saved (%s)"
+msgstr "Перемикач \"%s\" стоїть за значенням, яке неможливо зберегти (%s)"
+
+#: src/engine/frmserver/visualView/ctrl/radiobutton.cpp
+#, c-format
+msgid "The radio button \"%s\" is bound to another field: its choice value %s is not one the field holds, so it stands for none now."
+msgstr "Перемикач \"%s\" прив'язаний до іншого поля: його значення вибору %s поле зберігати не може, тому тепер він не стоїть за жодним."
+
+#: src/engine/backend/propertyManager/property/propertyValue.cpp
+#, c-format
+msgid "A value of type '%s' has no saved form"
+msgstr "Значення типу '%s' не має форми для збереження"

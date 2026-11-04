@@ -13715,3 +13715,23 @@ msgstr ""
 #, c-format
 msgid "The radio button \"%s\" stands for a value that could not be read (%s): it stands for none now."
 msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/radiobutton.cpp
+#, c-format
+msgid "The radio button \"%s\" stands for %s, which its source cannot hold: choose its value again"
+msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/radiobutton.cpp
+#, c-format
+msgid "The radio button \"%s\" stands for a value that cannot be saved (%s)"
+msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/radiobutton.cpp
+#, c-format
+msgid "The radio button \"%s\" is bound to another field: its choice value %s is not one the field holds, so it stands for none now."
+msgstr ""
+
+#: src/engine/backend/propertyManager/property/propertyValue.cpp
+#, c-format
+msgid "A value of type '%s' has no saved form"
+msgstr ""

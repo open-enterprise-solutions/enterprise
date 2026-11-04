@@ -60,6 +60,14 @@ ibPropertyChoiceMode ibPropertyValue::GetValueList(ibPropertyChoiceList& list)
 	return ibPropertyChoiceMode::Single;
 }
 
+bool ibPropertyValue::IsOfSourceType() const
+{
+	if (IsEmptyProperty() || m_typedBy == nullptr || m_typedBy->IsEmptyProperty())
+		return true;
+	const ibTypeDescription& type = m_typedBy->GetValueAsTypeDesc();
+	return type.GetClsidCount() == 0 || type.ContainType(GetValueAsValue().GetClassType());
+}
+
 bool ibPropertyValue::SetDataValue(const ibValue& varPropVal)
 {
 	SetValue(varPropVal);
@@ -162,17 +170,14 @@ bool ibPropertyValue::WriteNodeValue(ibDataValue& value) const
 	default: break;
 	}
 
+	// ⚠ A VALUE THAT CANNOT BE WRITTEN RAISES, as one that cannot be read does: the owner says whose it was
+	// (ibValueRadioButton::WriteData). Left out, the form would be saved without it and read back standing for none.
 	const ibMetaData* const metaData = GetPropertyObject() != nullptr ? GetPropertyObject()->GetMetaData() : nullptr;
 	auto node = std::make_shared<ibDataNode>();
-	try {
-		if (metaData != nullptr)
-			metaData->Serialize(held, *node);
-		else if (!held.Serialize(*node))
-			return false;
-	}
-	catch (const ibCoreException&) {
-		return false;
-	}
+	if (metaData != nullptr)
+		metaData->Serialize(held, *node);
+	else if (!held.Serialize(*node))
+		ibBackendCoreException::Error(_("A value of type '%s' has no saved form"), held.GetClassName());
 	value = ibDataValue::Child(node);
 	return true;
 }

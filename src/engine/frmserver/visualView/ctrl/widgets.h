@@ -517,24 +517,29 @@ private:
 // Selected decides, and a click selects it among the unbound buttons beside it.
 class ibValueRadioButton : public ibValueWindow,
 	public ibTypeControlFactory {
-	public:
+public:
+
+	ibValueRadioButton();
 
 	void SetCaption(const ibString& caption) { return m_propertyTitle->SetValue(caption); }
 	ibString GetCaption() const { return m_propertyTitle->GetValueAsTranslateString(); }
 
-	////////////////////////////////////////////////////////////////////////////////////////
 	void SetSource(const ibMetaID& id) { m_propertySource->SetValue(id); }
 	void SetSource(const std::vector<ibSourceId>& path) { m_propertySource->SetValue(ibSourceDescription(path)); }
 	// The value it stands for among its source's.
 	void SetChoiceValue(const ibValue& value) { m_propertyChoiceValue->SetValue(value); }
 	ibValue GetChoiceValue() const { return m_propertyChoiceValue->GetValueAsValue(); }
-	////////////////////////////////////////////////////////////////////////////////////////
+
+	// Whether it shows selected: bound — the source holds its ChoiceValue; unbound — its Selected.
+	bool IsSelected() const;
+
+	static ibPicture GetIconGroup();
 
 	// Available sources = the owning form's attributes.
 	virtual bool GetSourceList(std::vector<ibBackendFormAttributeValue*>& out) const override;
 
 	//get source object
-	virtual ibSourceObject* GetSourceObject() const;
+	virtual ibSourceObject* GetSourceObject() const override;
 
 	virtual ibSourceDescription& GetSourceDesc() const override { return m_propertySource->GetValueAsSourceDesc(); }
 
@@ -548,26 +553,21 @@ class ibValueRadioButton : public ibValueWindow,
 	virtual bool IsReadOnly() const override;
 
 	//get source attribute
-	virtual const ibBackendSourceColumn* GetSourceAttributeObject() const {
+	virtual const ibBackendSourceColumn* GetSourceAttributeObject() const override {
 		return m_propertySource->GetSourceAttributeObject();
 	}
 
 	//get form owner
-	virtual ibValueForm* GetOwnerForm() const { return m_formOwner; }
+	virtual ibValueForm* GetOwnerForm() const override { return m_formOwner; }
 
 	//get metaData
-	virtual const ibMetaData* GetMetaData() const;
+	virtual const ibMetaData* GetMetaData() const override;
 
 	//get type description
-	virtual ibTypeDescription& GetTypeDesc() const { return m_propertySource->GetValueAsTypeDesc(); }
-
-	ibValueRadioButton();
+	virtual ibTypeDescription& GetTypeDesc() const override { return m_propertySource->GetValueAsTypeDesc(); }
 
 	//get title
-	virtual ibString GetControlTitle() const;
-
-	// Whether it shows selected: bound — the source holds its ChoiceValue; unbound — its Selected.
-	bool IsSelected() const;
+	virtual ibString GetControlTitle() const override;
 
 	// The caption in the session's language, whether it is shown selected and whether it is read-only.
 	virtual void OnUpdate(ibDataNode& state, ibVisualHost* host) override;
@@ -575,16 +575,20 @@ class ibValueRadioButton : public ibValueWindow,
 	// Toggle — the button clicked (it is selected by it).
 	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) override;
 
+	// Source changed: a ChoiceValue its new type does not hold is dropped, and that is said (ibPropertyValue::
+	// IsOfSourceType) — a button left standing for a value its field can never hold could never be selected.
+	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue) override;
+
 	//support icons
-	virtual ibPicture GetIcon() const;
-	static ibPicture GetIconGroup();
+	virtual ibPicture GetIcon() const override;
 
 	//load & save object in control
-	virtual bool ReadData(const ibDataNode& node);
-	virtual bool WriteData(ibDataNode& node) const;
+	virtual bool ReadData(const ibDataNode& node) override;
+	// A ChoiceValue that cannot be written, or that its source's type does not hold, raises with the button's name.
+	virtual bool WriteData(ibDataNode& node) const override;
 
-	virtual bool HasValueInControl() const { return !m_propertySource->IsEmptyProperty(); }
-	virtual bool GetControlValue(ibValue& pvarControlVal) const;
+	virtual bool HasValueInControl() const override { return !m_propertySource->IsEmptyProperty(); }
+	virtual bool GetControlValue(ibValue& pvarControlVal) const override;
 
 private:
 

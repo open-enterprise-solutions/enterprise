@@ -14053,3 +14053,23 @@ msgstr "Радиокнопка \"%s\" стоит за значением, кот
 #, c-format
 msgid "The radio button \"%s\" stands for a value that could not be read (%s): it stands for none now."
 msgstr "Радиокнопка \"%s\" стоит за значением, которое не удалось прочитать (%s): теперь она не стоит ни за каким."
+
+#: src/engine/frmserver/visualView/ctrl/radiobutton.cpp
+#, c-format
+msgid "The radio button \"%s\" stands for %s, which its source cannot hold: choose its value again"
+msgstr "Радиокнопка \"%s\" стоит за значением %s, которое её источник не может хранить: выберите её значение заново"
+
+#: src/engine/frmserver/visualView/ctrl/radiobutton.cpp
+#, c-format
+msgid "The radio button \"%s\" stands for a value that cannot be saved (%s)"
+msgstr "Радиокнопка \"%s\" стоит за значением, которое невозможно сохранить (%s)"
+
+#: src/engine/frmserver/visualView/ctrl/radiobutton.cpp
+#, c-format
+msgid "The radio button \"%s\" is bound to another field: its choice value %s is not one the field holds, so it stands for none now."
+msgstr "Радиокнопка \"%s\" привязана к другому полю: её выбираемое значение %s поле хранить не может, поэтому теперь она не стоит ни за каким."
+
+#: src/engine/backend/propertyManager/property/propertyValue.cpp
+#, c-format
+msgid "A value of type '%s' has no saved form"
+msgstr "Значение типа '%s' не имеет сохраняемой формы"

@@ -17,12 +17,17 @@ class ibPropertySource;
 // of its own shape, adjusted to the source's type.
 //
 // ⚠ A VALUE THAT CANNOT BE READ RAISES (ibCoreException): a member deleted since, a word that names none of the
-// choices. Never a quiet empty — a button standing for no value looks exactly like one nobody set.
+// choices. Never a quiet empty — a button standing for no value looks exactly like one nobody set. So does one that
+// cannot be WRITTEN: left out, the saved form would read back standing for none.
 class BACKEND_API ibPropertyValue : public ibProperty {
 public:
 
 	ibValue GetValueAsValue() const;
 	void SetValue(const ibValue& value);
+
+	// The value is one its source's type holds — true too when there is no value, or no source to hold one. False is a
+	// value left from another binding, which no field of this one can ever hold.
+	bool IsOfSourceType() const;
 
 	ibPropertyValue(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString,
 		const ibPropertySource* typedBy)

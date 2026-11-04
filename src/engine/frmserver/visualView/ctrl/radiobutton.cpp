@@ -4,6 +4,7 @@
 #include "backend/appData.h"
 #include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "backend/compiler/procUnit.h"
+#include "backend/backend_exception.h"   // ibBackendCoreException — a value that cannot be saved, with its button
 #include "backend/system/systemManager.h"   // ibValueSystemFunction::Message — a value not read, said
 
 
@@ -101,6 +102,21 @@ void ibValueRadioButton::ReadChoiceValue(const ibDataValue& value)
 		ibStatusMessage::ibStatusMessage_Warning);
 }
 
+void ibValueRadioButton::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
+{
+	ibValueWindow::OnPropertyChanged(property, oldValue, newValue);
+
+	// ⭐ BOUND ELSEWHERE, IT STANDS FOR A VALUE OF THE NEW FIELD OR FOR NONE — a member of one enumeration, rebound to a
+	// field of another type, could never be selected and would be saved as it is. Dropped, and said where it happened.
+	if (property != m_propertySource || m_propertyChoiceValue->IsOfSourceType())
+		return;
+	const ibString was = m_propertyChoiceValue->GetValueAsValue().GetString();
+	m_propertyChoiceValue->SetValue(ibValue());
+	ibValueSystemFunction::Message(ibString::Format(
+		_("The radio button \"%s\" is bound to another field: its choice value %s is not one the field holds, so it stands for none now."),
+		GetControlName(), was), ibStatusMessage::ibStatusMessage_Warning);
+}
+
 bool ibValueRadioButton::ReadData(const ibDataNode& node)
 {
 	// The caption and the starting selection are the radio button's own, so they travel with it - without
@@ -121,7 +137,20 @@ bool ibValueRadioButton::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyTitle->GetName(), m_propertyTitle->GetNodeValue());
 	node.SetProperty(m_propertySelected->GetName(), m_propertySelected->GetNodeValue());
 	node.SetProperty(m_propertySource->GetName(), m_propertySource->GetNodeValue());
-	node.SetProperty(m_propertyChoiceValue->GetName(), m_propertyChoiceValue->GetNodeValue());
+	// ⭐ A VALUE THAT CANNOT BE SAVED IS REFUSED, with the button it belonged to — never left out, which would read back
+	// as a button standing for none. Nor one its source cannot hold: a field rebound by a door that does not ask the
+	// button (OnPropertyChanged drops it where it is asked).
+	if (!m_propertyChoiceValue->IsOfSourceType()) {
+		ibBackendCoreException::Error(_("The radio button \"%s\" stands for %s, which its source cannot hold: choose its value again"),
+			GetControlName(), m_propertyChoiceValue->GetValueAsValue().GetString());
+	}
+	try {
+		node.SetProperty(m_propertyChoiceValue->GetName(), m_propertyChoiceValue->GetNodeValue());
+	}
+	catch (const ibCoreException& err) {
+		ibBackendCoreException::Error(_("The radio button \"%s\" stands for a value that cannot be saved (%s)"),
+			GetControlName(), err.GetErrorDescription());
+	}
 
 	//events
 	node.SetProperty(m_onChange->GetName(), m_onChange->GetNodeValue());
