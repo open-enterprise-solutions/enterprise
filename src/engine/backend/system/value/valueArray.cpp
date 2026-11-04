@@ -34,15 +34,6 @@ bool ibValueArray::Init(ibValue** paParams, const long lSizeArray)
 	return false;
 }
 
-// Raises when `index` is out of range for ELEMENT ACCESS ([0, size)) — everywhere, the designer included:
-// the one evaluation there, the caret's walk for completion, catches what a call raises and offers nothing
-// for it, which is what an index into the empty array it built deserves anyway (census, 2026-10-01).
-void ibValueArray::CheckIndex(unsigned int index) const
-{
-	if (index >= m_listValue.size())
-		ibBackendCoreException::Error(_("Index goes beyond array"));
-}
-
 // Insert BEFORE `index`; index == size appends. The valid range is [0, size],
 // one wider than element access — never `insert(begin() + oob)`, which is UB.
 void ibValueArray::Insert(unsigned int index, const ibValue& varValue)
@@ -57,10 +48,8 @@ void ibValueArray::Insert(unsigned int index, const ibValue& varValue)
 // Erase the element AT `index` ([0, size)) — never `erase(begin() + oob)`.
 void ibValueArray::Remove(unsigned int index)
 {
-	if (index >= m_listValue.size()) {
-		CheckIndex(index);
-		return;
-	}
+	if (index >= m_listValue.size())
+		ThrowErrorIndexBeyond();
 	m_listValue.erase(m_listValue.begin() + index);
 }
 
@@ -71,13 +60,13 @@ void ibValueArray_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx
 {
 	helper.AppendConstructor(1, ibT("Array(num : number)"));
 
+	ibValueArray::FillCollection(helper);   // Count, Get - first, as the numbers say
+
 	helper.AppendFunc(ibT("Add"), 1, ibT("Add(value : any)"));
 	helper.AppendFunc(ibT("Insert"), 2, ibT("Insert(index, value : any)"));
 
-	helper.AppendFunc(ibT("Count"), ibT("Count()"));
 	helper.AppendFunc(ibT("Find"), 1, ibT("Find(value : any)"));
 	helper.AppendFunc(ibT("Clear"), ibT("Clear()"));
-	helper.AppendFunc(ibT("Get"), 1, ibT("Get(index)"));
 	helper.AppendFunc(ibT("Set"), 2, ibT("Set(index, value : any)"));
 	helper.AppendFunc(ibT("Remove"), 1, ibT("Remove(index : number)"));
 	helper.AppendFunc(ibT("Contains"), 1, ibT("Contains(value : any)"));
@@ -101,21 +90,16 @@ bool ibValueArray::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibVa
 	case enAdd: 
 		Add(*paParams[0]);
 		return true;
-	case enInsert: 
-		Insert(paParams[0]->GetUInteger(), *paParams[1]); 
+	case enInsert:
+		Insert(paParams[0]->GetUInteger(), *paParams[1]);
 		return true;
-	case enCount:
-		pvarRetValue = Count();
-		return true;
-	case enFind: 
+	case enFind:
 		pvarRetValue = Find(*paParams[0]);
 		return true;
-	case enClear: 
-		Clear(); 
+	case enClear:
+		Clear();
 		return true;
-	case enGet:
-		return GetAt(*paParams[0], pvarRetValue);
-	case enSet:  
+	case enSet:
 		return SetAt(*paParams[0], *paParams[1]);
 	case enRemove:
 		Remove(paParams[0]->GetUInteger());
@@ -156,7 +140,7 @@ bool ibValueArray::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibVa
 		return true;
 	}
 
-	return false;
+	return ibValueCollection::CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
 }
 
 // Selector-lambda aggregation variants. Each element is projected
@@ -318,24 +302,11 @@ void ibValueArray::DispatchLinqMethod(ibLinqMethod method, ibValue& ret,
 	}
 }
 
-bool ibValueArray::GetAt(const ibValue& varKeyValue, ibValue& pvarValue) //array index must start from 0
-{
-	const unsigned int index = varKeyValue.GetUInteger();
-	if (index >= m_listValue.size()) {
-		CheckIndex(index);
-		return false;
-	}
-	pvarValue = m_listValue[index];
-	return true;
-}
-
 bool ibValueArray::SetAt(const ibValue& varKeyValue, const ibValue& varValue)//array index must start from 0
 {
 	const unsigned int index = varKeyValue.GetUInteger();
-	if (index >= m_listValue.size()) {
-		CheckIndex(index);
-		return false;
-	}
+	if (index >= m_listValue.size())
+		ThrowErrorIndexBeyond();
 	m_listValue[index] = varValue;
 	return true;
 }

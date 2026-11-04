@@ -354,7 +354,7 @@ ibValue ibValueJsonReader::BuildValue(int depth)
 			const ibString spelled = name.GetString();
 			const long matched = object->FindProp(spelled);
 			if (matched >= 0) {
-				const ibString held = object->Entries()[static_cast<size_t>(matched)].key.GetString();
+				const ibString held = object->Values()[static_cast<size_t>(matched)].key.GetString();
 				if (held != spelled)
 					ibBackendCoreException::Error(_("JSONReader: the object has the keys '%s' and '%s', which differ only in case - a Structure cannot hold both; walk it with Read() instead"),
 						held, spelled);
@@ -583,11 +583,11 @@ void ibValueJsonWriter::WriteAny(const ibValue& value, int depth)
 	const ibValue* const target = value.GetRef();   // the value itself when it refers to nothing else
 	const bool object = target->GetType() == ibValueTypes::TYPE_VALUE;   // only an object is worth a cast
 
-	if (const ibValueContainer* const map = object ? dynamic_cast<const ibValueContainer*>(target) : nullptr) {
+	if (const ibValueMap* const map = object ? dynamic_cast<const ibValueMap*>(target) : nullptr) {
 		if (depth >= kMaxDepth)
 			ibBackendCoreException::Error(_("JSONWriter: the value nests deeper than %d levels"), kMaxDepth);
 		WriteStartObject();
-		for (const auto& entry : map->Entries()) {
+		for (const auto& entry : map->Values()) {
 			if (entry.key.GetType() != ibValueTypes::TYPE_STRING)
 				ibBackendCoreException::Error(_("JSONWriter: the names in a JSON object are strings, and this one has a key of type '%s'"),
 					entry.key.GetClassName());

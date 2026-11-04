@@ -8,7 +8,7 @@
 #include "chartOfCharacteristicTypes.h"        // the kind's own Type — what a value is adjusted to
 #include "reference/reference.h"               // ibValueReferenceDataObject::GetValueByMetaID — reading the kind
 #include "backend/metaCollection/resource/metaResourceObject.h"   // IsBalanceResource — which figure balances
-#include "backend/system/value/valueMap.h"      // ibValueContainer — a breakdown handed over as a whole map
+#include "backend/system/value/valueMap.h"      // ibValueMap — a breakdown handed over as a whole map
 #include "backend/system/value/valueType.h"    // ibValueTypeDescription::AdjustValue
 
 #include "backend/appData.h"
@@ -309,7 +309,7 @@ std::shared_ptr<ibValueIteratorState> ibValueRecordSetObjectAccountingRegister::
 			if (m_pos >= m_pairs.size()) return false;
 			ibValue valueCopy = m_pairs[m_pos].second;
 			current = ibValue(static_cast<ibValue*>(
-				new ibValueContainer::ibValueReturnContainer(m_pairs[m_pos].first, valueCopy)));
+				new ibValueMap::ibValueKeyValue(m_pairs[m_pos].first, valueCopy)));
 			return true;
 		}
 		void Reset() override { m_pos = 0; m_started = false; }
@@ -318,7 +318,7 @@ std::shared_ptr<ibValueIteratorState> ibValueRecordSetObjectAccountingRegister::
 			return next >= m_pairs.size() ? 0 : static_cast<long>(m_pairs.size() - next);
 		}
 		bool PeekSample(ibValue& current) const override {
-			current = ibValue(static_cast<ibValue*>(new ibValueContainer::ibValueReturnContainer()));
+			current = ibValue(static_cast<ibValue*>(new ibValueMap::ibValueKeyValue()));
 			return true;
 		}
 	private:
@@ -556,10 +556,10 @@ bool ibValueRecordSetObjectAccountingRegister::ibValueAccountingLine::SetPropVal
 			return true;
 		}
 
-		ibValueContainer* pairs = nullptr;
+		ibValueMap* pairs = nullptr;
 		if (!varPropVal.ConvertToValue(pairs) || pairs == nullptr)
 			return false;   // anything that is neither a map nor emptiness is not a breakdown
-		for (const auto& entry : pairs->Entries())
+		for (const auto& entry : pairs->Values())
 			if (!target.SetAt(entry.key, entry.value))
 				return false;
 		return true;

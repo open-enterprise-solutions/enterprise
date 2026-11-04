@@ -1123,7 +1123,8 @@ bool ibValueSystemFunction::RunJob(const ibString& strJobName)
 #include "backend/system/value/valueArray.h"
 #include "backend/system/value/valueBackgroundJob.h"
 
-ibValue ibValueSystemFunction::RunBackground(const ibString& strProcedureName, ibValue* pArgs)
+ibValue ibValueSystemFunction::RunBackground(const ibString& strProcedureName, ibValue* pArgs,
+	const ibString& strKey, const ibString& strDescription)
 {
 	// Starting work from a watch expression would be a side effect of LOOKING at
 	// something — the same reason the transaction verbs guard on this.
@@ -1157,6 +1158,10 @@ ibValue ibValueSystemFunction::RunBackground(const ibString& strProcedureName, i
 
 	// StartBackground gates the arguments and throws on a mutable one, so a bad
 	// call lands here, on the caller's stack, with the script's try/except as the
-	// natural handling point.
-	return new ibValueBackgroundJob(manager->StartBackground(strProcedureName, args));
+	// natural handling point. So does a key still held by an active run of the same procedure.
+	ibBackgroundRequest request;
+	request.m_method = strProcedureName;
+	request.m_key = strKey;
+	request.m_description = strDescription;
+	return new ibValueBackgroundJob(manager->StartBackground(request, args));
 }

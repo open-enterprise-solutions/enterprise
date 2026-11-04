@@ -64,7 +64,6 @@
     <ClInclude Include="sheetFormat\sheetFormatNative.h" />
     <ClInclude Include="sheetFormat\sheetFormatDocx.h" />
     <ClInclude Include="system\value\valueBackgroundJob.h" />
-    <ClInclude Include="system\value\valueScheduledJob.h" />
     <ClInclude Include="backend_core.h" />
     <ClInclude Include="backend_mainFrame.h" />
     <ClInclude Include="backend_picture.h" />
@@ -294,6 +293,7 @@
     <ClInclude Include="metadataDataProcessor.h" />
     <ClInclude Include="metadataReport.h" />
     <ClInclude Include="moduleInfo.h" />
+    <ClInclude Include="moduleManager\metaObjectCollection.h" />
     <ClInclude Include="moduleManager\moduleManager.h" />
     <ClInclude Include="moduleManager\moduleManagerExt.h" />
     <ClInclude Include="objCtor.h" />
@@ -402,6 +402,7 @@
     <ClInclude Include="utils\dataVersion.hpp" />
     <ClInclude Include="valueInfo.h" />
     <ClInclude Include="value_cast.h" />
+    <ClInclude Include="value_collection.h" />
     <ClInclude Include="value_ptr.h" />
   </ItemGroup>
   <ItemGroup>
@@ -450,7 +451,6 @@
     <ClCompile Include="sheetFormat\sheetFormatXlsxRead.cpp" />
     <ClCompile Include="sheetFormat\sheetFormatXlsxWrite.cpp" />
     <ClCompile Include="system\value\valueBackgroundJob.cpp" />
-    <ClCompile Include="system\value\valueScheduledJob.cpp" />
     <ClCompile Include="backend_mainFrame.cpp" />
     <ClCompile Include="backend_picture.cpp" />
     <ClCompile Include="backend_localization.cpp" />
@@ -792,6 +792,7 @@
     <ClCompile Include="metadataReport.cpp" />
     <ClCompile Include="metadataReportFactory.cpp" />
     <ClCompile Include="moduleInfo.cpp" />
+    <ClCompile Include="moduleManager\metaObjectCollection.cpp" />
     <ClCompile Include="moduleManager\moduleManager.cpp" />
     <ClCompile Include="moduleManager\moduleManagerEvent.cpp" />
     <ClCompile Include="moduleManager\moduleManagerExt.cpp" />
@@ -905,6 +906,7 @@
     <ClCompile Include="utils\passwordHash.cpp" />
     <ClCompile Include="utils\dataVersion.cpp" />
     <ClCompile Include="value_cast.cpp" />
+    <ClCompile Include="value_collection.cpp" />
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="databaseLayer\postgres\engine\dll\libcrypto-3-x64.dll">

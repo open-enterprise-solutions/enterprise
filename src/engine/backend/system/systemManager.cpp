@@ -261,7 +261,7 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	//--- Jobs: keep last, matching the enRunScheduledJobs..enRunJob enum tail.
 	helper.AppendFunc(ibT("RunScheduledJobs"), ibT("RunScheduledJobs()"));
 	helper.AppendFunc(ibT("RunJob"), 1, ibT("RunJob(name : string)"));
-	helper.AppendFunc(ibT("RunBackground"), 2, ibT("RunBackground(procedure : string, args : array)"));
+	helper.AppendFunc(ibT("RunBackground"), 4, ibT("RunBackground(procedure : string, args : array, key : string, description : string)"));
 	//--- …and value-as-text last, matching the enJSONString / enJSONValue tail above.
 	helper.AppendFunc(ibT("JSONString"), 1, ibT("JSONString(value : any)"));
 	helper.AppendFunc(ibT("JSONValue"), 1, ibT("JSONValue(json : string)"));
@@ -416,7 +416,9 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 		case enRunJob: pvarRetValue = RunJob(paParams[0]->GetString()); return true;
 		case enRunBackground:
 			pvarRetValue = RunBackground(paParams[0]->GetString(),
-				lSizeArray > 1 ? paParams[1] : nullptr);
+				lSizeArray > 1 ? paParams[1] : nullptr,
+				lSizeArray > 2 ? paParams[2]->GetString() : ibString(),
+				lSizeArray > 3 ? paParams[3]->GetString() : ibString());
 			return true;
 		case enJSONString: pvarRetValue = JSONString(*paParams[0]); return true;
 		case enJSONValue: pvarRetValue = JSONValue(paParams[0]->GetString()); return true;

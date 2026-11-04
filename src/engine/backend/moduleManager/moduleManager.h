@@ -176,7 +176,7 @@ public:
 	};
 
 	// "Data" global — the QUERYABLE-source mirror of "Metadata" (L4-2). The same
-	// member shape (kind namespaces -> a Name-keyed structure), but the leaves are
+	// member shape (kind namespaces -> a by-name collection, metaObjectCollection.h), but the leaves are
 	// ibValueQueryable values (the source the text query language reads through) —
 	// the QUERYABLE kinds only (records with a data-reference, registers,
 	// constants; no modules / forms / reports). Lazy by contract: vending a

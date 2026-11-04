@@ -4,10 +4,57 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "moduleManager.h"
+#include "metaObjectCollection.h"
 #include "backend/metaData.h"
 
-#include "backend/system/value/valueMap.h"
+#include <iterator>   // std::size — the table of kinds
 
+// Metadata.Catalogs, … — the metaobjects of one kind themselves (metaObjectCollection.h).
+class ibValueMetadataCollection : public ibValueMetaObjectCollection {
+public:
+
+	ibValueMetadataCollection() : ibValueMetaObjectCollection(nullptr) {}
+	ibValueMetadataCollection(const ibClassID& clsid, ibMetaData* metaData) : ibValueMetaObjectCollection(metaData) {
+		m_listValue = m_metaData->GetAnyArrayObject(clsid);
+	}
+
+protected:
+
+	virtual ibValue ElementValue(ibValueMetaObject* const& object) const override {
+		return object != nullptr ? ibValue(object) : ibValue();
+	}
+};
+
+namespace {
+
+// THE KINDS, one per member, in the members' order: the name a script reads and the kind it stands for. A member's
+// number is its position here, so FillMembers and GetPropVal read one table.
+struct ibMetadataKind {
+	const ibChar* m_name;
+	ibClassID     m_clsid;
+};
+
+constexpr ibMetadataKind s_metadataKinds[] = {
+	{ ibT("CommonModules"),               g_metaCommonModuleCLSID },
+	{ ibT("CommonForms"),                 g_metaCommonFormCLSID },
+	{ ibT("CommonTemplates"),             g_metaCommonTemplateCLSID },
+	{ ibT("Constants"),                   g_metaConstantCLSID },
+	{ ibT("Catalogs"),                    g_metaCatalogCLSID },
+	{ ibT("Documents"),                   g_metaDocumentCLSID },
+	{ ibT("Enumerations"),                g_metaEnumerationCLSID },
+	{ ibT("DataProcessors"),              g_metaDataProcessorCLSID },
+	{ ibT("Reports"),                     g_metaReportCLSID },
+	{ ibT("InformationRegisters"),        g_metaInformationRegisterCLSID },
+	{ ibT("AccumulationRegisters"),       g_metaAccumulationRegisterCLSID },
+	{ ibT("ChartsOfCharacteristicTypes"), g_metaChartOfCharacteristicTypesCLSID },
+	{ ibT("ChartsOfAccounts"),            g_metaChartOfAccountsCLSID },
+	{ ibT("AccountingRegisters"),         g_metaAccountingRegisterCLSID },
+	{ ibT("ChartsOfCalculationTypes"),    g_metaChartOfCalculationTypesCLSID },
+	{ ibT("CalculationRegisters"),        g_metaCalculationRegisterCLSID },
+	{ ibT("Sequences"),                   g_metaSequenceCLSID },
+};
+
+} // namespace
 
 ibValueModuleManager::ibValueMetadataUnit::ibValueMetadataUnit(ibMetaData* metaData) :
 	ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true), m_metaData(metaData)
@@ -19,54 +66,13 @@ ibValueModuleManager::ibValueMetadataUnit::~ibValueMetadataUnit()
 {
 }
 
-enum
-{
-	enCommonModules = 0,
-	enCommonForms,
-	enCommonTemplates,
-	enConstants,
-	enCatalogs,
-	enDocuments,
-	enEnumerations,
-	enDataProcessors,
-	enReports,
-	enInformationRegisters,
-	enAccumulationRegisters,
-	enChartsOfCharacteristicTypes,
-	enChartsOfAccounts,
-	enAccountingRegisters,
-	enChartsOfCalculationTypes,
-	enCalculationRegisters,
-	enSequences,
-	enScheduledJobs,
-	enParameterizedJobs,
-};
-
 void ibValueModuleManager::ibValueMetadataUnit::FillMembers(ibMemberTable& helper) const
 {
 	// The clsid rides in the (long) property-tag slot only to distinguish these members; GetPropVal
 	// dispatches by ordinal and re-supplies the clsid itself, so the narrowing is intentional and
 	// lossless-in-practice. static_cast makes it explicit (silences C4305/C4309 on the std::uint64_t clsid).
-	helper.AppendProp("CommonModules", true, false, static_cast<long>(g_metaCommonModuleCLSID));
-	helper.AppendProp("CommonForms", true, false, static_cast<long>(g_metaCommonFormCLSID));
-	helper.AppendProp("CommonTemplates", true, false, static_cast<long>(g_metaCommonTemplateCLSID));
-	helper.AppendProp("Constants", true, false, static_cast<long>(g_metaConstantCLSID));
-	helper.AppendProp("Catalogs", true, false, static_cast<long>(g_metaCatalogCLSID));
-	helper.AppendProp("Documents", true, false, static_cast<long>(g_metaDocumentCLSID));
-	helper.AppendProp("Enumerations", true, false, static_cast<long>(g_metaEnumerationCLSID));
-	helper.AppendProp("DataProcessors", true, false, static_cast<long>(g_metaDataProcessorCLSID));
-	helper.AppendProp("Reports", true, false, static_cast<long>(g_metaReportCLSID));
-	helper.AppendProp("InformationRegisters", true, false, static_cast<long>(g_metaInformationRegisterCLSID));
-	helper.AppendProp("AccumulationRegisters", true, false, static_cast<long>(g_metaAccumulationRegisterCLSID));
-	helper.AppendProp("ChartsOfCharacteristicTypes", true, false, static_cast<long>(g_metaChartOfCharacteristicTypesCLSID));
-	helper.AppendProp("ChartsOfAccounts", true, false, static_cast<long>(g_metaChartOfAccountsCLSID));
-	helper.AppendProp("AccountingRegisters", true, false, static_cast<long>(g_metaAccountingRegisterCLSID));
-	helper.AppendProp("ChartsOfCalculationTypes", true, false, static_cast<long>(g_metaChartOfCalculationTypesCLSID));
-	helper.AppendProp("CalculationRegisters", true, false, static_cast<long>(g_metaCalculationRegisterCLSID));
-	helper.AppendProp("Sequences", true, false, static_cast<long>(g_metaSequenceCLSID));
-	// The two kinds of scheduled job — what ScheduledJobs.FindPredefined / CreateScheduledJob are handed.
-	helper.AppendProp("ScheduledJobs", true, false, static_cast<long>(g_metaScheduledJobCLSID));
-	helper.AppendProp("ParameterizedJobs", true, false, static_cast<long>(g_metaParameterizedJobCLSID));
+	for (const ibMetadataKind& kind : s_metadataKinds)
+		helper.AppendProp(kind.m_name, true, false, static_cast<long>(kind.m_clsid));
 }
 
 //****************************************************************************
@@ -80,115 +86,14 @@ bool ibValueModuleManager::ibValueMetadataUnit::SetPropVal(const long lPropNum, 
 
 bool ibValueModuleManager::ibValueMetadataUnit::GetPropVal(const long lPropNum, ibValue& pvarPropVal)//attribute value
 {
-	// A name repeated while the configuration is edited is put, not inserted (globalContextManager.cpp).
-	ibValueStructure* valStruct = new ibValueStructure();
-	switch (lPropNum)
-	{
-	case enCommonModules: {
-		for (const auto object : m_metaData->GetAnyArrayObject(g_metaCommonModuleCLSID)) {
-			valStruct->SetAt(object->GetName(), object);
-		}
-	} break;
-	case enCommonForms: {
-		for (const auto object : m_metaData->GetAnyArrayObject(g_metaCommonFormCLSID)) {
-			valStruct->SetAt(object->GetName(), object);
-		}
-	} break;
-	case enCommonTemplates: {
-		for (const auto object : m_metaData->GetAnyArrayObject(g_metaCommonTemplateCLSID)) {
-			valStruct->SetAt(object->GetName(), object);
-		}
-	} break;
-	case enConstants: {
-		for (const auto object : m_metaData->GetAnyArrayObject(g_metaConstantCLSID)) {
-			valStruct->SetAt(object->GetName(), object);
-		}
-	} break;
-	case enCatalogs: {
-		for (const auto object : m_metaData->GetAnyArrayObject(g_metaCatalogCLSID)) {
-			valStruct->SetAt(object->GetName(), object);
-		}
-	} break;
-	case enDocuments: {
-		for (const auto object : m_metaData->GetAnyArrayObject(g_metaDocumentCLSID)) {
-			valStruct->SetAt(object->GetName(), object);
-		}
-	} break;
-	case enEnumerations: {
-		for (const auto object : m_metaData->GetAnyArrayObject(g_metaEnumerationCLSID)) {
-			valStruct->SetAt(object->GetName(), object);
-		}
-	} break;
-	case enDataProcessors: {
-		for (const auto object : m_metaData->GetAnyArrayObject(g_metaDataProcessorCLSID)) {
-			valStruct->SetAt(object->GetName(), object);
-		}
-	} break;
-	case enReports: {
-		for (const auto object : m_metaData->GetAnyArrayObject(g_metaReportCLSID)) {
-			valStruct->SetAt(object->GetName(), object);
-		}
-	} break;
-	case enInformationRegisters: {
-		for (const auto object : m_metaData->GetAnyArrayObject(g_metaInformationRegisterCLSID)) {
-			valStruct->SetAt(object->GetName(), object);
-		}
-	} break;
-	case enAccumulationRegisters: {
-		for (const auto object : m_metaData->GetAnyArrayObject(g_metaAccumulationRegisterCLSID)) {
-			valStruct->SetAt(object->GetName(), object);
-		}
-		break;
-	}
-	case enChartsOfCharacteristicTypes: {
-		for (const auto object : m_metaData->GetAnyArrayObject(g_metaChartOfCharacteristicTypesCLSID)) {
-			valStruct->SetAt(object->GetName(), object);
-		}
-		break;
-	}
-	case enChartsOfAccounts: {
-		for (const auto object : m_metaData->GetAnyArrayObject(g_metaChartOfAccountsCLSID)) {
-			valStruct->SetAt(object->GetName(), object);
-		}
-		break;
-	}
-	case enAccountingRegisters: {
-		for (const auto object : m_metaData->GetAnyArrayObject(g_metaAccountingRegisterCLSID)) {
-			valStruct->SetAt(object->GetName(), object);
-		}
-		break;
-	}
-	case enChartsOfCalculationTypes: {
-		for (const auto object : m_metaData->GetAnyArrayObject(g_metaChartOfCalculationTypesCLSID)) {
-			valStruct->SetAt(object->GetName(), object);
-		}
-		break;
-	}
-	case enCalculationRegisters: {
-		for (const auto object : m_metaData->GetAnyArrayObject(g_metaCalculationRegisterCLSID)) {
-			valStruct->SetAt(object->GetName(), object);
-		}
-		break;
-	}
-	case enSequences: {
-		for (const auto object : m_metaData->GetAnyArrayObject(g_metaSequenceCLSID)) {
-			valStruct->SetAt(object->GetName(), object);
-		}
-		break;
-	}
-	case enScheduledJobs: {
-		for (const auto object : m_metaData->GetAnyArrayObject(g_metaScheduledJobCLSID)) {
-			valStruct->SetAt(object->GetName(), object);
-		}
-		break;
-	}
-	case enParameterizedJobs: {
-		for (const auto object : m_metaData->GetAnyArrayObject(g_metaParameterizedJobCLSID)) {
-			valStruct->SetAt(object->GetName(), object);
-		}
-		break;
-	}
-	}
-	pvarPropVal = valStruct;
+	if (lPropNum < 0 || lPropNum >= (long)std::size(s_metadataKinds))
+		return false;
+	pvarPropVal = new ibValueMetadataCollection(s_metadataKinds[lPropNum].m_clsid, m_metaData);
 	return true;
 }
+
+//**********************************************************************
+//*                       Runtime register                             *
+//**********************************************************************
+
+SYSTEM_TYPE_REGISTER(ibValueMetadataCollection, "MetadataCollection", system_to_clsid("MG_MDCOL"));

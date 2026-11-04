@@ -7,12 +7,39 @@
 #include <unordered_map>
 #include <string>
 
-constexpr ibClassID g_valueContainerCLSID = value_to_clsid("VL_CONTR");
+// "VL_CONTR" is the Map's id still, as it was the Container's: the id is what a packed map is read back
+// by (kValueFieldClsid), and every one packed before the rename says it.
+constexpr ibClassID g_valueMapCLSID       = value_to_clsid("VL_CONTR");
 constexpr ibClassID g_valueKeyValueCLSID  = system_to_clsid("VL_KEVAL");
 constexpr ibClassID g_valueStructureCLSID = value_to_clsid("VL_STRUT");
 
-// A key -> value map (script "Container"; "Structure" is the string-keyed
-// variant). Keys are DATA: they live in the store below and are reached by NAME,
+// AN ENTRY of a container: the key, its value, and the key's HASH — taken once, when the entry is made. A
+// container below kIndexMin is walked, and an insert walks it for a repeat: with the hash at hand that walk
+// compares numbers and reads a key's text only where two agree; and the index, built when the count reaches
+// kIndexMin, takes the hashes it finds instead of folding every key again. (2026-10-01: once the index started
+// at eight, a ten-field Structure cost 1 660 -> 2 760 ns — some 28 comparisons of key text below eight, then
+// all eight keys hashed a second time.)
+struct ibMapEntry {
+	// An empty one is what a walk's sample is made of (the editor's hint, PeekSample).
+	ibMapEntry() : hash(0) {}
+	// BUILT IN PLACE (emplace_back), as the pair before it was: a braced temporary pushed in cost every
+	// insert two ibValue moves and two destructions, out of line — a one- or two-field Structure paid more
+	// for them than for its hash (CI, 2026-10-01).
+	ibMapEntry(const ibValue& k, const ibValue& v, size_t h) : key(k), value(v), hash(h) {}
+
+	ibValue key;
+	ibValue value;
+	size_t  hash;
+};
+
+// The method table of a container, and of a read-only one (no Clear / Delete / Insert) — DoGetPMethods
+// picks one by the flag.
+void BindWritableMapNames(ibValue::ibMemberTable& helper, const ibValue* ctx);
+void BindReadOnlyMapNames(ibValue::ibMemberTable& helper, const ibValue* ctx);
+
+// A key -> value map (script "Map"; "Structure" is the string-keyed
+// variant) — a collection whose element is an entry, read by its KEY rather than
+// by an index. Keys are DATA: they live in the store below and are reached by NAME,
 // never mirrored into the member table. Two consequences the previous design got
 // wrong and this one fixes:
 //
@@ -25,46 +52,26 @@ constexpr ibClassID g_valueStructureCLSID = value_to_clsid("VL_STRUT");
 //     n-key container was O(n^2) (docs/private/runtime-perf.md §1g). The member table now
 //     carries only the fixed METHODS; the keys never touch it.
 //   * The method table is the TYPE's, not the instance's — see DoGetPMethods.
-class BACKEND_API ibValueContainer : public ibValue {
-public:
-	// AN ENTRY: the key, its value, and the key's HASH — taken once, when the entry is made. A container
-	// below kIndexMin is walked, and an insert walks it for a repeat: with the hash at hand that walk
-	// compares numbers and reads a key's text only where two agree; and the index, built when the count
-	// reaches kIndexMin, takes the hashes it finds instead of folding every key again. (2026-10-01: once
-	// the index started at eight, a ten-field Structure cost 1 660 -> 2 760 ns — some 28 comparisons of
-	// key text below eight, then all eight keys hashed a second time.)
-	struct ibContainerEntry {
-		// BUILT IN PLACE (emplace_back), as the pair before it was: a braced temporary pushed in cost every
-		// insert two ibValue moves and two destructions, out of line — a one- or two-field Structure paid more
-		// for them than for its hash (CI, 2026-10-01).
-		ibContainerEntry(const ibValue& k, const ibValue& v, size_t h) : key(k), value(v), hash(h) {}
-
-		ibValue key;
-		ibValue value;
-		size_t  hash;
-	};
-
+class BACKEND_API ibValueMap : public ibValueCollection<ibMapEntry, &BindWritableMapNames> {
 protected:
 	// What a string key is - see m_keyKind.
 	enum class ibKeyKind { Value, Name };
 private:
 	// A METHOD NUMBER IS A POSITION in the member table, so the order here is the
-	// order BindContainerNames appends in -- and enGet sits before the three a
-	// read-only container does not get, where a position cannot move under it.
+	// order BindMapNames appends in: after the collection's Count and Get, and
+	// Property before the three a read-only container does not get, where a position
+	// cannot move under it.
 	enum Func  {
-		enCount = 0,
-		enProperty,
-		enGet,
+		enProperty = enCollectionFuncs,
 		enClear,
 		enDelete,
 		enInsert
 	};
 
-	// The store. `m_entries` keeps insertion order, which gives every key a
-	// stable index for the property protocol (FindProp -> GetPropVal) and a
-	// deterministic iteration / serialisation order. `m_index` buckets it.
-	// The two are maintained together by every mutating method.
-	std::vector<ibContainerEntry> m_entries;
+	// The store is the collection's vector (m_listValue): it keeps insertion order,
+	// which gives every key a stable index for the property protocol (FindProp ->
+	// GetPropVal) and a deterministic iteration / serialisation order. `m_index`
+	// buckets it. The two are maintained together by every mutating method.
 
 	// WHAT A STRING KEY IS depends on which of the two this is, and neither renders a value to text:
 	//
@@ -73,7 +80,7 @@ private:
 	//   once per LOOKUP while hashing; inside a bucket the comparison decides most candidates on
 	//   length alone and folds only the characters that differ.
 	//
-	//   in a CONTAINER a string key is a VALUE like any other: "fr" and "FR" are two keys, exactly as
+	//   in a MAP a string key is a VALUE like any other: "fr" and "FR" are two keys, exactly as
 	//   `"fr" = "FR"` is False — through `[key]`, Get and the dot alike.
 	//
 	//   anything that is not a string compares AS A VALUE in both, through ibValue's own ORDERING — a
@@ -87,7 +94,7 @@ private:
 	// THE INDEX HOLDS POSITIONS, NOT A SECOND COPY OF THE KEY. It used to be
 	// keyed by the ibValue itself, so every insert copied the key — and a string
 	// key copies its buffer, an allocation per field. The key was already in
-	// m_entries, one hop away.
+	// the store, one hop away.
 	//
 	// So: bucket by the key's HASH, map to entry positions, and settle equality
 	// against the entry itself — which is exactly what a hash table does on a
@@ -100,10 +107,10 @@ private:
 	// 250 bytes against 48 of two values). So the index exists exactly while the
 	// container holds kIndexMin entries or more — the rule the member table's own
 	// find index follows (kFindIndexMin); below that it is empty and a lookup walks
-	// m_entries. Every mutating path keeps that rule (Indexed()).
+	// the store. Every mutating path keeps that rule (Indexed()).
 	static constexpr size_t kIndexMin = 8;
 	std::unordered_multimap<size_t, size_t> m_index;
-	bool Indexed() const { return m_entries.size() >= kIndexMin; }
+	bool Indexed() const { return m_listValue.size() >= kIndexMin; }
 
 	// Hash and lookup, split because every mutating path wants both and hashing
 	// twice was the other half of the old shape's cost.
@@ -120,39 +127,28 @@ private:
 
 protected:
 	// A Structure's constructor: its string keys are field NAMES (see m_keyKind).
-	ibValueContainer(bool readOnly, ibKeyKind keyKind);
+	ibValueMap(bool readOnly, ibKeyKind keyKind);
 
 	// -1 when absent; the entry index otherwise. The single lookup primitive the
 	// key-facing methods share.
 	long IndexOf(const ibValue& key) const;
 
-public:
-	// THE ENTRIES, IN INSERTION ORDER — read-only, for a consumer that takes a whole map at once rather
-	// than asking key by key (an accounting posting is written as *(kind -> value)* pairs and poured
-	// into the movement's slots). Nothing else about the store is exposed: this is the same order a
-	// script sees when it iterates, so a caller cannot observe an arrangement the language does not.
-	const std::vector<ibContainerEntry>& Entries() const { return m_entries; }
-
-protected:
+	// What a walk yields: the key with its value (KeyValue).
+	virtual ibValue ElementValue(const ibMapEntry& entry) const override;
 
 public:
 
-	//Attribute -> String key
-	//working with an array as an aggregate object:
-
-	virtual bool GetAt(const ibValue& varKeyValue, ibValue& pvarValue);
-	virtual bool SetAt(const ibValue& varKeyValue, const ibValue& cValue);
-
-	//check is empty
-	virtual bool IsEmpty() const {
-		return m_entries.empty();
-	}
+	// [key] reads and writes BY KEY - the collection's GetAt reads by index. Values() hands out the
+	// entries in insertion order, the order a script walks them in, for a consumer that takes a whole
+	// map at once (an accounting posting is written as *(kind -> value)* pairs).
+	virtual bool GetAt(const ibValue& varKeyValue, ibValue& pvarValue) override;
+	virtual bool SetAt(const ibValue& varKeyValue, const ibValue& cValue) override;
 
 public:
 
 	// One per step of a walk over a map — so its two names (Key, Value) are one shared table, not a table
 	// built for every step that reads them.
-	class BACKEND_API ibValueReturnContainer : public ibValue {
+	class BACKEND_API ibValueKeyValue : public ibValue {
 	public:
 
 		enum Prop {
@@ -165,8 +161,8 @@ public:
 
 	public:
 
-		ibValueReturnContainer() : ibValue(ibValueTypes::TYPE_VALUE, true) {}
-		ibValueReturnContainer(const ibValue& key, ibValue& value) : ibValue(ibValueTypes::TYPE_VALUE, true), m_key(key), m_value(value) {}
+		ibValueKeyValue() : ibValue(ibValueTypes::TYPE_VALUE, true) {}
+		ibValueKeyValue(const ibValue& key, ibValue& value) : ibValue(ibValueTypes::TYPE_VALUE, true), m_key(key), m_value(value) {}
 
 		static void BindNames(ibMemberTable& helper, const ibValue* ctx);
 
@@ -177,20 +173,20 @@ public:
 		virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);                   //attribute value
 
 	protected:
-		virtual ibMemberTable* DoGetPMethods() const override { return ibMemberTable::Shared<&ibValueReturnContainer::BindNames>(); }
+		virtual ibMemberTable* DoGetPMethods() const override { return ibMemberTable::Shared<&ibValueKeyValue::BindNames>(); }
 	};
 
 public:
 
-	ibValueContainer();
-	ibValueContainer(const std::map<ibValue, ibValue>& containerValues);
-	ibValueContainer(bool readOnly);
+	ibValueMap();
+	ibValueMap(const std::map<ibValue, ibValue>& containerValues);
+	ibValueMap(bool readOnly);
 
-	virtual ~ibValueContainer();
+	virtual ~ibValueMap();
 
 	// Its own id, not the registry's (see the note beside the class ids in procUnitLINQ.cpp). A
 	// structure answers with its own.
-	virtual ibClassID GetClassType() const override { return g_valueContainerCLSID; }
+	virtual ibClassID GetClassType() const override { return g_valueMapCLSID; }
 
 	// KEY access. Resolved straight against the store — the member table carries
 	// only methods, so FindProp returns a key's entry index (or -1), and
@@ -198,7 +194,7 @@ public:
 	// keys to introspection (debugger, inspectors) without maintaining a live
 	// surface: they read the store on demand.
 	virtual long FindProp(const ibString& strPropName) const override;
-	virtual long GetNProps() const override { return (long)m_entries.size(); }
+	virtual long GetNProps() const override { return (long)m_listValue.size(); }
 	virtual const ibString& GetPropName(const long lPropNum) const override;
 	virtual bool SetPropVal(const long lPropNum, const ibValue& cValue) override;
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;
@@ -206,20 +202,20 @@ public:
 	// A key index is readable and writable; the base checks the member table,
 	// which no longer carries the keys, so it must be answered from the store.
 	// (A key is never scope-local, so the base's IsPropScoped is already right.)
-	virtual bool IsPropReadable(const long lPropNum) const override { return lPropNum >= 0 && lPropNum < (long)m_entries.size(); }
-	virtual bool IsPropWritable(const long lPropNum) const override { return lPropNum >= 0 && lPropNum < (long)m_entries.size(); }
+	virtual bool IsPropReadable(const long lPropNum) const override { return lPropNum >= 0 && lPropNum < (long)m_listValue.size(); }
+	virtual bool IsPropWritable(const long lPropNum) const override { return lPropNum >= 0 && lPropNum < (long)m_listValue.size(); }
 
 	// The FIXED method surface — methods only, no keys — written for one value of the read-only flag.
-	static void BindContainerNames(ibMemberTable& helper, bool readOnly);
+	static void BindMapNames(ibMemberTable& helper, bool readOnly);
 
-	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);       //method call
+	// Its own Get - by key, and without raising; Count is the collection's.
+	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) override;
 
 	// extended methods:
 	virtual void Insert(const ibValue& varKeyValue, const ibValue& cValue);
 	virtual void Delete(const ibValue& varKeyValue);
 	virtual bool Property(const ibValue& varKeyValue, ibValue& cValueFound);
-	unsigned int Count() const { return (unsigned int)m_entries.size(); }
-	void Clear() { m_entries.clear(); m_index.clear(); }
+	void Clear() { m_listValue.clear(); m_index.clear(); }
 
 	// COMPARES BY ITS ENTRIES, for the same reason the array does — the base
 	// compares object kinds by class name, so any two containers (and any two
@@ -233,11 +229,7 @@ public:
 private:
 	// The other side as a container, or nullptr. Cast choice is measured — see
 	// the note in valueArray.cpp.
-	const ibValueContainer* AsContainer(const ibVariant& cParam) const;
-public:
-
-	// iterator support:
-	virtual std::shared_ptr<ibValueIteratorState> CreateIterator() override;
+	const ibValueMap* AsMap(const ibVariant& cParam) const;
 
 protected:
 
@@ -246,7 +238,7 @@ protected:
 	// two Inserts built six names and six help strings of its own, ~1.3 KB against 48 bytes of
 	// data: 2 344 bytes per two-field Structure, 2.3 GB for a million rows (StructureFootprint
 	// bench, 2026-10-01). The surface depends on the read-only flag alone, and the flag moves no
-	// method's position (BindContainerNames), so there are two shared tables and every container
+	// method's position (BindMapNames), so there are two shared tables and every container
 	// points at one of them.
 	virtual ibMemberTable* DoGetPMethods() const override;
 
@@ -258,19 +250,19 @@ protected:
 };
 
 // structure
-class BACKEND_API ibValueStructure : public ibValueContainer {
+class BACKEND_API ibValueStructure : public ibValueMap {
 	public:
 
 	// Its own id — the map it derives from answers with the map's; a structure that is something more
 	// answers with its own (globalContextManager.cpp, valueSpreadsheet.cpp).
 	virtual ibClassID GetClassType() const override { return g_valueStructureCLSID; }
 
-	ibValueStructure() : ibValueContainer(false, ibKeyKind::Name) {}
-	ibValueStructure(const std::map<ibString, ibValue>& structureValues) : ibValueContainer(true, ibKeyKind::Name) {
-		for (auto& strBVal : structureValues) ibValueContainer::SetAt(strBVal.first, strBVal.second);
+	ibValueStructure() : ibValueMap(false, ibKeyKind::Name) {}
+	ibValueStructure(const std::map<ibString, ibValue>& structureValues) : ibValueMap(true, ibKeyKind::Name) {
+		for (auto& strBVal : structureValues) ibValueMap::SetAt(strBVal.first, strBVal.second);
 	}
 
-	ibValueStructure(bool readOnly) : ibValueContainer(readOnly, ibKeyKind::Name) {}
+	ibValueStructure(bool readOnly) : ibValueMap(readOnly, ibKeyKind::Name) {}
 
 	// `New Structure("Field1, Field2, ...", value1, value2, ...)` —
 	// named-column ctor: first arg is comma-separated field-name list,
@@ -283,8 +275,8 @@ class BACKEND_API ibValueStructure : public ibValueContainer {
 	virtual void Insert(const ibValue& varKeyValue, const ibValue& cValue = ibValue()) override;
 	virtual bool Property(const ibValue& varKeyValue, ibValue& cValueFound) override;
 
-	virtual bool GetAt(const ibValue& varKeyValue, ibValue& pvarValue);
-	virtual bool SetAt(const ibValue& varKeyValue, const ibValue& cValue);
+	virtual bool GetAt(const ibValue& varKeyValue, ibValue& pvarValue) override;
+	virtual bool SetAt(const ibValue& varKeyValue, const ibValue& cValue) override;
 };
 
 #include <locale>

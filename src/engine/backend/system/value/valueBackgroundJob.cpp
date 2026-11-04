@@ -12,6 +12,8 @@
 #include "backend/system/value/valueGuid.h"
 #include "backend/system/value/valueMap.h"      // the filter Structure
 
+#include <algorithm>
+
 namespace {
 
 // ONE NUMBERING for functions and procedures: the member table numbers its methods in the order they are
@@ -24,14 +26,12 @@ enum Method {
 	enError,
 	enActivity,
 	enCancel,
-	enWaitForExecutionCompletion,
 };
 
 enum Prop {
 	enState = 0,
 	enBegin,
 	enEnd,
-	enErrorInfo,
 	enKey,
 	enDescription,
 	enMethodName,
@@ -56,12 +56,10 @@ void ibValueBackgroundJob_BindNames(ibValue::ibMemberTable& helper, const ibValu
 	helper.AppendFunc(ibT("Error"), ibT("Error()"));
 	helper.AppendFunc(ibT("Activity"), ibT("Activity()"));
 	helper.AppendProc(ibT("Cancel"), ibT("Cancel()"));
-	helper.AppendFunc(ibT("WaitForExecutionCompletion"), 1, ibT("WaitForExecutionCompletion(timeout : number)"));
 
 	helper.AppendProp(ibT("State"), true, false, wxNOT_FOUND);
 	helper.AppendProp(ibT("Begin"), true, false, wxNOT_FOUND);
 	helper.AppendProp(ibT("End"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("ErrorInfo"), true, false, wxNOT_FOUND);
 	helper.AppendProp(ibT("Key"), true, false, wxNOT_FOUND);
 	helper.AppendProp(ibT("Description"), true, false, wxNOT_FOUND);
 	helper.AppendProp(ibT("MethodName"), true, false, wxNOT_FOUND);
@@ -89,7 +87,7 @@ ibString ibValueBackgroundJob::GetString() const
 {
 	if (m_run == nullptr)
 		return ibT("BackgroundJob");
-	const ibString description = m_run->Label().m_description;
+	const ibString description = m_run->Request().m_description;
 	if (!m_run->IsComplete()) {
 		if (!description.IsEmpty())
 			return description;
@@ -125,18 +123,6 @@ bool ibValueBackgroundJob::CallAsFunc(const long lMethodNum, ibValue& pvarRetVal
 	case enActivity:
 		pvarRetValue = m_run->Activity();
 		return true;
-	case enWaitForExecutionCompletion:
-	{
-		// The timeout is in SECONDS, as everywhere a person says how long to wait; none (or 0) waits for
-		// the end. A run that is still going when it elapses is not an error — State says Active, and the
-		// caller decides. The answer is the job itself, so a call can be read straight on.
-		const long seconds = lSizeArray > 0 && !paParams[0]->IsEmpty() ? paParams[0]->GetInteger() : 0;
-		if (seconds < 0)
-			ibBackendCoreException::Error(_("Background job: the timeout cannot be negative (%ld seconds)"), seconds);
-		m_run->Wait(seconds > 0 ? static_cast<int>(seconds * 1000) : 0);
-		pvarRetValue = this;
-		return true;
-	}
 	}
 	return false;
 }
@@ -170,19 +156,14 @@ bool ibValueBackgroundJob::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 	case enEnd:
 		pvarPropVal = ibValue(m_run->End());   // a run in flight: the empty date
 		return true;
-	case enErrorInfo:
-		// What the run died of, with the module and the line when its code said so; empty when it did not
-		// fail. A cancel answers here too, as it does in Error().
-		pvarPropVal = m_run->Error();
-		return true;
 	case enKey:
-		pvarPropVal = m_run->Label().m_key;
+		pvarPropVal = m_run->Request().m_key;
 		return true;
 	case enDescription:
-		pvarPropVal = m_run->Label().m_description;
+		pvarPropVal = m_run->Request().m_description;
 		return true;
 	case enMethodName:
-		pvarPropVal = m_run->Label().m_method;
+		pvarPropVal = m_run->Request().m_method;
 		return true;
 	case enUUID:
 		pvarPropVal = new ibValueGuid(m_run->UUID());
@@ -198,8 +179,7 @@ bool ibValueBackgroundJob::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 namespace {
 
 enum ManagerMethod {
-	enExecute = 0,
-	enGetBackgroundJobs,
+	enGetBackgroundJobs = 0,
 	enFindByUUID,
 };
 
@@ -224,37 +204,38 @@ ibGuid UUIDOf(const ibValue& value, const ibString& verb)
 	return ibGuid();
 }
 
-// ONE FILTER KEY against one run. Begin and End are bounds — begun at or after, ended at or before — the
-// rest are equal-to. A key that names nothing is refused with its name: a filter that quietly ignored a
-// misspelt key would answer with every job there is.
-bool Matches(const ibBackgroundRun& run, const ibString& key, const ibValue& wanted)
+// ONE FILTER FIELD — one of BackgroundJob's own properties, named as a script names it and found in the
+// job's member table, so the names live in one place (ibValueBackgroundJob_BindNames). A field that names no
+// property is refused with its name: a filter that quietly ignored a misspelt field would answer with every
+// job there is.
+struct ibRunFilterField {
+	long    m_prop = wxNOT_FOUND;
+	ibValue m_wanted;
+};
+
+// …against one job, by the property's number. Begin and End are bounds — begun at or after, ended at or
+// before — and the UUID is taken as a UUID or its text; every other property is equal-to.
+bool Matches(ibValueBackgroundJob& job, const ibRunFilterField& field)
 {
-	if (stringUtils::IsSameAs(key, ibT("UUID")))
-		return run.UUID() == UUIDOf(wanted, ibT("GetBackgroundJobs"));
-	if (stringUtils::IsSameAs(key, ibT("Key")))
-		return run.Label().m_key == wanted.GetString();
-	if (stringUtils::IsSameAs(key, ibT("Description")))
-		return run.Label().m_description == wanted.GetString();
-	if (stringUtils::IsSameAs(key, ibT("MethodName")))
-		return stringUtils::IsSameAs(run.Label().m_method, wanted.GetString());
-	if (stringUtils::IsSameAs(key, ibT("State")))
-		return StateValue(run.State()) == wanted;
-	if (stringUtils::IsSameAs(key, ibT("Begin")))
-		return run.Begin() >= wanted.GetDate();
-	if (stringUtils::IsSameAs(key, ibT("End"))) {
+	const ibBackgroundRun& run = *job.GetRun();
+	switch (field.m_prop) {
+	case enUUID:
+		return run.UUID() == UUIDOf(field.m_wanted, ibT("GetBackgroundJobs"));
+	case enBegin:
+		return run.Begin() >= field.m_wanted.GetDate();
+	case enEnd: {
 		const ibDateTime end = run.End();
-		return !end.IsEmpty() && end <= wanted.GetDate();
+		return !end.IsEmpty() && end <= field.m_wanted.GetDate();
 	}
-	ibBackendCoreException::Error(
-		_("GetBackgroundJobs: the filter has no field '%s' (UUID, Key, Description, MethodName, State, Begin, End)"), key);
-	return false;
+	}
+	ibValue held;
+	return job.GetPropVal(field.m_prop, held) && held == field.m_wanted;
 }
 
 } // namespace
 
 void ibValueBackgroundJobsManager_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendFunc(ibT("Execute"), 4, ibT("Execute(methodName : string, parameters : Array, key : string, description : string)"));
 	helper.AppendFunc(ibT("GetBackgroundJobs"), 1, ibT("GetBackgroundJobs(filter : Structure)"));
 	helper.AppendFunc(ibT("FindByUUID"), 1, ibT("FindByUUID(uuid : UUID)"));
 }
@@ -268,36 +249,6 @@ bool ibValueBackgroundJobsManager::CallAsFunc(const long lMethodNum, ibValue& pv
                                               ibValue** paParams, const long lSizeArray)
 {
 	switch (lMethodNum) {
-	case enExecute:
-	{
-		// Starting work from a watch expression would be a side effect of LOOKING at something — the
-		// same guard RunBackground has.
-		if (ibBackendException::IsEvalMode()) {
-			pvarRetValue = wxEmptyValue;
-			return true;
-		}
-		if (lSizeArray < 1 || paParams[0]->IsEmpty())
-			ibBackendCoreException::Error(_("Background job: no procedure name given"));
-
-		ibBackgroundLabel label;
-		label.m_method = paParams[0]->GetString();
-		if (lSizeArray > 2) label.m_key = paParams[2]->GetString();
-		if (lSizeArray > 3) label.m_description = paParams[3]->GetString();
-
-		// The parameters are an Array, passed to the method positionally. Anything else non-empty is the
-		// caller's mistake and named — read as "no parameters" it would start the method with the wrong
-		// signature and fail deep inside it.
-		std::vector<ibValue> args;
-		if (lSizeArray > 1 && !paParams[1]->IsEmpty()) {
-			ibValueArray* array = nullptr;
-			if (!paParams[1]->ConvertToValue(array) || array == nullptr)
-				ibBackendCoreException::Error(_("Background job: the parameters of '%s' must be an Array"), label.m_method);
-			args = array->Values();
-		}
-
-		pvarRetValue = new ibValueBackgroundJob(RunningJobManager()->StartBackground(args, label));
-		return true;
-	}
 	case enGetBackgroundJobs:
 	{
 		ibValueStructure* filter = nullptr;
@@ -305,14 +256,26 @@ bool ibValueBackgroundJobsManager::CallAsFunc(const long lMethodNum, ibValue& pv
 			&& (!paParams[0]->ConvertToValue(filter) || filter == nullptr))
 			ibBackendCoreException::Error(_("GetBackgroundJobs: the filter must be a Structure"));
 
+		// The fields are found ONCE, by name, among the job's properties; every run is then compared by number.
+		std::vector<ibRunFilterField> fields;
+		if (filter != nullptr) {
+			const ibValuePtr<ibValueBackgroundJob> probe(new ibValueBackgroundJob());
+			for (const ibMapEntry& entry : filter->Values()) {
+				const ibString name = entry.key.GetString();
+				const long prop = probe->FindProp(name);
+				if (prop == wxNOT_FOUND)
+					ibBackendCoreException::Error(_("GetBackgroundJobs: a background job has no property '%s' to filter by"), name);
+				if (prop == enUUID)
+					UUIDOf(entry.value, ibT("GetBackgroundJobs"));   // refused here, whether or not any job is held
+				fields.push_back({ prop, entry.value });
+			}
+		}
+
 		ibValuePtr<ibValueArray> found(new ibValueArray());
-		for (const std::shared_ptr<ibBackgroundRun>& run : RunningJobManager()->BackgroundRuns()) {
-			bool match = true;
-			if (filter != nullptr)
-				for (const ibValueContainer::ibContainerEntry& entry : filter->Entries())
-					if (!Matches(*run, entry.key.GetString(), entry.value)) { match = false; break; }
-			if (match)
-				found->Add(ibValue(new ibValueBackgroundJob(run)));
+		for (const std::shared_ptr<ibBackgroundRun>& run : RunningJobManager()->GetBackgroundJobs()) {
+			const ibValuePtr<ibValueBackgroundJob> job(new ibValueBackgroundJob(run));
+			if (std::all_of(fields.begin(), fields.end(), [&job](const ibRunFilterField& f) { return Matches(*job, f); }))
+				found->Add(ibValue(job));
 		}
 		pvarRetValue = found;
 		return true;
@@ -323,7 +286,7 @@ bool ibValueBackgroundJobsManager::CallAsFunc(const long lMethodNum, ibValue& pv
 			ibBackendCoreException::Error(_("FindByUUID: no UUID given"));
 		// Not found is an answer — Undefined — not an error: a job that ended a long time ago is let go.
 		const std::shared_ptr<ibBackgroundRun> run =
-			RunningJobManager()->FindBackgroundRun(UUIDOf(*paParams[0], ibT("FindByUUID")));
+			RunningJobManager()->FindBackgroundJob(UUIDOf(*paParams[0], ibT("FindByUUID")));
 		pvarRetValue = run != nullptr ? ibValue(new ibValueBackgroundJob(run)) : ibValue();
 		return true;
 	}

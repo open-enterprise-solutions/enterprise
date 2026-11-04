@@ -13,163 +13,91 @@
         "runtime",
         "jobs"
       ],
-      "signature": "ScheduledJobs",
-      "description": "Регламентні завдання конфігурації, обидва види під одним ім'ям. Predefined і Parameterized — дві розвилки: зумовлені завдання як колекція їхніх налаштувань і менеджер кожного параметризованого завдання. GetScheduledJobs, FindPredefined, FindByUUID і CreateScheduledJob питають обидва види одразу й відповідають значеннями ScheduledJob, тож список адміністратора обходить один масив, хто б не оголосив завдання.\n\nЗумовлене завдання зберігає свої живі налаштування в базі (sys_job), параметризоване — рядок своєї таблиці. Кожне записується там, де вже живе.",
-      "syntax_block": "Jobs = ScheduledJobs.GetScheduledJobs();",
+      "signature": "ScheduledJobs.Predefined | ScheduledJobs.Parameterized.<Name>",
+      "description": "Регламентні завдання конфігурації — два види, кожен за своєю розвилкою. Predefined — усі визначені завдання як колекція JobSettings: оголошені в конфігураторі, існують один раз, живі налаштування зберігаються в базі. Parameterized.<Name> — менеджер параметризованого завдання: його завдання — рядки його таблиці, вибираються, шукаються й виконуються як у довідника.",
+      "syntax_block": "for each Job in ScheduledJobs.Predefined { }",
       "parameters": "",
       "return_descr": "",
-      "example": "for each Job in ScheduledJobs.GetScheduledJobs(New Structure(\"Use\", True)) {\n    Message(Job.Description + \": \" + Job.Schedule);\n}",
+      "example": "for each Job in ScheduledJobs.Predefined {\n    Message(Job.Name + \": \" + Job.Schedule);\n}",
       "availability": "Сервер",
       "see_also": [
-        "cls.ScheduledJob",
-        "cls.ScheduledJobs.GetScheduledJobs",
-        "cls.ScheduledJobs.FindPredefined",
-        "cls.ScheduledJobs.FindByUUID",
-        "cls.ScheduledJobs.CreateScheduledJob",
+        "cls.JobSettings",
+        "mgr.ParameterizedJob.LastJob",
         "cls.BackgroundJobs"
       ],
       "reviewed": false
     },
     {
-      "id": "cls.ScheduledJobs.GetScheduledJobs",
-      "name_local": "GetScheduledJobs",
-      "name_en": "GetScheduledJobs",
-      "kind": "method",
-      "category_keys": [
-        "global_context",
-        "runtime",
-        "jobs"
-      ],
-      "signature": "ScheduledJobs.GetScheduledJobs([filter : Structure])",
-      "description": "Усі регламентні завдання — спершу зумовлені, далі рядки кожного параметризованого — масивом ScheduledJob. Відбір залишає ті, у яких поля дорівнюють його значенням: Metadata, Predefined, Use, Key, Description, UUID. Поле відбору, якого завдання не має, відхиляється з його ім'ям, а не пропускається — інакше відповіддю були б усі завдання.",
-      "syntax_block": "Jobs = ScheduledJobs.GetScheduledJobs(Filter);",
-      "parameters": "filter — Structure з полів вище; не задано — усі завдання.",
-      "return_descr": "Array з ScheduledJob.",
-      "example": "Off = ScheduledJobs.GetScheduledJobs(New Structure(\"Use, Predefined\", False, True));",
-      "availability": "Сервер",
-      "see_also": [
-        "cls.ScheduledJobs",
-        "cls.ScheduledJob"
-      ],
-      "reviewed": false
-    },
-    {
-      "id": "cls.ScheduledJobs.FindPredefined",
-      "name_local": "FindPredefined",
-      "name_en": "FindPredefined",
-      "kind": "method",
-      "category_keys": [
-        "global_context",
-        "runtime",
-        "jobs"
-      ],
-      "signature": "ScheduledJobs.FindPredefined(metadata : MetaObject | string)",
-      "description": "Зумовлене завдання, оголошене метаоб'єктом, з налаштуваннями, якими їх тримає база, — або якими вони оголошені, доки база не тримає жодних. Метаоб'єкт або його ім'я. Параметризоване завдання відхиляється: його завдання — рядки, їх знаходять GetScheduledJobs або FindByUUID.",
-      "syntax_block": "Job = ScheduledJobs.FindPredefined(Metadata.ScheduledJobs.Cleanup);",
-      "parameters": "metadata — метаоб'єкт завдання або його ім'я.",
-      "return_descr": "ScheduledJob.",
-      "example": "Job = ScheduledJobs.FindPredefined(Metadata.ScheduledJobs.Cleanup);\nJob.Use = False;\nJob.Write();",
-      "availability": "Сервер",
-      "see_also": [
-        "cls.ScheduledJobs",
-        "cls.ScheduledJob"
-      ],
-      "reviewed": false
-    },
-    {
-      "id": "cls.ScheduledJobs.FindByUUID",
-      "name_local": "FindByUUID",
-      "name_en": "FindByUUID",
-      "kind": "method",
-      "category_keys": [
-        "global_context",
-        "runtime",
-        "jobs"
-      ],
-      "signature": "ScheduledJobs.FindByUUID(uuid : UUID | string)",
-      "description": "Завдання з цим UUID: зумовлене — за UUID його метаоб'єкта, рядок параметризованого — за власним. Undefined, якщо такого немає: рядок могли видалити, поки UUID зберігали. Значення, що не є UUID, відхиляється.",
-      "syntax_block": "Job = ScheduledJobs.FindByUUID(Id);",
-      "parameters": "uuid — UUID або його текст.",
-      "return_descr": "ScheduledJob або Undefined.",
-      "example": "Job = ScheduledJobs.FindByUUID(Id);\nif (Job = Undefined) { Message(\"the job is gone\"); }",
-      "availability": "Сервер",
-      "see_also": [
-        "cls.ScheduledJobs",
-        "cls.ScheduledJob.UUID"
-      ],
-      "reviewed": false
-    },
-    {
-      "id": "cls.ScheduledJobs.CreateScheduledJob",
-      "name_local": "CreateScheduledJob",
-      "name_en": "CreateScheduledJob",
-      "kind": "method",
-      "category_keys": [
-        "global_context",
-        "runtime",
-        "jobs"
-      ],
-      "signature": "ScheduledJobs.CreateScheduledJob(metadata : MetaObject | string)",
-      "description": "Новий рядок параметризованого завдання, ще не записаний: його записує Write. Починає з розкладу завдання за замовчуванням. Зумовлене завдання відхиляється — воно існує в одному екземплярі, його знаходить FindPredefined.",
-      "syntax_block": "Job = ScheduledJobs.CreateScheduledJob(Metadata.ParameterizedJobs.Exchange);",
-      "parameters": "metadata — метаоб'єкт параметризованого завдання або його ім'я.",
-      "return_descr": "ScheduledJob.",
-      "example": "Job = ScheduledJobs.CreateScheduledJob(Metadata.ParameterizedJobs.Exchange);\nJob.Description = \"Warehouse 2\";\nJob.Parameters = New Structure(\"Node\", Warehouse2);\nJob.Use = True;\nJob.Write();",
-      "availability": "Сервер",
-      "see_also": [
-        "cls.ScheduledJobs",
-        "cls.ScheduledJob.Write"
-      ],
-      "reviewed": false
-    },
-    {
-      "id": "cls.ScheduledJob",
-      "name_local": "ScheduledJob",
-      "name_en": "ScheduledJob",
+      "id": "cls.JobSettings",
+      "name_local": "JobSettings",
+      "name_en": "JobSettings",
       "kind": "collection",
       "category_keys": [
         "global_context",
         "runtime",
         "jobs"
       ],
-      "signature": "ScheduledJob",
-      "description": "Одне регламентне завдання, хоч якого виду, — налаштування зумовленого або рядок параметризованого. Через New не створюється: його знаходить або створює ScheduledJobs.\n\nТе, чого вид не вміє, відхиляється з ім'ям завдання, а не мовчки пропускається: зумовлене завдання не має параметрів, його ключ — ім'я, опис — синонім, і видалити його не можна: воно оголошене, а не зберігається.",
-      "syntax_block": "Job = ScheduledJobs.FindByUUID(Id);",
+      "signature": "JobSettings",
+      "description": "Живі налаштування одного визначеного завдання — елемент ScheduledJobs.Predefined. Через New не створюється. Завдання, для якого в базі ще немає налаштувань, читається так, як оголошено. Write зберігає вимикач і розклад у базі й одразу застосовує їх до робочого розкладу.",
+      "syntax_block": "for each Job in ScheduledJobs.Predefined { }",
       "parameters": "",
       "return_descr": "",
-      "example": "Job = ScheduledJobs.FindPredefined(Metadata.ScheduledJobs.Cleanup);\nSchedule = Job.Schedule;\nSchedule.Interval = 600;\nJob.Schedule = Schedule;\nJob.Write();",
+      "example": "for each Job in ScheduledJobs.Predefined {\n    if (Job.Active and Job.Schedule.Interval < 60) {\n        Job.Active = False;\n        Job.Write();\n    }\n}",
       "availability": "Сервер",
       "see_also": [
         "cls.ScheduledJobs",
-        "cls.ScheduledJob.Write",
-        "cls.BackgroundJob"
+        "cls.JobSettings.Write",
+        "cls.JobSettings.LastJob"
       ],
       "reviewed": false
     },
     {
-      "id": "cls.ScheduledJob.Use",
-      "name_local": "Use",
-      "name_en": "Use",
+      "id": "cls.JobSettings.Name",
+      "name_local": "Name",
+      "name_en": "Name",
       "kind": "property",
       "category_keys": [
         "global_context",
         "runtime",
         "jobs"
       ],
-      "signature": "ScheduledJob.Use",
-      "description": "Чи запускає завдання розклад. Вимкнене завдання лишається, і його можна запустити вручну. Записується Write.",
-      "syntax_block": "Job.Use = False;",
+      "signature": "JobSettings.Name",
+      "description": "Ім'я завдання, як його оголошує конфігурація. Лише читання.",
+      "syntax_block": "Message(Job.Name);",
       "parameters": "",
-      "return_descr": "Boolean.",
-      "example": "Job.Use = False;\nJob.Write();",
+      "return_descr": "Рядок.",
+      "example": "Message(Job.Name);",
       "availability": "Сервер",
       "see_also": [
-        "cls.ScheduledJob"
+        "cls.JobSettings"
       ],
       "reviewed": false
     },
     {
-      "id": "cls.ScheduledJob.Schedule",
+      "id": "cls.JobSettings.Active",
+      "name_local": "Active",
+      "name_en": "Active",
+      "kind": "property",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "jobs"
+      ],
+      "signature": "JobSettings.Active",
+      "description": "Чи запускає завдання розклад. Вимкнене завдання все одно можна запустити вручну через Execute. Зберігається методом Write.",
+      "syntax_block": "Job.Active = False;",
+      "parameters": "",
+      "return_descr": "Булеве.",
+      "example": "Job.Active = False;\nJob.Write();",
+      "availability": "Сервер",
+      "see_also": [
+        "cls.JobSettings",
+        "cls.JobSettings.Write"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JobSettings.Schedule",
       "name_local": "Schedule",
       "name_en": "Schedule",
       "kind": "property",
@@ -178,109 +106,21 @@
         "runtime",
         "jobs"
       ],
-      "signature": "ScheduledJob.Schedule",
-      "description": "Коли завдання запускається, значенням JobSchedule. Прочитати, змінити, присвоїти назад, потім Write. Усе, крім JobSchedule, відхиляється.",
+      "signature": "JobSettings.Schedule",
+      "description": "Коли виконується завдання, значенням JobSchedule. Під час читання віддається копія: змініть її, присвойте назад, потім Write. Усе, крім JobSchedule, відхиляється.",
       "syntax_block": "Job.Schedule = Schedule;",
       "parameters": "",
       "return_descr": "JobSchedule.",
-      "example": "Schedule = Job.Schedule;\nSchedule.Interval = 3600;\nJob.Schedule = Schedule;\nJob.Write();",
+      "example": "Schedule = Job.Schedule;\nSchedule.Interval = 600;\nJob.Schedule = Schedule;\nJob.Write();",
       "availability": "Сервер",
       "see_also": [
-        "cls.ScheduledJob"
+        "cls.JobSettings",
+        "cls.JobSettings.NextRun"
       ],
       "reviewed": false
     },
     {
-      "id": "cls.ScheduledJob.Parameters",
-      "name_local": "Parameters",
-      "name_en": "Parameters",
-      "kind": "property",
-      "category_keys": [
-        "global_context",
-        "runtime",
-        "jobs"
-      ],
-      "signature": "ScheduledJob.Parameters",
-      "description": "Параметри рядка параметризованого завдання — його власні реквізити, оголошені завданням, — читаються й задаються Structure за іменами. Ім'я без такого реквізиту відхиляється. Зумовлене завдання їх не має: порожня Structure, а непорожня відхиляється.",
-      "syntax_block": "Job.Parameters = New Structure(\"Node\", Node);",
-      "parameters": "",
-      "return_descr": "Structure.",
-      "example": "Job.Parameters = New Structure(\"Node, Days\", Warehouse2, 7);\nJob.Write();",
-      "availability": "Сервер",
-      "see_also": [
-        "cls.ScheduledJob"
-      ],
-      "reviewed": false
-    },
-    {
-      "id": "cls.ScheduledJob.Key",
-      "name_local": "Key",
-      "name_en": "Key",
-      "kind": "property",
-      "category_keys": [
-        "global_context",
-        "runtime",
-        "jobs"
-      ],
-      "signature": "ScheduledJob.Key",
-      "description": "Ключ завдання: код рядка параметризованого завдання, ім'я зумовленого. Ключ зумовленого завдання не задається.",
-      "syntax_block": "Job.Key = \"warehouse-2\";",
-      "parameters": "",
-      "return_descr": "",
-      "example": "Jobs = ScheduledJobs.GetScheduledJobs(New Structure(\"Key\", \"warehouse-2\"));",
-      "availability": "Сервер",
-      "see_also": [
-        "cls.ScheduledJob"
-      ],
-      "reviewed": false
-    },
-    {
-      "id": "cls.ScheduledJob.Description",
-      "name_local": "Description",
-      "name_en": "Description",
-      "kind": "property",
-      "category_keys": [
-        "global_context",
-        "runtime",
-        "jobs"
-      ],
-      "signature": "ScheduledJob.Description",
-      "description": "Найменування рядка параметризованого завдання; у зумовленого — синонім, який змінюється в конфігураторі й тут відхиляється.",
-      "syntax_block": "Job.Description = \"Warehouse 2\";",
-      "parameters": "",
-      "return_descr": "",
-      "example": "Message(Job.Description);",
-      "availability": "Сервер",
-      "see_also": [
-        "cls.ScheduledJob"
-      ],
-      "reviewed": false
-    },
-    {
-      "id": "cls.ScheduledJob.LastJob",
-      "name_local": "LastJob",
-      "name_en": "LastJob",
-      "kind": "property",
-      "category_keys": [
-        "global_context",
-        "runtime",
-        "jobs"
-      ],
-      "signature": "ScheduledJob.LastJob",
-      "description": "Останній запуск, який бачив цей застосунок, значенням BackgroundJob — State, Begin, End, ErrorInfo. Undefined, якщо тут завдання не запускалося; коли воно запускалося будь-де — LastRun. Лише читання.",
-      "syntax_block": "Last = Job.LastJob;",
-      "parameters": "",
-      "return_descr": "BackgroundJob або Undefined.",
-      "example": "Last = Job.LastJob;\nif (Last <> Undefined and Last.State = BackgroundJobState.Failed) { Message(Last.ErrorInfo); }",
-      "availability": "Сервер",
-      "see_also": [
-        "cls.ScheduledJob",
-        "cls.BackgroundJob"
-      ],
-      "reviewed": false
-    },
-    {
-      "id": "cls.ScheduledJob.LastRun",
+      "id": "cls.JobSettings.LastRun",
       "name_local": "LastRun",
       "name_en": "LastRun",
       "kind": "property",
@@ -289,126 +129,180 @@
         "runtime",
         "jobs"
       ],
-      "signature": "ScheduledJob.LastRun",
-      "description": "Коли завдання востаннє запускалося на цій базі будь-яким процесом; порожня дата, якщо жодного разу. Лише читання.",
+      "signature": "JobSettings.LastRun",
+      "description": "Коли завдання востаннє виконувалося на цій базі, будь-яким процесом; порожня дата, якщо жодного разу. Лише читання.",
       "syntax_block": "When = Job.LastRun;",
       "parameters": "",
-      "return_descr": "Date.",
+      "return_descr": "Дата.",
       "example": "Message(Job.LastRun);",
       "availability": "Сервер",
       "see_also": [
-        "cls.ScheduledJob"
+        "cls.JobSettings",
+        "cls.JobSettings.LastJob",
+        "cls.JobSettings.Computer"
       ],
       "reviewed": false
     },
     {
-      "id": "cls.ScheduledJob.UUID",
-      "name_local": "UUID",
-      "name_en": "UUID",
+      "id": "cls.JobSettings.LastJob",
+      "name_local": "LastJob",
+      "name_en": "LastJob",
       "kind": "property",
       "category_keys": [
         "global_context",
         "runtime",
         "jobs"
       ],
-      "signature": "ScheduledJob.UUID",
-      "description": "Ідентичність завдання: UUID метаоб'єкта зумовленого, власний UUID рядка. Його питає FindByUUID. Лише читання.",
-      "syntax_block": "Id = Job.UUID;",
+      "signature": "JobSettings.LastJob",
+      "description": "Останній прохід завдання в цьому застосунку, значенням BackgroundJob — його State, Begin, End і Error(). Undefined, якщо тут проходів не було; коли завдання виконувалося будь-де — LastRun. Прохід, який натомість узяв інший процес, тут сліду не лишає. Лише читання.",
+      "syntax_block": "Last = Job.LastJob;",
       "parameters": "",
-      "return_descr": "UUID.",
-      "example": "Id = Job.UUID;\nJob = ScheduledJobs.FindByUUID(Id);",
+      "return_descr": "BackgroundJob або Undefined.",
+      "example": "Last = Job.LastJob;\nif (Last <> Undefined and Last.State = BackgroundJobState.Failed) { Message(Last.Error()); }",
       "availability": "Сервер",
       "see_also": [
-        "cls.ScheduledJob",
-        "cls.ScheduledJobs.FindByUUID"
+        "cls.JobSettings",
+        "cls.BackgroundJob",
+        "mgr.ParameterizedJob.LastJob"
       ],
       "reviewed": false
     },
     {
-      "id": "cls.ScheduledJob.Metadata",
-      "name_local": "Metadata",
-      "name_en": "Metadata",
+      "id": "cls.JobSettings.Computer",
+      "name_local": "Computer",
+      "name_en": "Computer",
       "kind": "property",
       "category_keys": [
         "global_context",
         "runtime",
         "jobs"
       ],
-      "signature": "ScheduledJob.Metadata",
-      "description": "Метаоб'єкт, що оголошує завдання. Лише читання.",
-      "syntax_block": "Kind = Job.Metadata;",
+      "signature": "JobSettings.Computer",
+      "description": "На якому комп'ютері завдання виконувалося востаннє. Лише читання.",
+      "syntax_block": "Message(Job.Computer);",
       "parameters": "",
-      "return_descr": "",
-      "example": "if (Job.Metadata = Metadata.ScheduledJobs.Cleanup) { Message(\"cleanup\"); }",
+      "return_descr": "Рядок.",
+      "example": "Message(Job.Name + \": \" + Job.Computer);",
       "availability": "Сервер",
       "see_also": [
-        "cls.ScheduledJob"
+        "cls.JobSettings",
+        "cls.JobSettings.LastRun"
       ],
       "reviewed": false
     },
     {
-      "id": "cls.ScheduledJob.Predefined",
-      "name_local": "Predefined",
-      "name_en": "Predefined",
+      "id": "cls.JobSettings.NextRun",
+      "name_local": "NextRun",
+      "name_en": "NextRun",
       "kind": "property",
       "category_keys": [
         "global_context",
         "runtime",
         "jobs"
       ],
-      "signature": "ScheduledJob.Predefined",
-      "description": "True у зумовленого завдання, False у рядка параметризованого. Лише читання.",
-      "syntax_block": "IsPredefined = Job.Predefined;",
+      "signature": "JobSettings.NextRun",
+      "description": "Коли завдання виконається наступного разу — обчислюється з розкладу й останнього запуску під час кожного читання, ніде не зберігається. Лише читання.",
+      "syntax_block": "Message(Job.NextRun);",
       "parameters": "",
-      "return_descr": "Boolean.",
-      "example": "if (not Job.Predefined) { Job.Delete(); }",
+      "return_descr": "Дата.",
+      "example": "Message(Job.Name + \": \" + Job.NextRun);",
       "availability": "Сервер",
       "see_also": [
-        "cls.ScheduledJob"
+        "cls.JobSettings",
+        "cls.JobSettings.Schedule"
       ],
       "reviewed": false
     },
     {
-      "id": "cls.ScheduledJob.Write",
+      "id": "cls.JobSettings.Read",
+      "name_local": "Read",
+      "name_en": "Read",
+      "kind": "method",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "jobs"
+      ],
+      "signature": "JobSettings.Read()",
+      "description": "Перечитує налаштування з бази — їх міг змінити інший сеанс. Хибність, якщо в базі для цього завдання налаштувань ще немає: тоді завдання читається так, як оголошено.",
+      "syntax_block": "Job.Read();",
+      "parameters": "",
+      "return_descr": "Булеве.",
+      "example": "Job.Read();\nMessage(Job.Active);",
+      "availability": "Сервер",
+      "see_also": [
+        "cls.JobSettings",
+        "cls.JobSettings.Write"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.JobSettings.Write",
       "name_local": "Write",
       "name_en": "Write",
-      "kind": "procedure",
+      "kind": "method",
       "category_keys": [
         "global_context",
         "runtime",
         "jobs"
       ],
-      "signature": "ScheduledJob.Write()",
-      "description": "Записує завдання туди, де воно живе. Зумовлене — вимикач і розклад у базу, одразу застосовуючи їх до робочого розкладу; якщо база їх не прийняла — помилка. Рядок параметризованого — записується зі своїми обробниками та правами, як його записує картка, і стає в розклад.",
+      "signature": "JobSettings.Write()",
+      "description": "Зберігає Active і Schedule у базі й одразу застосовує їх до робочого розкладу. Якщо база їх не прийняла, виникає виняток — на незбережене налаштування не відповідають Істиною.",
       "syntax_block": "Job.Write();",
       "parameters": "",
-      "return_descr": "",
-      "example": "Job.Use = True;\nJob.Write();",
+      "return_descr": "Булеве.",
+      "example": "Job.Active = True;\nJob.Write();",
       "availability": "Сервер",
       "see_also": [
-        "cls.ScheduledJob"
+        "cls.JobSettings",
+        "cls.JobSettings.Read"
       ],
       "reviewed": false
     },
     {
-      "id": "cls.ScheduledJob.Delete",
-      "name_local": "Delete",
-      "name_en": "Delete",
-      "kind": "procedure",
+      "id": "cls.JobSettings.Execute",
+      "name_local": "Execute",
+      "name_en": "Execute",
+      "kind": "method",
       "category_keys": [
         "global_context",
         "runtime",
         "jobs"
       ],
-      "signature": "ScheduledJob.Delete()",
-      "description": "Видаляє рядок параметризованого завдання, а з ним його налаштування й час запусків. Зумовлене завдання відхиляється — воно оголошене, а не зберігається: його вимикають через Use. Рядок, жодного разу не записаний, теж відхиляється.",
-      "syntax_block": "Job.Delete();",
+      "signature": "JobSettings.Execute()",
+      "description": "Запускає завдання зараз, хай що кажуть його розклад і вимикач. Хибність, якщо завдання не зареєстроване в цьому застосунку або вже виконується.",
+      "syntax_block": "Job.Execute();",
       "parameters": "",
-      "return_descr": "",
-      "example": "if (not Job.Predefined) { Job.Delete(); }",
+      "return_descr": "Булеве.",
+      "example": "if (Job.Execute()) { Message(\"запущено\"); }",
       "availability": "Сервер",
       "see_also": [
-        "cls.ScheduledJob"
+        "cls.JobSettings",
+        "cls.JobSettings.LastJob"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "mgr.ParameterizedJob.LastJob",
+      "name_local": "LastJob",
+      "name_en": "LastJob",
+      "kind": "method",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "jobs"
+      ],
+      "signature": "ScheduledJobs.Parameterized.<Name>.LastJob(job : reference)",
+      "description": "Останній прохід одного рядка завдання в цьому застосунку, значенням BackgroundJob — та сама відповідь, що дає LastJob визначеного завдання. Undefined, якщо проходів цього рядка тут не було. Потрібне право на читання завдання.",
+      "syntax_block": "Last = ScheduledJobs.Parameterized.Exchange.LastJob(Row);",
+      "parameters": "job — посилання на рядок цього завдання.",
+      "return_descr": "BackgroundJob або Undefined.",
+      "example": "Last = ScheduledJobs.Parameterized.Exchange.LastJob(Row);\nif (Last <> Undefined and Last.State = BackgroundJobState.Failed) { Message(Last.Error()); }",
+      "availability": "Сервер",
+      "see_also": [
+        "cls.ScheduledJobs",
+        "cls.JobSettings.LastJob",
+        "cls.BackgroundJob"
       ],
       "reviewed": false
     },
@@ -423,41 +317,16 @@
         "jobs"
       ],
       "signature": "BackgroundJobs",
-      "description": "Фонова робота: запускається під ключем і найменуванням, перелічується, знаходиться знову за UUID. Кожне завдання — той самий запуск, що робить RunBackground: власний сеанс, права того, хто викликав, — тож обидва перелічуються однаково. Завдання лишається в списку, доки виконується, і ще якийсь час після завершення.",
-      "syntax_block": "Job = BackgroundJobs.Execute(\"Exchange.Upload\", Parameters, \"upload\", \"Upload\");",
+      "description": "Де знову знаходяться запуски застосунку: кожне фонове завдання, запущене RunBackground, і кожен прохід регламентного завдання — поки він триває і серед останніх 256 після завершення. Сам нічого не запускає — завдання запускається через RunBackground.",
+      "syntax_block": "Jobs = BackgroundJobs.GetBackgroundJobs(Filter);",
       "parameters": "",
       "return_descr": "",
-      "example": "Job = BackgroundJobs.Execute(\"Exchange.Upload\", New Array(), \"upload\", \"Upload to the warehouse\");\nJob = Job.WaitForExecutionCompletion(60);\nMessage(Job.State);",
+      "example": "Job = RunBackground(\"Exchange.Upload\", New Array(), \"upload\", \"Вивантаження на склад\");\nId = Job.UUID;\n// …пізніше або з іншого сеансу\nJob = BackgroundJobs.FindByUUID(Id);",
       "availability": "Сервер",
       "see_also": [
         "cls.BackgroundJob",
-        "cls.BackgroundJobs.Execute",
         "cls.BackgroundJobs.GetBackgroundJobs",
         "cls.BackgroundJobs.FindByUUID",
-        "fn.RunBackground"
-      ],
-      "reviewed": false
-    },
-    {
-      "id": "cls.BackgroundJobs.Execute",
-      "name_local": "Execute",
-      "name_en": "Execute",
-      "kind": "method",
-      "category_keys": [
-        "global_context",
-        "runtime",
-        "jobs"
-      ],
-      "signature": "BackgroundJobs.Execute(methodName : string [, parameters : Array [, key : string [, description : string]]])",
-      "description": "Запускає у фоні публічний метод загального модуля — ІмяМодуля.ІмяМетоду — і одразу повертає його BackgroundJob. Параметри — Array, передаються за позицією; усе інше відхиляється. Доки активне завдання того самого методу з тим самим ключем, друге відхиляється — захист кнопки «запустити зараз» від подвійного натискання.",
-      "syntax_block": "Job = BackgroundJobs.Execute(\"Exchange.Upload\", Parameters, \"upload\", \"Upload\");",
-      "parameters": "methodName — ІмяМодуля.ІмяМетоду.\nparameters — Array аргументів методу.\nkey — ім'я роботи від того, хто викликав.\ndescription — що це за завдання, для людини.",
-      "return_descr": "BackgroundJob.",
-      "example": "Parameters = New Array();\nParameters.Add(Warehouse);\nJob = BackgroundJobs.Execute(\"Exchange.Upload\", Parameters, \"upload\", \"Upload to the warehouse\");",
-      "availability": "Сервер",
-      "see_also": [
-        "cls.BackgroundJobs",
-        "cls.BackgroundJob",
         "fn.RunBackground"
       ],
       "reviewed": false
@@ -473,11 +342,11 @@
         "jobs"
       ],
       "signature": "BackgroundJobs.GetBackgroundJobs([filter : Structure])",
-      "description": "Фонові завдання зі списку, від старих до нових, масивом BackgroundJob. Відбір: UUID, Key, Description, MethodName і State — на рівність; Begin залишає розпочаті не раніше нього, End — завершені не пізніше. Поле відбору, якого завдання не має, відхиляється з його ім'ям.",
+      "description": "Запуски, від старих до нових, Масивом BackgroundJob. Відбір називає властивості BackgroundJob: State, Key, Description, MethodName і UUID порівнюються на рівність; Begin лишає запуски, розпочаті не раніше нього, End — завершені не пізніше нього. Ім'я, яке не є властивістю BackgroundJob, відхиляється із зазначенням цього імені.",
       "syntax_block": "Jobs = BackgroundJobs.GetBackgroundJobs(Filter);",
-      "parameters": "filter — Structure з полів вище; не задано — усі завдання списку.",
-      "return_descr": "Array з BackgroundJob.",
-      "example": "Active = BackgroundJobs.GetBackgroundJobs(New Structure(\"Key, State\", \"upload\", BackgroundJobState.Active));",
+      "parameters": "filter — Структура з властивостей вище; якщо не вказано — усі запуски.",
+      "return_descr": "Масив BackgroundJob.",
+      "example": "Running = BackgroundJobs.GetBackgroundJobs(New Structure(\"Key, State\", \"upload\", BackgroundJobState.Active));",
       "availability": "Сервер",
       "see_also": [
         "cls.BackgroundJobs",
@@ -496,7 +365,7 @@
         "jobs"
       ],
       "signature": "BackgroundJobs.FindByUUID(uuid : UUID | string)",
-      "description": "Завдання зі списку з цим UUID або Undefined — давно завершене завдання відпускається. Значення, що не є UUID, відхиляється.",
+      "description": "Запуск із цим UUID або Undefined — давно завершений запуск відпускається. Значення, яке не є UUID, відхиляється.",
       "syntax_block": "Job = BackgroundJobs.FindByUUID(Id);",
       "parameters": "uuid — UUID або його текст.",
       "return_descr": "BackgroundJob або Undefined.",
@@ -519,11 +388,11 @@
         "jobs"
       ],
       "signature": "BackgroundJob",
-      "description": "Один фоновий запуск — розпочатий BackgroundJobs.Execute або RunBackground, або LastJob регламентного завдання. Через New не створюється. Якщо його відпустити, нічого не зупиниться: запуск завершиться сам.",
-      "syntax_block": "Job = BackgroundJobs.FindByUUID(Id);",
+      "description": "Один запуск — розпочатий RunBackground або прохід регламентного завдання (LastJob). Через New не створюється. Якщо відпустити значення, нічого не зупиниться: запуск допрацює сам.",
+      "syntax_block": "Job = RunBackground(\"Totals.Recalculate\", New Array());",
       "parameters": "",
       "return_descr": "",
-      "example": "Job = RunBackground(\"Totals.Recalculate\", New Array());\nif (Job.WaitForExecutionCompletion(30).State = BackgroundJobState.Failed) { Message(Job.ErrorInfo); }",
+      "example": "Job = RunBackground(\"Totals.Recalculate\", New Array());\nJob.Wait(30000);\nif (Job.State = BackgroundJobState.Failed) { Message(Job.Error()); }",
       "availability": "Сервер",
       "see_also": [
         "cls.BackgroundJobs",
@@ -543,14 +412,15 @@
         "jobs"
       ],
       "signature": "BackgroundJob.State",
-      "description": "Де завдання зараз: Active, доки виконується, потім Completed, Failed або Canceled. Лише читання.",
+      "description": "Де перебуває запуск: Active, поки триває, потім Completed, Failed або Cancelled. Лише читання.",
       "syntax_block": "if (Job.State = BackgroundJobState.Active) { Job.Cancel(); }",
       "parameters": "",
       "return_descr": "BackgroundJobState.",
       "example": "if (Job.State = BackgroundJobState.Active) { Job.Cancel(); }",
       "availability": "Сервер",
       "see_also": [
-        "cls.BackgroundJob"
+        "cls.BackgroundJob",
+        "enum.BackgroundJobState"
       ],
       "reviewed": false
     },
@@ -565,10 +435,10 @@
         "jobs"
       ],
       "signature": "BackgroundJob.Begin",
-      "description": "Коли завдання почалося. Лише читання.",
+      "description": "Коли запуск почався. Лише читання.",
       "syntax_block": "Message(Job.Begin);",
       "parameters": "",
-      "return_descr": "Date.",
+      "return_descr": "Дата.",
       "example": "Message(Job.Begin);",
       "availability": "Сервер",
       "see_also": [
@@ -587,33 +457,11 @@
         "jobs"
       ],
       "signature": "BackgroundJob.End",
-      "description": "Коли завдання завершилося; порожня дата, доки виконується. Лише читання.",
+      "description": "Коли запуск завершився; порожня дата, поки він триває. Лише читання.",
       "syntax_block": "Message(Job.End);",
       "parameters": "",
-      "return_descr": "Date.",
+      "return_descr": "Дата.",
       "example": "Message(Job.End);",
-      "availability": "Сервер",
-      "see_also": [
-        "cls.BackgroundJob"
-      ],
-      "reviewed": false
-    },
-    {
-      "id": "cls.BackgroundJob.ErrorInfo",
-      "name_local": "ErrorInfo",
-      "name_en": "ErrorInfo",
-      "kind": "property",
-      "category_keys": [
-        "global_context",
-        "runtime",
-        "jobs"
-      ],
-      "signature": "BackgroundJob.ErrorInfo",
-      "description": "З чим завдання впало — з модулем і рядком, де це сказав його код; порожньо, якщо не впало. Лише читання.",
-      "syntax_block": "if (Job.State = BackgroundJobState.Failed) { Message(Job.ErrorInfo); }",
-      "parameters": "",
-      "return_descr": "String.",
-      "example": "if (Job.State = BackgroundJobState.Failed) { Message(Job.ErrorInfo); }",
       "availability": "Сервер",
       "see_also": [
         "cls.BackgroundJob"
@@ -631,14 +479,15 @@
         "jobs"
       ],
       "signature": "BackgroundJob.Key",
-      "description": "Ключ, з яким завдання запущене. Лише читання.",
+      "description": "Ключ, з яким запуск розпочато, — третій аргумент RunBackground; порожньо, якщо не вказано. Лише читання.",
       "syntax_block": "Message(Job.Key);",
       "parameters": "",
-      "return_descr": "String.",
+      "return_descr": "Рядок.",
       "example": "Message(Job.Key);",
       "availability": "Сервер",
       "see_also": [
-        "cls.BackgroundJob"
+        "cls.BackgroundJob",
+        "fn.RunBackground"
       ],
       "reviewed": false
     },
@@ -653,10 +502,10 @@
         "jobs"
       ],
       "signature": "BackgroundJob.Description",
-      "description": "Найменування, з яким завдання запущене. Лише читання.",
+      "description": "Що це за запуск, як його читає людина: четвертий аргумент RunBackground або ім'я регламентного завдання, чий це прохід. Лише читання.",
       "syntax_block": "Message(Job.Description);",
       "parameters": "",
-      "return_descr": "String.",
+      "return_descr": "Рядок.",
       "example": "Message(Job.Description);",
       "availability": "Сервер",
       "see_also": [
@@ -675,10 +524,10 @@
         "jobs"
       ],
       "signature": "BackgroundJob.MethodName",
-      "description": "Метод, який воно виконує, — ІмяМодуля.ІмяМетоду. Лише читання.",
+      "description": "Який метод виконується — Ім'яМодуля.Ім'яМетоду; порожньо в проходу регламентного завдання. Лише читання.",
       "syntax_block": "Message(Job.MethodName);",
       "parameters": "",
-      "return_descr": "String.",
+      "return_descr": "Рядок.",
       "example": "Message(Job.MethodName);",
       "availability": "Сервер",
       "see_also": [
@@ -697,37 +546,129 @@
         "jobs"
       ],
       "signature": "BackgroundJob.UUID",
-      "description": "Ідентичність завдання, її питає BackgroundJobs.FindByUUID. Лише читання.",
+      "description": "Ім'я запуску — ім'я його сеансу, рядок в «Активних користувачах»; за ним питають BackgroundJobs.FindByUUID. Лише читання.",
       "syntax_block": "Id = Job.UUID;",
       "parameters": "",
       "return_descr": "UUID.",
       "example": "Id = Job.UUID;",
       "availability": "Сервер",
       "see_also": [
-        "cls.BackgroundJob"
+        "cls.BackgroundJob",
+        "cls.BackgroundJobs.FindByUUID"
       ],
       "reviewed": false
     },
     {
-      "id": "cls.BackgroundJob.WaitForExecutionCompletion",
-      "name_local": "WaitForExecutionCompletion",
-      "name_en": "WaitForExecutionCompletion",
+      "id": "cls.BackgroundJob.IsComplete",
+      "name_local": "IsComplete",
+      "name_en": "IsComplete",
       "kind": "method",
       "category_keys": [
         "global_context",
         "runtime",
         "jobs"
       ],
-      "signature": "BackgroundJob.WaitForExecutionCompletion([timeout : number])",
-      "description": "Чекає завершення завдання, не довше за таймаут у секундах; без нього або 0 — до завершення. Завдання, що ще виконується після таймауту, — не помилка: State скаже Active. Повертає саме завдання.",
-      "syntax_block": "Job = Job.WaitForExecutionCompletion(60);",
-      "parameters": "timeout — скільки секунд чекати щонайбільше.",
-      "return_descr": "BackgroundJob.",
-      "example": "Job = Job.WaitForExecutionCompletion(60);\nif (Job.State = BackgroundJobState.Active) { Message(\"still running\"); }",
+      "signature": "BackgroundJob.IsComplete()",
+      "description": "Істина, коли запуск завершився, хоч би як він завершився.",
+      "syntax_block": "Done = Job.IsComplete();",
+      "parameters": "",
+      "return_descr": "Булеве.",
+      "example": "if (Job.IsComplete()) { Message(Job.State); }",
+      "availability": "Сервер",
+      "see_also": [
+        "cls.BackgroundJob",
+        "cls.BackgroundJob.Wait"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.BackgroundJob.Wait",
+      "name_local": "Wait",
+      "name_en": "Wait",
+      "kind": "method",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "jobs"
+      ],
+      "signature": "BackgroundJob.Wait([timeoutMs : number])",
+      "description": "Чекає завершення запуску не довше за таймаут у мілісекундах; 0 або без аргументу — до кінця. Відповідає IsComplete(): Хибність означає, що час вийшов, а не що запуск упав.",
+      "syntax_block": "Done = Job.Wait(60000);",
+      "parameters": "timeoutMs — скільки мілісекунд чекати щонайбільше.",
+      "return_descr": "Булеве.",
+      "example": "if (not Job.Wait(60000)) { Message(\"ще виконується\"); }",
       "availability": "Сервер",
       "see_also": [
         "cls.BackgroundJob",
         "cls.BackgroundJob.State"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.BackgroundJob.Result",
+      "name_local": "Result",
+      "name_en": "Result",
+      "kind": "method",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "jobs"
+      ],
+      "signature": "BackgroundJob.Result()",
+      "description": "Що повернув метод. Порожньо, поки запуск триває, і порожньо після, якщо він упав, — розрізняє їх Error().",
+      "syntax_block": "Value = Job.Result();",
+      "parameters": "",
+      "return_descr": "Довільний.",
+      "example": "if (Job.Wait(30000) and Job.State = BackgroundJobState.Completed) { Message(Job.Result()); }",
+      "availability": "Сервер",
+      "see_also": [
+        "cls.BackgroundJob",
+        "cls.BackgroundJob.Error"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.BackgroundJob.Error",
+      "name_local": "Error",
+      "name_en": "Error",
+      "kind": "method",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "jobs"
+      ],
+      "signature": "BackgroundJob.Error()",
+      "description": "З якою помилкою запуск упав; порожньо, якщо не впав.",
+      "syntax_block": "Text = Job.Error();",
+      "parameters": "",
+      "return_descr": "Рядок.",
+      "example": "if (Job.State = BackgroundJobState.Failed) { Message(Job.Error()); }",
+      "availability": "Сервер",
+      "see_also": [
+        "cls.BackgroundJob",
+        "enum.BackgroundJobState.Failed"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.BackgroundJob.Activity",
+      "name_local": "Activity",
+      "name_en": "Activity",
+      "kind": "method",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "jobs"
+      ],
+      "signature": "BackgroundJob.Activity()",
+      "description": "Чим запуск зайнятий зараз — той самий рядок, що в «Активних користувачах»; порожньо після завершення.",
+      "syntax_block": "Message(Job.Activity());",
+      "parameters": "",
+      "return_descr": "Рядок.",
+      "example": "Message(Job.Activity());",
+      "availability": "Сервер",
+      "see_also": [
+        "cls.BackgroundJob"
       ],
       "reviewed": false
     },
@@ -742,7 +683,7 @@
         "jobs"
       ],
       "signature": "BackgroundJob.Cancel()",
-      "description": "Просить завдання зупинитися. Його код зупиняється на наступному кроці; завдання, що чекає на іншу систему, помітить, коли та відповість. Зупинене так завдання — Canceled, а не Failed.",
+      "description": "Просить запуск зупинитися. Його код зупиниться на наступному кроці; запуск, що чекає на іншу систему, помітить, коли та відповість. Зупинений так запуск — Cancelled, а не Failed.",
       "syntax_block": "Job.Cancel();",
       "parameters": "",
       "return_descr": "",
@@ -750,7 +691,7 @@
       "availability": "Сервер",
       "see_also": [
         "cls.BackgroundJob",
-        "enum.BackgroundJobState.Canceled"
+        "enum.BackgroundJobState.Cancelled"
       ],
       "reviewed": false
     },
@@ -764,8 +705,8 @@
         "runtime",
         "jobs"
       ],
-      "signature": "BackgroundJobState.Active, .Completed, .Failed, .Canceled",
-      "description": "Де фонове завдання зараз — BackgroundJob.State. Canceled — не Failed: завдання нічого не зробило не так, його попросили зупинитися.",
+      "signature": "BackgroundJobState.Active, .Completed, .Failed, .Cancelled",
+      "description": "Де перебуває запуск — BackgroundJob.State. Cancelled — не Failed: запуск нічого не зробив не так, його попросили зупинитися.",
       "syntax_block": "if (Job.State = BackgroundJobState.Completed) { }",
       "parameters": "",
       "return_descr": "",
@@ -775,7 +716,7 @@
         "enum.BackgroundJobState.Active",
         "enum.BackgroundJobState.Completed",
         "enum.BackgroundJobState.Failed",
-        "enum.BackgroundJobState.Canceled",
+        "enum.BackgroundJobState.Cancelled",
         "cls.BackgroundJob.State"
       ],
       "reviewed": false
@@ -791,11 +732,11 @@
         "jobs"
       ],
       "signature": "BackgroundJobState.Active",
-      "description": "Завдання виконується.",
+      "description": "Запуск триває.",
       "syntax_block": "if (Job.State = BackgroundJobState.Active) { }",
       "parameters": "",
       "return_descr": "BackgroundJobState.",
-      "example": "if (Job.State = BackgroundJobState.Active) { Message(Job.Description); }",
+      "example": "if (Job.State = BackgroundJobState.Active) { Message(Job.Activity()); }",
       "availability": "Сервер",
       "see_also": [
         "enum.BackgroundJobState",
@@ -814,11 +755,11 @@
         "jobs"
       ],
       "signature": "BackgroundJobState.Completed",
-      "description": "Завдання завершилося без помилки.",
+      "description": "Запуск завершився без помилки.",
       "syntax_block": "if (Job.State = BackgroundJobState.Completed) { }",
       "parameters": "",
       "return_descr": "BackgroundJobState.",
-      "example": "if (Job.State = BackgroundJobState.Completed) { Message(Job.Description); }",
+      "example": "if (Job.State = BackgroundJobState.Completed) { Message(Job.Result()); }",
       "availability": "Сервер",
       "see_also": [
         "enum.BackgroundJobState",
@@ -837,38 +778,38 @@
         "jobs"
       ],
       "signature": "BackgroundJobState.Failed",
-      "description": "Завдання завершилося помилкою — якою, каже ErrorInfo.",
+      "description": "Запуск завершився з помилкою — якою, каже Error().",
       "syntax_block": "if (Job.State = BackgroundJobState.Failed) { }",
       "parameters": "",
       "return_descr": "BackgroundJobState.",
-      "example": "if (Job.State = BackgroundJobState.Failed) { Message(Job.Description); }",
+      "example": "if (Job.State = BackgroundJobState.Failed) { Message(Job.Error()); }",
       "availability": "Сервер",
       "see_also": [
         "enum.BackgroundJobState",
-        "cls.BackgroundJob.State"
+        "cls.BackgroundJob.Error"
       ],
       "reviewed": false
     },
     {
-      "id": "enum.BackgroundJobState.Canceled",
-      "name_local": "Canceled",
-      "name_en": "Canceled",
+      "id": "enum.BackgroundJobState.Cancelled",
+      "name_local": "Cancelled",
+      "name_en": "Cancelled",
       "kind": "system_enum",
       "category_keys": [
         "global_context",
         "runtime",
         "jobs"
       ],
-      "signature": "BackgroundJobState.Canceled",
-      "description": "Завдання попросили зупинитися, і воно зупинилося.",
-      "syntax_block": "if (Job.State = BackgroundJobState.Canceled) { }",
+      "signature": "BackgroundJobState.Cancelled",
+      "description": "Запуск попросили зупинитися, і він зупинився.",
+      "syntax_block": "if (Job.State = BackgroundJobState.Cancelled) { }",
       "parameters": "",
       "return_descr": "BackgroundJobState.",
-      "example": "if (Job.State = BackgroundJobState.Canceled) { Message(Job.Description); }",
+      "example": "if (Job.State = BackgroundJobState.Cancelled) { Message(Job.Description); }",
       "availability": "Сервер",
       "see_also": [
         "enum.BackgroundJobState",
-        "cls.BackgroundJob.State"
+        "cls.BackgroundJob.Cancel"
       ],
       "reviewed": false
     }

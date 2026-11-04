@@ -4,9 +4,9 @@
   "locale": "ru",
   "entries": [
     {
-      "id": "cls.Container",
-      "name_local": "Container",
-      "name_en": "Container",
+      "id": "cls.Map",
+      "name_local": "Map",
+      "name_en": "Map",
       "kind": "collection",
       "class_id": 158350834197411078,
       "category_keys": [
@@ -14,28 +14,28 @@
         "collections",
         "containers"
       ],
-      "signature": "New Container()",
+      "signature": "New Map()",
       "description": "Ключ, связанный со значением, и оба они — значения рантайма. Ключом может быть строка, число, дата, ссылка на элемент — что различает `=` языка, то различает и контейнер: «fr» и «FR» — два ключа, а 1 — это не «1».\n\nСтроковый ключ читается и после точки — в том написании, в каком его вставили: `c.Name` находит ключ «Name», а `c.name` — нет. К ключу обращаются через `c[key]` (если ничего не связано — ошибка), через Get (вернёт Undefined), через Property и обходом контейнера, который отдаёт KeyValue на каждую запись в порядке вставки ключей.\n\nДля постоянного набора ИМЁН, которые пишут после точки в любом регистре, есть тип Structure.",
-      "syntax_block": "Rates = New Container();\nRates.Insert(\"fr\", 1);\nRates.Insert(\"FR\", 2);\nMessage(Rates[\"fr\"]);\nMessage(Rates.Get(\"de\"));\n\nForeach (Pair In Rates) {\n    Message(Pair.Key + \": \" + Pair.Value);\n}",
-      "syntax_block_ves": "Rates = New Container();\nRates.Insert(\"fr\", 1);\nRates.Insert(\"FR\", 2);\nMessage(Rates[\"fr\"]);\nMessage(Rates.Get(\"de\"));\n\nForeach Pair In Rates Do\n    Message(Pair.Key + \": \" + Pair.Value);\nEndDo;",
+      "syntax_block": "Rates = New Map();\nRates.Insert(\"fr\", 1);\nRates.Insert(\"FR\", 2);\nMessage(Rates[\"fr\"]);\nMessage(Rates.Get(\"de\"));\n\nForeach (Pair In Rates) {\n    Message(Pair.Key + \": \" + Pair.Value);\n}",
+      "syntax_block_ves": "Rates = New Map();\nRates.Insert(\"fr\", 1);\nRates.Insert(\"FR\", 2);\nMessage(Rates[\"fr\"]);\nMessage(Rates.Get(\"de\"));\n\nForeach Pair In Rates Do\n    Message(Pair.Key + \": \" + Pair.Value);\nEndDo;",
       "parameters": "Нет.",
-      "return_descr": "Container — пустой.",
-      "example": "Rates = New Container();\nRates.Insert(\"fr\", 1);\nRates.Insert(\"FR\", 2);\nMessage(Rates[\"fr\"]);\nMessage(Rates.Get(\"de\"));\n\nForeach (Pair In Rates) {\n    Message(Pair.Key + \": \" + Pair.Value);\n}",
+      "return_descr": "Map — пустой.",
+      "example": "Rates = New Map();\nRates.Insert(\"fr\", 1);\nRates.Insert(\"FR\", 2);\nMessage(Rates[\"fr\"]);\nMessage(Rates.Get(\"de\"));\n\nForeach (Pair In Rates) {\n    Message(Pair.Key + \": \" + Pair.Value);\n}",
       "availability": "Тонкий клиент, Сервер",
       "see_also": [
-        "cls.Container.Count",
-        "cls.Container.Get",
-        "cls.Container.Property",
-        "cls.Container.Insert",
-        "cls.Container.Delete",
-        "cls.Container.Clear",
+        "cls.Map.Count",
+        "cls.Map.Get",
+        "cls.Map.Property",
+        "cls.Map.Insert",
+        "cls.Map.Delete",
+        "cls.Map.Clear",
         "cls.KeyValue",
         "cls.Structure"
       ],
       "reviewed": false
     },
     {
-      "id": "cls.Container.Count",
+      "id": "cls.Map.Count",
       "name_local": "Count",
       "name_en": "Count",
       "kind": "method",
@@ -44,20 +44,20 @@
         "collections",
         "containers"
       ],
-      "signature": "Container.Count()",
+      "signature": "Map.Count()",
       "description": "Сколько ключей в контейнере.",
       "parameters": "Нет.",
       "return_descr": "Number.",
-      "example": "Rates = New Container();\nRates.Insert(\"fr\", 1);\nMessage(Rates.Count());",
+      "example": "Rates = New Map();\nRates.Insert(\"fr\", 1);\nMessage(Rates.Count());",
       "availability": "Тонкий клиент, Сервер",
       "see_also": [
-        "cls.Container",
-        "cls.Container.Clear"
+        "cls.Map",
+        "cls.Map.Clear"
       ],
       "reviewed": false
     },
     {
-      "id": "cls.Container.Get",
+      "id": "cls.Map.Get",
       "name_local": "Get",
       "name_en": "Get",
       "kind": "method",
@@ -66,21 +66,21 @@
         "collections",
         "containers"
       ],
-      "signature": "Container.Get(key)",
+      "signature": "Map.Get(key)",
       "description": "Значение, связанное с ключом, или Undefined, если с ним ничего не связано. Ошибки не вызывает — в отличие от `c[key]` — и не требует второго аргумента, в отличие от Property.",
       "parameters": "key — любое значение. Два строковых ключа — один ключ, когда это один и тот же текст; ключи другого рода сводит порядок значений, а он ставит Undefined и Null в одно место.",
       "return_descr": "Значение, связанное с ключом, или Undefined.",
-      "example": "Rates = New Container();\nRates.Insert(\"fr\", 1);\nMessage(Rates.Get(\"fr\"));\nMessage(ValueIsFilled(Rates.Get(\"de\")));",
+      "example": "Rates = New Map();\nRates.Insert(\"fr\", 1);\nMessage(Rates.Get(\"fr\"));\nMessage(ValueIsFilled(Rates.Get(\"de\")));",
       "availability": "Тонкий клиент, Сервер",
       "see_also": [
-        "cls.Container",
-        "cls.Container.Property",
-        "cls.Container.Insert"
+        "cls.Map",
+        "cls.Map.Property",
+        "cls.Map.Insert"
       ],
       "reviewed": false
     },
     {
-      "id": "cls.Container.Property",
+      "id": "cls.Map.Property",
       "name_local": "Property",
       "name_en": "Property",
       "kind": "method",
@@ -89,20 +89,20 @@
         "collections",
         "containers"
       ],
-      "signature": "Container.Property(key, valueFound)",
+      "signature": "Map.Property(key, valueFound)",
       "description": "Есть ли ключ в контейнере. Связанное с ним значение возвращается через второй аргумент; если ключа нет, аргумент остаётся прежним.",
       "parameters": "key — любое значение.\nvalueFound — переменная, в которую возвращается значение.",
       "return_descr": "Boolean — True, если ключ есть.",
       "example": "Rate = Undefined;\nIf (Rates.Property(\"fr\", Rate)) {\n    Message(Rate);\n}",
       "availability": "Тонкий клиент, Сервер",
       "see_also": [
-        "cls.Container",
-        "cls.Container.Get"
+        "cls.Map",
+        "cls.Map.Get"
       ],
       "reviewed": false
     },
     {
-      "id": "cls.Container.Insert",
+      "id": "cls.Map.Insert",
       "name_local": "Insert",
       "name_en": "Insert",
       "kind": "procedure",
@@ -111,21 +111,21 @@
         "collections",
         "containers"
       ],
-      "signature": "Container.Insert(key, value)",
+      "signature": "Map.Insert(key, value)",
       "description": "Связывает значение с ключом, которого в контейнере ещё нет. Уже имеющийся ключ вызывает ошибку «Key '<ключ>' is already using!» — чтобы заменить связанное значение, присвойте его: `Rates[\"fr\"] = 2`.",
       "parameters": "key — любое значение.\nvalue — что с ним связать.",
       "return_descr": "Нет.",
-      "example": "Rates = New Container();\nRates.Insert(\"fr\", 1);\nRates[\"fr\"] = 2;",
+      "example": "Rates = New Map();\nRates.Insert(\"fr\", 1);\nRates[\"fr\"] = 2;",
       "availability": "Тонкий клиент, Сервер",
       "see_also": [
-        "cls.Container",
-        "cls.Container.Delete",
-        "cls.Container.Get"
+        "cls.Map",
+        "cls.Map.Delete",
+        "cls.Map.Get"
       ],
       "reviewed": false
     },
     {
-      "id": "cls.Container.Delete",
+      "id": "cls.Map.Delete",
       "name_local": "Delete",
       "name_en": "Delete",
       "kind": "procedure",
@@ -134,20 +134,20 @@
         "collections",
         "containers"
       ],
-      "signature": "Container.Delete(key)",
+      "signature": "Map.Delete(key)",
       "description": "Удаляет ключ и связанное с ним значение. Отсутствующий ключ — не ошибка. Порядок остальных ключей сохраняется.",
       "parameters": "key — любое значение. Два строковых ключа — один ключ, когда это один и тот же текст; ключи другого рода сводит порядок значений, а он ставит Undefined и Null в одно место.",
       "return_descr": "Нет.",
       "example": "Rates.Delete(\"fr\");",
       "availability": "Тонкий клиент, Сервер",
       "see_also": [
-        "cls.Container",
-        "cls.Container.Clear"
+        "cls.Map",
+        "cls.Map.Clear"
       ],
       "reviewed": false
     },
     {
-      "id": "cls.Container.Clear",
+      "id": "cls.Map.Clear",
       "name_local": "Clear",
       "name_en": "Clear",
       "kind": "procedure",
@@ -156,15 +156,15 @@
         "collections",
         "containers"
       ],
-      "signature": "Container.Clear()",
+      "signature": "Map.Clear()",
       "description": "Удаляет все ключи.",
       "parameters": "Нет.",
       "return_descr": "Нет.",
       "example": "Rates.Clear();",
       "availability": "Тонкий клиент, Сервер",
       "see_also": [
-        "cls.Container",
-        "cls.Container.Delete"
+        "cls.Map",
+        "cls.Map.Delete"
       ],
       "reviewed": false
     },
@@ -180,7 +180,7 @@
         "containers"
       ],
       "signature": "New Structure([fields [, value1, value2, ...]])",
-      "description": "Набор именованных полей. Имя поля — это ИМЯ: регистр не важен (`s.Name`, `s.name` и `s[\"nAmE\"]` — одно поле), и поле читают после точки. Именем поля может быть только строка, всё остальное отвергается.\n\nПоля можно объявить при создании — `New Structure(\"Item, Amount\", \"Paper\", 12)` — или добавлять по одному через Insert. Обход структуры отдаёт KeyValue на каждое поле в порядке добавления.\n\nКогда ключи — ЗНАЧЕНИЯ, а не имена (ссылка, число, две строки, различающиеся регистром), нужен тип Container.",
+      "description": "Набор именованных полей. Имя поля — это ИМЯ: регистр не важен (`s.Name`, `s.name` и `s[\"nAmE\"]` — одно поле), и поле читают после точки. Именем поля может быть только строка, всё остальное отвергается.\n\nПоля можно объявить при создании — `New Structure(\"Item, Amount\", \"Paper\", 12)` — или добавлять по одному через Insert. Обход структуры отдаёт KeyValue на каждое поле в порядке добавления.\n\nКогда ключи — ЗНАЧЕНИЯ, а не имена (ссылка, число, две строки, различающиеся регистром), нужен тип Map.",
       "syntax_block": "Line = New Structure(\"Item, Amount\", \"Paper\", 12);\nLine.Insert(\"Price\", 3);\nMessage(Line.item);\nMessage(Line.Get(\"Vat\"));\n\nForeach (Field In Line) {\n    Message(Field.Key + \": \" + Field.Value);\n}",
       "syntax_block_ves": "Line = New Structure(\"Item, Amount\", \"Paper\", 12);\nLine.Insert(\"Price\", 3);\nMessage(Line.item);\nMessage(Line.Get(\"Vat\"));\n\nForeach Field In Line Do\n    Message(Field.Key + \": \" + Field.Value);\nEndDo;",
       "parameters": "fields — String, имена полей через запятую. Можно не указывать.\nvalue1, value2, … — значения полей в том же порядке; поле без значения — Undefined.",
@@ -195,7 +195,7 @@
         "cls.Structure.Delete",
         "cls.Structure.Clear",
         "cls.KeyValue",
-        "cls.Container"
+        "cls.Map"
       ],
       "reviewed": false
     },
@@ -342,7 +342,7 @@
         "collections",
         "containers"
       ],
-      "signature": "Foreach (Pair In Container) { ... }",
+      "signature": "Foreach (Pair In Map) { ... }",
       "description": "Одна запись контейнера или структуры — такой, какой её отдаёт обход: ключ и связанное с ним значение. Через New не создаётся: она появляется в Foreach по контейнеру или структуре.",
       "syntax_block": "Foreach (Pair In Rates) {\n    Message(Pair.Key + \": \" + Pair.Value);\n}",
       "syntax_block_ves": "Foreach Pair In Rates Do\n    Message(Pair.Key + \": \" + Pair.Value);\nEndDo;",
@@ -353,7 +353,7 @@
       "see_also": [
         "cls.KeyValue.Key",
         "cls.KeyValue.Value",
-        "cls.Container",
+        "cls.Map",
         "cls.Structure"
       ],
       "reviewed": false

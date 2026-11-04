@@ -39,6 +39,13 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   of this should be checked.
 - **An assistant's connection comes back by itself.** After a dropped connection its next call opens a
   new one. The call that was under way is not repeated, and the assistant is told to check its result.
+- **An assistant's sandbox and its runs are written in the registration journal**, source `assistant`:
+  what ran and how it ended. They are no longer shown in your window's messages.
+- **`Container` is now `Map`.** `New Container` no longer makes one: write `New Map`. A map the base
+  stored reads back as before.
+- **`Catalogs`, `Documents` and the other managers, `Metadata.Catalogs` and `Data.Catalogs` are
+  collections.** `For Each` hands out the managers, the objects or the data sources themselves, not
+  key-value pairs. `Count()` and `Get(name or position)` answer, and a name is found whatever its case.
 
 ## Script language
 
@@ -140,18 +147,16 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **A report on the start page, a cell's detail and a report an assistant shows build themselves as they open.**
   Whether to compose at once is said by whoever opens the form, not by the grid: the grid's `ComposeOnOpen`
   property is gone, and a form that had it set now waits for Compose.
-- **Scheduled jobs from code.** `ScheduledJobs.GetScheduledJobs(filter)`, `FindPredefined(metadata)`,
-  `FindByUUID(id)` and `CreateScheduledJob(metadata)` answer with a `ScheduledJob` — a predefined job's
-  settings or a parameterized job's row — with `Use`, `Schedule`, `Parameters`, `Key`, `Description`,
-  `LastJob`, `LastRun`, `Write()` and `Delete()`. `ScheduledJobs.Predefined` and `.Parameterized` stay.
-  `Metadata.ScheduledJobs` and `Metadata.ParameterizedJobs` name the metaobjects. A predefined job that
-  the base has no settings for now reads as declared; it read as switched on, hourly.
-- **Background jobs: `BackgroundJobs`.** `Execute(method, parameters, key, description)` starts what
-  `RunBackground` starts, and refuses a second job of the same method under a key that is still running.
-  `GetBackgroundJobs(filter)` and `FindByUUID(id)` find them again, for a while after they ended too. A
-  `BackgroundJob` says `State` (`BackgroundJobState`: `Active`, `Completed`, `Failed`, `Canceled`),
-  `Begin`, `End` and `ErrorInfo`, and has `WaitForExecutionCompletion(timeout)`. `Cancel()` did nothing
-  when called as a statement; it cancels now.
+- **Background jobs: a key, a description, and `BackgroundJobs`.** `RunBackground(method, parameters, key,
+  description)` refuses a second job of the same method under a key that is still running.
+  `BackgroundJobs.GetBackgroundJobs(filter)` and `FindByUUID(id)` find every run the application started —
+  a background job or a pass of a scheduled one — while it runs and among the last 256 after it ended. A `BackgroundJob`
+  says `State` (`BackgroundJobState`: `Active`, `Completed`, `Failed`, `Cancelled`), `Begin`, `End`,
+  `Key`, `Description`, `MethodName` and `UUID`. `Cancel()` did nothing when called as a statement; it
+  cancels now.
+- **A scheduled job's last pass.** A row of `ScheduledJobs.Predefined` has `LastJob`, and a parameterized
+  job's manager `LastJob(job)`: the `BackgroundJob` of its last pass here, `Undefined` if none ran. A
+  predefined job the base has no settings for reads as declared; it read as switched on, hourly.
 
 ## The browser client
 

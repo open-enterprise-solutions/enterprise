@@ -99,7 +99,7 @@ struct ibLinqBinding {
 // and calls GetExpression again at trampoline emit time — naturally
 // advances cursor to end, which we then restore.
 struct ibLinqPendingJoin {
-	ibParamUnit hashSlot;             // persistent: holds the New("Container")
+	ibParamUnit hashSlot;             // persistent: holds the New("Map")
 	ibParamUnit bindSlot;             // persistent: the current matched inner row (bucket iter var)
 	ibParamUnit bucketSlot;           // the key's bucket Array — Property's out-param at lookup,
 	                                  // and the build temp inside the trampoline

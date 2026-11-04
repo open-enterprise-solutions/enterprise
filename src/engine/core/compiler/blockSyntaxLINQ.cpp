@@ -59,7 +59,7 @@ bool Mentions(const ibString& expression, const ibString& name)
 	return false;
 }
 
-// Several values made into ONE, which a group compares by its contents (ibValueContainer::CompareValueLS)
+// Several values made into ONE, which a group compares by its contents (ibValueMap::CompareValueLS)
 // - `New Structure("Customer, Warehouse", o.Customer, o.Warehouse)`; its fields are read back by name.
 ibString MadeOne(const std::vector<std::pair<ibString, ibString>>& parts)
 {

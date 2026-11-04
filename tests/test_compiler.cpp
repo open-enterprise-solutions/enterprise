@@ -906,7 +906,7 @@ TEST(BarrierTypes, AKindBarrierAdmitsEveryMemberOfItsKind) {
 	const ibCtorAbstractType* anyValue = ibValue::GetAvailableCtor(wxT("AnyValue"));
 	ASSERT_NE(nullptr, anyValue);
 
-	for (const wchar_t* name : { L"Array", L"Structure", L"Container" }) {
+	for (const wchar_t* name : { L"Array", L"Structure", L"Map" }) {
 		const ibCtorAbstractType* ctor = ibValue::GetAvailableCtor(ibString(name));
 		if (ctor == nullptr) continue;
 		EXPECT_TRUE(anyValue->AllowValue(ctor->GetClassType()))
@@ -1026,7 +1026,7 @@ TEST(ValueSerialize, StructuresComeBackAsStructures) {
 	EXPECT_EQ(original.GetClassType(), restored.GetClassType())
 		<< "a structure must not come back as a plain container";
 
-	ibValueContainer* container = nullptr;
+	ibValueMap* container = nullptr;
 	ASSERT_TRUE(const_cast<ibValue&>(restored).ConvertToValue(container));
 	ASSERT_NE(nullptr, container);
 	EXPECT_EQ(2u, container->Count());

@@ -55,7 +55,7 @@ namespace {
 // this tree had ever executed one: not a policy, a wall.
 //
 // A real host always has it, so this is the test's job and not the engine's.
-// The same wall stands in front of ibValueContainer (six sites), which is why
+// The same wall stands in front of ibValueMap (six sites), which is why
 // the Structure benchmarks throw.
 //
 // Cost of not knowing this: seven builds spent proving the compiler innocent.
@@ -1342,13 +1342,13 @@ TEST(RuntimeTest, ArrayInsert_AtEnd_Appends) {
 	EXPECT_EQ(ret.GetInteger(), 123);   // [0,1,2,3]
 }
 
-// A Container round-trips its keys and values (the redesigned vector + hash
+// A Map round-trips its keys and values (the redesigned vector + hash
 // store), preserves insertion order, and overwrites on `[key] = v`.
 TEST(RuntimeTest, ContainerStore_InsertGetOverwriteOrder) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	const ibString src =
 		wxT("Function C() Public\n")
-		wxT("  var m; m = New Container;\n")
+		wxT("  var m; m = New Map;\n")
 		wxT("  m.Insert(\"b\", 2); m.Insert(\"a\", 1);\n")
 		wxT("  var got; m.Property(\"a\", got);\n")
 		wxT("  If got <> 1 Then Return -1; EndIf;\n")

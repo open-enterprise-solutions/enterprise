@@ -18,14 +18,6 @@
 
 namespace {
 
-// A finished future is one that is ready NOW. Anything else — still running, or
-// never started — is not harvestable. Zero timeout so this never blocks a tick.
-bool FutureReady(const std::future<void>& f)
-{
-	return f.valid()
-		&& f.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
-}
-
 // The claim's owner identity is the JOB'S SESSION, not the process.
 //
 // That is what makes a crash survivable. A lock row is cleaned up when its owner
@@ -97,7 +89,7 @@ ibJobManager::~ibJobManager()
 
 bool ibJobManager::IsRunning(const ibJobEntry& e)
 {
-	return e.m_future.valid() && !FutureReady(e.m_future);
+	return e.m_pass != nullptr && !e.m_pass->IsComplete();
 }
 
 bool ibJobManager::IsDue(const ibJobEntry& e, std::chrono::steady_clock::time_point now)
@@ -167,19 +159,24 @@ bool ibJobManager::IsDue(const ibJobEntry& e, std::chrono::steady_clock::time_po
 
 void ibJobManager::HarvestFinished(ibJobEntry& e, std::vector<std::shared_ptr<ibSessionHolder>>& release)
 {
-	if (!FutureReady(e.m_future))
+	if (e.m_pass == nullptr || !e.m_pass->IsComplete())
 		return;
 
 	// The VERDICT was decided on the worker, at the moment the run ended (see
 	// Launch). Nothing is caught here — there is nothing left to catch, because
-	// the task never let anything escape. This only copies the answer across.
-	if (e.m_result != nullptr && e.m_result->m_done.load(std::memory_order_acquire)) {
-		const bool skipped = e.m_result->m_skipped.load(std::memory_order_acquire);
-		const bool ok      = e.m_result->m_ok.load(std::memory_order_acquire);
+	// the task never let anything escape. This only copies the answer across:
+	// how the pass ended is the run's, the two answers only a pass gives are m_result's.
+	const std::shared_ptr<ibBackgroundRun> pass = std::move(e.m_pass);
+	e.m_pass.reset();
+	{
+		const bool skipped = e.m_result != nullptr && e.m_result->m_skipped.load(std::memory_order_acquire);
+		const ibString error = pass->Error();
+		const bool ok      = error.IsEmpty();
 		e.m_outcome     = skipped ? ibJobOutcome::Skipped
 		                : ok      ? ibJobOutcome::Succeeded
+		                : pass->State() == ibBackgroundJobState_Cancelled ? ibJobOutcome::Cancelled
 		                          : ibJobOutcome::Failed;
-		e.m_workRemains = ok && e.m_result->m_more.load(std::memory_order_acquire);
+		e.m_workRemains = ok && e.m_result != nullptr && e.m_result->m_more.load(std::memory_order_acquire);
 
 		// RETRY BOOKKEEPING, decided here because this is where the verdict lands.
 		//
@@ -203,29 +200,29 @@ void ibJobManager::HarvestFinished(ibJobEntry& e, std::vector<std::shared_ptr<ib
 			e.m_retryAt = ibDateTime();
 		}
 
-		e.m_lastEndAt = ibDateTime::Now();
-
-		std::lock_guard<std::mutex> lk(e.m_result->m_mtx);
-		e.m_error = e.m_result->m_error;
+		e.m_error = error;
 		if (!ok)
 			ibJournalInfo(ibT("job"),ibT("job '%s' failed: %s"), e.m_desc.m_name, e.m_error);
+
+		// A PASS THAT NEVER REACHED ITS BODY did no work: it is not LastJob, and it is not kept among the
+		// ended runs — a peer's pass is the one that did it. Its session is HANDED OUT, not dropped here:
+		// releasing a holder runs Teardown, which waits behind the session's own queue, and this is called
+		// with the manager's mutex held. The caller drops it once the lock is gone (Tick).
+		if (skipped) {
+			{
+				std::lock_guard<std::mutex> runLk(pass->m_mtx);   // the tick's order: the manager's lock, then the run's
+				if (pass->m_holder)
+					release.push_back(std::make_shared<ibSessionHolder>(std::move(pass->m_holder)));
+			}
+			m_backgroundJobs.erase(std::remove(m_backgroundJobs.begin(), m_backgroundJobs.end(), pass), m_backgroundJobs.end());
+		}
+		else {
+			e.m_lastPass = pass;
+		}
 	}
 
-	// Drain the future so a stray exception (one thrown by the POOL rather than by
-	// the body — a stopped pool rejecting the task) cannot surface out of the
-	// future's destructor.
-	try { e.m_future.get(); } catch (...) {}
-
-	// THE SESSION GOES — the run is over, so it has no reason to exist. Not done here, though:
-	// releasing a holder runs Teardown, which waits behind the session's own queue, and this is
-	// called with the manager's mutex held. HANDED OUT instead, for the caller to drop once the
-	// lock is gone (Tick). The entry lets go of it now, so nothing else can reach it.
-	if (e.m_runSession) {
-		release.push_back(std::move(e.m_runSession));
-		e.m_runSession.reset();
-	}
-
-	e.m_future = std::future<void>();
+	// A pass that did its work keeps its place in m_backgroundJobs, and the tick gives its session back with every
+	// other ended run's.
 	e.m_result.reset();
 }
 
@@ -255,6 +252,15 @@ ibString ibJobManager::FindNameByKey(const ibGuid& key) const
 		if (KeyOf(e->m_desc) == key)
 			return e->m_desc.m_name;
 	return ibString();
+}
+
+std::shared_ptr<ibBackgroundRun> ibJobManager::LastJob(const ibGuid& key) const
+{
+	std::lock_guard<std::mutex> lock(m_mtx);
+	for (const auto& e : m_entries)
+		if (KeyOf(e->m_desc) == key)
+			return e->m_pass != nullptr ? e->m_pass : e->m_lastPass;
+	return nullptr;
 }
 
 ibJobManager::ibJobEntry* ibJobManager::Find(const ibString& name)
@@ -322,9 +328,17 @@ bool ibJobManager::Launch(ibJobEntry& e)
 	// that does not compile, a module body that throws (ibSession::CompileRoot). Said where a run's failure
 	// is said, the job's outcome and the journal's error row, and the next attempt waits for the schedule
 	// as after any run instead of coming back every tick. The tick's catch around Launch says nothing.
-	std::shared_ptr<ibSessionHolder> runSession;
+	//
+	// ⭐ THE PASS IS A RUN — its request names the job, its session is the run's, and it is held in
+	// m_backgroundJobs like any other (ibJobEntry::m_pass). One that refused to come up is a pass too: LastJob is
+	// that one, ended with its error and holding no session.
+	const ibString activity = ibString::Format(ibT("job: %s"), desc.m_name);
+	auto pass = std::make_shared<ibBackgroundRun>();
+	pass->m_request.m_description = desc.m_name;
+
+	ibSessionHolder holder;
 	try {
-		runSession = std::make_shared<ibSessionHolder>(OpenRunSession(e.m_desc));
+		holder = OpenRunSession(e.m_desc);
 	}
 	catch (const ibCoreException& err) {
 		e.m_everRun   = true;
@@ -334,18 +348,48 @@ bool ibJobManager::Launch(ibJobEntry& e)
 		e.m_error     = err.GetErrorDescription();
 		if (ibLogger* const log = ibApplicationInstance::GetLogger())
 			log->Error(ibT("job"), ibT("failed"), ibString::Format(_("Job '%s' failed: %s"), desc.m_name, e.m_error));
+
+		pass->m_error = e.m_error;
+		pass->m_end   = ibDateTime::Now();
+		pass->m_done.store(true, std::memory_order_release);
+		std::lock_guard<std::mutex> lk(m_mtx);
+		if (!m_stopped)
+			m_backgroundJobs.push_back(pass);
+		e.m_lastPass = pass;
 		return false;
 	}
-	if (!*runSession)
+	if (!holder)
 		return false;   // no session — try again on the next tick
 
-	ibSession* const session = runSession->Get();
+	ibSession* const session = holder.Get();
+	pass->m_uuid   = session->Identity().m_guid;
+	pass->m_holder = std::move(holder);
+	pass->m_activity = activity;
 
-	e.m_future = session->Submit([session, runSession, desc, result]() {
+	std::shared_future<void> future = session->Submit([session, pass, activity, desc, result]() {
 		// 2. THE CLAIM, owned by this session so it dies with it — including if
 		//    the process does. Refused means a peer is already running the job:
 		//    not an error, just not ours this time.
 		ibLockHandle claim;
+
+		// THE ENDING IS PUBLISHED ON THE WAY OUT, whichever way that is, and LAST — after the claim is let go:
+		// once a pass reads complete the tick may take its session back, and the claim is the session's.
+		struct ibPassEnded {
+			ibBackgroundRun& m_pass;
+			ibLockHandle&    m_claim;
+
+			~ibPassEnded()
+			{
+				m_claim.Release();
+				{
+					std::lock_guard<std::mutex> lk(m_pass.m_mtx);
+					m_pass.m_activity.clear();
+					m_pass.m_end = ibDateTime::Now();
+				}
+				m_pass.m_done.store(true, std::memory_order_release);
+			}
+		} ended{ *pass, claim };
+
 		// Only an EXCLUSIVE job claims its record. A parameterised one is meant to
 		// have several instances running at once, so there is nothing to claim and
 		// nothing to be blocked by — see ibJobDescription::m_exclusive.
@@ -377,7 +421,6 @@ bool ibJobManager::Launch(ibJobEntry& e)
 					                            desc.m_name));
 				}
 				result->m_skipped.store(true, std::memory_order_release);
-				result->m_done.store(true, std::memory_order_release);
 				return;
 			}
 		}
@@ -403,8 +446,6 @@ bool ibJobManager::Launch(ibJobEntry& e)
 			const long long interval = desc.m_schedule.m_intervalSeconds * 1000ll;      // ms
 			if (since < interval) {
 				result->m_skipped.store(true, std::memory_order_release);
-				result->m_done.store(true, std::memory_order_release);
-				claim.Release();
 				return;
 			}
 		}
@@ -415,19 +456,24 @@ bool ibJobManager::Launch(ibJobEntry& e)
 		if (desc.m_exclusive)
 			WriteSharedLastRun(KeyOf(desc), desc.m_name, ibDateTime::Now());
 
-		// 4. THE BODY, wrapped. Visible in Active Users while it lasts.
-		session->SetActivity(ibString::Format(ibT("job: %s"), desc.m_name));
+		// 4. THE BODY, wrapped. Visible in Active Users while it lasts. A cancel is not a failure: somebody asked
+		//    the pass to stop, and it did (ibJobOutcome::Cancelled).
+		session->SetActivity(activity);
 		try {
 			result->m_more.store(desc.m_body(session), std::memory_order_release);
-			result->m_ok.store(true, std::memory_order_release);
+		}
+		catch (const ibBackendInterruptException&) {
+			pass->m_cancelled.store(true, std::memory_order_release);
+			std::lock_guard<std::mutex> lk(pass->m_mtx);
+			pass->m_error = _("the run was cancelled");
 		}
 		catch (const ibCoreException& err) {
-			std::lock_guard<std::mutex> lk(result->m_mtx);
-			result->m_error = err.GetErrorDescription();
+			std::lock_guard<std::mutex> lk(pass->m_mtx);
+			pass->m_error = err.GetErrorDescription();
 		}
 		catch (...) {
-			std::lock_guard<std::mutex> lk(result->m_mtx);
-			result->m_error = _("unknown exception");
+			std::lock_guard<std::mutex> lk(pass->m_mtx);
+			pass->m_error = _("unknown exception");
 		}
 		session->SetActivity(ibEmptyString);
 
@@ -436,8 +482,8 @@ bool ibJobManager::Launch(ibJobEntry& e)
 		//    row here, "did it run last night, and how did it go?" has no answer
 		//    short of watching Active Users at the right moment.
 		if (ibLogger* const log = ibApplicationInstance::GetLogger()) {
-			const bool ok = result->m_ok.load(std::memory_order_acquire);
-			if (ok) {
+			const ibString error = pass->Error();
+			if (error.IsEmpty()) {
 				// A completed run is a business event: it belongs to the trail an administrator
 				// reads, not to the list of things that are wrong.
 				log->Audit(ibT("job"), ibT("finished"),
@@ -449,28 +495,53 @@ bool ibJobManager::Launch(ibJobEntry& e)
 				// night sat in the journal indistinguishable from a login, and the one query built
 				// to find it (`level: error`) could not. Unattended work is exactly the work whose
 				// failures nobody witnesses; if it is not legible here it is legible nowhere.
-				std::lock_guard<std::mutex> lk(result->m_mtx);
 				log->Error(ibT("job"), ibT("failed"),
-				           ibString::Format(_("Job '%s' failed: %s"), desc.m_name, result->m_error));
+				           ibString::Format(_("Job '%s' failed: %s"), desc.m_name, error));
 			}
 		}
 
-		// 6. THE VERDICT, published LAST so a reader that sees it done finds the
-		//    answer already there.
-		result->m_done.store(true, std::memory_order_release);
-
+		// 6. THE VERDICT is published by `ended` on the way out, LAST, so a reader that sees the pass done
+		//    finds the answer already there.
+		//
 		// The session is NOT released here: Teardown queues an empty task on this
 		// very session and waits for it, which from inside one of its own tasks is
-		// waiting behind oneself. The tick releases it in HarvestFinished instead —
+		// waiting behind oneself. The tick releases it with every ended run's —
 		// one tick later at the outside, and off this session's worker.
-		claim.Release();
 	});
+
+	// A SUBMIT THAT WAS NOT ACCEPTED (a stopped pool) never runs the task, so nothing would ever say the pass
+	// ended: it is ended here, with why.
+	if (future.valid() && future.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+		try {
+			future.get();
+		}
+		catch (...) {
+			{
+				std::lock_guard<std::mutex> lk(pass->m_mtx);
+				if (pass->m_error.IsEmpty())
+					pass->m_error = _("Background job: the worker pool did not take the run");
+				pass->m_end = ibDateTime::Now();
+			}
+			pass->m_done.store(true, std::memory_order_release);
+		}
+	}
+	{
+		std::lock_guard<std::mutex> lk(pass->m_mtx);
+		pass->m_future = future;
+	}
 
 	// The pending attempt has been taken — a new failure will schedule the next one. Cleared HERE
 	// rather than on the verdict, so a retry that is still waiting survives an intervening tick.
 	e.m_retryAt = ibDateTime();
 
-	e.m_runSession = runSession;   // released by HarvestFinished, off the worker
+	// Held from here on, as every run is (m_backgroundJobs); the entry's own pointers are read under m_mtx too
+	// (LastJob), so they are set under it.
+	{
+		std::lock_guard<std::mutex> lk(m_mtx);
+		if (!m_stopped)
+			m_backgroundJobs.push_back(pass);
+		e.m_pass = pass;
+	}
 	e.m_result    = std::move(result);
 	e.m_everRun   = true;
 	e.m_lastRun   = std::chrono::steady_clock::now();
@@ -662,9 +733,8 @@ ibSessionHolder ibJobManager::OpenRunSession(const ibJobDescription& desc)
 
 bool ibJobManager::Unregister(const ibString& name)
 {
-	std::future<void> pending;
-	ibSessionHolder   holder;
-	bool              found = false;
+	std::shared_ptr<ibBackgroundRun> pending;
+	bool                             found = false;
 
 	{
 		std::unique_lock<std::mutex> lk(m_mtx);
@@ -685,10 +755,9 @@ bool ibJobManager::Unregister(const ibString& name)
 			if (it == m_entries.end())
 				break;   // somebody else removed it while we waited — still "found"
 
-			// Move the future and the holder OUT, then wait outside the lock: the
-			// running body may call back into the manager, and the session must not
-			// die before its task finishes with it.
-			pending = std::move((*it)->m_future);
+			// Take the pass in flight OUT, then wait outside the lock: the running body may call back into
+			// the manager. Its session stays with the run, held in m_backgroundJobs, and the tick gives it back.
+			pending = (*it)->m_pass;
 			m_entries.erase(it);
 			break;
 		}
@@ -700,10 +769,9 @@ bool ibJobManager::Unregister(const ibString& name)
 	if (!found)
 		return false;
 
-	if (pending.valid()) {
-		try { pending.get(); } catch (...) { /* logged by whoever harvests; here it is teardown */ }
-	}
-	return true;   // holder dies here — the session goes with it
+	if (pending != nullptr)
+		pending->Wait();
+	return true;
 }
 
 std::size_t ibJobManager::UnregisterByPrefix(const ibString& prefix)
@@ -802,24 +870,40 @@ int ibJobManager::Tick()
 		if (m_stopped)
 			return 0;
 
-		// A FINISHED BACKGROUND RUN GIVES ITS SESSION BACK HERE — from the tick, never from
-		// its own worker, for the reason spelled out on m_runSession: Teardown waits behind
+		// AN ENDED RUN GIVES ITS SESSION BACK HERE — a background run and a scheduled pass alike — from the
+		// tick, never from its own worker, for the reason spelled out on m_backgroundJobs: Teardown waits behind
 		// the session's own queue, and a task of that session dropping the last reference
 		// would be waiting behind itself. Holding the run this far also keeps its
 		// sys_session row alive past the moment the work ended, which is what makes a
 		// two-millisecond background job visible in Active Users at all — the cluster
 		// snapshot is taken once a second and would otherwise never catch one.
 		//
-		// The handle the caller was given (if it kept one) stays valid: only the session
-		// goes, and a finished run has nothing left to do with it.
-		for (auto it = m_background.begin(); it != m_background.end(); ) {
+		// The handle stays, for the last kKeptBackgroundJobs that ended: only the session goes, and an ended run
+		// has nothing left to do with it. A rented run is let go altogether — it says so itself (m_tenancy).
+		std::size_t ended = 0;
+		for (auto it = m_backgroundJobs.begin(); it != m_backgroundJobs.end(); ) {
 			const std::shared_ptr<ibBackgroundRun>& run = *it;
-			if (!run || run->m_done.load(std::memory_order_acquire)) {
-				if (run) {
-					std::lock_guard<std::mutex> runLk(run->m_mtx);
+			if (!run->m_done.load(std::memory_order_acquire)) {
+				++it;
+				continue;
+			}
+			{
+				std::lock_guard<std::mutex> runLk(run->m_mtx);
+				if (run->m_holder)
 					toRelease.push_back(std::make_shared<ibSessionHolder>(std::move(run->m_holder)));
-				}
-				it = m_background.erase(it);
+			}
+			if (run->m_tenancy == ibJobTenancy::Tenant) {
+				it = m_backgroundJobs.erase(it);
+				continue;
+			}
+			++ended;
+			++it;
+		}
+		// …the oldest ended ones first, past the policy; the active ones whatever their number.
+		for (auto it = m_backgroundJobs.begin(); ended > kKeptBackgroundJobs && it != m_backgroundJobs.end(); ) {
+			if ((*it)->m_done.load(std::memory_order_acquire)) {
+				it = m_backgroundJobs.erase(it);
+				--ended;
 			}
 			else {
 				++it;
@@ -965,9 +1049,6 @@ std::vector<ibJobState> ibJobManager::Snapshot() const
 		state.m_active    = e.m_desc.m_active;
 		state.m_outcome   = e.m_outcome;
 		state.m_lastRunAt = e.m_lastRunAt;
-		// A run in flight has not ended — its last one's end would read as this one's.
-		state.m_running   = IsRunning(e);
-		state.m_lastEndAt = state.m_running ? ibDateTime() : e.m_lastEndAt;
 		state.m_error     = e.m_error;
 
 		state.m_schedule = ibJobScheduleRules::Describe(e.m_desc.m_schedule);
@@ -1009,57 +1090,40 @@ void ibJobManager::Stop()
 			m_thread.join();
 	}
 
-	// EVERYTHING THIS MANAGER STARTED GOES WITH IT — background runs included.
-	// They are not on the schedule and nobody may be holding their value, but
-	// they are on sessions this process owns, against a database about to be torn
-	// down. Leaving one running would be work nobody is watching, on a session
-	// nobody will close.
+	// EVERYTHING THIS MANAGER STARTED GOES WITH IT — background runs and scheduled passes alike, all held in
+	// m_backgroundJobs. A background run is not on the schedule and nobody may be holding its value, but it is on a
+	// session this process owns, against a database about to be torn down. Leaving one running would be
+	// work nobody is watching, on a session nobody will close.
 	//
-	// Cancel first, then wait: cancellation is cooperative (the interpreter
-	// unwinds at its next loop boundary), so asking everyone before waiting on
-	// anyone means the waits overlap instead of queueing.
-	{
-		std::vector<std::shared_ptr<ibBackgroundRun>> alive;
-		// The listed handles go too: a run that was not harvested still holds its session, and the
-		// list must not keep it past the registry it belongs to.
-		std::deque<std::shared_ptr<ibBackgroundRun>> listed;
-		{
-			std::lock_guard<std::mutex> lk(m_mtx);
-			alive.swap(m_background);
-			listed.swap(m_listed);
-		}
-		for (auto& run : alive) run->Cancel();
-		for (auto& run : alive) run->Wait();
-	}
-
 	// The tick thread is joined by now, so no entry can still be m_inFlight — nothing to wait for
 	// here. The notify is for anyone parked in Unregister: m_stopped releases them.
-	std::vector<std::unique_ptr<ibJobEntry>> doomed;
+	std::vector<std::shared_ptr<ibBackgroundRun>> runs;
+	std::vector<std::unique_ptr<ibJobEntry>>      doomed;
 	{
 		std::lock_guard<std::mutex> lk(m_mtx);
 		if (m_stopped)
 			return;
 		m_stopped = true;
+		runs.swap(m_backgroundJobs);
 		doomed.swap(m_entries);
 	}
 	m_inFlightCv.notify_all();
 
-	// …CANCELLED BEFORE THEY ARE WAITED FOR, like the background runs above. A scheduled run still going
-	// was only waited for, so a long one held the whole shutdown until it ended on its own; its session
-	// hears the one command every other run hears, and the waits below overlap.
-	for (auto& e : doomed)
-		if (e->m_runSession)
-			if (ibSession* const session = e->m_runSession->Get())
-				session->Cancel();
+	// A pass launched while Stop was on its way is its entry's and not yet held: it goes the same way.
+	for (const auto& e : doomed)
+		if (e->m_pass != nullptr && std::find(runs.begin(), runs.end(), e->m_pass) == runs.end())
+			runs.push_back(e->m_pass);
 
-	// Wait outside the lock. Each run owns its own session inside its task, so
-	// waiting for the task IS waiting for the session to be let go — there is no
-	// holder here to reset.
-	for (auto& e : doomed) {
-		if (e->m_future.valid()) {
-			try { e->m_future.get(); } catch (...) { /* shutdown — nothing left to tell */ }
-		}
-	}
+	// ONLY THE ACTIVE ONES — an ended run has nothing to cancel and nothing to wait for. Cancel first, then
+	// wait: cancellation is cooperative (the interpreter unwinds at its next loop boundary), so asking
+	// everyone before waiting on anyone means the waits overlap instead of queueing. The sessions go with
+	// the runs, here, off every worker.
+	for (const auto& run : runs)
+		if (!run->IsComplete())
+			run->Cancel();
+	for (const auto& run : runs)
+		if (!run->IsComplete())
+			run->Wait();
 }
 
 

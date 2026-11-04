@@ -1755,7 +1755,7 @@ TEST(RuntimeBench, DISABLED_RecordParts) {
 
 // --- where a field's cost goes as a structure gets wider -------------------
 // `struct build 3 fields` read 1603 ns on 2026-08-11 (§8) and 2321 today, and
-// the suspect is the commit that turned ibValueContainer into a hash index
+// the suspect is the commit that turned ibValueMap into a hash index
 // (675b04db, 23:19 THAT DAY — the baseline predates it by hours). A hash pays a
 // fixed price the tree did not: the first insert allocates a bucket array, and
 // the key is then stored TWICE, in m_entries and in m_index.

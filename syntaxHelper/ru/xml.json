@@ -1789,10 +1789,10 @@
         "xml"
       ],
       "signature": "NamespaceMappings()",
-      "description": "Всё действующее сразу: `Container` из ПРЕФИКСА в ПРОСТРАНСТВО ИМЁН - пространство имён по умолчанию под ключом \"\", и `xml` всегда среди ключей.",
+      "description": "Всё действующее сразу: `Map` из ПРЕФИКСА в ПРОСТРАНСТВО ИМЁН - пространство имён по умолчанию под ключом \"\", и `xml` всегда среди ключей.",
       "syntax_block": "Mappings = Context.NamespaceMappings();",
       "parameters": "Нет.",
-      "return_descr": "Container - префикс → URI пространства имён.",
+      "return_descr": "Map - префикс → URI пространства имён.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns=\"\"urn:a\"\" xmlns:p=\"\"urn:p\"\"/>\");\nReader.Read();\nforeach (Pair In Reader.NamespaceContext.NamespaceMappings()) {\n    Message(\"'\" + Pair.Key + \"' = \" + Pair.Value);   // '' = urn:a, 'p' = urn:p, 'xml' = ...\n}",
       "availability": "Тонкий клиент, Сервер",
       "see_also": [

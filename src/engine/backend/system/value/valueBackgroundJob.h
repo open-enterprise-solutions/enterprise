@@ -43,7 +43,7 @@ public:
 	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray) override;
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) override;
 
-	// State, Begin, End, ErrorInfo and the label — FACTS about the run, all read-only.
+	// State, Begin, End and the label — FACTS about the run, all read-only.
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;
 
 	const std::shared_ptr<ibBackgroundRun>& GetRun() const { return m_run; }
@@ -54,11 +54,11 @@ private:
 
 void ibValueBackgroundJobsManager_BindNames(ibValue::ibMemberTable& helper, const ibValue* ctx);
 
-// BackgroundJobs — the global manager of background work: start one under a key and a description, list
-// them, find one by its UUID. Every one of them is the run RunBackground starts (ibJobManager::
-// StartBackground), so a job started here and one started there are the same thing, listed alike.
+// BackgroundJobs — where the runs are found again: listed, or one by its UUID. It starts nothing — a job is
+// started by RunBackground, under a key and a description when the caller gives them — and it lists every
+// run the job manager holds, a background job or a scheduled job's pass (ibJobManager::GetBackgroundJobs).
 //
-//   Job = BackgroundJobs.Execute("Exchange.Upload", Parameters, "upload", "Upload to the warehouse");
+//   Job = RunBackground("Exchange.Upload", Parameters, "upload", "Upload to the warehouse");
 //   Jobs = BackgroundJobs.GetBackgroundJobs(New Structure("Key, State", "upload", BackgroundJobState.Active));
 //
 // VENDED like the job itself: there is one, and it is reached by its global name.

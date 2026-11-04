@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
-//	Description : value structure and containers
+//	Description : value structure and map
 ////////////////////////////////////////////////////////////////////////////
 
 #include "valueMap.h"
@@ -30,8 +30,8 @@ inline wchar_t FoldChar(const wchar_t c)
 //   through a dot and does not care how it was typed (`s.Name` and `s.name` are one field). The fold
 //   runs over the text ONCE per lookup, here, and not once per candidate.
 //
-//   a STRING key in a CONTAINER is a value, and hashes as the value it is: "fr" and "FR" are two keys,
-//   as `"fr" = "FR"` is False. Until 2026-09-23 it folded like a field name, which made a Container
+//   a STRING key in a MAP is a value, and hashes as the value it is: "fr" and "FR" are two keys,
+//   as `"fr" = "FR"` is False. Until 2026-09-23 it folded like a field name, which made a Map
 //   answer a question about its keys differently from the language's own `=`.
 //
 //   anything else compares AS A VALUE — ibValue's own ordering, so a reference matches by its guid
@@ -50,7 +50,7 @@ static const ibString& KeyText(const ibValue& key, ibString& held)
 	return held;
 }
 
-size_t ibValueContainer::HashOf(const ibValue& key) const
+size_t ibValueMap::HashOf(const ibValue& key) const
 {
 	if (m_keyKind == ibKeyKind::Name && key.GetType() == ibValueTypes::TYPE_STRING) {
 		ibString held;
@@ -85,9 +85,9 @@ static bool FoldedEquals(const ibString& a, const ibString& b)
 
 // Entries in one bucket share a hash, not a key, so each candidate is settled against the entry
 // itself — a field name against a field name folded (Structure), text against text exactly
-// (Container), value against value otherwise. Text is kept apart from every other kind in both:
+// (Map), value against value otherwise. Text is kept apart from every other kind in both:
 // the value ordering puts an enumeration beside the text of its presentation, and a key is not that.
-bool ibValueContainer::KeyMatches(const ibValue& candidate, const ibValue& key) const
+bool ibValueMap::KeyMatches(const ibValue& candidate, const ibValue& key) const
 {
 	const bool isText = (key.GetType() == ibValueTypes::TYPE_STRING);
 	if (isText != (candidate.GetType() == ibValueTypes::TYPE_STRING))
@@ -101,84 +101,84 @@ bool ibValueContainer::KeyMatches(const ibValue& candidate, const ibValue& key) 
 	return candidate.CompareValueLS(key) == 0;
 }
 
-long ibValueContainer::FindWithHash(const ibValue& key, const size_t hash) const
+long ibValueMap::FindWithHash(const ibValue& key, const size_t hash) const
 {
 	if (Indexed()) {
 		const auto range = m_index.equal_range(hash);
 		for (auto it = range.first; it != range.second; ++it)
-			if (KeyMatches(m_entries[it->second].key, key))
+			if (KeyMatches(m_listValue[it->second].key, key))
 				return (long)it->second;
 		return wxNOT_FOUND;
 	}
 	// Walked: the stored hashes decide almost every entry, and a key's text is read only where two agree.
-	for (size_t at = 0; at < m_entries.size(); ++at)
-		if (m_entries[at].hash == hash && KeyMatches(m_entries[at].key, key))
+	for (size_t at = 0; at < m_listValue.size(); ++at)
+		if (m_listValue[at].hash == hash && KeyMatches(m_listValue[at].key, key))
 			return (long)at;
 	return wxNOT_FOUND;
 }
 
 // A container with no index (fewer than kIndexMin entries) is walked: the same rule of equality, no hash.
-long ibValueContainer::FindByWalk(const ibValue& key) const
+long ibValueMap::FindByWalk(const ibValue& key) const
 {
-	for (size_t at = 0; at < m_entries.size(); ++at)
-		if (KeyMatches(m_entries[at].key, key))
+	for (size_t at = 0; at < m_listValue.size(); ++at)
+		if (KeyMatches(m_listValue[at].key, key))
 			return (long)at;
 	return wxNOT_FOUND;
 }
 
-long ibValueContainer::IndexOf(const ibValue& key) const
+long ibValueMap::IndexOf(const ibValue& key) const
 {
 	return Indexed() ? FindWithHash(key, HashOf(key)) : FindByWalk(key);
 }
 
-void ibValueContainer::IndexNewEntry(const bool wasIndexed)
+void ibValueMap::IndexNewEntry(const bool wasIndexed)
 {
 	if (wasIndexed) {
-		m_index.emplace(m_entries.back().hash, m_entries.size() - 1);
+		m_index.emplace(m_listValue.back().hash, m_listValue.size() - 1);
 		return;
 	}
 	if (!Indexed())
 		return;
 	// The count just reached kIndexMin: every entry is indexed now, the new one with the rest.
-	m_index.reserve(m_entries.size());
-	for (size_t at = 0; at < m_entries.size(); ++at)
-		m_index.emplace(m_entries[at].hash, at);
+	m_index.reserve(m_listValue.size());
+	for (size_t at = 0; at < m_listValue.size(); ++at)
+		m_index.emplace(m_listValue[at].hash, at);
 }
 
-// The other side as a container, or nullptr. dynamic_cast for the reason
+// The other side as a map, or nullptr. dynamic_cast for the reason
 // measured in valueArray.cpp (a class-id compare is ×7.6 SLOWER here, not
 // faster) — read that note before changing this one.
 //
 // ⚠ A cast to the BASE also accepts the derived Structure, where a class-id
 // compare would have separated them. That is deliberate and it matches the
-// store: a Structure IS a Container whose keys must be strings, and two of them
+// store: a Structure IS a Map whose keys must be strings, and two of them
 // holding the same pairs hold the same data. If the two are ever required to
 // compare unequal, that is a rule about the TYPES and belongs in an override on
 // ibValueStructure, not in a cheaper-looking cast here.
-const ibValueContainer* ibValueContainer::AsContainer(const ibVariant& cParam) const
+const ibValueMap* ibValueMap::AsMap(const ibVariant& cParam) const
 {
-	return dynamic_cast<const ibValueContainer*>(cParam.GetRef());
+	return dynamic_cast<const ibValueMap*>(cParam.GetRef());
 }
 
 // An entry orders as a PAIR: key first, value only as the tiebreak (its hash is the
 // key's, so it says nothing more). Same element walk as the array — the vector's own
 // comparison, handed the comparator for what it holds.
-int ibValueContainer::CompareValueLS(const ibVariant& cParam) const
+int ibValueMap::CompareValueLS(const ibVariant& cParam) const
 {
-	const ibValueContainer* rhs = AsContainer(cParam);
+	const ibValueMap* rhs = AsMap(cParam);
 	if (rhs == nullptr)
 		return ibValue::CompareValueLS(cParam);   // not a container — the base places it by KIND
 
 
-	const auto less = [](const ibContainerEntry& a, const ibContainerEntry& b) {
+	const auto less = [](const ibMapEntry& a, const ibMapEntry& b) {
 		const int c = a.key.CompareValueLS(b.key);
 		return c != 0 ? c < 0 : a.value.CompareValueLS(b.value) < 0;
 	};
-	if (std::lexicographical_compare(m_entries.begin(), m_entries.end(),
-	                                 rhs->m_entries.begin(), rhs->m_entries.end(), less))
+	if (std::lexicographical_compare(m_listValue.begin(), m_listValue.end(),
+	                                 rhs->m_listValue.begin(), rhs->m_listValue.end(), less))
 		return -1;
-	if (std::lexicographical_compare(rhs->m_entries.begin(), rhs->m_entries.end(),
-	                                 m_entries.begin(), m_entries.end(), less))
+	if (std::lexicographical_compare(rhs->m_listValue.begin(), rhs->m_listValue.end(),
+	                                 m_listValue.begin(), m_listValue.end(), less))
 		return 1;
 	return 0;
 }
@@ -186,10 +186,10 @@ int ibValueContainer::CompareValueLS(const ibVariant& cParam) const
 // Entry order is insertion order and the comparison walks it, so the hash walks
 // it too: same pairs in the same sequence, same value. Both halves of a pair go
 // in — {a:1} and {a:2} are different containers.
-size_t ibValueContainer::GetValueHash() const
+size_t ibValueMap::GetValueHash() const
 {
-	std::uint64_t h = ibHashCombine(kIbHashBasis, m_entries.size());
-	for (const auto& entry : m_entries) {
+	std::uint64_t h = ibHashCombine(kIbHashBasis, m_listValue.size());
+	for (const auto& entry : m_listValue) {
 		h = ibHashCombine(h, entry.key.GetValueHash());
 		h = ibHashCombine(h, entry.value.GetValueHash());
 	}
@@ -198,15 +198,15 @@ size_t ibValueContainer::GetValueHash() const
 
 // Equality asks the entries for EQUALITY — the type-strict rule — rather than
 // for order-equal, exactly as the array does.
-bool ibValueContainer::CompareValueEQ(const ibVariant& cParam) const
+bool ibValueMap::CompareValueEQ(const ibVariant& cParam) const
 {
-	const ibValueContainer* rhs = AsContainer(cParam);
+	const ibValueMap* rhs = AsMap(cParam);
 	if (rhs == nullptr)
 		return false;
 
-	return m_entries.size() == rhs->m_entries.size()
-		&& std::equal(m_entries.begin(), m_entries.end(), rhs->m_entries.begin(),
-		              [](const ibContainerEntry& a, const ibContainerEntry& b) {
+	return m_listValue.size() == rhs->m_listValue.size()
+		&& std::equal(m_listValue.begin(), m_listValue.end(), rhs->m_listValue.begin(),
+		              [](const ibMapEntry& a, const ibMapEntry& b) {
 			              return a.key.CompareValueEQ(b.key)
 			                  && a.value.CompareValueEQ(b.value);
 		              });
@@ -216,18 +216,18 @@ bool ibValueContainer::CompareValueEQ(const ibVariant& cParam) const
 //*                          ibValueReturnMap                           *
 //**********************************************************************
 
-void ibValueContainer::ibValueReturnContainer::BindNames(ibMemberTable& helper, const ibValue* /*ctx*/)
+void ibValueMap::ibValueKeyValue::BindNames(ibMemberTable& helper, const ibValue* /*ctx*/)
 {
 	helper.AppendProp(ibT("Key"));
 	helper.AppendProp(ibT("Value"));
 }
 
-bool ibValueContainer::ibValueReturnContainer::SetPropVal(const long lPropNum, const ibValue& cValue)
+bool ibValueMap::ibValueKeyValue::SetPropVal(const long lPropNum, const ibValue& cValue)
 {
 	return false;
 }
 
-bool ibValueContainer::ibValueReturnContainer::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
+bool ibValueMap::ibValueKeyValue::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
 	switch (lPropNum)
 	{
@@ -243,53 +243,50 @@ bool ibValueContainer::ibValueReturnContainer::GetPropVal(const long lPropNum, i
 }
 
 //**********************************************************************
-//*                            ibValueContainer                         *
+//*                              ibValueMap                            *
 //**********************************************************************
 
-ibValueContainer::ibValueContainer() : ibValue(ibValueTypes::TYPE_VALUE), m_keyKind(ibKeyKind::Value) {
+ibValueMap::ibValueMap() : ibValueCollection(ibValueTypes::TYPE_VALUE), m_keyKind(ibKeyKind::Value) {
 }
 
-ibValueContainer::ibValueContainer(const std::map<ibValue, ibValue>& containerValues) : ibValue(ibValueTypes::TYPE_VALUE, true), m_keyKind(ibKeyKind::Value) {
+ibValueMap::ibValueMap(const std::map<ibValue, ibValue>& containerValues) : ibValueCollection(ibValueTypes::TYPE_VALUE, true), m_keyKind(ibKeyKind::Value) {
 	// SetAt, not Insert: should the source map hold two keys this store calls one, a
 	// build keeps the last rather than throwing.
 	for (const auto& cntVal : containerValues)
-		ibValueContainer::SetAt(cntVal.first, cntVal.second);
+		ibValueMap::SetAt(cntVal.first, cntVal.second);
 }
 
-ibValueContainer::ibValueContainer(bool readOnly) : ibValue(ibValueTypes::TYPE_VALUE, readOnly), m_keyKind(ibKeyKind::Value) {
+ibValueMap::ibValueMap(bool readOnly) : ibValueCollection(ibValueTypes::TYPE_VALUE, readOnly), m_keyKind(ibKeyKind::Value) {
 }
 
-ibValueContainer::ibValueContainer(bool readOnly, ibKeyKind keyKind) : ibValue(ibValueTypes::TYPE_VALUE, readOnly), m_keyKind(keyKind) {
+ibValueMap::ibValueMap(bool readOnly, ibKeyKind keyKind) : ibValueCollection(ibValueTypes::TYPE_VALUE, readOnly), m_keyKind(keyKind) {
 }
 
-ibValueContainer::~ibValueContainer() {
+ibValueMap::~ibValueMap() {
 }
 
-namespace {
-void BindWritableContainerNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/) { ibValueContainer::BindContainerNames(helper, false); }
-void BindReadOnlyContainerNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/) { ibValueContainer::BindContainerNames(helper, true); }
-}
+void BindWritableMapNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/) { ibValueMap::BindMapNames(helper, false); }
+void BindReadOnlyMapNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/) { ibValueMap::BindMapNames(helper, true); }
 
-ibValue::ibMemberTable* ibValueContainer::DoGetPMethods() const
+ibValue::ibMemberTable* ibValueMap::DoGetPMethods() const
 {
-	return m_bReadOnly ? ibMemberTable::Shared<&BindReadOnlyContainerNames>()
-	                   : ibMemberTable::Shared<&BindWritableContainerNames>();
+	return m_bReadOnly ? ibMemberTable::Shared<&BindReadOnlyMapNames>()
+	                   : ibMemberTable::Shared<&BindWritableMapNames>();
 }
 
 // The FIXED method surface — methods only. It does not publish the keys, so it is
 // type-invariant given the read-only flag, and shared (DoGetPMethods). The keys are
 // the store's job (FindProp / GetPropName).
-void ibValueContainer::BindContainerNames(ibMemberTable& helper, const bool readOnly)
+void ibValueMap::BindMapNames(ibMemberTable& helper, const bool readOnly)
 {
-	helper.AppendFunc(ibT("Count"), ibT("Count()"));
+	// Count, and Get - READ WITHOUT ASKING FIRST. Property answers whether a key is there and hands the
+	// value back through its second argument; [key] answers the value and raises when the key is not
+	// there. Get is the third question, the one the reference system's Map answers: the value, or
+	// Undefined -- which is what "nothing is bound to this key" looks like everywhere else in the
+	// language. A Structure gets it too: the member table is one table, a position in it is a method
+	// number, and a field that is not there is the same question.
+	FillCollection(helper, ibT("Get(key : any)"));
 	helper.AppendFunc(ibT("Property"), 2, ibT("Property(key : any, valueFound : any)"));
-	// READ WITHOUT ASKING FIRST. Property answers whether a key is there and hands the value
-	// back through its second argument; [key] answers the value and raises when the key is not
-	// there. Get is the third question, the one the reference system's Map answers: the value,
-	// or Undefined -- which is what "nothing is bound to this key" looks like everywhere else
-	// in the language. A Structure gets it too: the member table is one table, a position in it
-	// is a method number, and a field that is not there is the same question.
-	helper.AppendFunc(ibT("Get"), 1, ibT("Get(key : any)"));
 
 	if (!readOnly) {
 		helper.AppendFunc(ibT("Clear"), ibT("Clear()"));
@@ -304,22 +301,22 @@ void ibValueContainer::BindContainerNames(ibMemberTable& helper, const bool read
 // are the index side of the same store, used by the interpreter after FindProp
 // and by introspection.
 
-long ibValueContainer::FindProp(const ibString& strPropName) const
+long ibValueMap::FindProp(const ibString& strPropName) const
 {
 	return IndexOf(ibValue(strPropName));
 }
 
-const ibString& ibValueContainer::GetPropName(const long lPropNum) const
+const ibString& ibValueMap::GetPropName(const long lPropNum) const
 {
 	static const ibString s_absent;
-	if (lPropNum < 0 || lPropNum >= (long)m_entries.size())
+	if (lPropNum < 0 || lPropNum >= (long)m_listValue.size())
 		return s_absent;
 	// A string key lends its own text. A key of another kind — a number, a date — is NAMED by its text as well:
 	// a LINQ projection over containers names its columns so (procUnitLINQ.cpp), and a key 42 came out as a
 	// column with no name. That text is nowhere to be lent from, so it is made into this thread's one slot and
 	// lives until the next such name here; every caller copies it on the spot. (FindProp still cannot reach
 	// such a key by name — a text is not a number.)
-	const ibValue& key = m_entries[lPropNum].key;
+	const ibValue& key = m_listValue[lPropNum].key;
 	if (key.m_typeClass == ibValueTypes::TYPE_STRING)
 		return key.m_sData;
 	static thread_local ibString s_made;
@@ -327,31 +324,28 @@ const ibString& ibValueContainer::GetPropName(const long lPropNum) const
 	return s_made;
 }
 
-bool ibValueContainer::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
+bool ibValueMap::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	if (lPropNum < 0 || lPropNum >= (long)m_entries.size())
+	if (lPropNum < 0 || lPropNum >= (long)m_listValue.size())
 		return false;
-	pvarPropVal = m_entries[lPropNum].value;
+	pvarPropVal = m_listValue[lPropNum].value;
 	return true;
 }
 
-bool ibValueContainer::SetPropVal(const long lPropNum, const ibValue& varPropVal)
+bool ibValueMap::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	if (lPropNum < 0 || lPropNum >= (long)m_entries.size())
+	if (lPropNum < 0 || lPropNum >= (long)m_listValue.size())
 		return false;
-	m_entries[lPropNum].value = varPropVal;
+	m_listValue[lPropNum].value = varPropVal;
 	return true;
 }
 
-bool ibValueContainer::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
+bool ibValueMap::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
 	switch (lMethodNum)
 	{
 	case enClear:
 		Clear();
-		return true;
-	case enCount:
-		pvarRetValue = Count();
 		return true;
 	case enDelete:
 		Delete(*paParams[0]);
@@ -383,10 +377,10 @@ bool ibValueContainer::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, 
 		return true;
 	}
 
-	return false;
+	return ibValueCollection::CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
 }
 
-void ibValueContainer::Delete(const ibValue& varKeyValue)
+void ibValueMap::Delete(const ibValue& varKeyValue)
 {
 	const long idx = IndexOf(varKeyValue);
 	if (idx < 0)
@@ -397,7 +391,7 @@ void ibValueContainer::Delete(const ibValue& varKeyValue)
 	// 192 s for the 36 000 employees of one payroll (MEASURED 2026-09-14, Debug). It is still a pass over the
 	// index; `[key] = value` replaces a value in place and is the put.
 	const size_t hole = static_cast<size_t>(idx);
-	m_entries.erase(m_entries.begin() + idx);
+	m_listValue.erase(m_listValue.begin() + idx);
 	if (!Indexed()) {
 		m_index.clear();   // back below kIndexMin: walked again, as Indexed() says
 		return;
@@ -413,7 +407,7 @@ void ibValueContainer::Delete(const ibValue& varKeyValue)
 	}
 }
 
-void ibValueContainer::Insert(const ibValue& varKeyValue, const ibValue& cValue)
+void ibValueMap::Insert(const ibValue& varKeyValue, const ibValue& cValue)
 {
 	// ONE HASH OF THE KEY, taken here and kept in the entry. The hash is a fold over the
 	// key's whole text, so on a Structure — where keys are field names — taking it twice
@@ -426,47 +420,26 @@ void ibValueContainer::Insert(const ibValue& varKeyValue, const ibValue& cValue)
 		ibBackendCoreException::Error(_("Key '%s' is already using!"), varKeyValue.GetString());
 		return;
 	}
-	m_entries.emplace_back(varKeyValue, cValue, hash);
+	m_listValue.emplace_back(varKeyValue, cValue, hash);
 	IndexNewEntry(indexed);
 }
 
-bool ibValueContainer::Property(const ibValue& varKeyValue, ibValue& cValueFound)
+bool ibValueMap::Property(const ibValue& varKeyValue, ibValue& cValueFound)
 {
 	const long idx = IndexOf(varKeyValue);
 	if (idx < 0)
 		return false;
-	cValueFound = m_entries[idx].value;
+	cValueFound = m_listValue[idx].value;
 	return true;
 }
 
-std::shared_ptr<ibValueIteratorState> ibValueContainer::CreateIterator()
+ibValue ibValueMap::ElementValue(const ibMapEntry& entry) const
 {
-	using EntriesT = std::decay_t<decltype(m_entries)>;
-	class State : public ibValueIteratorState {
-	public:
-		explicit State(const EntriesT& e) : m_entries(e) {}
-		bool MoveNext(ibValue& current) override {
-			if (m_started) ++m_pos; else m_started = true;
-			if (m_pos >= m_entries.size()) return false;
-			ibValue valueCopy = m_entries[m_pos].value;
-			current = ibValue(static_cast<ibValue*>(
-				new ibValueReturnContainer(m_entries[m_pos].key, valueCopy)));
-			return true;
-		}
-		void Reset() override { m_pos = 0; m_started = false; }
-		bool PeekSample(ibValue& current) const override {
-			current = ibValue(static_cast<ibValue*>(new ibValueReturnContainer()));
-			return true;
-		}
-	private:
-		const EntriesT& m_entries;
-		size_t m_pos = 0;
-		bool m_started = false;
-	};
-	return std::make_shared<State>(m_entries);
+	ibValue valueCopy = entry.value;
+	return ibValue(static_cast<ibValue*>(new ibValueKeyValue(entry.key, valueCopy)));
 }
 
-bool ibValueContainer::SetAt(const ibValue& varKeyValue, const ibValue& varValue)
+bool ibValueMap::SetAt(const ibValue& varKeyValue, const ibValue& varValue)
 {
 	// Assign by key: overwrite an existing entry, create it otherwise. (Insert,
 	// the script verb, still refuses a duplicate; `[key] = v` is the put.)
@@ -474,19 +447,19 @@ bool ibValueContainer::SetAt(const ibValue& varKeyValue, const ibValue& varValue
 	const size_t hash = HashOf(varKeyValue);      // one hash for both branches, kept by a new entry
 	const long idx = FindWithHash(varKeyValue, hash);
 	if (idx >= 0)
-		m_entries[idx].value = varValue;
+		m_listValue[idx].value = varValue;
 	else {
-		m_entries.emplace_back(varKeyValue, varValue, hash);
+		m_listValue.emplace_back(varKeyValue, varValue, hash);
 		IndexNewEntry(indexed);
 	}
 	return true;
 }
 
-bool ibValueContainer::GetAt(const ibValue& varKeyValue, ibValue& pvarValue)
+bool ibValueMap::GetAt(const ibValue& varKeyValue, ibValue& pvarValue)
 {
 	const long idx = IndexOf(varKeyValue);
 	if (idx >= 0) {
-		pvarValue = m_entries[idx].value;
+		pvarValue = m_listValue[idx].value;
 		return true;
 	}
 	ibBackendCoreException::Error(_("Key '%s' not found!"), varKeyValue.GetString());
@@ -559,7 +532,7 @@ bool ibValueStructure::GetAt(const ibValue& varKeyValue, ibValue& pvarValue)
 		ibBackendCoreException::Error(st_error_conversion);
 		return false;
 	}
-	return ibValueContainer::GetAt(varKeyValue, pvarValue);
+	return ibValueMap::GetAt(varKeyValue, pvarValue);
 }
 
 bool ibValueStructure::SetAt(const ibValue& varKeyValue, const ibValue& cValue)
@@ -569,7 +542,7 @@ bool ibValueStructure::SetAt(const ibValue& varKeyValue, const ibValue& cValue)
 		return false;
 	}
 
-	return ibValueContainer::SetAt(varKeyValue, cValue);
+	return ibValueMap::SetAt(varKeyValue, cValue);
 }
 
 void ibValueStructure::Delete(const ibValue& varKeyValue)
@@ -579,7 +552,7 @@ void ibValueStructure::Delete(const ibValue& varKeyValue)
 		return;
 	}
 
-	ibValueContainer::Delete(varKeyValue);
+	ibValueMap::Delete(varKeyValue);
 }
 
 void ibValueStructure::Insert(const ibValue& varKeyValue, const ibValue& cValue)
@@ -589,7 +562,7 @@ void ibValueStructure::Insert(const ibValue& varKeyValue, const ibValue& cValue)
 		return;
 	}
 
-	ibValueContainer::Insert(varKeyValue, cValue);
+	ibValueMap::Insert(varKeyValue, cValue);
 }
 
 bool ibValueStructure::Property(const ibValue& varKeyValue, ibValue& cValueFound)
@@ -599,7 +572,7 @@ bool ibValueStructure::Property(const ibValue& varKeyValue, ibValue& cValueFound
 		return false;
 	}
 
-	return ibValueContainer::Property(varKeyValue, cValueFound);
+	return ibValueMap::Property(varKeyValue, cValueFound);
 }
 
 
@@ -618,11 +591,11 @@ bool ibValueStructure::Property(const ibValue& varKeyValue, ibValue& cValueFound
 #include "backend/metadataSerialization.h"   // ibDeserializeValue — an entry, as the configuration reads it
 
 
-bool ibValueContainer::DoSerialize(ibDataNode& node) const
+bool ibValueMap::DoSerialize(ibDataNode& node) const
 {
-	node.SetValue(ibT("n"), (std::int32_t)m_entries.size());
+	node.SetValue(ibT("n"), (std::int32_t)m_listValue.size());
 
-	for (const auto& entry : m_entries) {
+	for (const auto& entry : m_listValue) {
 		ibDataNode& keyNode = node.AddChild(entry.key.GetClassType(), 0);
 		if (!entry.key.Serialize(keyNode))
 			return false;   // one unpackable side voids the container
@@ -634,7 +607,7 @@ bool ibValueContainer::DoSerialize(ibDataNode& node) const
 	return true;
 }
 
-bool ibValueContainer::DoDeserialize(const ibDataNode& node)
+bool ibValueMap::DoDeserialize(const ibDataNode& node)
 {
 	Clear();
 
@@ -650,14 +623,14 @@ bool ibValueContainer::DoDeserialize(const ibDataNode& node)
 		Insert(key, value);
 	}
 
-	return (std::int32_t)m_entries.size() == node.GetValue<std::int32_t>(ibT("n"));
+	return (std::int32_t)m_listValue.size() == node.GetValue<std::int32_t>(ibT("n"));
 }
 
 //**********************************************************************
 //*                       Runtime register                             *
 //**********************************************************************
 
-VALUE_TYPE_REGISTER(ibValueContainer, "Container", g_valueContainerCLSID);
+VALUE_TYPE_REGISTER(ibValueMap, "Map", g_valueMapCLSID);
 VALUE_TYPE_REGISTER(ibValueStructure, "Structure", g_valueStructureCLSID);
 
-SYSTEM_TYPE_REGISTER(ibValueContainer::ibValueReturnContainer, "KeyValue", g_valueKeyValueCLSID);
+SYSTEM_TYPE_REGISTER(ibValueMap::ibValueKeyValue, "KeyValue", g_valueKeyValueCLSID);

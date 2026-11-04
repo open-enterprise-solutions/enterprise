@@ -964,11 +964,11 @@ TEST(XmlNamespaceContext, OnAPrefixedChildEveryDeclarationAboveIsInScope) {
 	std::sort(uris.begin(), uris.end());
 	EXPECT_EQ(uris, std::vector<ibString>({ kXmlNamespace, ibT("urn:a"), ibT("urn:p") }));
 
-	// A Container, prefix to URI - the default namespace under "".
+	// A Map, prefix to URI - the default namespace under "".
 	const ibValue mappings = CallXml(context, ibT("NamespaceMappings"));
-	ibValueContainer* map = dynamic_cast<ibValueContainer*>(mappings.GetRef());
+	ibValueMap* map = dynamic_cast<ibValueMap*>(mappings.GetRef());
 	ASSERT_NE(map, nullptr) << mappings.GetClassName();
-	EXPECT_EQ(mappings.GetClassName(), ibString(ibT("Container")));
+	EXPECT_EQ(mappings.GetClassName(), ibString(ibT("Map")));
 	EXPECT_EQ(map->Count(), 3u);
 	const struct { const ibChar* prefix; const ibChar* uri; } want[] = {
 		{ ibT(""), ibT("urn:a") }, { ibT("p"), ibT("urn:p") }, { ibT("xml"), kXmlNamespace },

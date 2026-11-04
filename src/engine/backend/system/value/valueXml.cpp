@@ -138,7 +138,7 @@ bool ibValueXmlNamespaceContext::CallAsFunc(const long lMethodNum, ibValue& pvar
 		return true;
 	}
 	case enNamespaceMappings: {
-		ibValuePtr<ibValueContainer> mappings(new ibValueContainer());
+		ibValuePtr<ibValueMap> mappings(new ibValueMap());
 		for (const std::pair<ibString, ibString>& pair : *m_namespaces)
 			mappings->Insert(pair.first, pair.second);
 		pvarRetValue = mappings;

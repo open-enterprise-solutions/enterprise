@@ -33,6 +33,9 @@
     <ClInclude Include="debugger\debugServer.h">
       <Filter>debugger</Filter>
     </ClInclude>
+    <ClInclude Include="moduleManager\metaObjectCollection.h">
+      <Filter>moduleManager</Filter>
+    </ClInclude>
     <ClInclude Include="moduleManager\moduleManager.h">
       <Filter>moduleManager</Filter>
     </ClInclude>
@@ -677,6 +680,7 @@
       <Filter>databaseLayer\firebird\engine\firebird\impl</Filter>
     </ClInclude>
     <ClInclude Include="value_cast.h" />
+    <ClInclude Include="value_collection.h" />
     <ClInclude Include="interfaceHelper.h" />
     <ClInclude Include="compositionHelper.h" />
     <ClInclude Include="functionalOptionHelper.h" />
@@ -953,6 +957,9 @@
       <Filter>moduleManager</Filter>
     </ClCompile>
     <ClCompile Include="moduleManager\moduleManagerEvent.cpp">
+      <Filter>moduleManager</Filter>
+    </ClCompile>
+    <ClCompile Include="moduleManager\metaObjectCollection.cpp">
       <Filter>moduleManager</Filter>
     </ClCompile>
     <ClCompile Include="moduleManager\moduleManagerMetadataUnit.cpp">
@@ -1871,6 +1878,7 @@
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="value_cast.cpp" />
+    <ClCompile Include="value_collection.cpp" />
     <ClCompile Include="interfaceHelper.cpp" />
     <ClCompile Include="compositionHelper.cpp" />
     <ClCompile Include="functionalOptionHelper.cpp" />
@@ -2729,9 +2737,6 @@
     <ClCompile Include="system\value\valueBackgroundJob.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
-    <ClCompile Include="system\value\valueScheduledJob.cpp">
-      <Filter>system\value</Filter>
-    </ClCompile>
     <ClCompile Include="tabularDataObject.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -2766,9 +2771,6 @@
       <Filter>system\value\composition</Filter>
     </ClInclude>
     <ClInclude Include="system\value\valueBackgroundJob.h">
-      <Filter>system\value</Filter>
-    </ClInclude>
-    <ClInclude Include="system\value\valueScheduledJob.h">
       <Filter>system\value</Filter>
     </ClInclude>
     <ClInclude Include="tabularDataObject.h" />

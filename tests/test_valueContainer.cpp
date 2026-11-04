@@ -1,7 +1,7 @@
 // =============================================================================
-// OES Enterprise — ibValueContainer (script Map / Dictionary) tests
+// OES Enterprise — ibValueMap (script Map / Dictionary) tests
 //
-// ibValueContainer (backend/system/value/valueMap.h) is the script keyed
+// ibValueMap (backend/system/value/valueMap.h) is the script keyed
 // container: Insert / GetAt / SetAt / Property / Delete over a
 // std::map<ibValue, ibValue>. Keys and values are ibValues; lookup uses the
 // container's ibValue comparator. Pure (no DB).
@@ -17,13 +17,13 @@ ibValue Key(const wxChar* k) { return ibValue(ibString(k)); }
 }
 
 TEST(ValueContainer, EmptyByDefault) {
-    ibValueContainer c;
+    ibValueMap c;
     EXPECT_TRUE(c.IsEmpty());
     EXPECT_EQ(c.Count(), 0u);
 }
 
 TEST(ValueContainer, InsertAndGetAt) {
-    ibValueContainer c;
+    ibValueMap c;
     c.Insert(Key(wxT("k")), ibValue(ibNumber(42)));
     EXPECT_EQ(c.Count(), 1u);
     ibValue out;
@@ -35,7 +35,7 @@ TEST(ValueContainer, InsertAndGetAt) {
 // contrast, raises "Key not found" outside designer mode — script-error
 // semantics — so it is not used for miss-testing here.)
 TEST(ValueContainer, PropertyMissReturnsFalse) {
-    ibValueContainer c;
+    ibValueMap c;
     ibValue out;
     EXPECT_FALSE(c.Property(Key(wxT("nope")), out));
 }
@@ -43,7 +43,7 @@ TEST(ValueContainer, PropertyMissReturnsFalse) {
 // SetAt delegates to Insert, which is insert-once (raises "Key already using"
 // on an existing key). So SetAt ADDS a new key; it does not update in place.
 TEST(ValueContainer, SetAtAddsNewKey) {
-    ibValueContainer c;
+    ibValueMap c;
     c.SetAt(Key(wxT("k")), ibValue(ibNumber(5)));
     EXPECT_EQ(c.Count(), 1u);
     ibValue out;
@@ -52,7 +52,7 @@ TEST(ValueContainer, SetAtAddsNewKey) {
 }
 
 TEST(ValueContainer, PropertyLooksUpValue) {
-    ibValueContainer c;
+    ibValueMap c;
     c.Insert(Key(wxT("a")), ibValue(ibNumber(7)));
     ibValue found;
     EXPECT_TRUE(c.Property(Key(wxT("a")), found));
@@ -60,7 +60,7 @@ TEST(ValueContainer, PropertyLooksUpValue) {
 }
 
 TEST(ValueContainer, DeleteRemovesKey) {
-    ibValueContainer c;
+    ibValueMap c;
     c.Insert(Key(wxT("a")), ibValue(ibNumber(1)));
     c.Insert(Key(wxT("b")), ibValue(ibNumber(2)));
     c.Delete(Key(wxT("a")));
@@ -71,7 +71,7 @@ TEST(ValueContainer, DeleteRemovesKey) {
 }
 
 TEST(ValueContainer, ClearEmpties) {
-    ibValueContainer c;
+    ibValueMap c;
     c.Insert(Key(wxT("a")), ibValue(ibNumber(1)));
     c.Clear();
     EXPECT_TRUE(c.IsEmpty());
@@ -80,7 +80,7 @@ TEST(ValueContainer, ClearEmpties) {
 TEST(ValueContainer, ConstructFromMap) {
     std::map<ibValue, ibValue> m;
     m[Key(wxT("x"))] = ibValue(ibNumber(9));
-    ibValueContainer c(m);
+    ibValueMap c(m);
     EXPECT_EQ(c.Count(), 1u);
     ibValue out;
     ASSERT_TRUE(c.GetAt(Key(wxT("x")), out));
@@ -112,7 +112,7 @@ ibValue Num(long long v) { return ibValue(ibNumber(v)); }
 }
 
 TEST(ValueContainer, NumericKeyIsFoundByItsOwnValue) {
-    ibValueContainer c;
+    ibValueMap c;
     c.Insert(Num(42), Key(wxT("answer")));
     ibValue out;
     ASSERT_TRUE(c.Property(Num(42), out));
@@ -120,7 +120,7 @@ TEST(ValueContainer, NumericKeyIsFoundByItsOwnValue) {
 }
 
 TEST(ValueContainer, NegativeAndZeroNumericKeysRoundTrip) {
-    ibValueContainer c;
+    ibValueMap c;
     c.Insert(Num(-42), Key(wxT("neg")));
     c.Insert(Num(0),   Key(wxT("zero")));
     ibValue out;
@@ -134,7 +134,7 @@ TEST(ValueContainer, NegativeAndZeroNumericKeysRoundTrip) {
 // Past the 47-bit immediate mantissa, so the number lives on the heap tier and
 // the inline print has to agree with the text path there too.
 TEST(ValueContainer, WideNumericKeyRoundTrips) {
-    ibValueContainer c;
+    ibValueMap c;
     c.Insert(Num(9007199254740993LL), Key(wxT("wide")));
     ibValue out;
     ASSERT_TRUE(c.Property(Num(9007199254740993LL), out));
@@ -151,7 +151,7 @@ TEST(ValueContainer, WideNumericKeyRoundTrips) {
 // as a number, which is also what the value ordering says (scalars and text sit
 // in different ranks), so the container and the language answer alike.
 TEST(ValueContainer, NumberAndItsSpellingAreDifferentKeys) {
-    ibValueContainer c;
+    ibValueMap c;
     c.Insert(Num(1), Key(wxT("one")));
     ibValue out;
     EXPECT_FALSE(c.Property(Key(wxT("1")), out));   // the text "1" is not the number 1
@@ -168,7 +168,7 @@ TEST(ValueContainer, NumberAndItsSpellingAreDifferentKeys) {
 // 1.0 and 1 are the same number, so they are the same key — canonicality is
 // settled by ibNumber before the key is ever spelled.
 TEST(ValueContainer, TrailingZeroIsNotASecondKey) {
-    ibValueContainer c;
+    ibValueMap c;
     c.Insert(Num(1), Key(wxT("one")));
     ibValue out;
     ASSERT_TRUE(c.Property(ibValue(ibNumber(1.0)), out));
@@ -178,7 +178,7 @@ TEST(ValueContainer, TrailingZeroIsNotASecondKey) {
 // The guard that earns the fast path: a truncating conversion would make 1.5
 // identify as "1" and silently overwrite a genuine 1.
 TEST(ValueContainer, FractionDoesNotCollideWithItsTruncation) {
-    ibValueContainer c;
+    ibValueMap c;
     c.Insert(Num(1), Key(wxT("whole")));
     c.Insert(ibValue(ibNumber(1.5)), Key(wxT("fraction")));
     EXPECT_EQ(c.Count(), 2u);
@@ -199,7 +199,7 @@ TEST(ValueContainer, FractionDoesNotCollideWithItsTruncation) {
 // GetAt reaches for it to decide whether to raise. The Insert road is the same
 // lookup, and tests/scripts/test_container_keys_suite.txt drives it for real.
 TEST(ValueContainer, StringKeysThatDifferOnlyInCaseAreTwoKeys) {
-    ibValueContainer c;
+    ibValueMap c;
     c.Insert(Key(wxT("ab")), ibValue(ibNumber(1)));
     c.SetAt (Key(wxT("AB")), ibValue(ibNumber(2)));
     EXPECT_EQ(c.Count(), 2u);
@@ -218,7 +218,7 @@ TEST(ValueContainer, StringKeysThatDifferOnlyInCaseAreTwoKeys) {
 // literal in the system code page): U+0431 U+043E U+0440 U+0449 is "borshch" in
 // small letters, U+0411 U+041E U+0420 U+0429 the same in capitals.
 TEST(ValueContainer, NonAsciiKeysThatDifferOnlyInCaseAreTwoKeys) {
-    ibValueContainer c;
+    ibValueMap c;
     c.Insert(Key(wxT("\u0431\u043E\u0440\u0449")), ibValue(ibNumber(1)));
     c.SetAt (Key(wxT("\u0411\u041E\u0420\u0429")), ibValue(ibNumber(2)));
     EXPECT_EQ(c.Count(), 2u);
@@ -232,7 +232,7 @@ TEST(ValueContainer, NonAsciiKeysThatDifferOnlyInCaseAreTwoKeys) {
 // THE DOT READS A KEY AS WRITTEN. `c.Name` asks FindProp, which is the same lookup as `[key]`: the
 // key "Name" is there, and "name" is another key that is not.
 TEST(ValueContainer, TheDotFindsAKeyAsWritten) {
-    ibValueContainer c;
+    ibValueMap c;
     c.Insert(Key(wxT("Name")), ibValue(ibNumber(1)));
     EXPECT_EQ(c.FindProp(wxT("Name")), 0);
     EXPECT_EQ(c.FindProp(wxT("name")), wxNOT_FOUND);
@@ -244,7 +244,7 @@ TEST(ValueContainer, TheDotFindsAKeyAsWritten) {
 // LINQ projection over containers names the columns of its answer with GetPropName. The walk hands
 // back every key, of any kind, as itself and in the order it was inserted.
 TEST(ValueContainer, AnEntryIsNamedByItsKeyAndWalkedInOrder) {
-    ibValueContainer c;
+    ibValueMap c;
     ibValue date; date.SetType(ibValueTypes::TYPE_DATE);
     ibValue yes;  yes.SetBoolean(wxT("True"));
     c.Insert(Key(wxT("Name")), Num(1));
@@ -278,7 +278,7 @@ TEST(ValueContainer, AnEntryIsNamedByItsKeyAndWalkedInOrder) {
 // method number IS a position in the member table: an entry added in the wrong place would still
 // compile and would run some other method.
 TEST(ValueContainer, GetAnswersTheValueOrUndefined) {
-    ibValueContainer c;
+    ibValueMap c;
     c.Insert(Key(wxT("k")), Num(7));
 
     const long at = c.FindMethod(wxT("Get"));
@@ -301,7 +301,7 @@ TEST(ValueContainer, GetAnswersTheValueOrUndefined) {
 // catches only a call with too many arguments; the slot this one would have read is made empty and
 // handed over, so without this Get would say "the key is not there" about a key nobody wrote.
 TEST(ValueContainer, GetWithoutAKeyIsRefused) {
-    ibValueContainer c;
+    ibValueMap c;
     c.Insert(Key(wxT("k")), Num(7));
     const long at = c.FindMethod(wxT("Get"));
     ASSERT_NE(at, wxNOT_FOUND);

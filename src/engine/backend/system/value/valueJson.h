@@ -127,7 +127,7 @@ BACKEND_API bool ibJsonNumberFromToken(const std::string& token, ibNumber& numbe
 //     var text = writer.Close();
 //
 // WriteValue takes a String, a Number (written exactly, never through a double), a Boolean, a Date (ISO 8601,
-// `2026-09-20T21:05:39`), Null and Undefined (`null`), and a Structure / Container / Array of those to any depth.
+// `2026-09-20T21:05:39`), Null and Undefined (`null`), and a Structure / Map / Array of those to any depth.
 // Anything else - a reference, a table - has no JSON form of its own and is refused by name: what goes out in
 // its place (a code, a description, a Guid) is the exchange's decision, not the writer's.
 

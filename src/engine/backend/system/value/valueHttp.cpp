@@ -489,7 +489,7 @@ ibValue ibValueHttpConnection::Send(ibHttpMethod method, const ibValueHttpReques
 	// ⚠ A HEADER THAT WOULD BREAK THE MESSAGE IS REFUSED HERE, BY NAME - a script that filled a Structure from a
 	// file needs to know WHICH entry it was.
 	bool authorized = false;
-	for (const auto& entry : request.Headers().Entries()) {
+	for (const auto& entry : request.Headers().Values()) {
 		const ibString key = entry.key.GetString();
 		const std::string field = ibHttpUtf8(key);
 		if (!ibHttpIsToken(field))
@@ -638,7 +638,7 @@ ibValue ibValueHttpConnection::Send(ibHttpMethod method, const ibValueHttpReques
 			value = wxString::From8BitData(field.second.data(), field.second.size());
 		const long held = headers->FindProp(key);
 		if (held >= 0 && !key.IsSameAs(ibT("Set-Cookie"), false))
-			value = headers->Entries()[static_cast<size_t>(held)].value.GetString() + ibT(", ") + value;
+			value = headers->Values()[static_cast<size_t>(held)].value.GetString() + ibT(", ") + value;
 		headers->SetAt(ibValue(key), ibValue(value));
 	}
 

@@ -215,7 +215,7 @@ enum { //instruction types
 	OPER_LINQ_RESULT,
 
 	// ⭐ GROUPING AND JOINING, in the same collection and with no name anywhere. A bucket is found by
-	// its KEY; what this replaces was a script `Container` created BY NAME whose every lookup went
+	// its KEY; what this replaces was a script `Map` created BY NAME whose every lookup went
 	// through the language's member machinery.
 	//   OPER_LINQ_BUCKET      p1 = the collection, p2 = the key, p3 = the row to put under it
 	//   OPER_LINQ_BUCKET_GET  p1 = the rows under that key (empty when none), p2 = collection, p3 = key

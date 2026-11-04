@@ -217,7 +217,10 @@ public:
 	// sees. `args` is an Array whose elements are passed positionally; every one
 	// of them must be transferable (ibValue::IsTransferable) — passing a form, an
 	// object or a record set throws here rather than failing in the background.
-	static ibValue RunBackground(const ibString& strProcedureName, ibValue* pArgs);
+	// `key` is the caller's name for the work: while a run of the same procedure under it is active, a second
+	// start is refused. `description` is what the job is, as a person reads it (BackgroundJob.Description).
+	static ibValue RunBackground(const ibString& strProcedureName, ibValue* pArgs,
+		const ibString& strKey = ibEmptyString, const ibString& strDescription = ibEmptyString);
 
 public:
 

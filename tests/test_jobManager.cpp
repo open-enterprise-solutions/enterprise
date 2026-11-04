@@ -498,7 +498,7 @@ TEST(JobManager, StopIsIdempotent) {
 
 TEST(JobManager, StartBackgroundRejectsEmptyName) {
     ibJobManager manager(ib::AppDataCtorToken{});
-    EXPECT_THROW(manager.StartBackground(wxEmptyString), ibBackendException);
+    EXPECT_THROW(manager.StartBackground(ibBackgroundRequest{}), ibBackendException);
 }
 
 TEST(JobManager, StartBackgroundRejectsMutableArgumentBeforeAnythingElse) {
@@ -508,7 +508,7 @@ TEST(JobManager, StartBackgroundRejectsMutableArgumentBeforeAnythingElse) {
     ibJobManager manager(ib::AppDataCtorToken{});
     std::vector<ibValue> args;
     args.push_back(ibValue(new ibValueIterator()));
-    EXPECT_THROW(manager.StartBackground(wxEmptyString, args), ibBackendException);
+    EXPECT_THROW(manager.StartBackground(ibBackgroundRequest{}, args), ibBackendException);
 }
 
 TEST(JobManager, StoppedManagerAcceptsNothing) {

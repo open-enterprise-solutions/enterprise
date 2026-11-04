@@ -619,7 +619,7 @@ bool ibValueForm::SetValueByAttributePath(const ibSourceDescription& desc, const
 //*           the module's walk over them: ThisForm.Attributes / ThisForm.Commands            *
 //*********************************************************************************************
 
-#include "backend/system/value/valueMap.h"   // ibValueContainer::ibValueReturnContainer — an element of a walk
+#include "backend/system/value/valueMap.h"   // ibValueMap::ibValueKeyValue — an element of a walk
 
 namespace {
 
@@ -635,12 +635,12 @@ public:
 		T* const entry = *m_it;
 		ibValue element(entry);
 		current = ibValue(static_cast<ibValue*>(
-			new ibValueContainer::ibValueReturnContainer(entry->GetName(), element)));
+			new ibValueMap::ibValueKeyValue(entry->GetName(), element)));
 		return true;
 	}
 	void Reset() override { m_it = m_list.begin(); m_started = false; }
 	bool PeekSample(ibValue& current) const override {
-		current = ibValue(static_cast<ibValue*>(new ibValueContainer::ibValueReturnContainer()));
+		current = ibValue(static_cast<ibValue*>(new ibValueMap::ibValueKeyValue()));
 		return true;
 	}
 private:

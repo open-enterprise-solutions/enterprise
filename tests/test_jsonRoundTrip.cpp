@@ -284,13 +284,13 @@ ibString Differs(const ibValue& value, const ibJsonNode& node, const ibString& p
 	case ibJsonNode::Object: {
 		const ibValueStructure* object = dynamic_cast<const ibValueStructure*>(value.GetRef());
 		if (object == nullptr) return path + wxT(": not a Structure");
-		if (object->Entries().size() != node.m_members.size())
+		if (object->Values().size() != node.m_members.size())
 			return path + ibString::Format(wxT(": %u members, written %u"),
-				static_cast<unsigned>(object->Entries().size()), static_cast<unsigned>(node.m_members.size()));
+				static_cast<unsigned>(object->Values().size()), static_cast<unsigned>(node.m_members.size()));
 		for (size_t i = 0; i < node.m_members.size(); i++) {
-			if (object->Entries()[i].key.GetString() != node.m_members[i].first)
+			if (object->Values()[i].key.GetString() != node.m_members[i].first)
 				return path + ibString::Format(wxT(": member %u is not the key written there"), static_cast<unsigned>(i));
-			const ibString inner = Differs(object->Entries()[i].value, node.m_members[i].second,
+			const ibString inner = Differs(object->Values()[i].value, node.m_members[i].second,
 				path + wxT(".") + node.m_members[i].first);
 			if (!inner.empty()) return inner;
 		}

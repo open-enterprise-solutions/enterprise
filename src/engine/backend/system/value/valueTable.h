@@ -378,7 +378,7 @@ public:
 	// in table order. The filter is a Structure of `column = value`; a row matches when EVERY term does, and an
 	// empty filter matches every row. A column the filter names that is not there raises rather than
 	// matching nothing: a typo in a filter would otherwise read as "no such rows".
-	ibValue FindRows(const ibValueContainer& filter);
+	ibValue FindRows(const ibValueMap& filter);
 	// In place: rows equal in the group columns become one, the sum columns added up; only those columns remain.
 	void GroupBy(const ibString& groupColumns, const ibString& sumColumns);
 	// One value into the listed columns of every row; no columns listed means every column.

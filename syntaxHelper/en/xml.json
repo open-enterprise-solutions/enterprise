@@ -1789,10 +1789,10 @@
         "xml"
       ],
       "signature": "NamespaceMappings()",
-      "description": "Everything in scope at once: a `Container` from PREFIX to NAMESPACE - the default namespace under the key \"\", and `xml` always among the keys.",
+      "description": "Everything in scope at once: a `Map` from PREFIX to NAMESPACE - the default namespace under the key \"\", and `xml` always among the keys.",
       "syntax_block": "Mappings = Context.NamespaceMappings();",
       "parameters": "None.",
-      "return_descr": "Container - prefix to namespace URI.",
+      "return_descr": "Map - prefix to namespace URI.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns=\"\"urn:a\"\" xmlns:p=\"\"urn:p\"\"/>\");\nReader.Read();\nforeach (Pair In Reader.NamespaceContext.NamespaceMappings()) {\n    Message(\"'\" + Pair.Key + \"' = \" + Pair.Value);   // '' = urn:a, 'p' = urn:p, 'xml' = ...\n}",
       "availability": "Thin client, Server",
       "see_also": [

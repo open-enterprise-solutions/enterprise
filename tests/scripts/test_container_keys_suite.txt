@@ -1,13 +1,13 @@
 // ============================================================================
-// Container and Structure keys - 2026-09-23
+// Map and Structure keys - 2026-09-23
 //
 // The suite CHECKS ITSELF: a mismatch raises, and a corpus script that raises fails its run.
 //
-//   1. A Container's string key is the string it is: "ab" and "AB" are two keys, as "ab" = "AB" is False.
-//   2. The dot reads a Container's key as written: c.Name reaches the key "Name", c.name misses it.
+//   1. A Map's string key is the string it is: "ab" and "AB" are two keys, as "ab" = "AB" is False.
+//   2. The dot reads a Map's key as written: c.Name reaches the key "Name", c.name misses it.
 //   3. A Structure's key is a field NAME: it folds case and is reached through a dot.
 //   4. A LINQ group by a string key splits "fr" from "FR". The groups live in LINQ's own collection,
-//      ordered by the language's comparison, so this was already so; it is here because a Container
+//      ordered by the language's comparison, so this was already so; it is here because a Map
 //      and a group must not answer the same question about two strings differently.
 //   5. A key with a quote inside is reached by the subscript, the quote doubled in the literal.
 //   6. Get answers the value bound to a key, or Undefined when nothing is - without raising, which
@@ -23,7 +23,7 @@
 // 1
 if ("ab" = "AB") { Raise("the language's = was expected to tell the two apart"); }
 
-var c = New Container;
+var c = New Map;
 c.Insert("ab", 1);
 c.Insert("AB", 2);
 if (c.Count() <> 2) { Raise("expected two keys, got " + c.Count()); }
@@ -41,7 +41,7 @@ if (Not missed) { Raise("c[Ab] was expected to miss"); }
 Message("container keys: " + c.Count());
 
 // 2
-var named = New Container;
+var named = New Map;
 named.Insert("Name", 7);
 if (named.Name <> 7) { Raise("named.Name: " + named.Name); }
 var otherCaseRaised = False;
@@ -51,7 +51,7 @@ try {
 } except {
 	otherCaseRaised = True;
 }
-if (Not otherCaseRaised) { Raise("a Container's key was reached through a dot in another case: " + viaDot); }
+if (Not otherCaseRaised) { Raise("a Map's key was reached through a dot in another case: " + viaDot); }
 if (named["Name"] <> 7) { Raise("named[Name]: " + named["Name"]); }
 Message("container dot reads the key as written");
 
@@ -86,13 +86,13 @@ foreach (g in q) {
 }
 
 // 5
-var quoted = New Container;
+var quoted = New Map;
 quoted.Insert("he said ""hi""", 7);
 if (quoted["he said ""hi"""] <> 7) { Raise("a doubled quote in a key: " + quoted["he said ""hi"""]); }
 Message("quoted key reached");
 
 // 6
-var got = New Container;
+var got = New Map;
 got.Insert("k", 7);
 if (got.Get("k") <> 7) { Raise("got.Get(k): " + got.Get("k")); }
 if (ValueIsFilled(got.Get("nope"))) { Raise("a key that is not there was expected to answer Undefined"); }
@@ -103,7 +103,7 @@ Message("get answered");
 
 // 7
 var lines = New Array;
-var line = New Container;
+var line = New Map;
 line.Insert("Amount", 5);
 lines.Add(line);
 var table = lines.ToTable();
@@ -116,7 +116,7 @@ if (seen <> 1) { Raise("expected one row, got " + seen); }
 Message("table columns: " + table.Columns.Count());
 
 // 8
-var typed = New Container;
+var typed = New Map;
 typed.Insert(True, "yes");
 typed.Insert(Undefined, "nothing");
 typed.Insert(7, "seven");

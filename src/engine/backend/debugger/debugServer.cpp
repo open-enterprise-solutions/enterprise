@@ -1538,28 +1538,16 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 		}
 		else {
 
-			// 🛑⭐ TOLD FROM THE APPLICATION'S OWN THREAD, NOT FROM THIS ONE. This runs on the debug
-			// thread; `Message` reaches the frame, and a desktop frame draws — touching a window
-			// from a thread that does not own it hangs where it does not crash, and the caller
-			// waiting for the sandbox's answer sees a timeout with no clue why (measured
-			// 2026-09-02: `debug_evaluate` answered `4` from this very stop while the sandbox, one
-			// branch along, timed out — the difference was these two lines).
+			// 🛑⭐ WRITTEN DOWN, IN THE JOURNAL AN AUDITOR READS — not told to a window. This runs on the debug
+			// thread: no session is current here and no window is anybody's, so the record is where it is
+			// kept, under the same source as the screen an assistant was shown (below) and every tool it
+			// called (mcpServer.cpp).
 			//
-			// Handed to the main thread and forgotten: the person is being told something, not
-			// asked, so nothing here has any reason to wait for it.
-			const auto tell = [](const ibString& text, ibStatusMessage status) {
-				if (wxTheApp != nullptr)
-					wxTheApp->CallAfter([text, status]() {
-						ibValueSystemFunction::Message(text, status); });
-			};
-
-			tell(_("An assistant is running code here in a sandbox - nothing it writes is kept."),
-				ibStatusMessage::ibStatusMessage_Information);
-
-			// …AND WHAT IT WAS. A person who is told that "code is running" and not WHICH code has
-			// been told the alarming half and none of the useful one; they are sitting in front of
-			// the window it runs in, and this is what lets them follow along rather than wonder.
-			tell(code, ibStatusMessage::ibStatusMessage_Information);
+			// …AND WHAT IT WAS. "Code is running" without WHICH code is the alarming half and none of the
+			// useful one, so the code stands in the same row.
+			if (ibLogger* const logger = ibApplicationInstance::GetLogger(debugServer->GetApplicationInstance()))
+				logger->Audit(ibT("assistant"), ibT("code.sandbox"), ibString::Format(ibT("%s\n%s"),
+					_("An assistant is running code here in a sandbox - nothing it writes is kept."), code));
 
 			ibString answer, json;
 			bool ran = false;
@@ -1691,24 +1679,18 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 				//  What the code wants seen, it prints, and that lands in the window as it runs.)
 			});
 
-			// ⭐⭐ AND THE PERSON SEES HOW IT ENDED, not only that it started. Announcing the start
-			// and then going quiet is the worst of both: they know something ran in their session
-			// and have no idea what came of it (Max, 2026-09-02: *"show the user at least your
-			// intermediate results, so they can see something is happening"*).
-			//
-			// The work in between shows itself: `Message` inside the code lands in this window as
-			// it runs, live — which is how a caller narrates a long experiment rather than
-			// producing one silent answer at the end.
-			{
+			// ⭐⭐ AND HOW IT ENDED, in the same journal, not only that it started. A start recorded and then
+			// silence is the worst of both: the record says something ran in their session and nothing of
+			// what came of it (Max, 2026-09-02: *"show the user at least your intermediate results, so they
+			// can see something is happening"*).
+			if (ibLogger* const logger = ibApplicationInstance::GetLogger(debugServer->GetApplicationInstance())) {
 				const ibString shown = answer.length() > 500
 					? answer.Left(497) + ibT("...") : answer;
 
-				tell(ran
+				logger->Audit(ibT("assistant"), ran ? ibT("code.sandbox.finished") : ibT("code.sandbox.stopped"), ran
 					? ibString::Format(
 						_("The sandbox finished and everything it wrote was rolled back. %s"), shown)
-					: ibString::Format(_("The sandbox stopped: %s"), shown),
-					ran ? ibStatusMessage::ibStatusMessage_Information
-					    : ibStatusMessage::ibStatusMessage_Error);
+					: ibString::Format(_("The sandbox stopped: %s"), shown));
 			}
 
 			// ⚠ THE OUTCOME IS A NUMBER, NOT THE WORD "ok". A flag spelled as a string is compared as

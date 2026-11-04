@@ -82,7 +82,7 @@ Procedure CheckBooleanPlus(Boolean t) {
 }
 
 Procedure CheckSubscript(Boolean t) {
-	var c = New Container;
+	var c = New Map;
 	c.Insert(True, "inserted");
 	if (c[t] <> "inserted") { Raise("typed boolean key: c[t] is [" + c[t] + "]"); }
 	if (c[True] <> "inserted") { Raise("boolean literal key: c[True] is [" + c[True] + "]"); }

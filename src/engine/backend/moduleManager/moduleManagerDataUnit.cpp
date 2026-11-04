@@ -11,14 +11,84 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "moduleManager.h"
+#include "metaObjectCollection.h"
 #include "backend/metaData.h"
 
 #include "backend/query/queryable.h"                // ibBackendQueryableHolder
 #include "backend/query/tempTableQueryable.h"       // ibTempTableQueryable — Data.From wrapper
-#include "backend/system/value/valueMap.h"          // ibValueStructure
 #include "backend/system/value/valueTable.h"        // ibValueModelTable — the From argument
 #include "backend/system/value/valueQueryable.h"    // ibValueQueryable — the vended leaf
 #include "backend/backend_exception.h"              // ibBackendCoreException — From argument validation
+
+#include <iterator>   // std::size — the table of kinds
+
+namespace {
+
+// The source an object vends, or nullptr: the kind member exists, and this object of it is no data source.
+const ibBackendQueryable* QueryableOf(const ibValueMetaObject* object)
+{
+	const ibBackendQueryableHolder* const holder = dynamic_cast<const ibBackendQueryableHolder*>(object);
+	return holder != nullptr ? holder->GetQueryable() : nullptr;
+}
+
+} // namespace
+
+// Data.Catalogs, … — the data source of each object of one kind that vends one (metaObjectCollection.h): the SAME
+// ibBackendQueryable the text query language reads through. Lazy by contract: vending a source reads NOTHING.
+class ibValueQueryableCollection : public ibValueMetaObjectCollection {
+public:
+
+	ibValueQueryableCollection() : ibValueMetaObjectCollection(nullptr) {}
+	ibValueQueryableCollection(const ibClassID& clsid, const ibString& kindName, ibMetaData* metaData)
+		: ibValueMetaObjectCollection(metaData), m_kindName(kindName) {
+		if (m_metaData == nullptr)
+			return;
+		for (const auto object : m_metaData->GetAnyArrayObject(clsid))
+			if (QueryableOf(object) != nullptr)
+				m_listValue.push_back(object);
+	}
+
+protected:
+
+	// The source is named by its script path ("Catalogs.Goods"), for a watch and a diagnostic.
+	virtual ibValue ElementValue(ibValueMetaObject* const& object) const override {
+		const ibBackendQueryable* const queryable = object != nullptr ? QueryableOf(object) : nullptr;
+		if (queryable == nullptr)
+			return ibValue();
+		return new ibValueQueryable(queryable, m_kindName + ibT(".") + object->GetName());
+	}
+
+private:
+
+	ibString m_kindName;   // the member it was read through — "Catalogs"
+};
+
+namespace {
+
+// THE QUERYABLE KINDS, one per member, in the members' order — mirrors the query language's source coverage
+// (queryableFactory): data-reference records, registers, constants. A member's number is its position here, so
+// FillMembers and GetPropVal read one table.
+struct ibQueryableKind {
+	const ibChar* m_name;
+	ibClassID     m_clsid;
+};
+
+constexpr ibQueryableKind s_dataKinds[] = {
+	{ ibT("Constants"),                   g_metaConstantCLSID },
+	{ ibT("Catalogs"),                    g_metaCatalogCLSID },
+	{ ibT("Documents"),                   g_metaDocumentCLSID },
+	{ ibT("Enumerations"),                g_metaEnumerationCLSID },
+	{ ibT("InformationRegisters"),        g_metaInformationRegisterCLSID },
+	{ ibT("AccumulationRegisters"),       g_metaAccumulationRegisterCLSID },
+	{ ibT("ChartsOfCharacteristicTypes"), g_metaChartOfCharacteristicTypesCLSID },
+	{ ibT("ChartsOfAccounts"),            g_metaChartOfAccountsCLSID },
+	{ ibT("AccountingRegisters"),         g_metaAccountingRegisterCLSID },
+	{ ibT("ChartsOfCalculationTypes"),    g_metaChartOfCalculationTypesCLSID },
+	{ ibT("CalculationRegisters"),        g_metaCalculationRegisterCLSID },
+	{ ibT("Sequences"),                   g_metaSequenceCLSID },
+};
+
+} // namespace
 
 ibValueModuleManager::ibValueDataUnit::ibValueDataUnit(ibMetaData* metaData) :
 	ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true), m_metaData(metaData)
@@ -30,49 +100,6 @@ ibValueModuleManager::ibValueDataUnit::~ibValueDataUnit()
 {
 }
 
-namespace {
-
-enum
-{
-	enDataConstants = 0,
-	enDataCatalogs,
-	enDataDocuments,
-	enDataEnumerations,
-	enDataInformationRegisters,
-	enDataAccumulationRegisters,
-	enDataChartsOfCharacteristicTypes,
-	enDataChartsOfAccounts,
-	enDataAccountingRegisters,
-	enDataChartsOfCalculationTypes,
-	enDataCalculationRegisters,
-	enDataSequences,
-};
-
-// One kind namespace: Name -> Queryable for every metaobject of the kind that
-// vends a queryable (ibBackendQueryableHolder). The source name mirrors the
-// canonical script path ("Catalogs.Goods") for watch / diagnostics.
-ibValueStructure* BuildKindNamespace(ibMetaData* metaData, const ibClassID& clsid,
-                                     const ibString& kindName)
-{
-	ibValueStructure* names = new ibValueStructure();
-	if (metaData == nullptr)
-		return names;
-	for (const auto object : metaData->GetAnyArrayObject(clsid)) {
-		const ibBackendQueryableHolder* holder =
-			dynamic_cast<const ibBackendQueryableHolder*>(object);
-		const ibBackendQueryable* queryable =
-			holder != nullptr ? holder->GetQueryable() : nullptr;
-		if (queryable == nullptr)
-			continue;   // the kind member exists but this object vends no source
-		// A name repeated while the configuration is edited is put, not inserted (globalContextManager.cpp).
-		names->SetAt(object->GetName(),
-			new ibValueQueryable(queryable, kindName + ibT(".") + object->GetName()));
-	}
-	return names;
-}
-
-} // namespace
-
 void ibValueModuleManager::ibValueDataUnit::FillMembers(ibMemberTable& helper) const
 {
 	// Data.From(valueTable) — an in-memory value table as a Queryable source.
@@ -83,22 +110,10 @@ void ibValueModuleManager::ibValueDataUnit::FillMembers(ibMemberTable& helper) c
 	// session, after Query.Execute and QueryResult.Select).
 	helper.AppendFunc("From", 1, "From(valueTable)");
 
-	// The QUERYABLE kinds only — mirrors the query language's source coverage
-	// (queryableFactory): data-reference records, registers, constants.
 	// clsid narrowed into the (long) tag slot on purpose — GetPropVal keys by ordinal and re-supplies
 	// the clsid, so only the tag identity matters; static_cast makes the std::uint64_t->long explicit (no C4305/C4309).
-	helper.AppendProp("Constants", true, false, static_cast<long>(g_metaConstantCLSID));
-	helper.AppendProp("Catalogs", true, false, static_cast<long>(g_metaCatalogCLSID));
-	helper.AppendProp("Documents", true, false, static_cast<long>(g_metaDocumentCLSID));
-	helper.AppendProp("Enumerations", true, false, static_cast<long>(g_metaEnumerationCLSID));
-	helper.AppendProp("InformationRegisters", true, false, static_cast<long>(g_metaInformationRegisterCLSID));
-	helper.AppendProp("AccumulationRegisters", true, false, static_cast<long>(g_metaAccumulationRegisterCLSID));
-	helper.AppendProp("ChartsOfCharacteristicTypes", true, false, static_cast<long>(g_metaChartOfCharacteristicTypesCLSID));
-	helper.AppendProp("ChartsOfAccounts", true, false, static_cast<long>(g_metaChartOfAccountsCLSID));
-	helper.AppendProp("AccountingRegisters", true, false, static_cast<long>(g_metaAccountingRegisterCLSID));
-	helper.AppendProp("ChartsOfCalculationTypes", true, false, static_cast<long>(g_metaChartOfCalculationTypesCLSID));
-	helper.AppendProp("CalculationRegisters", true, false, static_cast<long>(g_metaCalculationRegisterCLSID));
-	helper.AppendProp("Sequences", true, false, static_cast<long>(g_metaSequenceCLSID));
+	for (const ibQueryableKind& kind : s_dataKinds)
+		helper.AppendProp(kind.m_name, true, false, static_cast<long>(kind.m_clsid));
 }
 
 bool ibValueModuleManager::ibValueDataUnit::SetPropVal(const long lPropNum, const ibValue& varPropVal)
@@ -129,44 +144,14 @@ bool ibValueModuleManager::ibValueDataUnit::CallAsFunc(const long lMethodNum, ib
 
 bool ibValueModuleManager::ibValueDataUnit::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	switch (lPropNum)
-	{
-	case enDataConstants:
-		pvarPropVal = BuildKindNamespace(m_metaData, g_metaConstantCLSID, ibT("Constants"));
-		return true;
-	case enDataCatalogs:
-		pvarPropVal = BuildKindNamespace(m_metaData, g_metaCatalogCLSID, ibT("Catalogs"));
-		return true;
-	case enDataDocuments:
-		pvarPropVal = BuildKindNamespace(m_metaData, g_metaDocumentCLSID, ibT("Documents"));
-		return true;
-	case enDataEnumerations:
-		pvarPropVal = BuildKindNamespace(m_metaData, g_metaEnumerationCLSID, ibT("Enumerations"));
-		return true;
-	case enDataInformationRegisters:
-		pvarPropVal = BuildKindNamespace(m_metaData, g_metaInformationRegisterCLSID, ibT("InformationRegisters"));
-		return true;
-	case enDataAccumulationRegisters:
-		pvarPropVal = BuildKindNamespace(m_metaData, g_metaAccumulationRegisterCLSID, ibT("AccumulationRegisters"));
-		return true;
-	case enDataChartsOfCharacteristicTypes:
-		pvarPropVal = BuildKindNamespace(m_metaData, g_metaChartOfCharacteristicTypesCLSID, ibT("ChartsOfCharacteristicTypes"));
-		return true;
-	case enDataChartsOfAccounts:
-		pvarPropVal = BuildKindNamespace(m_metaData, g_metaChartOfAccountsCLSID, ibT("ChartsOfAccounts"));
-		return true;
-	case enDataAccountingRegisters:
-		pvarPropVal = BuildKindNamespace(m_metaData, g_metaAccountingRegisterCLSID, ibT("AccountingRegisters"));
-		return true;
-	case enDataChartsOfCalculationTypes:
-		pvarPropVal = BuildKindNamespace(m_metaData, g_metaChartOfCalculationTypesCLSID, ibT("ChartsOfCalculationTypes"));
-		return true;
-	case enDataCalculationRegisters:
-		pvarPropVal = BuildKindNamespace(m_metaData, g_metaCalculationRegisterCLSID, ibT("CalculationRegisters"));
-		return true;
-	case enDataSequences:
-		pvarPropVal = BuildKindNamespace(m_metaData, g_metaSequenceCLSID, ibT("Sequences"));
-		return true;
-	}
-	return false;
+	if (lPropNum < 0 || lPropNum >= (long)std::size(s_dataKinds))
+		return false;
+	pvarPropVal = new ibValueQueryableCollection(s_dataKinds[lPropNum].m_clsid, s_dataKinds[lPropNum].m_name, m_metaData);
+	return true;
 }
+
+//**********************************************************************
+//*                       Runtime register                             *
+//**********************************************************************
+
+SYSTEM_TYPE_REGISTER(ibValueQueryableCollection, "QueryableCollection", system_to_clsid("MG_DTCOL"));

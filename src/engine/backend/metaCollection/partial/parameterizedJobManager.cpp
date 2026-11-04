@@ -10,6 +10,8 @@
 #include "reference/reference.h"
 #include "selector/objectSelector.h"
 #include "backend/system/value/valueGuid.h"
+#include "backend/system/value/valueBackgroundJob.h"   // LastJob
+#include "backend/job/jobManager.h"                    // LastJob
 
 const ibValueMetaObjectCommonModule* ibValueManagerDataObjectJob::GetManagerModule() const
 {
@@ -31,6 +33,7 @@ enum Func {
 	eFindByCode,
 	eFindByDescription,
 	eExecute,
+	eLastJob,
 	eGetForm,
 	eGetListForm,
 	eGetSelectForm,
@@ -50,6 +53,9 @@ void ibValueManagerDataObjectJob::FillManagerMethods(ibMemberTable& helper) cons
 	// and the same single entry the tick uses. Without it a job could only be exercised by waiting
 	// out its interval, which makes "is the job wrong or is the manager wrong?" unanswerable.
 	helper.AppendFunc(ibT("Execute"), 1, ibT("Execute(job : reference)"));
+	// …and what its last pass did, as the BackgroundJob that pass is — the same answer a predefined job's
+	// row gives as LastJob. Undefined when no pass of the row has run in this process.
+	helper.AppendFunc(ibT("LastJob"), 1, ibT("LastJob(job : reference)"));
 	helper.AppendFunc(ibT("GetForm"), 3, ibT("GetForm(name : string, owner : any, id : guid)"));
 	helper.AppendFunc(ibT("GetListForm"), 3, ibT("GetListForm(name : string, owner : any, id : guid)"));
 	helper.AppendFunc(ibT("GetSelectForm"), 3, ibT("GetSelectForm(name : string, owner : any, id : guid)"));
@@ -86,6 +92,18 @@ bool ibValueManagerDataObjectJob::CallAsFunc(const long lMethodNum, ibValue& pva
 		if (!m_metaObject->AccessRight_Execute())
 			ibBackendCoreException::Error(_("insufficient rights to execute the job"));
 		pvarRetValue = m_metaObject->RunJobByReference(reference->GetGuid());
+		return true;
+	}
+	case eLastJob: {
+		// The row's guid IS its job's key (parameterizedJobRegistration.cpp), so the manager is asked by it.
+		ibValueReferenceDataObject* reference = lSizeArray > 0 ? paParams[0]->ConvertToType<ibValueReferenceDataObject>() : nullptr;
+		if (reference == nullptr)
+			ibBackendCoreException::Error(_("a job reference is required"));
+		if (!m_metaObject->AccessRight_Read())
+			ibBackendAccessException::Error(ibString::Format(_("reading '%s'"), m_metaObject->GetSynonym()));
+		ibJobManager* const manager = ibApplicationInstance::GetJobManager();
+		std::shared_ptr<ibBackgroundRun> run = manager != nullptr ? manager->LastJob(reference->GetGuid()) : nullptr;
+		pvarRetValue = run != nullptr ? ibValue(new ibValueBackgroundJob(std::move(run))) : ibValue();
 		return true;
 	}
 	case eGetForm: {

@@ -249,7 +249,7 @@ bool ibValueModelTable::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 	case enFindRows: {
 		// ConvertToValue, not ConvertToType: it CHECKS what the argument is (a string handed in by mistake is
 		// answered with the message below), where the raw cast has no way to say "not one of these".
-		ibValueContainer* filter = nullptr;
+		ibValueMap* filter = nullptr;
 		if (paParams[0] == nullptr || !paParams[0]->ConvertToValue(filter))
 			ibBackendCoreException::Error(_("FindRows expects a Structure of column = value"));
 		pvarRetValue = FindRows(*filter);
@@ -780,13 +780,13 @@ void ibValueModelTable::GroupBy(const ibString& groupColumns, const ibString& su
 	NotifyReset();   // the new rows' cells were written past the model - see FillValues
 }
 
-ibValue ibValueModelTable::FindRows(const ibValueContainer& filter)
+ibValue ibValueModelTable::FindRows(const ibValueMap& filter)
 {
 	// The filter's columns are resolved FIRST: a name that is not a column is a mistake worth seeing, and
 	// "no rows" would be the wrong way to say it.
 	struct Term { ibMetaID m_id; ibValue m_value; bool m_indexed; };
 	std::vector<Term> terms;
-	for (const auto& entry : filter.Entries()) {
+	for (const auto& entry : filter.Values()) {
 		const ibString name = entry.key.GetString();
 		const ibValueModelColumnCollection::ibValueModelColumnInfo* const colInfo =
 			m_tableColumnCollection != nullptr ? m_tableColumnCollection->GetColumnByName(name) : nullptr;

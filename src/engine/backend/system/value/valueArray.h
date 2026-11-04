@@ -10,19 +10,17 @@ constexpr ibClassID g_valueArrayCLSID = value_to_clsid("VL_ARR");
 // template non-type arg in the base clause below (the class is incomplete here).
 void ibValueArray_BindNames(ibValue::ibMemberTable& helper, const ibValue* ctx);
 
-class BACKEND_API ibValueArray : public ibValueStaticMembers<&ibValueArray_BindNames> {
-	public:
-private:
-	std::vector <ibValue> m_listValue;
+// THE COLLECTION THAT TAKES ANY VALUE: its element is the value itself, and it can be added to, set, sorted
+// and summed. Count, Get, [i] and For Each are the collection's.
+class BACKEND_API ibValueArray : public ibValueCollection<ibValue, &ibValueArray_BindNames> {
 private:
 
+	// After the collection's own (FillCollection) - the binder appends them in this order.
 	enum Func {
-		enAdd = 0,
+		enAdd = enCollectionFuncs,
 		enInsert,
-		enCount,
 		enFind,
 		enClear,
-		enGet,
 		enSet,
 		enRemove,
 		enContains,
@@ -39,20 +37,14 @@ private:
 		enAverage
 	};
 
-	// NOT inline: the definition lives in valueArray.cpp, and an inline function must be
-	// defined in every TU that uses it. This one is called from Insert() right in this
-	// header, so the promise was one no TU could keep — it only ever linked because the
-	// callers happened to sit in the same TU as the definition.
-	void CheckIndex(unsigned int index) const;
-
 public:
 
 	ibValueArray() :
-		ibValueStaticMembers(ibValueTypes::TYPE_VALUE) {
+		ibValueCollection(ibValueTypes::TYPE_VALUE) {
 	}
 
 	ibValueArray(const std::vector <ibValue>& arr) :
-		ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true), m_listValue(arr) {
+		ibValueCollection(arr, ibValueTypes::TYPE_VALUE, true) {
 	}
 
 	virtual ~ibValueArray() {
@@ -65,15 +57,11 @@ public:
 	virtual bool Init();
 	virtual bool Init(ibValue** paParams, const long lSizeArray);
 
-	//check is empty
-	virtual bool IsEmpty() const {
-		return m_listValue.empty();
-	}
-
 public:
 
-	// DoGetPMethods (protected) + Shared<&ibValueArray_BindNames> come from the base.
-	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);       //method call
+	// DoGetPMethods (protected) + Shared<&ibValueArray_BindNames> come from the base; what is not the
+	// array's own goes to the collection.
+	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) override;
 
 	// LINQ virtual-dispatch override. Intercepts hot operators that
 	// have O(1) direct-access shortcuts on the underlying vector
@@ -101,13 +89,6 @@ public:
 	// the designer and does nothing inside it — never an out-of-bounds insert.
 	// Defined in the .cpp so the bounds guard can use appData / the exception.
 	void Insert(unsigned int index, const ibValue& varValue);
-
-	unsigned int Count() const {
-		return m_listValue.size();
-	}
-
-	// The elements, for a caller in C++ that only reads them (what Entries() is to a Container).
-	const std::vector<ibValue>& Values() const { return m_listValue; }
 
 	ibValue Find(const ibValue& varValue) {
 		auto it = std::find(m_listValue.begin(), m_listValue.end(), varValue);
@@ -227,9 +208,8 @@ public:
 	ibValue MaxWithSelector(ibValue& selector) const;
 	ibValue AverageWithSelector(ibValue& selector) const;
 
-	//array support
-	virtual bool SetAt(const ibValue& varKeyValue, const ibValue& varValue);
-	virtual bool GetAt(const ibValue& varKeyValue, ibValue& pvarValue);
+	// The index starts from 0 - reading it is the collection's (GetAt).
+	virtual bool SetAt(const ibValue& varKeyValue, const ibValue& varValue) override;
 
 	// ORDERS AND COMPARES BY ITS ELEMENTS. Without these the base falls through to
 	// GetString(), which for an object kind is the CLASS NAME — every array reads
@@ -244,55 +224,11 @@ private:
 	// The other side as an array, or nullptr. The cast is the MEASURED choice for
 	// this path — see the note in valueArray.cpp before making it look cheaper.
 	const ibValueArray* AsArray(const ibVariant& cParam) const;
-public:
 
-	//Working with iterators
-	virtual std::shared_ptr<ibValueIteratorState> CreateIterator() override {
-		// ⭐⭐ THE ITERATOR OWNS THE ARRAY IT WALKS — a lazy pipeline outlives the expression that
-		// made its source, and an array that only lends a reference dies underneath it.
-		//
-		// `arr.Where(f)` returns a STATE, not rows: nothing is read until Count / Foreach asks. So
-		// the array has to survive the statement that created it, and the only thing that knows the
-		// state still needs it is the state itself. A reference to `m_listValue` said the opposite —
-		// "somebody else is keeping this alive" — and for a NAMED array that is true.
-		//
-		// 🛑 It is false for a TEMPORARY one, which is exactly what the pushed-down road builds:
-		// ibValueQueryable::MaterialiseThenRam streams the query into a local array and dispatches
-		// the untranslatable op on it. The op returned a lazy state, the local went out of scope, and
-		// the walk then read a freed vector — `Data.Catalogs.Goods.Where(f).Count()` answered 0 where
-		// 10 rows existed, SILENTLY, and the contract that road is built on ("the RAM floor, always
-		// correct") quietly did not hold (measured 2026-09-04).
-		//
-		// Holding a counted reference costs one increment per iterator and is what "always correct"
-		// requires; the vector is still read by reference, so the walk itself is unchanged.
-		class ArrayIteratorState : public ibValueIteratorState {
-		public:
-			ArrayIteratorState(ibValueArray* owner, const std::vector<ibValue>& list)
-				: m_owner(owner), m_list(list) {
-				if (m_owner != nullptr) m_owner->IncrRef();
-			}
-			~ArrayIteratorState() override {
-				if (m_owner != nullptr) m_owner->DecrRef();
-			}
-			bool MoveNext(ibValue& current) override {
-				if (m_started) ++m_pos; else m_started = true;
-				if (m_pos >= m_list.size()) return false;
-				current = m_list[m_pos];
-				return true;
-			}
-			void Reset() override { m_pos = 0; m_started = false; }
-			long Remaining() const override {
-				const size_t next = m_started ? m_pos + 1 : m_pos;
-				return next < m_list.size() ? (long)(m_list.size() - next) : 0;
-			}
-		private:
-			ibValueArray*                m_owner;   // kept alive for the walk — see the note above
-			const std::vector<ibValue>&  m_list;
-			size_t m_pos = 0;
-			bool m_started = false;
-		};
-		return std::make_shared<ArrayIteratorState>(this, m_listValue);
-	}
+protected:
+
+	// The element is the value itself.
+	virtual ibValue ElementValue(const ibValue& element) const override { return element; }
 };
 
 #endif

@@ -507,7 +507,7 @@ private:
 //
 //   * `Array` is created through `OPER_NEW` carrying a const STRING, so the class is resolved BY
 //     NAME at run time; `Contains` then walks the whole thing, so `Distinct` is O(n) per row.
-//   * `Structure` and `Container` key their members by STRING: every `g.Key` is a lookup.
+//   * `Structure` and `Map` key their members by STRING: every `g.Key` is a lookup.
 //
 // None of that is needed by machinery nobody can see. Here there is no name anywhere: members are
 // declared once, so the compiler turns `Key` and `Values` into the ordinals 0 and 1 while it is

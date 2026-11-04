@@ -533,12 +533,12 @@ ibQueryPredicatePtr AccountDimensionCondition(const ibValueMetaObjectAccountingR
                                               const ibBackendQueryable* source, bool creditSide,
                                               const ibValue& condition)
 {
-	ibValueContainer* pairs = nullptr;
+	ibValueMap* pairs = nullptr;
 	if (reg == nullptr || !condition.ConvertToValue(pairs) || pairs == nullptr)
 		return nullptr;
 
 	ibQueryPredicatePtr folded;
-	for (const auto& entry : pairs->Entries()) {
+	for (const auto& entry : pairs->Values()) {
 		if (entry.key.GetType() == TYPE_STRING || entry.key.IsEmpty())
 			continue;   // a dimension by name — not this converter's business
 

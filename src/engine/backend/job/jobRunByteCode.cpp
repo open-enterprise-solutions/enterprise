@@ -12,17 +12,12 @@
 #include "backend/moduleManager/moduleManager.h"
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/backend_exception.h"
-#include "backend/system/systemManager.h"   // Message - telling the person; WriteJournalEvent - the run's own record
+#include "backend/logger/logger.h"          // the journal the warning is written to before the run moves
 #include "backend/compiler/compileCode.h"   // the code is COMPILED here, against this application
 #include "backend/compiler/compileModule.h" // ...parented to the root, which is what it must see
 #include "backend/moduleInfo.h"             // GetByteCode - which is how the root is asked for
 #include "core/stringUtils.h"            // IsSameAs - how this tree compares a NAME
 #include "core/memory/memoryStream.h"          // ibWriterMemory / ibReaderMemory - the wire format below
-
-#include <wx/app.h>                         // wxTheApp - the thread that may touch a window
-
-#include <map>
-#include <mutex>
 
 namespace {
 
@@ -37,35 +32,26 @@ namespace {
 // a caller holding only a token had to be handed the session anyway (Max, 2026-09-06: *"it returns
 // you the id of the background job that started, and you track it"* — one id).
 //
-// ⚠ CAPTURED AT START, NOT ASKED OF THE LIVE RUN. That is the one thing the token did do: outlive
-// the session. A finished run has let its session go, so `SessionGuid()` would answer nothing and
-// status-after-completion would break; the guid taken here stays valid as long as the entry does.
+// ⚠ THE NAME OUTLIVES THE SESSION: the run takes it when its session is made (ibBackgroundRun::UUID). A
+// finished run has let its session go, so `SessionGuid()` would answer nothing and status-after-completion
+// would break; the name stays as long as the run is held.
 //
-// ⚠ THE REGISTRY IS HERE, not at the tool. The run belongs to the process doing the work: a designer
-// that reconnects, or a second assistant on the same application, can still ask after a run somebody
-// else started. Keeping the map at the caller would have made an id mean "a run I personally
-// launched during this connection", which is not what it is for.
-std::mutex                                           g_runsMutex;
-std::map<ibString, std::shared_ptr<ibBackgroundRun>> g_runs;
-
-ibString Remember(const std::shared_ptr<ibBackgroundRun>& run)
-{
-	const ibString session = run->SessionGuid();
-	std::lock_guard<std::mutex> lock(g_runsMutex);
-	g_runs[session] = run;
-	return session;
-}
-
+// ⚠ THE RUNS ARE THE MANAGER'S, not kept here and not at the tool: ibJobManager holds every run it started,
+// the active ones and the last ones that ended (ibJobManager::GetBackgroundJobs). A designer that reconnects, or a second
+// assistant on the same application, can still ask after a run somebody else started; one that dropped out
+// of the manager's list answers as unknown, as one that never existed does.
 std::shared_ptr<ibBackgroundRun> Recall(const ibString& session)
 {
-	std::lock_guard<std::mutex> lock(g_runsMutex);
-	const auto it = g_runs.find(session);
-	return it != g_runs.end() ? it->second : nullptr;
+	ibGuid uuid;
+	ibJobManager* const jobs = ibApplicationInstance::GetJobManager();
+	if (jobs == nullptr || !ibGuid::parse(session, uuid))
+		return nullptr;
+	return jobs->FindBackgroundJob(uuid);
 }
 
 // What a run has to say about itself, in one shape, so all three requests answer alike.
 //
-// ⚠ THE SESSION COMES FROM THE REGISTRY, not from the live run: a finished run has let its session
+// ⚠ THE SESSION IS THE RUN'S NAME, not asked of its live session: a finished run has let its session
 // go and would answer nothing, and "the run you asked about has no name" is not a true sentence.
 void Describe(const ibBackgroundRun& run, const ibString& session, ibJobRunByteCodeState& state)
 {
@@ -83,16 +69,6 @@ void Describe(const ibBackgroundRun& run, const ibString& session, ibJobRunByteC
 		if (state.m_error.IsEmpty())
 			state.m_result = run.Result().GetString();
 	}
-}
-
-// 🛑⭐ TOLD FROM THE APPLICATION'S OWN THREAD. This may be called from the debug thread; `Message`
-// reaches the frame, and a desktop frame draws — touching a window from a thread that does not own
-// it hangs where it does not crash. Handed over and forgotten: the person is being told something,
-// not asked.
-void Tell(const ibString& text, ibStatusMessage status)
-{
-	if (wxTheApp != nullptr)
-		wxTheApp->CallAfter([text, status]() { ibValueSystemFunction::Message(text, status); });
 }
 
 }   // namespace
@@ -333,20 +309,22 @@ bool ibJobRunByteCode::Start(const ibJobRunRequest& request, ibJobRunByteCodeSta
 		return answer;
 	};
 
-	// ⭐⭐ THE PERSON IS TOLD FIRST, IN THEIR OWN WINDOW, and told BEFORE anything moves - not left to
-	// notice the activity line while it happens. The sandbox already does this for a run that keeps
-	// NOTHING ("an assistant is running code here in a sandbox"); one that keeps everything cannot
-	// say less. What they read is the sentence the caller wrote in `understood`, so the warning and
-	// the account of what is about to be done arrive together and in the caller's own words - which
-	// is what makes a wrong one catchable.
-	Tell(commit
-		? ibString::Format(
-			_("An assistant is about to WRITE DATA into this base. Existing data can be overwritten "
-			  "or deleted and nothing undoes it. What it says it will do: %s"),
-			request.m_understood.IsEmpty() ? ibString(_("(nothing said)")) : request.m_understood)
-		: ibString(_("An assistant is running code here as a TRIAL - everything it writes will be undone, "
-		    "and the base is not changed.")),
-		commit ? ibStatusMessage_Warning : ibStatusMessage_Information);
+	// ⭐⭐ WRITTEN DOWN FIRST, IN THE JOURNAL AN AUDITOR READS, and BEFORE anything moves - not left to be
+	// noticed in the activity line while it happens. This runs on the debug thread: no session is current
+	// here and no window is anybody's, so the record is the one place the warning can be kept - the same
+	// journal, under the same source, as the screen an assistant was shown (debugServer.cpp) and every
+	// tool it called (mcpServer.cpp). The sandbox writes it for a run that keeps NOTHING; one that keeps
+	// everything cannot say less. What it reads is the sentence the caller wrote in `understood`, so the
+	// warning and the account of what is about to be done stand together and in the caller's own words -
+	// which is what makes a wrong one catchable.
+	if (ibLogger* const logger = ibApplicationInstance::GetLogger())
+		logger->Audit(ibT("assistant"), commit ? ibT("code.write") : ibT("code.trial"), commit
+			? ibString::Format(
+				_("An assistant is about to WRITE DATA into this base. Existing data can be overwritten "
+				  "or deleted and nothing undoes it. What it says it will do: %s"),
+				request.m_understood.IsEmpty() ? _("(nothing said)") : request.m_understood)
+			: _("An assistant is running code here as a TRIAL - everything it writes will be undone, "
+			    "and the base is not changed."));
 
 	// ⭐⭐ WHAT THE PERSON READS IS WHAT THE CALLER SAID IT WOULD DO. Ad-hoc code has no name to show
 	// — there is no module and no method any more — and a line reading "running some code" tells
@@ -382,7 +360,7 @@ bool ibJobRunByteCode::Start(const ibJobRunRequest& request, ibJobRunByteCodeSta
 		return false;
 	}
 
-	Describe(*run, Remember(run), state);
+	Describe(*run, run->UUID().str(), state);
 	return true;
 }
 

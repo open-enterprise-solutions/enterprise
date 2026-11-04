@@ -1767,6 +1767,7 @@ protected:
 
 #include "backend/value_ptr.h"
 #include "backend/value_cast.h"
+#include "backend/value_collection.h"
 
 /////////////////////////////////////////////////////////////////////////
 // ibValue template implementations deferred until ibValuePtr is complete

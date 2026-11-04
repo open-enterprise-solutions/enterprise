@@ -9,6 +9,7 @@
 #include "backend/metaData.h"
 #include "backend/metaCollection/metaObject.h"   // g_metaScheduledJobCLSID
 #include "backend/metaCollection/metaScheduledJobObject.h"   // the declared Use and Schedule a row starts from
+#include "valueBackgroundJob.h"                                // LastJob
 
 //////////////////////////////////////////////////////////////////////
 
@@ -173,39 +174,42 @@ void ibValueSchedule::ShowValue()
 //                        the collection                            //
 //////////////////////////////////////////////////////////////////////
 
+// Count and Get are the collection's, and nothing more: the jobs are the configuration's, not a caller's to add.
+void ibValuePredefinedJobs_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
+{
+	ibValuePredefinedJobs::FillCollection(helper);
+}
+
 ibValuePredefinedJobs::ibValuePredefinedJobs(ibMetaData* metaData)
-	: ibValueArray()
+	: ibValueCollection(ibValueTypes::TYPE_VALUE)
 {
 	if (metaData == nullptr)
 		return;
 
-	for (const auto object : metaData->GetAnyArrayObject(g_metaScheduledJobCLSID)) {
-		if (object->IsDeleted())
+	for (const auto job : metaData->GetAnyArrayObject<ibValueMetaObjectScheduledJob>(g_metaScheduledJobCLSID)) {
+		if (job->IsDeleted())
 			continue;
-		const ibValueMetaObjectScheduledJob* const job = dynamic_cast<const ibValueMetaObjectScheduledJob*>(object);
-		ibValuePtr<ibValueJobRow> row(job != nullptr
-			? new ibValueJobRow(job->GetGuid(), job->GetName(), job->IsUsed(), job->GetSchedule())
-			: new ibValueJobRow(object->GetGuid(), object->GetName()));
-		Add(row);
+		m_listValue.emplace_back(new ibValueJobRow(job->GetGuid(), job->GetName(), job->IsUsed(), job->GetSchedule()));
 	}
+}
+
+ibValue ibValuePredefinedJobs::ElementValue(const ibValuePtr<ibValueJobRow>& row) const
+{
+	if (row == nullptr)
+		return ibValue(new ibValueJobRow());
+	return row;
 }
 
 //////////////////////////////////////////////////////////////////////
 //                            the row                               //
 //////////////////////////////////////////////////////////////////////
 
-ibValuePredefinedJobs::ibValueJobRow::ibValueJobRow()
+ibValueJobRow::ibValueJobRow()
 	: ibValueStaticMembers(ibValueTypes::TYPE_VALUE)
 {
 }
 
-ibValuePredefinedJobs::ibValueJobRow::ibValueJobRow(const ibGuid& jobKey, const ibString& jobName)
-	: ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_jobKey(jobKey), m_jobName(jobName)
-{
-	ReadSettings();
-}
-
-ibValuePredefinedJobs::ibValueJobRow::ibValueJobRow(const ibGuid& jobKey, const ibString& jobName,
+ibValueJobRow::ibValueJobRow(const ibGuid& jobKey, const ibString& jobName,
 	bool declaredActive, const ibJobScheduleDescription& declaredSchedule)
 	: ibValueStaticMembers(ibValueTypes::TYPE_VALUE), m_jobKey(jobKey), m_jobName(jobName),
 	m_active(declaredActive), m_schedule(declaredSchedule)
@@ -213,7 +217,7 @@ ibValuePredefinedJobs::ibValueJobRow::ibValueJobRow(const ibGuid& jobKey, const 
 	ReadSettings();
 }
 
-bool ibValuePredefinedJobs::ibValueJobRow::ReadSettings()
+bool ibValueJobRow::ReadSettings()
 {
 	if (!m_jobKey.isValid())
 		return false;
@@ -235,41 +239,13 @@ bool ibValuePredefinedJobs::ibValueJobRow::ReadSettings()
 	return stored.m_found;
 }
 
-void ibValuePredefinedJobs::ibValueJobRow::WriteSettings()
-{
-	ibJobManager::ibJobSettings settings;
-	settings.m_key = m_jobKey;
-	settings.m_name = m_jobName;
-	settings.m_active = m_active;
-	settings.m_schedule = m_schedule;
-
-	// BOTH halves, in this order: the row is what survives a restart, the live entry is what
-	// the next tick reads. Writing only the row would leave a job running on a schedule nobody
-	// can see any more; applying only in memory would lose the change on close.
-	//
-	// ⚠ AND THE ROW MUST TAKE, or the in-memory half is a lie with a lifetime. Discarding the
-	// result meant `job.Write()` answered TRUE over a setting that had not been stored: the
-	// schedule looked changed until the next restart put the old one back. Applying the live
-	// half after a failed write would make that lie last exactly one session.
-	// Both non-Written outcomes raise here, and that is not the seed's rule.
-	// A seed is the platform offering a starting value; this is a PERSON having
-	// asked for a change and being answered `true`. "There was no base to write
-	// to" is just as much a lie to them as "the base refused" — the setting is
-	// not stored either way, and the live half below would outlive it by one session.
-	if (ibJobManager::WriteSharedSettings(settings) != ibJobManager::ibWriteOutcome::Written)
-		ibBackendCoreException::Error(
-			_("the schedule of '%s' could not be written to the base"), m_jobName);
-
-	if (ibJobManager* const manager = ibApplicationInstance::GetJobManager())
-		manager->ApplySettings(m_jobKey, m_active, m_schedule);
-}
-
 void ibValueJobRow_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
 	helper.AppendProp(ibT("Name"));
 	helper.AppendProp(ibT("Active"));
 	helper.AppendProp(ibT("Schedule"));
 	helper.AppendProp(ibT("LastRun"));
+	helper.AppendProp(ibT("LastJob"));
 	helper.AppendProp(ibT("Computer"));
 	helper.AppendProp(ibT("NextRun"));
 
@@ -278,7 +254,7 @@ void ibValueJobRow_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ct
 	helper.AppendFunc(ibT("Execute"), ibT("Execute()"));
 }
 
-bool ibValuePredefinedJobs::ibValueJobRow::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
+bool ibValueJobRow::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
 	switch (lMethodNum)
 	{
@@ -286,11 +262,39 @@ bool ibValuePredefinedJobs::ibValueJobRow::CallAsFunc(const long lMethodNum, ibV
 		pvarRetValue = ReadSettings();
 		return true;
 	case enWrite:
+	{
 		if (!m_jobKey.isValid())
 			return false;
-		WriteSettings();
+
+		ibJobManager::ibJobSettings settings;
+		settings.m_key = m_jobKey;
+		settings.m_name = m_jobName;
+		settings.m_active = m_active;
+		settings.m_schedule = m_schedule;
+
+		// BOTH halves, in this order: the row is what survives a restart, the live entry is what
+		// the next tick reads. Writing only the row would leave a job running on a schedule nobody
+		// can see any more; applying only in memory would lose the change on close.
+		//
+		// ⚠ AND THE ROW MUST TAKE, or the in-memory half is a lie with a lifetime. Discarding the
+		// result meant `job.Write()` answered TRUE over a setting that had not been stored: the
+		// schedule looked changed until the next restart put the old one back. Applying the live
+		// half after a failed write would make that lie last exactly one session.
+		// Both non-Written outcomes raise here, and that is not the seed's rule.
+		// A seed is the platform offering a starting value; this is a PERSON having
+		// asked for a change and being answered `true`. "There was no base to write
+		// to" is just as much a lie to them as "the base refused" — the setting is
+		// not stored either way, and the live half below would outlive it by one session.
+		if (ibJobManager::WriteSharedSettings(settings) != ibJobManager::ibWriteOutcome::Written)
+			ibBackendCoreException::Error(
+				_("the schedule of '%s' could not be written to the base"), m_jobName);
+
+		if (ibJobManager* const manager = ibApplicationInstance::GetJobManager())
+			manager->ApplySettings(m_jobKey, m_active, m_schedule);
+
 		pvarRetValue = true;
 		return true;
+	}
 	case enExecute:
 	{
 		// RUN IT NOW — ignoring the calendar AND the switch. Switching a job off takes it off the
@@ -313,7 +317,7 @@ bool ibValuePredefinedJobs::ibValueJobRow::CallAsFunc(const long lMethodNum, ibV
 	return false;
 }
 
-bool ibValuePredefinedJobs::ibValueJobRow::SetPropVal(const long lPropNum, const ibValue& varPropVal)
+bool ibValueJobRow::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
 	switch (lPropNum)
 	{
@@ -337,7 +341,7 @@ bool ibValuePredefinedJobs::ibValueJobRow::SetPropVal(const long lPropNum, const
 	return false;
 }
 
-bool ibValuePredefinedJobs::ibValueJobRow::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
+bool ibValueJobRow::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
 	switch (lPropNum)
 	{
@@ -355,6 +359,16 @@ bool ibValuePredefinedJobs::ibValueJobRow::GetPropVal(const long lPropNum, ibVal
 	case enLastRun:
 		pvarPropVal = ibValue(m_lastRun);   // never run: the empty date
 		return true;
+	case enLastJob:
+	{
+		// THE RUN ITSELF, handed over as the BackgroundJob it is — State / Begin / End / Error() are asked of
+		// a pass the same way as of any run. The manager holds it (ibJobManager::LastJob); a pass a peer took instead
+		// left nothing here, and when the job last ran anywhere is LastRun.
+		ibJobManager* const manager = ibApplicationInstance::GetJobManager();
+		std::shared_ptr<ibBackgroundRun> run = manager != nullptr ? manager->LastJob(m_jobKey) : nullptr;
+		pvarPropVal = run != nullptr ? ibValue(new ibValueBackgroundJob(std::move(run))) : ibValue();
+		return true;
+	}
 	case enComputer:
 		pvarPropVal = m_computer;
 		return true;
@@ -384,4 +398,4 @@ bool ibValuePredefinedJobs::ibValueJobRow::GetPropVal(const long lPropNum, ibVal
 // row exists because the collection produced it. `New JobSettings()` would refer to nothing — the
 // way in is ScheduledJobs.Predefined.
 SYSTEM_TYPE_REGISTER(ibValuePredefinedJobs, "PredefinedJobs", g_valuePredefinedJobsCLSID);
-SYSTEM_TYPE_REGISTER(ibValuePredefinedJobs::ibValueJobRow, "JobSettings", value_to_clsid("VL_JOBST"));
+SYSTEM_TYPE_REGISTER(ibValueJobRow, "JobSettings", value_to_clsid("VL_JOBST"));

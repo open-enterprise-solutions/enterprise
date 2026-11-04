@@ -4,9 +4,9 @@
   "locale": "en",
   "entries": [
     {
-      "id": "cls.Container",
-      "name_local": "Container",
-      "name_en": "Container",
+      "id": "cls.Map",
+      "name_local": "Map",
+      "name_en": "Map",
       "kind": "collection",
       "class_id": 158350834197411078,
       "category_keys": [
@@ -14,28 +14,28 @@
         "collections",
         "containers"
       ],
-      "signature": "New Container()",
-      "description": "A key bound to a value, and both of them are runtime VALUES. A key can be a string, a number, a date, a reference to an item -- whatever the language's `=` tells apart, a Container tells apart, so \"fr\" and \"FR\" are two keys and 1 is not \"1\".\n\nA string key is also read after a dot, as it was written: `c.Name` reaches the key \"Name\", and `c.name` does not. A key is reached by `c[key]`, which raises when nothing is bound to it; by Get, which answers Undefined instead; by Property; and by walking the container, which hands out a KeyValue per entry in the order the keys were inserted.\n\nFor a fixed set of NAMES read after a dot in any case, the type is Structure.",
-      "syntax_block": "Rates = New Container();\nRates.Insert(\"fr\", 1);\nRates.Insert(\"FR\", 2);\nMessage(Rates[\"fr\"]);\nMessage(Rates.Get(\"de\"));\n\nForeach (Pair In Rates) {\n    Message(Pair.Key + \": \" + Pair.Value);\n}",
-      "syntax_block_ves": "Rates = New Container();\nRates.Insert(\"fr\", 1);\nRates.Insert(\"FR\", 2);\nMessage(Rates[\"fr\"]);\nMessage(Rates.Get(\"de\"));\n\nForeach Pair In Rates Do\n    Message(Pair.Key + \": \" + Pair.Value);\nEndDo;",
+      "signature": "New Map()",
+      "description": "A key bound to a value, and both of them are runtime VALUES. A key can be a string, a number, a date, a reference to an item -- whatever the language's `=` tells apart, a Map tells apart, so \"fr\" and \"FR\" are two keys and 1 is not \"1\".\n\nA string key is also read after a dot, as it was written: `c.Name` reaches the key \"Name\", and `c.name` does not. A key is reached by `c[key]`, which raises when nothing is bound to it; by Get, which answers Undefined instead; by Property; and by walking the container, which hands out a KeyValue per entry in the order the keys were inserted.\n\nFor a fixed set of NAMES read after a dot in any case, the type is Structure.",
+      "syntax_block": "Rates = New Map();\nRates.Insert(\"fr\", 1);\nRates.Insert(\"FR\", 2);\nMessage(Rates[\"fr\"]);\nMessage(Rates.Get(\"de\"));\n\nForeach (Pair In Rates) {\n    Message(Pair.Key + \": \" + Pair.Value);\n}",
+      "syntax_block_ves": "Rates = New Map();\nRates.Insert(\"fr\", 1);\nRates.Insert(\"FR\", 2);\nMessage(Rates[\"fr\"]);\nMessage(Rates.Get(\"de\"));\n\nForeach Pair In Rates Do\n    Message(Pair.Key + \": \" + Pair.Value);\nEndDo;",
       "parameters": "None.",
-      "return_descr": "Container — empty.",
-      "example": "Rates = New Container();\nRates.Insert(\"fr\", 1);\nRates.Insert(\"FR\", 2);\nMessage(Rates[\"fr\"]);\nMessage(Rates.Get(\"de\"));\n\nForeach (Pair In Rates) {\n    Message(Pair.Key + \": \" + Pair.Value);\n}",
+      "return_descr": "Map — empty.",
+      "example": "Rates = New Map();\nRates.Insert(\"fr\", 1);\nRates.Insert(\"FR\", 2);\nMessage(Rates[\"fr\"]);\nMessage(Rates.Get(\"de\"));\n\nForeach (Pair In Rates) {\n    Message(Pair.Key + \": \" + Pair.Value);\n}",
       "availability": "Thin client, Server",
       "see_also": [
-        "cls.Container.Count",
-        "cls.Container.Get",
-        "cls.Container.Property",
-        "cls.Container.Insert",
-        "cls.Container.Delete",
-        "cls.Container.Clear",
+        "cls.Map.Count",
+        "cls.Map.Get",
+        "cls.Map.Property",
+        "cls.Map.Insert",
+        "cls.Map.Delete",
+        "cls.Map.Clear",
         "cls.KeyValue",
         "cls.Structure"
       ],
       "reviewed": false
     },
     {
-      "id": "cls.Container.Count",
+      "id": "cls.Map.Count",
       "name_local": "Count",
       "name_en": "Count",
       "kind": "method",
@@ -44,20 +44,20 @@
         "collections",
         "containers"
       ],
-      "signature": "Container.Count()",
+      "signature": "Map.Count()",
       "description": "How many keys the container holds.",
       "parameters": "None.",
       "return_descr": "Number.",
-      "example": "Rates = New Container();\nRates.Insert(\"fr\", 1);\nMessage(Rates.Count());",
+      "example": "Rates = New Map();\nRates.Insert(\"fr\", 1);\nMessage(Rates.Count());",
       "availability": "Thin client, Server",
       "see_also": [
-        "cls.Container",
-        "cls.Container.Clear"
+        "cls.Map",
+        "cls.Map.Clear"
       ],
       "reviewed": false
     },
     {
-      "id": "cls.Container.Get",
+      "id": "cls.Map.Get",
       "name_local": "Get",
       "name_en": "Get",
       "kind": "method",
@@ -66,21 +66,21 @@
         "collections",
         "containers"
       ],
-      "signature": "Container.Get(key)",
+      "signature": "Map.Get(key)",
       "description": "The value bound to the key, or Undefined when nothing is bound to it. It does not raise, which `c[key]` does, and it asks for no second argument, which Property does.",
       "parameters": "key — any value. Two string keys are the same key when they are the same text; a key of any other kind is settled by the value's own ordering, and that ordering puts Undefined and Null in one place.",
       "return_descr": "The value bound to the key, or Undefined.",
-      "example": "Rates = New Container();\nRates.Insert(\"fr\", 1);\nMessage(Rates.Get(\"fr\"));\nMessage(ValueIsFilled(Rates.Get(\"de\")));",
+      "example": "Rates = New Map();\nRates.Insert(\"fr\", 1);\nMessage(Rates.Get(\"fr\"));\nMessage(ValueIsFilled(Rates.Get(\"de\")));",
       "availability": "Thin client, Server",
       "see_also": [
-        "cls.Container",
-        "cls.Container.Property",
-        "cls.Container.Insert"
+        "cls.Map",
+        "cls.Map.Property",
+        "cls.Map.Insert"
       ],
       "reviewed": false
     },
     {
-      "id": "cls.Container.Property",
+      "id": "cls.Map.Property",
       "name_local": "Property",
       "name_en": "Property",
       "kind": "method",
@@ -89,20 +89,20 @@
         "collections",
         "containers"
       ],
-      "signature": "Container.Property(key, valueFound)",
+      "signature": "Map.Property(key, valueFound)",
       "description": "Whether the key is in the container. What it is bound to is handed back through the second argument, which is left as it was when the key is not there.",
       "parameters": "key — any value.\nvalueFound — the variable the value is handed back in.",
       "return_descr": "Boolean — True when the key is there.",
       "example": "Rate = Undefined;\nIf (Rates.Property(\"fr\", Rate)) {\n    Message(Rate);\n}",
       "availability": "Thin client, Server",
       "see_also": [
-        "cls.Container",
-        "cls.Container.Get"
+        "cls.Map",
+        "cls.Map.Get"
       ],
       "reviewed": false
     },
     {
-      "id": "cls.Container.Insert",
+      "id": "cls.Map.Insert",
       "name_local": "Insert",
       "name_en": "Insert",
       "kind": "procedure",
@@ -111,21 +111,21 @@
         "collections",
         "containers"
       ],
-      "signature": "Container.Insert(key, value)",
+      "signature": "Map.Insert(key, value)",
       "description": "Binds a value to a key that is not in the container yet. A key that is already there raises \"Key '<key>' is already using!\" -- to replace what a key is bound to, assign it: `Rates[\"fr\"] = 2`.",
       "parameters": "key — any value.\nvalue — what to bind to it.",
       "return_descr": "None.",
-      "example": "Rates = New Container();\nRates.Insert(\"fr\", 1);\nRates[\"fr\"] = 2;",
+      "example": "Rates = New Map();\nRates.Insert(\"fr\", 1);\nRates[\"fr\"] = 2;",
       "availability": "Thin client, Server",
       "see_also": [
-        "cls.Container",
-        "cls.Container.Delete",
-        "cls.Container.Get"
+        "cls.Map",
+        "cls.Map.Delete",
+        "cls.Map.Get"
       ],
       "reviewed": false
     },
     {
-      "id": "cls.Container.Delete",
+      "id": "cls.Map.Delete",
       "name_local": "Delete",
       "name_en": "Delete",
       "kind": "procedure",
@@ -134,20 +134,20 @@
         "collections",
         "containers"
       ],
-      "signature": "Container.Delete(key)",
+      "signature": "Map.Delete(key)",
       "description": "Removes the key and what it was bound to. A key that is not there is not an error. The keys that were inserted after it keep their order.",
       "parameters": "key — any value. Two string keys are the same key when they are the same text; a key of any other kind is settled by the value's own ordering, and that ordering puts Undefined and Null in one place.",
       "return_descr": "None.",
       "example": "Rates.Delete(\"fr\");",
       "availability": "Thin client, Server",
       "see_also": [
-        "cls.Container",
-        "cls.Container.Clear"
+        "cls.Map",
+        "cls.Map.Clear"
       ],
       "reviewed": false
     },
     {
-      "id": "cls.Container.Clear",
+      "id": "cls.Map.Clear",
       "name_local": "Clear",
       "name_en": "Clear",
       "kind": "procedure",
@@ -156,15 +156,15 @@
         "collections",
         "containers"
       ],
-      "signature": "Container.Clear()",
+      "signature": "Map.Clear()",
       "description": "Removes every key.",
       "parameters": "None.",
       "return_descr": "None.",
       "example": "Rates.Clear();",
       "availability": "Thin client, Server",
       "see_also": [
-        "cls.Container",
-        "cls.Container.Delete"
+        "cls.Map",
+        "cls.Map.Delete"
       ],
       "reviewed": false
     },
@@ -180,7 +180,7 @@
         "containers"
       ],
       "signature": "New Structure([fields [, value1, value2, ...]])",
-      "description": "A set of named fields. A field name is a NAME: case does not matter -- `s.Name`, `s.name` and `s[\"nAmE\"]` are one field -- and a field is read after a dot. Only a string can be a field name; anything else is refused.\n\nThe fields can be declared when the structure is made, `New Structure(\"Item, Amount\", \"Paper\", 12)`, or added one at a time with Insert. Walking a structure hands out a KeyValue per field, in the order the fields were added.\n\nWhen the keys are VALUES rather than names -- a reference, a number, two strings that differ in case -- the type is Container.",
+      "description": "A set of named fields. A field name is a NAME: case does not matter -- `s.Name`, `s.name` and `s[\"nAmE\"]` are one field -- and a field is read after a dot. Only a string can be a field name; anything else is refused.\n\nThe fields can be declared when the structure is made, `New Structure(\"Item, Amount\", \"Paper\", 12)`, or added one at a time with Insert. Walking a structure hands out a KeyValue per field, in the order the fields were added.\n\nWhen the keys are VALUES rather than names -- a reference, a number, two strings that differ in case -- the type is Map.",
       "syntax_block": "Line = New Structure(\"Item, Amount\", \"Paper\", 12);\nLine.Insert(\"Price\", 3);\nMessage(Line.item);\nMessage(Line.Get(\"Vat\"));\n\nForeach (Field In Line) {\n    Message(Field.Key + \": \" + Field.Value);\n}",
       "syntax_block_ves": "Line = New Structure(\"Item, Amount\", \"Paper\", 12);\nLine.Insert(\"Price\", 3);\nMessage(Line.item);\nMessage(Line.Get(\"Vat\"));\n\nForeach Field In Line Do\n    Message(Field.Key + \": \" + Field.Value);\nEndDo;",
       "parameters": "fields — String, the field names separated by commas. May be left out.\nvalue1, value2, ... — the value of each field in the same order; a field with no value given is Undefined.",
@@ -195,7 +195,7 @@
         "cls.Structure.Delete",
         "cls.Structure.Clear",
         "cls.KeyValue",
-        "cls.Container"
+        "cls.Map"
       ],
       "reviewed": false
     },
@@ -342,8 +342,8 @@
         "collections",
         "containers"
       ],
-      "signature": "Foreach (Pair In Container) { ... }",
-      "description": "One entry of a Container or a Structure, as walking it hands the entry over: the key and what is bound to it. It is not made with New -- a Foreach over a container or a structure is where it comes from.",
+      "signature": "Foreach (Pair In Map) { ... }",
+      "description": "One entry of a Map or a Structure, as walking it hands the entry over: the key and what is bound to it. It is not made with New -- a Foreach over a container or a structure is where it comes from.",
       "syntax_block": "Foreach (Pair In Rates) {\n    Message(Pair.Key + \": \" + Pair.Value);\n}",
       "syntax_block_ves": "Foreach Pair In Rates Do\n    Message(Pair.Key + \": \" + Pair.Value);\nEndDo;",
       "parameters": "None.",
@@ -353,7 +353,7 @@
       "see_also": [
         "cls.KeyValue.Key",
         "cls.KeyValue.Value",
-        "cls.Container",
+        "cls.Map",
         "cls.Structure"
       ],
       "reviewed": false
@@ -369,7 +369,7 @@
         "containers"
       ],
       "signature": "KeyValue.Key",
-      "description": "The key of the entry: a value in a Container, a field name in a Structure.",
+      "description": "The key of the entry: a value in a Map, a field name in a Structure.",
       "parameters": "None.",
       "return_descr": "Any value.",
       "example": "Foreach (Pair In Rates) {\n    Message(Pair.Key);\n}",

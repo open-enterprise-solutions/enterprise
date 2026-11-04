@@ -152,7 +152,7 @@ TEST(XmlValueFunctions, EveryKindGoesToXmlAndComesBackAsItself)
 	record->Insert(ibValue(ibString(ibT("Item"))), item);
 	record->Insert(ibValue(ibString(ibT("Rate"))), rate);
 	record->Insert(ibValue(ibString(ibT("List"))), list);
-	ibValuePtr<ibValueContainer> byRef(new ibValueContainer());
+	ibValuePtr<ibValueMap> byRef(new ibValueMap());
 	byRef->Insert(item, ibValue(ibString(ibT("the item"))));
 	byRef->Insert(rate, ibValue(20));
 	for (const ibValue& holder : { ibValue(list), ibValue(record), ibValue(byRef) }) {
@@ -170,14 +170,14 @@ TEST(XmlValueFunctions, EveryKindGoesToXmlAndComesBackAsItself)
 	}
 	// A container keyed by references, past the size where it builds its index: each value is found again by the key
 	// as read back - a reference that hashes and compares as the one written.
-	ibValuePtr<ibValueContainer> indexed(new ibValueContainer());
+	ibValuePtr<ibValueMap> indexed(new ibValueMap());
 	std::vector<ibValue> keys;
 	for (int at = 0; at < 12; ++at) {
 		ibValuePtr<ibValueReferenceDataObject> key(ibValueReferenceDataObject::Create(cfg.get(), goods->GetMetaID(), ibGuid(ibGuid::newGuid())));
 		keys.push_back(key);
 		indexed->Insert(key, ibValue(at));
 	}
-	ibValuePtr<ibValueContainer> indexedBack(ibValueSystemFunction::XMLValue(ibValueSystemFunction::XMLString(indexed)));
+	ibValuePtr<ibValueMap> indexedBack(ibValueSystemFunction::XMLValue(ibValueSystemFunction::XMLString(indexed)));
 	ASSERT_TRUE(static_cast<bool>(indexedBack));
 	for (int at = 0; at < 12; ++at) {
 		ibValue found;

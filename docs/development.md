@@ -158,6 +158,16 @@ member: a tile is where the picture stands, a hyperlink is how the button is dra
 class name, so a subclass of a stock property is a class it has never seen, and the cell shows a
 bare number. Compatibility glue in a property subclass is a second road.
 
+**A list is its own collection, not a borrowed Structure or Array.** Users, a kind's jobs, the
+managers or the metaobjects of one kind: each is its own class on `ibValueCollection<Element, Binder>`
+(`backend/value_collection.h`), registered on its own. The base answers what every list answers:
+`Count`, `Get`/`[i]`, `For Each`. The heir says what its element is to a script (`ElementValue`) and
+how it is found by a key, if it has one (`FindProp`, `GetAt`). It adds its own methods after the
+base's: its binder calls `FillCollection` first and numbers from `enCollectionFuncs`. Two lists that
+look alike are still two classes; the base is what they share. A borrowed Structure answers `Insert`
+on a list nobody may change, walks out pairs instead of elements, and builds every element on every
+read. Objects of one kind found by name derive from `ibValueMetaObjectCollection`.
+
 **Meaning is a type, not bits, branches or lists.** A new category ("any reference") is a
 registered type with its own rule, not a pattern in unused bits of an id or a special case in
 every consumer. A hand-maintained list of what the system already knows is a defect. Two flags

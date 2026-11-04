@@ -192,7 +192,7 @@ class ibValueEnumBackgroundJobState : public ibValueEnumeration<ibBackgroundJobS
 		AddEnumeration(ibBackgroundJobState::ibBackgroundJobState_Active, ibT("Active"), _("Active"));
 		AddEnumeration(ibBackgroundJobState::ibBackgroundJobState_Completed, ibT("Completed"), _("Completed"));
 		AddEnumeration(ibBackgroundJobState::ibBackgroundJobState_Failed, ibT("Failed"), _("Failed"));
-		AddEnumeration(ibBackgroundJobState::ibBackgroundJobState_Canceled, ibT("Canceled"), _("Canceled"));
+		AddEnumeration(ibBackgroundJobState::ibBackgroundJobState_Cancelled, ibT("Cancelled"), _("Cancelled"));
 	}
 };
 

@@ -132,8 +132,8 @@ TEST(JsonReader, RepeatedKeysCostOneLookupEach) {
 	const ibValue value = ReadWhole(text);
 	const ibValueStructure* object = AsStructure(value);
 	ASSERT_NE(object, nullptr);
-	ASSERT_EQ(object->Entries().size(), 4000u);
-	EXPECT_TRUE(object->Entries()[0].value.GetNumber() == ibNumber(1)) << "the LAST value of a repeated key";
+	ASSERT_EQ(object->Values().size(), 4000u);
+	EXPECT_TRUE(object->Values()[0].value.GetNumber() == ibNumber(1)) << "the LAST value of a repeated key";
 }
 
 TEST(JsonReader, TheTokensComeInTheOrderOfTheText) {
@@ -159,18 +159,18 @@ TEST(JsonReader, AnObjectKeepsItsKeysAndTheirOrder) {
 	const ibValue value = ReadWhole(wxT("{\"z\":1,\"odd key\":2,\"a\":3}"));
 	const ibValueStructure* object = AsStructure(value);
 	ASSERT_NE(object, nullptr);
-	ASSERT_EQ(object->Entries().size(), 3u);
-	EXPECT_EQ(object->Entries()[0].key.GetString(), ibString(wxT("z")));
-	EXPECT_EQ(object->Entries()[1].key.GetString(), ibString(wxT("odd key")));
-	EXPECT_EQ(object->Entries()[2].key.GetString(), ibString(wxT("a")));
+	ASSERT_EQ(object->Values().size(), 3u);
+	EXPECT_EQ(object->Values()[0].key.GetString(), ibString(wxT("z")));
+	EXPECT_EQ(object->Values()[1].key.GetString(), ibString(wxT("odd key")));
+	EXPECT_EQ(object->Values()[2].key.GetString(), ibString(wxT("a")));
 }
 
 TEST(JsonReader, ANameMetTwiceKeepsItsLastValue) {
 	const ibValue value = ReadWhole(wxT("{\"a\":1,\"b\":2,\"a\":3}"));
 	const ibValueStructure* object = AsStructure(value);
 	ASSERT_NE(object, nullptr);
-	ASSERT_EQ(object->Entries().size(), 2u);
-	EXPECT_TRUE(object->Entries()[0].value.GetNumber() == ibNumber(3));
+	ASSERT_EQ(object->Values().size(), 2u);
+	EXPECT_TRUE(object->Values()[0].value.GetNumber() == ibNumber(3));
 }
 
 // 🛑 A Structure's keys FOLD CASE and JSON's do not. `ab12` and `AB12` are two members there and would be one
@@ -300,7 +300,7 @@ TEST(JsonReader, ReadValueTakesTheValueTheReaderStandsOn) {
 	ASSERT_TRUE(reader.Read());                                   // {
 	const ibValue whole = reader.ReadValue();
 	ASSERT_NE(AsStructure(whole), nullptr);
-	EXPECT_EQ(AsStructure(whole)->Entries().size(), 2u);
+	EXPECT_EQ(AsStructure(whole)->Values().size(), 2u);
 	EXPECT_EQ(reader.CurrentType(), ibJsonValueType_ObjectEnd);
 }
 
@@ -499,7 +499,7 @@ TEST(JsonWriter, ARefusedValueLeavesNothingBehind) {
 }
 
 TEST(JsonWriter, AContainerWithAKeyThatIsNotAStringIsRefused) {
-	const ibValuePtr<ibValueContainer> map(new ibValueContainer());
+	const ibValuePtr<ibValueMap> map(new ibValueMap());
 	map->Insert(ibValue(ibNumber(1)), ibValue(ibString(wxT("x"))));
 	ibValueJsonWriter writer;
 	EXPECT_THROW(writer.WriteValue(map), ibBackendException);

@@ -1,17 +1,15 @@
 // =============================================================================
-// Scheduled and background jobs at run time — BackgroundJobs and ScheduledJobs' verbs (integration scope).
+// Scheduled and background jobs at run time — BackgroundJob and ScheduledJobs.Predefined (integration scope).
 //
 // Two halves, each over a live application (appData env + a SQLite pool), as the tenancy target is:
 //
-//   BACKGROUND — a run started with a label (BackgroundJobs.Execute) is LISTED: found again by its UUID
-//   and in the list, for a while after it ended, and it says where it stands — Active, then Completed,
-//   Failed or Canceled. A second run of the same method under the same key is refused while the first
-//   is active. Runs are rented (ibJobTenancy::Tenant) so the test needs no compiled runtime: being listed
-//   is the label's business, not the tenancy's.
+//   BACKGROUND — a run says where it stands: Active, then Completed, Failed or Cancelled. A rented run is not
+//   in the application's list (GetBackgroundJobs, FindBackgroundJob). A second run of the same method under the same key is refused
+//   while the first is active. Runs are rented (ibJobTenancy::Tenant) and their bodies are C++, so the test
+//   needs no compiled runtime; a standalone run's place in the list is checked on a stand.
 //
-//   SCHEDULED — a predefined job read through ScheduledJob starts from what it DECLARES, and Write
-//   stores the change in sys_job, where the next read finds it. Found by its metaobject and by its UUID,
-//   listed with a filter, and every verb that does not apply to a kind says so instead of doing nothing.
+//   SCHEDULED — a predefined job's row in ScheduledJobs.Predefined starts from what the job DECLARES, and
+//   Write stores the change in sys_job, where the next read finds it.
 //
 // SKIPS (not fails) if the headless environment cannot come up. Its own target, so that bring-up cannot
 // perturb the main suite.
@@ -43,14 +41,20 @@
 #include "backend/session/session.h"
 #include "backend/system/systemManagerEnum.h"
 #include "backend/system/value/valueBackgroundJob.h"
-#include "backend/system/value/valueGuid.h"
-#include "backend/system/value/valueMap.h"
-#include "backend/system/value/valueScheduledJob.h"
+#include "backend/system/value/valueJob.h"
 
 // sys_job is the application's own table, made when a base opens; a configuration run in memory never
 // opens one, so the test makes it the way the opening does.
 struct JobSchemaAccess {
 	static void CreateTableJob() { ibApplicationInstance::CreateTableJob(); }
+};
+
+// A requested run of a C++ body — what RunBackground starts, without a module to name.
+struct JobLaunchAccess {
+	static std::shared_ptr<ibBackgroundRun> Launch(ibJobManager& manager, ibJobManager::ibBackgroundBody body,
+		const ibBackgroundRequest& request) {
+		return manager.Launch(std::move(body), request, request.m_description, ibJobTenancy::Tenant);
+	}
 };
 
 namespace {
@@ -93,12 +97,12 @@ struct JobRuntimeFix : ::testing::Test {
 			ibApplicationInstance::DestroyAppDataEnv();
 	}
 
-	static ibBackgroundLabel Label(const ibString& key, const ibString& description = wxT("a test run")) {
-		ibBackgroundLabel label;
-		label.m_method = wxT("Tests.Run");
-		label.m_key = key;
-		label.m_description = description;
-		return label;
+	static ibBackgroundRequest Request(const ibString& key, const ibString& description = wxT("a test run")) {
+		ibBackgroundRequest request;
+		request.m_method = wxT("Tests.Run");
+		request.m_key = key;
+		request.m_description = description;
+		return request;
 	}
 };
 
@@ -116,6 +120,15 @@ ibValue Prop(ibValue& value, const ibString& name)
 	return result;
 }
 
+ibValue Func(ibValue& value, const ibString& name, ibValue** params = nullptr, long count = 0)
+{
+	ibValue result;
+	const long number = value.FindMethod(name);
+	EXPECT_NE(number, wxNOT_FOUND) << name;
+	value.CallAsFunc(number, result, params, count);
+	return result;
+}
+
 } // namespace
 
 // --------------------------------------------------------------------------
@@ -127,9 +140,8 @@ TEST_F(JobRuntimeFix, ABackgroundJobThatReturnsIsCompleted)
 	if (!ready) GTEST_SKIP();
 	ibJobManager manager(ib::AppDataCtorToken{});
 
-	const ibBackgroundLabel label = Label(wxT("done"), wxT("returns at once"));
-	auto run = manager.StartBackground([](ibSession*) { return ibValue(42); },
-		wxT("returns at once"), ibJobTenancy::Tenant, &label);
+	auto run = JobLaunchAccess::Launch(manager, [](ibSession*) { return ibValue(42); },
+		Request(wxT("done"), wxT("returns at once")));
 
 	ASSERT_TRUE(run->Wait(10000));
 	EXPECT_EQ(run->State(), ibBackgroundJobState_Completed);
@@ -144,7 +156,7 @@ TEST_F(JobRuntimeFix, ABackgroundJobThatReturnsIsCompleted)
 	EXPECT_EQ(Prop(job, wxT("Key")).GetString(), ibString(wxT("done")));
 	EXPECT_EQ(Prop(job, wxT("Description")).GetString(), ibString(wxT("returns at once")));
 	EXPECT_EQ(Prop(job, wxT("MethodName")).GetString(), ibString(wxT("Tests.Run")));
-	EXPECT_TRUE(Prop(job, wxT("ErrorInfo")).GetString().IsEmpty());
+	EXPECT_TRUE(Func(job, wxT("Error")).GetString().IsEmpty());
 
 	manager.Stop();
 }
@@ -154,11 +166,10 @@ TEST_F(JobRuntimeFix, ABackgroundJobThatThrowsIsFailedAndSaysWhy)
 	if (!ready) GTEST_SKIP();
 	ibJobManager manager(ib::AppDataCtorToken{});
 
-	const ibBackgroundLabel label = Label(wxT("broken"));
-	auto run = manager.StartBackground([](ibSession*) -> ibValue {
+	auto run = JobLaunchAccess::Launch(manager, [](ibSession*) -> ibValue {
 			ibBackendCoreException::Error(wxT("the warehouse did not answer"));
 			return ibValue();
-		}, wxT("throws"), ibJobTenancy::Tenant, &label);
+		}, Request(wxT("broken")));
 
 	ASSERT_TRUE(run->Wait(10000));
 	EXPECT_EQ(run->State(), ibBackgroundJobState_Failed);
@@ -166,19 +177,18 @@ TEST_F(JobRuntimeFix, ABackgroundJobThatThrowsIsFailedAndSaysWhy)
 
 	ibValue job(new ibValueBackgroundJob(run));
 	EXPECT_TRUE(Prop(job, wxT("State")) == StateMember(ibBackgroundJobState_Failed));
-	EXPECT_NE(Prop(job, wxT("ErrorInfo")).GetString().Find(wxT("the warehouse did not answer")), wxNOT_FOUND);
+	EXPECT_NE(Func(job, wxT("Error")).GetString().Find(wxT("the warehouse did not answer")), wxNOT_FOUND);
 
 	manager.Stop();
 }
 
-TEST_F(JobRuntimeFix, ABackgroundJobThatIsCancelledIsCanceledNotFailed)
+TEST_F(JobRuntimeFix, ABackgroundJobThatIsCancelledIsCancelledNotFailed)
 {
 	if (!ready) GTEST_SKIP();
 	ibJobManager manager(ib::AppDataCtorToken{});
 
 	std::atomic<bool> started { false };
-	const ibBackgroundLabel label = Label(wxT("long"));
-	auto run = manager.StartBackground([&started](ibSession* session) -> ibValue {
+	auto run = JobLaunchAccess::Launch(manager, [&started](ibSession* session) -> ibValue {
 			started.store(true);
 			// What the interpreter does between opcodes, done by hand: hear the cancel and unwind.
 			const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
@@ -186,7 +196,7 @@ TEST_F(JobRuntimeFix, ABackgroundJobThatIsCancelledIsCanceledNotFailed)
 				std::this_thread::sleep_for(std::chrono::milliseconds(5));
 			ibBackendInterruptException::Error();
 			return ibValue();
-		}, wxT("waits to be cancelled"), ibJobTenancy::Tenant, &label);
+		}, Request(wxT("long")));
 
 	while (!started.load())
 		std::this_thread::sleep_for(std::chrono::milliseconds(5));
@@ -199,43 +209,41 @@ TEST_F(JobRuntimeFix, ABackgroundJobThatIsCancelledIsCanceledNotFailed)
 	// Through the script's door — Cancel() is the procedure a script calls.
 	ASSERT_TRUE(job.CallAsProc(job.FindMethod(wxT("Cancel")), nullptr, 0));
 
-	ibValue timeout(10), waited;
+	ibValue timeout(10000);
 	ibValue* params[] = { &timeout };
-	ASSERT_TRUE(job.CallAsFunc(job.FindMethod(wxT("WaitForExecutionCompletion")), waited, params, 1));
-	EXPECT_EQ(run->State(), ibBackgroundJobState_Canceled)
+	EXPECT_TRUE(Func(job, wxT("Wait"), params, 1).GetBoolean());
+	EXPECT_EQ(run->State(), ibBackgroundJobState_Cancelled)
 		<< "a cancelled run did nothing wrong — it must not read as Failed";
-	EXPECT_TRUE(Prop(job, wxT("State")) == StateMember(ibBackgroundJobState_Canceled));
+	EXPECT_TRUE(Prop(job, wxT("State")) == StateMember(ibBackgroundJobState_Cancelled));
 
 	manager.Stop();
 }
 
 // --------------------------------------------------------------------------
-// Background — listed, found, and one per key
+// Background — held, found, and one per key
 // --------------------------------------------------------------------------
 
-TEST_F(JobRuntimeFix, ALabelledRunIsListedAndFoundByItsUUIDAfterItEnded)
+TEST_F(JobRuntimeFix, ARentedRunIsNotListedNorFoundByItsUUID)
 {
 	if (!ready) GTEST_SKIP();
 	ibJobManager manager(ib::AppDataCtorToken{});
 
-	const ibBackgroundLabel label = Label(wxT("found"));
-	auto listed = manager.StartBackground([](ibSession*) { return ibValue(); },
-		wxT("listed"), ibJobTenancy::Tenant, &label);
-	auto unlisted = manager.StartBackground([](ibSession*) { return ibValue(); },
-		wxT("a form's read"), ibJobTenancy::Tenant);
-	ASSERT_TRUE(listed->Wait(10000));
-	ASSERT_TRUE(unlisted->Wait(10000));
+	std::atomic<bool> release { false };
+	auto run = JobLaunchAccess::Launch(manager, [&release](ibSession*) {
+			while (!release.load())
+				std::this_thread::sleep_for(std::chrono::milliseconds(5));
+			return ibValue();
+		}, Request(wxT("rented")));
 
-	// The tick lets a finished run's session go; the listed handle must outlive that.
+	ASSERT_TRUE(run->UUID().isValid()) << "a run whose session came up is named by it";
+	EXPECT_EQ(manager.FindBackgroundJob(run->UUID()), nullptr)
+		<< "a read rented for a form is the form's business, not the application's list";
+	EXPECT_TRUE(manager.GetBackgroundJobs().empty());
+
+	release.store(true);
+	ASSERT_TRUE(run->Wait(10000));
 	manager.Tick();
-
-	EXPECT_EQ(manager.FindBackgroundRun(listed->UUID()), listed);
-	EXPECT_EQ(manager.FindBackgroundRun(unlisted->UUID()), nullptr)
-		<< "a run started without a label is its caller's business, not the list's";
-
-	const auto runs = manager.BackgroundRuns();
-	ASSERT_EQ(runs.size(), 1u);
-	EXPECT_EQ(runs.front(), listed);
+	EXPECT_TRUE(manager.GetBackgroundJobs().empty());
 
 	manager.Stop();
 }
@@ -246,41 +254,39 @@ TEST_F(JobRuntimeFix, ASecondRunUnderTheSameKeyIsRefusedWhileTheFirstIsActive)
 	ibJobManager manager(ib::AppDataCtorToken{});
 
 	std::atomic<bool> release { false };
-	const ibBackgroundLabel label = Label(wxT("upload"));
-	auto first = manager.StartBackground([&release](ibSession*) {
+	const ibBackgroundRequest request = Request(wxT("upload"));
+	auto first = JobLaunchAccess::Launch(manager, [&release](ibSession*) {
 			while (!release.load())
 				std::this_thread::sleep_for(std::chrono::milliseconds(5));
 			return ibValue();
-		}, wxT("first"), ibJobTenancy::Tenant, &label);
+		}, request);
 
-	EXPECT_THROW(manager.StartBackground([](ibSession*) { return ibValue(); },
-		wxT("second"), ibJobTenancy::Tenant, &label), ibBackendException)
+	EXPECT_THROW(JobLaunchAccess::Launch(manager, [](ibSession*) { return ibValue(); }, request), ibBackendException)
 		<< "a double click must not start the same work twice";
 
-	const ibBackgroundLabel other = Label(wxT("download"));
-	std::shared_ptr<ibBackgroundRun> third;
-	EXPECT_NO_THROW(third = manager.StartBackground([](ibSession*) { return ibValue(); },
-		wxT("third"), ibJobTenancy::Tenant, &other)) << "another key is another piece of work";
+	std::shared_ptr<ibBackgroundRun> other;
+	EXPECT_NO_THROW(other = JobLaunchAccess::Launch(manager, [](ibSession*) { return ibValue(); },
+		Request(wxT("download")))) << "another key is another piece of work";
 
 	release.store(true);
 	ASSERT_TRUE(first->Wait(10000));
-	if (third) third->Wait(10000);
+	if (other) other->Wait(10000);
 
 	std::shared_ptr<ibBackgroundRun> again;
-	EXPECT_NO_THROW(again = manager.StartBackground([](ibSession*) { return ibValue(); },
-		wxT("again"), ibJobTenancy::Tenant, &label)) << "the key is free once its run ended";
+	EXPECT_NO_THROW(again = JobLaunchAccess::Launch(manager, [](ibSession*) { return ibValue(); }, request))
+		<< "the key is free once its run ended";
 	if (again) again->Wait(10000);
 
 	manager.Stop();
 }
 
 // --------------------------------------------------------------------------
-// Scheduled — a predefined job, read and written through ScheduledJob
+// Scheduled — a predefined job's row, read and written
 // --------------------------------------------------------------------------
 
 namespace {
 
-struct ScheduledJobFix : ::testing::Test {
+struct PredefinedJobsFix : ::testing::Test {
 	wxInitializer m_wxInit;
 	const short m_codeStyle = ibCompileCode::GetCodeStyle();
 	std::shared_ptr<ibDatabaseLayerSQLite> db;
@@ -339,8 +345,16 @@ struct ScheduledJobFix : ::testing::Test {
 		}
 	}
 
-	ibValue Find(ibValueMetaObjectScheduledJob* job) {
-		return ibValueScheduledJob::FindPredefined(cfg.get(), ibValue(job));
+	// The row of one job in ScheduledJobs.Predefined, read afresh — a new collection reads the base again.
+	ibValue Row(const ibString& name) {
+		ibValuePtr<ibValuePredefinedJobs> predefined(new ibValuePredefinedJobs(cfg.get()));
+		for (const ibValue& row : predefined->Values()) {
+			ibValue held = row;
+			if (Prop(held, wxT("Name")).GetString() == name)
+				return held;
+		}
+		ADD_FAILURE() << "no row for " << name;
+		return ibValue();
 	}
 };
 
@@ -351,110 +365,42 @@ void SetProp(ibValue& value, const ibString& name, const ibValue& to)
 	value.SetPropVal(number, to);
 }
 
-void Call(ibValue& value, const ibString& name)
-{
-	const long number = value.FindMethod(name);
-	ASSERT_NE(number, wxNOT_FOUND) << name;
-	value.CallAsProc(number, nullptr, 0);
-}
-
 } // namespace
 
-TEST_F(ScheduledJobFix, APredefinedJobStartsFromWhatItDeclares)
+TEST_F(PredefinedJobsFix, APredefinedJobStartsFromWhatItDeclares)
 {
 	if (!ready) GTEST_SKIP();
 
-	ibValue off = Find(cleanup);
-	ibValue on = Find(backup);
-	EXPECT_FALSE(Prop(off, wxT("Use")).GetBoolean())
+	ibValue off = Row(wxT("Cleanup"));
+	ibValue on = Row(wxT("Backup"));
+	EXPECT_FALSE(Prop(off, wxT("Active")).GetBoolean())
 		<< "a base that never wrote the job's row runs it as declared — and it is declared off";
-	EXPECT_TRUE(Prop(on, wxT("Use")).GetBoolean());
-	EXPECT_TRUE(Prop(off, wxT("Predefined")).GetBoolean());
-	EXPECT_EQ(Prop(off, wxT("Key")).GetString(), ibString(wxT("Cleanup")));
+	EXPECT_TRUE(Prop(on, wxT("Active")).GetBoolean());
 	EXPECT_TRUE(Prop(off, wxT("LastRun")).GetDate().IsEmpty());
 	EXPECT_TRUE(Prop(off, wxT("LastJob")).IsEmpty()) << "a job that never ran here has no last run to show";
 }
 
-TEST_F(ScheduledJobFix, WriteStoresTheSwitchAndTheScheduleWhereTheNextReadFindsThem)
+TEST_F(PredefinedJobsFix, WriteStoresTheSwitchAndTheScheduleWhereTheNextReadFindsThem)
 {
 	if (!ready) GTEST_SKIP();
 
-	ibValue job = Find(backup);
-	SetProp(job, wxT("Use"), ibValue(false));
+	ibValue job = Row(wxT("Backup"));
+	SetProp(job, wxT("Active"), ibValue(false));
 	ibJobScheduleDescription schedule;
 	schedule.m_intervalSeconds = 600;
 	SetProp(job, wxT("Schedule"), ibValue(new ibValueSchedule(schedule)));
-	Call(job, wxT("Write"));
+	EXPECT_TRUE(Func(job, wxT("Write")).GetBoolean());
 
 	const ibJobManager::ibJobSettings stored = ibJobManager::ReadSharedSettings(backup->GetGuid());
 	ASSERT_TRUE(stored.m_found) << "Write must leave a row in sys_job";
-	EXPECT_FALSE(stored.m_active);
+	EXPECT_FALSE(stored.m_active) << "a switch written off is read back off";
 	EXPECT_EQ(stored.m_schedule.m_intervalSeconds, 600);
 
-	ibValue again = Find(backup);
-	EXPECT_FALSE(Prop(again, wxT("Use")).GetBoolean());
+	ibValue again = Row(wxT("Backup"));
+	EXPECT_FALSE(Prop(again, wxT("Active")).GetBoolean());
 	const ibValue readValue = Prop(again, wxT("Schedule"));   // held: the pointer below is into it
 	ibValueSchedule* read = nullptr;
 	ASSERT_TRUE(readValue.ConvertToValue(read));
 	ASSERT_NE(read, nullptr);
 	EXPECT_EQ(read->GetSchedule().m_intervalSeconds, 600);
-}
-
-TEST_F(ScheduledJobFix, APredefinedJobIsFoundByItsUUIDAndListedByAFilter)
-{
-	if (!ready) GTEST_SKIP();
-
-	ibValue byUuid = ibValueScheduledJob::FindByUUID(cfg.get(), ibValue(new ibValueGuid(cleanup->GetGuid())));
-	ASSERT_FALSE(byUuid.IsEmpty());
-	EXPECT_EQ(Prop(byUuid, wxT("Key")).GetString(), ibString(wxT("Cleanup")));
-
-	ibValue byText = ibValueScheduledJob::FindByUUID(cfg.get(), ibValue(ibGuid(cleanup->GetGuid()).str()));
-	EXPECT_FALSE(byText.IsEmpty()) << "a UUID's text is a UUID too";
-
-	EXPECT_TRUE(ibValueScheduledJob::FindByUUID(cfg.get(), ibValue(new ibValueGuid(ibGuid(ibGuid::newGuid())))).IsEmpty())
-		<< "no such job is an answer, not an error";
-
-	ibValueArray* all = nullptr;
-	ibValue every = ibValueScheduledJob::GetScheduledJobs(cfg.get(), ibValue());
-	ASSERT_TRUE(every.ConvertToValue(all));
-	EXPECT_EQ(all->Count(), 2u);
-
-	ibValuePtr<ibValueStructure> filter(new ibValueStructure());
-	filter->Insert(ibValue(ibString(wxT("Use"))), ibValue(true));
-	ibValueArray* used = nullptr;
-	ibValue usedValue = ibValueScheduledJob::GetScheduledJobs(cfg.get(), ibValue(filter));
-	ASSERT_TRUE(usedValue.ConvertToValue(used));
-	ASSERT_EQ(used->Count(), 1u);
-	ibValue only = used->Values().front();
-	EXPECT_EQ(Prop(only, wxT("Key")).GetString(), ibString(wxT("Backup")));
-
-	ibValuePtr<ibValueStructure> misspelt(new ibValueStructure());
-	misspelt->Insert(ibValue(ibString(wxT("Usage"))), ibValue(true));
-	EXPECT_THROW(ibValueScheduledJob::GetScheduledJobs(cfg.get(), ibValue(misspelt)), ibBackendException)
-		<< "a filter field that names nothing must not answer with every job";
-}
-
-TEST_F(ScheduledJobFix, WhatAPredefinedJobCannotDoIsRefusedByName)
-{
-	if (!ready) GTEST_SKIP();
-
-	EXPECT_THROW(ibValueScheduledJob::CreateScheduledJob(cfg.get(), ibValue(cleanup)), ibBackendException)
-		<< "a predefined job exists once";
-	EXPECT_THROW(ibValueScheduledJob::FindPredefined(cfg.get(), ibValue(ibString(wxT("NoSuchJob")))), ibBackendException);
-
-	ibValue job = Find(cleanup);
-	EXPECT_THROW(Call(job, wxT("Delete")), ibBackendException) << "it is declared, not stored";
-	EXPECT_THROW(SetProp(job, wxT("Key"), ibValue(ibString(wxT("other")))), ibBackendException);
-	EXPECT_THROW(SetProp(job, wxT("Description"), ibValue(ibString(wxT("other")))), ibBackendException);
-
-	ibValuePtr<ibValueStructure> parameters(new ibValueStructure());
-	parameters->Insert(ibValue(ibString(wxT("Node"))), ibValue(1));
-	EXPECT_THROW(SetProp(job, wxT("Parameters"), ibValue(parameters)), ibBackendException)
-		<< "a predefined job takes no parameters";
-	EXPECT_THROW(SetProp(job, wxT("Schedule"), ibValue(600)), ibBackendException)
-		<< "a schedule is a JobSchedule, not a number of seconds";
-
-	// …and found by name, as well as by the metaobject.
-	ibValue byName = ibValueScheduledJob::FindPredefined(cfg.get(), ibValue(ibString(wxT("Cleanup"))));
-	EXPECT_EQ(Prop(byName, wxT("Key")).GetString(), ibString(wxT("Cleanup")));
 }
