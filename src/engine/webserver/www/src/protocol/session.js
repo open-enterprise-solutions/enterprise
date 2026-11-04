@@ -74,13 +74,21 @@ export class Session extends EventTarget {
 	 * @param {string} password
 	 */
 	async login(user, password) {
-		const answer = await this.connection.call('login', { User: user, Password: password, Protocol: protocol,
-			Features: [resumeFeature] });
-		this.client = answer.Client;
-		// The bearer comes once — and only from a server that offers to keep the session.
-		this.token = (answer.Features ?? []).includes(resumeFeature) ? answer.Token ?? null : null;
-		this.take(answer);
-		return answer;
+		// IN THE QUEUE every call waits in. The start's own work can change the frame after it is drawn (a report composing
+		// as its form opens), and the server tells it — `changed` — before this answer has said who the client is: the
+		// frame asked for then goes once the Client is known. Sent with none, it was refused (401, no such client) and
+		// the session ended as it began (2026-11-04).
+		const next = this.queue.then(async () => {
+			const answer = await this.connection.call('login', { User: user, Password: password, Protocol: protocol,
+				Features: [resumeFeature] });
+			this.client = answer.Client;
+			// The bearer comes once — and only from a server that offers to keep the session.
+			this.token = (answer.Features ?? []).includes(resumeFeature) ? answer.Token ?? null : null;
+			this.take(answer);
+			return answer;
+		});
+		this.queue = next.catch(() => {});
+		return next;
 	}
 
 	/**

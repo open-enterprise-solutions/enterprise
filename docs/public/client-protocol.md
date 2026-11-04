@@ -398,6 +398,10 @@ What a call's own work changes is not told: its answer carries it. A question th
 answered — a confirmation answered No — comes in that answer, with no `changed` and no empty frame after it; a change
 made after the answer's frame was drawn (a report composed in the background) is told as before.
 
+A login's start is such work too: what changes after its frame was drawn can be told before the login's answer has
+given the client its `Client`. The client asks for its frame once that answer is in — never with no `Client`, which is
+refused (401).
+
 A notification begins `{"jsonrpc":"2.0","method":` — where an answer has its `id` — and a client tells the two apart
 by that, whatever the length.
 

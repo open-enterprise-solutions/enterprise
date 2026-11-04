@@ -42,6 +42,7 @@
 			this.loginLatency = scenario.loginLatency ?? this.latency;
 			this.users = scenario.users ?? [];
 			this.password = scenario.password ?? '';
+			this.title = scenario.title ?? 'Test base';
 			/** @type {any[]} the forms open, a tab each */
 			this.tabs = (scenario.tabs ?? []).map((tab, place) => ({ id: place + 1, ...tab }));
 			this.active = this.tabs.length > 0 ? 1 : 0;
@@ -83,7 +84,7 @@
 			const tab = this.tab();
 			return {
 				Frame: ++this.frame,
-				Title: scenario.title ?? 'Test base',
+				Title: this.title,
 				Status: 'Ready',
 				Menu: scenario.menu ?? {},
 				Tabs: { NodeChildren: this.tabs.map((one) => ({ NodeId: one.id, Title: one.title, Locked: one.locked === true,
@@ -192,6 +193,10 @@
 		}
 
 		handle(method, params) {
+			// A client's call names the Client its login gave: one with none, or another, is refused as frmserver refuses
+			// it (ibClientHost::Call, 401).
+			if (method !== 'users' && method !== 'login' && params.Client !== 'test')
+				throw { code: 401, message: 'no such client' };
 			switch (method) {
 			case 'users':
 				return { Users: this.users };
@@ -289,6 +294,12 @@
 				reply = { id: message.id, error: refusal };
 			}
 			const server = window.fake;
+			// A start whose own work changed the frame after it was drawn (`changedAtLogin`: the title it has then): told
+			// at once, the login's answer still on its way — as frmserver tells it (ibClientHost::NotifyChanged).
+			if (message.method === 'login' && reply.result !== undefined && scenario.changedAtLogin !== undefined) {
+				server.title = scenario.changedAtLogin;
+				this.notify('changed');
+			}
 			const wait = message.method === 'fetch' ? server.fetchLatency : message.method === 'login' ? server.loginLatency : server.latency;
 			setTimeout(() => this.onmessage?.({ data: encode(reply) }), wait);
 		}

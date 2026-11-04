@@ -56,6 +56,13 @@ class Login(PageTest):
         page.wait_for_function("document.querySelector('form.login .refusal').textContent.includes('wrong')", timeout=5000)
         self.assertEqual(page.locator('.client-window').count(), 0)
 
+    def test_a_change_told_before_the_login_is_answered_is_asked_for_after_it(self):
+        page = self.start({'tabs': [tab()], 'title': 'Trade', 'changedAtLogin': 'Trade, started', 'loginLatency': 200})
+        page.wait_for_function("document.querySelector('header h1').textContent === 'Trade, started'", timeout=5000)
+        frames = page.evaluate("window.fake.calls.filter((call) => call.method === 'frame').map((call) => call.params.Client ?? null)")
+        self.assertNotIn(None, frames, 'the frame was asked for before the login said who the client is')
+        self.assertEqual(page.locator('.ended').count(), 0)
+
 
 class Header(PageTest):
     def test_the_logo_stands_beside_the_name_of_the_configuration(self):
