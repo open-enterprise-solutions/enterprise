@@ -8,6 +8,7 @@
 
 ///////////////////////////////////////////////////
 class BACKEND_API ibBackendValueForm;
+struct BACKEND_API ibChoiceHolder;
 template <class T> class ibFormPtr;   // below — the owning reference a form is handed out by
 ///////////////////////////////////////////////////
 
@@ -130,6 +131,10 @@ public:
 	virtual void NotifyDelete(const ibValue& vChanged) = 0;
 
 	virtual void NotifyChoice(ibValue& vSelected) = 0;
+
+	// A field of this form's source changed (ibChoiceLinkResolver::ClearLinked): the fields chosen under rows of
+	// their own that name it, standing in that holder, are emptied.
+	virtual void ClearLinked(ibChoiceHolder& holder, const ibMetaID& edited) = 0;
 
 	//form event
 	virtual void ActivateForm() = 0;

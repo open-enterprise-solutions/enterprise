@@ -19,6 +19,14 @@ void ibValueModelTableBoxColumn::OnPropertyRefresh()
 			&& so->GetMetaTypeCtor() == ibCtorObjectMetaType::ibCtorObjectMetaType_Reference;
 	}
 	HideProperty(m_propertyChoiceForm, !hasChoice);
+
+	// How a reference is picked, and what is shown to pick it from — only where the column holds a reference.
+	bool hasReference = false;
+	for (const ibClassID& clsid : GetTypeDesc().GetClsidList())
+		hasReference = hasReference || ::IsReference(clsid);
+	HideProperty(m_propertyQuickChoice, !hasReference);
+	HideProperty(m_propertyChoiceFoldersAndItems, !hasReference);
+	HideProperty(m_propertyChoiceParameters, !hasReference);
 }
 
 bool ibValueModelTableBoxColumn::OnPropertyChanging(ibProperty* property, const ibVariant& newValue)

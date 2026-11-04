@@ -11,6 +11,7 @@
 #include "backend/compiler/value.h"
 #include "backend/createRequest.h"   // ibSelectMode (GetSelectMode's return type)
 #include "backend/choiceLinkResolver.h"             // ibChoiceHolder — who holds this control's field
+#include "frmserver/visualView/controlEnum.h"        // ibQuickChoiceMode, ibChoiceFoldersAndItems — the field's own word
 ///////////////////////////////////////////////////////////////////////////
 
 class BACKEND_API ibMetaData;
@@ -111,6 +112,16 @@ public:
 	// Empty by default: a control bound to nothing — a filter cell, a script's value — holds no fields
 	// and nothing is chosen within it.
 	virtual ibChoiceHolder GetChoiceHolder() const { return ibChoiceHolder(); }
+
+	// ⭐ WHAT THE FIELD ITSELF SAYS ABOUT ITS CHOICE, over what its type and its attribute say (issue #259). A text
+	// field and a table column hand over their properties' values; what they mean is decided here, in ChooseValue
+	// and GetSelectMode. The defaults leave the type's and the attribute's answers standing.
+	virtual ibQuickChoiceMode GetQuickChoiceMode() const { return ibQuickChoiceMode::ibQuickChoiceMode_Auto; }
+	virtual ibChoiceFoldersAndItems GetChoiceFoldersAndItems() const { return ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_Auto; }
+	virtual const ibChoiceParametersDescription& GetChoiceParameters() const {
+		static const ibChoiceParametersDescription s_none;
+		return s_none;
+	}
 };
 
 #endif

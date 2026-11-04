@@ -37,6 +37,14 @@ struct BACKEND_API ibChoiceHolder {
 
 	bool IsOk() const { return m_source != nullptr || m_table != nullptr; }
 
+	// The same holder: the same table and row where either is a row, otherwise the same object. A form asks
+	// it of its fields to find those standing where a value just changed.
+	bool operator==(const ibChoiceHolder& other) const {
+		if (m_table != nullptr || other.m_table != nullptr)
+			return m_table == other.m_table && m_row == other.m_row;
+		return m_source == other.m_source;
+	}
+
 	// The value a link's path names, and the empty value written back into a field it governs.
 	bool GetValue(const ibSourceDescription& path, ibValue& value) const;
 	bool SetValue(const ibMetaID& id, const ibValue& value);
@@ -93,8 +101,12 @@ public:
 	//
 	// A field of nullptr — a control bound to nothing, a filter cell, a script's value — carries no
 	// condition, which is the honest answer there rather than a refusal.
+	//
+	// ⭐ …AND A FORM FIELD MAY SAY MORE THAN ITS ATTRIBUTE: `rows` are the field's own, the same table read
+	// against the same holder. A row naming a parameter the attribute also names replaces the attribute's
+	// row, the others are added to them (SetRow). No rows: the attribute's answer as it stands (issue #259).
 	static ibChoiceCondition Resolve(const ibChoiceHolder& holder,
-		const ibValueMetaObjectAttributeBase* field);
+		const ibValueMetaObjectAttributeBase* field, const ibChoiceParametersDescription& rows);
 
 	// ⭐⭐ A NEW RECORD MADE IN A NARROWED LIST IS BORN MATCHING IT. The list a person pressed Add in
 	// shows only contracts of one counterparty; a new row without that counterparty is not merely
@@ -117,7 +129,17 @@ public:
 	// ⭐ AND IT FOLLOWS THROUGH: a field emptied here may itself govern a third, whose value is now just
 	// as stale. The walk carries on until nothing more is emptied — a chain nobody would think to write
 	// a handler for, and the first one a person builds by accident.
+	//
+	// ⭐ AND THE FORM OPEN ON THE SOURCE HEARS IT, through the same verb: its fields' own rows are applied
+	// there (ibBackendValueForm::ClearLinked), once, on a change — whatever wrote the value, a person in the
+	// form or a module.
 	static void ClearLinked(ibChoiceHolder& holder, const ibMetaID& edited);
+
+	// ⭐ THE SAME EMPTYING, ASKED BY A FORM FIELD'S OWN ROWS: `field` stands in `holder` and was chosen under
+	// `rows`, and `edited` just changed there. Emptied the way the attribute's own rows empty it, unless every
+	// row that names `edited` says Keep. The form asks it of each of its fields (ibValueForm::ClearLinked).
+	static void ClearLinked(ibChoiceHolder& holder, const ibMetaID& edited,
+		const ibValueMetaObjectAttributeBase* field, const ibChoiceParametersDescription& rows);
 
 	// ⭐⭐ THE VALUE, ADJUSTED TO WHAT ITS LINK SETTLES ON — the ONE line a holder writes through. A
 	// field's CONTOUR (what it may ever hold) is the attribute's own answer and needs nobody's help;
