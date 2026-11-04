@@ -154,6 +154,8 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   says `State` (`BackgroundJobState`: `Active`, `Completed`, `Failed`, `Cancelled`), `Begin`, `End`,
   `Key`, `Description`, `MethodName` and `UUID`. `Cancel()` did nothing when called as a statement; it
   cancels now.
+  The assistant's `code_status` and `code_cancel` answer from the same list, and their help says so: a code
+  run is answered while it runs and among the last 256 that ended, and as unknown after that.
 - **A scheduled job's last pass.** A row of `ScheduledJobs.Predefined` has `LastJob`, and a parameterized
   job's manager `LastJob(job)`: the `BackgroundJob` of its last pass here, `Undefined` if none ran. A
   predefined job the base has no settings for reads as declared; it read as switched on, hourly.

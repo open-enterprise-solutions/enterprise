@@ -93,6 +93,7 @@
 #include "backend/session/workerPool.h"       // …on the thread that owns what it is checked against
 #include "backend/metadataConfiguration.h"    // activeMetaData - whose configuration it checks against
 #include "backend/system/systemEnum.h"        // ibStatusMessage - the level of what the code said
+#include "backend/job/jobManager.h"           // ibJobManager::kKeptBackgroundJobs - how many ended runs are answered for
 
 namespace {
 
@@ -194,7 +195,11 @@ const ibArg& ArgSession()
 			  "the person's own Active Users if they want to stop it themselves.\n"
 			  "It names a run in the APPLICATION, not in this conversation - so it still answers "
 			  "after a reconnect, and a run somebody else started can be asked after with theirs. It "
-			  "dies when the application does."),
+			  "dies when the application does.\n"
+			  "AN ENDED RUN IS ANSWERED FOR A WHILE, NOT FOR EVER: the application keeps the runs that are "
+			  "going and the last ") + ibString::Format(ibT("%zu"), ibJobManager::kKeptBackgroundJobs)
+			+ ibMcpText(" that ended (its policy on ended runs). One that dropped out of them answers as unknown, "
+			  "the way a run that never existed does - its journal lines, read by the same session id, stay."),
 		/*required*/ true);
 	return s_a;
 }
