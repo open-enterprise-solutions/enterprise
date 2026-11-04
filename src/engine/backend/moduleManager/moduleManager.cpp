@@ -10,10 +10,12 @@
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
 #include "backend/metadataConfiguration.h"
+#include "backend/system/value/valuePicture.h"
 
 #define objectManager ibT("Manager")
 #define objectMetadataManager ibT("Metadata")
 #define objectDataManager ibT("Data")
+#define pictureLibrary ibT("PictureLib")
 
 //*********************************************************************************************************
 //*                          ibValueModuleManager — lightweight base                                    *
@@ -334,6 +336,30 @@ ibValueModuleManagerRuntimeConfiguration::ibValueModuleManagerRuntimeConfigurati
 	BindExportVariable(objectDataManager, m_dataManager);
 }
 
+// The objects a main module's scope is made of, made for this manager and held while it is up: the context types'
+// (EnumManager / SystemManager — transparent scope containers, their names are not identifiers) and, after them,
+// PictureLib (a name a script reads, its properties the pictures of this manager's configuration and the engine's).
+void ibValueModuleManager::BindContextManagers()
+{
+	for (auto ctor : ibValue::GetListCtorsByType(ibCtorObjectType_object_context)) {
+		const ibValue created = ctor->CreateObject();
+		BindScopeVariable(ctor->GetClassName(), created.GetRef());
+		m_listContextManager.emplace_back(ctor->GetClassName(), created);
+	}
+
+	const ibValue library(new ibValuePictureLib(m_metaManager->GetMetaData()));
+	BindContextVariable(pictureLibrary, library.GetRef());
+	m_listContextManager.emplace_back(pictureLibrary, library);
+}
+
+// Each name BindContextManagers bound, unbound, and the objects let go.
+void ibValueModuleManager::UnbindContextManagers()
+{
+	for (const auto& [name, value] : m_listContextManager)
+		UnbindVariable(name);
+	m_listContextManager.clear();
+}
+
 //main module - initialize
 bool ibValueModuleManagerRuntimeConfiguration::CreateMainModule()
 {
@@ -369,12 +395,7 @@ bool ibValueModuleManagerRuntimeConfiguration::CreateMainModule()
 	// identifier, only its props/methods (Catalogs / Documents / …) surface.
 	BindScopeVariable(objectManager, m_objectManager);
 
-	for (auto ctor : ibValue::GetListCtorsByType(ibCtorObjectType_object_context)) {
-		// EnumManager / SystemManager — transparent scope containers too; made for this manager, held by it.
-		const ibValue created = ctor->CreateObject();
-		BindScopeVariable(ctor->GetClassName(), created.GetRef());
-		m_listContextManager.emplace_back(created);
-	}
+	BindContextManagers();
 
 	// Compile only — runtime (ibProcUnit) is created per session by
 	// AttachRuntime(ctx). The manager itself no longer carries
@@ -427,10 +448,7 @@ bool ibValueModuleManagerRuntimeConfiguration::DestroyMainModule()
 	//create singleton "manager"
 	UnbindVariable(objectManager);
 
-	for (auto ctor : ibValue::GetListCtorsByType(ibCtorObjectType_object_context)) {
-		UnbindVariable(ctor->GetClassName());
-	}
-	m_listContextManager.clear();
+	UnbindContextManagers();
 
 	//reset global module
 	ResetByteCode();
@@ -548,12 +566,7 @@ bool ibValueModuleManagerDesigner::CreateMainModule()
 	// editor identifier; its props Catalogs / Documents / Enums surface).
 	BindScopeVariable(objectManager, m_objectManager);
 
-	//ctor-context objects (EnumManager / SystemManager) — transparent too; made for this manager, held by it.
-	for (auto ctor : ibValue::GetListCtorsByType(ibCtorObjectType_object_context)) {
-		const ibValue created = ctor->CreateObject();
-		BindScopeVariable(ctor->GetClassName(), created.GetRef());
-		m_listContextManager.emplace_back(created);
-	}
+	BindContextManagers();
 
 	// No unit compilation here — see AddCommonModule. The editor parses common
 	// modules' text for exports; the designer never executes script.
@@ -576,10 +589,7 @@ bool ibValueModuleManagerDesigner::DestroyMainModule()
 	// tear down just the per-bring-up scope bindings here.
 	UnbindVariable(objectManager);
 
-	for (auto ctor : ibValue::GetListCtorsByType(ibCtorObjectType_object_context)) {
-		UnbindVariable(ctor->GetClassName());
-	}
-	m_listContextManager.clear();
+	UnbindContextManagers();
 
 	m_populated = false;
 	return true;
