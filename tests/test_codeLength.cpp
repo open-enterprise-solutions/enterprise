@@ -475,17 +475,17 @@ protected:
 
 TEST_F(FirebirdCodeLength, ALongerCodeLengthAltersTheColumnAndKeepsTheCodes)
 {
+	// The rows are the seed's - each a predefined item with a reference of its own. A row written by hand
+	// with no reference would collide with the next one on the data-reference unique index (_REF_UQ), as a
+	// row of the application never does.
 	ASSERT_TRUE(m_cfg->RunDatabase());
+	m_firms->AppendPredefinedValue(Item(wxT("Main"), wxT("00000001"), wxT("Main firm")));
 	ibRestructureInfo created;
 	ASSERT_EQ(Create(created), 1);
 
 	const ibString table = m_firms->GetPhysicalTableName();
 	const ibString field = CodeField(ibColumnRole::String);
 	ASSERT_FALSE(field.IsEmpty());
-	ASSERT_GE(db_query->RunQuery(wxT("%s"),
-		ibString::Format(wxT("INSERT INTO %s (%s) VALUES ('00000001')"), table, field)), 0);
-	if (db_query->IsActiveTransaction())
-		db_query->Commit();
 
 	// The declaration as it was saved, and as it is now: the snapshot holds the live columns, so the
 	// one it was is read off a copy of the configuration.
@@ -496,15 +496,12 @@ TEST_F(FirebirdCodeLength, ALongerCodeLengthAltersTheColumnAndKeepsTheCodes)
 	ASSERT_TRUE(was.RunDatabase());   // run, as the saved one is: its references are typed on the run
 	const ibSchemaSnapshot before = was.BuildSchemaSnapshot();
 
+	// A longer code over a table that holds one, and an item that needs the longer one.
 	ASSERT_TRUE(Set(m_firms, wxT("CodeLength"), ibVariant(9u)));
+	m_firms->AppendPredefinedValue(Item(wxT("Second"), wxT("000000002"), wxT("Second firm")));
 	ibRestructureInfo ledger;
 	ASSERT_EQ(Apply(&before, m_cfg->BuildSchemaSnapshot(), ledger), 1);
 	EXPECT_FALSE(ledger.HasErrors());
-
-	ASSERT_GE(db_query->RunQuery(wxT("%s"),
-		ibString::Format(wxT("INSERT INTO %s (%s) VALUES ('000000002')"), table, field)), 0);
-	if (db_query->IsActiveTransaction())
-		db_query->Commit();
 
 	std::vector<ibString> codes;
 	ibQueryResult rows = ibDatabaseQueryBuilder().From(table).Select({ field }).Execute();
