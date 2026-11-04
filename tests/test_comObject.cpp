@@ -44,7 +44,7 @@ private:
 	HRESULT m_hr = E_FAIL;
 };
 
-::testing::Environment* const s_comApartment = ::testing::AddGlobalEnvironment(new ibComApartmentEnvironment);
+::testing::Environment* const s_comApartment = ::testing::AddGlobalTestEnvironment(new ibComApartmentEnvironment);
 #endif
 
 // New <typeName>(args), the way a script's New reaches it. A refusal comes back as its text.
