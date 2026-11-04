@@ -24,6 +24,7 @@
     "hashing": "Hashing, base64 and hex",
     "forms": "Forms — what a form shows",
     "com": "COM objects and add-ins",
+    "jobs": "Scheduled and background jobs",
     "runtime": "Runtime",
     "guide": "Guide",
     "sequences": "Sequences"

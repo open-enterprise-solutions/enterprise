@@ -135,8 +135,13 @@ ibJobManager::ibJobSettings ibJobManager::ReadSharedSettings(const ibGuid& key)
 
 			// An absent / NULL active reads as ON. A row written before the column existed must
 			// not turn its job off — silence is not a refusal.
+			//
+			// ⚠ ABSENT, NOT EMPTY: a False is an empty value (IsEmpty answers true for it, and for a
+			// stored 0), so asking IsEmpty read every switched-off job back as switched on — `Write()`
+			// of Active = False held until the next read of the row.
 			const ibValue active = rs.GetValue(3);
-			settings.m_active = active.IsNull() || active.IsEmpty() ? true : active.GetBoolean();
+			const bool absent = active.IsNull() || active.GetType() == ibValueTypes::TYPE_EMPTY;
+			settings.m_active = absent ? true : active.GetBoolean();
 
 			// The schedule rides as opaque bytes — read through the blob door, not as a value: it
 			// is a description, and its format belongs to ibJobScheduleDescriptionMemory alone.
