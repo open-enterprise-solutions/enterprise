@@ -92,7 +92,9 @@
 				// The schemas this server offers (ibFrame::Schemas): a scenario names them, when one is asked for by its number.
 				...(scenario.schemaKinds !== undefined ? { Schemas: scenario.schemaKinds } : {}),
 				Tabs: { NodeChildren: this.tabs.map((one) => ({ NodeId: one.id, Title: one.title, Locked: one.locked === true,
-					...(one.columns !== undefined ? { Kind: homePageKind } : {}) })) },
+					...(one.columns !== undefined ? { Kind: homePageKind } : {}),
+					// The commands its document takes now (ibTab::Commands): a scenario's tab names them.
+					...(one.commands !== undefined ? { Commands: one.commands } : {}) })) },
 				ActiveTab: this.active,
 				...(tab !== undefined ? { View: this.view(tab) } : {}),
 				...(this.request !== undefined ? { Request: this.request } : {}),
@@ -221,6 +223,12 @@
 					return this.answerFrame();
 				}
 				return this.closed(params.Tab);
+			case 'command':
+				// On the active tab's document — refused when it does not take the command now, as frmserver refuses it
+				// (ibClientHost::Call, NotNow).
+				if (!(this.tab()?.commands ?? []).includes(params.Command))
+					throw { code: 409, message: 'the active document does not take this command now' };
+				return this.answerFrame();
 			case 'fetch':
 				return this.fetch((this.forms.get(params.Form) ?? this.tab()).table, params.Request);
 			case 'event':

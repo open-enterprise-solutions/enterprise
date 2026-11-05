@@ -4,10 +4,14 @@
 // opens and keeps it for its life, so it is laid out once; each cell's form is folded in after that as a tab's is.
 
 import { Control, reconcile } from '../controls/control.js';
+import { TabDocument, defineDocument } from '../docView/tabDocument.js';
 
 /** @typedef {import('../protocol/patch.js').ProtocolNode} ProtocolNode */
 /** @typedef {import('../protocol/pictures.js').Pictures} Pictures */
 /** @typedef {import('../controls/control.js').FormContext} FormContext */
+
+// The start page's kind of tab (ibView::ibKind).
+const homePage = 16;
 
 // The least a sash leaves a column and a cell, the thin client's.
 const columnAtLeast = 80;
@@ -87,6 +91,22 @@ export class HomePage extends Control {
 	}
 }
 customElements.define('oes-homepage', HomePage);
+
+// THE START PAGE'S TAB — its document, as the thin client's (ibHomePageDocument): the page brought up to its view, each of
+// its forms going back to the server by its own Key.
+export class HomePageDocument extends TabDocument {
+	/** @param {ProtocolNode} view */
+	drawView(view) {
+		if (this.element === null)
+			this.element = this.window.views.appendChild(document.createElement('oes-homepage'));
+		/** @type {HomePage} */ (this.element).draw(view, (form) => this.contextOf(form), this.window.pictures);
+	}
+
+	settled() {
+		return /** @type {HomePage} */ (this.element).settled();
+	}
+}
+defineDocument(homePage, HomePageDocument);
 
 /**
  * A pane's share of what its parent has to give.

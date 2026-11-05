@@ -25,6 +25,7 @@ inline script, no inline style. What the page does is in `src/`, how it looks in
 |---|---|
 | `src/protocol/` | the socket (OES-RPC packets — `packet.js` reads and writes them — deflated answers), the session — login, one call at a time, the frame and its patches, coming back after a drop — and the pictures |
 | `src/window/` | the window: login, the section panel, the tabs, the messages, the questions, All functions |
+| `src/docView/` | a tab's document, as the thin client's: each registered for its tab's Kind by the module that defines it (`defineDocument`, as a control is), made by that Kind (`createDocument`); it draws the tab's view and names it in its controls' calls — a form by its `Key`, a sheet by its tab; it takes the tab's commands — undo, redo, save as its `Commands` say — and puts its view on paper; the start page's is beside the page |
 | `src/controls/` | a form's controls, one file each, each its own element; the sizers; the label column |
 | `src/tablebox/` | the table: the grid fed with the server's pages |
 | `src/gridbox/` | the spreadsheet, drawn as a table |
@@ -41,7 +42,7 @@ by a patch is updated in place, so the focus and the caret stay where they were.
 
 - **The start.** The thin client's splash is on the screen before the big stylesheets have come, the arrows and the stage
   of the start under it. A login asked takes its place; then it is up again until the first window has its rows.
-- **A form comes whole.** A form just opened is drawn out of sight, the one on show staying up until it has its rows and
+- **A form comes whole.** A tab just opened is drawn out of sight, the one on show staying up until it has its rows and
   the components it is drawn with have come and drawn themselves, for a second at most; then it replaces the other in one
   frame, and its tab comes in that frame too. The first window has as long as its rows take, the splash being up. A tab
   gone back to comes at once. What did not change is not drawn again.
@@ -93,6 +94,9 @@ by a patch is updated in place, so the focus and the caret stay where they were.
 - **Busy and offline are shown**: a call unanswered for 800 ms shows a spinner, a dropped connection a strip.
 - **Escape closes what stands on top**, one thing a press: a cell's editor, a menu, a dialog, then the active tab. The tab
   is closed as its × closes it: the text typed is sent first, and the server asks about what is left to save.
+- **File and Edit are the client's own**, as the thin client's, ahead of the server's menu: Save, Close, Print, Undo,
+  Redo, done on the active tab's document and enabled as its tab's `Commands` say. Ctrl+S, Ctrl+Z and Ctrl+Y are their
+  keys — the text typed is sent first; Undo and Redo pressed in a text field are the field's own.
 
 ## Where it stops
 
@@ -102,6 +106,6 @@ by a patch is updated in place, so the focus and the caret stay where they were.
 - A column under a group is not dragged.
 - A printed sheet is answered as printed: the browser does not say whether its print dialog was cancelled.
 - A number goes back from the calculator exact to 15 digits.
-- No files: nothing is uploaded or saved from the page.
+- No files: nothing is uploaded or saved from the page — no Save as.
 - A view that is no form — a text, a spreadsheet opened from a file — is not drawn.
 - The page's own captions are English; the server's texts come translated.

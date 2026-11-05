@@ -1,12 +1,13 @@
 // THE WINDOW — the client's window as the server draws it (the frame): its title, its menu, the section panel down its
 // side, its tabs, the active tab's view, the messages to the person and what the server asks them. The menu's routine
-// is the client's; everything done to a document goes to the server (docs/public/client-protocol.md, Menu and
-// commands). Each tab keeps the element its view was drawn into, so a tab gone back to finds its scroll and its table
-// where they were.
+// is the client's — its own File and Edit ahead of the server's menu, done on the active tab's document; everything done
+// to a document goes to the server (docs/public/client-protocol.md, Menu and commands). Each tab is a document of its
+// kind (src/docView/), which keeps the element its view was drawn into, so a tab gone back to finds its scroll and its
+// table where they were.
 
-import { componentsDrawn, reconcile, dispose } from '../controls/control.js';
+import { componentsDrawn } from '../controls/control.js';
+import { Command, createDocument } from '../docView/tabDocument.js';
 import { Refusal } from '../protocol/connection.js';
-import { HomePage } from './homePage.js';
 import { Questions } from './questions.js';
 import { Sections } from './sections.js';
 import { showFunctions } from './functions.js';
@@ -16,15 +17,11 @@ import { showTheme, styleSchema } from './theme.js';
 /** @typedef {import('../protocol/session.js').Session} Session */
 /** @typedef {import('../protocol/pictures.js').Pictures} Pictures */
 /** @typedef {import('../protocol/patch.js').ProtocolNode} ProtocolNode */
-/** @typedef {import('../controls/control.js').FormContext} FormContext */
+/** @typedef {import('../docView/tabDocument.js').TabDocument} TabDocument */
 
 // The schemas the window opens itself (ibSchema): All functions.
 const allFunctions = 1;
 const about = 4;
-
-// What a tab's view shows when it is no form (ibView::ibKind): a spreadsheet document, the start page.
-const spreadsheet = 3;
-const homePage = 16;
 
 // How long a call is waited on before the window says it waits: a quick answer shows nothing.
 const busyAfter = 800;
@@ -34,6 +31,12 @@ const arrivesWithin = 1000;
 
 // How long the first window is waited for, the splash up: nothing on show is held back by it, so it has the time its rows take.
 const startsWithin = 15000;
+
+// The keys of the document's commands, the thin client's defaults (SetDefaultHotKeys), with Ctrl or Cmd.
+/** @type {Record<string, number>} */
+const commandKeys = { s: Command.Save, z: Command.Undo, y: Command.Redo };
+// …and what keeps its own Undo and Redo: a field typed in.
+const textFields = 'input:not([type=radio]):not([type=checkbox]), textarea, [contenteditable]';
 
 // A message's level (ibMessage::ibLevel), as its line is marked.
 const information = 1;
@@ -121,8 +124,8 @@ export class ClientWindow {
 		root.append(this.header, this.sections.element, this.tabs, this.views, this.messages, this.status, this.busy,
 			this.offline);
 
-		/** @type {Map<number, HTMLElement>} each tab's view, drawn */
-		this.tabViews = new Map();
+		/** @type {Map<number, TabDocument>} each tab's document, by the tab's id (createDocument) */
+		this.documents = new Map();
 		/** @type {Map<number, HTMLElement>} each tab's button in the strip, kept while the tab is open */
 		this.tabButtons = new Map();
 		/** @type {{id: number} | null} the tab whose form is being drawn, the one on show still up */
@@ -136,11 +139,21 @@ export class ClientWindow {
 		session.addEventListener('connection', (event) => this.connected(/** @type {CustomEvent} */ (event).detail));
 		session.addEventListener('ended', (event) => this.ended(/** @type {CustomEvent} */ (event).detail));
 		document.addEventListener('keydown', (event) => this.escaped(event));
+		document.addEventListener('keydown', (event) => this.commandKeyed(event));
 		// A dialog gone whose form went with it has nothing to give the focus back to.
 		document.addEventListener('wa-after-hide', () => {
 			if (document.activeElement === document.body)
-				this.focusTable(this.tabViews.get(this.session.frame?.ActiveTab ?? 0));
+				this.focusTable(this.currentDocument()?.element);
 		});
+	}
+
+	/**
+	 * The active tab's document, as the thin client's (GetCurrentDocument) — none while no tab is up, or before its view
+	 * came.
+	 * @returns {TabDocument | undefined}
+	 */
+	currentDocument() {
+		return this.documents.get(this.session.frame?.ActiveTab ?? 0);
 	}
 
 	/**
@@ -180,21 +193,26 @@ export class ClientWindow {
 		await this.pictures.fetchFor({ Tabs: frame.Tabs, View: frame.View, Menu: frame.Menu }).catch(() => {});
 		this.title.textContent = frame.Title || document.title;
 		this.status.textContent = frame.Status ?? '';
-		this.drawMenu(frame.Menu);
+		// The view first: the menu's File and Edit are enabled by the document it is drawn by.
 		this.drawView(frame);
+		this.drawMenu(frame.Menu);
 		// A tab comes with its form, in one frame: the strip waits for the one arriving.
 		if (this.arrival === null)
 			this.drawTabs(frame);
 		this.questions.ask(frame.Request);
 	}
 
-	/** @param {ProtocolNode | undefined} menu */
+	/**
+	 * The menu: the client's own File and Edit, then the server's — drawn anew only when what it shows changed.
+	 * @param {ProtocolNode | undefined} menu the server's
+	 */
 	drawMenu(menu) {
-		const drawn = JSON.stringify(menu ?? {});
+		const tops = [...this.documentMenu(), ...(menu?.NodeChildren ?? [])];
+		const drawn = JSON.stringify(tops);
 		if (drawn === this.drawnMenu)
 			return;
 		this.drawnMenu = drawn;
-		this.menu.replaceChildren(...(menu?.NodeChildren ?? []).map((top) => {
+		this.menu.replaceChildren(...tops.map((top) => {
 			const dropdown = document.createElement('wa-dropdown');
 			const trigger = document.createElement('wa-button');
 			trigger.slot = 'trigger';
@@ -233,12 +251,45 @@ export class ClientWindow {
 	}
 
 	/**
-	 * A menu item done: a command of a schema, a schema read and shown, or a command on the active document.
+	 * THE CLIENT'S OWN FILE AND EDIT, as the thin client's (InitializeDefaultMenu): done on the active tab's document,
+	 * found as the item is chosen; enabled as its tab says — a command by its Commands, Close where its tab is not locked,
+	 * Print where there is a document at all. Cut, Copy and Paste are the browser's own.
+	 * @returns {ProtocolNode[]}
+	 */
+	documentMenu() {
+		const current = this.currentDocument();
+		const tab = this.session.frame?.Tabs?.NodeChildren?.find((one) => one.NodeId === current?.tab);
+		/**
+		 * @param {string} title
+		 * @param {number} command (Command)
+		 */
+		const commandItem = (title, command) => ({ Title: title, Enabled: current?.isCommandEnabled(command) ?? false,
+			done: () => this.currentDocument()?.doCommand(command) });
+		return [
+			{ Title: 'File', NodeChildren: [
+				commandItem('Save', Command.Save),
+				{ Title: 'Close', Enabled: tab !== undefined && !tab.Locked,
+					done: () => this.closeTab(this.session.frame?.ActiveTab ?? 0) },
+				{ Separator: true },
+				{ Title: 'Print', Enabled: current !== undefined, done: () => this.currentDocument()?.print() },
+			] },
+			{ Title: 'Edit', NodeChildren: [
+				commandItem('Undo', Command.Undo),
+				commandItem('Redo', Command.Redo),
+			] },
+		];
+	}
+
+	/**
+	 * A menu item done: the client's own (documentMenu), a command of a schema, a schema read and shown, or a command on
+	 * the active document.
 	 * @param {ProtocolNode} item
 	 */
 	async menuItem(item) {
 		try {
-			if (item.Schema !== undefined && item.Command !== undefined)
+			if (item.done !== undefined)
+				await item.done();
+			else if (item.Schema !== undefined && item.Command !== undefined)
 				await this.session.call('schema', { Schema: item.Schema, Command: item.Command });
 			else if (item.Schema === allFunctions)
 				await showFunctions(this.session, this.pictures, (error) => this.refused(error));
@@ -280,11 +331,11 @@ export class ClientWindow {
 				this.tabs.insertBefore(button, this.tabs.children[place] ?? null);
 		});
 		this.tabs.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-		// A tab closed takes its view with it.
-		for (const [id, element] of this.tabViews) {
+		// A tab closed takes its document with it.
+		for (const [id, closed] of this.documents) {
 			if (!open.has(id)) {
-				dispose(element);
-				this.tabViews.delete(id);
+				closed.close();
+				this.documents.delete(id);
 			}
 		}
 	}
@@ -360,15 +411,38 @@ export class ClientWindow {
 		const tab = frame.Tabs?.NodeChildren?.find((one) => one.NodeId === frame.ActiveTab);
 		if (tab === undefined || tab.Locked)
 			return;
-		const field = /** @type {HTMLElement | null} */ (document.activeElement);
-		field?.blur();
-		field?.focus({ preventScroll: true });
+		commitField();
 		this.closeTab(tab.NodeId);
 	}
 
 	/**
-	 * The active tab's view. A form just opened is drawn out of sight, the one on show staying up until it has its rows:
-	 * the person sees the one, then the other, and never an empty table filling.
+	 * A command's key (commandKeys) done on the active tab's document when it takes the command now — the field in
+	 * focus letting go first, as for Escape. Undo and Redo pressed in a text field are the field's own, and a key is
+	 * the open dialog's while one is up. Ctrl+S never saves the page.
+	 * @param {KeyboardEvent} event
+	 */
+	commandKeyed(event) {
+		// A keydown with no key — a field filled in by the browser itself — is none of them.
+		const command = commandKeys[event.key?.toLowerCase() ?? ''];
+		if (command === undefined || !(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey
+			|| event.defaultPrevented)
+			return;
+		if (command !== Command.Save && /** @type {Element} */ (event.composedPath()[0]).matches?.(textFields))
+			return;
+		if (command === Command.Save)
+			event.preventDefault();
+		const current = this.currentDocument();
+		if (event.repeat || current === undefined || this.session.frame?.Request !== undefined
+			|| document.querySelector('wa-dialog[open]') !== null || !current.isCommandEnabled(command))
+			return;
+		event.preventDefault();
+		commitField();
+		current.doCommand(command).catch((error) => this.refused(error));
+	}
+
+	/**
+	 * The active tab's view, drawn by the tab's document. A tab just opened is drawn out of sight, the one on show staying
+	 * up until it has its rows: the person sees the one, then the other, and never an empty table filling.
 	 * @param {ProtocolNode} frame
 	 */
 	drawView(frame) {
@@ -378,71 +452,38 @@ export class ClientWindow {
 			this.showView(active);
 			return;
 		}
-		const existing = this.tabViews.get(active) ?? null;
-		const kind = frame.Tabs?.NodeChildren?.find((tab) => tab.NodeId === active)?.Kind;
-		const isHomePage = kind === homePage;
-		if (kind === spreadsheet) {
-			// A SPREADSHEET DOCUMENT — a list output, a sheet shown by code: a gridbox's node, drawn by the gridbox a form's
-			// sheet is drawn with; its sheet fetched and its cells pressed by the tab.
-			const sheet = reconcile(this.views, /** @type {any} */ (existing), view, this.tabContextOf(active));
-			sheet.classList.add('tab-sheet');
-			this.tabViews.set(active, sheet);
-			this.showView(active);
-			return;
+		const shown = this.documents.get(active);
+		const returned = shown?.element.hidden === true;
+		const opened = shown
+			?? createDocument(this, frame.Tabs?.NodeChildren?.find((tab) => tab.NodeId === active)?.Kind, active);
+		opened.drawView(view);
+		if (shown === undefined) {
+			this.documents.set(active, opened);
+			this.arrive(active, opened);
 		}
-		if (view.NodeType !== 'ClientForm' && !isHomePage) {
-			// A view that is no form — a text, the journal — is not drawn here yet.
-			const placeholder = existing ?? document.createElement('div');
-			placeholder.className = 'view-placeholder';
-			placeholder.textContent = 'This view is not in the browser yet.';
-			if (existing === null) {
-				this.views.append(placeholder);
-				this.tabViews.set(active, placeholder);
-			}
-			this.showView(active);
-			return;
-		}
-		const returned = existing?.hidden === true;
-		const form = isHomePage ? this.drawHomePage(existing, view)
-			: reconcile(this.views, /** @type {any} */ (existing), view, this.contextOf(view));
-		this.tabViews.set(active, form);
-		if (existing === null)
-			this.arrive(active, /** @type {any} */ (form));
 		else if (this.arrival?.id !== active) {
 			this.showView(active);
 			if (returned)
-				this.focusTable(form);
+				this.focusTable(opened.element);
 		}
 	}
 
 	/**
-	 * The start page brought up to its view: each of its forms goes back to the server by its own Key.
-	 * @param {HTMLElement | null} existing
-	 * @param {ProtocolNode} view
-	 * @returns {HomePage}
-	 */
-	drawHomePage(existing, view) {
-		const page = /** @type {HomePage} */ (existing ?? this.views.appendChild(document.createElement('oes-homepage')));
-		page.draw(view, (form) => this.contextOf(form), this.pictures);
-		return page;
-	}
-
-	/**
-	 * A form just drawn, out of sight until it has settled.
+	 * A tab's view just drawn, out of sight until it has settled.
 	 * @param {number} id its tab
-	 * @param {import('../controls/control.js').Control} form
+	 * @param {TabDocument} opened its document
 	 */
-	arrive(id, form) {
+	arrive(id, opened) {
 		const arrival = { id };
 		this.arrival = arrival;
-		form.classList.add('arriving');
-		Promise.race([form.settled(), new Promise((resolve) => setTimeout(resolve, arrivesWithin))]).then(() => {
+		opened.element.classList.add('arriving');
+		Promise.race([opened.settled(), new Promise((resolve) => setTimeout(resolve, arrivesWithin))]).then(() => {
 			if (this.arrival !== arrival)
 				return;
 			this.showView(id);
 			if (this.session.frame !== null)
 				this.drawTabs(this.session.frame);
-			this.focusTable(form);
+			this.focusTable(opened.element);
 		});
 	}
 
@@ -462,53 +503,17 @@ export class ClientWindow {
 	 */
 	showView(active) {
 		this.arrival = null;
-		for (const [id, element] of this.tabViews) {
-			element.hidden = id !== active;
-			element.classList.remove('arriving');
+		for (const [id, shown] of this.documents) {
+			shown.element.hidden = id !== active;
+			shown.element.classList.remove('arriving');
 		}
 	}
 
 	/** The first window as it is meant to be seen: its sections read, its menu and the view on show drawn. */
 	settled() {
-		const view = this.tabViews.get(this.session.frame?.ActiveTab ?? 0);
-		const drawn = /** @type {any} */ (view)?.settled?.() ?? Promise.resolve();
+		const drawn = this.currentDocument()?.settled() ?? Promise.resolve();
 		return Promise.race([Promise.all([this.sectionsRead, componentsDrawn(this.menu), drawn]),
 			new Promise((resolve) => setTimeout(resolve, startsWithin))]);
-	}
-
-	/**
-	 * The doors a form's controls go back to the server through, named by its Key.
-	 * @param {ProtocolNode} view
-	 * @returns {FormContext}
-	 */
-	contextOf(view) {
-		const key = view.Key;
-		return {
-			key,
-			send: (control, kind, args, subscribed) => this.session
-				.send({ Control: control, Event: kind, ...(args !== undefined ? { Args: args } : {}), Form: key }, subscribed)
-				.catch((error) => this.refused(error)),
-			fetch: (control, request) => this.session.call('fetch', { Control: control, Request: request, Form: key }),
-			picture: (picture) => this.pictures.url(picture),
-			fetchPictures: (node) => this.pictures.fetchFor(node).catch(() => {}),
-		};
-	}
-
-	/**
-	 * …and those of a tab's view that is no form: it is the tab the server knows it by, not a control of a form.
-	 * @param {number} tab
-	 * @returns {FormContext}
-	 */
-	tabContextOf(tab) {
-		return {
-			key: '',
-			send: (_control, kind, args) => this.session
-				.send({ Tab: tab, Event: kind, ...(args !== undefined ? { Args: args } : {}) })
-				.catch((error) => this.refused(error)),
-			fetch: (_control, request) => this.session.call('fetch', { Tab: tab, Request: request }),
-			picture: (picture) => this.pictures.url(picture),
-			fetchPictures: (node) => this.pictures.fetchFor(node).catch(() => {}),
-		};
 	}
 
 	/** @param {{Messages?: ProtocolNode, Clear?: boolean, Exit?: boolean}} events */
@@ -572,6 +577,16 @@ export class ClientWindow {
 		shade.append(text, again);
 		document.body.append(shade);
 	}
+}
+
+/**
+ * The field in focus lets go and takes the focus back: the text typed in it reaches the server before what is done next
+ * is, and is asked about.
+ */
+function commitField() {
+	const field = /** @type {HTMLElement | null} */ (document.activeElement);
+	field?.blur();
+	field?.focus({ preventScroll: true });
 }
 
 /**

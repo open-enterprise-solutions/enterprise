@@ -3,7 +3,6 @@ import unittest
 
 from harness import PageTest, row, tab
 
-MENU = {'NodeChildren': [{'Title': 'File', 'NodeChildren': [{'Title': 'Save', 'Command': 1}]}]}
 DIALOG = 'wa-dialog[open]'
 
 
@@ -96,7 +95,8 @@ class Escape(PageTest):
         self.wait_for_tabs(0)
 
     def test_a_window_menu_goes_and_the_tab_stays(self):
-        page = self.start({'tabs': [tab()], 'menu': MENU})
+        # The client's own File — there whatever the server's menu is.
+        page = self.start({'tabs': [tab()]})
         self.row('Item 1').wait_for()
         page.locator('.menu wa-button', has_text='File').click()
         item = page.locator('wa-dropdown-item', has_text='Save')

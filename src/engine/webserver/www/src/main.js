@@ -2,6 +2,7 @@
 // the page. The page logs in, then draws the window the server answers with, and keeps drawing it as the answers come.
 
 import './controls/index.js';
+import './docView/index.js';
 import { Connection } from './protocol/connection.js';
 import { Session } from './protocol/session.js';
 import { Pictures } from './protocol/pictures.js';
