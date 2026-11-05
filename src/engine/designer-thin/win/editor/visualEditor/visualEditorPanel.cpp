@@ -11,6 +11,7 @@
 #include "frmclient/backend/serialize/dataProtocol.h"   // ibReadProtocolValue — a control's values, as its node has them
 #include "frmclient/mainFrame/objinspect/objinspect.h"
 #include "frmclient/propertyManager/property/advprop/advpropSource.h"   // ibSetSourcePicker — a control's Source cell
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties, ibProtocol::ibView::ibFormDesigner
 
 #include <set>
 

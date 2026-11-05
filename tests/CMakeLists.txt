@@ -656,6 +656,43 @@ set_target_properties(oes_protocol_test PROPERTIES
 oes_discover_tests(oes_protocol_test)
 
 # ---------------------------------------------------------------------------
+# The communicator — the client's side of the protocol, in the GUI client's library (frmclient) — against a connection
+# scripted in the test. Its own target: the protocol's links no GUI of the client's, and the client's library is no
+# neighbour of the engine's in one test (its stand-ins carry the engine's class names), so no backend here.
+#   cmake --build build --target oes_client_test --config Debug
+#   ./bin/oes_client_test
+# ---------------------------------------------------------------------------
+add_executable(oes_client_test
+    test_communicator.cpp
+)
+
+target_link_libraries(oes_client_test
+    PRIVATE
+        frmclient
+        protocol
+        wx::core
+        wx::base
+        GTest::gtest
+        GTest::gtest_main
+)
+
+target_compile_definitions(oes_client_test PRIVATE OES_TESTING)
+
+target_include_directories(oes_client_test PRIVATE
+    "${CMAKE_SOURCE_DIR}/src"
+    "${CMAKE_SOURCE_DIR}/src/engine"
+)
+
+set_target_properties(oes_client_test PROPERTIES
+    CXX_STANDARD          20
+    CXX_STANDARD_REQUIRED ON
+    BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
+    INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
+)
+
+oes_discover_tests(oes_client_test)
+
+# ---------------------------------------------------------------------------
 # PostgreSQL dialect — EXECUTED against a real server (integration scope).
 #
 # Everything else in the suite runs on SQLite, which pins semantics but cannot

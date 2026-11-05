@@ -12,6 +12,7 @@
 #include "core/serialize/dataBuilder.h"
 
 #include "frmserver/schema/designer/metaData.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibConfigCompare
 
 namespace {
 

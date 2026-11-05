@@ -8,6 +8,7 @@
 
 #include "backend/backend_picture.h"              // ibBackendPicture::SendPicture — the forms' pictures, by their ids
 #include "frmserver/schema/designer/metaData.h"   // ibSchemaMetaData — whose tree, which object
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibHomePage
 
 namespace {
 

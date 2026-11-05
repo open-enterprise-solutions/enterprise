@@ -9,6 +9,7 @@
 #include "frmserver/client/clientFrame.h"         // the rows after an edit, shown with its answer
 #include "frmserver/client/propertyInspector.h"   // the rows, as the inspector writes them
 #include "frmserver/schema/designer/metaData.h"     // the tab's tree, and its object by id — as its doors find them
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties
 
 namespace {
 

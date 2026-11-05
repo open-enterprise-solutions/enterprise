@@ -6,7 +6,7 @@
 #include "frmclient/backend/backend_core.h"
 #include "frmclient/propertyManager/property/advprop/advpropType.h"   // the Type row beneath — the desktop's
 #include "core/description/sourceDescription.h"
-#include "protocol/protocol.h"   // ibProtocol::ibSchema::ibProperties — SourceDataType, ibSourceDataType
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties — SourceDataType, ibSourceDataType
 
 #include <functional>
 

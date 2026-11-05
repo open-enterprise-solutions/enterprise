@@ -8,7 +8,7 @@
 #include "core/typeName.h"                // ibTypeInfoName — a property's class, named as the server names one
 #include "frmclient/backend/serialize/dataProtocol.h"                         // ibReadProtocolNode — the answer's rows
 #include "frmclient/win/picture.h"                                            // ibProtocolPictureReceive — the choices' pictures
-#include "protocol/protocol.h"                                                // ibProtocol::ibSchema::ibProperties — the rows' keys
+#include "protocol/protocolDesigner.h"                                                // ibProtocol::ibSchema::ibProperties — the rows' keys
 
 #define propBlock 0x00023456
 #define eventBlock 0x00023457

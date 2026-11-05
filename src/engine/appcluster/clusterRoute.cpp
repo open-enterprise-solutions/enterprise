@@ -4,6 +4,7 @@
 #include "core/exception.h"
 #include "core/serialize/dataBuilder.h"   // ibBinaryProvider — the first packet read where it lies
 #include "protocol/protocol.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibDebug
 
 #include "appCluster.h"
 #include "clusterWorker.h"

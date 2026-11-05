@@ -22,6 +22,7 @@
 #include "frmserver/client/clientFrame.h"   // IsClosingWindow — the client leaving vs a tab's cross
 #include "docViewComposerEdit.h"         // ibFetchComposerRequest — a reference's [+] (Expand), asked by the query constructor
 #include "queryConstructorRequest.h"     // ibFetchQueryConstructorRequest — what the query constructor asks the configuration
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibModule
 
 #include <algorithm>
 

@@ -1,8 +1,7 @@
 # =============================================================================
 # OES Enterprise — frmclient shared library
-# The thin client's core, shared by the thin runtime and the thin designer: the main window and what is drawn in it,
-# over the protocol's library (protocol/: the connections to a base's clients and the communicator that keeps the
-# frame).
+# The thin client's core, shared by the thin runtime and the thin designer: the communicator that keeps the frame, the
+# main window and what is drawn in it, over the protocol's library (protocol/: the connections to a base's clients).
 # =============================================================================
 
 # CONFIGURE_DEPENDS — see the note in backend/CMakeLists.txt. Every source here is in the build but the listed uikit

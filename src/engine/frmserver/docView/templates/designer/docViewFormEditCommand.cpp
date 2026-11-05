@@ -12,6 +12,7 @@
 #include "frmserver/visualView/ctrl/formCommand.h"
 #include "frmserver/visualView/layers/commandBar.h"     // GetCommandSections / GatherFormCommands — the shared gather
 #include "protocol/protocol.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibFormDesigner
 
 #include <map>
 

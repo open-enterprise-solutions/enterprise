@@ -1,6 +1,7 @@
 #include "docViewModuleEditor.h"
 #include "frmclient/mainFrame/mainFrame.h"
 #include "designer-thin/win/editor/codeEditor/codeEditorDesigner.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibModule
 
 enum {
 	wxID_ADD_COMMENTS = wxID_HIGHEST + 10000,

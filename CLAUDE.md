@@ -128,9 +128,9 @@ enterprise/
         │                    #   ibDateTime/ibGuid, fileSystem, serialize (dataBuilder, JSON), ibCoreException,
         │                    #   ibLocalization, build stamp; wx base only
         ├── backend/         # backend.dll  — engine, compiler, DB, metadata, debugger; links core
-        ├── protocol/        # protocol.dll — the client protocol: protocol.h (names/numbers, no deps) + the talking side
+        ├── protocol/        # protocol.dll — the client protocol: protocol.h (names/numbers, no deps; the designer's messages in protocolDesigner.h) + the talking side
         ├── frmserver/       # frmserver.dll — server-side forms, the client host; includes protocol.h only
-        ├── frmclient/       # frmclient.dll — the thin client's graphics library; links core and protocol
+        ├── frmclient/       # frmclient.dll — the thin client's graphics library and its communicator; links core and protocol
         ├── fileserver/      # fileserver.dll — a file base loaded into the thin client's process
         ├── enterprise-thin/ # enterprise-thin.exe (thin client)
         ├── webserver/       # webserver.exe (the bases' transport for browsers: the site + the client protocol)

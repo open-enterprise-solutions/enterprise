@@ -7,7 +7,7 @@
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 #include "frmclient/propertyManager/propertyEditor.h"
 
-#include "protocol/protocol.h"   // ibProtocol::ibSchema::ibProperties — the row's keys
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties — the row's keys
 
 namespace {
 

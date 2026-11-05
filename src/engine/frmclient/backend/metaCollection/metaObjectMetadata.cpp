@@ -3,6 +3,7 @@
 #include "frmclient/backend/serialize/dataProtocol.h"   // ibReadProtocolNode, ibWriteProtocolNode — the answer, the edit
 #include "frmclient/mainFrame/mainFrame.h"              // the door to the server
 #include "protocol/protocol.h"                          // ibProtocol::ibSchema::ibKind::HomePage — the editor the server holds
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibHomePage
 #include "protocol/protocolNode.h"
 
 // The workspace editor's — done by the server's (ibProtocol::ibSchema::ibKind::HomePage), the root of this id in its tree's tab.

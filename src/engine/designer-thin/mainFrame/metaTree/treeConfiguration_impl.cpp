@@ -23,6 +23,7 @@
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/mainFrame/objinspect/objinspect.h"   // the inspector the row's object is shown in
 #include "frmclient/win/picture.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibMetaData, ibProtocol::ibSchema::ibProperties
 
 namespace {
 

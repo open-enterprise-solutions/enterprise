@@ -10,6 +10,7 @@
 #include "designer-thin/mainFrame/local/localWindow.h"
 #include "designer-thin/mainFrame/stack/stackWindow.h"
 #include "designer-thin/mainFrame/watch/watchWindow.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibRequest::ibApplyChange, ibProtocol::ibSchema::ibMetaData
 
 ibFrontendMainFrameDesigner* ibFrontendMainFrameDesigner::GetFrame() {
 	ibFrontendMainFrame* instance = ibFrontendMainFrame::GetFrame();

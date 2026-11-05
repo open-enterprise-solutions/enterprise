@@ -19,6 +19,7 @@
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/mainFrame/objinspect/objinspect.h"
 #include "frmclient/win/picture.h"                                     // ibProtocolPicture — a row's picture
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibFormDesigner
 
 #include <wx/accel.h>     // wxAcceleratorTable — Ctrl+C / X / V / Delete on the tree
 #include <wx/artprov.h>   // wxArtProvider — menu-item icons (SAME set the attribute tree uses)

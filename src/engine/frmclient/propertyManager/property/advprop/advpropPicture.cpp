@@ -11,7 +11,7 @@
 
 #include "frmclient/win/picture.h"   // ibProtocolPicture — a configuration's picture, by its id
 
-#include "protocol/protocol.h"   // ibProtocol::ibSchema::ibProperties — the row's keys
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties — the row's keys
 
 namespace {
 

@@ -4,6 +4,7 @@
 
 #include "frmserver/mcp/mcpTool.h"
 #include "core/serialize/dataBuilder.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibTypes
 
 void ibSchemaTypes::Build(const ibSession& /*session*/, const ibDataNode& args, ibDataNode& result) const
 {

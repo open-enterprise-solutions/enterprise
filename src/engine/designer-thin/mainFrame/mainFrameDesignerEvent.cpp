@@ -21,6 +21,7 @@
 #include "designer-thin/backend/metaCollection/metaDiff.h"
 #include "designer-thin/docManager/templates/docViewConfigCompare.h"
 #include "core/exception.h"   // ibCoreException — a directory of files refused on this computer, said here
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibMetaData, ibProtocol::ibSchema::ibConfigCompare
 
 // Common shape for the three places that save the configuration before
 // kicking off a child process (enterprise-thin.exe / webserver.exe

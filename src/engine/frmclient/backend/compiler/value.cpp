@@ -9,6 +9,7 @@
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/win/picture.h"
 #include "protocol/protocol.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties
 
 bool ibValueSerializable::CompareValueEQ(const ibVariant& value) const
 {

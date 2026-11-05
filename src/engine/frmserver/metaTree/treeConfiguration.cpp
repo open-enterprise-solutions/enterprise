@@ -15,7 +15,7 @@
 #include "frmserver/client/clientFrame.h"
 #include "frmserver/docView/docView.h"
 #include "frmserver/win/dlgs/kindSelector.h"   // ibDialogSelectKind — the form's kind and the template's, asked
-#include "protocol/protocol.h"                  // ibProtocol::ibSchema::ibMetaData::FormType, TemplateData — the kinds, their properties
+#include "protocol/protocolDesigner.h"                  // ibProtocol::ibSchema::ibMetaData::FormType, TemplateData — the kinds, their properties
 
 #include <algorithm>    // std::stable_sort — the groups in the declared order
 #include <functional>   // std::function — a group fills its nested groups first

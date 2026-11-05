@@ -10,6 +10,7 @@
 
 #include "frmclient/win/editor/codeEditor/codeEditor.h"
 #include "core/compiler/scriptParseCode.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibModule
 
 #define ICON_SIZE 16
 

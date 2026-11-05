@@ -3,6 +3,7 @@
 #include <wx/settings.h>
 
 #include "protocol/protocol.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibRequest::ibApplyChange
 #include "frmclient/win/picture.h"
 
 // An entry's Level that is an error — the engine's ibRestructure::error.

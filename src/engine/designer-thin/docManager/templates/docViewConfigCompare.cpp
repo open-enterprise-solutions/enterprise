@@ -4,6 +4,7 @@
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/win/ctrls/dataview/dataview.h"
 #include "frmclient/win/theme/luna_toolbarart.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibConfigCompare
 
 #include <wx/aui/auibar.h>
 #include <wx/button.h>

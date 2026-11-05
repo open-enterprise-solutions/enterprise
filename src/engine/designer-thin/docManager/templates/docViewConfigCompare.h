@@ -16,6 +16,7 @@
 #include "core/clsid.h"
 #include "designer-thin/mainFrame/configCompare/configCompareModel.h"
 #include "protocol/protocol.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibConfigCompare
 
 #include <wx/object.h>
 

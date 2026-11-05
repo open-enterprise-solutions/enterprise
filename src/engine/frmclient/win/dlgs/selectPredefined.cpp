@@ -9,6 +9,7 @@
 #include <wx/sizer.h>
 
 #include "protocol/protocol.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibRequest::ibPredefinedSelector
 
 // The window's own parts — nothing outside this file has business with a tree node or a branch.
 namespace {

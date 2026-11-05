@@ -2,7 +2,7 @@
 #include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // its value — the one variant
 
 #include "frmclient/win/picture.h"   // ibProtocolPicture — a choice's picture, as the wire carries it
-#include "protocol/protocol.h"       // ibProtocol::ibSchema::ibProperties — the row's keys, as the server's inspector writes them
+#include "protocol/protocolDesigner.h"       // ibProtocol::ibSchema::ibProperties — the row's keys, as the server's inspector writes them
 
 namespace {
 

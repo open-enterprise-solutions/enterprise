@@ -22,7 +22,7 @@
 #include "core/compiler/scriptFoldCode.h"  // ibFoldCode — where the text folds, the core's one copy
 #include "core/compiler/codeDef.h"   // CODE_VES / CODE_CES — the syntax the stream reads in, for fold-mode dispatch
 
-#include "protocol/protocol.h"   // ibProtocol::ibView::ibModule::ibRequest — what the module's tab is asked
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibModule::ibRequest — what the module's tab is asked
 #include "protocol/protocolNode.h"
 
 #include "frmclient/mainFrame/settings/editorsettings.h"

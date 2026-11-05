@@ -16,6 +16,7 @@
 #include "designer-thin/docManager/templates/docViewModuleEditor.h"
 #include "designer-thin/mainFrame/mainFrameDesigner.h"
 #include "frmclient/mainFrame/output/outputWindow.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibDebug
 
 ///////////////////////////////////////////////////////////////////////
 ibDebuggerClient* ibDebuggerClient::ms_debugClient = nullptr;

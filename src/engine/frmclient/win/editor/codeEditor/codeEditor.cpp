@@ -8,6 +8,7 @@
 #include "frmclient/docView/tabDocument.h"   // the module's tab — what the text is fetched from and handed back to
 #include "frmclient/mainFrame/objinspect/objinspect.h"   // the inspector — what it shows as it is made, and activated
 #include "res/bitmaps_res.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibModule
 
 #include <wx/artprov.h>
 

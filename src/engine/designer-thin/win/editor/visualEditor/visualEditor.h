@@ -12,7 +12,7 @@
 
 #include "core/description/commandDescription.h"  // ibCommandDescription — a command row's path
 #include "core/description/sourceDescription.h"   // ibSourceHop — an attribute row's path
-#include "protocol/protocol.h"                     // ibProtocol::ibSchema::ibProperties::ibSourceDataType
+#include "protocol/protocolDesigner.h"                     // ibProtocol::ibSchema::ibProperties::ibSourceDataType
 
 #include <wx/aui/auibook.h>
 #include <wx/splitter.h>

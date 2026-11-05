@@ -8,7 +8,7 @@
 #include "frmclient/propertyManager/propertyEditor.h"
 #include "frmclient/win/picture.h"                                             // ibProtocolPicture — a command's picture
 
-#include "protocol/protocol.h"   // ibProtocol::ibSchema::ibProperties — the tree's keys
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties — the tree's keys
 
 #include <wx/treectrl.h>
 #include <functional>

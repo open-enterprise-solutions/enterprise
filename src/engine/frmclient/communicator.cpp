@@ -1,4 +1,4 @@
-#include "communicator.h"
+#include "frmclient/communicator.h"
 
 #include <algorithm>
 #include <chrono>
@@ -10,20 +10,9 @@
 #include <wx/scopeguard.h>   // wxMakeGuard — a call's line, however it returns
 
 #include "core/diagnostics/journal.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibDebug
 
 namespace {
-
-// The frame's own words — what the server draws its frame's state in (frmserver/client/clientHost.cpp: DrawFrame, its
-// `state`). Everything else an answer carries is not the frame: its number and how it was made, the login's own, the
-// events (Messages, Clear, Exit, Properties — DrawFrame's `events`) and the method's own result beside it.
-bool IsFrameWord(const ibString& name)
-{
-	return name == ibProtocol::ibFrame::Title || name == ibProtocol::ibFrame::Status
-		|| name == ibProtocol::ibFrame::Language || name == ibProtocol::ibFrame::ActiveTab
-		|| name == ibProtocol::ibFrame::Schemas || name == ibProtocol::ibFrame::Templates || name == ibProtocol::ibFrame::Menu
-		|| name == ibProtocol::ibFrame::MetaData || name == ibProtocol::ibFrame::View || name == ibProtocol::ibFrame::Tabs
-		|| name == ibProtocol::ibFrame::Request;
-}
 
 // The envelope's own refusals — JSON-RPC's numbers, said by the port for a message that is not JSON-RPC or a method
 // the server does not have — as the protocol says them: a refusal arrives the same by every transport, and a method
@@ -494,10 +483,8 @@ bool ibCommunicator::CallLocked(ibProtocol::ibMethod method, const ibProtocolNod
 			std::lock_guard<std::mutex> lock(m_pendingMutex);
 			pending.swap(m_pending);
 		}
-		for (const ibProtocolNode& event : pending) {
-			if (event.IsNode())
-				named.Writable()->AddItem(ibProtocol::ibLogin::Pending) = event.Held();
-		}
+		for (const ibProtocolNode& event : pending)
+			named.AddItem(ibProtocol::ibLogin::Pending, event);
 	}
 
 	// THE WHOLE EXCHANGE, beside the call's own line — what went, and how long what came back is and took: the debug
@@ -515,7 +502,7 @@ bool ibCommunicator::CallLocked(ibProtocol::ibMethod method, const ibProtocolNod
 	exchanged = msSince(exchanging);
 
 	ibJournalInfo(ibT("protocol"), ibT("%s answered in %lld ms, %zu bytes"), ibProtocol::MethodName(method),
-		msSince(began), answer.Held().Weight());
+		msSince(began), answer.GetBody() != nullptr ? answer.GetBody()->Weight() : std::size_t(0));
 
 	return ReadAnswer(answer, id, result, refusal, error);
 }
@@ -597,14 +584,15 @@ void ibCommunicator::Take(const ibProtocolNode& answer)
 		// Whole: the frame's own entries copied out of the answer as they lie — what it says beside the frame stays in it
 		// for the caller (Draw reads the events there, a door its own result) — and the names of its types. The views
 		// kept begin again with it.
-		auto frame = std::make_shared<ibProtocolTree>();
-		frame->m_made = false;
-		for (const auto& field : answer.Held().Fields()) {
-			if (IsFrameWord(field.first))
-				frame->m_root.AddField(field.first, field.second);
-		}
-		frame->NameTypes(answer.m_tree->m_types);
-		m_frame = ibProtocolNode(std::move(frame), ibProtocolNode::ibShape::Node);
+		//
+		// The frame's own words are what the server draws its frame's state in (frmserver/client/clientHost.cpp:
+		// DrawFrame, its `state`). Everything else an answer carries is not the frame: its number and how it was made,
+		// the login's own, the events (Messages, Clear, Exit, Properties — DrawFrame's `events`) and the method's own
+		// result beside it.
+		m_frame = answer.Clone({ ibProtocol::ibFrame::Title, ibProtocol::ibFrame::Status, ibProtocol::ibFrame::Language,
+			ibProtocol::ibFrame::ActiveTab, ibProtocol::ibFrame::Schemas, ibProtocol::ibFrame::Templates,
+			ibProtocol::ibFrame::Menu, ibProtocol::ibFrame::MetaData, ibProtocol::ibFrame::View, ibProtocol::ibFrame::Tabs,
+			ibProtocol::ibFrame::Request });
 		m_views.clear();
 	}
 	m_number = answer.GetInt(ibProtocol::ibFrame::Frame);

@@ -2,8 +2,8 @@
 # OES Enterprise — protocol shared library
 # The protocol: its contract (protocol.h — the names and numbers, depending on nothing), which the server's forms
 # include, and the library of the sides that talk it — a node of the wire, the connections to a base's clients (a file
-# base opened in process, an application server over its port), the communicator and the protocol's journal — which
-# the GUI client (frmclient) and the web server link. Of wx — the base only.
+# base opened in process, an application server over its port) and the protocol's journal — which the GUI client
+# (frmclient) and the web server link. Of wx — the base only.
 # =============================================================================
 
 # CONFIGURE_DEPENDS — see the note in backend/CMakeLists.txt. Every source here is in the build: the project

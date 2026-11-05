@@ -8,6 +8,7 @@
 
 #include "frmserver/schema/designer/metaData.h"   // ibSchemaMetaData — whose tree, which object
 #include "frmserver/win/dlgs/settings/settingsRequest.h"   // ibWriteSettingsClasses — the types a type is picked from, named
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibPredefined
 
 namespace {
 

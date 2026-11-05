@@ -10,6 +10,7 @@
 #include "core/stringUtils.h"
 
 #include "protocol/protocol.h"   // ibProtocol::ibRequest::ibKind::ObjectKind
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibRequest::ibObjectKind
 
 ibDialogSelectKind::ibDialogSelectKind(ibValueMetaObject* metaObject, const ibString& caption) :
 	m_metaObject(metaObject), m_caption(caption)

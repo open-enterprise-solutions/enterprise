@@ -137,7 +137,7 @@ bool ibPropertyCalcSchedule::WriteNodeValue(ibDataValue& value) const
 	return ibCalcScheduleDescriptionMemory::WriteNode(value, GetValueAsScheduleDesc());
 }
 
-#include "protocol/protocol.h"            // ibProtocol::ibSchema::ibProperties — the row's keys
+#include "protocol/protocolDesigner.h"            // ibProtocol::ibSchema::ibProperties — the row's keys
 #include "core/serialize/dataBuilder.h"
 
 bool ibPropertyCalcSchedule::GetProtocolValue(ibDataNode& row, ibReader reader)

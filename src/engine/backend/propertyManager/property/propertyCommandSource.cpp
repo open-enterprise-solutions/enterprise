@@ -65,7 +65,7 @@ bool ibPropertyCommandSource::WriteNodeValue(ibDataValue& value) const
 	return ibCommandDescriptionMemory::WriteNode(value, GetValueAsCommandDesc());
 }
 
-#include "protocol/protocol.h"   // ibProtocol::ibSchema::ibProperties — the row's keys
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties — the row's keys
 
 bool ibPropertyCommandSource::GetProtocolValue(ibDataNode& row, ibReader reader)
 {

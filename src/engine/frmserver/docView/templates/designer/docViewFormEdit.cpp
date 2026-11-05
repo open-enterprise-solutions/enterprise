@@ -15,6 +15,7 @@
 #include "frmserver/visualView/ctrl/formAttribute.h"   // ibFormAttributeValue — an attribute's rows (FetchProperties)
 #include "frmserver/visualView/ctrl/formCommand.h"     // ibFormCommandValue — a form command's
 #include "frmserver/visualView/layers/commandBar.h"   // ibValueCommandBar — a control's command bar, its rows
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibFormDesigner, ibProtocol::ibView::ibModule
 
 // ----------------------------------------------------------------------------
 // ibFormDesignView implementation

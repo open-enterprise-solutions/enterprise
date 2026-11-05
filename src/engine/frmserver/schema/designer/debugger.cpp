@@ -4,6 +4,7 @@
 #include "backend/metadataConfiguration.h"
 #include "backend/session/session.h"
 #include "core/serialize/dataBuilder.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibDebugger
 
 namespace {
 

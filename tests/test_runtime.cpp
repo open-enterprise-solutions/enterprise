@@ -34,6 +34,7 @@
 #include "core/serialize/dataBuilder.h"                // a control's saved node and its state
 #include "frmserver/visualView/controlEnum.h"         // a button's Representation, a tile among it
 #include "protocol/protocol.h"                       // the state a client reads a tile from
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibFormDesigner
 #include "backend/backend_mainFrame.h"               // a frame so the form can be born
 #include "backend/metaCollection/metaModuleObject.h" // a form module, so the bind has somewhere to live
 #include "backend/metadataConfiguration.h"           // the module's file name is asked of its metadata

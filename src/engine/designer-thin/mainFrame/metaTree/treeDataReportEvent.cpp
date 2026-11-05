@@ -7,6 +7,7 @@
 
 #include "core/serialize/dataBuilder.h"   // ibDataValue — what an edit gives
 #include "core/stringUtils.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibMetaData
 
 void ibDataReportTree::OnEditCaptionName(wxCommandEvent& WXUNUSED(event))
 {

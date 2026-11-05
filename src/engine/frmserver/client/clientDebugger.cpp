@@ -6,6 +6,7 @@
 #include "core/serialize/dataBuilder.h"
 
 #include "clientHost.h"   // NotifyDebug — the client told what the engine said
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibDebug
 
 namespace {
 

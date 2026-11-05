@@ -1,6 +1,7 @@
 ﻿#include "docViewFormEditor.h"
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/win/picture.h"   // ibProtocolPicture — a class's picture, as the answer brought it
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibFormDesigner, ibProtocol::ibView::ibModule
 
 enum {
 	wxID_ADD_COMMENTS = wxID_HIGHEST + 10000,

@@ -17,6 +17,7 @@
 #include "frmserver/visualView/ctrl/typeControl.h" // ibTypeControlFactory::ChooseValue — the one road a Select button walks
 
 #include "protocol/protocol.h"   // ibProtocol::ibRequest::ibListSettings::ibAct
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties
 
 #include <map>
 #include <set>

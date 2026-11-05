@@ -39,6 +39,7 @@
 #include "clientInstance.h"
 #include "backend/metadataSerialization.h"
 #include "protocol/protocol.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibDebug
 #include "clientPatch.h"
 
 namespace {

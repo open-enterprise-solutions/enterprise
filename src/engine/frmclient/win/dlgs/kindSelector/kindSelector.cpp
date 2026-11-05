@@ -8,6 +8,7 @@
 #include "core/stringUtils.h"
 #include "frmclient/mainFrame/mainFrame.h"
 #include "protocol/protocol.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibRequest::ibObjectKind
 
 namespace {
 

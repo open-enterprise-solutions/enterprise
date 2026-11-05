@@ -22,8 +22,8 @@
     <ResourceCompile Include="protocol.rc" />
   </ItemGroup>
   <!-- THE PROTOCOL — its contract (protocol.h: the names and numbers, depending on nothing), which the server's forms
-       include, and the library of the sides that talk it: a node of the wire, the connections, the communicator and
-       the protocol's journal, which the GUI client (frmclient) and the web server link. Of wx — the base only. -->
+       include, and the library of the sides that talk it: a node of the wire, the connections and the protocol's
+       journal, which the GUI client (frmclient) and the web server link. Of wx — the base only. -->
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
     <ProjectGuid>{A1B2C3D4-0008-4E5F-8A9B-C0D1E2F30008}</ProjectGuid>
@@ -151,19 +151,18 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="communicator.cpp" />
     <ClCompile Include="connectionFile.cpp" />
     <ClCompile Include="connectionServer.cpp" />
     <ClCompile Include="framePatch.cpp" />
     <ClCompile Include="protocolNode.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="communicator.h" />
     <ClInclude Include="connection.h" />
     <ClInclude Include="connectionFile.h" />
     <ClInclude Include="connectionServer.h" />
     <ClInclude Include="protocol.h" />
     <ClInclude Include="protocolApi.h" />
+    <ClInclude Include="protocolDesigner.h" />
     <ClInclude Include="protocolNode.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

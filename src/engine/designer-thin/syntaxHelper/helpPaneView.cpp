@@ -17,6 +17,7 @@
 #include "core/syntaxHelper/helpEntry.h"
 #include "core/syntaxHelper/helpResolver.h"
 #include "core/syntaxHelper/helpService.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibTypes
 
 #include <algorithm>
 

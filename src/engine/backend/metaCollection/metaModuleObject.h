@@ -4,7 +4,7 @@
 #include "metaObject.h"
 #include "core/compiler/translateCode.h"  // ibCompilableSourceCode — what a compile is given to read
 #include "core/serialize/dataBuilder.h"   // ibDataNode — holder serializes its metaobject's node
-#include "protocol/protocol.h"            // ibProtocol::ibSchema::ibProperties::Object — what the holder's link opens
+#include "protocol/protocolDesigner.h"            // ibProtocol::ibSchema::ibProperties::Object — what the holder's link opens
 
 enum ibContentHelper {
 	eProcedureHelper = 1,

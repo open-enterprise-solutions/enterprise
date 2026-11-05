@@ -13,7 +13,7 @@
 #include "frmclient/win/dlgs/textWithDotsCell.h"        // ibTextWithDotsRenderer, ibControlTextEditor — a value picked through "..."
 #include "frmclient/win/dlgs/typeSelector.h"            // ibShowTypeSelector — a type picked
 #include "frmclient/win/theme/luna_toolbarart.h"
-#include "protocol/protocol.h"                          // ibProtocol::ibRequest::ibPredefinedSelector — what that window is given
+#include "protocol/protocolDesigner.h"                          // ibProtocol::ibRequest::ibPredefinedSelector — what that window is given
 
 enum
 {

@@ -12,7 +12,7 @@
 
 #include "frmserver/frmserver.h"
 
-#include "protocol/protocol.h"   // ibProtocol::ibDebug — the commands and the news
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibDebug — the commands and the news
 
 class ibApplicationInstance;
 class ibClientInstance;

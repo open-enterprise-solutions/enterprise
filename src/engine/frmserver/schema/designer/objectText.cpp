@@ -5,6 +5,7 @@
 #include "core/serialize/dataBuilder.h"
 
 #include "frmserver/schema/designer/metaData.h"   // ibSchemaMetaData — whose tree, which object
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibObjectText
 
 bool ibSchemaObjectText::AccessRight(const ibSession& session) const
 {

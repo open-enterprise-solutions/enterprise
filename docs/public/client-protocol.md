@@ -10,7 +10,9 @@ the browser one [the browser client](browser-client.md).
 
 **Where it is written.** Every name and number below is written once, in `src/engine/protocol/protocol.h` — a header
 that depends on nothing, included by the server (`frmserver`), the thin client and the web server alike. A number there
-is never renumbered.
+is never renumbered. What only the designer speaks — its debugger, its schemas and views, the questions asked while a
+configuration is written — is written beside it, in `protocol/protocolDesigner.h`; its numbers stay in `protocol.h`,
+one numbering for the wire.
 
 ## Transports
 

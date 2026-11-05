@@ -1,7 +1,7 @@
 #include "advpropHyperLink.h"
 
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
-#include "protocol/protocol.h"   // ibProtocol::ibSchema::ibProperties::Object — what the link opens
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties::Object — what the link opens
 
 // register frontend property
 class ibPropertyModuleLoader

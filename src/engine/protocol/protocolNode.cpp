@@ -531,6 +531,23 @@ void ibProtocolNode::AddItem(const char* name, const ibString& text)
 	node->AddItem(name, ibDataValue::String(text));
 }
 
+void ibProtocolNode::AddItem(const char* name, const ibProtocolNode& node)
+{
+	if (node.m_shape != ibShape::Node)
+		return;
+	// Held first: it may lie in this very tree, and the bytes a write moves.
+	const ibDataNode source = node.Held();
+	ibDataNode* const target = Writable();
+	if (target == nullptr)
+		return;
+	if (const auto was = target->FindField(name); was && was->Kind() != ibDataKind::Array)
+		target->RemoveField(name);
+	// Its bytes as they are — and the names of its types with it, where it comes from another tree.
+	target->AddItem(name) = source;
+	if (node.m_tree && node.m_tree != m_tree)
+		m_tree->NameTypes(node.m_tree->m_types);
+}
+
 void ibProtocolNode::Remove(const char* name)
 {
 	ibDataNode* const node = Writable();
@@ -569,6 +586,26 @@ ibProtocolNode ibProtocolNode::Clone() const
 	default:
 		return ibProtocolNode(std::move(tree), ibShape::Empty);
 	}
+}
+
+ibProtocolNode ibProtocolNode::Clone(std::initializer_list<const char*> names) const
+{
+	// The entries named, copied out of this node as they lie, and the names of its types: a tree read, as this was.
+	auto tree = std::make_shared<ibProtocolTree>();
+	tree->m_made = false;
+	if (m_tree)
+		tree->NameTypes(m_tree->m_types);
+	if (m_shape != ibShape::Node)
+		return ibProtocolNode(std::move(tree), ibShape::Empty);
+	for (const auto& field : Held().Fields()) {
+		for (const char* name : names) {
+			if (IsWord(field.first, name)) {
+				tree->m_root.AddField(field.first, field.second);
+				break;
+			}
+		}
+	}
+	return ibProtocolNode(std::move(tree), ibShape::Node);
 }
 
 bool ibProtocolNode::operator==(const ibProtocolNode& other) const

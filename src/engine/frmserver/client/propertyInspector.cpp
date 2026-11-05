@@ -4,6 +4,7 @@
 #include "backend/compiler/value.h"              // ibValue::GetAvailableCtor — a class, as the engine registers it
 #include "backend/metaCollection/metaObject.h"   // ibValueMetaObject — a tree's object, shown by its own id
 #include "core/serialize/dataBuilder.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties
 
 #include <algorithm>
 #include <vector>

@@ -1,6 +1,7 @@
 #include "docViewFunctionalOption.h"
 
 #include "designer-thin/win/editor/functionalOptionEditor/functionalOptionEditor.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibCheckTree
 
 // ----------------------------------------------------------------------------
 // ibFunctionalOptionEditView implementation

@@ -2,6 +2,7 @@
 #define __PROTOCOL_NODE_H__
 
 #include <concepts>
+#include <initializer_list>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -101,6 +102,7 @@ public:
 	ibProtocolNode  AddItem(const char* name);
 	void            AddItem(const char* name, long long number);
 	void            AddItem(const char* name, const ibString& text);
+	void            AddItem(const char* name, const ibProtocolNode& node);   // a copy of it; of a node only
 	void            Remove(const char* name);
 
 	// A PATCH APPLIED — this frame, as the client holds it, made into the frame drawn now: the other half of the server's
@@ -114,13 +116,14 @@ public:
 
 	// A copy with a tree of its own.
 	ibProtocolNode Clone() const;
+	// …and of the entries named alone, copied out as they lie — what else the node says stays in it — with the names
+	// of its types. Of a node only.
+	ibProtocolNode Clone(std::initializer_list<const char*> names) const;
 
 	// Two nodes alike: the same entries — in whatever order — and the same children in the same order.
 	bool operator==(const ibProtocolNode& other) const;
 
 private:
-
-	friend class ibCommunicator;
 
 	// WHAT A HANDLE IS TO.
 	enum class ibShape : unsigned char {

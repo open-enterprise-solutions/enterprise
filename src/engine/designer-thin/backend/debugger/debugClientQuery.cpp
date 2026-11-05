@@ -6,6 +6,7 @@
 #include "debugClient.h"
 
 #include "designer-thin/mainFrame/mainFrameDesigner.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibDebugger
 
 // THE STORE IS THE SERVER'S — the engine's sys_dbg, of the base the configuration is in (ibSchemaDebugger,
 // frmserver/schema/designer/debugger.cpp): what the engine's client asked its builder here is asked of the schema, by the

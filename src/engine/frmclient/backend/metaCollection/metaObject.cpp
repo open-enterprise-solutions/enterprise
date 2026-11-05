@@ -7,6 +7,7 @@
 #include "frmclient/backend/propertyManager/property/propertySerializable.h"   // its properties — a row's each
 #include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // an edit's value — its node
 #include "frmclient/mainFrame/mainFrame.h"              // the door to the server
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibObjectText, ibProtocol::ibSchema::ibProperties
 
 ibString ibValueMetaObject::GetName() const
 {

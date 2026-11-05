@@ -1,6 +1,7 @@
 #include "roleEditor.h"
 
 #include "frmclient/win/picture.h"   // a row's picture, by its id
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibCheckTree
 
 #include <vector>
 

@@ -4,6 +4,7 @@
 #include "frmclient/backend/serialize/dataProtocol.h"   // ibReadProtocolValue / ibWriteProtocolNode — what an item declares, as it travels
 #include "frmclient/mainFrame/mainFrame.h"
 #include "protocol/protocol.h"       // ibProtocol::ibSchema::ibKind::Predefined — the editor the server holds
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibPredefined
 #include "protocol/protocolNode.h"
 
 // The predefined editor's three edits, as the engine makes them (backend/metaCollection/partial/commonObject.cpp) —

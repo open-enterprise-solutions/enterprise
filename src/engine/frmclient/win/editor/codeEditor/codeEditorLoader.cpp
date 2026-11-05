@@ -6,6 +6,7 @@
 #include "codeEditor.h"
 
 #include "frmclient/docView/tabDocument.h"   // the module's tab — what the caret's questions are asked of
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibModule
 
 #include <wx/file.h>
 #include <wx/stdpaths.h>

@@ -51,7 +51,7 @@ bool ibPropertyModule::WriteNodeValue(ibDataValue& value) const
 }
 
 #include "backend/metaCollection/metaObject.h"   // ibValueMetaObject — the owner, the link's object
-#include "protocol/protocol.h"                   // ibProtocol::ibSchema::ibProperties::Object
+#include "protocol/protocolDesigner.h"                   // ibProtocol::ibSchema::ibProperties::Object
 
 bool ibPropertyModule::GetProtocolValue(ibDataNode& row, ibReader reader)
 {

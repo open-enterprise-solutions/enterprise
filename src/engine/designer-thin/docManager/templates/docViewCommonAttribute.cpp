@@ -1,6 +1,7 @@
 #include "docViewCommonAttribute.h"
 
 #include "designer-thin/win/editor/commonAttributeEditor/commonAttributeEditor.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibCheckTree
 
 // ----------------------------------------------------------------------------
 // ibCommonAttributeEditView implementation

@@ -18,6 +18,7 @@
 #include "frmserver/visualView/ctrl/tableBox.h"                     // g_controlTableBoxCLSID
 #include "frmserver/visualView/ctrl/widgets.h"                      // g_controlCheckboxCLSID / g_controlTextCtrlCLSID
 #include "protocol/protocol.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibFormDesigner
 
 typedef ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColumnInfo ibTableColumnInfo;
 

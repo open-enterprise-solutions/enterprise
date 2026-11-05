@@ -15,6 +15,7 @@
 #include "frmserver/client/clientChildFrame.h"
 #include "frmserver/client/clientFrame.h"   // the tab an external file's tree is in; the rows the tree shows next
 #include "frmserver/win/dlgs/applyChange.h"   // the restructure's ledger, put to the person — Apply
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibMetaData
 
 namespace {
 

@@ -13,6 +13,7 @@
 #include "frmclient/backend/propertyManager/property/propertySerializable.h"   // its properties — a row's each
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/mainFrame/objinspect/objinspect.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibFormDesigner, ibProtocol::ibSchema::ibProperties
 
 #include <wx/artprov.h>
 #include <wx/dialog.h>

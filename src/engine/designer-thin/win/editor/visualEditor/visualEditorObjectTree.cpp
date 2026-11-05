@@ -14,6 +14,7 @@
 #include "frmclient/backend/backend_picture.h"   // ibBackendPicture::GetPicture — an engine's picture
 #include "frmclient/mainFrame/objinspect/objinspect.h"
 #include "frmclient/win/picture.h"   // ibProtocolPicture — a class's picture, as the answer brought it
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibFormDesigner
 
 #include <wx/imaglist.h>
 

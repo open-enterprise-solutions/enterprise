@@ -1,6 +1,7 @@
 #include "docViewInterface.h"
 
 #include "designer-thin/win/editor/interfaceEditor/interfaceEditor.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibCheckTree
 
 // ----------------------------------------------------------------------------
 // ibInterfaceEditView implementation

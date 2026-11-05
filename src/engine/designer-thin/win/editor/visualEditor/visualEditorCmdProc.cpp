@@ -12,6 +12,7 @@
 #include "frmclient/backend/serialize/dataProtocol.h"   // ibReadProtocolValue, ibWriteProtocolNode — a control's values
 #include "frmclient/backend/propertyManager/property/propertySerializable.h"   // a layer's properties — a row's each
 #include "frmclient/mainFrame/objinspect/objinspect.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibFormDesigner, ibProtocol::ibView::ibModule
 
 #include <wx/artprov.h>
 #include <wx/clipbrd.h>

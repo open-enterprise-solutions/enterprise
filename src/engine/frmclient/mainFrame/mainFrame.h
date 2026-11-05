@@ -16,8 +16,8 @@
 #include <wx/xml/xml.h>
 
 #include "frmclient/backend/backend_mainFrame.h"   // the frame an object asks for its inspector's selection
+#include "frmclient/communicator.h"
 #include "frmclient/docView/docView.h"
-#include "protocol/communicator.h"
 #include "frmclient/mainFrame/settings/editorsettings.h"
 #include "frmclient/mainFrame/settings/fontcolorsettings.h"
 #include "frmclient/mainFrame/settings/keybinder.h"

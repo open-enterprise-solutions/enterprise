@@ -1,5 +1,5 @@
-#ifndef __PROTOCOL_COMMUNICATOR_H__
-#define __PROTOCOL_COMMUNICATOR_H__
+#ifndef __FRMCLIENT_COMMUNICATOR_H__
+#define __FRMCLIENT_COMMUNICATOR_H__
 
 #include <atomic>
 #include <functional>
@@ -8,8 +8,9 @@
 #include <mutex>
 #include <vector>
 
-#include "connection.h"
-#include "protocolNode.h"
+#include "frmclient/frmclient.h"   // FRMCLIENT_API
+#include "protocol/connection.h"
+#include "protocol/protocolNode.h"
 
 // THE COMMUNICATOR — the client's side of the protocol, one for the thin runtime and the thin designer, for a file
 // base and a server alike (the connection says which; both carry the same packets). It writes each call's envelope
@@ -22,7 +23,7 @@
 // What it keeps and hands out is the wire's tree, read through ibProtocolNode.
 //
 // One call at a time: a second waits for the first. The frame is read between calls.
-class PROTOCOL_API ibCommunicator {
+class FRMCLIENT_API ibCommunicator {
 public:
 
 	explicit ibCommunicator(std::unique_ptr<ibProtocolConnection> connection);

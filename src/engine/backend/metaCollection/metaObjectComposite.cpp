@@ -7,7 +7,7 @@
 
 #include "core/description/typeDescription.h"   // ibTypeDescriptionMemory — the type written in the attribute's node
 #include "backend/backend_picture.h"            // ibBackendPicture::SendPicture — a type offered, drawn
-#include "protocol/protocol.h"                  // ibProtocol::ibSchema::ibProperties — the row's keys
+#include "protocol/protocolDesigner.h"                  // ibProtocol::ibSchema::ibProperties — the row's keys
 
 bool ibPropertyPredefinedType::ReadNodeValue(const ibDataValue& value)
 {

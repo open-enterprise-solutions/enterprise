@@ -12,6 +12,7 @@
 #include "core/serialize/dataBuilder.h"
 #include "frmserver/win/dlgs/settings/settingsRequest.h"  // ibWriteSettingsField / References — a field as the windows read it
 #include "protocol/protocol.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibQueryConstructor
 
 #include <set>
 #include <vector>

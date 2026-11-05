@@ -62,7 +62,7 @@ bool ibPropertyPicture::WriteNodeValue(ibDataValue& value) const
 	return ibBackendPictureDescriptionMemory::WriteNode(value, GetValueAsPictureDesc());
 }
 
-#include "protocol/protocol.h"                          // ibProtocol::ibSchema::ibProperties — the row's keys
+#include "protocol/protocolDesigner.h"                          // ibProtocol::ibSchema::ibProperties — the row's keys
 #include "backend/metaData.h"
 #include "backend/metaCollection/metaPictureObject.h"   // ibValueMetaObjectPicture — its Guid
 #include "core/pictureRegistry.h"                        // the core's pictures — the client has its own

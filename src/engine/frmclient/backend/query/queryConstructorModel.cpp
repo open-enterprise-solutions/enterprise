@@ -4,6 +4,7 @@
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/win/dlgs/settings/settingsFieldTree.h"   // ibReadSettingsFields — a field as the server writes it
 #include "protocol/protocol.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibQueryConstructor
 #include "core/query/queryRender.h"   // ibRenderQueryPackage — the package, as the server is asked about it
 #include "core/exception.h"           // ibCoreException — the engine's verdict, in its words
 #include "core/guid.h"                // a configuration picture's name

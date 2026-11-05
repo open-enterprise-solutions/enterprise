@@ -6,9 +6,9 @@
 #include "core/core.h"   // IB_EXPORT / IB_IMPORT
 
 // THE FORMS' CLIENT — the half of the desktop's frontend that draws, as frmserver is the half that composes: what the
-// thin runtime and the thin designer share, the main window and what is drawn in it, over the protocol's library
-// (protocol.dll: the connections to a base's clients and the communicator that keeps the frame it was answered). It
-// holds no model of a form: what it draws it is answered (docs/private/client-protocol-arc.md).
+// thin runtime and the thin designer share, the communicator that keeps the frame it was answered, the main window and
+// what is drawn in it, over the protocol's library (protocol.dll: the connections to a base's clients). It holds no
+// model of a form: what it draws it is answered (docs/private/client-protocol-arc.md).
 #if defined(FRMCLIENT_EXPORTS)
 #define FRMCLIENT_API IB_EXPORT
 #else

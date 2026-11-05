@@ -141,7 +141,8 @@ The desktop front (`frontend.dll`, the thick `designer.exe` / `enterprise.exe`, 
 on 2026-10-27; it is kept on the branch `oes/thick_client`. It carried two functions at once — the forms' logic and
 their drawing. The thin client splits them, with the
 [client protocol](public/client-protocol.md) between: **`frmserver`** holds the forms on the server and answers clients;
-**`frmclient`** draws them (main window, document/view, controls, editors) for **`enterprise-thin.exe`** and
+**`frmclient`** keeps the frame it was answered (its communicator) and draws it (main window, document/view, controls,
+editors) for **`enterprise-thin.exe`** and
 **`designer-thin.exe`**, on `frmclient/uikit` — the interface kit; **`protocol`** is
 the contract both keep (`protocol.h`, no dependencies — `frmserver` includes it only) and the talking side's library
 (`frmclient` and the web server link it). **`fileserver`** puts `backend` + `frmserver` into the client's process for a

@@ -20,6 +20,7 @@
 #include "frmserver/visualView/ctrl/widgets.h"         // ibValueButton / g_controlButtonCLSID — a dropped command's button
 #include "frmserver/visualView/layers/commandBar.h"    // GatherFormCommands / ibValueCommandBarItem — a dropped command
 #include "protocol/protocol.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibFormDesigner
 
 namespace {
 

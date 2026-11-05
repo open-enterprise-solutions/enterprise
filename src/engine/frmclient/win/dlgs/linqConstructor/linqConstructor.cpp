@@ -16,7 +16,7 @@
 #include "frmclient/win/editor/codeEditor/codeEditor.h"   // the block, coloured as the module is
 #include "frmclient/docView/tabDocument.h"               // the module's tab — what the compiler is asked through
 #include "frmclient/win/picture.h"                       // ibProtocolPicture — a kind's picture, by its id
-#include "protocol/protocol.h"                           // ibProtocol::ibView::ibModule::ibLinq
+#include "protocol/protocolDesigner.h"                           // ibProtocol::ibView::ibModule::ibLinq
 #include "protocol/protocolNode.h"
 
 #include <wx/artprov.h>

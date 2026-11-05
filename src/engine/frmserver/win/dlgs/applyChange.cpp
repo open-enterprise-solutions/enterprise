@@ -7,6 +7,7 @@
 
 #include "backend/backend_picture.h"   // ibBackendPicture::SendPicture — the picture, by its id
 #include "protocol/protocol.h"   // ibProtocol::ibRequest::ibKind::ApplyChange
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibRequest::ibApplyChange
 
 bool ibDialogApplyChange::ShowApplyChange(const ibRestructureInfo& info)
 {

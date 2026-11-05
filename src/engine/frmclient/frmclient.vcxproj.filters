@@ -73,6 +73,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="frmclient.cpp" />
+    <ClCompile Include="communicator.cpp" />
     <ClCompile Include="artProvider\artProvider.cpp">
       <Filter>artProvider</Filter>
     </ClCompile>
@@ -478,6 +479,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="frmclient.h" />
+    <ClInclude Include="communicator.h" />
     <ClInclude Include="window_ptr.h" />
     <ClInclude Include="artProvider\artProvider.h">
       <Filter>artProvider</Filter>

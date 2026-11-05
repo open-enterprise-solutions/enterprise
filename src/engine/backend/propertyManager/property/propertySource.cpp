@@ -223,7 +223,7 @@ bool ibPropertySource::PasteNodeValue(const ibDataValue& value)
 #include "backend/metaCollection/partial/reference/reference.h"   // ConvertToMetaIds — a field's reference targets
 #include "backend/srcDataObject.h"     // ibSourceDataObject / ibSourceExplorer — an attribute's fields
 #include "backend/system/value/valueTable.h"   // g_valueTableCLSID — a table's picture
-#include "protocol/protocol.h"     // ibProtocol::ibSchema::ibProperties — the row's keys
+#include "protocol/protocolDesigner.h"     // ibProtocol::ibSchema::ibProperties — the row's keys
 
 #include <algorithm>
 

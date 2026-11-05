@@ -78,7 +78,7 @@ bool ibPropertyDynamicSource::WriteNodeValue(ibDataValue& value) const
 	return true;
 }
 
-#include "protocol/protocol.h"   // ibProtocol::ibSchema::ibProperties — the row's keys
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties — the row's keys
 
 bool ibPropertyDynamicSource::GetProtocolValue(ibDataNode& row, ibReader reader)
 {

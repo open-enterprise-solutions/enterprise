@@ -19,6 +19,7 @@
 #include "frmserver/visualView/ctrl/frame.h"                             // ibControlFrame::ChoiceProcessing
 #include "frmserver/visualView/ctrl/typeControl.h"                       // ShowSelectType — the type list already in the product
 #include "protocol/protocol.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibRequest::ibPredefinedSelector
 
 // The window's own parts — nothing outside this file has business with a branch or a value's number.
 namespace {

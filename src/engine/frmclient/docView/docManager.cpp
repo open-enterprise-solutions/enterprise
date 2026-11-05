@@ -18,6 +18,7 @@
 
 #include "frmclient/backend/metaData.h"   // the configuration a metaobject opens in — its tab
 #include "protocol/protocol.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibMetaData
 #include "protocol/protocolNode.h"
 
 #if wxUSE_DOC_VIEW_ARCHITECTURE

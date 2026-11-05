@@ -23,6 +23,7 @@
 #include <set>                                  // std::set — the form's reference-type set
 #include <map>
 #include "protocol/protocol.h"                  // ibProtocol::ibForm::ibCommandBar — the command tree's rows
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties
 
 // Command bar — a CONTAINER layer object (the shared runtime/property/metadata base is
 // ibValueLayerObject). Holds its commands + the AutoFill flag; a client draws it from the frame.

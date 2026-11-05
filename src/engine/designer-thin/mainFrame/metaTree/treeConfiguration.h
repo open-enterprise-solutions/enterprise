@@ -12,6 +12,7 @@
 
 #include "frmclient/backend/metaCollection/metaObject.h"   // the object the inspector shows
 #include "protocol/protocol.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibMetaData
 #include "protocol/protocolNode.h"
 
 class ibMetaView;

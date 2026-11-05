@@ -3,6 +3,7 @@
 #include "frmclient/backend/metaData.h"   // the door a language list is asked through — its tab
 #include "frmclient/mainFrame/mainFrame.h"
 #include "protocol/protocol.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibUserList
 #include "protocol/protocolNode.h"
 
 ibUserInfo ibUserInfo::Read(const ibGuid& userGuid)

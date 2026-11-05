@@ -10,6 +10,7 @@
 #include "backend/userInfo.h"
 #include "backend/utils/passwordHash.hpp"
 #include "core/serialize/dataBuilder.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibUserList
 
 bool ibSchemaUserList::AccessRight(const ibSession& session) const
 {

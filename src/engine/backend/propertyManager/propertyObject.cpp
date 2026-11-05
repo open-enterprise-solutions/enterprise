@@ -267,7 +267,7 @@ ibDataValue ibBackendProperty::GetNodeValue() const
 ///////////////////////////////////////////////////////////////////////////////
 // property -> protocol value
 
-#include "protocol/protocol.h"   // ibProtocol::ibSchema::ibProperties — the row's keys
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties — the row's keys
 #include "core/typeName.h"       // ibTypeInfoName — a property's class, named as the client registers it
 
 bool ibBackendProperty::GetProtocolValue(ibDataNode& row, ibReader reader)

@@ -6,6 +6,7 @@
 #include "frmserver/client/clientFrame.h"
 #include "frmserver/client/propertyInspector.h"   // the header's rows
 #include "frmserver/docView/docView.h"            // the file's document — its title
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibMetaData
 
 ibDataProcessorTree::ibDataProcessorTree(ibClientFrame* frame, ibMetaDocument* docParent)
 	: ibMetaTreeBase(frame), m_docParent(docParent)

@@ -2,7 +2,7 @@
 
 #include "core/serialize/dataBuilder.h"   // ibDataNode — the row the lists come with
 #include "frmclient/win/picture.h"        // ibProtocolPicture — an item's picture, as the wire names it
-#include "protocol/protocol.h"            // ibProtocol::ibSchema::ibProperties — the row's keys, as the server's property writes them
+#include "protocol/protocolDesigner.h"            // ibProtocol::ibSchema::ibProperties — the row's keys, as the server's property writes them
 
 // WHAT A FIELD'S CHOICE WINDOWS ASK, READ OFF ITS ROW — the server writes it where the desktop's windows asked the
 // configuration (its ibPropertyChoiceLink / ibPropertyChoiceParameters::GetProtocolValue): the row's Targets (the

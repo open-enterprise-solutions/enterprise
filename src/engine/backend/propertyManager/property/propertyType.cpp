@@ -85,7 +85,7 @@ bool ibPropertyType::WriteNodeValue(ibDataValue& value) const
 
 ////////////////////////////////////////////////////////////////////////
 
-#include "protocol/protocol.h"         // ibProtocol::ibSchema::ibProperties — the row's keys
+#include "protocol/protocolDesigner.h"         // ibProtocol::ibSchema::ibProperties — the row's keys
 #include "backend/backend_picture.h"   // ibBackendPicture::SendPicture — a type's picture, by its class
 #include "backend/metaData.h"          // GetAvailableCtor — a type, named as its configuration names it
 #include "backend/objCtor.h"

@@ -6,6 +6,7 @@
 #include "backend/objCtor.h"
 #include "core/serialize/dataBuilder.h"
 #include "backend/backend_picture.h"   // ibBackendPicture::SendPicture — a row's icon
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibCheckTree
 
 #include <algorithm>
 #include <vector>

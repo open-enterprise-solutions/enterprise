@@ -20,6 +20,7 @@
 #include "core/clsid.h"
 #include "backend/metaCollection/metaFormObject.h"            // ibValueMetaObjectFormBase::SaveFormData — the live form back into its blob
 #include "backend/backend_exception.h"                       // ibBackendCoreException — a module asked for an attribute it cannot have
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibFormDesigner
 
 
 //*********************************************************************************************

@@ -6,6 +6,7 @@
 #include "treeDataProcessor.h"
 
 #include "frmclient/win/picture.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibMetaData, ibProtocol::ibSchema::ibProperties
 
 void ibDataProcessorTree::Draw(const ibProtocolNode& root)
 {

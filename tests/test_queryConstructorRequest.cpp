@@ -9,6 +9,7 @@
 #include "core/query/queryRender.h"
 #include "frmserver/docView/templates/designer/queryConstructorRequest.h"
 #include "protocol/protocol.h"
+#include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibQueryConstructor
 #include "backend/query/queryableFactory.h"      // ibQueryableSourceDescriptor — a table the configuration offers
 #include "backend/query/tempTableQueryable.h"    // ibTempTableQueryable — its columns, from a table in memory
 #include "backend/metadataConfiguration.h"       // ibMetaDataConfigurationFile — the open configuration it registers in
