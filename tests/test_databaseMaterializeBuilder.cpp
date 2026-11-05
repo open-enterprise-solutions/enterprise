@@ -651,7 +651,7 @@ TEST(MaterializeRead, OpeningWithNoStartIsAZeroNotASum) {
     const ibString typedZero = wxT("CAST(? AS ") + ibString::Format(SqliteQ().m_typeNumberPattern, 18, 6)
         + wxT(") AS Qty_OpeningBalance");
     EXPECT_TRUE(sql.Contains(typedZero))            << shown;   // …it stands typed
-    EXPECT_TRUE(sql.Contains(wxT("SUM(CASE")))      << shown;   // the turnover is summed
+    EXPECT_TRUE(sql.Contains(wxT("SUM((CASE")))     << shown;   // the turnover is summed
     EXPECT_TRUE(sql.Contains(wxT("GROUP BY wh")))   << shown;   // one row per key
 }
 

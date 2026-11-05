@@ -696,13 +696,14 @@ TEST_F(AcceptanceAccumulation, ByTheRecorderTheServerAnswersAsTheRamRoad)
 		if (turnovers.IsComputedInRam())
 			GTEST_SKIP() << "no totals on this driver - both roads are the RAM one";
 		const std::vector<ibString> moved = { wxT("QuantityReceipt"), wxT("QuantityExpense"), wxT("QuantityTurnover") };
-		expectSame(served(turnovers, keys, moved), computed(reg->ComputeTurnover(from, to, nullptr, fold), keys, moved),
+		// The RAM road through the reading's own door (ComputeRows) — the register's Compute* are not exported.
+		expectSame(served(turnovers, keys, moved), computed(turnovers.ComputeRows({}), keys, moved),
 			what + wxT(" turnovers"));
 
 		ibBalanceAndTurnoverQueryable both(reg, from, to, fold);
 		const std::vector<ibString> run = { wxT("QuantityOpeningBalance"), wxT("QuantityReceipt"), wxT("QuantityExpense"),
 			wxT("QuantityClosingBalance") };
-		expectSame(served(both, keys, run), computed(reg->ComputeBalanceAndTurnover(from, to, fold, nullptr), keys, run),
+		expectSame(served(both, keys, run), computed(both.ComputeRows({}), keys, run),
 			what + wxT(" balance and turnovers"));
 	}
 }

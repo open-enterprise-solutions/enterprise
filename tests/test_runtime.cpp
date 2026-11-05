@@ -1980,11 +1980,13 @@ TEST(RuntimeTest, NewIsReadOnLikeAnyValue) {
 	EXPECT_EQ(val.GetType(), ibValueTypes::TYPE_EMPTY);
 }
 
-TEST(RuntimeTest, StrSplitCutsAtEachSeparatorCharacter) {
+TEST_F(BuiltInRuntime, StrSplitCutsAtEachSeparatorCharacter) {
 	// A line of a "|"-separated export was cut with Find and Mid by hand: there was no StrSplit (#646).
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	ASSERT_TRUE(TryCompile(cc, wxT("var fields public; var blank public; var kept public; var mixed public; var whole public; var empty public;\n")
 		wxT("fields = StrSplit(\"2020-01-02|Client 1|5\", \"|\");\n")
+	ibValuePtr<ibValueSystemFunction> valueSystem(new ibValueSystemFunction());   // the global API, as a host binds it
+	cc.AddContextVariable(wxT("System"), valueSystem, true);
 		wxT("blank = StrSplit(\"a||b|\", \"|\");\n")
 		wxT("kept = StrSplit(\"a||b|\", \"|\", false);\n")
 		wxT("mixed = StrSplit(\"a,b;c\", \",;\");\n")
@@ -1992,7 +1994,8 @@ TEST(RuntimeTest, StrSplitCutsAtEachSeparatorCharacter) {
 		wxT("empty = StrSplit(\"\", \"|\", false);")));
 
 	ibProcUnit pu;
-	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+	ibString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
 
 	const auto parts = [&pu](const ibString& name) {
 		std::vector<ibString> answer;
@@ -2021,13 +2024,15 @@ TEST(RuntimeTest, StrSplitCutsAtEachSeparatorCharacter) {
 	EXPECT_TRUE(parts(wxT("empty")).empty());
 }
 
-TEST(RuntimeTest, FillPropertyValuesCopiesWhatBothSidesHave) {
+TEST_F(BuiltInRuntime, FillPropertyValuesCopiesWhatBothSidesHave) {
 	// There was no FillPropertyValues (#300): a ported module filled a structure field by field. With no list it
 	// fills what the source has and the receiver takes; a list names exactly what is filled; exclude leaves out
 	// what it names, found as the source finds a name - whatever its case. Nothing is added to the receiver.
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	ASSERT_TRUE(TryCompile(cc, wxT("var all public; var listed public; var excluded public;\n")
+	ibValuePtr<ibValueSystemFunction> valueSystem(new ibValueSystemFunction());   // the global API, as a host binds it
 		wxT("var src = New Structure(\"Code, Description, Price\", \"001\", \"Bolt\", 5);\n")
+	cc.AddContextVariable(wxT("System"), valueSystem, true);
 		wxT("all = New Structure(\"Description, Price, Comment\", \"\", 0, \"kept\");\n")
 		wxT("FillPropertyValues(all, src);\n")
 		wxT("listed = New Structure(\"Description, Price\", \"\", 0);\n")
@@ -2036,7 +2041,8 @@ TEST(RuntimeTest, FillPropertyValuesCopiesWhatBothSidesHave) {
 		wxT("FillPropertyValues(excluded, src, , \"price\");")));
 
 	ibProcUnit pu;
-	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+	ibString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
 
 	const auto field = [&pu](const ibString& name, const ibString& property) {
 		ibValue holder, value;
@@ -2068,20 +2074,25 @@ TEST(RuntimeTest, FillPropertyValuesCopiesWhatBothSidesHave) {
 		ibCompileCode refused(wxT("test"), wxT("memory"), false);
 		ASSERT_TRUE(TryCompile(refused, text)) << text;
 		ibProcUnit run;
-		EXPECT_FALSE(TryExecute(run, refused.m_cByteCode)) << text;
+		refused.AddContextVariable(wxT("System"), valueSystem, true);
+		ibString refusal;
+		EXPECT_FALSE(RunBound(refused, run, refusal)) << text;
 	}
 }
 
-TEST(RuntimeTest, NumberTakesTheWholeTextOrRefuses) {
+TEST_F(BuiltInRuntime, NumberTakesTheWholeTextOrRefuses) {
 	// Number("234,8") answered 234 and Number("12x") 12, without a word: the parse read the number the text
 	// begins with (#646). What is left over after the number is a refusal, the comma included.
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	ASSERT_TRUE(TryCompile(cc, wxT("var point public; var blanks public;\n")
+	ibValuePtr<ibValueSystemFunction> valueSystem(new ibValueSystemFunction());   // the global API, as a host binds it
 		wxT("point = Number(\"-1.5e2\");\n")
+	cc.AddContextVariable(wxT("System"), valueSystem, true);
 		wxT("blanks = Number(\" 42 \");")));
 
 	ibProcUnit pu;
-	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+	ibString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
 
 	ibValue val;
 	ASSERT_TRUE(pu.GetPropVal(wxT("point"), val));
@@ -2094,7 +2105,9 @@ TEST(RuntimeTest, NumberTakesTheWholeTextOrRefuses) {
 		ibCompileCode refused(wxT("test"), wxT("memory"), false);
 		ASSERT_TRUE(TryCompile(refused, text)) << text;
 		ibProcUnit run;
-		EXPECT_FALSE(TryExecute(run, refused.m_cByteCode)) << text;
+		refused.AddContextVariable(wxT("System"), valueSystem, true);
+		ibString refusal;
+		EXPECT_FALSE(RunBound(refused, run, refusal)) << text;
 	}
 }
 
