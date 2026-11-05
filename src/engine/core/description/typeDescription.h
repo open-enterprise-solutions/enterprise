@@ -14,8 +14,9 @@ enum ibAllowedLength {
 };
 
 struct ibQualifierNumber {
-	// The most digits a type description holds — QualifierNumber's bound; 0 is no limit. A field's column takes
-	// fewer: MAX_PRECISION_NUMBER (core/core.h), the designer's.
+	// The most digits a script's QualifierNumber takes; 0 is no limit. The description itself holds what m_precision
+	// holds, and a file is read back as written (ibTypeDescriptionMemory::ReadNode). A field's column takes fewer:
+	// MAX_PRECISION_NUMBER (core/core.h), the designer's.
 	static constexpr int kMaxPrecision = 38;
 	bool m_nonNegative;
 	unsigned char m_precision;

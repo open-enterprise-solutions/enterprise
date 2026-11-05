@@ -248,9 +248,10 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   Over MCP `metadata_get` shows each under the owner's property as a type, with the id `metadata_set_type` takes it
   by. A configuration saved before keeps the old types.
 - **A length or a precision a field cannot hold is refused, not cut.** `metadata_set_type` placed a length of 70000 as
-  4464 and 300 digits as 44; it now refuses past the designer's bound (1024 characters, 32 digits), given in words or
-  as a whole description, and a type
-  description read from a node refuses past a script's (65535, 38) and a scale above its precision.
+  4464 and 300 digits as 44; it now refuses past the designer's bound (1024 characters, 32 digits) and a scale above
+  the precision, given in words or as a whole description. A type description read from a node refuses a length or a
+  number of digits it would cut (past 65535 characters or 255 digits); a configuration saved before reads as it was
+  written.
 - **A report's composer is a template of the *Data composer* kind.** A template added to any object asks
   what it holds, a spreadsheet document or a data composer, the way a new form asks its kind; a common
   template is a spreadsheet. The kind is chosen once; the template's row in the properties reads it and

@@ -2,6 +2,8 @@
 #include "core/memory/memoryBuffer.h"
 #include "core/serialize/dataBuilder.h"   // ibDataNode / ibDataValue (Child + Array)
 
+#include <limits>                         // what a qualifier's field holds
+
 ////////////////////////////////////////////////////////////////////////
 
 namespace {
@@ -63,18 +65,20 @@ bool ibTypeDescriptionMemory::ReadNode(const ibDataValue& value, ibTypeDescripti
 	if (!root)
 		return false;
 
-	// 🛑 A QUALIFIER A DESCRIPTION CANNOT HOLD IS REFUSED, NOT CUT (#646). A length of 70000 was read as 4464 and
+	// 🛑 A QUALIFIER ITS FIELD CANNOT HOLD IS REFUSED, NOT CUT (#646). A length of 70000 was read as 4464 and
 	// 300 digits as 44 — a declaration nobody made, which the apply then built a column for. Asked before
-	// anything is touched, so a refused shape leaves the description as it was. The bound is the description's,
-	// as a script's qualifier has it — a field's narrower one is its door's (metadata_set_type, the designer).
+	// anything is touched, so a refused shape leaves the description as it was. The bound is the field's own and
+	// no more: a configuration loads through here, and its file reads as it was written — 44 digits saved before
+	// stay 44, for the apply's DDL to refuse; refused here, the attribute would keep its default type without a
+	// word. What a qualifier may say is its door's (QualifierNumber, the designer, metadata_set_type).
 	const std::int32_t precision = root->GetValue<std::int32_t>(ibT("Precision"));
 	const std::int32_t scale = root->GetValue<std::int32_t>(ibT("Scale"));
 	const std::int32_t length = root->GetValue<std::int32_t>(ibT("Length"));
-	if (precision < 0 || precision > ibQualifierNumber::kMaxPrecision)
+	if (precision < 0 || precision > std::numeric_limits<decltype(ibQualifierNumber::m_precision)>::max())
 		return false;
-	if (scale < 0 || (precision > 0 && scale > precision))
+	if (scale < 0 || scale > std::numeric_limits<decltype(ibQualifierNumber::m_scale)>::max())
 		return false;
-	if (length < 0 || length > ibQualifierString::kMaxLength)
+	if (length < 0 || length > std::numeric_limits<decltype(ibQualifierString::m_length)>::max())
 		return false;
 
 	typeDesc.ClearMetaType();
