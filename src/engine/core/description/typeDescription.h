@@ -45,13 +45,7 @@ struct ibQualifierString {
 
 struct ibTypeDescription {
 
-	std::vector<ibClassID> m_listTypeClass;
-
 	struct ibTypeData {
-		ibQualifierNumber m_number;
-		ibQualifierDate	 m_date;
-		ibQualifierString m_string;
-	public:
 
 		ibTypeData() :
 			m_number(10, 0), m_date(ibDateFractions::ibDateFractions_Date), m_string(10) {
@@ -110,11 +104,18 @@ struct ibTypeDescription {
 			m_string.m_length = length;
 			m_string.m_allowedLength = allowedLength;
 		}
+
+		//qualifiers
+		const ibQualifierNumber& GetNumberQualifier() const { return m_number; }
+		const ibQualifierDate& GetDateQualifier() const { return m_date; }
+		const ibQualifierString& GetStringQualifier() const { return m_string; }
+
+	private:
+
+		ibQualifierNumber m_number;
+		ibQualifierDate	 m_date;
+		ibQualifierString m_string;
 	};
-
-	ibTypeData m_typeData;
-
-public:
 
 	bool IsOk() const { return m_listTypeClass.size() > 0; }
 
@@ -170,7 +171,7 @@ public:
 
 	void SetDefaultMetaType(const std::vector<ibClassID>& array, const ibTypeDescription::ibTypeData& descr) {
 		ClearMetaType();
-		AppendMetaType(array, descr.m_number, descr.m_date, descr.m_string);
+		AppendMetaType(array, descr.GetNumberQualifier(), descr.GetDateQualifier(), descr.GetStringQualifier());
 	}
 
 	void SetDefaultMetaType(const std::vector<ibClassID>& array,
@@ -194,6 +195,7 @@ public:
 
 	void AppendMetaType(const ibClassID& clsid) {
 
+		if (clsid == g_valueAnyCLSID) return;
 		if (clsid == GetIDByVT(ibValueTypes::TYPE_NUMBER)) m_typeData.SetNumber(10, 0);
 		if (clsid == GetIDByVT(ibValueTypes::TYPE_DATE)) m_typeData.SetDate(ibDateFractions::ibDateFractions_DateTime);
 		if (clsid == GetIDByVT(ibValueTypes::TYPE_STRING)) m_typeData.SetString(10);
@@ -204,6 +206,7 @@ public:
 
 	void AppendMetaType(const ibClassID& clsid, const ibTypeDescription::ibTypeData& descr) {
 
+		if (clsid == g_valueAnyCLSID) return;
 		if (clsid == GetIDByVT(ibValueTypes::TYPE_NUMBER)) {
 			m_typeData.SetNumber(descr.GetPrecision(), descr.GetScale(), descr.IsNonNegative());
 		}
@@ -231,7 +234,7 @@ public:
 
 		for (auto clsid : array) {
 			auto iterator = std::find(m_listTypeClass.begin(), m_listTypeClass.end(), clsid);
-			if (iterator == m_listTypeClass.end()) m_listTypeClass.emplace_back(clsid);
+			if (clsid != g_valueAnyCLSID && iterator == m_listTypeClass.end()) m_listTypeClass.emplace_back(clsid);
 		}
 	}
 
@@ -246,7 +249,7 @@ public:
 
 		for (auto clsid : array) {
 			auto iterator = std::find(m_listTypeClass.begin(), m_listTypeClass.end(), clsid);
-			if (iterator == m_listTypeClass.end()) m_listTypeClass.emplace_back(clsid);
+			if (clsid != g_valueAnyCLSID && iterator == m_listTypeClass.end()) m_listTypeClass.emplace_back(clsid);
 		}
 	}
 
@@ -262,7 +265,7 @@ public:
 
 		for (auto clsid : array) {
 			auto iterator = std::find(m_listTypeClass.begin(), m_listTypeClass.end(), clsid);
-			if (iterator == m_listTypeClass.end()) m_listTypeClass.emplace_back(clsid);
+			if (clsid != g_valueAnyCLSID && iterator == m_listTypeClass.end()) m_listTypeClass.emplace_back(clsid);
 		}
 	}
 
@@ -348,9 +351,9 @@ public:
 	}
 
 	//qualifiers 
-	const ibQualifierNumber& GetNumberQualifier() const { return m_typeData.m_number; }
-	const ibQualifierDate& GetDateQualifier() const { return m_typeData.m_date; }
-	const ibQualifierString& GetStringQualifier() const { return m_typeData.m_string; }
+	const ibQualifierNumber& GetNumberQualifier() const { return m_typeData.GetNumberQualifier(); }
+	const ibQualifierDate& GetDateQualifier() const { return m_typeData.GetDateQualifier(); }
+	const ibQualifierString& GetStringQualifier() const { return m_typeData.GetStringQualifier(); }
 
 	//////////////////////////////////////////////////
 
@@ -367,12 +370,12 @@ public:
 	//////////////////////////////////////////////////
 
 	ibTypeDescription() {}
-	ibTypeDescription(const ibClassID& clsid) : m_listTypeClass({ clsid }) {}
-	ibTypeDescription(const ibClassID& clsid, const ibTypeData& descr) : m_listTypeClass({ clsid }), m_typeData(descr) {}
-	ibTypeDescription(const ibClassID& clsid, const ibQualifierNumber& qNumber, const ibQualifierDate& qDate, const ibQualifierString& qString) : m_listTypeClass({ clsid }), m_typeData(qNumber, qDate, qString) {}
-	ibTypeDescription(const std::vector<ibClassID>& array) : m_listTypeClass(array) {}
-	ibTypeDescription(const std::vector<ibClassID>& array, const ibTypeData& descr) : m_listTypeClass(array), m_typeData(descr) {}
-	ibTypeDescription(const std::vector<ibClassID>& array, const ibQualifierNumber& qNumber, const ibQualifierDate& qDate, const ibQualifierString& qString) : m_listTypeClass(array), m_typeData(qNumber, qDate, qString) {}
+	ibTypeDescription(const ibClassID& clsid) : m_listTypeClass({ clsid }) { std::erase(m_listTypeClass, g_valueAnyCLSID); }
+	ibTypeDescription(const ibClassID& clsid, const ibTypeData& descr) : m_listTypeClass({ clsid }), m_typeData(descr) { std::erase(m_listTypeClass, g_valueAnyCLSID); }
+	ibTypeDescription(const ibClassID& clsid, const ibQualifierNumber& qNumber, const ibQualifierDate& qDate, const ibQualifierString& qString) : m_listTypeClass({ clsid }), m_typeData(qNumber, qDate, qString) { std::erase(m_listTypeClass, g_valueAnyCLSID); }
+	ibTypeDescription(const std::vector<ibClassID>& array) : m_listTypeClass(array) { std::erase(m_listTypeClass, g_valueAnyCLSID); }
+	ibTypeDescription(const std::vector<ibClassID>& array, const ibTypeData& descr) : m_listTypeClass(array), m_typeData(descr) { std::erase(m_listTypeClass, g_valueAnyCLSID); }
+	ibTypeDescription(const std::vector<ibClassID>& array, const ibQualifierNumber& qNumber, const ibQualifierDate& qDate, const ibQualifierString& qString) : m_listTypeClass(array), m_typeData(qNumber, qDate, qString) { std::erase(m_listTypeClass, g_valueAnyCLSID); }
 
 	bool ContainType(const ibValueTypes& valType) const {
 		if (valType == ibValueTypes::TYPE_ENUM) {
@@ -398,20 +401,20 @@ public:
 
 	bool EqualType(const ibClassID& clsid, const ibTypeDescription& rhs) const {
 				if (clsid == g_valueNumberCLSID) {
-			bool result = m_typeData.m_number.m_precision == rhs.m_typeData.m_number.m_precision &&
-				m_typeData.m_number.m_scale == rhs.m_typeData.m_number.m_scale &&
-				m_typeData.m_number.m_nonNegative == rhs.m_typeData.m_number.m_nonNegative;
+			bool result = GetPrecision() == rhs.GetPrecision() &&
+				GetScale() == rhs.GetScale() &&
+				IsNonNegative() == rhs.IsNonNegative();
 			if (!result)
 				return false;
 		}
 		else if (clsid == g_valueDateCLSID) {
-			bool result = m_typeData.m_date.m_dateTime == rhs.m_typeData.m_date.m_dateTime;
+			bool result = GetDateFraction() == rhs.GetDateFraction();
 			if (!result)
 				return false;
 		}
 		else if (clsid == g_valueStringCLSID) {
-			bool result = m_typeData.m_string.m_length == rhs.m_typeData.m_string.m_length &&
-				m_typeData.m_string.m_allowedLength == rhs.m_typeData.m_string.m_allowedLength;
+			bool result = GetLength() == rhs.GetLength() &&
+				GetAllowedLength() == rhs.GetAllowedLength();
 			if (!result)
 				return false;
 		}
@@ -423,20 +426,20 @@ public:
 		if (m_listTypeClass == rhs.m_listTypeClass) {
 			for (auto clsid : m_listTypeClass) {
 								if (clsid == g_valueNumberCLSID) {
-					bool result = m_typeData.m_number.m_precision == rhs.m_typeData.m_number.m_precision &&
-						m_typeData.m_number.m_scale == rhs.m_typeData.m_number.m_scale &&
-						m_typeData.m_number.m_nonNegative == rhs.m_typeData.m_number.m_nonNegative;
+					bool result = GetPrecision() == rhs.GetPrecision() &&
+						GetScale() == rhs.GetScale() &&
+						IsNonNegative() == rhs.IsNonNegative();
 					if (!result)
 						return false;
 				}
 				else if (clsid == g_valueDateCLSID) {
-					bool result = m_typeData.m_date.m_dateTime == rhs.m_typeData.m_date.m_dateTime;
+					bool result = GetDateFraction() == rhs.GetDateFraction();
 					if (!result)
 						return false;
 				}
 				else if (clsid == g_valueStringCLSID) {
-					bool result = m_typeData.m_string.m_length == rhs.m_typeData.m_string.m_length &&
-						m_typeData.m_string.m_allowedLength == rhs.m_typeData.m_string.m_allowedLength;
+					bool result = GetLength() == rhs.GetLength() &&
+						GetAllowedLength() == rhs.GetAllowedLength();
 					if (!result)
 						return false;
 				}
@@ -453,6 +456,15 @@ public:
 		m_listTypeClass = rhs.m_listTypeClass;
 		return true;
 	}
+
+private:
+
+	// The classes it admits. ANY IS NEVER LISTED: a list of nothing admits every value, and that is Any — so Any given
+	// to any door above is taken as nothing, and Any is never a second way to say the empty list. Private with its
+	// qualifiers, so nothing lists a class past the doors.
+	std::vector<ibClassID> m_listTypeClass;
+	
+	ibTypeData m_typeData;
 };
 
 class ibDataValue;   // serialize/dataBuilder.h — node value (Child / Array)

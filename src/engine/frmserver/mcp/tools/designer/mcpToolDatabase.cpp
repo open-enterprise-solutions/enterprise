@@ -921,7 +921,7 @@ public:
 			const ibValueMetaObjectAttribute* attribute = nullptr;
 			if (object->ConvertToValue(attribute)) {
 
-				if (attribute->GetTypeDesc().m_listTypeClass.empty())
+				if (!attribute->GetTypeDesc().IsOk())
 					complain(object, ibMcpText("no type - metadata_set_type says what it may hold; a "
 						  "field with no type is one nothing can be written into"));
 

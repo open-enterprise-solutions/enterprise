@@ -2124,7 +2124,7 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 			const auto named = ibMetaTypeResolver(owner);
 
 			ibString holds;
-			for (const ibClassID& clsid : asType->GetValueAsTypeDesc().m_listTypeClass) {
+			for (const ibClassID& clsid : asType->GetValueAsTypeDesc().GetClsidList()) {
 				const ibString word = named(clsid);
 				if (word.IsEmpty())
 					continue;

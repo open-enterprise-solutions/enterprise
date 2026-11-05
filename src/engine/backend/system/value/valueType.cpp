@@ -127,12 +127,12 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 // A description that says nothing hands the value back untouched (below), so a value its caller is done
 // with goes back without a copy: a table loaded from rows that die with it (ibQueryRamTable::ToValueTable)
 // moves every cell of an untyped column — a LINQ answer's columns are all untyped, and a value table's column
-// given no type is Any, whose gate passes every value as it is. Anything else the description says is
+// given no type is Any, which is the description that lists nothing. Anything else the description says is
 // answered by the overload below, as for any other value.
 ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescription, ibValue&& varValue,
 	const ibMetaData* metaData)
 {
-	if (!typeDescription.IsOk() || (typeDescription.GetClsidCount() == 1 && typeDescription.GetFirstClsid() == g_valueAnyCLSID))
+	if (!typeDescription.IsOk())
 		return std::move(varValue);
 	return AdjustValue(typeDescription, static_cast<const ibValue&>(varValue), metaData);
 }
@@ -143,20 +143,19 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 	if (!typeDescription.IsOk())
 		return varValue;
 
-	auto iterator = std::find(typeDescription.m_listTypeClass.begin(), typeDescription.m_listTypeClass.end(), varValue.GetClassType());
-	if (iterator != typeDescription.m_listTypeClass.end()) {
+	if (typeDescription.ContainType(varValue.GetClassType())) {
 		ibValueTypes vt = ibValue::GetVTByID(varValue.GetClassType());
 		if (vt < ibValueTypes::TYPE_REFFER) {
 			if (vt == ibValueTypes::TYPE_NUMBER) {
 				// Precision 0 is "no limit", as a string's length 0 is (Unqualified) — no rounding.
-				if (typeDescription.m_typeData.m_number.m_precision == 0)
+				if (typeDescription.GetPrecision() == 0)
 					return varValue;
-				return ibValueSystemFunction::Round(varValue, typeDescription.m_typeData.m_number.m_scale);
+				return ibValueSystemFunction::Round(varValue, typeDescription.GetScale());
 			}
 			else if (vt == ibValueTypes::TYPE_DATE) {
-				if (typeDescription.m_typeData.m_date.m_dateTime == ibDateFractions::ibDateFractions_Date)
+				if (typeDescription.GetDateFraction() == ibDateFractions::ibDateFractions_Date)
 					return ibValueSystemFunction::BegOfDay(varValue);
-				else if (typeDescription.m_typeData.m_date.m_dateTime == ibDateFractions::ibDateFractions_Time)
+				else if (typeDescription.GetDateFraction() == ibDateFractions::ibDateFractions_Time)
 					return varValue;
 				return varValue;
 			}
@@ -168,9 +167,9 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 				//
 				// The same two-facts-one-number confusion as the driver's parameter clamp: only clamp
 				// where a limit was actually declared.
-				if (typeDescription.m_typeData.m_string.m_length == 0)
+				if (typeDescription.GetLength() == 0)
 					return varValue;
-				return ibValueSystemFunction::Left(varValue, typeDescription.m_typeData.m_string.m_length);
+				return ibValueSystemFunction::Left(varValue, typeDescription.GetLength());
 			}
 		}
 		return varValue;
@@ -204,14 +203,14 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 			ibValueTypes vt = ibValue::GetVTByID(typeDescription.GetFirstClsid());
 			if (vt < ibValueTypes::TYPE_REFFER) {
 				if (vt == ibValueTypes::TYPE_NUMBER) {
-					if (typeDescription.m_typeData.m_number.m_precision == 0)
+					if (typeDescription.GetPrecision() == 0)
 						return ibValue(varValue.GetNumber());   // no limit: the number as it is (the value may be of another type)
-					return ibValueSystemFunction::Round(varValue, typeDescription.m_typeData.m_number.m_scale);
+					return ibValueSystemFunction::Round(varValue, typeDescription.GetScale());
 				}
 				else if (vt == ibValueTypes::TYPE_DATE) {
-					if (typeDescription.m_typeData.m_date.m_dateTime == ibDateFractions::ibDateFractions_Date)
+					if (typeDescription.GetDateFraction() == ibDateFractions::ibDateFractions_Date)
 						return ibValueSystemFunction::BegOfDay(varValue);
-					else if (typeDescription.m_typeData.m_date.m_dateTime == ibDateFractions::ibDateFractions_Time)
+					else if (typeDescription.GetDateFraction() == ibDateFractions::ibDateFractions_Time)
 						return varValue;
 					return varValue.GetDate();
 				}
@@ -225,9 +224,9 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 					// instead of "", and the cell threw away whatever was typed into it, having nothing to read it
 					// by (2026-09-23: under a string kind the cell stayed Undefined, while a boolean kind made it
 					// `False` and a date kind an empty date).
-					if (typeDescription.m_typeData.m_string.m_length == 0)
+					if (typeDescription.GetLength() == 0)
 						return ibValue(varValue.GetString());
-					return ibValueSystemFunction::Left(varValue, typeDescription.m_typeData.m_string.m_length);
+					return ibValueSystemFunction::Left(varValue, typeDescription.GetLength());
 				}
 				// …and a Boolean reads the value as one, as its three siblings do. It fell through to the empty
 				// Boolean below, so a 1 written into a Boolean field — or `CAST(1 AS Boolean)` — was `False`.
@@ -278,7 +277,7 @@ ibValueTypeDescription::ibValueTypeDescription(ibValueType* valueType) :
 
 ibValueTypeDescription::ibValueTypeDescription(ibValueType* valueType, ibValueQualifierNumber* qNumber, ibValueQualifierDate* qDate, ibValueQualifierString* qString) :
 	ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true), m_typeDesc({ valueType ? valueType->GetOwnerTypeClass() : 0 },
-		(qNumber ? *qNumber : Unqualified().m_number), (qDate ? *qDate : Unqualified().m_date), (qString ? *qString : Unqualified().m_string)){
+		(qNumber ? *qNumber : Unqualified().GetNumberQualifier()), (qDate ? *qDate : Unqualified().GetDateQualifier()), (qString ? *qString : Unqualified().GetStringQualifier())){
 }
 
 ibValueTypeDescription::ibValueTypeDescription(const ibTypeDescription& typeDescription)
@@ -291,7 +290,7 @@ ibValueTypeDescription::ibValueTypeDescription(const std::vector<ibClassID>& arr
 
 ibValueTypeDescription::ibValueTypeDescription(const std::vector<ibClassID>& array, ibValueQualifierNumber* qNumber, ibValueQualifierDate* qDate, ibValueQualifierString* qString) :
 	ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true), m_typeDesc(array,
-		(qNumber ? *qNumber : Unqualified().m_number), (qDate ? *qDate : Unqualified().m_date), (qString ? *qString : Unqualified().m_string)){
+		(qNumber ? *qNumber : Unqualified().GetNumberQualifier()), (qDate ? *qDate : Unqualified().GetDateQualifier()), (qString ? *qString : Unqualified().GetStringQualifier())){
 }
 
 ibValueTypeDescription::~ibValueTypeDescription()
@@ -303,9 +302,18 @@ bool ibValueTypeDescription::Init(ibValue** paParams, const long lSizeArray)
 	if (lSizeArray < 1)
 		return false;
 
-	// A qualifier not given limits nothing (Unqualified); the ones given override it below.
-	m_typeDesc.m_typeData = Unqualified();
+	// A qualifier not given limits nothing (Unqualified); the ones given override it — the same three whatever names
+	// the types.
+	ibValueQualifierNumber* qNumber = nullptr;
+	ibValueQualifierDate* qDate = nullptr;
+	ibValueQualifierString* qString = nullptr;
+	const ibTypeDescription::ibTypeData qualifiers(
+		(lSizeArray > 1 && paParams[1]->ConvertToValue(qNumber) ? *qNumber : Unqualified().GetNumberQualifier()),
+		(lSizeArray > 2 && paParams[2]->ConvertToValue(qDate) ? *qDate : Unqualified().GetDateQualifier()),
+		(lSizeArray > 3 && paParams[3]->ConvertToValue(qString) ? *qString : Unqualified().GetStringQualifier()));
+	m_typeDesc.SetTypeData(qualifiers);
 
+	// The types go through the description's door: Any is taken as nothing there (typeDescription.h).
 	if (paParams[0]->GetType() == ibValueTypes::TYPE_STRING) {
 		// "Number, String" is several types, not one constructor name. A single name is the
 		// one-element case of the same list. A name that is not a type fails the whole description.
@@ -324,39 +332,18 @@ bool ibValueTypeDescription::Init(ibValue** paParams, const long lSizeArray)
 		}
 		if (types.empty())
 			return false;
-
-		ibValueQualifierNumber* qNumber = nullptr;
-		if (lSizeArray > 1 && paParams[1]->ConvertToValue(qNumber))
-			m_typeDesc.m_typeData.m_number = *qNumber;
-		ibValueQualifierDate* qDate = nullptr;
-		if (lSizeArray > 2 && paParams[2]->ConvertToValue(qDate))
-			m_typeDesc.m_typeData.m_date = *qDate;
-		ibValueQualifierString* qString = nullptr;
-		if (lSizeArray > 3 && paParams[3]->ConvertToValue(qString))
-			m_typeDesc.m_typeData.m_string = *qString;
 		for (const ibClassID clsid : types)
-			m_typeDesc.m_listTypeClass.push_back(clsid);
+			m_typeDesc.AppendMetaType(clsid, qualifiers);
 		return true;
 	}
 
 	ibValueArray* valArray = nullptr;
 	if (paParams[0]->ConvertToValue(valArray)) {
-		ibValueQualifierNumber* qNumber = nullptr;
-		if (lSizeArray > 1 && paParams[1]->ConvertToValue(qNumber))
-			m_typeDesc.m_typeData.m_number = *qNumber;
-		ibValueQualifierDate* qDate = nullptr;
-		if (lSizeArray > 2 && paParams[2]->ConvertToValue(qDate))
-			m_typeDesc.m_typeData.m_date = *qDate;
-		ibValueQualifierString* qString = nullptr;
-		if (lSizeArray > 3 && paParams[3]->ConvertToValue(qString))
-			m_typeDesc.m_typeData.m_string = *qString;
 		for (unsigned int i = 0; i < valArray->Count(); i++) {
 			ibValue retValue; valArray->GetAt(i, retValue);
 			ibValueType* valType = CastValue<ibValueType>(retValue);
 			wxASSERT(valType);
-			m_typeDesc.m_listTypeClass.emplace_back(
-				valType->GetOwnerTypeClass()
-			);
+			m_typeDesc.AppendMetaType(valType->GetOwnerTypeClass(), qualifiers);
 		}
 		/*std::sort(m_listTypeClass.begin(), m_listTypeClass.end(), [](const ibClassID& a, const ibClassID& b) {
 			return a < b; }
@@ -366,18 +353,7 @@ bool ibValueTypeDescription::Init(ibValue** paParams, const long lSizeArray)
 
 	ibValueType* valType = nullptr;
 	if (paParams[0]->ConvertToValue(valType)) {
-		ibValueQualifierNumber* qNumber = nullptr;
-		if (lSizeArray > 1 && paParams[1]->ConvertToValue(qNumber))
-			m_typeDesc.m_typeData.m_number = *qNumber;
-		ibValueQualifierDate* qDate = nullptr;
-		if (lSizeArray > 2 && paParams[2]->ConvertToValue(qDate))
-			m_typeDesc.m_typeData.m_date = *qDate;
-		ibValueQualifierString* qString = nullptr;
-		if (lSizeArray > 3 && paParams[3]->ConvertToValue(qString))
-			m_typeDesc.m_typeData.m_string = *qString;
-		m_typeDesc.m_listTypeClass.emplace_back(
-			valType->GetOwnerTypeClass()
-		);
+		m_typeDesc.AppendMetaType(valType->GetOwnerTypeClass(), qualifiers);
 		return true;
 	}
 
@@ -413,8 +389,7 @@ bool ibValueTypeDescription::ContainType(const ibValue& cType) const
 	wxASSERT(valueType);
 	// The range ended at begin(), so the search was over NOTHING: find always answered begin(), and
 	// comparing that with end() made the result "yes" for every type whenever the list was not empty.
-	auto it = std::find(m_typeDesc.m_listTypeClass.begin(), m_typeDesc.m_listTypeClass.end(), valueType->GetOwnerTypeClass());
-	return it != m_typeDesc.m_listTypeClass.end();
+	return m_typeDesc.ContainType(valueType->GetOwnerTypeClass());
 }
 
 ibValue ibValueTypeDescription::AdjustValue() const
@@ -451,7 +426,7 @@ bool ibValueTypeDescription::DoDeserialize(const ibDataNode& node)
 ibValue ibValueTypeDescription::Types() const
 {
 	ibValueArray* arr = new ibValueArray();
-	for (auto clsid : m_typeDesc.m_listTypeClass)
+	for (auto clsid : m_typeDesc.GetClsidList())
 		arr->Add(new ibValueType(clsid));
 	return arr;
 }
@@ -537,7 +512,7 @@ public:
 // limits nothing, the same as a description that names none (ibValueTypeDescription::Unqualified).
 bool ibValueQualifierNumber::Init()
 {
-	m_qNumber = ibValueTypeDescription::Unqualified().m_number;
+	m_qNumber = ibValueTypeDescription::Unqualified().GetNumberQualifier();
 	return true;
 }
 
@@ -556,13 +531,13 @@ bool ibValueQualifierNumber::Init(ibValue** paParams, const long lSizeArray)
 
 bool ibValueQualifierDate::Init()
 {
-	m_qDate = ibValueTypeDescription::Unqualified().m_date;
+	m_qDate = ibValueTypeDescription::Unqualified().GetDateQualifier();
 	return true;
 }
 
 bool ibValueQualifierDate::Init(ibValue** paParams, const long lSizeArray)
 {
-	m_qDate = ibValueTypeDescription::Unqualified().m_date;
+	m_qDate = ibValueTypeDescription::Unqualified().GetDateQualifier();
 	if (lSizeArray > 0 && !paParams[0]->IsEmpty())
 		m_qDate = ibQualifierDate(paParams[0]->ConvertToEnumValue<ibDateFractions>());
 	return true;
@@ -570,7 +545,7 @@ bool ibValueQualifierDate::Init(ibValue** paParams, const long lSizeArray)
 
 bool ibValueQualifierString::Init()
 {
-	m_qString = ibValueTypeDescription::Unqualified().m_string;
+	m_qString = ibValueTypeDescription::Unqualified().GetStringQualifier();
 	return true;
 }
 

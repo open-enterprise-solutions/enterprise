@@ -228,12 +228,12 @@ void ibTypeDescriptionMemory::WriteBuffer(ibMemoryBuffer& out, const ibTypeDescr
 
 	// The three qualifiers, in declaration order. Fixed width each, so a reader that knows this
 	// version can skip forward without parsing what it does not need.
-	PutU32(out, static_cast<std::uint32_t>(typeDesc.m_typeData.m_number.m_precision));
-	PutU32(out, static_cast<std::uint32_t>(typeDesc.m_typeData.m_number.m_scale));
-	PutU32(out, typeDesc.m_typeData.m_number.m_nonNegative ? 1u : 0u);
-	PutU32(out, static_cast<std::uint32_t>(typeDesc.m_typeData.m_date.m_dateTime));
-	PutU32(out, static_cast<std::uint32_t>(typeDesc.m_typeData.m_string.m_length));
-	PutU32(out, static_cast<std::uint32_t>(typeDesc.m_typeData.m_string.m_allowedLength));
+	PutU32(out, static_cast<std::uint32_t>(typeDesc.GetPrecision()));
+	PutU32(out, static_cast<std::uint32_t>(typeDesc.GetScale()));
+	PutU32(out, typeDesc.IsNonNegative() ? 1u : 0u);
+	PutU32(out, static_cast<std::uint32_t>(typeDesc.GetDateFraction()));
+	PutU32(out, static_cast<std::uint32_t>(typeDesc.GetLength()));
+	PutU32(out, static_cast<std::uint32_t>(typeDesc.GetAllowedLength()));
 }
 
 bool ibTypeDescriptionMemory::ReadBuffer(const void* data, size_t length, ibTypeDescription& typeDesc)
@@ -270,12 +270,10 @@ bool ibTypeDescriptionMemory::ReadBuffer(const void* data, size_t length, ibType
 		!reader.Take(dateFractions) || !reader.Take(strLength) || !reader.Take(allowedLength))
 		return false;
 
-	ibTypeDescription::ibTypeData typeData;
-	typeData.m_number = ibQualifierNumber(static_cast<unsigned char>(precision),
-		static_cast<char>(scale), nonNegative != 0);
-	typeData.m_date = ibQualifierDate(static_cast<ibDateFractions>(dateFractions));
-	typeData.m_string = ibQualifierString(static_cast<unsigned short>(strLength),
-		static_cast<ibAllowedLength>(allowedLength));
+	const ibTypeDescription::ibTypeData typeData(ibQualifierNumber(static_cast<unsigned char>(precision),
+		static_cast<char>(scale), nonNegative != 0),
+		ibQualifierDate(static_cast<ibDateFractions>(dateFractions)),
+		ibQualifierString(static_cast<unsigned short>(strLength), static_cast<ibAllowedLength>(allowedLength)));
 
 	typeDesc.SetDefaultMetaType(list);
 	typeDesc.SetTypeData(typeData);

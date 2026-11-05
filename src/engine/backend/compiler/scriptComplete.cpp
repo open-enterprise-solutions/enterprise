@@ -75,7 +75,7 @@ bool FieldTypesOf(const ibMetaData* metaData, const ibValue& owner, const ibStri
 		if (attribute == nullptr || !stringUtils::IsSameAs(attribute->GetName(), field))
 			continue;
 
-		for (const ibClassID& clsid : attribute->GetTypeValueDesc().m_listTypeClass) {
+		for (const ibClassID& clsid : attribute->GetTypeValueDesc().GetClsidList()) {
 
 			// TWO REGISTRIES, ASKED IN THE ORDER THAT MATTERS. A configuration type
 			// (CatalogRef.X, DocumentObject.Y) is the METADATA's and the platform has never heard

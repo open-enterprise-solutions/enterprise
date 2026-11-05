@@ -694,7 +694,7 @@ public:
 			const ibValueMetaObjectAttributeBase* column = nullptr;
 			if (other->ConvertToValue(column)) {
 
-				for (const ibClassID& clsid : column->GetTypeDesc().m_listTypeClass) {
+				for (const ibClassID& clsid : column->GetTypeDesc().GetClsidList()) {
 
 					// ⚠ THE KIND FIRST. Only a CONSTRUCTIVE id carries a metaID; a static one's body
 					// is a name hash, and reading a hash as an id finds a match roughly never and

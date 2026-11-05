@@ -202,7 +202,7 @@ public:
 
 		if (m_refCol != nullptr) {
 			const ibTypeDescription& declared = m_refCol->GetTypeValueDesc();
-			if (declared.m_listTypeClass.size() != 1)
+			if (declared.GetClsidCount() != 1)
 				return false;   // composite: several shapes, and picking one would be picking for the reader
 
 			// 🛑 THE VALUE IS MADE FROM ITS TYPE DESCRIPTION, not from the platform's ctor registry:
