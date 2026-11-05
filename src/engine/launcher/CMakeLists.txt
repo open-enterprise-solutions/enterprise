@@ -41,6 +41,7 @@ target_include_directories(launcher PRIVATE
 
 target_link_libraries(launcher PRIVATE
     backend
+    protocol
     wx::core wx::qa wx::base wx::xml
 )
 

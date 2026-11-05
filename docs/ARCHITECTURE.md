@@ -64,8 +64,8 @@ engine into their process; the cluster and its tray link `core` alone:
 
 | Executable | Run Mode (`ibRunMode`) | Own session (`ibSessionKind`) | Purpose |
 |---|---|---|---|
-| `launcher.exe` | `eLAUNCHER_MODE` | — | Connection chooser; creates/selects database |
-| `designer-thin.exe` | its host's | `ThinDesigner` (on the server) | The designer as a thin client: an application server's base by its address (`oes://host:port/base`, `oess://` over TLS), or a file base opened in its own process |
+| `launcher.exe` | `eLAUNCHER_MODE` | — | Connection chooser: a file base, a base of the server cluster (`server[:port]` and its name), a web server's publication by its link; starts the two clients on it |
+| `designer-thin.exe` | its host's | `ThinDesigner` (on the server) | The designer as a thin client: an application server's base by its address (`oes://host:port/base`, `oess://` over TLS) or a web server's publication by its link (`https://host/base/`), or a file base opened in its own process |
 | `enterprise-thin.exe` | its host's | `ThinClient` (on the server) | The runtime as a thin client, by the same two roads; holds no base of its own and runs no code |
 | `appserver.exe` | `eSERVER_MODE` | `Service` | The application server: serves one base of its server folder for the cluster, headless; protocol clients are `ThinClient` / `ThinDesigner` |
 | `appcluster.exe` | — | — | The application cluster: a console program — or a service of the system — on `core.dll` alone; `appserver --worker=<base> --route=<n>` for each base of its folder, as many as its `Processes`, started again when one falls; holds the clients' port and carries each socket on to the server its session lives in |

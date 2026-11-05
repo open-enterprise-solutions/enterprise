@@ -622,6 +622,7 @@ oes_discover_tests(oes_multi_base_test)
 # ---------------------------------------------------------------------------
 add_executable(oes_protocol_test
     test_clientFrameApply.cpp
+    test_connectionAddress.cpp
     test_sessionFailover.cpp
 )
 

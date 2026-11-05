@@ -335,7 +335,7 @@ bool ibWebServer::Publish(const ibWebPublication& publication)
 	int port = 0;
 	bool secure = false;
 	if (!ibProtocolConnectionServer::ParseAddress(publication.m_address, host, port, base, secure)) {
-		ibWebServerSay(ibJournalMark::Error, ibT("publication '%s': '%s' is not the address of a base: oes://server[:port]/<base> or oess://…"),
+		ibWebServerSay(ibJournalMark::Error, ibT("publication '%s': '%s' is not the address of a base: oes://server[:port]/<base>, oess://… or a publication's link, http(s)://…"),
 			name, publication.m_address);
 		return false;
 	}

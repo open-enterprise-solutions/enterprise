@@ -369,7 +369,8 @@ bin\Win32\Debug\enterprise-thin.exe --file=F:\projects\oes-bin\examples\fb_test3
 
 `--file=` is the **folder**, not a `.fdb`. Started with no `--file`, no `--srv` and no `--address`, the
 designer asks for the folder with a picker. Server bases take `--srv` / `--db` / `--usr` / `--pwd`
-instead, a base an application server serves `--address=oes://server[:port]/<base>`; the full list is
+instead, a base an application server serves `--address=oes://server[:port]/<base>`, a web server's publication
+`--address=` its link as the browser shows it (`https://server/<base>/`); the full list is
 `OnInitCmdLine` in each `mainApp.cpp` (`address`, `trusted`, `file`, `srv`, `dbport`, `db`, `user`,
 `password`, `ibuser`, `ibpwd`, `locale`).
 

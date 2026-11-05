@@ -2,32 +2,43 @@
 
 #include <wx/xml/xml.h>
 
-void ibDialogConnection::InitConnection(
-	const wxString& strName,
-	bool bFileMode,
-	const wxString& strFilePath,
-	const wxString& strServer, const wxString& strPort,
-	const wxString& strDatabase,
-	const wxString& strUser, const wxString& strPassword)
+#include "core/net/ports.h"                 // ibPort::Clients — the port a cluster's address leaves out
+#include "protocol/connectionServer.h"      // the socket a client opens on a cluster's base or a publication
+
+void ibDialogConnection::InitConnection(const wxString& strName, const ibListInfo& info)
 {
 	m_textCtrlName->SetValue(strName);
 
-	if (bFileMode) {
-		m_radioFile->SetValue(true);
-		m_radioServer->SetValue(false);
-		m_dirPickerFile->SetPath(strFilePath);
-	}
-	else {
-		m_radioFile->SetValue(false);
+	switch (info.m_connection) {
+	case ibLauncherConnection::Server:
 		m_radioServer->SetValue(true);
-		m_textCtrlServer->SetValue(strServer);
-		m_textCtrlPort->SetValue(strPort);
-		m_textCtrlDataBase->SetValue(strDatabase);
-		m_textCtrlUser->SetValue(strUser);
-		m_textCtrlPassword->SetValue(strPassword);
+		break;
+	case ibLauncherConnection::Web:
+		m_radioWeb->SetValue(true);
+		break;
+	default:
+		m_radioFile->SetValue(true);
+		break;
 	}
+	m_dirPickerFile->SetPath(info.m_strFilePath);
+	m_textCtrlServer->SetValue(info.m_strServer);
+	m_textCtrlDataBase->SetValue(info.m_strDatabase);
+	m_textCtrlAddress->SetValue(info.m_strAddress);
 
 	UpdateModeVisibility();
+}
+
+ibListInfo ibDialogConnection::GetListInfo() const
+{
+	ibListInfo info;
+	info.m_connection = m_radioServer->GetValue() ? ibLauncherConnection::Server
+		: m_radioWeb->GetValue() ? ibLauncherConnection::Web : ibLauncherConnection::File;
+	info.m_strFilePath = m_dirPickerFile->GetPath();
+	// A link copied from the browser's address bar comes with what stood around it.
+	info.m_strServer = m_textCtrlServer->GetValue().Strip(wxString::both);
+	info.m_strDatabase = m_textCtrlDataBase->GetValue().Strip(wxString::both);
+	info.m_strAddress = m_textCtrlAddress->GetValue().Strip(wxString::both);
+	return info;
 }
 
 void ibDialogConnection::UpdateModeVisibility()
@@ -35,7 +46,8 @@ void ibDialogConnection::UpdateModeVisibility()
 	const bool bFile = m_radioFile->GetValue();
 
 	m_sizerFileMode->Show(bFile);
-	m_sizerServerMode->Show(!bFile);
+	m_sizerServerMode->Show(m_radioServer->GetValue());
+	m_sizerWebMode->Show(m_radioWeb->GetValue());
 
 	m_buttonTestConnection->Show(!bFile);
 
@@ -64,14 +76,17 @@ ibDialogConnection::ibDialogConnection(wxWindow* parent, wxWindowID id, const wx
 	// Mode radio buttons
 	wxBoxSizer* sizerMode = new wxBoxSizer(wxHORIZONTAL);
 	m_radioFile = new wxRadioButton(this, wxID_ANY, _("File (local database)"), wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
-	m_radioServer = new wxRadioButton(this, wxID_ANY, _("Server"), wxDefaultPosition, wxDefaultSize, 0);
+	m_radioServer = new wxRadioButton(this, wxID_ANY, _("Server cluster"), wxDefaultPosition, wxDefaultSize, 0);
+	m_radioWeb = new wxRadioButton(this, wxID_ANY, _("Web server"), wxDefaultPosition, wxDefaultSize, 0);
 	m_radioFile->SetValue(true);
 	sizerMode->Add(m_radioFile, 1, wxALL, FromDIP(5));
 	sizerMode->Add(m_radioServer, 1, wxALL, FromDIP(5));
+	sizerMode->Add(m_radioWeb, 1, wxALL, FromDIP(5));
 	mainSizer->Add(sizerMode, 0, wxEXPAND, FromDIP(5));
 
 	m_radioFile->Bind(wxEVT_RADIOBUTTON, &ibDialogConnection::OnModeChanged, this);
 	m_radioServer->Bind(wxEVT_RADIOBUTTON, &ibDialogConnection::OnModeChanged, this);
+	m_radioWeb->Bind(wxEVT_RADIOBUTTON, &ibDialogConnection::OnModeChanged, this);
 
 	// File mode panel
 	m_sizerFileMode = new wxBoxSizer(wxVERTICAL);
@@ -92,35 +107,13 @@ ibDialogConnection::ibDialogConnection(wxWindow* parent, wxWindowID id, const wx
 	m_staticTextServer->Wrap(-1);
 	sizerServer->Add(m_staticTextServer, 1, wxALIGN_CENTER_VERTICAL, 0);
 	m_textCtrlServer = new wxTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0);
+	// The port after a colon, left out — the cluster's own.
+	m_textCtrlServer->SetHint(wxString::Format(wxT("localhost[:%u]"), static_cast<unsigned>(ibPort::Clients.m_first)));
 	sizerServer->Add(m_textCtrlServer, 3, wxALL | wxEXPAND, FromDIP(5));
 	m_sizerServerMode->Add(sizerServer, 0, wxEXPAND, FromDIP(5));
 
-	wxBoxSizer* sizerPort = new wxBoxSizer(wxHORIZONTAL);
-	m_staticTextPort = new wxStaticText(this, wxID_ANY, _("Port:"), wxDefaultPosition, wxDefaultSize, 0);
-	m_staticTextPort->Wrap(-1);
-	sizerPort->Add(m_staticTextPort, 1, wxALIGN_CENTER_VERTICAL, 0);
-	m_textCtrlPort = new wxTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0);
-	sizerPort->Add(m_textCtrlPort, 3, wxALL | wxEXPAND, FromDIP(5));
-	m_sizerServerMode->Add(sizerPort, 0, wxEXPAND, FromDIP(5));
-
-	wxBoxSizer* sizerUser = new wxBoxSizer(wxHORIZONTAL);
-	m_staticTextUser = new wxStaticText(this, wxID_ANY, _("User:"), wxDefaultPosition, wxDefaultSize, 0);
-	m_staticTextUser->Wrap(-1);
-	sizerUser->Add(m_staticTextUser, 1, wxALIGN_CENTER_VERTICAL, 0);
-	m_textCtrlUser = new wxTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0);
-	sizerUser->Add(m_textCtrlUser, 3, wxALL | wxEXPAND, FromDIP(5));
-	m_sizerServerMode->Add(sizerUser, 0, wxEXPAND, FromDIP(5));
-
-	wxBoxSizer* sizerPassword = new wxBoxSizer(wxHORIZONTAL);
-	m_staticTextPassword = new wxStaticText(this, wxID_ANY, _("Password:"), wxDefaultPosition, wxDefaultSize, 0);
-	m_staticTextPassword->Wrap(-1);
-	sizerPassword->Add(m_staticTextPassword, 1, wxALIGN_CENTER_VERTICAL, 0);
-	m_textCtrlPassword = new wxTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_PASSWORD);
-	sizerPassword->Add(m_textCtrlPassword, 3, wxALL | wxEXPAND, FromDIP(5));
-	m_sizerServerMode->Add(sizerPassword, 0, wxEXPAND, FromDIP(5));
-
 	wxBoxSizer* sizerDataBase = new wxBoxSizer(wxHORIZONTAL);
-	m_staticTextDataBase = new wxStaticText(this, wxID_ANY, _("Database:"), wxDefaultPosition, wxDefaultSize, 0);
+	m_staticTextDataBase = new wxStaticText(this, wxID_ANY, _("Base:"), wxDefaultPosition, wxDefaultSize, 0);
 	m_staticTextDataBase->Wrap(-1);
 	sizerDataBase->Add(m_staticTextDataBase, 1, wxALIGN_CENTER_VERTICAL, 0);
 	m_textCtrlDataBase = new wxTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0);
@@ -128,6 +121,20 @@ ibDialogConnection::ibDialogConnection(wxWindow* parent, wxWindowID id, const wx
 	m_sizerServerMode->Add(sizerDataBase, 0, wxEXPAND, FromDIP(5));
 
 	mainSizer->Add(m_sizerServerMode, 0, wxEXPAND, FromDIP(5));
+
+	// Web mode panel
+	m_sizerWebMode = new wxBoxSizer(wxVERTICAL);
+
+	wxBoxSizer* sizerAddress = new wxBoxSizer(wxHORIZONTAL);
+	m_staticTextAddress = new wxStaticText(this, wxID_ANY, _("Address:"), wxDefaultPosition, wxDefaultSize, 0);
+	m_staticTextAddress->Wrap(-1);
+	sizerAddress->Add(m_staticTextAddress, 1, wxALIGN_CENTER_VERTICAL, 0);
+	m_textCtrlAddress = new wxTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0);
+	m_textCtrlAddress->SetHint(wxT("https://server/<base>/"));
+	sizerAddress->Add(m_textCtrlAddress, 3, wxALL | wxEXPAND, FromDIP(5));
+	m_sizerWebMode->Add(sizerAddress, 0, wxEXPAND, FromDIP(5));
+
+	mainSizer->Add(m_sizerWebMode, 0, wxEXPAND, FromDIP(5));
 
 	// Buttons
 	wxBoxSizer* bSizerButton = new wxBoxSizer(wxHORIZONTAL);
@@ -159,50 +166,15 @@ void ibDialogConnection::OnModeChanged(wxCommandEvent& event)
 	event.Skip();
 }
 
-#ifdef OES_USE_POSTGRESQL
-#include "backend/databaseLayer/postgres/postgresDatabaseLayer.h"
-#endif
-#ifdef OES_USE_FIREBIRD
-#include "backend/databaseLayer/firebird/firebirdDatabaseLayer.h"
-#endif
-
 void ibDialogConnection::TestConnectionOnButtonClick(wxCommandEvent& event)
 {
-	bool success = false;
-
-#ifdef OES_USE_FIREBIRD
-	{
-		std::shared_ptr<ibDatabaseLayerFirebird> db(new ibDatabaseLayerFirebird(
-			m_textCtrlServer->GetValue(),
-			m_textCtrlDataBase->GetValue(),
-			m_textCtrlUser->GetValue(),
-			m_textCtrlPassword->GetValue()
-		));
-		success = db->Open();
-		db->Close();
-	}
-#elif defined(OES_USE_POSTGRESQL)
-	{
-		std::shared_ptr<ibDatabaseLayerPostgres> db(new ibDatabaseLayerPostgres);
-		success = db->Open(
-			m_textCtrlServer->GetValue(),
-			m_textCtrlPort->GetValue(),
-			m_textCtrlDataBase->GetValue(),
-			m_textCtrlUser->GetValue(),
-			m_textCtrlPassword->GetValue()
-		);
-		db->Close();
-	}
-#else
-	wxMessageBox(_("No database driver available"));
-	event.Skip();
-	return;
-#endif
-
-	if (success)
-		wxMessageBox(_("Connected to DB!"));
+	// THE CLIENT'S OWN ROAD — the socket it opens on the address (--address), opened and closed again.
+	ibProtocolConnectionServer server;
+	ibString error;
+	if (server.Open(GetListInfo().GetAddress(), ibEmptyString, error))
+		wxMessageBox(_("Connected to DB!"), _("Configure connect"), wxOK | wxICON_INFORMATION, this);
 	else
-		wxMessageBox(_("Failed to connect to DB!"));
+		wxMessageBox(error, _("Failed to connect to DB!"), wxOK | wxICON_ERROR, this);
 
 	event.Skip();
 }

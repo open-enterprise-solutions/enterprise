@@ -25,14 +25,21 @@
 enum class ibLauncherPicture { Enterprise, Designer, Web, Add, Edit, Delete, Exit };
 wxBitmapBundle ibGetLauncherPicture(ibLauncherPicture which);
 
-struct CListInfo {
-	bool m_bFileMode = false;
-	wxString m_strFilePath;
-	wxString m_strServer;
-	wxString m_strDatabase;
-	wxString m_strUser;
-	wxString m_strPassword;
-	wxString m_strPort;
+// HOW A BASE IS REACHED — the three a client knows: a file base, opened in its own process; a base of the server
+// cluster, over its port; a web server's publication, by the link a browser shows for it. The last two are one road
+// in the client (--address, protocol/connectionServer.h), the same protocol the server speaks.
+enum class ibLauncherConnection { File, Server, Web };
+
+struct ibListInfo {
+	ibLauncherConnection m_connection = ibLauncherConnection::File;
+	wxString m_strFilePath;   // File: the base's folder
+	wxString m_strServer;     // Server: the cluster, server[:port] — the port left out is the cluster's own…
+	wxString m_strDatabase;   // …and the base's name in it
+	wxString m_strAddress;    // Web: the publication's link, copied from the browser's address bar
+
+	// The address a client is started on (--address): the cluster's oes://server[:port]/<base>, the web's link as it
+	// is written; empty for a file base.
+	wxString GetAddress() const;
 };
 
 class ibFrameLauncher : public wxFrame {
@@ -47,7 +54,7 @@ class ibFrameLauncher : public wxFrame {
 	wxButton* m_buttonDelete;
 	wxButton* m_buttonExit;
 
-	std::vector<std::pair<wxString, CListInfo>> m_listInfoBase;
+	std::vector<std::pair<wxString, ibListInfo>> m_listInfoBase;
 
 public:
 

@@ -12199,6 +12199,14 @@ msgstr "З'єднання з БД встановлено!"
 msgid "Failed to connect to DB!"
 msgstr "Не вдалося підключитися до БД!"
 
+#: src/engine/launcher/connectionDB.cpp:79
+msgid "Server cluster"
+msgstr "Кластер серверів"
+
+#: src/engine/launcher/connectionDB.cpp:116
+msgid "Base:"
+msgstr "База:"
+
 #: src/engine/launcher/connectionDB.h:67
 msgid "Configure connect"
 msgstr "Налаштувати підключення"
@@ -13080,9 +13088,10 @@ msgid ""
 "\n"
 "Provide one of:\n"
 "  --address=oes://<server>[:port]/<base>   (an application server; oess:// over TLS)\n"
+"  --address=http(s)://<server>[:port]/<base>/   (a web server's publication, its link)\n"
 "  --file=<path>          (Firebird embedded / SQLite file)\n"
 "  --server=<host> --db=<name> [--dbport=...] [--user=...] [--password=...]"
-msgstr "Не вдалося запустити designer-thin.exe - не вказано інформаційну базу.\n\nВкажіть один із варіантів:\n  --address=oes://<server>[:port]/<base>   (сервер застосунків; oess:// через TLS)\n  --file=<path>          (Firebird embedded / файл SQLite)\n  --server=<host> --db=<name> [--dbport=...] [--user=...] [--password=...]"
+msgstr "Не вдалося запустити designer-thin.exe - не вказано інформаційну базу.\n\nВкажіть один із варіантів:\n  --address=oes://<server>[:port]/<base>   (сервер застосунків; oess:// через TLS)\n  --address=http(s)://<server>[:port]/<base>/   (публікація веб-сервера, її посилання)\n  --file=<path>          (Firebird embedded / файл SQLite)\n  --server=<host> --db=<name> [--dbport=...] [--user=...] [--password=...]"
 
 #: src/engine/designer-thin/mainFrame/mainFrameDesignerEvent.cpp:282
 msgid "Failed to upload configuration file."
@@ -13110,9 +13119,10 @@ msgid ""
 "\n"
 "Provide one of:\n"
 "  --address=oes://<server>[:port]/<base>   (an application server; oess:// over TLS)\n"
+"  --address=http(s)://<server>[:port]/<base>/   (a web server's publication, its link)\n"
 "  --file=<path>          (Firebird embedded / SQLite file)\n"
 "  --server=<host> --db=<name> [--dbport=...] [--user=...]"
-msgstr "Не вдалося запустити enterprise-thin.exe - не вказано інформаційну базу.\n\nВкажіть один із варіантів:\n  --address=oes://<server>[:port]/<base>   (сервер застосунків; oess:// через TLS)\n  --file=<path>          (Firebird embedded / файл SQLite)\n  --server=<host> --db=<name> [--dbport=...] [--user=...]"
+msgstr "Не вдалося запустити enterprise-thin.exe - не вказано інформаційну базу.\n\nВкажіть один із варіантів:\n  --address=oes://<server>[:port]/<base>   (сервер застосунків; oess:// через TLS)\n  --address=http(s)://<server>[:port]/<base>/   (публікація веб-сервера, її посилання)\n  --file=<path>          (Firebird embedded / файл SQLite)\n  --server=<host> --db=<name> [--dbport=...] [--user=...]"
 
 #: src/engine/frmclient/docView/templates/docViewSpreadsheet.cpp:233
 msgid "Zoom"
@@ -13341,8 +13351,8 @@ msgstr "не вдалося прочитати довірені сертифік
 
 #: src/engine/protocol/connectionServer.cpp:113
 #, c-format
-msgid "'%s' is not the address of a base: oes://server[:port]/<base> or oess://..."
-msgstr "'%s' не є адресою бази: oes://server[:port]/<base> або oess://..."
+msgid "'%s' is not the address of a base: oes://server[:port]/<base>, oess://... or a publication's link, http(s)://server[:port]/<publication>/"
+msgstr "'%s' не є адресою бази: oes://server[:port]/<base>, oess://... або посиланням публікації, http(s)://server[:port]/<publication>/"
 
 #: src/engine/protocol/connectionServer.cpp:121
 #, c-format

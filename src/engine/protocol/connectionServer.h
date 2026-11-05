@@ -23,6 +23,8 @@ public:
 
 	// `oes://server[:port]/<base>` or `oess://…` — the address the cluster prints for every base it serves — read;
 	// false when it is not one. The port left out is the cluster's own (ibPort::Clients); `secure` — oess://, TLS.
+	// …or the link a browser shows for a web server's publication, `http://server[:port]/<publication>/…` or
+	// `https://…`: the base is the path's first segment, the port left out the browser's (80, 443 over TLS).
 	static bool ParseAddress(const ibString& address, ibString& host, int& port, ibString& base, bool& secure);
 	// Where a base's clients come in on its server — /<base>/client, the name escaped.
 	static std::string ClientPath(const ibString& base);
@@ -34,8 +36,9 @@ public:
 	// Made where the socket's type is whole (the .cpp) — so is its destruction.
 	ibProtocolConnectionServer();
 
-	// `address` — `oes://server[:port]/<base>` or `oess://…`; `trusted` — for oess://, a PEM file of the authorities
-	// the server's certificate must end in, empty — the platform's store. False with why it was not reached in `error`.
+	// `address` — `oes://server[:port]/<base>`, `oess://…` or a publication's link (ParseAddress); `trusted` — over
+	// TLS (oess://, https://), a PEM file of the authorities the server's certificate must end in, empty — the
+	// platform's store. False with why it was not reached in `error`.
 	bool Open(const ibString& address, const ibString& trusted, ibString& error);
 	void Close();
 

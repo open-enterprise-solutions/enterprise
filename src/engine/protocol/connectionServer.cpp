@@ -41,24 +41,69 @@ std::string EscapeSegment(const ibString& segment)
 	return escaped;
 }
 
+// …and read back, as a browser's link carries it: every %XX the byte it stands for, the bytes UTF-8. False when a %
+// is not followed by two hex digits.
+bool UnescapeSegment(const ibString& segment, ibString& unescaped)
+{
+	const auto digit = [](char c) {
+		if (c >= '0' && c <= '9') return c - '0';
+		if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+		if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+		return -1;
+	};
+	const std::string utf8 = segment.utf8_str();
+	std::string bytes;
+	for (std::size_t i = 0; i < utf8.length(); ++i) {
+		if (utf8[i] != '%') {
+			bytes += utf8[i];
+			continue;
+		}
+		const int high = i + 2 < utf8.length() ? digit(utf8[i + 1]) : -1;
+		const int low = high >= 0 ? digit(utf8[i + 2]) : -1;
+		if (low < 0)
+			return false;
+		bytes += static_cast<char>(high * 16 + low);
+		i += 2;
+	}
+	unescaped = ibString::FromUTF8(bytes);
+	return true;
+}
+
 } // namespace
 
 bool ibProtocolConnectionServer::ParseAddress(const ibString& address, ibString& host, int& port, ibString& base,
 	bool& secure)
 {
+	// THE PAGE'S LINK — what a browser shows for a web server's publication: behind it the same door, /<publication>/client
+	// (webserver/webServer.h), and the same packets; the port left out is the browser's.
 	ibString rest;
-	secure = address.StartsWith(ibT("oess://"), &rest);
-	if (!secure && !address.StartsWith(ibT("oes://"), &rest))
-		return false;
+	bool page = true;
+	if (address.StartsWith(ibT("https://"), &rest))
+		secure = true;
+	else if (address.StartsWith(ibT("http://"), &rest))
+		secure = false;
+	else {
+		page = false;
+		secure = address.StartsWith(ibT("oess://"), &rest);
+		if (!secure && !address.StartsWith(ibT("oes://"), &rest))
+			return false;
+	}
 	const int slash = rest.Find(ibT('/'));
 	if (slash == wxNOT_FOUND)
 		return false;
 	ibString authority = rest.Left(slash);
 	base = rest.Mid(slash + 1);
-	if (base.EndsWith(ibT("/")))
+	if (page) {
+		// The publication is the path's first segment, escaped as the browser shows it; the page's own files after it,
+		// a query, a fragment are the page's.
+		const size_t end = base.find_first_of(ibString(ibT("/?#")));
+		if (!UnescapeSegment(end == ibString::npos ? base : base.Left(end), base))
+			return false;
+	}
+	else if (base.EndsWith(ibT("/")))
 		base.RemoveLast();
 
-	port = ibPort::Clients.m_first;
+	port = page ? (secure ? 443 : 80) : ibPort::Clients.m_first;
 	const int colon = authority.Find(ibT(':'), true);
 	if (colon != wxNOT_FOUND && !authority.EndsWith(ibT("]"))) {
 		long number = 0;
@@ -110,7 +155,7 @@ bool ibProtocolConnectionServer::Open(const ibString& address, const ibString& t
 	int port = 0;
 	bool secure = false;
 	if (!ParseAddress(address, host, port, base, secure)) {
-		error = ibString::Format(_("'%s' is not the address of a base: oes://server[:port]/<base> or oess://..."), address);
+		error = ibString::Format(_("'%s' is not the address of a base: oes://server[:port]/<base>, oess://... or a publication's link, http(s)://server[:port]/<publication>/"), address);
 		return false;
 	}
 

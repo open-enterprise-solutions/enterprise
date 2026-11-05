@@ -13,27 +13,19 @@
 
 namespace {
 
-wxString BuildLaunchCommand(const wxString& exeName, const CListInfo& info, ibLaunchSecrets& secrets) {
+wxString BuildLaunchCommand(const wxString& exeName, const ibListInfo& info, ibLaunchSecrets& secrets) {
 	// The program beside this one — a flat build's designer beside launcher, a bundle's designer.app beside launcher.app
 	// (ibExecutablePath).
 	wxString cmd = wxT("\"") + wxString(ibExecutablePath(exeName)) + wxT("\"");
 	secrets = ibLaunchSecrets();
 
-	if (info.m_bFileMode) {
+	if (info.m_connection == ibLauncherConnection::File) {
 		if (!info.m_strFilePath.IsEmpty())
 			cmd += wxT(" -file \"") + info.m_strFilePath + wxT("\"");
 	}
 	else {
-		if (!info.m_strServer.IsEmpty())
-			cmd += wxT(" -srv ") + info.m_strServer;
-		if (!info.m_strPort.IsEmpty())
-			cmd += wxT(" -p ") + info.m_strPort;
-		if (!info.m_strDatabase.IsEmpty())
-			cmd += wxT(" -db ") + info.m_strDatabase;
-		if (!info.m_strUser.IsEmpty())
-			cmd += wxT(" -usr ") + info.m_strUser;
-		secrets.m_dbUser = info.m_strUser;
-		secrets.m_dbPassword = info.m_strPassword;
+		// The cluster's base and the web's publication — one road in the client, the server's protocol.
+		cmd += wxT(" -address \"") + info.GetAddress() + wxT("\"");
 	}
 
 	// Pass locale from appData singleton (already read from backend.conf)
@@ -47,6 +39,17 @@ wxString BuildLaunchCommand(const wxString& exeName, const CListInfo& info, ibLa
 }
 
 } // anonymous namespace
+
+wxString ibListInfo::GetAddress() const {
+	switch (m_connection) {
+	case ibLauncherConnection::Server:
+		return wxT("oes://") + m_strServer + wxT("/") + m_strDatabase;
+	case ibLauncherConnection::Web:
+		return m_strAddress;
+	default:
+		return wxEmptyString;
+	}
+}
 
 void ibFrameLauncher::LoadListIB() {
 
@@ -64,14 +67,24 @@ void ibFrameLauncher::LoadListIB() {
 		wxXmlNode* node = root->GetChildren();
 		while (node != nullptr) {
 			if (node->GetName() == "item") {
-				CListInfo listInfo; wxString strNameIB;
+				ibListInfo listInfo; wxString strNameIB;
+				// A list written before the cluster and the web: filemode, 1 — a file base, 0 — a base on a DBMS server,
+				// which comes back as the cluster's base of the same name on the same host (its port, the DBMS's, is not read).
+				wxString strFileMode;
+				bool hasConnection = false;
 				wxXmlNode* nodeItem = node->GetChildren();
 				while (nodeItem != nullptr) {
 					if (nodeItem->GetName() == "name" && nodeItem->GetChildren()) {
 						strNameIB = nodeItem->GetChildren()->GetContent();
 					}
+					else if (nodeItem->GetName() == "connection" && nodeItem->GetChildren()) {
+						const wxString connection = nodeItem->GetChildren()->GetContent();
+						listInfo.m_connection = connection == "server" ? ibLauncherConnection::Server
+							: connection == "web" ? ibLauncherConnection::Web : ibLauncherConnection::File;
+						hasConnection = true;
+					}
 					else if (nodeItem->GetName() == "filemode" && nodeItem->GetChildren()) {
-						listInfo.m_bFileMode = (nodeItem->GetChildren()->GetContent() == "1");
+						strFileMode = nodeItem->GetChildren()->GetContent();
 					}
 					else if (nodeItem->GetName() == "filepath" && nodeItem->GetChildren()) {
 						listInfo.m_strFilePath = nodeItem->GetChildren()->GetContent();
@@ -79,26 +92,22 @@ void ibFrameLauncher::LoadListIB() {
 					else if (nodeItem->GetName() == "server" && nodeItem->GetChildren()) {
 						listInfo.m_strServer = nodeItem->GetChildren()->GetContent();
 					}
-					else if (nodeItem->GetName() == "port" && nodeItem->GetChildren()) {
-						listInfo.m_strPort = nodeItem->GetChildren()->GetContent();
-					}
 					else if (nodeItem->GetName() == "database" && nodeItem->GetChildren()) {
 						listInfo.m_strDatabase = nodeItem->GetChildren()->GetContent();
 					}
-					else if (nodeItem->GetName() == "user" && nodeItem->GetChildren()) {
-						listInfo.m_strUser = nodeItem->GetChildren()->GetContent();
-					}
-					else if (nodeItem->GetName() == "password" && nodeItem->GetChildren()) {
-						listInfo.m_strPassword = nodeItem->GetChildren()->GetContent();
+					else if (nodeItem->GetName() == "address" && nodeItem->GetChildren()) {
+						listInfo.m_strAddress = nodeItem->GetChildren()->GetContent();
 					}
 					nodeItem = nodeItem->GetNext();
 				}
+				if (!hasConnection && strFileMode == "0")
+					listInfo.m_connection = ibLauncherConnection::Server;
 
 				m_listInfoBase.emplace_back(strNameIB, listInfo);
 				m_listIBwnd->AppendString(strNameIB);
-
-				node = node->GetNext();
 			}
+			// Past a node that is not an item too: it stood in the loop for ever.
+			node = node->GetNext();
 		}
 	}
 }
@@ -116,9 +125,11 @@ void ibFrameLauncher::SaveListIB() {
 		xmlNode_name->AddChild(new wxXmlNode(wxXML_TEXT_NODE, wxEmptyString, list.first));
 		xmlItem->AddChild(xmlNode_name);
 
-		wxXmlNode* xmlNode_filemode = new wxXmlNode(wxXML_ELEMENT_NODE, "filemode");
-		xmlNode_filemode->AddChild(new wxXmlNode(wxXML_TEXT_NODE, wxEmptyString, list.second.m_bFileMode ? "1" : "0"));
-		xmlItem->AddChild(xmlNode_filemode);
+		const ibLauncherConnection connection = list.second.m_connection;
+		wxXmlNode* xmlNode_connection = new wxXmlNode(wxXML_ELEMENT_NODE, "connection");
+		xmlNode_connection->AddChild(new wxXmlNode(wxXML_TEXT_NODE, wxEmptyString,
+			connection == ibLauncherConnection::Server ? "server" : connection == ibLauncherConnection::Web ? "web" : "file"));
+		xmlItem->AddChild(xmlNode_connection);
 
 		wxXmlNode* xmlNode_filepath = new wxXmlNode(wxXML_ELEMENT_NODE, "filepath");
 		xmlNode_filepath->AddChild(new wxXmlNode(wxXML_TEXT_NODE, wxEmptyString, list.second.m_strFilePath));
@@ -127,18 +138,12 @@ void ibFrameLauncher::SaveListIB() {
 		wxXmlNode* xmlNode_server = new wxXmlNode(wxXML_ELEMENT_NODE, "server");
 		xmlNode_server->AddChild(new wxXmlNode(wxXML_TEXT_NODE, wxEmptyString, list.second.m_strServer));
 		xmlItem->AddChild(xmlNode_server);
-		wxXmlNode* xmlNode_port = new wxXmlNode(wxXML_ELEMENT_NODE, "port");
-		xmlNode_port->AddChild(new wxXmlNode(wxXML_TEXT_NODE, wxEmptyString, list.second.m_strPort));
-		xmlItem->AddChild(xmlNode_port);
 		wxXmlNode* xmlNode_db = new wxXmlNode(wxXML_ELEMENT_NODE, "database");
 		xmlNode_db->AddChild(new wxXmlNode(wxXML_TEXT_NODE, wxEmptyString, list.second.m_strDatabase));
 		xmlItem->AddChild(xmlNode_db);
-		wxXmlNode* xmlNode_user = new wxXmlNode(wxXML_ELEMENT_NODE, "user");
-		xmlNode_user->AddChild(new wxXmlNode(wxXML_TEXT_NODE, wxEmptyString, list.second.m_strUser));
-		xmlItem->AddChild(xmlNode_user);
-		wxXmlNode* xmlNode_password = new wxXmlNode(wxXML_ELEMENT_NODE, "password");
-		xmlNode_password->AddChild(new wxXmlNode(wxXML_TEXT_NODE, wxEmptyString, list.second.m_strPassword));
-		xmlItem->AddChild(xmlNode_password);
+		wxXmlNode* xmlNode_address = new wxXmlNode(wxXML_ELEMENT_NODE, "address");
+		xmlNode_address->AddChild(new wxXmlNode(wxXML_TEXT_NODE, wxEmptyString, list.second.m_strAddress));
+		xmlItem->AddChild(xmlNode_address);
 
 		root->AddChild(xmlItem);
 	}
@@ -243,11 +248,11 @@ ibFrameLauncher::~ibFrameLauncher()
 	SaveListIB();
 }
 
-static wxString FormatInfoLabel(const CListInfo& info) {
-	if (info.m_bFileMode) {
+static wxString FormatInfoLabel(const ibListInfo& info) {
+	if (info.m_connection == ibLauncherConnection::File) {
 		return wxT("file: ") + info.m_strFilePath;
 	}
-	return wxT("srv: ") + info.m_strServer + wxT("; db: ") + info.m_strDatabase;
+	return info.GetAddress();
 }
 
 void ibFrameLauncher::OnSelectedList(wxCommandEvent& event) {
@@ -292,16 +297,22 @@ void ibFrameLauncher::OnButtonWeb(wxCommandEvent& event) {
 	int selection = m_listIBwnd->GetSelection();
 	if (selection == wxNOT_FOUND) return;
 	auto itSelection = m_listInfoBase.begin() + selection;
-	const CListInfo& info = itSelection->second;
+	const ibListInfo& info = itSelection->second;
 
-	// THE WEB SERVER publishes a file base under its folder's name, and the browser opens its page; a login is the
-	// browser's. A base on a DBMS server is no publication of it (webserver/webServer.h).
-	if (!info.m_bFileMode) {
-		wxMessageBox(_("The web server publishes a file base, and this base is on a DBMS server."),
-			_("Launch OES"), wxOK | wxICON_ERROR, this);
+	// A PUBLICATION is on a web server already: its page is the link.
+	if (info.m_connection == ibLauncherConnection::Web) {
+		wxLaunchDefaultBrowser(info.m_strAddress);
+		Close(true);
 		return;
 	}
-	wxString cmd = wxT("\"") + wxString(ibExecutablePath(wxT("webserver"))) + wxT("\" --file=\"") + info.m_strFilePath + wxT("\"");
+
+	// THE WEB SERVER publishes the base — a file base under its folder's name, the cluster's under its name there — and
+	// the browser opens its page; a login is the browser's (webserver/webServer.h).
+	wxString cmd = wxT("\"") + wxString(ibExecutablePath(wxT("webserver"))) + wxT("\"");
+	if (info.m_connection == ibLauncherConnection::File)
+		cmd += wxT(" --file=\"") + info.m_strFilePath + wxT("\"");
+	else
+		cmd += wxT(" --server=\"") + info.GetAddress() + wxT("\"");
 	if (appData != nullptr) {
 		wxString locale = appData->GetLocale();
 		if (!locale.IsEmpty())
@@ -327,15 +338,7 @@ void ibFrameLauncher::OnButtonAdd(wxCommandEvent& event) {
 	const int res = connection_db->ShowModal();
 	if (res == wxID_OK) {
 
-		CListInfo listInfo;
-
-		listInfo.m_bFileMode = connection_db->IsFileMode();
-		listInfo.m_strFilePath = connection_db->GetFilePath();
-		listInfo.m_strServer = connection_db->GetServer();
-		listInfo.m_strPort = connection_db->GetPort();
-		listInfo.m_strDatabase = connection_db->GetDBName();
-		listInfo.m_strUser = connection_db->GetUser();
-		listInfo.m_strPassword = connection_db->GetPassword();
+		const ibListInfo listInfo = connection_db->GetListInfo();
 
 		m_listInfoBase.emplace_back(connection_db->GetNameIB(), listInfo);
 
@@ -356,25 +359,11 @@ void ibFrameLauncher::OnButtonEdit(wxCommandEvent& event) {
 	auto itSelection = m_listInfoBase.begin() + selection;
 
 	ibDialogConnection* connection_db = new ibDialogConnection(this, wxID_ANY);
-	connection_db->InitConnection(itSelection->first,
-		itSelection->second.m_bFileMode,
-		itSelection->second.m_strFilePath,
-		itSelection->second.m_strServer, itSelection->second.m_strPort,
-		itSelection->second.m_strDatabase,
-		itSelection->second.m_strUser, itSelection->second.m_strPassword
-	);
+	connection_db->InitConnection(itSelection->first, itSelection->second);
 	const int res = connection_db->ShowModal();
 	if (res == wxID_OK) {
 
-		CListInfo listInfo;
-
-		listInfo.m_bFileMode = connection_db->IsFileMode();
-		listInfo.m_strFilePath = connection_db->GetFilePath();
-		listInfo.m_strServer = connection_db->GetServer();
-		listInfo.m_strPort = connection_db->GetPort();
-		listInfo.m_strDatabase = connection_db->GetDBName();
-		listInfo.m_strUser = connection_db->GetUser();
-		listInfo.m_strPassword = connection_db->GetPassword();
+		const ibListInfo listInfo = connection_db->GetListInfo();
 
 		m_listIBwnd->Insert(connection_db->GetNameIB(), selection);
 		m_listIBwnd->Delete(selection + 1);

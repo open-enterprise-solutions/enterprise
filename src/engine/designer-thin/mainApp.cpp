@@ -28,7 +28,7 @@ wxIMPLEMENT_APP(ibAppDesigner);
 
 void ibAppDesigner::OnInitCmdLine(wxCmdLineParser& parser)
 {
-	parser.AddOption(wxT("address"), wxT("address"), "Application server: oes://server[:port]/<base>, oess:// over TLS", wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
+	parser.AddOption(wxT("address"), wxT("address"), "Application server: oes://server[:port]/<base>, oess:// over TLS; or a web server's publication: http(s)://server[:port]/<base>/", wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
 	parser.AddOption(wxT("trusted"), wxT("trusted"), "oess://: the authorities trusted, a PEM file (default: the system's store)", wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
 	parser.AddOption(wxT("file"),   wxT("file"),     "Database file path",      wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
 	parser.AddOption(wxT("srv"),    wxT("server"),   "Database server address", wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
@@ -147,6 +147,7 @@ bool ibAppDesigner::DoOnInit()
 			_("Cannot start designer-thin.exe - no infobase specified.\n\n"
 			  "Provide one of:\n"
 			  "  --address=oes://<server>[:port]/<base>   (an application server; oess:// over TLS)\n"
+			  "  --address=http(s)://<server>[:port]/<base>/   (a web server's publication, its link)\n"
 			  "  --file=<path>          (Firebird embedded / SQLite file)\n"
 			  "  --server=<host> --db=<name> [--dbport=...] [--user=...] [--password=...]"),
 			_("OES Designer"),

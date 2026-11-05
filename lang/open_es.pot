@@ -11867,6 +11867,14 @@ msgstr ""
 msgid "Failed to connect to DB!"
 msgstr ""
 
+#: src/engine/launcher/connectionDB.cpp:79
+msgid "Server cluster"
+msgstr ""
+
+#: src/engine/launcher/connectionDB.cpp:116
+msgid "Base:"
+msgstr ""
+
 #: src/engine/launcher/connectionDB.h:67
 msgid "Configure connect"
 msgstr ""
@@ -12747,6 +12755,7 @@ msgid ""
 "\n"
 "Provide one of:\n"
 "  --address=oes://<server>[:port]/<base>   (an application server; oess:// over TLS)\n"
+"  --address=http(s)://<server>[:port]/<base>/   (a web server's publication, its link)\n"
 "  --file=<path>          (Firebird embedded / SQLite file)\n"
 "  --server=<host> --db=<name> [--dbport=...] [--user=...] [--password=...]"
 msgstr ""
@@ -12777,6 +12786,7 @@ msgid ""
 "\n"
 "Provide one of:\n"
 "  --address=oes://<server>[:port]/<base>   (an application server; oess:// over TLS)\n"
+"  --address=http(s)://<server>[:port]/<base>/   (a web server's publication, its link)\n"
 "  --file=<path>          (Firebird embedded / SQLite file)\n"
 "  --server=<host> --db=<name> [--dbport=...] [--user=...]"
 msgstr ""
@@ -13008,7 +13018,7 @@ msgstr ""
 
 #: src/engine/protocol/connectionServer.cpp:113
 #, c-format
-msgid "'%s' is not the address of a base: oes://server[:port]/<base> or oess://..."
+msgid "'%s' is not the address of a base: oes://server[:port]/<base>, oess://... or a publication's link, http(s)://server[:port]/<publication>/"
 msgstr ""
 
 #: src/engine/protocol/connectionServer.cpp:121
