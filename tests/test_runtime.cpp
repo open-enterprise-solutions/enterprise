@@ -1979,7 +1979,7 @@ TEST(RuntimeTest, StrSplitCutsAtEachSeparatorCharacter) {
 		if (countAt < 0 || getAt < 0 || !array.CallAsFunc(countAt, count, noParams, 0))
 			return answer;
 		for (int i = 0; i < count.GetInteger(); ++i) {
-			ibValue index(ibNumber(i)), part;
+			ibValue index{ ibNumber(i) }, part;   // braces: `index(ibNumber(i))` declares a function
 			ibValue* params[1] = { &index };
 			if (array.CallAsFunc(getAt, part, params, 1))
 				answer.push_back(part.GetString());
