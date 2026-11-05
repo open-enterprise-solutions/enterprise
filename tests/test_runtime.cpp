@@ -4693,7 +4693,7 @@ TEST(RuntimeTest, ValueListUnloadsAndLoadsValues) {
 	ASSERT_TRUE(pu.GetPropVal(wxT("held"), v));
 	EXPECT_EQ(1, v.GetInteger());
 	ASSERT_TRUE(pu.GetPropVal(wxT("shown"), v));
-	EXPECT_TRUE(v.GetString().IsEmpty());
+	EXPECT_EQ(wxT("1"), v.GetString());   // loaded with no presentation: the value's text is taken as one
 	ASSERT_TRUE(pu.GetPropVal(wxT("mark"), v));
 	EXPECT_FALSE(v.GetBoolean());
 

@@ -438,11 +438,6 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 		case enBase64Value: pvarRetValue = ibValueBinaryData::Base64Value(paParams[0]->GetString()); return true;
 		case enStrSplit: pvarRetValue = new ibValueArray(StrSplit(*paParams[0], *paParams[1],
 			lSizeArray > 2 ? paParams[2]->GetBoolean() : true)); return true;
-		case enFillPropertyValues:
-			FillPropertyValues(*paParams[0], *paParams[1],
-				lSizeArray > 2 ? paParams[2]->GetString() : ibString(),
-				lSizeArray > 3 ? paParams[3]->GetString() : ibString());
-			return true;
 		case enEvaluate: pvarRetValue = Evaluate(paParams[0]->GetString()); return true;
 		case enExecute: Execute(paParams[0]->GetString()); return true;
 		case enFormat: pvarRetValue = Format(*paParams[0], paParams[1]->GetString()); return true;
@@ -551,6 +546,12 @@ bool ibValueSystemFunction::CallAsProc(const long lMethodNum, ibValue** paParams
 		case enBeginTransaction: BeginTransaction(); return true;
 		case enCommitTransaction: CommitTransaction(); return true;
 		case enRollBackTransaction: RollBackTransaction(); return true;
+			//--- A value's properties filled from another's: a procedure, so it is called here, never as a function.
+		case enFillPropertyValues:
+			FillPropertyValues(*paParams[0], *paParams[1],
+				lSizeArray > 2 ? paParams[2]->GetString() : ibString(),
+				lSizeArray > 3 ? paParams[3]->GetString() : ibString());
+			return true;
 		}
 	}
 	else

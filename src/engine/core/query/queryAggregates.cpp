@@ -10,9 +10,10 @@ std::vector<ibQueryKeyword> ibQueryAggregatesFor(const ibTypeDescription& type)
 	// cell a person cannot fill.
 	std::vector<ibQueryKeyword> out{ ibQueryKeyword::Count };
 
-	// UNKNOWN OR COMPOSITE: offer everything. Which type a row holds is the row's business, and
-	// narrowing here on a guess would take away a choice the query can perfectly well make.
-	if (type.GetClsidCount() != 1) {
+	// UNKNOWN, COMPOSITE OR ANY: offer everything. Which type a row holds is the row's business, and
+	// narrowing here on a guess would take away a choice the query can perfectly well make. Any is one
+	// clsid, but the type that admits every value - a value table's column given no type is Any.
+	if (type.GetClsidCount() != 1 || type.GetFirstClsid() == g_valueAnyCLSID) {
 		out.push_back(ibQueryKeyword::Sum);
 		out.push_back(ibQueryKeyword::Min);
 		out.push_back(ibQueryKeyword::Max);
