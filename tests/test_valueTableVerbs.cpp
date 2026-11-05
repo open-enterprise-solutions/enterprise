@@ -415,7 +415,8 @@ TEST_F(ValueTableVerbs, AColumnAddedWithoutAType_KeepsANumberAsANumber)
     ibValue* args[] = { &name };
     ASSERT_TRUE(columns->CallAsFunc(add, made, args, 1));
     EXPECT_EQ(columns->GetColumnCount(), 1u);
-    EXPECT_TRUE(columns->GetColumnInfo(0)->GetColumnType().ContainType(g_valueAnyCLSID));
+    // Any — the type that lists nothing.
+    EXPECT_EQ(0u, columns->GetColumnInfo(0)->GetColumnType().GetClsidCount());
 
     ibValue row = Call(wxT("Add"), {});
     const long prop = row.FindProp(wxT("A"));

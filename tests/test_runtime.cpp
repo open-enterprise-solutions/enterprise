@@ -4726,9 +4726,10 @@ TEST(RuntimeTest, ValueListIsATableSourceWithTheKindsColumns) {
 	EXPECT_EQ(wxT("Picture"), explorer->GetHelper(3)->GetSourceName());
 	EXPECT_FALSE(explorer->GetHelper(3)->IsVisible());
 
-	// The value is Any; the presentation is a string, the check a boolean, the picture a picture.
+	// The value is Any — the type that lists nothing; the presentation is a string, the check a boolean, the picture a
+	// picture.
 	const ibValueModel::ibValueModelColumnCollection* const columns = list->GetColumnCollection();
-	EXPECT_TRUE(columns->GetColumnInfo(0)->GetColumnType().ContainType(g_valueAnyCLSID));
+	EXPECT_EQ(0u, columns->GetColumnInfo(0)->GetColumnType().GetClsidCount());
 	EXPECT_TRUE(columns->GetColumnInfo(1)->GetColumnType().ContainType(ibValueTypes::TYPE_STRING));
 	EXPECT_TRUE(columns->GetColumnInfo(2)->GetColumnType().ContainType(ibValueTypes::TYPE_BOOLEAN));
 	EXPECT_TRUE(columns->GetColumnInfo(3)->GetColumnType().ContainType(g_valuePictureCLSID));
