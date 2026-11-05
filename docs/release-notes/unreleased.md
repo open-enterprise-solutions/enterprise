@@ -61,6 +61,10 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   identifier expected".
 - **`StrSplit(string, separators, includeBlank = true)`** cuts a string into an Array of its parts. Each
   character of `separators` is a separator; with `includeBlank` false the empty parts are left out.
+- **`FillPropertyValues(receiver, source, list, exclude)`** fills the receiver's properties with the source's of the
+  same names: a structure, a row, an object alike, and nothing is added to the receiver. With no list, every property
+  the source has and the receiver can take; a list, names separated by commas, fills exactly those, and a name either
+  side lacks is refused as an assignment would be. `exclude` leaves out what it names.
 - **`Name(…)` calls the procedure or function of that name even where a variable has it.** Names are read
   whatever their case, so `chapterNames = ChapterNames();` called the variable and failed with "value is not a
   callable function". The module's procedure or function, declared above or below, now wins, as a system one

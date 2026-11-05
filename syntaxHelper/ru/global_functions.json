@@ -1421,6 +1421,25 @@
       "reviewed": true
     },
     {
+      "id": "fn.FillPropertyValues",
+      "name_local": "FillPropertyValues",
+      "name_en": "FillPropertyValues",
+      "kind": "system_procedure",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "FillPropertyValues(receiver : any, source : any, list = \"\" : string, exclude = \"\" : string)",
+      "description": "Заполняет свойства приёмника значениями одноимённых свойств источника — у структуры, строки, объекта одинаково. Новых свойств у приёмника не появляется.",
+      "syntax_block": "FillPropertyValues(receiver : any, source : any, list = \"\" : string, exclude = \"\" : string)",
+      "parameters": "receiver — значение, чьи свойства заполняются. source — значение, из которого они читаются. list — имена через запятую; если пусто — все свойства источника, которые приёмник может принять, а имя, которое есть только у одного из них, пропускается. Имя из списка, которого нет у одной из сторон или которое приёмник не может записать, отвергается так же, как receiver.Name = source.Name. exclude — имена через запятую, которые не заполняются.",
+      "return_descr": "",
+      "example": "var from = New Structure(\"Code, Description, Price\", \"001\", \"Болт\", 5);\nvar to = New Structure(\"Description, Price\", \"\", 0);\nFillPropertyValues(to, from);              // to.Description = \"Болт\", to.Price = 5\nFillPropertyValues(to, from, \"Price\");     // только Price\nFillPropertyValues(to, from, , \"Price\");   // всё, кроме Price",
+      "availability": "Тонкий клиент, Сервер",
+      "see_also": ["fn.ValueIsFilled"],
+      "reviewed": true
+    },
+    {
       "id": "fn.IsEmptyValue",
       "name_local": "IsEmptyValue",
       "name_en": "IsEmptyValue",

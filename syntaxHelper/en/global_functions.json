@@ -1421,6 +1421,25 @@
       "reviewed": true
     },
     {
+      "id": "fn.FillPropertyValues",
+      "name_local": "FillPropertyValues",
+      "name_en": "FillPropertyValues",
+      "kind": "system_procedure",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "FillPropertyValues(receiver : any, source : any, list = \"\" : string, exclude = \"\" : string)",
+      "description": "Fills the receiver's properties with the values of the source's properties of the same names - a structure, a row, an object alike. Nothing is added to the receiver.",
+      "syntax_block": "FillPropertyValues(receiver : any, source : any, list = \"\" : string, exclude = \"\" : string)",
+      "parameters": "receiver — the value whose properties are filled. source — the value they are read from. list — the names to fill, separated by commas; when empty, every property the source has and the receiver can take; a name only one of them has is passed over. A name the list gives that either side does not have, or the receiver cannot write, is refused as receiver.Name = source.Name would be. exclude — names left out, separated by commas.",
+      "return_descr": "",
+      "example": "var from = New Structure(\"Code, Description, Price\", \"001\", \"Bolt\", 5);\nvar to = New Structure(\"Description, Price\", \"\", 0);\nFillPropertyValues(to, from);              // to.Description = \"Bolt\", to.Price = 5\nFillPropertyValues(to, from, \"Price\");     // Price only\nFillPropertyValues(to, from, , \"Price\");   // all but Price",
+      "availability": "Thin client, Server",
+      "see_also": ["fn.ValueIsFilled"],
+      "reviewed": true
+    },
+    {
       "id": "fn.IsEmptyValue",
       "name_local": "IsEmptyValue",
       "name_en": "IsEmptyValue",

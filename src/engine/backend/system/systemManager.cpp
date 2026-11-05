@@ -137,7 +137,9 @@ enum
 	enBase64String,
 	enBase64Value,
 	//--- A string cut into parts: at the END, for the same reason.
-	enStrSplit
+	enStrSplit,
+	//--- A value's properties filled from another's: at the END, for the same reason.
+	enFillPropertyValues
 };
 
 void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
@@ -274,6 +276,8 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	helper.AppendFunc(ibT("Base64String"), 1, ibT("Base64String(data : BinaryData)"));
 	helper.AppendFunc(ibT("Base64Value"), 1, ibT("Base64Value(text : string)"));
 	helper.AppendFunc(ibT("StrSplit"), 3, ibT("StrSplit(str : string, separators : string, includeBlank = true : boolean)"));
+	helper.AppendProc(ibT("FillPropertyValues"), 4,
+		ibT("FillPropertyValues(receiver : any, source : any, list = \"\" : string, exclude = \"\" : string)"));
 };
 
 #include "backend/compiler/enumUnit.h"
@@ -434,6 +438,11 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 		case enBase64Value: pvarRetValue = ibValueBinaryData::Base64Value(paParams[0]->GetString()); return true;
 		case enStrSplit: pvarRetValue = new ibValueArray(StrSplit(*paParams[0], *paParams[1],
 			lSizeArray > 2 ? paParams[2]->GetBoolean() : true)); return true;
+		case enFillPropertyValues:
+			FillPropertyValues(*paParams[0], *paParams[1],
+				lSizeArray > 2 ? paParams[2]->GetString() : ibString(),
+				lSizeArray > 3 ? paParams[3]->GetString() : ibString());
+			return true;
 		case enEvaluate: pvarRetValue = Evaluate(paParams[0]->GetString()); return true;
 		case enExecute: Execute(paParams[0]->GetString()); return true;
 		case enFormat: pvarRetValue = Format(*paParams[0], paParams[1]->GetString()); return true;

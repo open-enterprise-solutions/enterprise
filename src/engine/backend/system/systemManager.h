@@ -138,6 +138,10 @@ public:
 	static bool IsEmptyValue(const ibValue& cData);
 	static bool IsNull(const ibValue& cData);
 	static bool ValueIsFilled(const ibValue& cData);
+	// The receiver's properties filled with the source's of the same names: what both have and the receiver can take,
+	// or exactly what `list` names; `exclude` leaves out what it names. Both are names separated by commas.
+	static void FillPropertyValues(ibValue& receiver, ibValue& source, const ibString& list = ibEmptyString,
+		const ibString& exclude = ibEmptyString);
 
 	// ⭐⭐ A RUNTIME VALUE AS TEXT, AND BACK. The engine has packed values into an ibDataNode for a
 	// while (value.h `Serialize` / `Deserialize`, ibMetaData's door for the types only a

@@ -1994,6 +1994,57 @@ TEST(RuntimeTest, StrSplitCutsAtEachSeparatorCharacter) {
 	EXPECT_TRUE(parts(wxT("empty")).empty());
 }
 
+TEST(RuntimeTest, FillPropertyValuesCopiesWhatBothSidesHave) {
+	// There was no FillPropertyValues (#300): a ported module filled a structure field by field. With no list it
+	// fills what the source has and the receiver takes; a list names exactly what is filled; exclude leaves out
+	// what it names, found as the source finds a name - whatever its case. Nothing is added to the receiver.
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc, wxT("var all public; var listed public; var excluded public;\n")
+		wxT("var src = New Structure(\"Code, Description, Price\", \"001\", \"Bolt\", 5);\n")
+		wxT("all = New Structure(\"Description, Price, Comment\", \"\", 0, \"kept\");\n")
+		wxT("FillPropertyValues(all, src);\n")
+		wxT("listed = New Structure(\"Description, Price\", \"\", 0);\n")
+		wxT("FillPropertyValues(listed, src, \" Price ,\");\n")
+		wxT("excluded = New Structure(\"Description, Price\", \"\", 0);\n")
+		wxT("FillPropertyValues(excluded, src, , \"price\");")));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	const auto field = [&pu](const ibString& name, const ibString& property) {
+		ibValue holder, value;
+		if (pu.GetPropVal(name, holder)) {
+			const long at = holder.FindProp(property);
+			if (at >= 0)
+				holder.GetPropVal(at, value);
+		}
+		return value;
+	};
+	const auto has = [&pu](const ibString& name, const ibString& property) {
+		ibValue holder;
+		return pu.GetPropVal(name, holder) && holder.FindProp(property) >= 0;
+	};
+	EXPECT_EQ(field(wxT("all"), wxT("Description")).GetString(), ibString(wxT("Bolt")));
+	EXPECT_EQ(field(wxT("all"), wxT("Price")).GetInteger(), 5);
+	EXPECT_EQ(field(wxT("all"), wxT("Comment")).GetString(), ibString(wxT("kept")));   // the source has none
+	EXPECT_FALSE(has(wxT("all"), wxT("Code")));                                         // and nothing is added
+	EXPECT_EQ(field(wxT("listed"), wxT("Description")).GetString(), ibString());
+	EXPECT_EQ(field(wxT("listed"), wxT("Price")).GetInteger(), 5);
+	EXPECT_EQ(field(wxT("excluded"), wxT("Description")).GetString(), ibString(wxT("Bolt")));
+	EXPECT_EQ(field(wxT("excluded"), wxT("Price")).GetInteger(), 0);
+
+	// A name the list gives is asked for: one the receiver or the source does not have is refused, as
+	// `receiver.Name = source.Name` would be.
+	for (const ibString text : {
+		wxT("var a = New Structure(\"A\", 1); var b = New Structure(\"B\", 2); FillPropertyValues(b, a, \"A\");"),
+		wxT("var a = New Structure(\"A\", 1); var b = New Structure(\"A\", 2); FillPropertyValues(b, a, \"Z\");") }) {
+		ibCompileCode refused(wxT("test"), wxT("memory"), false);
+		ASSERT_TRUE(TryCompile(refused, text)) << text;
+		ibProcUnit run;
+		EXPECT_FALSE(TryExecute(run, refused.m_cByteCode)) << text;
+	}
+}
+
 TEST(RuntimeTest, NumberTakesTheWholeTextOrRefuses) {
 	// Number("234,8") answered 234 and Number("12x") 12, without a word: the parse read the number the text
 	// begins with (#646). What is left over after the number is a refusal, the comma included.

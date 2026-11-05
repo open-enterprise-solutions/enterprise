@@ -27,6 +27,8 @@
 #include "backend/logger/logger.h"                   // the registration journal — the durable channel
 #include "backend/job/jobManager.h"                  // ibBackgroundRun — keeps what a windowless run says
 
+#include <algorithm>                                  // FillPropertyValues — whether a name is left out
+
 //--- Basic:
 bool ibValueSystemFunction::Boolean(const ibValue& cValue)
 {
@@ -743,6 +745,58 @@ bool ibValueSystemFunction::IsNull(const ibValue& cData)
 bool ibValueSystemFunction::ValueIsFilled(const ibValue& cData)
 {
 	return !cData.IsEmpty();
+}
+
+// ⭐ A VALUE'S PROPERTIES FILLED FROM ANOTHER'S, BY NAME (#300) — through the doors an assignment takes,
+// `receiver.Name = source.Name`: a name found by each value's own lookup (a structure's keys whatever their case), read
+// where it is readable, written where it is writable. With no list it fills what both sides have and the receiver can
+// take, and passes over the rest; a list is asked for, so a name it gives is refused as the assignment would refuse
+// it. `exclude` is found as the source finds a name. Nothing is added to the receiver.
+void ibValueSystemFunction::FillPropertyValues(ibValue& receiver, ibValue& source, const ibString& list, const ibString& exclude)
+{
+	const auto namesOf = [](const ibString& text) {
+		std::vector<ibString> names;
+		for (const ibValue& part : StrSplit(ibValue(text), ibValue(ibString(ibT(","))), false)) {
+			const ibString name = TrimAll(part);
+			if (!name.IsEmpty())
+				names.push_back(name);
+		}
+		return names;
+	};
+	const std::vector<ibString> excluded = namesOf(exclude);
+	const auto isExcluded = [&](long from) {
+		return std::any_of(excluded.begin(), excluded.end(),
+			[&](const ibString& name) { return source.FindProp(name) == from; });
+	};
+	const auto copy = [&](long from, long to) {
+		ibValue value;
+		if (source.GetPropVal(from, value))
+			receiver.SetPropVal(to, value);
+	};
+
+	const std::vector<ibString> listed = namesOf(list);
+	if (!listed.empty()) {
+		for (const ibString& name : listed) {
+			const long from = source.FindProp(name);
+			if (from >= 0 && isExcluded(from))
+				continue;
+			const long to = receiver.FindProp(name);
+			if (from < 0 || to < 0)
+				ibBackendCoreException::Error(ibScriptError_MemberNotFound, name);
+			if (!source.IsPropReadable(from))
+				ibBackendCoreException::Error(ibScriptError_PropNotReadable, name);
+			if (!receiver.IsPropWritable(to))
+				ibBackendCoreException::Error(ibScriptError_PropNotWritable, name);
+			copy(from, to);
+		}
+		return;
+	}
+
+	for (long from = 0; from < source.GetNProps(); ++from) {
+		const long to = receiver.FindProp(source.GetPropName(from));
+		if (to >= 0 && !isExcluded(from) && source.IsPropReadable(from) && receiver.IsPropWritable(to))
+			copy(from, to);
+	}
 }
 
 namespace {
