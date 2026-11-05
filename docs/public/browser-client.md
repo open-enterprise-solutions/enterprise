@@ -16,6 +16,9 @@ server's tree.
 **Where.** `src/engine/webserver/www/`. The web server serves it from `Root` (a folder: edit and reload), a release
 from its pack `web/www.wpk`.
 
+**`index.html` only includes.** The stylesheets, the modules, the splash's markup, `#client` — nothing of its own: no
+inline script, no inline style. What the page does is in `src/`, how it looks in `styles/`.
+
 ## Parts
 
 | Folder | Holds |

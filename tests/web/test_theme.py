@@ -100,10 +100,8 @@ class TheTheme(PageTest):
             return [getComputedStyle(cell).color, getComputedStyle(holder).backgroundColor]; }""")
         self.assertEqual(look, ['rgb(228, 230, 234)', 'rgb(36, 39, 44)'])
 
-    def test_the_splash_is_the_machines_before_the_script(self):
+    def test_the_splash_is_the_machines(self):
         page = self.start(scenario(SYSTEM), before=lambda page: page.emulate_media(color_scheme='dark'))
-        # The inline script in the head has said it before any module ran - the page's own source carries it.
-        self.assertIn("matchMedia('(prefers-color-scheme: dark)')", page.evaluate("document.head.innerHTML"))
         self.assertEqual(self.painted(page)['theme'], 'dark')
 
     def test_ok_on_the_kept_one_paints_it(self):
