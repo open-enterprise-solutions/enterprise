@@ -289,6 +289,23 @@ TEST(ComObject, ValuesCrossBothWays)
 	EXPECT_TRUE(innerBack.CompareValueEQ(inner)) << "an object goes as its IDispatch and comes back as the same one";
 }
 
+// A VT_R8 comes back as the decimal it stands for, a VT_R4 at a float's own digits: through the double's seventeen
+// digits 0.43 read 0.42999999999999999, and a float's 0.1 read 0.100000001490116 even at fifteen (2026-11-05).
+TEST(ComObject, AFloatingValueComesBackAsItsDecimal)
+{
+	const ibNumber fraction(ibString(wxT("0.43")));
+	const ibNumber back = RoundTrip(ibValue(fraction)).GetNumber();
+	EXPECT_EQ(back, fraction) << "goes as VT_R8, came back " << back.ToString();
+
+	VARIANT single;
+	::VariantInit(&single);
+	single.vt = VT_R4;
+	single.fltVal = 0.1f;
+	ibValue tenth;
+	ibValueCOM::FromVariant(single, tenth, wxT("single"));
+	EXPECT_EQ(tenth.GetNumber(), ibNumber(ibString(wxT("0.1")))) << tenth.GetNumber().ToString();
+}
+
 TEST(ComObject, AnArgumentDeclaredInIsNotWrittenBack)
 {
 	// Scripting.Dictionary.Add takes `[in] VARIANT* Item`: a pointer, but no output.

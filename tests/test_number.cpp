@@ -497,6 +497,16 @@ TEST(NumberConv, ToFloat) {
     EXPECT_EQ(ibNumber(ibString(wxT("2.5"))).ToFloat(), 2.5f);
 }
 
+// A double is the decimal it stands for, at fifteen digits: 0.43, not the double's own 0.42999999999999999, which
+// rode into every sum made of what a door handed over (#646, 2026-11-05). What a double computes over decimals
+// rounds back to the decimal result.
+TEST(NumberConv, FromDoubleIsTheDecimalItStandsFor) {
+    EXPECT_EQ(ibNumber(0.43).ToString(), wxT("0.43"));
+    EXPECT_EQ(ibNumber(-1234.5).ToString(), wxT("-1234.5"));
+    EXPECT_EQ(ibNumber(0.1 + 0.2).ToString(), wxT("0.3"));
+    EXPECT_EQ(ibNumber(10.01 + 23.42).ToString(), wxT("33.43"));
+}
+
 // ===========================================================================
 // Math compat
 // ===========================================================================

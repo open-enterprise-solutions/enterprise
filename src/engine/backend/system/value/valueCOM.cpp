@@ -144,24 +144,24 @@ void ibValueCOM::FromVariant(const VARIANT& oleVariant, ibValue& value, const ib
 	case VT_UI8:
 		value = ibNumber(oleVariant.ullVal);
 		return;
-	case VT_R4:
-		value = ibNumber(oleVariant.fltVal);
-		return;
 	case VT_R8:
-		value = ibNumber(oleVariant.dblVal);
+		value = ibNumber(oleVariant.dblVal);   // the decimal a double stands for (fnumber.cpp)
 		return;
 	case VT_CY:
 		// Currency is an integer of ten-thousandths: divided exactly, never through a double.
 		value = ibNumber(oleVariant.cyVal.int64) / ibNumber(10000);
 		return;
+	case VT_R4:
 	case VT_DECIMAL: {
-		// 96 bits and a scale — written out in the invariant locale and read back exactly.
-		BSTR text = nullptr;
-		const HRESULT hr = ::VarBstrFromDec(const_cast<DECIMAL*>(&oleVariant.decVal), LOCALE_INVARIANT, 0, &text);
+		// Written out by OLE in the invariant locale and read back from the text: a DECIMAL's 96 bits and a scale
+		// exactly, a float at its own digits. Through a double a float carried its noise: 0.1 read 0.100000001490116.
+		VARIANT text;
+		::VariantInit(&text);
+		const HRESULT hr = ::VariantChangeTypeEx(&text, const_cast<VARIANT*>(&oleVariant), LOCALE_INVARIANT, 0, VT_BSTR);
 		if (FAILED(hr))
 			ibBackendCoreException::Error(_("COM object \"%s\" returned a value that cannot be read: %s"), objectName, ibSysErrorMsgStr(hr));
-		const ibString digits = FromBSTR(text);
-		::SysFreeString(text);
+		const ibString digits = FromBSTR(text.bstrVal);
+		::VariantClear(&text);
 		value = ibNumber(digits);
 		return;
 	}

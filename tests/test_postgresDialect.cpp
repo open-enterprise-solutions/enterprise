@@ -148,6 +148,18 @@ TEST_F(PostgresDialect, NumericSurvivesTheRoundTripUnrounded)
 	s_db->RunQuery(wxT("DROP TABLE oes_dialect_numeric"));
 }
 
+// A floating value the server computed is spelled at its own digits - fifteen for a float8, six for a float4 - as
+// SQLite spells its doubles: 0.3, not PostgreSQL 12's shortest 0.30000000000000004 (extra_float_digits = 0, set at
+// Open, 2026-11-05).
+TEST_F(PostgresDialect, AFloatingValueIsSpelledAtItsOwnDigits)
+{
+	ibResultSetGuard rs(s_db, s_db->RunQueryWithResults(wxT("SELECT 0.1::float8 + 0.2::float8, 0.1::float4")));
+	ASSERT_TRUE(static_cast<bool>(rs));
+	ASSERT_TRUE(rs->Next());
+	EXPECT_EQ(0, rs->GetResultNumber(1).Compare(ibNumber(ibString(wxT("0.3"))))) << rs->GetResultNumber(1).ToString();
+	EXPECT_EQ(0, rs->GetResultNumber(2).Compare(ibNumber(ibString(wxT("0.1"))))) << rs->GetResultNumber(2).ToString();
+}
+
 TEST_F(PostgresDialect, TimestampComesBackAsTheSameInstant)
 {
 	s_db->RunQuery(wxT("DROP TABLE IF EXISTS oes_dialect_stamp"));

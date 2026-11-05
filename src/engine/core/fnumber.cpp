@@ -618,12 +618,18 @@ ibNumber::ibNumber(unsigned long long v) noexcept
 	FromUnsigned64(static_cast<uint64_t>(v));
 }
 
+// ⭐ A DOUBLE IS THE DECIMAL IT STANDS FOR: fifteen significant digits (DBL_DIG, numeric_limits<double>::digits10 - the
+// digits a double carries through itself), as SQLite and a spreadsheet spell one. Seventeen are the double's OWN
+// precision, not the decimal's: 0.43 came in as 0.42999999999999999 through every door that hands a double over - a
+// database's floating column or expression, an OLE VT_R8, an ODBC SQL_DOUBLE - and its tail rode into every sum made
+// of it, where the server's SUM, rounded once, answered 33.43 (#646, 2026-11-05). What a double computes over
+// decimals rounds back to the decimal result at fifteen; the computations seeded here converge on their own.
 ibNumber::ibNumber(double v)
 	: m_payload(PackImmediate(0, 0))
 {
 	if (!std::isfinite(v)) return;  // NaN / Inf collapse to zero.
 	wchar_t buf[64];
-	const int n = std::swprintf(buf, sizeof(buf) / sizeof(buf[0]), L"%.17g", v);
+	const int n = std::swprintf(buf, sizeof(buf) / sizeof(buf[0]), L"%.15g", v);
 	if (n <= 0)
 		return;
 

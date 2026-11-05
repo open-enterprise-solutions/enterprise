@@ -515,6 +515,12 @@ bool ibDatabaseLayerPostgres::Open()
 	{
 		m_pInterface->GetPQsetClientEncoding()((PGconn*)m_pDatabase, "UTF-8");
 
+		// ⭐ A FLOATING VALUE IS SPELLED AT ITS OWN DIGITS - fifteen for a float8, six for a float4 - as SQLite spells
+		// its doubles and ibNumber(double) reads one (fnumber.cpp). Since PostgreSQL 12 the default writes the
+		// shortest text that round-trips: 0.1 + 0.2 came back 0.30000000000000004 here and 0.3 on every other engine
+		// (2026-11-05). The columns are NUMERIC and spelled exactly either way.
+		DoRunQuery(ibT("SET extra_float_digits = 0"), false);
+
 		// Made here, on the thread that owns the connection: PQcancel may use it from any other (Cancel),
 		// PQgetCancel may not.
 		PGcancel* const made = m_pInterface->GetPQgetCancel()((PGconn*)m_pDatabase);
