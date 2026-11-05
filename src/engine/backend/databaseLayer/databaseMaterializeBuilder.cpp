@@ -90,10 +90,8 @@ const ibTotalsPeriod g_units[] = {
 ibString Truncate(const ibDialectDictionary& dialect, ibTotalsPeriod unit, const ibString& expr)
 {
 	const auto it = dialect.m_periodTrunc.find(unit);
-	if (it == dialect.m_periodTrunc.end()) {
+	if (it == dialect.m_periodTrunc.end())
 		ibBackendCoreException::Error(_("The database engine cannot truncate a period to '%s'"), UnitSuffix(unit));
-		return ibEmptyString;   // not reached — Error throws
-	}
 	return Fill(it->second, ibT("expr"), expr);
 }
 
@@ -911,10 +909,17 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const ib
 		// …and "before an absent start" is no row at all. WhenPredicate answers an unbounded side with no
 		// condition, which for this one column would sum the whole history into the opening balance - the
 		// balance as it stands today, shown as what the interval began with (2026-10-28, a report by
-		// recorder with no period given).
-		if (c.m_when == ibMaterializeWhen::BeforeFrom && spec.m_from.GetType() != TYPE_DATE)
-			value = zero;
-		else if (ibQueryExprPtr when = WhenPredicate(spec, c.m_when))
+		// recorder with no period given). So it is a zero of the figure's type, and NOT SUMMED: a sum of a
+		// constant is the constant, and the bare zero summed was SUM(?), which Firebird refuses - "Argument for
+		// SUM in dialect 3 must be numeric" (2026-11-05, the same report once the reading by the recorder ran in
+		// the database). Still a figure of a grouped read, and it keeps no row: a read of such zeros alone is a
+		// key set, which is never pruned.
+		if (c.m_when == ibMaterializeWhen::BeforeFrom && spec.m_from.GetType() != TYPE_DATE) {
+			proj.push_back(ibQueryProjItem{ ibCast(zero, ibTypeNumber(18, 6)), c.m_alias });
+			anyAggregate = true;
+			continue;
+		}
+		if (ibQueryExprPtr when = WhenPredicate(spec, c.m_when))
 			value = ibCase({ { when, value } }, zero);
 
 		if (runningForm && periodised) {

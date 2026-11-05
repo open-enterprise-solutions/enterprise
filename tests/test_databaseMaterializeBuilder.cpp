@@ -633,6 +633,28 @@ TEST(MaterializeRead, WholeIntervalStaysConditionalSums) {
     EXPECT_FALSE(sql.Contains(wxT("OVER (")));        // and nothing accumulates
 }
 
+// No start, no history: the opening balance is a zero of its type, not a sum. Summed, the bare zero was
+// SUM(?), which Firebird refused for a report by recorder with no period given (2026-11-05). The read
+// stays grouped by its keys, and the turnover beside it is summed.
+TEST(MaterializeRead, OpeningWithNoStartIsAZeroNotASum) {
+    ibMaterializeReadSpec r = ReadFixture();
+    r.m_from = ibValue();
+    r.m_columns = {
+        { wxT("Qty_OpeningBalance"), wxT("qty_turn"), ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::BeforeFrom, true },
+        { wxT("Qty_Turnover"),       wxT("qty_turn"), ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange,    true },
+    };
+    const ibString sql = ReadSql(r);
+
+    const std::string shown = sql.ToStdString();
+    EXPECT_FALSE(sql.Contains(wxT("SUM(?)")))       << shown;
+    EXPECT_FALSE(sql.Contains(wxT("SUM(CAST(?")))   << shown;   // the zero is not summed at all
+    const ibString typedZero = wxT("CAST(? AS ") + ibString::Format(SqliteQ().m_typeNumberPattern, 18, 6)
+        + wxT(") AS Qty_OpeningBalance");
+    EXPECT_TRUE(sql.Contains(typedZero))            << shown;   // …it stands typed
+    EXPECT_TRUE(sql.Contains(wxT("SUM(CASE")))      << shown;   // the turnover is summed
+    EXPECT_TRUE(sql.Contains(wxT("GROUP BY wh")))   << shown;   // one row per key
+}
+
 // ⭐ THE READING THAT USED TO FALL INTO RAM. Grouped by the month, the two balances are windows over
 // the period sums, and the opening one is the closing one minus this period's own movement.
 TEST(MaterializeRead, PeriodisedBalanceAccumulatesOnTheServer) {
