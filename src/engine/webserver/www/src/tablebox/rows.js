@@ -3,6 +3,8 @@
 // `Picture`, its cells as children by the column's id: `Text`, `Checked` for a flag, `Number`, `Value` when the cell
 // takes an edit, its look. Turned here into the grid's records, one field per column and what a cell says of itself.
 
+import { onFill } from '../controls/control.js';
+
 /** @typedef {import('../protocol/patch.js').ProtocolNode} ProtocolNode */
 
 /**
@@ -46,10 +48,12 @@ export function recordOf(row) {
  */
 function lookOf(cell) {
 	const look = {};
-	if (cell.TextColour)
-		look.color = `rgb(${cell.TextColour})`;
-	if (cell.BackgroundColour)
-		look.backgroundColor = `rgb(${cell.BackgroundColour})`;
+	const [color, backgroundColor] = onFill(cell.TextColour ? `rgb(${cell.TextColour})` : '',
+		cell.BackgroundColour ? `rgb(${cell.BackgroundColour})` : '');
+	if (color)
+		look.color = color;
+	if (backgroundColor)
+		look.backgroundColor = backgroundColor;
 	if (cell.Bold)
 		look.fontWeight = 'bold';
 	if (cell.Italic)

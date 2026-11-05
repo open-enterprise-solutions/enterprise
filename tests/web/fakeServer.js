@@ -40,6 +40,8 @@
 			this.latency = scenario.latency ?? 0;
 			this.fetchLatency = scenario.fetchLatency ?? this.latency;
 			this.loginLatency = scenario.loginLatency ?? this.latency;
+			// A schema's command answered late - a save still on its way.
+			this.commandLatency = scenario.commandLatency ?? this.latency;
 			this.users = scenario.users ?? [];
 			this.password = scenario.password ?? '';
 			this.title = scenario.title ?? 'Test base';
@@ -87,6 +89,8 @@
 				Title: this.title,
 				Status: 'Ready',
 				Menu: scenario.menu ?? {},
+				// The schemas this server offers (ibFrame::Schemas): a scenario names them, when one is asked for by its number.
+				...(scenario.schemaKinds !== undefined ? { Schemas: scenario.schemaKinds } : {}),
 				Tabs: { NodeChildren: this.tabs.map((one) => ({ NodeId: one.id, Title: one.title, Locked: one.locked === true,
 					...(one.columns !== undefined ? { Kind: homePageKind } : {}) })) },
 				ActiveTab: this.active,
@@ -135,6 +139,8 @@
 					NodeChildren: [{
 						NodeType: 'Textctrl', ControlId: field.id, ButtonSelect: field.select ?? true, ButtonClear: field.clear ?? true,
 						State: { Caption: field.caption, Text: field.text ?? '' },
+						// A field's own saved properties as the server writes them - its colours, say.
+						...(field.node ?? {}),
 					}],
 				})), {
 					NodeType: 'SizerItem', ControlId: 600, Proportion: 1, Stretch: expand,
@@ -222,6 +228,9 @@
 			case 'respond':
 				return this.respond(params);
 			case 'schema':
+				// A scenario may have the server refuse a schema's command - the base keeps no settings, say.
+				if (params.Command !== undefined && scenario.schemaRefusal !== undefined)
+					throw { code: 500, message: scenario.schemaRefusal };
 				return scenario.schemas?.[params.Schema] ?? {};
 			case 'picture':
 				// The scenario's pictures, each its id and its PNG's bytes (an array of numbers in the scenario).
@@ -300,7 +309,8 @@
 				server.title = scenario.changedAtLogin;
 				this.notify('changed');
 			}
-			const wait = message.method === 'fetch' ? server.fetchLatency : message.method === 'login' ? server.loginLatency : server.latency;
+			const wait = message.method === 'fetch' ? server.fetchLatency : message.method === 'login' ? server.loginLatency
+				: message.method === 'schema' && message.params?.Command !== undefined ? server.commandLatency : server.latency;
 			setTimeout(() => this.onmessage?.({ data: encode(reply) }), wait);
 		}
 

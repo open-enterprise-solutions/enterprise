@@ -971,6 +971,21 @@ void ibFrontendMainFrame::ShowSchema(ibProtocol::ibSchema::ibKind schema, const 
 	else if (schema == ibProtocol::ibSchema::ibKind::Debugging || schema == ibProtocol::ibSchema::ibKind::McpServer) {
 		ShowOptions(schema, shown);
 	}
+	else if (schema == ibProtocol::ibSchema::ibKind::Style) {
+		// The person's theme - the three, the one in force chosen; another chosen is kept by the server as theirs, and
+		// the browser paints with it. This window does not yet: the thin client's dark look is still to come.
+		const wxString choices[] = { _("As the system is set"), _("Light"), _("Dark") };
+		wxSingleChoiceDialog dialog(this, _("The theme the interface is painted in:"), _("Theme"), WXSIZEOF(choices), choices);
+		const long long theme = shown.GetInt(ibProtocol::ibSchema::ibStyle::Theme, 0);
+		dialog.SetSelection(theme >= 0 && theme < static_cast<long long>(WXSIZEOF(choices)) ? static_cast<int>(theme) : 0);
+		if (dialog.ShowModal() != wxID_OK || dialog.GetSelection() == theme)
+			return;
+		ibProtocolNode params, answer;
+		params.SetValue(ibProtocol::ibSchema::Schema, static_cast<long long>(schema));
+		params.SetValue(ibProtocol::ibSchema::Command, static_cast<long long>(ibProtocol::ibSchema::ibCommand::Save));
+		params.Child(ibProtocol::ibSchema::Args).SetValue(ibProtocol::ibSchema::ibStyle::Theme, static_cast<long long>(dialog.GetSelection()));
+		Call(ibProtocol::ibMethod::Schema, params, answer);
+	}
 }
 
 void ibFrontendMainFrame::ShowOptions(ibProtocol::ibSchema::ibKind schema, const ibProtocolNode& shown)

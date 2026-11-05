@@ -13664,3 +13664,27 @@ msgstr ""
 #: src/engine/backend/system/value/valueList.cpp
 msgid "LoadValues: the argument is not an array"
 msgstr ""
+
+#: src/engine/frmserver/client/clientFrameRuntime.cpp
+msgid "Theme..."
+msgstr ""
+
+#: src/engine/frmclient/mainFrame/mainFrame.cpp
+msgid "As the system is set"
+msgstr ""
+
+#: src/engine/frmclient/mainFrame/mainFrame.cpp
+msgid "Light"
+msgstr ""
+
+#: src/engine/frmclient/mainFrame/mainFrame.cpp
+msgid "Dark"
+msgstr ""
+
+#: src/engine/frmclient/mainFrame/mainFrame.cpp
+msgid "The theme the interface is painted in:"
+msgstr ""
+
+#: src/engine/frmserver/schema/style.cpp
+msgid "The theme could not be kept"
+msgstr ""

@@ -14002,3 +14002,27 @@ msgstr "Ожидается элемент или индекс"
 #: src/engine/backend/system/value/valueList.cpp
 msgid "LoadValues: the argument is not an array"
 msgstr "LoadValues: аргумент не является массивом"
+
+#: src/engine/frmserver/client/clientFrameRuntime.cpp
+msgid "Theme..."
+msgstr "Тема..."
+
+#: src/engine/frmclient/mainFrame/mainFrame.cpp
+msgid "As the system is set"
+msgstr "Как в системе"
+
+#: src/engine/frmclient/mainFrame/mainFrame.cpp
+msgid "Light"
+msgstr "Светлая"
+
+#: src/engine/frmclient/mainFrame/mainFrame.cpp
+msgid "Dark"
+msgstr "Тёмная"
+
+#: src/engine/frmclient/mainFrame/mainFrame.cpp
+msgid "The theme the interface is painted in:"
+msgstr "Тема оформления интерфейса:"
+
+#: src/engine/frmserver/schema/style.cpp
+msgid "The theme could not be kept"
+msgstr "Не удалось сохранить тему"

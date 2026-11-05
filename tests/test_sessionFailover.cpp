@@ -10,6 +10,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <future>
 #include <memory>
 #include <string>
@@ -27,6 +28,7 @@
 #include "backend/appHost.h"
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/databaseLayer.h"
+#include "core/settings/settingsShelf.h"      // ibSettingsCategory - the style's row, refused by the base
 #include "backend/rpc/rpcMessage.h"     // ibRpcParseRequest — a call as the server's port reads it
 #include "backend/utils/passwordHash.hpp"
 #ifdef OES_USE_FIREBIRD
@@ -536,6 +538,100 @@ TEST_F(SessionFailover, TheSyntaxHelperAsksForATypeAndWhatItOffers)
 	EXPECT_FALSE(members.result.FindChild(ibProtocol::ibSchema::ibTypes::Methods).Children().empty());
 
 	g_base->host->Disconnect(&connection);
+}
+
+// THE PERSON'S THEME — kept in the base as theirs and read back: the system's until they choose; a value that is no
+// theme is refused, nothing kept. (This base has no users: its one row is everybody's.)
+TEST_F(SessionFailover, ThePersonsThemeIsKeptAndReadBack)
+{
+	int connection = 0;
+	const Rpc opened = g_base->Call(Request(130, "login", PasswordLogin()), &connection);
+	ASSERT_TRUE(opened.ok) << opened.message;
+	const ibString client = opened.result.GetString(ibProtocol::ibLogin::Client);
+
+	// A call of the schema; with a command, Args.Theme as the given setter writes it.
+	const auto call = [&](long long id, int command, const std::function<void(ibProtocolNode&)>& theme, int& connectionOf) {
+		ibProtocolNode params;
+		params.SetValue(ibProtocol::ibLogin::Client, client);
+		params.SetValue(ibProtocol::ibSchema::Schema, static_cast<int>(ibProtocol::ibSchema::ibKind::Style));
+		if (command != 0) {
+			ibProtocolNode args;
+			theme(args);
+			params.SetValue(ibProtocol::ibSchema::Command, command);
+			params.SetValue(ibProtocol::ibSchema::Args, args);
+		}
+		return g_base->Call(Request(id, "schema", params), &connectionOf);
+	};
+	const auto style = [&](long long id, int command, int theme, int& connectionOf) {
+		return call(id, command, [theme](ibProtocolNode& args) { args.SetValue(ibProtocol::ibSchema::ibStyle::Theme, theme); },
+			connectionOf);
+	};
+	const int save = static_cast<int>(ibProtocol::ibSchema::ibCommand::Save);
+	const int dark = static_cast<int>(ibProtocol::ibSchema::ibStyle::ibTheme::Dark);
+	const int system = static_cast<int>(ibProtocol::ibSchema::ibStyle::ibTheme::System);
+
+	// The frame offers it.
+	bool offered = false;
+	const ibDataNode* const frame = opened.result.GetBody();
+	ASSERT_NE(frame, nullptr);
+	if (const auto schemas = frame->FindField(ibProtocol::ibFrame::Schemas))
+		for (const ibDataValue& kind : schemas->AsArray())
+			offered = offered || kind.AsInt() == static_cast<std::int64_t>(ibProtocol::ibSchema::ibKind::Style);
+	EXPECT_TRUE(offered);
+
+	const Rpc before = style(131, 0, 0, connection);
+	ASSERT_TRUE(before.ok) << before.message;
+	EXPECT_EQ(before.result.GetInt(ibProtocol::ibSchema::ibStyle::Theme, -1), system);
+
+	// Back to the system's however the case ends: the base's no-user row is everybody's, and the other cases log into it.
+	struct Reset {
+		std::function<void()> m_reset;
+		~Reset() { m_reset(); }
+	} reset{ [&]() { EXPECT_TRUE(style(141, save, system, connection).ok); g_base->host->Disconnect(&connection); } };
+
+	const Rpc kept = style(132, save, dark, connection);
+	ASSERT_TRUE(kept.ok) << kept.message;
+	const Rpc after = style(133, 0, 0, connection);
+	ASSERT_TRUE(after.ok) << after.message;
+	EXPECT_EQ(after.result.GetInt(ibProtocol::ibSchema::ibStyle::Theme, -1), dark);
+
+	// No theme: a number out of the three, one wider than an int whose low 32 bits are 2 (Dark), a number given as text.
+	const Rpc refused = style(134, save, 7, connection);
+	EXPECT_FALSE(refused.ok);
+	EXPECT_EQ(refused.code, static_cast<long long>(ibProtocol::ibRefusal::BadParameter));
+	const Rpc wide = call(135, save, [](ibProtocolNode& args) {
+		args.SetValue(ibProtocol::ibSchema::ibStyle::Theme, 4294967298LL); }, connection);
+	EXPECT_FALSE(wide.ok);
+	EXPECT_EQ(wide.code, static_cast<long long>(ibProtocol::ibRefusal::BadParameter));
+	const Rpc text = call(136, save, [](ibProtocolNode& args) {
+		args.SetValue(ibProtocol::ibSchema::ibStyle::Theme, ibString(ibT("2"))); }, connection);
+	EXPECT_FALSE(text.ok);
+	EXPECT_EQ(text.code, static_cast<long long>(ibProtocol::ibRefusal::BadParameter));
+	const Rpc still = style(137, 0, 0, connection);
+	ASSERT_TRUE(still.ok) << still.message;
+	EXPECT_EQ(still.result.GetInt(ibProtocol::ibSchema::ibStyle::Theme, -1), dark) << "a refused theme keeps nothing";
+
+	// A storage that would not keep it: the row of the style refused by the base itself (a check on its category, so
+	// no other row is touched). The person is told - a refusal, not a frame answered as if it were kept.
+	const auto runSql = [](const ibString& sql) {
+		ibConnectionScope scope = ibConnectionPool::GetFreeConnection();
+		return scope ? scope->RunStatement(sql) : -1;
+	};
+	const ibString noStyle = ibString::Format(wxT("ALTER TABLE sys_settings ADD CONSTRAINT oes_test_no_style CHECK (category <> %d)"),
+		static_cast<int>(ibSettingsCategory::Style));
+	ASSERT_NE(runSql(noStyle), -1);
+	{
+		struct Allow {
+			std::function<int(const ibString&)> m_run;
+			~Allow() { EXPECT_NE(m_run(wxT("ALTER TABLE sys_settings DROP CONSTRAINT oes_test_no_style")), -1); }
+		} allow{ runSql };
+		const Rpc unkept = style(138, save, static_cast<int>(ibProtocol::ibSchema::ibStyle::ibTheme::Light), connection);
+		EXPECT_FALSE(unkept.ok);
+		EXPECT_EQ(unkept.code, static_cast<long long>(ibProtocol::ibRefusal::Exception)) << unkept.message;
+	}
+	const Rpc stillDark = style(140, 0, 0, connection);
+	ASSERT_TRUE(stillDark.ok) << stillDark.message;
+	EXPECT_EQ(stillDark.result.GetInt(ibProtocol::ibSchema::ibStyle::Theme, -1), dark) << "an unkept theme is not the one in force";
 }
 
 TEST_F(SessionFailover, NoTokenWithoutASocket)
