@@ -3433,7 +3433,7 @@ protected:
 
 	bool SendGridAreaEvent(wxEventType type, int rowOrColPos, const ibGridCellArea& area);
 
-	// send wxEVT_GRID_{ROW,COL}_SIZE or wxEVT_GRID_{ROW,COL}_AUTO_SIZE, return true
+	// send ibEVT_GRID_{ROW,COL}_SIZE or ibEVT_GRID_{ROW,COL}_AUTO_SIZE, return true
 	// if the event was processed, false otherwise
 	bool SendGridSizeEvent(wxEventType type,
 		int rowOrCol,
@@ -3580,7 +3580,7 @@ private:
 		bool isFirstDrag);
 
 	// process mouse drag event in the grid window, return false if starting
-	// dragging was vetoed by the user-defined wxEVT_GRID_CELL_BEGIN_DRAG
+	// dragging was vetoed by the user-defined ibEVT_GRID_CELL_BEGIN_DRAG
 	// handler
 	bool DoGridDragEvent(wxMouseEvent& event,
 		const ibGridCellCoords& coords,
@@ -3753,7 +3753,7 @@ private:
 
 	// Unconditionally try showing the editor for the current cell.
 	//
-	// Returns false if the user code vetoed wxEVT_GRID_EDITOR_SHOWN or if the
+	// Returns false if the user code vetoed ibEVT_GRID_EDITOR_SHOWN or if the
 	// editor was simply activated and won't be permanently shown.
 	bool DoEnableCellEditControl(const ibGridActivationSource& actSource);
 
@@ -4644,52 +4644,52 @@ private:
 	wxDECLARE_DYNAMIC_CLASS_NO_ASSIGN_DEF_COPY(ibGridAreaEvent);
 };
 
-wxDECLARE_EVENT(wxEVT_GRID_CELL_LEFT_CLICK, ibGridEvent);
-wxDECLARE_EVENT(wxEVT_GRID_CELL_RIGHT_CLICK, ibGridEvent);
-wxDECLARE_EVENT(wxEVT_GRID_CELL_LEFT_DCLICK, ibGridEvent);
-wxDECLARE_EVENT(wxEVT_GRID_CELL_RIGHT_DCLICK, ibGridEvent);
-wxDECLARE_EVENT(wxEVT_GRID_LABEL_LEFT_CLICK, ibGridEvent);
-wxDECLARE_EVENT(wxEVT_GRID_LABEL_RIGHT_CLICK, ibGridEvent);
-wxDECLARE_EVENT(wxEVT_GRID_LABEL_LEFT_DCLICK, ibGridEvent);
-wxDECLARE_EVENT(wxEVT_GRID_LABEL_RIGHT_DCLICK, ibGridEvent);
-wxDECLARE_EVENT(wxEVT_GRID_ROW_SIZE, ibGridSizeEvent);
-wxDECLARE_EVENT(wxEVT_GRID_ROW_AUTO_SIZE, ibGridSizeEvent);
-wxDECLARE_EVENT(wxEVT_GRID_ROW_MODIFIED, ibGridSizeEvent);
-wxDECLARE_EVENT(wxEVT_GRID_COL_SIZE, ibGridSizeEvent);
-wxDECLARE_EVENT(wxEVT_GRID_COL_AUTO_SIZE, ibGridSizeEvent);
-wxDECLARE_EVENT(wxEVT_GRID_COL_MODIFIED, ibGridSizeEvent);
-wxDECLARE_EVENT(wxEVT_GRID_RANGE_SELECTING, ibGridRangeSelectEvent);
-wxDECLARE_EVENT(wxEVT_GRID_RANGE_SELECTED, ibGridRangeSelectEvent);
-wxDECLARE_EVENT(wxEVT_GRID_CELL_CHANGING, ibGridEvent);
-wxDECLARE_EVENT(wxEVT_GRID_CELL_CHANGED, ibGridEvent);
-wxDECLARE_EVENT(wxEVT_GRID_TABLE_MODIFIED, ibGridEvent);
-wxDECLARE_EVENT(wxEVT_GRID_TABLE_ATTR_MODIFIED, ibGridEvent);
-wxDECLARE_EVENT(wxEVT_GRID_SELECT_CELL, ibGridEvent);
-wxDECLARE_EVENT(wxEVT_GRID_EDITOR_SHOWN, ibGridEvent);
-wxDECLARE_EVENT(wxEVT_GRID_EDITOR_HIDDEN, ibGridEvent);
-wxDECLARE_EVENT(wxEVT_GRID_EDITOR_CREATED, ibGridEditorCreatedEvent);
-wxDECLARE_EVENT(wxEVT_GRID_CELL_BEGIN_DRAG, ibGridEvent);
-wxDECLARE_EVENT(wxEVT_GRID_ROW_MOVE, ibGridEvent);
-wxDECLARE_EVENT(wxEVT_GRID_COL_MOVE, ibGridEvent);
-wxDECLARE_EVENT(wxEVT_GRID_COL_SORT, ibGridEvent);
-wxDECLARE_EVENT(wxEVT_GRID_ROW_BRAKE_ADD, ibGridSizeEvent);
-wxDECLARE_EVENT(wxEVT_GRID_ROW_BRAKE_SET, ibGridSizeEvent);
-wxDECLARE_EVENT(wxEVT_GRID_ROW_BRAKE_DELETE, ibGridSizeEvent);
-wxDECLARE_EVENT(wxEVT_GRID_COL_BRAKE_ADD, ibGridSizeEvent);
-wxDECLARE_EVENT(wxEVT_GRID_COL_BRAKE_SET, ibGridSizeEvent);
-wxDECLARE_EVENT(wxEVT_GRID_COL_BRAKE_DELETE, ibGridSizeEvent);
-wxDECLARE_EVENT(wxEVT_GRID_ROW_AREA_CREATE, ibGridAreaEvent);
-wxDECLARE_EVENT(wxEVT_GRID_ROW_AREA_DELETE, ibGridAreaEvent);
-wxDECLARE_EVENT(wxEVT_GRID_ROW_AREA_SIZE, ibGridAreaEvent);
-wxDECLARE_EVENT(wxEVT_GRID_ROW_AREA_NAME, ibGridAreaEvent);
-wxDECLARE_EVENT(wxEVT_GRID_COL_AREA_CREATE, ibGridAreaEvent);
-wxDECLARE_EVENT(wxEVT_GRID_COL_AREA_DELETE, ibGridAreaEvent);
-wxDECLARE_EVENT(wxEVT_GRID_COL_AREA_SIZE, ibGridAreaEvent);
-wxDECLARE_EVENT(wxEVT_GRID_COL_AREA_NAME, ibGridAreaEvent);
-wxDECLARE_EVENT(wxEVT_GRID_ROW_FREEZE, ibGridSizeEvent);
-wxDECLARE_EVENT(wxEVT_GRID_COL_FREEZE, ibGridSizeEvent);
-wxDECLARE_EVENT(wxEVT_GRID_ZOOM, ibGridEvent);
-wxDECLARE_EVENT(wxEVT_GRID_TABBING, ibGridEvent);
+wxDECLARE_EVENT(ibEVT_GRID_CELL_LEFT_CLICK, ibGridEvent);
+wxDECLARE_EVENT(ibEVT_GRID_CELL_RIGHT_CLICK, ibGridEvent);
+wxDECLARE_EVENT(ibEVT_GRID_CELL_LEFT_DCLICK, ibGridEvent);
+wxDECLARE_EVENT(ibEVT_GRID_CELL_RIGHT_DCLICK, ibGridEvent);
+wxDECLARE_EVENT(ibEVT_GRID_LABEL_LEFT_CLICK, ibGridEvent);
+wxDECLARE_EVENT(ibEVT_GRID_LABEL_RIGHT_CLICK, ibGridEvent);
+wxDECLARE_EVENT(ibEVT_GRID_LABEL_LEFT_DCLICK, ibGridEvent);
+wxDECLARE_EVENT(ibEVT_GRID_LABEL_RIGHT_DCLICK, ibGridEvent);
+wxDECLARE_EVENT(ibEVT_GRID_ROW_SIZE, ibGridSizeEvent);
+wxDECLARE_EVENT(ibEVT_GRID_ROW_AUTO_SIZE, ibGridSizeEvent);
+wxDECLARE_EVENT(ibEVT_GRID_ROW_MODIFIED, ibGridSizeEvent);
+wxDECLARE_EVENT(ibEVT_GRID_COL_SIZE, ibGridSizeEvent);
+wxDECLARE_EVENT(ibEVT_GRID_COL_AUTO_SIZE, ibGridSizeEvent);
+wxDECLARE_EVENT(ibEVT_GRID_COL_MODIFIED, ibGridSizeEvent);
+wxDECLARE_EVENT(ibEVT_GRID_RANGE_SELECTING, ibGridRangeSelectEvent);
+wxDECLARE_EVENT(ibEVT_GRID_RANGE_SELECTED, ibGridRangeSelectEvent);
+wxDECLARE_EVENT(ibEVT_GRID_CELL_CHANGING, ibGridEvent);
+wxDECLARE_EVENT(ibEVT_GRID_CELL_CHANGED, ibGridEvent);
+wxDECLARE_EVENT(ibEVT_GRID_TABLE_MODIFIED, ibGridEvent);
+wxDECLARE_EVENT(ibEVT_GRID_TABLE_ATTR_MODIFIED, ibGridEvent);
+wxDECLARE_EVENT(ibEVT_GRID_SELECT_CELL, ibGridEvent);
+wxDECLARE_EVENT(ibEVT_GRID_EDITOR_SHOWN, ibGridEvent);
+wxDECLARE_EVENT(ibEVT_GRID_EDITOR_HIDDEN, ibGridEvent);
+wxDECLARE_EVENT(ibEVT_GRID_EDITOR_CREATED, ibGridEditorCreatedEvent);
+wxDECLARE_EVENT(ibEVT_GRID_CELL_BEGIN_DRAG, ibGridEvent);
+wxDECLARE_EVENT(ibEVT_GRID_ROW_MOVE, ibGridEvent);
+wxDECLARE_EVENT(ibEVT_GRID_COL_MOVE, ibGridEvent);
+wxDECLARE_EVENT(ibEVT_GRID_COL_SORT, ibGridEvent);
+wxDECLARE_EVENT(ibEVT_GRID_ROW_BRAKE_ADD, ibGridSizeEvent);
+wxDECLARE_EVENT(ibEVT_GRID_ROW_BRAKE_SET, ibGridSizeEvent);
+wxDECLARE_EVENT(ibEVT_GRID_ROW_BRAKE_DELETE, ibGridSizeEvent);
+wxDECLARE_EVENT(ibEVT_GRID_COL_BRAKE_ADD, ibGridSizeEvent);
+wxDECLARE_EVENT(ibEVT_GRID_COL_BRAKE_SET, ibGridSizeEvent);
+wxDECLARE_EVENT(ibEVT_GRID_COL_BRAKE_DELETE, ibGridSizeEvent);
+wxDECLARE_EVENT(ibEVT_GRID_ROW_AREA_CREATE, ibGridAreaEvent);
+wxDECLARE_EVENT(ibEVT_GRID_ROW_AREA_DELETE, ibGridAreaEvent);
+wxDECLARE_EVENT(ibEVT_GRID_ROW_AREA_SIZE, ibGridAreaEvent);
+wxDECLARE_EVENT(ibEVT_GRID_ROW_AREA_NAME, ibGridAreaEvent);
+wxDECLARE_EVENT(ibEVT_GRID_COL_AREA_CREATE, ibGridAreaEvent);
+wxDECLARE_EVENT(ibEVT_GRID_COL_AREA_DELETE, ibGridAreaEvent);
+wxDECLARE_EVENT(ibEVT_GRID_COL_AREA_SIZE, ibGridAreaEvent);
+wxDECLARE_EVENT(ibEVT_GRID_COL_AREA_NAME, ibGridAreaEvent);
+wxDECLARE_EVENT(ibEVT_GRID_ROW_FREEZE, ibGridSizeEvent);
+wxDECLARE_EVENT(ibEVT_GRID_COL_FREEZE, ibGridSizeEvent);
+wxDECLARE_EVENT(ibEVT_GRID_ZOOM, ibGridEvent);
+wxDECLARE_EVENT(ibEVT_GRID_TABBING, ibGridEvent);
 
 typedef void (wxEvtHandler::* ibGridEventFunction)(ibGridEvent&);
 typedef void (wxEvtHandler::* ibGridSizeEventFunction)(ibGridSizeEvent&);
@@ -4713,19 +4713,19 @@ typedef void (wxEvtHandler::* ibGridEditorAreaEventFunction)(ibGridAreaEvent&);
     wxEVENT_HANDLER_CAST(ibGridEditorAreaEventFunction, func)
 
 #define wx__DECLARE_GRIDEVT(evt, id, fn) \
-    wx__DECLARE_EVT1(wxEVT_GRID_ ## evt, id, ibGridEventHandler(fn))
+    wx__DECLARE_EVT1(ibEVT_GRID_ ## evt, id, ibGridEventHandler(fn))
 
 #define wx__DECLARE_GRIDSIZEEVT(evt, id, fn) \
-    wx__DECLARE_EVT1(wxEVT_GRID_ ## evt, id, ibGridSizeEventHandler(fn))
+    wx__DECLARE_EVT1(ibEVT_GRID_ ## evt, id, ibGridSizeEventHandler(fn))
 
 #define wx__DECLARE_GRIDRANGESELEVT(evt, id, fn) \
-    wx__DECLARE_EVT1(wxEVT_GRID_ ## evt, id, ibGridRangeSelectEventHandler(fn))
+    wx__DECLARE_EVT1(ibEVT_GRID_ ## evt, id, ibGridRangeSelectEventHandler(fn))
 
 #define wx__DECLARE_GRIDEDITOREVT(evt, id, fn) \
-    wx__DECLARE_EVT1(wxEVT_GRID_ ## evt, id, ibGridEditorCreatedEventHandler(fn))
+    wx__DECLARE_EVT1(ibEVT_GRID_ ## evt, id, ibGridEditorCreatedEventHandler(fn))
 
 #define wx__DECLARE_GRIDAREAEVT(evt, id, fn) \
-    wx__DECLARE_EVT1(wxEVT_GRID_ ## evt, id, ibGridAreaEventHandler(fn))
+    wx__DECLARE_EVT1(ibEVT_GRID_ ## evt, id, ibGridAreaEventHandler(fn))
 
 #define EVT_GRID_CMD_CELL_LEFT_CLICK(id, fn)     wx__DECLARE_GRIDEVT(CELL_LEFT_CLICK, id, fn)
 #define EVT_GRID_CMD_CELL_RIGHT_CLICK(id, fn)    wx__DECLARE_GRIDEVT(CELL_RIGHT_CLICK, id, fn)
@@ -4821,18 +4821,18 @@ typedef void (wxEvtHandler::* ibGridEditorAreaEventFunction)(ibGridAreaEvent&);
 #define EVT_GRID_TABBING(fn)             EVT_GRID_CMD_TABBING(wxID_ANY, fn)
 #define EVT_GRID_ZOOM(fn)				 EVT_GRID_CMD_ZOOM(wxID_ANY, fn)
 
-// we used to have a single wxEVT_GRID_CELL_CHANGE event but it was split into
-// wxEVT_GRID_CELL_CHANGING and CHANGED ones in wx 2.9.0, however the CHANGED
+// we used to have a single ibEVT_GRID_CELL_CHANGE event but it was split into
+// ibEVT_GRID_CELL_CHANGING and CHANGED ones in wx 2.9.0, however the CHANGED
 // is basically the same as the old CHANGE event so we keep the name for
 // compatibility
-#define wxEVT_GRID_CELL_CHANGE wxEVT_GRID_CELL_CHANGED
+#define ibEVT_GRID_CELL_CHANGE ibEVT_GRID_CELL_CHANGED
 
 #define EVT_GRID_CMD_CELL_CHANGE EVT_GRID_CMD_CELL_CHANGED
 #define EVT_GRID_CELL_CHANGE EVT_GRID_CELL_CHANGED
 
 // same as above: RANGE_SELECT was split in RANGE_SELECTING and SELECTED in 3.2,
 // but we keep the old name for compatibility
-#define wxEVT_GRID_RANGE_SELECT wxEVT_GRID_RANGE_SELECTED
+#define ibEVT_GRID_RANGE_SELECT ibEVT_GRID_RANGE_SELECTED
 
 #define EVT_GRID_CMD_RANGE_SELECT EVT_GRID_CMD_RANGE_SELECTED
 #define EVT_GRID_RANGE_SELECT EVT_GRID_RANGE_SELECTED
@@ -4840,13 +4840,13 @@ typedef void (wxEvtHandler::* ibGridEditorAreaEventFunction)(ibGridAreaEvent&);
 
 #if 0  // TODO: implement these ?  others ?
 
-extern const int wxEVT_GRID_CREATE_CELL;
-extern const int wxEVT_GRID_CHANGE_LABELS;
-extern const int wxEVT_GRID_CHANGE_SEL_LABEL;
+extern const int ibEVT_GRID_CREATE_CELL;
+extern const int ibEVT_GRID_CHANGE_LABELS;
+extern const int ibEVT_GRID_CHANGE_SEL_LABEL;
 
-#define EVT_GRID_CREATE_CELL(fn)      wxDECLARE_EVENT_TABLE_ENTRY( wxEVT_GRID_CREATE_CELL,      wxID_ANY, wxID_ANY, (wxObjectEventFunction) (wxEventFunction)  wxStaticCastEvent( ibGridEventFunction, &fn ), NULL ),
-#define EVT_GRID_CHANGE_LABELS(fn)    wxDECLARE_EVENT_TABLE_ENTRY( wxEVT_GRID_CHANGE_LABELS,    wxID_ANY, wxID_ANY, (wxObjectEventFunction) (wxEventFunction)  wxStaticCastEvent( ibGridEventFunction, &fn ), NULL ),
-#define EVT_GRID_CHANGE_SEL_LABEL(fn) wxDECLARE_EVENT_TABLE_ENTRY( wxEVT_GRID_CHANGE_SEL_LABEL, wxID_ANY, wxID_ANY, (wxObjectEventFunction) (wxEventFunction)  wxStaticCastEvent( ibGridEventFunction, &fn ), NULL ),
+#define EVT_GRID_CREATE_CELL(fn)      wxDECLARE_EVENT_TABLE_ENTRY( ibEVT_GRID_CREATE_CELL,      wxID_ANY, wxID_ANY, (wxObjectEventFunction) (wxEventFunction)  wxStaticCastEvent( ibGridEventFunction, &fn ), NULL ),
+#define EVT_GRID_CHANGE_LABELS(fn)    wxDECLARE_EVENT_TABLE_ENTRY( ibEVT_GRID_CHANGE_LABELS,    wxID_ANY, wxID_ANY, (wxObjectEventFunction) (wxEventFunction)  wxStaticCastEvent( ibGridEventFunction, &fn ), NULL ),
+#define EVT_GRID_CHANGE_SEL_LABEL(fn) wxDECLARE_EVENT_TABLE_ENTRY( ibEVT_GRID_CHANGE_SEL_LABEL, wxID_ANY, wxID_ANY, (wxObjectEventFunction) (wxEventFunction)  wxStaticCastEvent( ibGridEventFunction, &fn ), NULL ),
 
 #endif
 

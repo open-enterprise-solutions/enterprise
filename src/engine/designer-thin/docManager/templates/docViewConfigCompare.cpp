@@ -164,10 +164,10 @@ void ibConfigCompareView::BuildLayout(wxWindow* parent)
 	// pattern.
 	m_dataView->AssociateModel(m_compareDoc->GetModel());
 
-	m_dataView->Bind(wxEVT_DATAVIEW_ITEM_COLLAPSING,
+	m_dataView->Bind(ibEVT_DATAVIEW_ITEM_COLLAPSING,
 		&ibConfigCompareView::OnItemCollapsing, this);
 
-	m_dataView->Bind(wxEVT_DATAVIEW_ITEM_VALUE_CHANGED,
+	m_dataView->Bind(ibEVT_DATAVIEW_ITEM_VALUE_CHANGED,
 		[this](ibDataViewEvent& event) {
 			event.Skip();
 			RefreshApplyButtonState();

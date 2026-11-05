@@ -90,7 +90,7 @@ bool ibSpreadsheetEditView::OnCreate(ibFrontendDocument* docBase, long flags)
 	m_gridEditor->EnableGridArea(doc->ConvertMetaObjectToType<ibValueMetaObjectTemplateBase>());
 	// Its grid's zoom (Ctrl+wheel) heard from the grid itself, not from a frame: a grid box's view is no frame's — the
 	// form's view stands in front of it — and its choice stayed at 100% over a sheet at 150% (2026-10-20).
-	m_gridEditor->Bind(wxEVT_GRID_ZOOM, &ibSpreadsheetEditView::OnGridZoomChanged, this);
+	m_gridEditor->Bind(ibEVT_GRID_ZOOM, &ibSpreadsheetEditView::OnGridZoomChanged, this);
 
 	return ibFrontendView::OnCreate(docBase, flags);
 }

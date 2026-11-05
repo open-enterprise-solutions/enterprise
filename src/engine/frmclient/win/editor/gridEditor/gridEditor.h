@@ -550,8 +550,8 @@ class FRMCLIENT_API ibGridEditor : public ibGrid {
 
 		ibPropertyGridEditorSpreadsheet(ibGridEditor* view) : m_view(view) {
 			if (m_view != nullptr) {
-				m_view->Bind(wxEVT_GRID_SELECT_CELL, &ibPropertyGridEditorSpreadsheet::OnSelectCell, this);
-				m_view->Bind(wxEVT_GRID_RANGE_SELECTED, &ibPropertyGridEditorSpreadsheet::OnSelectCells, this);
+				m_view->Bind(ibEVT_GRID_SELECT_CELL, &ibPropertyGridEditorSpreadsheet::OnSelectCell, this);
+				m_view->Bind(ibEVT_GRID_RANGE_SELECTED, &ibPropertyGridEditorSpreadsheet::OnSelectCells, this);
 			}
 		}
 
@@ -651,11 +651,11 @@ public:
 	void ActivateEditor();
 
 	void SendPropertyModify() {
-		ibGrid::SendEvent(wxEVT_GRID_EDITOR_HIDDEN, m_currentCellCoords);
+		ibGrid::SendEvent(ibEVT_GRID_EDITOR_HIDDEN, m_currentCellCoords);
 	}
 
 	void SendPropertyModify(const ibGridCellCoords& coords) {
-		ibGrid::SendEvent(wxEVT_GRID_EDITOR_HIDDEN, coords);
+		ibGrid::SendEvent(ibEVT_GRID_EDITOR_HIDDEN, coords);
 	}
 
 	bool IsPropertyEnabled() const { return m_enableProperty; }
@@ -868,7 +868,7 @@ private:
 	int m_autoHeightFrom = -1, m_autoHeightTo = -1;
 
 	// 🛑 WHILE THIS IS ON, A SIZE IS NOT ONE SOMEBODY CHOSE. `ibGrid::DoSetRowSize` / `DoSetColSize` send
-	// wxEVT_GRID_ROW_MODIFIED / _COL_MODIFIED themselves whenever a size changes outside a drag, and the
+	// ibEVT_GRID_ROW_MODIFIED / _COL_MODIFIED themselves whenever a size changes outside a drag, and the
 	// handlers write that into the document — so the height FitAutoRowHeights works out came straight back
 	// as a height of the row's own, and the row stopped being automatic on its first showing (Max,
 	// 2026-09-22: *"a row that became automatic is still automatic — its height is a WORKED-OUT one"*).

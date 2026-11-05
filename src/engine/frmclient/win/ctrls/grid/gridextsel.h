@@ -43,11 +43,11 @@ public:
 	void SelectBlock(int topRow, int leftCol,
 		int bottomRow, int rightCol,
 		const wxKeyboardState& kbd = wxKeyboardState(),
-		wxEventType eventType = wxEVT_GRID_RANGE_SELECTED);
+		wxEventType eventType = ibEVT_GRID_RANGE_SELECTED);
 	void SelectBlock(const ibGridCellCoords& topLeft,
 		const ibGridCellCoords& bottomRight,
 		const wxKeyboardState& kbd = wxKeyboardState(),
-		wxEventType eventType = wxEVT_GRID_RANGE_SELECTED)
+		wxEventType eventType = ibEVT_GRID_RANGE_SELECTED)
 	{
 		SelectBlock(topLeft.GetRow(), topLeft.GetCol(),
 			bottomRight.GetRow(), bottomRight.GetCol(),
@@ -60,7 +60,7 @@ public:
 
 	void DeselectBlock(const ibGridBlockCoords& block,
 		const wxKeyboardState& kbd = wxKeyboardState(),
-		wxEventType eventType = wxEVT_GRID_RANGE_SELECTED);
+		wxEventType eventType = ibEVT_GRID_RANGE_SELECTED);
 
 	// Note that this method refreshes the previously selected blocks and sends
 	// an event about the selection change.
@@ -85,15 +85,15 @@ public:
 	// Both components of both blockStart and blockEnd must be valid.
 	//
 	// This function sends an event notifying about the selection change using
-	// the provided event type, which is wxEVT_GRID_RANGE_SELECTED by default,
-	// but may also be wxEVT_GRID_RANGE_SELECTING, when the selection is not
+	// the provided event type, which is ibEVT_GRID_RANGE_SELECTED by default,
+	// but may also be ibEVT_GRID_RANGE_SELECTING, when the selection is not
 	// final yet.
 	//
 	// Return true if the current block was actually changed.
 	bool ExtendCurrentBlock(const ibGridCellCoords& blockStart,
 		const ibGridCellCoords& blockEnd,
 		const wxKeyboardState& kbd,
-		wxEventType eventType = wxEVT_GRID_RANGE_SELECTED);
+		wxEventType eventType = ibEVT_GRID_RANGE_SELECTED);
 
 
 	// Return the coordinates of the cell from which the selection should

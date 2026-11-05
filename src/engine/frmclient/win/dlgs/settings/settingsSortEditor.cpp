@@ -195,7 +195,7 @@ ibSortEditor::ibSortEditor(wxWindow* parent, ibSortDescription* sort, ibSettings
 
 	// DOUBLE CLICK OPENS THE EDITOR — the grid sends an ACTIVATE for it, and without
 	// this binding the cell could only be opened with F2.
-	m_view->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED, [this](ibDataViewEvent& e) {
+	m_view->Bind(ibEVT_DATAVIEW_ITEM_ACTIVATED, [this](ibDataViewEvent& e) {
 		if (m_view != nullptr)
 			m_view->EditItem(e.GetItem(), e.GetDataViewColumn());
 		e.Skip();
@@ -203,11 +203,11 @@ ibSortEditor::ibSortEditor(wxWindow* parent, ibSortDescription* sort, ibSettings
 
 	m_model = new ibSortLineModel(this);
 	m_view->AssociateModel(m_model);
-	m_view->Bind(wxEVT_DATAVIEW_ITEM_CONTEXT_MENU, &ibSortEditor::OnContextMenu, this);
-	m_view->Bind(wxEVT_DATAVIEW_ITEM_START_EDITING, &ibSortEditor::OnStartEditing, this);
+	m_view->Bind(ibEVT_DATAVIEW_ITEM_CONTEXT_MENU, &ibSortEditor::OnContextMenu, this);
+	m_view->Bind(ibEVT_DATAVIEW_ITEM_START_EDITING, &ibSortEditor::OnStartEditing, this);
 	// A CELL edit writes the buffer without changing the number of lines, so it never reaches
 	// RefreshLines. One bind covers every column.
-	m_view->Bind(wxEVT_DATAVIEW_ITEM_VALUE_CHANGED, [this](ibDataViewEvent& e) {
+	m_view->Bind(ibEVT_DATAVIEW_ITEM_VALUE_CHANGED, [this](ibDataViewEvent& e) {
 		e.Skip();
 		if (!m_reloading && m_onChanged)
 			m_onChanged();

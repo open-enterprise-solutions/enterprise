@@ -245,7 +245,7 @@ ibConditionalAppearanceEditor::ibConditionalAppearanceEditor(wxWindow* parent,
 		appearanceColumn->SetWidth(rest - rest * 36 / 100 - rest * 28 / 100);
 	});
 
-	m_view->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED, [this](ibDataViewEvent& e) {
+	m_view->Bind(ibEVT_DATAVIEW_ITEM_ACTIVATED, [this](ibDataViewEvent& e) {
 		m_view->EditItem(e.GetItem(), e.GetDataViewColumn());
 		e.Skip();
 	});

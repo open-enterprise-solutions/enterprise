@@ -171,7 +171,7 @@ private:
 
 		// as this is done by the user we should notify the main program about
 		// it
-		GetOwner()->SendGridSizeEvent(wxEVT_GRID_COL_SIZE, idx,
+		GetOwner()->SendGridSizeEvent(ibEVT_GRID_COL_SIZE, idx,
 			GetDummyMouseEvent());
 	}
 
@@ -186,7 +186,7 @@ private:
 	// event handlers forwarding wxHeaderCtrl events to ibGrid
 	void OnClick(wxHeaderCtrlEvent& event)
 	{
-		GetOwner()->SendEvent(wxEVT_GRID_LABEL_LEFT_CLICK,
+		GetOwner()->SendEvent(ibEVT_GRID_LABEL_LEFT_CLICK,
 			-1, event.GetColumn(),
 			GetDummyMouseEvent());
 
@@ -195,7 +195,7 @@ private:
 
 	void OnDoubleClick(wxHeaderCtrlEvent& event)
 	{
-		if (!GetOwner()->SendEvent(wxEVT_GRID_LABEL_LEFT_DCLICK,
+		if (!GetOwner()->SendEvent(ibEVT_GRID_LABEL_LEFT_DCLICK,
 			-1, event.GetColumn(),
 			GetDummyMouseEvent()))
 		{
@@ -205,7 +205,7 @@ private:
 
 	void OnRightClick(wxHeaderCtrlEvent& event)
 	{
-		if (!GetOwner()->SendEvent(wxEVT_GRID_LABEL_RIGHT_CLICK,
+		if (!GetOwner()->SendEvent(ibEVT_GRID_LABEL_RIGHT_CLICK,
 			-1, event.GetColumn(),
 			GetDummyMouseEvent()))
 		{
@@ -741,7 +741,7 @@ public:
 	// extend current selection block up to given row or column
 	virtual bool SelectionExtendCurrentBlock(ibGrid* grid, int line,
 		const wxMouseEvent& event,
-		wxEventType eventType = wxEVT_GRID_RANGE_SELECTED) const = 0;
+		wxEventType eventType = ibEVT_GRID_RANGE_SELECTED) const = 0;
 
 	// select or de-select a row or column
 	virtual void SelectArea(ibGrid* grid, int line, wxMouseEvent& event) const = 0;
@@ -963,7 +963,7 @@ public:
 
 	virtual bool SelectionExtendCurrentBlock(ibGrid* grid, int line,
 		const wxMouseEvent& event,
-		wxEventType eventType = wxEVT_GRID_RANGE_SELECTED) const wxOVERRIDE
+		wxEventType eventType = ibEVT_GRID_RANGE_SELECTED) const wxOVERRIDE
 	{
 		return grid->m_selection->ExtendCurrentBlock
 		(
@@ -1217,7 +1217,7 @@ public:
 
 	virtual bool SelectionExtendCurrentBlock(ibGrid* grid, int line,
 		const wxMouseEvent& event,
-		wxEventType eventType = wxEVT_GRID_RANGE_SELECTED) const wxOVERRIDE
+		wxEventType eventType = ibEVT_GRID_RANGE_SELECTED) const wxOVERRIDE
 	{
 		return grid->m_selection->ExtendCurrentBlock
 		(

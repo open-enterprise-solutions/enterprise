@@ -166,7 +166,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 	const auto makeList = [&](wxWindow* page) {
 		ibDataViewListCtrl* list = new ibDataViewListCtrl(page, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 			wxDV_ROW_LINES | wxDV_SINGLE);
-		list->Bind(wxEVT_DATAVIEW_ITEM_VALUE_CHANGED, [this](ibDataViewEvent&) { ShowResult(); });
+		list->Bind(ibEVT_DATAVIEW_ITEM_VALUE_CHANGED, [this](ibDataViewEvent&) { ShowResult(); });
 		ibDataViewEditOnActivate(list);   // a double-click opens the cell - the constructors' one way
 		return list;
 	};

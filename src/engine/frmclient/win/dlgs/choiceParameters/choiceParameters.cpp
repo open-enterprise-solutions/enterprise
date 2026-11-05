@@ -181,8 +181,8 @@ void ibDialogChoiceParameters::BuildControls()
 	m_up->Bind(wxEVT_BUTTON, &ibDialogChoiceParameters::OnMoveUp, this);
 	m_down->Bind(wxEVT_BUTTON, &ibDialogChoiceParameters::OnMoveDown, this);
 
-	m_rows->Bind(wxEVT_DATAVIEW_SELECTION_CHANGED, [this](ibDataViewEvent&) { ShowSelection(); });
-	m_available->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED, [this](ibDataViewEvent&) {
+	m_rows->Bind(ibEVT_DATAVIEW_SELECTION_CHANGED, [this](ibDataViewEvent&) { ShowSelection(); });
+	m_available->Bind(ibEVT_DATAVIEW_ITEM_ACTIVATED, [this](ibDataViewEvent&) {
 		wxCommandEvent unused; OnAdd(unused);   // a double-click is the same act as ">"
 	});
 
@@ -356,7 +356,7 @@ void ibDialogChoiceParameters::BindDragAndDrop()
 	m_rows->EnableDragSource(wxDF_UNICODETEXT);
 	m_rows->EnableDropTarget(wxDF_UNICODETEXT);
 
-	m_available->Bind(wxEVT_DATAVIEW_ITEM_BEGIN_DRAG, [this](ibDataViewEvent& event) {
+	m_available->Bind(ibEVT_DATAVIEW_ITEM_BEGIN_DRAG, [this](ibDataViewEvent& event) {
 		const long line = (long)m_availableModel->GetRow(event.GetItem());
 		if (line < 0 || (size_t)line >= m_availableSources.size()) {
 			event.Veto();
@@ -366,7 +366,7 @@ void ibDialogChoiceParameters::BindDragAndDrop()
 		event.SetDragFlags(wxDrag_CopyOnly);
 	});
 
-	m_rows->Bind(wxEVT_DATAVIEW_ITEM_BEGIN_DRAG, [this](ibDataViewEvent& event) {
+	m_rows->Bind(ibEVT_DATAVIEW_ITEM_BEGIN_DRAG, [this](ibDataViewEvent& event) {
 		const long line = (long)m_rowsModel->GetRow(event.GetItem());
 		if (line < 0 || (size_t)line >= m_params.m_rows.size()) {
 			event.Veto();
@@ -381,12 +381,12 @@ void ibDialogChoiceParameters::BindDragAndDrop()
 	// would not take it: the drag picture followed the cursor and nothing happened (Max, 2026-09-23).
 	// The control reads the effect back out of this event (datavgen.cpp, OnDragOver), so saying nothing
 	// is what "whatever the source allowed" looks like.
-	m_rows->Bind(wxEVT_DATAVIEW_ITEM_DROP_POSSIBLE, [](ibDataViewEvent& event) {
+	m_rows->Bind(ibEVT_DATAVIEW_ITEM_DROP_POSSIBLE, [](ibDataViewEvent& event) {
 		if (event.GetDataFormat() != wxDF_UNICODETEXT)
 			event.Veto();
 	});
 
-	m_rows->Bind(wxEVT_DATAVIEW_ITEM_DROP, [this](ibDataViewEvent& event) {
+	m_rows->Bind(ibEVT_DATAVIEW_ITEM_DROP, [this](ibDataViewEvent& event) {
 		if (event.GetDataFormat() != wxDF_UNICODETEXT) {
 			event.Veto();
 			return;

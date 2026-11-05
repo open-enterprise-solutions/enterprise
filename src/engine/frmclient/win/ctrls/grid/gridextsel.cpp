@@ -62,7 +62,7 @@ void ibGridSelection::EndSelecting()
 	// Send RANGE_SELECTED event for the last modified block.
 	const ibGridBlockCoords& block = m_selection.back();
 	ibGridRangeSelectEvent gridEvt(m_grid->GetId(),
-		wxEVT_GRID_RANGE_SELECTED,
+		ibEVT_GRID_RANGE_SELECTED,
 		m_grid,
 		block.GetTopLeft(),
 		block.GetBottomRight(),
@@ -186,7 +186,7 @@ void ibGridSelection::SelectRow(int row, const wxKeyboardState& kbd)
 		return;
 
 	Select(ibGridBlockCoords(row, 0, row, m_grid->GetNumberCols() - 1),
-		kbd, wxEVT_GRID_RANGE_SELECTED);
+		kbd, ibEVT_GRID_RANGE_SELECTED);
 }
 
 void ibGridSelection::SelectCol(int col, const wxKeyboardState& kbd)
@@ -196,7 +196,7 @@ void ibGridSelection::SelectCol(int col, const wxKeyboardState& kbd)
 		return;
 
 	Select(ibGridBlockCoords(0, col, m_grid->GetNumberRows() - 1, col),
-		kbd, wxEVT_GRID_RANGE_SELECTED);
+		kbd, ibEVT_GRID_RANGE_SELECTED);
 }
 
 void ibGridSelection::SelectBlock(int topRow, int leftCol,
@@ -264,7 +264,7 @@ ibGridSelection::SelectAll()
 	if (numRows && numCols)
 	{
 		Select(ibGridBlockCoords(0, 0, numRows - 1, numCols - 1),
-			wxKeyboardState(), wxEVT_GRID_RANGE_SELECTED);
+			wxKeyboardState(), ibEVT_GRID_RANGE_SELECTED);
 	}
 }
 
@@ -434,7 +434,7 @@ void ibGridSelection::ClearSelection()
 	// (No finer grained events for each of the smaller regions
 	//  deselected above!)
 	ibGridRangeSelectEvent gridEvt(m_grid->GetId(),
-		wxEVT_GRID_RANGE_SELECTED,
+		ibEVT_GRID_RANGE_SELECTED,
 		m_grid,
 		ibGridCellCoords(0, 0),
 		ibGridCellCoords(

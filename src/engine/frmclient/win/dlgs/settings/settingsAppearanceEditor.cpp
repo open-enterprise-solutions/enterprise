@@ -161,7 +161,7 @@ public:
 			ibAppearanceModel::kColValue, FromDIP(260), wxAlignment::wxALIGN_LEFT));
 
 		// A DOUBLE-CLICK (or Enter) EDITS THE CELL under the cursor — the same gesture the settings grids use.
-		m_view->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED, [this](ibDataViewEvent& e) {
+		m_view->Bind(ibEVT_DATAVIEW_ITEM_ACTIVATED, [this](ibDataViewEvent& e) {
 			m_view->EditItem(e.GetItem(), e.GetDataViewColumn());
 			e.Skip();
 		});

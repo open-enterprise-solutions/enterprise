@@ -19,7 +19,7 @@ inline void ibDataViewEditOnActivate(ibDataViewCtrl* grid)
 	// ⚠⚠ AND THE HANDLER MUST NOT Skip(). This took four attempts, so the reason is written down.
 	//
 	// The control raises ITEM_ACTIVATED on a double-click and passes the CLICKED COLUMN with it
-	// (datavgen.cpp, `le(wxEVT_DATAVIEW_ITEM_ACTIVATED, this, col, item)`) — so the column was never
+	// (datavgen.cpp, `le(ibEVT_DATAVIEW_ITEM_ACTIVATED, this, col, item)`) — so the column was never
 	// the problem, and binding a mouse handler here was worse than useless: mouse events go to the
 	// control's inner window and never reach this one at all.
 	//
@@ -29,7 +29,7 @@ inline void ibDataViewEditOnActivate(ibDataViewCtrl* grid)
 	// outside that is exactly "the cell will not open".
 	//
 	// So: open the cell and OWN the event.
-	grid->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED, [grid](ibDataViewEvent& event) {
+	grid->Bind(ibEVT_DATAVIEW_ITEM_ACTIVATED, [grid](ibDataViewEvent& event) {
 		ibDataViewColumn* column = event.GetDataViewColumn();
 		if (column == nullptr)
 			column = grid->GetCurrentColumn();

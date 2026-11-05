@@ -556,7 +556,7 @@ void ibHeaderGenericCtrl::CancelDragging()
 
 	unsigned int& col = IsResizing() ? m_colBeingResized : m_colBeingReordered;
 
-	ibHeaderGenericCtrlEvent event(wxEVT_HEADER_DRAGGING_CANCELLED, GetId());
+	ibHeaderGenericCtrlEvent event(ibEVT_HEADER_DRAGGING_CANCELLED, GetId());
 	event.SetEventObject(this);
 	event.SetColumn(col);
 
@@ -581,8 +581,8 @@ int ibHeaderGenericCtrl::ConstrainByMinWidth(unsigned int col, int& xPhysical)
 
 void ibHeaderGenericCtrl::StartOrContinueResizing(unsigned int col, int xPhysical)
 {
-	ibHeaderGenericCtrlEvent event(IsResizing() ? wxEVT_HEADER_RESIZING
-		: wxEVT_HEADER_BEGIN_RESIZE,
+	ibHeaderGenericCtrlEvent event(IsResizing() ? ibEVT_HEADER_RESIZING
+		: ibEVT_HEADER_BEGIN_RESIZE,
 		GetId());
 	event.SetEventObject(this);
 	event.SetColumn(col);
@@ -619,7 +619,7 @@ void ibHeaderGenericCtrl::EndResizing(int xPhysical)
 
 	ReleaseMouse();
 
-	ibHeaderGenericCtrlEvent event(wxEVT_HEADER_END_RESIZE, GetId());
+	ibHeaderGenericCtrlEvent event(ibEVT_HEADER_END_RESIZE, GetId());
 	event.SetEventObject(this);
 	event.SetColumn(m_colBeingResized);
 	event.SetWidth(ConstrainByMinWidth(m_colBeingResized, xPhysical));
@@ -671,7 +671,7 @@ void ibHeaderGenericCtrl::DrawReorderingMarker(int xPhysical, const wxRect& hint
 
 void ibHeaderGenericCtrl::StartReordering(unsigned int col, int xPhysical)
 {
-	ibHeaderGenericCtrlEvent event(wxEVT_HEADER_BEGIN_REORDER, GetId());
+	ibHeaderGenericCtrlEvent event(ibEVT_HEADER_BEGIN_REORDER, GetId());
 	event.SetEventObject(this);
 	event.SetColumn(col);
 
@@ -719,7 +719,7 @@ bool ibHeaderGenericCtrl::EndReordering(int xPhysical, int yPhysical)
 
 	if (static_cast<int>(colNew) != colOld)
 	{
-		ibHeaderGenericCtrlEvent event(wxEVT_HEADER_END_REORDER, GetId());
+		ibHeaderGenericCtrlEvent event(ibEVT_HEADER_END_REORDER, GetId());
 		event.SetEventObject(this);
 		event.SetColumn(colOld);
 
@@ -1007,24 +1007,24 @@ void ibHeaderGenericCtrl::OnMouse(wxMouseEvent& mevent)
 			// treat left double clicks on separator specially
 			if (onSeparator && dblclk)
 			{
-				evtType = wxEVT_HEADER_SEPARATOR_DCLICK;
+				evtType = ibEVT_HEADER_SEPARATOR_DCLICK;
 				m_wasSeparatorDClick = true;
 			}
 			else if (!wasSeparatorDClick)
 			{
-				evtType = click ? wxEVT_HEADER_CLICK
-					: wxEVT_HEADER_DCLICK;
+				evtType = click ? ibEVT_HEADER_CLICK
+					: ibEVT_HEADER_DCLICK;
 			}
 			break;
 
 		case wxMOUSE_BTN_RIGHT:
-			evtType = click ? wxEVT_HEADER_RIGHT_CLICK
-				: wxEVT_HEADER_RIGHT_DCLICK;
+			evtType = click ? ibEVT_HEADER_RIGHT_CLICK
+				: ibEVT_HEADER_RIGHT_DCLICK;
 			break;
 
 		case wxMOUSE_BTN_MIDDLE:
-			evtType = click ? wxEVT_HEADER_MIDDLE_CLICK
-				: wxEVT_HEADER_MIDDLE_DCLICK;
+			evtType = click ? ibEVT_HEADER_MIDDLE_CLICK
+				: ibEVT_HEADER_MIDDLE_DCLICK;
 			break;
 
 		default:

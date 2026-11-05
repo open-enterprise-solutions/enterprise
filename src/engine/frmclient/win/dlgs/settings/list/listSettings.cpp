@@ -456,7 +456,7 @@ wxWindow* ibListSettingsPanel::BuildGroupPage(wxWindow* parent)
 		if (m_fieldSource != nullptr) AddGroupForField(m_fieldSource->GetDragItem());
 	}));
 
-	m_groupView->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED, [this](ibDataViewEvent& e) {
+	m_groupView->Bind(ibEVT_DATAVIEW_ITEM_ACTIVATED, [this](ibDataViewEvent& e) {
 		if (m_groupView != nullptr)
 			m_groupView->EditItem(e.GetItem(), e.GetDataViewColumn());
 		e.Skip();
@@ -464,7 +464,7 @@ wxWindow* ibListSettingsPanel::BuildGroupPage(wxWindow* parent)
 
 	m_groupModel = new ibGroupModel(this);
 	m_groupView->AssociateModel(m_groupModel);
-	m_groupView->Bind(wxEVT_DATAVIEW_ITEM_CONTEXT_MENU, &ibListSettingsPanel::OnListContextMenu, this);
+	m_groupView->Bind(ibEVT_DATAVIEW_ITEM_CONTEXT_MENU, &ibListSettingsPanel::OnListContextMenu, this);
 	m_groupModel->ResetFromList();
 
 	return panel;

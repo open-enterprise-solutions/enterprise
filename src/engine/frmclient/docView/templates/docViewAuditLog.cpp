@@ -324,7 +324,7 @@ void ibAuditLogView::BuildLayout(wxWindow* parent)
 	// ----- DataView -----
 	m_dataEditor = new ibDataViewCtrl(parent, wxID_ANY,
 		wxDefaultPosition, wxDefaultSize, 0);
-	m_dataEditor->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED,
+	m_dataEditor->Bind(ibEVT_DATAVIEW_ITEM_ACTIVATED,
 		&ibAuditLogView::OnItemActivated, this);
 	m_dataEditor->Bind(wxEVT_MENU, &ibAuditLogView::OnCommandMenu, this);
 

@@ -1489,7 +1489,7 @@ public:
 			bound->Bind(wxEVT_KILL_FOCUS, [this](wxFocusEvent& e) { ApplyPeriods(); e.Skip(); });
 			bound->Bind(wxEVT_TEXT_ENTER, [this](wxCommandEvent&) { ApplyPeriods(); });
 		}
-		m_view->Bind(wxEVT_DATAVIEW_SELECTION_CHANGED, [this](ibDataViewEvent&) { FillPeriods(); });
+		m_view->Bind(ibEVT_DATAVIEW_SELECTION_CHANGED, [this](ibDataViewEvent&) { FillPeriods(); });
 
 		// WHAT AN EMPTY LIST MEANS, said where the list is empty. Not a warning — it is one of the
 		// two things this form makes, and a person should not have to know it in advance.
@@ -1829,14 +1829,14 @@ void ibComposerSettingsPanel::BuildPanel()
 	if (m_resourceView != nullptr)
 		m_resourceView->SetDropTarget(new ibCallbackDropTarget([this] { wxCommandEvent e; OnAddResource(e); }));
 	if (m_resourceView != nullptr)
-		m_resourceView->Bind(wxEVT_DATAVIEW_ITEM_CONTEXT_MENU, &ibComposerSettingsPanel::OnResourceContextMenu, this);
+		m_resourceView->Bind(ibEVT_DATAVIEW_ITEM_CONTEXT_MENU, &ibComposerSettingsPanel::OnResourceContextMenu, this);
 
 	// VIEW ONLY, the cell half — every grid this window owns, in ONE place. Bound after all of them
 	// exist so none is missed, and listed here rather than beside each creation for the same reason:
 	// a fifth grid is added to this line, not remembered about.
 	for (ibDataViewCtrl* view : { m_variantView, m_structureView, m_fieldView, m_resourceView, m_parameterView }) {
 		if (view != nullptr)
-			view->Bind(wxEVT_DATAVIEW_ITEM_START_EDITING, &ibComposerSettingsPanel::OnStartEditing, this);
+			view->Bind(ibEVT_DATAVIEW_ITEM_START_EDITING, &ibComposerSettingsPanel::OnStartEditing, this);
 	}
 
 	PopulateFieldTrees();
@@ -2372,8 +2372,8 @@ wxWindow* ibComposerSettingsPanel::BuildVariantPane(wxWindow* parent)
 
 	// PICKING ONE SWITCHES EVERYTHING. The row that is now selected is the variant the rest of the
 	// window is about — see ActivateVariant for what "switching" costs.
-	m_variantView->Bind(wxEVT_DATAVIEW_ITEM_CONTEXT_MENU, &ibComposerSettingsPanel::OnVariantContextMenu, this);
-	m_variantView->Bind(wxEVT_DATAVIEW_SELECTION_CHANGED, [this](ibDataViewEvent& e) {
+	m_variantView->Bind(ibEVT_DATAVIEW_ITEM_CONTEXT_MENU, &ibComposerSettingsPanel::OnVariantContextMenu, this);
+	m_variantView->Bind(ibEVT_DATAVIEW_SELECTION_CHANGED, [this](ibDataViewEvent& e) {
 		const int picked = ibSelectedRow(m_variantView);
 		if (picked != wxNOT_FOUND)
 			ActivateVariant((size_t)picked);
@@ -2498,7 +2498,7 @@ wxWindow* ibComposerSettingsPanel::BuildStructurePane(wxWindow* parent)
 	m_structureView->AssociateModel(m_structureModel);
 
 	// A DOUBLE-CLICK EDITS THE CELL under the cursor — the same gesture the settings grids use.
-	m_structureView->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED, [this](ibDataViewEvent& e) {
+	m_structureView->Bind(ibEVT_DATAVIEW_ITEM_ACTIVATED, [this](ibDataViewEvent& e) {
 		if (m_structureView != nullptr)
 			m_structureView->EditItem(e.GetItem(), e.GetDataViewColumn());
 		e.Skip();
@@ -2507,8 +2507,8 @@ wxWindow* ibComposerSettingsPanel::BuildStructurePane(wxWindow* parent)
 	// settings per node, the header is also where that limitation is stated out loud.
 	// RIGHT-CLICK RAISES THE SAME VERBS the toolbar does — a list you can only command from a bar
 	// above it makes you travel for every action.
-	m_structureView->Bind(wxEVT_DATAVIEW_ITEM_CONTEXT_MENU, &ibComposerSettingsPanel::OnStructureContextMenu, this);
-	m_structureView->Bind(wxEVT_DATAVIEW_SELECTION_CHANGED, [this](ibDataViewEvent& e) {
+	m_structureView->Bind(ibEVT_DATAVIEW_ITEM_CONTEXT_MENU, &ibComposerSettingsPanel::OnStructureContextMenu, this);
+	m_structureView->Bind(ibEVT_DATAVIEW_SELECTION_CHANGED, [this](ibDataViewEvent& e) {
 		// ⚠ THE ITEM COMES FROM THE EVENT. Asking the control for its selection HERE walks a
 		// selection it is still rebuilding, and it fails the assertion that says so.
 		if (m_structureModel != nullptr) {
@@ -3264,7 +3264,7 @@ wxWindow* ibComposerSettingsPanel::BuildFieldPage(wxWindow* parent)
 		ibFieldModel::kColTitle, FromDIP(256), wxAlignment::wxALIGN_LEFT));
 
 	// A DOUBLE-CLICK (or Enter) EDITS THE CELL under the cursor — the same gesture the settings grids use.
-	m_fieldView->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED, [this](ibDataViewEvent& e) {
+	m_fieldView->Bind(ibEVT_DATAVIEW_ITEM_ACTIVATED, [this](ibDataViewEvent& e) {
 		if (m_fieldView != nullptr)
 			m_fieldView->EditItem(e.GetItem(), e.GetDataViewColumn());
 		e.Skip();
@@ -3475,7 +3475,7 @@ wxWindow* ibComposerSettingsPanel::BuildResourcePage(wxWindow* parent)
 	// ⚠ QUEUED, because this event is sent BEFORE the model is written: reading the description here
 	// would ask about the text before the one just typed (the same order the parameter page's own
 	// check had to be written around).
-	m_resourceView->Bind(wxEVT_DATAVIEW_ITEM_EDITING_DONE, [this](ibDataViewEvent& event) {
+	m_resourceView->Bind(ibEVT_DATAVIEW_ITEM_EDITING_DONE, [this](ibDataViewEvent& event) {
 		event.Skip();
 		if (event.IsEditCancelled())
 			return;
@@ -3633,7 +3633,7 @@ wxWindow* ibComposerSettingsPanel::BuildParameterPage(wxWindow* parent, bool for
 	// before the one just typed, which is the desync. And because the write has not happened yet,
 	// refusing is one call: VETO, and nothing was stored. No second edit is started and no queued
 	// re-entry into the grid — the event already carries both the answer and the say.
-	m_parameterView->Bind(wxEVT_DATAVIEW_ITEM_EDITING_DONE, [this](ibDataViewEvent& event) {
+	m_parameterView->Bind(ibEVT_DATAVIEW_ITEM_EDITING_DONE, [this](ibDataViewEvent& event) {
 		event.Skip();
 		const ibDataViewColumn* column = event.GetDataViewColumn();
 		if (column == nullptr || column->GetModelColumn() != ibParameterModel::kColExpression
@@ -3656,8 +3656,8 @@ wxWindow* ibComposerSettingsPanel::BuildParameterPage(wxWindow* parent, bool for
 		});
 
 	// RIGHT-CLICK OFFERS WHAT THE TOOLBAR OFFERS — every list in this window answers the right hand.
-	m_parameterView->Bind(wxEVT_DATAVIEW_ITEM_CONTEXT_MENU, &ibComposerSettingsPanel::OnParameterContextMenu, this);
-	m_parameterView->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED, [this](ibDataViewEvent& e) {
+	m_parameterView->Bind(ibEVT_DATAVIEW_ITEM_CONTEXT_MENU, &ibComposerSettingsPanel::OnParameterContextMenu, this);
+	m_parameterView->Bind(ibEVT_DATAVIEW_ITEM_ACTIVATED, [this](ibDataViewEvent& e) {
 		if (m_parameterView != nullptr)
 			m_parameterView->EditItem(e.GetItem(), e.GetDataViewColumn());
 		e.Skip();

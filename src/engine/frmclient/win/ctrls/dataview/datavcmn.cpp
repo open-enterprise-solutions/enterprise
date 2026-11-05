@@ -383,7 +383,7 @@ bool ibDataViewRendererBase::StartEditing(const ibDataViewItem& item, wxRect lab
 	ibDataViewCtrl* const dv_ctrl = column->GetOwner();
 
 	// Before doing anything we send an event asking if editing of this item is really wanted.
-	ibDataViewEvent event(wxEVT_DATAVIEW_ITEM_START_EDITING, dv_ctrl, column, item);
+	ibDataViewEvent event(ibEVT_DATAVIEW_ITEM_START_EDITING, dv_ctrl, column, item);
 	dv_ctrl->GetEventHandler()->ProcessEvent(event);
 	if (!event.IsAllowed())
 		return false;
@@ -427,7 +427,7 @@ void ibDataViewRendererBase::NotifyEditingStarted(const ibDataViewItem& item)
 	ibDataViewColumn* const column = GetOwner();
 	ibDataViewCtrl* const dv_ctrl = column->GetOwner();
 
-	ibDataViewEvent event(wxEVT_DATAVIEW_ITEM_EDITING_STARTED, dv_ctrl, column, item);
+	ibDataViewEvent event(ibEVT_DATAVIEW_ITEM_EDITING_STARTED, dv_ctrl, column, item);
 	dv_ctrl->GetEventHandler()->ProcessEvent(event);
 }
 
@@ -499,7 +499,7 @@ ibDataViewRendererBase::DoHandleEditingDone(ibVariant* value)
 	unsigned int col = column->GetModelColumn();
 
 	// Now we should send Editing Done event
-	ibDataViewEvent event(wxEVT_DATAVIEW_ITEM_EDITING_DONE, dv_ctrl, column, m_item);
+	ibDataViewEvent event(ibEVT_DATAVIEW_ITEM_EDITING_DONE, dv_ctrl, column, m_item);
 	if (value)
 		event.SetValue(*value);
 	else
@@ -1675,36 +1675,36 @@ ibDataViewCtrlBase::CreateDataObject(const wxVector<wxDataFormat>& formats)
 
 wxIMPLEMENT_DYNAMIC_CLASS(ibDataViewEvent, wxNotifyEvent);
 
-wxDEFINE_EVENT(wxEVT_DATAVIEW_SELECTION_CHANGED, ibDataViewEvent);
+wxDEFINE_EVENT(ibEVT_DATAVIEW_SELECTION_CHANGED, ibDataViewEvent);
 
-wxDEFINE_EVENT(wxEVT_DATAVIEW_ITEM_ACTIVATED, ibDataViewEvent);
-wxDEFINE_EVENT(wxEVT_DATAVIEW_ITEM_COLLAPSING, ibDataViewEvent);
-wxDEFINE_EVENT(wxEVT_DATAVIEW_ITEM_COLLAPSED, ibDataViewEvent);
-wxDEFINE_EVENT(wxEVT_DATAVIEW_ITEM_EXPANDING, ibDataViewEvent);
-wxDEFINE_EVENT(wxEVT_DATAVIEW_ITEM_EXPANDED, ibDataViewEvent);
-wxDEFINE_EVENT(wxEVT_DATAVIEW_ITEM_EDITING_STARTED, ibDataViewEvent);
-wxDEFINE_EVENT(wxEVT_DATAVIEW_ITEM_START_EDITING, ibDataViewEvent);
-wxDEFINE_EVENT(wxEVT_DATAVIEW_ITEM_EDITING_DONE, ibDataViewEvent);
-wxDEFINE_EVENT(wxEVT_DATAVIEW_ITEM_VALUE_CHANGED, ibDataViewEvent);
+wxDEFINE_EVENT(ibEVT_DATAVIEW_ITEM_ACTIVATED, ibDataViewEvent);
+wxDEFINE_EVENT(ibEVT_DATAVIEW_ITEM_COLLAPSING, ibDataViewEvent);
+wxDEFINE_EVENT(ibEVT_DATAVIEW_ITEM_COLLAPSED, ibDataViewEvent);
+wxDEFINE_EVENT(ibEVT_DATAVIEW_ITEM_EXPANDING, ibDataViewEvent);
+wxDEFINE_EVENT(ibEVT_DATAVIEW_ITEM_EXPANDED, ibDataViewEvent);
+wxDEFINE_EVENT(ibEVT_DATAVIEW_ITEM_EDITING_STARTED, ibDataViewEvent);
+wxDEFINE_EVENT(ibEVT_DATAVIEW_ITEM_START_EDITING, ibDataViewEvent);
+wxDEFINE_EVENT(ibEVT_DATAVIEW_ITEM_EDITING_DONE, ibDataViewEvent);
+wxDEFINE_EVENT(ibEVT_DATAVIEW_ITEM_VALUE_CHANGED, ibDataViewEvent);
 
-wxDEFINE_EVENT(wxEVT_DATAVIEW_ITEM_START_INSERTING, ibDataViewEvent);
-wxDEFINE_EVENT(wxEVT_DATAVIEW_ITEM_START_ADDING, ibDataViewEvent);
-wxDEFINE_EVENT(wxEVT_DATAVIEW_ITEM_START_DELETING, ibDataViewEvent);
+wxDEFINE_EVENT(ibEVT_DATAVIEW_ITEM_START_INSERTING, ibDataViewEvent);
+wxDEFINE_EVENT(ibEVT_DATAVIEW_ITEM_START_ADDING, ibDataViewEvent);
+wxDEFINE_EVENT(ibEVT_DATAVIEW_ITEM_START_DELETING, ibDataViewEvent);
 
-wxDEFINE_EVENT(wxEVT_DATAVIEW_ITEM_CONTEXT_MENU, ibDataViewEvent);
+wxDEFINE_EVENT(ibEVT_DATAVIEW_ITEM_CONTEXT_MENU, ibDataViewEvent);
 
-wxDEFINE_EVENT(wxEVT_DATAVIEW_COLUMN_HEADER_CLICK, ibDataViewEvent);
-wxDEFINE_EVENT(wxEVT_DATAVIEW_COLUMN_HEADER_RIGHT_CLICK, ibDataViewEvent);
-wxDEFINE_EVENT(wxEVT_DATAVIEW_COLUMN_SORTED, ibDataViewEvent);
-wxDEFINE_EVENT(wxEVT_DATAVIEW_COLUMN_REORDERED, ibDataViewEvent);
+wxDEFINE_EVENT(ibEVT_DATAVIEW_COLUMN_HEADER_CLICK, ibDataViewEvent);
+wxDEFINE_EVENT(ibEVT_DATAVIEW_COLUMN_HEADER_RIGHT_CLICK, ibDataViewEvent);
+wxDEFINE_EVENT(ibEVT_DATAVIEW_COLUMN_SORTED, ibDataViewEvent);
+wxDEFINE_EVENT(ibEVT_DATAVIEW_COLUMN_REORDERED, ibDataViewEvent);
 
-wxDEFINE_EVENT(wxEVT_DATAVIEW_CACHE_HINT, ibDataViewEvent);
+wxDEFINE_EVENT(ibEVT_DATAVIEW_CACHE_HINT, ibDataViewEvent);
 
-wxDEFINE_EVENT(wxEVT_DATAVIEW_ITEM_BEGIN_DRAG, ibDataViewEvent);
-wxDEFINE_EVENT(wxEVT_DATAVIEW_ITEM_DROP_POSSIBLE, ibDataViewEvent);
-wxDEFINE_EVENT(wxEVT_DATAVIEW_ITEM_DROP, ibDataViewEvent);
+wxDEFINE_EVENT(ibEVT_DATAVIEW_ITEM_BEGIN_DRAG, ibDataViewEvent);
+wxDEFINE_EVENT(ibEVT_DATAVIEW_ITEM_DROP_POSSIBLE, ibDataViewEvent);
+wxDEFINE_EVENT(ibEVT_DATAVIEW_ITEM_DROP, ibDataViewEvent);
 
-wxDEFINE_EVENT(wxEVT_DATAVIEW_VIEW_SET, ibDataViewEvent);
+wxDEFINE_EVENT(ibEVT_DATAVIEW_VIEW_SET, ibDataViewEvent);
 
 // Common part of non-copy ctors.
 void ibDataViewEvent::Init(ibDataViewCtrlBase* dvc,

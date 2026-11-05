@@ -134,52 +134,52 @@ WX_DEFINE_OBJARRAY(ibGridCellAreaArray)
 // events
 // ----------------------------------------------------------------------------
 
-wxDEFINE_EVENT(wxEVT_GRID_CELL_LEFT_CLICK, ibGridEvent);
-wxDEFINE_EVENT(wxEVT_GRID_CELL_RIGHT_CLICK, ibGridEvent);
-wxDEFINE_EVENT(wxEVT_GRID_CELL_LEFT_DCLICK, ibGridEvent);
-wxDEFINE_EVENT(wxEVT_GRID_CELL_RIGHT_DCLICK, ibGridEvent);
-wxDEFINE_EVENT(wxEVT_GRID_CELL_BEGIN_DRAG, ibGridEvent);
-wxDEFINE_EVENT(wxEVT_GRID_LABEL_LEFT_CLICK, ibGridEvent);
-wxDEFINE_EVENT(wxEVT_GRID_LABEL_RIGHT_CLICK, ibGridEvent);
-wxDEFINE_EVENT(wxEVT_GRID_LABEL_LEFT_DCLICK, ibGridEvent);
-wxDEFINE_EVENT(wxEVT_GRID_LABEL_RIGHT_DCLICK, ibGridEvent);
-wxDEFINE_EVENT(wxEVT_GRID_ROW_SIZE, ibGridSizeEvent);
-wxDEFINE_EVENT(wxEVT_GRID_ROW_MODIFIED, ibGridSizeEvent);
-wxDEFINE_EVENT(wxEVT_GRID_ROW_AUTO_SIZE, ibGridSizeEvent);
-wxDEFINE_EVENT(wxEVT_GRID_COL_SIZE, ibGridSizeEvent);
-wxDEFINE_EVENT(wxEVT_GRID_COL_MODIFIED, ibGridSizeEvent);
-wxDEFINE_EVENT(wxEVT_GRID_COL_AUTO_SIZE, ibGridSizeEvent);
-wxDEFINE_EVENT(wxEVT_GRID_ROW_MOVE, ibGridEvent);
-wxDEFINE_EVENT(wxEVT_GRID_COL_MOVE, ibGridEvent);
-wxDEFINE_EVENT(wxEVT_GRID_COL_SORT, ibGridEvent);
-wxDEFINE_EVENT(wxEVT_GRID_RANGE_SELECTING, ibGridRangeSelectEvent);
-wxDEFINE_EVENT(wxEVT_GRID_RANGE_SELECTED, ibGridRangeSelectEvent);
-wxDEFINE_EVENT(wxEVT_GRID_CELL_CHANGING, ibGridEvent);
-wxDEFINE_EVENT(wxEVT_GRID_CELL_CHANGED, ibGridEvent);
-wxDEFINE_EVENT(wxEVT_GRID_TABLE_MODIFIED, ibGridEvent);
-wxDEFINE_EVENT(wxEVT_GRID_TABLE_ATTR_MODIFIED, ibGridEvent);
-wxDEFINE_EVENT(wxEVT_GRID_SELECT_CELL, ibGridEvent);
-wxDEFINE_EVENT(wxEVT_GRID_EDITOR_SHOWN, ibGridEvent);
-wxDEFINE_EVENT(wxEVT_GRID_EDITOR_HIDDEN, ibGridEvent);
-wxDEFINE_EVENT(wxEVT_GRID_EDITOR_CREATED, ibGridEditorCreatedEvent);
-wxDEFINE_EVENT(wxEVT_GRID_ROW_BRAKE_ADD, ibGridSizeEvent);
-wxDEFINE_EVENT(wxEVT_GRID_ROW_BRAKE_SET, ibGridSizeEvent);
-wxDEFINE_EVENT(wxEVT_GRID_ROW_BRAKE_DELETE, ibGridSizeEvent);
-wxDEFINE_EVENT(wxEVT_GRID_COL_BRAKE_ADD, ibGridSizeEvent);
-wxDEFINE_EVENT(wxEVT_GRID_COL_BRAKE_SET, ibGridSizeEvent);
-wxDEFINE_EVENT(wxEVT_GRID_COL_BRAKE_DELETE, ibGridSizeEvent);
-wxDEFINE_EVENT(wxEVT_GRID_ROW_AREA_CREATE, ibGridAreaEvent);
-wxDEFINE_EVENT(wxEVT_GRID_ROW_AREA_DELETE, ibGridAreaEvent);
-wxDEFINE_EVENT(wxEVT_GRID_ROW_AREA_SIZE, ibGridAreaEvent);
-wxDEFINE_EVENT(wxEVT_GRID_ROW_AREA_NAME, ibGridAreaEvent);
-wxDEFINE_EVENT(wxEVT_GRID_COL_AREA_CREATE, ibGridAreaEvent);
-wxDEFINE_EVENT(wxEVT_GRID_COL_AREA_DELETE, ibGridAreaEvent);
-wxDEFINE_EVENT(wxEVT_GRID_COL_AREA_SIZE, ibGridAreaEvent);
-wxDEFINE_EVENT(wxEVT_GRID_COL_AREA_NAME, ibGridAreaEvent);
-wxDEFINE_EVENT(wxEVT_GRID_ROW_FREEZE, ibGridSizeEvent);
-wxDEFINE_EVENT(wxEVT_GRID_COL_FREEZE, ibGridSizeEvent);
-wxDEFINE_EVENT(wxEVT_GRID_ZOOM, ibGridEvent);
-wxDEFINE_EVENT(wxEVT_GRID_TABBING, ibGridEvent);
+wxDEFINE_EVENT(ibEVT_GRID_CELL_LEFT_CLICK, ibGridEvent);
+wxDEFINE_EVENT(ibEVT_GRID_CELL_RIGHT_CLICK, ibGridEvent);
+wxDEFINE_EVENT(ibEVT_GRID_CELL_LEFT_DCLICK, ibGridEvent);
+wxDEFINE_EVENT(ibEVT_GRID_CELL_RIGHT_DCLICK, ibGridEvent);
+wxDEFINE_EVENT(ibEVT_GRID_CELL_BEGIN_DRAG, ibGridEvent);
+wxDEFINE_EVENT(ibEVT_GRID_LABEL_LEFT_CLICK, ibGridEvent);
+wxDEFINE_EVENT(ibEVT_GRID_LABEL_RIGHT_CLICK, ibGridEvent);
+wxDEFINE_EVENT(ibEVT_GRID_LABEL_LEFT_DCLICK, ibGridEvent);
+wxDEFINE_EVENT(ibEVT_GRID_LABEL_RIGHT_DCLICK, ibGridEvent);
+wxDEFINE_EVENT(ibEVT_GRID_ROW_SIZE, ibGridSizeEvent);
+wxDEFINE_EVENT(ibEVT_GRID_ROW_MODIFIED, ibGridSizeEvent);
+wxDEFINE_EVENT(ibEVT_GRID_ROW_AUTO_SIZE, ibGridSizeEvent);
+wxDEFINE_EVENT(ibEVT_GRID_COL_SIZE, ibGridSizeEvent);
+wxDEFINE_EVENT(ibEVT_GRID_COL_MODIFIED, ibGridSizeEvent);
+wxDEFINE_EVENT(ibEVT_GRID_COL_AUTO_SIZE, ibGridSizeEvent);
+wxDEFINE_EVENT(ibEVT_GRID_ROW_MOVE, ibGridEvent);
+wxDEFINE_EVENT(ibEVT_GRID_COL_MOVE, ibGridEvent);
+wxDEFINE_EVENT(ibEVT_GRID_COL_SORT, ibGridEvent);
+wxDEFINE_EVENT(ibEVT_GRID_RANGE_SELECTING, ibGridRangeSelectEvent);
+wxDEFINE_EVENT(ibEVT_GRID_RANGE_SELECTED, ibGridRangeSelectEvent);
+wxDEFINE_EVENT(ibEVT_GRID_CELL_CHANGING, ibGridEvent);
+wxDEFINE_EVENT(ibEVT_GRID_CELL_CHANGED, ibGridEvent);
+wxDEFINE_EVENT(ibEVT_GRID_TABLE_MODIFIED, ibGridEvent);
+wxDEFINE_EVENT(ibEVT_GRID_TABLE_ATTR_MODIFIED, ibGridEvent);
+wxDEFINE_EVENT(ibEVT_GRID_SELECT_CELL, ibGridEvent);
+wxDEFINE_EVENT(ibEVT_GRID_EDITOR_SHOWN, ibGridEvent);
+wxDEFINE_EVENT(ibEVT_GRID_EDITOR_HIDDEN, ibGridEvent);
+wxDEFINE_EVENT(ibEVT_GRID_EDITOR_CREATED, ibGridEditorCreatedEvent);
+wxDEFINE_EVENT(ibEVT_GRID_ROW_BRAKE_ADD, ibGridSizeEvent);
+wxDEFINE_EVENT(ibEVT_GRID_ROW_BRAKE_SET, ibGridSizeEvent);
+wxDEFINE_EVENT(ibEVT_GRID_ROW_BRAKE_DELETE, ibGridSizeEvent);
+wxDEFINE_EVENT(ibEVT_GRID_COL_BRAKE_ADD, ibGridSizeEvent);
+wxDEFINE_EVENT(ibEVT_GRID_COL_BRAKE_SET, ibGridSizeEvent);
+wxDEFINE_EVENT(ibEVT_GRID_COL_BRAKE_DELETE, ibGridSizeEvent);
+wxDEFINE_EVENT(ibEVT_GRID_ROW_AREA_CREATE, ibGridAreaEvent);
+wxDEFINE_EVENT(ibEVT_GRID_ROW_AREA_DELETE, ibGridAreaEvent);
+wxDEFINE_EVENT(ibEVT_GRID_ROW_AREA_SIZE, ibGridAreaEvent);
+wxDEFINE_EVENT(ibEVT_GRID_ROW_AREA_NAME, ibGridAreaEvent);
+wxDEFINE_EVENT(ibEVT_GRID_COL_AREA_CREATE, ibGridAreaEvent);
+wxDEFINE_EVENT(ibEVT_GRID_COL_AREA_DELETE, ibGridAreaEvent);
+wxDEFINE_EVENT(ibEVT_GRID_COL_AREA_SIZE, ibGridAreaEvent);
+wxDEFINE_EVENT(ibEVT_GRID_COL_AREA_NAME, ibGridAreaEvent);
+wxDEFINE_EVENT(ibEVT_GRID_ROW_FREEZE, ibGridSizeEvent);
+wxDEFINE_EVENT(ibEVT_GRID_COL_FREEZE, ibGridSizeEvent);
+wxDEFINE_EVENT(ibEVT_GRID_ZOOM, ibGridEvent);
+wxDEFINE_EVENT(ibEVT_GRID_TABBING, ibGridEvent);
 
 // ============================================================================
 // implementation
@@ -1978,7 +1978,7 @@ void ibGridTableBase::OnGridTableNotify(int row, int col, const wxString& s)
 {
 	if (GetView())
 	{
-		GetView()->SendEvent(wxEVT_GRID_TABLE_MODIFIED, row, col, s);
+		GetView()->SendEvent(ibEVT_GRID_TABLE_MODIFIED, row, col, s);
 	}
 }
 
@@ -4683,7 +4683,7 @@ void ibGrid::ProcessRowColLabelMouseEvent(const ibGridOperations& oper, wxMouseE
 				if (m_selection && m_numRows && m_numCols &&
 					m_selection->IsInSelection(m_currentCellCoords))
 				{
-					oper.SelectionExtendCurrentBlock(this, line, event, wxEVT_GRID_RANGE_SELECTING);
+					oper.SelectionExtendCurrentBlock(this, line, event, ibEVT_GRID_RANGE_SELECTING);
 				}
 			}
 			else if (m_cursorMode == oper.GetCursorModeMove())
@@ -4763,7 +4763,7 @@ void ibGrid::ProcessRowColLabelMouseEvent(const ibGridOperations& oper, wxMouseE
 		{
 			// not a request to start resizing
 			if (line >= 0 &&
-				oper.SendEvent(this, wxEVT_GRID_LABEL_LEFT_CLICK, line, event) == Event_Unhandled)
+				oper.SendEvent(this, ibEVT_GRID_LABEL_LEFT_CLICK, line, event) == Event_Unhandled)
 			{
 				if (oper.CanDragMove(this))
 				{
@@ -4841,7 +4841,7 @@ void ibGrid::ProcessRowColLabelMouseEvent(const ibGridOperations& oper, wxMouseE
 		else // not on line separator or it's not resizable
 		{
 			if (line >= 0 &&
-				oper.SendEvent(this, wxEVT_GRID_LABEL_LEFT_DCLICK, line, event) == Event_Unhandled)
+				oper.SendEvent(this, ibEVT_GRID_LABEL_LEFT_DCLICK, line, event) == Event_Unhandled)
 			{
 				// no default action at the moment
 			}
@@ -4899,7 +4899,7 @@ void ibGrid::ProcessRowColLabelMouseEvent(const ibGridOperations& oper, wxMouseE
 	else if (event.RightDown())
 	{
 		if (line < 0 ||
-			oper.SendEvent(this, wxEVT_GRID_LABEL_RIGHT_CLICK, line, event) == Event_Unhandled)
+			oper.SendEvent(this, ibEVT_GRID_LABEL_RIGHT_CLICK, line, event) == Event_Unhandled)
 		{
 			// no default action at the moment
 			event.Skip();
@@ -4911,7 +4911,7 @@ void ibGrid::ProcessRowColLabelMouseEvent(const ibGridOperations& oper, wxMouseE
 	else if (event.RightDClick())
 	{
 		if (line < 0 ||
-			oper.SendEvent(this, wxEVT_GRID_LABEL_RIGHT_DCLICK, line, event) == Event_Unhandled)
+			oper.SendEvent(this, ibEVT_GRID_LABEL_RIGHT_DCLICK, line, event) == Event_Unhandled)
 		{
 			// no default action at the moment
 			event.Skip();
@@ -5039,7 +5039,7 @@ void ibGrid::DoColHeaderClick(int col)
 {
 	// we consider that the grid was resorted if this event is processed and
 	// not vetoed
-	if (SendEvent(wxEVT_GRID_COL_SORT, -1, col) == Event_Handled)
+	if (SendEvent(ibEVT_GRID_COL_SORT, -1, col) == Event_Handled)
 	{
 		SetSortingColumn(col, IsSortingBy(col) ? !m_sortIsAscending : true);
 		Refresh();
@@ -5087,18 +5087,18 @@ void ibGrid::ProcessRowColAreaMouseEvent(const ibGridOperations& oper, wxMouseEv
 		// indicate corner label by having both row and
 		// col args == -1
 		//
-		if (SendEvent(wxEVT_GRID_LABEL_LEFT_CLICK, -1, -1, event) == Event_Unhandled) {
+		if (SendEvent(ibEVT_GRID_LABEL_LEFT_CLICK, -1, -1, event) == Event_Unhandled) {
 			oper.SelectArea(this, line, event);
 		}
 	}
 	else if (event.LeftDClick())
 	{
-		SendEvent(wxEVT_GRID_LABEL_LEFT_DCLICK, -1, -1, event);
+		SendEvent(ibEVT_GRID_LABEL_LEFT_DCLICK, -1, -1, event);
 		oper.MakeAreaName(this, line, event);
 	}
 	else if (event.RightDown())
 	{
-		if (SendEvent(wxEVT_GRID_LABEL_RIGHT_CLICK, -1, -1, event) == Event_Unhandled)
+		if (SendEvent(ibEVT_GRID_LABEL_RIGHT_CLICK, -1, -1, event) == Event_Unhandled)
 		{
 			// no default action at the moment
 			event.Skip();
@@ -5106,7 +5106,7 @@ void ibGrid::ProcessRowColAreaMouseEvent(const ibGridOperations& oper, wxMouseEv
 	}
 	else if (event.RightDClick())
 	{
-		if (SendEvent(wxEVT_GRID_LABEL_RIGHT_DCLICK, -1, -1, event) == Event_Unhandled)
+		if (SendEvent(ibEVT_GRID_LABEL_RIGHT_DCLICK, -1, -1, event) == Event_Unhandled)
 		{
 			// no default action at the moment
 			event.Skip();
@@ -5125,18 +5125,18 @@ void ibGrid::ProcessCornerLabelMouseEvent(wxMouseEvent& event)
 		// indicate corner label by having both row and
 		// col args == -1
 		//
-		if (SendEvent(wxEVT_GRID_LABEL_LEFT_CLICK, -1, -1, event) == Event_Unhandled)
+		if (SendEvent(ibEVT_GRID_LABEL_LEFT_CLICK, -1, -1, event) == Event_Unhandled)
 		{
 			SelectAll();
 		}
 	}
 	else if (event.LeftDClick())
 	{
-		SendEvent(wxEVT_GRID_LABEL_LEFT_DCLICK, -1, -1, event);
+		SendEvent(ibEVT_GRID_LABEL_LEFT_DCLICK, -1, -1, event);
 	}
 	else if (event.RightDown())
 	{
-		if (SendEvent(wxEVT_GRID_LABEL_RIGHT_CLICK, -1, -1, event) == Event_Unhandled)
+		if (SendEvent(ibEVT_GRID_LABEL_RIGHT_CLICK, -1, -1, event) == Event_Unhandled)
 		{
 			// no default action at the moment
 			event.Skip();
@@ -5144,7 +5144,7 @@ void ibGrid::ProcessCornerLabelMouseEvent(wxMouseEvent& event)
 	}
 	else if (event.RightDClick())
 	{
-		if (SendEvent(wxEVT_GRID_LABEL_RIGHT_DCLICK, -1, -1, event) == Event_Unhandled)
+		if (SendEvent(ibEVT_GRID_LABEL_RIGHT_DCLICK, -1, -1, event) == Event_Unhandled)
 		{
 			// no default action at the moment
 			event.Skip();
@@ -5161,10 +5161,10 @@ void ibGrid::HandleRowAutosize(int row, const wxMouseEvent& event)
 	// adjust row height depending on label text
 	//
 	// TODO: generate RESIZING event, see #10754
-	if (!SendGridSizeEvent(wxEVT_GRID_ROW_AUTO_SIZE, row, event))
+	if (!SendGridSizeEvent(ibEVT_GRID_ROW_AUTO_SIZE, row, event))
 		AutoSizeRowLabelSize(row);
 
-	SendGridSizeEvent(wxEVT_GRID_ROW_SIZE, row, event);
+	SendGridSizeEvent(ibEVT_GRID_ROW_SIZE, row, event);
 }
 
 void ibGrid::HandleColumnAutosize(int col, const wxMouseEvent& event)
@@ -5172,10 +5172,10 @@ void ibGrid::HandleColumnAutosize(int col, const wxMouseEvent& event)
 	// adjust column width depending on label text
 	//
 	// TODO: generate RESIZING event, see #10754
-	if (!SendGridSizeEvent(wxEVT_GRID_COL_AUTO_SIZE, col, event))
+	if (!SendGridSizeEvent(ibEVT_GRID_COL_AUTO_SIZE, col, event))
 		AutoSizeColLabelSize(col);
 
-	SendGridSizeEvent(wxEVT_GRID_COL_SIZE, col, event);
+	SendGridSizeEvent(ibEVT_GRID_COL_SIZE, col, event);
 }
 
 void ibGrid::CancelMouseCapture()
@@ -5328,7 +5328,7 @@ ibGrid::DoGridCellDrag(wxMouseEvent& event,
 			if (CanDragCell())
 			{
 				// if event is handled by user code, no further processing
-				return SendEvent(wxEVT_GRID_CELL_BEGIN_DRAG, coords, event) == Event_Unhandled;
+				return SendEvent(ibEVT_GRID_CELL_BEGIN_DRAG, coords, event) == Event_Unhandled;
 			}
 			break;
 
@@ -5467,7 +5467,7 @@ ibGrid::DoGridCellDrag(wxMouseEvent& event,
 		m_selection->ExtendCurrentBlock(anchorCorner,
 			cursorCorner,
 			event,
-			wxEVT_GRID_RANGE_SELECTING);
+			ibEVT_GRID_RANGE_SELECTING);
 	}
 
 	return true;
@@ -5505,7 +5505,7 @@ ibGrid::DoGridCellLeftDown(wxMouseEvent& event,
 	const ibGridCellCoords& coords,
 	const wxPoint& pos)
 {
-	if (SendEvent(wxEVT_GRID_CELL_LEFT_CLICK, coords, event) != Event_Unhandled)
+	if (SendEvent(ibEVT_GRID_CELL_LEFT_CLICK, coords, event) != Event_Unhandled)
 	{
 		// event handled by user code, no need to do anything here
 		return;
@@ -5619,7 +5619,7 @@ ibGrid::DoGridCellLeftDClick(wxMouseEvent& event,
 {
 	if (XToEdgeOfCol(pos.x) < 0 && YToEdgeOfRow(pos.y) < 0)
 	{
-		if (SendEvent(wxEVT_GRID_CELL_LEFT_DCLICK, coords, event) == Event_Unhandled)
+		if (SendEvent(ibEVT_GRID_CELL_LEFT_DCLICK, coords, event) == Event_Unhandled)
 		{
 			// we want double click to select a cell and start editing
 			// (i.e. to behave in same way as sequence of two slow clicks):
@@ -5829,9 +5829,9 @@ void ibGrid::ProcessGridCellMouseEvent(wxMouseEvent& event, ibGridWindow* eventG
 			else if (event.LeftDClick())
 				handled = (DoGridCellLeftDClick(event, coords, pos), true);
 			else if (event.RightDown())
-				handled = SendEvent(wxEVT_GRID_CELL_RIGHT_CLICK, coords, event) != Event_Unhandled;
+				handled = SendEvent(ibEVT_GRID_CELL_RIGHT_CLICK, coords, event) != Event_Unhandled;
 			else if (event.RightDClick())
-				handled = SendEvent(wxEVT_GRID_CELL_RIGHT_DCLICK, coords, event) != Event_Unhandled;
+				handled = SendEvent(ibEVT_GRID_CELL_RIGHT_DCLICK, coords, event) != Event_Unhandled;
 		}
 	}
 	else if (event.Moving())
@@ -5889,12 +5889,12 @@ void ibGrid::DoEndDragResizeRow(const wxMouseEvent& event, ibGridWindow* gridWin
 {
 	DoGridDragResize(event.GetPosition(), ibGridRowOperations(), gridWindow);
 
-	SendGridSizeEvent(wxEVT_GRID_ROW_SIZE, m_dragRowOrCol, event);
+	SendGridSizeEvent(ibEVT_GRID_ROW_SIZE, m_dragRowOrCol, event);
 
 	PushCommand<ibGridCommandRowSize>(m_dragRowOrCol,
 		GetRowHeight(m_dragRowOrCol), m_dragRowOrColOldSize);
 
-	SendGridSizeEvent(wxEVT_GRID_ROW_MODIFIED, m_dragRowOrCol, event);
+	SendGridSizeEvent(ibEVT_GRID_ROW_MODIFIED, m_dragRowOrCol, event);
 
 	m_dragRowOrCol = -1;
 }
@@ -5903,12 +5903,12 @@ void ibGrid::DoEndDragResizeCol(const wxMouseEvent& event, ibGridWindow* gridWin
 {
 	DoGridDragResize(event.GetPosition(), ibGridColumnOperations(), gridWindow);
 
-	SendGridSizeEvent(wxEVT_GRID_COL_SIZE, m_dragRowOrCol, event);
+	SendGridSizeEvent(ibEVT_GRID_COL_SIZE, m_dragRowOrCol, event);
 
 	PushCommand<ibGridCommandColSize>(m_dragRowOrCol,
 		GetColWidth(m_dragRowOrCol), m_dragRowOrColOldSize);
 
-	SendGridSizeEvent(wxEVT_GRID_COL_MODIFIED, m_dragRowOrCol, event);
+	SendGridSizeEvent(ibEVT_GRID_COL_MODIFIED, m_dragRowOrCol, event);
 
 	m_dragRowOrCol = -1;
 }
@@ -5956,7 +5956,7 @@ void ibGrid::DoEndMoveRow(int pos)
 {
 	wxASSERT_MSG(m_dragMoveRowOrCol != -1, "no matching DoStartMoveRow?");
 
-	if (SendEvent(wxEVT_GRID_ROW_MOVE, m_dragMoveRowOrCol, -1) != Event_Vetoed)
+	if (SendEvent(ibEVT_GRID_ROW_MOVE, m_dragMoveRowOrCol, -1) != Event_Vetoed)
 		SetRowPos(m_dragMoveRowOrCol, pos);
 
 	m_dragMoveRowOrCol = -1;
@@ -6039,7 +6039,7 @@ void ibGrid::DoEndMoveCol(int pos)
 {
 	wxASSERT_MSG(m_dragMoveRowOrCol != -1, "no matching DoStartMoveCol?");
 
-	if (SendEvent(wxEVT_GRID_COL_MOVE, -1, m_dragMoveRowOrCol) != Event_Vetoed)
+	if (SendEvent(ibEVT_GRID_COL_MOVE, -1, m_dragMoveRowOrCol) != Event_Vetoed)
 		SetColPos(m_dragMoveRowOrCol, pos);
 
 	m_dragMoveRowOrCol = -1;
@@ -6281,8 +6281,8 @@ bool ibGrid::FreezeTo(int row, int col)
 	e.SetState(wxGetMouseState());
 	ScreenToClient(&e.m_x, &e.m_y);
 
-	SendGridSizeEvent(wxEVT_GRID_ROW_FREEZE, row, e);
-	SendGridSizeEvent(wxEVT_GRID_COL_FREEZE, col, e);
+	SendGridSizeEvent(ibEVT_GRID_ROW_FREEZE, row, e);
+	SendGridSizeEvent(ibEVT_GRID_COL_FREEZE, col, e);
 	return true;
 }
 
@@ -6473,10 +6473,10 @@ ibGrid::SendEvent(wxEventType type,
 	const wxMouseEvent& mouseEv)
 {
 
-	if (type == wxEVT_GRID_LABEL_LEFT_CLICK ||
-		type == wxEVT_GRID_LABEL_LEFT_DCLICK ||
-		type == wxEVT_GRID_LABEL_RIGHT_CLICK ||
-		type == wxEVT_GRID_LABEL_RIGHT_DCLICK)
+	if (type == ibEVT_GRID_LABEL_LEFT_CLICK ||
+		type == ibEVT_GRID_LABEL_LEFT_DCLICK ||
+		type == ibEVT_GRID_LABEL_RIGHT_CLICK ||
+		type == ibEVT_GRID_LABEL_RIGHT_DCLICK)
 	{
 		wxPoint pos = mouseEv.GetPosition();
 
@@ -6507,7 +6507,7 @@ ibGrid::SendEvent(wxEventType type,
 			false,
 			mouseEv);
 
-		if (type == wxEVT_GRID_CELL_BEGIN_DRAG)
+		if (type == ibEVT_GRID_CELL_BEGIN_DRAG)
 		{
 			// by default the dragging is not supported, the user code must
 			// explicitly allow the event for it to take place
@@ -6928,7 +6928,7 @@ void ibGrid::OnKeyDown(wxKeyEvent& event)
 		case WXK_TAB:
 		{
 			// send an event to the grid's parents for custom handling
-			ibGridEvent gridEvt(GetId(), wxEVT_GRID_TABBING, this,
+			ibGridEvent gridEvt(GetId(), ibEVT_GRID_TABBING, this,
 				GetGridCursorRow(), GetGridCursorCol(),
 				-1, -1, false, event);
 			if (ProcessWindowEvent(gridEvt))
@@ -7265,7 +7265,7 @@ void ibGrid::DoGridProcessTab(wxKeyboardState& kbdState)
 
 bool ibGrid::SetCurrentCell(const ibGridCellCoords& coords)
 {
-	switch (SendEvent(wxEVT_GRID_SELECT_CELL, coords))
+	switch (SendEvent(ibEVT_GRID_SELECT_CELL, coords))
 	{
 	case Event_Vetoed:
 	case Event_CellDeleted:
@@ -8937,7 +8937,7 @@ void ibGrid::EnableCellEditControl(bool enable)
 
 bool ibGrid::DoEnableCellEditControl(const ibGridActivationSource& actSource)
 {
-	switch (SendEvent(wxEVT_GRID_EDITOR_SHOWN))
+	switch (SendEvent(ibEVT_GRID_EDITOR_SHOWN))
 	{
 	case Event_Vetoed:
 	case Event_CellDeleted:
@@ -8956,7 +8956,7 @@ bool ibGrid::DoEnableCellEditControl(const ibGridActivationSource& actSource)
 		// We have to send the HIDDEN event matching the SHOWN one above as the
 		// user code may reasonably expect always getting them in pairs, so do
 		// it even if the editor hadn't really been shown at all.
-		SendEvent(wxEVT_GRID_EDITOR_HIDDEN);
+		SendEvent(ibEVT_GRID_EDITOR_HIDDEN);
 
 		return false;
 	}
@@ -8966,7 +8966,7 @@ bool ibGrid::DoEnableCellEditControl(const ibGridActivationSource& actSource)
 
 void ibGrid::DoDisableCellEditControl()
 {
-	SendEvent(wxEVT_GRID_EDITOR_HIDDEN);
+	SendEvent(ibEVT_GRID_EDITOR_HIDDEN);
 
 	DoAcceptCellEditControl();
 }
@@ -9032,7 +9032,7 @@ bool ibGrid::DoShowCellEditControl(const ibGridActivationSource& actSource)
 		// This is somewhat similar to what DoSaveEditControlValue() does.
 		// but we don't allow vetoing CHANGED event here as this code is
 		// new and shouldn't have to support this obsolete usage.
-		switch (SendEvent(wxEVT_GRID_CELL_CHANGING, res.GetNewValue()))
+		switch (SendEvent(ibEVT_GRID_CELL_CHANGING, res.GetNewValue()))
 		{
 		case Event_Vetoed:
 		case Event_CellDeleted:
@@ -9047,9 +9047,9 @@ bool ibGrid::DoShowCellEditControl(const ibGridActivationSource& actSource)
 			// Show the new cell value.
 			RefreshBlock(m_currentCellCoords, m_currentCellCoords);
 
-			if (SendEvent(wxEVT_GRID_CELL_CHANGED, oldval) == Event_Vetoed)
+			if (SendEvent(ibEVT_GRID_CELL_CHANGED, oldval) == Event_Vetoed)
 			{
-				wxFAIL_MSG("Vetoing wxEVT_GRID_CELL_CHANGED is ignored");
+				wxFAIL_MSG("Vetoing ibEVT_GRID_CELL_CHANGED is ignored");
 			}
 			break;
 		}
@@ -9109,7 +9109,7 @@ bool ibGrid::DoShowCellEditControl(const ibGridActivationSource& actSource)
 		}
 
 		ibGridEditorCreatedEvent evt(GetId(),
-			wxEVT_GRID_EDITOR_CREATED,
+			ibEVT_GRID_EDITOR_CREATED,
 			this,
 			row,
 			col,
@@ -9318,7 +9318,7 @@ void ibGrid::DoSaveEditControlValue()
 	if (!editor->EndEdit(row, col, this, oldval, &newval))
 		return;
 
-	switch (SendEvent(wxEVT_GRID_CELL_CHANGING, newval))
+	switch (SendEvent(ibEVT_GRID_CELL_CHANGING, newval))
 	{
 	case Event_Vetoed:
 	case Event_CellDeleted:
@@ -9330,9 +9330,9 @@ void ibGrid::DoSaveEditControlValue()
 		editor->ApplyEdit(row, col, this);
 
 		// for compatibility reasons dating back to wx 2.8 when this event
-		// was called wxEVT_GRID_CELL_CHANGE and wxEVT_GRID_CELL_CHANGING
+		// was called ibEVT_GRID_CELL_CHANGE and ibEVT_GRID_CELL_CHANGING
 		// didn't exist we allow vetoing this one too
-		if (SendEvent(wxEVT_GRID_CELL_CHANGED, oldval) == Event_Vetoed)
+		if (SendEvent(ibEVT_GRID_CELL_CHANGED, oldval) == Event_Vetoed)
 		{
 			// Event has been vetoed, set the data back.
 			//
@@ -10631,7 +10631,7 @@ void ibGrid::SetGridZoom(int point)
 		InvalidateBestSize();
 		CalcDimensions();
 
-		SendEvent(wxEVT_GRID_ZOOM);
+		SendEvent(ibEVT_GRID_ZOOM);
 	}
 }
 
@@ -11784,7 +11784,7 @@ bool ibGrid::MakeRowAreaLabel(ibGridCellArea* rowArea)
 				const int index = m_rowAreaAt.Index(*rowArea);
 				if (index >= 0)
 				{
-					SendGridAreaEvent(wxEVT_GRID_ROW_AREA_NAME, index, *rowArea);
+					SendGridAreaEvent(ibEVT_GRID_ROW_AREA_NAME, index, *rowArea);
 
 					PushCommand<ibGridCommandAreaName>(index, ibGridCommandAreaName::AreaRow, newValue, oldValue);
 				}
@@ -11840,7 +11840,7 @@ bool ibGrid::MakeColAreaLabel(ibGridCellArea* colArea)
 				const int index = m_colAreaAt.Index(*colArea);
 				if (index >= 0)
 				{
-					SendGridAreaEvent(wxEVT_GRID_COL_AREA_NAME, index, *colArea);
+					SendGridAreaEvent(ibEVT_GRID_COL_AREA_NAME, index, *colArea);
 
 					PushCommand<ibGridCommandAreaName>(index, ibGridCommandAreaName::AreaCol, newValue, oldValue);
 				}
@@ -11869,7 +11869,7 @@ void ibGrid::AddRowBrake(int row)
 	e.SetState(wxGetMouseState());
 	ScreenToClient(&e.m_x, &e.m_y);
 
-	SendGridSizeEvent(wxEVT_GRID_ROW_BRAKE_ADD, row, e);
+	SendGridSizeEvent(ibEVT_GRID_ROW_BRAKE_ADD, row, e);
 }
 
 void ibGrid::SetRowBrake(int row)
@@ -11891,7 +11891,7 @@ void ibGrid::SetRowBrake(int row)
 			e.SetState(wxGetMouseState());
 			ScreenToClient(&e.m_x, &e.m_y);
 
-			SendGridSizeEvent(wxEVT_GRID_ROW_BRAKE_SET, row, e);
+			SendGridSizeEvent(ibEVT_GRID_ROW_BRAKE_SET, row, e);
 		}
 	}
 }
@@ -11910,7 +11910,7 @@ void ibGrid::AddColBrake(int col)
 	e.SetState(wxGetMouseState());
 	ScreenToClient(&e.m_x, &e.m_y);
 
-	SendGridSizeEvent(wxEVT_GRID_COL_BRAKE_ADD, col, e);
+	SendGridSizeEvent(ibEVT_GRID_COL_BRAKE_ADD, col, e);
 }
 
 void ibGrid::DeleteRowBrake(int row)
@@ -11927,7 +11927,7 @@ void ibGrid::DeleteRowBrake(int row)
 	e.SetState(wxGetMouseState());
 	ScreenToClient(&e.m_x, &e.m_y);
 
-	SendGridSizeEvent(wxEVT_GRID_ROW_BRAKE_DELETE, row, e);
+	SendGridSizeEvent(ibEVT_GRID_ROW_BRAKE_DELETE, row, e);
 }
 
 void ibGrid::DeleteColBrake(int col)
@@ -11944,7 +11944,7 @@ void ibGrid::DeleteColBrake(int col)
 	e.SetState(wxGetMouseState());
 	ScreenToClient(&e.m_x, &e.m_y);
 
-	SendGridSizeEvent(wxEVT_GRID_COL_BRAKE_DELETE, col, e);
+	SendGridSizeEvent(ibEVT_GRID_COL_BRAKE_DELETE, col, e);
 
 }
 
@@ -11967,7 +11967,7 @@ void ibGrid::SetColBrake(int col)
 			e.SetState(wxGetMouseState());
 			ScreenToClient(&e.m_x, &e.m_y);
 
-			SendGridSizeEvent(wxEVT_GRID_COL_BRAKE_SET, col, e);
+			SendGridSizeEvent(ibEVT_GRID_COL_BRAKE_SET, col, e);
 		}
 	}
 }
@@ -12199,7 +12199,7 @@ void ibGrid::SetCellBackgroundColour(int row, int col, const wxColour& colour, b
 
 		attr->SetBackgroundColour(colour);
 
-		SendEvent(wxEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
+		SendEvent(ibEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
 
 		//support printing
 		SetRowBrake(row);
@@ -12220,7 +12220,7 @@ void ibGrid::SetCellBackgroundColour(const ibGridBlockCoords& coords, const wxCo
 			{
 				GetOrCreateCellAttrPtr(row, col)->SetBackgroundColour(colour);
 
-				SendEvent(wxEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
+				SendEvent(ibEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
 			}
 		}
 
@@ -12241,7 +12241,7 @@ void ibGrid::SetCellTextColour(int row, int col, const wxColour& colour, bool se
 
 		attr->SetTextColour(colour);
 
-		SendEvent(wxEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
+		SendEvent(ibEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
 
 		//support printing
 		SetRowBrake(row);
@@ -12262,7 +12262,7 @@ void ibGrid::SetCellTextColour(const ibGridBlockCoords& coords, const wxColour& 
 			{
 				GetOrCreateCellAttrPtr(row, col)->SetTextColour(colour);
 
-				SendEvent(wxEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
+				SendEvent(ibEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
 			}
 		}
 
@@ -12283,7 +12283,7 @@ void ibGrid::SetCellTextOrient(int row, int col, const int& orient, bool sendUnd
 
 		attr->SetTextOrient(orient);
 
-		SendEvent(wxEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
+		SendEvent(ibEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
 
 		//support printing
 		SetRowBrake(row);
@@ -12304,7 +12304,7 @@ void ibGrid::SetCellTextOrient(const ibGridBlockCoords& coords, const int& orien
 			{
 				GetOrCreateCellAttrPtr(row, col)->SetTextOrient(orient);
 
-				SendEvent(wxEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
+				SendEvent(ibEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
 			}
 		}
 
@@ -12325,7 +12325,7 @@ void ibGrid::SetCellFont(int row, int col, const wxFont& font, bool sendUndoComm
 
 		attr->SetFont(font);
 
-		SendEvent(wxEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
+		SendEvent(ibEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
 
 		//support printing
 		SetRowBrake(row);
@@ -12346,7 +12346,7 @@ void ibGrid::SetCellFont(const ibGridBlockCoords& coords, const wxFont& font, bo
 			{
 				GetOrCreateCellAttrPtr(row, col)->SetFont(font);
 
-				SendEvent(wxEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
+				SendEvent(ibEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
 			}
 		}
 
@@ -12369,7 +12369,7 @@ void ibGrid::SetCellAlignment(int row, int col, int horiz, int vert, bool sendUn
 
 		attr->SetAlignment(horiz, vert);
 
-		SendEvent(wxEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
+		SendEvent(ibEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
 
 		//support printing
 		SetRowBrake(row);
@@ -12390,7 +12390,7 @@ void ibGrid::SetCellAlignment(const ibGridBlockCoords& coords, int horiz, int ve
 			{
 				GetOrCreateCellAttrPtr(row, col)->SetAlignment(horiz, vert);
 
-				SendEvent(wxEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
+				SendEvent(ibEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
 			}
 		}
 
@@ -12411,7 +12411,7 @@ void ibGrid::SetCellBorderLeft(int row, int col, wxPenStyle style, const wxColou
 
 		attr->SetBorderLeft(style, colour, width);
 
-		SendEvent(wxEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
+		SendEvent(ibEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
 
 		//support printing
 		SetRowBrake(row);
@@ -12432,7 +12432,7 @@ void ibGrid::SetCellBorderLeft(const ibGridBlockCoords& coords, wxPenStyle style
 			{
 				GetOrCreateCellAttrPtr(row, col)->SetBorderLeft(style, colour, width);
 
-				SendEvent(wxEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
+				SendEvent(ibEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
 			}
 		}
 
@@ -12453,7 +12453,7 @@ void ibGrid::SetCellBorderRight(int row, int col, wxPenStyle style, const wxColo
 
 		attr->SetBorderRight(style, colour, width);
 
-		SendEvent(wxEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
+		SendEvent(ibEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
 
 		//support printing
 		SetRowBrake(row);
@@ -12474,7 +12474,7 @@ void ibGrid::SetCellBorderRight(const ibGridBlockCoords& coords, wxPenStyle styl
 			{
 				GetOrCreateCellAttrPtr(row, col)->SetBorderRight(style, colour, width);
 
-				SendEvent(wxEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
+				SendEvent(ibEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
 			}
 		}
 
@@ -12495,7 +12495,7 @@ void ibGrid::SetCellBorderTop(int row, int col, wxPenStyle style, const wxColour
 
 		attr->SetBorderTop(style, colour, width);
 
-		SendEvent(wxEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
+		SendEvent(ibEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
 
 		//support printing
 		SetRowBrake(row);
@@ -12516,7 +12516,7 @@ void ibGrid::SetCellBorderTop(const ibGridBlockCoords& coords, wxPenStyle style,
 			{
 				GetOrCreateCellAttrPtr(row, col)->SetBorderTop(style, colour, width);
 
-				SendEvent(wxEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
+				SendEvent(ibEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
 			}
 		}
 
@@ -12537,7 +12537,7 @@ void ibGrid::SetCellBorderBottom(int row, int col, wxPenStyle style, const wxCol
 
 		attr->SetBorderBottom(style, colour, width);
 
-		SendEvent(wxEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
+		SendEvent(ibEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
 
 		//support printing
 		SetRowBrake(row);
@@ -12558,7 +12558,7 @@ void ibGrid::SetCellBorderBottom(const ibGridBlockCoords& coords, wxPenStyle sty
 			{
 				GetOrCreateCellAttrPtr(row, col)->SetBorderBottom(style, colour, width);
 
-				SendEvent(wxEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
+				SendEvent(ibEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
 			}
 		}
 
@@ -12579,7 +12579,7 @@ void ibGrid::SetCellFitMode(int row, int col, ibGridFitMode fitMode, bool sendUn
 
 		attr->SetFitMode(fitMode);
 
-		SendEvent(wxEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
+		SendEvent(ibEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
 
 		//support printing
 		SetRowBrake(row);
@@ -12600,7 +12600,7 @@ void ibGrid::SetCellFitMode(const ibGridBlockCoords& coords, ibGridFitMode fitMo
 			{
 				GetOrCreateCellAttrPtr(row, col)->SetFitMode(fitMode);
 
-				SendEvent(wxEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
+				SendEvent(ibEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
 			}
 		}
 
@@ -12641,7 +12641,7 @@ void ibGrid::SetCellSize(int row, int col, int num_rows, int num_cols, bool send
 					{
 						GetOrCreateCellAttrPtr(j, i)->SetSize(1, 1);
 
-						SendEvent(wxEVT_GRID_TABLE_ATTR_MODIFIED, j, i);
+						SendEvent(ibEVT_GRID_TABLE_ATTR_MODIFIED, j, i);
 					}
 				}
 			}
@@ -12660,7 +12660,7 @@ void ibGrid::SetCellSize(int row, int col, int num_rows, int num_cols, bool send
 					{
 						GetOrCreateCellAttrPtr(j, i)->SetSize(row - j, col - i);
 
-						SendEvent(wxEVT_GRID_TABLE_ATTR_MODIFIED, j, i);
+						SendEvent(ibEVT_GRID_TABLE_ATTR_MODIFIED, j, i);
 					}
 				}
 			}
@@ -12670,7 +12670,7 @@ void ibGrid::SetCellSize(int row, int col, int num_rows, int num_cols, bool send
 			PushCommand<ibGridCommandAttrSize>(row, col,
 				wxSize{ num_rows, num_cols }, wxSize{ cell_rows, cell_cols });
 
-		SendEvent(wxEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
+		SendEvent(ibEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
 
 		//support printing
 		SetRowBrake(row + num_rows - 1);
@@ -12705,7 +12705,7 @@ void ibGrid::SetCellReadOnly(int row, int col, bool isReadOnly, bool sendUndoCom
 
 		attr->SetReadOnly(isReadOnly);
 
-		SendEvent(wxEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
+		SendEvent(ibEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
 
 		//support printing
 		SetRowBrake(row);
@@ -12726,7 +12726,7 @@ void ibGrid::SetCellReadOnly(const ibGridBlockCoords& coords, bool isReadOnly, b
 			{
 				GetOrCreateCellAttrPtr(row, col)->SetReadOnly(isReadOnly);
 
-				SendEvent(wxEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
+				SendEvent(ibEVT_GRID_TABLE_ATTR_MODIFIED, row, col);
 			}
 		}
 
@@ -13089,7 +13089,7 @@ void ibGrid::DoSetRowSize(int row, int height)
 		e.SetState(wxGetMouseState());
 		ScreenToClient(&e.m_x, &e.m_y);
 
-		SendGridSizeEvent(wxEVT_GRID_ROW_MODIFIED, row, e);
+		SendGridSizeEvent(ibEVT_GRID_ROW_MODIFIED, row, e);
 	}
 
 	//support printing
@@ -13328,7 +13328,7 @@ void ibGrid::DoSetColSize(int col, int width)
 		e.SetState(wxGetMouseState());
 		ScreenToClient(&e.m_x, &e.m_y);
 
-		SendGridSizeEvent(wxEVT_GRID_COL_MODIFIED, col, e);
+		SendGridSizeEvent(ibEVT_GRID_COL_MODIFIED, col, e);
 	}
 }
 
@@ -14491,7 +14491,7 @@ void ibGrid::DoRowAreaCreate(int start, int end)
 
 				item.m_end = end;
 
-				SendGridAreaEvent(wxEVT_GRID_ROW_AREA_SIZE, idx, item);
+				SendGridAreaEvent(ibEVT_GRID_ROW_AREA_SIZE, idx, item);
 
 				//support printing
 				SetRowBrake(end);
@@ -14507,7 +14507,7 @@ void ibGrid::DoRowAreaCreate(int start, int end)
 
 				item.m_start = start;
 
-				SendGridAreaEvent(wxEVT_GRID_ROW_AREA_SIZE, idx, item);
+				SendGridAreaEvent(ibEVT_GRID_ROW_AREA_SIZE, idx, item);
 				return;
 			}
 		}
@@ -14555,7 +14555,7 @@ void ibGrid::DoRowAreaCreate(int start, int end)
 
 		AddRowArea(entry);
 
-		SendGridAreaEvent(wxEVT_GRID_ROW_AREA_CREATE, m_rowAreaAt.Count() - 1, entry);
+		SendGridAreaEvent(ibEVT_GRID_ROW_AREA_CREATE, m_rowAreaAt.Count() - 1, entry);
 	}
 }
 
@@ -14573,7 +14573,7 @@ void ibGrid::DoColAreaCreate(int start, int end)
 
 				item.m_end = end;
 
-				SendGridAreaEvent(wxEVT_GRID_COL_AREA_SIZE, idx, item);
+				SendGridAreaEvent(ibEVT_GRID_COL_AREA_SIZE, idx, item);
 
 				//support printing
 				SetColBrake(end);
@@ -14589,7 +14589,7 @@ void ibGrid::DoColAreaCreate(int start, int end)
 
 				item.m_start = start;
 
-				SendGridAreaEvent(wxEVT_GRID_COL_AREA_SIZE, idx, item);
+				SendGridAreaEvent(ibEVT_GRID_COL_AREA_SIZE, idx, item);
 				return;
 			}
 		}
@@ -14636,7 +14636,7 @@ void ibGrid::DoColAreaCreate(int start, int end)
 
 		AddColArea(entry);
 
-		SendGridAreaEvent(wxEVT_GRID_COL_AREA_CREATE, m_colAreaAt.Count() - 1, entry);
+		SendGridAreaEvent(ibEVT_GRID_COL_AREA_CREATE, m_colAreaAt.Count() - 1, entry);
 	}
 }
 
@@ -14651,7 +14651,7 @@ void ibGrid::DoRowAreaDelete(int start, int end)
 			PushCommand<ibGridCommandArea>(idx,
 				ibGridCommandArea::AreaRow, ibGridCommandArea::DeleteArea, item);
 
-			SendGridAreaEvent(wxEVT_GRID_ROW_AREA_DELETE, idx, item);
+			SendGridAreaEvent(ibEVT_GRID_ROW_AREA_DELETE, idx, item);
 
 			m_rowAreaAt.Detach(idx);
 		}
@@ -14681,7 +14681,7 @@ void ibGrid::DoColAreaDelete(int start, int end)
 			PushCommand<ibGridCommandArea>(idx,
 				ibGridCommandArea::AreaCol, ibGridCommandArea::DeleteArea, item);
 
-			SendGridAreaEvent(wxEVT_GRID_COL_AREA_DELETE, idx, item);
+			SendGridAreaEvent(ibEVT_GRID_COL_AREA_DELETE, idx, item);
 
 			m_colAreaAt.Detach(idx);
 		}

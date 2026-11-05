@@ -481,23 +481,23 @@ void ibHeaderGenericCtrlSimple::OnHeaderResizing(ibHeaderGenericCtrlEvent& evt)
 
 wxIMPLEMENT_DYNAMIC_CLASS(ibHeaderGenericCtrlEvent, wxNotifyEvent);
 
-wxDEFINE_EVENT( wxEVT_HEADER_CLICK, ibHeaderGenericCtrlEvent);
-wxDEFINE_EVENT( wxEVT_HEADER_RIGHT_CLICK, ibHeaderGenericCtrlEvent);
-wxDEFINE_EVENT( wxEVT_HEADER_MIDDLE_CLICK, ibHeaderGenericCtrlEvent);
+wxDEFINE_EVENT( ibEVT_HEADER_CLICK, ibHeaderGenericCtrlEvent);
+wxDEFINE_EVENT( ibEVT_HEADER_RIGHT_CLICK, ibHeaderGenericCtrlEvent);
+wxDEFINE_EVENT( ibEVT_HEADER_MIDDLE_CLICK, ibHeaderGenericCtrlEvent);
 
-wxDEFINE_EVENT( wxEVT_HEADER_DCLICK, ibHeaderGenericCtrlEvent);
-wxDEFINE_EVENT( wxEVT_HEADER_RIGHT_DCLICK, ibHeaderGenericCtrlEvent);
-wxDEFINE_EVENT( wxEVT_HEADER_MIDDLE_DCLICK, ibHeaderGenericCtrlEvent);
+wxDEFINE_EVENT( ibEVT_HEADER_DCLICK, ibHeaderGenericCtrlEvent);
+wxDEFINE_EVENT( ibEVT_HEADER_RIGHT_DCLICK, ibHeaderGenericCtrlEvent);
+wxDEFINE_EVENT( ibEVT_HEADER_MIDDLE_DCLICK, ibHeaderGenericCtrlEvent);
 
-wxDEFINE_EVENT( wxEVT_HEADER_SEPARATOR_DCLICK, ibHeaderGenericCtrlEvent);
+wxDEFINE_EVENT( ibEVT_HEADER_SEPARATOR_DCLICK, ibHeaderGenericCtrlEvent);
 
-wxDEFINE_EVENT( wxEVT_HEADER_BEGIN_RESIZE, ibHeaderGenericCtrlEvent);
-wxDEFINE_EVENT( wxEVT_HEADER_RESIZING, ibHeaderGenericCtrlEvent);
-wxDEFINE_EVENT( wxEVT_HEADER_END_RESIZE, ibHeaderGenericCtrlEvent);
+wxDEFINE_EVENT( ibEVT_HEADER_BEGIN_RESIZE, ibHeaderGenericCtrlEvent);
+wxDEFINE_EVENT( ibEVT_HEADER_RESIZING, ibHeaderGenericCtrlEvent);
+wxDEFINE_EVENT( ibEVT_HEADER_END_RESIZE, ibHeaderGenericCtrlEvent);
 
-wxDEFINE_EVENT( wxEVT_HEADER_BEGIN_REORDER, ibHeaderGenericCtrlEvent);
-wxDEFINE_EVENT( wxEVT_HEADER_END_REORDER, ibHeaderGenericCtrlEvent);
+wxDEFINE_EVENT( ibEVT_HEADER_BEGIN_REORDER, ibHeaderGenericCtrlEvent);
+wxDEFINE_EVENT( ibEVT_HEADER_END_REORDER, ibHeaderGenericCtrlEvent);
 
-wxDEFINE_EVENT( wxEVT_HEADER_DRAGGING_CANCELLED, ibHeaderGenericCtrlEvent);
+wxDEFINE_EVENT( ibEVT_HEADER_DRAGGING_CANCELLED, ibHeaderGenericCtrlEvent);
 
 #endif // wxUSE_HEADERCTRL

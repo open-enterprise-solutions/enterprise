@@ -173,7 +173,7 @@ void ibDialogChoiceLink::BuildControls()
 		}
 	}
 
-	m_list->Bind(wxEVT_DATAVIEW_SELECTION_CHANGED, [this](ibDataViewEvent&) {
+	m_list->Bind(ibEVT_DATAVIEW_SELECTION_CHANGED, [this](ibDataViewEvent&) {
 		const ibDataViewItem item = m_list->GetSelection();
 		const long line = item.IsOk() ? (long)m_model->GetRow(item) : wxNOT_FOUND;
 		if (line < 0 || (size_t)line >= m_fields.size())

@@ -638,7 +638,7 @@ ibFilterEditor::ibFilterEditor(wxWindow* parent, ibFilterDescription* filter, ib
 	m_view = new ibDataViewCtrl(rightPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxDV_ROW_LINES | wxDV_SINGLE);
 	ibStyleSettingsGrid(m_view);
-	m_view->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED, &ibFilterEditor::OnFilterItemActivated, this);
+	m_view->Bind(ibEVT_DATAVIEW_ITEM_ACTIVATED, &ibFilterEditor::OnFilterItemActivated, this);
 
 	// ⚠⚠ AND AGAIN WHEN THE WINDOW IS SHOWN. The expansion posted from the load
 	// (RefreshFilterTree -> CallAfter) runs while the window is still being BUILT: the control has
@@ -735,11 +735,11 @@ ibFilterEditor::ibFilterEditor(wxWindow* parent, ibFilterDescription* filter, ib
 	m_model = new ibFilterTreeModel(m_fieldSource);
 	m_model->SetFilter(m_filter);
 	m_view->AssociateModel(m_model);
-	m_view->Bind(wxEVT_DATAVIEW_ITEM_CONTEXT_MENU, &ibFilterEditor::OnContextMenu, this);
-	m_view->Bind(wxEVT_DATAVIEW_ITEM_START_EDITING, &ibFilterEditor::OnStartEditing, this);
+	m_view->Bind(ibEVT_DATAVIEW_ITEM_CONTEXT_MENU, &ibFilterEditor::OnContextMenu, this);
+	m_view->Bind(ibEVT_DATAVIEW_ITEM_START_EDITING, &ibFilterEditor::OnStartEditing, this);
 	// THE OTHER HALF OF "IT CHANGED": a CELL edit writes the buffer without touching the tree's
 	// shape, so it never reaches RefreshFilterTree. One bind covers every column.
-	m_view->Bind(wxEVT_DATAVIEW_ITEM_VALUE_CHANGED, [this](ibDataViewEvent& e) {
+	m_view->Bind(ibEVT_DATAVIEW_ITEM_VALUE_CHANGED, [this](ibDataViewEvent& e) {
 		e.Skip();
 		if (!m_reloading && m_onChanged)
 			m_onChanged();

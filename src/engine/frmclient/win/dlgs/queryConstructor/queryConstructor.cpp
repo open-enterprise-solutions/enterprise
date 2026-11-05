@@ -293,7 +293,7 @@ void ibDialogQueryConstructor::AttachContextMenu(wxWindow* target, wxToolBar* ba
 	// is. The row under the cursor is selected first, because a verb acts on the selection and a
 	// right-click that does not move it would act on whatever was chosen before.
 	if (ibDataViewCtrl* grid = dynamic_cast<ibDataViewCtrl*>(target)) {
-		grid->Bind(wxEVT_DATAVIEW_ITEM_CONTEXT_MENU, [grid, popup](ibDataViewEvent& event) {
+		grid->Bind(ibEVT_DATAVIEW_ITEM_CONTEXT_MENU, [grid, popup](ibDataViewEvent& event) {
 			if (event.GetItem().IsOk())
 				grid->Select(event.GetItem());
 			popup(grid);
@@ -673,7 +673,7 @@ wxWindow* ibDialogQueryConstructor::BuildPackagePage(wxWindow* parent)
 	AttachContextMenu(m_statements, bar);
 	m_statements->GetRootColumnGroup()->AppendColumn(TextColumn(_("Query"),  kGridCol1, FromDIP(160)));
 	m_statements->GetRootColumnGroup()->AppendColumn(TextColumn(_("Does"),   kGridCol2, FromDIP(520)));
-	m_statements->Bind(wxEVT_DATAVIEW_SELECTION_CHANGED, &ibDialogQueryConstructor::OnStatementSelected, this);
+	m_statements->Bind(ibEVT_DATAVIEW_SELECTION_CHANGED, &ibDialogQueryConstructor::OnStatementSelected, this);
 	sizer->Add(m_statements, 1, wxEXPAND | wxALL, FromDIP(3));
 
 	panel->SetSizer(sizer);
@@ -875,7 +875,7 @@ wxWindow* ibDialogQueryConstructor::BuildTablesPage(wxWindow* parent)
 	});
 	m_fields->GetRootColumnGroup()->AppendColumn(IconColumn(_("Field"), kGridCol1, FromDIP(240)));   // fits its pane — see the totals grid
 	// EditItem is inert on an inert column, so the double-click lands here instead.
-	m_fields->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED,
+	m_fields->Bind(ibEVT_DATAVIEW_ITEM_ACTIVATED,
 		[this](ibDataViewEvent&) { wxCommandEvent e; OnEditFieldExpression(e); });
 	AttachContextMenu(m_fields, rightBar);   // the same verbs the toolbar above it carries
 	// THE DROP IS ANSWERED BY WHERE IT CAME FROM. From the chosen tables it is "select this field";
@@ -1979,7 +1979,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 	m_totalsDimensions->EnableDragSource(wxDF_UNICODETEXT);
 	m_totalsDimensions->EnableDropTarget(wxDF_UNICODETEXT);
 
-	m_totalsDimensions->Bind(wxEVT_DATAVIEW_ITEM_BEGIN_DRAG, [this](ibDataViewEvent& event) {
+	m_totalsDimensions->Bind(ibEVT_DATAVIEW_ITEM_BEGIN_DRAG, [this](ibDataViewEvent& event) {
 		const ibTotalsRow at = ibQueryTotalsTreeModel::AtOf(event.GetItem());
 		if (!CanEdit() || !at.IsLevel()) {
 			event.Veto();   // a separator keeps its place — the arrows set that
@@ -1990,7 +1990,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 		event.SetDragFlags(wxDrag_AllowMove);
 	});
 
-	m_totalsDimensions->Bind(wxEVT_DATAVIEW_ITEM_DROP_POSSIBLE, [](ibDataViewEvent& event) {
+	m_totalsDimensions->Bind(ibEVT_DATAVIEW_ITEM_DROP_POSSIBLE, [](ibDataViewEvent& event) {
 		if (event.GetDataFormat() != wxDF_UNICODETEXT) {
 			event.Veto();
 			return;
@@ -2005,7 +2005,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 		event.SetDropEffect(wxDragCopy);
 	});
 
-	m_totalsDimensions->Bind(wxEVT_DATAVIEW_ITEM_DROP, [this](ibDataViewEvent& event) {
+	m_totalsDimensions->Bind(ibEVT_DATAVIEW_ITEM_DROP, [this](ibDataViewEvent& event) {
 		if (event.GetDataFormat() != wxDF_UNICODETEXT) {
 			event.Veto();
 			return;
@@ -2134,7 +2134,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 
 
 	// The panels belong to whichever level is selected, so they are refilled when that changes.
-	m_totalsDimensions->Bind(wxEVT_DATAVIEW_SELECTION_CHANGED,
+	m_totalsDimensions->Bind(ibEVT_DATAVIEW_SELECTION_CHANGED,
 		[this](ibDataViewEvent& event) { FillTotalsPeriods(); event.Skip(); });
 
 	dimRow->Add(dims, 1, wxEXPAND);
@@ -2384,7 +2384,7 @@ wxWindow* ibDialogQueryConstructor::BuildUnionsPage(wxWindow* parent)
 	m_unions->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("No duplicates"),
 		new ibDataViewToggleRenderer(ibDataViewToggleRenderer::GetDefaultType(), wxDATAVIEW_CELL_ACTIVATABLE),
 		kUnionColKeepDuplicates, FromDIP(110), wxAlignment::wxALIGN_CENTER));
-	m_unions->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED, [this](ibDataViewEvent&) { wxCommandEvent e; OnEditUnionBranch(e); });
+	m_unions->Bind(ibEVT_DATAVIEW_ITEM_ACTIVATED, [this](ibDataViewEvent&) { wxCommandEvent e; OnEditUnionBranch(e); });
 	AttachContextMenu(m_unions, bar);
 	left->Add(m_unions, 1, wxEXPAND | wxALL, FromDIP(3));
 	leftPane->SetSizer(left);

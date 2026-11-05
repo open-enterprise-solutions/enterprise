@@ -302,12 +302,12 @@ public:
 		if (owner->IsColumnSorted(column))
 		{
 			col->UnsetAsSortKey();
-			SendEvent(wxEVT_DATAVIEW_COLUMN_SORTED, column);
+			SendEvent(ibEVT_DATAVIEW_COLUMN_SORTED, column);
 		}
 		else // Do start sortign by it.
 		{
 			col->SetSortOrder(true);
-			SendEvent(wxEVT_DATAVIEW_COLUMN_SORTED, column);
+			SendEvent(ibEVT_DATAVIEW_COLUMN_SORTED, column);
 		}
 	}
 
@@ -520,7 +520,7 @@ private:
 
 		const unsigned idx = event.GetColumn();
 
-		if (SendEvent(wxEVT_DATAVIEW_COLUMN_HEADER_CLICK, idx))
+		if (SendEvent(ibEVT_DATAVIEW_COLUMN_HEADER_CLICK, idx))
 			return;
 
 		// default handling for the column click is to sort by this column or
@@ -572,7 +572,7 @@ private:
 			// Direct integration: the paged override rewrites the composer
 			// sort and refetches; legacy non-paged models forward to
 			// Resort() through the default implementation. NOTE: an OES
-			// tablebox consumes wxEVT_DATAVIEW_COLUMN_HEADER_CLICK first
+			// tablebox consumes ibEVT_DATAVIEW_COLUMN_HEADER_CLICK first
 			// (ibValueModelTableBox::OnColumnClick) and commits the sort
 			// straight on its concrete model's composer — so this generic
 			// path only runs for native (non-tablebox) models.
@@ -581,13 +581,13 @@ private:
 
 		owner->OnColumnChange(idx);
 
-		SendEvent(wxEVT_DATAVIEW_COLUMN_SORTED, idx);
+		SendEvent(ibEVT_DATAVIEW_COLUMN_SORTED, idx);
 	}
 
 	void OnRClick(ibHeaderGenericCtrlEvent& event)
 	{
 		// Event wasn't processed somewhere, use default behaviour
-		if (!SendEvent(wxEVT_DATAVIEW_COLUMN_HEADER_RIGHT_CLICK,
+		if (!SendEvent(ibEVT_DATAVIEW_COLUMN_HEADER_RIGHT_CLICK,
 			event.GetColumn()))
 		{
 			event.Skip();
@@ -2172,12 +2172,12 @@ namespace
 
 bool ibDataViewCtrl::ItemInserted(const ibDataViewItem& parent, const ibDataViewItem& item)
 {
-	return DoItemInserted(parent, item, wxEVT_DATAVIEW_ITEM_START_INSERTING);
+	return DoItemInserted(parent, item, ibEVT_DATAVIEW_ITEM_START_INSERTING);
 }
 
 bool ibDataViewCtrl::ItemAppended(const ibDataViewItem& parent, const ibDataViewItem& item)
 {
-	return DoItemInserted(parent, item, wxEVT_DATAVIEW_ITEM_START_ADDING);
+	return DoItemInserted(parent, item, ibEVT_DATAVIEW_ITEM_START_ADDING);
 }
 
 bool ibDataViewCtrl::DoItemInserted(const ibDataViewItem& parent, const ibDataViewItem& item, wxEventType eventType)
@@ -2356,7 +2356,7 @@ bool ibDataViewCtrl::ItemDeleted(const ibDataViewItem& parent,
 	const ibDataViewItem& item)
 {
 	// Send event
-	ibDataViewEvent le(wxEVT_DATAVIEW_ITEM_START_DELETING, this, GetCurrentColumn(), item);
+	ibDataViewEvent le(ibEVT_DATAVIEW_ITEM_START_DELETING, this, GetCurrentColumn(), item);
 	if (this->ProcessWindowEvent(le) || !le.IsAllowed())
 		return false;
 
@@ -2579,7 +2579,7 @@ bool ibDataViewCtrl::DoItemChanged(const ibDataViewItem& item, int view_column)
 	RefreshRow(GetRowByItem(item));
 
 	// Send event
-	ibDataViewEvent le(wxEVT_DATAVIEW_ITEM_VALUE_CHANGED, this, column, item);
+	ibDataViewEvent le(ibEVT_DATAVIEW_ITEM_VALUE_CHANGED, this, column, item);
 	this->ProcessWindowEvent(le);
 
 	return true;
@@ -2958,7 +2958,7 @@ void ibDataViewCtrl::SendSelectionChangedEvent(const ibDataViewItem& item)
 	wxAccessible::NotifyEvent(wxACC_EVENT_OBJECT_SELECTIONWITHIN, this, wxOBJID_CLIENT, wxACC_SELF);
 #endif // wxUSE_ACCESSIBILITY
 
-	ibDataViewEvent le(wxEVT_DATAVIEW_SELECTION_CHANGED, this, item);
+	ibDataViewEvent le(ibEVT_DATAVIEW_SELECTION_CHANGED, this, item);
 	ProcessWindowEvent(le);
 }
 
@@ -3305,7 +3305,7 @@ ibDataViewCtrl::SendExpanderEvent(wxEventType type,
 	const ibDataViewItem& item)
 {
 #if wxUSE_ACCESSIBILITY
-	if (type == wxEVT_DATAVIEW_ITEM_EXPANDED || type == wxEVT_DATAVIEW_ITEM_COLLAPSED)
+	if (type == ibEVT_DATAVIEW_ITEM_EXPANDED || type == ibEVT_DATAVIEW_ITEM_COLLAPSED)
 		wxAccessible::NotifyEvent(wxACC_EVENT_OBJECT_REORDER, this, wxOBJID_CLIENT, wxACC_SELF);
 #endif // wxUSE_ACCESSIBILITY
 
@@ -3368,7 +3368,7 @@ ibDataViewCtrl::DoExpand(ibDataViewTreeNode* node,
 
 	if (!node->IsOpen())
 	{
-		if (!SendExpanderEvent(wxEVT_DATAVIEW_ITEM_EXPANDING, node->GetItem()))
+		if (!SendExpanderEvent(ibEVT_DATAVIEW_ITEM_EXPANDING, node->GetItem()))
 		{
 			// Vetoed by the event handler.
 						return;
@@ -3407,7 +3407,7 @@ ibDataViewCtrl::DoExpand(ibDataViewTreeNode* node,
 		UpdateDisplay();
 
 		// Send the expanded event
-		SendExpanderEvent(wxEVT_DATAVIEW_ITEM_EXPANDED, node->GetItem());
+		SendExpanderEvent(ibEVT_DATAVIEW_ITEM_EXPANDED, node->GetItem());
 	}
 
 	// Note that we have to expand the children when expanding recursively even
@@ -3455,7 +3455,7 @@ void ibDataViewCtrl::CollapseRow(unsigned int row)
 
 	if (node->IsOpen())
 	{
-		if (!SendExpanderEvent(wxEVT_DATAVIEW_ITEM_COLLAPSING, node->GetItem()))
+		if (!SendExpanderEvent(ibEVT_DATAVIEW_ITEM_COLLAPSING, node->GetItem()))
 		{
 			// Vetoed by the event handler.
 			return;
@@ -3467,7 +3467,7 @@ void ibDataViewCtrl::CollapseRow(unsigned int row)
 		{
 			SendSelectionChangedEvent(GetItemByRow(row));
 
-			// The event handler for wxEVT_DATAVIEW_SELECTION_CHANGED could
+			// The event handler for ibEVT_DATAVIEW_SELECTION_CHANGED could
 			// have called Collapse() itself, in which case the node would be
 			// already closed and we shouldn't try to close it again.
 			if (!node->IsOpen())
@@ -3494,7 +3494,7 @@ void ibDataViewCtrl::CollapseRow(unsigned int row)
 
 		UpdateDisplay();
 
-		SendExpanderEvent(wxEVT_DATAVIEW_ITEM_COLLAPSED, node->GetItem());
+		SendExpanderEvent(ibEVT_DATAVIEW_ITEM_COLLAPSED, node->GetItem());
 	}
 }
 
@@ -5605,7 +5605,7 @@ wxDragResult ibDataViewCtrl::OnDragOver(wxDataFormat format, wxCoord x,
 {
 	DropItemInfo nextDropItemInfo = GetDropItemInfo(x, y);
 
-	ibDataViewEvent event(wxEVT_DATAVIEW_ITEM_DROP_POSSIBLE, this, nextDropItemInfo.m_item);
+	ibDataViewEvent event(ibEVT_DATAVIEW_ITEM_DROP_POSSIBLE, this, nextDropItemInfo.m_item);
 	event.SetProposedDropIndex(nextDropItemInfo.m_proposedDropIndex);
 	event.SetDataFormat(format);
 	event.SetDropEffect(def);
@@ -5668,7 +5668,7 @@ bool ibDataViewCtrl::OnDrop(wxDataFormat format, wxCoord x, wxCoord y)
 
 	DropItemInfo dropItemInfo = GetDropItemInfo(x, y);
 
-	ibDataViewEvent event(wxEVT_DATAVIEW_ITEM_DROP_POSSIBLE, this, dropItemInfo.m_item);
+	ibDataViewEvent event(ibEVT_DATAVIEW_ITEM_DROP_POSSIBLE, this, dropItemInfo.m_item);
 	event.SetProposedDropIndex(dropItemInfo.m_proposedDropIndex);
 	event.SetDataFormat(format);
 	if (!HandleWindowEvent(event) || !event.IsAllowed())
@@ -5686,7 +5686,7 @@ wxDragResult ibDataViewCtrl::OnData(wxDataFormat format, wxCoord x, wxCoord y,
 		target = static_cast<ibDataViewDropTarget*>(GetDropTarget());
 	wxDataObjectComposite* const obj = target->GetCompositeDataObject();
 
-	ibDataViewEvent event(wxEVT_DATAVIEW_ITEM_DROP, this, dropItemInfo.m_item);
+	ibDataViewEvent event(ibEVT_DATAVIEW_ITEM_DROP, this, dropItemInfo.m_item);
 	event.SetProposedDropIndex(dropItemInfo.m_proposedDropIndex);
 	event.InitData(obj, format);
 	event.SetDropEffect(def);
@@ -6086,7 +6086,7 @@ void ibDataViewCtrl::WXMoveColumn(ibDataViewColumn* column, ibDataViewColumnGrou
 	InvalidateColumnLayout();
 	UpdateDisplay();
 
-	ibDataViewEvent event(wxEVT_DATAVIEW_COLUMN_REORDERED, this, column);
+	ibDataViewEvent event(ibEVT_DATAVIEW_COLUMN_REORDERED, this, column);
 	event.SetColumn(GetColumnIndex(column));
 	ProcessWindowEvent(event);
 }
@@ -6634,7 +6634,7 @@ void ibDataViewCtrl::SetViewMode(ibDataViewViewMode viewMode)
 		// react to the new mode.  Selection-restore is async — by the
 		// time PagedBootstrap finishes, m_currentRow / m_selection are
 		// already updated by the bootstrap's own restore logic.
-		ibDataViewEvent cache_event(wxEVT_DATAVIEW_VIEW_SET, this, selection);
+		ibDataViewEvent cache_event(ibEVT_DATAVIEW_VIEW_SET, this, selection);
 		cache_event.SetViewMode(viewMode);
 		ProcessWindowEvent(cache_event);
 
@@ -7035,7 +7035,7 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 			}
 
 	// Send the event to ibDataViewCtrl itself.
-	ibDataViewEvent cache_event(wxEVT_DATAVIEW_CACHE_HINT, this, NULL);
+	ibDataViewEvent cache_event(ibEVT_DATAVIEW_CACHE_HINT, this, NULL);
 	cache_event.SetCache(item_start, item_last - 1);
 
 	ProcessWindowEvent(cache_event);
@@ -7739,13 +7739,13 @@ void ibDataViewCtrl::ProcessTableCharEvent(wxKeyEvent& event, ibDataViewMainWind
 		}
 		else
 		{
-			// Enter activates the item, i.e. sends wxEVT_DATAVIEW_ITEM_ACTIVATED to
+			// Enter activates the item, i.e. sends ibEVT_DATAVIEW_ITEM_ACTIVATED to
 			// it. Only if that event is not handled do we activate column renderer (which
 			// is normally done by Space) or even inline editing.
 
 			const ibDataViewItem item = GetItemByRow(m_currentRow);
 
-			ibDataViewEvent le(wxEVT_DATAVIEW_ITEM_ACTIVATED, this, item);
+			ibDataViewEvent le(ibEVT_DATAVIEW_ITEM_ACTIVATED, this, item);
 			if (ProcessWindowEvent(le))
 				break;
 			// else: fall through to WXK_SPACE handling
@@ -8044,7 +8044,7 @@ void ibDataViewCtrl::ProcessTableMouseEvent(wxMouseEvent& event, ibDataViewMainW
 	// the other ones.
 	if (event.RightUp())
 	{
-		ibDataViewEvent le(wxEVT_DATAVIEW_ITEM_CONTEXT_MENU, this, col, item);
+		ibDataViewEvent le(ibEVT_DATAVIEW_ITEM_CONTEXT_MENU, this, col, item);
 		int xx = event.GetX();
 		int yy = event.GetY();
 		ClientToScreen(&xx, &yy);
@@ -8083,7 +8083,7 @@ void ibDataViewCtrl::ProcessTableMouseEvent(wxMouseEvent& event, ibDataViewMainW
 			ibDataViewItem itemDragged = GetItemByRow(drag_item_row);
 
 			// Notify cell about drag
-			ibDataViewEvent evt(wxEVT_DATAVIEW_ITEM_BEGIN_DRAG, this, itemDragged);
+			ibDataViewEvent evt(ibEVT_DATAVIEW_ITEM_BEGIN_DRAG, this, itemDragged);
 			if (!HandleWindowEvent(evt))
 				return;
 
@@ -8212,7 +8212,7 @@ void ibDataViewCtrl::ProcessTableMouseEvent(wxMouseEvent& event, ibDataViewMainW
 	{
 		if (!hoverOverExpander && (current == m_lineLastClicked))
 		{
-			ibDataViewEvent le(wxEVT_DATAVIEW_ITEM_ACTIVATED, this, col, item);
+			ibDataViewEvent le(ibEVT_DATAVIEW_ITEM_ACTIVATED, this, col, item);
 			if (ProcessWindowEvent(le))
 			{
 				// Item activation was handled from the user code.

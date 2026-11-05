@@ -253,7 +253,7 @@ public:
 	// the owner isn't set and GetAlignment() is default.
 	int GetEffectiveAlignmentIfKnown() const;
 
-	// Send wxEVT_DATAVIEW_ITEM_EDITING_STARTED event.
+	// Send ibEVT_DATAVIEW_ITEM_EDITING_STARTED event.
 	void NotifyEditingStarted(const ibDataViewItem& item);
 
 	// Sets the transformer for fine-tuning rendering of values depending on row's state

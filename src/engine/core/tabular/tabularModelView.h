@@ -288,7 +288,7 @@ public:
 
 	virtual bool ItemInserted(const ibDataViewItem& parent, const ibDataViewItem& item) = 0;
 	// "Append" semantics — distinct from ItemInserted (insert at position) so
-	// the control can fire wxEVT_DATAVIEW_ITEM_START_ADDING separately from
+	// the control can fire ibEVT_DATAVIEW_ITEM_START_ADDING separately from
 	// _START_INSERTING. Default forwards to ItemInserted so notifiers that
 	// don't care about the distinction stay correct.
 	virtual bool ItemAppended(const ibDataViewItem& parent, const ibDataViewItem& item) { return ItemInserted(parent, item); }

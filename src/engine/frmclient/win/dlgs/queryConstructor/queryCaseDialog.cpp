@@ -132,7 +132,7 @@ ibDialogQueryCase::ibDialogQueryCase(wxWindow* parent,
 
 	// A DOUBLE-CLICK OPENS THE FULL EDITOR over the cell — the same rule the constructor's grids
 	// follow: the cell is for a short edit, the editor is where an expression is written.
-	m_grid->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED, [this](ibDataViewEvent& event) {
+	m_grid->Bind(ibEVT_DATAVIEW_ITEM_ACTIVATED, [this](ibDataViewEvent& event) {
 		if (m_readOnly)
 			return;
 		const long row = SelectedRow();

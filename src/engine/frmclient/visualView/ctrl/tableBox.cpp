@@ -288,22 +288,22 @@ void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& node)
 	model->DecRef();   // the data view holds it
 
 	m_dataView->Bind(wxEVT_IDLE, &ibValueModelTableBox::OnIdle, this);
-	m_dataView->Bind(wxEVT_DATAVIEW_SELECTION_CHANGED, &ibValueModelTableBox::OnSelectionChanged, this);
+	m_dataView->Bind(ibEVT_DATAVIEW_SELECTION_CHANGED, &ibValueModelTableBox::OnSelectionChanged, this);
 	m_dataView->GetMainWindow()->Bind(wxEVT_LEFT_UP, &ibValueModelTableBox::OnCellCursor, this);
 	m_dataView->GetMainWindow()->Bind(wxEVT_KEY_UP, &ibValueModelTableBox::OnCellCursor, this);
 	m_dataView->GetMainWindow()->Bind(wxEVT_LEFT_DOWN, &ibValueModelTableBox::OnMainWindowClick, this);
-	m_dataView->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED, &ibValueModelTableBox::OnItemActivated, this);
-	m_dataView->Bind(wxEVT_DATAVIEW_ITEM_START_EDITING, &ibValueModelTableBox::OnItemStartEditing, this);
-	m_dataView->Bind(wxEVT_DATAVIEW_ITEM_EDITING_STARTED, &ibValueModelTableBox::OnItemEditingStarted, this);
-	m_dataView->Bind(wxEVT_DATAVIEW_ITEM_EDITING_DONE, &ibValueModelTableBox::OnItemEditingDone, this);
+	m_dataView->Bind(ibEVT_DATAVIEW_ITEM_ACTIVATED, &ibValueModelTableBox::OnItemActivated, this);
+	m_dataView->Bind(ibEVT_DATAVIEW_ITEM_START_EDITING, &ibValueModelTableBox::OnItemStartEditing, this);
+	m_dataView->Bind(ibEVT_DATAVIEW_ITEM_EDITING_STARTED, &ibValueModelTableBox::OnItemEditingStarted, this);
+	m_dataView->Bind(ibEVT_DATAVIEW_ITEM_EDITING_DONE, &ibValueModelTableBox::OnItemEditingDone, this);
 	// The cell editor's buttons — they travel up from the editor to the table, which knows the cell.
 	m_dataView->Bind(wxEVT_CONTROL_BUTTON_SELECT, &ibValueModelTableBox::OnEditorButton, this);
 	m_dataView->Bind(wxEVT_CONTROL_BUTTON_OPEN, &ibValueModelTableBox::OnEditorButton, this);
 	m_dataView->Bind(wxEVT_CONTROL_BUTTON_CLEAR, &ibValueModelTableBox::OnEditorButton, this);
-	m_dataView->Bind(wxEVT_DATAVIEW_COLUMN_HEADER_CLICK, &ibValueModelTableBox::OnColumnClick, this);
-	m_dataView->Bind(wxEVT_DATAVIEW_COLUMN_REORDERED, &ibValueModelTableBox::OnColumnReordered, this);
-	m_dataView->Bind(wxEVT_DATAVIEW_ITEM_CONTEXT_MENU, &ibValueModelTableBox::OnContextMenu, this);
-	m_dataView->GenericGetHeader()->Bind(wxEVT_HEADER_END_RESIZE, &ibValueModelTableBox::OnHeaderEndResize, this);
+	m_dataView->Bind(ibEVT_DATAVIEW_COLUMN_HEADER_CLICK, &ibValueModelTableBox::OnColumnClick, this);
+	m_dataView->Bind(ibEVT_DATAVIEW_COLUMN_REORDERED, &ibValueModelTableBox::OnColumnReordered, this);
+	m_dataView->Bind(ibEVT_DATAVIEW_ITEM_CONTEXT_MENU, &ibValueModelTableBox::OnContextMenu, this);
+	m_dataView->GenericGetHeader()->Bind(ibEVT_HEADER_END_RESIZE, &ibValueModelTableBox::OnHeaderEndResize, this);
 }
 
 void ibValueModelTableBox::Update(const ibProtocolNode& node)

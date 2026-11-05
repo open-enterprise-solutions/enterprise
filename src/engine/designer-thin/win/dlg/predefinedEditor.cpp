@@ -713,8 +713,8 @@ void ibDialogPredefinedEditor::CreateDialogView()
 
 	m_tableEditor = new ibDataViewCtrl(this, wxID_ANY);
 
-	m_tableEditor->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED, &ibDialogPredefinedEditor::OnItemActivated, this);
-	m_tableEditor->Bind(wxEVT_DATAVIEW_ITEM_CONTEXT_MENU, &ibDialogPredefinedEditor::OnContextMenu, this);
+	m_tableEditor->Bind(ibEVT_DATAVIEW_ITEM_ACTIVATED, &ibDialogPredefinedEditor::OnItemActivated, this);
+	m_tableEditor->Bind(ibEVT_DATAVIEW_ITEM_CONTEXT_MENU, &ibDialogPredefinedEditor::OnContextMenu, this);
 
 	m_tableEditor->Connect(wxEVT_MENU, wxCommandEventHandler(ibDialogPredefinedEditor::OnCommandMenu), nullptr, this);
 
