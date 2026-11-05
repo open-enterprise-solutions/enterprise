@@ -40,6 +40,8 @@
 #include "backend/metaCollection/metaFormObject.h"  // a common form: what a tile's form is created by
 #include "backend/moduleManager/moduleManager.h"
 #include "backend/system/value/valueDynamicList.h"
+#include "backend/system/value/valueList.h"        // ibValueValueList — a value list is a table source
+#include "backend/system/value/valuePicture.h"     // g_valuePictureCLSID — the type of a value list's picture
 
 #include <wx/init.h>
 #include <wx/log.h>    // wxLogStderr — a wx warning must not become a modal box                        // wxInitializer — wxBase before appData
@@ -1983,10 +1985,10 @@ TEST(RuntimeTest, NewIsReadOnLikeAnyValue) {
 TEST_F(BuiltInRuntime, StrSplitCutsAtEachSeparatorCharacter) {
 	// A line of a "|"-separated export was cut with Find and Mid by hand: there was no StrSplit (#646).
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
-	ASSERT_TRUE(TryCompile(cc, wxT("var fields public; var blank public; var kept public; var mixed public; var whole public; var empty public;\n")
-		wxT("fields = StrSplit(\"2020-01-02|Client 1|5\", \"|\");\n")
 	ibValuePtr<ibValueSystemFunction> valueSystem(new ibValueSystemFunction());   // the global API, as a host binds it
 	cc.AddContextVariable(wxT("System"), valueSystem, true);
+	ASSERT_TRUE(TryCompile(cc, wxT("var fields public; var blank public; var kept public; var mixed public; var whole public; var empty public;\n")
+		wxT("fields = StrSplit(\"2020-01-02|Client 1|5\", \"|\");\n")
 		wxT("blank = StrSplit(\"a||b|\", \"|\");\n")
 		wxT("kept = StrSplit(\"a||b|\", \"|\", false);\n")
 		wxT("mixed = StrSplit(\"a,b;c\", \",;\");\n")
@@ -2028,11 +2030,11 @@ TEST_F(BuiltInRuntime, FillPropertyValuesCopiesWhatBothSidesHave) {
 	// There was no FillPropertyValues (#300): a ported module filled a structure field by field. With no list it
 	// fills what the source has and the receiver takes; a list names exactly what is filled; exclude leaves out
 	// what it names, found as the source finds a name - whatever its case. Nothing is added to the receiver.
-	ibCompileCode cc(wxT("test"), wxT("memory"), false);
-	ASSERT_TRUE(TryCompile(cc, wxT("var all public; var listed public; var excluded public;\n")
 	ibValuePtr<ibValueSystemFunction> valueSystem(new ibValueSystemFunction());   // the global API, as a host binds it
-		wxT("var src = New Structure(\"Code, Description, Price\", \"001\", \"Bolt\", 5);\n")
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	cc.AddContextVariable(wxT("System"), valueSystem, true);
+	ASSERT_TRUE(TryCompile(cc, wxT("var all public; var listed public; var excluded public;\n")
+		wxT("var src = New Structure(\"Code, Description, Price\", \"001\", \"Bolt\", 5);\n")
 		wxT("all = New Structure(\"Description, Price, Comment\", \"\", 0, \"kept\");\n")
 		wxT("FillPropertyValues(all, src);\n")
 		wxT("listed = New Structure(\"Description, Price\", \"\", 0);\n")
@@ -2072,9 +2074,9 @@ TEST_F(BuiltInRuntime, FillPropertyValuesCopiesWhatBothSidesHave) {
 		wxT("var a = New Structure(\"A\", 1); var b = New Structure(\"B\", 2); FillPropertyValues(b, a, \"A\");"),
 		wxT("var a = New Structure(\"A\", 1); var b = New Structure(\"A\", 2); FillPropertyValues(b, a, \"Z\");") }) {
 		ibCompileCode refused(wxT("test"), wxT("memory"), false);
+		refused.AddContextVariable(wxT("System"), valueSystem, true);
 		ASSERT_TRUE(TryCompile(refused, text)) << text;
 		ibProcUnit run;
-		refused.AddContextVariable(wxT("System"), valueSystem, true);
 		ibString refusal;
 		EXPECT_FALSE(RunBound(refused, run, refusal)) << text;
 	}
@@ -2083,11 +2085,11 @@ TEST_F(BuiltInRuntime, FillPropertyValuesCopiesWhatBothSidesHave) {
 TEST_F(BuiltInRuntime, NumberTakesTheWholeTextOrRefuses) {
 	// Number("234,8") answered 234 and Number("12x") 12, without a word: the parse read the number the text
 	// begins with (#646). What is left over after the number is a refusal, the comma included.
-	ibCompileCode cc(wxT("test"), wxT("memory"), false);
-	ASSERT_TRUE(TryCompile(cc, wxT("var point public; var blanks public;\n")
 	ibValuePtr<ibValueSystemFunction> valueSystem(new ibValueSystemFunction());   // the global API, as a host binds it
-		wxT("point = Number(\"-1.5e2\");\n")
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	cc.AddContextVariable(wxT("System"), valueSystem, true);
+	ASSERT_TRUE(TryCompile(cc, wxT("var point public; var blanks public;\n")
+		wxT("point = Number(\"-1.5e2\");\n")
 		wxT("blanks = Number(\" 42 \");")));
 
 	ibProcUnit pu;
@@ -2103,9 +2105,9 @@ TEST_F(BuiltInRuntime, NumberTakesTheWholeTextOrRefuses) {
 	for (const ibString text : { wxT("var x; x = Number(\"234,8\");"), wxT("var x; x = Number(\"12x\");"),
 		wxT("var x; x = Number(\"1 234\");") }) {
 		ibCompileCode refused(wxT("test"), wxT("memory"), false);
+		refused.AddContextVariable(wxT("System"), valueSystem, true);
 		ASSERT_TRUE(TryCompile(refused, text)) << text;
 		ibProcUnit run;
-		refused.AddContextVariable(wxT("System"), valueSystem, true);
 		ibString refusal;
 		EXPECT_FALSE(RunBound(refused, run, refusal)) << text;
 	}
@@ -4458,4 +4460,291 @@ TEST_F(BuiltInRuntime, GetMillisecondIsTheDatesOwnCount) {
 	const ibNumber counted = ibValueSystemFunction::GetMillisecond(ibValue(ibDateTime(2024, 3, 15, 14, 40, 7, 250)));
 	ASSERT_EQ(counted.ToInt(withMilliseconds), 0);
 	EXPECT_EQ(withMilliseconds - count, 250);
+}
+
+TEST(RuntimeTest, ValueListHoldsItemsAndWalksThem) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var n public; var held public; var shown public; var mark public; var bare public;\n")
+		wxT("var found public; var missing public; var walked public; var left public;\n")
+		wxT("var list; list = New ValueList();\n")
+		wxT("list.Add(1, \"one\", true);\n")
+		wxT("list.Add(2);\n")
+		wxT("n = list.Count();\n")
+		wxT("var item; item = list.Get(0);\n")
+		wxT("held = item.Value;\n")
+		wxT("shown = item.Presentation;\n")
+		wxT("mark = item.Check;\n")
+		wxT("bare = list.Get(1).Presentation;\n")
+		wxT("found = list.FindByValue(2);\n")
+		wxT("missing = list.FindByValue(9);\n")
+		wxT("walked = 0;\n")
+		wxT("Foreach it In list Do\n")
+		wxT("  walked = walked + it.Value;\n")
+		wxT("EndDo;\n")
+		wxT("list.Delete(0);\n")
+		wxT("left = list.Count();\n")));
+
+	ibProcUnit pu;
+	ibString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("n"), v));
+	EXPECT_EQ(2, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("held"), v));
+	EXPECT_EQ(1, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("shown"), v));
+	EXPECT_EQ(wxT("one"), v.GetString());
+	ASSERT_TRUE(pu.GetPropVal(wxT("mark"), v));
+	EXPECT_TRUE(v.GetBoolean());
+	// Given none, an item takes its value's text as its presentation.
+	ASSERT_TRUE(pu.GetPropVal(wxT("bare"), v));
+	EXPECT_EQ(wxT("2"), v.GetString());
+	ASSERT_TRUE(pu.GetPropVal(wxT("found"), v));
+	EXPECT_FALSE(v.IsEmpty());
+	ASSERT_TRUE(pu.GetPropVal(wxT("missing"), v));
+	EXPECT_TRUE(v.IsEmpty());
+	ASSERT_TRUE(pu.GetPropVal(wxT("walked"), v));
+	EXPECT_EQ(3, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("left"), v));
+	EXPECT_EQ(1, v.GetInteger());
+}
+
+// Delete(item) used to read the item as an index, and that read is 0, so the first
+// element went and the one that was passed stayed.
+TEST(RuntimeTest, ValueListDeleteRemovesTheItemThatWasPassed)
+{
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var first public; var second public; var n public;\n")
+		wxT("var list; list = New ValueList();\n")
+		wxT("list.Add(\"a\"); list.Add(\"b\"); list.Add(\"c\");\n")
+		wxT("var item; item = list.Get(1);\n")
+		wxT("list.Delete(item);\n")
+		wxT("first = list.Get(0).Value;\n")
+		wxT("second = list.Get(1).Value;\n")
+		wxT("n = list.Count();\n")));
+
+	ibProcUnit pu;
+	ibString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("first"), v));
+	EXPECT_EQ(wxT("a"), v.GetString());
+	ASSERT_TRUE(pu.GetPropVal(wxT("second"), v));
+	EXPECT_EQ(wxT("c"), v.GetString());
+	ASSERT_TRUE(pu.GetPropVal(wxT("n"), v));
+	EXPECT_EQ(2, v.GetInteger());
+
+	ibCompileCode byIndex(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(byIndex,
+		wxT("var first public; var second public;\n")
+		wxT("var list; list = New ValueList();\n")
+		wxT("list.Add(\"a\"); list.Add(\"b\"); list.Add(\"c\");\n")
+		wxT("list.Delete(1);\n")
+		wxT("first = list.Get(0).Value;\n")
+		wxT("second = list.Get(1).Value;\n")));
+	ibProcUnit indexUnit;
+	ASSERT_TRUE(RunBound(byIndex, indexUnit, strError)) << strError.ToStdString();
+	ASSERT_TRUE(indexUnit.GetPropVal(wxT("first"), v));
+	EXPECT_EQ(wxT("a"), v.GetString());
+	ASSERT_TRUE(indexUnit.GetPropVal(wxT("second"), v));
+	EXPECT_EQ(wxT("c"), v.GetString());
+
+	ibCompileCode missing(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(missing,
+		wxT("var one; one = New ValueList();\n")
+		wxT("var other; other = New ValueList();\n")
+		wxT("one.Add(\"a\");\n")
+		wxT("other.Delete(one.Get(0));\n")));
+	ibProcUnit missingUnit;
+	EXPECT_FALSE(RunBound(missing, missingUnit, strError));
+	EXPECT_TRUE(strError.Contains(wxT("not in the list")));
+
+	// A value, or Undefined, is neither an item nor an index. Reading either as
+	// a number answered 0 and removed the first element.
+	ibCompileCode byValue(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(byValue,
+		wxT("var n public;\n")
+		wxT("var list; list = New ValueList();\n")
+		wxT("list.Add(\"a\"); list.Add(\"b\");\n")
+		wxT("list.Delete(\"b\");\n")
+		wxT("n = list.Count();\n")));
+	ibProcUnit valueUnit;
+	EXPECT_FALSE(RunBound(byValue, valueUnit, strError));
+	EXPECT_TRUE(strError.Contains(wxT("item or an index")));
+
+	ibCompileCode byEmpty(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(byEmpty,
+		wxT("var n public;\n")
+		wxT("var list; list = New ValueList();\n")
+		wxT("list.Add(\"a\");\n")
+		wxT("list.Delete(Undefined);\n")
+		wxT("n = list.Count();\n")));
+	ibProcUnit emptyUnit;
+	EXPECT_FALSE(RunBound(byEmpty, emptyUnit, strError));
+	EXPECT_TRUE(strError.Contains(wxT("item or an index")));
+}
+
+// The rest of what ported code asks of a value list: a copy that does not share items, the two sorts,
+// marking every item, moving one, list[i] as the item at i, and Index(item) as Table.Index answers it.
+TEST(RuntimeTest, ValueListCopiesSortsMovesAndIndexes) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var copied public; var kept public; var byValue public; var byValueDown public;\n")
+		wxT("var byShown public; var marked public; var moved public; var indexed public; var at public; var away public;\n")
+		wxT("Function Spell(l)\n")
+		wxT("  var s; s = \"\";\n")
+		wxT("  Foreach it In l Do s = s + it.Value; EndDo;\n")
+		wxT("  Return s;\n")
+		wxT("EndFunction\n")
+		wxT("var list; list = New ValueList();\n")
+		wxT("list.Add(\"b\", \"2\"); list.Add(\"c\", \"1\"); list.Add(\"a\", \"3\");\n")
+		wxT("var copy; copy = list.Copy();\n")
+		wxT("copy.Get(0).Value = \"z\";\n")
+		wxT("copied = Spell(copy); kept = Spell(list);\n")
+		wxT("list.SortByValue(); byValue = Spell(list);\n")
+		wxT("list.SortByValue(false); byValueDown = Spell(list);\n")
+		wxT("list.SortByPresentation(); byShown = Spell(list);\n")
+		wxT("list.FillChecks(true);\n")
+		wxT("marked = list.Get(0).Check and list.Get(1).Check and list.Get(2).Check;\n")
+		wxT("list.Move(list.Get(0), 2); list.Move(1, -1); moved = Spell(list);\n")
+		wxT("indexed = list[2].Value;\n")
+		wxT("at = list.Index(list[1]); away = list.Index(copy.Get(0));\n")));
+
+	ibProcUnit pu;
+	ibString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("copied"), v));
+	EXPECT_EQ(wxT("zca"), v.GetString());
+	ASSERT_TRUE(pu.GetPropVal(wxT("kept"), v));
+	EXPECT_EQ(wxT("bca"), v.GetString());
+	ASSERT_TRUE(pu.GetPropVal(wxT("byValue"), v));
+	EXPECT_EQ(wxT("abc"), v.GetString());
+	ASSERT_TRUE(pu.GetPropVal(wxT("byValueDown"), v));
+	EXPECT_EQ(wxT("cba"), v.GetString());
+	ASSERT_TRUE(pu.GetPropVal(wxT("byShown"), v));
+	EXPECT_EQ(wxT("cba"), v.GetString());
+	ASSERT_TRUE(pu.GetPropVal(wxT("marked"), v));
+	EXPECT_TRUE(v.GetBoolean());
+	// c b a -> Move(c, 2) -> b a c -> Move(1, -1) -> a b c
+	ASSERT_TRUE(pu.GetPropVal(wxT("moved"), v));
+	EXPECT_EQ(wxT("abc"), v.GetString());
+	ASSERT_TRUE(pu.GetPropVal(wxT("indexed"), v));
+	EXPECT_EQ(wxT("c"), v.GetString());
+	ASSERT_TRUE(pu.GetPropVal(wxT("at"), v));
+	EXPECT_EQ(1, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("away"), v));
+	EXPECT_EQ(-1, v.GetInteger());
+
+	// A move past either end, and a value that is neither an item nor an index, are refused.
+	const wxChar* const refusals[] = {
+		wxT("var l; l = New ValueList(); l.Add(1); l.Add(2); l.Move(0, 2);\n"),
+		wxT("var l; l = New ValueList(); l.Add(1); l.Add(2); l.Move(l.Get(0), -1);\n"),
+		wxT("var l; l = New ValueList(); l.Add(1); l.Move(\"1\", 0);\n"),
+		wxT("var l; l = New ValueList(); l.Add(1); var x; x = l[1];\n"),
+	};
+	for (const wxChar* const code : refusals) {
+		ibCompileCode refused(wxT("test"), wxT("memory"), false);
+		ASSERT_TRUE(TryCompile(refused, code));
+		ibProcUnit refusedUnit;
+		ibString refusedError;
+		EXPECT_FALSE(RunBound(refused, refusedUnit, refusedError)) << code;
+	}
+}
+
+TEST(RuntimeTest, ValueListUnloadsAndLoadsValues) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var n public; var first public; var second public;\n")
+		wxT("var left public; var held public; var shown public; var mark public;\n")
+		wxT("var list; list = New ValueList();\n")
+		wxT("list.Add(1, \"one\", true);\n")
+		wxT("list.Add(2);\n")
+		wxT("var values; values = list.UnloadValues();\n")
+		wxT("n = values.Count();\n")
+		wxT("first = values.Get(0);\n")
+		wxT("second = values.Get(1);\n")
+		wxT("list.Add(9, \"nine\", true);\n")
+		wxT("list.LoadValues(values);\n")
+		wxT("left = list.Count();\n")
+		wxT("var item; item = list.Get(0);\n")
+		wxT("held = item.Value;\n")
+		wxT("shown = item.Presentation;\n")
+		wxT("mark = item.Check;\n")));
+
+	ibProcUnit pu;
+	ibString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("n"), v));
+	EXPECT_EQ(2, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("first"), v));
+	EXPECT_EQ(1, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("second"), v));
+	EXPECT_EQ(2, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("left"), v));
+	EXPECT_EQ(2, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("held"), v));
+	EXPECT_EQ(1, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("shown"), v));
+	EXPECT_TRUE(v.GetString().IsEmpty());
+	ASSERT_TRUE(pu.GetPropVal(wxT("mark"), v));
+	EXPECT_FALSE(v.GetBoolean());
+
+	ibCompileCode refused(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(refused,
+		wxT("var list; list = New ValueList();\n")
+		wxT("list.LoadValues(1);\n")));
+	ibProcUnit refusedUnit;
+	ibString refusedError;
+	EXPECT_FALSE(RunBound(refused, refusedUnit, refusedError));
+	EXPECT_TRUE(refusedError.Contains(wxT("array")));
+}
+
+
+// A value list is a form's data source as a table is: its explorer is a table, so an attribute of that type drops
+// as a table box, and the columns are the kind's own. Only the value is shown; the other three are there to add.
+TEST(RuntimeTest, ValueListIsATableSourceWithTheKindsColumns) {
+	ibValuePtr<ibValueValueList> list(new ibValueValueList());
+	const ibSourceDataObject::ibSourceExplorer* explorer = list->GetSourceExplorer();
+	ASSERT_NE(explorer, nullptr);
+	EXPECT_TRUE(explorer->IsTableSection());
+	ASSERT_EQ(4u, explorer->GetHelperCount());
+	EXPECT_EQ(wxT("Value"), explorer->GetHelper(0)->GetSourceName());
+	EXPECT_TRUE(explorer->GetHelper(0)->IsVisible());
+	EXPECT_EQ(wxT("Presentation"), explorer->GetHelper(1)->GetSourceName());
+	EXPECT_FALSE(explorer->GetHelper(1)->IsVisible());
+	EXPECT_EQ(wxT("Check"), explorer->GetHelper(2)->GetSourceName());
+	EXPECT_FALSE(explorer->GetHelper(2)->IsVisible());
+	EXPECT_EQ(wxT("Picture"), explorer->GetHelper(3)->GetSourceName());
+	EXPECT_FALSE(explorer->GetHelper(3)->IsVisible());
+
+	// The value is Any; the presentation is a string, the check a boolean, the picture a picture.
+	const ibValueModel::ibValueModelColumnCollection* const columns = list->GetColumnCollection();
+	EXPECT_TRUE(columns->GetColumnInfo(0)->GetColumnType().ContainType(g_valueAnyCLSID));
+	EXPECT_TRUE(columns->GetColumnInfo(1)->GetColumnType().ContainType(ibValueTypes::TYPE_STRING));
+	EXPECT_TRUE(columns->GetColumnInfo(2)->GetColumnType().ContainType(ibValueTypes::TYPE_BOOLEAN));
+	EXPECT_TRUE(columns->GetColumnInfo(3)->GetColumnType().ContainType(g_valuePictureCLSID));
+
+	// A row shows its presentation, and its value when it has none.
+	list->Add(ibValue(7), ibString(), false, ibValue());
+	list->Add(ibValue(8), ibString(wxT("eight")), true, ibValue());
+	ibValue shown;
+	list->GetValueByRow(shown, list->GetItem(0), ibValueValueList::ePresentation);
+	EXPECT_EQ(wxT("7"), shown.GetString());
+	list->GetValueByRow(shown, list->GetItem(1), ibValueValueList::ePresentation);
+	EXPECT_EQ(wxT("eight"), shown.GetString());
+	list->GetValueByRow(shown, list->GetItem(1), ibValueValueList::eCheck);
+	EXPECT_TRUE(shown.GetBoolean());
+	// An item given no picture holds an empty one, not Undefined.
+	ibValue picture;
+	ASSERT_TRUE(list->GetValueByMetaID(list->GetItem(0), ibValueValueList::ePicture, picture));
+	EXPECT_EQ(g_valuePictureCLSID, picture.GetClassType());
+	EXPECT_TRUE(picture.IsEmpty());
 }

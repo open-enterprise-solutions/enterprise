@@ -157,7 +157,7 @@ public:
 			ibPropertyCategory* m_categoryCommon = ibPropertyObject::CreatePropertyCategory(ibT("Common"), _("General"));
 			ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_categoryCommon, ibT("Name"), _("Name"), _("Column name"), ibT(""));
 			ibPropertyTString* m_propertyCaption = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryCommon, ibT("Caption"), _("Caption"), _("Column caption (header)"), ibT(""));
-			ibPropertyType* m_propertyType = ibPropertyObject::CreateProperty<ibPropertyType>(m_categoryCommon, ibT("Type"), _("Type"), _("Which values the column holds; a value of another type is converted to it when stored. String by default."), ibValueTypes::TYPE_STRING);
+			ibPropertyType* m_propertyType = ibPropertyObject::CreateProperty<ibPropertyType>(m_categoryCommon, ibT("Type"), _("Type"), _("Which values the column holds; a value of another type is converted to it when stored. Any by default."), g_valueAnyCLSID);
 			ibPropertyBoolean* m_propertyIndexed = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryCommon, ibT("Indexing"), _("Indexing"), _("Keep a lookup index on this column, so Find and an equality search stop scanning"), false);
 
 			friend ibValueModelTableColumnCollection;

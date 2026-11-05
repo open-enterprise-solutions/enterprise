@@ -4,6 +4,8 @@
 #include "backend/compiler/value.h"
 #include "backend/backend_picture.h"
 
+constexpr ibClassID g_valuePictureCLSID = value_to_clsid("SY_PICTR");
+
 //picture support
 class BACKEND_API ibValuePicture : public ibValue {
 	public:

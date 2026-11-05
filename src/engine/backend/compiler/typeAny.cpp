@@ -73,7 +73,7 @@ private:
 class ibCtorAnyUnrestricted : public ibCtorValueTypeBase {
 public:
 	ibCtorAnyUnrestricted()
-		: ibCtorValueTypeBase(ibT("Any"), typeid(void), system_to_clsid("Any")) {
+		: ibCtorValueTypeBase(ibT("Any"), typeid(void), g_valueAnyCLSID) {
 	}
 
 	ibCtorObjectType GetObjectTypeCtor() const override { return ibCtorObjectType::ibCtorObjectType_object_system; }

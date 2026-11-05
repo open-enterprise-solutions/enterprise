@@ -311,8 +311,8 @@ bool ibFormDesignView::FetchAttribute(const ibDataNode& request, ibDataNode& res
 		break;
 	case ibProtocol::ibView::ibFormDesigner::ibCommand::AddColumn: {
 		// The desktop's OnAddColumn: a column of the value table the attribute holds — its columns live in the value and
-		// are saved with the attribute; named uniquely among them (Column, Column1, …), String, the type changed in the
-		// inspector after; the new one shown.
+		// are saved with the attribute; named uniquely among them (Column, Column1, …), String — a column added by
+		// hand is typed in, the type changed in the inspector after; the new one shown.
 		ibValueModelTable* valueTable = nullptr;
 		if (entry == nullptr || !entry->GetBindValue()->ConvertToValue(valueTable) || valueTable == nullptr)
 			return false;

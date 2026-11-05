@@ -292,7 +292,9 @@ void AppendExplorerColumns(ibDataNode& parent, const ibSourceExplorer& explorer,
 			continue;
 		std::vector<ibSourceHop> childPath = prefix;
 		childPath.push_back({ col->GetSourceId() });
-		AppendSource(parent, col->GetSourceName(), childPath,
+		// The name, the type beside it — as an attribute's field says itself (GetProtocolValue, below).
+		const ibString label = col->GetSourceName() + ibT(" (") + MakeTypeString(metaData, col->GetTypeDesc()) + ibT(")");
+		AppendSource(parent, label, childPath,
 			ibValueReferenceDataObject::ConvertToMetaIds(col->GetClsidList(), metaData), false);
 	}
 }

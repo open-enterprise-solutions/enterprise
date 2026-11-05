@@ -7341,8 +7341,8 @@ msgid "Column caption (header)"
 msgstr "Заголовок колонки (шапка)"
 
 #: src/engine/backend/system/value/valueTable.h:155
-msgid "Which values the column holds; a value of another type is converted to it when stored. String by default."
-msgstr "Какие значения хранит колонка; значение другого типа при сохранении преобразуется к нему. По умолчанию - строка."
+msgid "Which values the column holds; a value of another type is converted to it when stored. Any by default."
+msgstr "Какие значения хранит колонка; значение другого типа при сохранении преобразуется к нему. По умолчанию - произвольный."
 
 #: src/engine/backend/system/value/valueTable.h:156
 msgid "Keep a lookup index on this column, so Find and an equality search stop scanning"
@@ -13976,3 +13976,19 @@ msgstr "Чтению по движениям передан источник б�
 #, c-format
 msgid "The encoding '%s' is not supported; supported: %s"
 msgstr "Кодировка '%s' не поддерживается; поддерживаются: %s"
+
+#: src/engine/backend/system/value/valueList.cpp
+msgid "Check"
+msgstr "Пометка"
+
+#: src/engine/backend/system/value/valueList.cpp
+msgid "The item is not in the list"
+msgstr "Элемент не принадлежит списку"
+
+#: src/engine/backend/system/value/valueList.cpp
+msgid "Expected an item or an index"
+msgstr "Ожидается элемент или индекс"
+
+#: src/engine/backend/system/value/valueList.cpp
+msgid "LoadValues: the argument is not an array"
+msgstr "LoadValues: аргумент не является массивом"

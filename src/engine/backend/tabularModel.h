@@ -1898,18 +1898,11 @@ public:
 			Move(node, delta);
 	}
 
-	// ORDER THE ROWS BY ONE COLUMN — through L5-2, NOT a compare loop (Max: sorting lives on L5). ONE sort
-	// at a time: it is the answer to "in what order are the rows read", and a second answer would only be
-	// the previous one still standing. BY THE COLUMN'S NAME, hops and all — that dotted name is what the
-	// composer splits and walks, the same string a header click and the by-column filter commit.
-	bool SortRows(const ibDataViewColumnItem& column, bool ascending) {
-		if (!column.IsOk())
-			return false;
-		m_composer.ClearSorts();
-		m_composer.Sort(column.m_name, ascending);
-		NotifyReset();
-		return true;
-	}
+	// ORDER THE ROWS BY ONE COLUMN — the rows themselves: L5-2 says the order (NOT a compare loop; Max: sorting
+	// lives on L5), the rows are re-seated into it, and nothing is left on the composer, so the stored order IS the
+	// sorted one afterwards. What a value table's Sort, a tabular section's sort command and a value list's
+	// SortByValue all do. BY THE COLUMN'S NAME, hops and all — that dotted name is what the composer splits and walks.
+	bool SortRows(const ibDataViewColumnItem& column, bool ascending);
 
 	// The name door — what the script's Sort("Column") says. A plain column of this table, no hop: it must
 	// be one of ours, and then it resolves to the one road above.

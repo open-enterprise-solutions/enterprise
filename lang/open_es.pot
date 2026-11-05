@@ -7300,7 +7300,7 @@ msgid "Column caption (header)"
 msgstr ""
 
 #: src/engine/backend/system/value/valueTable.h:155
-msgid "Which values the column holds; a value of another type is converted to it when stored. String by default."
+msgid "Which values the column holds; a value of another type is converted to it when stored. Any by default."
 msgstr ""
 
 #: src/engine/backend/system/value/valueTable.h:156
@@ -13637,4 +13637,20 @@ msgstr ""
 #: src/engine/backend/system/value/valueTextFile.cpp
 #, c-format
 msgid "The encoding '%s' is not supported; supported: %s"
+msgstr ""
+
+#: src/engine/backend/system/value/valueList.cpp
+msgid "Check"
+msgstr ""
+
+#: src/engine/backend/system/value/valueList.cpp
+msgid "The item is not in the list"
+msgstr ""
+
+#: src/engine/backend/system/value/valueList.cpp
+msgid "Expected an item or an index"
+msgstr ""
+
+#: src/engine/backend/system/value/valueList.cpp
+msgid "LoadValues: the argument is not an array"
 msgstr ""

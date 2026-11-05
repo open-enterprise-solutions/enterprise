@@ -405,7 +405,7 @@ static ibValue CellValue(ibValue row, const ibString& column)
 }
 
 // `Columns.AddColumn("A")` named a string, so a number written there came back as text. An omitted
-// type names no type, and the cell keeps the value.
+// type makes the column Any, and the cell keeps the value.
 TEST_F(ValueTableVerbs, AColumnAddedWithoutAType_KeepsANumberAsANumber)
 {
     ibValueModelTable::ibValueModelColumnCollection* const columns = m_table->GetColumnCollection();
@@ -415,7 +415,7 @@ TEST_F(ValueTableVerbs, AColumnAddedWithoutAType_KeepsANumberAsANumber)
     ibValue* args[] = { &name };
     ASSERT_TRUE(columns->CallAsFunc(add, made, args, 1));
     EXPECT_EQ(columns->GetColumnCount(), 1u);
-    EXPECT_FALSE(columns->GetColumnInfo(0)->GetColumnType().IsOk());
+    EXPECT_TRUE(columns->GetColumnInfo(0)->GetColumnType().ContainType(g_valueAnyCLSID));
 
     ibValue row = Call(wxT("Add"), {});
     const long prop = row.FindProp(wxT("A"));

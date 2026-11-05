@@ -65,6 +65,12 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   same names: a structure, a row, an object alike, and nothing is added to the receiver. With no list, every property
   the source has and the receiver can take; a list, names separated by commas, fills exactly those, and a name either
   side lacks is refused as an assignment would be. `exclude` leaves out what it names.
+- **`ValueList`** — a list of values, each item with a presentation, a check and a picture. `Add`, `Insert`, `Get`,
+  `Delete`, `FindByValue`, `UnloadValues`, `LoadValues`, `Copy`, `SortByValue`, `SortByPresentation`, `FillChecks`,
+  `Move`, `Index`; `For Each` hands out the items. On a form it is a table that shows the value; the presentation,
+  the check and the picture can be added. For a query's `IN`, pass `list.UnloadValues()`.
+- **`Any` is a type that takes every value.** A value table's column given no type is `Any`, and so is the value
+  of a list's item; the type picker offers it first, where it offered Undefined, which takes only itself.
 - **`Name(…)` calls the procedure or function of that name even where a variable has it.** Names are read
   whatever their case, so `chapterNames = ChapterNames();` called the variable and failed with "value is not a
   callable function". The module's procedure or function, declared above or below, now wins, as a system one

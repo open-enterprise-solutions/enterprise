@@ -401,6 +401,21 @@
         "cls.KeyValue.Key"
       ],
       "reviewed": false
+    },
+    {
+      "id": "cls.ValueList",
+      "name_local": "ValueList",
+      "name_en": "ValueList",
+      "kind": "collection",
+      "category_keys": ["value_types", "collections", "containers"],
+      "signature": "New ValueList()",
+      "description": "A list of values. Add(value, presentation, check, picture) appends an item and returns it; Insert, Get, Count and Clear use an index from zero. Delete takes an item of this list or an index, and refuses anything else. FindByValue returns the item or Undefined. UnloadValues copies the values into a new Array. LoadValues replaces the list with an array of values, unchecked. Copy makes a new list with new items. SortByValue and SortByPresentation sort in place, ascending unless false is passed (as a value table's Sort), and keep equal items in their order. An item given no presentation takes its value's text as one. FillChecks sets every item's check. Move(item, offset) moves an item, or the item at an index, by offset places. list[index] is the item there, and Index(item) is its position, or -1 for an item of another list. Each item has Value (of any type), Presentation, Check and Picture. On a form it is a table that shows the value; the presentation, check and picture can be added. Foreach yields the item. For a query IN, pass list.UnloadValues().",
+      "parameters": "None.",
+      "return_descr": "ValueList — empty.",
+      "example": "list = New ValueList();\nlist.Add(1, \"one\", true);",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": ["cls.Structure"],
+      "reviewed": true
     }
   ]
 }

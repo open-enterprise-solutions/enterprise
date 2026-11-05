@@ -126,12 +126,13 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 
 // A description that says nothing hands the value back untouched (below), so a value its caller is done
 // with goes back without a copy: a table loaded from rows that die with it (ibQueryRamTable::ToValueTable)
-// moves every cell of an untyped column — a LINQ answer's columns are all untyped. Anything the description
-// does say is answered by the overload below, as for any other value.
+// moves every cell of an untyped column — a LINQ answer's columns are all untyped, and a value table's column
+// given no type is Any, whose gate passes every value as it is. Anything else the description says is
+// answered by the overload below, as for any other value.
 ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescription, ibValue&& varValue,
 	const ibMetaData* metaData)
 {
-	if (!typeDescription.IsOk())
+	if (!typeDescription.IsOk() || (typeDescription.GetClsidCount() == 1 && typeDescription.GetFirstClsid() == g_valueAnyCLSID))
 		return std::move(varValue);
 	return AdjustValue(typeDescription, static_cast<const ibValue&>(varValue), metaData);
 }

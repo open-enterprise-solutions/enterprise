@@ -13,6 +13,9 @@
 // The UNDEFINED value type's clsid — the canonical "no concrete type"; base-level so low-level code can name it.
 constexpr ibClassID g_valueUndefinedCLSID = primitive_to_clsid("VL_UNDF");
 
+// …and ANY's — the type that admits every value (typeAny.cpp): declared, never created.
+constexpr ibClassID g_valueAnyCLSID = system_to_clsid("VL_ANY");
+
 // …and the primitives' — what every value is (variant.h), named the same by the engine and the client.
 constexpr ibClassID g_valueBooleanCLSID = primitive_to_clsid("VL_BOOL");
 constexpr ibClassID g_valueNumberCLSID = primitive_to_clsid("VL_NUMB");
