@@ -490,8 +490,10 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibV
 
 			for (size_t k = 0; k < keyCount; k++)
 				cells[k] = sel.GetValue(keyCols[k]);
+			// A calendar fold reports the TRUNCATED period, which is an aggregate alias; every other reading of it groups
+			// by the column itself and reads it as one.
 			if (ids[keyCount] != 0)
-				cells[keyCount] = sel.GetColumn(periodName);
+				cells[keyCount] = cFold.IsCalendar() ? sel.GetColumn(periodName) : sel.GetValue(periodCol);
 			retTable.AppendRow(ids, cells);
 		}
 	}
@@ -728,8 +730,11 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 				for (const ibBackendQueryColumn* key : keyOnReading)
 					keyValues.push_back(sel.GetValue(key));
 				ibPeriodRow read;
-				if (readPeriod != nullptr)   // a grouped column is read by the column, a truncation by the name it was given
-					read.m_period = atMovementGrain ? sel.GetValue(readPeriod) : sel.GetColumn(periodName);
+				// A grouped column is read by the column, a truncation by the name it was given - as they were grouped above.
+				if (readPeriod != nullptr && cFold.IsCalendar())
+					read.m_period = sel.GetColumn(periodName);
+				else if (readPeriod != nullptr && (cFold.m_kind == ibRegGranularity::Period || atMovementGrain))
+					read.m_period = sel.GetValue(readPeriod);
 				if (recorderCol != nullptr)
 					read.m_recorder = sel.GetValue(recorderCol);
 				if (lineCol != nullptr)
