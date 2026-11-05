@@ -495,3 +495,5 @@ bool ibAuditLogView::OnClose(bool deleteWindow)
 	if (m_tailTimer && m_tailTimer->IsRunning()) m_tailTimer->Stop();
 	return true;
 }
+
+TAB_DOCUMENT_REGISTER(ibAuditLogDocument, ibProtocol::ibView::ibKind::AuditLog)

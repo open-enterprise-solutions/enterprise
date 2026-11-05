@@ -77,9 +77,12 @@ The desktop's document/view, without its metadata part. Four classes take other 
 `ibFrontendView`, `ibFrontendDocManager`, `ibFrontendDocTemplate` — because a file base puts the server's own in the
 same process, and wx keeps one class table.
 
-- **A server's tab is a bridge document.** One invisible template makes one for each tab the frame has. It holds the
+- **A server's tab is a bridge document.** One is made for each tab the frame has, with no template. It holds the
   tab's id and nothing of the document: its title, and whether it may be saved, undone or closed now, are read from the
   tab; save, undo, redo and close are calls.
+- **A tab's Kind picks its document.** Each document registers for its Kind at the bottom of its source
+  (`TAB_DOCUMENT_REGISTER`); a form's tab names no Kind and gets a form's. A control is made the same way, by its
+  node's type (`CONTROL_REGISTER`); a type nobody registered stands as a placeholder.
 - **A file goes to the server, by two calls.** `upload` puts it into the session's temporary storage and `open` makes
   the document of it by its id — the server works with ids, not files. An external data processor or report runs its
   form; a text or a spreadsheet is the server's document of its own template. The client's document goes once it has

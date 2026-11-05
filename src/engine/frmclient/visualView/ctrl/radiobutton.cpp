@@ -19,3 +19,5 @@ void ibValueRadioButton::Update(const ibProtocolNode& node)
 
 	UpdateWindow(m_radioButton, node);
 }
+
+CONTROL_REGISTER(ibValueRadioButton, ibProtocol::ibForm::ibType::Radiobutton)

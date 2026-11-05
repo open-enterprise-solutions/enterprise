@@ -21,3 +21,5 @@ void ibValueGauge::Update(const ibProtocolNode& node)
 
 	UpdateWindow(m_gauge, node);
 }
+
+CONTROL_REGISTER(ibValueGauge, ibProtocol::ibForm::ibType::Gauge)

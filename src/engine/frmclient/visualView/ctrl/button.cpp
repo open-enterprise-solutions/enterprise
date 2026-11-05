@@ -115,3 +115,4 @@ void ibValueButton::OnButtonPressed(wxCommandEvent& WXUNUSED(event))
 	Send(ibProtocol::ibEvent::ibKind::Press, args);
 }
 
+CONTROL_REGISTER(ibValueButton, ibProtocol::ibForm::ibType::Button)

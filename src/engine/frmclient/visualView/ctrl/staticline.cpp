@@ -16,3 +16,4 @@ void ibValueStaticLine::Update(const ibProtocolNode& node)
 	UpdateWindow(m_staticLine, node);
 }
 
+CONTROL_REGISTER(ibValueStaticLine, ibProtocol::ibForm::ibType::Staticline)

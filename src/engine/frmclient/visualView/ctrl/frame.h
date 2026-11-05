@@ -82,6 +82,8 @@ public:
 	// The control drawn for a node of that type — a placeholder in its place for a type this client does not draw yet
 	// (IsPlaceholder); held once it is added to its parent.
 	static ibValueFrame* Make(const wxString& type, ibVisualHostClient& host, long long controlId);
+	// …and how a control of a type is made, registered as its source is loaded (CONTROL_REGISTER).
+	static void Register(const wxString& type, ibValueFrame* (*make)(ibVisualHostClient& host, long long controlId));
 
 	virtual ~ibValueFrame() = default;
 
@@ -194,5 +196,11 @@ private:
 	bool     m_expanded = true;
 	unsigned m_subscribedEvents = 0;   // a bit per ibProtocol::ibEvent::ibKind — its State's Subscribed
 };
+
+// A node's type and the control made for it — at the bottom of the control's source, as a tab's document is registered
+// (TAB_DOCUMENT_REGISTER).
+#define CONTROL_REGISTER(class_info, type)\
+	[[maybe_unused]] static const bool wxMAKE_UNIQUE_NAME(s_control_reg_) = (ibValueFrame::Register(type,\
+		[](ibVisualHostClient& host, long long controlId) -> ibValueFrame* { return new class_info(host, controlId); }), true);
 
 #endif

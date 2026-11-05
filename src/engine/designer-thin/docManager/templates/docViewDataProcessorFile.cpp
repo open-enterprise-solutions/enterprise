@@ -37,3 +37,5 @@ ibFrontendView* ibDataProcessorFileDocument::DoCreateView()
 {
 	return new ibDataProcessorEditView();
 }
+
+TAB_DOCUMENT_REGISTER(ibDataProcessorFileDocument, ibProtocol::ibView::ibKind::DataProcessor)

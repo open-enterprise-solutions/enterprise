@@ -32,10 +32,7 @@
 #include "frmclient/backend/appData.h"
 #include "frmclient/backend/mcp/mcpServer.h"   // the assistant's port, up and down with the window
 #include "frmclient/docView/docManager.h"
-#include "frmclient/docView/docViewAssistant.h"   // the assistant's tab — a view the server holds
 #include "frmclient/docView/templates/docViewFile.h"
-#include "frmclient/docView/templates/docViewAuditLog.h"   // the journal's tab — a view of its own (the tab's Kind)
-#include "frmclient/docView/templates/docViewHomePage.h"   // the start page's tab — its forms, laid out
 #include "frmclient/artProvider/artProvider.h"
 #include "frmclient/visualView/visualHostClient.h"
 #include "frmclient/win/picture.h"
@@ -1240,17 +1237,6 @@ void ibFrontendMainFrame::DrawTemplates(const ibProtocolNode& templates)
 	}
 }
 
-ibTabDocument* ibFrontendMainFrame::CreateDocument(ibProtocol::ibView::ibKind kind, long long tabId)
-{
-	if (kind == ibProtocol::ibView::ibKind::AuditLog)
-		return new ibAuditLogDocument(tabId);
-	if (kind == ibProtocol::ibView::ibKind::HomePage)
-		return new ibHomePageDocument(tabId);
-	if (kind == ibProtocol::ibView::ibKind::Assistant)
-		return new ibAssistantDocument(tabId);
-	return new ibFormVisualDocument(tabId);
-}
-
 void ibFrontendMainFrame::DrawTabs(const ibProtocolNode& tabs)
 {
 	wxAuiMDIClientWindow* const client = GetClientWindow();
@@ -1261,8 +1247,8 @@ void ibFrontendMainFrame::DrawTabs(const ibProtocolNode& tabs)
 	m_drawing = true;
 	client->Freeze();
 
-	// EACH TAB A DOCUMENT THE SERVER RAISED — made here, with no template (ibTabDocument), by the tab's Kind: a form, or a
-	// view of its own; its view in a tab of the window (CreateChildFrame).
+	// EACH TAB A DOCUMENT THE SERVER RAISED — made here, with no template, by the tab's Kind (ibTabDocument::Make): a form,
+	// or a view of its own; its view in a tab of the window (CreateChildFrame).
 	std::set<long long> drawn;
 	for (const ibProtocolNode& tab : tabs.Children()) {
 		const long long id = tab.GetId();
@@ -1280,7 +1266,7 @@ void ibFrontendMainFrame::DrawTabs(const ibProtocolNode& tabs)
 		// …and a tab closing is not opened again — its form went with the window it was shown in (ibDialogDocChildFrame).
 		if (m_tabsClosing.contains(id))
 			continue;
-		ibTabDocument* const opened = CreateDocument(static_cast<ibProtocol::ibView::ibKind>(tab.GetInt(ibProtocol::ibFrame::ibTab::Kind)), id);
+		ibTabDocument* const opened = ibTabDocument::Make(static_cast<ibProtocol::ibView::ibKind>(tab.GetInt(ibProtocol::ibFrame::ibTab::Kind)), id);
 		m_documents[id] = opened;
 		opened->SetTitle(title);
 		const wxBitmap icon = ibProtocolPicture(tab, ibProtocol::ibFrame::ibTab::Icon);

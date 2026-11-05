@@ -56,3 +56,5 @@ void ibValueTextBox::OnKillFocus(wxFocusEvent& event)
 	}
 	event.Skip();
 }
+
+CONTROL_REGISTER(ibValueTextBox, ibProtocol::ibForm::ibType::Textbox)

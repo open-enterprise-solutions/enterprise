@@ -1,8 +1,22 @@
 #include "tabDocument.h"
 
+#include <map>
+
 #include <wx/filedlg.h>   // wxFileSelector — Save as, where the person keeps the file
 
 #include "frmclient/mainFrame/mainFrame.h"
+
+namespace {
+
+// A tab's kind → how its document is made (TAB_DOCUMENT_REGISTER) — made at its first use: the sources register as their
+// module is loaded, in whatever order they come.
+std::map<ibProtocol::ibView::ibKind, ibTabDocument* (*)(long long)>& Kinds()
+{
+	static std::map<ibProtocol::ibView::ibKind, ibTabDocument* (*)(long long)> kinds;
+	return kinds;
+}
+
+} // namespace
 
 ibTabDocument::ibTabDocument(long long tabId)
 	: m_tabId(tabId)
@@ -177,6 +191,18 @@ bool ibTabDocument::Call(ibProtocol::ibEvent::ibKind event, const ibProtocolNode
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
 	ibProtocolNode answer;
 	return frame != nullptr && frame->Call(ibProtocol::ibMethod::Event, EventOf(event, args), answer);
+}
+
+ibTabDocument* ibTabDocument::Make(ibProtocol::ibView::ibKind kind, long long tabId)
+{
+	const auto& kinds = Kinds();
+	const auto registered = kinds.find(kind);
+	return (registered != kinds.end() ? registered->second : kinds.at(ibProtocol::ibView::ibKind::Form))(tabId);
+}
+
+void ibTabDocument::Register(ibProtocol::ibView::ibKind kind, ibTabDocument* (*make)(long long tabId))
+{
+	Kinds()[kind] = make;
 }
 
 ibProtocolNode ibTabDocument::EventOf(ibProtocol::ibEvent::ibKind event, const ibProtocolNode& args) const

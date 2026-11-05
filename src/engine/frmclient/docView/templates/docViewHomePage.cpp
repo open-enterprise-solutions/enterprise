@@ -270,3 +270,5 @@ ibFrontendView* ibHomePageDocument::DoCreateView()
 {
 	return new ibHomePageView();
 }
+
+TAB_DOCUMENT_REGISTER(ibHomePageDocument, ibProtocol::ibView::ibKind::HomePage)

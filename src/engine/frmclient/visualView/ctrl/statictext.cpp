@@ -35,3 +35,4 @@ wxWindow* ibValueStaticText::GetWindow() const
 	return m_staticText;
 }
 
+CONTROL_REGISTER(ibValueStaticText, ibProtocol::ibForm::ibType::Statictext)

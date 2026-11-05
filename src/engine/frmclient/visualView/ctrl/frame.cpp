@@ -6,11 +6,9 @@
 #include "frame.h"
 #include "frmclient/visualView/visualHostClient.h"
 
-#include "gridBox.h"
-#include "notebook.h"
-#include "sizer.h"
-#include "tableBox.h"
-#include "widgets.h"
+#include <map>
+
+#include "widgets.h"   // ibViewPlaceholder — a type none is registered for
 
 #include "core/stringUtils.h"   // stringUtils::IsSameAs — a name found as the desktop's finds it
 #include "frmclient/backend/propertyManager/property/propertySerializable.h"   // its properties — a row's each
@@ -19,64 +17,29 @@
 
 namespace {
 
-ibValueFrame* MakeOfType(const wxString& type, ibVisualHostClient& host, long long controlId)
+// A node's type → how its control is made (CONTROL_REGISTER) — made at its first use: the sources register as their
+// module is loaded, in whatever order they come.
+std::map<wxString, ibValueFrame* (*)(ibVisualHostClient&, long long)>& Types()
 {
-	if (type == ibProtocol::ibForm::ibType::SizerItem)
-		return new ibValueSizerItem(host, controlId);
-	if (type == ibProtocol::ibForm::ibType::Boxsizer)
-		return new ibValueBoxSizer(host, controlId);
-	if (type == ibProtocol::ibForm::ibType::Wrapsizer)
-		return new ibValueWrapSizer(host, controlId);
-	if (type == ibProtocol::ibForm::ibType::Gridsizer)
-		return new ibValueGridSizer(host, controlId);
-	if (type == ibProtocol::ibForm::ibType::Staticboxsizer)
-		return new ibValueStaticBoxSizer(host, controlId);
-	if (type == ibProtocol::ibForm::ibType::Statictext)
-		return new ibValueStaticText(host, controlId);
-	if (type == ibProtocol::ibForm::ibType::Textctrl)
-		return new ibValueTextCtrl(host, controlId);
-	if (type == ibProtocol::ibForm::ibType::Button)
-		return new ibValueButton(host, controlId);
-	if (type == ibProtocol::ibForm::ibType::Checkbox)
-		return new ibValueCheckbox(host, controlId);
-	if (type == ibProtocol::ibForm::ibType::Staticline)
-		return new ibValueStaticLine(host, controlId);
-	if (type == ibProtocol::ibForm::ibType::Tablebox)
-		return new ibValueModelTableBox(host, controlId);
-	if (type == ibProtocol::ibForm::ibType::TableboxColumn)
-		return new ibValueModelTableBoxColumn(host, controlId);
-	if (type == ibProtocol::ibForm::ibType::TableboxColumnGroup)
-		return new ibValueModelTableBoxColumnGroup(host, controlId);
-	if (type == ibProtocol::ibForm::ibType::Gridbox)
-		return new ibValueGridBox(host, controlId);
-	if (type == ibProtocol::ibForm::ibType::Textbox)
-		return new ibValueTextBox(host, controlId);
-	if (type == ibProtocol::ibForm::ibType::Notebook)
-		return new ibValueNotebook(host, controlId);
-	if (type == ibProtocol::ibForm::ibType::NotebookPage)
-		return new ibValueNotebookPage(host, controlId);
-	if (type == ibProtocol::ibForm::ibType::Radiobutton)
-		return new ibValueRadioButton(host, controlId);
-	if (type == ibProtocol::ibForm::ibType::Slider)
-		return new ibValueSlider(host, controlId);
-	if (type == ibProtocol::ibForm::ibType::Gauge)
-		return new ibValueGauge(host, controlId);
-	if (type == ibProtocol::ibForm::ibType::Htmlbox)
-		return new ibValueHTMLBox(host, controlId);
-	if (type == ibProtocol::ibForm::ibType::Chartbox)
-		return new ibValueChartBox(host, controlId);
-	return nullptr;
+	static std::map<wxString, ibValueFrame* (*)(ibVisualHostClient&, long long)> types;
+	return types;
 }
 
 } // namespace
 
 ibValueFrame* ibValueFrame::Make(const wxString& type, ibVisualHostClient& host, long long controlId)
 {
-	ibValueFrame* made = MakeOfType(type, host, controlId);
-	if (made == nullptr)
-		made = new ibViewPlaceholder(host, controlId);
+	const auto& types = Types();
+	const auto registered = types.find(type);
+	ibValueFrame* const made = registered != types.end() ? registered->second(host, controlId)
+		: new ibViewPlaceholder(host, controlId);
 	made->m_className = type;
 	return made;
+}
+
+void ibValueFrame::Register(const wxString& type, ibValueFrame* (*make)(ibVisualHostClient& host, long long controlId))
+{
+	Types()[type] = make;
 }
 
 bool ibValueFrame::ChangeChildPosition(ibValueFrame* obj, unsigned int pos)

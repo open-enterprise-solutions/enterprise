@@ -60,3 +60,5 @@ ibFrontendView* ibRoleEditDocument::DoCreateView()
 {
 	return new ibRoleEditView();
 }
+
+TAB_DOCUMENT_REGISTER(ibRoleEditDocument, ibProtocol::ibView::ibKind::Role)

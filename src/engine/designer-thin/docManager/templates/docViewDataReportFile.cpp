@@ -37,3 +37,5 @@ ibFrontendView* ibReportFileDocument::DoCreateView()
 {
 	return new ibReportEditView();
 }
+
+TAB_DOCUMENT_REGISTER(ibReportFileDocument, ibProtocol::ibView::ibKind::Report)

@@ -342,3 +342,5 @@ bool ibAssistantView::OnClose(bool deleteWindow)
 
 	return ibFrontendView::OnClose(deleteWindow);
 }
+
+TAB_DOCUMENT_REGISTER(ibAssistantDocument, ibProtocol::ibView::ibKind::Assistant)

@@ -163,3 +163,5 @@ void ibValueGridBox::OnCellLeftClick(ibGridEvent& event)
 		.SetValue(ibProtocol::ibEvent::Col, event.GetCol() + 1);
 	Send(ibProtocol::ibEvent::ibKind::Cell, args);
 }
+
+CONTROL_REGISTER(ibValueGridBox, ibProtocol::ibForm::ibType::Gridbox)

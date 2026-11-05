@@ -316,3 +316,5 @@ ibFrontendView* ibFormEditDocument::DoCreateView()
 {
 	return new ibFormEditView();
 }
+
+TAB_DOCUMENT_REGISTER(ibFormEditDocument, ibProtocol::ibView::ibKind::FormDesigner)

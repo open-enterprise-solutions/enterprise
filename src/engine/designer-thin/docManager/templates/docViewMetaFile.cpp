@@ -67,3 +67,5 @@ ibFrontendView* ibMetadataBrowserDocument::DoCreateView()
 {
 	return new ibMetadataEditView();
 }
+
+TAB_DOCUMENT_REGISTER(ibMetadataBrowserDocument, ibProtocol::ibView::ibKind::Configuration)

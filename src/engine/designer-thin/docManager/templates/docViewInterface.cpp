@@ -60,3 +60,5 @@ ibFrontendView* ibInterfaceEditDocument::DoCreateView()
 {
 	return new ibInterfaceEditView();
 }
+
+TAB_DOCUMENT_REGISTER(ibInterfaceEditDocument, ibProtocol::ibView::ibKind::Interface)

@@ -60,3 +60,5 @@ ibFrontendView* ibCommonAttributeEditDocument::DoCreateView()
 {
 	return new ibCommonAttributeEditView();
 }
+
+TAB_DOCUMENT_REGISTER(ibCommonAttributeEditDocument, ibProtocol::ibView::ibKind::CommonAttribute)

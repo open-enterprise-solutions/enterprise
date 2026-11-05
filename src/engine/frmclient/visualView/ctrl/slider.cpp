@@ -24,3 +24,5 @@ void ibValueSlider::Update(const ibProtocolNode& node)
 
 	UpdateWindow(m_slider, node);
 }
+
+CONTROL_REGISTER(ibValueSlider, ibProtocol::ibForm::ibType::Slider)

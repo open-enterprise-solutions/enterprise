@@ -277,3 +277,5 @@ ibFrontendView* ibModuleEditDocument::DoCreateView()
 {
 	return new ibModuleEditView();
 }
+
+TAB_DOCUMENT_REGISTER(ibModuleEditDocument, ibProtocol::ibView::ibKind::Module)

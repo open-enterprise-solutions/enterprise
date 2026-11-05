@@ -109,3 +109,4 @@ void ibValueTextCtrl::OnKillFocus(wxFocusEvent& event)
 	event.Skip();
 }
 
+CONTROL_REGISTER(ibValueTextCtrl, ibProtocol::ibForm::ibType::Textctrl)

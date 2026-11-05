@@ -60,3 +60,5 @@ ibFrontendView* ibFunctionalOptionEditDocument::DoCreateView()
 {
 	return new ibFunctionalOptionEditView();
 }
+
+TAB_DOCUMENT_REGISTER(ibFunctionalOptionEditDocument, ibProtocol::ibView::ibKind::FunctionalOption)

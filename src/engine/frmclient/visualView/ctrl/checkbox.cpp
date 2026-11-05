@@ -39,3 +39,4 @@ wxWindow* ibValueCheckbox::GetWindow() const
 	return m_checkbox;
 }
 
+CONTROL_REGISTER(ibValueCheckbox, ibProtocol::ibForm::ibType::Checkbox)

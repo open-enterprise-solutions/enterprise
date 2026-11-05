@@ -154,42 +154,6 @@ bool ibFrontendMainFrameDesigner::Debug(const ibProtocolNode& params, ibProtocol
 }
 #pragma endregion
 
-#include "designer-thin/docManager/templates/docViewMetaFile.h"
-#include "designer-thin/docManager/templates/docViewDataProcessorFile.h"
-#include "designer-thin/docManager/templates/docViewDataReportFile.h"
-#include "designer-thin/docManager/templates/docViewModuleEditor.h"
-#include "designer-thin/docManager/templates/docViewFormEditor.h"
-#include "designer-thin/docManager/templates/docViewInterface.h"
-#include "designer-thin/docManager/templates/docViewCommonAttribute.h"
-#include "designer-thin/docManager/templates/docViewFunctionalOption.h"
-#include "designer-thin/docManager/templates/docViewRole.h"
-#include "designer-thin/docManager/templates/docViewComposer.h"
-
-ibTabDocument* ibFrontendMainFrameDesigner::CreateDocument(ibProtocol::ibView::ibKind kind, long long tabId)
-{
-	if (kind == ibProtocol::ibView::ibKind::Configuration)
-		return new ibMetadataBrowserDocument(tabId);   // a file's or the database's copy — the server's to tell apart
-	if (kind == ibProtocol::ibView::ibKind::DataProcessor)
-		return new ibDataProcessorFileDocument(tabId);
-	if (kind == ibProtocol::ibView::ibKind::Report)
-		return new ibReportFileDocument(tabId);
-	if (kind == ibProtocol::ibView::ibKind::Module)
-		return new ibModuleEditDocument(tabId);
-	if (kind == ibProtocol::ibView::ibKind::FormDesigner)
-		return new ibFormEditDocument(tabId);
-	if (kind == ibProtocol::ibView::ibKind::Interface)
-		return new ibInterfaceEditDocument(tabId);
-	if (kind == ibProtocol::ibView::ibKind::CommonAttribute)
-		return new ibCommonAttributeEditDocument(tabId);
-	if (kind == ibProtocol::ibView::ibKind::FunctionalOption)
-		return new ibFunctionalOptionEditDocument(tabId);
-	if (kind == ibProtocol::ibView::ibKind::Role)
-		return new ibRoleEditDocument(tabId);
-	if (kind == ibProtocol::ibView::ibKind::Composer)
-		return new ibComposerEditDocument(tabId);
-	return ibFrontendMainFrame::CreateDocument(kind, tabId);
-}
-
 bool ibFrontendMainFrameDesigner::AllowClose()
 {
 	// ⭐ THE CONFIGURATION IS ASKED ABOUT BEFORE THE TABS, where the desktop asked after them: the base's Exit is the

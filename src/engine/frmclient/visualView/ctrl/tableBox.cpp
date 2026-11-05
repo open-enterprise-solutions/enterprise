@@ -880,3 +880,7 @@ void ibValueModelTableBoxColumnGroup::Update(const ibProtocolNode& node)
 	if (ibDataViewCtrl* const dataView = m_group->GetOwner())
 		dataView->InvalidateColumnLayout();
 }
+
+CONTROL_REGISTER(ibValueModelTableBox, ibProtocol::ibForm::ibType::Tablebox)
+CONTROL_REGISTER(ibValueModelTableBoxColumn, ibProtocol::ibForm::ibType::TableboxColumn)
+CONTROL_REGISTER(ibValueModelTableBoxColumnGroup, ibProtocol::ibForm::ibType::TableboxColumnGroup)

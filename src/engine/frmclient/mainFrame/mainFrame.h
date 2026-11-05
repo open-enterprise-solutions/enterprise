@@ -229,11 +229,6 @@ protected:
 	// modes are asked; a mode's window asks its own (the designer's restructure ledger) and leaves the rest to the base.
 	virtual void ShowRequest(const ibProtocolNode& request, ibProtocolNode& response);
 
-	// THE DOCUMENT OF A TAB THE SERVER RAISED, by the tab's Kind (DrawTabs) — the desktop doc template's CreateDocument for
-	// a tab, as it has no template. The base makes what both modes have (a form, the journal) and the runtime's start page;
-	// a mode's window makes its own (the designer's tree of an external file) and leaves the rest to the base.
-	virtual ibTabDocument* CreateDocument(ibProtocol::ibView::ibKind kind, long long tabId);
-
 	// The File and Edit menus — the desktop's, the doc manager's commands — and the bar they start it. A mode's window
 	// makes its own menu (the designer's Help) and calls this.
 	virtual void InitializeDefaultMenu();

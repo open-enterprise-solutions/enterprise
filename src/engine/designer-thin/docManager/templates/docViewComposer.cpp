@@ -177,3 +177,5 @@ ibFrontendView* ibComposerEditDocument::DoCreateView()
 {
 	return new ibComposerEditView();
 }
+
+TAB_DOCUMENT_REGISTER(ibComposerEditDocument, ibProtocol::ibView::ibKind::Composer)
