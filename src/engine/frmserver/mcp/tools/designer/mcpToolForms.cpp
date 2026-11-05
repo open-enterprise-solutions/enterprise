@@ -257,8 +257,8 @@ ibValueForm* OpenForm(const ibDataNode& params, ibString& refusal,
 	const ibValuePtr<ibValueForm> form(built);
 	if (!form) {
 		refusal = ibString::Format(
-			ibMcpText("'%s' could not be opened. Its module may have refused - messages_read has "
-			  "what the platform said."), object->GetName());
+			ibMcpText("'%s' could not be opened. Its module may have refused - if it raised, journal_read "
+			  "with `level: error` has the failure, with its module and line."), object->GetName());
 		return nullptr;
 	}
 
@@ -287,8 +287,8 @@ ibValueForm* OpenObjectForm(const ibDataNode& params, ibString& refusal, bool& g
 	const ibValuePtr<ibValueForm> form(record->GetObjectForm());
 	if (!form) {
 		refusal = ibString::Format(
-			ibMcpText("The object form of '%s' could not be opened. Its module may have refused - messages_read "
-			  "has what the platform said."), object->GetName());
+			ibMcpText("The object form of '%s' could not be opened. Its module may have refused - if it raised, "
+			  "journal_read with `level: error` has the failure, with its module and line."), object->GetName());
 		return nullptr;
 	}
 

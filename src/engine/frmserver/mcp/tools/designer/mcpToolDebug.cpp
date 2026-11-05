@@ -1085,7 +1085,7 @@ public:
 		if (!ran)
 			result.SetValue(ibT("note"),
 				ibMcpText("The code did not run to the end - `answer` carries what the platform said "
-				  "about it. messages_read has anything it printed before it stopped."));
+				  "about it. `printed` has anything it printed before it stopped."));
 
 		return true;
 	}

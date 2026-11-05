@@ -1636,13 +1636,14 @@ std::vector<ibString> ibMcpComplaints(ibValueMetaObject* object)
 
 	// ⭐ AND THE OTHER HALF IS NOT HERE. Some metatypes complain into this ledger;
 	// others say it through the message pane (a chart of accounts with no chart of
-	// characteristic types does), and that road ends at the designer's main
-	// window, which records it. Reading it belongs to messages_read, on the side
-	// that has a window — not to a second collector in the backend saying the same
+	// characteristic types does), and that road ends in the frame of the session
+	// this runs in — the person's designer window. Nothing on this side keeps it:
+	// messages_read, which read the desktop window's record, went with the desktop
+	// front (2026-10-27), and a second collector in the backend would say the same
 	// thing twice.
 	//
-	// The probe below therefore FILLS BOTH: whatever it says through the pane is
-	// recorded by the window as it passes, and is there to be read a moment later.
+	// The probe below therefore FILLS BOTH: the ledger is read here, and whatever
+	// it says through the pane is shown to the person at the designer.
 	try {
 		object->OnSaveMetaObject(0);
 	}
@@ -1677,7 +1678,7 @@ void ibMcpReportComplaints(ibDataNode& result, ibValueMetaObject* object)
 	result.SetValue(ibT("incompleteNote"),
 		ibMcpText("The change was made. The object still reports this, and the configuration cannot "
 		  "be saved to the database until it stops. Some objects complain through the "
-		  "message pane instead - messages_read has those."));
+		  "message pane instead - those reach the designer's window, not this answer."));
 }
 
 // ⭐⭐ THE SAME DOOR A MOUSE CLICK USES — and it is the platform's, not this server's.
