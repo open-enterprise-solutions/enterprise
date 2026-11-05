@@ -238,7 +238,7 @@ private:
 	// and empty is an ERROR rather than "everything the contour allows". Without that, a
 	// characteristic with no type would let a value of any kind into a slot the kind was supposed
 	// to narrow — which is the whole purpose of this second tier.
-	ibPropertyContainer<>* m_propertyAttributeType = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateSpecialType(ibT("Type"), _("Type"), _("The type of this characteristic's values - chosen from the chart's Types of characteristics. A field typed by this characteristic holds values of this type only. Required."), g_valueTypeDescriptionCLSID, /*fillCheck*/ true, ibValue(), ibItemMode::ibItemMode_Item));
+	ibPropertyPredefined<>* m_propertyAttributeType = ibPropertyObject::CreateProperty<ibPropertyPredefined<>>(m_categoryPredefined, ibValueMetaObjectCompositeData::CreateSpecialType(ibT("Type"), _("Type"), _("The type of this characteristic's values - chosen from the chart's Types of characteristics. A field typed by this characteristic holds values of this type only. Required."), g_valueTypeDescriptionCLSID, /*fillCheck*/ true, ibValue(), ibItemMode::ibItemMode_Item));
 
 	friend class ibValueRecordDataObjectChartOfCharacteristicTypes;
 	friend class ibMetaData;

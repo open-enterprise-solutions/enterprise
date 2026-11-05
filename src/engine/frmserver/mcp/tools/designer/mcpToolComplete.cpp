@@ -474,7 +474,7 @@ public:
 			// ⭐⭐ WHAT THE EXPRESSION TURNED OUT TO BE, AND IT IS SAID PER BRANCH. The members alone
 			// say what may be written next; they do not say WHAT is being written on, and a caller
 			// reading only a member list has to infer the thing from its parts — a catalog manager
-			// from `CreateElement`, an array from `Add`. That is the same guessing this arc removes
+			// from `CreateItem`, an array from `Add`. That is the same guessing this arc removes
 			// everywhere else, so the value says its own name: it is the one fact the walk holds and
 			// nobody else can recover. Said once for the whole answer it would name the last branch
 			// and describe the others wrongly, which is worse than saying nothing.

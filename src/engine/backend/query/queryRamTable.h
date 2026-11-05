@@ -13,7 +13,7 @@
 #include "queryColumn.h"                 // ibBackendQueryColumn / ibTypeDescription / ibMetaID
 #include "backend/compiler/value.h"      // ibValue
 
-#include <utility>         // std::swap — a row re-keyed (RekeyRow)
+#include <algorithm>       // std::stable_sort — the re-keying list put in order once (AppendRowsRekeyed)
 #include <map>
 #include <deque>           // the rows — see m_rows
 #include <unordered_map>   // balance opening — keyed by the key tuple, see ibValueSeqHash (value.h)
@@ -54,16 +54,23 @@ public:
 	// Room for a cell per declared column, made once — the cells then land without growing the row.
 	long    AppendRow()                                       { m_rows.emplace_back().reserve(m_columns.size());
 	                                                             return static_cast<long>(m_rows.size()) - 1; }
+	// ⭐⭐ …OR A ROW LAID DOWN WHOLE, from a reader's buffer: `cells[i]` lands under `ids[i]`, both in whatever order the
+	// reader reads them. A row keeps its cells sorted by id, and set one by one a cell under a smaller id than one
+	// already there went in through the middle and moved every cell after it up. A register writes its keys first and
+	// numbers its figures below them (SyntheticKind::Derived is negative), so every figure of every row did: 6.7% of a
+	// report over 100 000 turnovers (#646, 2026-11-04, Debug). Here the IDS are put in order, not the values — each
+	// value is moved once, to where it stays, and the buffer is left to be filled again. An id of 0 is a column the
+	// table does not declare and is not written; of two under one id the later wins, as it did cell by cell.
+	long    AppendRow(const std::vector<ibMetaID>& ids, std::vector<ibValue>& cells);
 	void    SetCell(long row, ibMetaID id, const ibValue& v)  { if (row >= 0 && row < RowCount()) m_rows[static_cast<size_t>(row)][id] = v; }
 	// A column's id by its NAME — 0 when the table declares no such column, which reads back as an empty
 	// cell and never as somebody else's. For derived columns read by alias (register balance / turnover
 	// X_Balance / X_Turnover…).
+	// ⚠ ASKED ONCE, BEFORE THE ROWS — it walks the columns comparing names. A setter by name asked it per cell
+	// per row, and in a register's turnovers stood in 5% of a report over 100 000 rows; it is gone (#646).
 	ibMetaID ColumnIdByName(const ibString& name) const {
 	            for (const ibQueryRamColumn& c : m_columns) if (c.m_name == name) return c.m_id;
 	            return 0; }
-	// Set by column NAME — no-op if the name is unknown.
-	void    SetByName(long row, const ibString& name, const ibValue& v) {
-	            if (const ibMetaID id = ColumnIdByName(name)) SetCell(row, id, v); }
 	// (The cells are found with find_value — the value where it lies, and no iterator made to reach it.)
 	ibValue GetCell(long row, ibMetaID id) const              { if (row < 0 || row >= RowCount()) return ibValue();
 	                                                             const ibValue* v = m_rows[static_cast<size_t>(row)].find_value(id);
@@ -127,12 +134,28 @@ public:
 	// most once — a column read twice needs a copy, not a move.
 	// Every row of `src`: re-keyed where it stands, then handed on whole (AppendRowsFrom). One buffer
 	// serves every row: each re-keyed row takes it, and hands back the memory it had (RekeyRow).
+	// ⭐ THE ORDER IS WORKED OUT ONCE, NOT PER ROW (#646): every row is re-keyed by the same list, so its pairs are
+	// put in the order of their new ids here, and a row only merges them with its riders. Sorting each row's cells
+	// swapped the values themselves, a quarter of the cells' count squared per row: 17% of the samples of a report
+	// over 100 000 turnovers (2026-11-04, Debug).
 	void    AppendRowsRekeyed(ibQueryRamTable& src, const std::vector<std::pair<ibMetaID, ibMetaID>>& rekey)
 	{
 		if (!rekey.empty()) {
+			// The pairs by new id (stable: of two naming one id, the later stays later), and every id a pair names
+			// on either side — the ids no rider may stand on.
+			std::vector<std::pair<ibMetaID, ibMetaID>> byNewId(rekey);
+			std::stable_sort(byNewId.begin(), byNewId.end(),
+				[](const std::pair<ibMetaID, ibMetaID>& a, const std::pair<ibMetaID, ibMetaID>& b) { return a.second < b.second; });
+			std::vector<ibMetaID> named;
+			named.reserve(rekey.size() * 2);
+			for (const std::pair<ibMetaID, ibMetaID>& k : rekey) {
+				named.push_back(k.first);
+				named.push_back(k.second);
+			}
+			std::sort(named.begin(), named.end());
 			Row::container_type cells;
 			for (Row& r : src.m_rows)
-				RekeyRow(r, rekey, cells);
+				RekeyRow(r, byNewId, named, cells);
 		}
 		AppendRowsFrom(src);
 	}
@@ -160,47 +183,43 @@ private:
 	// where it stands, so a new key that is another pair's old one can never meet the cell still waiting to
 	// be moved away from it: the named cells under their new ids, then the riders — except where a named
 	// pair claims a rider's id, which it does whether or not it brought a cell (a pair with nothing to
-	// bring states the cell empty; a rider does not answer for it). Sorted once, and a later pair wins a
-	// key two pairs name, as a later insert would have.
+	// bring states the cell empty; a rider does not answer for it). A later pair wins a key two pairs name,
+	// as a later insert would have.
+	// `byNewId` is the list in the order of its new ids and `named` every id it names, sorted (AppendRowsRekeyed);
+	// the row's own cells stand in order already, so the two are MERGED, and every value is moved once.
 	// `cells` is the caller's buffer: the new row is built in it and EXCHANGED with the old one, so the
 	// next row is built in the memory this one gave back — a vector per row, and std::stable_sort's own
 	// buffer per row besides, made the re-keying of 120 thousand rows twice as slow as the tree's node
 	// moves it replaced (2026-09-12, Debug).
-	static void RekeyRow(Row& r, const std::vector<std::pair<ibMetaID, ibMetaID>>& rekey, Row::container_type& cells)
+	static void RekeyRow(Row& r, const std::vector<std::pair<ibMetaID, ibMetaID>>& byNewId,
+	                     const std::vector<ibMetaID>& named, Row::container_type& cells)
 	{
-		if (rekey.empty())
-			return;
-		const auto named = [&rekey](ibMetaID id, bool asSource) {
-			for (const std::pair<ibMetaID, ibMetaID>& k : rekey)
-				if ((asSource ? k.first : k.second) == id)
-					return true;
-			return false;
-		};
 		cells.clear();
-		cells.reserve(r.size() + rekey.size());
-		for (const std::pair<ibMetaID, ibMetaID>& k : rekey)
-			if (ibValue* const v = r.find_value(k.first))
-				cells.emplace_back(k.second, std::move(*v));
-		for (Row::value_type& cell : r)
-			if (!named(cell.first, /*asSource*/ true) && !named(cell.first, /*asSource*/ false))
-				cells.emplace_back(cell.first, std::move(cell.second));
-		// A handful of cells: sorted by insertion, over the array itself (stable — of two pairs naming one
-		// id, the later stays later).
-		Row::value_type* const c = cells.data();
-		const size_t n = cells.size();
-		for (size_t i = 1; i < n; ++i)
-			for (size_t j = i; j > 0 && c[j].first < c[j - 1].first; --j)
-				std::swap(c[j], c[j - 1]);
-		size_t kept = 0;
-		for (size_t i = 0; i < n; ++i) {
-			if (kept > 0 && c[kept - 1].first == c[i].first)
-				c[kept - 1].second = std::move(c[i].second);   // the later pair of two naming one id
-			else if (kept != i)
-				c[kept++] = std::move(c[i]);
-			else
-				++kept;
+		cells.reserve(r.size() + byNewId.size());
+		Row::iterator rider = r.begin();
+		std::vector<ibMetaID>::const_iterator claim = named.begin();
+		size_t k = 0;
+		for (;;) {
+			// The next named cell: of the pairs naming one new id, the last that brings a cell.
+			ibMetaID id = 0;
+			ibValue* brought = nullptr;
+			while (brought == nullptr && k < byNewId.size()) {
+				id = byNewId[k].second;
+				for (; k < byNewId.size() && byNewId[k].second == id; ++k)
+					if (ibValue* const v = r.find_value(byNewId[k].first))
+						brought = v;
+			}
+			// The riders standing before it — every one left, once no named cell is.
+			for (; rider != r.end() && (brought == nullptr || rider->first < id); ++rider) {
+				while (claim != named.end() && *claim < rider->first)
+					++claim;
+				if (claim == named.end() || *claim != rider->first)
+					cells.emplace_back(rider->first, std::move(rider->second));
+			}
+			if (brought == nullptr)
+				break;
+			cells.emplace_back(id, std::move(*brought));
 		}
-		cells.resize(kept);
 		r.swap_sorted(cells);
 	}
 

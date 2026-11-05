@@ -544,7 +544,7 @@ bool ibValueQualifierNumber::Init(ibValue** paParams, const long lSizeArray)
 {
 	const long precision = lSizeArray > 0 ? paParams[0]->GetInteger() : 0;
 	const long scale     = lSizeArray > 1 ? paParams[1]->GetInteger() : 0;
-	if (precision < 0 || precision > 38)
+	if (precision < 0 || precision > ibQualifierNumber::kMaxPrecision)
 		ibBackendCoreException::Error(_("QualifierNumber: the number of digits is from 0 (no limit) to 38, not %d"), (int)precision);
 	if (scale < 0 || (precision > 0 && scale > precision))
 		ibBackendCoreException::Error(_("QualifierNumber: the digits after the point are from 0 to the number of digits, not %d"), (int)scale);
@@ -576,7 +576,7 @@ bool ibValueQualifierString::Init()
 bool ibValueQualifierString::Init(ibValue** paParams, const long lSizeArray)
 {
 	const long length = lSizeArray > 0 ? paParams[0]->GetInteger() : 0;
-	if (length < 0 || length > 65535)
+	if (length < 0 || length > ibQualifierString::kMaxLength)
 		ibBackendCoreException::Error(_("QualifierString: the length is from 0 (no limit) to 65535, not %d"), (int)length);
 	m_qString = ibQualifierString(static_cast<unsigned short>(length),
 		lSizeArray > 1 && !paParams[1]->IsEmpty() ? paParams[1]->ConvertToEnumValue<ibAllowedLength>()

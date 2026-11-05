@@ -472,7 +472,7 @@ private:
 	ibValuePtr<ibValueMetaObjectTotals> m_totalsBalances;
 	ibValuePtr<ibValueMetaObjectTotals> m_totalsTurnovers;
 
-	ibPropertyContainer<>* m_propertyAttributeRecordType = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateSpecialType(ibT("RecordType"), _("Record type"), _("Receipt or expense - whether the movement adds its resources to the balance or takes them away. Only in a register of balances."), g_enumRecordTypeCLSID, false, ibValueEnumAccumulationRegisterRecordType::CreateDefEnumValue()));
+	ibPropertyPredefined<>* m_propertyAttributeRecordType = ibPropertyObject::CreateProperty<ibPropertyPredefined<>>(m_categoryPredefined, ibValueMetaObjectCompositeData::CreateSpecialType(ibT("RecordType"), _("Record type"), _("Receipt or expense - whether the movement adds its resources to the balance or takes them away. Only in a register of balances."), g_enumRecordTypeCLSID, false, ibValueEnumAccumulationRegisterRecordType::CreateDefEnumValue()));
 
 	friend class ibBalanceQueryable;
 	friend class ibTurnoverQueryable;

@@ -324,6 +324,22 @@ ibPredefinedCellDescription Packed(const ibValue& value)
 	return cell;
 }
 
+// A code or a description as the caller said it, read by what the kind says it is (described.m_code, m_description, #646)
+// as a cell is: a number code the number the word reads as, a word it cannot hold refused. Said empty: not declared.
+bool ReadField(const ibMetaData* metaData, const ibPredefinedAttributeDescription& field, const ibDataValue& given,
+	ibPredefinedCellDescription& cell, ibString& refusal)
+{
+	if (given.Kind() == ibDataKind::String && given.AsString().IsEmpty()) {
+		cell = ibPredefinedCellDescription();   // not a number 0: nothing said
+		return true;
+	}
+	ibValue stored;
+	if (!ReadCell(metaData, field, given, stored, refusal))
+		return false;
+	cell = stored.GetType() == ibValueTypes::TYPE_EMPTY ? ibPredefinedCellDescription() : Packed(stored);
+	return true;
+}
+
 // `values` and `lines` as the caller sent them, laid over what the item declares (nothing, for an item being added) by
 // what the kind offers: a value null removes its cell, a section named gets exactly the rows given. Nothing is changed
 // here: the door takes the whole of it or none, so an item is never left half-declared.
@@ -430,9 +446,9 @@ ibDataValue ItemEntry(const ibPredefinedOwner* owner, const ibPredefinedDescript
 	// and named apart, for the same reason a query field keeps them apart.
 	node->SetValue(ibT("name"), item.m_name);
 	if (!item.m_code.IsEmpty())
-		node->SetValue(ibT("code"), item.m_code);
+		node->AddField(ibT("code"), SayCell(owner->GetMetaData(), described.m_code, item.m_code));
 	if (!item.m_description.IsEmpty())
-		node->SetValue(ibT("description"), item.m_description);
+		node->AddField(ibT("description"), SayCell(owner->GetMetaData(), described.m_description, item.m_description));
 
 	if (item.m_folder)
 		node->AddField(ibT("folder"), ibDataValue::Bool(true));
@@ -615,11 +631,8 @@ public:
 			return false;
 		}
 
-		const ibString description = ArgDescription().Text(params);
 		ibPredefinedItemDescription item;
 		item.m_name = name;
-		item.m_code = ArgCode().Text(params);
-		item.m_description = description.IsEmpty() ? name : description;
 		item.m_folder = ArgFolder().Flag(params);
 
 		const ibString parentName = ArgParent().Text(params);
@@ -638,9 +651,14 @@ public:
 			// (AppendPredefinedValue), for this road and the designer's window alike.
 		}
 
-		// Read before anything is added: a word the object cannot take refuses the item whole.
+		// Read before anything is added: a word the object cannot take refuses the item whole. No code: the next one; no
+		// description: its name.
 		const ibPredefinedDescription& described = owner->GetPredefinedDesc();
-		if (!ReadDeclared(owner, described, params, item, refusal))
+		const ibString description = ArgDescription().Text(params);
+		if (!ReadField(owner->GetMetaData(), described.m_code, ibDataValue::String(ArgCode().Text(params)), item.m_code, refusal)
+			|| !ReadField(owner->GetMetaData(), described.m_description, ibDataValue::String(description.IsEmpty() ? name : description),
+				item.m_description, refusal)
+			|| !ReadDeclared(owner, described, params, item, refusal))
 			return false;
 
 		// Its fields and what it declares, through the one door: added whole, or refused and nothing added.
@@ -772,19 +790,22 @@ public:
 
 		// What is not passed stays as it is.
 		ibPredefinedItemDescription changed = *item;
-		if (ArgCode().Given(params))
-			changed.m_code = ArgCode().Text(params);
-		if (ArgDescription().Given(params))
-			changed.m_description = ArgDescription().Text(params);
 		const ibPredefinedDescription& described = owner->GetPredefinedDesc();
+		if (ArgCode().Given(params)
+			&& !ReadField(owner->GetMetaData(), described.m_code, ibDataValue::String(ArgCode().Text(params)), changed.m_code, refusal))
+			return false;
+		if (ArgDescription().Given(params) && !ReadField(owner->GetMetaData(), described.m_description,
+				ibDataValue::String(ArgDescription().Text(params)), changed.m_description, refusal))
+			return false;
 		if (!ReadDeclared(owner, described, params, changed, refusal))
 			return false;
 
-		// The whole of it through the one door, which changes nothing when it refuses.
+		// The whole of it through the one door, which changes nothing when it refuses — and answered as the door kept it.
 		owner->SetPredefinedValue(changed);
 
 		result.AddField(ibT("changed"), ibDataValue::Bool(true));
-		result.AddField(ibT("item"), ItemEntry(owner, described, changed));
+		if (const ibPredefinedItemDescription* const kept = owner->FindPredefinedValue(changed.m_guid))
+			result.AddField(ibT("item"), ItemEntry(owner, described, *kept));
 		return true;
 	}
 };

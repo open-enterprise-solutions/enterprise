@@ -25,7 +25,7 @@
 // reads them; their shape (one column naming a calculation type of the same chart), their storage and
 // their life are identical, which is what a class is for. It began as a class of its own for the
 // displacement relation; the base and the leading relations were the second and third copy of it
-// waiting to be written. The instance is named by the property that holds it (ibPropertyContainer
+// waiting to be written. The instance is named by the property that holds it (ibPropertyPredefined
 // passes its own name down), so `Displacing`, `Base` and `Leading` come from the chart, not from here.
 //
 // DB-BACKED, therefore ibValueMetaObjectTableDataRef and not the shared base — the same reason the
@@ -113,7 +113,7 @@ private:
 	// declare an edge into a different chart. (This note once promised the binding before anything
 	// performed it; an untyped column then stored a type tag and no reference, and the relation read
 	// back empty.)
-	ibPropertyContainer<>* m_propertyCalculationType = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryRelation,
+	ibPropertyPredefined<>* m_propertyCalculationType = ibPropertyObject::CreateProperty<ibPropertyPredefined<>>(m_categoryRelation,
 		ibValueMetaObjectCompositeData::CreateEmptyType(ibT("CalculationType"), _("Calculation type"), _("The type this row names - the one that displaces, feeds the base of, or leads the type owning the row, depending on the section. A type of this chart or of one of its base charts. Required."), /*fillCheck*/ true, ibItemMode::ibItemMode_Item));
 };
 

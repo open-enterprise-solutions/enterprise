@@ -871,7 +871,8 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const ib
 	// Periodised, the period joins the keys in the GROUP BY and becomes the order the running
 	// columns accumulate along. It is projected under the period column's OWN name, so everything
 	// above (the outer bound below, and the caller's own query) names one thing whether the grain is
-	// the surface's or a calendar unit.
+	// the surface's or a calendar unit. By the movement it is each movement's own instant, as stored.
+	const bool movements  = spec.m_grain == ibMaterializeGrain::Movements;
 	const bool periodised = spec.m_grain != ibMaterializeGrain::Whole && !spec.m_periodColumn.IsEmpty();
 	ibQueryExprPtr grain;
 	if (periodised) {
@@ -969,8 +970,16 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const ib
 	// The rows as they stand when the reading was handed them (m_storedRows), the named surface otherwise.
 	const ibString rows = spec.m_rowsAlias.IsEmpty() ? alias + ibT("_rows") : spec.m_rowsAlias;
 
+	// 🛑 STORED ROWS WITHOUT THE MOVEMENTS CANNOT ANSWER BY THE MOVEMENT, nor can a view without its movement arm:
+	// the rows would be read from nowhere, and the reading would report nothing moved.
+	if (movements && (spec.m_storedRows ? !spec.m_movedRows : spec.m_markColumn.IsEmpty()))
+		ibBackendQueryException::Throw(ibBackendQueryException::Kind::UnsupportedNode,
+			_("A reading by the movement was handed a surface without its movements"));
+
 	ibDatabaseQueryBuilder q;
-	if (spec.m_storedRows)
+	if (movements && spec.m_movedRows)
+		q.From(ibSubquery(spec.m_movedRows, rows)).Project(proj);
+	else if (spec.m_storedRows)
 		q.From(ibSubquery(spec.m_storedRows, rows)).Project(proj);
 	else
 		q.From(spec.m_view).Project(proj);
@@ -983,13 +992,45 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const ib
 	if (!anyAggregate && spec.m_from.GetType() == TYPE_DATE && !spec.m_periodColumn.IsEmpty())
 		q.Where(ibBinOp(ibQueryBinOp::Ge, ibCol(spec.m_periodColumn), ibConst(spec.m_from)));
 
+	// ⭐⭐ DOES ANY FIGURE LOOK BEFORE THE LOWER BOUNDARY? A turnover looks only inside the
+	// interval, so everything before its start can be left out of both arms. An opening or a
+	// closing balance — and any running form, which accumulates from the first period — needs
+	// that history, and the arms have to carry it.
+	//
+	// 🛑 They did not. The stored arm began at the head split and the movement arm was bounded
+	// below by the start of the interval, so for an interval starting INSIDE a grain everything
+	// before its start was in neither arm: the opening balance read zero and the closing one
+	// lost every earlier posting. Measured 2026-09-16 against the movements themselves, on a
+	// correspondence ledger read from 14.07 13:00 to 16.09 11:00 — coffee opened at 0 instead of
+	// 45 000 and closed at -41 400 instead of 3 600.
+	bool readsHistory = false;
+	for (const ibMaterializeReadColumn& c : spec.m_columns)
+		if (c.m_when == ibMaterializeWhen::BeforeFrom || c.m_when == ibMaterializeWhen::UpToTo
+		    || c.m_agg == ibMaterializeAgg::RunningSum || c.m_agg == ibMaterializeAgg::RunningSumExcludingCurrent)
+			readsHistory = true;
+
+	// ⭐ BY THE MOVEMENT THERE IS NOTHING TO CUT. Every row is a movement and is counted by itself — the stored rows are
+	// not read at all — so only the boundaries are said: an instant, or an instant AND the document at it, exactly as
+	// the movement half of a cut says them.
+	if (movements) {
+		if (!spec.m_movedRows)
+			q.Where(ibIsNull(ibCol(spec.m_markColumn), /*negated*/ true));   // the view's movement arm
+		if (!spec.m_periodColumn.IsEmpty()) {
+			const ibQueryExprPtr period = ibCol(spec.m_periodColumn);
+			if (spec.m_to.GetType() == TYPE_DATE)
+				q.Where(BoundedByMoment(period, spec.m_to, spec.m_boundaryTail, /*atMost*/ true, spec.m_toExcluding));
+			if (spec.m_from.GetType() == TYPE_DATE && !readsHistory)
+				q.Where(BoundedByMoment(period, spec.m_from, spec.m_boundaryHead, /*atMost*/ false, spec.m_fromExcluding));
+		}
+	}
+
 	// ⭐⭐ THE CUT BETWEEN THE ARMS — the one place this whole arrangement can lie.
 	//
 	// Stored rows are complete up to the grain boundary; movements carry everything after it. Take
 	// stored rows BELOW the floor and movement rows from the floor onward and each movement is
 	// counted exactly once — by the trigger below the line, by itself above it. Drop the floor and
 	// the current grain arrives twice, which reads as a balance that is quietly too large.
-	if (!spec.m_markColumn.IsEmpty() && !spec.m_periodColumn.IsEmpty()) {
+	else if (!spec.m_markColumn.IsEmpty() && !spec.m_periodColumn.IsEmpty()) {
 		const ibQueryExprPtr period    = ibCol(spec.m_periodColumn);
 		const ibQueryExprPtr fromTotal = ibIsNull(ibCol(spec.m_markColumn));
 
@@ -1000,23 +1041,6 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const ib
 			q.Where(fromTotal);
 		}
 		else {
-			// ⭐⭐ DOES ANY FIGURE LOOK BEFORE THE LOWER BOUNDARY? A turnover looks only inside the
-			// interval, so everything before its start can be left out of both arms. An opening or a
-			// closing balance — and any running form, which accumulates from the first period — needs
-			// that history, and the arms have to carry it.
-			//
-			// 🛑 They did not. The stored arm began at the head split and the movement arm was bounded
-			// below by the start of the interval, so for an interval starting INSIDE a grain everything
-			// before its start was in neither arm: the opening balance read zero and the closing one
-			// lost every earlier posting. Measured 2026-09-16 against the movements themselves, on a
-			// correspondence ledger read from 14.07 13:00 to 16.09 11:00 — coffee opened at 0 instead of
-			// 45 000 and closed at -41 400 instead of 3 600.
-			bool readsHistory = false;
-			for (const ibMaterializeReadColumn& c : spec.m_columns)
-				if (c.m_when == ibMaterializeWhen::BeforeFrom || c.m_when == ibMaterializeWhen::UpToTo
-				    || c.m_agg == ibMaterializeAgg::RunningSum || c.m_agg == ibMaterializeAgg::RunningSumExcludingCurrent)
-					readsHistory = true;
-
 			const bool headSplit = spec.m_headSplit.GetType() == TYPE_DATE;
 			const bool headGrain = readsHistory && headSplit && spec.m_headGrain.GetType() == TYPE_DATE;
 			const ibQueryExprPtr inHeadGrain = headGrain

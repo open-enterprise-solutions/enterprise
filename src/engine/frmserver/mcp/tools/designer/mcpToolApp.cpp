@@ -31,9 +31,8 @@
 #include "backend/appData.h"
 #include "backend/debugger/debugClient.h"     // one debug session at a time — the menu's own guard
 #include "backend/metadataConfiguration.h"    // …and the configuration must already be in the base
-#include "core/startProcess.h"                // ibStopProcess — the process asked to close, before it is made to
+#include "core/startProcess.h"                // ibStopProcess, ibKillProcess, ibProcessExists — asked to close, made to, gone
 
-#include <wx/process.h>                       // wxProcess::Exists — has the previous run actually gone
 #include <chrono>
 #include <thread>                             // the wait while it goes
 
@@ -80,6 +79,44 @@ const ibArg& ArgRestart()
 // file base is a lock fight, and the loser is silent), and so every tool whose wait expires can ask
 // whether the application is still there. Zero when this designer has started nothing, which is
 // honest: a run somebody else started is one this cannot watch, and the wait falls back to a fixed one.
+
+// THE RUN THAT IS GOING, ENDED - app_run's restart and app_stop alike. True when there was one to end.
+bool StopStartedApplication()
+{
+	const long lastStarted = ibMcpStartedApplication();
+	bool ended = false;
+
+	// ⭐ THE PLATFORM'S OWN ENDING, asked of every connection rather than of a chosen one — the debugger's Stop:
+	// DetachConnection is a no-op on a connection that is not attached, so the filtering that would otherwise be
+	// written here is already inside it.
+	if (debugClient != nullptr && debugClient->HasConnections()) {
+		debugClient->Stop(/*kill=*/true);
+		ended = true;
+		if (lastStarted == 0)
+			std::this_thread::sleep_for(std::chrono::milliseconds(1000));   // started by somebody else - there is no pid to watch
+	}
+
+	// ⚠ …AND THE PROCESS IS ASKED AS WELL, whatever the debugger was told: a run started without it has no
+	// connection to end (`restart` then started a SECOND application beside the first, 2026-09-10), and one with
+	// it may not have heard or may not go (`endedPrevious` was answered with the old web server alive, and the next
+	// run's commands went to both, 2026-10-30). A run THIS designer started has its pid, so it is asked to close,
+	// and then made to.
+	//
+	// ⚠ AND WAIT FOR IT TO ACTUALLY GO. It unwinds, closes its session and lets go of the base; starting the
+	// replacement before that is two processes on one file base — Firebird gives the second one a lock error
+	// that reads like a corrupt installation.
+	if (lastStarted != 0 && ibProcessExists(lastStarted)) {
+		ibStopProcess(lastStarted);
+		for (int waited = 0; waited < 100 && ibProcessExists(lastStarted); ++waited)
+			std::this_thread::sleep_for(std::chrono::milliseconds(50));
+		if (ibProcessExists(lastStarted))
+			ibKillProcess(lastStarted);
+		for (int waited = 0; waited < 100 && ibProcessExists(lastStarted); ++waited)
+			std::this_thread::sleep_for(std::chrono::milliseconds(50));
+		ended = true;
+	}
+	return ended;
+}
 
 } // namespace
 
@@ -135,7 +172,6 @@ public:
 			withDebug = ArgDebug().Flag(params);
 
 		const bool restart = ArgRestart().Flag(params);
-		const long lastStarted = ibMcpStartedApplication();   // see the note above the namespace's end
 
 		// ⚠ THE CONFIGURATION MUST ALREADY BE IN THE BASE. The application reads the database's
 		// copy, so launching with unapplied changes runs the OLD configuration while the caller
@@ -162,51 +198,18 @@ public:
 
 		// ONE DEBUGGER AT A TIME — the same guard the menu keeps. A second debug launch attaches
 		// nothing and leaves the caller waiting at a breakpoint that will never be hit.
-		bool ended = false;
-		if (debugClient != nullptr && debugClient->HasConnections()) {
-
-			if (!restart && withDebug) {
-				// ⭐ A REFUSAL THAT NAMES THE DOOR. "Let it finish" is advice a tool cannot act on,
-				// and it is not even what the caller wants — they want the new code running.
-				refusal = ibMcpText("A debug session is already running. Pass restart: true to end it "
-					"and come up again with the current configuration - that is what to do after "
-					"changing a module, because a running application keeps the bytecode it "
-					"started with. (debug_sessions reports the address, and debug_attach with "
-					"stop: true ends one without starting anything.)");
-				return false;
-			}
-
-			if (restart) {
-				// ⭐ THE PLATFORM'S OWN ENDING, asked of every connection rather than of a chosen
-				// one — the debugger's Stop: DetachConnection is a no-op on a connection that is not
-				// attached, so the filtering that would otherwise be written here is already inside it.
-				debugClient->Stop(/*kill=*/true);
-
-				ended = true;
-
-				if (lastStarted == 0)
-					std::this_thread::sleep_for(std::chrono::milliseconds(1000));   // started by somebody else - there is no pid to watch
-			}
+		if (debugClient != nullptr && debugClient->HasConnections() && !restart && withDebug) {
+			// ⭐ A REFUSAL THAT NAMES THE DOOR. "Let it finish" is advice a tool cannot act on,
+			// and it is not even what the caller wants — they want the new code running.
+			refusal = ibMcpText("A debug session is already running. Pass restart: true to end it "
+				"and come up again with the current configuration - that is what to do after "
+				"changing a module, because a running application keeps the bytecode it "
+				"started with. (debug_sessions reports the address, and app_stop ends it "
+				"without starting anything.)");
+			return false;
 		}
-		// ⚠ …AND THE PROCESS IS ASKED AS WELL, whatever the debugger was told: a run started without it has no
-		// connection to end (`restart` then started a SECOND application beside the first, 2026-09-10), and one with
-		// it may not have heard or may not go (`endedPrevious` was answered with the old web server alive, and the next
-		// run's commands went to both, 2026-10-30). A run THIS designer started has its pid, so it is asked to close,
-		// and then made to.
-		//
-		// ⚠ AND WAIT FOR IT TO ACTUALLY GO. It unwinds, closes its session and lets go of the base; starting the
-		// replacement before that is two processes on one file base — Firebird gives the second one a lock error
-		// that reads like a corrupt installation.
-		if (restart && lastStarted != 0 && wxProcess::Exists((int)lastStarted)) {
-			ibStopProcess(lastStarted);
-			for (int waited = 0; waited < 100 && wxProcess::Exists((int)lastStarted); ++waited)
-				std::this_thread::sleep_for(std::chrono::milliseconds(50));
-			if (wxProcess::Exists((int)lastStarted))
-				wxProcess::Kill((int)lastStarted, wxSIGKILL, wxKILL_CHILDREN);
-			for (int waited = 0; waited < 100 && wxProcess::Exists((int)lastStarted); ++waited)
-				std::this_thread::sleep_for(std::chrono::milliseconds(50));
-			ended = true;
-		}
+
+		const bool ended = restart && StopStartedApplication();
 
 		const ibString useWeb = application.Lower();
 		const bool manifest = useWeb.IsSameAs(ibT("webserver"));
@@ -241,3 +244,47 @@ public:
 };
 
 MCP_TOOL_REGISTER_DESIGNER(ibMcpToolAppRun);
+
+//---------------------------------------------------------------------------
+// app_stop
+//---------------------------------------------------------------------------
+
+// ⭐ app_run's PAIR (#646). Ending a run was a step of a restart and nothing on its own, so an application stopped at a
+// breakpoint held the base until `debug_run continue` let it go - and config_apply, which needs the base to itself,
+// waited behind it.
+class ibMcpToolAppStop : public ibMcpTool {
+public:
+
+	ibString GetName() const override { return ibT("app_stop"); }
+
+	ibString GetActivity(const ibDataNode&) const override
+	{
+		return ibMcpText("ending the application");
+	}
+
+	ibString GetDescription() const override
+	{
+		return ibMcpText("End the application started from here - the thin client or the web server, with the "
+			"debugger or without it, stopped at a breakpoint or running: what app_run's restart ends before it "
+			"starts again, with nothing started after. Use it before config_apply, which needs the base to itself.");
+	}
+
+	const std::vector<ibMcpArgument>& Arguments() const override
+	{
+		static const std::vector<ibMcpArgument> s_arguments;
+		return s_arguments;
+	}
+
+	bool Call(const ibDataNode&, ibDataNode& result, ibString& refusal) const override
+	{
+		if (!StopStartedApplication()) {
+			refusal = ibMcpText("Nothing started from here is running, and no debug session is attached. An "
+				"application somebody else started is theirs to close; session_list shows its session.");
+			return false;
+		}
+		result.AddField(ibT("ended"), ibDataValue::Bool(true));
+		return true;
+	}
+};
+
+MCP_TOOL_REGISTER_DESIGNER(ibMcpToolAppStop);

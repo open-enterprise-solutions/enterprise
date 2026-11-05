@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <fstream>
+#include <functional>
 #include <map>
 #include <set>
 #include <string>
@@ -102,6 +103,19 @@ struct Movement {
 	bool receipt = false;
 	ibString qty;
 	bool active = true;
+};
+
+// What the lowering folds a projection through (ProjectionHandle, queryLowering.cpp): a column named by the
+// projection in the statement's spelling, with an id of its own.
+class ProjectionHandle : public ibBackendColumnRawDB {
+public:
+	ProjectionHandle(const ibString& alias, ibMetaID id)
+		: ibBackendColumnRawDB(ibSqlAliasOf(alias), RawType::Number), m_id(SyntheticId(SyntheticKind::Output, id)) {}
+
+	ibMetaID GetColumnId() const override { return m_id; }
+
+private:
+	ibMetaID m_id;
 };
 
 struct AcceptanceAccumulation : ::testing::Test {
@@ -589,6 +603,229 @@ TEST_F(AcceptanceAccumulation, DayAndMonthReadingsSpanMarchIntoApril)
 		ExpectNear(receipt, AsWx(question["receipt"]), unit + wxT(" receipt"));
 		ExpectNear(expense, AsWx(question["expense"]), unit + wxT(" expense"));
 	}
+}
+
+// ⭐ BY THE RECORDER THE SERVER ANSWERS WHAT THE RAM ROAD ANSWERS (#646). The turnovers and the balance-and-turnovers
+// by Recorder or Record were computed in memory only; they now stand on the totals — a row per movement, each opening
+// where the one before it closed, a key carried in and untouched at the interval's beginning — and the RAM road, which
+// reads the movements themselves, is their oracle. From the 1st, with the line out of force inside the interval (it
+// moved nothing on either road — the RAM one counted it, ibRegWhereActive), and from the 2nd, so what the 1st left is
+// carried in.
+TEST_F(AcceptanceAccumulation, ByTheRecorderTheServerAnswersAsTheRamRoad)
+{
+	if (!ready) return;
+	PostOpening();
+	const ibValue to(ibDateTime(2026, 4, 30, 23, 59, 59));
+
+	// A row: its key as text, its figures as numbers. The two roads answer in orders of their own, so each list is
+	// sorted before they are compared.
+	struct Row {
+		ibString key;
+		std::vector<ibNumber> figures;
+	};
+	const auto sorted = [](std::vector<Row> rows) {
+		std::sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) {
+			if (a.key != b.key)
+				return a.key < b.key;
+			for (size_t i = 0; i < a.figures.size() && i < b.figures.size(); ++i)
+				if (const int c = a.figures[i].Compare(b.figures[i]); c != 0)
+					return c < 0;
+			return false;
+		});
+		return rows;
+	};
+	const auto served = [&](const ibBackendQueryable& view, const std::vector<ibString>& keys, const std::vector<ibString>& figures) {
+		std::vector<const ibBackendQueryColumn*> keyCols, figureCols;
+		for (const ibString& name : keys)
+			keyCols.push_back(MustColumn(&view, name));
+		for (const ibString& name : figures)
+			figureCols.push_back(MustColumn(&view, name));
+		ibDataQueryBuilder q(ibConnectionPool::ThreadHolder());
+		q.From(&view);
+		unsigned n = 0;
+		for (const ibBackendQueryColumn* column : keyCols)
+			if (column != nullptr) q.Select(column, ibString::Format(wxT("k%u"), n++));
+		for (const ibBackendQueryColumn* column : figureCols)
+			if (column != nullptr) q.Select(column, ibString::Format(wxT("f%u"), n++));
+		std::vector<Row> rows;
+		ibDataQueryResult got = q.Execute(ibReadPageRequest{});
+		while (got.Next()) {
+			Row row;
+			for (const ibBackendQueryColumn* column : keyCols)
+				row.key << (column != nullptr ? got.GetValue(column).GetString() : ibString()) << wxT("|");
+			for (const ibBackendQueryColumn* column : figureCols)
+				row.figures.push_back(column != nullptr ? got.GetValue(column).GetNumber() : ibNumber());
+			rows.push_back(std::move(row));
+		}
+		return sorted(std::move(rows));
+	};
+	const auto computed = [&](const ibQueryRamTable& table, const std::vector<ibString>& keys, const std::vector<ibString>& figures) {
+		std::vector<Row> rows;
+		for (long r = 0; r < table.RowCount(); ++r) {
+			Row row;
+			for (const ibString& name : keys)
+				row.key << table.GetCell(r, table.ColumnIdByName(name)).GetString() << wxT("|");
+			for (const ibString& name : figures)
+				row.figures.push_back(table.GetCell(r, table.ColumnIdByName(name)).GetNumber());
+			rows.push_back(std::move(row));
+		}
+		return sorted(std::move(rows));
+	};
+	const auto expectSame = [](const std::vector<Row>& server, const std::vector<Row>& ram, const ibString& what) {
+		ASSERT_EQ(server.size(), ram.size()) << what;
+		for (size_t i = 0; i < server.size(); ++i) {
+			EXPECT_EQ(server[i].key, ram[i].key) << what << " row " << i;
+			for (size_t f = 0; f < server[i].figures.size() && f < ram[i].figures.size(); ++f)
+				EXPECT_EQ(0, server[i].figures[f].Compare(ram[i].figures[f]))
+					<< what << " " << server[i].key << " figure " << f << ": server " << server[i].figures[f].ToString()
+					<< ", RAM " << ram[i].figures[f].ToString();
+		}
+	};
+
+	for (const ibValue& from : { ibValue(ibDateTime(2026, 3, 1)), ibValue(ibDateTime(2026, 3, 2)) })
+	for (const ibRegGranularity kind : { ibRegGranularity::Recorder, ibRegGranularity::Record }) {
+		ibRegFold fold;
+		fold.m_kind = kind;
+		std::vector<ibString> keys = { wxT("Warehouse"), wxT("Item"), reg->GetRegisterPeriod()->GetName() };
+		if (fold.HasLineNumber())
+			keys.push_back(reg->GetRegisterLineNumber()->GetName());
+		const ibString what = (kind == ibRegGranularity::Record ? ibString(wxT("Record")) : ibString(wxT("Recorder")))
+			+ wxT(" from ") + from.GetString();
+
+		ibTurnoverQueryable turnovers(reg, from, to, nullptr, fold);
+		if (turnovers.IsComputedInRam())
+			GTEST_SKIP() << "no totals on this driver - both roads are the RAM one";
+		const std::vector<ibString> moved = { wxT("QuantityReceipt"), wxT("QuantityExpense"), wxT("QuantityTurnover") };
+		expectSame(served(turnovers, keys, moved), computed(reg->ComputeTurnover(from, to, nullptr, fold), keys, moved),
+			what + wxT(" turnovers"));
+
+		ibBalanceAndTurnoverQueryable both(reg, from, to, fold);
+		const std::vector<ibString> run = { wxT("QuantityOpeningBalance"), wxT("QuantityReceipt"), wxT("QuantityExpense"),
+			wxT("QuantityClosingBalance") };
+		expectSame(served(both, keys, run), computed(reg->ComputeBalanceAndTurnover(from, to, fold, nullptr), keys, run),
+			what + wxT(" balance and turnovers"));
+	}
+}
+
+// ⭐ A LADDER OF TOTALS IS FOLDED BY THE SERVER AS IN MEMORY (2026-11-05). SQLite has no ROLLUP, so two levels read
+// every movement into memory to make their headings; one GROUP BY over both levels' fields now returns the items under
+// each warehouse, and the warehouses and the grand total add up from them. Ordered by the figure, each level stands in
+// the order the rows read by it meet its groups — by the largest movement under each, the largest first: the kitchen
+// before the bar, which the alphabet would not put there. The oracle is the movements read plainly and added up here.
+TEST_F(AcceptanceAccumulation, ALadderOfTotalsIsFoldedByTheServerAsInMemory)
+{
+	if (!ready) return;
+	PostOpening();
+	const ibBackendQueryColumn* const whCol   = warehouse->GetQueryColumn();
+	const ibBackendQueryColumn* const itemCol = item->GetQueryColumn();
+	const ibBackendQueryColumn* const qtyCol  = reg->GetResourceArrayObject().front()->GetQueryColumn();
+
+	struct Figures { ibNumber sum; ibNumber largest; bool seen = false; };
+	std::map<ibString, Figures> byWarehouse;
+	std::map<std::pair<ibString, ibString>, Figures> byItem;
+	ibNumber total;
+	{
+		ibDataQueryBuilder rows(ibConnectionPool::ThreadHolder());
+		rows.From(reg->GetQueryable());
+		rows.Select(whCol, wxT("wh"));
+		rows.Select(itemCol, wxT("item"));
+		rows.Select(qtyCol, wxT("qty"));
+		const auto add = [](Figures& figures, const ibNumber& qty) {
+			figures.sum = figures.sum + qty;
+			if (!figures.seen || qty.Compare(figures.largest) > 0)
+				figures.largest = qty;
+			figures.seen = true;
+		};
+		ibDataQueryResult read = rows.Execute(ibReadPageRequest{});
+		while (read.Next()) {
+			const ibString wh = read.GetValue(whCol).GetString();
+			const ibNumber qty = read.GetValue(qtyCol).GetNumber();
+			add(byWarehouse[wh], qty);
+			add(byItem[{ wh, read.GetValue(itemCol).GetString() }], qty);
+			total = total + qty;
+		}
+	}
+	ASSERT_GT(byItem.size(), byWarehouse.size()) << "a warehouse holds several items";
+
+	ibDataQueryBuilder q(ibConnectionPool::ThreadHolder());
+	q.From(reg->GetQueryable());
+	q.TotalBy(whCol, ibDimensionKind::Elements);
+	q.TotalBy(itemCol, ibDimensionKind::Elements);
+	q.Totals().Sum(qtyCol, wxT("Qty"));   // named, as the lowering names it: the server's answer is read back by the name
+	q.OrderBy(qtyCol, /*ascending*/ false);
+	ibDataQueryResult pushed = ibMakeEmptyQueryResult(nullptr);
+	ASSERT_TRUE(q.TryTotalsPushdown(pushed)) << "two levels of sums are folded by the server, ROLLUP or not";
+
+	const ibSelectorTree tree = q.SelectTotals();
+	const ibSelectorTree::Node& root = tree.Root();
+	EXPECT_EQ(0, root.m_values.at(qtyCol->GetColumnId()).GetNumber().Compare(total)) << "the grand total";
+	ASSERT_EQ(root.m_children.size(), byWarehouse.size());
+	const ibNumber* whBefore = nullptr;
+	for (const std::unique_ptr<ibSelectorTree::Node>& w : root.m_children) {
+		const ibString wh = w->m_values.at(whCol->GetColumnId()).GetString();
+		const auto at = byWarehouse.find(wh);
+		ASSERT_NE(at, byWarehouse.end()) << wh;
+		EXPECT_EQ(0, w->m_values.at(qtyCol->GetColumnId()).GetNumber().Compare(at->second.sum)) << wh;
+		if (whBefore != nullptr)
+			EXPECT_LE(at->second.largest.Compare(*whBefore), 0) << wh << " stands after a warehouse whose largest movement is smaller";
+		whBefore = &at->second.largest;
+		EXPECT_TRUE(w->m_hasChildren) << wh;
+
+		size_t items = 0;
+		const ibNumber* itemBefore = nullptr;
+		for (const std::unique_ptr<ibSelectorTree::Node>& i : w->m_children) {
+			const ibString code = i->m_values.at(itemCol->GetColumnId()).GetString();
+			const auto found = byItem.find({ wh, code });
+			ASSERT_NE(found, byItem.end()) << wh << "/" << code;
+			EXPECT_EQ(0, i->m_values.at(qtyCol->GetColumnId()).GetNumber().Compare(found->second.sum)) << wh << "/" << code;
+			if (itemBefore != nullptr)
+				EXPECT_LE(found->second.largest.Compare(*itemBefore), 0) << wh << "/" << code << " stands after a smaller one";
+			itemBefore = &found->second.largest;
+			++items;
+		}
+		EXPECT_EQ(items, static_cast<size_t>(std::count_if(byItem.begin(), byItem.end(),
+			[&](const auto& kv) { return kv.first.first == wh; }))) << wh;
+	}
+	EXPECT_EQ(root.m_children.front()->m_values.at(whCol->GetColumnId()).GetString(), ibString(wxT("kitchen")))
+		<< "the kitchen moved the most at once";
+}
+
+// ⭐ A FIGURE OVER A PROJECTION IS FOLDED BY THE SERVER TOO (2026-11-05). A second fold over one column, a computed
+// field: the lowering projects each and folds it through a handle named by the projection. The ladder aggregated that
+// name over the bare source, and Firebird answered "Column unknown"; the source is now read with the projection beside
+// its row. Twice the quantity, at every heading, is twice the quantity's figure.
+TEST_F(AcceptanceAccumulation, AFigureOverAProjectionIsFoldedByTheServer)
+{
+	if (!ready) return;
+	PostOpening();
+	const ibBackendQueryColumn* const whCol   = warehouse->GetQueryColumn();
+	const ibBackendQueryColumn* const itemCol = item->GetQueryColumn();
+	const ibBackendQueryColumn* const qtyCol  = reg->GetResourceArrayObject().front()->GetQueryColumn();
+	const ProjectionHandle twice(wxT("Twice"), 1);
+
+	ibDataQueryBuilder q(ibConnectionPool::ThreadHolder());
+	q.From(reg->GetQueryable());
+	q.SelectExpr(ibQueryColumnExpr::Arith(ibQueryColumnArithOp::Mul, ibQueryColumnExpr::Col(qtyCol),
+	                                      ibQueryColumnExpr::Const(ibValue(ibNumber(2)))), wxT("Twice"));
+	q.TotalBy(whCol, ibDimensionKind::Elements);
+	q.TotalBy(itemCol, ibDimensionKind::Elements);
+	q.Totals().Sum(qtyCol, wxT("Qty"));
+	q.Totals().Sum(&twice, wxT("TwiceQty"));
+	ibDataQueryResult pushed = ibMakeEmptyQueryResult(nullptr);
+	ASSERT_TRUE(q.TryTotalsPushdown(pushed)) << "a figure over a projection of the source's row is the server's";
+
+	const ibSelectorTree tree = q.SelectTotals();
+	size_t headings = 0;
+	const std::function<void(const ibSelectorTree::Node&)> check = [&](const ibSelectorTree::Node& node) {
+		const ibNumber qty = node.m_values.at(qtyCol->GetColumnId()).GetNumber();
+		EXPECT_EQ(0, node.m_values.at(twice.GetColumnId()).GetNumber().Compare(qty * ibNumber(2))) << "level " << node.m_level;
+		++headings;
+		for (const std::unique_ptr<ibSelectorTree::Node>& child : node.m_children)
+			check(*child);
+	};
+	check(tree.Root());
+	EXPECT_NE(0, tree.Root().m_values.at(qtyCol->GetColumnId()).GetNumber().Compare(ibNumber(0))) << "the movements were read";
+	EXPECT_GT(headings, 3u) << "the grand total, the warehouses and their items";
 }
 
 TEST_F(AcceptanceAccumulation, RepostingAndUnpostingChangeTheBalance)

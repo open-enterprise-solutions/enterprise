@@ -417,6 +417,21 @@ TEST(NumberCompare, ZeroEqualsNegZero) {
     EXPECT_EQ(ibNumber(0), ibNumber(ibString(wxT("-0"))));
 }
 
+// Two amounts with cents are compared aligned, without the heap tier (#646): the answer is the one the heap
+// tier gave, whatever the decimal places on either side.
+TEST(NumberCompare, DecimalsOfDifferentPlaces) {
+    const ibNumber a(ibString(wxT("1.5"))), b(ibString(wxT("1.25"))), c(ibString(wxT("-0.1"))), d(ibString(wxT("0.05")));
+    EXPECT_FALSE(a.IsHeap());
+    EXPECT_FALSE(b.IsHeap());
+    EXPECT_GT(a, b);
+    EXPECT_LT(b, a);
+    EXPECT_LT(c, d);
+    EXPECT_GT(d, c);
+    EXPECT_EQ(ibNumber(ibString(wxT("2.50"))), ibNumber(ibString(wxT("2.5"))));
+    EXPECT_LT(ibNumber(ibString(wxT("123456.78"))), ibNumber(123457));
+    EXPECT_GT(ibNumber(ibString(wxT("-0.001"))), ibNumber(-1));
+}
+
 // ===========================================================================
 // Rounding
 // ===========================================================================
@@ -687,6 +702,26 @@ TEST(Number128, ThirtyDigitNegativeRoundTrip) {
     ibNumber b;
     b.From128Bytes(buf);
     EXPECT_EQ(b, a);
+}
+
+// What fits 64 bits is read the 64-bit way (#646) — up to either border and not one past it, and into a number
+// that held a big value before, which lets that one go.
+TEST(Number128, SixtyFourBitsAndTheirBorders) {
+    const wxChar* const values[] = { wxT("12345"), wxT("-12345"), wxT("9223372036854775807"), wxT("-9223372036854775808"),
+                                     wxT("9223372036854775808"), wxT("-9223372036854775809") };
+    for (const wxChar* const text : values) {
+        const ibNumber a{ ibString(text) };
+        uint8_t buf[16];
+        a.To128Bytes(buf);
+        ibNumber b(ibString(wxT("123456789012345678901234567890")));
+        b.From128Bytes(buf);
+        EXPECT_EQ(b, a) << text;
+    }
+    uint8_t buf[16];
+    ibNumber(12345).To128Bytes(buf);
+    ibNumber small;
+    small.From128Bytes(buf);
+    EXPECT_FALSE(small.IsHeap());
 }
 
 // ===========================================================================

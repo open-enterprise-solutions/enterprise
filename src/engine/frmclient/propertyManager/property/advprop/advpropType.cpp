@@ -28,11 +28,19 @@ ibTypeDescription ReadType(const wxVariant& value)
 	return typeDesc;
 }
 
-// …and the value of another one: the same property's, read as the names of its types.
+// …and the value of another one: the same property's, read as the names of its types. Written OVER the node it came
+// in, not into a new one: the holder of an attribute (ibPropertyPredefinedType) hands over the attribute's whole node with
+// the type in it, and takes the same shape back; a type property's node is the type alone.
 wxVariant WriteType(const wxVariant& value, const ibTypeDescription& typeDesc)
 {
-	ibDataValue node;
-	ibTypeDescriptionMemory::WriteNode(node, typeDesc);
+	ibDataValue type;
+	ibTypeDescriptionMemory::WriteNode(type, typeDesc);
+	const std::optional<ibDataNode> held = ibVariantDataSerializable::GetNodeValue(value).AsChild();
+	auto written = std::make_shared<ibDataNode>(held ? *held : ibDataNode());
+	if (const std::optional<ibDataNode> fields = type.AsChild())
+		for (const auto& field : fields->Fields())
+			written->SetField(field.first, field.second);
+	const ibDataValue node = ibDataValue::Child(written);
 	wxString names;
 	for (const ibClassID clsid : typeDesc.GetClsidList()) {
 		const ibCtorAbstractType* const typeCtor = ibValue::GetAvailableCtor(clsid);
@@ -52,14 +60,18 @@ public:
 	{
 		// ibPropertyType — the type description as the server stores it (ibTypeDescriptionMemory); what it may hold is the
 		// row's offer (GetValueList: each type's class id, in the server's order; several at once unless a table's shape).
-		ibPropertyRegistry::Register(wxT("ibPropertyType"), [](ibBackendProperty* property) -> wxPGProperty* {
+		const auto editor = [](ibBackendProperty* property) -> wxPGProperty* {
 			ibPropertyChoiceList offered;
 			const bool multiple = property->GetValueList(offered) == ibPropertyChoiceMode::Mult;
 			std::vector<ibClassID> listType;
 			for (unsigned int idx = 0; idx < offered.GetCount(); idx++)
 				listType.push_back(offered.GetValue(idx).GetULongLong().GetValue());
 			return new ibPGTypeProperty(listType, multiple, property->GetLabel(), property->GetName(), property->GetValue());
-		});
+		};
+		ibPropertyRegistry::Register(wxT("ibPropertyType"), editor);
+		// …and the holder of an attribute whose type is chosen - a code, a description, a number: the same editor, over
+		// the attribute's node (WriteType).
+		ibPropertyRegistry::Register(wxT("ibPropertyPredefinedType"), editor);
 	}
 }g_typeLoader;
 

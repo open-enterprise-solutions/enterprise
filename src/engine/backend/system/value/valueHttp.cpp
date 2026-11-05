@@ -200,9 +200,9 @@ void ibValueHttpRequest_BindNames(ibValue::ibMemberTable& helper, const ibValue*
 	helper.AppendProp(ibT("ResourceAddress"), true, true, wxNOT_FOUND);
 	helper.AppendProp(ibT("Headers"), true, true, wxNOT_FOUND);
 
-	helper.AppendFunc(ibT("SetBodyFromString"), 2, ibT("SetBodyFromString(text : string, encoding : TextEncoding = UTF8)"));
+	helper.AppendFunc(ibT("SetBodyFromString"), 2, ibT("SetBodyFromString(text : string, encoding : TextEncoding | string = UTF8)"));
 	helper.AppendFunc(ibT("SetBodyFromBinaryData"), 1, ibT("SetBodyFromBinaryData(data : binaryData)"));
-	helper.AppendFunc(ibT("GetBodyAsString"), 1, ibT("GetBodyAsString(encoding : TextEncoding = UTF8)"));
+	helper.AppendFunc(ibT("GetBodyAsString"), 1, ibT("GetBodyAsString(encoding : TextEncoding | string = UTF8)"));
 	helper.AppendFunc(ibT("GetBodyAsBinaryData"), ibT("GetBodyAsBinaryData()"));
 }
 
@@ -319,7 +319,7 @@ void ibValueHttpResponse_BindNames(ibValue::ibMemberTable& helper, const ibValue
 	helper.AppendProp(ibT("StatusCode"), true, false, wxNOT_FOUND);
 	helper.AppendProp(ibT("Headers"), true, false, wxNOT_FOUND);
 
-	helper.AppendFunc(ibT("GetBodyAsString"), 1, ibT("GetBodyAsString(encoding : TextEncoding = UTF8)"));
+	helper.AppendFunc(ibT("GetBodyAsString"), 1, ibT("GetBodyAsString(encoding : TextEncoding | string = UTF8)"));
 	helper.AppendFunc(ibT("GetBodyAsBinaryData"), ibT("GetBodyAsBinaryData()"));
 }
 

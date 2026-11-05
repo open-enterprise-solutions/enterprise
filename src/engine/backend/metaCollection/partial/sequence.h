@@ -355,8 +355,8 @@ private:
 		_("Code of the sequence as a whole rather than of one set: its exported procedures and functions are called on "
 		  "the manager, as Sequences.<Name>.<Function>() - beside GetBorder and SetBorder."));
 
-	ibPropertyContainer<>* m_propertyAttributePointInTime = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(
-		m_categoryCommon, ibValueMetaObjectCompositeData::CreateSpecialType(ibT("PointInTime"), _("Point in time"),
+	ibPropertyPredefined<>* m_propertyAttributePointInTime = ibPropertyObject::CreateProperty<ibPropertyPredefined<>>(
+		m_categoryPredefined, ibValueMetaObjectCompositeData::CreateSpecialType(ibT("PointInTime"), _("Point in time"),
 			_("The registration's moment: the period it carries together with the document that registered it, so two "
 			  "registrations of one period are still ordered. Not stored - built from the two; a border is compared and "
 			  "sorted by it."), value_to_clsid(ibT("PointInTime"))));

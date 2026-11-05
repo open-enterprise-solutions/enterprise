@@ -32,13 +32,17 @@ enum ibRoundMode
 
 // How the TEXT of a file is spelled in bytes - what a TextReader decodes by and a TextWriter encodes by.
 // ANSI and OEM are the two code pages Windows keeps per system; elsewhere both mean the locale's own.
+// Windows1251 and Cp866 are pages a script NAMES ("windows-1251", "cp866") and the enumeration TextEncoding
+// does not list: read by the fixed table of ibXmlCodePage (core/xml/xmlText.h), the same on every machine.
 enum ibTextEncoding
 {
 	ibTextEncoding_UTF8 = 1,
 	ibTextEncoding_UTF16,
 	ibTextEncoding_ANSI,
 	ibTextEncoding_OEM,
-	ibTextEncoding_System
+	ibTextEncoding_System,
+	ibTextEncoding_Windows1251,
+	ibTextEncoding_Cp866
 };
 
 // What a DataHashing computes - the digest function, said with a member. MD5 and SHA1 are there for the other

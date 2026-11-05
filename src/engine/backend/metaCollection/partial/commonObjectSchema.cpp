@@ -269,6 +269,48 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 		return passed;
 	};
 
+	// ⭐ …AND A CODE AND A DESCRIPTION ARE NOT NARROWED (#646): no shorter, no fewer digits, a code not turned from a string
+	// into a number or back. Compared with what the APPLIED configuration declared (`baseline`), never with the rows: the
+	// schema is what the base is built from, and rows a change would cut are the rehearsal's to meet (Max, 2026-11-04). A
+	// table new to the applied configuration has nothing to narrow.
+	t.m_beforeChange += [this](const ibSchemaTable* baseline, ibRestructureInfo* report) -> bool {
+		if (baseline == nullptr)
+			return true;
+		// A length or a count of digits of 0 holds anything.
+		const auto narrower = [](unsigned was, unsigned now) { return now != 0 && (was == 0 || now < was); };
+		bool passed = true;
+		for (const ibValueMetaObjectAttributeBase* attribute : { GetDataCode(), GetDataDescription() }) {
+			const ibBackendQueryColumn* const column = attribute->GetQueryColumn();
+			const auto applied = std::find_if(baseline->m_columns.begin(), baseline->m_columns.end(),
+				[column](const ibSchemaColumn& c) { return c.m_id == column->GetColumnId() && c.m_column != nullptr; });
+			if (applied == baseline->m_columns.end())
+				continue;
+			const ibTypeDescription& was = applied->m_column->GetTypeDesc();
+			const ibTypeDescription& now = column->GetTypeDesc();
+			const bool number = now.ContainType(ibValueTypes::TYPE_NUMBER);
+			const unsigned before = number ? was.GetPrecision() : was.GetLength();   // a number's digits, a string's length
+			const unsigned after  = number ? now.GetPrecision() : now.GetLength();
+			ibString refusal;
+			if (number != was.ContainType(ibValueTypes::TYPE_NUMBER))
+				refusal = ibString::Format(_("%s: the %s cannot change between a string and a number"), GetName(), attribute->GetSynonym());
+			else if (narrower(before, after))
+				refusal = ibString::Format(_("%s: the %s cannot be shorter than it was (%u, now %u)"), GetName(), attribute->GetSynonym(),
+					before, after);
+			if (refusal.IsEmpty())
+				continue;
+			if (report != nullptr)
+				report->AppendError(refusal);
+			passed = false;
+		}
+		return passed;
+	};
+
+	// A code and a description as their field holds them (#646): a value of its type — the door made it one, and one kept
+	// from before or under a type since changed is made one here.
+	const auto held = [this](const ibValueMetaObjectAttributeBase* attribute, const ibPredefinedCellDescription& declared) {
+		return attribute->AdjustValue(declared.IsEmpty() ? ibValue() : ibDeserializeValue(declared.m_value, m_metaData));
+	};
+
 	// (No rule on retiring Parent / IsFolder any more, 2026-10-05: a hierarchy switched off takes those
 	//  columns the way deleting any attribute takes its own — the list stops declaring them, the differ
 	//  drops them and the apply ledger says "Remove …". The rule that refused it kept its own idea of which
@@ -291,8 +333,8 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 				ibValuePtr<ibValueReferenceDataObject>(
 					ibValueReferenceDataObject::Create(this, object.m_guid, ibReferenceLoad::OnDemand)))
 			.Set(m_propertyAttributePredefined->GetMetaObject()->GetQueryColumn(), ibValue(object.m_name))
-			.Set(m_propertyAttributeCode->GetMetaObject()->GetQueryColumn(), ibValue(object.m_code))
-			.Set(m_propertyAttributeDescription->GetMetaObject()->GetQueryColumn(), ibValue(object.m_description))
+			.Set(m_propertyAttributeCode->GetMetaObject()->GetQueryColumn(), held(m_propertyAttributeCode->GetMetaObject(), object.m_code))
+			.Set(m_propertyAttributeDescription->GetMetaObject()->GetQueryColumn(), held(m_propertyAttributeDescription->GetMetaObject(), object.m_description))
 			.Set(m_propertyAttributeIsFolder->GetMetaObject()->GetQueryColumn(), ibValue(object.m_folder))
 			.Set(m_propertyAttributeDeletionMark->GetMetaObject()->GetQueryColumn(), ibValue(false))
 			.Set(m_propertyAttributeParent->GetMetaObject()->GetQueryColumn(),

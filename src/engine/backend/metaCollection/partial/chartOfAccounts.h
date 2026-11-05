@@ -324,7 +324,7 @@ private:
 
 	ibPropertyCategory* m_categoryAccounting = ibPropertyObject::CreatePropertyCategory(ibT("Accounting"), _("Accounting"));
 
-	ibPropertyContainer<>* m_propertyAttributeAccountType = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryAccounting,
+	ibPropertyPredefined<>* m_propertyAttributeAccountType = ibPropertyObject::CreateProperty<ibPropertyPredefined<>>(m_categoryAccounting,
 		// Folder_Item like its neighbours: a folder in a chart of accounts is an account that has
 		// children, so it has a side of its own. Leaving it Item-only was an asymmetry against
 		// OffBalance / Quantitative / Currency, which are all declared for both.
@@ -338,7 +338,7 @@ private:
 		// required in the form, and a rule of ours would be a second answer to the same question.
 		ibValueMetaObjectCompositeData::CreateSpecialType(ibT("AccountType"), _("Account type"), _("The account's side: Active (its balance is a debit), Passive (a credit) or Active/Passive (either, shown as it falls). Required - every posting asks which side an amount moves, and an account without a side takes none."), g_enumAccountTypeCLSID, /*fillCheck*/ true, ibValueEnumAccountType::CreateDefEnumValue(), ibItemMode::ibItemMode_Folder_Item));
 
-	ibPropertyContainer<>* m_propertyAttributeOffBalance = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryAccounting,
+	ibPropertyPredefined<>* m_propertyAttributeOffBalance = ibPropertyObject::CreateProperty<ibPropertyPredefined<>>(m_categoryAccounting,
 		ibValueMetaObjectCompositeData::CreateBoolean(ibT("OffBalance"), _("Off-balance"), _("An off-balance account is a separate circuit outside the double entry: a posting may name it on one side only, with no correspondent account, and its figures are not summed into the balance that debits and credits must agree on."), ibItemMode::ibItemMode_Folder_Item));
 
 	// (QUANTITATIVE AND CURRENCY WERE DECLARED HERE, as two boolean fields the engine handed every
@@ -370,9 +370,9 @@ private:
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Predefined tabular section "AccountDimensionKinds" — own meta class with predefined columns
-	// Created manually because ibPropertyContainer template can't pass args to non-default constructor via wxClassInfo
-	ibPropertyContainer<ibValueMetaObjectAccountDimensionKindsTable>* m_propertyAccountDimensionKindsTable =
-		ibPropertyObject::CreateProperty<ibPropertyContainer<ibValueMetaObjectAccountDimensionKindsTable>>(m_categoryAccounting, ibT("AccountDimensionKinds"), _("Account dimension kinds"), _("Each account's analytics: the dimension kinds it is kept by, one row per slot in order - row N fills the register's dimension N. A row may say Summary only: turnovers are kept by that kind, balances are not broken down by it."));
+	// Created manually because ibPropertyPredefined template can't pass args to non-default constructor via wxClassInfo
+	ibPropertyPredefined<ibValueMetaObjectAccountDimensionKindsTable>* m_propertyAccountDimensionKindsTable =
+		ibPropertyObject::CreateProperty<ibPropertyPredefined<ibValueMetaObjectAccountDimensionKindsTable>>(m_categoryAccounting, ibT("AccountDimensionKinds"), _("Account dimension kinds"), _("Each account's analytics: the dimension kinds it is kept by, one row per slot in order - row N fills the register's dimension N. A row may say Summary only: turnovers are kept by that kind, balances are not broken down by it."));
 
 	// The kinds section unfolded — one attribute per position, count declared by MaxAccountDimensionCount.
 	// Created by SyncAccountDimensionKindColumns and never destroyed: lowering the ceiling deactivates

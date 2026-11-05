@@ -233,3 +233,55 @@ TEST_F(CommonModuleCheck, AGlobalModuleIsReadWithTheTextThatBindsIt)
 	ASSERT_FALSE(removed.m_diagnostics.empty());
 	EXPECT_TRUE(removed.m_diagnostics.front().m_message.Contains(wxT("GlobalDouble")));
 }
+
+// A method the manager does not have is the check's to say, not the run's (#646): `Catalogs.Products.CreateElement()`
+// compiled, and failed only when it ran, with "Aggregate object field not found".
+TEST_F(CommonModuleCheck, AMethodTheManagerDoesNotHaveIsReported)
+{
+	CodeStyleRestore style;
+	ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry();
+	ASSERT_NE(registry, nullptr);
+	ibSessionHolder holder = registry->MintUnlisted(
+		std::make_shared<ibSession>(wxT("method-call-check"), ibSessionKind::Designer));
+	ibSession* const session = holder.Get();
+	ASSERT_NE(session, nullptr);
+	ibSessionScope scope(session);
+
+	registry->NotifyAuthenticated(session);
+	struct Leave {
+		ibSessionRegistry* m_registry;
+		ibSession* m_session;
+		~Leave() { m_registry->NotifyDisconnect(m_session); }
+	} leave{ registry, session };
+
+	ibMetaDataConfigurationBase* cfg = session->GetMetaData();
+	ASSERT_NE(cfg, nullptr);
+	if (cfg->IsConfigOpen()) {
+		ASSERT_TRUE(cfg->CloseDatabase(ibRuntimeRequest(forceCloseFlag)));
+	}
+
+	ibValueMetaObjectConfiguration* root = cfg->GetCommonMetaObject();
+	ASSERT_NE(root, nullptr);
+
+	ibValueMetaObject* const products = cfg->CreateMetaObject(g_metaCatalogCLSID, root, false);
+	auto* user = dynamic_cast<ibValueMetaObjectCommonModule*>(
+		cfg->CreateMetaObject(g_metaCommonModuleCLSID, root, false));
+	ASSERT_NE(products, nullptr);
+	ASSERT_NE(user, nullptr);
+	products->SetName(wxT("Products"));
+	user->SetModuleText(wxT("Procedure Make() {\n\tvar item = Catalogs.Products.CreateItem();\n}\n"));
+
+	ASSERT_TRUE(cfg->RunDatabase());
+
+	const ibScriptCheckAnswer clean = ibCheckModule(user);
+	EXPECT_EQ(clean.m_outcome, ibScriptCheckOutcome::Checked);
+	EXPECT_TRUE(clean.m_diagnostics.empty())
+		<< (clean.m_diagnostics.empty() ? std::string() : clean.m_diagnostics.front().m_message.ToStdString());
+
+	user->SetModuleText(wxT("Procedure Make() {\n\tvar item = Catalogs.Products.CreateElement();\n}\n"));
+	const ibScriptCheckAnswer wrong = ibCheckModule(user);
+	ASSERT_EQ(wrong.m_diagnostics.size(), 1u);
+	EXPECT_EQ(wrong.m_diagnostics.front().m_line, 2u);
+	EXPECT_TRUE(wrong.m_diagnostics.front().m_message.Contains(wxT("CreateElement")))
+		<< wrong.m_diagnostics.front().m_message.ToStdString();
+}

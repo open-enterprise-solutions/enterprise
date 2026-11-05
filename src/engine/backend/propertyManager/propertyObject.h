@@ -33,6 +33,7 @@ template <class T> class ibValuePtr;
 #include "backend/backend_exception.h"   // ibBackendCoreException — a cell that is not what it is asked for raises
 
 #include <concepts>   // std::derived_from — what CreateProperty and CreateEvent make
+#include <initializer_list>   // CreateProperty — a list in braces, taken as it is
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -517,6 +518,12 @@ protected:
 	template <std::derived_from<ibProperty> typeProp, typename... Args>
 	inline typeProp* CreateProperty(ibPropertyCategory* cat, Args&&... args) {
 		return new typeProp(cat, std::forward<Args>(args)...);
+	}
+	// …and with a list in braces last - `{ g_valueNumberCLSID }`, the types a holder offers: a braced list deduces no
+	// pack, so it is taken here, as the list it is.
+	template <std::derived_from<ibProperty> typeProp, typename Arg, typename Item>
+	inline typeProp* CreateProperty(ibPropertyCategory* cat, Arg&& arg, std::initializer_list<Item> list) {
+		return new typeProp(cat, std::forward<Arg>(arg), list);
 	}
 	template <std::derived_from<ibEvent> typeEvent, typename... Args>
 	inline typeEvent* CreateEvent(ibPropertyCategory* cat, Args&&... args) {

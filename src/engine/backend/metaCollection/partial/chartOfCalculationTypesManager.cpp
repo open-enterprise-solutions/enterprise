@@ -19,8 +19,8 @@ ibValueReferenceDataObject* ibValueManagerDataObjectChartOfCalculationTypes::Emp
 }
 
 enum Func {
-	eCreateElement = 0,
-	eCreateGroup,
+	eCreateCalculationType = 0,
+	eCreateFolder,
 	eSelect,
 	eFindByCode,
 	eFindByDescription,
@@ -33,8 +33,8 @@ enum Func {
 
 void ibValueManagerDataObjectChartOfCalculationTypes::FillManagerMethods(ibMemberTable& helper) const
 {
-	helper.AppendFunc(ibT("CreateElement"), ibT("CreateElement()"));
-	helper.AppendFunc(ibT("CreateGroup"), ibT("CreateGroup()"));
+	helper.AppendFunc(ibT("CreateCalculationType"), ibT("CreateCalculationType()"));
+	helper.AppendFunc(ibT("CreateFolder"), ibT("CreateFolder()"));
 	helper.AppendFunc(ibT("Select"), ibT("Select()"));
 	helper.AppendFunc(ibT("FindByCode"), 1, ibT("FindByCode(code : string)"));
 	helper.AppendFunc(ibT("FindByDescription"), 2, ibT("FindByDescription(descr : string, exact = true : boolean)"));
@@ -53,10 +53,10 @@ bool ibValueManagerDataObjectChartOfCalculationTypes::CallAsFunc(const long lMet
 	// from before 16e8324c (2026-09-09), which moved the other eleven managers here.
 	switch (BuiltinMethodNum(lMethodNum))
 	{
-	case eCreateElement:
+	case eCreateCalculationType:
 		pvarRetValue = m_metaObject->CreateObjectValue(ibObjectMode::OBJECT_ITEM);
 		return true;
-	case eCreateGroup:
+	case eCreateFolder:
 		pvarRetValue = m_metaObject->CreateObjectValue(ibObjectMode::OBJECT_FOLDER);
 		return true;
 	case eSelect:

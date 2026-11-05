@@ -645,6 +645,107 @@ inline ibQueryRelPtr ibRegRunningGrid(const ibQueryRelPtr& openRead, const ibQue
 	return ibProject(ibSubquery(summed, aS), std::move(projection));
 }
 
+// ⭐⭐ THE SAME RUN AT THE MOVEMENTS' GRAIN (Recorder / Record) — no calendar: a row per movement, the balance a key
+// carries in laid under every row of it, each movement's opening and closing in the order moments are counted in
+// (the period, the recorder's fields, the line's). A key carried in and untouched is one row at `begin`, as the RAM
+// roads stand it (#646).
+//
+//   opening    as the grid's: each key's balance entering the interval, not pruned;
+//   turnovers  each key's movements inside it, a row per movement (ibMaterializeGrain::Movements), its own fields
+//              — `movementFields`, under the names the read answers them by — among the columns;
+//   rows       the two laid one under the other: the opening a row of its key at `begin` with no movement (typed
+//              NULLs — a UNION takes one type), each movement with no opening.
+//
+// Published: every key, the period, the movement's fields, each `passThrough` column, and for each running figure
+// its opening and closing — closing = the balance carried in (the whole key's, so on every row of it) plus the
+// movements summed along the key so far, opening = closing − the row's own. The row standing at `begin` stays only
+// where the key did not move: moved, its balance is already in every movement's opening.
+//
+// Not summed as the grid's arms are: a movement read is one row per movement already, and the opening's row is told
+// from every one of them by its NULL fields.
+inline ibQueryRelPtr ibRegRunningMovements(const ibQueryRelPtr& openRead, const ibQueryRelPtr& turnRead,
+                                           const ibValue& begin, const ibString& periodField,
+                                           const std::vector<ibString>& keyNames, const std::vector<ibColumnSlot>& movementFields,
+                                           const std::vector<ibString>& passThrough,
+                                           const std::vector<ibRegRunningFigure>& running, const ibString& alias)
+{
+	if (openRead == nullptr || turnRead == nullptr || movementFields.empty())
+		return nullptr;
+	const ibString aO = alias + ibT("_mo"), aT = alias + ibT("_mt"), aU = alias + ibT("_mu"), aW = alias + ibT("_mw");
+	const ibString movesOfKey = alias + ibT("_moves");   // how many movements the row's key has
+	const auto orZero = [](const ibQueryExprPtr& e) {
+		return ibCast(ibFunc(ibT("COALESCE"), { e, ibRegTypedZero() }), ibTypeNumber(18, 6));
+	};
+
+	// The figures each arm carries, as the grid's do: an arm answers the other's with a zero.
+	std::vector<ibString> moved, held;
+	const auto once = [](std::vector<ibString>& names, const ibString& name) {
+		if (std::find(names.begin(), names.end(), name) == names.end())
+			names.push_back(name);
+	};
+	for (const ibString& name : passThrough)
+		once(moved, name);
+	for (const ibRegRunningFigure& figure : running) {
+		once(moved, figure.m_turnover);
+		once(held, figure.m_opening);
+	}
+
+	const auto arm = [&](const ibString& from, bool balances) {
+		std::vector<ibQueryProjItem> items;
+		for (const ibString& name : keyNames)
+			items.push_back({ ibCol(from, name), name });
+		items.push_back({ ibCast(balances ? ibConst(begin) : ibCol(from, periodField), ibTypeDate()), periodField });
+		for (const ibColumnSlot& field : movementFields)
+			items.push_back({ balances ? ibCast(ibConst(ibValue()), field.m_type) : ibCol(from, field.m_name), field.m_name });
+		for (const ibString& name : moved)
+			items.push_back({ balances ? ibRegTypedZero() : orZero(ibCol(from, name)), name });
+		for (const ibString& name : held)
+			items.push_back({ balances ? orZero(ibCol(from, name)) : ibRegTypedZero(), name });
+		return items;
+	};
+	const ibQueryRelPtr rows = ibUnionAll(ibProject(ibSubquery(openRead, aO), arm(aO, /*balances*/ true)),
+	                                      ibProject(ibSubquery(turnRead, aT), arm(aT, /*balances*/ false)));
+
+	// --- the run: along the key's movements, peers included; the carried balance over the key whole -------------
+	std::vector<ibQueryExprPtr> partition;
+	std::vector<ibQuerySortKey> order{ ibQuerySortKey{ ibCol(aU, periodField), ibQuerySortDir::Asc } };
+	for (const ibColumnSlot& field : movementFields)
+		order.push_back(ibQuerySortKey{ ibCol(aU, field.m_name), ibQuerySortDir::Asc });
+	std::vector<ibQueryProjItem> projection, published;
+	for (const ibString& name : keyNames)
+		partition.push_back(ibCol(aU, name));
+	const auto carry = [&](const ibQueryExprPtr& value, const ibString& name) {
+		projection.push_back({ value, name });
+		published.push_back({ ibCol(aW, name), name });
+	};
+	for (const ibString& name : keyNames)
+		carry(ibCol(aU, name), name);
+	carry(ibCol(aU, periodField), periodField);
+	for (const ibColumnSlot& field : movementFields)
+		carry(ibCol(aU, field.m_name), field.m_name);
+	for (const ibString& name : passThrough)
+		carry(ibCol(aU, name), name);
+	for (const ibRegRunningFigure& figure : running) {
+		const ibQueryExprPtr turn = ibCol(aU, figure.m_turnover);
+		const ibQueryExprPtr carriedIn = ibWindowed(ibFunc(ibT("SUM"), { ibCol(aU, figure.m_opening) }),
+			ibQueryWindow{ partition, {}, ibQueryFrame::NoFrame });
+		const ibQueryExprPtr closing = ibBinOp(ibQueryBinOp::Add, carriedIn,
+			ibWindowed(ibFunc(ibT("SUM"), { turn }), ibQueryWindow{ partition, order, ibQueryFrame::RangeThroughPeers }));
+		carry(ibBinOp(ibQueryBinOp::Sub, closing, turn), figure.m_openingOut);
+		carry(closing, figure.m_closingOut);
+	}
+	// COUNT reads past NULLs, so the row at `begin` is not one of the key's movements.
+	const ibString& mark = movementFields.front().m_name;
+	projection.push_back({ ibWindowed(ibFunc(ibT("COUNT"), { ibCol(aU, mark) }), ibQueryWindow{ partition, {}, ibQueryFrame::NoFrame }),
+	                       movesOfKey });
+
+	// A window may not stand in a WHERE, so the row at `begin` is left out one level up.
+	const ibQueryExprPtr keep = ibBinOp(ibQueryBinOp::Or, ibIsNull(ibCol(aW, mark), /*negated*/ true),
+		ibBinOp(ibQueryBinOp::Eq, ibCol(aW, movesOfKey), ibCast(ibConst(ibValue(0)), ibTypeInteger())));
+	const ibQueryRelPtr run = ibProject(ibSubquery(rows, aU), std::move(projection));
+	return ibProject(ibFilter(ibSubquery(run, aW), keep), std::move(published));
+}
+
 // --- register-side convenience over the column-layout tier ---------------------------------------
 // An attribute IS an ibBackendQueryColumn; the tier functions take (col, metaData). These thin
 // wrappers derive the metadata from the attribute so register lowering reads cleanly — the SQL-field
@@ -1568,6 +1669,24 @@ inline void ibRegGuardInForce(ibSchemaMaterialize& m, const ibValueMetaObjectAtt
 		return;
 	m.Guard(ibT("CAST({row}.") + ibRegValueField(active) + ibT(" AS INTEGER) <> 0"),
 		ibQueryPredicate::Leaf(ibQueryCondition{ active->GetQueryColumn(), ibQueryFilterOp::Equal, ibValue(true) }));
+}
+
+// ⭐ …AND THE SAME, SAID BY A READING OF THE RAW MOVEMENTS. A stored total was accumulated under the guard above, so a
+// reading of the VIEW inherits it and needs nothing; a reading of the raw movements inherits nothing at all. Left
+// unsaid there, the same question answered from the two surfaces gives two different numbers — and which one a caller
+// gets depends on whether the driver can maintain derived state at all: the accumulation register's readings by the
+// recorder counted the lines out of force (#646). Nothing is said when the reading does not stand on the movements.
+// `TReg` is a register; taken as a template parameter, as ibRegFillArmCut is, so this header needs no register include.
+template <typename TReg>
+inline void ibRegWhereActive(ibDataQueryBuilder& b, const TReg* reg, const ibBackendQueryable* source, bool onMovements)
+{
+	if (!onMovements || reg == nullptr || source == nullptr)
+		return;
+	if (const ibValueMetaObjectAttributeBase* active = reg->GetRegisterActive()) {
+		// …the attribute's own face when this source does not name it — an attribute HOLDS a query column.
+		const ibBackendQueryColumn* here = source->ResolveColumnByName(active->GetName());
+		b.Where(here != nullptr ? here : active->GetQueryColumn(), ibValue(true));
+	}
 }
 
 // ⭐⭐ AN ACCUMULATING COLUMN, IN THE RESOURCE'S OWN PRECISION. Declared flat it came out

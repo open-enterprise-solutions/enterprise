@@ -48,13 +48,13 @@ void ibValueBinaryData_BindNames(ibValue::ibMemberTable& helper, const ibValue* 
 {
 	helper.AppendConstructor(0, ibT("BinaryData()"));
 	helper.AppendConstructor(1, ibT("BinaryData(base64 : string)"));
-	helper.AppendConstructor(2, ibT("BinaryData(text : string, encoding : TextEncoding)"));
-	helper.AppendConstructor(3, ibT("BinaryData(text : string, encoding : TextEncoding, byteOrderMark : boolean)"));
+	helper.AppendConstructor(2, ibT("BinaryData(text : string, encoding : TextEncoding | string)"));
+	helper.AppendConstructor(3, ibT("BinaryData(text : string, encoding : TextEncoding | string, byteOrderMark : boolean)"));
 
 	helper.AppendFunc(ibT("Size"), ibT("Size()"));
 	helper.AppendFunc(ibT("Read"), 1, ibT("Read(path : string)"));
 	helper.AppendFunc(ibT("Write"), 1, ibT("Write(path : string)"));
-	helper.AppendFunc(ibT("GetString"), 1, ibT("GetString(encoding : TextEncoding)"));
+	helper.AppendFunc(ibT("GetString"), 1, ibT("GetString(encoding : TextEncoding | string)"));
 }
 
 ibValueBinaryData::ibValueBinaryData() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true), m_data() {}

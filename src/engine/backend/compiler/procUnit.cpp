@@ -2978,7 +2978,7 @@ bool ibProcUnit::GetPropVal(const ibString& strPropName, ibValue& pvarPropVal) /
 // to the expression. Mirrors expression-only mode onto bc-side
 // (m_cByteCode.m_bExpressionOnly) so runtime's OPER_GET_A scoped-prop
 // check fires for chain access through eval
-// (`Catalogs.X.CreateElement().ThisObject`).
+// (`Catalogs.X.CreateItem().ThisObject`).
 //
 // Lives in procUnit.cpp (the runtime module) because it's the only
 // place that constructs eval modules. Base ibCompileCode exposes

@@ -1551,6 +1551,21 @@ ibQueryRamTable WalkedLeafOfTargets(const ibBackendQueryable* owner, const ibBac
 	return filed;
 }
 
+// SQL NULL only (TYPE_NULL — what the DB driver yields for a NULL column). NOT TYPE_EMPTY
+// (Undefined = composite with no type chosen): that is a runtime placeholder, never a DB null.
+bool RamIsNullValue(const ibValue& v)
+{
+	return v.IsNull();
+}
+
+// ⭐⭐ THE ABSENT VALUE, SPELLED ONCE. TYPE_NULL — not a default ibValue, which is TYPE_EMPTY ("no
+// type chosen") and answers FALSE to `IS NULL`. Both the unmatched side of an outer join and a strict
+// scalar's refusal below produce the same thing, because downstream they mean the same thing.
+ibValue RamNullValue()
+{
+	ibValue v; v.SetType(ibValueTypes::TYPE_NULL); return v;
+}
+
 // RAM dot-walk resolution for a COMPUTED source (register slice / balance / turnover / subquery). Each
 // ibDotWalkColumn (ref segments + leaf) is resolved by materialising every reference hop's TARGET as a RAM
 // table (MaterialiseLeaf) and LEFT-joining it onto the computed rows, keyed on (segment ref column, target
@@ -1564,6 +1579,29 @@ ibQueryRamTable ResolveComputedDotWalks(ibQueryRamTable rows, const ibBackendQue
                                         const ibDataQuerySpec& spec,
                                         std::vector<const ibBackendQueryColumn*>& present)
 {
+	// ⭐ A LEAF IS BROUGHT INTO THE ROWS WHERE THEY STAND (#646). Its table holds a row per reference, so the LEFT join
+	// with it only adds a column, and JoinRamTables made every row again for that one, each cell copied: 15% of a
+	// compose_run over 100 000 turnovers walking `Product.Group` (Debug samples, 2026-11-04). The answer is the join's,
+	// cell for cell: a key that is NULL or that the leaf does not hold brings NULL. A key the leaf holds twice would
+	// multiply the rows, and that stays the join's to do - false, and nothing is touched.
+	const auto bringIn = [&rows](const ibQueryRamTable& leaf, const ibBackendQueryColumn* refCol,
+	                             const ibBackendQueryColumn* leafKey, const ibBackendQueryColumn* bring) {
+		std::unordered_map<ibValue, long, ibValueHash, ibValueEqual> byKey;
+		for (long j = 0; j < leaf.RowCount(); ++j) {
+			const ibValue* const key = leaf.FindCell(j, leafKey->GetColumnId());
+			if (key != nullptr && !RamIsNullValue(*key) && !byKey.emplace(*key, j).second)
+				return false;
+		}
+		rows.AddColumn(bring->GetColumnId(), bring->GetName(), bring->GetTypeDesc());
+		for (long i = 0; i < rows.RowCount(); ++i) {
+			const ibValue* const key = rows.FindCell(i, refCol->GetColumnId());
+			const auto found = key != nullptr && !RamIsNullValue(*key) ? byKey.find(*key) : byKey.end();
+			rows.SetCell(i, bring->GetColumnId(),
+				found != byKey.end() ? leaf.GetCell(found->second, bring->GetColumnId()) : RamNullValue());
+		}
+		return true;
+	};
+
 	// Gather every dot-walk PATH used over the computed source — projection (m_dotWalks), ORDER BY (m_sorts),
 	// GROUP BY (m_groupPaths) and aggregate inputs (m_aggregates[].m_path). Each is a reference chain to
 	// materialise + LEFT-join; the leaf lands keyed by GetColumnId so every clause reads it as a plain column.
@@ -1638,10 +1676,12 @@ ibQueryRamTable ResolveComputedDotWalks(ibQueryRamTable rows, const ibBackendQue
 						ReferencesIn(rows, refCol));
 					if (fileKey == nullptr)
 						break;   // no table this reference may point at reaches the field — the cell stays empty
-					std::vector<const ibBackendQueryColumn*> outCols = present;
-					std::vector<bool> fromLeft(present.size(), true);
-					outCols.push_back(bring);  fromLeft.push_back(false);
-					rows = ibQueryComposer::JoinRamTables(rows, filed, refCol, fileKey, outCols, fromLeft, ibQueryJoinKind::Left);
+					if (!bringIn(filed, refCol, fileKey, bring)) {
+						std::vector<const ibBackendQueryColumn*> outCols = present;
+						std::vector<bool> fromLeft(present.size(), true);
+						outCols.push_back(bring);  fromLeft.push_back(false);
+						rows = ibQueryComposer::JoinRamTables(rows, filed, refCol, fileKey, outCols, fromLeft, ibQueryJoinKind::Left);
+					}
 					present.push_back(bring);
 					joined[joinKey] = true;
 				}
@@ -1683,10 +1723,12 @@ ibQueryRamTable ResolveComputedDotWalks(ibQueryRamTable rows, const ibBackendQue
 					}
 					tgt = std::move(filed);
 				}
-				std::vector<const ibBackendQueryColumn*> outCols = present;               // keep every present column (LEFT) ...
-				std::vector<bool> fromLeft(present.size(), true);
-				outCols.push_back(bring);  fromLeft.push_back(false);                     // ... plus the brought-in target column (RIGHT)
-				rows = ibQueryComposer::JoinRamTables(rows, tgt, refCol, tgtKey, outCols, fromLeft, ibQueryJoinKind::Left);
+				if (!bringIn(tgt, refCol, tgtKey, bring)) {
+					std::vector<const ibBackendQueryColumn*> outCols = present;               // keep every present column (LEFT) ...
+					std::vector<bool> fromLeft(present.size(), true);
+					outCols.push_back(bring);  fromLeft.push_back(false);                     // ... plus the brought-in target column (RIGHT)
+					rows = ibQueryComposer::JoinRamTables(rows, tgt, refCol, tgtKey, outCols, fromLeft, ibQueryJoinKind::Left);
+				}
 				present.push_back(bring);
 				joined[joinKey] = true;
 			}
@@ -1809,13 +1851,6 @@ enum class RamTri { False = 0, True = 1, Unknown = 2 };
 RamTri RamTriNot(RamTri a)
 {
 	return a == RamTri::Unknown ? RamTri::Unknown : (a == RamTri::True ? RamTri::False : RamTri::True);
-}
-
-// SQL NULL only (TYPE_NULL — what the DB driver yields for a NULL column). NOT TYPE_EMPTY
-// (Undefined = composite with no type chosen): that is a runtime placeholder, never a DB null.
-bool RamIsNullValue(const ibValue& v)
-{
-	return v.IsNull();
 }
 
 RamTri RamEvalLeaf(const ibQueryCondition& c, const ibQueryRow& row)
@@ -1973,13 +2008,6 @@ ibQueryRamTable RamFilter(const ibQueryRamTable& src, const ibQueryPredicate* pr
 // A computed column is SQL-pushed for a single source; over a JOIN the leaves materialise to RAM, so
 // the expression is evaluated per joined row here off the column-based AST (Column / Const / Arith /
 // Case — the CASE reuses the boolean predicate evaluator). Pure — unit-testable via EvalColumnExpr.
-// ⭐⭐ THE ABSENT VALUE, SPELLED ONCE. TYPE_NULL — not a default ibValue, which is TYPE_EMPTY ("no
-// type chosen") and answers FALSE to `IS NULL`. Both the unmatched side of an outer join and a strict
-// scalar's refusal below produce the same thing, because downstream they mean the same thing.
-ibValue RamNullValue()
-{
-	ibValue v; v.SetType(ibValueTypes::TYPE_NULL); return v;
-}
 
 // ⭐⭐ A SCALAR IS STRICT IN ITS OPERANDS — one NULL in, NULL out.
 //
@@ -6674,9 +6702,10 @@ ibDataQueryResult ibQueryComposer::ExecuteGroupLevelPage(const ibDataQuerySpec& 
 // not. False = nothing was read; the caller proceeds exactly as before.
 bool ibQueryComposer::TryFoldTotalsInDbms(const ibDataQuerySpec& spec, ibSelectorTree& out)
 {
-	if (IsSingleSource(spec) && ibDbTableProvider::CanFoldOneLevelTotals(spec)) {
-		ibJournalInfo(ibT("query.road"), ibT("SERVER: one level folded by GROUP BY (single source)"));
-		out = ibDbTableProvider::ExecuteOneLevelTotals(spec);
+	if (IsSingleSource(spec) && ibDbTableProvider::CanFoldGroupByTotals(spec)) {
+		ibJournalInfo(ibT("query.road"), ibT("SERVER: %u level(s) folded by GROUP BY (single source)"),
+		              static_cast<unsigned>(spec.m_totals != nullptr ? spec.m_totals->size() : 0));
+		out = ibDbTableProvider::ExecuteGroupByTotals(spec);
 		return true;
 	}
 	if (IsSingleSource(spec) && ibDbTableProvider::CanPushRollupTotals(spec)) {
@@ -6702,10 +6731,11 @@ ibSelectorTree ibQueryComposer::ExecuteTotals(const ibDataQuerySpec& spec)
 {
 	// The one that needs it most: totals read the detail AND fold it, often in more than one pass.
 
-	// ONE level of headings is a plain GROUP BY, on any engine — ROLLUP or not (CanFoldOneLevelTotals).
-	if (IsSingleSource(spec) && ibDbTableProvider::CanFoldOneLevelTotals(spec)) {
-		ibJournalInfo(ibT("query.road"), ibT("SERVER: one level folded by GROUP BY (single source)"));
-		return ibDbTableProvider::ExecuteOneLevelTotals(spec);
+	// A ladder of headings is a plain GROUP BY, on any engine — ROLLUP or not (CanFoldGroupByTotals).
+	if (IsSingleSource(spec) && ibDbTableProvider::CanFoldGroupByTotals(spec)) {
+		ibJournalInfo(ibT("query.road"), ibT("SERVER: %u level(s) folded by GROUP BY (single source)"),
+		              static_cast<unsigned>(spec.m_totals != nullptr ? spec.m_totals->size() : 0));
+		return ibDbTableProvider::ExecuteGroupByTotals(spec);
 	}
 
 	// Push-down: a single-source totals on a ROLLUP-capable DBMS runs server-side (GROUP BY ROLLUP),

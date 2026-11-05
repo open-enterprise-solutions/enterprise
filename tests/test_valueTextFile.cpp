@@ -284,6 +284,47 @@ TEST(TextWriter, ACharacterThePageCannotSpellIsRefused) {
 }
 #endif
 
+// A page a script NAMES is the fixed table XML reads by - the same bytes on every machine, whatever its own pages
+// are. Asked through the door a script's New comes in by, the name in any case and by an alias.
+TEST(TextWriter, APageByItsNameIsTheSameOnEveryMachine) {
+	const ibString borscht = ibString::FromUTF8("\xD0\x91\xD0\xBE\xD1\x80\xD1\x89");   // "Борщ"
+	const struct { const char* written; const char* read; std::string bytes; } pages[] = {
+		{ "windows-1251", "CP1251", "\xC1\xEE\xF0\xF9" },
+		{ "cp866", "IBM866", "\x81\xAE\xE0\xE9" } };
+
+	for (const auto& page : pages) {
+		TempFile f;
+		ibValue path(f.path), written(ibString::FromUTF8(page.written)), read(ibString::FromUTF8(page.read));
+		{
+			ibValue* params[] = { &path, &written };
+			ibValueTextWriter writer;
+			ASSERT_TRUE(writer.Init(params, 2));
+			writer.Write(borscht);
+			writer.Close();
+		}
+		EXPECT_EQ(f.Get(), page.bytes) << page.written;
+
+		ibValue* params[] = { &path, &read };
+		ibValueTextReader reader;
+		ASSERT_TRUE(reader.Init(params, 2));
+		EXPECT_EQ(reader.ReadRest(), borscht) << page.read;
+	}
+}
+
+// A name no table answers to is refused, and so is a byte the named page has no character for (0x98 in 1251).
+TEST(TextReader, AnUnknownNameAndAByteThePageLacksAreRefused) {
+	TempFile f;
+	f.Put("a\x98");
+	ibValue path(f.path), unknown(ibString(wxT("koi8-x"))), page(ibString(wxT("windows-1251")));
+
+	ibValue* unknownParams[] = { &path, &unknown };
+	ibValueTextReader reader;
+	EXPECT_THROW(reader.Init(unknownParams, 2), ibBackendException);
+
+	ibValue* pageParams[] = { &path, &page };
+	EXPECT_THROW(reader.Init(pageParams, 2), ibBackendException);
+}
+
 // Appending adds to the end, and a UTF-16 file gets its mark once.
 TEST(TextWriter, AppendingKeepsWhatWasThere) {
 	TempFile f;

@@ -254,6 +254,19 @@ void ibHelpCorpus::BuildIndexes() {
 			for (const ibString& t : Tokenise(text))
 				unique.insert(t);
 
+		// ⭐ …AND THE WORDS A NAME IS RUN TOGETHER FROM. `StrReplace` says "replace" there and nowhere else - its prose
+		// says "replaced" - so "replace substring" found nothing, and "split string" did not find `StrSplit` (#646). A
+		// word begins at a capital that follows a small letter or a digit.
+		for (const ibString& name : { e.nameLocal, e.nameEn }) {
+			size_t from = 0;
+			for (size_t at = 1; at <= name.length(); ++at) {
+				if (at < name.length() && !(ibIsUpper(name[at]) && (ibIsLower(name[at - 1]) || ibIsDigit(name[at - 1]))))
+					continue;
+				unique.insert(NormaliseKey(name.Mid(from, at - from)));
+				from = at;
+			}
+		}
+
 		for (const ibString& t : unique)
 			m_tokenIndex[t].push_back(i);
 	}
@@ -331,7 +344,7 @@ ibHelpCorpus::SearchText(const ibString& query) const {
 	const std::vector<ibString> tokens = Tokenise(query);
 	if (tokens.empty()) return {};
 
-	// Intersect token postings — entry must contain ALL query tokens.
+	// Count token postings per entry — the bar is below.
 	// For Phase 1 we score by (hit count, name-exact-bonus) — BM25 is a
 	// Phase 6 enhancement once HTTP search hits real load (§3.5).
 	std::unordered_map<ibHelpEntryIndex, int> score;
@@ -341,11 +354,17 @@ ibHelpCorpus::SearchText(const ibString& query) const {
 		for (ibHelpEntryIndex idx : it->second) score[idx] += 1;
 	}
 
+	// ⭐ EVERY WORD WHEN AN ENTRY HAS THEM ALL, AND THE MOST OF THEM WHEN NONE DOES. A job is asked in the words of the
+	// job, and the entry that does it seldom uses every one of them; all-or-nothing answered nothing, which reads as
+	// "there is no such thing" rather than "say it differently" (#646).
 	std::vector<std::pair<int, ibHelpEntryIndex>> ranked;
 	ranked.reserve(score.size());
-	const int allTokens = static_cast<int>(tokens.size());
+	int need = 0;
+	for (const auto& kv : score)
+		need = std::max(need, kv.second);
+	need = std::min(need, static_cast<int>(tokens.size()));
 	for (const auto& kv : score) {
-		if (kv.second < allTokens) continue; // require all tokens hit
+		if (kv.second < need) continue;
 		int s = kv.second;
 		// Name-exact bonus — query exactly equals the entry's local or
 		// English name. Boosts identifier-looking lookups above prose.

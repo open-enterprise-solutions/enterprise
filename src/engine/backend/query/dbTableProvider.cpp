@@ -4090,6 +4090,19 @@ static const std::vector<ibDataQueryBuilder::AggregateItem>& RollupAggregatesOf(
 	return spec.m_aggregates != nullptr ? *spec.m_aggregates : s_none;
 }
 
+// …AND WHAT ONE OF THEM FOLDS, WHEN THE LOWERING PROJECTED IT — a second fold over one column, a computed field, an
+// expression written in place: each is projected under a name of its own and folded through a handle named by that
+// projection in the statement's spelling (ProjectionHandle, queryLowering.cpp). Null for a column of the source.
+static const ibQueryColumnSelect* SelectExprOf(const ibDataQuerySpec& spec, const ibBackendQueryColumn* col)
+{
+	if (col == nullptr || spec.m_selectExprs == nullptr || !ibBackendQueryColumn::IsSyntheticId(col->GetColumnId()))
+		return nullptr;
+	for (const ibQueryColumnSelect& sc : *spec.m_selectExprs)
+		if (ibSqlAliasOf(sc.m_alias) == col->GetPhysicalName())
+			return &sc;
+	return nullptr;
+}
+
 // ⭐⭐ THE PHANTOM LEVEL — what a DETAIL level becomes on the way to the server.
 //
 // "A detail record is an empty grouping": the composition declares a level with no fields and the
@@ -4209,9 +4222,9 @@ struct GroupOrderWalk {
 	const ibBackendQueryColumn* column   = nullptr;  // and that table's column the sort names
 };
 
-// The STRUCTURAL half of a fold on the server, for both of its roads: ROLLUP over a ladder, and a plain GROUP BY
-// over ONE level (`oneLevel`), which needs no ROLLUP and orders its groups itself (see the sorts below).
-static bool TotalsShapeFoldable(const ibDataQuerySpec& spec, bool oneLevel)
+// The STRUCTURAL half of a fold on the server, for both of its roads: ROLLUP over a ladder (`rollup`), and a plain
+// GROUP BY over the levels' fields, which needs no ROLLUP and orders its groups itself (see the sorts below).
+static bool TotalsShapeFoldable(const ibDataQuerySpec& spec, bool rollup)
 	{
 		// Single-source DB queryable (a multi-source totals goes through the co-located / RAM paths).
 		if (spec.m_root != nullptr && spec.m_root->m_kind != ibQueryNode::Kind::Source)
@@ -4286,6 +4299,12 @@ static bool TotalsShapeFoldable(const ibDataQuerySpec& spec, bool oneLevel)
 			}
 			for (const ibTotalField& f : level.m_fields) {
 				if (f.m_col == nullptr)                           RollupDecline(ibT("a level field with no column"));
+				// ⚠ A KEY SQL CANNOT COMPARE IS NO KEY OF A GROUP BY (ibIsComparableType) — the moment is stored
+				// nowhere, a schedule or a type description is one blob. Grouped by its first field, a list's moment
+				// came back as the document's date and was read as a moment: "Invalid field type", and the list
+				// showed nothing (#646, 2026-11-04). The RAM fold groups the values themselves.
+				if (!ibIsComparableType(f.m_col->GetTypeDesc()))
+					RollupDecline(ibT("level '%s' is not a value SQL compares"), f.m_col->GetName());
 				// BY PERIODS groups by a TRUNCATION of the field, and a truncation is a scalar
 				// expression over a scalar column — there is no truncating a reference's spread.
 				// The RAM fold answers such a level by reading the value and truncating it there.
@@ -4317,21 +4336,23 @@ static bool TotalsShapeFoldable(const ibDataQuerySpec& spec, bool oneLevel)
 		// else keeps the RAM fold, which orders the rows and then groups them in first-seen order.
 		if (spec.m_sorts != nullptr)
 			for (const ibQuerySortItem& s : *spec.m_sorts) {
-				// ⭐ ONE LEVEL ORDERS ITS GROUPS ITSELF (RunRollupTotals): by the key a sort names, by what a walk
-				// on from the key reaches (one value per group — the key's kind order is such a walk), and by an
-				// ordinary field's first (MIN) or last (MAX) value — the order the groups are first met in when
-				// the rows are read sorted by that field, which is the order the RAM fold shows. A row-key sort
-				// has no group to speak of and is left to the key. Anything else cannot be said over groups.
-				if (oneLevel) {
-					if (SortsByLevelKey(levels.front(), s)
-						|| (LevelKeyWalkedOnFrom(levels.front(), s) >= 0 && WalkReaches(q, s.m_path))
+				// ⭐ A PLAIN GROUP BY ORDERS ITS GROUPS ITSELF (RunRollupTotals): by a level's key a sort names, by what
+				// a walk on from a level's key reaches (one value per group — the order of the key's own table is such a
+				// walk, and every sort by a reference takes it first), and by an ordinary field's first (MIN) or last
+				// (MAX) value — the order the groups are first met in when the rows are read sorted by that field, which
+				// is the order the RAM fold shows. A row-key sort has no group to speak of and is left to the keys.
+				// Anything else cannot be said over groups.
+				if (!rollup) {
+					if (std::any_of(levels.begin(), levels.end(), [&](const ibTotalLevel& l) { return SortsByLevelKey(l, s); })
+						|| (std::any_of(levels.begin(), levels.end(), [&](const ibTotalLevel& l) { return LevelKeyWalkedOnFrom(l, s) >= 0; })
+						    && WalkReaches(q, s.m_path))
 						|| (s.m_expr == nullptr && s.m_path.empty() && s.m_col == nullptr))
 						continue;
 					if (s.m_expr != nullptr || !s.m_path.empty())
-						RollupDecline(ibT("one level: a computed sort, or a walk that does not go on from the level's key"));
+						RollupDecline(ibT("by GROUP BY: a computed sort, or a walk that does not go on from a level's key"));
 					ColocatedLeaves one; one.push_back(q);
 					if (!ScalarReadable(s.m_col, one))
-						RollupDecline(ibT("one level: sort by '%s', which is neither the key nor a scalar to order the groups by"),
+						RollupDecline(ibT("by GROUP BY: sort by '%s', which is neither a level's key nor a scalar to order the groups by"),
 						              s.m_col->GetName());
 					continue;
 				}
@@ -4369,6 +4390,15 @@ static bool TotalsShapeFoldable(const ibDataQuerySpec& spec, bool oneLevel)
 		for (const ibDataQueryBuilder::AggregateItem& a : RollupAggregatesOf(spec)) {
 			if (a.m_col != nullptr && !ScalarReadable(a.m_col, one))
 				RollupDecline(ibT("aggregate input '%s' is not a scalar column"), a.m_col->GetName());
+			// ⭐ A FIGURE OVER A PROJECTION folds the expression the projection holds, written beside the source's row
+			// (FoldSingleSource) — as long as that row alone answers it: a CASE, a window or a walk keeps the RAM fold.
+			if (const ibQueryColumnSelect* projected = SelectExprOf(spec, a.m_col)) {
+				std::vector<const ibBackendQueryColumn*> reads;
+				if (!CollectExprColumns(projected->m_expr.get(), reads)
+				    || std::any_of(reads.begin(), reads.end(), [q](const ibBackendQueryColumn* c) { return !q->OwnsColumn(c); }))
+					RollupDecline(ibT("'%s' folds '%s', which the source's row does not answer alone"),
+					              a.m_alias, projected->m_alias);
+			}
 			// A BALANCE is a reading at a key's first or last moment — ROLLUP only adds rows up.
 			if (a.m_balance != ibBalanceRole::None)
 				RollupDecline(ibT("'%s' is a balance, taken at a moment rather than added up"), a.m_alias);
@@ -4378,30 +4408,42 @@ static bool TotalsShapeFoldable(const ibDataQuerySpec& spec, bool oneLevel)
 
 bool ibDbTableProvider::CanRollupTotalsShape(const ibDataQuerySpec& spec)
 	{
-		return TotalsShapeFoldable(spec, /*oneLevel*/ false);
+		return TotalsShapeFoldable(spec, /*rollup*/ true);
 	}
 
-// ⭐⭐ ONE LEVEL NEEDS NO ROLLUP. A list grouped by a field asks for exactly one level of headings, and a plain
-// GROUP BY — which every engine has — answers it; ROLLUP only adds the subtotals of a LADDER. Firebird has no
-// ROLLUP at all (ibSqlFeatures::m_rollup), so a grouped list there read every row into memory to make its few
-// headings: a million register rows for five warehouses, fifty seconds per read (2026-10-05).
+// ⭐⭐ A LADDER NEEDS NO ROLLUP. A list grouped by a field asks for exactly one level of headings, and a plain
+// GROUP BY — which every engine has — answers it. Firebird has no ROLLUP at all (ibSqlFeatures::m_rollup), so a
+// grouped list there read every row into memory to make its few headings: a million register rows for five
+// warehouses, fifty seconds per read (2026-10-05).
 //
-// The grand total is what the groups add up to, so only a figure that adds up may ride here: a sum, a count, a
-// minimum, a maximum. An average or a count of DISTINCT values over the groups is not the one over the rows.
-bool ibDbTableProvider::CanFoldOneLevelTotals(const ibDataQuerySpec& spec)
+// …AND NEITHER DOES A LADDER OF THEM. The same GROUP BY over every level's fields returns the bottom groups, and the
+// ones above are made as they are first met and add up from them. A report by product group and product read every
+// turnover row into memory to fold 1615 headings: 99 291 rows, 4 s of the 6.5 s a run took (2026-11-05).
+//
+// The groups above and the grand total are what the groups below add up to, so only a figure that adds up may ride
+// here: a sum, a count, a minimum, a maximum. An average or a count of DISTINCT values over the groups is not the
+// one over the rows.
+bool ibDbTableProvider::CanFoldGroupByTotals(const ibDataQuerySpec& spec)
 	{
 		const std::vector<ibTotalLevel> levels = RollupLevelsOf(spec);
-		if (levels.size() != 1 || levels.front().m_fields.empty())
-			return false;   // not one level of headings — the ROLLUP road's question, asked next
+		if (levels.empty())
+			return false;
+		for (const ibTotalLevel& level : levels)
+			if (level.m_fields.empty())
+				return false;   // detail records under the headings — the ROLLUP road's question, asked next
 		for (const ibDataQueryBuilder::AggregateItem& a : RollupAggregatesOf(spec)) {
 			if (a.m_fn == ibDataQueryBuilder::AggregateFn::Avg)
-				RollupDecline(ibT("one level: '%s' is an average, which the groups do not add up to"), a.m_alias);
+				RollupDecline(ibT("by GROUP BY: '%s' is an average, which the groups do not add up to"), a.m_alias);
 			if (a.m_distinct)
-				RollupDecline(ibT("one level: '%s' counts distinct values, which the groups do not add up to"), a.m_alias);
+				RollupDecline(ibT("by GROUP BY: '%s' counts distinct values, which the groups do not add up to"), a.m_alias);
 			if (a.m_scopeDepth != 0 || a.m_scopeBranch != nullptr)
-				RollupDecline(ibT("one level: '%s' is computed over an area of its own"), a.m_alias);
+				RollupDecline(ibT("by GROUP BY: '%s' is computed over an area of its own"), a.m_alias);
 		}
-		return TotalsShapeFoldable(spec, /*oneLevel*/ true);
+		// A condition on the groups cuts the bottom ones — and the ones above would add up only what it left.
+		if (levels.size() > 1 && !spec.m_having->empty())
+			RollupDecline(ibT("by GROUP BY over %u levels: HAVING would cut the bottom groups before the ones above add them up"),
+			              static_cast<unsigned>(levels.size()));
+		return TotalsShapeFoldable(spec, /*rollup*/ false);
 	}
 
 bool ibDbTableProvider::CanPushRollupTotals(const ibDataQuerySpec& spec)
@@ -4445,8 +4487,18 @@ static void MarkRollupFolders(ibSelectorTree::Node& node)
 			MarkRollupFolders(*child);
 }
 
-// `rollup` false = ONE level by a plain GROUP BY (ibDbTableProvider::CanFoldOneLevelTotals): every row is a heading,
-// the groups are ordered here (the query's sorts said over groups) and the grand total is added up from them.
+// A part added into what the groups add up to: a sum or a count adds, a minimum or a maximum compares.
+static void AddUp(ibDataQueryBuilder::AggregateFn fn, ibValue& total, const ibValue& part)
+{
+	using Fn = ibDataQueryBuilder::AggregateFn;
+	if (fn == Fn::Min)      { if (part.CompareValueLS(total) < 0) total = part; }
+	else if (fn == Fn::Max) { if (part.CompareValueLS(total) > 0) total = part; }
+	else                      total = ibValue(total.GetNumber() + part.GetNumber());
+}
+
+// `rollup` false = a plain GROUP BY over the levels' fields (ibDbTableProvider::CanFoldGroupByTotals): every row is a
+// bottom group, the groups are ordered here (the query's sorts said over groups), and the groups above and the grand
+// total are made as they are first met and added up from the ones below.
 static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr from,
 	const std::function<ibQueryExprPtr(const ibBackendQueryColumn*)>& colExpr,
 	const std::function<RollupGroupKey(const ibBackendQueryColumn*)>& keyInfo,
@@ -4655,28 +4707,36 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 			parentsFirst.push_back(std::move(key));
 	}
 	else {
-		// ⭐ ONE LEVEL ORDERS ITS GROUPS ITSELF (the gate's note, TotalsShapeFoldable): by the key a sort names,
-		// by what a walk on from the key reaches (`sortWalks` — one value per group, so MIN is that value), by
-		// an ordinary field's first (MIN) or last (MAX) value — the order the groups are met in when the rows
-		// are read sorted by it, which is what the RAM fold shows — and by the key last, for the groups that
-		// tie and for a read that named no order at all, unless a sort has named the key already.
-		const LevelPlan&    only  = levelPlans.front();
-		const ibTotalLevel& level = levels.front();
-		bool keyNamed = false;
+		// ⭐ THE GROUPS ARE ORDERED HERE (the gate's note, TotalsShapeFoldable) — the bottom ones, which are all this
+		// statement returns; the ones above are made as they are first met (the read below), so they follow. By a
+		// level's key a sort names, by what a walk on from a level's key reaches (`sortWalks`, one value per group, so
+		// MIN is that value — looked up over the groups by the key of the level it goes on from), by an ordinary
+		// field's first (MIN) or last (MAX) value — the order the groups are met in when the rows are read sorted by
+		// it, which is what the RAM fold shows — and by the keys last, level by level, for the groups that tie and for
+		// a read that named no order at all, unless a sort has named that level's key already.
+		std::vector<bool> keyNamed(levels.size(), false);
 		if (spec.m_sorts != nullptr)
 			for (size_t k = 0; k < spec.m_sorts->size(); ++k) {
 				const ibQuerySortItem& s   = (*spec.m_sorts)[k];
 				const ibQuerySortDir   dir = s.m_ascending ? ibQuerySortDir::Asc : ibQuerySortDir::Desc;
 				const ibString         fn  = s.m_ascending ? ibT("MIN") : ibT("MAX");
-				if (SortsByLevelKey(level, s)) {
-					for (const ibQueryExprPtr& key : only.keys)
+				const auto named = std::find_if(levels.begin(), levels.end(),
+					[&](const ibTotalLevel& level) { return SortsByLevelKey(level, s); });
+				if (named != levels.end()) {
+					const size_t which = static_cast<size_t>(named - levels.begin());
+					for (const ibQueryExprPtr& key : levelPlans[which].keys)
 						parentsFirst.push_back(ibQuerySortKey{ overFolded(key), dir });
-					keyNamed = true;
+					keyNamed[which] = true;
 					continue;
 				}
 				const GroupOrderWalk* walk = k < sortWalks.size() ? &sortWalks[k] : nullptr;
 				if (walk != nullptr && walk->target != nullptr) {
-					const ibString keyRef = walk->keyField < only.fields.size() ? only.fields[walk->keyField].refAlias : ibString();
+					const auto walkedFrom = std::find_if(levels.begin(), levels.end(),
+						[&](const ibTotalLevel& level) { return LevelKeyWalkedOnFrom(level, s) >= 0; });
+					const LevelPlan* const onFrom = walkedFrom != levels.end()
+						? &levelPlans[static_cast<size_t>(walkedFrom - levels.begin())] : nullptr;
+					const ibString keyRef = onFrom != nullptr && walk->keyField < onFrom->fields.size()
+						? onFrom->fields[walk->keyField].refAlias : ibString();
 					if (keyRef.IsEmpty())
 						throw std::logic_error("RunRollupTotals: a level key looked up over the groups wrote no reference id");
 					const ibString alias = ibString::Format(ibT("gl%u"), static_cast<unsigned>(k));
@@ -4693,9 +4753,10 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 				if (s.m_expr == nullptr && s.m_path.empty() && s.m_col != nullptr)
 					parentsFirst.push_back(ibQuerySortKey{ overFolded(ibFunc(fn, { colExpr(s.m_col) })), dir });
 			}
-		if (!keyNamed)
-			for (const ibQueryExprPtr& k : only.keys)
-				parentsFirst.push_back(ibQuerySortKey{ overFolded(k), ibQuerySortDir::Asc });
+		for (size_t i = 0; i < levelPlans.size(); ++i)
+			if (!keyNamed[i])
+				for (const ibQueryExprPtr& k : levelPlans[i].keys)
+					parentsFirst.push_back(ibQuerySortKey{ overFolded(k), ibQuerySortDir::Asc });
 		projection.insert(projection.end(), orderedInside.begin(), orderedInside.end());
 	}
 
@@ -4758,10 +4819,25 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 	// asked for parents-before-children (see the sort keys above), so a row's parent is always
 	// already in the map by the time the row is read.
 	struct RRow { std::vector<std::vector<ibValue>> levelValues; std::vector<ibValue> aggs; int level; };
-	// A plain GROUP BY returns no grand total: it is what the groups add up to (the gate let in only figures that
-	// do — CanFoldOneLevelTotals).
-	std::vector<ibValue> grandTotal(aggregates.size());
-	std::vector<bool>    grandSeen(aggregates.size(), false);
+	// A node holds the keys of every level down to its own.
+	const auto keysInto = [&levels](ibSelectorTree::Node& node, const RRow& rr, size_t depth) {
+		for (size_t i = 0; i < depth && i < levels.size(); ++i)
+			for (size_t f = 0; f < levels[i].m_fields.size() && f < rr.levelValues[i].size(); ++f)
+				if (const ibBackendQueryColumn* gc = levels[i].m_fields[f].m_col)
+					node.m_values[gc->GetColumnId()] = rr.levelValues[i][f];
+	};
+	// A plain GROUP BY returns only the bottom groups: the ones above and the grand total are what they add up to (the
+	// gate let in only figures that do — CanFoldGroupByTotals), added up as the rows go by.
+	struct AddedUp { std::vector<ibValue> values; std::vector<bool> seen; };
+	std::unordered_map<ibSelectorTree::Node*, AddedUp> above;
+	const auto addedUpOf = [&](ibSelectorTree::Node* node) -> AddedUp& {
+		AddedUp& sums = above[node];
+		if (sums.seen.empty()) {
+			sums.values.resize(aggregates.size());
+			sums.seen.assign(aggregates.size(), false);
+		}
+		return sums;
+	};
 	while (cursor.Next()) {
 		RRow rr; rr.level = 0;
 		for (size_t i = 0; i < levelPlans.size(); ++i) {
@@ -4796,14 +4872,6 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 			else
 				av = ibValue(cursor.GetResultNumber(aggAlias));
 			rr.aggs.push_back(av);
-
-			if (rollup || av.IsNull())
-				continue;
-			const size_t i = rr.aggs.size() - 1;
-			if (!grandSeen[i])                                                      { grandTotal[i] = av; grandSeen[i] = true; }
-			else if (a.m_fn == Fn::Min) { if (av.CompareValueLS(grandTotal[i]) < 0)   grandTotal[i] = av; }
-			else if (a.m_fn == Fn::Max) { if (av.CompareValueLS(grandTotal[i]) > 0)   grandTotal[i] = av; }
-			else                                                                      grandTotal[i] = ibValue(grandTotal[i].GetNumber() + av.GetNumber());
 		}
 
 		// --- this row becomes its node, here, while the cursor stands on it ---------------------
@@ -4813,26 +4881,53 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 			key.insert(key.end(), rr.levelValues[i].begin(), rr.levelValues[i].end());
 
 		ibSelectorTree::Node* node = nullptr;
+		std::vector<ibSelectorTree::Node*> over;   // a plain GROUP BY: the nodes this row adds up into, the root first
 		if (rr.level == 0) {
 			node = &tree.Root();          // grand total
 		}
 		else {
-			const size_t lastLevelWidth = rr.levelValues[level - 1].size();
-			const std::vector<ibValue> parentKey(key.begin(), key.end() - static_cast<long>(lastLevelWidth));
-			const auto pit = nodes.find(parentKey);
-			ibSelectorTree::Node* parent = (pit != nodes.end()) ? pit->second : &tree.Root();
+			ibSelectorTree::Node* parent = &tree.Root();
+			if (rollup) {
+				const size_t lastLevelWidth = rr.levelValues[level - 1].size();
+				const std::vector<ibValue> parentKey(key.begin(), key.end() - static_cast<long>(lastLevelWidth));
+				const auto pit = nodes.find(parentKey);
+				if (pit != nodes.end())
+					parent = pit->second;
+			}
+			else {
+				// ⭐ …AND A PLAIN GROUP BY RETURNS ONLY THE BOTTOM GROUPS: the ones above are made here, as they are
+				// first met — in the order the bottom was sorted by, which is the order the RAM fold meets them in.
+				over.push_back(parent);
+				std::vector<ibValue> prefix;
+				for (size_t i = 0; i + 1 < level; ++i) {
+					prefix.insert(prefix.end(), rr.levelValues[i].begin(), rr.levelValues[i].end());
+					const auto [at, made] = nodes.try_emplace(prefix, nullptr);
+					if (made) {
+						at->second = parent->AddChild(static_cast<int>(i + 1));
+						keysInto(*at->second, rr, i + 1);
+					}
+					parent = at->second;
+					over.push_back(parent);
+				}
+			}
 			node = parent->AddChild(rr.level);
 			// A ROW OR A HEADING — said by the node, because only the node knows. The phantom level's
 			// nodes are the detail records the composition asked for.
 			if (detailLevel >= 0 && rr.level == detailLevel + 1)
 				node->m_kind = ibSelectorNodeKind::Detail;
-			for (size_t i = 0; i < level && i < levels.size(); ++i)
-				for (size_t f = 0; f < levels[i].m_fields.size() && f < rr.levelValues[i].size(); ++f)
-					if (const ibBackendQueryColumn* gc = levels[i].m_fields[f].m_col)
-						node->m_values[gc->GetColumnId()] = rr.levelValues[i][f];
+			keysInto(*node, rr, level);
 			// Only a node that can still have children is worth remembering — see the map's note.
 			if (level < levels.size())
 				nodes[std::move(key)] = node;
+		}
+		for (ibSelectorTree::Node* up : over) {
+			AddedUp& sums = addedUpOf(up);
+			for (size_t i = 0; i < rr.aggs.size() && i < aggregates.size(); ++i) {
+				if (rr.aggs[i].IsNull())
+					continue;
+				if (!sums.seen[i]) { sums.values[i] = rr.aggs[i]; sums.seen[i] = true; }
+				else                 AddUp(aggregates[i].m_fn, sums.values[i], rr.aggs[i]);
+			}
 		}
 		for (size_t i = 0; i < rr.aggs.size() && i < aggregates.size(); ++i) {
 			const ibBackendQueryColumn* ac = aggregates[i].m_col;
@@ -4849,19 +4944,23 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 			node->m_values[ac->GetColumnId()] = rr.aggs[i];   // IN-PLACE in the aggregate's own column
 		}
 	}
-	// The grand total of a plain GROUP BY — added up above; a sum or a count of no groups is a zero, as it is on
-	// every other road (a minimum of nothing stays unsaid).
-	if (!rollup)
-		for (size_t i = 0; i < aggregates.size(); ++i) {
-			using Fn = ibDataQueryBuilder::AggregateFn;
-			const ibBackendQueryColumn* ac = aggregates[i].m_col;
-			if (ac == nullptr)
-				continue;
-			if (grandSeen[i])
-				tree.Root().m_values[ac->GetColumnId()] = grandTotal[i];
-			else if (aggregates[i].m_fn == Fn::Sum || aggregates[i].m_fn == Fn::Count)
-				tree.Root().m_values[ac->GetColumnId()] = ibValue(ibNumber(0L));
-		}
+	// What a plain GROUP BY's groups add up to — the ones above and the grand total, added up above, the grand total
+	// said even over no groups: a sum or a count of none is a zero, as it is on every other road (a minimum of
+	// nothing stays unsaid).
+	if (!rollup) {
+		addedUpOf(&tree.Root());
+		for (const auto& [up, sums] : above)
+			for (size_t i = 0; i < aggregates.size(); ++i) {
+				using Fn = ibDataQueryBuilder::AggregateFn;
+				const ibBackendQueryColumn* ac = aggregates[i].m_col;
+				if (ac == nullptr)
+					continue;
+				if (sums.seen[i])
+					up->m_values[ac->GetColumnId()] = sums.values[i];
+				else if (aggregates[i].m_fn == Fn::Sum || aggregates[i].m_fn == Fn::Count)
+					up->m_values[ac->GetColumnId()] = ibValue(ibNumber(0L));
+			}
+	}
 	MarkRollupFolders(tree.Root());
 	// …AND THE PERIODS THE SERVER HAD NOTHING TO REPORT FOR. A `GROUP BY` returns the periods that
 	// have rows; the quiet month is missing by construction, on this road exactly as on the RAM one.
@@ -4909,8 +5008,8 @@ static const ibBackendQueryColumn* HopToFoldFirst(const ibDataQuerySpec& spec)
 	return field.m_path.front();
 }
 
-// Single-source fold on the server — SELECT … GROUP BY [ROLLUP] over ONE source; `rollup` false = the one-level
-// plain GROUP BY (ibDbTableProvider::CanFoldOneLevelTotals).
+// Single-source fold on the server — SELECT … GROUP BY [ROLLUP] over ONE source; `rollup` false = the plain GROUP BY
+// over the levels' fields (ibDbTableProvider::CanFoldGroupByTotals).
 static ibSelectorTree FoldSingleSource(const ibDataQuerySpec& spec, bool rollup)
 	{
 		const ibBackendQueryable* q = spec.m_queryable;
@@ -4922,6 +5021,31 @@ static ibSelectorTree FoldSingleSource(const ibDataQuerySpec& spec, bool rollup)
 		// sort's. The chain below walks it like any root (BuildPageIR's windowed root is the same move).
 		const ibBackendQueryColumn* hop = rollup ? nullptr : HopToFoldFirst(spec);
 		const ibString rootTable = hop != nullptr ? ibString(ibT("q_hops")) : mainTable;
+		const ibQueryExprPtr where = ibMetaIRBuilder::BuildWhere(q, *spec.m_conditions, spec.m_predicate);
+
+		// ⭐ A FIGURE OVER A PROJECTION READS IT OFF THE SOURCE'S ROW, written out under the source's own name with each
+		// projection a figure folds beside it and the filter inside — BuildPageIR's windowed root, and the name keeps every
+		// column, join and key below qualified as it was. Folded over the bare source, the handle (SelectExprOf) named a
+		// column the source does not have: "Column unknown OUT_C3CC2289" for `100 * SUM(GrossProfit) / SUM(Amount)` beside
+		// `SUM(Amount)`, by GROUP BY on Firebird (2026-11-05). The gate lets through only what that row answers alone.
+		ibQueryRelPtr projectedRows;
+		{
+			std::vector<ibQueryProjItem>             row{ ibQueryProjItem{ ibCol(mainTable, ibT("*")), ibString() } };
+			std::vector<const ibBackendQueryColumn*> handles;
+			for (const ibDataQueryBuilder::AggregateItem& a : RollupAggregatesOf(spec))
+				if (const ibQueryColumnSelect* projected = SelectExprOf(spec, a.m_col))
+					if (std::find(handles.begin(), handles.end(), a.m_col) == handles.end()) {
+						handles.push_back(a.m_col);
+						row.push_back(ibQueryProjItem{ ibMetaIRBuilder::BuildColumnExpr(q, projected->m_expr, mainTable),
+							a.m_col->GetPhysicalName() });
+					}
+			if (!handles.empty()) {
+				ibQueryRelPtr source = SourceRelationOf(q, mainTable);
+				if (where) source = ibFilter(source, where);
+				projectedRows = ibSubquery(ibProject(source, std::move(row)), mainTable);
+			}
+		}
+
 		std::vector<ibQueryExprPtr> partials;                         // each aggregate's part, as the level adds it up
 		std::map<const ibBackendQueryColumn*, ibString> sortParts;   // a plain sort's column -> its part's name
 		ibQueryRelPtr hopsRelation;
@@ -4952,9 +5076,11 @@ static ibSelectorTree FoldSingleSource(const ibDataQuerySpec& spec, bool rollup)
 					sortParts[s.m_col] = part;
 				}
 			}
-			ibQueryRelPtr source = SourceRelationOf(q, mainTable);
-			if (ibQueryExprPtr where = ibMetaIRBuilder::BuildWhere(q, *spec.m_conditions, spec.m_predicate))
-				source = ibFilter(source, where);
+			ibQueryRelPtr source = projectedRows;
+			if (!source) {
+				source = SourceRelationOf(q, mainTable);
+				if (where) source = ibFilter(source, where);
+			}
 			hopsRelation = ibSubquery(ibAggregate(source, std::move(inner), std::move(byHop)), rootTable);
 			ibJournalInfo(ibT("query.road"), ibT("SERVER: one level folded by '%s' first - the walk joins its groups, not every row"),
 				hop->GetName());
@@ -4963,7 +5089,7 @@ static ibSelectorTree FoldSingleSource(const ibDataQuerySpec& spec, bool rollup)
 		// DOT-WALK group keys / aggregate inputs (Producer.Region) ride a reference JOIN chain, exactly like the
 		// non-ROLLUP aggregate: resolve each path to a join alias + its JOINED source (whose leaf-set / metaData
 		// drive the leaf's scalar test + a reference leaf's spread reassembly). A plain column keeps the main table.
-		ibRefJoinChain chain(q, rootTable, hopsRelation);
+		ibRefJoinChain chain(q, rootTable, hop != nullptr ? hopsRelation : projectedRows);
 		std::map<const ibBackendQueryColumn*, std::pair<ibString, const ibBackendQueryable*>> dw;   // col -> (alias, joined source)
 		// …and a walk through a reference of several kinds (`Recorder.Warehouse`) has no one alias: its leaf is the
 		// spread merged across the kinds, the one a walked output projects (ibRefJoinChain::MergedSpread).
@@ -4990,19 +5116,22 @@ static ibSelectorTree FoldSingleSource(const ibDataQuerySpec& spec, bool rollup)
 		for (const ibDataQueryBuilder::AggregateItem& a : RollupAggregatesOf(spec))
 			resolveDot(a.m_col, a.m_path);
 
-		// ONE LEVEL: what a sort's walk on from the key reaches, to order the groups by (RunRollupTotals, GroupOrderWalk).
-		// One step past the key — its target's own field, a kind's order — is looked up over the groups, on the key they
-		// hold: a thousand items, not every register row joined to the catalog (2026-10-05). A longer walk takes the
-		// fields the page read sorts it on (BuildPageIR's path ORDER BY, the same three ways), joined here with the rest
-		// of the chain, because the FROM is taken next.
+		// A PLAIN GROUP BY: what a sort's walk on from a level's key reaches, to order the groups by (RunRollupTotals,
+		// GroupOrderWalk). One step past the key — its target's own field, a kind's order, which every sort by a reference
+		// takes first (ibDataQueryBuilder::OrderBy) — is looked up over the groups, on the key they hold: a thousand items,
+		// not every register row joined to the catalog (2026-10-05). The bottom groups hold every level's key, so a level
+		// above is looked up the same way. A longer walk takes the fields the page read sorts it on (BuildPageIR's path
+		// ORDER BY, the same three ways), joined here with the rest of the chain, because the FROM is taken next.
 		std::vector<GroupOrderWalk> sortWalks;
+		const std::vector<ibTotalLevel> levels = RollupLevelsOf(spec);
 		if (!rollup && spec.m_sorts != nullptr) {
-			const std::vector<ibTotalLevel> levels = RollupLevelsOf(spec);
 			for (const ibQuerySortItem& s : *spec.m_sorts) {
 				GroupOrderWalk walk;
-				const int fi = levels.empty() ? -1 : LevelKeyWalkedOnFrom(levels.front(), s);
+				const auto walkedFrom = std::find_if(levels.begin(), levels.end(),
+					[&](const ibTotalLevel& level) { return LevelKeyWalkedOnFrom(level, s) >= 0; });
+				const int fi = walkedFrom != levels.end() ? LevelKeyWalkedOnFrom(*walkedFrom, s) : -1;
 				if (fi >= 0) {
-					const ibTotalField& f = levels.front().m_fields[static_cast<size_t>(fi)];
+					const ibTotalField& f = walkedFrom->m_fields[static_cast<size_t>(fi)];
 					const size_t keyLength = f.m_path.empty() ? 1 : f.m_path.size();
 					if (s.m_path.size() == keyLength + 1)
 						if (const ibBackendQueryable* target = LevelKeyTarget(q, f))
@@ -5033,10 +5162,9 @@ static ibSelectorTree FoldSingleSource(const ibDataQuerySpec& spec, bool rollup)
 		// exactly that: "Token unknown - line 1, column 219: GROUP" (2026-08-22, with the road forced
 		// open). The engine was right; the statement was ours.
 		const bool chained = hasDotWalk || hop != nullptr;   // folded by a hop first, the chain's root IS the FROM
-		ibQueryRelPtr from = chained ? chain.From() : SourceRelationOf(q, mainTable);
-		if (hop == nullptr)   // …and its rows were filtered inside
-			if (ibQueryExprPtr where = ibMetaIRBuilder::BuildWhere(q, *spec.m_conditions, spec.m_predicate))
-				from = ibFilter(from, where);
+		ibQueryRelPtr from = chained ? chain.From() : projectedRows ? projectedRows : SourceRelationOf(q, mainTable);
+		if (hop == nullptr && projectedRows == nullptr && where)   // …else its rows were filtered inside
+			from = ibFilter(from, where);
 
 		// A plain column qualifies by the main table WHEN joins are present (disambiguation), else UNqualified.
 		const ibString mainQual = chained ? rootTable : ibString();
@@ -5088,7 +5216,7 @@ ibSelectorTree ibDbTableProvider::ExecuteRollupTotals(const ibDataQuerySpec& spe
 		return FoldSingleSource(spec, /*rollup*/ true);
 	}
 
-ibSelectorTree ibDbTableProvider::ExecuteOneLevelTotals(const ibDataQuerySpec& spec)
+ibSelectorTree ibDbTableProvider::ExecuteGroupByTotals(const ibDataQuerySpec& spec)
 	{
 		return FoldSingleSource(spec, /*rollup*/ false);
 	}

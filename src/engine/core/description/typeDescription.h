@@ -14,6 +14,9 @@ enum ibAllowedLength {
 };
 
 struct ibQualifierNumber {
+	// The most digits a type description holds — QualifierNumber's bound; 0 is no limit. A field's column takes
+	// fewer: MAX_PRECISION_NUMBER (core/core.h), the designer's.
+	static constexpr int kMaxPrecision = 38;
 	bool m_nonNegative;
 	unsigned char m_precision;
 	unsigned char m_scale;
@@ -29,6 +32,9 @@ struct ibQualifierDate {
 };
 
 struct ibQualifierString {
+	// The longest string a type description holds — the most m_length holds; 0 is no limit. A field's column takes
+	// fewer: MAX_LENGTH_STRING (core/core.h), the designer's.
+	static constexpr int kMaxLength = 65535;
 	unsigned short m_length;
 	ibAllowedLength m_allowedLength;
 	ibQualifierString(unsigned short length = 10, ibAllowedLength allowedLength = ibAllowedLength::ibAllowedLength_Variable) :

@@ -1292,6 +1292,31 @@ bool ibCompileCode::PushCallFunction(const std::shared_ptr<ibCallFunction>& call
 	std::shared_ptr<ibCompileContext::ibFunction> foundedFunc = nullptr;
 
 	if (!GetFunction(callFunction->m_strName, foundedFunc, &numModule)) {
+		// No function answers the name, and a variable of that name holds a callable value: it is called on its
+		// slot, and the runtime verifies at dispatch that the value really wraps a function.
+		if (callFunction->m_puCallableVal.m_numArray != DEF_VAR_SKIP) {
+			ibByteUnit code;
+			StampSource(code);
+			code.m_numString = callFunction->m_numString;
+			code.m_numLine = callFunction->m_numLine;
+			code.m_strModuleName = callFunction->m_strModuleName;
+			code.m_numOper = OPER_CALL_LAMBDA;
+			code.m_param1 = callFunction->m_puRetValue;		// variable into which the value is returned
+			code.m_param4 = callFunction->m_puCallableVal;	// the variable holding the callable value
+			// The caller's argument count: the runtime reads that many OPER_SET after this, and the lambda's
+			// own defaults fill the rest.
+			code.m_param2.m_numIndex = callFunction->m_listParam.size();
+			m_cByteCode.m_listCode.emplace_back(std::move(code));
+
+			for (const ibParamUnit& param : callFunction->m_listParam) {
+				ibByteUnit argCode;
+				StampSource(argCode);
+				argCode.m_numOper = OPER_SET;
+				argCode.m_param1 = param;
+				m_cByteCode.m_listCode.emplace_back(std::move(argCode));
+			}
+			return true;
+		}
 		m_numCurrentCompile = callFunction->m_numError;
 		Refuse(ibScriptError_CallFunction, callFunction->m_strRealName);// there is no such function in the module
 		return false;
@@ -2097,9 +2122,11 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 			case KEY_VAR: // setting variables and arrays
 				CompileDeclaration(context);
 				break;
-			case KEY_NEW:
-				CompileNewObject(context);
+			case KEY_NEW: { // `new Structure("a", 1);`, `New Query(text).Execute();` - read as a call, keyword and all
+				int numSet = 0;
+				GetCurrentIdentifier(context, numSet);
 				break;
+			}
 			case KEY_FROM:
 				// LINQ as top-level statement — result-array is emitted
 				// into a temp slot and discarded. Symmetric with KEY_NEW
@@ -2517,76 +2544,6 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 	return true;
 }//CompileBlock
 
-bool ibCompileCode::CompileNewObject(ibCompileContext* context)
-{
-	ExpectKeyword(KEY_NEW);
-
-	ibString strClassName = ExpectIdentifier(true);
-	const int numConst = GetConstString(strClassName);
-
-	std::vector <ibParamUnit> listParam;
-
-	if (IsNextDelimiter('(')) { // this is a method call
-		ExpectDelimiter('(');
-		while (!IsNextDelimiter(')')) {
-			if (IsNextDelimiter(',')) {
-				ibParamUnit data;
-				data.m_numArray = DEF_VAR_SKIP;// missing parameter
-				data.m_numIndex = DEF_VAR_SKIP;
-				listParam.emplace_back(std::move(data));
-			}
-			else {
-				listParam.emplace_back(GetExpression(context));
-				if (!IsNextDelimiter(',') || IsNextDelimiter(')'))
-					break;
-			}
-			ExpectDelimiter(',');
-		}
-		ExpectDelimiter(')');
-	}
-
-	if (!ibValue::IsRegisterCtor(strClassName, ibCtorObjectType::ibCtorObjectType_object_value)) {
-		Refuse(ibScriptError_CallConstructor, strClassName);
-		return false;
-	}
-
-	ibByteUnit code;
-	StampSource(code);
-
-	code.m_numOper = OPER_NEW;
-	code.m_param2.m_numIndex = numConst;//number of the called method from the list of encountered methods
-	code.m_param2.m_numArray = listParam.size();// number of parameters
-
-	// ⭐⭐ THE CLASS ID, DECIDED HERE — the guard above has just PROVED this name is a registered
-	// value ctor, and that answer used to be thrown away: the instruction carried the NAME and the
-	// runtime looked it up again on every execution (`CreateObject(className, …)` is literally
-	// `GetIDObjectFromString` followed by `CreateObject(clsid, …)`). GetTypeVar's own comment states
-	// the rule this restores: *"THE ID, NOT THE NAME. Everything downstream speaks class ids;
-	// handing back a name would only mean resolving it again, later, somewhere else."*
-	//
-	// The name stays in the const pool: a refusal has to be able to say which class it was.
-	code.m_param3.m_numIndex = (long long)ibValue::GetIDObjectFromString(strClassName);
-
-	ibParamUnit variable = context->CreateVariable(DEF_VAR_TEMP_MOVE);
-	code.m_param1 = variable;// variable into which the value is returned
-	m_cByteCode.m_listCode.emplace_back(std::move(code));
-
-	for (unsigned int arg = 0; arg < listParam.size(); arg++) {
-
-		ibByteUnit argCode;
-		StampSource(argCode);
-		argCode.m_numOper = OPER_SET;
-		argCode.m_param1 = listParam[arg];
-
-		// The ARGUMENT's instruction — `code` was moved into the list above, so pushing it again put an empty
-		// instruction where each argument belonged: `New Structure("a", 1);` as a statement reached the
-		// constructor with no arguments at all (measured 2026-09-17). The expression form below was right.
-		m_cByteCode.m_listCode.emplace_back(std::move(argCode));
-	}
-
-	return true;
-}
-
 /**
  * CompileGoto
  * Purpose:
@@ -2619,7 +2576,8 @@ bool ibCompileCode::CompileGoto(ibCompileContext* context)
 /*
  * GetCurrentIdentifier
  * Purpose:
- * Compiling an identifier (defining its type as a variable, attribute or function, method)
+ * Compiling an identifier (defining its type as a variable, attribute or function, method), or `new Class(…)`,
+ * and what is written after it: `[key]`, `.Name`, `.Method(…)`
  * numIsSet - at the input: 1 - a sign that an expression assignment may be expected (if the '=' sign is encountered)
  * Return value:
  * numIsSet - at the output: 1 - a sign that the assignment of the expression is exactly expected (i.e. the '=' sign must be encountered)
@@ -2630,10 +2588,76 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 {
 	ibParamUnit variable; int numPrevSet = numIsSet;
 
+	// `new Class(…)` names its class as an identifier and is a value like any other: what is written after it is
+	// read on below - `new Array(3).Count()`, `New Query(text).Execute().Select()`.
+	const bool isNew = IsNextKeyword(KEY_NEW);
+	if (isNew)
+		ExpectKeyword(KEY_NEW);
+
 	const ibString& strRealName = ExpectIdentifier(true);
 	const ibString& strName = stringUtils::MakeUpper(strRealName);
 
-	if (IsNextDelimiter('(')) { // this is a function call
+	if (isNew) {
+		const int numConst = GetConstString(strRealName);
+
+		std::vector <ibParamUnit> listParam;
+		if (IsNextDelimiter('(')) { // the constructor's arguments
+			ExpectDelimiter('(');
+			while (!IsNextDelimiter(')')) {
+				if (IsNextDelimiter(',')) {
+					ibParamUnit data;
+					data.m_numArray = DEF_VAR_SKIP;// missing parameter
+					data.m_numIndex = DEF_VAR_SKIP;
+					listParam.emplace_back(std::move(data));
+				}
+				else {
+					listParam.emplace_back(GetExpression(context));
+					if (!IsNextDelimiter(',') || IsNextDelimiter(')'))
+						break;
+				}
+				ExpectDelimiter(',');
+			}
+			ExpectDelimiter(')');
+		}
+
+		if (!ibValue::IsRegisterCtor(strRealName, ibCtorObjectType::ibCtorObjectType_object_value)) {
+			Refuse(ibScriptError_CallConstructor, strRealName);
+			return ibParamUnit();
+		}
+
+		ibByteUnit code;
+		StampSource(code);
+		code.m_numOper = OPER_NEW;
+		code.m_param2.m_numIndex = numConst;//number of the called method from the list of encountered methods
+		code.m_param2.m_numArray = listParam.size();// number of parameters
+
+		// ⭐⭐ THE CLASS ID, DECIDED HERE — the guard above has just PROVED this name is a registered
+		// value ctor, and that answer used to be thrown away: the instruction carried the NAME and the
+		// runtime looked it up again on every execution (`CreateObject(className, …)` is literally
+		// `GetIDObjectFromString` followed by `CreateObject(clsid, …)`). GetTypeVar's own comment states
+		// the rule this restores: *"THE ID, NOT THE NAME. Everything downstream speaks class ids;
+		// handing back a name would only mean resolving it again, later, somewhere else."*
+		//
+		// The name stays in the const pool: a refusal has to be able to say which class it was.
+		code.m_param3.m_numIndex = ibValue::GetIDObjectFromString(strRealName);
+
+		variable = context->CreateVariable(DEF_VAR_TEMP_MOVE);
+		code.m_param1 = variable;// variable into which the value is returned
+		m_cByteCode.m_listCode.emplace_back(std::move(code));
+
+		for (unsigned int arg = 0; arg < listParam.size(); arg++) {
+			ibByteUnit argCode;
+			StampSource(argCode);
+			argCode.m_numOper = OPER_SET;
+			argCode.m_param1 = listParam[arg];
+			// The ARGUMENT's instruction — `code` was moved into the list above, so pushing it again put an empty
+			// instruction where each argument belonged: `New Structure("a", 1);` as a statement reached the
+			// constructor with no arguments at all (measured 2026-09-17).
+			m_cByteCode.m_listCode.emplace_back(std::move(argCode));
+		}
+		numIsSet = 0;   // a new object is not assigned to
+	}
+	else if (IsNextDelimiter('(')) { // this is a function call
 		std::shared_ptr<ibCompileContext::ibFunction> foundedFunc = nullptr;
 		if (m_rootContext->FindFunction(strName, foundedFunc, true)) {
 			const int numConst = GetConstString(strRealName);
@@ -2687,97 +2711,7 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 			}
 		}
 		else {
-			// Try as a Variable holding a callable value (lambda /
-			// function-pointer / any ibValueFunction-wrapping ibValue).
-			// This sits between the context-method check above and the
-			// named-function fallback below: regular Local / Export
-			// vars get OPER_CALL_LAMBDA on their slot; runtime then verifies
-			// at dispatch that the value really wraps an ibValueFunction.
-			// Excludes context-bindings (Manager, ThisForm — m_bContext)
-			// and externals (m_bExternal) — those aren't user-callable
-			// in Phase A. ContextProp (m_strContext non-empty) goes
-			// through OPER_GET_A elsewhere.
-			// `context->FindVariable` is OWN-scope only (does not walk
-			// parents). For nested block scopes (RETURN_BLOCK) we MUST
-			// walk the parent compile-context chain manually — otherwise
-			// a lambda assigned in an outer block (e.g. `a = Function...`
-			// in block-A, then `a()` called from block-A's nested
-			// block-B-block-C) is not visible at the call site and the
-			// emitter falls through to GetCallFunction → "Procedure or
-			// function not detected (a)". Stop at the first match (own
-			// scope wins over parents — same nearest-binding rule as
-			// GetVariable's parent loop).
-			std::shared_ptr<ibCompileContext::ibVariable> foundedCallableVar = nullptr;
-			bool foundCallable = false;
-			bool foundInBlockScope = false;
-			for (ibCompileContext* pCur = context; pCur != nullptr; pCur = pCur->m_parentContext) {
-				if (pCur->FindVariable(strRealName, foundedCallableVar)) {
-					foundCallable = true;
-					foundInBlockScope = (pCur->m_numReturn == RETURN_BLOCK);
-					break;
-				}
-			}
-			// Block-scope vars (var declared inside `{...}` in CES) get
-			// PushVariable'd with contextVar=true so the runtime emission
-			// path treats them as outer-frame slots — same routing as
-			// real Context bindings (Manager / ThisForm). For dispatch
-			// purposes we must still recognize them as user-callable
-			// values: distinguish by the ctx they were found in
-			// (RETURN_BLOCK ⇒ block-scope artifact, NOT a real context
-			// binding). Real Context bindings live on m_rootContext
-			// (numReturn == RETURN_NONE).
-			const bool isCallableVar = foundCallable
-				&& foundedCallableVar
-				&& foundedCallableVar->m_strContext.IsEmpty()
-				&& !foundedCallableVar->IsExternal()
-				&& (!foundedCallableVar->IsContext() || foundInBlockScope);
-
-			if (isCallableVar) {
-				std::vector<ibParamUnit> listParam;
-				ExpectDelimiter('(');
-				while (!IsNextDelimiter(')')) {
-					if (IsNextDelimiter(',')) {
-						ibParamUnit data;
-						data.m_numArray = DEF_VAR_SKIP; // missing parameter
-						data.m_numIndex = DEF_VAR_SKIP;
-						listParam.emplace_back(std::move(data));
-					}
-					else {
-						listParam.emplace_back(GetExpression(context));
-						if (!IsNextDelimiter(',') || IsNextDelimiter(')'))
-							break;
-					}
-					ExpectDelimiter(',');
-				}
-				ExpectDelimiter(')');
-
-				ibByteUnit code;
-				StampSource(code);
-				code.m_numOper = OPER_CALL_LAMBDA;
-				variable = context->CreateVariable(DEF_VAR_TEMP_MOVE);
-				code.m_param1 = variable;                                  // return-value dest
-				code.m_param4 = context->GetVariable(strRealName, true, false);  // source callable slot
-				// m_param2.m_numIndex = caller-supplied arg count. Runtime
-				// uses this as the upper bound for inline OPER_SET / SETCONST
-				// consumption. Trailing params (callerArgCount..paramCount)
-				// are filled from the lambda's m_listParam[i].m_defaultValue.
-				code.m_param2.m_numIndex = (long)listParam.size();
-				m_cByteCode.m_listCode.emplace_back(std::move(code));
-
-				// Inline OPER_SET for each parameter — same layout as
-				// OPER_CALL_METHOD / OPER_CALL. Runtime walks these via
-				// lCodeLine++ inside its OPER_CALL_LAMBDA handler.
-				for (unsigned int i = 0; i < listParam.size(); i++) {
-					ibByteUnit argCode;
-					StampSource(argCode);
-					argCode.m_numOper = OPER_SET;
-					argCode.m_param1 = listParam[i];
-					m_cByteCode.m_listCode.emplace_back(std::move(argCode));
-				}
-			}
-			else {
-				variable = GetCallFunction(context, strRealName, numIsSet);
-			}
+			variable = GetCallFunction(context, strRealName, numIsSet);
 		}
 		if (IsTypeVar(strRealName)) {
 			variable.m_clsid = GetTypeVar(strRealName);	// this is a type cast
@@ -3502,6 +3436,44 @@ ibParamUnit ibCompileCode::GetCallFunction(ibCompileContext* context, const ibSt
 	callFunc->m_strRealName = strRealName;
 	callFunc->m_numError = m_numCurrentCompile;// to display messages when errors occur
 
+	// A Variable holding a callable value (lambda / function-pointer / any ibValueFunction-wrapping ibValue):
+	// regular Local / Export vars get OPER_CALL_LAMBDA on their slot; runtime then verifies at dispatch that
+	// the value really wraps an ibValueFunction. Excludes context-bindings (Manager, ThisForm — m_bContext)
+	// and externals (m_bExternal) — those aren't user-callable in Phase A. ContextProp (m_strContext
+	// non-empty) goes through OPER_GET_A elsewhere.
+	// `context->FindVariable` is OWN-scope only (does not walk parents). For nested block scopes
+	// (RETURN_BLOCK) we MUST walk the parent compile-context chain manually — otherwise a lambda assigned in
+	// an outer block (e.g. `a = Function...` in block-A, then `a()` called from block-A's nested
+	// block-B-block-C) is not visible at the call site and the call is refused with "Procedure or function
+	// not detected (a)". Stop at the first match (own scope wins over parents — same nearest-binding rule
+	// as GetVariable's parent loop).
+	std::shared_ptr<ibCompileContext::ibVariable> foundedCallableVar = nullptr;
+	bool foundInBlockScope = false;
+	for (ibCompileContext* pCur = context; pCur != nullptr; pCur = pCur->m_parentContext) {
+		if (pCur->FindVariable(strRealName, foundedCallableVar)) {
+			foundInBlockScope = (pCur->m_numReturn == RETURN_BLOCK);
+			break;
+		}
+	}
+	// Block-scope vars (var declared inside `{...}` in CES) get PushVariable'd with contextVar=true so the
+	// runtime emission path treats them as outer-frame slots — same routing as real Context bindings
+	// (Manager / ThisForm). For dispatch purposes we must still recognize them as user-callable values:
+	// distinguish by the ctx they were found in (RETURN_BLOCK ⇒ block-scope artifact, NOT a real context
+	// binding). Real Context bindings live on m_rootContext (numReturn == RETURN_NONE).
+	//
+	// ⭐ A PROCEDURE OR FUNCTION OF THAT NAME WINS, as a context method already does. Names are read whatever
+	// their case, so `var chapterNames = ChapterNames();` had the variable hide the module's function, and the
+	// run failed with "value is not a callable function" (#646) while `message` never hid `Message()`. So the
+	// variable is held for when no function answers the name: a function declared further down is known only
+	// at the end of the module, where a call made before its declaration is resolved (PushCallFunction).
+	callFunc->m_puCallableVal.m_numArray = DEF_VAR_SKIP; // no such variable
+	callFunc->m_puCallableVal.m_numIndex = DEF_VAR_SKIP;
+	if (foundedCallableVar
+		&& foundedCallableVar->m_strContext.IsEmpty()
+		&& !foundedCallableVar->IsExternal()
+		&& (!foundedCallableVar->IsContext() || foundInBlockScope))
+		callFunc->m_puCallableVal = context->GetVariable(strRealName, true, false);
+
 	ExpectDelimiter('(');
 
 	while (!IsNextDelimiter(')')) {
@@ -3543,7 +3515,10 @@ ibParamUnit ibCompileCode::GetCallFunction(ibCompileContext* context, const ibSt
 	// body compiles (it includes the temps created during it). The whole point
 	// of deferring a self-call to m_listCallFunc is to resolve it at finalize
 	// once the count is settled, so the recursive frame is sized correctly.
-	if (foundedFunc != nullptr && !stringUtils::IsSameAs(m_strCurFuncName, callFunc->m_strName)) {
+	//
+	// An expression declares nothing further down, so a variable holding a callable of that name is called at once.
+	if ((foundedFunc != nullptr && !stringUtils::IsSameAs(m_strCurFuncName, callFunc->m_strName))
+		|| (foundedFunc == nullptr && callFunc->m_puCallableVal.m_numArray != DEF_VAR_SKIP && IsExpressionOnly())) {
 
 		if (!PushCallFunction(callFunc))
 			return ibParamUnit();
@@ -3675,56 +3650,11 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 		m_cByteCode.m_listCode.emplace_back(std::move(code));
 	}
 	else if ((lex.m_lexType == KEYWORD && lex.m_numData == KEY_NEW)) {
-
-		const ibString strObjectName = ExpectIdentifier(true);
-		const int numConst = GetConstString(strObjectName);
-
-		std::vector <ibParamUnit> listParam;
-
-		if (IsNextDelimiter('(')) { // this is a method call
-			ExpectDelimiter('(');
-			while (!IsNextDelimiter(')')) {
-				if (IsNextDelimiter(',')) {
-					ibParamUnit data;
-					data.m_numArray = DEF_VAR_SKIP;// missing parameter
-					data.m_numIndex = DEF_VAR_SKIP;
-					listParam.emplace_back(std::move(data));
-				}
-				else {
-					listParam.emplace_back(GetExpression(context));
-					if (!IsNextDelimiter(',') || IsNextDelimiter(')'))
-						break;
-				}
-				ExpectDelimiter(',');
-			}
-			ExpectDelimiter(')');
-		}
-
-		if (lex.m_numData == KEY_NEW && !ibValue::IsRegisterCtor(strObjectName, ibCtorObjectType::ibCtorObjectType_object_value)) {
-			Refuse(ibScriptError_CallConstructor, strObjectName);
-			return ibParamUnit();
-		}
-
-		ibByteUnit code;
-		StampSource(code);
-		code.m_numOper = OPER_NEW;
-
-		code.m_param2.m_numIndex = numConst;//number of the called method from the list of encountered methods
-		code.m_param2.m_numArray = listParam.size();// number of parameters
-		// The id, decided here — see the twin emitter above for why.
-		code.m_param3.m_numIndex = (long long)ibValue::GetIDObjectFromString(strObjectName);
-
-		variable = context->CreateVariable(DEF_VAR_TEMP_MOVE);
-		code.m_param1 = variable;// variable into which the value is returned
-		m_cByteCode.m_listCode.emplace_back(std::move(code));
-
-		for (unsigned int arg = 0; arg < listParam.size(); arg++) {
-			ibByteUnit argCode;
-			StampSource(argCode);
-			argCode.m_numOper = OPER_SET;
-			argCode.m_param1 = listParam[arg];
-			m_cByteCode.m_listCode.emplace_back(std::move(argCode));
-		}
+		// `new Class(…)` is read as an identifier is, and so is what follows it. Stepped back so that
+		// GetCurrentIdentifier takes the keyword itself.
+		m_numCurrentCompile--;
+		int numSet = 0;
+		variable = GetCurrentIdentifier(context, numSet);
 	}
 	else if (lex.m_lexType == KEYWORD && lex.m_numData == KEY_FROM) {
 		// LINQ block expression — `from <id> in <expr> ... select <expr>`.

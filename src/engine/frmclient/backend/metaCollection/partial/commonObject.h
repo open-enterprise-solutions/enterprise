@@ -44,8 +44,9 @@ public:
 		}
 
 		const ibString& GetPredefinedName() const { return m_item.m_name; }
-		const ibString& GetPredefinedCode() const { return m_item.m_code; }
-		const ibString& GetPredefinedDescription() const { return m_item.m_description; }
+		// The code and the description as they read — each a value of its field's type (#646).
+		const ibString& GetPredefinedCode() const { return m_item.m_code.m_title; }
+		const ibString& GetPredefinedDescription() const { return m_item.m_description.m_title; }
 
 		bool IsPredefinedFolder() const { return m_item.m_folder; }
 		wxObjectDataPtr<ibPredefinedItem> GetPredefinedParent() const { return m_valueParent; }

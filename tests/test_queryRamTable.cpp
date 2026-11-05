@@ -83,6 +83,24 @@ TEST(RamTableRekey, AClaimedIdIsNeverARiders) {
     EXPECT_EQ(Text(dst, 0, kY), wxT("b"));
 }
 
+// Of two pairs naming one new id, the later wins, as a later insert would have; and a rider whose id stands past
+// the new one keeps its place after it — the named cells and the riders are merged, not appended (#646).
+TEST(RamTableRekey, TheLaterOfTwoPairsWinsAndARiderStaysInOrder) {
+    ibQueryRamTable src = Table({ kA, kB, kY });
+    const long r = src.AppendRow();
+    Put(src, r, kA, wxT("a"));
+    Put(src, r, kB, wxT("b"));
+    Put(src, r, kY, wxT("rider y"));
+
+    ibQueryRamTable dst = Table({ kX, kY });
+    dst.AppendRowsRekeyed(src, { { kA, kX }, { kB, kX } });
+
+    EXPECT_EQ(Text(dst, 0, kX), wxT("b"));
+    EXPECT_EQ(Text(dst, 0, kY), wxT("rider y"));
+    EXPECT_EQ(dst.FindCell(0, kA), nullptr);
+    EXPECT_EQ(dst.FindCell(0, kB), nullptr);
+}
+
 // Into a table that already holds rows, the new ones go after them, in their own order.
 TEST(RamTableRows, HandedOnAfterWhatIsThere) {
     ibQueryRamTable dst = Table({ kA });
@@ -98,6 +116,24 @@ TEST(RamTableRows, HandedOnAfterWhatIsThere) {
     EXPECT_EQ(Text(dst, 1, kA), wxT("second"));
     EXPECT_EQ(Text(dst, 2, kA), wxT("third"));
     EXPECT_EQ(src.RowCount(), 0);
+}
+
+// A row laid down whole: each cell lands under its id whatever order the two came in — a figure numbered below the
+// keys among them, as a register numbers it — an id of 0 is not written, and of two under one id the later wins (#646).
+TEST(RamTableRows, LaidDownWholeInTheOrderOfTheIds) {
+    const ibMetaID kFigure = -5;
+    ibQueryRamTable t = Table({ kA, kB, kFigure });
+    const std::vector<ibMetaID> ids = { kB, kA, 0, kFigure, kA };
+    std::vector<ibValue> cells;
+    for (const ibString& s : { ibString(wxT("b")), ibString(wxT("a")), ibString(wxT("nobody")), ibString(wxT("figure")), ibString(wxT("a again")) })
+        cells.emplace_back(s);
+
+    ASSERT_EQ(t.AppendRow(ids, cells), 0);
+
+    EXPECT_EQ(Text(t, 0, kFigure), wxT("figure"));
+    EXPECT_EQ(Text(t, 0, kA), wxT("a again"));
+    EXPECT_EQ(Text(t, 0, kB), wxT("b"));
+    EXPECT_EQ(t.FindCell(0, 0), nullptr);
 }
 
 // Rows reordered where they stand: row i becomes what was row order[i], and only the first `keep` stay.

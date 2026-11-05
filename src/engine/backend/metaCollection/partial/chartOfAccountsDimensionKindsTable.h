@@ -81,10 +81,10 @@ private:
 	// takes row N of this table, so a number stored beside the row would be a second spelling of
 	// the row's own position — two answers to one question, and the stored one is the one that can
 	// disagree. Removed 2026-08-16; nothing had ever read it.
-	ibPropertyContainer<>* m_propertyAccountDimensionKind = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryAccountDimension,
+	ibPropertyPredefined<>* m_propertyAccountDimensionKind = ibPropertyObject::CreateProperty<ibPropertyPredefined<>>(m_categoryAccountDimension,
 		ibValueMetaObjectCompositeData::CreateEmptyType(ibT("AccountDimensionKind"), _("Account dimension kind"), _("The analytics kind this slot of the account is kept by - an item of the bound chart of characteristic types; its type is what the posting's dimension may hold. Required."), /*fillCheck*/ true, ibItemMode::ibItemMode_Item));
 
-	ibPropertyContainer<>* m_propertySummaryOnly = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryAccountDimension,
+	ibPropertyPredefined<>* m_propertySummaryOnly = ibPropertyObject::CreateProperty<ibPropertyPredefined<>>(m_categoryAccountDimension,
 		ibValueMetaObjectCompositeData::CreateBoolean(ibT("SummaryOnly"), _("Summary only"), _("Turnovers only: postings carry this dimension and turnovers are read by it, but balances are not broken down by it - the balance of the account is folded over this slot."), ibItemMode::ibItemMode_Item));
 };
 

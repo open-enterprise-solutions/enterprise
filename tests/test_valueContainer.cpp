@@ -243,20 +243,22 @@ TEST(ValueContainer, TheDotFindsAKeyAsWritten) {
 // WHAT AN ENTRY IS NAMED is its key's text, and a caller that wants a name wants exactly that: a
 // LINQ projection over containers names the columns of its answer with GetPropName. The walk hands
 // back every key, of any kind, as itself and in the order it was inserted.
+// ⚠ Held by a counted pointer, as a script holds it: the walk counts the map it walks (ibValueCollection), and one on
+// the stack was freed when the walk let it go.
 TEST(ValueContainer, AnEntryIsNamedByItsKeyAndWalkedInOrder) {
-    ibValueMap c;
+    const ibValuePtr<ibValueMap> c(new ibValueMap());
     ibValue date; date.SetType(ibValueTypes::TYPE_DATE);
     ibValue yes;  yes.SetBoolean(wxT("True"));
-    c.Insert(Key(wxT("Name")), Num(1));
-    c.Insert(Num(42), Num(2));
-    c.Insert(date, Num(3));
-    c.Insert(yes, Num(4));
+    c->Insert(Key(wxT("Name")), Num(1));
+    c->Insert(Num(42), Num(2));
+    c->Insert(date, Num(3));
+    c->Insert(yes, Num(4));
 
-    EXPECT_EQ(c.GetPropName(0), ibString(wxT("Name")));
-    EXPECT_EQ(c.GetPropName(1), ibString(wxT("42")));
-    EXPECT_EQ(c.FindProp(c.GetPropName(0)), 0) << "a string key is found again by its name";
+    EXPECT_EQ(c->GetPropName(0), ibString(wxT("Name")));
+    EXPECT_EQ(c->GetPropName(1), ibString(wxT("42")));
+    EXPECT_EQ(c->FindProp(c->GetPropName(0)), 0) << "a string key is found again by its name";
 
-    const std::shared_ptr<ibValueIteratorState> iterator = c.CreateIterator();
+    const std::shared_ptr<ibValueIteratorState> iterator = c->CreateIterator();
     ASSERT_NE(iterator, nullptr);
     ibValue pair, key, value;
     for (int at = 0; at < 4; at++) {

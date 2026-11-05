@@ -908,23 +908,8 @@ void SplitAccountCondition(const ibQueryPredicatePtr& condition,
 }
 
 // ⭐⭐ AN INACTIVE MOVEMENT EXISTS AND COUNTS FOR NOTHING — and a reading over the MOVEMENTS is the
-// one place that has to say so out loud.
-//
-// The meaning is declared once, as the totals delta's GUARD (accountingRegisterMetadataSchema.cpp): an
-// entry written but not in effect occupies its row and moves no figure. A stored total was accumulated
-// under that guard, so a reading of the VIEW inherits it and needs nothing; a reading of the raw
-// movements inherits nothing at all. Left unsaid there, the same question answered from the two
-// surfaces gives two different numbers — and which one a caller gets depends on whether the driver can
-// maintain derived state at all.
-void WhereActive(ibDataQueryBuilder& b, const ibValueMetaObjectAccountingRegister* reg,
-                 const ibBackendQueryable* source, bool onMovements)
-{
-	if (!onMovements || reg == nullptr)
-		return;
-	if (const ibValueMetaObjectAttributeBase* active = reg->GetRegisterActive())
-		if (const ibBackendQueryColumn* here = ColumnOn(source, active))
-			b.Where(here, ibValue(true));
-}
+// one place that has to say so out loud: ibRegWhereActive (registerQueryLowering.h), the totals' guard
+// said by a reading, which the accumulation register's readings of the movements say too (#646).
 
 // …and the totals' OTHER guard, for a pass that stands on one side: that side names an account
 // (ibRegSideNamed). A stored total never took an unnamed side in; a pass over the raw movements has to leave
@@ -1989,7 +1974,7 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetShapeQueryable
 			// different accounts: slot 1 is a counterparty on 62 and an item on 41. So every reading
 			// that folds groups by the kind column beside the value — one kind per row by construction
 			// — and puts it in the key. A shape that then keeps the kind to itself publishes a key it
-			// does not report: the value is poured, the kind is dropped on the way (SetByName finds no
+			// does not report: the value is poured, the kind is dropped on the way (the pour finds no
 			// such column and says nothing), and every reader downstream that needs it — the
 			// turnovers-only suppression first of all — asks a table that has forgotten.
 			//
@@ -2209,6 +2194,19 @@ void PourRows(ibQueryRamTable& table,
 	if (layouts.empty())
 		return;
 
+	// ⭐ THE IDS THE NAMES LAND UNDER ARE FOUND ONCE (#646), not per cell per row: a lookup by name walks the table's
+	// columns comparing names, and in the accumulation register's turnovers it stood in 5% of a report over 100 000
+	// rows (2026-11-04, Debug). A pass's key names are known up front; a figure's, the first time it is met.
+	std::vector<std::vector<ibMetaID>> keyIds(layouts.size());
+	for (size_t l = 0; l < layouts.size(); ++l)
+		for (const ibString& name : layouts[l].m_columns)
+			keyIds[l].push_back(table.ColumnIdByName(name));
+	std::map<ibString, ibMetaID> figureIds;
+	// One buffer for every row, laid down whole (AppendRow): the figures are numbered below the keys, and set cell by
+	// cell each went in ahead of them.
+	std::vector<ibMetaID> ids;
+	std::vector<ibValue> cells;
+
 	for (const auto& entry : rows) {
 		if (dropEmpty) {
 			bool anyNonZero = false;
@@ -2221,14 +2219,22 @@ void PourRows(ibQueryRamTable& table,
 
 		// The names of the PASS that wrote this key, never the first pass's: two passes break down two
 		// different sides by two lists the caller chose, and those lists need not be the same length.
-		const std::vector<ibString>& keyColumns =
-			layouts[entry.second.m_layout < layouts.size() ? entry.second.m_layout : 0].m_columns;
+		const std::vector<ibMetaID>& keyColumns = keyIds[entry.second.m_layout < layouts.size() ? entry.second.m_layout : 0];
 
-		const long row = table.AppendRow();
-		for (size_t i = 0; i < keyColumns.size() && i < entry.second.m_key.size(); i++)
-			table.SetByName(row, keyColumns[i], entry.second.m_key[i]);
-		for (const auto& figure : entry.second.m_figures)
-			table.SetByName(row, figure.first, figure.second);
+		ids.clear();
+		cells.clear();
+		for (size_t i = 0; i < keyColumns.size() && i < entry.second.m_key.size(); i++) {
+			ids.push_back(keyColumns[i]);
+			cells.push_back(entry.second.m_key[i]);
+		}
+		for (const auto& figure : entry.second.m_figures) {
+			auto id = figureIds.find(figure.first);
+			if (id == figureIds.end())
+				id = figureIds.emplace(figure.first, table.ColumnIdByName(figure.first)).first;
+			ids.push_back(id->second);
+			cells.push_back(figure.second);
+		}
+		table.AppendRow(ids, cells);
 	}
 
 }
@@ -2326,7 +2332,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalance(
 		else
 			WherePeriodAtMost(b, periodCol, ColumnOn(source, GetRegisterRecorder()), bound);
 
-		WhereActive(b, this, source, /*onMovements*/ source == movements);
+		ibRegWhereActive(b, this, source, /*onMovements*/ source == movements);
 		WhereSideNamed(b, source, pass.m_account, /*onMovements*/ source == movements);
 
 		// "The balance of 51" on this pass's own account column; "…in correspondence with 62" on the other.
@@ -2608,7 +2614,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeTurnover(
 		else
 			WherePeriodRange(b, periodCol, ColumnOn(source, GetRegisterRecorder()), begin, end);
 
-		WhereActive(b, this, source, /*onMovements*/ source == movements);
+		ibRegWhereActive(b, this, source, /*onMovements*/ source == movements);
 		WhereSideNamed(b, source, pass.m_account, /*onMovements*/ source == movements);
 
 		WhereAccount(b, accountCol, scopeAccount);
@@ -2847,7 +2853,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeDrCrTurnover(
 	b.WithAccessPolicy(nullptr);
 
 	WherePeriodRange(b, GetRegisterPeriod()->GetQueryColumn(), RecorderColumnOf(this), begin, end);
-	WhereActive(b, this, movements, /*onMovements*/ true);
+	ibRegWhereActive(b, this, movements, /*onMovements*/ true);
 	WhereAccount(b, GetRegisterAccount()->GetQueryColumn(),   scopeDr);
 	WhereAccount(b, GetRegisterAccountCr()->GetQueryColumn(), scopeCr);
 	WhereCondition(b, this, movements, ibAcctShape::DrCrTurnovers, /*creditSide*/ false, kindsDr, kindsCr, filter);
@@ -2974,7 +2980,7 @@ ibQueryRelPtr ibValueMetaObjectAccountingRegister::BuildDrCrTurnoverRelation(
 	b.WithAccessPolicy(nullptr);
 
 	WherePeriodRange(b, GetRegisterPeriod()->GetQueryColumn(), RecorderColumnOf(this), begin, end);
-	WhereActive(b, this, movements, /*onMovements*/ true);
+	ibRegWhereActive(b, this, movements, /*onMovements*/ true);
 	WhereAccount(b, GetRegisterAccount()->GetQueryColumn(),   scopeDr);
 	WhereAccount(b, GetRegisterAccountCr()->GetQueryColumn(), scopeCr);
 	WhereCondition(b, this, movements, ibAcctShape::DrCrTurnovers, /*creditSide*/ false, kindsDr, kindsCr, filter);
@@ -3982,20 +3988,45 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeRecords(
 	for (const auto resource : GetResourceArrayObject())
 		carry(resource);
 
+	// The ids a breakdown lands under — its kind's (0: it carries none) and its value's — found once, not by name per
+	// row (#646, as PourRows).
+	const auto idsOf = [&retTable](const std::vector<ibAcctBreakdownColumn>& breakdown) {
+		std::vector<std::pair<ibMetaID, ibMetaID>> ids;
+		for (const ibAcctBreakdownColumn& column : breakdown)
+			ids.emplace_back(BreakdownCarriesKind(column) ? retTable.ColumnIdByName(column.m_kindAlias) : 0,
+			                 retTable.ColumnIdByName(column.m_alias));
+		return ids;
+	};
+	const std::vector<std::pair<ibMetaID, ibMetaID>> idsDr = idsOf(breakdownDr), idsCr = idsOf(breakdownCr);
+
+	// One buffer for every row, laid down whole (AppendRow): a breakdown is numbered below the line's own columns, and
+	// set cell by cell each went in ahead of them.
+	std::vector<ibMetaID> ids;
+	std::vector<ibValue> cells;
 	ibDataQueryResult sel = b.Execute(ibReadPageRequest{});
 	while (sel.Next()) {
-		const long row = retTable.AppendRow();
-		for (const ibBackendQueryColumn* column : straight)
-			retTable.SetCell(row, column->GetColumnId(), sel.GetValue(column));
-		const auto pourBreakdown = [&](const std::vector<ibAcctBreakdownColumn>& breakdown) {
-			for (const ibAcctBreakdownColumn& column : breakdown) {
-				if (BreakdownCarriesKind(column))
-					retTable.SetByName(row, column.m_kindAlias, ReadBreakdownKind(sel, column));
-				retTable.SetByName(row, column.m_alias, ReadBreakdown(sel, column));
+		ids.clear();
+		cells.clear();
+		for (const ibBackendQueryColumn* column : straight) {
+			ids.push_back(column->GetColumnId());
+			cells.push_back(sel.GetValue(column));
+		}
+		const auto pourBreakdown = [&](const std::vector<ibAcctBreakdownColumn>& breakdown,
+		                               const std::vector<std::pair<ibMetaID, ibMetaID>>& breakdownIds) {
+			for (size_t i = 0; i < breakdown.size(); ++i) {
+				if (breakdownIds[i].first != 0) {
+					ids.push_back(breakdownIds[i].first);
+					cells.push_back(ReadBreakdownKind(sel, breakdown[i]));
+				}
+				if (breakdownIds[i].second != 0) {
+					ids.push_back(breakdownIds[i].second);
+					cells.push_back(ReadBreakdown(sel, breakdown[i]));
+				}
 			}
 		};
-		pourBreakdown(breakdownDr);
-		pourBreakdown(breakdownCr);
+		pourBreakdown(breakdownDr, idsDr);
+		pourBreakdown(breakdownCr, idsCr);
+		retTable.AppendRow(ids, cells);
 	}
 
 	return retTable;
@@ -4325,7 +4356,14 @@ ibQueryRelPtr ServerSideRead(const ibValueMetaObjectAccountingRegister* reg, con
 
 	spec.m_view = reg->GetTurnoverViewName(creditSide);
 
-	const std::vector<ibAcctServerKey> keys = ServerKeys(reg, published, shape, creditSide);
+	std::vector<ibAcctServerKey> keys = ServerKeys(reg, published, shape, creditSide);
+	// ⭐ BY THE MOVEMENT its own fields are a key as well: the recorder, and the line where the shape publishes it
+	// (`Record`). The view's movement arm keeps them under the register's own fields (#646).
+	if (spec.m_grain == ibMaterializeGrain::Movements)
+		for (const ibValueMetaObjectAttributePredefined* movement : { reg->GetRegisterRecorder(), reg->GetRegisterLineNumber() })
+			if (movement != nullptr)
+				if (const ibBackendQueryColumn* answer = published->ResolveColumnByName(movement->GetName()))
+					PairByRole(keys, movement->GetQueryColumn(), answer);
 	for (const ibAcctServerKey& key : keys)
 		spec.m_keyColumns.push_back(key.m_stored);
 
@@ -4706,22 +4744,26 @@ ibQueryRelPtr PeriodisedOnServer(const ibValueMetaObjectAccountingRegister* reg,
 	const ibValueMetaObjectChartOfAccounts* chart   = reg->GetChartOfAccounts();
 	if (period == nullptr || account == nullptr || chart == nullptr || chart->GetQueryable() == nullptr)
 		return nullptr;
-	const std::vector<ibDateTime> periods = ibRegCalendarOf(begin.m_date, end.m_date, fold.m_unit);
-	if (periods.empty())
+	// ⭐ BY THE RECORDER OR THE LINE there is no calendar: the turnovers are read per movement and the balances run
+	// along them (ibRegRunningMovements, #646).
+	const bool byMovement = fold.FromMovements();
+	const std::vector<ibDateTime> periods = byMovement ? std::vector<ibDateTime>() : ibRegCalendarOf(begin.m_date, end.m_date, fold.m_unit);
+	if (periods.empty() && !byMovement)
 		return nullptr;
 
 	const ibString periodField = ibRegValueField(period);
 	const ibQueryHierarchyScope accounts = ServerAccounts(reg, published, shape, accountDr);
 
-	// --- the turnovers per key per period --------------------------------------------------------------
+	// --- the turnovers per key per period — or per movement --------------------------------------------
 	ibMaterializeReadSpec t;
 	t.m_periodColumn = periodField;
 	t.m_from         = begin.m_date;
 	t.m_to           = end.m_date;
-	t.m_dropZeroRows = true;
-	t.m_grain        = ibMaterializeGrain::Calendar;
+	// …a movement of nothing still stands between two balances, and is pruned below, after the run.
+	t.m_dropZeroRows = !byMovement;
+	t.m_grain        = byMovement ? ibMaterializeGrain::Movements : ibMaterializeGrain::Calendar;
 	t.m_periodUnit   = fold.m_unit;
-	t.m_fromGrain    = ibValue(periods.front());
+	t.m_fromGrain    = byMovement ? ibValue() : ibValue(periods.front());
 	ibRegFillArmCut(t, reg, end, begin);
 
 	// --- the balance entering the interval, per key ---------------------------------------------------------
@@ -4802,7 +4844,18 @@ ibQueryRelPtr PeriodisedOnServer(const ibValueMetaObjectAccountingRegister* reg,
 		}
 	}
 
-	ibQueryRelPtr grid = ibRegRunningGrid(openRead, turnRead, periods, periodField, keyNames, passThrough, running, alias);
+	// The movement's own fields, under the names the read answers them by (ServerSideRead keys them so).
+	std::vector<ibColumnSlot> movementFields;
+	if (byMovement)
+		for (const ibValueMetaObjectAttributePredefined* movement : { reg->GetRegisterRecorder(), reg->GetRegisterLineNumber() })
+			if (movement != nullptr)
+				if (const ibBackendQueryColumn* answer = readShape->ResolveColumnByName(movement->GetName()))
+					for (const ibColumnSlot& slot : DescribeColumnLayout(answer))
+						movementFields.push_back(slot);
+
+	ibQueryRelPtr grid = byMovement
+		? ibRegRunningMovements(openRead, turnRead, begin.m_date, periodField, keyNames, movementFields, passThrough, running, alias)
+		: ibRegRunningGrid(openRead, turnRead, periods, periodField, keyNames, passThrough, running, alias);
 	if (grid == nullptr)
 		return nullptr;
 
@@ -4844,6 +4897,8 @@ ibQueryRelPtr PeriodisedOnServer(const ibValueMetaObjectAccountingRegister* reg,
 	for (const ibString& name : keyNames)
 		projection.push_back({ ibCol(aR, name), name });
 	projection.push_back({ ibCol(aR, periodField), periodField });
+	for (const ibColumnSlot& slot : movementFields)
+		projection.push_back({ ibCol(aR, slot.m_name), slot.m_name });
 	ibQueryExprPtr anyFigure;
 	const auto nonZero = [&anyFigure](const ibQueryExprPtr& figure) {
 		const ibQueryExprPtr one = ibBinOp(ibQueryBinOp::Ne, figure, ibRegTypedZero());
@@ -4920,13 +4975,11 @@ bool ibAcctTurnoverQueryable::CanReadOnServer() const
 	if (!m_condition.IsEmpty())
 		return false;
 
-	// FINER THAN THE STORED GRAIN — per recorder, per line — is answered by the movements by
-	// construction; a stored row is a day and cannot be cut into hours after the fact.
-	if (m_fold.FromMovements())
-		return false;
-
 	// A CALENDAR fold coarser than the grain is a projection the view already publishes; `Period`
-	// groups the stored column as it stands. Both are the spec's business. Nothing else is.
+	// groups the stored column as it stands. FINER THAN THE STORED GRAIN — per recorder, per line — is
+	// answered by the movements by construction, and each side's view carries them as its movement arm
+	// (ibMaterializeGrain::Movements); it used to be sent back here, and every step of a query above it
+	// computed in RAM (#646). All three are the spec's business. Nothing else is.
 	return true;
 }
 
@@ -4957,6 +5010,10 @@ ibQueryRelPtr ibAcctTurnoverQueryable::GetSourceRelation(const ibString& alias) 
 			? ibValue(r.m_from.GetDate().BeginOfPeriod(m_fold.m_unit))
 			: r.m_from;
 	}
+	// ⭐ BY THE RECORDER OR THE LINE the rows are the movements alone, the period as it stands — and the movement's
+	// own fields join each side's key (ServerSideRead).
+	if (m_fold.FromMovements())
+		r.m_grain = ibMaterializeGrain::Movements;
 
 	// ⭐⭐ THE CUT, AND THE HALF OF A BOUNDARY THAT ONLY IT CAN SAY. Whole grains come from the stored
 	// rows and each partial end from the movements — and where an end names a DOCUMENT, the recorder's
@@ -5327,8 +5384,17 @@ bool ibAcctBalanceAndTurnoverQueryable::CanReadOnServer() const
 	if (!m_condition.IsEmpty())
 		return false;               // its slot half is built per side
 
-	if (m_fold.FromMovements())
-		return false;               // recorder / line: a fold is exactly what discards them
+	// RECORDER / LINE: no fold discards them now — each movement opens where the one before it closed, a window along
+	// the movements (ibRegRunningMovements, read by PeriodisedOnServer as a calendar is, #646).
+	if (m_fold.FromMovements()) {
+		// The rows standing on a turnovers-only subconto are laid under the run with the period and no recorder, so
+		// such a chart keeps the live path here.
+		if (AnyTurnoverOnlyKind(m_reg->GetChartOfAccounts()))
+			return false;
+		ibConnectionScope scope;
+		if (!ibCanPushWindow(scope.get()))
+			return false;   // no windows on this driver — the RAM road answers exactly as before
+	}
 
 	// ⚠⚠ A PERIODICITY USED TO CLOSE THIS ROAD, and the reason was arithmetic rather than effort. The
 	// spec kept the period OUT of the key — one row per key for the whole interval — which is what
@@ -5368,8 +5434,9 @@ ibQueryRelPtr ibAcctBalanceAndTurnoverQueryable::GetSourceRelation(const ibStrin
 	if (!CanReadOnServer())
 		return nullptr;
 
-	// Per period: every period of the interval for every key — a calendar, see PeriodisedOnServer.
-	if (m_fold.HasPeriod()) {
+	// Per period: every period of the interval for every key — a calendar, see PeriodisedOnServer; per movement, the
+	// same reads run along the movements.
+	if (m_fold.HasPeriod() || m_fold.FromMovements()) {
 		const ibQueryRelPtr periodised = PeriodisedOnServer(m_reg, this, m_shape, m_begin, m_end, m_fold,
 			m_filter, m_accountDr, m_kindsDr, AnyTurnoverOnlyKind(m_reg->GetChartOfAccounts()), alias + ibT("_t"));
 		return periodised != nullptr ? ibSubquery(periodised, alias) : nullptr;

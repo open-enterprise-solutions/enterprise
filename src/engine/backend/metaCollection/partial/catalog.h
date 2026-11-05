@@ -227,7 +227,7 @@ private:
 	ibPropertyOwner* m_propertyOwner = ibPropertyObject::CreateProperty<ibPropertyOwner>(m_categoryData, ibT("ListOwner"), _("List owner"), _("The catalogs whose items own this catalog's items - contracts owned by counterparties, say. When set, every item has an Owner and is not written without one. The list and the choice are not narrowed to one owner by themselves yet - a query or a form filters by Owner. Empty: the catalog is not subordinate."));
 
 	//default array 
-	ibPropertyContainer<>* m_propertyAttributeOwner = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateEmptyType(ibT("Owner"), _("Owner"), _("The item of an owner catalog this item belongs to; its type is set by List owner. Required when the catalog is subordinate."), true, ibItemMode::ibItemMode_Folder_Item));
+	ibPropertyPredefined<>* m_propertyAttributeOwner = ibPropertyObject::CreateProperty<ibPropertyPredefined<>>(m_categoryPredefined, ibValueMetaObjectCompositeData::CreateEmptyType(ibT("Owner"), _("Owner"), _("The item of an owner catalog this item belongs to; its type is set by List owner. Required when the catalog is subordinate."), true, ibItemMode::ibItemMode_Folder_Item));
 
 	friend class ibValueRecordDataObjectCatalog;
 	friend class ibMetaData;

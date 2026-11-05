@@ -6,13 +6,14 @@
 
 #pragma region __property_standart_h__
 
-//base property for "inner attribute"
+// The holder of a PREDEFINED ATTRIBUTE - one every object of its kind has (Ref, Code, Description, Period, Recorder, …), made
+// with the kind and shown in its Predefined attributes (m_categoryPredefined).
 template <typename T = class ibValueMetaObjectAttributePredefined>
-class ibPropertyContainer : public ibProperty {
+class ibPropertyPredefined : public ibProperty {
 public:
 
 	template <typename... Args>
-	ibPropertyContainer(ibPropertyCategory* cat, Args&&... args)
+	ibPropertyPredefined(ibPropertyCategory* cat, Args&&... args)
 		: ibProperty(cat,
 			std::get<0>(std::forward_as_tuple(args...)),
 			std::get<1>(std::forward_as_tuple(args...)),
@@ -26,12 +27,12 @@ public:
 	}
 
 	// The help is the held attribute's comment — what it says about itself is what the property shows.
-	ibPropertyContainer(ibPropertyCategory* cat, T* metaObject)
+	ibPropertyPredefined(ibPropertyCategory* cat, T* metaObject)
 		: ibProperty(cat, metaObject->GetName(), metaObject->GetSynonym(), metaObject->GetComment(), ibVariant()), m_metaObject(metaObject)
 	{
 	}
 
-	virtual ~ibPropertyContainer() {}
+	virtual ~ibPropertyPredefined() {}
 
 	// get meta object 
 	T* GetMetaObject() const { return m_metaObject; }
@@ -70,13 +71,44 @@ public:
 		return true;
 	}
 
-	// NO ROW — it carries composition (an inner attribute: Ref, Code, Description, …; a table), not a value to edit: the
-	// desktop's grid has no editor for it (advpropModule.cpp, RegisterNoEditor) and draws none.
+	// NO ROW — it carries composition (an inner attribute: Ref, Code, Description, …; a table), not a value to edit, and
+	// the inspector draws none.
 	virtual bool GetProtocolValue(ibDataNode& row, ibReader reader) override { return false; }
 
 private:
 
 	ibValuePtr<T> m_metaObject;
+};
+
+// ⭐ …AND ONE WITH A FACE (#646). An inner attribute whose type the configuration chooses - a catalog's code and
+// description, a document's number, a tabular section's line number - is shown on its owner as that TYPE, one of those
+// it is offered, and its length: a string or a number for a code, a description and a document's number; a number alone
+// for a line number, which the platform counts. The attribute stays what it is and writes nothing of its own
+// (ibValueMetaObjectAttributePredefined::WriteData says why); what was chosen is written by this holder, into the
+// attribute's node beside the rest, so the file and the inspector hand over ONE shape - both come in through
+// ReadNodeValue. Asked for as a property of the owner instead, the length would be one more property for each thing an
+// attribute can be told.
+class BACKEND_API ibPropertyPredefinedType : public ibPropertyPredefined<> {
+public:
+
+	ibPropertyPredefinedType(ibPropertyCategory* cat, ibValueMetaObjectAttributePredefined* metaObject,
+		std::vector<ibClassID> offered = { g_valueStringCLSID, g_valueNumberCLSID })
+		: ibPropertyPredefined<>(cat, metaObject), m_offered(std::move(offered))
+	{
+	}
+
+	// The attribute's node, and the type chosen in it. A node with no type - a configuration saved before it could be
+	// chosen - keeps the one the metatype states; a type it is not offered, or several, is refused.
+	virtual bool ReadNodeValue(const ibDataValue& value) override;
+	virtual bool WriteNodeValue(ibDataValue& value) const override;
+
+	// A ROW, which the holder of an attribute does not give: the node as it is stored - the client reads the type in it
+	// (advpropType.cpp) - and the types it is offered, one at a time.
+	virtual bool GetProtocolValue(ibDataNode& row, ibReader reader) override;
+
+private:
+
+	std::vector<ibClassID> m_offered;   // the types it may be, one at a time - what its picker offers
 };
 
 #pragma endregion
@@ -276,6 +308,11 @@ protected:
 		return FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(
 			array, { g_metaCommonAttributeColumnCLSID });
 	}
+
+	// THE PREDEFINED ATTRIBUTES' PLACE in the inspector (ibPropertyPredefined) - Ref, Code, Description, Date, Period, … -
+	// under the object's Context, apart from its name and caption, which they read as part of. Made here, before any
+	// category of the kinds, so it stands right under Context; the inspector leaves it out where it is empty.
+	ibPropertyCategory* m_categoryPredefined = ibPropertyObject::CreatePropertyCategory(ibT("Predefined"), _("Predefined attributes"));
 };
 
 #endif

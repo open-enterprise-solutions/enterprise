@@ -87,16 +87,32 @@ bool ReadAttribute(const ibDataValue& value, ibPredefinedAttributeDescription& a
 	return true;
 }
 
-// A row of cells: an Array of {Id, Title, Value} — Title absent where the cell has none.
+// One cell: Title — absent where the cell has none — and Value.
+void WriteCell(ibDataNode& entry, const ibPredefinedCellDescription& cell)
+{
+	if (!cell.m_title.IsEmpty())
+		entry.SetValue(ibT("Title"), cell.m_title);
+	entry.AddField(ibT("Value"), ibDataValue::Child(std::make_shared<ibDataNode>(cell.m_value)));
+}
+
+bool ReadCell(const ibDataNode& entry, ibPredefinedCellDescription& cell)
+{
+	const auto held = entry.FindField(ibT("Value"));
+	const std::optional<ibDataNode> packed = held ? held->AsChild() : std::nullopt;
+	if (!packed)
+		return false;
+	cell = ibPredefinedCellDescription{ entry.GetValue<ibString>(ibT("Title")), *packed };
+	return true;
+}
+
+// A row of cells: an Array of {Id, Title, Value}.
 ibDataValue WriteCells(const ibPredefinedRowDescription& row)
 {
 	std::vector<ibDataValue> cells;
 	for (const auto& cell : row) {
 		auto entry = std::make_shared<ibDataNode>();
 		entry->SetValue(ibT("Id"), (std::int32_t)cell.first);
-		if (!cell.second.m_title.IsEmpty())
-			entry->SetValue(ibT("Title"), cell.second.m_title);
-		entry->AddField(ibT("Value"), ibDataValue::Child(std::make_shared<ibDataNode>(cell.second.m_value)));
+		WriteCell(*entry, cell.second);
 		cells.push_back(ibDataValue::Child(entry));
 	}
 	return ibDataValue::Array(std::move(cells));
@@ -108,14 +124,40 @@ bool ReadCells(const ibDataValue& value, ibPredefinedRowDescription& row)
 		return false;
 	for (const ibDataValue& entry : value.AsArray()) {
 		const std::optional<ibDataNode> read = entry.AsChild();
-		const auto held = read ? read->FindField(ibT("Value")) : std::nullopt;
-		const std::optional<ibDataNode> packed = held ? held->AsChild() : std::nullopt;
-		if (!packed)
+		ibPredefinedCellDescription cell;
+		if (!read || !ReadCell(*read, cell))
 			return false;
-		row.insert_or_assign((ibMetaID)read->GetValue<std::int32_t>(ibT("Id")),
-			ibPredefinedCellDescription{ read->GetValue<ibString>(ibT("Title")), *packed });
+		row.insert_or_assign((ibMetaID)read->GetValue<std::int32_t>(ibT("Id")), std::move(cell));
 	}
 	return true;
+}
+
+// A code, a description, the next code — one cell under its own name.
+ibDataValue WriteField(const ibPredefinedCellDescription& cell)
+{
+	auto entry = std::make_shared<ibDataNode>();
+	WriteCell(*entry, cell);
+	return ibDataValue::Child(entry);
+}
+
+// …read back. Absent: not declared. A string is one saved before they were values — the text it was, as a string value is
+// packed (kValueFieldClsid, kValueFieldData); the seed makes it a value of the field's type.
+bool ReadField(const ibDataNode& node, const ibChar* name, ibPredefinedCellDescription& cell)
+{
+	const auto field = node.FindField(name);
+	if (!field)
+		return true;
+	if (field->Kind() == ibDataKind::String) {
+		const ibString text = field->AsString();
+		if (!text.IsEmpty()) {
+			cell.m_title = text;
+			cell.m_value.SetValue(kValueFieldClsid, ibString::Format(ibT("%llu"), static_cast<unsigned long long>(g_valueStringCLSID)));
+			cell.m_value.SetValue(kValueFieldData, text);
+		}
+		return true;
+	}
+	const std::optional<ibDataNode> entry = field->AsChild();
+	return entry && ReadCell(*entry, cell);
 }
 
 }
@@ -125,8 +167,8 @@ bool ibPredefinedItemDescriptionMemory::WriteNode(ibDataValue& value, const ibPr
 	auto node = std::make_shared<ibDataNode>();
 	node->SetValue(ibT("Guid"), item.m_guid);
 	node->SetValue(ibT("Name"), item.m_name);
-	node->SetValue(ibT("Code"), item.m_code);
-	node->SetValue(ibT("Description"), item.m_description);
+	node->AddField(ibT("Code"), WriteField(item.m_code));
+	node->AddField(ibT("Description"), WriteField(item.m_description));
 	node->SetValue(ibT("IsFolder"), item.m_folder);
 	if (item.m_parent.isValid())
 		node->SetValue(ibT("Parent"), item.m_parent);
@@ -161,8 +203,8 @@ bool ibPredefinedItemDescriptionMemory::ReadNode(const ibDataValue& value, ibPre
 	item = ibPredefinedItemDescription();
 	item.m_guid = node->GetValue<ibGuid>(ibT("Guid"));
 	item.m_name = node->GetValue<ibString>(ibT("Name"));
-	item.m_code = node->GetValue<ibString>(ibT("Code"));
-	item.m_description = node->GetValue<ibString>(ibT("Description"));
+	if (!ReadField(*node, ibT("Code"), item.m_code) || !ReadField(*node, ibT("Description"), item.m_description))
+		return false;
 	item.m_folder = node->GetValue<bool>(ibT("IsFolder"));
 	if (node->Has(ibT("Parent")))
 		item.m_parent = node->GetValue<ibGuid>(ibT("Parent"));
@@ -193,7 +235,9 @@ bool ibPredefinedDescriptionMemory::WriteNode(ibDataValue& value, const ibPredef
 	auto root = std::make_shared<ibDataNode>();
 	root->SetValue(ibT("Parent"), description.m_parent);
 	root->SetValue(ibT("Folders"), description.m_folders);
-	root->SetValue(ibT("NextCode"), description.m_nextCode);
+	root->AddField(ibT("NextCode"), WriteField(description.m_nextCode));
+	root->AddField(ibT("Code"), WriteAttribute(description.m_code));
+	root->AddField(ibT("Description"), WriteAttribute(description.m_description));
 
 	std::vector<ibDataValue> attributes;
 	for (const ibPredefinedAttributeDescription& attribute : description.m_attributes)
@@ -241,7 +285,13 @@ bool ibPredefinedDescriptionMemory::ReadNode(const ibDataValue& value, ibPredefi
 
 	description.m_parent = root->GetValue<bool>(ibT("Parent"));
 	description.m_folders = root->GetValue<bool>(ibT("Folders"));
-	description.m_nextCode = root->GetValue<ibString>(ibT("NextCode"));
+	if (!ReadField(*root, ibT("NextCode"), description.m_nextCode))
+		return false;
+	// A schema saved before an item's code and description were described has neither: they stay empty.
+	if (const auto code = root->FindField(ibT("Code")); code && !ReadAttribute(*code, description.m_code))
+		return false;
+	if (const auto described = root->FindField(ibT("Description")); described && !ReadAttribute(*described, description.m_description))
+		return false;
 
 	if (const auto attributes = root->FindField(ibT("Attributes")); attributes && attributes->Kind() == ibDataKind::Array) {
 		for (const ibDataValue& entry : attributes->AsArray()) {

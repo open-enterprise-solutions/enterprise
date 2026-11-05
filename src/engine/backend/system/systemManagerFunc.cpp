@@ -266,6 +266,27 @@ int ibValueSystemFunction::StrLineCount(const ibValue& cSource)
 	return lines;
 }
 
+// The parts of a text between its separators. Each CHARACTER of `separators` is one, so ",;" cuts at a comma and
+// at a semicolon alike. An empty part - two separators side by side, or one at an end - is kept unless
+// includeBlank is false; with no separator in the text the whole text is the one part.
+std::vector<ibValue> ibValueSystemFunction::StrSplit(const ibValue& cSource, const ibValue& cSeparators, bool includeBlank)
+{
+	const ibString src = cSource.GetString();
+	const ibString separators = cSeparators.GetString();
+
+	std::vector<ibValue> parts;
+	size_t from = 0;
+	while (true) {
+		const size_t at = src.find_first_of(separators, from);
+		const size_t end = at == ibString::npos ? src.length() : at;
+		if (includeBlank || end > from)
+			parts.emplace_back(src.substr(from, end - from));
+		if (at == ibString::npos)
+			return parts;
+		from = at + 1;
+	}
+}
+
 ibString ibValueSystemFunction::StrGetLine(const ibValue& cValue, unsigned int nLine)
 {
 	if (nLine == 0) return ibEmptyString;
@@ -641,6 +662,10 @@ void ibValueSystemFunction::SetStatus(const ibString& sStatus)
 	// the reasoning behind dropping the wxIsMainThread() guard.
 	if (auto* frame = ibSession::CurrentFrame())
 		frame->SetStatusText(sStatus);
+	// …and with no window, the background run's activity, as Message is its lines: where the run has got to, what
+	// code_status and Active Users read (#646).
+	else if (ibBackgroundRun* const run = ibBackgroundRun::Current())
+		run->Activity(sStatus);
 }
 
 void ibValueSystemFunction::ClearMessage()

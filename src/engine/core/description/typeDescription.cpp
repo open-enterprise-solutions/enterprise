@@ -63,6 +63,20 @@ bool ibTypeDescriptionMemory::ReadNode(const ibDataValue& value, ibTypeDescripti
 	if (!root)
 		return false;
 
+	// 🛑 A QUALIFIER A DESCRIPTION CANNOT HOLD IS REFUSED, NOT CUT (#646). A length of 70000 was read as 4464 and
+	// 300 digits as 44 — a declaration nobody made, which the apply then built a column for. Asked before
+	// anything is touched, so a refused shape leaves the description as it was. The bound is the description's,
+	// as a script's qualifier has it — a field's narrower one is its door's (metadata_set_type, the designer).
+	const std::int32_t precision = root->GetValue<std::int32_t>(ibT("Precision"));
+	const std::int32_t scale = root->GetValue<std::int32_t>(ibT("Scale"));
+	const std::int32_t length = root->GetValue<std::int32_t>(ibT("Length"));
+	if (precision < 0 || precision > ibQualifierNumber::kMaxPrecision)
+		return false;
+	if (scale < 0 || (precision > 0 && scale > precision))
+		return false;
+	if (length < 0 || length > ibQualifierString::kMaxLength)
+		return false;
+
 	typeDesc.ClearMetaType();
 
 	const ibDataValue typesVal = ReadTypeList(*root);
@@ -79,11 +93,10 @@ bool ibTypeDescriptionMemory::ReadNode(const ibDataValue& value, ibTypeDescripti
 
 	// restore the shared qualifier block (overwrites the per-type defaults set above)
 	ibTypeDescription::ibTypeData data;
-	data.SetNumber((unsigned char)root->GetValue<std::int32_t>(ibT("Precision")),
-		(unsigned char)root->GetValue<std::int32_t>(ibT("Scale")),
+	data.SetNumber(static_cast<unsigned char>(precision), static_cast<unsigned char>(scale),
 		root->GetValue<bool>(ibT("NonNegative")));
 	data.SetDate((ibDateFractions)root->GetValue<std::int32_t>(ibT("DateFraction")));
-	data.SetString((unsigned short)root->GetValue<std::int32_t>(ibT("Length")),
+	data.SetString(static_cast<unsigned short>(length),
 		(ibAllowedLength)root->GetValue<std::int32_t>(ibT("AllowedLength")));
 	typeDesc.SetTypeData(data);
 	return true;

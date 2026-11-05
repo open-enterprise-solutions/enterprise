@@ -298,7 +298,6 @@ ibLockHandle ibLockManager::Acquire(const std::vector<ibLockItem>& items,
 	}
 
 	ibBackendCoreException::Error(_("ibLockManager: the lock header stayed busy."));
-	return ibLockHandle();
 }
 
 void ibLockManager::ReleaseRows(const std::vector<ibGuid>& lockGuids)
@@ -427,30 +426,52 @@ void ibLockManager::SweepOrphans(const std::vector<ibGuid>& liveSessionGuids)
 	// A header with nobody holding the key is only a row. Re-creation is the
 	// same insert the first acquire does, and the primary key plus the retry
 	// serialise it, so dropping these cannot grant a key twice.
+	std::vector<std::pair<ibString, ibString>> headers;
 	try {
-		std::vector<std::pair<ibString, ibString>> headers;
 		ibQueryResult rs = q.ExecuteIR(ibQueryIR(ibProject(ibScan(lock_key_table),
 			{ { ibCol(ibT("namespace")), ibEmptyString },
 			  { ibCol(ibT("keyHash")),   ibEmptyString } })));
 		while (rs.Next())
 			headers.emplace_back(rs.GetResultString(ibT("namespace")), rs.GetResultString(ibT("keyHash")));
-		for (const auto& header : headers) {
-			ibQueryResult held = q.ExecuteIR(ibQueryIR(ibProject(
-				ibFilter(ibScan(lock_table),
-					ibBinOp(ibQueryBinOp::And,
-						ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("namespace")), ibConst(ibValue(header.first))),
-						ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("keyHash")),   ibConst(ibValue(header.second))))),
-				{ { ibCol(ibT("namespace")), ibT("n") } })));
-			if (held.Next())
-				continue;
-			q.Execute(ibDelete(lock_key_table,
-				ibBinOp(ibQueryBinOp::And,
-					ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("namespace")), ibConst(ibValue(header.first))),
-					ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("keyHash")),   ibConst(ibValue(header.second))))));
-		}
 	}
 	catch (const ibCoreException&) {
 		return;
+	}
+
+	// ⚠ HELD IS ALSO A HELD ROW, and that is not in sys_lock: an acquire holds its header by an UPDATE before its sys_lock
+	// row is written, and a compile holds its module's header the whole compile and writes none (ibByteCodeCache::ibRowLock).
+	// So each header goes in a transaction of its own that does not wait, as OnSessionEnd's delete does on this thread, and a
+	// held one is left for the next tick while the rest are swept. The DELETE waited behind a starting client's compile, then
+	// gave up the whole sweep with "update conflicts with concurrent update" (2026-11-05).
+	for (const auto& header : headers) {
+		const ibQueryExprPtr key = ibBinOp(ibQueryBinOp::And,
+			ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("namespace")), ibConst(ibValue(header.first))),
+			ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("keyHash")),   ibConst(ibValue(header.second))));
+		ibDbTxOptions opts;
+		opts.noWait = true;
+		try {
+			q.BeginTransaction(opts);
+			bool held = false;
+			{
+				ibQueryResult rs = q.ExecuteIR(ibQueryIR(ibProject(ibFilter(ibScan(lock_table), key),
+					{ { ibCol(ibT("namespace")), ibT("n") } })));
+				held = rs.Next();
+			}
+			if (!held)
+				q.Execute(ibDelete(lock_key_table, key));
+			q.Commit();
+		}
+		catch (const ibDatabaseLayerException& err) {
+			if (q.IsActiveTransaction())
+				q.RollBack();
+			if (!HeaderWait(err))
+				return;   // not a held row but the database failing: the next tick tries again
+		}
+		catch (const ibCoreException&) {
+			if (q.IsActiveTransaction())
+				q.RollBack();
+			return;
+		}
 	}
 }
 

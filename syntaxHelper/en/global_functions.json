@@ -32,7 +32,7 @@
         "global_functions"
       ],
       "signature": "Number(value: any)",
-      "description": "Converts a value to a number. A string is parsed; a boolean gives 1 or 0; a value with no numeric reading gives zero rather than raising. The result is an exact decimal — this platform's numbers are not binary floating point, so money arithmetic does not drift.",
+      "description": "Converts a value to a number. A string is read whole — a number, with spaces around it if any; \"234,8\" or \"12x\" raises \"Cannot convert string to number\". A boolean gives 1 or 0; another value with no numeric reading gives zero rather than raising. The result is an exact decimal — this platform's numbers are not binary floating point, so money arithmetic does not drift.",
       "syntax_block": "Number(value: any)",
       "parameters": "value — a value of any type.",
       "return_descr": "Number.",
@@ -400,6 +400,25 @@
       "example": "Message(StrReplace(\"a-b-c\", \"-\", \"+\"));   // a+b+c",
       "availability": "Thin client, Server",
       "see_also": ["fn.Find", "fn.StrCountOccur"],
+      "reviewed": true
+    },
+    {
+      "id": "fn.StrSplit",
+      "name_local": "StrSplit",
+      "name_en": "StrSplit",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "StrSplit(str : string, separators : string, includeBlank = true : boolean)",
+      "description": "Splits a string into an array of parts at its separators. Each CHARACTER of separators is a separator of its own. A line of a delimited file becomes its fields.",
+      "syntax_block": "StrSplit(str : string, separators : string, includeBlank = true : boolean)",
+      "parameters": "str — the string to split. separators — the characters that separate, each on its own (\",;\" splits at a comma and at a semicolon). includeBlank — keep the empty parts (two separators side by side, or one at an end); true by default.",
+      "return_descr": "Array of strings. A string with no separator in it is one part; the separators are not in the parts.",
+      "example": "var fields = StrSplit(\"2020-01-02|Client 1|5\", \"|\");   // [\"2020-01-02\", \"Client 1\", \"5\"]\nvar words = StrSplit(\"a,,b\", \",\", false);              // [\"a\", \"b\"]",
+      "availability": "Thin client, Server",
+      "see_also": ["fn.Find", "fn.Mid", "fn.StrReplace"],
       "reviewed": true
     },
     {
@@ -1272,7 +1291,7 @@
         "global_functions"
       ],
       "signature": "SetStatus(text : string)",
-      "description": "Puts a line of text in the window's status bar — progress for work that takes a while, without interrupting anybody. Does nothing under an evaluation.",
+      "description": "Puts a line of text in the window's status bar — progress for work that takes a while, without interrupting anybody. In a background job, which has no window, the line is the job's activity: Active Users and `code_status` show it. Does nothing under an evaluation.",
       "syntax_block": "SetStatus(text : string)",
       "parameters": "text — the line to show.",
       "return_descr": "Nothing.",

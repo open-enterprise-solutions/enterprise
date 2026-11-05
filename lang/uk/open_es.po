@@ -13949,3 +13949,27 @@ msgstr "GetBackgroundJobs: фонове завдання не має власт�
 #: src/engine/backend/system/value/valueBackgroundJob.cpp
 msgid "FindByUUID: no UUID given"
 msgstr "FindByUUID: UUID не вказано"
+
+#: src/engine/backend/compiler/scriptComplete.cpp
+#, c-format
+msgid "%s has no method '%s'"
+msgstr "У %s немає методу '%s'"
+
+#: src/engine/backend/metaCollection/partial/commonObjectSchema.cpp
+#, c-format
+msgid "%s: the %s cannot change between a string and a number"
+msgstr "%s: %s не можна переводити з рядка на число й навпаки"
+
+#: src/engine/backend/metaCollection/partial/commonObjectSchema.cpp
+#, c-format
+msgid "%s: the %s cannot be shorter than it was (%u, now %u)"
+msgstr "%s: %s не може бути коротшим, ніж був (%u, тепер %u)"
+
+#: src/engine/backend/databaseLayer/databaseMaterializeBuilder.cpp
+msgid "A reading by the movement was handed a surface without its movements"
+msgstr "Читанню за рухами передано джерело без рухів"
+
+#: src/engine/backend/system/value/valueTextFile.cpp
+#, c-format
+msgid "The encoding '%s' is not supported; supported: %s"
+msgstr "Кодування '%s' не підтримується; підтримуються: %s"

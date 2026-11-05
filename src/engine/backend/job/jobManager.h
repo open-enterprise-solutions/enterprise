@@ -301,9 +301,10 @@ public:
 	// its next loop boundary. A run blocked in a socket read will not notice.
 	void     Cancel();
 
-	// Set by the worker as the run proceeds; also written to
+	// Set by the worker as the run proceeds, and by its code (`SetStatus` with no window); also written to
 	// sys_session.currentActivity, so the same text shows in Active Users.
 	ibString Activity() const;
+	void     Activity(const ibString& activity);
 
 	// ITS ONE NAME — its session's, sys_session.session: what Active Users shows, what the journal is stamped
 	// with, BackgroundJob.UUID and what BackgroundJobs.FindByUUID and code_status are asked with. Taken when

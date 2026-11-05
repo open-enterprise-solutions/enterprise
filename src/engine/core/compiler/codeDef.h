@@ -84,7 +84,7 @@ enum { //instruction types
 	OPER_SET_TYPE,
 	// ⭐ CREATE A VALUE OF A BUILT-IN TYPE — `New Structure(…)`, `New Array`, and every other
 	// registered VALUE ctor. Configuration objects are not made this way; they come from their
-	// manager (`Catalogs.X.CreateElement()`), which is why the compiler refuses any name that is not
+	// manager (`Catalogs.X.CreateItem()`), which is why the compiler refuses any name that is not
 	// an `ibCtorObjectType_object_value`.
 	//   m_param1            — the destination
 	//   m_param2.m_numIndex — the class NAME in the const pool, for a refusal to be able to name it

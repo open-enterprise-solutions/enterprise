@@ -620,14 +620,18 @@ ibQueryRamTable ibCalcFactQueryable::ComputeRows(const std::vector<ibQueryCondit
 		if (const ibQueryExprPtr exact = ibDbTableProvider::BuildPredicateIR(surface,
 				ibRegConditionOn(surface, m_condition, [](const ibBackendQueryColumn*) { return true; }), ibT("v")))
 			q.Where(exact);
+	// One buffer for every row, laid down whole (AppendRow, #646).
+	std::vector<ibMetaID> ids;
+	ids.reserve(columns.size());
+	for (const ibBackendQueryColumn* column : columns)
+		ids.push_back(column->GetColumnId());
+	std::vector<ibValue> cells;
 	ibQueryResult rs = q.Execute();
 	while (rs.Next()) {
-		const long row = out.AppendRow();
-		for (const ibBackendQueryColumn* column : columns) {
-			ibValue value;
-			column->ReadValue(column->GetPhysicalName(), metaData, value, rs);
-			out.SetCell(row, column->GetColumnId(), value);
-		}
+		cells.clear();
+		for (const ibBackendQueryColumn* column : columns)
+			column->ReadValue(column->GetPhysicalName(), metaData, cells.emplace_back(), rs);
+		out.AppendRow(ids, cells);
 	}
 	return out;
 }
@@ -1430,15 +1434,27 @@ ibQueryRamTable ibCalcBaseQueryable::ComputeRows(const std::vector<ibQueryCondit
 	for (const auto& section : m_asked.m_sections)
 		sectionColumns.push_back(ibRegDerivedColumnId(section.second->GetMetaID(), ibCalcBaseColumn_Section));
 
+	// One buffer for every row, laid down whole (AppendRow, #646): the figures and the sections are numbered below the
+	// record's own columns, and set cell by cell each went in ahead of them.
+	std::vector<ibMetaID> ids;
+	std::vector<ibValue> cells;
 	readBase.Resume();
 	ibCalcReadBase(m_reg, m_asked, asking, [&](size_t i, const std::vector<ibValue>& sections, const std::vector<ibNumber>& figures) {
-		const long row = out.AppendRow();
-		for (size_t a = 0; a < record.size(); ++a)
-			out.SetCell(row, record[a]->GetMetaID(), records[i][a]);
-		for (size_t c = 0; c < figures.size(); ++c)
-			out.SetCell(row, figureColumns[c], ibValue(figures[c]));
-		for (size_t s = 0; s < sections.size(); ++s)
-			out.SetCell(row, sectionColumns[s], sections[s]);
+		ids.clear();
+		cells.clear();
+		for (size_t a = 0; a < record.size(); ++a) {
+			ids.push_back(record[a]->GetMetaID());
+			cells.push_back(records[i][a]);
+		}
+		for (size_t c = 0; c < figures.size(); ++c) {
+			ids.push_back(figureColumns[c]);
+			cells.emplace_back(figures[c]);
+		}
+		for (size_t s = 0; s < sections.size(); ++s) {
+			ids.push_back(sectionColumns[s]);
+			cells.push_back(sections[s]);
+		}
+		out.AppendRow(ids, cells);
 	});
 	readBase.Pause();
 	ibJournalInfo(ibT("query.road"), ibT("Base%s of %s: %zu record(s) read in %lld ms, the base of them in %lld ms"),
@@ -2179,15 +2195,27 @@ ibQueryRamTable ibCalcScheduleDataQueryable::ComputeRows(const std::vector<ibQue
 			if (std::find(asked.begin(), asked.end(), resources[k]->GetName() + ibCalcSchedulePeriodName(periods[p])) != asked.end())
 				filled.emplace_back(p * resources.size() + k, ibRegDerivedColumnId(resources[k]->GetMetaID(), periods[p]));
 
+	// The ids a row lands under are the same for every row; one buffer serves them all, laid down whole (AppendRow,
+	// #646) — the sums are numbered below the record's own columns, and set cell by cell each went in ahead of them.
+	std::vector<ibMetaID> ids;
+	for (size_t a = 0; a < record.size(); ++a)
+		if (needed[a])
+			ids.push_back(record[a]->GetMetaID());
+	for (const std::pair<size_t, ibMetaID>& cell : filled)
+		ids.push_back(cell.second);
+	std::vector<ibValue> cells;
+	cells.reserve(ids.size());
+
 	lay.Resume();
 	for (size_t i = 0; i < records.size(); ++i) {
 		const std::vector<ibValue>& one = records[i];
-		const long row = out.AppendRow();
+		cells.clear();
 		for (size_t a = 0; a < record.size(); ++a)
 			if (needed[a])
-				out.SetCell(row, record[a]->GetMetaID(), one[a]);
+				cells.push_back(one[a]);
 		for (const std::pair<size_t, ibMetaID>& cell : filled)
-			out.SetCell(row, cell.second, ibValue(sums[i][cell.first]));
+			cells.emplace_back(sums[i][cell.first]);
+		out.AppendRow(ids, cells);
 	}
 	lay.Pause();
 	ibJournalInfo(ibT("query.road"), ibT("ScheduleData of %s: %zu record(s) read in %lld ms, %zu of %zu sum column(s) asked for, ")

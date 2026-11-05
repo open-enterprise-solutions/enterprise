@@ -28,8 +28,9 @@ class wxMBConv;
 // ⚠ THE END OF THE FILE IS `Undefined`, NOT AN EMPTY STRING. An empty line is a line; a file ends where
 // there is nothing more to hand over, and the two must not look alike to a `while`.
 //
-// The encoding is said with the TextEncoding enumeration, UTF-8 when left out. A byte-order mark at the
-// head of a UTF-8 or UTF-16 file is read as what it is — a mark — and never handed over as text.
+// The encoding is said with the TextEncoding enumeration or a page's name ("windows-1251"), UTF-8 when left out.
+// A byte-order mark at the head of a UTF-8 or UTF-16 file is read as what it is — a mark — and never handed over
+// as text.
 
 BACKEND_API std::unique_ptr<wxMBConv> ibCreateTextConv(ibTextEncoding encoding);
 
@@ -43,8 +44,9 @@ BACKEND_API bool ibTextFromBytes(const void* data, size_t size, ibTextEncoding e
 // the encoding - a text is not written with a question mark where a letter should stand.
 BACKEND_API bool ibTextToBytes(const ibString& text, ibTextEncoding encoding, std::string& bytes);
 
-// The optional TextEncoding argument at `at`: UTF-8 when it is left out, and nothing but a member otherwise. A string
-// that "means" one, or a member of another enumeration, is refused. The one door for a script saying an encoding.
+// The optional TextEncoding argument at `at`: UTF-8 when it is left out, a member, or a string naming a page of
+// ibXmlCodePage (UTF-8, UTF-16, windows-1251, cp866 and their aliases, any case). Any other string, and a member of
+// another enumeration, is refused. The one door for a script saying an encoding.
 BACKEND_API ibTextEncoding ibTextEncodingAt(ibValue** paParams, const long lSizeArray, const long at);
 
 void ibValueTextReader_BindNames(ibValue::ibMemberTable& helper, const ibValue* ctx);

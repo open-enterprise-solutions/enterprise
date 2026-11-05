@@ -11,6 +11,7 @@
 #include "backend/session/session.h"
 #include "backend/backend_exception.h"   // ibEvalModeScope — which kind of evaluation a dropdown is
 #include "backend/compiler/scriptComplete.h"   // ibValueAtCaret / ibNamesAtCaret — the two answers
+#include "backend/compiler/scriptCheck.h"      // ibCheckModule — what the Syntax control button asks
 #include "backend/objCtor.h"
 #include "core/compiler/translateCode.h"   // what the caret stands in
 #include "core/compiler/scriptParseCode.h"   // ibContentType — the icon a name wears
@@ -91,7 +92,7 @@ void AddKeywordFromObject(ibDataNode& response, const ibValue& vObject)
 		for (long i = 0; i < vObject.GetNProps(); i++) {
 			// Scope-local props (ThisObject / ThisForm) must not
 			// surface in autocomplete after a chain walk reaches a
-			// foreign object (`Catalogs.Catalog1.CreateElement().` …).
+			// foreign object (`Catalogs.Catalog1.CreateItem().` …).
 			if (vObject.IsPropScoped(i)) continue;
 			AppendName(response, ibContentType::eVariable, vObject.GetPropName(i), ibEmptyString);
 		}
@@ -699,39 +700,36 @@ bool ibModuleTextDocument::SyntaxControl(bool throwMessage) const
 {
 	const ibValueMetaObject* metaObject = GetMetaObject();
 	wxASSERT(metaObject);
-	const ibMetaData* metaData = metaObject->GetMetaData();
-	wxASSERT(metaData);
-	ibRuntimeModuleDataObject* dataRef = nullptr;
-	auto* cc = metaData->GetCompileCache();
-	if (cc && cc->FindCompileModule(metaObject, dataRef)) {
 
-		// A descriptor that answers the lookup carries a module (the desktop's editor says why it is asserted).
-		const std::unique_ptr<ibCompileModule> compileModule = dataRef->CreateCompiler();
-		wxASSERT(compileModule);
+	// ⭐ THE CHECK'S OWN ROAD (scriptCheck.h), the one module_write and config_check answer by: the button and an
+	// assistant are told the same things - what the compile refused, and a method call it let through (#646).
+	const ibScriptCheckAnswer checked = ibCheckModule(metaObject);
+	if (checked.m_outcome != ibScriptCheckOutcome::Checked)
+		return true;   // no compile module for it - nothing was checked, and nothing stands in the way
+	if (checked.m_diagnostics.empty()) {
+		if (throwMessage)
+			ibValueSystemFunction::Message(_("No syntax errors detected!"));
+		return true;
+	}
 
-		try {
-			if (compileModule->Compile()) {
-				if (throwMessage)
-					ibValueSystemFunction::Message(_("No syntax errors detected!"));
-				return true;
-			}
-			wxASSERT("ibCompileCode::Compile return false");
+	// The check is quiet by itself (it is asked by an assistant too), so what it found is put in front of the person
+	// here, in the words a refusal reaches the output with: `{Module(line)}: message`, the line under it.
+	ibBackendDocFrame* const frame = ibSession::CurrentFrame();
+	if (frame == nullptr)
+		return true;   // no frame - no one to tell or to ask: on
+	for (const ibDiagnostic& diagnostic : checked.m_diagnostics) {
+		frame->BackendError(diagnostic.m_fileName, diagnostic.m_docPath, diagnostic.m_line,
+			ibString::Format(ibT("{%s(%u)}: %s\n"), diagnostic.m_moduleName, diagnostic.m_line, diagnostic.m_message)
+			+ diagnostic.m_codeLine);
+	}
+
+	// Asked through the session's frame, as the desktop asked in a message box.
+	if (!throwMessage) {
+		const int answer = frame->ShowModalMessage(
+			_("Errors were found while checking module. Do you want to continue ?"), metaObject->GetFullName(),
+			wxYES_NO | wxCENTRE);
+		if (answer == wxNO)
 			return false;
-
-		}
-		catch (...) {
-
-			// Asked through the session's frame, as the desktop asked in a message box; no frame — no one to ask: on.
-			ibBackendDocFrame* const frame = ibSession::CurrentFrame();
-			if (!throwMessage && frame != nullptr) {
-				const int answer = frame->ShowModalMessage(
-					_("Errors were found while checking module. Do you want to continue ?"), compileModule->GetModuleName(),
-					wxYES_NO | wxCENTRE);
-
-				if (answer == wxNO)
-					return false;
-			}
-		}
 	}
 
 	return true;

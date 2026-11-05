@@ -18,8 +18,8 @@ ibValueReferenceDataObject* ibValueManagerDataObjectChartOfAccounts::EmptyRef() 
 }
 
 enum Func {
-	eCreateElement = 0,
-	eCreateGroup,
+	eCreateAccount = 0,
+	eCreateFolder,
 	eSelect,
 	eFindByCode,
 	eFindByDescription,
@@ -32,8 +32,8 @@ enum Func {
 
 void ibValueManagerDataObjectChartOfAccounts::FillManagerMethods(ibMemberTable& helper) const
 {
-	helper.AppendFunc(ibT("CreateElement"), ibT("CreateElement()"));
-	helper.AppendFunc(ibT("CreateGroup"), ibT("CreateGroup()"));
+	helper.AppendFunc(ibT("CreateAccount"), ibT("CreateAccount()"));
+	helper.AppendFunc(ibT("CreateFolder"), ibT("CreateFolder()"));
 	helper.AppendFunc(ibT("Select"), ibT("Select()"));
 	helper.AppendFunc(ibT("FindByCode"), 1, ibT("FindByCode(code : string)"));
 	helper.AppendFunc(ibT("FindByDescription"), 2, ibT("FindByDescription(descr : string, exact = true : boolean)"));
@@ -51,8 +51,8 @@ bool ibValueManagerDataObjectChartOfAccounts::CallAsFunc(const long lMethodNum, 
 	// Our own ordinal, not the table index — ibValueManagerDataObject::BuiltinMethodNum says why.
 	switch (BuiltinMethodNum(lMethodNum))
 	{
-	case eCreateElement: pvarRetValue = m_metaObject->CreateObjectValue(ibObjectMode::OBJECT_ITEM); return true;
-	case eCreateGroup: pvarRetValue = m_metaObject->CreateObjectValue(ibObjectMode::OBJECT_FOLDER); return true;
+	case eCreateAccount: pvarRetValue = m_metaObject->CreateObjectValue(ibObjectMode::OBJECT_ITEM); return true;
+	case eCreateFolder: pvarRetValue = m_metaObject->CreateObjectValue(ibObjectMode::OBJECT_FOLDER); return true;
 	case eSelect: pvarRetValue = new ibValueSelectorRecordDataObject(m_metaObject); return true;
 	case eFindByCode: pvarRetValue = FindByCode(*paParams[0]); return true;
 	case eFindByDescription: pvarRetValue = FindByDescription(*paParams[0], lSizeArray > 1 ? *paParams[1] : ibValue()); return true;

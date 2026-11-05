@@ -129,6 +129,23 @@ ibString ibBackgroundRun::Activity() const
 	return m_activity;
 }
 
+void ibBackgroundRun::Activity(const ibString& activity)
+{
+	// Only into the row that exists. A tenant has none (it is unlisted), so this would be a registry request per
+	// scrolled page for a line nobody can read; its handle carries the text instead. The session is asked after the
+	// lock is let go, as Cancel asks it.
+	std::shared_ptr<ibSession> session;
+	{
+		std::lock_guard<std::mutex> lk(m_mtx);
+		m_activity = activity;
+		if (m_tenancy != ibJobTenancy::Tenant)
+			if (ibSession* const held = m_holder.Get())
+				session = held->shared_from_this();
+	}
+	if (session)
+		session->SetActivity(activity);
+}
+
 ibGuid ibBackgroundRun::UUID() const
 {
 	std::lock_guard<std::mutex> lk(m_mtx);
@@ -455,7 +472,9 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::Launch(ibBackgroundBody body, con
 		// Under the run's lock: the run is held already, and the tick and TenantsOf read its holder.
 		std::lock_guard<std::mutex> lk(run->m_mtx);
 		run->m_holder = std::move(holder);
-		run->m_uuid   = session->Identity().m_guid;
+		// Its session's id: a listed session's is the guid of its identity, and a rented one has no identity at all - it
+		// is minted under a guid of its own (#646: Identity() left a rented run's UUID empty).
+		run->m_uuid   = ibGuid(session->GetId());
 	}
 	launch->m_run     = run;
 	launch->m_session = session;
@@ -563,15 +582,7 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::Launch(ibBackgroundBody body, con
 				l.m_registry->NotifyAuthenticated(l.m_session);
 			}
 
-			{
-				std::lock_guard<std::mutex> lk(run->m_mtx);
-				run->m_activity = l.m_activity;
-			}
-			// Only into the row that exists. A tenant has none (it is unlisted), so
-			// this would be a registry request per scrolled page for a line nobody
-			// can read; its handle carries the text instead.
-			if (!l.m_tenant)
-				l.m_session->SetActivity(l.m_activity);
+			run->Activity(l.m_activity);
 
 			// 3. The work itself. Whatever it is — a configuration's procedure
 			//    resolved by name, or an engine read — it is a function of the

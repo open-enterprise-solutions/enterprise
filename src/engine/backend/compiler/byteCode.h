@@ -458,7 +458,7 @@ public:
 	// in a parent walk, so scoped bindings (ThisForm / ThisObject) are
 	// reachable iff they live on a real ancestor — exactly the legit
 	// case. Cross-entity isolation through value chain access
-	// (`Catalogs.X.CreateElement().ThisObject`) is enforced at the
+	// (`Catalogs.X.CreateItem().ThisObject`) is enforced at the
 	// runtime OPER_GET_A handler / autocomplete / debugger, each of which asks
 	// the VALUE through IsPropScoped - NOT here, and not from a copy on the
 	// variable: that copy existed, rode into the AOT blob, and was read by no one.

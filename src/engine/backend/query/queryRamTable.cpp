@@ -60,6 +60,34 @@ ibValue ibQueryRamTable::ToValueTable() &&
 	return LoadValueTable(m_columns, m_rows);
 }
 
+long ibQueryRamTable::AppendRow(const std::vector<ibMetaID>& ids, std::vector<ibValue>& cells)
+{
+	// By position and by pointer, never by iterator — a checked build registers each one under a global lock
+	// (rowValues.h).
+	const size_t count = ids.size() < cells.size() ? ids.size() : cells.size();
+	std::vector<size_t> order;
+	order.reserve(count);
+	for (size_t i = 0; i < count; ++i)
+		if (ids[i] != 0)
+			order.push_back(i);
+	// By id, and of two under one id the earlier first — the later is laid over it below.
+	const ibMetaID* const id = ids.data();
+	std::sort(order.data(), order.data() + order.size(),
+		[id](size_t a, size_t b) { return id[a] != id[b] ? id[a] < id[b] : a < b; });
+
+	Row::container_type laid;
+	laid.reserve(order.size());
+	for (size_t k = 0; k < order.size(); ++k) {
+		const size_t i = order[k];
+		if (!laid.empty() && laid.back().first == id[i])
+			laid.back().second = std::move(cells[i]);
+		else
+			laid.emplace_back(id[i], std::move(cells[i]));
+	}
+	m_rows.emplace_back().swap_sorted(laid);
+	return static_cast<long>(m_rows.size()) - 1;
+}
+
 void FoldBalancesForward(ibQueryRamTable& table,
                          const std::vector<ibMetaID>& keyColumns,
                          ibMetaID periodColumn,

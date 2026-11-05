@@ -312,7 +312,8 @@ public:
 			"Update database configuration. Code as much as structure: the application runs what the "
 			"database holds, so an edited module gets to the running application only through this, and "
 			"then after a restart (app_run restart). READ database_diff FIRST: this writes DDL and can "
-			"take the base exclusively. With confirm=false it goes all the way and then rolls "
+			"take the base exclusively - an application started from here holds it until app_stop ends it. "
+			"With confirm=false it goes all the way and then rolls "
 			"back, answering with the ledger of every CREATE, ALTER and DROP it would have made - "
 			"which is the only way to see the schema changes in advance, because the engine has "
 			"no rehearsal mode by design. What is rolled back is the structure: the configuration "
@@ -444,6 +445,11 @@ public:
 					"stores it first - config_rollback takes the database's copy back."));
 			return true;
 		}
+
+		// ⭐ THE DOOR, NAMED (#646). An apply that never reached its decision most often found the base held, and the
+		// holder is usually the application started from here, standing at a breakpoint.
+		if (!decisionReached)
+			refusal += ibMcpText(" If an application started from here holds the base, app_stop ends it.");
 
 		return false;   // a real failure — `refusal` already carries the engine's words
 	}

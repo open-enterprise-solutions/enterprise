@@ -1359,7 +1359,18 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 		}
 		else {
 			const ibDataValue value = property->GetNodeValue();
-			entry->SetValue(ibT("kind"), KindOf(value));
+			const bool metaObject = value.Kind() == ibDataKind::Child && value.AsChild()
+				&& value.AsChild()->FindField(ibT("Id"));
+
+			// ⭐ A METAOBJECT THAT HOLDS A TYPE IS SAID AS THE TYPE. A code's, a description's, a number's type is chosen on
+			// the owner and written into the attribute's node (ibPropertyPredefinedType, #646), so it was named below and
+			// not unfolded, {"name": "Code", "id": …}: the type metadata_set_type had just placed read back as nothing, and
+			// its own "read one, change it, send it back" could not be followed (2026-11-05). Asked of the node, as
+			// metadata_set_type finds the holder - a node with no type in it is a structure - and said as a type property
+			// says one, with the attribute's id beside it: what metadata_set_type takes.
+			ibTypeDescription held;
+			const bool typed = metaObject && ibTypeDescriptionMemory::ReadNode(value, held) && held.GetClsidCount() > 0;
+			entry->SetValue(ibT("kind"), typed ? ibString(ibT("type")) : KindOf(value));
 
 			// ⚠ A STRUCTURE IS NAMED, NOT UNFOLDED. A property whose value is a nested metaobject —
 			// a catalog's Code, Description, Ref, its two modules — writes ITSELF whole when asked
@@ -1375,9 +1386,14 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 			// a caption, a type, a picture, a command binding, a field binding, a list's whole Settings —
 			// and each was rescued by a cast of its own above, the property's class named here one at a
 			// time (2026-10-28). Anything else is said as the property writes it: the shape that goes back.
-			const bool metaObject = value.Kind() == ibDataKind::Child && value.AsChild()
-				&& value.AsChild()->FindField(ibT("Id"));
-			if (metaObject) {
+			if (typed) {
+				ibDataValue described;
+				ibTypeDescriptionMemory::WriteNode(described, held);
+				entry->AddField(ibT("value"), described);
+				if (auto id = value.AsChild()->FindField(ibT("Id")))
+					entry->AddField(ibT("id"), *id);
+			}
+			else if (metaObject) {
 
 				const ibDataNode held = *value.AsChild();
 				ibDataNode& shown = entry->Child(ibT("value"));

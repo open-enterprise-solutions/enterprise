@@ -509,12 +509,16 @@ ibNumber ibVariant::GetNumber() const
 	case ibValueTypes::TYPE_NUMBER:
 		return m_fData;
 	case ibValueTypes::TYPE_STRING: {
+		// ⭐ THE WHOLE TEXT IS THE NUMBER, OR IT IS NONE. The parse reads the number a text begins with, so
+		// "234,8" was 234 and "12x" was 12, without a word (#646): a figure that does not add up has to be
+		// refused where it is read, not found later in a total.
 		ibString strVal = m_sData;
 		strVal.Trim(true);
 		strVal.Trim(false);
 		strVal.MakeUpper();
 		ibNumber number;
-		if (!number.FromString(strVal))
+		size_t length = 0;
+		if (!number.FromString(strVal, length) || length != strVal.length())
 			ibCoreException::Error(_("Cannot convert string to number!"));
 		return number;
 	}

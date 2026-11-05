@@ -295,7 +295,11 @@ enum class ibMaterializeGrain
 {
 	Whole,         // one row per key
 	StoredPeriod,  // one row per key per period, AS STORED (the surface's own grain)
-	Calendar       // one row per key per period truncated to m_periodUnit
+	Calendar,      // one row per key per period truncated to m_periodUnit
+	// One row per key per movement's instant: the MOVEMENTS ALONE (m_movedRows, or the view's movement arm), the period
+	// as it stands. No stored row carries a recorder, so a reading by the recorder or the line stands here and names
+	// the movement's own fields among m_keyColumns (#646).
+	Movements
 };
 
 struct ibMaterializeReadSpec
@@ -315,7 +319,7 @@ struct ibMaterializeReadSpec
 	// Relations, not names: they are rendered from the same declaration the maintenance is
 	// (RenderStoredRows / RenderMovementRows), so nothing has to exist in the database beyond the totals
 	// table and the movements — a base built before this reading answers it as it stands.
-	// m_movedRows null = the surface has no movement arm, and nothing is cut.
+	// m_movedRows null = the surface has no movement arm, and nothing is cut. A Movements grain reads m_movedRows alone.
 	ibQueryRelPtr m_storedRows;
 	ibQueryRelPtr m_movedRows;
 

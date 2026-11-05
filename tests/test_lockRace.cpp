@@ -4,7 +4,9 @@
 // connections used to both insert an Exclusive row. The header row
 // (sys_lock_key) is the mutex: one transaction holds it, the other waits
 // or, with noWait, is refused at once. The header stays after release.
-// The sweep deletes it once nobody holds the key.
+// The sweep deletes it once nobody holds the key. A header whose row a
+// transaction holds, with nothing in sys_lock (an acquire before its insert,
+// a compile), is left without waiting, and the headers after it are swept.
 //
 // PostgreSQL is compiled into oes_pg_dialect_test (OES_LOCK_RACE_POSTGRES_ONLY)
 // and skips without OES_PG_USER. Firebird and SQLite are compiled into
@@ -522,6 +524,43 @@ std::unique_ptr<ibLockManager> LockRace<Driver>::s_peer;
 		EXPECT_EQ(outcome.kind, OutcomeKind::Granted) << outcome.error;                                \
 		if (raw->IsActiveTransaction())                                                                \
 			raw->RollBack();                                                                           \
+	}                                                                                                  \
+	TEST_F(Fixture, SweepOrphans_HeaderHeldByRow_KeptAndOthersSwept)                                   \
+	{                                                                                                  \
+		const ibLockItem held = Item(wxT("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa8"), ibLockMode::Exclusive); \
+		const ibLockItem idle = Item(wxT("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa9"), ibLockMode::Exclusive); \
+		ASSERT_TRUE(SeedHeader(held));                                                                 \
+		ASSERT_TRUE(SeedHeader(idle));                                                                 \
+		auto raw = DriverType::Hold();                                                                 \
+		ASSERT_TRUE(raw != nullptr);                                                                   \
+		raw->BeginTransaction();                                                                       \
+		{                                                                                              \
+			ibStatementGuard upd(raw.get(), raw->PrepareStatement(                                     \
+				wxT("UPDATE sys_lock_key SET namespace = ? WHERE namespace = ? AND keyHash = ?")));    \
+			ASSERT_TRUE(static_cast<bool>(upd));                                                       \
+			upd->SetParamString(1, held.namespaceName);                                                \
+			upd->SetParamString(2, held.namespaceName);                                                \
+			upd->SetParamString(3, held.KeyHash());                                                    \
+			ASSERT_GE(upd->RunQuery(), 1);                                                             \
+		}                                                                                              \
+		ibLockManager* mine = Mine();                                                                  \
+		const auto began = std::chrono::steady_clock::now();                                           \
+		std::atomic<bool> finished{ false };                                                           \
+		std::thread sweeper([&] {                                                                      \
+			ibApplicationInstanceScope bound(App());                                                   \
+			mine->SweepOrphans({});                                                                    \
+			finished.store(true);                                                                      \
+		});                                                                                            \
+		const auto deadline = began + std::chrono::milliseconds(3000);                                 \
+		while (!finished.load() && std::chrono::steady_clock::now() < deadline)                        \
+			std::this_thread::sleep_for(std::chrono::milliseconds(20));                                \
+		const bool waited = !finished.load();                                                          \
+		try { raw->RollBack(); }                                                                       \
+		catch (...) {}                                                                                 \
+		sweeper.join();                                                                                \
+		EXPECT_FALSE(waited) << "the sweep waited for a header a transaction holds by its row";        \
+		EXPECT_EQ(CountRows(lock_key_table, held.namespaceName, held.KeyHash()), 1) << "a held header is left"; \
+		EXPECT_EQ(CountRows(lock_key_table, idle.namespaceName, idle.KeyHash()), 0) << "the others are swept";  \
 	}
 
 #ifdef OES_LOCK_RACE_POSTGRES_ONLY

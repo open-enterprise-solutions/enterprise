@@ -58,6 +58,33 @@ const ibHelpCategory* ChildByKey(const ibHelpCategory* parent, const ibString& k
 
 } // namespace
 
+// A function is found by its job (#646): "replace substring" found nothing, because `StrReplace` says "replace" only in
+// its name, run together, and its prose says "replaced"; and an entry that has not every word of a question is still
+// an answer when none has them all.
+TEST(HelpCorpus, AFunctionIsFoundByTheWordsOfItsJob) {
+	auto make = [](const wxChar* name, const wxChar* description) {
+		ibHelpEntry e = MakeEntry(ibString(wxT("fn.")) + name, { wxT("global_functions") });
+		e.nameEn = e.nameLocal = name;
+		e.description = description;
+		return e;
+	};
+	std::vector<ibHelpEntry> entries;
+	entries.push_back(make(wxT("StrReplace"), wxT("The string with every occurrence of one substring replaced by another.")));
+	entries.push_back(make(wxT("StrSplit"), wxT("Splits a string into an array of parts at its separators.")));
+	entries.push_back(make(wxT("Find"), wxT("Where one string first occurs in another.")));
+
+	ibHelpCorpus corpus(wxT("en"), ibHelpCorpus::Source::kPlatform, std::move(entries), {}, {});
+
+	const auto first = [&corpus](const wxChar* query) {
+		const std::vector<const ibHelpEntry*> found = corpus.SearchText(query);
+		return found.empty() ? ibString() : found.front()->id;
+	};
+	EXPECT_EQ(first(wxT("replace substring")), wxT("fn.StrReplace"));
+	EXPECT_EQ(first(wxT("split string")), wxT("fn.StrSplit"));
+	EXPECT_EQ(first(wxT("replace substring everywhere")), wxT("fn.StrReplace")) << "two words of three are an answer";
+	EXPECT_TRUE(corpus.SearchText(wxT("nothing here")).empty());
+}
+
 // The dictionary reaches the tree: a key that has a translation shows it.
 TEST(HelpCorpus, CategoryKeysCarryTheirTranslatedName) {
 	std::vector<ibHelpEntry> entries;

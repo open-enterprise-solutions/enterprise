@@ -19,8 +19,8 @@ ibValueReferenceDataObject* ibValueManagerDataObjectCatalog::EmptyRef() const
 }
 
 enum Func {
-	eCreateElement = 0,
-	eCreateGroup,
+	eCreateItem = 0,
+	eCreateFolder,
 	eSelect,
 	eFindByCode,
 	eFindByDescription,
@@ -35,9 +35,9 @@ void ibValueManagerDataObjectCatalog::FillManagerMethods(ibMemberTable& helper) 
 {
 	// Composes after FillMembers (common-module methods) + FillPredefined (props),
 	// bound earlier in the ctor chain. Order is load-bearing — CallAsFunc switches
-	// on the method index (eCreateElement = 0 …, relative to these appends).
-	helper.AppendFunc(ibT("CreateElement"), ibT("CreateElement()"));
-	helper.AppendFunc(ibT("CreateGroup"), ibT("CreateGroup()"));
+	// on the method index (eCreateItem = 0 …, relative to these appends).
+	helper.AppendFunc(ibT("CreateItem"), ibT("CreateItem()"));
+	helper.AppendFunc(ibT("CreateFolder"), ibT("CreateFolder()"));
 	helper.AppendFunc(ibT("Select"), ibT("Select()"));
 	helper.AppendFunc(ibT("FindByCode"), 1, ibT("FindByCode(code : string)"));
 	helper.AppendFunc(ibT("FindByDescription"), 2, ibT("FindByDescription(descr : string, exact = true : boolean)"));
@@ -55,10 +55,10 @@ bool ibValueManagerDataObjectCatalog::CallAsFunc(const long lMethodNum, ibValue&
 	// Our own ordinal, not the table index — ibValueManagerDataObject::BuiltinMethodNum says why.
 	switch (BuiltinMethodNum(lMethodNum))
 	{
-	case eCreateElement:
+	case eCreateItem:
 		pvarRetValue = m_metaObject->CreateObjectValue(ibObjectMode::OBJECT_ITEM);
 		return true;
-	case eCreateGroup:
+	case eCreateFolder:
 		pvarRetValue = m_metaObject->CreateObjectValue(ibObjectMode::OBJECT_FOLDER);
 		return true;
 	case eSelect:

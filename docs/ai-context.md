@@ -375,11 +375,11 @@ handler worked out), and does not write, read back and write again.
 
 ```c
 // the chart: a sick leave displaces the salary; a bonus is computed on the salary
-var sick = ChartsOfCalculationTypes.Accruals.CreateElement(); sick.Description = "SickLeave"; sick.Write();
-var salary = ChartsOfCalculationTypes.Accruals.CreateElement(); salary.Description = "Salary";
+var sick = ChartsOfCalculationTypes.Accruals.CreateCalculationType(); sick.Description = "SickLeave"; sick.Write();
+var salary = ChartsOfCalculationTypes.Accruals.CreateCalculationType(); salary.Description = "Salary";
 var edge = salary.Displacing.Add(); edge.CalculationType = sick.Ref;
 salary.Write();
-var bonus = ChartsOfCalculationTypes.Accruals.CreateElement(); bonus.Description = "Bonus";
+var bonus = ChartsOfCalculationTypes.Accruals.CreateCalculationType(); bonus.Description = "Bonus";
 var feed = bonus.Base.Add(); feed.CalculationType = salary.Ref;
 bonus.Write();
 

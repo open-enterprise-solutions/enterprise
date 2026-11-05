@@ -75,6 +75,12 @@ if (HexString(utf16) <> "61006200") { Raise("UTF-16 is little-endian with no mar
 var marked = New BinaryData("ab", TextEncoding.UTF8, True);
 if (HexString(marked) <> "EFBBBF6162") { Raise("the mark asked for: " + HexString(marked)); }
 if (marked.GetString(TextEncoding.UTF8) <> "ab") { Raise("a mark is read as a mark"); }
+// a page by its name - the same table XML reads by, on every machine
+var named = New BinaryData("Борщ", "windows-1251");
+if (HexString(named) <> "C1EEF0F9") { Raise("Борщ in windows-1251: " + HexString(named)); }
+if (named.GetString("CP1251") <> "Борщ") { Raise("windows-1251 round trip, the name in another case and alias"); }
+if (New BinaryData("Борщ", "cp866").GetString("IBM866") <> "Борщ") { Raise("cp866 round trip"); }
+if (New BinaryData("ab", "UTF-16").Size() <> 4) { Raise("UTF-16 by its name"); }
 
 // 7
 var man = New BinaryData("Man", TextEncoding.UTF8);
@@ -117,8 +123,11 @@ refused = False;
 try { var noFunction = New DataHashing(TextEncoding.UTF8); } except { refused = True; }
 if (Not refused) { Raise("a member of another enumeration is no hash function"); }
 refused = False;
-try { var noEncoding = New BinaryData("abc", "UTF8"); } except { refused = True; }
-if (Not refused) { Raise("a string is no encoding"); }
+try { var noEncoding = New BinaryData("abc", "koi8-x"); } except { refused = True; }
+if (Not refused) { Raise("a string that names no page is no encoding"); }
+refused = False;
+try { var noByte = New BinaryData("中", "windows-1251"); } except { refused = True; }
+if (Not refused) { Raise("a character the page has no byte for is refused"); }
 refused = False;
 try { bytes.GetString(HashFunction.MD5); } except { refused = True; }
 if (Not refused) { Raise("a member of another enumeration is no encoding"); }

@@ -32,19 +32,38 @@
 
 namespace {
 
+// A value as every value travels, and how it reads.
+ibPredefinedCellDescription Packed(const ibValue& value)
+{
+	ibPredefinedCellDescription cell;
+	cell.m_title = value.GetString();
+	ibSerializeValue(value, cell.m_value);
+	return cell;
+}
+
+// ⭐ A CODE OR A DESCRIPTION AS ITS ATTRIBUTE HOLDS IT (#646) — the door insures what it is given, however it came: run
+// through the attribute's own AdjustValue, a number code the number its text reads as. Not declared stays not declared.
+ibPredefinedCellDescription Adjusted(const ibMetaData* metaData, const ibValueMetaObjectAttributeBase* attribute,
+	const ibPredefinedCellDescription& declared)
+{
+	if (declared.IsEmpty())
+		return declared;
+	return Packed(attribute->AdjustValue(ibDeserializeValue(declared.m_value, metaData)));
+}
+
 // ⭐ THE CODE A NEW ITEM IS GIVEN — the one after the greatest its kind declares, spelled as a written item's code is
 // (GenerateIdentifier). Asked of the declaration alone: what some base holds is no business of a configuration, and a
 // configuration numbers its own items as they are added (Max, 2026-11-02). A code that is not a whole number (`60.01`)
-// is no counter and is passed over. Empty where the kind has no code.
-ibString NextPredefinedCode(const ibValueMetaObjectRecordDataHierarchyMutableRef& owner)
+// is no counter and is passed over. A value of the code's type (#646); nothing reads in it where the kind has no code.
+ibPredefinedCellDescription NextPredefinedCode(const ibValueMetaObjectRecordDataHierarchyMutableRef& owner)
 {
 	long long greatest = 0;
 	for (const ibPredefinedItemDescription& item : owner.GetPredefinedValueArray()) {
 		long long code = 0;
-		if (item.m_code.ToLongLong(&code) && code > greatest)
+		if (item.m_code.m_title.ToLongLong(&code) && code > greatest)
 			greatest = code;
 	}
-	return owner.GenerateIdentifier(ibNumber(greatest + 1)).GetString();
+	return Packed(owner.GenerateIdentifier(ibNumber(greatest + 1)));
 }
 
 // ⭐ WHERE AN ITEM MAY STAND, AS THE KIND'S HIERARCHY SAYS. A folder only where the kind tells folders from items, and one
@@ -250,6 +269,8 @@ const ibPredefinedDescription& ibValueMetaObjectRecordDataHierarchyMutableRef::G
 	described.m_parent = HasParentLink();
 	described.m_folders = HasFolders();
 	described.m_nextCode = NextPredefinedCode(*this);
+	described.m_code = Describe(m_metaData, GetDataCode());
+	described.m_description = Describe(m_metaData, GetDataDescription());
 
 	// ⭐ WHAT AN ITEM DECLARES IS READ OFF THE SCHEMA — the tables this object declares (the record's ContributeTables,
 	// the structure alone, no seed), so the window, the door and the check offer exactly the columns the seed writes.
@@ -329,21 +350,26 @@ ibGuid ibValueMetaObjectRecordDataHierarchyMutableRef::AppendPredefinedValue(con
 
 	if (item.m_code.IsEmpty())
 		item.m_code = described.m_nextCode;
+	item.m_code = Adjusted(m_metaData, GetDataCode(), item.m_code);
+	item.m_description = Adjusted(m_metaData, GetDataDescription(), item.m_description);
 	m_predefinedDesc.m_items.push_back(std::move(item));
 
 	m_metaData->Modify(true);
 	return m_predefinedDesc.m_items.back().m_guid;
 }
 
-void ibValueMetaObjectRecordDataHierarchyMutableRef::SetPredefinedValue(const ibPredefinedItemDescription& item)
+void ibValueMetaObjectRecordDataHierarchyMutableRef::SetPredefinedValue(const ibPredefinedItemDescription& given)
 {
-	CheckPlace(*this, item);
-	CheckGiven(m_metaData, GetName(), GetPredefinedDesc(), item);
+	CheckPlace(*this, given);
+	CheckGiven(m_metaData, GetName(), GetPredefinedDesc(), given);
 
+	ibPredefinedItemDescription item = given;
+	item.m_code = Adjusted(m_metaData, GetDataCode(), item.m_code);
+	item.m_description = Adjusted(m_metaData, GetDataDescription(), item.m_description);
 	if (ibPredefinedItemDescription* const kept = m_predefinedDesc.FindItem(item.m_guid))
-		*kept = item;
+		*kept = std::move(item);
 	else
-		m_predefinedDesc.m_items.push_back(item);
+		m_predefinedDesc.m_items.push_back(std::move(item));
 
 	m_metaData->Modify(true);
 }

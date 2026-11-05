@@ -220,22 +220,24 @@ const ibArg& ArgTypeShape()
 
 const ibArg& ArgLength()
 {
-	static const ibArg s_a(ibT("length"), ibArg::Kind::Whole,
-		ibMcpText("For String - how many characters. Default 10."));
+	static const ibArg s_a(ibT("length"), ibArg::Kind::Whole, ibString::Format(
+		ibMcpText("For String - how many characters, from 0 (no limit) to %d; more is refused, not cut. Default 10."),
+		MAX_LENGTH_STRING));
 	return s_a;
 }
 
 const ibArg& ArgPrecision()
 {
-	static const ibArg s_a(ibT("precision"), ibArg::Kind::Whole,
-		ibMcpText("For Number - total digits. Default 10."));
+	static const ibArg s_a(ibT("precision"), ibArg::Kind::Whole, ibString::Format(
+		ibMcpText("For Number - total digits, from 0 (no limit) to %d; more is refused, not cut. Default 10."),
+		MAX_PRECISION_NUMBER));
 	return s_a;
 }
 
 const ibArg& ArgScale()
 {
 	static const ibArg s_a(ibT("scale"), ibArg::Kind::Whole,
-		ibMcpText("For Number - digits after the point. Default 0."));
+		ibMcpText("For Number - digits after the point, from 0 to the precision. Default 0."));
 	return s_a;
 }
 
@@ -1468,6 +1470,8 @@ public:
 		return ibMcpText("Give an attribute, a dimension or a resource its type - in words: String with a "
 			"length, Number with precision and scale, Date, Boolean, or a reference such as "
 			"CatalogRef.Goods. type_list shows what names exist.\n"
+			"A catalog's or a chart's Code and Description and a document's Number take a String or a Number too - by "
+			"their own id, which metadata_get gives under the owner's property of that name, beside the type it holds.\n"
 			"WHICH REFERENCE, by what the field MEANS - a reference field may be as narrow or as wide as that:\n"
 			"* ONE KIND OF THING (the customer, the warehouse) - that object's own reference, CatalogRef.Counterparties. "
 			"The default: a choice opens its list, a query joins its one table, anything else is refused.\n"
@@ -1555,11 +1559,65 @@ public:
 			}
 		}
 
-		if (typeValue == nullptr) {
+		// ⭐ …OR THE ONE ITS OWNER SHOWS IT BY. A code, a description, a number have no type property of their own: the
+		// holder on the owner, under the attribute's name, shows the type and takes it in the attribute's node, as the
+		// inspector sends it (ibPropertyPredefinedType, #646). Asked of its value: a holder whose node carries no type takes none.
+		ibValueMetaObject* const owner = object->GetParent();
+		ibProperty* const holder = typeValue == nullptr && owner != nullptr ? owner->GetProperty(object->GetName()) : nullptr;
+		ibTypeDescription heldType;
+		const bool held = holder != nullptr && holder->GetNodeValue().Kind() == ibDataKind::Child
+			&& ibTypeDescriptionMemory::ReadNode(holder->GetNodeValue(), heldType) && heldType.GetClsidCount() > 0;
+
+		if (typeValue == nullptr && !held) {
 			refusal = ibString::Format(
 				ibMcpText("'%s' has no type to set."), object->GetName());
 			return false;
 		}
+
+		// PLACED WHERE THE TYPE LIVES - its own property, or the holder, the attribute's node around it - and read back from
+		// there.
+		const auto place = [&](const ibTypeDescription& type) -> bool {
+			if (typeValue != nullptr) {
+				typeValue->SetFromTypeDesc(type);
+				return ibMcpApplyByHand(typeProperty, ibVariant(new ibVariantAttribute(*typeValue)), refusal);
+			}
+			ibDataValue fields;
+			ibTypeDescriptionMemory::WriteNode(fields, type);
+			auto node = std::make_shared<ibDataNode>(*holder->GetNodeValue().AsChild());
+			for (const auto& field : fields.AsChild()->Fields())
+				node->SetField(field.first, field.second);
+			return ibPropertyGate::SetValue(owner, holder, ibDataValue::Child(node), &refusal);
+		};
+		const auto placed = [&]() -> ibTypeDescription {
+			if (typeValue != nullptr)
+				return typeProperty->get_cell_variant<ibVariantAttribute>()->GetTypeDesc();
+			ibTypeDescription now;
+			ibTypeDescriptionMemory::ReadNode(holder->GetNodeValue(), now);
+			return now;
+		};
+
+		// 🛑 A LENGTH OR A PRECISION THE FIELD CANNOT HOLD IS REFUSED, NOT CUT (#646): 70000 was placed as 4464, 300 digits
+		// as 44. The bound is the designer's own (advpropType) - two doors, one answer - and it is asked of both roads here,
+		// a name with its qualifiers and a whole description: the description placed 5000 characters and 36 digits that
+		// `length` and `precision` refused (2026-11-05).
+		const auto fits = [&refusal](bool string, bool number, std::int32_t length, std::int32_t precision, std::int32_t scale) {
+			if (string && (length < 0 || length > MAX_LENGTH_STRING)) {
+				refusal = ibString::Format(ibMcpText("A string's length is from 0 (no limit) to %d, not %d."),
+					MAX_LENGTH_STRING, length);
+				return false;
+			}
+			if (number && (precision < 0 || precision > MAX_PRECISION_NUMBER)) {
+				refusal = ibString::Format(ibMcpText("A number's precision is from 0 (no limit) to %d, not %d."),
+					MAX_PRECISION_NUMBER, precision);
+				return false;
+			}
+			if (number && (scale < 0 || (precision > 0 && scale > precision))) {
+				refusal = ibString::Format(ibMcpText("A number's scale is from 0 to its precision (%d), not %d."),
+					precision, scale);
+				return false;
+			}
+			return true;
+		};
 
 		const ibString typeName = ArgType().Text(params);
 
@@ -1622,21 +1680,22 @@ public:
 					"shape metadata_get gives, with your changes in it.");
 				return false;
 			}
+			if (!fits(described.ContainType(ibValueTypes::TYPE_STRING), described.ContainType(ibValueTypes::TYPE_NUMBER),
+			          described.GetLength(), described.GetPrecision(), described.GetScale()))
+				return false;
 
-			typeValue->SetFromTypeDesc(described);
-			if (!ibMcpApplyByHand(typeProperty, ibVariant(new ibVariantAttribute(*typeValue)), refusal))
+			if (!place(described))
 				return false;
 
 			metaData->Modify(true);
 
-			ibDataValue placed;
-			if (!ibTypeDescriptionMemory::WriteNode(placed,
-					typeProperty->get_cell_variant<ibVariantAttribute>()->GetTypeDesc())) {
+			ibDataValue written;
+			if (!ibTypeDescriptionMemory::WriteNode(written, placed())) {
 				refusal = ibMcpText("The description was placed, but could not be read back to confirm it.");
 				return false;
 			}
 
-			result.AddField(ibT("type"), placed);
+			result.AddField(ibT("type"), written);
 			ibMcpReportComplaints(result, object->GetParent());
 			return true;
 		}
@@ -1703,18 +1762,23 @@ public:
 		description.SetDefaultMetaType(clsid);
 
 		// The qualifiers only mean something for the type they belong to; set
-		// unconditionally they would silently rewrite a neighbour's.
-		if (typeName.IsSameAs(ibT("String"), false))
-			description.SetString((unsigned short)length);
-		else if (typeName.IsSameAs(ibT("Number"), false))
-			description.SetNumber((unsigned char)precision, (unsigned char)scale);
+		// unconditionally they would silently rewrite a neighbour's. Asked before they are cast (`fits`).
+		if (typeName.IsSameAs(ibT("String"), false)) {
+			if (!fits(true, false, length, precision, scale))
+				return false;
+			description.SetString(static_cast<unsigned short>(length));
+		}
+		else if (typeName.IsSameAs(ibT("Number"), false)) {
+			if (!fits(false, true, length, precision, scale))
+				return false;
+			description.SetNumber(static_cast<unsigned char>(precision), static_cast<unsigned char>(scale));
+		}
 
 		// ⭐ WRITTEN THROUGH THE VALUE, and then the value is placed — the inspector's own sequence,
 		// so whatever watches a property change sees this one. The variant is CLONED because the one
 		// read out is the property's live data: mutating it and handing it back as "the new value"
 		// is a write nobody was told about.
-		typeValue->SetFromTypeDesc(description);
-		if (!ibMcpApplyByHand(typeProperty, ibVariant(new ibVariantAttribute(*typeValue)), refusal))
+		if (!place(description))
 			return false;
 
 		metaData->Modify(true);
@@ -1736,8 +1800,7 @@ public:
 		// — a COMPOSITE type, several types at once — which came back reported as a length of 10.
 		// The same shape the answer now carries is the shape metadata_set takes back, so a caller
 		// can read a type and place it somewhere else without translating anything.
-		const ibTypeDescription& now =
-			typeProperty->get_cell_variant<ibVariantAttribute>()->GetTypeDesc();
+		const ibTypeDescription now = placed();
 
 		// ⚠ ASKED WHETHER IT COULD SAY ITSELF. The family answers that, and a dropped answer here
 		// would report a type that was never written as an empty one.

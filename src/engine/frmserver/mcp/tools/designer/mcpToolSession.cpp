@@ -305,8 +305,9 @@ public:
 			"before something that needs the installation to itself, and to free a lock whose "
 			"holder has walked away (lock_list names the session). It is a SIGNAL: the process "
 			"that owns the session acts on it within a few seconds, so the row does not vanish "
-			"the instant this returns. Refuses to disconnect the session this server is running "
-			"in.");
+			"the instant this returns, and a runtime stopped at a breakpoint does not act on it until it runs "
+			"on - app_stop ends an application started from here. Refuses to disconnect the session this "
+			"server is running in.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override

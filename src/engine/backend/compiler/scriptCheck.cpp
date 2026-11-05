@@ -6,6 +6,7 @@
 
 #include "backend/backend_exception.h"
 #include "backend/compiler/compileModule.h"     // ibCompileModule — the contextual compile
+#include "backend/compiler/scriptComplete.h"    // ibCheckMethodCalls — the walk asked about each call
 #include "backend/metaData.h"                   // ibCompileValueCache::FindCompileModule
 #include "backend/metaCollection/metaObject.h"  // ibValueMetaObject::GetMetaData
 #include "backend/moduleInfo.h"                 // ibRuntimeModuleDataObject::CreateCompiler
@@ -198,11 +199,16 @@ ibScriptCheckAnswer ibCheckModule(const ibValueMetaObject* metaObject)
 	if (compileModule == nullptr)
 		return answer;
 
-	// THE BUTTON'S OWN ROAD — ibCodeEditor::SyntaxControl compiles exactly this,
+	// THE BUTTON'S OWN ROAD — the designer's Syntax control asks exactly this,
 	// so the module is checked against the metaobject that owns it and every
 	// name it can legitimately see resolves.
 	answer.m_diagnostics = CollectFrom([&] { compileModule->Compile(); });
 	answer.m_outcome = ibScriptCheckOutcome::Checked;
+
+	// ⭐ …AND THE TEXT THAT COMPILED IS ASKED ABOUT ITS METHOD CALLS, which the compile cannot judge: a method is looked
+	// up by name when it runs (scriptComplete.h, ibCheckMethodCalls; #646).
+	if (answer.m_diagnostics.empty())
+		answer.m_diagnostics = ibCheckMethodCalls(compileModule->m_translateCode.GetBuffer(), metaObject);
 	return answer;
 }
 

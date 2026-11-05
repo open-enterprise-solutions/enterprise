@@ -200,8 +200,9 @@ private:
 	ibPropertyEnum<ibValueEnumItemMode>* m_propertyUse = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumItemMode>>(m_categoryGroup, ibT("ItemMode"), _("Item mode"),
 		_("In a catalog with folders: which nodes have this tabular section - items (the default), folders, or both. The other kind's form and record simply do not offer it."),
 		ibItemMode::ibItemMode_Item);
-	ibPropertyContainer<>* m_propertyNumberLine = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryGroup, ibValueMetaObjectCompositeData::CreateNumber(ibT("NumberLine"), _("N"),
-		_("The row's number in the tabular section, 1-based, kept by the platform: renumbered when rows are added, deleted or moved, and written with the object. Read-only for code."), 6, 0));
+	// The line number's length is the configuration's - shown and set as its type, a number alone (ibPropertyPredefinedType).
+	ibPropertyPredefinedType* m_propertyNumberLine = ibPropertyObject::CreateProperty<ibPropertyPredefinedType>(m_categoryPredefined, ibValueMetaObjectCompositeData::CreateNumber(ibT("NumberLine"), _("N"),
+		_("The row's number in the tabular section, 1-based, kept by the platform: renumbered when rows are added, deleted or moved, and written with the object. Read-only for code."), 6, 0), { g_valueNumberCLSID });
 };
 
 // ibValueMetaObjectTableDataRam — RAM-only tabular section (data processors / reports). A thin

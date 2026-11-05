@@ -53,6 +53,7 @@ class BACKEND_API ibCompileCode {
 
 		ibParamUnit m_puRetValue;	// variable where the result of the function execution should be returned
 		ibParamUnit m_puContextVal;  // pointer to the Context variable
+		ibParamUnit m_puCallableVal; // a variable of that name holding a callable value, called when no function answers the name (DEF_VAR_SKIP - none)
 
 		unsigned int m_numAddLine = 0;	// position in the bytecode array where the call was encountered (for the case where there is a call, but the function has not yet been declared)
 		unsigned int m_numError = 0;	// to display error messages
@@ -539,7 +540,6 @@ protected:
 
 	bool CompileDeclaration(ibCompileContext* context);
 	bool CompileBlock(ibCompileContext* context);
-	bool CompileNewObject(ibCompileContext* context);
 	bool CompileGoto(ibCompileContext* context);
 	bool CompileIf(ibCompileContext* context);
 	bool CompileWhile(ibCompileContext* context);

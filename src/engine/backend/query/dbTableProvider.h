@@ -124,12 +124,13 @@ public:
 	static BACKEND_API bool CanPushRollupTotals(const ibDataQuerySpec& spec);
 	static ibSelectorTree   ExecuteRollupTotals(const ibDataQuerySpec& spec);
 
-	// ONE level of headings needs no ROLLUP: a plain GROUP BY, which every engine has (Firebird has no ROLLUP),
-	// the groups ordered by the key and by an ordinary sort's MIN / MAX, the grand total added up from the groups
-	// — so only a sum, a count, a minimum or a maximum rides here. Same shape rules as the ROLLUP road otherwise;
-	// no dialect probe -> unit-testable without a DB.
-	static BACKEND_API bool CanFoldOneLevelTotals(const ibDataQuerySpec& spec);
-	static ibSelectorTree   ExecuteOneLevelTotals(const ibDataQuerySpec& spec);
+	// A LADDER OF HEADINGS NEEDS NO ROLLUP: a plain GROUP BY over every level's fields, which every engine has
+	// (Firebird has no ROLLUP), returns the bottom groups ordered by the keys and by an ordinary sort's MIN / MAX;
+	// the groups above are made as they are first met and, with the grand total, add up from the ones below — so
+	// only a sum, a count, a minimum or a maximum rides here. Same shape rules as the ROLLUP road otherwise; no
+	// dialect probe -> unit-testable without a DB.
+	static BACKEND_API bool CanFoldGroupByTotals(const ibDataQuerySpec& spec);
+	static ibSelectorTree   ExecuteGroupByTotals(const ibDataQuerySpec& spec);
 
 	// Multi-source variant of the ROLLUP totals push-down: the SAME GROUP BY ROLLUP + GROUPING()
 	// mechanism, but over a co-located INNER/LEFT JOIN tree (BuildColocatedFrom) OR a UNION-of-branches

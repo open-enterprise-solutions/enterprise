@@ -22,7 +22,7 @@ ibValueReferenceDataObject* ibValueManagerDataObjectDocument::EmptyRef()
 }
 
 enum Func {
-	eCreateElement = 0,
+	eCreateDocument = 0,
 	eSelect,
 	eFindByNumber,
 	eGetForm,
@@ -55,7 +55,7 @@ bool ibValueManagerDataObjectDocument::CallAsFunc(const long lMethodNum, ibValue
 	// different verb for every configuration that declares one.
 	switch (BuiltinMethodNum(lMethodNum))
 	{
-	case eCreateElement:
+	case eCreateDocument:
 		pvarRetValue = m_metaObject->CreateObjectValue();
 		return true;
 	case eSelect:

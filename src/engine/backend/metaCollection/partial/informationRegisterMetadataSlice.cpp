@@ -439,14 +439,21 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 		// With two roads to this answer the silence would be worse still, since the one that broke
 		// would be the one nobody looked at. A slice that cannot be computed is an error, and the
 		// caller is entitled to hear which.
+		// One buffer for every row, laid down whole (AppendRow, #646); a value that could not be read is not a cell.
+		std::vector<ibMetaID> ids;
+		std::vector<ibValue> cells;
 		ibQueryResult rs = ibDatabaseQueryBuilder().ExecuteIR(sliceIr);
 		while (rs.Next()) {
-			const long retRow = retTable.AppendRow();
+			ids.clear();
+			cells.clear();
 			for (const auto object : meta->GetGenericAttributeArrayObject()) {
 				ibValue retValue;
-				if (ibDbTableProvider::GetValueAttribute(object, retValue, rs))
-					retTable.SetCell(retRow, object->GetMetaID(), retValue);
+				if (ibDbTableProvider::GetValueAttribute(object, retValue, rs)) {
+					ids.push_back(object->GetMetaID());
+					cells.push_back(std::move(retValue));
+				}
 			}
+			retTable.AppendRow(ids, cells);
 		}
 	}
 

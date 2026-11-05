@@ -147,24 +147,31 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalance(const ibVa
 			b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, col, figure.first);
 
 	try {
+		// The ids the cells are published under, found once and not by name per figure per row (#646, as the
+		// turnovers below), and one buffer for every row — keys, then figures — laid down whole (AppendRow).
+		const size_t keyCount = keyCols.size();
+		std::vector<ibMetaID> ids;
+		ids.reserve(keyCount + figures.size());
+		for (const ibBackendQueryColumn* key : keyCols)
+			ids.push_back(key->GetColumnId());
+		for (const auto& figure : figures)
+			ids.push_back(retTable.ColumnIdByName(figure.second));
+		std::vector<ibValue> cells(ids.size());
 		ibDataQueryResult sel = b.SelectAggregate();
 		while (sel.Next()) {
 			// No stock means NO ROW — the same answer the materialised read gives (m_dropZeroRows).
-			std::vector<ibValue> values;
 			bool anyNonZero = false;
-			for (const auto& figure : figures) {
-				ibValue v = sel.GetColumn(figure.first);
-				if (!(v.GetNumber() == ibNumber())) anyNonZero = true;
-				values.push_back(v);
+			for (size_t i = 0; i < figures.size(); i++) {
+				ibValue& figure = cells[keyCount + i];
+				figure = sel.GetColumn(figures[i].first);
+				if (!(figure.GetNumber() == ibNumber())) anyNonZero = true;
 			}
 			if (!figures.empty() && !anyNonZero)
 				continue;
 
-			const long row = retTable.AppendRow();
-			for (const ibBackendQueryColumn* key : keyCols)
-				retTable.SetCell(row, key->GetColumnId(), sel.GetValue(key));
-			for (size_t i = 0; i < figures.size(); i++)
-				retTable.SetByName(row, figures[i].second, values[i]);
+			for (size_t k = 0; k < keyCount; k++)
+				cells[k] = sel.GetValue(keyCols[k]);
+			retTable.AppendRow(ids, cells);
 		}
 	}
 	// 🛑 A BALANCE THAT COULD NOT BE READ IS NOT A BALANCE OF ZERO. Swallowed, this handed back the
@@ -210,15 +217,19 @@ ibQueryRamTable ibBalanceAndTurnoverQueryable::ComputeRows(const std::vector<ibQ
 // the GROUP BY and each period's figures are that period's own rows added up. Nothing looks outside
 // its own row, which is exactly what the balance below cannot say — and being the harder case, the
 // balance is what got a server road first. The easy one stayed in memory behind a single `||`.
+// …AND NEITHER IS THE RECORDER. No rolled-up total carries one, so a reading by the recorder or the line stands on the
+// movements alone (ibMaterializeGrain::Movements) — and that is one GROUP BY as well (#646). It used to be a reason to
+// compute in RAM, and with it every step of the query above the reading: 23 s a pass of a report over 99 291
+// turnovers (2026-11-04, Debug).
 bool ibTurnoverQueryable::IsComputedInRam() const
 {
 	if (m_reg == nullptr || !m_reg->HasMaterializedViews())
 		return true;    // nothing stored to read — the live aggregation IS the reading
 
-	if (m_fold.FromMovements())
-		return true;    // a recorder is not a calendar interval; no rolled-up total carries one
+	if (m_fold.FromMovements() && !m_reg->HasMovementArm())
+		return true;    // the surface carries no movement, and no rolled-up total carries a recorder
 
-	return false;       // whole or periodised: one GROUP BY, and the surface answers it
+	return false;       // whole, periodised or by the movement: one GROUP BY, and the surface answers it
 }
 
 // WHICH ROAD, and every clause of it is a different question — kept as separate returns rather than
@@ -232,8 +243,10 @@ bool ibBalanceAndTurnoverQueryable::IsComputedInRam() const
 	if (m_fold.IsWholeInterval())
 		return false;   // one row per key: three conditional sums over one pass, no window involved
 
-	if (m_fold.FromMovements())
-		return true;    // a recorder is not a calendar interval; no rolled-up total carries one
+	// By the recorder or the line each movement opens where the one before it closed (ibRegRunningMovements) — a window
+	// along the movements, asked of the driver below like every periodised one (#646).
+	if (m_fold.FromMovements() && (!m_reg->HasMovementArm() || m_reg->GetRegisterType() != ibRegisterType::eBalances))
+		return true;    // no movement arm to read them from, or no balance to run along them
 
 	// A calendar over an interval with both ends reports EVERY period of it, and the server spells that
 	// calendar into the statement a row per period — past the limit of ibRegCalendarOf (a daily one over
@@ -311,6 +324,8 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibV
 	// asking it for `Recorder IS NULL` would return nothing at all.
 	if (!atMovementGrain)
 		RestrictToStoredArm(b, this, view);
+	// …and the totals' guard is the movements' to say: a line out of force moved nothing (#646).
+	ibRegWhereActive(b, this, source, /*onMovements*/ atMovementGrain);
 	// ⚠ NOT FILTERED BY THE CALLER'S RIGHTS. Totals read through a right-limited view would report
 	// figures computed from the rows that caller happens to see, and a wrong total does not look
 	// like an error.
@@ -447,28 +462,37 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibV
 	}
 
 	try {
+		// ⭐ THE IDS THE CELLS LAND UNDER ARE FOUND ONCE, not by name per figure per row (#646): a lookup by name walks
+		// the columns comparing names, and stood in 5% of a report over 100 000 turnovers (2026-11-04, Debug). A row is
+		// read into one buffer in the order it always was — keys, period, figures — and laid down whole (AppendRow).
+		const size_t keyCount = keyCols.size();
+		std::vector<ibMetaID> ids;
+		ids.reserve(keyCount + 1 + figures.size());
+		for (const ibBackendQueryColumn* key : keyCols)
+			ids.push_back(key->GetColumnId());
+		ids.push_back(withPeriodOut ? retTable.ColumnIdByName(periodName) : 0);
+		for (const ibString& figure : figures)
+			ids.push_back(retTable.ColumnIdByName(figure));
+		std::vector<ibValue> cells(ids.size());
 		ibDataQueryResult sel = b.SelectAggregate();
 		while (sel.Next()) {
 			// A key whose every figure folded to nothing is not a row. The old read said so with a
 			// HAVING; the door's HAVING takes ordered comparisons only, so it is said here — same
 			// rows out, one clause fewer in the SQL.
-			std::vector<ibValue> values;
 			bool anyNonZero = false;
-			for (const ibString& figure : figures) {
-				ibValue v = sel.GetColumn(figure);
-				if (!(v.GetNumber() == ibNumber())) anyNonZero = true;
-				values.push_back(v);
+			for (size_t i = 0; i < figures.size(); i++) {
+				ibValue& figure = cells[keyCount + 1 + i];
+				figure = sel.GetColumn(figures[i]);
+				if (!(figure.GetNumber() == ibNumber())) anyNonZero = true;
 			}
 			if (!figures.empty() && !anyNonZero)
 				continue;
 
-			const long row = retTable.AppendRow();
-			for (const ibBackendQueryColumn* key : keyCols)
-				retTable.SetCell(row, key->GetColumnId(), sel.GetValue(key));
-			if (withPeriodOut)
-				retTable.SetByName(row, periodName, sel.GetColumn(periodName));
-			for (size_t i = 0; i < figures.size(); i++)
-				retTable.SetByName(row, figures[i], values[i]);
+			for (size_t k = 0; k < keyCount; k++)
+				cells[k] = sel.GetValue(keyCols[k]);
+			if (ids[keyCount] != 0)
+				cells[keyCount] = sel.GetColumn(periodName);
+			retTable.AppendRow(ids, cells);
 		}
 	}
 	// Same rule as the balance above, and it is the ORACLE saying it: a parity test measures the
@@ -625,6 +649,8 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 	const ibBackendQueryable* const reading = atMovementGrain ? GetQueryable() : source;
 	const ibString recorderName = GetRegisterRecorder()   != nullptr ? GetRegisterRecorder()->GetName()   : ibString();
 	const ibString lineName     = GetRegisterLineNumber() != nullptr ? GetRegisterLineNumber()->GetName() : ibString();
+	const ibMetaID recorderId   = !recorderName.IsEmpty() ? retTable.ColumnIdByName(recorderName) : 0;
+	const ibMetaID lineId       = !lineName.IsEmpty() ? retTable.ColumnIdByName(lineName) : 0;
 	if (reading != nullptr) {
 		ibDataQueryBuilder b;
 		const ibBackendQueryColumn* readPeriod = atMovementGrain ? reading->ResolveColumnByName(periodName) : periodCol;
@@ -638,6 +664,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 			// the reason openRead gives; the condition and the keys are resolved on this table.
 			b.From(reading);
 			b.WithAccessPolicy(nullptr);
+			ibRegWhereActive(b, this, reading, /*onMovements*/ true);   // a line out of force moved nothing (#646)
 			if (const ibQueryPredicatePtr onMoves = ibRegConditionOn(reading, cFilter, ibRegSelectsByDimensions(this)))
 				b.Where(onMoves);
 			keyOnReading.clear();
@@ -773,6 +800,10 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 	// --- 2b. poured in the order the roll needs -------------------------------------------------------------
 	// Every row of one key together, its periods ascending. The roll is sequential (a period's opening IS the
 	// previous closing), and the order a GROUP BY answers in is the engine's business, not a promise.
+	// A row is put in one buffer and laid down whole (AppendRow, #646); the groups are not read again, so what a row
+	// carries is moved into it.
+	std::vector<ibMetaID> ids;
+	std::vector<ibValue> cells;
 	for (auto& group : groups) {
 		std::stable_sort(group.second.begin(), group.second.end(), [](const ibPeriodRow& a, const ibPeriodRow& b) {
 			const auto dateOf = [](const ibValue& v) { return v.GetType() == TYPE_DATE ? v.GetDate() : ibDateTime(); };
@@ -789,27 +820,39 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 				return a.m_line < b.m_line;
 			return false;
 		});
-		for (const ibPeriodRow& read : group.second) {
-			const long row = retTable.AppendRow();
+		for (ibPeriodRow& read : group.second) {
+			ids.clear();
+			cells.clear();
 			size_t k = 0;
 			for (const auto dimension : GetDimensionArrayObject()) {
 				if (dimension == nullptr || k >= group.first.size())
 					continue;
-				retTable.SetCell(row, dimension->GetMetaID(), group.first[k++]);
+				ids.push_back(dimension->GetMetaID());
+				cells.push_back(group.first[k++]);
 			}
-			if (periodCol != nullptr)
-				retTable.SetCell(row, periodId, read.m_period);
+			if (periodCol != nullptr) {
+				ids.push_back(periodId);
+				cells.push_back(std::move(read.m_period));
+			}
 			if (atMovementGrain) {
-				if (!read.m_recorder.IsEmpty() && !recorderName.IsEmpty())
-					retTable.SetByName(row, recorderName, read.m_recorder);
-				if (!read.m_line.IsEmpty() && !lineName.IsEmpty())
-					retTable.SetByName(row, lineName, read.m_line);
+				if (!read.m_recorder.IsEmpty() && recorderId != 0) {
+					ids.push_back(recorderId);
+					cells.push_back(std::move(read.m_recorder));
+				}
+				if (!read.m_line.IsEmpty() && lineId != 0) {
+					ids.push_back(lineId);
+					cells.push_back(std::move(read.m_line));
+				}
 			}
 			for (size_t i = 0; i < resources.size(); i++) {
-				retTable.SetCell(row, slots[i].m_receipt, read.m_receipt[i]);
-				if (withSign)
-					retTable.SetCell(row, slots[i].m_expense, read.m_expense[i]);
+				ids.push_back(slots[i].m_receipt);
+				cells.push_back(std::move(read.m_receipt[i]));
+				if (withSign) {
+					ids.push_back(slots[i].m_expense);
+					cells.push_back(std::move(read.m_expense[i]));
+				}
 			}
+			retTable.AppendRow(ids, cells);
 		}
 	}
 
@@ -1057,6 +1100,16 @@ ibQueryRelPtr ibTurnoverQueryable::GetSourceRelation(const ibString& alias) cons
 		r.m_grain      = m_fold.IsCalendar() ? ibMaterializeGrain::Calendar : ibMaterializeGrain::StoredPeriod;
 		r.m_periodUnit = m_fold.m_unit;
 	}
+	// ⭐ BY THE RECORDER OR THE LINE the rows are the movements alone — no stored row carries either — and the
+	// movement's own fields join the key as a dimension's do, the period as it stands (#646).
+	if (m_fold.FromMovements()) {
+		r.m_grain = ibMaterializeGrain::Movements;
+		for (const ibString& f : ibRegFieldsOf(m_reg->GetRegisterRecorder()))
+			r.m_keyColumns.push_back(f);
+		if (m_fold.HasLineNumber())
+			for (const ibString& f : ibRegFieldsOf(m_reg->GetRegisterLineNumber()))
+				r.m_keyColumns.push_back(f);
+	}
 
 	// ⭐ EITHER END MAY REACH BELOW THE GRAIN — "turnovers between this document and that one" is
 	// the question, and both ends of it name a moment. Ask for whole days and the stored rows answer
@@ -1161,10 +1214,26 @@ ibQueryRelPtr ibBalanceAndTurnoverQueryable::GetSourceRelation(const ibString& a
 	const bool withSign = (m_reg->GetRegisterType() == ibRegisterType::eBalances);
 	const std::vector<ibDateTime> calendar = (periodised && withSign && m_fold.IsCalendar())
 		? ibRegCalendarOf(r.m_from, r.m_to, m_fold.m_unit) : std::vector<ibDateTime>();
-	if (!calendar.empty()) {
-		// The movement per key per period, inside the interval.
+	// ⭐ …AND BY THE RECORDER OR THE LINE, NO CALENDAR AT ALL: a row per movement, each opening where the one before it
+	// closed, the same two reads under it (ibRegRunningMovements, #646). The movement's own fields join the key of the
+	// movements' read only — the balance carried in is the key's, not a document's.
+	const bool byMovement = m_fold.FromMovements();
+	if (!calendar.empty() || byMovement) {
+		// The movement per key per period, inside the interval — or per movement.
 		ibMaterializeReadSpec t = r;
-		t.m_fromGrain = ibValue(calendar.front());
+		std::vector<ibColumnSlot> movementFields;
+		if (byMovement) {
+			t.m_grain        = ibMaterializeGrain::Movements;
+			t.m_dropZeroRows = false;   // a movement of nothing still stands between two balances; pruned below, after the run
+			movementFields = DescribeColumnLayout(m_reg->GetRegisterRecorder()->GetQueryColumn());
+			if (m_fold.HasLineNumber())
+				for (const ibColumnSlot& slot : DescribeColumnLayout(m_reg->GetRegisterLineNumber()->GetQueryColumn()))
+					movementFields.push_back(slot);
+			for (const ibColumnSlot& slot : movementFields)
+				t.m_keyColumns.push_back(slot.m_name);
+		}
+		else
+			t.m_fromGrain = ibValue(calendar.front());
 		// The balance each key carries in — NOT pruned, and grouped over every row up to the end, so it is also
 		// the set of every key that holds a balance or moves in the interval.
 		ibMaterializeReadSpec o = r;
@@ -1194,8 +1263,11 @@ ibQueryRelPtr ibBalanceAndTurnoverQueryable::GetSourceRelation(const ibString& a
 		}
 
 		const ibString aG = alias + ibT("_g");
-		const ibQueryRelPtr grid = ibRegRunningGrid(RenderMaterializedRead(o, alias + ibT("_or")), RenderMaterializedRead(t, alias + ibT("_tr")),
-			calendar, r.m_periodColumn, r.m_keyColumns, passThrough, running, alias);
+		const ibQueryRelPtr openRead = RenderMaterializedRead(o, alias + ibT("_or"));
+		const ibQueryRelPtr turnRead = RenderMaterializedRead(t, alias + ibT("_tr"));
+		const ibQueryRelPtr grid = byMovement
+			? ibRegRunningMovements(openRead, turnRead, r.m_from, r.m_periodColumn, r.m_keyColumns, movementFields, passThrough, running, alias)
+			: ibRegRunningGrid(openRead, turnRead, calendar, r.m_periodColumn, r.m_keyColumns, passThrough, running, alias);
 		if (grid == nullptr)
 			return nullptr;
 
@@ -1206,6 +1278,8 @@ ibQueryRelPtr ibBalanceAndTurnoverQueryable::GetSourceRelation(const ibString& a
 		for (const ibString& key : r.m_keyColumns)
 			projection.push_back({ ibCol(aG, key), key });
 		projection.push_back({ ibCol(aG, r.m_periodColumn), r.m_periodColumn });
+		for (const ibColumnSlot& slot : movementFields)
+			projection.push_back({ ibCol(aG, slot.m_name), slot.m_name });
 		for (const ibString& name : published) {
 			const ibQueryExprPtr one = ibBinOp(ibQueryBinOp::Ne, ibCol(aG, name), ibRegTypedZero());
 			anyFigure = anyFigure ? ibBinOp(ibQueryBinOp::Or, anyFigure, one) : one;

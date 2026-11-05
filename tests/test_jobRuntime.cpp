@@ -235,7 +235,8 @@ TEST_F(JobRuntimeFix, ARentedRunIsNotListedNorFoundByItsUUID)
 			return ibValue();
 		}, Request(wxT("rented")));
 
-	ASSERT_TRUE(run->UUID().isValid()) << "a run whose session came up is named by it";
+	// EXPECT, not ASSERT: leaving here before `release` left the run spinning, and the test hung instead of failing.
+	EXPECT_TRUE(run->UUID().isValid()) << "a run whose session came up is named by it";
 	EXPECT_EQ(manager.FindBackgroundJob(run->UUID()), nullptr)
 		<< "a read rented for a form is the form's business, not the application's list";
 	EXPECT_TRUE(manager.GetBackgroundJobs().empty());

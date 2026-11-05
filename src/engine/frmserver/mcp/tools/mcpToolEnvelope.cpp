@@ -197,8 +197,13 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		const ibString wanted = ArgName().Text(params);
+		ibString wanted = ArgName().Text(params);
 		const ibString query = ArgQuery().Text(params);
+
+		// ⭐ A QUERY THAT IS A TOOL'S NAME IS ASKED BY NAME (#646). As words, `code_run` is said in the descriptions of a
+		// dozen verbs around it, most of them shorter than its own, so it scored below the bar and was not in the answer.
+		if (wanted.IsEmpty() && ibFindMcpTool(query) != nullptr)
+			wanted = query;
 
 		bool withSchema = true;
 		if (params.Has(ArgSchema().Name()))

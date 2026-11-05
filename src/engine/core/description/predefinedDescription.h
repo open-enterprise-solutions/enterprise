@@ -81,6 +81,9 @@ struct ibPredefinedTableDescription {
 struct ibPredefinedCellDescription {
 	ibString   m_title;
 	ibDataNode m_value;
+
+	// Nothing reads in it: not declared — a code that is generated, a description not given.
+	bool IsEmpty() const { return m_title.IsEmpty(); }
 };
 
 // A ROW OF THEM, by the attribute's id — absent: not declared; and the rows of a section, in order — a row is its position.
@@ -92,8 +95,10 @@ typedef std::vector<ibPredefinedRowDescription> ibPredefinedRowDescriptionVector
 struct ibPredefinedItemDescription {
 	ibGuid   m_guid;
 	ibString m_name;
-	ibString m_code;
-	ibString m_description;
+	// ⭐ A CODE AND A DESCRIPTION ARE VALUES OF THEIR FIELD'S TYPE, as a cell is its attribute's (#646): a number code a
+	// number. Not declared: nothing reads in them — a code is generated.
+	ibPredefinedCellDescription m_code;
+	ibPredefinedCellDescription m_description;
 	bool     m_folder = false;
 	ibGuid   m_parent;
 	ibPredefinedRowDescription m_row;
@@ -102,9 +107,11 @@ struct ibPredefinedItemDescription {
 
 class CORE_API ibPredefinedItemDescriptionMemory {
 public:
-	// node form: a Child — Guid, Name, Code, Description, IsFolder, Parent (absent at the top), Row — an Array of
-	// {Id, Title, Value} — and Tables — an Array of {Table, Rows: an Array of {Row}}; Row and Tables absent where it
-	// declares nothing. As a configuration keeps an item and a command carries one. False: a value it holds cannot be read.
+	// node form: a Child — Guid, Name, Code and Description ({Title, Value} each), IsFolder, Parent (absent at the top),
+	// Row — an Array of {Id, Title, Value} — and Tables — an Array of {Table, Rows: an Array of {Row}}; Row and Tables
+	// absent where it declares nothing. As a configuration keeps an item and a command carries one. Read, a Code or a
+	// Description that is a string is one saved before they were values: a string value. False: a value it holds cannot
+	// be read.
 	static bool ReadNode(const ibDataValue& value, ibPredefinedItemDescription& item);
 	static bool WriteNode(ibDataValue& value, const ibPredefinedItemDescription& item);
 };
@@ -112,7 +119,10 @@ public:
 struct ibPredefinedDescription {
 	bool     m_parent = false;    // the items stand under one another: Parent is asked
 	bool     m_folders = false;   // …and a folder is told from an item
-	ibString m_nextCode;          // the code a new item is given; empty: the kind has no code
+	ibPredefinedCellDescription m_nextCode;   // the code a new item is given, in the code's type; empty: the kind has no code
+	// WHAT AN ITEM'S CODE AND DESCRIPTION ARE — their caption and type: a string or a number, and its length (#646).
+	ibPredefinedAttributeDescription m_code;
+	ibPredefinedAttributeDescription m_description;
 	std::vector<ibPredefinedAttributeDescription> m_attributes;
 	std::vector<ibPredefinedTableDescription>     m_tables;
 	std::vector<ibPredefinedItemDescription>      m_items;
@@ -151,9 +161,10 @@ struct ibPredefinedDescription {
 
 class CORE_API ibPredefinedDescriptionMemory {
 public:
-	// node form: a Child — Parent, Folders, NextCode, an Attributes Array and a Tables Array, each attribute with its
-	// Type (ibTypeDescriptionMemory), its Offered ids and its Choices — and an Items Array, each item in its own form
-	// (ibPredefinedItemDescriptionMemory). Read, an Array is the items alone: a configuration saved before kept them so.
+	// node form: a Child — Parent, Folders, NextCode (a cell), the Code and the Description (an attribute each), an
+	// Attributes Array and a Tables Array, each attribute with its Type (ibTypeDescriptionMemory), its Offered ids and its
+	// Choices — and an Items Array, each item in its own form (ibPredefinedItemDescriptionMemory). Read, an Array is the
+	// items alone: a configuration saved before kept them so.
 	static bool ReadNode(const ibDataValue& value, ibPredefinedDescription& description);
 	static bool WriteNode(ibDataValue& value, const ibPredefinedDescription& description);
 };

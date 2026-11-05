@@ -1928,6 +1928,138 @@ TEST(RuntimeTest, NewAsAStatementPassesItsArguments) {
 	ibProcUnit pu;
 	EXPECT_TRUE(TryExecute(pu, cc.m_cByteCode));
 }
+
+TEST(RuntimeTest, NewIsReadOnLikeAnyValue) {
+	// What is written after `new Class(…)` - a method, a property, an index - was refused: "Keyword or
+	// identifier expected" (#646). A new object is a value, and the chain after it is the one after a variable.
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc, wxT("var count public; var field public; var inner public; var element public;\n")
+		wxT("count = new Array(3).Count();\n")
+		wxT("field = New Structure(\"A, B\", 1, 2).B;\n")
+		wxT("inner = new Structure(\"A\", new Array(2)).A.Count();\n")
+		wxT("element = new Array(3)[2];")));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue val;
+	ASSERT_TRUE(pu.GetPropVal(wxT("count"), val));
+	EXPECT_EQ(val.GetInteger(), 3);
+	ASSERT_TRUE(pu.GetPropVal(wxT("field"), val));
+	EXPECT_EQ(val.GetInteger(), 2);
+	ASSERT_TRUE(pu.GetPropVal(wxT("inner"), val));
+	EXPECT_EQ(val.GetInteger(), 2);
+	ASSERT_TRUE(pu.GetPropVal(wxT("element"), val));
+	EXPECT_EQ(val.GetType(), ibValueTypes::TYPE_EMPTY);
+}
+
+TEST(RuntimeTest, StrSplitCutsAtEachSeparatorCharacter) {
+	// A line of a "|"-separated export was cut with Find and Mid by hand: there was no StrSplit (#646).
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc, wxT("var fields public; var blank public; var kept public; var mixed public; var whole public; var empty public;\n")
+		wxT("fields = StrSplit(\"2020-01-02|Client 1|5\", \"|\");\n")
+		wxT("blank = StrSplit(\"a||b|\", \"|\");\n")
+		wxT("kept = StrSplit(\"a||b|\", \"|\", false);\n")
+		wxT("mixed = StrSplit(\"a,b;c\", \",;\");\n")
+		wxT("whole = StrSplit(\"abc\", \"|\");\n")
+		wxT("empty = StrSplit(\"\", \"|\", false);")));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	const auto parts = [&pu](const ibString& name) {
+		std::vector<ibString> answer;
+		ibValue array;
+		if (!pu.GetPropVal(name, array))
+			return answer;
+		ibValue count;
+		ibValue* noParams[1] = { nullptr };
+		const long countAt = array.FindMethod(wxT("Count"));
+		const long getAt = array.FindMethod(wxT("Get"));
+		if (countAt < 0 || getAt < 0 || !array.CallAsFunc(countAt, count, noParams, 0))
+			return answer;
+		for (int i = 0; i < count.GetInteger(); ++i) {
+			ibValue index(ibNumber(i)), part;
+			ibValue* params[1] = { &index };
+			if (array.CallAsFunc(getAt, part, params, 1))
+				answer.push_back(part.GetString());
+		}
+		return answer;
+	};
+	EXPECT_EQ(parts(wxT("fields")), (std::vector<ibString>{ wxT("2020-01-02"), wxT("Client 1"), wxT("5") }));
+	EXPECT_EQ(parts(wxT("blank")), (std::vector<ibString>{ wxT("a"), wxT(""), wxT("b"), wxT("") }));
+	EXPECT_EQ(parts(wxT("kept")), (std::vector<ibString>{ wxT("a"), wxT("b") }));
+	EXPECT_EQ(parts(wxT("mixed")), (std::vector<ibString>{ wxT("a"), wxT("b"), wxT("c") }));
+	EXPECT_EQ(parts(wxT("whole")), (std::vector<ibString>{ wxT("abc") }));
+	EXPECT_TRUE(parts(wxT("empty")).empty());
+}
+
+TEST(RuntimeTest, NumberTakesTheWholeTextOrRefuses) {
+	// Number("234,8") answered 234 and Number("12x") 12, without a word: the parse read the number the text
+	// begins with (#646). What is left over after the number is a refusal, the comma included.
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc, wxT("var point public; var blanks public;\n")
+		wxT("point = Number(\"-1.5e2\");\n")
+		wxT("blanks = Number(\" 42 \");")));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue val;
+	ASSERT_TRUE(pu.GetPropVal(wxT("point"), val));
+	EXPECT_EQ(val.GetNumber(), ibNumber(-150));
+	ASSERT_TRUE(pu.GetPropVal(wxT("blanks"), val));
+	EXPECT_EQ(val.GetInteger(), 42);
+
+	for (const ibString text : { wxT("var x; x = Number(\"234,8\");"), wxT("var x; x = Number(\"12x\");"),
+		wxT("var x; x = Number(\"1 234\");") }) {
+		ibCompileCode refused(wxT("test"), wxT("memory"), false);
+		ASSERT_TRUE(TryCompile(refused, text)) << text;
+		ibProcUnit run;
+		EXPECT_FALSE(TryExecute(run, refused.m_cByteCode)) << text;
+	}
+}
+
+TEST(RuntimeTest, NewAsAStatementIsReadOnToo) {
+	// The statement that starts with `new` takes the same chain: the array is made and added to, nothing kept.
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc, wxT("new Array(2).Add(1);")));
+
+	ibProcUnit pu;
+	EXPECT_TRUE(TryExecute(pu, cc.m_cByteCode));
+}
+
+TEST(RuntimeTest, AFunctionWinsOverAVariableOfItsName) {
+	// Names are read whatever their case, so `before = Before();` had the variable hide the module's function and
+	// the run failed with "value is not a callable function" (#646). The function wins, as a system one already did,
+	// declared above or below the call; a variable no function is named after is still called.
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("Function Before()\n")
+		wxT("  Return 1;\n")
+		wxT("EndFunction\n")
+		wxT("Function Run()\n")
+		wxT("  var before; before = Before();\n")
+		wxT("  var after; after = After();\n")
+		wxT("  Return before * 10 + after;\n")
+		wxT("EndFunction\n")
+		wxT("Function After()\n")
+		wxT("  Return 2;\n")
+		wxT("EndFunction\n")
+		wxT("var result public; var called public; var f;\n")
+		wxT("result = Run();\n")
+		wxT("f = Function() Return 7; EndFunction;\n")
+		wxT("called = f();\n")));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue val;
+	ASSERT_TRUE(pu.GetPropVal(wxT("result"), val));
+	EXPECT_EQ(val.GetInteger(), 12);
+	ASSERT_TRUE(pu.GetPropVal(wxT("called"), val));
+	EXPECT_EQ(val.GetInteger(), 7);
+}
 // ===========================================================================
 // A CLOSURE WRITING BACK INTO ITS CAPTURED SLOT
 //

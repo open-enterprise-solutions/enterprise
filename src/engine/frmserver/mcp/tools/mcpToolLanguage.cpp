@@ -327,9 +327,9 @@ public:
 		// name type_list had just given.
 		//
 		// ⚠ AND IT IS THE MANAGERS THAT MADE IT COST SOMETHING. `Catalogs.<name>` is where DATA IS
-		// WRITTEN — CreateElement, CreateFolder, CreateGroup, the finders — and the one verb that
+		// WRITTEN — CreateItem, CreateFolder, the finders — and the one verb that
 		// exists to answer "what can this value do" refused precisely there. Measured 2026-09-09:
-		// the way to find the item-creating verb was to guess `CreateItem`, be refused by the
+		// the way to find the item-creating verb (then `CreateElement`) was to guess `CreateItem`, be refused by the
 		// runtime, and guess again. A vocabulary that cannot be asked is a vocabulary somebody
 		// brings from another platform.
 		const ibMetaData* const metaData =

@@ -46,9 +46,31 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **`Catalogs`, `Documents` and the other managers, `Metadata.Catalogs` and `Data.Catalogs` are
   collections.** `For Each` hands out the managers, the objects or the data sources themselves, not
   key-value pairs. `Count()` and `Get(name or position)` answer, and a name is found whatever its case.
+- **A manager's create verbs are named by what they create.** A catalog, a chart of characteristic types
+  and the parameterized jobs: `CreateItem` (was `CreateElement`). A chart of accounts: `CreateAccount`.
+  A chart of calculation types: `CreateCalculationType`. A folder: `CreateFolder` (was `CreateGroup`). A
+  module that calls the old names has to be changed.
+- **A string becomes a number only when the whole of it is one.** `Number("234,8")` gave 234 and
+  `Number("12x")` gave 12; both are now refused with "Cannot convert string to number". Spaces around the
+  number are still allowed.
 
 ## Script language
 
+- **What follows `new Class(…)` is read on.** `new Array(3).Count()`, `New Query(text).Execute().Select()`
+  and `New Structure("A", 1).A` compile, as a statement too. They were refused with "Keyword or
+  identifier expected".
+- **`StrSplit(string, separators, includeBlank = true)`** cuts a string into an Array of its parts. Each
+  character of `separators` is a separator; with `includeBlank` false the empty parts are left out.
+- **`Name(…)` calls the procedure or function of that name even where a variable has it.** Names are read
+  whatever their case, so `chapterNames = ChapterNames();` called the variable and failed with "value is not a
+  callable function". The module's procedure or function, declared above or below, now wins, as a system one
+  already did; a function value in a variable is called only when nothing of its name is declared.
+- **`SetStatus` in a background job says where the job has got to.** With no window it reached nothing; it is
+  now the job's activity, which Active Users and `code_status` show.
+- **The module check names a method the manager, object or reference does not have.** `Catalogs.Products.CreateElement()`
+  compiled and failed only when it ran, with "Aggregate object field not found". The designer's *Syntax control*, the
+  check on save, `module_write` and `config_check` now say "… has no method 'CreateElement'" at its line. A value that
+  came out of a call is not asked about, so the check runs no query.
 - **A form module adds an attribute to its open form and binds a control to it.**
   `ThisForm.Attributes` lists the form's attributes as `ThisForm.Controls` lists its controls: by index,
   by name and in `Foreach`, each one with its `Name`, `Caption`, `Type` and `FillCheck`.
@@ -127,13 +149,27 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **`First`, `Last`, `Min`, `Max`, `Single` and `ElementAt` in a loop answer for this pass.** With a function
   passed to `Where` or `Select` before them, a pass that found nothing answered with the previous pass's
   value, and `Max` of a group was compared with the group before.
-- **An encoding is a member of `TextEncoding`.** `TextReader` and `TextWriter` took a string or another
-  enumeration's member without a word; now it is refused, as `HTTPRequest` already refused a string.
+- **An encoding is a member of `TextEncoding` or a code page by its name.** `TextReader`, `TextWriter`,
+  `BinaryData` and the HTTP bodies take `"UTF-8"`, `"UTF-16"`, `"windows-1251"` and `"cp866"` in any case
+  (also `cp1251`, `IBM866`), read by the table XML uses, the same on every machine: a 1251 file reads right
+  where the system's own page is not 1251. Any other string and another enumeration's member are refused;
+  `TextReader` and `TextWriter` took them without a word.
 - **`Sequences.<Name>.Restore(boundary, key)`.** It posts again, in sequence order and each in its own
   transaction, every registered document after its key's border, up to the boundary (a date, a moment
   or a `Boundary`; all when left out) and for the dimension values the structure names (every key when
   left out); the border follows each one. The first failure stops the run, keeps the border before that
   document and raises its error with the document's name. A sequence's list has a *Restore* command.
+- **A query over the turnovers, or the balance and turnovers, of an accumulation or accounting register by
+  `Recorder` or `Record` runs in the database.** They were read into memory, and with them everything the query
+  does above them: the joins, the grouping and the totals. They are now one statement where the register's totals
+  are kept (not over ODBC). Each movement opens at the balance the one before it closed at, and a key that carried a
+  balance in and did not move is one row at the beginning of the interval, as before. An accounting register whose
+  chart keeps a subconto by turnovers only still reads the balance and turnovers in memory.
+- **Totals over several levels add up in the database on every engine.** `TOTALS … BY Group, Product` read every
+  row into memory on Firebird, which has no `ROLLUP`, and wherever the query was ordered by a figure. One `GROUP BY`
+  over the levels' fields now returns the bottom groups, and the groups above and the grand total add up from them,
+  in the order the rows put them in. A sum, a count, a minimum or a maximum; an average, a distinct count or a
+  `HAVING` over several levels still folds in memory.
 
 ## Forms
 
@@ -197,6 +233,24 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Metadata
 
+- **The attributes every object of a kind has are a group of their own.** *Predefined attributes*, under *Context*,
+  holds Ref, Code, Description, Number, Date, Parent, Owner, Period, Recorder and the rest; they stood under *Common*
+  among the name, synonym and comment. An object with none does not show the group.
+- **A catalog's and a chart's code and description, and a document's number, take their type and length.** The
+  *Predefined attributes* group of the properties shows each as a type: a code or a number is a string or a number,
+  a description a string, each with its length. A tabular section's line number takes its length the same way, a
+  number alone; it was Number(6). They were String(8),
+  String(150) and String(11) and could not be changed. A new code or number is generated in that type and length;
+  a predefined item's code and description are values of that type — a number code takes a number in the designer
+  and over MCP (`0042` is 42), a description is cut to its length — and are written as a type chosen later holds them.
+  A code or a description made shorter than the applied configuration has it, or a code turned between a string and
+  a number, refuses the apply.
+  Over MCP `metadata_get` shows each under the owner's property as a type, with the id `metadata_set_type` takes it
+  by. A configuration saved before keeps the old types.
+- **A length or a precision a field cannot hold is refused, not cut.** `metadata_set_type` placed a length of 70000 as
+  4464 and 300 digits as 44; it now refuses past the designer's bound (1024 characters, 32 digits), given in words or
+  as a whole description, and a type
+  description read from a node refuses past a script's (65535, 38) and a scale above its precision.
 - **A report's composer is a template of the *Data composer* kind.** A template added to any object asks
   what it holds, a spreadsheet document or a data composer, the way a new form asks its kind; a common
   template is a spreadsheet. The kind is chosen once; the template's row in the properties reads it and
@@ -227,7 +281,16 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Fixes
 
+- **Typing a number code finds the item wherever it stands.** A catalog whose code is a number was searched among
+  its first hundred items only; `12` now finds 12, 120 to 129, 1200 to 1299 and so on, through the code's index.
 - **Output list names a column by its header**, the field's synonym, not by the field's name.
+- **A document list grouped by *Point in time* shows its rows.** It showed nothing, and the server said
+  "Invalid field type".
+- **An accumulation register's turnovers, and balance and turnovers, by `Recorder` or `Record` leave out the lines
+  that are not active.** They counted them, as no other reading of the register does.
+- **The lock sweep does not wait for a key somebody is taking.** A client starting while the designer swept the lock
+  keys held the sweep behind its module compile, and the sweep gave up the rest of the keys with "update conflicts
+  with concurrent update". A key held at that moment is left for the next pass, and the others are swept.
 
 - **`ThisForm.<attribute> = value` writes into the attribute.** It overwrote the attribute's own entry,
   and the attribute kept its old value.
@@ -268,6 +331,16 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   `AccumulationRecordType` or `QueryResult` came back empty. The server's registry is now asked: the
   designer's pane lists them in Index and Search and shows what one offers, `syntax_search` answers with
   `types`, and `syntax_get` takes such a name. One that has an article still shows the article.
+
+- **The syntax helper finds a function by its job.** "replace substring" found nothing and "split string" did
+  not find `StrSplit`: a word said only inside a name, `StrReplace`, was not indexed, and an entry had to carry
+  every word asked. The words a name is made of are indexed now, and when no entry has all the words, those with
+  the most of them answer. `mcp_search` with a tool's name for a query answers that tool, as `name` does;
+  `code_run` was not among the verbs found for it.
+
+- **MCP: `app_stop` ends the application started from here**, with the debugger or without it, at a breakpoint
+  or running. Only `app_run`'s restart could end it, so an application stopped at a breakpoint held the base and
+  `config_apply` waited behind it; its refusal now names `app_stop`.
 
 - **A value read from JSON no longer gains a `type` field.** The type's name the JSON view writes
   beside a value's type came back as a field, one more on each round.

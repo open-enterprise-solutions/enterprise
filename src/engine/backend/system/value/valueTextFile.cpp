@@ -8,6 +8,11 @@
 #include "backend/backend_exception.h"
 #include "backend/compiler/enumUnit.h"   // ConvertToEnumValue<> is declared in value.h and DEFINED here
 
+#include "core/xml/xmlText.h"            // ibXmlCodePage - the pages a script names, one table on every machine
+
+#include <cstring>   // std::strlen
+#include <cwchar>    // std::wcslen
+
 #include <wx/ffile.h>
 #include <wx/strconv.h>
 #include <wx/fontenc.h>
@@ -57,6 +62,50 @@ private:
 
 } // namespace
 #endif
+
+namespace {
+
+// A page a script NAMED, by the table XML reads it by - the same bytes on every machine, which a page asked of the
+// system is not. A byte the table has no character for is a FAILURE, as is a character it has no byte for.
+class ibXmlCodePageConv : public wxMBConv {
+public:
+	explicit ibXmlCodePageConv(const ibXmlCodePage& page) : m_page(page) {}
+
+	virtual size_t ToWChar(wchar_t* dst, size_t dstLen, const char* src, size_t srcLen = wxNO_LEN) const override {
+		const size_t length = srcLen == wxNO_LEN ? std::strlen(src) + 1 : srcLen;   // wxNO_LEN: the NUL goes too
+		if (dst != nullptr && dstLen < length)
+			return wxCONV_FAILED;
+		for (size_t i = 0; i < length; i++) {
+			const char16_t ch = m_page.ToChar(static_cast<unsigned char>(src[i]));
+			if (ch == 0xFFFF)
+				return wxCONV_FAILED;
+			if (dst != nullptr)
+				dst[i] = static_cast<wchar_t>(ch);
+		}
+		return length;
+	}
+
+	virtual size_t FromWChar(char* dst, size_t dstLen, const wchar_t* src, size_t srcLen = wxNO_LEN) const override {
+		const size_t length = srcLen == wxNO_LEN ? std::wcslen(src) + 1 : srcLen;
+		if (dst != nullptr && dstLen < length)
+			return wxCONV_FAILED;
+		for (size_t i = 0; i < length; i++) {
+			unsigned char byte = 0;
+			if (!m_page.ToByte(static_cast<char32_t>(src[i]), byte))
+				return wxCONV_FAILED;
+			if (dst != nullptr)
+				dst[i] = static_cast<char>(byte);
+		}
+		return length;
+	}
+
+	virtual wxMBConv* Clone() const override { return new ibXmlCodePageConv(m_page); }
+
+private:
+	ibXmlCodePage m_page;
+};
+
+} // namespace
 
 // ANSI and OEM are asked of the SYSTEM, not assumed: a base moved from one machine to another reads the
 // files of the machine it runs on. Elsewhere than Windows there is one such encoding - the locale's.
@@ -133,6 +182,10 @@ std::unique_ptr<wxMBConv> ibCreateTextConv(ibTextEncoding encoding)
 #else
 		return std::make_unique<wxCSConv>(wxFONTENCODING_SYSTEM);
 #endif
+	case ibTextEncoding_Windows1251:
+		return std::make_unique<ibXmlCodePageConv>(ibXmlCodePage::Find(ibT("windows-1251")));
+	case ibTextEncoding_Cp866:
+		return std::make_unique<ibXmlCodePageConv>(ibXmlCodePage::Find(ibT("cp866")));
 	case ibTextEncoding_UTF8:
 	default:
 		// STRICT: bytes that are not UTF-8 are a refusal, not a text with holes in it.
@@ -144,7 +197,20 @@ ibTextEncoding ibTextEncodingAt(ibValue** paParams, const long lSizeArray, const
 {
 	if (lSizeArray <= at || paParams[at]->GetType() == ibValueTypes::TYPE_EMPTY)
 		return ibTextEncoding_UTF8;
-	return paParams[at]->ConvertToEnumValue<ibTextEncoding>();
+	if (paParams[at]->GetType() != ibValueTypes::TYPE_STRING)
+		return paParams[at]->ConvertToEnumValue<ibTextEncoding>();
+
+	// A page by its NAME, as XML names it - one table, so a name means the same bytes on every machine.
+	const ibString name = paParams[at]->GetString();
+	switch (ibXmlCodePage::Find(name).Kind()) {
+	case ibXmlCodePage::kUtf8:        return ibTextEncoding_UTF8;
+	case ibXmlCodePage::kUtf16:       return ibTextEncoding_UTF16;
+	case ibXmlCodePage::kWindows1251: return ibTextEncoding_Windows1251;
+	case ibXmlCodePage::kCp866:       return ibTextEncoding_Cp866;
+	case ibXmlCodePage::kUnknown:
+	default:
+		ibBackendCoreException::Error(_("The encoding '%s' is not supported; supported: %s"), name, ibXmlCodePage::Supported());
+	}
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -155,9 +221,9 @@ ibTextEncoding ibTextEncodingAt(ibValue** paParams, const long lSizeArray, const
 void ibValueTextReader_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
 	helper.AppendConstructor(1, ibT("TextReader(path : string)"));
-	helper.AppendConstructor(2, ibT("TextReader(path : string, encoding : TextEncoding)"));
+	helper.AppendConstructor(2, ibT("TextReader(path : string, encoding : TextEncoding | string)"));
 
-	helper.AppendFunc(ibT("Open"), 2, ibT("Open(path : string, encoding : TextEncoding)"));
+	helper.AppendFunc(ibT("Open"), 2, ibT("Open(path : string, encoding : TextEncoding | string)"));
 	helper.AppendFunc(ibT("ReadLine"), ibT("ReadLine()"));
 	helper.AppendFunc(ibT("Read"), ibT("Read()"));
 	helper.AppendFunc(ibT("Close"), ibT("Close()"));
@@ -307,10 +373,10 @@ bool ibValueTextReader::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 void ibValueTextWriter_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
 	helper.AppendConstructor(1, ibT("TextWriter(path : string)"));
-	helper.AppendConstructor(2, ibT("TextWriter(path : string, encoding : TextEncoding)"));
-	helper.AppendConstructor(3, ibT("TextWriter(path : string, encoding : TextEncoding, append : boolean)"));
+	helper.AppendConstructor(2, ibT("TextWriter(path : string, encoding : TextEncoding | string)"));
+	helper.AppendConstructor(3, ibT("TextWriter(path : string, encoding : TextEncoding | string, append : boolean)"));
 
-	helper.AppendFunc(ibT("Open"), 3, ibT("Open(path : string, encoding : TextEncoding, append : boolean)"));
+	helper.AppendFunc(ibT("Open"), 3, ibT("Open(path : string, encoding : TextEncoding | string, append : boolean)"));
 	helper.AppendFunc(ibT("Write"), 1, ibT("Write(text : string)"));
 	helper.AppendFunc(ibT("WriteLine"), 1, ibT("WriteLine(text : string)"));
 	helper.AppendFunc(ibT("Close"), ibT("Close()"));

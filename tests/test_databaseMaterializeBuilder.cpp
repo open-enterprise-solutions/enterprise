@@ -743,3 +743,36 @@ TEST(MaterializeRead, RunningFormWithoutAGrainIsRefused) {
     };
     EXPECT_THROW(ReadSql(r), ibBackendQueryException);
 }
+
+// ⭐ BY THE MOVEMENT THE ROWS ARE THE MOVEMENTS ALONE (#646). No stored row carries a recorder, so a turnover by it
+// reads the movement arm and nothing else — even where a floor would have cut a balance in two — and groups by the
+// recorder as by a key, at the instant each movement happened: no calendar unit is computed.
+TEST(MaterializeRead, ByTheMovementReadsTheMovementArmAlone) {
+    ibMaterializeReadSpec r = ReadFixture();
+    r.m_grain        = ibMaterializeGrain::Movements;
+    r.m_keyColumns   = { wxT("wh"), wxT("rec_ref") };
+    r.m_markColumn   = wxT("rec_ref");
+    r.m_floor        = ibValue(2026, 3, 31);
+    r.m_dropZeroRows = true;
+    r.m_columns = {
+        { wxT("Qty_Turnover"), wxT("qty_turn"), ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true },
+    };
+    const ibString sql = ReadSql(r);
+
+    const std::string shown = sql.ToStdString();
+    EXPECT_TRUE(sql.Contains(wxT("rec_ref IS NOT NULL")))           << shown;   // the movement arm…
+    EXPECT_FALSE(sql.Contains(wxT("rec_ref IS NULL")))              << shown;   // …and never the stored one
+    EXPECT_TRUE(sql.Contains(wxT("GROUP BY wh, rec_ref, period_"))) << shown;   // the recorder is a key, the period as it stands
+    EXPECT_FALSE(sql.Contains(wxT("strftime('%Y-%m-01")))           << shown;
+    EXPECT_FALSE(sql.Contains(wxT("OVER (")))                       << shown;
+}
+
+// 🛑 …and a surface without its movements cannot answer by them: refused, not read as nothing moved.
+TEST(MaterializeRead, ByTheMovementWithoutTheMovementsIsRefused) {
+    ibMaterializeReadSpec r = ReadFixture();   // a view with one arm: no mark column
+    r.m_grain = ibMaterializeGrain::Movements;
+    r.m_columns = {
+        { wxT("Qty_Turnover"), wxT("qty_turn"), ibString(), ibMaterializeAgg::Value, ibMaterializeWhen::InRange, true },
+    };
+    EXPECT_THROW(ReadSql(r), ibBackendQueryException);
+}

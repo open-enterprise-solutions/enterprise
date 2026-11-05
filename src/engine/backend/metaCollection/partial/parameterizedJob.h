@@ -298,17 +298,17 @@ private:
 	// The row's own columns. Attribute usage is `Items`, the default — so a FOLDER carries none of
 	// them and its card shows Description and Parent, like any catalog group. That is a model and
 	// form fact, not a storage one: items and folders share one table.
-	ibPropertyContainer<>* m_propertyAttributeActive = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon,
+	ibPropertyPredefined<>* m_propertyAttributeActive = ibPropertyObject::CreateProperty<ibPropertyPredefined<>>(m_categoryPredefined,
 		ibValueMetaObjectCompositeData::CreateBoolean(ibT("Active"), _("Active"), _("The administrator's switch for this row: an inactive row keeps its settings but is not run by its schedule."), false, true));
-	ibPropertyContainer<>* m_propertyAttributeSchedule = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon,
+	ibPropertyPredefined<>* m_propertyAttributeSchedule = ibPropertyObject::CreateProperty<ibPropertyPredefined<>>(m_categoryPredefined,
 		ibValueMetaObjectCompositeData::CreateSpecialType(ibT("Schedule"), _("Schedule"), _("This row's own schedule - when the job runs with this row's parameters. Starts as the kind's default schedule and is changed per row."), g_valueScheduleCLSID));
-	ibPropertyContainer<>* m_propertyAttributeLastRun = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon,
+	ibPropertyPredefined<>* m_propertyAttributeLastRun = ibPropertyObject::CreateProperty<ibPropertyPredefined<>>(m_categoryPredefined,
 		ibValueMetaObjectCompositeData::CreateDate(ibT("LastRun"), _("Last run"), _("When the row's job last started - written by the job manager; the next run is counted from it."), ibDateFractions::ibDateFractions_DateTime));
 	// NextRun is DERIVED — the column exists so the requisite has a name, a type and a place on a
 	// form, but nothing ever writes it: the value is generated when it is read (see the object's
 	// GetValueByMetaID). No index, therefore, and no ordering by it — there is nothing in the
 	// column to order by.
-	ibPropertyContainer<>* m_propertyAttributeNextRun = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon,
+	ibPropertyPredefined<>* m_propertyAttributeNextRun = ibPropertyObject::CreateProperty<ibPropertyPredefined<>>(m_categoryPredefined,
 		ibValueMetaObjectCompositeData::CreateDate(ibT("NextRun"), _("Next run"), _("When the row's job is due next, worked out from its schedule and last run each time it is read. Nothing stores it, so it cannot be written, indexed or ordered by."), ibDateFractions::ibDateFractions_DateTime));
 
 	// "May run it by hand" is deliberately its own right: editing an exchange's settings and

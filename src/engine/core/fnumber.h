@@ -302,6 +302,9 @@ public:
 	// input has no digits or is otherwise unparseable; on failure value is
 	// reset to zero.
 	CORE_API bool FromString(const ibString& s);
+	// …and how many characters of `s` the number took, its leading spaces included. The parse reads the number a
+	// text BEGINS with ("12x" is 12), so a text is a number only when nothing but blanks is left after `length`.
+	CORE_API bool FromString(const ibString& s, size_t& length);
 
 	// 128-bit raw integer extraction / loading. Bytes are little-endian
 	// two's-complement. Used by DB layers (e.g. Firebird SQL_INT128). Caller is

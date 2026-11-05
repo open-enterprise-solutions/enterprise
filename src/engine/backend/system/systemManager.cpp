@@ -135,7 +135,9 @@ enum
 	enHexString,
 	enHexValue,
 	enBase64String,
-	enBase64Value
+	enBase64Value,
+	//--- A string cut into parts: at the END, for the same reason.
+	enStrSplit
 };
 
 void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
@@ -271,9 +273,11 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	helper.AppendFunc(ibT("HexValue"), 1, ibT("HexValue(text : string)"));
 	helper.AppendFunc(ibT("Base64String"), 1, ibT("Base64String(data : BinaryData)"));
 	helper.AppendFunc(ibT("Base64Value"), 1, ibT("Base64Value(text : string)"));
+	helper.AppendFunc(ibT("StrSplit"), 3, ibT("StrSplit(str : string, separators : string, includeBlank = true : boolean)"));
 };
 
 #include "backend/compiler/enumUnit.h"
+#include "backend/system/value/valueArray.h"        // StrSplit
 #include "backend/system/value/valueBinaryData.h"   // HexString / HexValue, Base64String / Base64Value
 #include "backend/system/value/valueGuid.h"
 #include "backend/system/value/valueJson.h"   // ReadJSON / WriteJSON
@@ -428,6 +432,8 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 		case enHexValue: pvarRetValue = ibValueBinaryData::HexValue(paParams[0]->GetString()); return true;
 		case enBase64String: pvarRetValue = ibValueBinaryData::Base64String(*paParams[0]); return true;
 		case enBase64Value: pvarRetValue = ibValueBinaryData::Base64Value(paParams[0]->GetString()); return true;
+		case enStrSplit: pvarRetValue = new ibValueArray(StrSplit(*paParams[0], *paParams[1],
+			lSizeArray > 2 ? paParams[2]->GetBoolean() : true)); return true;
 		case enEvaluate: pvarRetValue = Evaluate(paParams[0]->GetString()); return true;
 		case enExecute: Execute(paParams[0]->GetString()); return true;
 		case enFormat: pvarRetValue = Format(*paParams[0], paParams[1]->GetString()); return true;

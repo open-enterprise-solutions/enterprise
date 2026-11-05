@@ -2418,3 +2418,98 @@ std::vector<ibQueryOutline> ibOutlineScriptQueries(const ibString& text, const i
 
 	return outlines;
 }
+
+//---------------------------------------------------------------------------
+// The same compile, asked whether each method call has a method to call.
+//---------------------------------------------------------------------------
+
+std::vector<ibDiagnostic> ibCheckMethodCalls(const ibString& text, const ibValueMetaObject* moduleObject)
+{
+	std::vector<ibDiagnostic> found;
+	if (text.IsEmpty() || moduleObject == nullptr)
+		return found;
+
+	// The whole text beside the module it lives in - the list's compile, not cut at a caret.
+	const ibCaretCompile compiled(text, (unsigned int)text.length(), moduleObject, /*upToCaret*/ false);
+	if (!compiled.Refusal().IsEmpty())
+		return found;
+
+	const ibByteCode& bc = compiled.ByteCode();
+	const ibMetaData* const metaData = moduleObject->GetMetaData();
+
+	// A bare platform call names its receiver on the function entry, not in the operand (see ReceiverOfContextMethod):
+	// the compiler resolved it by that name, and it is not asked about again.
+	const auto isContextMethod = [&compiled](const ibString& method) {
+		for (const ibCompileCode* compile : compiled.Chain())
+			for (const auto& fn : compile->m_cByteCode.m_listFunc)
+				if (fn.IsContextMethod() && stringUtils::IsSameAs(method, fn.m_strRealName))
+					return true;
+		return false;
+	};
+
+	for (long ip = 0; ip < (long)bc.m_listCode.size(); ip++) {
+		const ibByteUnit& code = bc.m_listCode[(size_t)ip];
+		if ((code.m_numOper % TYPE_DELTA1) != OPER_CALL_METHOD)
+			continue;
+		if (code.m_param3.m_numIndex < 0 || (size_t)code.m_param3.m_numIndex >= bc.m_listConst.size())
+			continue;
+		const ibString method = bc.m_listConst[(size_t)code.m_param3.m_numIndex].GetString();
+		if (method.IsEmpty() || isContextMethod(method))
+			continue;
+
+		// Back from the call: the instruction that wrote the receiver, and the body the call stands in - the opener
+		// met with no body still open, the bodies that closed above it passed whole.
+		const ibByteCode::ibByteFunction* frame = nullptr;
+		short producer = -1;
+		for (long at = ip - 1, foreign = 0; at >= 0; --at) {
+			const ibByteUnit& step = bc.m_listCode[(size_t)at];
+			const short oper = step.m_numOper % TYPE_DELTA1;
+			if (oper == OPER_ENDFUNC || oper == OPER_ENDLFUNC) { foreign++; continue; }
+			if (oper == OPER_FUNC || oper == OPER_LFUNC) {
+				if (foreign == 0) { frame = bc.FindFunctionByEntry(at); break; }
+				foreign--;
+				continue;
+			}
+			if (foreign == 0 && producer < 0 && SameSlot(step.m_param1, code.m_param2))
+				producer = oper;
+		}
+		if (producer != OPER_GET_A && producer != OPER_GET_SCOPE)
+			continue;   // not read as a member: a call's answer, a parameter - see the header
+
+		std::vector<ibCaretValue> receivers;
+		try {
+			const ibCaretWalk walk(compiled.Chain(), frame, ip, metaData);
+			if (!walk.ValuesOfSlot(code.m_param2, receivers, 0, ip))
+				continue;
+		}
+		catch (...) {
+			continue;   // a speculative question must not surface as an error
+		}
+
+		// Every branch a configuration's value, and none of them with the method.
+		bool judged = !receivers.empty();
+		for (const ibCaretValue& receiver : receivers) {
+			const ibClassID clsid = receiver.m_value.GetClassType();
+			if ((!IsManager(clsid) && !IsObject(clsid) && !IsReference(clsid))
+				|| receiver.m_value.FindMethod(method) != wxNOT_FOUND) {
+				judged = false;
+				break;
+			}
+		}
+		if (!judged)
+			continue;
+
+		ibDiagnostic diagnostic;
+		diagnostic.m_kind = ibDiagnosticKind::Compile;
+		diagnostic.m_fileName = moduleObject->GetFileName();
+		diagnostic.m_moduleName = moduleObject->GetFullName();
+		diagnostic.m_docPath = moduleObject->GetDocPath();
+		diagnostic.m_line = code.m_numLine + 1;
+		diagnostic.m_position = code.m_numString;
+		diagnostic.m_message = ibString::Format(_("%s has no method '%s'"),
+			receivers.front().m_value.GetClassName(), method);
+		found.push_back(std::move(diagnostic));
+	}
+
+	return found;
+}

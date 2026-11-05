@@ -3,6 +3,7 @@
 #include <wx/msgdlg.h>
 #include <wx/notebook.h>
 #include <wx/statbox.h>
+#include <wx/valtext.h>   // wxTextValidator — a number typed as nothing but a number
 
 #include "core/stringUtils.h"
 #include "frmclient/backend/compiler/value.h"           // ibValue — a value ticked or typed, as it travels
@@ -207,6 +208,18 @@ std::optional<ibPredefinedCellDescription> TakeText(const ibPredefinedAttributeD
 	return Packed(ibValueTypeDescription::AdjustValue(attribute.m_type, ibValue(text)));
 }
 
+// ⭐ WHAT A BOX TAKES, AS THE TYPE IT IS TYPED INTO SAYS (#646) — a number nothing but a number; a string no longer than
+// its length (0: any). A type of several classes says no one of them.
+void LimitTyping(wxTextCtrl* box, const ibTypeDescription& type)
+{
+	if (type.GetClsidCount() != 1)
+		return;
+	if (type.ContainType(ibValueTypes::TYPE_NUMBER))
+		box->SetValidator(wxTextValidator(wxFILTER_NUMERIC));
+	else if (type.ContainType(ibValueTypes::TYPE_STRING) && type.GetLength() > 0)
+		box->SetMaxLength(type.GetLength());
+}
+
 // A required value not given: the person told which, and the window kept.
 bool Refuse(const wxString& what)
 {
@@ -261,16 +274,18 @@ ibDialogPredefinedEditor::ibDialogPredefinedItem::ibDialogPredefinedItem(ibDialo
 	m_textName = new wxTextCtrl(this, wxID_ANY, source != nullptr ? wxString(source->GetPredefinedName()) : wxString());
 	fields->Add(m_textName, 1, wxEXPAND);
 
-	// A code, where the kind has one — a new item's the next.
-	const wxString code = made ? wxString(m_described.m_nextCode) : wxString(source->GetPredefinedCode());
+	// A code, where the kind has one — a new item's the next — and a description, each typed as its type takes it.
+	const wxString code = made ? wxString(m_described.m_nextCode.m_title) : wxString(source->GetPredefinedCode());
 	if (!m_described.m_nextCode.IsEmpty() || !code.IsEmpty()) {
 		fields->Add(new wxStaticText(this, wxID_ANY, _("Code")), 0, wxALIGN_CENTER_VERTICAL);
 		m_textCode = new wxTextCtrl(this, wxID_ANY, code);
+		LimitTyping(m_textCode, m_described.m_code.m_type);
 		fields->Add(m_textCode, 1, wxEXPAND);
 	}
 
 	fields->Add(new wxStaticText(this, wxID_ANY, ibGETTEXT_IN_CONTEXT("item name", "Description")), 0, wxALIGN_CENTER_VERTICAL);
 	m_textDescription = new wxTextCtrl(this, wxID_ANY, source != nullptr ? wxString(source->GetPredefinedDescription()) : wxString());
+	LimitTyping(m_textDescription, m_described.m_description.m_type);
 	fields->Add(m_textDescription, 1, wxEXPAND);
 
 	// What the kind says an item declares — a row each.
@@ -371,6 +386,7 @@ void ibDialogPredefinedEditor::ibDialogPredefinedItem::AppendAttribute(wxWindow*
 	}
 	else {
 		editor->m_text = new wxTextCtrl(parent, wxID_ANY, editor->m_held ? wxString(editor->m_held->m_title) : wxString());
+		LimitTyping(editor->m_text, attribute.m_type);
 		sizer->Add(editor->m_text, 1, wxEXPAND);
 		control = editor->m_text;
 	}
@@ -641,8 +657,9 @@ void ibDialogPredefinedEditor::ibDialogPredefinedItem::OnCommandOK(wxCommandEven
 		return;
 	item.m_guid = m_itemGuid;
 	item.m_name = strName;
-	item.m_code = strCode;
-	item.m_description = strDescription;
+	// A code and a description as a typed cell is taken: a value of the field's type (#646).
+	item.m_code = TakeText(m_described.m_code, strCode, std::nullopt).value_or(ibPredefinedCellDescription());
+	item.m_description = TakeText(m_described.m_description, strDescription, std::nullopt).value_or(ibPredefinedCellDescription());
 	item.m_folder = m_checkFolder != nullptr && m_checkFolder->GetValue();
 	const int parentIdx = m_choiceParent != nullptr ? m_choiceParent->GetSelection() : 0;
 	if (parentIdx > 0 && parentIdx < static_cast<int>(m_parentOptions.size()))

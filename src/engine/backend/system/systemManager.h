@@ -62,6 +62,7 @@ public:
 	static int StrCountOccur(const ibValue& cSource, const ibValue& cValue1);
 	static int StrLineCount(const ibValue& cSource);
 	static ibString StrGetLine(const ibValue& cValue, unsigned int nLine);
+	static std::vector<ibValue> StrSplit(const ibValue& cSource, const ibValue& cSeparators, bool includeBlank = true);
 	static ibString Upper(const ibValue& cSource);
 	static ibString Lower(const ibValue& cSource);
 	static ibString Chr(short nCode);

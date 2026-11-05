@@ -190,7 +190,7 @@ private:
 	// (the record description, the number and the date are the RECORDER's — see the base class)
 
 	//create default attributes
-	ibPropertyContainer<>* m_propertyAttributePosted = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateBoolean(ibT("Posted"), _("Posted"), _("Set by the platform while the document is posted - its movements stand in the registers. Written by posting and by undoing it, never by hand.")));
+	ibPropertyPredefined<>* m_propertyAttributePosted = ibPropertyObject::CreateProperty<ibPropertyPredefined<>>(m_categoryPredefined, ibValueMetaObjectCompositeData::CreateBoolean(ibT("Posted"), _("Posted"), _("Set by the platform while the document is posted - its movements stand in the registers. Written by posting and by undoing it, never by hand.")));
 
 	ibPropertyEnum<ibValueEnumNumberPeriodicity>* m_propertyNumberPeriodicity = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumNumberPeriodicity>>(m_categoryData, ibT("NumberPeriodicity"), _("Number periodicity"), _("When the document's numbers start again. Nonperiodical (the default): one series for the life of the document. Year, quarter, month or day: the next number is the next one inside that period of the document's date, and a new period starts again at one. A document saved before this setting existed stays nonperiodical, on the series it already has."), ibNumberPeriodicity::ibNumberPeriodicity_Nonperiodical);
 

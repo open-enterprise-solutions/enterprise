@@ -395,6 +395,29 @@ TEST(McpToolContract, TheEnvelope_TakesItsArgumentsAsAnObject)
 	EXPECT_EQ(targetType->AsString(), wxT("string"));
 }
 
+// ⭐ A QUERY THAT IS A TOOL'S NAME FINDS THAT TOOL (#646). As words, a verb whose name the descriptions around it say -
+// `code_run`, `compose_run` - scored below the shorter neighbours that mention it and was cut by the bar; the search
+// answered every verb but the one asked for.
+TEST(McpToolContract, TheSearch_AnswersAToolsNameWithThatTool)
+{
+	const ibMcpTool* search = ibFindMcpTool(wxT("mcp_search"));
+	ASSERT_NE(search, nullptr);
+
+	ibDataNode params;
+	params.SetValue(ibT("query"), ibString(wxT("compose_run")));
+	params.SetValue(ibT("schema"), false);
+	ibDataNode result;
+	ibString refusal;
+	ASSERT_TRUE(search->Call(params, result, refusal)) << refusal.ToStdString();
+
+	auto tools = result.FindField(ibT("tools"));
+	ASSERT_TRUE(tools);
+	ASSERT_EQ(tools->Kind(), ibDataKind::Array);
+	ASSERT_EQ(tools->AsArray().size(), 1u);
+	ASSERT_TRUE(tools->AsArray().front().AsChild());
+	EXPECT_EQ(tools->AsArray().front().AsChild()->GetValue<ibString>(ibT("name")), wxT("compose_run"));
+}
+
 TEST(McpToolContract, EveryRequiredArgument_IsAlsoDeclared)
 {
 	// ⭐ THE ONE THAT MATTERS MOST. A schema that REQUIRES a name it never

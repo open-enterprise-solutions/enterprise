@@ -440,7 +440,7 @@ namespace
 	// conversion, since digits, sign, decimal point and exponent marker are all ASCII and fit in a
 	// single code unit of either.
 	template <class Char>
-	bool TryParseString(const Char* p, ibNumber::BigImpl& out)
+	bool TryParseString(const Char* p, ibNumber::BigImpl& out, const Char** end = nullptr)
 	{
 		out.limbs.clear();
 		out.negative = false;
@@ -520,6 +520,8 @@ namespace
 		ibNumber::BigImpl::TrimMag(out.limbs);
 		out.negative = negative && !out.IsZero();
 		out.exp = exp10;
+		if (end != nullptr)
+			*end = p;   // the first character the number did not take
 		return true;
 	}
 }
@@ -1000,6 +1002,15 @@ ibNumber ibNumber::operator-() const
 // (see ibNumber::Compare there), so a caller resolves `i < n` without a call.
 int ibNumber::CompareBig(const ibNumber& rhs) const
 {
+	// ⭐ TWO AMOUNTS ARE COMPARED WHERE THEY ARE ADDED (#646): both immediate, brought to one exponent as + and - bring
+	// them (TryImmAligned). Only integers were compared without building two heap numbers, so a report's sort by an
+	// amount or a price allocated on every comparison: 15-18% of a compose_run over 100 000 turnovers (Debug samples,
+	// 2026-11-04).
+	int64_t am, bm;
+	int32_t exp10;
+	if (TryImmAligned(rhs, am, bm, exp10))
+		return (am > bm) - (am < bm);
+
 	BigImpl a, b;
 	LoadBig(a);
 	rhs.LoadBig(b);
@@ -1966,11 +1977,21 @@ void ibNumber::ToString(const Format& fmt, ibString& out) const
 
 bool ibNumber::FromString(const ibString& s)
 {
+	size_t length = 0;
+	return FromString(s, length);
+}
+
+bool ibNumber::FromString(const ibString& s, size_t& length)
+{
 	BigImpl big;
-	if (!TryParseString(s.c_str(), big)) {
+	const ibChar* const begin = s.c_str();
+	const ibChar* end = begin;
+	if (!TryParseString(begin, big, &end)) {
 		Clear();
+		length = 0;
 		return false;
 	}
+	length = static_cast<size_t>(end - begin);
 	StoreBig(std::move(big));
 	return true;
 }
@@ -2166,6 +2187,16 @@ void ibNumber::From128Bytes(const uint8_t bytes[16])
 		         | (static_cast<uint32_t>(bytes[i * 4 + 1]) <<  8)
 		         | (static_cast<uint32_t>(bytes[i * 4 + 2]) << 16)
 		         | (static_cast<uint32_t>(bytes[i * 4 + 3]) << 24);
+	}
+
+	// ⭐ WHAT FITS 64 BITS TAKES THE 64-BIT ROAD (#646): the high half is only the low half's sign spread out. A SUM over a
+	// NUMERIC comes back from Firebird as INT128 whatever its size, and decoding each one into limbs made a vector per
+	// number - 5% of a report over 100 000 turnovers (2026-11-04, Debug).
+	const uint32_t spread = (limbs[1] & 0x80000000u) != 0 ? 0xFFFFFFFFu : 0u;
+	if (limbs[2] == spread && limbs[3] == spread) {
+		Clear();
+		FromSigned64(static_cast<int64_t>((static_cast<uint64_t>(limbs[1]) << 32) | limbs[0]));
+		return;
 	}
 
 	const bool negative = (limbs[3] & 0x80000000u) != 0;

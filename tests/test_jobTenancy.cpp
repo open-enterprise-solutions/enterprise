@@ -42,6 +42,7 @@
 #include "backend/job/jobManager.h"
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
+#include "backend/system/systemManager.h"                // ibValueSystemFunction::SetStatus
 
 namespace {
 
@@ -227,6 +228,35 @@ TEST_F(JobTenancyFix, RentedRunsDoNotExhaustTheConnectionPool)
 
 	EXPECT_LE(pool->LiveSize(), kPoolMax)
 		<< "the pool grew past its cap — connections were not returned";
+
+	manager.Stop();
+}
+
+// ---------------------------------------------------------------------------
+// Where a run has got to
+// ---------------------------------------------------------------------------
+
+// ⭐ SetStatus IN A RUN WITH NO WINDOW IS WHERE THE RUN HAS GOT TO (#646) — its activity, which code_status and Active
+// Users read; it reached nothing before. A rented run, because it is the one that comes up here without a configuration;
+// the road is the same for every run.
+TEST_F(JobTenancyFix, SetStatusInARunIsItsActivity)
+{
+	if (!ready) GTEST_SKIP();
+
+	ibJobManager manager(ib::AppDataCtorToken{});
+
+	ibString seen;
+	auto run = manager.StartBackground(
+		[&seen](ibSession*) {
+			ibValueSystemFunction::SetStatus(wxT("half way"));
+			seen = ibBackgroundRun::Current()->Activity();
+			return ibValue();
+		},
+		wxT("a counted read"), ibJobTenancy::Tenant);
+
+	ASSERT_TRUE(run->Wait(10000));
+	EXPECT_TRUE(run->Error().IsEmpty()) << run->Error();
+	EXPECT_EQ(seen, ibString(wxT("half way")));
 
 	manager.Stop();
 }

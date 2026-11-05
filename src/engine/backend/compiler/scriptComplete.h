@@ -21,7 +21,7 @@
 // hand may be called; a BARE NAME call is a user function and is never run. That is the rule the
 // reverted arc arrived at too, and it is a rule rather than a list of opcodes because a list has to
 // be kept in step with the language and a rule does not. Arguments are passed as empty slots — the
-// methods this reaches (Select, Get, CreateElement …) answer with their SHAPE regardless, and
+// methods this reaches (Select, Get, CreateItem …) answer with their SHAPE regardless, and
 // evaluating an argument would mean running arbitrary code for a question the editor asked
 // speculatively.
 //
@@ -43,6 +43,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "backend/compiler/value.h"   // a branch HOLDS its value, and holding it is owning it
+#include "backend/backend_diagnostic.h"   // ibDiagnostic - what ibCheckMethodCalls answers with
 
 #include <wx/string.h>
 
@@ -282,5 +283,20 @@ struct ibQueryOutline {
 BACKEND_API std::vector<ibQueryOutline> ibOutlineScriptQueries(const ibString& text,
 	const ibString& moduleName = ibT("module"),
 	const class ibMetaData* metaData = nullptr);
+
+// ⭐⭐ A METHOD CALL THE RECEIVER HAS NO METHOD FOR — the fourth question off the same compile, and the one a compile
+// cannot ask: a method is looked up by name when it RUNS, so `Catalogs.Products.CreateElement()` compiled and failed
+// only at run time with "Aggregate object field not found" (#646). The walk knows the receiver, so it is asked.
+//
+// 🛑 ONLY WHERE THE ANSWER IS SURE, because a check that refuses good code is worse than none:
+//   - the receiver is READ AS A MEMBER (`Catalogs.Products.`, `ThisObject.Ref.`) — one that came out of a call is
+//     passed by, so the check never runs a query to find out what a method returned;
+//   - it is a configuration's own value — a manager, an object, a reference — whose methods are all known while
+//     designing, its module's exports included (read off the text, moduleInfo.h);
+//   - the call is not a bare platform one (`Write()` in an object module), whose receiver slot nobody wrote.
+// The text is the module's, `moduleObject` the module it lives in — as for ibValueAtCaret. Empty means nothing to
+// say, which includes a text that does not compile: that is the compiler's to report.
+BACKEND_API std::vector<ibDiagnostic> ibCheckMethodCalls(const ibString& text,
+	const ibValueMetaObject* moduleObject);
 
 #endif
