@@ -1747,6 +1747,33 @@ TEST(RuntimeTest, NullAndFilledBuiltins) {
 	EXPECT_FALSE(ibValueSystemFunction::ValueIsFilled(emptyStr));
 }
 
+// The two rounding rules differ on an EXACT half only: Round15as20 sends it away from zero, Round15as10
+// towards it. Past the half both go away — Round15as10 once took 0.4 of the last place off first, and
+// 1.6 came out 1.
+TEST(RuntimeTest, RoundModesDifferOnAnExactHalfOnly) {
+	const auto round = [](const wchar_t* text, int places, ibRoundMode mode) {
+		ibNumber n;
+		EXPECT_TRUE(n.FromString(ibString(text)));
+		return ibValueSystemFunction::Round(ibValue(n), places, mode).ToString().ToStdString();
+	};
+	constexpr ibRoundMode away = ibRoundMode::ibRoundMode_Round15as20, towards = ibRoundMode::ibRoundMode_Round15as10;
+
+	EXPECT_EQ(round(L"1.5", 0, away), "2");
+	EXPECT_EQ(round(L"-1.5", 0, away), "-2");
+	EXPECT_EQ(round(L"1.5", 0, towards), "1");
+	EXPECT_EQ(round(L"-1.5", 0, towards), "-1");
+
+	EXPECT_EQ(round(L"1.6", 0, towards), "2");
+	EXPECT_EQ(round(L"1.51", 0, towards), "2");
+	EXPECT_EQ(round(L"-1.6", 0, towards), "-2");
+	EXPECT_EQ(round(L"1.4", 0, towards), "1");
+
+	EXPECT_EQ(round(L"1250.565", 2, towards), "1250.56");
+	EXPECT_EQ(round(L"1250.565", 2, away), "1250.57");
+	EXPECT_EQ(round(L"1250.566", 2, towards), "1250.57");
+	EXPECT_EQ(round(L"1250.5650001", 2, towards), "1250.57");
+}
+
 // `+=` on a string concatenates (bare OPER_ADD over strings), same as `s = s + ...`.
 TEST(RuntimeTest, CompoundAssignmentStringConcat) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);

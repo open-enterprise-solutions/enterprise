@@ -82,20 +82,24 @@ ibNumber ibValueSystemFunction::Round(const ibValue& cValue, int precision, ibRo
 	ibNumber fNumber = cValue.GetNumber();
 	if (precision > MAX_PRECISION_NUMBER) precision = MAX_PRECISION_NUMBER;
 
-	// ibNumber::Round implements half-away-from-zero. The Round15as20 mode matches
-	// that exactly; the default mode is "round half down" (only digits >= 6 round
-	// up). Approximated by subtracting 0.4 of the last kept place's unit before
-	// rounding for the default mode — equivalent to old ttmath behaviour.
-	if (mode == ibRoundMode::ibRoundMode_Round15as20) {
+	// ibNumber::Round sends a half away from zero, which IS Round15as20.
+	if (mode == ibRoundMode::ibRoundMode_Round15as20)
 		return fNumber.Round(precision);
-	}
 
-	// Default: round half down. Build adjustment = 0.4 * 10^-precision and shrink
-	// magnitude so anything < .5 stays down, .5..<.6 rounds down, .6..<1 rounds up.
-	ibNumber adjust = ibNumber(4);
-	for (int i = 0; i < precision + 1; ++i) adjust /= ibNumber(10);
-	if (fNumber.IsSign()) fNumber += adjust;
-	else                  fNumber -= adjust;
+	// ⭐ ROUND15AS10 DIFFERS ON ONE INPUT ONLY: AN EXACT HALF, which goes towards zero (1.5 → 1, -1.5 → -1).
+	// Past the half the number goes away as in the other mode (1.6 → 2, 1.51 → 2). It used to be
+	// approximated by taking 0.4 of the last place off before rounding, which moved the threshold to .9:
+	// 1.6 came out 1, against the help's own words.
+	ibNumber shifted = fNumber;
+	shifted.ShiftDecimal(precision);   // the kept places become the whole part — exactly, no division
+	ibNumber kept = shifted.Trunc();
+	ibNumber half(5);
+	half.ShiftDecimal(-1);
+	const ibNumber dropped = shifted - kept;
+	if (dropped == half || dropped == -half) {
+		kept.ShiftDecimal(-precision);
+		return kept;
+	}
 	return fNumber.Round(precision);
 }
 

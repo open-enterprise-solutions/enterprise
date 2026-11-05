@@ -89,7 +89,7 @@
         "global_functions"
       ],
       "signature": "Round(num : number, number, roundMode)",
-      "description": "Rounds a number to the given number of decimal places. The rounding RULE is the third argument and it changes results on exact halves: Round15as20 (the default) sends a half away from zero, so 1.5 becomes 2; Round15as10 keeps a half down, so 1.5 becomes 1 and only .6 and above go up. State the rule explicitly wherever the figure is reconciled against another system.",
+      "description": "Rounds a number to the given number of decimal places. The rounding RULE is the third argument and it changes results on exact halves: Round15as20 (the default) sends a half away from zero, so 1.5 becomes 2; Round15as10 sends an exact half towards zero, so 1.5 becomes 1, while anything past the half goes up (1.51 and 1.6 become 2). State the rule explicitly wherever the figure is reconciled against another system.",
       "syntax_block": "Round(num : number, number, roundMode)",
       "parameters": "num — the number. number — decimal places (default 0). roundMode — RoundMode.Round15as20 (default) or RoundMode.Round15as10.",
       "return_descr": "Number, rounded.",
