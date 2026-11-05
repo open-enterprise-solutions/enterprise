@@ -67,20 +67,32 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibValue
 			return true;
 	}
 
-	if (ibTypeControlFactory::QuickChoice(ownerValue, clsid, metaData))
+	const ibCtorMetaValueType* so = metaData != nullptr ? metaData->GetTypeCtor(clsid) : nullptr;
+	const bool isReference = so != nullptr && so->GetMetaTypeCtor() == ibCtorObjectMetaType_Reference;
+
+	// ⭐ THE QUICK CHOICE: the type's answer, and for a reference the field's own word over it (issue #259).
+	bool quick = ownerValue->HasQuickChoice();
+	if (isReference) {
+		switch (factory->GetQuickChoiceMode()) {
+		case ibQuickChoiceMode::ibQuickChoiceMode_Use: quick = true; break;
+		case ibQuickChoiceMode::ibQuickChoiceMode_DontUse: quick = false; break;
+		case ibQuickChoiceMode::ibQuickChoiceMode_Auto: break;
+		}
+	}
+
+	if (quick && ibTypeControlFactory::QuickChoice(ownerValue, clsid, metaData))
 		return true;
 
-	const ibCtorMetaValueType* so = metaData != nullptr ? metaData->GetTypeCtor(clsid) : nullptr;
-	if (so != nullptr && so->GetMetaTypeCtor() == ibCtorObjectMetaType_Reference) {
+	if (isReference) {
 		if (const ibValueMetaObject* metaObject = so->GetMetaObject()) {
 			// ⭐ WHAT NARROWS THIS CHOICE — two things the control supplies and nothing it works out:
 			// the FIELD being filled, and WHERE the values its link names are read. The second is the
 			// control's own answer — the form's source for a control on a form, the row being edited
 			// for a table column — so the list is narrowed by exactly what the person can see beside
-			// the field they are filling.
+			// the field they are filling. The field's own rows stand over its attribute's (issue #259).
 			const ibChoiceHolder holder = factory->GetChoiceHolder();
 			const ibChoiceCondition condition = ibChoiceLinkResolver::Resolve(holder,
-				ibChoiceLinkResolver::FieldOf(holder, factory));
+				ibChoiceLinkResolver::FieldOf(holder, factory), factory->GetChoiceParameters());
 
 			// ⭐ WHAT THE FORM IS MADE WITH: which form the author picked, and — as one named part of
 			// it — the choice. The condition goes in WHOLE, empty or not: "nothing narrows this" is a
@@ -123,7 +135,7 @@ bool ibTypeControlFactory::SimpleChoice(ibControlFrame* ownerValue, const ibClas
 
 bool ibTypeControlFactory::QuickChoice(ibControlFrame* ownerValue, const ibClassID& clsid, const ibMetaData* metaData)
 {
-	if (ownerValue == nullptr || !ownerValue->HasQuickChoice())
+	if (ownerValue == nullptr)
 		return false;
 
 	// A number and a date first, on their own windows — the desktop's order.
@@ -198,6 +210,14 @@ void ibTypeControlFactory::QuickChoice(ibControlFrame* controlValue, ibValue& ne
 
 ibSelectMode ibTypeControlFactory::GetSelectMode() const
 {
+	// The field's own answer comes first: a form may let folders be picked into a field whose attribute takes items.
+	switch (GetChoiceFoldersAndItems()) {
+	case ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_Items: return ibSelectMode::ibSelectMode_Items;
+	case ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_Folders: return ibSelectMode::ibSelectMode_Folders;
+	case ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_FoldersAndItems: return ibSelectMode::ibSelectMode_FoldersAndItems;
+	case ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_Auto: break;
+	}
+
 	// Select mode is a metaobject-attribute concern — a single reference to a HIERARCHICAL catalog
 	// carries Items / Folders / FoldersAndItems. Resolve the bound leaf and, WHEN it is a metadata
 	// attribute, read its mode; a plain column (a dynamic list's queryable column) has none →

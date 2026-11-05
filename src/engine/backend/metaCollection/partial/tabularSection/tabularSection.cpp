@@ -126,7 +126,7 @@ bool ibValueTabularSectionDataObjectBase::SetValueByMetaID(const ibDataViewItem&
 			// ⚠ ON A CHANGE, NOT ON A WRITE, for the reason spelled out at the object's own write
 			// (commonObject.cpp): re-choosing what is already in the cell makes nothing stale.
 			if (ok && changed) {
-				ibChoiceHolder holder(this, item);
+				ibChoiceHolder holder(this, item, m_objectValue->GetGuid());
 				ibChoiceLinkResolver::ClearLinked(holder, id);
 			}
 

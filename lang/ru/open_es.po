@@ -14026,3 +14026,35 @@ msgstr "Тема оформления интерфейса:"
 #: src/engine/frmserver/schema/style.cpp
 msgid "The theme could not be kept"
 msgstr "Не удалось сохранить тему"
+
+#: src/engine/frmserver/visualView/controlEnum.h:136
+msgid "Don't use"
+msgstr "Не использовать"
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h:362
+msgid "How a reference is picked into the field when Select is pressed. Auto: as its type says (the catalog's or the document's own Quick choice). Use: a drop-down of the matching items. Don't use: the list form."
+msgstr "Как ссылка выбирается в поле по кнопке выбора. Авто: как задано у её типа (быстрый выбор справочника или документа). Использовать: выпадающий список подходящих элементов. Не использовать: форма списка."
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h:364
+msgid "Choice folders and items"
+msgstr "Выбор групп и элементов"
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h:365
+msgid "For a field referring to a hierarchical catalog: what may be picked into it - items, folders, or both. Auto: what the bound attribute's Select says."
+msgstr "Для поля со ссылкой на иерархический справочник: что можно выбрать в него - элементы, группы или и то, и другое. Авто: как задано в свойстве «Выбор групп и элементов» реквизита, к которому привязано поле."
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h:383
+msgid "What is shown in the list, on this form: a row per parameter - which field of the chosen object it filters, which field beside this one gives the value, and what becomes of a chosen value when that field changes, typed in the form or set by a module. The rows narrow the list over the bound attribute's - a row for the same parameter replaces the attribute's, the others are added to them - and empty the value on top of what the attribute's rows empty: those still empty it on every write of the object, whatever this form's rows say."
+msgstr "Что показывается в списке на этой форме: строка на каждый параметр - какое поле выбираемого объекта он отбирает, какое поле рядом с этим даёт значение и что становится с выбранным значением, когда это поле меняется, при вводе в форме или из модуля. Строки сужают список поверх строк реквизита, к которому привязано поле, - строка того же параметра заменяет строку реквизита, остальные добавляются к ним, - и очищают значение сверх того, что очищают строки реквизита: те по-прежнему очищают его при каждой записи объекта, что бы ни говорили строки этой формы."
+
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:847
+msgid "How a reference is picked into the cell when Select is pressed. Auto: as its type says (the catalog's or the document's own Quick choice). Use: a drop-down of the matching items. Don't use: the list form."
+msgstr "Как ссылка выбирается в ячейку по кнопке выбора. Авто: как задано у её типа (быстрый выбор справочника или документа). Использовать: выпадающий список подходящих элементов. Не использовать: форма списка."
+
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:850
+msgid "For a column referring to a hierarchical catalog: what may be picked into its cells - items, folders, or both. Auto: what the bound attribute's Select says."
+msgstr "Для колонки со ссылкой на иерархический справочник: что можно выбрать в её ячейки - элементы, группы или и то, и другое. Авто: как задано в свойстве «Выбор групп и элементов» реквизита, к которому привязана колонка."
+
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:853
+msgid "What is shown in the list, on this form: a row per parameter - which field of the chosen object it filters, which cell of the row or field of the object gives the value, and what becomes of a chosen value when it changes, typed in the form or set by a module. The rows narrow the list over the bound attribute's - a row for the same parameter replaces the attribute's, the others are added to them - and empty the value on top of what the attribute's rows empty: those still empty it on every write of the object, whatever this form's rows say."
+msgstr "Что показывается в списке на этой форме: строка на каждый параметр - какое поле выбираемого объекта он отбирает, какая ячейка строки или какое поле объекта даёт значение и что становится с выбранным значением, когда оно меняется, при вводе в форме или из модуля. Строки сужают список поверх строк реквизита, к которому привязана колонка, - строка того же параметра заменяет строку реквизита, остальные добавляются к ним, - и очищают значение сверх того, что очищают строки реквизита: те по-прежнему очищают его при каждой записи объекта, что бы ни говорили строки этой формы."

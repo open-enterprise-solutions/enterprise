@@ -405,7 +405,7 @@ bool ibValueForm::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 			// INTO THE VALUE THE ATTRIBUTE HOLDS — the cell the module's bare <name> writes through its bind.
 			// SetValue is the variant's own, inherited by the holder: it copied the value over the HOLDER, so
 			// `ThisForm.<name> = …` turned the entry into the primitive and the attribute never saw it.
-			attr->SetHeldValue(varPropVal);
+			attr->SetValueByPath({}, varPropVal);   // the attribute's one write — a field bound to it writes the same
 			return true;
 		}
 	}

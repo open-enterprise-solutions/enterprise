@@ -14023,3 +14023,35 @@ msgstr "Тема оформлення інтерфейсу:"
 #: src/engine/frmserver/schema/style.cpp
 msgid "The theme could not be kept"
 msgstr "Не вдалося зберегти тему"
+
+#: src/engine/frmserver/visualView/controlEnum.h:136
+msgid "Don't use"
+msgstr "Не використовувати"
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h:362
+msgid "How a reference is picked into the field when Select is pressed. Auto: as its type says (the catalog's or the document's own Quick choice). Use: a drop-down of the matching items. Don't use: the list form."
+msgstr "Як посилання вибирається в поле кнопкою вибору. Авто: як задано в її типу (швидкий вибір довідника або документа). Використовувати: випадний список відповідних елементів. Не використовувати: форма списку."
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h:364
+msgid "Choice folders and items"
+msgstr "Вибір груп і елементів"
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h:365
+msgid "For a field referring to a hierarchical catalog: what may be picked into it - items, folders, or both. Auto: what the bound attribute's Select says."
+msgstr "Для поля з посиланням на ієрархічний довідник: що можна вибрати в нього - елементи, групи або і те, і інше. Авто: як задано у властивості «Вибір груп і елементів» реквізиту, до якого прив'язане поле."
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h:383
+msgid "What is shown in the list, on this form: a row per parameter - which field of the chosen object it filters, which field beside this one gives the value, and what becomes of a chosen value when that field changes, typed in the form or set by a module. The rows narrow the list over the bound attribute's - a row for the same parameter replaces the attribute's, the others are added to them - and empty the value on top of what the attribute's rows empty: those still empty it on every write of the object, whatever this form's rows say."
+msgstr "Що показується у списку на цій формі: рядок на кожен параметр - яке поле об'єкта, що вибирається, він відбирає, яке поле поруч із цим дає значення і що стається з вибраним значенням, коли це поле змінюється, під час введення у формі або з модуля. Рядки звужують список поверх рядків реквізиту, до якого прив'язане поле, - рядок того самого параметра замінює рядок реквізиту, решта додаються до них, - і очищують значення понад те, що очищують рядки реквізиту: ті й надалі очищують його під час кожного запису об'єкта, хоч би що казали рядки цієї форми."
+
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:847
+msgid "How a reference is picked into the cell when Select is pressed. Auto: as its type says (the catalog's or the document's own Quick choice). Use: a drop-down of the matching items. Don't use: the list form."
+msgstr "Як посилання вибирається в комірку кнопкою вибору. Авто: як задано в її типу (швидкий вибір довідника або документа). Використовувати: випадний список відповідних елементів. Не використовувати: форма списку."
+
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:850
+msgid "For a column referring to a hierarchical catalog: what may be picked into its cells - items, folders, or both. Auto: what the bound attribute's Select says."
+msgstr "Для колонки з посиланням на ієрархічний довідник: що можна вибрати в її комірки - елементи, групи або і те, і інше. Авто: як задано у властивості «Вибір груп і елементів» реквізиту, до якого прив'язана колонка."
+
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:853
+msgid "What is shown in the list, on this form: a row per parameter - which field of the chosen object it filters, which cell of the row or field of the object gives the value, and what becomes of a chosen value when it changes, typed in the form or set by a module. The rows narrow the list over the bound attribute's - a row for the same parameter replaces the attribute's, the others are added to them - and empty the value on top of what the attribute's rows empty: those still empty it on every write of the object, whatever this form's rows say."
+msgstr "Що показується у списку на цій формі: рядок на кожен параметр - яке поле об'єкта, що вибирається, він відбирає, яка комірка рядка або яке поле об'єкта дає значення і що стається з вибраним значенням, коли воно змінюється, під час введення у формі або з модуля. Рядки звужують список поверх рядків реквізиту, до якого прив'язана колонка, - рядок того самого параметра замінює рядок реквізиту, решта додаються до них, - і очищують значення понад те, що очищують рядки реквізиту: ті й надалі очищують його під час кожного запису об'єкта, хоч би що казали рядки цієї форми."

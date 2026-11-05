@@ -489,6 +489,7 @@ public:
 	//notify
 	virtual void NotifyCreate(const ibValue& vCreated);
 	virtual void NotifyChange(const ibValue& vChanged);
+	virtual void NotifyChange(ibChoiceHolder& holder, const ibMetaID& edited) override;   // …its fields' own rows applied
 	virtual void NotifyDelete(const ibValue& vChanged);
 
 	virtual void NotifyChoice(ibValue& vSelected);

@@ -298,6 +298,19 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   where the base already holds one (remove the lines held there first). A line the configuration
   stops declaring stays, an ordinary line.
 
+## Forms
+
+- **A form field says how its value is chosen, over what its attribute says.** A text field and a
+  table column have `QuickChoice` (Auto — as the type says, Use, Don't use), `ChoiceFoldersAndItems`
+  (Auto — as the attribute's Select says, Items, Folders, Folders and items) and `ChoiceParameters`:
+  the attribute's table of rows, kept on the form. The field's rows narrow the list over the
+  attribute's: a row for the same parameter replaces the attribute's row, the others are added to
+  it. They also empty the field when their field changes, typed in the form or set by a module,
+  unless the row says Keep, on top of what the attribute's rows empty: those still empty it on a
+  write of the object, whatever the form's rows say. MCP: `form_set {control, property:
+  "ChoiceParameters", value: {"Owner": "Counterparty"}}`, in the shape `metadata_set_choice` takes,
+  and `form_control` reads the three back.
+
 ## Fixes
 
 - **Typing a number code finds the item wherever it stands.** A catalog whose code is a number was searched among

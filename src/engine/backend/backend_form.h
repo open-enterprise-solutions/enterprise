@@ -8,6 +8,7 @@
 
 ///////////////////////////////////////////////////
 class BACKEND_API ibBackendValueForm;
+struct BACKEND_API ibChoiceHolder;
 template <class T> class ibFormPtr;   // below — the owning reference a form is handed out by
 ///////////////////////////////////////////////////
 
@@ -127,6 +128,7 @@ public:
 	//notify
 	virtual void NotifyCreate(const ibValue& vCreated) = 0;
 	virtual void NotifyChange(const ibValue& vChanged) = 0;
+	virtual void NotifyChange(ibChoiceHolder& holder, const ibMetaID& edited) = 0;   // …a field `edited` of what it stands on
 	virtual void NotifyDelete(const ibValue& vChanged) = 0;
 
 	virtual void NotifyChoice(ibValue& vSelected) = 0;

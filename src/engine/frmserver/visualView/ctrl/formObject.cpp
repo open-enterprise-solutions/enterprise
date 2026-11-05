@@ -403,6 +403,21 @@ void ibValueForm::NotifyChange(const ibValue& vChanged)
 	ibValueForm::Modify(false);
 }
 
+// A FIELD OF WHAT THE FORM STANDS ON CHANGED, whatever wrote it: each field of the form standing in that holder
+// empties what its own rows chose under it. A field stands there when its field is one of the holder's own — a
+// column in every row of its table, not only in the row it has current.
+void ibValueForm::NotifyChange(ibChoiceHolder& holder, const ibMetaID& edited)
+{
+	for (ibValueControl* control : GetControlList()) {
+		const ibTypeControlFactory* factory = dynamic_cast<const ibTypeControlFactory*>(control);
+		if (factory == nullptr || !factory->GetChoiceParameters().IsOk())
+			continue;
+		const ibValueMetaObjectAttributeBase* field = ibChoiceLinkResolver::FieldOf(holder, factory);
+		if (field != nullptr && field->GetParent() == holder.GetFields())
+			ibChoiceLinkResolver::ClearLinked(holder, edited, field, factory->GetChoiceParameters());
+	}
+}
+
 void ibValueForm::NotifyDelete(const ibValue& vChanged)
 {
 	ibValueForm* ownerForm = m_controlOwner != nullptr ?

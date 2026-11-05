@@ -4,6 +4,7 @@
 #include "core/description/choiceLinkDescription.h"
 #include "backend/createRequest.h"   // ibChoiceCondition — what this produces
 #include "backend/tabularDataObject.h"              // the TABLE shape of a source, and its row hop
+#include "backend/uniqueKey.h"                      // ibUniqueKey — the holder keeps the key its form is found by
 #include "core/tabular/tabularModelView.h"          // ibDataViewItem COMPLETE — the holder below keeps one BY VALUE,
                                                     // and tabularDataObject.h only forward-declares it. It did compile
                                                     // without this, through some other header's chain; a by-value
@@ -30,10 +31,14 @@ struct BACKEND_API ibChoiceHolder {
 	ibSourceDataObject* m_source = nullptr;    // the object — for a table column, the one above the row
 	ibTabularDataObject* m_table = nullptr;    // the table and the row, where the holder is a row
 	ibDataViewItem m_row;
+	ibUniqueKey m_key;                         // the key the form open on it is found by; none — no form to tell
 
 	ibChoiceHolder() = default;
-	explicit ibChoiceHolder(ibSourceDataObject* source) : m_source(source) {}
-	ibChoiceHolder(ibTabularDataObject* table, const ibDataViewItem& row) : m_table(table), m_row(row) {}
+	explicit ibChoiceHolder(ibSourceDataObject* source);   // …keyed by the source's own key
+	// …keyed by the object the table is part of, which only its caller knows: a section passes its object's key,
+	// a register's line has no object over it and passes none.
+	ibChoiceHolder(ibTabularDataObject* table, const ibDataViewItem& row, const ibUniqueKey& key = ibUniqueKey())
+		: m_table(table), m_row(row), m_key(key) {}
 
 	bool IsOk() const { return m_source != nullptr || m_table != nullptr; }
 
@@ -93,8 +98,12 @@ public:
 	//
 	// A field of nullptr — a control bound to nothing, a filter cell, a script's value — carries no
 	// condition, which is the honest answer there rather than a refusal.
+	//
+	// ⭐ …AND A FORM FIELD MAY SAY MORE THAN ITS ATTRIBUTE: `rows` are the field's own, the same table read
+	// against the same holder. A row naming a parameter the attribute also names replaces the attribute's
+	// row, the others are added to them (SetRow). No rows: the attribute's answer as it stands (issue #259).
 	static ibChoiceCondition Resolve(const ibChoiceHolder& holder,
-		const ibValueMetaObjectAttributeBase* field);
+		const ibValueMetaObjectAttributeBase* field, const ibChoiceParametersDescription& rows);
 
 	// ⭐⭐ A NEW RECORD MADE IN A NARROWED LIST IS BORN MATCHING IT. The list a person pressed Add in
 	// shows only contracts of one counterparty; a new row without that counterparty is not merely
@@ -117,7 +126,18 @@ public:
 	// ⭐ AND IT FOLLOWS THROUGH: a field emptied here may itself govern a third, whose value is now just
 	// as stale. The walk carries on until nothing more is emptied — a chain nobody would think to write
 	// a handler for, and the first one a person builds by accident.
+	//
+	// ⭐ AND THE FORM OPEN ON THE SOURCE HEARS IT, through the same verb: its fields' own rows are applied
+	// there (ibBackendValueForm::NotifyChange), once, on a change — whatever wrote the value, a person in the
+	// form or a module.
 	static void ClearLinked(ibChoiceHolder& holder, const ibMetaID& edited);
+
+	// ⭐ …ONE FIELD AT A TIME, under one table of rows: `field` stands in `holder` and was chosen under `rows`, and
+	// `edited` just changed there. Emptied when its type link names `edited`, or a row naming it does not say Keep.
+	// The pass above asks it of each field with its attribute's rows; a form, of each of its fields with their own
+	// (ibValueForm::NotifyChange).
+	static void ClearLinked(ibChoiceHolder& holder, const ibMetaID& edited,
+		const ibValueMetaObjectAttributeBase* field, const ibChoiceParametersDescription& rows);
 
 	// ⭐⭐ THE VALUE, ADJUSTED TO WHAT ITS LINK SETTLES ON — the ONE line a holder writes through. A
 	// field's CONTOUR (what it may ever hold) is the attribute's own answer and needs nobody's help;

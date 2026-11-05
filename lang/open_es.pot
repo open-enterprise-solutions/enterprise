@@ -13688,3 +13688,35 @@ msgstr ""
 #: src/engine/frmserver/schema/style.cpp
 msgid "The theme could not be kept"
 msgstr ""
+
+#: src/engine/frmserver/visualView/controlEnum.h:136
+msgid "Don't use"
+msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h:362
+msgid "How a reference is picked into the field when Select is pressed. Auto: as its type says (the catalog's or the document's own Quick choice). Use: a drop-down of the matching items. Don't use: the list form."
+msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h:364
+msgid "Choice folders and items"
+msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h:365
+msgid "For a field referring to a hierarchical catalog: what may be picked into it - items, folders, or both. Auto: what the bound attribute's Select says."
+msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h:383
+msgid "What is shown in the list, on this form: a row per parameter - which field of the chosen object it filters, which field beside this one gives the value, and what becomes of a chosen value when that field changes, typed in the form or set by a module. The rows narrow the list over the bound attribute's - a row for the same parameter replaces the attribute's, the others are added to them - and empty the value on top of what the attribute's rows empty: those still empty it on every write of the object, whatever this form's rows say."
+msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:847
+msgid "How a reference is picked into the cell when Select is pressed. Auto: as its type says (the catalog's or the document's own Quick choice). Use: a drop-down of the matching items. Don't use: the list form."
+msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:850
+msgid "For a column referring to a hierarchical catalog: what may be picked into its cells - items, folders, or both. Auto: what the bound attribute's Select says."
+msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:853
+msgid "What is shown in the list, on this form: a row per parameter - which field of the chosen object it filters, which cell of the row or field of the object gives the value, and what becomes of a chosen value when it changes, typed in the form or set by a module. The rows narrow the list over the bound attribute's - a row for the same parameter replaces the attribute's, the others are added to them - and empty the value on top of what the attribute's rows empty: those still empty it on every write of the object, whatever this form's rows say."
+msgstr ""

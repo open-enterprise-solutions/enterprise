@@ -1,6 +1,7 @@
 #include "variantChoiceLink.h"   // …and, beside these two classes, the two name lookups they draw with
 #include "backend/propertyManager/property/propertyChoiceLink.h"   // ibFieldReferenceTypes, ibChoiceOwnerRow — declared there
 #include "backend/choiceLinkResolver.h"                    // CanGovern — the reading this offer must agree with
+#include "backend/backend_type.h"                          // ibBackendTypeSourceFactory — a form field, asked as its attribute
 #include "backend/metaData.h"                              // …and the counter a configuration moves when something is removed
 #include "backend/objCtor.h"                               // ibCtorMetaValueType — what a reference type names, by its id
 #include "backend/metaCollection/partial/commonObject.h"   // the objects and their fields
@@ -14,14 +15,43 @@ namespace {
 // The property family hands its owner over as an ibPropertyObject, so somebody has to say what that
 // owner is; saying it in five places is five chances for the five to stop agreeing (Max, 2026-09-23,
 // reading this file: "you have thrown casts about here").
-const ibValueMetaObjectAttributeBase* SelfAttribute(const ibPropertyObject* owner)
+//
+// ⭐ A FORM FIELD IS ASKED AS THE ATTRIBUTE IT IS BOUND TO (issue #259). Its own choice parameters are the
+// same table over the same neighbours — at run time it reads them from the same holder the attribute's are
+// read from (ibChoiceLinkResolver::Resolve) — so every list below is the bound attribute's. A field bound to
+// no attribute (a form attribute of its own, a list's column) has none to offer.
+//
+// ⚠ NOT BY THE BINDING'S WALK ALONE: on a form being edited the walk answers with its source's COLUMN, which
+// stands for the attribute and is not it. So the field is named as the run time names it — the leaf among the
+// fields of the form's source (ibChoiceLinkResolver::FieldOf). A table column, whose fields stand in a row there
+// is none of here, is named by the leaf's own metaID — and only where the hop before the leaf is the leaf's own
+// parent, the section: through a reference (`Counterparty.Parent`) the leaf is a field of ANOTHER object, with
+// none of this field's neighbours.
+const ibValueMetaObjectAttributeBase* FieldOf(const ibPropertyObject* owner)
 {
-	return dynamic_cast<const ibValueMetaObjectAttributeBase*>(owner);
+	if (const ibValueMetaObjectAttributeBase* attribute = dynamic_cast<const ibValueMetaObjectAttributeBase*>(owner))
+		return attribute;
+	const ibBackendTypeSourceFactory* bound = dynamic_cast<const ibBackendTypeSourceFactory*>(owner);
+	const ibSourceDescription* path = bound != nullptr ? &bound->GetSourceDesc() : nullptr;
+	if (path == nullptr || path->GetHopCount() < 2)
+		return nullptr;
+
+	ibBackendFormAttributeValue* head = bound->FindSourceHolder(path->GetFirst());
+	if (const ibValueMetaObjectAttributeBase* field = ibChoiceLinkResolver::FieldOf(
+			ibChoiceHolder(head != nullptr ? head->GetSourceValue() : nullptr), bound))
+		return field;
+
+	const ibMetaData* metaData = owner->GetMetaData();
+	const ibValueMetaObjectAttributeBase* leaf = metaData != nullptr ? dynamic_cast<const ibValueMetaObjectAttributeBase*>(
+		metaData->FindAnyObjectByFilter(path->GetLeaf(), true)) : nullptr;
+	const ibValueMetaObject* section = leaf != nullptr ? leaf->GetParent() : nullptr;
+	const ibSourceId before = path->GetPath()[path->GetHopCount() - 2].m_id;
+	return section != nullptr && section->GetMetaID() == before ? leaf : nullptr;
 }
 
-ibMetaID SelfId(const ibPropertyObject* owner)
+ibMetaID FieldIdOf(const ibPropertyObject* owner)
 {
-	const ibValueMetaObjectAttributeBase* self = SelfAttribute(owner);
+	const ibValueMetaObjectAttributeBase* self = FieldOf(owner);
 	return self != nullptr ? self->GetMetaID() : 0;
 }
 
@@ -39,7 +69,7 @@ ibMetaID SelfId(const ibPropertyObject* owner)
 // value from one. One rule, written once, so the two cannot offer different neighbourhoods.
 std::vector<ibValueMetaObjectAttributeBase*> HolderAttributes(const ibPropertyObject* owner)
 {
-	const ibValueMetaObjectAttributeBase* self = SelfAttribute(owner);
+	const ibValueMetaObjectAttributeBase* self = FieldOf(owner);
 	const ibValueMetaObject* holder = self != nullptr ? self->GetParent() : nullptr;
 	const ibValueMetaObjectCompositeData* fields = dynamic_cast<const ibValueMetaObjectCompositeData*>(holder);
 	if (fields == nullptr)
@@ -81,7 +111,7 @@ std::vector<ibValueMetaObjectAttributeBase*> HolderAttributes(const ibPropertyOb
 // it through this one function, so the designer, the inspector's row and MCP cannot spell it apart.
 ibString NeighbourName(const ibPropertyObject* owner, const ibValueMetaObjectAttributeBase* field)
 {
-	const ibValueMetaObjectAttributeBase* self = SelfAttribute(owner);
+	const ibValueMetaObjectAttributeBase* self = FieldOf(owner);
 	const ibValueMetaObject* holder = field->GetParent();
 	if (self == nullptr || holder == nullptr || holder == self->GetParent())
 		return field->GetName();
@@ -109,7 +139,7 @@ template <typename T>
 std::vector<const T*> ReferencedObjects(const ibPropertyObject* owner)
 {
 	std::vector<const T*> out;
-	const ibValueMetaObjectAttributeBase* self = SelfAttribute(owner);
+	const ibValueMetaObjectAttributeBase* self = FieldOf(owner);
 	if (self == nullptr)
 		return out;
 	for (const ibClassID& clsid : self->GetTypeDesc().GetClsidList()) {
@@ -183,7 +213,7 @@ void ibChoiceParametersForSource(const ibPropertyObject* owner, const ibMetaID& 
 
 ibString ibChoiceHolderName(const ibPropertyObject* owner)
 {
-	const ibValueMetaObjectAttributeBase* self = SelfAttribute(owner);
+	const ibValueMetaObjectAttributeBase* self = FieldOf(owner);
 	const ibValueMetaObject* holder = self != nullptr ? self->GetParent() : nullptr;
 	return holder != nullptr ? holder->GetName() : ibString();
 }
@@ -220,7 +250,7 @@ void ibFieldReferenceTypes(const ibPropertyObject* owner, ibPropertyChoiceList& 
 // deleting it sticks (Max, 2026-09-23).
 bool ibChoiceOwnerRow(const ibPropertyObject* owner, ibChoiceParameterRowDescription& row)
 {
-	const ibMetaID selfId = SelfId(owner);
+	const ibMetaID selfId = FieldIdOf(owner);
 
 	for (const ibValueMetaObjectCatalog* target : ReferencedObjects<ibValueMetaObjectCatalog>(owner)) {
 		// A catalog that owns nothing has an Owner attribute with no types declared — asking it for its
@@ -300,7 +330,7 @@ ibPropertyChoiceMode ibVariantChoiceLink::GetValueList(ibPropertyChoiceList& lis
 	if (metaData == nullptr)
 		return ibPropertyChoiceMode::None;
 
-	const ibMetaID self = SelfId(owner);
+	const ibMetaID self = FieldIdOf(owner);
 
 	for (const ibValueMetaObjectAttributeBase* field : HolderAttributes(owner)) {
 		if (field->GetMetaID() == self)
@@ -406,7 +436,7 @@ void ibVariantChoiceParameters::GetParameterList(const ibClassID& ofType, ibProp
 void ibVariantChoiceParameters::GetSourceList(ibPropertyChoiceList& list) const
 {
 	const ibPropertyObject* owner = m_ownerProperty;
-	const ibMetaID selfId = SelfId(owner);
+	const ibMetaID selfId = FieldIdOf(owner);
 
 	for (const ibValueMetaObjectAttributeBase* field : HolderAttributes(owner)) {
 		if (field->GetMetaID() == selfId)

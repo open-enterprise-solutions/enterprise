@@ -3711,8 +3711,15 @@ bool ibValueRecordManagerObject::SetValueByMetaID(const ibMetaID& id, const ibVa
 	// Read off the record after the write, for the reason given at ibValueRecordDataObjectRef::SetValueByMetaID.
 	const ibValue before = ibValueRecordManagerObject::GetValueByMetaID(id);
 	const bool result = m_recordLine->SetValueByMetaID(id, varMetaVal);
-	if (!(before == ibValueRecordManagerObject::GetValueByMetaID(id)))
+	if (!(before == ibValueRecordManagerObject::GetValueByMetaID(id))) {
 		ibValueRecordManagerObject::Modify(true);
+
+		// ⭐ THE RECORD FORM STANDS ON THE MANAGER, so the manager tells it — with itself as the holder, the one the
+		// form's fields answer with. The line has already emptied what the attribute's rows name; the record set does
+		// not learn about its manager, and a set written with no manager over it has no form to tell (issue #259).
+		ibChoiceHolder holder(this);
+		ibChoiceLinkResolver::ClearLinked(holder, id);
+	}
 	return result;
 }
 
