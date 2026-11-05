@@ -76,6 +76,7 @@ Add a row to the group it belongs to when you add a document, so this folder can
 
 | Document | What it holds |
 |---|---|
+| [style.md](style.md) | The style: the items the look is painted with, a light and a dark value for each, the platform's style and one lying over it |
 | [thin-client.md](thin-client.md) | The thin client: its parts, who does what, the document/view skeleton, spreadsheets, printing, a file base, what it guarantees |
 | [browser-client.md](browser-client.md) | The browser client: a page with no build, its parts, who does what, what it guarantees, where it stops |
 | [client-protocol.md](client-protocol.md) | How a client works with a base: transports, methods, the frame, schemas, questions, files, the menu, what it guarantees |

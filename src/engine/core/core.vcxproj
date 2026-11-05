@@ -196,6 +196,7 @@
     <ClCompile Include="fnumber.cpp" />
     <ClCompile Include="formatString.cpp" />
     <ClCompile Include="fstring.cpp" />
+    <ClCompile Include="graphics\border.cpp" />
     <ClCompile Include="graphics\colour.cpp" />
     <ClCompile Include="graphics\font.cpp" />
     <ClCompile Include="graphics\geometry.cpp" />
@@ -250,6 +251,8 @@
     <ClCompile Include="spreadsheet\sheetFormat.cpp" />
     <ClCompile Include="spreadsheet\spreadsheetObject.cpp" />
     <ClCompile Include="startProcess.cpp" />
+    <ClCompile Include="style\style.cpp" />
+    <ClCompile Include="style\styleItem.cpp" />
     <ClCompile Include="stringTokenizer.cpp" />
     <ClCompile Include="syntaxHelper\helpCorpus.cpp" />
     <ClCompile Include="syntaxHelper\helpLoader.cpp" />
@@ -310,6 +313,7 @@
     <ClInclude Include="fnumber.h" />
     <ClInclude Include="formatString.h" />
     <ClInclude Include="fstring.h" />
+    <ClInclude Include="graphics\border.h" />
     <ClInclude Include="graphics\colour.h" />
     <ClInclude Include="graphics\font.h" />
     <ClInclude Include="graphics\geometry.h" />
@@ -364,6 +368,8 @@
     <ClInclude Include="spreadsheet\sheetFormat.h" />
     <ClInclude Include="spreadsheet\spreadsheetObject.h" />
     <ClInclude Include="startProcess.h" />
+    <ClInclude Include="style\style.h" />
+    <ClInclude Include="style\styleItem.h" />
     <ClInclude Include="stringTokenizer.h" />
     <ClInclude Include="stringUtils.h" />
     <ClInclude Include="syntaxHelper\helpCategory.h" />
