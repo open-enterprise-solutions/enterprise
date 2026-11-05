@@ -103,6 +103,10 @@ function loadGrid() {
 }
 
 class Tablebox extends Control {
+	// A table's own, as the server's makes it (ibValueModelTableBox): white — the theme's table.
+	/** @type {[string, string]} */
+	static platformBackground = ['rgb(255,255,255)', 'var(--oes-table-bg)'];
+
 	/** @param {ProtocolNode} node */
 	build(node) {
 		this.bar = new CommandBar(this);

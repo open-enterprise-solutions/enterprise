@@ -13,6 +13,10 @@ import { TextEditor } from './textEditor.js';
 /** @typedef {import('../protocol/patch.js').ProtocolNode} ProtocolNode */
 
 class Textctrl extends Control {
+	// A field's own, as the server's makes it (ibValueTextCtrl): white — the theme's, as a table's.
+	/** @type {[string, string]} */
+	static platformBackground = ['rgb(255,255,255)', 'var(--oes-table-bg)'];
+
 	/** @param {ProtocolNode} node */
 	build(node) {
 		this.caption = document.createElement('span');

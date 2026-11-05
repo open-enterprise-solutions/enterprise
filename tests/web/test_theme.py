@@ -135,7 +135,8 @@ class AControlsOwnLook(PageTest):
     theme's; a colour the author chose stays theirs."""
 
     def look(self, theme):
-        fields = [{'id': 21, 'caption': 'Platform', 'node': {'BackgroundColour': '250,247,240', 'ForegroundColour': '63,92,119'}},
+        # A field's own fill is white, as the server makes one (ibValueTextCtrl); a label's, a group's - cream.
+        fields = [{'id': 21, 'caption': 'Platform', 'node': {'BackgroundColour': '255,255,255', 'ForegroundColour': '63,92,119'}},
                   {'id': 22, 'caption': 'Chosen fill', 'node': {'BackgroundColour': '200,30,30', 'ForegroundColour': '63,92,119'}},
                   {'id': 23, 'caption': 'Chosen ink', 'node': {'BackgroundColour': '250,247,240', 'ForegroundColour': '0,0,128'}},
                   {'id': 24, 'caption': 'Fill alone', 'node': {'BackgroundColour': '255,255,0'}}]
@@ -145,7 +146,7 @@ class AControlsOwnLook(PageTest):
 
     def test_the_platforms_is_dark_in_the_dark(self):
         platform, fill, ink, alone = self.look(DARK)
-        self.assertEqual(platform, ['rgb(201, 214, 226)', 'rgb(34, 38, 43)'])
+        self.assertEqual(platform, ['rgb(201, 214, 226)', 'rgb(36, 39, 44)'])
         # One side the author's: the other is the light theme's, so the pair reads as they chose it.
         self.assertEqual(fill, ['rgb(63, 92, 119)', 'rgb(200, 30, 30)'])
         self.assertEqual(ink, ['rgb(0, 0, 128)', 'rgb(250, 247, 240)'])
@@ -163,9 +164,21 @@ class AControlsOwnLook(PageTest):
 
     def test_the_platforms_is_itself_in_the_light(self):
         platform, fill, ink, alone = self.look(LIGHT)
-        self.assertEqual(platform, ['rgb(63, 92, 119)', 'rgb(250, 247, 240)'])
+        self.assertEqual(platform, ['rgb(63, 92, 119)', 'rgb(255, 255, 255)'])
         self.assertEqual(fill, ['rgb(63, 92, 119)', 'rgb(200, 30, 30)'])
         self.assertEqual(ink, ['rgb(0, 0, 128)', 'rgb(250, 247, 240)'])
+
+    def table_fill(self, theme):
+        # A table's own fill is white, as the server makes one (ibValueModelTableBox): its command bar stands on it.
+        page = self.start({'tabs': [tab(node={'BackgroundColour': '255,255,255', 'ForegroundColour': '63,92,119'})],
+                           'schemas': {str(STYLE): {'Theme': theme}}, 'schemaKinds': [STYLE]})
+        return page.evaluate("() => getComputedStyle(document.querySelector('oes-tablebox')).backgroundColor")
+
+    def test_a_tables_own_is_the_themes_table_in_the_dark(self):
+        self.assertEqual(self.table_fill(DARK), 'rgb(36, 39, 44)')
+
+    def test_a_tables_own_is_itself_in_the_light(self):
+        self.assertEqual(self.table_fill(LIGHT), 'rgb(255, 255, 255)')
 
 
 class ACellsOwnColour(PageTest):

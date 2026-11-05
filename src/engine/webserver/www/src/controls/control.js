@@ -40,6 +40,11 @@ export function defineControl(type, control) {
 }
 
 export class Control extends HTMLElement {
+	// THE BACKGROUND ITS KIND IS GIVEN WHEN ITS AUTHOR PICKS NONE, as the server saves it (frmserver's
+	// ibDefaultStyleBGColour; a kind of its own says its own), and the theme's for it — what a control naming it is painted.
+	/** @type {[string, string]} */
+	static platformBackground = ['rgb(250,247,240)', 'var(--oes-form-bg)'];
+
 	constructor() {
 		super();
 		/** @type {ProtocolNode} the node it was last brought up to, without its children */
@@ -136,7 +141,8 @@ export class Control extends HTMLElement {
 		else
 			this.removeAttribute('title');
 
-		const [text, background] = themedPair(colour(node.ForegroundColour), colour(node.BackgroundColour));
+		const [text, background] = themedPair(colour(node.ForegroundColour), colour(node.BackgroundColour),
+			/** @type {typeof Control} */ (this.constructor).platformBackground);
 		this.lookTarget.style.color = text;
 		this.lookTarget.style.backgroundColor = background;
 		applyFont(this, node.Font);
@@ -261,23 +267,24 @@ function sameEntries(node, previous) {
 }
 
 // THE PLATFORM'S OWN LOOK OF A CONTROL - what a control is given when its author picks no colour (frmserver's
-// ibDefaultStyleFGColour / ibDefaultStyleBGColour). A form saves it as any colour, so it comes as one: a control that
-// names it is painted with the theme's (styles/tokens.css), which is it in the light theme and a dark one in the dark.
+// ibDefaultStyleFGColour; the background its kind's, Control.platformBackground). A form saves it as any colour, so it
+// comes as one: a control that names it is painted with the theme's (styles/tokens.css), which is it in the light theme
+// and a dark one in the dark.
 const defaultText = 'rgb(63,92,119)';
-const defaultBackground = 'rgb(250,247,240)';
 
 /**
  * A control's two colours as they are painted. Both the platform's own look (or none): the theme's. One of them the
  * author's: the author chose it against the light theme's other side, so that side is what it gets - the platform's
  * colour as saved, or the light paper when the form names none - and the pair reads as the author saw it.
  * @param {string} text @param {string} background
+ * @param {[string, string]} platform its kind's background as saved, and the theme's for it (Control.platformBackground)
  * @returns {[string, string]}
  */
-function themedPair(text, background) {
+function themedPair(text, background, [platformBackground, themedBackground]) {
 	const ownText = text !== '' && text !== defaultText;
-	const ownBackground = background !== '' && background !== defaultBackground;
+	const ownBackground = background !== '' && background !== platformBackground;
 	if (!ownText && !ownBackground)
-		return [text === '' ? '' : 'var(--oes-form-text)', background === '' ? '' : 'var(--oes-form-bg)'];
+		return [text === '' ? '' : 'var(--oes-form-text)', background === '' ? '' : themedBackground];
 	return [text || 'var(--oes-paper-text)', background || 'var(--oes-paper)'];
 }
 

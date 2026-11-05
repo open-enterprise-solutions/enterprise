@@ -150,6 +150,8 @@
 						NodeType: 'Tablebox', ControlId: table.id ?? 1, Header: true, HeaderHeight: table.headerHeight ?? 1,
 						Footer: table.footer === true, FooterHeight: table.footerHeight ?? 1, FrezeeRow: 0, FrezeeCol: 0,
 						RowSelectionMode: table.selection ?? 1,
+						// The table's own saved properties as the server writes them - its colours, say.
+						...(table.node ?? {}),
 						State: state,
 						NodeChildren: table.columns,
 					}],
