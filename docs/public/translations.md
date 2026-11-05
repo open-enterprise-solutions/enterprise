@@ -7,7 +7,7 @@ gettext catalogs (`ibMsgCatalog`, one `.mo` each). It is loaded once and kept fo
 translated with `ibGetTranslation`. The language is the THREAD's.
 
 **Why.** wx's `wxTranslations` is one object per process. A process that holds several bases (the
-application server) could speak only one language: the first base's. Now every thread that works
+web server, a file base per publication) could speak only one language: the first base's. Now every thread that works
 for a base speaks that base's language.
 
 ## The choice per thread

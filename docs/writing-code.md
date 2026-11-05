@@ -58,9 +58,9 @@ beside `TranslateErrorCode(int)`, not `ErrorCodeOf`; `GetColumn(prefix, col)` be
 `GetColumn(col)`. A name with no neighbour is the smell: it usually duplicates a function that
 already answers.
 
-**Copy the principle a family is named by, not only its suffix.** `ibFileRelay`, `ibServerRelay`
-and `ibHostRelay` are named by destination, so the relay of commands is `ibCommandRelay`, not
-`ibDesignerRelay`. `kLoginWithin` sits beside `kOpenWithin`. When porting, the original's names
+**Copy the principle a family is named by, not only its suffix.** `ibFileRelay` and `ibHostRelay`
+are named by what they carry to (a file base, a base this server holds), so the debugger's relay is
+`ibCommandRelay`, not `ibDesignerRelay`. `kLoginWithin` sits beside `kOpenWithin`. When porting, the original's names
 are the neighbours.
 
 **Name a thing by what it holds or answers,** not by when or for whom it is called: a parameter
@@ -141,8 +141,8 @@ expression at the call site.
 **Extract a helper at the third copy,** as a `static` or inline function in the same `.cpp`, never
 a new header for three lines.
 
-**One path to `ibValue`.** No diamonds: capability mixins (`ibTabularObject`,
-`ibActionDataObject`) never inherit `ibValue`, and a class swaps its base slot rather than adding a
+**One path to `ibValue`.** No diamonds: capability mixins (`ibSourceObject`, `ibTabularObject`,
+`ibStandardCommandSource`) never inherit `ibValue`, and a class swaps its base slot rather than adding a
 second base.
 
 **A constructor that builds a request or a description from a name is `explicit`.** An implicit
@@ -420,8 +420,8 @@ subject.** A handler is foreign code: it must not see what the user may not see.
 function, never the other handler through a synthesised event: verb to verb through handlers
 closes into recursion.
 
-**A generic primitive only emits its event** (`ibWebTimer` queues a timer event); the subscribers
-own the domain logic.
+**A generic primitive only emits its event** (a timer queues a timer event); the subscribers own
+the domain logic.
 
 **Open and close through the lifecycle verb that fires its own events** (`CloseForm`). Never fire
 them by hand, and never tear down views inside a control's handler.

@@ -137,7 +137,7 @@ and filters there (`linq.md` § 0.1); for a filter the database should apply, wr
 (`Data.Documents.Orders.Where(Function(o) { Return o.Total > 10000; })` — a lambda is a `Function`,
 the language has no `=>`) or a query.
 
-Full LINQ surface: `docs/linq.md` (34 chain ops + block syntax — the live count is the
+Full LINQ surface: `docs/private/linq.md` (38 chain ops on 2026-11-05 + block syntax — the live count is the
 `ibLinqMethod` enum in `compiler/value.h`).
 
 ### 4.2 Throw by value, catch by const reference
@@ -240,7 +240,7 @@ The 13 metaobject types and their script-side namespace:
 | `Constant` | `Constants.<Name>` | Singleton values (company name, tax ID) |
 | `InformationRegister` | `InformationRegisters.<Name>` | Periodic / dimensioned facts (price lists, exchange rates) |
 | `AccumulationRegister` | `AccumulationRegisters.<Name>` | Quantitative balances (inventory, AR / AP) |
-| `AccountingRegister` | `AccountingRegisters.<Name>` | Double-entry bookkeeping (see `docs/register-totals-strategy.md`) |
+| `AccountingRegister` | `AccountingRegisters.<Name>` | Double-entry bookkeeping (see `docs/private/register-totals-strategy.md`) |
 | `ChartOfAccounts` | `ChartsOfAccounts.<Name>` | Account hierarchy for AccountingRegister |
 | `ChartOfCharacteristicTypes` | `ChartsOfCharacteristicTypes.<Name>` | The KINDS an account dimension can be, each narrowing what values it admits |
 | `ChartOfCalculationTypes` | `ChartsOfCalculationTypes.<Name>` | The calculation TYPES a calculation register records (salary, bonus, sick leave, income tax) and how they interact — three relation sections on every type: `Displacing`, `Base`, `Leading` |
@@ -250,15 +250,16 @@ The 13 metaobject types and their script-side namespace:
 
 Two further global namespaces exist for the external (out-of-configuration) variants:
 `ExternalDataProcessors.<Name>` and `ExternalReports.<Name>`. The full registered set is the
-`AppendProp` list in `backend/moduleManager/globalContextManager.cpp` — 17 namespaces (the 15
-metaobject ones plus `ScheduledJobs` and `SessionParameters`). The LINQ door has the same kinds under
+`AppendProp` list in `backend/moduleManager/globalContextManager.cpp` — 20 namespaces (the 15
+metaobject ones plus `Sequences`, `ScheduledJobs`, `SessionParameters`, `FunctionalOptions` and
+`BackgroundJobs`). The LINQ door has the same kinds under
 `Data.` — `Data.CalculationRegisters.<Name>`, `Data.ChartsOfCalculationTypes.<Name>`.
 
 Configuration is serialized through the `ibDataNode` tree: in storage as the node's own bytes
 (`ibBinaryProvider`), and as a directory of text files that loads back (`ibFileProvider`, see
 [configuration-files.md](public/configuration-files.md)). The JSON view of one node
 (`ibJsonProvider`) is lossy by design — read it, do not load a configuration from it. See
-`docs/configuration-compare.md` for the Compare/Merge feature.
+`docs/private/configuration-compare.md` for the Compare/Merge feature.
 
 ### 5.1 Calculation register — what a generator must get right
 
@@ -267,7 +268,7 @@ salary RATE, a position, a tax rate) is an `InformationRegister`; amounts that a
 (settlements with employees, year-to-date taxes) are an `AccumulationRegister`. A
 `CalculationRegister` is for results whose types displace one another over days (a sick leave cuts
 the salary), take their base from other types' results (a bonus of 10 % of last month's salary), or
-go stale when those change. Design and measurements: `docs/payroll-arc.md` § 11.
+go stale when those change. Design and measurements: `docs/private/payroll-arc.md` § 11.
 
 **The chart** (`ChartOfCalculationTypes`) — one element per calculation type.
 
@@ -401,7 +402,7 @@ foreach (b in tax.GetBase(resources, new Structure("Employee", "Accrual.Employee
 
 ### 5.2 Accounting register — the names a query uses
 
-Design and measurements: `docs/accounting-register-arc.md` (§ 7, § 8.3). What a generator must get
+Design and measurements: `docs/private/accounting-register-arc.md` (§ 7, § 8.3). What a generator must get
 right is mostly NAMES, and they depend on the register's mode and on the table being read.
 
 **The line.** `Correspondence` off (one-sided): `RecordType` + `Account` + `AccountDimension1..N`.
@@ -517,13 +518,13 @@ Mapping common ERP / business-application concepts to their OES form:
 | Singleton config value | Constant | One row, one value, typed |
 | Interactive utility / batch tool | DataProcessor | Forms + script, no persisted business data |
 | Read-only analytical output | Report | Form + LINQ / register query |
-| Save an object | `object.Write()` | Record-locks enforced; see `docs/record-locks.md` |
+| Save an object | `object.Write()` | Record-locks enforced; see `docs/private/record-locks.md` |
 | Add an accounting movement | `document.RegisterRecords.<RegisterName>.Add()` | Built 2026-08-13; see `accounting-register-arc.md`, `register-totals-strategy.md` |
-| Built-in query language | LINQ block / chain syntax | `from ... where ... select`; see `docs/linq.md` |
+| Built-in query language | LINQ block / chain syntax | `from ... where ... select`; see `docs/private/linq.md` |
 | Document posting handler | `Procedure Posting(Cancel, PostingMode)` in the Document's object module; `UndoPosting(Cancel)` for undoing | Writes register movements. The name is the engine's: a procedure under any other name (`OnPosting`) is never called, and the document posts with no movements and no error |
 | What becomes of a document's movements when it is posted again or its posting undone | the document's property `RegisterRecordsDeletion` | `Automatically` (default) — cleared before the posting handler runs and when the posting is undone; `OnUndoPosting` — kept when posted again (a set the handler fills replaces its own), cleared on undo; `Never` — the platform clears nothing on either, the configuration does. A deleted document takes its movements with it whatever the property says. A write is a clearing and a writing: nothing compares the old movements with the new |
 | Document date | `document.Date` | `ibDateTime` type |
-| Data-composition / pivot system | L5 data composer | Declarative filter/sort/grouping rendered into a query; see `docs/data-composer.md` |
+| Data-composition / pivot system | L5 data composer | Declarative filter/sort/grouping rendered into a query; see `docs/private/data-composer.md` |
 | Form model | Form / VisualHost | Single form layer, on the server (`frmserver.dll`); the same form is drawn by the thin client and the browser |
 | Client tier | Thin client / browser client | `frmclient.dll` under `enterprise-thin` / `designer-thin`; the browser client served by `webserver` — both over the client protocol |
 
@@ -533,31 +534,44 @@ Mapping common ERP / business-application concepts to their OES form:
 
 Drill into these only when the task touches the specific area.
 
-| Topic | Canonical doc |
-|---|---|
-| Project bootstrap, layers, modules | `docs/ARCHITECTURE.md` |
-| Build / clone / submodules | `docs/BUILD.md` |
-| Configuration Compare / Merge (`.oap`) | `docs/configuration-compare.md` |
-| OES script — full language | `docs/lambda.md`, `docs/closure-capture.md`, `docs/linq.md`, `docs/eval-scope-refactor.md` |
-| Query language / L2–L5 engine (LINQ → SQL) | `docs/query-language-arc.md` |
-| Data composition (L5 filter/sort/group) | `docs/data-composer.md`, `docs/ram-composer-decoupling.md` |
-| Row-level security / access policy (`Restrict`) | `docs/access-policy-rls.md`, `docs/data-policy-arc.md` |
-| Metadata system, CLSIDs, inheritance | `docs/ARCHITECTURE.md` §Metadata System, `docs/schema-first-metadata.md` |
-| Name binding / prepare-names | `docs/name-binding.md`, `docs/preparenames-bind-arc.md` |
-| Sessions, threading, registry | `docs/session-registry.md` |
-| DB access, connection pool, transactions | `docs/connection-pool.md` |
-| Concurrent-write protection | `docs/record-locks.md` |
-| Distribution (Firebird mesh / shara) | `docs/firebird-mesh-driver.md` |
-| Lists / trees / paging | `docs/paging-design.md`, `docs/dynamic-list.md` |
-| Forms architecture | `docs/backend-frontend-split.md`, `docs/ARCHITECTURE.md` §Form System |
-| Form attribute binding (dot-path sources) | `docs/form-attribute-binding.md` |
-| Doc/View subsystem (wx fork, client + server) | `docs/docview-fork.md` |
-| Copy / paste across the object model | `docs/copy-paste.md` |
-| UI palette / colours | `docs/ui-palette.md` |
-| Web frontend | `docs/web/` |
-| Accounting registers | `docs/accounting-register-arc.md`, `docs/register-totals-strategy.md`, `docs/value-audit.md` |
-| Payroll — calculation register, chart of calculation types, recalculation | `docs/payroll-arc.md` § 11 (as built), § 7.6 (measured) |
-| Syntax helper / inline reference | `docs/syntax-helper-design.md` |
+The public documents open for everyone; the ones under `docs/private/` open only for members of the
+organisation (an empty folder for everyone else — [README.md](README.md)).
+
+| Topic | Public | Private (design, as built) |
+|---|---|---|
+| Project bootstrap, layers, modules | [ARCHITECTURE.md](ARCHITECTURE.md) | |
+| Build / clone / submodules | [BUILD.md](BUILD.md) | |
+| Working with an assistant over MCP | [ai-quickstart.md](public/ai-quickstart.md) | |
+| A configuration as text files | [configuration-files.md](public/configuration-files.md) | |
+| Configuration Compare / Merge (`.oap`) | | `private/configuration-compare.md` |
+| OES script — full language | | `private/script-language.md`, `private/lambda.md`, `private/closure-capture.md`, `private/linq.md`, `private/eval-scope-refactor.md` |
+| Script API: numbers, dates, JSON, XML, HTTP | [number-model.md](public/number-model.md), [date-model.md](public/date-model.md), [json.md](public/json.md), [xml.md](public/xml.md), [http-client.md](public/http-client.md) | `private/system-functions.md`, `private/fnumber.md` |
+| Event handlers, functional options | [event-handlers.md](public/event-handlers.md), [functional-options.md](public/functional-options.md) | |
+| Query language / L2–L5 engine (LINQ → SQL) | [query-language.md](public/query-language.md) | `private/query-engine-layers.md`, `private/query-language-arc.md` |
+| Data composition (L5 filter/sort/group), reports | [reports.md](public/reports.md) | `private/data-composer.md`, `private/ram-composer-decoupling.md`, `private/report-engine.md` |
+| Roles, rights, row-level security (`restrict`) | [access-rights.md](public/access-rights.md) | `private/access-policy-rls.md`, `private/data-policy-arc.md` |
+| Applying a configuration to the database | [applying-a-configuration.md](public/applying-a-configuration.md) | `private/schema-authority.md` |
+| Application cluster, one base per process | [application-cluster.md](public/application-cluster.md) | `private/appcluster.md` |
+| Jobs: platform, scheduled, background | [jobs.md](public/jobs.md) | `private/job-manager.md`, `private/scheduled-jobs.md` |
+| Debugger | [debugger.md](public/debugger.md) | `private/debugger-architecture.md`, `private/debugger-per-session.md` |
+| Metadata system, CLSIDs, inheritance | [ARCHITECTURE.md](ARCHITECTURE.md) §Metadata System | `private/schema-first-metadata.md` |
+| Name binding / prepare-names | | `private/name-binding.md`, `private/preparenames-bind-arc.md` |
+| Sessions, threading, registry | | `private/session-registry.md` |
+| DB access, connection pool, transactions | | `private/connection-pool.md` |
+| Concurrent-write protection | [record-locks.md](public/record-locks.md) | `private/record-locks.md` |
+| Distribution (Firebird mesh / shara) | | `private/firebird-mesh-driver.md` |
+| Lists / trees / paging | | `private/table-model.md`, `private/paging-design.md`, `private/dynamic-list.md` |
+| Forms architecture | [thin-client.md](public/thin-client.md), [client-protocol.md](public/client-protocol.md), [ARCHITECTURE.md](ARCHITECTURE.md) §Form System | `private/form-engine.md`, `private/backend-frontend-split.md` |
+| Form attribute binding (dot-path sources) | | `private/form-attribute-binding.md` |
+| Doc/View subsystem (wx fork, client + server) | | `private/docview-fork.md` |
+| Copy / paste across the object model | | `private/copy-paste.md` |
+| UI palette / colours | | `private/ui-palette.md` |
+| Browser client | [browser-client.md](public/browser-client.md) | `private/web/` |
+| Registers, totals, accounting registers | [registers.md](public/registers.md) | `private/accounting-register-arc.md`, `private/register-totals-strategy.md`, `private/register-shared-machinery.md`, `private/value-audit.md` |
+| Payroll — calculation register, chart of calculation types, recalculation | | `private/payroll-arc.md` § 11 (as built), § 7.6 (measured) |
+| Syntax helper / inline reference | | `private/syntax-helper-design.md` |
+| The engine's own translations | [translations.md](public/translations.md) | |
+| The words the engine is built in | [vocabulary.md](public/vocabulary.md) | |
 
 ---
 
@@ -606,7 +620,7 @@ Stop and surface the issue rather than guessing:
 | Need to modify C++ source | Out of AI scope; needs human review for invariant preservation |
 | Need to add a plugin (.dll) | Same as above |
 | Schema change touches an existing populated table | Migration semantics need human judgement |
-| Cross-driver SQL portability concern (FB→PG fall-back) | `ibSqlDialect` is partial; per-config workarounds need review |
+| Cross-driver SQL portability concern (FB→PG fall-back) | `ibDialectDictionary` is partial; per-config workarounds need review |
 | Conflicting requirements from BA prose | Loop with the analyst, not guess |
 | Existing config has VES syntax — should new module also be VES? | Confirm style consistency before mixing |
 | Performance / concurrency design decision | Architect picks (e.g. trigger-maintained totals vs LIVE aggregation) |
@@ -618,15 +632,16 @@ Stop and surface the issue rather than guessing:
 
 When the architect reviews your generated PR, they look for:
 
-- **Commit messages in English**, `type(scope): summary` style — see
-  recent `git log --oneline`. No "co-authored by AI" footers, no
-  marketing language.
+- **Commit messages in English**: the title says what is now true, the
+  body why — see [development.md](development.md) §1 and recent
+  `git log --oneline`. No "co-authored by AI" footers, no marketing
+  language.
 - **One concern per commit** — refactors, features, fixes separated.
 - **Linked rationale** — what BA prompt drove what change. Architect
   should be able to verify "the analyst asked for X" → "metadata
   shows X" → "smoke-test confirms X".
 - **No emojis** in code, comments, or commit messages. (UI strings
-  and chat are different — see `feedback_english_code` in memory.)
+  are different.)
 - **No new dependency** without architect sign-off.
 
 ---
