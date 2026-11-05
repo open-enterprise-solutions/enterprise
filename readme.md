@@ -80,14 +80,15 @@ tree, forms, the language, queries and reports, and the pitfalls.
 - **Jobs** — scheduled and background jobs in sessions of their own, with a cross-process claim so a
   job runs once across a cluster; the platform's own housekeeping (totals folding and verification,
   Firebird sweep and backup) runs on the same manager.
-- **AI access over MCP** — an MCP server inside the designer (and per base on the application server), 113 tools across the platform: read and
+- **AI access over MCP** — an assistant's port in the designer and in the application client, the tools in
+  the engine (one MCP server per client, on the file base's or the application server's side), 132 tools across the platform: read and
   edit metadata and modules; apply the configuration with a rehearsal; run code on the
   application; ask the data questions and compose reports; drive the debugger; read and write the
   registration journal. Protected by a token, listening on loopback by default; every call is
   journalled.
-- **Application server** — `appserver` serves the bases its `server.conf` lists from one process:
-  Firebird and PostgreSQL side by side, one worker pool for all, and each base with its own
-  connections, sessions, locks, jobs and journal. Several servers may share a base; a desktop client
+- **Application server** — `appserver` serves one base of the server folder (Firebird and PostgreSQL
+  bases side by side in one `server.conf`) for the cluster that starts it: the base's connections,
+  sessions, locks, jobs and journal. Several servers may share a base; a file base opened by a client
   and a server may not use one at the same time. Passwords in its configuration are sealed
   (AES-256-GCM).
 - **Application cluster** — `appcluster` runs the same server folder as a server process per base and
@@ -138,9 +139,9 @@ On a copy of a 40 000-employee payroll base (Release, x86): a month's payroll re
 5. Build the solution (`Ctrl+Shift+B`). Binaries are placed in `bin\<Platform>\<Configuration>\`
    (`Win32` or `Win64`).
 6. Run `designer-thin.exe` to build a configuration, `enterprise-thin.exe` to work in it — or
-   `launcher.exe` to pick a base first (it starts the same two programs). `appserver.exe` serves the bases of a server folder with no
-   window, `appcluster.exe` the same folder with a process per base (`appcluster-tray.exe` shows and
-   steers it); both clients work in a base they serve, or in a file base.
+   `launcher.exe` to pick a base first (it starts the same two programs). `appcluster.exe` serves the bases of a server folder with no
+   window, an `appserver.exe` process per base (`appcluster-tray.exe` shows and steers it); both
+   clients work in a base it serves, or in a file base.
 
 ### macOS
 
@@ -220,7 +221,7 @@ git submodule update --init --recursive
 
 ```
 enterprise/
-├── enterprise.sln            # MSBuild solution (18 projects, Mbed TLS, llhttp and LodePNG among them)
+├── enterprise.sln            # MSBuild solution (19 projects, Mbed TLS, llhttp, LodePNG and expat among them)
 ├── CMakeLists.txt            # the cross-platform build, tests included
 ├── Common.props              # Shared MSBuild properties (paths, platforms)
 ├── ConfigurationDefs.props   # Preprocessor definitions per configuration
@@ -233,17 +234,16 @@ enterprise/
 │                             # organisation only and is empty for everyone else. The build never
 │                             # needs it, so links to docs/private/… will not open for you.
 └── src/
-    ├── 3rdparty/             # Git submodules: wxWidgets 3.3.4, Mbed TLS, Asio, llhttp, LodePNG, NanoSVG, cpp-httplib, nlohmann/json
+    ├── 3rdparty/             # Git submodules: wxWidgets 3.3.4, Mbed TLS, Asio, llhttp, expat, LodePNG, NanoSVG, date, cpp-httplib, nlohmann/json
     └── engine/
-        ├── core/             # What the engine and its clients share: values, strings, dates, nodes, the journal
+        ├── core/             # What the engine and its clients share: values, strings, dates, nodes, the query text, the journal
         ├── backend/          # Core engine DLL
         │   ├── compiler/     # Lexer, parser, bytecode, interpreter, LINQ
-        │   ├── query/        # The query language: parse, lower, render to SQL, run in memory
+        │   ├── query/        # The query language: lower, render to SQL, run in memory (its text is read in core)
         │   ├── composition/  # The report composer
         │   ├── calculation/  # The calculation register's engine (displacement, base, recalculation)
         │   ├── databaseLayer/# DB abstraction + drivers (Firebird, PostgreSQL, SQLite, ODBC)
         │   ├── metaCollection/  # Metadata: business objects, registers, charts, common objects
-        │   ├── mcp/          # The MCP server and its tools
         │   ├── job/          # Scheduled and background jobs
         │   ├── session/      # Sessions, their registry and worker pools
         │   ├── lock/         # Record locks, cluster-wide
@@ -253,7 +253,7 @@ enterprise/
         │   ├── propertyManager/
         │   └── system/       # Built-in functions and values
         ├── protocol/         # The client protocol: its contract (protocol.h) and connections
-        ├── frmserver/        # The server side of the thin client: sessions, forms, the client host
+        ├── frmserver/        # The server side of the thin client: sessions, forms, the client host, the MCP server and its tools
         ├── frmclient/        # The thin client's window, document/view and controls
         ├── fileserver/       # A file base in the thin client's process
         ├── enterprise-thin/  # The thin client runtime executable

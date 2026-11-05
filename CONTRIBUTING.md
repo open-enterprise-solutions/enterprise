@@ -118,7 +118,7 @@ that is the part somebody will need in a year. Long commit messages are normal h
 user-supplied values, whatever the surrounding legacy code does.
 
 **Backend stays GUI-free.** No wxWidgets includes under `src/engine/backend` — that boundary
-is what lets the engine run headless in the daemon, the web server and the tests.
+is what lets the engine run headless in the application server, the web server and the tests.
 
 **Build it on more than Windows if you can.** MSVC accepts things GCC and Clang refuse
 (ambiguous conversions, name hiding, unused-value rules), so a change that builds locally can
