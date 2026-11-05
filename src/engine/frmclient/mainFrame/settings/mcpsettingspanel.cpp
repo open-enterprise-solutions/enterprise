@@ -18,14 +18,17 @@ ibPanelMcpSettings::ibPanelMcpSettings(wxWindow* parent, int id, wxPoint pos, wx
 
 	wxStaticBoxSizer* box = new wxStaticBoxSizer(
 		new wxStaticBox(this, -1, _("Assistant access (MCP)")), wxVERTICAL);
+	// What a box holds is its frame's child, as wx has it — a sibling of the frame drawn over it is wx's assert, one line
+	// in the journal for each control every time the page opens. Their events still come up to the page.
+	wxStaticBox* const boxFrame = box->GetStaticBox();
 
-	m_enabled = new wxCheckBox(this, ID_McpEnabled,
+	m_enabled = new wxCheckBox(boxFrame, ID_McpEnabled,
 		_("Let an assistant reach this session"), wxDefaultPosition, wxDefaultSize, 0);
 	box->Add(m_enabled, 0, wxALL, 5);
 
 	// SAID PLAINLY, because a person deciding this is deciding how much to hand
 	// over — and the honest answer is "everything you can do here".
-	wxStaticText* what = new wxStaticText(this, wxID_ANY,
+	wxStaticText* what = new wxStaticText(boxFrame, wxID_ANY,
 		_("A connected assistant works as you, with your rights: it can do here what your roles "
 		  "allow you. It runs only while your session is open."),
 		wxDefaultPosition, wxDefaultSize, 0);
@@ -35,12 +38,12 @@ ibPanelMcpSettings::ibPanelMcpSettings(wxWindow* parent, int id, wxPoint pos, wx
 	wxFlexGridSizer* grid = new wxFlexGridSizer(2, 2, 0, 0);
 	grid->AddGrowableCol(1);
 
-	grid->Add(new wxStaticText(this, wxID_ANY, _("Address:")), 0, wxALL | wxALIGN_CENTER_VERTICAL, 5);
-	m_addressCtrl = new wxTextCtrl(this, ID_McpAddress, wxEmptyString);
+	grid->Add(new wxStaticText(boxFrame, wxID_ANY, _("Address:")), 0, wxALL | wxALIGN_CENTER_VERTICAL, 5);
+	m_addressCtrl = new wxTextCtrl(boxFrame, ID_McpAddress, wxEmptyString);
 	grid->Add(m_addressCtrl, 1, wxALL | wxEXPAND, 5);
 
-	grid->Add(new wxStaticText(this, wxID_ANY, _("Port:")), 0, wxALL | wxALIGN_CENTER_VERTICAL, 5);
-	m_portCtrl = new wxTextCtrl(this, ID_McpPort, wxEmptyString);
+	grid->Add(new wxStaticText(boxFrame, wxID_ANY, _("Port:")), 0, wxALL | wxALIGN_CENTER_VERTICAL, 5);
+	m_portCtrl = new wxTextCtrl(boxFrame, ID_McpPort, wxEmptyString);
 	grid->Add(m_portCtrl, 0, wxALL, 5);
 
 	box->Add(grid, 0, wxEXPAND, 5);
@@ -51,10 +54,10 @@ ibPanelMcpSettings::ibPanelMcpSettings(wxWindow* parent, int id, wxPoint pos, wx
 	// it off today should not have to change what happens every day to get that.
 	wxBoxSizer* liveRow = new wxBoxSizer(wxHORIZONTAL);
 
-	m_runButton = new wxButton(this, ID_McpRun, _("Start now"));
+	m_runButton = new wxButton(boxFrame, ID_McpRun, _("Start now"));
 	liveRow->Add(m_runButton, 0, wxALL, 5);
 
-	m_stateLabel = new wxStaticText(this, wxID_ANY, wxEmptyString);
+	m_stateLabel = new wxStaticText(boxFrame, wxID_ANY, wxEmptyString);
 	liveRow->Add(m_stateLabel, 1, wxALL | wxALIGN_CENTER_VERTICAL, 5);
 
 	box->Add(liveRow, 0, wxEXPAND, 0);
@@ -64,6 +67,7 @@ ibPanelMcpSettings::ibPanelMcpSettings(wxWindow* parent, int id, wxPoint pos, wx
 	// read-only and why it is empty until something is actually listening.
 	wxStaticBoxSizer* handout = new wxStaticBoxSizer(
 		new wxStaticBox(this, -1, _("Give this to your assistant")), wxVERTICAL);
+	wxStaticBox* const handoutFrame = handout->GetStaticBox();
 
 	// ⭐ SETUP IS A LINE TO PASTE, NOT A FORMAT TO UNDERSTAND. Whoever sets this up is not
 	// necessarily a programmer — an accountant who bought an assistant subscription is the case
@@ -75,39 +79,39 @@ ibPanelMcpSettings::ibPanelMcpSettings(wxWindow* parent, int id, wxPoint pos, wx
 	// tied to no vendor - any client on this machine connects the same way. The convenience
 	// command below is one PRODUCT's spelling of it, and leading with that would quietly tell
 	// somebody using a different assistant that they were in the wrong place.
-	wxStaticText* howTo = new wxStaticText(this, wxID_ANY,
+	wxStaticText* howTo = new wxStaticText(handoutFrame, wxID_ANY,
 		_("Any assistant that speaks MCP can connect from this machine. Put this into its server "
 		  "configuration - it is the standard form and needs nothing else:"));
 	howTo->Wrap(FromDIP(420));
 	handout->Add(howTo, 0, wxALL, 5);
 
-	m_endpointCtrl = new wxTextCtrl(this, wxID_ANY, wxEmptyString,
+	m_endpointCtrl = new wxTextCtrl(handoutFrame, wxID_ANY, wxEmptyString,
 		wxDefaultPosition, FromDIP(wxSize(-1, 190)),   // the eleven lines below, and the scroll bar of the longest
 		wxTE_READONLY | wxTE_MULTILINE | wxTE_DONTWRAP);
 	handout->Add(m_endpointCtrl, 1, wxALL | wxEXPAND, 5);
 
-	wxButton* copyBlock = new wxButton(this, ID_McpCopyBlock, _("Copy the configuration"));
+	wxButton* copyBlock = new wxButton(handoutFrame, ID_McpCopyBlock, _("Copy the configuration"));
 	handout->Add(copyBlock, 0, wxLEFT | wxBOTTOM, 5);
 
 	// THE SHORTCUT, labelled as belonging to ONE product. Offered because it is genuinely the
 	// easiest thing to do when it applies - a line in a terminal beats editing a file - and named
 	// so nobody using something else tries it and concludes the server is broken.
-	wxStaticText* orCommand = new wxStaticText(this, wxID_ANY,
+	wxStaticText* orCommand = new wxStaticText(handoutFrame, wxID_ANY,
 		_("Using Claude Code? This one line does the same thing:"));
 	orCommand->Wrap(FromDIP(420));
 	handout->Add(orCommand, 0, wxTOP | wxLEFT | wxRIGHT, 5);
 
-	m_commandCtrl = new wxTextCtrl(this, wxID_ANY, wxEmptyString,
+	m_commandCtrl = new wxTextCtrl(handoutFrame, wxID_ANY, wxEmptyString,
 		wxDefaultPosition, FromDIP(wxSize(-1, 70)),    // the command wrapped, key included
 		wxTE_READONLY | wxTE_MULTILINE | wxTE_BESTWRAP);
 	handout->Add(m_commandCtrl, 0, wxALL | wxEXPAND, 5);
 
-	wxButton* copyCommand = new wxButton(this, ID_McpCopyCommand, _("Copy the command"));
+	wxButton* copyCommand = new wxButton(handoutFrame, ID_McpCopyCommand, _("Copy the command"));
 	handout->Add(copyCommand, 0, wxLEFT | wxBOTTOM, 5);
 
 	// ⚠ SAID LAST, WHERE IT IS ABOUT TO BE ACTED ON. Both of the things above carry the key, and
 	// a person is one paste away from handing over everything they can do in this base.
-	wxStaticText* warning = new wxStaticText(this, wxID_ANY,
+	wxStaticText* warning = new wxStaticText(handoutFrame, wxID_ANY,
 		_("Both contain your access key. Whoever holds it can do here everything you can - put it "
 		  "into your own assistant and nowhere else."));
 	warning->Wrap(FromDIP(420));
