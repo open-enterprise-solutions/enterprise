@@ -66,6 +66,7 @@ add_executable(oes_tests
     test_firebirdLease.cpp
     test_firebirdBatchInsert.cpp
     test_firebirdDates.cpp
+    test_firebirdNumbers.cpp
     test_firebirdZoneRules.cpp
     test_logger.cpp
     test_dbTaxonomy.cpp

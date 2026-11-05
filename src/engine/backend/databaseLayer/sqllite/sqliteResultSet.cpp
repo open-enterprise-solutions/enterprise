@@ -146,14 +146,17 @@ double ibDatabaseResultSetSQLite::GetResultDouble(int nField)
 	return dblValue;
 }
 
+// ⭐ A NUMBER IS READ AS SQLITE SPELLS IT, as the PostgreSQL driver reads its own text. SQLite keeps a NUMERIC as a
+// double, or a whole one as an INTEGER, and spells a double with fifteen digits ("%!.15g": the decimal it was written
+// as). Read through sqlite3_column_double it went to ibNumber(double), whose seventeen digits are the double's own:
+// 0.43 came back 0.42999999999999999, every movement carried its tail into the sums made of it, and a register's
+// balance added up in memory missed the server's SUM in the last places (#646, 2026-11-05). An INTEGER is spelled
+// whole — all sixty-four bits, which a double does not carry. NULL is the empty text, and reads as zero.
 ibNumber ibDatabaseResultSetSQLite::GetResultNumber(int nField)
 {
-	ibNumber dblValue = -1;
-	if (m_pSqliteStatement == nullptr)
-		m_pSqliteStatement = m_pStatement->GetLastStatement();
-	dblValue = sqlite3_column_double(m_pSqliteStatement, nField - 1);
-
-	return dblValue;
+	ibNumber value;
+	value.FromString(GetResultString(nField));
+	return value;
 }
 
 void* ibDatabaseResultSetSQLite::GetResultBlob(int nField, ibMemoryBuffer& buffer)

@@ -5,6 +5,9 @@
 #include "backend/databaseLayer/databaseErrorCodes.h"
 #include "backend/databaseLayer/databaseLayerException.h"
 
+#include <charconv>   // std::to_chars — a floating value's digits, with a point whatever the locale
+#include <limits>     // std::numeric_limits<>::digits10 — the decimal digits a floating type carries through itself
+
 ibDatabaseResultSetFirebird::ibDatabaseResultSetFirebird(ibInterfaceFirebird* pInterface)
 	: ibDatabaseResultSet()
 {
@@ -368,6 +371,22 @@ double ibDatabaseResultSetFirebird::GetResultDouble(int nField)
 	return dblReturn;
 }
 
+// ⭐ A FLOATING VALUE READS AS THE DECIMAL IT STANDS FOR: its type's own digits (digits10 — fifteen for a double, six
+// for a float), as SQLite spells its doubles (sqliteResultSet.cpp). The columns are NUMERIC and read exactly; a float
+// comes only from what the server computed in floating point, and through ibNumber(double) it took the double's own
+// seventeen digits — 0.43 read 0.42999999999999999, where the same query read 0.43 on SQLite (2026-11-05). NaN and
+// infinity are no decimal, and read as zero, as ibNumber(double) collapses them.
+template <class Float>
+static ibNumber DecimalOf(Float value)
+{
+	char digits[32];
+	const std::to_chars_result written = std::to_chars(digits, digits + sizeof(digits), value,
+		std::chars_format::general, std::numeric_limits<Float>::digits10);
+	ibNumber decimal;
+	decimal.FromString(ibString::FromUTF8(digits, static_cast<size_t>(written.ptr - digits)));
+	return decimal;
+}
+
 ibNumber ibDatabaseResultSetFirebird::GetResultNumber(int nField)
 {
 	// ⚠ ZERO IS THE DEFAULT CONSTRUCTOR, NOT `0.00`. A double literal goes through ibNumber(double),
@@ -389,13 +408,13 @@ ibNumber ibDatabaseResultSetFirebird::GetResultNumber(int nField)
 		{
 			float v = 0.0f;
 			memcpy(&v, pVar->sqldata, sizeof(v));
-			dblReturn = v;
+			dblReturn = DecimalOf(v);
 		}
 		else if (nType == SQL_DOUBLE)
 		{
 			double v = 0.0;
 			memcpy(&v, pVar->sqldata, sizeof(v));
-			dblReturn = v;
+			dblReturn = DecimalOf(v);
 		}
 		// ⭐ A SCALED INTEGER IS ITS DIGITS AND ITS SCALE — the decimal point is moved (ShiftDecimal), not
 		// divided for scale times over. Only a scale that lowers the value is the column's own; a

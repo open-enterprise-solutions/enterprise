@@ -398,6 +398,31 @@ TEST(SqliteNumberBinding, OnlyANumberADoubleCannotCarryIsBoundAsAnInteger) {
 	db->CloseStatement(statement);
 }
 
+// ...and a number reads back as the decimal it was written as, the way SQLite spells it. Read through the double, 0.43
+// came back 0.42999999999999999 and a register's movements summed in memory missed the server's SUM (#646, 2026-11-05);
+// the sixty bits came back with the +1 dropped. A sum the server made of doubles reads at fifteen digits too, and NULL
+// as zero.
+TEST(SqliteNumberBinding, ANumberReadsBackAsTheDecimalItWasWrittenAs) {
+	auto db = std::make_shared<ibDatabaseLayerSQLite>();
+	ASSERT_TRUE(db->Open(wxT(":memory:")));
+
+	const ibNumber fraction(ibString(wxT("0.43")));
+	const long long sixtyBits = 1152921504606846977LL;
+	ibPreparedStatement* statement = db->PrepareStatement(wxT("SELECT ?, ?, 10.01 + 23.42, NULL"));
+	ASSERT_NE(statement, nullptr);
+	statement->SetParamNumber(1, fraction);
+	statement->SetParamNumber(2, ibNumber(sixtyBits));
+	ibDatabaseResultSet* rs = statement->RunQueryWithResults();
+	ASSERT_NE(rs, nullptr);
+	ASSERT_TRUE(rs->Next());
+	EXPECT_EQ(0, rs->GetResultNumber(1).Compare(fraction)) << rs->GetResultNumber(1).ToString();
+	EXPECT_EQ(0, rs->GetResultNumber(2).Compare(ibNumber(sixtyBits))) << rs->GetResultNumber(2).ToString();
+	EXPECT_EQ(0, rs->GetResultNumber(3).Compare(ibNumber(ibString(wxT("33.43"))))) << rs->GetResultNumber(3).ToString();
+	EXPECT_EQ(0, rs->GetResultNumber(4).Compare(ibNumber())) << rs->GetResultNumber(4).ToString();
+	statement->CloseResultSet(rs);
+	db->CloseStatement(statement);
+}
+
 // A sequence with nothing but its documents is one border. The register save used to refuse that
 // shape ("Doesn't have any dimension, resource or attribute") and the refusal aborted the whole
 // configuration. An information register with the same empty body is still refused: that table
