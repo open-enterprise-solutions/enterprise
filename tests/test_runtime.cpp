@@ -4771,6 +4771,8 @@ TEST(RuntimeTest, PictureLibNamesTheConfigurationsPicturesAndTheEngines) {
 	EXPECT_FALSE(bound->second.m_scopeContext);
 	ibValue* library = bound->second.m_value;
 	ASSERT_NE(library, nullptr);
+	// The compiler asks every context value for its type; one not registered asserts there.
+	EXPECT_NE(library->GetClassType(), static_cast<ibClassID>(0));
 
 	ibCompileCode cc(ibT("test"), ibT("memory"), false);
 	cc.AddContextVariable(ibT("PictureLib"), library, false);

@@ -77,3 +77,7 @@ bool ibValuePictureLib::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 	pvarPropVal = ibValue::CreateObjectValue<ibValuePicture>(m_pictures[index]);
 	return true;
 }
+
+// SYSTEM, not a value type: a script cannot make one, the module manager vends it. It still needs the entry — the
+// compiler asks every context value for its type (PrepareModuleData), and a type not in the registry asserts there.
+SYSTEM_TYPE_REGISTER(ibValuePictureLib, "PictureLib");
