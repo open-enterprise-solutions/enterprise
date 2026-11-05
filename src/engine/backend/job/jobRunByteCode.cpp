@@ -40,6 +40,10 @@ namespace {
 // the active ones and the last ones that ended (ibJobManager::GetBackgroundJobs). A designer that reconnects, or a second
 // assistant on the same application, can still ask after a run somebody else started; one that dropped out
 // of the manager's list answers as unknown, as one that never existed does.
+//
+// ⚠ WHICH MANAGER — the base's this thread works for (GetJobManager asks the calling thread's base). A command
+// over the debugger's wire is handled for the base the debugger server belongs to (EntryClient's scope), so
+// code_status / code_cancel ask the application's manager, the one that started the run.
 std::shared_ptr<ibBackgroundRun> Recall(const ibString& session)
 {
 	ibGuid uuid;

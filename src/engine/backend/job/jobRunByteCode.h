@@ -109,6 +109,11 @@ public:
 	// ⚠ THE REFUSAL RIDES IN THE STATE, so a false RETURN says only "read m_refusal".
 	static bool Start(const ibJobRunRequest& request, ibJobRunByteCodeState& state);
 
+	// ⭐ WHOSE RUNS ARE ASKED — the manager of the base the asking thread works for. Over MCP that is the
+	// debugger's connection thread, which works for the base its server debugs (ibApplicationInstanceScope in
+	// ibDebuggerServerConnection::EntryClient): the APPLICATION the designer started, never the designer's own
+	// base. A run is answered while it runs and among the last ibJobManager::kKeptBackgroundJobs that ended;
+	// one that dropped out answers as unknown.
 	static bool Status(const ibString& token, ibJobRunByteCodeState& state);
 
 	// Cooperative: the flag is raised and the code unwinds at its next loop boundary. ⚠ Whatever a
