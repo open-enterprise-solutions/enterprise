@@ -1730,8 +1730,13 @@ public:
 		//
 		// 🛑 IT WAS WALKED HERE, a road of its own beside the engine's, and a script had none at all: its Source write
 		// was dropped (ibPropertySource::SetDataValue answered false and did nothing).
+		// …and its owner told, as the designer's inspector tells it (ibFormDesignView::SetProperty): what a control does
+		// when its source changes — a radio button dropping a value the new field cannot hold — is the control's, by
+		// whichever door the binding came.
 		try {
+			const ibVariant before = binding->GetValue();
 			binding->SetDataValue(ibValue(ArgPath().Text(params)));
+			binding->GetPropertyObject()->OnPropertyChanged(binding, before, binding->GetValue());
 		}
 		catch (const ibBackendInterruptException&) {
 			form->DecrRef();

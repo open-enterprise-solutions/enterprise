@@ -29,6 +29,7 @@
 #include "backend/system/value/valueMap.h"  // ibValueStructure, g_valueStructureCLSID
 #include "frmserver/visualView/ctrl/form.h"          // a real form, DataSource bound on it
 #include "frmserver/visualView/ctrl/formAttribute.h" // the attribute cell the bind points at
+#include "backend/propertyManager/property/propertySource.h" // a radio button bound, as the inspector binds it
 #include "frmserver/visualView/ctrl/tableBox.h"     // a table bound to a value table the module added
 #include "backend/system/value/valueType.h"         // ibValueTypeDescription — an attribute's type, as the list reads it
 #include "core/serialize/dataBuilder.h"                // a control's saved node and its state
@@ -4749,4 +4750,210 @@ TEST(RuntimeTest, ValueListIsATableSourceWithTheKindsColumns) {
 	ASSERT_TRUE(list->GetValueByMetaID(list->GetItem(0), ibValueValueList::ePicture, picture));
 	EXPECT_EQ(g_valuePictureCLSID, picture.GetClassType());
 	EXPECT_TRUE(picture.IsEmpty());
+}
+
+// RADIO BUTTONS, MADE AS A FORM MAKES THEM (NewObject) AND READ AS A CLIENT READS THEM (the State OnUpdate writes):
+// the class is frmserver's own, so nothing here names it — its properties by name, its state by the protocol's words.
+namespace {
+
+struct RadioFrame {
+	std::shared_ptr<FramedSession> session;
+	KeyFrame frame;
+	ibSessionScope scope;
+	explicit RadioFrame(const ibChar* name)
+		: session(std::make_shared<FramedSession>(name, ibSessionKind::Enterprise)),
+		  frame(ibApplicationInstance::GetSessionRegistry()->MintUnlisted(session)),
+		  scope(session.get())
+	{
+		session->Attach(&frame);
+	}
+};
+
+ibValueFrame* NewRadio(ibValueForm* form)
+{
+	return form->NewObject(ibT("Radiobutton"), form);
+}
+
+void BindRadio(ibValueFrame* radio, ibSourceId attribute)
+{
+	ibPropertySource* const source = dynamic_cast<ibPropertySource*>(radio->GetProperty(ibT("Source")));
+	ASSERT_NE(source, nullptr);
+	source->SetValue(ibSourceDescription(std::vector<ibSourceId>{ attribute }));
+}
+
+ibValue ChoiceOf(ibValueFrame* radio)
+{
+	ibValue value;
+	radio->GetProperty(ibT("ChoiceValue"))->GetDataValue(value);
+	return value;
+}
+
+bool ShownSelected(ibValueFrame* radio)
+{
+	ibDataNode state;
+	radio->OnUpdate(state, nullptr);
+	return state.GetValue<bool>(ibProtocol::ibForm::ibState::Selected);
+}
+
+} // namespace
+
+// RADIO BUTTONS BOUND TO ONE FIELD ARE ONE SWITCH. Each stands for a value of the field (ChoiceValue): it is shown
+// selected while the field holds that value, and a click writes it in — the one selected before reads the field back
+// as not its own.
+TEST_F(FormRuntime, RadioButtonsBoundToOneFieldAreOneSwitch) {
+	RadioFrame frame(ibT("radio-switch"));
+	ibValuePtr<ibValueForm> form(new ibValueForm());
+	ibFormAttributeValue* const kind = form->AddAttribute(ibT("Kind"), g_valueNumberCLSID, ibValue());
+	ASSERT_NE(kind, nullptr);
+	kind->SetHeldValue(ibValue(2));
+
+	ibValueFrame* const first = NewRadio(form);
+	ibValueFrame* const second = NewRadio(form);
+	ASSERT_NE(first, nullptr);
+	ASSERT_NE(second, nullptr);
+	BindRadio(first, kind->GetId());
+	BindRadio(second, kind->GetId());
+	ASSERT_TRUE(first->GetProperty(ibT("ChoiceValue"))->SetDataValue(ibValue(1)));
+	ASSERT_TRUE(second->GetProperty(ibT("ChoiceValue"))->SetDataValue(ibValue(2)));
+
+	EXPECT_FALSE(ShownSelected(first));
+	EXPECT_TRUE(ShownSelected(second));
+
+	EXPECT_TRUE(first->OnClientEvent(ibProtocol::ibEvent::ibKind::Toggle, ibDataNode()));
+
+	ibValue held;
+	ASSERT_TRUE(form->GetValueByAttributePath(ibSourceDescription(kind->GetId()), held));
+	EXPECT_EQ(held.GetInteger(), 1);
+	EXPECT_TRUE(ShownSelected(first));
+	EXPECT_FALSE(ShownSelected(second));
+}
+
+// AN UNBOUND RADIO BUTTON IS THE PLAIN ONE IT ALWAYS WAS: its Selected decides, and a click selects it among the
+// unbound buttons beside it.
+TEST_F(FormRuntime, UnboundRadioButtonIsSelectedAmongItsNeighbours) {
+	RadioFrame frame(ibT("radio-unbound"));
+	ibValuePtr<ibValueForm> form(new ibValueForm());
+	ibValueFrame* const first = NewRadio(form);
+	ibValueFrame* const second = NewRadio(form);
+	ASSERT_NE(first, nullptr);
+	ASSERT_NE(second, nullptr);
+	ASSERT_TRUE(first->GetProperty(ibT("Selected"))->SetDataValue(ibValue(true)));
+
+	EXPECT_TRUE(ShownSelected(first));
+	EXPECT_FALSE(ShownSelected(second));
+
+	EXPECT_TRUE(second->OnClientEvent(ibProtocol::ibEvent::ibKind::Toggle, ibDataNode()));
+	EXPECT_FALSE(ShownSelected(first));
+	EXPECT_TRUE(ShownSelected(second));
+}
+
+// THE VALUE A RADIO BUTTON STANDS FOR IS SAVED AS THE VALUE IT IS — a number stays a number, a string a string, a date
+// a date — and read back the same, by the form's own write and read of the control.
+TEST_F(FormRuntime, RadioButtonChoiceValueSurvivesASave) {
+	RadioFrame frame(ibT("radio-value"));
+	ibValuePtr<ibValueForm> form(new ibValueForm());
+	const ibValue values[] = { ibValue(42), ibValue(ibString(ibT("Retail"))), ibValue(ibDateTime(2026, 10, 29)), ibValue(true) };
+	for (const ibValue& value : values) {
+		ibValueFrame* const written = NewRadio(form);
+		ASSERT_NE(written, nullptr);
+		ASSERT_TRUE(written->GetProperty(ibT("ChoiceValue"))->SetDataValue(value));
+		ibDataNode node;
+		ASSERT_TRUE(written->WriteData(node));
+
+		ibValueFrame* const read = NewRadio(form);
+		ASSERT_NE(read, nullptr);
+		ASSERT_TRUE(read->ReadData(node));
+		const ibValue got = ChoiceOf(read);
+		EXPECT_EQ(got.GetType(), value.GetType());
+		EXPECT_TRUE(got == value) << got.GetString().ToStdString();
+	}
+}
+
+// A VALUE THAT CANNOT BE READ IS SAID, NOT DROPPED IN SILENCE — a member of an enumeration deleted since the form was
+// saved. The form still reads (one button must not take the form with it); the button stands for none, and the
+// refusal goes to the person. The property itself raises rather than answering false.
+TEST_F(FormRuntime, RadioButtonValueThatCannotBeReadStandsForNone) {
+	RadioFrame frame(ibT("radio-unread"));
+	ibValuePtr<ibValueForm> form(new ibValueForm());
+
+	// A value of a type nobody has — as a member deleted since reads.
+	auto nobodys = std::make_shared<ibDataNode>();
+	nobodys->SetValue(kValueFieldClsid, ibString(ibT("12345")));
+	ibDataNode node;
+	node.SetProperty(ibT("ChoiceValue"), ibDataValue::Child(nobodys));
+
+	ibValueFrame* const read = NewRadio(form);
+	ASSERT_NE(read, nullptr);
+	EXPECT_NO_THROW(EXPECT_TRUE(read->ReadData(node)));
+	EXPECT_TRUE(ChoiceOf(read).IsEmpty());
+
+	ibValueFrame* const direct = NewRadio(form);
+	ASSERT_NE(direct, nullptr);
+	EXPECT_THROW(direct->GetProperty(ibT("ChoiceValue"))->SetNodeValue(ibDataValue::Child(nobodys)), ibCoreException);
+}
+
+// THE INSPECTOR NAMES A CHOICE BY ITS ID — a boolean's True / False, an enumeration's member — and an empty text is no
+// value at all.
+TEST_F(FormRuntime, RadioButtonChoiceValueIsChosenByItsId) {
+	RadioFrame frame(ibT("radio-choice"));
+	ibValuePtr<ibValueForm> form(new ibValueForm());
+	ibFormAttributeValue* const flag = form->AddAttribute(ibT("Flag"), g_valueBooleanCLSID, ibValue());
+	ASSERT_NE(flag, nullptr);
+	ibValueFrame* const radio = NewRadio(form);
+	ASSERT_NE(radio, nullptr);
+	BindRadio(radio, flag->GetId());
+
+	ibProperty* const value = radio->GetProperty(ibT("ChoiceValue"));
+	auto chosen = std::make_shared<ibDataNode>();
+	chosen->SetValue(ibProtocol::ibSchema::ibProperties::Id, static_cast<std::int32_t>(1));
+	ASSERT_TRUE(value->SetNodeValue(ibDataValue::Child(chosen)));
+	EXPECT_EQ(ChoiceOf(radio).GetType(), ibValueTypes::TYPE_BOOLEAN);
+	EXPECT_TRUE(ChoiceOf(radio).GetBoolean());
+
+	ASSERT_TRUE(value->SetNodeValue(ibDataValue::String(ibT(""))));
+	EXPECT_TRUE(ChoiceOf(radio).IsEmpty());
+}
+
+// BOUND ELSEWHERE, A RADIO BUTTON DROPS A VALUE THE NEW FIELD CANNOT HOLD — as the designer's inspector and form_bind
+// tell it (OnPropertyChanged); a value the new field holds stays. Saved with one it cannot hold, the form refuses,
+// naming the button.
+TEST_F(FormRuntime, RadioButtonRebindDropsAValueTheNewFieldCannotHold) {
+	RadioFrame frame(ibT("radio-rebind"));
+	ibValuePtr<ibValueForm> form(new ibValueForm());
+	ibFormAttributeValue* const count = form->AddAttribute(ibT("Count"), g_valueNumberCLSID, ibValue());
+	ibFormAttributeValue* const amount = form->AddAttribute(ibT("Amount"), g_valueNumberCLSID, ibValue());
+	ibFormAttributeValue* const name = form->AddAttribute(ibT("Name"), g_valueStringCLSID, ibValue());
+	ASSERT_NE(count, nullptr);
+	ASSERT_NE(amount, nullptr);
+	ASSERT_NE(name, nullptr);
+
+	ibValueFrame* const radio = NewRadio(form);
+	ASSERT_NE(radio, nullptr);
+	BindRadio(radio, count->GetId());
+	ASSERT_TRUE(radio->GetProperty(ibT("ChoiceValue"))->SetDataValue(ibValue(3)));
+
+	// …to another number: 3 is one it holds.
+	ibProperty* const source = radio->GetProperty(ibT("Source"));
+	ibVariant before = source->GetValue();
+	BindRadio(radio, amount->GetId());
+	radio->OnPropertyChanged(source, before, source->GetValue());
+	EXPECT_EQ(ChoiceOf(radio).GetInteger(), 3);
+
+	// …to a string: it is not.
+	before = source->GetValue();
+	BindRadio(radio, name->GetId());
+	radio->OnPropertyChanged(source, before, source->GetValue());
+	EXPECT_TRUE(ChoiceOf(radio).IsEmpty());
+
+	// Rebound by a door that does not tell it, the save refuses and names the button.
+	ASSERT_TRUE(radio->GetProperty(ibT("ChoiceValue"))->SetDataValue(ibValue(7)));
+	ibDataNode node;
+	try {
+		radio->WriteData(node);
+		ADD_FAILURE() << "a value its source cannot hold was saved";
+	}
+	catch (const ibCoreException& refused) {
+		EXPECT_NE(refused.GetErrorDescription().Find(radio->GetControlName()), wxNOT_FOUND)
+			<< refused.GetErrorDescription().ToStdString();
+	}
 }
