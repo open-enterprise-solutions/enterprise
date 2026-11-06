@@ -25,6 +25,8 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <set>
+#include <vector>
 #include <thread>
 
 #include <wx/string.h>
@@ -74,7 +76,8 @@ public:
 	// The connection closed: the clients logged in through it are logged out.
 	void Disconnect(const void* connection);
 
-	// True when a client has logged in through this connection, or its debugger listens on it (protocol 6). The
+	// True when a client has logged in through this connection, its debugger listens on it (protocol 6), or a web server
+	// listens on it to the base's addresses (`addresses`). The
 	// listener uses it to tell a socket that is only holding a thread from one the half-hour round already watches.
 	bool LoggedIn(const void* connection) const;
 
@@ -93,6 +96,10 @@ public:
 	// …and THE CLIENT'S ASSISTANT SERVER SAID SOMETHING UNASKED (protocol 7): sent as it is, `mcp {Client, Message}`, to the
 	// connection its transport listens on (ibProtocol::ibMcp). None listening — not told.
 	void NotifyMcp(const ibClientInstance* instance, const ibString& message);
+
+	// THE BASE'S WEB ADDRESSES CHANGED (backend/served/servedAddressRegistry.h): every connection that asked for them
+	// (protocol `addresses`) is sent `addresses {Addresses}`, the whole list.
+	void NotifyAddresses(const std::vector<struct ibServedAddress>& addresses);
 
 	// The host serving this base — what a door outside the library (an MCP tool) reaches the clients by.
 	static ibClientHost* Find(const ibApplicationInstance* applicationInstance);
@@ -209,6 +216,12 @@ private:
 
 	void RoundBody();
 
+	// protocol `addresses` — the list onto `result`, and the connection subscribed to it.
+	bool Addresses(const void* connection, ibDataNode& result, ibProtocol::ibRefusal& refusal, ibString& error);
+	// protocol `serve` — the request handed to its entry's kind, the answer onto `result`.
+	bool Serve(const ibDataNode& params, const ibString& address, ibDataNode& result, ibProtocol::ibRefusal& refusal,
+		ibString& error);
+
 	ibApplicationInstance* m_applicationInstance;
 	unsigned               m_route;
 
@@ -216,6 +229,10 @@ private:
 	std::map<ibString, std::shared_ptr<Client>>    m_clients;
 	// How each connection is told something (SetNotifier), under m_mutex.
 	std::map<const void*, std::function<void(const ibMemoryBuffer& packet)>> m_notifiers;
+	// The connections that asked for the web addresses (`addresses`), under m_mutex; Disconnect forgets one. The
+	// registry is listened to from the first of them until the host goes.
+	std::set<const void*>   m_addressConnections;
+	std::uint64_t           m_addressListening = 0;
 
 	std::mutex              m_roundMutex;
 	std::condition_variable m_roundSignal;

@@ -12,6 +12,11 @@
 //                                 address's; the page's own files beside it (/<publication>/js/…)
 //   WS   /<publication>/client    a connection: each text message one JSON-RPC request, answered by its response
 //   POST /<publication>/client    one request, its response
+//   *    /<publication>/<path>/…  what the base itself answers there — its web addresses (backend/served/
+//                                 servedAddress.h): an HTTP service of its configuration, an assistant's channel. The
+//                                 web server knows no kind: it asks the base for the list (protocol `addresses`, which
+//                                 also tells it every change), mounts each path, and hands what comes there to the base
+//                                 (`serve`) on threads of their own
 //
 // Started by hand it narrates in its console and stays until Ctrl+C; later it becomes a service.
 //
@@ -33,6 +38,9 @@
 //                                   edit is served at the next request, with no build
 //   Origins=                        the pages of other sites that may open a socket here, comma-separated
 //   Workers=                        the threads that call the bases; empty — four per core, 32 at least
+//   ServiceWorkers=8                the threads a base's addresses are served on — a request waits there, not on Workers
+//   ServiceCalls=64                 the requests to addresses at once, waiting ones counted; past it — 503, Retry-After
+//   ServiceWait=60                  seconds a request to an address waits for the base's answer; past it — 504
 //   [trade]                         a publication: the base at /trade/client
 //   Kind=firebird                   firebird — a file base, opened here from its Directory
 //   Directory=bases/trade
@@ -59,6 +67,8 @@
 #include "core/net/ports.h"
 
 class ibProtocolFileBase;
+class ibServedPublication;
+class ibServeQueue;
 
 // What the web server says goes through Print, not the journal macros: those compile to nothing in a release build,
 // and this is what a person watching the console must always see.
@@ -90,6 +100,9 @@ struct ibWebConfig {
 	ibString                      m_root;
 	std::vector<ibString>         m_origins;
 	long                          m_workers = 0;
+	long                          m_serviceWorkers = 8;    // the base's addresses: their own threads,
+	long                          m_serviceCalls = 64;     // …how many at once,
+	long                          m_serviceWait = 60;      // …and how long one waits, in seconds
 	std::vector<ibWebPublication> m_publications;
 	ibString                      m_manifest;   // a file the page's address is written to once the port is open: the
 	                                            // last publication's - the command line's goes last (--manifest)
@@ -118,12 +131,19 @@ private:
 	// The connections let go first — each browser's clients leave their base — and then the file bases.
 	void Stop();
 
+	// THE BASE'S ADDRESSES of a publication — asked for, listened to and mounted (ibServedPublication).
+	void Serve(const ibWebPublication& publication, const ibProtocolFileBase* base);
+
 	const ibWebConfig& m_config;
 	ibHttpServer       m_http;
 
 	// Every publication served, by name: the file base opened here for it, each the server of its browsers — none for
 	// an application server's.
 	std::map<ibString, std::unique_ptr<ibProtocolFileBase>> m_bases;
+
+	// The requests to the bases' addresses — their threads, their count, their wait — and each publication's list.
+	std::unique_ptr<ibServeQueue>                            m_serveQueue;
+	std::map<ibString, std::shared_ptr<ibServedPublication>> m_served;
 };
 
 #endif

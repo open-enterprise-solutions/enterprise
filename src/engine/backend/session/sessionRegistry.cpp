@@ -657,6 +657,12 @@ void ibSessionRegistry::OnLastDisconnect(VoidCallback cb)
 	m_listLastDisconnect.push_back(std::move(cb));
 }
 
+void ibSessionRegistry::OnSweep(VoidCallback cb)
+{
+	std::lock_guard<std::mutex> lk(m_eventMutex);
+	m_listSweep.push_back(std::move(cb));
+}
+
 void ibSessionRegistry::OnAfterCompile(SessionCallback cb)
 {
 	std::lock_guard<std::mutex> lk(m_eventMutex);
@@ -2430,6 +2436,18 @@ void ibSessionRegistry::ThreadBody() noexcept
 			if (now >= nextSweep) {
 				JobSweepStale();
 					JobCheckSignal();
+				// …and what other processes of the base wrote, read again by whoever listens.
+				std::vector<VoidCallback> sweepers;
+				{
+					std::lock_guard<std::mutex> lk(m_eventMutex);
+					sweepers = m_listSweep;
+				}
+				for (const auto& cb : sweepers) {
+					try { if (cb) cb(); }
+					catch (const std::exception& err) {
+						ibJournalWarning(ibT("session"), ibT("a sweep listener ended with an exception: %s"), ibString::FromUTF8(err.what()));
+					}
+				}
 				nextSweep = now + kSweepInterval;
 			}
 

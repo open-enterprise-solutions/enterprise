@@ -24,6 +24,7 @@
 #include "core/serialize/dataBuilder.h"
 #include "backend/session/session.h"
 #include "backend/session/sessionException.h"
+#include "backend/served/servedAddressRegistry.h"   // the base's web addresses — protocol `addresses` and `serve`
 #include "backend/temp/tempStorage.h"   // the client's files
 #include "backend/userInfo.h"           // users — the names the login window offers
 #include "core/crypto/sessionToken.h"
@@ -380,6 +381,12 @@ ibClientHost::~ibClientHost()
 	if (m_round.joinable())
 		m_round.join();
 
+	// No connection is told the web addresses any more.
+	if (m_addressListening != 0) {
+		if (ibServedAddressRegistry* const registry = ibApplicationInstance::GetServedAddressRegistry(m_applicationInstance))
+			registry->Forget(m_addressListening);
+	}
+
 	// Every client goes — each its own session's teardown (ibClientInstance::OnExit).
 	std::map<ibString, std::shared_ptr<Client>> clients;
 	{
@@ -590,6 +597,7 @@ void ibClientHost::Disconnect(const void* connection)
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
 		m_notifiers.erase(connection);
+		m_addressConnections.erase(connection);
 		for (const auto& entry : m_clients) {
 			if (entry.second->connection.load(std::memory_order_acquire) == connection)
 				matched.push_back(entry.second);
@@ -682,7 +690,8 @@ bool ibClientHost::LoggedIn(const void* connection) const
 			|| it.second->mcpChannel.connection == connection)
 			return true;
 	}
-	return false;
+	// …or a web server listens on it to the base's addresses: it logs nobody in, and stays.
+	return m_addressConnections.contains(connection);
 }
 
 void ibClientHost::SetNotifier(const void* connection, std::function<void(const ibMemoryBuffer& packet)> notify)
@@ -1089,6 +1098,13 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 				done = true;
 			}
 		}
+	}
+	else if (method == ibProtocol::ibMethod::Addresses) {
+		// The web server's — no client: it is the transport, and the list is the base's.
+		done = Addresses(connection, result, refusal, error);
+	}
+	else if (method == ibProtocol::ibMethod::Serve) {
+		done = Serve(params, address, result, refusal, error);
 	}
 	else if (method == ibProtocol::ibMethod::Debug) {
 		// ⭐ BESIDE THE CLIENT'S CALLS, NOT AFTER THEM (protocol 6): not under the client's lock and with no frame — a step
@@ -1612,6 +1628,154 @@ bool ibClientHost::Mcp(Client& client, const ibDataNode& params, ibDataNode& res
 		params.GetValue<ibString>(ibProtocol::ibMcp::Name), status);
 	result.SetValue(ibProtocol::ibMcp::Message, answer);
 	result.SetValue(ibProtocol::ibMcp::Status, status);
+	return true;
+}
+
+//*******************************************************************************************
+//*                                   The web addresses                                     *
+//*******************************************************************************************
+
+namespace {
+
+// The list as the protocol writes it — each {Id, Path}.
+ibDataValue AddressList(const std::vector<ibServedAddress>& addresses)
+{
+	std::vector<ibDataValue> items;
+	for (const ibServedAddress& address : addresses) {
+		auto item = std::make_shared<ibDataNode>();
+		item->SetValue(ibProtocol::ibServed::Id, address.m_id.str());
+		item->SetValue(ibProtocol::ibServed::Path, address.m_path);
+		items.push_back(ibDataValue::Child(item));
+	}
+	return ibDataValue::Array(std::move(items));
+}
+
+// A list of headers as the protocol writes it — a child each, Name and Value.
+ibDataValue HeaderList(const std::vector<std::pair<std::string, std::string>>& headers)
+{
+	std::vector<ibDataValue> items;
+	for (const auto& header : headers) {
+		auto item = std::make_shared<ibDataNode>();
+		item->SetValue(ibProtocol::ibServed::Name, ibString::FromUTF8(header.first));
+		item->SetValue(ibProtocol::ibServed::Value, ibString::FromUTF8(header.second));
+		items.push_back(ibDataValue::Child(item));
+	}
+	return ibDataValue::Array(std::move(items));
+}
+
+std::vector<std::pair<std::string, std::string>> ReadHeaders(const ibDataNode& node)
+{
+	std::vector<std::pair<std::string, std::string>> headers;
+	if (const auto list = node.FindField(ibProtocol::ibServed::Headers)) {
+		for (const ibDataValue& item : list->AsArray()) {
+			if (const std::optional<ibDataNode> header = item.AsChild())
+				headers.emplace_back(std::string(header->GetValue<ibString>(ibProtocol::ibServed::Name).ToUtf8()),
+					std::string(header->GetValue<ibString>(ibProtocol::ibServed::Value).ToUtf8()));
+		}
+	}
+	return headers;
+}
+
+std::string ReadBytes(const ibDataNode& node, const char* name)
+{
+	const ibMemoryBuffer bytes = node.GetValue<ibMemoryBuffer>(name);
+	return std::string(static_cast<const char*>(bytes.GetData()), bytes.GetDataLen());
+}
+
+} // namespace
+
+bool ibClientHost::Addresses(const void* connection, ibDataNode& result, ibProtocol::ibRefusal& refusal, ibString& error)
+{
+	ibServedAddressRegistry* const registry = ibApplicationInstance::GetServedAddressRegistry(m_applicationInstance);
+	if (registry == nullptr) {
+		refusal = ibProtocol::ibRefusal::NotNow;
+		error = ibT("the base is not open");
+		return false;
+	}
+	// ⭐ THE CALL SUBSCRIBES — a connection that keeps itself open is told every change from now on; the registry is
+	// listened to once, from the first such connection.
+	if (connection != nullptr) {
+		bool listen = false;
+		{
+			std::lock_guard<std::mutex> lock(m_mutex);
+			if (m_notifiers.contains(connection))
+				m_addressConnections.insert(connection);
+			listen = m_addressListening == 0;
+			if (listen)
+				m_addressListening = ~std::uint64_t(0);   // claimed: a second call here does not listen twice
+		}
+		if (listen) {
+			const std::uint64_t listening = registry->Listen([this](const std::vector<ibServedAddress>& addresses) {
+				NotifyAddresses(addresses);
+			});
+			std::lock_guard<std::mutex> lock(m_mutex);
+			m_addressListening = listening;
+		}
+	}
+	result.AddField(ibProtocol::ibServed::Addresses, AddressList(registry->GetServedAddressArray()));
+	return true;
+}
+
+void ibClientHost::NotifyAddresses(const std::vector<ibServedAddress>& addresses)
+{
+	std::vector<std::function<void(const ibMemoryBuffer& packet)>> notifiers;
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		for (const void* connection : m_addressConnections) {
+			const auto found = m_notifiers.find(connection);
+			if (found != m_notifiers.end())
+				notifiers.push_back(found->second);
+		}
+	}
+	if (notifiers.empty())
+		return;
+	// The envelope as Notification writes one, without a Client: the list is no client's.
+	ibDataNode note;
+	note.SetValue(ibProtocol::ibRpc::Method, ibString(ibProtocol::ibRpc::Addresses));
+	note.Child(ibProtocol::ibRpc::Params).AddField(ibProtocol::ibServed::Addresses, AddressList(addresses));
+	ibMemoryBuffer packet;
+	ibBinaryProvider().Write(note, packet);
+	for (const auto& notify : notifiers)
+		notify(packet);
+}
+
+bool ibClientHost::Serve(const ibDataNode& params, const ibString& address, ibDataNode& result,
+	ibProtocol::ibRefusal& refusal, ibString& error)
+{
+	ibServedAddressRegistry* const registry = ibApplicationInstance::GetServedAddressRegistry(m_applicationInstance);
+	if (registry == nullptr) {
+		refusal = ibProtocol::ibRefusal::NotNow;
+		error = ibT("the base is not open");
+		return false;
+	}
+	const ibString id = params.GetValue<ibString>(ibProtocol::ibServed::Address);
+	const ibGuid entry(id);
+	if (!entry.isValid()) {
+		refusal = ibProtocol::ibRefusal::BadParameter;
+		error = ibString::Format(ibT("'%s' is not an entry's id"), id);
+		return false;
+	}
+
+	ibHttpRequest request;
+	request.m_method = std::string(params.GetValue<ibString>(ibProtocol::ibServed::Method).ToUtf8());
+	request.m_path = std::string(params.GetValue<ibString>(ibProtocol::ibServed::Path).ToUtf8());
+	request.m_query = std::string(params.GetValue<ibString>(ibProtocol::ibServed::Query).ToUtf8());
+	request.m_headers = ReadHeaders(params);
+	request.m_body = ReadBytes(params, ibProtocol::ibServed::Body);
+	request.m_address = address;
+
+	// ⭐ ON THIS THREAD, WORKING FOR THE BASE — the kind makes what it needs of it (a session of its own for an HTTP
+	// service's request); the thread is the transport's, as Users' is.
+	ibHttpResponse response;
+	{
+		const ibApplicationInstanceScope working(m_applicationInstance);
+		response = registry->Serve(entry, request, params.GetValue<ibString>(ibProtocol::ibServed::Prefix));
+	}
+	result.SetValue(ibProtocol::ibServed::Status, static_cast<std::int32_t>(response.m_status));
+	result.AddField(ibProtocol::ibServed::Headers, HeaderList(response.m_headers));
+	ibMemoryBuffer body;
+	body.AppendData(response.m_body.data(), response.m_body.size());
+	result.SetValue(ibProtocol::ibServed::Body, body);
 	return true;
 }
 

@@ -203,6 +203,7 @@
     <ClCompile Include="mcp\tools\designer\mcpToolProtocol.cpp" />
     <ClCompile Include="mcp\tools\mcpToolQuery.cpp" />
     <ClCompile Include="mcp\tools\mcpToolValue.cpp" />
+    <ClCompile Include="mcp\tools\designer\mcpToolAddress.cpp" />
     <ClCompile Include="mcp\tools\designer\mcpToolApp.cpp" />
     <ClCompile Include="mcp\tools\designer\mcpToolBind.cpp" />
     <ClCompile Include="mcp\tools\designer\mcpToolClipboard.cpp" />
@@ -251,6 +252,7 @@
     <ClCompile Include="schema\designer\properties.cpp" />
     <ClCompile Include="schema\designer\types.cpp" />
     <ClCompile Include="schema\designer\userList.cpp" />
+    <ClCompile Include="schema\designer\webAddress.cpp" />
     <ClCompile Include="schema\runtime\allFunctions.cpp" />
     <ClCompile Include="schema\runtime\debugging.cpp" />
     <ClCompile Include="schema\runtime\sections.cpp" />
@@ -418,6 +420,7 @@
     <ClInclude Include="schema\designer\properties.h" />
     <ClInclude Include="schema\designer\types.h" />
     <ClInclude Include="schema\designer\userList.h" />
+    <ClInclude Include="schema\designer\webAddress.h" />
     <ClInclude Include="schema\runtime\allFunctions.h" />
     <ClInclude Include="schema\runtime\debugging.h" />
     <ClInclude Include="schema\runtime\sections.h" />
