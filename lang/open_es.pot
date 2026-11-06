@@ -13688,3 +13688,115 @@ msgstr ""
 #: src/engine/frmserver/schema/style.cpp
 msgid "The theme could not be kept"
 msgstr ""
+
+#: src/engine/frmclient/win/dlgs/webAddress.cpp
+msgid "A session's"
+msgstr ""
+
+#: src/engine/frmclient/win/dlgs/webAddress.cpp
+msgid "Add a web address"
+msgstr ""
+
+#: src/engine/frmclient/win/dlgs/webAddress.cpp
+msgid "Add..."
+msgstr ""
+
+#: src/engine/frmclient/win/dlgs/webAddress.cpp
+msgid "Another path..."
+msgstr ""
+
+#: src/engine/frmclient/win/dlgs/webAddress.cpp
+msgid "In the base"
+msgstr ""
+
+#: src/engine/frmclient/win/dlgs/webAddress.cpp
+msgid "Kept"
+msgstr ""
+
+#: src/engine/frmclient/win/dlgs/webAddress.cpp
+msgid "No kind of web address is known to this platform."
+msgstr ""
+
+#: src/engine/frmclient/win/dlgs/webAddress.cpp
+#, c-format
+msgid "Take the web address '%s' off?"
+msgstr ""
+
+#: src/engine/frmclient/win/dlgs/webAddress.cpp
+msgid "The path under every publication of the base, without a slash at either end (es/desk):"
+msgstr ""
+
+#: src/engine/frmserver/client/clientFrameDesigner.cpp
+msgid "Web addresses"
+msgstr ""
+
+#: src/engine/frmclient/win/dlgs/webAddress.cpp
+msgid "What the base is to answer:"
+msgstr ""
+
+#: src/engine/frmclient/win/dlgs/webAddress.cpp
+msgid "Which kind answers there:"
+msgstr ""
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+#, c-format
+msgid "The web address %s '%s' is not registered: %s answers there already."
+msgstr ""
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+#, c-format
+msgid "The web address %s '%s' is not registered: %s."
+msgstr ""
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+#, c-format
+msgid "The web address %s '%s' is not registered: its id is registered already."
+msgstr ""
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+#, c-format
+msgid "The web address %s '%s' is not registered: no kind of that name answers."
+msgstr ""
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+#, c-format
+msgid "The web address %s '%s' is not registered: the base is not open."
+msgstr ""
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+#, c-format
+msgid "The web address %s is not unregistered: no entry has that id."
+msgstr ""
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+#, c-format
+msgid "The web address %s is not unregistered: the base is not open."
+msgstr ""
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+msgid "a segment holds a character other than a letter, a digit or . _ ~ -"
+msgstr ""
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+msgid "a segment is . or .."
+msgstr ""
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+msgid "the base has no settings storage"
+msgstr ""
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+msgid "the base's web addresses were not written"
+msgstr ""
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+msgid "the first segment is client, the publication's own door"
+msgstr ""
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+msgid "the path has an empty segment"
+msgstr ""
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+msgid "the path is empty"
+msgstr ""

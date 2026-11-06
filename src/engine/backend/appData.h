@@ -564,6 +564,10 @@ private:
 	// back when the pool shuts down — the lock manager's arrangement, for the lock manager's reason.
 	std::unique_ptr<class ibTempStorage> m_tempStorage;
 
+	// What the base answers on a web server (sys_settings, Web — no user — and the sessions' own). Reads and writes
+	// through the settings storage and the lock manager above, so it dies before them.
+	std::unique_ptr<class ibServedAddressRegistry> m_servedAddressRegistry;
+
 	// ⭐ THE ACTIVE CONFIGURATION — held FOR THE SESSIONS STILL TO COME (Max, 2026-10-06: *"the active metadata
 	// holds for new sessions"*). A session let in takes its own reference to it (ibSession::GetMetaData, +1) and
 	// works in that one for its whole life, so an update that puts another one here leaves every working session
@@ -653,6 +657,13 @@ public:
 	static class ibSettingsStorage* GetSettingsStorage() { return GetSettingsStorage(Get()); }
 	static class ibSettingsStorage* GetSettingsStorage(const ibApplicationInstance* applicationInstance) {
 		return applicationInstance != nullptr ? applicationInstance->m_settingsStorage.get() : nullptr;
+	}
+
+	// The addresses the base answers on a web server. Same nullptr-before-and-after contract.
+	// See backend/served/servedAddressRegistry.h.
+	static class ibServedAddressRegistry* GetServedAddressRegistry() { return GetServedAddressRegistry(Get()); }
+	static class ibServedAddressRegistry* GetServedAddressRegistry(const ibApplicationInstance* applicationInstance) {
+		return applicationInstance != nullptr ? applicationInstance->m_servedAddressRegistry.get() : nullptr;
 	}
 
 	// The sessions' temporary files. Same nullptr-before-and-after contract. See backend/temp/tempStorage.h.
