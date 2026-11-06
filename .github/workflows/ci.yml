@@ -824,8 +824,10 @@ jobs:
   # Anything it does surface is a portability rule for docs/portability.md.
   # ---------------------------------------------------------------------------
   tests-macos-arm:
-    name: Tests (macOS 14, arm64, Debug)
-    runs-on: macos-14
+    name: Tests (macOS 15, arm64, Debug)
+    # GitHub retired the macos-14 image on 2026-11-02 ("The configuration 'macos-14-arm64-us-default' is not
+    # supported"). What the programs ask of the machine is CMAKE_OSX_DEPLOYMENT_TARGET (CMakePresets.json), not this.
+    runs-on: macos-15
     timeout-minutes: 90
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache

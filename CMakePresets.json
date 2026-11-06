@@ -62,7 +62,7 @@
             "displayName": "macOS — Debug",
             "inherits": "base",
             "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" },
-            "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "CMAKE_OSX_DEPLOYMENT_TARGET": "14.0" }
         },
         {
             "name": "macos-release",

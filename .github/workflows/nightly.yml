@@ -187,7 +187,9 @@ jobs:
     name: macOS arm64
     needs: changes
     if: needs.changes.outputs.build == 'true'
-    runs-on: macos-14
+    # The image the dmg is built on, not the macOS it asks for: that is CMAKE_OSX_DEPLOYMENT_TARGET (CMakePresets.json),
+    # 14.0, so "macOS 14+" below stays true on a newer runner (macos-14 was retired 2026-11-02).
+    runs-on: macos-15
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v5
