@@ -310,6 +310,9 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **The lock sweep does not wait for a key somebody is taking.** A client starting while the designer swept the lock
   keys held the sweep behind its module compile, and the sweep gave up the rest of the keys with "update conflicts
   with concurrent update". A key held at that moment is left for the next pass, and the others are swept.
+- **On Firebird, a statement that fails with no transaction open says what Firebird said.** A duplicate in a
+  unique index, for example, was refused with an empty description and a code of 0. And when one of several
+  statements run together failed before the last one, the transaction they ran in was left open.
 
 - **`ThisForm.<attribute> = value` writes into the attribute.** It overwrote the attribute's own entry,
   and the attribute kept its old value.
