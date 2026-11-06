@@ -350,6 +350,8 @@ namespace ibProtocol {
 			                                                              // the path it stores (ibSourceDescriptionMemory);
 			                                                              // a source's: its window's tree
 			inline constexpr const char* Default      = "Default";
+			inline constexpr const char* FullTextSearch = "FullTextSearch"; // a predefined attribute's node: whether the
+			                                                              // full-text index holds it (a code, a description)
 			inline constexpr const char* Targets      = "Targets";
 			inline constexpr const char* Pictures     = "Pictures";       // a picture's: those it may be (Guid, Name; Id —
 			                                                              // the id it is drawn by)

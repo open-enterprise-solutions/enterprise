@@ -5,6 +5,7 @@
 #include "frmclient/backend/compiler/value.h"                            // a type's name and picture, as the server named it
 #include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the type's node
 #include "core/description/typeDescription.h"                                         // ibTypeDescriptionMemory
+#include "protocol/protocolDesigner.h"                                                // ibProtocol::ibSchema::ibProperties::FullTextSearch
 
 #include "frmclient/propertyManager/property/private/prop.h"             // ibPGPropertyFlags_* — the grid flags
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
@@ -50,6 +51,25 @@ ibVariant WriteType(const ibVariant& value, const ibTypeDescription& typeDesc)
 	return ibVariant(new ibVariantSerializable(node, names));
 }
 
+// Whether the full-text index holds a predefined attribute - a field of its node, beside the type.
+bool ReadFullTextSearch(const wxVariant& value)
+{
+	const std::optional<ibDataNode> held = ibVariantDataSerializable::GetNodeValue(value).AsChild();
+	bool fullTextSearch = false;
+	if (held)
+		held->GetValue(ibProtocol::ibSchema::ibProperties::FullTextSearch, fullTextSearch);
+	return fullTextSearch;
+}
+
+wxVariant WriteFullTextSearch(const wxVariant& value, const ibTypeDescription& typeDesc, bool fullTextSearch)
+{
+	const wxVariant written = WriteType(value, typeDesc);
+	const std::optional<ibDataNode> held = ibVariantDataSerializable::GetNodeValue(written).AsChild();
+	auto node = std::make_shared<ibDataNode>(held ? *held : ibDataNode());
+	node->SetValue(ibProtocol::ibSchema::ibProperties::FullTextSearch, fullTextSearch);
+	return wxVariant(new ibVariantDataSerializable(written.GetType(), ibDataValue::Child(node), written.GetString()));
+}
+
 }
 
 // register frontend property
@@ -73,8 +93,15 @@ public:
 		};
 		ibPropertyRegistry::Register(wxT("ibPropertyType"), editor);
 		// …and the holder of an attribute whose type is chosen - a code, a description, a number: the same editor, over
-		// the attribute's node (WriteType).
-		ibPropertyRegistry::Register(wxT("ibPropertyPredefinedType"), editor);
+		// the attribute's node (WriteType), with the full-text search flag the node carries.
+		ibPropertyRegistry::Register(wxT("ibPropertyPredefinedType"), [](ibBackendProperty* property) -> wxPGProperty* {
+			ibPropertyChoiceList offered;
+			const bool multiple = property->GetValueList(offered) == ibPropertyChoiceMode::Mult;
+			std::vector<ibClassID> listType;
+			for (unsigned int idx = 0; idx < offered.GetCount(); idx++)
+				listType.push_back(offered.GetValue(idx).GetULongLong().GetValue());
+			return new ibPGTypeProperty(listType, multiple, property->GetLabel(), property->GetName(), property->GetValue(), true);
+		});
 	}
 }g_typeLoader;
 
@@ -88,7 +115,7 @@ ibPGChoices ibPGTypeProperty::GetDateTime()
 }
 
 ibPGTypeProperty::ibPGTypeProperty(const std::vector<ibClassID>& listType, bool multiple, const wxString& label,
-	const wxString& strName, const ibVariant& value) :
+	const wxString& strName, const ibVariant& value, bool predefined) :
 	ibPGProperty(label, strName), m_listType(listType), m_multiple(multiple)
 {
 	m_precision = new ibUIntProperty(_("Precision"), wxT("precision"), 0);
@@ -112,6 +139,11 @@ ibPGTypeProperty::ibPGTypeProperty(const std::vector<ibClassID>& listType, bool 
 	m_unlimited = new ibBoolProperty(_("Unlimited length"), wxT("unlimited"), false);
 	m_unlimited->SetAttribute(ibPG_BOOL_USE_CHECKBOX, true);
 	AddPrivateChild(m_unlimited);
+	if (predefined) {
+		m_fullTextSearch = new ibBoolProperty(_("Full-text search"), wxT("full_text_search"), false);
+		m_fullTextSearch->SetHelpString(_("The base's full-text search finds records by the words of this field."));
+		AddPrivateChild(m_fullTextSearch);
+	}
 
 	// Each type it may hold, named and drawn as the server offered it — in the server's order (GetTypesByFilter there:
 	// the primitives, the containers, each family before its members, AnyRef last).
@@ -172,6 +204,9 @@ ibVariant ibPGTypeProperty::ChildChanged(ibVariant& thisValue, int childIndex, i
 		// on: the length 0, held while it stays on (Max, 2026-11-10); off: a new attribute's length
 		td.SetString(childValue.GetBoolean() ? 0 : ibQualifierString().m_length, ibAllowedLength::ibAllowedLength_Variable);
 	}
+	else if (m_fullTextSearch != nullptr && child == m_fullTextSearch) {
+		return WriteFullTextSearch(thisValue, td, childValue.GetBoolean());
+	}
 	return WriteType(thisValue, td);
 }
 
@@ -205,6 +240,13 @@ void ibPGTypeProperty::RefreshChildren()
 	m_unlimited->SetValue(unlimited);
 	m_length->Enable(!unlimited);
 	m_allowedLength->Enable(!unlimited);
+
+	// The flag: under a string type only - the index holds words.
+	if (m_fullTextSearch != nullptr) {
+		const bool string = td.ContainType(ibValueTypes::TYPE_STRING);
+		m_fullTextSearch->Hide(!string);
+		m_fullTextSearch->SetValue(ReadFullTextSearch(m_value));
+	}
 
 	ibPGTypeProperty::SetExpanded(true);
 }
