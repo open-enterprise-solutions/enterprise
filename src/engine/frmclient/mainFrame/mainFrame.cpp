@@ -38,6 +38,7 @@
 #include "frmclient/win/picture.h"
 #include "frmclient/win/dlgs/about.h"
 #include "frmclient/win/dlgs/activeUser.h"
+#include "frmclient/win/dlgs/webAddress.h"
 #include "frmclient/win/dlgs/authorization.h"
 #include "frmclient/win/dlgs/errorDialog.h"
 #include "frmclient/win/dlgs/formEditor.h"
@@ -960,6 +961,10 @@ void ibFrontendMainFrame::ShowSchema(ibProtocol::ibSchema::ibKind schema, const 
 {
 	if (schema == ibProtocol::ibSchema::ibKind::ActiveUser) {
 		ibDialogActiveUser dialog(this, shown);
+		dialog.ShowModal();
+	}
+	else if (schema == ibProtocol::ibSchema::ibKind::WebAddress) {
+		ibDialogWebAddress dialog(this, shown);
 		dialog.ShowModal();
 	}
 	else if (schema == ibProtocol::ibSchema::ibKind::About) {

@@ -249,6 +249,13 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **Output list works**: the columns are asked as in the thin client, each ticked or not, with OK and Cancel, and the list
   opens in a tab as a spreadsheet. A question that picks one of a list offers its items to choose, then OK.
 
+- **A base can answer more than its clients on a web server.** Its *web addresses* are a list kept in the base:
+  each a path under the publication and the code that answers there. Every web server that publishes the base
+  mounts them within seconds and hands each request to the base; **Administration → Web addresses...** in the
+  designer edits the list, and over MCP `address_list`, `address_register` and `address_unregister`. No kind
+  answers at one yet: the list is what a feature such as an HTTP service registers into. `web.conf` bounds
+  the requests: `ServiceWorkers`, `ServiceCalls` (503 past it), `ServiceWait` (504 past it).
+
 ## Metadata
 
 - **The attributes every object of a kind has are a group of their own.** *Predefined attributes*, under *Context*,

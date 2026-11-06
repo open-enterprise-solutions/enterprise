@@ -898,6 +898,12 @@
     <ClInclude Include="settings\settingsStorage.h">
       <Filter>settings</Filter>
     </ClInclude>
+    <ClInclude Include="served\servedAddress.h">
+      <Filter>served</Filter>
+    </ClInclude>
+    <ClInclude Include="served\servedAddressRegistry.h">
+      <Filter>served</Filter>
+    </ClInclude>
     <ClInclude Include="settings\settingsComposer.h">
       <Filter>settings</Filter>
     </ClInclude>
@@ -2182,6 +2188,9 @@
     <ClCompile Include="settings\settingsStorage.cpp">
       <Filter>settings</Filter>
     </ClCompile>
+    <ClCompile Include="served\servedAddressRegistry.cpp">
+      <Filter>served</Filter>
+    </ClCompile>
     <ClCompile Include="settings\settingsComposer.cpp">
       <Filter>settings</Filter>
     </ClCompile>
@@ -2357,6 +2366,9 @@
     </Filter>
     <Filter Include="job">
       <UniqueIdentifier>{9a1e4c7b-2d6f-4a3e-b8c5-7d1f2a4e6b9c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="served">
+      <UniqueIdentifier>{fcb51a64-8f8b-4d81-9f2d-b7ab58ef464d}</UniqueIdentifier>
     </Filter>
     <Filter Include="settings">
       <UniqueIdentifier>{3f7b2c5d-8e14-4a6b-9c02-5d8e7a1b3c4f}</UniqueIdentifier>

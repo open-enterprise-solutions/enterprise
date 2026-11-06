@@ -14034,3 +14034,115 @@ msgstr "Тема оформления интерфейса:"
 #: src/engine/frmserver/schema/style.cpp
 msgid "The theme could not be kept"
 msgstr "Не удалось сохранить тему"
+
+#: src/engine/frmclient/win/dlgs/webAddress.cpp
+msgid "A session's"
+msgstr "Сеанса"
+
+#: src/engine/frmclient/win/dlgs/webAddress.cpp
+msgid "Add a web address"
+msgstr "Добавить веб-адрес"
+
+#: src/engine/frmclient/win/dlgs/webAddress.cpp
+msgid "Add..."
+msgstr "Добавить..."
+
+#: src/engine/frmclient/win/dlgs/webAddress.cpp
+msgid "Another path..."
+msgstr "Другой путь..."
+
+#: src/engine/frmclient/win/dlgs/webAddress.cpp
+msgid "In the base"
+msgstr "В базе"
+
+#: src/engine/frmclient/win/dlgs/webAddress.cpp
+msgid "Kept"
+msgstr "Хранится"
+
+#: src/engine/frmclient/win/dlgs/webAddress.cpp
+msgid "No kind of web address is known to this platform."
+msgstr "Платформе не известен ни один вид веб-адреса."
+
+#: src/engine/frmclient/win/dlgs/webAddress.cpp
+#, c-format
+msgid "Take the web address '%s' off?"
+msgstr "Снять веб-адрес '%s'?"
+
+#: src/engine/frmclient/win/dlgs/webAddress.cpp
+msgid "The path under every publication of the base, without a slash at either end (es/desk):"
+msgstr "Путь под каждой публикацией базы, без косой черты в начале и в конце (es/desk):"
+
+#: src/engine/frmserver/client/clientFrameDesigner.cpp
+msgid "Web addresses"
+msgstr "Веб-адреса"
+
+#: src/engine/frmclient/win/dlgs/webAddress.cpp
+msgid "What the base is to answer:"
+msgstr "Что база будет отвечать:"
+
+#: src/engine/frmclient/win/dlgs/webAddress.cpp
+msgid "Which kind answers there:"
+msgstr "Какой вид отвечает по этому адресу:"
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+#, c-format
+msgid "The web address %s '%s' is not registered: %s answers there already."
+msgstr "Веб-адрес %s '%s' не зарегистрирован: по этому пути уже отвечает %s."
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+#, c-format
+msgid "The web address %s '%s' is not registered: %s."
+msgstr "Веб-адрес %s '%s' не зарегистрирован: %s."
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+#, c-format
+msgid "The web address %s '%s' is not registered: its id is registered already."
+msgstr "Веб-адрес %s '%s' не зарегистрирован: его идентификатор уже зарегистрирован."
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+#, c-format
+msgid "The web address %s '%s' is not registered: no kind of that name answers."
+msgstr "Веб-адрес %s '%s' не зарегистрирован: вида с таким именем нет."
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+#, c-format
+msgid "The web address %s '%s' is not registered: the base is not open."
+msgstr "Веб-адрес %s '%s' не зарегистрирован: база не открыта."
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+#, c-format
+msgid "The web address %s is not unregistered: no entry has that id."
+msgstr "Веб-адрес %s не снят: записи с таким идентификатором нет."
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+#, c-format
+msgid "The web address %s is not unregistered: the base is not open."
+msgstr "Веб-адрес %s не снят: база не открыта."
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+msgid "a segment holds a character other than a letter, a digit or . _ ~ -"
+msgstr "в сегменте есть символ, отличный от буквы, цифры или . _ ~ -"
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+msgid "a segment is . or .."
+msgstr "сегмент равен . или .."
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+msgid "the base has no settings storage"
+msgstr "у базы нет хранилища настроек"
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+msgid "the base's web addresses were not written"
+msgstr "веб-адреса базы не записаны"
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+msgid "the first segment is client, the publication's own door"
+msgstr "первый сегмент — client, собственный вход публикации"
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+msgid "the path has an empty segment"
+msgstr "в пути есть пустой сегмент"
+
+#: src/engine/backend/served/servedAddressRegistry.cpp
+msgid "the path is empty"
+msgstr "путь пуст"

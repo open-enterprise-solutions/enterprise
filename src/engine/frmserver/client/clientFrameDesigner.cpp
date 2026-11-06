@@ -64,6 +64,8 @@ void ibClientFrameDesigner::InitializeDefaultMenu()
 	administration.AppendSeparator();
 	administration.Append(ibProtocol::ibSchema::ibKind::AuditLog, _("Registration journal"));
 	administration.AppendSeparator();
+	administration.Append(ibProtocol::ibSchema::ibKind::WebAddress, _("Web addresses"));
+	administration.AppendSeparator();
 	administration.Append(ibProtocol::ibSchema::ibKind::Database, ibProtocol::ibSchema::ibCommand::Load, _("Restore database"));
 	administration.Append(ibProtocol::ibSchema::ibKind::Database, ibProtocol::ibSchema::ibCommand::Save, _("Dump database"));
 	administration.AppendSeparator();

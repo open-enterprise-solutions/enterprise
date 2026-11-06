@@ -549,8 +549,28 @@ struct ibHttpServerState {
 		std::string           m_prefix;
 		std::filesystem::path m_root;   // canonical
 		std::shared_ptr<const std::map<std::string, ibHeldFile>> m_files;   // …or files held in memory, by their path
+		ibHttpHandler         m_handler;                                     // …or a handler, for every method
 	};
-	std::vector<ibMount> m_mounts;
+	using ibMounts = std::vector<ibMount>;   // the longest prefix first
+
+	// ⭐ THE MOUNTS ARE A SNAPSHOT — mounted and unmounted at any time, from any thread, while requests come: a change
+	// makes a new list and swaps it in under the lock, and a request takes the list it finds and reads it with none. A
+	// request already given a handler keeps it.
+	std::shared_ptr<const ibMounts> GetMounts() const
+	{
+		std::lock_guard<std::mutex> lock(m_mountMutex);
+		return m_mounts;
+	}
+	void ChangeMounts(const std::function<void(ibMounts&)>& change)
+	{
+		std::lock_guard<std::mutex> lock(m_mountMutex);
+		auto mounts = std::make_shared<ibMounts>(*m_mounts);
+		change(*mounts);
+		m_mounts = std::move(mounts);
+	}
+
+	mutable std::mutex              m_mountMutex;
+	std::shared_ptr<const ibMounts> m_mounts = std::make_shared<const ibMounts>();
 	ibStaticFiles        m_files;
 
 	// The connections — for the limits, and for the stop, which lets each go and waits until all have.
@@ -941,69 +961,82 @@ private:
 			return;
 		}
 		const bool head = method == "HEAD";
-		const std::map<std::string, ibHttpHandler>* routes = nullptr;
-		if (method == "GET" || head)
-			routes = &m_server.m_get;
-		else if (method == "POST")
-			routes = &m_server.m_post;
-		else {
+		const bool reads = method == "GET" || head;
+		auto self = shared_from_this();
+		const auto request = std::make_shared<const ibHttpRequest>(m_request);
+
+		// A ROUTE BY ITS PATH — GET and HEAD, or POST.
+		const std::map<std::string, ibHttpHandler>* routes = reads ? &m_server.m_get : method == "POST" ? &m_server.m_post : nullptr;
+		if (routes != nullptr) {
+			const auto route = routes->find(request->m_path);
+			if (route != routes->end()) {
+				Handle(request, route->second, head);
+				return;
+			}
+		}
+
+		// THEN A MOUNT, the longest prefix first: a handler takes every method, files are read by GET and HEAD.
+		const auto mounts = m_server.GetMounts();
+		for (const ibHttpServerState::ibMount& mount : *mounts) {
+			const std::string& prefix = mount.m_prefix;
+			const std::string& path = request->m_path;
+			if (path.compare(0, prefix.size(), prefix) != 0)
+				continue;
+			if (prefix.back() != '/' && path.size() > prefix.size() && path[prefix.size()] != '/')
+				continue;
+			if (mount.m_handler) {
+				Handle(request, mount.m_handler, head);
+				return;
+			}
+			if (!reads)
+				continue;
+			const std::filesystem::path root = mount.m_root;
+			const auto files = mount.m_files;
+			// The file is found on a worker — the disk is not the I/O threads' to wait for.
+			asio::post(*m_server.m_workers, [self, request, root, files, prefix, head]() {
+				const std::string relative = request->m_path.substr(prefix.size());
+				ibReply reply = files ? self->m_server.m_files.Serve(*files, relative, *request)
+					: self->m_server.m_files.Serve(root, relative, *request);
+				reply.m_bodyless = head;
+				asio::post(self->m_executor, [self, reply = std::move(reply)]() mutable { self->Answer(std::move(reply)); });
+			});
+			return;
+		}
+
+		if (routes == nullptr) {
 			ibReply reply = Plain(405, "Method Not Allowed");
 			reply.m_headers.emplace_back("Allow", "GET, HEAD, POST");
 			Answer(std::move(reply));
 			return;
 		}
-
-		auto self = shared_from_this();
-		const auto request = std::make_shared<const ibHttpRequest>(m_request);
-		const auto route = routes->find(request->m_path);
-		if (route != routes->end()) {
-			// THE ANSWER, ONCE — a handler that answers twice is heard the first time.
-			const auto answered = std::make_shared<std::atomic<bool>>(false);
-			ibHttpResponder respond = [self, answered, head](ibHttpResponse response) {
-				if (answered->exchange(true))
-					return;
-				asio::post(self->m_executor, [self, head, response = std::move(response)]() mutable {
-					ibReply reply = ToReply(std::move(response));
-					reply.m_bodyless = head;
-					self->Answer(std::move(reply));
-				});
-			};
-			const ibHttpHandler handler = route->second;
-			asio::post(*m_server.m_workers, [request, handler, respond]() {
-				try {
-					handler(*request, respond);
-				}
-				catch (...) {
-					ibHttpResponse failed;
-					failed.m_status = 500;
-					respond(std::move(failed));
-				}
-			});
-			return;
-		}
-
-		if (method != "POST") {
-			for (const ibHttpServerState::ibMount& mount : m_server.m_mounts) {
-				const std::string& prefix = mount.m_prefix;
-				const std::string& path = request->m_path;
-				if (path.compare(0, prefix.size(), prefix) != 0)
-					continue;
-				if (prefix.back() != '/' && path.size() > prefix.size() && path[prefix.size()] != '/')
-					continue;
-				const std::filesystem::path root = mount.m_root;
-				const auto files = mount.m_files;
-				// The file is found on a worker — the disk is not the I/O threads' to wait for.
-				asio::post(*m_server.m_workers, [self, request, root, files, prefix, head]() {
-					const std::string relative = request->m_path.substr(prefix.size());
-					ibReply reply = files ? self->m_server.m_files.Serve(*files, relative, *request)
-						: self->m_server.m_files.Serve(root, relative, *request);
-					reply.m_bodyless = head;
-					asio::post(self->m_executor, [self, reply = std::move(reply)]() mutable { self->Answer(std::move(reply)); });
-				});
-				return;
-			}
-		}
 		Answer(Plain(404, "Not Found"));
+	}
+
+	// A HANDLER GIVEN THE REQUEST, on a worker — a route's or a mount's.
+	void Handle(const std::shared_ptr<const ibHttpRequest>& request, const ibHttpHandler& handler, bool head)
+	{
+		auto self = shared_from_this();
+		// THE ANSWER, ONCE — a handler that answers twice is heard the first time.
+		const auto answered = std::make_shared<std::atomic<bool>>(false);
+		ibHttpResponder respond = [self, answered, head](ibHttpResponse response) {
+			if (answered->exchange(true))
+				return;
+			asio::post(self->m_executor, [self, head, response = std::move(response)]() mutable {
+				ibReply reply = ToReply(std::move(response));
+				reply.m_bodyless = head;
+				self->Answer(std::move(reply));
+			});
+		};
+		asio::post(*m_server.m_workers, [request, handler, respond]() {
+			try {
+				handler(*request, respond);
+			}
+			catch (...) {
+				ibHttpResponse failed;
+				failed.m_status = 500;
+				respond(std::move(failed));
+			}
+		});
 	}
 
 	void Answer(ibReply reply)
@@ -1768,14 +1801,19 @@ void ibHttpServer::EventStream(const std::string& path, ibEventStreamOpening ope
 
 namespace {
 
-// A mount among the others — the longest prefix first: /app/ before /.
-void AddMount(std::vector<ibHttpServerState::ibMount>& mounts, ibHttpServerState::ibMount mount)
+// A mount among the others — the longest prefix first: /app/ before /. One of the same prefix is replaced.
+void AddMount(ibHttpServerState& state, ibHttpServerState::ibMount mount)
 {
-	mounts.push_back(std::move(mount));
-	std::sort(mounts.begin(), mounts.end(),
-		[](const ibHttpServerState::ibMount& a, const ibHttpServerState::ibMount& b) {
-			return a.m_prefix.size() > b.m_prefix.size();
-		});
+	if (mount.m_prefix.empty())
+		mount.m_prefix = "/";
+	state.ChangeMounts([&mount](ibHttpServerState::ibMounts& mounts) {
+		std::erase_if(mounts, [&mount](const ibHttpServerState::ibMount& held) { return held.m_prefix == mount.m_prefix; });
+		mounts.push_back(std::move(mount));
+		std::stable_sort(mounts.begin(), mounts.end(),
+			[](const ibHttpServerState::ibMount& a, const ibHttpServerState::ibMount& b) {
+				return a.m_prefix.size() > b.m_prefix.size();
+			});
+	});
 }
 
 } // namespace
@@ -1784,8 +1822,7 @@ void ibHttpServer::Mount(const std::string& prefix, const std::string& directory
 {
 	std::error_code error;
 	const std::filesystem::path root = std::filesystem::weakly_canonical(std::filesystem::u8path(directory), error);
-	AddMount(m_state->m_mounts, ibHttpServerState::ibMount{ prefix.empty() ? std::string("/") : prefix,
-		error ? std::filesystem::u8path(directory) : root, nullptr });
+	AddMount(*m_state, ibHttpServerState::ibMount{ prefix, error ? std::filesystem::u8path(directory) : root, nullptr, nullptr });
 }
 
 void ibHttpServer::Mount(const std::string& prefix, std::map<std::string, std::string> files)
@@ -1795,8 +1832,20 @@ void ibHttpServer::Mount(const std::string& prefix, std::map<std::string, std::s
 		std::string tag = TagOf(file.second);
 		(*held)[file.first] = ibHeldFile{ std::make_shared<const std::string>(std::move(file.second)), std::move(tag) };
 	}
-	AddMount(m_state->m_mounts, ibHttpServerState::ibMount{ prefix.empty() ? std::string("/") : prefix,
-		std::filesystem::path(), std::move(held) });
+	AddMount(*m_state, ibHttpServerState::ibMount{ prefix, std::filesystem::path(), std::move(held), nullptr });
+}
+
+void ibHttpServer::Mount(const std::string& prefix, ibHttpHandler handler)
+{
+	AddMount(*m_state, ibHttpServerState::ibMount{ prefix, std::filesystem::path(), nullptr, std::move(handler) });
+}
+
+void ibHttpServer::Unmount(const std::string& prefix)
+{
+	const std::string held = prefix.empty() ? std::string("/") : prefix;
+	m_state->ChangeMounts([&held](ibHttpServerState::ibMounts& mounts) {
+		std::erase_if(mounts, [&held](const ibHttpServerState::ibMount& mount) { return mount.m_prefix == held; });
+	});
 }
 
 bool ibHttpServer::Start(const ibHttpServerOptions& options, std::string& error)
