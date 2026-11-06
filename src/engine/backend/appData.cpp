@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "backend/appData.h"
+#include "backend/fullTextSearch/fullTextIndex.h"   // its tables, made at the open
 #include "backend/appHost.h"
 #include "core/launchTicket.h"
 
@@ -918,6 +919,7 @@ ibApplicationInstance* ibApplicationInstance::Open(std::unique_ptr<ibApplication
 			CreateTableSettings();         // sys_settings — what people saved on their forms and their lists
 			CreateTableFile();             // sys_file — the sessions' temporary files
 			CreateTableBytecodeCache();    // sys_bytecode_cache — the compiled modules
+			ibFullTextIndex::CreateTables(); // sys_search_word / _entry / _state — the full-text index
 			// The application's own — what the database publishes, what a studio saves, its sequence: read at the
 			// end of this opening.
 			ibMetaDataApplicationStorage::CreateApplicationTable();

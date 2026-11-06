@@ -350,6 +350,8 @@ namespace ibProtocol {
 			                                                              // the path it stores (ibSourceDescriptionMemory);
 			                                                              // a source's: its window's tree
 			inline constexpr const char* Default      = "Default";
+			inline constexpr const char* FullTextSearch = "FullTextSearch"; // a predefined attribute's node: whether the
+			                                                              // full-text index holds it (a code, a description)
 			inline constexpr const char* Targets      = "Targets";
 			inline constexpr const char* Values       = "Values";         // a switch's Choices: the values its field's type
 			                                                              // is finite in (a Boolean, an enumeration), each

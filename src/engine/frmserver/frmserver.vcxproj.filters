@@ -397,6 +397,9 @@
     <ClCompile Include="schema\workspace\debugging.cpp">
       <Filter>schema\workspace</Filter>
     </ClCompile>
+    <ClCompile Include="schema\workspace\fullTextSearch.cpp">
+      <Filter>schema\workspace</Filter>
+    </ClCompile>
     <ClCompile Include="schema\workspace\sections.cpp">
       <Filter>schema\workspace</Filter>
     </ClCompile>
@@ -881,6 +884,9 @@
       <Filter>schema\workspace</Filter>
     </ClInclude>
     <ClInclude Include="schema\workspace\debugging.h">
+      <Filter>schema\workspace</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\workspace\fullTextSearch.h">
       <Filter>schema\workspace</Filter>
     </ClInclude>
     <ClInclude Include="schema\workspace\sections.h">

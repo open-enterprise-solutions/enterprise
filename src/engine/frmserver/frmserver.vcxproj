@@ -247,6 +247,7 @@
     <ClCompile Include="schema\studio\webAddress.cpp" />
     <ClCompile Include="schema\workspace\allFunctions.cpp" />
     <ClCompile Include="schema\workspace\debugging.cpp" />
+    <ClCompile Include="schema\workspace\fullTextSearch.cpp" />
     <ClCompile Include="schema\workspace\sections.cpp" />
     <ClCompile Include="settings\formSettings.cpp" />
     <ClCompile Include="visualView\controlEnum.cpp" />
@@ -411,6 +412,7 @@
     <ClInclude Include="schema\studio\webAddress.h" />
     <ClInclude Include="schema\workspace\allFunctions.h" />
     <ClInclude Include="schema\workspace\debugging.h" />
+    <ClInclude Include="schema\workspace\fullTextSearch.h" />
     <ClInclude Include="schema\workspace\sections.h" />
     <ClInclude Include="settings\formSettings.h" />
     <ClInclude Include="visualView\controlCtor.h" />

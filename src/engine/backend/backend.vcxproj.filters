@@ -603,6 +603,12 @@
     <ClInclude Include="system\value\valueFullTextSearch.h">
       <Filter>system\value</Filter>
     </ClInclude>
+    <ClInclude Include="fullTextSearch\fullTextIndex.h">
+      <Filter>fullTextSearch</Filter>
+    </ClInclude>
+    <ClInclude Include="fullTextSearch\fullTextTokenizer.h">
+      <Filter>fullTextSearch</Filter>
+    </ClInclude>
     <ClInclude Include="system\value\valueTextFile.h">
       <Filter>system\value</Filter>
     </ClInclude>
@@ -1877,6 +1883,12 @@
     <ClCompile Include="system\value\valueFullTextSearch.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
+    <ClCompile Include="fullTextSearch\fullTextIndex.cpp">
+      <Filter>fullTextSearch</Filter>
+    </ClCompile>
+    <ClCompile Include="fullTextSearch\fullTextTokenizer.cpp">
+      <Filter>fullTextSearch</Filter>
+    </ClCompile>
     <ClCompile Include="system\value\valueTextFile.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
@@ -2480,6 +2492,9 @@
     </Filter>
     <Filter Include="served">
       <UniqueIdentifier>{fcb51a64-8f8b-4d81-9f2d-b7ab58ef464d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="fullTextSearch">
+      <UniqueIdentifier>{6b7c1e2a-3f4d-4e8a-9a51-0f2d7c3b9e14}</UniqueIdentifier>
     </Filter>
     <Filter Include="settings">
       <UniqueIdentifier>{3f7b2c5d-8e14-4a6b-9c02-5d8e7a1b3c4f}</UniqueIdentifier>
