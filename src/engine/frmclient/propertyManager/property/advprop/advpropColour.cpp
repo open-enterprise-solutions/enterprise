@@ -7,7 +7,7 @@
 #include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the colour's node
 #include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
-#include "frmclient/win/typeconv.h"   // ColourToWxColour / WxColourToColour — the dialog's and the painter's colour
+#include "gui/typeconv.h"   // ColourToWxColour / WxColourToColour — the dialog's and the painter's colour
 
 namespace {
 

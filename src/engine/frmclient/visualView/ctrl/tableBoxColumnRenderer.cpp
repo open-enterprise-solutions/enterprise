@@ -1,13 +1,12 @@
 #include "tableBoxColumnRenderer.h"
 
-#include "frmclient/win/ctrls/controlTextEditor.h"
+#include "gui/univ/ctrl/textCtrl.h"
 
 wxWindow* ibDataViewValueRenderer::CreateEditorCtrl(wxWindow* dv,
 	wxRect labelRect,
 	const ibVariant& value)
 {
-	ibControlTextEditor* textEditor = new ibControlTextEditor;
-	textEditor->SetDVCMode(true);
+	ibTextCtrl* textEditor = new ibTextCtrl;
 
 	// create the window hidden to prevent flicker
 	textEditor->Show(false);
@@ -34,7 +33,6 @@ wxWindow* ibDataViewValueRenderer::CreateEditorCtrl(wxWindow* dv,
 
 	// (A column's buttons, its password and multiline modes and its handlers were bound here — a settings cell
 	// overrides this editor with its own.)
-	textEditor->LayoutControls();
 	textEditor->Show(true);
 	textEditor->SetInsertionPointEnd();
 	return textEditor;
@@ -42,7 +40,7 @@ wxWindow* ibDataViewValueRenderer::CreateEditorCtrl(wxWindow* dv,
 
 bool ibDataViewValueRenderer::GetValueFromEditorCtrl(wxWindow* ctrl, ibVariant& value)
 {
-	ibControlTextEditor* textEditor = wxDynamicCast(ctrl, ibControlTextEditor);
+	ibTextCtrl* textEditor = wxDynamicCast(ctrl, ibTextCtrl);
 	if (textEditor == nullptr)
 		return false;
 

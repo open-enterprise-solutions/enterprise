@@ -1,5 +1,6 @@
 #include "connectionDB.h"
 
+#include <wx/dirdlg.h>   // wxDirSelector — the base's folder, chosen in the system's dialog
 #include <wx/xml/xml.h>
 
 #include "core/net/ports.h"                 // ibPort::Clients — the port a cluster's address leaves out
@@ -20,7 +21,7 @@ void ibDialogConnection::InitConnection(const wxString& strName, const ibListInf
 		m_radioFile->SetValue(true);
 		break;
 	}
-	m_dirPickerFile->SetPath(info.m_strFilePath);
+	m_textCtrlFilePath->SetValue(info.m_strFilePath);
 	m_textCtrlServer->SetValue(info.m_strServer);
 	m_textCtrlDataBase->SetValue(info.m_strDatabase);
 	m_textCtrlAddress->SetValue(info.m_strAddress);
@@ -33,7 +34,7 @@ ibListInfo ibDialogConnection::GetListInfo() const
 	ibListInfo info;
 	info.m_connection = m_radioServer->GetValue() ? ibLauncherConnection::Server
 		: m_radioWeb->GetValue() ? ibLauncherConnection::Web : ibLauncherConnection::File;
-	info.m_strFilePath = m_dirPickerFile->GetPath();
+	info.m_strFilePath = m_textCtrlFilePath->GetValue();
 	// A link copied from the browser's address bar comes with what stood around it.
 	info.m_strServer = m_textCtrlServer->GetValue().Strip(wxString::both);
 	info.m_strDatabase = m_textCtrlDataBase->GetValue().Strip(wxString::both);
@@ -66,18 +67,17 @@ ibDialogConnection::ibDialogConnection(wxWindow* parent, wxWindowID id, const wx
 
 	// Name row
 	wxBoxSizer* sizerName = new wxBoxSizer(wxHORIZONTAL);
-	m_staticTextName = new wxStaticText(this, wxID_ANY, _("Name IB:"), wxDefaultPosition, wxDefaultSize, 0);
-	m_staticTextName->Wrap(-1);
+	m_staticTextName = new ibStaticText(this, wxID_ANY, _("Name IB:"), wxDefaultPosition, wxDefaultSize, 0);
 	sizerName->Add(m_staticTextName, 1, wxALIGN_CENTER_VERTICAL, 0);
-	m_textCtrlName = new wxTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0);
+	m_textCtrlName = new ibTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0);
 	sizerName->Add(m_textCtrlName, 3, wxALL | wxEXPAND, FromDIP(5));
 	mainSizer->Add(sizerName, 0, wxEXPAND, FromDIP(5));
 
 	// Mode radio buttons
 	wxBoxSizer* sizerMode = new wxBoxSizer(wxHORIZONTAL);
-	m_radioFile = new wxRadioButton(this, wxID_ANY, _("File (local database)"), wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
-	m_radioServer = new wxRadioButton(this, wxID_ANY, _("Server cluster"), wxDefaultPosition, wxDefaultSize, 0);
-	m_radioWeb = new wxRadioButton(this, wxID_ANY, _("Web server"), wxDefaultPosition, wxDefaultSize, 0);
+	m_radioFile = new ibRadioButton(this, wxID_ANY, _("File (local database)"), wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
+	m_radioServer = new ibRadioButton(this, wxID_ANY, _("Server cluster"), wxDefaultPosition, wxDefaultSize, 0);
+	m_radioWeb = new ibRadioButton(this, wxID_ANY, _("Web server"), wxDefaultPosition, wxDefaultSize, 0);
 	m_radioFile->SetValue(true);
 	sizerMode->Add(m_radioFile, 1, wxALL, FromDIP(5));
 	sizerMode->Add(m_radioServer, 1, wxALL, FromDIP(5));
@@ -91,11 +91,12 @@ ibDialogConnection::ibDialogConnection(wxWindow* parent, wxWindowID id, const wx
 	// File mode panel
 	m_sizerFileMode = new wxBoxSizer(wxVERTICAL);
 	wxBoxSizer* sizerFilePath = new wxBoxSizer(wxHORIZONTAL);
-	m_staticTextFilePath = new wxStaticText(this, wxID_ANY, _("Database folder:"), wxDefaultPosition, wxDefaultSize, 0);
-	m_staticTextFilePath->Wrap(-1);
+	m_staticTextFilePath = new ibStaticText(this, wxID_ANY, _("Database folder:"), wxDefaultPosition, wxDefaultSize, 0);
 	sizerFilePath->Add(m_staticTextFilePath, 1, wxALIGN_CENTER_VERTICAL, 0);
-	m_dirPickerFile = new wxDirPickerCtrl(this, wxID_ANY, wxEmptyString, _("Select database folder"), wxDefaultPosition, wxDefaultSize, wxDIRP_USE_TEXTCTRL | wxDIRP_DIR_MUST_EXIST);
-	sizerFilePath->Add(m_dirPickerFile, 3, wxALL | wxEXPAND, FromDIP(5));
+	m_textCtrlFilePath = new ibTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0);
+	sizerFilePath->Add(m_textCtrlFilePath, 3, wxALL | wxEXPAND, FromDIP(5));
+	m_buttonFilePath = new ibButton(this, wxID_ANY, wxT("..."), wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+	sizerFilePath->Add(m_buttonFilePath, 0, wxTOP | wxBOTTOM | wxRIGHT | wxEXPAND, FromDIP(5));
 	m_sizerFileMode->Add(sizerFilePath, 0, wxEXPAND, FromDIP(5));
 	mainSizer->Add(m_sizerFileMode, 0, wxEXPAND, FromDIP(5));
 
@@ -103,20 +104,18 @@ ibDialogConnection::ibDialogConnection(wxWindow* parent, wxWindowID id, const wx
 	m_sizerServerMode = new wxBoxSizer(wxVERTICAL);
 
 	wxBoxSizer* sizerServer = new wxBoxSizer(wxHORIZONTAL);
-	m_staticTextServer = new wxStaticText(this, wxID_ANY, _("Server:"), wxDefaultPosition, wxDefaultSize, 0);
-	m_staticTextServer->Wrap(-1);
+	m_staticTextServer = new ibStaticText(this, wxID_ANY, _("Server:"), wxDefaultPosition, wxDefaultSize, 0);
 	sizerServer->Add(m_staticTextServer, 1, wxALIGN_CENTER_VERTICAL, 0);
-	m_textCtrlServer = new wxTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0);
+	m_textCtrlServer = new ibTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0);
 	// The port after a colon, left out — the cluster's own.
 	m_textCtrlServer->SetHint(wxString::Format(wxT("localhost[:%u]"), static_cast<unsigned>(ibPort::Clients.m_first)));
 	sizerServer->Add(m_textCtrlServer, 3, wxALL | wxEXPAND, FromDIP(5));
 	m_sizerServerMode->Add(sizerServer, 0, wxEXPAND, FromDIP(5));
 
 	wxBoxSizer* sizerDataBase = new wxBoxSizer(wxHORIZONTAL);
-	m_staticTextDataBase = new wxStaticText(this, wxID_ANY, _("Base:"), wxDefaultPosition, wxDefaultSize, 0);
-	m_staticTextDataBase->Wrap(-1);
+	m_staticTextDataBase = new ibStaticText(this, wxID_ANY, _("Base:"), wxDefaultPosition, wxDefaultSize, 0);
 	sizerDataBase->Add(m_staticTextDataBase, 1, wxALIGN_CENTER_VERTICAL, 0);
-	m_textCtrlDataBase = new wxTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0);
+	m_textCtrlDataBase = new ibTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0);
 	sizerDataBase->Add(m_textCtrlDataBase, 3, wxALL | wxEXPAND, FromDIP(5));
 	m_sizerServerMode->Add(sizerDataBase, 0, wxEXPAND, FromDIP(5));
 
@@ -126,10 +125,9 @@ ibDialogConnection::ibDialogConnection(wxWindow* parent, wxWindowID id, const wx
 	m_sizerWebMode = new wxBoxSizer(wxVERTICAL);
 
 	wxBoxSizer* sizerAddress = new wxBoxSizer(wxHORIZONTAL);
-	m_staticTextAddress = new wxStaticText(this, wxID_ANY, _("Address:"), wxDefaultPosition, wxDefaultSize, 0);
-	m_staticTextAddress->Wrap(-1);
+	m_staticTextAddress = new ibStaticText(this, wxID_ANY, _("Address:"), wxDefaultPosition, wxDefaultSize, 0);
 	sizerAddress->Add(m_staticTextAddress, 1, wxALIGN_CENTER_VERTICAL, 0);
-	m_textCtrlAddress = new wxTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0);
+	m_textCtrlAddress = new ibTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0);
 	m_textCtrlAddress->SetHint(wxT("https://server/<base>/"));
 	sizerAddress->Add(m_textCtrlAddress, 3, wxALL | wxEXPAND, FromDIP(5));
 	m_sizerWebMode->Add(sizerAddress, 0, wxEXPAND, FromDIP(5));
@@ -139,12 +137,12 @@ ibDialogConnection::ibDialogConnection(wxWindow* parent, wxWindowID id, const wx
 	// Buttons
 	wxBoxSizer* bSizerButton = new wxBoxSizer(wxHORIZONTAL);
 
-	m_buttonTestConnection = new wxButton(this, wxID_ANY, _("Test connection"), wxDefaultPosition, wxDefaultSize, 0);
-	m_buttonTestConnection->SetBackgroundColour(wxColour(0xF5, 0xE8, 0xD5));  // #F5E8D5 light cream
+	m_buttonTestConnection = new ibButton(this, wxID_ANY, _("Test connection"), wxDefaultPosition, wxDefaultSize, 0);
 	bSizerButton->Add(m_buttonTestConnection, 0, wxALL, FromDIP(5));
 
-	m_buttonSaveConnection = new wxButton(this, wxID_ANY, _("Save connection"), wxDefaultPosition, wxDefaultSize, 0);
-	m_buttonSaveConnection->SetBackgroundColour(wxColour(0xD9, 0x77, 0x57));  // #D97757 terracotta (primary action)
+	// The primary action — the theme's accent (the kit's ibButton::SetPrimary), not a colour of its own.
+	m_buttonSaveConnection = new ibButton(this, wxID_ANY, _("Save connection"), wxDefaultPosition, wxDefaultSize, 0);
+	m_buttonSaveConnection->SetPrimary();
 	bSizerButton->Add(m_buttonSaveConnection, 1, wxALL, FromDIP(5));
 
 	mainSizer->Add(bSizerButton, 1, wxEXPAND, FromDIP(5));
@@ -156,6 +154,7 @@ ibDialogConnection::ibDialogConnection(wxWindow* parent, wxWindowID id, const wx
 	this->Centre(wxBOTH);
 
 	// Connect Events
+	m_buttonFilePath->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ibDialogConnection::FilePathOnButtonClick), NULL, this);
 	m_buttonTestConnection->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ibDialogConnection::TestConnectionOnButtonClick), NULL, this);
 	m_buttonSaveConnection->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ibDialogConnection::SaveConnectionOnButtonClick), NULL, this);
 }
@@ -163,6 +162,16 @@ ibDialogConnection::ibDialogConnection(wxWindow* parent, wxWindowID id, const wx
 void ibDialogConnection::OnModeChanged(wxCommandEvent& event)
 {
 	UpdateModeVisibility();
+	event.Skip();
+}
+
+void ibDialogConnection::FilePathOnButtonClick(wxCommandEvent& event)
+{
+	// The kit has no picker: the field and its button, and the system's folder dialog.
+	const wxString path = wxDirSelector(_("Select database folder"), m_textCtrlFilePath->GetValue(),
+		wxDD_DEFAULT_STYLE | wxDD_DIR_MUST_EXIST, wxDefaultPosition, this);
+	if (!path.IsEmpty())
+		m_textCtrlFilePath->SetValue(path);
 	event.Skip();
 }
 

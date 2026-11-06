@@ -9,7 +9,7 @@
 #include "frmclient/backend/system/value/valueFont.h"              // …and a font
 #include "frmclient/backend/system/value/valueSpreadsheet.h"       // …and an alignment, the sheet's own enumeration
 #include "core/description/spreadsheetDescription.h"              // ibDefaultSpreadsheetFont() — the font a font is chosen from
-#include "frmclient/win/typeconv.h"                               // WxColourToColour — a row's grey is the model view's data
+#include "gui/typeconv.h"                               // WxColourToColour — a row's grey is the model view's data
 
 #include <wx/choicdlg.h>   // wxGetSingleChoiceIndex — an alignment is one of three words
 #include <wx/colordlg.h>   // wxColourDialog — a colour is chosen in the system's window

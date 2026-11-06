@@ -70,7 +70,7 @@ TEST(Style, ThePlatformsHasEveryItemInBothLooks) {
 		}
 	}
 	// What the light look keeps: the forms' ink on cream (frmserver's default style) and the Luna theme's colours
-	// (frmclient/uikit/theme/lunaTheme.cpp), each where the platform painted it.
+	// (gui/univ/theme/lunaTheme.cpp), each where the platform painted it.
 	const std::vector<std::pair<ibStyleItem, ibColour>> kept = {
 		{ ibStyleItem::FormText, ibColour(0x3F, 0x5C, 0x77) },
 		{ ibStyleItem::FormBackground, ibColour(0xFA, 0xF7, 0xF0) },

@@ -33,7 +33,7 @@
 #include "core/query/queryAST.h"
 #include "frmclient/backend/query/queryConstructorModel.h"
 
-#include "frmclient/win/ctrls/dataview/dataview.h"
+#include "gui/univ/dataview/dataview.h"
 
 class ibMetaData;
 

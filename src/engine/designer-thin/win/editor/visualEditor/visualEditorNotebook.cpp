@@ -1,6 +1,6 @@
 ﻿#include "visualEditor.h"
 #include "frmclient/artProvider/artProvider.h"
-#include "frmclient/win/theme/luna_tabart.h"
+#include "gui/univ/theme/luna_tabart.h"
 
 #include "frmclient/docView/docView.h"   // ibDOC_READONLY
 #include "core/serialize/dataBuilder.h"   // ibDataNode — an event's row, its Args

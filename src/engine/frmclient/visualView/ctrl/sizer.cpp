@@ -5,7 +5,7 @@
 
 #include "sizer.h"
 
-#include "frmclient/win/typeconv.h"
+#include "gui/typeconv.h"
 
 void ibViewUpdateSizer(wxSizer* sizer, const ibProtocolNode& node)
 {

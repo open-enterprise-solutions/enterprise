@@ -95,7 +95,7 @@ export class Control extends HTMLElement {
 
 	/**
 	 * How wide its label is, for the column it stands in (controls/labels.js); null — it takes no part. The thin
-	 * client's question of a control with a label beside it (ibControlDynamicBorder::CalculateLabelSize).
+	 * client's question of a control with a title beside it (ibControl::GetTitleExtent).
 	 * @returns {number | null}
 	 */
 	calculateLabelSize() {
@@ -103,7 +103,7 @@ export class Control extends HTMLElement {
 	}
 
 	/**
-	 * The column's width, given to its label (ibControlDynamicBorder::ApplyLabelSize).
+	 * The column's width, given to its label (ibControl::SetTitleWidth).
 	 * @param {number} width
 	 */
 	applyLabelSize(width) {}

@@ -1,18 +1,18 @@
 ﻿#ifndef _FRMCLIENT_VIEW_WIDGETS_H__
 #define _FRMCLIENT_VIEW_WIDGETS_H__
 
-#include <wx/gauge.h>
 #include <wx/html/htmlwin.h>
-#include <wx/radiobut.h>
-#include <wx/slider.h>
-#include <wx/statline.h>
 
 #include "frmclient/visualView/ctrl/window.h"
 
-class ibControlStaticTextValue;
-class ibControlTextEditor;
-class ibControlButton;
-class ibControlCheckbox;
+class ibStaticText;
+class ibTextCtrl;
+class ibButton;
+class ibCheckBox;
+class ibRadioButton;
+class ibSlider;
+class ibGauge;
+class ibStaticLine;
 class ibTextEditor;
 
 // THE WIDGETS OF A VIEW — the old desktop's, each on the control it drew with, now
@@ -28,7 +28,7 @@ public:
 	virtual wxWindow* GetWindow() const override;
 
 private:
-	ibControlStaticTextValue* m_staticText = nullptr;
+	ibStaticText* m_staticText = nullptr;
 };
 
 // A field. What is typed is the person's until it is committed — Enter, or the focus gone: the server is told the
@@ -51,8 +51,8 @@ private:
 	void OnTextEnter(wxCommandEvent& event);
 	void OnKillFocus(wxFocusEvent& event);
 
-	ibControlTextEditor* m_textEditor = nullptr;
-	bool                 m_editing = false;   // typed into, not committed yet
+	ibTextCtrl* m_textCtrl = nullptr;
+	bool        m_editing = false;   // typed into, not committed yet
 };
 
 // A TEXT BOX — the desktop's text editor, many lines: the State's Text shown, ReadOnly or typed into. What is typed is the
@@ -84,8 +84,8 @@ public:
 private:
 	void OnButtonPressed(wxCommandEvent& event);
 
-	ibControlButton* m_button = nullptr;
-	ibProtocolNode   m_members;   // a copy — the frame changes under a handle into it
+	ibButton*      m_button = nullptr;
+	ibProtocolNode m_members;   // a copy — the frame changes under a handle into it
 };
 
 class ibValueCheckbox : public ibValueWindow {
@@ -97,7 +97,7 @@ public:
 	virtual wxWindow* GetWindow() const override;
 
 private:
-	ibControlCheckbox* m_checkbox = nullptr;
+	ibCheckBox* m_checkbox = nullptr;
 };
 
 // A radio button — shown selected as the State says; it has no data source, and its click stays on the client, as the
@@ -108,10 +108,10 @@ public:
 
 	virtual void Create(wxWindow* parent, const ibProtocolNode& node) override;
 	virtual void Update(const ibProtocolNode& node) override;
-	virtual wxWindow* GetWindow() const override { return m_radioButton; }
+	virtual wxWindow* GetWindow() const override;
 
 private:
-	wxRadioButton* m_radioButton = nullptr;
+	ibRadioButton* m_radioButton = nullptr;
 };
 
 // A slider between its ends, its thumb where the form put it; moved, it stays on the client, as the desktop's did. Its
@@ -122,10 +122,10 @@ public:
 
 	virtual void Create(wxWindow* parent, const ibProtocolNode& node) override;
 	virtual void Update(const ibProtocolNode& node) override;
-	virtual wxWindow* GetWindow() const override { return m_slider; }
+	virtual wxWindow* GetWindow() const override;
 
 private:
-	wxSlider* m_slider = nullptr;
+	ibSlider* m_slider = nullptr;
 };
 
 // A progress bar, filled to its value of its range. Its orientation is what it is built with, as a slider's is.
@@ -135,10 +135,10 @@ public:
 
 	virtual void Create(wxWindow* parent, const ibProtocolNode& node) override;
 	virtual void Update(const ibProtocolNode& node) override;
-	virtual wxWindow* GetWindow() const override { return m_gauge; }
+	virtual wxWindow* GetWindow() const override;
 
 private:
-	wxGauge* m_gauge = nullptr;
+	ibGauge* m_gauge = nullptr;
 };
 
 // An HTML box — the page its form's code set (the State's Page), the box's whole content.
@@ -190,10 +190,10 @@ public:
 
 	virtual void Create(wxWindow* parent, const ibProtocolNode& node) override;
 	virtual void Update(const ibProtocolNode& node) override;
-	virtual wxWindow* GetWindow() const override { return m_staticLine; }
+	virtual wxWindow* GetWindow() const override;
 
 private:
-	wxStaticLine* m_staticLine = nullptr;
+	ibStaticLine* m_staticLine = nullptr;
 };
 
 #endif

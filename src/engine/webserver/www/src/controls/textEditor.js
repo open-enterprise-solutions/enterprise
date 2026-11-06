@@ -1,4 +1,4 @@
-// THE TEXT EDITOR — the driver both a field and a table's cell type into, as the thin client's (ibControlTextEditor): the
+// THE TEXT EDITOR — the driver both a field and a table's cell type into, as the thin client's (ibTextCtrl): the
 // text, and inside its frame the buttons its control was saved with: Select (…), Open (▷), Clear (×). It looks the same
 // wherever it stands. What the text means, and when it goes back, is its owner's.
 

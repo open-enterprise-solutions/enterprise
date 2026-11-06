@@ -8,7 +8,7 @@
 #include <functional>
 
 #include "frmclient/win/picture.h"
-#include "frmclient/win/ctrls/controlButton.h"
+#include "gui/univ/ctrl/button.h"
 
 namespace {
 
@@ -23,7 +23,7 @@ constexpr int kTilePicture = 32;
 
 void ibValueButton::Create(wxWindow* parent, const ibProtocolNode& /*node*/)
 {
-	m_button = new ibControlButton(parent, wxID_ANY);
+	m_button = new ibButton(parent, wxID_ANY);
 	m_button->Bind(wxEVT_BUTTON, &ibValueButton::OnButtonPressed, this);
 }
 

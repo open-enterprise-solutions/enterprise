@@ -40,12 +40,6 @@
     <Filter Include="win\ctrls">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5014}</UniqueIdentifier>
     </Filter>
-    <Filter Include="win\ctrls\dataview">
-      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5015}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="win\ctrls\grid">
-      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5016}</UniqueIdentifier>
-    </Filter>
     <Filter Include="win\dlgs">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5017}</UniqueIdentifier>
     </Filter>
@@ -57,18 +51,6 @@
     </Filter>
     <Filter Include="win\editor\textEditor">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5020}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="win\theme">
-      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5021}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="uikit">
-      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f505e}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="uikit\ctrl">
-      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f505f}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="uikit\theme">
-      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5060}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -239,70 +221,10 @@
     <ClCompile Include="win\editor\gridEditor\gridEditor.cpp">
       <Filter>win\editor\gridEditor</Filter>
     </ClCompile>
-    <ClCompile Include="win\theme\luna_dockart.cpp">
-      <Filter>win\theme</Filter>
-    </ClCompile>
-    <ClCompile Include="win\theme\luna_tabart.cpp">
-      <Filter>win\theme</Filter>
-    </ClCompile>
-    <ClCompile Include="win\theme\luna_toolbarart.cpp">
-      <Filter>win\theme</Filter>
-    </ClCompile>
-    <ClCompile Include="win\ctrls\dataview\headerctrlcmn.cpp">
-      <Filter>win\ctrls\dataview</Filter>
-    </ClCompile>
-    <ClCompile Include="win\ctrls\dataview\headerctrlg.cpp">
-      <Filter>win\ctrls\dataview</Filter>
-    </ClCompile>
-    <ClCompile Include="win\ctrls\dataview\datavcmn.cpp">
-      <Filter>win\ctrls\dataview</Filter>
-    </ClCompile>
-    <ClCompile Include="win\ctrls\dataview\datavgen.cpp">
-      <Filter>win\ctrls\dataview</Filter>
-    </ClCompile>
-    <ClCompile Include="win\ctrls\dataview\datavgen.paged.cpp">
-      <Filter>win\ctrls\dataview</Filter>
-    </ClCompile>
-    <ClCompile Include="win\ctrls\dataview\datavgen.scrollbar.cpp">
-      <Filter>win\ctrls\dataview</Filter>
-    </ClCompile>
-    <ClCompile Include="win\ctrls\dataview\datavlayout.cpp">
-      <Filter>win\ctrls\dataview</Filter>
-    </ClCompile>
-    <ClCompile Include="win\ctrls\grid\gridext.cpp">
-      <Filter>win\ctrls\grid</Filter>
-    </ClCompile>
-    <ClCompile Include="win\ctrls\grid\gridextctrl.cpp">
-      <Filter>win\ctrls\grid</Filter>
-    </ClCompile>
-    <ClCompile Include="win\ctrls\grid\gridexteditors.cpp">
-      <Filter>win\ctrls\grid</Filter>
-    </ClCompile>
-    <ClCompile Include="win\ctrls\grid\gridextsel.cpp">
-      <Filter>win\ctrls\grid</Filter>
-    </ClCompile>
     <ClCompile Include="win\ctrls\checktree.cpp">
       <Filter>win\ctrls</Filter>
     </ClCompile>
     <ClCompile Include="win\ctrls\tableView.cpp">
-      <Filter>win\ctrls</Filter>
-    </ClCompile>
-    <ClCompile Include="win\ctrls\controlButton.cpp">
-      <Filter>win\ctrls</Filter>
-    </ClCompile>
-    <ClCompile Include="win\ctrls\controlCheckboxEditor.cpp">
-      <Filter>win\ctrls</Filter>
-    </ClCompile>
-    <ClCompile Include="win\ctrls\controlStaticText.cpp">
-      <Filter>win\ctrls</Filter>
-    </ClCompile>
-    <ClCompile Include="win\ctrls\controlTextEditor.cpp">
-      <Filter>win\ctrls</Filter>
-    </ClCompile>
-    <ClCompile Include="win\ctrls\dynamicBorder.cpp">
-      <Filter>win\ctrls</Filter>
-    </ClCompile>
-    <ClCompile Include="win\ctrls\treelistctrl.cpp">
       <Filter>win\ctrls</Filter>
     </ClCompile>
     <ClCompile Include="visualView\commandBar.cpp">
@@ -373,108 +295,6 @@
     </ClCompile>
     <ClCompile Include="visualView\ctrl\textBox.cpp">
       <Filter>visualView\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\theme.cpp">
-      <Filter>uikit</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\inputConsumer.cpp">
-      <Filter>uikit</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\inputHandler.cpp">
-      <Filter>uikit</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\controlRenderer.cpp">
-      <Filter>uikit</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\window.cpp">
-      <Filter>uikit</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\menu.cpp">
-      <Filter>uikit</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\theme\themeRenderer.cpp">
-      <Filter>uikit\theme</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\theme\lunaTheme.cpp">
-      <Filter>uikit\theme</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\ctrl\control.cpp">
-      <Filter>uikit\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\ctrl\scrollBar.cpp">
-      <Filter>uikit\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\ctrl\scrollArrow.cpp">
-      <Filter>uikit\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\ctrl\scrollThumb.cpp">
-      <Filter>uikit\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\ctrl\anyButton.cpp">
-      <Filter>uikit\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\ctrl\button.cpp">
-      <Filter>uikit\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\ctrl\staticText.cpp">
-      <Filter>uikit\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\ctrl\staticLine.cpp">
-      <Filter>uikit\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\ctrl\checkBox.cpp">
-      <Filter>uikit\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\ctrl\radioButton.cpp">
-      <Filter>uikit\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\ctrl\gauge.cpp">
-      <Filter>uikit\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\ctrl\toggleButton.cpp">
-      <Filter>uikit\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\ctrl\textCtrl.cpp">
-      <Filter>uikit\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\ctrl\listBox.cpp">
-      <Filter>uikit\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\ctrl\choice.cpp">
-      <Filter>uikit\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\ctrl\notebook.cpp">
-      <Filter>uikit\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\ctrl\toolBar.cpp">
-      <Filter>uikit\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\ctrl\comboBox.cpp">
-      <Filter>uikit\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\ctrl\spinButton.cpp">
-      <Filter>uikit\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\ctrl\slider.cpp">
-      <Filter>uikit\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\ctrl\staticBox.cpp">
-      <Filter>uikit\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\ctrl\staticBitmap.cpp">
-      <Filter>uikit\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\ctrl\bmpButton.cpp">
-      <Filter>uikit\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\ctrl\checkListBox.cpp">
-      <Filter>uikit\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\ctrl\radioBox.cpp">
-      <Filter>uikit\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="uikit\ctrl\treeCtrl.cpp">
-      <Filter>uikit\ctrl</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -655,92 +475,11 @@
     <ClInclude Include="win\editor\gridEditor\gridEditor.h">
       <Filter>win\editor\gridEditor</Filter>
     </ClInclude>
-    <ClInclude Include="win\theme\luna_dockart.h">
-      <Filter>win\theme</Filter>
-    </ClInclude>
-    <ClInclude Include="win\theme\luna_tabart.h">
-      <Filter>win\theme</Filter>
-    </ClInclude>
-    <ClInclude Include="win\theme\luna_toolbarart.h">
-      <Filter>win\theme</Filter>
-    </ClInclude>
-    <ClInclude Include="win\ctrls\dataview\headerctrlg.h">
-      <Filter>win\ctrls\dataview</Filter>
-    </ClInclude>
-    <ClInclude Include="win\ctrls\dataview\datavgen.h">
-      <Filter>win\ctrls\dataview</Filter>
-    </ClInclude>
-    <ClInclude Include="win\ctrls\dataview\datavlayout.h">
-      <Filter>win\ctrls\dataview</Filter>
-    </ClInclude>
-    <ClInclude Include="win\ctrls\dataview\dataview.h">
-      <Filter>win\ctrls\dataview</Filter>
-    </ClInclude>
-    <ClInclude Include="win\ctrls\dataview\dataviewEditOnActivate.h">
-      <Filter>win\ctrls\dataview</Filter>
-    </ClInclude>
-    <ClInclude Include="win\ctrls\dataview\dvrenderers.h">
-      <Filter>win\ctrls\dataview</Filter>
-    </ClInclude>
-    <ClInclude Include="win\ctrls\dataview\datavgen.paged.private.h">
-      <Filter>win\ctrls\dataview</Filter>
-    </ClInclude>
-    <ClInclude Include="win\ctrls\dataview\datavgen.window.private.h">
-      <Filter>win\ctrls\dataview</Filter>
-    </ClInclude>
-    <ClInclude Include="win\ctrls\grid\gridext.h">
-      <Filter>win\ctrls\grid</Filter>
-    </ClInclude>
-    <ClInclude Include="win\ctrls\grid\gridextctrl.h">
-      <Filter>win\ctrls\grid</Filter>
-    </ClInclude>
-    <ClInclude Include="win\ctrls\grid\gridexteditors.h">
-      <Filter>win\ctrls\grid</Filter>
-    </ClInclude>
-    <ClInclude Include="win\ctrls\grid\gridextprivate.h">
-      <Filter>win\ctrls\grid</Filter>
-    </ClInclude>
-    <ClInclude Include="win\ctrls\grid\gridextsel.h">
-      <Filter>win\ctrls\grid</Filter>
-    </ClInclude>
     <ClInclude Include="win\ctrls\checktree.h">
       <Filter>win\ctrls</Filter>
     </ClInclude>
     <ClInclude Include="win\ctrls\tableView.h">
       <Filter>win\ctrls</Filter>
-    </ClInclude>
-    <ClInclude Include="win\ctrls\controlButton.h">
-      <Filter>win\ctrls</Filter>
-    </ClInclude>
-    <ClInclude Include="win\ctrls\controlCheckboxEditor.h">
-      <Filter>win\ctrls</Filter>
-    </ClInclude>
-    <ClInclude Include="win\ctrls\controlStaticText.h">
-      <Filter>win\ctrls</Filter>
-    </ClInclude>
-    <ClInclude Include="win\ctrls\controlStaticTextValue.h">
-      <Filter>win\ctrls</Filter>
-    </ClInclude>
-    <ClInclude Include="win\ctrls\controlTextEditor.h">
-      <Filter>win\ctrls</Filter>
-    </ClInclude>
-    <ClInclude Include="win\ctrls\dynamicBorder.h">
-      <Filter>win\ctrls</Filter>
-    </ClInclude>
-    <ClInclude Include="win\ctrls\floatingNotebook.h">
-      <Filter>win\ctrls</Filter>
-    </ClInclude>
-    <ClInclude Include="win\ctrls\toolBar.h">
-      <Filter>win\ctrls</Filter>
-    </ClInclude>
-    <ClInclude Include="win\ctrls\treelistctrl.h">
-      <Filter>win\ctrls</Filter>
-    </ClInclude>
-    <ClInclude Include="win\dateconv.h">
-      <Filter>win</Filter>
-    </ClInclude>
-    <ClInclude Include="win\typeconv.h">
-      <Filter>win</Filter>
     </ClInclude>
     <ClInclude Include="visualView\commandBar.h">
       <Filter>visualView</Filter>
@@ -774,117 +513,6 @@
     </ClInclude>
     <ClInclude Include="visualView\ctrl\widgets.h">
       <Filter>visualView\ctrl</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\colourScheme.h">
-      <Filter>uikit</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\inputConsumer.h">
-      <Filter>uikit</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\inputHandler.h">
-      <Filter>uikit</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\menu.h">
-      <Filter>uikit</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\menuItem.h">
-      <Filter>uikit</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\renderer.h">
-      <Filter>uikit</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\scrollTimer.h">
-      <Filter>uikit</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\theme.h">
-      <Filter>uikit</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\uikit.h">
-      <Filter>uikit</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\window.h">
-      <Filter>uikit</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\theme\themeRenderer.h">
-      <Filter>uikit\theme</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\ctrl\anyButton.h">
-      <Filter>uikit\ctrl</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\ctrl\bmpButton.h">
-      <Filter>uikit\ctrl</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\ctrl\button.h">
-      <Filter>uikit\ctrl</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\ctrl\checkBox.h">
-      <Filter>uikit\ctrl</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\ctrl\checkListBox.h">
-      <Filter>uikit\ctrl</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\ctrl\choice.h">
-      <Filter>uikit\ctrl</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\ctrl\comboBox.h">
-      <Filter>uikit\ctrl</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\ctrl\control.h">
-      <Filter>uikit\ctrl</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\ctrl\gauge.h">
-      <Filter>uikit\ctrl</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\ctrl\listBox.h">
-      <Filter>uikit\ctrl</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\ctrl\notebook.h">
-      <Filter>uikit\ctrl</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\ctrl\radioBox.h">
-      <Filter>uikit\ctrl</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\ctrl\radioButton.h">
-      <Filter>uikit\ctrl</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\ctrl\scrollArrow.h">
-      <Filter>uikit\ctrl</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\ctrl\scrollBar.h">
-      <Filter>uikit\ctrl</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\ctrl\scrollThumb.h">
-      <Filter>uikit\ctrl</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\ctrl\slider.h">
-      <Filter>uikit\ctrl</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\ctrl\spinButton.h">
-      <Filter>uikit\ctrl</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\ctrl\staticBitmap.h">
-      <Filter>uikit\ctrl</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\ctrl\staticBox.h">
-      <Filter>uikit\ctrl</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\ctrl\staticLine.h">
-      <Filter>uikit\ctrl</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\ctrl\staticText.h">
-      <Filter>uikit\ctrl</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\ctrl\textCtrl.h">
-      <Filter>uikit\ctrl</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\ctrl\toggleButton.h">
-      <Filter>uikit\ctrl</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\ctrl\toolBar.h">
-      <Filter>uikit\ctrl</Filter>
-    </ClInclude>
-    <ClInclude Include="uikit\ctrl\treeCtrl.h">
-      <Filter>uikit\ctrl</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

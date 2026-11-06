@@ -1,0 +1,273 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="gui.rc" />
+  </ItemGroup>
+  <!-- THE DESKTOP'S USER INTERFACE LIBRARY - what the desktop's programs draw their windows with (gui.h): the
+       custom-drawn engine and its Luna theme, the forks of wx's generic controls and ours, the dock art. Of the engine,
+       the core alone; of wx, the core, the base and AUI. -->
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>15.0</VCProjectVersion>
+    <ProjectGuid>{A1B2C3D4-0011-4E5F-8A9B-C0D1E2F30011}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>gui</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>gui</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\Common.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\Common.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\Common.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\Common.props" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;_USRDLL;GUI_EXPORTS;_WIN32_WINNT=0x0A00;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <AdditionalIncludeDirectories>$(oesEngine);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>core.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>wxmsw33ud_aui.lib;wxmsw33ud_core.lib;wxbase33ud.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>wxmsw33ud_aui.lib;wxmsw33ud_core.lib;wxbase33ud.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>wxmsw33u_aui.lib;wxmsw33u_core.lib;wxbase33u.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>wxmsw33u_aui.lib;wxmsw33u_core.lib;wxbase33u.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="univ\controlRenderer.cpp" />
+    <ClCompile Include="univ\ctrl\anyButton.cpp" />
+    <ClCompile Include="univ\ctrl\bmpButton.cpp" />
+    <ClCompile Include="univ\ctrl\button.cpp" />
+    <ClCompile Include="univ\ctrl\checkBox.cpp" />
+    <ClCompile Include="univ\ctrl\checkListBox.cpp" />
+    <ClCompile Include="univ\ctrl\choice.cpp" />
+    <ClCompile Include="univ\ctrl\comboBox.cpp" />
+    <ClCompile Include="univ\ctrl\control.cpp" />
+    <ClCompile Include="univ\ctrl\gauge.cpp" />
+    <ClCompile Include="univ\ctrl\listBox.cpp" />
+    <ClCompile Include="univ\ctrl\notebook.cpp" />
+    <ClCompile Include="univ\ctrl\radioBox.cpp" />
+    <ClCompile Include="univ\ctrl\radioButton.cpp" />
+    <ClCompile Include="univ\ctrl\scrollArrow.cpp" />
+    <ClCompile Include="univ\ctrl\scrollBar.cpp" />
+    <ClCompile Include="univ\ctrl\scrollThumb.cpp" />
+    <ClCompile Include="univ\ctrl\slider.cpp" />
+    <ClCompile Include="univ\ctrl\spinButton.cpp" />
+    <ClCompile Include="univ\ctrl\staticBitmap.cpp" />
+    <ClCompile Include="univ\ctrl\staticBox.cpp" />
+    <ClCompile Include="univ\ctrl\staticLine.cpp" />
+    <ClCompile Include="univ\ctrl\staticText.cpp" />
+    <ClCompile Include="univ\ctrl\textCtrl.cpp" />
+    <ClCompile Include="univ\ctrl\toggleButton.cpp" />
+    <ClCompile Include="univ\ctrl\toolBar.cpp" />
+    <ClCompile Include="univ\ctrl\treeCtrl.cpp" />
+    <ClCompile Include="univ\ctrl\treelistctrl.cpp" />
+    <ClCompile Include="univ\dataview\datavcmn.cpp" />
+    <ClCompile Include="univ\dataview\datavgen.cpp" />
+    <ClCompile Include="univ\dataview\datavgen.paged.cpp" />
+    <ClCompile Include="univ\dataview\datavgen.scrollbar.cpp" />
+    <ClCompile Include="univ\dataview\datavlayout.cpp" />
+    <ClCompile Include="univ\dataview\headerctrlcmn.cpp" />
+    <ClCompile Include="univ\dataview\headerctrlg.cpp" />
+    <ClCompile Include="univ\grid\gridext.cpp" />
+    <ClCompile Include="univ\grid\gridextctrl.cpp" />
+    <ClCompile Include="univ\grid\gridexteditors.cpp" />
+    <ClCompile Include="univ\grid\gridextsel.cpp" />
+    <ClCompile Include="univ\inputConsumer.cpp" />
+    <ClCompile Include="univ\inputHandler.cpp" />
+    <ClCompile Include="univ\menu.cpp" />
+    <ClCompile Include="univ\theme\lunaTheme.cpp" />
+    <ClCompile Include="univ\theme\luna_dockart.cpp" />
+    <ClCompile Include="univ\theme\luna_tabart.cpp" />
+    <ClCompile Include="univ\theme\luna_toolbarart.cpp" />
+    <ClCompile Include="univ\theme\themeRenderer.cpp" />
+    <ClCompile Include="univ\theme.cpp" />
+    <ClCompile Include="univ\window.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="dateconv.h" />
+    <ClInclude Include="typeconv.h" />
+    <ClInclude Include="univ\app.h" />
+    <ClInclude Include="univ\colourScheme.h" />
+    <ClInclude Include="univ\ctrl\anyButton.h" />
+    <ClInclude Include="univ\ctrl\auiToolBar.h" />
+    <ClInclude Include="univ\ctrl\bmpButton.h" />
+    <ClInclude Include="univ\ctrl\button.h" />
+    <ClInclude Include="univ\ctrl\checkBox.h" />
+    <ClInclude Include="univ\ctrl\checkListBox.h" />
+    <ClInclude Include="univ\ctrl\choice.h" />
+    <ClInclude Include="univ\ctrl\comboBox.h" />
+    <ClInclude Include="univ\ctrl\control.h" />
+    <ClInclude Include="univ\ctrl\floatingNotebook.h" />
+    <ClInclude Include="univ\ctrl\gauge.h" />
+    <ClInclude Include="univ\ctrl\listBox.h" />
+    <ClInclude Include="univ\ctrl\notebook.h" />
+    <ClInclude Include="univ\ctrl\radioBox.h" />
+    <ClInclude Include="univ\ctrl\radioButton.h" />
+    <ClInclude Include="univ\ctrl\scrollArrow.h" />
+    <ClInclude Include="univ\ctrl\scrollBar.h" />
+    <ClInclude Include="univ\ctrl\scrollThumb.h" />
+    <ClInclude Include="univ\ctrl\slider.h" />
+    <ClInclude Include="univ\ctrl\spinButton.h" />
+    <ClInclude Include="univ\ctrl\staticBitmap.h" />
+    <ClInclude Include="univ\ctrl\staticBox.h" />
+    <ClInclude Include="univ\ctrl\staticLine.h" />
+    <ClInclude Include="univ\ctrl\staticText.h" />
+    <ClInclude Include="univ\ctrl\statusBar.h" />
+    <ClInclude Include="univ\ctrl\textCtrl.h" />
+    <ClInclude Include="univ\ctrl\toggleButton.h" />
+    <ClInclude Include="univ\ctrl\toolBar.h" />
+    <ClInclude Include="univ\ctrl\treeCtrl.h" />
+    <ClInclude Include="univ\ctrl\treelistctrl.h" />
+    <ClInclude Include="univ\customBgWin.h" />
+    <ClInclude Include="univ\dataview\datavgen.h" />
+    <ClInclude Include="univ\dataview\datavgen.paged.private.h" />
+    <ClInclude Include="univ\dataview\datavgen.window.private.h" />
+    <ClInclude Include="univ\dataview\dataview.h" />
+    <ClInclude Include="univ\dataview\dataviewEditOnActivate.h" />
+    <ClInclude Include="univ\dataview\datavlayout.h" />
+    <ClInclude Include="univ\dataview\dvrenderers.h" />
+    <ClInclude Include="univ\dataview\headerctrlg.h" />
+    <ClInclude Include="univ\dialog.h" />
+    <ClInclude Include="univ\frame.h" />
+    <ClInclude Include="univ\grid\gridext.h" />
+    <ClInclude Include="univ\grid\gridextctrl.h" />
+    <ClInclude Include="univ\grid\gridexteditors.h" />
+    <ClInclude Include="univ\grid\gridextprivate.h" />
+    <ClInclude Include="univ\grid\gridextsel.h" />
+    <ClInclude Include="univ\inputConsumer.h" />
+    <ClInclude Include="univ\inputHandler.h" />
+    <ClInclude Include="univ\menu.h" />
+    <ClInclude Include="univ\menuItem.h" />
+    <ClInclude Include="univ\renderer.h" />
+    <ClInclude Include="univ\scrollTimer.h" />
+    <ClInclude Include="univ\theme\luna_dockart.h" />
+    <ClInclude Include="univ\theme\luna_tabart.h" />
+    <ClInclude Include="univ\theme\luna_toolbarart.h" />
+    <ClInclude Include="univ\theme\themeRenderer.h" />
+    <ClInclude Include="univ\theme.h" />
+    <ClInclude Include="univ\topLevel.h" />
+    <ClInclude Include="univ\window.h" />
+    <ClInclude Include="gui.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

@@ -46,7 +46,7 @@ done < <(find "$stage" -type f -print0)
 
 required=(enterprise-thin designer-thin launcher codeRunner appserver
           appcluster appcluster-tray webserver web/www.wpk
-          libcore.so libbackend.so libprotocol.so libfrmclient.so libfrmserver.so libfileserver.so
+          libcore.so libbackend.so libprotocol.so libgui.so libfrmclient.so libfrmserver.so libfileserver.so
           backend.conf help/en.hlk lang/ru/open_es.mo
           _fb/lib/libfbclient.so.2 _fb/lib/libtommath.so.1 _fb/plugins/libEngine13.so _fb/intl/fbintl _fb/firebird.msg _fb/firebird.conf)
 for r in "${required[@]}"; do
@@ -57,7 +57,7 @@ done
 unresolved=0
 for f in "$stage"/enterprise-thin "$stage"/designer-thin "$stage"/launcher "$stage"/codeRunner "$stage"/appserver \
          "$stage"/appcluster "$stage"/appcluster-tray "$stage"/webserver \
-         "$stage"/libcore.so "$stage"/libbackend.so "$stage"/libprotocol.so "$stage"/libfrmclient.so \
+         "$stage"/libcore.so "$stage"/libbackend.so "$stage"/libprotocol.so "$stage"/libgui.so "$stage"/libfrmclient.so \
          "$stage"/libfrmserver.so "$stage"/libfileserver.so "$stage"/_fb/lib/libfbclient.so.2 "$stage"/_fb/plugins/libEngine13.so "$stage"/_fb/intl/fbintl; do
   if env -u LD_LIBRARY_PATH ldd "$f" | grep -q 'not found'; then
     echo "::error::$(basename "$f") has unresolved libraries:"

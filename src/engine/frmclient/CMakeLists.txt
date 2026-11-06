@@ -4,17 +4,10 @@
 # main window and what is drawn in it, over the protocol's library (protocol/: the connections to a base's clients).
 # =============================================================================
 
-# CONFIGURE_DEPENDS — see the note in backend/CMakeLists.txt. Every source here is in the build but the listed uikit
-# units — unfinished, not in the project (frmclient.vcxproj) either.
+# CONFIGURE_DEPENDS — see the note in backend/CMakeLists.txt.
 file(GLOB_RECURSE FRMCLIENT_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
 )
-list(FILTER FRMCLIENT_SOURCES EXCLUDE REGEX "uikit/ctrl/statusBar\\.cpp$")
-list(FILTER FRMCLIENT_SOURCES EXCLUDE REGEX "uikit/dialog\\.cpp$")
-list(FILTER FRMCLIENT_SOURCES EXCLUDE REGEX "uikit/settings\\.cpp$")
-list(FILTER FRMCLIENT_SOURCES EXCLUDE REGEX "uikit/theme/theme_win32\\.cpp$")
-list(FILTER FRMCLIENT_SOURCES EXCLUDE REGEX "uikit/topLevel\\.cpp$")
-list(FILTER FRMCLIENT_SOURCES EXCLUDE REGEX "uikit/frame\\.cpp$")
 
 add_library(frmclient SHARED ${FRMCLIENT_SOURCES})
 
@@ -23,31 +16,10 @@ if(APPLE)
     target_link_libraries(frmclient PRIVATE "-framework AppKit")
 endif()
 
-# The FORKED widget layer compiles quiet — the wxWidgets submodule's rule (the root CMakeLists), applied per file
-# because these live inside our target: win/ctrls (wx's dataview, grid, treelistctrl), win/theme (wxAUI dock art) and
-# uikit (wxUniversal) are vendored forks. Upstream style is not ours to correct, and the volume hides our own: 150 of
-# the 168 -Wreorder lines in the 2026-08-02 CI run came from dataview alone. The limit, learned from a CI log: this
-# reaches the .cpp only; a vendored header with inline definitions warns inside every one of ours that includes it,
-# and silences itself with `#pragma GCC system_header`. docs/private/wx-fork.md is the inventory of the forks.
-set(FRMCLIENT_VENDORED_SOURCES ${FRMCLIENT_SOURCES})
-list(FILTER FRMCLIENT_VENDORED_SOURCES INCLUDE REGEX "/(uikit|win/ctrls|win/theme)/")
-
-if(FRMCLIENT_VENDORED_SOURCES)
-    if(MSVC)
-        set_source_files_properties(${FRMCLIENT_VENDORED_SOURCES} PROPERTIES COMPILE_OPTIONS "/W0")
-    else()
-        set_source_files_properties(${FRMCLIENT_VENDORED_SOURCES} PROPERTIES COMPILE_OPTIONS "-w")
-    endif()
-endif()
-
 target_include_directories(frmclient
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_SOURCE_DIR}/src/engine
-        # win/theme/luna_dockart.cpp is a fork of wxAUI's dock art and reaches into wx's
-        # GTK-private headers, which include <gtk/gtk.h> outright. wx links GTK privately,
-        # so those paths never arrive through wx::core. Empty off Linux, hence unguarded.
-        ${GTK3_INCLUDE_DIRS}
 )
 
 target_compile_definitions(frmclient
@@ -61,11 +33,13 @@ if(WIN32)
 endif()
 
 # Nothing of the server — not even the backend: the client talks through the protocol's library (protocol/), which
-# carries the wire's tree and the connections; and it speaks the core's meanings (core/), as the engine does.
+# carries the wire's tree and the connections; it speaks the core's meanings (core/), as the engine does; and its
+# windows are drawn with the desktop's user interface library (gui/) - public, as the thin designer draws with it too.
 target_link_libraries(frmclient
     PUBLIC
         protocol
         core
+        gui
     PRIVATE
         wx::core
         wx::aui

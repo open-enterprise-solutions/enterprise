@@ -1,7 +1,7 @@
 #ifndef __DVC_H__
 #define __DVC_H__
 
-#include "frmclient/win/ctrls/dataview/dataview.h"
+#include "gui/univ/dataview/dataview.h"
 #include "frmclient/backend/compiler/value.h"
 #include "core/formatString.h"   // ibFormatString — what a cell is shown through (GetCellFormat)
 

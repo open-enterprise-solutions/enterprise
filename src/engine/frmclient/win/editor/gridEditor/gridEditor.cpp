@@ -424,7 +424,7 @@ void ibGridEditor::OnMouseRightDown(ibGridEvent& event)
 	}
 }
 
-#include "frmclient/win/ctrls/grid/gridextprivate.h"
+#include "gui/univ/grid/gridextprivate.h"
 
 // This seems to be required for wxMotif/wxGTK otherwise the mouse
 // cursor must be in the cell edit control to get key events

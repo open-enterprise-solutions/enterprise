@@ -11,7 +11,7 @@ This file gives an AI assistant (Claude Code or similar) the context needed to w
 **"Cross-platform" here is measured, not aspirational.** The platform core — metadata, the
 language and its compiler, the bytecode interpreter, the query engine, the database layer and the
 form layer — builds from one code base and runs an **identical suite** under three toolchains on
-two architectures: MSVC on Windows x64, GCC on Linux x64, and Apple Clang on macOS 14 **arm64**.
+two architectures: MSVC on Windows x64, GCC on Linux x64, and Apple Clang on macOS 15 **arm64**.
 Every application (`enterprise-thin`, `designer-thin`, `appserver`, `webserver`, `appcluster`, `launcher`,
 `codeRunner`, `simplePlugin`) links on every platform.
 
@@ -67,7 +67,7 @@ enterprise/
 │       │                     # and is simply EMPTY for everyone else — the build never needs it, and
 │       │                     # CI fetches every submodule .gitmodules names but this one. The map below is inside it.
 │       ├── ui-palette.md         # Interior-design palette — source of truth for UI colours
-│       ├── uikit.md              # Custom-drawn UI engine (wxUniversal fork + Luna theme)
+│       ├── gui.md            # The desktop's user interface library — custom-drawn engine (wxUniversal fork + Luna), its controls, layout
 │       ├── query-engine-layers.md # THE FLOOR PLAN — L1–L5 taxonomy, one house (read first for the query arc)
 │       ├── data-composer.md      # L5 — declarative composition over the query language
 │       ├── table-model.md        # tables/lists/trees — ibDataViewModel + ibValueModel + RunComposerPage (fetch = web road)
@@ -130,7 +130,9 @@ enterprise/
         ├── backend/         # backend.dll  — engine, compiler, DB, metadata, debugger; links core
         ├── protocol/        # protocol.dll — the client protocol: protocol.h (names/numbers, no deps; the designer's messages in protocolDesigner.h) + the talking side
         ├── frmserver/       # frmserver.dll — server-side forms, the client host; includes protocol.h only
-        ├── frmclient/       # frmclient.dll — the thin client's graphics library and its communicator; links core and protocol
+        ├── gui/         # gui.dll  — the desktop's user interface: the root is the API (gui.h, typeconv, dateconv); univ/ the
+        │                    #   custom-drawn engine and all that inherits it (ctrl, dataview, grid, theme); links core
+        ├── frmclient/       # frmclient.dll — the thin client's graphics library and its communicator; links core, protocol, gui
         ├── fileserver/      # fileserver.dll — a file base loaded into the thin client's process
         ├── enterprise-thin/ # enterprise-thin.exe (thin client)
         ├── webserver/       # webserver.exe (the bases' transport for browsers: the site + the client protocol)
@@ -180,13 +182,13 @@ The compiler is a single-pass recursive descent parser with a deferred-call-reso
 
 ### 4. Two-DLL Architecture
 
-`backend.dll` has zero UI code. The wxWidgets GUI is the clients': `frmclient.dll` under `enterprise-thin` and `designer-thin`, and `launcher` / `codeRunner` on wx directly. The forms are `frmserver.dll`'s, which reaches the engine through abstract C++ interfaces exported by `backend.dll` and a client through the protocol. This allows the backend to run headless (daemon, codeRunner, service mode).
+`backend.dll` has zero UI code. The wxWidgets GUI is the clients': `frmclient.dll` under `enterprise-thin` and `designer-thin`, `launcher` on `gui.dll` (the desktop's user interface library, which frmclient places too), and `codeRunner` on wx directly. The forms are `frmserver.dll`'s, which reaches the engine through abstract C++ interfaces exported by `backend.dll` and a client through the protocol. This allows the backend to run headless (daemon, codeRunner, service mode).
 
 Under both sits **`core.dll`** (`src/engine/core/`, `CORE_API` / `CORE_EXPORTS` and the platform `__IBMSW__` / `__IBOSX__` / `__IBGTK__` in `coreApi.h`; its text is `ibString` throughout — UTF-16, `ibChar` = `char16_t` on every OS, `wc_str()` its one wide boundary — and of wx it keeps the base for `ibString`'s conversion, `_()`, `wxFileConfig`, zip and zlib): what the engine and its clients mean by the same words — ids and `ibValueTypes` (`core/types.h`), `ibVariant` (`core/variant.h`, the one value type: a primitive or a counted reference, its lifecycle, serialization and compare, no base, no factory — the engine's `ibValue` adds the runtime and the factory, the thin client's a small factory; `ibVariantPtr<T>` in `core/variant_ptr.h`), `clsid.h`, `ibString` (+ pool), `ibNumber`, `ibDateTime`, `ibGuid`, `ibFormatString`, `fileSystem/` (`ibReader`/`ibWriter`, lz), `serialize/` (`ibDataNode`, the binary provider; `provider/` — JSON, XML, files), `json/` and `xml/` (the formats' text), `ibCoreException`, `ibLocalization`, `diagnostics/` (the technology journal — one per process — and the crash guard), `description/` (the schemas both sides share — source path, command path, calc schedule, choice link, home page; ids and nodes, never a value), `query/` (the query language's words: keywords, scalar calls, unfold, balance role), `graphics/` (`ibPicture`, `ibFont`, `ibColour`, `ibPoint`/`ibSize`/`ibRect` — data; the conversion to wx is each side's), `ibProgramFolder` (`fileSystem.h` — where `backend.conf`, `lang/`, `plugins/`, `_fb/` and the other programs are looked for: the executable's folder, or on macOS the one that holds the `.app`, never `Contents/MacOS`) and `ibDiagnosticFolder` (where the journal, the dumps and `oes-debug.log` go: the same folder, except `~/Library/Logs/OES` for a program running from a macOS bundle), `GetBuildId`/`GetBuildStamp`. It reads no base, runs no script, draws no window.
 
 - Chain: core → backend → frmserver ⇄ protocol ⇄ frmclient → enterprise-thin; fileserver = backend + frmserver inside the client process.
-- backend links core PUBLIC; every project that links `backend.lib` also links `core.lib`; protocol links core; frmclient links core + protocol. `protocol.h` itself stays dependency-free.
-- Not in core: `typeconv` (fonts/colours), frmclient's `dataProtocol` seam, a value's storage.
+- backend links core PUBLIC; every project that links `backend.lib` also links `core.lib`; protocol links core; gui links core; frmclient links core + protocol + gui. `protocol.h` itself stays dependency-free.
+- Not in core: `typeconv` (fonts/colours — `gui/typeconv.h`), frmclient's `dataProtocol` seam, a value's storage.
 - Same class names as before the move; `backend/backend_core.h` includes the core headers (it is the remnant of the engine's original "core"). frmclient's `backend/backend_core.h` / `backend.h` / `backend_exception.h` are facades that include core.
 
 ### 5. Throw-By-Value Exception Pattern

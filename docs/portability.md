@@ -255,7 +255,7 @@ test rather than leaving the gap silent.
 The description types hold fonts and colours as data — `ibFont` and `ibColour`
 (`core/graphics/`), in `core/description/spreadsheetDescription.h` and in every property cell. The
 backend has no `typeconv`: converting to `wxFont` / `wxColour` is the GUI side's
-(`frmclient/win/typeconv.h`, 2026-10-13).
+(`gui/typeconv.h`; out of the backend since 2026-10-13).
 
 ### 1.8 An initialiser list that disagrees with the declaration order is a lie
 
@@ -369,7 +369,8 @@ same pass as `src/`. It is the same class as the two build systems seeing differ
   on the `.sln` road's prebuilt binaries ([BUILD.md](BUILD.md#wxwidgets-submodule-details)).
 - `path::u8string()` answers `std::u8string` now, not `std::string`.
 - The library is bounded by the oldest toolchain in CI — MSVC 2022, GCC 11 (ubuntu-22.04), Apple
-  Clang 15 (macOS 14). Per their published status, not yet tried in CI:
+  Clang of macOS 15's Xcode (macos-15; macos-14, with Clang 15, was retired 2026-11-02). Per their
+  published status, not yet tried in CI:
 
 | On all three | Not yet on all three |
 |---|---|
@@ -479,7 +480,7 @@ runtime-form suite passed 26/26 under Xvfb. (Sixteen more sources were excluded 
 `web/` + `wfrontend.cpp` belonged to `wfrontend.dll`, and six `uikit` units were unfinished.) The
 desktop front was removed on 2026-10-27; it is kept on the branch `oes/thick_client`.
 
-Not one failure was about drawing a widget. `uikit` is a wxUniversal fork that paints its own
+Not one failure was about drawing a widget. `uikit` (now `gui`) is a wxUniversal fork that paints its own
 controls, so it carries no native-toolkit assumptions — it went through untouched. Everything
 that broke was ordinary C++ MSVC had accepted: default arguments binding a non-const reference
 to a temporary, an anonymous aggregate holding members with constructors, `wxToolTip` used

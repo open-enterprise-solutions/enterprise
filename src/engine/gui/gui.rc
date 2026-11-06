@@ -1,0 +1,8 @@
+// gui.dll - its version (core/version.rc2).
+
+#include <windows.h>
+
+#define OES_FILE_DESCRIPTION "OES user interface library"
+#define OES_FILE_NAME        "gui.dll"
+#define OES_FILE_TYPE        VFT_DLL
+#include "../core/version.rc2"

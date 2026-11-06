@@ -19,7 +19,7 @@
 #include <functional>
 #include <utility>
 
-#include "frmclient/win/ctrls/controlTextEditor.h"
+#include "gui/univ/ctrl/textCtrl.h"
 #include "frmclient/visualView/ctrl/frame.h"                 // ibControlFrame
 #include "frmclient/visualView/ctrl/tableBoxColumnRenderer.h" // ibDataViewValueRenderer — the TABLE's own renderer
 
@@ -37,8 +37,7 @@ public:
 	virtual wxWindow* CreateEditorCtrl(wxWindow* dv, wxRect labelRect, const ibVariant& value) override {
 		m_text = value.GetString();
 
-		ibControlTextEditor* editor = new ibControlTextEditor;
-		editor->SetDVCMode(true);
+		ibTextCtrl* editor = new ibTextCtrl;
 		editor->Show(false);
 		if (!editor->Create(dv, wxID_ANY, value.GetString().ToWxString(), labelRect.GetPosition(), labelRect.GetSize()))
 			return nullptr;
@@ -46,9 +45,9 @@ public:
 		editor->ShowSelectButton(true);    // the "..." — room to write what does not fit
 		editor->ShowClearButton(true);
 		editor->ShowOpenButton(false);
-		editor->SetTextEditMode(m_typed);  // typing straight into the cell is the ordinary case
+		editor->SetEditable(m_typed);  // typing straight into the cell is the ordinary case
 		// …and a cell that is NOT typed into is still edited through its "..." and cleared with its "×".
-		// SetTextEditMode(false) is the control's READ-ONLY switch and greys both (2026-09-29: the appearance
+		// SetEditable(false) is the control's READ-ONLY switch and greys both (2026-09-29: the appearance
 		// cell's "..." did nothing), so they are given back here.
 		if (!m_typed) {
 			editor->EnableSelectButton(true);
@@ -56,7 +55,6 @@ public:
 		}
 		editor->Bind(wxEVT_CONTROL_BUTTON_SELECT, &ibTextWithDotsRenderer::OnExpand, this);
 		editor->Bind(wxEVT_CONTROL_BUTTON_CLEAR, &ibTextWithDotsRenderer::OnClear, this);
-		editor->LayoutControls();
 		editor->Show(true);
 		return editor;
 	}
@@ -65,7 +63,7 @@ public:
 	// already gone (the dialog's own closing takes the editor with it), what it last held is what
 	// this renderer kept, so the written text is not lost with the window that wrote it.
 	virtual bool GetValueFromEditorCtrl(wxWindow* editor, ibVariant& value) override {
-		if (ibControlTextEditor* box = dynamic_cast<ibControlTextEditor*>(editor)) {
+		if (ibTextCtrl* box = dynamic_cast<ibTextCtrl*>(editor)) {
 			m_text = box->GetValue();
 			value  = m_text;
 			return true;
@@ -94,18 +92,18 @@ private:
 	// survive its own window closing. (The value cell beside this one learnt the same lesson from
 	// the other side — it closes the editor itself before opening a picker.)
 	void OnExpand(wxCommandEvent&) {
-		ibControlTextEditor* box = dynamic_cast<ibControlTextEditor*>(GetEditorCtrl());
+		ibTextCtrl* box = dynamic_cast<ibTextCtrl*>(GetEditorCtrl());
 		wxString text = box != nullptr ? box->GetValue() : m_text;
 		if (!m_expand || !m_expand(text))
 			return;
 
 		m_text = text;   // what the cell commits, whether or not the box is still there
-		if (ibControlTextEditor* alive = dynamic_cast<ibControlTextEditor*>(GetEditorCtrl()))
-			alive->SetValue(text);
+		if (ibTextCtrl* alive = dynamic_cast<ibTextCtrl*>(GetEditorCtrl()))
+			alive->ChangeValue(text);
 	}
 	void OnClear(wxCommandEvent&) {
-		if (ibControlTextEditor* box = dynamic_cast<ibControlTextEditor*>(GetEditorCtrl()))
-			box->SetValue(wxEmptyString);
+		if (ibTextCtrl* box = dynamic_cast<ibTextCtrl*>(GetEditorCtrl()))
+			box->ChangeValue(wxEmptyString);
 	}
 
 	wxWindow* m_host;

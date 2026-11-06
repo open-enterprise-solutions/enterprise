@@ -11,7 +11,7 @@
 #include "frmclient/backend/appData.h"
 #include "frmclient/backend/system/value/valueType.h"                  // ibValueTypeDescription::AdjustValue
 
-#include "frmclient/win/ctrls/controlTextEditor.h"
+#include "gui/univ/ctrl/textCtrl.h"
 #include "frmclient/visualView/ctrl/typeControl.h"
 #include "frmclient/visualView/ctrl/frame.h"
 #include "frmclient/visualView/ctrl/tableBoxColumnRenderer.h"  // ibDataViewValueRenderer — the cell is drawn by the TABLE's renderer
@@ -118,8 +118,7 @@ public:
 		if (m_editor != nullptr)
 			m_editor->SetEditedRow(m_item);   // the window holds it — see ibFilterEditor::SetEditedRow
 
-		ibControlTextEditor* textEditor = new ibControlTextEditor;
-		textEditor->SetDVCMode(true);
+		ibTextCtrl* textEditor = new ibTextCtrl;
 
 		// create the window hidden to prevent flicker
 		textEditor->Show(false);
@@ -147,19 +146,16 @@ public:
 			textEditor->SetFont(dv->GetFont());
 		}
 
-		textEditor->SetPasswordMode(false);
-		textEditor->SetMultilineMode(false);
-		// ALWAYS EDITABLE AS A CONTROL. SetTextEditMode(false) is the read-only
+		// ALWAYS EDITABLE AS A CONTROL. SetEditable(false) is the read-only
 		// policy and it locks the Select / Clear buttons too — which is precisely
 		// how the field cell ended up with a picker that could not be opened. A
 		// field still cannot be typed into meaningfully: the model refuses text for
 		// that column, so what the user types is simply not taken.
-		textEditor->SetTextEditMode(true);
+		textEditor->SetEditable(true);
 
 		textEditor->Bind(wxEVT_CONTROL_BUTTON_SELECT, &ibFilterValueRenderer::OnSelectButtonPressed, this);
 		textEditor->Bind(wxEVT_CONTROL_BUTTON_CLEAR, &ibFilterValueRenderer::OnClearButtonPressed, this);
 
-		textEditor->LayoutControls();
 		textEditor->Show(true);
 
 		textEditor->SetInsertionPointEnd();
@@ -173,7 +169,7 @@ public:
 	}
 
 	virtual bool GetValueFromEditorCtrl(wxWindow* ctrl, ibVariant& value) override {
-		ibControlTextEditor* textEditor = wxDynamicCast(ctrl, ibControlTextEditor);
+		ibTextCtrl* textEditor = wxDynamicCast(ctrl, ibTextCtrl);
 		if (textEditor == nullptr)
 			return false;
 		const wxString text = textEditor->GetValue();

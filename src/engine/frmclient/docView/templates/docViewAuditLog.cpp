@@ -6,7 +6,7 @@
 #include "protocol/protocol.h"
 
 #include "frmclient/visualView/ctrl/frame.h"
-#include "frmclient/win/theme/luna_toolbarart.h"
+#include "gui/univ/theme/luna_toolbarart.h"
 
 #include <algorithm>
 

@@ -2,7 +2,7 @@
 #define __CONFIG_COMPARE_MODEL_H__
 
 #include "designer-thin/backend/metaCollection/metaDiff.h"
-#include "frmclient/win/ctrls/dataview/dataview.h"
+#include "gui/univ/dataview/dataview.h"
 
 #include <vector>
 

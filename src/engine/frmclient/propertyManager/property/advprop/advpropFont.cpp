@@ -3,7 +3,7 @@
 #include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the font's node
 #include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
-#include "frmclient/win/typeconv.h"   // FontToWxFont / WxFontToFont — the dialog's font, and back
+#include "gui/typeconv.h"   // FontToWxFont / WxFontToFont — the dialog's font, and back
 
 namespace {
 

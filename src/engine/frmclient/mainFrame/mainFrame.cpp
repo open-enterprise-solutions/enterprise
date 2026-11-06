@@ -52,12 +52,12 @@
 #include "frmclient/backend/backend_localization.h"     // the session's language — the frame says it
 #include "frmclient/visualView/ctrl/typeControl.h"      // ibTypeControlFactory::ChooseValue — the calculator, the calendar, the list
 #include "frmclient/visualView/ctrl/frame.h"            // ibControlFrame — what they are drawn over
-#include "frmclient/win/ctrls/controlTextEditor.h"      // ibControlTextEditor — the field they drop under
+#include "gui/univ/ctrl/textCtrl.h"                   // ibTextCtrl — the field they drop under
 #include "frmclient/backend/composition/dataComposer.h"
 #include "frmclient/win/ctrls/tableView.h"
-#include "frmclient/win/ctrls/floatingNotebook.h"
-#include "frmclient/win/theme/luna_tabart.h"
-#include "frmclient/win/theme/luna_dockart.h"
+#include "gui/univ/ctrl/floatingNotebook.h"
+#include "gui/univ/theme/luna_tabart.h"
+#include "gui/univ/theme/luna_dockart.h"
 
 namespace {
 
@@ -269,7 +269,7 @@ private:
 wxWindow* FocusedEditor(wxWindow* otherwise)
 {
 	for (wxWindow* window = wxWindow::FindFocus(); window != nullptr; window = window->GetParent()) {
-		if (wxDynamicCast(window, ibControlTextEditor) != nullptr)
+		if (wxDynamicCast(window, ibTextCtrl) != nullptr)
 			return window;
 	}
 	return wxWindow::FindFocus() != nullptr ? wxWindow::FindFocus() : otherwise;

@@ -1,0 +1,360 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="univ">
+      <UniqueIdentifier>{7c1e4a2b-9d3f-4e5a-8b6c-0d1e2f3a0001}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="univ\ctrl">
+      <UniqueIdentifier>{7c1e4a2b-9d3f-4e5a-8b6c-0d1e2f3a0002}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="univ\dataview">
+      <UniqueIdentifier>{7c1e4a2b-9d3f-4e5a-8b6c-0d1e2f3a0003}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="univ\grid">
+      <UniqueIdentifier>{7c1e4a2b-9d3f-4e5a-8b6c-0d1e2f3a0004}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="univ\theme">
+      <UniqueIdentifier>{7c1e4a2b-9d3f-4e5a-8b6c-0d1e2f3a0005}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="univ\controlRenderer.cpp">
+      <Filter>univ</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\anyButton.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\bmpButton.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\button.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\checkBox.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\checkListBox.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\choice.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\comboBox.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\control.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\gauge.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\listBox.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\notebook.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\radioBox.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\radioButton.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\scrollArrow.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\scrollBar.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\scrollThumb.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\slider.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\spinButton.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\staticBitmap.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\staticBox.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\staticLine.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\staticText.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\textCtrl.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\toggleButton.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\toolBar.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\treeCtrl.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\treelistctrl.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\dataview\datavcmn.cpp">
+      <Filter>univ\dataview</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\dataview\datavgen.cpp">
+      <Filter>univ\dataview</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\dataview\datavgen.paged.cpp">
+      <Filter>univ\dataview</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\dataview\datavgen.scrollbar.cpp">
+      <Filter>univ\dataview</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\dataview\datavlayout.cpp">
+      <Filter>univ\dataview</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\dataview\headerctrlcmn.cpp">
+      <Filter>univ\dataview</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\dataview\headerctrlg.cpp">
+      <Filter>univ\dataview</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\grid\gridext.cpp">
+      <Filter>univ\grid</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\grid\gridextctrl.cpp">
+      <Filter>univ\grid</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\grid\gridexteditors.cpp">
+      <Filter>univ\grid</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\grid\gridextsel.cpp">
+      <Filter>univ\grid</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\inputConsumer.cpp">
+      <Filter>univ</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\inputHandler.cpp">
+      <Filter>univ</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\menu.cpp">
+      <Filter>univ</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\theme\lunaTheme.cpp">
+      <Filter>univ\theme</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\theme\luna_dockart.cpp">
+      <Filter>univ\theme</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\theme\luna_tabart.cpp">
+      <Filter>univ\theme</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\theme\luna_toolbarart.cpp">
+      <Filter>univ\theme</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\theme\themeRenderer.cpp">
+      <Filter>univ\theme</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\theme.cpp">
+      <Filter>univ</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\window.cpp">
+      <Filter>univ</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="dateconv.h" />
+    <ClInclude Include="typeconv.h" />
+    <ClInclude Include="univ\app.h">
+      <Filter>univ</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\colourScheme.h">
+      <Filter>univ</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\anyButton.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\auiToolBar.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\bmpButton.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\button.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\checkBox.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\checkListBox.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\choice.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\comboBox.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\control.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\floatingNotebook.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\gauge.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\listBox.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\notebook.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\radioBox.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\radioButton.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\scrollArrow.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\scrollBar.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\scrollThumb.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\slider.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\spinButton.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\staticBitmap.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\staticBox.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\staticLine.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\staticText.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\statusBar.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\textCtrl.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\toggleButton.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\toolBar.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\treeCtrl.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\treelistctrl.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\customBgWin.h">
+      <Filter>univ</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\dataview\datavgen.h">
+      <Filter>univ\dataview</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\dataview\datavgen.paged.private.h">
+      <Filter>univ\dataview</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\dataview\datavgen.window.private.h">
+      <Filter>univ\dataview</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\dataview\dataview.h">
+      <Filter>univ\dataview</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\dataview\dataviewEditOnActivate.h">
+      <Filter>univ\dataview</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\dataview\datavlayout.h">
+      <Filter>univ\dataview</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\dataview\dvrenderers.h">
+      <Filter>univ\dataview</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\dataview\headerctrlg.h">
+      <Filter>univ\dataview</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\dialog.h">
+      <Filter>univ</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\frame.h">
+      <Filter>univ</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\grid\gridext.h">
+      <Filter>univ\grid</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\grid\gridextctrl.h">
+      <Filter>univ\grid</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\grid\gridexteditors.h">
+      <Filter>univ\grid</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\grid\gridextprivate.h">
+      <Filter>univ\grid</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\grid\gridextsel.h">
+      <Filter>univ\grid</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\inputConsumer.h">
+      <Filter>univ</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\inputHandler.h">
+      <Filter>univ</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\menu.h">
+      <Filter>univ</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\menuItem.h">
+      <Filter>univ</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\renderer.h">
+      <Filter>univ</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\scrollTimer.h">
+      <Filter>univ</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\theme\luna_dockart.h">
+      <Filter>univ\theme</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\theme\luna_tabart.h">
+      <Filter>univ\theme</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\theme\luna_toolbarart.h">
+      <Filter>univ\theme</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\theme\themeRenderer.h">
+      <Filter>univ\theme</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\theme.h">
+      <Filter>univ</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\topLevel.h">
+      <Filter>univ</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\window.h">
+      <Filter>univ</Filter>
+    </ClInclude>
+    <ClInclude Include="gui.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="gui.rc" />
+  </ItemGroup>
+</Project>

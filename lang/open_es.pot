@@ -1035,7 +1035,7 @@ msgid "Composer: source '%s.%s' exposes no columns"
 msgstr ""
 
 #: src/engine/backend/composition/dataComposer.cpp:1698
-msgid "Composer: a query of several selections has one that is neither named nor a temporary table. Name it with ONTO — without a name nothing can read it, and it is left out of the answer."
+msgid "Composer: a query of several selections has one that is neither named nor a temporary table. Name it with ONTO - without a name nothing can read it, and it is left out of the answer."
 msgstr ""
 
 #: src/engine/backend/composition/dataComposer.cpp:1886
@@ -5698,7 +5698,7 @@ msgstr ""
 
 #: src/engine/backend/query/queryLowering.cpp:6279
 #, c-format
-msgid "the link on '%s' refers to '%s', which this query reads AFTER it: a link can only relate tables that are already read — move the table earlier, or write this as a condition"
+msgid "the link on '%s' refers to '%s', which this query reads AFTER it: a link can only relate tables that are already read - move the table earlier, or write this as a condition"
 msgstr ""
 
 #: src/engine/backend/query/queryLowering.cpp:6294
@@ -11079,7 +11079,7 @@ msgstr ""
 msgid "By periods"
 msgstr ""
 
-msgid "Group this level by calendar periods, and report every period in the range — including the ones nothing happened in."
+msgid "Group this level by calendar periods, and report every period in the range - including the ones nothing happened in."
 msgstr ""
 
 msgid "Period:"
@@ -11087,7 +11087,7 @@ msgstr ""
 
 msgid ""
 "Report periods from this moment. Empty = from the earliest period in the data.\n"
-"A bound does not filter rows — it says which periods to show."
+"A bound does not filter rows - it says which periods to show."
 msgstr ""
 
 msgid "Report periods up to this moment. Empty = to the latest period in the data."

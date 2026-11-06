@@ -89,7 +89,7 @@ done
 
 required=(enterprise-thin.app designer-thin.app launcher.app codeRunner appserver
           appcluster appcluster-tray webserver web/www.wpk
-          libcore.dylib libbackend.dylib libprotocol.dylib libfrmclient.dylib libfrmserver.dylib libfileserver.dylib
+          libcore.dylib libbackend.dylib libprotocol.dylib libgui.dylib libfrmclient.dylib libfrmserver.dylib libfileserver.dylib
           backend.conf help/en.hlk lang/ru/open_es.mo
           _fb/lib/libfbclient.dylib _fb/lib/libtommath.dylib _fb/plugins/libEngine13.dylib _fb/intl/libfbintl.dylib _fb/firebird.msg _fb/firebird.conf)
 for r in "${required[@]}"; do

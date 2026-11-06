@@ -24,7 +24,7 @@
 #include <wx/stattext.h>
 
 #include "frmclient/frmclient.h"   // FRMCLIENT_API
-#include "frmclient/win/ctrls/dataview/dataview.h"
+#include "gui/univ/dataview/dataview.h"
 #include "core/description/choiceLinkDescription.h"
 
 class FRMCLIENT_API ibBackendProperty;

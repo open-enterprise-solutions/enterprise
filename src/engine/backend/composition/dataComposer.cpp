@@ -1718,7 +1718,7 @@ void ibDataDBComposer::SplitSourceText() const
 			continue;   // …the one exception: with no links the LAST statement IS the result
 		ibBackendCoreException::Error(
 			_("Composer: a query of several selections has one that is neither named nor a temporary "
-			  "table. Name it with ONTO — without a name nothing can read it, and it is left out of "
+			  "table. Name it with ONTO - without a name nothing can read it, and it is left out of "
 			  "the answer."));
 	}
 

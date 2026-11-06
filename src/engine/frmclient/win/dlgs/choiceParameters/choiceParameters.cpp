@@ -3,7 +3,7 @@
 #include "frmclient/backend/propertyManager/property/propertyChoiceLink.h"           // ibFieldReferenceTypes
 
 #include "frmclient/win/dlgs/queryConstructor/queryGridModel.h"   // the one grid model for a plain list
-#include "frmclient/win/ctrls/dataview/dataviewEditOnActivate.h"  // …and the one way a cell opens on a double-click
+#include "gui/univ/dataview/dataviewEditOnActivate.h"  // …and the one way a cell opens on a double-click
 
 #include <wx/sizer.h>
 #include <wx/statline.h>

@@ -13,9 +13,9 @@
 #include "frmclient/visualView/commandBar.h"
 #include "frmclient/visualView/visualHostClient.h"   // a designer's host selects and moves by it
 #include "frmclient/win/picture.h"
-#include "frmclient/win/ctrls/controlTextEditor.h"
-#include "frmclient/win/ctrls/dataview/dataview.h"
-#include "frmclient/win/ctrls/dataview/headerctrlg.h"
+#include "gui/univ/ctrl/textCtrl.h"
+#include "gui/univ/dataview/dataview.h"
+#include "gui/univ/dataview/headerctrlg.h"
 
 namespace {
 
@@ -69,8 +69,7 @@ public:
 	// The desktop's CreateEditorCtrl: the field's editor in the cell, as its column says, the table's look on it.
 	virtual wxWindow* CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const ibVariant& value) override
 	{
-		ibControlTextEditor* const textEditor = new ibControlTextEditor;
-		textEditor->SetDVCMode(true);
+		ibTextCtrl* const textEditor = new ibTextCtrl;
 		textEditor->Show(false);   // hidden while it is made: no flicker
 		if (!textEditor->Create(parent, wxID_ANY, value.GetType() == ibValueTypes::TYPE_EMPTY ? wxString() : value.GetString().ToWxString(),
 			labelRect.GetPosition(), labelRect.GetSize()))
@@ -85,11 +84,10 @@ public:
 		textEditor->SetForegroundColour(view->GetForegroundColour());
 		textEditor->SetFont(view->GetFont());
 
-		textEditor->SetPasswordMode(m_column.GetPasswordMode());
-		textEditor->SetMultilineMode(m_column.GetMultilineMode());
-		textEditor->SetTextEditMode(m_column.GetTextEditMode());
+		textEditor->SetPassword(m_column.GetPasswordMode());
+		textEditor->SetMultiLine(m_column.GetMultilineMode());
+		textEditor->SetEditable(m_column.GetTextEditMode());
 
-		textEditor->LayoutControls();
 		textEditor->Show(true);
 		textEditor->SetInsertionPointEnd();
 		m_textEditor = textEditor;
@@ -111,7 +109,7 @@ private:
 	const ibValueModelTableBoxColumn& m_column;
 	std::optional<bool>      m_flag;
 	wxString                 m_text;
-	ibControlTextEditor*     m_textEditor = nullptr;   // the editor it made, while the cell is edited
+	ibTextCtrl*              m_textEditor = nullptr;   // the editor it made, while the cell is edited
 };
 
 // A table's own properties, as its node writes them — itself less its columns and its State — with what of the State
@@ -131,12 +129,15 @@ ibProtocolNode PropertiesOf(const ibProtocolNode& node)
 } // namespace
 
 // THE TABLE'S DATA VIEW — the desktop's ibTableViewCtrl: the data view, and what a table asks of it beside — the row
-// read that a handle names. The data view finds a row by its object; the server names it by its handle.
+// read that a handle names, and a row's state picture as the client was sent it. The data view finds a row by its
+// object; the server names it by its handle.
 class ibTableViewCtrl : public ibDataViewCtrl {
 public:
 
 	ibTableViewCtrl(wxWindow* parent, long style)
 		: ibDataViewCtrl(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, style) {}
+
+	virtual wxBitmap PictureById(const ibPictureID& picture) const override { return ibProtocolPictureById(picture); }
 
 	// The row read of that handle — none: not among the rows read.
 	ibDataViewItem FindRow(long long handle) const
@@ -650,8 +651,8 @@ void ibValueModelTableBox::OnEditorButton(wxCommandEvent& event)
 	// Cleared — into the open editor too, as the desktop's column wrote the empty value there (SetControlValue): the
 	// text left standing in it went back with the edit's end and found the value it had cleared again.
 	if (type == wxEVT_CONTROL_BUTTON_CLEAR) {
-		if (wxTextCtrl* const text = wxDynamicCast(event.GetEventObject(), wxTextCtrl))
-			text->SetValue(wxEmptyString);
+		if (ibTextCtrl* const text = wxDynamicCast(event.GetEventObject(), ibTextCtrl))
+			text->ChangeValue(wxEmptyString);
 	}
 
 	SendCell(type == wxEVT_CONTROL_BUTTON_SELECT ? ibProtocol::ibEvent::ibKind::Select

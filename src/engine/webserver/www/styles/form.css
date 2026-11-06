@@ -226,7 +226,7 @@ oes-textctrl .caption {
 }
 
 /* One width for every field, its buttons inside it: a field with Select and Clear is as wide as one with none, as the
-   desktop's (ibControlTextEditor: "button presence must not change the default size"). A stretched item still fills. */
+   desktop's (ibTextCtrl: "button presence must not change the default size"). A stretched item still fills. */
 oes-textctrl wa-input,
 oes-textctrl wa-textarea {
 	flex: 1 1 auto;

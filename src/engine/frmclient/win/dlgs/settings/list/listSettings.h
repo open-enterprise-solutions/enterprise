@@ -17,7 +17,7 @@
 
 // The tabs are model-driven grids, and the value cells are type-driven selectors — both live on the
 // dataview machinery below.
-#include "frmclient/win/ctrls/dataview/dataview.h"
+#include "gui/univ/dataview/dataview.h"
 #include "protocol/protocolNode.h"   // the server's question and its answer
 
 class FRMCLIENT_API ibMetaData;

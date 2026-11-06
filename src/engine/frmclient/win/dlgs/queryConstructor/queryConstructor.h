@@ -56,7 +56,7 @@
 #include "frmclient/backend/query/queryConstructorModel.h"
 
 // The links grid is an ibDataViewCtrl with its own model — cells edited IN PLACE.
-#include "frmclient/win/ctrls/dataview/dataview.h"
+#include "gui/univ/dataview/dataview.h"
 #include "queryGridModel.h"   // ibTotalsRow — which NODE a row of the totals grid belongs to
 
 class ibMetaData;

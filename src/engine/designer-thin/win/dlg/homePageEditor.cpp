@@ -16,7 +16,7 @@
 
 #include "frmclient/backend/backend_picture.h"                 // ibBackendPicture::GetPicture — the toolbar art
 #include "core/picturePredefined.h"
-#include "frmclient/win/theme/luna_toolbarart.h"
+#include "gui/univ/theme/luna_toolbarart.h"
 #include "protocol/protocolDesigner.h"                                 // ibProtocol::ibSchema::ibHomePage — the forms' rows
 
 #include <map>

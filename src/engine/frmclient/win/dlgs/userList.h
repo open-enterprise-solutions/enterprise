@@ -18,7 +18,7 @@
 #include <wx/itemattr.h>
 
 #include "frmclient/frmclient.h"
-#include "frmclient/win/ctrls/dataview/dataview.h"
+#include "gui/univ/dataview/dataview.h"
 
 // USERS — the old desktop's dialog as it was: the list read from the server's schema
 // (frmserver/schema/designer/userList.cpp) through ibUserInfo, as it read sys_user.

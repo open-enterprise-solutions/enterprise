@@ -30,7 +30,7 @@
 #include "frmclient/backend/metaData.h"                               // ibMetaData — the configuration a type is read against
 #include "frmclient/backend/system/value/composition/valueComposerSettings.h"           // ibValueCompositionField — the one value with a picker
 #include "frmclient/backend/system/value/valueType.h"                 // ibValueTypeDescription::AdjustValue — text shaped by the declared type
-#include "frmclient/win/ctrls/controlTextEditor.h"
+#include "gui/univ/ctrl/textCtrl.h"
 #include "frmclient/visualView/ctrl/typeControl.h"           // ibTypeControlFactory::ChooseValue
 #include "frmclient/visualView/ctrl/frame.h"                 // ibControlFrame
 #include "frmclient/visualView/ctrl/tableBoxColumnRenderer.h" // ibDataViewValueRenderer — the TABLE's own renderer
@@ -136,8 +136,7 @@ public:
 	virtual wxWindow* CreateEditorCtrl(wxWindow* dv, wxRect labelRect, const ibVariant& value) override {
 		m_row = m_item;   // the row this editor belongs to — never the grid's selection
 
-		ibControlTextEditor* editor = new ibControlTextEditor;
-		editor->SetDVCMode(true);
+		ibTextCtrl* editor = new ibTextCtrl;
 		editor->Show(false);
 		if (!editor->Create(dv, wxID_ANY, value.GetString().ToWxString(), labelRect.GetPosition(), labelRect.GetSize()))
 			return nullptr;
@@ -145,12 +144,12 @@ public:
 		editor->ShowSelectButton(true);
 		editor->ShowClearButton(true);
 		editor->ShowOpenButton(false);
-		// NOT SetTextEditMode(false): that flag is the read-only POLICY — it locks the
-		// Select and Clear buttons along with the text (controlTextEditor.h says so).
+		// NOT SetEditable(false): that flag is the read-only POLICY — it locks the
+		// Select and Clear buttons along with the text (gui's textCtrl.h says so).
 		// Using it to stop typing into a field is what disabled "…" and "×" on every
 		// tab at once. Typing is harmless here because the cell only accepts values
 		// it was GIVEN — the text is never read back as a field.
-		editor->SetTextEditMode(true);
+		editor->SetEditable(true);
 		editor->Bind(wxEVT_CONTROL_BUTTON_SELECT, &ibRowValueCellRenderer::OnSelect, this);
 		editor->Bind(wxEVT_CONTROL_BUTTON_CLEAR, &ibRowValueCellRenderer::OnClear, this);
 
@@ -162,11 +161,8 @@ public:
 		// Written on the KEYSTROKE rather than on the way out, because the way out of this editor has
 		// several doors — Enter, focus, a modal opening over it — and a value that depends on which
 		// one was used is a value that goes missing on the others.
-		if (m_typeOf) {
-			editor->Bind(wxEVT_CONTROL_TEXT_INPUT, &ibRowValueCellRenderer::OnTyped, this);
-			editor->Bind(wxEVT_CONTROL_TEXT_CLEAR, &ibRowValueCellRenderer::OnTyped, this);
-		}
-		editor->LayoutControls();
+		if (m_typeOf)
+			editor->Bind(wxEVT_TEXT, &ibRowValueCellRenderer::OnTyped, this);
 		editor->Show(true);
 		return editor;
 	}

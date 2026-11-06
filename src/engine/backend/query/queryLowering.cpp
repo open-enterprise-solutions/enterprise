@@ -6308,7 +6308,7 @@ void CheckJoinsAreConsistent(const ibQuerySelect& ast, const std::vector<ibSourc
 			if (root > bound)
 				ThrowQueryException(join.m_on->m_line, join.m_on->m_col, ibString::Format(
 					_("the link on '%s' refers to '%s', which this query reads AFTER it: a link can "
-					  "only relate tables that are already read — move the table earlier, or write "
+					  "only relate tables that are already read - move the table earlier, or write "
 					  "this as a condition"),
 					ibQuerySourceName(join.m_source),
 					ibQuerySourceName(ast.m_joins[static_cast<size_t>(root) - 1].m_source)));

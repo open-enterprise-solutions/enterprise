@@ -168,7 +168,7 @@ ibFrameLauncher::ibFrameLauncher(wxWindow* parent, wxWindowID id, const wxString
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxHORIZONTAL);
 	wxBoxSizer* sizerLeft = new wxBoxSizer(wxVERTICAL);
 
-	m_listIBwnd = new wxListBox(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, nullptr, wxLB_SINGLE);
+	m_listIBwnd = new ibListBox(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, nullptr, wxLB_SINGLE);
 	m_listIBwnd->SetFont(wxFont(13, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
 
 	m_listIBwnd->Bind(wxEVT_LISTBOX, &ibFrameLauncher::OnSelectedList, this);
@@ -176,48 +176,47 @@ ibFrameLauncher::ibFrameLauncher(wxWindow* parent, wxWindowID id, const wxString
 
 	sizerLeft->Add(m_listIBwnd, 1, wxALL | wxEXPAND, 8);
 
-	m_staticDBName = new wxStaticText(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0);
+	m_staticDBName = new ibStaticText(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0);
 	m_staticDBName->SetFont(wxFont(12, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
-	m_staticDBName->Wrap(-1);
 	sizerLeft->Add(m_staticDBName, 0, wxALL | wxEXPAND, FromDIP(5));
 
 	mainSizer->Add(sizerLeft, 1, wxEXPAND, FromDIP(5));
 
 	wxBoxSizer* sizerRight = new wxBoxSizer(wxVERTICAL);
 
-	m_buttonEnterprise = new wxButton(this, wxID_ANY, _("Enterprise"), wxDefaultPosition, wxDefaultSize, 0);
+	m_buttonEnterprise = new ibButton(this, wxID_ANY, _("Enterprise"), wxDefaultPosition, wxDefaultSize, 0);
 	m_buttonEnterprise->SetBitmap(ibGetLauncherPicture(ibLauncherPicture::Enterprise));
 	m_buttonEnterprise->Bind(wxEVT_BUTTON, &ibFrameLauncher::OnButtonEnterprise, this);
 
 	sizerRight->Add(m_buttonEnterprise, 0, wxALL | wxEXPAND, FromDIP(5));
 
-	m_buttonDesigner = new wxButton(this, wxID_ANY, _("Designer"), wxDefaultPosition, wxDefaultSize, 0);
+	m_buttonDesigner = new ibButton(this, wxID_ANY, _("Designer"), wxDefaultPosition, wxDefaultSize, 0);
 	m_buttonDesigner->SetBitmap(ibGetLauncherPicture(ibLauncherPicture::Designer));
 	m_buttonDesigner->Bind(wxEVT_BUTTON, &ibFrameLauncher::OnButtonDesigner, this);
 
 	sizerRight->Add(m_buttonDesigner, 0, wxALL | wxEXPAND, FromDIP(5));
 
-	m_buttonWeb = new wxButton(this, wxID_ANY, _("Web"), wxDefaultPosition, wxDefaultSize, 0);
+	m_buttonWeb = new ibButton(this, wxID_ANY, _("Web"), wxDefaultPosition, wxDefaultSize, 0);
 	m_buttonWeb->SetBitmap(ibGetLauncherPicture(ibLauncherPicture::Web));
 	m_buttonWeb->Bind(wxEVT_BUTTON, &ibFrameLauncher::OnButtonWeb, this);
 
 	sizerRight->Add(m_buttonWeb, 0, wxALL | wxEXPAND, FromDIP(5));
 	sizerRight->Add(0, 0, 1, wxEXPAND, FromDIP(5));
 
-	m_buttonAdd = new wxButton(this, wxID_ANY, _("Add"), wxDefaultPosition, wxDefaultSize, 0);
+	m_buttonAdd = new ibButton(this, wxID_ANY, _("Add"), wxDefaultPosition, wxDefaultSize, 0);
 	m_buttonAdd->SetBitmap(ibGetLauncherPicture(ibLauncherPicture::Add));
 	sizerRight->Add(m_buttonAdd, 0, wxALL | wxEXPAND, FromDIP(5));
 
 	m_buttonAdd->Bind(wxEVT_BUTTON, &ibFrameLauncher::OnButtonAdd, this);
 
-	m_buttonEdit = new wxButton(this, wxID_ANY, _("Edit"), wxDefaultPosition, wxDefaultSize, 0);
+	m_buttonEdit = new ibButton(this, wxID_ANY, _("Edit"), wxDefaultPosition, wxDefaultSize, 0);
 
 	m_buttonEdit->SetBitmap(ibGetLauncherPicture(ibLauncherPicture::Edit));
 	sizerRight->Add(m_buttonEdit, 0, wxALL | wxEXPAND, FromDIP(5));
 
 	m_buttonEdit->Bind(wxEVT_BUTTON, &ibFrameLauncher::OnButtonEdit, this);
 
-	m_buttonDelete = new wxButton(this, wxID_ANY, _("Delete"), wxDefaultPosition, wxDefaultSize, 0);
+	m_buttonDelete = new ibButton(this, wxID_ANY, _("Delete"), wxDefaultPosition, wxDefaultSize, 0);
 
 	m_buttonDelete->SetBitmap(ibGetLauncherPicture(ibLauncherPicture::Delete));
 	sizerRight->Add(m_buttonDelete, 0, wxALL | wxEXPAND, FromDIP(5));
@@ -226,7 +225,7 @@ ibFrameLauncher::ibFrameLauncher(wxWindow* parent, wxWindowID id, const wxString
 
 	sizerRight->Add(0, 0, 1, wxEXPAND, FromDIP(5));
 
-	m_buttonExit = new wxButton(this, wxID_EXIT, _("Exit"), wxDefaultPosition, wxDefaultSize, 0);
+	m_buttonExit = new ibButton(this, wxID_EXIT, _("Exit"), wxDefaultPosition, wxDefaultSize, 0);
 
 	m_buttonExit->SetBitmap(ibGetLauncherPicture(ibLauncherPicture::Exit));
 	sizerRight->Add(m_buttonExit, 0, wxALL | wxEXPAND, FromDIP(5));

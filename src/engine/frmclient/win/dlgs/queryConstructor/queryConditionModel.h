@@ -24,7 +24,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////
 
-#include "frmclient/win/ctrls/dataview/dataview.h"
+#include "gui/univ/dataview/dataview.h"
 
 #include "core/query/queryAST.h"
 

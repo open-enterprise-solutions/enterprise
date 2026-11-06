@@ -21,7 +21,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////
 
-#include "frmclient/win/ctrls/dataview/dataview.h"
+#include "gui/univ/dataview/dataview.h"
 #include "queryLinkModel.h"                     // the column ids — one grid shape, one set of ids
 
 #include "core/query/queryAST.h"

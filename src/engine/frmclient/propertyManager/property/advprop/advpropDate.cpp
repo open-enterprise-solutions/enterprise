@@ -3,7 +3,7 @@
 #include <wx/datectrl.h>            // wxDatePickerCtrl — the grid's picker, told the date
 
 #include "frmclient/backend/backend_core.h"   // ibDateTime — the date as the server stores it
-#include "frmclient/win/typeconv.h"   // DateTimeToWxDateTime / WxDateTimeToDateTime — a date across to wx and back
+#include "gui/typeconv.h"   // DateTimeToWxDateTime / WxDateTimeToDateTime — a date across to wx and back
 #include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the date's node
 #include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"

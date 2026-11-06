@@ -31,7 +31,7 @@
 #include <wx/treectrl.h>
 
 #include "frmclient/backend/backend_composition.h"   // ibFilterDescription — what is edited here; its literals, restored
-#include "frmclient/win/ctrls/dataview/dataview.h"
+#include "gui/univ/dataview/dataview.h"
 #include "frmclient/win/dlgs/settings/filterTreeModel.h"   // ibFilterTreeModel + ibFilterPath — a row IS a path
 
 class ibSettingsFieldTree;

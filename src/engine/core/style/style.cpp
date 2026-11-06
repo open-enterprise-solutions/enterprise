@@ -199,7 +199,7 @@ const ibStyle& ibStyle::Platform()
 		ibStyle& style = *made;
 		// Each colour item: its light value and its dark one. The light look keeps what the platform painted with - the
 		// forms' ink on cream (frmserver's default style), the Luna theme's chrome, border, accent and button colours
-		// (frmclient/uikit/theme/lunaTheme.cpp); the items it had no colour for, and the whole dark look, are new.
+		// (gui/univ/theme/lunaTheme.cpp); the items it had no colour for, and the whole dark look, are new.
 		const struct { ibStyleItem item; unsigned int light; unsigned int dark; } colours[] = {
 			{ ibStyleItem::FormBackground,        0xFAF7F0, 0x22262B },
 			{ ibStyleItem::FormText,              0x3F5C77, 0xC9D6E2 },

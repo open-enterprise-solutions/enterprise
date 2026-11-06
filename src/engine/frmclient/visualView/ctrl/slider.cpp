@@ -5,9 +5,11 @@
 
 #include "widgets.h"
 
+#include "gui/univ/ctrl/slider.h"
+
 void ibValueSlider::Create(wxWindow* parent, const ibProtocolNode& node)
 {
-	m_slider = new wxSlider(parent, wxID_ANY,
+	m_slider = new ibSlider(parent, wxID_ANY,
 		static_cast<int>(node.GetInt(ibProtocol::ibForm::ibProperty::Value, 50)),
 		static_cast<int>(node.GetInt(ibProtocol::ibForm::ibProperty::MinValue, 0)),
 		static_cast<int>(node.GetInt(ibProtocol::ibForm::ibProperty::MaxValue, 100)),
@@ -23,6 +25,11 @@ void ibValueSlider::Update(const ibProtocolNode& node)
 	m_slider->SetValue(static_cast<int>(node.GetInt(ibProtocol::ibForm::ibProperty::Value, 50)));
 
 	UpdateWindow(m_slider, node);
+}
+
+wxWindow* ibValueSlider::GetWindow() const
+{
+	return m_slider;
 }
 
 CONTROL_REGISTER(ibValueSlider, ibProtocol::ibForm::ibType::Slider)

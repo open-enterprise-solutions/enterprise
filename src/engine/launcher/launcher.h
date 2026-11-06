@@ -3,20 +3,20 @@
 
 #include <wx/artprov.h>
 #include <wx/string.h>
-#include <wx/listbox.h>
 #include <wx/gdicmn.h>
 #include <wx/font.h>
 #include <wx/colour.h>
 #include <wx/settings.h>
-#include <wx/stattext.h>
 #include <wx/sizer.h>
 #include <wx/bitmap.h>
 #include <wx/image.h>
 #include <wx/icon.h>
-#include <wx/button.h>
 #include <wx/frame.h>
 #include <wx/bmpbndl.h>
 #include "core/localization/dictionary.h"   // _() — the dialog's words
+#include "gui/univ/ctrl/button.h"       // the window's controls — the kit's (gui.h)
+#include "gui/univ/ctrl/listBox.h"
+#include "gui/univ/ctrl/staticText.h"
 
 // ⭐ THE LAUNCHER'S OWN PICTURES. It links the backend alone, so the frontend's art provider — which answers the
 // stock ids in the set's manner in the designer and the running application — never reaches it, and a stock id
@@ -44,15 +44,15 @@ struct ibListInfo {
 
 class ibFrameLauncher : public wxFrame {
 
-	wxListBox* m_listIBwnd;
-	wxStaticText* m_staticDBName;
-	wxButton* m_buttonEnterprise;
-	wxButton* m_buttonDesigner;
-	wxButton* m_buttonWeb;
-	wxButton* m_buttonAdd;
-	wxButton* m_buttonEdit;
-	wxButton* m_buttonDelete;
-	wxButton* m_buttonExit;
+	ibListBox* m_listIBwnd;
+	ibStaticText* m_staticDBName;
+	ibButton* m_buttonEnterprise;
+	ibButton* m_buttonDesigner;
+	ibButton* m_buttonWeb;
+	ibButton* m_buttonAdd;
+	ibButton* m_buttonEdit;
+	ibButton* m_buttonDelete;
+	ibButton* m_buttonExit;
 
 	std::vector<std::pair<wxString, ibListInfo>> m_listInfoBase;
 

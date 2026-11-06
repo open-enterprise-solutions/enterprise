@@ -215,7 +215,7 @@ EVT_PG_SELECTED(WXOES_PROPERTY_GRID, ibDialogFormEditor::OnPropertyGridItemSelec
 
 wxEND_EVENT_TABLE()
 
-#include "frmclient/win/theme/luna_toolbarart.h"
+#include "gui/univ/theme/luna_toolbarart.h"
 #include "frmclient/visualView/visualHostClient.h"
 
 ibDialogFormEditor::ibDialogFormEditor(ibValueForm* valueForm) :

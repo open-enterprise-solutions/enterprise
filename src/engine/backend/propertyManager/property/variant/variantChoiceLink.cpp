@@ -367,7 +367,7 @@ ibString ibVariantChoiceParameters::GetString() const
 	unsigned int named = 0;
 	for (const ibChoiceParameterRowDescription& row : paramsDesc.m_rows) {
 		if (named == 3) {
-			shown += ibT(", …");
+			shown += ibT(", ...");
 			break;
 		}
 		if (named > 0)

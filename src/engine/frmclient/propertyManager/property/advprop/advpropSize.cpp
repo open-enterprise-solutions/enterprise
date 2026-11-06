@@ -3,7 +3,7 @@
 #include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the size's node
 #include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
-#include "frmclient/win/typeconv.h"   // the size as the server writes it
+#include "gui/typeconv.h"   // the size as the server writes it
 
 // -----------------------------------------------------------------------
 // ibPGSizeProperty

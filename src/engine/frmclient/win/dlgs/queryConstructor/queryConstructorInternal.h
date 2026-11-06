@@ -60,7 +60,7 @@
 #include <wx/stc/stc.h>
 
 #include "../callbackDropTarget.h"   // the same-process drag: a drop is a notification, the source knows what moved
-#include "frmclient/win/ctrls/dataview/dataviewEditOnActivate.h"   // a double-click opens the cell
+#include "gui/univ/dataview/dataviewEditOnActivate.h"   // a double-click opens the cell
 #include "queryFieldTree.h"   // the field row: its node, its walk, its drag — shared with the expression editor
 
 #include "mainFrame/settings/fontcolorsettings.h"   // the engine's own font + colours, so this pane matches the code editor

@@ -10,9 +10,9 @@
 #include "frmclient/backend/system/value/valueType.h"   // ibValueTypeDescription::AdjustValue — typed text, a value of the type
 #include "frmclient/visualView/ctrl/frame.h"
 #include "frmclient/win/dlgs/selectPredefined.h"        // ibShowPredefinedSelector — a declared value picked
-#include "frmclient/win/dlgs/textWithDotsCell.h"        // ibTextWithDotsRenderer, ibControlTextEditor — a value picked through "..."
+#include "frmclient/win/dlgs/textWithDotsCell.h"        // ibTextWithDotsRenderer, ibTextCtrl — a value picked through "..."
 #include "frmclient/win/dlgs/typeSelector.h"            // ibShowTypeSelector — a type picked
-#include "frmclient/win/theme/luna_toolbarart.h"
+#include "gui/univ/theme/luna_toolbarart.h"
 #include "protocol/protocolDesigner.h"                          // ibProtocol::ibRequest::ibPredefinedSelector — what that window is given
 
 enum
@@ -359,14 +359,13 @@ void ibDialogPredefinedEditor::ibDialogPredefinedItem::AppendAttribute(wxWindow*
 		control = editor->m_check;
 	}
 	else if (IsPicked(attribute)) {
-		editor->m_picked = new ibControlTextEditor(parent, wxID_ANY, editor->m_held ? wxString(editor->m_held->m_title) : wxString());
+		editor->m_picked = new ibTextCtrl(parent, wxID_ANY, editor->m_held ? wxString(editor->m_held->m_title) : wxString());
 		editor->m_picked->ShowSelectButton(true);
 		editor->m_picked->ShowClearButton(true);
 		editor->m_picked->ShowOpenButton(false);
-		editor->m_picked->SetTextEditMode(false);   // the read-only switch greys the buttons too: given back below
+		editor->m_picked->SetEditable(false);   // the read-only switch greys the buttons too: given back below
 		editor->m_picked->EnableSelectButton(true);
 		editor->m_picked->EnableClearButton(true);
-		editor->m_picked->LayoutControls();
 		ibAttributeEditor* const held = editor.get();
 		editor->m_picked->Bind(wxEVT_CONTROL_BUTTON_SELECT, [this, held](wxCommandEvent&) {
 			if (held->m_attribute->m_holdsType) {
@@ -375,11 +374,11 @@ void ibDialogPredefinedEditor::ibDialogPredefinedItem::AppendAttribute(wxWindow*
 			}
 			wxString title = held->m_picked->GetValue();
 			if (PickValue(this, *held->m_attribute, title))
-				held->m_picked->SetValue(title);
+				held->m_picked->ChangeValue(title);
 		});
 		editor->m_picked->Bind(wxEVT_CONTROL_BUTTON_CLEAR, [held](wxCommandEvent&) {
 			held->m_held.reset();
-			held->m_picked->SetValue(wxEmptyString);
+			held->m_picked->ChangeValue(wxEmptyString);
 		});
 		sizer->Add(editor->m_picked, 1, wxEXPAND);
 		control = editor->m_picked;
@@ -541,7 +540,7 @@ void ibDialogPredefinedEditor::ibDialogPredefinedItem::PickType(ibAttributeEdito
 		packed.AddField(kValueFieldData, written);
 		editor.m_held = ibPredefinedCellDescription{ DescribeTypes(type), packed };
 	}
-	editor.m_picked->SetValue(editor.m_held ? wxString(editor.m_held->m_title) : wxString());
+	editor.m_picked->ChangeValue(editor.m_held ? wxString(editor.m_held->m_title) : wxString());
 }
 
 bool ibDialogPredefinedEditor::ibDialogPredefinedItem::TakeRow(ibPredefinedRowDescription& row) const

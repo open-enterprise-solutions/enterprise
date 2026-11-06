@@ -6,7 +6,7 @@
 #include <wx/button.h>
 #include <wx/sizer.h>
 
-#include "frmclient/win/ctrls/dataview/dataview.h"   // ibDataViewViewMode
+#include "gui/univ/dataview/dataview.h"   // ibDataViewViewMode
 
 // THE VIEW MODE WINDOW — the old desktop's (ibTableViewCtrl::ShowViewMode):the mode in
 // force and the window's picture are what the server sent (ibProtocol::ibRequest::ibKind::ViewMode), the mode chosen goes back.

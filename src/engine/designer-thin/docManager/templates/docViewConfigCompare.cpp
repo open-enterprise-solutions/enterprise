@@ -2,8 +2,8 @@
 
 #include "designer-thin/backend/metaCollection/metaDiff.h"
 #include "frmclient/mainFrame/mainFrame.h"
-#include "frmclient/win/ctrls/dataview/dataview.h"
-#include "frmclient/win/theme/luna_toolbarart.h"
+#include "gui/univ/dataview/dataview.h"
+#include "gui/univ/theme/luna_toolbarart.h"
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibConfigCompare
 
 #include <wx/aui/auibar.h>

@@ -2085,7 +2085,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 	wxBoxSizer* periodRow = new wxBoxSizer(wxHORIZONTAL);
 	m_byPeriods = new wxCheckBox(m_periodPane, wxID_ANY, _("By periods"));
 	m_byPeriods->SetToolTip(_("Group this level by calendar periods, and report every period in the "
-	                          "range — including the ones nothing happened in."));
+	                          "range - including the ones nothing happened in."));
 	m_byPeriods->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) { ApplyTotalsPeriods(); });
 	periodRow->Add(m_byPeriods, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(6));
 
@@ -2125,7 +2125,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 	};
 	addBound(_("From:"), m_periodFrom,
 		_("Report periods from this moment. Empty = from the earliest period in the data.\n"
-		  "A bound does not filter rows — it says which periods to show."));
+		  "A bound does not filter rows - it says which periods to show."));
 	addBound(_("To:"), m_periodTo,
 		_("Report periods up to this moment. Empty = to the latest period in the data."));
 	m_periodPane->SetSizer(periodRow);

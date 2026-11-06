@@ -9,7 +9,7 @@
 
 #include "frmclient/artProvider/artProvider.h"
 #include "frmclient/docView/docView.h"   // ibMetaView — the tree's view
-#include "frmclient/win/theme/luna_toolbarart.h"
+#include "gui/univ/theme/luna_toolbarart.h"
 
 //**********************************************************************************
 

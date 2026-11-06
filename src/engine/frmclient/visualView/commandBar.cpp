@@ -10,8 +10,8 @@
 
 #include "protocol/protocol.h"
 #include "frmclient/win/picture.h"
-#include "frmclient/win/ctrls/toolBar.h"
-#include "frmclient/win/theme/luna_toolbarart.h"
+#include "gui/univ/ctrl/auiToolBar.h"
+#include "gui/univ/theme/luna_toolbarart.h"
 #include "frmclient/visualView/visualHostClient.h"   // ibVisualHostClient::IsDesignerHost — the bar's real width in the editor
 
 namespace {

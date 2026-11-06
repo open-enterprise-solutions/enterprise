@@ -4,9 +4,9 @@
 #include <wx/aui/auibar.h>
 
 #include "frmclient/backend/metaCollection/partial/commonObject.h"
-#include "frmclient/win/ctrls/dataview/dataview.h"
+#include "gui/univ/dataview/dataview.h"
 
-class ibControlTextEditor;
+class ibTextCtrl;
 
 class ibDialogPredefinedEditor : public wxDialog {
 
@@ -159,7 +159,7 @@ class ibDialogPredefinedEditor : public wxDialog {
 		struct ibAttributeEditor {
 			const ibPredefinedAttributeDescription* m_attribute = nullptr;
 			wxCheckBox* m_check = nullptr;              // a flag
-			ibControlTextEditor* m_picked = nullptr;    // a value picked through its "...": a type, or one of the closed set
+			ibTextCtrl* m_picked = nullptr;             // a value picked through its "...": a type, or one of the closed set
 			wxTextCtrl* m_text = nullptr;               // a value typed
 			std::optional<ibPredefinedCellDescription> m_held;
 		};

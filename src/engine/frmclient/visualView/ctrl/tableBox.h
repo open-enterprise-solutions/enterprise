@@ -4,8 +4,8 @@
 #include <memory>
 
 #include "frmclient/visualView/ctrl/window.h"
-#include "frmclient/win/ctrls/dataview/dataview.h"      // ibDataViewSelectionMode, ibDataViewViewMode
-#include "frmclient/win/ctrls/dataview/datavlayout.h"   // ibColumnGroupKind
+#include "gui/univ/dataview/dataview.h"      // ibDataViewSelectionMode, ibDataViewViewMode
+#include "gui/univ/dataview/datavlayout.h"   // ibColumnGroupKind
 #include "frmclient/visualView/tableModel.h"
 
 class ibViewCommandBar;

@@ -54,7 +54,7 @@
 #include "frmclient/win/dlgs/rowValueCell.h"          // ibRowValueCellRenderer — a field and a kind are VALUES
 #include "frmclient/win/dlgs/textWithDotsCell.h"      // ibTextWithDotsRenderer — a text cell with a "..."
 #include "frmclient/win/dlgs/settings/settingsAppearanceEditor.h"   // a field's appearance — the "..." behind it
-#include "frmclient/win/typeconv.h"                    // WxColourToColour — a row's grey is the model view's data
+#include "gui/typeconv.h"                    // WxColourToColour — a row's grey is the model view's data
 
 namespace {
 enum {

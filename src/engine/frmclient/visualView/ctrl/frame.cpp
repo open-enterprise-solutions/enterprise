@@ -12,7 +12,7 @@
 
 #include "core/stringUtils.h"   // stringUtils::IsSameAs — a name found as the desktop's finds it
 #include "frmclient/backend/propertyManager/property/propertySerializable.h"   // its properties — a row's each
-#include "frmclient/win/typeconv.h"
+#include "gui/typeconv.h"
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties
 
 namespace {

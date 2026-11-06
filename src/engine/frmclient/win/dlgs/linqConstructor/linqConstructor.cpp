@@ -10,8 +10,8 @@
 #include "frmclient/backend/compiler/value.h"   // ibValue::GetIconGroup - a field's picture
 #include "frmclient/artProvider/artProvider.h"   // wxART_FRONTEND and the product's own pictures
 #include "frmclient/mainFrame/mainFrame.h"       // the editor settings the block is coloured with
-#include "frmclient/win/ctrls/dataview/dataview.h"   // ibDataViewListCtrl - the platform's list, edited in place
-#include "frmclient/win/ctrls/dataview/dataviewEditOnActivate.h"   // …opened by a double-click
+#include "gui/univ/dataview/dataview.h"   // ibDataViewListCtrl - the platform's list, edited in place
+#include "gui/univ/dataview/dataviewEditOnActivate.h"   // …opened by a double-click
 #include "frmclient/win/dlgs/callbackDropTarget.h"   // a drop is the arrow's verb, reached by the mouse
 #include "frmclient/win/editor/codeEditor/codeEditor.h"   // the block, coloured as the module is
 #include "frmclient/docView/tabDocument.h"               // the module's tab — what the compiler is asked through

@@ -5,11 +5,13 @@
 
 #include "widgets.h"
 
+#include "gui/univ/ctrl/staticText.h"
+
 void ibViewPlaceholder::Create(wxWindow* parent, const ibProtocolNode& /*node*/)
 {
 	m_panel = new wxPanel(parent, wxID_ANY);
 
-	wxStaticText* const text = new wxStaticText(m_panel, wxID_ANY,
+	ibStaticText* const text = new ibStaticText(m_panel, wxID_ANY,
 		ibString::Format(_("The control type \"%s\" is not registered in this client yet."), GetClassName()),
 		wxDefaultPosition, wxDefaultSize, wxALIGN_CENTRE_HORIZONTAL);
 	text->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));

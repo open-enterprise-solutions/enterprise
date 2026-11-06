@@ -26,7 +26,7 @@
 #include "core/roleCompositionMode.h"   // ibRoleCompositionMode — the membership carries how the role combines
 
 #include "frmclient/win/ctrls/checktree.h"
-#include "frmclient/win/theme/luna_tabart.h"
+#include "gui/univ/theme/luna_tabart.h"
 
 // A USER — the old desktop's dialog as it was, on ibUserInfo: its roles and languages offered
 // as the server lists them, where the desktop's took the active configuration. What its OK checked before it saved — that
