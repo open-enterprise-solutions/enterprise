@@ -4605,7 +4605,7 @@ private:
 	wxDECLARE_DYNAMIC_CLASS_NO_ASSIGN_DEF_COPY(ibGridEditorCreatedEvent);
 };
 
-class ibGridAreaEvent : public wxNotifyEvent
+class GUI_API ibGridAreaEvent : public wxNotifyEvent
 {
 public:
 

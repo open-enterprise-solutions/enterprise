@@ -624,7 +624,7 @@ private:
 // ibHeaderGenericCtrl events
 // ----------------------------------------------------------------------------
 
-class ibHeaderGenericCtrlEvent : public wxNotifyEvent
+class GUI_API ibHeaderGenericCtrlEvent : public wxNotifyEvent
 {
 public:
 	ibHeaderGenericCtrlEvent(wxEventType commandType = wxEVT_NULL, int winid = 0)
