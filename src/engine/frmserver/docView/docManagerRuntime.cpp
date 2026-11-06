@@ -2,6 +2,7 @@
 
 #include "frmserver/schema/runtime/allFunctions.h"
 #include "frmserver/schema/runtime/debugging.h"
+#include "frmserver/schema/runtime/fullTextSearch.h"
 #include "frmserver/schema/runtime/sections.h"
 
 //files
@@ -25,4 +26,7 @@ ibDocManagerRuntime::ibDocManagerRuntime()
 	RegisterSchema(ibProtocol::ibSchema::ibKind::Sections, std::make_unique<ibSchemaSections>());
 	// …and debugging it, switched in its Options.
 	RegisterSchema(ibProtocol::ibSchema::ibKind::Debugging, std::make_unique<ibSchemaDebugging>());
+	// …and the base's full-text search: its administration, and Find over it.
+	RegisterSchema(ibProtocol::ibSchema::ibKind::FullTextSearch, std::make_unique<ibSchemaFullTextSearch>());
+	RegisterSchema(ibProtocol::ibSchema::ibKind::Search, std::make_unique<ibSchemaSearch>());
 }

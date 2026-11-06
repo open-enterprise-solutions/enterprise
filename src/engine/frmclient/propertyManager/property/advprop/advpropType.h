@@ -23,8 +23,11 @@ public:
 	const std::vector<ibClassID>& GetTypeList() const { return m_listType; }
 	bool IsMultiple() const { return m_multiple; }
 
+	// `predefined`: the holder of a predefined attribute (a code, a description) - its node carries, beside the type,
+	// whether the full-text index holds the field, shown as one more row under a string type.
 	ibPGTypeProperty(const std::vector<ibClassID>& listType = std::vector<ibClassID>(), bool multiple = true,
-		const wxString& label = wxPG_LABEL, const wxString& name = wxPG_LABEL, const wxVariant& value = wxNullVariant);
+		const wxString& label = wxPG_LABEL, const wxString& name = wxPG_LABEL, const wxVariant& value = wxNullVariant,
+		bool predefined = false);
 
 	virtual wxString ValueToString(wxVariant& value, wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override { return value.GetString(); }
 	virtual bool StringToValue(wxVariant& variant,
@@ -63,6 +66,7 @@ protected:
 	wxUIntProperty* m_scale;
 	wxEnumProperty* m_date_time;
 	wxUIntProperty* m_length;
+	wxBoolProperty* m_fullTextSearch = nullptr;   // the predefined holder's only
 
 	std::map<int, ibClassID> m_valChoices;
 };

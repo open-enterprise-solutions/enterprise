@@ -205,11 +205,18 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **A scheduled job's last pass.** A row of `ScheduledJobs.Predefined` has `LastJob`, and a parameterized
   job's manager `LastJob(job)`: the `BackgroundJob` of its last pass here, `Undefined` if none ran. A
   predefined job the base has no settings for reads as declared; it read as switched on, hourly.
-- **`FullTextSearch`, the base's full-text search.** `GetFullTextSearchMode()` and
-  `SetFullTextSearchMode(FullTextSearchMode.Enable | Disable)` read and switch the mode, kept in the base
-  and changed with the *Data administration* right; a base where nobody switched it on answers `Disable`.
-  There is no index yet: `UpdateIndex(merge, portion)` and `ClearIndex()` succeed and do nothing,
-  `IndexTrue()` is `False` and `UpdateDate()` the empty date, so a module that keeps an index fresh runs.
+- **`FullTextSearch`, the base's full-text search.** A string attribute of a catalog, a document or a chart
+  (and of their tabular sections) has the *Full-text search* property; a catalog's and a chart's Description and
+  Code have it too. With the base's mode on (`SetFullTextSearchMode(FullTextSearchMode.Enable)`, the *Data
+  administration* right), every write puts its record's words into the index in the write's own transaction and a
+  delete drops them - no queue, nothing to run after a write. `UpdateIndex(portion)` builds what a write cannot: the
+  records written before a flag or the mode was switched on, or since `ClearIndex()`; `IndexTrue()` says whether
+  anything is left, `UpdateDate()` when the build last completed. A call with two arguments - `UpdateIndex(merge,
+  portion)` - is refused and says why. `CreateList(text, portionSize)` searches: plain words, each found as the
+  beginning of an indexed word or within one letter in five of one, ranked; the list's parts hold only records the
+  person may read, and `TotalCount()` counts after that filter. With the mouse: *Administration - Full-text search
+  index* and *Tools - Find in data* (the thin client; the browser client says they are not there yet). Tables:
+  `sys_search_word`, `sys_search_entry`, `sys_search_state`.
 
 ## The browser client
 

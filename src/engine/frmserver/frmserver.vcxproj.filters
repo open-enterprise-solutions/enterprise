@@ -379,6 +379,9 @@
     <ClCompile Include="schema\runtime\debugging.cpp">
       <Filter>schema\runtime</Filter>
     </ClCompile>
+    <ClCompile Include="schema\runtime\fullTextSearch.cpp">
+      <Filter>schema\runtime</Filter>
+    </ClCompile>
     <ClCompile Include="schema\runtime\sections.cpp">
       <Filter>schema\runtime</Filter>
     </ClCompile>
@@ -872,6 +875,9 @@
       <Filter>schema\runtime</Filter>
     </ClInclude>
     <ClInclude Include="schema\runtime\debugging.h">
+      <Filter>schema\runtime</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\runtime\fullTextSearch.h">
       <Filter>schema\runtime</Filter>
     </ClInclude>
     <ClInclude Include="schema\runtime\sections.h">

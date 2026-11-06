@@ -17,6 +17,7 @@
 #include "backend/databaseLayer/databaseErrorCodes.h"
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door — the sequence bump is built here
 #include "backend/backend_form.h"
+#include "backend/fullTextSearch/fullTextIndex.h"          // the record's words, written with it
 #include "backend/logger/logger.h"
 
 #include "backend/metaCollection/partial/tabularSection/tabularSection.h"
@@ -400,6 +401,12 @@ bool ibValueRecordDataObjectRef::SaveData()
 		}
 	}
 
+	// ⭐ THE FULL-TEXT INDEX, IN THE SAME TRANSACTION: the record's words replaced by what it holds now, so the index is
+	// never behind its data and nothing has to remember what changed (fullTextSearch/fullTextIndex.h). Asked when the
+	// lines were - a record written unchanged holds the words it was indexed with.
+	if (!hasError && (m_newObject || m_objModified || ibBackendException::IsEvalMode()))
+		ibFullTextIndex::IndexRecord(*this);
+
 	if (!hasError) {
 		m_newObject = false;
 	}
@@ -450,6 +457,9 @@ bool ibValueRecordDataObjectRef::DeleteData()
 				.Update();
 		}
 	}
+
+	// …its words go with it, in the delete's transaction.
+	ibFullTextIndex::DropRecord(*this);
 
 	// Delete the main row through the L3 door — WHERE uuid = <guid>, no statement / L2 visible.
 	// Best-effort like the prior path (it ignored the result).

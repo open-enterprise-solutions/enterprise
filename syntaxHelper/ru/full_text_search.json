@@ -14,11 +14,11 @@
         "full_text_search"
       ],
       "signature": "FullTextSearch",
-      "description": "Полнотекстовый поиск базы: включён ли он, и обслуживание его индекса. Глобальное имя сервера.\n\nРЕЖИМ ПРИНАДЛЕЖИТ БАЗЕ — один для всех сеансов и всех людей, хранится в базе, меняет его тот, у кого есть право «Администрирование данных». База, где поиск никто не включал, отвечает FullTextSearchMode.Disable.\n\nИНДЕКСА ПОКА НЕТ. Пока платформа его не ведёт, обслуживание проходит успешно и ничего не делает: IndexTrue() — False, UpdateDate() — пустая дата, UpdateIndex() и ClearIndex() возвращаются, ничего не изменив, — при любом режиме. Модуль, который только поддерживает индекс свежим (регламентное задание, форма администрирования), компилируется и работает так же, как будет работать, когда индекс появится.",
-      "syntax_block": "If FullTextSearch.GetFullTextSearchMode() = FullTextSearchMode.Enable Then\n    FullTextSearch.UpdateIndex(False, True);\nEndIf;",
+      "description": "Полнотекстовый поиск базы: поиск записей по словам их полей. Глобальное свойство сервера, доступное по имени.\n\nЧТО ИНДЕКСИРУЕТСЯ — решают метаданные: строковый реквизит, у которого включено свойство «Полнотекстовый поиск», — у справочника, документа или плана, у их табличных частей, а также Наименование и Код справочника или плана. Отдельного списка нигде нет.\n\nИНДЕКС ВЕДЁТСЯ САМ. Слова записи пишутся вместе с записью, в той же транзакции, и удаляются при её удалении: нет ни очереди, ни работы после записи. На UpdateIndex остаётся ПОСТРОЕНИЕ — записи, записанные до включения флага у поля, до включения режима или после ClearIndex. IndexTrue говорит, осталось ли что строить.\n\nРЕЖИМ — БАЗЫ: один для всех сеансов, хранится в базе, меняется с правом «Администрирование данных». В базе, где его никто не включал, — FullTextSearchMode.Disable; выключение очищает индекс.\n\nМышью: Администрирование — Индекс полнотекстового поиска включает режим и строит индекс; Сервис — Найти в данных ищет.",
+      "syntax_block": "List = FullTextSearch.CreateList(\"front wheel\", 20);\nList.FirstPart();",
       "parameters": "",
       "return_descr": "",
-      "example": "// a scheduled job keeping the index fresh\nif (FullTextSearch.GetFullTextSearchMode() = FullTextSearchMode.Enable) {\n    FullTextSearch.UpdateIndex(false, true);\n}",
+      "example": "List = FullTextSearch.CreateList(\"front wheel\", 20);\nList.FirstPart();\nfor (i = 0; i < List.Count(); i++) {\n    Message(List.Get(i).Presentation);\n}",
       "availability": "Сервер",
       "see_also": [
         "cls.FullTextSearch.GetFullTextSearchMode",
@@ -27,6 +27,8 @@
         "cls.FullTextSearch.UpdateIndex",
         "cls.FullTextSearch.ClearIndex",
         "cls.FullTextSearch.UpdateDate",
+        "cls.FullTextSearch.CreateList",
+        "cls.FullTextSearchList",
         "enum.FullTextSearchMode"
       ],
       "reviewed": false
@@ -42,7 +44,7 @@
         "full_text_search"
       ],
       "signature": "FullTextSearch.GetFullTextSearchMode() : FullTextSearchMode",
-      "description": "Режим полнотекстового поиска базы, как он хранится в базе. Если ничего не сохранено — FullTextSearchMode.Disable. Режим, которого эта сборка не знает, отвергается с его номером, а не читается как один из двух.",
+      "description": "Режим полнотекстового поиска базы, как он хранится в базе. Если ничего не сохранено — FullTextSearchMode.Disable. Неизвестный этой сборке режим отвергается с его номером.",
       "syntax_block": "Mode = FullTextSearch.GetFullTextSearchMode();",
       "parameters": "",
       "return_descr": "FullTextSearchMode.",
@@ -66,15 +68,16 @@
         "full_text_search"
       ],
       "signature": "FullTextSearch.SetFullTextSearchMode(mode : FullTextSearchMode)",
-      "description": "Включает или выключает полнотекстовый поиск базы — для всех сеансов. Нужно право «Администрирование данных»; без него вызов отвергается, и режим остаётся прежним. Режим, который не является значением FullTextSearchMode (число, строка), отвергается. Если база не приняла запись, вызов тоже отвергается, а журнал технологии говорит почему.",
+      "description": "Включает или выключает полнотекстовый поиск базы для всех сеансов. Нужно право «Администрирование данных». После включения индекс пуст, и каждая следующая запись его ведёт — записанное раньше строит UpdateIndex. После выключения индекс очищается, и записи его больше не ведут. Значение, не являющееся членом FullTextSearchMode, отвергается.",
       "syntax_block": "FullTextSearch.SetFullTextSearchMode(FullTextSearchMode.Enable);",
-      "parameters": "mode — значение FullTextSearchMode: Enable или Disable.",
+      "parameters": "mode — член FullTextSearchMode: Enable или Disable.",
       "return_descr": "",
-      "example": "FullTextSearch.SetFullTextSearchMode(FullTextSearchMode.Enable);\nMessage(FullTextSearch.GetFullTextSearchMode());",
+      "example": "FullTextSearch.SetFullTextSearchMode(FullTextSearchMode.Enable);\nFullTextSearch.UpdateIndex();",
       "availability": "Сервер",
       "see_also": [
         "cls.FullTextSearch",
         "cls.FullTextSearch.GetFullTextSearchMode",
+        "cls.FullTextSearch.UpdateIndex",
         "enum.FullTextSearchMode"
       ],
       "reviewed": false
@@ -90,11 +93,11 @@
         "full_text_search"
       ],
       "signature": "FullTextSearch.IndexTrue() : boolean",
-      "description": "Содержит ли индекс всё, что есть в базе. Пока платформа индекс не ведёт — False: ничего не проиндексировано, значит, ничего и не актуально.",
-      "syntax_block": "Fresh = FullTextSearch.IndexTrue();",
+      "description": "Нечего ли больше строить: каждый объект с индексируемыми полями построен ровно с этими полями, и ничего не проиндексировано для объекта, у которого их больше нет. Записи никогда не делают его False — они ведут индекс сами; это делают включение или выключение флага у поля, включение режима и ClearIndex. При выключенном режиме — False.",
+      "syntax_block": "Built = FullTextSearch.IndexTrue();",
       "parameters": "",
       "return_descr": "Булево.",
-      "example": "if (!FullTextSearch.IndexTrue()) {\n    FullTextSearch.UpdateIndex();\n}",
+      "example": "while (!FullTextSearch.IndexTrue()) {\n    FullTextSearch.UpdateIndex(true);\n}",
       "availability": "Сервер",
       "see_also": [
         "cls.FullTextSearch",
@@ -113,12 +116,12 @@
         "runtime",
         "full_text_search"
       ],
-      "signature": "FullTextSearch.UpdateIndex(merge : boolean = false, portion : boolean = false)",
-      "description": "Приводит индекс в соответствие с базой. Пока платформа индекс не ведёт, проходит успешно и ничего не делает — при любом режиме. Флаг, который не является Булевым, отвергается.",
-      "syntax_block": "FullTextSearch.UpdateIndex(merge, portion);",
-      "parameters": "merge — True, чтобы слить части индекса в одну. Не указан — False.\nportion — True, чтобы проиндексировать порцию изменений и вернуться. Не указан — False.",
+      "signature": "FullTextSearch.UpdateIndex(portion : boolean = false)",
+      "description": "Строит индекс для записей, которых в нём ещё нет: записанных до включения флага у поля, до включения режима или после ClearIndex. Записи читаются как хранятся — их модули не выполняются. Каждая порция записей индексируется в своей транзакции, так что остановка между порциями сохраняет построенное. При выключенном режиме отвергается. Нужно право «Администрирование данных».\n\nОДИН АРГУМЕНТ. Аргумента слияния нет: каждая запись сама вливает свою запись в индекс. Вызов с двумя аргументами — UpdateIndex(merge, portion) — отвергается с объяснением: его первый аргумент был бы прочитан как portion, а второй потерян. Пишите UpdateIndex(portion).",
+      "syntax_block": "FullTextSearch.UpdateIndex(portion);",
+      "parameters": "portion — True, чтобы проиндексировать одну порцию записей (500) и вернуться; затем IndexTrue скажет, вызывать ли снова. Не указан — False: строится всё оставшееся.",
       "return_descr": "",
-      "example": "// a scheduled job: a portion at a time, merged at night\nFullTextSearch.UpdateIndex(false, true);",
+      "example": "// a scheduled job: one portion each run, until the index is built\nif (!FullTextSearch.IndexTrue()) {\n    FullTextSearch.UpdateIndex(true);\n}",
       "availability": "Сервер",
       "see_also": [
         "cls.FullTextSearch",
@@ -138,7 +141,7 @@
         "full_text_search"
       ],
       "signature": "FullTextSearch.ClearIndex()",
-      "description": "Очищает индекс, чтобы следующий UpdateIndex построил его заново. Пока платформа индекс не ведёт, проходит успешно и ничего не делает. Режим не меняется.",
+      "description": "Очищает индекс: ничего не находится, пока UpdateIndex не построит его снова. Режим не меняется, и записи продолжают индексировать себя. Нужно право «Администрирование данных».",
       "syntax_block": "FullTextSearch.ClearIndex();",
       "parameters": "",
       "return_descr": "",
@@ -161,15 +164,362 @@
         "full_text_search"
       ],
       "signature": "FullTextSearch.UpdateDate() : date",
-      "description": "Когда индекс в последний раз был приведён в актуальное состояние. Пока платформа индекс не ведёт — пустая дата: ни разу.",
-      "syntax_block": "Updated = FullTextSearch.UpdateDate();",
+      "description": "Когда построение последний раз завершилось — пустая дата, если ни разу, или если сейчас что-то осталось строить.",
+      "syntax_block": "Built = FullTextSearch.UpdateDate();",
       "parameters": "",
       "return_descr": "Дата.",
       "example": "Message(FullTextSearch.UpdateDate());",
       "availability": "Сервер",
       "see_also": [
         "cls.FullTextSearch",
-        "cls.FullTextSearch.UpdateIndex"
+        "cls.FullTextSearch.UpdateIndex",
+        "cls.FullTextSearch.IndexTrue"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearch.CreateList",
+      "name_local": "CreateList",
+      "name_en": "CreateList",
+      "kind": "method",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearch.CreateList(searchString : string = \"\", portionSize : number = 20) : FullTextSearchList",
+      "description": "Поиск, ещё не выполненный: его выполняет FirstPart. Текст — простые слова, без операторов. Запись находится, если содержит каждое слово — как начало проиндексированного слова (whe находит wheel) или с отличием не больше одной буквы из пяти (wheal, wheell). Размер или артикул с точкой, косой чертой или запятой между цифрами (205/55, 1.6) — одно слово. Регистр не важен.",
+      "syntax_block": "List = FullTextSearch.CreateList(searchString, portionSize);",
+      "parameters": "searchString — слова для поиска.\nportionSize — сколько записей в одной части. Не указан — 20.",
+      "return_descr": "FullTextSearchList.",
+      "example": "List = FullTextSearch.CreateList(\"wheel 205/55\", 20);\nList.FirstPart();\nMessage(List.TotalCount());",
+      "availability": "Сервер",
+      "see_also": [
+        "cls.FullTextSearch",
+        "cls.FullTextSearchList",
+        "cls.FullTextSearchList.FirstPart"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearchList",
+      "name_local": "FullTextSearchList",
+      "name_en": "FullTextSearchList",
+      "kind": "collection",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchList",
+      "description": "Поиск и его части, создаётся FullTextSearch.CreateList. До FirstPart ничего не ищется; затем найденные записи читаются по частям, лучшие первыми — выше запись, где слова встречаются чаще, причём точное совпадение или начало слова весит вдвое больше совпадения с опечаткой.\n\nЧТО ВИДИТ ПОЛЬЗОВАТЕЛЬ: только объекты, которые ему можно читать, и из их записей — только разрешённые ограничением доступа на уровне записей. TotalCount считает после этого фильтра, так что это итог самого пользователя.",
+      "syntax_block": "List = FullTextSearch.CreateList(\"wheel\");",
+      "parameters": "",
+      "return_descr": "",
+      "example": "List = FullTextSearch.CreateList(\"wheel\", 10);\nList.FirstPart();\nwhile (true) {\n    for (i = 0; i < List.Count(); i++) {\n        Message(List.Get(i).Presentation);\n    }\n    if (List.StartIndex() + List.Count() >= List.TotalCount()) {\n        break;\n    }\n    List.NextPart();\n}",
+      "availability": "Сервер",
+      "see_also": [
+        "cls.FullTextSearchList.FirstPart",
+        "cls.FullTextSearchList.NextPart",
+        "cls.FullTextSearchList.PreviousPart",
+        "cls.FullTextSearchList.Count",
+        "cls.FullTextSearchList.TotalCount",
+        "cls.FullTextSearchList.StartIndex",
+        "cls.FullTextSearchList.Get",
+        "cls.FullTextSearchList.SearchString",
+        "cls.FullTextSearchList.PortionSize",
+        "cls.FullTextSearchItem",
+        "cls.FullTextSearch.CreateList"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearchList.FirstPart",
+      "name_local": "FirstPart",
+      "name_en": "FirstPart",
+      "kind": "procedure",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchList.FirstPart()",
+      "description": "Выполняет поиск и показывает его первую часть. Отвергается при выключенном режиме и для текста без единого слова.",
+      "syntax_block": "List.FirstPart();",
+      "parameters": "",
+      "return_descr": "",
+      "example": "List.FirstPart();\nMessage(List.Count());",
+      "availability": "Сервер",
+      "see_also": [
+        "cls.FullTextSearchList"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearchList.NextPart",
+      "name_local": "NextPart",
+      "name_en": "NextPart",
+      "kind": "procedure",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchList.NextPart()",
+      "description": "Показывает следующую часть. Отвергается, если показана последняя часть, или до FirstPart.",
+      "syntax_block": "List.NextPart();",
+      "parameters": "",
+      "return_descr": "",
+      "example": "List.NextPart();",
+      "availability": "Сервер",
+      "see_also": [
+        "cls.FullTextSearchList"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearchList.PreviousPart",
+      "name_local": "PreviousPart",
+      "name_en": "PreviousPart",
+      "kind": "procedure",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchList.PreviousPart()",
+      "description": "Показывает предыдущую часть. Отвергается, если показана первая часть, или до FirstPart.",
+      "syntax_block": "List.PreviousPart();",
+      "parameters": "",
+      "return_descr": "",
+      "example": "List.PreviousPart();",
+      "availability": "Сервер",
+      "see_also": [
+        "cls.FullTextSearchList"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearchList.Count",
+      "name_local": "Count",
+      "name_en": "Count",
+      "kind": "method",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchList.Count() : number",
+      "description": "Сколько записей в показанной части.",
+      "syntax_block": "N = List.Count();",
+      "parameters": "",
+      "return_descr": "Число.",
+      "example": "Message(List.Count());",
+      "availability": "Сервер",
+      "see_also": [
+        "cls.FullTextSearchList"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearchList.TotalCount",
+      "name_local": "TotalCount",
+      "name_en": "TotalCount",
+      "kind": "method",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchList.TotalCount() : number",
+      "description": "Сколько найдено записей, которые пользователю можно читать, — считается после фильтра прав.",
+      "syntax_block": "N = List.TotalCount();",
+      "parameters": "",
+      "return_descr": "Число.",
+      "example": "Message(List.TotalCount());",
+      "availability": "Сервер",
+      "see_also": [
+        "cls.FullTextSearchList"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearchList.StartIndex",
+      "name_local": "StartIndex",
+      "name_en": "StartIndex",
+      "kind": "method",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchList.StartIndex() : number",
+      "description": "Позиция среди всех найденных записей первой записи показанной части — от 0.",
+      "syntax_block": "N = List.StartIndex();",
+      "parameters": "",
+      "return_descr": "Число.",
+      "example": "Message(List.StartIndex());",
+      "availability": "Сервер",
+      "see_also": [
+        "cls.FullTextSearchList"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearchList.Get",
+      "name_local": "Get",
+      "name_en": "Get",
+      "kind": "method",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchList.Get(index : number) : FullTextSearchItem",
+      "description": "Запись показанной части. Индекс вне части отвергается.",
+      "syntax_block": "Item = List.Get(index);",
+      "parameters": "index — от 0 до Count() - 1.",
+      "return_descr": "FullTextSearchItem.",
+      "example": "Item = List.Get(0);\nOpenValue(Item.Value);",
+      "availability": "Сервер",
+      "see_also": [
+        "cls.FullTextSearchList",
+        "cls.FullTextSearchItem"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearchList.SearchString",
+      "name_local": "SearchString",
+      "name_en": "SearchString",
+      "kind": "property",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchList.SearchString",
+      "description": "Текст поиска — только чтение.",
+      "syntax_block": "Text = List.SearchString;",
+      "parameters": "",
+      "return_descr": "Строка.",
+      "example": "Message(List.SearchString);",
+      "availability": "Сервер",
+      "see_also": [
+        "cls.FullTextSearchList"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearchList.PortionSize",
+      "name_local": "PortionSize",
+      "name_en": "PortionSize",
+      "kind": "property",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchList.PortionSize",
+      "description": "Сколько записей в одной части — только чтение.",
+      "syntax_block": "N = List.PortionSize;",
+      "parameters": "",
+      "return_descr": "Число.",
+      "example": "Message(List.PortionSize);",
+      "availability": "Сервер",
+      "see_also": [
+        "cls.FullTextSearchList"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearchItem",
+      "name_local": "FullTextSearchItem",
+      "name_en": "FullTextSearchItem",
+      "kind": "collection",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchItem",
+      "description": "Одна найденная запись, как её выдаёт FullTextSearchList.Get.",
+      "syntax_block": "Item = List.Get(0);",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Item = List.Get(0);\nMessage(Item.Presentation);",
+      "availability": "Сервер",
+      "see_also": [
+        "cls.FullTextSearchItem.Value",
+        "cls.FullTextSearchItem.Metadata",
+        "cls.FullTextSearchItem.Presentation",
+        "cls.FullTextSearchList.Get"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearchItem.Value",
+      "name_local": "Value",
+      "name_en": "Value",
+      "kind": "property",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchItem.Value",
+      "description": "Ссылка на запись — только чтение.",
+      "syntax_block": "Ref = Item.Value;",
+      "parameters": "",
+      "return_descr": "Ссылка.",
+      "example": "Ref = Item.Value;",
+      "availability": "Сервер",
+      "see_also": [
+        "cls.FullTextSearchItem"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearchItem.Metadata",
+      "name_local": "Metadata",
+      "name_en": "Metadata",
+      "kind": "property",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchItem.Metadata",
+      "description": "Объект метаданных, к которому относится запись, — только чтение.",
+      "syntax_block": "Object = Item.Metadata;",
+      "parameters": "",
+      "return_descr": "Объект метаданных.",
+      "example": "Object = Item.Metadata;",
+      "availability": "Сервер",
+      "see_also": [
+        "cls.FullTextSearchItem"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.FullTextSearchItem.Presentation",
+      "name_local": "Presentation",
+      "name_en": "Presentation",
+      "kind": "property",
+      "category_keys": [
+        "global_context",
+        "runtime",
+        "full_text_search"
+      ],
+      "signature": "FullTextSearchItem.Presentation",
+      "description": "Как запись показывается: имя её объекта и её собственное представление — только чтение.",
+      "syntax_block": "Text = Item.Presentation;",
+      "parameters": "",
+      "return_descr": "Строка.",
+      "example": "Text = Item.Presentation;",
+      "availability": "Сервер",
+      "see_also": [
+        "cls.FullTextSearchItem"
       ],
       "reviewed": false
     },

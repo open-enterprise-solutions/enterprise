@@ -38,6 +38,7 @@
 #include "frmclient/win/picture.h"
 #include "frmclient/win/dlgs/about.h"
 #include "frmclient/win/dlgs/activeUser.h"
+#include "frmclient/win/dlgs/fullTextSearch.h"
 #include "frmclient/win/dlgs/authorization.h"
 #include "frmclient/win/dlgs/errorDialog.h"
 #include "frmclient/win/dlgs/formEditor.h"
@@ -964,6 +965,19 @@ void ibFrontendMainFrame::ShowSchema(ibProtocol::ibSchema::ibKind schema, const 
 	else if (schema == ibProtocol::ibSchema::ibKind::About) {
 		ibDialogAbout dialog(this, shown);
 		dialog.ShowModal();
+	}
+	else if (schema == ibProtocol::ibSchema::ibKind::FullTextSearch) {
+		ibDialogFullTextSearch dialog(this, shown);
+		dialog.ShowModal();
+	}
+	else if (schema == ibProtocol::ibSchema::ibKind::Search) {
+		// Not modal: what is found opens beside it. Switched off - said, and nothing to search in.
+		if (!shown.GetBool(ibProtocol::ibSchema::ibFullTextSearch::Enabled)) {
+			wxMessageBox(_("Full-text search is switched off in this base. It is switched on in Administration - Full-text search index."),
+				_("Find in data"), wxOK | wxICON_INFORMATION, this);
+			return;
+		}
+		(new ibDialogSearch(this))->Show();
 	}
 	else if (schema == ibProtocol::ibSchema::ibKind::Debugging || schema == ibProtocol::ibSchema::ibKind::McpServer) {
 		ShowOptions(schema, shown);

@@ -29,14 +29,20 @@ void ibClientFrameRuntime::InitializeDefaultMenu()
 	// (AccessRight_Assistant). Its window stands on the access running.
 	const bool activeUserAllowed = IsSchemaAllowed(ibProtocol::ibSchema::ibKind::ActiveUser);
 	const bool assistantAllowed = IsSchemaAllowed(ibProtocol::ibSchema::ibKind::McpServer);
-	if (activeUserAllowed || assistantAllowed) {
+	const bool fullTextSearchAllowed = IsSchemaAllowed(ibProtocol::ibSchema::ibKind::FullTextSearch);
+	if (activeUserAllowed || assistantAllowed || fullTextSearchAllowed) {
 		ibClientMenu administration;
 		if (activeUserAllowed) {
 			administration.Append(ibProtocol::ibSchema::ibKind::ActiveUser, _("Active users"));
 			administration.AppendSeparator();
 			administration.Append(ibProtocol::ibSchema::ibKind::AuditLog, _("Registration journal"));
 		}
-		if (activeUserAllowed && assistantAllowed)
+		if (fullTextSearchAllowed) {
+			if (activeUserAllowed)
+				administration.AppendSeparator();
+			administration.Append(ibProtocol::ibSchema::ibKind::FullTextSearch, _("Full-text search index..."));
+		}
+		if ((activeUserAllowed || fullTextSearchAllowed) && assistantAllowed)
 			administration.AppendSeparator();
 		if (assistantAllowed) {
 			ibClientMenu::Item& assistant = administration.Append(ibProtocol::ibSchema::ibKind::Assistant, ibProtocol::ibSchema::ibCommand::Open,
@@ -47,6 +53,8 @@ void ibClientFrameRuntime::InitializeDefaultMenu()
 	}
 
 	ibClientMenu tools;
+	tools.Append(ibProtocol::ibSchema::ibKind::Search, _("Find in data..."));
+	tools.AppendSeparator();
 	tools.Append(ibProtocol::ibSchema::ibKind::Debugging, _("Options..."));
 	tools.Append(ibProtocol::ibSchema::ibKind::Style, _("Theme..."));
 	m_menu.AppendSubMenu(tools, _("Tools"));

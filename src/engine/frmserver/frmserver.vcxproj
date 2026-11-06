@@ -253,6 +253,7 @@
     <ClCompile Include="schema\designer\userList.cpp" />
     <ClCompile Include="schema\runtime\allFunctions.cpp" />
     <ClCompile Include="schema\runtime\debugging.cpp" />
+    <ClCompile Include="schema\runtime\fullTextSearch.cpp" />
     <ClCompile Include="schema\runtime\sections.cpp" />
     <ClCompile Include="settings\formSettings.cpp" />
     <ClCompile Include="visualView\choiceRequest.cpp" />
@@ -420,6 +421,7 @@
     <ClInclude Include="schema\designer\userList.h" />
     <ClInclude Include="schema\runtime\allFunctions.h" />
     <ClInclude Include="schema\runtime\debugging.h" />
+    <ClInclude Include="schema\runtime\fullTextSearch.h" />
     <ClInclude Include="schema\runtime\sections.h" />
     <ClInclude Include="settings\formSettings.h" />
     <ClInclude Include="visualView\choiceRequest.h" />

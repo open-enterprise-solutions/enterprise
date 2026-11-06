@@ -7,6 +7,25 @@
 
 #include "backend/metaData.h"
 #include "backend/objCtor.h"
+#include "backend/metaCollection/partial/commonObject.h"   // the owners the full-text index is for
+
+namespace {
+
+// A catalog, a document or a chart - or one of their tabular sections: the records the full-text index is for.
+bool IsFullTextSearchOwner(const ibValueMetaObject* parent)
+{
+	if (dynamic_cast<const ibValueMetaObjectTableData*>(parent) != nullptr)
+		parent = parent->GetParent();
+	return dynamic_cast<const ibValueMetaObjectRecordDataMutableRef*>(parent) != nullptr;
+}
+
+} // namespace
+
+bool ibValueMetaObjectAttribute::IsFullTextSearch() const
+{
+	return m_propertyFullTextSearch->GetValueAsBoolean() && ContainType(ibValueTypes::TYPE_STRING)
+		&& IsFullTextSearchOwner(m_parent);
+}
 
 void ibValueMetaObjectAttribute::OnPropertyCreated(ibProperty* property)
 {
@@ -33,6 +52,10 @@ void ibValueMetaObjectAttribute::OnPropertyRefresh()
 	// ItemMode is the OWNER's question — only a hierarchical owner has folders vs items.
 	HideProperty(m_propertyItemMode,
 		dynamic_cast<ibValueMetaObjectRecordDataHierarchyMutableRef*>(m_parent) == nullptr);
+
+	// The full-text index holds words, so a field that holds no string has none to give it; and it is kept for the
+	// records a person looks for - a catalog's, a document's, a chart's.
+	HideProperty(m_propertyFullTextSearch, !ContainType(ibValueTypes::TYPE_STRING) || !IsFullTextSearchOwner(m_parent));
 
 	// ⭐ CHOICE PARAMETERS NARROW A LIST, so a field that refers to nothing — a number, a date — has no
 	// list for them to narrow. Hidden by the same rule as the neighbours above (Max, 2026-09-23, opening

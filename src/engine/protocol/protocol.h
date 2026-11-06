@@ -777,6 +777,10 @@ namespace ibProtocol {
 			ConfigCompare = 18,  // ibConfigCompare — the walk of two configurations; command Merge applies the ops chosen
 			Types        = 19,   // ibTypes
 			Style        = 20,   // ibStyle — both modes': how the person's interface is painted; command Save {Theme}
+			FullTextSearch = 21, // ibFullTextSearch — the runtime's administration of the base's full-text index; commands
+			                     // Set {Enabled}, Start (one portion of the build), Clear
+			Search       = 22,   // ibFullTextSearch — the runtime's Find: Build with Args {Text} answers the hits; command
+			                     // Open {MetaId, Key} opens one
 		};
 
 		// A schema's own commands — `schema {Schema, Command, Args}`. All functions and Sections take the one: Open
@@ -895,6 +899,26 @@ namespace ibProtocol {
 			inline constexpr const char* Debugging = "Debugging";   // the session's process listens for the designer
 			inline constexpr const char* Allowed   = "Allowed";     // …and may be switched now: not on the application server,
 			                                                        // not while a start waits for the designer
+
+		}
+
+		// The base's full-text search. Administration (FullTextSearch): Enabled — the mode; IndexTrue — nothing is left to
+		// build; Updated — when the build last completed, empty while it is not complete; Indexed, Total — records built
+		// and records to build. Find (Search): Enabled, and for Args {Text} its Hits (Title, Metadata, MetaId, Key) and
+		// Total — the hits the person may read, of which the first Shown are listed.
+		namespace ibFullTextSearch {
+
+			inline constexpr const char* Enabled   = "Enabled";
+			inline constexpr const char* IndexTrue = "IndexTrue";
+			inline constexpr const char* Updated   = "Updated";
+			inline constexpr const char* Indexed   = "Indexed";
+			inline constexpr const char* Total     = "Total";
+			inline constexpr const char* Text      = "Text";
+			inline constexpr const char* Hits      = "Hits";
+			inline constexpr const char* Title     = "Title";
+			inline constexpr const char* Metadata  = "Metadata";
+			inline constexpr const char* MetaId    = "MetaId";
+			inline constexpr const char* Key       = "Key";
 
 		}
 

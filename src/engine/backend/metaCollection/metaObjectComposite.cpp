@@ -21,6 +21,11 @@ bool ibPropertyPredefinedType::ReadNodeValue(const ibDataValue& value)
 		return false;
 	if (chosen.GetClsidCount() == 1)
 		GetMetaObject()->GetTypeDesc() = chosen;
+	// A node without the field - saved before it existed - is a field the index does not hold.
+	bool fullTextSearch = false;
+	if (const auto child = value.AsChild())
+		child->GetValue(ibProtocol::ibSchema::ibProperties::FullTextSearch, fullTextSearch);
+	GetMetaObject()->SetFullTextSearch(fullTextSearch);
 	return true;
 }
 
@@ -33,6 +38,7 @@ bool ibPropertyPredefinedType::WriteNodeValue(ibDataValue& value) const
 	if (const auto fields = type.AsChild())
 		for (const auto& field : fields->Fields())
 			child->SetField(field.first, field.second);
+	child->SetValue(ibProtocol::ibSchema::ibProperties::FullTextSearch, GetMetaObject()->GetFullTextSearch());
 	value = ibDataValue::Child(child);
 	return true;
 }
