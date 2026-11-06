@@ -814,8 +814,18 @@ void ibSession::Detach(std::chrono::milliseconds timeout)
 	WaitForAuth(Auth(), timeout);
 }
 
+ibString ibSession::GetActivity() const
+{
+	std::lock_guard<std::mutex> lk(m_mtx);
+	return m_activity;
+}
+
 void ibSession::SetActivity(const ibString& activity)
 {
+	{
+		std::lock_guard<std::mutex> lk(m_mtx);
+		m_activity = activity;
+	}
 	ibSessionRegistry* const regPtr = RegistryOf(*this);
 	if (regPtr == nullptr) return;
 	auto& reg = *regPtr;
@@ -862,6 +872,11 @@ void ibSession::SetExclusive(bool on)
 	if (regPtr == nullptr)
 		ibBackendCoreException::Error(_("Session registry not initialised"));
 	const ibExclusiveResult r = regPtr->SetExclusive(this, on);
+	ibString jobs;
+	{
+		std::lock_guard<std::mutex> lk(m_mtx);
+		jobs = m_exclusiveJobs;
+	}
 	switch (r) {
 	case ibExclusiveResult::Granted:
 		return;
@@ -876,6 +891,10 @@ void ibSession::SetExclusive(bool on)
 		ibBackendSessionException::Throw(ibBackendSessionException::Kind::ExclusiveHeld,
 			_("Another session is in exclusive mode"));
 	case ibExclusiveResult::NotSole:
+		// Only a job in the way — it ends by itself, so say which one and that the request can be made again.
+		if (!jobs.IsEmpty())
+			ibBackendSessionException::Throw(ibBackendSessionException::Kind::OthersActive,
+				ibString::Format(_("Cannot acquire exclusive mode while a job is running: %s. Try again when it finishes."), jobs));
 		ibBackendSessionException::Throw(ibBackendSessionException::Kind::OthersActive,
 			_("Cannot acquire exclusive mode: other sessions are active"));
 	case ibExclusiveResult::Pending:

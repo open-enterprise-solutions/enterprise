@@ -11,6 +11,8 @@
 #include <gtest/gtest.h>
 
 #include "backend/session/session.h"
+#include "backend/session/sessionRegistry.h"   // ibSoleSessionCheck
+#include "backend/session/sessionSnapshot.h"
 #include "backend/databaseLayer/connectionHolder.h"
 #include "backend/appData.h"
 #include "backend/metadataConfiguration.h"
@@ -248,3 +250,101 @@ TEST(SessionRegistry, ALockedHeartbeatAndSweepComeBackAtOnce)
 	gone.other->Commit();
 	EXPECT_EQ(removed, 1) << "once the lock is gone the sweep delete takes the row";
 }
+
+
+// ---------------------------------------------------------------------------
+// ibSoleSessionCheck — who stands between a session and exclusive mode (#649).
+// The snapshot's road: every row of sys_session, this process's own among them.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+struct SoleRows {
+	ibSessionSnapshot snapshot;
+	std::unordered_map<ibString, ibString> activity;
+	std::unordered_map<ibString, bool> own;   // this registry's sessions
+
+	void Row(const ibString& id, ibSessionKind kind, bool ownHost, const ibString& label = ibString()) {
+		snapshot.AppendSession(ibRunMode::eSERVER_MODE, static_cast<int>(kind), ibDateTime::Now(),
+			wxEmptyString, wxT("srv"), id);
+		activity[id] = label;
+		own[id] = ownHost;
+	}
+
+	ibSoleSessionCheck Check() {
+		snapshot.SetActivityFromMap(activity);
+		ibSoleSessionCheck check;
+		check.CountSnapshot(snapshot, wxT("designer"), [this](const ibString& id) { return own[id]; });
+		return check;
+	}
+};
+
+} // namespace
+
+TEST(SoleSessionCheck, TheHostsOwnServiceRowIsNotAnotherSession)
+{
+	SoleRows rows;
+	rows.Row(wxT("designer"), ibSessionKind::ThinDesigner, true);
+	rows.Row(wxT("host"), ibSessionKind::Service, true);
+	EXPECT_TRUE(rows.Check().IsSole());
+}
+
+TEST(SoleSessionCheck, ARunningJobRefusesAndIsNamed)
+{
+	SoleRows rows;
+	rows.Row(wxT("designer"), ibSessionKind::ThinDesigner, true);
+	rows.Row(wxT("host"), ibSessionKind::Service, true);
+	rows.Row(wxT("sweep"), ibSessionKind::SystemJob, true, wxT("job: firebird.sweep"));
+	const ibSoleSessionCheck check = rows.Check();
+	EXPECT_FALSE(check.IsSole());
+	EXPECT_EQ(check.GetJobsInTheWay(), ibString(wxT("job: firebird.sweep")));
+}
+
+TEST(SoleSessionCheck, AJobWithNoLabelIsNamedByItsKind)
+{
+	SoleRows rows;
+	rows.Row(wxT("run"), ibSessionKind::BackgroundJob, false);
+	const ibSoleSessionCheck check = rows.Check();
+	EXPECT_FALSE(check.IsSole());
+	EXPECT_FALSE(check.GetJobsInTheWay().IsEmpty());
+}
+
+TEST(SoleSessionCheck, AnotherProcesssServiceRowIsAnotherServer)
+{
+	SoleRows rows;
+	rows.Row(wxT("host"), ibSessionKind::Service, true);
+	rows.Row(wxT("peer"), ibSessionKind::Service, false);
+	const ibSoleSessionCheck check = rows.Check();
+	EXPECT_FALSE(check.IsSole());
+	EXPECT_TRUE(check.GetJobsInTheWay().IsEmpty()) << "a server is not a job to wait for";
+}
+
+TEST(SoleSessionCheck, ASecondClientRefusesAndNoJobIsBlamed)
+{
+	SoleRows rows;
+	rows.Row(wxT("host"), ibSessionKind::Service, true);
+	rows.Row(wxT("sweep"), ibSessionKind::SystemJob, true, wxT("job: firebird.sweep"));
+	rows.Row(wxT("client"), ibSessionKind::ThinClient, true);
+	const ibSoleSessionCheck check = rows.Check();
+	EXPECT_FALSE(check.IsSole());
+	EXPECT_TRUE(check.GetJobsInTheWay().IsEmpty()) << "the job ends, the client does not";
+}
+
+TEST(SoleSessionCheck, ThisProcesssOwnSessionsByKind)
+{
+	// The in-process road passes every other session of this registry, ownHost true.
+	ibSoleSessionCheck host;
+	host.Count(ibSessionKind::Service, true, ibString());
+	EXPECT_TRUE(host.IsSole());
+
+	ibSoleSessionCheck job;
+	job.Count(ibSessionKind::Service, true, ibString());
+	job.Count(ibSessionKind::ScheduledJob, true, wxT("job: nightly"));
+	EXPECT_EQ(job.GetJobsInTheWay(), ibString(wxT("job: nightly")));
+
+	ibSoleSessionCheck client;
+	client.Count(ibSessionKind::Enterprise, true, ibString());
+	EXPECT_FALSE(client.IsSole());
+	EXPECT_TRUE(client.GetJobsInTheWay().IsEmpty());
+}
+

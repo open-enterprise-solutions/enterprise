@@ -163,6 +163,37 @@ struct BACKEND_API ibConnectResult {
 
 class ibDatabaseLayer;
 
+// ⭐ WHO STANDS BETWEEN A SESSION AND EXCLUSIVE MODE. The acquire asks twice — this process's sessions, then
+// the cluster's rows in the snapshot — and both ask through this one rule, every OTHER session counted once.
+//
+//   * The HOST'S OWN Service session (an application server's login, kept in this registry) does not stand in the
+//     way: it holds the base open for the clients the server hosts, the one asking among them, and does no work
+//     of its own. Another process's Service row is another application server, and does (#649).
+//   * A JOB always does — whatever its kind. One already running when the mode is asked for writes into the base
+//     (the totals fold, the nightly backup and restore, a configuration's script; the 15-minute sweep shares its
+//     kind with the first two), and the restructuring that asks for the mode is DDL. A job cannot START once the
+//     mode is held — ProcessAdd parks it — so only one running now is in question, and it ends by itself: the
+//     refusal names it so the person knows what to wait for.
+//   * Everything else is a client, and blocks.
+class BACKEND_API ibSoleSessionCheck {
+public:
+	// ownHost — the session is this registry's (this process's).
+	void Count(ibSessionKind kind, bool ownHost, const ibString& activity);
+
+	// Every row of the snapshot but `self`; isOwn tells this registry's sessions from another process's.
+	void CountSnapshot(const ibSessionSnapshot& snapshot, const ibString& self,
+	                   const std::function<bool(const ibString&)>& isOwn);
+
+	bool IsSole() const { return !m_client && m_jobs.empty(); }
+
+	// Only jobs stood in the way: their labels, comma-separated — empty when a client did, or nobody.
+	ibString GetJobsInTheWay() const;
+
+private:
+	bool                  m_client = false;
+	std::vector<ibString> m_jobs;
+};
+
 class BACKEND_API ibSessionRegistry {
 public:
 	// No static `Instance()` on the class itself — the registry is a

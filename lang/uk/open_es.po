@@ -6241,6 +6241,23 @@ msgstr "Інший сеанс працює у монопольному режи�
 msgid "Cannot acquire exclusive mode: other sessions are active"
 msgstr "Неможливо отримати монопольний режим: активні інші сеанси"
 
+#: src/engine/backend/session/session.cpp:897
+#, c-format
+msgid "Cannot acquire exclusive mode while a job is running: %s. Try again when it finishes."
+msgstr "Неможливо отримати монопольний режим, поки виконується завдання: %s. Повторіть, коли воно завершиться."
+
+#: src/engine/backend/session/sessionRegistry.cpp:1470
+msgid "a background job"
+msgstr "фонове завдання"
+
+#: src/engine/backend/session/sessionRegistry.cpp:1471
+msgid "a scheduled job"
+msgstr "регламентне завдання"
+
+#: src/engine/backend/session/sessionRegistry.cpp:1472
+msgid "a system job"
+msgstr "системне завдання"
+
 #: src/engine/backend/session/session.cpp:804
 msgid "Exclusive mode request did not complete"
 msgstr "Запит монопольного режиму не виконано"

@@ -1454,6 +1454,49 @@ void ibSessionRegistry::ProcessRemove(ibRegistryRequest& req)
 	s.Transition(ibSessionState::Gone);
 }
 
+void ibSoleSessionCheck::Count(ibSessionKind kind, bool ownHost, const ibString& activity)
+{
+	if (kind == ibSessionKind::Service && ownHost)
+		return;   // the host's own login — the asking session is one of the clients it holds the base for
+	if (!IsJobSessionKind(kind)) {
+		m_client = true;
+		return;
+	}
+	if (!activity.IsEmpty()) {
+		m_jobs.push_back(activity);   // the job manager's "job: <name>", a background run's own label
+		return;
+	}
+	switch (kind) {
+	case ibSessionKind::BackgroundJob: m_jobs.push_back(_("a background job")); break;
+	case ibSessionKind::ScheduledJob:  m_jobs.push_back(_("a scheduled job"));  break;
+	default:                           m_jobs.push_back(_("a system job"));     break;
+	}
+}
+
+void ibSoleSessionCheck::CountSnapshot(const ibSessionSnapshot& snapshot, const ibString& self,
+                                       const std::function<bool(const ibString&)>& isOwn)
+{
+	for (unsigned int i = 0; i < snapshot.GetSessionCount(); ++i) {
+		const ibString id = snapshot.GetSession(i);
+		if (id == self)
+			continue;
+		Count(static_cast<ibSessionKind>(snapshot.GetSessionKind(i)), isOwn(id), snapshot.GetActivity(i));
+	}
+}
+
+ibString ibSoleSessionCheck::GetJobsInTheWay() const
+{
+	if (m_client)
+		return ibString();
+	ibString jobs;
+	for (const ibString& job : m_jobs) {
+		if (!jobs.IsEmpty())
+			jobs += ibT(", ");
+		jobs += job;
+	}
+	return jobs;
+}
+
 ibSession::ibExclusiveResult ibSessionRegistry::SetExclusive(ibSession* session, bool on)
 {
 	using R = ibSession::ibExclusiveResult;
@@ -1465,6 +1508,7 @@ ibSession::ibExclusiveResult ibSessionRegistry::SetExclusive(ibSession* session,
 	{
 		std::lock_guard<std::mutex> lk(session->m_mtx);
 		session->m_exclusiveResult = R::Pending;
+		session->m_exclusiveJobs.clear();
 	}
 
 	ibRegistryRequest req;
@@ -1484,9 +1528,10 @@ void ibSessionRegistry::ProcessSetExclusive(ibRegistryRequest& req)
 	if (!req.session) return;
 	ibSession& s = *req.session;
 
-	auto setResult = [&](ibSession::ibExclusiveResult r) {
+	auto setResult = [&](ibSession::ibExclusiveResult r, const ibString& jobs = ibString()) {
 		std::lock_guard<std::mutex> lk(s.m_mtx);
 		s.m_exclusiveResult = r;
+		s.m_exclusiveJobs = jobs;
 		s.m_cv.notify_all();
 	};
 
@@ -1526,25 +1571,26 @@ void ibSessionRegistry::ProcessSetExclusive(ibRegistryRequest& req)
 			return;
 		}
 
-		// In-process sole-live check — every other Added session blocks
-		// us. Iterate m_own under shared lock; only the registry thread
-		// writes m_own so the snapshot is consistent for the duration of
-		// this call.
-		bool soleLive = true;
+		// In-process sole-live check — every other Added session is asked of ibSoleSessionCheck: the host's
+		// own Service session passes, a job or a client blocks. Collected under the shared lock (only the
+		// registry thread writes m_own), asked after it, so no session's own lock is taken under m_ownMutex.
 		{
-			std::shared_lock<std::shared_mutex> lock(m_ownMutex);
-			for (const auto& kv : m_own) {
-				auto other = kv.second.Share();
-				if (!other || other.get() == &s) continue;
-				if (other->State() == ibSessionState::Added) {
-					soleLive = false;
-					break;
+			std::vector<std::shared_ptr<ibSession>> others;
+			{
+				std::shared_lock<std::shared_mutex> lock(m_ownMutex);
+				for (const auto& kv : m_own) {
+					auto other = kv.second.Share();
+					if (other && other.get() != &s && other->State() == ibSessionState::Added)
+						others.push_back(std::move(other));
 				}
 			}
-		}
-		if (!soleLive) {
-			setResult(ibSession::ibExclusiveResult::NotSole);
-			return;
+			ibSoleSessionCheck own;
+			for (const auto& other : others)
+				own.Count(other->GetKind(), /*ownHost*/true, other->GetActivity());
+			if (!own.IsSole()) {
+				setResult(ibSession::ibExclusiveResult::NotSole, own.GetJobsInTheWay());
+				return;
+			}
 		}
 
 		// ASK THE TABLE, DON'T ASK LAST SECOND'S MEMORY OF IT. The check below reads m_snapshot, which a
@@ -1574,30 +1620,25 @@ void ibSessionRegistry::ProcessSetExclusive(ibRegistryRequest& req)
 			SettleSilentPeers(peers);   // refreshes the snapshot when it removes any
 		}
 
-		// Cluster sole-live check + cross-process exclusive scan — peer
-		// processes' rows live in m_snapshot. Any peer row blocks acquire;
-		// our own row is the one we just verified above.
+		// Cluster sole-live check + cross-process exclusive scan — every row of m_snapshot, this process's
+		// own included (the host's Service row is one of them). A row holding the mode refuses outright; the
+		// rest are asked of ibSoleSessionCheck, which knows this registry's own rows by Find.
 		{
 			std::shared_lock<std::shared_mutex> lk(m_snapshotMtx);
 			if (m_snapshot) {
 				const ibString ownId = s.GetId();
 				const unsigned int n = m_snapshot->GetSessionCount();
-				bool clusterSole = true;
-				bool peerExclusive = false;
 				for (unsigned int i = 0; i < n; ++i) {
-					if (m_snapshot->GetSession(i) == ownId) continue;
-					clusterSole = false;
-					if (m_snapshot->IsExclusive(i)) {
-						peerExclusive = true;
-						break;
+					if (m_snapshot->GetSession(i) != ownId && m_snapshot->IsExclusive(i)) {
+						setResult(ibSession::ibExclusiveResult::HeldByOther);
+						return;
 					}
 				}
-				if (peerExclusive) {
-					setResult(ibSession::ibExclusiveResult::HeldByOther);
-					return;
-				}
-				if (!clusterSole) {
-					setResult(ibSession::ibExclusiveResult::NotSole);
+				ibSoleSessionCheck cluster;
+				cluster.CountSnapshot(*m_snapshot, ownId,
+					[this](const ibString& id) { return Find(id).Share() != nullptr; });
+				if (!cluster.IsSole()) {
+					setResult(ibSession::ibExclusiveResult::NotSole, cluster.GetJobsInTheWay());
 					return;
 				}
 			}

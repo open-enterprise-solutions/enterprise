@@ -35,6 +35,8 @@
 #include "backend/session/session.h"
 #include "backend/session/sessionHolder.h"
 #include "backend/session/sessionRegistry.h"           // Start — a base put together by hand starts its registry
+#include "backend/session/sessionException.h"          // exclusive mode refused: OthersActive
+#include "backend/session/sessionSnapshot.h"           // the rows the acquire read
 
 namespace {
 
@@ -284,4 +286,80 @@ TEST_F(OneBaseFix, AnEmptyUserListOpensAndAnUnreadableOneRefuses)
 		EXPECT_TRUE(ibUserInfo::ListAll().empty());
 	}
 	wxRemoveFile(path);
+}
+
+// #649 — a thin designer in an application server asks for exclusive mode beside the server's own login
+// (ibSessionKind::Service, appServer.cpp). The login is the HOST'S: it passes both of the acquire's checks — this
+// process's sessions and the snapshot's rows, where the registry wrote its row. A job running at that moment and a
+// second client each refuse; the job is named, because it ends by itself and the request can be made again.
+TEST(ExclusiveBesideTheHost, TheHostsOwnLoginPassesAJobAndASecondClientDoNot)
+{
+	wxInitializer wxInit;
+	if (!wxInit.IsOk())
+		GTEST_SKIP() << "wxBase init failed (no wxApp host)";
+
+	const ibString path = wxFileName::CreateTempFileName(wxT("oes-exclusive"));
+	ASSERT_FALSE(path.IsEmpty());
+	struct Gone {
+		ibString path;
+		~Gone() {
+			ibApplicationInstance::DestroyAppDataEnv();
+			wxRemoveFile(path);
+		}
+	} gone{ path };
+
+	// A file and a wider pool: the registry keeps a connection of its own for sys_session.
+	ibApplicationInstance* const base = OpenBase(ibRunMode::eFILE_MODE, /*poolSize=*/4, path);
+	if (base == nullptr)
+		GTEST_SKIP() << "appData env unavailable headless";
+	ibApplicationInstanceScope working(base);
+	ASSERT_NE(db_query->RunQuery(wxT(
+		"CREATE TABLE sys_session ("
+		"session TEXT PRIMARY KEY, userName TEXT, application INTEGER, started TEXT, lastActive TEXT, "
+		"computer TEXT, pid INTEGER, address TEXT, currentActivity TEXT, kind INTEGER, signal TEXT, "
+		"exclusive INTEGER NOT NULL DEFAULT 0, tokenHash TEXT)")), -1);
+	ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry();
+	registry->Start();
+
+	ibSessionHolder host = base->CreateSession(ibSessionKind::Service);
+	ibSessionHolder designer = base->CreateSession(ibSessionKind::ThinDesigner);
+	ASSERT_NE(host.Get(), nullptr);
+	ASSERT_NE(designer.Get(), nullptr);
+
+	EXPECT_NO_THROW(designer.Get()->SetExclusive(true)) << "the host's own login is not another session";
+	EXPECT_EQ(registry->GetClusterSnapshot().CountByKind(ibSessionKind::Service), 1u)
+		<< "the snapshot the acquire read held the host's row — the second check saw it, and let it pass";
+	designer.Get()->SetExclusive(false);
+
+	const auto refusal = [&]() -> ibString {
+		try {
+			designer.Get()->SetExclusive(true);
+		}
+		catch (const ibBackendSessionException& err) {
+			EXPECT_EQ(err.GetKind(), ibBackendSessionException::Kind::OthersActive);
+			return err.GetErrorDescription();
+		}
+		designer.Get()->SetExclusive(false);
+		return ibString();
+	};
+
+	{
+		ibSessionHolder job = base->CreateSession(ibSessionKind::SystemJob);
+		ASSERT_NE(job.Get(), nullptr);
+		job.Get()->SetActivity(wxT("job: firebird.sweep"));
+		const ibString said = refusal();
+		EXPECT_NE(said.Find(wxT("job: firebird.sweep")), wxNOT_FOUND)
+			<< "a running job refuses, and is named: " << said.utf8_str();
+	}
+
+	EXPECT_NO_THROW(designer.Get()->SetExclusive(true)) << "the job ended - the request made again is granted";
+	designer.Get()->SetExclusive(false);
+
+	{
+		ibSessionHolder client = base->CreateSession(ibSessionKind::ThinClient);
+		ASSERT_NE(client.Get(), nullptr);
+		const ibString said = refusal();
+		EXPECT_FALSE(said.IsEmpty()) << "a second client refuses";
+		EXPECT_EQ(said.Find(wxT("job")), wxNOT_FOUND) << "and is not told to wait for a job: " << said.utf8_str();
+	}
 }

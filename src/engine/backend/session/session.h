@@ -395,6 +395,9 @@ public:
 	// it never preempts real Add / Remove work. Registry handler UPDATEs
 	// `sys_session.currentActivity`; admin UI sees it on the next snapshot.
 	void SetActivity(const ibString& activity);
+	// The label last given to SetActivity, kept in memory as well: a refusal of exclusive mode names the job in the
+	// way by it ("job: firebird.sweep"), and this process's own sessions are asked here, not through the table.
+	ibString GetActivity() const;
 
 	// A thin client's resume token, its digest, into `sys_session.tokenHash` — written by the registry, the row's one
 	// writer (ProcessSetTokenHash). Waits for its verdict: false — refused, or not answered in time.
@@ -1172,6 +1175,9 @@ public:
 	};
 private:
 	ibExclusiveResult         m_exclusiveResult { ibExclusiveResult::Pending };
+	// With NotSole, when only jobs stood in the way: their labels, for the refusal to name. Empty when a
+	// client did. Guarded by m_mtx, written with m_exclusiveResult.
+	ibString                  m_exclusiveJobs;
 
 	// Server (parent) session — non-owning back-link populated by the
 	// holder of the client after the server spawns it. See Server() /
