@@ -51,6 +51,13 @@
 #include "backend/query/dataQueryBuilder.h"
 #include "backend/query/columnLayout.h"
 #include "core/clsid.h"
+#include "frmserver/visualView/ctrl/form.h"                     // a radio button on a form, typed by an enumeration
+#include "frmserver/visualView/ctrl/formAttribute.h"
+#include "backend/propertyManager/property/propertySource.h"
+#include "backend/srcDataObject.h"
+#include "backend/backend_mainFrame.h"           // a frame so the form can be born
+#include "backend/session/session.h"
+#include "backend/session/sessionRegistry.h"   // MintUnlisted — a harness's session
 
 using ibComposerNode = ibValueModel::ibComposerNode;
 
@@ -218,3 +225,93 @@ TEST_F(TabularEnumPersist, FindValue_OnAnEmptyTypedEnumCell_FindsTheMemberByName
 	EXPECT_EQ(candidates.front().GetString(), wxT("Vat10"));
 }
 
+
+// A RADIO BUTTON ON A FORM OFFERS AN ENUMERATION'S MEMBERS TO CHOOSE AMONG — as the designer's inspector asks it, through
+// the button's own property (ibPropertyValue::GetValueList). The members come from the form's configuration, which a
+// control knows only through the const GetMetaData; asked through a non-const owner, the button had none and the
+// drop-down was empty (an assert in a Debug build, 2026-11-05).
+namespace {
+
+// What hands the form its configuration, as the object a form edits does in the designer.
+class ConfigurationSource : public ibSourceDataObject {
+	const ibMetaData* m_metaData;
+	ibSourceExplorer m_explorer;
+public:
+	explicit ConfigurationSource(const ibMetaData* metaData) : m_metaData(metaData) {}
+	const ibSourceExplorer* GetSourceExplorer() const override { return &m_explorer; }
+	void SourceIncrRef() override {}
+	void SourceDecrRef() override {}
+	bool IsEmpty() const override { return false; }
+	const ibUniqueKey& GetGuid() const override { static const ibUniqueKey none; return none; }
+	const ibValueMetaObjectGenericData* GetSourceMetaObject() const override { return nullptr; }
+	const ibMetaData* GetSourceMetaData() const override { return m_metaData; }
+	ibClassID GetSourceClassType() const override { return 0; }
+	ibString GetSourceCaption() const override { return ibString(); }
+};
+
+// A form is born against its session's frame, as in test_runtime.cpp's FormRuntime.
+struct EnumFormFrame : ibBackendDocFrame {
+	explicit EnumFormFrame(ibSessionHolder&& holder) : ibBackendDocFrame(std::move(holder)) {}
+	void SetTitle(const ibString&) override {}
+	void SetStatusText(const ibString&, int) override {}
+	void RefreshFrame() override {}
+	void RaiseFrame() override {}
+	ibUniqueKey CreateFormUniqueKey(const ibBackendControlFrame*, const ibSourceDataObject*,
+		const ibUniqueKey& formGuid) override
+	{
+		if (formGuid.isValid())
+			return formGuid;
+		ibUniqueKey made = wxNewUniqueGuid;
+		return made;
+	}
+};
+
+struct EnumFormSession : ibSession {
+	using ibSession::ibSession;
+	ibBackendDocFrame* GetFrame() const override { return m_frame; }
+	ibBackendDocFrame* m_frame = nullptr;
+};
+
+struct FormOverSource : ibValueForm {
+	ConfigurationSource* m_source = nullptr;
+	ibSourceDataObject* GetSourceObject() const override { return m_source; }
+};
+
+} // namespace
+
+TEST_F(TabularEnumPersist, RadioButtonOffersTheMembersOfItsEnumeration) {
+	ibValue member;
+	ASSERT_TRUE(vatRates->ResolveQueryConstant(wxT("Vat10"), member));
+	const ibClassID enumType = member.GetClassType();
+
+	auto session = std::make_shared<EnumFormSession>(wxT("radio-enum"), ibSessionKind::Enterprise);
+	EnumFormFrame frame(ibApplicationInstance::GetSessionRegistry()->MintUnlisted(session));
+	session->m_frame = &frame;
+	ibSessionScope scope(session.get());
+
+	ConfigurationSource source(cfg.get());
+	ibValuePtr<FormOverSource> form(new FormOverSource());
+	form->m_source = &source;
+	ibFormAttributeValue* const rate = form->AddAttribute(ibT("Rate"), enumType, ibValue());
+	ASSERT_NE(rate, nullptr);
+
+	ibValueFrame* const radio = form->NewObject(ibT("Radiobutton"), form);
+	ASSERT_NE(radio, nullptr);
+	ibPropertySource* const bound = dynamic_cast<ibPropertySource*>(radio->GetProperty(ibT("Source")));
+	ASSERT_NE(bound, nullptr);
+	bound->SetValue(ibSourceDescription(std::vector<ibSourceId>{ rate->GetId() }));
+
+	ibPropertyChoiceList choices;
+	EXPECT_NE(radio->GetProperty(ibT("ChoiceValue"))->GetValueList(choices), ibPropertyChoiceMode::None);
+	ASSERT_EQ(choices.GetCount(), 2u);
+	EXPECT_EQ(choices.GetName(0), ibString(ibT("Vat10")));
+	EXPECT_EQ(choices.GetName(1), ibString(ibT("Vat20")));
+
+	// Chosen by its name, as a caller writes one, the button stands for that member.
+	ASSERT_TRUE(radio->GetProperty(ibT("ChoiceValue"))->SetNodeValue(ibDataValue::String(ibT("Vat20"))));
+	ibValue chosen;
+	radio->GetProperty(ibT("ChoiceValue"))->GetDataValue(chosen);
+	EXPECT_EQ(chosen.GetClassType(), enumType);
+	EXPECT_EQ(chosen.GetString(), wxT("Vat20"));
+	form->m_source = nullptr;
+}

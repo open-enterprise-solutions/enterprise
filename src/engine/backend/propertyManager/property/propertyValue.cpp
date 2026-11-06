@@ -21,6 +21,15 @@ ibClassID SingleClass(const ibPropertySource* typedBy)
 	return type.GetClsidCount() == 1 ? type.GetFirstClsid() : 0;
 }
 
+// THE OWNER'S METADATA, ASKED THROUGH A CONST POINTER — a form control overrides only the const GetMetaData (it reads
+// its form's); the non-const one is ibPropertyObject's default, which answers null (and asserts) for everything but a
+// metaobject. Asked through the owner as GetPropertyObject() hands it, a radio button in the form designer had no
+// metadata: no enumeration members to choose, and a member written or read without the configuration's door.
+const ibMetaData* OwnerMetaData(const ibPropertyObject* owner)
+{
+	return owner != nullptr ? owner->GetMetaData() : nullptr;
+}
+
 }
 
 ibValue ibPropertyValue::GetValueAsValue() const
@@ -46,7 +55,7 @@ ibPropertyChoiceMode ibPropertyValue::GetValueList(ibPropertyChoiceList& list)
 	}
 
 	// An enumeration's members, each as the value a field of its type holds — its reference.
-	const ibMetaData* const metaData = GetPropertyObject() != nullptr ? GetPropertyObject()->GetMetaData() : nullptr;
+	const ibMetaData* const metaData = OwnerMetaData(GetPropertyObject());
 	const ibCtorMetaValueType* const ctor = metaData != nullptr ? metaData->GetTypeCtor(clsid) : nullptr;
 	const ibValueMetaObjectRecordDataEnumRef* const enumeration = ctor != nullptr
 		? dynamic_cast<const ibValueMetaObjectRecordDataEnumRef*>(ctor->GetMetaObject()) : nullptr;
@@ -82,7 +91,7 @@ bool ibPropertyValue::GetDataValue(ibValue& pvarPropVal) const
 
 bool ibPropertyValue::ReadNodeValue(const ibDataValue& value)
 {
-	const ibMetaData* const metaData = GetPropertyObject() != nullptr ? GetPropertyObject()->GetMetaData() : nullptr;
+	const ibMetaData* const metaData = OwnerMetaData(GetPropertyObject());
 
 	// A value that is no scalar — a member of an enumeration, a reference — comes as its node, through the door it was
 	// written by.
@@ -172,7 +181,7 @@ bool ibPropertyValue::WriteNodeValue(ibDataValue& value) const
 
 	// ⚠ A VALUE THAT CANNOT BE WRITTEN RAISES, as one that cannot be read does: the owner says whose it was
 	// (ibValueRadioButton::WriteData). Left out, the form would be saved without it and read back standing for none.
-	const ibMetaData* const metaData = GetPropertyObject() != nullptr ? GetPropertyObject()->GetMetaData() : nullptr;
+	const ibMetaData* const metaData = OwnerMetaData(GetPropertyObject());
 	auto node = std::make_shared<ibDataNode>();
 	if (metaData != nullptr)
 		metaData->Serialize(held, *node);
