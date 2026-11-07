@@ -2534,6 +2534,10 @@ msgstr "Монопольний режим зайнятий іншим сеанс
 msgid "The session registry did not answer in time."
 msgstr "Реєстр сеансів не відповів вчасно."
 
+#: src/engine/backend/metaCollection/metaObject.cpp:391
+msgid "A job is running - try again when it finishes."
+msgstr "Виконується завдання - повторіть, коли воно завершиться."
+
 #: src/engine/backend/metaCollection/metaObject.cpp:379
 msgid "Other sessions are connected - disconnect them and try again."
 msgstr "Підключено інші сеанси - від'єднайте їх і спробуйте знову."
@@ -6240,6 +6244,10 @@ msgstr "Інший сеанс працює у монопольному режи�
 #: src/engine/backend/session/session.cpp:802
 msgid "Cannot acquire exclusive mode: other sessions are active"
 msgstr "Неможливо отримати монопольний режим: активні інші сеанси"
+
+#: src/engine/backend/session/session.cpp:885
+msgid "Cannot acquire exclusive mode while a job is running. Try again when it finishes."
+msgstr "Неможливо отримати монопольний режим, поки виконується завдання. Повторіть, коли воно завершиться."
 
 #: src/engine/backend/session/session.cpp:804
 msgid "Exclusive mode request did not complete"

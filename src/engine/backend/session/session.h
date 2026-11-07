@@ -1111,7 +1111,6 @@ private:
 	mutable std::mutex              m_mtx;
 	mutable std::condition_variable m_cv;
 
-	ibString m_activity;   // guarded by m_mtx; last-reported activity string
 	ibString m_reason;     // guarded by m_mtx; reject / auth-fail diagnostic
 
 	// Authoritative user identity for this session. Populated by InstallUser
@@ -1169,6 +1168,7 @@ public:
 		Granted     = 1,   // either acquire ok or release ok
 		HeldByOther = 2,   // another session is currently exclusive
 		NotSole     = 3,   // other live sessions present — can't acquire
+		JobRunning  = 4,   // only jobs present — each ends by itself, the request can be made again
 	};
 private:
 	ibExclusiveResult         m_exclusiveResult { ibExclusiveResult::Pending };

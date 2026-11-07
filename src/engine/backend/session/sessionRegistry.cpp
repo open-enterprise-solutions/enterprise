@@ -1490,6 +1490,14 @@ void ibSessionRegistry::ProcessSetExclusive(ibRegistryRequest& req)
 		s.m_cv.notify_all();
 	};
 
+	// WHO STANDS IN THE WAY — another session, by its kind; both checks of the acquire ask it. A job ends by itself, so
+	// the request can be made again (JobRunning); anyone else refuses outright (NotSole), and outweighs a job. A job
+	// cannot START once the mode is held (ProcessAdd parks it), so only one running now is in question.
+	auto inTheWay = [](ibSessionKind kind, ibSession::ibExclusiveResult verdict) {
+		using R = ibSession::ibExclusiveResult;
+		return IsJobSessionKind(kind) && verdict != R::NotSole ? R::JobRunning : R::NotSole;
+	};
+
 	// DB-side flip helper — UPDATE sys_session.exclusive on the row this
 	// session owns. No-op for tests / embedders that don't own sys_session
 	// or whose schema predates the column. Best-effort; failure here
@@ -1526,24 +1534,24 @@ void ibSessionRegistry::ProcessSetExclusive(ibRegistryRequest& req)
 			return;
 		}
 
-		// In-process sole-live check — every other Added session blocks
-		// us. Iterate m_own under shared lock; only the registry thread
-		// writes m_own so the snapshot is consistent for the duration of
-		// this call.
-		bool soleLive = true;
+		// In-process sole-live check — every other Added session stands in
+		// the way (inTheWay) but the host's own login: Service, an
+		// application server's, holding the base for the clients it hosts,
+		// the asking one among them (#649). Iterate m_own under shared lock;
+		// only the registry thread writes m_own so the snapshot is
+		// consistent for the duration of this call.
+		ibSession::ibExclusiveResult verdict = ibSession::ibExclusiveResult::Granted;
 		{
 			std::shared_lock<std::shared_mutex> lock(m_ownMutex);
 			for (const auto& kv : m_own) {
 				auto other = kv.second.Share();
 				if (!other || other.get() == &s) continue;
-				if (other->State() == ibSessionState::Added) {
-					soleLive = false;
-					break;
-				}
+				if (other->State() == ibSessionState::Added && other->GetKind() != ibSessionKind::Service)
+					verdict = inTheWay(other->GetKind(), verdict);
 			}
 		}
-		if (!soleLive) {
-			setResult(ibSession::ibExclusiveResult::NotSole);
+		if (verdict != ibSession::ibExclusiveResult::Granted) {
+			setResult(verdict);
 			return;
 		}
 
@@ -1575,18 +1583,22 @@ void ibSessionRegistry::ProcessSetExclusive(ibRegistryRequest& req)
 		}
 
 		// Cluster sole-live check + cross-process exclusive scan — peer
-		// processes' rows live in m_snapshot. Any peer row blocks acquire;
-		// our own row is the one we just verified above.
+		// processes' rows live in m_snapshot, beside this registry's own:
+		// those asked above (Added) are not asked again, so the host's own
+		// login passes here too, while another process's Service row is
+		// another application server and stands in the way (#649).
 		{
 			std::shared_lock<std::shared_mutex> lk(m_snapshotMtx);
 			if (m_snapshot) {
 				const ibString ownId = s.GetId();
 				const unsigned int n = m_snapshot->GetSessionCount();
-				bool clusterSole = true;
 				bool peerExclusive = false;
 				for (unsigned int i = 0; i < n; ++i) {
-					if (m_snapshot->GetSession(i) == ownId) continue;
-					clusterSole = false;
+					const ibString id = m_snapshot->GetSession(i);
+					if (id == ownId) continue;
+					const auto own = Find(id).Share();
+					if (own && own->State() == ibSessionState::Added) continue;   // asked above
+					verdict = inTheWay(static_cast<ibSessionKind>(m_snapshot->GetSessionKind(i)), verdict);
 					if (m_snapshot->IsExclusive(i)) {
 						peerExclusive = true;
 						break;
@@ -1596,8 +1608,8 @@ void ibSessionRegistry::ProcessSetExclusive(ibRegistryRequest& req)
 					setResult(ibSession::ibExclusiveResult::HeldByOther);
 					return;
 				}
-				if (!clusterSole) {
-					setResult(ibSession::ibExclusiveResult::NotSole);
+				if (verdict != ibSession::ibExclusiveResult::Granted) {
+					setResult(verdict);
 					return;
 				}
 			}

@@ -35,6 +35,8 @@
 #include "backend/session/session.h"
 #include "backend/session/sessionHolder.h"
 #include "backend/session/sessionRegistry.h"           // Start — a base put together by hand starts its registry
+#include "backend/session/sessionException.h"          // exclusive mode refused: OthersActive
+#include "backend/session/sessionSnapshot.h"           // the rows the acquire read
 
 namespace {
 
@@ -284,4 +286,70 @@ TEST_F(OneBaseFix, AnEmptyUserListOpensAndAnUnreadableOneRefuses)
 		EXPECT_TRUE(ibUserInfo::ListAll().empty());
 	}
 	wxRemoveFile(path);
+}
+
+// #649 — a thin designer in an application server asks for exclusive mode beside the server's own login
+// (ibSessionKind::Service, appServer.cpp). The login is the HOST'S: it passes both of the acquire's checks — this
+// process's sessions, and the snapshot's rows, where the registry wrote its row. A job running at that moment refuses
+// as one to wait for (JobRunning: it ends by itself), a second client refuses outright (NotSole) and outweighs a job.
+TEST(ExclusiveBesideTheHost, TheHostsOwnLoginPassesAJobAndASecondClientDoNot)
+{
+	wxInitializer wxInit;
+	if (!wxInit.IsOk())
+		GTEST_SKIP() << "wxBase init failed (no wxApp host)";
+
+	const ibString path = wxFileName::CreateTempFileName(wxT("oes-exclusive"));
+	ASSERT_FALSE(path.IsEmpty());
+	struct Gone {
+		ibString path;
+		~Gone() {
+			ibApplicationInstance::DestroyAppDataEnv();
+			wxRemoveFile(path);
+		}
+	} gone{ path };
+
+	// A file and a wider pool: the registry keeps a connection of its own for sys_session.
+	ibApplicationInstance* const base = OpenBase(ibRunMode::eFILE_MODE, /*poolSize=*/4, path);
+	if (base == nullptr)
+		GTEST_SKIP() << "appData env unavailable headless";
+	ibApplicationInstanceScope working(base);
+	ASSERT_NE(db_query->RunQuery(wxT(
+		"CREATE TABLE sys_session ("
+		"session TEXT PRIMARY KEY, userName TEXT, application INTEGER, started TEXT, lastActive TEXT, "
+		"computer TEXT, pid INTEGER, address TEXT, currentActivity TEXT, kind INTEGER, signal TEXT, "
+		"exclusive INTEGER NOT NULL DEFAULT 0, tokenHash TEXT)")), -1);
+	ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry();
+	registry->Start();
+
+	ibSessionHolder host = base->CreateSession(ibSessionKind::Service);
+	ibSessionHolder designer = base->CreateSession(ibSessionKind::ThinDesigner);
+	ASSERT_NE(host.Get(), nullptr);
+	ASSERT_NE(designer.Get(), nullptr);
+
+	// The registry's verdict, asked as an apply asks it (ibRestructureInfo::RequireExclusiveForDDL); a grant is let go.
+	using R = ibSession::ibExclusiveResult;
+	const auto acquire = [&]() {
+		const R verdict = registry->SetExclusive(designer.Get(), true);
+		if (verdict == R::Granted)
+			registry->SetExclusive(designer.Get(), false);
+		return verdict;
+	};
+
+	EXPECT_EQ(acquire(), R::Granted) << "the host's own login is not another session";
+	EXPECT_EQ(registry->GetClusterSnapshot().CountByKind(ibSessionKind::Service), 1u)
+		<< "the snapshot the acquire read held the host's row — the second check knew it as this registry's";
+
+	{
+		ibSessionHolder job = base->CreateSession(ibSessionKind::SystemJob);
+		ASSERT_NE(job.Get(), nullptr);
+		EXPECT_EQ(acquire(), R::JobRunning) << "a running job refuses, as one to wait for";
+		EXPECT_THROW(designer.Get()->SetExclusive(true), ibBackendSessionException)
+			<< "and the session's door refuses with it";
+
+		ibSessionHolder client = base->CreateSession(ibSessionKind::ThinClient);
+		ASSERT_NE(client.Get(), nullptr);
+		EXPECT_EQ(acquire(), R::NotSole) << "a client beside the job outweighs it";
+	}
+
+	EXPECT_EQ(acquire(), R::Granted) << "the job and the client gone, the request made again is granted";
 }

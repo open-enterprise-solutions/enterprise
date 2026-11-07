@@ -386,9 +386,10 @@ void ibRestructureInfo::RequireExclusiveForDDL()
 	// Each verdict says what it is: "not answered" read as "others connected" sent the person looking for
 	// a session that did not exist (2026-09-15).
 	const ibString why =
-		verdict == ibSession::ibExclusiveResult::HeldByOther ? _("Another session holds exclusive mode.")
-		: verdict == ibSession::ibExclusiveResult::Pending   ? _("The session registry did not answer in time.")
-		:                                                      _("Other sessions are connected - disconnect them and try again.");
+		verdict == ibSession::ibExclusiveResult::HeldByOther  ? _("Another session holds exclusive mode.")
+		: verdict == ibSession::ibExclusiveResult::Pending    ? _("The session registry did not answer in time.")
+		: verdict == ibSession::ibExclusiveResult::JobRunning ? _("A job is running - try again when it finishes.")
+		:                                                       _("Other sessions are connected - disconnect them and try again.");
 	ibBackendCoreException::Error(ibString::Format(
 		_("Structure (DDL) changes require exclusive mode. %s "
 		  "Code-only changes (modules, forms) can be saved without it."), why));

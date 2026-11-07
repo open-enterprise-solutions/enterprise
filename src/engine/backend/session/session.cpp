@@ -878,6 +878,11 @@ void ibSession::SetExclusive(bool on)
 	case ibExclusiveResult::NotSole:
 		ibBackendSessionException::Throw(ibBackendSessionException::Kind::OthersActive,
 			_("Cannot acquire exclusive mode: other sessions are active"));
+	case ibExclusiveResult::JobRunning:
+		// Only jobs in the way — each ends by itself, so the request can be made again. Which one runs is in Active
+		// Users (its activity); the refusal does not name it.
+		ibBackendSessionException::Throw(ibBackendSessionException::Kind::OthersActive,
+			_("Cannot acquire exclusive mode while a job is running. Try again when it finishes."));
 	case ibExclusiveResult::Pending:
 		ibBackendCoreException::Error(_("Exclusive mode request did not complete"));
 	}
