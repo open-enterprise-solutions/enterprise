@@ -310,6 +310,9 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **The lock sweep does not wait for a key somebody is taking.** A client starting while the designer swept the lock
   keys held the sweep behind its module compile, and the sweep gave up the rest of the keys with "update conflicts
   with concurrent update". A key held at that moment is left for the next pass, and the others are swept.
+- **A column whose choice parameters take a value from a header field is emptied in every row when that field
+  changes.** A contract column filtered by the header's counterparty kept its contracts when the counterparty
+  changed, in a form and from a module alike; a row marked *Keep* still keeps its value.
 
 - **`ThisForm.<attribute> = value` writes into the attribute.** It overwrote the attribute's own entry,
   and the attribute kept its old value.

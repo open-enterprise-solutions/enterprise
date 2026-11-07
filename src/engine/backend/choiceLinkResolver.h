@@ -117,6 +117,9 @@ public:
 	// ⭐ AND IT FOLLOWS THROUGH: a field emptied here may itself govern a third, whose value is now just
 	// as stale. The walk carries on until nothing more is emptied — a chain nobody would think to write
 	// a handler for, and the first one a person builds by accident.
+	//
+	// ⭐ AND A HEADER FIELD REACHES THE ROWS: where the holder is the object, every row of a tabular section
+	// whose column is chosen within the edited field takes the same step, with the row as the holder.
 	static void ClearLinked(ibChoiceHolder& holder, const ibMetaID& edited);
 
 	// ⭐⭐ THE VALUE, ADJUSTED TO WHAT ITS LINK SETTLES ON — the ONE line a holder writes through. A

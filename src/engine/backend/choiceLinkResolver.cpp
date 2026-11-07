@@ -5,6 +5,7 @@
 #include "backend/metaCollection/attribute/metaAttributeObject.h"        // a field answers what governs it
 #include "backend/srcDataObject.h"                                       // the path door every source answers
 #include "backend/backend_type.h"                                        // ibBackendTypeSourceFactory — the binding that names the field
+#include "backend/tabularModel.h"                                         // ibValueModel — a tabular section's rows, walked when the header changes
 
 // ⭐⭐ THIS ROAD SAYS WHAT IT DECIDED, AND IT DID NOT (2026-09-23). Four reports came in on one evening —
 // "the value does not react", "every other time", "the substitution does not work", "the characteristic
@@ -321,15 +322,33 @@ ibValue ibChoiceLinkResolver::Adjust(const ibChoiceHolder& holder,
 	return adjusted;
 }
 
-// ⭐⭐ THE SOURCE'S OWN FIELDS, EMPTIED WHERE THEY WERE CHOSEN WITHIN THE EDITED ONE. Everything this
-// needs is already written down and asked of whoever holds it: the source names its metaobject, the
-// metaobject lists its fields, and each field says what governs it. No cast, and no second idea of
-// where the fields are — a row of a tabular section answers exactly as an object does.
-void ibChoiceLinkResolver::ClearLinked(ibChoiceHolder& holder, const ibMetaID& edited)
+namespace {
+
+// IS THIS FIELD'S VALUE CHOSEN WITHIN `edited`? The field's own answer, read off what it declares.
+// The type it was chosen under changed: the value is of the wrong type now, and there is no
+// question to ask about it. A parameter row is gentler — it carries the author's answer.
+bool IsChosenWithin(const ibValueMetaObjectAttributeBase* field, const ibMetaID& edited)
+{
+	if (field->IsDeleted() || field->GetMetaID() == edited)
+		return false;
+	if (field->GetTypeLink().m_source.GetLeaf() == edited)
+		return true;
+	for (const ibChoiceParameterRowDescription& row : field->GetChoiceParameters().m_rows) {
+		if (row.m_source.GetLeaf() == edited && row.m_onChange != ibChoiceParameterOnChange::Keep)
+			return true;
+	}
+	return false;
+}
+
+// ⭐⭐ THE ONE STEP — the fields standing in THIS holder, emptied where they were chosen within the
+// edited one. Everything this needs is already written down and asked of whoever holds it: the source
+// names its metaobject, the metaobject lists its fields, and each field says what governs it. No cast,
+// and no second idea of where the fields are — a row of a tabular section answers exactly as an object does.
+void ClearFields(ibChoiceHolder& holder, const ibMetaID& edited)
 {
 	const ibValueMetaObjectCompositeData* fields = holder.GetFields();
 	const ibMetaData* metaData = holder.GetMetaData();
-	if (fields == nullptr || metaData == nullptr || edited == 0)
+	if (fields == nullptr || metaData == nullptr)
 		return;
 
 	// ⭐ ONE PASS, AND THE CHAIN FOLLOWS BY ITSELF. Emptying a field makes it a changed field in its turn,
@@ -343,17 +362,7 @@ void ibChoiceLinkResolver::ClearLinked(ibChoiceHolder& holder, const ibMetaID& e
 	// walking. It ran on every changed write, which in a posting pass is nearly every write: two vectors
 	// and a fresh field list per cell for nothing (2026-09-24, measured on the write bench).
 	for (const ibValueMetaObjectAttributeBase* field : fields->GetGenericAttributeArrayObject()) {
-		if (field->IsDeleted() || field->GetMetaID() == edited)
-			continue;
-
-		// The type it was chosen under changed: the value is of the wrong type now, and there is no
-		// question to ask about it. A parameter row is gentler — it carries the author's answer.
-		bool clear = field->GetTypeLink().m_source.GetLeaf() == edited;
-		for (const ibChoiceParameterRowDescription& row : field->GetChoiceParameters().m_rows) {
-			if (row.m_source.GetLeaf() == edited && row.m_onChange != ibChoiceParameterOnChange::Keep)
-				clear = true;
-		}
-		if (!clear)
+		if (!IsChosenWithin(field, edited))
 			continue;
 
 		// ⭐ THE EMPTY VALUE OF ITS OWN TYPE, not a bare undefined: a field declared as one reference
@@ -371,7 +380,7 @@ void ibChoiceLinkResolver::ClearLinked(ibChoiceHolder& holder, const ibMetaID& e
 		// instead, the skip left a new row's characteristic UNDEFINED under a chosen kind, so clicking it
 		// asked for a type the kind had already settled (Max, 2026-09-24: "I re-choose the kind, and the
 		// value on the right still offers the type choice").
-		const ibValue cleared = Adjust(holder, field, empty);
+		const ibValue cleared = ibChoiceLinkResolver::Adjust(holder, field, empty);
 		ibSourceDescription at;
 		at.AppendSource(field->GetMetaID());
 		ibValue current;
@@ -388,5 +397,65 @@ void ibChoiceLinkResolver::ClearLinked(ibChoiceHolder& holder, const ibMetaID& e
 		// Written through the source's own hop gate — the door every kind of source answers, so a
 		// row and an object are not told apart here either.
 		holder.SetValue(field->GetMetaID(), cleared);
+	}
+}
+
+}
+
+// The object's own fields first, and then — where the holder IS the object rather than a row of it —
+// every row of every tabular section with a column chosen within the edited field.
+void ibChoiceLinkResolver::ClearLinked(ibChoiceHolder& holder, const ibMetaID& edited)
+{
+	if (edited == 0)
+		return;
+
+	ClearFields(holder, edited);
+
+	// 🛑⭐ A COLUMN MAY BE CHOSEN WITHIN A FIELD OF THE OBJECT ABOVE IT — a contract in a line, filtered by
+	// the counterparty in the header — and this pass stopped at the object's own fields: the header changed,
+	// and every line kept a contract with somebody the document no longer names (issue #650). Between two
+	// header fields, and between two cells of one row, the same link worked.
+	//
+	// ⭐ SO THE SAME STEP, WITH EACH ROW AS THE HOLDER. Written through the row's own hop gate, as a cell
+	// edited in that row would be, so whatever was chosen within the emptied cell goes too — within that
+	// row. The tables are the ones the object itself says it has (its explorer, the node a form walks),
+	// and their values come through the object's own hop gate: nothing here knows which kinds have tables.
+	//
+	// ⚠ A ROW IS NOT WALKED FOR NOTHING: a table none of whose columns is chosen within the edited field is
+	// passed over without touching a row — this runs on every changed write of the header.
+	if (holder.m_table != nullptr || holder.m_source == nullptr)
+		return;
+	const ibSourceDataObject::ibSourceExplorer* explorer = holder.m_source->GetSourceExplorer();
+	if (explorer == nullptr)
+		return;
+
+	for (unsigned int idx = 0; idx < explorer->GetHelperCount(); ++idx) {
+		const ibSourceDataObject::ibSourceExplorer* node = explorer->GetHelper(idx);
+		if (node == nullptr || !node->IsTableSection())
+			continue;
+
+		ibValue value;
+		ibValueModel* table = nullptr;
+		if (!holder.m_source->GetValueBySourceHop(ibSourceHop{ node->GetSourceId() }, value) || !value.ConvertToValue(table))
+			continue;
+
+		const ibValueMetaObjectCompositeData* columns = table->GetSourceMetaObject();
+		if (columns == nullptr)
+			continue;
+		bool governed = false;
+		for (const ibValueMetaObjectAttributeBase* column : columns->GetGenericAttributeArrayObject()) {
+			if (IsChosenWithin(column, edited)) {
+				governed = true;
+				break;
+			}
+		}
+		if (!governed)
+			continue;
+
+		for (long row = 0; row < table->GetRowCount(); ++row) {
+			ibChoiceHolder line(table, table->GetItem(row));
+			line.m_source = holder.m_source;   // a cell's link may read the header, as GetValue reads it
+			ClearFields(line, edited);
+		}
 	}
 }
