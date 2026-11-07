@@ -2149,6 +2149,15 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 			return false;
 		}
 
+		// …and WHAT A BUTTON RUNS is bound by form_bind, which takes the command by its name and asks the button
+		// whether it can run it (#579). A name sent here is not the shape this property reads, and it refuses it.
+		if (dynamic_cast<const ibPropertyCommandSource*>(property) != nullptr) {
+			refusal = refused + ibT(' ') + ibString::Format(
+				ibMcpText("'%s' is a command binding: form_bind {control, property: \"%s\", path: \"<command>\"} "
+				  "binds it by the command's name, as form_control lists them."), name, name);
+			return false;
+		}
+
 		// …and only the OTHER road needs to know what shape it holds.
 		const ibDataValue held = property->GetNodeValue();
 

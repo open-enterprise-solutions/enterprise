@@ -62,20 +62,49 @@ namespace {
 const ibChar* const kHopsField = ibT("hops");
 const ibChar* const kTypeField = ibT("commandType");
 
+// The stored number back as the member it names — each one by name, so a number that names none is a refusal and
+// never an enumerator nobody declared.
+bool ReadCommandType(std::int64_t stored, ibInterfaceCommandType& type)
+{
+	switch (stored) {
+	case ibInterfaceCommandType_Default: type = ibInterfaceCommandType_Default; return true;
+	case ibInterfaceCommandType_Create:  type = ibInterfaceCommandType_Create;  return true;
+	case ibInterfaceCommandType_List:    type = ibInterfaceCommandType_List;    return true;
+	case ibInterfaceCommandType_Select:  type = ibInterfaceCommandType_Select;  return true;
+	default:                             return false;
+	}
+}
+
 } // namespace
 
+// ⚠ A NODE OF ANOTHER SHAPE IS NOT READ (#579). This read anything it was handed: a node without `hops` kept the hops
+// the description already held, and a missing `commandType` became 0, a number no member carries — so a caller who sent
+// `{name: …}` was answered with a binding nobody asked for. Now the node is the shape WriteNode writes, whole, or it is
+// refused and the description stays as it was; what is read REPLACES what was there.
 bool ibCommandDescriptionMemory::ReadNode(const ibDataValue& value, ibCommandDescription& cmdDesc)
 {
 	const auto node = value.AsChild();
 	if (!node)
 		return true;   // wired to nothing — an ordinary state
 
-	if (auto hops = node->FindField(kHopsField)) {
-		for (const ibDataValue& hop : hops->AsArray())
-			cmdDesc.AppendCommand((ibMetaID)hop.AsInt());
-	}
+	const auto hops = node->FindField(kHopsField);
+	const auto stored = node->FindField(kTypeField);
+	if (!hops || hops->Kind() != ibDataKind::Array || !stored || stored->Kind() != ibDataKind::Number)
+		return false;
 
-	cmdDesc.SetCommandType((ibInterfaceCommandType)node->GetValue<std::int32_t>(kTypeField));
+	ibInterfaceCommandType type = ibInterfaceCommandType_Default;
+	if (!ReadCommandType(stored->AsInt(), type))
+		return false;
+
+	ibCommandDescription read;
+	for (const ibDataValue& hop : hops->AsArray()) {
+		if (hop.Kind() != ibDataKind::Number)
+			return false;
+		read.AppendCommand((ibMetaID)hop.AsInt());
+	}
+	read.SetCommandType(type);
+
+	cmdDesc = read;
 	return true;
 }
 
