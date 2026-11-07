@@ -11,8 +11,9 @@
 // Licence:     wxWindows licence
 /////////////////////////////////////////////////////////////////////////////
 
-#ifndef _GENERIC_TREECTRL_H_
-#define _GENERIC_TREECTRL_H_
+// Not _GENERIC_TREECTRL_H_: that is wx/generic/treectlg.h's guard, included wherever wx has no native tree (macOS).
+#ifndef _IB_GUI_UNIV_TREECTRL_H_
+#define _IB_GUI_UNIV_TREECTRL_H_
 
 #include "gui/gui.h"
 
@@ -632,4 +633,4 @@ private:
 
 #endif // wxUSE_TREECTRL
 
-#endif // _GENERIC_TREECTRL_H_
+#endif // _IB_GUI_UNIV_TREECTRL_H_
