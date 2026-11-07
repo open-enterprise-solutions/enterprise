@@ -78,6 +78,7 @@ add_executable(oes_tests
     test_predefinedCells.cpp
     test_codeLengthApply.cpp
     test_numberPeriodicity.cpp
+    test_partHoldsWhole.cpp
     test_pictureVersion.cpp
     test_commonAttribute.cpp
     test_roleComposition.cpp
