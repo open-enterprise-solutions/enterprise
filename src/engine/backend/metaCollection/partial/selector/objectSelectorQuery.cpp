@@ -47,6 +47,7 @@ void ibValueSelectorRecordDataObject::Reset()
 	m_objGuid.reset(); m_newObject = false;
 	m_anchorSort.clear();
 	m_listObjectValue.clear();
+	m_listTableValue.clear();
 	// Studio mode never iterates (Next() returns false); GetPropVal reads these
 	// studio values directly, so populate them up front.
 	if (appData->StudioMode()) {
@@ -56,7 +57,7 @@ void ibValueSelectorRecordDataObject::Reset()
 			m_listObjectValue.insert_or_assign(object->GetMetaID(), object->CreateValue());
 		}
 		for (const auto object : m_metaObject->GetTableArrayObject())
-			m_listObjectValue.insert_or_assign(object->GetMetaID(), new ibValueTabularSectionDataObjectRef(this, object));
+			SetTable(object->GetMetaID(), new ibValueTabularSectionDataObjectRef(this, object));
 	}
 }
 
@@ -95,15 +96,17 @@ void ibValueSelectorRecordDataObject::MaterialiseRow(const ibDataQueryResult& se
 	// Self reference (keyed by the object's metaID, the way GetPropVal expects) + every
 	// non-reference attribute + the row's tabular sections.
 	m_listObjectValue.clear();
+	m_listTableValue.clear();
 	m_listObjectValue.insert_or_assign(m_metaObject->GetMetaID(),
 		selection.GetValue(m_metaObject->GetDataReference()->GetQueryColumn()));
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject())
 		if (!m_metaObject->IsDataReference(object->GetMetaID()) && object->GetQueryColumn() != nullptr)
 			m_listObjectValue[object->GetMetaID()] = selection.GetValue(object->GetQueryColumn());
+	// The previous row's sections are let go here; one somebody still holds keeps this selector with it
+	// (valuePart.h), and keeps the rows it was read with.
 	for (const auto object : m_metaObject->GetTableArrayObject()) {
-		ibValueTabularSectionDataObjectRef* tabularSection = new ibValueTabularSectionDataObjectRef(this, object);
-		tabularSection->LoadData(m_objGuid);
-		m_listObjectValue.insert_or_assign(object->GetMetaID(), tabularSection);
+		SetTable(object->GetMetaID(), new ibValueTabularSectionDataObjectRef(this, object));
+		FindTable(object->GetMetaID())->LoadData(m_objGuid);
 	}
 }
 
