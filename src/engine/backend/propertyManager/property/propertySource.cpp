@@ -3,6 +3,7 @@
 #include "backend/propertyManager/property/variant/variantSource.h"   // GetGuidByID / GetIdByGuid — the hop <-> guid resolve
 #include "core/serialize/dataBuilder.h"   // ibDataValue — node value (Binary)
 #include "core/description/sourceDescription.h"       // ibSourceDescription / ibSourceHop (the id path the variant holds)
+#include "backend/metaCollection/metaIdRemap.h"       // ibMetaIdRemap — the ids a merged subtree was renumbered by
 #include "core/memory/memoryStream.h"           // ibReaderMemory / ibWriterMemory — the guid-keyed node blob
 #include "backend/functionalOption/functionalOptionGate.h"   // ibFunctionalOptionGate::AnyUnavailable — IsAvailable
 
@@ -211,6 +212,32 @@ bool ibPropertySource::PasteNodeValue(const ibDataValue& value)
 			type = (ibClassID)reader.r_u64();
 		}
 		desc.AppendSource(id, type);
+	}
+	return true;
+}
+
+// #578 — the same hops as the copy road above, mapped instead of carried on guids. HEAD (idx 0) is a form attribute's
+// id and stays. A later hop is a field OF what the hop before it holds, so it is renumbered when that is a renumbered
+// object (Object.Goods.Price: Goods is the data processor's, and so is Price) and left when it is not
+// (Object.Customer.Name: Name is the host catalog's, whatever number it has). A hop with no type written (a blob from
+// before the hops had types) is renumbered when its id is one of the subtree's. Every hop's expected type that is
+// built on a renumbered object names it by its new id.
+bool ibPropertySource::RemapIds(const ibMetaIdRemap& remap)
+{
+	ibSourceDescription& desc = GetValueAsSourceDesc();
+	ibClassID heldBefore = g_valueUndefinedCLSID;   // what the hop before holds, by its id BEFORE the renumbering
+	for (size_t idx = 0; idx < desc.m_listSource.size(); idx++) {
+		ibSourceHop& hop = desc.m_listSource[idx];
+		const ibClassID held = hop.m_type;
+		if (idx > 0) {
+			const bool inRenumbered = IsMetaValue(heldBefore)
+				? remap.Has((ibMetaID)clsid_metaID(heldBefore))
+				: true;
+			if (inRenumbered)
+				hop.m_id = (ibSourceId)remap.Map((ibMetaID)hop.m_id);
+		}
+		hop.m_type = remap.MapClsid(hop.m_type);
+		heldBefore = held;
 	}
 	return true;
 }

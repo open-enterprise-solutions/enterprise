@@ -1,4 +1,6 @@
 #include "form.h"
+#include "formAttribute.h"   // ibFormAttributeValue — RemapIds walks the attributes
+#include "formCommand.h"     // ibFormCommandValue — …and the form commands
 #include "backend/metaCollection/metaFormObject.h"
 
 // The form is serialized as ONE node tree: SaveControl / LoadControl drive the root
@@ -26,6 +28,22 @@ bool ibValueForm::LoadForm(const ibMemoryBuffer& data)
 	// Controls loaded from memory → the form's attribute surface is stale.
 	InvalidateNames();
 	return true;
+}
+
+// #578 — what SaveForm writes, rewritten: the control tree and the form's command bar (ibValueFrame::RemapIds), each
+// attribute (its type, the value it holds — attached to it) and each form command. Called on a form just loaded from
+// its metaobject's data, which is then saved back (ibValueMetaObjectFormBase::RemapFormData).
+bool ibValueForm::RemapIds(const ibMetaIdRemap& remap)
+{
+	bool remapped = ibValueFrame::RemapIds(remap);
+	for (const auto& attribute : m_attributes)
+		if (attribute != nullptr)
+			remapped = attribute->RemapIds(remap) && remapped;
+	for (const auto& command : m_formCommands)
+		if (command != nullptr)
+			remapped = command->RemapIds(remap) && remapped;
+	InvalidateNames();
+	return remapped;
 }
 
 bool ibValueForm::SaveForm(ibMemoryBuffer& data) const

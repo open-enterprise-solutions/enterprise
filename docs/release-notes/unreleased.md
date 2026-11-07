@@ -466,3 +466,8 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   name. Sent `{name: …}`, it answered with a binding nobody asked for: the button kept the command it had and its
   item type became a number no type carries. A command binding now reads only the shape it is written in, `hops`
   and `commandType`, and replaces what it held.
+- **A data processor or a report read from its file into a configuration keeps its forms' bindings.** Its objects
+  were given new ids, but its forms still held the file's: a button named the command of the object the file was
+  saved from, a field its attribute, the form's main attribute its type. Read into the configuration it came from,
+  the copy's form ran the original's command. Everything a form holds of the object read in now follows its new ids,
+  and so do the object's own modules, which kept the file's ids before.

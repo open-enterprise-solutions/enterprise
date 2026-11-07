@@ -83,6 +83,11 @@ public:
 	// The commands a binding may name, as rows — the form editor's command tree (the frontend's WriteCommandTree over
 	// this receiver's form), which the command-source row carries for its picker.
 	virtual void WriteCommandTree(class ibDataNode& node) const = 0;
+
+	// #578 — the binding after its subtree was renumbered (metaIdRemap.h). Only the walk knows which hop is an object's:
+	// the head is the form's own command before it is a configuration's, and a hop after a control or an action is
+	// that one's own. So the receiver that walks the path rewrites it, hop by hop in the walk's own order.
+	virtual void RemapCommand(ibCommandDescription& desc, const class ibMetaIdRemap& remap) const = 0;
 };
 
 #endif // !__BACKEND_COMMAND_H__

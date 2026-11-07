@@ -98,6 +98,13 @@ bool ibPropertyForm::PasteNodeValue(const ibDataValue& value)
 	return metaForm->PasteFormData();
 }
 
+bool ibPropertyForm::RemapIds(const ibMetaIdRemap& remap)
+{
+	ibValueMetaObjectFormBase* metaForm = dynamic_cast<ibValueMetaObjectFormBase*>(m_owner);
+	if (metaForm == nullptr) return true;   // not a metaform's property: nothing it holds is a form's data
+	return metaForm->RemapFormData(remap);
+}
+
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties::Object — what the link opens
 
 bool ibPropertyForm::GetProtocolValue(ibDataNode& row, ibReader reader)

@@ -482,6 +482,10 @@ protected:
 	virtual bool CopyData(ibDataNode& node) const { return true; }
 	virtual bool PasteData(const ibDataNode& node) { return true; }
 
+	// #578 — the metaIDs the control holds, after its form's owner was renumbered: its properties (a button's command,
+	// a field's source), its command bar's items, then its sub-controls — what SaveNode writes of it.
+	virtual bool RemapIds(const class ibMetaIdRemap& remap) override;
+
 protected:
 
 	bool m_expanded = true; // is expanded in the object tree, allows for saving to file

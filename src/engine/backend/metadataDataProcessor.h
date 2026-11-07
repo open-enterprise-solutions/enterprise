@@ -83,7 +83,8 @@ public:
 protected:
 
 	//loader/saver/deleter: (header sign/version/guid read+written inside LoadCommonTree/SaveCommonTree)
-	bool LoadCommonTree(ibValueMetaObjectDataProcessor* root, const ibClassID& clsid, ibReaderMemory& readerData, bool resetId = false);
+	// `renumbered` (#578): given, the tree read is renumbered at once (RenumberSubtree) and the map lands here.
+	bool LoadCommonTree(ibValueMetaObjectDataProcessor* root, const ibClassID& clsid, ibReaderMemory& readerData, class ibMetaIdRemap* renumbered = nullptr);
 	bool SaveCommonTree(const ibClassID& clsid, ibWriterMemory& writerData, int flags = defaultFlag);
 	bool DeleteCommonTree(const ibClassID& clsid);
 

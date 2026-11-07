@@ -28,6 +28,9 @@ public:
 	// (::WriteCommandTree over GetCommandGateForm): what the command-source picker offers. Nothing for no form.
 	virtual void WriteCommandTree(class ibDataNode& node) const override;
 
+	// ibBackendCommandReceiver — a binding renumbered with its subtree (#578), in the walk's order (see the .cpp).
+	virtual void RemapCommand(ibCommandDescription& desc, const class ibMetaIdRemap& remap) const override;
+
 	// THE one command resolve — EVERY projection (button / bar / the inspector cell) calls this, so "does it exist +
 	// what's its look" is decided in ONE place, never guessed per-surface. Walk the path (ResolveValueByPath); where
 	// the walk is fragile (a tablebox command resolves the hop but vends an EMPTY caption / no icon in the designer)

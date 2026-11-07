@@ -2,6 +2,7 @@
 #include "backend/propertyManager/property/variant/variantType.h"
 #include "core/serialize/dataBuilder.h"   // ibDataNode / ibDataValue (Child + Array)
 #include "core/description/typeDescription.h"   // ibTypeDescription + qualifiers
+#include "backend/metaCollection/metaIdRemap.h"   // ibMetaIdRemap — the ids a merged subtree was renumbered by
 
 
 ////////////////////////////////////////////////////////////////////////
@@ -81,6 +82,26 @@ bool ibPropertyType::ReadNodeValue(const ibDataValue& value)
 bool ibPropertyType::WriteNodeValue(ibDataValue& value) const
 {
 	return ibTypeDescriptionMemory::WriteNode(value, GetValueAsTypeDesc());
+}
+
+bool ibPropertyType::RemapIds(const ibMetaIdRemap& remap)
+{
+	ibTypeDescription& typeDesc = GetValueAsTypeDesc();
+	std::vector<ibClassID> types;
+	bool renumbered = false;
+	for (const ibClassID& clsid : typeDesc.GetClsidList()) {
+		types.push_back(remap.MapClsid(clsid));
+		renumbered = renumbered || types.back() != clsid;
+	}
+	if (!renumbered)
+		return true;
+	// The list is laid down again in its order, and the qualifiers it had are put back whole (AppendMetaType sets
+	// a primitive's defaults).
+	const ibTypeDescription::ibTypeData data = typeDesc.GetTypeData();
+	typeDesc.ClearMetaType();
+	typeDesc.AppendMetaType(types, data);
+	typeDesc.SetTypeData(data);
+	return true;
 }
 
 ////////////////////////////////////////////////////////////////////////

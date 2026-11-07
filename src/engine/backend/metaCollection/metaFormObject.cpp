@@ -9,6 +9,8 @@
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/appData.h"
 #include "backend/system/systemManager.h"
+#include "backend/metaCollection/metaIdRemap.h"
+#include "core/diagnostics/journal.h"
 
 // ibDeferredForm impl — defined here where ibValueMetaObjectGenericData
 // (parent's CreateObjectForm) and formWrapper are fully visible.
@@ -79,6 +81,28 @@ bool ibValueMetaObjectFormBase::SaveFormData(ibBackendValueForm* valueForm) {
 		return !memoryBuffer.IsEmpty();
 	}
 	return false;   // form refused to serialize (e.g. a dynamic list with no queryable source) — don't commit
+}
+
+bool ibValueMetaObjectFormBase::RemapFormData(const ibMetaIdRemap& remap)
+{
+	if (remap.IsEmpty() || GetFormData().IsEmpty())
+		return true;
+
+	// The form is built from its data and saved back — only it knows which of the numbers it holds are metaIDs. Built
+	// after the configuration has run (LoadFromBuffer calls this after LoadDatabase), as every form is: a form
+	// attribute typed by an object of the subtree resolves only then.
+	try {
+		ibFormPtr<ibBackendValueForm> form = ibBackendValueForm::CreateNewForm(ibFormRequest(), this);
+		if (!form || !LoadFormData(form.Get()))
+			return false;
+		if (!form->RemapIds(remap.Unvisited()))
+			return false;
+		return SaveFormData(form.Get());
+	}
+	catch (const ibCoreException& err) {
+		ibJournalError(ibT("metadata.form"), ibT("%s"), err.GetErrorDescription());
+		return false;
+	}
 }
 
 //***********************************************************************

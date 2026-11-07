@@ -486,6 +486,10 @@ public:
 	virtual bool LoadForm(const ibMemoryBuffer& data);
 	virtual bool SaveForm(ibMemoryBuffer &data) const;
 
+	// #578 — ibBackendValueForm's and ibPropertyObject's at once: the controls (ibValueFrame's walk, the form's own
+	// command bar with it), then the attributes and the form commands WriteData writes beside them.
+	virtual bool RemapIds(const class ibMetaIdRemap& remap) override;
+
 	//notify
 	virtual void NotifyCreate(const ibValue& vCreated);
 	virtual void NotifyChange(const ibValue& vChanged);
