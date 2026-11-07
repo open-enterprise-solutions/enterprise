@@ -402,6 +402,7 @@
     <ClInclude Include="utils\passwordHash.hpp" />
     <ClInclude Include="utils\dataVersion.hpp" />
     <ClInclude Include="valueInfo.h" />
+    <ClInclude Include="valuePart.h" />
     <ClInclude Include="value_cast.h" />
     <ClInclude Include="value_collection.h" />
     <ClInclude Include="value_ptr.h" />
