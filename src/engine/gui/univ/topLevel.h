@@ -15,6 +15,7 @@
 
 #include "gui/univ/renderer.h"
 #include "gui/univ/theme.h"
+#include "gui/univ/colourScheme.h"
 
 #include <algorithm>
 #include <vector>
@@ -345,7 +346,15 @@ void ibTopLevelWindow<W>::OnPaint(wxPaintEvent& WXUNUSED(event))
     wxBitmap buffer(size);
     wxMemoryDC dc(buffer);
 
-    dc.SetBackground(wxBrush(this->GetBackgroundColour()));
+    // not GetBackgroundColour() raw: an uncoloured top-level window's own colour is wx 3.3.4's wxOSX transparent
+    // black (565553ee98), and this Clear() fills the WHOLE window buffer with it before the title bar and the
+    // client area's children paint their own pieces on top - a transparent fill there paints solid black under
+    // anything that doesn't repaint over it itself (see ibLunaColourScheme::GetBackground, the same guard). W is
+    // not necessarily an ibWindow (wxDialog, wxFrame, ...), so this goes through the window-less Get(WINDOW)
+    // rather than wxTHEME_BG_COLOUR's GetBackground(ibWindow*).
+    const wxColour bgCol = this->GetBackgroundColour();
+    dc.SetBackground(wxBrush(bgCol.IsOk() && bgCol.Alpha() != wxALPHA_TRANSPARENT
+        ? bgCol : wxTHEME_COLOUR(WINDOW)));
     dc.Clear();
     m_renderer->DrawFrameTitleBar(dc, wxRect(size), this->GetTitle(), wxNullIcon,
                                   GetDecorationsStyle(), m_pressedButton, wxCONTROL_PRESSED);

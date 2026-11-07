@@ -179,7 +179,17 @@ wxColour ibLunaColourScheme::GetBackground(ibWindow* win) const {
 		if (!parent->HasTransparentBackground() || parent->IsTopLevel())
 			break;
 	}
-	return win->GetBackgroundColour();
+
+	// a top-level window with no parent to fall through to (a message box,
+	// a bare dialog) and no colour of its own: wx 3.3.4's wxOSX
+	// GetClassDefaultAttributes returns wxTransparentColour for an
+	// uncoloured window (565553ee98) rather than the old opaque system
+	// grey, and a transparent colour paints as solid black - with
+	// CONTROL_TEXT also black, the whole surface goes unreadable. The
+	// theme's own content colour is the right surface here, as it is the
+	// one input controls already sit on (see WINDOW above).
+	const wxColour col = win->GetBackgroundColour();
+	return col.IsOk() && col.Alpha() != wxALPHA_TRANSPARENT ? col : Get(WINDOW);
 }
 
 // ----------------------------------------------------------------------------
