@@ -19,6 +19,10 @@
 #include <wx/settings.h>
 #include <wx/toplevel.h>
 
+#ifdef __WXOSX__
+    #include <wx/osx/private/available.h>
+#endif
+
 #include <wx/generic/private/drawresize.h>
 
 #include <stdlib.h>

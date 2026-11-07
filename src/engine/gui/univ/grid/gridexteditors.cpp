@@ -1541,13 +1541,8 @@ void ibGridCellChoiceEditor::BeginEdit(int row, int col, ibGrid* grid)
 
 	Combo()->SetFocus();
 
-#ifdef __WXOSX_COCOA__
-	// This is a work around for the combobox being simply dismissed when a
-	// choice is made in it under OS X. The bug is almost certainly due to a
-	// problem in focus events generation logic but it's not obvious to fix and
-	// for now this at least allows to use ibGrid.
-	Combo()->Popup();
-#endif
+	// SEAM vs wx: no OS X work around (the popup opened at once) - it was the native combo box's, dismissed by its focus
+	// events as a choice was made; the library's combo is the same on every platform
 
 	if (evtHandler)
 	{
@@ -1696,13 +1691,7 @@ void ibGridCellEnumEditor::BeginEdit(int row, int col, ibGrid* grid)
 	Combo()->SetSelection(m_index);
 	Combo()->SetFocus();
 
-#ifdef __WXOSX_COCOA__
-	// This is a work around for the combobox being simply dismissed when a
-	// choice is made in it under OS X. The bug is almost certainly due to a
-	// problem in focus events generation logic but it's not obvious to fix and
-	// for now this at least allows to use ibGrid.
-	Combo()->Popup();
-#endif
+	// SEAM vs wx: no OS X work around - see ibGridCellChoiceEditor::BeginEdit
 
 	if (evtHandler)
 	{

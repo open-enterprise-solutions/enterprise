@@ -37,6 +37,7 @@
 #include <wx/renderer.h>
 #include "gui/univ/renderer.h"
 #include "gui/univ/theme.h"  // the toggle's box: the theme's renderer
+#include "gui/univ/ctrl/textCtrl.h"  // the text renderer's editor
 #include <wx/graphics.h>   // the busy badge's arc (antialiased, alpha)
 #include <wx/dcbuffer.h>
 #include <wx/icon.h>
@@ -55,7 +56,6 @@
 
 #if wxUSE_ACCESSIBILITY
 #include <wx/private/markupparser.h>
-#include "gui/univ/ctrl/textCtrl.h"
 #endif // wxUSE_ACCESSIBILITY
 
 //-----------------------------------------------------------------------------
