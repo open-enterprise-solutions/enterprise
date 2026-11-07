@@ -403,8 +403,12 @@ public:
 	virtual ibSelectMode GetSelectMode() const { return m_selectMode; }
 	virtual ibIndexingMode GetIndexingMode() const { return m_indexingMode; }
 
-	//get type description
-	virtual ibTypeDescription& GetTypeDesc() const { return m_typeDesc; }
+	//get type description — another attribute's while the owner has named one (SetOwnerTypeSource)
+	virtual ibTypeDescription& GetTypeDesc() const { return m_typeSource ? m_typeSource->GetTypeDesc() : m_typeDesc; }
+
+	// …and the attribute's OWN, whatever it answers: what the configuration chose for it, which is what its holder
+	// shows, reads and writes (ibPropertyPredefinedType) — a type answered from elsewhere is not written into this one.
+	ibTypeDescription& GetOwnTypeDesc() const { return m_typeDesc; }
 
 
 	// A predefined attribute is part of the metatype's definition, so its shape is fixed by the
@@ -426,6 +430,13 @@ public:
 	// drawn as that field in a field list, a dimension as a dimension and a figure as a figure, not as one
 	// more plain attribute. Restated by the owner with the name and the caption; unset, the class's own.
 	void SetOwnerPicture(const ibPictureDescription& picture) { m_ownerPicture = picture; }
+
+	// …and the TYPE, the third: a predefined attribute whose type its owner hands over to another declaration — a
+	// document's Number while the document numbers from a numerator IS the numerator's Number, string or number and
+	// its length, so every document of one series stores numbers of one shape. The owner restates it when its setting
+	// changes and clears it on close; held counted, so a numerator closed first leaves no dangling answer. Null: its own.
+	void SetOwnerTypeSource(ibValueMetaObjectAttributePredefined* source) { m_typeSource = source; }
+	bool HasOwnerTypeSource() const { return static_cast<bool>(m_typeSource); }
 	ibPictureDescription GetColumnPicture() const override {
 		return !m_ownerPicture.IsEmptyPicture() ? m_ownerPicture : ibValueMetaObjectAttributeBase::GetColumnPicture();
 	}
@@ -441,6 +452,7 @@ protected:
 private:
 
 	mutable ibTypeDescription m_typeDesc;
+	ibValuePtr<ibValueMetaObjectAttributePredefined> m_typeSource;   // SetOwnerTypeSource — null: m_typeDesc answers
 
 	bool m_fillCheck;
 	ibItemMode m_itemMode;

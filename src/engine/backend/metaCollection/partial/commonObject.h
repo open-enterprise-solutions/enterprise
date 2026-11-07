@@ -2334,19 +2334,45 @@ protected:
 
 //Object with reference type 
 class BACKEND_API ibValueRecordDataObjectRef : public ibValueRecordDataObject {
-	public:
-protected:
+public:
 
 	// Which series the next number comes from, and — when the series is a period — the date
 	// column and the half-open range the bootstrap scan must stay inside. The default is the
 	// one series a catalog uses, and a document that is not periodic.
+	//
+	// (Public types, protected question: the series is answered by the kind, read by the allocator's helper.)
+	//
+	// ⭐ ONE KEY, N TABLES (#622). A document that numbers from a NUMERATOR shares the numerator's counter
+	// row and every table of the documents that name it: the key names the row (m_seriesPath) and the
+	// tables (m_members), and the bootstrap scan and the "already taken" check read all of them. Left
+	// empty, both are this kind alone — its own path, its own table, the date field above — which is
+	// bit for bit the key every counter row was written under before numerators existed.
+	struct ibNumberSeriesMember {
+		ibString m_table;         // the physical table the series' numbers stand in
+		ibString m_numberField;   // its counter column — the number's String or Number slot (CounterField)
+		ibString m_dateField;     // its date column, for a periodic series; empty otherwise
+	};
 	struct ibNumberSeriesKey {
 		int      m_interval = ibNumberSeriesNonperiodical;
 		ibString m_dateField;
 		long long m_from = 0;
 		long long m_to = 0;
+		ibString m_seriesPath;                        // sys_sequence.meta_guid; empty: this kind's own path
+		std::vector<ibNumberSeriesMember> m_members;  // empty: this kind's table alone
 	};
+
+	// The physical column a counter is read from — the attribute's Number or String slot, asked of the layout by
+	// its ROLE — and the one a date is (its Date slot). Empty for an attribute that has no such slot.
+	static ibString CounterField(const ibValueMetaObjectAttributeBase* attribute);
+	static ibString DateField(const ibValueMetaObjectAttributeBase* attribute);
+
+protected:
 	virtual ibNumberSeriesKey NumberSeriesKey() const { return {}; }
+
+	// THE SERIES ROW, HELD — what a number given by hand is checked under, as a generated one is under the
+	// increment that produced it: every writer of one series and period then waits for the one before it. A row
+	// not there yet is made from the tables, as the first allocation makes it.
+	void LockNumberSeries(const ibNumberSeriesKey& series);
 
 	// Code generator. Allocates the next per-(meta_guid, prefix) sequence
 	// number from sys_sequence and formats it per the attribute's type.
@@ -2801,6 +2827,11 @@ public:
 	// (e.g. a bare business-process recorder) doesn't need to override.
 	virtual bool IsPosted() const           { return false; }
 	virtual void SetPosted(bool /*posted*/) {}   // the write's own stamp: into the slot, past Modify
+
+	// A NUMBER ANOTHER RECORD OF THE SERIES ALREADY HAS — asked by WriteObject once the number is settled and before
+	// the row is stored; a refusal raises naming the record that has it. `generated` says the number was just
+	// allocated, so the series row is already held. The default checks nothing: a recorder kind with no numerator.
+	virtual void RefuseTakenNumber(bool /*generated*/) {}
 
 protected:
 	// THE RECORDER'S HALF ON TOP OF THE OBJECT'S. A posting marks the recorder posted before its
