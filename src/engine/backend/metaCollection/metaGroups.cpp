@@ -50,7 +50,9 @@ const ibMetaGroupRow s_groups[] = {
 	{ g_metaDocumentCLSID,                   ibTRANSLATE("Documents"),       ibMetaGroupBand::Metadata, ibTRANSLATE("Document") },
 	// A journal lists the documents above it, so it stands right under them.
 	{ g_metaDocumentJournalCLSID,            ibTRANSLATE("Document journals"), ibMetaGroupBand::Metadata, ibTRANSLATE("Document journal") },
-	{ g_metaEnumerationCLSID,               ibTRANSLATE("Enumerations"),    ibMetaGroupBand::Metadata, ibTRANSLATE("Enumeration") },
+	// …and the number series documents may share, right after them: shown as a branch of Documents.
+	{ g_metaDocumentNumeratorCLSID,          ibTRANSLATE("Document numerators"), ibMetaGroupBand::Metadata, ibTRANSLATE("Document numerator") },
+	{ g_metaEnumerationCLSID,                ibTRANSLATE("Enumerations"),    ibMetaGroupBand::Metadata, ibTRANSLATE("Enumeration") },
 	{ g_metaDataToolCLSID,                   ibTRANSLATE("Data tools"),      ibMetaGroupBand::Metadata, ibTRANSLATE("Data tool") },
 	{ g_metaReportCLSID,                     ibTRANSLATE("Reports"),         ibMetaGroupBand::Metadata, ibTRANSLATE("Report") },
 	// ⭐ THE CHARTS BEFORE THE REGISTERS, AND THE REGISTERS LAST — see the header.

@@ -45,6 +45,7 @@ Add a row to the group it belongs to when you add a document, so this folder can
 | [access-rights.md](access-rights.md) | Roles: the rights on an object kind and on the application, row restrictions as a debuggable handler, how several roles compose |
 | [ai-quickstart.md](ai-quickstart.md) | Building an application with an assistant: connecting it to the studio over MCP, the first request, where it stops |
 | [application-files.md](application-files.md) | An application as a directory of text files: the layout, the value kinds, export and import over MCP, publication and refusal |
+| [document-numerators.md](document-numerators.md) | Document numerators: one number series several kinds of document share, its type and period, the uniqueness check, where it stops |
 | [event-handlers.md](event-handlers.md) | Event handlers: one event of many objects handled in one module, the call order, the composite rule, the manager events |
 | [feature-options.md](feature-options.md) | Feature options: a constant that decides what is shown, membership kept on the member, the one rule, where it stops |
 | [registers.md](registers.md) | The four registers: what each keeps and how it is read, a recorder's set, totals kept by the database, what a balance guarantees |
