@@ -248,6 +248,19 @@ bool ibValueFrame::PasteNode(const ibDataNode& node)
 	return true;
 }
 
+// #578 — the walk SaveNode makes, rewriting instead of writing: the control's properties and events (ibPropertyObject),
+// the command bar a composite keeps in its "Layers" block, then each sub-control.
+bool ibValueFrame::RemapIds(const ibMetaIdRemap& remap)
+{
+	bool remapped = ibPropertyObject::RemapIds(remap);
+	if (ibValueCommandBar* const bar = GetCommandBar())
+		remapped = bar->RemapIds(remap) && remapped;
+	for (unsigned int idx = 0; idx < GetChildCount(); idx++)
+		if (ibValueFrame* const child = GetChild(idx))
+			remapped = child->RemapIds(remap) && remapped;
+	return remapped;
+}
+
 //*******************************************************************
 
 bool ibValueFrame::Init()

@@ -314,21 +314,27 @@ bool ibMetaDataDataProcessor::LoadFromBuffer(const ibMemoryBuffer& buffer, const
 
 	m_fullPath = fullPath;
 
-	// Inner (read object + copy into a config): the data processor is a child of
-	// the configuration tree — load into the existing root, no swap. resetId=true
-	// regenerates every loaded node's metaId from the config counter (m_ownerMeta,
-	// stamped via OnCreateMetaObject) so the file's ids can't collide with existing
-	// config objects; ResetAll then gives the root a fresh guid too (its ctor clsid
-	// keys on guid). Without this the import re-registers a live clsid → "Object is
-	// exist" → throw out of RunDatabase.
+	// Inner (read object + copy into a config): the data processor is a child of the configuration tree — load into the
+	// existing root, no swap. The file's ids would collide with the configuration's own (the import re-registers a
+	// live clsid → "Object is exist" → throw out of RunDatabase), so the tree read is renumbered from the config
+	// counter (m_ownerMeta, stamped via OnCreateMetaObject) — every object, the root and the predefined children
+	// included — and the root gets a fresh guid (its ctor clsid keys on guid).
+	//
+	// #578 — renumbering the objects is half of it: a form's button still names the file's command id, a field the
+	// file's attribute id, a form attribute the file's root. Once the data processor has run, every property of the subtree
+	// rewrites what it holds by the map (RemapSubtree). Forms are built only over a configuration that has run, so
+	// that is the moment.
 	if (!m_commonObject->IsExternalCreate()) {
 		if (!m_commonObject->OnCreateMetaObject(m_ownerMeta, newObjectFlag))
 			return false;
-		if (!LoadCommonTree(m_commonObject, g_metaExternalDataProcessorCLSID, readerData, /*resetId*/ true))
+		ibMetaIdRemap renumbered;
+		if (!LoadCommonTree(m_commonObject, g_metaExternalDataProcessorCLSID, readerData, &renumbered))
 			return false;
-		m_commonObject->ResetAll();
+		m_commonObject->ResetGuid();
 		m_commonObject->BuildNewName();
-		return LoadDatabase();
+		if (!LoadDatabase())
+			return false;
+		return m_commonObject->RemapSubtree(renumbered);
 	}
 
 	// External (start from file): standalone data processor — detached-root swap.
@@ -430,7 +436,7 @@ bool ibMetaDataDataProcessor::SaveToBuffer(ibWriterMemory& writerData, const ibS
 	return true;
 }
 
-bool ibMetaDataDataProcessor::LoadCommonTree(ibValueMetaObjectDataProcessor* root, const ibClassID& clsid, ibReaderMemory& readerData, bool resetId)
+bool ibMetaDataDataProcessor::LoadCommonTree(ibValueMetaObjectDataProcessor* root, const ibClassID& clsid, ibReaderMemory& readerData, ibMetaIdRemap* renumbered)
 {
 	// Header (sign + version + guid) leads the tree blob in the same stream — read
 	// and validate it here so the common-tree blob stays self-describing (was the
@@ -479,7 +485,12 @@ bool ibMetaDataDataProcessor::LoadCommonTree(ibValueMetaObjectDataProcessor* roo
 	ibBinaryProvider provider;
 	provider.Read(*readerMetaMemory, rootNode);
 	try {
-		root->ApplyDataNode(rootNode, resetId);
+		root->ApplyDataNode(rootNode);
+
+		// #578 — the file's ids are not the configuration's: renumbered before anyone is told the tree is read, so
+		// whatever registers it registers the new ones. What HOLDS those ids is remapped later (LoadFromBuffer).
+		if (renumbered != nullptr)
+			*renumbered = root->RenumberSubtree();
 
 		// ⭐ AND EVERYONE WATCHING IS TOLD IT IS READ IN — the stage a tree answers by drawing the
 		// whole thing. Said HERE rather than by each caller of the load, because there are several

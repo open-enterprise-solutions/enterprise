@@ -7,6 +7,7 @@
 #include "core/serialize/dataBuilder.h"   // ibDataValue — property node serialization
 #include "backend/metaData.h"                                        // GetAnyArrayObject — the candidates
 #include "backend/propertyManager/property/variant/variantOwner.h"   // the variant a relationship holds
+#include "backend/metaCollection/metaIdRemap.h"                       // ibMetaIdRemap — what RemapIds hands each property
 
 #define propBlock 0x00023456
 #define eventBlock 0x00023457
@@ -521,6 +522,27 @@ bool ibPropertyObject::WriteProperty(ibDataNode& node) const
 	for (ibPropertyObject* other : m_attachedObjects)
 		other->WriteProperty(node);
 	return true;
+}
+
+// #578 — every property and event first, then the attached objects (their properties are ours). A property that
+// fails (a form that could not be built to be rewritten) fails the whole walk, after the rest has been tried.
+bool ibPropertyObject::RemapIds(const ibMetaIdRemap& remap)
+{
+	// ONCE PER OBJECT: an object reached twice (attached here and a child there) would map its ids a second time, and
+	// a new id may well be another object's old one.
+	if (!remap.Visit(this))
+		return true;
+	bool remapped = true;
+	for (unsigned int idx = 0; idx < GetPropertyCount(); idx++)
+		if (ibProperty* prop = GetProperty(idx))
+			remapped = prop->RemapIds(remap) && remapped;
+	for (unsigned int idx = 0; idx < GetEventCount(); idx++)
+		if (ibEvent* event = GetEvent(idx))
+			remapped = event->RemapIds(remap) && remapped;
+	for (ibPropertyObject* other : m_attachedObjects)
+		if (other != nullptr && other != this)
+			remapped = other->RemapIds(remap) && remapped;
+	return remapped;
 }
 
 unsigned int ibPropertyObject::GetPropertyIndex(const ibString& nameParam) const {

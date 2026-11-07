@@ -268,6 +268,9 @@ public:
 	bool WriteData(ibDataNode& node) const;
 	bool ReadData(const ibDataNode& node);
 
+	// #578 — its own properties and each item's (an item's command binding), as WriteData writes them.
+	virtual bool RemapIds(const class ibMetaIdRemap& remap) override;
+
 	// ibValue / ibPropertyObject concrete requirements specific to the bar.
 	virtual ibString GetString() const override { return _("Command bar"); }
 	virtual ibString GetClassName() const override { return ibT("CommandBar"); }

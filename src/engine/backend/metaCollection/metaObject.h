@@ -2,6 +2,7 @@
 #define __META_OBJECT_H__
 
 #include "backend/propertyManager/propertyManager.h"
+#include "backend/metaCollection/metaIdRemap.h"   // RenumberSubtree answers with it
 
 #include <concepts>   // std::derived_from — what the finders hand back, what is made a child
 #include <vector>   // ibMetaMenuItem arrives as a vector of these — see CollectContextMenu
@@ -559,13 +560,23 @@ public:
 	// the top-level ibDataBuilder + ibBinaryProvider; this node owns only the
 	// metaobject<->node mapping (each node carries its own m_metaData).
 	//   ApplyDataNode - factory-create children by clsid + LoadNode(this) +
-	//                   OnLoadMetaObject; `resetId` regenerates each metaId (grafting a
-	//                   file subtree into a config). Throws ibBackendException on bad data.
+	//                   OnLoadMetaObject, with the ids the node carries. Throws ibBackendException on bad data.
 	//   BuildDataNode - SaveNode(this) + OnSaveMetaObject + children recursed.
 	//   DeleteSubtree - purge IsDeleted descendants (detach).
-	bool ApplyDataNode(const ibDataNode& node, bool resetId = false);
+	bool ApplyDataNode(const ibDataNode& node);
 	bool BuildDataNode(ibDataNode& node, int flags = defaultFlag);
 	bool DeleteSubtree();
+
+	// #578 — GRAFTING A FILE'S SUBTREE INTO A CONFIGURATION (an external data processor or report read into one). Two
+	// steps, apart because they need different moments (metaIdRemap.h):
+	//   RenumberSubtree - every object of the subtree, this one and the predefined children included, gets a fresh id;
+	//                     answers old → new. Right after ApplyDataNode, before the subtree runs, so it registers under
+	//                     the new ids.
+	//   RemapSubtree    - every property of the subtree rewrites what it holds of those ids (a type, a source, the
+	//                     form data — ibBackendProperty::RemapIds). After the subtree has run: a form is built to be
+	//                     remapped, and a form is built only over a configuration that has run (ibDeferredForm).
+	ibMetaIdRemap RenumberSubtree();
+	bool RemapSubtree(const ibMetaIdRemap& remap);
 
 	// Node form, SEPARATE per direction (no flag): LoadNode reads a genuinely CONST node
 	// into the object; SaveNode writes the object into the node. Both handle the common

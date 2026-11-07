@@ -65,6 +65,13 @@ bool ibPropertyCommandSource::WriteNodeValue(ibDataValue& value) const
 	return ibCommandDescriptionMemory::WriteNode(value, GetValueAsCommandDesc());
 }
 
+bool ibPropertyCommandSource::RemapIds(const ibMetaIdRemap& remap)
+{
+	if (const ibBackendCommandReceiver* const receiver = get_cell_variant<ibVariantCommandSource>()->GetOwner())
+		receiver->RemapCommand(GetValueAsCommandDesc(), remap);
+	return true;
+}
+
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties — the row's keys
 
 bool ibPropertyCommandSource::GetProtocolValue(ibDataNode& row, ibReader reader)

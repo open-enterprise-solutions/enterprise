@@ -40,6 +40,10 @@ public:
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
 	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
+	// #578 — renumbered by the owner's command door (ibBackendCommandReceiver::RemapCommand), which walks the path and
+	// alone knows which hop is an object's.
+	virtual bool RemapIds(const class ibMetaIdRemap& remap) override;
+
 	// …and the commands of the owner's form it may name, as the desktop's picker gathered them over the owner's command
 	// door (advpropCommandSource.cpp): CommandTree, the form editor's (ibBackendCommandReceiver::WriteCommandTree).
 	virtual bool GetProtocolValue(ibDataNode& row, ibReader reader) override;

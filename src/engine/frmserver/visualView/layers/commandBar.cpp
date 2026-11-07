@@ -812,6 +812,15 @@ bool ibValueCommandBar::ReadData(const ibDataNode& node)
 	return true;
 }
 
+bool ibValueCommandBar::RemapIds(const ibMetaIdRemap& remap)
+{
+	bool remapped = ibPropertyObject::RemapIds(remap);
+	for (const auto& item : m_items)
+		if (item != nullptr)
+			remapped = item->RemapIds(remap) && remapped;
+	return remapped;
+}
+
 //***********************************************************************
 //*                       Register in runtime                           *
 //***********************************************************************

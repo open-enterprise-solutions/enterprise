@@ -13,6 +13,7 @@
 #include "backend/system/value/valueType.h"         // ibValueTypeDescription::AllowValue — a barrier parameter takes its members
 #include "backend/compiler/value.h"                 // ibValue (the resolved command parameter)
 #include "backend/backend_command.h"              // ibBackendCommandSender::ResolveCommandPath — the SERVER walk (starts on the form)
+#include "backend/metaCollection/metaIdRemap.h"     // ibMetaIdRemap — RemapCommand
 #include "frmserver/visualView/layers/commandBar.h" // GatherFormCommands / ibCommandSourceEntry — reliable fallback for WalkCommand
 
 // A control's current value, taken if `paramType` admits it (AllowValue): its own type, or a barrier over it such
@@ -272,4 +273,22 @@ bool ibFrontendCommandReceiver::WalkCommand(const ibCommandDescription& desc, ib
 void ibFrontendCommandReceiver::WriteCommandTree(ibDataNode& node) const
 {
 	::WriteCommandTree(node, GetCommandGateForm());
+}
+
+// #578 — the hops renumbered in the order ibValueForm::GetCommandByHop reads them. The head is the form's OWN command
+// first: a form command's id is the form's, whatever number it is, so the path stays as it is. Otherwise a hop the
+// subtree renumbered is the object the walk found under it (a command, a group, an object item) and takes its new id,
+// and so does each hop after it while they are the subtree's (a group's sub-command). The first hop that is not — a
+// control's attribute id, a standard action, a host's own command — ends it: what follows is that one's own.
+void ibFrontendCommandReceiver::RemapCommand(ibCommandDescription& desc, const ibMetaIdRemap& remap) const
+{
+	const ibValueForm* const gate = GetCommandGateForm();
+	for (size_t idx = 0; idx < desc.m_listCommand.size(); idx++) {
+		ibCommandHop& hop = desc.m_listCommand[idx];
+		if (idx == 0 && gate != nullptr && gate->FindFormCommandById(hop.m_id) != nullptr)
+			return;
+		if (!remap.Has(hop.m_id))
+			return;
+		hop.m_id = remap.Map(hop.m_id);
+	}
 }
