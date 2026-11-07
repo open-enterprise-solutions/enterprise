@@ -6,6 +6,42 @@
 #include "document.h"
 #include "backend/metaData.h"
 #include "backend/objCtor.h"
+#include "documentNumerator.h"
+
+// The first entry IS the numerator — the property offers one kind and one choice.
+const ibValueMetaObjectDocumentNumerator* ibValueMetaObjectDocument::GetNumerator() const
+{
+	const ibMetaDescription& metaDesc = m_propertyNumerator->GetValueAsMetaDesc();
+	for (unsigned int idx = 0; idx < metaDesc.GetTypeCount(); idx++) {
+		const ibValueMetaObject* found = m_metaData != nullptr
+			? m_metaData->FindAnyObjectByFilter(metaDesc.GetByIdx(idx), g_metaDocumentNumeratorCLSID) : nullptr;
+		const ibValueMetaObjectDocumentNumerator* numerator = nullptr;
+		if (found != nullptr && !found->IsDeleted() && found->ConvertToValue(numerator) && numerator != nullptr)
+			return numerator;
+	}
+	return nullptr;
+}
+
+ibNumberPeriodicity ibValueMetaObjectDocument::GetNumberPeriodicity() const
+{
+	if (const ibValueMetaObjectDocumentNumerator* numerator = GetNumerator())
+		return numerator->GetNumberPeriodicity();
+	return m_propertyNumberPeriodicity->GetValueAsEnum();
+}
+
+void ibValueMetaObjectDocument::RestateNumerator()
+{
+	const ibValueMetaObjectDocumentNumerator* numerator = GetNumerator();
+	GetDocumentNumber()->SetOwnerTypeSource(numerator != nullptr ? numerator->GetNumberAttribute() : nullptr);
+}
+
+void ibValueMetaObjectDocument::OnPropertyRefresh()
+{
+	ibValueMetaObjectRecordDataRecorderRef::OnPropertyRefresh();
+	const bool bound = GetNumerator() != nullptr;
+	HideProperty(m_propertyNumberPeriodicity, bound);
+	HideProperty(m_propertyAttributeNumber, bound);
+}
 
 void ibValueMetaObjectDocument::OnPropertyCreated(ibProperty* property)
 {
@@ -42,6 +78,10 @@ void ibValueMetaObjectDocument::OnPropertyChanged(ibProperty* property, const ib
 				infoRecorder->GetTypeDesc().ClearMetaType((*m_propertyAttributeReference)->GetTypeDesc());
 		}
 	}
+
+	// The Number takes the numerator's type at once — the schema the next save restructures to is the one it states.
+	if (m_propertyNumerator == property)
+		RestateNumerator();
 
 	if (ibValueMetaObjectDocument::OnReloadMetaObject()) ibValueMetaObject::OnPropertyChanged(property, oldValue, newValue);
 }
