@@ -5182,6 +5182,24 @@ ibQuerySelectPtr WithSelectOneLevelDown(const ibQuerySelectPtr& ast, const std::
 		for (ibQueryTotalDim& d : s.m_levels)
 			for (ibQueryTotalField& f : d.m_fields)
 				f.m_expr = ontoOutput(f.m_expr);
+	// ⭐ A CALL'S ARGUMENT THAT IS AN EXPRESSION IS WORKED OUT ONE LEVEL UP, over its fields read there. The fold reads
+	// the row the totals stand on, and an expression carried down whole is a field that row does not have: a resource
+	// written as `SUM(Charged - Paid)` folded `q_carried0`, refused as a field the selection does not carry (#486). So
+	// an expression the SELECT wrote as it is still reads as that output; any other one keeps its shape and reads each
+	// of its fields as the figure's field would be read — a scalar call's words (`Day`) are no fields and stay.
+	const std::function<ibQueryAstExprPtr(const ibQueryAstExprPtr&)> argOntoOutput =
+		[&](const ibQueryAstExprPtr& e) -> ibQueryAstExprPtr {
+			if (!e || e->m_kind == ibQueryAstExprKind::Column || e->m_kind == ibQueryAstExprKind::Param
+			    || e->m_kind == ibQueryAstExprKind::Literal || e->m_kind == ibQueryAstExprKind::Value)
+				return ontoOutput(e);
+			const ibString spelled = ibRenderQueryExpr(*e);
+			for (const auto& w : written)
+				if (w.first == spelled)
+					return readUp(e, { w.second });
+			ibQueryAstExprPtr onto = std::make_shared<ibQueryAstExpr>(*e);
+			ibQueryForEachOperand(*onto, [&argOntoOutput](ibQueryAstExprPtr& child) { child = argOntoOutput(child); });
+			return onto;
+		};
 	// A figure's calls read their arguments one level up — the figure's own call, or each one a figure made of figures
 	// holds (`SUM(a) - SUM(b)`). The nodes on the way are copied, so the statement's own tree is left as written.
 	const std::function<ibQueryAstExprPtr(const ibQueryAstExprPtr&)> callsOntoOutput =
@@ -5190,7 +5208,7 @@ ibQuerySelectPtr WithSelectOneLevelDown(const ibQuerySelectPtr& ast, const std::
 				return e;
 			ibQueryAstExprPtr onto = std::make_shared<ibQueryAstExpr>(*e);
 			if (e->m_kind == ibQueryAstExprKind::Func)
-				onto->m_arg = ontoOutput(e->m_arg);
+				onto->m_arg = argOntoOutput(e->m_arg);
 			else
 				ibQueryForEachChild(*onto, [&callsOntoOutput](ibQueryAstExprPtr& child) { child = callsOntoOutput(child); });
 			return onto;

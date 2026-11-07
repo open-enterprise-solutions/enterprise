@@ -236,6 +236,19 @@ void ibQueryForEachOperand(const ibQueryAstExpr& e, Fn visit)
 	});
 }
 
+// …and its spelling to REWRITE the operands in place, as ibQueryForEachChild has both.
+template <std::invocable<ibQueryAstExprPtr&> Fn>
+void ibQueryForEachOperand(ibQueryAstExpr& e, Fn visit)
+{
+	ibQueryForEachChild(e, [&e, &visit](ibQueryAstExprPtr& child) {
+		if (e.m_kind == ibQueryAstExprKind::ScalarCall)
+			for (size_t i = 0; i < e.m_args.size(); ++i)
+				if (e.m_args[i] == child && ibQueryScalarArgIsWord(e.m_scalar, i))
+					return;
+		visit(child);
+	});
+}
+
 // One SELECT output column: an expression (column path or aggregate) + an optional
 // alias. SELECT * sets m_star (whole-row, no expr).
 struct ibQueryProjection
