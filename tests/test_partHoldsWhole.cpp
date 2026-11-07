@@ -20,7 +20,7 @@
 #include "backend/compiler/value.h"
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
-#include "backend/metadataConfiguration.h"
+#include "backend/metadataApplication.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
 #include "backend/metaCollection/dimension/metaDimensionObject.h"
@@ -64,7 +64,7 @@ ibValue Func(ibValue& value, const ibString& name)
 struct PartHoldsWhole : ::testing::Test {
 	wxInitializer                                m_wxInit;
 	std::shared_ptr<ibDatabaseLayerSQLite>       db;
-	std::unique_ptr<ibMetaDataConfigurationFile> cfg;
+	std::unique_ptr<ibMetaDataApplicationFile> cfg;
 	ibValueMetaObjectDocument*                   doc = nullptr;
 
 	void SetUp() override {
@@ -80,8 +80,8 @@ struct PartHoldsWhole : ::testing::Test {
 			GTEST_SKIP() << "in-memory SQLite open failed";
 		pool->Init(db, /*maxSize=*/1, /*minIdle=*/0);
 
-		cfg = std::make_unique<ibMetaDataConfigurationFile>();
-		ibValueMetaObjectConfiguration* root = cfg->GetCommonMetaObject();
+		cfg = std::make_unique<ibMetaDataApplicationFile>();
+		ibValueMetaObjectApplication* root = cfg->GetRootMetaObject();
 		ASSERT_NE(root, nullptr);
 
 		// A document with a tabular section Goods (one string column, Item)…
