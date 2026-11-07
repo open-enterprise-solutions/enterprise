@@ -7,6 +7,7 @@
 #include "frmclient/propertyManager/propertyEditor.h"
 #include "frmclient/win/ctrls/checktree.h"
 #include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the ids' node
+#include "gui/univ/dialog.h"
 
 #define icon_size 16
 
@@ -120,7 +121,7 @@ wxPGEditorDialogAdapter* ibPGChartBindingProperty::GetEditorDialog() const
 			const std::vector<ibMetaID> held = IdsOf(dlgProp->GetValue());
 
 			// launch editor dialog — titled by the property it edits, so one class serves every binding
-			wxDialog* dlg = new wxDialog(pg, wxID_ANY, dlgProp->GetLabel(), wxDefaultPosition, wxDefaultSize,
+			ibDialog* dlg = new ibDialog(pg, wxID_ANY, dlgProp->GetLabel(), wxDefaultPosition, wxDefaultSize,
 				wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER | wxCLIP_CHILDREN);
 
 			dlg->SetFont(pg->GetFont()); // To allow entering chars of the same set as the propGrid
@@ -142,7 +143,7 @@ wxPGEditorDialogAdapter* ibPGChartBindingProperty::GetEditorDialog() const
 			tc->SetDoubleBuffered(true);
 			tc->Enable(!dlgProp->HasFlag(wxPGFlags::ReadOnly));
 
-			wxStdDialogButtonSizer* buttonSizer = dlg->CreateStdDialogButtonSizer(wxOK | wxCANCEL);
+			ibStdDialogButtonSizer* buttonSizer = dlg->CreateStdDialogButtonSizer(wxOK | wxCANCEL);
 			topsizer->Add(buttonSizer, wxSizerFlags(0).Right().Border(wxBOTTOM | wxRIGHT, spacing));
 
 			dlg->SetSizer(topsizer);

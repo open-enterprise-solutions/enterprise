@@ -9,6 +9,7 @@
 
 #include "frmclient/win/picture.h"
 #include "gui/univ/ctrl/button.h"
+#include "gui/univ/menu.h"
 
 namespace {
 
@@ -87,24 +88,23 @@ void ibValueButton::OnButtonPressed(wxCommandEvent& WXUNUSED(event))
 	// A GROUP is picked from — its commands, groups nesting as submenus; a command is named by its place among all the
 	// group's commands, in the order they are written.
 	int next = kFirstMemberId;
-	std::function<void(wxMenu*, const ibProtocolNode&)> fill = [&fill, &next](wxMenu* into, const ibProtocolNode& members) {
+	std::function<void(ibMenu*, const ibProtocolNode&)> fill = [&fill, &next](ibMenu* into, const ibProtocolNode& members) {
 		for (const ibProtocolNode& member : members.Children()) {
 			const wxString caption = member.GetString(ibProtocol::ibForm::ibButton::Caption);
 			if (!member.Children().empty()) {
-				wxMenu* const submenu = new wxMenu();
+				ibMenu* const submenu = new ibMenu();
 				fill(submenu, member);
 				into->AppendSubMenu(submenu, caption);
 				continue;
 			}
-			wxMenuItem* const item = new wxMenuItem(into, next++, caption);
+			wxMenuItem* const item = into->Append(next++, caption);   // the menu makes its own item (ibMenuItem)
 			const wxBitmap picture = ibProtocolPicture(member, ibProtocol::ibForm::ibButton::Picture);
 			if (picture.IsOk())
 				item->SetBitmap(picture);
-			into->Append(item);
 		}
 	};
 
-	wxMenu menu;
+	ibMenu menu;
 	fill(&menu, m_members);
 	const int chosen = m_button->GetPopupMenuSelectionFromUser(menu, wxPoint(0, m_button->GetSize().GetHeight()));
 	if (chosen == wxID_NONE)

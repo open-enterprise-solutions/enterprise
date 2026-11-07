@@ -22,12 +22,14 @@
 
 #include <functional>
 #include <vector>
+#include "gui/univ/ctrl/button.h"
+#include "gui/univ/ctrl/choice.h"
 
 constexpr ibClassID g_toolConfigCompareCLSID = make_clsid("TL_CCMP", ibClassKind_None);   // tool/doc id — not a registered type
 
 class wxAuiToolBar;
-class wxButton;
-class wxChoice;
+class ibButton;
+class ibChoice;
 class ibDataViewCtrl;
 class ibDataViewEvent;
 
@@ -124,9 +126,9 @@ private:
 
 	wxAuiToolBar*  m_toolbar         = nullptr;
 	ibDataViewCtrl* m_dataView       = nullptr;
-	wxChoice*      m_filterChoice    = nullptr;
-	wxChoice*      m_directionChoice = nullptr;
-	wxButton*      m_buttonApply     = nullptr;
+	ibChoice*      m_filterChoice    = nullptr;
+	ibChoice*      m_directionChoice = nullptr;
+	ibButton*      m_buttonApply     = nullptr;
 
 	ibConfigCompareDocument* m_compareDoc = nullptr;
 };

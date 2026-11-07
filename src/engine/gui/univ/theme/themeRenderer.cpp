@@ -40,10 +40,6 @@
 // constants
 // ----------------------------------------------------------------------------
 
-static const int FRAME_TITLEBAR_HEIGHT             = 18;
-static const int FRAME_BUTTON_WIDTH                = 16;
-static const int FRAME_BUTTON_HEIGHT               = 14;
-
 // the margin between listbox item text and its rectangle
 static const int ITEM_MARGIN = 1;
 
@@ -698,6 +694,32 @@ void ibThemeRenderer::DrawRadioButton(wxDC& dc,
     else
         DrawCheckOrRadioButton(dc, label, GetRadioBitmap(flags), rect, flags, align, indexAccel);
 
+}
+
+// SEAM vs univ: wxRendererNative's check and radio boxes are the theme's indicators - ibRenderer's delegate drew
+// the generic ones, and the forks asked the native renderer; centred in the rect, as the native box is
+void ibThemeRenderer::DrawCheckBox(wxWindow* WXUNUSED(win),
+                                 wxDC& dc,
+                                 const wxRect& rect,
+                                 int flags)
+{
+    const wxBitmap bitmap = GetCheckBitmap(flags);
+    dc.DrawBitmap(bitmap, wxRect(bitmap.GetSize()).CentreIn(rect).GetPosition(), true /* use mask */);
+}
+
+void ibThemeRenderer::DrawRadioBitmap(wxWindow* WXUNUSED(win),
+                                    wxDC& dc,
+                                    const wxRect& rect,
+                                    int flags)
+{
+    const wxBitmap bitmap = GetRadioBitmap(flags);
+    dc.DrawBitmap(bitmap, wxRect(bitmap.GetSize()).CentreIn(rect).GetPosition(), true /* use mask */);
+}
+
+wxSize ibThemeRenderer::GetCheckBoxSize(wxWindow* WXUNUSED(win), int WXUNUSED(flags))
+{
+    // the indicator's size, as ibCheckBox takes it; a cell's box (wxCONTROL_CELL) is the same, it has no margins
+    return GetCheckBitmapSize();
 }
 
 void ibThemeRenderer::DrawCheckOrRadioButton(wxDC& dc,

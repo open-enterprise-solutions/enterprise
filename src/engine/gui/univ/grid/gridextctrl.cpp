@@ -28,6 +28,7 @@
 #include <wx/numformatter.h>
 #include <wx/tokenzr.h>
 #include <wx/renderer.h>
+#include "gui/univ/renderer.h"
 #include <wx/uilocale.h>
 
 #include "gridextprivate.h"
@@ -1034,9 +1035,10 @@ wxSize ibGridCellBoolRenderer::GetMaxBestSize(ibGrid& grid,
 	// DPI has changed.
 	if (s_sizeCheckMark.HasChanged(&grid))
 	{
+		// SEAM vs wx: the box Draw draws - the grid's renderer's
 		s_sizeCheckMark.SetAtNewDPI
 		(
-			wxRendererNative::Get().GetCheckBoxSize(&grid, wxCONTROL_CELL)
+			grid.GetRenderer()->GetCheckBoxSize(&grid, wxCONTROL_CELL)
 		);
 	}
 
@@ -1075,7 +1077,9 @@ void ibGridCellBoolRenderer::Draw(ibGrid& grid,
 	if (value)
 		flags |= wxCONTROL_CHECKED;
 
-	wxRendererNative::Get().DrawCheckBox(&grid, dc, checkBoxRect, flags);
+	// SEAM vs wx: the grid's renderer draws the box - the theme's, as the bool editor's ibCheckBox; wx asked the
+	// native one
+	grid.GetRenderer()->DrawCheckBox(&grid, dc, checkBoxRect, flags);
 }
 
 #endif // wxUSE_GRID

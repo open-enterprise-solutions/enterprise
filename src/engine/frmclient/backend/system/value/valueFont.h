@@ -10,8 +10,9 @@ public:
 
 	wxFont m_font;
 
-	ibValueFont() = default;
-	ibValueFont(const wxFont& font) : m_font(font) {}
+	// …an object, of its kind, as the engine's is made — see ibValueColour
+	ibValueFont() : ibValue(ibValueTypes::TYPE_VALUE) {}
+	ibValueFont(const wxFont& font) : ibValue(ibValueTypes::TYPE_VALUE), m_font(font) {}
 
 	virtual ibClassID GetClassType() const override { return value_to_clsid("VL_FONT"); }
 	virtual ibString GetString() const override;

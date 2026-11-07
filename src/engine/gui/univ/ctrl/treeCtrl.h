@@ -627,32 +627,8 @@ private:
     wxDECLARE_NO_COPY_CLASS(ibTreeCtrl);
 };
 
-// Also define wxTreeCtrl to be ibTreeCtrl on all platforms without a
-// native version, i.e. all but MSW and Qt.
-#if !(defined(__WXMSW__) || defined(__WXQT__)) || defined(__WXUNIVERSAL__)
-/*
- * wxTreeCtrl has to be a real class or we have problems with
- * the run-time information.
- */
-
-class WXDLLIMPEXP_CORE wxTreeCtrl: public ibTreeCtrl
-{
-    wxDECLARE_DYNAMIC_CLASS(wxTreeCtrl);
-
-public:
-    wxTreeCtrl() = default;
-
-    wxTreeCtrl(wxWindow *parent, wxWindowID id = wxID_ANY,
-               const wxPoint& pos = wxDefaultPosition,
-               const wxSize& size = wxDefaultSize,
-               long style = wxTR_DEFAULT_STYLE,
-               const wxValidator &validator = wxDefaultValidator,
-               const wxString& name = wxASCII_STR(wxTreeCtrlNameStr))
-    : ibTreeCtrl(parent, id, pos, size, style, validator, name)
-    {
-    }
-};
-#endif // !(__WXMSW__ || __WXQT__) || __WXUNIVERSAL__
+// SEAM vs wx: the canon also defined wxTreeCtrl as this class where wx has no native one (all but MSW and Qt) - here
+// that is wx's own wxTreeCtrl, beside which this one lives, so the alias is gone.
 
 #endif // wxUSE_TREECTRL
 

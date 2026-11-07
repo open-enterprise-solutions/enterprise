@@ -18,8 +18,9 @@
 #include "launcher.h"                       // ibListInfo — what the dialog edits
 #include "gui/univ/ctrl/radioButton.h"  // the dialog's controls — the kit's, as the launcher's window (launcher.h)
 #include "gui/univ/ctrl/textCtrl.h"
+#include "gui/univ/dialog.h"
 
-class ibDialogConnection : public wxDialog {
+class ibDialogConnection : public ibDialog {
 	ibStaticText* m_staticTextName;
 	ibTextCtrl* m_textCtrlName;
 
@@ -27,10 +28,9 @@ class ibDialogConnection : public wxDialog {
 	ibRadioButton* m_radioServer;
 	ibRadioButton* m_radioWeb;
 
-	// File mode controls — the base's folder, typed or chosen in the system's folder dialog
+	// File mode controls — the base's folder, typed or chosen in the system's folder dialog by the field's "..."
 	ibStaticText* m_staticTextFilePath;
 	ibTextCtrl* m_textCtrlFilePath;
-	ibButton* m_buttonFilePath;
 
 	// Server mode controls — the cluster, server[:port], and the base's name in it
 	ibStaticText* m_staticTextServer;

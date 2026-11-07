@@ -23,15 +23,15 @@
 //
 ////////////////////////////////////////////////////////////////////////////
 
-#include <wx/panel.h>
 #include <wx/dc.h>
 
 #include "core/query/queryAST.h"
+#include "gui/univ/window.h"
 
 #include <functional>
 #include <vector>
 
-class ibQueryJoinDiagram : public wxPanel
+class ibQueryJoinDiagram : public ibWindow
 {
 public:
 	explicit ibQueryJoinDiagram(wxWindow* parent);

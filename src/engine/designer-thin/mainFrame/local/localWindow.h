@@ -1,8 +1,8 @@
 #if !defined(_LOC_BAR_H__)
 #define _LOC_BAR_H__
 
-#include <wx/panel.h>
-#include <wx/listctrl.h>
+#include "gui/univ/panel.h"
+#include "gui/univ/ctrl/listCtrl.h"
 #include <wx/sizer.h>
 
 #include "frmclient/frmclient.h"
@@ -10,8 +10,8 @@
 
 #define localWindow ibLocalWindow::GetLocalWindow()
 
-class ibLocalWindow : public wxPanel {
-	wxListCtrl* m_treeCtrl;
+class ibLocalWindow : public ibPanel {
+	ibListCtrl* m_treeCtrl;
 private:
 	ibLocalWindow(wxWindow* parent, int id = wxID_ANY);
 	friend class ibFrontendMainFrameDesigner;

@@ -359,7 +359,7 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::SelectCom
 }
 
 ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::ibVisualEditorObjectTree(ibVisualEditor* handler, wxWindow* parent, int id) :
-	wxPanel(parent, id),
+	ibPanel(parent, id),
 	m_formHandler(handler)
 {
 	m_tree = new ibDesignerTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_HAS_BUTTONS | wxTR_NO_LINES | wxSIMPLE_BORDER | wxTR_TWIST_BUTTONS);
@@ -468,9 +468,9 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnRightCl
 
 	// Layer node (bar OR command) — the object fills its own menu and runs the choice; the tree never branches per kind.
 	if (ibValueLayerObject* const layer = data->GetLayerObject()) {
-		wxMenu menu;
+		ibMenu menu;
 		layer->PrepareDefaultMenu(&menu);
-		const int chosen = GetPopupMenuSelectionFromUser(menu, event.GetPoint());
+		const int chosen = m_tree->GetPopupMenuSelectionFromUser(menu, event.GetPoint());   // the tree's point, over the tree
 		if (chosen != wxID_NONE)
 			layer->ExecuteMenu(chosen);
 		return;
@@ -482,7 +482,7 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnRightCl
 		m_formHandler->SelectObject(control);
 		ibVisualEditorItemPopupMenu menu(m_formHandler, this, control);
 		menu.UpdateUI(&menu);
-		PopupMenu(&menu, event.GetPoint());
+		m_tree->PopupMenu(&menu, event.GetPoint());   // the tree's point, over the tree
 	}
 }
 
@@ -581,7 +581,7 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnExpansi
 // The control's own items first (a table's "Add column", a notebook's "Add page" — the desktop's PrepareDefaultMenu):
 // its class's Menu in the tab's answer, each the class it adds and its title.
 ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorItemPopupMenu::ibVisualEditorItemPopupMenu(ibVisualEditor* handler, wxWindow* WXUNUSED(parent), ibValueFrame* obj)
-	: wxMenu(), m_object(obj), m_formHandler(handler)
+	: ibMenu(), m_object(obj), m_formHandler(handler)
 {
 	wxMenuItem* item = nullptr;
 

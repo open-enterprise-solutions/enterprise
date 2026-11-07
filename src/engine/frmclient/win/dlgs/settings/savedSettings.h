@@ -24,14 +24,14 @@
 
 #include "frmclient/backend/settings/settingsComposer.h"   // the shelf itself — entries, the default pointer
 
-#include <wx/dialog.h>
-#include <wx/listctrl.h>
-#include <wx/button.h>
+#include "gui/univ/dialog.h"
+#include "gui/univ/ctrl/listCtrl.h"
+#include "gui/univ/ctrl/button.h"
 
 class ibDataComposer;
 class ibMetaData;
 
-class FRMCLIENT_API ibDialogSavedSettings : public wxDialog {
+class FRMCLIENT_API ibDialogSavedSettings : public ibDialog {
 public:
 
 	// WHICH ACT THE WINDOW IS FOR. The shelf is the same one either way — the entries, the bold
@@ -79,12 +79,12 @@ private:
 	ibGuid                               m_defaultId;   // invalid = nothing marked
 	bool                                 m_changed = false;
 
-	wxListCtrl* m_list       = nullptr;
-	wxButton*   m_btnMain    = nullptr;   // "Save" / "Restore" — the act the window is for
-	wxButton*   m_btnNew     = nullptr;   // save mode only
-	wxButton*   m_btnDefault = nullptr;
-	wxButton*   m_btnRename  = nullptr;
-	wxButton*   m_btnRemove  = nullptr;
+	ibListCtrl* m_list       = nullptr;
+	ibButton*   m_btnMain    = nullptr;   // "Save" / "Restore" — the act the window is for
+	ibButton*   m_btnNew     = nullptr;   // save mode only
+	ibButton*   m_btnDefault = nullptr;
+	ibButton*   m_btnRename  = nullptr;
+	ibButton*   m_btnRemove  = nullptr;
 };
 
 #endif // !_SAVED_SETTINGS_H__

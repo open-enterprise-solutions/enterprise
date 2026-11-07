@@ -9,9 +9,9 @@
 #include <wx/aui/auibar.h>
 #include <wx/button.h>
 #include <wx/choice.h>
-#include <wx/msgdlg.h>
+#include "gui/univ/messageDialog.h"
 #include <wx/sizer.h>
-#include <wx/stattext.h>
+#include "gui/univ/ctrl/staticText.h"
 
 // ============================================================
 //   ibConfigCompareDocument
@@ -179,23 +179,23 @@ void ibConfigCompareView::BuildLayout(wxWindow* parent)
 
 	wxBoxSizer* bottomSizer = new wxBoxSizer(wxHORIZONTAL);
 
-	bottomSizer->Add(new wxStaticText(parent, wxID_ANY, _("Show:")),
+	bottomSizer->Add(new ibStaticText(parent, wxID_ANY, _("Show:")),
 		0, wxALIGN_CENTER_VERTICAL | wxLEFT, parent->FromDIP(8));
 
 	wxArrayString filterChoices;
 	filterChoices.Add(_("All"));
 	filterChoices.Add(_("Only differences"));
 	filterChoices.Add(_("Only unchanged"));
-	m_filterChoice = new wxChoice(parent, wxID_ANY, wxDefaultPosition,
+	m_filterChoice = new ibChoice(parent, wxID_ANY, wxDefaultPosition,
 		wxDefaultSize, filterChoices);
 	m_filterChoice->SetSelection(0);
 	m_filterChoice->Bind(wxEVT_CHOICE, &ibConfigCompareView::OnFilterChanged, this);
 	bottomSizer->Add(m_filterChoice, 0, wxALL, parent->FromDIP(5));
 
-	bottomSizer->Add(new wxStaticText(parent, wxID_ANY, _("Direction:")),
+	bottomSizer->Add(new ibStaticText(parent, wxID_ANY, _("Direction:")),
 		0, wxALIGN_CENTER_VERTICAL | wxLEFT, parent->FromDIP(12));
 
-	m_directionChoice = new wxChoice(parent, wxID_ANY);
+	m_directionChoice = new ibChoice(parent, wxID_ANY);
 	m_directionChoice->Bind(wxEVT_CHOICE,
 		&ibConfigCompareView::OnDirectionChanged, this);
 	bottomSizer->Add(m_directionChoice, 0, wxALL, parent->FromDIP(5));
@@ -203,7 +203,7 @@ void ibConfigCompareView::BuildLayout(wxWindow* parent)
 
 	bottomSizer->AddStretchSpacer(1);
 
-	m_buttonApply = new wxButton(parent, wxID_TOOL_APPLY_MERGE, _("Apply merge"));
+	m_buttonApply = new ibButton(parent, wxID_TOOL_APPLY_MERGE, _("Apply merge"));
 	// Terracotta — interior-palette focal accent for the primary action.
 	m_buttonApply->SetBackgroundColour(wxColour(0xD9, 0x77, 0x57));
 	m_buttonApply->SetForegroundColour(*wxWHITE);
@@ -344,7 +344,7 @@ void ibConfigCompareView::OnApplyMerge(wxCommandEvent& WXUNUSED(event))
 		|| m_directionChoice->GetSelection() == 0);
 
 	if (!pull && !m_compareDoc->CanPush()) {
-		wxMessageBox(
+		ibMessageBox(
 			_("Push direction has no save target - open the other "
 			  "configuration from a writable source first."),
 			_("Merge"), wxOK | wxICON_WARNING, m_viewFrame);
@@ -437,7 +437,7 @@ void ibConfigCompareView::OnApplyMerge(wxCommandEvent& WXUNUSED(event))
 	}
 
 	if (!msg.IsEmpty())
-		wxMessageBox(msg, _("Merge"),
+		ibMessageBox(msg, _("Merge"),
 			wxOK | ((ok && savedRight) ? wxICON_INFORMATION : wxICON_WARNING), m_viewFrame);
 
 	if (ok && m_compareDoc->GetAppliedCallback())

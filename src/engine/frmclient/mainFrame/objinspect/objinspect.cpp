@@ -57,7 +57,7 @@ private:
 // ibObjectInspector
 // -----------------------------------------------------------------------
 
-wxBEGIN_EVENT_TABLE(ibObjectInspector, wxPanel)
+wxBEGIN_EVENT_TABLE(ibObjectInspector, ibPanel)
 EVT_PG_CHANGING(WXOES_PROPERTY_GRID, ibObjectInspector::OnPropertyGridChanging)
 EVT_PG_CHANGED(WXOES_PROPERTY_GRID, ibObjectInspector::OnPropertyGridChanged)
 EVT_PG_ITEM_COLLAPSED(WXOES_PROPERTY_GRID, ibObjectInspector::OnPropertyGridExpand)
@@ -71,7 +71,7 @@ wxEND_EVENT_TABLE()
 ///////////////////////////////////////////////////////////////////////////////
 
 ibObjectInspector::ibObjectInspector(wxWindow* parent, int id, int style)
-	: wxPanel(parent, id), m_currentSel(nullptr)
+	: ibPanel(parent, id), m_currentSel(nullptr)
 	, m_notifier(new ibGenericPropertyObjectNotifier(this))
 	, m_style(style)
 {

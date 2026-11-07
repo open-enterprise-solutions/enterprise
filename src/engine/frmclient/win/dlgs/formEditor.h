@@ -2,9 +2,10 @@
 #define __FORM_EDITOR_H__
 
 #include <wx/dialog.h>
-#include <wx/button.h>
+#include "gui/univ/ctrl/button.h"
 #include <wx/sizer.h>
-#include <wx/treectrl.h>
+#include "gui/univ/ctrl/treeCtrl.h"
+#include "gui/univ/menu.h"
 
 #include <wx/propgrid/propgrid.h>
 #include <wx/propgrid/manager.h>
@@ -18,6 +19,7 @@
 #include "frmclient/backend/backend_picture.h"     // …and what the desktop's form.h brought with it: the engine's pictures
 #include "core/picturePredefined.h"
 #include "frmclient/visualView/ctrl/form.h"
+#include "gui/univ/dialog.h"
 
 ///////////////////////////////////////////////////////////////////////////////
 /// Class ibDialogFormEditor
@@ -54,7 +56,7 @@ protected:
 
 #pragma endregion 
 
-class FRMCLIENT_API ibDialogFormEditor : public wxDialog {
+class FRMCLIENT_API ibDialogFormEditor : public ibDialog {
 public:
 
 	ibDialogFormEditor(ibValueForm* valueForm);
@@ -81,7 +83,7 @@ protected:
 	*
 	* This object executes the menu commands related to the selected object.
 	*/
-	class ibDialogFormEditorItemPopupMenu : public wxMenu {
+	class ibDialogFormEditorItemPopupMenu : public ibMenu {
 	public:
 
 		int GetSelectedID() const { return m_selID; }
@@ -237,17 +239,17 @@ private:
 	wxAuiToolBarItem* m_toolDownItem;
 
 	wxImageList* m_iconList = nullptr;
-	wxTreeCtrl* m_treeControl;
+	ibTreeCtrl* m_treeControl;
 
 	wxPropertyGridManager* m_propertyGridManager;
 	wxPropertyGridPage* m_propertyGridPage;
 
-	wxStdDialogButtonSizer* m_sdbSizer;
+	ibStdDialogButtonSizer* m_sdbSizer;
 	wxTreeItemId m_draggedItem;
 
-	wxButton* m_sdbSizerOK;
-	wxButton* m_sdbSizerApply;
-	wxButton* m_sdbSizerCancel;
+	ibButton* m_sdbSizerOK;
+	ibButton* m_sdbSizerApply;
+	ibButton* m_sdbSizerCancel;
 
 	wxDECLARE_EVENT_TABLE();
 };

@@ -12,13 +12,13 @@
 
 #include <wx/aui/auibar.h>
 #include <wx/checkbox.h>
-#include <wx/choice.h>
+#include "gui/univ/ctrl/choice.h"
 #include <wx/datectrl.h>
 #include <wx/datetime.h>
 #include <wx/itemattr.h>
 #include <wx/sizer.h>
-#include <wx/stattext.h>
-#include <wx/textctrl.h>
+#include "gui/univ/ctrl/staticText.h"
+#include "gui/univ/ctrl/textCtrl.h"
 #include <wx/timer.h>
 #include <wx/variant.h>
 
@@ -249,7 +249,7 @@ void ibAuditLogView::BuildLayout(wxWindow* parent)
 	// ----- Filter strip -----
 	wxBoxSizer* filt = new wxBoxSizer(wxHORIZONTAL);
 
-	filt->Add(new wxStaticText(parent, wxID_ANY, _("From:")),
+	filt->Add(new ibStaticText(parent, wxID_ANY, _("From:")),
 		0, wxALIGN_CENTER_VERTICAL | wxALL, parent->FromDIP(3));
 	wxDateTime defaultFrom = wxDateTime::Today();
 	defaultFrom.Subtract(wxDateSpan::Days(7));
@@ -257,37 +257,37 @@ void ibAuditLogView::BuildLayout(wxWindow* parent)
 		wxDefaultPosition, wxDefaultSize, wxDP_DROPDOWN | wxDP_SHOWCENTURY);
 	filt->Add(m_fromDate, 0, wxALL, parent->FromDIP(3));
 
-	filt->Add(new wxStaticText(parent, wxID_ANY, _("To:")),
+	filt->Add(new ibStaticText(parent, wxID_ANY, _("To:")),
 		0, wxALIGN_CENTER_VERTICAL | wxALL, parent->FromDIP(3));
 	m_toDate = new wxDatePickerCtrl(parent, wxID_ANY, wxDateTime::Today(),
 		wxDefaultPosition, wxDefaultSize, wxDP_DROPDOWN | wxDP_SHOWCENTURY);
 	filt->Add(m_toDate, 0, wxALL, parent->FromDIP(3));
 
-	filt->Add(new wxStaticText(parent, wxID_ANY, _("Level:")),
+	filt->Add(new ibStaticText(parent, wxID_ANY, _("Level:")),
 		0, wxALIGN_CENTER_VERTICAL | wxALL, parent->FromDIP(3));
-	m_levelChoice = new wxChoice(parent, wxID_ANY);
+	m_levelChoice = new ibChoice(parent, wxID_ANY);
 	for (const auto& l : kLevels) m_levelChoice->Append(l.label);
 	m_levelChoice->SetSelection(4);                              // Audit only
 	filt->Add(m_levelChoice, 0, wxALL, parent->FromDIP(3));
 
-	filt->Add(new wxStaticText(parent, wxID_ANY, _("Source:")),
+	filt->Add(new ibStaticText(parent, wxID_ANY, _("Source:")),
 		0, wxALIGN_CENTER_VERTICAL | wxALL, parent->FromDIP(3));
-	m_sourceChoice = new wxChoice(parent, wxID_ANY);
+	m_sourceChoice = new ibChoice(parent, wxID_ANY);
 	for (int i = 0; kSources[i] != nullptr; ++i) {
 		m_sourceChoice->Append(kSources[i][0] == 0 ? wxString(_("any")) : wxString(kSources[i]));
 	}
 	m_sourceChoice->SetSelection(0);
 	filt->Add(m_sourceChoice, 0, wxALL, parent->FromDIP(3));
 
-	filt->Add(new wxStaticText(parent, wxID_ANY, _("User:")),
+	filt->Add(new ibStaticText(parent, wxID_ANY, _("User:")),
 		0, wxALIGN_CENTER_VERTICAL | wxALL, parent->FromDIP(3));
-	m_userText = new wxTextCtrl(parent, wxID_ANY, wxEmptyString,
+	m_userText = new ibTextCtrl(parent, wxID_ANY, wxEmptyString,
 		wxDefaultPosition, wxSize(parent->FromDIP(120), -1));
 	filt->Add(m_userText, 0, wxALL, parent->FromDIP(3));
 
-	filt->Add(new wxStaticText(parent, wxID_ANY, _("Search:")),
+	filt->Add(new ibStaticText(parent, wxID_ANY, _("Search:")),
 		0, wxALIGN_CENTER_VERTICAL | wxALL, parent->FromDIP(3));
-	m_searchText = new wxTextCtrl(parent, wxID_ANY, wxEmptyString,
+	m_searchText = new ibTextCtrl(parent, wxID_ANY, wxEmptyString,
 		wxDefaultPosition, wxSize(parent->FromDIP(160), -1));
 	filt->Add(m_searchText, 1, wxALL | wxEXPAND, parent->FromDIP(3));
 

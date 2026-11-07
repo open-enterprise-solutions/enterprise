@@ -10,8 +10,10 @@ public:
 
 	wxColour m_colour;
 
-	ibValueColour() = default;
-	ibValueColour(const wxColour& colour) : m_colour(colour) {}
+	// …an object, of its kind, as the engine's is made: the default value is EMPTY, which a store writes as nothing chosen
+	// (ibStoreValue) — a colour picked for an appearance was dropped as it was kept, its cell read back empty
+	ibValueColour() : ibValue(ibValueTypes::TYPE_VALUE) {}
+	ibValueColour(const wxColour& colour) : ibValue(ibValueTypes::TYPE_VALUE), m_colour(colour) {}
 
 	virtual ibClassID GetClassType() const override { return value_to_clsid("VL_COLOR"); }
 	virtual ibString GetString() const override;

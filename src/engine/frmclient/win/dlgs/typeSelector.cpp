@@ -7,16 +7,19 @@
 
 #include "core/clsid.h"                       // the family a type belongs to, read off its id
 #include "frmclient/backend/backend_core.h"   // MAX_PRECISION_NUMBER, MAX_LENGTH_STRING
-#include "frmclient/backend/compiler/value.h"
+#include "frmclient/backend/compiler/value.h"   // ibValue::ReadClasses — the types offered, named as the tab names them
+#include "frmclient/backend/metaData.h"         // ibMetaData::Fetch — the offer asked of the tab
 #include "frmclient/win/ctrls/checktree.h"
+#include "protocol/protocol.h"                  // ibProtocol::ibView::ibComposer — Kind Types
+#include "protocol/protocolNode.h"
 
-#include <wx/checkbox.h>
-#include <wx/dialog.h>
+#include "gui/univ/ctrl/checkBox.h"
+#include "gui/univ/dialog.h"
 #include <wx/sizer.h>
 #include <wx/imaglist.h>
-#include <wx/spinctrl.h>
-#include <wx/choice.h>
-#include <wx/stattext.h>
+#include "gui/univ/ctrl/spinCtrl.h"
+#include "gui/univ/ctrl/choice.h"
+#include "gui/univ/ctrl/staticText.h"
 
 #include <map>
 #include <algorithm>
@@ -57,17 +60,30 @@ wxTreeItemId AppendType(ibCheckTree* tc, const wxTreeItemId& parent, const ibCla
 
 } // namespace
 
-bool ibShowTypeSelector(wxWindow* parent, ibSelectorDataType WXUNUSED(kind),
-	const std::vector<ibClassID>& filter, ibTypeDescription& inOut, const ibMetaData* WXUNUSED(metaData),
+bool ibShowTypeSelector(wxWindow* parent, ibSelectorDataType kind,
+	const std::vector<ibClassID>& filter, ibTypeDescription& inOut, const ibMetaData* metaData,
 	bool allowEdit, bool single)
 {
-	// No offer of the server's — nothing to pick from (see the header).
-	if (filter.empty())
+	// The offer is the server's (the header says why): the caller's, or — a reference-shaped one not given — asked of the
+	// tab the configuration is (fetch {Tab, Request: {Kind: Types}}), named as it names them (Classes).
+	std::vector<ibClassID> allowed = filter;
+	if (allowed.empty() && kind == ibSelectorDataType::ibSelectorDataType_reference && metaData != nullptr) {
+		ibProtocolNode request, answer;
+		request.SetValue(ibProtocol::ibView::ibComposer::Kind, static_cast<long long>(ibProtocol::ibView::ibComposer::ibRequest::Types));
+		if (metaData->Fetch(request, answer)) {
+			ibValue::ReadClasses(answer.FindChild(ibProtocol::ibView::ibComposer::Classes));
+			for (const ibProtocolNode& type : answer.GetList(ibProtocol::ibView::ibComposer::Types)) {
+				unsigned long long clsid = 0;
+				if (type.AsString().ToULongLong(&clsid) && clsid != 0)
+					allowed.push_back(static_cast<ibClassID>(clsid));
+			}
+		}
+	}
+	// No offer — nothing to pick from (see the header).
+	if (allowed.empty())
 		return false;
 
-	// The offer is the server's (the header says why); a type the value ALREADY holds survives either way — an editor
-	// must not silently drop what it was opened on.
-	std::vector<ibClassID> allowed = filter;
+	// A type the value ALREADY holds survives either way — an editor must not silently drop what it was opened on.
 	for (const ibClassID& held : inOut.GetClsidList()) {
 		if (std::find(allowed.begin(), allowed.end(), held) == allowed.end())
 			allowed.push_back(held);
@@ -75,7 +91,7 @@ bool ibShowTypeSelector(wxWindow* parent, ibSelectorDataType WXUNUSED(kind),
 
 	// The title names the ACTION and its OBJECT. "Choice type" was a calque — it read as a noun
 	// phrase about a kind of choice, which is neither what the window does nor what it is about.
-	wxDialog* dlg = new wxDialog(parent, wxID_ANY, _("Select data type"), wxDefaultPosition, wxDefaultSize,
+	ibDialog* dlg = new ibDialog(parent, wxID_ANY, _("Select data type"), wxDefaultPosition, wxDefaultSize,
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER | wxCLIP_CHILDREN);
 
 	wxBoxSizer* topsizer = new wxBoxSizer(wxVERTICAL);
@@ -84,7 +100,7 @@ bool ibShowTypeSelector(wxWindow* parent, ibSelectorDataType WXUNUSED(kind),
 	// several types, and this checkbox is how that is said. `single` is the other question: whether
 	// the caller allows the choice at all (a BINDING names exactly one), and where it does not, the
 	// checkbox is not offered rather than offered and ignored.
-	wxCheckBox* compositeDataType = new wxCheckBox(dlg, wxID_ANY, _("Composite data type"));
+	ibCheckBox* compositeDataType = new ibCheckBox(dlg, wxID_ANY, _("Composite data type"));
 	compositeDataType->Enable(allowEdit);
 	compositeDataType->Show(!single);
 
@@ -103,7 +119,10 @@ bool ibShowTypeSelector(wxWindow* parent, ibSelectorDataType WXUNUSED(kind),
 	tc->AddRoot(wxEmptyString);
 
 	compositeDataType->Bind(wxEVT_COMMAND_CHECKBOX_CLICKED, [tc](wxCommandEvent& event) {
-		tc->SetWindowStyle(event.IsChecked() ? wxCR_MULTIPLE_CHECK : wxCR_SINGLE_CHECK);
+		// the check mode alone: SetWindowStyle takes the whole style, and the mode by itself wiped the tree's - its
+		// root, lines and buttons showed, its frame went
+		const long treeStyle = tc->GetWindowStyleFlag() & ~(wxCR_MULTIPLE_CHECK | wxCR_SINGLE_CHECK);
+		tc->SetWindowStyle(treeStyle | (event.IsChecked() ? wxCR_MULTIPLE_CHECK : wxCR_SINGLE_CHECK));
 		event.Skip();
 	});
 
@@ -120,9 +139,9 @@ bool ibShowTypeSelector(wxWindow* parent, ibSelectorDataType WXUNUSED(kind),
 	ibTypeDescription working = inOut;
 
 	wxBoxSizer* stringSizer = new wxBoxSizer(wxHORIZONTAL);
-	wxStaticText* stSLength = new wxStaticText(dlg, wxID_ANY, _("Length:"));
+	ibStaticText* stSLength = new ibStaticText(dlg, wxID_ANY, _("Length:"));
 	stringSizer->Add(stSLength, 0, wxALL, dlg->FromDIP(5));
-	wxSpinCtrl* tcSLength = new wxSpinCtrl(dlg, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
+	ibSpinCtrl* tcSLength = new ibSpinCtrl(dlg, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
 		wxSP_ARROW_KEYS, 0, MAX_LENGTH_STRING);
 	tcSLength->SetValue(working.GetLength());
 	tcSLength->Enable(allowEdit);
@@ -134,9 +153,9 @@ bool ibShowTypeSelector(wxWindow* parent, ibSelectorDataType WXUNUSED(kind),
 	topsizer->Add(stringSizer, 0, 0, dlg->FromDIP(5));
 
 	wxBoxSizer* numberSizer = new wxBoxSizer(wxHORIZONTAL);
-	wxStaticText* stNLength = new wxStaticText(dlg, wxID_ANY, _("Length:"));
+	ibStaticText* stNLength = new ibStaticText(dlg, wxID_ANY, _("Length:"));
 	numberSizer->Add(stNLength, 0, wxALL, dlg->FromDIP(5));
-	wxSpinCtrl* tcNLength = new wxSpinCtrl(dlg, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
+	ibSpinCtrl* tcNLength = new ibSpinCtrl(dlg, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
 		wxSP_ARROW_KEYS, 0, MAX_PRECISION_NUMBER);
 	tcNLength->SetValue(working.GetPrecision());
 	tcNLength->Enable(allowEdit);
@@ -146,9 +165,9 @@ bool ibShowTypeSelector(wxWindow* parent, ibSelectorDataType WXUNUSED(kind),
 		event.Skip();
 	});
 
-	wxStaticText* stNScale = new wxStaticText(dlg, wxID_ANY, _("Scale:"));
+	ibStaticText* stNScale = new ibStaticText(dlg, wxID_ANY, _("Scale:"));
 	numberSizer->Add(stNScale, 0, wxTOP | wxBOTTOM | wxLEFT, dlg->FromDIP(5));
-	wxSpinCtrl* tcNScale = new wxSpinCtrl(dlg, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS);
+	ibSpinCtrl* tcNScale = new ibSpinCtrl(dlg, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS);
 	tcNScale->SetValue(working.GetScale());
 	tcNScale->Enable(allowEdit);
 	numberSizer->Add(tcNScale, 0, wxRIGHT | wxLEFT, dlg->FromDIP(5));
@@ -162,9 +181,9 @@ bool ibShowTypeSelector(wxWindow* parent, ibSelectorDataType WXUNUSED(kind),
 	topsizer->Add(numberSizer, 0, 0, dlg->FromDIP(5));
 
 	wxBoxSizer* dateSizer = new wxBoxSizer(wxHORIZONTAL);
-	wxStaticText* stDFormat = new wxStaticText(dlg, wxID_ANY, _("Date format:"));
+	ibStaticText* stDFormat = new ibStaticText(dlg, wxID_ANY, _("Date format:"));
 	dateSizer->Add(stDFormat, 0, wxALL, dlg->FromDIP(5));
-	wxChoice* cDDateFormat = new wxChoice(dlg, wxID_ANY);
+	ibChoice* cDDateFormat = new ibChoice(dlg, wxID_ANY);
 	cDDateFormat->Append(_("Date"));
 	cDDateFormat->Append(_("Date and time"));
 	cDDateFormat->Append(_("Time"));

@@ -2,15 +2,15 @@
 #define _FRMCLIENT_ACTIVE_USER_H__
 
 #include <wx/artprov.h>
-#include <wx/listctrl.h>
-#include <wx/notebook.h>
+#include "gui/univ/ctrl/listCtrl.h"
+#include "gui/univ/ctrl/notebook.h"
 #include <wx/gdicmn.h>
 #include <wx/font.h>
 #include <wx/colour.h>
 #include <wx/settings.h>
 #include <wx/string.h>
 #include <wx/sizer.h>
-#include <wx/dialog.h>
+#include "gui/univ/dialog.h"
 #include <wx/timer.h>
 
 #include <memory>
@@ -22,10 +22,10 @@
 // ACTIVE USERS — the old desktop's dialog as it was: its sessions and its locks read from
 // the server's schema (frmserver/schema/activeUser.cpp) where it read the registry and the lock manager itself, asked
 // again every second as it read them.
-class FRMCLIENT_API ibDialogActiveUser : public wxDialog {
-	wxNotebook* m_notebook;
-	wxListCtrl* m_activeTable;
-	wxListCtrl* m_locksTable;
+class FRMCLIENT_API ibDialogActiveUser : public ibDialog {
+	ibNotebook* m_notebook;
+	ibListCtrl* m_activeTable;
+	ibListCtrl* m_locksTable;
 	std::shared_ptr<wxTimer> m_activeTableScanner;
 	ibString    m_sessionArray;   // the sessions shown, as they came — the desktop's hash of them
 	size_t  m_lastLockRowCount = 0;

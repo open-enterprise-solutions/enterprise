@@ -902,8 +902,6 @@ public:
 	void ResetAllSortColumns();
 protected:
 
-	virtual void DoEnableSystemTheme(bool enable, wxWindow* window) wxOVERRIDE;
-
 	void OnDPIChanged(wxDPIChangedEvent& event);
 
 	// Scroll-driven prefetch: control owns the decision (margin

@@ -22,6 +22,7 @@
 #endif
 
 #include "gui/gui.h"
+#include "gui/univ/ctrl/control.h"
 
 class GUI_API ibTreeListItem;
 class GUI_API ibTreeListHeaderWindow;
@@ -129,7 +130,8 @@ const int wxTL_MODE_FIND_NOCASE = 0x0020;
 const int wxTREE_HITTEST_ONITEMCOLUMN = 0x2000;
 extern const wxChar* ibTreeListCtrlNameStr;
 
-class GUI_API ibTreeListCtrl : public wxControl
+// SEAM vs wx: wxControl there - the library's control here
+class GUI_API ibTreeListCtrl : public ibControl
 {
 	friend class ibTreeListHeaderWindow;
 	friend class ibTreeListMainWindow;

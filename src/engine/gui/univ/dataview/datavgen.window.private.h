@@ -19,7 +19,7 @@
 #include <wx/app.h>
 #endif
 
-class ibDataViewMainWindow : public wxWindow
+class ibDataViewMainWindow : public ibWindow
 {
 public:
 

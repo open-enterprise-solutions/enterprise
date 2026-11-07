@@ -12,6 +12,7 @@
 #endif
 
 #include "frmclient/frmclient.h"
+#include "gui/univ/panel.h"
 
 static int wxEVT_OES_PROP_PICTURE_CHANGED = wxNewEventType();
 
@@ -27,7 +28,7 @@ enum {
 // widget registered for its type (ibPropertyRegistry). A metaobject's properties are the server's — the object holds
 // them, filled from its rows (ibValueMetaObject, ibPropertySerializable); the inspector knows no metadata and no server, and an
 // edit goes through the object's door (ibPropertyGate), as on the desktop.
-class FRMCLIENT_API ibObjectInspector final : public wxPanel {
+class FRMCLIENT_API ibObjectInspector final : public ibPanel {
 
 	ibObjectInspector(wxWindow* parent, int id, int style = wxOES_OI_DEFAULT_STYLE);
 

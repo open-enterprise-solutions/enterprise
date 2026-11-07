@@ -22,9 +22,7 @@
 
 #include "headerctrlg.h"
 
-#ifndef WX_PRECOMP
-    #include <wx/menu.h>
-#endif // WX_PRECOMP
+#include "gui/univ/menu.h"
 
 #include <wx/rearrangectrl.h>
 #include <wx/renderer.h>
@@ -73,7 +71,7 @@ public:
 
 extern const char ibHeaderGenericCtrlNameStr[] = "ibHeaderGenericCtrl";
 
-wxBEGIN_EVENT_TABLE(ibHeaderGenericCtrlBase, wxControl)
+wxBEGIN_EVENT_TABLE(ibHeaderGenericCtrlBase, ibControl)
     EVT_HEADER_SEPARATOR_DCLICK(wxID_ANY, ibHeaderGenericCtrlBase::OnSeparatorDClick)
 #if wxUSE_MENUS
     EVT_HEADER_RIGHT_CLICK(wxID_ANY, ibHeaderGenericCtrlBase::OnRClick)
@@ -274,7 +272,7 @@ ibHeaderGenericCtrlBase::DoResizeColumnIndices(wxArrayInt& colIndices, unsigned 
 
 #if wxUSE_MENUS
 
-void ibHeaderGenericCtrlBase::AddColumnsItems(wxMenu& menu, int idColumnsBase)
+void ibHeaderGenericCtrlBase::AddColumnsItems(ibMenu& menu, int idColumnsBase)
 {
     const unsigned count = GetColumnCount();
     for ( unsigned n = 0; n < count; n++ )
@@ -289,7 +287,8 @@ void ibHeaderGenericCtrlBase::AddColumnsItems(wxMenu& menu, int idColumnsBase)
 bool ibHeaderGenericCtrlBase::ShowColumnsMenu(const wxPoint& pt, const wxString& title)
 {
     // construct the menu with the entries for all columns
-    wxMenu menu;
+    // SEAM vs wx: the library's menu - the header is an ib window, its popup the ib one
+    ibMenu menu;
     if ( !title.empty() )
         menu.SetTitle(title);
 

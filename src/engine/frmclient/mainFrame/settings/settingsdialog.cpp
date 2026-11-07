@@ -5,15 +5,15 @@
 #include "mcpsettingspanel.h"
 #include "debugsettingspanel.h"
 
-#include <wx/bookctrl.h>
+#include "gui/univ/ctrl/notebook.h"
 
 ibDialogSettings::ibDialogSettings(wxWindow* parent)
-	: wxPropertySheetDialog(parent, wxID_ANY, _("Settings"), wxDefaultPosition, wxDefaultSize,
+	: ibPropertySheetDialog(parent, wxID_ANY, _("Settings"), wxDefaultPosition, wxDefaultSize,
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 {
 	CreateButtons(wxOK | wxCANCEL);
 
-	wxBookCtrlBase* const book = GetBookCtrl();
+	ibNotebook* const book = GetBookCtrl();
 	m_keyBinderPanel = new ibPanelKeyBinder(book);
 	book->AddPage(m_keyBinderPanel, _("Key Bindings"));
 	m_editorSettingsPanel = new ibPanelEditorSettings(book);
@@ -26,7 +26,7 @@ ibDialogSettings::ibDialogSettings(wxWindow* parent)
 
 ibPanelMcpSettings* ibDialogSettings::AddMcpSettingsPanel()
 {
-	wxBookCtrlBase* const book = GetBookCtrl();
+	ibNotebook* const book = GetBookCtrl();
 	m_mcpSettingsPanel = new ibPanelMcpSettings(book);
 	book->AddPage(m_mcpSettingsPanel, _("Assistant access"));
 	return m_mcpSettingsPanel;
@@ -34,7 +34,7 @@ ibPanelMcpSettings* ibDialogSettings::AddMcpSettingsPanel()
 
 void ibDialogSettings::AddDebugSettingsPanel(const ibProtocolNode& shown)
 {
-	wxBookCtrlBase* const book = GetBookCtrl();
+	ibNotebook* const book = GetBookCtrl();
 	book->AddPage(new ibPanelDebugSettings(book, shown), _("Debugging"));
 }
 

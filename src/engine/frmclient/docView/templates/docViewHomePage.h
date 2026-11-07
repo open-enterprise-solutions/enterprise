@@ -12,7 +12,7 @@
 #include <vector>
 
 class wxSizer;
-class wxStaticText;
+class ibStaticText;
 
 class FRMCLIENT_API ibHomePageView : public ibVisualHostView {
 public:
@@ -31,7 +31,7 @@ private:
 
 	// One cell — its header's caption, and the host its form is drawn in (none: the form is not available).
 	struct ibHomePageCell {
-		wxStaticText*       m_caption = nullptr;
+		ibStaticText*       m_caption = nullptr;
 		ibVisualHostClient* m_host = nullptr;
 	};
 
@@ -42,7 +42,7 @@ private:
 	// form is not available.
 	wxWindow* OpenCell(wxWindow* parent, const ibProtocolNode& cell);
 	// The strip above a cell — its icon and its title, as the server sent them; returns the title's text.
-	wxStaticText* BuildCellHeader(wxWindow* pane, wxSizer* paneSizer, const ibProtocolNode& cell);
+	ibStaticText* BuildCellHeader(wxWindow* pane, wxSizer* paneSizer, const ibProtocolNode& cell);
 
 	wxWindow* m_workspace = nullptr;
 	std::vector<ibHomePageCell> m_cells;   // column by column, top to bottom — as the view lists them

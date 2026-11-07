@@ -10,8 +10,8 @@
 
 #include <wx/menu.h>
 #include <wx/sizer.h>
-#include <wx/splitter.h>
-#include <wx/stattext.h>
+#include "gui/univ/splitterWindow.h"
+#include "gui/univ/ctrl/staticText.h"
 #include <wx/toolbar.h>
 #include <wx/treectrl.h>
 
@@ -69,23 +69,23 @@ public:
 // ===========================================================================
 
 ibSortEditor::ibSortEditor(wxWindow* parent, ibSortDescription* sort, ibSettingsFieldTree* fields)
-	: wxPanel(parent, wxID_ANY), m_sort(sort), m_fieldSource(fields)
+	: ibPanel(parent, wxID_ANY), m_sort(sort), m_fieldSource(fields)
 {
-	wxSplitterWindow* splitter = new wxSplitterWindow(this, wxID_ANY,
+	ibSplitterWindow* splitter = new ibSplitterWindow(this, wxID_ANY,
 		wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
 	splitter->SetMinimumPaneSize(FromDIP(120));
 
 	// ---- LEFT pane: available fields (dot-walkable) ----
-	wxPanel* leftPane = new wxPanel(splitter);
+	ibPanel* leftPane = new ibPanel(splitter);
 	wxBoxSizer* leftSizer = new wxBoxSizer(wxVERTICAL);
-	leftSizer->Add(new wxStaticText(leftPane, wxID_ANY, _("Available fields")), 0, wxALL, FromDIP(4));
-	m_fieldCtrl = new wxTreeCtrl(leftPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+	leftSizer->Add(new ibStaticText(leftPane, wxID_ANY, _("Available fields")), 0, wxALL, FromDIP(4));
+	m_fieldCtrl = new ibTreeCtrl(leftPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_HIDE_ROOT | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxTR_TWIST_BUTTONS);
 	leftSizer->Add(m_fieldCtrl, 1, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, FromDIP(4));
 	leftPane->SetSizer(leftSizer);
 
 	// ---- RIGHT pane: the sort list — Field + editable Direction (choice), model-driven ----
-	wxPanel* rightPane = new wxPanel(splitter);
+	ibPanel* rightPane = new ibPanel(splitter);
 	wxBoxSizer* rightSizer = new wxBoxSizer(wxVERTICAL);
 	m_view = new ibDataViewCtrl(rightPane, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxDV_ROW_LINES | wxDV_SINGLE);
 	ibStyleSettingsGrid(m_view);
@@ -353,7 +353,7 @@ void ibSortEditor::OnContextMenu(ibDataViewEvent&)
 	if (m_readOnly)
 		return;
 
-	wxMenu menu;
+	ibMenu menu;
 	ibAppendCmd(menu, wxID_ADD, _("Add") + wxT("\tIns"), wxASCII_STR(wxART_NEW), this);
 	ibAppendCmd(menu, wxID_REMOVE, _("Delete") + wxT("\tDel"), wxASCII_STR(wxART_DELETE), this);
 	menu.AppendSeparator();
@@ -365,5 +365,5 @@ void ibSortEditor::OnContextMenu(ibDataViewEvent&)
 	menu.Bind(wxEVT_MENU, [this](wxCommandEvent&)   { MoveLine(-1); }, wxID_UP);
 	menu.Bind(wxEVT_MENU, [this](wxCommandEvent&)   { MoveLine(+1); }, wxID_DOWN);
 
-	PopupMenu(&menu);
+	m_view->PopupMenu(&menu);   // on the view: an ib menu shows over an ib window, the panel is native
 }

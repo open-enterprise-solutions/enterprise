@@ -4,26 +4,27 @@
 #include <wx/artprov.h>
 #include <wx/xrc/xmlres.h>
 #include <wx/string.h>
-#include <wx/checkbox.h>
+#include "gui/univ/ctrl/checkBox.h"
 #include <wx/gdicmn.h>
 #include <wx/font.h>
 #include <wx/colour.h>
 #include <wx/settings.h>
 #include <wx/textctrl.h>
-#include <wx/spinctrl.h>
+#include "gui/univ/ctrl/spinCtrl.h"
 #include <wx/sizer.h>
-#include <wx/button.h>
+#include "gui/univ/ctrl/button.h"
 #include <wx/dialog.h>
 #include "core/localization/dictionary.h"   // _() — the dialog's words
+#include "gui/univ/dialog.h"
 
 class ibGridEditor;
 
-class ibDialogColWidth : public wxDialog {
-	wxCheckBox* m_defaultWidth;
-	wxSpinCtrlDouble* m_spinCtrlWidth;
-	wxStdDialogButtonSizer* m_sdbSizerBottom;
-	wxButton* m_sdbSizerBottomOK;
-	wxButton* m_sdbSizerBottomCancel;
+class ibDialogColWidth : public ibDialog {
+	ibCheckBox* m_defaultWidth;
+	ibSpinCtrlDouble* m_spinCtrlWidth;
+	ibStdDialogButtonSizer* m_sdbSizerBottom;
+	ibButton* m_sdbSizerBottomOK;
+	ibButton* m_sdbSizerBottomCancel;
 public:
 
 	int GetWidth() const {

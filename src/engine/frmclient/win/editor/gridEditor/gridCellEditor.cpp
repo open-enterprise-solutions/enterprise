@@ -31,7 +31,7 @@ void ibGridEditor::ibGridEditorCellTextEditor::DoCreate(wxWindow* parent,
 	wxEvtHandler* evtHandler,
 	long style)
 {
-	wxTextCtrl* const text = new wxTextCtrl(parent, id, wxEmptyString,
+	ibTextCtrl* const text = new ibTextCtrl(parent, id, wxEmptyString,
 		wxDefaultPosition, wxDefaultSize,
 		style | wxTE_MULTILINE | wxTE_NO_VSCROLL | wxTE_PROCESS_ENTER | wxTE_PROCESS_TAB | wxNO_BORDER);
 
@@ -222,7 +222,7 @@ void ibGridEditor::ibGridEditorCellTextEditor::StartingKey(wxKeyEvent& event)
 	// Do it ourselves instead.  We know that if we get this far that we have
 	// a valid character, so not a whole lot of testing needs to be done.
 
-	wxTextCtrl* tc = Text();
+	ibTextCtrl* tc = Text();
 	int ch;
 
 	bool isPrintable;

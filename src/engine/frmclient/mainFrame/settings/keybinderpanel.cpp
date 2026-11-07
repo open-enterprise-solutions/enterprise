@@ -21,40 +21,40 @@ static wxString JoinKeys(const std::vector<ibKeyBinder::Key>& keys)
 }
 
 ibPanelKeyBinder::ibPanelKeyBinder(wxWindow* parent)
-	: wxPanel(parent, wxID_ANY)
+	: ibPanel(parent, wxID_ANY)
 {
 	wxBoxSizer* const page = new wxBoxSizer(wxVERTICAL);
 
-	m_filterCtrl = new wxSearchCtrl(this, wxID_ANY);
+	m_filterCtrl = new ibSearchCtrl(this, wxID_ANY);
 	m_filterCtrl->SetDescriptiveText(_("Find a command or a key"));
 	m_filterCtrl->ShowCancelButton(true);
 	page->Add(m_filterCtrl, 0, wxEXPAND | wxALL, 5);
 
-	m_commandList = new wxListCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+	m_commandList = new ibListCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxLC_REPORT | wxLC_SINGLE_SEL);
 	m_commandList->InsertColumn(kColumnCommand, _("Command"), wxLIST_FORMAT_LEFT, FromDIP(170));
 	m_commandList->InsertColumn(kColumnKeys, _("Keys"), wxLIST_FORMAT_LEFT, FromDIP(110));
 	m_commandList->InsertColumn(kColumnMenu, _("Menu"), wxLIST_FORMAT_LEFT, FromDIP(110));
 	page->Add(m_commandList, 1, wxEXPAND | wxLEFT | wxRIGHT, 5);
 
-	m_helpText = new wxStaticText(this, wxID_ANY, wxString());
+	m_helpText = new ibStaticText(this, wxID_ANY, wxString());
 	page->Add(m_helpText, 0, wxEXPAND | wxALL, 5);
 
 	wxBoxSizer* const keyRow = new wxBoxSizer(wxHORIZONTAL);
-	keyRow->Add(new wxStaticText(this, wxID_ANY, _("Press a key:")), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
-	m_keyCtrl = new wxTextCtrl(this, wxID_ANY);
+	keyRow->Add(new ibStaticText(this, wxID_ANY, _("Press a key:")), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+	m_keyCtrl = new ibTextCtrl(this, wxID_ANY);
 	keyRow->Add(m_keyCtrl, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
-	m_assignButton = new wxButton(this, wxID_ANY, _("Assign"));
+	m_assignButton = new ibButton(this, wxID_ANY, _("Assign"));
 	keyRow->Add(m_assignButton, 0, wxALIGN_CENTER_VERTICAL);
 	page->Add(keyRow, 0, wxEXPAND | wxLEFT | wxRIGHT, 5);
 
-	m_holderText = new wxStaticText(this, wxID_ANY, wxString());
+	m_holderText = new ibStaticText(this, wxID_ANY, wxString());
 	page->Add(m_holderText, 0, wxEXPAND | wxALL, 5);
 
 	wxBoxSizer* const buttonRow = new wxBoxSizer(wxHORIZONTAL);
-	m_removeButton = new wxButton(this, wxID_ANY, _("Remove keys"));
+	m_removeButton = new ibButton(this, wxID_ANY, _("Remove keys"));
 	buttonRow->Add(m_removeButton, 0, wxRIGHT, 5);
-	m_resetButton = new wxButton(this, wxID_ANY, _("Reset to default"));
+	m_resetButton = new ibButton(this, wxID_ANY, _("Reset to default"));
 	buttonRow->Add(m_resetButton, 0);
 	page->Add(buttonRow, 0, wxALL, 5);
 

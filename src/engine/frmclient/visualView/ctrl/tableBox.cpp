@@ -16,6 +16,7 @@
 #include "gui/univ/ctrl/textCtrl.h"
 #include "gui/univ/dataview/dataview.h"
 #include "gui/univ/dataview/headerctrlg.h"
+#include "gui/univ/menu.h"
 
 namespace {
 
@@ -184,7 +185,7 @@ ibValueModelTableBox::~ibValueModelTableBox() = default;
 
 void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& node)
 {
-	m_panel = new wxPanel(parent, wxID_ANY);
+	m_panel = new ibPanel(parent, wxID_ANY);
 	wxBoxSizer* const sizer = new wxBoxSizer(wxVERTICAL);
 
 	// The chrome: its command bar above it.
@@ -746,7 +747,7 @@ void ibValueModelTableBox::OnContextMenu(ibDataViewEvent& event)
 		return;
 
 	constexpr int kFirstEntryId = wxID_HIGHEST + 1;
-	wxMenu menu;
+	ibMenu menu;
 	for (std::size_t idx = 0; idx < entries.size(); ++idx) {
 		wxMenuItem* const item = menu.Append(kFirstEntryId + static_cast<int>(idx), entries[idx].GetString(ibProtocol::ibForm::ibCommandBar::Caption));
 		const wxBitmap picture = ibProtocolPicture(entries[idx], ibProtocol::ibForm::ibCommandBar::Picture);

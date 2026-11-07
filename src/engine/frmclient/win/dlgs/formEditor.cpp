@@ -5,6 +5,8 @@
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 #include "frmclient/settings/formSettings.h"   // the setting this window saves and clears
 #include "frmclient/docView/tabDocument.h"   // ibTabDocument — the form's tab, which this opens over
+#include "gui/univ/ctrl/staticText.h"
+#include "gui/univ/messageDialog.h"
 
 enum {
 	WXOES_PROPERTY_GRID = wxID_HIGHEST + 1001
@@ -191,7 +193,7 @@ void ibDialogFormEditor::AddChildren(ibValueFrame* obj, const wxTreeItemId& pare
 	}
 }
 
-wxBEGIN_EVENT_TABLE(ibDialogFormEditor, wxDialog)
+wxBEGIN_EVENT_TABLE(ibDialogFormEditor, ibDialog)
 
 EVT_UPDATE_UI(wxID_ANY, ibDialogFormEditor::OnUpdateEvent)
 
@@ -219,7 +221,7 @@ wxEND_EVENT_TABLE()
 #include "frmclient/visualView/visualHostClient.h"
 
 ibDialogFormEditor::ibDialogFormEditor(ibValueForm* valueForm) :
-	wxDialog(valueForm->GetVisualDocument()->GetDocumentWindow(), wxID_ANY, _("Form editor"), wxDefaultPosition, wxSize(600, 350), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER), m_owner(valueForm), m_selectedControl(nullptr)
+	ibDialog(valueForm->GetVisualDocument()->GetDocumentWindow(), wxID_ANY, _("Form editor"), wxDefaultPosition, wxSize(600, 350), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER), m_owner(valueForm), m_selectedControl(nullptr)
 {
 	wxBoxSizer* commonSizer = new wxBoxSizer(wxVERTICAL);
 	wxBoxSizer* controlSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -233,7 +235,7 @@ ibDialogFormEditor::ibDialogFormEditor(ibValueForm* valueForm) :
 
 	commonSizer->Add(m_mainToolBar, 0, wxEXPAND);
 
-	m_treeControl = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_HAS_BUTTONS | wxSIMPLE_BORDER | wxTR_NO_LINES | wxTR_TWIST_BUTTONS);
+	m_treeControl = new ibTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_HAS_BUTTONS | wxSIMPLE_BORDER | wxTR_NO_LINES | wxTR_TWIST_BUTTONS);
 	controlSizer->Add(m_treeControl, 1, wxALL | wxEXPAND, FromDIP(5));
 	m_treeControl->SetDoubleBuffered(true);
 
@@ -253,11 +255,11 @@ ibDialogFormEditor::ibDialogFormEditor(ibValueForm* valueForm) :
 	// about this window's edit at all. OK applies what was just changed; these two decide whether the
 	// arrangement outlives the window (frmclient/settings/formSettings.h).
 	wxBoxSizer* settingSizer = new wxBoxSizer(wxHORIZONTAL);
-	settingSizer->Add(new wxButton(this, BUTTON_SAVE_SETTING, _("Save setting")),
+	settingSizer->Add(new ibButton(this, BUTTON_SAVE_SETTING, _("Save setting")),
 		0, wxALL, FromDIP(5));
-	settingSizer->Add(new wxButton(this, BUTTON_RESET_SETTING, _("Restore default setting")),
+	settingSizer->Add(new ibButton(this, BUTTON_RESET_SETTING, _("Restore default setting")),
 		0, wxALL, FromDIP(5));
-	settingSizer->Add(new wxStaticText(this, LABEL_SETTING_STATUS, wxEmptyString),
+	settingSizer->Add(new ibStaticText(this, LABEL_SETTING_STATUS, wxEmptyString),
 		1, wxALL | wxALIGN_CENTER_VERTICAL, FromDIP(5));
 	commonSizer->Add(settingSizer, 0, wxEXPAND, FromDIP(5));
 
@@ -266,16 +268,16 @@ ibDialogFormEditor::ibDialogFormEditor(ibValueForm* valueForm) :
 	if (wxWindow* reset = FindWindow(BUTTON_RESET_SETTING))
 		reset->Enable(ibHasFormSettings(m_owner));
 
-	m_sdbSizer = new wxStdDialogButtonSizer();
-	m_sdbSizerOK = new wxButton(this, wxID_OK);
+	m_sdbSizer = new ibStdDialogButtonSizer();
+	m_sdbSizerOK = new ibButton(this, wxID_OK);
 	m_sdbSizer->AddButton(m_sdbSizerOK);
-	m_sdbSizerApply = new wxButton(this, wxID_APPLY);
+	m_sdbSizerApply = new ibButton(this, wxID_APPLY);
 	m_sdbSizer->AddButton(m_sdbSizerApply);
-	m_sdbSizerCancel = new wxButton(this, wxID_CANCEL);
+	m_sdbSizerCancel = new ibButton(this, wxID_CANCEL);
 	m_sdbSizer->AddButton(m_sdbSizerCancel);
 	m_sdbSizer->Realize();
 
-	commonSizer->Add(m_sdbSizer, 0, wxALIGN_RIGHT, FromDIP(5));
+	commonSizer->Add(m_sdbSizer, 0, wxALIGN_RIGHT | wxALL, FromDIP(5));
 
 	Receive(m_owner);
 	RebuildTree();
@@ -285,8 +287,8 @@ ibDialogFormEditor::ibDialogFormEditor(ibValueForm* valueForm) :
 	wxIcon dlg_icon;
 	dlg_icon.CopyFromBitmap(ibBackendPicture::GetPicture(g_picChangeFormCLSID));
 	
-	wxDialog::SetIcon(dlg_icon);
-	wxDialog::SetFocus();
+	ibDialog::SetIcon(dlg_icon);
+	ibDialog::SetFocus();
 }
 
 void ibDialogFormEditor::OnUpdateEvent(wxUpdateUIEvent& event)
@@ -342,15 +344,15 @@ void ibDialogFormEditor::OnButtonEvent(wxCommandEvent& e)
 			// Not a failure — a statement about this form. One built from its source rather than
 			// declared in the configuration has no metaobject, so there is nothing to key a setting
 			// by, and trying again will never help.
-			wxMessageBox(_("This form is generated from its data and cannot keep a setting of its own."),
+			ibMessageBox(_("This form is generated from its data and cannot keep a setting of its own."),
 				_("Change form"), wxOK | wxICON_INFORMATION, this);
 			break;
 		case ibFormSettingsResult::NoStorage:
-			wxMessageBox(_("Settings are not available in this session."),
+			ibMessageBox(_("Settings are not available in this session."),
 				_("Change form"), wxOK | wxICON_INFORMATION, this);
 			break;
 		default:
-			wxMessageBox(_("The form setting could not be saved."),
+			ibMessageBox(_("The form setting could not be saved."),
 				_("Change form"), wxOK | wxICON_WARNING, this);
 			break;
 		}
@@ -369,7 +371,7 @@ void ibDialogFormEditor::OnButtonEvent(wxCommandEvent& e)
 				reset->Enable(false);
 		}
 		else {
-			wxMessageBox(_("The form setting could not be cleared."), _("Change form"), wxOK | wxICON_WARNING, this);
+			ibMessageBox(_("The form setting could not be cleared."), _("Change form"), wxOK | wxICON_WARNING, this);
 		}
 		return;
 	}
@@ -462,7 +464,7 @@ void ibDialogFormEditor::OnRightClick(wxTreeEvent& event)
 		// On the stack — PopupMenu does not take ownership and blocks until dismissed.
 		ibDialogFormEditorItemPopupMenu menu(this, obj);
 		wxPoint pos = event.GetPoint();
-		menu.UpdateUI(&menu); PopupMenu(&menu, pos.x, pos.y);
+		menu.UpdateUI(&menu); m_treeControl->PopupMenu(&menu, pos.x, pos.y);   // the tree's point, over the tree (an ib window)
 	}
 }
 
@@ -630,13 +632,13 @@ void ibDialogFormEditor::MovePosition(ibValueFrame* move_obj, bool right, unsign
 	}
 }
 
-wxBEGIN_EVENT_TABLE(ibDialogFormEditor::ibDialogFormEditorItemPopupMenu, wxMenu)
+wxBEGIN_EVENT_TABLE(ibDialogFormEditor::ibDialogFormEditorItemPopupMenu, ibMenu)
 EVT_MENU(wxID_ANY, ibDialogFormEditor::ibDialogFormEditorItemPopupMenu::OnMenuEvent)
 EVT_UPDATE_UI(wxID_ANY, ibDialogFormEditor::ibDialogFormEditorItemPopupMenu::OnUpdateEvent)
 wxEND_EVENT_TABLE()
 
 ibDialogFormEditor::ibDialogFormEditorItemPopupMenu::ibDialogFormEditorItemPopupMenu(ibDialogFormEditor* parent, ibValueFrame* obj)
-	: wxMenu(), m_handler(parent), m_object(obj)
+	: ibMenu(), m_handler(parent), m_object(obj)
 {
 	Append(MENU_MOVE_UP, wxT("Move Up\tAlt+Up"))->SetBitmap(wxArtProvider::GetBitmapBundle(wxASCII_STR(wxART_GO_UP), wxASCII_STR(wxART_MENU)));
 	Append(MENU_MOVE_DOWN, wxT("Move Down\tAlt+Down"))->SetBitmap(wxArtProvider::GetBitmapBundle(wxASCII_STR(wxART_GO_DOWN), wxASCII_STR(wxART_MENU)));

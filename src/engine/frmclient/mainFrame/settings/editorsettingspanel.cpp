@@ -1,38 +1,40 @@
 #include "editorsettingspanel.h"
+#include "gui/univ/ctrl/staticText.h"
+#include "gui/univ/ctrl/staticBox.h"
 
 ibPanelEditorSettings::ibPanelEditorSettings(wxWindow* parent)
-	: wxPanel(parent, wxID_ANY)
+	: ibPanel(parent, wxID_ANY)
 {
 	wxBoxSizer* const page = new wxBoxSizer(wxVERTICAL);
 
-	wxStaticBoxSizer* const indent = new wxStaticBoxSizer(wxVERTICAL, this, _("Indent"));
+	ibStaticBoxSizer* const indent = new ibStaticBoxSizer(wxVERTICAL, this, _("Indent"));
 	wxWindow* const indentBox = indent->GetStaticBox();
 
 	wxBoxSizer* const sizeRow = new wxBoxSizer(wxHORIZONTAL);
-	sizeRow->Add(new wxStaticText(indentBox, wxID_ANY, _("Indent size:")), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
-	m_indentSizeCtrl = new wxSpinCtrl(indentBox, wxID_ANY, wxString(), wxDefaultPosition, wxDefaultSize,
+	sizeRow->Add(new ibStaticText(indentBox, wxID_ANY, _("Indent size:")), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+	m_indentSizeCtrl = new ibSpinCtrl(indentBox, wxID_ANY, wxString(), wxDefaultPosition, wxDefaultSize,
 		wxSP_ARROW_KEYS, 1, 32, 4);
 	sizeRow->Add(m_indentSizeCtrl, 0, wxALIGN_CENTER_VERTICAL);
 	indent->Add(sizeRow, 0, wxALL, 5);
 
-	m_useSpaces = new wxRadioButton(indentBox, wxID_ANY, _("Insert spaces"), wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
+	m_useSpaces = new ibRadioButton(indentBox, wxID_ANY, _("Insert spaces"), wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
 	indent->Add(m_useSpaces, 0, wxALL, 5);
-	m_useTabs = new wxRadioButton(indentBox, wxID_ANY, _("Keep tabs"));
+	m_useTabs = new ibRadioButton(indentBox, wxID_ANY, _("Keep tabs"));
 	indent->Add(m_useTabs, 0, wxALL, 5);
-	m_removeTabsOnLoad = new wxCheckBox(indentBox, wxID_ANY, _("Convert tabs to spaces on load"));
+	m_removeTabsOnLoad = new ibCheckBox(indentBox, wxID_ANY, _("Convert tabs to spaces on load"));
 	indent->Add(m_removeTabsOnLoad, 0, wxALL, 5);
 	page->Add(indent, 0, wxEXPAND | wxALL, 5);
 
-	wxStaticBoxSizer* const view = new wxStaticBoxSizer(wxVERTICAL, this, _("View"));
+	ibStaticBoxSizer* const view = new ibStaticBoxSizer(wxVERTICAL, this, _("View"));
 	wxWindow* const viewBox = view->GetStaticBox();
 
-	m_showLineNumbers = new wxCheckBox(viewBox, wxID_ANY, _("Show line numbers in margin"));
+	m_showLineNumbers = new ibCheckBox(viewBox, wxID_ANY, _("Show line numbers in margin"));
 	view->Add(m_showLineNumbers, 0, wxALL, 5);
-	m_showWhiteSpace = new wxCheckBox(viewBox, wxID_ANY, _("Show white space"));
+	m_showWhiteSpace = new ibCheckBox(viewBox, wxID_ANY, _("Show white space"));
 	view->Add(m_showWhiteSpace, 0, wxALL, 5);
-	m_enableAutoComplete = new wxCheckBox(viewBox, wxID_ANY, _("Enable auto complete"));
+	m_enableAutoComplete = new ibCheckBox(viewBox, wxID_ANY, _("Enable auto complete"));
 	view->Add(m_enableAutoComplete, 0, wxALL, 5);
-	m_mostRecentlyUsedTabSwitching = new wxCheckBox(viewBox, wxID_ANY, _("Most recently used tab switching"));
+	m_mostRecentlyUsedTabSwitching = new ibCheckBox(viewBox, wxID_ANY, _("Most recently used tab switching"));
 	view->Add(m_mostRecentlyUsedTabSwitching, 0, wxALL, 5);
 	page->Add(view, 0, wxEXPAND | wxALL, 5);
 

@@ -27,6 +27,7 @@
 #if wxUSE_STATTEXT
 
 #include <wx/stattext.h>
+#include <wx/textwrapper.h>
 
 #ifndef WX_PRECOMP
     #include <wx/dcclient.h>
@@ -137,6 +138,33 @@ void ibStaticText::SetLabel(const wxString& str)
 {
     // SEAM vs univ: no wxStaticTextBase ellipsizing support — show as is
     WXSetVisibleLabel(str);
+    InvalidateBestSize();
+}
+
+void ibStaticText::Wrap(int width)
+{
+    // wxStaticTextBase's wxLabelWrapper (stattextcmn.cpp). SEAM vs wx: the label as drawn, GetLabelText() - GetLabel(),
+    // the window's, is empty here (DoGetBestClientSize) - and back with its '&' kept as it is
+    class LabelWrapper : public wxTextWrapper
+    {
+    public:
+        void WrapLabel(ibStaticText *text, int widthMax)
+        {
+            m_text.clear();
+            Wrap(text, text->GetLabelText(), widthMax);
+            text->SetLabelText(m_text);
+        }
+
+    protected:
+        virtual void OnOutputLine(const wxString& line) override { m_text += line; }
+        virtual void OnNewLine() override { m_text += wxT('\n'); }
+
+    private:
+        wxString m_text;
+    };
+
+    LabelWrapper wrapper;
+    wrapper.WrapLabel(this, width);
     InvalidateBestSize();
 }
 

@@ -108,6 +108,18 @@ public:
                                  wxAlignment align = wxALIGN_LEFT,
                                  int indexAccel = -1) override;
 
+    // wxRendererNative: the check and radio boxes a cell draws (dataview, grid, list) - the theme's indicators,
+    // the ones ibCheckBox and ibRadioButton draw
+    virtual void DrawCheckBox(wxWindow *win,
+                              wxDC& dc,
+                              const wxRect& rect,
+                              int flags = 0) override;
+    virtual void DrawRadioBitmap(wxWindow *win,
+                                 wxDC& dc,
+                                 const wxRect& rect,
+                                 int flags = 0) override;
+    virtual wxSize GetCheckBoxSize(wxWindow *win, int flags = 0) override;
+
     virtual void DrawScrollbarArrow(wxDC& dc,
                                     wxDirection dir,
                                     const wxRect& rect,
@@ -337,6 +349,13 @@ protected:
     // return the width of the border around the text area in the text control
     virtual int GetTextBorderWidth(const ibTextCtrl *text) const;
 #endif // wxUSE_TEXTCTRL
+
+    // SEAM vs univ: a top-level window's title bar and its buttons - static in the canon's .cpp, here for a theme
+    // drawing its buttons itself (Luna's DrawFrameButton) in the places HitTestFrame finds them. The canon's 18/16/14
+    // were the Win95 caption's.
+    static constexpr int FRAME_TITLEBAR_HEIGHT = 22;
+    static constexpr int FRAME_BUTTON_WIDTH = 24;
+    static constexpr int FRAME_BUTTON_HEIGHT = 18;
 
     // GDI objects we often use
     wxPen m_penBlack,

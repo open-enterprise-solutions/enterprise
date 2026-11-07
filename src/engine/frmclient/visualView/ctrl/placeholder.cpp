@@ -9,7 +9,7 @@
 
 void ibViewPlaceholder::Create(wxWindow* parent, const ibProtocolNode& /*node*/)
 {
-	m_panel = new wxPanel(parent, wxID_ANY);
+	m_panel = new ibPanel(parent, wxID_ANY);
 
 	ibStaticText* const text = new ibStaticText(m_panel, wxID_ANY,
 		ibString::Format(_("The control type \"%s\" is not registered in this client yet."), GetClassName()),

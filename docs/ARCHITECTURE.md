@@ -143,7 +143,7 @@ their drawing. The thin client splits them, with the
 [client protocol](public/client-protocol.md) between: **`frmserver`** holds the forms on the server and answers clients;
 **`frmclient`** keeps the frame it was answered (its communicator) and draws it (main window, document/view, controls,
 editors) for **`enterprise-thin.exe`** and
-**`designer-thin.exe`**, on **`gui`** — the desktop's user interface library (the custom-drawn engine and the controls built on it,
+**`designer-thin.exe`**, on **`gui`** — the desktop's user interface library (the custom-drawn engine and the controls and dialogs built on it,
 which the launcher places too; it links `core` alone); **`protocol`** is
 the contract both keep (`protocol.h`, no dependencies — `frmserver` includes it only) and the talking side's library
 (`frmclient` and the web server link it). **`fileserver`** puts `backend` + `frmserver` into the client's process for a
@@ -955,8 +955,10 @@ Choice, ComboBox, ListBox and ToolBar (with Tool / ToolSeparator) were the deskt
 ### Form Rendering
 
 `ibVisualHost` (frmserver) holds the form and writes it as a frame — no window. The client draws that frame:
-`ibVisualHostClient` (frmclient) builds the wx controls from it, and what the person does goes back over the
-[client protocol](public/client-protocol.md) to the form's script event handlers.
+`ibVisualHostClient` (frmclient) builds gui's controls from it, and what the person does goes back over the
+[client protocol](public/client-protocol.md) to the form's script event handlers. A patch answers what the client
+shows: a field's text the person committed and the server put otherwise (a reference not found, a value refused) is
+named in the answer's patch, so the field shows the server's text at once.
 
 ---
 

@@ -21,18 +21,14 @@
 #include <wx/dcclient.h>
 #include <wx/settings.h>
 #include <wx/log.h>
-#include <wx/textctrl.h>
-#include <wx/checkbox.h>
-#include <wx/combobox.h>
 #include <wx/intl.h>
 #include <wx/math.h>
 #include <wx/listbox.h>
 #endif
 
 #include <wx/numformatter.h>
-#include <wx/valnum.h>
+#include "gui/univ/numValidator.h"
 #include <wx/textfile.h>
-#include <wx/spinctrl.h>
 #include <wx/tokenzr.h>
 #include <wx/renderer.h>
 #include <wx/datectrl.h>
@@ -465,7 +461,7 @@ void ibGridCellTextEditor::DoCreate(wxWindow* parent,
 {
 	style |= wxTE_PROCESS_ENTER | wxTE_PROCESS_TAB | wxNO_BORDER;
 
-	wxTextCtrl* const text = new wxTextCtrl(parent, id, wxEmptyString,
+	ibTextCtrl* const text = new ibTextCtrl(parent, id, wxEmptyString,
 		wxDefaultPosition, wxDefaultSize,
 		style);
 	text->SetMargins(0, 0);
@@ -596,7 +592,7 @@ void ibGridCellTextEditor::StartingKey(wxKeyEvent& event)
 	// Do it ourselves instead.  We know that if we get this far that we have
 	// a valid character, so not a whole lot of testing needs to be done.
 
-	wxTextCtrl* tc = Text();
+	ibTextCtrl* tc = Text();
 	int ch;
 
 	bool isPrintable;
@@ -703,7 +699,7 @@ void ibGridCellNumberEditor::Create(wxWindow* parent,
 			wxTE_PROCESS_TAB;
 
 		// create a spin ctrl
-		m_control = new wxSpinCtrl(parent, wxID_ANY, wxEmptyString,
+		m_control = new ibSpinCtrl(parent, wxID_ANY, wxEmptyString,
 			wxDefaultPosition, wxDefaultSize,
 			style,
 			m_min, m_max);
@@ -717,7 +713,7 @@ void ibGridCellNumberEditor::Create(wxWindow* parent,
 		ibGridCellTextEditor::Create(parent, id, evtHandler);
 
 #if wxUSE_VALIDATORS
-		Text()->SetValidator(wxIntegerValidator<int>());
+		Text()->SetValidator(ibIntegerValidator<int>());
 #endif
 	}
 }
@@ -727,7 +723,7 @@ void ibGridCellNumberEditor::SetSize(const wxRect& rectCell)
 #if wxUSE_SPINCTRL
 	if (HasRange())
 	{
-		wxASSERT_MSG(m_control, "The wxSpinCtrl must be created first!");
+		wxASSERT_MSG(m_control, "The ibSpinCtrl must be created first!");
 
 		wxSize size = Spin()->GetBestSize();
 
@@ -895,7 +891,7 @@ void ibGridCellNumberEditor::StartingKey(wxKeyEvent& event)
 	{
 		if (wxIsdigit(keycode))
 		{
-			wxSpinCtrl* spin = (wxSpinCtrl*)m_control;
+			ibSpinCtrl* spin = (ibSpinCtrl*)m_control;
 			spin->SetValue(keycode - '0');
 			spin->SetSelection(1, 1);
 			return;
@@ -965,7 +961,7 @@ void ibGridCellFloatEditor::Create(wxWindow* parent,
 	ibGridCellTextEditor::Create(parent, id, evtHandler);
 
 #if wxUSE_VALIDATORS
-	Text()->SetValidator(wxFloatingPointValidator<double>(m_precision));
+	Text()->SetValidator(ibFloatingPointValidator<double>(m_precision));
 #endif
 }
 
@@ -1268,7 +1264,7 @@ void ibGridCellBoolEditor::Create(wxWindow* parent,
 	wxWindowID id,
 	wxEvtHandler* evtHandler)
 {
-	m_control = new wxCheckBox(parent, id, wxEmptyString,
+	m_control = new ibCheckBox(parent, id, wxEmptyString,
 		wxDefaultPosition, wxDefaultSize,
 		wxNO_BORDER);
 
@@ -1320,7 +1316,9 @@ void ibGridCellBoolEditor::Show(bool show, ibGridCellAttr* attr, float scale)
 	if (show)
 	{
 		wxColour colBg = attr ? attr->GetBackgroundColour() : *wxLIGHT_GREY;
-		CBox()->SetTransparentPartColour(colBg);
+		// SEAM vs wx: the library's check box is the theme's bitmap, its box in its own colours whatever the window's
+		// - the part around it is the window's background, so the cell's colour is simply set as that
+		CBox()->SetBackgroundColour(colBg);
 	}
 }
 
@@ -1497,7 +1495,7 @@ void ibGridCellChoiceEditor::Create(wxWindow* parent,
 
 	if (!m_allowOthers)
 		style |= wxCB_READONLY;
-	m_control = new wxComboBox(parent, id, wxEmptyString,
+	m_control = new ibComboBox(parent, id, wxEmptyString,
 		wxDefaultPosition, wxDefaultSize,
 		m_choices,
 		style);

@@ -13,9 +13,9 @@
 #include <wx/bitmap.h>
 #include <wx/image.h>
 #include <wx/icon.h>
-#include <wx/button.h>
+#include "gui/univ/ctrl/button.h"
 #include <wx/sizer.h>
-#include <wx/dialog.h>
+#include "gui/univ/dialog.h"
 
 #include "frmclient/frmclient.h"
 #include "frmclient/mainFrame/settings/editorsettings.h"
@@ -23,7 +23,7 @@
 
 // A SCRIPT'S FAILURE — the old desktop's dialog, asked by the server
 // (ibProtocol::ibRequest::ibKind::Error). ShowModal answers the act chosen (ibProtocol::ibRequest::ibError::ibAct); closed — wxID_CANCEL.
-class FRMCLIENT_API ibDialogError : public wxDialog {
+class FRMCLIENT_API ibDialogError : public ibDialog {
 public:
 
 	ibDialogError(class ibFrontendMainFrame* parent, wxWindowID id = wxID_ANY,
@@ -43,9 +43,9 @@ private:
 
 	wxStyledTextCtrl* m_errorOutput;
 
-	wxButton* m_buttonCloseProgram;
-	wxButton* m_buttonGotoDesigner;
-	wxButton* m_buttonCloseWindow;
+	ibButton* m_buttonCloseProgram;
+	ibButton* m_buttonGotoDesigner;
+	ibButton* m_buttonCloseWindow;
 };
 
 #endif

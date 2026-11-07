@@ -579,10 +579,10 @@ bool ibTypeControlFactory::QuickChoice(ibControlFrame* ownerValue, const ibChoos
 			const ibControl* const control = dynamic_cast<const ibControl*>(m_parent);
 			const wxSize controlSize(m_parent->GetSize().x - (control != nullptr ? control->GetTitleWidth() : 0),
 				m_parent->GetSize().y);
-			if (m_selListBox->GetCount() > 5)
-				wxPopupTransientWindow::SetSize(wxSize(controlSize.x, (m_selListBox->GetCharHeight() * 5) + 4));
-			else
-				wxPopupTransientWindow::SetSize(wxSize(controlSize.x, (m_selListBox->GetCharHeight() * m_selListBox->GetCount()) + 4));
+			// Five rows at most, each as high as the list draws it (GetLineHeight, as the combo's popup measures them): a
+			// character's height is less, and the fifth row was cut.
+			const int rows = wxMax(1, wxMin((int)m_selListBox->GetCount(), 5));
+			wxPopupTransientWindow::SetSize(wxSize(controlSize.x, m_selListBox->GetLineHeight() * rows + 4));
 
 			wxPoint pos = m_parent->GetScreenPosition();
 			pos.x += (m_parent->GetSize().x - GetSize().x);

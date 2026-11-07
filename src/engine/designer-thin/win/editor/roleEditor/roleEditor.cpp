@@ -9,9 +9,9 @@
 
 ibRoleEditor::ibRoleEditor(wxWindow* parent,
 	wxWindowID winid, const ibTabDocument* document) :
-	wxSplitterWindow(parent, winid, wxDefaultPosition, wxDefaultSize, wxSP_3D | wxSP_LIVE_UPDATE), m_document(document)
+	ibSplitterWindow(parent, winid, wxDefaultPosition, wxDefaultSize, wxSP_3D | wxSP_LIVE_UPDATE), m_document(document)
 {
-	m_roleCtrl = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_HAS_BUTTONS | wxTR_ROW_LINES | wxTR_NO_LINES | wxTR_SINGLE | wxTR_TWIST_BUTTONS);
+	m_roleCtrl = new ibTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_HAS_BUTTONS | wxTR_ROW_LINES | wxTR_NO_LINES | wxTR_SINGLE | wxTR_TWIST_BUTTONS);
 	m_roleCtrl->SetDoubleBuffered(true);
 	m_roleCtrl->Bind(wxEVT_TREE_SEL_CHANGED, &ibRoleEditor::OnSelectedItem, this);
 
@@ -32,14 +32,14 @@ ibRoleEditor::ibRoleEditor(wxWindow* parent,
 	treeSizer->Add(m_checkCtrl, 1, wxEXPAND);
 	mainSizer->Add(treeSizer, 1, wxEXPAND, 1);
 
-	wxSplitterWindow::SetSashGravity(0.5);
-	wxSplitterWindow::SplitVertically(m_roleCtrl, m_checkCtrl,
+	ibSplitterWindow::SetSashGravity(0.5);
+	ibSplitterWindow::SplitVertically(m_roleCtrl, m_checkCtrl,
 		250);
 
 	m_roleCtrl->SelectItem(m_treeMETADATA);
 
-	wxSplitterWindow::SetSizer(mainSizer);
-	wxSplitterWindow::Layout();
+	ibSplitterWindow::SetSizer(mainSizer);
+	ibSplitterWindow::Layout();
 }
 
 ibRoleEditor::~ibRoleEditor() {
@@ -119,7 +119,10 @@ void ibRoleEditor::RefreshRole(const ibProtocolNode& view)
 
 	// …and the rights of the row selected, read again from the rows just drawn: the selection was restored with the
 	// events off.
-	wxTreeEvent selected(wxEVT_TREE_SEL_CHANGED, m_roleCtrl, m_roleCtrl->GetSelection());
+	// as ibTreeCtrl's own: wxTreeEvent's constructor from the tree takes wx's tree (wxTreeCtrlBase)
+	wxTreeEvent selected(wxEVT_TREE_SEL_CHANGED, m_roleCtrl->GetId());
+	selected.SetEventObject(m_roleCtrl);
+	selected.SetItem(m_roleCtrl->GetSelection());
 	OnSelectedItem(selected);
 }
 

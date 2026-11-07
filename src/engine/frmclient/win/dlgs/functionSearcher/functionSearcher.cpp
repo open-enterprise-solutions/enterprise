@@ -15,22 +15,22 @@
 #define ICON_SIZE 16
 
 ibFunctionList::ibFunctionList(ibTabDocument* moduleDoc, ibCodeEditor* parent)
-	: wxDialog(parent, wxID_ANY, _("Procedures and functions")), m_docModule(moduleDoc), m_codeEditor(parent)
+	: ibDialog(parent, wxID_ANY, _("Procedures and functions")), m_docModule(moduleDoc), m_codeEditor(parent)
 {
 	// The window wears the picture of the button that opens it.
 	SetIcon(wxArtProvider::GetIcon(wxART_PROC_AND_FUNC, wxART_DOC_MODULE, FromDIP(wxSize(16, 16))));
 
-	m_OK = new wxButton(this, wxID_ANY, _("OK"));
+	m_OK = new ibButton(this, wxID_ANY, _("OK"));
 	m_OK->Connect(wxEVT_BUTTON, wxCommandEventHandler(ibFunctionList::OnButtonOk), nullptr, this);
-	m_Cancel = new wxButton(this, wxID_ANY, _("Cancel"));
+	m_Cancel = new ibButton(this, wxID_ANY, _("Cancel"));
 	m_Cancel->Connect(wxEVT_BUTTON, wxCommandEventHandler(ibFunctionList::OnButtonCancel), nullptr, this);
 
-	m_Sort = new wxCheckBox(this, wxID_ANY, _("Sort"));
+	m_Sort = new ibCheckBox(this, wxID_ANY, _("Sort"));
 	m_Sort->Connect(wxEVT_CHECKBOX, wxCommandEventHandler(ibFunctionList::OnCheckBoxSort), nullptr, this);
 
 	wxBoxSizer* boxsizerList = new wxBoxSizer(wxHORIZONTAL);
 
-	m_listProcedures = new wxListCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_REPORT | wxLC_NO_HEADER);
+	m_listProcedures = new ibListCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_REPORT | wxLC_NO_HEADER);
 	m_listProcedures->AppendColumn(_("Procedures and functions"), wxLIST_FORMAT_LEFT, GetSize().x - 10);
 
 	m_listProcedures->Connect(wxEVT_LIST_ITEM_SELECTED, wxListEventHandler(ibFunctionList::OnItemSelected), nullptr, this);
@@ -172,14 +172,14 @@ void ibFunctionList::OnButtonCancel(wxCommandEvent& event)
 
 struct sortInfo_t
 {
-	wxListCtrl* m_listCtrl;
+	ibListCtrl* m_listCtrl;
 	bool m_sortOrder;
 };
 
 int wxCALLBACK CompareFunction(wxIntPtr item1, wxIntPtr item2, wxIntPtr sortData)
 {
 	sortInfo_t* sortInfo = (sortInfo_t*)sortData;
-	wxListCtrl* listCtrl = sortInfo->m_listCtrl;
+	ibListCtrl* listCtrl = sortInfo->m_listCtrl;
 
 	long index1 = listCtrl->FindItem(-1, item1); // gets index of the first item
 	long index2 = listCtrl->FindItem(-1, item2); // gets index of the second item

@@ -10,10 +10,8 @@ file(GLOB_RECURSE GUI_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
 )
 list(FILTER GUI_SOURCES EXCLUDE REGEX "/statusBar\\.cpp$")
-list(FILTER GUI_SOURCES EXCLUDE REGEX "/dialog\\.cpp$")
 list(FILTER GUI_SOURCES EXCLUDE REGEX "/settings\\.cpp$")
 list(FILTER GUI_SOURCES EXCLUDE REGEX "theme/theme_win32\\.cpp$")
-list(FILTER GUI_SOURCES EXCLUDE REGEX "/topLevel\\.cpp$")
 list(FILTER GUI_SOURCES EXCLUDE REGEX "/frame\\.cpp$")
 
 add_library(gui SHARED ${GUI_SOURCES})

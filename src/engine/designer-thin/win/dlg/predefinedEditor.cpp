@@ -1,7 +1,7 @@
 #include "predefinedEditor.h"
 
-#include <wx/msgdlg.h>
-#include <wx/notebook.h>
+#include "gui/univ/messageDialog.h"
+#include "gui/univ/ctrl/notebook.h"
 #include <wx/statbox.h>
 #include <wx/valtext.h>   // wxTextValidator — a number typed as nothing but a number
 
@@ -12,8 +12,12 @@
 #include "frmclient/win/dlgs/selectPredefined.h"        // ibShowPredefinedSelector — a declared value picked
 #include "frmclient/win/dlgs/textWithDotsCell.h"        // ibTextWithDotsRenderer, ibTextCtrl — a value picked through "..."
 #include "frmclient/win/dlgs/typeSelector.h"            // ibShowTypeSelector — a type picked
+#include "gui/univ/menu.h"
 #include "gui/univ/theme/luna_toolbarart.h"
 #include "protocol/protocolDesigner.h"                          // ibProtocol::ibRequest::ibPredefinedSelector — what that window is given
+#include "gui/univ/ctrl/staticText.h"
+#include "gui/univ/ctrl/staticBox.h"
+#include "gui/univ/panel.h"
 
 enum
 {
@@ -210,7 +214,7 @@ std::optional<ibPredefinedCellDescription> TakeText(const ibPredefinedAttributeD
 
 // ⭐ WHAT A BOX TAKES, AS THE TYPE IT IS TYPED INTO SAYS (#646) — a number nothing but a number; a string no longer than
 // its length (0: any). A type of several classes says no one of them.
-void LimitTyping(wxTextCtrl* box, const ibTypeDescription& type)
+void LimitTyping(ibTextCtrl* box, const ibTypeDescription& type)
 {
 	if (type.GetClsidCount() != 1)
 		return;
@@ -223,7 +227,7 @@ void LimitTyping(wxTextCtrl* box, const ibTypeDescription& type)
 // A required value not given: the person told which, and the window kept.
 bool Refuse(const wxString& what)
 {
-	wxMessageBox(ibString::Format(_("\"%s\" must be filled in"), what));
+	ibMessageBox(ibString::Format(_("\"%s\" must be filled in"), what));
 	return false;
 }
 
@@ -231,7 +235,7 @@ bool Refuse(const wxString& what)
 
 ibDialogPredefinedEditor::ibDialogPredefinedItem::ibDialogPredefinedItem(ibDialogPredefinedEditor* owner,
 	const ibGuid& itemGuid, const ibPredefinedItem* source) :
-	wxDialog(owner, wxID_ANY, _("Predefined value"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
+	ibDialog(owner, wxID_ANY, _("Predefined value"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
 	m_itemGuid(itemGuid), m_described(owner->GetPredefinedDesc())
 {
 
@@ -245,16 +249,16 @@ ibDialogPredefinedEditor::ibDialogPredefinedItem::ibDialogPredefinedItem(ibDialo
 
 	// A folder, where the kind tells folders from items.
 	if (m_described.m_folders) {
-		fields->Add(new wxStaticText(this, wxID_ANY, _("Kind")), 0, wxALIGN_CENTER_VERTICAL);
-		m_checkFolder = new wxCheckBox(this, wxID_ANY, _("Folder (group)"));
+		fields->Add(new ibStaticText(this, wxID_ANY, _("Kind")), 0, wxALIGN_CENTER_VERTICAL);
+		m_checkFolder = new ibCheckBox(this, wxID_ANY, _("Folder (group)"));
 		m_checkFolder->SetValue(source != nullptr && source->IsPredefinedFolder());
 		fields->Add(m_checkFolder, 1, wxEXPAND);
 	}
 
 	// A parent, where items stand under one another.
 	if (m_described.m_parent) {
-		fields->Add(new wxStaticText(this, wxID_ANY, _("Parent")), 0, wxALIGN_CENTER_VERTICAL);
-		m_choiceParent = new wxChoice(this, wxID_ANY);
+		fields->Add(new ibStaticText(this, wxID_ANY, _("Parent")), 0, wxALIGN_CENTER_VERTICAL);
+		m_choiceParent = new ibChoice(this, wxID_ANY);
 		m_choiceParent->Append(_("<none>"));
 		m_parentOptions.push_back(wxObjectDataPtr<ibPredefinedItem>());   // index 0 → no parent
 		const wxObjectDataPtr<ibPredefinedItem> current =
@@ -270,21 +274,21 @@ ibDialogPredefinedEditor::ibDialogPredefinedItem::ibDialogPredefinedItem(ibDialo
 		fields->Add(m_choiceParent, 1, wxEXPAND);
 	}
 
-	fields->Add(new wxStaticText(this, wxID_ANY, _("Name")), 0, wxALIGN_CENTER_VERTICAL);
-	m_textName = new wxTextCtrl(this, wxID_ANY, source != nullptr ? wxString(source->GetPredefinedName()) : wxString());
+	fields->Add(new ibStaticText(this, wxID_ANY, _("Name")), 0, wxALIGN_CENTER_VERTICAL);
+	m_textName = new ibTextCtrl(this, wxID_ANY, source != nullptr ? wxString(source->GetPredefinedName()) : wxString());
 	fields->Add(m_textName, 1, wxEXPAND);
 
 	// A code, where the kind has one — a new item's the next — and a description, each typed as its type takes it.
 	const wxString code = made ? wxString(m_described.m_nextCode.m_title) : wxString(source->GetPredefinedCode());
 	if (!m_described.m_nextCode.IsEmpty() || !code.IsEmpty()) {
-		fields->Add(new wxStaticText(this, wxID_ANY, _("Code")), 0, wxALIGN_CENTER_VERTICAL);
-		m_textCode = new wxTextCtrl(this, wxID_ANY, code);
+		fields->Add(new ibStaticText(this, wxID_ANY, _("Code")), 0, wxALIGN_CENTER_VERTICAL);
+		m_textCode = new ibTextCtrl(this, wxID_ANY, code);
 		LimitTyping(m_textCode, m_described.m_code.m_type);
 		fields->Add(m_textCode, 1, wxEXPAND);
 	}
 
-	fields->Add(new wxStaticText(this, wxID_ANY, ibGETTEXT_IN_CONTEXT("item name", "Description")), 0, wxALIGN_CENTER_VERTICAL);
-	m_textDescription = new wxTextCtrl(this, wxID_ANY, source != nullptr ? wxString(source->GetPredefinedDescription()) : wxString());
+	fields->Add(new ibStaticText(this, wxID_ANY, ibGETTEXT_IN_CONTEXT("item name", "Description")), 0, wxALIGN_CENTER_VERTICAL);
+	m_textDescription = new ibTextCtrl(this, wxID_ANY, source != nullptr ? wxString(source->GetPredefinedDescription()) : wxString());
 	LimitTyping(m_textDescription, m_described.m_description.m_type);
 	fields->Add(m_textDescription, 1, wxEXPAND);
 
@@ -299,43 +303,43 @@ ibDialogPredefinedEditor::ibDialogPredefinedItem::ibDialogPredefinedItem(ibDialo
 	const std::map<ibMetaID, ibPredefinedRowDescriptionVector>& tables = source != nullptr ? source->GetPredefinedTables() : noTables;
 	if (m_described.m_tables.size() == 1) {
 		const ibPredefinedTableDescription& table = m_described.m_tables.front();
-		wxStaticBoxSizer* box = new wxStaticBoxSizer(wxVERTICAL, this, Caption(table.m_title, table.m_name));
+		ibStaticBoxSizer* box = new ibStaticBoxSizer(wxVERTICAL, this, Caption(table.m_title, table.m_name));
 		box->Add(AppendSection(box->GetStaticBox(), table, tables), 1, wxEXPAND);
 		mainSizer->Add(box, 1, wxEXPAND | wxLEFT | wxRIGHT, kPad * 2);
 	}
 	else if (m_described.m_tables.size() > 1) {
-		wxNotebook* pages = new wxNotebook(this, wxID_ANY);
+		ibNotebook* pages = new ibNotebook(this, wxID_ANY);
 		for (const ibPredefinedTableDescription& table : m_described.m_tables) {
-			wxPanel* page = new wxPanel(pages);
+			ibPanel* page = new ibPanel(pages);
 			page->SetSizer(AppendSection(page, table, tables));
 			pages->AddPage(page, Caption(table.m_title, table.m_name));
 		}
 		mainSizer->Add(pages, 1, wxEXPAND | wxLEFT | wxRIGHT, kPad * 2);
 	}
 
-	wxStdDialogButtonSizer* buttons = new wxStdDialogButtonSizer();
-	m_sdbSizerOK = new wxButton(this, wxID_OK);
+	ibStdDialogButtonSizer* buttons = new ibStdDialogButtonSizer();
+	m_sdbSizerOK = new ibButton(this, wxID_OK);
 	m_sdbSizerOK->Bind(wxEVT_BUTTON, &ibDialogPredefinedItem::OnCommandOK, this);
 	buttons->AddButton(m_sdbSizerOK);
-	wxButton* cancel = new wxButton(this, wxID_CANCEL);
+	ibButton* cancel = new ibButton(this, wxID_CANCEL);
 	cancel->Bind(wxEVT_BUTTON, &ibDialogPredefinedItem::OnCommandCancel, this);
 	buttons->AddButton(cancel);
 	buttons->Realize();
 	mainSizer->Add(buttons, 0, wxEXPAND | wxALL, kPad);
 
-	wxDialog::SetSizer(mainSizer);
+	ibDialog::SetSizer(mainSizer);
 	mainSizer->SetSizeHints(this);
 	const wxSize minSize = FromDIP(wxSize(m_described.m_tables.empty() ? 380 : 520, -1));
 	if (GetSize().x < minSize.x)
 		SetSize(minSize.x, GetSize().y);
 
-	wxDialog::Layout();
-	wxDialog::Centre(wxBOTH);
+	ibDialog::Layout();
+	ibDialog::Centre(wxBOTH);
 
 	wxIcon dlg_icon;
 	dlg_icon.CopyFromBitmap(ibBackendPicture::GetPicture(g_metaAttributeCLSID));
-	wxDialog::SetIcon(dlg_icon);
-	wxDialog::SetFocus();
+	ibDialog::SetIcon(dlg_icon);
+	ibDialog::SetFocus();
 }
 
 // ONE ATTRIBUTE, ITS EDITOR CHOSEN BY WHAT IT HOLDS: a flag — a tick; a type or a closed set — our text editor, not typed
@@ -349,11 +353,11 @@ void ibDialogPredefinedEditor::ibDialogPredefinedItem::AppendAttribute(wxWindow*
 	editor->m_attribute = &attribute;
 	editor->m_held = Held(attribute, row);
 
-	sizer->Add(new wxStaticText(parent, wxID_ANY, Caption(attribute.m_title, attribute.m_name)), 0, wxALIGN_CENTER_VERTICAL);
+	sizer->Add(new ibStaticText(parent, wxID_ANY, Caption(attribute.m_title, attribute.m_name)), 0, wxALIGN_CENTER_VERTICAL);
 
 	wxWindow* control = nullptr;
 	if (IsFlag(attribute)) {
-		editor->m_check = new wxCheckBox(parent, wxID_ANY, wxEmptyString);
+		editor->m_check = new ibCheckBox(parent, wxID_ANY, wxEmptyString);
 		editor->m_check->SetValue(editor->m_held && ibValue::FromNode(editor->m_held->m_value).GetBoolean());
 		sizer->Add(editor->m_check, 1, wxEXPAND);
 		control = editor->m_check;
@@ -384,7 +388,7 @@ void ibDialogPredefinedEditor::ibDialogPredefinedItem::AppendAttribute(wxWindow*
 		control = editor->m_picked;
 	}
 	else {
-		editor->m_text = new wxTextCtrl(parent, wxID_ANY, editor->m_held ? wxString(editor->m_held->m_title) : wxString());
+		editor->m_text = new ibTextCtrl(parent, wxID_ANY, editor->m_held ? wxString(editor->m_held->m_title) : wxString());
 		LimitTyping(editor->m_text, attribute.m_type);
 		sizer->Add(editor->m_text, 1, wxEXPAND);
 		control = editor->m_text;
@@ -407,7 +411,7 @@ wxSizer* ibDialogPredefinedEditor::ibDialogPredefinedItem::AppendSection(wxWindo
 	const auto declared = tables.find(table.m_id);
 
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
-	section->m_declared = new wxCheckBox(parent, wxID_ANY, _("Declared by the configuration"));
+	section->m_declared = new ibCheckBox(parent, wxID_ANY, _("Declared by the configuration"));
 	section->m_declared->SetValue(declared != tables.end());
 	sizer->Add(section->m_declared, 0, wxALL, kPad);
 
@@ -450,13 +454,13 @@ wxSizer* ibDialogPredefinedEditor::ibDialogPredefinedItem::AppendSection(wxWindo
 	sizer->Add(section->m_rows, 1, wxEXPAND | wxLEFT | wxRIGHT, kPad);
 
 	wxBoxSizer* buttons = new wxBoxSizer(wxHORIZONTAL);
-	section->m_add = new wxButton(parent, wxID_ANY, _("Add"));
-	section->m_remove = new wxButton(parent, wxID_ANY, _("Delete"));
+	section->m_add = new ibButton(parent, wxID_ANY, _("Add"));
+	section->m_remove = new ibButton(parent, wxID_ANY, _("Delete"));
 	buttons->Add(section->m_add, 0, wxRIGHT, kPad);
 	buttons->Add(section->m_remove, 0, wxRIGHT, kPad);
 	// A row's place is its line number in every section: moved, it is a different line.
-	section->m_up = new wxButton(parent, wxID_ANY, _("Move up"));
-	section->m_down = new wxButton(parent, wxID_ANY, _("Move down"));
+	section->m_up = new ibButton(parent, wxID_ANY, _("Move up"));
+	section->m_down = new ibButton(parent, wxID_ANY, _("Move down"));
 	buttons->Add(section->m_up, 0, wxRIGHT, kPad);
 	buttons->Add(section->m_down, 0, wxRIGHT, kPad);
 	sizer->Add(buttons, 0, wxALL, kPad);
@@ -635,18 +639,18 @@ void ibDialogPredefinedEditor::ibDialogPredefinedItem::OnCommandOK(wxCommandEven
 	const wxString strDescription = m_textDescription->GetValue();
 
 	if (strName.IsEmpty() || (m_textCode != nullptr && strCode.IsEmpty()) || strDescription.IsEmpty()) {
-		wxMessageBox(_("All key fields are not filled in!"));
+		ibMessageBox(_("All key fields are not filled in!"));
 		return;
 	}
 
 	if (stringUtils::CheckCorrectName(strName) >= 0) {
-		wxMessageBox(_("The \"name\" field is filled in incorrectly!"));
+		ibMessageBox(_("The \"name\" field is filled in incorrectly!"));
 		return;
 	}
 
 	const wxObjectDataPtr<ibPredefinedItem> named = GetOwner()->FindPredefinedValue(strName);
 	if (named != nullptr && named->GetPredefinedGuid() != m_itemGuid) {
-		wxMessageBox(_("The \"name\" field has not unique!"));
+		ibMessageBox(_("The \"name\" field has not unique!"));
 		return;
 	}
 
@@ -676,7 +680,7 @@ void ibDialogPredefinedEditor::ibDialogPredefinedItem::OnCommandOK(wxCommandEven
 
 void ibDialogPredefinedEditor::CreateDialogView()
 {
-	wxDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
+	ibDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
 
 	wxBoxSizer* sizerList = new wxBoxSizer(wxVERTICAL);
 
@@ -728,20 +732,20 @@ void ibDialogPredefinedEditor::CreateDialogView()
 
 	sizerList->Add(m_tableEditor, 1, wxALL | wxEXPAND, FromDIP(5));
 
-	wxDialog::SetSizer(sizerList);
-	wxDialog::Layout();
-	wxDialog::Centre(wxBOTH);
+	ibDialog::SetSizer(sizerList);
+	ibDialog::Layout();
+	ibDialog::Centre(wxBOTH);
 
 	wxIcon dlg_icon;
 	dlg_icon.CopyFromBitmap(ibBackendPicture::GetPicture(g_metaAttributeCLSID));
 
-	wxDialog::SetIcon(dlg_icon);
-	wxDialog::SetFocus();
+	ibDialog::SetIcon(dlg_icon);
+	ibDialog::SetFocus();
 }
 
 void ibDialogPredefinedEditor::OnContextMenu(ibDataViewEvent& event)
 {
-	wxMenu menu;
+	ibMenu menu;
 
 	for (unsigned int idx = 0; idx < m_toolbarTableEditor->GetToolCount(); idx++) {
 		wxAuiToolBarItem* tool = m_toolbarTableEditor->FindToolByIndex(idx);

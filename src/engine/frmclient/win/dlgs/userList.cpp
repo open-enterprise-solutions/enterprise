@@ -4,7 +4,7 @@
 #include "frmclient/backend/backend_picture.h"
 #include "core/picturePredefined.h"
 
-#include <wx/menu.h>
+#include "gui/univ/menu.h"
 
 #define colUserName 1
 #define colUserFullName 2
@@ -60,9 +60,9 @@ enum {
 
 #include "frmclient/visualView/ctrl/frame.h"
 
-ibDialogUserList::ibDialogUserList(wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) : wxDialog(parent, id, title, pos, size, style)
+ibDialogUserList::ibDialogUserList(wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) : ibDialog(parent, id, title, pos, size, style)
 {
-	wxDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
+	ibDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
 	this->SetBackgroundColour(wxColour(184, 201, 212));   // #B8C9D4 powder-blue dialog
 
 	wxBoxSizer* sizerList = new wxBoxSizer(wxVERTICAL);
@@ -112,15 +112,15 @@ ibDialogUserList::ibDialogUserList(wxWindow* parent, wxWindowID id, const wxStri
 
 	sizerList->Add(m_dataEditor, 1, wxALL | wxEXPAND, FromDIP(5));
 
-	wxDialog::SetSizer(sizerList);
-	wxDialog::Layout();
-	wxDialog::Centre(wxBOTH);
+	ibDialog::SetSizer(sizerList);
+	ibDialog::Layout();
+	ibDialog::Centre(wxBOTH);
 
 	wxIcon dlg_icon;
 	dlg_icon.CopyFromBitmap(ibBackendPicture::GetPicture(g_picUserListCLSID));
 
-	wxDialog::SetIcon(dlg_icon);
-	wxDialog::SetFocus();
+	ibDialog::SetIcon(dlg_icon);
+	ibDialog::SetFocus();
 }
 
 ibDialogUserList::~ibDialogUserList()
@@ -131,7 +131,7 @@ ibDialogUserList::~ibDialogUserList()
 
 void ibDialogUserList::OnContextMenu(ibDataViewEvent& event)
 {
-	wxMenu menu;
+	ibMenu menu;
 
 	for (unsigned int idx = 0; idx < m_toolbarMain->GetToolCount(); idx++) {
 		wxAuiToolBarItem* tool = m_toolbarMain->FindToolByIndex(idx);

@@ -249,8 +249,10 @@ bool ibStdCheckListboxInputHandler::HandleMouse(ibInputConsumer *consumer,
         ibCheckListBox *lbox = wxStaticCast(consumer->GetInputWindow(), ibCheckListBox);
         int x, y;
 
-        wxPoint pt = event.GetPosition();
-        pt -= consumer->GetInputWindow()->GetClientAreaOrigin();
+        // SEAM vs univ: the mouse's point is in the client area already (wxMSW's InitMouseEvent), as the list box reads
+        // it (DoListHitTest) - the canon took the origin off again, and a title beside the list (ibControl) moved the
+        // check boxes' place off theirs
+        const wxPoint pt = event.GetPosition();
         lbox->CalcUnscrolledPosition(pt.x, pt.y, &x, &y);
 
         ibRenderer *renderer = lbox->GetRenderer();

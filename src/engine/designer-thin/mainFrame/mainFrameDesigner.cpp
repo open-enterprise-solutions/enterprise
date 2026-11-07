@@ -11,6 +11,7 @@
 #include "designer-thin/mainFrame/stack/stackWindow.h"
 #include "designer-thin/mainFrame/watch/watchWindow.h"
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibRequest::ibApplyChange, ibProtocol::ibSchema::ibMetaData
+#include "gui/univ/messageDialog.h"
 
 ibFrontendMainFrameDesigner* ibFrontendMainFrameDesigner::GetFrame() {
 	ibFrontendMainFrame* instance = ibFrontendMainFrame::GetFrame();
@@ -160,7 +161,7 @@ bool ibFrontendMainFrameDesigner::AllowClose()
 	// server's, and once it says Exit the window goes (CallSettled) — a Cancel said after it could not keep it. Not asked,
 	// an edit nobody saved went with the window (2026-10-28). A session already gone has nothing to save.
 	if (m_metaWindow != nullptr && GetCommunicator().IsLoggedIn() && m_metaWindow->IsEdited()) {
-		const int answer = wxMessageBox(
+		const int answer = ibMessageBox(
 			ibString::Format(_("Configuration '%s' has been changed. Save?"), m_metaWindow->GetConfigName()),
 			wxTheApp->GetAppDisplayName(), wxYES | wxNO | wxCANCEL | wxCENTRE | wxICON_QUESTION, this);
 		if (answer == wxCANCEL)

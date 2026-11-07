@@ -26,9 +26,9 @@
 
 #include <functional>   // std::function — the "it changed" callback a host installs
 
-#include <wx/panel.h>
+#include "gui/univ/panel.h"
 #include <wx/toolbar.h>
-#include <wx/treectrl.h>
+#include "gui/univ/ctrl/treeCtrl.h"
 
 #include "frmclient/backend/backend_composition.h"   // ibFilterDescription — what is edited here; its literals, restored
 #include "gui/univ/dataview/dataview.h"
@@ -37,7 +37,7 @@
 class ibSettingsFieldTree;
 class ibMetaData;
 
-class ibFilterEditor : public wxPanel {
+class ibFilterEditor : public ibPanel {
 public:
 
 	// `filter` — the description whose TREE is edited (never owned here).
@@ -167,7 +167,7 @@ private:
 	// refresh as a mutation does; without this the editor would announce a change for having been
 	// filled in. Set only around Reload, so everything else is by definition somebody's edit.
 	bool               m_reloading = false;
-	wxTreeCtrl*        m_fieldCtrl = nullptr;
+	ibTreeCtrl*        m_fieldCtrl = nullptr;
 };
 
 #endif // __SETTINGS_FILTER_EDITOR_H__

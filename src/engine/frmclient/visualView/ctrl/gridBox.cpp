@@ -40,7 +40,7 @@ ibFrontendView* ibValueGridBox::GetControlView() const
 
 void ibValueGridBox::Create(wxWindow* parent, const ibProtocolNode& /*node*/)
 {
-	m_panel = new wxPanel(parent, wxID_ANY);
+	m_panel = new ibPanel(parent, wxID_ANY);
 	wxBoxSizer* const sizer = new wxBoxSizer(wxVERTICAL);
 
 	// The chrome: its command bar above it.

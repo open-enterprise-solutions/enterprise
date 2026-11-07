@@ -1,10 +1,10 @@
 #ifndef _DATAPROCESSOR_WND_H__
 #define _DATAPROCESSOR_WND_H__
 
-#include <wx/button.h>
+#include "gui/univ/ctrl/button.h"
 #include <wx/choice.h>
-#include <wx/stattext.h>
-#include <wx/textctrl.h>
+#include "gui/univ/ctrl/staticText.h"
+#include "gui/univ/ctrl/textCtrl.h"
 
 #include "treeConfiguration.h"
 
@@ -31,16 +31,16 @@ private:
 
 	void OnButtonModuleClicked(wxCommandEvent& event);
 
-	wxStaticText* m_nameCaption = nullptr;
-	wxStaticText* m_synonymCaption = nullptr;
-	wxStaticText* m_commentCaption = nullptr;
-	wxStaticText* m_defaultForm = nullptr;
-	wxTextCtrl* m_nameValue = nullptr;
-	wxTextCtrl* m_synonymValue = nullptr;
-	wxTextCtrl* m_commentValue = nullptr;
-	wxChoice* m_defaultFormValue = nullptr;
+	ibStaticText* m_nameCaption = nullptr;
+	ibStaticText* m_synonymCaption = nullptr;
+	ibStaticText* m_commentCaption = nullptr;
+	ibStaticText* m_defaultForm = nullptr;
+	ibTextCtrl* m_nameValue = nullptr;
+	ibTextCtrl* m_synonymValue = nullptr;
+	ibTextCtrl* m_commentValue = nullptr;
+	ibChoice* m_defaultFormValue = nullptr;
 
-	wxButton* m_buttonModule = nullptr;
+	ibButton* m_buttonModule = nullptr;
 };
 
 #endif

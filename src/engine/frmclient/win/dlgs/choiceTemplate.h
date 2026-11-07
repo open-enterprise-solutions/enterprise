@@ -6,15 +6,16 @@
 
 #include <algorithm>
 
-#include <wx/button.h>
+#include "gui/univ/ctrl/button.h"
 #include <wx/dialog.h>
 #include <wx/imaglist.h>
-#include <wx/listctrl.h>
+#include "gui/univ/ctrl/listCtrl.h"
 #include <wx/sizer.h>
-#include <wx/statline.h>
-#include <wx/stattext.h>
+#include "gui/univ/ctrl/staticLine.h"
+#include "gui/univ/ctrl/staticText.h"
 
 #include "frmclient/docView/docManager.h"
+#include "gui/univ/dialog.h"
 
 struct ibChoiceTemplateItem
 {
@@ -23,7 +24,7 @@ struct ibChoiceTemplateItem
 	wxIcon m_icon;
 };
 
-class ibDialogChoiceTemplate : public wxDialog {
+class ibDialogChoiceTemplate : public ibDialog {
 
 	struct ibDialogChoiceTemplateItem {
 
@@ -52,15 +53,15 @@ public:
 	}
 
 	ibDialogChoiceTemplate(const wxVector<ibChoiceTemplateItem>& choices) :
-		wxDialog(NULL, wxID_ANY, _("Select document type"), wxDefaultPosition, wxSize(250, 225), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
+		ibDialog(NULL, wxID_ANY, _("Select document type"), wxDefaultPosition, wxSize(250, 225), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 	{
 		wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
-		m_staticTextTemplate = new wxStaticText(this, wxID_ANY, _("Templates:"));
+		m_staticTextTemplate = new ibStaticText(this, wxID_ANY, _("Templates:"));
 		m_staticTextTemplate->Wrap(-1);
 		mainSizer->Add(m_staticTextTemplate, 0, wxALL, 5);
 
-		m_listChoice = new wxListCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_NO_HEADER | wxLC_REPORT | wxLC_SINGLE_SEL);
+		m_listChoice = new ibListCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_NO_HEADER | wxLC_REPORT | wxLC_SINGLE_SEL);
 		m_listChoice->AppendColumn(wxT("template"), wxLIST_FORMAT_LEFT, 250);
 		m_listChoice->SetImageList(m_imageList, wxIMAGE_LIST_SMALL);
 
@@ -72,21 +73,21 @@ public:
 
 		mainSizer->Add(m_listChoice, 1, wxALL | wxEXPAND, 5);
 
-		m_staticline = new wxStaticLine(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLI_HORIZONTAL);
+		m_staticline = new ibStaticLine(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLI_HORIZONTAL);
 		mainSizer->Add(m_staticline, 0, wxEXPAND | wxALL, 5);
 
-		m_sdbSizer = new wxStdDialogButtonSizer();
-		m_sdbSizerOK = new wxButton(this, wxID_OK);
+		m_sdbSizer = new ibStdDialogButtonSizer();
+		m_sdbSizerOK = new ibButton(this, wxID_OK);
 		m_sdbSizer->AddButton(m_sdbSizerOK);
-		m_sdbSizerCancel = new wxButton(this, wxID_CANCEL);
+		m_sdbSizerCancel = new ibButton(this, wxID_CANCEL);
 		m_sdbSizer->AddButton(m_sdbSizerCancel);
 		m_sdbSizer->Realize();
 
 		mainSizer->Add(m_sdbSizer, 0, wxEXPAND, 5);
 
-		wxDialog::SetSizer(mainSizer);
-		wxDialog::Layout();
-		wxDialog::Centre(wxBOTH);
+		ibDialog::SetSizer(mainSizer);
+		ibDialog::Layout();
+		ibDialog::Centre(wxBOTH);
 
 		m_listChoice->SetFocus();
 	}
@@ -96,7 +97,7 @@ public:
 private:
 
 	void OnitemActivated(wxListEvent& event) {
-		wxDialog::EndModal(wxID_OK);
+		ibDialog::EndModal(wxID_OK);
 		event.Skip();
 	}
 
@@ -122,12 +123,12 @@ private:
 
 	wxImageList* m_imageList = new wxImageList(16, 16);
 
-	wxStaticText* m_staticTextTemplate;
-	wxListCtrl* m_listChoice;
-	wxStaticLine* m_staticline;
-	wxStdDialogButtonSizer* m_sdbSizer;
-	wxButton* m_sdbSizerOK;
-	wxButton* m_sdbSizerCancel;
+	ibStaticText* m_staticTextTemplate;
+	ibListCtrl* m_listChoice;
+	ibStaticLine* m_staticline;
+	ibStdDialogButtonSizer* m_sdbSizer;
+	ibButton* m_sdbSizerOK;
+	ibButton* m_sdbSizerCancel;
 
 	wxVector<ibDialogChoiceTemplateItem> m_choiceData;
 };

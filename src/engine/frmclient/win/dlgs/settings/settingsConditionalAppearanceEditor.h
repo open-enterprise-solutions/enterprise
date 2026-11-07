@@ -14,7 +14,7 @@
 
 #include <functional>
 
-#include <wx/panel.h>
+#include "gui/univ/panel.h"
 
 #include "core/description/compositionDescription.h"   // ibConditionalAppearanceDescription — what is edited here
 
@@ -24,7 +24,7 @@ class ibSettingsFieldTree;
 class ibConditionalAppearanceModel;
 class wxToolBar;
 
-class ibConditionalAppearanceEditor : public wxPanel {
+class ibConditionalAppearanceEditor : public ibPanel {
 public:
 	// `fields` — the tree a condition and the fields are picked from; `metaOf` — the configuration a text is
 	// written in, asked when a window opens.

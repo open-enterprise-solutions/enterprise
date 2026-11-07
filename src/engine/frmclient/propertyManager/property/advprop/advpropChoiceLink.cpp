@@ -9,6 +9,7 @@
 #include "frmclient/win/dlgs/choiceLink/choiceLink.h"               // where the governing field is chosen
 #include "frmclient/win/dlgs/choiceParameters/choiceParameters.h"   // …and where the parameters' rows live
 #include "frmclient/backend/propertyManager/property/propertyChoiceLink.h"   // ibChoiceHasLists — what the row brought
+#include "gui/univ/messageDialog.h"
 
 // -----------------------------------------------------------------------
 // ibPGChoiceLinkProperty
@@ -102,7 +103,7 @@ bool ibPGChoiceParametersProperty::OnEvent(wxPropertyGrid* propgrid, wxWindow* W
 	// property's answers — the fields of what this one refers to, the fields beside it, what each could fill — written
 	// on the row (its Targets and Sources). Opened without them it would tell the author the field refers to nothing.
 	if (!ibChoiceHasLists(m_property)) {
-		wxMessageBox(_("Editing the choice parameters is not available in the thin designer yet."),
+		ibMessageBox(_("Editing the choice parameters is not available in the thin designer yet."),
 			_("Choice parameter links"), wxOK | wxICON_INFORMATION, propgrid);
 		return false;
 	}

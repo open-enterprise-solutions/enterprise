@@ -24,10 +24,12 @@
 
 #include <wx/datectrl.h>
 #include <wx/except.h>
-#include <wx/spinctrl.h>
-#include <wx/choice.h>
+#include "gui/univ/ctrl/spinCtrl.h"
+#include "gui/univ/ctrl/choice.h"
 #include <wx/imaglist.h>
 #include <wx/renderer.h>
+#include "gui/univ/renderer.h"
+#include "gui/univ/theme.h"  // the check box: the theme's renderer
 #include <wx/uilocale.h>
 
 #if wxUSE_ACCESSIBILITY
@@ -929,7 +931,7 @@ ibDataViewColumnBase::~ibDataViewColumnBase()
 // ibDataViewCtrlBase
 // ---------------------------------------------------------
 
-wxIMPLEMENT_ABSTRACT_CLASS(ibDataViewCtrlBase, wxControl);
+wxIMPLEMENT_ABSTRACT_CLASS(ibDataViewCtrlBase, ibControl);
 
 ibDataViewCtrlBase::ibDataViewCtrlBase()
 {
@@ -1773,7 +1775,7 @@ wxWindow* ibDataViewSpinRenderer::CreateEditorCtrl(wxWindow* parent, wxRect labe
 	long l = value.GetInteger();
 	wxString str;
 	str.Printf(wxT("%d"), (int)l);
-	wxSpinCtrl* sc = new wxSpinCtrl(parent, wxID_ANY, str,
+	ibSpinCtrl* sc = new ibSpinCtrl(parent, wxID_ANY, str,
 		labelRect.GetTopLeft(), labelRect.GetSize(), wxSP_ARROW_KEYS | wxTE_PROCESS_ENTER, m_min, m_max, l);
 #ifdef __WXOSX__
 	const wxSize size = sc->GetSize();
@@ -1786,7 +1788,7 @@ wxWindow* ibDataViewSpinRenderer::CreateEditorCtrl(wxWindow* parent, wxRect labe
 
 bool ibDataViewSpinRenderer::GetValueFromEditorCtrl(wxWindow* editor, ibVariant& value)
 {
-	wxSpinCtrl* sc = (wxSpinCtrl*)editor;
+	ibSpinCtrl* sc = (ibSpinCtrl*)editor;
 	long l = sc->GetValue();
 	value = l;
 	return true;
@@ -1846,7 +1848,7 @@ ibDataViewChoiceRenderer::ibDataViewChoiceRenderer(const wxArrayString& choices,
 
 wxWindow* ibDataViewChoiceRenderer::CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const ibVariant& value)
 {
-	wxChoice* c = new wxChoice
+	ibChoice* c = new ibChoice
 	(
 		parent,
 		wxID_ANY,
@@ -1861,7 +1863,7 @@ wxWindow* ibDataViewChoiceRenderer::CreateEditorCtrl(wxWindow* parent, wxRect la
 
 bool ibDataViewChoiceRenderer::GetValueFromEditorCtrl(wxWindow* editor, ibVariant& value)
 {
-	wxChoice* c = (wxChoice*)editor;
+	ibChoice* c = (ibChoice*)editor;
 	value = c->GetStringSelection();
 	return true;
 }
@@ -2174,7 +2176,8 @@ bool ibDataViewCheckIconTextRenderer::Render(wxRect cell, wxDC* dc, int state)
 	wxRect rectCheck(cell.GetPosition(), sizeCheck);
 	rectCheck = rectCheck.CentreIn(cell, wxVERTICAL);
 
-	wxRendererNative::Get().DrawCheckBox
+	// SEAM vs wx: the theme's renderer draws the box - the indicator ibCheckBox draws; wx asked the native one
+	ibThemeEngine::Get()->GetRenderer()->DrawCheckBox
 	(
 		GetView(), *dc, rectCheck, renderFlags
 	);
@@ -2228,7 +2231,8 @@ ibDataViewCheckIconTextRenderer::ActivateCell(const wxRect& WXUNUSED(cell),
 
 wxSize ibDataViewCheckIconTextRenderer::GetCheckSize() const
 {
-	return wxRendererNative::Get().GetCheckBoxSize(GetView());
+	// SEAM vs wx: the box Render draws - the theme's renderer's
+	return ibThemeEngine::Get()->GetRenderer()->GetCheckBoxSize(GetView());
 }
 
 //-----------------------------------------------------------------------------

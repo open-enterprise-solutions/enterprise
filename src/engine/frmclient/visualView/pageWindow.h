@@ -1,11 +1,11 @@
 #ifndef _FRMCLIENT_PAGE_WINDOW_H__
 #define _FRMCLIENT_PAGE_WINDOW_H__
 
-#include <wx/panel.h>
+#include "gui/univ/panel.h"
 #include <wx/sizer.h>
 
 // A NOTEBOOK'S PAGE — the old desktop's window:a panel laying out what is placed on it.
-class ibPanelPage : public wxPanel
+class ibPanelPage : public ibPanel
 {
 	wxDECLARE_DYNAMIC_CLASS(ibPanelPage);
 

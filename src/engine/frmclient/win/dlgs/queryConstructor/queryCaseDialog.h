@@ -34,10 +34,12 @@
 #include "frmclient/backend/query/queryConstructorModel.h"
 
 #include "gui/univ/dataview/dataview.h"
+#include "gui/univ/ctrl/textCtrl.h"
+#include "gui/univ/dialog.h"
 
 class ibMetaData;
 
-class FRMCLIENT_API ibDialogQueryCase : public wxDialog
+class FRMCLIENT_API ibDialogQueryCase : public ibDialog
 {
 public:
 	// `existing` — the CASE being edited, or anything else (then the window opens empty and the
@@ -82,7 +84,7 @@ private:
 
 	ibDataViewCtrl*          m_grid  = nullptr;
 	class ibQueryGridModel*  m_model = nullptr;
-	class wxTextCtrl*        m_elseBox = nullptr;
+	class ibTextCtrl*        m_elseBox = nullptr;
 };
 
 // Open the CASE builder over `expression` (a CASE, or anything else to start empty). Returns true

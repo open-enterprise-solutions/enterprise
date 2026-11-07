@@ -107,6 +107,11 @@ ibControl::~ibControl()
 
 void ibControl::SetLabel(const wxString& label)
 {
+    // SEAM vs univ: wxControlBase's InvalidateBestSize, lost with the base (ibControl derives from ibWindow) - a label
+    // set after the creation (a form's control takes its caption on Update) kept the empty one's best size, and the
+    // sizer left the text no room
+    InvalidateBestSize();
+
     // save original label
     ibWindow::SetLabel(label);
 

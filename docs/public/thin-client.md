@@ -24,7 +24,8 @@ protocol between them; neither half is called a frontend.
 | `protocol` | the contract — `protocol.h`: every name and number of the wire, depending on nothing, with the designer's own messages beside it in `protocolDesigner.h` — and the library of the sides that talk it: the wire's node, the connections (a server's socket, a file base in process), the protocol's journal |
 | `frmserver` | the server side: sessions, forms, the configuration's documents, the client host. It includes the contract only |
 | `core` | under both the engine and the client: ids and value kinds, string, number, date, guid, the node with its JSON and binary forms, the refusal (`ibCoreException`), the translation engine (`ibLocalization`), the format string, the schemas (`description/`), a colour and a font as data, the table's model view (`tabular/`); of wx, the base only |
-| `frmclient` | the client's graphics library: the communicator that keeps the frame it was answered, the main window, the document/view skeleton, the controls, the editors. It links `core` and `protocol` |
+| `gui` | the desktop's user interface library: the custom-drawn controls and dialogs, one theme (Luna), wx below only as the host. It links `core` |
+| `frmclient` | the client's graphics library: the communicator that keeps the frame it was answered, the main window, the document/view skeleton, the form's controls, the editors — drawn with `gui`. It links `core`, `protocol` and `gui` |
 | `fileserver` | a file base in the client's process — the engine loaded beside the window |
 | `enterprise-thin` | the runtime's window and its document manager |
 | `designer-thin` | the designer's window and its document manager |

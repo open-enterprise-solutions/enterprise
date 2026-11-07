@@ -21,10 +21,10 @@
 //
 ////////////////////////////////////////////////////////////////////////////
 
-#include <wx/dialog.h>
+#include "gui/univ/dialog.h"
 #include <wx/stc/stc.h>
 
-class ibDialogTextEditor : public wxDialog {
+class ibDialogTextEditor : public ibDialog {
 public:
 
 	// `caption` is what the person is looking at — "Help information", "Notes". The dialog does

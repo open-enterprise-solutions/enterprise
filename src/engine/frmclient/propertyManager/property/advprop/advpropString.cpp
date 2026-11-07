@@ -4,6 +4,9 @@
 #include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the string's node
 #include "frmclient/propertyManager/property/private/prop.h"                 // wxPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
+#include "gui/univ/ctrl/textCtrl.h"
+#include "gui/univ/dialog.h"
+#include "gui/univ/messageDialog.h"
 
 namespace {
 
@@ -88,7 +91,7 @@ bool ibUStringProperty::StringToValue(wxVariant& variant,
 	wxPGPropValFormatFlags flags) const
 {
 	if (stringUtils::CheckCorrectName(text) >= 0) {
-		wxMessageBox(_("You can enter only numbers, letters and the symbol \"_\""), _("Error entering value"));
+		ibMessageBox(_("You can enter only numbers, letters and the symbol \"_\""), _("Error entering value"));
 		return false;
 	}
 
@@ -222,7 +225,7 @@ bool wxMStringProperty::StringToValue(wxVariant& variant, const wxString& text, 
 bool wxMStringProperty::DisplayEditorDialog(wxPropertyGrid* pg, wxVariant& value)
 {
 	// launch editor dialog
-	wxDialog* dlg = new wxDialog(pg->GetPanel(), wxID_ANY,
+	ibDialog* dlg = new ibDialog(pg->GetPanel(), wxID_ANY,
 		m_dlgTitle.empty() ? GetLabel() : m_dlgTitle,
 		wxDefaultPosition, wxDefaultSize, m_dlgStyle);
 
@@ -235,7 +238,7 @@ bool wxMStringProperty::DisplayEditorDialog(wxPropertyGrid* pg, wxVariant& value
 	long edStyle = wxTE_MULTILINE;
 	if (HasFlag(wxPGFlags::ReadOnly))
 		edStyle |= wxTE_READONLY;
-	wxTextCtrl* ed = new wxTextCtrl(dlg, wxID_ANY, ReadText(value),
+	ibTextCtrl* ed = new ibTextCtrl(dlg, wxID_ANY, ReadText(value),
 		wxDefaultPosition, wxDefaultSize, edStyle);
 	if (m_maxLen > 0)
 		ed->SetMaxLength(m_maxLen);
@@ -246,7 +249,7 @@ bool wxMStringProperty::DisplayEditorDialog(wxPropertyGrid* pg, wxVariant& value
 	long btnSizerFlags = wxCANCEL;
 	if (!HasFlag(wxPGFlags::ReadOnly))
 		btnSizerFlags |= wxOK;
-	wxStdDialogButtonSizer* buttonSizer = dlg->CreateStdDialogButtonSizer(btnSizerFlags);
+	ibStdDialogButtonSizer* buttonSizer = dlg->CreateStdDialogButtonSizer(btnSizerFlags);
 	topsizer->Add(buttonSizer, wxSizerFlags(0).Right().Border(wxBOTTOM | wxRIGHT, spacing));
 
 	dlg->SetSizer(topsizer);

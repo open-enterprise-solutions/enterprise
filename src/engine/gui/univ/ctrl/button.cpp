@@ -376,6 +376,16 @@ void ibButton::Click()
     Command(event);
 }
 
+/* static */
+bool ibButton::ClickIfPossible(ibButton *button)
+{
+    if ( !button || !button->IsEnabled() || !button->IsShownOnScreen() )
+        return false;
+
+    button->Click();
+    return true;
+}
+
 // ----------------------------------------------------------------------------
 // misc
 // ----------------------------------------------------------------------------
@@ -462,6 +472,17 @@ ibWindow *ibButton::SetDefault()
     // SEAM vs univ: no native default-button bookkeeping — the flag is ours
     m_isDefault = true;
     Refresh();
+
+    // and the top-level window's default item, as wxButtonBase::SetDefault keeps it: Enter in a field clicks it
+    // (ibTextCtrl::ClickDefaultButtonIfPossible). The one before it is drawn as an ordinary button again.
+    wxTopLevelWindow * const tlw = wxDynamicCast(wxGetTopLevelParent(this), wxTopLevelWindow);
+    if ( tlw )
+    {
+        ibButton * const before = wxDynamicCast(tlw->SetDefaultItem(this), ibButton);
+        if ( before && before != this )
+            before->SetPrimary(false);
+    }
+
     return this;
 }
 

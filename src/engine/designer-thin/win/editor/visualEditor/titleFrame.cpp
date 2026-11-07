@@ -6,15 +6,15 @@
 #include "titleFrame.h"
 
 #include <wx/sizer.h>
-#include <wx/stattext.h>
+#include "gui/univ/ctrl/staticText.h"
 
-ibPanelTitle::ibPanelTitle(wxWindow* parent, const wxString& title) : wxPanel(parent, wxID_ANY)
+ibPanelTitle::ibPanelTitle(wxWindow* parent, const wxString& title) : ibPanel(parent, wxID_ANY)
 {
 	// Deep dusty blue #3F5C77 from the palette, not the system's caption blue that clashed with it; the
 	// label made after it inherits it.
 	SetBackgroundColour(wxColour(0x3F, 0x5C, 0x77));
 
-	wxStaticText* const label = new wxStaticText(this, wxID_ANY, title);
+	ibStaticText* const label = new ibStaticText(this, wxID_ANY, title);
 	label->SetForegroundColour(*wxWHITE);
 	label->SetFont(wxFontInfo(8).Family(wxFONTFAMILY_SWISS).Bold());
 
@@ -25,7 +25,7 @@ ibPanelTitle::ibPanelTitle(wxWindow* parent, const wxString& title) : wxPanel(pa
 
 wxWindow* ibPanelTitle::CreateTitle(wxWindow* inner, const wxString& title)
 {
-	wxPanel* const holder = new wxPanel(inner->GetParent(), wxID_ANY);
+	ibPanel* const holder = new ibPanel(inner->GetParent(), wxID_ANY);
 	inner->Reparent(holder);
 
 	wxBoxSizer* const column = new wxBoxSizer(wxVERTICAL);

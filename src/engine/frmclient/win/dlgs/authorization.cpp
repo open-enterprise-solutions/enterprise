@@ -5,9 +5,9 @@
 
 ///////////////////////////////////////////////////////////////////////////
 
-ibDialogAuthentication::ibDialogAuthentication(const std::vector<ibString>& users, wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) : wxDialog(parent, id, title, pos, size, style)
+ibDialogAuthentication::ibDialogAuthentication(const std::vector<ibString>& users, wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) : ibDialog(parent, id, title, pos, size, style)
 {
-	wxDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
+	ibDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
 	this->SetBackgroundColour(wxColour(184, 201, 212));   // #B8C9D4 powder-blue dialog
 
 	// Consistent DIP-aware padding — previous layout used 5/9/10 px which looked
@@ -21,13 +21,13 @@ ibDialogAuthentication::ibDialogAuthentication(const std::vector<ibString>& user
 	wxFlexGridSizer* grid = new wxFlexGridSizer(/*rows*/ 0, /*cols*/ 2, kPad, kPad);
 	grid->AddGrowableCol(1, 1);
 
-	m_staticTextLogin = new wxStaticText(this, wxID_ANY, _("Login:"));
+	m_staticTextLogin = new ibStaticText(this, wxID_ANY, _("Login:"));
 	m_comboBoxLogin   = new wxBitmapComboBox(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize);
 	for (const ibString& user : users)
 		m_comboBoxLogin->Append(user, ibBackendPicture::GetPicture(g_picUserCLSID));
 
-	m_staticTextPassword = new wxStaticText(this, wxID_ANY, _("Password:"));
-	m_textCtrlPassword   = new wxTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_PASSWORD);
+	m_staticTextPassword = new ibStaticText(this, wxID_ANY, _("Password:"));
+	m_textCtrlPassword   = new ibTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_PASSWORD);
 
 	grid->Add(m_staticTextLogin,    0, wxALIGN_CENTER_VERTICAL);
 	grid->Add(m_comboBoxLogin,      1, wxEXPAND);
@@ -36,16 +36,16 @@ ibDialogAuthentication::ibDialogAuthentication(const std::vector<ibString>& user
 
 	bSizer->Add(grid, 1, wxALL | wxEXPAND, kPad * 2);
 
-	wxStdDialogButtonSizer* bSizerButtons = new wxStdDialogButtonSizer();
-	m_buttonOK = new wxButton(this, wxID_OK);
+	ibStdDialogButtonSizer* bSizerButtons = new ibStdDialogButtonSizer();
+	m_buttonOK = new ibButton(this, wxID_OK);
 	bSizerButtons->AddButton(m_buttonOK);
-	m_buttonCancel = new wxButton(this, wxID_CANCEL);
+	m_buttonCancel = new ibButton(this, wxID_CANCEL);
 	bSizerButtons->AddButton(m_buttonCancel);
 	bSizerButtons->Realize();
 
 	bSizer->Add(bSizerButtons, 0, wxALL | wxALIGN_RIGHT, kPad);
 
-	wxDialog::SetSizer(bSizer);
+	ibDialog::SetSizer(bSizer);
 	bSizer->SetSizeHints(this);
 
 	// Ensure the dialog is at least wide enough for the title bar text
@@ -54,16 +54,16 @@ ibDialogAuthentication::ibDialogAuthentication(const std::vector<ibString>& user
 	if (GetSize().x < minSize.x)
 		SetSize(minSize.x, GetSize().y);
 
-	wxDialog::Layout();
+	ibDialog::Layout();
 
-	wxDialog::Centre(wxBOTH);
+	ibDialog::Centre(wxBOTH);
 
 	// The server sends no picture before the login: until it has, the window goes without an icon.
 	const wxBitmap picture = ibBackendPicture::GetPicture(g_picAuthenticationCLSID);
 	if (picture.IsOk()) {
 		wxIcon dlg_icon;
 		dlg_icon.CopyFromBitmap(picture);
-		wxDialog::SetIcon(dlg_icon);
+		ibDialog::SetIcon(dlg_icon);
 	}
-	wxDialog::SetFocus();
+	ibDialog::SetFocus();
 }

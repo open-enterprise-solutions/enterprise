@@ -25,7 +25,7 @@
 #include <wx/listbox.h>
 #include <wx/notebook.h>
 #include <wx/sizer.h>
-#include <wx/splitter.h>
+#include "gui/univ/splitterWindow.h"
 #include <wx/toolbar.h>
 #include <wx/xml/xml.h>
 
@@ -60,7 +60,7 @@ bool ReadTypes(const ibProtocolNode& args, ibProtocolNode& answer)
 } // namespace
 
 ibHelpPaneView::ibHelpPaneView(wxWindow* parent, const wxString& locale)
-    : wxPanel(parent, wxID_ANY),
+    : ibPanel(parent, wxID_ANY),
       m_helpService(std::make_unique<ibHelpService>(locale)) {
 	// Toolbar across the top — back / forward navigation, reload of
 	// the live corpus snapshot, and a "sync from editor cursor" button
@@ -102,13 +102,13 @@ ibHelpPaneView::ibHelpPaneView(wxWindow* parent, const wxString& locale)
 	// on every WM_SIZE; WS_EX_COMPOSITED doesn't fully suppress that
 	// on Win32. Ghost-line drag + final commit on mouse-up is the
 	// flicker-free trade-off.
-	auto* splitter = new wxSplitterWindow(this, wxID_ANY,
+	auto* splitter = new ibSplitterWindow(this, wxID_ANY,
 	                                        wxDefaultPosition, wxDefaultSize,
 	                                        wxSP_3DSASH);
 	splitter->SetSashGravity(0.0);
 	splitter->SetMinimumPaneSize(80);
 
-	m_notebook   = new wxNotebook(splitter, wxID_ANY);
+	m_notebook   = new ibNotebook(splitter, wxID_ANY);
 	m_treeView   = new ibHelpTreeView(m_notebook, this);
 	m_indexView  = new ibHelpIndexView(m_notebook, this);
 	m_searchView = new ibHelpSearchView(m_notebook, this);
@@ -163,7 +163,7 @@ void ibHelpPaneView::ShowEntry(const wxString& entryId) {
 	m_treeView->HighlightEntry(entryId);
 }
 
-void ibHelpPaneView::AppendTypes(const wxString& query, const std::vector<const ibHelpEntry*>& written, wxListBox* list,
+void ibHelpPaneView::AppendTypes(const wxString& query, const std::vector<const ibHelpEntry*>& written, ibListBox* list,
 	std::vector<wxString>& ids) {
 	ibProtocolNode args, answer;
 	args.SetValue(ibProtocol::ibSchema::ibTypes::Query, ibString(query));

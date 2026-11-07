@@ -20,7 +20,7 @@
 // the list's four tabs do.
 // ---------------------------------------------------------------------------
 
-#include <wx/treectrl.h>
+#include "gui/univ/ctrl/treeCtrl.h"
 
 #include <vector>
 #include <functional>
@@ -85,12 +85,12 @@ public:
 
 	// FILL a tree control. REBUILT, not built once: changing the query changes which
 	// fields exist, and this runs again to say so.
-	void Populate(wxTreeCtrl* tree) const;
+	void Populate(ibTreeCtrl* tree) const;
 
 	// Walk a dotted technical path down the tree, loading each reference on the way — the node, or an
 	// invalid id when the path names nothing here. SelectByPath lands the cursor on it.
-	wxTreeItemId FindByPath(wxTreeCtrl* tree, const wxString& path) const;
-	void SelectByPath(wxTreeCtrl* tree, const wxString& path) const;
+	wxTreeItemId FindByPath(ibTreeCtrl* tree, const wxString& path) const;
+	void SelectByPath(ibTreeCtrl* tree, const wxString& path) const;
 
 	// ⭐ WHETHER THE FIELD A PATH REACHES IS AVAILABLE — the question the tree asks of every field before
 	// putting it up, asked of a path already written, so what a picker offers and which lines a list lists
@@ -102,14 +102,14 @@ public:
 	// drag a field out (dropping on the right-hand pane adds it — the dropped field
 	// is GetDragItem()). The host binds what it does with a double-click itself,
 	// because that differs per tab.
-	void Attach(wxTreeCtrl* tree);
+	void Attach(ibTreeCtrl* tree);
 
 	// The field being dragged out of a tree, or an invalid id.
 	const wxTreeItemId& GetDragItem() const { return m_dragItem; }
 
 	// Read one tree node as a FIELD — the path, the readable presentation, the leaf
 	// id and the type behind it. Null when the node is a road (a reference) or empty.
-	static class ibValueCompositionField* FieldAt(const wxTreeCtrl* tree, const wxTreeItemId& item);
+	static class ibValueCompositionField* FieldAt(const ibTreeCtrl* tree, const wxTreeItemId& item);
 
 	// THE PICKER — the same tree as a form. A field is a VALUE, so choosing one is
 	// choosing a value, and it happens where every other value choice happens: the

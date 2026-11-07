@@ -3,12 +3,15 @@
 
 #include <wx/wx.h>
 #include <wx/panel.h>
-#include <wx/button.h>
-#include <wx/statline.h>
+#include "gui/univ/ctrl/button.h"
+#include "gui/univ/ctrl/staticLine.h"
 #include <wx/hyperlink.h>
 
 #include "frmclient/frmclient.h"
 #include "protocol/protocolNode.h"
+#include "gui/univ/ctrl/staticText.h"
+#include "gui/univ/ctrl/textCtrl.h"
+#include "gui/univ/dialog.h"
 
 /**
  * Class ibDialogAbout
@@ -17,29 +20,29 @@
  * dialog, drawn from what it is answered instead of reading the process itself.
  */
 class FRMCLIENT_API ibDialogAbout :
-	public wxDialog {
+	public ibDialog {
 public:
 
 	ibDialogAbout(wxWindow* parent, const ibProtocolNode& shown, int id = wxID_ANY);
 
 private:
 
-	wxStaticText* m_staticTextHeader;
-	wxStaticText* m_staticTextFramework;
-	wxStaticText* m_staticTextCommunity;
-	wxStaticText* m_staticTextThanks;
-	wxStaticLine* m_staticlineHeader;
-	wxTextCtrl* m_textCtrlContributors;
+	ibStaticText* m_staticTextHeader;
+	ibStaticText* m_staticTextFramework;
+	ibStaticText* m_staticTextCommunity;
+	ibStaticText* m_staticTextThanks;
+	ibStaticLine* m_staticlineHeader;
+	ibTextCtrl* m_textCtrlContributors;
 
-	wxStaticText* m_staticDataBaseInfo;
-	wxTextCtrl* m_textCtrl1;
-	wxStaticText* m_staticAppInfo;
-	wxTextCtrl* m_textCtrl2;
-	wxStaticText* m_staticUserInfo;
-	wxTextCtrl* m_textCtrl3;
-	wxStaticText* m_staticLocaleInfo;
-	wxTextCtrl* m_textCtrl4;
-	wxButton* m_buttonOK;
+	ibStaticText* m_staticDataBaseInfo;
+	ibTextCtrl* m_textCtrl1;
+	ibStaticText* m_staticAppInfo;
+	ibTextCtrl* m_textCtrl2;
+	ibStaticText* m_staticUserInfo;
+	ibTextCtrl* m_textCtrl3;
+	ibStaticText* m_staticLocaleInfo;
+	ibTextCtrl* m_textCtrl4;
+	ibButton* m_buttonOK;
 };
 
 #endif //__about__

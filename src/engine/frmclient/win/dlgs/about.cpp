@@ -2,6 +2,7 @@
 
 #include "protocol/protocol.h"
 #include "frmclient/win/picture.h"
+#include "gui/univ/ctrl/staticBox.h"
 
 static const wxString s_strContributors =
 	wxT("wxWidgets and wxFormBuilder, Unknown Worlds Entertaiment team\n")
@@ -14,12 +15,12 @@ namespace {
 // Compact read-only value field: no border, transparent background, fills
 // the 2nd column of the info grid. Looks like a label but the user can still
 // copy text out of it.
-wxTextCtrl* AddInfoRow(wxWindow* parent, wxFlexGridSizer* grid, const wxString& label, const wxString& value)
+ibTextCtrl* AddInfoRow(wxWindow* parent, wxFlexGridSizer* grid, const wxString& label, const wxString& value)
 {
-	wxStaticText* lbl = new wxStaticText(parent, wxID_ANY, label + wxT(":"));
+	ibStaticText* lbl = new ibStaticText(parent, wxID_ANY, label + wxT(":"));
 	grid->Add(lbl, 0, wxALIGN_CENTER_VERTICAL);
 
-	wxTextCtrl* field = new wxTextCtrl(parent, wxID_ANY, value,
+	ibTextCtrl* field = new ibTextCtrl(parent, wxID_ANY, value,
 		wxDefaultPosition, wxDefaultSize, wxTE_READONLY | wxBORDER_NONE);
 	field->SetBackgroundColour(parent->GetBackgroundColour());
 	grid->Add(field, 1, wxEXPAND);
@@ -30,7 +31,7 @@ wxTextCtrl* AddInfoRow(wxWindow* parent, wxFlexGridSizer* grid, const wxString& 
 } // namespace
 
 ibDialogAbout::ibDialogAbout(wxWindow* parent, const ibProtocolNode& shown, int id)
-	: wxDialog(parent, id, _("About..."), wxDefaultPosition, wxDefaultSize,
+	: ibDialog(parent, id, _("About..."), wxDefaultPosition, wxDefaultSize,
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 {
 	// System font so the dialog looks native on each platform/theme.
@@ -44,18 +45,18 @@ ibDialogAbout::ibDialogAbout(wxWindow* parent, const ibProtocolNode& shown, int 
 	wxBoxSizer* root = new wxBoxSizer(wxVERTICAL);
 
 	// --- Header block (title, subtitle, copyright link) ---
-	m_staticTextHeader = new wxStaticText(this, wxID_ANY,
+	m_staticTextHeader = new ibStaticText(this, wxID_ANY,
 		wxString::Format(wxT("Open Enterprise Solutions, build %lld"), shown.GetInt(ibProtocol::ibSchema::ibAbout::Build)),
 		wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER_HORIZONTAL);
 	m_staticTextHeader->SetFont(headerFont);
 	root->Add(m_staticTextHeader, 0, wxEXPAND | wxTOP | wxLEFT | wxRIGHT, kPad * 2);
 
-	m_staticTextFramework = new wxStaticText(this, wxID_ANY,
+	m_staticTextFramework = new ibStaticText(this, wxID_ANY,
 		wxT("a RAD tool powered by wxWidgets framework"),
 		wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER_HORIZONTAL);
 	root->Add(m_staticTextFramework, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, kPad);
 
-	m_staticTextCommunity = new wxStaticText(this, wxID_ANY,
+	m_staticTextCommunity = new ibStaticText(this, wxID_ANY,
 		wxT("(c) 2026 OES community"),
 		wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER_HORIZONTAL);
 	m_staticTextCommunity->SetFont(linkFont);
@@ -68,12 +69,12 @@ ibDialogAbout::ibDialogAbout(wxWindow* parent, const ibProtocolNode& shown, int 
 		});
 	root->Add(m_staticTextCommunity, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, kPad);
 
-	m_staticlineHeader = new wxStaticLine(this, wxID_ANY);
+	m_staticlineHeader = new ibStaticLine(this, wxID_ANY);
 	root->Add(m_staticlineHeader, 0, wxEXPAND | wxLEFT | wxRIGHT, kPad);
 
 	// --- Info block: 2-col flex grid (label | value) ---
-	wxStaticBoxSizer* infoSizer = new wxStaticBoxSizer(
-		new wxStaticBox(this, wxID_ANY, _("Info")), wxVERTICAL);
+	ibStaticBoxSizer* infoSizer = new ibStaticBoxSizer(
+		new ibStaticBox(this, wxID_ANY, _("Info")), wxVERTICAL);
 	wxWindow* infoHost = infoSizer->GetStaticBox();
 
 	wxFlexGridSizer* grid = new wxFlexGridSizer(/*rows*/0, /*cols*/2, kRowGap, kPad * 2);
@@ -94,8 +95,8 @@ ibDialogAbout::ibDialogAbout(wxWindow* parent, const ibProtocolNode& shown, int 
 		const std::vector<ibProtocolNode> plugins = shown.FindChild(ibProtocol::ibSchema::ibAbout::Plugins).Children();
 		if (!plugins.empty()) {
 
-			wxStaticBoxSizer* pluginsSizer = new wxStaticBoxSizer(
-				new wxStaticBox(this, wxID_ANY, _("Plugins")), wxVERTICAL);
+			ibStaticBoxSizer* pluginsSizer = new ibStaticBoxSizer(
+				new ibStaticBox(this, wxID_ANY, _("Plugins")), wxVERTICAL);
 
 			wxString text;
 			for (const ibProtocolNode& p : plugins) {
@@ -107,7 +108,7 @@ ibDialogAbout::ibDialogAbout(wxWindow* parent, const ibProtocolNode& shown, int 
 			if (!text.empty() && text.Last() == wxT('\n'))
 				text.RemoveLast();
 
-			wxTextCtrl* list = new wxTextCtrl(pluginsSizer->GetStaticBox(), wxID_ANY,
+			ibTextCtrl* list = new ibTextCtrl(pluginsSizer->GetStaticBox(), wxID_ANY,
 				text, wxDefaultPosition, FromDIP(wxSize(-1, 48)),
 				wxTE_MULTILINE | wxTE_READONLY | wxBORDER_NONE);
 			list->SetBackgroundColour(pluginsSizer->GetStaticBox()->GetBackgroundColour());
@@ -118,11 +119,11 @@ ibDialogAbout::ibDialogAbout(wxWindow* parent, const ibProtocolNode& shown, int 
 	}
 
 	// --- Thanks block ---
-	wxStaticBoxSizer* thanksSizer = new wxStaticBoxSizer(
-		new wxStaticBox(this, wxID_ANY, _("Thanks")), wxVERTICAL);
+	ibStaticBoxSizer* thanksSizer = new ibStaticBoxSizer(
+		new ibStaticBox(this, wxID_ANY, _("Thanks")), wxVERTICAL);
 	m_staticTextThanks = nullptr;
 
-	m_textCtrlContributors = new wxTextCtrl(thanksSizer->GetStaticBox(), wxID_ANY,
+	m_textCtrlContributors = new ibTextCtrl(thanksSizer->GetStaticBox(), wxID_ANY,
 		s_strContributors, wxDefaultPosition, FromDIP(wxSize(-1, 64)),
 		wxTE_MULTILINE | wxTE_READONLY | wxBORDER_NONE);
 	m_textCtrlContributors->SetBackgroundColour(thanksSizer->GetStaticBox()->GetBackgroundColour());
@@ -131,8 +132,8 @@ ibDialogAbout::ibDialogAbout(wxWindow* parent, const ibProtocolNode& shown, int 
 	root->Add(thanksSizer, 1, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, kPad);
 
 	// --- OK button, right-aligned ---
-	wxStdDialogButtonSizer* btns = new wxStdDialogButtonSizer();
-	m_buttonOK = new wxButton(this, wxID_OK);
+	ibStdDialogButtonSizer* btns = new ibStdDialogButtonSizer();
+	m_buttonOK = new ibButton(this, wxID_OK);
 	btns->AddButton(m_buttonOK);
 	btns->Realize();
 	root->Add(btns, 0, wxALIGN_RIGHT | wxALL, kPad * 2);

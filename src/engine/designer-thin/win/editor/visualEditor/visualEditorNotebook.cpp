@@ -8,6 +8,7 @@
 
 #include "core/compiler/scriptParseCode.h"
 #include "core/stringUtils.h"
+#include "gui/univ/messageDialog.h"
 
 void ibVisualEditorNotebook::CreateVisualEditor(ibModuleEditDocument* document, wxWindow* parent, wxWindowID id, long flags)
 {
@@ -92,7 +93,7 @@ void ibVisualEditorNotebook::ModifyEvent(ibProperty* event, const wxVariant& old
 				content.m_eType == ibContentType::eExportFunction) {
 				m_lineStart = content.m_lineStart; m_lineEnd = content.m_lineEnd;
 				if (stringUtils::IsSameAs(content.m_name, oldEvent) && !stringUtils::IsSameAs(content.m_name, strEvent) && changeSel) {
-					int answer = wxMessageBox(_("Do you rename an existing procedure?"), _("Rename"), wxYES_NO | wxCENTRE);
+					int answer = ibMessageBox(_("Do you rename an existing procedure?"), _("Rename"), wxYES_NO | wxCENTRE);
 					if (answer == wxYES) {
 						wxString currentLine = m_codeEditor->GetLine(content.m_lineStart);
 						currentLine.Replace(content.m_name, strEvent);
@@ -106,7 +107,7 @@ void ibVisualEditorNotebook::ModifyEvent(ibProperty* event, const wxVariant& old
 					break;
 				}
 				else if (stringUtils::IsSameAs(content.m_name, oldEvent) && !changeSel) {
-					int answer = wxMessageBox(_("Do you delete an existing procedure?"), _("Delete"), wxYES_NO | wxCENTRE);
+					int answer = ibMessageBox(_("Do you delete an existing procedure?"), _("Delete"), wxYES_NO | wxCENTRE);
 					if (answer == wxYES) {
 						m_codeEditor->Replace(
 							m_codeEditor->GetLineEndPosition(content.m_lineStart - 1) + 1,

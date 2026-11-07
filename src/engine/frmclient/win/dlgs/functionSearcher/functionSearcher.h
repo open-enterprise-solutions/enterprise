@@ -2,10 +2,10 @@
 #define _FUNCTIONLIST_H__
 
 #include <wx/sizer.h>
-#include <wx/button.h>
-#include <wx/checkbox.h>
-#include <wx/dialog.h>
-#include <wx/listctrl.h>
+#include "gui/univ/ctrl/button.h"
+#include "gui/univ/ctrl/checkBox.h"
+#include "gui/univ/dialog.h"
+#include "gui/univ/ctrl/listCtrl.h"
 
 // The old desktop's:its module's procedures and functions, and the handlers it may
 // have — the module's tab asked for those (ibProtocol::ibView::ibModule::ibRequest::Procedures), its document the desktop's metaobject.
@@ -14,16 +14,16 @@ class ibCodeEditor;
 
 #include <map>
 
-struct ibFunctionList : public wxDialog
+struct ibFunctionList : public ibDialog
 {
 	wxArrayString aListName;
 	wxArrayInt aListImage;
 
-	wxCheckBox *m_Sort;
-	wxButton *m_Cancel;
-	wxButton *m_OK;
+	ibCheckBox *m_Sort;
+	ibButton *m_Cancel;
+	ibButton *m_OK;
 
-	wxListCtrl *m_listProcedures;
+	ibListCtrl *m_listProcedures;
 
 	ibTabDocument *m_docModule;
 	ibCodeEditor *m_codeEditor;

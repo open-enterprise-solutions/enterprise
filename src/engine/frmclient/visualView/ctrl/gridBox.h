@@ -4,6 +4,7 @@
 #include <memory>
 
 #include "frmclient/visualView/ctrl/frame.h"
+#include "gui/univ/panel.h"
 
 class ibViewCommandBar;
 class ibGridEvent;
@@ -37,7 +38,7 @@ private:
 	void OnSheetModified(const struct ibSpreadsheetDescription& spreadsheetDesc);
 	void OnCellLeftClick(ibGridEvent& event);
 
-	wxPanel*                          m_panel = nullptr;
+	ibPanel*                          m_panel = nullptr;
 	std::unique_ptr<ibViewCommandBar> m_commandBar;
 	ibViewFetcher                     m_fetcher;
 

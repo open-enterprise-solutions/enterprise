@@ -23,13 +23,14 @@
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/mainFrame/objinspect/objinspect.h"   // the inspector the row's object is shown in
 #include "frmclient/win/picture.h"
+#include "gui/univ/menu.h"   // ibMenu — the row's context menu
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibMetaData, ibProtocol::ibSchema::ibProperties
 
 namespace {
 
 // A NEW BLOCK STARTS HERE — the desktop's (designer/mainFrame/metaTree/treeConfiguration_impl.cpp): asked of the MENU,
 // which is the only thing that knows what is already in it — never a line first, never two in a row.
-void ibAppendSeparator(wxMenu* menu)
+void ibAppendSeparator(ibMenu* menu)
 {
 	if (menu == nullptr)
 		return;
@@ -337,7 +338,7 @@ bool ibMetaTreeBase::Command(ibProtocol::ibSchema::ibMetaData::ibCommand command
 	return frame != nullptr && frame->Call(ibProtocol::ibMethod::Schema, GetParams(command, args), answer);
 }
 
-void ibMetaTreeBase::UpdateChoiceSelection(wxChoice* choice, const ibProtocolNode& property)
+void ibMetaTreeBase::UpdateChoiceSelection(ibChoice* choice, const ibProtocolNode& property)
 {
 	choice->Clear();
 	choice->AppendString(_("<not selected>"));
@@ -823,7 +824,7 @@ void ibMetaTreeBase::UpdateToolbar()
 	m_metaTreeToolbar->Refresh();
 }
 
-bool ibMetaTreeBase::AppendMetaMenu(wxMenu& menu, const ibProtocolNode& row)
+bool ibMetaTreeBase::AppendMetaMenu(ibMenu& menu, const ibProtocolNode& row)
 {
 	const ibProtocolNode items = row.FindChild(ibProtocol::ibSchema::ibMetaData::Menu);
 	const bool standard = items.GetBool(ibProtocol::ibSchema::ibMetaData::Standard, true);
@@ -903,7 +904,7 @@ void ibMetaTreeBase::ShowContextMenu(const wxTreeItemId& item, const wxPoint& po
 	if (row == nullptr)
 		return;
 
-	wxMenu menu;   // stack — PopupMenu does not take ownership, and it blocks until dismissed
+	ibMenu menu;   // stack — PopupMenu does not take ownership, and it blocks until dismissed
 
 	if (row->m_row.GetId() > 0) {
 		// ⭐ ASKED ONCE. The object offers what it opens, this draws it, and the answer says whether the standard New /

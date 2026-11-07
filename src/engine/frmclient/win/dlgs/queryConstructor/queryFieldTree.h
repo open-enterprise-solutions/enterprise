@@ -33,6 +33,7 @@
 
 #include <utility>
 #include <vector>
+#include "gui/univ/ctrl/treeCtrl.h"
 
 // A node of a constructor tree carries what it IS, not what it looks like — the source path for
 // the catalogue, the (source, field) pair for a chosen table.
@@ -68,7 +69,7 @@ public:
 };
 
 // The node behind a row, or nullptr when the row carries none (a group header, the placeholder).
-inline ibQueryTreeNode* ibQueryNodeOf(wxTreeCtrl* tree, const wxTreeItemId& item)
+inline ibQueryTreeNode* ibQueryNodeOf(ibTreeCtrl* tree, const wxTreeItemId& item)
 {
 	return tree != nullptr && item.IsOk()
 		? dynamic_cast<ibQueryTreeNode*>(tree->GetItemData(item)) : nullptr;
@@ -77,7 +78,7 @@ inline ibQueryTreeNode* ibQueryNodeOf(wxTreeCtrl* tree, const wxTreeItemId& item
 // APPEND ONE FIELD ROW. `pathPrefix` is what has been walked so far — empty at the top level, the
 // parent's path below it — and the row's own path is the two joined by a dot, which is exactly what
 // every verb in the window puts into the AST.
-inline void ibQueryAddFieldNode(wxTreeCtrl* tree, const wxTreeItemId& parent,
+inline void ibQueryAddFieldNode(ibTreeCtrl* tree, const wxTreeItemId& parent,
                                 const ibQueryConstructorField& field, int icon,
                                 int sourceIndex = -1,
                                 const wxString& pathPrefix = wxEmptyString,
@@ -107,7 +108,7 @@ inline void ibQueryAddFieldNode(wxTreeCtrl* tree, const wxTreeItemId& parent,
 // hold. It is a GROUPING, not a segment: the path does not grow through it, because the query walks
 // `Recorder.Date` whichever document the row turns out to hold. What it adds is the answer to which
 // type offers what, which is the whole reason two `Date`s must not be merged into one row here.
-inline void ibQueryAddBranchNode(wxTreeCtrl* tree, const wxTreeItemId& parent,
+inline void ibQueryAddBranchNode(ibTreeCtrl* tree, const wxTreeItemId& parent,
                                  const ibQueryConstructorField& branch, int icon,
                                  int sourceIndex, const wxString& path,
                                  const std::vector<ibString>& tablePath, const wxString& sourceLabel)
@@ -128,7 +129,7 @@ inline void ibQueryAddBranchNode(wxTreeCtrl* tree, const wxTreeItemId& parent,
 // always run (ExpandDotWalkJoins in the lowering); what was missing was a way to SAY it without
 // typing it, so a reference sat in every field tree as a dead leaf. Unfolding one asks the model
 // what is behind it — which the model answers from the reference's own clsid, no lookup table.
-inline void ibQueryExpandFieldNode(wxTreeCtrl* tree, const wxTreeItemId& item,
+inline void ibQueryExpandFieldNode(ibTreeCtrl* tree, const wxTreeItemId& item,
                                    const ibQueryConstructorModel& model, int icon)
 {
 	ibQueryTreeNode* node = ibQueryNodeOf(tree, item);
@@ -165,7 +166,7 @@ inline void ibQueryExpandFieldNode(wxTreeCtrl* tree, const wxTreeItemId& item,
 // ⚠ THE DRAG IS RUN BY US, and the event must NOT be Allow()ed. Allowing it starts wx's own drag as
 // well, and the two collide inside wxDragImage::BeginDrag with an assert. The source window is the
 // TREE — passing the dialog produced the same assert.
-inline void ibQueryBeginTextDrag(wxTreeCtrl* tree, const wxTreeItemId& item, const wxString& text)
+inline void ibQueryBeginTextDrag(ibTreeCtrl* tree, const wxTreeItemId& item, const wxString& text)
 {
 	if (tree == nullptr || text.IsEmpty())
 		return;

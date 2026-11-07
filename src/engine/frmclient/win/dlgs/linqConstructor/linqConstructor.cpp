@@ -20,20 +20,21 @@
 #include "protocol/protocolNode.h"
 
 #include <wx/artprov.h>
-#include <wx/button.h>
+#include "gui/univ/ctrl/button.h"
 #include <wx/imaglist.h>
-#include <wx/msgdlg.h>
-#include <wx/notebook.h>
-#include <wx/panel.h>
+#include "gui/univ/messageDialog.h"
+#include "gui/univ/ctrl/notebook.h"
+#include "gui/univ/panel.h"
 #include <wx/settings.h>
 #include <wx/sizer.h>
-#include <wx/spinctrl.h>
+#include "gui/univ/ctrl/spinCtrl.h"
 #include <wx/statbox.h>
-#include <wx/textdlg.h>
+#include "gui/univ/textEntryDialog.h"
 #include <wx/toolbar.h>
 #include <wx/utils.h>
 
 #include <algorithm>
+#include "gui/univ/ctrl/staticBox.h"
 
 namespace {
 
@@ -63,7 +64,7 @@ public:
 	bool       m_loaded;
 };
 
-ibLinqNode* NodeOf(const wxTreeCtrl* tree, const wxTreeItemId& item)
+ibLinqNode* NodeOf(const ibTreeCtrl* tree, const wxTreeItemId& item)
 {
 	return tree != nullptr && item.IsOk() ? static_cast<ibLinqNode*>(tree->GetItemData(item)) : nullptr;
 }
@@ -86,7 +87,7 @@ namespace linq = ibProtocol::ibView::ibModule::ibLinq;
 
 ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxString& text, unsigned int caret,
 	ibTabDocument* module, short codeStyle, bool readOnly)
-	: wxDialog(parent, wxID_ANY, _("LINQ query constructor"), wxDefaultPosition, wxDefaultSize,
+	: ibDialog(parent, wxID_ANY, _("LINQ query constructor"), wxDefaultPosition, wxDefaultSize,
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
 	m_text(text), m_caret(std::min<unsigned int>(caret, (unsigned int)text.length())), m_module(module),
 	m_codeStyle(codeStyle)
@@ -153,7 +154,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 
 	const int gap = FromDIP(6);
 	wxBoxSizer* top = new wxBoxSizer(wxVERTICAL);
-	m_notebook = new wxNotebook(this, wxID_ANY);
+	m_notebook = new ibNotebook(this, wxID_ANY);
 	// A TAB WEARS ITS PICTURE — the query constructor's for the same tab; Other is its Advanced. In the
 	// order the pages are added below, which is also each page's picture index.
 	{
@@ -196,11 +197,11 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 	const auto arrows = [&](wxWindow* page, std::function<void()> in, std::function<void()> out) {
 		wxBoxSizer* column = new wxBoxSizer(wxVERTICAL);
 		column->AddStretchSpacer();
-		wxButton* forward = new wxButton(page, wxID_ANY, kArrowIn, wxDefaultPosition, FromDIP(wxSize(28, 24)), wxBU_EXACTFIT);
+		ibButton* forward = new ibButton(page, wxID_ANY, kArrowIn, wxDefaultPosition, FromDIP(wxSize(28, 24)), wxBU_EXACTFIT);
 		forward->Bind(wxEVT_BUTTON, [in](wxCommandEvent&) { in(); });
 		column->Add(forward, wxSizerFlags().Border(wxBOTTOM, gap));
 		if (out) {
-			wxButton* back = new wxButton(page, wxID_ANY, kArrowOut, wxDefaultPosition, FromDIP(wxSize(28, 24)), wxBU_EXACTFIT);
+			ibButton* back = new ibButton(page, wxID_ANY, kArrowOut, wxDefaultPosition, FromDIP(wxSize(28, 24)), wxBU_EXACTFIT);
 			back->Bind(wxEVT_BUTTON, [out](wxCommandEvent&) { out(); });
 			column->Add(back);
 		}
@@ -209,7 +210,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 	};
 	const auto pane = [&](wxWindow* page, const wxString& title, wxToolBar* bar, wxWindow* body) {
 		wxBoxSizer* column = new wxBoxSizer(wxVERTICAL);
-		column->Add(new wxStaticText(page, wxID_ANY, title), wxSizerFlags().Border(wxBOTTOM, gap / 2));
+		column->Add(new ibStaticText(page, wxID_ANY, title), wxSizerFlags().Border(wxBOTTOM, gap / 2));
 		if (bar != nullptr) {
 			bar->Realize();
 			column->Add(bar, wxSizerFlags().Expand());
@@ -220,10 +221,10 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 
 	// ---- Tables and fields: what can be read | the tables read | the columns of the answer ----
 	{
-		wxPanel* page = new wxPanel(m_notebook);
+		ibPanel* page = new ibPanel(m_notebook);
 		wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
 
-		wxTreeCtrl* tree = MakeSourceTree(page);
+		ibTreeCtrl* tree = MakeSourceTree(page);
 		row->Add(pane(page, _("Available tables"), nullptr, tree), wxSizerFlags(3).Expand().Border(wxALL, gap));
 		row->Add(arrows(page, [this] { AddSelectedAsSource(false); }, [this, removeSelected] { removeSelected(m_sources); }),
 			wxSizerFlags().Expand());
@@ -258,7 +259,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 		AddTool(fieldBar, _("Move down"), wxART_DOWN, [this, moveSelected] { moveSelected(m_fields, +1); });
 		wxBoxSizer* fieldPane = pane(page, _("Fields"), fieldBar, m_fields);
 		// Said only while the query groups: then these are not the answer's only columns, and not rows.
-		m_fieldsNote = new wxStaticText(page, wxID_ANY, wxEmptyString);
+		m_fieldsNote = new ibStaticText(page, wxID_ANY, wxEmptyString);
 		m_fieldsNote->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
 		m_fieldsNote->Hide();
 		fieldPane->Add(m_fieldsNote, wxSizerFlags().Expand().Border(wxTOP, gap / 2));
@@ -274,10 +275,10 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 
 	// ---- Conditions: what can be read | the conditions, a `Where` each ----
 	{
-		wxPanel* page = new wxPanel(m_notebook);
+		ibPanel* page = new ibPanel(m_notebook);
 		wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
 
-		wxTreeCtrl* tree = MakeSourceTree(page);
+		ibTreeCtrl* tree = MakeSourceTree(page);
 		row->Add(pane(page, _("Available tables"), nullptr, tree), wxSizerFlags(3).Expand().Border(wxALL, gap));
 		row->Add(arrows(page, [this] { AddSelectedToCondition(); }, [this, removeSelected] { removeSelected(m_conditions); }),
 			wxSizerFlags().Expand());
@@ -307,10 +308,10 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 
 	// ---- Grouping: what can be read | the keys | the totals - the query constructor's own page ----
 	{
-		wxPanel* page = new wxPanel(m_notebook);
+		ibPanel* page = new ibPanel(m_notebook);
 		wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
 
-		wxTreeCtrl* tree = MakeSourceTree(page);
+		ibTreeCtrl* tree = MakeSourceTree(page);
 		row->Add(pane(page, _("Available tables"), nullptr, tree), wxSizerFlags(3).Expand().Border(wxALL, gap));
 
 		wxBoxSizer* lists = new wxBoxSizer(wxVERTICAL);
@@ -367,12 +368,12 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 
 		// THE GROUP'S NAME, and what it means, said where it is set.
 		wxBoxSizer* intoRow = new wxBoxSizer(wxHORIZONTAL);
-		intoRow->Add(new wxStaticText(page, wxID_ANY, ibString::Format(_("The group's name (%s)"), Word(KEY_INTO))),
+		intoRow->Add(new ibStaticText(page, wxID_ANY, ibString::Format(_("The group's name (%s)"), Word(KEY_INTO))),
 			wxSizerFlags().CenterVertical().Border(wxRIGHT, gap));
-		m_groupInto = new wxTextCtrl(page, wxID_ANY);
+		m_groupInto = new ibTextCtrl(page, wxID_ANY);
 		intoRow->Add(m_groupInto, wxSizerFlags(1));
 		lists->Add(intoRow, wxSizerFlags().Expand().Border(wxLEFT | wxRIGHT, gap * 2));
-		wxStaticText* meaning = new wxStaticText(page, wxID_ANY,
+		ibStaticText* meaning = new ibStaticText(page, wxID_ANY,
 			_("Rows with the same keys become one row of the answer: its columns are the keys and the totals. "
 			  "The order then sorts the groups - by a key, or by a total's column name. Past the name, a condition "
 			  "marked 'On groups' or a field reads the group: <name>.Key, <name>.Values. "
@@ -393,10 +394,10 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 
 	// ---- Order: what can be read | the keys, in order ----
 	{
-		wxPanel* page = new wxPanel(m_notebook);
+		ibPanel* page = new ibPanel(m_notebook);
 		wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
 
-		wxTreeCtrl* tree = MakeSourceTree(page);
+		ibTreeCtrl* tree = MakeSourceTree(page);
 		row->Add(pane(page, _("Available tables"), nullptr, tree), wxSizerFlags(3).Expand().Border(wxALL, gap));
 		row->Add(arrows(page, [this] { AddSelectedToOrder(); }, [this, removeSelected] { removeSelected(m_order); }),
 			wxSizerFlags().Expand());
@@ -426,8 +427,8 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 
 	// ---- Other: the query constructor's "Record selection" - a switch and a number of rows ----
 	{
-		wxPanel* page = new wxPanel(m_notebook);
-		wxStaticBoxSizer* selection = new wxStaticBoxSizer(wxVERTICAL, page, _("Record selection"));
+		ibPanel* page = new ibPanel(m_notebook);
+		ibStaticBoxSizer* selection = new ibStaticBoxSizer(wxVERTICAL, page, _("Record selection"));
 		wxWindow* box = selection->GetStaticBox();
 
 		// ⭐ A NUMBER OF ROWS IS A NUMBER, so it is a counter with arrows, switched on by its word - as the
@@ -435,16 +436,16 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 		// and said beside the counter, until the counter is touched.
 		const auto countRow = [&](ibRowCount& count, int key, const wxString& meaning) {
 			wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
-			count.m_use = new wxCheckBox(box, wxID_ANY, Word(key));
+			count.m_use = new ibCheckBox(box, wxID_ANY, Word(key));
 			row->Add(count.m_use, wxSizerFlags().CenterVertical().Border(wxRIGHT, gap));
-			count.m_count = new wxSpinCtrl(box, wxID_ANY, wxEmptyString, wxDefaultPosition, FromDIP(wxSize(90, -1)),
+			count.m_count = new ibSpinCtrl(box, wxID_ANY, wxEmptyString, wxDefaultPosition, FromDIP(wxSize(90, -1)),
 				wxSP_ARROW_KEYS, 1, 1000000, 10);
 			count.m_count->Disable();
 			row->Add(count.m_count, wxSizerFlags().CenterVertical().Border(wxRIGHT, gap));
-			wxStaticText* said = new wxStaticText(box, wxID_ANY, meaning);
+			ibStaticText* said = new ibStaticText(box, wxID_ANY, meaning);
 			said->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
 			row->Add(said, wxSizerFlags().CenterVertical().Border(wxRIGHT, gap));
-			count.m_kept = new wxStaticText(box, wxID_ANY, wxEmptyString);
+			count.m_kept = new ibStaticText(box, wxID_ANY, wxEmptyString);
 			count.m_kept->Hide();
 			row->Add(count.m_kept, wxSizerFlags().CenterVertical());
 			selection->Add(row, wxSizerFlags().Border(wxALL, gap / 2));
@@ -462,7 +463,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 		countRow(m_skipCount, KEY_SKIP, _("rows to pass over"));
 		countRow(m_takeCount, KEY_TAKE, _("rows at most"));
 
-		m_distinct = new wxCheckBox(box, wxID_ANY, ibString::Format(_("%s - no repeated rows"), Word(KEY_DISTINCT)));
+		m_distinct = new ibCheckBox(box, wxID_ANY, ibString::Format(_("%s - no repeated rows"), Word(KEY_DISTINCT)));
 		selection->Add(m_distinct, wxSizerFlags().Border(wxALL, gap / 2));
 
 		wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
@@ -476,7 +477,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 
 	// HOW IT IS USED, said once: the tree on the left is what can be read, and everything moves out of it
 	// the same three ways.
-	wxStaticText* howTo = new wxStaticText(this, wxID_ANY,
+	ibStaticText* howTo = new ibStaticText(this, wxID_ANY,
 		_("Drag a table or a field from the tree on the left into a list, double-click it, or press the arrow. "
 		  "A table whose columns are not known opens to a line that lets you write a field by hand."));
 	howTo->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
@@ -493,7 +494,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 	m_block->SetReadOnly(true);
 	top->Add(m_block, wxSizerFlags().Expand().Border(wxLEFT | wxRIGHT, gap));
 
-	m_verdict = new wxStaticText(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxST_NO_AUTORESIZE);
+	m_verdict = new ibStaticText(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxST_NO_AUTORESIZE);
 	top->Add(m_verdict, wxSizerFlags().Expand().Border(wxLEFT | wxRIGHT | wxTOP, gap * 2));
 	top->Add(CreateStdDialogButtonSizer(readOnly ? wxCANCEL : (wxOK | wxCANCEL)),
 		wxSizerFlags().Right().Border(wxALL, gap * 2));
@@ -512,7 +513,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 	if (m_replacing)
 		Open(opened);
 	else if (!openRefusal.IsEmpty())
-		wxMessageBox(openRefusal + wxT("\n\n")
+		ibMessageBox(openRefusal + wxT("\n\n")
 			+ _("The window opens empty, and OK writes a new block at the caret."), GetTitle(), wxOK | wxICON_INFORMATION, parent);
 
 	ShowResult();
@@ -620,7 +621,7 @@ void ibDialogLinqConstructor::AskAll(const std::vector<wxString>& probes, const 
 		// the place lists nothing, once for each question the tab left unanswered.
 		for (const wxString& probe : probes)
 			m_asked.emplace(probe, ibProbe());
-		wxMessageBox(_("The module's tab did not answer: what this place holds is not listed."),
+		ibMessageBox(_("The module's tab did not answer: what this place holds is not listed."),
 			_("LINQ query constructor"), wxOK | wxICON_WARNING);
 	}
 }
@@ -629,7 +630,7 @@ void ibDialogLinqConstructor::AskAll(const std::vector<wxString>& probes, const 
 //  The trees
 // ---------------------------------------------------------------------------
 
-int ibDialogLinqConstructor::IconIndex(wxTreeCtrl* tree, const wxString& key, const std::function<wxIcon()>& make)
+int ibDialogLinqConstructor::IconIndex(ibTreeCtrl* tree, const wxString& key, const std::function<wxIcon()>& make)
 {
 	std::map<wxString, int>& known = m_treeIcons[tree];
 	const auto found = known.find(key);
@@ -648,7 +649,7 @@ int ibDialogLinqConstructor::IconIndex(wxTreeCtrl* tree, const wxString& key, co
 // is what the type registry calls "Catalog". One rule turns the section's name into the kind's
 // (`ChartsOf...` into `ChartOf...`, a plural into its singular), so a metatype added tomorrow is dressed
 // the day it registers.
-int ibDialogLinqConstructor::KindIcon(wxTreeCtrl* tree, const wxString& section)
+int ibDialogLinqConstructor::KindIcon(ibTreeCtrl* tree, const wxString& section)
 {
 	// The kind's registration is the server's (the desktop's GetAvailableCtor(kind)->GetClassIcon): the opening
 	// answered each section's picture; one with none wears the folder the desktop fell back to.
@@ -679,7 +680,7 @@ bool ibDialogLinqConstructor::IsPlainValue(const ibProbe& members)
 
 // One place under `parent`. Asked (`probe`) whether it is only a plain value, which then stays a leaf;
 // a place under a section of `Data` is a table and is not asked.
-void ibDialogLinqConstructor::AddPlace(wxTreeCtrl* tree, const wxTreeItemId& parent, const wxString& name,
+void ibDialogLinqConstructor::AddPlace(ibTreeCtrl* tree, const wxTreeItemId& parent, const wxString& name,
 	const wxString& expression, int icon, bool probe)
 {
 	const bool plain = probe && IsPlainValue(MembersOf(expression));
@@ -688,10 +689,10 @@ void ibDialogLinqConstructor::AddPlace(wxTreeCtrl* tree, const wxTreeItemId& par
 	tree->SetItemHasChildren(item, !plain);
 }
 
-wxTreeCtrl* ibDialogLinqConstructor::MakeSourceTree(wxWindow* parent)
+ibTreeCtrl* ibDialogLinqConstructor::MakeSourceTree(wxWindow* parent)
 {
 	// The modern arrow and no lines - the same as every tree of the query constructor.
-	wxTreeCtrl* tree = new wxTreeCtrl(parent, wxID_ANY, wxDefaultPosition, FromDIP(wxSize(250, 300)),
+	ibTreeCtrl* tree = new ibTreeCtrl(parent, wxID_ANY, wxDefaultPosition, FromDIP(wxSize(250, 300)),
 		wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_HIDE_ROOT | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxTR_TWIST_BUTTONS);
 	tree->AssignImageList(new wxImageList(16, 16));
 
@@ -734,7 +735,7 @@ wxTreeCtrl* ibDialogLinqConstructor::MakeSourceTree(wxWindow* parent)
 // tree's own native drag beside this one, which MSW refuses (see queryConstructorEdit.cpp).
 void ibDialogLinqConstructor::OnBeginDrag(wxTreeEvent& event)
 {
-	wxTreeCtrl* tree = wxDynamicCast(event.GetEventObject(), wxTreeCtrl);
+	ibTreeCtrl* tree = wxDynamicCast(event.GetEventObject(), ibTreeCtrl);
 	if (tree == nullptr || NodeOf(tree, event.GetItem()) == nullptr)
 		return;
 	tree->SelectItem(event.GetItem());
@@ -743,7 +744,7 @@ void ibDialogLinqConstructor::OnBeginDrag(wxTreeEvent& event)
 	drag.DoDragDrop(wxDrag_CopyOnly);
 }
 
-void ibDialogLinqConstructor::FillFields(wxTreeCtrl* tree, const wxTreeItemId& item, const wxString& expression, const ibProbe& row)
+void ibDialogLinqConstructor::FillFields(ibTreeCtrl* tree, const wxTreeItemId& item, const wxString& expression, const ibProbe& row)
 {
 	const int fieldIcon = IconIndex(tree, wxT("field"), [] { return ibValue::GetIconGroup(); });
 	for (const wxString& field : row.m_names)
@@ -762,7 +763,7 @@ void ibDialogLinqConstructor::FillFields(wxTreeCtrl* tree, const wxTreeItemId& i
 
 void ibDialogLinqConstructor::OnExpanding(wxTreeEvent& event)
 {
-	wxTreeCtrl* tree = wxDynamicCast(event.GetEventObject(), wxTreeCtrl);
+	ibTreeCtrl* tree = wxDynamicCast(event.GetEventObject(), ibTreeCtrl);
 	const wxTreeItemId item = event.GetItem();
 	ibLinqNode* node = NodeOf(tree, item);
 	if (node == nullptr || node->m_loaded)
@@ -817,7 +818,7 @@ void ibDialogLinqConstructor::OnExpanding(wxTreeEvent& event)
 		tree->SetItemHasChildren(item, false);
 }
 
-wxTreeCtrl* ibDialogLinqConstructor::CurrentTree() const
+ibTreeCtrl* ibDialogLinqConstructor::CurrentTree() const
 {
 	const int page = m_notebook != nullptr ? m_notebook->GetSelection() : wxNOT_FOUND;
 	return page >= 0 && (size_t)page < m_pageTrees.size() ? m_pageTrees[page] : nullptr;
@@ -825,7 +826,7 @@ wxTreeCtrl* ibDialogLinqConstructor::CurrentTree() const
 
 void ibDialogLinqConstructor::OnActivated(wxTreeEvent& event)
 {
-	wxTreeCtrl* tree = wxDynamicCast(event.GetEventObject(), wxTreeCtrl);
+	ibTreeCtrl* tree = wxDynamicCast(event.GetEventObject(), ibTreeCtrl);
 	ibLinqNode* node = NodeOf(tree, event.GetItem());
 	if (node == nullptr) {
 		event.Skip();
@@ -861,14 +862,14 @@ void ibDialogLinqConstructor::OnActivated(wxTreeEvent& event)
 // ⭐ ON THE AUTHOR'S RESPONSIBILITY: a field of a source whose rows the walk cannot describe is written
 // in by name. It lands in the tree like any other field and is used the same way; nothing here can
 // check it, and the compiler's verdict under the block is what does.
-void ibDialogLinqConstructor::WriteFieldByHand(wxTreeCtrl* tree, const wxTreeItemId& hint)
+void ibDialogLinqConstructor::WriteFieldByHand(ibTreeCtrl* tree, const wxTreeItemId& hint)
 {
 	const wxTreeItemId source = tree->GetItemParent(hint);
 	ibLinqNode* node = NodeOf(tree, hint);
 	if (!source.IsOk() || node == nullptr)
 		return;
 
-	const wxString name = wxString(wxGetTextFromUser(
+	const wxString name = wxString(ibGetTextFromUser(
 		_("The field's name, as it is written after a dot. The constructor cannot check it - the compiler's verdict under the block will."),
 		GetTitle(), wxEmptyString, this)).Trim(true).Trim(false);
 	if (name.IsEmpty())
@@ -886,7 +887,7 @@ void ibDialogLinqConstructor::WriteFieldByHand(wxTreeCtrl* tree, const wxTreeIte
 
 void ibDialogLinqConstructor::AddSelectedAsSource(bool join)
 {
-	wxTreeCtrl* tree = CurrentTree();
+	ibTreeCtrl* tree = CurrentTree();
 	const wxTreeItemId item = tree != nullptr ? tree->GetSelection() : wxTreeItemId();
 	ibLinqNode* node = NodeOf(tree, item);
 	if (node == nullptr)
@@ -912,7 +913,7 @@ wxString ibDialogLinqConstructor::QualifiedField(const wxString& sourceExpressio
 
 void ibDialogLinqConstructor::AddSelectedAsField()
 {
-	wxTreeCtrl* tree = CurrentTree();
+	ibTreeCtrl* tree = CurrentTree();
 	const wxTreeItemId item = tree != nullptr ? tree->GetSelection() : wxTreeItemId();
 	ibLinqNode* node = NodeOf(tree, item);
 	if (node == nullptr) {
@@ -961,7 +962,7 @@ void ibDialogLinqConstructor::AddSelectedAsField()
 
 void ibDialogLinqConstructor::AddSelectedToCondition()
 {
-	wxTreeCtrl* tree = CurrentTree();
+	ibTreeCtrl* tree = CurrentTree();
 	ibLinqNode* node = NodeOf(tree, tree != nullptr ? tree->GetSelection() : wxTreeItemId());
 	if (node == nullptr)
 		return;
@@ -995,7 +996,7 @@ void ibDialogLinqConstructor::AddSelectedToCondition()
 
 bool ibDialogLinqConstructor::SelectedField(wxString& expression, wxString& name)
 {
-	wxTreeCtrl* tree = CurrentTree();
+	ibTreeCtrl* tree = CurrentTree();
 	ibLinqNode* node = NodeOf(tree, tree != nullptr ? tree->GetSelection() : wxTreeItemId());
 	if (node == nullptr || node->m_kind != ibNodeKind::Field) {
 		wxBell();
@@ -1084,7 +1085,7 @@ void ibDialogLinqConstructor::AddSelectedAsTotal()
 
 void ibDialogLinqConstructor::AddSelectedToOrder()
 {
-	wxTreeCtrl* tree = CurrentTree();
+	ibTreeCtrl* tree = CurrentTree();
 	ibLinqNode* node = NodeOf(tree, tree != nullptr ? tree->GetSelection() : wxTreeItemId());
 	if (node == nullptr || node->m_kind != ibNodeKind::Field) {
 		wxBell();
@@ -1443,7 +1444,7 @@ void ibDialogLinqConstructor::OnOk(wxCommandEvent& event)
 {
 	ibString refusal;
 	if (GetBlock(refusal).IsEmpty()) {
-		wxMessageBox(refusal, GetTitle(), wxOK | wxICON_WARNING, this);
+		ibMessageBox(refusal, GetTitle(), wxOK | wxICON_WARNING, this);
 		return;
 	}
 	event.Skip();   // the dialog's own OK: EndModal(wxID_OK)

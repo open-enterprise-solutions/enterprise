@@ -3,7 +3,7 @@
 
 #include <wx/artprov.h>
 #include <wx/xrc/xmlres.h>
-#include <wx/listctrl.h>
+#include "gui/univ/ctrl/listCtrl.h"
 #include <wx/gdicmn.h>
 #include <wx/font.h>
 #include <wx/colour.h>
@@ -11,12 +11,12 @@
 #include <wx/string.h>
 #include <wx/sizer.h>
 #include <wx/statbox.h>
-#include <wx/dialog.h>
+#include "gui/univ/dialog.h"
 
 #include <wx/timer.h>
 #include "core/localization/dictionary.h"   // _() — the dialog's words
 
-class ibDialogDebugItem : public wxDialog {
+class ibDialogDebugItem : public ibDialog {
 public:
 
 	ibDialogDebugItem(wxWindow* parent, wxWindowID id = wxID_ANY,
@@ -37,7 +37,7 @@ protected:
 private:
 
 	wxTimer* m_connectionScanner;
-	wxListCtrl* m_availableList, * m_attachedList;
+	ibListCtrl* m_availableList, * m_attachedList;
 
 	std::vector<std::pair<unsigned short, wxString>> m_listAvailable;
 	std::vector<std::pair<unsigned short, wxString>> m_listAttached;

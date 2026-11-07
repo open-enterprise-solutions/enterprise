@@ -16,6 +16,7 @@
 
 #include "ctrl/frame.h"   // ibViewFetcher
 #include "ctrl/form.h"
+#include "gui/univ/panel.h"
 
 class ibFrontendMainFrame;
 class ibViewCommandBar;
@@ -28,7 +29,7 @@ class ibViewCommandBar;
 //
 // A frame of the same form is drawn into the controls there — a control added, removed, moved or made otherwise laid in
 // among them where it changed (UpdateChildren); another form is built anew.
-class FRMCLIENT_API ibVisualHostClient : public wxPanel {
+class FRMCLIENT_API ibVisualHostClient : public ibPanel {
 public:
 
 	ibVisualHostClient(ibFrontendMainFrame& frame, wxWindow* parent, long long tabId);

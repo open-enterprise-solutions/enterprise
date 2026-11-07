@@ -26,8 +26,10 @@
 // although currently they're only used by wxGrid which is in wxAdv because we
 // plan to use it in wxListCtrl which is in core too in the future
 class ibHeaderGenericCtrlEvent;
+class ibMenu;
 
 #include "gui/gui.h"
+#include "gui/univ/ctrl/control.h"
 
 // ----------------------------------------------------------------------------
 // constants
@@ -60,7 +62,8 @@ const unsigned COL_NONE = (unsigned)-1;
 // ibHeaderGenericCtrlBase defines the interface of a header control
 // ----------------------------------------------------------------------------
 
-class ibHeaderGenericCtrlBase : public wxControl
+// SEAM vs wx: wxControl there - the library's control here
+class ibHeaderGenericCtrlBase : public ibControl
 {
 public:
 	/*
@@ -154,7 +157,7 @@ public:
 	//
 	// the ids of the items corresponding to the columns are consecutive and
 	// start from idColumnsBase
-	void AddColumnsItems(wxMenu& menu, int idColumnsBase = 0);
+	void AddColumnsItems(ibMenu& menu, int idColumnsBase = 0);
 #endif // wxUSE_MENUS
 
 	// show the columns customization dialog and return true if something was

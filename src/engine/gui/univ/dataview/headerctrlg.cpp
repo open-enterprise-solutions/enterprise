@@ -340,7 +340,7 @@ void ibHeaderGenericCtrl::DoScrollHorz(int dx)
 	m_scrollOffset += dx;
 
 	// don't call our own version which calls this function!
-	wxControl::ScrollWindow(dx, 0);
+	ibControl::ScrollWindow(dx, 0);
 }
 
 // ----------------------------------------------------------------------------
@@ -909,6 +909,11 @@ void ibHeaderGenericCtrl::OnMouse(wxMouseEvent& mevent)
 	// do this in advance to allow simply returning if we're not interested,
 	// we'll undo it if we do handle the event below
 	mevent.Skip();
+
+	// SEAM vs wx: a disabled header keeps its window enabled (ibWindow::DoEnable) - the mouse is refused here, as
+	// ibInputConsumer refuses it
+	if (!IsEnabled())
+		return;
 
 	// account for the control displacement
 	const int xPhysical = mevent.GetX();

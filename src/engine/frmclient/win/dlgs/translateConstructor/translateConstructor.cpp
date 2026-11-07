@@ -7,9 +7,9 @@
 #include "frmclient/backend/userInfo.h"   // ibUserInfo::ListLanguages — the configuration's languages, the server's
 #include "core/stringUtils.h"
 
-#include <wx/button.h>
+#include "gui/univ/ctrl/button.h"
 #include <wx/sizer.h>
-#include <wx/stattext.h>
+#include "gui/univ/ctrl/staticText.h"
 
 // What a person reads beside a box: the language's name and its code, or the code alone when that is
 // all there is.
@@ -22,7 +22,7 @@ static wxString LanguageLabel(const wxString& code, const wxString& name)
 
 ibDialogTranslateConstructor::ibDialogTranslateConstructor(wxWindow* parent, const wxString& title,
 	const ibTranslateString& text, const ibMetaData* metaData, bool readOnly, int maxLength, const ibBoxEditor& boxEditor)
-	: wxDialog(parent, wxID_ANY, title, wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
+	: ibDialog(parent, wxID_ANY, title, wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
 	m_original(text)
 {
 	// The configuration's languages, in its own order — the server's (an extension's are its owner's).
@@ -51,8 +51,8 @@ ibDialogTranslateConstructor::ibDialogTranslateConstructor(wxWindow* parent, con
 	// each grid takes as much of the height as it has rows (below), so a box in the second grid grows
 	// exactly like one in the first.
 	const auto addRow = [&](wxFlexGridSizer* grid, const wxString& code, const wxString& label) {
-		grid->Add(new wxStaticText(this, wxID_ANY, label), wxSizerFlags().Border(wxTOP, FromDIP(3)));
-		wxTextCtrl* box = new wxTextCtrl(this, wxID_ANY, m_original.FindTranslate(code),
+		grid->Add(new ibStaticText(this, wxID_ANY, label), wxSizerFlags().Border(wxTOP, FromDIP(3)));
+		ibTextCtrl* box = new ibTextCtrl(this, wxID_ANY, m_original.FindTranslate(code),
 			wxDefaultPosition, FromDIP(wxSize(360, 44)), boxStyle);
 		if (maxLength > 0)
 			box->SetMaxLength(maxLength);
@@ -60,7 +60,7 @@ ibDialogTranslateConstructor::ibDialogTranslateConstructor(wxWindow* parent, con
 			// The box and its `...` share the one cell the box had, so the grid keeps its two columns.
 			wxBoxSizer* cell = new wxBoxSizer(wxHORIZONTAL);
 			cell->Add(box, wxSizerFlags(1).Expand());
-			wxButton* edit = new wxButton(this, wxID_ANY, wxT("..."), wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+			ibButton* edit = new ibButton(this, wxID_ANY, wxT("..."), wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
 			edit->Bind(wxEVT_BUTTON, [this, box, label, boxEditor](wxCommandEvent&) {
 				wxString boxText = box->GetValue();
 				if (boxEditor(this, label, boxText))
@@ -92,7 +92,7 @@ ibDialogTranslateConstructor::ibDialogTranslateConstructor(wxWindow* parent, con
 		if (isLanguage(entry.m_code))
 			continue;
 		if (other == nullptr) {
-			top->Add(new wxStaticText(this, wxID_ANY, hasConfiguration
+			top->Add(new ibStaticText(this, wxID_ANY, hasConfiguration
 					? _("Also in this text, for codes this configuration has no language for. They are kept:")
 					: _("Also in this text:")),
 				wxSizerFlags().Border(wxLEFT | wxRIGHT, gap * 2));
@@ -117,7 +117,7 @@ ibDialogTranslateConstructor::ibDialogTranslateConstructor(wxWindow* parent, con
 	// or, when none is, to the language in force.
 	Bind(wxEVT_INIT_DIALOG, [this](wxInitDialogEvent& event) {
 		event.Skip();
-		wxTextCtrl* focus = nullptr;
+		ibTextCtrl* focus = nullptr;
 		for (const auto& box : m_boxes) {
 			if (box.second->IsEmpty()) { focus = box.second; break; }
 		}

@@ -39,10 +39,11 @@
     #include "wx/filedlg.h"
     #include "wx/intl.h"
     #include "wx/log.h"
-    #include "wx/msgdlg.h"
     #include "wx/mdi.h"
-    #include "wx/choicdlg.h"
 #endif
+
+#include "gui/univ/choiceDialog.h"   // ibGetSingleChoiceData — a document's view, when it has several
+#include "gui/univ/messageDialog.h"  // ibMessageBox — save the changes?
 
 #if wxUSE_PRINTING_ARCHITECTURE
     #include "wx/prntbase.h"
@@ -75,7 +76,7 @@
 #include <algorithm>
 
 // OES — unified modal routing: both desktop and web implement
-// ibBackendDocFrame::ShowModalMessage. Desktop forwards to wxMessageBox
+// ibBackendDocFrame::ShowModalMessage. Desktop forwards to ibMessageBox
 // (with frame as parent); web waits in the session's pool (Await) + emits
 // the modal via /session, answered through /modal-reply. Replaces the per-
 // callsite wxMessageDialog / wxMessageBox in OnSaveModified / OnSave-
@@ -146,6 +147,12 @@ ibFrontendDocument::~ibFrontendDocument()
 
     if ( m_documentParent )
         m_documentParent->m_childDocuments.remove(this);
+
+    // …and its own let go of it. A document goes without Close too — with its last view, a form's window deleted with
+    // the modal it is over (~ibDialogDocChildFrame) — and the forms it owns kept it for their parent: the next event of
+    // theirs asked the freed one for its manager (the list's settings closed with forms over them, the dump of 2026-11-07).
+    for ( ibFrontendDocument* const childDoc : m_childDocuments )
+        childDoc->m_documentParent = nullptr;
 
     // Not safe to do here, since it'll invoke virtual view functions
     // expecting to see valid derived objects: and by the time we get here,
@@ -524,7 +531,7 @@ bool ibFrontendDocument::Revert()
     // top-window returns wxOK silently — close enough for revert).
     if ( wxWindow* const frame = wxTheApp->GetTopWindow() )
     {
-        const int rc = wxMessageBox(
+        const int rc = ibMessageBox(
             _("Discard changes and reload the last saved version?"),
             wxTheApp ? wxTheApp->GetAppDisplayName() : wxString(),
             wxYES_NO | wxCANCEL | wxICON_QUESTION);
@@ -579,7 +586,7 @@ bool ibFrontendDocument::OnSaveModified()
     if ( IsModified() )
     {
         // Unified modal — frame->ShowModalMessage works on both builds.
-        // Desktop forwards to wxMessageBox; web routes via the modal
+        // Desktop forwards to ibMessageBox; web routes via the modal
         // queue + /modal-reply round-trip. Returns the wx button code.
         // Label customisation (Save/Discard/Don't close) was desktop-
         // wxMessageDialog-specific and is dropped in this unified path;
@@ -589,7 +596,7 @@ bool ibFrontendDocument::OnSaveModified()
         if ( !frame )
             return true;   // no frame → no prompt → treat as "ok to close"
 
-        const int rc = wxMessageBox(
+        const int rc = ibMessageBox(
             ibString::Format(_("Do you want to save changes to %s?"),
                              GetUserReadableName()),
             wxTheApp ? wxTheApp->GetAppDisplayName() : wxString(),
@@ -619,7 +626,7 @@ void ibFrontendDocument::OnSaveBeforeForceClose()
     {
         const wxString caption = wxTheApp ? wxTheApp->GetAppDisplayName()
                                           : wxString();
-        const int rc = wxMessageBox(
+        const int rc = ibMessageBox(
             ibString::Format(
                 _("Do you want to save changes to %s before closing it?"),
                 GetUserReadableName()),
@@ -629,7 +636,7 @@ void ibFrontendDocument::OnSaveBeforeForceClose()
         {
             while ( !Save() )
             {
-                const int retry = wxMessageBox(
+                const int retry = ibMessageBox(
                     ibString::Format(
                         _("Saving %s failed, would you like to retry?"),
                         GetUserReadableName()),
@@ -1223,7 +1230,7 @@ void ibFrontendDocManager::OnMRUFileNotExist(unsigned n, const wxString& filenam
 static void ShowNothingToPrint()
 {
     if (wxWindow* const frame = wxTheApp->GetTopWindow())
-        wxMessageBox(
+        ibMessageBox(
             _("There is nothing here to print. In a form with several tables, put the cursor in the one to print."),
             _("Print"), wxOK | wxICON_INFORMATION);
 }
@@ -1889,7 +1896,7 @@ ibFrontendDocTemplate *ibFrontendDocManager::SelectDocumentPath(ibFrontendDocTem
             else
                 msgTitle = wxString(_("File error"));
 
-            wxMessageBox(_("Sorry, could not open this file."),
+            ibMessageBox(_("Sorry, could not open this file."),
                          msgTitle,
                          wxOK | wxICON_EXCLAMATION | wxCENTRE);
 
@@ -1923,7 +1930,7 @@ ibFrontendDocTemplate *ibFrontendDocManager::SelectDocumentPath(ibFrontendDocTem
             // Since we do not add files with non-default extensions to the
             // file history this can only happen if the application changes the
             // allowed templates in runtime.
-            wxMessageBox(_("Sorry, the format for this file is unknown."),
+            ibMessageBox(_("Sorry, the format for this file is unknown."),
                          _("Open File"),
                          wxOK | wxICON_EXCLAMATION | wxCENTRE);
         }
@@ -2070,7 +2077,7 @@ ibFrontendDocTemplate *ibFrontendDocManager::SelectViewType(ibFrontendDocTemplat
             break;
 
         default:
-            theTemplate = (ibFrontendDocTemplate *)wxGetSingleChoiceData
+            theTemplate = (ibFrontendDocTemplate *)ibGetSingleChoiceData
                           (
                             _("Select a document view"),
                             _("Views"),

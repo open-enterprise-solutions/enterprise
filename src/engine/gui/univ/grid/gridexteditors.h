@@ -16,6 +16,10 @@
 #if wxUSE_GRID
 
 #include <wx/scopedptr.h>
+#include "gui/univ/ctrl/textCtrl.h"
+#include "gui/univ/ctrl/checkBox.h"
+#include "gui/univ/ctrl/comboBox.h"
+#include "gui/univ/ctrl/spinCtrl.h"
 
 class ibGridCellEditorEvtHandler : public wxEvtHandler
 {
@@ -93,7 +97,7 @@ public:
 	virtual wxString GetValue() const wxOVERRIDE;
 
 protected:
-	wxTextCtrl* Text() const { return (wxTextCtrl*)m_control; }
+	ibTextCtrl* Text() const { return (ibTextCtrl*)m_control; }
 
 	// parts of our virtual functions reused by the derived classes
 	void DoCreate(wxWindow* parent, wxWindowID id, wxEvtHandler* evtHandler,
@@ -159,7 +163,7 @@ public:
 
 protected:
 #if wxUSE_SPINCTRL
-	wxSpinCtrl* Spin() const { return (wxSpinCtrl*)m_control; }
+	ibSpinCtrl* Spin() const { return (ibSpinCtrl*)m_control; }
 #endif
 
 	// if HasRange(), we use wxSpinCtrl - otherwise wxTextCtrl
@@ -330,7 +334,7 @@ public:
 	static bool IsTrueValue(const wxString& value);
 
 protected:
-	wxCheckBox* CBox() const { return (wxCheckBox*)m_control; }
+	ibCheckBox* CBox() const { return (ibCheckBox*)m_control; }
 
 private:
 	// These functions modify or use m_value.
@@ -400,7 +404,7 @@ public:
 	virtual wxString GetValue() const wxOVERRIDE;
 
 protected:
-	wxComboBox* Combo() const { return (wxComboBox*)m_control; }
+	ibComboBox* Combo() const { return (ibComboBox*)m_control; }
 
 	void OnComboCloseUp(wxCommandEvent& evt);
 

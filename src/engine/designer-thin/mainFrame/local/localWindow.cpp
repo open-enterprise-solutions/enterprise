@@ -17,7 +17,7 @@ namespace {
 // can draw off-screen without a background-erase flash.
 class ibListRedrawLock {
 public:
-	explicit ibListRedrawLock(wxListCtrl* ctrl)
+	explicit ibListRedrawLock(ibListCtrl* ctrl)
 		: m_ctrl(ctrl),
 		m_hwnd(static_cast<HWND>(ctrl->GetHWND())),
 		m_header(m_hwnd ? reinterpret_cast<HWND>(::SendMessageW(m_hwnd, LVM_GETHEADER, 0, 0)) : nullptr)
@@ -33,14 +33,14 @@ public:
 	ibListRedrawLock(const ibListRedrawLock&) = delete;
 	ibListRedrawLock& operator=(const ibListRedrawLock&) = delete;
 private:
-	wxListCtrl* m_ctrl;
+	ibListCtrl* m_ctrl;
 	HWND m_hwnd;
 	HWND m_header;
 };
 } // namespace
 #endif
 
-wxBEGIN_EVENT_TABLE(ibLocalWindow, wxPanel)
+wxBEGIN_EVENT_TABLE(ibLocalWindow, ibPanel)
 EVT_SIZE(ibLocalWindow::OnSize)
 wxEND_EVENT_TABLE()
 
@@ -49,7 +49,7 @@ wxEND_EVENT_TABLE()
 //////////////////////////////////////////////////////////////////////
 
 ibLocalWindow::ibLocalWindow(wxWindow* parent, int id) :
-	wxPanel(parent, id), m_treeCtrl(new wxListCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_REPORT))
+	ibPanel(parent, id), m_treeCtrl(new ibListCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_REPORT))
 {
 	// Card-style depth — panel powder-blue, list cream (matches editor).
 	this->SetBackgroundColour(wxColour(184, 201, 212));   // #B8C9D4 powder-blue panel

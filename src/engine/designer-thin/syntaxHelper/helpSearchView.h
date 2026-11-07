@@ -1,7 +1,7 @@
 ﻿/////////////////////////////////////////////////////////////////////////////
 // "Search" tab — full-text search.
 //
-// wxSearchCtrl on top, "Found: N" badge underneath, wxListBox of
+// ibSearchCtrl on top, "Found: N" badge underneath, ibListBox of
 // ranked results. Drives corpus->SearchText.
 /////////////////////////////////////////////////////////////////////////////
 
@@ -10,9 +10,9 @@
 
 #include "designer-thin/syntaxHelper/helpDragSource.h"
 
-#include <wx/panel.h>
-#include <wx/srchctrl.h>
-#include <wx/stattext.h>
+#include "gui/univ/panel.h"
+#include "gui/univ/ctrl/searchCtrl.h"
+#include "gui/univ/ctrl/staticText.h"
 #include <wx/listbox.h>
 
 #include <memory>
@@ -21,7 +21,7 @@
 class ibHelpCorpus;
 class ibHelpPaneView;
 
-class ibHelpSearchView : public wxPanel {
+class ibHelpSearchView : public ibPanel {
 public:
 	ibHelpSearchView(wxWindow* parent, ibHelpPaneView* pane);
 
@@ -29,9 +29,9 @@ public:
 
 private:
 	ibHelpPaneView* m_pane   = nullptr;
-	wxSearchCtrl*   m_search = nullptr;
-	wxStaticText*   m_badge  = nullptr;
-	wxListBox*      m_list   = nullptr;
+	ibSearchCtrl*   m_search = nullptr;
+	ibStaticText*   m_badge  = nullptr;
+	ibListBox*      m_list   = nullptr;
 
 	std::shared_ptr<const ibHelpCorpus> m_corpus;
 	std::vector<wxString>               m_ids;

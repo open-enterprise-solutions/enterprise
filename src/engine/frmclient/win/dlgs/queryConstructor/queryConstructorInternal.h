@@ -47,12 +47,11 @@
 #include <wx/stattext.h>
 #include <wx/statbox.h>
 #include <wx/button.h>
-#include <wx/msgdlg.h>
-#include <wx/choicdlg.h>
-#include <wx/textdlg.h>   // the totals level's name — a prompt, because the cell would not open   // wxGetSingleChoiceIndex — the fallback when no field is picked in a tree
+#include "gui/univ/choiceDialog.h"   // ibGetSingleChoiceIndex — the fallback when no field is picked in a tree
+#include "gui/univ/textEntryDialog.h"   // ibTextEntryDialog — a table's new name, a prompt
 #include <wx/panel.h>
 #include <wx/settings.h>
-#include <wx/splitter.h>
+#include "gui/univ/splitterWindow.h"   // ibSplitterWindow — the tabs' panes
 #include <wx/toolbar.h>
 #include <wx/artprov.h>
 #include <wx/dnd.h>
@@ -69,6 +68,7 @@
 #include <functional>
 #include <map>
 #include <set>
+#include "gui/univ/ctrl/comboBox.h"
 
 // The window's own small vocabulary - names it uses everywhere and nobody else needs.
 namespace queryctor {
@@ -210,14 +210,14 @@ public:
 		if (!held.IsEmpty() && words.Index(held, false) == wxNOT_FOUND)
 			words.Insert(held, 0);
 
-		wxChoice* editor = new wxChoice(parent, wxID_ANY, rect.GetTopLeft(), rect.GetSize(), words);
+		ibChoice* editor = new ibChoice(parent, wxID_ANY, rect.GetTopLeft(), rect.GetSize(), words);
 		editor->SetStringSelection(held);
 		return editor;
 	}
 
 	bool GetValueFromEditorCtrl(wxWindow* editor, ibVariant& value) override
 	{
-		wxChoice* choice = dynamic_cast<wxChoice*>(editor);
+		ibChoice* choice = dynamic_cast<ibChoice*>(editor);
 		if (choice == nullptr)
 			return false;
 		value = choice->GetStringSelection();
@@ -280,7 +280,7 @@ public:
 
 	wxWindow* CreateEditorCtrl(wxWindow* parent, wxRect rect, const ibVariant& value) override
 	{
-		wxPanel* host = new wxPanel(parent, wxID_ANY, rect.GetTopLeft(), rect.GetSize());
+		ibPanel* host = new ibPanel(parent, wxID_ANY, rect.GetTopLeft(), rect.GetSize());
 		wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
 
 		// ⭐ TWO SHAPES, ONE CELL — and the ROW decides which. Free, it is an editable box with the
@@ -304,7 +304,7 @@ public:
 		if (!held.IsEmpty() && words.Index(held, false) == wxNOT_FOUND)
 			words.Insert(held, 0);
 
-		wxComboBox* combo = new wxComboBox(host, wxID_ANY, held,
+		ibComboBox* combo = new ibComboBox(host, wxID_ANY, held,
 			wxDefaultPosition, wxDefaultSize, words, freeform ? 0 : wxCB_READONLY);
 		if (!freeform)
 			combo->SetStringSelection(held);   // a read-only box shows its SELECTION, not its text
@@ -313,7 +313,7 @@ public:
 		// THE DOOR OUT OF THE LIST, right next to it. Square and narrow: it is a way through, not a
 		// verb of its own.
 		if (freeform) {
-			wxButton* more = new wxButton(host, wxID_ANY, wxT("..."), wxDefaultPosition,
+			ibButton* more = new ibButton(host, wxID_ANY, wxT("..."), wxDefaultPosition,
 				host->FromDIP(wxSize(24, 20)));
 			more->Bind(wxEVT_BUTTON, [this, combo](wxCommandEvent&) {
 				wxString text = combo->GetValue();
@@ -333,7 +333,7 @@ public:
 		if (editor == nullptr)
 			return false;
 		for (wxWindow* child : editor->GetChildren())
-			if (wxComboBox* combo = dynamic_cast<wxComboBox*>(child)) {
+			if (ibComboBox* combo = dynamic_cast<ibComboBox*>(child)) {
 				// ⚠ A CLOSED BOX WITH NOTHING SELECTED WRITES NOTHING. Refusing here is the second
 				// half of the guard above: even if a list somehow arrives without the held value in
 				// it, the cell declines to answer rather than answering "empty" — which downstream

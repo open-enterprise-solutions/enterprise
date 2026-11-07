@@ -9,7 +9,7 @@
 #include <wx/filename.h>
 #include <wx/filedlg.h>
 #include <wx/dirdlg.h>
-#include <wx/msgdlg.h>
+#include "gui/univ/messageDialog.h"
 
 //********************************************************************************
 //*                                 Debug commands                               *
@@ -33,7 +33,7 @@ static bool SaveBeforeChildLaunch(wxWindow* parent, const ibConfigurationTree* m
 {
 	if (metaWindow == nullptr || !metaWindow->IsEdited())
 		return true;
-	const int ans = wxMessageBox(
+	const int ans = ibMessageBox(
 		ibString::Format(_("Configuration '%s' has been changed.\nDo you want to save?"),
 			metaWindow->GetConfigName()),
 		wxTheApp->GetAppDisplayName(),
@@ -49,7 +49,7 @@ static bool SaveBeforeChildLaunch(wxWindow* parent, const ibConfigurationTree* m
 void ibFrontendMainFrameDesigner::OnStartDebug(wxCommandEvent& WXUNUSED(event))
 {
 	if (debugClient->HasConnections()) {
-		wxMessageBox(_("Debugger is already running!"));
+		ibMessageBox(_("Debugger is already running!"));
 		return;
 	}
 
@@ -77,7 +77,7 @@ static void LaunchWebDebug(wxWindow* parent, bool withDebug)
 	// is looked for as the thin client's is.
 	if (appData->RunApplication(wxT("webserver"),
 			/*searchDebug=*/withDebug, /*useManifest=*/true) == 0) {
-		wxMessageBox(_("Failed to start webserver"),
+		ibMessageBox(_("Failed to start webserver"),
 			wxTheApp->GetAppDisplayName(), wxOK | wxICON_ERROR, parent);
 	}
 	else if (withDebug) {
@@ -88,7 +88,7 @@ static void LaunchWebDebug(wxWindow* parent, bool withDebug)
 void ibFrontendMainFrameDesigner::OnStartDebugWeb(wxCommandEvent& WXUNUSED(event))
 {
 	if (debugClient->HasConnections()) {
-		wxMessageBox(_("Debugger is already running!"));
+		ibMessageBox(_("Debugger is already running!"));
 		return;
 	}
 	if (!SaveBeforeChildLaunch(this, m_metaWindow))
@@ -146,7 +146,7 @@ void ibFrontendMainFrameDesigner::OnUpdateConfiguration(wxCommandEvent& WXUNUSED
 	// too — one road for the doing. What differs is only who answers the questions, and a person
 	// answers them in dialogs.
 	if (debugClient->HasConnections()) {
-		if (wxMessageBox(
+		if (ibMessageBox(
 			_("To update the database configuration you need stop debugging.\nDo you want to continue?"), wxTheApp->GetAppDisplayName(),
 			wxYES_NO | wxCENTRE | wxICON_INFORMATION, this) == wxNO) {
 			return;
@@ -251,7 +251,7 @@ void ibFrontendMainFrameDesigner::OnConfiguration(wxCommandEvent& event)
 			// A configuration just read from a FILE lives nowhere but in the server's session, which is what makes the
 			// question worth asking here (ibMetaData::IsEdited).
 			if (m_metaWindow->IsEdited()) {
-				if (wxMessageBox(ibString::Format(_("Configuration '%s' has been changed.\nDo you want to save?"),
+				if (ibMessageBox(ibString::Format(_("Configuration '%s' has been changed.\nDo you want to save?"),
 					m_metaWindow->GetConfigName()), wxTheApp->GetAppDisplayName(), wxYES_NO | wxCENTRE | wxICON_QUESTION, this) == wxYES) {
 					OnUpdateConfiguration(event);
 				}
@@ -266,7 +266,7 @@ void ibFrontendMainFrameDesigner::OnConfiguration(wxCommandEvent& event)
 			return;     // the user changed idea...
 
 		if (m_metaWindow->SaveConfigToFile(saveFileDialog.GetPath())) {
-			wxMessageBox(_("Successfully unloaded to: ") + saveFileDialog.GetPath());
+			ibMessageBox(_("Successfully unloaded to: ") + saveFileDialog.GetPath());
 		}
 	}
 	// …and as a directory of files: read and written on this computer, so what refuses here (a directory that is no
@@ -280,14 +280,14 @@ void ibFrontendMainFrameDesigner::OnConfiguration(wxCommandEvent& event)
 
 		try {
 			if (m_metaWindow->LoadConfigFromFiles(dirDialog.GetPath()) && m_metaWindow->IsEdited()) {
-				if (wxMessageBox(ibString::Format(_("Configuration '%s' has been changed.\nDo you want to save?"),
+				if (ibMessageBox(ibString::Format(_("Configuration '%s' has been changed.\nDo you want to save?"),
 					m_metaWindow->GetConfigName()), wxTheApp->GetAppDisplayName(), wxYES_NO | wxCENTRE | wxICON_QUESTION, this) == wxYES) {
 					OnUpdateConfiguration(event);
 				}
 			}
 		}
 		catch (const ibCoreException& err) {
-			wxMessageBox(err.GetErrorDescription(), wxTheApp->GetAppDisplayName(), wxOK | wxICON_ERROR, this);
+			ibMessageBox(err.GetErrorDescription(), wxTheApp->GetAppDisplayName(), wxOK | wxICON_ERROR, this);
 		}
 	}
 	else if (wxID_DESIGNER_CONFIGURATION_SAVE_TO_FILES == event.GetId())
@@ -298,10 +298,10 @@ void ibFrontendMainFrameDesigner::OnConfiguration(wxCommandEvent& event)
 
 		try {
 			if (m_metaWindow->SaveConfigToFiles(dirDialog.GetPath()))
-				wxMessageBox(_("Successfully unloaded to: ") + dirDialog.GetPath());
+				ibMessageBox(_("Successfully unloaded to: ") + dirDialog.GetPath());
 		}
 		catch (const ibCoreException& err) {
-			wxMessageBox(err.GetErrorDescription(), wxTheApp->GetAppDisplayName(), wxOK | wxICON_ERROR, this);
+			ibMessageBox(err.GetErrorDescription(), wxTheApp->GetAppDisplayName(), wxOK | wxICON_ERROR, this);
 		}
 	}
 	else if (wxID_DESIGNER_CONFIGURATION_COMPARE_FILE == event.GetId())
@@ -316,13 +316,13 @@ void ibFrontendMainFrameDesigner::OnConfiguration(wxCommandEvent& event)
 		ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
 		wxString fileId;
 		if (frame == nullptr || !frame->UploadFile(openFileDialog.GetPath(), fileId)) {
-			wxMessageBox(_("Failed to upload configuration file."),
+			ibMessageBox(_("Failed to upload configuration file."),
 				wxTheApp->GetAppDisplayName(), wxOK | wxICON_ERROR, this);
 			return;
 		}
 		ibProtocolNode answer;
 		if (!CallCompareBuild(ibProtocol::ibSchema::ibConfigCompare::ibMode::File, fileId, wxString(), answer)) {
-			wxMessageBox(_("Failed to compare with the configuration file."),
+			ibMessageBox(_("Failed to compare with the configuration file."),
 				wxTheApp->GetAppDisplayName(), wxOK | wxICON_ERROR, this);
 			return;
 		}
@@ -336,7 +336,7 @@ void ibFrontendMainFrameDesigner::OnConfiguration(wxCommandEvent& event)
 		ibProtocolNode answer;
 		if (!CallCompareBuild(ibProtocol::ibSchema::ibConfigCompare::ibMode::Database,
 				wxString(), wxString(), answer)) {
-			wxMessageBox(_("Database configuration is not available."),
+			ibMessageBox(_("Database configuration is not available."),
 				wxTheApp->GetAppDisplayName(), wxOK | wxICON_ERROR, this);
 			return;
 		}
@@ -363,14 +363,14 @@ void ibFrontendMainFrameDesigner::OnConfiguration(wxCommandEvent& event)
 		if (frame == nullptr
 			|| !frame->UploadFile(dlgA.GetPath(), fileId)
 			|| !frame->UploadFile(dlgB.GetPath(), file2Id)) {
-			wxMessageBox(_("Failed to upload one of the configuration files."),
+			ibMessageBox(_("Failed to upload one of the configuration files."),
 				wxTheApp->GetAppDisplayName(), wxOK | wxICON_ERROR, this);
 			return;
 		}
 		ibProtocolNode answer;
 		if (!CallCompareBuild(ibProtocol::ibSchema::ibConfigCompare::ibMode::TwoFiles,
 				fileId, file2Id, answer)) {
-			wxMessageBox(_("Failed to load one of the configuration files."),
+			ibMessageBox(_("Failed to load one of the configuration files."),
 				wxTheApp->GetAppDisplayName(), wxOK | wxICON_ERROR, this);
 			return;
 		}

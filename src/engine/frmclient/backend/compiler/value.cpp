@@ -6,6 +6,7 @@
 #include "frmclient/backend/system/value/composition/valueComposerField.h"   // a field of a composition, read back as one
 #include "frmclient/backend/system/value/valueColour.h"   // …an appearance's colour
 #include "frmclient/backend/system/value/valueFont.h"     // …and its font
+#include "frmclient/backend/system/value/valueSpreadsheet.h"   // …and its alignment, the sheet's enumeration
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/win/picture.h"
 #include "protocol/protocol.h"
@@ -52,6 +53,11 @@ ibValue ibValue::FromNode(const ibDataNode& node)
 		return ReadObject<ibValueColour>(node);
 	if (clsid == ibValueFont().GetClassType())
 		return ReadObject<ibValueFont>(node);
+	// …and its alignment, a member of the client's own enumeration, by its number (ibValueEnumerationVariant): as a type
+	// of the server's it read back with no word, and the appearance's cell showed nothing for the alignment chosen
+	if (clsid == ibValueEnumSpreadsheetHorizontalAlignment().GetClassType())
+		return CreateEnumObject<ibValueEnumSpreadsheetHorizontalAlignment>(
+			static_cast<ibSpreadsheetAlignmentHorz>(node.GetValue<std::int32_t>(kValueFieldData)));
 
 	// A type of the server's — kept as it was written, to be given back.
 	return ibValue(new ibValueSerializable(clsid, node,

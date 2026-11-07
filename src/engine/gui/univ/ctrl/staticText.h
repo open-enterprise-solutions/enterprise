@@ -59,6 +59,10 @@ public:
 
     virtual void SetLabel(const wxString& label) override;
 
+    // wxStaticTextBase's: wrap the label so that each of its lines becomes at most of the given width (if it is
+    // possible to break it at words boundaries)
+    void Wrap(int width);
+
     virtual bool IsFocused() const override { return false; }
 
     // SEAM vs univ: a text takes no focus - wxStaticTextBase said so, lost with the rebase onto ibControl; a link does:

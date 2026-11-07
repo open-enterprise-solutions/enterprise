@@ -1,11 +1,12 @@
 #include "docViewHomePage.h"
 
-#include <wx/panel.h>
+#include "gui/univ/panel.h"
 #include <wx/sizer.h>
-#include <wx/splitter.h>
-#include <wx/statbmp.h>
-#include <wx/statline.h>
-#include <wx/stattext.h>
+#include <wx/wupdlock.h>   // wxWindowUpdateLocker — the page held still while it is built
+#include "gui/univ/splitterWindow.h"
+#include "gui/univ/ctrl/staticBitmap.h"
+#include "gui/univ/ctrl/staticLine.h"
+#include "gui/univ/ctrl/staticText.h"
 
 #include <memory>   // std::make_shared — a sash placed once
 
@@ -32,7 +33,7 @@ long long TotalWeight(const std::vector<ibProtocolNode>& cells, size_t from)
 // Place a splitter's sash at `ratio` of its size ONCE, on the first layout that gives it a real size — the tree is
 // built before the page is shown, so the size is not known yet. The gravity keeps the ratio through later resizes; the
 // one-shot flag keeps a person's drag.
-void ApplySashRatio(wxSplitterWindow* splitter, double ratio)
+void ApplySashRatio(ibSplitterWindow* splitter, double ratio)
 {
 	splitter->SetSashGravity(ratio);
 
@@ -93,11 +94,18 @@ void ibHomePageView::Draw(const ibProtocolNode& view, const ibProtocolNode& patc
 	if (columns.empty())
 		return;
 
+	// Held still while it is built and its forms drawn the first time, and painted whole when let go: laid out pane by
+	// pane and form by form (each form holds only itself still), it was seen drawn piece by piece. A patch after it
+	// changes a form, which holds itself still.
+	wxWindowUpdateLocker freeze;
+
 	// ⭐ LAID OUT ONCE — the server's page reads its workspace and opens its forms as it opens, and keeps them for its
 	// life (frmserver's ibHomePageDocument): every view it draws after has the same columns and the same cells.
 	if (m_workspace == nullptr) {
+		freeze.Lock(m_viewFrame);
+
 		if (columns.size() > 1) {
-			wxSplitterWindow* const splitter = new wxSplitterWindow(m_viewFrame, wxID_ANY,
+			ibSplitterWindow* const splitter = new ibSplitterWindow(m_viewFrame, wxID_ANY,
 				wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_THIN_SASH | wxSP_NOBORDER);
 			splitter->SetMinimumPaneSize(splitter->FromDIP(80));
 			wxWindow* const left = BuildColumn(splitter, columns[0].Children(), 0);
@@ -155,7 +163,7 @@ wxWindow* ibHomePageView::BuildColumn(wxWindow* parent, const std::vector<ibProt
 	if (from + 1 == cells.size())
 		return OpenCell(parent, cells[from]);
 
-	wxSplitterWindow* const splitter = new wxSplitterWindow(parent, wxID_ANY,
+	ibSplitterWindow* const splitter = new ibSplitterWindow(parent, wxID_ANY,
 		wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_THIN_SASH | wxSP_NOBORDER);
 	splitter->SetMinimumPaneSize(splitter->FromDIP(40));
 
@@ -173,7 +181,7 @@ wxWindow* ibHomePageView::OpenCell(wxWindow* parent, const ibProtocolNode& cell)
 {
 	// THE pane — how the page houses one form: its own window, a header saying what lives here, and the form's host
 	// filling the rest.
-	wxPanel* const pane = new wxPanel(parent, wxID_ANY);
+	ibPanel* const pane = new ibPanel(parent, wxID_ANY);
 	wxBoxSizer* const paneSizer = new wxBoxSizer(wxVERTICAL);
 	pane->SetSizer(paneSizer);
 
@@ -190,7 +198,7 @@ wxWindow* ibHomePageView::OpenCell(wxWindow* parent, const ibProtocolNode& cell)
 		// The form is gone or refused to open. The pane still stands — a splitter cannot hold a hole — and says what
 		// happened.
 		paneSizer->AddStretchSpacer();
-		paneSizer->Add(new wxStaticText(pane, wxID_ANY, cell.GetString(ibProtocol::ibView::ibHomePage::Unavailable),
+		paneSizer->Add(new ibStaticText(pane, wxID_ANY, cell.GetString(ibProtocol::ibView::ibHomePage::Unavailable),
 			wxDefaultPosition, wxDefaultSize, wxALIGN_CENTRE_HORIZONTAL), 0, wxEXPAND);
 		paneSizer->AddStretchSpacer();
 	}
@@ -210,7 +218,7 @@ ibVisualHostClient* ibHomePageView::FindVisualHost(wxWindow* window) const
 	return nullptr;
 }
 
-wxStaticText* ibHomePageView::BuildCellHeader(wxWindow* pane, wxSizer* paneSizer, const ibProtocolNode& cell)
+ibStaticText* ibHomePageView::BuildCellHeader(wxWindow* pane, wxSizer* paneSizer, const ibProtocolNode& cell)
 {
 	wxBoxSizer* const headerSizer = new wxBoxSizer(wxHORIZONTAL);
 
@@ -218,13 +226,13 @@ wxStaticText* ibHomePageView::BuildCellHeader(wxWindow* pane, wxSizer* paneSizer
 	// the form's own, or the page's glyph when the form is gone.
 	const wxBitmap icon = ibProtocolPicture(cell, ibProtocol::ibView::ibHomePage::Icon);
 	if (icon.IsOk()) {
-		headerSizer->Add(new wxStaticBitmap(pane, wxID_ANY, icon), 0,
+		headerSizer->Add(new ibStaticBitmap(pane, wxID_ANY, icon), 0,
 			wxALIGN_CENTER_VERTICAL | wxRIGHT, pane->FromDIP(3));
 	}
 
 	// The strip is a LABEL, not a title bar: it must not eat height the form could use. The icon (16px) is the floor, so
 	// the caption is kept a point below the default and every margin around the row is minimal.
-	wxStaticText* const caption = new wxStaticText(pane, wxID_ANY, cell.GetString(ibProtocol::ibView::ibHomePage::Title));
+	ibStaticText* const caption = new ibStaticText(pane, wxID_ANY, cell.GetString(ibProtocol::ibView::ibHomePage::Title));
 	wxFont captionFont = caption->GetFont();
 	captionFont.MakeBold();
 	if (captionFont.GetPointSize() > 7)
@@ -233,7 +241,7 @@ wxStaticText* ibHomePageView::BuildCellHeader(wxWindow* pane, wxSizer* paneSizer
 	headerSizer->Add(caption, 1, wxALIGN_CENTER_VERTICAL);
 
 	paneSizer->Add(headerSizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, pane->FromDIP(2));
-	paneSizer->Add(new wxStaticLine(pane, wxID_ANY), 0, wxEXPAND | wxTOP, pane->FromDIP(1));
+	paneSizer->Add(new ibStaticLine(pane, wxID_ANY), 0, wxEXPAND | wxTOP, pane->FromDIP(1));
 
 	return caption;
 }

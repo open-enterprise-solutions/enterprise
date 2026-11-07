@@ -6,9 +6,10 @@
 #include "gridEditor.h"
 
 #include <wx/activityindicator.h>   // the "composing..." spinner — see ShowComposeState
-#include <wx/stattext.h>
+#include "gui/univ/ctrl/staticText.h"
 
 #include "frmclient/docView/docView.h"
+#include "gui/univ/menu.h"
 
 #include <wx/wupdlock.h>   // wxWindowUpdateLocker — the Freeze/Thaw pair taken as a guard
 
@@ -229,13 +230,13 @@ void ibGridEditor::ShowComposeState(ibProtocol::ibForm::ibSpreadsheet::ibCompose
 		if (state == ibProtocol::ibForm::ibSpreadsheet::ibComposeState::Composed)
 			return;   // nothing built, nothing to hide
 
-		wxWindow* const panel = new wxPanel(this, wxID_ANY);
+		wxWindow* const panel = new ibPanel(this, wxID_ANY);
 		panel->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE));
 
 		wxBoxSizer* const sizer = new wxBoxSizer(wxHORIZONTAL);
 		m_composeSpinner = new wxActivityIndicator(panel);
 		sizer->Add(m_composeSpinner, 0, wxALL | wxALIGN_CENTER_VERTICAL, FromDIP(6));
-		m_composeText = new wxStaticText(panel, wxID_ANY, wxEmptyString);
+		m_composeText = new ibStaticText(panel, wxID_ANY, wxEmptyString);
 		sizer->Add(m_composeText, 0, wxALL | wxALIGN_CENTER_VERTICAL, FromDIP(6));
 		panel->SetSizer(sizer);
 
@@ -374,7 +375,7 @@ void ibGridEditor::OnMouseRightDown(ibGridEvent& event)
 
 	if (m_enableProperty) {
 
-		wxMenuItem* item = nullptr; wxMenu menuPopup;
+		wxMenuItem* item = nullptr; ibMenu menuPopup;
 		item = menuPopup.Append(wxID_COPY, _("Copy"));
 		item->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_COPY, wxART_MENU));
 		item = menuPopup.Append(wxID_PASTE, _("Paste"));

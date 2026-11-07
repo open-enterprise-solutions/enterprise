@@ -60,6 +60,7 @@
 
 // Required for wxIs... functions
 #include <ctype.h>
+#include "gui/univ/messageDialog.h"
 
 const char ibGridNameStr[] = "gridext";
 
@@ -2375,7 +2376,7 @@ wxString ibGridStringTable::GetCornerLabelValue() const
 //////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////
 
-wxBEGIN_EVENT_TABLE(ibGridSubwindow, wxWindow)
+wxBEGIN_EVENT_TABLE(ibGridSubwindow, ibWindow)
 EVT_MOUSE_CAPTURE_LOST(ibGridSubwindow::OnMouseCaptureLost)
 wxEND_EVENT_TABLE()
 
@@ -3228,7 +3229,7 @@ void ibGridWindow::OnFocus(wxFocusEvent& event)
 
 /////////////////////////////////////////////////////////////////////
 
-wxBEGIN_EVENT_TABLE(ibGrid, wxScrolledCanvas)
+wxBEGIN_EVENT_TABLE(ibGrid, wxScrolled<ibWindow>)
 EVT_SIZE(ibGrid::OnSize)
 EVT_DPI_CHANGED(ibGrid::OnDPIChanged)
 EVT_KEY_DOWN(ibGrid::OnKeyDown)
@@ -3239,7 +3240,7 @@ bool ibGrid::Create(wxWindow* parent, wxWindowID id,
 	const wxPoint& pos, const wxSize& size,
 	long style, const wxString& name)
 {
-	if (!wxScrolledCanvas::Create(parent, id, pos, size,
+	if (!wxScrolled<ibWindow>::Create(parent, id, pos, size,
 		style | wxWANTS_CHARS, name))
 		return false;
 
@@ -4489,7 +4490,7 @@ void ibGrid::CalcCellsExposed(const wxRegion& reg,
 
 void ibGrid::PrepareDCFor(wxDC& dc, ibGridWindow* gridWindow)
 {
-	wxScrolledCanvas::PrepareDC(dc);
+	wxScrolled<ibWindow>::PrepareDC(dc);
 
 	wxPoint dcOrigin = dc.GetDeviceOrigin() - GetGridWindowOffset(gridWindow);
 
@@ -6536,7 +6537,7 @@ void ibGrid::Refresh(bool eraseb, const wxRect* rect)
 	if (m_created && ShouldRefresh())
 	{
 		// Refresh to get correct scrolled position:
-		wxScrolledCanvas::Refresh(eraseb, rect);
+		wxScrolled<ibWindow>::Refresh(eraseb, rect);
 
 		if (rect)
 		{
@@ -8895,7 +8896,7 @@ void ibGrid::ForceRefresh()
 
 void ibGrid::DoEnable(bool enable)
 {
-	wxScrolledCanvas::DoEnable(enable);
+	wxScrolled<ibWindow>::DoEnable(enable);
 
 	Refresh(false /* don't erase background */);
 }
@@ -10384,7 +10385,7 @@ void ibGrid::SetRowLabelSize(int width)
 		m_rowLabelWidth = width;
 		InvalidateBestSize();
 		CalcWindowSizes();
-		wxScrolledCanvas::Refresh(true);
+		wxScrolled<ibWindow>::Refresh(true);
 	}
 }
 
@@ -10419,7 +10420,7 @@ void ibGrid::SetColLabelSize(int height)
 		m_colLabelHeight = height;
 		InvalidateBestSize();
 		CalcWindowSizes();
-		wxScrolledCanvas::Refresh(true);
+		wxScrolled<ibWindow>::Refresh(true);
 	}
 }
 
@@ -11758,7 +11759,7 @@ bool ibGrid::MakeRowAreaLabel(ibGridCellArea* rowArea)
 			{
 				if (rowArea != &m_rowAreaAt[idx] && areaLabel == m_rowAreaAt[idx].m_areaLabel)
 				{
-					wxMessageBox(_("Wrong area name!"), _("Grid editor"));
+					ibMessageBox(_("Wrong area name!"), _("Grid editor"));
 					return false;
 				}
 			}
@@ -11792,7 +11793,7 @@ bool ibGrid::MakeRowAreaLabel(ibGridCellArea* rowArea)
 				return true;
 			}
 
-			wxMessageBox(_("Wrong area name!"), _("Grid editor"));
+			ibMessageBox(_("Wrong area name!"), _("Grid editor"));
 		}
 	}
 
@@ -11814,7 +11815,7 @@ bool ibGrid::MakeColAreaLabel(ibGridCellArea* colArea)
 			{
 				if (colArea != &m_colAreaAt[idx] && areaLabel == m_colAreaAt[idx].m_areaLabel)
 				{
-					wxMessageBox(_("Wrong area name!"), _("Grid editor"), wxOK | wxCENTRE, this);
+					ibMessageBox(_("Wrong area name!"), _("Grid editor"), wxOK | wxCENTRE, this);
 					return false;
 				}
 			}
@@ -11848,7 +11849,7 @@ bool ibGrid::MakeColAreaLabel(ibGridCellArea* colArea)
 				return true;
 			}
 
-			wxMessageBox(_("Wrong area name!"), _("Grid editor"), wxOK | wxCENTRE, this);
+			ibMessageBox(_("Wrong area name!"), _("Grid editor"), wxOK | wxCENTRE, this);
 		}
 	}
 

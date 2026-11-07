@@ -14,6 +14,7 @@
 //**********************************************************************************
 
 #include "designer-thin/win/dlg/predefinedEditor.h"
+#include "gui/univ/ctrl/staticBox.h"
 
 void ibConfigurationTree::EditPredefinedValues(ibValueMetaObjectRecordDataHierarchyMutableRef* valueMetaObjectHierarchy)
 {
@@ -68,12 +69,12 @@ void ibMetaTreeBase::CreateToolBar(wxWindow* parent)
 }
 
 ibMetaTreeBase::ibMetaTreeBase(wxWindow* parent, long long tab, ibProtocol::ibView::ibKind kind)
-	: wxPanel(parent, wxID_ANY), m_tab(tab), m_metaView(new ibMetaTreeView(this))
+	: ibPanel(parent, wxID_ANY), m_tab(tab), m_metaView(new ibMetaTreeView(this))
 {
 	const bool configuration = kind == ibProtocol::ibView::ibKind::Configuration;
 
 	// …an external file's toolbar and rows framed in a box, under its header (the desktop's).
-	wxStaticBoxSizer* const treeBox = !configuration ? new wxStaticBoxSizer(new wxStaticBox(this, wxID_ANY, wxT("")), wxVERTICAL) : nullptr;
+	ibStaticBoxSizer* const treeBox = !configuration ? new ibStaticBoxSizer(new ibStaticBox(this, wxID_ANY, wxT("")), wxVERTICAL) : nullptr;
 	wxWindow* const treeParent = treeBox != nullptr ? static_cast<wxWindow*>(treeBox->GetStaticBox()) : this;
 
 	CreateToolBar(treeParent);
@@ -85,7 +86,7 @@ ibMetaTreeBase::ibMetaTreeBase(wxWindow* parent, long long tab, ibProtocol::ibVi
 	this->SetBackgroundColour(wxColour(184, 201, 212));   // #B8C9D4 powder-blue panel
 	//Create main tree
 	// …an external file's root hidden: its groups are the tree (the desktop's).
-	m_metaTreeCtrl = new wxTreeCtrl(treeParent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+	m_metaTreeCtrl = new ibTreeCtrl(treeParent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_NO_LINES | wxTR_TWIST_BUTTONS | (!configuration ? wxTR_HIDE_ROOT : 0));
 	m_metaTreeCtrl->SetBackgroundColour(wxColour(250, 247, 240));  // #FAF7F0 cream tree (matches editor)
 	m_metaTreeCtrl->SetDoubleBuffered(true);
@@ -134,9 +135,9 @@ ibMetaTreeBase::ibMetaTreeBase(wxWindow* parent, long long tab, ibProtocol::ibVi
 
 	// …the search, the configuration's alone (an external file's tree has none — the desktop's).
 	if (configuration) {
-		m_searchTree = new wxSearchCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
-		m_searchTree->Bind(wxEVT_SEARCH, &ibMetaTreeBase::OnStartSearch, this);
-		m_searchTree->Bind(wxEVT_COMMAND_TEXT_UPDATED, &ibMetaTreeBase::OnCancelSearch, this);
+		m_searchTree = new ibSearchCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
+		// the rows found as the text is typed - emptied (the "×" too), the whole tree again
+		m_searchTree->Bind(wxEVT_TEXT, &ibMetaTreeBase::OnStartSearch, this);
 		m_searchTree->ShowCancelButton(true);
 		panelSizer->Add(m_searchTree, 0, wxEXPAND, 1);
 	}

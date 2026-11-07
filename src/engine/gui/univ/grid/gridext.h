@@ -24,6 +24,10 @@
 #endif
 
 #include "gui/gui.h"
+#include "gui/univ/window.h"
+#include "gui/univ/dialog.h"
+#include "gui/univ/ctrl/button.h"
+#include "gui/univ/ctrl/textCtrl.h"
 
 // ----------------------------------------------------------------------------
 // constants
@@ -1236,18 +1240,18 @@ struct ibGridCellGroup {
 // ibGridDialogInputArea: dialog area of a cell in the grid
 // ----------------------------------------------------------------------------
 
-class ibGridDialogInputArea : public wxDialog {
+class ibGridDialogInputArea : public ibDialog {
 public:
 
 	ibGridDialogInputArea(wxWindow* parent, wxWindowID id = wxID_ANY)
-		: wxDialog(parent, id, _("Identifier area"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE)
+		: ibDialog(parent, id, _("Identifier area"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE)
 	{
-		m_areaInput = new wxTextCtrl(this, wxID_ANY);
+		m_areaInput = new ibTextCtrl(this, wxID_ANY);
 
-		m_sdbSizer = new wxStdDialogButtonSizer();
-		m_sdbSizerOK = new wxButton(this, wxID_OK);
+		m_sdbSizer = new ibStdDialogButtonSizer();
+		m_sdbSizerOK = new ibButton(this, wxID_OK);
 		m_sdbSizer->AddButton(m_sdbSizerOK);
-		m_sdbSizerCancel = new wxButton(this, wxID_CANCEL);
+		m_sdbSizerCancel = new ibButton(this, wxID_CANCEL);
 		m_sdbSizer->AddButton(m_sdbSizerCancel);
 		m_sdbSizer->Realize();
 
@@ -1257,9 +1261,9 @@ public:
 
 		mainSizer->Fit(this);
 
-		wxDialog::SetSizer(mainSizer);
-		wxDialog::Layout();
-		wxDialog::Centre(wxBOTH);
+		ibDialog::SetSizer(mainSizer);
+		ibDialog::Layout();
+		ibDialog::Centre(wxBOTH);
 	}
 
 	void SetAreaLabel(const wxString& areaLabel)
@@ -1274,10 +1278,10 @@ public:
 
 private:
 
-	wxTextCtrl* m_areaInput;
-	wxStdDialogButtonSizer* m_sdbSizer;
-	wxButton* m_sdbSizerOK;
-	wxButton* m_sdbSizerCancel;
+	ibTextCtrl* m_areaInput;
+	ibStdDialogButtonSizer* m_sdbSizer;
+	ibButton* m_sdbSizerOK;
+	ibButton* m_sdbSizerCancel;
 };
 
 // An array of cell coords...
@@ -1727,7 +1731,9 @@ struct ibGridSizesInfo
 // ibGrid
 // ----------------------------------------------------------------------------
 
-class GUI_API ibGrid : public wxScrolledCanvas
+// SEAM vs wx: wxScrolledCanvas (wxScrolled<wxWindow>) there - scrolled on the library's window here, its scrollbars
+// the theme's
+class GUI_API ibGrid : public wxScrolled<ibWindow>
 {
 public:
 	// possible selection modes

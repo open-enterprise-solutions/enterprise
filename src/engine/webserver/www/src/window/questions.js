@@ -81,7 +81,7 @@ export class Questions {
 	}
 
 	/**
-	 * A message box, as the thin client's (wxMessageBox): Enter presses its default button — the first, or No or Cancel
+	 * A message box, as the thin client's (ibMessageBox): Enter presses its default button — the first, or No or Cancel
 	 * when the Style says so. Closed by Escape or ×, it answers as the box does: Cancel when it offers Cancel, OK when OK
 	 * is all it offers; a Yes/No without Cancel is not closed but answered.
 	 * @param {ProtocolNode} request
@@ -99,9 +99,9 @@ export class Questions {
 	}
 
 	/**
-	 * One of a list, as the thin client asks it (wxSingleChoiceDialog): the one Selected chosen to begin with, else the
+	 * One of a list, as the thin client asks it (ibSingleChoiceDialog): the one Selected chosen to begin with, else the
 	 * first; OK — or a double click on an item — answers with it, Cancel and closing with none. SEVERAL (Multiple, the
-	 * thin client's wxMultiChoiceDialog): each ticked or not, those Selected ticked to begin with; OK answers with the
+	 * thin client's ibMultiChoiceDialog): each ticked or not, those Selected ticked to begin with; OK answers with the
 	 * ticked ones' Ids in the order offered — none ticked, none.
 	 * @param {ProtocolNode} request
 	 */
@@ -307,7 +307,7 @@ export class Questions {
 	 * A dialog with its buttons, each answering the request its own way; the preferred one is drawn as the default and
 	 * takes Enter pressed anywhere in the dialog but on another button. Closed by Escape or ×, it is answered with what
 	 * it answers closed — as cancelled unless said otherwise; with none, it is not closed and has no ×. With no request
-	 * it is the window's own box (wxMessageBox), and closing it answers nobody.
+	 * it is the window's own box (ibMessageBox), and closing it answers nobody.
 	 * @param {string} caption
 	 * @param {string} text
 	 * @param {{caption: string, variant?: string, answer: object, preferred?: boolean}[]} actions

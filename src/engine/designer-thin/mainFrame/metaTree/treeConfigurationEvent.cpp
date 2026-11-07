@@ -217,10 +217,3 @@ void ibMetaTreeBase::OnStartSearch(wxCommandEvent& event)
 	Search(event.GetString());
 	event.Skip();
 }
-
-void ibMetaTreeBase::OnCancelSearch(wxCommandEvent& event)
-{
-	if (event.GetString().IsEmpty())
-		Search(wxEmptyString);
-	event.Skip();
-}

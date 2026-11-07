@@ -2,8 +2,8 @@
 #define _ROLE_EDITOR_H__
 
 #include <wx/panel.h>
-#include <wx/treectrl.h>
-#include <wx/splitter.h>
+#include "gui/univ/ctrl/treeCtrl.h"
+#include "gui/univ/splitterWindow.h"
 
 #include "frmclient/docView/tabDocument.h"
 #include "frmclient/win/ctrls/checktree.h"
@@ -12,7 +12,7 @@
 // the rights the role gives on the one selected, as the tab's view writes them (frmserver ibRoleRightsView, ViewKind
 // Role) — each row with its rights (Roles). A tick goes to the server (Toggle, naming the right) and comes back drawn.
 
-class ibRoleEditor : public wxSplitterWindow {
+class ibRoleEditor : public ibSplitterWindow {
 
 	wxTreeItemId m_treeMETADATA;
 
@@ -35,7 +35,7 @@ class ibRoleEditor : public wxSplitterWindow {
 		const wxString& GetRole() const { return m_role; }
 	};
 
-	wxTreeCtrl* m_roleCtrl;
+	ibTreeCtrl* m_roleCtrl;
 	ibCheckTree* m_checkCtrl;
 
 	long long m_keepSelId = 0;   // the object selected before a RefreshRole — restored after

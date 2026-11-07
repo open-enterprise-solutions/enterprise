@@ -237,8 +237,16 @@ bool ibGridEditor::LoadDocument(const std::shared_ptr<ibSpreadsheetObject>& doc)
 {
 	const ibSpreadsheetDescription& spreadsheetDesc = doc->GetSpreadsheetDesc();
 
+	// ⚠ THE SHEET COMES UP WHOLE — the window held still while it is read in, as its rows' heights are (FitAutoRowHeights),
+	// and the grid in a batch. A column's width moves every column after it, and the window scrolled to fit paints what is
+	// pending first (ibWindow::ScrollWindow): a composed report's cells came up column by column under the «Composing...»
+	// spinner, 13 paints in its 0.85 s (Max, 2026-11-07).
+	wxWindowUpdateLocker freeze(this);
+
 	if (!spreadsheetDesc.IsEmptySpreadsheet())
 	{
+		ibGridUpdateLocker batch(this);
+
 		ibGrid::SetTable(
 			new ibGridEditorStringTable(spreadsheetDesc.GetNumberRows(), spreadsheetDesc.GetNumberCols()), true);
 

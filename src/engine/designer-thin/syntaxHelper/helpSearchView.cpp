@@ -12,10 +12,10 @@
 #include <wx/sizer.h>
 
 ibHelpSearchView::ibHelpSearchView(wxWindow* parent, ibHelpPaneView* pane)
-    : wxPanel(parent, wxID_ANY), m_pane(pane) {
-	m_search = new wxSearchCtrl(this, wxID_ANY);
-	m_badge  = new wxStaticText(this, wxID_ANY, wxT(""));
-	m_list   = new wxListBox(this, wxID_ANY);
+    : ibPanel(parent, wxID_ANY), m_pane(pane) {
+	m_search = new ibSearchCtrl(this, wxID_ANY);
+	m_badge  = new ibStaticText(this, wxID_ANY, wxT(""));
+	m_list   = new ibListBox(this, wxID_ANY);
 
 	auto* sizer = new wxBoxSizer(wxVERTICAL);
 	sizer->Add(m_search, 0, wxEXPAND | wxALL, 4);

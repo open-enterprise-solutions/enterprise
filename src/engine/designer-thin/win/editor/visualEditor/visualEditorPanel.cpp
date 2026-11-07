@@ -27,7 +27,7 @@ std::set<ibVisualEditorNotebook::ibVisualEditor*>& OpenEditors()
 }
 
 ibVisualEditorNotebook::ibVisualEditor::ibVisualEditor(ibModuleEditDocument* document, ibVisualEditorNotebook* parent, int id) :
-	wxPanel(parent, id), m_document(document), m_visualNotebook(parent)
+	ibPanel(parent, id), m_document(document), m_visualNotebook(parent)
 {
 	CreateWideGui();
 
@@ -48,7 +48,7 @@ void ibVisualEditorNotebook::ibVisualEditor::CreateWideGui()
 {
 	wxWindow::Freeze();
 
-	m_splitter = new wxSplitterWindow(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSP_THIN_SASH);
+	m_splitter = new ibSplitterWindow(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSP_THIN_SASH);
 	m_splitter->SetSashGravity(1.0);   // the CANVAS absorbs vertical growth; the tree strip below keeps a fixed height
 	m_splitter->SetMinimumPaneSize(20); // Smalest size the
 
@@ -65,7 +65,7 @@ void ibVisualEditorNotebook::ibVisualEditor::CreateWideGui()
 	// split gives the object tree ~1/3 (gravity 0.34 -> it keeps a third of any horizontal growth, the right pane
 	// two thirds); the inner split halves the remainder. A generous min pane size (a readable column, not 20 px)
 	// stops the Commands pane from collapsing to a sliver on a wide window.
-	m_treeSplitter = new wxSplitterWindow(m_splitter, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSP_THIN_SASH);
+	m_treeSplitter = new ibSplitterWindow(m_splitter, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSP_THIN_SASH);
 	m_treeSplitter->SetSashGravity(0.34);
 	m_treeSplitter->SetMinimumPaneSize(160);
 
@@ -74,7 +74,7 @@ void ibVisualEditorNotebook::ibVisualEditor::CreateWideGui()
 	// The right pane splits again: [Attributes | Commands] — the source-attribute tree and the command
 	// navigator (the command door beside the data door). The command navigator is where a designer drags
 	// a command onto the form to create a bound button. Equal halves of the remaining two thirds.
-	m_rightSplitter = new wxSplitterWindow(m_treeSplitter, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSP_THIN_SASH);
+	m_rightSplitter = new ibSplitterWindow(m_treeSplitter, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSP_THIN_SASH);
 	m_rightSplitter->SetSashGravity(0.5);
 	m_rightSplitter->SetMinimumPaneSize(160);
 	m_attributeTree = new ibVisualEditorAttributeTree(this, m_rightSplitter);
@@ -91,7 +91,7 @@ void ibVisualEditorNotebook::ibVisualEditor::CreateWideGui()
 
 	SetSizer(sizerMain);
 
-	// A wxSplitterWindow's sash set at construction lands on a not-yet-sized window, so the panes render lopsided
+	// An ibSplitterWindow's sash set at construction lands on a not-yet-sized window, so the panes render lopsided
 	// (the Commands third collapses to a sliver, the canvas/tree split is arbitrary). Set the three sashes ONCE the
 	// panel has its first REAL size — canvas over a fixed tree strip, and the three navigators as equal thirds — then
 	// let gravity hold the balance on every later resize. One-shot (m_layoutBalanced), so a manual drag afterwards sticks.

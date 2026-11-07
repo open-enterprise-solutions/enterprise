@@ -10,8 +10,9 @@ public:
 
 	wxSize m_size;
 
-	ibValueSize() = default;
-	ibValueSize(const wxSize& size) : m_size(size) {}
+	// …an object, of its kind, as the engine's is made — see ibValueColour
+	ibValueSize() : ibValue(ibValueTypes::TYPE_VALUE) {}
+	ibValueSize(const wxSize& size) : ibValue(ibValueTypes::TYPE_VALUE), m_size(size) {}
 };
 
 #endif

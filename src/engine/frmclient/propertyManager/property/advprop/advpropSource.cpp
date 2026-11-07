@@ -7,6 +7,7 @@
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 #include "frmclient/propertyManager/propertyEditor.h"
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties
+#include "gui/univ/messageDialog.h"
 
 wxPG_IMPLEMENT_PROPERTY_CLASS(ibPGDataSourceProperty, wxPGProperty, TextCtrlAndButton)
 
@@ -155,7 +156,7 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 			ibPGDataSourceProperty* const cell = wxDynamicCast(prop, ibPGDataSourceProperty);
 			// No form holds the control (no picker set) — said, as before.
 			if (cell == nullptr || !SourcePicker()) {
-				wxMessageBox(_("Choosing a data source is not available in the thin designer yet."),
+				ibMessageBox(_("Choosing a data source is not available in the thin designer yet."),
 					_("Choice source"), wxOK | wxICON_INFORMATION, pg);
 				return false;
 			}

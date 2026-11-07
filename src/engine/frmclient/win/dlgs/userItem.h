@@ -13,26 +13,28 @@
 #include <wx/font.h>
 #include <wx/colour.h>
 #include <wx/settings.h>
-#include <wx/stattext.h>
+#include "gui/univ/ctrl/staticText.h"
 #include <wx/sizer.h>
-#include <wx/textctrl.h>
+#include "gui/univ/ctrl/textCtrl.h"
 #include <wx/dialog.h>
-#include <wx/button.h>
-#include <wx/statline.h>
+#include "gui/univ/ctrl/button.h"
+#include "gui/univ/ctrl/staticLine.h"
 #include <wx/stattext.h>
-#include <wx/choice.h>
+#include "gui/univ/ctrl/choice.h"
 
 #include "frmclient/backend/backend_core.h"
 #include "core/roleCompositionMode.h"   // ibRoleCompositionMode — the membership carries how the role combines
 
 #include "frmclient/win/ctrls/checktree.h"
 #include "gui/univ/theme/luna_tabart.h"
+#include "gui/univ/dialog.h"
+#include "gui/univ/panel.h"
 
 // A USER — the old desktop's dialog as it was, on ibUserInfo: its roles and languages offered
 // as the server lists them, where the desktop's took the active configuration. What its OK checked before it saved — that
 // some user keeps a role with the administration rights — and the password's hash are the server's: a refusal comes
 // back with the desktop's text.
-class ibDialogUserItem : public wxDialog {
+class ibDialogUserItem : public ibDialog {
 
 	struct ibDataUserRole {
 		wxString m_strRoleGuid;
@@ -69,23 +71,23 @@ private:
 	wxString m_strDefaultLanguageCode;
 
 	wxAuiNotebook* m_mainNotebook;
-	wxPanel* m_main;
-	wxStaticText* m_staticName;
-	wxStaticText* m_staticFullName;
-	wxTextCtrl* m_textName;
-	wxTextCtrl* m_textFullName;
-	wxStaticLine* m_staticline;
-	wxStaticText* m_staticPassword;
-	wxTextCtrl* m_textPassword;
-	wxPanel* m_other;
-	wxStdDialogButtonSizer* m_bottom;
-	wxButton* m_bottomOK;
-	wxButton* m_bottomCancel;
+	ibPanel* m_main;
+	ibStaticText* m_staticName;
+	ibStaticText* m_staticFullName;
+	ibTextCtrl* m_textName;
+	ibTextCtrl* m_textFullName;
+	ibStaticLine* m_staticline;
+	ibStaticText* m_staticPassword;
+	ibTextCtrl* m_textPassword;
+	ibPanel* m_other;
+	ibStdDialogButtonSizer* m_bottom;
+	ibButton* m_bottomOK;
+	ibButton* m_bottomCancel;
 
-	wxStaticText* m_staticRole;
-	wxStaticText* m_staticLanguage;
+	ibStaticText* m_staticRole;
+	ibStaticText* m_staticLanguage;
 	ibCheckTree* m_choiceRole;
-	wxChoice* m_choiceLanguage;
+	ibChoice* m_choiceLanguage;
 
 	ibGuid m_userGuid;
 };

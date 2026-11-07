@@ -14,7 +14,7 @@
 #include <wx/colour.h>
 #include <wx/settings.h>
 #include <wx/sizer.h>
-#include <wx/dialog.h>
+#include "gui/univ/dialog.h"
 #include <wx/itemattr.h>
 
 #include "frmclient/frmclient.h"
@@ -22,7 +22,7 @@
 
 // USERS — the old desktop's dialog as it was: the list read from the server's schema
 // (frmserver/schema/designer/userList.cpp) through ibUserInfo, as it read sys_user.
-class FRMCLIENT_API ibDialogUserList : public wxDialog
+class FRMCLIENT_API ibDialogUserList : public ibDialog
 {
 	wxAuiToolBar* m_toolbarMain;
 

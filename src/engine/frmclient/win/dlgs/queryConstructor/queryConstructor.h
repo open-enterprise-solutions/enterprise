@@ -37,16 +37,16 @@
 
 #include "frmclient/frmclient.h"
 
-#include <wx/dialog.h>
-#include <wx/notebook.h>
-#include <wx/treectrl.h>
+#include "gui/univ/dialog.h"
+#include "gui/univ/ctrl/notebook.h"
+#include "gui/univ/ctrl/treeCtrl.h"
 // (No wx/listctrl.h or wx/listbox.h: every list in this window is an ibDataViewCtrl now.)
-#include <wx/checkbox.h>
-#include <wx/spinctrl.h>
-#include <wx/textctrl.h>
-#include <wx/stattext.h>
-#include <wx/choice.h>
-#include <wx/radiobox.h>
+#include "gui/univ/ctrl/checkBox.h"
+#include "gui/univ/ctrl/spinCtrl.h"
+#include "gui/univ/ctrl/textCtrl.h"
+#include "gui/univ/ctrl/staticText.h"
+#include "gui/univ/ctrl/choice.h"
+#include "gui/univ/ctrl/radioBox.h"
 
 #include <functional>
 #include <map>
@@ -58,6 +58,8 @@
 // The links grid is an ibDataViewCtrl with its own model — cells edited IN PLACE.
 #include "gui/univ/dataview/dataview.h"
 #include "queryGridModel.h"   // ibTotalsRow — which NODE a row of the totals grid belongs to
+#include "gui/univ/ctrl/button.h"
+#include "gui/univ/panel.h"
 
 class ibMetaData;
 
@@ -99,7 +101,7 @@ enum ibQueryConstructorExclude {
 	ibQueryExclude_Roles      = 1 << 10,
 };
 
-class FRMCLIENT_API ibDialogQueryConstructor : public wxDialog
+class FRMCLIENT_API ibDialogQueryConstructor : public ibDialog
 {
 public:
 	// `metaData` — the config the query is written against, HANDED IN. The dialog never reaches for
@@ -141,7 +143,7 @@ private:
 	// (AddButton removed — every verb in this window lives on a TOOLBAR now, and the last plain
 	//  command button went with the move to tool bands.)
 	// A MOVE button — the narrow glyph column that sits between two panes.
-	class wxButton* AddMoveButton(wxWindow* parent, class wxSizer* sizer, const wxString& glyph,
+	class ibButton* AddMoveButton(wxWindow* parent, class wxSizer* sizer, const wxString& glyph,
 	                              const wxString& tip, std::function<void(wxCommandEvent&)> handler);
 
 	// THE VERBS OF A PANE LIVE ON A TOOLBAR ABOVE IT — the shape the rest of the settings windows
@@ -153,7 +155,7 @@ private:
 	             std::function<void(wxCommandEvent&)> handler);
 	// THE RIGHT-CLICK ON A PANE OFFERS WHAT ITS TOOLBAR OFFERS — replayed from the toolbar's own
 	// record of what was added to it, never from a second list. Call it after the bar is filled.
-	void AttachContextMenu(wxWindow* target, class wxToolBar* bar);
+	void AttachContextMenu(class ibWindow* target, class wxToolBar* bar);
 
 	// One tab, and whether it describes a QUERY. A statement that drops a temp table has no query,
 	// so those tabs are removed for it — a page window outlives the notebook's idea of which pages
@@ -259,7 +261,7 @@ private:
 	// THE CATALOGUE into any tree — kinds, their tables, the temporary tables made before this statement, each
 	// with its picture. The left pane unfolds every table into its fields; the table picker stops at the table
 	// (PickTable), so the two show one catalogue the same way.
-	void FillCatalogue(class wxTreeCtrl* tree, bool withFields);
+	void FillCatalogue(class ibTreeCtrl* tree, bool withFields);
 	// ⚠ THIN: a catalogue table's fields, asked when it is opened — false: not such a table.
 	bool FillCatalogueFields(const wxTreeItemId& item);
 
@@ -496,9 +498,13 @@ private:
 	void ShowEngineVerdict();   // the status line under the text, refreshed on every edit
 
 	// ---- helpers --------------------------------------------------------
-	// Every field of every chosen table, qualified — what the Conditions / Order / Grouping /
-	// Totals tabs offer. Asked of the model, which asks the sources.
+	// Every field of every chosen table, qualified — what the Conditions / Order / Grouping tabs
+	// offer. Asked of the model, which asks the sources.
 	std::vector<ibQueryConstructorField> AvailableFields() const;
+	// …and what a TOTAL is taken over: the result's own fields by alias (no source), then every chosen
+	// table's by its bare name — what the Totals tab offers, and what its expression window writes and
+	// checks names against.
+	std::vector<ibQueryConstructorField> TotalsFields() const;
 	// The same answer, shown on the left of each of those tabs.
 	void FillFieldSources();   // fills all four field trees from the chosen tables
 
@@ -552,7 +558,7 @@ private:
 	// resolves (it stays in the query and the engine says so on the verdict line). What a table's
 	// own DELETION takes with it is a different verb, and it is explicit: ibQueryDropSourceReferences.
 
-	TreeIcons PrepareIcons(wxTreeCtrl* tree) const;
+	TreeIcons PrepareIcons(ibTreeCtrl* tree) const;
 	int KindIcon(TreeIcons& icons, const wxString& kind) const;
 	// THE PICTURE FOR ONE FIELD — its own if the column gave one, the plain field picture if not.
 	// Nothing here reads a metatype: the column already answered (ibBackendSourceColumn::GetColumnPicture).
@@ -568,12 +574,12 @@ private:
 	// UNFOLD A REFERENCE — the dot walk the language has always been able to write. Bound on every
 	// tree that shows fields.
 	void OnFieldTreeExpanding(wxTreeEvent&);
-	wxString SelectedFieldOf(class wxTreeCtrl* tree) const;
+	wxString SelectedFieldOf(class ibTreeCtrl* tree) const;
 	// THE SAME SCOPE RULE, everywhere a field tree is acted on: a plain field is itself, a REFERENCE
 	// is everything behind it (as dot-walk paths), a table row is every field it has. Written once,
 	// because "what you act on decides the scope" is one rule and four copies of it would drift.
-	std::vector<wxString> SelectedFieldsOf(class wxTreeCtrl* tree) const;
-	// Ask the user for one of those fields; empty when cancelled.
+	std::vector<wxString> SelectedFieldsOf(class ibTreeCtrl* tree) const;
+	// Ask the user for one of the fields a total is taken over (TotalsFields); empty when cancelled.
 	wxString ChooseField(const wxString& title);
 	// The sources of the current select, FROM first then the joins — the order a query names them in.
 	std::vector<ibQuerySource*> CurrentSources() const;
@@ -609,13 +615,13 @@ private:
 
 	class ibDataViewCtrl*   m_statements     = nullptr;   // the package — one row per statement
 	class ibQueryGridModel* m_statementModel = nullptr;
-	wxNotebook*    m_notebook   = nullptr;
+	ibNotebook*    m_notebook   = nullptr;
 	// THE QUERY TEXT, in a real code editor (wxStyledTextCtrl) with the SQL lexer. The round trip IS
 	// the feature, so the text is on screen the whole time — and text that is on screen the whole time
 	// should be readable: keywords apart from names, strings apart from numbers. The keyword set comes
 	// from the LANGUAGE'S OWN TABLE (ibAllQueryKeywords), never a list typed here.
 	class wxStyledTextCtrl* m_preview = nullptr;
-	wxStaticText*  m_status      = nullptr;   // the engine's verdict on the query as it stands
+	ibStaticText*  m_status      = nullptr;   // the engine's verdict on the query as it stands
 	// TWO STRIPS OF TABS DOWN THE RIGHT EDGE, one per level, and both mean the same thing: "the
 	// query the tabs are currently showing". A list box was the first shape for the branches and it
 	// read as a separate window sitting beside the tabs; a branch — like a batch statement — is not
@@ -624,12 +630,12 @@ private:
 	//
 	//   m_batchStrip   the BATCH's statements   — the outer level, furthest right
 	//   m_branchStrip  the union branches OF the selected statement — the inner level
-	wxNotebook*    m_batchStrip  = nullptr;
-	wxNotebook*    m_branchStrip = nullptr;
+	ibNotebook*    m_batchStrip  = nullptr;
+	ibNotebook*    m_branchStrip = nullptr;
 	// Every command button and tool band, collected as made, so read-only mode greys the whole set
 	// in one place. The greying is the SIGN; CanEdit() is the guarantee (a double-click reaches a
 	// handler no disabled button guards).
-	std::vector<class wxButton*>  m_commandButtons;
+	std::vector<class ibButton*>  m_commandButtons;
 	std::vector<class wxToolBar*> m_commandBars;
 
 	// EVERY VERB A TOOLBAR CARRIES, remembered as it is added — so the right-click can offer exactly
@@ -648,7 +654,7 @@ private:
 	// the same field dropped there from the CATALOGUE is "read this table and select this field" —
 	// one gesture, two steps, because that is what the author meant and making them do it in two
 	// moves is the constructor asking them to do its bookkeeping.
-	class wxTreeCtrl* m_dragTree = nullptr;
+	class ibTreeCtrl* m_dragTree = nullptr;
 	// Add the catalogue field standing in `m_sourceTree` — bringing its TABLE in first if the query
 	// does not read it yet. Returns false when there is nothing to add.
 	bool AddCatalogueFieldToSelect();
@@ -659,8 +665,8 @@ private:
 	void OnTableBeginDrag(wxTreeEvent&);
 	void OnFieldTreeBeginDrag(wxTreeEvent&);   // any of the four field trees
 
-	wxTreeCtrl*  m_sourceTree = nullptr;   // the catalogue (a WALK over the factory) + the package's temps
-	wxTreeCtrl*  m_tables     = nullptr;   // chosen tables, each expanding into its fields
+	ibTreeCtrl*  m_sourceTree = nullptr;   // the catalogue (a WALK over the factory) + the package's temps
+	ibTreeCtrl*  m_tables     = nullptr;   // chosen tables, each expanding into its fields
 	// The chosen fields — Field | Alias, both editable IN PLACE. Editing the field opens the
 	// arbitrary-expression editor, because a SELECT list takes expressions, not only columns.
 	class ibDataViewCtrl* m_fields = nullptr;
@@ -676,11 +682,11 @@ private:
 	// THE SAME TREE, four times: the chosen tables, each expanding into its fields. A flat list of
 	// qualified names was the first shape and it hid the thing a person is looking for — which table
 	// a field belongs to. Every one of these is draggable onto the pane beside it.
-	wxTreeCtrl*  m_groupingSource  = nullptr;
-	wxTreeCtrl*  m_conditionSource = nullptr;
-	wxTreeCtrl*  m_orderSource     = nullptr;
-	wxTreeCtrl*  m_indexSource     = nullptr;
-	wxTreeCtrl*  m_totalsSource    = nullptr;
+	ibTreeCtrl*  m_groupingSource  = nullptr;
+	ibTreeCtrl*  m_conditionSource = nullptr;
+	ibTreeCtrl*  m_orderSource     = nullptr;
+	ibTreeCtrl*  m_indexSource     = nullptr;
+	ibTreeCtrl*  m_totalsSource    = nullptr;
 
 	// EVERY LIST IN THIS WINDOW IS A GRID, on the same control with the same model class
 	// (queryGridModel.h). It was six listboxes and two listctrls beside three dataview grids, and
@@ -703,18 +709,18 @@ private:
 	class ibQueryGridModel* m_totalsAggregateModel = nullptr;
 	class ibDataViewCtrl* m_totalsDimensions = nullptr;   // Grouping field | Totals kind | Alias
 	class ibQueryTotalsTreeModel* m_totalsDimensionModel = nullptr;   // a TREE: a separator is a node, its groupings are its children
-	wxCheckBox*  m_grandTotals = nullptr;   // what the root of a totals tree IS — see BuildTotalsPage
+	ibCheckBox*  m_grandTotals = nullptr;   // what the root of a totals tree IS — see BuildTotalsPage
 	// ⭐ THE SELECTED LEVEL'S PERIODICITY, stated with a mouse. It belongs to ONE level, so it sits
 	// under the grid and follows the selection — the same place, and the same reading, a person is
 	// used to: a switch, the unit, and the two bounds that may be left open.
 	// ⭐ THE WHOLE STRIP IS HIDDEN where it does not apply, not greyed (Max): a level keyed by
 	// something that is not a date has no periodicity to speak of, and a row of dead controls under
 	// the grid says "this exists for you and is switched off", which is a different and untrue thing.
-	class wxPanel* m_periodPane = nullptr;
-	wxCheckBox*  m_byPeriods   = nullptr;
-	class wxChoice*   m_periodUnit = nullptr;   // the ten words, taken from ibPeriodUnits() — never a second list
-	class wxTextCtrl* m_periodFrom = nullptr;   // an expression: a parameter, a date. Empty = from the data
-	class wxTextCtrl* m_periodTo   = nullptr;
+	class ibPanel* m_periodPane = nullptr;
+	ibCheckBox*  m_byPeriods   = nullptr;
+	class ibChoice*   m_periodUnit = nullptr;   // the ten words, taken from ibPeriodUnits() — never a second list
+	class ibTextCtrl* m_periodFrom = nullptr;   // an expression: a parameter, a date. Empty = from the data
+	class ibTextCtrl* m_periodTo   = nullptr;
 	// ⭐ DID ANYBODY TYPE IN THEM? The bounds commit on losing focus, and a focus change is not an
 	// edit — a click through the tab would otherwise rewrite the level on every pass. Asked of the
 	// EDIT EVENT rather than by comparing what the panel would write against what the level says:
@@ -726,18 +732,18 @@ private:
 	class ibDataViewCtrl*          m_unionFields     = nullptr;   // the field map across branches
 	class ibQueryUnionFieldModel*  m_unionFieldModel = nullptr;
 
-	wxCheckBox*  m_distinct   = nullptr;
-	wxCheckBox*  m_allowed    = nullptr;
-	wxCheckBox*  m_forUpdate  = nullptr;
-	wxCheckBox*  m_useTop     = nullptr;
-	wxSpinCtrl*  m_topCount   = nullptr;
+	ibCheckBox*  m_distinct   = nullptr;
+	ibCheckBox*  m_allowed    = nullptr;
+	ibCheckBox*  m_forUpdate  = nullptr;
+	ibCheckBox*  m_useTop     = nullptr;
+	ibSpinCtrl*  m_topCount   = nullptr;
 
 	// WHAT THIS STATEMENT IS — a select, a select that materialises a temp table, or a drop of one.
 	// A KIND, not a checkbox: the three are different statements, and the name is asked because the
 	// kind asks for it, not because a flag was ticked. It lives on the package strip rather than on
 	// a tab because it says what the statement IS, while the tabs say what its query SELECTS.
-	class wxRadioBox* m_queryKind = nullptr;
-	wxTextCtrl*  m_tempName   = nullptr;
+	class ibRadioBox* m_queryKind = nullptr;
+	ibTextCtrl*  m_tempName   = nullptr;
 };
 
 // Open the constructor over query TEXT (a package). Returns true on OK, with `queryText` replaced

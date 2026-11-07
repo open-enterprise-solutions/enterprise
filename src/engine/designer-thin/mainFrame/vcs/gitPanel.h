@@ -8,11 +8,11 @@
 #ifndef _OES_DESIGNER_GIT_PANEL_H_
 #define _OES_DESIGNER_GIT_PANEL_H_
 
-#include <wx/panel.h>
-#include <wx/listctrl.h>
-#include <wx/button.h>
-#include <wx/stattext.h>
-#include <wx/choice.h>
+#include "gui/univ/panel.h"
+#include "gui/univ/ctrl/listCtrl.h"
+#include "gui/univ/ctrl/button.h"
+#include "gui/univ/ctrl/staticText.h"
+#include "gui/univ/ctrl/choice.h"
 #include <memory>
 
 #include "designer-thin/backend/vcs/gitService.h"   // the engine's, living in the thin designer
@@ -20,7 +20,7 @@
 // THE DESKTOP'S (designer/mainFrame/vcs/gitPanel.h) WHOLE — over the working copy beside the file base the designer was
 // started on (CreateGitPane), on this machine.
 
-class ibGitPanel : public wxPanel {
+class ibGitPanel : public ibPanel {
 public:
 	// `workdir` is the configuration working copy. Empty until a config is
 	// opened; SetWorkdir() rebinds the service and refreshes.
@@ -47,15 +47,15 @@ private:
 	std::unique_ptr<ibGitService> m_git;   // null until a workdir is bound
 	wxString      m_workdir;
 
-	wxChoice*     m_branchChoice = nullptr;
-	wxButton*     m_btnNewBranch = nullptr;
-	wxListCtrl*   m_statusList   = nullptr;
-	wxListCtrl*   m_logList      = nullptr;
-	wxButton*     m_btnRefresh   = nullptr;
-	wxButton*     m_btnCommit    = nullptr;
-	wxButton*     m_btnPush      = nullptr;
-	wxButton*     m_btnPull      = nullptr;
-	wxStaticText* m_info         = nullptr;   // last-action result line
+	ibChoice*     m_branchChoice = nullptr;
+	ibButton*     m_btnNewBranch = nullptr;
+	ibListCtrl*   m_statusList   = nullptr;
+	ibListCtrl*   m_logList      = nullptr;
+	ibButton*     m_btnRefresh   = nullptr;
+	ibButton*     m_btnCommit    = nullptr;
+	ibButton*     m_btnPush      = nullptr;
+	ibButton*     m_btnPull      = nullptr;
+	ibStaticText* m_info         = nullptr;   // last-action result line
 };
 
 #endif // _OES_DESIGNER_GIT_PANEL_H_

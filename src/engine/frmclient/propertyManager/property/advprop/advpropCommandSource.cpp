@@ -10,10 +10,12 @@
 
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties — the tree's keys
 
-#include <wx/treectrl.h>
+#include "gui/univ/ctrl/treeCtrl.h"
 #include <functional>
 #include <wx/imaglist.h>
 #include <wx/artprov.h>
+#include "gui/univ/dialog.h"
+#include "gui/univ/messageDialog.h"
 
 namespace {
 
@@ -153,20 +155,20 @@ wxPGEditorDialogAdapter* ibPGCommandSourceProperty::GetEditorDialog() const
 			const ibDataNode* const tree = dlgProp->GetCommandTree();
 			if (!tree) {
 				// An older server's row: the command sources are gathered over its form, and it did not send them.
-				wxMessageBox(_("Choosing a command is not available in the thin designer yet."),
+				ibMessageBox(_("Choosing a command is not available in the thin designer yet."),
 					_("Choice command"), wxOK | wxICON_INFORMATION, pg);
 				return false;
 			}
 
 			// The desktop's window (frontend advpropCommandSource.cpp), over the row's tree: the three sections, a
 			// source's sub-groups, the commands with their own pictures.
-			wxDialog* dlg = new wxDialog(pg, wxID_ANY, _("Choice command"), wxDefaultPosition, wxDefaultSize,
+			ibDialog* dlg = new ibDialog(pg, wxID_ANY, _("Choice command"), wxDefaultPosition, wxDefaultSize,
 				wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER | wxCLIP_CHILDREN);
 			dlg->SetFont(pg->GetFont());
 			const int spacing = wxPropertyGrid::IsSmallScreen() ? 4 : 8;
 
 			wxBoxSizer* topsizer = new wxBoxSizer(wxVERTICAL);
-			wxTreeCtrl* tc = new wxTreeCtrl(dlg, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+			ibTreeCtrl* tc = new ibTreeCtrl(dlg, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 				wxTR_HIDE_ROOT | wxTR_HAS_BUTTONS | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxSUNKEN_BORDER | wxTR_TWIST_BUTTONS);
 			tc->SetDoubleBuffered(true);
 			topsizer->Add(tc, wxSizerFlags(1).Expand().Border(wxALL, spacing));
@@ -205,7 +207,7 @@ wxPGEditorDialogAdapter* ibPGCommandSourceProperty::GetEditorDialog() const
 				tc->EnsureVisible(selNode);
 			}
 
-			wxStdDialogButtonSizer* buttonSizer = dlg->CreateStdDialogButtonSizer(wxOK | wxCANCEL);
+			ibStdDialogButtonSizer* buttonSizer = dlg->CreateStdDialogButtonSizer(wxOK | wxCANCEL);
 			topsizer->Add(buttonSizer, wxSizerFlags(0).Right().Border(wxBOTTOM | wxRIGHT, spacing));
 			dlg->SetSizer(topsizer);
 			topsizer->SetSizeHints(dlg);

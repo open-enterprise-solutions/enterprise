@@ -10,6 +10,12 @@
 #include <wx/imaglist.h>      // …and its pictures, taken from the same icons the grids draw
 #include <wx/tokenzr.h>       // the cell holds the ticked names comma-separated
 #include "win/ctrls/checktree.h"   // ibCheckTree — the same ticked tree "Select data type" uses
+#include "gui/univ/ctrl/staticText.h"
+#include "gui/univ/ctrl/button.h"
+#include "gui/univ/ctrl/choice.h"
+#include "gui/univ/ctrl/treeCtrl.h"
+#include "gui/univ/menu.h"
+#include "gui/univ/messageDialog.h"
 
 using namespace queryctor;
 
@@ -54,7 +60,7 @@ void ibDialogQueryConstructor::OnFieldTreeBeginDrag(wxTreeEvent& event)
 		return;
 
 	// NOT `Allow()`ed — see OnSourceBeginDrag. The tree must not start a drag of its own beside ours.
-	wxTreeCtrl* tree = dynamic_cast<wxTreeCtrl*>(event.GetEventObject());
+	ibTreeCtrl* tree = dynamic_cast<ibTreeCtrl*>(event.GetEventObject());
 	if (tree == nullptr)
 		return;
 	m_dragTree = tree;
@@ -228,7 +234,7 @@ void ibDialogQueryConstructor::ApplyQueryKind(bool focusName)
 		const std::vector<ibQueryConstructorSource> temps =
 			ibQueryConstructorModel::GetTempSources(m_package, m_statement);
 		if (temps.empty()) {
-			wxMessageBox(_("There is no temporary table to drop yet: an earlier statement of this "
+			ibMessageBox(_("There is no temporary table to drop yet: an earlier statement of this "
 			               "package has to make one first."),
 				_("Query kind"), wxOK | wxICON_INFORMATION, this);
 			FillAll();   // put the radio back on what the statement actually is
@@ -255,7 +261,7 @@ void ibDialogQueryConstructor::ApplyQueryKind(bool focusName)
 			const ibQueryAstStatement& other = m_package.m_statements[i];
 			if (other.m_select == nullptr || !other.m_select->m_ontoName.IsSameAs(name, false))
 				continue;
-			wxMessageBox(ibString::Format(
+			ibMessageBox(ibString::Format(
 					_("Another query of this package already produces the result '%s'.\n\nResults are "
 					  "asked for by name, so two the same would make one of them unreachable."), name),
 				_("Query constructor"), wxOK | wxICON_WARNING, this);
@@ -302,7 +308,7 @@ void ibDialogQueryConstructor::ApplyQueryKind(bool focusName)
 		select.m_indexBy.clear();
 	}
 	if (hadOrderOrTotals)
-		wxMessageBox(_("A temporary table is read by the statements after it, not shown: the order and "
+		ibMessageBox(_("A temporary table is read by the statements after it, not shown: the order and "
 		               "the totals of this query were removed with the change."),
 			_("Query kind"), wxOK | wxICON_INFORMATION, this);
 
@@ -466,7 +472,7 @@ void ibDialogQueryConstructor::OnMoveStatement(int delta)
 // literal, a computation over them), a condition opens the ordinary expression editor over the
 // fields THAT SOURCE admits in a condition. Add a parameter to a source tomorrow and a row appears
 // here with nothing edited in this file.
-class ibDialogVirtualTableParameters : public wxDialog
+class ibDialogVirtualTableParameters : public ibDialog
 {
 public:
 	ibDialogVirtualTableParameters(wxWindow* parent,
@@ -474,7 +480,7 @@ public:
 	                               const std::vector<ibQueryAstExprPtr>& current,
 	                               std::function<std::vector<ibQueryConstructorField>(const wxString&)> fieldsForSlot,
 	                               const ibMetaData* metaData, bool readOnly)
-		: wxDialog(parent, wxID_ANY, _("Virtual table parameters"), wxDefaultPosition, wxDefaultSize,
+		: ibDialog(parent, wxID_ANY, _("Virtual table parameters"), wxDefaultPosition, wxDefaultSize,
 		           wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 		, m_parameters(parameters), m_fieldsForSlot(std::move(fieldsForSlot))
 		, m_metaData(metaData), m_readOnly(readOnly)
@@ -491,7 +497,7 @@ public:
 		for (size_t i = 0; i < m_parameters.size(); ++i) {
 			const ibQuerySourceParameter& parameter = m_parameters[i];
 
-			rows->Add(new wxStaticText(this, wxID_ANY, parameter.m_name + wxT(":")), 0,
+			rows->Add(new ibStaticText(this, wxID_ANY, parameter.m_name + wxT(":")), 0,
 				parameter.m_condition ? wxALIGN_TOP | wxTOP : wxALIGN_CENTER_VERTICAL, FromDIP(4));
 
 			const wxString written =
@@ -550,7 +556,7 @@ public:
 				if (!current.IsEmpty() && words.Index(current, /*bCase*/ false) == wxNOT_FOUND)
 					words.Add(written);
 
-				row.m_choice = new wxChoice(this, wxID_ANY, wxDefaultPosition,
+				row.m_choice = new ibChoice(this, wxID_ANY, wxDefaultPosition,
 					wxSize(FromDIP(360), -1), words);
 				row.m_choice->Enable(!m_readOnly);
 				if (current.IsEmpty() || (!row.m_choice->SetStringSelection(current)
@@ -586,7 +592,7 @@ public:
 			// it blind — when the editor with those very fields exists — is how a window gets a
 			// reputation. A value row keeps the column so the boxes line up.
 			if (parameter.m_condition && !m_readOnly) {
-				wxButton* open = new wxButton(this, wxID_ANY, wxT("..."),
+				ibButton* open = new ibButton(this, wxID_ANY, wxT("..."),
 					wxDefaultPosition, wxSize(FromDIP(28), -1));
 				open->Bind(wxEVT_BUTTON, [this, row, slot = parameter.m_name](wxCommandEvent&) { EditCondition(row, slot); });
 				rows->Add(open, 0);
@@ -666,7 +672,7 @@ private:
 	struct Row
 	{
 		wxStyledTextCtrl* m_code   = nullptr;
-		wxChoice*         m_choice = nullptr;   // a closed set of values (the source declared one)
+		ibChoice*         m_choice = nullptr;   // a closed set of values (the source declared one)
 
 		wxString Text() const {
 			if (m_choice != nullptr) {
@@ -811,7 +817,7 @@ void ibDialogQueryConstructor::OnAddLink(wxCommandEvent&)
 
 	const size_t target = m_linkModel->FirstUnlinked();
 	if (target == static_cast<size_t>(-1)) {
-		wxMessageBox(select->m_joins.empty()
+		ibMessageBox(select->m_joins.empty()
 			? _("Add a second table first: a link is written between two tables the query reads.")
 			: _("Every table of this query already carries a link."),
 			GetTitle(), wxOK | wxICON_INFORMATION, this);
@@ -869,15 +875,16 @@ struct ibScopeRow {
 	std::vector<ibScopeRow> children;
 };
 
-class ibDialogPickTotalsScope : public wxDialog
+class ibDialogPickTotalsScope : public ibDialog
 {
 public:
 	ibDialogPickTotalsScope(wxWindow* parent, const std::vector<ibScopeRow>& rows, const wxString& current)
-		: wxDialog(parent, wxID_ANY, _("Computed over"), wxDefaultPosition, wxSize(360, 420),
+		: ibDialog(parent, wxID_ANY, _("Computed over"), wxDefaultPosition, wxSize(360, 420),
 		           wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 	{
+		// Several areas ticked, or none — nothing ticked is the way back to the ladder (PickTotalsScope).
 		m_tree = new ibCheckTree(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-		                        wxTR_HAS_BUTTONS | wxTR_HIDE_ROOT | wxTR_LINES_AT_ROOT);
+		                        wxTR_HAS_BUTTONS | wxTR_HIDE_ROOT | wxTR_LINES_AT_ROOT | wxCR_MULTIPLE_CHECK | wxCR_EMPTY_CHECK);
 		// ⭐ THE SAME PICTURES AS EVERY OTHER LIST IN THIS WINDOW. A field is drawn by its own icon
 		// (IconOfExpr over the level's head), a separator by the grouping picture — so the tree reads
 		// as the grids beside it and not as a dialog from somewhere else. One image list, the
@@ -1189,7 +1196,7 @@ void ibDialogQueryConstructor::OnSelectionLinkAdd(wxCommandEvent&)
 		return;
 
 	if (NamedResults().size() < 2) {
-		wxMessageBox(_("Name two of the package's selections with ONTO first: a link relates two of them."),
+		ibMessageBox(_("Name two of the package's selections with ONTO first: a link relates two of them."),
 			GetTitle(), wxOK | wxICON_INFORMATION, this);
 		return;
 	}
@@ -1423,7 +1430,7 @@ void ibDialogQueryConstructor::OnTableParameters(wxCommandEvent&)
 	std::vector<ibQueryAstExprPtr> arguments;
 	wxString error;
 	if (!dialog.TakeArguments(arguments, error)) {
-		wxMessageBox(error, _("Query"), wxOK | wxICON_ERROR, this);
+		ibMessageBox(error, _("Query"), wxOK | wxICON_ERROR, this);
 		return;
 	}
 
@@ -1463,12 +1470,12 @@ void ibDialogQueryConstructor::OnTableContextMenu(wxTreeEvent& event)
 	const bool replaceable = source != nullptr && !source->m_subquery;
 
 	enum { kAdd = wxID_HIGHEST + 1, kRemove, kRename, kReplace, kParameters };
-	wxMenu menu;
+	ibMenu menu;
 	// EACH WITH ITS PICTURE, the one its verb wears on the toolbars.
 	auto verb = [this, &menu](int id, const wxString& label, const wxString& art, const wxString& client, bool enabled) {
-		wxMenuItem* entry = new wxMenuItem(&menu, id, label);
+		wxMenuItem* entry = menu.Append(id, label);   // the menu makes its own item (ibMenuItem)
 		entry->SetBitmap(wxArtProvider::GetBitmapBundle(art, client, wxSize(16, 16)));   // normal DPI, no FromDIP
-		menu.Append(entry)->Enable(enabled);
+		entry->Enable(enabled);
 	};
 	verb(kAdd,        _("Add"),                             wxART_ADD,      wxART_FRONTEND, true);
 	verb(kRemove,     _("Delete") + wxT("\tAlt+Shift+Del"), wxART_DELETE,   wxART_FRONTEND, isTable);
@@ -1488,7 +1495,7 @@ void ibDialogQueryConstructor::OnTableContextMenu(wxTreeEvent& event)
 		default: break;
 		}
 	});
-	PopupMenu(&menu);
+	m_tables->PopupMenu(&menu);   // on the tree: an ib menu shows over an ib window, the dialog is native
 }
 
 // THE RENAME WINDOW — the table's name in a box, OK or Cancel. What happens to the name is RenameTable's.
@@ -1497,7 +1504,7 @@ void ibDialogQueryConstructor::OnRenameTable(wxCommandEvent&)
 	ibQuerySource* source = CanEdit() ? SelectedSource() : nullptr;
 	if (source == nullptr)
 		return;
-	wxTextEntryDialog dialog(this, _("Name:"), _("Change table name"), ibQuerySourceName(*source));
+	ibTextEntryDialog dialog(this, _("Name:"), _("Change table name"), ibQuerySourceName(*source));
 	if (dialog.ShowModal() != wxID_OK)
 		return;
 	RenameTable(*source, dialog.GetValue());
@@ -1541,14 +1548,14 @@ void ibDialogQueryConstructor::RenameTable(ibQuerySource& source, wxString alias
 // the table. A table row chosen (OK, a double-click) is the answer; a kind is a heading, not a table.
 bool ibDialogQueryConstructor::PickTable(const wxString& title, std::vector<ibString>& path)
 {
-	wxDialog dialog(this, wxID_ANY, title, wxDefaultPosition, FromDIP(wxSize(360, 480)),
+	ibDialog dialog(this, wxID_ANY, title, wxDefaultPosition, FromDIP(wxSize(360, 480)),
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
-	wxTreeCtrl* tree = new wxTreeCtrl(&dialog, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+	ibTreeCtrl* tree = new ibTreeCtrl(&dialog, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_HIDE_ROOT | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxTR_TWIST_BUTTONS);
 	FillCatalogue(tree, /*withFields*/ false);
 	sizer->Add(tree, 1, wxEXPAND | wxALL, FromDIP(6));
-	wxStdDialogButtonSizer* buttons = dialog.CreateStdDialogButtonSizer(wxOK | wxCANCEL);
+	ibStdDialogButtonSizer* buttons = dialog.CreateStdDialogButtonSizer(wxOK | wxCANCEL);
 	sizer->Add(buttons, 0, wxALIGN_RIGHT | wxLEFT | wxRIGHT | wxBOTTOM, FromDIP(6));
 	dialog.SetSizer(sizer);
 
@@ -1683,7 +1690,7 @@ void ibDialogQueryConstructor::OnDescribeTempTable(wxCommandEvent&)
 	const wxString table = chosen.StartsWith(wxT("&")) ? chosen.Mid(1) : chosen;
 	for (const ibQuerySource* other : CurrentSources())
 		if (other != source && other != nullptr && ibQuerySourceName(*other).IsSameAs(table, false)) {
-			wxMessageBox(ibString::Format(_("This query already has a table called '%s'."), table),
+			ibMessageBox(ibString::Format(_("This query already has a table called '%s'."), table),
 				_("Temporary table"), wxOK | wxICON_WARNING, this);
 			return;
 		}
@@ -1905,7 +1912,7 @@ void ibDialogQueryConstructor::OnEditNestedTable(wxCommandEvent&)
 		return;
 	}
 	if (source == nullptr || !source->m_subquery) {
-		wxMessageBox(_("This table is not a nested one: only a nested table has a query to edit."),
+		ibMessageBox(_("This table is not a nested one: only a nested table has a query to edit."),
 			_("Edit nested table"), wxOK | wxICON_INFORMATION, this);
 		return;
 	}
@@ -2277,7 +2284,7 @@ void ibDialogQueryConstructor::OnCopyLink(wxCommandEvent&)
 		FillAll();
 		return;
 	}
-	wxMessageBox(_("Select a link to copy. It lands on the first table that has none: "
+	ibMessageBox(_("Select a link to copy. It lands on the first table that has none: "
 	               "if every table already carries one, there is nowhere to put it."),
 		GetTitle(), wxOK | wxICON_INFORMATION, this);
 }
@@ -2694,7 +2701,7 @@ void ibDialogQueryConstructor::OnAddTotalsAggregate(wxCommandEvent&)
 	// and the window answered "add a level", which is the window arguing with itself. The rule did
 	// not change; what counts as a level did.
 	if (select->m_totalsBy.empty() && !select->m_totalsOverall) {
-		wxMessageBox(_("Add a grouping level first, or tick Grand totals: totals are counted PER "
+		ibMessageBox(_("Add a grouping level first, or tick Grand totals: totals are counted PER "
 		               "LEVEL, so there has to be one."),
 			GetTitle(), wxOK | wxICON_INFORMATION, this);
 		return;
@@ -2732,7 +2739,7 @@ void ibDialogQueryConstructor::OnEditTotalsAggregate(wxCommandEvent&)
 	if (select == nullptr || index < 0 || static_cast<size_t>(index) >= select->m_totalsAggregates.size())
 		return;
 
-	ibDialogQueryExpression dialog(this, _("Totals"), AvailableFields(),
+	ibDialogQueryExpression dialog(this, _("Totals"), TotalsFields(),
 		select->m_totalsAggregates[index].m_expr, m_metaData, m_readOnly);
 	if (dialog.ShowModal() != wxID_OK)
 		return;
@@ -3033,7 +3040,7 @@ void ibDialogQueryConstructor::DropTotalsIfLevelless(ibQuerySelect& select)
 		return;
 
 	if (!select.m_totalsAggregates.empty()) {
-		wxMessageBox(_("The last grouping level is gone, so the totals go with it: they are counted "
+		ibMessageBox(_("The last grouping level is gone, so the totals go with it: they are counted "
 		               "PER LEVEL, and there is no level left to count them on."),
 			GetTitle(), wxOK | wxICON_INFORMATION, this);
 		select.m_totalsAggregates.clear();
@@ -3252,7 +3259,7 @@ void ibDialogQueryConstructor::OnEditTotalsDimension(wxCommandEvent&)
 	// several fields is composed in its cell, where they are written as a list; here the head is
 	// what the editor was raised for.
 	ibQueryTotalField* head = (*levels)[static_cast<size_t>(at.m_level)].Head();
-	ibDialogQueryExpression dialog(this, _("Grouping level"), AvailableFields(),
+	ibDialogQueryExpression dialog(this, _("Grouping level"), TotalsFields(),
 		head != nullptr ? head->m_expr : ibQueryAstExprPtr(), m_metaData, m_readOnly);
 	if (dialog.ShowModal() != wxID_OK)
 		return;

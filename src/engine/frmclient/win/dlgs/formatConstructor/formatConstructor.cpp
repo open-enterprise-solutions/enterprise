@@ -8,8 +8,8 @@
 #include "frmclient/backend/compiler/value.h"   // the sample's value: the client's, an ibVariant as the engine's is
 
 #include <wx/datetime.h>
-#include <wx/msgdlg.h>
-#include <wx/panel.h>
+#include "gui/univ/messageDialog.h"
+#include "gui/univ/panel.h"
 #include <wx/sizer.h>
 
 // A row's label: what the code does, and how it is written.
@@ -36,7 +36,7 @@ static wxString PresetTitle(ibDatePreset preset)
 
 ibDialogFormatConstructor::ibDialogFormatConstructor(wxWindow* parent, const wxString& title,
 	const ibFormatString& format, bool readOnly)
-	: wxDialog(parent, wxID_ANY, title, wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
+	: ibDialog(parent, wxID_ANY, title, wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
 	m_original(format), m_readOnly(readOnly)
 {
 	m_filling = true;
@@ -44,7 +44,7 @@ ibDialogFormatConstructor::ibDialogFormatConstructor(wxWindow* parent, const wxS
 
 	wxBoxSizer* top = new wxBoxSizer(wxVERTICAL);
 
-	m_notebook = new wxNotebook(this, wxID_ANY);
+	m_notebook = new ibNotebook(this, wxID_ANY);
 	BuildNumberPage(m_notebook);
 	BuildDatePage(m_notebook);
 	BuildBooleanPage(m_notebook);
@@ -53,11 +53,11 @@ ibDialogFormatConstructor::ibDialogFormatConstructor(wxWindow* parent, const wxS
 	// THE STRING AS IT WILL BE WRITTEN, and what it does to a value of the tab's kind.
 	wxFlexGridSizer* result = new wxFlexGridSizer(2, gap, gap);
 	result->AddGrowableCol(1, 1);
-	result->Add(new wxStaticText(this, wxID_ANY, _("Format string:")), wxSizerFlags().CenterVertical());
-	m_text = new wxTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_READONLY);
+	result->Add(new ibStaticText(this, wxID_ANY, _("Format string:")), wxSizerFlags().CenterVertical());
+	m_text = new ibTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_READONLY);
 	result->Add(m_text, wxSizerFlags().Expand());
-	result->Add(new wxStaticText(this, wxID_ANY, _("Sample:")));
-	m_sample = new wxStaticText(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxST_NO_AUTORESIZE);
+	result->Add(new ibStaticText(this, wxID_ANY, _("Sample:")));
+	m_sample = new ibStaticText(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxST_NO_AUTORESIZE);
 	result->Add(m_sample, wxSizerFlags().Expand());
 	top->Add(result, wxSizerFlags().Expand().Border(wxLEFT | wxRIGHT, gap * 2));
 
@@ -66,7 +66,7 @@ ibDialogFormatConstructor::ibDialogFormatConstructor(wxWindow* parent, const wxS
 		wxString kept;
 		for (const auto& pair : m_original.m_other)
 			kept += (kept.IsEmpty() ? wxString() : wxString(wxT("; "))) + pair.first + wxT("=") + pair.second;
-		top->Add(new wxStaticText(this, wxID_ANY,
+		top->Add(new ibStaticText(this, wxID_ANY,
 			ibString::Format(_("Kept as written - codes the platform does not read: %s"), kept)),
 			wxSizerFlags().Border(wxLEFT | wxRIGHT | wxTOP, gap * 2));
 	}
@@ -104,16 +104,16 @@ ibDialogFormatConstructor::ibNumberRow ibDialogFormatConstructor::AddNumberRow(w
 	const wxString& label, ibFormatCode code, const std::optional<int>& value, int defaultValue, int min, int max)
 {
 	ibNumberRow row;
-	row.m_on = new wxCheckBox(page, wxID_ANY, RowLabel(label, code));
+	row.m_on = new ibCheckBox(page, wxID_ANY, RowLabel(label, code));
 	row.m_on->SetValue(value.has_value());
 	row.m_on->Enable(!m_readOnly);
-	row.m_value = new wxSpinCtrl(page, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
+	row.m_value = new ibSpinCtrl(page, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
 		wxSP_ARROW_KEYS, min, max, value ? *value : defaultValue);
 	row.m_value->Enable(value.has_value() && !m_readOnly);
 	grid->Add(row.m_on, wxSizerFlags().CenterVertical());
 	grid->Add(row.m_value);
 
-	wxSpinCtrl* editor = row.m_value;
+	ibSpinCtrl* editor = row.m_value;
 	row.m_on->Bind(wxEVT_CHECKBOX, [this, editor](wxCommandEvent& event) {
 		editor->Enable(event.IsChecked());
 		ShowResult();
@@ -128,10 +128,10 @@ ibDialogFormatConstructor::ibCharRow ibDialogFormatConstructor::AddCharRow(wxWin
 	const std::vector<std::pair<ibChar, wxString>>& chars)
 {
 	ibCharRow row;
-	row.m_on = new wxCheckBox(page, wxID_ANY, RowLabel(label, code));
+	row.m_on = new ibCheckBox(page, wxID_ANY, RowLabel(label, code));
 	row.m_on->SetValue(value.has_value());
 	row.m_on->Enable(!m_readOnly);
-	row.m_value = new wxChoice(page, wxID_ANY);
+	row.m_value = new ibChoice(page, wxID_ANY);
 	for (const auto& item : chars) {
 		row.m_value->Append(item.second);
 		row.m_chars.push_back(item.first);
@@ -152,7 +152,7 @@ ibDialogFormatConstructor::ibCharRow ibDialogFormatConstructor::AddCharRow(wxWin
 	grid->Add(row.m_on, wxSizerFlags().CenterVertical());
 	grid->Add(row.m_value);
 
-	wxChoice* editor = row.m_value;
+	ibChoice* editor = row.m_value;
 	row.m_on->Bind(wxEVT_CHECKBOX, [this, editor](wxCommandEvent& event) {
 		editor->Enable(event.IsChecked());
 		ShowResult();
@@ -165,15 +165,15 @@ ibDialogFormatConstructor::ibTextRow ibDialogFormatConstructor::AddTextRow(wxWin
 	const wxString& label, ibFormatCode code, const std::optional<wxString>& value)
 {
 	ibTextRow row;
-	row.m_on = new wxCheckBox(page, wxID_ANY, RowLabel(label, code));
+	row.m_on = new ibCheckBox(page, wxID_ANY, RowLabel(label, code));
 	row.m_on->SetValue(value.has_value());
 	row.m_on->Enable(!m_readOnly);
-	row.m_value = new wxTextCtrl(page, wxID_ANY, value ? *value : wxString());
+	row.m_value = new ibTextCtrl(page, wxID_ANY, value ? *value : wxString());
 	row.m_value->Enable(value.has_value() && !m_readOnly);
 	grid->Add(row.m_on, wxSizerFlags().CenterVertical());
 	grid->Add(row.m_value, wxSizerFlags().Expand());
 
-	wxTextCtrl* editor = row.m_value;
+	ibTextCtrl* editor = row.m_value;
 	row.m_on->Bind(wxEVT_CHECKBOX, [this, editor](wxCommandEvent& event) {
 		editor->Enable(event.IsChecked());
 		ShowResult();
@@ -186,9 +186,9 @@ ibDialogFormatConstructor::ibTextRow ibDialogFormatConstructor::AddTextRow(wxWin
 //  The tabs
 // ---------------------------------------------------------------------------
 
-void ibDialogFormatConstructor::BuildNumberPage(wxNotebook* notebook)
+void ibDialogFormatConstructor::BuildNumberPage(ibNotebook* notebook)
 {
-	wxPanel* page = new wxPanel(notebook);
+	ibPanel* page = new ibPanel(notebook);
 	const int gap = FromDIP(6);
 	wxFlexGridSizer* grid = new wxFlexGridSizer(2, gap, gap * 2);
 	grid->AddGrowableCol(1, 1);
@@ -215,9 +215,9 @@ void ibDialogFormatConstructor::BuildNumberPage(wxNotebook* notebook)
 	notebook->AddPage(page, _("Number"));
 }
 
-void ibDialogFormatConstructor::BuildDatePage(wxNotebook* notebook)
+void ibDialogFormatConstructor::BuildDatePage(ibNotebook* notebook)
 {
-	wxPanel* page = new wxPanel(notebook);
+	ibPanel* page = new ibPanel(notebook);
 	const int gap = FromDIP(6);
 	wxFlexGridSizer* grid = new wxFlexGridSizer(2, gap, gap * 2);
 	grid->AddGrowableCol(1, 1);
@@ -225,14 +225,14 @@ void ibDialogFormatConstructor::BuildDatePage(wxNotebook* notebook)
 	const ibDateFormat& date = m_original.m_date;
 
 	// THE PATTERN: a preset, or any pattern typed — the two stay in step both ways.
-	m_patternOn = new wxCheckBox(page, wxID_ANY, RowLabel(_("Pattern"), ibFormatCode::DatePattern));
+	m_patternOn = new ibCheckBox(page, wxID_ANY, RowLabel(_("Pattern"), ibFormatCode::DatePattern));
 	m_patternOn->SetValue(date.m_pattern.has_value());
 	m_patternOn->Enable(!m_readOnly);
 
 	const wxString pattern = date.m_pattern ? *date.m_pattern : ibFormatString::PresetPattern(ibDatePreset::Date);
 	m_presets = { ibDatePreset::Date, ibDatePreset::DateTime, ibDatePreset::Time, ibDatePreset::HoursMinutes,
 		ibDatePreset::MonthYear, ibDatePreset::Year, ibDatePreset::Sortable, ibDatePreset::Custom };
-	m_preset = new wxChoice(page, wxID_ANY);
+	m_preset = new ibChoice(page, wxID_ANY);
 	for (const ibDatePreset preset : m_presets) {
 		const wxString presetPattern = ibFormatString::PresetPattern(preset);
 		m_preset->Append(presetPattern.IsEmpty() ? PresetTitle(preset)
@@ -244,7 +244,7 @@ void ibDialogFormatConstructor::BuildDatePage(wxNotebook* notebook)
 		return static_cast<int>(m_presets.size()) - 1;
 	};
 	m_preset->SetSelection(presetIndex(ibFormatString::PresetOf(pattern)));
-	m_pattern = new wxTextCtrl(page, wxID_ANY, pattern);
+	m_pattern = new ibTextCtrl(page, wxID_ANY, pattern);
 	m_preset->Enable(date.m_pattern.has_value() && !m_readOnly);
 	m_pattern->Enable(date.m_pattern.has_value() && !m_readOnly);
 
@@ -275,7 +275,7 @@ void ibDialogFormatConstructor::BuildDatePage(wxNotebook* notebook)
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 	sizer->Add(grid, wxSizerFlags().Expand().Border(wxALL, gap * 2));
 	// ⚠ The one thing about this grammar nobody guesses: the month is lower case and the minutes upper.
-	wxStaticText* legend = new wxStaticText(page, wxID_ANY,
+	ibStaticText* legend = new ibStaticText(page, wxID_ANY,
 		_("In a pattern: yyyy or yy - the year, mm or m - the month, dd or d - the day, HH or H - the hours, "
 		  "MM or M - the minutes, SS or S - the seconds. The month is lower case, the minutes upper."));
 	legend->Wrap(FromDIP(460));
@@ -284,9 +284,9 @@ void ibDialogFormatConstructor::BuildDatePage(wxNotebook* notebook)
 	notebook->AddPage(page, _("Date"));
 }
 
-void ibDialogFormatConstructor::BuildBooleanPage(wxNotebook* notebook)
+void ibDialogFormatConstructor::BuildBooleanPage(ibNotebook* notebook)
 {
-	wxPanel* page = new wxPanel(notebook);
+	ibPanel* page = new ibPanel(notebook);
 	const int gap = FromDIP(6);
 	wxFlexGridSizer* grid = new wxFlexGridSizer(2, gap, gap * 2);
 	grid->AddGrowableCol(1, 1);
@@ -384,7 +384,7 @@ void ibDialogFormatConstructor::OnOk(wxCommandEvent& event)
 {
 	// `;` ENDS A PAIR AND `=` IS NOT KEPT IN ONE, so a text holding either would come back as something
 	// else — said here, on the field, rather than found later in what a report prints.
-	struct ibCheck { wxCheckBox* m_on; wxTextCtrl* m_value; int m_page; };
+	struct ibCheck { ibCheckBox* m_on; ibTextCtrl* m_value; int m_page; };
 	const ibCheck checks[] = {
 		{ m_zero.m_on, m_zero.m_value, 0 },
 		{ m_patternOn, m_pattern, 1 },
@@ -397,7 +397,7 @@ void ibDialogFormatConstructor::OnOk(wxCommandEvent& event)
 			continue;
 		m_notebook->SetSelection(check.m_page);
 		check.m_value->SetFocus();
-		wxMessageBox(ibString::Format(_("'%s' cannot hold ';' or '=': a format string has no way to write them."),
+		ibMessageBox(ibString::Format(_("'%s' cannot hold ';' or '=': a format string has no way to write them."),
 			check.m_on->GetLabel()), GetTitle(), wxOK | wxICON_WARNING, this);
 		return;
 	}

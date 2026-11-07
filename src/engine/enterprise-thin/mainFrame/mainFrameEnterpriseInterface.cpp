@@ -5,10 +5,6 @@
 #include <wx/artprov.h>
 #include <wx/renderer.h>
 #include <wx/popupwin.h>
-#include <wx/statline.h>
-#include <wx/statbmp.h>   // wxStaticBitmap — a declared command group's picture beside its heading
-#include <wx/tglbtn.h>
-#include <wx/hyperlink.h>
 #include <wx/dcbuffer.h>
 
 // Interior-design palette (see luna_dockart.cpp). Subsystem chrome
@@ -22,6 +18,9 @@
 #define wxDefaultStypeFGColour wxColour(0x3F, 0x5C, 0x77)  // #3F5C77 deep dusty blue
 
 #include "frmclient/win/picture.h"   // the pictures, as they travel
+#include "gui/univ/ctrl/control.h"
+#include "gui/univ/ctrl/staticText.h"
+#include "gui/univ/ctrl/staticBitmap.h"
 
 // THE SECTION PANEL — the desktop's (enterprise/mainFrame/mainFrameEnterpriseInterface.cpp) on the thin client: the
 // same buttons, the same page in its popup, drawn line for line; what it shows is the server's schema Sections
@@ -38,13 +37,13 @@ static wxIcon IconOf(const ibProtocolNode& item)
 	return icon;
 }
 
-class ibSubSystemWindow : public wxWindow {
+class ibSubSystemWindow : public ibWindow {
 
 	// ----------------------------------------------------------------------------
 	// ibSubSystemButton: search button used by search control
 	// ----------------------------------------------------------------------------
 
-	class ibSubSystemButton : public wxControl {
+	class ibSubSystemButton : public ibControl {
 
 		wxString ChopText(wxDC& dc, const wxString& text, int max_size) {
 
@@ -102,7 +101,7 @@ class ibSubSystemWindow : public wxWindow {
 		ibSubSystemWindow* GetMainWindow() const { return m_mainWindow; }
 
 		ibSubSystemButton(ibSubSystemWindow* mainWindow, wxWindowID id, const ibProtocolNode& section)
-			: wxControl(mainWindow, id, wxDefaultPosition, wxDefaultSize, wxNO_BORDER),
+			: ibControl(mainWindow, id, wxDefaultPosition, wxDefaultSize, wxNO_BORDER),
 			m_section(section), m_popupWindow(nullptr),
 			m_mainWindow(mainWindow), m_bitmap(ibProtocolPicture(section, ibProtocol::ibSchema::ibSections::Picture)), m_eventType(wxEVT_BUTTON) {
 
@@ -183,7 +182,7 @@ class ibSubSystemWindow : public wxWindow {
 			wxCoord texty;
 
 			// if the caption is empty, measure some temporary text
-			wxString caption = m_labelOrig;
+			wxString caption = GetLabel();
 			if (caption.empty())
 				caption = wxT("Xj");
 
@@ -350,7 +349,7 @@ class ibSubSystemWindow : public wxWindow {
 
 			if (m_bitmap.IsOk()) {
 
-				bitmap_offset = tab_x + wxControl::FromDIP(8);
+				bitmap_offset = tab_x + ibControl::FromDIP(8);
 
 				// draw bitmap
 				dc.DrawBitmap(m_bitmap,
@@ -359,10 +358,10 @@ class ibSubSystemWindow : public wxWindow {
 					true);
 
 				text_offset = bitmap_offset + m_bitmap.GetLogicalWidth();
-				text_offset += wxControl::FromDIP(3); // bitmap padding
+				text_offset += ibControl::FromDIP(3); // bitmap padding
 			}
 			else {
-				text_offset = tab_x + wxControl::FromDIP(8);
+				text_offset = tab_x + ibControl::FromDIP(8);
 			}
 
 			wxString draw_text = ChopText(dc,
@@ -449,13 +448,13 @@ class ibSubSystemWindow : public wxWindow {
 	//
 	// It answers a click the way the button did — a wxEVT_BUTTON from this window, carrying its id — so
 	// the handlers that were bound to the buttons are bound to this unchanged.
-	class ibCommandLink : public wxControl {
+	class ibCommandLink : public ibControl {
 	public:
 
 		ibCommandLink(wxWindow* parent, wxWindowID id, const wxString& caption, const wxIcon& icon)
 			: m_caption(caption), m_icon(icon)
 		{
-			wxControl::Create(parent, id, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
+			ibControl::Create(parent, id, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
 
 			SetBackgroundStyle(wxBG_STYLE_PAINT);
 			SetForegroundColour(wxDefaultStypeFGColour);
@@ -611,7 +610,7 @@ class ibSubSystemWindow : public wxWindow {
 
 	class ibPopupSubWindow : public wxPopupTransientWindow {
 
-		class ibScrolledSubWindow : public wxScrolledWindow {
+		class ibScrolledSubWindow : public wxScrolled<ibWindow> {
 
 			// What a link opens — the schema's Item, and how (its Type: a new item in Create, the default anywhere else).
 			class ibScrolledSubWindowItemRefData : public wxClientData {
@@ -626,9 +625,9 @@ class ibSubSystemWindow : public wxWindow {
 
 		public:
 
-			ibScrolledSubWindow() : wxScrolledWindow() {}
+			ibScrolledSubWindow() : wxScrolled<ibWindow>() {}
 			ibScrolledSubWindow(ibPopupSubWindow* parent,
-				wxWindowID winid = wxID_ANY) : wxScrolledWindow(parent, winid, wxDefaultPosition, wxDefaultSize, wxBORDER_SUNKEN | wxHSCROLL | wxVSCROLL), m_popupWindow(parent)
+				wxWindowID winid = wxID_ANY) : wxScrolled<ibWindow>(parent, winid, wxDefaultPosition, wxDefaultSize, wxBORDER_SUNKEN | wxHSCROLL | wxVSCROLL), m_popupWindow(parent)
 			{
 				wxBoxSizer* sizerMain = new wxBoxSizer(wxHORIZONTAL);
 				wxBoxSizer* sizerLeft = new wxBoxSizer(wxVERTICAL);
@@ -693,7 +692,7 @@ class ibSubSystemWindow : public wxWindow {
 				const wxBitmap& picture = wxNullBitmap, const wxString& tooltip = wxEmptyString) {
 
 				wxBoxSizer* sizerBlock = new wxBoxSizer(wxVERTICAL);
-				wxStaticText* st = new wxStaticText(this, wxID_ANY, caption, wxDefaultPosition, wxDefaultSize, 0);
+				ibStaticText* st = new ibStaticText(this, wxID_ANY, caption, wxDefaultPosition, wxDefaultSize, 0);
 
 				st->SetForegroundColour(wxDefaultStypeFGColour);
 				st->Wrap(-1);
@@ -703,7 +702,7 @@ class ibSubSystemWindow : public wxWindow {
 
 				if (picture.IsOk()) {
 					wxBoxSizer* sizerHeading = new wxBoxSizer(wxHORIZONTAL);
-					wxStaticBitmap* sb = new wxStaticBitmap(this, wxID_ANY, picture);
+					ibStaticBitmap* sb = new ibStaticBitmap(this, wxID_ANY, picture);
 					if (!tooltip.IsEmpty())
 						sb->SetToolTip(tooltip);
 					sizerHeading->Add(sb, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(5));
@@ -838,7 +837,7 @@ class ibSubSystemWindow : public wxWindow {
 
 		wxWindow*          m_staticLine    = nullptr;
 		ibSubSystemButton* m_currentButton = nullptr;
-		wxScrolledWindow*  m_mainWindow    = nullptr;
+		ibScrolledSubWindow* m_mainWindow  = nullptr;
 
 		wxTimer m_fadeTimer;
 		int     m_currentAlpha   = 0;
@@ -856,7 +855,7 @@ public:
 	// An item of a page opened — the window's call; true when it was.
 	using Opener = std::function<bool(long long item, int type)>;
 
-	ibSubSystemWindow() : wxWindow(), m_activeButton(nullptr) {}
+	ibSubSystemWindow() : ibWindow(), m_activeButton(nullptr) {}
 	ibSubSystemWindow(wxWindow* parent,
 		wxWindowID id,
 		const ibProtocolNode& shown,
@@ -864,7 +863,7 @@ public:
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize,
 		long style = 0,
-		const wxString& name = wxASCII_STR(wxPanelNameStr)) : wxWindow(parent, id, pos, size, style, name), m_activeButton(nullptr),
+		const wxString& name = wxASCII_STR(wxPanelNameStr)) : ibWindow(parent, id, pos, size, style, name), m_activeButton(nullptr),
 		m_open(std::move(open))
 	{
 		// The sections the server shows this person — only those they may use come; the pictures they name — each
@@ -876,7 +875,7 @@ public:
 		// Interior palette — light dusty (one tier between powder chrome
 		// and the cream popup interior). Was wxAUI_DEFAULT_COLOUR
 		// (dark navy) lightened — read as a muddy mid-grey.
-		wxWindow::SetBackgroundColour(wxColour(0xC8, 0xD6, 0xDF));  // #C8D6DF light dusty
+		ibWindow::SetBackgroundColour(wxColour(0xC8, 0xD6, 0xDF));  // #C8D6DF light dusty
 	}
 
 protected:
@@ -936,12 +935,12 @@ private:
 	wxDECLARE_EVENT_TABLE();
 };
 
-wxBEGIN_EVENT_TABLE(ibSubSystemWindow::ibSubSystemButton, wxControl)
+wxBEGIN_EVENT_TABLE(ibSubSystemWindow::ibSubSystemButton, ibControl)
 EVT_LEFT_UP(ibSubSystemWindow::ibSubSystemButton::OnLeftUp)
 EVT_PAINT(ibSubSystemWindow::ibSubSystemButton::OnPaint)
 wxEND_EVENT_TABLE()
 
-wxBEGIN_EVENT_TABLE(ibSubSystemWindow, wxWindow)
+wxBEGIN_EVENT_TABLE(ibSubSystemWindow, ibWindow)
 EVT_BUTTON(wxID_ANY, ibSubSystemWindow::OnEventButton)
 EVT_SIZE(ibSubSystemWindow::OnEventSize)
 wxEND_EVENT_TABLE()

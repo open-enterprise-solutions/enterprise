@@ -4,6 +4,20 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "queryConstructorInternal.h"
+#include "gui/univ/ctrl/staticText.h"
+#include "gui/univ/ctrl/button.h"
+#include "gui/univ/ctrl/checkBox.h"
+#include "gui/univ/ctrl/textCtrl.h"
+#include "gui/univ/ctrl/choice.h"
+#include "gui/univ/ctrl/notebook.h"
+#include "gui/univ/ctrl/radioBox.h"
+#include "gui/univ/dialog.h"
+#include "gui/univ/ctrl/treeCtrl.h"
+#include "gui/univ/ctrl/staticBox.h"
+#include "gui/univ/ctrl/spinCtrl.h"
+#include "gui/univ/menu.h"
+#include "gui/univ/panel.h"
+#include "gui/univ/messageDialog.h"
 
 using namespace queryctor;
 
@@ -258,17 +272,17 @@ void ibDialogQueryConstructor::AddTool(wxToolBar* bar, const wxString& label, co
 // button that has no menu item and a menu item that does nothing. The toolbar records each verb as it
 // is added (AddTool); this replays that record. A tool added tomorrow is in the menu the same day,
 // with nothing edited here.
-void ibDialogQueryConstructor::AttachContextMenu(wxWindow* target, wxToolBar* bar)
+void ibDialogQueryConstructor::AttachContextMenu(ibWindow* target, wxToolBar* bar)
 {
 	if (target == nullptr || bar == nullptr)
 		return;
 
-	auto popup = [this, bar](wxWindow* over) {
+	auto popup = [this, bar](ibWindow* over) {
 		const auto verbs = m_barVerbs.find(bar);
 		if (verbs == m_barVerbs.end() || verbs->second.empty() || !CanEdit())
 			return;
 
-		wxMenu menu;
+		ibMenu menu;
 		std::vector<int> ids;
 		for (const Verb& verb : verbs->second) {
 			const int id = wxWindow::NewControlId();
@@ -300,7 +314,7 @@ void ibDialogQueryConstructor::AttachContextMenu(wxWindow* target, wxToolBar* ba
 		});
 		return;
 	}
-	if (wxTreeCtrl* tree = dynamic_cast<wxTreeCtrl*>(target)) {
+	if (ibTreeCtrl* tree = dynamic_cast<ibTreeCtrl*>(target)) {
 		tree->Bind(wxEVT_TREE_ITEM_MENU, [tree, popup](wxTreeEvent& event) {
 			if (event.GetItem().IsOk())
 				tree->SelectItem(event.GetItem());
@@ -313,11 +327,11 @@ void ibDialogQueryConstructor::AttachContextMenu(wxWindow* target, wxToolBar* ba
 
 // A MOVE button — the narrow column that sits BETWEEN two panes. Its whole job is direction, so it
 // is a glyph and it is square; a word here would make the column as wide as the pane beside it.
-wxButton* ibDialogQueryConstructor::AddMoveButton(wxWindow* parent, wxSizer* sizer, const wxString& glyph,
+ibButton* ibDialogQueryConstructor::AddMoveButton(wxWindow* parent, wxSizer* sizer, const wxString& glyph,
                                                   const wxString& tip,
                                                   std::function<void(wxCommandEvent&)> handler)
 {
-	wxButton* button = new wxButton(parent, wxID_ANY, glyph, wxDefaultPosition,
+	ibButton* button = new ibButton(parent, wxID_ANY, glyph, wxDefaultPosition,
 		parent->FromDIP(wxSize(30, 26)));
 	button->SetToolTip(tip);
 	button->Bind(wxEVT_BUTTON, handler);
@@ -389,7 +403,7 @@ static void ibDropTotalsFromPackage(ibQueryPackage& package)
 }
 ibDialogQueryConstructor::ibDialogQueryConstructor(wxWindow* parent, const ibQueryPackage& package,
                                                    const ibMetaData* metaData, bool readOnly, int exclude)
-	: wxDialog(parent, wxID_ANY, _("Query constructor"), wxDefaultPosition, wxSize(1040, 720),
+	: ibDialog(parent, wxID_ANY, _("Query constructor"), wxDefaultPosition, wxSize(1040, 720),
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 	, m_package(package)
 	, m_metaData(metaData)
@@ -442,7 +456,7 @@ ibDialogQueryConstructor::ibDialogQueryConstructor(wxWindow* parent, const ibQue
 	// whether something is broken; the sentence tells them the query is there to be read and that
 	// nothing they do here will be kept.
 	if (m_readOnly) {
-		wxStaticText* banner = new wxStaticText(this, wxID_ANY,
+		ibStaticText* banner = new ibStaticText(this, wxID_ANY,
 			// ASCII ONLY in this literal: the file is UTF-8 with no BOM, MSVC reads it in the
 			// system codepage, and an em dash typed here reaches the screen as two garbage glyphs.
 			_("View only. This query belongs to a configuration that cannot be changed. "
@@ -455,7 +469,7 @@ ibDialogQueryConstructor::ibDialogQueryConstructor(wxWindow* parent, const ibQue
 
 	// THE PACKAGE IS THE SHELL'S TOP LEVEL — a list of statements AROUND the tabs, because that is
 	// what a package is: the tabs edit one statement, the strip says which.
-	m_notebook = new wxNotebook(this, wxID_ANY);
+	m_notebook = new ibNotebook(this, wxID_ANY);
 	// The branch strip follows the tab: switching branches is meaningless where the branches
 	// themselves are being configured.
 	m_notebook->Bind(wxEVT_NOTEBOOK_PAGE_CHANGED, [this](wxBookCtrlEvent& e) {
@@ -527,7 +541,7 @@ ibDialogQueryConstructor::ibDialogQueryConstructor(wxWindow* parent, const ibQue
 	//
 	// The pages are empty on purpose. The content beside them IS the main notebook; this control is
 	// here for its tab strip, so it is kept as narrow as the strip needs.
-	m_branchStrip = new wxNotebook(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxNB_RIGHT);
+	m_branchStrip = new ibNotebook(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxNB_RIGHT);
 	m_branchStrip->SetMinSize(FromDIP(wxSize(34, -1)));
 	m_branchStrip->Bind(wxEVT_NOTEBOOK_PAGE_CHANGED, &ibDialogQueryConstructor::OnBranchSelected, this);
 	upper->Add(m_branchStrip, 0, wxEXPAND | wxTOP | wxBOTTOM, FromDIP(6));
@@ -536,7 +550,7 @@ ibDialogQueryConstructor::ibDialogQueryConstructor(wxWindow* parent, const ibQue
 	// own conditions, its own everything — so it is switched the same way a union branch is, and by
 	// the same kind of control. The list on the "Query batch" page is where statements are ADDED and
 	// ORDERED; this is where you simply move between them, which is what you do most.
-	m_batchStrip = new wxNotebook(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxNB_RIGHT);
+	m_batchStrip = new ibNotebook(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxNB_RIGHT);
 	m_batchStrip->SetMinSize(FromDIP(wxSize(34, -1)));
 	m_batchStrip->Bind(wxEVT_NOTEBOOK_PAGE_CHANGED, &ibDialogQueryConstructor::OnBatchSelected, this);
 	upper->Add(m_batchStrip, 0, wxEXPAND | wxTOP | wxBOTTOM | wxRIGHT, FromDIP(6));
@@ -569,20 +583,20 @@ ibDialogQueryConstructor::ibDialogQueryConstructor(wxWindow* parent, const ibQue
 	// standing beside it, and the two read as one piece of nonsense.
 	//
 	// Fixed width means the control owns the whole line and erases all of it on every paint.
-	m_status = new wxStaticText(this, wxID_ANY, wxEmptyString,
+	m_status = new ibStaticText(this, wxID_ANY, wxEmptyString,
 		wxDefaultPosition, wxDefaultSize, wxST_NO_AUTORESIZE);
 	outer->Add(m_status, 0, wxEXPAND | wxLEFT | wxRIGHT, FromDIP(10));
 
 	wxBoxSizer* buttons = new wxBoxSizer(wxHORIZONTAL);
 	// THE DOOR TO THE TEXT. Open whether or not the query is sound — reading what the constructor
 	// wrote is exactly what a person does when it is NOT sound.
-	wxButton* queryText = new wxButton(this, wxID_ANY, _("Query text..."));
+	ibButton* queryText = new ibButton(this, wxID_ANY, _("Query text..."));
 	queryText->Bind(wxEVT_BUTTON, &ibDialogQueryConstructor::OnShowQueryText, this);
 	buttons->Add(queryText, 0, wxRIGHT, FromDIP(6));
 
 	// Checking stays available when the query may only be read — asking the engine whether a query
 	// is sound is a way of READING it, and the answer is worth having whether or not it can be fixed.
-	wxButton* check = new wxButton(this, wxID_ANY, _("Check query"));
+	ibButton* check = new ibButton(this, wxID_ANY, _("Check query"));
 	check->Bind(wxEVT_BUTTON, &ibDialogQueryConstructor::OnCheck, this);
 	buttons->Add(check, 0, wxRIGHT, FromDIP(6));
 	buttons->AddStretchSpacer();
@@ -600,7 +614,7 @@ ibDialogQueryConstructor::ibDialogQueryConstructor(wxWindow* parent, const ibQue
 	if (m_readOnly) {
 		// The buttons go grey together — the SIGN that this is a reading window. The guarantee is
 		// CanEdit() inside the handlers, because a double-click reaches one with no button in the way.
-		for (wxButton* button : m_commandButtons)
+		for (ibButton* button : m_commandButtons)
 			if (button != nullptr) button->Enable(false);
 		if (m_preview != nullptr)
 			m_preview->SetReadOnly(true);
@@ -631,7 +645,7 @@ ibDialogQueryConstructor::ibDialogQueryConstructor(wxWindow* parent, const ibQue
 // — the package is a thing you visit, not a thing you watch.
 wxWindow* ibDialogQueryConstructor::BuildPackagePage(wxWindow* parent)
 {
-	wxPanel* panel = new wxPanel(parent);
+	ibPanel* panel = new ibPanel(parent);
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 
 	wxToolBar* bar = MakeToolBar(panel);
@@ -689,22 +703,22 @@ wxWindow* ibDialogQueryConstructor::BuildPackagePage(wxWindow* parent)
 // writing it.
 wxWindow* ibDialogQueryConstructor::BuildTablesPage(wxWindow* parent)
 {
-	wxPanel* page = new wxPanel(parent);
+	ibPanel* page = new ibPanel(parent);
 
 	// splitterOuter: [available] | [ splitterInner: [tables] | [fields] ]
-	wxSplitterWindow* splitterOuter = new wxSplitterWindow(page, wxID_ANY,
+	ibSplitterWindow* splitterOuter = new ibSplitterWindow(page, wxID_ANY,
 		wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
 	splitterOuter->SetMinimumPaneSize(FromDIP(140));
 
 	// ---- LEFT: the catalogue. A WALK over the queryable factory (plus the temp tables this
 	// package has declared so far), never a written-out list of metaclasses.
-	wxPanel* leftPane = new wxPanel(splitterOuter);
+	ibPanel* leftPane = new ibPanel(splitterOuter);
 	wxBoxSizer* left = new wxBoxSizer(wxVERTICAL);
-	left->Add(new wxStaticText(leftPane, wxID_ANY, _("Available tables")), 0, wxALL, FromDIP(3));
+	left->Add(new ibStaticText(leftPane, wxID_ANY, _("Available tables")), 0, wxALL, FromDIP(3));
 	// NO TOOLBAR HERE. This pane is the CATALOGUE — what the configuration has. Nothing is created
 	// in it, so a verb standing over it had nothing to act on: "add a nested table" makes a table
 	// for THIS QUERY, which is the middle pane, and that is where it now lives beside "edit nested".
-	m_sourceTree = new wxTreeCtrl(leftPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+	m_sourceTree = new ibTreeCtrl(leftPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_HIDE_ROOT | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxTR_TWIST_BUTTONS);
 	m_sourceTree->Bind(wxEVT_TREE_ITEM_ACTIVATED, [this](wxTreeEvent&) { wxCommandEvent e; OnAddTable(e); });
 	m_sourceTree->Bind(wxEVT_TREE_BEGIN_DRAG, &ibDialogQueryConstructor::OnSourceBeginDrag, this);
@@ -712,14 +726,14 @@ wxWindow* ibDialogQueryConstructor::BuildTablesPage(wxWindow* parent)
 	left->Add(m_sourceTree, 1, wxEXPAND | wxLEFT | wxRIGHT, FromDIP(3));
 	leftPane->SetSizer(left);
 
-	wxSplitterWindow* splitterInner = new wxSplitterWindow(splitterOuter, wxID_ANY,
+	ibSplitterWindow* splitterInner = new ibSplitterWindow(splitterOuter, wxID_ANY,
 		wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
 	splitterInner->SetMinimumPaneSize(FromDIP(160));
 
 	// ---- MIDDLE: the chosen tables, each expanding into its own fields. This is where "ask the
 	// SOURCE which it is" lands: a real table answers through its descriptor, a nested one through
 	// its projections, and this pane never learns the difference.
-	wxPanel* middlePane = new wxPanel(splitterInner);
+	ibPanel* middlePane = new ibPanel(splitterInner);
 	wxBoxSizer* middleRow = new wxBoxSizer(wxHORIZONTAL);
 
 	wxBoxSizer* toTables = new wxBoxSizer(wxVERTICAL);
@@ -732,7 +746,7 @@ wxWindow* ibDialogQueryConstructor::BuildTablesPage(wxWindow* parent)
 	middleRow->Add(toTables, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, FromDIP(3));
 
 	wxBoxSizer* middle = new wxBoxSizer(wxVERTICAL);
-	middle->Add(new wxStaticText(middlePane, wxID_ANY, _("Tables")), 0, wxALL, FromDIP(3));
+	middle->Add(new ibStaticText(middlePane, wxID_ANY, _("Tables")), 0, wxALL, FromDIP(3));
 	wxToolBar* middleBar = MakeToolBar(middlePane);
 	// A NESTED TABLE IS A TABLE OF THIS QUERY, so it is added where the query's tables are — and it
 	// opens THIS SAME window one level down over the inner select.
@@ -752,7 +766,7 @@ wxWindow* ibDialogQueryConstructor::BuildTablesPage(wxWindow* parent)
 	// rest of the query calls that table by, and the place a person expects to type a thing's name
 	// is on the thing. F2 or a slow second click renames it; a FIELD row refuses (see the BEGIN
 	// handler), because a field's name is not the author's to change here.
-	m_tables = new wxTreeCtrl(middlePane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+	m_tables = new ibTreeCtrl(middlePane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_HIDE_ROOT | wxTR_LINES_AT_ROOT | wxTR_NO_LINES
 		| wxTR_TWIST_BUTTONS | wxTR_EDIT_LABELS);
 	m_tables->Bind(wxEVT_TREE_BEGIN_LABEL_EDIT, &ibDialogQueryConstructor::OnTableAliasEditBegin, this);
@@ -782,7 +796,7 @@ wxWindow* ibDialogQueryConstructor::BuildTablesPage(wxWindow* parent)
 	middlePane->SetSizer(middleRow);
 
 	// ---- RIGHT: the projections, in order.
-	wxPanel* rightPane = new wxPanel(splitterInner);
+	ibPanel* rightPane = new ibPanel(splitterInner);
 	wxBoxSizer* rightRow = new wxBoxSizer(wxHORIZONTAL);
 
 	wxBoxSizer* toFields = new wxBoxSizer(wxVERTICAL);
@@ -795,7 +809,7 @@ wxWindow* ibDialogQueryConstructor::BuildTablesPage(wxWindow* parent)
 	rightRow->Add(toFields, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, FromDIP(3));
 
 	wxBoxSizer* right = new wxBoxSizer(wxVERTICAL);
-	right->Add(new wxStaticText(rightPane, wxID_ANY, _("Fields")), 0, wxALL, FromDIP(3));
+	right->Add(new ibStaticText(rightPane, wxID_ANY, _("Fields")), 0, wxALL, FromDIP(3));
 	wxToolBar* rightBar = MakeToolBar(rightPane);
 	AddTool(rightBar, _("Expression"), wxART_ADD_EXPRESSION, [this](wxCommandEvent& e) { OnAddFieldExpression(e); });
 	// EDIT THE CURRENT FIELD — the arbitrary-expression editor, over the field standing here. The
@@ -905,13 +919,13 @@ wxWindow* ibDialogQueryConstructor::BuildTablesPage(wxWindow* parent)
 // a glance and where its exact predicate is edited.
 wxWindow* ibDialogQueryConstructor::BuildLinksPage(wxWindow* parent)
 {
-	wxPanel* page = new wxPanel(parent);
+	ibPanel* page = new ibPanel(parent);
 
 	// ⚠ THE DIAGRAM IS GONE. It drew the two tables as boxes to drag a field between — a second way
 	// to say what the row below says, and the row says it better now that both tables are chosen
 	// from drop-downs and the condition has the expression editor behind its "...". Two pictures of
 	// one thing cost a splitter, a refill and a drag protocol, and taught nothing the grid does not.
-	wxPanel* bottomPane = page;
+	ibPanel* bottomPane = page;
 	wxBoxSizer* bottom = new wxBoxSizer(wxVERTICAL);
 	wxToolBar* bar = MakeToolBar(bottomPane);
 	// A LINK IS MADE HERE TOO, not only by adding a table. Joining a table that is already in the
@@ -1007,7 +1021,7 @@ wxWindow* ibDialogQueryConstructor::BuildLinksPage(wxWindow* parent)
 // See docs/private/query-constructor.md §8a.
 wxWindow* ibDialogQueryConstructor::BuildSelectionLinksPage(wxWindow* parent)
 {
-	wxPanel* page = new wxPanel(parent);
+	ibPanel* page = new ibPanel(parent);
 	wxBoxSizer* box = new wxBoxSizer(wxVERTICAL);
 
 	wxToolBar* bar = MakeToolBar(page);
@@ -1065,17 +1079,17 @@ wxWindow* ibDialogQueryConstructor::BuildSelectionLinksPage(wxWindow* parent)
 // keys above, the aggregates below.
 wxWindow* ibDialogQueryConstructor::BuildGroupingPage(wxWindow* parent)
 {
-	wxPanel* page = new wxPanel(parent);
+	ibPanel* page = new ibPanel(parent);
 
-	wxSplitterWindow* splitter = new wxSplitterWindow(page, wxID_ANY,
+	ibSplitterWindow* splitter = new ibSplitterWindow(page, wxID_ANY,
 		wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
 	splitter->SetMinimumPaneSize(FromDIP(150));
 
 	// ---- LEFT: what there is to group by.
-	wxPanel* leftPane = new wxPanel(splitter);
+	ibPanel* leftPane = new ibPanel(splitter);
 	wxBoxSizer* left = new wxBoxSizer(wxVERTICAL);
-	left->Add(new wxStaticText(leftPane, wxID_ANY, _("Fields")), 0, wxALL, FromDIP(3));
-	m_groupingSource = new wxTreeCtrl(leftPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+	left->Add(new ibStaticText(leftPane, wxID_ANY, _("Fields")), 0, wxALL, FromDIP(3));
+	m_groupingSource = new ibTreeCtrl(leftPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_HIDE_ROOT | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxTR_TWIST_BUTTONS);
 	m_groupingSource->Bind(wxEVT_TREE_ITEM_ACTIVATED, [this](wxTreeEvent&) { wxCommandEvent e; OnAddGrouping(e); });
 	// DRAGGABLE, like every other field list — you can drag anything you can see.
@@ -1085,11 +1099,11 @@ wxWindow* ibDialogQueryConstructor::BuildGroupingPage(wxWindow* parent)
 	leftPane->SetSizer(left);
 
 	// ---- RIGHT: the two things a grouping is made of, one above the other.
-	wxSplitterWindow* rightSplit = new wxSplitterWindow(splitter, wxID_ANY,
+	ibSplitterWindow* rightSplit = new ibSplitterWindow(splitter, wxID_ANY,
 		wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
 	rightSplit->SetMinimumPaneSize(FromDIP(70));
 
-	wxPanel* keysPane = new wxPanel(rightSplit);
+	ibPanel* keysPane = new ibPanel(rightSplit);
 	wxBoxSizer* keysRow = new wxBoxSizer(wxHORIZONTAL);
 	wxBoxSizer* keysMove = new wxBoxSizer(wxVERTICAL);
 	keysMove->AddStretchSpacer();
@@ -1100,7 +1114,7 @@ wxWindow* ibDialogQueryConstructor::BuildGroupingPage(wxWindow* parent)
 	keysMove->AddStretchSpacer();
 	keysRow->Add(keysMove, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, FromDIP(3));
 	wxBoxSizer* keys = new wxBoxSizer(wxVERTICAL);
-	keys->Add(new wxStaticText(keysPane, wxID_ANY, _("Grouping fields")), 0, wxALL, FromDIP(3));
+	keys->Add(new ibStaticText(keysPane, wxID_ANY, _("Grouping fields")), 0, wxALL, FromDIP(3));
 	// EDITED IN PLACE, like every other grid here. A grouping key is an expression; typing over it
 	// goes through the engine's parser, and what the parser says is what the user is shown.
 	m_groupingModel = new ibQueryGridModel();
@@ -1140,7 +1154,7 @@ wxWindow* ibDialogQueryConstructor::BuildGroupingPage(wxWindow* parent)
 	// The aggregates are PROJECTIONS whose expression is an aggregate call — the same list the
 	// Fields tab shows, seen through the question this tab asks. One AST, two views. Shown with
 	// the FUNCTION in its own column, because that is the thing being chosen about them.
-	wxPanel* aggPane = new wxPanel(rightSplit);
+	ibPanel* aggPane = new ibPanel(rightSplit);
 	wxBoxSizer* aggRow = new wxBoxSizer(wxHORIZONTAL);
 	wxBoxSizer* aggMove = new wxBoxSizer(wxVERTICAL);
 	aggMove->AddStretchSpacer();
@@ -1151,7 +1165,7 @@ wxWindow* ibDialogQueryConstructor::BuildGroupingPage(wxWindow* parent)
 	aggMove->AddStretchSpacer();
 	aggRow->Add(aggMove, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, FromDIP(3));
 	wxBoxSizer* agg = new wxBoxSizer(wxVERTICAL);
-	agg->Add(new wxStaticText(aggPane, wxID_ANY, _("Aggregate fields")), 0, wxALL, FromDIP(3));
+	agg->Add(new ibStaticText(aggPane, wxID_ANY, _("Aggregate fields")), 0, wxALL, FromDIP(3));
 	// The aggregate rows are PROJECTIONS whose expression is an aggregate call, so the row indexes
 	// into the projection list — see AggregateRows(), which is the one place that decides which
 	// projections those are.
@@ -1308,16 +1322,16 @@ wxWindow* ibDialogQueryConstructor::BuildGroupingPage(wxWindow* parent)
 // pane lists them, and double-clicking one starts a condition on it.
 wxWindow* ibDialogQueryConstructor::BuildConditionsPage(wxWindow* parent)
 {
-	wxPanel* page = new wxPanel(parent);
+	ibPanel* page = new ibPanel(parent);
 
-	wxSplitterWindow* splitter = new wxSplitterWindow(page, wxID_ANY,
+	ibSplitterWindow* splitter = new ibSplitterWindow(page, wxID_ANY,
 		wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
 	splitter->SetMinimumPaneSize(FromDIP(150));
 
-	wxPanel* leftPane = new wxPanel(splitter);
+	ibPanel* leftPane = new ibPanel(splitter);
 	wxBoxSizer* left = new wxBoxSizer(wxVERTICAL);
-	left->Add(new wxStaticText(leftPane, wxID_ANY, _("Fields")), 0, wxALL, FromDIP(3));
-	m_conditionSource = new wxTreeCtrl(leftPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+	left->Add(new ibStaticText(leftPane, wxID_ANY, _("Fields")), 0, wxALL, FromDIP(3));
+	m_conditionSource = new ibTreeCtrl(leftPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_HIDE_ROOT | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxTR_TWIST_BUTTONS);
 	// DOUBLE-CLICK ADDS THE CONDITION, it does not open a window to ask about it. Every other tab's
 	// tree adds what you clicked; this one alone raised a modal, which is why the gesture felt
@@ -1330,7 +1344,7 @@ wxWindow* ibDialogQueryConstructor::BuildConditionsPage(wxWindow* parent)
 	left->Add(m_conditionSource, 1, wxEXPAND | wxALL, FromDIP(3));
 	leftPane->SetSizer(left);
 
-	wxPanel* rightPane = new wxPanel(splitter);
+	ibPanel* rightPane = new ibPanel(splitter);
 	wxBoxSizer* rightRow = new wxBoxSizer(wxHORIZONTAL);
 
 	wxBoxSizer* move = new wxBoxSizer(wxVERTICAL);
@@ -1424,16 +1438,16 @@ wxWindow* ibDialogQueryConstructor::BuildConditionsPage(wxWindow* parent)
 // filtering one of them finds its rows instead of walking the table (queryTempStore.cpp).
 wxWindow* ibDialogQueryConstructor::BuildIndexPage(wxWindow* parent)
 {
-	wxPanel* page = new wxPanel(parent);
+	ibPanel* page = new ibPanel(parent);
 
-	wxSplitterWindow* splitter = new wxSplitterWindow(page, wxID_ANY,
+	ibSplitterWindow* splitter = new ibSplitterWindow(page, wxID_ANY,
 		wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
 	splitter->SetMinimumPaneSize(FromDIP(150));
 
-	wxPanel* leftPane = new wxPanel(splitter);
+	ibPanel* leftPane = new ibPanel(splitter);
 	wxBoxSizer* left = new wxBoxSizer(wxVERTICAL);
-	left->Add(new wxStaticText(leftPane, wxID_ANY, _("Fields")), 0, wxALL, FromDIP(3));
-	m_indexSource = new wxTreeCtrl(leftPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+	left->Add(new ibStaticText(leftPane, wxID_ANY, _("Fields")), 0, wxALL, FromDIP(3));
+	m_indexSource = new ibTreeCtrl(leftPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_HIDE_ROOT | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxTR_TWIST_BUTTONS);
 	m_indexSource->Bind(wxEVT_TREE_ITEM_ACTIVATED, [this](wxTreeEvent&) { wxCommandEvent e; OnAddIndexField(e); });
 	// DRAGGABLE, like every other field list — you can drag anything you can see.
@@ -1442,7 +1456,7 @@ wxWindow* ibDialogQueryConstructor::BuildIndexPage(wxWindow* parent)
 	left->Add(m_indexSource, 1, wxEXPAND | wxALL, FromDIP(3));
 	leftPane->SetSizer(left);
 
-	wxPanel* rightPane = new wxPanel(splitter);
+	ibPanel* rightPane = new ibPanel(splitter);
 	wxBoxSizer* rightRow = new wxBoxSizer(wxHORIZONTAL);
 	wxBoxSizer* move = new wxBoxSizer(wxVERTICAL);
 	move->AddStretchSpacer();
@@ -1454,7 +1468,7 @@ wxWindow* ibDialogQueryConstructor::BuildIndexPage(wxWindow* parent)
 	rightRow->Add(move, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, FromDIP(3));
 
 	wxBoxSizer* right = new wxBoxSizer(wxVERTICAL);
-	right->Add(new wxStaticText(rightPane, wxID_ANY, _("Index by")), 0, wxALL, FromDIP(3));
+	right->Add(new ibStaticText(rightPane, wxID_ANY, _("Index by")), 0, wxALL, FromDIP(3));
 	m_indexModel = new ibQueryGridModel();
 	m_indexModel->SetReader([this](unsigned int row, unsigned int) -> wxString {
 		const ibQuerySelect* select = Current();
@@ -1499,16 +1513,16 @@ wxWindow* ibDialogQueryConstructor::BuildIndexPage(wxWindow* parent)
 
 wxWindow* ibDialogQueryConstructor::BuildOrderPage(wxWindow* parent)
 {
-	wxPanel* page = new wxPanel(parent);
+	ibPanel* page = new ibPanel(parent);
 
-	wxSplitterWindow* splitter = new wxSplitterWindow(page, wxID_ANY,
+	ibSplitterWindow* splitter = new ibSplitterWindow(page, wxID_ANY,
 		wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
 	splitter->SetMinimumPaneSize(FromDIP(150));
 
-	wxPanel* leftPane = new wxPanel(splitter);
+	ibPanel* leftPane = new ibPanel(splitter);
 	wxBoxSizer* left = new wxBoxSizer(wxVERTICAL);
-	left->Add(new wxStaticText(leftPane, wxID_ANY, _("Fields")), 0, wxALL, FromDIP(3));
-	m_orderSource = new wxTreeCtrl(leftPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+	left->Add(new ibStaticText(leftPane, wxID_ANY, _("Fields")), 0, wxALL, FromDIP(3));
+	m_orderSource = new ibTreeCtrl(leftPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_HIDE_ROOT | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxTR_TWIST_BUTTONS);
 	m_orderSource->Bind(wxEVT_TREE_ITEM_ACTIVATED, [this](wxTreeEvent&) { wxCommandEvent e; OnAddOrder(e); });
 	// DRAGGABLE, like every other field list — you can drag anything you can see.
@@ -1517,7 +1531,7 @@ wxWindow* ibDialogQueryConstructor::BuildOrderPage(wxWindow* parent)
 	left->Add(m_orderSource, 1, wxEXPAND | wxALL, FromDIP(3));
 	leftPane->SetSizer(left);
 
-	wxPanel* rightPane = new wxPanel(splitter);
+	ibPanel* rightPane = new ibPanel(splitter);
 	wxBoxSizer* rightRow = new wxBoxSizer(wxHORIZONTAL);
 
 	wxBoxSizer* move = new wxBoxSizer(wxVERTICAL);
@@ -1607,17 +1621,17 @@ wxWindow* ibDialogQueryConstructor::BuildOrderPage(wxWindow* parent)
 // without a name of its own the second answers to the first's.
 wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 {
-	wxPanel* page = new wxPanel(parent);
+	ibPanel* page = new ibPanel(parent);
 
-	wxSplitterWindow* splitter = new wxSplitterWindow(page, wxID_ANY,
+	ibSplitterWindow* splitter = new ibSplitterWindow(page, wxID_ANY,
 		wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
 	splitter->SetMinimumPaneSize(FromDIP(150));
 
 	// ---- LEFT: what there is to total, and to total BY.
-	wxPanel* leftPane = new wxPanel(splitter);
+	ibPanel* leftPane = new ibPanel(splitter);
 	wxBoxSizer* left = new wxBoxSizer(wxVERTICAL);
-	left->Add(new wxStaticText(leftPane, wxID_ANY, _("Fields")), 0, wxALL, FromDIP(3));
-	m_totalsSource = new wxTreeCtrl(leftPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+	left->Add(new ibStaticText(leftPane, wxID_ANY, _("Fields")), 0, wxALL, FromDIP(3));
+	m_totalsSource = new ibTreeCtrl(leftPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_HIDE_ROOT | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxTR_TWIST_BUTTONS);
 	m_totalsSource->Bind(wxEVT_TREE_ITEM_ACTIVATED, [this](wxTreeEvent&) { wxCommandEvent e; OnAddTotalsDimension(e); });
 	m_totalsSource->Bind(wxEVT_TREE_BEGIN_DRAG, [this](wxTreeEvent& e) { OnFieldTreeBeginDrag(e); });
@@ -1626,11 +1640,11 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 	leftPane->SetSizer(left);
 
 	// ---- RIGHT: the levels above, the grand-totals line, the aggregates below.
-	wxSplitterWindow* rightSplit = new wxSplitterWindow(splitter, wxID_ANY,
+	ibSplitterWindow* rightSplit = new ibSplitterWindow(splitter, wxID_ANY,
 		wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
 	rightSplit->SetMinimumPaneSize(FromDIP(80));
 
-	wxPanel* dimPane = new wxPanel(rightSplit);
+	ibPanel* dimPane = new ibPanel(rightSplit);
 	wxBoxSizer* dimRow = new wxBoxSizer(wxHORIZONTAL);
 	wxBoxSizer* dimMove = new wxBoxSizer(wxVERTICAL);
 	dimMove->AddStretchSpacer();
@@ -1737,7 +1751,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 				if (other == static_cast<size_t>(at.m_node) || name.IsEmpty())
 					continue;
 				if (select->m_totalsSplits[other].m_name.IsSameAs(name, false)) {
-					wxMessageBox(ibString::Format(_("A separator called '%s' is already there."), name),
+					ibMessageBox(ibString::Format(_("A separator called '%s' is already there."), name),
 						_("Query constructor"), wxOK | wxICON_WARNING, this);
 					return false;
 				}
@@ -1761,7 +1775,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 			// walk. Said here, at the cell, rather than left for the engine to refuse after the whole
 			// query is written.
 			if (unfold != ibQueryDimUnfold::Elements && !dim.IsSingleField()) {
-				wxMessageBox(_("This level groups by several fields, and a hierarchy unfolds one field's "
+				ibMessageBox(_("This level groups by several fields, and a hierarchy unfolds one field's "
 				               "parent chain.\n\nGive the hierarchy field a level of its own."),
 					_("Query constructor"), wxOK | wxICON_WARNING, this);
 				return false;
@@ -1809,7 +1823,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 				const ibQueryTotalDim& other = *otherPtr;
 				const wxString otherName = ibQueryDimensionName(other);
 				if (otherName.IsSameAs(alias, false)) {
-					wxMessageBox(ibString::Format(
+					ibMessageBox(ibString::Format(
 							_("Another totals level is already called '%s'.\n\nLevels are read back "
 							  "by name, so two the same would make one of them unreachable."), alias),
 						_("Query constructor"), wxOK | wxICON_WARNING, this);
@@ -1839,7 +1853,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 				// Refused where it is written, for the same reason the engine refuses it: a hierarchy
 				// unfolds one parent chain and a key of several fields has none.
 				if (dim.HeadUnfold() != ibQueryDimUnfold::Elements) {
-					wxMessageBox(_("This level unfolds through a hierarchy, which follows one field's "
+					ibMessageBox(_("This level unfolds through a hierarchy, which follows one field's "
 					               "parent chain.\n\nRemove the hierarchy first, or give the extra "
 					               "fields a level of their own."),
 						_("Query constructor"), wxOK | wxICON_WARNING, this);
@@ -1849,7 +1863,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 				// a period is a SCALE, and a key made of several fields has none to pad along.
 				for (const ibQueryTotalField& field : parsed)
 					if (field.m_periods) {
-						wxMessageBox(_("A level of several fields cannot be read by periods: a period "
+						ibMessageBox(_("A level of several fields cannot be read by periods: a period "
 						               "is a scale, and a key made of several fields has none.\n\n"
 						               "Give the period a level of its own."),
 							_("Query constructor"), wxOK | wxICON_WARNING, this);
@@ -2046,7 +2060,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 	// true of the FOLD and false of the RESULT. The tree's root always carries the whole-result
 	// aggregates; whether that root is walked as a ROW is a choice, and the box was refusing to make
 	// it while looking like it already had. The mechanism was finished; only this was not connected.
-	m_grandTotals = new wxCheckBox(dimPane, wxID_ANY, _("Grand totals"));
+	m_grandTotals = new ibCheckBox(dimPane, wxID_ANY, _("Grand totals"));
 	m_grandTotals->SetToolTip(_("One row above every dimension, folding the whole result "
 	                            "(written as OVERALL, first in the BY list)."));
 	m_grandTotals->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent& event) {
@@ -2081,17 +2095,17 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 	// ONE PANE, so the strip can be TAKEN AWAY rather than dimmed. A level keyed by something that is
 	// not a date has no periodicity at all, and dead controls under the grid would announce a setting
 	// that does not exist for it (Max).
-	m_periodPane = new wxPanel(dimPane);
+	m_periodPane = new ibPanel(dimPane);
 	wxBoxSizer* periodRow = new wxBoxSizer(wxHORIZONTAL);
-	m_byPeriods = new wxCheckBox(m_periodPane, wxID_ANY, _("By periods"));
+	m_byPeriods = new ibCheckBox(m_periodPane, wxID_ANY, _("By periods"));
 	m_byPeriods->SetToolTip(_("Group this level by calendar periods, and report every period in the "
 	                          "range - including the ones nothing happened in."));
 	m_byPeriods->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) { ApplyTotalsPeriods(); });
 	periodRow->Add(m_byPeriods, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(6));
 
-	periodRow->Add(new wxStaticText(m_periodPane, wxID_ANY, _("Period:")),
+	periodRow->Add(new ibStaticText(m_periodPane, wxID_ANY, _("Period:")),
 		0, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(12));
-	m_periodUnit = new wxChoice(m_periodPane, wxID_ANY);
+	m_periodUnit = new ibChoice(m_periodPane, wxID_ANY);
 	// THE TEN WORDS THE LANGUAGE HAS, read out of the one table that holds them. A list typed in
 	// here would be a second vocabulary, and the day one of them is renamed the two disagree.
 	for (const std::pair<ibTotalsPeriod, wxString>& unit : ibPeriodUnits())
@@ -2101,10 +2115,10 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 
 	// The bounds are EXPRESSIONS — `&PeriodStart` is what an author writes far more often than a
 	// literal date, and both are read by the same parser the field itself goes through.
-	auto addBound = [&](const wxString& label, wxTextCtrl*& field, const wxString& tip) {
-		periodRow->Add(new wxStaticText(m_periodPane, wxID_ANY, label),
+	auto addBound = [&](const wxString& label, ibTextCtrl*& field, const wxString& tip) {
+		periodRow->Add(new ibStaticText(m_periodPane, wxID_ANY, label),
 			0, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(12));
-		field = new wxTextCtrl(m_periodPane, wxID_ANY, wxEmptyString, wxDefaultPosition,
+		field = new ibTextCtrl(m_periodPane, wxID_ANY, wxEmptyString, wxDefaultPosition,
 			wxSize(FromDIP(150), -1), wxTE_PROCESS_ENTER);
 		field->SetToolTip(tip);
 		// Committed on leaving the field or on Enter, never per keystroke: each commit re-parses the
@@ -2140,7 +2154,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 	dimRow->Add(dims, 1, wxEXPAND);
 	dimPane->SetSizer(dimRow);
 
-	wxPanel* aggPane = new wxPanel(rightSplit);
+	ibPanel* aggPane = new ibPanel(rightSplit);
 	wxBoxSizer* aggRow = new wxBoxSizer(wxHORIZONTAL);
 	wxBoxSizer* aggMove = new wxBoxSizer(wxVERTICAL);
 	aggMove->AddStretchSpacer();
@@ -2282,7 +2296,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 		[this](wxString& text) {
 			// ⚠ NO WINDOW CALLS HERE — this cell writes a TOTALS figure, which folds nodes and takes
 			// aggregates only. The area such a figure is computed over is the neighbouring column.
-			ibDialogQueryExpression editor(this, _("Totals"), AvailableFields(), nullptr,
+			ibDialogQueryExpression editor(this, _("Totals"), TotalsFields(), nullptr,
 				m_metaData, m_readOnly, /*allowWindows*/false);
 			editor.SetText(text);
 			if (editor.ShowModal() != wxID_OK)
@@ -2349,14 +2363,14 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 // lines branches up BY NAME, so the map is a table of what already matches (queryUnionModel.h).
 wxWindow* ibDialogQueryConstructor::BuildUnionsPage(wxWindow* parent)
 {
-	wxPanel* page = new wxPanel(parent);
+	ibPanel* page = new ibPanel(parent);
 
-	wxSplitterWindow* splitter = new wxSplitterWindow(page, wxID_ANY,
+	ibSplitterWindow* splitter = new ibSplitterWindow(page, wxID_ANY,
 		wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
 	splitter->SetMinimumPaneSize(FromDIP(150));
 
 	// ---- LEFT: the branches.
-	wxPanel* leftPane = new wxPanel(splitter);
+	ibPanel* leftPane = new ibPanel(splitter);
 	wxBoxSizer* left = new wxBoxSizer(wxVERTICAL);
 	wxToolBar* bar = MakeToolBar(leftPane);
 	AddTool(bar, _("Add branch"),       wxART_ADD_BRANCH, [this](wxCommandEvent& e) { OnAddUnionBranch(e); });
@@ -2391,9 +2405,9 @@ wxWindow* ibDialogQueryConstructor::BuildUnionsPage(wxWindow* parent)
 
 	// ---- RIGHT: the field map. Its branch columns are rebuilt in FillUnions, because how many
 	// there are is a fact about the query, not about the window.
-	wxPanel* rightPane = new wxPanel(splitter);
+	ibPanel* rightPane = new ibPanel(splitter);
 	wxBoxSizer* right = new wxBoxSizer(wxVERTICAL);
-	right->Add(new wxStaticText(rightPane, wxID_ANY,
+	right->Add(new ibStaticText(rightPane, wxID_ANY,
 		// ⚠ ASCII ONLY IN THIS FILE'S LITERALS. It is UTF-8 without a BOM and MSVC reads it in the
 		// system codepage, so an em dash typed here reaches the screen as mojibake. The move glyphs
 		// taught this once; a dash in a sentence is the same trap wearing different clothes.
@@ -2444,7 +2458,7 @@ wxWindow* ibDialogQueryConstructor::BuildUnionsPage(wxWindow* parent)
 	// A REFUSED RENAME IS TOLD, not left on the verdict line at the far edge of the window: the eyes
 	// are on the cell, and the cell is about to put its old text back.
 	m_unionFieldModel->SetOnError([this](const wxString& message) {
-		wxMessageBox(message, _("Query constructor"), wxOK | wxICON_WARNING, this);
+		ibMessageBox(message, _("Query constructor"), wxOK | wxICON_WARNING, this);
 	});
 	m_unionFields->AssociateModel(m_unionFieldModel);
 	ibDataViewEditOnActivate(m_unionFields);   // the Alias cell — the one place an output field is named
@@ -2461,33 +2475,33 @@ wxWindow* ibDialogQueryConstructor::BuildUnionsPage(wxWindow* parent)
 }
 wxWindow* ibDialogQueryConstructor::BuildAdvancedPage(wxWindow* parent)
 {
-	wxPanel* page = new wxPanel(parent);
+	ibPanel* page = new ibPanel(parent);
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 	wxBoxSizer* groups = new wxBoxSizer(wxHORIZONTAL);
 
 	auto changed = [this](wxCommandEvent& e) { OnAdvancedChanged(e); };
 
 	// ---- WHICH RECORDS: the three words that narrow the selection itself.
-	wxStaticBoxSizer* selection = new wxStaticBoxSizer(wxVERTICAL, page, _("Record selection"));
+	ibStaticBoxSizer* selection = new ibStaticBoxSizer(wxVERTICAL, page, _("Record selection"));
 	wxWindow* selectionBox = selection->GetStaticBox();
 
 	wxBoxSizer* topRow = new wxBoxSizer(wxHORIZONTAL);
-	m_useTop = new wxCheckBox(selectionBox, wxID_ANY, _("First"));
+	m_useTop = new ibCheckBox(selectionBox, wxID_ANY, _("First"));
 	m_useTop->Bind(wxEVT_CHECKBOX, changed);
 	topRow->Add(m_useTop, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, FromDIP(6));
-	m_topCount = new wxSpinCtrl(selectionBox, wxID_ANY, wxEmptyString, wxDefaultPosition,
+	m_topCount = new ibSpinCtrl(selectionBox, wxID_ANY, wxEmptyString, wxDefaultPosition,
 		FromDIP(wxSize(90, -1)), wxSP_ARROW_KEYS, 1, 1000000, 10);
 	m_topCount->Bind(wxEVT_SPINCTRL, [this](wxSpinEvent&) { wxCommandEvent e; OnAdvancedChanged(e); });
 	topRow->Add(m_topCount, 0, wxALIGN_CENTER_VERTICAL);
 	selection->Add(topRow, 0, wxALL, FromDIP(4));
 
-	m_distinct = new wxCheckBox(selectionBox, wxID_ANY, _("No duplicates"));
+	m_distinct = new ibCheckBox(selectionBox, wxID_ANY, _("No duplicates"));
 	m_distinct->Bind(wxEVT_CHECKBOX, changed);
 	selection->Add(m_distinct, 0, wxLEFT | wxRIGHT | wxBOTTOM, FromDIP(4));
 
 	// ALLOWED — a word, not a switch buried in a list, because the sentence it changes matters:
 	// a refusal becomes silence, and silence is only honest when it was asked for.
-	m_allowed = new wxCheckBox(selectionBox, wxID_ANY, _("Allowed only"));
+	m_allowed = new ibCheckBox(selectionBox, wxID_ANY, _("Allowed only"));
 	m_allowed->SetToolTip(_("Skip what this user may not read instead of refusing the whole query"));
 	m_allowed->Bind(wxEVT_CHECKBOX, changed);
 	selection->Add(m_allowed, 0, wxLEFT | wxRIGHT | wxBOTTOM, FromDIP(4));
@@ -2495,7 +2509,7 @@ wxWindow* ibDialogQueryConstructor::BuildAdvancedPage(wxWindow* parent)
 
 	// ---- WHAT THIS STATEMENT IS. A KIND, not a checkbox: three different statements, and the name
 	// is asked by the two kinds that need one.
-	wxStaticBoxSizer* kind = new wxStaticBoxSizer(wxVERTICAL, page, _("Query kind"));
+	ibStaticBoxSizer* kind = new ibStaticBoxSizer(wxVERTICAL, page, _("Query kind"));
 	wxWindow* kindBox = kind->GetStaticBox();
 
 	// ALL THREE SHOWN AT ONCE. A kind is a choice among named alternatives, and a drop-down hides
@@ -2509,7 +2523,7 @@ wxWindow* ibDialogQueryConstructor::BuildAdvancedPage(wxWindow* parent)
 	// kind and not the same thing — a temporary table is read by later statements, a named result is
 	// asked for by whoever runs the package, by name instead of by position.
 	kinds.Add(_("Select under a name"));
-	m_queryKind = new wxRadioBox(kindBox, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
+	m_queryKind = new ibRadioBox(kindBox, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
 		kinds, 1, wxRA_SPECIFY_COLS);
 	m_queryKind->SetSelection(0);
 	m_queryKind->Bind(wxEVT_RADIOBOX, &ibDialogQueryConstructor::OnQueryKindChanged, this);
@@ -2517,9 +2531,9 @@ wxWindow* ibDialogQueryConstructor::BuildAdvancedPage(wxWindow* parent)
 
 	// ONE FIELD, because all three naming kinds ask the same thing: what this statement's name is.
 	// Which name it becomes — a temporary table's or a result's — is what the kind above says.
-	kind->Add(new wxStaticText(kindBox, wxID_ANY, _("Name")), 0,
+	kind->Add(new ibStaticText(kindBox, wxID_ANY, _("Name")), 0,
 		wxLEFT | wxRIGHT, FromDIP(4));
-	m_tempName = new wxTextCtrl(kindBox, wxID_ANY, wxEmptyString, wxDefaultPosition,
+	m_tempName = new ibTextCtrl(kindBox, wxID_ANY, wxEmptyString, wxDefaultPosition,
 		FromDIP(wxSize(240, -1)));
 	// Applied when the caret leaves it — and WITHOUT pulling the caret back, or leaving the box
 	// would be impossible.
@@ -2529,7 +2543,7 @@ wxWindow* ibDialogQueryConstructor::BuildAdvancedPage(wxWindow* parent)
 
 	sizer->Add(groups, 0, wxEXPAND);
 
-	m_forUpdate = new wxCheckBox(page, wxID_ANY, _("Lock the rows read, so they can be changed after"));
+	m_forUpdate = new ibCheckBox(page, wxID_ANY, _("Lock the rows read, so they can be changed after"));
 	m_forUpdate->Bind(wxEVT_CHECKBOX, changed);
 	sizer->Add(m_forUpdate, 0, wxALL, FromDIP(10));
 

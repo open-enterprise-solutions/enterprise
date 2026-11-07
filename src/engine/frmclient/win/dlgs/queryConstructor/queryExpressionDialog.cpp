@@ -22,13 +22,13 @@
 #include <wx/sizer.h>
 #include <wx/stattext.h>
 #include <wx/button.h>
-#include <wx/splitter.h>
-#include <wx/msgdlg.h>
+#include "gui/univ/splitterWindow.h"
+#include "gui/univ/messageDialog.h"
 #include <wx/dnd.h>
 #include <wx/imaglist.h>
 #include <wx/stc/stc.h>
 #include <wx/choice.h>     // the role constructor — the word picked
-#include <wx/spinctrl.h>   // …and a period's number
+#include "gui/univ/ctrl/spinCtrl.h"   // …and a period's number
 #include <iterator>        // std::size — GCC does not bring it along with the rest
 
 #include <algorithm>
@@ -53,7 +53,7 @@ ibDialogQueryExpression::ibDialogQueryExpression(wxWindow* parent, const wxStrin
                                                  const std::vector<ibQueryConstructorField>& fields,
                                                  const ibQueryAstExprPtr& existing,
                                                  const ibMetaData* metaData, bool readOnly, bool allowWindows)
-	: wxDialog(parent, wxID_ANY, title.IsEmpty() ? wxString(_("Arbitrary expression")) : title,
+	: ibDialog(parent, wxID_ANY, title.IsEmpty() ? wxString(_("Arbitrary expression")) : title,
 		wxDefaultPosition, wxSize(820, 560), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 	, m_fields(fields)
 	, m_metaData(metaData)
@@ -76,18 +76,18 @@ ibDialogQueryExpression::ibDialogQueryExpression(wxWindow* parent, const wxStrin
 
 	// The two palettes side by side, the text below — what the expression is ABOUT above what it
 	// says, because the text is written by picking from them.
-	wxSplitterWindow* palettes = new wxSplitterWindow(this, wxID_ANY,
+	ibSplitterWindow* palettes = new ibSplitterWindow(this, wxID_ANY,
 		wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
 	palettes->SetMinimumPaneSize(FromDIP(150));
 
-	wxPanel* leftPane = new wxPanel(palettes);
+	ibPanel* leftPane = new ibPanel(palettes);
 	wxBoxSizer* left = new wxBoxSizer(wxVERTICAL);
-	left->Add(new wxStaticText(leftPane, wxID_ANY, _("Fields")), 0, wxALL, FromDIP(3));
+	left->Add(new ibStaticText(leftPane, wxID_ANY, _("Fields")), 0, wxALL, FromDIP(3));
 	// THE SAME TREE THE CONSTRUCTOR SHOWS, and for the same reason: a flat list cannot say what a
 	// reference LEADS to, so every field behind one was unreachable from this window — you had to
 	// close it, unfold the reference in the constructor, and come back. Twist buttons, the field
 	// picture, drag onto the text: nothing here is special to this dialog.
-	m_fieldTree = new wxTreeCtrl(leftPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+	m_fieldTree = new ibTreeCtrl(leftPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_HIDE_ROOT | wxTR_LINES_AT_ROOT | wxTR_NO_LINES
 		| wxTR_TWIST_BUTTONS);
 	{
@@ -128,12 +128,12 @@ ibDialogQueryExpression::ibDialogQueryExpression(wxWindow* parent, const wxStrin
 	left->Add(m_fieldTree, 1, wxEXPAND | wxALL, FromDIP(3));
 	leftPane->SetSizer(left);
 
-	wxPanel* rightPane = new wxPanel(palettes);
+	ibPanel* rightPane = new ibPanel(palettes);
 	wxBoxSizer* right = new wxBoxSizer(wxVERTICAL);
-	right->Add(new wxStaticText(rightPane, wxID_ANY, _("Query language")), 0, wxALL, FromDIP(3));
+	right->Add(new ibStaticText(rightPane, wxID_ANY, _("Query language")), 0, wxALL, FromDIP(3));
 	// wxTR_TWIST_BUTTONS + no lines — the modern arrow, the same as every other tree in this window.
 	// The boxed [+] is the one thing left here that looked like a different decade.
-	m_language = new wxTreeCtrl(rightPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+	m_language = new ibTreeCtrl(rightPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_HIDE_ROOT | wxTR_LINES_AT_ROOT | wxTR_NO_LINES
 		| wxTR_TWIST_BUTTONS);
 	m_language->Bind(wxEVT_TREE_ITEM_ACTIVATED, &ibDialogQueryExpression::OnInsertLanguage, this);
@@ -174,7 +174,7 @@ ibDialogQueryExpression::ibDialogQueryExpression(wxWindow* parent, const wxStrin
 	wxBoxSizer* buttons = new wxBoxSizer(wxHORIZONTAL);
 	// THE THING THAT MAKES THIS A CONSTRUCTOR. `IN (SELECT …)` is an expression whose right side is
 	// a query, so it is authored in the query constructor — one level down, the same window.
-	wxButton* nested = new wxButton(this, wxID_ANY, _("Nested query"));
+	ibButton* nested = new ibButton(this, wxID_ANY, _("Nested query"));
 	nested->Bind(wxEVT_BUTTON, &ibDialogQueryExpression::OnNestedQuery, this);
 	nested->Enable(!m_readOnly);
 	buttons->Add(nested, 0, wxRIGHT, FromDIP(6));
@@ -183,7 +183,7 @@ ibDialogQueryExpression::ibDialogQueryExpression(wxWindow* parent, const wxStrin
 	// that was missing is going BACK into that subquery with the tabs — selecting it here and
 	// pressing this opens the constructor over exactly that span and puts the result back in place.
 	// Without it, a nested query could be created and never edited again except as text.
-	wxButton* editSelection = new wxButton(this, wxID_ANY, _("Query constructor"));
+	ibButton* editSelection = new ibButton(this, wxID_ANY, _("Query constructor"));
 	editSelection->Bind(wxEVT_BUTTON, &ibDialogQueryExpression::OnEditSelection, this);
 	editSelection->Enable(!m_readOnly);
 	buttons->Add(editSelection, 0, wxRIGHT, FromDIP(6));
@@ -195,13 +195,13 @@ ibDialogQueryExpression::ibDialogQueryExpression(wxWindow* parent, const wxStrin
 	//
 	// Same shape as the two buttons beside it: it works ON THE SELECTION, so a CASE already written
 	// can be opened, rearranged and written back — the round trip, not a one-way generator.
-	wxButton* choice = new wxButton(this, wxID_ANY, ibQueryKeywordText(ibQueryKeyword::Case));
+	ibButton* choice = new ibButton(this, wxID_ANY, ibQueryKeywordText(ibQueryKeyword::Case));
 	choice->Bind(wxEVT_BUTTON, &ibDialogQueryExpression::OnEditChoice, this);
 	choice->Enable(!m_readOnly);
 	buttons->Add(choice, 0, wxRIGHT, FromDIP(6));
 	// ⭐ AND WHAT THE FIELD IS IN A BALANCE — the role constructor, shown only where the expression is a field
 	// (OfferRole). Hidden until then: a condition or a total has no role to give.
-	m_roleButton = new wxButton(this, wxID_ANY, _("Role..."));
+	m_roleButton = new ibButton(this, wxID_ANY, _("Role..."));
 	m_roleButton->Bind(wxEVT_BUTTON, &ibDialogQueryExpression::OnEditRole, this);
 	m_roleButton->Enable(!m_readOnly);
 	m_roleButton->Hide();
@@ -461,7 +461,7 @@ void ibDialogQueryExpression::OnEditSelection(wxCommandEvent&)
 	wxString fragment = m_text->GetRange(from, to);
 	fragment.Trim(true).Trim(false);
 	if (fragment.IsEmpty()) {
-		wxMessageBox(_("Select the subquery to open, or write one with \"Nested query\"."),
+		ibMessageBox(_("Select the subquery to open, or write one with \"Nested query\"."),
 			GetTitle(), wxOK | wxICON_INFORMATION, this);
 		return;
 	}
@@ -511,7 +511,7 @@ void ibDialogQueryExpression::OnOk(wxCommandEvent& event)
 		m_expression = parser.ParseExpression(text);
 	}
 	catch (const ibCoreException& e) {
-		wxMessageBox(e.GetErrorDescription(), GetTitle(), wxOK | wxICON_ERROR, this);
+		ibMessageBox(e.GetErrorDescription(), GetTitle(), wxOK | wxICON_ERROR, this);
 		return;
 	}
 
@@ -521,7 +521,7 @@ void ibDialogQueryExpression::OnOk(wxCommandEvent& event)
 	// what to fix; found later by the engine it is a refusal in a query this window never showed.
 	const wxString complaint = CheckExpressionNames(m_expression);
 	if (!complaint.IsEmpty()) {
-		wxMessageBox(complaint, GetTitle(), wxOK | wxICON_ERROR, this);
+		ibMessageBox(complaint, GetTitle(), wxOK | wxICON_ERROR, this);
 		return;
 	}
 
@@ -715,7 +715,7 @@ void ibDialogQueryExpression::ShowRoleOnButton()
 // (it speaks the language it writes). One window — see the declaration for who opens it.
 bool ibEditBalanceRole(wxWindow* parent, bool& said, ibBalanceRole& role, int& periodRank, bool readOnly, bool withNumber)
 {
-	wxDialog dialog(parent, wxID_ANY, _("Role"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE);
+	ibDialog dialog(parent, wxID_ANY, _("Role"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE);
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 
 	static const ibBalanceRole s_roles[] = { ibBalanceRole::Moment, ibBalanceRole::Dimension,
@@ -724,7 +724,7 @@ bool ibEditBalanceRole(wxWindow* parent, bool& said, ibBalanceRole& role, int& p
 	words.Add(_("As its source says"));
 	for (const ibBalanceRole known : s_roles)
 		words.Add(ibBalanceRoleWord(known));
-	wxChoice* choice = new wxChoice(&dialog, wxID_ANY, wxDefaultPosition, wxDefaultSize, words);
+	ibChoice* choice = new ibChoice(&dialog, wxID_ANY, wxDefaultPosition, wxDefaultSize, words);
 	int at = 0;
 	if (said)
 		for (size_t i = 0; i < std::size(s_roles); ++i)
@@ -732,15 +732,15 @@ bool ibEditBalanceRole(wxWindow* parent, bool& said, ibBalanceRole& role, int& p
 				at = static_cast<int>(i) + 1;
 	choice->SetSelection(at);
 	choice->Enable(!readOnly);
-	sizer->Add(new wxStaticText(&dialog, wxID_ANY, _("What the field is in a balance:")), 0, wxLEFT | wxRIGHT | wxTOP, dialog.FromDIP(8));
+	sizer->Add(new ibStaticText(&dialog, wxID_ANY, _("What the field is in a balance:")), 0, wxLEFT | wxRIGHT | wxTOP, dialog.FromDIP(8));
 	sizer->Add(choice, 0, wxEXPAND | wxALL, dialog.FromDIP(8));
 
 	// A PERIOD'S NUMBER — 0 is "in the order it stands": the platform counts it after the numbered ones.
-	wxSpinCtrl* rank = nullptr;
+	ibSpinCtrl* rank = nullptr;
 	if (withNumber) {
 		wxBoxSizer* rankRow = new wxBoxSizer(wxHORIZONTAL);
-		rankRow->Add(new wxStaticText(&dialog, wxID_ANY, _("Period number (0 = in order):")), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, dialog.FromDIP(6));
-		rank = new wxSpinCtrl(&dialog, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
+		rankRow->Add(new ibStaticText(&dialog, wxID_ANY, _("Period number (0 = in order):")), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, dialog.FromDIP(6));
+		rank = new ibSpinCtrl(&dialog, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
 			wxSP_ARROW_KEYS, 0, ibSourcePeriodRank(0) - 1, periodRank);
 		rankRow->Add(rank, 0);
 		sizer->Add(rankRow, 0, wxLEFT | wxRIGHT | wxBOTTOM, dialog.FromDIP(8));

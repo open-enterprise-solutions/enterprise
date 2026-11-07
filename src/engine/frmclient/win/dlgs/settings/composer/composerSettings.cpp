@@ -13,7 +13,7 @@
 #include "frmclient/win/dlgs/queryConstructor/queryConstructor.h" // the Query tab's constructor button
 #include "frmclient/win/dlgs/queryConstructor/queryExpressionDialog.h" // the resource expression editor
 #include "frmclient/win/dlgs/typeSelector.h"              // the product.s type picker — a parameter declares its type
-#include "frmclient/backend/compiler/value.h"             // ibValue::ReadClasses — …offered what the tab answers, named as it named them
+#include "frmclient/backend/compiler/value.h"             // ibValue — a grouping kind's text, the group picture
 #include "frmclient/win/dlgs/translateConstructor/translateConstructor.h"   // a field's title, every language of it
 #include "frmclient/win/dlgs/queryConstructor/queryConstructorInternal.h" // ibExpressionCellRenderer — the Totals tab's own cell
 #include "core/query/queryPeriodUnits.h"                     // ibPeriodUnits — the engine's own list of period words
@@ -36,17 +36,15 @@
 #include <algorithm>   // std::min — MSVC drags it in transitively, libstdc++ does not
 
 #include <wx/sizer.h>
-#include <wx/button.h>
-#include <wx/choice.h>
-#include <wx/notebook.h>
+#include "gui/univ/ctrl/button.h"
+#include "gui/univ/ctrl/choice.h"
+#include "gui/univ/ctrl/notebook.h"
 #include <wx/panel.h>
-#include <wx/splitter.h>
 #include <wx/statbox.h>
 #include <wx/toolbar.h>
 #include <wx/artprov.h>
 #include <wx/settings.h>   // wxSystemSettings — a generated title reads grey
 #include <wx/menu.h>
-#include <wx/choicdlg.h>  // wxGetSingleChoiceIndex — which saved setting to rename / drop
 #include <wx/stc/stc.h>   // wxStyledTextCtrl — the query editor
 #include <wx/dnd.h>       // wxDropSource / wxTextDataObject — the drag half
 
@@ -55,6 +53,11 @@
 #include "frmclient/win/dlgs/textWithDotsCell.h"      // ibTextWithDotsRenderer — a text cell with a "..."
 #include "frmclient/win/dlgs/settings/settingsAppearanceEditor.h"   // a field's appearance — the "..." behind it
 #include "gui/typeconv.h"                    // WxColourToColour — a row's grey is the model view's data
+#include "gui/univ/ctrl/staticText.h"
+#include "gui/univ/ctrl/checkBox.h"
+#include "gui/univ/ctrl/textCtrl.h"
+#include "gui/univ/dialog.h"
+#include "gui/univ/messageDialog.h"
 
 namespace {
 enum {
@@ -210,7 +213,7 @@ public:
 					for (const wxString& had : known)
 						if (had.IsSameAs(one, false)) { found = true; break; }
 					if (!found) {
-						wxMessageBox(ibString::Format(
+						ibMessageBox(ibString::Format(
 							_("\"%s\" is not a grouping of this report: a figure can only be computed over one of its own groupings."),
 							one), _("Computed over"), wxOK | wxICON_WARNING);
 						return false;   // the cell keeps what it had — nothing silently wrong is stored
@@ -439,7 +442,7 @@ public:
 			return nullptr;
 		ibFieldDescription* entry = ibFieldEntryForPath(*selects, path);
 		if (entry == nullptr)
-			wxMessageBox(ibString::Format(_("\"%s\" does not say which select of the query it belongs to: name the selects with ONTO."),
+			ibMessageBox(ibString::Format(_("\"%s\" does not say which select of the query it belongs to: name the selects with ONTO."),
 				path), _("Fields"), wxOK | wxICON_WARNING);
 		return entry;
 	}
@@ -1357,11 +1360,11 @@ static ibRowValueCellRenderer::FieldChooser ibComposerFieldChooser(ibComposerSet
 // AND THE EMPTY LIST IS AN ANSWER. A node with no fields is the DETAIL RECORDS — a node all the
 // same, with its own filter, sort and selected fields — so "OK with nothing in the list" is not a
 // cancelled dialog: it is the level that prints the rows.
-class ibComposerGroupingDialog : public wxDialog
+class ibComposerGroupingDialog : public ibDialog
 {
 public:
 	ibComposerGroupingDialog(ibComposerSettingsPanel* panel, const ibLevelDescription& seed)
-		: wxDialog(panel, wxID_ANY, _("Grouping"), wxDefaultPosition, wxDefaultSize,
+		: ibDialog(panel, wxID_ANY, _("Grouping"), wxDefaultPosition, wxDefaultSize,
 			wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
 		  m_panel(panel), m_node(seed)
 	{
@@ -1423,7 +1426,7 @@ public:
 						return;
 					const ibQueryDimUnfold kind = value.ConvertToEnumValue<ibQueryDimUnfold>();
 					if (kind != ibQueryDimUnfold::Elements && m_node.m_settings.m_group.m_lines.size() > 1) {
-						wxMessageBox(_("This grouping is made of several fields, and a hierarchy unfolds "
+						ibMessageBox(_("This grouping is made of several fields, and a hierarchy unfolds "
 						               "one field's parent chain.\n\nGive the hierarchy field a grouping "
 						               "of its own."),
 							GetTitle(), wxOK | wxICON_WARNING, this);
@@ -1441,16 +1444,16 @@ public:
 		// not greyed, when the selected line is not a date (Max, 2026-08-25: "if the row is not a
 		// date, the whole strip is not shown at all"). Greying it would say "there is something here
 		// for you, but not now", which for a field that can never be a period is not true.
-		m_periodPane = new wxPanel(this, wxID_ANY);
+		m_periodPane = new ibPanel(this, wxID_ANY);
 		{
 			wxBoxSizer* strip = new wxBoxSizer(wxHORIZONTAL);
-			m_byPeriods = new wxCheckBox(m_periodPane, wxID_ANY, _("By periods"));
+			m_byPeriods = new ibCheckBox(m_periodPane, wxID_ANY, _("By periods"));
 			strip->Add(m_byPeriods, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, FromDIP(6));
 
 			// THE UNITS ARE THE ENGINE'S OWN LIST — `ibPeriodUnits()` (core/query/queryPeriodUnits.h), the same
 			// vocabulary the lowering reads and the query constructor offers. A list typed out here
 			// would be a second copy of the words, and it would be right until one of them changed.
-			m_periodUnit = new wxChoice(m_periodPane, wxID_ANY);
+			m_periodUnit = new ibChoice(m_periodPane, wxID_ANY);
 			for (const std::pair<ibTotalsPeriod, wxString>& unit : ibPeriodUnits())
 				m_periodUnit->Append(unit.second);
 			strip->Add(m_periodUnit, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, FromDIP(10));
@@ -1463,10 +1466,10 @@ public:
 			// assert inside wxTextCtrlBase::OnDynamicBind, which in a Debug build is an int 3 in the
 			// dialog's CONSTRUCTOR. Dropped on the way over from the query constructor's strip (which
 			// has it), the whole "Add grouping" command died with the window (dump 2026-08-25 22:18).
-			const auto addBound = [&](const wxString& label, wxTextCtrl*& field) {
-				strip->Add(new wxStaticText(m_periodPane, wxID_ANY, label), 0,
+			const auto addBound = [&](const wxString& label, ibTextCtrl*& field) {
+				strip->Add(new ibStaticText(m_periodPane, wxID_ANY, label), 0,
 					wxALIGN_CENTER_VERTICAL | wxRIGHT, FromDIP(4));
-				field = new wxTextCtrl(m_periodPane, wxID_ANY, wxEmptyString,
+				field = new ibTextCtrl(m_periodPane, wxID_ANY, wxEmptyString,
 					wxDefaultPosition, FromDIP(wxSize(90, -1)), wxTE_PROCESS_ENTER);
 				field->SetToolTip(_("A parameter (&From) or a literal date. Empty = from the data.\n"
 				                    "A bound does not filter rows - it says which periods to show."));
@@ -1485,7 +1488,7 @@ public:
 		// ⚠ COMMITTED ON LEAVING THE FIELD, not on every keystroke: a bound is half-typed most of the
 		// time it is being typed. (`ChangeValue` in FillPeriods raises no event, so filling the strip
 		// never reads back as an edit — the fault that made the constructor's strip fight the user.)
-		for (wxTextCtrl* bound : { m_periodFrom, m_periodTo }) {
+		for (ibTextCtrl* bound : { m_periodFrom, m_periodTo }) {
 			bound->Bind(wxEVT_KILL_FOCUS, [this](wxFocusEvent& e) { ApplyPeriods(); e.Skip(); });
 			bound->Bind(wxEVT_TEXT_ENTER, [this](wxCommandEvent&) { ApplyPeriods(); });
 		}
@@ -1493,7 +1496,7 @@ public:
 
 		// WHAT AN EMPTY LIST MEANS, said where the list is empty. Not a warning — it is one of the
 		// two things this form makes, and a person should not have to know it in advance.
-		m_hint = new wxStaticText(this, wxID_ANY, wxEmptyString);
+		m_hint = new ibStaticText(this, wxID_ANY, wxEmptyString);
 		sizer->Add(m_hint, 0, wxEXPAND | wxALL, FromDIP(6));
 
 		sizer->Add(CreateButtonSizer(wxOK | wxCANCEL), 0, wxEXPAND | wxALL, FromDIP(6));
@@ -1584,8 +1587,8 @@ private:
 			// the unqualified name is THAT one, and asking it to repaint would rebuild, refill and
 			// land back here: a loop, not a redraw. (The hidden-name trap: a member of this name
 			// hides every wxWindow overload.)
-			wxDialog::Refresh(true);
-			wxDialog::Update();
+			ibDialog::Refresh(true);
+			ibDialog::Update();
 		}
 		if (!applies)
 			return;
@@ -1632,13 +1635,13 @@ private:
 	ibLevelDescription m_node;
 	ibGroupingFieldsModel*    m_model = nullptr;
 	ibDataViewCtrl*           m_view  = nullptr;
-	wxStaticText*             m_hint  = nullptr;
+	ibStaticText*             m_hint  = nullptr;
 	// The BY PERIODS strip — one panel, so it is shown and hidden as one thing.
-	wxPanel*                  m_periodPane = nullptr;
-	wxCheckBox*               m_byPeriods  = nullptr;
-	wxChoice*                 m_periodUnit = nullptr;
-	wxTextCtrl*               m_periodFrom = nullptr;
-	wxTextCtrl*               m_periodTo   = nullptr;
+	ibPanel*                  m_periodPane = nullptr;
+	ibCheckBox*               m_byPeriods  = nullptr;
+	ibChoice*                 m_periodUnit = nullptr;
+	ibTextCtrl*               m_periodFrom = nullptr;
+	ibTextCtrl*               m_periodTo   = nullptr;
 };
 
 // ⭐ THE SETTINGS ARE A PANEL, AND THE DIALOG IS ONE OF ITS HOSTS. A composer declared in the
@@ -1649,7 +1652,7 @@ private:
 // THE DESIGNER'S — it edits the description's own variants, starting on the zeroth.
 ibComposerSettingsPanel::ibComposerSettingsPanel(wxWindow* parent, ibCompositionDescription& edited,
 	const ibMetaData* metaData)
-	: wxPanel(parent, wxID_ANY),
+	: ibPanel(parent, wxID_ANY),
 	  m_metaData(metaData), m_readerRoad(false),
 	  m_settings(&edited.m_variants.front().m_settings),
 	  m_edited(edited),
@@ -1663,7 +1666,7 @@ ibComposerSettingsPanel::ibComposerSettingsPanel(wxWindow* parent, ibComposition
 // header's m_heldComposition — on the desktop, the 2026-09-02 crash under an MCP write).
 ibComposerSettingsPanel::ibComposerSettingsPanel(wxWindow* parent, const ibCompositionDescription& composition,
 	const ibMetaData* metaData)
-	: wxPanel(parent, wxID_ANY),
+	: ibPanel(parent, wxID_ANY),
 	  m_metaData(metaData), m_readerRoad(false),
 	  m_heldComposition(composition),
 	  m_settings(&m_heldComposition.m_variants.front().m_settings),
@@ -1676,7 +1679,7 @@ ibComposerSettingsPanel::ibComposerSettingsPanel(wxWindow* parent, const ibCompo
 // THE READER'S — it edits the setting it was handed, and knows nothing of variants.
 ibComposerSettingsPanel::ibComposerSettingsPanel(wxWindow* parent, ibCompositionDescription& edited,
 	const ibMetaData* metaData, ibSettingsDescription& settings)
-	: wxPanel(parent, wxID_ANY),
+	: ibPanel(parent, wxID_ANY),
 	  m_metaData(metaData), m_readerRoad(true),
 	  m_settings(&settings),
 	  m_edited(edited),
@@ -1738,7 +1741,7 @@ void ibComposerSettingsPanel::BuildPanel()
 	if (Structure().empty())
 		AddOutput();
 
-	wxNotebook* notebook = new wxNotebook(this, wxID_ANY);
+	ibNotebook* notebook = new ibNotebook(this, wxID_ANY);
 	ibStyleSettingsTabs(notebook);
 	if (appData->DesignerMode()) {
 		notebook->AddPage(BuildQueryPage(notebook), _("Query"), true, ibSettingsTabArt(ibSettingsTab::Query));
@@ -1972,7 +1975,7 @@ bool ibComposerSettingsPanel::Commit()
 	// either), and losing the rest of the settings over it would be worse.
 	const wxString complaints = CheckAllExpressions();
 	if (!complaints.IsEmpty()) {
-		const int answer = wxMessageBox(
+		const int answer = ibMessageBox(
 			_("Some parameter expressions do not compile:") + wxT("\n\n") + complaints + wxT("\n")
 				+ _("Close anyway?"),
 			_("Data composer settings"), wxYES_NO | wxICON_WARNING, this);
@@ -2168,7 +2171,7 @@ bool ibDialogComposerSettings::ShowUserSettings(wxWindow* parent, const ibProtoc
 	// A setting the server refused comes back with why — said before the window opens on it again.
 	const wxString error = request.GetString(ibProtocol::ibRequest::ibListSettings::Error);
 	if (!error.IsEmpty())
-		wxMessageBox(error, _("Data composer settings"), wxOK | wxICON_WARNING, top);
+		ibMessageBox(error, _("Data composer settings"), wxOK | wxICON_WARNING, top);
 
 	ibDialogComposerSettings dlg(top, shown, metaData, edited);
 	if (dlg.ShowModal() != wxID_OK)
@@ -2217,7 +2220,7 @@ bool ibDialogComposerSettings::ShowComposerSettings(wxWindow* parent, ibComposit
 // in decided whether it is a clone, and that decides what Cancel drops.
 ibDialogComposerSettings::ibDialogComposerSettings(wxWindow* parent, ibCompositionDescription& desc,
 	const ibMetaData* metaData, ibSettingsDescription& settings)
-	: wxDialog(parent, wxID_ANY, _("Data composer settings"), wxDefaultPosition, wxSize(900, 620),
+	: ibDialog(parent, wxID_ANY, _("Data composer settings"), wxDefaultPosition, wxSize(900, 620),
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 {
 	m_panel = new ibComposerSettingsPanel(this, desc, metaData, settings);
@@ -2227,7 +2230,7 @@ ibDialogComposerSettings::ibDialogComposerSettings(wxWindow* parent, ibCompositi
 // …AND THE AUTHOR'S, over the description itself.
 ibDialogComposerSettings::ibDialogComposerSettings(wxWindow* parent, ibCompositionDescription& desc,
 	const ibMetaData* metaData)
-	: wxDialog(parent, wxID_ANY, _("Data composer settings"), wxDefaultPosition, wxSize(900, 620),
+	: ibDialog(parent, wxID_ANY, _("Data composer settings"), wxDefaultPosition, wxSize(900, 620),
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 {
 	m_panel = new ibComposerSettingsPanel(this, desc, metaData);
@@ -2288,16 +2291,16 @@ wxWindow* ibComposerSettingsPanel::BuildOutputPage(wxWindow* parent)
 	// reader's road, and the structure with its settings band IS the page.
 	// ⭐ THE LESSON, since it is the second of its kind today: removing a thing means removing what
 	// held it, not passing null where it stood.
-	wxSplitterWindow* outer = nullptr;
+	ibSplitterWindow* outer = nullptr;
 	wxWindow* variantPane = nullptr;
 	if (!m_readerRoad) {
-		outer = new wxSplitterWindow(parent, wxID_ANY,
+		outer = new ibSplitterWindow(parent, wxID_ANY,
 			wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
 		outer->SetMinimumPaneSize(FromDIP(120));
 		variantPane = BuildVariantPane(outer);
 	}
 
-	wxSplitterWindow* inner = new wxSplitterWindow(outer != nullptr ? (wxWindow*)outer : parent, wxID_ANY,
+	ibSplitterWindow* inner = new ibSplitterWindow(outer != nullptr ? (wxWindow*)outer : parent, wxID_ANY,
 		wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
 	inner->SetMinimumPaneSize(FromDIP(90));
 
@@ -2335,7 +2338,7 @@ wxWindow* ibComposerSettingsPanel::BuildOutputPage(wxWindow* parent)
 // settings at all.
 wxWindow* ibComposerSettingsPanel::BuildVariantPane(wxWindow* parent)
 {
-	wxPanel* variantPane = new wxPanel(parent);
+	ibPanel* variantPane = new ibPanel(parent);
 	wxBoxSizer* variantSizer = new wxBoxSizer(wxVERTICAL);
 
 	m_variantBar = new wxToolBar(variantPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
@@ -2392,7 +2395,7 @@ wxWindow* ibComposerSettingsPanel::BuildVariantPane(wxWindow* parent)
 // drop-down assembled here — a hand-built list beside a registered type is a second enumeration.
 wxWindow* ibComposerSettingsPanel::BuildStructurePane(wxWindow* parent)
 {
-	wxPanel* pane = new wxPanel(parent);
+	ibPanel* pane = new ibPanel(parent);
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 
 	wxToolBar* bar = m_structureBar = new wxToolBar(pane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
@@ -2538,15 +2541,15 @@ wxWindow* ibComposerSettingsPanel::BuildStructurePane(wxWindow* parent)
 // different for no reason reads as a page that works differently.
 wxWindow* ibComposerSettingsPanel::BuildGroupingPage(wxWindow* parent)
 {
-	wxSplitterWindow* splitter = new wxSplitterWindow(parent, wxID_ANY, wxDefaultPosition,
+	ibSplitterWindow* splitter = new ibSplitterWindow(parent, wxID_ANY, wxDefaultPosition,
 		wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
 
 	// LEFT — WHAT THIS NODE MAY SEE. The available fields are inherited: what the report offers is
 	// what its outputs offer, and what an output offers is what its levels offer. The tree is the
 	// shared one, so this page cannot come to a different answer than the filter tab beside it.
-	wxPanel* left = new wxPanel(splitter);
+	ibPanel* left = new ibPanel(splitter);
 	wxBoxSizer* leftSizer = new wxBoxSizer(wxVERTICAL);
-	leftSizer->Add(new wxStaticText(left, wxID_ANY, _("Available fields")), 0, wxALL, FromDIP(4));
+	leftSizer->Add(new ibStaticText(left, wxID_ANY, _("Available fields")), 0, wxALL, FromDIP(4));
 	m_groupingFieldTree = CreateFieldTree(left);
 	leftSizer->Add(m_groupingFieldTree, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, FromDIP(4));
 	left->SetSizer(leftSizer);
@@ -2565,7 +2568,7 @@ wxWindow* ibComposerSettingsPanel::BuildGroupingPage(wxWindow* parent)
 		e.Skip();
 	});
 	// RIGHT — the level's own elements, in order.
-	wxPanel* right = new wxPanel(splitter);
+	ibPanel* right = new ibPanel(splitter);
 	// ⭐ AND BY DRAGGING, the way the filter and the sort already take a field: drop it on this
 	// pane and it joins the level's elements. The payload is nothing — what moved is what the tree
 	// has selected, which the source knows (ibCallbackDropTarget).
@@ -2635,7 +2638,7 @@ wxWindow* ibComposerSettingsPanel::BuildGroupingPage(wxWindow* parent)
 					return;
 				const ibQueryDimUnfold kind = value.ConvertToEnumValue<ibQueryDimUnfold>();
 				if (kind != ibQueryDimUnfold::Elements && level->m_settings.m_group.m_lines.size() > 1) {
-					wxMessageBox(_("This grouping is made of several fields, and a hierarchy unfolds "
+					ibMessageBox(_("This grouping is made of several fields, and a hierarchy unfolds "
 					               "one field's parent chain.\n\nGive the hierarchy field a grouping "
 					               "of its own."),
 						_("Data composer settings"), wxOK | wxICON_WARNING, this);
@@ -2670,13 +2673,13 @@ wxWindow* ibComposerSettingsPanel::BuildFieldSetPage(wxWindow* parent)
 {
 	ibFieldSetPage& page = m_selectedPage;
 
-	wxSplitterWindow* splitter = new wxSplitterWindow(parent, wxID_ANY, wxDefaultPosition,
+	ibSplitterWindow* splitter = new ibSplitterWindow(parent, wxID_ANY, wxDefaultPosition,
 		wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
 
 	// LEFT — everything the source can give, which is where a set is picked FROM.
-	wxPanel* left = new wxPanel(splitter);
+	ibPanel* left = new ibPanel(splitter);
 	wxBoxSizer* leftSizer = new wxBoxSizer(wxVERTICAL);
-	leftSizer->Add(new wxStaticText(left, wxID_ANY, _("Available fields")), 0, wxALL, FromDIP(4));
+	leftSizer->Add(new ibStaticText(left, wxID_ANY, _("Available fields")), 0, wxALL, FromDIP(4));
 	page.m_sourceTree = CreateFieldTree(left);
 	leftSizer->Add(page.m_sourceTree, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, FromDIP(4));
 	left->SetSizer(leftSizer);
@@ -2692,7 +2695,7 @@ wxWindow* ibComposerSettingsPanel::BuildFieldSetPage(wxWindow* parent)
 	// nothing to say once nothing replaces. What returns is the choice itself, in the table: it
 	// stands where the inherited fields land, and taking it out is how a node states its whole
 	// composition by hand. A flag could not say WHERE.
-	wxPanel* right = new wxPanel(splitter);
+	ibPanel* right = new ibPanel(splitter);
 	wxBoxSizer* rightSizer = new wxBoxSizer(wxVERTICAL);
 
 	const int idAdd    = ID_SELECTED_ADD;
@@ -2938,7 +2941,7 @@ void ibComposerSettingsPanel::OnGroupingFieldAdd(wxCommandEvent&)
 	if (level == nullptr) {
 		// SAID, NOT IGNORED: the page is only about a grouping, and pressing its button on the
 		// report is a reasonable thing to try.
-		wxMessageBox(_("Select a grouping in the structure above: these are the fields IT groups by."),
+		ibMessageBox(_("Select a grouping in the structure above: these are the fields IT groups by."),
 			_("Data composer settings"), wxOK | wxICON_INFORMATION, this);
 		return;
 	}
@@ -3104,17 +3107,17 @@ void ibComposerSettingsPanel::ReloadGrouping(int select)
 // on one screen.
 wxWindow* ibComposerSettingsPanel::BuildSettingsPane(wxWindow* parent)
 {
-	wxPanel* pane = new wxPanel(parent);
+	ibPanel* pane = new ibPanel(parent);
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 
-	m_settingsHeader = new wxStaticText(pane, wxID_ANY, wxEmptyString);
+	m_settingsHeader = new ibStaticText(pane, wxID_ANY, wxEmptyString);
 	sizer->Add(m_settingsHeader, 0, wxLEFT | wxRIGHT | wxTOP, FromDIP(4));
 
 	// ⭐⭐ THE TWO SHARED EDITORS, over THIS window's buffer. Not the dynamic list's settings
 	// window with some tabs switched off — that made a composition a case of a table model, which
 	// it is not, and the cast that got it in there was the proof (Max, 2026-08-20: "two different
 	// worlds").
-	wxNotebook* tabs = m_settingsTabs = new wxNotebook(pane, wxID_ANY);
+	ibNotebook* tabs = m_settingsTabs = new ibNotebook(pane, wxID_ANY);
 	ibStyleSettingsTabs(tabs);
 
 	// ⭐ THE GROUPING'S OWN FIELDS — first, because it is what a grouping IS before it is anything
@@ -3201,7 +3204,7 @@ wxWindow* ibComposerSettingsPanel::BuildSettingsPane(wxWindow* parent)
 // stacks its columns with.
 wxWindow* ibComposerSettingsPanel::BuildFieldPage(wxWindow* parent)
 {
-	wxPanel* page = new wxPanel(parent);
+	ibPanel* page = new ibPanel(parent);
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 
 	m_fieldView = new ibDataViewCtrl(page, wxID_ANY, wxDefaultPosition, wxDefaultSize,
@@ -3377,22 +3380,22 @@ wxWindow* ibComposerSettingsPanel::BuildResourcePage(wxWindow* parent)
 	// TOOLBAR over the list that is being built. The column of ">" / "<" / "..." buttons floating in
 	// the middle was the odd one out in this window — it read as three unlabelled arrows between two
 	// panes, and it fixed the proportion of those panes at exactly half and half.
-	wxSplitterWindow* split = new wxSplitterWindow(parent, wxID_ANY,
+	ibSplitterWindow* split = new ibSplitterWindow(parent, wxID_ANY,
 		wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
 	split->SetMinimumPaneSize(FromDIP(140));
 
 	// ---- LEFT: the fields this composition offers ----------------------------
 	// Resources carry their own field list because they are their own screen; the Output page's
 	// fields live in ITS lower area, shared by its sections.
-	wxPanel* leftPane = new wxPanel(split);
+	ibPanel* leftPane = new ibPanel(split);
 	wxBoxSizer* left = new wxBoxSizer(wxVERTICAL);
-	left->Add(new wxStaticText(leftPane, wxID_ANY, _("Available fields")), 0, wxALL, FromDIP(4));
+	left->Add(new ibStaticText(leftPane, wxID_ANY, _("Available fields")), 0, wxALL, FromDIP(4));
 	m_resourceFieldTree = CreateFieldTree(leftPane);
 	left->Add(m_resourceFieldTree, 1, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, FromDIP(4));
 	leftPane->SetSizer(left);
 
 	// ---- RIGHT: what is folded, and the verbs that build it ------------------
-	wxPanel* rightPane = new wxPanel(split);
+	ibPanel* rightPane = new ibPanel(split);
 	wxBoxSizer* right = new wxBoxSizer(wxVERTICAL);
 
 	wxToolBar* bar = m_resourceBar = new wxToolBar(rightPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
@@ -3509,7 +3512,7 @@ wxWindow* ibComposerSettingsPanel::BuildResourcePage(wxWindow* parent)
 // its value").
 wxWindow* ibComposerSettingsPanel::BuildParameterPage(wxWindow* parent, bool forReader)
 {
-	wxPanel* panel = new wxPanel(parent);
+	ibPanel* panel = new ibPanel(parent);
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 
 	if (!forReader) {
@@ -3647,7 +3650,7 @@ wxWindow* ibComposerSettingsPanel::BuildParameterPage(wxWindow* parent, bool for
 		// It ASKS rather than refuses, like the window's own check on the way out: a half-written
 		// expression is a legitimate thing to leave behind. "No" drops what was typed and the cell
 		// keeps the expression it had.
-		const int answer = wxMessageBox(
+		const int answer = ibMessageBox(
 			_("The expression has an error:") + wxT("\n\n") + complaint + wxT("\n\n")
 				+ _("Leave it as it is?"),
 			_("Data composer settings"), wxYES_NO | wxICON_WARNING, this);
@@ -3783,23 +3786,10 @@ bool ibComposerSettingsPanel::EditParameterType(wxString& text)
 	if ((size_t)idx >= m_edited.m_parameters.size())
 		return false;
 	// ⭐ THE REFERENCE FILTER, as asked (Max, 2026-08-28) — what may stand under it is the tab's to say: the desktop's
-	// picker asked its configuration, and the client has none (fetch {Tab, Request: {Kind: Types}}). Offered nothing,
-	// the picker answers Cancel.
-	std::vector<ibClassID> offered;
-	const ibMetaData* const metaData = GetEditedMetaData();
-	ibProtocolNode request, answer;
-	request.SetValue(ibProtocol::ibView::ibComposer::Kind, static_cast<long long>(ibProtocol::ibView::ibComposer::ibRequest::Types));
-	if (metaData != nullptr && metaData->Fetch(request, answer)) {
-		ibValue::ReadClasses(answer.FindChild(ibProtocol::ibView::ibComposer::Classes));
-		for (const ibProtocolNode& type : answer.GetList(ibProtocol::ibView::ibComposer::Types)) {
-			unsigned long long clsid = 0;
-			if (type.AsString().ToULongLong(&clsid) && clsid != 0)
-				offered.push_back(static_cast<ibClassID>(clsid));
-		}
-	}
+	// picker asked its configuration, and the client has none — the picker asks the tab (Kind Types).
 	ibTypeDescription declared = m_edited.m_parameters[idx].m_type;
-	if (!ibShowTypeSelector(this, ibSelectorDataType::ibSelectorDataType_reference, offered,
-			declared, metaData, /*allowEdit*/true, /*single*/false))
+	if (!ibShowTypeSelector(this, ibSelectorDataType::ibSelectorDataType_reference, std::vector<ibClassID>(),
+			declared, GetEditedMetaData(), /*allowEdit*/true, /*single*/false))
 		return false;
 
 	// ⭐ A NEW TYPE BRINGS ITS OWN EMPTY VALUE. What a parameter holds is a value OF its declared type,
@@ -3819,7 +3809,7 @@ bool ibComposerSettingsPanel::EditParameterType(wxString& text)
 }
 bool ibComposerSettingsPanel::EditParameterExpression(wxString& text)
 {
-	wxDialog dlg(this, wxID_ANY, _("Expression editor"), wxDefaultPosition, FromDIP(wxSize(620, 380)),
+	ibDialog dlg(this, wxID_ANY, _("Expression editor"), wxDefaultPosition, FromDIP(wxSize(620, 380)),
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
 
 	// THE PRODUCT'S OWN CODE EDITOR, SET UP THE WAY EVERY OTHER ONE IS — the shared font and colour
@@ -3852,7 +3842,7 @@ bool ibComposerSettingsPanel::EditParameterExpression(wxString& text)
 	dlg.Bind(wxEVT_BUTTON, [&dlg, editor, metaData](wxCommandEvent& e) {
 		wxString complaint;
 		if (!CheckExpression(editor->GetText(), complaint, metaData)) {
-			wxMessageBox(complaint, _("Expression editor"), wxOK | wxICON_WARNING, &dlg);
+			ibMessageBox(complaint, _("Expression editor"), wxOK | wxICON_WARNING, &dlg);
 			return;
 		}
 		dlg.EndModal(wxID_OK);
@@ -3892,20 +3882,20 @@ void ibComposerSettingsPanel::OnParameterContextMenu(ibDataViewEvent& event)
 	const bool removable = idx != wxNOT_FOUND && (size_t)idx < m_edited.m_parameters.size()
 	                    && !m_edited.m_parameters[idx].m_fromQuery;
 
-	wxMenu menu;
+	ibMenu menu;
 	ibAppendCmd(menu, ID_PARAM_ADD, _("Add parameter"), wxASCII_STR(wxART_NEW), this);
 	ibAppendCmd(menu, ID_PARAM_REMOVE, _("Delete parameter"), wxASCII_STR(wxART_DELETE), this)
 		->Enable(removable);
 
 	menu.Bind(wxEVT_MENU, [this](wxCommandEvent& e) { OnParameterAdd(e); }, ID_PARAM_ADD);
 	menu.Bind(wxEVT_MENU, [this](wxCommandEvent& e) { OnParameterRemove(e); }, ID_PARAM_REMOVE);
-	PopupMenu(&menu);
+	m_parameterView->PopupMenu(&menu);   // on the view: an ib menu shows over an ib window, the panel is native
 }
 // A HAND-MADE PARAMETER IS NAMED WHEN IT IS ADDED — the name is what the query will refer to, so an
 // unnamed row would be a row nothing can use.
 void ibComposerSettingsPanel::OnParameterAdd(wxCommandEvent&)
 {
-	const wxString name = wxGetTextFromUser(_("Parameter name"), _("Add parameter"), wxEmptyString, this);
+	const wxString name = ibGetTextFromUser(_("Parameter name"), _("Add parameter"), wxEmptyString, this);
 	if (name.IsEmpty())
 		return;
 
@@ -3940,7 +3930,7 @@ void ibComposerSettingsPanel::OnParameterRemove(wxCommandEvent&)
 	// 🛑 AN AUTO PARAMETER IS NOT REMOVED HERE — it is in the query text. Said out loud rather than
 	// silently doing nothing, because the row looks exactly like a removable one.
 	if (m_edited.m_parameters[idx].m_fromQuery) {
-		wxMessageBox(_("This parameter comes from the query text. Remove it from the query instead."),
+		ibMessageBox(_("This parameter comes from the query text. Remove it from the query instead."),
 			_("Parameters"), wxOK | wxICON_INFORMATION, this);
 		return;
 	}
@@ -3950,18 +3940,18 @@ void ibComposerSettingsPanel::OnParameterRemove(wxCommandEvent&)
 }
 wxWindow* ibComposerSettingsPanel::BuildQueryPage(wxWindow* parent)
 {
-	wxPanel* panel = new wxPanel(parent);
+	ibPanel* panel = new ibPanel(parent);
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 
 	// ⚠ ASCII ONLY IN UI LITERALS. The file has no BOM, so MSVC reads it as ANSI and a UTF-8 dash
 	// arrives on screen as three mojibake characters. Seen live 2026-08-18 on this very label.
 	wxBoxSizer* head = new wxBoxSizer(wxHORIZONTAL);
-	head->Add(new wxStaticText(panel, wxID_ANY, _("Query text - what the composition reads")),
+	head->Add(new ibStaticText(panel, wxID_ANY, _("Query text - what the composition reads")),
 		0, wxALIGN_CENTER_VERTICAL);
 	head->AddStretchSpacer();
 	// THE CONSTRUCTOR EDITS THIS VERY TEXT and writes it back — the same door the dynamic list's
 	// query tab opens, so a composition is authored with the tool that already exists.
-	head->Add(new wxButton(panel, ID_QUERY_BUILD, _("Query constructor")), 0);
+	head->Add(new ibButton(panel, ID_QUERY_BUILD, _("Query constructor")), 0);
 	sizer->Add(head, 0, wxALL | wxEXPAND, FromDIP(4));
 	// THE SAME STYLED EDITOR the query constructor and the list settings use — SQL lexer, the
 	// language's own keyword set, line numbers. A query is query text wherever it is shown, and
@@ -3979,7 +3969,7 @@ wxWindow* ibComposerSettingsPanel::BuildQueryPage(wxWindow* parent)
 
 	// THE ENGINE'S OWN WORDS, verbatim — a query that cannot be described cannot be run, and
 	// hearing that here, from its author's chair, is the whole point of describing it early.
-	m_queryError = new wxStaticText(panel, wxID_ANY, wxEmptyString);
+	m_queryError = new ibStaticText(panel, wxID_ANY, wxEmptyString);
 	m_queryError->SetForegroundColour(*wxRED);
 	m_queryError->Hide();
 	sizer->Add(m_queryError, 0, wxALL | wxEXPAND, FromDIP(4));
@@ -4092,7 +4082,7 @@ bool ibComposerSettingsPanel::ValidateEditedSettings()
 		ibValidateSettings(EditedSettings());
 	}
 	catch (const ibCoreException& err) {
-		wxMessageBox(err.GetErrorDescription(), _("Data composer settings"), wxOK | wxICON_WARNING, this);
+		ibMessageBox(err.GetErrorDescription(), _("Data composer settings"), wxOK | wxICON_WARNING, this);
 		return false;
 	}
 	return true;
@@ -4237,9 +4227,9 @@ void ibComposerSettingsPanel::ReloadFieldTrees()
 // (Out of line, so the header can forward-declare the field tree it holds by pointer.)
 ibComposerSettingsPanel::~ibComposerSettingsPanel() = default;
 
-wxTreeCtrl* ibComposerSettingsPanel::CreateFieldTree(wxWindow* parent)
+ibTreeCtrl* ibComposerSettingsPanel::CreateFieldTree(wxWindow* parent)
 {
-	return new wxTreeCtrl(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+	return new ibTreeCtrl(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_HIDE_ROOT | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxTR_TWIST_BUTTONS);
 }
 
@@ -4268,7 +4258,7 @@ void ibComposerSettingsPanel::PopulateFieldTrees()
 }
 
 // The field a tree's cursor stands on, or null on the root / an empty tree.
-const ibQueryConstructorField* ibComposerSettingsPanel::SelectedField(wxTreeCtrl* tree) const
+const ibQueryConstructorField* ibComposerSettingsPanel::SelectedField(ibTreeCtrl* tree) const
 {
 	if (tree == nullptr)
 		return nullptr;
@@ -4281,7 +4271,7 @@ const ibQueryConstructorField* ibComposerSettingsPanel::SelectedField(wxTreeCtrl
 	return &m_fieldList[data->GetIndex()];
 }
 
-void ibComposerSettingsPanel::PopulateFieldTree(wxTreeCtrl* tree)
+void ibComposerSettingsPanel::PopulateFieldTree(ibTreeCtrl* tree)
 {
 	if (tree == nullptr)
 		return;
@@ -4380,7 +4370,7 @@ void ibComposerSettingsPanel::OnStructureContextMenu(ibDataViewEvent& event)
 	// that is greyed: the axes of a table are UNDELETABLE (Max, 2026-08-25), and the menu says so.
 	const bool onOutput = m_currentNode.IsOutput();
 
-	wxMenu menu;
+	ibMenu menu;
 	ibAppendCmd(menu, ID_LEVEL_ADD, _("Add grouping"), wxASCII_STR(wxART_NEW), this);
 	ibAppendCmd(menu, ID_TABLE_ADD, _("Add table"), wxASCII_STR(wxART_LIST_VIEW), this);
 	ibAppendCmd(menu, ID_LEVEL_REMOVE, _("Delete"), wxASCII_STR(wxART_DELETE), this)
@@ -4396,7 +4386,7 @@ void ibComposerSettingsPanel::OnStructureContextMenu(ibDataViewEvent& event)
 	menu.Bind(wxEVT_MENU, [this](wxCommandEvent& e) { OnStructureRemove(e); }, ID_LEVEL_REMOVE);
 	menu.Bind(wxEVT_MENU, [this](wxCommandEvent&)   { MoveStructureLevel(-1); }, ID_LEVEL_UP);
 	menu.Bind(wxEVT_MENU, [this](wxCommandEvent&)   { MoveStructureLevel(+1); }, ID_LEVEL_DOWN);
-	PopupMenu(&menu);
+	m_structureView->PopupMenu(&menu);   // on the view: an ib menu shows over an ib window, the panel is native
 }
 
 void ibComposerSettingsPanel::OnVariantContextMenu(ibDataViewEvent& event)
@@ -4406,7 +4396,7 @@ void ibComposerSettingsPanel::OnVariantContextMenu(ibDataViewEvent& event)
 	if (m_variantView != nullptr && event.GetItem().IsOk())
 		m_variantView->Select(event.GetItem());
 
-	wxMenu menu;
+	ibMenu menu;
 	ibAppendCmd(menu, ID_VARIANT_ADD, _("Add variant"), wxASCII_STR(wxART_NEW), this);
 	ibAppendCmd(menu, ID_VARIANT_COPY, _("Copy variant"), wxASCII_STR(wxART_COPY), this);
 	// 🛑 The last variant stays — greyed here for the same reason it is greyed on the toolbar.
@@ -4416,7 +4406,7 @@ void ibComposerSettingsPanel::OnVariantContextMenu(ibDataViewEvent& event)
 	menu.Bind(wxEVT_MENU, [this](wxCommandEvent& e) { OnVariantAdd(e); }, ID_VARIANT_ADD);
 	menu.Bind(wxEVT_MENU, [this](wxCommandEvent& e) { OnVariantCopy(e); }, ID_VARIANT_COPY);
 	menu.Bind(wxEVT_MENU, [this](wxCommandEvent& e) { OnVariantRemove(e); }, ID_VARIANT_REMOVE);
-	PopupMenu(&menu);
+	m_variantView->PopupMenu(&menu);   // on the view: an ib menu shows over an ib window, the panel is native
 }
 
 // THE RESOURCES LIST answers the right hand too — same two verbs its buttons carry.
@@ -4427,7 +4417,7 @@ void ibComposerSettingsPanel::OnResourceContextMenu(ibDataViewEvent& event)
 	if (m_resourceView != nullptr && event.GetItem().IsOk())
 		m_resourceView->Select(event.GetItem());
 
-	wxMenu menu;
+	ibMenu menu;
 	ibAppendCmd(menu, ID_RESOURCE_ADD, _("Add"), wxASCII_STR(wxART_NEW), this);
 	ibAppendCmd(menu, ID_RESOURCE_EXPR, _("Expression..."), wxASCII_STR(wxART_EDIT), this);
 	ibAppendCmd(menu, ID_RESOURCE_REMOVE, _("Delete"), wxASCII_STR(wxART_DELETE), this)
@@ -4436,7 +4426,7 @@ void ibComposerSettingsPanel::OnResourceContextMenu(ibDataViewEvent& event)
 	menu.Bind(wxEVT_MENU, [this](wxCommandEvent& e) { OnAddResource(e); }, ID_RESOURCE_ADD);
 	menu.Bind(wxEVT_MENU, [this](wxCommandEvent& e) { OnResourceExpression(e); }, ID_RESOURCE_EXPR);
 	menu.Bind(wxEVT_MENU, [this](wxCommandEvent& e) { OnRemoveResource(e); }, ID_RESOURCE_REMOVE);
-	PopupMenu(&menu);
+	m_resourceView->PopupMenu(&menu);   // on the view: an ib menu shows over an ib window, the panel is native
 }
 // ---------------------------------------------------------------------------
 //  Variants — add / copy / delete, and what a switch costs
@@ -4753,7 +4743,7 @@ void ibComposerSettingsPanel::OnStructureAdd(wxCommandEvent&)
 	if (axis == nullptr) {
 		// SAID, NOT SWALLOWED. A command that does nothing and explains nothing reads as broken,
 		// and this is the one state where it can happen: the composition has no output to add to.
-		wxMessageBox(_("This composition has no output to add a grouping to."),
+		ibMessageBox(_("This composition has no output to add a grouping to."),
 			_("Data composer settings"), wxOK | wxICON_INFORMATION, this);
 		return;
 	}

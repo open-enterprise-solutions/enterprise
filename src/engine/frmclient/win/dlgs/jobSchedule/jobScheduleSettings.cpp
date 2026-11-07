@@ -5,9 +5,12 @@
 #include "jobScheduleSettings.h"
 #include "gui/typeconv.h"   // DateTimeToWxDateTime / WxDateTimeToDateTime — a date across to wx and back
 
-#include <wx/notebook.h>
+#include "gui/univ/ctrl/notebook.h"
 #include <wx/sizer.h>
 #include <wx/statbox.h>
+#include "gui/univ/ctrl/staticBox.h"
+#include "gui/univ/panel.h"
+#include "gui/univ/messageDialog.h"
 
 namespace {
 
@@ -34,13 +37,13 @@ void SplitInterval(int seconds, int& value, int& unitIndex)
 } // namespace
 
 ibDialogJobSchedule::ibDialogJobSchedule(wxWindow* parent, const ibJobScheduleDescription& schedule)
-	: wxDialog(parent, wxID_ANY, _("Schedule"), wxDefaultPosition, wxDefaultSize,
+	: ibDialog(parent, wxID_ANY, _("Schedule"), wxDefaultPosition, wxDefaultSize,
 	           wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER | wxCLIP_CHILDREN),
 	  m_schedule(schedule)
 {
 	wxBoxSizer* topSizer = new wxBoxSizer(wxVERTICAL);
 
-	wxNotebook* notebook = new wxNotebook(this, wxID_ANY);
+	ibNotebook* notebook = new ibNotebook(this, wxID_ANY);
 	notebook->AddPage(BuildGeneralPage(notebook), _("General"), true);
 	notebook->AddPage(BuildDailyPage(notebook),   _("Daily"));
 	notebook->AddPage(BuildWeeklyPage(notebook),  _("Weekly"));
@@ -49,10 +52,10 @@ ibDialogJobSchedule::ibDialogJobSchedule(wxWindow* parent, const ibJobScheduleDe
 	topSizer->Add(notebook, wxSizerFlags(1).Expand().Border(wxALL, FromDIP(6)));
 
 	// The sentence — what the manager will actually understand, shown while it is being built.
-	m_description = new wxStaticText(this, wxID_ANY, wxEmptyString);
+	m_description = new ibStaticText(this, wxID_ANY, wxEmptyString);
 	topSizer->Add(m_description, wxSizerFlags(0).Expand().Border(wxLEFT | wxRIGHT | wxBOTTOM, FromDIP(8)));
 
-	wxStdDialogButtonSizer* buttons = CreateStdDialogButtonSizer(wxOK | wxCANCEL);
+	ibStdDialogButtonSizer* buttons = CreateStdDialogButtonSizer(wxOK | wxCANCEL);
 	topSizer->Add(buttons, wxSizerFlags(0).Right().Border(wxLEFT | wxRIGHT | wxBOTTOM, FromDIP(8)));
 
 	SetSizer(topSizer);
@@ -72,36 +75,36 @@ ibDialogJobSchedule::ibDialogJobSchedule(wxWindow* parent, const ibJobScheduleDe
 
 wxWindow* ibDialogJobSchedule::BuildGeneralPage(wxWindow* parent)
 {
-	wxPanel* page = new wxPanel(parent, wxID_ANY);
+	ibPanel* page = new ibPanel(parent, wxID_ANY);
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 
 	wxBoxSizer* intervalRow = new wxBoxSizer(wxHORIZONTAL);
-	intervalRow->Add(new wxStaticText(page, wxID_ANY, _("Repeat every:")), wxSizerFlags(0).CenterVertical().Border(wxRIGHT, FromDIP(6)));
+	intervalRow->Add(new ibStaticText(page, wxID_ANY, _("Repeat every:")), wxSizerFlags(0).CenterVertical().Border(wxRIGHT, FromDIP(6)));
 
-	m_intervalValue = new wxSpinCtrl(page, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
+	m_intervalValue = new ibSpinCtrl(page, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
 	                                 wxSP_ARROW_KEYS, 1, 100000, 1);
 	intervalRow->Add(m_intervalValue, wxSizerFlags(0).CenterVertical().Border(wxRIGHT, FromDIP(6)));
 
 	wxArrayString units;
 	units.Add(_("seconds")); units.Add(_("minutes")); units.Add(_("hours")); units.Add(_("days"));
-	m_intervalUnit = new wxChoice(page, wxID_ANY, wxDefaultPosition, wxDefaultSize, units);
+	m_intervalUnit = new ibChoice(page, wxID_ANY, wxDefaultPosition, wxDefaultSize, units);
 	intervalRow->Add(m_intervalUnit, wxSizerFlags(0).CenterVertical());
 
 	sizer->Add(intervalRow, wxSizerFlags(0).Expand().Border(wxALL, FromDIP(8)));
 
 	// Validity range — the job does not run before / after these. Unchecked = unbounded, which is
 	// what an untouched control has to mean; a default of "today" would silently bound the job.
-	wxStaticBoxSizer* rangeBox = new wxStaticBoxSizer(wxVERTICAL, page, _("Validity"));
+	ibStaticBoxSizer* rangeBox = new ibStaticBoxSizer(wxVERTICAL, page, _("Validity"));
 
 	wxBoxSizer* fromRow = new wxBoxSizer(wxHORIZONTAL);
-	m_activeFromUse = new wxCheckBox(rangeBox->GetStaticBox(), wxID_ANY, _("Start date:"));
+	m_activeFromUse = new ibCheckBox(rangeBox->GetStaticBox(), wxID_ANY, _("Start date:"));
 	m_activeFrom = new wxDatePickerCtrl(rangeBox->GetStaticBox(), wxID_ANY);
 	fromRow->Add(m_activeFromUse, wxSizerFlags(0).CenterVertical().Border(wxRIGHT, FromDIP(6)));
 	fromRow->Add(m_activeFrom, wxSizerFlags(0).CenterVertical());
 	rangeBox->Add(fromRow, wxSizerFlags(0).Expand().Border(wxALL, FromDIP(4)));
 
 	wxBoxSizer* toRow = new wxBoxSizer(wxHORIZONTAL);
-	m_activeToUse = new wxCheckBox(rangeBox->GetStaticBox(), wxID_ANY, _("End date:"));
+	m_activeToUse = new ibCheckBox(rangeBox->GetStaticBox(), wxID_ANY, _("End date:"));
 	m_activeTo = new wxDatePickerCtrl(rangeBox->GetStaticBox(), wxID_ANY);
 	toRow->Add(m_activeToUse, wxSizerFlags(0).CenterVertical().Border(wxRIGHT, FromDIP(6)));
 	toRow->Add(m_activeTo, wxSizerFlags(0).CenterVertical());
@@ -121,21 +124,21 @@ wxWindow* ibDialogJobSchedule::BuildGeneralPage(wxWindow* parent)
 
 wxWindow* ibDialogJobSchedule::BuildDailyPage(wxWindow* parent)
 {
-	wxPanel* page = new wxPanel(parent, wxID_ANY);
+	ibPanel* page = new ibPanel(parent, wxID_ANY);
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 
 	// The time-of-day window. It WRAPS midnight when the start is later than the end (22:00–05:00
 	// is a night window); read as a plain range it would match no minute at all.
-	wxStaticBoxSizer* windowBox = new wxStaticBoxSizer(wxVERTICAL, page, _("Time window"));
+	ibStaticBoxSizer* windowBox = new ibStaticBoxSizer(wxVERTICAL, page, _("Time window"));
 
-	m_windowUse = new wxCheckBox(windowBox->GetStaticBox(), wxID_ANY, _("Run only inside a time window"));
+	m_windowUse = new ibCheckBox(windowBox->GetStaticBox(), wxID_ANY, _("Run only inside a time window"));
 	windowBox->Add(m_windowUse, wxSizerFlags(0).Expand().Border(wxALL, FromDIP(4)));
 
 	wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
-	row->Add(new wxStaticText(windowBox->GetStaticBox(), wxID_ANY, _("From:")), wxSizerFlags(0).CenterVertical().Border(wxRIGHT, FromDIP(4)));
+	row->Add(new ibStaticText(windowBox->GetStaticBox(), wxID_ANY, _("From:")), wxSizerFlags(0).CenterVertical().Border(wxRIGHT, FromDIP(4)));
 	m_windowStart = new wxTimePickerCtrl(windowBox->GetStaticBox(), wxID_ANY);
 	row->Add(m_windowStart, wxSizerFlags(0).CenterVertical().Border(wxRIGHT, FromDIP(10)));
-	row->Add(new wxStaticText(windowBox->GetStaticBox(), wxID_ANY, _("to:")), wxSizerFlags(0).CenterVertical().Border(wxRIGHT, FromDIP(4)));
+	row->Add(new ibStaticText(windowBox->GetStaticBox(), wxID_ANY, _("to:")), wxSizerFlags(0).CenterVertical().Border(wxRIGHT, FromDIP(4)));
 	m_windowEnd = new wxTimePickerCtrl(windowBox->GetStaticBox(), wxID_ANY);
 	row->Add(m_windowEnd, wxSizerFlags(0).CenterVertical());
 	windowBox->Add(row, wxSizerFlags(0).Expand().Border(wxALL, FromDIP(4)));
@@ -144,9 +147,9 @@ wxWindow* ibDialogJobSchedule::BuildDailyPage(wxWindow* parent)
 
 	// Stop-after gates the START only: cutting a pass off mid-flight belongs to whoever knows what
 	// half-done means for that work.
-	wxStaticBoxSizer* stopBox = new wxStaticBoxSizer(wxVERTICAL, page, _("Do not start after"));
+	ibStaticBoxSizer* stopBox = new ibStaticBoxSizer(wxVERTICAL, page, _("Do not start after"));
 	wxBoxSizer* stopRow = new wxBoxSizer(wxHORIZONTAL);
-	m_stopAfterUse = new wxCheckBox(stopBox->GetStaticBox(), wxID_ANY, _("Time:"));
+	m_stopAfterUse = new ibCheckBox(stopBox->GetStaticBox(), wxID_ANY, _("Time:"));
 	m_stopAfter = new wxTimePickerCtrl(stopBox->GetStaticBox(), wxID_ANY);
 	stopRow->Add(m_stopAfterUse, wxSizerFlags(0).CenterVertical().Border(wxRIGHT, FromDIP(6)));
 	stopRow->Add(m_stopAfter, wxSizerFlags(0).CenterVertical());
@@ -163,31 +166,31 @@ wxWindow* ibDialogJobSchedule::BuildDailyPage(wxWindow* parent)
 
 wxWindow* ibDialogJobSchedule::BuildWeeklyPage(wxWindow* parent)
 {
-	wxPanel* page = new wxPanel(parent, wxID_ANY);
+	ibPanel* page = new ibPanel(parent, wxID_ANY);
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 
 	wxArrayString days;
 	days.Add(_("Monday")); days.Add(_("Tuesday")); days.Add(_("Wednesday")); days.Add(_("Thursday"));
 	days.Add(_("Friday")); days.Add(_("Saturday")); days.Add(_("Sunday"));
-	m_weekDays = new wxCheckListBox(page, wxID_ANY, wxDefaultPosition, wxDefaultSize, days);
-	sizer->Add(new wxStaticText(page, wxID_ANY, _("Days of week (none checked = every day):")),
+	m_weekDays = new ibCheckListBox(page, wxID_ANY, wxDefaultPosition, wxDefaultSize, days);
+	sizer->Add(new ibStaticText(page, wxID_ANY, _("Days of week (none checked = every day):")),
 	           wxSizerFlags(0).Border(wxLEFT | wxTOP, FromDIP(8)));
 	sizer->Add(m_weekDays, wxSizerFlags(1).Expand().Border(wxALL, FromDIP(8)));
 
 	wxBoxSizer* everyRow = new wxBoxSizer(wxHORIZONTAL);
-	everyRow->Add(new wxStaticText(page, wxID_ANY, _("Every N weeks:")), wxSizerFlags(0).CenterVertical().Border(wxRIGHT, FromDIP(6)));
-	m_everyNWeeks = new wxSpinCtrl(page, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, 52, 1);
+	everyRow->Add(new ibStaticText(page, wxID_ANY, _("Every N weeks:")), wxSizerFlags(0).CenterVertical().Border(wxRIGHT, FromDIP(6)));
+	m_everyNWeeks = new ibSpinCtrl(page, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, 52, 1);
 	everyRow->Add(m_everyNWeeks, wxSizerFlags(0).CenterVertical());
 	sizer->Add(everyRow, wxSizerFlags(0).Border(wxLEFT | wxRIGHT | wxBOTTOM, FromDIP(8)));
 
 	// The Nth weekday of the month — it counts occurrences of the weekday checked above, so it is
 	// only meaningful when exactly one day is checked.
 	wxBoxSizer* ordinalRow = new wxBoxSizer(wxHORIZONTAL);
-	ordinalRow->Add(new wxStaticText(page, wxID_ANY, _("Occurrence in month:")), wxSizerFlags(0).CenterVertical().Border(wxRIGHT, FromDIP(6)));
+	ordinalRow->Add(new ibStaticText(page, wxID_ANY, _("Occurrence in month:")), wxSizerFlags(0).CenterVertical().Border(wxRIGHT, FromDIP(6)));
 	wxArrayString ordinals;
 	ordinals.Add(_("any")); ordinals.Add(_("first")); ordinals.Add(_("second")); ordinals.Add(_("third"));
 	ordinals.Add(_("fourth")); ordinals.Add(_("fifth")); ordinals.Add(_("last"));
-	m_weekdayOrdinal = new wxChoice(page, wxID_ANY, wxDefaultPosition, wxDefaultSize, ordinals);
+	m_weekdayOrdinal = new ibChoice(page, wxID_ANY, wxDefaultPosition, wxDefaultSize, ordinals);
 	ordinalRow->Add(m_weekdayOrdinal, wxSizerFlags(0).CenterVertical());
 	sizer->Add(ordinalRow, wxSizerFlags(0).Border(wxLEFT | wxRIGHT | wxBOTTOM, FromDIP(8)));
 
@@ -201,7 +204,7 @@ wxWindow* ibDialogJobSchedule::BuildWeeklyPage(wxWindow* parent)
 
 wxWindow* ibDialogJobSchedule::BuildMonthlyPage(wxWindow* parent)
 {
-	wxPanel* page = new wxPanel(parent, wxID_ANY);
+	ibPanel* page = new ibPanel(parent, wxID_ANY);
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 
 	wxBoxSizer* listsRow = new wxBoxSizer(wxHORIZONTAL);
@@ -210,8 +213,8 @@ wxWindow* ibDialogJobSchedule::BuildMonthlyPage(wxWindow* parent)
 	for (int day = 1; day <= 31; ++day)
 		days.Add(wxString::Format(wxT("%i"), day));
 	wxBoxSizer* daysCol = new wxBoxSizer(wxVERTICAL);
-	daysCol->Add(new wxStaticText(page, wxID_ANY, _("Days of month:")), wxSizerFlags(0));
-	m_monthDays = new wxCheckListBox(page, wxID_ANY, wxDefaultPosition, wxDefaultSize, days);
+	daysCol->Add(new ibStaticText(page, wxID_ANY, _("Days of month:")), wxSizerFlags(0));
+	m_monthDays = new ibCheckListBox(page, wxID_ANY, wxDefaultPosition, wxDefaultSize, days);
 	daysCol->Add(m_monthDays, wxSizerFlags(1).Expand());
 	listsRow->Add(daysCol, wxSizerFlags(1).Expand().Border(wxRIGHT, FromDIP(6)));
 
@@ -222,8 +225,8 @@ wxWindow* ibDialogJobSchedule::BuildMonthlyPage(wxWindow* parent)
 	for (int back = 1; back <= 30; ++back)
 		fromEnd.Add(ibString::Format(_("%i before last"), back));
 	wxBoxSizer* endCol = new wxBoxSizer(wxVERTICAL);
-	endCol->Add(new wxStaticText(page, wxID_ANY, _("From the end:")), wxSizerFlags(0));
-	m_monthDaysEnd = new wxCheckListBox(page, wxID_ANY, wxDefaultPosition, wxDefaultSize, fromEnd);
+	endCol->Add(new ibStaticText(page, wxID_ANY, _("From the end:")), wxSizerFlags(0));
+	m_monthDaysEnd = new ibCheckListBox(page, wxID_ANY, wxDefaultPosition, wxDefaultSize, fromEnd);
 	endCol->Add(m_monthDaysEnd, wxSizerFlags(1).Expand());
 	listsRow->Add(endCol, wxSizerFlags(1).Expand().Border(wxRIGHT, FromDIP(6)));
 
@@ -232,16 +235,16 @@ wxWindow* ibDialogJobSchedule::BuildMonthlyPage(wxWindow* parent)
 	months.Add(_("May")); months.Add(_("June")); months.Add(_("July")); months.Add(_("August"));
 	months.Add(_("September")); months.Add(_("October")); months.Add(_("November")); months.Add(_("December"));
 	wxBoxSizer* monthsCol = new wxBoxSizer(wxVERTICAL);
-	monthsCol->Add(new wxStaticText(page, wxID_ANY, _("Months:")), wxSizerFlags(0));
-	m_months = new wxCheckListBox(page, wxID_ANY, wxDefaultPosition, wxDefaultSize, months);
+	monthsCol->Add(new ibStaticText(page, wxID_ANY, _("Months:")), wxSizerFlags(0));
+	m_months = new ibCheckListBox(page, wxID_ANY, wxDefaultPosition, wxDefaultSize, months);
 	monthsCol->Add(m_months, wxSizerFlags(1).Expand());
 	listsRow->Add(monthsCol, wxSizerFlags(1).Expand());
 
 	sizer->Add(listsRow, wxSizerFlags(1).Expand().Border(wxALL, FromDIP(8)));
 
 	wxBoxSizer* everyRow = new wxBoxSizer(wxHORIZONTAL);
-	everyRow->Add(new wxStaticText(page, wxID_ANY, _("Every N months:")), wxSizerFlags(0).CenterVertical().Border(wxRIGHT, FromDIP(6)));
-	m_everyNMonths = new wxSpinCtrl(page, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, 12, 1);
+	everyRow->Add(new ibStaticText(page, wxID_ANY, _("Every N months:")), wxSizerFlags(0).CenterVertical().Border(wxRIGHT, FromDIP(6)));
+	m_everyNMonths = new ibSpinCtrl(page, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 1, 12, 1);
 	everyRow->Add(m_everyNMonths, wxSizerFlags(0).CenterVertical());
 	sizer->Add(everyRow, wxSizerFlags(0).Border(wxLEFT | wxRIGHT | wxBOTTOM, FromDIP(8)));
 
@@ -258,7 +261,7 @@ wxWindow* ibDialogJobSchedule::BuildMonthlyPage(wxWindow* parent)
 //*                        buffer <-> controls                          *
 //***********************************************************************
 
-int ibDialogJobSchedule::MinutesFrom(wxTimePickerCtrl* ctrl, const wxCheckBox* use)
+int ibDialogJobSchedule::MinutesFrom(wxTimePickerCtrl* ctrl, const ibCheckBox* use)
 {
 	if (ctrl == nullptr || (use != nullptr && !use->GetValue()))
 		return -1;
@@ -268,7 +271,7 @@ int ibDialogJobSchedule::MinutesFrom(wxTimePickerCtrl* ctrl, const wxCheckBox* u
 	return hour * 60 + minute;
 }
 
-void ibDialogJobSchedule::MinutesTo(wxTimePickerCtrl* ctrl, wxCheckBox* use, int minutes)
+void ibDialogJobSchedule::MinutesTo(wxTimePickerCtrl* ctrl, ibCheckBox* use, int minutes)
 {
 	const bool declared = minutes >= 0;
 	if (use != nullptr)
@@ -277,7 +280,7 @@ void ibDialogJobSchedule::MinutesTo(wxTimePickerCtrl* ctrl, wxCheckBox* use, int
 		ctrl->SetTime(declared ? minutes / 60 : 0, declared ? minutes % 60 : 0, 0);
 }
 
-void ibDialogJobSchedule::MaskTo(wxCheckListBox* list, std::uint32_t mask)
+void ibDialogJobSchedule::MaskTo(ibCheckListBox* list, std::uint32_t mask)
 {
 	if (list == nullptr)
 		return;
@@ -285,7 +288,7 @@ void ibDialogJobSchedule::MaskTo(wxCheckListBox* list, std::uint32_t mask)
 		list->Check(idx, (mask & (1u << idx)) != 0);
 }
 
-std::uint32_t ibDialogJobSchedule::MaskFrom(const wxCheckListBox* list)
+std::uint32_t ibDialogJobSchedule::MaskFrom(const ibCheckListBox* list)
 {
 	std::uint32_t mask = 0;
 	if (list == nullptr)
@@ -398,7 +401,7 @@ void ibDialogJobSchedule::OnOk(wxCommandEvent& event)
 	// Refuse what can never match, HERE, in front of the person who typed it — rather than leaving
 	// it to be debugged later as a job that simply never runs.
 	if (!ibJobScheduleRules::IsValid(m_schedule)) {
-		wxMessageBox(_("This schedule can never run: check the interval and the time window."),
+		ibMessageBox(_("This schedule can never run: check the interval and the time window."),
 		             _("Schedule"), wxOK | wxICON_WARNING, this);
 		return;
 	}

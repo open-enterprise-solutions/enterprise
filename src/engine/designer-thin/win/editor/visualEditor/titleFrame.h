@@ -1,10 +1,10 @@
 ﻿#ifndef __TITLE__
 #define __TITLE__
 
-#include <wx/panel.h>
+#include "gui/univ/panel.h"
 
 // A caption strip in the palette's colours, over one of the form editor's trees.
-class ibPanelTitle : public wxPanel {
+class ibPanelTitle : public ibPanel {
 public:
 	ibPanelTitle(wxWindow* parent, const wxString& title);
 

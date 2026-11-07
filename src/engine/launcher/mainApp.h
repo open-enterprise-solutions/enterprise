@@ -14,7 +14,7 @@ public:
 	int OnExit() override;
 
 private:
-	ibFrameLauncher* m_launcher = nullptr;
+	ibDialogLauncher* m_launcher = nullptr;
 };
 
 wxDECLARE_APP(ibAppLauncher);

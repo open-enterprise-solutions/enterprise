@@ -12,12 +12,12 @@
 // schedule was NOT designed as a cron string: an expression has to be parsed to be shown, and
 // unparsed to be saved, and the two drift.
 
-#include <wx/dialog.h>
-#include <wx/checklst.h>
-#include <wx/checkbox.h>
-#include <wx/spinctrl.h>
-#include <wx/choice.h>
-#include <wx/stattext.h>
+#include "gui/univ/dialog.h"
+#include "gui/univ/ctrl/checkListBox.h"
+#include "gui/univ/ctrl/checkBox.h"
+#include "gui/univ/ctrl/spinCtrl.h"
+#include "gui/univ/ctrl/choice.h"
+#include "gui/univ/ctrl/staticText.h"
 #include <wx/datectrl.h>
 #include <wx/timectrl.h>
 
@@ -26,7 +26,7 @@
 
 // The old desktop's, asked by the server (ibProtocol::ibRequest::ibKind::Schedule): the schedule
 // comes in the question, the edited one is the answer.
-class FRMCLIENT_API ibDialogJobSchedule : public wxDialog {
+class FRMCLIENT_API ibDialogJobSchedule : public ibDialog {
 public:
 
 	ibDialogJobSchedule(wxWindow* parent, const ibJobScheduleDescription& schedule);
@@ -52,40 +52,40 @@ private:
 
 	// Helpers for the two representations that differ between UI and storage: a time is minutes
 	// from midnight (-1 = unset), and a mask is a check-list.
-	static int  MinutesFrom(wxTimePickerCtrl* ctrl, const wxCheckBox* use);
-	static void MinutesTo(wxTimePickerCtrl* ctrl, wxCheckBox* use, int minutes);
-	static void MaskTo(wxCheckListBox* list, std::uint32_t mask);
-	static std::uint32_t MaskFrom(const wxCheckListBox* list);
+	static int  MinutesFrom(wxTimePickerCtrl* ctrl, const ibCheckBox* use);
+	static void MinutesTo(wxTimePickerCtrl* ctrl, ibCheckBox* use, int minutes);
+	static void MaskTo(ibCheckListBox* list, std::uint32_t mask);
+	static std::uint32_t MaskFrom(const ibCheckListBox* list);
 
 	ibJobScheduleDescription m_schedule;   // the buffer
 
 	// General
-	wxSpinCtrl*        m_intervalValue   = nullptr;
-	wxChoice*          m_intervalUnit    = nullptr;   // seconds / minutes / hours / days
-	wxCheckBox*        m_activeFromUse   = nullptr;
+	ibSpinCtrl*        m_intervalValue   = nullptr;
+	ibChoice*          m_intervalUnit    = nullptr;   // seconds / minutes / hours / days
+	ibCheckBox*        m_activeFromUse   = nullptr;
 	wxDatePickerCtrl*  m_activeFrom      = nullptr;
-	wxCheckBox*        m_activeToUse     = nullptr;
+	ibCheckBox*        m_activeToUse     = nullptr;
 	wxDatePickerCtrl*  m_activeTo        = nullptr;
 
 	// Daily
-	wxCheckBox*        m_windowUse       = nullptr;
+	ibCheckBox*        m_windowUse       = nullptr;
 	wxTimePickerCtrl*  m_windowStart     = nullptr;
 	wxTimePickerCtrl*  m_windowEnd       = nullptr;
-	wxCheckBox*        m_stopAfterUse    = nullptr;
+	ibCheckBox*        m_stopAfterUse    = nullptr;
 	wxTimePickerCtrl*  m_stopAfter       = nullptr;
 
 	// Weekly
-	wxCheckListBox*    m_weekDays        = nullptr;
-	wxSpinCtrl*        m_everyNWeeks     = nullptr;
-	wxChoice*          m_weekdayOrdinal  = nullptr;   // none / first … fifth / last
+	ibCheckListBox*    m_weekDays        = nullptr;
+	ibSpinCtrl*        m_everyNWeeks     = nullptr;
+	ibChoice*          m_weekdayOrdinal  = nullptr;   // none / first … fifth / last
 
 	// Monthly
-	wxCheckListBox*    m_monthDays       = nullptr;
-	wxCheckListBox*    m_monthDaysEnd    = nullptr;
-	wxCheckListBox*    m_months          = nullptr;
-	wxSpinCtrl*        m_everyNMonths    = nullptr;
+	ibCheckListBox*    m_monthDays       = nullptr;
+	ibCheckListBox*    m_monthDaysEnd    = nullptr;
+	ibCheckListBox*    m_months          = nullptr;
+	ibSpinCtrl*        m_everyNMonths    = nullptr;
 
-	wxStaticText*      m_description     = nullptr;
+	ibStaticText*      m_description     = nullptr;
 };
 
 #endif // _FRMCLIENT_JOB_SCHEDULE_DLG_H__

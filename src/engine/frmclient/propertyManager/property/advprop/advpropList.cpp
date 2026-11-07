@@ -3,6 +3,8 @@
 #include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 #include "frmclient/propertyManager/propertyEditor.h"
+#include "gui/univ/dialog.h"
+#include "gui/univ/dataview/dataview.h"   // ibDataViewListCtrl — the dialog's list of choices
 
 #define icon_size 16
 
@@ -100,54 +102,9 @@ int ibPGListProperty::GetChoiceSelection() const
 	return m_choices.Index(ReadId(m_value));
 }
 
-#include <wx/dataview.h>
-#include <wx/treectrl.h>
-
 wxPGEditorDialogAdapter* ibPGListProperty::GetEditorDialog() const
 {
 	class wxPGListEventAdapter : public wxPGEditorDialogAdapter {
-
-		enum
-		{
-			list_column_name = 0
-		};
-
-		class wxDataViewListCtrl : public wxDataViewCtrl {
-
-			class wxDataViewPropertyListStore : public wxDataViewListStore {
-			public:
-				wxDataViewPropertyListStore() { AppendColumn(wxT("wxDataViewIconText")); }
-			};
-
-			wxDataViewListStore* GetStore() {
-				return (wxDataViewPropertyListStore*)GetModel();
-			}
-
-		public:
-
-			wxDataViewListCtrl(wxWindow* parent, wxWindowID id,
-				const wxPoint& pos = wxDefaultPosition,
-				const wxSize& size = wxDefaultSize, long style = wxDV_NO_HEADER | wxDV_ROW_LINES,
-				const wxValidator& validator = wxDefaultValidator,
-				const wxString& name = wxASCII_STR(wxDataViewCtrlNameStr))
-				: wxDataViewCtrl(parent, id, pos, size, style, validator, name)
-			{
-				wxDataViewListCtrl::AssociateModel(new wxDataViewPropertyListStore());
-				wxDataViewListCtrl::AppendColumn(
-					new wxDataViewColumn(wxT("name"), new wxDataViewIconTextRenderer, list_column_name,
-						-1, static_cast<wxAlignment>(wxALIGN_LEFT), wxDATAVIEW_COL_RESIZABLE)
-				);
-			}
-
-			void AppendItem(const wxString& strName, const wxBitmapBundle& bitmap, wxUIntPtr data = 0) {
-				wxVector<wxVariant> values;
-				wxVariant value;
-				value << wxDataViewIconText(strName, bitmap);
-				values.push_back(value);
-				GetStore()->AppendItem(values, data);
-			}
-		};
-
 	public:
 
 		virtual bool DoShowDialog(wxPropertyGrid* pg, wxPGProperty* prop) wxOVERRIDE
@@ -156,7 +113,7 @@ wxPGEditorDialogAdapter* ibPGListProperty::GetEditorDialog() const
 			wxCHECK_MSG(dlgProp, false, "Function called for incompatible property");
 
 			// launch editor dialog
-			wxDialog* dlg = new wxDialog(pg, wxID_ANY, _("Select object"), wxDefaultPosition, wxDefaultSize,
+			ibDialog* dlg = new ibDialog(pg, wxID_ANY, _("Select object"), wxDefaultPosition, wxDefaultSize,
 				wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER | wxCLIP_CHILDREN);
 
 			dlg->SetFont(pg->GetFont()); // To allow entering chars of the same set as the propGrid
@@ -166,8 +123,11 @@ wxPGEditorDialogAdapter* ibPGListProperty::GetEditorDialog() const
 			wxBoxSizer* topsizer = new wxBoxSizer(wxVERTICAL);
 			wxBoxSizer* rowsizer = new wxBoxSizer(wxHORIZONTAL);
 
-			wxDataViewListCtrl* lc = new wxDataViewListCtrl(dlg, wxID_ANY,
+			// The list's one column — the choice's name and picture.
+			ibDataViewListCtrl* lc = new ibDataViewListCtrl(dlg, wxID_ANY,
 				wxDefaultPosition, wxDefaultSize, wxDV_NO_HEADER | wxDV_ROW_LINES);
+			lc->AppendIconTextColumn(wxT("name"), wxDATAVIEW_CELL_INERT, wxCOL_WIDTH_DEFAULT,
+				wxALIGN_LEFT, wxDATAVIEW_COL_RESIZABLE);
 
 			rowsizer->Add(lc, wxSizerFlags(1).Expand().Border(wxALL, spacing));
 			topsizer->Add(rowsizer, wxSizerFlags(1).Expand());
@@ -175,7 +135,7 @@ wxPGEditorDialogAdapter* ibPGListProperty::GetEditorDialog() const
 			lc->SetDoubleBuffered(true);
 			lc->Enable(!dlgProp->HasFlag(wxPGFlags::ReadOnly));
 
-			wxStdDialogButtonSizer* buttonSizer = dlg->CreateStdDialogButtonSizer(wxOK | wxCANCEL);
+			ibStdDialogButtonSizer* buttonSizer = dlg->CreateStdDialogButtonSizer(wxOK | wxCANCEL);
 			topsizer->Add(buttonSizer, wxSizerFlags(0).Right().Border(wxBOTTOM | wxRIGHT, spacing));
 
 			dlg->SetSizer(topsizer);
@@ -192,21 +152,17 @@ wxPGEditorDialogAdapter* ibPGListProperty::GetEditorDialog() const
 			const long selected = ReadId(prop->GetValue());
 
 			for (unsigned int idx = 0; idx < choices.GetCount(); idx++) {
-				const wxBitmapBundle& bitmap = choices.Item(idx).GetBitmap();
-				lc->AppendItem(
-					choices.GetLabel(idx),
-					bitmap,
-					idx + 1
-				);
+				wxVector<ibVariant> values;
+				values.push_back(ibVariant(new ibDataViewIconText(choices.GetLabel(idx), choices.Item(idx).GetBitmap())));
+				lc->AppendItem(values);
 				if (selected == choices.GetValue(idx))
-					lc->Select(wxDataViewItem(reinterpret_cast<void*>(idx + 1)));
+					lc->SelectRow(idx);
 			}
 
 			const int res = dlg->ShowModal();
-			const wxDataViewItem& item = lc->GetSelection();
-			if (res == wxID_OK && item.IsOk()) SetValue(WriteId(prop->GetValue(),
-				choices.GetValue(
-					static_cast<unsigned int>(reinterpret_cast<uintptr_t>(item.GetID())) - 1)));
+			const int row = lc->GetSelectedRow();
+			if (res == wxID_OK && row != wxNOT_FOUND)
+				SetValue(WriteId(prop->GetValue(), choices.GetValue(static_cast<unsigned int>(row))));
 			else if (res == wxID_OK)
 				SetValue(WriteId(prop->GetValue(), wxNOT_FOUND));
 

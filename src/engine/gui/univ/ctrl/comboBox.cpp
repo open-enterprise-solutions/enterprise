@@ -160,9 +160,12 @@ bool ibComboBox::Create(wxWindow *parent,
         m_lbox->Append(choices[i]);
 
     // the combo IS a text box + a drop-down list: the value always lives in
-    // an ibTextCtrl child (read-only one for wxCB_READONLY)
+    // an ibTextCtrl child (read-only one for wxCB_READONLY) - born in its
+    // value area: a combo created at its final size (a cell's editor) gets no
+    // EVT_SIZE after this, and the child's own best width covered the button
+    const wxRect rectValue = GetValueRect();
     m_text = new ibTextCtrl(this, wxID_ANY, value,
-                            wxDefaultPosition, wxDefaultSize,
+                            rectValue.GetPosition(), rectValue.GetSize(),
                             wxBORDER_NONE |
                             ((style & wxCB_READONLY) ? wxTE_READONLY : 0));
 
@@ -214,6 +217,11 @@ void ibComboBox::SetValue(const wxString& value)
 void ibComboBox::ChangeValue(const wxString& value)
 {
     m_text->ChangeValue(value);
+}
+
+void ibComboBox::SetInsertionPointEnd()
+{
+    m_text->SetInsertionPointEnd();
 }
 
 // ----------------------------------------------------------------------------

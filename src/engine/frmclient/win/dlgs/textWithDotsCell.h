@@ -20,6 +20,7 @@
 #include <utility>
 
 #include "gui/univ/ctrl/textCtrl.h"
+#include "core/diagnostics/journal.h"                       // ibJournalInfo — what the "..." gave
 #include "frmclient/visualView/ctrl/frame.h"                 // ibControlFrame
 #include "frmclient/visualView/ctrl/tableBoxColumnRenderer.h" // ibDataViewValueRenderer — the TABLE's own renderer
 
@@ -98,7 +99,9 @@ private:
 			return;
 
 		m_text = text;   // what the cell commits, whether or not the box is still there
-		if (ibTextCtrl* alive = dynamic_cast<ibTextCtrl*>(GetEditorCtrl()))
+		ibTextCtrl* const alive = dynamic_cast<ibTextCtrl*>(GetEditorCtrl());
+		ibJournalInfo(wxT("ui"), wxT("the \"...\" gave \"%s\", the box %s"), text, alive != nullptr ? wxT("alive") : wxT("gone"));
+		if (alive != nullptr)
 			alive->ChangeValue(text);
 	}
 	void OnClear(wxCommandEvent&) {

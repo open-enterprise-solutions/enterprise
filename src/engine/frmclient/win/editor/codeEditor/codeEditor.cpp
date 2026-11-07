@@ -11,6 +11,7 @@
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibModule
 
 #include <wx/artprov.h>
+#include "gui/univ/messageDialog.h"
 
 #define DEF_LINENUMBER_ID 0
 #define DEF_BREAKPOINT_ID 1
@@ -515,7 +516,7 @@ void ibCodeEditor::FindText(const wxString& findString, int wxflags)
 		result = ibCodeEditor::SearchPrev(sciflags, findString);
 	}
 	if (wxSTC_INVALID_POSITION == result) {
-		wxMessageBox(ibString::Format(_("\"%s\" not found!"), findString.c_str()),
+		ibMessageBox(ibString::Format(_("\"%s\" not found!"), findString.c_str()),
 			_("Not Found!"), wxICON_ERROR, (wxWindow*)this);
 	}
 	else {

@@ -1,39 +1,40 @@
 #include "fontcolorsettingspanel.h"
+#include "gui/univ/ctrl/button.h"
 
 ibPanelFontColorSettings::ibPanelFontColorSettings(wxWindow* parent)
-	: wxPanel(parent, wxID_ANY)
+	: ibPanel(parent, wxID_ANY)
 {
 	wxBoxSizer* const page = new wxBoxSizer(wxVERTICAL);
 
 	wxBoxSizer* const fontRow = new wxBoxSizer(wxHORIZONTAL);
-	fontRow->Add(new wxStaticText(this, wxID_ANY, _("Font:")), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+	fontRow->Add(new ibStaticText(this, wxID_ANY, _("Font:")), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
 	m_fontPicker = new wxFontPickerCtrl(this, wxID_ANY);
 	fontRow->Add(m_fontPicker, 1, wxALIGN_CENTER_VERTICAL);
 	page->Add(fontRow, 0, wxEXPAND | wxALL, 5);
 
 	wxBoxSizer* const itemRow = new wxBoxSizer(wxHORIZONTAL);
-	m_displayItemList = new wxListBox(this, wxID_ANY);
+	m_displayItemList = new ibListBox(this, wxID_ANY);
 	for (unsigned int i = 0; i < m_settings.GetNumDisplayItems(); ++i)
 		m_displayItemList->Append(ibFontColorSettings::GetDisplayItemName(i));
 	itemRow->Add(m_displayItemList, 1, wxEXPAND | wxRIGHT, 5);
 
 	wxFlexGridSizer* const look = new wxFlexGridSizer(2, 5, 5);
-	look->Add(new wxStaticText(this, wxID_ANY, _("Foreground:")), 0, wxALIGN_CENTER_VERTICAL);
+	look->Add(new ibStaticText(this, wxID_ANY, _("Foreground:")), 0, wxALIGN_CENTER_VERTICAL);
 	m_foreColorPicker = new wxColourPickerCtrl(this, wxID_ANY);
 	look->Add(m_foreColorPicker, 0, wxALIGN_CENTER_VERTICAL);
-	look->Add(new wxStaticText(this, wxID_ANY, _("Background:")), 0, wxALIGN_CENTER_VERTICAL);
+	look->Add(new ibStaticText(this, wxID_ANY, _("Background:")), 0, wxALIGN_CENTER_VERTICAL);
 	m_backColorPicker = new wxColourPickerCtrl(this, wxID_ANY);
 	look->Add(m_backColorPicker, 0, wxALIGN_CENTER_VERTICAL);
-	m_boldCheck = new wxCheckBox(this, wxID_ANY, _("Bold"));
+	m_boldCheck = new ibCheckBox(this, wxID_ANY, _("Bold"));
 	look->Add(m_boldCheck, 0, wxALIGN_CENTER_VERTICAL);
-	m_italicCheck = new wxCheckBox(this, wxID_ANY, _("Italic"));
+	m_italicCheck = new ibCheckBox(this, wxID_ANY, _("Italic"));
 	look->Add(m_italicCheck, 0, wxALIGN_CENTER_VERTICAL);
 	itemRow->Add(look, 0);
 	page->Add(itemRow, 1, wxEXPAND | wxLEFT | wxRIGHT, 5);
 
 	// The sample sits on a panel of its own, so the background colour fills more than the text's own box.
-	m_previewPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition, FromDIP(wxSize(-1, 48)), wxBORDER_SIMPLE);
-	m_previewText = new wxStaticText(m_previewPanel, wxID_ANY, wxT("AaBbYyZz 0123 (){};"));
+	m_previewPanel = new ibPanel(this, wxID_ANY, wxDefaultPosition, FromDIP(wxSize(-1, 48)), wxBORDER_SIMPLE);
+	m_previewText = new ibStaticText(m_previewPanel, wxID_ANY, wxT("AaBbYyZz 0123 (){};"));
 	wxBoxSizer* const previewSizer = new wxBoxSizer(wxVERTICAL);
 	previewSizer->AddStretchSpacer();
 	previewSizer->Add(m_previewText, 0, wxALIGN_CENTER_HORIZONTAL);
@@ -41,7 +42,7 @@ ibPanelFontColorSettings::ibPanelFontColorSettings(wxWindow* parent)
 	m_previewPanel->SetSizer(previewSizer);
 	page->Add(m_previewPanel, 0, wxEXPAND | wxALL, 5);
 
-	wxButton* const resetButton = new wxButton(this, wxID_ANY, _("Reset to defaults"));
+	ibButton* const resetButton = new ibButton(this, wxID_ANY, _("Reset to defaults"));
 	page->Add(resetButton, 0, wxALL, 5);
 
 	SetSizer(page);

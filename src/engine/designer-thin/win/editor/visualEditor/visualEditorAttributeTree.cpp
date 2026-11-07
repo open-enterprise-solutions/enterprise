@@ -16,10 +16,9 @@
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibFormDesigner, ibProtocol::ibSchema::ibProperties
 
 #include <wx/artprov.h>
-#include <wx/dialog.h>
+#include "gui/univ/dialog.h"
 #include <wx/imaglist.h>
-#include <wx/menu.h>
-#include <wx/msgdlg.h>
+#include "gui/univ/menu.h"
 #include <wx/settings.h>
 #include <wx/sizer.h>
 
@@ -132,7 +131,7 @@ void ibFormAttributeValue::ReadRow(const ibProtocolNode& row)
 // ibVisualEditorAttributeTree
 ///////////////////////////////////////////////////////////////////////////////
 
-wxBEGIN_EVENT_TABLE(ibAttributeTree, wxPanel)
+wxBEGIN_EVENT_TABLE(ibAttributeTree, ibPanel)
 	EVT_TREE_SEL_CHANGED(wxID_ANY, ibAttributeTree::OnSelChanged)
 	EVT_TREE_ITEM_ACTIVATED(wxID_ANY, ibAttributeTree::OnActivated)
 	EVT_TREE_ITEM_EXPANDING(wxID_ANY, ibAttributeTree::OnItemExpanding)
@@ -151,7 +150,7 @@ wxBEGIN_EVENT_TABLE(ibAttributeTree, wxPanel)
 wxEND_EVENT_TABLE()
 
 ibAttributeTree::ibVisualEditorAttributeTree(ibVisualEditor* owner, wxWindow* parent, int id)
-	: wxPanel(parent, id), m_formHandler(owner)
+	: ibPanel(parent, id), m_formHandler(owner)
 {
 	// No toolbar — every action lives on the context menu. wxTR_EDIT_LABELS enables the inline
 	// rename used by "Edit".
@@ -463,11 +462,10 @@ void ibAttributeTree::OnContextMenu(wxContextMenuEvent& event)
 	// restructured: every MUTATING action is disabled; the read-only-safe ones (Copy, Properties) stay live.
 	const bool editable = m_formHandler->IsEditable();
 
-	wxMenu menu;
+	ibMenu menu;
 	auto appendItem = [&menu](int menuId, const wxString& label, const wxArtID& art, bool enabled) {
-		wxMenuItem* item = new wxMenuItem(&menu, menuId, label);
+		wxMenuItem* item = menu.Append(menuId, label);   // the menu makes its own item (ibMenuItem)
 		item->SetBitmap(wxArtProvider::GetBitmap(art, wxART_MENU));
-		menu.Append(item);
 		item->Enable(enabled);
 	};
 
@@ -484,7 +482,7 @@ void ibAttributeTree::OnContextMenu(wxContextMenuEvent& event)
 	appendItem(ID_ATTR_SETMAIN, isMain ? _("Unset main") : _("Set as main"), wxART_TICK_MARK, hasAttr && editable);
 	appendItem(ID_ATTR_PROPERTIES, _("Properties"), wxART_LIST_VIEW, hasAttr);   // read-only safe
 
-	PopupMenu(&menu);
+	m_tcAttributes->PopupMenu(&menu);   // pop on the TREE (ibWindow) - the menu events bubble up to this panel's table
 }
 
 void ibAttributeTree::OnActivated(wxTreeEvent& event)
@@ -562,10 +560,10 @@ bool ibAttributeTree::PickSource(wxWindow* parent, const wxString& name,
 		return false;
 	const ibProtocolNode rows = answer.FindChild(ibProtocol::ibSchema::ibProperties::Sources);
 
-	wxDialog dlg(parent, wxID_ANY, _("Choice source"), wxDefaultPosition, wxDefaultSize,
+	ibDialog dlg(parent, wxID_ANY, _("Choice source"), wxDefaultPosition, wxDefaultSize,
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER | wxCLIP_CHILDREN);
 	dlg.SetFont(parent->GetFont());   // the desktop's: the property grid's
-	wxTreeCtrl* const tc = new wxTreeCtrl(&dlg, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+	ibTreeCtrl* const tc = new ibTreeCtrl(&dlg, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTR_HIDE_ROOT | wxTR_HAS_BUTTONS | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxSUNKEN_BORDER | wxTR_SINGLE
 		| (filter != ibSourceDataType::TableColumn ? wxTR_TWIST_BUTTONS : 0));
 

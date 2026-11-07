@@ -18,8 +18,8 @@
 
 #include <wx/menu.h>
 #include <wx/sizer.h>
-#include <wx/splitter.h>
-#include <wx/stattext.h>
+#include "gui/univ/splitterWindow.h"
+#include "gui/univ/ctrl/staticText.h"
 
 // Filter COMMANDS — raised by the toolbar and by the context menu alike, so both
 // roads end in one handler and cannot drift apart. (The filter's column ids live
@@ -581,24 +581,24 @@ private:
 // ===========================================================================
 
 ibFilterEditor::ibFilterEditor(wxWindow* parent, ibFilterDescription* filter, ibSettingsFieldTree* fields)
-	: wxPanel(parent, wxID_ANY), m_filter(filter), m_fieldSource(fields)
+	: ibPanel(parent, wxID_ANY), m_filter(filter), m_fieldSource(fields)
 {
 	// Draggable split: LEFT = available-fields tree (dot-walkable), RIGHT = the composed filter.
-	wxSplitterWindow* splitter = new wxSplitterWindow(this, wxID_ANY,
+	ibSplitterWindow* splitter = new ibSplitterWindow(this, wxID_ANY,
 		wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
 	splitter->SetMinimumPaneSize(FromDIP(120));
 
 	// ---- LEFT pane: available fields (a reference field expands into its target's fields) ----
-	wxPanel* leftPane = new wxPanel(splitter);
+	ibPanel* leftPane = new ibPanel(splitter);
 	wxBoxSizer* leftSizer = new wxBoxSizer(wxVERTICAL);
-	leftSizer->Add(new wxStaticText(leftPane, wxID_ANY, _("Available fields")), 0, wxALL, FromDIP(4));
-	m_fieldCtrl = new wxTreeCtrl(leftPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+	leftSizer->Add(new ibStaticText(leftPane, wxID_ANY, _("Available fields")), 0, wxALL, FromDIP(4));
+	m_fieldCtrl = new ibTreeCtrl(leftPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_HIDE_ROOT | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxTR_TWIST_BUTTONS);
 	leftSizer->Add(m_fieldCtrl, 1, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, FromDIP(4));
 	leftPane->SetSizer(leftSizer);
 
 	// ---- RIGHT pane: the filter TREE — Use / Left / Comparison / Right / Display / Presentation ----
-	wxPanel* rightPane = new wxPanel(splitter);
+	ibPanel* rightPane = new ibPanel(splitter);
 	wxBoxSizer* rightSizer = new wxBoxSizer(wxVERTICAL);
 
 	// THE COMMANDS LIVE ON A TOOLBAR, and the context menu offers the same ones.
@@ -1170,7 +1170,7 @@ void ibFilterEditor::OnContextMenu(ibDataViewEvent&)
 	if (m_readOnly)
 		return;
 
-	wxMenu menu;
+	ibMenu menu;
 
 	// ONE PICTURE PER VERB — the same art ids the toolbar raises, through the same
 	// helper. Spelled bare here once, the menu drifted from its own toolbar: the
@@ -1218,5 +1218,5 @@ void ibFilterEditor::OnContextMenu(ibDataViewEvent&)
 	menu.Bind(wxEVT_MENU, [this](wxCommandEvent& e) { OnFilterGroupSelected(e); }, kFilterCmdGroup);
 	menu.Bind(wxEVT_MENU, [this](wxCommandEvent& e) { OnFilterUngroup(e); }, kFilterCmdUngroup);
 
-	PopupMenu(&menu);
+	m_view->PopupMenu(&menu);   // on the view: an ib menu shows over an ib window, the panel is native
 }

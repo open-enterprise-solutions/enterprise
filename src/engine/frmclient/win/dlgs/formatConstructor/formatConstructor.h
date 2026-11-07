@@ -24,17 +24,17 @@
 #include "core/formatString.h"
 #include "frmclient/win/dlgs/translateConstructor/translateConstructor.h"   // ibBoxEditor — a language's box, edited here
 
-#include <wx/dialog.h>
-#include <wx/checkbox.h>
-#include <wx/choice.h>
-#include <wx/notebook.h>
-#include <wx/spinctrl.h>
-#include <wx/stattext.h>
-#include <wx/textctrl.h>
+#include "gui/univ/dialog.h"
+#include "gui/univ/ctrl/checkBox.h"
+#include "gui/univ/ctrl/choice.h"
+#include "gui/univ/ctrl/notebook.h"
+#include "gui/univ/ctrl/spinCtrl.h"
+#include "gui/univ/ctrl/staticText.h"
+#include "gui/univ/ctrl/textCtrl.h"
 
 #include <vector>
 
-class FRMCLIENT_API ibDialogFormatConstructor : public wxDialog
+class FRMCLIENT_API ibDialogFormatConstructor : public ibDialog
 {
 public:
 
@@ -47,24 +47,24 @@ private:
 
 	// A code with a whole number: written or not, and the number.
 	struct ibNumberRow {
-		wxCheckBox* m_on = nullptr;
-		wxSpinCtrl* m_value = nullptr;
+		ibCheckBox* m_on = nullptr;
+		ibSpinCtrl* m_value = nullptr;
 	};
 	// A code with one character, picked from the ones it is usually written with.
 	struct ibCharRow {
-		wxCheckBox*            m_on = nullptr;
-		wxChoice*              m_value = nullptr;
+		ibCheckBox*            m_on = nullptr;
+		ibChoice*              m_value = nullptr;
 		std::vector<ibChar>   m_chars;   // the character behind each item of m_value
 	};
 	// A code with a text.
 	struct ibTextRow {
-		wxCheckBox* m_on = nullptr;
-		wxTextCtrl* m_value = nullptr;
+		ibCheckBox* m_on = nullptr;
+		ibTextCtrl* m_value = nullptr;
 	};
 
-	void BuildNumberPage(wxNotebook* notebook);
-	void BuildDatePage(wxNotebook* notebook);
-	void BuildBooleanPage(wxNotebook* notebook);
+	void BuildNumberPage(ibNotebook* notebook);
+	void BuildDatePage(ibNotebook* notebook);
+	void BuildBooleanPage(ibNotebook* notebook);
 
 	ibNumberRow AddNumberRow(wxWindow* page, wxSizer* grid, const wxString& label, ibFormatCode code,
 		const std::optional<int>& value, int defaultValue, int min, int max);
@@ -88,17 +88,17 @@ private:
 	ibCharRow   m_decimalSeparator, m_groupSeparator;
 	ibTextRow   m_zero;
 
-	wxCheckBox* m_patternOn = nullptr;
-	wxChoice*   m_preset = nullptr;          // item i is the preset at m_presets[i]
-	wxTextCtrl* m_pattern = nullptr;
+	ibCheckBox* m_patternOn = nullptr;
+	ibChoice*   m_preset = nullptr;          // item i is the preset at m_presets[i]
+	ibTextCtrl* m_pattern = nullptr;
 	std::vector<ibDatePreset> m_presets;
 	ibTextRow   m_emptyDate;
 
 	ibTextRow   m_true, m_false;
 
-	wxNotebook*   m_notebook = nullptr;
-	wxTextCtrl*   m_text = nullptr;          // the format string, as it will be written
-	wxStaticText* m_sample = nullptr;        // what the current tab's kind of value prints as
+	ibNotebook*   m_notebook = nullptr;
+	ibTextCtrl*   m_text = nullptr;          // the format string, as it will be written
+	ibStaticText* m_sample = nullptr;        // what the current tab's kind of value prints as
 
 	bool m_filling = false;                  // the controls are being set, not edited
 };

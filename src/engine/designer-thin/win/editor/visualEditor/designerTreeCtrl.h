@@ -3,6 +3,7 @@
 
 #include <wx/treectrl.h>
 #include <wx/event.h>
+#include "gui/univ/ctrl/treeCtrl.h"
 
 // ibDesignerTreeCtrl — our projection of wxTreeCtrl. The vendored widget in 3rdparty/wxWidgets stays
 // untouched; when its behaviour doesn't fit we fork the ONE call here, in our subclass.
@@ -16,17 +17,17 @@
 //
 // We save the focus, block our own SET_FOCUS for the duration of the base delete (so the re-entrant
 // grab drives no handler), run the base, then hand focus back if the base took it.
-class ibDesignerTreeCtrl : public wxTreeCtrl
+class ibDesignerTreeCtrl : public ibTreeCtrl
 {
 public:
-	using wxTreeCtrl::wxTreeCtrl;   // same constructors as the base
+	using ibTreeCtrl::ibTreeCtrl;   // same constructors as the base
 
 	void DeleteAllItems() override
 	{
 		wxWindow* const keepFocus = wxWindow::FindFocus();
 		{
 			wxEventBlocker noFocusEvents(this, wxEVT_SET_FOCUS);
-			wxTreeCtrl::DeleteAllItems();
+			ibTreeCtrl::DeleteAllItems();
 		}
 		if (keepFocus != nullptr && keepFocus != this && wxWindow::FindFocus() == this)
 			keepFocus->SetFocus();

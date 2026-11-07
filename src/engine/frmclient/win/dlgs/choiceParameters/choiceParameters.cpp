@@ -6,10 +6,11 @@
 #include "gui/univ/dataview/dataviewEditOnActivate.h"  // …and the one way a cell opens on a double-click
 
 #include <wx/sizer.h>
-#include <wx/statline.h>
+#include "gui/univ/ctrl/staticLine.h"
 #include <wx/artprov.h>
-#include <wx/msgdlg.h>   // the refusal OK gives when a row has no parameter
+#include "gui/univ/messageDialog.h"   // the refusal OK gives when a row has no parameter
 #include <wx/dnd.h>
+#include "gui/univ/ctrl/bmpButton.h"
 
 namespace {
 
@@ -54,7 +55,7 @@ wxIcon FieldPicture(const wxIcon& own, const wxIcon& ordinary)
 
 ibDialogChoiceParameters::ibDialogChoiceParameters(wxWindow* parent, ibBackendProperty* property,
 	const ibChoiceParametersDescription& params)
-	: wxDialog(parent, wxID_ANY, _("Choice parameter links"), wxDefaultPosition, wxSize(820, 440),
+	: ibDialog(parent, wxID_ANY, _("Choice parameter links"), wxDefaultPosition, wxSize(820, 440),
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 	, m_property(property), m_params(params)
 {
@@ -142,14 +143,14 @@ void ibDialogChoiceParameters::BuildControls()
 	// The sentence the window opens with — what these rows DO, said once here rather than guessed from
 	// three column headings. It names the two halves in the order the row reads: the parameter, then the
 	// attribute the value comes from.
-	outer->Add(new wxStaticText(this, wxID_ANY,
+	outer->Add(new ibStaticText(this, wxID_ANY,
 		_("The parameters used when a value is chosen into this field. A row gives the parameter's name "
 		  "and the attribute to take its value from.")),
 		wxSizerFlags().Expand().Border(wxALL, FromDIP(6)));
 
 	// ⭐ AND THE ONE CASE WHERE THERE IS NOTHING TO SAY, SAID. A field that refers to nothing has no
 	// list to narrow, which is an answer rather than a fault — but an empty window is not that answer.
-	m_nothing = new wxStaticText(this, wxID_ANY,
+	m_nothing = new ibStaticText(this, wxID_ANY,
 		_("This field refers to nothing, so there is no list for a parameter to narrow. Give it a reference type first."));
 	m_nothing->Show(m_parameters.empty());
 	outer->Add(m_nothing, wxSizerFlags().Expand().Border(wxLEFT | wxRIGHT | wxBOTTOM, FromDIP(6)));
@@ -159,8 +160,8 @@ void ibDialogChoiceParameters::BuildControls()
 
 	// the two buttons between the panes, the way this shape is always drawn
 	wxBoxSizer* between = new wxBoxSizer(wxVERTICAL);
-	wxButton* add = new wxButton(this, wxID_ADD, wxT(">"), wxDefaultPosition, FromDIP(wxSize(32, 26)));
-	wxButton* remove = new wxButton(this, wxID_REMOVE, wxT("<"), wxDefaultPosition, FromDIP(wxSize(32, 26)));
+	ibButton* add = new ibButton(this, wxID_ADD, wxT(">"), wxDefaultPosition, FromDIP(wxSize(32, 26)));
+	ibButton* remove = new ibButton(this, wxID_REMOVE, wxT("<"), wxDefaultPosition, FromDIP(wxSize(32, 26)));
 	between->AddStretchSpacer();
 	between->Add(add, wxSizerFlags().Border(wxBOTTOM, FromDIP(4)));
 	between->Add(remove, wxSizerFlags());
@@ -171,7 +172,7 @@ void ibDialogChoiceParameters::BuildControls()
 
 	outer->Add(middle, wxSizerFlags(1).Expand());
 
-	outer->Add(new wxStaticLine(this), wxSizerFlags().Expand().Border(wxLEFT | wxRIGHT, FromDIP(6)));
+	outer->Add(new ibStaticLine(this), wxSizerFlags().Expand().Border(wxLEFT | wxRIGHT, FromDIP(6)));
 	outer->Add(CreateStdDialogButtonSizer(wxOK | wxCANCEL), wxSizerFlags().Expand().Border(wxALL, FromDIP(6)));
 
 	SetSizer(outer);
@@ -208,7 +209,7 @@ wxSizer* ibDialogChoiceParameters::BuildAvailablePane()
 	// window has always had, the left pane IS "where from" (Max, 2026-09-23, showing the reference
 	// implementation). The parameter is named in the cell; the attribute is what you pick and carry over.
 	wxBoxSizer* left = new wxBoxSizer(wxVERTICAL);
-	left->Add(new wxStaticText(this, wxID_ANY, _("Available attributes:")), wxSizerFlags().Border(wxBOTTOM, FromDIP(2)));
+	left->Add(new ibStaticText(this, wxID_ANY, _("Available attributes:")), wxSizerFlags().Border(wxBOTTOM, FromDIP(2)));
 
 	m_available = new ibDataViewCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxDV_ROW_LINES | wxDV_SINGLE | wxDV_NO_HEADER);
@@ -234,7 +235,7 @@ wxSizer* ibDialogChoiceParameters::BuildAvailablePane()
 wxSizer* ibDialogChoiceParameters::BuildRowsPane()
 {
 	wxBoxSizer* right = new wxBoxSizer(wxVERTICAL);
-	right->Add(new wxStaticText(this, wxID_ANY, _("Parameters:")), wxSizerFlags().Border(wxBOTTOM, FromDIP(2)));
+	right->Add(new ibStaticText(this, wxID_ANY, _("Parameters:")), wxSizerFlags().Border(wxBOTTOM, FromDIP(2)));
 
 	wxBoxSizer* rowsAndOrder = new wxBoxSizer(wxHORIZONTAL);
 	m_rows = new ibDataViewCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
@@ -276,8 +277,8 @@ wxSizer* ibDialogChoiceParameters::BuildRowsPane()
 	// literals and came out as mojibake the moment the compiler read the file as the system codepage
 	// (Max, 2026-09-23, screenshot) — a bitmap has no encoding to get wrong.
 	wxBoxSizer* order = new wxBoxSizer(wxVERTICAL);
-	m_up = new wxBitmapButton(this, wxID_UP, wxArtProvider::GetBitmapBundle(wxART_GO_UP, wxART_BUTTON));
-	m_down = new wxBitmapButton(this, wxID_DOWN, wxArtProvider::GetBitmapBundle(wxART_GO_DOWN, wxART_BUTTON));
+	m_up = new ibBitmapButton(this, wxID_UP, wxArtProvider::GetBitmapBundle(wxART_GO_UP, wxART_BUTTON));
+	m_down = new ibBitmapButton(this, wxID_DOWN, wxArtProvider::GetBitmapBundle(wxART_GO_DOWN, wxART_BUTTON));
 	order->Add(m_up, wxSizerFlags().Border(wxBOTTOM, FromDIP(4)));
 	order->Add(m_down, wxSizerFlags());
 	rowsAndOrder->Add(order, wxSizerFlags().Border(wxLEFT, FromDIP(4)));
@@ -659,7 +660,7 @@ bool ibDialogChoiceParameters::Validate()
 			continue;
 
 		const ibOffered* source = SourceOf(m_params.m_rows[idx].m_source);
-		wxMessageBox(ibString::Format(
+		ibMessageBox(ibString::Format(
 			_("The row taking its value from '%s' has no parameter name.\n\n"
 			  "Choose one in the Name column - it says WHICH field of the chosen object this narrows - "
 			  "or remove the row."),

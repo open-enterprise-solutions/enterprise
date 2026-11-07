@@ -92,6 +92,11 @@ tab it gets what changed there, not the whole form. A client keeps each tab's vi
 makes active in place (keeping the view it holds when it has none for that tab), applies the patch's `View` to it,
 and begins the store again with a frame sent whole.
 
+A field's text a `Change` committed (`Args.Text`) is taken as what the window shows: when the frame drawn after it
+shows the field otherwise — a reference not found, a value refused — the patch names the field's `State.Text` even
+if the frame before held the same text, so the window puts the server's back at once. Neither side's copy of the frame
+is changed for it.
+
 A tab's `Kind` says what its view shows when it is no form (2 a text, 3 a spreadsheet, 4 the registration journal,
 16 the start page — its `Columns`, each cell's form a `View` as a tab's, named by its `Key`).
 A text's `View` is a textbox's node, its `State` the `Text` and `ReadOnly`; help is such a tab, read-only. The

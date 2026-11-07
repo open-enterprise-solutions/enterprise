@@ -19,9 +19,9 @@
 // the server's ibPropertyChoiceLink::GetValueList offered, pictures drawn — and the reference types of the field,
 // with the class each is registered under, are the row's Targets (ibFieldReferenceTypes).
 
-#include <wx/dialog.h>
-#include <wx/choice.h>
-#include <wx/stattext.h>
+#include "gui/univ/dialog.h"
+#include "gui/univ/ctrl/choice.h"
+#include "gui/univ/ctrl/staticText.h"
 
 #include "frmclient/frmclient.h"   // FRMCLIENT_API
 #include "gui/univ/dataview/dataview.h"
@@ -29,7 +29,7 @@
 
 class FRMCLIENT_API ibBackendProperty;
 
-class ibDialogChoiceLink : public wxDialog {
+class ibDialogChoiceLink : public ibDialog {
 public:
 
 	ibDialogChoiceLink(wxWindow* parent, ibBackendProperty* property,
@@ -66,9 +66,9 @@ private:
 
 	ibDataViewCtrl*         m_list  = nullptr;
 	class ibQueryGridModel* m_model = nullptr;
-	wxStaticText*   m_says          = nullptr;   // what the field standing selected would decide
-	wxChoice*       m_governed      = nullptr;   // shown only where the field holds more than one type
-	wxStaticText*   m_governedLabel = nullptr;
+	ibStaticText*   m_says          = nullptr;   // what the field standing selected would decide
+	ibChoice*       m_governed      = nullptr;   // shown only where the field holds more than one type
+	ibStaticText*   m_governedLabel = nullptr;
 };
 
 #endif // __CHOICE_LINK_DLG_H__

@@ -12,8 +12,12 @@
 #include <wx/fontpicker.h>
 
 #include "fontcolorsettings.h"
+#include "gui/univ/ctrl/staticText.h"
+#include "gui/univ/ctrl/checkBox.h"
+#include "gui/univ/ctrl/listBox.h"
+#include "gui/univ/panel.h"
 
-class FRMCLIENT_API ibPanelFontColorSettings : public wxPanel
+class FRMCLIENT_API ibPanelFontColorSettings : public ibPanel
 {
 public:
 
@@ -37,13 +41,13 @@ private:
 	void OnResetToDefaults(wxCommandEvent& event);
 
 	wxFontPickerCtrl* m_fontPicker = nullptr;
-	wxListBox* m_displayItemList = nullptr;
+	ibListBox* m_displayItemList = nullptr;
 	wxColourPickerCtrl* m_foreColorPicker = nullptr;
 	wxColourPickerCtrl* m_backColorPicker = nullptr;
-	wxCheckBox* m_boldCheck = nullptr;
-	wxCheckBox* m_italicCheck = nullptr;
-	wxPanel* m_previewPanel = nullptr;
-	wxStaticText* m_previewText = nullptr;
+	ibCheckBox* m_boldCheck = nullptr;
+	ibCheckBox* m_italicCheck = nullptr;
+	ibPanel* m_previewPanel = nullptr;
+	ibStaticText* m_previewText = nullptr;
 
 	ibFontColorSettings m_settings;
 };

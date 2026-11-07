@@ -18,12 +18,14 @@
 
 
 #include <wx/bookctrl.h>
-#include <wx/panel.h>
+#include "gui/univ/panel.h"
 
 #include <memory>
 #include <vector>
 
 #include "core/syntaxHelper/helpEntry.h"
+#include "gui/univ/ctrl/notebook.h"
+#include "gui/univ/ctrl/listBox.h"
 
 class ibHelpCorpus;
 class ibHelpService;
@@ -31,9 +33,9 @@ class ibHelpTreeView;
 class ibHelpIndexView;
 class ibHelpSearchView;
 class ibHelpDetailView;
-class wxNotebook;
+class ibNotebook;
 
-class ibHelpPaneView : public wxPanel {
+class ibHelpPaneView : public ibPanel {
 public:
 	// `locale` — the application's (the server's, the desktop's process
 	// locale). The corpus is the pane's: the desktop's was appData's,
@@ -59,7 +61,7 @@ public:
 
 	// The language's types whose names match `query` and that `written`, the tab's articles, do not name: rows of the
 	// tab's list and its ids. They are the server's, so it is asked each time and nothing is kept.
-	void AppendTypes(const wxString& query, const std::vector<const ibHelpEntry*>& written, class wxListBox* list,
+	void AppendTypes(const wxString& query, const std::vector<const ibHelpEntry*>& written, class ibListBox* list,
 		std::vector<wxString>& ids);
 
 	// The entry of an id: an article of the corpus, or, for an id AppendTypes gave, what the server says that type
@@ -93,7 +95,7 @@ private:
 	ibHelpEntry m_typeEntry;   // the type Entry answered last
 
 	class wxToolBar* m_toolbar         = nullptr;
-	wxNotebook*       m_notebook       = nullptr;
+	ibNotebook*       m_notebook       = nullptr;
 	ibHelpTreeView*   m_treeView       = nullptr;
 	ibHelpIndexView*  m_indexView      = nullptr;
 	ibHelpSearchView* m_searchView     = nullptr;

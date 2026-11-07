@@ -10,8 +10,8 @@
 
 #include "designer-thin/syntaxHelper/helpDragSource.h"
 
-#include <wx/panel.h>
-#include <wx/textctrl.h>
+#include "gui/univ/panel.h"
+#include "gui/univ/ctrl/textCtrl.h"
 #include <wx/listbox.h>
 
 #include <memory>
@@ -20,7 +20,7 @@
 class ibHelpCorpus;
 class ibHelpPaneView;
 
-class ibHelpIndexView : public wxPanel {
+class ibHelpIndexView : public ibPanel {
 public:
 	ibHelpIndexView(wxWindow* parent, ibHelpPaneView* pane);
 
@@ -28,8 +28,8 @@ public:
 
 private:
 	ibHelpPaneView* m_pane    = nullptr;
-	wxTextCtrl*     m_filter  = nullptr;
-	wxListBox*      m_list    = nullptr;
+	ibTextCtrl*     m_filter  = nullptr;
+	ibListBox*      m_list    = nullptr;
 
 	std::shared_ptr<const ibHelpCorpus> m_corpus;
 	std::vector<wxString>               m_ids; // parallel to m_list's items

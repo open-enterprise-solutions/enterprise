@@ -9,17 +9,18 @@
 #ifndef _IB_HELP_TREE_VIEW_H_
 #define _IB_HELP_TREE_VIEW_H_
 
-#include <wx/panel.h>
+#include "gui/univ/panel.h"
 #include <wx/treectrl.h>
 
 #include <memory>
 #include <unordered_map>
+#include "gui/univ/ctrl/treeCtrl.h"
 
 class ibHelpCorpus;
 class ibHelpPaneView;
 struct ibHelpCategory;
 
-class ibHelpTreeView : public wxPanel {
+class ibHelpTreeView : public ibPanel {
 public:
 	ibHelpTreeView(wxWindow* parent, ibHelpPaneView* pane);
 
@@ -32,7 +33,7 @@ public:
 
 private:
 	ibHelpPaneView* m_pane = nullptr;
-	wxTreeCtrl*     m_tree = nullptr;
+	ibTreeCtrl*     m_tree = nullptr;
 
 	// id → tree-item mapping for HighlightEntry. Built during
 	// Rebuild; cleared on every Rebuild call so reload-safe.

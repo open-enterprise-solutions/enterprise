@@ -2,9 +2,9 @@
 #include "frmclient/win/editor/gridEditor/gridEditor.h"
 
 ibDialogRowHeight::ibDialogRowHeight(ibGridEditor* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) : 
-	wxDialog(parent, id, title, pos, size, style)
+	ibDialog(parent, id, title, pos, size, style)
 {
-	wxDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
+	ibDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
 
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
@@ -20,7 +20,7 @@ ibDialogRowHeight::ibDialogRowHeight(ibGridEditor* parent, wxWindowID id, const 
 		}
 	}
 
-	m_autoHeight = new wxCheckBox(this, wxID_ANY, _("Auto row height"), wxDefaultPosition, wxDefaultSize, 0);
+	m_autoHeight = new ibCheckBox(this, wxID_ANY, _("Auto row height"), wxDefaultPosition, wxDefaultSize, 0);
 	m_autoHeight->SetValue(autoHeight);
 	mainSizer->Add(m_autoHeight, 0, wxALL, FromDIP(5));
 
@@ -45,7 +45,7 @@ ibDialogRowHeight::ibDialogRowHeight(ibGridEditor* parent, wxWindowID id, const 
 		}
 	}
 
-	m_spinCtrlHeight = new wxSpinCtrlDouble(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, 999, height);
+	m_spinCtrlHeight = new ibSpinCtrlDouble(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, 999, height);
 	m_spinCtrlHeight->SetDigits(2);
 	rowSizer->Add(m_spinCtrlHeight, 0, 0, FromDIP(5));
 	mainSizer->Add(rowSizer, 1, wxEXPAND, FromDIP(5));
@@ -56,20 +56,20 @@ ibDialogRowHeight::ibDialogRowHeight(ibGridEditor* parent, wxWindowID id, const 
 		m_spinCtrlHeight->Enable(!m_autoHeight->GetValue());
 	});
 
-	m_sdbSizerBottom = new wxStdDialogButtonSizer();
-	m_sdbSizerBottomOK = new wxButton(this, wxID_OK);
+	m_sdbSizerBottom = new ibStdDialogButtonSizer();
+	m_sdbSizerBottomOK = new ibButton(this, wxID_OK);
 	m_sdbSizerBottom->AddButton(m_sdbSizerBottomOK);
-	m_sdbSizerBottomCancel = new wxButton(this, wxID_CANCEL);
+	m_sdbSizerBottomCancel = new ibButton(this, wxID_CANCEL);
 	m_sdbSizerBottom->AddButton(m_sdbSizerBottomCancel);
 	m_sdbSizerBottom->Realize();
 
-	mainSizer->Add(m_sdbSizerBottom, 1, wxEXPAND, FromDIP(5));
+	mainSizer->Add(m_sdbSizerBottom, 1, wxEXPAND | wxALL, FromDIP(5));
 
-	wxDialog::SetSizer(mainSizer);
-	wxDialog::Layout();
+	ibDialog::SetSizer(mainSizer);
+	ibDialog::Layout();
 	mainSizer->Fit(this);
 
-	wxDialog::Centre(wxBOTH);
+	ibDialog::Centre(wxBOTH);
 }
 
 ibDialogRowHeight::~ibDialogRowHeight()

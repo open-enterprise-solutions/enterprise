@@ -5,7 +5,7 @@
 #include "frmclient/win/dlgs/queryConstructor/queryGridModel.h"   // the one grid model for a plain list
 
 #include <wx/sizer.h>
-#include <wx/statline.h>
+#include "gui/univ/ctrl/staticLine.h"
 #include <wx/artprov.h>
 
 namespace {
@@ -36,7 +36,7 @@ static ibClassID ReferenceClassOf(const ibBackendProperty* property, ibMetaID id
 
 ibDialogChoiceLink::ibDialogChoiceLink(wxWindow* parent, ibBackendProperty* property,
 	const ibChoiceTypeLinkDescription& link)
-	: wxDialog(parent, wxID_ANY, _("Link by type"), wxDefaultPosition, wxSize(560, 430),
+	: ibDialog(parent, wxID_ANY, _("Link by type"), wxDefaultPosition, wxSize(560, 430),
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 	, m_property(property), m_link(link)
 {
@@ -97,14 +97,14 @@ void ibDialogChoiceLink::BuildControls()
 	// empty grid, and a paragraph saying the same thing again underneath (Max, 2026-09-23). A window
 	// that explains itself twice reads as a window that does not know what it is for.
 	if (m_fields.size() <= 1) {
-		wxStaticText* none = new wxStaticText(this, wxID_ANY,
+		ibStaticText* none = new ibStaticText(this, wxID_ANY,
 			_("Nothing standing beside this field can say what a value in it may be.\n\n"
 			  "A link takes that from the field it names: a characteristic says it through its chart, "
 			  "a field holding a type description says it outright. In a tabular section the neighbours "
 			  "are the other columns of the same row."));
 		none->Wrap(FromDIP(500));
 		outer->Add(none, wxSizerFlags(1).Expand().Border(wxALL, FromDIP(12)));
-		outer->Add(new wxStaticLine(this), wxSizerFlags().Expand().Border(wxLEFT | wxRIGHT, FromDIP(6)));
+		outer->Add(new ibStaticLine(this), wxSizerFlags().Expand().Border(wxLEFT | wxRIGHT, FromDIP(6)));
 		outer->Add(CreateStdDialogButtonSizer(wxOK | wxCANCEL), wxSizerFlags().Expand().Border(wxALL, FromDIP(6)));
 		SetSizer(outer);
 		return;
@@ -112,7 +112,7 @@ void ibDialogChoiceLink::BuildControls()
 
 	// ⚠ WRAPPED, not left to be cut off by the window's width — a sentence that ends in mid-air reads
 	// as a fault in the window rather than as an explanation of it.
-	wxStaticText* says = new wxStaticText(this, wxID_ANY,
+	ibStaticText* says = new ibStaticText(this, wxID_ANY,
 		_("The field whose value decides the TYPE of this one."));
 	says->Wrap(FromDIP(500));
 	outer->Add(says, wxSizerFlags().Expand().Border(wxALL, FromDIP(6)));
@@ -138,17 +138,17 @@ void ibDialogChoiceLink::BuildControls()
 	// ⭐ WHAT THE SELECTED FIELD WOULD DECIDE, said under the list. Choosing the field that types this
 	// one is a consequence an author cannot see from a name, and showing the consequence is the whole
 	// reason this is a window and not a drop-down row.
-	m_says = new wxStaticText(this, wxID_ANY, wxEmptyString);
+	m_says = new ibStaticText(this, wxID_ANY, wxEmptyString);
 	outer->Add(m_says, wxSizerFlags().Expand().Border(wxALL, FromDIP(6)));
 
 	wxBoxSizer* governed = new wxBoxSizer(wxHORIZONTAL);
-	m_governedLabel = new wxStaticText(this, wxID_ANY, _("Decides this field's type:"));
+	m_governedLabel = new ibStaticText(this, wxID_ANY, _("Decides this field's type:"));
 	governed->Add(m_governedLabel, wxSizerFlags().CenterVertical().Border(wxRIGHT, FromDIP(6)));
-	m_governed = new wxChoice(this, wxID_ANY);
+	m_governed = new ibChoice(this, wxID_ANY);
 	governed->Add(m_governed, wxSizerFlags(1).Expand());
 	outer->Add(governed, wxSizerFlags().Expand().Border(wxLEFT | wxRIGHT | wxBOTTOM, FromDIP(6)));
 
-	outer->Add(new wxStaticLine(this), wxSizerFlags().Expand().Border(wxLEFT | wxRIGHT, FromDIP(6)));
+	outer->Add(new ibStaticLine(this), wxSizerFlags().Expand().Border(wxLEFT | wxRIGHT, FromDIP(6)));
 	outer->Add(CreateStdDialogButtonSizer(wxOK | wxCANCEL), wxSizerFlags().Expand().Border(wxALL, FromDIP(6)));
 
 	SetSizer(outer);

@@ -27,8 +27,8 @@
 #include "frmclient/frmclient.h"
 #include "frmclient/backend/backend_localization.h"   // ibTranslateString — what the boxes are over
 
-#include <wx/dialog.h>
-#include <wx/textctrl.h>
+#include "gui/univ/dialog.h"
+#include "gui/univ/ctrl/textCtrl.h"
 
 #include <functional>
 #include <utility>
@@ -36,7 +36,7 @@
 
 class ibMetaData;
 
-class FRMCLIENT_API ibDialogTranslateConstructor : public wxDialog
+class FRMCLIENT_API ibDialogTranslateConstructor : public ibDialog
 {
 public:
 
@@ -66,7 +66,7 @@ private:
 	ibTranslateString m_original;
 
 	// Each box with the code it writes, in the order they stand in the window.
-	std::vector<std::pair<wxString, wxTextCtrl*>> m_boxes;
+	std::vector<std::pair<wxString, ibTextCtrl*>> m_boxes;
 };
 
 #endif

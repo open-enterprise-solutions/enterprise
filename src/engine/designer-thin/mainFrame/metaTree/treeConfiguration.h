@@ -6,15 +6,17 @@
 #include <set>
 
 #include <wx/aui/aui.h>
-#include <wx/choice.h>
-#include <wx/srchctrl.h>
-#include <wx/treectrl.h>
+#include "gui/univ/ctrl/choice.h"
+#include "gui/univ/ctrl/searchCtrl.h"
+#include "gui/univ/ctrl/treeCtrl.h"
 
 #include "frmclient/backend/metaCollection/metaObject.h"   // the object the inspector shows
 #include "protocol/protocol.h"
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibMetaData
 #include "protocol/protocolNode.h"
+#include "gui/univ/panel.h"
 
+class ibMenu;
 class ibMetaView;
 
 // THE DESIGNER'S TREES — the desktop's ibMetaTreeBase and its heirs (designer/mainFrame/metaTree): the panel, its
@@ -24,7 +26,7 @@ class ibMetaView;
 // Position, Menu (protocol.h, ibProtocol::ibSchema::ibKind::MetaData). What a person does goes back as the doors of schema
 // MetaData (ibProtocol::ibSchema::ibMetaData::ibCommand), and the rows come back with the frame: a click ASKS, the row follows from the
 // metadata — as on the desktop it followed the stage and never the click.
-class ibMetaTreeBase : public wxPanel {
+class ibMetaTreeBase : public ibPanel {
 public:
 
 	virtual ~ibMetaTreeBase() override;
@@ -68,7 +70,7 @@ protected:
 	bool Command(ibProtocol::ibSchema::ibMetaData::ibCommand command, ibProtocolNode args) const;
 	// …and a header's choice drawn from its property's row: "<not selected>", what may be chosen (its children: Title,
 	// Id), the one chosen by its Value.
-	void UpdateChoiceSelection(wxChoice* choice, const ibProtocolNode& property);
+	void UpdateChoiceSelection(ibChoice* choice, const ibProtocolNode& property);
 
 	ibProtocolNode m_root;            // the rows drawn — a copy: the frame changes under a handle into it
 
@@ -152,7 +154,7 @@ private:
 	void ShowContextMenu(const wxTreeItemId& item, const wxPoint& pos);
 	// What the row's object offers to open — its Menu (the engine's CollectContextMenu); true when the tree's own New /
 	// Edit / Remove apply to it (Standard).
-	bool AppendMetaMenu(wxMenu& menu, const ibProtocolNode& row);
+	bool AppendMetaMenu(ibMenu& menu, const ibProtocolNode& row);
 
 	void Search(const wxString& search);
 
@@ -170,7 +172,6 @@ private:
 	void OnEditHelp(wxCommandEvent& event);
 	void OnEditNotes(wxCommandEvent& event);
 	void OnStartSearch(wxCommandEvent& event);
-	void OnCancelSearch(wxCommandEvent& event);
 
 	bool m_readOnly = false;
 	const long long m_tab;
@@ -188,8 +189,8 @@ private:
 	bool m_switchingActivation = false;
 
 	wxAuiToolBar* m_metaTreeToolbar = nullptr;
-	wxTreeCtrl* m_metaTreeCtrl = nullptr;
-	wxSearchCtrl* m_searchTree = nullptr;
+	ibTreeCtrl* m_metaTreeCtrl = nullptr;
+	ibSearchCtrl* m_searchTree = nullptr;
 
 	wxString m_search;                 // the text the rows are found by — none: all of them
 	std::set<wxString> m_expanded;      // the rows the person opened, by their places

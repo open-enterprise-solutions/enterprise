@@ -3,9 +3,9 @@
 #include <wx/xml/xml.h>
 
 ibDialogConnection::ibDialogConnection(wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) :
-	wxDialog(parent, id, title, pos, size, style)
+	ibDialog(parent, id, title, pos, size, style)
 {
-	wxDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
+	ibDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
 	// Drop the INACTIVECAPTION yellow tint — native window background reads
 	// correctly against every OS theme.
 
@@ -16,10 +16,10 @@ ibDialogConnection::ibDialogConnection(wxWindow* parent, wxWindowID id, const wx
 	wxFlexGridSizer* grid = new wxFlexGridSizer(/*rows*/ 0, /*cols*/ 2, kPad, kPad);
 	grid->AddGrowableCol(1, 1);
 
-	auto addRow = [&](wxStaticText*& label, const wxString& text,
-		wxTextCtrl*& ctrl, long ctrlStyle) {
-		label = new wxStaticText(this, wxID_ANY, text);
-		ctrl  = new wxTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, ctrlStyle);
+	auto addRow = [&](ibStaticText*& label, const wxString& text,
+		ibTextCtrl*& ctrl, long ctrlStyle) {
+		label = new ibStaticText(this, wxID_ANY, text);
+		ctrl  = new ibTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, ctrlStyle);
 		grid->Add(label, 0, wxALIGN_CENTER_VERTICAL);
 		grid->Add(ctrl,  1, wxEXPAND);
 	};
@@ -33,8 +33,8 @@ ibDialogConnection::ibDialogConnection(wxWindow* parent, wxWindowID id, const wx
 	mainSizer->Add(grid, 0, wxALL | wxEXPAND, kPad * 2);
 
 	wxBoxSizer* bSizerButton = new wxBoxSizer(wxHORIZONTAL);
-	m_buttonTestConnection = new wxButton(this, wxID_ANY, _("Test connection"));
-	m_buttonSaveConnection = new wxButton(this, wxID_ANY, _("Save connection"));
+	m_buttonTestConnection = new ibButton(this, wxID_ANY, _("Test connection"));
+	m_buttonSaveConnection = new ibButton(this, wxID_ANY, _("Save connection"));
 	// Right-aligned button bar, default theme colouring.
 	bSizerButton->AddStretchSpacer(1);
 	bSizerButton->Add(m_buttonTestConnection, 0, wxRIGHT, kPad);
@@ -42,10 +42,10 @@ ibDialogConnection::ibDialogConnection(wxWindow* parent, wxWindowID id, const wx
 
 	mainSizer->Add(bSizerButton, 0, wxALL | wxEXPAND, kPad * 2);
 
-	wxDialog::SetSizer(mainSizer);
+	ibDialog::SetSizer(mainSizer);
 	mainSizer->SetSizeHints(this);
-	wxDialog::Layout();
-	wxDialog::Centre(wxBOTH);
+	ibDialog::Layout();
+	ibDialog::Centre(wxBOTH);
 
 	// Connect Events
 	m_buttonTestConnection->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ibDialogConnection::TestConnectionOnButtonClick), NULL, this);
@@ -118,14 +118,14 @@ void ibDialogConnection::SaveConnectionData()
 	//document.Save(strFileName);
 }
 
-#include <wx/msgdlg.h>
+#include "gui/univ/messageDialog.h"
 
 void ibDialogConnection::TestConnectionOnButtonClick(wxCommandEvent& event)
 {
 	// ⚠ NOT HERE YET: the desktop's opened a PostgreSQL driver (ibDatabaseLayerPostgres) with these settings, closed it and
 	// said how it went — the driver's own message on a failure. The drivers are the server's, and no request asks one to
 	// try a connection.
-	wxMessageBox(_("Testing a connection is not in the thin client yet."), _("Test connection"), wxOK | wxICON_INFORMATION, this);
+	ibMessageBox(_("Testing a connection is not in the thin client yet."), _("Test connection"), wxOK | wxICON_INFORMATION, this);
 	event.Skip();
 }
 

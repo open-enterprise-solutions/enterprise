@@ -8,8 +8,8 @@
 #include "frmclient/backend/system/value/composition/valueComposerSettings.h"   // ibValueEnumComparisonKind — a condition's word
 #include "frmclient/backend/system/value/composition/valueComposerField.h"      // ibValueCompositionField — a picked field
 
-#include <wx/dialog.h>
-#include <wx/listbox.h>
+#include "gui/univ/dialog.h"
+#include "gui/univ/ctrl/listBox.h"
 #include <wx/sizer.h>
 #include <wx/toolbar.h>
 
@@ -55,11 +55,11 @@ ibString FieldsText(const std::vector<ibString>& fields)
 }
 
 // ⭐ THE CONDITION IN A WINDOW OF ITS OWN — the filter editor itself, over a copy that lands on OK.
-class ibDialogCondition : public wxDialog {
+class ibDialogCondition : public ibDialog {
 public:
 	ibDialogCondition(wxWindow* parent, const ibFilterDescription& condition, ibSettingsFieldTree* fields,
 		bool readOnly)
-		: wxDialog(parent, wxID_ANY, _("Condition"), wxDefaultPosition, wxDefaultSize,
+		: ibDialog(parent, wxID_ANY, _("Condition"), wxDefaultPosition, wxDefaultSize,
 			wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
 		  m_edited(condition)
 	{
@@ -86,10 +86,10 @@ private:
 };
 
 // ⭐ THE FIELDS A RULE DRESSES — a list, each picked from the field tree; none = the whole row.
-class ibDialogFields : public wxDialog {
+class ibDialogFields : public ibDialog {
 public:
 	ibDialogFields(wxWindow* parent, const std::vector<ibString>& fields, ibSettingsFieldTree* source, bool readOnly)
-		: wxDialog(parent, wxID_ANY, _("Fields"), wxDefaultPosition, wxDefaultSize,
+		: ibDialog(parent, wxID_ANY, _("Fields"), wxDefaultPosition, wxDefaultSize,
 			wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
 		  m_fields(fields), m_source(source)
 	{
@@ -103,7 +103,7 @@ public:
 		toolbar->Enable(!readOnly);
 		sizer->Add(toolbar, 0, wxLEFT | wxRIGHT | wxTOP | wxEXPAND, FromDIP(4));
 
-		m_list = new wxListBox(this, wxID_ANY, wxDefaultPosition, FromDIP(wxSize(320, 220)));
+		m_list = new ibListBox(this, wxID_ANY, wxDefaultPosition, FromDIP(wxSize(320, 220)));
 		for (const ibString& field : m_fields)
 			m_list->Append(field);
 		sizer->Add(m_list, 1, wxEXPAND | wxALL, FromDIP(4));
@@ -138,7 +138,7 @@ public:
 private:
 	std::vector<ibString> m_fields;
 	ibSettingsFieldTree*  m_source = nullptr;
-	wxListBox*            m_list = nullptr;
+	ibListBox*            m_list = nullptr;
 };
 
 } // namespace
@@ -195,7 +195,7 @@ private:
 
 ibConditionalAppearanceEditor::ibConditionalAppearanceEditor(wxWindow* parent,
 	ibConditionalAppearanceDescription* rules, ibSettingsFieldTree* fields, MetaOf metaOf)
-	: wxPanel(parent, wxID_ANY), m_rules(rules), m_fields(fields), m_metaOf(std::move(metaOf))
+	: ibPanel(parent, wxID_ANY), m_rules(rules), m_fields(fields), m_metaOf(std::move(metaOf))
 {
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 

@@ -10,7 +10,7 @@
 
 #include <wx/dcbuffer.h>
 #include <wx/settings.h>
-#include <wx/msgdlg.h>
+#include "gui/univ/messageDialog.h"
 
 // NAMED, NOT INHERITED — std::max / std::min in the layout pass. MSVC hands <algorithm> over
 // transitively through the wx headers above; GCC and Clang do not. (docs/portability.md)
@@ -36,7 +36,7 @@ wxColour Blend(const wxColour& base, int lightness)
 } // namespace
 
 ibQueryJoinDiagram::ibQueryJoinDiagram(wxWindow* parent)
-	: wxPanel(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxFULL_REPAINT_ON_RESIZE)
+	: ibWindow(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxFULL_REPAINT_ON_RESIZE)
 {
 	SetBackgroundStyle(wxBG_STYLE_PAINT);   // wxAutoBufferedPaintDC — no flicker while dragging
 
@@ -339,7 +339,7 @@ void ibQueryJoinDiagram::ConnectFields(size_t fromTable, size_t fromField,
 		join.m_on = parser.ParseExpression(text);
 	}
 	catch (const ibCoreException& e) {
-		wxMessageBox(e.GetErrorDescription(), _("Link"), wxOK | wxICON_ERROR, this);
+		ibMessageBox(e.GetErrorDescription(), _("Link"), wxOK | wxICON_ERROR, this);
 		return;
 	}
 

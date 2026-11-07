@@ -9,7 +9,7 @@
 
 ibDialogTextEditor::ibDialogTextEditor(wxWindow* parent, const wxString& caption,
 	const wxString& subject, const wxString& text)
-	: wxDialog(parent, wxID_ANY,
+	: ibDialog(parent, wxID_ANY,
 		// The SUBJECT is in the title, because a dialog that says only "Notes" leaves a person
 		// who opened two of them in a row unable to tell which object they are looking at.
 		// ⚠ ASCII IN THE LITERAL. This file carries NO BOM, so MSVC reads it as the system code

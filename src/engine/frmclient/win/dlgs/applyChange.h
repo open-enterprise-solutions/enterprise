@@ -1,11 +1,11 @@
 #ifndef _FRMCLIENT_CHANGING_STRUCTURE_H__
 #define _FRMCLIENT_CHANGING_STRUCTURE_H__
 
-#include <wx/stattext.h>
-#include <wx/listbox.h>
+#include "gui/univ/ctrl/staticText.h"
+#include "gui/univ/ctrl/listBox.h"
 #include <wx/sizer.h>
-#include <wx/button.h>
-#include <wx/dialog.h>
+#include "gui/univ/ctrl/button.h"
+#include "gui/univ/dialog.h"
 
 #include "frmclient/frmclient.h"
 #include "protocol/protocolNode.h"
@@ -13,12 +13,12 @@
 // THE RESTRUCTURE'S LEDGER — the old desktop's ibDialogApplyChange.What it lists the
 // server sent (ibProtocol::ibRequest::ibKind::ApplyChange) — a row per entry, its Level and Text, and the window's Picture; the
 // desktop's was handed the engine's ledger. Apply is the answer, the base held on the server until it comes.
-class FRMCLIENT_API ibDialogApplyChange : public wxDialog
+class FRMCLIENT_API ibDialogApplyChange : public ibDialog
 {
-	wxStaticText* m_staticInformation;
-	wxListBox* m_resultBox;
-	wxButton* m_buttonApply;
-	wxButton* m_buttonCancel;
+	ibStaticText* m_staticInformation;
+	ibListBox* m_resultBox;
+	ibButton* m_buttonApply;
+	ibButton* m_buttonCancel;
 
 private:
 	ibDialogApplyChange(const ibProtocolNode& request, wxWindow* parent);

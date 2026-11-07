@@ -1,10 +1,14 @@
 #ifndef _FRMCLIENT_MAIN_FRAME_CHILD_H__
 #define _FRMCLIENT_MAIN_FRAME_CHILD_H__
 
+#include <memory>
+
 #include <wx/aui/aui.h>
 #include <wx/cmdproc.h>
+#include <wx/utils.h>
 
 #include "frmclient/docView/docView.h"
+#include "gui/univ/dialog.h"
 
 #include "frmclient/frmclient.h"
 
@@ -326,7 +330,7 @@ private:
 };
 
 class FRMCLIENT_API ibDialogDocChildFrame :
-	public ibDocChildFrameAny<wxDialog, wxWindow> {
+	public ibDocChildFrameAny<ibDialog, wxWindow> {
 public:
 
 	ibDialogDocChildFrame()
@@ -349,6 +353,10 @@ public:
 
 	virtual ~ibDialogDocChildFrame();
 
+	// MODAL AS THE MODAL IT IS OPENED OVER: while it is shown the other windows take no input, that one among them — a
+	// form shown over the list's settings left them open to be closed under it
+	virtual bool Show(bool show = true) override;
+
 	bool Create(ibFrontendDocument* doc,
 		ibFrontendView* view,
 		wxWindow* parent,
@@ -367,6 +375,8 @@ public:
 	}
 
 private:
+
+	std::unique_ptr<wxWindowDisabler> m_winDisabler;   // the other windows, disabled while it is shown
 
 	wxDECLARE_CLASS(ibDialogDocChildFrame);
 	wxDECLARE_NO_COPY_CLASS(ibDialogDocChildFrame);

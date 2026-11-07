@@ -11,10 +11,10 @@
 // ---------------------------------------------------------------------------
 
 #include <wx/artprov.h>
-#include <wx/bookctrl.h>
-#include <wx/menu.h>
+#include "gui/univ/menu.h"
 #include <wx/settings.h>
 #include <wx/window.h>
+#include <wx/withimages.h>
 
 #include "frmclient/artProvider/artProvider.h"   // the tabs' pictures (client wxART_FRONTEND)
 #include "gui/univ/dataview/dataview.h"
@@ -28,7 +28,7 @@ inline wxBitmapBundle ibSettingsArt(const wxString& artId, const wxWindow* owner
 }
 
 // Append a command that LOOKS the same wherever it appears.
-inline wxMenuItem* ibAppendCmd(wxMenu& menu, int id, const wxString& label,
+inline wxMenuItem* ibAppendCmd(ibMenu& menu, int id, const wxString& label,
 	const wxString& artId, const wxWindow* owner)
 {
 	wxMenuItem* item = menu.Append(id, label);
@@ -43,7 +43,7 @@ inline wxMenuItem* ibAppendCmd(wxMenu& menu, int id, const wxString& label,
 enum class ibSettingsTab { Query, Fields, Resources, Parameters, Output, Grouping, SelectedFields, Filter, Sort,
 	OtherSettings, ConditionalAppearance };
 
-inline void ibStyleSettingsTabs(wxBookCtrlBase* tabs)
+inline void ibStyleSettingsTabs(wxWithImages* tabs)
 {
 	static const wxString s_art[] = { wxART_QUERY_CONSTRUCTOR, wxART_TABLE, wxART_TOTALS, wxART_PARAMETERS,
 		wxART_OUTPUT, wxART_GROUPING, wxART_SELECTED_FIELDS, wxART_FILTER, wxART_SORT,

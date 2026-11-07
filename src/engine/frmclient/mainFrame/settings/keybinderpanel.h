@@ -12,12 +12,16 @@
 /////////////////////////////////////////////////////////////////////////////
 
 #include <wx/wx.h>
-#include <wx/listctrl.h>
-#include <wx/srchctrl.h>
+#include "gui/univ/ctrl/listCtrl.h"
+#include "gui/univ/ctrl/searchCtrl.h"
 
 #include "keybinder.h"
+#include "gui/univ/ctrl/staticText.h"
+#include "gui/univ/ctrl/button.h"
+#include "gui/univ/ctrl/textCtrl.h"
+#include "gui/univ/panel.h"
 
-class FRMCLIENT_API ibPanelKeyBinder : public wxPanel
+class FRMCLIENT_API ibPanelKeyBinder : public ibPanel
 {
 public:
 
@@ -48,14 +52,14 @@ private:
 	void OnRemove(wxCommandEvent& event);
 	void OnReset(wxCommandEvent& event);
 
-	wxSearchCtrl* m_filterCtrl = nullptr;
-	wxListCtrl* m_commandList = nullptr;
-	wxStaticText* m_helpText = nullptr;
-	wxTextCtrl* m_keyCtrl = nullptr;
-	wxButton* m_assignButton = nullptr;
-	wxStaticText* m_holderText = nullptr;
-	wxButton* m_removeButton = nullptr;
-	wxButton* m_resetButton = nullptr;
+	ibSearchCtrl* m_filterCtrl = nullptr;
+	ibListCtrl* m_commandList = nullptr;
+	ibStaticText* m_helpText = nullptr;
+	ibTextCtrl* m_keyCtrl = nullptr;
+	ibButton* m_assignButton = nullptr;
+	ibStaticText* m_holderText = nullptr;
+	ibButton* m_removeButton = nullptr;
+	ibButton* m_resetButton = nullptr;
 
 	std::vector<ibKeyBinder::Command> m_commands;
 

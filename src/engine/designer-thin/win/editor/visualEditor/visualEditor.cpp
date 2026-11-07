@@ -181,9 +181,9 @@ bool ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnRightClickFro
 		ibValueLayerObject* const layer = m_formHandler->GetObjectTree()->FindEntry(barOwner->GetControlID());
 		if (layer == nullptr)
 			return false;
-		wxMenu menu;
+		ibMenu menu;
 		layer->PrepareDefaultMenu(&menu);
-		const int sel = currentWindow->GetPopupMenuSelectionFromUser(menu, event.GetPosition());
+		const int sel = GetPopupMenuSelectionFromUser(menu, ScreenToClient(currentWindow->ClientToScreen(event.GetPosition())));
 		if (sel != wxID_NONE)
 			layer->ExecuteMenu(sel);
 		return true;
@@ -205,7 +205,8 @@ bool ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnRightClickFro
 	// fully handled before the scope ends.
 	ibVisualEditorItemPopupMenu menu(m_formHandler, currentWindow, founded);
 	menu.UpdateUI(&menu);
-	currentWindow->PopupMenu(&menu, event.GetPosition());
+	// over the host (an ib window), at the click: the window clicked may be a native one (a command bar)
+	PopupMenu(&menu, ScreenToClient(currentWindow->ClientToScreen(event.GetPosition())));
 	return true;
 }
 
@@ -397,23 +398,36 @@ void ibDesignerWindow::DrawSelection(wxDC& dc) const
 
 void ibDesignerWindow::OnPaint(wxPaintEvent& event)
 {
-	wxPaintDC dc(this);
-	if (m_selectedPanel != nullptr && m_selectedPanel == GetFrameContentPanel()) {
-		const wxPoint origin = m_selectedPanel->GetPosition();
-		dc.SetDeviceOrigin(origin.x, origin.y);
-		DrawSelection(dc);
-	}
+	// THE CARD FIRST, THE BOX OVER IT: the card paints the whole of itself (ibWindow::OnPaint, from its buffer), so the
+	// box drawn before its pass was painted over. Its pass runs here, and the box goes on the same paint after it.
+	ibInnerFrame::OnPaint(event);
 
-	event.Skip();
+	if (m_selectedPanel == nullptr || m_selectedPanel != GetFrameContentPanel())
+		return;
+
+	// The box in the panel's coordinates, where the panel stands in the card — through the screen, as the box itself.
+	wxPaintDC dc(this);
+	const wxPoint origin = ScreenToClient(m_selectedPanel->GetScreenPosition());
+	dc.SetDeviceOrigin(origin.x, origin.y);
+	DrawSelection(dc);
 }
 
 void ibDesignerWindow::OnPanelPaint(wxPaintEvent& event)
 {
 	wxWindow* const panel = wxDynamicCast(event.GetEventObject(), wxWindow);
-	if (panel != nullptr && panel == m_selectedPanel) {
-		wxPaintDC dc(panel);
-		DrawSelection(dc);
+	if (m_panelPainting || panel == nullptr || panel != m_selectedPanel) {
+		event.Skip();
+		return;
 	}
 
-	event.Skip();
+	// THE PANEL FIRST, THE BOX OVER IT: an ib panel paints the whole of itself (ibWindow::OnPaint, from its buffer), so
+	// the box drawn before its pass was painted over. Its pass runs here — the event again, past this handler — and the
+	// box goes on the same paint after it (one paint DC per window and paint: the panel's and this one are the same).
+	m_panelPainting = true;
+	wxPaintEvent own(event);
+	panel->GetEventHandler()->ProcessEvent(own);
+	m_panelPainting = false;
+
+	wxPaintDC dc(panel);
+	DrawSelection(dc);
 }

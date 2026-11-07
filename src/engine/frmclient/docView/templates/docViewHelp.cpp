@@ -1,5 +1,6 @@
 #include "docViewHelp.h"
 #include "frmclient/mainFrame/mainFrame.h"
+#include "gui/univ/messageDialog.h"
 
 // ----------------------------------------------------------------------------
 // ibFrontendHelpEditView implementation
@@ -86,7 +87,7 @@ void ibFrontendHelpEditView::OnFind(wxFindDialogEvent& event)
 	}
 	if (wxSTC_INVALID_POSITION == result)
 	{
-		wxMessageBox(ibString::Format(_("\"%s\" not found!"), event.GetFindString().c_str()), _("Not Found!"), wxICON_ERROR, (wxWindow*)event.GetClientData());
+		ibMessageBox(ibString::Format(_("\"%s\" not found!"), event.GetFindString().c_str()), _("Not Found!"), wxICON_ERROR, (wxWindow*)event.GetClientData());
 	}
 	else
 	{

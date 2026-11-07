@@ -10,24 +10,24 @@
 static constexpr long long s_levelError = 2;
 
 ibDialogApplyChange::ibDialogApplyChange(const ibProtocolNode& request, wxWindow* parent) :
-	wxDialog(parent, wxID_ANY, _("Design changes"), wxDefaultPosition, wxSize(500, 200), wxDEFAULT_DIALOG_STYLE)
+	ibDialog(parent, wxID_ANY, _("Design changes"), wxDefaultPosition, wxSize(500, 200), wxDEFAULT_DIALOG_STYLE)
 {
-	wxDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
+	ibDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
 
-	wxDialog::SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_SCROLLBAR));
-	wxDialog::SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_SCROLLBAR));
+	ibDialog::SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_SCROLLBAR));
+	ibDialog::SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_SCROLLBAR));
 
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxHORIZONTAL);
 	wxBoxSizer* resultSizer = new wxBoxSizer(wxHORIZONTAL);
 	wxBoxSizer* windowSizer = new wxBoxSizer(wxVERTICAL);
 
-	m_staticInformation = new wxStaticText(this, wxID_ANY, _("Changes detected in metadata structure:"), wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER_HORIZONTAL);
+	m_staticInformation = new ibStaticText(this, wxID_ANY, _("Changes detected in metadata structure:"), wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER_HORIZONTAL);
 	m_staticInformation->Wrap(-1);
 	m_staticInformation->SetForegroundColour(wxColour(0, 120, 215));
 
 	windowSizer->Add(m_staticInformation, 0, wxEXPAND | wxRIGHT | wxLEFT, FromDIP(5));
 
-	m_resultBox = new wxListBox(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, NULL, wxLB_SINGLE);
+	m_resultBox = new ibListBox(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, NULL, wxLB_SINGLE);
 	m_resultBox->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNHIGHLIGHT));
 
 	bool hasErrors = false;
@@ -42,7 +42,7 @@ ibDialogApplyChange::ibDialogApplyChange(const ibProtocolNode& request, wxWindow
 
 	wxBoxSizer* buttonSizer = new wxBoxSizer(wxVERTICAL);
 
-	m_buttonApply = new wxButton(this, wxID_OK, _("Apply"), wxDefaultPosition, wxDefaultSize, 0);
+	m_buttonApply = new ibButton(this, wxID_OK, _("Apply"), wxDefaultPosition, wxDefaultSize, 0);
 	// AN ERROR IN THE LEDGER BLOCKS THE APPLY — the desktop's: an error entry says what has to be put right first; until
 	// it is, there is nothing to press (the server rolls such a ledger back whatever is answered).
 	if (hasErrors) {
@@ -52,23 +52,23 @@ ibDialogApplyChange::ibDialogApplyChange(const ibProtocolNode& request, wxWindow
 		m_staticInformation->SetForegroundColour(wxColour(200, 0, 0));
 	}
 	buttonSizer->Add(m_buttonApply, 0, wxALL, FromDIP(5));
-	m_buttonCancel = new wxButton(this, wxID_CANCEL, _("Cancel"), wxDefaultPosition, wxDefaultSize, 0);
+	m_buttonCancel = new ibButton(this, wxID_CANCEL, _("Cancel"), wxDefaultPosition, wxDefaultSize, 0);
 
 	buttonSizer->Add(m_buttonCancel, 0, wxALL, FromDIP(5));
 	resultSizer->Add(buttonSizer, 0, wxEXPAND, FromDIP(5));
 
 	mainSizer->Add(resultSizer, 1, wxEXPAND, FromDIP(5));
 
-	wxDialog::SetSizer(mainSizer);
-	wxDialog::Layout();
+	ibDialog::SetSizer(mainSizer);
+	ibDialog::Layout();
 
-	wxDialog::Centre(wxBOTH);
+	ibDialog::Centre(wxBOTH);
 
 	const wxBitmap picture = ibProtocolPicture(request, ibProtocol::ibRequest::ibApplyChange::Picture);
 	if (picture.IsOk()) {
 		wxIcon dlg_icon;
 		dlg_icon.CopyFromBitmap(picture);
-		wxDialog::SetIcon(dlg_icon);
+		ibDialog::SetIcon(dlg_icon);
 	}
-	wxDialog::SetFocus();
+	ibDialog::SetFocus();
 }

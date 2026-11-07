@@ -33,7 +33,6 @@
 #include <wx/vector.h>
 #include <wx/dataobj.h>
 #include <wx/withimages.h>
-#include <wx/systhemectrl.h>
 #include <wx/vector.h>
 
 class WXDLLIMPEXP_FWD_CORE wxImageList;
@@ -43,6 +42,7 @@ class ibHeaderGenericCtrl;
 #include "core/tabular/tabularModelView.h"
 #include "headerctrlg.h"
 #include "gui/gui.h"
+#include "gui/univ/ctrl/control.h"
 // The (x, band) geometry a grouped table paints in, and the ORIENTATION a group can
 // carry. Free of any dataview type — which is why the form layer can include it alone.
 #include "datavlayout.h"
@@ -637,7 +637,9 @@ private:
 	std::vector<ibColumnMember> m_members;
 };
 
-class GUI_API ibDataViewCtrlBase : public wxSystemThemedControl<wxControl>
+// SEAM vs wx: wxSystemThemedControl<wxControl> there - the library's control here, drawn by the theme (its border,
+// its scrollbars); the native "Explorer" theme it switched on has nothing left to theme
+class GUI_API ibDataViewCtrlBase : public ibControl
 {
 public:
 

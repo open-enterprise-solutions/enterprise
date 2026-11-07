@@ -8,7 +8,7 @@
 #include "designer-thin/docManager/templates/docViewModuleEditor.h"
 
 #include <wx/menu.h>
-#include <wx/textdlg.h>   // wxTextEntryDialog - the breakpoint's condition
+#include "gui/univ/textEntryDialog.h"   // ibTextEntryDialog - the breakpoint's condition
 #include "frmclient/artProvider/artProvider.h"   // wxART_BREAKPOINT_CONDITION
 
 ibCodeEditorDesigner::ibCodeEditorDesigner(ibModuleEditDocument* document, wxWindow* parent, wxWindowID id,
@@ -80,7 +80,7 @@ void ibCodeEditorDesigner::AppendDebugMenu(wxMenu& menu, int line)
 		const wxString filename = m_moduleDocument->GetDocPath();
 		const std::map<unsigned int, wxString> breakpoints = debugClient->GetDebugList(filename);
 		const auto current = breakpoints.find((unsigned int)line);
-		wxTextEntryDialog dialog(this,
+		ibTextEntryDialog dialog(this,
 			_("Stop on this line only when the condition is true, for example: i > 500. Leave it empty to stop every time."),
 			_("Breakpoint condition"), current != breakpoints.end() ? current->second : wxString());
 		if (dialog.ShowModal() != wxID_OK)

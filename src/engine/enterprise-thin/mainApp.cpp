@@ -10,7 +10,7 @@
 #include <wx/cmdline.h>
 #include "core/launchTicket.h"
 #include <wx/image.h>
-#include <wx/msgdlg.h>
+#include "gui/univ/messageDialog.h"
 
 #include "frmclient/artProvider/splash/splashLogo.h"   // the splash's picture, the desktop's
 #include "frmclient/backend/backend_picture.h"         // ibBackendPicture::GetImageFromBase64 — the splash, a master in the source
@@ -103,7 +103,7 @@ bool ibAppEnterprise::DoOnInit()
 		auto server = std::make_unique<ibProtocolConnectionServer>();
 		if (!server->Open(m_strAddress, m_strTrusted, error)) {
 			splash.reset();
-			wxMessageBox(error, _("OES Enterprise - startup error"), wxOK | wxICON_ERROR);
+			ibMessageBox(error, _("OES Enterprise - startup error"), wxOK | wxICON_ERROR);
 			return false;
 		}
 		connection = std::move(server);
@@ -126,7 +126,7 @@ bool ibAppEnterprise::DoOnInit()
 		auto file = std::make_unique<ibProtocolConnectionFile>();
 		if (!file->Open(request.Write(), error)) {
 			splash.reset();
-			wxMessageBox(error + wxT("\n\n") + (m_strFile.IsEmpty() ? m_strServer + wxT(" / ") + m_strDatabase : m_strFile),
+			ibMessageBox(error + wxT("\n\n") + (m_strFile.IsEmpty() ? m_strServer + wxT(" / ") + m_strDatabase : m_strFile),
 				_("OES Enterprise - startup error"), wxOK | wxICON_ERROR);
 			return false;
 		}
@@ -134,7 +134,7 @@ bool ibAppEnterprise::DoOnInit()
 	}
 	else {
 		splash.reset();
-		wxMessageBox(
+		ibMessageBox(
 			_("Cannot start enterprise-thin.exe - no infobase specified.\n\n"
 			  "Provide one of:\n"
 			  "  --address=oes://<server>[:port]/<base>   (an application server; oess:// over TLS)\n"

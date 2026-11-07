@@ -7,6 +7,7 @@
 #include "gui/univ/dataview/dataview.h"      // ibDataViewSelectionMode, ibDataViewViewMode
 #include "gui/univ/dataview/datavlayout.h"   // ibColumnGroupKind
 #include "frmclient/visualView/tableModel.h"
+#include "gui/univ/panel.h"
 
 class ibViewCommandBar;
 class ibViewTableColumnObject;
@@ -73,7 +74,7 @@ private:
 	void OnHeaderEndResize(ibHeaderGenericCtrlEvent& event);
 	void OnMainWindowClick(wxMouseEvent& event);
 
-	wxPanel*                         m_panel = nullptr;
+	ibPanel*                         m_panel = nullptr;
 	ibTableViewCtrl*                  m_dataView = nullptr;
 	std::unique_ptr<ibViewCommandBar> m_commandBar;
 	ibProtocolNode                    m_contextMenu;   // the State's ContextMenu — what a right click offers

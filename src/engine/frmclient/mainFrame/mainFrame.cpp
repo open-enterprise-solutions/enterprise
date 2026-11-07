@@ -9,7 +9,7 @@
 #include <functional>
 #include <set>
 
-#include <wx/choicdlg.h>
+#include "gui/univ/choiceDialog.h"   // ibSingleChoiceDialog, ibMultiChoiceDialog — the theme, a server's choice
 #include <wx/config.h>
 #include <wx/file.h>
 #include <wx/filedlg.h>
@@ -58,6 +58,7 @@
 #include "gui/univ/ctrl/floatingNotebook.h"
 #include "gui/univ/theme/luna_tabart.h"
 #include "gui/univ/theme/luna_dockart.h"
+#include "gui/univ/messageDialog.h"
 
 namespace {
 
@@ -766,7 +767,7 @@ bool ibFrontendMainFrame::Show(bool show)
 	std::vector<ibString> users;
 	for (bool asked = false; !loggedIn && refusal == ibProtocol::ibRefusal::LoginRefused; asked = true) {
 		if (asked) {
-			wxMessageBox(error, GetTitle(), wxOK | wxICON_ERROR);
+			ibMessageBox(error, GetTitle(), wxOK | wxICON_ERROR);
 		}
 		else {
 			ibProtocol::ibRefusal usersRefusal = ibProtocol::ibRefusal::None;
@@ -789,7 +790,7 @@ bool ibFrontendMainFrame::Show(bool show)
 		// the person ended it, or saw what it said — the desktop's start goes as quietly (enterprise/mainApp.cpp, Cancelled).
 		// Nor is a login window the person cancelled.
 		if (!cancelled && refusal != ibProtocol::ibRefusal::StartRefused)
-			wxMessageBox(!error.IsEmpty() ? error : ibString(_("The start was refused.")), GetTitle(), wxOK | wxICON_ERROR);
+			ibMessageBox(!error.IsEmpty() ? error : ibString(_("The start was refused.")), GetTitle(), wxOK | wxICON_ERROR);
 		return false;
 	}
 
@@ -972,7 +973,7 @@ void ibFrontendMainFrame::ShowSchema(ibProtocol::ibSchema::ibKind schema, const 
 		// The person's theme - the three, the one in force chosen; another chosen is kept by the server as theirs, and
 		// the browser paints with it. This window does not yet: the thin client's dark look is still to come.
 		const wxString choices[] = { _("As the system is set"), _("Light"), _("Dark") };
-		wxSingleChoiceDialog dialog(this, _("The theme the interface is painted in:"), _("Theme"), WXSIZEOF(choices), choices);
+		ibSingleChoiceDialog dialog(this, _("The theme the interface is painted in:"), _("Theme"), WXSIZEOF(choices), choices);
 		const long long theme = shown.GetInt(ibProtocol::ibSchema::ibStyle::Theme, 0);
 		dialog.SetSelection(theme >= 0 && theme < static_cast<long long>(WXSIZEOF(choices)) ? static_cast<int>(theme) : 0);
 		if (dialog.ShowModal() != wxID_OK || dialog.GetSelection() == theme)
@@ -1507,8 +1508,10 @@ void ibFrontendMainFrame::ShowRequest(const ibProtocolNode& request, ibProtocolN
 
 	switch (static_cast<ibProtocol::ibRequest::ibKind>(request.GetInt(ibProtocol::ibRequest::Kind))) {
 	case ibProtocol::ibRequest::ibKind::Message: {
-		// wx's own flags and codes travel — this client is wx.
-		const int button = wxMessageBox(request.GetString(ibProtocol::ibRequest::ibMessage::Text), request.GetString(ibProtocol::ibRequest::ibMessage::Caption),
+		// wx's own flags and codes travel — this client is wx. A message with no caption takes the client's — the window's
+		// title, as its own messages have it: the server's asks to save a document leave it to the client.
+		const ibString caption = request.GetString(ibProtocol::ibRequest::ibMessage::Caption);
+		const int button = ibMessageBox(request.GetString(ibProtocol::ibRequest::ibMessage::Text), !caption.IsEmpty() ? caption : ibString(GetTitle()),
 			static_cast<int>(request.GetInt(ibProtocol::ibRequest::ibMessage::Style, wxOK)), parent);
 		response.SetValue(ibProtocol::ibRequest::ibMessage::Button, button);
 		break;
@@ -1583,9 +1586,9 @@ void ibFrontendMainFrame::ShowRequest(const ibProtocolNode& request, ibProtocolN
 				response.SetValue(ibProtocol::ibRequest::ibChoice::Id, items[picked].GetInt(ibProtocol::ibRequest::ibChoice::Id));
 			break;
 		}
-		// SEVERAL — the desktop's wxMultiChoiceDialog, those Selected ticked; cancelled — answered with no Ids.
+		// SEVERAL — the desktop's ibMultiChoiceDialog, those Selected ticked; cancelled — answered with no Ids.
 		if (request.GetBool(ibProtocol::ibRequest::ibChoice::Multiple)) {
-			wxMultiChoiceDialog dialog(parent, request.GetString(ibProtocol::ibRequest::ibChoice::Caption), request.GetString(ibProtocol::ibRequest::ibChoice::Caption),
+			ibMultiChoiceDialog dialog(parent, request.GetString(ibProtocol::ibRequest::ibChoice::Caption), request.GetString(ibProtocol::ibRequest::ibChoice::Caption),
 				captions);
 			dialog.SetSelections(ticked);
 			if (dialog.ShowModal() == wxID_OK) {
@@ -1596,7 +1599,7 @@ void ibFrontendMainFrame::ShowRequest(const ibProtocolNode& request, ibProtocolN
 			}
 			break;
 		}
-		wxSingleChoiceDialog dialog(parent, request.GetString(ibProtocol::ibRequest::ibChoice::Caption), request.GetString(ibProtocol::ibRequest::ibChoice::Caption), captions);
+		ibSingleChoiceDialog dialog(parent, request.GetString(ibProtocol::ibRequest::ibChoice::Caption), request.GetString(ibProtocol::ibRequest::ibChoice::Caption), captions);
 		if (!captions.IsEmpty())
 			dialog.SetSelection(selected);
 		// Cancelled — answered with no Id: the server takes that for no choice.
@@ -1792,11 +1795,11 @@ void ibFrontendMainFrame::Refused(ibProtocol::ibRefusal refusal, const wxString&
 		if (m_closingWindow)
 			return;
 		Close(true);
-		wxMessageBox(said, GetTitle(), wxOK | wxICON_ERROR);
+		ibMessageBox(said, GetTitle(), wxOK | wxICON_ERROR);
 		return;
 	}
 
-	wxMessageBox(said, GetTitle(), wxOK | wxICON_WARNING, IsShown() ? this : nullptr);
+	ibMessageBox(said, GetTitle(), wxOK | wxICON_WARNING, IsShown() ? this : nullptr);
 }
 
 void ibFrontendMainFrame::CallPosted()

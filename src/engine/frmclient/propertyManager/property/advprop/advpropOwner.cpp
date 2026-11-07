@@ -9,6 +9,7 @@
 #include "frmclient/backend/compiler/value.h"   // ibValue::GetAvailableCtor — a kind, as the server registered its class
 
 #include <map>
+#include "gui/univ/dialog.h"
 
 #define icon_size 16
 
@@ -153,7 +154,7 @@ wxPGEditorDialogAdapter* ibPGOwnerProperty::GetEditorDialog() const
 			const ibMetaDescription held = ReadMeta(dlgProp->GetValue());
 
 			// launch editor dialog
-			wxDialog* dlg = new wxDialog(pg, wxID_ANY, _("Choice owner"), wxDefaultPosition, wxDefaultSize,
+			ibDialog* dlg = new ibDialog(pg, wxID_ANY, _("Choice owner"), wxDefaultPosition, wxDefaultSize,
 				wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER | wxCLIP_CHILDREN);
 
 			dlg->SetFont(pg->GetFont()); // To allow entering chars of the same set as the propGrid
@@ -174,7 +175,7 @@ wxPGEditorDialogAdapter* ibPGOwnerProperty::GetEditorDialog() const
 			tc->SetDoubleBuffered(true);
 			tc->Enable(!dlgProp->HasFlag(wxPGFlags::ReadOnly));
 
-			wxStdDialogButtonSizer* buttonSizer = dlg->CreateStdDialogButtonSizer(wxOK | wxCANCEL);
+			ibStdDialogButtonSizer* buttonSizer = dlg->CreateStdDialogButtonSizer(wxOK | wxCANCEL);
 			topsizer->Add(buttonSizer, wxSizerFlags(0).Right().Border(wxBOTTOM | wxRIGHT, spacing));
 
 			dlg->SetSizer(topsizer);

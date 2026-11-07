@@ -151,6 +151,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="univ\choiceDialog.cpp" />
     <ClCompile Include="univ\controlRenderer.cpp" />
     <ClCompile Include="univ\ctrl\anyButton.cpp" />
     <ClCompile Include="univ\ctrl\bmpButton.cpp" />
@@ -162,14 +163,17 @@
     <ClCompile Include="univ\ctrl\control.cpp" />
     <ClCompile Include="univ\ctrl\gauge.cpp" />
     <ClCompile Include="univ\ctrl\listBox.cpp" />
+    <ClCompile Include="univ\ctrl\listCtrl.cpp" />
     <ClCompile Include="univ\ctrl\notebook.cpp" />
     <ClCompile Include="univ\ctrl\radioBox.cpp" />
     <ClCompile Include="univ\ctrl\radioButton.cpp" />
     <ClCompile Include="univ\ctrl\scrollArrow.cpp" />
     <ClCompile Include="univ\ctrl\scrollBar.cpp" />
     <ClCompile Include="univ\ctrl\scrollThumb.cpp" />
+    <ClCompile Include="univ\ctrl\searchCtrl.cpp" />
     <ClCompile Include="univ\ctrl\slider.cpp" />
     <ClCompile Include="univ\ctrl\spinButton.cpp" />
+    <ClCompile Include="univ\ctrl\spinCtrl.cpp" />
     <ClCompile Include="univ\ctrl\staticBitmap.cpp" />
     <ClCompile Include="univ\ctrl\staticBox.cpp" />
     <ClCompile Include="univ\ctrl\staticLine.cpp" />
@@ -186,6 +190,7 @@
     <ClCompile Include="univ\dataview\datavlayout.cpp" />
     <ClCompile Include="univ\dataview\headerctrlcmn.cpp" />
     <ClCompile Include="univ\dataview\headerctrlg.cpp" />
+    <ClCompile Include="univ\dialog.cpp" />
     <ClCompile Include="univ\grid\gridext.cpp" />
     <ClCompile Include="univ\grid\gridextctrl.cpp" />
     <ClCompile Include="univ\grid\gridexteditors.cpp" />
@@ -193,18 +198,27 @@
     <ClCompile Include="univ\inputConsumer.cpp" />
     <ClCompile Include="univ\inputHandler.cpp" />
     <ClCompile Include="univ\menu.cpp" />
+    <ClCompile Include="univ\messageDialog.cpp" />
+    <ClCompile Include="univ\numberEntryDialog.cpp" />
+    <ClCompile Include="univ\numValidator.cpp" />
+    <ClCompile Include="univ\panel.cpp" />
+    <ClCompile Include="univ\propertySheetDialog.cpp" />
     <ClCompile Include="univ\theme\lunaTheme.cpp" />
     <ClCompile Include="univ\theme\luna_dockart.cpp" />
     <ClCompile Include="univ\theme\luna_tabart.cpp" />
     <ClCompile Include="univ\theme\luna_toolbarart.cpp" />
     <ClCompile Include="univ\theme\themeRenderer.cpp" />
+    <ClCompile Include="univ\splitterWindow.cpp" />
     <ClCompile Include="univ\theme.cpp" />
+    <ClCompile Include="univ\textEntryDialog.cpp" />
+    <ClCompile Include="univ\textValidator.cpp" />
     <ClCompile Include="univ\window.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="dateconv.h" />
     <ClInclude Include="typeconv.h" />
     <ClInclude Include="univ\app.h" />
+    <ClInclude Include="univ\choiceDialog.h" />
     <ClInclude Include="univ\colourScheme.h" />
     <ClInclude Include="univ\ctrl\anyButton.h" />
     <ClInclude Include="univ\ctrl\auiToolBar.h" />
@@ -218,14 +232,17 @@
     <ClInclude Include="univ\ctrl\floatingNotebook.h" />
     <ClInclude Include="univ\ctrl\gauge.h" />
     <ClInclude Include="univ\ctrl\listBox.h" />
+    <ClInclude Include="univ\ctrl\listCtrl.h" />
     <ClInclude Include="univ\ctrl\notebook.h" />
     <ClInclude Include="univ\ctrl\radioBox.h" />
     <ClInclude Include="univ\ctrl\radioButton.h" />
     <ClInclude Include="univ\ctrl\scrollArrow.h" />
     <ClInclude Include="univ\ctrl\scrollBar.h" />
     <ClInclude Include="univ\ctrl\scrollThumb.h" />
+    <ClInclude Include="univ\ctrl\searchCtrl.h" />
     <ClInclude Include="univ\ctrl\slider.h" />
     <ClInclude Include="univ\ctrl\spinButton.h" />
+    <ClInclude Include="univ\ctrl\spinCtrl.h" />
     <ClInclude Include="univ\ctrl\staticBitmap.h" />
     <ClInclude Include="univ\ctrl\staticBox.h" />
     <ClInclude Include="univ\ctrl\staticLine.h" />
@@ -256,13 +273,22 @@
     <ClInclude Include="univ\inputHandler.h" />
     <ClInclude Include="univ\menu.h" />
     <ClInclude Include="univ\menuItem.h" />
+    <ClInclude Include="univ\messageDialog.h" />
+    <ClInclude Include="univ\numberEntryDialog.h" />
+    <ClInclude Include="univ\numValidator.h" />
+    <ClInclude Include="univ\panel.h" />
+    <ClInclude Include="univ\propertySheetDialog.h" />
     <ClInclude Include="univ\renderer.h" />
     <ClInclude Include="univ\scrollTimer.h" />
     <ClInclude Include="univ\theme\luna_dockart.h" />
     <ClInclude Include="univ\theme\luna_tabart.h" />
     <ClInclude Include="univ\theme\luna_toolbarart.h" />
     <ClInclude Include="univ\theme\themeRenderer.h" />
+    <ClInclude Include="univ\splitterWindow.h" />
     <ClInclude Include="univ\theme.h" />
+    <ClInclude Include="univ\textEntryDialog.h" />
+    <ClInclude Include="univ\textSizerWrapper.h" />
+    <ClInclude Include="univ\textValidator.h" />
     <ClInclude Include="univ\topLevel.h" />
     <ClInclude Include="univ\window.h" />
     <ClInclude Include="gui.h" />

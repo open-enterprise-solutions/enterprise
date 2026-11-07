@@ -1,6 +1,7 @@
 #include "debugItem.h"
 #include "designer-thin/backend/debugger/debugClient.h"
 #include "core/stringUtils.h"
+#include "gui/univ/ctrl/staticBox.h"
 
 void ibDialogDebugItem::RefreshDebugList()
 {
@@ -61,20 +62,20 @@ void ibDialogDebugItem::RefreshDebugList()
 }
 
 ibDialogDebugItem::ibDialogDebugItem(wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style)
-	: wxDialog(parent, id, title, pos, size, style)
+	: ibDialog(parent, id, title, pos, size, style)
 {
 	this->SetSizeHints(wxDefaultSize, wxDefaultSize);
 
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
-	wxStaticBoxSizer* sbSizerAvailable = new wxStaticBoxSizer(new wxStaticBox(this, wxID_ANY, _("Available debug items:")), wxVERTICAL);
-	m_availableList = new wxListCtrl(sbSizerAvailable->GetStaticBox(), wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_REPORT | wxLC_SINGLE_SEL);
+	ibStaticBoxSizer* sbSizerAvailable = new ibStaticBoxSizer(new ibStaticBox(this, wxID_ANY, _("Available debug items:")), wxVERTICAL);
+	m_availableList = new ibListCtrl(sbSizerAvailable->GetStaticBox(), wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_REPORT | wxLC_SINGLE_SEL);
 	m_availableList->Bind(wxEVT_LIST_ITEM_ACTIVATED, &ibDialogDebugItem::OnAvailableItemSelected, this);
 
 	sbSizerAvailable->Add(m_availableList, 1, wxEXPAND);
 	mainSizer->Add(sbSizerAvailable, 1, wxEXPAND);
 
-	wxStaticBoxSizer* sbSizerAttached = new wxStaticBoxSizer(new wxStaticBox(this, wxID_ANY, _("Attached debug items:")), wxVERTICAL);
-	m_attachedList = new wxListCtrl(sbSizerAttached->GetStaticBox(), wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_REPORT | wxLC_SINGLE_SEL);
+	ibStaticBoxSizer* sbSizerAttached = new ibStaticBoxSizer(new ibStaticBox(this, wxID_ANY, _("Attached debug items:")), wxVERTICAL);
+	m_attachedList = new ibListCtrl(sbSizerAttached->GetStaticBox(), wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_REPORT | wxLC_SINGLE_SEL);
 	m_attachedList->Bind(wxEVT_LIST_ITEM_ACTIVATED, &ibDialogDebugItem::OnAttachedItemSelected, this);
 	sbSizerAttached->Add(m_attachedList, 1, wxEXPAND);
 

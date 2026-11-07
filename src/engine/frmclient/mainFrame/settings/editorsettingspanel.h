@@ -7,11 +7,14 @@
 /////////////////////////////////////////////////////////////////////////////
 
 #include <wx/wx.h>
-#include <wx/spinctrl.h>
+#include "gui/univ/ctrl/spinCtrl.h"
 
 #include "editorsettings.h"
+#include "gui/univ/ctrl/checkBox.h"
+#include "gui/univ/ctrl/radioButton.h"
+#include "gui/univ/panel.h"
 
-class FRMCLIENT_API ibPanelEditorSettings : public wxPanel
+class FRMCLIENT_API ibPanelEditorSettings : public ibPanel
 {
 public:
 
@@ -22,14 +25,14 @@ public:
 
 private:
 
-	wxSpinCtrl* m_indentSizeCtrl = nullptr;
-	wxRadioButton* m_useSpaces = nullptr;
-	wxRadioButton* m_useTabs = nullptr;
-	wxCheckBox* m_removeTabsOnLoad = nullptr;
-	wxCheckBox* m_showLineNumbers = nullptr;
-	wxCheckBox* m_showWhiteSpace = nullptr;
-	wxCheckBox* m_enableAutoComplete = nullptr;
-	wxCheckBox* m_mostRecentlyUsedTabSwitching = nullptr;
+	ibSpinCtrl* m_indentSizeCtrl = nullptr;
+	ibRadioButton* m_useSpaces = nullptr;
+	ibRadioButton* m_useTabs = nullptr;
+	ibCheckBox* m_removeTabsOnLoad = nullptr;
+	ibCheckBox* m_showLineNumbers = nullptr;
+	ibCheckBox* m_showWhiteSpace = nullptr;
+	ibCheckBox* m_enableAutoComplete = nullptr;
+	ibCheckBox* m_mostRecentlyUsedTabSwitching = nullptr;
 };
 
 #endif

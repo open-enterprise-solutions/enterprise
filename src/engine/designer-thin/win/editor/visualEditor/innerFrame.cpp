@@ -23,12 +23,12 @@ static wxBitmap FrameButton(const wxString& png)
 
 ibInnerFrame::ibInnerFrame(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size, long style)
 #ifdef __WXGTK__
-	: wxPanel(parent, id, pos, size, wxBORDER_NONE | wxFULL_REPAINT_ON_RESIZE),
+	: ibPanel(parent, id, pos, size, wxBORDER_NONE | wxFULL_REPAINT_ON_RESIZE),
 #else
-	: wxPanel(parent, id, pos, size, wxBORDER_RAISED | wxFULL_REPAINT_ON_RESIZE),
+	: ibPanel(parent, id, pos, size, wxBORDER_RAISED | wxFULL_REPAINT_ON_RESIZE),
 #endif
-	m_titleBar(new wxPanel(this, wxID_ANY)),
-	m_content(new wxPanel(this, wxID_ANY)),
+	m_titleBar(new ibPanel(this, wxID_ANY)),
+	m_content(new ibPanel(this, wxID_ANY)),
 	m_titleStyle(style),
 	m_closeButton(FrameButton(s_frameClose_png)),
 	m_maximizeButton(FrameButton(s_frameMaximize_png)),

@@ -19,7 +19,7 @@ static const wxString s_checkedDisabled_png = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABAC
 wxDEFINE_EVENT(wxEVT_CHECKTREE_FOCUS, wxTreeEvent);
 wxDEFINE_EVENT(wxEVT_CHECKTREE_CHOICE, wxTreeEvent);
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibCheckTree, wxTreeCtrl)
+wxIMPLEMENT_DYNAMIC_CLASS(ibCheckTree, ibTreeCtrl)
 
 bool ibCheckTree::on_check_or_label(int flags)
 {
@@ -86,7 +86,10 @@ void ibCheckTree::mohighlight(const wxTreeItemId& id, bool toggle)
 
 	if (toggle)
 	{
-		wxTreeEvent eventChoice(wxEVT_CHECKTREE_CHOICE, this, id);
+		// as ibTreeCtrl's own: wxTreeEvent's constructor from the tree takes wx's tree (wxTreeCtrlBase)
+		wxTreeEvent eventChoice(wxEVT_CHECKTREE_CHOICE, GetId());
+		eventChoice.SetEventObject(this);
+		eventChoice.SetItem(id);
 		eventChoice.SetExtraLong(is_checked ? 1 : 0);
 		ibCheckTree::ProcessWindowEvent(eventChoice);
 
@@ -121,13 +124,13 @@ void ibCheckTree::ldhighlight(const wxTreeItemId& id)
 }
 
 ibCheckTree::ibCheckTree()
-	:wxTreeCtrl()
+	:ibTreeCtrl()
 	, mouse_entered_tree_with_left_down(false), last_mo(), last_ld(), last_kf(), m_singleCheck(false), m_allowEmpty(false)
 {
 }
 
 ibCheckTree::ibCheckTree(wxWindow* parent, const wxWindowID id, const wxPoint& pos, const wxSize& size, long style)
-	: wxTreeCtrl(parent, id, pos, size, style & ~wxCR_MULTIPLE_CHECK & ~wxCR_SINGLE_CHECK & ~wxCR_EMPTY_CHECK)
+	: ibTreeCtrl(parent, id, pos, size, style & ~wxCR_MULTIPLE_CHECK & ~wxCR_SINGLE_CHECK & ~wxCR_EMPTY_CHECK)
 	, mouse_entered_tree_with_left_down(false), last_mo(), last_ld(), last_kf(), m_singleCheck((style& wxCR_SINGLE_CHECK) == wxCR_SINGLE_CHECK), m_allowEmpty((style& wxCR_EMPTY_CHECK) == wxCR_EMPTY_CHECK)
 {
 	Init();
@@ -135,7 +138,7 @@ ibCheckTree::ibCheckTree(wxWindow* parent, const wxWindowID id, const wxPoint& p
 
 ibCheckTree::~ibCheckTree()
 {
-	wxTreeCtrl::UnselectAll();
+	ibTreeCtrl::UnselectAll();
 	m_colors.clear();
 }
 
@@ -195,7 +198,44 @@ void ibCheckTree::SetItemTextColour(const wxTreeItemId& item, const wxColour& co
 {
 	m_colors.insert_or_assign(item, col);
 
-	wxTreeCtrl::SetItemTextColour(item, col);
+	ibTreeCtrl::SetItemTextColour(item, col);
+}
+
+// The item and then its subtree's rows: a row's id is the library tree's pointer to the item, freed with it (the native
+// tree refused a stale handle), and GetSelection answers from m_checkedItems - the interface editor rebuilds the tree on
+// every tick, and the next tick read a freed item's data (2026-11-06).
+void ibCheckTree::Delete(const wxTreeItemId& item)
+{
+	DeleteChildren(item);
+
+	m_checkedItems.erase(item);
+	m_colors.erase(item);
+	for (wxTreeItemId* const id : { &last_mo, &last_ld, &last_kf }) {
+		if (*id == item)
+			*id = wxTreeItemId();
+	}
+
+	ibTreeCtrl::Delete(item);
+}
+
+void ibCheckTree::DeleteChildren(const wxTreeItemId& item)
+{
+	const auto under = [this, &item](wxTreeItemId id) {
+		while ((id = GetItemParent(id)).IsOk()) {
+			if (id == item)
+				return true;
+		}
+		return false;
+	};
+
+	std::erase_if(m_checkedItems, [&under](const auto& row) { return under(row.first); });
+	std::erase_if(m_colors, [&under](const auto& row) { return under(row.first); });
+	for (wxTreeItemId* const id : { &last_mo, &last_ld, &last_kf }) {
+		if (id->IsOk() && under(*id))
+			*id = wxTreeItemId();
+	}
+
+	ibTreeCtrl::DeleteChildren(item);
 }
 
 bool ibCheckTree::EnableCheckBox(const wxTreeItemId& item, bool enable)
@@ -272,6 +312,9 @@ void ibCheckTree::MakeCheckable(const wxTreeItemId& item, bool state)
 		if (i<0 || i>CHECKED_DISABLED)
 		{
 			SetItemState(item, state ? CHECKED : UNCHECKED);
+			// …and noted as Check notes it: the ticks are counted from m_checkedItems, and a row ticked here unnoted was
+			// counted out — the last tick not to be taken off, the dialog's ticks could not be taken off ("Computed over")
+			m_checkedItems.insert_or_assign(item, state);
 		}
 	}
 }
@@ -599,7 +642,8 @@ void ibCheckTree::SetFocusFromKbd()
 		SelectItem(last_kf);
 	}
 
-	wxTreeEvent eventChoice(wxEVT_CHECKTREE_FOCUS, this, wxTreeItemId());
+	wxTreeEvent eventChoice(wxEVT_CHECKTREE_FOCUS, GetId());
+	eventChoice.SetEventObject(this);
 	ProcessWindowEvent(eventChoice);
 
 	wxWindow::SetFocusFromKbd();

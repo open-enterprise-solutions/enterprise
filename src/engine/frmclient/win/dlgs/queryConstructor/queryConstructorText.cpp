@@ -4,6 +4,9 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "queryConstructorInternal.h"
+#include "gui/univ/ctrl/button.h"
+#include "gui/univ/dialog.h"
+#include "gui/univ/messageDialog.h"
 
 using namespace queryctor;
 
@@ -37,7 +40,7 @@ bool ibDialogQueryConstructor::AdoptText(const wxString& text, bool reportModall
 		// time focus leaves a half-typed query turns the one useful message into an obstacle.
 		// A modal is for a moment the user ASKED about — Check, or OK.
 		if (reportModally)
-			wxMessageBox(e.GetErrorDescription(), _("Query"), wxOK | wxICON_ERROR, this);
+			ibMessageBox(e.GetErrorDescription(), _("Query"), wxOK | wxICON_ERROR, this);
 		else
 			ShowEngineError(e.GetErrorDescription());
 		return false;
@@ -86,7 +89,7 @@ void ibDialogQueryConstructor::OnShowQueryText(wxCommandEvent&)
 	if (m_preview == nullptr)
 		return;
 
-	wxDialog window(this, wxID_ANY, _("Query text"), wxDefaultPosition,
+	ibDialog window(this, wxID_ANY, _("Query text"), wxDefaultPosition,
 		FromDIP(wxSize(860, 600)), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
 
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
@@ -97,10 +100,10 @@ void ibDialogQueryConstructor::OnShowQueryText(wxCommandEvent&)
 	wxBoxSizer* buttons = new wxBoxSizer(wxHORIZONTAL);
 	// DEBUG A PIECE ON ITS OWN — and it belongs HERE, because a selection only exists where the text
 	// is. On the main window it was a button that could only ever say "select some text first".
-	wxButton* openSelection = new wxButton(&window, wxID_ANY, _("Open the selection"));
+	ibButton* openSelection = new ibButton(&window, wxID_ANY, _("Open the selection"));
 	openSelection->Bind(wxEVT_BUTTON, &ibDialogQueryConstructor::OnOpenSelection, this);
 	buttons->Add(openSelection, 0, wxRIGHT, window.FromDIP(6));
-	wxButton* check = new wxButton(&window, wxID_ANY, _("Check query"));
+	ibButton* check = new ibButton(&window, wxID_ANY, _("Check query"));
 	check->Bind(wxEVT_BUTTON, &ibDialogQueryConstructor::OnCheck, this);
 	buttons->Add(check, 0, wxRIGHT, window.FromDIP(6));
 	buttons->AddStretchSpacer();
@@ -149,10 +152,10 @@ void ibDialogQueryConstructor::OnCheck(wxCommandEvent&)
 		try {
 			ibQueryParser parser;
 			parser.ParsePackage(selection);
-			wxMessageBox(_("No errors found in the selection."), _("Check query"), wxOK | wxICON_INFORMATION, this);
+			ibMessageBox(_("No errors found in the selection."), _("Check query"), wxOK | wxICON_INFORMATION, this);
 		}
 		catch (const ibCoreException& e) {
-			wxMessageBox(e.GetErrorDescription(), _("Check query"), wxOK | wxICON_ERROR, this);
+			ibMessageBox(e.GetErrorDescription(), _("Check query"), wxOK | wxICON_ERROR, this);
 		}
 		return;
 	}
@@ -161,9 +164,9 @@ void ibDialogQueryConstructor::OnCheck(wxCommandEvent&)
 	// point of having it is that a person can ask whenever they like, not only when they are done.
 	wxString message;
 	if (AskEngine(message))
-		wxMessageBox(_("No errors found."), _("Check query"), wxOK | wxICON_INFORMATION, this);
+		ibMessageBox(_("No errors found."), _("Check query"), wxOK | wxICON_INFORMATION, this);
 	else
-		wxMessageBox(message, _("Check query"), wxOK | wxICON_ERROR, this);
+		ibMessageBox(message, _("Check query"), wxOK | wxICON_ERROR, this);
 }
 
 void ibDialogQueryConstructor::OnOpenSelection(wxCommandEvent&)
@@ -171,7 +174,7 @@ void ibDialogQueryConstructor::OnOpenSelection(wxCommandEvent&)
 	const wxString selection = m_preview != nullptr
 		? m_preview->GetSelectedText().Trim(true).Trim(false) : wxString();
 	if (selection.IsEmpty()) {
-		wxMessageBox(_("Select a part of the query text first: that part opens as a query of its own."),
+		ibMessageBox(_("Select a part of the query text first: that part opens as a query of its own."),
 			_("Open the selection"), wxOK | wxICON_INFORMATION, this);
 		return;
 	}
@@ -240,7 +243,7 @@ void ibDialogQueryConstructor::OnOk(wxCommandEvent&)
 		m_package = parser.ParsePackage(ibRenderQueryPackage(m_package));
 	}
 	catch (const ibCoreException& e) {
-		wxMessageBox(e.GetErrorDescription(), _("Query"), wxOK | wxICON_ERROR, this);
+		ibMessageBox(e.GetErrorDescription(), _("Query"), wxOK | wxICON_ERROR, this);
 		return;
 	}
 
@@ -257,7 +260,7 @@ void ibDialogQueryConstructor::OnOk(wxCommandEvent&)
 	// refuses it at the door, in the engine's own words). So the question names exactly that.
 	wxString complaint;
 	if (!Verdict(complaint)) {
-		if (wxMessageBox(complaint + wxT("\n\n")
+		if (ibMessageBox(complaint + wxT("\n\n")
 				+ _("Keep this query anyway? The constructor will not open on it again - it will "
 				    "report this error instead, and the query will have to be repaired as text."),
 				GetTitle(), wxYES_NO | wxICON_WARNING, this) != wxYES)
@@ -333,7 +336,7 @@ bool ibShowQueryConstructor(wxWindow* parent, wxString& queryText, const ibMetaD
 		}
 
 		if (!complaint.IsEmpty()) {
-			if (wxMessageBox(complaint + wxT("\n\n")
+			if (ibMessageBox(complaint + wxT("\n\n")
 					+ _("Open the constructor on an empty query? The existing text will be replaced only if you press OK."),
 					_("Query constructor"), wxYES_NO | wxICON_WARNING, parent) != wxYES)
 				return false;

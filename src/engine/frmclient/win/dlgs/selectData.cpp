@@ -17,7 +17,7 @@ bool ibDialogSelectDataType::ShowModal(ibClassID& clsid)
 		return true;
 	}
 
-	int res = wxDialog::ShowModal();
+	int res = ibDialog::ShowModal();
 	if (res == wxID_OK) {
 		long lSelectedItem = m_listData->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
 		if (lSelectedItem != wxNOT_FOUND) {
@@ -31,12 +31,12 @@ bool ibDialogSelectDataType::ShowModal(ibClassID& clsid)
 #define ICON_SIZE 16
 
 ibDialogSelectDataType::ibDialogSelectDataType(const ibMetaData* metaData, const std::vector<ibClassID>& array) :
-	wxDialog(ibFrontendMainFrame::GetFrame(), wxID_ANY, _("Select data type"), wxDefaultPosition, wxSize(315, 300), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
+	ibDialog(ibFrontendMainFrame::GetFrame(), wxID_ANY, _("Select data type"), wxDefaultPosition, wxSize(315, 300), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 {
-	wxDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
+	ibDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxHORIZONTAL);
 
-	m_listData = new wxListCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_NO_HEADER | wxLC_SINGLE_SEL | wxLC_LIST);
+	m_listData = new ibListCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_NO_HEADER | wxLC_SINGLE_SEL | wxLC_LIST);
 	m_listData->AppendColumn(wxT("type"), wxLIST_FORMAT_LEFT, 300);
 	mainSizer->Add(m_listData, 1, wxALL | wxEXPAND, FromDIP(5));
 
@@ -60,17 +60,17 @@ ibDialogSelectDataType::ibDialogSelectDataType(const ibMetaData* metaData, const
 	m_listData->SetDoubleBuffered(true);
 
 	wxBoxSizer* buttonsSizer = new wxBoxSizer(wxVERTICAL);
-	m_buttonOk = new wxButton(this, wxID_OK, _("Ok"), wxDefaultPosition, wxDefaultSize, 0);
+	m_buttonOk = new ibButton(this, wxID_OK, _("Ok"), wxDefaultPosition, wxDefaultSize, 0);
 	buttonsSizer->Add(m_buttonOk, 0, wxALL, FromDIP(5));
-	m_buttonCancel = new wxButton(this, wxID_CANCEL, _("Cancel"), wxDefaultPosition, wxDefaultSize, 0);
+	m_buttonCancel = new ibButton(this, wxID_CANCEL, _("Cancel"), wxDefaultPosition, wxDefaultSize, 0);
 	buttonsSizer->Add(m_buttonCancel, 0, wxALL, FromDIP(5));
 
 	mainSizer->Add(buttonsSizer, 0, wxEXPAND, FromDIP(5));
 
-	wxDialog::SetSizer(mainSizer);
-	wxDialog::Layout();
+	ibDialog::SetSizer(mainSizer);
+	ibDialog::Layout();
 
-	wxDialog::Centre(wxBOTH);
+	ibDialog::Centre(wxBOTH);
 }
 
 ibDialogSelectDataType::~ibDialogSelectDataType()

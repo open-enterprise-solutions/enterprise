@@ -225,7 +225,7 @@ void ibSpreadsheetEditView::OnCreateToolbar(wxAuiToolBar* toolbar)
 	toolbar->EnableTool(wxID_DOCK_TABLE, m_gridEditor->IsEditable());
 	toolbar->AddSeparator();
 
-	wxChoice* zoomChoice = new wxChoice(toolbar, wxID_SHEET_ZOOM);
+	wxChoice* zoomChoice = new wxChoice(toolbar, wxID_SHEET_ZOOM);   // the toolbar's (AddControl takes a wxControl)
 	for (const wxString& label : s_zoomChoices)
 		zoomChoice->Append(label);
 	m_zoomChoice = zoomChoice;

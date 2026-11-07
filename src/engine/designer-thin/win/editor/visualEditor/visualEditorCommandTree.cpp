@@ -24,7 +24,7 @@
 #include <wx/accel.h>     // wxAcceleratorTable — Ctrl+C / X / V / Delete on the tree
 #include <wx/artprov.h>   // wxArtProvider — menu-item icons (SAME set the attribute tree uses)
 #include <wx/imaglist.h>
-#include <wx/menu.h>      // wxMenu — the "add command" context menu
+#include "gui/univ/menu.h"   // ibMenu — the "add command" context menu
 
 #include <set>
 
@@ -105,12 +105,12 @@ void ibFormCommandValue::ReadRow(const ibProtocolNode& row)
 // ibVisualEditorCommandTree
 ///////////////////////////////////////////////////////////////////////////////
 
-wxBEGIN_EVENT_TABLE(ibCommandTree, wxPanel)
+wxBEGIN_EVENT_TABLE(ibCommandTree, ibPanel)
 	EVT_TREE_BEGIN_DRAG(wxID_ANY, ibCommandTree::OnBeginDrag)
 wxEND_EVENT_TABLE()
 
 ibCommandTree::ibVisualEditorCommandTree(ibVisualEditor* owner, wxWindow* parent, int id)
-	: wxPanel(parent, id), m_formHandler(owner)
+	: ibPanel(parent, id), m_formHandler(owner)
 {
 	m_tcCommands = new ibDesignerTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTR_DEFAULT_STYLE | wxTR_HIDE_ROOT | wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_FULL_ROW_HIGHLIGHT);
@@ -345,11 +345,10 @@ void ibCommandTree::OnContextMenu(wxContextMenuEvent& event)
 	// view-only form can be browsed but not restructured — every MUTATING item is disabled.
 	const bool hasCmd = SelectedFormCommand() != nullptr;
 	const bool editable = m_formHandler->IsEditable();
-	wxMenu menu;
+	ibMenu menu;
 	auto appendItem = [&menu](int menuId, const wxString& label, const wxArtID& art, bool enabled) {
-		wxMenuItem* item = new wxMenuItem(&menu, menuId, label);
+		wxMenuItem* item = menu.Append(menuId, label);   // the menu makes its own item (ibMenuItem)
 		item->SetBitmap(wxArtProvider::GetBitmap(art, wxART_MENU));
-		menu.Append(item);
 		item->Enable(enabled);
 	};
 	appendItem(ID_COMMANDTREE_ADD_OBJECT, _("Add command"), wxART_NEW, editable);   // mutates → locked when read-only

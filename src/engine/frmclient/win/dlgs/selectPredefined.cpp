@@ -4,8 +4,8 @@
 
 #include "selectPredefined.h"
 
-#include <wx/treectrl.h>
-#include <wx/dialog.h>
+#include "gui/univ/ctrl/treeCtrl.h"
+#include "gui/univ/dialog.h"
 #include <wx/sizer.h>
 
 #include "protocol/protocol.h"
@@ -24,7 +24,7 @@ struct ibDesignerRefItem : public wxTreeItemData {
 
 // WHAT ONE TYPE OFFERS, as the server wrote it: its empty reference, then everything it declares, nested as it is
 // declared.
-void ibFillOneTypeBranch(wxTreeCtrl* tree, const wxTreeItemId& root, const ibProtocolNode& branch)
+void ibFillOneTypeBranch(ibTreeCtrl* tree, const wxTreeItemId& root, const ibProtocolNode& branch)
 {
 	for (const ibProtocolNode& value : branch.Children()) {
 		const wxTreeItemId item = tree->AppendItem(root, value.GetString(ibProtocol::ibRequest::ibPredefinedSelector::Name),
@@ -36,7 +36,7 @@ void ibFillOneTypeBranch(wxTreeCtrl* tree, const wxTreeItemId& root, const ibPro
 // EVERY ADMITTED REFERENCE TYPE IS A BRANCH — the composite case is not a second window but one more
 // branch, which is what makes "choose a declared value" a single question however many types the
 // parameter admits.
-void ibFillDesignerRefTree(wxTreeCtrl* tree, const ibProtocolNode& types)
+void ibFillDesignerRefTree(ibTreeCtrl* tree, const ibProtocolNode& types)
 {
 	tree->DeleteAllItems();
 	const wxTreeItemId hidden = tree->AddRoot(wxT("*"));   // hidden — the branches are the roots seen
@@ -65,10 +65,10 @@ bool ibShowPredefinedSelector(wxWindow* parent, const ibProtocolNode& request, i
 	const wxSize dialogSize = parent != nullptr
 		? wxDLG_UNIT(parent, wxSize(170, 130)) : wxDefaultSize;
 
-	wxDialog dlg(owner, wxID_ANY, _("Select a predefined value"), wxDefaultPosition,
+	ibDialog dlg(owner, wxID_ANY, _("Select a predefined value"), wxDefaultPosition,
 		dialogSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
 
-	wxTreeCtrl* valueTree = new wxTreeCtrl(&dlg, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+	ibTreeCtrl* valueTree = new ibTreeCtrl(&dlg, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTR_HAS_BUTTONS | wxTR_LINES_AT_ROOT | wxTR_SINGLE | wxTR_HIDE_ROOT);
 	ibFillDesignerRefTree(valueTree, request.FindChild(ibProtocol::ibRequest::ibPredefinedSelector::Types));
 	valueTree->Bind(wxEVT_TREE_ITEM_ACTIVATED, [&](wxTreeEvent& event) {

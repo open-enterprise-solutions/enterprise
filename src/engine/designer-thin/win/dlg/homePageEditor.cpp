@@ -11,8 +11,7 @@
 #include <wx/stattext.h>
 #include <wx/button.h>
 #include <wx/artprov.h>
-#include <wx/numdlg.h>
-#include <wx/msgdlg.h>
+#include "gui/univ/numberEntryDialog.h"   // ibGetNumberFromUser — an item's height share
 
 #include "frmclient/backend/backend_picture.h"                 // ibBackendPicture::GetPicture — the toolbar art
 #include "core/picturePredefined.h"
@@ -20,6 +19,7 @@
 #include "protocol/protocolDesigner.h"                                 // ibProtocol::ibSchema::ibHomePage — the forms' rows
 
 #include <map>
+#include "gui/univ/panel.h"
 
 enum {
 	model_form = 0,
@@ -41,7 +41,7 @@ static wxIcon FormIcon(const ibDataNode& form, const ibString& name)
 //********************************************************************************************
 
 ibDialogHomePageEditor::ibDialogHomePageEditor(wxWindow* parent, ibValueMetaObjectConfiguration* metaObject)
-	: wxDialog(parent, wxID_ANY, _("Home page workspace"),
+	: ibDialog(parent, wxID_ANY, _("Home page workspace"),
 		wxDefaultPosition, wxSize(760, 480), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
 	m_metaObject(metaObject)
 {
@@ -56,11 +56,11 @@ ibDialogHomePageEditor::ibDialogHomePageEditor(wxWindow* parent, ibValueMetaObje
 
 wxWindow* ibDialogHomePageEditor::CreateColumnPane(wxWindow* parent, ibHomePageColumn column, const wxString& caption)
 {
-	wxPanel* pane = new wxPanel(parent, wxID_ANY);
+	ibPanel* pane = new ibPanel(parent, wxID_ANY);
 	wxBoxSizer* paneSizer = new wxBoxSizer(wxVERTICAL);
 	pane->SetSizer(paneSizer);
 
-	wxStaticText* paneCaption = new wxStaticText(pane, wxID_ANY, caption);
+	ibStaticText* paneCaption = new ibStaticText(pane, wxID_ANY, caption);
 	paneSizer->Add(paneCaption, 0, wxALL, FromDIP(3));
 
 	wxAuiToolBar* toolbar = new wxAuiToolBar(pane, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_LAYOUT);
@@ -85,7 +85,7 @@ wxWindow* ibDialogHomePageEditor::CreateColumnPane(wxWindow* parent, ibHomePageC
 
 	paneSizer->Add(toolbar, 0, wxEXPAND);
 
-	wxListCtrl* listCtrl = new wxListCtrl(pane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+	ibListCtrl* listCtrl = new ibListCtrl(pane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxLC_REPORT | wxLC_SINGLE_SEL);
 
 	// Every row carries the FORM metaobject's own icon — the same glyph the metadata tree
@@ -122,10 +122,10 @@ void ibDialogHomePageEditor::CreateDialogView()
 	mainSizer->Add(columnsSizer, 1, wxEXPAND);
 
 	wxBoxSizer* templateSizer = new wxBoxSizer(wxHORIZONTAL);
-	templateSizer->Add(new wxStaticText(this, wxID_ANY, _("Home page template:")), 0,
+	templateSizer->Add(new ibStaticText(this, wxID_ANY, _("Home page template:")), 0,
 		wxALIGN_CENTER_VERTICAL | wxALL, FromDIP(4));
 
-	m_templateChoice = new wxChoice(this, wxID_ANY);
+	m_templateChoice = new ibChoice(this, wxID_ANY);
 	// Order matches ibHomePageTemplate — the selection index IS the template.
 	m_templateChoice->Append(_("One column"));
 	m_templateChoice->Append(_("Two columns of equal width"));
@@ -137,11 +137,11 @@ void ibDialogHomePageEditor::CreateDialogView()
 
 	mainSizer->Add(templateSizer, 0, wxEXPAND);
 
-	wxStdDialogButtonSizer* buttonSizer = new wxStdDialogButtonSizer();
-	m_buttonOK = new wxButton(this, wxID_OK);
+	ibStdDialogButtonSizer* buttonSizer = new ibStdDialogButtonSizer();
+	m_buttonOK = new ibButton(this, wxID_OK);
 	m_buttonOK->Bind(wxEVT_BUTTON, &ibDialogHomePageEditor::OnCommandOK, this);
 	buttonSizer->AddButton(m_buttonOK);
-	wxButton* buttonCancel = new wxButton(this, wxID_CANCEL);
+	ibButton* buttonCancel = new ibButton(this, wxID_CANCEL);
 	buttonSizer->AddButton(buttonCancel);
 	buttonSizer->Realize();
 
@@ -184,7 +184,7 @@ std::optional<ibDataNode> ibDialogHomePageEditor::FindItemForm(const ibHomePageI
 
 void ibDialogHomePageEditor::FillColumn(ibHomePageColumn column, long selectIndex)
 {
-	wxListCtrl* const listCtrl = m_listCtrl[column];
+	ibListCtrl* const listCtrl = m_listCtrl[column];
 	if (listCtrl == nullptr)
 		return;
 
@@ -238,7 +238,7 @@ ibHomePageColumn ibDialogHomePageEditor::ColumnOfEvent(const wxCommandEvent& eve
 
 long ibDialogHomePageEditor::GetSelection(ibHomePageColumn column) const
 {
-	wxListCtrl* const listCtrl = m_listCtrl[column];
+	ibListCtrl* const listCtrl = m_listCtrl[column];
 	return listCtrl != nullptr ?
 		listCtrl->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED) : wxNOT_FOUND;
 }
@@ -267,7 +267,7 @@ void ibDialogHomePageEditor::OnCommandMenu(wxCommandEvent& event)
 		ibHomePageItem& item = m_description.GetColumn(column)[selection];
 		// The height is a share of the column, not pixels — 0 keeps the item equal to the
 		// other unset ones.
-		const long height = wxGetNumberFromUser(
+		const long height = ibGetNumberFromUser(
 			_("Height share of the column (0 - same as the others)"),
 			_("Height"), _("Home page workspace"), (long)item.m_height, 0, 100, this);
 
@@ -375,13 +375,13 @@ void ibDialogHomePageEditor::OnCommandOK(wxCommandEvent& event)
 //********************************************************************************************
 
 ibDialogHomePageFormSelect::ibDialogHomePageFormSelect(wxWindow* parent, const ibValueMetaObjectConfiguration* metaObject)
-	: wxDialog(parent, wxID_ANY, _("Select form"),
+	: ibDialog(parent, wxID_ANY, _("Select form"),
 		wxDefaultPosition, wxSize(420, 480), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
 	m_metaObject(metaObject)
 {
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
-	m_treeCtrl = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+	m_treeCtrl = new ibTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_LINES_AT_ROOT | wxTR_HIDE_ROOT);
 
 	// Same rule as the workspace list: every row shows the metaobject's own icon, so a form
@@ -393,11 +393,11 @@ ibDialogHomePageFormSelect::ibDialogHomePageFormSelect(wxWindow* parent, const i
 
 	mainSizer->Add(m_treeCtrl, 1, wxEXPAND | wxALL, FromDIP(5));
 
-	wxStdDialogButtonSizer* buttonSizer = new wxStdDialogButtonSizer();
-	m_buttonOK = new wxButton(this, wxID_OK);
+	ibStdDialogButtonSizer* buttonSizer = new ibStdDialogButtonSizer();
+	m_buttonOK = new ibButton(this, wxID_OK);
 	m_buttonOK->Enable(false);   // nothing selected yet — a group row is not an answer
 	buttonSizer->AddButton(m_buttonOK);
-	buttonSizer->AddButton(new wxButton(this, wxID_CANCEL));
+	buttonSizer->AddButton(new ibButton(this, wxID_CANCEL));
 	buttonSizer->Realize();
 
 	mainSizer->Add(buttonSizer, 0, wxEXPAND | wxALL, FromDIP(5));

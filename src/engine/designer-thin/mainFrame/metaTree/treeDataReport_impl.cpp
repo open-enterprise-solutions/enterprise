@@ -16,7 +16,7 @@ void ibDataReportTree::Draw(const ibProtocolNode& root)
 	// typing into is left as typed.
 	for (const ibProtocolNode& property : root.FindChild(ibProtocol::ibSchema::ibMetaData::Properties).Children()) {
 		const wxString name = property.GetString(ibProtocol::ibSchema::ibProperties::Name);
-		wxTextCtrl* const text = name == wxT("Name") ? m_nameValue
+		ibTextCtrl* const text = name == wxT("Name") ? m_nameValue
 			: name == wxT("Synonym") ? m_synonymValue
 			: name == wxT("Comment") ? m_commentValue
 			: nullptr;

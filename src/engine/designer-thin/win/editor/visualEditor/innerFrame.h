@@ -1,12 +1,12 @@
 ﻿#ifndef __INNER_FRAME__
 #define __INNER_FRAME__
 
-#include <wx/panel.h>
+#include "gui/univ/panel.h"
 #include <wx/bitmap.h>
 
 // The form's card in the visual editor: a caption over the panel the form is built in, resized by
 // dragging its right edge, its bottom edge or the corner between them.
-class ibInnerFrame : public wxPanel {
+class ibInnerFrame : public ibPanel {
 public:
 
 	ibInnerFrame(wxWindow* parent, wxWindowID id,
@@ -14,7 +14,7 @@ public:
 		const wxSize& size = wxDefaultSize,
 		long style = 0);
 
-	wxPanel* GetFrameContentPanel() const { return m_content; }
+	ibPanel* GetFrameContentPanel() const { return m_content; }
 
 	void SetTitle(const wxString& title);
 	void SetTitleStyle(long style);
@@ -41,8 +41,8 @@ private:
 	void OnLeftUp(wxMouseEvent& event);
 	void OnMouseCaptureLost(wxMouseCaptureLostEvent& event);
 
-	wxPanel* m_titleBar;
-	wxPanel* m_content;
+	ibPanel* m_titleBar;
+	ibPanel* m_content;
 
 	wxString m_title;
 	long m_titleStyle;

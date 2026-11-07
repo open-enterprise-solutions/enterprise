@@ -19,12 +19,12 @@ public:
 
 ibDialogFunctionAll::ibDialogFunctionAll(wxWindow* parent, const ibProtocolNode& shown, Open open,
 	wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style)
-	: wxDialog(parent, id, title, pos, size, style), m_open(std::move(open))
+	: ibDialog(parent, id, title, pos, size, style), m_open(std::move(open))
 {
 	this->SetSizeHints(wxDefaultSize, wxDefaultSize);
 
 	wxBoxSizer* bSizer = new wxBoxSizer(wxVERTICAL);
-	m_treeCtrlElements = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_SINGLE | wxTR_HIDE_ROOT | wxTR_TWIST_BUTTONS);
+	m_treeCtrlElements = new ibTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_SINGLE | wxTR_HIDE_ROOT | wxTR_TWIST_BUTTONS);
 	m_treeCtrlElements->SetDoubleBuffered(true);
 	bSizer->Add(m_treeCtrlElements, 1, wxALL | wxEXPAND, FromDIP(5));
 
@@ -34,13 +34,13 @@ ibDialogFunctionAll::ibDialogFunctionAll(wxWindow* parent, const ibProtocolNode&
 		new wxImageList(ICON_SIZE, ICON_SIZE)
 	);
 
-	wxDialog::SetSizer(bSizer);
-	wxDialog::Layout();
+	ibDialog::SetSizer(bSizer);
+	ibDialog::Layout();
 
-	wxDialog::Centre(wxBOTH);
+	ibDialog::Centre(wxBOTH);
 
 	BuildTree(shown);
-	wxDialog::SetFocus();
+	ibDialog::SetFocus();
 }
 
 void ibDialogFunctionAll::BuildTree(const ibProtocolNode& shown)

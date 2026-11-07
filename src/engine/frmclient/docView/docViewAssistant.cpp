@@ -2,13 +2,13 @@
 
 #include "frmclient/mainFrame/mainFrame.h"   // the shared font/colour settings live on the frame
 
-#include <wx/button.h>
-#include <wx/panel.h>
+#include "gui/univ/ctrl/button.h"
+#include "gui/univ/panel.h"
 #include <wx/sizer.h>
-#include <wx/splitter.h>
-#include <wx/stattext.h>
+#include "gui/univ/splitterWindow.h"
+#include "gui/univ/ctrl/staticText.h"
 #include <wx/stc/stc.h>
-#include <wx/textctrl.h>
+#include "gui/univ/ctrl/textCtrl.h"
 #include <wx/weakref.h>
 
 namespace {
@@ -71,7 +71,7 @@ void ibAssistantView::BuildLayout(wxWindow* parent)
 	// A SPLITTER, because how much room the conversation deserves and how much
 	// the question being typed does is the reader's business and changes by the
 	// minute — a fixed input strip is right for nobody.
-	wxSplitterWindow* splitter = new wxSplitterWindow(parent, wxID_ANY,
+	ibSplitterWindow* splitter = new ibSplitterWindow(parent, wxID_ANY,
 		wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
 	splitter->SetMinimumPaneSize(80);
 
@@ -156,17 +156,17 @@ void ibAssistantView::BuildLayout(wxWindow* parent)
 	m_transcript->SetWrapMode(wxSTC_WRAP_WORD);
 
 	// --- the lower pane: what a person would write ------------------------
-	wxPanel* bottom = new wxPanel(splitter, wxID_ANY);
+	ibPanel* bottom = new ibPanel(splitter, wxID_ANY);
 	wxBoxSizer* bottomSizer = new wxBoxSizer(wxVERTICAL);
 
 	// One line survives a resize; three explain themselves to nobody.
-	wxStaticText* pending = new wxStaticText(bottom, wxID_ANY,
+	ibStaticText* pending = new ibStaticText(bottom, wxID_ANY,
 		_("What you write goes to the connected assistant. The platform calls no model itself."));
 	bottomSizer->Add(pending, 0, wxALL, 4);
 
 	// EMPTY UNTIL THERE IS SOMETHING TO WAIT FOR. A strip that always says something becomes
 	// furniture and stops being read; this one appears when it has news and goes away again.
-	m_waiting = new wxStaticText(bottom, wxID_ANY, wxEmptyString);
+	m_waiting = new ibStaticText(bottom, wxID_ANY, wxEmptyString);
 	bottomSizer->Add(m_waiting, 0, wxLEFT | wxRIGHT | wxBOTTOM, 4);
 
 	wxBoxSizer* inputSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -174,7 +174,7 @@ void ibAssistantView::BuildLayout(wxWindow* parent)
 	// WRITABLE, even though nothing carries it away yet. A question can be
 	// drafted now and sent when the other direction lands; a field locked
 	// against typing loses the thought instead of keeping it.
-	m_input = new wxTextCtrl(bottom, wxID_ANY, wxEmptyString,
+	m_input = new ibTextCtrl(bottom, wxID_ANY, wxEmptyString,
 		wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE);
 	if (font.IsOk())
 		m_input->SetFont(font);
@@ -206,7 +206,7 @@ void ibAssistantView::BuildLayout(wxWindow* parent)
 
 	inputSizer->Add(m_input, 1, wxEXPAND | wxALL, 4);
 
-	m_send = new wxButton(bottom, wxID_ANY, _("Send"));
+	m_send = new ibButton(bottom, wxID_ANY, _("Send"));
 	m_send->SetToolTip(_("Leaves your message for the connected assistant to collect."));
 	m_send->Bind(wxEVT_BUTTON, &ibAssistantView::OnSend, this);
 	inputSizer->Add(m_send, 0, wxALL | wxALIGN_BOTTOM, 4);
@@ -221,7 +221,7 @@ void ibAssistantView::BuildLayout(wxWindow* parent)
 	// negative offset then lands at the top and the conversation pane starts
 	// collapsed, which is exactly how this arrived. CallAfter runs once the
 	// layout has happened and the height is real.
-	wxWeakRef<wxSplitterWindow> laterSplitter = splitter;
+	wxWeakRef<ibSplitterWindow> laterSplitter = splitter;
 	splitter->CallAfter([laterSplitter]() {
 		if (!laterSplitter)
 			return;

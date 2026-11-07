@@ -13,19 +13,22 @@
 //
 // The runtime side that renders this is frmclient/docView/templates/docViewHomePage.{h,cpp}.
 
-#include <wx/dialog.h>
-#include <wx/listctrl.h>
-#include <wx/choice.h>
+#include "gui/univ/dialog.h"
+#include "gui/univ/ctrl/listCtrl.h"
+#include "gui/univ/ctrl/choice.h"
 #include <wx/panel.h>
 #include <wx/aui/auibar.h>
 
 #include "frmclient/backend/metaCollection/metaObjectMetadata.h"
+#include "gui/univ/ctrl/staticText.h"
+#include "gui/univ/ctrl/button.h"
+#include "gui/univ/ctrl/treeCtrl.h"
 
-class wxButton;
+class ibButton;
 class wxTreeEvent;
-class wxStaticText;
+class ibStaticText;
 
-class ibDialogHomePageEditor : public wxDialog {
+class ibDialogHomePageEditor : public ibDialog {
 
 	enum {
 		wxID_TOOL_ADD = wxID_HIGHEST + 1,
@@ -83,16 +86,16 @@ private:
 
 	wxWindow*     m_pane[eHomePageColumn_Count] = { nullptr, nullptr };
 	wxAuiToolBar* m_toolbar[eHomePageColumn_Count] = { nullptr, nullptr };
-	wxListCtrl*   m_listCtrl[eHomePageColumn_Count] = { nullptr, nullptr };
-	wxStaticText* m_paneCaption[eHomePageColumn_Count] = { nullptr, nullptr };
+	ibListCtrl*   m_listCtrl[eHomePageColumn_Count] = { nullptr, nullptr };
+	ibStaticText* m_paneCaption[eHomePageColumn_Count] = { nullptr, nullptr };
 
-	wxChoice* m_templateChoice = nullptr;
-	wxButton* m_buttonOK = nullptr;
+	ibChoice* m_templateChoice = nullptr;
+	ibButton* m_buttonOK = nullptr;
 };
 
 // The form picker — the tree of every form the configuration owns, grouped by its owner
 // metaobject, plus the common forms. Answers ONE question: which form to attach.
-class ibDialogHomePageFormSelect : public wxDialog {
+class ibDialogHomePageFormSelect : public ibDialog {
 public:
 
 	ibDialogHomePageFormSelect(wxWindow* parent, const ibValueMetaObjectConfiguration* metaObject);
@@ -111,8 +114,8 @@ protected:
 private:
 
 	const ibValueMetaObjectConfiguration* m_metaObject;
-	class wxTreeCtrl* m_treeCtrl = nullptr;
-	wxButton* m_buttonOK = nullptr;
+	class ibTreeCtrl* m_treeCtrl = nullptr;
+	ibButton* m_buttonOK = nullptr;
 	ibMetaID m_selectedForm = wxNOT_FOUND;
 };
 

@@ -14,7 +14,7 @@
 
 #include <cstdlib>
 
-void ibHelpDragSource::Bind(wxListBox* list,
+void ibHelpDragSource::Bind(ibListBox* list,
                               const std::vector<wxString>* ids,
                               const std::shared_ptr<const ibHelpCorpus>* corpus,
                               const ibHelpPaneView* pane)
@@ -82,7 +82,7 @@ void ibHelpDragSource::OnMotion(wxMouseEvent& event)
 	// during the pump leaves nothing to write to.
 	m_armed = false;
 	m_dragId.clear();
-	wxListBox* source = m_list;
+	ibListBox* source = m_list;
 
 	wxTextDataObject payload(tpl);
 	wxDropSource src(payload, source);

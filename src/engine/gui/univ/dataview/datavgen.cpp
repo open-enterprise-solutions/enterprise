@@ -35,6 +35,8 @@
 #include <wx/stockitem.h>
 #include <wx/popupwin.h>
 #include <wx/renderer.h>
+#include "gui/univ/renderer.h"
+#include "gui/univ/theme.h"  // the toggle's box: the theme's renderer
 #include <wx/graphics.h>   // the busy badge's arc (antialiased, alpha)
 #include <wx/dcbuffer.h>
 #include <wx/icon.h>
@@ -53,6 +55,7 @@
 
 #if wxUSE_ACCESSIBILITY
 #include <wx/private/markupparser.h>
+#include "gui/univ/ctrl/textCtrl.h"
 #endif // wxUSE_ACCESSIBILITY
 
 //-----------------------------------------------------------------------------
@@ -106,9 +109,9 @@ namespace
 		return expander;
 	}
 
-	wxTextCtrl* CreateEditorTextCtrl(wxWindow* parent, const wxRect& labelRect, const wxString& value)
+	ibTextCtrl* CreateEditorTextCtrl(wxWindow* parent, const wxRect& labelRect, const wxString& value)
 	{
-		wxTextCtrl* ctrl = new wxTextCtrl(parent, wxID_ANY, value,
+		ibTextCtrl* ctrl = new ibTextCtrl(parent, wxID_ANY, value,
 			labelRect.GetPosition(),
 			labelRect.GetSize(),
 			wxTE_PROCESS_ENTER);
@@ -1236,7 +1239,7 @@ wxWindow* ibDataViewTextRenderer::CreateEditorCtrl(wxWindow* parent,
 
 bool ibDataViewTextRenderer::GetValueFromEditorCtrl(wxWindow* editor, ibVariant& value)
 {
-	wxTextCtrl* text = (wxTextCtrl*)editor;
+	ibTextCtrl* text = (ibTextCtrl*)editor;
 	value = text->GetValue();
 	return true;
 }
@@ -1394,7 +1397,9 @@ bool ibDataViewToggleRenderer::Render(wxRect cell, wxDC* dc, int WXUNUSED(state)
 	size.IncTo(GetSize());
 	cell.SetSize(size);
 
-	wxRendererNative& renderer = wxRendererNative::Get();
+	// SEAM vs wx: the theme's renderer draws the box - the indicator ibCheckBox and ibRadioButton draw; wx asked
+	// the native one
+	wxRendererNative& renderer = *ibThemeEngine::Get()->GetRenderer();
 
 	if (m_radio)
 		renderer.DrawRadioBitmap(win, *dc, cell, flags);
@@ -1424,7 +1429,8 @@ bool ibDataViewToggleRenderer::WXActivateCell(const wxRect& WXUNUSED(cellRect),
 
 wxSize ibDataViewToggleRenderer::GetSize() const
 {
-	return wxRendererNative::Get().GetCheckBoxSize(GetView());
+	// SEAM vs wx: the box Render draws - the theme's renderer's
+	return ibThemeEngine::Get()->GetRenderer()->GetCheckBoxSize(GetView());
 }
 
 // ---------------------------------------------------------
@@ -1586,7 +1592,7 @@ wxWindow* ibDataViewIconTextRenderer::CreateEditorCtrl(wxWindow* parent, wxRect 
 
 bool ibDataViewIconTextRenderer::GetValueFromEditorCtrl(wxWindow* editor, ibVariant& value)
 {
-	wxTextCtrl* text = (wxTextCtrl*)editor;
+	ibTextCtrl* text = (ibTextCtrl*)editor;
 
 	// The icon can't be edited so get its old value and reuse it.
 	ibVariant valueOld;
@@ -1606,11 +1612,11 @@ bool ibDataViewIconTextRenderer::GetValueFromEditorCtrl(wxWindow* editor, ibVari
 
 #if wxUSE_DRAG_AND_DROP
 
-class ibBitmapCanvas : public wxWindow
+class ibBitmapCanvas : public ibWindow
 {
 public:
 	ibBitmapCanvas(wxWindow* parent, const wxBitmap& bitmap, const wxSize& size) :
-		wxWindow(parent, wxID_ANY, wxPoint(0, 0), size)
+		ibWindow(parent, wxID_ANY, wxPoint(0, 0), size)
 		, m_bitmap(bitmap)
 	{
 		Bind(wxEVT_PAINT, &ibBitmapCanvas::OnPaint, this);
@@ -4629,7 +4635,7 @@ bool ibDataViewCtrl::Create(wxWindow* parent,
 {
 	Init();
 
-	if (!wxControl::Create(parent, id, pos, size,
+	if (!ibControl::Create(parent, id, pos, size,
 		style | wxWANTS_CHARS, validator, name))
 		return false;
 
@@ -4677,8 +4683,6 @@ bool ibDataViewCtrl::Create(wxWindow* parent,
 	{
 		m_rowHeightCache = NULL;
 	}
-
-	EnableSystemThemeByDefault();
 
 #if wxUSE_ACCESSIBILITY
 	wxAccessible::NotifyEvent(wxACC_EVENT_OBJECT_CREATE, this, wxOBJID_CLIENT, wxACC_SELF);
@@ -5260,7 +5264,7 @@ bool ibDataViewCtrl::SetBackgroundColour(const wxColour& colour)
 #if wxUSE_ACCESSIBILITY
 bool ibDataViewCtrl::Show(bool show)
 {
-	bool changed = wxControl::Show(show);
+	bool changed = ibControl::Show(show);
 	if (changed)
 	{
 		wxAccessible::NotifyEvent(show ? wxACC_EVENT_OBJECT_SHOW : wxACC_EVENT_OBJECT_HIDE,
@@ -5272,13 +5276,13 @@ bool ibDataViewCtrl::Show(bool show)
 
 void ibDataViewCtrl::SetName(const wxString& name)
 {
-	wxControl::SetName(name);
+	ibControl::SetName(name);
 	wxAccessible::NotifyEvent(wxACC_EVENT_OBJECT_NAMECHANGE, this, wxOBJID_CLIENT, wxACC_SELF);
 }
 
 bool ibDataViewCtrl::Reparent(wxWindowBase* newParent)
 {
-	bool changed = wxControl::Reparent(newParent);
+	bool changed = ibControl::Reparent(newParent);
 	if (changed)
 	{
 		wxAccessible::NotifyEvent(wxACC_EVENT_OBJECT_PARENTCHANGE, this, wxOBJID_CLIENT, wxACC_SELF);
@@ -5290,7 +5294,7 @@ bool ibDataViewCtrl::Reparent(wxWindowBase* newParent)
 
 bool ibDataViewCtrl::Enable(bool enable)
 {
-	bool changed = wxControl::Enable(enable);
+	bool changed = ibControl::Enable(enable);
 	if (changed)
 	{
 #if wxUSE_ACCESSIBILITY
@@ -6944,23 +6948,6 @@ void ibDataViewCtrl::DontUseColumnForSorting(int idx)
 void ibDataViewCtrl::ToggleSortByColumn(int column)
 {
 	m_headerAreaWin->ToggleSortByColumn(column);
-}
-
-void ibDataViewCtrl::DoEnableSystemTheme(bool enable, wxWindow* window)
-{
-	typedef wxSystemThemedControl<wxControl> Base;
-	Base::DoEnableSystemTheme(enable, window);
-	Base::DoEnableSystemTheme(enable, m_tableAreaWin);
-	if (m_tableFrozenRowAreaWin)
-		Base::DoEnableSystemTheme(enable, m_tableFrozenRowAreaWin);
-	if (m_tableFrozenRowAreaWin)
-		Base::DoEnableSystemTheme(enable, m_tableFrozenColAreaWin);
-	if (m_tableFrozenCornerAreaWin)
-		Base::DoEnableSystemTheme(enable, m_tableFrozenCornerAreaWin);
-	if (m_headerAreaWin)
-		Base::DoEnableSystemTheme(enable, m_headerAreaWin);
-	if (m_footerAreaWin)
-		Base::DoEnableSystemTheme(enable, m_footerAreaWin);
 }
 
 void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindow)
@@ -9269,9 +9256,9 @@ wxAccStatus ibDataViewCtrlAccessible::GetSelections(wxVariant* selections)
 // ibDataViewMainWindow
 //-----------------------------------------------------------------------------
 
-wxIMPLEMENT_ABSTRACT_CLASS(ibDataViewMainWindow, wxWindow);
+wxIMPLEMENT_ABSTRACT_CLASS(ibDataViewMainWindow, ibWindow);
 
-wxBEGIN_EVENT_TABLE(ibDataViewMainWindow, wxWindow)
+wxBEGIN_EVENT_TABLE(ibDataViewMainWindow, ibWindow)
 EVT_PAINT(ibDataViewMainWindow::OnPaint)
 EVT_MOUSE_EVENTS(ibDataViewMainWindow::OnMouse)
 EVT_SET_FOCUS(ibDataViewMainWindow::OnSetFocus)
@@ -9333,11 +9320,11 @@ constexpr int  kBusyBadgeSide = 44;
 // the portion lands — and everything painted INSIDE it went silent with it, so the
 // wait showed as a blank rectangle with nothing to say on it. Freeze or spinner,
 // pick one. A sibling window is frozen by nobody, so both hold.
-class ibDataViewBusyWindow : public wxWindow
+class ibDataViewBusyWindow : public ibWindow
 {
 public:
 	explicit ibDataViewBusyWindow(ibDataViewCtrl* owner)
-		: wxWindow(owner, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+		: ibWindow(owner, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		           wxBORDER_NONE | wxTRANSPARENT_WINDOW)
 	{
 		SetBackgroundStyle(wxBG_STYLE_PAINT);
@@ -9584,6 +9571,14 @@ void ibDataViewMainWindow::OnChar(wxKeyEvent& event)
 
 void ibDataViewMainWindow::OnMouse(wxMouseEvent& event)
 {
+	// SEAM vs wx: a disabled control keeps its window enabled (ibWindow::DoEnable) - no native disabling shuts the
+	// rows off with it, so the mouse is refused here, as ibInputConsumer refuses it
+	if (!IsEnabled())
+	{
+		event.Skip();
+		return;
+	}
+
 	if (event.GetEventType() == wxEVT_MOUSEWHEEL)
 	{
 		// set one always one scroll

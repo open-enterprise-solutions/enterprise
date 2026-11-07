@@ -6,6 +6,9 @@
 #include "queryConstructorInternal.h"
 #include "frmclient/win/picture.h"   // ibProtocolPicture — a kind's picture, as the server named it
 #include "frmclient/backend/backend_picture.h"   // ibBackendPicture::GetPictureAsIcon — a field's picture made an icon of this tree's
+#include "gui/univ/ctrl/treeCtrl.h"
+#include "gui/univ/panel.h"
+#include "gui/univ/messageDialog.h"
 
 using namespace queryctor;
 
@@ -76,11 +79,73 @@ std::vector<ibQueryConstructorField> ibDialogQueryConstructor::AvailableFields()
 	return out;
 }
 
+// ⭐⭐ TOTALS ARE TAKEN OVER THE RESULT — `TOTALS COUNT(IsFolder) BY PredefinedName` names its columns, the BY and
+// the figure alike. The tab offered them and its cell wrote them, while the expression window behind the cell's
+// "..." was handed the tables' qualified fields: it offered `Counterparties.IsFolder` and refused `IsFolder` as
+// "not a field of this query" (2026-11-07). One list for the three.
+std::vector<ibQueryConstructorField> ibDialogQueryConstructor::TotalsFields() const
+{
+	std::vector<ibQueryConstructorField> out;
+	const ibQuerySelect* select = Current();
+	if (select == nullptr)
+		return out;
+
+	// ⭐ AND EACH RESULT FIELD KEEPS WHAT IT IS. Built from a name alone, these rows carried no type and no
+	// reference — so the picker had nothing to unfold and drew every one of them as a plain field, including the
+	// references. The description is taken from the SOURCE field it stands for, which is the same answer the
+	// other tabs show.
+	const std::vector<ibQueryConstructorField> available = AvailableFields();
+	for (const ibQueryProjection& projection : select->m_projections) {
+		ibQueryConstructorField field;
+		const wxString written = projection.m_expr ? ibRenderQueryExpr(*projection.m_expr) : ibString();
+		wxString shown = ibQueryOutputName(projection);
+		if (shown.IsEmpty())
+			shown = written;
+		if (shown.IsEmpty())
+			continue;
+		// ⭐ THE ALIAS IS BOTH THE LABEL AND THE PATH — a total is taken over the RESULT, and the result calls this
+		// field by its alias. With a union that is the ONLY name it has: `Catalog1.Parent` is a path into branch
+		// one, which branch two need not carry at all, while the alias is what every branch is lined up under.
+		//
+		// This row used to carry the SOURCE path, because the engine resolved a TOTALS dimension against the tables
+		// and nothing else — a shim in the dialog standing in for a missing resolution. The lowering looks the
+		// leading segment up among the output names now (queryLowering.cpp, `throughAlias`), so a dot-walk from an
+		// alias — `Parent.Description` — reaches the same column the qualified path did.
+		field.m_name         = shown;
+		field.m_presentation = shown;
+
+		// A plain column stands for a field of a table, and that field knows its type, its picture and whether it
+		// can be walked into. An expression stands for nothing but itself and stays a leaf.
+		if (projection.m_expr && projection.m_expr->m_kind == ibQueryAstExprKind::Column)
+			for (const ibQueryConstructorField& source : available)
+				if (source.m_name.IsSameAs(written, false)) {
+					field.m_reference       = source.m_reference;
+					field.m_referenceClsid  = source.m_referenceClsid;
+					field.m_type            = source.m_type;
+					field.m_picture         = source.m_picture;
+					break;
+				}
+		out.push_back(std::move(field));
+	}
+
+	// ⭐ …THEN THE TABLES, BY THE BARE NAME. A total over a field the result does not carry is still allowed: it
+	// goes in by NAME, and the lowering resolves it against the sources when no output field claims it (Max,
+	// 2026-08-22: a table's path is no word of totals).
+	for (const ibQuerySource* source : CurrentSources()) {
+		if (source == nullptr || (source->m_name.empty() && !source->m_subquery))
+			continue;
+		const std::vector<ibQueryConstructorField> fields = m_model.GetFields(*source, m_package, m_statement);
+		out.insert(out.end(), fields.begin(), fields.end());
+	}
+	return out;
+}
+
 wxString ibDialogQueryConstructor::ChooseField(const wxString& title)
 {
-	const std::vector<ibQueryConstructorField> fields = AvailableFields();
+	// A totals level is what this asks for, nothing else does — so the result's names, not the tables' paths
+	const std::vector<ibQueryConstructorField> fields = TotalsFields();
 	if (fields.empty()) {
-		wxMessageBox(_("Choose a table first: the fields come from the tables the query reads."),
+		ibMessageBox(_("Choose a table first: the fields come from the tables the query reads."),
 			title, wxOK | wxICON_INFORMATION, this);
 		return wxEmptyString;
 	}
@@ -89,7 +154,7 @@ wxString ibDialogQueryConstructor::ChooseField(const wxString& title)
 	for (const ibQueryConstructorField& field : fields)
 		labels.Add(field.m_presentation);
 
-	const int index = wxGetSingleChoiceIndex(_("Field"), title, labels, this);
+	const int index = ibGetSingleChoiceIndex(_("Field"), title, labels, this);
 	return index >= 0 ? fields[static_cast<size_t>(index)].m_name : ibString();
 }
 
@@ -223,7 +288,7 @@ void ibDialogQueryConstructor::FillPackage()
 		if (m_batchStrip->GetPageCount() != statements) {
 			m_batchStrip->DeleteAllPages();
 			for (size_t i = 0; i < statements; ++i)
-				m_batchStrip->AddPage(new wxPanel(m_batchStrip),
+				m_batchStrip->AddPage(new ibPanel(m_batchStrip),
 					ibString::Format(_("Query %u"), static_cast<unsigned int>(i + 1)));
 		}
 		if (m_statement < statements && m_batchStrip->GetSelection() != static_cast<int>(m_statement))
@@ -405,7 +470,7 @@ void ibDialogQueryConstructor::SyncNotebookPages()
 // A METATYPE'S OWN PICTURE, taken from the type registry — the namespace a source registers under
 // IS the metatype's registered name ("Catalog", "Document", "Constant"), so this needs no table of
 // its own and a metatype added tomorrow is dressed the day it registers.
-ibDialogQueryConstructor::TreeIcons ibDialogQueryConstructor::PrepareIcons(wxTreeCtrl* tree) const
+ibDialogQueryConstructor::TreeIcons ibDialogQueryConstructor::PrepareIcons(ibTreeCtrl* tree) const
 {
 	TreeIcons icons;
 	if (tree == nullptr)
@@ -862,7 +927,7 @@ int ibDialogQueryConstructor::FieldIcon(TreeIcons& icons, const ibQueryConstruct
 // The plain-field picture in a tree's own list. Index 0 BY CONSTRUCTION — PrepareIcons adds it
 // first to a fresh list — which is what lets a lazily-expanded node draw the same icon as the rows
 // that were there from the start, without rebuilding the list and restyling every row.
-static int FieldIconOf(wxTreeCtrl* tree)
+static int FieldIconOf(ibTreeCtrl* tree)
 {
 	return tree != nullptr && tree->GetImageList() != nullptr ? 0 : wxNOT_FOUND;
 }
@@ -874,7 +939,7 @@ void ibDialogQueryConstructor::OnFieldTreeExpanding(wxTreeEvent& event)
 {
 	event.Skip();
 
-	wxTreeCtrl* tree = dynamic_cast<wxTreeCtrl*>(event.GetEventObject());
+	ibTreeCtrl* tree = dynamic_cast<ibTreeCtrl*>(event.GetEventObject());
 	if (tree == m_sourceTree && FillCatalogueFields(event.GetItem()))
 		return;
 	ibQueryExpandFieldNode(tree, event.GetItem(), m_model, FieldIconOf(tree));
@@ -979,7 +1044,7 @@ void ibDialogQueryConstructor::FillSourceTree()
 	FillCatalogue(m_sourceTree, /*withFields*/ true);
 }
 
-void ibDialogQueryConstructor::FillCatalogue(wxTreeCtrl* tree, bool withFields)
+void ibDialogQueryConstructor::FillCatalogue(ibTreeCtrl* tree, bool withFields)
 {
 	// The catalogue is the biggest list in the window and the one rebuilt most often (it changes
 	// whenever a statement is added, moved or re-kinded). Rebuilding it visibly is most of the
@@ -1210,7 +1275,7 @@ void ibDialogQueryConstructor::ExpandStars()
 
 void ibDialogQueryConstructor::FillFieldSources()
 {
-	for (wxTreeCtrl* tree : { m_groupingSource, m_conditionSource, m_orderSource, m_indexSource,
+	for (ibTreeCtrl* tree : { m_groupingSource, m_conditionSource, m_orderSource, m_indexSource,
 	                          m_totalsSource }) {
 		if (tree == nullptr)
 			continue;
@@ -1238,47 +1303,11 @@ void ibDialogQueryConstructor::FillFieldSources()
 		wxTreeItemId tablesUnder = root;
 		if (tree == m_totalsSource) {
 			const ibQuerySelect* select = Current();
-			// ⭐ AND EACH RESULT FIELD KEEPS WHAT IT IS. Built from a name alone, these rows carried
-			// no type and no reference — so the picker had nothing to unfold and drew every one of
-			// them as a plain field, including the references. The description is taken from the
-			// SOURCE field it stands for, which is the same answer the other tabs show.
-			const std::vector<ibQueryConstructorField> available = AvailableFields();
-			if (select != nullptr)
-				for (const ibQueryProjection& projection : select->m_projections) {
-					ibQueryConstructorField field;
-					const wxString written = projection.m_expr ? ibRenderQueryExpr(*projection.m_expr) : ibString();
-					wxString shown = ibQueryOutputName(projection);
-					if (shown.IsEmpty())
-						shown = written;
-					if (shown.IsEmpty())
-						continue;
-					// ⭐ THE ALIAS IS BOTH THE LABEL AND THE PATH — a total is taken over the RESULT,
-					// and the result calls this field by its alias. With a union that is the ONLY
-					// name it has: `Catalog1.Parent` is a path into branch one, which branch two need
-					// not carry at all, while the alias is what every branch is lined up under.
-					//
-					// This row used to carry the SOURCE path, because the engine resolved a TOTALS
-					// dimension against the tables and nothing else — a shim in the dialog standing
-					// in for a missing resolution. The lowering looks the leading segment up among
-					// the output names now (queryLowering.cpp, `throughAlias`), so a dot-walk from an
-					// alias — `Parent.Description` — reaches the same column the qualified path did.
-					field.m_name         = shown;
-					field.m_presentation = shown;
-
-					// A plain column stands for a field of a table, and that field knows its type,
-					// its picture and whether it can be walked into. An expression stands for nothing
-					// but itself and stays a leaf.
-					if (projection.m_expr && projection.m_expr->m_kind == ibQueryAstExprKind::Column)
-						for (const ibQueryConstructorField& source : available)
-							if (source.m_name.IsSameAs(written, false)) {
-								field.m_reference       = source.m_reference;
-								field.m_referenceClsid  = source.m_referenceClsid;
-								field.m_type            = source.m_type;
-								field.m_picture         = source.m_picture;
-								break;
-							}
+			// The result's own fields — those of no table (TotalsFields); the tables follow below, a
+			// heading each, as on the other tabs.
+			for (const ibQueryConstructorField& field : TotalsFields())
+				if (field.m_source.IsEmpty())
 					ibQueryAddFieldNode(tree, root, field, FieldIcon(icons, field), 0, wxEmptyString);
-				}
 			const int allIcon = (select != nullptr) ? KindIcon(icons, KindOfSource(select->m_from)) : -1;
 			tablesUnder = tree->AppendItem(root, _("All fields"), allIcon, allIcon,
 				new ibQueryTreeNode(0, wxEmptyString));
@@ -1327,7 +1356,7 @@ void ibDialogQueryConstructor::FillFieldSources()
 
 // The technical name behind the selected node of one of those trees, or empty when the selection
 // is a table row rather than a field.
-wxString ibDialogQueryConstructor::SelectedFieldOf(wxTreeCtrl* tree) const
+wxString ibDialogQueryConstructor::SelectedFieldOf(ibTreeCtrl* tree) const
 {
 	if (tree == nullptr)
 		return wxEmptyString;
@@ -1341,7 +1370,7 @@ wxString ibDialogQueryConstructor::SelectedFieldOf(wxTreeCtrl* tree) const
 // THE SCOPE RULE, in one place. Grouping, Order, Index and Totals all act on a field tree, and all
 // four mean the same thing by a selection — so the question "which fields did they point at" is
 // answered here rather than four times.
-std::vector<wxString> ibDialogQueryConstructor::SelectedFieldsOf(wxTreeCtrl* tree) const
+std::vector<wxString> ibDialogQueryConstructor::SelectedFieldsOf(ibTreeCtrl* tree) const
 {
 	std::vector<wxString> fields;
 	if (tree == nullptr)
@@ -1604,7 +1633,7 @@ void ibDialogQueryConstructor::FillUnions()
 		if (m_branchStrip->GetPageCount() != branches) {
 			m_branchStrip->DeleteAllPages();
 			for (size_t i = 0; i < branches; ++i)
-				m_branchStrip->AddPage(new wxPanel(m_branchStrip),
+				m_branchStrip->AddPage(new ibPanel(m_branchStrip),
 					ibString::Format(_("Query %u"), static_cast<unsigned int>(i + 1)));
 		}
 		const int wanted = m_unionBranch + 1;
@@ -1707,7 +1736,7 @@ bool ibDialogQueryConstructor::AcceptName(const wxString& name, const wxString& 
 	// bottom of the window while the cell quietly kept its old text — and a person watching the
 	// cell has no reason to look at the far edge of the dialog. The rejection has to arrive where
 	// the eyes already are, and only then does the old value come back.
-	wxMessageBox(ibString::Format(
+	ibMessageBox(ibString::Format(
 			_("'%s' cannot be a %s.\n\nA name is one word: letters, digits and underscores, "
 			  "with no spaces or punctuation."), name, what),
 		_("Query constructor"), wxOK | wxICON_WARNING, this);

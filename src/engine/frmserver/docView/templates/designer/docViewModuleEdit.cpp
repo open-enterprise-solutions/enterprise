@@ -571,11 +571,14 @@ bool ibModuleTextView::Fetch(const ibDataNode& request, ibDataNode& response)
 		return false;
 
 	// THE QUERY CONSTRUCTOR opened over this module's query asks the module's configuration — its sources, a source's
-	// fields and parameters, and a reference's fields one level down (the composer's Expand).
+	// fields and parameters, a reference's fields one level down (the composer's Expand), and the types a temporary
+	// table's field may be given (the composer's Types — the type picker's offer).
 	if (ibFetchQueryConstructorRequest(request, response, creator->GetMetaData()))
 		return true;
-	if (static_cast<ibProtocol::ibView::ibComposer::ibRequest>(request.GetValue<std::int32_t>(ibProtocol::ibView::ibComposer::Kind))
-	    == ibProtocol::ibView::ibComposer::ibRequest::Expand)
+	const auto composerKind =
+		static_cast<ibProtocol::ibView::ibComposer::ibRequest>(request.GetValue<std::int32_t>(ibProtocol::ibView::ibComposer::Kind));
+	if (composerKind == ibProtocol::ibView::ibComposer::ibRequest::Expand
+	    || composerKind == ibProtocol::ibView::ibComposer::ibRequest::Types)
 		return ibFetchComposerRequest(request, response, creator->GetMetaData());
 
 	const ibString text = request.GetValue<ibString>(ibProtocol::ibView::ibModule::Text);

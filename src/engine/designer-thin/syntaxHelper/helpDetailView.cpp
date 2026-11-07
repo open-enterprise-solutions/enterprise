@@ -24,7 +24,7 @@
 #include <wx/uri.h>
 
 ibHelpDetailView::ibHelpDetailView(wxWindow* parent, ibHelpPaneView* pane)
-    : wxPanel(parent, wxID_ANY), m_pane(pane) {
+    : ibPanel(parent, wxID_ANY), m_pane(pane) {
 	m_html = new wxHtmlWindow(this, wxID_ANY);
 
 	auto* sizer = new wxBoxSizer(wxVERTICAL);

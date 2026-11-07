@@ -89,7 +89,13 @@ public:
 
     // wxControlBase shims (see the SEAM note above)
     void Command(wxCommandEvent& event) { ProcessWindowEvent(event); }
+    // set the label without mnemonics: its '&' is shown as it is
+    void SetLabelText(const wxString& text) { SetLabel(wxControl::EscapeMnemonics(text)); }
     int GetAlignment() const { return GetWindowStyle() & wxALIGN_MASK; }
+    // the control's size for a text of this size: a control holding text answers it (DoGetSizeFromTextSize)
+    wxSize GetSizeFromTextSize(int xlen, int ylen = -1) const { return DoGetSizeFromTextSize(xlen, ylen); }
+    wxSize GetSizeFromTextSize(const wxSize& tsize) const { return DoGetSizeFromTextSize(tsize.x, tsize.y); }
+    wxSize GetSizeFromText(const wxString& text) const { return GetSizeFromTextSize(GetTextExtent(text).GetWidth()); }
 
     // wxUniversal-specific methods
 
@@ -129,6 +135,9 @@ public:
 protected:
     // the title is drawn beside the frame, outside the client area: the frame's rect leaves its column out
     virtual wxRect GetBorderRect() const override;
+
+    // wxControlBase shim: a control knows no text of its own - no size from it
+    virtual wxSize DoGetSizeFromTextSize(int WXUNUSED(xlen), int WXUNUSED(ylen) = -1) const { return wxSize(-1, -1); }
 
     // common part of all ctors
     void Init();

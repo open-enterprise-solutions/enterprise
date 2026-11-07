@@ -325,10 +325,17 @@ protected:
 
     // calc the size from the text extent
     virtual wxSize DoGetBestClientSize() const override;
+    virtual wxSize DoGetSizeFromTextSize(int xlen, int ylen = -1) const override;
 
     // implements Set/ChangeValue()
     virtual void DoSetValue(const wxString& value, int flags = 0) override;
     virtual wxString DoGetValue() const override;
+
+    // SEAM vs univ: THE TEXT OF wxEVT_TEXT. wxCommandEvent::GetString() asks the window for it (WXGetTextEntry), and
+    // only wx's text entry answers - this field is not one, and its events came with an empty string to a handler
+    // reading the text from the event (the configuration tree's search, the help's). Its own get it here, before any
+    // handler.
+    virtual bool TryBefore(wxEvent& event) override;
 
     // common part of all ctors
     void Init();

@@ -10,11 +10,12 @@
 #include "frmclient/backend/system/value/valueSpreadsheet.h"       // …and an alignment, the sheet's own enumeration
 #include "core/description/spreadsheetDescription.h"              // ibDefaultSpreadsheetFont() — the font a font is chosen from
 #include "gui/typeconv.h"                               // WxColourToColour — a row's grey is the model view's data
+#include "core/diagnostics/journal.h"                   // ibJournalInfo — a value chosen, and what the cell commits
 
-#include <wx/choicdlg.h>   // wxGetSingleChoiceIndex — an alignment is one of three words
+#include "gui/univ/choiceDialog.h"   // ibGetSingleChoiceIndex — an alignment is one of three words
 #include <wx/colordlg.h>   // wxColourDialog — a colour is chosen in the system's window
 #include <wx/fontdlg.h>    // wxFontDialog — …and a font
-#include <wx/dialog.h>
+#include "gui/univ/dialog.h"
 #include <wx/settings.h>   // wxSystemSettings — an unticked value reads grey
 #include <wx/sizer.h>
 
@@ -94,6 +95,8 @@ public:
 
 		wxString text = variant.GetString();
 		text.Trim(true).Trim(false);
+		ibJournalInfo(wxT("ui"), wxT("appearance: the cell commits \"%s\" to %s, which keeps \"%s\""), text,
+			ibAppearanceParameterCaption(parameter).ToWxString(), kept.ToWxString());
 		// A COLOUR, A FONT, AN ALIGNMENT ARE CHOSEN, NOT TYPED — their "..." opens their window. Emptied (the
 		// cell's "×"), the parameter is forgotten.
 		if (!IsTyped(parameter)) {
@@ -134,11 +137,11 @@ private:
 	bool                     m_readOnly;
 };
 
-class ibDialogAppearance : public wxDialog {
+class ibDialogAppearance : public ibDialog {
 public:
 	ibDialogAppearance(wxWindow* parent, const ibAppearanceDescription& appearance, const ibMetaData* metaData,
 		bool readOnly)
-		: wxDialog(parent, wxID_ANY, _("Appearance"), wxDefaultPosition, wxDefaultSize,
+		: ibDialog(parent, wxID_ANY, _("Appearance"), wxDefaultPosition, wxDefaultSize,
 			wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
 		  m_edited(appearance), m_metaData(metaData), m_readOnly(readOnly)
 	{
@@ -185,6 +188,8 @@ private:
 		if (!ibAppearanceModel::IsRow(row))
 			return false;
 		const ibAppearanceParameter parameter = ibAppearanceModel::ParameterAt(row);
+		ibJournalInfo(wxT("ui"), wxT("appearance: the \"...\" of row %u, %s"), row,
+			ibAppearanceParameterCaption(parameter).ToWxString());
 
 		switch (parameter) {
 		case ibAppearanceParameter::Format: {
@@ -256,7 +261,7 @@ private:
 			for (const ibSpreadsheetAlignmentHorz one : offered)
 				labels.Add(ibValue::CreateEnumObject<ibValueEnumSpreadsheetHorizontalAlignment>(one).GetString());
 			const int current = labels.Index(KeptText(m_edited, parameter));
-			const int chosen = wxGetSingleChoiceIndex(ibAppearanceParameterCaption(parameter), _("Appearance"),
+			const int chosen = ibGetSingleChoiceIndex(ibAppearanceParameterCaption(parameter), _("Appearance"),
 				labels, current != wxNOT_FOUND ? current : 0, this);
 			if (chosen < 0 || chosen >= static_cast<int>(labels.size()))
 				return false;
@@ -271,6 +276,8 @@ private:
 	bool Choose(ibAppearanceParameter parameter, const ibValue& value, wxString& text) {
 		m_edited.Say(parameter, true, ibStoreValue(value));
 		text = KeptText(m_edited, parameter);
+		ibJournalInfo(wxT("ui"), wxT("appearance: %s chosen, kept as \"%s\", ticked %d"),
+			ibAppearanceParameterCaption(parameter).ToWxString(), text, IsTicked(m_edited, parameter) ? 1 : 0);
 		m_view->Refresh();
 		return true;
 	}

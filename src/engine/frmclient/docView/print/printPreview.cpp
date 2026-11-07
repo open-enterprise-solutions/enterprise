@@ -5,7 +5,7 @@
 
 #include "printPreview.h"
 
-#include <wx/checkbox.h>
+#include "gui/univ/ctrl/checkBox.h"
 #include <wx/sizer.h>
 
 #include <functional>
@@ -43,7 +43,7 @@ public:
 		if (!m_canFitToPageWidth)
 			return;
 
-		wxCheckBox* box = new wxCheckBox(this, wxID_ANY, _("Fit to page width"));
+		ibCheckBox* box = new ibCheckBox(this, wxID_ANY, _("Fit to page width"));
 		box->SetValue(m_fitToPageWidth);
 		box->SetToolTip(_("Shrink a table wider than the page so that it is printed on one page across"));
 		box->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent& event) { m_onFitToPageWidth(event.IsChecked()); });

@@ -22,8 +22,8 @@
 
 class wxAuiToolBar;
 class wxDatePickerCtrl;
-class wxChoice;
-class wxTextCtrl;
+class ibChoice;
+class ibTextCtrl;
 class wxCheckBox;
 class wxTimer;
 class ibAuditLogModel;
@@ -161,11 +161,11 @@ private:
 	// Filter strip
 	wxDatePickerCtrl* m_fromDate     = nullptr;
 	wxDatePickerCtrl* m_toDate       = nullptr;
-	wxChoice*         m_levelChoice  = nullptr;
-	wxChoice*         m_sourceChoice = nullptr;
-	wxTextCtrl*       m_userText     = nullptr;
-	wxTextCtrl*       m_searchText   = nullptr;
-	wxCheckBox*       m_tailCheck    = nullptr;
+	ibChoice*         m_levelChoice  = nullptr;
+	ibChoice*         m_sourceChoice = nullptr;
+	ibTextCtrl*       m_userText     = nullptr;
+	ibTextCtrl*       m_searchText   = nullptr;
+	wxCheckBox*       m_tailCheck    = nullptr;   // the toolbar's (wxAuiToolBar::AddControl takes a wxControl)
 
 	// AuiToolBar + DataView shell (mirrors ibDialogUserList).
 	wxAuiToolBar*    m_toolbarMain  = nullptr;

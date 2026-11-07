@@ -23,7 +23,7 @@ bool ibAppLauncher::DoOnInit()
 	// so no GUI library dependency was added — launcher still links
 	// only backend.lib + wxlibs.
 	ibApplicationInstance::CreateAppDataEnv(ibRunMode::eLAUNCHER_MODE);
-	m_launcher = new ibFrameLauncher(nullptr, wxID_ANY);
+	m_launcher = new ibDialogLauncher(nullptr, wxID_ANY);
 
 	m_launcher->Show();
 	return true;

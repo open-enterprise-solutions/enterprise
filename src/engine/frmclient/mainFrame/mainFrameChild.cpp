@@ -6,7 +6,7 @@
 #include "mainFrameChild.h"
 
 wxIMPLEMENT_CLASS(ibAuiDocChildFrame, wxAuiMDIChildFrame);
-wxIMPLEMENT_CLASS(ibDialogDocChildFrame, wxDialog);
+wxIMPLEMENT_CLASS(ibDialogDocChildFrame, ibDialog);
 
 #include "mainFrame.h"
 
@@ -40,6 +40,18 @@ ibDialogDocChildFrame::~ibDialogDocChildFrame()
 	SetView(nullptr);
 	view->Close(false);
 	delete view;
+}
+
+// The others disabled before it is shown, as the progress dialog disables them (wxGenericProgressDialog), and enabled
+// again before it is hidden, as a modal enables them (wxDialog::Show): hidden first, Windows activates another window, one
+// still enabled. Deleted shown — with the modal it is over — they are enabled as it goes.
+bool ibDialogDocChildFrame::Show(bool show)
+{
+	if (show && m_winDisabler == nullptr)
+		m_winDisabler = std::make_unique<wxWindowDisabler>(this);
+	else if (!show)
+		m_winDisabler.reset();
+	return ibDocChildFrameAny::Show(show);
 }
 
 #if wxUSE_MENUS

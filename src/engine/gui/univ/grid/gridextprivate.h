@@ -265,13 +265,13 @@ private:
 };
 
 // common base class for various grid subwindows
-class ibGridSubwindow : public wxWindow
+class ibGridSubwindow : public ibWindow
 {
 public:
 	ibGridSubwindow(ibGrid* owner,
 		int additionalStyle = 0,
 		const wxString& name = wxASCII_STR(wxPanelNameStr))
-		: wxWindow(owner, wxID_ANY,
+		: ibWindow(owner, wxID_ANY,
 			wxDefaultPosition, wxDefaultSize,
 			wxBORDER_NONE | additionalStyle,
 			name)
@@ -284,6 +284,10 @@ public:
 		//  them — the space below the last row, the strip's own margins. Denied that fill they
 		//  showed an uninitialised buffer: black bands across the headings. Whoever tries this again
 		//  must give each strip its own Clear() first, in its own colour.)
+		//
+		// SEAM vs wx: ibWindow sets wxBG_STYLE_PAINT for every window (its Init) - taken back for the strips, whose
+		// fill is then ibWindow's own erase, in the strip's own colour (SetOwnBackgroundColour, ibGrid::Create)
+		SetBackgroundStyle(wxBG_STYLE_ERASE);
 	}
 
 	virtual wxWindow* GetMainWindowOfCompositeControl() wxOVERRIDE { return m_owner; }

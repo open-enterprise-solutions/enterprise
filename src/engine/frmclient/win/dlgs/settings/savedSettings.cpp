@@ -3,8 +3,10 @@
 #include "frmclient/backend/composition/dataComposer.h"
 
 #include <wx/sizer.h>
-#include <wx/textdlg.h>
-#include <wx/msgdlg.h>
+#include "gui/univ/messageDialog.h"
+#include "gui/univ/ctrl/button.h"
+#include "gui/univ/dialog.h"
+#include "gui/univ/textEntryDialog.h"
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -31,7 +33,7 @@ ibDialogSavedSettings::ibDialogSavedSettings(wxWindow* parent, ibDataComposer& c
                                              const ibMetaData* metaData)
 	// ⚠ NO FromDIP IN THIS LIST. It is a method of the window being constructed — calling it before
 	// the base has run asks a wxWindow that does not exist yet. The size is scaled below instead.
-	: wxDialog(parent, wxID_ANY,
+	: ibDialog(parent, wxID_ANY,
 	           mode == Mode::Save ? _("Save settings") : _("Restore settings"),
 	           wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
 	  m_composer(composer), m_mode(mode), m_category(category), m_objectKey(objectKey), m_metaData(metaData)
@@ -42,7 +44,7 @@ ibDialogSavedSettings::ibDialogSavedSettings(wxWindow* parent, ibDataComposer& c
 
 	// ONE COLUMN, NO HEADER — the entries are names, and a header over a single column of names says
 	// nothing the window's own title has not said already.
-	m_list = new wxListCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+	m_list = new ibListCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxLC_REPORT | wxLC_SINGLE_SEL | wxLC_NO_HEADER);
 	m_list->InsertColumn(0, wxEmptyString, wxLIST_FORMAT_LEFT, FromDIP(290));
 
@@ -52,7 +54,7 @@ ibDialogSavedSettings::ibDialogSavedSettings(wxWindow* parent, ibDataComposer& c
 	wxBoxSizer* buttons = new wxBoxSizer(wxVERTICAL);
 
 	// THE ACT THE WINDOW IS FOR, first and named after itself.
-	m_btnMain = new wxButton(this, wxID_ANY, m_mode == Mode::Save ? _("Save") : _("Restore"));
+	m_btnMain = new ibButton(this, wxID_ANY, m_mode == Mode::Save ? _("Save") : _("Restore"));
 	buttons->Add(m_btnMain, 0, wxEXPAND | wxBOTTOM, FromDIP(4));
 
 	// …and, when saving, somewhere to put it that is not on the shelf yet.
@@ -62,7 +64,7 @@ ibDialogSavedSettings::ibDialogSavedSettings(wxWindow* parent, ibDataComposer& c
 		// (the button reads as "New" followed by three mojibake bytes). Every other button in the
 		// tree spells it with three dots for the same
 		// reason — comments may hold anything, literals may not.
-		m_btnNew = new wxButton(this, wxID_ANY, _("New..."));
+		m_btnNew = new ibButton(this, wxID_ANY, _("New..."));
 		buttons->Add(m_btnNew, 0, wxEXPAND | wxBOTTOM, FromDIP(4));
 	}
 
@@ -72,11 +74,11 @@ ibDialogSavedSettings::ibDialogSavedSettings(wxWindow* parent, ibDataComposer& c
 	//
 	// Its caption states the ACT, not the state, because a person reads a button to find out what
 	// pressing it does; WHICH entry currently carries the mark is said by the bold row.
-	m_btnDefault = new wxButton(this, wxID_ANY, _("Restore on open"));
+	m_btnDefault = new ibButton(this, wxID_ANY, _("Restore on open"));
 	buttons->Add(m_btnDefault, 0, wxEXPAND | wxBOTTOM, FromDIP(12));
 
-	m_btnRename = new wxButton(this, wxID_ANY, _("Rename..."));
-	m_btnRemove = new wxButton(this, wxID_ANY, _("Delete"));
+	m_btnRename = new ibButton(this, wxID_ANY, _("Rename..."));
+	m_btnRemove = new ibButton(this, wxID_ANY, _("Delete"));
 	buttons->Add(m_btnRename, 0, wxEXPAND | wxBOTTOM, FromDIP(4));
 	buttons->Add(m_btnRemove, 0, wxEXPAND | wxBOTTOM, FromDIP(4));
 
@@ -159,7 +161,7 @@ bool ibDialogSavedSettings::SaveInto(const ibGuid& id, const wxString& name)
 	// ⭐ THE ID DECIDES: empty = a new entry with a new identity; an existing one = that entry is
 	// rewritten and KEEPS its identity, so the default mark goes on pointing at the same thing.
 	if (!ibSaveComposerSettings(m_category, m_objectKey, id, name, m_composer).isValid()) {
-		wxMessageBox(_("The settings could not be saved."), _("Save settings"), wxOK | wxICON_ERROR, this);
+		ibMessageBox(_("The settings could not be saved."), _("Save settings"), wxOK | wxICON_ERROR, this);
 		return false;
 	}
 	m_changed = true;
@@ -182,7 +184,7 @@ bool ibDialogSavedSettings::ActOnSelected()
 		// A REFUSAL IS SPOKEN. The row may hold a value whose type this configuration no longer has —
 		// the read says so and the row stays; the person is told rather than left pressing an entry
 		// that does nothing.
-		wxMessageBox(ibString::Format(_("The settings named \"%s\" could not be restored."), m_entries[at].m_name),
+		ibMessageBox(ibString::Format(_("The settings named \"%s\" could not be restored."), m_entries[at].m_name),
 			_("Saved settings"), wxOK | wxICON_ERROR, this);
 		return false;
 	}
@@ -206,7 +208,7 @@ void ibDialogSavedSettings::OnMainAct(wxCommandEvent& WXUNUSED(event))
 
 void ibDialogSavedSettings::OnNew(wxCommandEvent& WXUNUSED(event))
 {
-	const wxString name = wxGetTextFromUser(_("Settings name"), _("Save settings"), wxEmptyString, this);
+	const wxString name = ibGetTextFromUser(_("Settings name"), _("Save settings"), wxEmptyString, this);
 	if (name.IsEmpty())
 		return;   // cancelled, or named nothing — a nameless shelf entry is hard to pick back
 
@@ -214,7 +216,7 @@ void ibDialogSavedSettings::OnNew(wxCommandEvent& WXUNUSED(event))
 	// otherwise two entries wear one caption and only their ids tell them apart.
 	for (const ibComposerSettingsEntry& entry : m_entries)
 		if (entry.m_name.IsSameAs(name, false)) {
-			if (wxMessageBox(ibString::Format(_("Settings named \"%s\" already exist. Replace them?"), name),
+			if (ibMessageBox(ibString::Format(_("Settings named \"%s\" already exist. Replace them?"), name),
 					_("Save settings"), wxYES_NO | wxICON_QUESTION, this) != wxYES)
 				return;
 			if (SaveInto(entry.m_id, name))
@@ -236,7 +238,7 @@ void ibDialogSavedSettings::OnDefault(wxCommandEvent& WXUNUSED(event))
 	// clears it, so "open it the way the author left it" needs no button of its own.
 	const bool already = m_entries[at].m_id == m_defaultId;
 	if (!ibSetDefaultComposerSettings(m_objectKey, already ? wxNullGuid : m_entries[at].m_id)) {
-		wxMessageBox(_("The default settings could not be changed."), _("Saved settings"), wxOK | wxICON_ERROR, this);
+		ibMessageBox(_("The default settings could not be changed."), _("Saved settings"), wxOK | wxICON_ERROR, this);
 		return;
 	}
 
@@ -250,7 +252,7 @@ void ibDialogSavedSettings::OnRename(wxCommandEvent& WXUNUSED(event))
 	if (at == wxNOT_FOUND || static_cast<size_t>(at) >= m_entries.size())
 		return;
 
-	const wxString renamed = wxGetTextFromUser(_("New name"), _("Rename settings"), m_entries[at].m_name, this);
+	const wxString renamed = ibGetTextFromUser(_("New name"), _("Rename settings"), m_entries[at].m_name, this);
 	if (renamed.IsEmpty() || renamed == m_entries[at].m_name)
 		return;
 
@@ -258,7 +260,7 @@ void ibDialogSavedSettings::OnRename(wxCommandEvent& WXUNUSED(event))
 	// touches the composer — a person renaming the entry they are NOT using must not have it applied
 	// to them as a side effect.
 	if (!ibRenameComposerSettings(m_category, m_objectKey, m_entries[at].m_id, renamed)) {
-		wxMessageBox(_("The settings could not be renamed."), _("Rename settings"), wxOK | wxICON_ERROR, this);
+		ibMessageBox(_("The settings could not be renamed."), _("Rename settings"), wxOK | wxICON_ERROR, this);
 		return;
 	}
 
@@ -272,12 +274,12 @@ void ibDialogSavedSettings::OnRemove(wxCommandEvent& WXUNUSED(event))
 	if (at == wxNOT_FOUND || static_cast<size_t>(at) >= m_entries.size())
 		return;
 
-	if (wxMessageBox(ibString::Format(_("Delete the settings named \"%s\"?"), m_entries[at].m_name),
+	if (ibMessageBox(ibString::Format(_("Delete the settings named \"%s\"?"), m_entries[at].m_name),
 			_("Delete settings"), wxYES_NO | wxICON_QUESTION, this) != wxYES)
 		return;
 
 	if (!ibRemoveComposerSettings(m_category, m_objectKey, m_entries[at].m_id)) {
-		wxMessageBox(_("The settings could not be deleted."), _("Delete settings"), wxOK | wxICON_ERROR, this);
+		ibMessageBox(_("The settings could not be deleted."), _("Delete settings"), wxOK | wxICON_ERROR, this);
 		return;
 	}
 

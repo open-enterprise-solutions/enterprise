@@ -197,7 +197,7 @@ class FRMCLIENT_API ibGridEditor : public ibGrid {
 		virtual wxString GetValue() const override;
 
 	protected:
-		wxTextCtrl* Text() const { return (wxTextCtrl*)m_control; }
+		ibTextCtrl* Text() const { return (ibTextCtrl*)m_control; }
 
 		// parts of our virtual functions reused by the derived classes
 		void DoCreate(wxWindow* parent, wxWindowID id, wxEvtHandler* evtHandler,
@@ -861,7 +861,7 @@ private:
 	// while composing, its text says which.
 	class wxWindow*             m_composeState = nullptr;
 	class wxActivityIndicator*  m_composeSpinner = nullptr;
-	class wxStaticText*         m_composeText = nullptr;
+	class ibStaticText*         m_composeText = nullptr;
 
 	// The rows waiting for their automatic height (RequestAutoRowHeights) — one span, widened as rows
 	// are marked; -1 when none are.

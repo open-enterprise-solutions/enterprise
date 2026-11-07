@@ -10,7 +10,7 @@
 #include <wx/cmdline.h>
 #include <wx/dirdlg.h>
 #include <wx/image.h>
-#include <wx/msgdlg.h>
+#include "gui/univ/messageDialog.h"
 #include <wx/stdpaths.h>
 
 #include "frmclient/artProvider/splash/splashLogo.h"   // the splash's picture, the desktop's
@@ -110,7 +110,7 @@ bool ibAppDesigner::DoOnInit()
 		auto server = std::make_unique<ibProtocolConnectionServer>();
 		if (!server->Open(appData->m_strAddress, appData->m_strTrusted, error)) {
 			splash.reset();
-			wxMessageBox(error, _("OES Designer - startup error"), wxOK | wxICON_ERROR);
+			ibMessageBox(error, _("OES Designer - startup error"), wxOK | wxICON_ERROR);
 			return false;
 		}
 		connection = std::move(server);
@@ -134,7 +134,7 @@ bool ibAppDesigner::DoOnInit()
 		auto file = std::make_unique<ibProtocolConnectionFile>();
 		if (!file->Open(request.Write(), error)) {
 			splash.reset();
-			wxMessageBox(error + wxT("\n\n") + (appData->m_strFile.IsEmpty()
+			ibMessageBox(error + wxT("\n\n") + (appData->m_strFile.IsEmpty()
 				? appData->m_strServer + wxT(" / ") + appData->m_strDatabase : appData->m_strFile),
 				_("OES Designer - startup error"), wxOK | wxICON_ERROR);
 			return false;
@@ -143,7 +143,7 @@ bool ibAppDesigner::DoOnInit()
 	}
 	else {
 		splash.reset();
-		wxMessageBox(
+		ibMessageBox(
 			_("Cannot start designer-thin.exe - no infobase specified.\n\n"
 			  "Provide one of:\n"
 			  "  --address=oes://<server>[:port]/<base>   (an application server; oess:// over TLS)\n"

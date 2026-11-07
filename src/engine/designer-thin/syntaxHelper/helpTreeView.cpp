@@ -34,8 +34,8 @@ struct EntryIdData : public wxTreeItemData {
 } // namespace
 
 ibHelpTreeView::ibHelpTreeView(wxWindow* parent, ibHelpPaneView* pane)
-    : wxPanel(parent, wxID_ANY), m_pane(pane) {
-	m_tree = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+    : ibPanel(parent, wxID_ANY), m_pane(pane) {
+	m_tree = new ibTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 	                          wxTR_DEFAULT_STYLE | wxTR_HIDE_ROOT |
 	                          wxTR_SINGLE);
 

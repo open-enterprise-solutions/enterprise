@@ -94,6 +94,7 @@ public:
     wxString GetValue() const;
     void SetValue(const wxString& value);
     void ChangeValue(const wxString& value);
+    void SetInsertionPointEnd();
 
     bool IsEditable() const { return !HasFlag(wxCB_READONLY); }
 

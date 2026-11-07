@@ -7,7 +7,7 @@
 
 void ibValueChartBox::Create(wxWindow* parent, const ibProtocolNode& /*node*/)
 {
-	m_chartBox = new wxPanel(parent, wxID_ANY);
+	m_chartBox = new ibPanel(parent, wxID_ANY);
 }
 
 void ibValueChartBox::Update(const ibProtocolNode& node)

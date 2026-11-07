@@ -199,9 +199,10 @@ private:
 		const ibDataNode& params);
 
 	// The work on the client's session worker, waited for until it settles; then the frame drawn into `result` —
-	// numbered, and the patch from the frame of number `since` when that is the last one the client was answered.
+	// numbered, and the patch from the frame of number `since` when that is the last one the client was answered; an
+	// event's `call` — a field's text it committed is in the patch where the server shows another (KeepCommitted).
 	bool Run(Client& client, std::function<void(ibClientFrame*)> work, std::int32_t since, ibDataNode& result,
-		ibProtocol::ibRefusal& refusal, ibString& error);
+		ibProtocol::ibRefusal& refusal, ibString& error, const ibDataNode& call = ibDataNode());
 	void Settle(Client& client);
 	// The frame: what it is (`state`, what a patch is made of) and what happened since the last answer (`events`:
 	// the messages, a clear) — drawn apart.

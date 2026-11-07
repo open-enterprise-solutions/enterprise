@@ -1,12 +1,12 @@
 #ifndef _FRMCLIENT_KIND_SELECTOR_H__
 #define _FRMCLIENT_KIND_SELECTOR_H__
 
-#include <wx/dialog.h>
-#include <wx/button.h>
+#include "gui/univ/dialog.h"
+#include "gui/univ/ctrl/button.h"
 #include <wx/sizer.h>
 #include <wx/radiobox.h>
-#include <wx/stattext.h>
-#include <wx/textctrl.h>
+#include "gui/univ/ctrl/staticText.h"
+#include "gui/univ/ctrl/textCtrl.h"
 
 #include <vector>
 
@@ -18,16 +18,16 @@
 // Comment, and a kind per child: its Id, Caption and the Name the object takes with it; the desktop's read them of the
 // configuration. The server puts the answer on the object, as the desktop's OK put it there. Here, as the desktop keeps
 // it; asked by the designer's frame (ibFrontendMainFrameDesigner::ShowRequest).
-class FRMCLIENT_API ibDialogSelectKind : public wxDialog {
+class FRMCLIENT_API ibDialogSelectKind : public ibDialog {
 
-	wxStaticText* m_staticTextName;
-	wxStaticText* m_staticTextSynonym;
-	wxStaticText* m_staticTextComment;
-	wxTextCtrl* m_textCtrlName;
-	wxTextCtrl* m_textCtrlSynonym;
-	wxTextCtrl* m_textCtrlComment;
-	wxButton* m_sdbSizerOK;
-	wxButton* m_sdbSizerCancel;
+	ibStaticText* m_staticTextName;
+	ibStaticText* m_staticTextSynonym;
+	ibStaticText* m_staticTextComment;
+	ibTextCtrl* m_textCtrlName;
+	ibTextCtrl* m_textCtrlSynonym;
+	ibTextCtrl* m_textCtrlComment;
+	ibButton* m_sdbSizerOK;
+	ibButton* m_sdbSizerCancel;
 
 	struct ibChoiceData {
 		wxString m_name;

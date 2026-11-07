@@ -12,9 +12,9 @@
 #include <wx/sizer.h>
 
 ibHelpIndexView::ibHelpIndexView(wxWindow* parent, ibHelpPaneView* pane)
-    : wxPanel(parent, wxID_ANY), m_pane(pane) {
-	m_filter = new wxTextCtrl(this, wxID_ANY);
-	m_list   = new wxListBox(this, wxID_ANY);
+    : ibPanel(parent, wxID_ANY), m_pane(pane) {
+	m_filter = new ibTextCtrl(this, wxID_ANY);
+	m_list   = new ibListBox(this, wxID_ANY);
 
 	auto* sizer = new wxBoxSizer(wxVERTICAL);
 	sizer->Add(m_filter, 0, wxEXPAND | wxALL, 4);

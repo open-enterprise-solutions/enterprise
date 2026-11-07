@@ -5,10 +5,15 @@
 
 #include "frmclient/backend/metaCollection/partial/commonObject.h"
 #include "gui/univ/dataview/dataview.h"
+#include "gui/univ/ctrl/button.h"
+#include "gui/univ/ctrl/checkBox.h"
+#include "gui/univ/ctrl/textCtrl.h"
+#include "gui/univ/ctrl/choice.h"
+#include "gui/univ/dialog.h"
 
 class ibTextCtrl;
 
-class ibDialogPredefinedEditor : public wxDialog {
+class ibDialogPredefinedEditor : public ibDialog {
 
 	enum {
 		wxID_TOOL_ADD = wxID_HIGHEST + 1,
@@ -137,7 +142,7 @@ class ibDialogPredefinedEditor : public wxDialog {
 	// told apart, a parent where items stand under one another, a code where there is one); a row per attribute, its
 	// editor chosen by what the attribute holds (a closed set — a list; a flag — a tick; a type — the type picker; the
 	// rest typed); a table per section whose rows the item owns. It knows no kind: a kind described tomorrow shows here.
-	class ibDialogPredefinedItem : public wxDialog {
+	class ibDialogPredefinedItem : public ibDialog {
 	public:
 
 		// `itemGuid` — the item it writes (none: a new one); `source` — the item it starts from (none: an empty one): the
@@ -158,21 +163,21 @@ class ibDialogPredefinedEditor : public wxDialog {
 		// as the person picked it (a type), kept as it came where the editor shows it unchanged.
 		struct ibAttributeEditor {
 			const ibPredefinedAttributeDescription* m_attribute = nullptr;
-			wxCheckBox* m_check = nullptr;              // a flag
+			ibCheckBox* m_check = nullptr;              // a flag
 			ibTextCtrl* m_picked = nullptr;             // a value picked through its "...": a type, or one of the closed set
-			wxTextCtrl* m_text = nullptr;               // a value typed
+			ibTextCtrl* m_text = nullptr;               // a value typed
 			std::optional<ibPredefinedCellDescription> m_held;
 		};
 
 		// ONE SECTION'S TABLE — whether the item declares its rows, the rows, and what each row held as it came.
 		struct ibSectionEditor {
 			const ibPredefinedTableDescription* m_table = nullptr;
-			wxCheckBox* m_declared = nullptr;
+			ibCheckBox* m_declared = nullptr;
 			ibDataViewListCtrl* m_rows = nullptr;
-			wxButton* m_add = nullptr;
-			wxButton* m_remove = nullptr;
-			wxButton* m_up = nullptr;
-			wxButton* m_down = nullptr;
+			ibButton* m_add = nullptr;
+			ibButton* m_remove = nullptr;
+			ibButton* m_up = nullptr;
+			ibButton* m_down = nullptr;
 			ibPredefinedRowDescriptionVector m_held;   // row N as it came; a row added holds nothing
 		};
 
@@ -195,19 +200,19 @@ class ibDialogPredefinedEditor : public wxDialog {
 		ibPredefinedDescription m_described;
 		bool m_readOnly = false;
 
-		wxCheckBox* m_checkFolder = nullptr;
-		wxChoice* m_choiceParent = nullptr;
+		ibCheckBox* m_checkFolder = nullptr;
+		ibChoice* m_choiceParent = nullptr;
 		// m_parentOptions[i] matches choice entry i; index 0 is "<none>" = nullptr.
 		std::vector<wxObjectDataPtr<ibPredefinedItem>> m_parentOptions;
 
-		wxTextCtrl* m_textName = nullptr;
-		wxTextCtrl* m_textCode = nullptr;
-		wxTextCtrl* m_textDescription = nullptr;
+		ibTextCtrl* m_textName = nullptr;
+		ibTextCtrl* m_textCode = nullptr;
+		ibTextCtrl* m_textDescription = nullptr;
 
 		std::vector<std::unique_ptr<ibAttributeEditor>> m_attributes;
 		std::vector<std::unique_ptr<ibSectionEditor>> m_sections;
 
-		wxButton* m_sdbSizerOK = nullptr;
+		ibButton* m_sdbSizerOK = nullptr;
 	};
 
 public:
@@ -215,7 +220,7 @@ public:
 	// full ctor
 	ibDialogPredefinedEditor(wxWindow* parent, ibValueMetaObjectRecordDataHierarchyMutableRef* valueMetaObjectHierarchy)
 		:
-		wxDialog(parent, wxID_ANY, _("Predefined values editor"),
+		ibDialog(parent, wxID_ANY, _("Predefined values editor"),
 			wxDefaultPosition, wxSize(500, 300), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
 		m_tableModelStore(nullptr)
 	{

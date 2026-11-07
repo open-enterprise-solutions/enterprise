@@ -3,15 +3,15 @@
 
 #include <functional>
 
-#include <wx/dialog.h>
-#include <wx/treectrl.h>
+#include "gui/univ/dialog.h"
+#include "gui/univ/ctrl/treeCtrl.h"
 
 #include "protocol/protocolNode.h"
 
 // ALL FUNCTIONS — the objects this person may open, grouped by kind: the desktop's dialog (enterprise/win/dlg), drawn
 // from the server's schema (frmserver/schema/runtime/allFunctions.cpp) instead of reading the configuration itself.
 // An item opened is the schema's command, made by the window (`open`); the dialog goes when it is done.
-class ibDialogFunctionAll : public wxDialog {
+class ibDialogFunctionAll : public ibDialog {
 public:
 
 	using Open = std::function<bool(long long item)>;
@@ -29,7 +29,7 @@ protected:
 private:
 	void BuildTree(const ibProtocolNode& shown);
 
-	wxTreeCtrl* m_treeCtrlElements;
+	ibTreeCtrl* m_treeCtrlElements;
 	Open        m_open;
 };
 

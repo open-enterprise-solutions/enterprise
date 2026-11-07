@@ -20,8 +20,13 @@
 #include <wx/wx.h>
 
 #include "frmclient/backend/mcp/mcpServer.h"   // ibMcpSettings — the value this page edits
+#include "gui/univ/ctrl/staticText.h"
+#include "gui/univ/ctrl/button.h"
+#include "gui/univ/ctrl/checkBox.h"
+#include "gui/univ/ctrl/textCtrl.h"
+#include "gui/univ/panel.h"
 
-class FRMCLIENT_API ibPanelMcpSettings : public wxPanel
+class FRMCLIENT_API ibPanelMcpSettings : public ibPanel
 {
 
 public:
@@ -72,7 +77,7 @@ private:
 	void RefreshHandout();
 
 	// One place that puts a field on the clipboard, so both buttons cannot drift apart.
-	void CopyOut(const wxTextCtrl* from);
+	void CopyOut(const ibTextCtrl* from);
 
 	// The button's label and the sentence beside it, written together — two places saying whether
 	// it is running is two places that can end up saying different things.
@@ -87,18 +92,18 @@ private:
 		ID_McpRun,
 	};
 
-	wxCheckBox* m_enabled     = nullptr;
-	wxTextCtrl* m_addressCtrl = nullptr;
-	wxTextCtrl* m_portCtrl    = nullptr;
+	ibCheckBox* m_enabled     = nullptr;
+	ibTextCtrl* m_addressCtrl = nullptr;
+	ibTextCtrl* m_portCtrl    = nullptr;
 
 	// The easy road and the manual one — a one-line command to paste into an assistant's
 	// terminal, and the configuration block for a client that takes a file instead.
-	wxTextCtrl* m_commandCtrl  = nullptr;
-	wxTextCtrl* m_endpointCtrl = nullptr;
+	ibTextCtrl* m_commandCtrl  = nullptr;
+	ibTextCtrl* m_endpointCtrl = nullptr;
 
 	// Acting on it right now, and saying what it is doing.
-	wxButton*     m_runButton  = nullptr;
-	wxStaticText* m_stateLabel = nullptr;
+	ibButton*     m_runButton  = nullptr;
+	ibStaticText* m_stateLabel = nullptr;
 
 	// What the server last reported. Held because the handout is rebuilt whenever the settings
 	// change too, and it must not lose the half that only the server can answer.

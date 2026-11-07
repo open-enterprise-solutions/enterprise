@@ -1136,7 +1136,7 @@ ibProtocolNode ibValueCommandBar::FindRows(const ibProtocolNode& control) const
 	return control.FindChild(ibProtocol::ibView::ibFormDesigner::CommandBar);
 }
 
-void ibValueCommandBar::PrepareDefaultMenu(wxMenu* menu) const
+void ibValueCommandBar::PrepareDefaultMenu(ibMenu* menu) const
 {
 	menu->Append(kMenuAddCommand, _("Add command"));
 	if (m_formHandler->PasteEntry(oes_clipboard_command_bar_item).IsNode()) {
@@ -1200,7 +1200,7 @@ ibProtocolNode ibValueCommandBarItem::FindRows(const ibProtocolNode& control) co
 }
 
 // Same items / icons / hotkeys as the control popup menu (ibVisualEditorItemPopupMenu).
-void ibValueCommandBarItem::PrepareDefaultMenu(wxMenu* menu) const
+void ibValueCommandBarItem::PrepareDefaultMenu(ibMenu* menu) const
 {
 	wxMenuItem* item = nullptr;
 	item = menu->Append(kMenuCut,   _("Cut\tCtrl+X"));   item->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_CUT, wxART_MENU));

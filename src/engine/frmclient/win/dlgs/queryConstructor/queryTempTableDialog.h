@@ -25,7 +25,7 @@
 
 #include "frmclient/frmclient.h"
 
-#include <wx/dialog.h>
+#include "gui/univ/dialog.h"
 
 #include <vector>
 
@@ -33,11 +33,12 @@
 #include "core/description/typeDescription.h"
 
 #include "gui/univ/dataview/dataview.h"
+#include "gui/univ/ctrl/textCtrl.h"
 
 class ibMetaData;
 class ibQueryConstructorModel;
 
-class FRMCLIENT_API ibDialogQueryTempTable : public wxDialog
+class FRMCLIENT_API ibDialogQueryTempTable : public ibDialog
 {
 public:
 	struct Field
@@ -86,7 +87,7 @@ private:
 
 	std::vector<Field> m_fields;
 
-	class wxTextCtrl*       m_nameBox = nullptr;
+	class ibTextCtrl*       m_nameBox = nullptr;
 	ibDataViewCtrl*         m_grid    = nullptr;
 	class ibQueryGridModel* m_rows    = nullptr;
 };

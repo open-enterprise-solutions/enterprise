@@ -10,9 +10,9 @@
 
 #include <wx/timer.h>   // wxTimer — a member below, so the type has to be complete here
 
-class wxTextCtrl;
-class wxButton;
-class wxStaticText;
+class ibTextCtrl;
+class ibButton;
+class ibStaticText;
 class wxStyledTextCtrl;
 
 class ibAssistantDocument : public ibTabDocument {
@@ -74,15 +74,15 @@ private:
 	// snippet — instead of a rule in the widget deciding for it. And it takes
 	// the platform's shared font, the one the code editor uses everywhere.
 	wxStyledTextCtrl* m_transcript = nullptr;
-	wxTextCtrl*       m_input      = nullptr;
-	wxButton*         m_send       = nullptr;
+	ibTextCtrl*       m_input      = nullptr;
+	ibButton*         m_send       = nullptr;
 
 	// The entries of the server's transcript already shown — it only grows.
 	size_t m_shownEntries = 0;
 
 	// What the strip says, and what animates it — the dots only: what it says is the server's. Stopped when the wait
 	// ends or the window closes — a timer left running writes into a destroyed control.
-	wxStaticText* m_waiting     = nullptr;
+	ibStaticText* m_waiting     = nullptr;
 	wxTimer       m_waitingTick;
 	int           m_waitingDots = 0;
 	// The messages no assistant has collected — the server's (State Pending).

@@ -9,6 +9,8 @@
 #include "frmclient/win/dlgs/typeSelector.h"
 
 #include <wx/textctrl.h>
+#include "gui/univ/ctrl/staticText.h"
+#include "gui/univ/messageDialog.h"
 
 namespace {
 
@@ -88,7 +90,7 @@ ibDialogQueryTempTable::ibDialogQueryTempTable(wxWindow* parent, const wxString&
                                                std::vector<Field> fields,
                                                const ibQueryConstructorModel& model,
                                                const ibMetaData* metaData, bool readOnly)
-	: wxDialog(parent, wxID_ANY, _("Temporary table"), wxDefaultPosition, wxSize(560, 420),
+	: ibDialog(parent, wxID_ANY, _("Temporary table"), wxDefaultPosition, wxSize(560, 420),
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 	, m_model(model)
 	, m_metaData(metaData)
@@ -108,14 +110,14 @@ ibDialogQueryTempTable::ibDialogQueryTempTable(wxWindow* parent, const wxString&
 
 	// ---- the name, and with it where the rows come from --------------------------------------
 	wxBoxSizer* nameRow = new wxBoxSizer(wxHORIZONTAL);
-	nameRow->Add(new wxStaticText(this, wxID_ANY, _("Table name:")), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, FromDIP(6));
-	m_nameBox = new wxTextCtrl(this, wxID_ANY, name);
+	nameRow->Add(new ibStaticText(this, wxID_ANY, _("Table name:")), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, FromDIP(6));
+	m_nameBox = new ibTextCtrl(this, wxID_ANY, name);
 	m_nameBox->Enable(!m_readOnly);
 	nameRow->Add(m_nameBox, 1, wxALIGN_CENTER_VERTICAL);
 	outer->Add(nameRow, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, FromDIP(6));
 	// (EscapeMnemonics — a label reads `&` as the key it underlines, and this one means the ampersand itself;
 	// Wrap — one line of it was cut at the window's edge.)
-	wxStaticText* hint = new wxStaticText(this, wxID_ANY, wxControl::EscapeMnemonics(
+	ibStaticText* hint = new ibStaticText(this, wxID_ANY, wxControl::EscapeMnemonics(
 		_("&Name reads a value table given as the parameter Name; a name alone reads the temporary table of "
 		  "that name, made earlier in the package or brought by the temporary tables manager.")));
 	hint->Wrap(FromDIP(530));
@@ -154,7 +156,7 @@ ibDialogQueryTempTable::ibDialogQueryTempTable(wxWindow* parent, const wxString&
 		const wxString text = wxString(typed).Trim(true).Trim(false);
 		if (col == kTempColName) {
 			if (!ibQueryLexer::IsIdentifier(text)) {
-				wxMessageBox(ibString::Format(_("'%s' cannot be a field name.\n\nA name is one word: letters, "
+				ibMessageBox(ibString::Format(_("'%s' cannot be a field name.\n\nA name is one word: letters, "
 					"digits and underscores, with no spaces or punctuation."), text), GetTitle(), wxOK | wxICON_WARNING, this);
 				return false;
 			}
@@ -163,7 +165,7 @@ ibDialogQueryTempTable::ibDialogQueryTempTable(wxWindow* parent, const wxString&
 		}
 		ibTypeDescription type;
 		if (!ReadType(text, type)) {
-			wxMessageBox(ibString::Format(_("'%s' is not a type a field can be described by: Number(15, 2), "
+			ibMessageBox(ibString::Format(_("'%s' is not a type a field can be described by: Number(15, 2), "
 				"String(50), Date, Boolean, or a table a reference points at, such as Catalog.Items."), text),
 				GetTitle(), wxOK | wxICON_WARNING, this);
 			return false;
@@ -188,7 +190,7 @@ ibDialogQueryTempTable::ibDialogQueryTempTable(wxWindow* parent, const wxString&
 		kTempColType, FromDIP(280), wxAlignment::wxALIGN_LEFT));
 	outer->Add(m_grid, 1, wxEXPAND | wxLEFT | wxRIGHT, FromDIP(6));
 
-	wxStdDialogButtonSizer* buttons = CreateStdDialogButtonSizer(wxOK | wxCANCEL);
+	ibStdDialogButtonSizer* buttons = CreateStdDialogButtonSizer(wxOK | wxCANCEL);
 	outer->Add(buttons, 0, wxALIGN_RIGHT | wxALL, FromDIP(6));
 
 	SetSizer(outer);
@@ -246,7 +248,7 @@ bool ibDialogQueryTempTable::PickType(wxString& text)
 	const wxString written = TypeText(type);
 	// A type the text cannot say is not offered as if it could be: the field would come back untyped.
 	if (written.IsEmpty() && type.IsOk()) {
-		wxMessageBox(_("This type cannot be written into a query: a field is described by a primitive type "
+		ibMessageBox(_("This type cannot be written into a query: a field is described by a primitive type "
 			"or by a table a reference points at."), GetTitle(), wxOK | wxICON_WARNING, this);
 		return false;
 	}
@@ -327,7 +329,7 @@ void ibDialogQueryTempTable::OnOk(wxCommandEvent& event)
 	// The name is a word the language reads — after an ampersand when the rows come from a parameter.
 	const wxString name = GetTableName();
 	if (!ibQueryLexer::IsIdentifier(name.StartsWith(wxT("&")) ? name.Mid(1) : name)) {
-		wxMessageBox(ibString::Format(_("'%s' cannot be a table name.\n\nA name is one word: letters, digits "
+		ibMessageBox(ibString::Format(_("'%s' cannot be a table name.\n\nA name is one word: letters, digits "
 			"and underscores, with no spaces or punctuation - after an ampersand when the table is a parameter."), name),
 			GetTitle(), wxOK | wxICON_WARNING, this);
 		m_nameBox->SetFocus();
@@ -337,7 +339,7 @@ void ibDialogQueryTempTable::OnOk(wxCommandEvent& event)
 	for (size_t i = 0; i < m_fields.size(); ++i)
 		for (size_t j = i + 1; j < m_fields.size(); ++j)
 			if (m_fields[i].m_name.IsSameAs(m_fields[j].m_name, false)) {
-				wxMessageBox(ibString::Format(_("Two fields are called '%s'."), m_fields[i].m_name),
+				ibMessageBox(ibString::Format(_("Two fields are called '%s'."), m_fields[i].m_name),
 					GetTitle(), wxOK | wxICON_WARNING, this);
 				return;
 			}

@@ -15,9 +15,9 @@
 
 ibDialogError::ibDialogError(ibFrontendMainFrame* parent, wxWindowID id,
 	const wxString& title, const wxPoint& pos, const wxSize& size, long style) :
-	wxDialog(parent, id, title, pos, size, style)
+	ibDialog(parent, id, title, pos, size, style)
 {
-	wxDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
+	ibDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
 	wxBoxSizer* bSizerMain = new wxBoxSizer(wxHORIZONTAL);
 
 	m_errorOutput = new wxStyledTextCtrl(this, wxID_ANY, wxDefaultPosition, wxSize(550, 250), 0, wxEmptyString);
@@ -47,22 +47,22 @@ ibDialogError::ibDialogError(ibFrontendMainFrame* parent, wxWindowID id,
 
 	wxBoxSizer* m_bSizerButtons = new wxBoxSizer(wxVERTICAL);
 
-	m_buttonCloseWindow = new wxButton(this, wxID_ANY, _("Close window"), wxDefaultPosition, wxDefaultSize, 0);
+	m_buttonCloseWindow = new ibButton(this, wxID_ANY, _("Close window"), wxDefaultPosition, wxDefaultSize, 0);
 	m_bSizerButtons->Add(m_buttonCloseWindow, 0, wxALL | wxEXPAND, FromDIP(5));
 
-	m_buttonGotoDesigner = new wxButton(this, wxID_ANY, _("Go to designer"), wxDefaultPosition, wxDefaultSize, 0);
+	m_buttonGotoDesigner = new ibButton(this, wxID_ANY, _("Go to designer"), wxDefaultPosition, wxDefaultSize, 0);
 	m_bSizerButtons->Add(m_buttonGotoDesigner, 0, wxALL | wxEXPAND, FromDIP(5));
 
-	m_buttonCloseProgram = new wxButton(this, wxID_ANY, _("Close program"), wxDefaultPosition, wxDefaultSize, 0);
+	m_buttonCloseProgram = new ibButton(this, wxID_ANY, _("Close program"), wxDefaultPosition, wxDefaultSize, 0);
 	m_bSizerButtons->Add(m_buttonCloseProgram, 0, wxALL | wxEXPAND, FromDIP(5));
 
 	bSizerMain->Add(m_bSizerButtons, 0, wxEXPAND, FromDIP(5));
 
-	wxDialog::SetSizer(bSizerMain);
-	wxDialog::Layout();
+	ibDialog::SetSizer(bSizerMain);
+	ibDialog::Layout();
 	bSizerMain->Fit(this);
 
-	wxDialog::Centre(wxBOTH);
+	ibDialog::Centre(wxBOTH);
 
 	// Connect Events
 	m_buttonCloseProgram->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ibDialogError::OnButtonCloseProgramClick), nullptr, this);
@@ -97,8 +97,8 @@ ibDialogError::ibDialogError(ibFrontendMainFrame* parent, wxWindowID id,
 	wxIcon dlg_icon;
 	dlg_icon.CopyFromBitmap(ibBackendPicture::GetPicture(g_picErrorCLSID));
 
-	wxDialog::SetIcon(dlg_icon);
-	wxDialog::SetFocus();
+	ibDialog::SetIcon(dlg_icon);
+	ibDialog::SetFocus();
 }
 
 // The act chosen is what ShowModal answers. The dialog is the caller's (on its stack), so it is ended, not destroyed.

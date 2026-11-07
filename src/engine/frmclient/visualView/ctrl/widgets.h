@@ -4,6 +4,7 @@
 #include <wx/html/htmlwin.h>
 
 #include "frmclient/visualView/ctrl/window.h"
+#include "gui/univ/panel.h"
 
 class ibStaticText;
 class ibTextCtrl;
@@ -165,7 +166,7 @@ public:
 	virtual wxWindow* GetWindow() const override { return m_chartBox; }
 
 private:
-	wxPanel* m_chartBox = nullptr;
+	ibPanel* m_chartBox = nullptr;
 };
 
 // A control of a type this client does not draw yet: its place in the layout kept, and said so in the middle of it.
@@ -180,7 +181,7 @@ public:
 	virtual bool IsPlaceholder() const override { return true; }
 
 private:
-	wxPanel* m_panel = nullptr;
+	ibPanel* m_panel = nullptr;
 };
 
 // A line. Its orientation is what it is built with — a line turned is built anew (ibVisualHostClient's shape).

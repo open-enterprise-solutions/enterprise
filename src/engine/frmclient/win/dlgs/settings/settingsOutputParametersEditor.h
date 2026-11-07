@@ -13,7 +13,7 @@
 
 #include <functional>
 
-#include <wx/panel.h>
+#include "gui/univ/panel.h"
 
 #include "frmclient/backend/backend_composition.h"   // ibOutputParametersDescription — what is edited here; its values, restored
 
@@ -21,7 +21,7 @@ class ibMetaData;
 class ibDataViewCtrl;
 class ibOutputParametersModel;
 
-class ibOutputParametersEditor : public wxPanel {
+class ibOutputParametersEditor : public ibPanel {
 public:
 	// `metaOf` names the configuration whose languages a title is written in — ASKED when a title is edited,
 	// the way the appearance window is handed it at the click: the window that holds this page may not know it

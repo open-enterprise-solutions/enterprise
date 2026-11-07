@@ -7,7 +7,7 @@
 #include "frmclient/backend/backend_localization.h"               // ibTranslateString — a title read in the language in force
 #include "gui/typeconv.h"                               // WxColourToColour — a row's grey is the model view's data
 
-#include <wx/choicdlg.h>   // wxGetSingleChoiceIndex — the window a theme or a word is picked in
+#include "gui/univ/choiceDialog.h"   // ibGetSingleChoiceIndex — the window a theme or a word is picked in
 #include <wx/settings.h>   // wxSystemSettings — an unticked value reads grey
 #include <wx/sizer.h>
 
@@ -159,7 +159,7 @@ private:
 
 ibOutputParametersEditor::ibOutputParametersEditor(wxWindow* parent, ibOutputParametersDescription* parameters,
 	ibOutputParameterScope scope, MetaOf metaOf)
-	: wxPanel(parent, wxID_ANY), m_parameters(parameters), m_scope(scope), m_metaOf(std::move(metaOf))
+	: ibPanel(parent, wxID_ANY), m_parameters(parameters), m_scope(scope), m_metaOf(std::move(metaOf))
 {
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 
@@ -259,7 +259,7 @@ bool ibOutputParametersEditor::EditValue(wxString& text)
 	if (offered.empty())
 		return false;
 	const int current = labels.Index(Presentation(*m_parameters, parameter));
-	const int chosen = wxGetSingleChoiceIndex(ibOutputParameterCaption(parameter), _("Other settings"), labels,
+	const int chosen = ibGetSingleChoiceIndex(ibOutputParameterCaption(parameter), _("Other settings"), labels,
 		current != wxNOT_FOUND ? current : 0, this);
 	if (chosen < 0 || chosen >= (int)offered.size())
 		return false;

@@ -114,6 +114,7 @@ public:
     // wxButtonBase shims: the bitmap and its place beside the label - on the left unless told otherwise; on top, the
     // button is a tile
     void SetBitmap(const wxBitmapBundle& bitmap, wxDirection dir = wxLEFT);
+    wxBitmap GetBitmap() const { return DoGetBitmap(wxAnyButtonBase::State_Normal); }
     void SetBitmapPosition(wxDirection dir);
 
     // The line under the label of a tile (SetBitmap(bitmap, wxTOP)): a price, a count. Drawn in that layout alone, and
@@ -130,6 +131,11 @@ public:
     void SetPrimary(bool primary = true) { m_isDefault = primary; Refresh(); }
 
     static wxSize GetDefaultSize(wxWindow* win = nullptr);
+
+    // SEAM vs MSW: wxWindowMSW::MSWClickButtonIfPossible (msw/window.h) for the library's button - wx's finds a
+    // wxButton, and ibButton is not one. Enabled and shown on screen, it is clicked: Esc and the title bar's x in
+    // ibDialog, Enter in a field (ibTextCtrl::ClickDefaultButtonIfPossible).
+    static bool ClickIfPossible(ibButton *button);
 
 protected:
     // SEAM vs univ: a bitmap for each state (the canon kept the normal one alone); the state's own is drawn, or the

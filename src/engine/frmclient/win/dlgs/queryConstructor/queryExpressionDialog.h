@@ -28,16 +28,17 @@
 //
 ////////////////////////////////////////////////////////////////////////////
 
-#include <wx/dialog.h>
+#include "gui/univ/dialog.h"
 #include <wx/textctrl.h>
 #include <wx/listbox.h>
-#include <wx/treectrl.h>
+#include "gui/univ/ctrl/treeCtrl.h"
 #include <wx/stc/stc.h>
 
 #include "core/query/queryAST.h"
 #include "frmclient/backend/query/queryConstructorModel.h"
 
 #include <vector>
+#include "gui/univ/ctrl/button.h"
 
 class ibMetaData;
 
@@ -48,7 +49,7 @@ class ibMetaData;
 bool ibEditBalanceRole(wxWindow* parent, bool& said, ibBalanceRole& role, int& periodRank,
                        bool readOnly = false, bool withNumber = true);
 
-class ibDialogQueryExpression : public wxDialog
+class ibDialogQueryExpression : public ibDialog
 {
 public:
 	// `existing` — the expression being edited (null when writing a new one). `fields` — what the
@@ -135,14 +136,14 @@ private:
 	// A TREE, not a list. A flat list cannot show what a reference LEADS to, so every field behind
 	// one was unreachable from here — you had to close the editor, unfold it in the constructor's
 	// tree, and come back. Same shape as those trees: twist buttons, field pictures, draggable.
-	wxTreeCtrl* m_fieldTree = nullptr;
+	ibTreeCtrl* m_fieldTree = nullptr;
 	int         m_fieldIcon = wxNOT_FOUND;
-	wxTreeCtrl* m_language  = nullptr;
+	ibTreeCtrl* m_language  = nullptr;
 	// The same styled editor the constructor's text pane uses — one language, one look.
 	class wxStyledTextCtrl* m_text = nullptr;
 
 	// The role, when it is offered (OfferRole) — the button hidden otherwise.
-	class wxButton* m_roleButton = nullptr;
+	class ibButton* m_roleButton = nullptr;
 	bool            m_roleSaid   = false;
 	ibBalanceRole   m_role       = ibBalanceRole::None;
 	int             m_periodRank = 0;

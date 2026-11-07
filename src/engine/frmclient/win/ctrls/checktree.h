@@ -1,7 +1,7 @@
 #ifndef __checktree_H_INCLUDED__
 #define __checktree_H_INCLUDED__
 
-#include <wx/treectrl.h>
+#include "gui/univ/ctrl/treeCtrl.h"
 
 #include <set>
 #include <map>
@@ -12,7 +12,7 @@
 
 #include "frmclient/frmclient.h"
 
-class FRMCLIENT_API ibCheckTree : public wxTreeCtrl {
+class FRMCLIENT_API ibCheckTree : public ibTreeCtrl {
 	bool m_singleCheck;
 	bool m_allowEmpty;
 	std::map<wxTreeItemId, bool> m_checkedItems;
@@ -28,7 +28,7 @@ protected:
 		int image, int selImage,
 		wxTreeItemData* data)
 	{
-		wxTreeItemId id = wxTreeCtrl::DoInsertItem(
+		wxTreeItemId id = ibTreeCtrl::DoInsertItem(
 			parent,
 			pos,
 			text,
@@ -50,7 +50,7 @@ protected:
 		int image = -1, int selImage = -1,
 		wxTreeItemData* data = nullptr)
 	{
-		wxTreeItemId id = wxTreeCtrl::DoInsertAfter(
+		wxTreeItemId id = ibTreeCtrl::DoInsertAfter(
 			parent,
 			idPrevious,
 			text,
@@ -85,6 +85,10 @@ public:
 	virtual void SetFocusFromKbd() override;
 	virtual void SetItemTextColour(const wxTreeItemId& item, const wxColour& col) override;
 
+	// an item deleted takes its rows in the check bookkeeping with it, its subtree's too
+	virtual void Delete(const wxTreeItemId& item) override;
+	virtual void DeleteChildren(const wxTreeItemId& item) override;
+
 	virtual void SetWindowStyleFlag(long style) override
 	{
 		m_singleCheck = (style & wxCR_MULTIPLE_CHECK) != wxCR_MULTIPLE_CHECK;
@@ -104,7 +108,9 @@ public:
 				}
 			}
 		}
-		wxTreeCtrl::SetWindowStyleFlag(style);
+		// the check bits are the check tree's, as in the constructor: in the tree's style they read as its own
+		// (wxCR_SINGLE_CHECK is wxTR_FULL_ROW_HIGHLIGHT)
+		ibTreeCtrl::SetWindowStyleFlag(style & ~wxCR_MULTIPLE_CHECK & ~wxCR_SINGLE_CHECK & ~wxCR_EMPTY_CHECK);
 	}
 
 	//interaction with the check boxes:

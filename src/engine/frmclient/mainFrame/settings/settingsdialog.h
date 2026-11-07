@@ -7,7 +7,7 @@
 /////////////////////////////////////////////////////////////////////////////
 
 #include <wx/wx.h>
-#include <wx/propdlg.h>
+#include "gui/univ/propertySheetDialog.h"
 
 #include "frmclient/frmclient.h"
 #include "protocol/protocolNode.h"
@@ -17,7 +17,7 @@ class ibPanelFontColorSettings;
 class ibPanelEditorSettings;
 class ibPanelMcpSettings;
 
-class FRMCLIENT_API ibDialogSettings : public wxPropertySheetDialog
+class FRMCLIENT_API ibDialogSettings : public ibPropertySheetDialog
 {
 public:
 

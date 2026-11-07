@@ -5,10 +5,10 @@
 
 #include <wx/sizer.h>
 #include <wx/stattext.h>
-#include <wx/textdlg.h>
-#include <wx/msgdlg.h>
-#include <wx/dialog.h>
-#include <wx/textctrl.h>
+#include "gui/univ/messageDialog.h"
+#include "gui/univ/dialog.h"
+#include "gui/univ/textEntryDialog.h"
+#include "gui/univ/ctrl/textCtrl.h"
 #include "core/localization/dictionary.h"   // _() — the panel's words
 
 enum {
@@ -22,7 +22,7 @@ enum {
 };
 
 ibGitPanel::ibGitPanel(wxWindow* parent, const wxString& workdir)
-	: wxPanel(parent, wxID_ANY)
+	: ibPanel(parent, wxID_ANY)
 {
 	BuildUI();
 	SetWorkdir(workdir);
@@ -34,19 +34,19 @@ void ibGitPanel::BuildUI()
 
 	// Branch row: current/switch + new.
 	wxBoxSizer* brow = new wxBoxSizer(wxHORIZONTAL);
-	brow->Add(new wxStaticText(this, wxID_ANY, _("Branch:")), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-	m_branchChoice = new wxChoice(this, ID_GIT_BRANCH);
+	brow->Add(new ibStaticText(this, wxID_ANY, _("Branch:")), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+	m_branchChoice = new ibChoice(this, ID_GIT_BRANCH);
 	brow->Add(m_branchChoice, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-	m_btnNewBranch = new wxButton(this, ID_GIT_NEWBRANCH, _("New..."), wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+	m_btnNewBranch = new ibButton(this, ID_GIT_NEWBRANCH, _("New..."), wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
 	brow->Add(m_btnNewBranch, 0, wxALIGN_CENTER_VERTICAL);
 	root->Add(brow, 0, wxEXPAND | wxALL, 4);
 
 	// Actions row.
 	wxBoxSizer* bar = new wxBoxSizer(wxHORIZONTAL);
-	m_btnRefresh = new wxButton(this, ID_GIT_REFRESH, _("Refresh"), wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
-	m_btnCommit  = new wxButton(this, ID_GIT_COMMIT,  _("Commit..."), wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
-	m_btnPush    = new wxButton(this, ID_GIT_PUSH,    _("Push"), wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
-	m_btnPull    = new wxButton(this, ID_GIT_PULL,    _("Pull"), wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+	m_btnRefresh = new ibButton(this, ID_GIT_REFRESH, _("Refresh"), wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+	m_btnCommit  = new ibButton(this, ID_GIT_COMMIT,  _("Commit..."), wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+	m_btnPush    = new ibButton(this, ID_GIT_PUSH,    _("Push"), wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+	m_btnPull    = new ibButton(this, ID_GIT_PULL,    _("Pull"), wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
 	bar->Add(m_btnRefresh, 0, wxRIGHT, 3);
 	bar->Add(m_btnCommit,  0, wxRIGHT, 3);
 	bar->Add(m_btnPush,    0, wxRIGHT, 3);
@@ -54,23 +54,23 @@ void ibGitPanel::BuildUI()
 	root->Add(bar, 0, wxLEFT | wxRIGHT | wxBOTTOM, 4);
 
 	// Changes (double-click a row -> diff).
-	root->Add(new wxStaticText(this, wxID_ANY, _("Changes (double-click for diff):")), 0, wxLEFT | wxRIGHT, 4);
-	m_statusList = new wxListCtrl(this, ID_GIT_STATUSLIST, wxDefaultPosition, wxDefaultSize,
+	root->Add(new ibStaticText(this, wxID_ANY, _("Changes (double-click for diff):")), 0, wxLEFT | wxRIGHT, 4);
+	m_statusList = new ibListCtrl(this, ID_GIT_STATUSLIST, wxDefaultPosition, wxDefaultSize,
 		wxLC_REPORT | wxLC_SINGLE_SEL);
 	m_statusList->InsertColumn(0, _("State"), wxLIST_FORMAT_LEFT, 60);
 	m_statusList->InsertColumn(1, _("Path"),  wxLIST_FORMAT_LEFT, 320);
 	root->Add(m_statusList, 2, wxEXPAND | wxALL, 4);
 
 	// Recent history.
-	root->Add(new wxStaticText(this, wxID_ANY, _("History:")), 0, wxLEFT | wxRIGHT, 4);
-	m_logList = new wxListCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+	root->Add(new ibStaticText(this, wxID_ANY, _("History:")), 0, wxLEFT | wxRIGHT, 4);
+	m_logList = new ibListCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxLC_REPORT | wxLC_SINGLE_SEL);
 	m_logList->InsertColumn(0, _("Hash"),    wxLIST_FORMAT_LEFT, 70);
 	m_logList->InsertColumn(1, _("Date"),    wxLIST_FORMAT_LEFT, 90);
 	m_logList->InsertColumn(2, _("Subject"), wxLIST_FORMAT_LEFT, 280);
 	root->Add(m_logList, 1, wxEXPAND | wxALL, 4);
 
-	m_info = new wxStaticText(this, wxID_ANY, wxEmptyString);
+	m_info = new ibStaticText(this, wxID_ANY, wxEmptyString);
 	root->Add(m_info, 0, wxALL, 4);
 
 	SetSizer(root);
@@ -152,7 +152,7 @@ void ibGitPanel::ReportResult(const wxString& action, const ibGitResult& r)
 		// git failures are normal control flow — surface, don't throw.
 		const wxString msg = r.error.empty() ? r.output : r.error;
 		m_info->SetLabel(action + _(": failed"));
-		wxMessageBox(msg, action + _(" failed"), wxOK | wxICON_WARNING, this);
+		ibMessageBox(msg, action + _(" failed"), wxOK | wxICON_WARNING, this);
 	}
 }
 
@@ -161,11 +161,11 @@ void ibGitPanel::OnRefresh(wxCommandEvent&) { RefreshStatus(); }
 void ibGitPanel::OnCommit(wxCommandEvent&)
 {
 	if (!m_git || !m_git->IsRepo()) return;
-	wxTextEntryDialog dlg(this, _("Commit message:"), _("Commit"));
+	ibTextEntryDialog dlg(this, _("Commit message:"), _("Commit"));
 	if (dlg.ShowModal() != wxID_OK) return;
 	const wxString msg = dlg.GetValue();
 	if (msg.Strip(wxString::both).empty()) {
-		wxMessageBox(_("Empty commit message."), _("Commit"), wxOK | wxICON_INFORMATION, this);
+		ibMessageBox(_("Empty commit message."), _("Commit"), wxOK | wxICON_INFORMATION, this);
 		return;
 	}
 	ReportResult(_("Commit"), m_git->CommitAll(msg));
@@ -198,7 +198,7 @@ void ibGitPanel::OnBranchSelected(wxCommandEvent&)
 void ibGitPanel::OnNewBranch(wxCommandEvent&)
 {
 	if (!m_git || !m_git->IsRepo()) return;
-	wxTextEntryDialog dlg(this, _("New branch name:"), _("New branch"));
+	ibTextEntryDialog dlg(this, _("New branch name:"), _("New branch"));
 	if (dlg.ShowModal() != wxID_OK) return;
 	const wxString name = dlg.GetValue().Strip(wxString::both);
 	if (name.empty()) return;
@@ -215,9 +215,9 @@ void ibGitPanel::OnStatusActivated(wxListEvent& event)
 	const wxString diff = m_git->Diff(path);
 
 	// Read-only monospaced diff viewer.
-	wxDialog dlg(this, wxID_ANY, ibString::Format(_("Diff: %s"), path),
+	ibDialog dlg(this, wxID_ANY, ibString::Format(_("Diff: %s"), path),
 		wxDefaultPosition, wxSize(700, 500), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
-	wxTextCtrl* txt = new wxTextCtrl(&dlg, wxID_ANY,
+	ibTextCtrl* txt = new ibTextCtrl(&dlg, wxID_ANY,
 		diff.empty() ? wxString(_("(no diff - untracked, binary, or staged)")) : diff,
 		wxDefaultPosition, wxDefaultSize,
 		wxTE_MULTILINE | wxTE_READONLY | wxTE_DONTWRAP);

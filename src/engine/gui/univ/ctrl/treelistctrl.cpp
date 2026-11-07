@@ -29,7 +29,7 @@
 #include <wx/app.h>
 #include <wx/treebase.h>
 #include <wx/timer.h>
-#include <wx/textctrl.h>
+#include "gui/univ/ctrl/textCtrl.h"
 #include <wx/tooltip.h>   // SetToolTip() reads the tip out of it, so it needs the full type
 #include <wx/imaglist.h>
 #include <wx/settings.h>
@@ -105,7 +105,7 @@ static ibTreeListColumnInfo wxInvalidTreeListColumnInfo;
 // private classes
 // ---------------------------------------------------------------------------
 
-class ibTreeListHeaderWindow : public wxWindow
+class ibTreeListHeaderWindow : public ibWindow
 {
 protected:
 	ibTreeListMainWindow* m_owner;
@@ -243,7 +243,9 @@ class ibEditTextCtrl;
 
 
 // this is the "true" control
-class  ibTreeListMainWindow : public wxScrolledWindow
+// SEAM vs wx: wxScrolledWindow (wxScrolled<wxPanel>) there - scrolled on the library's window here, its scrollbars
+// the theme's
+class  ibTreeListMainWindow : public wxScrolled<ibWindow>
 {
 	friend class ibTreeListItem;
 	friend class ibTreeListRenameTimer;
@@ -758,7 +760,7 @@ private:
 //-----------------------------------------------------------------------------
 
 // control used for in-place edit
-class  ibEditTextCtrl : public wxTextCtrl
+class  ibEditTextCtrl : public ibTextCtrl
 {
 public:
 	ibEditTextCtrl(wxWindow* parent,
@@ -1122,7 +1124,7 @@ void ibTreeListRenameTimer::Notify()
 // ibEditTextCtrl (internal)
 //-----------------------------------------------------------------------------
 
-wxBEGIN_EVENT_TABLE(ibEditTextCtrl, wxTextCtrl)
+wxBEGIN_EVENT_TABLE(ibEditTextCtrl, ibTextCtrl)
 EVT_CHAR(ibEditTextCtrl::OnChar)
 EVT_KEY_UP(ibEditTextCtrl::OnKeyUp)
 EVT_KILL_FOCUS(ibEditTextCtrl::OnKillFocus)
@@ -1139,7 +1141,7 @@ ibEditTextCtrl::ibEditTextCtrl(wxWindow* parent,
 	int style,
 	const wxValidator& validator,
 	const wxString& name)
-	: wxTextCtrl(parent, id, value, pos, size, style | wxWANTS_CHARS, validator, name), m_startValue(value)
+	: ibTextCtrl(parent, id, value, pos, size, style | wxWANTS_CHARS, validator, name), m_startValue(value)
 {
 	m_res = res;
 	m_accept = accept;
@@ -1240,9 +1242,9 @@ void ibEditTextCtrl::OnKillFocus(wxFocusEvent& event)
 //  ibTreeListHeaderWindow
 //-----------------------------------------------------------------------------
 
-IMPLEMENT_DYNAMIC_CLASS(ibTreeListHeaderWindow, wxWindow);
+IMPLEMENT_DYNAMIC_CLASS(ibTreeListHeaderWindow, ibWindow);
 
-wxBEGIN_EVENT_TABLE(ibTreeListHeaderWindow, wxWindow)
+wxBEGIN_EVENT_TABLE(ibTreeListHeaderWindow, ibWindow)
 EVT_PAINT(ibTreeListHeaderWindow::OnPaint)
 EVT_ERASE_BACKGROUND(ibTreeListHeaderWindow::OnEraseBackground) // reduce flicker
 EVT_MOUSE_EVENTS(ibTreeListHeaderWindow::OnMouse)
@@ -1279,7 +1281,7 @@ ibTreeListHeaderWindow::ibTreeListHeaderWindow(wxWindow* win,
 	const wxSize& size,
 	long style,
 	const wxString& name)
-	: wxWindow(win, id, pos, size, style, name)
+	: ibWindow(win, id, pos, size, style, name)
 {
 	Init();
 
@@ -1952,9 +1954,9 @@ int ibTreeListItem::GetCurrentImage() const {
 // ibTreeListMainWindow implementation
 // ---------------------------------------------------------------------------
 
-IMPLEMENT_DYNAMIC_CLASS(ibTreeListMainWindow, wxScrolledWindow)
+IMPLEMENT_DYNAMIC_CLASS(ibTreeListMainWindow, ibWindow)
 
-wxBEGIN_EVENT_TABLE(ibTreeListMainWindow, wxScrolledWindow)
+wxBEGIN_EVENT_TABLE(ibTreeListMainWindow, wxScrolled<ibWindow>)
 EVT_PAINT(ibTreeListMainWindow::OnPaint)
 EVT_ERASE_BACKGROUND(ibTreeListMainWindow::OnEraseBackground) // to reduce flicker
 EVT_MOUSE_EVENTS(ibTreeListMainWindow::OnMouse)
@@ -2053,7 +2055,7 @@ bool ibTreeListMainWindow::Create(ibTreeListCtrl* parent,
 	if (major < 10) style |= wxTR_ROW_LINES;
 #endif
 
-	wxScrolledWindow::Create(parent, id, pos, size, style | wxHSCROLL | wxVSCROLL, name);
+	wxScrolled<ibWindow>::Create(parent, id, pos, size, style | wxHSCROLL | wxVSCROLL, name);
 
 #if wxUSE_VALIDATORS
 	SetValidator(validator);
@@ -2358,7 +2360,7 @@ void ibTreeListMainWindow::SetItemFont(const wxTreeItemId& item, int column, con
 
 
 bool ibTreeListMainWindow::SetFont(const wxFont& font) {
-	wxScrolledWindow::SetFont(font);
+	wxScrolled<ibWindow>::SetFont(font);
 	m_normalFont = font;
 	m_boldFont = wxFont(m_normalFont.GetPointSize(),
 		m_normalFont.GetFamily(),
@@ -4300,7 +4302,7 @@ void ibTreeListMainWindow::OnMouse(wxMouseEvent & event) {
 		// not over an item, use global tip
 		if (item == nullptr) {
 			m_toolTipItem = nullptr;
-			wxScrolledWindow::SetToolTip(m_toolTip);
+			wxScrolled<ibWindow>::SetToolTip(m_toolTip);
 
 			// over an item
 		}
@@ -4310,20 +4312,20 @@ void ibTreeListMainWindow::OnMouse(wxMouseEvent & event) {
 			// is there an item-specific tip ?
 			if (tip) {
 				m_toolTipItem = item;
-				wxScrolledWindow::SetToolTip(*tip);
+				wxScrolled<ibWindow>::SetToolTip(*tip);
 
 				// no item tip, but we are in item-specific mode (SetItemToolTip()
 				//  was called after SetToolTip() )
 			}
 			else if (m_isItemToolTip) {
 				m_toolTipItem = item;
-				wxScrolledWindow::SetToolTip(wxString());
+				wxScrolled<ibWindow>::SetToolTip(wxString());
 
 				// no item tip, display global tip instead; item change ignored
 			}
 			else if (m_toolTipItem != nullptr) {
 				m_toolTipItem = nullptr;
-				wxScrolledWindow::SetToolTip(m_toolTip);
+				wxScrolled<ibWindow>::SetToolTip(m_toolTip);
 			}
 		}
 	}
@@ -4544,7 +4546,7 @@ void ibTreeListMainWindow::OnScroll(wxScrollWinEvent & event) {
 
 void ibTreeListMainWindow::ScrollWindow(int dx, int dy, const wxRect* rect) {
 
-	wxScrolledWindow::ScrollWindow(dx, dy, rect);
+	wxScrolled<ibWindow>::ScrollWindow(dx, dy, rect);
 
 	if (dx != 0) {
 		m_owner->GetHeaderWindow()->Refresh();
@@ -4841,9 +4843,9 @@ bool ibTreeListMainWindow::SendEvent(wxEventType event_type, ibTreeListItem * it
 //  ibTreeListCtrl
 //-----------------------------------------------------------------------------
 
-IMPLEMENT_DYNAMIC_CLASS(ibTreeListCtrl, wxControl);
+IMPLEMENT_DYNAMIC_CLASS(ibTreeListCtrl, ibControl);
 
-wxBEGIN_EVENT_TABLE(ibTreeListCtrl, wxControl)
+wxBEGIN_EVENT_TABLE(ibTreeListCtrl, ibControl)
 EVT_SIZE(ibTreeListCtrl::OnSize)
 wxEND_EVENT_TABLE();
 
@@ -4858,7 +4860,7 @@ bool ibTreeListCtrl::Create(wxWindow * parent, wxWindowID id,
 	main_style |= wxWANTS_CHARS;
 	long ctrl_style = style & ~(wxVSCROLL | wxHSCROLL);
 
-	if (!wxControl::Create(parent, id, pos, size, ctrl_style, validator, name))
+	if (!ibControl::Create(parent, id, pos, size, ctrl_style, validator, name))
 		return false;
 	
 	m_main_win = new ibTreeListMainWindow(this, -1, wxPoint(0, 0), size,
@@ -5595,12 +5597,12 @@ void ibTreeListCtrl::DoSetSize(int x, int y,
 	m_header_win->SetSize(x, y, width, m_headerHeight);
 	m_main_win->SetSize(x, y + m_headerHeight, width, height - m_headerHeight);
 
-	wxControl::DoSetSize(x, y, width, height, sizeFlags);
+	ibControl::DoSetSize(x, y, width, height, sizeFlags);
 }
 
 wxSize ibTreeListCtrl::DoGetBestClientSize() const
 {
-	return wxControl::DoGetBestClientSize();
+	return ibControl::DoGetBestClientSize();
 }
 
 wxSize ibTreeListCtrl::DoGetBestSize() const

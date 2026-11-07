@@ -38,22 +38,22 @@
 #include "frmclient/frmclient.h"
 #include "core/compiler/blockSyntaxLINQ.h"
 
-#include <wx/dialog.h>
-#include <wx/treectrl.h>
-#include <wx/textctrl.h>
-#include <wx/checkbox.h>
-#include <wx/stattext.h>
+#include "gui/univ/dialog.h"
+#include "gui/univ/ctrl/treeCtrl.h"
+#include "gui/univ/ctrl/textCtrl.h"
+#include "gui/univ/ctrl/checkBox.h"
+#include "gui/univ/ctrl/staticText.h"
 
 #include <functional>
 #include <map>
 #include <vector>
 
-class wxNotebook;
+class ibNotebook;
 class wxToolBar;
 class ibTabDocument;
 class ibProtocolNode;
 
-class FRMCLIENT_API ibDialogLinqConstructor : public wxDialog
+class FRMCLIENT_API ibDialogLinqConstructor : public ibDialog
 {
 public:
 
@@ -104,16 +104,16 @@ private:
 	static bool IsPlainValue(const ibProbe& members);
 
 	// ---- the trees: one per tab that picks from what can be read, all asked the same way ----
-	wxTreeCtrl* MakeSourceTree(wxWindow* parent);
-	void AddPlace(wxTreeCtrl* tree, const wxTreeItemId& parent, const wxString& name, const wxString& expression,
+	ibTreeCtrl* MakeSourceTree(wxWindow* parent);
+	void AddPlace(ibTreeCtrl* tree, const wxTreeItemId& parent, const wxString& name, const wxString& expression,
 		int icon, bool probe);
-	void FillFields(wxTreeCtrl* tree, const wxTreeItemId& item, const wxString& expression, const ibProbe& row);
+	void FillFields(ibTreeCtrl* tree, const wxTreeItemId& item, const wxString& expression, const ibProbe& row);
 	void OnBeginDrag(wxTreeEvent& event);
-	int  IconIndex(wxTreeCtrl* tree, const wxString& key, const std::function<wxIcon()>& make);
-	int  KindIcon(wxTreeCtrl* tree, const wxString& section);
+	int  IconIndex(ibTreeCtrl* tree, const wxString& key, const std::function<wxIcon()>& make);
+	int  KindIcon(ibTreeCtrl* tree, const wxString& section);
 	void OnExpanding(wxTreeEvent& event);
 	void OnActivated(wxTreeEvent& event);
-	wxTreeCtrl* CurrentTree() const;
+	ibTreeCtrl* CurrentTree() const;
 
 	// ---- the verbs: the arrows, the toolbars and a double click all come here ----
 	void AddSelectedAsSource(bool join);
@@ -122,7 +122,7 @@ private:
 	void AddSelectedAsGroupKey();
 	void AddSelectedAsTotal();
 	void AddSelectedToOrder();
-	void WriteFieldByHand(wxTreeCtrl* tree, const wxTreeItemId& hint);
+	void WriteFieldByHand(ibTreeCtrl* tree, const wxTreeItemId& hint);
 
 	wxString QualifiedField(const wxString& sourceExpression, const wxString& field);
 	void AddSource(const wxString& expression, bool join);
@@ -162,9 +162,9 @@ private:
 	std::vector<bool>        m_variableOpens;  // …and whether each is a place to open, or a plain value
 	std::vector<wxString>    m_sections;       // `Data`'s members - Catalogs, Documents, the registers
 
-	wxNotebook*                                   m_notebook = nullptr;
-	std::vector<wxTreeCtrl*>                      m_pageTrees;   // per page; null where a page has none
-	std::map<wxTreeCtrl*, std::map<wxString, int>> m_treeIcons;
+	ibNotebook*                                   m_notebook = nullptr;
+	std::vector<ibTreeCtrl*>                      m_pageTrees;   // per page; null where a page has none
+	std::map<ibTreeCtrl*, std::map<wxString, int>> m_treeIcons;
 
 	// The platform's own list control (frmclient/win/ctrls/dataview) — every list of the constructors is
 	// one, edited in place.
@@ -174,14 +174,14 @@ private:
 	class ibDataViewListCtrl* m_order = nullptr;        // expression | descending
 	class ibDataViewListCtrl* m_groupKeys = nullptr;    // column | expression
 	class ibDataViewListCtrl* m_totals = nullptr;       // column | total | expression
-	wxTextCtrl*               m_groupInto = nullptr;
+	ibTextCtrl*               m_groupInto = nullptr;
 
 	// `Skip` / `Take`: switched on by the word, a counter with arrows - and a variable read out of a
 	// block opened, kept as written until the counter is touched.
 	struct ibRowCount {
-		wxCheckBox*       m_use = nullptr;
-		class wxSpinCtrl* m_count = nullptr;
-		wxStaticText*     m_kept = nullptr;
+		ibCheckBox*       m_use = nullptr;
+		class ibSpinCtrl* m_count = nullptr;
+		ibStaticText*     m_kept = nullptr;
 		wxString          m_variable;
 	};
 	ibRowCount                m_skipCount;
@@ -190,12 +190,12 @@ private:
 	void OpenCount(ibRowCount& count, const wxString& text);
 	static wxString CountText(const ibRowCount& count);
 
-	wxCheckBox*               m_distinct = nullptr;
-	wxStaticText*             m_fieldsNote = nullptr;   // on the fields tab: what the columns are when grouped
+	ibCheckBox*               m_distinct = nullptr;
+	ibStaticText*             m_fieldsNote = nullptr;   // on the fields tab: what the columns are when grouped
 
 	// The block, shown by the code editor itself — the same colouring the module has.
 	class ibCodeEditor*       m_block = nullptr;
-	wxStaticText*             m_verdict = nullptr;
+	ibStaticText*             m_verdict = nullptr;
 
 	// What the tab answered, kept for the window's life: each probe by its text, each section's picture by its name,
 	// and the block last read with what the compiler read of it.

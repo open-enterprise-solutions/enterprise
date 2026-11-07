@@ -22,15 +22,15 @@
 
 #include <functional>   // std::function — the "it changed" callback a host installs
 
-#include <wx/panel.h>
-#include <wx/treectrl.h>
+#include "gui/univ/panel.h"
+#include "gui/univ/ctrl/treeCtrl.h"
 
 #include "core/description/compositionDescription.h"   // ibSortDescription — what is edited here
 #include "gui/univ/dataview/dataview.h"
 
 class ibSettingsFieldTree;
 
-class ibSortEditor : public wxPanel {
+class ibSortEditor : public ibPanel {
 public:
 
 	// `sort`   — the description whose lines are edited (never owned here).
@@ -81,7 +81,7 @@ private:
 
 	ibDataViewCtrl* m_view      = nullptr;
 	ibSortLineModel* m_model    = nullptr;
-	wxTreeCtrl*     m_fieldCtrl = nullptr;
+	ibTreeCtrl*     m_fieldCtrl = nullptr;
 	class wxToolBar* m_toolbar  = nullptr;   // held so view-only can reach it, as the filter editor's is
 	bool            m_readOnly  = false;     // view only — see SetReadOnly
 	std::function<void()> m_onChanged;       // told on every change — see SetOnChanged

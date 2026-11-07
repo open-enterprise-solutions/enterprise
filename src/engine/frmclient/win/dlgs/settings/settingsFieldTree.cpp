@@ -16,7 +16,7 @@
 #include "frmclient/win/picture.h"                                          // ibProtocolPicture — a field's picture, as it names it
 #include "protocol/protocol.h"
 
-#include <wx/dialog.h>
+#include "gui/univ/dialog.h"
 #include <wx/dnd.h>
 #include <wx/imaglist.h>
 #include <wx/sizer.h>
@@ -49,7 +49,7 @@ struct ibSourceFieldNode : public wxTreeItemData {
 //
 // A null icon (a field with no column behind it) answers 0 — the attribute picture the list is
 // seeded with, which is what such a field has always worn.
-static int ibSettingsFieldIcon(wxTreeCtrl* tree, const wxIcon& icon)
+static int ibSettingsFieldIcon(ibTreeCtrl* tree, const wxIcon& icon)
 {
 	wxImageList* images = tree->GetImageList();
 	if (images == nullptr || !icon.IsOk())
@@ -65,7 +65,7 @@ static int ibSettingsFieldIcon(wxTreeCtrl* tree, const wxIcon& icon)
 
 // …the picture a field is described with — the column's, as the server names it (the desktop's GetSourcePicture); none
 // answers 0.
-static int ibSettingsFieldIcon(wxTreeCtrl* tree, const ibDataValue& picture)
+static int ibSettingsFieldIcon(ibTreeCtrl* tree, const ibDataValue& picture)
 {
 	wxIcon icon;
 	const wxBitmap bitmap = ibProtocolPicture(picture);
@@ -78,7 +78,7 @@ static int ibSettingsFieldIcon(wxTreeCtrl* tree, const ibDataValue& picture)
 // metaobject). A resource is a registered metatype (`ibValueMetaObjectResource`) and it vends its
 // class icon like every other; drawing a mark of our own would be a second picture for a thing that
 // already has one, and it would drift from the one the metadata tree shows.
-static int ibSettingsResourceIcon(wxTreeCtrl* tree)
+static int ibSettingsResourceIcon(ibTreeCtrl* tree)
 {
 	return ibSettingsFieldIcon(tree, ibValueMetaObjectResource::GetIconGroup());
 }
@@ -119,7 +119,7 @@ static std::vector<ibSettingsPlainField> AskTargetFields(const std::vector<ibMet
 // Lazily build a reference field node's children (its target's fields). An EMPTY typed
 // reference-as-source vends the target's explorer; its fields are copied into tree nodes
 // synchronously, so the temporary reference can die after.
-static void ExpandSourceFieldNode(wxTreeCtrl* tree, const wxTreeItemId& item, const ibMetaData* metaData,
+static void ExpandSourceFieldNode(ibTreeCtrl* tree, const wxTreeItemId& item, const ibMetaData* metaData,
 	const std::function<bool(const wxString&)>& isResource = nullptr)
 {
 	ibSourceFieldNode* data = dynamic_cast<ibSourceFieldNode*>(tree->GetItemData(item));
@@ -190,7 +190,7 @@ const ibMetaData* ibSettingsFieldTree::GetMetaData() const
 // REFERENCE field gets a [+] and expands into its target's fields — exactly like advpropSource's
 // picker. Only a source that cannot describe itself falls back to flat fields (and even those get a
 // [+] when their type is a reference).
-void ibSettingsFieldTree::Populate(wxTreeCtrl* tree) const
+void ibSettingsFieldTree::Populate(ibTreeCtrl* tree) const
 {
 	if (tree == nullptr)
 		return;
@@ -243,7 +243,7 @@ void ibSettingsFieldTree::Populate(wxTreeCtrl* tree) const
 
 // Walk a dotted path down the tree, loading each reference on the way, and land the
 // cursor on the leaf. The path is the technical one (that is what a field stores).
-wxTreeItemId ibSettingsFieldTree::FindByPath(wxTreeCtrl* tree, const wxString& path) const
+wxTreeItemId ibSettingsFieldTree::FindByPath(ibTreeCtrl* tree, const wxString& path) const
 {
 	if (tree == nullptr || path.IsEmpty())
 		return wxTreeItemId();
@@ -295,7 +295,7 @@ bool ibSettingsFieldTree::IsAvailable(const wxString& path) const
 	return true;
 }
 
-void ibSettingsFieldTree::SelectByPath(wxTreeCtrl* tree, const wxString& path) const
+void ibSettingsFieldTree::SelectByPath(ibTreeCtrl* tree, const wxString& path) const
 {
 	const wxTreeItemId found = FindByPath(tree, path);
 	if (found.IsOk()) {
@@ -306,7 +306,7 @@ void ibSettingsFieldTree::SelectByPath(wxTreeCtrl* tree, const wxString& path) c
 
 // The two behaviours every field tree has. What a DOUBLE-CLICK does is the host's
 // business — it differs per tab — so that binding stays outside.
-void ibSettingsFieldTree::Attach(wxTreeCtrl* tree)
+void ibSettingsFieldTree::Attach(ibTreeCtrl* tree)
 {
 	if (tree == nullptr)
 		return;
@@ -333,7 +333,7 @@ void ibSettingsFieldTree::Attach(wxTreeCtrl* tree)
 
 // ONE NODE READ AS A FIELD. The label the user sees is the presentation; the leaf id and type are
 // what let the OTHER side of a condition edit its value through the runtime.
-ibValueCompositionField* ibSettingsFieldTree::FieldAt(const wxTreeCtrl* tree, const wxTreeItemId& item)
+ibValueCompositionField* ibSettingsFieldTree::FieldAt(const ibTreeCtrl* tree, const wxTreeItemId& item)
 {
 	if (tree == nullptr || !item.IsOk())
 		return nullptr;
@@ -369,11 +369,11 @@ ibValueCompositionField* ibSettingsFieldTree::FieldAt(const wxTreeCtrl* tree, co
 // only one answer to "which fields does this source have".
 ibValueCompositionField* ibSettingsFieldTree::ChooseField(wxWindow* parent, const wxString& currentPath) const
 {
-	wxDialog dlg(parent, wxID_ANY, _("Select field"),
+	ibDialog dlg(parent, wxID_ANY, _("Select field"),
 		wxDefaultPosition, wxSize(320, 420),
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
 
-	wxTreeCtrl* tree = new wxTreeCtrl(&dlg, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+	ibTreeCtrl* tree = new ibTreeCtrl(&dlg, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_HIDE_ROOT | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxTR_TWIST_BUTTONS);
 	Populate(tree);
 	// References expand by the SAME rule the tabs use — a deep path

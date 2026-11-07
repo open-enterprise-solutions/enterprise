@@ -17,6 +17,7 @@
 #include "gui/univ/ctrl/button.h"       // the window's controls — the kit's (gui.h)
 #include "gui/univ/ctrl/listBox.h"
 #include "gui/univ/ctrl/staticText.h"
+#include "gui/univ/dialog.h"
 
 // ⭐ THE LAUNCHER'S OWN PICTURES. It links the backend alone, so the frontend's art provider — which answers the
 // stock ids in the set's manner in the designer and the running application — never reaches it, and a stock id
@@ -42,7 +43,9 @@ struct ibListInfo {
 	wxString GetAddress() const;
 };
 
-class ibFrameLauncher : public wxFrame {
+// THE LAUNCHER'S WINDOW IS A DIALOG of the library (ibDialog): its title bar and border the theme's. Modeless - closed,
+// it is destroyed, and the application ends with it.
+class ibDialogLauncher : public ibDialog {
 
 	ibListBox* m_listIBwnd;
 	ibStaticText* m_staticDBName;
@@ -61,8 +64,8 @@ public:
 	void LoadListIB();
 	void SaveListIB();
 
-	ibFrameLauncher(wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = _("Launch OES"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize(520, 420), long style = wxDEFAULT_FRAME_STYLE | wxRESIZE_BORDER);
-	virtual ~ibFrameLauncher();
+	ibDialogLauncher(wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = _("Launch OES"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize(520, 420), long style = wxDEFAULT_FRAME_STYLE | wxRESIZE_BORDER);
+	virtual ~ibDialogLauncher();
 
 	//events:
 protected:
@@ -79,6 +82,7 @@ protected:
 	void OnButtonDelete(wxCommandEvent& event);
 
 	void OnButtonClose(wxCommandEvent& event);
+	void OnCloseWindow(wxCloseEvent& event);
 
 private:
 

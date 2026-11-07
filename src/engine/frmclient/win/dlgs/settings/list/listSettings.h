@@ -1,9 +1,9 @@
 ﻿#ifndef __LIST_SETTINGS_DLG_H__
 #define __LIST_SETTINGS_DLG_H__
 
-#include <wx/dialog.h>
+#include "gui/univ/dialog.h"
 #include <wx/listctrl.h>
-#include <wx/treectrl.h>
+#include "gui/univ/ctrl/treeCtrl.h"
 #include <wx/combobox.h>
 #include <wx/choice.h>
 #include <wx/textctrl.h>
@@ -19,6 +19,9 @@
 // dataview machinery below.
 #include "gui/univ/dataview/dataview.h"
 #include "protocol/protocolNode.h"   // the server's question and its answer
+#include "gui/univ/ctrl/staticText.h"
+#include "gui/univ/ctrl/button.h"
+#include "gui/univ/panel.h"
 
 class FRMCLIENT_API ibMetaData;
 
@@ -40,7 +43,7 @@ class FRMCLIENT_API ibMetaData;
 // wrapper the list opens — panel + OK/Cancel. Which pages appear is the embedder's
 // choice.
 // ---------------------------------------------------------------------------
-class ibListSettingsPanel : public wxPanel {
+class ibListSettingsPanel : public ibPanel {
 public:
 	// WHICH EDITORS this panel carries. A host asks for what it does not already
 	// provide itself.
@@ -213,8 +216,8 @@ private:
 	//  query". See BuildQueryPage: the two disagreed, and the text won by accident.)
 	// The arbitrary query, in the SAME styled editor the constructor uses — one language, one look.
 	class wxStyledTextCtrl* m_queryText = nullptr;
-	class wxButton* m_queryBuild = nullptr;   // opens the query constructor ON this text and writes back into it
-	class wxStaticText* m_queryError = nullptr;   // the ENGINE's verdict, verbatim; hidden when the query resolves
+	class ibButton* m_queryBuild = nullptr;   // opens the query constructor ON this text and writes back into it
+	class ibStaticText* m_queryError = nullptr;   // the ENGINE's verdict, verbatim; hidden when the query resolves
 	ibString            m_queryFault;             // what it said, kept so the line can be shown on open too
 
 	// Push the query onto the list and rebuild everything that depends on it (the three field trees,
@@ -235,7 +238,7 @@ private:
 	// Group — Field, model-driven.
 	ibDataViewCtrl* m_groupView      = nullptr;
 	ibGroupModel*   m_groupModel     = nullptr;
-	wxTreeCtrl*     m_groupFieldTree = nullptr;   // Group tab — available fields (left pane)
+	ibTreeCtrl*     m_groupFieldTree = nullptr;   // Group tab — available fields (left pane)
 
 	int m_pages = Page_All;   // which editors this panel was asked for
 
@@ -250,7 +253,7 @@ private:
 // the panel's buffer onto the model; Cancel drops it, which is what makes the whole
 // window transactional.
 // ---------------------------------------------------------------------------
-class ibDialogListSettings : public wxDialog {
+class ibDialogListSettings : public ibDialog {
 public:
 	// THE AUTHOR'S ROAD — the description is edited (its query included).
 	ibDialogListSettings(wxWindow* parent, ibCompositionDescription& desc, const class ibMetaData* metaData);

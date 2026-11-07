@@ -15,17 +15,18 @@
 #include "frmclient/backend/serialize/dataProtocol.h"         // the setting and its fields, as the server's question carries them
 #include "frmclient/backend/metaCollection/partial/reference/reference.h"   // which of the fields' types are references
 
-#include <wx/notebook.h>
+#include "gui/univ/ctrl/notebook.h"
 #include <wx/panel.h>
 #include <wx/sizer.h>
-#include <wx/button.h>
+#include "gui/univ/ctrl/button.h"
 #include <wx/treectrl.h>
-#include <wx/splitter.h>
+#include "gui/univ/splitterWindow.h"
 #include <wx/menu.h>
-#include <wx/msgdlg.h>
-#include <wx/stattext.h>
+#include "gui/univ/messageDialog.h"
+#include "gui/univ/ctrl/staticText.h"
 #include <wx/toolbar.h>
 #include <wx/app.h>
+#include "gui/univ/dialog.h"
 
 // Group tab dataview columns.
 // COLUMN 0 IS RESERVED by the ibDataViewCtrl fork (a model column 0 paints blank
@@ -84,7 +85,7 @@ public:
 // `settings` is what the window EDITS; the caller took the copy and decides what accepting it means.
 ibListSettingsPanel::ibListSettingsPanel(wxWindow* parent, ibCompositionDescription& desc,
 	const ibMetaData* metaData, int pages)
-	: wxPanel(parent, wxID_ANY),
+	: ibPanel(parent, wxID_ANY),
 	  m_schema(&desc), m_desc(&desc), m_metaData(metaData),
 	  m_fieldSource(new ibSettingsFieldTree()), m_pages(pages)
 {
@@ -96,7 +97,7 @@ ibListSettingsPanel::ibListSettingsPanel(wxWindow* parent, ibCompositionDescript
 ibListSettingsPanel::ibListSettingsPanel(wxWindow* parent, const ibCompositionDescription& schema,
 	const ibMetaData* metaData, ibSettingsDescription& settings,
 	std::vector<ibSettingsPlainField> fields, int pages)
-	: wxPanel(parent, wxID_ANY),
+	: ibPanel(parent, wxID_ANY),
 	  m_schema(&schema), m_metaData(metaData), m_settings(&settings), m_plainFields(std::move(fields)),
 	  m_fieldSource(new ibSettingsFieldTree()), m_pages(pages)
 {
@@ -112,7 +113,7 @@ void ibListSettingsPanel::BuildPages()
 
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
-	wxNotebook* notebook = new wxNotebook(this, wxID_ANY);
+	ibNotebook* notebook = new ibNotebook(this, wxID_ANY);
 	ibStyleSettingsTabs(notebook);
 	// ⭐ TABS ARE GATED BY WHAT THE HOST ASKED FOR, and by nothing else. A DESCRIPTION forbids no
 	// part of itself: every one of them is there to be written. The gate used to ask a MODEL for
@@ -225,7 +226,7 @@ void ibListSettingsPanel::BindFieldSource()
 // UseCustomQuery / CustomQuery properties (serialised), NOT the settings buffer; applied to the list on OK.
 wxWindow* ibListSettingsPanel::BuildQueryPage(wxWindow* parent)
 {
-	wxPanel* page = new wxPanel(parent, wxID_ANY);
+	ibPanel* page = new ibPanel(parent, wxID_ANY);
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 
 	// ⭐ NO "ARBITRARY QUERY" BOX. Having a query IS running one — the description says so by carrying
@@ -234,13 +235,13 @@ wxWindow* ibListSettingsPanel::BuildQueryPage(wxWindow* parent)
 	// query opened with the box CLEAR and the text editable, and typing turned the list into a
 	// query-driven one without ever ticking anything (Max, 2026-08-24).
 	wxBoxSizer* header = new wxBoxSizer(wxHORIZONTAL);
-	header->Add(new wxStaticText(page, wxID_ANY, _("Query text - what this list reads")),
+	header->Add(new ibStaticText(page, wxID_ANY, _("Query text - what this list reads")),
 		0, wxALIGN_CENTER_VERTICAL);
 	header->AddStretchSpacer();
 
 	// THE CONSTRUCTOR OPENS ON THIS VERY TEXT and writes back into it — as the composer's Query page has it. (On the
 	// client it is the ported window, whose catalogue and fields come from the server: queryConstructor.h.)
-	m_queryBuild = new wxButton(page, wxID_ANY, _("Query constructor"));
+	m_queryBuild = new ibButton(page, wxID_ANY, _("Query constructor"));
 	m_queryBuild->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
 		if (m_queryText == nullptr)
 			return;
@@ -264,7 +265,7 @@ wxWindow* ibListSettingsPanel::BuildQueryPage(wxWindow* parent)
 
 	// THE ENGINE'S OWN WORDS, under the text it is about. Shown only when there is something to say;
 	// there is no second, softer opinion here about what a valid query is.
-	m_queryError = new wxStaticText(page, wxID_ANY, wxEmptyString);
+	m_queryError = new ibStaticText(page, wxID_ANY, wxEmptyString);
 	m_queryError->SetForegroundColour(*wxRED);
 	m_queryError->Hide();
 	sizer->Add(m_queryError, 0, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, FromDIP(6));
@@ -336,22 +337,22 @@ void ibListSettingsPanel::ApplyQueryToList()
 // THE GROUP TAB — the list's own fold, a flat ordered list of Field + Kind.
 wxWindow* ibListSettingsPanel::BuildGroupPage(wxWindow* parent)
 {
-	wxPanel* panel = new wxPanel(parent);
-	wxSplitterWindow* splitter = new wxSplitterWindow(panel, wxID_ANY,
+	ibPanel* panel = new ibPanel(parent);
+	ibSplitterWindow* splitter = new ibSplitterWindow(panel, wxID_ANY,
 		wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
 	splitter->SetMinimumPaneSize(FromDIP(120));
 
 	// ---- LEFT pane: available fields (dot-walkable) ----
-	wxPanel* leftPane = new wxPanel(splitter);
+	ibPanel* leftPane = new ibPanel(splitter);
 	wxBoxSizer* leftSizer = new wxBoxSizer(wxVERTICAL);
-	leftSizer->Add(new wxStaticText(leftPane, wxID_ANY, _("Available fields")), 0, wxALL, FromDIP(4));
-	m_groupFieldTree = new wxTreeCtrl(leftPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+	leftSizer->Add(new ibStaticText(leftPane, wxID_ANY, _("Available fields")), 0, wxALL, FromDIP(4));
+	m_groupFieldTree = new ibTreeCtrl(leftPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_HIDE_ROOT | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxTR_TWIST_BUTTONS);
 	leftSizer->Add(m_groupFieldTree, 1, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, FromDIP(4));
 	leftPane->SetSizer(leftSizer);
 
 	// ---- RIGHT pane: the grouping list — Field + Kind, model-driven ----
-	wxPanel* rightPane = new wxPanel(splitter);
+	ibPanel* rightPane = new ibPanel(splitter);
 	wxBoxSizer* rightSizer = new wxBoxSizer(wxVERTICAL);
 	m_groupView = new ibDataViewCtrl(rightPane, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxDV_ROW_LINES | wxDV_SINGLE);
 	ibStyleSettingsGrid(m_groupView);
@@ -560,7 +561,7 @@ const ibMetaData* ibListSettingsPanel::SourceMetaData() const
 // differently depending on where the user clicked.
 void ibListSettingsPanel::OnListContextMenu(ibDataViewEvent&)
 {
-	wxMenu menu;
+	ibMenu menu;
 	ibAppendCmd(menu, wxID_ADD, _("Add") + wxT("\tIns"), wxASCII_STR(wxART_NEW), this);
 	ibAppendCmd(menu, wxID_REMOVE, _("Delete") + wxT("\tDel"), wxASCII_STR(wxART_DELETE), this);
 	menu.AppendSeparator();
@@ -572,7 +573,7 @@ void ibListSettingsPanel::OnListContextMenu(ibDataViewEvent&)
 	menu.Bind(wxEVT_MENU, [this](wxCommandEvent&)   { MoveGroupLine(-1); }, wxID_UP);
 	menu.Bind(wxEVT_MENU, [this](wxCommandEvent&)   { MoveGroupLine(+1); }, wxID_DOWN);
 
-	PopupMenu(&menu);
+	m_groupView->PopupMenu(&menu);   // on the view: an ib menu shows over an ib window, the panel is native
 }
 
 // A virtual-list row id is 1-based, and the row shows the line the model maps it to.
@@ -666,7 +667,7 @@ bool ibListSettingsPanel::Commit()
 		ibValidateSettings(EditedSettings());
 	}
 	catch (const ibBackendException& err) {
-		wxMessageBox(err.GetErrorDescription(), _("List settings"), wxOK | wxICON_WARNING, this);
+		ibMessageBox(err.GetErrorDescription(), _("List settings"), wxOK | wxICON_WARNING, this);
 		return false;   // the host stays open — nothing is committed
 	}
 
@@ -696,7 +697,7 @@ bool ibListSettingsPanel::Commit()
 // the panel. `settings` null means the description's own settings section is what is edited.
 ibDialogListSettings::ibDialogListSettings(wxWindow* parent, ibCompositionDescription& desc,
 	const ibMetaData* metaData)
-	: wxDialog(parent, wxID_ANY, _("List settings"), wxDefaultPosition, wxSize(660, 450),
+	: ibDialog(parent, wxID_ANY, _("List settings"), wxDefaultPosition, wxSize(660, 450),
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 {
 	m_panel = new ibListSettingsPanel(this, desc, metaData);
@@ -706,7 +707,7 @@ ibDialogListSettings::ibDialogListSettings(wxWindow* parent, ibCompositionDescri
 ibDialogListSettings::ibDialogListSettings(wxWindow* parent, const ibCompositionDescription& schema,
 	const ibMetaData* metaData, ibSettingsDescription& settings,
 	std::vector<ibSettingsPlainField> fields)
-	: wxDialog(parent, wxID_ANY, _("List settings"), wxDefaultPosition, wxSize(660, 450),
+	: ibDialog(parent, wxID_ANY, _("List settings"), wxDefaultPosition, wxSize(660, 450),
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 {
 	m_panel = new ibListSettingsPanel(this, schema, metaData, settings, std::move(fields));
@@ -790,7 +791,7 @@ bool ibDialogListSettings::ShowUserSettings(wxWindow* parent, const ibProtocolNo
 	// A setting the server refused comes back with why — said before the window opens on it again.
 	const wxString error = request.GetString(ibProtocol::ibRequest::ibListSettings::Error);
 	if (!error.IsEmpty())
-		wxMessageBox(error, _("List settings"), wxOK | wxICON_WARNING, top);
+		ibMessageBox(error, _("List settings"), wxOK | wxICON_WARNING, top);
 
 	ibDialogListSettings dlg(top, kNoSource, metaData, edited, std::move(fields));
 	if (dlg.ShowModal() != wxID_OK)

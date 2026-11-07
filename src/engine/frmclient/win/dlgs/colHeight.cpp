@@ -2,9 +2,9 @@
 #include "frmclient/win/editor/gridEditor/gridEditor.h"
 
 ibDialogColWidth::ibDialogColWidth(ibGridEditor* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) :
-	wxDialog(parent, id, title, pos, size, style)
+	ibDialog(parent, id, title, pos, size, style)
 {
-	wxDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
+	ibDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
 
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
@@ -20,7 +20,7 @@ ibDialogColWidth::ibDialogColWidth(ibGridEditor* parent, wxWindowID id, const wx
 		}
 	}
 
-	m_defaultWidth = new wxCheckBox(this, wxID_ANY, _("Default column width"), wxDefaultPosition, wxDefaultSize, 0);
+	m_defaultWidth = new ibCheckBox(this, wxID_ANY, _("Default column width"), wxDefaultPosition, wxDefaultSize, 0);
 	m_defaultWidth->SetValue(defaultWidth);
 	mainSizer->Add(m_defaultWidth, 0, wxALL, FromDIP(5));
 
@@ -42,7 +42,7 @@ ibDialogColWidth::ibDialogColWidth(ibGridEditor* parent, wxWindowID id, const wx
 		}
 	}
 
-	m_spinCtrlWidth = new wxSpinCtrlDouble(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, 999, width);
+	m_spinCtrlWidth = new ibSpinCtrlDouble(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, 999, width);
 	m_spinCtrlWidth->SetDigits(2);
 	rowSizer->Add(m_spinCtrlWidth, 0, 0, FromDIP(5));
 	mainSizer->Add(rowSizer, 1, wxEXPAND, FromDIP(5));
@@ -53,20 +53,20 @@ ibDialogColWidth::ibDialogColWidth(ibGridEditor* parent, wxWindowID id, const wx
 		m_spinCtrlWidth->Enable(!m_defaultWidth->GetValue());
 	});
 
-	m_sdbSizerBottom = new wxStdDialogButtonSizer();
-	m_sdbSizerBottomOK = new wxButton(this, wxID_OK);
+	m_sdbSizerBottom = new ibStdDialogButtonSizer();
+	m_sdbSizerBottomOK = new ibButton(this, wxID_OK);
 	m_sdbSizerBottom->AddButton(m_sdbSizerBottomOK);
-	m_sdbSizerBottomCancel = new wxButton(this, wxID_CANCEL);
+	m_sdbSizerBottomCancel = new ibButton(this, wxID_CANCEL);
 	m_sdbSizerBottom->AddButton(m_sdbSizerBottomCancel);
 	m_sdbSizerBottom->Realize();
 
-	mainSizer->Add(m_sdbSizerBottom, 1, wxEXPAND, FromDIP(5));
+	mainSizer->Add(m_sdbSizerBottom, 1, wxEXPAND | wxALL, FromDIP(5));
 
-	wxDialog::SetSizer(mainSizer);
-	wxDialog::Layout();
+	ibDialog::SetSizer(mainSizer);
+	ibDialog::Layout();
 	mainSizer->Fit(this);
 
-	wxDialog::Centre(wxBOTH);
+	ibDialog::Centre(wxBOTH);
 }
 
 ibDialogColWidth::~ibDialogColWidth()

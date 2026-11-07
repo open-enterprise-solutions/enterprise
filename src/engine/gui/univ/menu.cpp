@@ -780,9 +780,9 @@ bool ibPopupMenuWindow::ProcessLeftDown(wxMouseEvent& event)
 
 // SEAM vs univ: with the mouse captured a right click lands here and the
 // canon ignored it — the menu looked stuck. Match the native behaviour:
-// a right click outside dismisses the menu and immediately re-opens the
-// context menu of the window under the cursor.
-// the reopen request must NOT be queued while the menu modal loop is still
+// a right click outside dismisses the menu and the click goes on to the
+// window under the cursor (DoPopupMenu).
+// the click must NOT be queued while the menu modal loop is still
 // running — the loop pumps pending events and the new DoPopupMenu would
 // re-enter before ms_evtLoopPopup is cleared (assert); remember the spot
 // and let DoPopupMenu fire it AFTER the loop exits
@@ -2804,6 +2804,32 @@ bool ibWindow::PopupMenu(ibMenu *menu, int x, int y)
     return DoPopupMenu(menu, x, y);
 }
 
+// SEAM vs wx: wxWindowBase's DoGetPopupMenuSelectionFromUser, its selection
+// kept here rather than in wincmn.cpp's static - the item's event caught on
+// its way to this window, the update events stopped here as there (a menu of
+// made-up ids is not updated by handlers elsewhere)
+int ibWindow::GetPopupMenuSelectionFromUser(ibMenu& menu, const wxPoint& pos)
+{
+    int selection = wxID_NONE;
+    const auto onMenu = [&selection](wxCommandEvent& event) { selection = event.GetId(); };
+    const auto onUpdate = [](wxUpdateUIEvent& WXUNUSED(event)) {};
+
+    Bind(wxEVT_MENU, onMenu);
+    Bind(wxEVT_UPDATE_UI, onUpdate);
+
+    PopupMenu(&menu, pos);
+
+    Unbind(wxEVT_UPDATE_UI, onUpdate);
+    Unbind(wxEVT_MENU, onMenu);
+
+    return selection;
+}
+
+int ibWindow::GetPopupMenuSelectionFromUser(ibMenu& menu, int x, int y)
+{
+    return GetPopupMenuSelectionFromUser(menu, wxPoint(x, y));
+}
+
 bool ibWindow::DoPopupMenu(ibMenu *menu, int x, int y)
 {
     wxCHECK_MSG( !ms_evtLoopPopup, false,
@@ -2850,8 +2876,12 @@ bool ibWindow::DoPopupMenu(ibMenu *menu, int x, int y)
     // remove the handler
     PopEventHandler(true /* delete it */);
 
-    // a right click outside the menu asked to reopen the context menu of
-    // the window under the cursor — now the modal loop is gone it is safe
+    // a right click outside the menu dismissed it - now the modal loop is gone
+    // the click is the window's under the cursor, as a native menu leaves it:
+    // its own right press (a tree, a list, a grid select there and pop their
+    // menus), the release that follows its own too (the context menu event
+    // of the windows asking for that one); a context menu event sent instead
+    // reached none of the first ones - the menu shut, no new one opened
     if ( s_pendingContextReopen )
     {
         s_pendingContextReopen = false;
@@ -2859,8 +2889,10 @@ bool ibWindow::DoPopupMenu(ibMenu *menu, int x, int y)
         wxWindow* target = wxFindWindowAtPoint(s_pendingContextPos);
         if ( target )
         {
-            wxContextMenuEvent* evt = new wxContextMenuEvent(
-                wxEVT_CONTEXT_MENU, target->GetId(), s_pendingContextPos);
+            wxMouseEvent* evt = new wxMouseEvent(wxEVT_RIGHT_DOWN);
+            evt->SetPosition(target->ScreenToClient(s_pendingContextPos));
+            evt->SetRightDown(true);
+            evt->SetId(target->GetId());
             evt->SetEventObject(target);
             target->GetEventHandler()->QueueEvent(evt);
         }

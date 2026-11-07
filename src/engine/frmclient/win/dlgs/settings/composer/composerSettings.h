@@ -3,18 +3,20 @@
 
 #include "frmclient/frmclient.h"
 
-#include <wx/dialog.h>
-#include <wx/treectrl.h>
+#include "gui/univ/dialog.h"
+#include "gui/univ/ctrl/treeCtrl.h"
 #include <wx/listbox.h>
 #include <wx/textctrl.h>
-#include <wx/stattext.h>
-#include <wx/textdlg.h>   // wxGetTextFromUser — a hand-made parameter is named when it is added
+#include "gui/univ/ctrl/staticText.h"
+#include "gui/univ/textEntryDialog.h"   // ibGetTextFromUser — a hand-made parameter is named when it is added
 
 #include <map>
 #include <memory>
 #include <vector>
 
 #include "frmclient/backend/query/queryConstructorModel.h"   // ibQueryConstructorField + ibQueryFieldsOfText — the fields a TEXT offers
+#include "gui/univ/ctrl/notebook.h"
+#include "gui/univ/panel.h"
 // (NO valueDataComposition.h. The panel holds no running composition; only the modal host below
 //  takes one, as a pointer, and a name is all that needs.)
 class ibValueDataComposition;
@@ -119,7 +121,7 @@ struct ibStructurePos
 	}
 };
 
-class FRMCLIENT_API ibComposerSettingsPanel : public wxPanel {
+class FRMCLIENT_API ibComposerSettingsPanel : public ibPanel {
 public:
 
 	// ⭐⭐ `edited` — THE DESCRIPTION THIS PANEL EDITS, BY REFERENCE, edited in place. The shape the
@@ -310,12 +312,12 @@ private:
 
 	// One tree of available fields per page that picks one — same contents, filled by the same
 	// walk, because "which fields does this composition have" has exactly one answer.
-	wxTreeCtrl* CreateFieldTree(wxWindow* parent);
-	void PopulateFieldTree(wxTreeCtrl* tree);
+	ibTreeCtrl* CreateFieldTree(wxWindow* parent);
+	void PopulateFieldTree(ibTreeCtrl* tree);
 	void PopulateFieldTrees();
 	// The FIELD behind the cursor — carries its type, which is what the resources page asks the
 	// engine about ("which aggregates fit this?").
-	const struct ibQueryConstructorField* SelectedField(wxTreeCtrl* tree) const;
+	const struct ibQueryConstructorField* SelectedField(ibTreeCtrl* tree) const;
 
 	// WHAT THE QUERY OFFERS, read once per rebuild and shown by every tree. Kept because a row
 	// carries an INDEX into it: the answer about a selected row comes from the field object.
@@ -602,11 +604,11 @@ private:
 	// parameter belongs to the composition, not to a node under it. See the .cpp.
 	void SyncParameterPage();
 
-	class wxNotebook*           m_settingsTabs  = nullptr;
+	class ibNotebook*           m_settingsTabs  = nullptr;
 	wxWindow*                   m_groupingPage  = nullptr;
 	// The reader's parameters page — built once on that road, put on the notebook at the root only.
 	wxWindow*                   m_readerParameterPage = nullptr;
-	wxTreeCtrl*                 m_groupingFieldTree = nullptr;   // available fields, the shared tree's view
+	ibTreeCtrl*                 m_groupingFieldTree = nullptr;   // available fields, the shared tree's view
 	class ibDataViewCtrl*       m_groupingView  = nullptr;
 	class ibGroupingFieldsModel* m_groupingModel = nullptr;
 
@@ -621,7 +623,7 @@ private:
 	// "available tells us nothing, it is the same thing understood in a harder way"), and it had no
 	// reader on the run path at all. Removing it removed the parameter with it.
 	struct ibFieldSetPage {
-		wxTreeCtrl*              m_sourceTree = nullptr;   // everything the source offers, to pick FROM
+		ibTreeCtrl*              m_sourceTree = nullptr;   // everything the source offers, to pick FROM
 		class ibDataViewCtrl*    m_view    = nullptr;
 		class ibSelectedListModel* m_model = nullptr;
 	};
@@ -657,9 +659,9 @@ private:
 	std::unique_ptr<class ibSettingsFieldTree> m_fieldSource;
 	// WHICH NODE the settings below belong to — and, until the engine holds settings per node,
 	// that they are the whole composition's.
-	wxStaticText* m_settingsHeader = nullptr;
+	ibStaticText* m_settingsHeader = nullptr;
 
-	wxTreeCtrl*   m_resourceFieldTree = nullptr;
+	ibTreeCtrl*   m_resourceFieldTree = nullptr;
 	// Resources on the same dataview everything else uses: two columns, field and expression.
 	// The parameters page: the composition owns the list, this is the view onto it.
 	class ibDataViewCtrl*     m_parameterView = nullptr;
@@ -676,7 +678,7 @@ private:
 	// language's own keywords, line numbers. Query text is query text wherever it is shown; grey
 	// characters here while it is highlighted there is one language wearing two faces.
 	class wxStyledTextCtrl* m_queryText = nullptr;
-	wxStaticText* m_queryError = nullptr;
+	ibStaticText* m_queryError = nullptr;
 };
 
 // ------------------------------------------------------------------------------------------------
@@ -728,7 +730,7 @@ private:
 
 // The MODAL host — the panel plus OK / Cancel. Kept as the door the gridbox and the property
 // editor already call (ShowComposerSettings), so nothing outside had to learn about the split.
-class FRMCLIENT_API ibDialogComposerSettings : public wxDialog {
+class FRMCLIENT_API ibDialogComposerSettings : public ibDialog {
 public:
 
 	// ⭐⭐ THE USER'S SETTINGS OF A MODEL — the GRIDBOX's road, and the LIST's own window word for

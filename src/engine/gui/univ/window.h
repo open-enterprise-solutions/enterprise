@@ -111,6 +111,11 @@ public:
     bool PopupMenu(ibMenu *menu, const wxPoint& pos = wxDefaultPosition);
     bool PopupMenu(ibMenu *menu, int x, int y);
 
+    // ...and wxWindowBase's for the same reason: the id of the item chosen,
+    // wxID_NONE when the menu is dismissed
+    int GetPopupMenuSelectionFromUser(ibMenu& menu, const wxPoint& pos = wxDefaultPosition);
+    int GetPopupMenuSelectionFromUser(ibMenu& menu, int x, int y);
+
     // this is wxUniv-specific private method to be used only by ibMenu
     void DismissPopupMenu();
 
@@ -275,6 +280,12 @@ protected:
 public:
     // override MSWWindowProc() to process WM_NCHITTEST
     WXLRESULT MSWWindowProc(WXUINT message, WXWPARAM wParam, WXLPARAM lParam);
+
+    // SEAM vs univ: the border and the scrollbars are ours - drawn inside the window - and the native window never
+    // takes them. The wx style keeps both for our own pipeline, and the native style is made of it here, at Create
+    // and at every restyle (MSWUpdateStyle): wxNavigationEnabled's wxTAB_TRAVERSAL, at the first child, turned a
+    // panel's wxBORDER_RAISED into a native 3px frame under ours.
+    virtual WXDWORD MSWGetStyle(long flags, WXDWORD *exstyle = nullptr) const override;
 #endif // __WXMSW__
 
 private:

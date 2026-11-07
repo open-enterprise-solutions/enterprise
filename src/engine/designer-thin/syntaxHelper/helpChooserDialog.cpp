@@ -9,9 +9,9 @@
 
 #include "core/syntaxHelper/helpEntry.h"
 
-#include <wx/button.h>
+#include "gui/univ/ctrl/button.h"
 #include <wx/sizer.h>
-#include <wx/stattext.h>
+#include "gui/univ/ctrl/staticText.h"
 
 namespace {
 
@@ -37,14 +37,14 @@ wxString CategoryPath(const ibHelpEntry& e) {
 ibHelpChooserDialog::ibHelpChooserDialog(
     wxWindow* parent,
     const std::vector<const ibHelpEntry*>& candidates)
-    : wxDialog(parent, wxID_ANY, _("Select topic"),
+    : ibDialog(parent, wxID_ANY, _("Select topic"),
                 wxDefaultPosition, wxSize(560, 360),
                 wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER) {
 
-	auto* label = new wxStaticText(this, wxID_ANY,
+	auto* label = new ibStaticText(this, wxID_ANY,
 	                                 _("Select a topic from the list:"));
 
-	m_list = new wxListBox(this, wxID_ANY);
+	m_list = new ibListBox(this, wxID_ANY);
 	for (const ibHelpEntry* e : candidates) {
 		if (e == nullptr) continue;
 		const wxString display =
@@ -56,9 +56,9 @@ ibHelpChooserDialog::ibHelpChooserDialog(
 	}
 	if (!m_ids.empty()) m_list->SetSelection(0);
 
-	auto* btnShow   = new wxButton(this, IDC_ShowSelected, _("Show"));
-	auto* btnCancel = new wxButton(this, wxID_CANCEL,      _("Cancel"));
-	auto* btnHelp   = new wxButton(this, IDC_OpenHelp,     _("Help"));
+	auto* btnShow   = new ibButton(this, IDC_ShowSelected, _("Show"));
+	auto* btnCancel = new ibButton(this, wxID_CANCEL,      _("Cancel"));
+	auto* btnHelp   = new ibButton(this, IDC_OpenHelp,     _("Help"));
 	btnShow->SetDefault();
 
 	auto* buttons = new wxBoxSizer(wxHORIZONTAL);

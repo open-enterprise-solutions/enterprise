@@ -5,6 +5,7 @@
 #include <wx/wrapsizer.h>
 
 #include "frmclient/visualView/ctrl/control.h"
+#include "gui/univ/ctrl/staticBox.h"
 
 // THE SIZERS OF A VIEW — the old desktop's:a sizer is no window, it lays out what is
 // in it, as its node says; its properties are the server's (ibValueFrame).
@@ -88,7 +89,7 @@ public:
 	virtual wxWindow* GetChildParent() const override { return m_sizer != nullptr ? m_sizer->GetStaticBox() : nullptr; }
 
 private:
-	wxStaticBoxSizer* m_sizer = nullptr;
+	ibStaticBoxSizer* m_sizer = nullptr;
 };
 
 #endif

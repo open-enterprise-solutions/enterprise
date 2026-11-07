@@ -14,10 +14,10 @@
 #include "artProvider/artProvider.h"
 
 #include <wx/sizer.h>
-#include <wx/stattext.h>
+#include "gui/univ/ctrl/staticText.h"
 #include <wx/textctrl.h>
 #include <wx/button.h>
-#include <wx/msgdlg.h>
+#include "gui/univ/messageDialog.h"
 #include <wx/artprov.h>
 
 namespace {
@@ -34,7 +34,7 @@ ibDialogQueryCase::ibDialogQueryCase(wxWindow* parent,
                                      const std::vector<ibQueryConstructorField>& fields,
                                      const ibQueryAstExprPtr& existing,
                                      const ibMetaData* metaData, bool readOnly)
-	: wxDialog(parent, wxID_ANY, Kw(ibQueryKeyword::Case), wxDefaultPosition, wxSize(760, 420),
+	: ibDialog(parent, wxID_ANY, Kw(ibQueryKeyword::Case), wxDefaultPosition, wxSize(760, 420),
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 	, m_fields(fields)
 	, m_metaData(metaData)
@@ -67,7 +67,7 @@ ibDialogQueryCase::ibDialogQueryCase(wxWindow* parent,
 
 	wxBoxSizer* outer = new wxBoxSizer(wxVERTICAL);
 
-	outer->Add(new wxStaticText(this, wxID_ANY,
+	outer->Add(new ibStaticText(this, wxID_ANY,
 		// ⚠ ASCII ONLY in this literal — the file is UTF-8 with no BOM and MSVC reads it in the
 		// system codepage. The keywords themselves come from the ACTIVE table, so a localized
 		// language shows its own words here.
@@ -78,7 +78,7 @@ ibDialogQueryCase::ibDialogQueryCase(wxWindow* parent,
 	// ---- the verbs, on a toolbar-shaped row of buttons -------------------------------------
 	wxBoxSizer* commands = new wxBoxSizer(wxHORIZONTAL);
 	auto command = [this, commands](const wxString& label, void (ibDialogQueryCase::*handler)(wxCommandEvent&)) {
-		wxButton* button = new wxButton(this, wxID_ANY, label);
+		ibButton* button = new ibButton(this, wxID_ANY, label);
 		button->Bind(wxEVT_BUTTON, handler, this);
 		button->Enable(!m_readOnly);
 		commands->Add(button, 0, wxRIGHT, FromDIP(4));
@@ -87,12 +87,12 @@ ibDialogQueryCase::ibDialogQueryCase(wxWindow* parent,
 	command(_("Add"),    &ibDialogQueryCase::OnAdd);
 	command(_("Delete"), &ibDialogQueryCase::OnRemove);
 	{
-		wxButton* up = new wxButton(this, wxID_ANY, _("Move up"));
+		ibButton* up = new ibButton(this, wxID_ANY, _("Move up"));
 		up->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { MoveBranch(-1); });
 		up->Enable(!m_readOnly);
 		commands->Add(up, 0, wxRIGHT, FromDIP(4));
 
-		wxButton* down = new wxButton(this, wxID_ANY, _("Move down"));
+		ibButton* down = new ibButton(this, wxID_ANY, _("Move down"));
 		down->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { MoveBranch(+1); });
 		down->Enable(!m_readOnly);
 		commands->Add(down, 0, wxRIGHT, FromDIP(4));
@@ -148,13 +148,13 @@ ibDialogQueryCase::ibDialogQueryCase(wxWindow* parent,
 
 	// ---- the ELSE ---------------------------------------------------------------------------
 	wxBoxSizer* elseRow = new wxBoxSizer(wxHORIZONTAL);
-	elseRow->Add(new wxStaticText(this, wxID_ANY, Kw(ibQueryKeyword::Else)),
+	elseRow->Add(new ibStaticText(this, wxID_ANY, Kw(ibQueryKeyword::Else)),
 		0, wxALIGN_CENTER_VERTICAL | wxRIGHT, FromDIP(6));
-	m_elseBox = new wxTextCtrl(this, wxID_ANY, m_otherwise);
+	m_elseBox = new ibTextCtrl(this, wxID_ANY, m_otherwise);
 	m_elseBox->Enable(!m_readOnly);
 	elseRow->Add(m_elseBox, 1, wxALIGN_CENTER_VERTICAL);
 	{
-		wxButton* pick = new wxButton(this, wxID_ANY, wxT("..."), wxDefaultPosition, FromDIP(wxSize(32, 24)));
+		ibButton* pick = new ibButton(this, wxID_ANY, wxT("..."), wxDefaultPosition, FromDIP(wxSize(32, 24)));
 		pick->Enable(!m_readOnly);
 		pick->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
 			wxString text = m_elseBox->GetValue();
@@ -166,11 +166,11 @@ ibDialogQueryCase::ibDialogQueryCase(wxWindow* parent,
 	// LEFT EMPTY MEANS NO `ELSE`, which is a different query from `ELSE NULL` — the language says so
 	// and this window must not decide otherwise on the author's behalf.
 	outer->Add(elseRow, 0, wxEXPAND | wxALL, FromDIP(6));
-	outer->Add(new wxStaticText(this, wxID_ANY,
+	outer->Add(new ibStaticText(this, wxID_ANY,
 		_("Leave it empty for no ELSE branch: that is not the same as ELSE NULL.")),
 		0, wxLEFT | wxRIGHT | wxBOTTOM, FromDIP(6));
 
-	wxStdDialogButtonSizer* buttons = CreateStdDialogButtonSizer(wxOK | wxCANCEL);
+	ibStdDialogButtonSizer* buttons = CreateStdDialogButtonSizer(wxOK | wxCANCEL);
 	outer->Add(buttons, 0, wxALIGN_RIGHT | wxLEFT | wxRIGHT | wxBOTTOM, FromDIP(6));
 
 	SetSizer(outer);
@@ -285,7 +285,7 @@ void ibDialogQueryCase::OnOk(wxCommandEvent& event)
 	// arriving somewhere else entirely.
 	for (size_t i = 0; i < m_branches.size(); ++i) {
 		if (m_branches[i].m_when.IsEmpty() || m_branches[i].m_then.IsEmpty()) {
-			wxMessageBox(ibString::Format(
+			ibMessageBox(ibString::Format(
 				_("Branch %u is unfinished: it needs both a condition and a result."),
 				static_cast<unsigned int>(i + 1)),
 				GetTitle(), wxOK | wxICON_WARNING, this);
@@ -297,13 +297,13 @@ void ibDialogQueryCase::OnOk(wxCommandEvent& event)
 	// softer opinion here about what a valid expression is.
 	try {
 		if (GetExpression() == nullptr) {
-			wxMessageBox(_("Add at least one branch: a choice with no condition is not a choice."),
+			ibMessageBox(_("Add at least one branch: a choice with no condition is not a choice."),
 				GetTitle(), wxOK | wxICON_WARNING, this);
 			return;
 		}
 	}
 	catch (const ibCoreException& error) {
-		wxMessageBox(error.GetErrorDescription(), GetTitle(), wxOK | wxICON_ERROR, this);
+		ibMessageBox(error.GetErrorDescription(), GetTitle(), wxOK | wxICON_ERROR, this);
 		return;
 	}
 

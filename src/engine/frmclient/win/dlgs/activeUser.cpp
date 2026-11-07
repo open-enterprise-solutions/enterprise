@@ -6,7 +6,8 @@
 #include "frmclient/visualView/ctrl/frame.h"   // wxDefaultStypeFGColour — the desktop's dialog took it from there
 #include "frmclient/backend/appData.h"        // DesignerMode — whose the context menus are
 
-#include <wx/menu.h>
+#include "gui/univ/menu.h"
+#include "gui/univ/messageDialog.h"
 
 namespace {
 
@@ -124,35 +125,35 @@ void ibDialogActiveUser::RefreshLocksTable(const ibProtocolNode& shown)
 }
 
 ibDialogActiveUser::ibDialogActiveUser(wxWindow* parent, const ibProtocolNode& shown, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) :
-	wxDialog(parent, id, title, pos, size, style), m_activeTableScanner(new wxTimer)
+	ibDialog(parent, id, title, pos, size, style), m_activeTableScanner(new wxTimer)
 {
-	wxDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
+	ibDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
 	this->SetBackgroundColour(wxColour(184, 201, 212));   // #B8C9D4 powder-blue dialog
 
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
-	m_notebook = new wxNotebook(this, wxID_ANY);
+	m_notebook = new ibNotebook(this, wxID_ANY);
 	mainSizer->Add(m_notebook, 1, wxALL | wxEXPAND, FromDIP(5));
 
-	m_activeTable = new wxListCtrl(m_notebook, wxID_ANY, wxDefaultPosition,
+	m_activeTable = new ibListCtrl(m_notebook, wxID_ANY, wxDefaultPosition,
 		wxDefaultSize, wxLC_REPORT | wxLC_SINGLE_SEL);
 	m_activeTable->SetBackgroundColour(wxColour(250, 250, 250));  // #fafafa list
 	m_notebook->AddPage(m_activeTable, _("Users"), true);
 
-	m_locksTable = new wxListCtrl(m_notebook, wxID_ANY, wxDefaultPosition,
+	m_locksTable = new ibListCtrl(m_notebook, wxID_ANY, wxDefaultPosition,
 		wxDefaultSize, wxLC_REPORT | wxLC_SINGLE_SEL);
 	m_locksTable->SetBackgroundColour(wxColour(250, 250, 250));   // #fafafa list
 	m_notebook->AddPage(m_locksTable, _("Locks"), false);
 
-	wxDialog::SetSizer(mainSizer);
-	wxDialog::Layout();
-	wxDialog::Centre(wxBOTH);
+	ibDialog::SetSizer(mainSizer);
+	ibDialog::Layout();
+	ibDialog::Centre(wxBOTH);
 
 	wxIcon dlg_icon;
 	dlg_icon.CopyFromBitmap(ibProtocolPicture(shown, ibProtocol::ibSchema::ibActiveUser::Icon));
 
-	wxDialog::SetIcon(dlg_icon);
-	wxDialog::SetFocus();
+	ibDialog::SetIcon(dlg_icon);
+	ibDialog::SetFocus();
 
 	m_activeTable->SetForegroundColour(wxDefaultStypeFGColour);
 	m_locksTable->SetForegroundColour(wxDefaultStypeFGColour);
@@ -217,14 +218,14 @@ void ibDialogActiveUser::OnContextMenu(wxListEvent& event)
 	// boot peers off. (The server refuses them to any other session too.)
 	if (!appData->DesignerMode()) return;
 
-	wxMenu menu;
+	ibMenu menu;
 	menu.Append(ID_ActiveUser_Kick,   _("Kick session"));
 	menu.Append(ID_ActiveUser_Reload, _("Reload clients"));
 	menu.Bind(wxEVT_MENU, &ibDialogActiveUser::OnKickSelected,   this,
 		ID_ActiveUser_Kick);
 	menu.Bind(wxEVT_MENU, &ibDialogActiveUser::OnReloadSelected, this,
 		ID_ActiveUser_Reload);
-	PopupMenu(&menu);
+	m_activeTable->PopupMenu(&menu);   // on the list: an ib menu shows over an ib window, the dialog is native
 }
 
 void ibDialogActiveUser::OnKickSelected(wxCommandEvent&)
@@ -241,7 +242,7 @@ void ibDialogActiveUser::OnKickSelected(wxCommandEvent&)
 	const wxString userLabel = user.IsEmpty()
 		? wxString(_("(user not specified)"))
 		: user;
-	const int answer = wxMessageBox(
+	const int answer = ibMessageBox(
 		ibString::Format(_("Kick session of '%s'?"), userLabel),
 		wxTheApp->GetAppDisplayName(), wxYES_NO | wxICON_QUESTION, this);
 	if (answer != wxYES) return;
@@ -273,11 +274,11 @@ void ibDialogActiveUser::OnLocksContextMenu(wxListEvent& event)
 	const wxString lockGuid = m_locksTable->GetItemText(row, 5);
 	if (lockGuid.IsEmpty()) return;
 
-	wxMenu menu;
+	ibMenu menu;
 	menu.Append(ID_ActiveUser_ForceReleaseLock, _("Force release"));
 	menu.Bind(wxEVT_MENU, &ibDialogActiveUser::OnForceReleaseSelected, this,
 		ID_ActiveUser_ForceReleaseLock);
-	PopupMenu(&menu);
+	m_locksTable->PopupMenu(&menu);   // on the list: an ib menu shows over an ib window, the dialog is native
 }
 
 void ibDialogActiveUser::OnForceReleaseSelected(wxCommandEvent&)
@@ -292,7 +293,7 @@ void ibDialogActiveUser::OnForceReleaseSelected(wxCommandEvent&)
 	const wxString ns   = m_locksTable->GetItemText(row, 0);
 	const wxString user = m_locksTable->GetItemText(row, 3);
 
-	const int answer = wxMessageBox(
+	const int answer = ibMessageBox(
 		ibString::Format(_("Force-release lock on '%s' held by '%s'?"),
 			ns, user.IsEmpty() ? wxString(_("(unknown)")) : user),
 		wxTheApp->GetAppDisplayName(), wxYES_NO | wxICON_QUESTION, this);

@@ -7,13 +7,13 @@
 #ifndef _IB_HELP_DETAIL_VIEW_H_
 #define _IB_HELP_DETAIL_VIEW_H_
 
-#include <wx/panel.h>
+#include "gui/univ/panel.h"
 #include <wx/html/htmlwin.h>
 
 struct ibHelpEntry;
 class ibHelpPaneView;
 
-class ibHelpDetailView : public wxPanel {
+class ibHelpDetailView : public ibPanel {
 public:
 	ibHelpDetailView(wxWindow* parent, ibHelpPaneView* pane);
 

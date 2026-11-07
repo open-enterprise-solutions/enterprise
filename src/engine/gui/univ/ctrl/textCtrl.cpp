@@ -873,6 +873,14 @@ wxString ibTextCtrl::DoGetValue() const
     return m_value;
 }
 
+bool ibTextCtrl::TryBefore(wxEvent& event)
+{
+    if ( event.GetEventType() == wxEVT_TEXT && event.GetEventObject() == this )
+        static_cast<wxCommandEvent&>(event).SetString(GetValue());
+
+    return ibControl::TryBefore(event);
+}
+
 void ibTextCtrl::Clear()
 {
     SetValue(wxEmptyString);
@@ -2448,6 +2456,13 @@ void ibTextCtrl::Paste()
 bool ibTextCtrl::DoPaste()
 {
 #if wxUSE_CLIPBOARD
+    // SEAM vs univ: the paste is announced first, as the native field announces it - a handler that doesn't skip
+    // wxEVT_TEXT_PASTE has pasted in its own way (ibTextValidator: the valid chars only)
+    wxClipboardTextEvent event(wxEVT_TEXT_PASTE, GetId());
+    event.SetEventObject(this);
+    if ( HandleWindowEvent(event) )
+        return true;
+
     wxClipboardLocker clipLock;
 
     wxTextDataObject data;
@@ -2650,6 +2665,25 @@ wxSize ibTextCtrl::DoGetBestClientSize() const
     return wxSize(rectTotal.width, rectTotal.height);
 }
 
+wxSize ibTextCtrl::DoGetSizeFromTextSize(int xlen, int ylen) const
+{
+    if ( m_heightLine == -1 )
+    {
+        wxConstCast(this, ibTextCtrl)->RecalcFontMetrics();
+    }
+
+    // SEAM vs wx: the native field added the system's borders and margins to the text; here the text area grows by
+    // the theme's paddings, as for the best size - the text with the caret after it (CreateCaret: one wide), and the
+    // field's buttons beside it, whose room UpdateTextRect takes from the text - and the window by its frame and
+    // title's column, as GetMinSize counts them
+    wxRect rectText;
+    rectText.width = xlen + 1;
+    rectText.height = IsSingleLine() || ylen <= 0 ? GetLineHeight() : ylen;
+    wxRect rectTotal = GetRenderer()->GetTextTotalArea(this, rectText);
+
+    return wxSize(rectTotal.width + GetButtonsWidth(), rectTotal.height) + GetWindowBorderSize();
+}
+
 void ibTextCtrl::UpdateTextRect()
 {
     wxRect rectTotal(GetClientSize());
@@ -2785,6 +2819,15 @@ void ibTextCtrl::UpdateLastVisible()
 void ibTextCtrl::OnSize(wxSizeEvent& event)
 {
     UpdateTextRect();
+
+#if wxUSE_CARET
+    // SEAM vs univ: the caret is seated in the window (wxCaret adds the client area's origin as it moves), and the text
+    // has just moved in it - the line centred in the new height, the client area moved by a title beside the field
+    // (ibControl::OnTitleChanged): seated again, or it stayed where the text was before - a field focused as its form
+    // was laid out showed it in its title
+    if ( wxCaret* const caret = GetCaret() )
+        caret->Move(GetCaretPosition());
+#endif // wxUSE_CARET
 
     if ( !IsSingleLine() )
     {
@@ -5174,12 +5217,8 @@ bool ibTextCtrl::ClickDefaultButtonIfPossible()
     if ( !item || !item->IsEnabled() || !item->IsShown() )
         return false;
 
-    ibButton* ibBtn = wxDynamicCast(item, ibButton);
-    if ( ibBtn )
-    {
-        ibBtn->Click();
+    if ( ibButton::ClickIfPossible(wxDynamicCast(item, ibButton)) )
         return true;
-    }
 
     wxButton* nativeBtn = wxDynamicCast(item, wxButton);
     if ( nativeBtn )
@@ -5215,8 +5254,12 @@ ibStdTextCtrlInputHandler::ibStdTextCtrlInputHandler(ibInputHandler *inphand)
 wxTextPos ibStdTextCtrlInputHandler::HitTest(const ibTextCtrl *text,
                                              const wxPoint& pt)
 {
+    // SEAM vs univ: the mouse's point is in the client area (wxMSW's InitMouseEvent takes its origin off), the
+    // control's HitTest reads the window's, as its paint does (the update region): the canon passed it as it came, the
+    // origin taken off twice - a border's 2px went unseen, a title beside the field (ibControl) put a click anywhere in
+    // the first title's width of the text at its start
     wxTextCoord col, row;
-    wxTextCtrlHitTestResult ht = text->HitTest(pt, &col, &row);
+    wxTextCtrlHitTestResult ht = text->HitTest(pt + text->GetClientAreaOrigin(), &col, &row);
 
     wxTextPos pos = text->XYToPosition(col, row);
 

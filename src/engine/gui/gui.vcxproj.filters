@@ -18,6 +18,9 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="univ\choiceDialog.cpp">
+      <Filter>univ</Filter>
+    </ClCompile>
     <ClCompile Include="univ\controlRenderer.cpp">
       <Filter>univ</Filter>
     </ClCompile>
@@ -51,6 +54,9 @@
     <ClCompile Include="univ\ctrl\listBox.cpp">
       <Filter>univ\ctrl</Filter>
     </ClCompile>
+    <ClCompile Include="univ\ctrl\listCtrl.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
     <ClCompile Include="univ\ctrl\notebook.cpp">
       <Filter>univ\ctrl</Filter>
     </ClCompile>
@@ -69,10 +75,16 @@
     <ClCompile Include="univ\ctrl\scrollThumb.cpp">
       <Filter>univ\ctrl</Filter>
     </ClCompile>
+    <ClCompile Include="univ\ctrl\searchCtrl.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
     <ClCompile Include="univ\ctrl\slider.cpp">
       <Filter>univ\ctrl</Filter>
     </ClCompile>
     <ClCompile Include="univ\ctrl\spinButton.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\spinCtrl.cpp">
       <Filter>univ\ctrl</Filter>
     </ClCompile>
     <ClCompile Include="univ\ctrl\staticBitmap.cpp">
@@ -123,6 +135,9 @@
     <ClCompile Include="univ\dataview\headerctrlg.cpp">
       <Filter>univ\dataview</Filter>
     </ClCompile>
+    <ClCompile Include="univ\dialog.cpp">
+      <Filter>univ</Filter>
+    </ClCompile>
     <ClCompile Include="univ\grid\gridext.cpp">
       <Filter>univ\grid</Filter>
     </ClCompile>
@@ -144,6 +159,21 @@
     <ClCompile Include="univ\menu.cpp">
       <Filter>univ</Filter>
     </ClCompile>
+    <ClCompile Include="univ\messageDialog.cpp">
+      <Filter>univ</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\numberEntryDialog.cpp">
+      <Filter>univ</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\numValidator.cpp">
+      <Filter>univ</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\panel.cpp">
+      <Filter>univ</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\propertySheetDialog.cpp">
+      <Filter>univ</Filter>
+    </ClCompile>
     <ClCompile Include="univ\theme\lunaTheme.cpp">
       <Filter>univ\theme</Filter>
     </ClCompile>
@@ -159,7 +189,16 @@
     <ClCompile Include="univ\theme\themeRenderer.cpp">
       <Filter>univ\theme</Filter>
     </ClCompile>
+    <ClCompile Include="univ\splitterWindow.cpp">
+      <Filter>univ</Filter>
+    </ClCompile>
     <ClCompile Include="univ\theme.cpp">
+      <Filter>univ</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\textEntryDialog.cpp">
+      <Filter>univ</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\textValidator.cpp">
       <Filter>univ</Filter>
     </ClCompile>
     <ClCompile Include="univ\window.cpp">
@@ -170,6 +209,9 @@
     <ClInclude Include="dateconv.h" />
     <ClInclude Include="typeconv.h" />
     <ClInclude Include="univ\app.h">
+      <Filter>univ</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\choiceDialog.h">
       <Filter>univ</Filter>
     </ClInclude>
     <ClInclude Include="univ\colourScheme.h">
@@ -211,6 +253,9 @@
     <ClInclude Include="univ\ctrl\listBox.h">
       <Filter>univ\ctrl</Filter>
     </ClInclude>
+    <ClInclude Include="univ\ctrl\listCtrl.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
     <ClInclude Include="univ\ctrl\notebook.h">
       <Filter>univ\ctrl</Filter>
     </ClInclude>
@@ -229,10 +274,16 @@
     <ClInclude Include="univ\ctrl\scrollThumb.h">
       <Filter>univ\ctrl</Filter>
     </ClInclude>
+    <ClInclude Include="univ\ctrl\searchCtrl.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
     <ClInclude Include="univ\ctrl\slider.h">
       <Filter>univ\ctrl</Filter>
     </ClInclude>
     <ClInclude Include="univ\ctrl\spinButton.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\spinCtrl.h">
       <Filter>univ\ctrl</Filter>
     </ClInclude>
     <ClInclude Include="univ\ctrl\staticBitmap.h">
@@ -325,6 +376,21 @@
     <ClInclude Include="univ\menuItem.h">
       <Filter>univ</Filter>
     </ClInclude>
+    <ClInclude Include="univ\messageDialog.h">
+      <Filter>univ</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\numberEntryDialog.h">
+      <Filter>univ</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\numValidator.h">
+      <Filter>univ</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\panel.h">
+      <Filter>univ</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\propertySheetDialog.h">
+      <Filter>univ</Filter>
+    </ClInclude>
     <ClInclude Include="univ\renderer.h">
       <Filter>univ</Filter>
     </ClInclude>
@@ -343,7 +409,19 @@
     <ClInclude Include="univ\theme\themeRenderer.h">
       <Filter>univ\theme</Filter>
     </ClInclude>
+    <ClInclude Include="univ\splitterWindow.h">
+      <Filter>univ</Filter>
+    </ClInclude>
     <ClInclude Include="univ\theme.h">
+      <Filter>univ</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\textEntryDialog.h">
+      <Filter>univ</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\textSizerWrapper.h">
+      <Filter>univ</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\textValidator.h">
       <Filter>univ</Filter>
     </ClInclude>
     <ClInclude Include="univ\topLevel.h">

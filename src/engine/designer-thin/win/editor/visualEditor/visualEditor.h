@@ -15,8 +15,9 @@
 #include "protocol/protocolDesigner.h"                     // ibProtocol::ibSchema::ibProperties::ibSourceDataType
 
 #include <wx/aui/auibook.h>
-#include <wx/splitter.h>
-#include <wx/treectrl.h>
+#include "gui/univ/splitterWindow.h"
+#include "gui/univ/ctrl/treeCtrl.h"
+#include "gui/univ/menu.h"
 
 #include <wx/dnd.h>
 
@@ -104,6 +105,7 @@ private:
 	wxWindow* m_selectedWindow = nullptr;
 	wxSizer* m_selectedSizer = nullptr;
 	wxWindow* m_selectedPanel = nullptr;
+	bool m_panelPainting = false;   // the panel's own pass under way, inside OnPanelPaint
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -139,7 +141,7 @@ private:
 class ibVisualEditorNotebook : public wxAuiNotebook {
 
 public: class ibVisualEditor :
-	public wxPanel {
+	public ibPanel {
 
 	// THE DESKTOP'S COMMAND PROCESSOR — the history of the form's commands: those before the cursor done, those after it
 	// undone; and where the form was last handed back (its save point).
@@ -258,7 +260,7 @@ public:
 
 	class ibVisualEditorObjectTreeItemData;
 
-	class ibVisualEditorObjectTree : public wxPanel {
+	class ibVisualEditorObjectTree : public ibPanel {
 	public:
 
 		ibVisualEditorObjectTree(ibVisualEditor* owner, wxWindow* parent, int id = wxID_ANY);
@@ -319,7 +321,7 @@ public:
 		void OnExpansionChange(wxTreeEvent& event);
 
 		ibVisualEditor* m_formHandler = nullptr;
-		wxTreeCtrl* m_tree = nullptr;
+		ibTreeCtrl* m_tree = nullptr;
 
 		std::map<ibValueFrame*, wxTreeItemId> m_controlItems;
 		std::map<wxString, int> m_pictureIndex;
@@ -364,7 +366,7 @@ public:
 
 	class ibVisualEditorAttributeTreeItemData;   // a row's data — below
 
-	class ibVisualEditorAttributeTree : public wxPanel {
+	class ibVisualEditorAttributeTree : public ibPanel {
 	public:
 
 		ibVisualEditorAttributeTree(ibVisualEditor* owner, wxWindow* parent, int id = wxID_ANY);
@@ -431,7 +433,7 @@ public:
 		bool SelectColumn(long long attributeId, long long columnId);
 
 		ibVisualEditor* m_formHandler = nullptr;
-		wxTreeCtrl* m_tcAttributes = nullptr;
+		ibTreeCtrl* m_tcAttributes = nullptr;
 
 		// THE HOLDERS — one per root row, by the attribute's id; made by the row, and gone with it.
 		std::map<long long, std::unique_ptr<ibFormAttributeValue>> m_entries;
@@ -499,7 +501,7 @@ public:
 	// (`FormCommand`), the form as it stands asked with.
 	//////////////////////////////////////////////////////////////////////////////////////////
 
-	class ibVisualEditorCommandTree : public wxPanel {
+	class ibVisualEditorCommandTree : public ibPanel {
 	public:
 
 		ibVisualEditorCommandTree(ibVisualEditor* owner, wxWindow* parent, int id = wxID_ANY);
@@ -536,7 +538,7 @@ public:
 		void RevealSelectedCommand();              // surface the selected form command in the inspector (both click paths)
 
 		ibVisualEditor* m_formHandler = nullptr;
-		wxTreeCtrl* m_tcCommands = nullptr;
+		ibTreeCtrl* m_tcCommands = nullptr;
 		wxTreeItemId m_formCommandsGroup;          // the "Form commands" section node — the ONLY place the menu shows
 
 		// THE HOLDERS — one per form command's row, by its id; made by the row, and gone with it.
@@ -554,7 +556,7 @@ public:
 
 	//////////////////////////////////////////////////////////////////////////////////////////
 
-	class ibVisualEditorItemPopupMenu : public wxMenu {
+	class ibVisualEditorItemPopupMenu : public ibMenu {
 	public:
 
 		ibVisualEditorItemPopupMenu(ibVisualEditor* owner, wxWindow* parent, ibValueFrame* obj);
@@ -798,11 +800,11 @@ private:
 	ibVisualEditorNotebook* m_visualNotebook;
 
 	//Splitter for designer
-	wxSplitterWindow* m_splitter = nullptr;
+	ibSplitterWindow* m_splitter = nullptr;
 	//Splitter between the control tree and the attribute tree
-	wxSplitterWindow* m_treeSplitter = nullptr;
+	ibSplitterWindow* m_treeSplitter = nullptr;
 	//Splitter between the attribute tree and the command navigator (the right pane's own split)
-	wxSplitterWindow* m_rightSplitter = nullptr;
+	ibSplitterWindow* m_rightSplitter = nullptr;
 
 	// One-shot guard: the three splitter sashes are balanced (canvas strip + equal-thirds navigators) on the FIRST
 	// real size, then left to gravity — so a later manual drag is not overwritten. See CreateWideGui's size hook.
@@ -1074,7 +1076,7 @@ public:
 	virtual ibProtocolNode FindRows(const ibProtocolNode& control) const = 0;
 
 	// THE DESKTOP'S LAYER MENU — what it fills the tree's popup with, and what a choice does.
-	virtual void PrepareDefaultMenu(wxMenu* menu) const = 0;
+	virtual void PrepareDefaultMenu(ibMenu* menu) const = 0;
 	virtual void ExecuteMenu(int menuId) = 0;
 
 	// Open in the tree (the desktop's) — a command always; the bar as it was left.
@@ -1112,7 +1114,7 @@ public:
 	virtual ibProtocolNode FindNode(const ibProtocolNode& control) const override;
 	virtual ibProtocolNode FindRows(const ibProtocolNode& control) const override;
 
-	virtual void PrepareDefaultMenu(wxMenu* menu) const override;
+	virtual void PrepareDefaultMenu(ibMenu* menu) const override;
 	virtual void ExecuteMenu(int menuId) override;
 
 	virtual bool IsTreeExpanded() const override { return m_treeExpanded; }
@@ -1141,7 +1143,7 @@ public:
 	// …a command's own, by its name, among its bar's (Items) — none such: a new command's (CommandBarItem).
 	virtual ibProtocolNode FindRows(const ibProtocolNode& control) const override;
 
-	virtual void PrepareDefaultMenu(wxMenu* menu) const override;
+	virtual void PrepareDefaultMenu(ibMenu* menu) const override;
 	virtual void ExecuteMenu(int menuId) override;
 
 	unsigned int GetIndex() const { return m_index; }

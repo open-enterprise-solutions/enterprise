@@ -77,8 +77,8 @@ void ibValueGridSizer::Update(const ibProtocolNode& node)
 void ibValueStaticBoxSizer::Create(wxWindow* parent, const ibProtocolNode& node)
 {
 	const ibProtocolNode state = node.FindChild(ibProtocol::ibForm::ibState::State);
-	wxStaticBox* const staticBox = new wxStaticBox(parent, wxID_ANY, state.GetString(ibProtocol::ibForm::ibState::Title));
-	m_sizer = new wxStaticBoxSizer(staticBox, static_cast<int>(node.GetInt(ibProtocol::ibForm::ibProperty::Orient, wxVERTICAL)));
+	ibStaticBox* const staticBox = new ibStaticBox(parent, wxID_ANY, state.GetString(ibProtocol::ibForm::ibState::Title));
+	m_sizer = new ibStaticBoxSizer(staticBox, static_cast<int>(node.GetInt(ibProtocol::ibForm::ibProperty::Orient, wxVERTICAL)));
 }
 
 void ibValueStaticBoxSizer::Update(const ibProtocolNode& node)
@@ -91,7 +91,7 @@ void ibValueStaticBoxSizer::Update(const ibProtocolNode& node)
 
 	// The box is the group's window: its caption, its look, whether it is enabled and shown — the State's, which the
 	// server reads with the group's title in the person's language.
-	wxStaticBox* const staticBox = m_sizer->GetStaticBox();
+	ibStaticBox* const staticBox = m_sizer->GetStaticBox();
 	staticBox->SetLabel(state.GetString(ibProtocol::ibForm::ibState::Title));
 	staticBox->SetMinSize(minSize);
 	ApplyLook(staticBox, node);

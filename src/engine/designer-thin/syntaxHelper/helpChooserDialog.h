@@ -11,13 +11,14 @@
 
 
 #include <wx/dialog.h>
-#include <wx/listbox.h>
+#include "gui/univ/ctrl/listBox.h"
 
 #include <vector>
+#include "gui/univ/dialog.h"
 
 struct ibHelpEntry;
 
-class ibHelpChooserDialog : public wxDialog {
+class ibHelpChooserDialog : public ibDialog {
 public:
 	ibHelpChooserDialog(wxWindow* parent,
 	                    const std::vector<const ibHelpEntry*>& candidates);
@@ -33,7 +34,7 @@ public:
 	bool HelpRequested() const { return m_helpRequested; }
 
 private:
-	wxListBox* m_list = nullptr;
+	ibListBox* m_list = nullptr;
 	std::vector<wxString> m_ids;
 
 	wxString m_selectedId;

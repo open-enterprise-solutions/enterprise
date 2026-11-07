@@ -21,6 +21,7 @@
 #include <wx/listbox.h>
 
 #include <memory>
+#include "gui/univ/ctrl/listBox.h"
 
 class ibHelpCorpus;
 class ibHelpPaneView;
@@ -33,13 +34,13 @@ public:
 	// must outlive the drag source instance (typically owned by the
 	// enclosing wxPanel). `pane` answers the code style the template
 	// is written in (the desktop read the process's).
-	void Bind(wxListBox* list,
+	void Bind(ibListBox* list,
 	          const std::vector<wxString>* ids,
 	          const std::shared_ptr<const ibHelpCorpus>* corpus,
 	          const ibHelpPaneView* pane);
 
 private:
-	wxListBox* m_list = nullptr;
+	ibListBox* m_list = nullptr;
 	const std::vector<wxString>*               m_ids    = nullptr;
 	const std::shared_ptr<const ibHelpCorpus>* m_corpus = nullptr;
 	const ibHelpPaneView*                      m_pane   = nullptr;

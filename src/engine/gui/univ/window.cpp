@@ -25,6 +25,7 @@
 #include "gui/univ/window.h"
 
 #include <wx/dcbuffer.h>
+#include "gui/univ/ctrl/button.h"
 #include "gui/univ/ctrl/scrollBar.h"
 
 
@@ -170,15 +171,6 @@ bool ibWindow::Create(wxWindow *parent,
     actualStyle &= ~wxVSCROLL;
     actualStyle &= ~wxHSCROLL;
 
-    // SEAM vs univ: the univ port never let the border reach the native
-    // window — it draws the border itself in the NC pass. Here the native
-    // host would translate wxBORDER_SUNKEN into WS_EX_CLIENTEDGE: a second,
-    // 3-D, frame eating 2px of client area on every side (the "pressed-in"
-    // look + clipped text). The full style incl. the border is restored at
-    // the wx level below for our own border pipeline.
-    actualStyle &= ~wxBORDER_MASK;
-    actualStyle |= wxBORDER_NONE;
-
 #ifdef __WXMSW__
     // without this, borders (non-client areas in general) are not repainted
     // correctly when resizing; apparently, native NC areas are fully repainted
@@ -292,9 +284,35 @@ const wxBitmap& ibWindow::GetBackgroundBitmap(int *alignment,
 // ----------------------------------------------------------------------------
 
 // the event handlers executed when the window must be repainted
+// SEAM vs univ: the square in the corner between the two scrollbars is painted with the border, as a control's title
+// is (ibControl::OnNcPaint) - the non-client part, after every paint whoever painted it (wxMSW sends this event after
+// wxEVT_PAINT, HandlePaint). The canon erased it (OnErase); with no erase pass (wxBG_STYLE_PAINT) a window painting
+// itself (ibTreeCtrl::OnPaint) left it black.
 void ibWindow::OnNcPaint(wxNcPaintEvent& WXUNUSED(event))
 {
     RefreshBorder();
+
+#if wxUSE_SCROLLBAR
+    if ( m_renderer && m_scrollbarVert && m_scrollbarHorz )
+    {
+        // the frame's size, not the window's: a title beside the frame is not under the scrollbars
+        wxSize size = GetBorderRect().GetSize();
+        wxRect rectClient = GetClientRect(),
+               rectBorder = m_renderer->GetBorderDimensions(GetBorder());
+
+        wxRect rectCorner;
+        rectCorner.x = rectClient.GetRight() + 1;
+        rectCorner.y = rectClient.GetBottom() + 1;
+        rectCorner.SetRight(size.x - rectBorder.width);
+        rectCorner.SetBottom(size.y - rectBorder.height);
+
+        if ( GetUpdateRegion().Contains(rectCorner) )
+        {
+            wxWindowDC dc(this);
+            m_renderer->DrawScrollCorner(dc, rectCorner);
+        }
+    }
+#endif // wxUSE_SCROLLBAR
 }
 
 void ibWindow::RefreshBorder()
@@ -343,33 +361,22 @@ void ibWindow::OnPaint(wxPaintEvent& event)
 #endif // wxUSE_CARET
 
         // single buffered pass: background (the erase pass is disabled by
-        // wxBG_STYLE_PAINT in Init()) + the control itself
-        wxAutoBufferedPaintDC dc(this);
+        // wxBG_STYLE_PAINT in Init()) + the control itself; the buffer covers
+        // the client area only (GetClientSize: without the scrollbars), the
+        // corner between them is the border's (OnNcPaint)
+        // SEAM vs univ: wxBufferedDC over the paint DC, as wxBufferedPaintDC builds it - not wxAutoBufferedPaintDC, which
+        // asserts wxBG_STYLE_PAINT, and a window taking the erase back paints here too (the grid's outline corner,
+        // ibGridOutlineCornerWindow: wxBG_STYLE_ERASE from ibGridSubwindow, no paint of its own)
+        wxPaintDC dcPaint(this);
+#if wxALWAYS_NATIVE_DOUBLE_BUFFER
+        wxDC& dc = dcPaint;
+#else
+        wxBufferedDC dc(&dcPaint, GetClientSize());
+        // the window's font and colours, as wxBufferedPaintDC takes them
+        dc.GetImpl()->InheritAttributes(this);
+#endif
 
         DoDrawBackground(dc);
-
-#if wxUSE_SCROLLBAR
-        // if we have both scrollbars, we also have a square in the corner
-        // between them which we must paint (lived in OnErase in the canon)
-        if ( m_scrollbarVert && m_scrollbarHorz )
-        {
-            // the frame's size, not the window's: a title beside the frame is not under the scrollbars
-            wxSize size = GetBorderRect().GetSize();
-            wxRect rectClient = GetClientRect(),
-                   rectBorder = m_renderer->GetBorderDimensions(GetBorder());
-
-            wxRect rectCorner;
-            rectCorner.x = rectClient.GetRight() + 1;
-            rectCorner.y = rectClient.GetBottom() + 1;
-            rectCorner.SetRight(size.x - rectBorder.width);
-            rectCorner.SetBottom(size.y - rectBorder.height);
-
-            if ( GetUpdateRegion().Contains(rectCorner) )
-            {
-                m_renderer->DrawScrollCorner(dc, rectCorner);
-            }
-        }
-#endif // wxUSE_SCROLLBAR
 
         ibControlRenderer renderer(this, dc, m_renderer);
 
@@ -395,30 +402,8 @@ void ibWindow::OnErase(wxEraseEvent& event)
         return;
     }
 
+    // the corner between the scrollbars is the border's (OnNcPaint)
     DoDrawBackground(*event.GetDC());
-
-#if wxUSE_SCROLLBAR
-    // if we have both scrollbars, we also have a square in the corner between
-    // them which we must paint
-    if ( m_scrollbarVert && m_scrollbarHorz )
-    {
-        // the frame's size, not the window's: a title beside the frame is not under the scrollbars
-        wxSize size = GetBorderRect().GetSize();
-        wxRect rectClient = GetClientRect(),
-               rectBorder = m_renderer->GetBorderDimensions(GetBorder());
-
-        wxRect rectCorner;
-        rectCorner.x = rectClient.GetRight() + 1;
-        rectCorner.y = rectClient.GetBottom() + 1;
-        rectCorner.SetRight(size.x - rectBorder.width);
-        rectCorner.SetBottom(size.y - rectBorder.height);
-
-        if ( GetUpdateRegion().Contains(rectCorner) )
-        {
-            m_renderer->DrawScrollCorner(*event.GetDC(), rectCorner);
-        }
-    }
-#endif // wxUSE_SCROLLBAR
 }
 
 bool ibWindow::DoDrawBackground(wxDC& dc)
@@ -1567,7 +1552,20 @@ WXLRESULT ibWindow::MSWWindowProc(WXUINT message, WXWPARAM wParam, WXLPARAM lPar
         }
     }
 
+    // SEAM vs MSW: the border is ours - drawn inside the window (OnNcPaint), the client area measured inside it
+    // (DoGetClientSize). MSWGetStyle keeps it off the native style, but wxMSW's themed border reads the wx style,
+    // which keeps it: WM_NCCALCSIZE took 2px a side off the native client - the children went past its edge and the
+    // scroll blit pulled the frame in, a line a row - and WM_NCPAINT drew a second frame round ours.
+    if ( m_renderer && (message == WM_NCCALCSIZE || message == WM_NCPAINT) )
+        return MSWDefWindowProc(message, wParam, lParam);
+
     return wxWindow::MSWWindowProc(message, wParam, lParam);
+}
+
+WXDWORD ibWindow::MSWGetStyle(long flags, WXDWORD *exstyle) const
+{
+    flags &= ~(wxBORDER_MASK | wxVSCROLL | wxHSCROLL);
+    return wxWindow::MSWGetStyle(flags | wxBORDER_NONE, exstyle);
 }
 
 #endif // __WXMSW__

@@ -4,9 +4,9 @@
 #include "protocol/protocol.h"
 
 ibPanelDebugSettings::ibPanelDebugSettings(wxWindow* parent, const ibProtocolNode& shown)
-	: wxPanel(parent, wxID_ANY)
+	: ibPanel(parent, wxID_ANY)
 {
-	m_enableDebugger = new wxCheckBox(this, wxID_ANY, _("Debugging in the current session"));
+	m_enableDebugger = new ibCheckBox(this, wxID_ANY, _("Debugging in the current session"));
 	m_enableDebugger->Bind(wxEVT_CHECKBOX, &ibPanelDebugSettings::OnEnableDebugger, this);
 
 	wxBoxSizer* const sizer = new wxBoxSizer(wxVERTICAL);

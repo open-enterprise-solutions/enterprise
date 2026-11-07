@@ -5,6 +5,7 @@
 
 #include "core/net/ports.h"                 // ibPort::Clients — the port a cluster's address leaves out
 #include "protocol/connectionServer.h"      // the socket a client opens on a cluster's base or a publication
+#include "gui/univ/messageDialog.h"
 
 void ibDialogConnection::InitConnection(const wxString& strName, const ibListInfo& info)
 {
@@ -57,7 +58,7 @@ void ibDialogConnection::UpdateModeVisibility()
 }
 
 ibDialogConnection::ibDialogConnection(wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) :
-	wxDialog(parent, id, title, pos, size, style)
+	ibDialog(parent, id, title, pos, size, style)
 {
 	this->SetSizeHints(wxDefaultSize, wxDefaultSize);
 	// Interior palette — powder-blue dialog frame.
@@ -94,9 +95,8 @@ ibDialogConnection::ibDialogConnection(wxWindow* parent, wxWindowID id, const wx
 	m_staticTextFilePath = new ibStaticText(this, wxID_ANY, _("Database folder:"), wxDefaultPosition, wxDefaultSize, 0);
 	sizerFilePath->Add(m_staticTextFilePath, 1, wxALIGN_CENTER_VERTICAL, 0);
 	m_textCtrlFilePath = new ibTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0);
+	m_textCtrlFilePath->ShowSelectButton();
 	sizerFilePath->Add(m_textCtrlFilePath, 3, wxALL | wxEXPAND, FromDIP(5));
-	m_buttonFilePath = new ibButton(this, wxID_ANY, wxT("..."), wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
-	sizerFilePath->Add(m_buttonFilePath, 0, wxTOP | wxBOTTOM | wxRIGHT | wxEXPAND, FromDIP(5));
 	m_sizerFileMode->Add(sizerFilePath, 0, wxEXPAND, FromDIP(5));
 	mainSizer->Add(m_sizerFileMode, 0, wxEXPAND, FromDIP(5));
 
@@ -154,7 +154,7 @@ ibDialogConnection::ibDialogConnection(wxWindow* parent, wxWindowID id, const wx
 	this->Centre(wxBOTH);
 
 	// Connect Events
-	m_buttonFilePath->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ibDialogConnection::FilePathOnButtonClick), NULL, this);
+	m_textCtrlFilePath->Bind(wxEVT_CONTROL_BUTTON_SELECT, &ibDialogConnection::FilePathOnButtonClick, this);
 	m_buttonTestConnection->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ibDialogConnection::TestConnectionOnButtonClick), NULL, this);
 	m_buttonSaveConnection->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ibDialogConnection::SaveConnectionOnButtonClick), NULL, this);
 }
@@ -167,7 +167,7 @@ void ibDialogConnection::OnModeChanged(wxCommandEvent& event)
 
 void ibDialogConnection::FilePathOnButtonClick(wxCommandEvent& event)
 {
-	// The kit has no picker: the field and its button, and the system's folder dialog.
+	// The kit has no picker: the field's own "..." (ShowSelectButton), and the system's folder dialog.
 	const wxString path = wxDirSelector(_("Select database folder"), m_textCtrlFilePath->GetValue(),
 		wxDD_DEFAULT_STYLE | wxDD_DIR_MUST_EXIST, wxDefaultPosition, this);
 	if (!path.IsEmpty())
@@ -181,9 +181,9 @@ void ibDialogConnection::TestConnectionOnButtonClick(wxCommandEvent& event)
 	ibProtocolConnectionServer server;
 	ibString error;
 	if (server.Open(GetListInfo().GetAddress(), ibEmptyString, error))
-		wxMessageBox(_("Connected to DB!"), _("Configure connect"), wxOK | wxICON_INFORMATION, this);
+		ibMessageBox(_("Connected to DB!"), _("Configure connect"), wxOK | wxICON_INFORMATION, this);
 	else
-		wxMessageBox(error, _("Failed to connect to DB!"), wxOK | wxICON_ERROR, this);
+		ibMessageBox(error, _("Failed to connect to DB!"), wxOK | wxICON_ERROR, this);
 
 	event.Skip();
 }

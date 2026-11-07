@@ -354,6 +354,78 @@ void DispatchEvent(ibClientFrame* frame, const ibDataNode& call)
 		form->DispatchEvent(call.GetValue<std::int32_t>(ibProtocol::ibEvent::Control), event, args);
 }
 
+// ⭐ WHAT A FIELD SHOWS ONCE IT IS COMMITTED — the text typed (Change {Text}), whatever the client's copy of the frame says
+// of it. Where the server shows another (a text refused leaves the value as it was, ibValueTextCtrl::TextProcessing), the
+// base this answer is patched from takes the typed text in the field's place, and the patch carries the server's: with no
+// change to say, it left what was typed showing. Only then, and in this answer's base alone: a text the server shows as
+// typed is told as any change is, and the copy the client holds and the frame kept here stay one (the kept ones altered,
+// an accepted text was in no patch, and the next one of the field drew the copy's old text back). A field that shows a
+// text only (its State's Text): a table's cell is its rows'.
+void KeepCommitted(ibDataNode& base, const ibDataNode& drawn, const ibDataNode& call)
+{
+	const auto args = call.FindChild(ibProtocol::ibEvent::Args);
+	const std::optional<ibDataValue> typed = args ? args->FindField(ibProtocol::ibEvent::Text) : std::nullopt;
+	const std::int32_t control = call.GetValue<std::int32_t>(ibProtocol::ibEvent::Control);
+	const auto event = static_cast<ibProtocol::ibEvent::ibKind>(call.GetValue<std::int32_t>(ibProtocol::ibEvent::Event));
+	if (!typed || control == 0 || event != ibProtocol::ibEvent::ibKind::Change)
+		return;
+	const ibString form = call.GetValue<ibString>(ibProtocol::ibEvent::Form);
+
+	// The way to the field in a view — each step a child's place among its node's children — in the form named by its key
+	// (a cell of the start page), the view's own when none is named.
+	std::vector<std::size_t> way;
+	const auto find = [&](const auto& self, const ibDataNode& node, bool inForm) -> bool {
+		inForm = inForm || node.GetValue<ibString>(ibProtocol::ibForm::Key) == form;
+		std::size_t place = 0;
+		for (const ibDataNode& child : node.Children()) {
+			way.push_back(place++);
+			if ((inForm && child.GetMetaId() == control) || self(self, child, inForm))
+				return true;
+			way.pop_back();
+		}
+		return false;
+	};
+	// …and the node at its end: read, or as a handle to write where it lies (`node` a root or a handle). A handle is
+	// taken of a part read out of a node as it is now — the way is read first, and nothing is written on it.
+	const auto walk = [&way](ibDataNode& node) -> ibDataNode& {
+		ibDataNode* at = &node;
+		for (const std::size_t place : way) {
+			std::size_t index = 0;
+			for (const ibDataNode& child : at->Children()) {
+				if (index++ == place) {
+					at = &at->Handle(child);
+					break;
+				}
+			}
+		}
+		return *at;
+	};
+
+	// The server's text — the same as typed, nothing to do.
+	std::optional<ibDataNode> shown;
+	if (const auto view = drawn.FindField(ibProtocol::ibFrame::View))
+		shown = view->AsChild();
+	if (!shown || !find(find, *shown, form.IsEmpty()))
+		return;
+	const auto state = walk(*shown).FindChild(ibProtocol::ibForm::ibState::State);
+	if (!state || !state->Has(ibProtocol::ibForm::ibState::Text) || state->FindField(ibProtocol::ibForm::ibState::Text) == typed)
+		return;
+
+	// Another: the typed text in the base's field, where the base has it.
+	std::optional<ibDataNode> was;
+	if (const auto view = base.FindField(ibProtocol::ibFrame::View))
+		was = view->AsChild();
+	way.clear();
+	if (!was || !find(find, *was, form.IsEmpty()))
+		return;
+	ibDataNode& field = walk(*was);
+	const auto wasState = field.FindChild(ibProtocol::ibForm::ibState::State);
+	if (!wasState || !wasState->Has(ibProtocol::ibForm::ibState::Text))
+		return;
+	field.Handle(*wasState).SetField(ibProtocol::ibForm::ibState::Text, *typed);
+	base.SetField(ibProtocol::ibFrame::View, ibDataValue::Child(std::make_shared<ibDataNode>(*was)));
+}
+
 } // namespace
 
 ibClientHost::ibClientHost(ibApplicationInstance* applicationInstance, unsigned route)
@@ -1210,7 +1282,7 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 			}
 			else if (method == ibProtocol::ibMethod::Event) {
 				done = Run(*client, [params](ibClientFrame* frame) { DispatchEvent(frame, params); }, since, result,
-					refusal, error);
+					refusal, error, params);
 			}
 			else if (method == ibProtocol::ibMethod::Activate || method == ibProtocol::ibMethod::Close) {
 				// A TAB BY ITS ID — a position shifts the moment a tab closes. One the frame does not have is refused
@@ -1669,7 +1741,7 @@ bool ibClientHost::BindChannel(Channel& channel, const ibString& given, const vo
 //*******************************************************************************************
 
 bool ibClientHost::Run(Client& client, std::function<void(ibClientFrame*)> work, std::int32_t since, ibDataNode& result,
-	ibProtocol::ibRefusal& refusal, ibString& error)
+	ibProtocol::ibRefusal& refusal, ibString& error, const ibDataNode& call)
 {
 	std::shared_ptr<ibSession> session = client.instance->ShareSession();
 	if (session == nullptr) {
@@ -1757,8 +1829,14 @@ bool ibClientHost::Run(Client& client, std::function<void(ibClientFrame*)> work,
 		if (ownView)
 			base.AddField(ibProtocol::ibFrame::View, kept->second);
 	}
+	else if (fromLast) {
+		base = client.sent;
+	}
+	// …and a field's text the call committed, where the server shows another (KeepCommitted).
+	if (fromLast)
+		KeepCommitted(base, drawn, call);
 	ibDataNode patch;
-	const bool patched = fromLast && ibClientFramePatch(client.protocol >= 2 ? base : client.sent, drawn, patch);
+	const bool patched = fromLast && ibClientFramePatch(base, drawn, patch);
 	ibJournalInfo(ibT("client"), ibT("  work %lld ms, frame drawn %lld ms, %s %lld ms"), settled - began, framed - settled,
 		patched ? ibT("patched") : ibT("sent whole"), NowMs() - framed);
 	if (patched) {

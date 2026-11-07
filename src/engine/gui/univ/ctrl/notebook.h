@@ -50,6 +50,15 @@ public:
         return m_pages[n];
     }
 
+    // get the currently selected page or wxNOT_FOUND if none
+    int GetSelection() const { return m_selection; }
+
+    // remove one page from the notebook, without deleting it
+    bool RemovePage(size_t n) {
+        InvalidateBestSize();
+        return DoRemovePage(n) != nullptr;
+    }
+
     bool AddPage(wxWindow *page, const wxString& text,
                  bool bSelect = false, int imageId = NO_IMAGE) {
         return InsertPage(GetPageCount(), page, text, bSelect, imageId);
@@ -189,6 +198,8 @@ protected:
     virtual void DoSetSize(int x, int y,
                            int width, int height,
                            int sizeFlags = wxSIZE_AUTO) override;
+    // wxBookCtrlBase's: the largest page's best size, the tabs around it
+    virtual wxSize DoGetBestSize() const override;
 
     int DoSetSelection(size_t nPage, int flags = 0) ;
 
@@ -237,9 +248,9 @@ protected:
     wxCoord GetTabWidth(int page) const
         { return FixedSizeTabs() ? m_widthMax : m_widths[page]; }
 
-    // return true if the tab has an associated image
+    // return true if the tab has an associated image (from the list or the bundles)
     bool HasImage(int page) const
-        { return HasImageList() && m_images[page] != -1; }
+        { return HasImages() && m_images[page] != -1; }
 
     // get the part of the notebook reserved for the pages (slightly larger
     // than GetPageRect() as we draw a border and leave marginin between)

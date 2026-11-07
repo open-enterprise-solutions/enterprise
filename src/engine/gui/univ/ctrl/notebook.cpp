@@ -193,7 +193,7 @@ bool ibNotebook::SetPageImage(size_t nPage, int nImage)
 {
     wxCHECK_MSG( IS_VALID_PAGE(nPage), false, wxT("invalid notebook page") );
 
-    wxCHECK_MSG( HasImageList() && nImage < GetImageList()->GetImageCount(),
+    wxCHECK_MSG( HasImages() && nImage < GetImageCount(),
                  false, wxT("invalid image index in SetPageImage()") );
 
     if ( nImage != m_images[nPage] )
@@ -475,22 +475,9 @@ void ibNotebook::DoDrawTab(wxDC& dc, const wxRect& rect, size_t n)
     wxBitmap bmp;
     if ( HasImage(n) )
     {
-        int image = m_images[n];
-
-        // Not needed now that wxGenericImageList is being
-        // used for wxUniversal under MSW
-#if 0 // def __WXMSW__    // FIXME
-        int w, h;
-        GetImageList()->GetSize(n, w, h);
-        bmp.Create(w, h);
-        wxMemoryDC dc;
-        dc.SelectObject(bmp);
-        dc.SetBackground(wxBrush(GetBackgroundColour(), wxBRUSHSTYLE_SOLID));
-        GetImageList()->Draw(image, dc, 0, 0, wxIMAGELIST_DRAW_NORMAL, true);
-        dc.SelectObject(wxNullBitmap);
-#else
-        bmp = GetImageList()->GetBitmap(image);
-#endif
+        // SEAM vs univ: the image list or the bundles (SetImages), whichever the book was given - univ took the list
+        // only, so a book given bundles drew no pictures on its tabs
+        bmp = GetImageBitmapFor(this, m_images[n]);
     }
 
     int flags = 0;
@@ -823,8 +810,7 @@ wxSize ibNotebook::CalcTabSize(int page) const
 
     if ( HasImage(page) )
     {
-        wxSize sizeImage;
-        GetImageList()->GetSize(m_images[page], sizeImage.x, sizeImage.y);
+        const wxSize sizeImage = GetImageLogicalSize(this);
 
         size.x += sizeImage.x + 5; // FIXME: hard coded margin
 
@@ -985,6 +971,23 @@ void ibNotebook::SetPageSize(const wxSize& size)
 wxSize ibNotebook::CalcSizeFromPage(const wxSize& sizePage) const
 {
     return AdjustSize(GetSizeForPage(sizePage));
+}
+
+// SEAM vs univ: wxBookCtrlBase's, lost with the base (see the class) - without it the book was as small as its tabs,
+// and a dialog fitted to it (ibPropertySheetDialog::LayoutDialog) too
+wxSize ibNotebook::DoGetBestSize() const
+{
+    // iterate over all pages, get the largest width and height
+    wxSize bestSize;
+    for ( const wxWindow* page : m_pages )
+    {
+        if ( page )
+            bestSize.IncTo(page->GetBestSize());
+    }
+
+    // convert display area to window area, adding the size necessary for the
+    // tabs
+    return CalcSizeFromPage(bestSize);
 }
 
 // ----------------------------------------------------------------------------

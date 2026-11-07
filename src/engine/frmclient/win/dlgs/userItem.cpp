@@ -63,46 +63,46 @@ bool ibDialogUserItem::ReadUserData(const ibGuid& userGuid, bool copy)
 }
 
 ibDialogUserItem::ibDialogUserItem(wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) :
-	wxDialog(parent, id, title, pos, size, style), m_bInitialized(false), m_bPasswordTouched(false)
+	ibDialog(parent, id, title, pos, size, style), m_bInitialized(false), m_bPasswordTouched(false)
 {
-	wxDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
+	ibDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
 
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
 	m_mainNotebook = new wxAuiNotebook(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_NB_TOP | wxAUI_NB_TAB_SPLIT | wxAUI_NB_TAB_MOVE | wxAUI_NB_SCROLL_BUTTONS);
 	m_mainNotebook->SetArtProvider(new wxAuiLunaTabArt());
-	m_main = new wxPanel(m_mainNotebook, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL);
+	m_main = new ibPanel(m_mainNotebook, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL);
 
 	wxBoxSizer* sizerUser = new wxBoxSizer(wxVERTICAL);
 	wxBoxSizer* sizerUserTop = new wxBoxSizer(wxHORIZONTAL);
 	wxBoxSizer* sizerLabel = new wxBoxSizer(wxVERTICAL);
 
-	m_staticName = new wxStaticText(m_main, wxID_ANY, _("Name:"), wxDefaultPosition, wxDefaultSize, 0);
+	m_staticName = new ibStaticText(m_main, wxID_ANY, _("Name:"), wxDefaultPosition, wxDefaultSize, 0);
 	m_staticName->Wrap(-1);
 	sizerLabel->Add(m_staticName, 0, wxALL, FromDIP(9));
 
-	m_staticFullName = new wxStaticText(m_main, wxID_ANY, _("Full name:"), wxDefaultPosition, wxDefaultSize, 0);
+	m_staticFullName = new ibStaticText(m_main, wxID_ANY, _("Full name:"), wxDefaultPosition, wxDefaultSize, 0);
 	m_staticFullName->Wrap(-1);
 	sizerLabel->Add(m_staticFullName, 0, wxALL, FromDIP(9));
 
 	sizerUserTop->Add(sizerLabel, 0, 0, FromDIP(5));
 
 	wxBoxSizer* sizerText = new wxBoxSizer(wxVERTICAL);
-	m_textName = new wxTextCtrl(m_main, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
+	m_textName = new ibTextCtrl(m_main, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
 	sizerText->Add(m_textName, 0, wxALL | wxEXPAND, FromDIP(5));
-	m_textFullName = new wxTextCtrl(m_main, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0);
+	m_textFullName = new ibTextCtrl(m_main, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0);
 	sizerText->Add(m_textFullName, 0, wxALL | wxEXPAND, FromDIP(5));
 	sizerUserTop->Add(sizerText, 1, wxEXPAND, FromDIP(5));
 	sizerUser->Add(sizerUserTop, 0, wxEXPAND, FromDIP(5));
 
-	m_staticline = new wxStaticLine(m_main, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLI_HORIZONTAL);
+	m_staticline = new ibStaticLine(m_main, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLI_HORIZONTAL);
 	sizerUser->Add(m_staticline, 0, wxALL | wxEXPAND, FromDIP(5));
 
 	wxBoxSizer* sizerUserBottom = new wxBoxSizer(wxHORIZONTAL);
-	m_staticPassword = new wxStaticText(m_main, wxID_ANY, _("Password:"), wxDefaultPosition, wxDefaultSize, 0);
+	m_staticPassword = new ibStaticText(m_main, wxID_ANY, _("Password:"), wxDefaultPosition, wxDefaultSize, 0);
 	m_staticPassword->Wrap(-1);
 	sizerUserBottom->Add(m_staticPassword, 0, wxALL, FromDIP(10));
-	m_textPassword = new wxTextCtrl(m_main, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_PASSWORD);
+	m_textPassword = new ibTextCtrl(m_main, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_PASSWORD);
 	sizerUserBottom->Add(m_textPassword, 1, wxALL, FromDIP(5));
 
 	sizerUser->Add(sizerUserBottom, 1, wxEXPAND, FromDIP(5));
@@ -111,14 +111,14 @@ ibDialogUserItem::ibDialogUserItem(wxWindow* parent, wxWindowID id, const wxStri
 	m_main->Layout();
 	sizerUser->Fit(m_main);
 	m_mainNotebook->AddPage(m_main, _("User"), false, wxNullBitmap);
-	m_other = new wxPanel(m_mainNotebook, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL);
+	m_other = new ibPanel(m_mainNotebook, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL);
 
 	wxBoxSizer* sizerOther = new wxBoxSizer(wxVERTICAL);
 	wxBoxSizer* sizerLabels = new wxBoxSizer(wxVERTICAL);
 
-	m_staticRole = new wxStaticText(m_other, wxID_ANY, _("Role:"), wxDefaultPosition, wxDefaultSize, 0);
+	m_staticRole = new ibStaticText(m_other, wxID_ANY, _("Role:"), wxDefaultPosition, wxDefaultSize, 0);
 	m_staticRole->Wrap(-1);
-	m_staticLanguage = new wxStaticText(m_other, wxID_ANY, _("Language:"), wxDefaultPosition, wxDefaultSize, 0);
+	m_staticLanguage = new ibStaticText(m_other, wxID_ANY, _("Language:"), wxDefaultPosition, wxDefaultSize, 0);
 	m_staticLanguage->Wrap(-1);
 
 	wxImageList* imageList = new wxImageList(16, 16);
@@ -128,7 +128,7 @@ ibDialogUserItem::ibDialogUserItem(wxWindow* parent, wxWindowID id, const wxStri
 
 	const wxTreeItemId& root = m_choiceRole->AddRoot(wxT(""));
 
-	m_choiceLanguage = new wxChoice(m_other, wxID_ANY, wxDefaultPosition, wxDefaultSize);
+	m_choiceLanguage = new ibChoice(m_other, wxID_ANY, wxDefaultPosition, wxDefaultSize);
 
 	// The configuration's roles and languages — the server's, listed beside the users (the desktop's read them off the
 	// active configuration). A role's picture is its class's (ibValueMetaObjectRole::GetIcon is GetIconGroup), asked of
@@ -176,26 +176,26 @@ ibDialogUserItem::ibDialogUserItem(wxWindow* parent, wxWindowID id, const wxStri
 	m_mainNotebook->AddPage(m_other, _("Other"), true, wxNullBitmap);
 	mainSizer->Add(m_mainNotebook, 1, wxEXPAND | wxALL, FromDIP(5));
 
-	m_bottom = new wxStdDialogButtonSizer();
-	m_bottomOK = new wxButton(this, wxID_OK);
+	m_bottom = new ibStdDialogButtonSizer();
+	m_bottomOK = new ibButton(this, wxID_OK);
 	m_bottom->AddButton(m_bottomOK);
-	m_bottomCancel = new wxButton(this, wxID_CANCEL);
+	m_bottomCancel = new ibButton(this, wxID_CANCEL);
 	m_bottom->AddButton(m_bottomCancel);
 	m_bottom->Realize();
 
 	m_mainNotebook->SetSelection(0);
-	mainSizer->Add(m_bottom, 0, wxEXPAND, FromDIP(5));
+	mainSizer->Add(m_bottom, 0, wxEXPAND | wxALL, FromDIP(5));
 
-	wxDialog::SetSizer(mainSizer);
-	wxDialog::Layout();
+	ibDialog::SetSizer(mainSizer);
+	ibDialog::Layout();
 
-	wxDialog::Centre(wxBOTH);
+	ibDialog::Centre(wxBOTH);
 
 	wxIcon dlg_icon;
 	dlg_icon.CopyFromBitmap(ibBackendPicture::GetPicture(g_picUserCLSID));
 
-	wxDialog::SetIcon(dlg_icon);
-	wxDialog::SetFocus();
+	ibDialog::SetIcon(dlg_icon);
+	ibDialog::SetFocus();
 
 	// Connect Events
 	m_textName->Bind(wxEVT_COMMAND_TEXT_ENTER,

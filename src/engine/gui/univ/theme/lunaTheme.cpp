@@ -16,6 +16,7 @@
 #include "gui/univ/renderer.h"
 #include "gui/univ/colourScheme.h"
 #include "gui/univ/inputConsumer.h"
+#include "gui/univ/topLevel.h"
 #include "gui/univ/window.h"
 #include "gui/univ/theme/themeRenderer.h"
 #include "gui/univ/menu.h"
@@ -167,11 +168,18 @@ wxColour ibLunaColourScheme::GetBackground(ibWindow* win) const {
 		return Get(CONTROL);
 	}
 
-	// label-like statics blend with the parent surface
-	wxWindow* parent = win->GetParent();
-	if (parent != nullptr)
-		return parent->GetBackgroundColour();
-	return Get(WINDOW);
+	// label-like statics and the containers they sit on take the surface under them - the colour set on the nearest
+	// window up the chain the background shows through (wxMSW's MSWGetBgBrush: on through a transparent window, to one
+	// that is not), else their own. A parent's colour that is only its default is not that surface: an MDI child is a
+	// frame, its default the workspace grey, and the home page's panes (ibPanel, transparent under the MDI client's
+	// colour) drew it in their header gaps while their labels drew the panel's own.
+	for (wxWindow* parent = win->GetParent(); parent != nullptr; parent = parent->GetParent()) {
+		if (parent->UseBgCol())
+			return parent->GetBackgroundColour();
+		if (!parent->HasTransparentBackground() || parent->IsTopLevel())
+			break;
+	}
+	return win->GetBackgroundColour();
 }
 
 // ----------------------------------------------------------------------------
@@ -185,6 +193,15 @@ public:
 	virtual wxBitmap GetRadioBitmap(int flags) override;
 	virtual wxBitmap GetCheckBitmap(int flags) override;
 	virtual wxBitmap GetFrameButtonBitmap(FrameButtonType type) override;
+
+	// a top-level window's decorations (ibTopLevelWindow) as the designer's form card has them (ibInnerFrame): the
+	// border every raised window has, the system's caption colour lightening to the right, the buttons flat glyphs; a
+	// resizable window's corner marked, and held there it is sized
+	virtual int HitTestFrame(const wxRect& rect, const wxPoint& pt, int flags = 0) const override;
+	virtual void DrawFrameBorder(wxDC& dc, const wxRect& rect, int flags) override;
+	virtual void DrawFrameBackground(wxDC& dc, const wxRect& rect, int flags) override;
+	virtual void DrawFrameButton(wxDC& dc, wxCoord x, wxCoord y, int button, int flags = 0) override;
+	virtual int GetFrameBorderWidth(int flags) const override;
 
 	// the default (primary) button is the palette accent — the "ottoman":
 	// flat terracotta face, deep border, white label
@@ -424,8 +441,9 @@ public:
 		dc.SetBrush(wxBrush(selected ? m_scheme->Get(ibColourScheme::WINDOW)
 		                             : m_scheme->Get(ibColourScheme::CONTROL)));
 		dc.DrawRectangle(rect);
-		DrawLabel(dc, label, rect, flags, wxALIGN_CENTRE, indexAccel);
-		wxUnusedVar(bitmap);
+		// the label and the tab's picture beside it - DrawLabel's road (DrawButtonLabel), of the picture too: dropped
+		// here, no tab showed the one its book was given
+		DrawButtonLabel(dc, label, bitmap, rect, flags, wxALIGN_CENTRE, indexAccel);
 	}
 
 	// sliders: not revived yet — simple flat geometry
@@ -799,8 +817,96 @@ wxBitmap ibLunaRenderer::GetCheckBitmap(int flags) {
 }
 
 wxBitmap ibLunaRenderer::GetFrameButtonBitmap(FrameButtonType WXUNUSED(type)) {
-	// top-level frames stay native for now — nothing draws these yet
+	// the frame's buttons are glyphs (DrawFrameButton), not bitmaps
 	return wxNullBitmap;
+}
+
+// The corner of a resizable window's client area that sizes it - the square the native size grip takes.
+static wxRect GetFrameGripRect(const wxRect& client) {
+	const int side = 12;
+	return wxRect(client.GetRight() + 1 - side, client.GetBottom() + 1 - side, side, side);
+}
+
+int ibLunaRenderer::HitTestFrame(const wxRect& rect, const wxPoint& pt, int flags) const {
+	const int hit = ibThemeRenderer::HitTestFrame(rect, pt, flags);
+	if (hit == wxHT_TOPLEVEL_CLIENT_AREA && (flags & wxTOPLEVEL_RESIZEABLE) && !(flags & wxTOPLEVEL_MAXIMIZED)
+			&& GetFrameGripRect(GetFrameClientArea(rect, flags)).Contains(pt))
+		return wxHT_TOPLEVEL_BORDER_SE;
+	return hit;
+}
+
+void ibLunaRenderer::DrawFrameBorder(wxDC& dc, const wxRect& rect, int flags) {
+	if (flags & wxTOPLEVEL_BORDER)
+		DrawBorder(dc, wxBORDER_RAISED, rect);
+
+	// the corner's mark: three strokes across it, as the native grip has
+	if ((flags & wxTOPLEVEL_RESIZEABLE) && !(flags & wxTOPLEVEL_MAXIMIZED)) {
+		const wxRect grip = GetFrameGripRect(GetFrameClientArea(rect, flags));
+		dc.SetPen(wxPen(kCaptionBottom));
+		for (int stroke = 1; stroke <= 3; ++stroke) {
+			const int d = 4 * stroke - 1;
+			dc.DrawLine(grip.GetRight() - d, grip.GetBottom(), grip.GetRight() + 1, grip.GetBottom() - d - 1);
+		}
+	}
+}
+
+void ibLunaRenderer::DrawFrameBackground(wxDC& dc, const wxRect& rect, int flags) {
+	if (!(flags & wxTOPLEVEL_TITLEBAR))
+		return;
+
+	// the band from the border's line to the client: a resizable window's grip above the title is the band too
+	const bool bordered = (flags & wxTOPLEVEL_BORDER) && !(flags & wxTOPLEVEL_MAXIMIZED);
+	const int line = bordered ? GetBorderDimensions(wxBORDER_RAISED).y : 0;
+	const wxRect client = GetFrameClientArea(rect, flags);
+	const wxRect band(rect.x + line, rect.y + line, rect.width - 2 * line, client.y - rect.y - line);
+
+	const wxColour caption = wxSystemSettings::GetColour((flags & wxTOPLEVEL_ACTIVE) ? wxSYS_COLOUR_ACTIVECAPTION
+		: wxSYS_COLOUR_INACTIVECAPTION);
+	dc.GradientFillLinear(band, caption, caption.ChangeLightness(120), wxEAST);
+}
+
+void ibLunaRenderer::DrawFrameButton(wxDC& dc, wxCoord x, wxCoord y, int button, int flags) {
+	// a face only while pressed
+	const wxRect face(x, y, FRAME_BUTTON_WIDTH, FRAME_BUTTON_HEIGHT);
+	if (flags & wxCONTROL_PRESSED) {
+		dc.SetPen(*wxTRANSPARENT_PEN);
+		dc.SetBrush(wxBrush(kBorder));
+		dc.DrawRectangle(face);
+	}
+
+	// the glyph in a square of 8 pixels in the middle
+	const int side = 8;
+	const wxRect glyph(face.x + (face.width - side) / 2, face.y + (face.height - side) / 2, side, side);
+	dc.SetPen(wxPen(kCaptionBottom));
+	dc.SetBrush(*wxTRANSPARENT_BRUSH);
+	switch (button) {
+	case wxTOPLEVEL_BUTTON_CLOSE:
+		dc.DrawLine(glyph.GetLeft(), glyph.GetTop(), glyph.GetRight() + 1, glyph.GetBottom() + 1);
+		dc.DrawLine(glyph.GetRight(), glyph.GetTop(), glyph.GetLeft() - 1, glyph.GetBottom() + 1);
+		break;
+	case wxTOPLEVEL_BUTTON_MAXIMIZE:
+		dc.DrawRectangle(glyph);
+		break;
+	case wxTOPLEVEL_BUTTON_RESTORE:
+		// the window in front, the corner of the one behind it
+		dc.DrawRectangle(glyph.x, glyph.y + 2, side - 2, side - 2);
+		dc.DrawLine(glyph.x + 2, glyph.y, glyph.GetRight() + 1, glyph.y);
+		dc.DrawLine(glyph.GetRight(), glyph.y, glyph.GetRight(), glyph.y + side - 2);
+		break;
+	case wxTOPLEVEL_BUTTON_ICONIZE:
+		dc.DrawLine(glyph.GetLeft(), glyph.GetBottom(), glyph.GetRight() + 1, glyph.GetBottom());
+		break;
+	case wxTOPLEVEL_BUTTON_HELP:
+		dc.SetTextForeground(kCaptionBottom);
+		dc.DrawLabel(wxT("?"), face, wxALIGN_CENTRE);
+		break;
+	}
+}
+
+int ibLunaRenderer::GetFrameBorderWidth(int flags) const {
+	// the border's line, and inside it a resizable window's grip
+	const int line = GetBorderDimensions(wxBORDER_RAISED).x;
+	return (flags & wxTOPLEVEL_RESIZEABLE) ? line + 4 : line;
 }
 
 // ----------------------------------------------------------------------------

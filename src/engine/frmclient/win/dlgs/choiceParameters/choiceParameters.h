@@ -31,9 +31,9 @@
 // configuration, written on the row (its Targets and Sources). A row without them would read every field as one that
 // refers to nothing, so the row opens the window only when it has them (advpropChoiceLink.cpp).
 
-#include <wx/dialog.h>
-#include <wx/button.h>
-#include <wx/stattext.h>
+#include "gui/univ/dialog.h"
+#include "gui/univ/ctrl/button.h"
+#include "gui/univ/ctrl/staticText.h"
 
 #include <map>
 
@@ -43,7 +43,7 @@
 
 class FRMCLIENT_API ibBackendProperty;
 
-class ibDialogChoiceParameters : public wxDialog {
+class ibDialogChoiceParameters : public ibDialog {
 public:
 
 	ibDialogChoiceParameters(wxWindow* parent, ibBackendProperty* property,
@@ -153,13 +153,13 @@ private:
 	// ⭐ AND WHEN THERE IS NOTHING TO OFFER, IT SAYS SO. An empty window explains nothing, and the
 	// commonest way to reach one is perfectly legitimate: the field refers to nothing, so there is no
 	// list for a parameter to narrow (Max, 2026-09-23, opening this on a Quantity).
-	wxStaticText* m_nothing = nullptr;
+	ibStaticText* m_nothing = nullptr;
 
 	// right: the rows, one line each — every cell but the name is edited where it stands
 	ibDataViewCtrl*         m_rows      = nullptr;
 	class ibQueryGridModel* m_rowsModel = nullptr;
-	wxButton*               m_up        = nullptr;   // the order is the author's — it is what a reader sees
-	wxButton*               m_down      = nullptr;
+	ibButton*               m_up        = nullptr;   // the order is the author's — it is what a reader sees
+	ibButton*               m_down      = nullptr;
 };
 
 #endif // __CHOICE_PARAMETERS_DLG_H__

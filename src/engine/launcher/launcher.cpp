@@ -6,7 +6,7 @@
 
 #include <wx/filename.h>
 #include <wx/log.h>
-#include <wx/msgdlg.h>   // wxMessageBox — a start that failed is said
+#include "gui/univ/messageDialog.h"   // ibMessageBox — a start that failed is said
 #include <wx/stdpaths.h>
 #include <wx/utils.h>   // wxLaunchDefaultBrowser, wxYieldIfNeeded
 #include <wx/xml/xml.h>
@@ -51,7 +51,7 @@ wxString ibListInfo::GetAddress() const {
 	}
 }
 
-void ibFrameLauncher::LoadListIB() {
+void ibDialogLauncher::LoadListIB() {
 
 	wxLogNull logNo;
 
@@ -112,7 +112,7 @@ void ibFrameLauncher::LoadListIB() {
 	}
 }
 
-void ibFrameLauncher::SaveListIB() {
+void ibDialogLauncher::SaveListIB() {
 
 	wxXmlDocument document;
 	wxXmlNode* root = new wxXmlNode(wxXML_ELEMENT_NODE, "ib");
@@ -158,8 +158,10 @@ void ibFrameLauncher::SaveListIB() {
 	document.Save(strFileName.GetFullPath());
 }
 
-ibFrameLauncher::ibFrameLauncher(wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) : wxFrame(parent, id, title, pos, size, style)
+ibDialogLauncher::ibDialogLauncher(wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) : ibDialog(parent, id, title, pos, size, style)
 {
+	Bind(wxEVT_CLOSE_WINDOW, &ibDialogLauncher::OnCloseWindow, this);
+
 	this->SetSizeHints(wxDefaultSize, wxDefaultSize);
 	// Interior palette — powder-blue frame (matches enterprise / designer
 	// chrome). Was system BTNFACE (Win98 light grey).
@@ -171,8 +173,8 @@ ibFrameLauncher::ibFrameLauncher(wxWindow* parent, wxWindowID id, const wxString
 	m_listIBwnd = new ibListBox(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, nullptr, wxLB_SINGLE);
 	m_listIBwnd->SetFont(wxFont(13, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
 
-	m_listIBwnd->Bind(wxEVT_LISTBOX, &ibFrameLauncher::OnSelectedList, this);
-	m_listIBwnd->Bind(wxEVT_LISTBOX_DCLICK, &ibFrameLauncher::OnSelectedDClickList, this);
+	m_listIBwnd->Bind(wxEVT_LISTBOX, &ibDialogLauncher::OnSelectedList, this);
+	m_listIBwnd->Bind(wxEVT_LISTBOX_DCLICK, &ibDialogLauncher::OnSelectedDClickList, this);
 
 	sizerLeft->Add(m_listIBwnd, 1, wxALL | wxEXPAND, 8);
 
@@ -186,19 +188,19 @@ ibFrameLauncher::ibFrameLauncher(wxWindow* parent, wxWindowID id, const wxString
 
 	m_buttonEnterprise = new ibButton(this, wxID_ANY, _("Enterprise"), wxDefaultPosition, wxDefaultSize, 0);
 	m_buttonEnterprise->SetBitmap(ibGetLauncherPicture(ibLauncherPicture::Enterprise));
-	m_buttonEnterprise->Bind(wxEVT_BUTTON, &ibFrameLauncher::OnButtonEnterprise, this);
+	m_buttonEnterprise->Bind(wxEVT_BUTTON, &ibDialogLauncher::OnButtonEnterprise, this);
 
 	sizerRight->Add(m_buttonEnterprise, 0, wxALL | wxEXPAND, FromDIP(5));
 
 	m_buttonDesigner = new ibButton(this, wxID_ANY, _("Designer"), wxDefaultPosition, wxDefaultSize, 0);
 	m_buttonDesigner->SetBitmap(ibGetLauncherPicture(ibLauncherPicture::Designer));
-	m_buttonDesigner->Bind(wxEVT_BUTTON, &ibFrameLauncher::OnButtonDesigner, this);
+	m_buttonDesigner->Bind(wxEVT_BUTTON, &ibDialogLauncher::OnButtonDesigner, this);
 
 	sizerRight->Add(m_buttonDesigner, 0, wxALL | wxEXPAND, FromDIP(5));
 
 	m_buttonWeb = new ibButton(this, wxID_ANY, _("Web"), wxDefaultPosition, wxDefaultSize, 0);
 	m_buttonWeb->SetBitmap(ibGetLauncherPicture(ibLauncherPicture::Web));
-	m_buttonWeb->Bind(wxEVT_BUTTON, &ibFrameLauncher::OnButtonWeb, this);
+	m_buttonWeb->Bind(wxEVT_BUTTON, &ibDialogLauncher::OnButtonWeb, this);
 
 	sizerRight->Add(m_buttonWeb, 0, wxALL | wxEXPAND, FromDIP(5));
 	sizerRight->Add(0, 0, 1, wxEXPAND, FromDIP(5));
@@ -207,21 +209,21 @@ ibFrameLauncher::ibFrameLauncher(wxWindow* parent, wxWindowID id, const wxString
 	m_buttonAdd->SetBitmap(ibGetLauncherPicture(ibLauncherPicture::Add));
 	sizerRight->Add(m_buttonAdd, 0, wxALL | wxEXPAND, FromDIP(5));
 
-	m_buttonAdd->Bind(wxEVT_BUTTON, &ibFrameLauncher::OnButtonAdd, this);
+	m_buttonAdd->Bind(wxEVT_BUTTON, &ibDialogLauncher::OnButtonAdd, this);
 
 	m_buttonEdit = new ibButton(this, wxID_ANY, _("Edit"), wxDefaultPosition, wxDefaultSize, 0);
 
 	m_buttonEdit->SetBitmap(ibGetLauncherPicture(ibLauncherPicture::Edit));
 	sizerRight->Add(m_buttonEdit, 0, wxALL | wxEXPAND, FromDIP(5));
 
-	m_buttonEdit->Bind(wxEVT_BUTTON, &ibFrameLauncher::OnButtonEdit, this);
+	m_buttonEdit->Bind(wxEVT_BUTTON, &ibDialogLauncher::OnButtonEdit, this);
 
 	m_buttonDelete = new ibButton(this, wxID_ANY, _("Delete"), wxDefaultPosition, wxDefaultSize, 0);
 
 	m_buttonDelete->SetBitmap(ibGetLauncherPicture(ibLauncherPicture::Delete));
 	sizerRight->Add(m_buttonDelete, 0, wxALL | wxEXPAND, FromDIP(5));
 
-	m_buttonDelete->Bind(wxEVT_BUTTON, &ibFrameLauncher::OnButtonDelete, this);
+	m_buttonDelete->Bind(wxEVT_BUTTON, &ibDialogLauncher::OnButtonDelete, this);
 
 	sizerRight->Add(0, 0, 1, wxEXPAND, FromDIP(5));
 
@@ -230,7 +232,7 @@ ibFrameLauncher::ibFrameLauncher(wxWindow* parent, wxWindowID id, const wxString
 	m_buttonExit->SetBitmap(ibGetLauncherPicture(ibLauncherPicture::Exit));
 	sizerRight->Add(m_buttonExit, 0, wxALL | wxEXPAND, FromDIP(5));
 
-	m_buttonExit->Bind(wxEVT_BUTTON, &ibFrameLauncher::OnButtonClose, this);
+	m_buttonExit->Bind(wxEVT_BUTTON, &ibDialogLauncher::OnButtonClose, this);
 
 	mainSizer->Add(sizerRight, 0, wxEXPAND, FromDIP(5));
 
@@ -242,7 +244,7 @@ ibFrameLauncher::ibFrameLauncher(wxWindow* parent, wxWindowID id, const wxString
 	LoadListIB();
 }
 
-ibFrameLauncher::~ibFrameLauncher()
+ibDialogLauncher::~ibDialogLauncher()
 {
 	SaveListIB();
 }
@@ -254,7 +256,7 @@ static wxString FormatInfoLabel(const ibListInfo& info) {
 	return info.GetAddress();
 }
 
-void ibFrameLauncher::OnSelectedList(wxCommandEvent& event) {
+void ibDialogLauncher::OnSelectedList(wxCommandEvent& event) {
 	int selection = m_listIBwnd->GetSelection();
 	if (selection == wxNOT_FOUND) return;
 	auto itSelection = m_listInfoBase.begin() + selection;
@@ -262,7 +264,7 @@ void ibFrameLauncher::OnSelectedList(wxCommandEvent& event) {
 }
 
 // ONE ROAD TO START AN APPLICATION — the double click, Enterprise and Designer were three copies of it.
-void ibFrameLauncher::StartApplication(const wxString& appName) {
+void ibDialogLauncher::StartApplication(const wxString& appName) {
 	int selection = m_listIBwnd->GetSelection();
 	if (selection == wxNOT_FOUND) return;
 	auto itSelection = m_listInfoBase.begin() + selection;
@@ -273,26 +275,26 @@ void ibFrameLauncher::StartApplication(const wxString& appName) {
 	// launcher used to close regardless, so a missing executable looked exactly like a click that did nothing —
 	// which is how the designer "would not start" on a Mac with nothing on screen to say why.
 	if (ibStartProcess(executeCmd, secrets) == 0) {
-		wxMessageBox(ibString::Format(_("Could not start %s.\n\n%s"), appName, executeCmd),
+		ibMessageBox(ibString::Format(_("Could not start %s.\n\n%s"), appName, executeCmd),
 			_("Launch OES"), wxOK | wxICON_ERROR, this);
 		return;
 	}
 	Close(true);
 }
 
-void ibFrameLauncher::OnSelectedDClickList(wxCommandEvent& event) {
+void ibDialogLauncher::OnSelectedDClickList(wxCommandEvent& event) {
 	StartApplication(wxT("enterprise-thin"));
 }
 
-void ibFrameLauncher::OnButtonEnterprise(wxCommandEvent& event) {
+void ibDialogLauncher::OnButtonEnterprise(wxCommandEvent& event) {
 	StartApplication(wxT("enterprise-thin"));
 }
 
-void ibFrameLauncher::OnButtonDesigner(wxCommandEvent& event) {
+void ibDialogLauncher::OnButtonDesigner(wxCommandEvent& event) {
 	StartApplication(wxT("designer-thin"));
 }
 
-void ibFrameLauncher::OnButtonWeb(wxCommandEvent& event) {
+void ibDialogLauncher::OnButtonWeb(wxCommandEvent& event) {
 	int selection = m_listIBwnd->GetSelection();
 	if (selection == wxNOT_FOUND) return;
 	auto itSelection = m_listInfoBase.begin() + selection;
@@ -321,7 +323,7 @@ void ibFrameLauncher::OnButtonWeb(wxCommandEvent& event) {
 	// The window keeps painting while the base opens, and the browser is launched before the launcher closes.
 	ibString url;
 	if (ibStartWebServer(cmd, url, []() { wxYieldIfNeeded(); }) == 0) {
-		wxMessageBox(ibString::Format(_("Could not start %s.\n\n%s"), wxT("webserver"), cmd),
+		ibMessageBox(ibString::Format(_("Could not start %s.\n\n%s"), wxT("webserver"), cmd),
 			_("Launch OES"), wxOK | wxICON_ERROR, this);
 		return;
 	}
@@ -332,7 +334,7 @@ void ibFrameLauncher::OnButtonWeb(wxCommandEvent& event) {
 
 #include "connectionDB.h"
 
-void ibFrameLauncher::OnButtonAdd(wxCommandEvent& event) {
+void ibDialogLauncher::OnButtonAdd(wxCommandEvent& event) {
 	ibDialogConnection* connection_db = new ibDialogConnection(this, wxID_ANY);
 	const int res = connection_db->ShowModal();
 	if (res == wxID_OK) {
@@ -351,7 +353,7 @@ void ibFrameLauncher::OnButtonAdd(wxCommandEvent& event) {
 	event.Skip();
 }
 
-void ibFrameLauncher::OnButtonEdit(wxCommandEvent& event) {
+void ibDialogLauncher::OnButtonEdit(wxCommandEvent& event) {
 
 	int selection = m_listIBwnd->GetSelection();
 	if (selection == wxNOT_FOUND) return;
@@ -375,7 +377,7 @@ void ibFrameLauncher::OnButtonEdit(wxCommandEvent& event) {
 	event.Skip();
 }
 
-void ibFrameLauncher::OnButtonDelete(wxCommandEvent& event) {
+void ibDialogLauncher::OnButtonDelete(wxCommandEvent& event) {
 	int selection = m_listIBwnd->GetSelection();
 	if (selection == wxNOT_FOUND) return;
 	auto itSelection = m_listInfoBase.begin() + selection;
@@ -384,6 +386,11 @@ void ibFrameLauncher::OnButtonDelete(wxCommandEvent& event) {
 	event.Skip();
 }
 
-void ibFrameLauncher::OnButtonClose(wxCommandEvent& event) {
+void ibDialogLauncher::OnButtonClose(wxCommandEvent& event) {
 	Close(true);
+}
+
+// A modeless dialog closed is only hidden (wxDialogBase::EndDialog): the launcher's is destroyed, as a frame is.
+void ibDialogLauncher::OnCloseWindow(wxCloseEvent& event) {
+	Destroy();
 }
