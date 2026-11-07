@@ -1,5 +1,5 @@
 ﻿#include "gridEditor.h"
-#include "gui/univ/grid/gridextprivate.h"
+#include "deskgui/univ/grid/gridextprivate.h"
 
 #include <wx/wupdlock.h>   // wxWindowUpdateLocker — the Freeze/Thaw pair taken as a guard
 

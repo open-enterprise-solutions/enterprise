@@ -14,7 +14,7 @@
 
 #include <functional>
 
-#include "gui/univ/panel.h"
+#include "deskgui/univ/panel.h"
 
 #include "core/description/compositionDescription.h"   // ibConditionalAppearanceDescription — what is edited here
 

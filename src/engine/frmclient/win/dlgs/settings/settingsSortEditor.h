@@ -22,11 +22,11 @@
 
 #include <functional>   // std::function — the "it changed" callback a host installs
 
-#include "gui/univ/panel.h"
-#include "gui/univ/ctrl/treeCtrl.h"
+#include "deskgui/univ/panel.h"
+#include "deskgui/univ/ctrl/treeCtrl.h"
 
 #include "core/description/compositionDescription.h"   // ibSortDescription — what is edited here
-#include "gui/univ/dataview/dataview.h"
+#include "deskgui/univ/dataview/dataview.h"
 
 class ibSettingsFieldTree;
 

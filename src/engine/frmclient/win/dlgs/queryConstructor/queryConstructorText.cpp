@@ -4,9 +4,9 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "queryConstructorInternal.h"
-#include "gui/univ/ctrl/button.h"
-#include "gui/univ/dialog.h"
-#include "gui/univ/messageDialog.h"
+#include "deskgui/univ/ctrl/button.h"
+#include "deskgui/univ/dialog.h"
+#include "deskgui/univ/messageDialog.h"
 
 using namespace queryctor;
 

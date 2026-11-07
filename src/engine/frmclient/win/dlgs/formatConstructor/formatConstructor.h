@@ -24,13 +24,13 @@
 #include "core/formatString.h"
 #include "frmclient/win/dlgs/translateConstructor/translateConstructor.h"   // ibBoxEditor — a language's box, edited here
 
-#include "gui/univ/dialog.h"
-#include "gui/univ/ctrl/checkBox.h"
-#include "gui/univ/ctrl/choice.h"
-#include "gui/univ/ctrl/notebook.h"
-#include "gui/univ/ctrl/spinCtrl.h"
-#include "gui/univ/ctrl/staticText.h"
-#include "gui/univ/ctrl/textCtrl.h"
+#include "deskgui/univ/dialog.h"
+#include "deskgui/univ/ctrl/checkBox.h"
+#include "deskgui/univ/ctrl/choice.h"
+#include "deskgui/univ/ctrl/notebook.h"
+#include "deskgui/univ/ctrl/spinCtrl.h"
+#include "deskgui/univ/ctrl/staticText.h"
+#include "deskgui/univ/ctrl/textCtrl.h"
 
 #include <vector>
 

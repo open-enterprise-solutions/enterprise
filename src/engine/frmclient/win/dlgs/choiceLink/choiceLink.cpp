@@ -5,7 +5,7 @@
 #include "frmclient/win/dlgs/queryConstructor/queryGridModel.h"   // the one grid model for a plain list
 
 #include <wx/sizer.h>
-#include "gui/univ/ctrl/staticLine.h"
+#include "deskgui/univ/ctrl/staticLine.h"
 #include <wx/artprov.h>
 
 namespace {

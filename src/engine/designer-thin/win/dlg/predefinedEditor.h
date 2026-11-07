@@ -4,12 +4,12 @@
 #include <wx/aui/auibar.h>
 
 #include "frmclient/backend/metaCollection/partial/commonObject.h"
-#include "gui/univ/dataview/dataview.h"
-#include "gui/univ/ctrl/button.h"
-#include "gui/univ/ctrl/checkBox.h"
-#include "gui/univ/ctrl/textCtrl.h"
-#include "gui/univ/ctrl/choice.h"
-#include "gui/univ/dialog.h"
+#include "deskgui/univ/dataview/dataview.h"
+#include "deskgui/univ/ctrl/button.h"
+#include "deskgui/univ/ctrl/checkBox.h"
+#include "deskgui/univ/ctrl/textCtrl.h"
+#include "deskgui/univ/ctrl/choice.h"
+#include "deskgui/univ/dialog.h"
 
 class ibTextCtrl;
 

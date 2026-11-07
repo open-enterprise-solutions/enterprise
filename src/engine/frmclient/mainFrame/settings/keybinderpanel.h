@@ -12,14 +12,14 @@
 /////////////////////////////////////////////////////////////////////////////
 
 #include <wx/wx.h>
-#include "gui/univ/ctrl/listCtrl.h"
-#include "gui/univ/ctrl/searchCtrl.h"
+#include "deskgui/univ/ctrl/listCtrl.h"
+#include "deskgui/univ/ctrl/searchCtrl.h"
 
 #include "keybinder.h"
-#include "gui/univ/ctrl/staticText.h"
-#include "gui/univ/ctrl/button.h"
-#include "gui/univ/ctrl/textCtrl.h"
-#include "gui/univ/panel.h"
+#include "deskgui/univ/ctrl/staticText.h"
+#include "deskgui/univ/ctrl/button.h"
+#include "deskgui/univ/ctrl/textCtrl.h"
+#include "deskgui/univ/panel.h"
 
 class FRMCLIENT_API ibPanelKeyBinder : public ibPanel
 {

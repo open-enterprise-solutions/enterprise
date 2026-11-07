@@ -5,7 +5,7 @@
 
 #include "core/net/ports.h"                 // ibPort::Clients — the port a cluster's address leaves out
 #include "protocol/connectionServer.h"      // the socket a client opens on a cluster's base or a publication
-#include "gui/univ/messageDialog.h"
+#include "deskgui/univ/messageDialog.h"
 
 void ibDialogConnection::InitConnection(const wxString& strName, const ibListInfo& info)
 {

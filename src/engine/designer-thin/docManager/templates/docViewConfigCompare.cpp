@@ -2,16 +2,16 @@
 
 #include "designer-thin/backend/metaCollection/metaDiff.h"
 #include "frmclient/mainFrame/mainFrame.h"
-#include "gui/univ/dataview/dataview.h"
-#include "gui/univ/theme/luna_toolbarart.h"
+#include "deskgui/univ/dataview/dataview.h"
+#include "deskgui/univ/theme/luna_toolbarart.h"
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibConfigCompare
 
 #include <wx/aui/auibar.h>
 #include <wx/button.h>
 #include <wx/choice.h>
-#include "gui/univ/messageDialog.h"
+#include "deskgui/univ/messageDialog.h"
 #include <wx/sizer.h>
-#include "gui/univ/ctrl/staticText.h"
+#include "deskgui/univ/ctrl/staticText.h"
 
 // ============================================================
 //   ibConfigCompareDocument

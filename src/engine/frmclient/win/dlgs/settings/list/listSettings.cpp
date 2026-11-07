@@ -15,18 +15,18 @@
 #include "frmclient/backend/serialize/dataProtocol.h"         // the setting and its fields, as the server's question carries them
 #include "frmclient/backend/metaCollection/partial/reference/reference.h"   // which of the fields' types are references
 
-#include "gui/univ/ctrl/notebook.h"
+#include "deskgui/univ/ctrl/notebook.h"
 #include <wx/panel.h>
 #include <wx/sizer.h>
-#include "gui/univ/ctrl/button.h"
+#include "deskgui/univ/ctrl/button.h"
 #include <wx/treectrl.h>
-#include "gui/univ/splitterWindow.h"
+#include "deskgui/univ/splitterWindow.h"
 #include <wx/menu.h>
-#include "gui/univ/messageDialog.h"
-#include "gui/univ/ctrl/staticText.h"
+#include "deskgui/univ/messageDialog.h"
+#include "deskgui/univ/ctrl/staticText.h"
 #include <wx/toolbar.h>
 #include <wx/app.h>
-#include "gui/univ/dialog.h"
+#include "deskgui/univ/dialog.h"
 
 // Group tab dataview columns.
 // COLUMN 0 IS RESERVED by the ibDataViewCtrl fork (a model column 0 paints blank

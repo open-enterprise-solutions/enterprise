@@ -3,7 +3,7 @@
 
 #include <wx/artprov.h>
 #include <wx/xrc/xmlres.h>
-#include "gui/univ/ctrl/listCtrl.h"
+#include "deskgui/univ/ctrl/listCtrl.h"
 #include <wx/gdicmn.h>
 #include <wx/font.h>
 #include <wx/colour.h>
@@ -11,7 +11,7 @@
 #include <wx/string.h>
 #include <wx/sizer.h>
 #include <wx/statbox.h>
-#include "gui/univ/dialog.h"
+#include "deskgui/univ/dialog.h"
 
 #include <wx/timer.h>
 #include "core/localization/dictionary.h"   // _() — the dialog's words

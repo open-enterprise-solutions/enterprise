@@ -4,9 +4,9 @@
 #include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the string's node
 #include "frmclient/propertyManager/property/private/prop.h"                 // wxPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
-#include "gui/univ/ctrl/textCtrl.h"
-#include "gui/univ/dialog.h"
-#include "gui/univ/messageDialog.h"
+#include "deskgui/univ/ctrl/textCtrl.h"
+#include "deskgui/univ/dialog.h"
+#include "deskgui/univ/messageDialog.h"
 
 namespace {
 

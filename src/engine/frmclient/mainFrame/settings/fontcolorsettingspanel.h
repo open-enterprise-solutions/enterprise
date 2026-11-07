@@ -12,10 +12,10 @@
 #include <wx/fontpicker.h>
 
 #include "fontcolorsettings.h"
-#include "gui/univ/ctrl/staticText.h"
-#include "gui/univ/ctrl/checkBox.h"
-#include "gui/univ/ctrl/listBox.h"
-#include "gui/univ/panel.h"
+#include "deskgui/univ/ctrl/staticText.h"
+#include "deskgui/univ/ctrl/checkBox.h"
+#include "deskgui/univ/ctrl/listBox.h"
+#include "deskgui/univ/panel.h"
 
 class FRMCLIENT_API ibPanelFontColorSettings : public ibPanel
 {

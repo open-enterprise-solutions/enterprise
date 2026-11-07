@@ -7,7 +7,7 @@
 #include "frmclient/propertyManager/propertyEditor.h"
 #include "frmclient/win/ctrls/checktree.h"
 #include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the ids' node
-#include "gui/univ/dialog.h"
+#include "deskgui/univ/dialog.h"
 
 #define icon_size 16
 

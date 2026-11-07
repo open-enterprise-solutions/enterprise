@@ -10,9 +10,9 @@
 #include <wx/dcbuffer.h>
 #include <wx/sizer.h>
 
-#include "gui/univ/renderer.h"
-#include "gui/univ/theme.h"
-#include "gui/univ/topLevel.h"   // wxTOPLEVEL_xxx - what the caption is drawn as
+#include "deskgui/univ/renderer.h"
+#include "deskgui/univ/theme.h"
+#include "deskgui/univ/topLevel.h"   // wxTOPLEVEL_xxx - what the caption is drawn as
 #include "frmclient/backend/backend_picture.h"
 #include "res/visualResource.h"   // the caption's window buttons
 

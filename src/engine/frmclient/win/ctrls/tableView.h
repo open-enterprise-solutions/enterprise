@@ -2,12 +2,12 @@
 #define _FRMCLIENT_TABLE_VIEW_H__
 
 #include <wx/dialog.h>
-#include "gui/univ/ctrl/radioButton.h"
-#include "gui/univ/ctrl/button.h"
+#include "deskgui/univ/ctrl/radioButton.h"
+#include "deskgui/univ/ctrl/button.h"
 #include <wx/sizer.h>
 
-#include "gui/univ/dataview/dataview.h"   // ibDataViewViewMode
-#include "gui/univ/dialog.h"
+#include "deskgui/univ/dataview/dataview.h"   // ibDataViewViewMode
+#include "deskgui/univ/dialog.h"
 
 // THE VIEW MODE WINDOW — the old desktop's (ibTableViewCtrl::ShowViewMode):the mode in
 // force and the window's picture are what the server sent (ibProtocol::ibRequest::ibKind::ViewMode), the mode chosen goes back.

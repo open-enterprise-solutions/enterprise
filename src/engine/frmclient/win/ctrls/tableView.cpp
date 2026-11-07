@@ -1,7 +1,7 @@
 #include "tableView.h"
 
 #include <wx/statbox.h>
-#include "gui/univ/ctrl/staticBox.h"
+#include "deskgui/univ/ctrl/staticBox.h"
 
 wxTableViewModeDialog::wxTableViewModeDialog(wxWindow* parent, wxWindowID id, ibDataViewViewMode mode, const wxBitmap& picture) :
 	ibDialog(parent, id, _("View mode"))

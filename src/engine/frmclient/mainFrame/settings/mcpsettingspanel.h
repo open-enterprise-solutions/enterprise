@@ -20,11 +20,11 @@
 #include <wx/wx.h>
 
 #include "frmclient/backend/mcp/mcpServer.h"   // ibMcpSettings — the value this page edits
-#include "gui/univ/ctrl/staticText.h"
-#include "gui/univ/ctrl/button.h"
-#include "gui/univ/ctrl/checkBox.h"
-#include "gui/univ/ctrl/textCtrl.h"
-#include "gui/univ/panel.h"
+#include "deskgui/univ/ctrl/staticText.h"
+#include "deskgui/univ/ctrl/button.h"
+#include "deskgui/univ/ctrl/checkBox.h"
+#include "deskgui/univ/ctrl/textCtrl.h"
+#include "deskgui/univ/panel.h"
 
 class FRMCLIENT_API ibPanelMcpSettings : public ibPanel
 {

@@ -15,7 +15,7 @@
 #include "frmclient/docView/tabDocument.h"
 
 #include "frmclient/backend/logger/loggerReader.h"
-#include "gui/univ/dataview/dataview.h"
+#include "deskgui/univ/dataview/dataview.h"
 
 #include <memory>
 #include <vector>

@@ -12,7 +12,7 @@
 #endif
 
 #include "frmclient/frmclient.h"
-#include "gui/univ/panel.h"
+#include "deskgui/univ/panel.h"
 
 static int wxEVT_OES_PROP_PICTURE_CHANGED = wxNewEventType();
 

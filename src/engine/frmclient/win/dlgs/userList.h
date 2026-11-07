@@ -14,11 +14,11 @@
 #include <wx/colour.h>
 #include <wx/settings.h>
 #include <wx/sizer.h>
-#include "gui/univ/dialog.h"
+#include "deskgui/univ/dialog.h"
 #include <wx/itemattr.h>
 
 #include "frmclient/frmclient.h"
-#include "gui/univ/dataview/dataview.h"
+#include "deskgui/univ/dataview/dataview.h"
 
 // USERS — the old desktop's dialog as it was: the list read from the server's schema
 // (frmserver/schema/designer/userList.cpp) through ibUserInfo, as it read sys_user.

@@ -254,7 +254,7 @@ enterprise/
         │   └── system/       # Built-in functions and values
         ├── protocol/         # The client protocol: its contract (protocol.h) and connections
         ├── frmserver/        # The server side of the thin client: sessions, forms, the client host, the MCP server and its tools
-        ├── gui/              # The desktop's user interface library: the custom-drawn controls and dialogs, the Luna theme
+        ├── deskgui/          # The desktop's user interface library: the custom-drawn controls and dialogs, the Luna theme
         ├── frmclient/        # The thin client's window, document/view and controls
         ├── fileserver/       # A file base in the thin client's process
         ├── enterprise-thin/  # The thin client runtime executable
@@ -276,7 +276,7 @@ enterprise/
 |---|---|
 | Language | C++20 |
 | Text | UTF-16 (`char16_t`) on every OS — one length and one index for a text everywhere, the browser's included; OES-RPC carries it as it lies |
-| GUI framework | wxWidgets 3.3.4 as the host; the controls and dialogs drawn by `gui` (a fork of the wxUniversal theme engine, the Luna theme) |
+| GUI framework | wxWidgets 3.3.4 as the host; the controls and dialogs drawn by `deskgui` (a fork of the wxUniversal theme engine, the Luna theme) |
 | Primary database | Firebird (embedded) |
 | Production alternative | PostgreSQL |
 | Other databases | ODBC; SQLite (tests + logging) |

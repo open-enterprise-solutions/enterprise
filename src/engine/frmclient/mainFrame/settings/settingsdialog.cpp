@@ -5,7 +5,7 @@
 #include "mcpsettingspanel.h"
 #include "debugsettingspanel.h"
 
-#include "gui/univ/ctrl/notebook.h"
+#include "deskgui/univ/ctrl/notebook.h"
 
 ibDialogSettings::ibDialogSettings(wxWindow* parent)
 	: ibPropertySheetDialog(parent, wxID_ANY, _("Settings"), wxDefaultPosition, wxDefaultSize,

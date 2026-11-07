@@ -1,5 +1,5 @@
 #include "fontcolorsettingspanel.h"
-#include "gui/univ/ctrl/button.h"
+#include "deskgui/univ/ctrl/button.h"
 
 ibPanelFontColorSettings::ibPanelFontColorSettings(wxWindow* parent)
 	: ibPanel(parent, wxID_ANY)

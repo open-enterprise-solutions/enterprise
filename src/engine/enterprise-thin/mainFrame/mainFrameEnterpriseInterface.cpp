@@ -18,9 +18,9 @@
 #define wxDefaultStypeFGColour wxColour(0x3F, 0x5C, 0x77)  // #3F5C77 deep dusty blue
 
 #include "frmclient/win/picture.h"   // the pictures, as they travel
-#include "gui/univ/ctrl/control.h"
-#include "gui/univ/ctrl/staticText.h"
-#include "gui/univ/ctrl/staticBitmap.h"
+#include "deskgui/univ/ctrl/control.h"
+#include "deskgui/univ/ctrl/staticText.h"
+#include "deskgui/univ/ctrl/staticBitmap.h"
 
 // THE SECTION PANEL — the desktop's (enterprise/mainFrame/mainFrameEnterpriseInterface.cpp) on the thin client: the
 // same buttons, the same page in its popup, drawn line for line; what it shows is the server's schema Sections

@@ -118,7 +118,7 @@ void ibDialogConnection::SaveConnectionData()
 	//document.Save(strFileName);
 }
 
-#include "gui/univ/messageDialog.h"
+#include "deskgui/univ/messageDialog.h"
 
 void ibDialogConnection::TestConnectionOnButtonClick(wxCommandEvent& event)
 {

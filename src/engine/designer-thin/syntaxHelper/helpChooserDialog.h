@@ -11,10 +11,10 @@
 
 
 #include <wx/dialog.h>
-#include "gui/univ/ctrl/listBox.h"
+#include "deskgui/univ/ctrl/listBox.h"
 
 #include <vector>
-#include "gui/univ/dialog.h"
+#include "deskgui/univ/dialog.h"
 
 struct ibHelpEntry;
 

@@ -10,7 +10,7 @@
 #include <wx/cmdline.h>
 #include "core/launchTicket.h"
 #include <wx/image.h>
-#include "gui/univ/messageDialog.h"
+#include "deskgui/univ/messageDialog.h"
 
 #include "frmclient/artProvider/splash/splashLogo.h"   // the splash's picture, the desktop's
 #include "frmclient/backend/backend_picture.h"         // ibBackendPicture::GetImageFromBase64 — the splash, a master in the source

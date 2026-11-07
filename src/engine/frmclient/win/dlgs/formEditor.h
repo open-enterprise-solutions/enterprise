@@ -2,10 +2,10 @@
 #define __FORM_EDITOR_H__
 
 #include <wx/dialog.h>
-#include "gui/univ/ctrl/button.h"
+#include "deskgui/univ/ctrl/button.h"
 #include <wx/sizer.h>
-#include "gui/univ/ctrl/treeCtrl.h"
-#include "gui/univ/menu.h"
+#include "deskgui/univ/ctrl/treeCtrl.h"
+#include "deskgui/univ/menu.h"
 
 #include <wx/propgrid/propgrid.h>
 #include <wx/propgrid/manager.h>
@@ -19,7 +19,7 @@
 #include "frmclient/backend/backend_picture.h"     // …and what the desktop's form.h brought with it: the engine's pictures
 #include "core/picturePredefined.h"
 #include "frmclient/visualView/ctrl/form.h"
-#include "gui/univ/dialog.h"
+#include "deskgui/univ/dialog.h"
 
 ///////////////////////////////////////////////////////////////////////////////
 /// Class ibDialogFormEditor

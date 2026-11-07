@@ -14,10 +14,10 @@
 #include "artProvider/artProvider.h"
 
 #include <wx/sizer.h>
-#include "gui/univ/ctrl/staticText.h"
+#include "deskgui/univ/ctrl/staticText.h"
 #include <wx/textctrl.h>
 #include <wx/button.h>
-#include "gui/univ/messageDialog.h"
+#include "deskgui/univ/messageDialog.h"
 #include <wx/artprov.h>
 
 namespace {

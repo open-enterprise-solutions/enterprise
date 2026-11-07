@@ -8,7 +8,7 @@
 #include "frmclient/visualView/pageWindow.h"
 #include "frmclient/visualView/visualHostClient.h"   // a designer's host selects and moves by it
 #include "frmclient/win/picture.h"
-#include "gui/univ/theme/luna_tabart.h"
+#include "deskgui/univ/theme/luna_tabart.h"
 
 namespace {
 

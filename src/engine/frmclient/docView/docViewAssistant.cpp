@@ -2,13 +2,13 @@
 
 #include "frmclient/mainFrame/mainFrame.h"   // the shared font/colour settings live on the frame
 
-#include "gui/univ/ctrl/button.h"
-#include "gui/univ/panel.h"
+#include "deskgui/univ/ctrl/button.h"
+#include "deskgui/univ/panel.h"
 #include <wx/sizer.h>
-#include "gui/univ/splitterWindow.h"
-#include "gui/univ/ctrl/staticText.h"
+#include "deskgui/univ/splitterWindow.h"
+#include "deskgui/univ/ctrl/staticText.h"
 #include <wx/stc/stc.h>
-#include "gui/univ/ctrl/textCtrl.h"
+#include "deskgui/univ/ctrl/textCtrl.h"
 #include <wx/weakref.h>
 
 namespace {

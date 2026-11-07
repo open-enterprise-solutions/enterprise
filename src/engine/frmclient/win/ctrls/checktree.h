@@ -1,7 +1,7 @@
 #ifndef __checktree_H_INCLUDED__
 #define __checktree_H_INCLUDED__
 
-#include "gui/univ/ctrl/treeCtrl.h"
+#include "deskgui/univ/ctrl/treeCtrl.h"
 
 #include <set>
 #include <map>

@@ -14,10 +14,10 @@
 #include <wx/frame.h>
 #include <wx/bmpbndl.h>
 #include "core/localization/dictionary.h"   // _() — the dialog's words
-#include "gui/univ/ctrl/button.h"       // the window's controls — the kit's (gui.h)
-#include "gui/univ/ctrl/listBox.h"
-#include "gui/univ/ctrl/staticText.h"
-#include "gui/univ/dialog.h"
+#include "deskgui/univ/ctrl/button.h"       // the window's controls — the kit's (deskgui.h)
+#include "deskgui/univ/ctrl/listBox.h"
+#include "deskgui/univ/ctrl/staticText.h"
+#include "deskgui/univ/dialog.h"
 
 // ⭐ THE LAUNCHER'S OWN PICTURES. It links the backend alone, so the frontend's art provider — which answers the
 // stock ids in the set's manner in the designer and the running application — never reaches it, and a stock id

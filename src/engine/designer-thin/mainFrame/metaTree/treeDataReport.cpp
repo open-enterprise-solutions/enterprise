@@ -6,7 +6,7 @@
 #include "treeDataReport.h"
 
 #include <wx/sizer.h>
-#include "gui/univ/ctrl/choice.h"
+#include "deskgui/univ/ctrl/choice.h"
 
 ibDataReportTree::ibDataReportTree(wxWindow* parent, long long tab)
 	: ibMetaTreeBase(parent, tab, ibProtocol::ibView::ibKind::Report)

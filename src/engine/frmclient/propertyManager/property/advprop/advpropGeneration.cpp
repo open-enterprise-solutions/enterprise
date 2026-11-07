@@ -9,7 +9,7 @@
 #include "frmclient/backend/compiler/value.h"   // ibValue::GetAvailableCtor — a kind, as the server registered its class
 
 #include <map>
-#include "gui/univ/dialog.h"
+#include "deskgui/univ/dialog.h"
 
 #define icon_size 16
 

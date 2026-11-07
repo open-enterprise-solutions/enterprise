@@ -8,11 +8,11 @@
 #ifndef _OES_DESIGNER_GIT_PANEL_H_
 #define _OES_DESIGNER_GIT_PANEL_H_
 
-#include "gui/univ/panel.h"
-#include "gui/univ/ctrl/listCtrl.h"
-#include "gui/univ/ctrl/button.h"
-#include "gui/univ/ctrl/staticText.h"
-#include "gui/univ/ctrl/choice.h"
+#include "deskgui/univ/panel.h"
+#include "deskgui/univ/ctrl/listCtrl.h"
+#include "deskgui/univ/ctrl/button.h"
+#include "deskgui/univ/ctrl/staticText.h"
+#include "deskgui/univ/ctrl/choice.h"
 #include <memory>
 
 #include "designer-thin/backend/vcs/gitService.h"   // the engine's, living in the thin designer

@@ -6,10 +6,10 @@
 #include "gridEditor.h"
 
 #include <wx/activityindicator.h>   // the "composing..." spinner — see ShowComposeState
-#include "gui/univ/ctrl/staticText.h"
+#include "deskgui/univ/ctrl/staticText.h"
 
 #include "frmclient/docView/docView.h"
-#include "gui/univ/menu.h"
+#include "deskgui/univ/menu.h"
 
 #include <wx/wupdlock.h>   // wxWindowUpdateLocker — the Freeze/Thaw pair taken as a guard
 
@@ -425,7 +425,7 @@ void ibGridEditor::OnMouseRightDown(ibGridEvent& event)
 	}
 }
 
-#include "gui/univ/grid/gridextprivate.h"
+#include "deskgui/univ/grid/gridextprivate.h"
 
 // This seems to be required for wxMotif/wxGTK otherwise the mouse
 // cursor must be in the cell edit control to get key events

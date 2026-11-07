@@ -8,8 +8,8 @@
 #include <functional>
 
 #include "frmclient/win/picture.h"
-#include "gui/univ/ctrl/button.h"
-#include "gui/univ/menu.h"
+#include "deskgui/univ/ctrl/button.h"
+#include "deskgui/univ/menu.h"
 
 namespace {
 

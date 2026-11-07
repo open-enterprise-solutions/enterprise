@@ -51,7 +51,7 @@ These keep their own licenses. Nothing in LICENSE.md changes or overrides them.
 
 Some of the widget layer is a **fork** of wxWidgets code rather than a use of it: the
 data-view control, the grid, the tree control, the document/view layer and the wxUniversal
-controls (gui/univ) were taken from wxWidgets, and the tree-list control from wxCode's
+controls (deskgui/univ) were taken from wxWidgets, and the tree-list control from wxCode's
 wxTreeListCtrl, and changed in place. Those files carry the original notices and remain under
 the **wxWindows Library Licence**, whatever the rest of this repository is licensed under. So
 do two property-grid cells — the font cell (wxPropertyGrid's wxFontProperty) and the size cell
@@ -63,11 +63,11 @@ They live in:
 
 | Directory | Files |
 |---|---|
-| `src/engine/gui/univ/grid` | 9 |
-| `src/engine/gui/univ/dataview` | 8 |
-| `src/engine/gui/univ/ctrl` (treelistctrl) | 2 |
+| `src/engine/deskgui/univ/grid` | 9 |
+| `src/engine/deskgui/univ/dataview` | 8 |
+| `src/engine/deskgui/univ/ctrl` (treelistctrl) | 2 |
 | `src/engine/frmclient/docView`, `src/engine/frmserver/docView` | 2 + 2 |
-| `src/engine/gui/univ` (with `ctrl`, `theme`: wxUniversal's) | 70 |
+| `src/engine/deskgui/univ` (with `ctrl`, `theme`: wxUniversal's) | 70 |
 | `src/engine/frmclient/propertyManager/property/advprop` (advpropFont, advpropSize) | 2 |
 | `src/engine/core/localization` (dictionary.cpp: the `.mo` reader and the plural-forms calculator) | 1 |
 | `src/engine/core` (fdatetimeParse.cpp: the free-form date and time reader) | 1 |

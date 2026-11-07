@@ -11,15 +11,15 @@
 #include "frmclient/backend/appData.h"
 #include "frmclient/backend/system/value/valueType.h"                  // ibValueTypeDescription::AdjustValue
 
-#include "gui/univ/ctrl/textCtrl.h"
+#include "deskgui/univ/ctrl/textCtrl.h"
 #include "frmclient/visualView/ctrl/typeControl.h"
 #include "frmclient/visualView/ctrl/frame.h"
 #include "frmclient/visualView/ctrl/tableBoxColumnRenderer.h"  // ibDataViewValueRenderer — the cell is drawn by the TABLE's renderer
 
 #include <wx/menu.h>
 #include <wx/sizer.h>
-#include "gui/univ/splitterWindow.h"
-#include "gui/univ/ctrl/staticText.h"
+#include "deskgui/univ/splitterWindow.h"
+#include "deskgui/univ/ctrl/staticText.h"
 
 // Filter COMMANDS — raised by the toolbar and by the context menu alike, so both
 // roads end in one handler and cannot drift apart. (The filter's column ids live

@@ -36,9 +36,9 @@
 #include <algorithm>   // std::min — MSVC drags it in transitively, libstdc++ does not
 
 #include <wx/sizer.h>
-#include "gui/univ/ctrl/button.h"
-#include "gui/univ/ctrl/choice.h"
-#include "gui/univ/ctrl/notebook.h"
+#include "deskgui/univ/ctrl/button.h"
+#include "deskgui/univ/ctrl/choice.h"
+#include "deskgui/univ/ctrl/notebook.h"
 #include <wx/panel.h>
 #include <wx/statbox.h>
 #include <wx/toolbar.h>
@@ -52,12 +52,12 @@
 #include "frmclient/win/dlgs/rowValueCell.h"          // ibRowValueCellRenderer — a field and a kind are VALUES
 #include "frmclient/win/dlgs/textWithDotsCell.h"      // ibTextWithDotsRenderer — a text cell with a "..."
 #include "frmclient/win/dlgs/settings/settingsAppearanceEditor.h"   // a field's appearance — the "..." behind it
-#include "gui/typeconv.h"                    // WxColourToColour — a row's grey is the model view's data
-#include "gui/univ/ctrl/staticText.h"
-#include "gui/univ/ctrl/checkBox.h"
-#include "gui/univ/ctrl/textCtrl.h"
-#include "gui/univ/dialog.h"
-#include "gui/univ/messageDialog.h"
+#include "deskgui/typeconv.h"                    // WxColourToColour — a row's grey is the model view's data
+#include "deskgui/univ/ctrl/staticText.h"
+#include "deskgui/univ/ctrl/checkBox.h"
+#include "deskgui/univ/ctrl/textCtrl.h"
+#include "deskgui/univ/dialog.h"
+#include "deskgui/univ/messageDialog.h"
 
 namespace {
 enum {

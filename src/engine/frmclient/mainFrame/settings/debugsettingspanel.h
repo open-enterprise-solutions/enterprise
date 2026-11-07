@@ -5,8 +5,8 @@
 
 #include "frmclient/frmclient.h"
 #include "protocol/protocolNode.h"
-#include "gui/univ/ctrl/checkBox.h"
-#include "gui/univ/panel.h"
+#include "deskgui/univ/ctrl/checkBox.h"
+#include "deskgui/univ/panel.h"
 
 // THE APPLICATION'S DEBUGGING PAGE OF THE OPTIONS: its box read from the server's schema
 // (frmserver/schema/runtime/debugging.cpp) and switched by the schema's Start and Stop, at once, not on OK.

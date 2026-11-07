@@ -19,12 +19,12 @@
 // the server's ibPropertyChoiceLink::GetValueList offered, pictures drawn — and the reference types of the field,
 // with the class each is registered under, are the row's Targets (ibFieldReferenceTypes).
 
-#include "gui/univ/dialog.h"
-#include "gui/univ/ctrl/choice.h"
-#include "gui/univ/ctrl/staticText.h"
+#include "deskgui/univ/dialog.h"
+#include "deskgui/univ/ctrl/choice.h"
+#include "deskgui/univ/ctrl/staticText.h"
 
 #include "frmclient/frmclient.h"   // FRMCLIENT_API
-#include "gui/univ/dataview/dataview.h"
+#include "deskgui/univ/dataview/dataview.h"
 #include "core/description/choiceLinkDescription.h"
 
 class FRMCLIENT_API ibBackendProperty;

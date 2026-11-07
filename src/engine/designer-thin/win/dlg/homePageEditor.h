@@ -13,16 +13,16 @@
 //
 // The runtime side that renders this is frmclient/docView/templates/docViewHomePage.{h,cpp}.
 
-#include "gui/univ/dialog.h"
-#include "gui/univ/ctrl/listCtrl.h"
-#include "gui/univ/ctrl/choice.h"
+#include "deskgui/univ/dialog.h"
+#include "deskgui/univ/ctrl/listCtrl.h"
+#include "deskgui/univ/ctrl/choice.h"
 #include <wx/panel.h>
 #include <wx/aui/auibar.h>
 
 #include "frmclient/backend/metaCollection/metaObjectMetadata.h"
-#include "gui/univ/ctrl/staticText.h"
-#include "gui/univ/ctrl/button.h"
-#include "gui/univ/ctrl/treeCtrl.h"
+#include "deskgui/univ/ctrl/staticText.h"
+#include "deskgui/univ/ctrl/button.h"
+#include "deskgui/univ/ctrl/treeCtrl.h"
 
 class ibButton;
 class wxTreeEvent;

@@ -21,7 +21,7 @@
 #include <wx/listbox.h>
 
 #include <memory>
-#include "gui/univ/ctrl/listBox.h"
+#include "deskgui/univ/ctrl/listBox.h"
 
 class ibHelpCorpus;
 class ibHelpPaneView;

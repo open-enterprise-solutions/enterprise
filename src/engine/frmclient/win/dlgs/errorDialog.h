@@ -13,9 +13,9 @@
 #include <wx/bitmap.h>
 #include <wx/image.h>
 #include <wx/icon.h>
-#include "gui/univ/ctrl/button.h"
+#include "deskgui/univ/ctrl/button.h"
 #include <wx/sizer.h>
-#include "gui/univ/dialog.h"
+#include "deskgui/univ/dialog.h"
 
 #include "frmclient/frmclient.h"
 #include "frmclient/mainFrame/settings/editorsettings.h"

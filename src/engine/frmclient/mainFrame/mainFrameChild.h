@@ -8,7 +8,7 @@
 #include <wx/utils.h>
 
 #include "frmclient/docView/docView.h"
-#include "gui/univ/dialog.h"
+#include "deskgui/univ/dialog.h"
 
 #include "frmclient/frmclient.h"
 

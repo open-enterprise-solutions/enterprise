@@ -1,7 +1,7 @@
 #include "valueFont.h"
 
 #include "core/serialize/dataBuilder.h"
-#include "gui/typeconv.h"   // FontToString / StringToFont — the engine's text of a font
+#include "deskgui/typeconv.h"   // FontToString / StringToFont — the engine's text of a font
 
 namespace {
 const ibString kFontText = ibT("v");

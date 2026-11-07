@@ -11,7 +11,7 @@
 #include "designer-thin/mainFrame/stack/stackWindow.h"
 #include "designer-thin/mainFrame/watch/watchWindow.h"
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibRequest::ibApplyChange, ibProtocol::ibSchema::ibMetaData
-#include "gui/univ/messageDialog.h"
+#include "deskgui/univ/messageDialog.h"
 
 ibFrontendMainFrameDesigner* ibFrontendMainFrameDesigner::GetFrame() {
 	ibFrontendMainFrame* instance = ibFrontendMainFrame::GetFrame();

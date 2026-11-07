@@ -25,7 +25,7 @@
 #include <wx/listbox.h>
 #include <wx/notebook.h>
 #include <wx/sizer.h>
-#include "gui/univ/splitterWindow.h"
+#include "deskgui/univ/splitterWindow.h"
 #include <wx/toolbar.h>
 #include <wx/xml/xml.h>
 

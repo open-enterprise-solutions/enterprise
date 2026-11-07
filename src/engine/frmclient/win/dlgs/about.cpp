@@ -2,7 +2,7 @@
 
 #include "protocol/protocol.h"
 #include "frmclient/win/picture.h"
-#include "gui/univ/ctrl/staticBox.h"
+#include "deskgui/univ/ctrl/staticBox.h"
 
 static const wxString s_strContributors =
 	wxT("wxWidgets and wxFormBuilder, Unknown Worlds Entertaiment team\n")

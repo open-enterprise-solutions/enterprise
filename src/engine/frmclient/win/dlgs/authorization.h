@@ -3,12 +3,12 @@
 
 #include <vector>
 
-#include "gui/univ/dialog.h"
+#include "deskgui/univ/dialog.h"
 #include <wx/sizer.h>
-#include "gui/univ/ctrl/button.h"
+#include "deskgui/univ/ctrl/button.h"
 #include <wx/bmpcbox.h>
-#include "gui/univ/ctrl/textCtrl.h"
-#include "gui/univ/ctrl/staticText.h"
+#include "deskgui/univ/ctrl/textCtrl.h"
+#include "deskgui/univ/ctrl/staticText.h"
 
 #include "frmclient/frmclient.h"
 

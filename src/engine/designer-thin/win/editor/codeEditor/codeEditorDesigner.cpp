@@ -8,7 +8,7 @@
 #include "designer-thin/docManager/templates/docViewModuleEditor.h"
 
 #include <wx/menu.h>
-#include "gui/univ/textEntryDialog.h"   // ibTextEntryDialog - the breakpoint's condition
+#include "deskgui/univ/textEntryDialog.h"   // ibTextEntryDialog - the breakpoint's condition
 #include "frmclient/artProvider/artProvider.h"   // wxART_BREAKPOINT_CONDITION
 
 ibCodeEditorDesigner::ibCodeEditorDesigner(ibModuleEditDocument* document, wxWindow* parent, wxWindowID id,

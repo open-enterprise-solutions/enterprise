@@ -24,9 +24,9 @@
 
 #include "frmclient/backend/settings/settingsComposer.h"   // the shelf itself — entries, the default pointer
 
-#include "gui/univ/dialog.h"
-#include "gui/univ/ctrl/listCtrl.h"
-#include "gui/univ/ctrl/button.h"
+#include "deskgui/univ/dialog.h"
+#include "deskgui/univ/ctrl/listCtrl.h"
+#include "deskgui/univ/ctrl/button.h"
 
 class ibDataComposer;
 class ibMetaData;

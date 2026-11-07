@@ -11,15 +11,15 @@
 #include <wx/stattext.h>
 #include <wx/button.h>
 #include <wx/artprov.h>
-#include "gui/univ/numberEntryDialog.h"   // ibGetNumberFromUser — an item's height share
+#include "deskgui/univ/numberEntryDialog.h"   // ibGetNumberFromUser — an item's height share
 
 #include "frmclient/backend/backend_picture.h"                 // ibBackendPicture::GetPicture — the toolbar art
 #include "core/picturePredefined.h"
-#include "gui/univ/theme/luna_toolbarart.h"
+#include "deskgui/univ/theme/luna_toolbarart.h"
 #include "protocol/protocolDesigner.h"                                 // ibProtocol::ibSchema::ibHomePage — the forms' rows
 
 #include <map>
-#include "gui/univ/panel.h"
+#include "deskgui/univ/panel.h"
 
 enum {
 	model_form = 0,

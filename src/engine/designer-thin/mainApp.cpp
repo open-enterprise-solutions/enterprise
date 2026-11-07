@@ -10,7 +10,7 @@
 #include <wx/cmdline.h>
 #include <wx/dirdlg.h>
 #include <wx/image.h>
-#include "gui/univ/messageDialog.h"
+#include "deskgui/univ/messageDialog.h"
 #include <wx/stdpaths.h>
 
 #include "frmclient/artProvider/splash/splashLogo.h"   // the splash's picture, the desktop's

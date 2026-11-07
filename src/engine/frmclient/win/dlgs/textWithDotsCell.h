@@ -19,7 +19,7 @@
 #include <functional>
 #include <utility>
 
-#include "gui/univ/ctrl/textCtrl.h"
+#include "deskgui/univ/ctrl/textCtrl.h"
 #include "core/diagnostics/journal.h"                       // ibJournalInfo — what the "..." gave
 #include "frmclient/visualView/ctrl/frame.h"                 // ibControlFrame
 #include "frmclient/visualView/ctrl/tableBoxColumnRenderer.h" // ibDataViewValueRenderer — the TABLE's own renderer

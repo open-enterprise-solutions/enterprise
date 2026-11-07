@@ -10,7 +10,7 @@
 
 #include <wx/dcbuffer.h>
 #include <wx/settings.h>
-#include "gui/univ/messageDialog.h"
+#include "deskgui/univ/messageDialog.h"
 
 // NAMED, NOT INHERITED — std::max / std::min in the layout pass. MSVC hands <algorithm> over
 // transitively through the wx headers above; GCC and Clang do not. (docs/portability.md)

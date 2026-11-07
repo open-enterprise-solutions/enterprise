@@ -1,7 +1,7 @@
 ﻿#ifndef __TITLE__
 #define __TITLE__
 
-#include "gui/univ/panel.h"
+#include "deskgui/univ/panel.h"
 
 // A caption strip in the palette's colours, over one of the form editor's trees.
 class ibPanelTitle : public ibPanel {

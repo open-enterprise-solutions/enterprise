@@ -4,8 +4,8 @@
 
 #include "selectPredefined.h"
 
-#include "gui/univ/ctrl/treeCtrl.h"
-#include "gui/univ/dialog.h"
+#include "deskgui/univ/ctrl/treeCtrl.h"
+#include "deskgui/univ/dialog.h"
 #include <wx/sizer.h>
 
 #include "protocol/protocol.h"

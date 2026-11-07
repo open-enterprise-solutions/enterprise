@@ -6,9 +6,9 @@
 #include "queryConstructorInternal.h"
 #include "frmclient/win/picture.h"   // ibProtocolPicture — a kind's picture, as the server named it
 #include "frmclient/backend/backend_picture.h"   // ibBackendPicture::GetPictureAsIcon — a field's picture made an icon of this tree's
-#include "gui/univ/ctrl/treeCtrl.h"
-#include "gui/univ/panel.h"
-#include "gui/univ/messageDialog.h"
+#include "deskgui/univ/ctrl/treeCtrl.h"
+#include "deskgui/univ/panel.h"
+#include "deskgui/univ/messageDialog.h"
 
 using namespace queryctor;
 

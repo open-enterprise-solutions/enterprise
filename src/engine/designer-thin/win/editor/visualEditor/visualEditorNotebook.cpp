@@ -1,6 +1,6 @@
 ﻿#include "visualEditor.h"
 #include "frmclient/artProvider/artProvider.h"
-#include "gui/univ/theme/luna_tabart.h"
+#include "deskgui/univ/theme/luna_tabart.h"
 
 #include "frmclient/docView/docView.h"   // ibDOC_READONLY
 #include "core/serialize/dataBuilder.h"   // ibDataNode — an event's row, its Args
@@ -8,7 +8,7 @@
 
 #include "core/compiler/scriptParseCode.h"
 #include "core/stringUtils.h"
-#include "gui/univ/messageDialog.h"
+#include "deskgui/univ/messageDialog.h"
 
 void ibVisualEditorNotebook::CreateVisualEditor(ibModuleEditDocument* document, wxWindow* parent, wxWindowID id, long flags)
 {

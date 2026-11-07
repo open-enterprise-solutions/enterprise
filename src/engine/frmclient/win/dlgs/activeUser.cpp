@@ -6,8 +6,8 @@
 #include "frmclient/visualView/ctrl/frame.h"   // wxDefaultStypeFGColour — the desktop's dialog took it from there
 #include "frmclient/backend/appData.h"        // DesignerMode — whose the context menus are
 
-#include "gui/univ/menu.h"
-#include "gui/univ/messageDialog.h"
+#include "deskgui/univ/menu.h"
+#include "deskgui/univ/messageDialog.h"
 
 namespace {
 

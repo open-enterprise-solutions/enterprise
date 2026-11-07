@@ -9,7 +9,7 @@
 #include <wx/filename.h>
 #include <wx/filedlg.h>
 #include <wx/dirdlg.h>
-#include "gui/univ/messageDialog.h"
+#include "deskgui/univ/messageDialog.h"
 
 //********************************************************************************
 //*                                 Debug commands                               *

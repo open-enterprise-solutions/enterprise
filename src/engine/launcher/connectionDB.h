@@ -16,9 +16,9 @@
 #include <wx/wx.h>
 #include "core/localization/dictionary.h"   // _() — the dialog's words
 #include "launcher.h"                       // ibListInfo — what the dialog edits
-#include "gui/univ/ctrl/radioButton.h"  // the dialog's controls — the kit's, as the launcher's window (launcher.h)
-#include "gui/univ/ctrl/textCtrl.h"
-#include "gui/univ/dialog.h"
+#include "deskgui/univ/ctrl/radioButton.h"  // the dialog's controls — the kit's, as the launcher's window (launcher.h)
+#include "deskgui/univ/ctrl/textCtrl.h"
+#include "deskgui/univ/dialog.h"
 
 class ibDialogConnection : public ibDialog {
 	ibStaticText* m_staticTextName;

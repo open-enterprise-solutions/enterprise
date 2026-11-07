@@ -1,7 +1,7 @@
 #ifndef _FRMCLIENT_PAGE_WINDOW_H__
 #define _FRMCLIENT_PAGE_WINDOW_H__
 
-#include "gui/univ/panel.h"
+#include "deskgui/univ/panel.h"
 #include <wx/sizer.h>
 
 // A NOTEBOOK'S PAGE — the old desktop's window:a panel laying out what is placed on it.

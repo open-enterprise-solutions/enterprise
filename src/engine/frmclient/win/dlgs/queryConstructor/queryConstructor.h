@@ -37,16 +37,16 @@
 
 #include "frmclient/frmclient.h"
 
-#include "gui/univ/dialog.h"
-#include "gui/univ/ctrl/notebook.h"
-#include "gui/univ/ctrl/treeCtrl.h"
+#include "deskgui/univ/dialog.h"
+#include "deskgui/univ/ctrl/notebook.h"
+#include "deskgui/univ/ctrl/treeCtrl.h"
 // (No wx/listctrl.h or wx/listbox.h: every list in this window is an ibDataViewCtrl now.)
-#include "gui/univ/ctrl/checkBox.h"
-#include "gui/univ/ctrl/spinCtrl.h"
-#include "gui/univ/ctrl/textCtrl.h"
-#include "gui/univ/ctrl/staticText.h"
-#include "gui/univ/ctrl/choice.h"
-#include "gui/univ/ctrl/radioBox.h"
+#include "deskgui/univ/ctrl/checkBox.h"
+#include "deskgui/univ/ctrl/spinCtrl.h"
+#include "deskgui/univ/ctrl/textCtrl.h"
+#include "deskgui/univ/ctrl/staticText.h"
+#include "deskgui/univ/ctrl/choice.h"
+#include "deskgui/univ/ctrl/radioBox.h"
 
 #include <functional>
 #include <map>
@@ -56,10 +56,10 @@
 #include "frmclient/backend/query/queryConstructorModel.h"
 
 // The links grid is an ibDataViewCtrl with its own model — cells edited IN PLACE.
-#include "gui/univ/dataview/dataview.h"
+#include "deskgui/univ/dataview/dataview.h"
 #include "queryGridModel.h"   // ibTotalsRow — which NODE a row of the totals grid belongs to
-#include "gui/univ/ctrl/button.h"
-#include "gui/univ/panel.h"
+#include "deskgui/univ/ctrl/button.h"
+#include "deskgui/univ/panel.h"
 
 class ibMetaData;
 

@@ -26,7 +26,7 @@
 #include <wx/dc.h>
 
 #include "core/query/queryAST.h"
-#include "gui/univ/window.h"
+#include "deskgui/univ/window.h"
 
 #include <functional>
 #include <vector>

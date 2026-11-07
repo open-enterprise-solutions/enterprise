@@ -5,7 +5,7 @@
 
 #include "printPreview.h"
 
-#include "gui/univ/ctrl/checkBox.h"
+#include "deskgui/univ/ctrl/checkBox.h"
 #include <wx/sizer.h>
 
 #include <functional>

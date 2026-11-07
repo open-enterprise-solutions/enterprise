@@ -1,8 +1,8 @@
 #if !defined(_LOC_BAR_H__)
 #define _LOC_BAR_H__
 
-#include "gui/univ/panel.h"
-#include "gui/univ/ctrl/listCtrl.h"
+#include "deskgui/univ/panel.h"
+#include "deskgui/univ/ctrl/listCtrl.h"
 #include <wx/sizer.h>
 
 #include "frmclient/frmclient.h"

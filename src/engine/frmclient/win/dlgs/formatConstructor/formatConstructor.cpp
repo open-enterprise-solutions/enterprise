@@ -3,13 +3,13 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "formatConstructor.h"
-#include "gui/typeconv.h"   // DateTimeToWxDateTime / WxDateTimeToDateTime — a date across to wx and back
+#include "deskgui/typeconv.h"   // DateTimeToWxDateTime / WxDateTimeToDateTime — a date across to wx and back
 
 #include "frmclient/backend/compiler/value.h"   // the sample's value: the client's, an ibVariant as the engine's is
 
 #include <wx/datetime.h>
-#include "gui/univ/messageDialog.h"
-#include "gui/univ/panel.h"
+#include "deskgui/univ/messageDialog.h"
+#include "deskgui/univ/panel.h"
 #include <wx/sizer.h>
 
 // A row's label: what the code does, and how it is written.

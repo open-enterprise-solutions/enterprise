@@ -5,9 +5,9 @@
 #include "frmclient/win/dlgs/translateConstructor/translateConstructor.h"   // a title, every language of it
 #include "core/composition/compositionTheme.h"                    // ibCompositionThemes — the palettes a theme is picked from
 #include "frmclient/backend/backend_localization.h"               // ibTranslateString — a title read in the language in force
-#include "gui/typeconv.h"                               // WxColourToColour — a row's grey is the model view's data
+#include "deskgui/typeconv.h"                               // WxColourToColour — a row's grey is the model view's data
 
-#include "gui/univ/choiceDialog.h"   // ibGetSingleChoiceIndex — the window a theme or a word is picked in
+#include "deskgui/univ/choiceDialog.h"   // ibGetSingleChoiceIndex — the window a theme or a word is picked in
 #include <wx/settings.h>   // wxSystemSettings — an unticked value reads grey
 #include <wx/sizer.h>
 

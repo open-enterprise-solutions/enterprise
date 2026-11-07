@@ -8,8 +8,8 @@
 #include "frmclient/backend/system/value/composition/valueComposerSettings.h"   // ibValueEnumComparisonKind — a condition's word
 #include "frmclient/backend/system/value/composition/valueComposerField.h"      // ibValueCompositionField — a picked field
 
-#include "gui/univ/dialog.h"
-#include "gui/univ/ctrl/listBox.h"
+#include "deskgui/univ/dialog.h"
+#include "deskgui/univ/ctrl/listBox.h"
 #include <wx/sizer.h>
 #include <wx/toolbar.h>
 

@@ -42,8 +42,8 @@
     #include "wx/mdi.h"
 #endif
 
-#include "gui/univ/choiceDialog.h"   // ibGetSingleChoiceData — a document's view, when it has several
-#include "gui/univ/messageDialog.h"  // ibMessageBox — save the changes?
+#include "deskgui/univ/choiceDialog.h"   // ibGetSingleChoiceData — a document's view, when it has several
+#include "deskgui/univ/messageDialog.h"  // ibMessageBox — save the changes?
 
 #if wxUSE_PRINTING_ARCHITECTURE
     #include "wx/prntbase.h"

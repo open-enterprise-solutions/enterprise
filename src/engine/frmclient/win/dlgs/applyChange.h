@@ -1,11 +1,11 @@
 #ifndef _FRMCLIENT_CHANGING_STRUCTURE_H__
 #define _FRMCLIENT_CHANGING_STRUCTURE_H__
 
-#include "gui/univ/ctrl/staticText.h"
-#include "gui/univ/ctrl/listBox.h"
+#include "deskgui/univ/ctrl/staticText.h"
+#include "deskgui/univ/ctrl/listBox.h"
 #include <wx/sizer.h>
-#include "gui/univ/ctrl/button.h"
-#include "gui/univ/dialog.h"
+#include "deskgui/univ/ctrl/button.h"
+#include "deskgui/univ/dialog.h"
 
 #include "frmclient/frmclient.h"
 #include "protocol/protocolNode.h"

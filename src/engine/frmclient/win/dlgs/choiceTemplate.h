@@ -6,16 +6,16 @@
 
 #include <algorithm>
 
-#include "gui/univ/ctrl/button.h"
+#include "deskgui/univ/ctrl/button.h"
 #include <wx/dialog.h>
 #include <wx/imaglist.h>
-#include "gui/univ/ctrl/listCtrl.h"
+#include "deskgui/univ/ctrl/listCtrl.h"
 #include <wx/sizer.h>
-#include "gui/univ/ctrl/staticLine.h"
-#include "gui/univ/ctrl/staticText.h"
+#include "deskgui/univ/ctrl/staticLine.h"
+#include "deskgui/univ/ctrl/staticText.h"
 
 #include "frmclient/docView/docManager.h"
-#include "gui/univ/dialog.h"
+#include "deskgui/univ/dialog.h"
 
 struct ibChoiceTemplateItem
 {

@@ -1,10 +1,10 @@
 #ifndef _FRMCLIENT_GENERATION_DATA_WND_H__
 #define _FRMCLIENT_GENERATION_DATA_WND_H__
 
-#include "gui/univ/ctrl/listCtrl.h"
-#include "gui/univ/ctrl/button.h"
+#include "deskgui/univ/ctrl/listCtrl.h"
+#include "deskgui/univ/ctrl/button.h"
 #include <wx/sizer.h>
-#include "gui/univ/dialog.h"
+#include "deskgui/univ/dialog.h"
 
 #include "frmclient/backend/backend_core.h"   // ibMetaID
 #include "protocol/protocolNode.h"

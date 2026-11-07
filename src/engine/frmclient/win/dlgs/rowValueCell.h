@@ -30,7 +30,7 @@
 #include "frmclient/backend/metaData.h"                               // ibMetaData — the configuration a type is read against
 #include "frmclient/backend/system/value/composition/valueComposerSettings.h"           // ibValueCompositionField — the one value with a picker
 #include "frmclient/backend/system/value/valueType.h"                 // ibValueTypeDescription::AdjustValue — text shaped by the declared type
-#include "gui/univ/ctrl/textCtrl.h"
+#include "deskgui/univ/ctrl/textCtrl.h"
 #include "frmclient/visualView/ctrl/typeControl.h"           // ibTypeControlFactory::ChooseValue
 #include "frmclient/visualView/ctrl/frame.h"                 // ibControlFrame
 #include "frmclient/visualView/ctrl/tableBoxColumnRenderer.h" // ibDataViewValueRenderer — the TABLE's own renderer
@@ -145,7 +145,7 @@ public:
 		editor->ShowClearButton(true);
 		editor->ShowOpenButton(false);
 		// NOT SetEditable(false): that flag is the read-only POLICY — it locks the
-		// Select and Clear buttons along with the text (gui's textCtrl.h says so).
+		// Select and Clear buttons along with the text (deskgui's textCtrl.h says so).
 		// Using it to stop typing into a field is what disabled "…" and "×" on every
 		// tab at once. Typing is harmless here because the cell only accepts values
 		// it was GIVEN — the text is never read back as a field.

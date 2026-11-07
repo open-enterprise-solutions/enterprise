@@ -2,8 +2,8 @@
 #define _ROLE_EDITOR_H__
 
 #include <wx/panel.h>
-#include "gui/univ/ctrl/treeCtrl.h"
-#include "gui/univ/splitterWindow.h"
+#include "deskgui/univ/ctrl/treeCtrl.h"
+#include "deskgui/univ/splitterWindow.h"
 
 #include "frmclient/docView/tabDocument.h"
 #include "frmclient/win/ctrls/checktree.h"

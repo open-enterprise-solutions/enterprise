@@ -1,6 +1,6 @@
 #include "editorsettingspanel.h"
-#include "gui/univ/ctrl/staticText.h"
-#include "gui/univ/ctrl/staticBox.h"
+#include "deskgui/univ/ctrl/staticText.h"
+#include "deskgui/univ/ctrl/staticBox.h"
 
 ibPanelEditorSettings::ibPanelEditorSettings(wxWindow* parent)
 	: ibPanel(parent, wxID_ANY)

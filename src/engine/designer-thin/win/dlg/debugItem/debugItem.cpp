@@ -1,7 +1,7 @@
 #include "debugItem.h"
 #include "designer-thin/backend/debugger/debugClient.h"
 #include "core/stringUtils.h"
-#include "gui/univ/ctrl/staticBox.h"
+#include "deskgui/univ/ctrl/staticBox.h"
 
 void ibDialogDebugItem::RefreshDebugList()
 {

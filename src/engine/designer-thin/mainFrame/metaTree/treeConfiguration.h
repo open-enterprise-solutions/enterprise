@@ -6,15 +6,15 @@
 #include <set>
 
 #include <wx/aui/aui.h>
-#include "gui/univ/ctrl/choice.h"
-#include "gui/univ/ctrl/searchCtrl.h"
-#include "gui/univ/ctrl/treeCtrl.h"
+#include "deskgui/univ/ctrl/choice.h"
+#include "deskgui/univ/ctrl/searchCtrl.h"
+#include "deskgui/univ/ctrl/treeCtrl.h"
 
 #include "frmclient/backend/metaCollection/metaObject.h"   // the object the inspector shows
 #include "protocol/protocol.h"
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibMetaData
 #include "protocol/protocolNode.h"
-#include "gui/univ/panel.h"
+#include "deskgui/univ/panel.h"
 
 class ibMenu;
 class ibMetaView;

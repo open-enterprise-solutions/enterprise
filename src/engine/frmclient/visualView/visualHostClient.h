@@ -16,7 +16,7 @@
 
 #include "ctrl/frame.h"   // ibViewFetcher
 #include "ctrl/form.h"
-#include "gui/univ/panel.h"
+#include "deskgui/univ/panel.h"
 
 class ibFrontendMainFrame;
 class ibViewCommandBar;

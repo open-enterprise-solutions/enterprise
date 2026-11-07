@@ -4,7 +4,7 @@
 #include <wx/html/htmlwin.h>
 
 #include "frmclient/visualView/ctrl/window.h"
-#include "gui/univ/panel.h"
+#include "deskgui/univ/panel.h"
 
 class ibStaticText;
 class ibTextCtrl;

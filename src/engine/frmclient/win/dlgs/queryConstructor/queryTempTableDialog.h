@@ -25,15 +25,15 @@
 
 #include "frmclient/frmclient.h"
 
-#include "gui/univ/dialog.h"
+#include "deskgui/univ/dialog.h"
 
 #include <vector>
 
 #include "core/query/queryAST.h"
 #include "core/description/typeDescription.h"
 
-#include "gui/univ/dataview/dataview.h"
-#include "gui/univ/ctrl/textCtrl.h"
+#include "deskgui/univ/dataview/dataview.h"
+#include "deskgui/univ/ctrl/textCtrl.h"
 
 class ibMetaData;
 class ibQueryConstructorModel;

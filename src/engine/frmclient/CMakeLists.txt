@@ -34,12 +34,12 @@ endif()
 
 # Nothing of the server — not even the backend: the client talks through the protocol's library (protocol/), which
 # carries the wire's tree and the connections; it speaks the core's meanings (core/), as the engine does; and its
-# windows are drawn with the desktop's user interface library (gui/) - public, as the thin designer draws with it too.
+# windows are drawn with the desktop's user interface library (deskgui/) - public, as the thin designer draws with it too.
 target_link_libraries(frmclient
     PUBLIC
         protocol
         core
-        gui
+        deskgui
     PRIVATE
         wx::core
         wx::aui

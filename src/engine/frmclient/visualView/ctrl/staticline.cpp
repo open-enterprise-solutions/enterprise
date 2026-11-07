@@ -5,7 +5,7 @@
 
 #include "widgets.h"
 
-#include "gui/univ/ctrl/staticLine.h"
+#include "deskgui/univ/ctrl/staticLine.h"
 
 void ibValueStaticLine::Create(wxWindow* parent, const ibProtocolNode& node)
 {

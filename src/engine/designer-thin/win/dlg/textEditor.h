@@ -21,7 +21,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////
 
-#include "gui/univ/dialog.h"
+#include "deskgui/univ/dialog.h"
 #include <wx/stc/stc.h>
 
 class ibDialogTextEditor : public ibDialog {

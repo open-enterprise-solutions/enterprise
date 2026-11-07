@@ -22,8 +22,8 @@
 
 #include <functional>
 #include <vector>
-#include "gui/univ/ctrl/button.h"
-#include "gui/univ/ctrl/choice.h"
+#include "deskgui/univ/ctrl/button.h"
+#include "deskgui/univ/ctrl/choice.h"
 
 constexpr ibClassID g_toolConfigCompareCLSID = make_clsid("TL_CCMP", ibClassKind_None);   // tool/doc id — not a registered type
 

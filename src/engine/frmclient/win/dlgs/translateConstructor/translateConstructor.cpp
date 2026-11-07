@@ -7,9 +7,9 @@
 #include "frmclient/backend/userInfo.h"   // ibUserInfo::ListLanguages — the configuration's languages, the server's
 #include "core/stringUtils.h"
 
-#include "gui/univ/ctrl/button.h"
+#include "deskgui/univ/ctrl/button.h"
 #include <wx/sizer.h>
-#include "gui/univ/ctrl/staticText.h"
+#include "deskgui/univ/ctrl/staticText.h"
 
 // What a person reads beside a box: the language's name and its code, or the code alone when that is
 // all there is.

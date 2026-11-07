@@ -47,11 +47,11 @@
 #include <wx/stattext.h>
 #include <wx/statbox.h>
 #include <wx/button.h>
-#include "gui/univ/choiceDialog.h"   // ibGetSingleChoiceIndex — the fallback when no field is picked in a tree
-#include "gui/univ/textEntryDialog.h"   // ibTextEntryDialog — a table's new name, a prompt
+#include "deskgui/univ/choiceDialog.h"   // ibGetSingleChoiceIndex — the fallback when no field is picked in a tree
+#include "deskgui/univ/textEntryDialog.h"   // ibTextEntryDialog — a table's new name, a prompt
 #include <wx/panel.h>
 #include <wx/settings.h>
-#include "gui/univ/splitterWindow.h"   // ibSplitterWindow — the tabs' panes
+#include "deskgui/univ/splitterWindow.h"   // ibSplitterWindow — the tabs' panes
 #include <wx/toolbar.h>
 #include <wx/artprov.h>
 #include <wx/dnd.h>
@@ -59,7 +59,7 @@
 #include <wx/stc/stc.h>
 
 #include "../callbackDropTarget.h"   // the same-process drag: a drop is a notification, the source knows what moved
-#include "gui/univ/dataview/dataviewEditOnActivate.h"   // a double-click opens the cell
+#include "deskgui/univ/dataview/dataviewEditOnActivate.h"   // a double-click opens the cell
 #include "queryFieldTree.h"   // the field row: its node, its walk, its drag — shared with the expression editor
 
 #include "mainFrame/settings/fontcolorsettings.h"   // the engine's own font + colours, so this pane matches the code editor
@@ -68,7 +68,7 @@
 #include <functional>
 #include <map>
 #include <set>
-#include "gui/univ/ctrl/comboBox.h"
+#include "deskgui/univ/ctrl/comboBox.h"
 
 // The window's own small vocabulary - names it uses everywhere and nobody else needs.
 namespace queryctor {

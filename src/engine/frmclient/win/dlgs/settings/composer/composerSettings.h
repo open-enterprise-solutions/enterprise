@@ -3,20 +3,20 @@
 
 #include "frmclient/frmclient.h"
 
-#include "gui/univ/dialog.h"
-#include "gui/univ/ctrl/treeCtrl.h"
+#include "deskgui/univ/dialog.h"
+#include "deskgui/univ/ctrl/treeCtrl.h"
 #include <wx/listbox.h>
 #include <wx/textctrl.h>
-#include "gui/univ/ctrl/staticText.h"
-#include "gui/univ/textEntryDialog.h"   // ibGetTextFromUser — a hand-made parameter is named when it is added
+#include "deskgui/univ/ctrl/staticText.h"
+#include "deskgui/univ/textEntryDialog.h"   // ibGetTextFromUser — a hand-made parameter is named when it is added
 
 #include <map>
 #include <memory>
 #include <vector>
 
 #include "frmclient/backend/query/queryConstructorModel.h"   // ibQueryConstructorField + ibQueryFieldsOfText — the fields a TEXT offers
-#include "gui/univ/ctrl/notebook.h"
-#include "gui/univ/panel.h"
+#include "deskgui/univ/ctrl/notebook.h"
+#include "deskgui/univ/panel.h"
 // (NO valueDataComposition.h. The panel holds no running composition; only the modal host below
 //  takes one, as a pointer, and a name is all that needs.)
 class ibValueDataComposition;

@@ -4,18 +4,18 @@
 #include <wx/artprov.h>
 #include <wx/xrc/xmlres.h>
 #include <wx/string.h>
-#include "gui/univ/ctrl/staticText.h"
+#include "deskgui/univ/ctrl/staticText.h"
 #include <wx/gdicmn.h>
 #include <wx/font.h>
 #include <wx/colour.h>
 #include <wx/settings.h>
-#include "gui/univ/ctrl/textCtrl.h"
+#include "deskgui/univ/ctrl/textCtrl.h"
 #include <wx/sizer.h>
 #include <wx/bitmap.h>
 #include <wx/image.h>
 #include <wx/icon.h>
-#include "gui/univ/ctrl/button.h"
-#include "gui/univ/dialog.h"
+#include "deskgui/univ/ctrl/button.h"
+#include "deskgui/univ/dialog.h"
 #include "core/localization/dictionary.h"   // _() — the dialog's words
 
 class ibDialogLineInput : public ibDialog

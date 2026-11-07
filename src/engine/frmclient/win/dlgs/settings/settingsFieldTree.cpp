@@ -16,7 +16,7 @@
 #include "frmclient/win/picture.h"                                          // ibProtocolPicture — a field's picture, as it names it
 #include "protocol/protocol.h"
 
-#include "gui/univ/dialog.h"
+#include "deskgui/univ/dialog.h"
 #include <wx/dnd.h>
 #include <wx/imaglist.h>
 #include <wx/sizer.h>

@@ -5,7 +5,7 @@
 
 #include "widgets.h"
 
-#include "gui/univ/ctrl/checkBox.h"
+#include "deskgui/univ/ctrl/checkBox.h"
 
 void ibValueCheckbox::Create(wxWindow* parent, const ibProtocolNode& /*node*/)
 {

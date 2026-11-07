@@ -13,10 +13,10 @@
 #include "frmclient/visualView/commandBar.h"
 #include "frmclient/visualView/visualHostClient.h"   // a designer's host selects and moves by it
 #include "frmclient/win/picture.h"
-#include "gui/univ/ctrl/textCtrl.h"
-#include "gui/univ/dataview/dataview.h"
-#include "gui/univ/dataview/headerctrlg.h"
-#include "gui/univ/menu.h"
+#include "deskgui/univ/ctrl/textCtrl.h"
+#include "deskgui/univ/dataview/dataview.h"
+#include "deskgui/univ/dataview/headerctrlg.h"
+#include "deskgui/univ/menu.h"
 
 namespace {
 

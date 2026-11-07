@@ -135,7 +135,7 @@ The backend is the core engine. It is self-contained — no GUI dependencies. Ke
 - **`ibSession` / `ibSessionRegistry`** (`src/engine/backend/session/`) — per-session state and the base's session manager (one registry per base). The session is reachable via `ibSession::Current()`: the calling thread's own binding, else the base's fallback — the process's own session in that base (never a job's or a web tab's). `ibSessionScope` and `ibSessionThreadBinding` are the RAII helpers that bind a session to the calling thread. See [Sessions and Runtime Ownership](#sessions-and-runtime-ownership).
 - **`ibDebuggerServer`** (`src/engine/backend/debugger/debugServer.h`) — TCP server that accepts designer connections and relays debugger events.
 
-### Thin client layer (`protocol.dll`, `frmserver.dll`, `gui.dll`, `frmclient.dll`, `fileserver.dll`)
+### Thin client layer (`protocol.dll`, `frmserver.dll`, `deskgui.dll`, `frmclient.dll`, `fileserver.dll`)
 
 The desktop front (`frontend.dll`, the thick `designer.exe` / `enterprise.exe`, the old web `wfrontend.dll`) was removed
 on 2026-10-27; it is kept on the branch `oes/thick_client`. It carried two functions at once — the forms' logic and
@@ -143,7 +143,7 @@ their drawing. The thin client splits them, with the
 [client protocol](public/client-protocol.md) between: **`frmserver`** holds the forms on the server and answers clients;
 **`frmclient`** keeps the frame it was answered (its communicator) and draws it (main window, document/view, controls,
 editors) for **`enterprise-thin.exe`** and
-**`designer-thin.exe`**, on **`gui`** — the desktop's user interface library (the custom-drawn engine and the controls and dialogs built on it,
+**`designer-thin.exe`**, on **`deskgui`** — the desktop's user interface library (the custom-drawn engine and the controls and dialogs built on it,
 which the launcher places too; it links `core` alone); **`protocol`** is
 the contract both keep (`protocol.h`, no dependencies — `frmserver` includes it only) and the talking side's library
 (`frmclient` and the web server link it). **`fileserver`** puts `backend` + `frmserver` into the client's process for a
@@ -955,7 +955,7 @@ Choice, ComboBox, ListBox and ToolBar (with Tool / ToolSeparator) were the deskt
 ### Form Rendering
 
 `ibVisualHost` (frmserver) holds the form and writes it as a frame — no window. The client draws that frame:
-`ibVisualHostClient` (frmclient) builds gui's controls from it, and what the person does goes back over the
+`ibVisualHostClient` (frmclient) builds deskgui's controls from it, and what the person does goes back over the
 [client protocol](public/client-protocol.md) to the form's script event handlers. A patch answers what the client
 shows: a field's text the person committed and the server put otherwise (a reference not found, a value refused) is
 named in the answer's patch, so the field shows the server's text at once.

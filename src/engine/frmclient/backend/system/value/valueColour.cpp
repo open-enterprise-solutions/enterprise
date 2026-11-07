@@ -1,7 +1,7 @@
 #include "valueColour.h"
 
 #include "core/serialize/dataBuilder.h"
-#include "gui/typeconv.h"   // ColourToString / StringToColour — the engine's text of a colour
+#include "deskgui/typeconv.h"   // ColourToString / StringToColour — the engine's text of a colour
 
 namespace {
 const ibString kColourText = ibT("v");

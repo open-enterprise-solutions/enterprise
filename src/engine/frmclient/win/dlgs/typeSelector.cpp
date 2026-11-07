@@ -13,13 +13,13 @@
 #include "protocol/protocol.h"                  // ibProtocol::ibView::ibComposer — Kind Types
 #include "protocol/protocolNode.h"
 
-#include "gui/univ/ctrl/checkBox.h"
-#include "gui/univ/dialog.h"
+#include "deskgui/univ/ctrl/checkBox.h"
+#include "deskgui/univ/dialog.h"
 #include <wx/sizer.h>
 #include <wx/imaglist.h>
-#include "gui/univ/ctrl/spinCtrl.h"
-#include "gui/univ/ctrl/choice.h"
-#include "gui/univ/ctrl/staticText.h"
+#include "deskgui/univ/ctrl/spinCtrl.h"
+#include "deskgui/univ/ctrl/choice.h"
+#include "deskgui/univ/ctrl/staticText.h"
 
 #include <map>
 #include <algorithm>

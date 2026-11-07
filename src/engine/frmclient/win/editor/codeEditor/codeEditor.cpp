@@ -11,7 +11,7 @@
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibModule
 
 #include <wx/artprov.h>
-#include "gui/univ/messageDialog.h"
+#include "deskgui/univ/messageDialog.h"
 
 #define DEF_LINENUMBER_ID 0
 #define DEF_BREAKPOINT_ID 1

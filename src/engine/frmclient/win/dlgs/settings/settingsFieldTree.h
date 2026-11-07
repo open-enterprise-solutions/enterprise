@@ -20,7 +20,7 @@
 // the list's four tabs do.
 // ---------------------------------------------------------------------------
 
-#include "gui/univ/ctrl/treeCtrl.h"
+#include "deskgui/univ/ctrl/treeCtrl.h"
 
 #include <vector>
 #include <functional>

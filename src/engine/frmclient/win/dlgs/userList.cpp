@@ -1,10 +1,10 @@
 #include "userList.h"
 #include "frmclient/backend/userInfo.h"   // the users — the server's schema behind the desktop's calls
-#include "gui/univ/theme/luna_toolbarart.h"
+#include "deskgui/univ/theme/luna_toolbarart.h"
 #include "frmclient/backend/backend_picture.h"
 #include "core/picturePredefined.h"
 
-#include "gui/univ/menu.h"
+#include "deskgui/univ/menu.h"
 
 #define colUserName 1
 #define colUserFullName 2

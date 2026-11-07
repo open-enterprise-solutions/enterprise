@@ -13,7 +13,7 @@
 #include "core/fnumber.h"
 #include "core/fdatetime.h"
 #include "core/fstring.h"
-#include "gui/typeconv.h"
+#include "deskgui/typeconv.h"
 #include "core/stringUtils.h"
 #include "core/diagnostics/journal.h"
 

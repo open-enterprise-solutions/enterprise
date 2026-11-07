@@ -9,13 +9,13 @@
 #include "frmclient/backend/system/value/valueFont.h"              // …and a font
 #include "frmclient/backend/system/value/valueSpreadsheet.h"       // …and an alignment, the sheet's own enumeration
 #include "core/description/spreadsheetDescription.h"              // ibDefaultSpreadsheetFont() — the font a font is chosen from
-#include "gui/typeconv.h"                               // WxColourToColour — a row's grey is the model view's data
+#include "deskgui/typeconv.h"                               // WxColourToColour — a row's grey is the model view's data
 #include "core/diagnostics/journal.h"                   // ibJournalInfo — a value chosen, and what the cell commits
 
-#include "gui/univ/choiceDialog.h"   // ibGetSingleChoiceIndex — an alignment is one of three words
+#include "deskgui/univ/choiceDialog.h"   // ibGetSingleChoiceIndex — an alignment is one of three words
 #include <wx/colordlg.h>   // wxColourDialog — a colour is chosen in the system's window
 #include <wx/fontdlg.h>    // wxFontDialog — …and a font
-#include "gui/univ/dialog.h"
+#include "deskgui/univ/dialog.h"
 #include <wx/settings.h>   // wxSystemSettings — an unticked value reads grey
 #include <wx/sizer.h>
 

@@ -9,7 +9,7 @@
 #include <functional>
 #include <set>
 
-#include "gui/univ/choiceDialog.h"   // ibSingleChoiceDialog, ibMultiChoiceDialog — the theme, a server's choice
+#include "deskgui/univ/choiceDialog.h"   // ibSingleChoiceDialog, ibMultiChoiceDialog — the theme, a server's choice
 #include <wx/config.h>
 #include <wx/file.h>
 #include <wx/filedlg.h>
@@ -52,13 +52,13 @@
 #include "frmclient/backend/backend_localization.h"     // the session's language — the frame says it
 #include "frmclient/visualView/ctrl/typeControl.h"      // ibTypeControlFactory::ChooseValue — the calculator, the calendar, the list
 #include "frmclient/visualView/ctrl/frame.h"            // ibControlFrame — what they are drawn over
-#include "gui/univ/ctrl/textCtrl.h"                   // ibTextCtrl — the field they drop under
+#include "deskgui/univ/ctrl/textCtrl.h"                   // ibTextCtrl — the field they drop under
 #include "frmclient/backend/composition/dataComposer.h"
 #include "frmclient/win/ctrls/tableView.h"
-#include "gui/univ/ctrl/floatingNotebook.h"
-#include "gui/univ/theme/luna_tabart.h"
-#include "gui/univ/theme/luna_dockart.h"
-#include "gui/univ/messageDialog.h"
+#include "deskgui/univ/ctrl/floatingNotebook.h"
+#include "deskgui/univ/theme/luna_tabart.h"
+#include "deskgui/univ/theme/luna_dockart.h"
+#include "deskgui/univ/messageDialog.h"
 
 namespace {
 

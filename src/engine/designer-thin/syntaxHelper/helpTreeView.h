@@ -9,12 +9,12 @@
 #ifndef _IB_HELP_TREE_VIEW_H_
 #define _IB_HELP_TREE_VIEW_H_
 
-#include "gui/univ/panel.h"
+#include "deskgui/univ/panel.h"
 #include <wx/treectrl.h>
 
 #include <memory>
 #include <unordered_map>
-#include "gui/univ/ctrl/treeCtrl.h"
+#include "deskgui/univ/ctrl/treeCtrl.h"
 
 class ibHelpCorpus;
 class ibHelpPaneView;

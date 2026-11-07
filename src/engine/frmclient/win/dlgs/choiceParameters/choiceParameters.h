@@ -31,14 +31,14 @@
 // configuration, written on the row (its Targets and Sources). A row without them would read every field as one that
 // refers to nothing, so the row opens the window only when it has them (advpropChoiceLink.cpp).
 
-#include "gui/univ/dialog.h"
-#include "gui/univ/ctrl/button.h"
-#include "gui/univ/ctrl/staticText.h"
+#include "deskgui/univ/dialog.h"
+#include "deskgui/univ/ctrl/button.h"
+#include "deskgui/univ/ctrl/staticText.h"
 
 #include <map>
 
 #include "frmclient/frmclient.h"   // FRMCLIENT_API
-#include "gui/univ/dataview/dataview.h"
+#include "deskgui/univ/dataview/dataview.h"
 #include "core/description/choiceLinkDescription.h"
 
 class FRMCLIENT_API ibBackendProperty;

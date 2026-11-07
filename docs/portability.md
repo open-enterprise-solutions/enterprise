@@ -255,7 +255,7 @@ test rather than leaving the gap silent.
 The description types hold fonts and colours as data — `ibFont` and `ibColour`
 (`core/graphics/`), in `core/description/spreadsheetDescription.h` and in every property cell. The
 backend has no `typeconv`: converting to `wxFont` / `wxColour` is the GUI side's
-(`gui/typeconv.h`; out of the backend since 2026-10-13).
+(`deskgui/typeconv.h`; out of the backend since 2026-10-13).
 
 ### 1.8 An initialiser list that disagrees with the declaration order is a lie
 
@@ -480,7 +480,7 @@ runtime-form suite passed 26/26 under Xvfb. (Sixteen more sources were excluded 
 `web/` + `wfrontend.cpp` belonged to `wfrontend.dll`, and six `uikit` units were unfinished.) The
 desktop front was removed on 2026-10-27; it is kept on the branch `oes/thick_client`.
 
-Not one failure was about drawing a widget. `uikit` (now `gui`) is a wxUniversal fork that paints its own
+Not one failure was about drawing a widget. `uikit` (now `deskgui`) is a wxUniversal fork that paints its own
 controls, so it carries no native-toolkit assumptions — it went through untouched. Everything
 that broke was ordinary C++ MSVC had accepted: default arguments binding a non-const reference
 to a temporary, an anonymous aggregate holding members with constructors, `wxToolTip` used

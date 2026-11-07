@@ -15,8 +15,8 @@ static const wxString s_strTypeTextOrString = wxT("stringText");
 static const wxString s_strTypeTemplate = wxT("stringTemplate");
 static const wxString s_strTypeParameter = wxT("stringParameter");
 
-#include "gui/univ/grid/gridextctrl.h"
-#include "gui/univ/grid/gridexteditors.h"
+#include "deskgui/univ/grid/gridextctrl.h"
+#include "deskgui/univ/grid/gridexteditors.h"
 
 // ⭐⭐ THE ONE PLACE THE TWO FIT MODES MEET. The description's mode is what a template is SAVED with;
 // the grid's is what the control draws by. Translating between them was written out inline as

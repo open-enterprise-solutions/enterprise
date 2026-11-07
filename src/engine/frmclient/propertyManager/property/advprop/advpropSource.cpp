@@ -7,7 +7,7 @@
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 #include "frmclient/propertyManager/propertyEditor.h"
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties
-#include "gui/univ/messageDialog.h"
+#include "deskgui/univ/messageDialog.h"
 
 wxPG_IMPLEMENT_PROPERTY_CLASS(ibPGDataSourceProperty, wxPGProperty, TextCtrlAndButton)
 

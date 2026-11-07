@@ -5,7 +5,7 @@
 
 #include "widgets.h"
 
-#include "gui/univ/ctrl/textCtrl.h"
+#include "deskgui/univ/ctrl/textCtrl.h"
 
 void ibValueTextCtrl::Create(wxWindow* parent, const ibProtocolNode& node)
 {

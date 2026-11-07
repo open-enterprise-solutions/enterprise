@@ -2,15 +2,15 @@
 #define _FRMCLIENT_ACTIVE_USER_H__
 
 #include <wx/artprov.h>
-#include "gui/univ/ctrl/listCtrl.h"
-#include "gui/univ/ctrl/notebook.h"
+#include "deskgui/univ/ctrl/listCtrl.h"
+#include "deskgui/univ/ctrl/notebook.h"
 #include <wx/gdicmn.h>
 #include <wx/font.h>
 #include <wx/colour.h>
 #include <wx/settings.h>
 #include <wx/string.h>
 #include <wx/sizer.h>
-#include "gui/univ/dialog.h"
+#include "deskgui/univ/dialog.h"
 #include <wx/timer.h>
 
 #include <memory>

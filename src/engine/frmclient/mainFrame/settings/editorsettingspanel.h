@@ -7,12 +7,12 @@
 /////////////////////////////////////////////////////////////////////////////
 
 #include <wx/wx.h>
-#include "gui/univ/ctrl/spinCtrl.h"
+#include "deskgui/univ/ctrl/spinCtrl.h"
 
 #include "editorsettings.h"
-#include "gui/univ/ctrl/checkBox.h"
-#include "gui/univ/ctrl/radioButton.h"
-#include "gui/univ/panel.h"
+#include "deskgui/univ/ctrl/checkBox.h"
+#include "deskgui/univ/ctrl/radioButton.h"
+#include "deskgui/univ/panel.h"
 
 class FRMCLIENT_API ibPanelEditorSettings : public ibPanel
 {

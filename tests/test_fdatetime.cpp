@@ -14,7 +14,7 @@
 
 #include <gtest/gtest.h>
 #include "backend/backend_core.h"   // ibDateTime, and the ibString its text is
-#include "gui/dateconv.h"   // DateTimeToWxDateTime / WxDateTimeToDateTime — a date across to wx and back
+#include "deskgui/dateconv.h"   // DateTimeToWxDateTime / WxDateTimeToDateTime — a date across to wx and back
 
 #include <wx/datetime.h>
 

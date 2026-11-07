@@ -1,7 +1,7 @@
 #include "predefinedEditor.h"
 
-#include "gui/univ/messageDialog.h"
-#include "gui/univ/ctrl/notebook.h"
+#include "deskgui/univ/messageDialog.h"
+#include "deskgui/univ/ctrl/notebook.h"
 #include <wx/statbox.h>
 #include <wx/valtext.h>   // wxTextValidator — a number typed as nothing but a number
 
@@ -12,12 +12,12 @@
 #include "frmclient/win/dlgs/selectPredefined.h"        // ibShowPredefinedSelector — a declared value picked
 #include "frmclient/win/dlgs/textWithDotsCell.h"        // ibTextWithDotsRenderer, ibTextCtrl — a value picked through "..."
 #include "frmclient/win/dlgs/typeSelector.h"            // ibShowTypeSelector — a type picked
-#include "gui/univ/menu.h"
-#include "gui/univ/theme/luna_toolbarart.h"
+#include "deskgui/univ/menu.h"
+#include "deskgui/univ/theme/luna_toolbarart.h"
 #include "protocol/protocolDesigner.h"                          // ibProtocol::ibRequest::ibPredefinedSelector — what that window is given
-#include "gui/univ/ctrl/staticText.h"
-#include "gui/univ/ctrl/staticBox.h"
-#include "gui/univ/panel.h"
+#include "deskgui/univ/ctrl/staticText.h"
+#include "deskgui/univ/ctrl/staticBox.h"
+#include "deskgui/univ/panel.h"
 
 enum
 {

@@ -3,8 +3,8 @@
 
 #include <functional>
 
-#include "gui/univ/dialog.h"
-#include "gui/univ/ctrl/treeCtrl.h"
+#include "deskgui/univ/dialog.h"
+#include "deskgui/univ/ctrl/treeCtrl.h"
 
 #include "protocol/protocolNode.h"
 

@@ -16,9 +16,9 @@
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibFormDesigner, ibProtocol::ibSchema::ibProperties
 
 #include <wx/artprov.h>
-#include "gui/univ/dialog.h"
+#include "deskgui/univ/dialog.h"
 #include <wx/imaglist.h>
-#include "gui/univ/menu.h"
+#include "deskgui/univ/menu.h"
 #include <wx/settings.h>
 #include <wx/sizer.h>
 

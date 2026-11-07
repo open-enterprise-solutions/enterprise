@@ -1,9 +1,9 @@
 ﻿#ifndef __LIST_SETTINGS_DLG_H__
 #define __LIST_SETTINGS_DLG_H__
 
-#include "gui/univ/dialog.h"
+#include "deskgui/univ/dialog.h"
 #include <wx/listctrl.h>
-#include "gui/univ/ctrl/treeCtrl.h"
+#include "deskgui/univ/ctrl/treeCtrl.h"
 #include <wx/combobox.h>
 #include <wx/choice.h>
 #include <wx/textctrl.h>
@@ -17,11 +17,11 @@
 
 // The tabs are model-driven grids, and the value cells are type-driven selectors — both live on the
 // dataview machinery below.
-#include "gui/univ/dataview/dataview.h"
+#include "deskgui/univ/dataview/dataview.h"
 #include "protocol/protocolNode.h"   // the server's question and its answer
-#include "gui/univ/ctrl/staticText.h"
-#include "gui/univ/ctrl/button.h"
-#include "gui/univ/panel.h"
+#include "deskgui/univ/ctrl/staticText.h"
+#include "deskgui/univ/ctrl/button.h"
+#include "deskgui/univ/panel.h"
 
 class FRMCLIENT_API ibMetaData;
 

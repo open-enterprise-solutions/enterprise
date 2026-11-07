@@ -6,19 +6,19 @@
 #include "protocol/protocol.h"
 
 #include "frmclient/visualView/ctrl/frame.h"
-#include "gui/univ/theme/luna_toolbarart.h"
+#include "deskgui/univ/theme/luna_toolbarart.h"
 
 #include <algorithm>
 
 #include <wx/aui/auibar.h>
 #include <wx/checkbox.h>
-#include "gui/univ/ctrl/choice.h"
+#include "deskgui/univ/ctrl/choice.h"
 #include <wx/datectrl.h>
 #include <wx/datetime.h>
 #include <wx/itemattr.h>
 #include <wx/sizer.h>
-#include "gui/univ/ctrl/staticText.h"
-#include "gui/univ/ctrl/textCtrl.h"
+#include "deskgui/univ/ctrl/staticText.h"
+#include "deskgui/univ/ctrl/textCtrl.h"
 #include <wx/timer.h>
 #include <wx/variant.h>
 

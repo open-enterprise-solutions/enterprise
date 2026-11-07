@@ -3,15 +3,15 @@
 
 #include <wx/wx.h>
 #include <wx/panel.h>
-#include "gui/univ/ctrl/button.h"
-#include "gui/univ/ctrl/staticLine.h"
+#include "deskgui/univ/ctrl/button.h"
+#include "deskgui/univ/ctrl/staticLine.h"
 #include <wx/hyperlink.h>
 
 #include "frmclient/frmclient.h"
 #include "protocol/protocolNode.h"
-#include "gui/univ/ctrl/staticText.h"
-#include "gui/univ/ctrl/textCtrl.h"
-#include "gui/univ/dialog.h"
+#include "deskgui/univ/ctrl/staticText.h"
+#include "deskgui/univ/ctrl/textCtrl.h"
+#include "deskgui/univ/dialog.h"
 
 /**
  * Class ibDialogAbout

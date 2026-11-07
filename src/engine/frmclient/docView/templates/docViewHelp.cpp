@@ -1,6 +1,6 @@
 #include "docViewHelp.h"
 #include "frmclient/mainFrame/mainFrame.h"
-#include "gui/univ/messageDialog.h"
+#include "deskgui/univ/messageDialog.h"
 
 // ----------------------------------------------------------------------------
 // ibFrontendHelpEditView implementation

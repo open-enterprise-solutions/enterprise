@@ -9,8 +9,8 @@
 #include "frmclient/mainFrame/mainFrame.h"
 #include "protocol/protocol.h"
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibRequest::ibObjectKind
-#include "gui/univ/ctrl/radioButton.h"
-#include "gui/univ/ctrl/staticBox.h"
+#include "deskgui/univ/ctrl/radioButton.h"
+#include "deskgui/univ/ctrl/staticBox.h"
 
 namespace {
 

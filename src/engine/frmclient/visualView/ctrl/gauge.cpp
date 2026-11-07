@@ -5,7 +5,7 @@
 
 #include "widgets.h"
 
-#include "gui/univ/ctrl/gauge.h"
+#include "deskgui/univ/ctrl/gauge.h"
 
 void ibValueGauge::Create(wxWindow* parent, const ibProtocolNode& node)
 {

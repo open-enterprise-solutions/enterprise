@@ -9,7 +9,7 @@
 // (SetExpanded). The last row is always empty: typing into it adds one.
 /////////////////////////////////////////////////////////////////////////////
 
-#include "gui/univ/ctrl/treelistctrl.h"
+#include "deskgui/univ/ctrl/treelistctrl.h"
 #include "designer-thin/backend/debugger/debugDefs.h"
 
 #define watchWindow	ibWatchWindow::GetWatchWindow()

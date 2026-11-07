@@ -10,9 +10,9 @@
 
 #include "designer-thin/syntaxHelper/helpDragSource.h"
 
-#include "gui/univ/panel.h"
-#include "gui/univ/ctrl/searchCtrl.h"
-#include "gui/univ/ctrl/staticText.h"
+#include "deskgui/univ/panel.h"
+#include "deskgui/univ/ctrl/searchCtrl.h"
+#include "deskgui/univ/ctrl/staticText.h"
 #include <wx/listbox.h>
 
 #include <memory>

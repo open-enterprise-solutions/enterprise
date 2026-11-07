@@ -8,7 +8,7 @@
 #include <wx/init.h>
 
 #include "backend/backend_core.h"                              // ibDateTime
-#include "gui/dateconv.h"   // DateTimeToWxDateTime / WxDateTimeToDateTime — a date across to wx and back
+#include "deskgui/dateconv.h"   // DateTimeToWxDateTime / WxDateTimeToDateTime — a date across to wx and back
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 
 #include <wx/filefn.h>   // wxFileExists / wxRemoveFile - the cross-zone base

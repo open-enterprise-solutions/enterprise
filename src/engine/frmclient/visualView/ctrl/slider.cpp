@@ -5,7 +5,7 @@
 
 #include "widgets.h"
 
-#include "gui/univ/ctrl/slider.h"
+#include "deskgui/univ/ctrl/slider.h"
 
 void ibValueSlider::Create(wxWindow* parent, const ibProtocolNode& node)
 {

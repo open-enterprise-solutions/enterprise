@@ -10,12 +10,12 @@
 #include <wx/imaglist.h>      // …and its pictures, taken from the same icons the grids draw
 #include <wx/tokenzr.h>       // the cell holds the ticked names comma-separated
 #include "win/ctrls/checktree.h"   // ibCheckTree — the same ticked tree "Select data type" uses
-#include "gui/univ/ctrl/staticText.h"
-#include "gui/univ/ctrl/button.h"
-#include "gui/univ/ctrl/choice.h"
-#include "gui/univ/ctrl/treeCtrl.h"
-#include "gui/univ/menu.h"
-#include "gui/univ/messageDialog.h"
+#include "deskgui/univ/ctrl/staticText.h"
+#include "deskgui/univ/ctrl/button.h"
+#include "deskgui/univ/ctrl/choice.h"
+#include "deskgui/univ/ctrl/treeCtrl.h"
+#include "deskgui/univ/menu.h"
+#include "deskgui/univ/messageDialog.h"
 
 using namespace queryctor;
 

@@ -33,7 +33,7 @@
 
 #include <utility>
 #include <vector>
-#include "gui/univ/ctrl/treeCtrl.h"
+#include "deskgui/univ/ctrl/treeCtrl.h"
 
 // A node of a constructor tree carries what it IS, not what it looks like — the source path for
 // the catalogue, the (source, field) pair for a chosen table.

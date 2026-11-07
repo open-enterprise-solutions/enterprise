@@ -3,14 +3,14 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "jobScheduleSettings.h"
-#include "gui/typeconv.h"   // DateTimeToWxDateTime / WxDateTimeToDateTime — a date across to wx and back
+#include "deskgui/typeconv.h"   // DateTimeToWxDateTime / WxDateTimeToDateTime — a date across to wx and back
 
-#include "gui/univ/ctrl/notebook.h"
+#include "deskgui/univ/ctrl/notebook.h"
 #include <wx/sizer.h>
 #include <wx/statbox.h>
-#include "gui/univ/ctrl/staticBox.h"
-#include "gui/univ/panel.h"
-#include "gui/univ/messageDialog.h"
+#include "deskgui/univ/ctrl/staticBox.h"
+#include "deskgui/univ/panel.h"
+#include "deskgui/univ/messageDialog.h"
 
 namespace {
 

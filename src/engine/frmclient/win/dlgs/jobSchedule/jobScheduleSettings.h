@@ -12,12 +12,12 @@
 // schedule was NOT designed as a cron string: an expression has to be parsed to be shown, and
 // unparsed to be saved, and the two drift.
 
-#include "gui/univ/dialog.h"
-#include "gui/univ/ctrl/checkListBox.h"
-#include "gui/univ/ctrl/checkBox.h"
-#include "gui/univ/ctrl/spinCtrl.h"
-#include "gui/univ/ctrl/choice.h"
-#include "gui/univ/ctrl/staticText.h"
+#include "deskgui/univ/dialog.h"
+#include "deskgui/univ/ctrl/checkListBox.h"
+#include "deskgui/univ/ctrl/checkBox.h"
+#include "deskgui/univ/ctrl/spinCtrl.h"
+#include "deskgui/univ/ctrl/choice.h"
+#include "deskgui/univ/ctrl/staticText.h"
 #include <wx/datectrl.h>
 #include <wx/timectrl.h>
 

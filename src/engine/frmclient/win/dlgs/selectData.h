@@ -5,18 +5,18 @@
 
 #include <wx/artprov.h>
 #include <wx/xrc/xmlres.h>
-#include "gui/univ/ctrl/listCtrl.h"
+#include "deskgui/univ/ctrl/listCtrl.h"
 #include <wx/gdicmn.h>
 #include <wx/font.h>
 #include <wx/colour.h>
 #include <wx/settings.h>
 #include <wx/string.h>
-#include "gui/univ/ctrl/button.h"
+#include "deskgui/univ/ctrl/button.h"
 #include <wx/bitmap.h>
 #include <wx/image.h>
 #include <wx/icon.h>
 #include <wx/sizer.h>
-#include "gui/univ/dialog.h"
+#include "deskgui/univ/dialog.h"
 
 #include "frmclient/backend/metaData.h"
 

@@ -38,11 +38,11 @@
 #include "frmclient/frmclient.h"
 #include "core/compiler/blockSyntaxLINQ.h"
 
-#include "gui/univ/dialog.h"
-#include "gui/univ/ctrl/treeCtrl.h"
-#include "gui/univ/ctrl/textCtrl.h"
-#include "gui/univ/ctrl/checkBox.h"
-#include "gui/univ/ctrl/staticText.h"
+#include "deskgui/univ/dialog.h"
+#include "deskgui/univ/ctrl/treeCtrl.h"
+#include "deskgui/univ/ctrl/textCtrl.h"
+#include "deskgui/univ/ctrl/checkBox.h"
+#include "deskgui/univ/ctrl/staticText.h"
 
 #include <functional>
 #include <map>

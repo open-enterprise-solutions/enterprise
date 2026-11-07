@@ -15,9 +15,9 @@
 #include "protocol/protocolDesigner.h"                     // ibProtocol::ibSchema::ibProperties::ibSourceDataType
 
 #include <wx/aui/auibook.h>
-#include "gui/univ/splitterWindow.h"
-#include "gui/univ/ctrl/treeCtrl.h"
-#include "gui/univ/menu.h"
+#include "deskgui/univ/splitterWindow.h"
+#include "deskgui/univ/ctrl/treeCtrl.h"
+#include "deskgui/univ/menu.h"
 
 #include <wx/dnd.h>
 

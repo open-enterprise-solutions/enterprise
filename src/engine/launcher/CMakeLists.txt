@@ -39,9 +39,9 @@ target_include_directories(launcher PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-# Its window and dialog place the kit's controls (gui/).
+# Its window and dialog place the kit's controls (deskgui/).
 target_link_libraries(launcher PRIVATE
-    gui
+    deskgui
     backend
     protocol
     wx::core wx::qa wx::base wx::xml

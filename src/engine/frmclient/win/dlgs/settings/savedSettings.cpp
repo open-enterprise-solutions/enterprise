@@ -3,10 +3,10 @@
 #include "frmclient/backend/composition/dataComposer.h"
 
 #include <wx/sizer.h>
-#include "gui/univ/messageDialog.h"
-#include "gui/univ/ctrl/button.h"
-#include "gui/univ/dialog.h"
-#include "gui/univ/textEntryDialog.h"
+#include "deskgui/univ/messageDialog.h"
+#include "deskgui/univ/ctrl/button.h"
+#include "deskgui/univ/dialog.h"
+#include "deskgui/univ/textEntryDialog.h"
 
 ///////////////////////////////////////////////////////////////////////////////
 

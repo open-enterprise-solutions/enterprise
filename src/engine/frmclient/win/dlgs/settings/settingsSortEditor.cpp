@@ -10,8 +10,8 @@
 
 #include <wx/menu.h>
 #include <wx/sizer.h>
-#include "gui/univ/splitterWindow.h"
-#include "gui/univ/ctrl/staticText.h"
+#include "deskgui/univ/splitterWindow.h"
+#include "deskgui/univ/ctrl/staticText.h"
 #include <wx/toolbar.h>
 #include <wx/treectrl.h>
 

@@ -7,7 +7,7 @@
 #ifndef _IB_HELP_DETAIL_VIEW_H_
 #define _IB_HELP_DETAIL_VIEW_H_
 
-#include "gui/univ/panel.h"
+#include "deskgui/univ/panel.h"
 #include <wx/html/htmlwin.h>
 
 struct ibHelpEntry;

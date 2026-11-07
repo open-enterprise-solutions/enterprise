@@ -13,7 +13,7 @@
 
 #include <functional>
 
-#include "gui/univ/panel.h"
+#include "deskgui/univ/panel.h"
 
 #include "frmclient/backend/backend_composition.h"   // ibOutputParametersDescription — what is edited here; its values, restored
 

@@ -3,8 +3,8 @@
 #include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 #include "frmclient/propertyManager/propertyEditor.h"
-#include "gui/univ/dialog.h"
-#include "gui/univ/dataview/dataview.h"   // ibDataViewListCtrl — the dialog's list of choices
+#include "deskgui/univ/dialog.h"
+#include "deskgui/univ/dataview/dataview.h"   // ibDataViewListCtrl — the dialog's list of choices
 
 #define icon_size 16
 

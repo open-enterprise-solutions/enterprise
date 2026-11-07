@@ -3,7 +3,7 @@
 
 #include <wx/treectrl.h>
 #include <wx/event.h>
-#include "gui/univ/ctrl/treeCtrl.h"
+#include "deskgui/univ/ctrl/treeCtrl.h"
 
 // ibDesignerTreeCtrl — our projection of wxTreeCtrl. The vendored widget in 3rdparty/wxWidgets stays
 // untouched; when its behaviour doesn't fit we fork the ONE call here, in our subclass.

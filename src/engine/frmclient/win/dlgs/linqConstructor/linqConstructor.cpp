@@ -10,8 +10,8 @@
 #include "frmclient/backend/compiler/value.h"   // ibValue::GetIconGroup - a field's picture
 #include "frmclient/artProvider/artProvider.h"   // wxART_FRONTEND and the product's own pictures
 #include "frmclient/mainFrame/mainFrame.h"       // the editor settings the block is coloured with
-#include "gui/univ/dataview/dataview.h"   // ibDataViewListCtrl - the platform's list, edited in place
-#include "gui/univ/dataview/dataviewEditOnActivate.h"   // …opened by a double-click
+#include "deskgui/univ/dataview/dataview.h"   // ibDataViewListCtrl - the platform's list, edited in place
+#include "deskgui/univ/dataview/dataviewEditOnActivate.h"   // …opened by a double-click
 #include "frmclient/win/dlgs/callbackDropTarget.h"   // a drop is the arrow's verb, reached by the mouse
 #include "frmclient/win/editor/codeEditor/codeEditor.h"   // the block, coloured as the module is
 #include "frmclient/docView/tabDocument.h"               // the module's tab — what the compiler is asked through
@@ -20,21 +20,21 @@
 #include "protocol/protocolNode.h"
 
 #include <wx/artprov.h>
-#include "gui/univ/ctrl/button.h"
+#include "deskgui/univ/ctrl/button.h"
 #include <wx/imaglist.h>
-#include "gui/univ/messageDialog.h"
-#include "gui/univ/ctrl/notebook.h"
-#include "gui/univ/panel.h"
+#include "deskgui/univ/messageDialog.h"
+#include "deskgui/univ/ctrl/notebook.h"
+#include "deskgui/univ/panel.h"
 #include <wx/settings.h>
 #include <wx/sizer.h>
-#include "gui/univ/ctrl/spinCtrl.h"
+#include "deskgui/univ/ctrl/spinCtrl.h"
 #include <wx/statbox.h>
-#include "gui/univ/textEntryDialog.h"
+#include "deskgui/univ/textEntryDialog.h"
 #include <wx/toolbar.h>
 #include <wx/utils.h>
 
 #include <algorithm>
-#include "gui/univ/ctrl/staticBox.h"
+#include "deskgui/univ/ctrl/staticBox.h"
 
 namespace {
 

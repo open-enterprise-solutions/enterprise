@@ -1,10 +1,10 @@
 #ifndef _DATAREPORT_WND_H__
 #define _DATAREPORT_WND_H__
 
-#include "gui/univ/ctrl/button.h"
+#include "deskgui/univ/ctrl/button.h"
 #include <wx/choice.h>
-#include "gui/univ/ctrl/staticText.h"
-#include "gui/univ/ctrl/textCtrl.h"
+#include "deskgui/univ/ctrl/staticText.h"
+#include "deskgui/univ/ctrl/textCtrl.h"
 
 #include "treeConfiguration.h"
 

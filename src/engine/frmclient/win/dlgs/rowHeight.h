@@ -4,18 +4,18 @@
 #include <wx/artprov.h>
 #include <wx/xrc/xmlres.h>
 #include <wx/string.h>
-#include "gui/univ/ctrl/checkBox.h"
+#include "deskgui/univ/ctrl/checkBox.h"
 #include <wx/gdicmn.h>
 #include <wx/font.h>
 #include <wx/colour.h>
 #include <wx/settings.h>
 #include <wx/textctrl.h>
-#include "gui/univ/ctrl/spinCtrl.h"
+#include "deskgui/univ/ctrl/spinCtrl.h"
 #include <wx/sizer.h>
-#include "gui/univ/ctrl/button.h"
+#include "deskgui/univ/ctrl/button.h"
 #include <wx/dialog.h>
 #include "core/localization/dictionary.h"   // _() — the dialog's words
-#include "gui/univ/dialog.h"
+#include "deskgui/univ/dialog.h"
 
 class ibGridEditor;
 

@@ -2,10 +2,10 @@
 #define _FUNCTIONLIST_H__
 
 #include <wx/sizer.h>
-#include "gui/univ/ctrl/button.h"
-#include "gui/univ/ctrl/checkBox.h"
-#include "gui/univ/dialog.h"
-#include "gui/univ/ctrl/listCtrl.h"
+#include "deskgui/univ/ctrl/button.h"
+#include "deskgui/univ/ctrl/checkBox.h"
+#include "deskgui/univ/dialog.h"
+#include "deskgui/univ/ctrl/listCtrl.h"
 
 // The old desktop's:its module's procedures and functions, and the handlers it may
 // have — the module's tab asked for those (ibProtocol::ibView::ibModule::ibRequest::Procedures), its document the desktop's metaobject.

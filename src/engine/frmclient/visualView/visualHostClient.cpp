@@ -12,8 +12,8 @@
 #include <wx/wupdlock.h>   // wxWindowUpdateLocker — RAII Freeze/Thaw
 
 #include "frmclient/mainFrame/mainFrame.h"
-#include "gui/typeconv.h"
-#include "gui/univ/ctrl/control.h"   // ibControl — a title beside it, lined up into a column
+#include "deskgui/typeconv.h"
+#include "deskgui/univ/ctrl/control.h"   // ibControl — a title beside it, lined up into a column
 
 namespace {
 

@@ -19,7 +19,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////
 
-#include "gui/univ/dataview/dataview.h"
+#include "deskgui/univ/dataview/dataview.h"
 
 #include "core/query/queryAST.h"
 

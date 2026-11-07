@@ -1,7 +1,7 @@
 ﻿#ifndef __INNER_FRAME__
 #define __INNER_FRAME__
 
-#include "gui/univ/panel.h"
+#include "deskgui/univ/panel.h"
 #include <wx/bitmap.h>
 
 // The form's card in the visual editor: a caption over the panel the form is built in, resized by

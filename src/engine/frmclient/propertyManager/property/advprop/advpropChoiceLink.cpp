@@ -9,7 +9,7 @@
 #include "frmclient/win/dlgs/choiceLink/choiceLink.h"               // where the governing field is chosen
 #include "frmclient/win/dlgs/choiceParameters/choiceParameters.h"   // …and where the parameters' rows live
 #include "frmclient/backend/propertyManager/property/propertyChoiceLink.h"   // ibChoiceHasLists — what the row brought
-#include "gui/univ/messageDialog.h"
+#include "deskgui/univ/messageDialog.h"
 
 // -----------------------------------------------------------------------
 // ibPGChoiceLinkProperty

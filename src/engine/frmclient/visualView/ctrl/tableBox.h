@@ -4,10 +4,10 @@
 #include <memory>
 
 #include "frmclient/visualView/ctrl/window.h"
-#include "gui/univ/dataview/dataview.h"      // ibDataViewSelectionMode, ibDataViewViewMode
-#include "gui/univ/dataview/datavlayout.h"   // ibColumnGroupKind
+#include "deskgui/univ/dataview/dataview.h"      // ibDataViewSelectionMode, ibDataViewViewMode
+#include "deskgui/univ/dataview/datavlayout.h"   // ibColumnGroupKind
 #include "frmclient/visualView/tableModel.h"
-#include "gui/univ/panel.h"
+#include "deskgui/univ/panel.h"
 
 class ibViewCommandBar;
 class ibViewTableColumnObject;

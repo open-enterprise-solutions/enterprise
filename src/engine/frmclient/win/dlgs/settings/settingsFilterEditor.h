@@ -26,12 +26,12 @@
 
 #include <functional>   // std::function — the "it changed" callback a host installs
 
-#include "gui/univ/panel.h"
+#include "deskgui/univ/panel.h"
 #include <wx/toolbar.h>
-#include "gui/univ/ctrl/treeCtrl.h"
+#include "deskgui/univ/ctrl/treeCtrl.h"
 
 #include "frmclient/backend/backend_composition.h"   // ibFilterDescription — what is edited here; its literals, restored
-#include "gui/univ/dataview/dataview.h"
+#include "deskgui/univ/dataview/dataview.h"
 #include "frmclient/win/dlgs/settings/filterTreeModel.h"   // ibFilterTreeModel + ibFilterPath — a row IS a path
 
 class ibSettingsFieldTree;

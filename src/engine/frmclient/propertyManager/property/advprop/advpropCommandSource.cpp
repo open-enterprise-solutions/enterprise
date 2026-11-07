@@ -10,12 +10,12 @@
 
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties — the tree's keys
 
-#include "gui/univ/ctrl/treeCtrl.h"
+#include "deskgui/univ/ctrl/treeCtrl.h"
 #include <functional>
 #include <wx/imaglist.h>
 #include <wx/artprov.h>
-#include "gui/univ/dialog.h"
-#include "gui/univ/messageDialog.h"
+#include "deskgui/univ/dialog.h"
+#include "deskgui/univ/messageDialog.h"
 
 namespace {
 

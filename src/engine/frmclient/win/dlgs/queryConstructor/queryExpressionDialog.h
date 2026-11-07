@@ -28,17 +28,17 @@
 //
 ////////////////////////////////////////////////////////////////////////////
 
-#include "gui/univ/dialog.h"
+#include "deskgui/univ/dialog.h"
 #include <wx/textctrl.h>
 #include <wx/listbox.h>
-#include "gui/univ/ctrl/treeCtrl.h"
+#include "deskgui/univ/ctrl/treeCtrl.h"
 #include <wx/stc/stc.h>
 
 #include "core/query/queryAST.h"
 #include "frmclient/backend/query/queryConstructorModel.h"
 
 #include <vector>
-#include "gui/univ/ctrl/button.h"
+#include "deskgui/univ/ctrl/button.h"
 
 class ibMetaData;
 

@@ -50,7 +50,7 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "frmserver", "src\engine\frm
 		{35245A06-A72D-40B9-92FE-8EF2CCCC9D00} = {35245A06-A72D-40B9-92FE-8EF2CCCC9D00}
 	EndProjectSection
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "gui", "src\engine\gui\gui.vcxproj", "{A1B2C3D4-0011-4E5F-8A9B-C0D1E2F30011}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "deskgui", "src\engine\deskgui\deskgui.vcxproj", "{A1B2C3D4-0011-4E5F-8A9B-C0D1E2F30011}"
 	ProjectSection(ProjectDependencies) = postProject
 		{A1B2C3D4-0009-4E5F-8A9B-C0D1E2F30009} = {A1B2C3D4-0009-4E5F-8A9B-C0D1E2F30009}
 	EndProjectSection

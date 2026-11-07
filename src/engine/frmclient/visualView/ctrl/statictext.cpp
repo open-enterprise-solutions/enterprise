@@ -7,7 +7,7 @@
 
 #include <wx/control.h>   // wxControl::EscapeMnemonics - a value is text, not a label with mnemonics
 
-#include "gui/univ/ctrl/staticText.h"
+#include "deskgui/univ/ctrl/staticText.h"
 
 void ibValueStaticText::Create(wxWindow* parent, const ibProtocolNode& /*node*/)
 {

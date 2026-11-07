@@ -13,22 +13,22 @@
 #include <wx/font.h>
 #include <wx/colour.h>
 #include <wx/settings.h>
-#include "gui/univ/ctrl/staticText.h"
+#include "deskgui/univ/ctrl/staticText.h"
 #include <wx/sizer.h>
-#include "gui/univ/ctrl/textCtrl.h"
+#include "deskgui/univ/ctrl/textCtrl.h"
 #include <wx/dialog.h>
-#include "gui/univ/ctrl/button.h"
-#include "gui/univ/ctrl/staticLine.h"
+#include "deskgui/univ/ctrl/button.h"
+#include "deskgui/univ/ctrl/staticLine.h"
 #include <wx/stattext.h>
-#include "gui/univ/ctrl/choice.h"
+#include "deskgui/univ/ctrl/choice.h"
 
 #include "frmclient/backend/backend_core.h"
 #include "core/roleCompositionMode.h"   // ibRoleCompositionMode — the membership carries how the role combines
 
 #include "frmclient/win/ctrls/checktree.h"
-#include "gui/univ/theme/luna_tabart.h"
-#include "gui/univ/dialog.h"
-#include "gui/univ/panel.h"
+#include "deskgui/univ/theme/luna_tabart.h"
+#include "deskgui/univ/dialog.h"
+#include "deskgui/univ/panel.h"
 
 // A USER — the old desktop's dialog as it was, on ibUserInfo: its roles and languages offered
 // as the server lists them, where the desktop's took the active configuration. What its OK checked before it saved — that

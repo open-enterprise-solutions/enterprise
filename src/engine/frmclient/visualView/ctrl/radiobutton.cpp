@@ -5,7 +5,7 @@
 
 #include "widgets.h"
 
-#include "gui/univ/ctrl/radioButton.h"
+#include "deskgui/univ/ctrl/radioButton.h"
 
 void ibValueRadioButton::Create(wxWindow* parent, const ibProtocolNode& /*node*/)
 {

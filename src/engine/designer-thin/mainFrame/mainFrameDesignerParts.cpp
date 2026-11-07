@@ -58,8 +58,8 @@ void ibFrontendMainFrameDesigner::CreateGitPane()
 }
 
 #include "frmclient/artProvider/artProvider.h"
-#include "gui/univ/ctrl/floatingNotebook.h"
-#include "gui/univ/theme/luna_tabart.h"
+#include "deskgui/univ/ctrl/floatingNotebook.h"
+#include "deskgui/univ/theme/luna_tabart.h"
 #include "frmclient/mainFrame/output/outputWindow.h"
 #include "designer-thin/mainFrame/local/localWindow.h"
 #include "designer-thin/mainFrame/stack/stackWindow.h"

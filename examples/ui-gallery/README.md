@@ -6,11 +6,11 @@ folder's base. It was built live through the Designer's MCP server (an assistant
 driving `metadata_create`/`form_add`/`form_bind`, not hand-authored), and is kept
 here as a worked example of what that looks like, plus a record of what it found.
 
-## Why `visualView`, not `gui`
+## Why `visualView`, not `deskgui`
 
 OES has two layers that could be called "the UI kit":
 
-- `src/engine/gui/` — the desktop's user interface library: a wxUniversal-fork
+- `src/engine/deskgui/` — the desktop's user interface library: a wxUniversal-fork
   renderer (the "Luna" theme) and the controls on it, shared by the thin client
   and the launcher. Unfinished, and the web client never calls into it at all.
 - `src/engine/frmserver/visualView/ctrl/` — the form-control types a developer
@@ -19,7 +19,7 @@ OES has two layers that could be called "the UI kit":
   metadata is built from, and the only one with any chance of reaching the web
   client — see the gap below for how much of a chance that actually is.
 
-A gallery built on `gui` would showcase widgets the web client can never show
+A gallery built on `deskgui` would showcase widgets the web client can never show
 under any circumstance. This gallery catalogs `visualView` instead.
 
 ## The 19 catalogued control types

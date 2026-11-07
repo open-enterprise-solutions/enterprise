@@ -1,6 +1,6 @@
 #include "tableBoxColumnRenderer.h"
 
-#include "gui/univ/ctrl/textCtrl.h"
+#include "deskgui/univ/ctrl/textCtrl.h"
 
 wxWindow* ibDataViewValueRenderer::CreateEditorCtrl(wxWindow* dv,
 	wxRect labelRect,

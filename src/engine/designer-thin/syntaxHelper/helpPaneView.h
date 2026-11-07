@@ -18,14 +18,14 @@
 
 
 #include <wx/bookctrl.h>
-#include "gui/univ/panel.h"
+#include "deskgui/univ/panel.h"
 
 #include <memory>
 #include <vector>
 
 #include "core/syntaxHelper/helpEntry.h"
-#include "gui/univ/ctrl/notebook.h"
-#include "gui/univ/ctrl/listBox.h"
+#include "deskgui/univ/ctrl/notebook.h"
+#include "deskgui/univ/ctrl/listBox.h"
 
 class ibHelpCorpus;
 class ibHelpService;

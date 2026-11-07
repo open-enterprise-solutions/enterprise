@@ -5,7 +5,7 @@
 
 #include "widgets.h"
 
-#include "gui/univ/ctrl/staticText.h"
+#include "deskgui/univ/ctrl/staticText.h"
 
 void ibViewPlaceholder::Create(wxWindow* parent, const ibProtocolNode& /*node*/)
 {

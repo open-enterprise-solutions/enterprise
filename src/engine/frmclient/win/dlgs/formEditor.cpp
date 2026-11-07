@@ -5,8 +5,8 @@
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 #include "frmclient/settings/formSettings.h"   // the setting this window saves and clears
 #include "frmclient/docView/tabDocument.h"   // ibTabDocument — the form's tab, which this opens over
-#include "gui/univ/ctrl/staticText.h"
-#include "gui/univ/messageDialog.h"
+#include "deskgui/univ/ctrl/staticText.h"
+#include "deskgui/univ/messageDialog.h"
 
 enum {
 	WXOES_PROPERTY_GRID = wxID_HIGHEST + 1001
@@ -217,7 +217,7 @@ EVT_PG_SELECTED(WXOES_PROPERTY_GRID, ibDialogFormEditor::OnPropertyGridItemSelec
 
 wxEND_EVENT_TABLE()
 
-#include "gui/univ/theme/luna_toolbarart.h"
+#include "deskgui/univ/theme/luna_toolbarart.h"
 #include "frmclient/visualView/visualHostClient.h"
 
 ibDialogFormEditor::ibDialogFormEditor(ibValueForm* valueForm) :

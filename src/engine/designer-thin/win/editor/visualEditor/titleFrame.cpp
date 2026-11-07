@@ -6,7 +6,7 @@
 #include "titleFrame.h"
 
 #include <wx/sizer.h>
-#include "gui/univ/ctrl/staticText.h"
+#include "deskgui/univ/ctrl/staticText.h"
 
 ibPanelTitle::ibPanelTitle(wxWindow* parent, const wxString& title) : ibPanel(parent, wxID_ANY)
 {

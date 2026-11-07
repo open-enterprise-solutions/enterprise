@@ -7,7 +7,7 @@
 /////////////////////////////////////////////////////////////////////////////
 
 #include <wx/wx.h>
-#include "gui/univ/propertySheetDialog.h"
+#include "deskgui/univ/propertySheetDialog.h"
 
 #include "frmclient/frmclient.h"
 #include "protocol/protocolNode.h"

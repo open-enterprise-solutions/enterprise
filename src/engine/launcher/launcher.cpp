@@ -6,7 +6,7 @@
 
 #include <wx/filename.h>
 #include <wx/log.h>
-#include "gui/univ/messageDialog.h"   // ibMessageBox — a start that failed is said
+#include "deskgui/univ/messageDialog.h"   // ibMessageBox — a start that failed is said
 #include <wx/stdpaths.h>
 #include <wx/utils.h>   // wxLaunchDefaultBrowser, wxYieldIfNeeded
 #include <wx/xml/xml.h>

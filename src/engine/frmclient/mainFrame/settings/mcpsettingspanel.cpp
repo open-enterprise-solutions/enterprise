@@ -1,7 +1,7 @@
 ﻿#include "mcpsettingspanel.h"
 
 #include <wx/clipbrd.h>   // the handout is meant to be taken, not retyped
-#include "gui/univ/ctrl/staticBox.h"
+#include "deskgui/univ/ctrl/staticBox.h"
 
 wxBEGIN_EVENT_TABLE(ibPanelMcpSettings, ibPanel)
 	EVT_CHECKBOX(ID_McpEnabled,      ibPanelMcpSettings::OnEnabled)

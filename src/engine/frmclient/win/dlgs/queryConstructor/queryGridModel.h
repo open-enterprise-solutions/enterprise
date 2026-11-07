@@ -22,7 +22,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////
 
-#include "gui/univ/dataview/dataview.h"
+#include "deskgui/univ/dataview/dataview.h"
 #include "core/tabular/tabularModelView.h"   // ibDataViewObject — what a TREE row is (the totals tree below)
 
 #include <functional>

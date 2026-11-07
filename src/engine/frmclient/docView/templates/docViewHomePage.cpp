@@ -1,12 +1,12 @@
 #include "docViewHomePage.h"
 
-#include "gui/univ/panel.h"
+#include "deskgui/univ/panel.h"
 #include <wx/sizer.h>
 #include <wx/wupdlock.h>   // wxWindowUpdateLocker — the page held still while it is built
-#include "gui/univ/splitterWindow.h"
-#include "gui/univ/ctrl/staticBitmap.h"
-#include "gui/univ/ctrl/staticLine.h"
-#include "gui/univ/ctrl/staticText.h"
+#include "deskgui/univ/splitterWindow.h"
+#include "deskgui/univ/ctrl/staticBitmap.h"
+#include "deskgui/univ/ctrl/staticLine.h"
+#include "deskgui/univ/ctrl/staticText.h"
 
 #include <memory>   // std::make_shared — a sash placed once
 

@@ -4,7 +4,7 @@
 #include <memory>
 
 #include "frmclient/visualView/ctrl/frame.h"
-#include "gui/univ/panel.h"
+#include "deskgui/univ/panel.h"
 
 class ibViewCommandBar;
 class ibGridEvent;

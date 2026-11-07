@@ -3,14 +3,14 @@
 #include "frmclient/backend/propertyManager/property/propertyChoiceLink.h"           // ibFieldReferenceTypes
 
 #include "frmclient/win/dlgs/queryConstructor/queryGridModel.h"   // the one grid model for a plain list
-#include "gui/univ/dataview/dataviewEditOnActivate.h"  // …and the one way a cell opens on a double-click
+#include "deskgui/univ/dataview/dataviewEditOnActivate.h"  // …and the one way a cell opens on a double-click
 
 #include <wx/sizer.h>
-#include "gui/univ/ctrl/staticLine.h"
+#include "deskgui/univ/ctrl/staticLine.h"
 #include <wx/artprov.h>
-#include "gui/univ/messageDialog.h"   // the refusal OK gives when a row has no parameter
+#include "deskgui/univ/messageDialog.h"   // the refusal OK gives when a row has no parameter
 #include <wx/dnd.h>
-#include "gui/univ/ctrl/bmpButton.h"
+#include "deskgui/univ/ctrl/bmpButton.h"
 
 namespace {
 

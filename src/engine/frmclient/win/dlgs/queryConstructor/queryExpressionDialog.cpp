@@ -22,13 +22,13 @@
 #include <wx/sizer.h>
 #include <wx/stattext.h>
 #include <wx/button.h>
-#include "gui/univ/splitterWindow.h"
-#include "gui/univ/messageDialog.h"
+#include "deskgui/univ/splitterWindow.h"
+#include "deskgui/univ/messageDialog.h"
 #include <wx/dnd.h>
 #include <wx/imaglist.h>
 #include <wx/stc/stc.h>
 #include <wx/choice.h>     // the role constructor — the word picked
-#include "gui/univ/ctrl/spinCtrl.h"   // …and a period's number
+#include "deskgui/univ/ctrl/spinCtrl.h"   // …and a period's number
 #include <iterator>        // std::size — GCC does not bring it along with the rest
 
 #include <algorithm>

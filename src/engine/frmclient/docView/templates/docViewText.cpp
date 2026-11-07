@@ -1,7 +1,7 @@
 #include "docViewText.h"
 #include "frmclient/mainFrame/mainFrame.h"
 #include "wx/filedlg.h"   // wxFileSelector - the text box's own Save as
-#include "gui/univ/messageDialog.h"
+#include "deskgui/univ/messageDialog.h"
 
 // ----------------------------------------------------------------------------
 // ibFrontendTextEditView implementation

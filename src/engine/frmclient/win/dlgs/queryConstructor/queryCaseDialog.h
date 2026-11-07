@@ -33,9 +33,9 @@
 #include "core/query/queryAST.h"
 #include "frmclient/backend/query/queryConstructorModel.h"
 
-#include "gui/univ/dataview/dataview.h"
-#include "gui/univ/ctrl/textCtrl.h"
-#include "gui/univ/dialog.h"
+#include "deskgui/univ/dataview/dataview.h"
+#include "deskgui/univ/ctrl/textCtrl.h"
+#include "deskgui/univ/dialog.h"
 
 class ibMetaData;
 

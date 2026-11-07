@@ -27,8 +27,8 @@
 #include "frmclient/frmclient.h"
 #include "frmclient/backend/backend_localization.h"   // ibTranslateString — what the boxes are over
 
-#include "gui/univ/dialog.h"
-#include "gui/univ/ctrl/textCtrl.h"
+#include "deskgui/univ/dialog.h"
+#include "deskgui/univ/ctrl/textCtrl.h"
 
 #include <functional>
 #include <utility>

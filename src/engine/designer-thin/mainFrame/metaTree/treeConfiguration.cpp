@@ -9,12 +9,12 @@
 
 #include "frmclient/artProvider/artProvider.h"
 #include "frmclient/docView/docView.h"   // ibMetaView — the tree's view
-#include "gui/univ/theme/luna_toolbarart.h"
+#include "deskgui/univ/theme/luna_toolbarart.h"
 
 //**********************************************************************************
 
 #include "designer-thin/win/dlg/predefinedEditor.h"
-#include "gui/univ/ctrl/staticBox.h"
+#include "deskgui/univ/ctrl/staticBox.h"
 
 void ibConfigurationTree::EditPredefinedValues(ibValueMetaObjectRecordDataHierarchyMutableRef* valueMetaObjectHierarchy)
 {

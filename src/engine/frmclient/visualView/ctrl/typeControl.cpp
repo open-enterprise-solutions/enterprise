@@ -1,5 +1,5 @@
 #include "typeControl.h"
-#include "gui/typeconv.h"   // DateTimeToWxDateTime / WxDateTimeToDateTime — a date across to wx and back
+#include "deskgui/typeconv.h"   // DateTimeToWxDateTime / WxDateTimeToDateTime — a date across to wx and back
 
 #include <algorithm>
 #include <utility>   // std::exchange — the owner told once
@@ -12,10 +12,10 @@
 
 #include "frmclient/mainFrame/mainFrame.h"   // ibFrontendMainFrame::ChooseValue — a value of the server's type
 #include "frmclient/visualView/ctrl/frame.h"
-#include "gui/univ/ctrl/control.h"         // ibControl — where a quick choice drops down from, beside its title
-#include "gui/univ/ctrl/button.h"          // ibButton — the calculator's keys, the OK of a window
-#include "gui/univ/ctrl/listBox.h"         // ibListBox — the quick choice's list
-#include "gui/univ/ctrl/staticText.h"      // ibStaticText — the calculator's display
+#include "deskgui/univ/ctrl/control.h"         // ibControl — where a quick choice drops down from, beside its title
+#include "deskgui/univ/ctrl/button.h"          // ibButton — the calculator's keys, the OK of a window
+#include "deskgui/univ/ctrl/listBox.h"         // ibListBox — the quick choice's list
+#include "deskgui/univ/ctrl/staticText.h"      // ibStaticText — the calculator's display
 #include "frmclient/backend/system/value/valueType.h"   // ibValueTypeDescription — the empty value of a settled type
 
 bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibChooseValueRequest& request, wxWindow* parent)

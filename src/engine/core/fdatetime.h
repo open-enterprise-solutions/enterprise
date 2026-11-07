@@ -36,7 +36,7 @@ class ibDictionary;                      // core/localization/dictionary.h - the
 // ⭐ wxDateTime IS THE WINDOWS', and the core does not know it. wx keeps an INSTANT - milliseconds of real time,
 // read through the machine's zone - and the server holds none: its jobs, sessions, locks and settings keep
 // this date. A picker or a list that prints a time crosses at the client's border, by the LOCAL PARTS
-// (gui/typeconv.h: DateTimeToWxDateTime / WxDateTimeToDateTime). An instant the engine is handed -
+// (deskgui/typeconv.h: DateTimeToWxDateTime / WxDateTimeToDateTime). An instant the engine is handed -
 // a file's time, a stored form written before this class - is read through OfInstant.
 
 // The parts of a reading, with the day's place in the week and the year.
