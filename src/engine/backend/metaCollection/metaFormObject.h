@@ -61,6 +61,11 @@ public:
 	bool LoadFormData(ibBackendValueForm* value) const;
 	bool SaveFormData(ibBackendValueForm* value);
 
+	// #578 — the form's data after the subtree it belongs to was renumbered: the form is built from its data, every
+	// id it holds of the subtree is rewritten (ibBackendValueForm::RemapIds), and it is saved back. Called by
+	// ibPropertyForm::RemapIds, so ibValueMetaObject::RemapSubtree reaches every form of the subtree.
+	bool RemapFormData(const class ibMetaIdRemap& remap);
+
 #pragma region _form_creator_h_
 
 	// ⭐⭐ WHERE THE OPENING PARAMETERS ARE FIXED ONTO THE FORM. This is the one place a form object is

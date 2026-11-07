@@ -109,6 +109,10 @@ public:
 	virtual bool CopyNodeValue(ibDataValue& value) const override;
 	virtual bool PasteNodeValue(const ibDataValue& value) override;
 
+	// #578 — the hops the copy road rides on guids are the ones renumbered here: every hop after the head (the head
+	// is a form attribute's, form-local) and the type each hop expects, when it is built on a renumbered object.
+	virtual bool RemapIds(const class ibMetaIdRemap& remap) override;
+
 	// What its source window may offer: SourceDataType (ibSourceDataType).
 	// …and in its Value, beside the path, the type the binding holds (SourceType — its node and its words), with the
 	// classes it names (Classes). Its editor: the window's tree, as it opens (Sources) — the desktop's, written as the

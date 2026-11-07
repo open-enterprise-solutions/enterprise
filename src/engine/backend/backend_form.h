@@ -114,6 +114,11 @@ public:
 	virtual bool LoadForm(const ibMemoryBuffer& data) = 0;
 	virtual bool SaveForm(ibMemoryBuffer &data) const = 0;
 
+	// #578 — the metaIDs the loaded form holds, after its owner's subtree was renumbered (metaIdRemap.h): only the
+	// form knows its parts (controls, attributes, command bars). The metaform loads, remaps and saves it back
+	// (ibValueMetaObjectFormBase::RemapFormData).
+	virtual bool RemapIds(const class ibMetaIdRemap& remap) = 0;
+
 	///////////////////////////////////////////////////////////////////////////
 
 	virtual ibSourceDataObject* GetSourceObject() const = 0;

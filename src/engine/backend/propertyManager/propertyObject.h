@@ -408,6 +408,12 @@ public:
 	virtual bool CopyNodeValue(ibDataValue& value) const;
 	virtual bool PasteNodeValue(const ibDataValue& value);
 
+	// ⭐ THE METAIDS THIS PROPERTY HOLDS, AFTER ITS SUBTREE WAS RENUMBERED (#578; metaIdRemap.h). Only the property
+	// knows which of its ids are an object's and which are its owner's own — a source's head is a form attribute's,
+	// a command's may be a form command's — so the map is handed to it and it rewrites what is the subtree's. Default:
+	// a property that holds no metaID. False: it could not (the form could not be built to be rewritten).
+	virtual bool RemapIds(const class ibMetaIdRemap& remap) { return true; }
+
 	//Set/Get property data
 	virtual bool SetDataValue(const ibValue& varPropVal) = 0;
 	virtual bool GetDataValue(ibValue& pvarPropVal) const = 0;
@@ -651,6 +657,11 @@ public:
 	* Returns the depth of the object in the tree.
 	*/
 	virtual int GetComponentType() const { return COMPONENT_TYPE_ABSTRACT; }
+
+	// The metaIDs this object's properties hold, renumbered (#578, ibBackendProperty::RemapIds): every property and
+	// event, then every attached object (its properties are ours). An object that holds ids in parts that are not
+	// properties — a form's controls, attributes and command bars — overrides and calls the base.
+	virtual bool RemapIds(const class ibMetaIdRemap& remap);
 
 	// Central VIRTUAL entry for object-level node save/load. A type OVERRIDES it to do its
 	// OWN data: meta / controls call their LoadNode/SaveNode inside (their per-type

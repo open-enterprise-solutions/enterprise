@@ -40,6 +40,9 @@ public:
 	virtual bool CopyNodeValue(ibDataValue& value) const override;
 	virtual bool PasteNodeValue(const ibDataValue& value) override;
 
+	// #578 — the ids the form's data holds of a renumbered subtree: the metaform rebuilds and resaves it.
+	virtual bool RemapIds(const class ibMetaIdRemap& remap) override;
+
 	// …and what its link opens: the form it is the data of (Object).
 	virtual bool GetProtocolValue(ibDataNode& row, ibReader reader) override;
 

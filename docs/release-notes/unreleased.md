@@ -453,3 +453,8 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **`ExternalDataProcessors.Create` and `ExternalReports.Create` no longer hand back a freed object.** A data
   processor with no form, or a report with neither a form nor a composer, unloaded at the end of its own start,
   and the call returned what was left of it; it now returns nothing.
+- **A data processor or a report read from its file into a configuration keeps its forms' bindings.** Its objects
+  were given new ids, but its forms still held the file's: a button named the command of the object the file was
+  saved from, a field its attribute, the form's main attribute its type. Read into the configuration it came from,
+  the copy's form ran the original's command. Everything a form holds of the object read in now follows its new ids,
+  and so do the object's own modules, which kept the file's ids before.

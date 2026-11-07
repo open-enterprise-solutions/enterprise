@@ -36,6 +36,10 @@ public:
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
 	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
+	// #578 — a type built on a renumbered object (a reference, an object, a tabular section of it) names it by its
+	// new id; the qualifiers stay as they are.
+	virtual bool RemapIds(const class ibMetaIdRemap& remap) override;
+
 	// …and the types it may hold, as the desktop's picker offered them (ibShowTypeSelector): those the configuration
 	// offers a field of its shape, and those the value holds already — an editor does not drop what it was opened on;
 	// each by its class id (Type), named and drawn as it is offered. Several at once, but in a table's shape, one.

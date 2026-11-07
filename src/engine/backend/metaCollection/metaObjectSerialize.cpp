@@ -196,7 +196,7 @@ bool ibValueMetaObject::BuildDataNode(ibDataNode& node, int flags)
 // (factory-create by clsid + recurse), then own data via LoadNode, then the load
 // event (OnLoadMetaObject). Predefined children created in OnCreateMetaObject stay;
 // we only APPEND the serialized ones.
-bool ibValueMetaObject::ApplyDataNode(const ibDataNode& node, bool resetId)
+bool ibValueMetaObject::ApplyDataNode(const ibDataNode& node)
 {
 	for (const ibDataNode& childNode : node.Children()) {
 		// ⭐⭐ A CHILD NODE IS A CHILD METAOBJECT ONLY IF ITS CLSID SAYS SO. The id is KIND-TYPED
@@ -234,7 +234,7 @@ bool ibValueMetaObject::ApplyDataNode(const ibDataNode& node, bool resetId)
 				_("Unknown metadata class id %lld while loading subtree of '%s'"),
 				(long long)childNode.GetClsid(), GetName());
 		newMetaObject->SetMetaData(m_metaData);
-		newMetaObject->ApplyDataNode(childNode, resetId); // throws on error
+		newMetaObject->ApplyDataNode(childNode); // throws on error
 	}
 
 	if (!LoadNode(node))
@@ -242,9 +242,39 @@ bool ibValueMetaObject::ApplyDataNode(const ibDataNode& node, bool resetId)
 	if (!OnLoadMetaObject(m_metaData))
 		ibBackendCoreException::Error(_("OnLoadMetaObject failed for '%s'"), GetName());
 
-	if (resetId)
-		ResetId();
 	return true;
+}
+
+// #578 — children first, then this one; every child, the predefined ones too (an inner module carries the file's id
+// as much as an attribute does, and the old reset-on-apply never reached it).
+ibMetaIdRemap ibValueMetaObject::RenumberSubtree()
+{
+	ibMetaIdRemap remap;
+	std::vector<ibValueMetaObject*> stack{ this };
+	while (!stack.empty()) {
+		ibValueMetaObject* object = stack.back();
+		stack.pop_back();
+		for (unsigned int idx = 0; idx < object->GetChildCount(); idx++)
+			if (ibValueMetaObject* child = object->GetChild(idx))
+				stack.push_back(child);
+		const ibMetaID old = object->GetMetaID();
+		object->ResetId();
+		remap.Add(old, object->GetMetaID());
+	}
+	return remap;
+}
+
+// #578 — each object's own properties (ibPropertyObject::RemapIds walks properties, events and attached objects), then
+// its children. Every holder answers; one refusal fails the graft, as a half-remapped form would bind the host's ids.
+bool ibValueMetaObject::RemapSubtree(const ibMetaIdRemap& remap)
+{
+	if (remap.IsEmpty())
+		return true;
+	bool remapped = RemapIds(remap);
+	for (unsigned int idx = 0; idx < GetChildCount(); idx++)
+		if (ibValueMetaObject* child = GetChild(idx))
+			remapped = child->RemapSubtree(remap) && remapped;
+	return remapped;
 }
 
 bool ibValueMetaObject::DeleteSubtree()
