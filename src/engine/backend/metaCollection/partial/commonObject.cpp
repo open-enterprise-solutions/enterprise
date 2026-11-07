@@ -3989,6 +3989,50 @@ ibValueRecordSetObject::~ibValueRecordSetObject()
 // DeleteData with their per-type UPSERT / DELETE SQL.
 //----------------------------------------------------------------------
 
+// The date of the document a register line is recorded by — empty for an empty reference, or for a recorder whose
+// row is not found. Read as `Ref.Date` reads it, as a reference's PointInTime does (reference.cpp).
+static ibValue ibRecorderDateOf(const ibValue& recorder)
+{
+	ibValueReferenceDataObject* reference = nullptr;
+	if (!recorder.ConvertToValue(reference) || reference == nullptr || reference->IsEmptyRef())
+		return ibValue();
+	const ibValueMetaObjectRecordDataRecorderRef* document = nullptr;
+	if (!reference->GetMetaObject()->ConvertToValue(document) || document == nullptr)
+		return ibValue();
+	ibValue date;
+	if (!reference->GetValueByMetaID(document->GetDocumentDate()->GetMetaID(), date)
+		|| date.GetType() != ibValueTypes::TYPE_DATE)
+		return ibValue();
+	return date;
+}
+
+// ⭐ A LINE THAT SAYS NO PERIOD IS DATED BY ITS RECORDER. A set kept by a document is that document's movements, and
+// a movement happens when the document does: code that writes them names the item and the quantity and leaves the
+// period to the document (#421). Only an EMPTY period is filled — one the code put is the code's — and a set keyed
+// by its period writes every line with the key's (SaveData), so there is nothing to fill there. The recorder is the
+// one the line is written with: the set's filter when it names one, the line's own otherwise.
+static void ibFillPeriodFromRecorder(ibValueRecordSetObject& set)
+{
+	const ibValueMetaObjectRegisterData* meta = set.GetMetaObject();
+	if (meta == nullptr || !meta->HasRecorder() || !meta->HasPeriod())
+		return;
+	const ibMetaID period = meta->GetRegisterPeriod()->GetMetaID();
+	if (set.FindKeyValue(period))
+		return;
+	const ibMetaID recorder = meta->GetRegisterRecorder()->GetMetaID();
+	const bool keyed = set.FindKeyValue(recorder);
+	const ibValue keyedDate = keyed ? ibRecorderDateOf(set.GetKeyValue(recorder)) : ibValue();   // read once for every line
+	for (long row = 0; row < set.GetRowCount(); row++) {
+		ibComposerNode* node = set.GetViewData<ibComposerNode>(set.GetItem(row));
+		if (node == nullptr || !node->IsEmptyValue(period))
+			continue;
+		const ibValue date = keyed ? keyedDate
+			: (node->HasColumnValue(recorder) ? ibRecorderDateOf(node->GetTableValue(recorder)) : ibValue());
+		if (!date.IsEmpty())
+			node->SetValue(period, date, true);
+	}
+}
+
 bool ibValueRecordSetObject::WriteRecordSet(bool replace, bool clearTable)
 {
 	ibConnectionScope scope = ibSession::Current()->OpenConnectionScope();
@@ -4007,6 +4051,10 @@ bool ibValueRecordSetObject::WriteRecordSet(bool replace, bool clearTable)
 			return false;
 		}
 	}
+
+	// After BeforeWrite, which may still add lines; before SaveData, whose fill check would refuse an empty period and
+	// whose leaves (a periodic information register) truncate the period first.
+	ibFillPeriodFromRecorder(*this);
 
 	// SaveData already reports a failed fill check per line ("The %s is required on line %i");
 	// this names the register whose rows could not be stored.

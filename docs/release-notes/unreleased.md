@@ -310,6 +310,9 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   "Invalid field type".
 - **An accumulation register's turnovers, and balance and turnovers, by `Recorder` or `Record` leave out the lines
   that are not active.** They counted them, as no other reading of the register does.
+- **A register line written by its recorder with no period takes the recorder's date.** A document's register
+  records written with an empty `Period` were refused with "The Period is required on line 1"; a period the code
+  sets is kept, and a periodic information register truncates the recorder's date to its own unit.
 - **The lock sweep does not wait for a key somebody is taking.** A client starting while the designer swept the lock
   keys held the sweep behind its module compile, and the sweep gave up the rest of the keys with "update conflicts
   with concurrent update". A key held at that moment is left for the next pass, and the others are swept.
