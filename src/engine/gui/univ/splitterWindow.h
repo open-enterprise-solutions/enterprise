@@ -263,9 +263,6 @@ protected:
     // set the cursor appropriate for the current split mode
     void SetResizeCursor();
 
-    // redraw the splitter if its "hotness" changed if necessary
-    void RedrawIfHotSensitive(bool isHot);
-
     // return the best size of the splitter equal to best sizes of its
     // subwindows
     virtual wxSize DoGetBestSize() const override;
@@ -293,7 +290,6 @@ protected:
     // when in live mode, set this to true to resize children in idle
     bool        m_needUpdating:1;
     bool        m_permitUnsplitAlways:1;
-    bool        m_isHot:1;
 
 private:
     wxDECLARE_DYNAMIC_CLASS(ibSplitterWindow);

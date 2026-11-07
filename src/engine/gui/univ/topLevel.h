@@ -13,6 +13,7 @@
 #ifndef _GUI_UNIV_TOPLEVEL_H_
 #define _GUI_UNIV_TOPLEVEL_H_
 
+#include "gui/univ/colourScheme.h"
 #include "gui/univ/renderer.h"
 #include "gui/univ/theme.h"
 
@@ -184,6 +185,13 @@ bool ibTopLevelWindow<W>::Create(wxWindow *parent,
         return false;
 
     this->m_windowStyle = (this->m_windowStyle & ~s_decorations) | (style & s_decorations);
+
+    // the theme's surface, not the platform's: a native window's default is the system's colour (BTNFACE on MSW, the
+    // appearance's on macOS - black there, under Luna's black text), the palette's for a dialog is chrome (FRAME,
+    // docs/private/ui-palette.md). Its OWN colour, so the labels on it take it (ibLunaColourScheme::GetBackground)
+    // and one set on the window afterwards wins
+    if ( !this->UseBgCol() )
+        this->SetOwnBackgroundColour(ibThemeEngine::Get()->GetColourScheme()->Get(ibColourScheme::FRAME));
 
     // wx's native dialog with no place given stands by its owner's corner (wxTopLevelWindowMSW::CreateDialog) - centred
     // here, at the size it is made with; one fitted afterwards centres itself again (ibMessageDialog)

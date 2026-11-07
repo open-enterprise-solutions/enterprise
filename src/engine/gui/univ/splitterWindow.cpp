@@ -90,7 +90,6 @@ void ibSplitterWindow::Init()
     m_sashCursorNS = wxCursor(wxCURSOR_SIZENS);
 
     m_needUpdating = false;
-    m_isHot = false;
 }
 
 ibSplitterWindow::~ibSplitterWindow()
@@ -101,30 +100,15 @@ ibSplitterWindow::~ibSplitterWindow()
 // entering/leaving sash
 // ----------------------------------------------------------------------------
 
-void ibSplitterWindow::RedrawIfHotSensitive(bool isHot)
-{
-    if ( wxRendererNative::Get().GetSplitterParams(this).isHotSensitive )
-    {
-        m_isHot = isHot;
-
-        wxClientDC dc(this);
-        DrawSash(dc);
-    }
-    //else: we don't change our appearance, don't redraw to avoid flicker
-}
-
+// SEAM vs wx: the sash does not light up under the mouse - it is the background (DrawSash); the cursor shows it
 void ibSplitterWindow::OnEnterSash()
 {
     SetResizeCursor();
-
-    RedrawIfHotSensitive(true);
 }
 
 void ibSplitterWindow::OnLeaveSash()
 {
     SetCursor(*wxSTANDARD_CURSOR);
-
-    RedrawIfHotSensitive(false);
 }
 
 void ibSplitterWindow::SetResizeCursor()
@@ -552,16 +536,13 @@ void ibSplitterWindow::DrawSash(wxDC& dc)
     if ( IsSashInvisible() )
         return;
 
-    wxRendererNative::Get().DrawSplitterSash
-                            (
-                                this,
-                                dc,
-                                GetClientSize(),
-                                m_sashPosition,
-                                m_splitMode == wxSPLIT_VERTICAL ? wxVERTICAL
-                                                                : wxHORIZONTAL,
-                                m_isHot ? (int)wxCONTROL_CURRENT : 0
-                            );
+    // SEAM vs wx: the sash is the window's own background, the theme's (ibWindow::EraseBackground) - wxMSW's is the
+    // dialog's face too, but the system's (BTNFACE): a light bar between the panes on Luna's chrome, and macOS draws
+    // its own divider
+    const wxSize size = GetClientSize();
+    EraseBackground(dc, m_splitMode == wxSPLIT_VERTICAL
+                            ? wxRect(m_sashPosition, 0, GetSashSize(), size.y)
+                            : wxRect(0, m_sashPosition, size.x, GetSashSize()));
 }
 
 // Draw the sash tracker (for whilst moving the sash)

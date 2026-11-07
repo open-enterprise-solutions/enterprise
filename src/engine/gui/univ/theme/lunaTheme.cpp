@@ -34,6 +34,8 @@ const wxColour kContent(0xFA, 0xF7, 0xF0);       // content       #FAF7F0
 const wxColour kBorder(0xA8, 0xBA, 0xC8);        // border        #A8BAC8
 const wxColour kCaptionTop(0x5A, 0x7B, 0x95);    // caption-active-top
 const wxColour kCaptionBottom(0x3F, 0x5C, 0x77); // caption-active-bottom
+const wxColour kCaptionInactiveTop(0xD8, 0xE2, 0xEB);    // caption-inactive-top
+const wxColour kCaptionInactiveBottom(0xC5, 0xD2, 0xDC); // caption-inactive-bottom
 const wxColour kAccent(0xD9, 0x77, 0x57);        // accent        #D97757
 const wxColour kAccentDeep(0xB8, 0x5A, 0x38);    // accent-deep   #B85A38
 
@@ -43,6 +45,11 @@ const wxColour kAccentDeep(0xB8, 0x5A, 0x38);    // accent-deep   #B85A38
 const wxCoord MENU_LEFT_MARGIN = 22;
 const wxCoord MENU_RIGHT_MARGIN = 24;
 const wxCoord MENU_VERT_MARGIN = 5;
+
+// the empty strip at each of the menu's four sides: the items, their highlight and the separators stand inside it -
+// drawn from the border, the highlight ran edge to edge and touched the border above the first item and below the
+// last, and the pictures stood 5 px off it (2026-11-07)
+const wxCoord MENU_SIDE_MARGIN = 4;
 
 // the margin around bitmap/check marks (on each side)
 const wxCoord MENU_BMP_MARGIN = 2;
@@ -158,8 +165,9 @@ wxColour ibLunaColourScheme::GetBackground(ibWindow* win) const {
 
 	// highlightable controls (buttons and friends) take the control colour
 	// modulated by state — pressed must be UNMISTAKABLE (a toggle button
-	// stays pressed, the old chrome-8% shade was nearly invisible)
-	if (win->CanBeHighlighted()) {
+	// stays pressed, the old chrome-8% shade was nearly invisible); one whose
+	// face is not its background (a check box: the box) takes the surface
+	if (win->CanBeHighlighted() && !win->HasTransparentBackground()) {
 		const int flags = win->GetStateFlags();
 		if (flags & wxCONTROL_PRESSED)
 			return kAccent.ChangeLightness(172);
@@ -170,16 +178,18 @@ wxColour ibLunaColourScheme::GetBackground(ibWindow* win) const {
 
 	// label-like statics and the containers they sit on take the surface under them - the colour set on the nearest
 	// window up the chain the background shows through (wxMSW's MSWGetBgBrush: on through a transparent window, to one
-	// that is not), else their own. A parent's colour that is only its default is not that surface: an MDI child is a
-	// frame, its default the workspace grey, and the home page's panes (ibPanel, transparent under the MDI client's
-	// colour) drew it in their header gaps while their labels drew the panel's own.
+	// that is not), else the theme's chrome. A parent's colour that is only its default is not that surface: an MDI
+	// child is a frame, its default the workspace grey, and the home page's panes (ibPanel, transparent under the MDI
+	// client's colour) drew it in their header gaps while their labels drew the panel's own. Nor is the window's own
+	// default, the platform's: black on macOS, grey beside a dialog's chrome on Windows - the chrome a dialog takes
+	// (ibTopLevelWindow::Create). Content (a tree, a list, a grid) paints its own background, not through here.
 	for (wxWindow* parent = win->GetParent(); parent != nullptr; parent = parent->GetParent()) {
 		if (parent->UseBgCol())
 			return parent->GetBackgroundColour();
 		if (!parent->HasTransparentBackground() || parent->IsTopLevel())
 			break;
 	}
-	return win->GetBackgroundColour();
+	return Get(FRAME);
 }
 
 // ----------------------------------------------------------------------------
@@ -519,9 +529,9 @@ public:
 			(const ibLunaMenuGeometryInfo&)gi;
 
 		wxRect rect;
-		rect.x = 0;
+		rect.x = MENU_SIDE_MARGIN;
 		rect.y = y;
-		rect.width = geometryInfo.GetSize().x;
+		rect.width = geometryInfo.GetSize().x - 2 * MENU_SIDE_MARGIN;
 		rect.height = geometryInfo.GetItemHeight();
 
 		// draw the selected item specially
@@ -555,14 +565,14 @@ public:
 
 		// draw the accel string
 		rect.x = geometryInfo.GetAccelOffset();
-		rect.SetRight(geometryInfo.GetSize().x);
+		rect.SetRight(geometryInfo.GetSize().x - MENU_SIDE_MARGIN);
 
 		// NB: no accel index here
 		DrawLabel(dc, accel, rect, flags, wxALIGN_CENTRE_VERTICAL);
 
 		// draw the submenu indicator
 		if (flags & wxCONTROL_ISSUBMENU) {
-			rect.x = geometryInfo.GetSize().x - MENU_RIGHT_MARGIN;
+			rect.x = geometryInfo.GetSize().x - MENU_SIDE_MARGIN - MENU_RIGHT_MARGIN;
 			rect.width = MENU_RIGHT_MARGIN;
 
 			DrawArrow(dc, wxRIGHT, rect, flags);
@@ -572,7 +582,7 @@ public:
 	virtual void DrawMenuSeparator(wxDC& dc, wxCoord y,
 		const ibMenuGeometryInfo& geomInfo) override {
 		dc.SetPen(wxPen(m_scheme->Get(ibColourScheme::SHADOW_IN)));
-		dc.DrawLine(0, y + MENU_VERT_MARGIN, geomInfo.GetSize().x,
+		dc.DrawLine(MENU_SIDE_MARGIN, y + MENU_VERT_MARGIN, geomInfo.GetSize().x - MENU_SIDE_MARGIN,
 			y + MENU_VERT_MARGIN);
 	}
 
@@ -642,8 +652,8 @@ public:
 		// the height of a normal item
 		wxCoord heightText = dc.GetCharHeight();
 
-		// the total height
-		wxCoord height = 0;
+		// the total height, from below the empty strip at the top
+		wxCoord height = MENU_SIDE_MARGIN;
 
 		// the max length of label and accel strings: the menu width is the
 		// sum of them, even if they're for different items (as the accels
@@ -701,7 +711,7 @@ public:
 		// bundle the metrics into a struct and return it
 		ibLunaMenuGeometryInfo* gi = new ibLunaMenuGeometryInfo;
 
-		gi->m_ofsLabel = widthBmpMax + 2 * MENU_BMP_MARGIN;
+		gi->m_ofsLabel = MENU_SIDE_MARGIN + widthBmpMax + 2 * MENU_BMP_MARGIN;
 		gi->m_ofsAccel = gi->m_ofsLabel + widthLabelMax;
 		if (widthAccelMax > 0) {
 			// if we actually have any accels, add a margin
@@ -710,8 +720,8 @@ public:
 
 		gi->m_heightItem = heightText + 2 * MENU_VERT_MARGIN;
 
-		gi->m_size.x = gi->m_ofsAccel + widthAccelMax + MENU_RIGHT_MARGIN;
-		gi->m_size.y = height;
+		gi->m_size.x = gi->m_ofsAccel + widthAccelMax + MENU_RIGHT_MARGIN + MENU_SIDE_MARGIN;
+		gi->m_size.y = height + MENU_SIDE_MARGIN;
 
 		return gi;
 	}
@@ -860,9 +870,12 @@ void ibLunaRenderer::DrawFrameBackground(wxDC& dc, const wxRect& rect, int flags
 	const wxRect client = GetFrameClientArea(rect, flags);
 	const wxRect band(rect.x + line, rect.y + line, rect.width - 2 * line, client.y - rect.y - line);
 
-	const wxColour caption = wxSystemSettings::GetColour((flags & wxTOPLEVEL_ACTIVE) ? wxSYS_COLOUR_ACTIVECAPTION
-		: wxSYS_COLOUR_INACTIVECAPTION);
-	dc.GradientFillLinear(band, caption, caption.ChangeLightness(120), wxEAST);
+	// the palette's captions, the panes' (luna_dockart): the active one dusty blue under its white title, the inactive
+	// one light under its blue title. The system's caption colour lightening to the right was a pale blue the white
+	// title hardly showed on (Max, 2026-11-07), and the platform's, not the theme's
+	const bool active = (flags & wxTOPLEVEL_ACTIVE) != 0;
+	dc.GradientFillLinear(band, active ? kCaptionTop : kCaptionInactiveTop,
+		active ? kCaptionBottom : kCaptionInactiveBottom, wxSOUTH);
 }
 
 void ibLunaRenderer::DrawFrameButton(wxDC& dc, wxCoord x, wxCoord y, int button, int flags) {
@@ -874,10 +887,11 @@ void ibLunaRenderer::DrawFrameButton(wxDC& dc, wxCoord x, wxCoord y, int button,
 		dc.DrawRectangle(face);
 	}
 
-	// the glyph in a square of 8 pixels in the middle
+	// the glyph in a square of 8 pixels in the middle, in the title's colour - DrawFrameTitle sets it just before the
+	// buttons: white on the active caption, blue on the inactive one
 	const int side = 8;
 	const wxRect glyph(face.x + (face.width - side) / 2, face.y + (face.height - side) / 2, side, side);
-	dc.SetPen(wxPen(kCaptionBottom));
+	dc.SetPen(wxPen(dc.GetTextForeground()));
 	dc.SetBrush(*wxTRANSPARENT_BRUSH);
 	switch (button) {
 	case wxTOPLEVEL_BUTTON_CLOSE:
@@ -897,7 +911,6 @@ void ibLunaRenderer::DrawFrameButton(wxDC& dc, wxCoord x, wxCoord y, int button,
 		dc.DrawLine(glyph.GetLeft(), glyph.GetBottom(), glyph.GetRight() + 1, glyph.GetBottom());
 		break;
 	case wxTOPLEVEL_BUTTON_HELP:
-		dc.SetTextForeground(kCaptionBottom);
 		dc.DrawLabel(wxT("?"), face, wxALIGN_CENTRE);
 		break;
 	}

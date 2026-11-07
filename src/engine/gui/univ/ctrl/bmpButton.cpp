@@ -55,8 +55,10 @@ bool ibBitmapButton::Create(wxWindow *parent,
     // we add wxBU_EXACTFIT because the bitmap buttons are not the standard
     // ones and so shouldn't be forced to be of the standard size which is
     // typically too big for them
+    // SEAM vs univ: and wxBU_NOTEXT, as wx's wxBitmapButtonBase::Create - a picture alone; a stock id gave it the
+    // stock label beside the picture, fitted exactly ("Up" and "Down" of the choice links, each its own width)
     return ibButton::Create(parent, id, bitmap, wxEmptyString,
-                            pos, size, style | wxBU_EXACTFIT, validator, name);
+                            pos, size, style | wxBU_EXACTFIT | wxBU_NOTEXT, validator, name);
 }
 
 #endif // wxUSE_BMPBUTTON

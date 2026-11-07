@@ -213,16 +213,17 @@ wxSize ibButton::DoGetBestClientSize() const
     // SEAM vs univ (sizing rules per the design directive):
     //  - the HEIGHT of every default-sized button is the standard one — the
     //    uniform control-row height;
-    //  - the WIDTH follows the label (plus breathing room); the standard
-    //    width applies only when there is nothing to measure
+    //  - the WIDTH follows the label (plus breathing room) and is never less
+    //    than the standard one, as univ's and wxMSW's: a short label was as
+    //    narrow as its word; a picture alone keeps its own width
     if ( !(GetWindowStyle() & wxBU_EXACTFIT) )
     {
         const wxSize szDef = GetDefaultSize();
 
         if ( width > 0 )
             width += 2*dc.GetCharWidth();   // label padding
-        else
-            width = szDef.x;                // empty button: standard width
+        if ( width < szDef.x && !(bmp.IsOk() && label.empty()) )
+            width = szDef.x;                // the standard width at least
 
         if ( height < szDef.y )
             height = szDef.y;

@@ -2119,6 +2119,12 @@ void ibListHeaderWindow::OnInternalIdle()
     {
         m_owner->SetColumnWidth( m_colToSend, m_widthToSend );
         m_sendSetColumnWidth = false;
+
+        // SEAM vs wx: lay the rows out and refresh them with the header now. The control's idle, which does it for
+        // every other change (ibListCtrl::OnInternalIdle), came before this one - a parent's idle runs before its
+        // children's - so the width being dragged waited for the next message, and each paint met the rows still
+        // dirty: they stood still until the mouse was let go
+        m_owner->RecalculatePositionsAndRefresh();
     }
 }
 

@@ -560,14 +560,15 @@ ibPopupMenuWindow::GetMenuItemFromPoint(const wxPoint& pt) const
     // outside the window completely
     if ( HitTest(pt) == wxHT_WINDOW_INSIDE )
     {
-        wxCoord y = 0;
+        // SEAM vs univ: the item's own place, as the theme laid it out (GetMenuGeometry) - not the heights summed
+        // from the top, which knew of no empty strip above the first item
+        (void)m_menu->GetGeometryInfo();
         for ( ibMenuItemIter node = m_menu->GetMenuItems().GetFirst();
               node;
               node = node->GetNext() )
         {
             ibMenuItem *item = ibItem(node->GetData());
-            y += item->GetHeight();
-            if ( y > pt.y )
+            if ( pt.y >= item->GetPosition() && pt.y < item->GetPosition() + item->GetHeight() )
             {
                 // found
                 return node;
@@ -618,13 +619,16 @@ void ibPopupMenuWindow::DoDraw(wxDC& dc, ibRenderer *rend)
     //        ibPopupMenuWindow::RefreshItem() should be changed too!
     dc.SetLogicalOrigin(1, 1);
 
-    wxCoord y = 0;
     const ibMenuGeometryInfo& gi = m_menu->GetGeometryInfo();
     for ( ibMenuItemIter node = m_menu->GetMenuItems().GetFirst();
           node;
           node = node->GetNext() )
     {
         ibMenuItem *item = ibItem(node->GetData());
+
+        // SEAM vs univ: at its own place, as the theme laid it out (GetMenuGeometry) and the mouse finds it
+        // (GetMenuItemFromPoint) - not the heights summed from the top
+        const wxCoord y = item->GetPosition();
 
         if ( item->IsSeparator() )
         {
@@ -679,8 +683,6 @@ void ibPopupMenuWindow::DoDraw(wxDC& dc, ibRenderer *rend)
                      item->GetAccelIndex()
                   );
         }
-
-        y += item->GetHeight();
     }
 }
 

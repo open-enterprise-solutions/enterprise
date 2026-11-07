@@ -119,6 +119,11 @@ public:
                                const wxString& strArg = wxEmptyString) override;
 
     virtual bool CanBeHighlighted() const override { return true; }
+
+    // its face is its box; the label stands on the surface under it - not on a button's face, which under Luna is
+    // blue (ibLunaColourScheme::GetBackground), not the dialog's grey it was under win32
+    virtual bool HasTransparentBackground() override { return true; }
+
     virtual ibInputHandler *CreateStdInputHandler(ibInputHandler *handlerDef);
     virtual ibInputHandler *DoGetStdInputHandler(ibInputHandler *handlerDef) override
     {

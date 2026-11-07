@@ -8,9 +8,11 @@
 #include <algorithm>
 
 #include <wx/dcbuffer.h>
-#include <wx/settings.h>
 #include <wx/sizer.h>
 
+#include "gui/univ/renderer.h"
+#include "gui/univ/theme.h"
+#include "gui/univ/topLevel.h"   // wxTOPLEVEL_xxx - what the caption is drawn as
 #include "frmclient/backend/backend_picture.h"
 #include "res/visualResource.h"   // the caption's window buttons
 
@@ -34,7 +36,9 @@ ibInnerFrame::ibInnerFrame(wxWindow* parent, wxWindowID id, const wxPoint& pos, 
 	m_maximizeButton(FrameButton(s_frameMaximize_png)),
 	m_minimizeButton(FrameButton(s_frameMinimize_png))
 {
-	m_titleBar->SetMinSize(wxSize(100, 19));
+	// a dialog's caption height - the theme's
+	m_titleBar->SetMinSize(wxSize(100,
+		ibThemeEngine::Get()->GetRenderer()->GetFrameTotalSize(wxSize(), wxTOPLEVEL_TITLEBAR).y));
 	m_titleBar->SetBackgroundStyle(wxBG_STYLE_PAINT);
 	m_titleBar->Bind(wxEVT_PAINT, &ibInnerFrame::OnPaintTitleBar, this);
 	m_titleBar->Bind(wxEVT_LEFT_DOWN, &ibInnerFrame::OnTitleBarLeftDown, this);
@@ -131,9 +135,9 @@ void ibInnerFrame::OnPaintTitleBar(wxPaintEvent&)
 	const wxRect bar = m_titleBar->GetClientRect();
 	const int margin = FromDIP(2);
 
-	// The system's caption colour, lightening to the right.
-	const wxColour caption = wxSystemSettings::GetColour(wxSYS_COLOUR_ACTIVECAPTION);
-	dc.GradientFillLinear(bar, caption, caption.ChangeLightness(120), wxEAST);
+	// The theme's caption, as a dialog's title bar is painted: the bar is a frame's caption with no border and
+	// nothing under it. The system's caption colour, lightening to the right, left the white title on a pale blue.
+	ibThemeEngine::Get()->GetRenderer()->DrawFrameBackground(dc, bar, wxTOPLEVEL_TITLEBAR | wxTOPLEVEL_ACTIVE);
 
 	// The window buttons the style asks for, from the right edge inwards.
 	int buttonsLeft = bar.GetRight() - margin;
