@@ -2291,10 +2291,11 @@ TEST(RuntimeTest, AStringSumIntoASlotHoldingAReferenceReleasesItOnce) {
 		wxT("  slot = \"n=\" + 1;\n")
 		wxT("EndProcedure\n")));
 
+	// Before the unit: the unit's frame releases the probe when it ends, and the probe counts into this.
+	int destroyed = 0;
 	ibProcUnit pu;
 	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
 
-	int destroyed = 0;
 	ASSERT_TRUE(pu.SetPropVal(wxT("keep"), ibValue(static_cast<ibValue*>(new ReleaseProbe(&destroyed)))));
 	pu.CallAsProc(wxT("Run"));
 
