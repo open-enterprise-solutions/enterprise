@@ -232,6 +232,7 @@
     <ClInclude Include="metaCollection\partial\dataReport.h" />
     <ClInclude Include="metaCollection\partial\dataReportManager.h" />
     <ClInclude Include="metaCollection\partial\document.h" />
+    <ClInclude Include="metaCollection\partial\documentNumerator.h" />
     <ClInclude Include="metaCollection\partial\documentEnum.h" />
     <ClInclude Include="metaCollection\partial\documentManager.h" />
     <ClInclude Include="metaCollection\partial\enumeration.h" />
@@ -318,6 +319,7 @@
     <ClInclude Include="propertyManager\property\propertyNumber.h" />
     <ClInclude Include="propertyManager\property\propertyList.h" />
     <ClInclude Include="propertyManager\property\propertyOwner.h" />
+    <ClInclude Include="propertyManager\property\propertyMetaObjectChoice.h" />
     <ClInclude Include="propertyManager\property\propertyChartOfCharacteristicTypes.h" />
     <ClInclude Include="propertyManager\property\propertyAccountingKind.h" />
     <ClInclude Include="propertyManager\property\propertyChartOfAccounts.h" />
@@ -709,6 +711,8 @@
     <ClCompile Include="metaCollection\partial\documentMetadataMenu.cpp" />
     <ClCompile Include="metaCollection\partial\documentMetadataProperty.cpp" />
     <ClCompile Include="metaCollection\partial\documentMetadata_res.cpp" />
+    <ClCompile Include="metaCollection\partial\documentNumeratorMetadata.cpp" />
+    <ClCompile Include="metaCollection\partial\documentNumeratorMetadata_res.cpp" />
     <ClCompile Include="metaCollection\partial\documentObject.cpp" />
     <ClCompile Include="metaCollection\partial\enumerationManager.cpp" />
     <ClCompile Include="metaCollection\partial\enumerationMetadata.cpp" />
@@ -821,6 +825,7 @@
     <ClCompile Include="propertyManager\property\propertyNumber.cpp" />
     <ClCompile Include="propertyManager\property\propertyList.cpp" />
     <ClCompile Include="propertyManager\property\propertyOwner.cpp" />
+    <ClCompile Include="propertyManager\property\propertyMetaObjectChoice.cpp" />
     <ClCompile Include="propertyManager\property\propertyChartOfCharacteristicTypes.cpp" />
     <ClCompile Include="propertyManager\property\propertyAccountingKind.cpp" />
     <ClCompile Include="propertyManager\property\propertyChartOfAccounts.cpp" />

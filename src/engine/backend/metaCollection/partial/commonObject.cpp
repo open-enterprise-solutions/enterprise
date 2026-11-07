@@ -3367,12 +3367,16 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 			SetValueByMetaID(*date, ibValueSystemFunction::CurrentDate());
 	}
 
+	bool generated = false;
 	if (!IsSetUniqueIdentifier()) {
 		ibValue prefix = ibEmptyString, standartProcessing = true;
 		ExecAsEvent(ibT("SetNewNumber"), prefix, standartProcessing);
 		if (standartProcessing.GetBoolean())
-			GenerateUniqueIdentifier(prefix.GetString());
+			generated = GenerateUniqueIdentifier(prefix.GetString());
 	}
+
+	// The number is settled — generated, typed, or given by the handler — and nothing is stored yet.
+	RefuseTakenNumber(generated);
 
 	if (!SaveData())
 		return refuse(_("%s: failed to save the object data"));

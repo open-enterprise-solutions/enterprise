@@ -145,6 +145,9 @@ constexpr ibClassID g_metaRecalculationCLSID = metadata_to_clsid("MD_RCLC");   /
 // SEQUENCES — up to which point the documents of a key have been posted in order (sequence-arc.md)
 constexpr ibClassID g_metaSequenceCLSID = metadata_to_clsid("MD_SEQN");
 
+// DOCUMENT NUMERATORS — one number series several document kinds take their numbers from (document-numerators.md)
+constexpr ibClassID g_metaDocumentNumeratorCLSID = metadata_to_clsid("MD_DNUM");
+
 // EXTERNAL
 constexpr ibClassID g_metaExternalDataProcessorCLSID = metadata_to_clsid("MD_EDPR");
 constexpr ibClassID g_metaExternalReportCLSID = metadata_to_clsid("MD_ERPT");
@@ -604,6 +607,11 @@ public:
 	virtual bool OnLoadMetaObject(ibMetaData* metaData);
 	virtual bool OnSaveMetaObject(int flags) { return true; }
 	virtual bool OnDeleteMetaObject();
+	// AN OBJECT OTHERS STAND ON REFUSES TO GO — asked by ibMetaData::RemoveMetaObject BEFORE anything is closed,
+	// so a refusal leaves the object exactly as it was. It raises (ibBackendCoreException) with a sentence that
+	// names the object and the first one that needs it; the designer's verb and MCP hand that sentence back.
+	// The default stands on nothing. (OnDeleteMetaObject is too late for it: the close phases have run.)
+	virtual void RefuseDelete() const {}
 	virtual bool OnRenameMetaObject(const ibString& sNewName) { return true; }
 
 	//for designer 

@@ -4,6 +4,9 @@
 #include "commonObject.h"
 
 #include "documentEnum.h"
+#include "backend/propertyManager/property/propertyMetaObjectChoice.h"
+
+class ibValueMetaObjectDocumentNumerator;
 
 //********************************************************************************************
 //*                                  Factory & metaData                                      *
@@ -40,9 +43,11 @@ public:
 	// Year / quarter / month / day: the next number is the next one inside that period of the
 	// document's date. Nonperiodical (the default, and every document saved before the setting
 	// existed) keeps the one series the document already had.
-	virtual ibNumberPeriodicity GetNumberPeriodicity() const override {
-		return m_propertyNumberPeriodicity->GetValueAsEnum();
-	}
+	// …unless the document numbers from a NUMERATOR, which then says it for every document of its series.
+	virtual ibNumberPeriodicity GetNumberPeriodicity() const override;
+
+	// The numerator this document takes its numbers from, or null: a series of its own (documentNumerator.h).
+	const ibValueMetaObjectDocumentNumerator* GetNumerator() const;
 
 
 	//default constructor
@@ -68,6 +73,8 @@ public:
 	/**
 	* Property events
 	*/
+	// While a numerator is named, the document's own periodicity and Number type give way to it and are not shown.
+	virtual void OnPropertyRefresh() override;
 	virtual void OnPropertyCreated(ibProperty* property);
 	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue);
 	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue);
@@ -192,6 +199,13 @@ private:
 	//create default attributes
 	ibPropertyPredefined<>* m_propertyAttributePosted = ibPropertyObject::CreateProperty<ibPropertyPredefined<>>(m_categoryPredefined, ibValueMetaObjectCompositeData::CreateBoolean(ibT("Posted"), _("Posted"), _("Set by the platform while the document is posted - its movements stand in the registers. Written by posting and by undoing it, never by hand.")));
 
+	// ⭐ ONE SERIES FOR SEVERAL KINDS (#622). Named: this document takes the next number of the numerator's series, of
+	// the numerator's type, checked against every document that names it; its own periodicity and Number type wait.
+	ibPropertyMetaObjectChoice* m_propertyNumerator = ibPropertyObject::CreateProperty<ibPropertyMetaObjectChoice>(m_categoryData, ibT("Numerator"), _("Numerator"), _("The document numerator this document takes its numbers from. Empty (the default): the document numbers on its own. Named: its numbers are the next ones of the numerator's series, shared with every document that names the same numerator, of the numerator's type and length and restarting with the numerator's periodicity - this document's own Number periodicity and Number type are not used while it is set."), g_metaDocumentNumeratorCLSID);
+
+	// Hands the document's Number to the numerator's type, or takes it back — on run and when Numerator changes.
+	void RestateNumerator();
+
 	ibPropertyEnum<ibValueEnumNumberPeriodicity>* m_propertyNumberPeriodicity = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumNumberPeriodicity>>(m_categoryData, ibT("NumberPeriodicity"), _("Number periodicity"), _("When the document's numbers start again. Nonperiodical (the default): one series for the life of the document. Year, quarter, month or day: the next number is the next one inside that period of the document's date, and a new period starts again at one. A document saved before this setting existed stays nonperiodical, on the series it already has."), ibNumberPeriodicity::ibNumberPeriodicity_Nonperiodical);
 
 	friend class ibValueRecordDataObjectDocument;
@@ -250,6 +264,14 @@ protected:
 
 	// The series the next number is taken from: the document's date, folded to its periodicity.
 	virtual ibNumberSeriesKey NumberSeriesKey() const override;
+
+	// Bound to a numerator that checks: a number another document of the series has in this period is refused,
+	// naming that document. Under the series row, so two writers of one series are checked one after the other.
+	virtual void RefuseTakenNumber(bool generated) override;
+
+	// The metaobject as the DOCUMENT it is: this object is constructed from one and from nothing else (the ctor
+	// takes an ibValueMetaObjectDocument), so the recorder base's pointer is narrowed by construction, not tested.
+	const ibValueMetaObjectDocument* GetDocumentMetaObject() const { return static_cast<const ibValueMetaObjectDocument*>(GetMetaObject()); }
 public:
 
 	//support actionData

@@ -785,6 +785,9 @@ bool ibMetaData::RemoveMetaObject(ibValueMetaObject* object, ibValueMetaObject* 
 	if (!IsEditable())   // see CreateMetaObject — the rule lives in the door
 		return false;
 
+	// What stands on it is asked first — a refusal raises with the reason, and nothing has been closed yet.
+	object->RefuseDelete();
+
 	// Both close phases — symmetric with CreateMetaObject's Before+After run phases.
 	// The before-hook carries the real teardown (RemoveCompileModule /
 	// RemoveCommonModule from the compile cache + module storage); skipping it left
