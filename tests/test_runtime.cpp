@@ -3887,6 +3887,41 @@ TEST(RuntimeTest, AColumnUnloadedIntoAnArraySumsAndAveragesItsNumbers) {
 	EXPECT_EQ(6, v.GetInteger());
 }
 
+// Issue #416: whether a table has a column was answerable only by trying to read it. The column
+// collection now answers Find(name) — the column, in any case, or Undefined — and Count(). The two
+// verbs it had before keep working after them (a method number is a position in the member table).
+TEST(RuntimeTest, TableColumnsFindAColumnByNameOrAnswerUndefined) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var found public; var foundName public; var missing public; var before public; var after public;\n")
+		wxT("var t; t = New Table;\n")
+		wxT("t.Columns.AddColumn(\"Amount\");\n")
+		wxT("t.Columns.AddColumn(\"Note\");\n")
+		wxT("before = t.Columns.Count();\n")
+		wxT("var col; col = t.Columns.Find(\"amount\");\n")
+		wxT("found = col <> Undefined;\n")
+		wxT("foundName = col.Name;\n")
+		wxT("missing = t.Columns.Find(\"Price\") = Undefined;\n")
+		wxT("t.Columns.RemoveColumn(\"Note\");\n")
+		wxT("after = t.Columns.Count();\n")));
+
+	ibProcUnit pu;
+	ibString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("before"), v));
+	EXPECT_EQ(2, v.GetInteger());
+	ASSERT_TRUE(pu.GetPropVal(wxT("found"), v));
+	EXPECT_TRUE(v.GetBoolean());
+	ASSERT_TRUE(pu.GetPropVal(wxT("foundName"), v));
+	EXPECT_EQ(ibT("Amount"), v.GetString());
+	ASSERT_TRUE(pu.GetPropVal(wxT("missing"), v));
+	EXPECT_TRUE(v.GetBoolean());
+	ASSERT_TRUE(pu.GetPropVal(wxT("after"), v));
+	EXPECT_EQ(1, v.GetInteger());
+}
+
 TEST(RuntimeTest, AnArrayWalkedAndRewalkedIsLetGoOfOnce) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	ASSERT_TRUE(TryCompile(cc,

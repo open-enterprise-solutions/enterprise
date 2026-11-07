@@ -358,8 +358,27 @@ public:
 		virtual ibValueModelColumnInfo* GetColumnInfo(unsigned int idx) const = 0;
 		virtual unsigned int GetColumnCount() const = 0;
 
-		ibValueModelColumnCollection() : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true) {}
+		// WHAT EVERY COLUMN COLLECTION ANSWERS A SCRIPT — Count() and Find(name), the column or Undefined. Both
+		// are read off the two questions above, so they are the collection's, whatever kind it is; a collection
+		// that also changes its columns (the value table's) appends its own verbs after these.
+		virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) override;
+
+		ibValueModelColumnCollection() : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true) {
+			m_members.Bind(this, &ibValueModelColumnCollection::FillColumnMembers);
+		}
 		virtual ~ibValueModelColumnCollection() {}
+
+	protected:
+		// A METHOD NUMBER IS A POSITION in the member table: these come first, and a derived collection's
+		// own verbs start at enColumnFuncs.
+		enum ColumnFunc {
+			enColumnCount = 0,
+			enColumnFind,
+			enColumnFuncs
+		};
+
+		void FillColumnMembers(ibMemberTable& helper) const;   // bound in ctor
+	public:
 
 		//Working with iterators
 		virtual std::shared_ptr<ibValueIteratorState> CreateIterator() override {
