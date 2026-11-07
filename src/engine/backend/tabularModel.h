@@ -786,6 +786,10 @@ public:
 		return colCollection != nullptr ? colCollection->GetColumnType(id) : ibTypeDescription();
 	}
 
+	// …and which columns are linked to `edited` — off the same collection, each judged by what this table
+	// says governs it (ibTabularDataObject::GetTypeLink). Body in tabularModel.cpp.
+	virtual std::vector<ibMetaID> GetLinked(const ibMetaID& edited) const override;
+
 	//set meta/get meta
 	virtual ibMetaID GetColumnIDByName(const ibString colName) const {
 		ibValueModelColumnCollection* colCollection = GetColumnCollection();
@@ -1285,8 +1289,8 @@ public:
 
 	/////////////////////////////////////////////////////////
 
-	// (Row count / row access GetRowCount / GetRow / GetItem are declared LOWER as virtual DB-defaults — a DB
-	// model has NO stored rows; ibValueModelStorage overrides them to read its ibRamValueStorage.)
+	// (Row count / row access GetRowCount / GetItem are ibTabularDataObject's, GetRow is declared LOWER — virtual
+	// DB-defaults: a DB model has NO stored rows; ibValueModelStorage overrides them to read its ibRamValueStorage.)
 
 	/////////////////////////////////////////////////////////
 
@@ -1499,10 +1503,8 @@ public:
 	// --- row access (source-agnostic query; base default = DB tier: NO stored rows) ------------------------
 	// A DB model reads dynamically from the cursor and has NO stored rows, so these return empty; ibValueModelStorage
 	// OVERRIDES them to read its ibRamValueStorage. (Kept virtual on the base so IsEmpty / the display resolve
-	// polymorphically.)
-	virtual long GetRowCount() const { return 0; }
+	// polymorphically.) GetRowCount / GetItem are the table's own, ibTabularDataObject's — a row walk asks any table.
 	virtual long GetRow(const ibDataViewItem& /*item*/) const { return wxNOT_FOUND; }
-	virtual ibDataViewItem GetItem(long /*row*/) const { return ibDataViewItem(); }
 
 	// THE ROW'S STATE PICTURE — asked by the control once per row, drawn at the start of its first column
 	// (ibDataViewModel::GetRowPicture; the provider forwards here). The model that knows what its rows are

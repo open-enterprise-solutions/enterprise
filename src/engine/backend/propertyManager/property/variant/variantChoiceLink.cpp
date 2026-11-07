@@ -309,7 +309,7 @@ ibPropertyChoiceMode ibVariantChoiceLink::GetValueList(ibPropertyChoiceList& lis
 		// ⭐ THE SAME ANSWER THE RESOLVER READS BY. Which fields can give a type is said ONCE, beside the
 		// reading itself (ibChoiceLinkResolver::CanGovern) — a second rule here is a designer that offers
 		// a field the runtime cannot read, and the drift would be silent.
-		if (!ibChoiceLinkResolver::CanGovern(field))
+		if (!ibChoiceLinkResolver::CanGovern(field->GetTypeDesc()))
 			continue;
 
 		ibChoiceTypeLinkDescription linkDesc;

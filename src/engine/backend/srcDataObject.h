@@ -10,6 +10,13 @@
 #include "backend/lock/lockTypes.h"     // ibLockMode (TryAcquireFormLock)
 #include "backend/compiler/value.h"     // ibValue (inline GetValueByPath default-constructs one)
 #include "core/description/sourceDescription.h"  // ibSourceHop — a binding path is {id, expected type} per hop
+#include "backend/createRequest.h"      // ibSelectMode — what choosing a field's value opens on (GetSelectMode)
+
+// What a field says about its value — asked by id below, bodies in srcDataObject.cpp.
+struct ibChoiceTypeLinkDescription;      // core/description/choiceLinkDescription.h
+struct ibChoiceParametersDescription;
+
+class BACKEND_API ibTranslateString;     // backend/backend_localization.h
 
 #include "backend/metaCollection/genericData.h"   // ibValueMetaObjectGenericData COMPLETE -> the covariant GetSourceMetaObject() -> GenericData* compiles (no casts). genericData.h fwd-declares ibSourceDataObject, so no cycle.
 
@@ -373,6 +380,26 @@ public:
 	// metadata-free. A live value already of the pinned type is returned AS IS (never fabricated over).
 	virtual bool GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const { return false; }
 	virtual bool SetValueBySourceHop(const ibSourceHop& hop, const ibValue& value) { return false; }
+
+	// ⭐⭐ WHAT A FIELD OF THIS SOURCE SAYS ABOUT ITS VALUE — by id, the key the hop gate above reads it by:
+	// what its type is taken from, what narrows its choice, how it is shown, what choosing it opens on, and
+	// the field's own adjustment of a value written into it. A binding is made through a source, so the
+	// questions a binding asks are the source's to answer: a choice link asked them of the metaobject's
+	// attribute instead, and a field that is not an attribute — a form's own — had nobody to ask.
+	//
+	// Answered by the OBJECT behind the source, for its own fields — a record and a record manager by their
+	// attributes. The base says nothing (srcDataObject.cpp): empty, and the value as it is.
+	virtual const ibChoiceTypeLinkDescription& GetTypeLink(const ibMetaID& id) const;
+	virtual const ibChoiceParametersDescription& GetChoiceParameters(const ibMetaID& id) const;
+	virtual const ibTranslateString& GetFormat(const ibMetaID& id) const;
+	virtual ibSelectMode GetSelectMode(const ibMetaID& id) const;
+	virtual ibValue AdjustValue(const ibMetaID& id, const ibValue& value) const;
+
+	// …AND WHICH OF THEM ARE LINKED TO `edited` — the fields a value written there leaves stale
+	// (ibChoiceLinkResolver::ClearLinked). The source answers it off its explorer and the questions above
+	// (srcDataObject.cpp), so whatever answers those by id has it; an object that finds each field by a walk
+	// of its own says it in one walk over its fields instead (a record, by its attributes).
+	virtual std::vector<ibMetaID> GetLinked(const ibMetaID& edited) const;
 
 	// Is this source a TABLE (renders as a tablebox) or a scalar object? A pure TYPE fact,
 	// answered by the class factory through the source's own CLSID — the metaobject ctor

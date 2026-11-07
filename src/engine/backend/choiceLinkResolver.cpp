@@ -1,10 +1,8 @@
 #include "choiceLinkResolver.h"
 
-#include "backend/metaData.h"
-#include "backend/metaCollection/partial/reference/reference.h"          // the metaobject a source answers with, complete
-#include "backend/metaCollection/attribute/metaAttributeObject.h"        // a field answers what governs it
-#include "backend/srcDataObject.h"                                       // the path door every source answers
-#include "backend/backend_type.h"                                        // ibBackendTypeSourceFactory — the binding that names the field
+#include "backend/metaData.h"                                            // a parameter names a field of the list it opens
+#include "backend/srcDataObject.h"                                       // the path door every source answers, and what its fields say
+#include "backend/backend_localization.h"                                // ibTranslateString — a field's format
 
 // ⭐⭐ THIS ROAD SAYS WHAT IT DECIDED, AND IT DID NOT (2026-09-23). Four reports came in on one evening —
 // "the value does not react", "every other time", "the substitution does not work", "the characteristic
@@ -51,17 +49,52 @@ bool ibChoiceHolder::SetValue(const ibMetaID& id, const ibValue& value)
 	return m_source != nullptr && m_source->SetValueBySourceHop(hop, value);
 }
 
-// ⭐ THE ROW FIRST, AS IN GetValue ABOVE. A column's holder carries both the row it edits and the form's
-// object over it, and the fields standing HERE are the row's — the columns. This answered with the
-// object whenever there was one, so a column looking for its own field searched the DOCUMENT's attributes,
-// found nothing, and fell back to its bare declaration: a characteristic column offered no type to choose
-// and drew `False` as blank (2026-09-23: the table's value column was looked for among the document's
-// fields and not found, with the row standing right there as its holder).
-const ibValueMetaObjectCompositeData* ibChoiceHolder::GetFields() const
+// ⭐ THE ROW FIRST, THE OBJECT AFTER IT, AS GetValue READS. A column's holder carries both the row it edits
+// and the form's object over it, and the fields standing HERE are first the row's — the columns. This
+// answered with the object whenever there was one, so a column looking for its own field searched the
+// DOCUMENT's attributes, found nothing, and fell back to its bare declaration: a characteristic column
+// offered no type to choose and drew `False` as blank (2026-09-23: the table's value column was looked for
+// among the document's fields and not found, with the row standing right there as its holder). A row that
+// says nothing does not have the field, and the object above it is asked — a column bound to the header.
+//
+// ⭐ SAID ONCE for every question (AskRowFirst): each brings only what it asks and what "says something" is
+// for its answer. Written out three times, the order was three copies to keep in step with GetValue's.
+namespace {
+
+template <typename Answer, typename Ask, typename Said>
+Answer AskRowFirst(const ibChoiceHolder& holder, const Ask& ask, const Said& said, Answer none)
 {
-	if (m_table != nullptr)
-		return m_table->GetSourceMetaObject();
-	return m_source != nullptr ? m_source->GetSourceMetaObject() : nullptr;
+	if (holder.m_table != nullptr) {
+		Answer answer = ask(*holder.m_table);
+		if (said(answer) || holder.m_source == nullptr)
+			return answer;
+	}
+	return holder.m_source != nullptr ? ask(*holder.m_source) : none;
+}
+
+}
+
+const ibChoiceParametersDescription& ibChoiceHolder::GetChoiceParameters(const ibMetaID& id) const
+{
+	static const ibChoiceParametersDescription s_none;
+	return AskRowFirst<const ibChoiceParametersDescription&>(*this,
+		[&id](const auto& level) -> const ibChoiceParametersDescription& { return level.GetChoiceParameters(id); },
+		[](const ibChoiceParametersDescription& params) { return params.IsOk(); }, s_none);
+}
+
+const ibTranslateString& ibChoiceHolder::GetFormat(const ibMetaID& id) const
+{
+	static const ibTranslateString s_none;
+	return AskRowFirst<const ibTranslateString&>(*this,
+		[&id](const auto& level) -> const ibTranslateString& { return level.GetFormat(id); },
+		[](const ibTranslateString& format) { return !format.IsEmpty(); }, s_none);
+}
+
+ibSelectMode ibChoiceHolder::GetSelectMode(const ibMetaID& id) const
+{
+	return AskRowFirst<ibSelectMode>(*this,
+		[&id](const auto& level) { return level.GetSelectMode(id); },
+		[](ibSelectMode mode) { return mode != ibSelectMode::ibSelectMode_Items; }, ibSelectMode::ibSelectMode_Items);
 }
 
 const ibMetaData* ibChoiceHolder::GetMetaData() const
@@ -71,67 +104,8 @@ const ibMetaData* ibChoiceHolder::GetMetaData() const
 	return m_source != nullptr ? m_source->GetSourceMetaData() : nullptr;
 }
 
-namespace {
-
-// THE FIELD A PATH NAMES, among the holder's own — the leaf hop is the field, the hops before it are
-// how it was reached. Null when the path leaves this holder or names something gone.
-const ibValueMetaObjectAttributeBase* FieldOfPath(const ibChoiceHolder& holder, const ibSourceDescription& path)
+bool ibChoiceLinkResolver::CanGovern(const ibTypeDescription& type)
 {
-	if (!path.IsOk())
-		return nullptr;
-
-	const ibMetaID named = path.GetLeaf();
-	const auto findIn = [named](const ibValueMetaObjectCompositeData* fields) -> const ibValueMetaObjectAttributeBase* {
-		if (fields == nullptr)
-			return nullptr;
-		for (const ibValueMetaObjectAttributeBase* field : fields->GetGenericAttributeArrayObject()) {
-			if (field->GetMetaID() == named)
-				return field;
-		}
-		return nullptr;
-	};
-
-	// The holder's own fields — the row's, where there is a row — and then the object above it: a column may
-	// be bound to a header attribute, and a link may name one, in the same order GetValue reads them.
-	if (const ibValueMetaObjectAttributeBase* field = findIn(holder.GetFields()))
-		return field;
-	return holder.m_table != nullptr && holder.m_source != nullptr
-		? findIn(holder.m_source->GetSourceMetaObject()) : nullptr;
-}
-
-}
-
-const ibValueMetaObjectAttributeBase* ibChoiceLinkResolver::FieldOf(const ibChoiceHolder& holder,
-	const ibBackendTypeSourceFactory* bound)
-{
-	if (bound == nullptr)
-		return nullptr;
-
-	// ⭐ A DOTTED PATH — `Counterparty.Parent`. The leaf lives inside what the head refers to, and the
-	// binding's own walk is what resolves it; for a metadata source it hands back the attribute itself.
-	if (const ibValueMetaObjectAttributeBase* leaf =
-		dynamic_cast<const ibValueMetaObjectAttributeBase*>(bound->WalkSource(bound->GetSourceDesc())))
-		return leaf;
-
-	// 🛑 …AND A WHOLE-ATTRIBUTE BINDING ANSWERS NULL TO THAT WALK, BY CONTRACT — "null = a whole-
-	// attribute binding (length 1) or a broken path" (backend_type.h). Which is EVERY ordinary field on
-	// a form: a one-hop path. Asking only the walk therefore found nothing for the commonest binding
-	// there is, so the choice of a contract opened with no owner condition at all — no refusal, no
-	// message, the whole list (measured 2026-09-23, standing in ibCreateHierarchyList with the
-	// parameters empty).
-	//
-	// The leaf of a one-hop path IS its head, and it stands among the HOLDER's own fields — which is
-	// the SAME question a link's path asks, so it is the same lookup and not a second spelling of it.
-	// The tree already answers this pair both ways in one breath: ibVariantSource::
-	// RefreshTypeFromSource takes the walked leaf's type, or the head's when there is no leaf.
-	return FieldOfPath(holder, bound->GetSourceDesc());
-}
-
-bool ibChoiceLinkResolver::CanGovern(const ibValueMetaObjectAttributeBase* field)
-{
-	if (field == nullptr || field->IsDeleted())
-		return false;
-
 	// ⭐⭐ A FIELD CAN GIVE ITS TYPE IF IT HAS ONE, AND THAT IS THE WHOLE TEST. A link by type is the
 	// choice of the COLUMN the type is pulled from (Max, 2026-09-23: "a link by type — I just point at
 	// the column I pull it from, and I have never once managed to do it"). What is pulled is
@@ -146,7 +120,7 @@ bool ibChoiceLinkResolver::CanGovern(const ibValueMetaObjectAttributeBase* field
 	//
 	// An empty type description is the one thing that cannot be pulled: a field that holds nothing has
 	// nothing to give.
-	return !field->IsEmptyTypeDesc();
+	return type.IsOk();
 }
 
 // ⭐ ONE CONDITION PER ROW, over the field of the target the row names — and the condition is an ordinary
@@ -216,7 +190,7 @@ bool ibChoiceLinkResolver::ResolveParameters(const ibChoiceParametersDescription
 // fields of what is being created; a name that answers nothing is skipped rather than guessed at.
 void ibChoiceLinkResolver::Fill(ibChoiceHolder& holder, const ibCreateRequest& request)
 {
-	const ibValueMetaObjectCompositeData* fields = holder.GetFields();
+	const ibSourceExplorer* fields = holder.m_source != nullptr ? holder.m_source->GetSourceExplorer() : nullptr;
 	if (fields == nullptr)
 		return;
 
@@ -226,64 +200,47 @@ void ibChoiceLinkResolver::Fill(ibChoiceHolder& holder, const ibCreateRequest& r
 	// and the line that would have separated them did not exist because it only ever printed per
 	// parameter. A decision with nothing in it is still a decision.
 	ibJournalInfo(ibT("choice.fill"), ibT("'%s': %d parameter(s) to write in"),
-		fields->GetName(), static_cast<int>(request.m_condition.m_parameters.size()));
+		fields->GetSourceName(), static_cast<int>(request.m_condition.m_parameters.size()));
 
-	// 🛑⭐ THE SAME LIST THE REST OF THIS FILE ASKS, and it has to be. `FindAnyObjectByFilter` searches
-	// DIRECT CHILDREN, and the field this whole arc is about — a subordinate catalog's `Owner` — is not
-	// one: it is a PREDEFINED attribute, kept in a property container and reached only through
-	// `GetGenericAttributeArrayObject` (predefined + common + plain). So the commonest narrowing there
-	// is named a field this lookup could not see, nothing was filled, and a contract created in a list
-	// showing one counterparty's was born with no counterparty (Max, 2026-09-23: "the substitution of
-	// the value by the filter does not work"). A second way of finding a field is how one road comes to
-	// know about a field the other does not.
-	const std::vector<ibValueMetaObjectAttributeBase*> declared = fields->GetGenericAttributeArrayObject();
-
+	// 🛑⭐ THE FIELDS THE SOURCE ITSELF LISTS, and it has to be them. `FindAnyObjectByFilter` on the
+	// configuration searches its DIRECT CHILDREN, and the field this whole arc is about — a subordinate
+	// catalog's `Owner` — is not one: it is a PREDEFINED attribute of the catalog. So the commonest narrowing
+	// there was named a field that lookup could not see, nothing was filled, and a contract created in a list
+	// showing one counterparty's was born with no counterparty (Max, 2026-09-23: "the substitution of the
+	// value by the filter does not work"). The source's explorer lists every field it has, predefined ones
+	// included, and a second way of finding a field is how one road comes to know about a field the other
+	// does not.
 	for (const std::pair<const ibString, ibValue>& parameter : request.m_condition.m_parameters) {
-		const ibValueMetaObjectAttributeBase* field = nullptr;
-		for (const ibValueMetaObjectAttributeBase* candidate : declared) {
-			if (candidate != nullptr && !candidate->IsDeleted() && candidate->GetName() == parameter.first) {
-				field = candidate;
-				break;
-			}
-		}
-
-		if (field == nullptr) {
+		const ibSourceExplorer* field = fields->FindByName(parameter.first);
+		if (field == nullptr || field->IsTableSection()) {
 			// The list was narrowed by a field of what is being SHOWN, and the thing being MADE has no
 			// field of that name — so the new record cannot be born matching the list, and says so.
 			ibJournalInfo(ibT("choice.fill"), ibT("'%s' names no field of '%s' - not filled"),
-				parameter.first, fields->GetName());
+				parameter.first, fields->GetSourceName());
 			continue;
 		}
 
 		ibJournalInfo(ibT("choice.fill"), ibT("'%s' = %s"), parameter.first, parameter.second.GetString());
-		holder.SetValue(field->GetMetaID(), parameter.second);
+		holder.SetValue(field->GetSourceId(), parameter.second);
 	}
 }
 
-ibChoiceCondition ibChoiceLinkResolver::Resolve(const ibChoiceHolder& holder,
-	const ibValueMetaObjectAttributeBase* field)
+ibChoiceCondition ibChoiceLinkResolver::Resolve(const ibChoiceHolder& holder, const ibMetaID& field)
 {
 	ibChoiceCondition condition;
-	if (field == nullptr)
-		return condition;
-
-	ResolveParameters(field->GetChoiceParameters(), holder, condition);
+	ResolveParameters(holder.GetChoiceParameters(field), holder, condition);
 	return condition;
 }
 
-ibValue ibChoiceLinkResolver::Adjust(const ibChoiceHolder& holder,
-	const ibValueMetaObjectAttributeBase* field, const ibValue& value)
+bool ibChoiceLinkResolver::Adjust(const ibChoiceHolder& holder, const ibChoiceTypeLinkDescription& link,
+	const ibValue& value, ibValue& adjusted)
 {
-	if (field == nullptr)
-		return value;
-
-	// ⭐ A FIELD NO LINK GOVERNS IS ADJUSTED EXACTLY AS IT WAS BEFORE THERE WERE LINKS. This runs on every
-	// write of every field — a posting pass filling a record set runs it once per cell — and nearly every
-	// field has no link: building a condition for it cost a heap node per write for nothing (2026-09-24,
-	// measured on the write bench).
-	const ibChoiceTypeLinkDescription& link = field->GetTypeLink();
+	// ⭐ A FIELD NO LINK GOVERNS IS ADJUSTED EXACTLY AS IT WAS BEFORE THERE WERE LINKS — by the writer, who
+	// holds the field. This runs on every write of every field — a posting pass filling a record set runs it
+	// once per cell — and nearly every field has no link: building a condition for it cost a heap node per
+	// write for nothing (2026-09-24, measured on the write bench).
 	if (!link.IsOk())
-		return field->AdjustValue(value);
+		return false;
 
 	// ⭐⭐ THE GOVERNING VALUE BRINGS THE VALUE, AND THAT IS THE WHOLE ANSWER — ibValue::AdjustValue, the
 	// same verb the accounting register's dimension uses for a subconto. Nothing here reads a type off
@@ -301,9 +258,8 @@ ibValue ibChoiceLinkResolver::Adjust(const ibChoiceHolder& holder,
 	// that with the field's declaration. All of it is gone; the one question is enough.
 	ibValue governing;
 	if (!holder.GetValue(link.m_source, governing) || governing.IsEmpty())
-		return field->AdjustValue(value);
+		return false;
 
-	ibValue adjusted;
 	governing.AdjustOutValue(value, adjusted);
 
 	// 🛑⭐ A VALUE THAT WENT IN AND DID NOT COME OUT — said out loud, because this is the shape the
@@ -314,22 +270,36 @@ ibValue ibChoiceLinkResolver::Adjust(const ibChoiceHolder& holder,
 	// reading code that looks right — hence a WARNING, with what was lost in it.
 	ibJournalIf {
 		if (!value.IsEmpty() && adjusted.IsEmpty())
-			ibJournalWarning(ibT("choice.adjust"), ibT("'%s' (#%d): %s was not admitted here - written empty"),
-				field->GetName(), field->GetMetaID(), value.GetString());
+			ibJournalWarning(ibT("choice.adjust"), ibT("%s was not admitted under #%d - written empty"),
+				value.GetString(), link.m_source.GetLeaf());
 	}
 
-	return adjusted;
+	return true;
+}
+
+// The type it was chosen under changed: the value is of the wrong type now, and there is no question to
+// ask about it. A parameter row is gentler — it carries the author's answer.
+bool ibChoiceLinkResolver::IsLinked(const ibMetaID& field, const ibChoiceTypeLinkDescription& link,
+	const ibChoiceParametersDescription& params, const ibMetaID& edited)
+{
+	if (field == edited)
+		return false;
+	if (link.m_source.GetLeaf() == edited)
+		return true;
+	for (const ibChoiceParameterRowDescription& row : params.m_rows) {
+		if (row.m_source.GetLeaf() == edited && row.m_onChange != ibChoiceParameterOnChange::Keep)
+			return true;
+	}
+	return false;
 }
 
 // ⭐⭐ THE SOURCE'S OWN FIELDS, EMPTIED WHERE THEY WERE CHOSEN WITHIN THE EDITED ONE. Everything this
-// needs is already written down and asked of whoever holds it: the source names its metaobject, the
-// metaobject lists its fields, and each field says what governs it. No cast, and no second idea of
-// where the fields are — a row of a tabular section answers exactly as an object does.
+// needs is already written down and asked of whoever holds it: the source says which of its fields are
+// linked to the edited one (GetLinked) and, by id, what governs each. No cast, no metaobject, and no
+// second idea of where the fields are — a row of a tabular section answers exactly as an object does.
 void ibChoiceLinkResolver::ClearLinked(ibChoiceHolder& holder, const ibMetaID& edited)
 {
-	const ibValueMetaObjectCompositeData* fields = holder.GetFields();
-	const ibMetaData* metaData = holder.GetMetaData();
-	if (fields == nullptr || metaData == nullptr || edited == 0)
+	if (!holder.IsOk() || edited == 0)
 		return;
 
 	// ⭐ ONE PASS, AND THE CHAIN FOLLOWS BY ITSELF. Emptying a field makes it a changed field in its turn,
@@ -342,28 +312,20 @@ void ibChoiceLinkResolver::ClearLinked(ibChoiceHolder& holder, const ibMetaID& e
 	// the whole field list rebuilt for every step — and it walked the same chain the writes were already
 	// walking. It ran on every changed write, which in a posting pass is nearly every write: two vectors
 	// and a fresh field list per cell for nothing (2026-09-24, measured on the write bench).
-	for (const ibValueMetaObjectAttributeBase* field : fields->GetGenericAttributeArrayObject()) {
-		if (field->IsDeleted() || field->GetMetaID() == edited)
-			continue;
-
-		// The type it was chosen under changed: the value is of the wrong type now, and there is no
-		// question to ask about it. A parameter row is gentler — it carries the author's answer.
-		bool clear = field->GetTypeLink().m_source.GetLeaf() == edited;
-		for (const ibChoiceParameterRowDescription& row : field->GetChoiceParameters().m_rows) {
-			if (row.m_source.GetLeaf() == edited && row.m_onChange != ibChoiceParameterOnChange::Keep)
-				clear = true;
-		}
-		if (!clear)
-			continue;
+	//
+	// ⭐ THE LEVEL THE FIELD IS ON SAYS WHICH OF ITS FIELDS ARE LINKED — the row's table for a column, the
+	// object for its own field — in one walk over them (GetLinked). Asked here field by field, by id, an
+	// object looked every field up twice on every changed write. Each linked field takes the step below,
+	// in the holder it stands in: the edited one's, or a row of a table under it.
+	const auto clear = [&edited](ibChoiceHolder& owner, const auto& level, const ibMetaID& field) {
+		const ibChoiceTypeLinkDescription& link = level.GetTypeLink(field);
 
 		// ⭐ THE EMPTY VALUE OF ITS OWN TYPE, not a bare undefined: a field declared as one reference
 		// shows an empty reference of it, which is what the control was showing before anything was
 		// chosen. A composite field has no single such value, and undefined is the honest one there.
 		// What the field may HOLD decides it, not what it declares: a characteristic declares one type
-		// and holds its chart's several.
-		const ibTypeDescription& typeDesc = field->GetTypeValueDesc();
-		const ibValue empty = typeDesc.GetClsidCount() == 1 ? metaData->CreateObject(typeDesc.GetFirstClsid()) : ibValue();
-
+		// and holds its chart's several — which is the field's own adjustment of nothing, its source's.
+		//
 		// ⭐ ALREADY CLEARED IS NOT CLEARED AGAIN — but "cleared" means what the write WOULD store, and that
 		// is the empty value narrowed by the field's own link: a characteristic under a numeric kind is 0,
 		// not undefined. Writing the row's kind into a new row used to empty an already empty cell all the
@@ -371,22 +333,71 @@ void ibChoiceLinkResolver::ClearLinked(ibChoiceHolder& holder, const ibMetaID& e
 		// instead, the skip left a new row's characteristic UNDEFINED under a chosen kind, so clicking it
 		// asked for a type the kind had already settled (Max, 2026-09-24: "I re-choose the kind, and the
 		// value on the right still offers the type choice").
-		const ibValue cleared = Adjust(holder, field, empty);
+		ibValue cleared;
+		if (!Adjust(owner, link, ibValue(), cleared))
+			cleared = level.AdjustValue(field, ibValue());
 		ibSourceDescription at;
-		at.AppendSource(field->GetMetaID());
+		at.AppendSource(field);
 		ibValue current;
-		if (holder.GetValue(at, current) && current.GetClassType() == cleared.GetClassType() && current == cleared)
-			continue;
+		if (owner.GetValue(at, current) && current.GetClassType() == cleared.GetClassType() && current == cleared)
+			return;
 
 		// ⚠ SAID ONLY WHEN SOMETHING WAS THERE. An empty cell getting its kind's empty value lost nothing —
 		// it is a new row typed, and in a posting pass that is every row: the line alone was 3 s of 7 on
 		// twenty thousand register lines given a kind (2026-09-24, the write bench, Debug).
 		if (!current.IsEmpty())
-			ibJournalInfo(ibT("choice.clear"), ibT("'%s' (#%d) emptied - #%d changed under it"),
-				field->GetName(), field->GetMetaID(), edited);
+			ibJournalInfo(ibT("choice.clear"), ibT("#%d emptied - #%d changed under it"), field, edited);
 
 		// Written through the source's own hop gate — the door every kind of source answers, so a
 		// row and an object are not told apart here either.
-		holder.SetValue(field->GetMetaID(), cleared);
+		owner.SetValue(field, cleared);
+	};
+
+	// A ROW'S FIELDS ARE ITS TABLE'S COLUMNS, and a row has no tables below it.
+	if (holder.m_table != nullptr) {
+		for (const ibMetaID& field : holder.m_table->GetLinked(edited))
+			clear(holder, *holder.m_table, field);
+		return;
+	}
+
+	for (const ibMetaID& field : holder.m_source->GetLinked(edited))
+		clear(holder, *holder.m_source, field);
+
+	// 🛑⭐ A COLUMN MAY BE CHOSEN WITHIN A FIELD OF THE OBJECT ABOVE IT — a contract in a line, filtered by
+	// the counterparty in the header — and this pass stopped at the object's own fields: the header changed,
+	// and every line kept a contract with somebody the document no longer names (issue #650). Between two
+	// header fields, and between two cells of one row, the same link worked.
+	//
+	// ⭐ SO THE SAME STEP, WITH EACH ROW AS THE HOLDER. Written through the row's own hop gate, as a cell
+	// edited in that row would be, so whatever was chosen within the emptied cell goes too — within that
+	// row. The tables are the ones the object itself says it has (its explorer, the node a form walks), and
+	// their values come through the object's own hop gate: nothing here knows which kinds have tables.
+	//
+	// ⚠ A ROW IS NOT WALKED FOR NOTHING: a table with no column linked to the edited field is passed over
+	// without touching a row — this runs on every changed write of the header — and the linked columns are
+	// asked once per table, not once per row.
+	const ibSourceExplorer* fields = holder.m_source->GetSourceExplorer();
+	if (fields == nullptr)
+		return;
+	for (unsigned int idx = 0; idx < fields->GetHelperCount(); ++idx) {
+		const ibSourceExplorer* node = fields->GetHelper(idx);
+		if (node == nullptr || !node->IsTableSection())
+			continue;
+
+		ibValue value;
+		ibTabularDataObject* table = nullptr;
+		if (!holder.m_source->GetValueBySourceHop(ibSourceHop{ node->GetSourceId() }, value) || !value.ConvertToValue(table))
+			continue;
+
+		const std::vector<ibMetaID> columns = table->GetLinked(edited);
+		if (columns.empty())
+			continue;
+
+		for (long row = 0; row < table->GetRowCount(); ++row) {
+			ibChoiceHolder line(table, table->GetItem(row));
+			line.m_source = holder.m_source;   // a cell's link may read the header, as GetValue reads it
+			for (const ibMetaID& column : columns)
+				clear(line, *table, column);
+		}
 	}
 }

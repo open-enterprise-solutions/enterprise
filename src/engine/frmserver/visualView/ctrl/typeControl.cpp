@@ -14,7 +14,7 @@
 #include "backend/session/session.h"
 #include "backend/system/value/valueType.h"          // ibValueTypeDescription / g_valueTypeDescriptionCLSID
 #include "backend/choiceLinkResolver.h"               // what narrows this choice — type and conditions
-#include "backend/metaCollection/attribute/metaAttributeObject.h"   // the bound attribute holds both
+#include "backend/metaCollection/metaObject.h"                      // the metaobject a choice opens
 #include "frmserver/win/dlgs/selectPredefined.h"   // ibShowPredefinedSelector — the designer's declared values
 #include "backend/appData.h"                        // DesignerMode — the two roads part here
 
@@ -80,7 +80,7 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibValue
 			// the field they are filling.
 			const ibChoiceHolder holder = factory->GetChoiceHolder();
 			const ibChoiceCondition condition = ibChoiceLinkResolver::Resolve(holder,
-				ibChoiceLinkResolver::FieldOf(holder, factory));
+				factory->GetSourceDesc().GetLeaf());
 
 			// ⭐ WHAT THE FORM IS MADE WITH: which form the author picked, and — as one named part of
 			// it — the choice. The condition goes in WHOLE, empty or not: "nothing narrows this" is a
@@ -198,14 +198,10 @@ void ibTypeControlFactory::QuickChoice(ibControlFrame* controlValue, ibValue& ne
 
 ibSelectMode ibTypeControlFactory::GetSelectMode() const
 {
-	// Select mode is a metaobject-attribute concern — a single reference to a HIERARCHICAL catalog
-	// carries Items / Folders / FoldersAndItems. Resolve the bound leaf and, WHEN it is a metadata
-	// attribute, read its mode; a plain column (a dynamic list's queryable column) has none →
-	// default to item selection.
-	const ibValueMetaObjectAttributeBase* attr =
-		ibChoiceLinkResolver::FieldOf(GetChoiceHolder(), this);
-	if (attr != nullptr) return attr->GetSelectMode();
-	return ibSelectMode::ibSelectMode_Items;
+	// A single reference to a HIERARCHICAL catalog carries Items / Folders / FoldersAndItems — asked of the
+	// source holding the bound field, by the binding's leaf; a field it does not answer for (a dynamic list's
+	// queryable column) chooses items.
+	return GetChoiceHolder().GetSelectMode(GetSourceDesc().GetLeaf());
 }
 
 ibValue ibTypeControlFactory::CreateValue() const

@@ -3,18 +3,10 @@
 
 #include "core/description/choiceLinkDescription.h"
 #include "backend/createRequest.h"   // ibChoiceCondition — what this produces
-#include "backend/tabularDataObject.h"              // the TABLE shape of a source, and its row hop
-#include "core/tabular/tabularModelView.h"          // ibDataViewItem COMPLETE — the holder below keeps one BY VALUE,
-                                                    // and tabularDataObject.h only forward-declares it. It did compile
-                                                    // without this, through some other header's chain; a by-value
-                                                    // member resting on include order is what the note at the top of
-                                                    // srcObject.h exists to warn about.
+#include "backend/tabularDataObject.h"              // the TABLE shape of a source, its row hop, and ibDataViewItem
+                                                    // complete — the holder below keeps one BY VALUE
 
-class ibMetaData;
 class BACKEND_API ibSourceDataObject;
-class BACKEND_API ibValueMetaObjectAttributeBase;
-class BACKEND_API ibValueMetaObjectCompositeData;
-class BACKEND_API ibBackendTypeSourceFactory;
 
 // ⭐⭐ WHO HOLDS THE FIELDS — IN THE TWO SHAPES THE TREE ALREADY KEEPS, AND NO THIRD. A source comes
 // either scalar (ibSourceDataObject — an object, a form's source) or tabular (ibTabularDataObject plus
@@ -41,9 +33,15 @@ struct BACKEND_API ibChoiceHolder {
 	bool GetValue(const ibSourceDescription& path, ibValue& value) const;
 	bool SetValue(const ibMetaID& id, const ibValue& value);
 
-	// The fields standing here — the metaobject's own, whichever shape the holder is.
-	const ibValueMetaObjectCompositeData* GetFields() const;
-	const ibMetaData* GetMetaData() const;
+	// ⭐⭐ WHAT A FIELD STANDING HERE SAYS — by id, the ROW FIRST and the object after it, as GetValue reads:
+	// a column is the row's, and a column may also be bound to a field of the object above it. The source
+	// answers for its own fields (ibSourceDataObject::GetChoiceParameters) and says nothing of one it has
+	// not; ids are the configuration's own, so a row saying nothing is a row not having the field.
+	const ibChoiceParametersDescription& GetChoiceParameters(const ibMetaID& id) const;
+	const ibTranslateString& GetFormat(const ibMetaID& id) const;
+	ibSelectMode GetSelectMode(const ibMetaID& id) const;
+
+	const class ibMetaData* GetMetaData() const;
 };
 
 // ⭐⭐ THE VALUES COME FROM THE HOLDER, AND THE HOLDER IS THE CALLER'S. A link's path is an
@@ -59,19 +57,12 @@ struct BACKEND_API ibChoiceHolder {
 class BACKEND_API ibChoiceLinkResolver {
 public:
 
-	// ⭐⭐ WHICH FIELDS CAN GOVERN, SAID ONCE. Any field that has a type can: whatever stands in it knows
-	// what it brings a value to — a type description by what it describes, a chosen kind by its own
-	// `Type`, anything else by its own class (ibValue::AdjustValue). Only a field declared with no type
-	// at all has nothing to give. The designer offers exactly the fields that answer true.
-	static bool CanGovern(const ibValueMetaObjectAttributeBase* field);
-
-	// ⭐⭐ THE FIELD A BINDING NAMES — asked of the BINDING and the holder it stands in, not of a column
-	// somebody already walked to. A path names its field by its LEAF, and where that leaf lives depends
-	// on how long the path is: one hop and it is one of the holder's own fields, more and it lives
-	// inside what the head refers to. Both readings live in here so no caller has to know there are
-	// two. Null when the binding names nothing this arc can carry a link on.
-	static const ibValueMetaObjectAttributeBase* FieldOf(const ibChoiceHolder& holder,
-		const ibBackendTypeSourceFactory* bound);
+	// ⭐⭐ WHICH FIELDS CAN GOVERN, SAID ONCE — by the type the field declares. Any field that has a type
+	// can: whatever stands in it knows what it brings a value to — a type description by what it
+	// describes, a chosen kind by its own `Type`, anything else by its own class (ibValue::AdjustValue).
+	// Only a field declared with no type at all has nothing to give. The designer offers exactly the
+	// fields that answer true.
+	static bool CanGovern(const ibTypeDescription& type);
 
 	// One condition per row, over the field of the target the row names — by
 	// whatever the row's source holds, empty included.
@@ -87,14 +78,14 @@ public:
 	// once, by the one verb (Adjust below, ibValue::AdjustValue). Two machineries said one thing, and
 	// the one that said it to nobody is gone (Max, 2026-09-24: "tear it out").
 	//
-	// ⭐ THE FIELD IS HANDED OVER WHOLE, the same shape as Adjust below and for the same reason: the
-	// parameters ARE the field's, so a caller that takes them off it and passes the pieces is doing the
-	// field's arithmetic in a window (Max, 2026-09-23, reading the type control).
+	// ⭐ THE FIELD IS NAMED BY ID, and the holder's source answers its parameters: they ARE the field's, so
+	// a caller that takes them off it and passes the pieces is doing the field's arithmetic in a window
+	// (Max, 2026-09-23, reading the type control). A binding names its field by its LEAF
+	// (ibSourceDescription::GetLeaf).
 	//
-	// A field of nullptr — a control bound to nothing, a filter cell, a script's value — carries no
-	// condition, which is the honest answer there rather than a refusal.
-	static ibChoiceCondition Resolve(const ibChoiceHolder& holder,
-		const ibValueMetaObjectAttributeBase* field);
+	// A field the holder does not answer for — a control bound to nothing, a filter cell, a script's
+	// value — carries no condition, which is the honest answer there rather than a refusal.
+	static ibChoiceCondition Resolve(const ibChoiceHolder& holder, const ibMetaID& field);
 
 	// ⭐⭐ A NEW RECORD MADE IN A NARROWED LIST IS BORN MATCHING IT. The list a person pressed Add in
 	// shows only contracts of one counterparty; a new row without that counterparty is not merely
@@ -105,6 +96,12 @@ public:
 	// is exactly what filling is; the request the list was made with is sitting on its form. Every pair
 	// is written — the owner, a flag, whatever the parameters name — where the new record has the field.
 	static void Fill(ibChoiceHolder& holder, const ibCreateRequest& request);
+
+	// IS `field` LINKED TO `edited` — its value chosen within it, read off what governs the field: its link by
+	// type, or a parameter row that does not say Keep. The rule ClearLinked empties by, said once; a source
+	// asks it of each of its own fields when it lists the linked ones (ibSourceDataObject::GetLinked).
+	static bool IsLinked(const ibMetaID& field, const ibChoiceTypeLinkDescription& link,
+		const ibChoiceParametersDescription& params, const ibMetaID& edited);
 
 	// ⭐⭐ A VALUE WAS WRITTEN INTO ONE OF THIS SOURCE'S FIELDS — and every field chosen WITHIN the old
 	// one is now a contract with the previous counterparty. They are emptied, to the empty value of
@@ -117,6 +114,9 @@ public:
 	// ⭐ AND IT FOLLOWS THROUGH: a field emptied here may itself govern a third, whose value is now just
 	// as stale. The walk carries on until nothing more is emptied — a chain nobody would think to write
 	// a handler for, and the first one a person builds by accident.
+	//
+	// ⭐ AND A HEADER FIELD REACHES THE ROWS: where the holder is the object, every row of a tabular section
+	// whose column is chosen within the edited field takes the same step, with the row as the holder.
 	static void ClearLinked(ibChoiceHolder& holder, const ibMetaID& edited);
 
 	// ⭐⭐ THE VALUE, ADJUSTED TO WHAT ITS LINK SETTLES ON — the ONE line a holder writes through. A
@@ -129,9 +129,14 @@ public:
 	// way a value arrives and not the way it arrives most (Max, 2026-09-23: "you have done it for the
 	// control — and if I do it at runtime, on the server?"). Where the data is, not where the window is.
 	//
-	// No link, or nothing chosen in the governing field, gives the field's own ordinary adjustment.
-	static ibValue Adjust(const ibChoiceHolder& holder,
-		const ibValueMetaObjectAttributeBase* field, const ibValue& value);
+	// ⭐ THE LINK IS HANDED IN BY WHOEVER WRITES, who has just found the field it writes and its link with
+	// it: asked again here by id, the field was looked up twice more on every write of every cell.
+	//
+	// True: the link settled the value, `adjusted` is it — and nothing narrows it after (see the body). False:
+	// no link, or nothing chosen in the governing field — the field's own ordinary adjustment applies, and
+	// that is the writer's, who holds the field.
+	static bool Adjust(const ibChoiceHolder& holder, const ibChoiceTypeLinkDescription& link,
+		const ibValue& value, ibValue& adjusted);
 };
 
 #endif

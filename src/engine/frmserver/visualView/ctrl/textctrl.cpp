@@ -137,13 +137,11 @@ bool ibValueTextCtrl::IsReadOnly() const
 
 #include "backend/appData.h"
 #include "core/formatString.h"   // ibFormatString — what the field shows its value through
-#include "backend/metaCollection/attribute/metaAttributeObject.h"
 
+// The format of the field this control is bound to — asked of the source that holds it, by the binding's leaf.
 const ibTranslateString& ibValueTextCtrl::GetSourceFormat() const
 {
-	static const ibTranslateString s_none;
-	const ibValueMetaObjectAttributeBase* attribute = ibChoiceLinkResolver::FieldOf(GetChoiceHolder(), this);
-	return attribute != nullptr ? attribute->GetFormat() : s_none;
+	return GetChoiceHolder().GetFormat(GetSourceDesc().GetLeaf());
 }
 
 void ibValueTextCtrl::OnCreated(ibVisualHost* host, bool firstCreated)

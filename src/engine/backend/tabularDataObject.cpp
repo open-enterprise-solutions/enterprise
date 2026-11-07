@@ -7,6 +7,38 @@
 
 #include "backend/srcDataObject.h"                                // ResolvePath - the shared deep-hop loop
 #include "backend/metaCollection/partial/reference/reference.h"   // CoerceHopType - the reference builds its OWN twin
+#include "core/description/choiceLinkDescription.h"
+#include "backend/backend_localization.h"
+
+// A column this table does not answer for says nothing, as a scalar source's field does
+// (ibSourceDataObject::GetTypeLink): the table behind answers for its own columns.
+const ibChoiceTypeLinkDescription& ibTabularDataObject::GetTypeLink(const ibMetaID& /*id*/) const
+{
+	static const ibChoiceTypeLinkDescription s_none;
+	return s_none;
+}
+
+const ibChoiceParametersDescription& ibTabularDataObject::GetChoiceParameters(const ibMetaID& /*id*/) const
+{
+	static const ibChoiceParametersDescription s_none;
+	return s_none;
+}
+
+const ibTranslateString& ibTabularDataObject::GetFormat(const ibMetaID& /*id*/) const
+{
+	static const ibTranslateString s_none;
+	return s_none;
+}
+
+ibSelectMode ibTabularDataObject::GetSelectMode(const ibMetaID& /*id*/) const
+{
+	return ibSelectMode::ibSelectMode_Items;
+}
+
+ibValue ibTabularDataObject::AdjustValue(const ibMetaID& /*id*/, const ibValue& value) const
+{
+	return value;
+}
 
 // A STRUCTURE WALK STEPS BY TYPE, NOT BY VALUE. There is no row to read at form-design time, and none is
 // wanted: what the walk needs is something OF THE COLUMN'S TYPE, so it can go on reading the referenced

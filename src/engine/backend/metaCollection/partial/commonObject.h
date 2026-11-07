@@ -2204,6 +2204,14 @@ public:
 	virtual bool SetValueBySourceHop(const ibSourceHop& hop, const ibValue& value) override { return SetValueByMetaID(hop.m_id, value); }
 	virtual bool GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const override;   // out-of-line (commonObject.cpp): filters the pin by the field's live declared type
 
+	// What a field of this object says about its value — its attribute's own answer (ibSourceDataObject).
+	virtual const ibChoiceTypeLinkDescription& GetTypeLink(const ibMetaID& id) const override;
+	virtual const ibChoiceParametersDescription& GetChoiceParameters(const ibMetaID& id) const override;
+	virtual const ibTranslateString& GetFormat(const ibMetaID& id) const override;
+	virtual ibSelectMode GetSelectMode(const ibMetaID& id) const override;
+	virtual ibValue AdjustValue(const ibMetaID& id, const ibValue& value) const override;
+	virtual std::vector<ibMetaID> GetLinked(const ibMetaID& edited) const override;   // one walk over its attributes
+
 	ibValue GetValueByMetaID(const ibMetaID& id) const {
 		ibValue retValue;
 		if (GetValueByMetaID(id, retValue))
@@ -3144,6 +3152,13 @@ public:
 
 	//Get ref class
 	virtual ibClassID GetSourceClassType() const { return GetClassType(); }
+
+	// What a column says about its value — its attribute's own answer (ibTabularDataObject).
+	virtual const ibChoiceTypeLinkDescription& GetTypeLink(const ibMetaID& id) const override;
+	virtual const ibChoiceParametersDescription& GetChoiceParameters(const ibMetaID& id) const override;
+	virtual const ibTranslateString& GetFormat(const ibMetaID& id) const override;
+	virtual ibSelectMode GetSelectMode(const ibMetaID& id) const override;
+	virtual ibValue AdjustValue(const ibMetaID& id, const ibValue& value) const override;
 #pragma endregion
 
 	virtual bool AutoCreateColumn() const { return false; }
@@ -3358,6 +3373,13 @@ public:
 	// reference FIELD of this object seeds UNDEFINED, so the shared helper hands back an empty typed twin.
 	virtual bool SetValueBySourceHop(const ibSourceHop& hop, const ibValue& value) override { return SetValueByMetaID(hop.m_id, value); }
 	virtual bool GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const override;   // out-of-line (commonObject.cpp): filters the pin by the field's live declared type
+
+	// What a field of this object says about its value — its attribute's own answer (ibSourceDataObject).
+	virtual const ibChoiceTypeLinkDescription& GetTypeLink(const ibMetaID& id) const override;
+	virtual const ibChoiceParametersDescription& GetChoiceParameters(const ibMetaID& id) const override;
+	virtual const ibTranslateString& GetFormat(const ibMetaID& id) const override;
+	virtual ibSelectMode GetSelectMode(const ibMetaID& id) const override;
+	virtual ibValue AdjustValue(const ibMetaID& id, const ibValue& value) const override;
 
 	ibValue GetValueByMetaID(const ibMetaID& id) const {
 		ibValue retValue;

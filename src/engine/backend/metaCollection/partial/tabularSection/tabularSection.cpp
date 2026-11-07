@@ -31,6 +31,38 @@ static const ibValueMetaObjectAttributeBase* ibSectionColumnById(const ibValueMe
 	return nullptr;
 }
 
+// What a column says — asked of the attribute the section's own column map holds (one lookup, no list built
+// per call: a row's clearing asks it of every column). One this section has not says nothing.
+const ibChoiceTypeLinkDescription& ibValueTabularSectionDataObjectBase::GetTypeLink(const ibMetaID& id) const
+{
+	const ibValueMetaObjectAttributeBase* attribute = m_recordColumnCollection->GetAttributeByID(id);
+	return attribute != nullptr ? attribute->GetTypeLink() : ibTabularDataObject::GetTypeLink(id);
+}
+
+const ibChoiceParametersDescription& ibValueTabularSectionDataObjectBase::GetChoiceParameters(const ibMetaID& id) const
+{
+	const ibValueMetaObjectAttributeBase* attribute = m_recordColumnCollection->GetAttributeByID(id);
+	return attribute != nullptr ? attribute->GetChoiceParameters() : ibTabularDataObject::GetChoiceParameters(id);
+}
+
+const ibTranslateString& ibValueTabularSectionDataObjectBase::GetFormat(const ibMetaID& id) const
+{
+	const ibValueMetaObjectAttributeBase* attribute = m_recordColumnCollection->GetAttributeByID(id);
+	return attribute != nullptr ? attribute->GetFormat() : ibTabularDataObject::GetFormat(id);
+}
+
+ibSelectMode ibValueTabularSectionDataObjectBase::GetSelectMode(const ibMetaID& id) const
+{
+	const ibValueMetaObjectAttributeBase* attribute = m_recordColumnCollection->GetAttributeByID(id);
+	return attribute != nullptr ? attribute->GetSelectMode() : ibTabularDataObject::GetSelectMode(id);
+}
+
+ibValue ibValueTabularSectionDataObjectBase::AdjustValue(const ibMetaID& id, const ibValue& value) const
+{
+	const ibValueMetaObjectAttributeBase* attribute = m_recordColumnCollection->GetAttributeByID(id);
+	return attribute != nullptr ? attribute->AdjustValue(value) : ibTabularDataObject::AdjustValue(id, value);
+}
+
 ibDataViewItem ibValueTabularSectionDataObjectBase::FindRowValue(const ibValue& varValue, const ibString& colName) const
 {
 	ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo = m_recordColumnCollection->GetColumnByName(colName);
@@ -112,8 +144,9 @@ bool ibValueTabularSectionDataObjectBase::SetValueByMetaID(const ibDataViewItem&
 			if (attribute == nullptr) return false;
 			// …narrowed by the column's link, with THIS ROW as the holder — a value column typed by the
 			// kind column beside it takes the kind of its OWN row (choiceLinkResolver.h).
-			const ibValue settled =
-				ibChoiceLinkResolver::Adjust(ibChoiceHolder(this, item), attribute, varMetaVal);
+			ibValue settled;
+			if (!ibChoiceLinkResolver::Adjust(ibChoiceHolder(this, item), attribute->GetTypeLink(), varMetaVal, settled))
+				settled = attribute->AdjustValue(varMetaVal);
 
 			ibValue previous;
 			const bool changed = !node->GetValue(id, previous) || !(previous == settled);

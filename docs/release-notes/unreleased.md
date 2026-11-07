@@ -316,6 +316,9 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **On Firebird, a statement that fails with no transaction open says what Firebird said.** A duplicate in a
   unique index, for example, was refused with an empty description and a code of 0. And when one of several
   statements run together failed before the last one, the transaction they ran in was left open.
+- **A column whose choice parameters take a value from a header field is emptied in every row when that field
+  changes.** A contract column filtered by the header's counterparty kept its contracts when the counterparty
+  changed, in a form and from a module alike; a row marked *Keep* still keeps its value.
 
 - **`ThisForm.<attribute> = value` writes into the attribute.** It overwrote the attribute's own entry,
   and the attribute kept its old value.

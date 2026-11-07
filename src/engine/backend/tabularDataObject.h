@@ -3,12 +3,15 @@
 
 #include "backend/srcObject.h"   // ibTabularObject (minimal base) + BACKEND_API
 #include "backend/compiler/value.h"     // ibValue (inline GetValueByPath default-constructs one)
+#include "backend/createRequest.h"      // ibSelectMode — what choosing a column's value opens on (GetSelectMode)
 #include "core/description/sourceDescription.h"  // ibSourceHop — a binding path is {id, expected type} per hop
 #include "core/description/typeDescription.h"    // ibTypeDescription — what a column accepts, the table's own answer
+#include "core/tabular/tabularModelView.h"       // ibDataViewItem COMPLETE — GetItem below hands one back by value
 
-// Fwd — the hop gate takes these BY REF, so declarations suffice here (full types come in the .cpp's that
-// implement it): ibSourceHop (sourceDescription.h), ibDataViewItem (tabularModelView.h), ibValue (compiler/value.h).
-class CORE_API ibDataViewItem;
+// What a column says about its value — asked by id below, bodies in tabularDataObject.cpp.
+struct ibChoiceTypeLinkDescription;      // core/description/choiceLinkDescription.h
+struct ibChoiceParametersDescription;
+class BACKEND_API ibTranslateString;     // backend/backend_localization.h
 
 // ibTabularDataObject — the FULL tabular source: the TABLE mirror of ibSourceDataObject (the full SCALAR source
 // over ibSourceObject). It is ibTabularObject + THE table hop gate. A table value is PER-ROW, so the hop gate
@@ -18,8 +21,27 @@ class CORE_API ibDataViewItem;
 class BACKEND_API ibTabularDataObject : public ibTabularObject {
 public:
 	virtual ~ibTabularDataObject() {}
+
+	// THE ROWS — how many, and the n-th as the item the hops below take. The default is a table that stores no
+	// rows, as a database model reads its cursor; one that keeps them answers (ibValueModelStorage).
+	virtual long GetRowCount() const { return 0; }
+	virtual ibDataViewItem GetItem(long row) const { return ibDataViewItem(); }
+
 	virtual bool GetValueBySourceHop(const ibDataViewItem& item, const ibSourceHop& hop, ibValue& out) const { return false; }
 	virtual bool SetValueBySourceHop(const ibDataViewItem& item, const ibSourceHop& hop, const ibValue& value) { return false; }
+
+	// WHAT A COLUMN SAYS ABOUT ITS VALUE — by id, the scalar source's same five questions
+	// (ibSourceDataObject::GetTypeLink), answered by the table behind for its own columns — a tabular
+	// section and a record set by their attributes. The base says nothing (tabularDataObject.cpp).
+	virtual const ibChoiceTypeLinkDescription& GetTypeLink(const ibMetaID& id) const;
+	virtual const ibChoiceParametersDescription& GetChoiceParameters(const ibMetaID& id) const;
+	virtual const ibTranslateString& GetFormat(const ibMetaID& id) const;
+	virtual ibSelectMode GetSelectMode(const ibMetaID& id) const;
+	virtual ibValue AdjustValue(const ibMetaID& id, const ibValue& value) const;
+
+	// …and which columns are linked to `edited` (ibSourceDataObject::GetLinked) — answered by ibValueModel off
+	// its column collection and the questions above. None by default.
+	virtual std::vector<ibMetaID> GetLinked(const ibMetaID& edited) const { return {}; }
 
 	// WHAT THIS COLUMN ACCEPTS — the structure hop's only input. Declared here because the hop below is
 	// here; ANSWERED once by ibValueModel, off the model's own column collection, which is already kept in

@@ -695,3 +695,24 @@ ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* ibValueModel
 
 	return nullptr;
 }
+
+#include "backend/choiceLinkResolver.h"   // IsLinked — the rule a linked column is judged by
+
+// The columns the collection holds, each judged by what this table says governs it: the table behind answers
+// for its own (a section and a record set, by their attributes), and a value table's columns say nothing.
+std::vector<ibMetaID> ibValueModel::GetLinked(const ibMetaID& edited) const
+{
+	std::vector<ibMetaID> linked;
+	ibValueModelColumnCollection* colCollection = GetColumnCollection();
+	if (colCollection == nullptr)
+		return linked;
+	for (unsigned int idx = 0; idx < colCollection->GetColumnCount(); ++idx) {
+		const ibValueModelColumnCollection::ibValueModelColumnInfo* columnInfo = colCollection->GetColumnInfo(idx);
+		if (columnInfo == nullptr)
+			continue;
+		const ibMetaID column = columnInfo->GetColumnID();
+		if (ibChoiceLinkResolver::IsLinked(column, GetTypeLink(column), GetChoiceParameters(column), edited))
+			linked.push_back(column);
+	}
+	return linked;
+}

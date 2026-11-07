@@ -121,6 +121,12 @@ public:
 		virtual bool SetAt(const ibValue& varKeyValue, const ibValue& varValue);
 		virtual bool GetAt(const ibValue& varKeyValue, ibValue& pvarValue);
 
+		// The attribute a column is, by its id — out of this map, as the record set's collection answers.
+		const ibValueMetaObjectAttributeBase* GetAttributeByID(const ibMetaID& id) const {
+			const auto found = m_listColumnInfo.find(id);
+			return found != m_listColumnInfo.end() ? found->second->m_metaAttribute : nullptr;
+		}
+
 		friend class ibValueTabularSectionDataObjectBase;
 
 	protected:
@@ -168,6 +174,13 @@ public:
 
 	//Get ref class
 	virtual ibClassID GetSourceClassType() const { return GetClassType(); }
+
+	// What a column says about its value — its attribute's own answer (ibTabularDataObject).
+	virtual const ibChoiceTypeLinkDescription& GetTypeLink(const ibMetaID& id) const override;
+	virtual const ibChoiceParametersDescription& GetChoiceParameters(const ibMetaID& id) const override;
+	virtual const ibTranslateString& GetFormat(const ibMetaID& id) const override;
+	virtual ibSelectMode GetSelectMode(const ibMetaID& id) const override;
+	virtual ibValue AdjustValue(const ibMetaID& id, const ibValue& value) const override;
 
 #pragma endregion 
 

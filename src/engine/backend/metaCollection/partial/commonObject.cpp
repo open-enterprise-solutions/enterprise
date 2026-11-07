@@ -1987,7 +1987,9 @@ bool ibValueRecordDataObject::SetValueByMetaID(const ibMetaID& id, const ibValue
 		// ⭐ ADJUSTED THROUGH THE LINK, AND THE HOLDER IS THIS OBJECT. A field typed by a neighbour is
 		// narrowed to what that neighbour holds RIGHT NOW — the same narrowing whether the value came
 		// from a form, from a script or from a record written on the server (choiceLinkResolver.h).
-		const ibValue settled = ibChoiceLinkResolver::Adjust(ibChoiceHolder(this), attribute, varMetaVal);
+		ibValue settled;
+		if (!ibChoiceLinkResolver::Adjust(ibChoiceHolder(this), attribute->GetTypeLink(), varMetaVal, settled))
+			settled = attribute->AdjustValue(varMetaVal);
 		const bool changed = !(it->second == settled);
 		it->second = settled;
 
@@ -2044,6 +2046,51 @@ bool ibValueRecordDataObject::GetValueBySourceHop(const ibSourceHop& hop, ibValu
 	const bool got = GetValueByMetaID(hop.m_id, out);
 	const ibValueMetaObjectAttributeBase* attribute = GetMetaObject()->FindAnyAttributeObjectByFilter(hop.m_id);
 	return ibValueReferenceDataObject::CoerceHopType(hop, out, attribute != nullptr ? attribute->GetTypeDesc() : ibTypeDescription(), GetSourceMetaData()) || got;
+}
+
+// What a field says — asked of the attribute the write finds it by; one this object has not says nothing.
+const ibChoiceTypeLinkDescription& ibValueRecordDataObject::GetTypeLink(const ibMetaID& id) const
+{
+	const ibValueMetaObjectAttributeBase* attribute = GetMetaObject()->FindAnyAttributeObjectByFilter(id);
+	return attribute != nullptr ? attribute->GetTypeLink() : ibSourceDataObject::GetTypeLink(id);
+}
+
+const ibChoiceParametersDescription& ibValueRecordDataObject::GetChoiceParameters(const ibMetaID& id) const
+{
+	const ibValueMetaObjectAttributeBase* attribute = GetMetaObject()->FindAnyAttributeObjectByFilter(id);
+	return attribute != nullptr ? attribute->GetChoiceParameters() : ibSourceDataObject::GetChoiceParameters(id);
+}
+
+const ibTranslateString& ibValueRecordDataObject::GetFormat(const ibMetaID& id) const
+{
+	const ibValueMetaObjectAttributeBase* attribute = GetMetaObject()->FindAnyAttributeObjectByFilter(id);
+	return attribute != nullptr ? attribute->GetFormat() : ibSourceDataObject::GetFormat(id);
+}
+
+ibSelectMode ibValueRecordDataObject::GetSelectMode(const ibMetaID& id) const
+{
+	const ibValueMetaObjectAttributeBase* attribute = GetMetaObject()->FindAnyAttributeObjectByFilter(id);
+	return attribute != nullptr ? attribute->GetSelectMode() : ibSourceDataObject::GetSelectMode(id);
+}
+
+ibValue ibValueRecordDataObject::AdjustValue(const ibMetaID& id, const ibValue& value) const
+{
+	const ibValueMetaObjectAttributeBase* attribute = GetMetaObject()->FindAnyAttributeObjectByFilter(id);
+	return attribute != nullptr ? attribute->AdjustValue(value) : ibSourceDataObject::AdjustValue(id, value);
+}
+
+// The attributes linked to `edited`, in one walk over the list the write finds them in — each judged by
+// its own link and parameters. The source's road (ibSourceDataObject::GetLinked) asks by id, and here an
+// id is found by a walk of its own: twice per field. Only what the finds find (IsAllowed).
+std::vector<ibMetaID> ibValueRecordDataObject::GetLinked(const ibMetaID& edited) const
+{
+	std::vector<ibMetaID> linked;
+	for (const ibValueMetaObjectAttributeBase* attribute : GetMetaObject()->GetGenericAttributeArrayObject()) {
+		if (attribute->IsAllowed() && ibChoiceLinkResolver::IsLinked(attribute->GetMetaID(),
+			attribute->GetTypeLink(), attribute->GetChoiceParameters(), edited))
+			linked.push_back(attribute->GetMetaID());
+	}
+	return linked;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -3706,6 +3753,37 @@ bool ibValueRecordManagerObject::GetValueBySourceHop(const ibSourceHop& hop, ibV
 	return ibValueReferenceDataObject::CoerceHopType(hop, out, attribute != nullptr ? attribute->GetTypeDesc() : ibTypeDescription(), GetSourceMetaData()) || got;
 }
 
+// What a field says — as the record object answers (ibValueRecordDataObject::GetTypeLink), of the register's attribute.
+const ibChoiceTypeLinkDescription& ibValueRecordManagerObject::GetTypeLink(const ibMetaID& id) const
+{
+	const ibValueMetaObjectAttributeBase* attribute = GetMetaObject()->FindAnyAttributeObjectByFilter(id);
+	return attribute != nullptr ? attribute->GetTypeLink() : ibSourceDataObject::GetTypeLink(id);
+}
+
+const ibChoiceParametersDescription& ibValueRecordManagerObject::GetChoiceParameters(const ibMetaID& id) const
+{
+	const ibValueMetaObjectAttributeBase* attribute = GetMetaObject()->FindAnyAttributeObjectByFilter(id);
+	return attribute != nullptr ? attribute->GetChoiceParameters() : ibSourceDataObject::GetChoiceParameters(id);
+}
+
+const ibTranslateString& ibValueRecordManagerObject::GetFormat(const ibMetaID& id) const
+{
+	const ibValueMetaObjectAttributeBase* attribute = GetMetaObject()->FindAnyAttributeObjectByFilter(id);
+	return attribute != nullptr ? attribute->GetFormat() : ibSourceDataObject::GetFormat(id);
+}
+
+ibSelectMode ibValueRecordManagerObject::GetSelectMode(const ibMetaID& id) const
+{
+	const ibValueMetaObjectAttributeBase* attribute = GetMetaObject()->FindAnyAttributeObjectByFilter(id);
+	return attribute != nullptr ? attribute->GetSelectMode() : ibSourceDataObject::GetSelectMode(id);
+}
+
+ibValue ibValueRecordManagerObject::AdjustValue(const ibMetaID& id, const ibValue& value) const
+{
+	const ibValueMetaObjectAttributeBase* attribute = GetMetaObject()->FindAnyAttributeObjectByFilter(id);
+	return attribute != nullptr ? attribute->AdjustValue(value) : ibSourceDataObject::AdjustValue(id, value);
+}
+
 bool ibValueRecordManagerObject::SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal)
 {
 	// Read off the record after the write, for the reason given at ibValueRecordDataObjectRef::SetValueByMetaID.
@@ -4090,6 +4168,37 @@ ibValuePtr<ibValueModel> ibValueRecordSetObject::SaveDataToTable() const
 	return valueTable;
 }
 
+// What a column says — asked of the attribute the set's own column map holds, the one its write finds it by.
+const ibChoiceTypeLinkDescription& ibValueRecordSetObject::GetTypeLink(const ibMetaID& id) const
+{
+	const ibValueMetaObjectAttributeBase* attribute = m_recordColumnCollection->GetAttributeByID(id);
+	return attribute != nullptr ? attribute->GetTypeLink() : ibTabularDataObject::GetTypeLink(id);
+}
+
+const ibChoiceParametersDescription& ibValueRecordSetObject::GetChoiceParameters(const ibMetaID& id) const
+{
+	const ibValueMetaObjectAttributeBase* attribute = m_recordColumnCollection->GetAttributeByID(id);
+	return attribute != nullptr ? attribute->GetChoiceParameters() : ibTabularDataObject::GetChoiceParameters(id);
+}
+
+const ibTranslateString& ibValueRecordSetObject::GetFormat(const ibMetaID& id) const
+{
+	const ibValueMetaObjectAttributeBase* attribute = m_recordColumnCollection->GetAttributeByID(id);
+	return attribute != nullptr ? attribute->GetFormat() : ibTabularDataObject::GetFormat(id);
+}
+
+ibSelectMode ibValueRecordSetObject::GetSelectMode(const ibMetaID& id) const
+{
+	const ibValueMetaObjectAttributeBase* attribute = m_recordColumnCollection->GetAttributeByID(id);
+	return attribute != nullptr ? attribute->GetSelectMode() : ibTabularDataObject::GetSelectMode(id);
+}
+
+ibValue ibValueRecordSetObject::AdjustValue(const ibMetaID& id, const ibValue& value) const
+{
+	const ibValueMetaObjectAttributeBase* attribute = m_recordColumnCollection->GetAttributeByID(id);
+	return attribute != nullptr ? attribute->AdjustValue(value) : ibTabularDataObject::AdjustValue(id, value);
+}
+
 bool ibValueRecordSetObject::SetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, const ibValue& varMetaVal)
 {
 	if (!appData->DesignerMode()) {
@@ -4111,8 +4220,9 @@ bool ibValueRecordSetObject::SetValueByMetaID(const ibDataViewItem& item, const 
 				// kind column takes the type of the kind standing in the same record, not in some other
 				// one (choiceLinkResolver.h). A set written by a posting pass is exactly the road that
 				// has no control on it.
-				const ibValue settled =
-					ibChoiceLinkResolver::Adjust(ibChoiceHolder(this, item), attribute, varMetaVal);
+				ibValue settled;
+				if (!ibChoiceLinkResolver::Adjust(ibChoiceHolder(this, item), attribute->GetTypeLink(), varMetaVal, settled))
+					settled = attribute->AdjustValue(varMetaVal);
 
 				ibValue previous;
 				const bool changed = !node->GetValue(id, previous) || !(previous == settled);

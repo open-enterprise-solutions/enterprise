@@ -160,4 +160,58 @@ const ibSourceDataObject::ibSourceExplorer* ibSourceDataObject::WalkColumns(cons
 	return explorer;
 }
 
+#include "core/description/choiceLinkDescription.h"
+#include "backend/backend_localization.h"
+
+// A field this source does not answer for says nothing: no link, no narrowing, no format, items, and the
+// value as it is. The object behind the source answers for its own fields.
+const ibChoiceTypeLinkDescription& ibSourceDataObject::GetTypeLink(const ibMetaID& /*id*/) const
+{
+	static const ibChoiceTypeLinkDescription s_none;
+	return s_none;
+}
+
+const ibChoiceParametersDescription& ibSourceDataObject::GetChoiceParameters(const ibMetaID& /*id*/) const
+{
+	static const ibChoiceParametersDescription s_none;
+	return s_none;
+}
+
+const ibTranslateString& ibSourceDataObject::GetFormat(const ibMetaID& /*id*/) const
+{
+	static const ibTranslateString s_none;
+	return s_none;
+}
+
+ibSelectMode ibSourceDataObject::GetSelectMode(const ibMetaID& /*id*/) const
+{
+	return ibSelectMode::ibSelectMode_Items;
+}
+
+ibValue ibSourceDataObject::AdjustValue(const ibMetaID& /*id*/, const ibValue& value) const
+{
+	return value;
+}
+
+#include "backend/choiceLinkResolver.h"   // IsLinked — the rule a linked field is judged by
+
+// The fields the explorer lists, each judged by what this source says governs it. A table node is not a
+// field: its rows are the table's to answer.
+std::vector<ibMetaID> ibSourceDataObject::GetLinked(const ibMetaID& edited) const
+{
+	std::vector<ibMetaID> linked;
+	const ibSourceExplorer* fields = GetSourceExplorer();
+	if (fields == nullptr)
+		return linked;
+	for (unsigned int idx = 0; idx < fields->GetHelperCount(); ++idx) {
+		const ibSourceExplorer* node = fields->GetHelper(idx);
+		if (node == nullptr || node->IsTableSection())
+			continue;
+		const ibMetaID field = node->GetSourceId();
+		if (ibChoiceLinkResolver::IsLinked(field, GetTypeLink(field), GetChoiceParameters(field), edited))
+			linked.push_back(field);
+	}
+	return linked;
+}
+
 

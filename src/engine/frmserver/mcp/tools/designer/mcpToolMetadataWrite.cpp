@@ -2561,14 +2561,16 @@ public:
 		}
 
 		// ---- the condition, as the control asks for it ------------------------------------------
-		const ibChoiceCondition condition = ibChoiceLinkResolver::Resolve(at.holder, field);
+		const ibChoiceCondition condition = ibChoiceLinkResolver::Resolve(at.holder, field->GetMetaID());
 
 		// ⭐ WHAT A LINK BY TYPE SETTLES, ASKED THE WAY A WRITE ASKS IT. A condition used to carry a
 		// settled type description computed here a second way; it narrowed no list and this report was
 		// its only reader, so it is gone. Bringing an EMPTY value through the link gives a value of
 		// whatever the link settles on, and its class is the answer (2026-09-24).
-		const ibClassID settled = field->GetTypeLink().IsOk()
-			? ibChoiceLinkResolver::Adjust(at.holder, field, ibValue()).GetClassType() : 0;
+		ibValue broughtIn;
+		if (!ibChoiceLinkResolver::Adjust(at.holder, field->GetTypeLink(), ibValue(), broughtIn))
+			broughtIn = field->AdjustValue(ibValue());   // the field's own adjustment, as the write falls back to
+		const ibClassID settled = field->GetTypeLink().IsOk() ? broughtIn.GetClassType() : 0;
 
 		std::vector<ibDataValue> types;
 		std::vector<ibClassID> lists;
