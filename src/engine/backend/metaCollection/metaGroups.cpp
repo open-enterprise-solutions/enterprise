@@ -48,6 +48,8 @@ const ibMetaGroupRow s_groups[] = {
 	{ g_metaConstantCLSID,                  ibTRANSLATE("Constants"),       ibMetaGroupBand::Metadata, ibTRANSLATE("Constant") },
 	{ g_metaCatalogCLSID,                    ibTRANSLATE("Catalogs"),        ibMetaGroupBand::Metadata, ibTRANSLATE("Catalog") },
 	{ g_metaDocumentCLSID,                   ibTRANSLATE("Documents"),       ibMetaGroupBand::Metadata, ibTRANSLATE("Document") },
+	// …and the number series documents may share, right after them: shown as a branch of Documents.
+	{ g_metaDocumentNumeratorCLSID,          ibTRANSLATE("Document numerators"), ibMetaGroupBand::Metadata, ibTRANSLATE("Document numerator") },
 	{ g_metaEnumerationCLSID,                ibTRANSLATE("Enumerations"),    ibMetaGroupBand::Metadata, ibTRANSLATE("Enumeration") },
 	{ g_metaDataToolCLSID,                   ibTRANSLATE("Data tools"),      ibMetaGroupBand::Metadata, ibTRANSLATE("Data tool") },
 	{ g_metaReportCLSID,                     ibTRANSLATE("Reports"),         ibMetaGroupBand::Metadata, ibTRANSLATE("Report") },
