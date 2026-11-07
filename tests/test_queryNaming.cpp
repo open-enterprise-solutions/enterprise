@@ -10,6 +10,7 @@
 //   * `SELECT * INTO Tmp` yielding a temp table with no fields;
 //   * settings left pointing at a field the source no longer has.
 
+#include <algorithm>
 #include <gtest/gtest.h>
 #include "core/query/queryRefusal.h"   // ibQueryRefusal — what the core parser gives back for a text that does not read
 
@@ -24,6 +25,8 @@
 #include "backend/query/queryableFactory.h"      // ibQueryableSourceDescriptor — a virtual table that consumes its condition
 #include "backend/query/tempTableQueryable.h"    // ibTempTableQueryable — its columns, from a table in memory
 #include "backend/metadataConfiguration.h"       // ibMetaDataConfigurationFile — the open configuration it registers in
+#include "backend/query/dataQueryBuilder.h"       // ibDataQueryResult — what a composer's run hands back
+#include "backend/query/querySelector.h"         // ibSelector — its totals, read at the root
 
 namespace {
 
@@ -1489,4 +1492,99 @@ TEST(QueryComposerPackage, AnUnnamedSelectionAmongSeveralIsRefused)
 		wxT("LINK Plan JOIN Plan ON Plan.Item = Plan.Item"));
 
 	EXPECT_THROW(composer.RenderText(), ibBackendException);
+}
+
+// ===========================================================================
+//  A resource written as an expression, over a query of several branches
+// ===========================================================================
+
+namespace {
+
+// A document's rows in memory: the columns, typed, and the rows as (column name, value).
+class RowsInMemory : public ibQueryableSourceDescriptor
+{
+public:
+	RowsInMemory(const ibString& name, std::initializer_list<std::pair<ibString, ibValueTypes>> columns,
+	             std::initializer_list<std::vector<ibValue>> rows)
+		: m_name(name), m_rows(Fill(columns, rows)) {}
+
+	ibString GetNamespace() const override { return ibT("Document"); }
+	ibString GetName() const override { return m_name; }
+	const ibBackendQueryable* CreateQueryable(ibValue**, long) override { return &m_rows; }
+
+private:
+	static ibValue Fill(std::initializer_list<std::pair<ibString, ibValueTypes>> columns,
+	                    std::initializer_list<std::vector<ibValue>> rows)
+	{
+		ibValueModelTable* const table = new ibValueModelTable();
+		const ibValue held(table);
+		std::vector<ibMetaID> ids;
+		for (const auto& column : columns) {
+			ibTypeDescription type;
+			type.SetDefaultMetaType(column.second);
+			ids.push_back(table->GetColumnCollection()->AddColumn(column.first, type, column.first)->GetColumnID());
+		}
+		for (const std::vector<ibValue>& row : rows) {
+			std::vector<std::pair<ibMetaID, ibValue>> values;
+			for (size_t at = 0; at < row.size(); ++at)
+				values.emplace_back(ids[at], row[at]);
+			table->AppendRow(values);
+		}
+		return held;
+	}
+
+	ibString             m_name;
+	ibTempTableQueryable m_rows;
+};
+
+} // namespace
+
+// A resource with no function is its expression, and the totals fold over the author's query read one level down. The
+// expression inside the call was carried into that query whole, as a field of its own (`q_carried0`), and the figure
+// then folded a field the row it stands on does not have: `TOTALS aggregates "q_carried0", which the selection does
+// not carry` (issue #486, met over a query of several branches). The expression is now worked out one level up, over
+// the outputs it names, and the figure folds its value.
+TEST(QueryComposerTotals, AResourceWrittenAsAnExpressionFoldsOverAUnion)
+{
+	RowsInMemory invoices(ibT("Invoice"),
+		{ { ibT("Counterparty"), ibValueTypes::TYPE_STRING }, { ibT("TotalWithVAT"), ibValueTypes::TYPE_NUMBER } },
+		{ { ibValue(ibString(ibT("North"))), ibValue(100) }, { ibValue(ibString(ibT("South"))), ibValue(50) } });
+	RowsInMemory payments(ibT("IncomingPayment"),
+		{ { ibT("Counterparty"), ibValueTypes::TYPE_STRING }, { ibT("Amount"), ibValueTypes::TYPE_NUMBER } },
+		{ { ibValue(ibString(ibT("North"))), ibValue(30) } });
+	OpenConfiguration cfg;
+	ASSERT_NE(nullptr, cfg.GetSourceFactory());
+	cfg.RegisterSource(&invoices);
+	cfg.RegisterSource(&payments);
+	const ibSourceMetaDataScope scope(&cfg);
+
+	ibDataDBComposer composer;
+	composer.SetMetaData(&cfg);   // the configuration a report's composer reads its sources from
+	composer.FromText(
+		ibT("SELECT Invoice.Counterparty AS Counterparty, Invoice.TotalWithVAT AS Charged, 0 AS Paid ")
+		ibT("FROM Document.Invoice AS Invoice ")
+		ibT("UNION ALL ")
+		ibT("SELECT Payment.Counterparty, 0, Payment.Amount FROM Document.IncomingPayment AS Payment"));
+	composer.Resource(ibT("SUM"), ibT("Charged"));
+	composer.Resource(ibT("SUM"), ibT("Paid"));
+	ibResourceDescription balance;
+	balance.m_path  = ibT("SUM(Charged - Paid)");   // no function: the path is the expression
+	balance.m_alias = ibT("Balance");
+	composer.Resource(balance);
+	composer.TotalBy(ibT("Counterparty"));
+	composer.Select(ibT("Charged")).Select(ibT("Paid")).Select(ibT("Balance"));   // a figure is folded when it is shown
+
+	std::vector<ibQueryLowering::OutputColumn> schema;
+	bool hasTotals = false;
+	ibDataQueryResult rows = ibMakeEmptyQueryResult(nullptr);
+	ASSERT_NO_THROW(rows = composer.Execute(schema, hasTotals)) << composer.RenderText();
+	EXPECT_TRUE(hasTotals);
+
+	// Read as the report reads it: through the column the schema hands back for the figure.
+	const auto figure = std::find_if(schema.begin(), schema.end(),
+		[](const ibQueryLowering::OutputColumn& oc) { return oc.m_name == ibT("Balance"); });
+	ASSERT_NE(schema.end(), figure);
+	const ibSelector totals = rows.Select(ibSelectKind::ibSelectKind_ByGroups);
+	const ibValue balanceTotal = figure->m_byAlias ? totals.GetTotalColumn(figure->m_alias) : totals.GetTotal(figure->m_col);
+	EXPECT_EQ(0, balanceTotal.GetNumber().Compare(ibNumber(120))) << "150 charged, 30 paid";
 }
