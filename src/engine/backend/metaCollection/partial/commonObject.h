@@ -2217,6 +2217,8 @@ public:
 	//counter
 	virtual void SourceIncrRef() override { ibValue::IncrRef(); }
 	virtual void SourceDecrRef() override { ibValue::DecrRef(); }
+	// The value a tabular section of this object holds (valueInfo.h).
+	virtual ibValue* GetDataValue() override { return this; }
 
 	//get metaData from object
 	virtual const ibValueMetaObjectRecordData* GetMetaObject() const override = 0;
@@ -2705,7 +2707,10 @@ class BACKEND_API ibValueRecordDataObjectRecorderRef : public ibValueRecordDataO
 	// RecordDescription, creates one ibValueRecordSetObject per
 	// declared register seeded with this recorder's reference, and
 	// fans Write/Delete across all of them.
-	class BACKEND_API ibRecorderRegister : public ibValueDynamicMembers {
+	//
+	// PART of its recorder (valuePart.h, #645): holding RegisterRecords holds the document, which keeps the
+	// holder through an ibPartHold that does not count the document.
+	class BACKEND_API ibRecorderRegister : public ibValuePart<ibValueDynamicMembers> {
 	public:
 		void CreateRecordSet();
 		bool WriteRecordSet();
@@ -2730,7 +2735,12 @@ class BACKEND_API ibValueRecordDataObjectRecorderRef : public ibValueRecordDataO
 
 		virtual bool IsEmpty() const { return false; }
 
+	protected:
+		// The whole this holder is part of: its recorder.
+		virtual ibValue* GetWholeValue() const override { return m_recorder; }
+
 	private:
+		// Not counted here: the holder's own count is the recorder's too (GetWholeValue).
 		ibValueRecordDataObjectRecorderRef* m_recorder;
 		// WHICH OF THE RECORDER'S LISTS this holder is made of. One holder class, two instances —
 		// see ibRecorderWrites above for why that is a type.
@@ -2828,10 +2838,11 @@ public:
 
 protected:
 	// Register holder owned by the recorder. Created in ctor, lives
-	// for the lifetime of the recorder value.
-	ibValuePtr<ibRecorderRegister> m_registerRecords;
+	// for the lifetime of the recorder value. A part's hold, not an ibValuePtr: that would count the
+	// recorder on itself, and it would never end.
+	ibPartHold<ibRecorderRegister> m_registerRecords;
 	// …and the same holder over the other list: the sets of registrations.
-	ibValuePtr<ibRecorderRegister> m_sequenceRecords;
+	ibPartHold<ibRecorderRegister> m_sequenceRecords;
 };
 
 #pragma endregion

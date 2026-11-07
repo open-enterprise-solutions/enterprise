@@ -300,6 +300,8 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Fixes
 
+- **A tabular section and a document's `RegisterRecords` keep their object while they are held.** `Ref.GetObject().Goods.Add()` crashed: the object was gone once `.Goods` was read. A function can now return
+  `Obj.Goods` or `Obj.RegisterRecords` of an object of its own, and the caller can use it.
 - **Typing a number code finds the item wherever it stands.** A catalog whose code is a number was searched among
   its first hundred items only; `12` now finds 12, 120 to 129, 1200 to 1299 and so on, through the code's index.
 - **Output list names a column by its header**, the field's synonym, not by the field's name.

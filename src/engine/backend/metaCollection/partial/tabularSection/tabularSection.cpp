@@ -14,6 +14,36 @@
 #include "backend/appData.h"
 
 //////////////////////////////////////////////////////////////////////
+//               ibValueDataObject — the sections it keeps                //
+//////////////////////////////////////////////////////////////////////
+
+// Here, where the section is a complete type: the holds let go of their sections (valueInfo.h).
+ibValueDataObject::~ibValueDataObject() = default;
+
+bool ibValueDataObject::GetTableValue(const ibMetaID& id, ibValue& out) const
+{
+	const auto it = m_listTableValue.find(id);
+	if (it == m_listTableValue.end())
+		return false;
+	if (it->second)
+		out = ibValue(it->second.get());   // the hand-out counts the section, and through it this object
+	else
+		out = ibValue(ibValueTypes::TYPE_NULL);
+	return true;
+}
+
+ibValueTabularSectionDataObjectBase* ibValueDataObject::FindTable(const ibMetaID& id) const
+{
+	const auto it = m_listTableValue.find(id);
+	return it != m_listTableValue.end() ? it->second.get() : nullptr;
+}
+
+void ibValueDataObject::SetTable(const ibMetaID& id, ibValueTabularSectionDataObjectBase* table)
+{
+	m_listTableValue.insert_or_assign(id, ibPartHold<ibValueTabularSectionDataObjectBase>(table));
+}
+
+//////////////////////////////////////////////////////////////////////
 //               ibValueTabularSectionDataObjectBase                          //
 //////////////////////////////////////////////////////////////////////
 

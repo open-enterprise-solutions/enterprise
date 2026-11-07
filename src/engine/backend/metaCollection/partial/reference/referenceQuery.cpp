@@ -246,6 +246,9 @@ bool ibValueReferenceDataObject::FindValue(const ibString& findData, std::vector
 			return m_metaObject;
 		}
 
+		// Not a value: it lives on the stack for one comparison and makes no tabular section.
+		virtual ibValue* GetDataValue() override { return nullptr; }
+
 	private:
 		const ibValueMetaObjectRecordDataRef* m_metaObject;
 	};
