@@ -11,8 +11,8 @@
 // Licence:     ibWindows licence
 ///////////////////////////////////////////////////////////////////////////////
 
-#ifndef _WX_UNIV_SPINBUTT_H_
-#define _WX_UNIV_SPINBUTT_H_
+#ifndef _GUI_UNIV_SPINBUTTON_H_
+#define _GUI_UNIV_SPINBUTTON_H_
 
 #include "gui/gui.h"
 
@@ -136,5 +136,5 @@ public:
                                  const wxMouseEvent& event) override;
 };
 
-#endif // _WX_UNIV_SPINBUTT_H_
+#endif // _GUI_UNIV_SPINBUTTON_H_
 

@@ -11,8 +11,8 @@
 // Licence:     ibWindows licence
 ///////////////////////////////////////////////////////////////////////////////
 
-#ifndef _WX_UNIV_RADIOBOX_H_
-#define _WX_UNIV_RADIOBOX_H_
+#ifndef _GUI_UNIV_RADIOBOX_H_
+#define _GUI_UNIV_RADIOBOX_H_
 
 #include "gui/gui.h"
 
@@ -155,4 +155,4 @@ private:
     wxDECLARE_DYNAMIC_CLASS(ibRadioBox);
 };
 
-#endif // _WX_UNIV_RADIOBOX_H_
+#endif // _GUI_UNIV_RADIOBOX_H_

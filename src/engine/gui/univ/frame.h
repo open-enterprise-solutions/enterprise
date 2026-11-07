@@ -11,8 +11,8 @@
 // Licence:     ibWindows licence
 ///////////////////////////////////////////////////////////////////////////////
 
-#ifndef _WX_UNIV_FRAME_H_
-#define _WX_UNIV_FRAME_H_
+#ifndef _GUI_UNIV_FRAME_H_
+#define _GUI_UNIV_FRAME_H_
 
 #include "gui/gui.h"
 
@@ -90,4 +90,4 @@ protected:
     wxDECLARE_DYNAMIC_CLASS(ibFrame);
 };
 
-#endif // _WX_UNIV_FRAME_H_
+#endif // _GUI_UNIV_FRAME_H_

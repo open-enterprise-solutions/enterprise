@@ -11,8 +11,8 @@
 // Licence:     ibWindows licence
 ///////////////////////////////////////////////////////////////////////////////
 
-#ifndef _WX_UNIV_SCRARROW_H_
-#define _WX_UNIV_SCRARROW_H_
+#ifndef _GUI_UNIV_SCROLLARROW_H_
+#define _GUI_UNIV_SCROLLARROW_H_
 
 #include "gui/gui.h"
 
@@ -117,4 +117,4 @@ public:
 };
 #endif // wxUSE_SCROLLBAR
 
-#endif // _WX_UNIV_SCRARROW_H_
+#endif // _GUI_UNIV_SCROLLARROW_H_

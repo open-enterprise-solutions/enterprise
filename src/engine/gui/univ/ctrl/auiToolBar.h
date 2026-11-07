@@ -1,5 +1,5 @@
-#ifndef _TOOLBAR_H_
-#define _TOOLBAR_H_
+#ifndef _GUI_UNIV_AUITOOLBAR_H_
+#define _GUI_UNIV_AUITOOLBAR_H_
 
 #include <wx/aui/auibar.h>
 

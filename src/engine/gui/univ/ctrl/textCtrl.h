@@ -11,8 +11,8 @@
 // Licence:     ibWindows licence
 /////////////////////////////////////////////////////////////////////////////
 
-#ifndef _WX_UNIV_TEXTCTRL_H_
-#define _WX_UNIV_TEXTCTRL_H_
+#ifndef _GUI_UNIV_TEXTCTRL_H_
+#define _GUI_UNIV_TEXTCTRL_H_
 
 #include "gui/gui.h"
 
@@ -643,5 +643,5 @@ private:
     friend class wxWrappedLineData;
 };
 
-#endif // _WX_UNIV_TEXTCTRL_H_
+#endif // _GUI_UNIV_TEXTCTRL_H_
 

@@ -11,8 +11,8 @@
 // Licence:     ibWindows licence
 /////////////////////////////////////////////////////////////////////////////
 
-#ifndef _WX_UNIV_INPCONS_H_
-#define _WX_UNIV_INPCONS_H_
+#ifndef _GUI_UNIV_INPUTCONSUMER_H_
+#define _GUI_UNIV_INPUTCONSUMER_H_
 
 #include "gui/gui.h"
 
@@ -154,4 +154,4 @@ private:
         ibInputConsumer::OnActivate(event); \
     }
 
-#endif // _WX_UNIV_INPCONS_H_
+#endif // _GUI_UNIV_INPUTCONSUMER_H_

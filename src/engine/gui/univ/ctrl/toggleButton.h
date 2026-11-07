@@ -12,8 +12,8 @@
 // Licence:     ibWindows licence
 ///////////////////////////////////////////////////////////////////////////////
 
-#ifndef _WX_UNIV_TGLBTN_H_
-#define _WX_UNIV_TGLBTN_H_
+#ifndef _GUI_UNIV_TOGGLEBUTTON_H_
+#define _GUI_UNIV_TOGGLEBUTTON_H_
 
 #include "gui/gui.h"
 
@@ -72,4 +72,4 @@ private:
     wxDECLARE_DYNAMIC_CLASS(ibToggleButton);
 };
 
-#endif // _WX_UNIV_TGLBTN_H_
+#endif // _GUI_UNIV_TOGGLEBUTTON_H_

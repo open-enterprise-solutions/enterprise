@@ -10,8 +10,8 @@
 // Licence:     wxWindows licence
 /////////////////////////////////////////////////////////////////////////////
 
-#ifndef _GUI_UNIV_CTRL_SEARCHCTRL_H_
-#define _GUI_UNIV_CTRL_SEARCHCTRL_H_
+#ifndef _GUI_UNIV_SEARCHCTRL_H_
+#define _GUI_UNIV_SEARCHCTRL_H_
 
 #include "gui/univ/ctrl/textCtrl.h"         // base class declaration
 
@@ -65,4 +65,4 @@ private:
     wxDECLARE_DYNAMIC_CLASS(ibSearchCtrl);
 };
 
-#endif // _GUI_UNIV_CTRL_SEARCHCTRL_H_
+#endif // _GUI_UNIV_SEARCHCTRL_H_

@@ -8,8 +8,8 @@
 // Licence:     wxWindows licence
 /////////////////////////////////////////////////////////////////////////////
 
-#ifndef _WX_GENERIC_GRIDCTRL_H_
-#define _WX_GENERIC_GRIDCTRL_H_
+#ifndef _GUI_UNIV_GRIDEXTCTRL_H_
+#define _GUI_UNIV_GRIDEXTCTRL_H_
 
 #include "gridext.h"
 
@@ -431,4 +431,4 @@ private:
 };
 
 #endif  // wxUSE_GRID
-#endif // _WX_GENERIC_GRIDCTRL_H_
+#endif // _GUI_UNIV_GRIDEXTCTRL_H_

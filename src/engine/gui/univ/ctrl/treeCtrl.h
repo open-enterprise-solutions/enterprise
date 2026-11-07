@@ -12,8 +12,8 @@
 /////////////////////////////////////////////////////////////////////////////
 
 // Not _GENERIC_TREECTRL_H_: that is wx/generic/treectlg.h's guard, included wherever wx has no native tree (macOS).
-#ifndef _IB_GUI_UNIV_TREECTRL_H_
-#define _IB_GUI_UNIV_TREECTRL_H_
+#ifndef _GUI_UNIV_TREECTRL_H_
+#define _GUI_UNIV_TREECTRL_H_
 
 #include "gui/gui.h"
 
@@ -633,4 +633,4 @@ private:
 
 #endif // wxUSE_TREECTRL
 
-#endif // _IB_GUI_UNIV_TREECTRL_H_
+#endif // _GUI_UNIV_TREECTRL_H_

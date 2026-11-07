@@ -8,8 +8,8 @@
 // Licence:     wxWindows licence
 /////////////////////////////////////////////////////////////////////////////
 
-#ifndef _WX_DATAVIEW_H_BASE_
-#define _WX_DATAVIEW_H_BASE_
+#ifndef _GUI_UNIV_DATAVIEW_H_
+#define _GUI_UNIV_DATAVIEW_H_
 
 // VENDORED (wxWidgets dataview base classes, wxWindows licence) — see the note in
 // datavgen.h: a system header, because inline definitions here warn in every
@@ -1643,4 +1643,4 @@ private:
 #endif // wxUSE_DATAVIEWCTRL
 
 #endif
-	// _WX_DATAVIEW_H_BASE_
+	// _GUI_UNIV_DATAVIEW_H_

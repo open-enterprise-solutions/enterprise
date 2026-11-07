@@ -11,8 +11,8 @@
 // Licence:     ibWindows licence
 ///////////////////////////////////////////////////////////////////////////////
 
-#ifndef _WX_UNIV_CUSTOMBGWIN_H_
-#define _WX_UNIV_CUSTOMBGWIN_H_
+#ifndef _GUI_UNIV_CUSTOMBGWIN_H_
+#define _GUI_UNIV_CUSTOMBGWIN_H_
 
 // ----------------------------------------------------------------------------
 // ibCustomBackgroundWindow
@@ -37,4 +37,4 @@ protected:
     wxDECLARE_NO_COPY_TEMPLATE_CLASS(ibCustomBackgroundWindow, W);
 };
 
-#endif // _WX_UNIV_CUSTOMBGWIN_H_
+#endif // _GUI_UNIV_CUSTOMBGWIN_H_

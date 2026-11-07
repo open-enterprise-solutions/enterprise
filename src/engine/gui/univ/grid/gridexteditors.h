@@ -8,8 +8,8 @@
 // Licence:     wxWindows licence
 /////////////////////////////////////////////////////////////////////////////
 
-#ifndef _WX_GENERIC_GRID_EDITORS_H_
-#define _WX_GENERIC_GRID_EDITORS_H_
+#ifndef _GUI_UNIV_GRIDEXTEDITORS_H_
+#define _GUI_UNIV_GRIDEXTEDITORS_H_
 
 #include <wx/defs.h>
 
@@ -517,4 +517,4 @@ private:
 
 #endif // wxUSE_GRID
 
-#endif // _WX_GENERIC_GRID_EDITORS_H_
+#endif // _GUI_UNIV_GRIDEXTEDITORS_H_

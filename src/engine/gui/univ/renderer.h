@@ -11,8 +11,8 @@
 // Licence:     ibWindows licence
 ///////////////////////////////////////////////////////////////////////////////
 
-#ifndef _WX_UNIV_RENDERER_H_
-#define _WX_UNIV_RENDERER_H_
+#ifndef _GUI_UNIV_RENDERER_H_
+#define _GUI_UNIV_RENDERER_H_
 
 #include "gui/gui.h"
 
@@ -929,4 +929,4 @@ private:
     wxRect m_rect;
 };
 
-#endif // _WX_UNIV_RENDERER_H_
+#endif // _GUI_UNIV_RENDERER_H_

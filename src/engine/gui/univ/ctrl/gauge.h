@@ -11,8 +11,8 @@
 // Licence:     ibWindows licence
 ///////////////////////////////////////////////////////////////////////////////
 
-#ifndef _WX_UNIV_GAUGE_H_
-#define _WX_UNIV_GAUGE_H_
+#ifndef _GUI_UNIV_GAUGE_H_
+#define _GUI_UNIV_GAUGE_H_
 
 #include "gui/gui.h"
 
@@ -84,4 +84,4 @@ protected:
     wxDECLARE_DYNAMIC_CLASS(ibGauge);
 };
 
-#endif // _WX_UNIV_GAUGE_H_
+#endif // _GUI_UNIV_GAUGE_H_

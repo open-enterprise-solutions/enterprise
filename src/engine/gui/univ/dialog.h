@@ -10,8 +10,8 @@
 // Licence:     wxWindows licence
 /////////////////////////////////////////////////////////////////////////////
 
-#ifndef _WX_UNIV_DIALOG_H_
-#define _WX_UNIV_DIALOG_H_
+#ifndef _GUI_UNIV_DIALOG_H_
+#define _GUI_UNIV_DIALOG_H_
 
 #include "gui/gui.h"
 #include "gui/univ/topLevel.h"
@@ -121,4 +121,4 @@ private:
 };
 
 #endif
-    // _WX_UNIV_DIALOG_H_
+    // _GUI_UNIV_DIALOG_H_

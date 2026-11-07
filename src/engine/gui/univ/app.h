@@ -11,13 +11,13 @@
 // Licence:     ibWindows licence
 ///////////////////////////////////////////////////////////////////////////////
 
-#ifndef _WX_UNIX_APP_H_
-#define _WX_UNIX_APP_H_
+#ifndef _GUI_UNIV_APP_H_
+#define _GUI_UNIV_APP_H_
 
 class GUI_API ibUniversalApp : public wxApp
 {
 public:
 };
 
-#endif // _WX_UNIX_APP_H_
+#endif // _GUI_UNIV_APP_H_
 

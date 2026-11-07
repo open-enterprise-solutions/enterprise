@@ -8,8 +8,8 @@
 // Licence:     wxWindows licence
 /////////////////////////////////////////////////////////////////////////////
 
-#ifndef _WX_GENERIC_GRID_H_
-#define _WX_GENERIC_GRID_H_
+#ifndef _GUI_UNIV_GRIDEXT_H_
+#define _GUI_UNIV_GRIDEXT_H_
 
 #include <wx/defs.h>
 
@@ -4858,4 +4858,4 @@ extern const int ibEVT_GRID_CHANGE_SEL_LABEL;
 
 #endif // wxUSE_GRID
 
-#endif // _WX_GENERIC_GRID_H_
+#endif // _GUI_UNIV_GRIDEXT_H_

@@ -8,8 +8,8 @@
 // Licence:     wxWindows licence
 /////////////////////////////////////////////////////////////////////////////
 
-#ifndef _WX_GENERIC_GRID_PRIVATE_H_
-#define _WX_GENERIC_GRID_PRIVATE_H_
+#ifndef _GUI_UNIV_GRIDEXTPRIVATE_H_
+#define _GUI_UNIV_GRIDEXTPRIVATE_H_
 
 #include "wx/defs.h"
 
@@ -1631,4 +1631,4 @@ namespace ibGridPrivate
 } // namespace ibGridPrivate
 
 #endif // wxUSE_GRID
-#endif // _WX_GENERIC_GRID_PRIVATE_H_
+#endif // _GUI_UNIV_GRIDEXTPRIVATE_H_

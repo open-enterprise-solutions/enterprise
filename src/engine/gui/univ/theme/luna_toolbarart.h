@@ -1,5 +1,5 @@
-#ifndef _LUNA_TABART_H__
-#define _LUNA_TABART_H__
+#ifndef _LUNA_TOOLBARART_H__
+#define _LUNA_TOOLBARART_H__
 
 #include "gui/gui.h"
 #include <wx/aui/auibar.h>

@@ -8,8 +8,8 @@
 // Licence:     wxWindows licence
 ///////////////////////////////////////////////////////////////////////////////
 
-#ifndef _WX_DVRENDERERS_H_
-#define _WX_DVRENDERERS_H_
+#ifndef _GUI_UNIV_DVRENDERERS_H_
+#define _GUI_UNIV_DVRENDERERS_H_
 
 /*
 	Note about the structure of various headers: they're organized in a more
@@ -889,5 +889,5 @@ private:
 // ibDataViewTextRenderer itself now, don't use it any more
 #define ibDataViewTextRendererAttr ibDataViewTextRenderer
 
-#endif // _WX_DVRENDERERS_H_
+#endif // _GUI_UNIV_DVRENDERERS_H_
 

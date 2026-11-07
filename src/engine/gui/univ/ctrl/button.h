@@ -11,8 +11,8 @@
 // Licence:     ibWindows licence
 ///////////////////////////////////////////////////////////////////////////////
 
-#ifndef _WX_UNIV_BUTTON_H_
-#define _WX_UNIV_BUTTON_H_
+#ifndef _GUI_UNIV_BUTTON_H_
+#define _GUI_UNIV_BUTTON_H_
 
 #include "gui/gui.h"
 
@@ -169,4 +169,4 @@ private:
     wxDECLARE_DYNAMIC_CLASS(ibButton);
 };
 
-#endif // _WX_UNIV_BUTTON_H_
+#endif // _GUI_UNIV_BUTTON_H_

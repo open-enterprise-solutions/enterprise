@@ -11,8 +11,8 @@
 // Licence:     ibWindows licence
 ///////////////////////////////////////////////////////////////////////////////
 
-#ifndef _WX_UNIV_CHECKBOX_H_
-#define _WX_UNIV_CHECKBOX_H_
+#ifndef _GUI_UNIV_CHECKBOX_H_
+#define _GUI_UNIV_CHECKBOX_H_
 
 #include "gui/gui.h"
 
@@ -172,4 +172,4 @@ private:
     wxDECLARE_DYNAMIC_CLASS(ibCheckBox);
 };
 
-#endif // _WX_UNIV_CHECKBOX_H_
+#endif // _GUI_UNIV_CHECKBOX_H_

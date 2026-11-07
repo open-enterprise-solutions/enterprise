@@ -11,8 +11,8 @@
 // Licence:     ibWindows licence
 ///////////////////////////////////////////////////////////////////////////////
 
-#ifndef _WX_UNIV_STATUSBR_H_
-#define _WX_UNIV_STATUSBR_H_
+#ifndef _GUI_UNIV_STATUSBAR_H_
+#define _GUI_UNIV_STATUSBAR_H_
 
 #include "gui/gui.h"
 
@@ -102,5 +102,5 @@ private:
     WX_DECLARE_INPUT_CONSUMER()
 };
 
-#endif // _WX_UNIV_STATUSBR_H_
+#endif // _GUI_UNIV_STATUSBAR_H_
 

@@ -10,8 +10,8 @@
 // Licence:     wxWindows
 /////////////////////////////////////////////////////////////////////////////
 
-#ifndef TREELISTCTRL_H
-#define TREELISTCTRL_H
+#ifndef _GUI_UNIV_TREELISTCTRL_H_
+#define _GUI_UNIV_TREELISTCTRL_H_
 
 #include <wx/treectrl.h>
 #include <wx/control.h>
@@ -579,4 +579,4 @@ private:
 };
 
 /////////////////////////////////////////////////////////////////////////////
-#endif /* TREELISTCTRL_H */
+#endif /* _GUI_UNIV_TREELISTCTRL_H_ */

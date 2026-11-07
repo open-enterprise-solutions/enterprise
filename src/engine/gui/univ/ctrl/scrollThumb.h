@@ -11,8 +11,8 @@
 // Licence:     ibWindows licence
 ///////////////////////////////////////////////////////////////////////////////
 
-#ifndef _WX_UNIV_SCRTHUMB_H_
-#define _WX_UNIV_SCRTHUMB_H_
+#ifndef _GUI_UNIV_SCROLLTHUMB_H_
+#define _GUI_UNIV_SCROLLTHUMB_H_
 
 #include "gui/gui.h"
 
@@ -143,4 +143,4 @@ public:
     virtual bool OnPageScroll(int pageInc) = 0;
 };
 
-#endif // _WX_UNIV_SCRTHUMB_H_
+#endif // _GUI_UNIV_SCROLLTHUMB_H_

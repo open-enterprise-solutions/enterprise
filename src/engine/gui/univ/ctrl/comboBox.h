@@ -4,8 +4,8 @@
 // the value area + drop arrow, an ibTextCtrl child for editable mode and a
 // transient popup window with an ibListBox carrying the items.
 
-#ifndef _WX_UNIV_COMBOBOX_H_
-#define _WX_UNIV_COMBOBOX_H_
+#ifndef _GUI_UNIV_COMBOBOX_H_
+#define _GUI_UNIV_COMBOBOX_H_
 
 #include "gui/gui.h"
 
@@ -178,4 +178,4 @@ private:
     wxDECLARE_DYNAMIC_CLASS(ibComboBox);
 };
 
-#endif // _WX_UNIV_COMBOBOX_H_
+#endif // _GUI_UNIV_COMBOBOX_H_

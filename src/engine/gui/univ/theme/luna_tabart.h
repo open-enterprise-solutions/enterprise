@@ -1,5 +1,5 @@
-#ifndef __AUITABART_H__
-#define __AUITABART_H__
+#ifndef _LUNA_TABART_H__
+#define _LUNA_TABART_H__
 
 #include <wx/aui/auibook.h>
 #include "gui/gui.h"
@@ -105,4 +105,4 @@ protected:
 	unsigned int m_flags;
 };
 
-#endif // __AUITABART_H__
+#endif // _LUNA_TABART_H__

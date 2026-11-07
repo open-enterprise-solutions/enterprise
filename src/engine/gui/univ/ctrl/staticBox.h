@@ -11,8 +11,8 @@
 // Licence:     ibWindows licence
 ///////////////////////////////////////////////////////////////////////////////
 
-#ifndef _WX_UNIV_STATBOX_H_
-#define _WX_UNIV_STATBOX_H_
+#ifndef _GUI_UNIV_STATICBOX_H_
+#define _GUI_UNIV_STATICBOX_H_
 
 #include "gui/gui.h"
 
@@ -137,4 +137,4 @@ private:
     wxDECLARE_NO_COPY_CLASS(ibStaticBoxSizer);
 };
 
-#endif // _WX_UNIV_STATBOX_H_
+#endif // _GUI_UNIV_STATICBOX_H_

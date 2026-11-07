@@ -10,8 +10,8 @@
 /////////////////////////////////////////////////////////////////////////////
 
 
-#ifndef __WX_UNIV_TOPLEVEL_H__
-#define __WX_UNIV_TOPLEVEL_H__
+#ifndef _GUI_UNIV_TOPLEVEL_H_
+#define _GUI_UNIV_TOPLEVEL_H_
 
 #include "gui/univ/renderer.h"
 #include "gui/univ/theme.h"
@@ -551,4 +551,4 @@ bool ibTopLevelWindow<W>::GetResizingCursor(long hit, wxCursor& cursor)
     return false;
 }
 
-#endif // __WX_UNIV_TOPLEVEL_H__
+#endif // _GUI_UNIV_TOPLEVEL_H_

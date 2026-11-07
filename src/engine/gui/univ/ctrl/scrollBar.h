@@ -11,8 +11,8 @@
 // Licence:     ibWindows licence
 ///////////////////////////////////////////////////////////////////////////////
 
-#ifndef _WX_UNIV_SCROLBAR_H_
-#define _WX_UNIV_SCROLBAR_H_
+#ifndef _GUI_UNIV_SCROLLBAR_H_
+#define _GUI_UNIV_SCROLLBAR_H_
 
 #include "gui/gui.h"
 
@@ -289,5 +289,5 @@ protected:
     ibScrollTimer *m_timerScroll;
 };
 
-#endif // _WX_UNIV_SCROLBAR_H_
+#endif // _GUI_UNIV_SCROLLBAR_H_
 

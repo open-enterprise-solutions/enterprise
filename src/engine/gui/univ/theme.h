@@ -13,8 +13,8 @@
 // Licence:     ibWindows licence
 ///////////////////////////////////////////////////////////////////////////////
 
-#ifndef _WX_UNIV_THEME_H_
-#define _WX_UNIV_THEME_H_
+#ifndef _GUI_UNIV_THEME_H_
+#define _GUI_UNIV_THEME_H_
 
 #include "gui/gui.h"
 
@@ -168,4 +168,4 @@ struct GUI_API ibThemeInfo
 // the only built-in theme is ours
 #define wxUNIV_DEFAULT_THEME luna
 
-#endif // _WX_UNIV_THEME_H_
+#endif // _GUI_UNIV_THEME_H_

@@ -11,8 +11,8 @@
 // Licence:     ibWindows licence
 ///////////////////////////////////////////////////////////////////////////////
 
-#ifndef _WX_UNIV_STDREND_H_
-#define _WX_UNIV_STDREND_H_
+#ifndef _GUI_UNIV_THEMERENDERER_H_
+#define _GUI_UNIV_THEMERENDERER_H_
 
 #include "gui/univ/renderer.h"
 #include <wx/pen.h>
@@ -372,4 +372,4 @@ protected:
     wxDECLARE_NO_COPY_CLASS(ibThemeRenderer);
 };
 
-#endif // _WX_UNIV_STDREND_H_
+#endif // _GUI_UNIV_THEMERENDERER_H_

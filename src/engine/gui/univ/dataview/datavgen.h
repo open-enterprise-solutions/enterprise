@@ -7,8 +7,8 @@
 // Licence:     wxWindows licence
 /////////////////////////////////////////////////////////////////////////////
 
-#ifndef __GENERICDATAVIEWCTRLH__
-#define __GENERICDATAVIEWCTRLH__
+#ifndef _GUI_UNIV_DATAVGEN_H_
+#define _GUI_UNIV_DATAVGEN_H_
 
 // VENDORED (wxWidgets generic dataview, wxWindows licence). Marked a system header so
 // its diagnostics stay out of OUR logs: the classes here are defined inline, so every
@@ -1895,4 +1895,4 @@ public:
 };
 #endif // wxUSE_ACCESSIBILITY
 
-#endif // __GENERICDATAVIEWCTRLH__
+#endif // _GUI_UNIV_DATAVGEN_H_

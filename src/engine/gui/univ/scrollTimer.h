@@ -11,8 +11,8 @@
 // Licence:     ibWindows licence
 ///////////////////////////////////////////////////////////////////////////////
 
-#ifndef _WX_UNIV_SCRTIMER_H
-#define _WX_UNIV_SCRTIMER_H
+#ifndef _GUI_UNIV_SCROLLTIMER_H_
+#define _GUI_UNIV_SCROLLTIMER_H_
 
 #include "gui/gui.h"
 
@@ -52,4 +52,4 @@ protected:
 
 #endif // wxUSE_TIMER
 
-#endif // _WX_UNIV_SCRTIMER_H
+#endif // _GUI_UNIV_SCROLLTIMER_H_

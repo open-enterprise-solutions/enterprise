@@ -11,8 +11,8 @@
 // Licence:     ibWindows licence
 ///////////////////////////////////////////////////////////////////////////////
 
-#ifndef _WX_UNIV_COLSCHEM_H_
-#define _WX_UNIV_COLSCHEM_H_
+#ifndef _GUI_UNIV_COLOURSCHEME_H_
+#define _GUI_UNIV_COLOURSCHEME_H_
 
 #include "gui/gui.h"
 
@@ -107,4 +107,4 @@ typedef ibColourScheme ibColourScheme;
 #define wxTHEME_BG_COLOUR(win) \
     ibThemeEngine::Get()->GetColourScheme()->GetBackground(win)
 
-#endif // _WX_UNIV_COLSCHEM_H_
+#endif // _GUI_UNIV_COLOURSCHEME_H_
