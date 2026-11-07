@@ -7078,6 +7078,10 @@ msgstr "JSONWriter: нічого не записано - документ міс
 msgid "Get: the key to look for is not given"
 msgstr "Get: не вказано ключ для пошуку"
 
+#: src/engine/backend/tabularModel.cpp:717
+msgid "Find: the column name to look for is not given"
+msgstr "Find: не вказано ім'я колонки для пошуку"
+
 #: src/engine/backend/system/value/valueMap.cpp:426
 #, c-format
 msgid "Key '%s' is already using!"

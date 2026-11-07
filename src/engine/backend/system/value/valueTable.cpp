@@ -473,7 +473,7 @@ bool ibValueModelTable::ibValueModelTableColumnCollection::CallAsFunc(const long
 	}
 	}
 
-	return false;
+	return ibValueModelColumnCollection::CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
 }
 
 bool ibValueModelTable::ibValueModelTableColumnCollection::SetAt(const ibValue& varKeyValue, const ibValue& varValue) // read-only column collection - no-op (writes are not supported)
