@@ -1953,6 +1953,9 @@ const ibSourceExplorer* ibValueRecordDataObject::GetSourceExplorer() const
 
 bool ibValueRecordDataObject::SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal)
 {
+	// A tabular section is not assigned: it is the object's own, and its rows are what is written.
+	if (m_listTableValue.find(id) != m_listTableValue.end())
+		return false;
 	auto it = m_listObjectValue.find(id);
 	ibASSERT(it != m_listObjectValue.end());
 	if (it != m_listObjectValue.end()) {
@@ -2010,6 +2013,8 @@ bool ibValueRecordDataObject::SetValueByMetaID(const ibMetaID& id, const ibValue
 // object that owns it (ibSourceDataObject::WalkColumns), so a table's column is asked of the table.
 bool ibValueRecordDataObject::GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const
 {
+	if (GetTableValue(id, pvarMetaVal))
+		return true;
 	auto it = m_listObjectValue.find(id);
 	ibASSERT(it != m_listObjectValue.end());
 	if (it != m_listObjectValue.end()) {
@@ -2080,10 +2085,7 @@ std::vector<ibMetaID> ibValueRecordDataObject::GetLinked(const ibMetaID& edited)
 
 ibValueModel* ibValueRecordDataObject::GetTableByMetaID(const ibMetaID& id) const
 {
-	const ibValue& cTable = GetValueByMetaID(id); ibValueModel* retTable = nullptr;
-	if (cTable.ConvertToValue(retTable))
-		return retTable;
-	return nullptr;
+	return FindTable(id);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2096,6 +2098,7 @@ void ibValueRecordDataObject::PrepareEmptyObject()
 	ibASSERT(metaObject);
 
 	m_listObjectValue.clear();
+	m_listTableValue.clear();
 
 	//attrbutes can refValue 
 	for (const auto object : metaObject->GetGenericAttributeArrayObject()) {
@@ -2108,7 +2111,7 @@ void ibValueRecordDataObject::PrepareEmptyObject()
 	for (const auto object : metaObject->GetGenericTableArrayObject()) {
 		if (object->IsDeleted())
 			continue;
-		m_listObjectValue.insert_or_assign(object->GetMetaID(), new ibValueTabularSectionDataObject(this, object));
+		SetTable(object->GetMetaID(), new ibValueTabularSectionDataObject(this, object));
 	}
 }
 
@@ -2626,6 +2629,7 @@ ibValuePtr<ibValueRecordDataObject> ibValueRecordDataObjectRef::CopyObjectValue(
 void ibValueRecordDataObjectRef::PrepareEmptyObject()
 {
 	m_listObjectValue.clear();
+	m_listTableValue.clear();
 	//attrbutes can refValue 
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 		if (object->IsDeleted())
@@ -2638,7 +2642,7 @@ void ibValueRecordDataObjectRef::PrepareEmptyObject()
 	for (const auto object : m_metaObject->GetGenericTableArrayObject()) {
 		if (object->IsDeleted())
 			continue;
-		m_listObjectValue.insert_or_assign(object->GetMetaID(), new ibValueTabularSectionDataObjectRef(this, object));
+		SetTable(object->GetMetaID(), new ibValueTabularSectionDataObjectRef(this, object));
 	}
 	m_objModified = true;
 }
@@ -2646,6 +2650,7 @@ void ibValueRecordDataObjectRef::PrepareEmptyObject()
 void ibValueRecordDataObjectRef::PrepareEmptyObject(const ibValueRecordDataObjectRef* source)
 {
 	m_listObjectValue.clear();
+	m_listTableValue.clear();
 
 	ibValueMetaObjectAttributeBase* codeAttribute = m_metaObject->GetAttributeForCode();
 	ibASSERT(codeAttribute);
@@ -2665,11 +2670,10 @@ void ibValueRecordDataObjectRef::PrepareEmptyObject(const ibValueRecordDataObjec
 	for (const auto object : m_metaObject->GetGenericTableArrayObject()) {
 		if (object->IsDeleted())
 			continue;
-		ibValueTabularSectionDataObjectRef* tableSection = new ibValueTabularSectionDataObjectRef(this, object);
-		if (tableSection->LoadDataFromTable(source->GetTableByMetaID(object->GetMetaID())))
-			m_listObjectValue.insert_or_assign(object->GetMetaID(), tableSection);
-		else
-			delete tableSection;
+		// Held before it is filled; one the source has nothing to give for is let go again.
+		SetTable(object->GetMetaID(), new ibValueTabularSectionDataObjectRef(this, object));
+		if (!FindTable(object->GetMetaID())->LoadDataFromTable(source->GetTableByMetaID(object->GetMetaID())))
+			m_listTableValue.erase(object->GetMetaID());
 	}
 	m_objModified = true;
 }
@@ -2758,6 +2762,7 @@ bool ibValueRecordDataObjectHierarchyRef::GetValueByMetaID(const ibMetaID& id, i
 void ibValueRecordDataObjectHierarchyRef::PrepareEmptyObject()
 {
 	m_listObjectValue.clear();
+	m_listTableValue.clear();
 	//attrbutes can refValue
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 		if (object->IsDeleted())
@@ -2801,19 +2806,19 @@ void ibValueRecordDataObjectHierarchyRef::PrepareEmptyObject()
 		if (m_objMode == ibObjectMode::OBJECT_ITEM) {
 			if (tableUse == ibItemMode::ibItemMode_Item ||
 				tableUse == ibItemMode::ibItemMode_Folder_Item) {
-				m_listObjectValue.insert_or_assign(object->GetMetaID(), new ibValueTabularSectionDataObjectRef(this, object));
+				SetTable(object->GetMetaID(), new ibValueTabularSectionDataObjectRef(this, object));
 			}
 			else {
-				m_listObjectValue.insert_or_assign(object->GetMetaID(), ibValueTypes::TYPE_NULL);
+				SetTable(object->GetMetaID(), nullptr);   // not used by this kind
 			}
 		}
 		else {
 			if (tableUse == ibItemMode::ibItemMode_Folder ||
 				tableUse == ibItemMode::ibItemMode_Folder_Item) {
-				m_listObjectValue.insert_or_assign(object->GetMetaID(), new ibValueTabularSectionDataObjectRef(this, object));
+				SetTable(object->GetMetaID(), new ibValueTabularSectionDataObjectRef(this, object));
 			}
 			else {
-				m_listObjectValue.insert_or_assign(object->GetMetaID(), ibValueTypes::TYPE_NULL);
+				SetTable(object->GetMetaID(), nullptr);   // not used by this kind
 			}
 		}
 	}
@@ -2823,6 +2828,7 @@ void ibValueRecordDataObjectHierarchyRef::PrepareEmptyObject()
 void ibValueRecordDataObjectHierarchyRef::PrepareEmptyObject(const ibValueRecordDataObjectRef* source)
 {
 	m_listObjectValue.clear();
+	m_listTableValue.clear();
 	ibValueMetaObjectAttributeBase* codeAttribute = m_metaObject->GetAttributeForCode();
 	ibASSERT(codeAttribute);
 	m_listObjectValue[codeAttribute->GetMetaID()] = codeAttribute->CreateValue();
@@ -2849,11 +2855,10 @@ void ibValueRecordDataObjectHierarchyRef::PrepareEmptyObject(const ibValueRecord
 	for (const auto object : m_metaObject->GetGenericTableArrayObject()) {
 		if (object->IsDeleted())
 			continue;
-		ibValueTabularSectionDataObjectRef* tableSection = new ibValueTabularSectionDataObjectRef(this, object);
-		if (tableSection->LoadDataFromTable(source->GetTableByMetaID(object->GetMetaID())))
-			m_listObjectValue.insert_or_assign(object->GetMetaID(), tableSection);
-		else
-			delete tableSection;
+		// Held before it is filled; one the source has nothing to give for is let go again.
+		SetTable(object->GetMetaID(), new ibValueTabularSectionDataObjectRef(this, object));
+		if (!FindTable(object->GetMetaID())->LoadDataFromTable(source->GetTableByMetaID(object->GetMetaID())))
+			m_listTableValue.erase(object->GetMetaID());
 	}
 	m_objModified = true;
 }
@@ -3146,7 +3151,7 @@ void ibValueRecordDataObjectRecorderRef::ibRecorderRegister::RefreshRecordSet()
 }
 
 ibValueRecordDataObjectRecorderRef::ibRecorderRegister::ibRecorderRegister(ibValueRecordDataObjectRecorderRef* recorder, ibRecorderWrites of) :
-	ibValueDynamicMembers(ibValueTypes::TYPE_VALUE), m_recorder(recorder), m_writes(of)
+	ibValuePart<ibValueDynamicMembers>(ibValueTypes::TYPE_VALUE), m_recorder(recorder), m_writes(of)
 {
 	m_members.Bind(this, &ibRecorderRegister::FillMembers);
 	ibRecorderRegister::CreateRecordSet();
@@ -3222,10 +3227,10 @@ ibValueRecordDataObjectRecorderRef::~ibValueRecordDataObjectRecorderRef() = defa
 
 void ibValueRecordDataObjectRecorderRef::InitRegisterRecords()
 {
-	ibASSERT(m_registerRecords == nullptr);
-	m_registerRecords = new ibRecorderRegister(this);
+	ibASSERT(!m_registerRecords);
+	m_registerRecords = ibPartHold<ibRecorderRegister>(new ibRecorderRegister(this));
 	// …and the other list, where a kind has one: the sets of registrations a document writes.
-	m_sequenceRecords = new ibRecorderRegister(this, ibRecorderWrites::Sequences);
+	m_sequenceRecords = ibPartHold<ibRecorderRegister>(new ibRecorderRegister(this, ibRecorderWrites::Sequences));
 }
 
 // RegisterRecords — EXPORTED context variable, bound BEFORE the base compiles so
@@ -3235,10 +3240,10 @@ void ibValueRecordDataObjectRecorderRef::InitRegisterRecords()
 bool ibValueRecordDataObjectRecorderRef::InitializeObject(const ibGuid& copyGuid)
 {
 	ibRuntimeModuleDataObject::SetParent(ibSession::EditModuleManagerFor(m_metaObject->GetMetaData()));
-	ibRecorderRegister* recordSet = m_registerRecords;
+	ibRecorderRegister* recordSet = m_registerRecords.get();
 	BindExportVariable(ibT("RegisterRecords"), recordSet);
 	// …and the other list, bound beside it: the sets of registrations this document writes.
-	ibRecorderRegister* sequenceSet = m_sequenceRecords;
+	ibRecorderRegister* sequenceSet = m_sequenceRecords.get();
 	BindExportVariable(ibT("Sequences"), sequenceSet);
 	return ibValueRecordDataObjectRef::InitializeObject(copyGuid);
 }
@@ -3246,9 +3251,9 @@ bool ibValueRecordDataObjectRecorderRef::InitializeObject(const ibGuid& copyGuid
 bool ibValueRecordDataObjectRecorderRef::InitializeObject(ibValueRecordDataObjectRef* source, bool generate)
 {
 	ibRuntimeModuleDataObject::SetParent(ibSession::EditModuleManagerFor(m_metaObject->GetMetaData()));
-	ibRecorderRegister* recordSet = m_registerRecords;
+	ibRecorderRegister* recordSet = m_registerRecords.get();
 	BindExportVariable(ibT("RegisterRecords"), recordSet);
-	ibRecorderRegister* sequenceSet = m_sequenceRecords;
+	ibRecorderRegister* sequenceSet = m_sequenceRecords.get();
 	BindExportVariable(ibT("Sequences"), sequenceSet);
 	return ibValueRecordDataObjectRef::InitializeObject(source, generate);
 }

@@ -69,6 +69,8 @@ class BACKEND_API ibValueSelectorRecordDataObject : public ibValueSelectorDataOb
 	virtual const ibValueMetaObjectRecordData* GetMetaObject() const {
 		return m_metaObject;
 	}
+	// The value a tabular section of the current row holds (valueInfo.h).
+	virtual ibValue* GetDataValue() override { return this; }
 
 	void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);//method call
