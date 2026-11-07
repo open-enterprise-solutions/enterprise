@@ -20,6 +20,9 @@
 #include <wx/toplevel.h>
 
 #include <wx/generic/private/drawresize.h>
+#ifdef __WXOSX__
+#include <wx/osx/private/available.h>   // WX_IS_MACOS_AVAILABLE in OnPaint
+#endif
 
 #include <stdlib.h>
 

@@ -1546,7 +1546,7 @@ void ibGridCellChoiceEditor::BeginEdit(int row, int col, ibGrid* grid)
 	// choice is made in it under OS X. The bug is almost certainly due to a
 	// problem in focus events generation logic but it's not obvious to fix and
 	// for now this at least allows to use ibGrid.
-	Combo()->Popup();
+	Combo()->ShowPopup();
 #endif
 
 	if (evtHandler)
@@ -1701,7 +1701,7 @@ void ibGridCellEnumEditor::BeginEdit(int row, int col, ibGrid* grid)
 	// choice is made in it under OS X. The bug is almost certainly due to a
 	// problem in focus events generation logic but it's not obvious to fix and
 	// for now this at least allows to use ibGrid.
-	Combo()->Popup();
+	Combo()->ShowPopup();
 #endif
 
 	if (evtHandler)

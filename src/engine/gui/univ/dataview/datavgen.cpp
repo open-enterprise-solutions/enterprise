@@ -53,9 +53,9 @@
 #include <wx/generic/private/rowheightcache.h>
 #include <wx/generic/private/widthcalc.h>
 
+#include "gui/univ/ctrl/textCtrl.h"   // the in-place editor - on every platform, not only with accessibility
 #if wxUSE_ACCESSIBILITY
 #include <wx/private/markupparser.h>
-#include "gui/univ/ctrl/textCtrl.h"
 #endif // wxUSE_ACCESSIBILITY
 
 //-----------------------------------------------------------------------------
