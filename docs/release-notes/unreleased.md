@@ -251,6 +251,14 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Metadata
 
+- **Several kinds of document can share one number series: a *Document numerator*.** It sits under
+  *Documents → Document numerators* and says what a number of the series is (a string or a number, and its
+  length), the period it starts again in and whether a number may stand twice. A document that names it in
+  its new `Numerator` property takes the next number of the shared series, its `Number` takes the numerator's
+  type, and its own *Number periodicity* is not shown; the first number reads every member's table. With
+  *Check unique* on (the default), a write whose number another document of the series already has in the
+  period is refused, naming that document. A numerator a document names is not deleted. A document that names
+  none numbers as before. See [document-numerators.md](../public/document-numerators.md).
 - **The attributes every object of a kind has are a group of their own.** *Predefined attributes*, under *Context*,
   holds Ref, Code, Description, Number, Date, Parent, Owner, Period, Recorder and the rest; they stood under *Common*
   among the name, synonym and comment. An object with none does not show the group.

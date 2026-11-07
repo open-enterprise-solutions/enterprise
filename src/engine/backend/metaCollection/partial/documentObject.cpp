@@ -4,6 +4,9 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "document.h"
+#include "documentNumerator.h"
+#include "backend/query/dataQueryBuilder.h"   // the numerator's uniqueness check — each member read through the L3 door
+#include "backend/backend_exception.h"
 #include "backend/metaData.h"
 #include "backend/system/value/valuePointInTime.h"   // the moment an object can be asked for
 
@@ -269,18 +272,38 @@ bool ibValueRecordDataObjectDocument::CallAsFunc(const long lMethodNum, ibValue&
 ibValueRecordDataObjectRef::ibNumberSeriesKey ibValueRecordDataObjectDocument::NumberSeriesKey() const
 {
 	ibNumberSeriesKey key;
-	const ibValueMetaObjectRecordDataRecorderRef* meta = GetMetaObject();
+	const ibValueMetaObjectDocument* meta = GetDocumentMetaObject();
 	if (meta == nullptr)
 		return key;
 
+	// ⭐ A NUMERATOR'S SERIES: its counter row and every table of the documents that name it. Each table is
+	// asked for its own columns — the documents share the TYPE of the number (the numerator's), not the names.
+	// Unbound, both stay empty: the document's own row and its own table, exactly as before numerators.
+	const ibValueMetaObjectDocumentNumerator* numerator = meta->GetNumerator();
+	if (numerator != nullptr)
+		key.m_seriesPath = numerator->GetDocPath();
+
 	const ibNumberPeriodicity period = meta->GetNumberPeriodicity();
-	if (period == ibNumberPeriodicity::ibNumberPeriodicity_Nonperiodical)
+	const bool periodic = period != ibNumberPeriodicity::ibNumberPeriodicity_Nonperiodical;
+
+	if (numerator != nullptr) {
+		for (const ibValueMetaObjectDocument* member : numerator->GetMembers()) {
+			key.m_members.push_back({ member->GetPhysicalTableName(),
+				CounterField(member->GetDocumentNumber()),
+				periodic ? DateField(member->GetDocumentDate()) : ibString() });
+		}
+	}
+
+	if (!periodic)
 		return key;
 
 	// The write dates the document before it asks for a number. An empty date has no period.
 	const ibValue date = GetValueByMetaID(*meta->GetDocumentDate());
-	if (date.GetType() != ibValueTypes::TYPE_DATE || date.GetDate().IsEmpty())
+	if (date.GetType() != ibValueTypes::TYPE_DATE || date.GetDate().IsEmpty()) {
+		for (ibNumberSeriesMember& member : key.m_members)
+			member.m_dateField.Clear();
 		return key;
+	}
 	const ibDateTime when = date.GetDate();
 
 	key.m_interval = ibDocumentNumberInterval(period, when);
@@ -289,15 +312,54 @@ ibValueRecordDataObjectRef::ibNumberSeriesKey ibValueRecordDataObjectDocument::N
 	key.m_from = when.BeginOfPeriod(unit).GetValue();
 	key.m_to   = when.BeginOfNextPeriod(unit).GetValue();
 
-	const ibValueMetaObjectAttributePredefined* dateAttribute = meta->GetDocumentDate();
-	if (dateAttribute != nullptr && dateAttribute->GetQueryColumn() != nullptr) {
-		for (const ibColumnSlot& slot : DescribeColumnLayout(dateAttribute->GetQueryColumn())) {
-			if (slot.m_role == ibColumnRole::Date) {
-				key.m_dateField = slot.m_name;
-				break;
-			}
+	key.m_dateField = DateField(meta->GetDocumentDate());
+	return key;
+}
+
+void ibValueRecordDataObjectDocument::RefuseTakenNumber(bool generated)
+{
+	const ibValueMetaObjectDocument* meta = GetDocumentMetaObject();
+	const ibValueMetaObjectDocumentNumerator* numerator = meta != nullptr ? meta->GetNumerator() : nullptr;
+	if (numerator == nullptr || !numerator->IsCheckUnique())
+		return;
+
+	const ibValue number = GetValueByMetaID(*meta->GetDocumentNumber());
+	if (number.IsEmpty())
+		return;   // nothing to compare — and a write with no number is the handler's own business
+
+	const ibNumberSeriesKey series = NumberSeriesKey();
+	// A generated number holds the row already (the increment that produced it); a typed one takes it now.
+	if (!generated)
+		LockNumberSeries(series);
+
+	const bool periodic = series.m_interval != ibNumberSeriesNonperiodical;
+	for (const ibValueMetaObjectDocument* member : numerator->GetMembers()) {
+		const ibBackendQueryColumn* numberCol = member->GetDocumentNumber()->GetQueryColumn();
+		const ibBackendQueryColumn* dateCol = member->GetDocumentDate()->GetQueryColumn();
+
+		ibDataQueryBuilder b;
+		b.From(member->GetQueryable());
+		// ⚠ NOT FILTERED BY THE WRITER'S RIGHTS: a number is taken whoever may see the document that has it.
+		b.WithAccessPolicy(nullptr);
+		b.Where(numberCol, number);
+		if (periodic) {
+			b.WhereCompare(dateCol, ibQueryFilterOp::GreaterEqual, ibValue(ibDateTime(series.m_from)));
+			b.WhereCompare(dateCol, ibQueryFilterOp::Less, ibValue(ibDateTime(series.m_to)));
+		}
+		// …and not by this document itself, written again with the number it already has.
+		if (member == meta && !IsNewObject()) {
+			b.Where(member->GetDataReference()->GetQueryColumn(), ibQueryFilterOp::NotEqual,
+				ibValue(ibValueReferenceDataObject::Create(member, m_objGuid, ibReferenceLoad::OnDemand)));
+		}
+
+		ibReadPageRequest page;
+		page.m_count = 1;
+		ibDataQueryResult rs = b.Execute(page);
+		if (rs.Next()) {
+			ibBackendCoreException::Error(_("%s: the number %s is already taken by %s %s from %s (document numerator %s)"),
+				GetSourceCaption(), number.GetString(), member->GetSynonym(), number.GetString(),
+				rs.GetValue(dateCol).GetString(), numerator->GetName());
 		}
 	}
-	return key;
 }
 

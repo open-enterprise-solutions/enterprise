@@ -13688,3 +13688,41 @@ msgstr ""
 #: src/engine/frmserver/schema/style.cpp
 msgid "The theme could not be kept"
 msgstr ""
+
+#: src/engine/backend/metaCollection/partial/documentNumerator.h
+msgid "Check unique"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/document.h
+msgid "Numerator"
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaGroups.cpp
+msgid "Document numerators"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/documentObject.cpp
+#, c-format
+msgid "%s: the number %s is already taken by %s %s from %s (document numerator %s)"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/documentNumeratorMetadata.cpp
+#, c-format
+msgid "The document numerator '%s' cannot be deleted: the document '%s' numbers from it. Clear the document's Numerator property first."
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/documentNumerator.h
+msgid "A document is not written while another document of this numerator - of any of its kinds - already has the same number in the same period. The refusal names that document. Off: a number typed by hand may stand twice."
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/document.h
+msgid "The document numerator this document takes its numbers from. Empty (the default): the document numbers on its own. Named: its numbers are the next ones of the numerator's series, shared with every document that names the same numerator, of the numerator's type and length and restarting with the numerator's periodicity - this document's own Number periodicity and Number type are not used while it is set."
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/documentNumerator.h
+msgid "What a number of this series is: a string or a number, and its length. Every document that numbers from the numerator has its Number of this type; a string number is padded with zeros to the length."
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/documentNumerator.h
+msgid "When the numerator's numbers start again. Nonperiodical (the default): one series for the life of the numerator. Year, quarter, month or day: the next number is the next one inside that period of the document's date, whichever of the numerator's documents took the last one, and a new period starts again at one."
+msgstr ""
