@@ -687,8 +687,8 @@ bool ibWebConfig::Read(const ibString& folder, ibString& error)
 
 ibWebServer::ibWebServer(const ibWebConfig& config) :
 	m_config(config),
-	m_serveQueue(std::make_unique<ibServeQueue>(static_cast<std::size_t>(std::max(config.m_serviceWorkers, 1L)),
-		static_cast<std::size_t>(std::max(config.m_serviceCalls, 1L)), std::chrono::seconds(std::max(config.m_serviceWait, 1L))))
+	m_serveQueue(std::make_unique<ibServeQueue>(static_cast<std::size_t>((std::max)(config.m_serviceWorkers, 1L)),
+		static_cast<std::size_t>((std::max)(config.m_serviceCalls, 1L)), std::chrono::seconds((std::max)(config.m_serviceWait, 1L))))
 {
 }
 
