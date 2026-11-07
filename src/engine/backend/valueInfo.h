@@ -27,6 +27,13 @@ public:
 
 	ibValueDataObject(const ibGuid& objGuid = wxNullGuid, bool newObject = true) : m_newObject(newObject), m_objGuid(objGuid) {}
 
+	// Not copyable: the sections are parts of this object alone (ibPartHold is move-only). Said out loud
+	// because the class is exported, and MSVC defines every implicit member of an exported class — the
+	// copy it would define copies the map of holds and does not compile. Nothing copies one: a derived
+	// copy (ibValueRecordDataObject's) builds a fresh base, a new object with sections of its own.
+	ibValueDataObject(const ibValueDataObject&) = delete;
+	ibValueDataObject& operator = (const ibValueDataObject&) = delete;
+
 	// The class is polymorphic (GetMetaObject below is pure virtual) and three classes derive
 	// it, so the destructor has to be virtual: deleting a derived object through this type
 	// would otherwise be undefined behaviour. Nothing does that today — every delete goes
