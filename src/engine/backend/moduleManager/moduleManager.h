@@ -285,6 +285,10 @@ public:
 
 protected:
 
+	// The main module's scope objects — made, bound and held by the one, unbound and let go by the other.
+	void BindContextManagers();
+	void UnbindContextManagers();
+
 	//global manager
 	ibValuePtr<ibValue> m_objectManager;
 
@@ -294,9 +298,10 @@ protected:
 	// global data manager — the "Data" queryable-source root (L4-2)
 	ibValuePtr<ibValueDataUnit> m_dataManager;
 
-	// the context types' objects (EnumManager / SystemManager) — made for this manager as its main module comes up,
-	// held while it is up: the compile module's context binds only reference them
-	std::vector<ibValue> m_listContextManager;
+	// the objects of the main module's scope (EnumManager / SystemManager, PictureLib) under the names they are bound
+	// by — made for this manager as its main module comes up, held while it is up: the compile module's binds only
+	// reference them
+	std::vector<std::pair<ibString, ibValue>> m_listContextManager;
 
 	friend class ibMetaDataConfiguration;
 	friend class ibMetaDataDataProcessor;

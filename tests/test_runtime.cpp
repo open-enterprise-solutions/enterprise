@@ -43,6 +43,8 @@
 #include "backend/system/value/valueDynamicList.h"
 #include "backend/system/value/valueList.h"        // ibValueValueList — a value list is a table source
 #include "backend/system/value/valuePicture.h"     // g_valuePictureCLSID — the type of a value list's picture
+#include "core/picturePredefined.h"
+#include "backend/metaCollection/metaPictureObject.h"  // a configuration's own picture, for PictureLib
 
 #include <wx/init.h>
 #include <wx/log.h>    // wxLogStderr — a wx warning must not become a modal box                        // wxInitializer — wxBase before appData
@@ -4749,4 +4751,76 @@ TEST(RuntimeTest, ValueListIsATableSourceWithTheKindsColumns) {
 	ASSERT_TRUE(list->GetValueByMetaID(list->GetItem(0), ibValueValueList::ePicture, picture));
 	EXPECT_EQ(g_valuePictureCLSID, picture.GetClassType());
 	EXPECT_TRUE(picture.IsEmpty());
+}
+
+// PictureLib is one per module manager: its main module makes it and binds the name (a name a script reads, not a
+// transparent scope), and letting the main module go unbinds it. A property is a picture: the configuration's own
+// Picture objects and the engine's, the set the picture property's picker offers.
+TEST(RuntimeTest, PictureLibNamesTheConfigurationsPicturesAndTheEngines) {
+	ibMetaDataConfigurationFile cfg;
+	ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+	ASSERT_NE(root, nullptr);
+	auto* logo = dynamic_cast<ibValueMetaObjectPicture*>(cfg.CreateMetaObject(g_metaPictureCLSID, root, false));
+	ASSERT_NE(logo, nullptr);
+	logo->SetName(ibT("Logo"));
+
+	ibValueModuleManagerDesigner manager(&cfg, root);
+	ASSERT_TRUE(manager.CreateMainModule());
+	const auto bound = manager.GetContextVariables().find(ibT("PictureLib"));
+	ASSERT_NE(bound, manager.GetContextVariables().end());
+	EXPECT_FALSE(bound->second.m_scopeContext);
+	ibValue* library = bound->second.m_value;
+	ASSERT_NE(library, nullptr);
+	// The compiler asks every context value for its type; one not registered asserts there.
+	EXPECT_NE(library->GetClassType(), static_cast<ibClassID>(0));
+
+	ibCompileCode cc(ibT("test"), ibT("memory"), false);
+	cc.AddContextVariable(ibT("PictureLib"), library, false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var own public;\n")
+		wxT("var engine public;\n")
+		wxT("own = PictureLib.Logo;\n")
+		wxT("engine = PictureLib.Error;\n")));
+	ibProcUnit pu;
+	ibString error;
+	ASSERT_TRUE(RunBound(cc, pu, error)) << error.ToStdString();
+
+	ibValue own;
+	ASSERT_TRUE(pu.GetPropVal(ibT("own"), own));
+	ibValuePicture* ownPicture = own.ConvertToType<ibValuePicture>();
+	ASSERT_NE(ownPicture, nullptr);
+	EXPECT_TRUE(ownPicture->GetPictureDesc() == ibPictureDescription(logo->GetGuid()));
+
+	ibValue engine;
+	ASSERT_TRUE(pu.GetPropVal(ibT("engine"), engine));
+	ibValuePicture* enginePicture = engine.ConvertToType<ibValuePicture>();
+	ASSERT_NE(enginePicture, nullptr);
+	EXPECT_TRUE(enginePicture->GetPictureDesc() == ibPictureDescription(g_picErrorCLSID));
+
+	ASSERT_TRUE(manager.DestroyMainModule());
+	EXPECT_EQ(manager.GetContextVariables().count(ibT("PictureLib")), 0u);
+}
+
+// A configuration picture named like an engine one is the configuration's: the name is listed once, and it answers
+// with the configuration's picture.
+TEST(RuntimeTest, PictureLibAConfigurationPictureTakesTheEnginesName) {
+	ibMetaDataConfigurationFile cfg;
+	ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+	ASSERT_NE(root, nullptr);
+	auto* own = dynamic_cast<ibValueMetaObjectPicture*>(cfg.CreateMetaObject(g_metaPictureCLSID, root, false));
+	ASSERT_NE(own, nullptr);
+	own->SetName(ibT("Error"));
+
+	const ibValue holder(new ibValuePictureLib(&cfg));
+	ibValue* const library = holder.GetRef();
+	long found = 0;
+	for (long prop = 0; prop < library->GetNProps(); ++prop)
+		found += stringUtils::IsSameAs(library->GetPropName(prop), ibT("Error")) ? 1 : 0;
+	EXPECT_EQ(found, 1);
+
+	ibValue picture;
+	ASSERT_TRUE(library->GetPropVal(library->FindProp(ibT("Error")), picture));
+	ibValuePicture* got = picture.ConvertToType<ibValuePicture>();
+	ASSERT_NE(got, nullptr);
+	EXPECT_TRUE(got->GetPictureDesc() == ibPictureDescription(own->GetGuid()));
 }
