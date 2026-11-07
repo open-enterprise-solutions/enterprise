@@ -200,6 +200,7 @@ add_executable(oes_tests
     test_propertyDefaults.cpp
     test_sourceExplorer.cpp
     test_sourceDescription.cpp
+    test_commandDescription.cpp
     test_tabularHop.cpp
     test_sourceHopChain.cpp
     test_modelFetchDoor.cpp

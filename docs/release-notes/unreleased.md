@@ -453,3 +453,7 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **`ExternalDataProcessors.Create` and `ExternalReports.Create` no longer hand back a freed object.** A data
   processor with no form, or a report with neither a form nor a composer, unloaded at the end of its own start,
   and the call returned what was left of it; it now returns nothing.
+- **MCP: `form_set` refuses a name for a button's `Command`** and names `form_bind`, which binds a command by its
+  name. Sent `{name: …}`, it answered with a binding nobody asked for: the button kept the command it had and its
+  item type became a number no type carries. A command binding now reads only the shape it is written in, `hops`
+  and `commandType`, and replaces what it held.
