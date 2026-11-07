@@ -1270,10 +1270,17 @@ int ibDatabaseLayerFirebird::DoRunQuery(const ibString& strQuery, bool bParseQue
 					// Only OUR OWN transaction is ours to close, and that goes through the public
 					// RollBack so the base keeps its own books (databaseLayer.h: drivers must not
 					// touch m_txDepth themselves).
-					if (bQuickieTransaction)
-						RollBack();
-
-					ThrowDatabaseException();
+					//
+					// THROW FIRST, ROLL BACK IN THE CATCH. DoRollBack begins with ResetErrorCodes, so a
+					// rollback before the throw cleared the code and the message just read, and the
+					// statement's failure went out with no description (#648). Once thrown, the
+					// exception holds them — the same shape as the quickie's Commit below.
+					try { ThrowDatabaseException(); }
+					catch (...) {
+						if (bQuickieTransaction)
+							RollBack();
+						throw;
+					}
 					return DATABASE_LAYER_QUERY_RESULT_ERROR;
 				}
 				start++;
@@ -1358,22 +1365,21 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const ibStri
 					}
 				}
 
-				// Assume that only the last statement in the array returns the result set
-				for (unsigned int i = 0; i < QueryArray.size() - 1; i++)
-				{
-					DoRunQuery(QueryArray[i], false);
-					if (GetErrorCode() != DATABASE_LAYER_OK)
-					{
-						// Inner DoRunQuery failure — when we own the
-						// outer TX (bQuickieTransaction), drop the
-						// depth counter via public RollBack so a
-						// subsequent caller doesn't see a phantom
-						// active transaction. Symmetric to the fix in
-						// DoRunQuery's per-statement error path.
-						if (bQuickieTransaction) RollBack();
-						ThrowDatabaseException();
-						return NULL;
-					}
+				// Assume that only the last statement in the array returns the result set.
+				//
+				// A statement that fails THROWS — DoRunQuery never answers with an error code — so the
+				// failure is met in a catch: our own quickie is rolled back through the public RollBack
+				// (the base keeps the depth) and the statement's exception goes on as it was. The check
+				// of the error code that stood after the call never ran, and a failure before the last
+				// statement left the quickie open with its depth counted (#648).
+				try {
+					for (unsigned int i = 0; i < QueryArray.size() - 1; i++)
+						DoRunQuery(QueryArray[i], false);
+				}
+				catch (...) {
+					if (bQuickieTransaction)
+						RollBack();
+					throw;
 				}
 
 				// Now commit all the previous queries before calling the query that returns a result set

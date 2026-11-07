@@ -65,6 +65,7 @@ add_executable(oes_tests
     test_blobCompression.cpp
     test_firebirdLease.cpp
     test_firebirdBatchInsert.cpp
+    test_firebirdQuickTransaction.cpp
     test_firebirdDates.cpp
     test_firebirdNumbers.cpp
     test_firebirdZoneRules.cpp
