@@ -136,7 +136,8 @@ enum
 	enScheduledJobs,
 	enSessionParameters,
 	enFunctionalOptions,
-	enBackgroundJobs
+	enBackgroundJobs,
+	enFullTextSearch
 };
 
 void ibValueGlobalContextManager::FillMembers(ibMemberTable& helper) const
@@ -170,11 +171,14 @@ void ibValueGlobalContextManager::FillMembers(ibMemberTable& helper) const
 	// Work running on its own, found again — `BackgroundJobs.GetBackgroundJobs(…)`, `FindByUUID(…)`; started by
 	// RunBackground. Not metadata: the jobs are the base's, whatever the configuration declares.
 	helper.AppendProp(ibT("BackgroundJobs"));
+	// The base's full-text search - its mode and its index (valueFullTextSearch.h).
+	helper.AppendProp(ibT("FullTextSearch"));
 }
 
 #include "backend/metaCollection/metaSessionParameterObject.h"   // the metatype AND the value it yields
 #include "backend/metaCollection/partial/dataProcessorManager.h"
 #include "backend/metaCollection/partial/dataReportManager.h"
+#include "backend/system/value/valueFullTextSearch.h"
 
 bool ibValueGlobalContextManager::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
@@ -239,6 +243,9 @@ bool ibValueGlobalContextManager::GetPropVal(const long lPropNum, ibValue& pvarP
 		return true;
 	case enBackgroundJobs:
 		pvarPropVal = new ibValueBackgroundJobsManager();
+		return true;
+	case enFullTextSearch:
+		pvarPropVal = new ibValueFullTextSearchManager();
 		return true;
 	}
 

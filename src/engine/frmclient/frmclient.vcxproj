@@ -192,6 +192,7 @@
     <ClCompile Include="win\picture.cpp" />
     <ClCompile Include="win\dlgs\about.cpp" />
     <ClCompile Include="win\dlgs\activeUser.cpp" />
+    <ClCompile Include="win\dlgs\fullTextSearch.cpp" />
     <ClCompile Include="win\dlgs\applyChange.cpp" />
     <ClCompile Include="win\dlgs\userItem.cpp" />
     <ClCompile Include="win\dlgs\userList.cpp" />
@@ -378,6 +379,7 @@
     <ClInclude Include="win\picture.h" />
     <ClInclude Include="win\dlgs\about.h" />
     <ClInclude Include="win\dlgs\activeUser.h" />
+    <ClInclude Include="win\dlgs\fullTextSearch.h" />
     <ClInclude Include="win\dlgs\applyChange.h" />
     <ClInclude Include="win\dlgs\userItem.h" />
     <ClInclude Include="win\dlgs\userList.h" />

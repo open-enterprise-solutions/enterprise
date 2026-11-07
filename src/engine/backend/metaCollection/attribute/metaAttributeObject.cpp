@@ -204,6 +204,7 @@ bool ibValueMetaObjectAttribute::ReadData(const ibDataNode& node)
 	m_propertyType->SetNodeValue(node.GetProperty(m_propertyType->GetName()));
 	m_propertyFillCheck->SetNodeValue(node.GetProperty(m_propertyFillCheck->GetName()));
 	m_propertyIndexingMode->SetNodeValue(node.GetProperty(m_propertyIndexingMode->GetName()));
+	m_propertyFullTextSearch->SetNodeValue(node.GetProperty(m_propertyFullTextSearch->GetName()));
 	m_propertyItemMode->SetNodeValue(node.GetProperty(m_propertyItemMode->GetName()));
 	m_propertySelectMode->SetNodeValue(node.GetProperty(m_propertySelectMode->GetName()));
 	m_propertyFormat->SetNodeValue(node.GetProperty(m_propertyFormat->GetName()));
@@ -216,6 +217,7 @@ bool ibValueMetaObjectAttribute::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyType->GetName(),       m_propertyType->GetNodeValue());
 	node.SetProperty(m_propertyFillCheck->GetName(),  m_propertyFillCheck->GetNodeValue());
 	node.SetProperty(m_propertyIndexingMode->GetName(),   m_propertyIndexingMode->GetNodeValue());
+	node.SetProperty(m_propertyFullTextSearch->GetName(), m_propertyFullTextSearch->GetNodeValue());
 	node.SetProperty(m_propertyItemMode->GetName(),   m_propertyItemMode->GetNodeValue());
 	node.SetProperty(m_propertySelectMode->GetName(), m_propertySelectMode->GetNodeValue());
 	node.SetProperty(m_propertyFormat->GetName(),     m_propertyFormat->GetNodeValue());

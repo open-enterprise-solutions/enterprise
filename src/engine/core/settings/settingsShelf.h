@@ -44,6 +44,9 @@ enum class ibSettingsCategory : int {
 	// the next (frmserver/schema/style.cpp). A row per person under one well-known object key, the platform's look.
 	// Appended, as the rule above requires.
 	Style,
+	// The base's full-text search: whether it is on (FullTextSearch.SetFullTextSearchMode), one row with NO user —
+	// the mode is the base's, as the locale above is (backend/system/value/valueFullTextSearch.cpp).
+	Search,
 };
 
 // ONE SAVED SETTING as a shelf shows it — the identity, the caption, and when it

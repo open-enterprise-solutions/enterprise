@@ -449,6 +449,7 @@ private:
 #ifdef OES_TESTING
 	friend struct LockSchemaAccess;   // the race test opens a base that already has sys_lock
 	friend struct JobSchemaAccess;    // the job runtime test writes job settings into a base it made
+	friend struct SettingsSchemaAccess;   // the full-text search test keeps its mode in a base it made itself
 #endif
 	// Additive — creates sys_job if missing. The shared last-run clock for
 	// scheduled jobs; independent table, not part of TableAlreadyCreated()'s
@@ -725,6 +726,11 @@ private:
 // sys_file — the sessions' temporary files: one row per PART of a file (its header first), owned by a
 // session and gone with it. See backend/temp/tempStorage.h.
 #define file_table				ibT("sys_file")
+// The full-text index (backend/fullTextSearch/fullTextIndex.h): the dictionary of the words it holds, one row per
+// word, record and attribute, and one row per metaobject the index was built for.
+#define search_word_table		ibT("sys_search_word")
+#define search_entry_table		ibT("sys_search_entry")
+#define search_state_table		ibT("sys_search_state")
 ///////////////////////////////////////////////////////////////////////////////
 
 #endif

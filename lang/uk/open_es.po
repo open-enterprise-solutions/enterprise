@@ -14023,3 +14023,220 @@ msgstr "Тема оформлення інтерфейсу:"
 #: src/engine/frmserver/schema/style.cpp
 msgid "The theme could not be kept"
 msgstr "Не вдалося зберегти тему"
+
+#: src/engine/backend/system/systemManagerEnum.h
+msgid "Enable"
+msgstr "Увімкнути"
+
+#: src/engine/backend/system/systemManagerEnum.h
+msgid "Disable"
+msgstr "Вимкнути"
+
+#: src/engine/backend/system/value/valueFullTextSearch.cpp
+#, c-format
+msgid "FullTextSearch.%s: the full-text index is the base's, and changing it needs the Data administration right"
+msgstr "FullTextSearch.%s: повнотекстовий індекс належить базі, і для його зміни потрібне право «Адміністрування даних»"
+
+#: src/engine/backend/system/value/valueFullTextSearch.cpp
+#, c-format
+msgid "FullTextSearch.%s: %s is a Boolean"
+msgstr "FullTextSearch.%s: %s — значення типу Булеве"
+
+#: src/engine/backend/system/value/valueFullTextSearch.cpp
+msgid "FullTextSearch.SetFullTextSearchMode: the mode is a FullTextSearchMode value - FullTextSearchMode.Enable or FullTextSearchMode.Disable"
+msgstr "FullTextSearch.SetFullTextSearchMode: режим — значення FullTextSearchMode: FullTextSearchMode.Enable або FullTextSearchMode.Disable"
+
+#: src/engine/backend/system/value/valueFullTextSearch.cpp
+msgid "FullTextSearch.UpdateIndex takes one argument, portion: the index is merged by every write, so there is no merge argument. A call written as UpdateIndex(merge, portion) would read its first argument as portion - write UpdateIndex(portion)"
+msgstr "FullTextSearch.UpdateIndex приймає один аргумент, portion: індекс зливається кожним записом, тому аргументу merge немає. Виклик UpdateIndex(merge, portion) прочитав би перший аргумент як portion — пишіть UpdateIndex(portion)"
+
+#: src/engine/backend/system/value/valueFullTextSearch.cpp
+msgid "FullTextSearch.CreateList: portionSize is a number of records, at least 1"
+msgstr "FullTextSearch.CreateList: portionSize — кількість записів, не менше 1"
+
+#: src/engine/backend/system/value/valueFullTextSearch.cpp
+#, c-format
+msgid "FullTextSearchList: nothing is searched yet - FirstPart searches \"%s\""
+msgstr "FullTextSearchList: пошук ще не виконано — FirstPart шукає \"%s\""
+
+#: src/engine/backend/system/value/valueFullTextSearch.cpp
+#, c-format
+msgid "FullTextSearchList.NextPart: the part shown is the last of %ld records found"
+msgstr "FullTextSearchList.NextPart: показана частина — остання з %ld знайдених записів"
+
+#: src/engine/backend/system/value/valueFullTextSearch.cpp
+msgid "FullTextSearchList.PreviousPart: the part shown is the first"
+msgstr "FullTextSearchList.PreviousPart: показана частина — перша"
+
+#: src/engine/backend/system/value/valueFullTextSearch.cpp
+#, c-format
+msgid "FullTextSearchList.Get: the part holds %ld records, so there is none at %ld"
+msgstr "FullTextSearchList.Get: у частині %ld записів, тому запису з індексом %ld немає"
+
+#: src/engine/backend/system/value/valueFullTextSearch.cpp
+msgid "FullTextSearchList.Get: the index is a number"
+msgstr "FullTextSearchList.Get: індекс — число"
+
+#: src/engine/frmclient/mainFrame/mainFrame.cpp
+msgid "Full-text search is switched off in this base. It is switched on in Administration - Full-text search index."
+msgstr "Повнотекстовий пошук у цій базі вимкнено. Він вмикається в меню Адміністрування → Індекс повнотекстового пошуку."
+
+#: src/engine/frmclient/mainFrame/mainFrame.cpp
+msgid "Find in data"
+msgstr "Знайти в даних"
+
+#: src/engine/frmclient/propertyManager/property/advprop/advpropType.cpp
+msgid "Full-text search"
+msgstr "Повнотекстовий пошук"
+
+#: src/engine/frmclient/propertyManager/property/advprop/advpropType.cpp
+msgid "The base's full-text search finds records by the words of this field."
+msgstr "Повнотекстовий пошук бази знаходить записи за словами цього поля."
+
+#: src/engine/frmserver/client/clientFrameRuntime.cpp
+msgid "Full-text search index..."
+msgstr "Індекс повнотекстового пошуку..."
+
+#: src/engine/frmserver/client/clientFrameRuntime.cpp
+msgid "Find in data..."
+msgstr "Знайти в даних..."
+
+#: src/engine/backend/fullTextSearch/fullTextIndex.cpp
+msgid "FullTextSearch: no base is open, so there is no full-text search mode to read or set"
+msgstr "FullTextSearch: базу не відкрито, тому режим повнотекстового пошуку ніде прочитати чи встановити"
+
+#: src/engine/backend/fullTextSearch/fullTextIndex.cpp
+#, c-format
+msgid "FullTextSearch: the base keeps a full-text search mode this build does not know (%d)"
+msgstr "FullTextSearch: у базі зберігається режим повнотекстового пошуку, невідомий цій збірці (%d)"
+
+#: src/engine/backend/fullTextSearch/fullTextIndex.cpp
+msgid "FullTextSearch.SetFullTextSearchMode: the mode was not saved in the base (the technology journal says why)"
+msgstr "FullTextSearch.SetFullTextSearchMode: режим не збережено в базі (причина — у технологічному журналі)"
+
+#: src/engine/backend/fullTextSearch/fullTextIndex.cpp
+#, c-format
+msgid "%s: the full-text index of the record was not written"
+msgstr "%s: повнотекстовий індекс запису не записано"
+
+#: src/engine/backend/fullTextSearch/fullTextIndex.cpp
+#, c-format
+msgid "FullTextSearch.UpdateIndex: %s %s could not be made to read its words"
+msgstr "FullTextSearch.UpdateIndex: не вдалося прочитати слова запису %s %s"
+
+#: src/engine/backend/fullTextSearch/fullTextIndex.cpp
+msgid "FullTextSearch.UpdateIndex: the full-text search of this base is switched off - there is no index to build"
+msgstr "FullTextSearch.UpdateIndex: повнотекстовий пошук цієї бази вимкнено — будувати нічого"
+
+#: src/engine/backend/fullTextSearch/fullTextIndex.cpp
+msgid "FullTextSearch.UpdateIndex: no configuration is open, so there is nothing to index"
+msgstr "FullTextSearch.UpdateIndex: конфігурацію не відкрито, тому індексувати нічого"
+
+#: src/engine/backend/fullTextSearch/fullTextIndex.cpp
+msgid "FullTextSearch: the full-text search of this base is switched off"
+msgstr "FullTextSearch: повнотекстовий пошук цієї бази вимкнено"
+
+#: src/engine/backend/fullTextSearch/fullTextIndex.cpp
+msgid "FullTextSearch: no configuration is open, so there is nothing to search in"
+msgstr "FullTextSearch: конфігурацію не відкрито, тому шукати ніде"
+
+#: src/engine/backend/fullTextSearch/fullTextIndex.cpp
+#, c-format
+msgid "FullTextSearch: the fuzzy threshold is a share of a word's letters from 0 to 50 percent, not %d"
+msgstr "FullTextSearch: поріг нечіткого збігу — частка літер слова від 0 до 50 відсотків, а не %d"
+
+#: src/engine/backend/fullTextSearch/fullTextIndex.cpp
+#, c-format
+msgid "FullTextSearch: \"%s\" has no word to search by"
+msgstr "FullTextSearch: у \"%s\" немає жодного слова для пошуку"
+
+#: src/engine/frmclient/win/dlgs/fullTextSearch.cpp
+msgid "Full-text search index"
+msgstr "Індекс повнотекстового пошуку"
+
+#: src/engine/frmclient/win/dlgs/fullTextSearch.cpp
+msgid "Full-text search is enabled in this base"
+msgstr "Повнотекстовий пошук у цій базі ввімкнено"
+
+#: src/engine/frmclient/win/dlgs/fullTextSearch.cpp
+msgid "Update index"
+msgstr "Оновити індекс"
+
+#: src/engine/frmclient/win/dlgs/fullTextSearch.cpp
+msgid "Clear index"
+msgstr "Очистити індекс"
+
+#: src/engine/frmclient/win/dlgs/fullTextSearch.cpp
+msgid "Full-text search is switched off: nothing is indexed and nothing can be found."
+msgstr "Повнотекстовий пошук вимкнено: нічого не індексується і нічого не можна знайти."
+
+#: src/engine/frmclient/win/dlgs/fullTextSearch.cpp
+#, c-format
+msgid "The index is up to date: %lld records are indexed."
+msgstr "Індекс актуальний: проіндексовано записів — %lld."
+
+#: src/engine/frmclient/win/dlgs/fullTextSearch.cpp
+#, c-format
+msgid "The index needs updating: %lld of %lld records are indexed."
+msgstr "Індекс потребує оновлення: проіндексовано %lld з %lld записів."
+
+#: src/engine/frmclient/win/dlgs/fullTextSearch.cpp
+msgid "The index has not been built completely yet."
+msgstr "Індекс ще не побудовано повністю."
+
+#: src/engine/frmclient/win/dlgs/fullTextSearch.cpp
+#, c-format
+msgid "Last built completely: %s"
+msgstr "Остання повна побудова: %s"
+
+#: src/engine/frmclient/win/dlgs/fullTextSearch.cpp
+msgid "Switching full-text search off clears the index: it will have to be built again. Switch it off?"
+msgstr "Вимкнення повнотекстового пошуку очищує індекс: його доведеться будувати заново. Вимкнути?"
+
+#: src/engine/frmclient/win/dlgs/fullTextSearch.cpp
+#, c-format
+msgid "The update was stopped: %lld records were indexed in this run, %lld of %lld are indexed now."
+msgstr "Оновлення зупинено: за цей запуск проіндексовано записів — %lld, зараз проіндексовано %lld з %lld."
+
+#: src/engine/frmclient/win/dlgs/fullTextSearch.cpp
+msgid "Clear the full-text index? Nothing can be found until it is built again."
+msgstr "Очистити повнотекстовий індекс? Доки його не побудовано заново, нічого не знайдеться."
+
+#: src/engine/frmclient/win/dlgs/fullTextSearch.cpp
+msgid "Words to find - each may be the beginning of a word, or misspelt"
+msgstr "Слова для пошуку — кожне може бути початком слова або з помилкою"
+
+#: src/engine/frmclient/win/dlgs/fullTextSearch.cpp
+msgid "Found"
+msgstr "Знайдено"
+
+#: src/engine/frmclient/win/dlgs/fullTextSearch.cpp
+msgid "Where"
+msgstr "Де"
+
+#: src/engine/frmclient/win/dlgs/fullTextSearch.cpp
+msgid "Full-text search is switched off in this base (Administration - Full-text search index)."
+msgstr "Повнотекстовий пошук у цій базі вимкнено (Адміністрування → Індекс повнотекстового пошуку)."
+
+#: src/engine/frmclient/win/dlgs/fullTextSearch.cpp
+msgid "Nothing was found."
+msgstr "Нічого не знайдено."
+
+#: src/engine/frmclient/win/dlgs/fullTextSearch.cpp
+#, c-format
+msgid "Found: %lld, the first %zu are shown."
+msgstr "Знайдено: %lld, показано перші %zu."
+
+#: src/engine/frmclient/win/dlgs/fullTextSearch.cpp
+#, c-format
+msgid "Found: %lld."
+msgstr "Знайдено: %lld."
+
+#: src/engine/frmserver/schema/runtime/fullTextSearch.cpp
+#, c-format
+msgid "Find: %s %s could not be read"
+msgstr "Пошук: не вдалося прочитати %s %s"
+
+#: src/engine/backend/metaCollection/attribute/metaAttributeObject.h
+msgid "The base's full-text search finds records by the words of this field. Offered for a string field of a catalog, a document or a chart, and of their tabular sections. A record's words are indexed when it is written, in the same transaction; records written before the flag was switched on are indexed by Administration - Full-text search index - Update index (or FullTextSearch.UpdateIndex)."
+msgstr "Повнотекстовий пошук бази знаходить записи за словами цього поля. Доступно для рядкового поля довідника, документа чи плану та їхніх табличних частин. Слова запису індексуються під час його запису, у тій самій транзакції; записи, записані до ввімкнення прапорця, індексує Адміністрування - Індекс повнотекстового пошуку - Оновити індекс (або FullTextSearch.UpdateIndex)."

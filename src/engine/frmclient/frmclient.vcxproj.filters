@@ -182,6 +182,9 @@
     <ClCompile Include="win\dlgs\activeUser.cpp">
       <Filter>win\dlgs</Filter>
     </ClCompile>
+    <ClCompile Include="win\dlgs\fullTextSearch.cpp">
+      <Filter>win\dlgs</Filter>
+    </ClCompile>
     <ClCompile Include="win\dlgs\applyChange.cpp">
       <Filter>win\dlgs</Filter>
     </ClCompile>
@@ -431,6 +434,9 @@
       <Filter>win\dlgs</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\activeUser.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\fullTextSearch.h">
       <Filter>win\dlgs</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\applyChange.h">

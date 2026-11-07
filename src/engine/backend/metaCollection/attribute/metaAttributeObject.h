@@ -217,6 +217,10 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 	virtual ibSelectMode GetSelectMode() const { return ibSelectMode::ibSelectMode_Items; }
 	virtual ibIndexingMode GetIndexingMode() const { return ibIndexingMode::ibIndexingMode_DontIndex; }
 
+	// WHETHER THE BASE'S FULL-TEXT INDEX HOLDS THE FIELD (backend/fullTextSearch/fullTextIndex.h): its own flag, of a
+	// string field of a catalog, a document or a chart, or of one of their tabular sections. No field is, by default.
+	virtual bool IsFullTextSearch() const { return false; }
+
 	//get metaData
 	virtual const ibMetaData* GetMetaData() const { return m_metaData; }
 	virtual ibMetaData* GetMetaData() { return m_metaData; }
@@ -266,6 +270,7 @@ class BACKEND_API ibValueMetaObjectAttribute : public ibValueMetaObjectAttribute
 	virtual ibItemMode GetItemMode() const;
 	virtual ibSelectMode GetSelectMode() const;
 	virtual ibIndexingMode GetIndexingMode() const { return m_propertyIndexingMode->GetValueAsEnum(); }
+	virtual bool IsFullTextSearch() const override;
 
 	//get type description
 	virtual ibTypeDescription& GetTypeDesc() const { return m_propertyType->GetValueAsTypeDesc(); }
@@ -308,6 +313,7 @@ private:
 	ibPropertyCategory* m_categoryAttribute = ibPropertyObject::CreatePropertyCategory(ibT("Attribute"), _("Attribute"));
 	ibPropertyBoolean* m_propertyFillCheck = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryAttribute, ibT("FillCheck"), _("Fill check"), _("The field must be filled: a write that leaves it empty is refused with a message naming the field (and the line, in a tabular section or a record set), and the form shows it as required."));
 	ibPropertyEnum<ibValueEnumIndexingMode>* m_propertyIndexingMode = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumIndexingMode>>(m_categoryAttribute, ibT("Indexing"), _("Indexing"), _("Whether the database keeps an index on the field. Index: searches and filters by it stop scanning the table. Index with additional ordering: the index also carries the object's main order, so a list filtered by the field pages without sorting. Don't index (the default): no index - cheaper writes."), ibIndexingMode::ibIndexingMode_DontIndex);
+	ibPropertyBoolean* m_propertyFullTextSearch = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryAttribute, ibT("FullTextSearch"), _("Full-text search"), _("The base's full-text search finds records by the words of this field. Offered for a string field of a catalog, a document or a chart, and of their tabular sections. A record's words are indexed when it is written, in the same transaction; records written before the flag was switched on are indexed by Administration - Full-text search index - Update index (or FullTextSearch.UpdateIndex)."));
 	ibPropertyCategory* m_categoryPresentation = ibPropertyObject::CreatePropertyCategory(ibT("Presentation"), _("Presentation"));
 	ibPropertyEnum<ibValueEnumSelectMode>* m_propertySelectMode = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumSelectMode>>(m_categoryPresentation, ibT("Select"), _("Select group and items"), _("For a field referring to a hierarchical catalog: what may be chosen into it - items only (the default), folders only, or both."), ibSelectMode::ibSelectMode_Items);
 	ibPropertyFormat* m_propertyFormat = ibPropertyObject::CreateProperty<ibPropertyFormat>(m_categoryPresentation, ibT("Format"), _("Format"), _("How the field's value is shown, written per language: digits after the point, separators, a date pattern, the words for True and False. Every input field and table column bound to the field shows it this way unless it has a format of its own. Empty: a number is shown with as many digits after the point as its type keeps, a date as its type has it."), ibT(""));
@@ -402,9 +408,15 @@ public:
 	virtual ibItemMode GetItemMode() const { return m_itemMode; }
 	virtual ibSelectMode GetSelectMode() const { return m_selectMode; }
 	virtual ibIndexingMode GetIndexingMode() const { return m_indexingMode; }
+	virtual bool IsFullTextSearch() const override { return m_fullTextSearch && m_typeDesc.ContainType(ibValueTypes::TYPE_STRING); }
 
 	//get type description
 	virtual ibTypeDescription& GetTypeDesc() const { return m_typeDesc; }
+
+	// A THIRD EXCEPTION: whether the full-text index holds a code or a description is the configuration's choice, set
+	// on the owner beside the field's type (ibPropertyPredefinedType writes it into the attribute's node).
+	void SetFullTextSearch(bool fullTextSearch) { m_fullTextSearch = fullTextSearch; }
+	bool GetFullTextSearch() const { return m_fullTextSearch; }
 
 
 	// A predefined attribute is part of the metatype's definition, so its shape is fixed by the
@@ -446,6 +458,7 @@ private:
 	ibItemMode m_itemMode;
 	ibSelectMode m_selectMode;
 	ibIndexingMode m_indexingMode = ibIndexingMode::ibIndexingMode_DontIndex;
+	bool m_fullTextSearch = false;
 
 	ibString m_strSynonym;
 	ibPictureDescription m_ownerPicture;   // see SetOwnerPicture
