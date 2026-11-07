@@ -47,7 +47,7 @@ public:
 	virtual ibNumberPeriodicity GetNumberPeriodicity() const override;
 
 	// The numerator this document takes its numbers from, or null: a series of its own (documentNumerator.h).
-	const ibValueMetaObjectDocumentNumerator* GetNumerator() const;
+	BACKEND_API const ibValueMetaObjectDocumentNumerator* GetNumerator() const;
 
 
 	//default constructor
