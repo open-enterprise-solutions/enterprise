@@ -466,3 +466,7 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   name. Sent `{name: …}`, it answered with a binding nobody asked for: the button kept the command it had and its
   item type became a number no type carries. A command binding now reads only the shape it is written in, `hops`
   and `commandType`, and replaces what it held.
+- **MCP: `code_run` says it needs the debugger.** It reaches an application only over the debugger's connection,
+  and an application started with `app_run {debug: false}` was refused as "no application is attached - app_run
+  starts one", so a second application was started beside the first. The refusal now says that the running one has
+  no debugger and names `app_run` with `restart: true`; `app_run`'s `debug` says which verbs need it.

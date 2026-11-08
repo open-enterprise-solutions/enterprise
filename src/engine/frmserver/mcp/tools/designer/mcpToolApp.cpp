@@ -45,7 +45,8 @@ const ibArg& ArgDebug()
 	static const ibArg s_a(ibT("debug"), ibArg::Kind::Flag,
 		ibMcpText("Start it with the debugger attached, so breakpoints set through debug_breakpoint "
 		  "are honoured. Default true - the reason a tool starts an application is usually "
-		  "to watch it."));
+		  "to watch it. code_run, code_status, code_cancel and debug_sandbox reach an application "
+		  "only over this connection: one started with debug: false is out of their reach."));
 	return s_a;
 }
 
