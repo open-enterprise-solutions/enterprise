@@ -670,7 +670,7 @@ private:
 	}
 
 	ibDatabaseQueryBuilder& m_q;
-	const Key& m_key;
+	const Key m_key;   // by value: the caller may hand a temporary (NumberSeriesKey())
 	const ibString m_prefix;
 	const ibString m_path;
 	const bool m_isNumber;
