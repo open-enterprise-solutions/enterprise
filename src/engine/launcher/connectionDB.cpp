@@ -145,6 +145,11 @@ ibDialogConnection::ibDialogConnection(wxWindow* parent, wxWindowID id, const wx
 	m_buttonSaveConnection->SetPrimary();
 	bSizerButton->Add(m_buttonSaveConnection, 1, wxALL, FromDIP(5));
 
+	// The way out without saving, as the platform's other dialogs have it: Esc and the title bar's x click it
+	// (ibDialog::SendCloseButtonClickEvent), and the dialog ends with wxID_CANCEL - the list stays as it was.
+	m_buttonCancel = new ibButton(this, wxID_CANCEL, _("Cancel"), wxDefaultPosition, wxDefaultSize, 0);
+	bSizerButton->Add(m_buttonCancel, 0, wxALL, FromDIP(5));
+
 	mainSizer->Add(bSizerButton, 1, wxEXPAND, FromDIP(5));
 
 	this->SetSizer(mainSizer);

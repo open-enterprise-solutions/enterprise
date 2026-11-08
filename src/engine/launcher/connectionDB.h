@@ -48,6 +48,7 @@ class ibDialogConnection : public ibDialog {
 
 	ibButton* m_buttonTestConnection;
 	ibButton* m_buttonSaveConnection;
+	ibButton* m_buttonCancel;
 
 	void UpdateModeVisibility();
 

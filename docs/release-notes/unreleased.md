@@ -471,3 +471,5 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **On macOS a window and a dialog of the desktop programs have their title bar and frame.** The launcher's window
   and its connection dialog showed neither, and the dialog merged with the window behind it; the title bar's
   buttons now work there too.
+- **The launcher's connection dialog has a Cancel button**, and Esc or the title bar's close button leaves it too,
+  without saving. It could only be left by saving the connection.
