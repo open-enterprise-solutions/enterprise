@@ -673,7 +673,7 @@ private:
 	}
 
 	ibDatabaseQueryBuilder& m_q;
-	const Key m_key;   // a copy: the key is made for the call (NumberSeriesKey()), and outlives nothing
+	const Key m_key;   // by value: the caller may hand a temporary (NumberSeriesKey())
 	const ibString m_prefix;
 	const ibString m_path;
 	const bool m_isNumber;
