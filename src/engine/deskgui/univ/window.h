@@ -288,6 +288,15 @@ public:
     virtual WXDWORD MSWGetStyle(long flags, WXDWORD *exstyle = nullptr) const override;
 #endif // __WXMSW__
 
+#ifdef __WXOSX__
+public:
+    // SEAM vs OSX: the border is ours here too. wxOSX insets the native view by the theme's frame for a sunken or
+    // simple border and moves the DC back over it, but not a refresh: the rect a control invalidates (a glyph typed,
+    // ibTextCtrl::RefreshPixelRange) landed the frame's width right and down of where it paints - the left of every
+    // glyph typed was never painted again. No frame of wx's own: the view is the whole window, as the MSW one is.
+    virtual long MacGetWXBorderSize() const override;
+#endif // __WXOSX__
+
 private:
 
 #if wxUSE_SCROLLBAR

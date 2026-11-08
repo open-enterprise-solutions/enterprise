@@ -1569,3 +1569,17 @@ WXDWORD ibWindow::MSWGetStyle(long flags, WXDWORD *exstyle) const
 }
 
 #endif // __WXMSW__
+
+// ----------------------------------------------------------------------------
+// OSX-specific section
+// ----------------------------------------------------------------------------
+
+#ifdef __WXOSX__
+
+long ibWindow::MacGetWXBorderSize() const
+{
+    // a native control (no renderer) keeps the platform's frame
+    return m_renderer ? 0 : wxWindow::MacGetWXBorderSize();
+}
+
+#endif // __WXOSX__

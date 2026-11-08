@@ -466,3 +466,5 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   name. Sent `{name: …}`, it answered with a binding nobody asked for: the button kept the command it had and its
   item type became a number no type carries. A command binding now reads only the shape it is written in, `hops`
   and `commandType`, and replaces what it held.
+- **On macOS a text field shows every letter typed whole.** The left edge of each new letter stayed unpainted, in
+  the launcher's fields and in every other text field of the desktop programs.
