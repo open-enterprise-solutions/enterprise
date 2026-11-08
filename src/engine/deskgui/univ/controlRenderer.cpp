@@ -167,8 +167,12 @@ void ibControlRenderer::DrawBitmap(wxDC &dc,
     if ( !bmp.IsOk() )
         return;
 
-    int width = bmp.GetWidth(),
-        height = bmp.GetHeight();
+    // SEAM vs univ: the size the DC draws it at - in logical units, not the
+    // pixels: a bitmap of scale 2 (OSX Retina) has twice the pixels, centring
+    // by them put it half its height above the middle of the rect
+    const wxSize sizeBmp = bmp.GetLogicalSize();
+    int width = sizeBmp.x,
+        height = sizeBmp.y;
 
     wxCoord x = 0,
             y = 0;

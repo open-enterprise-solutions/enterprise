@@ -2538,7 +2538,8 @@ ibMenuGeometryInfo *wxWin32Renderer::GetMenuGeometry(ibWindow *win,
             const wxBitmap& bmp = item->GetBitmap();
             if ( bmp.IsOk() )
             {
-                wxCoord widthBmp = bmp.GetWidth();
+                // logical: the width it is drawn at (scale 2 on OSX Retina)
+                wxCoord widthBmp = bmp.GetLogicalSize().x;
                 if ( widthBmp > widthBmpMax )
                     widthBmpMax = widthBmp;
             }
