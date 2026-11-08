@@ -473,3 +473,4 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   buttons now work there too.
 - **The launcher's connection dialog has a Cancel button**, and Esc or the title bar's close button leaves it too,
   without saving. It could only be left by saving the connection.
+- **On macOS closing a dialog no longer crashes the program** when the focus is in an empty field with a hint.
