@@ -466,3 +466,7 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   name. Sent `{name: …}`, it answered with a binding nobody asked for: the button kept the command it had and its
   item type became a number no type carries. A command binding now reads only the shape it is written in, `hops`
   and `commandType`, and replaces what it held.
+- **A missing property named like a global function is reported as a missing property.** `Doc.Date` or `P.Type`
+  on a value that has no such property said "'Date' is a global function - it is not a member of this value",
+  which read as `.Date` being taken for a call of `Date()`. That sentence is now kept for a method call such as
+  `x.ValueIsFilled()`; a read or a write says the field is not found.
