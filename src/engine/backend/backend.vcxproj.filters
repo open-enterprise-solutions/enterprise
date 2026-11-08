@@ -425,6 +425,9 @@
     <ClInclude Include="metaCollection\partial\document.h">
       <Filter>metaCollection\partial</Filter>
     </ClInclude>
+    <ClInclude Include="metaCollection\partial\documentNumerator.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
     <ClInclude Include="metaCollection\partial\documentEnum.h">
       <Filter>metaCollection\partial</Filter>
     </ClInclude>
@@ -522,6 +525,9 @@
       <Filter>propertyManager\property</Filter>
     </ClInclude>
     <ClInclude Include="propertyManager\property\propertyOwner.h">
+      <Filter>propertyManager\property</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\propertyMetaObjectChoice.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
     <ClInclude Include="propertyManager\propertyManager.h">
@@ -1600,6 +1606,12 @@
     <ClCompile Include="metaCollection\partial\documentMetadata_res.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
+    <ClCompile Include="metaCollection\partial\documentNumeratorMetadata.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\documentNumeratorMetadata_res.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
     <ClCompile Include="metaCollection\partial\documentMetadataMenu.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
@@ -1742,6 +1754,9 @@
       <Filter>propertyManager\property</Filter>
     </ClCompile>
     <ClCompile Include="propertyManager\property\propertyOwner.cpp">
+      <Filter>propertyManager\property</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\propertyMetaObjectChoice.cpp">
       <Filter>propertyManager\property</Filter>
     </ClCompile>
     <ClCompile Include="propertyManager\property\propertyColour.cpp">

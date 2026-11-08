@@ -80,6 +80,8 @@ const ibMetaTreeGroupDef s_groups[] = {
 	{ g_metaConstantCLSID,                   0, ibMetaRow::Item },
 	{ g_metaCatalogCLSID,                    0, ibMetaRow::Item },
 	{ g_metaDocumentCLSID,                   0, ibMetaRow::Item },
+	// DOCUMENT NUMERATORS: a sub-branch of Documents — what they number is documents, and nothing else.
+	{ g_metaDocumentNumeratorCLSID,          g_metaDocumentCLSID, ibMetaRow::Item },
 	{ g_metaEnumerationCLSID,                0, ibMetaRow::Item },
 	{ g_metaDataProcessorCLSID,              0, ibMetaRow::Item },
 	{ g_metaReportCLSID,                     0, ibMetaRow::Item },

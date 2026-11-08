@@ -14031,3 +14031,41 @@ msgstr "Тема оформлення інтерфейсу:"
 #: src/engine/frmserver/schema/style.cpp
 msgid "The theme could not be kept"
 msgstr "Не вдалося зберегти тему"
+
+#: src/engine/backend/metaCollection/partial/documentNumerator.h
+msgid "Check unique"
+msgstr "Перевіряти унікальність"
+
+#: src/engine/backend/metaCollection/partial/document.h
+msgid "Numerator"
+msgstr "Нумератор"
+
+#: src/engine/backend/metaCollection/metaGroups.cpp
+msgid "Document numerators"
+msgstr "Нумератори документів"
+
+#: src/engine/backend/metaCollection/partial/documentObject.cpp
+#, c-format
+msgid "%s: the number %s is already taken by %s %s from %s (document numerator %s)"
+msgstr "%s: номер %s уже зайнятий: %s %s від %s (нумератор документів %s)"
+
+#: src/engine/backend/metaCollection/partial/documentNumeratorMetadata.cpp
+#, c-format
+msgid "The document numerator '%s' cannot be deleted: the document '%s' numbers from it. Clear the document's Numerator property first."
+msgstr "Нумератор документів '%s' не можна видалити: за ним нумерується документ '%s'. Спершу очистіть властивість Нумератор у документа."
+
+#: src/engine/backend/metaCollection/partial/documentNumerator.h
+msgid "A document is not written while another document of this numerator - of any of its kinds - already has the same number in the same period. The refusal names that document. Off: a number typed by hand may stand twice."
+msgstr "Документ не записується, поки інший документ цього нумератора - будь-якого з його видів - уже має той самий номер у тому самому періоді. Відмова називає цей документ. Вимкнено: введений вручну номер може повторитися."
+
+#: src/engine/backend/metaCollection/partial/document.h
+msgid "The document numerator this document takes its numbers from. Empty (the default): the document numbers on its own. Named: its numbers are the next ones of the numerator's series, shared with every document that names the same numerator, of the numerator's type and length and restarting with the numerator's periodicity - this document's own Number periodicity and Number type are not used while it is set."
+msgstr "Нумератор документів, з якого документ бере номери. Порожньо (за замовчуванням): документ нумерується сам. Вказано: номери документа - наступні номери серії нумератора, спільної для всіх документів, що вказали той самий нумератор; тип і довжина номера - нумератора, і серія починається заново з періодичністю нумератора - власні Періодичність номера і тип Номера документа, поки нумератор вказано, не використовуються."
+
+#: src/engine/backend/metaCollection/partial/documentNumerator.h
+msgid "What a number of this series is: a string or a number, and its length. Every document that numbers from the numerator has its Number of this type; a string number is padded with zeros to the length."
+msgstr "Що таке номер цієї серії: рядок або число, і його довжина. У кожного документа, що нумерується за нумератором, Номер цього типу; рядковий номер доповнюється нулями до довжини."
+
+#: src/engine/backend/metaCollection/partial/documentNumerator.h
+msgid "When the numerator's numbers start again. Nonperiodical (the default): one series for the life of the numerator. Year, quarter, month or day: the next number is the next one inside that period of the document's date, whichever of the numerator's documents took the last one, and a new period starts again at one."
+msgstr "Коли номери нумератора починаються заново. Неперіодичний (за замовчуванням): одна серія на весь час життя нумератора. Рік, квартал, місяць або день: наступний номер - наступний у межах цього періоду дати документа, хоч би який із документів нумератора взяв останній, а новий період починається знову з одиниці."

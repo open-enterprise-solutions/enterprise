@@ -41,6 +41,8 @@ const ibMetaGroupRow s_groups[] = {
 	{ g_metaConstantCLSID,                   ibTRANSLATE("Constants"),       ibMetaGroupBand::Metadata },
 	{ g_metaCatalogCLSID,                    ibTRANSLATE("Catalogs"),        ibMetaGroupBand::Metadata },
 	{ g_metaDocumentCLSID,                   ibTRANSLATE("Documents"),       ibMetaGroupBand::Metadata },
+	// …and the number series documents may share, right after them: shown as a branch of Documents.
+	{ g_metaDocumentNumeratorCLSID,          ibTRANSLATE("Document numerators"), ibMetaGroupBand::Metadata },
 	{ g_metaEnumerationCLSID,                ibTRANSLATE("Enumerations"),    ibMetaGroupBand::Metadata },
 	{ g_metaDataProcessorCLSID,              ibTRANSLATE("Data processors"), ibMetaGroupBand::Metadata },
 	{ g_metaReportCLSID,                     ibTRANSLATE("Reports"),         ibMetaGroupBand::Metadata },

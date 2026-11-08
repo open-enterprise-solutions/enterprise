@@ -157,6 +157,17 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, std::i
 		ibValueMetaObject* const object = FindObject(metaData, args, ibProtocol::ibSchema::ibMetaData::Id, refusal, error);
 		if (object == nullptr)
 			return nullptr;
+		// What stands on it is asked HERE, before the work: a refusal raised inside the work reaches only the journal
+		// (ibClientHost::Settle), so the person saw the object stay with no word why. Answered as a refusal, the
+		// client says the sentence. RemoveMetaObject asks again, for its other callers.
+		try {
+			object->RefuseDelete();
+		}
+		catch (const ibCoreException& err) {
+			refusal = ibProtocol::ibRefusal::Exception;
+			error = err.GetErrorDescription();
+			return nullptr;
+		}
 		// …and the rows of the object the tree goes to after it (Select — the next row, else the one before, else the
 		// parent: the client's RemoveItem), shown with the answer.
 		const std::int32_t tabId = args.GetValue<std::int32_t>(ibProtocol::ibSchema::ibMetaData::Tab);

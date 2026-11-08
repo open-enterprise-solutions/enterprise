@@ -551,6 +551,135 @@ void ibValueRecordDataObjectRef::SetDeletionMark(bool deletionMark)
 //*                                          Code generator												   *
 //**********************************************************************************************************
 
+namespace {
+
+// THE SERIES, AS QUESTIONS — the rows a key spans and what is asked of them: the counter row's identity, the
+// highest number the tables hold, whether one of them already holds a number. One place, so allocating a number
+// and holding the series for a typed one ask the same rows of the same tables.
+class ibNumberSeriesQuery {
+public:
+	using Key = ibValueRecordDataObjectRef::ibNumberSeriesKey;
+	using Member = ibValueRecordDataObjectRef::ibNumberSeriesMember;
+
+	ibNumberSeriesQuery(ibDatabaseQueryBuilder& q, const Key& key, const ibValueMetaObjectRecordDataRef* metaObject,
+		const ibValueMetaObjectAttributeBase* attribute, const ibString& prefix)
+		: m_q(q), m_key(key), m_prefix(prefix),
+		  m_path(key.m_seriesPath.IsEmpty() ? metaObject->GetDocPath() : key.m_seriesPath),
+		  m_isNumber(attribute->ContainType(ibValueTypes::TYPE_NUMBER))
+	{
+		// The counter's column is asked of each table's layout by its ROLE (CounterField): GetSQLFieldName() returns
+		// the composite "<fld>_TYPE,<fld>_<X>" shape SaveData uses, and spelling the suffix here made this a second
+		// writer of the lettering. A table whose number has neither slot has nothing to look at, and is left out.
+		m_isString = !m_isNumber && attribute->ContainType(ibValueTypes::TYPE_STRING);
+		if (key.m_members.empty())
+			m_members.push_back({ metaObject->GetPhysicalTableName(), ibValueRecordDataObjectRef::CounterField(attribute), key.m_dateField });
+		else
+			m_members = key.m_members;
+		std::erase_if(m_members, [](const Member& member) { return member.m_numberField.IsEmpty(); });
+	}
+
+	// The sequence row's identity, shared by every arm.
+	ibQueryExprPtr KeyPredicate() const {
+		return ibBinOp(ibQueryBinOp::And,
+			ibBinOp(ibQueryBinOp::And,
+				ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("interval")),  ibConst(ibValue(m_key.m_interval))),
+				ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("meta_guid")), ibConst(ibValue(m_path)))),
+			ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("prefix")),    ibConst(ibValue(m_prefix))));
+	}
+
+	// The highest counter the tables hold in this series — the start of a counter row that is not there yet, so
+	// the first INSERT does not collide with imported or migrated records. 0 when they hold none.
+	ibNumber ScanMax() const {
+		ibNumber maxFound = 0;
+		for (const Member& member : m_members) {
+			// SELECT MAX(<field>) FROM <series rows>. Aggregate with no group keys = one row.
+			ibQueryIR ir;
+			ir.m_root = ibAggregate(Rows(member),
+				{ { ibFunc(ibT("MAX"), { ibCol(member.m_numberField) }), ibT("maxValue") } }, {});
+			ibQueryResult rs = m_q.ExecuteIR(ir);
+			if (!rs.Next())
+				continue;
+			const ibValue maxValue = rs.GetValue(1);
+			if (maxValue.IsNull())
+				continue;    // an empty table
+			ibNumber found = 0;
+			if (m_isNumber)
+				found = maxValue.GetNumber();
+			else {
+				const ibString maxCode = maxValue.GetString();
+				if (maxCode.length() > m_prefix.length()) {
+					long parsed = 0;
+					maxCode.Mid(m_prefix.length()).ToLong(&parsed);
+					if (parsed > 0) found = parsed;
+				}
+			}
+			if (found > maxFound)
+				maxFound = found;
+		}
+		return maxFound;
+	}
+
+	// Does a row of the series — in any of its tables — already hold `code`?
+	bool Taken(const ibValue& code) const {
+		for (const Member& member : m_members) {
+			ibQueryIR ir;
+			ir.m_root = ibAggregate(
+				ibFilter(Rows(member), ibBinOp(ibQueryBinOp::Eq, ibCol(member.m_numberField), ibConst(code))),
+				{ { ibFunc(ibT("COUNT"), { ibCol(member.m_numberField) }), ibT("taken") } }, {});
+			ibQueryResult rs = m_q.ExecuteIR(ir);
+			if (rs.Next() && rs.GetValue(1).GetInteger() > 0)
+				return true;
+		}
+		return false;
+	}
+
+	// The counter row, made at `number`. False when a racing session made it first: the constraint violation
+	// arrives as an exception (L1 signals failure by throwing), and the caller's next UPDATE finds that row.
+	bool Insert(const ibNumber& number) const {
+		try {
+			// Asking for the count rather than comparing against DATABASE_LAYER_QUERY_RESULT_ERROR: that
+			// constant is 0, which is a row count, not a failure — see databaseErrorCodes.h.
+			return m_q.Execute(ibInsert(sequence_table, {
+					{ ibT("interval"),  ibConst(ibValue(m_key.m_interval)) },
+					{ ibT("meta_guid"), ibConst(ibValue(m_path)) },
+					{ ibT("prefix"),    ibConst(ibValue(m_prefix)) },
+					{ ibT("number"),    ibConst(ibValue(number)) },
+				})) >= 1;
+		}
+		catch (const ibCoreException&) {
+			return false;
+		}
+	}
+
+private:
+
+	// The rows of THIS series in one table: the string arm narrows to the prefix, a periodic series to the
+	// period of the document's date.
+	ibQueryRelPtr Rows(const Member& member) const {
+		ibQueryRelPtr source = ibScan(member.m_table);
+		if (m_isString)
+			source = ibFilter(std::move(source),
+				ibBinOp(ibQueryBinOp::Like, ibCol(member.m_numberField), ibConst(ibValue(m_prefix + ibT("%")))));
+		if (!member.m_dateField.IsEmpty()) {
+			source = ibFilter(std::move(source),
+				ibBinOp(ibQueryBinOp::And,
+					ibBinOp(ibQueryBinOp::Ge, ibCol(member.m_dateField), ibConst(ibValue(ibDateTime(m_key.m_from)))),
+					ibBinOp(ibQueryBinOp::Lt, ibCol(member.m_dateField), ibConst(ibValue(ibDateTime(m_key.m_to))))));
+		}
+		return source;
+	}
+
+	ibDatabaseQueryBuilder& m_q;
+	const Key m_key;   // by value: the caller may hand a temporary (NumberSeriesKey())
+	const ibString m_prefix;
+	const ibString m_path;
+	const bool m_isNumber;
+	bool m_isString = false;
+	std::vector<Member> m_members;
+};
+
+}
+
 ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttributeBase* attribute, const ibString& strPrefix)
 {
 	wxASSERT(attribute);
@@ -573,88 +702,13 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 	// The series. A catalog, and a document that is not periodic, stay on 20000101 — the bucket
 	// every number allocated before periodicity was a setting already lives in. A periodic document
 	// names the period of its date, and the bootstrap scan below stays inside that period: the
-	// first number of a new year must not continue the previous year's max.
-	const ibNumberSeriesKey series = NumberSeriesKey();
-	const int interval = series.m_interval;
-
-	// The counter's column in the data table: the per-type sub-column, asked of the layout by its ROLE.
-	// GetSQLFieldName() returns the composite "<fld>_TYPE,<fld>_<X>" shape used by SaveData, and spelling
-	// the suffix here made this a second writer of the lettering — one that would keep compiling after a
-	// change. Empty for an attribute that is neither a number nor a string: there is nothing to look at.
-	const bool isNumber = attribute->ContainType(ibValueTypes::TYPE_NUMBER);
-	const bool isString = !isNumber && attribute->ContainType(ibValueTypes::TYPE_STRING);
-	ibString field;
-	if (isNumber || isString) {
-		const ibColumnRole role = isNumber ? ibColumnRole::Number : ibColumnRole::String;
-		for (const ibColumnSlot& slot : DescribeColumnLayout(attribute->GetQueryColumn()))
-			if (slot.m_role == role) { field = slot.m_name; break; }
-	}
-
-	// The rows of THIS series: the string arm narrows to the prefix, a periodic document to the
-	// period of its date. Both questions below ask them.
-	const auto seriesRows = [&]() {
-		ibQueryRelPtr source = ibScan(m_metaObject->GetPhysicalTableName());
-		if (isString)
-			source = ibFilter(std::move(source),
-				ibBinOp(ibQueryBinOp::Like, ibCol(field), ibConst(ibValue(strPrefix + ibT("%")))));
-		if (!series.m_dateField.IsEmpty()) {
-			source = ibFilter(std::move(source),
-				ibBinOp(ibQueryBinOp::And,
-					ibBinOp(ibQueryBinOp::Ge, ibCol(series.m_dateField), ibConst(ibValue(ibDateTime(series.m_from)))),
-					ibBinOp(ibQueryBinOp::Lt, ibCol(series.m_dateField), ibConst(ibValue(ibDateTime(series.m_to))))));
-		}
-		return source;
-	};
-
-	// Bootstrap helper: when sys_sequence has no row yet for this key,
-	// scan the actual data table for the highest existing counter value
-	// matching strPrefix so the first-ever sequence INSERT doesn't
-	// collide with imported / migrated records. Returns 0 on empty.
-	auto scanDataMax = [&]() -> ibNumber {
-		ibNumber maxFound = 0;
-		if (field.IsEmpty())
-			return maxFound;
-
-		// SELECT MAX(<field>) FROM <series rows>. Aggregate with no group keys = one row.
-		ibQueryIR ir;
-		ir.m_root = ibAggregate(seriesRows(),
-			{ { ibFunc(ibT("MAX"), { ibCol(field) }), ibT("maxValue") } }, {});
-
-		ibQueryResult rs = q.ExecuteIR(ir);
-		if (!rs.Next())
-			return maxFound;
-
-		const ibValue maxValue = rs.GetValue(1);
-		if (maxValue.IsNull())
-			return maxFound;    // empty table — start from zero
-
-		if (isNumber)
-			return maxValue.GetNumber();
-
-		const ibString maxCode = maxValue.GetString();
-		if (maxCode.length() > strPrefix.length()) {
-			long parsed = 0;
-			maxCode.Mid(strPrefix.length()).ToLong(&parsed);
-			if (parsed > 0) maxFound = parsed;
-		}
-		return maxFound;
-	};
+	// first number of a new year must not continue the previous year's max. A document that numbers
+	// from a numerator names the numerator's row and every table of its documents.
+	const ibNumberSeriesQuery series(q, NumberSeriesKey(), m_metaObject, attribute, strPrefix);
 
 	// The value the attribute stores for counter `n` — spelled by the metaobject, as a predefined item's code is.
 	const auto codeOf = [&](const ibNumber& n) -> ibValue {
 		return m_metaObject->GenerateIdentifier(n, strPrefix);
-	};
-
-	// Does a row of the series already hold `code`?
-	const auto taken = [&](const ibValue& code) {
-		if (field.IsEmpty())
-			return false;
-		ibQueryIR ir;
-		ir.m_root = ibAggregate(
-			ibFilter(seriesRows(), ibBinOp(ibQueryBinOp::Eq, ibCol(field), ibConst(code))),
-			{ { ibFunc(ibT("COUNT"), { ibCol(field) }), ibT("taken") } }, {});
-		ibQueryResult rs = q.ExecuteIR(ir);
-		return rs.Next() && rs.GetValue(1).GetInteger() > 0;
 	};
 
 	// Two attempts:
@@ -662,16 +716,6 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 	//   2) Bootstrap-scan + INSERT. The INSERT may PK-conflict if another session
 	//      inserted first; the next iteration's UPDATE arm then succeeds with that
 	//      session's value + 1.
-	//
-	// The sequence row's identity, shared by both arms.
-	const auto keyPredicate = [&]() {
-		return ibBinOp(ibQueryBinOp::And,
-			ibBinOp(ibQueryBinOp::And,
-				ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("interval")),  ibConst(ibValue(interval))),
-				ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("meta_guid")), ibConst(ibValue(m_metaObject->GetDocPath())))),
-			ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("prefix")),    ibConst(ibValue(strPrefix))));
-	};
-
 	ibNumber resultCode = 1;
 	bool gotCode = false;
 	bool counted = false;   // the row was there, and the number is the counter's
@@ -685,7 +729,7 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 				ibReturning(
 					ibUpdate(sequence_table,
 						{ { ibT("number"), ibBinOp(ibQueryBinOp::Add, ibCol(ibT("number")), ibConst(ibValue(1))) } },
-						keyPredicate()),
+						series.KeyPredicate()),
 					{ ibT("number") }));
 
 			if (rs.Next()) {
@@ -699,28 +743,13 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 		}
 		if (gotCode) break;
 
-		// No row yet — bootstrap from the data table and INSERT. A racing session may have
+		// No row yet — bootstrap from the data tables and INSERT. A racing session may have
 		// inserted first, in which case this conflicts on the PK and the next iteration's
 		// UPDATE arm succeeds with that session's value + 1.
-		const ibNumber candidate = scanDataMax() + 1;
-		try {
-			// The bootstrap INSERT must land its one row. Asking for the count rather than
-			// comparing against DATABASE_LAYER_QUERY_RESULT_ERROR: that constant is 0, which
-			// is a row count, not a failure — see databaseErrorCodes.h.
-			if (q.Execute(ibInsert(sequence_table, {
-					{ ibT("interval"),  ibConst(ibValue(interval)) },
-					{ ibT("meta_guid"), ibConst(ibValue(m_metaObject->GetDocPath())) },
-					{ ibT("prefix"),    ibConst(ibValue(strPrefix)) },
-					{ ibT("number"),    ibConst(ibValue(candidate)) },
-				})) >= 1) {
-				resultCode = candidate;
-				gotCode = true;
-			}
-		}
-		catch (const ibCoreException&) {
-			// PK conflict from a racing session's bootstrap — the constraint violation now
-			// arrives as an exception (L1 signals failure by throwing), so it is caught here
-			// rather than read off a return code. Fall through to the retry.
+		const ibNumber candidate = series.ScanMax() + 1;
+		if (series.Insert(candidate)) {
+			resultCode = candidate;
+			gotCode = true;
 		}
 	}
 
@@ -728,15 +757,63 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 
 	// ⭐ A COUNTER BEHIND ITS OWN SERIES. The row is where the series stood when it was last counted, and
 	// the rows moved on without it: the document went periodic and back — the year's buckets numbered the
-	// same rows — or rows came in by import. The number it hands out is then one a row already has. The
-	// counter is set to where the rows are, once, and the series goes on from there; the UPDATE above
-	// holds the row, so a concurrent writer waits for this one.
-	if (counted && taken(codeOf(resultCode))) {
-		resultCode = scanDataMax() + 1;
+	// same rows — or rows came in by import, or a document joined a numerator with numbers of its own. The
+	// number it hands out is then one a row already has. The counter is set to where the rows are, once,
+	// and the series goes on from there; the UPDATE above holds the row, so a concurrent writer waits for
+	// this one.
+	if (counted && series.Taken(codeOf(resultCode))) {
+		resultCode = series.ScanMax() + 1;
 		q.Execute(ibUpdate(sequence_table,
 			{ { ibT("number"), ibConst(ibValue(resultCode)) } },
-			keyPredicate()));
+			series.KeyPredicate()));
 	}
 
 	return codeOf(resultCode);
+}
+
+void ibValueRecordDataObjectRef::LockNumberSeries(const ibNumberSeriesKey& key)
+{
+	const ibValueMetaObjectAttributeBase* attribute = m_metaObject->GetAttributeForCode();
+	if (attribute == nullptr)
+		return;
+
+	ibDatabaseQueryBuilder q;
+	const ibNumberSeriesQuery series(q, key, m_metaObject, attribute, ibEmptyString);
+
+	// UPDATE … SET number = number: the row is held until the write commits, and its number does not move.
+	const auto hold = [&]() {
+		return q.Execute(ibUpdate(sequence_table,
+			{ { ibT("number"), ibCol(ibT("number")) } },
+			series.KeyPredicate())) >= 1;
+	};
+	if (hold())
+		return;
+	// No row yet: made where the tables stand — the next allocation goes on from there — and then held.
+	series.Insert(series.ScanMax());
+	hold();
+}
+
+ibString ibValueRecordDataObjectRef::CounterField(const ibValueMetaObjectAttributeBase* attribute)
+{
+	if (attribute == nullptr || attribute->GetQueryColumn() == nullptr)
+		return ibEmptyString;
+	const bool isNumber = attribute->ContainType(ibValueTypes::TYPE_NUMBER);
+	const bool isString = !isNumber && attribute->ContainType(ibValueTypes::TYPE_STRING);
+	if (!isNumber && !isString)
+		return ibEmptyString;
+	const ibColumnRole role = isNumber ? ibColumnRole::Number : ibColumnRole::String;
+	for (const ibColumnSlot& slot : DescribeColumnLayout(attribute->GetQueryColumn()))
+		if (slot.m_role == role)
+			return slot.m_name;
+	return ibEmptyString;
+}
+
+ibString ibValueRecordDataObjectRef::DateField(const ibValueMetaObjectAttributeBase* attribute)
+{
+	if (attribute == nullptr || attribute->GetQueryColumn() == nullptr)
+		return ibEmptyString;
+	for (const ibColumnSlot& slot : DescribeColumnLayout(attribute->GetQueryColumn()))
+		if (slot.m_role == ibColumnRole::Date)
+			return slot.m_name;
+	return ibEmptyString;
 }
