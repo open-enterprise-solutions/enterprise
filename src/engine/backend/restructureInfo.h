@@ -74,6 +74,29 @@ public:
 	// ran. Pair with RequireExclusiveForDDL inside OnAfterSaveDatabase.
 	static void ReleaseAutoExclusive();
 
+	// ⭐ AN APPLY THAT WILL RUN DDL ASKS BEFORE IT STARTS, NOT AT ITS FIRST DDL (#404). The gate above is
+	// asked by the first batch with steps (ibStructureBatch::Flush) — tens of seconds into an apply on a
+	// real base, after the configuration save and the diff. A session that connected meanwhile then
+	// threw all that work away. ApplyConfiguration knows up front whether the structure moves
+	// (IsDynamicUpdateAvailable — the differ's own snapshots, compared), and holds exclusive mode for
+	// the whole apply when it does: refused at once, with the same words, or nobody comes in until it
+	// ends. Held by this scope, not by the gate — the saves inside it (each one's OnAfterSave lets the
+	// gate's own go) find it held and leave it alone; the scope lets it go on every exit.
+	class BACKEND_API ApplyExclusive {
+	public:
+		explicit ApplyExclusive(bool structureMoves);
+		~ApplyExclusive();
+
+		ApplyExclusive(const ApplyExclusive&)            = delete;
+		ApplyExclusive& operator=(const ApplyExclusive&) = delete;
+
+		// Whether this scope took exclusive mode (false: none was needed, or it was held already).
+		bool IsHeld() const noexcept { return m_held; }
+
+	private:
+		bool m_held = false;
+	};
+
 private:
 	std::vector<Entry> m_entries;
 	size_t             m_warnings = 0;

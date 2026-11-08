@@ -355,6 +355,20 @@ namespace {
 	// RequireExclusiveForDDL. ReleaseAutoExclusive uses it to know
 	// whether to drop the flag (don't drop if the caller had it before).
 	thread_local bool ts_acquiredByGate = false;
+
+	// Each verdict says what it is: "not answered" read as "others connected" sent the person looking for
+	// a session that did not exist (2026-09-15).
+	[[noreturn]] void RefuseExclusive(ibSession::ibExclusiveResult verdict)
+	{
+		const ibString why =
+			verdict == ibSession::ibExclusiveResult::HeldByOther  ? _("Another session holds exclusive mode.")
+			: verdict == ibSession::ibExclusiveResult::Pending    ? _("The session registry did not answer in time.")
+			: verdict == ibSession::ibExclusiveResult::JobRunning ? _("A job is running - try again when it finishes.")
+			:                                                       _("Other sessions are connected - disconnect them and try again.");
+		ibBackendCoreException::Error(ibString::Format(
+			_("Structure (DDL) changes require exclusive mode. %s "
+			  "Code-only changes (modules, forms) can be saved without it."), why));
+	}
 }
 
 void ibRestructureInfo::RequireExclusiveForDDL()
@@ -382,17 +396,36 @@ void ibRestructureInfo::RequireExclusiveForDDL()
 		ts_acquiredByGate = true;
 		return;
 	}
+	RefuseExclusive(verdict);
+}
 
-	// Each verdict says what it is: "not answered" read as "others connected" sent the person looking for
-	// a session that did not exist (2026-09-15).
-	const ibString why =
-		verdict == ibSession::ibExclusiveResult::HeldByOther  ? _("Another session holds exclusive mode.")
-		: verdict == ibSession::ibExclusiveResult::Pending    ? _("The session registry did not answer in time.")
-		: verdict == ibSession::ibExclusiveResult::JobRunning ? _("A job is running - try again when it finishes.")
-		:                                                       _("Other sessions are connected - disconnect them and try again.");
-	ibBackendCoreException::Error(ibString::Format(
-		_("Structure (DDL) changes require exclusive mode. %s "
-		  "Code-only changes (modules, forms) can be saved without it."), why));
+ibRestructureInfo::ApplyExclusive::ApplyExclusive(bool structureMoves)
+{
+	// Nothing to run, nothing to ask: a code-only apply goes through while people work, as the gate lets it.
+	// Held already (the person set it, or an outer apply): theirs, left as it is.
+	if (!structureMoves || appData->ExclusiveMode())
+		return;
+
+	// The gate's bootstrap road — no session or no registry yet, nobody else can be connected.
+	auto* session  = ibSession::Current();
+	auto* registry = ibApplicationInstance::GetSessionRegistry();
+	if (session == nullptr || registry == nullptr)
+		return;
+
+	const auto verdict = registry->SetExclusive(session, true);
+	if (verdict != ibSession::ibExclusiveResult::Granted)
+		RefuseExclusive(verdict);
+	m_held = true;
+}
+
+ibRestructureInfo::ApplyExclusive::~ApplyExclusive()
+{
+	if (!m_held)
+		return;
+	auto* session  = ibSession::Current();
+	auto* registry = ibApplicationInstance::GetSessionRegistry();
+	if (session != nullptr && registry != nullptr)
+		registry->SetExclusive(session, false);
 }
 
 void ibRestructureInfo::ReleaseAutoExclusive()

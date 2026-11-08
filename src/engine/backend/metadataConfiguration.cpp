@@ -872,6 +872,14 @@ bool ibMetaDataConfigurationBase::ApplyConfiguration(ibString& refusal,
 	}
 
 	try {
+		// 0 — ⭐ EXCLUSIVE MODE BEFORE THE WORK, WHEN THE STRUCTURE MOVES (#404). The first batch with DDL used
+		// to be the first to ask (ibStructureBatch::Flush) — 45 to 70 seconds into an apply on a real base,
+		// after the save below and the diff — and a session that connected in that window threw the whole
+		// apply away. Whether the structure moves is known now, from the configuration in memory (the
+		// differ's own snapshots, compared), so the refusal comes at once and the base stays closed to
+		// newcomers until the apply ends. A code-only apply asks nothing, as before.
+		const ibRestructureInfo::ApplyExclusive exclusive(!IsDynamicUpdateAvailable());
+
 		// 1 — the configuration itself, PERSISTED AND NOTHING MORE. The restructure is steps 2-5,
 		// and it is the whole reason this verb is separate from the save above.
 		//

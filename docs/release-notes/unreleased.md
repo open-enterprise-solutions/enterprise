@@ -303,6 +303,9 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **A thin designer in an application server gets exclusive mode.** The server's own login counted as another
   session, so applying a configuration was refused with "other sessions are connected" when nobody else was. A job
   running at that moment still refuses, and now says so: it ends by itself, and the request can be made again.
+- **Applying a configuration that changes the structure asks for exclusive mode before it starts**, not at its
+  first table change tens of seconds in. Another session connected is refused at once, with the same words, and
+  nobody can come in while the apply runs. An apply of modules and forms only still asks nothing (#404).
 - **Typing a number code finds the item wherever it stands.** A catalog whose code is a number was searched among
   its first hundred items only; `12` now finds 12, 120 to 129, 1200 to 1299 and so on, through the code's index.
 - **Output list names a column by its header**, the field's synonym, not by the field's name.
