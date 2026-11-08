@@ -468,3 +468,6 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   and `commandType`, and replaces what it held.
 - **On macOS a text field shows every letter typed whole.** The left edge of each new letter stayed unpainted, in
   the launcher's fields and in every other text field of the desktop programs.
+- **On macOS a window and a dialog of the desktop programs have their title bar and frame.** The launcher's window
+  and its connection dialog showed neither, and the dialog merged with the window behind it; the title bar's
+  buttons now work there too.

@@ -101,6 +101,11 @@ public:
     // the part of the window at the point of the client area: wxHT_TOPLEVEL_xxx
     long HitTest(const wxPoint& pt) const;
 
+    // the mouse event's point in the client area, as HitTest takes it: wxMSW gives it so (wxWindowMSW::InitMouseEvent
+    // takes the client area's origin off), wxOSX gives it in the native view's coordinates - the whole window's, the
+    // decorations' too (wxSetupCoordinates) - and the title bar's x was hit a title bar's height below it
+    wxPoint GetClientPoint(const wxMouseEvent& event) const;
+
     virtual wxPoint GetClientAreaOrigin() const override;
     virtual wxSize GetMinSize() const override;
     virtual void SetTitle(const wxString& title) override;
@@ -124,6 +129,9 @@ private:
     void ClickTitleBarButton(long button);
 
     void OnPaint(wxPaintEvent& event);
+
+    // the window whole on the DC whose (0, 0) is the window's corner: its colour, the decorations round the client area
+    void PaintFrame(wxDC& dc);
     void OnActivateTitleBar(wxActivateEvent& event);
     void OnSetCursor(wxSetCursorEvent& event);
     void OnMouseMotion(wxMouseEvent& event);
@@ -205,6 +213,16 @@ long ibTopLevelWindow<W>::HitTest(const wxPoint& pt) const
 {
     // the point is the client area's (wxWindowMSW::InitMouseEvent), the frame the whole window's
     return m_renderer->HitTestFrame(wxRect(this->GetSize()), pt + GetClientAreaOrigin(), GetDecorationsStyle());
+}
+
+template <class W>
+wxPoint ibTopLevelWindow<W>::GetClientPoint(const wxMouseEvent& event) const
+{
+#ifdef __WXOSX__
+    return event.GetPosition() - GetClientAreaOrigin();
+#else
+    return event.GetPosition();
+#endif
 }
 
 template <class W>
@@ -343,6 +361,14 @@ void ibTopLevelWindow<W>::ClickTitleBarButton(long button)
 template <class W>
 void ibTopLevelWindow<W>::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
+#ifdef __WXOSX__
+    // wxOSX's paint DC begins at the client area and is clipped to it (wxPaintDCImpl), and its clip is the native
+    // context's own, the window's every DC drawing under it: the decorations round the client area were never painted -
+    // no title bar, no close button, no frame, the window one with what was behind it. No paint DC here (wxOSX needs
+    // none, the view is drawing already), the window DC draws on the same context, the whole window. Buffered natively.
+    wxWindowDC dc(this);
+    PaintFrame(dc);
+#else
     wxPaintDC dcPaint(this);
 
     // the paint DC begins at the client area (GetClientAreaOrigin), the decorations are round it: the whole window.
@@ -352,13 +378,21 @@ void ibTopLevelWindow<W>::OnPaint(wxPaintEvent& WXUNUSED(event))
     const wxSize size = this->GetSize();
     wxBitmap buffer(size);
     wxMemoryDC dc(buffer);
+    PaintFrame(dc);
+
+    dcPaint.Blit(0, 0, size.x, size.y, &dc, 0, 0);
+#endif
+}
+
+template <class W>
+void ibTopLevelWindow<W>::PaintFrame(wxDC& dc)
+{
+    const wxSize size = this->GetSize();
 
     dc.SetBackground(wxBrush(this->GetBackgroundColour()));
     dc.Clear();
     m_renderer->DrawFrameTitleBar(dc, wxRect(size), this->GetTitle(), wxNullIcon,
                                   GetDecorationsStyle(), m_pressedButton, wxCONTROL_PRESSED);
-
-    dcPaint.Blit(0, 0, size.x, size.y, &dc, 0, 0);
 }
 
 template <class W>
@@ -402,7 +436,7 @@ void ibTopLevelWindow<W>::OnMouseMotion(wxMouseEvent& event)
     // the button held is pressed while the mouse is over it
     if ( m_grip & wxHT_TOPLEVEL_ANY_BUTTON )
     {
-        const long pressed = HitTest(event.GetPosition()) == m_grip ? m_grip : 0;
+        const long pressed = HitTest(GetClientPoint(event)) == m_grip ? m_grip : 0;
         if ( pressed != m_pressedButton )
         {
             m_pressedButton = pressed;
@@ -455,7 +489,7 @@ template <class W>
 void ibTopLevelWindow<W>::OnLeftDown(wxMouseEvent& event)
 {
     // a button is pressed, the title bar moves the window and the border sizes it
-    const long hit = HitTest(event.GetPosition());
+    const long hit = HitTest(GetClientPoint(event));
     const bool button = (hit & wxHT_TOPLEVEL_ANY_BUTTON) != 0;
     const bool move = hit == wxHT_TOPLEVEL_TITLEBAR && !this->IsMaximized();
     const bool size = (hit & wxHT_TOPLEVEL_ANY_BORDER) != 0 && this->HasFlag(wxRESIZE_BORDER);
@@ -514,7 +548,7 @@ template <class W>
 void ibTopLevelWindow<W>::OnLeftDClick(wxMouseEvent& event)
 {
     const long button = GetDecorationsStyle() & (wxTOPLEVEL_BUTTON_MAXIMIZE | wxTOPLEVEL_BUTTON_RESTORE);
-    if ( button == 0 || HitTest(event.GetPosition()) != wxHT_TOPLEVEL_TITLEBAR )
+    if ( button == 0 || HitTest(GetClientPoint(event)) != wxHT_TOPLEVEL_TITLEBAR )
     {
         event.Skip();
         return;
