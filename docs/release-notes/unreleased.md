@@ -466,3 +466,7 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   name. Sent `{name: …}`, it answered with a binding nobody asked for: the button kept the command it had and its
   item type became a number no type carries. A command binding now reads only the shape it is written in, `hops`
   and `commandType`, and replaces what it held.
+- **MCP: `config_apply` says what it applied.** Its `changes` counted the structure work, so an apply of data
+  processors, reports, modules or forms, which live in no table, answered `changes: 0` with an empty ledger
+  while it applied them. `changes` and `objects` are now the objects the apply carried, in `database_diff`'s
+  words; the structure work stays in `ledger`, `structureChanges` long.
