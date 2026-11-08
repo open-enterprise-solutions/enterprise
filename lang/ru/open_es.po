@@ -13986,6 +13986,11 @@ msgstr "%s: %s нельзя переводить со строки на числ
 msgid "%s: the %s cannot be shorter than it was (%u, now %u)"
 msgstr "%s: %s не может быть короче, чем был (%u, теперь %u)"
 
+#: src/engine/backend/query/schemaSnapshot.cpp
+#, c-format
+msgid "%s in %s cannot be narrowed from %s to %s - a stored field keeps its length and its digits: keep them, or add a new field and move the values"
+msgstr "%s в %s нельзя сузить с %s до %s - хранимое поле сохраняет свою длину и свои разряды: сохраните их или добавьте новое поле и перенесите значения"
+
 #: src/engine/backend/databaseLayer/databaseMaterializeBuilder.cpp
 msgid "A reading by the movement was handed a surface without its movements"
 msgstr "Чтению по движениям передан источник без движений"

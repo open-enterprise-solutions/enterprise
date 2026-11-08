@@ -814,6 +814,62 @@ int AlterTable(ibStructureBatch& batch, const ibSchemaTable& old, const ibSchema
 	return retCode;
 }
 
+// ⭐ A STORED FIELD IS NOT NARROWED IN PLACE (#414). The column diff ALTERs a field whose type changed, and
+// Firebird refuses an ALTER that does not widen — by the declaration, whatever the rows hold: "New scale
+// specified for column … must be at most 0", "New size specified … must be at least 11 characters" — and the
+// whole apply rolled back on a statement, naming a physical column. Asked here instead, before a statement,
+// of every field in the layout (a composite field's string and number parts each), old declaration against
+// new: a string shorter, a number with fewer integer or fewer fractional digits. A length or a count of
+// digits of 0 holds anything. On every engine, as a code's and a description's narrowing is (#646): the
+// schema is what a base is built from, and the base is not asked what it holds. Two physical types compared
+// — no metadata case, so every column meets the same rule.
+ibString FieldTypeText(const ibColumnType& t)
+{
+	if (t.m_kind == ibCanonicalKind::Number)
+		return ibString::Format(ibT("Number(%d,%d)"), t.m_precision, t.m_scale);
+	return ibString::Format(ibT("String(%d)"), t.m_length);
+}
+
+bool NarrowsField(const ibColumnType& was, const ibColumnType& now)
+{
+	if (was.m_kind != now.m_kind)
+		return false;
+	const auto fewer = [](int before, int after) { return after != 0 && (before == 0 || after < before); };
+	if (now.m_kind == ibCanonicalKind::String)
+		return fewer(was.m_length, now.m_length);
+	if (now.m_kind == ibCanonicalKind::Number) {
+		if (now.m_precision == 0)
+			return false;
+		if (was.m_precision == 0)
+			return true;
+		return now.m_precision - now.m_scale < was.m_precision - was.m_scale || now.m_scale < was.m_scale;
+	}
+	return false;
+}
+
+bool FieldsKeepTheirWidthOrSay(const ibSchemaTable& old, const ibSchemaTable& cur, ibRestructureInfo* report)
+{
+	bool passed = true;
+	for (const ibSchemaColumn& c : cur.m_columns) {
+		const ibSchemaColumn* o = FindColumn(old.m_columns, c.m_id);
+		if (o == nullptr || o->m_column == nullptr || c.m_column == nullptr)
+			continue;
+		const std::vector<ibColumnSlot> wasLayout = DescribeColumnLayout(o->m_column);
+		for (const ibColumnSlot& now : DescribeColumnLayout(c.m_column)) {
+			const auto was = std::find_if(wasLayout.begin(), wasLayout.end(),
+				[&now](const ibColumnSlot& s) { return s.m_name == now.m_name; });
+			if (was == wasLayout.end() || !NarrowsField(was->m_type, now.m_type))
+				continue;
+			if (report != nullptr)
+				report->AppendError(ibString::Format(
+					_("%s in %s cannot be narrowed from %s to %s - a stored field keeps its length and its digits: keep them, or add a new field and move the values"),
+					ColName(c.m_column), LedgerName(cur), FieldTypeText(was->m_type), FieldTypeText(now.m_type)));
+			passed = false;
+		}
+	}
+	return passed;
+}
+
 // ⭐ AN INDEX THE BASE CANNOT HOLD IS REFUSED HERE, before a statement — not by the engine at CREATE INDEX,
 // where the failure rolls the apply back and names nothing useful (a register's records key was declared
 // with no width check at all, ROADMAP §1o). Measured the way a derived key is (ibDeclareDerivedKey): fields
@@ -997,6 +1053,16 @@ int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& targ
 	for (const ibSchemaTable& cur : target.Tables()) {
 		if (!cur.m_beforeChange(baseline != nullptr ? baseline->Find(cur.m_id) : nullptr, report))
 			refused = true;
+	}
+
+	// …and no stored field is narrowed (FieldsKeepTheirWidthOrSay). A derived table is left out: its fields
+	// follow the movements' own, whose refusal names the field a person declared.
+	if (baseline != nullptr) {
+		for (const ibSchemaTable& cur : target.Tables()) {
+			const ibSchemaTable* old = baseline->Find(cur.m_id);
+			if (old != nullptr && !cur.m_derived && !FieldsKeepTheirWidthOrSay(*old, cur, report))
+				refused = true;
+		}
 	}
 
 	// …and every index this apply would CREATE — new, or changed — is asked whether the base can hold it

@@ -280,4 +280,87 @@ TEST_P(TypeChangeLedger, AThousandIsGrouped)
 	EXPECT_NE(said[0].Find(wxT(": 1 234 stored values will be cleared")), wxNOT_FOUND) << said[0];
 }
 
+// #414 — a stored field is not narrowed in place. Firebird refuses an ALTER that does not widen, whatever the rows
+// hold, and the apply died on that statement. Now it is refused before a statement, naming the field, on every engine:
+// DiffSnapshots answers 0, the ledger says why, and the table stands as it was.
+namespace {
+
+std::vector<ibString> RefusedNarrowing(const StoredColumn& was, const StoredColumn& next)
+{
+	ibSchemaSnapshot before;
+	before.Shared(kGoodsTable, wxT("goods")).Add(&was);
+	ibSchemaSnapshot after;
+	after.Shared(kGoodsTable, wxT("goods")).Add(&next);
+	ibRestructureInfo ledger;
+	EXPECT_EQ(DiffSnapshots(&before, after, nullptr, &ledger), 0) << "the apply is refused";
+	std::vector<ibString> said;
+	for (const ibRestructureInfo::Entry& entry : ledger)
+		if (entry.type == ibRestructure::error && entry.descr.Find(wxT("cannot be narrowed")) != wxNOT_FOUND)
+			said.push_back(entry.descr);
+	return said;
+}
+
+} // namespace
+
+TEST_P(TypeChangeLedger, ANumberWithFewerIntegerDigitsIsRefusedBeforeAStatement)
+{
+	StoredColumn was;
+	was.physical = wxT("Amount");
+	was.type.AppendMetaType(ibValueTypes::TYPE_NUMBER);
+	was.type.SetNumber(10, 0);
+	StoredColumn next = was;
+	next.type.SetNumber(10, 2);   // 8 integer digits where there were 10
+
+	Create(was);
+	Put(FieldOf(was, ibColumnRole::Number), wxT("1234567890"));
+
+	const std::vector<ibString> said = RefusedNarrowing(was, next);
+	ASSERT_EQ(said.size(), 1u);
+	EXPECT_NE(said[0].Find(wxT("Number(10,0) to Number(10,2)")), wxNOT_FOUND) << said[0];
+	EXPECT_NE(said[0].Find(wxT("Amount")), wxNOT_FOUND) << said[0];
+
+	ibQueryResult rows = ibDatabaseQueryBuilder().From(wxT("goods")).Select({ FieldOf(was, ibColumnRole::Number) }).Execute();
+	ASSERT_TRUE(rows.Next()) << "the table stands, and its row";
+}
+
+TEST_P(TypeChangeLedger, AShorterStringAndFewerFractionalDigitsAreRefused)
+{
+	StoredColumn was;
+	was.physical = wxT("Number");
+	was.type.AppendMetaType(ibValueTypes::TYPE_STRING);
+	was.type.AppendMetaType(ibValueTypes::TYPE_NUMBER);
+	was.type.SetString(11);
+	was.type.SetNumber(15, 3);
+	StoredColumn next = was;
+	next.type.SetString(6);
+	next.type.SetNumber(15, 2);   // more integer digits, fewer fractional: still narrower
+
+	Create(was);
+	const std::vector<ibString> said = RefusedNarrowing(was, next);
+	ASSERT_EQ(said.size(), 2u) << "every part of a composite field is asked, every objection said at once";
+	EXPECT_NE((said[0] + said[1]).Find(wxT("String(11) to String(6)")), wxNOT_FOUND);
+	EXPECT_NE((said[0] + said[1]).Find(wxT("Number(15,3) to Number(15,2)")), wxNOT_FOUND);
+}
+
+// A widening is not a narrowing, and an unlimited string holds anything. (SQLite has no in-place type change at
+// all — its renderer refuses any ALTER — so the widening itself is applied on the engines that have one.)
+TEST_P(TypeChangeLedger, AWideningIsNotRefused)
+{
+	if (std::string(GetParam()) == "sqlite")
+		GTEST_SKIP() << "no in-place type change on SQLite";
+	StoredColumn was;
+	was.physical = wxT("Number");
+	was.type.AppendMetaType(ibValueTypes::TYPE_STRING);
+	was.type.AppendMetaType(ibValueTypes::TYPE_NUMBER);
+	was.type.SetString(6);
+	was.type.SetNumber(10, 0);
+	StoredColumn next = was;
+	next.type.SetString(11);
+	next.type.SetNumber(12, 2);
+
+	Create(was);
+	Put(FieldOf(was, ibColumnRole::Number), wxT("1234567890"));
+	EXPECT_TRUE(Apply(was, next).empty());
+}
+
 INSTANTIATE_TEST_SUITE_P(Engines, TypeChangeLedger, ::testing::Values("sqlite", "postgres", "firebird"));

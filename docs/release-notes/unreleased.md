@@ -303,6 +303,11 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **A thin designer in an application server gets exclusive mode.** The server's own login counted as another
   session, so applying a configuration was refused with "other sessions are connected" when nobody else was. A job
   running at that moment still refuses, and now says so: it ends by itself, and the request can be made again.
+- **A stored field is not narrowed: the apply refuses it before a statement, naming the field.** A string made
+  shorter, or a number given fewer integer or fewer fractional digits (`Number(10,0)` to `Number(10,2)`), reached
+  the base as an in-place type change, which Firebird refuses, and the whole apply failed on a physical column
+  name. Now it is refused on every engine with the field, the old and the new type: keep the length and the
+  digits, or add a new field and move the values (#414).
 - **Typing a number code finds the item wherever it stands.** A catalog whose code is a number was searched among
   its first hundred items only; `12` now finds 12, 120 to 129, 1200 to 1299 and so on, through the code's index.
 - **Output list names a column by its header**, the field's synonym, not by the field's name.
