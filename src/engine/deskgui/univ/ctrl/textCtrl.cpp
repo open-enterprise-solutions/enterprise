@@ -4686,6 +4686,15 @@ void ibTextCtrl::CreateCaret()
 void ibTextCtrl::ShowCaret(bool show)
 {
     wxCaret *caret = GetCaret();
+
+    // a window being hidden leaves its caret alone: hiding takes the focus, the
+    // hint is put back (SetValue -> ShowPosition -> here), and on OSX drawing
+    // the caret re-creates its overlay, which orders the top-level window back
+    // in and takes the focus again - the dialog closing never ends. Hidden and
+    // shown again in ShowPosition, the caret is unchanged by skipping both
+    if ( caret && !IsShownOnScreen() )
+        return;
+
     if ( caret )
     {
         // (re)position caret correctly

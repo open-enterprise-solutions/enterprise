@@ -497,3 +497,11 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   saved from, a field its attribute. Read into the configuration it came from, the copy's form ran the original's
   command. The file is now read on its own and pasted in, as a copy made in the designer is pasted. And a pasted
   button names the pasted object's command — in the designer's copy and paste too, where it kept the original's.
+- **On macOS a text field shows every letter typed whole.** The left edge of each new letter stayed unpainted, in
+  the launcher's fields and in every other text field of the desktop programs.
+- **On macOS a window and a dialog of the desktop programs have their title bar and frame.** The launcher's window
+  and its connection dialog showed neither, and the dialog merged with the window behind it — it could only be
+  left by saving the connection. The title bar's buttons now work there too.
+- **On macOS closing a dialog no longer crashes the program** when the focus is in an empty field with a hint.
+- **On macOS menu icons stand level with their items' text.** On a Retina screen each icon sat half a line above
+  its label, and the first one was cut by the menu's edge.
