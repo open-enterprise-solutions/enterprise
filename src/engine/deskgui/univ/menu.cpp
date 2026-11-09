@@ -690,6 +690,13 @@ void ibPopupMenuWindow::DoDraw(wxDC& dc, ibRenderer *rend)
 // ibPopupMenuWindow actions
 // ----------------------------------------------------------------------------
 
+// SEAM vs univ: the item clicked is done AFTER the menu's modal loop, as a native menu's command comes once
+// TrackPopupMenu has returned - DoPopupMenu does it. Done inside the loop, whatever the command showed modally ran in
+// it, and no menu could be shown there: a dialog opened from the code editor's menu (the query constructor) answered
+// no right click, DoPopupMenu refusing a second loop without a word
+static ibMenu *s_pendingClickMenu = nullptr;
+static ibMenuItem *s_pendingClickItem = nullptr;
+
 void ibPopupMenuWindow::ClickItem(ibMenuItem *item)
 {
     wxCHECK_RET( item, wxT("can't click null item") );
@@ -702,7 +709,8 @@ void ibPopupMenuWindow::ClickItem(ibMenuItem *item)
     // close all menus
     DismissAndNotify();
 
-    menu->ClickItem(item);
+    s_pendingClickMenu = menu;
+    s_pendingClickItem = item;
 }
 
 void ibPopupMenuWindow::OpenSubmenu(ibMenuItem *item, InputMethod how)
@@ -2903,6 +2911,17 @@ bool ibWindow::DoPopupMenu(ibMenu *menu, int x, int y)
 #ifdef __WXMSW__
     SetCursor(cursorOld);
 #endif // __WXMSW__
+
+    // the item clicked, now the loop is gone (ibPopupMenuWindow::ClickItem)
+    if ( s_pendingClickItem )
+    {
+        ibMenu *clicked = s_pendingClickMenu;
+        ibMenuItem *item = s_pendingClickItem;
+        s_pendingClickMenu = nullptr;
+        s_pendingClickItem = nullptr;
+
+        clicked->ClickItem(item);
+    }
 
     return true;
 }
