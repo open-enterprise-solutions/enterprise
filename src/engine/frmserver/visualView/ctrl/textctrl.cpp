@@ -213,11 +213,13 @@ bool ibValueTextCtrl::SetControlValue(const ibValue& varControlVal)
 	ibValue before;
 	GetControlValue(before);
 
+	// What the field shows is what its source is given: an empty value written in (a linked field emptied, ClearLinked)
+	// is the empty value of its type, not Undefined.
+	m_selValue = ibTypeControlFactory::AdjustValue(value);
 	const ibBackendSourceColumn* column = !m_propertySource->IsEmptyProperty()
 		? WalkSource(GetSourceDesc()) : nullptr;
 	if (column != nullptr && m_formOwner != nullptr)
-		m_formOwner->SetValueByAttributePath(m_propertySource->GetValueAsSourceDesc(), value);
-	m_selValue = ibTypeControlFactory::AdjustValue(value);
+		m_formOwner->SetValueByAttributePath(m_propertySource->GetValueAsSourceDesc(), m_selValue);
 
 	// …and the controls chosen within this field are emptied, on a change (#616).
 	ibTypeControlFactory::ClearLinked(this, before);
@@ -265,6 +267,13 @@ ibSelectMode ibValueTextCtrl::GetSelectMode() const
 	case ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_Auto: break;
 	}
 	return ibTypeControlFactory::GetSelectMode();
+}
+
+// …and its own rows over its field's, read in the form (#616).
+ibChoiceCondition ibValueTextCtrl::GetChoiceCondition() const
+{
+	return ibChoiceLinkResolver::Resolve(GetChoiceHolder(), GetSourceDesc().GetLeaf(), GetChoiceParameters(),
+		ibChoiceHolder(m_formOwner));
 }
 
 //*******************************************************************

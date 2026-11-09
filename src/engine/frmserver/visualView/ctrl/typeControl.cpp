@@ -64,21 +64,16 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibValue
 			return true;
 	}
 
-	if (QuickChoice(ownerValue, current, metaData))
+	// ⭐ WHAT NARROWS THIS CHOICE — the control's own answer (GetChoiceCondition): the quick choice finds under it, and
+	// the choice form opens with it.
+	const ibChoiceCondition condition = factory->GetChoiceCondition();
+
+	if (QuickChoice(ownerValue, current, condition, metaData))
 		return true;
 
 	const ibCtorMetaValueType* so = metaData != nullptr ? metaData->GetTypeCtor(clsid) : nullptr;
 	if (so != nullptr && so->GetMetaTypeCtor() == ibCtorObjectMetaType_Reference) {
 		if (const ibValueMetaObject* metaObject = so->GetMetaObject()) {
-			// ⭐ WHAT NARROWS THIS CHOICE — two things the control supplies and nothing it works out:
-			// the FIELD being filled, and WHERE the values its link names are read. The second is the
-			// control's own answer — the form's source for a control on a form, the row being edited
-			// for a table column — so the list is narrowed by exactly what the person can see beside
-			// the field they are filling; the control's own rows over it are read in the form.
-			const ibChoiceCondition condition = ibChoiceLinkResolver::Resolve(factory->GetChoiceHolder(),
-				factory->GetSourceDesc().GetLeaf(), factory->GetChoiceParameters(),
-				ibChoiceHolder(ownerValue->GetOwnerForm()));
-
 			// ⭐ WHAT THE FORM IS MADE WITH: which form the author picked, and — as one named part of
 			// it — the choice. The condition goes in WHOLE, empty or not: "nothing narrows this" is a
 			// condition with nothing in it, and the list asks the same question of both.
@@ -91,24 +86,10 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibValue
 	return false;
 }
 
-bool ibTypeControlFactory::FindValue(ibControlFrame* ownerValue, const ibValue& value, const ibString& input,
-	std::vector<ibValue>& out)
+void ibTypeControlFactory::ClearLinked(ibControlFrame* changed, const ibValue& before) const
 {
-	const ibTypeControlFactory* factory = dynamic_cast<const ibTypeControlFactory*>(ownerValue);
-	if (factory == nullptr)
-		return false;
-
-	// The same condition the choice form is made with (ChooseValue) — typing finds no more than the form shows.
-	const ibChoiceCondition condition = ibChoiceLinkResolver::Resolve(factory->GetChoiceHolder(),
-		factory->GetSourceDesc().GetLeaf(), factory->GetChoiceParameters(), ibChoiceHolder(ownerValue->GetOwnerForm()));
-	return value.FindValue(input, condition, out);
-}
-
-void ibTypeControlFactory::ClearLinked(ibControlFrame* changed, const ibValue& before)
-{
-	const ibTypeControlFactory* factory = dynamic_cast<const ibTypeControlFactory*>(changed);
-	ibValueForm* const form = changed != nullptr ? changed->GetOwnerForm() : nullptr;
-	if (factory == nullptr || form == nullptr)
+	ibValueForm* const form = changed->GetOwnerForm();
+	if (form == nullptr)
 		return;
 
 	// On a CHANGE only — what the control shows now, after its own adjustment; writing what is already there makes
@@ -118,12 +99,10 @@ void ibTypeControlFactory::ClearLinked(ibControlFrame* changed, const ibValue& b
 	if (after.GetClassType() == before.GetClassType() && after == before)
 		return;
 
-	const ibSourceDescription& edited = factory->GetSourceDesc();
+	const ibSourceDescription& edited = GetSourceDesc();
 	for (ibValueControl* control : form->GetControlList()) {
-		ibTypeControlFactory* linked = dynamic_cast<ibTypeControlFactory*>(control);
-		if (linked != nullptr && linked != factory
-			&& ibChoiceLinkResolver::IsLinked(linked->GetTypeLink(), linked->GetChoiceParameters(), edited))
-			control->SetControlValue(linked->AdjustValue());
+		if (control != changed && ibChoiceLinkResolver::IsLinked(control->GetTypeLink(), control->GetChoiceParameters(), edited))
+			control->SetControlValue();
 	}
 }
 
@@ -151,7 +130,8 @@ bool ibTypeControlFactory::SimpleChoice(ibControlFrame* ownerValue, const ibValu
 	return true;   // the type has its own window — shown, whatever the person did with it
 }
 
-bool ibTypeControlFactory::QuickChoice(ibControlFrame* ownerValue, const ibValue& current, const ibMetaData* metaData)
+bool ibTypeControlFactory::QuickChoice(ibControlFrame* ownerValue, const ibValue& current, const ibChoiceCondition& condition,
+	const ibMetaData* metaData)
 {
 	if (ownerValue == nullptr || !ownerValue->HasQuickChoice())
 		return false;
@@ -162,7 +142,7 @@ bool ibTypeControlFactory::QuickChoice(ibControlFrame* ownerValue, const ibValue
 
 	// The short list, among what the choice is made under — the form's list would show no more.
 	std::vector<ibValue> values;
-	if (!FindValue(ownerValue, current, ibEmptyString, values))
+	if (!current.FindValue(ibEmptyString, condition, values))
 		return false;
 
 	std::vector<ibChoiceItem> items;
@@ -185,16 +165,12 @@ ibSelectMode ibTypeControlFactory::GetSelectMode() const
 	return GetChoiceHolder().GetSelectMode(GetSourceDesc().GetLeaf());
 }
 
-const ibChoiceTypeLinkDescription& ibTypeControlFactory::GetTypeLink() const
+// ⭐ TWO THINGS THE CONTROL SUPPLIES AND NOTHING IT WORKS OUT: the FIELD being filled, and WHERE the values its link names
+// are read — the form's source for a control on a form, the row being edited for a table column — so the list is
+// narrowed by exactly what the person can see beside the field they are filling.
+ibChoiceCondition ibTypeControlFactory::GetChoiceCondition() const
 {
-	static const ibChoiceTypeLinkDescription s_none;
-	return s_none;
-}
-
-const ibChoiceParametersDescription& ibTypeControlFactory::GetChoiceParameters() const
-{
-	static const ibChoiceParametersDescription s_none;
-	return s_none;
+	return ibChoiceLinkResolver::Resolve(GetChoiceHolder(), GetSourceDesc().GetLeaf());
 }
 
 ibClassID ibTypeControlFactory::ShowSelectType(const ibMetaData* metaData, const ibTypeDescription& typeDescription)

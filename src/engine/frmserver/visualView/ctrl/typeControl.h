@@ -35,12 +35,11 @@ public:
 	// table column answer with their own word over it (ChoiceFoldersAndItems).
 	virtual ibSelectMode GetSelectMode() const;
 
-	// ⭐ THE CONTROL'S OWN LINKS (#616) — a link by type and choice parameters said on the control, for a field reached
-	// through the dot that has no attribute of its own to declare them. Their paths are the form's, as the binding's are,
-	// and the form is their source (ibChoiceHolder over it). Empty by default: a control saying nothing adds nothing to
-	// what its bound field says.
-	virtual const ibChoiceTypeLinkDescription& GetTypeLink() const;
-	virtual const ibChoiceParametersDescription& GetChoiceParameters() const;
+	// ⭐ WHAT A CHOICE HERE IS MADE UNDER — the one thing a value is chosen and found by: the choice form opens with it,
+	// the quick choice and the text typed in find under it (ibValue::FindValue), so neither finds more than the form shows
+	// (#616). By default the bound field's parameters (ibChoiceLinkResolver::Resolve over the holder); a text field and a
+	// table column add their own rows over them, read in the form.
+	virtual ibChoiceCondition GetChoiceCondition() const;
 
 	// GetSourceList is NOT implemented here — each concrete control overrides
 	// ibBackendTypeSourceFactory::GetSourceList(out) using its own GetOwnerForm()
@@ -66,23 +65,10 @@ public:
 	// A number and a date are picked by the client itself (a calculator, a calendar):
 	// what comes back is typed into the field like anything else.
 	static bool ChooseValue(ibControlFrame* ownerValue, const class ibValueMetaObject* choiceForm = nullptr);
-	// …AND WHAT IS FOUND IN IT WITHOUT A FORM — the values of `value`'s kind `input` names (ibValue::FindValue), among
-	// what a choice in `ownerValue` is made under: its field's parameters and its own over them (ibChoiceLinkResolver::
-	// Resolve). Asked by the text typed into a control and by its quick choice, so neither finds more than the choice
-	// form shows (#616, Max 2026-11-09).
-	static bool FindValue(ibControlFrame* ownerValue, const ibValue& value, const ibString& input,
-		std::vector<ibValue>& out);
 
 	// The type a value is created of, out of those a description admits — an "any" offers every reference it admits; asked
 	// of the person when there are several, 0 when the person closes the choice.
 	static ibClassID ShowSelectType(const ibMetaData* metadata, const ibTypeDescription& typeDescription);
-
-	// ⭐ …AND WHAT A WRITE THROUGH A CONTROL LEAVES STALE (#616): `changed` showed `before`, and if it shows anything else
-	// now, every control of its form whose OWN links name its field — a link by type, or a row that does not say Keep — is
-	// emptied through its own door, to the empty value of its type. Asked by the control's write, the one door a value
-	// typed or chosen into it passes; the emptied control's write asks it in turn, so the chain follows by itself and stops
-	// where a value is already empty. The data's own links are its record's to empty (ibChoiceLinkResolver::ClearLinked).
-	static void ClearLinked(ibControlFrame* changed, const ibValue& before);
 
 protected:
 
@@ -98,11 +84,20 @@ protected:
 	// and nothing is chosen within it.
 	virtual ibChoiceHolder GetChoiceHolder() const { return ibChoiceHolder(); }
 
+	// ⭐ …AND WHAT A WRITE THROUGH THIS CONTROL LEAVES STALE (#616): `changed` — the control itself, its own `this` (an
+	// implicit upcast, as ibValueControl::AutoBindNewSource takes its factory) — showed `before`, and if it shows anything
+	// else now, every control of its form whose OWN links name this field — a link by type, or a row that does not say
+	// Keep — is emptied through its own door. Asked by the control's write, the one door a value typed or chosen into it
+	// passes; the emptied control's write asks it in turn, so the chain follows by itself and stops where a value is
+	// already empty. The data's own links are its record's to empty (ibChoiceLinkResolver::ClearLinked).
+	void ClearLinked(ibControlFrame* changed, const ibValue& before) const;
+
 private:
 
-	// The short list `current` is picked from (an enumeration's members, a boolean, a small reference list), found as the
-	// typed text is (FindValue), put to the person as a choice. False when its type has none.
-	static bool QuickChoice(ibControlFrame* ownerValue, const ibValue& current, const ibMetaData* metaData);
+	// The short list `current` is picked from (an enumeration's members, a boolean, a small reference list), among what
+	// `condition` leaves, put to the person as a choice. False when its type has none.
+	static bool QuickChoice(ibControlFrame* ownerValue, const ibValue& current, const ibChoiceCondition& condition,
+		const ibMetaData* metaData);
 	// A NUMBER ON ITS CALCULATOR, A DATE ON ITS CALENDAR — the desktop's SimpleChoice, drawn by the client under the
 	// field pressed (ibProtocol::ibRequest::ibKind::SimpleChoice); the value chosen is handed to the field. False when the type
 	// is neither. Asked first by the quick choice.

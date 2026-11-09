@@ -27,7 +27,7 @@ bool ibValueModelTableBoxColumn::TextProcessing(const ibString& strData)
 	}
 	if (strData.Length() > 0) {
 		std::vector<ibValue> listValue;
-		if (ibTypeControlFactory::FindValue(this, newValue, strData, listValue)) {
+		if (newValue.FindValue(strData, GetChoiceCondition(), listValue)) {
 			SetControlValue(listValue.at(0));
 		}
 		else {

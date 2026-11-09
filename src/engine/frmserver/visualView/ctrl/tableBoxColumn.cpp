@@ -377,6 +377,13 @@ ibSelectMode ibValueModelTableBoxColumn::GetSelectMode() const
 	return ibTypeControlFactory::GetSelectMode();
 }
 
+// …and its own rows over its field's, read in the form (#616), as a form field's (ibValueTextCtrl::GetChoiceCondition).
+ibChoiceCondition ibValueModelTableBoxColumn::GetChoiceCondition() const
+{
+	return ibChoiceLinkResolver::Resolve(GetChoiceHolder(), GetSourceDesc().GetLeaf(), GetChoiceParameters(),
+		ibChoiceHolder(m_formOwner));
+}
+
 bool ibValueModelTableBoxColumn::GetControlValue(ibValue& pvarControlVal) const
 {
 	ibValueModel::ibValueModelReturnLine* currentLine = GetCurrentLine();

@@ -322,7 +322,9 @@ namespace ibProtocol {
 			inline constexpr const char* Schedule     = "Schedule";       // a schedule's, in its stored form
 			inline constexpr const char* Sources      = "Sources";        // a choice parameters row's: the fields beside it
 			                                                              // that may supply a value (Title, the holder they
-			                                                              // stand in); a source's: its window's tree
+			                                                              // stand in), each Id, Title, Picture and Value —
+			                                                              // the path it stores (ibSourceDescriptionMemory);
+			                                                              // a source's: its window's tree
 			inline constexpr const char* Default      = "Default";
 			inline constexpr const char* Targets      = "Targets";
 			inline constexpr const char* Pictures     = "Pictures";       // a picture's: those it may be (Guid, Name; Id —

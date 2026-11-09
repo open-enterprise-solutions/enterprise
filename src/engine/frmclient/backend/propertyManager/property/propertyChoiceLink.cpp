@@ -33,7 +33,7 @@ std::optional<ibDataNode> Target(const ibDataNode& row, const ibMetaID& type)
 {
 	if (const auto targets = row.FindChild(ibProtocol::ibSchema::ibProperties::Targets)) {
 		for (const ibDataNode& target : targets->Children()) {
-			if ((ibMetaID)target.GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Id) == type)
+			if (target.GetValue<ibMetaID>(ibProtocol::ibSchema::ibProperties::Id) == type)
 				return target;
 		}
 	}
@@ -102,20 +102,13 @@ ibSourceDescription ibChoiceSourcePath(const ibBackendProperty* property, const 
 	if (!sources)
 		return path;
 	for (const ibDataNode& source : sources->Children()) {
-		if ((ibMetaID)source.GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Id) != sourceId)
+		if (source.GetValue<ibMetaID>(ibProtocol::ibSchema::ibProperties::Id) != sourceId)
 			continue;
-		// The hops as a Source's rows carry them (ibFormDesignView::ReadPath reads them back the same way).
-		const auto hops = source.FindField(ibProtocol::ibView::ibFormDesigner::Path);
-		if (!hops || hops->Kind() != ibDataKind::Array)
-			return ibSourceDescription(static_cast<ibSourceId>(sourceId));   // an older server's: the Id is the field's
-		for (const ibDataValue& hop : hops->AsArray()) {
-			if (hop.Kind() != ibDataKind::Child || !hop.AsChild())
-				continue;
-			unsigned long long type = 0;
-			hop.AsChild()->GetValue<ibString>(ibProtocol::ibView::ibFormDesigner::Type).ToULongLong(&type);
-			path.AppendSource(static_cast<ibSourceId>(hop.AsChild()->GetValue<std::int32_t>(ibProtocol::ibView::ibFormDesigner::Id)),
-				type != 0 ? static_cast<ibClassID>(type) : g_valueUndefinedCLSID);
-		}
+		// The path it stores, by the path's own serialiser — as the server wrote it, and as the link's value carries it.
+		const auto written = source.FindField(ibProtocol::ibSchema::ibProperties::Value);
+		if (!written)
+			return ibSourceDescription(sourceId);   // an older server's: the Id is the field's
+		ibSourceDescriptionMemory::ReadNode(*written, path);
 		return path;
 	}
 	return path;
@@ -131,12 +124,12 @@ void ibChoiceParametersForSource(const ibBackendProperty* property, const ibMeta
 	if (!sources)
 		return;
 	for (const ibDataNode& source : sources->Children()) {
-		if ((ibMetaID)source.GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Id) != sourceId)
+		if (source.GetValue<ibMetaID>(ibProtocol::ibSchema::ibProperties::Id) != sourceId)
 			continue;
 		for (const ibDataNode& fit : source.Children())
-			out.push_back((ibMetaID)fit.GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Id));
+			out.push_back(fit.GetValue<ibMetaID>(ibProtocol::ibSchema::ibProperties::Id));
 		if (obvious != nullptr)
-			*obvious = (ibMetaID)source.GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Default);
+			*obvious = source.GetValue<ibMetaID>(ibProtocol::ibSchema::ibProperties::Default);
 		return;
 	}
 }

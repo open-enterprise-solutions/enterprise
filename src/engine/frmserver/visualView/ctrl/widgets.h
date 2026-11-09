@@ -314,9 +314,10 @@ public:
 	// The field's own word over its type's and its attribute's (issue #259): QuickChoice and ChoiceFoldersAndItems.
 	virtual bool HasQuickChoice() const override;
 	virtual ibSelectMode GetSelectMode() const override;
-	// …and its own links (#616): TypeLink and ChoiceParameters.
+	// …and its own links (#616): TypeLink and ChoiceParameters, and the condition they add to its field's.
 	virtual const ibChoiceTypeLinkDescription& GetTypeLink() const override { return m_propertyTypeLink->GetValueAsLinkDesc(); }
 	virtual const ibChoiceParametersDescription& GetChoiceParameters() const override { return m_propertyChoiceParameters->GetValueAsParametersDesc(); }
+	virtual ibChoiceCondition GetChoiceCondition() const override;
 
 public:
 

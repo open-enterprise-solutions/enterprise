@@ -71,6 +71,14 @@ public:
 
 	virtual bool HasQuickChoice() const = 0;
 	virtual void ChoiceProcessing(ibValue& vSelected) = 0;
+
+	// ⭐ THE CONTROL'S OWN LINKS (#616) — a link by type and choice parameters said on the control, for a field reached
+	// through the dot that has no attribute of its own to declare them. Their paths are the form's, as the binding's are,
+	// and the form is their source (ibChoiceHolder over it). Here, beside the value they narrow, so a write that leaves a
+	// neighbour's value stale reads them off any control of the form (ibTypeControlFactory::ClearLinked). Empty by
+	// default: a control saying nothing adds nothing to what its bound field says.
+	virtual const struct ibChoiceTypeLinkDescription& GetTypeLink() const;
+	virtual const struct ibChoiceParametersDescription& GetChoiceParameters() const;
 };
 
 // CAN A VALUE OF THIS TYPE BE PICKED FROM A SHORT LIST? ONE function, and the only place the ctor kinds

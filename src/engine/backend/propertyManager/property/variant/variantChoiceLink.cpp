@@ -395,6 +395,7 @@ ibPropertyChoiceMode ibVariantChoiceLink::GetValueList(ibPropertyChoiceList& lis
 	if (metaData == nullptr)
 		return ibPropertyChoiceMode::None;
 
+	long row = 0;
 	for (const ibChoiceHolderField& field : ibChoiceHolderFields(owner)) {
 		// ⭐ THE SAME ANSWER THE RESOLVER READS BY. Which fields can give a type is said ONCE, beside the
 		// reading itself (ibChoiceLinkResolver::CanGovern) — a second rule here is a designer that offers
@@ -405,7 +406,7 @@ ibPropertyChoiceMode ibVariantChoiceLink::GetValueList(ibPropertyChoiceList& lis
 		ibChoiceTypeLinkDescription linkDesc;
 		linkDesc.m_source = field.m_path;
 
-		list.Add(static_cast<long>(list.GetCount() + 1), field.m_spelled, field.m_column->GetSynonym(),
+		list.Add(++row, field.m_spelled, field.m_column->GetSynonym(),
 			ibVariant(new ibVariantChoiceLink(owner, linkDesc)),
 			field.m_column->GetColumnPicture());
 	}

@@ -11,6 +11,20 @@
 #include "backend/metaCollection/metaFormObject.h"   // ibValueMetaObjectFormBase — IsCopyMode / IsPasteMode mark
 
 
+#include "core/description/choiceLinkDescription.h"
+
+const ibChoiceTypeLinkDescription& ibControlFrame::GetTypeLink() const
+{
+	static const ibChoiceTypeLinkDescription s_none;
+	return s_none;
+}
+
+const ibChoiceParametersDescription& ibControlFrame::GetChoiceParameters() const
+{
+	static const ibChoiceParametersDescription s_none;
+	return s_none;
+}
+
 //*************************************************************************
 //*                          ValueControl		                          *
 //*************************************************************************
