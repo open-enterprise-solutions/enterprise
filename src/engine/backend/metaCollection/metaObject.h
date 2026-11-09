@@ -752,9 +752,13 @@ public:
 	//     COMPATIBILITY VERSION (`GetMetaData()->GetVersion()`, a new rung in ibProgramVersion), here and in
 	//     the runtime together (§ 6.2, compatibility-version.md): the user raises the mode, and the next
 	//     apply is the migration. A metatype no released base holds yet needs neither.
+	//
+	// A DELETED CHILD DECLARES NOTHING. It stays in the tree until the configuration is written (DeleteSubtree),
+	// and a snapshot taken before that — IsDynamicUpdateAvailable, asked before an apply starts — kept its table, so
+	// deleting an applied object read as "the structure stays" (#404). The base's copy holds none.
 	virtual void ContributeTables(class ibSchemaSnapshot& out) const {
 		for (unsigned int i = 0; i < GetChildCount(); i++)
-			if (ibValueMetaObject* child = GetChild(i))
+			if (ibValueMetaObject* child = GetChild(i); child != nullptr && !child->IsDeleted())
 				child->ContributeTables(out);
 	}
 

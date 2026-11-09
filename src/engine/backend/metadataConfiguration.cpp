@@ -6,6 +6,7 @@
 #include "backend/backend_mainFrame.h"
 #include "backend/appData.h"
 #include "backend/session/session.h"   // IsDesignerSessionKind — whom a configuration was made for
+#include "backend/session/sessionRegistry.h"   // an apply that moves the structure lets the session's exclusive mode go
 #include "backend/job/jobManager.h"   // the job records are swept once the surviving jobs are known
 
 // ms_instance / Get / Initialize / Destroy retired — ownership moved
@@ -872,6 +873,31 @@ bool ibMetaDataConfigurationBase::ApplyConfiguration(ibString& refusal,
 	}
 
 	try {
+		// 0 — ⭐ EXCLUSIVE MODE BEFORE THE WORK, WHEN THE STRUCTURE MOVES (#404). The first batch with DDL used
+		// to be the first to ask (ibStructureBatch::Flush) — 45 to 70 seconds into an apply on a real base,
+		// after the save below and the diff — and a session that connected in that window threw the whole
+		// apply away. Whether the structure moves is known now, from the configuration in memory (the
+		// differ's own snapshots, compared), so the refusal comes at once and the base stays closed to
+		// newcomers until the apply ends. A code-only apply asks nothing, as before.
+		//
+		// THE SESSION'S OWN EXCLUSIVE MODE, the one a script sets (ibSession::SetExclusive) - not the gate's: every
+		// save lets the gate's go (ibStructureBuilder::OnAfterSave), and step 1 is a save of its own. The gate finds
+		// this one held and leaves it; the guard lets it go however the apply ends, as the gate lets its own go.
+		struct ibApplyExclusive {
+			ibSession* m_session = nullptr;
+			~ibApplyExclusive() {
+				ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry();
+				if (m_session != nullptr && registry != nullptr)
+					registry->SetExclusive(m_session, false);
+			}
+		} exclusive;
+		ibSession* const session = ibSession::Current();
+		if (session != nullptr && !session->IsExclusive() && ibApplicationInstance::GetSessionRegistry() != nullptr
+			&& !IsDynamicUpdateAvailable()) {
+			session->SetExclusive(true);   // refused in the session's words, which the catch below hands back
+			exclusive.m_session = session;
+		}
+
 		// 1 — the configuration itself, PERSISTED AND NOTHING MORE. The restructure is steps 2-5,
 		// and it is the whole reason this verb is separate from the save above.
 		//

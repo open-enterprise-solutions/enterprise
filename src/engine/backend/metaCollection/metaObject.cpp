@@ -234,8 +234,20 @@ bool ibValueMetaObject::CompareObject(const ibValueMetaObject* compareObject) co
 					return false;
 			}
 
+			// The children the walker pairs (IsAcceptedByParent): a deleted one stays in the tree until the configuration
+			// is written, and counted, it made its parent differ over nothing the write keeps.
+			const auto accepted = [](const ibValueMetaObject* object) {
+				unsigned int count = 0;
+				for (unsigned int idx = 0; idx < object->GetChildCount(); idx++) {
+					const ibValueMetaObject* child = object->GetChild(idx);
+					if (child != nullptr && child->IsAcceptedByParent())
+						count++;
+				}
+				return count;
+			};
+
 			return (compareObject1->GetPropertyCount() == compareObject2->GetPropertyCount() && compareObject1->GetEventCount() == compareObject2->GetEventCount()) &&
-				compareObject1->GetChildCount() == compareObject2->GetChildCount();
+				accepted(compareObject1) == accepted(compareObject2);
 		}
 	};
 

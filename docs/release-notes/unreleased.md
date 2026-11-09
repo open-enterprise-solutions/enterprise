@@ -321,6 +321,11 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **A thin designer in an application server gets exclusive mode.** The server's own login counted as another
   session, so applying a configuration was refused with "other sessions are connected" when nobody else was. A job
   running at that moment still refuses, and now says so: it ends by itself, and the request can be made again.
+- **Applying a configuration that changes the structure asks for exclusive mode before it starts**, not at its
+  first table change tens of seconds in. With another session connected the apply is refused at once, and nobody
+  can come in while it runs. An apply of modules and forms only still asks nothing (#404). Deleting
+  an object the base holds counts as a change of structure from the start too: before the configuration was
+  written, the deleted object's table was still counted.
 - **Typing a number code finds the item wherever it stands.** A catalog whose code is a number was searched among
   its first hundred items only; `12` now finds 12, 120 to 129, 1200 to 1299 and so on, through the code's index.
 - **Output list names a column by its header**, the field's synonym, not by the field's name.
@@ -515,3 +520,6 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   no debugger and names `app_run` with `restart: true`; `app_run`'s `debug` says which verbs need it. And `app_run`
   no longer starts a second application beside one it started without the debugger: it asks for `restart: true`,
   as it did beside a debug session.
+- **MCP: an object created and deleted before the configuration is written leaves no trace in `database_diff`.**
+  Its parents read "changed" and the change read as structural until the configuration was written; the same
+  count was in `config_apply`'s `changes`.

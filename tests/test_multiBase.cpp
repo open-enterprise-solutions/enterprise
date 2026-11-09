@@ -32,6 +32,7 @@
 #include "backend/backend_exception.h"
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
+#include "backend/restructureInfo.h"                    // the gate a save asks, and what it leaves held (#404)
 #include "backend/session/session.h"
 #include "backend/session/sessionHolder.h"
 #include "backend/session/sessionRegistry.h"           // Start — a base put together by hand starts its registry
@@ -352,4 +353,51 @@ TEST(ExclusiveBesideTheHost, TheHostsOwnLoginPassesAJobAndASecondClientDoNot)
 	}
 
 	EXPECT_EQ(acquire(), R::Granted) << "the job and the client gone, the request made again is granted";
+}
+
+// #404 — an apply that will run DDL takes the session's OWN exclusive mode before its first step (ApplyConfiguration),
+// not the gate's at its first DDL tens of seconds in. What that rests on: every save lets the gate's go
+// (ibStructureBuilder::OnAfterSave), and the apply's first step is a save of its own — the session's survives them.
+// Refused beside another client: TheHostsOwnLoginPassesAJobAndASecondClientDoNot, above.
+TEST(ExclusiveBesideTheHost, TheSessionsExclusiveOutlivesASavesGate)
+{
+	wxInitializer wxInit;
+	if (!wxInit.IsOk())
+		GTEST_SKIP() << "wxBase init failed (no wxApp host)";
+
+	const ibString path = wxFileName::CreateTempFileName(wxT("oes-apply-exclusive"));
+	ASSERT_FALSE(path.IsEmpty());
+	struct Gone {
+		ibString path;
+		~Gone() {
+			ibApplicationInstance::DestroyAppDataEnv();
+			wxRemoveFile(path);
+		}
+	} gone{ path };
+
+	ibApplicationInstance* const base = OpenBase(ibRunMode::eFILE_MODE, /*poolSize=*/4, path);
+	if (base == nullptr)
+		GTEST_SKIP() << "appData env unavailable headless";
+	ibApplicationInstanceScope working(base);
+	ASSERT_NE(db_query->RunQuery(wxT(
+		"CREATE TABLE sys_session ("
+		"session TEXT PRIMARY KEY, userName TEXT, application INTEGER, started TEXT, lastActive TEXT, "
+		"computer TEXT, pid INTEGER, address TEXT, currentActivity TEXT, kind INTEGER, signal TEXT, "
+		"exclusive INTEGER NOT NULL DEFAULT 0, tokenHash TEXT)")), -1);
+	ibApplicationInstance::GetSessionRegistry()->Start();
+
+	ibSessionHolder designer = base->CreateSession(ibSessionKind::ThinDesigner);
+	ASSERT_NE(designer.Get(), nullptr);
+	ibSessionScope bound(designer.Get());
+
+	designer.Get()->SetExclusive(true);
+	EXPECT_TRUE(appData->ExclusiveMode()) << "the designer alone: held from the start";
+
+	// A save inside the apply: its first DDL asks the gate, its OnAfterSave lets the gate's own go.
+	ibRestructureInfo::RequireExclusiveForDDL();
+	ibRestructureInfo::ReleaseAutoExclusive();
+	EXPECT_TRUE(appData->ExclusiveMode()) << "the save found it held and left it — the apply still holds it";
+
+	designer.Get()->SetExclusive(false);
+	EXPECT_FALSE(appData->ExclusiveMode()) << "the apply over, it is let go";
 }
