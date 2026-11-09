@@ -24,12 +24,14 @@ wxString ReadHandler(const wxVariant& value)
 	return node ? node->GetValue<ibString>(ibT("Value")) : ibString();
 }
 
-// …and the value naming another: the same event's (its name is its own), read as the handler.
+// …and the value naming another: the same event's (its name is its own), read as the handler — put in place of the one
+// it held: SetValue appends, and a second Value went to the server behind the first, empty one it read (the handler
+// typed was never kept).
 wxVariant WriteHandler(const wxVariant& value, const wxString& handler)
 {
 	const auto held = ibVariantDataSerializable::GetNodeValue(value).AsChild();
 	auto node = held ? std::make_shared<ibDataNode>(*held) : std::make_shared<ibDataNode>();
-	node->SetValue(ibT("Value"), ibString(handler));
+	node->SetField(ibT("Value"), ibDataValue::String(ibString(handler)));
 	return wxVariant(new ibVariantDataSerializable(value.GetType(), ibDataValue::Child(node), handler));
 }
 

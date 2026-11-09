@@ -321,6 +321,9 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Fixes
 
+- **An event handler typed in the thin designer's inspector is kept.** The procedure was written into the module,
+  but the event — a form command's Action, a control's event — went to the server with its old, empty handler ahead
+  of the new one, and the server kept the empty one.
 - **An accumulation register's `Balance` takes the dimensions and the resources** as its third and fourth
   arguments, comma lists: `Balance(, Filter, "", "Quantity")` is one line with the whole balance. A name that
   is not the register's refuses, naming it. It took two arguments and refused a third (#409).
