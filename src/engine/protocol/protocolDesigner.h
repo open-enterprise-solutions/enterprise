@@ -204,6 +204,25 @@ namespace ibProtocol {
 
 		}
 
+		// THE BASE'S WEB ADDRESSES — the designer's Administration → Web addresses (backend/served/servedAddress.h):
+		// Addresses (Id, Kind, Path, Object — its object's guid, Title — its object's name, Kept), what each kind
+		// Offers (Kind, Path, Object, Title) and the Kinds there are (Name each); commands Create {Kind, Path[, Object]} —
+		// registered and kept in the base, Remove {Id} — taken off. Each refused with the registry's words.
+		namespace ibWebAddress {
+
+			inline constexpr const char* Addresses = "Addresses";
+			inline constexpr const char* Offers    = "Offers";
+			inline constexpr const char* Kinds     = "Kinds";
+			inline constexpr const char* Id        = "Id";
+			inline constexpr const char* Kind      = "Kind";
+			inline constexpr const char* Path      = "Path";
+			inline constexpr const char* Object    = "Object";
+			inline constexpr const char* Title     = "Title";
+			inline constexpr const char* Kept      = "Kept";
+			inline constexpr const char* Name      = "Name";
+
+		}
+
 		// THE DESIGNER'S CONFIGURATION TREE — shows nothing: its rows ride the frame (ibFrame::MetaData), each row
 		// ibNode::Id — its object's id, or below 0 a group row's place among its siblings; Title, Picture, Group — what New
 		// makes under it, Type, Synonym, Position, Guid — its object's; a language's Code, a role's Mode; Menu. Its

@@ -170,7 +170,7 @@ public:
 	ibHttpServer();
 	~ibHttpServer();
 
-	// THE ROUTES — by the exact decoded path; a request for none of them goes to the files mounted, and failing them
+	// THE ROUTES — by the exact decoded path; a request for none of them goes to what is mounted, and failing that
 	// is answered 404. Said before Start.
 	void Get(const std::string& path, ibHttpHandler handler);
 	void Post(const std::string& path, ibHttpHandler handler);
@@ -182,6 +182,15 @@ public:
 	// …and files held in memory, by their path under `prefix` (index.html, js/app.js) — a pack read whole: served as a
 	// directory's are.
 	void Mount(const std::string& prefix, std::map<std::string, std::string> files);
+	// …and a handler, for every method and every path under `prefix`: what it answers there — 404 and 405 included —
+	// is its own.
+	void Mount(const std::string& prefix, ibHttpHandler handler);
+	// What is mounted under `prefix` taken off, whichever of the three it is.
+	//
+	// ⭐ THE MOUNTS CHANGE AT ANY TIME, from any thread, before Start and while requests come — a list a base keeps
+	// changing is served as it changes. One mount per prefix: a second under the same prefix replaces the first. The
+	// longest prefix answers. A request already handed to a handler keeps it.
+	void Unmount(const std::string& prefix);
 
 	// Listening, with the threads up — or false, with why in `error`.
 	bool Start(const ibHttpServerOptions& options, std::string& error);

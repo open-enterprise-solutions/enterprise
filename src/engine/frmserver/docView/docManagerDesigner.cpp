@@ -10,6 +10,7 @@
 #include "frmserver/schema/designer/properties.h"
 #include "frmserver/schema/designer/types.h"
 #include "frmserver/schema/designer/userList.h"
+#include "frmserver/schema/designer/webAddress.h"
 
 //files
 #include "frmserver/docView/templates/designer/docViewDataProcessorEdit.h"
@@ -70,6 +71,8 @@ ibDocManagerDesigner::ibDocManagerDesigner()
 	RegisterSchema(ibProtocol::ibSchema::ibKind::Properties, std::make_unique<ibSchemaProperties>());
 	// The designer's Administration → Users — the base's users.
 	RegisterSchema(ibProtocol::ibSchema::ibKind::UserList, std::make_unique<ibSchemaUserList>());
+	// …and Web addresses — what the base answers on a web server, beside its clients.
+	RegisterSchema(ibProtocol::ibSchema::ibKind::WebAddress, std::make_unique<ibSchemaWebAddress>());
 	// …and Restore, Dump and Clear database — the base as a whole.
 	RegisterSchema(ibProtocol::ibSchema::ibKind::Database, std::make_unique<ibSchemaDatabase>());
 	RegisterSchema(ibProtocol::ibSchema::ibKind::ConfigCompare, std::make_unique<ibSchemaConfigCompare>());

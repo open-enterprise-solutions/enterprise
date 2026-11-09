@@ -229,6 +229,9 @@
     <ClCompile Include="mcp\tools\mcpToolValue.cpp">
       <Filter>mcp\tools</Filter>
     </ClCompile>
+    <ClCompile Include="mcp\tools\designer\mcpToolAddress.cpp">
+      <Filter>mcp\tools\designer</Filter>
+    </ClCompile>
     <ClCompile Include="mcp\tools\designer\mcpToolApp.cpp">
       <Filter>mcp\tools\designer</Filter>
     </ClCompile>
@@ -371,6 +374,9 @@
       <Filter>schema\designer</Filter>
     </ClCompile>
     <ClCompile Include="schema\designer\userList.cpp">
+      <Filter>schema\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\designer\webAddress.cpp">
       <Filter>schema\designer</Filter>
     </ClCompile>
     <ClCompile Include="schema\runtime\allFunctions.cpp">
@@ -866,6 +872,9 @@
       <Filter>schema\designer</Filter>
     </ClInclude>
     <ClInclude Include="schema\designer\userList.h">
+      <Filter>schema\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="schema\designer\webAddress.h">
       <Filter>schema\designer</Filter>
     </ClInclude>
     <ClInclude Include="schema\runtime\allFunctions.h">

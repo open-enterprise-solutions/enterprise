@@ -81,6 +81,7 @@ Add a row to the group it belongs to when you add a document, so this folder can
 | [browser-client.md](browser-client.md) | The browser client: a page with no build, its parts, who does what, what it guarantees, where it stops |
 | [client-protocol.md](client-protocol.md) | How a client works with a base: transports, methods, the frame, schemas, questions, files, the menu, what it guarantees |
 | [listeners.md](listeners.md) | The listeners and the ports: TLS when backend.conf names a certificate; where the clear is allowed, and where it is refused |
+| [web-addresses.md](web-addresses.md) | Web addresses: what a base answers on a web server beside its clients, kept in the base, mounted by every web server that publishes it |
 
 ### The engine's words
 

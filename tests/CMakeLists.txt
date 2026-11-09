@@ -176,6 +176,7 @@ add_executable(oes_tests
     test_valueHttp.cpp
     test_valueHttpSecure.cpp
     test_listener.cpp
+    test_servedAddress.cpp
     test_sessionTokenText.cpp
     test_metaDescription.cpp
     test_backendColumnRawDB.cpp

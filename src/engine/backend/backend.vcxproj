@@ -57,6 +57,8 @@
     <ClInclude Include="rpc\rpcMessage.h" />
     <ClInclude Include="job\platformJobs.h" />
     <ClInclude Include="settings\settingsStorage.h" />
+    <ClInclude Include="served\servedAddress.h" />
+    <ClInclude Include="served\servedAddressRegistry.h" />
     <ClInclude Include="settings\settingsComposer.h" />
     <ClInclude Include="temp\tempStorage.h" />
     <ClInclude Include="sheetFormat\sheetFormat.h" />
@@ -444,6 +446,7 @@
     <ClCompile Include="job\platformJobs.cpp" />
     <ClCompile Include="query\queryable.cpp" />
     <ClCompile Include="settings\settingsStorage.cpp" />
+    <ClCompile Include="served\servedAddressRegistry.cpp" />
     <ClCompile Include="settings\settingsComposer.cpp" />
     <ClCompile Include="temp\tempStorage.cpp" />
     <ClCompile Include="sheetFormat\sheetFormat.cpp" />
