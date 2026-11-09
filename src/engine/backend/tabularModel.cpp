@@ -592,6 +592,38 @@ std::shared_ptr<ibValueIteratorState> ibValueModel::CreateIterator()
 
 ///////////////////////////////////////////////////////////////////////////////////////
 
+void ibValueModel::ibValueModelColumnCollection::FillColumnMembers(ibMemberTable& helper) const
+{
+	helper.AppendFunc(ibT("Count"), ibT("Count()"));
+	helper.AppendFunc(ibT("Find"), 1, ibT("Find(name : string)"));
+}
+
+bool ibValueModel::ibValueModelColumnCollection::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
+{
+	switch (lMethodNum)
+	{
+	case enColumnCount:
+		pvarRetValue = GetColumnCount();
+		return true;
+	case enColumnFind:
+	{
+		// A forgotten name is refused by name: the slot would be handed over empty, and Undefined is this
+		// method's word for "no such column".
+		if (lSizeArray < 1 || paParams == nullptr)
+			ibBackendCoreException::Error(_("Find: the column name to look for is not given"));
+		if (ibValueModelColumnInfo* const colInfo = GetColumnByName(paParams[0]->GetString()))
+			pvarRetValue = colInfo;
+		else
+			pvarRetValue = ibValue();
+		return true;
+	}
+	}
+
+	return ibValueDynamicMembers::CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////
+
 ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo::ibValueModelColumnInfo() :
 	ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true)
 {

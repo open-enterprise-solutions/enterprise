@@ -71,6 +71,8 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   the check and the picture can be added. For a query's `IN`, pass `list.UnloadValues()`.
 - **`Any` is a type that takes every value.** A value table's column given no type is `Any`, and so is the value
   of a list's item; the type picker offers it first, where it offered Undefined, which takes only itself.
+- **A table's `Columns` answer `Find(name)` and `Count()`.** `Find` gives the column of that name, in any case,
+  or Undefined when the table has none, so whether a column is there no longer has to be tried by reading it.
 - **`Name(…)` calls the procedure or function of that name even where a variable has it.** Names are read
   whatever their case, so `chapterNames = ChapterNames();` called the variable and failed with "value is not a
   callable function". The module's procedure or function, declared above or below, now wins, as a system one

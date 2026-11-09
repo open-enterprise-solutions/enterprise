@@ -7048,6 +7048,10 @@ msgstr ""
 msgid "Get: the key to look for is not given"
 msgstr ""
 
+#: src/engine/backend/tabularModel.cpp:717
+msgid "Find: the column name to look for is not given"
+msgstr ""
+
 #: src/engine/backend/system/value/valueMap.cpp:426
 #, c-format
 msgid "Key '%s' is already using!"

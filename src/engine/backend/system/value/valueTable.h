@@ -64,8 +64,9 @@ public:
 	class ibValueModelTableColumnCollection : public ibValueModel::ibValueModelColumnCollection {
 	public:
 	private:
+		// After the base's Count and Find (a method number is a position in the member table).
 		enum Func {
-			enAddColumn = 0,
+			enAddColumn = enColumnFind + 1,
 			enRemoveColumn
 		};
 	public:
