@@ -557,11 +557,13 @@ TEST(PredefinedCells, AnItemsCodeIsWrittenAsItsFieldHoldsIt) {
 	EXPECT_EQ(wordyDescription->GetString().length(), 150u);
 }
 
-// ⭐ A CODE AND A DESCRIPTION ARE NOT NARROWED (#646): no shorter, no fewer digits, a code not turned between a string and
-// a number - measured against what the APPLIED configuration declared, never against rows. Two configurations of one
-// shape, the way the apply reads its baseline off the saved one: the snapshot holds the live columns, so the one it was
-// cannot be read off the one it is. A length or a count of digits of 0 holds anything.
-TEST(PredefinedCells, ACodeAndADescriptionAreNotNarrowed) {
+// ⭐ A CODE AND A DESCRIPTION ARE NOT NARROWED (#646), NOR A DOCUMENT'S NUMBER OR A FIELD A PERSON DECLARED (#414): no
+// shorter, no fewer digits, a code or a number not turned between a string and a number - measured against what the
+// APPLIED configuration declared, never against rows. Each level asks the fields it declares, in its own
+// ContributeTables. Two configurations of one shape, the way the apply reads its baseline off the saved one: the snapshot
+// holds the live columns, so the one it was cannot be read off the one it is. A length or a count of digits of 0 holds
+// anything.
+TEST(PredefinedCells, ACodeANumberAndAFieldAreNotNarrowed) {
 	wxInitializer wx;
 	if (!wx.IsOk())
 		GTEST_SKIP() << "wxBase init failed (no wxApp host)";
@@ -594,23 +596,24 @@ TEST(PredefinedCells, ACodeAndADescriptionAreNotNarrowed) {
 		attribute->GetTypeDesc().ClearMetaType();
 		attribute->GetTypeDesc().SetNumber(precision, 0);
 	};
-	// What the check before the update says of the edited declaration against the applied one, in the ledger's words.
-	const auto refusals = [&]() {
+	// What the check before the update says of an edited declaration against the applied one, in the ledger's words.
+	const auto refusalsOf = [&](const ibValueMetaObject* declared, const ibValueMetaObject* changed) {
 		const ibSchemaSnapshot baseline = applied.BuildSchemaSnapshot();
 		const ibSchemaSnapshot target = edited.BuildSchemaSnapshot();
 		std::vector<ibString> said;
-		const ibSchemaTable* table = target.Find(now->GetMetaID());
+		const ibSchemaTable* table = target.Find(changed->GetMetaID());
 		if (table == nullptr) {
 			said.push_back(ibT("no table"));
 			return said;
 		}
 		ibRestructureInfo report;
-		const bool passed = table->m_beforeChange(baseline.Find(was->GetMetaID()), &report);
+		const bool passed = table->m_beforeChange(baseline.Find(declared->GetMetaID()), &report);
 		for (size_t idx = 0; idx < report.Count(); idx++)
 			said.push_back(report.At(idx).descr);
 		EXPECT_EQ(passed, said.empty());
 		return said;
 	};
+	const auto refusals = [&]() { return refusalsOf(was, now); };
 	const auto names = [](const std::vector<ibString>& said, const ibValueMetaObjectAttributeBase* attribute) {
 		return said.size() == 1 && said.front().Contains(wxT("Units")) && said.front().Contains(attribute->GetSynonym());
 	};
@@ -642,6 +645,96 @@ TEST(PredefinedCells, ACodeAndADescriptionAreNotNarrowed) {
 	digits(now->GetDataCode(), 9);
 	text(was->GetDataDescription(), 0);
 	EXPECT_TRUE(names(refusals(), now->GetDataDescription())) << "a length under an unlimited one";
+
+	// A document's number the same way (#414): made shorter on binding to a numerator (#661), it failed the apply on
+	// Firebird, naming a physical column.
+	const auto document = [](ibMetaDataConfigurationFile& cfg) {
+		auto* declared = dynamic_cast<ibValueMetaObjectRecordDataRecorderRef*>(
+			cfg.CreateMetaObject(g_metaDocumentCLSID, cfg.GetCommonMetaObject(), false));
+		if (declared != nullptr)
+			declared->SetName(wxT("Invoice"));
+		return declared;
+	};
+	ibValueMetaObjectRecordDataRecorderRef* invoiceWas = document(applied);
+	ibValueMetaObjectRecordDataRecorderRef* invoiceNow = document(edited);
+	ASSERT_NE(invoiceWas, nullptr);
+	ASSERT_NE(invoiceNow, nullptr);
+	ASSERT_EQ(invoiceWas->GetMetaID(), invoiceNow->GetMetaID());
+	ASSERT_EQ(invoiceWas->GetDocumentNumber()->GetMetaID(), invoiceNow->GetDocumentNumber()->GetMetaID());
+	const auto invoiceNames = [invoiceNow](const std::vector<ibString>& said) {
+		return said.size() == 1 && said.front().Contains(wxT("Invoice"))
+			&& said.front().Contains(invoiceNow->GetDocumentNumber()->GetSynonym());
+	};
+
+	text(invoiceWas->GetDocumentNumber(), 11);
+	text(invoiceNow->GetDocumentNumber(), 11);
+	EXPECT_TRUE(refusalsOf(invoiceWas, invoiceNow).empty()) << "the same number narrows nothing";
+	text(invoiceNow->GetDocumentNumber(), 6);
+	EXPECT_TRUE(invoiceNames(refusalsOf(invoiceWas, invoiceNow))) << "a number made shorter";
+	digits(invoiceNow->GetDocumentNumber(), 11);
+	EXPECT_TRUE(invoiceNames(refusalsOf(invoiceWas, invoiceNow))) << "a string number turned into a number";
+
+	// A section's field (#414), a catalog's section and a document's alike: a string no shorter, a number with no fewer
+	// whole and no fewer fractional digits. A type turned between a string and a number is no narrowing - the values of
+	// the type removed are cleared, and the ledger counts them.
+	const auto goods = [](ibMetaDataConfigurationFile& cfg, ibValueMetaObject* owner) {
+		ibValueMetaObject* declared = cfg.CreateMetaObject(g_metaTableCLSID, owner, false);
+		if (declared != nullptr)
+			declared->SetName(wxT("Goods"));
+		return declared;
+	};
+	const auto field = [](ibMetaDataConfigurationFile& cfg, ibValueMetaObject* owner, const ibString& name) {
+		auto* declared = dynamic_cast<ibValueMetaObjectAttributeBase*>(cfg.CreateMetaObject(g_metaAttributeCLSID, owner, false));
+		if (declared != nullptr)
+			declared->SetName(name);
+		return declared;
+	};
+	ibValueMetaObject* goodsWas = goods(applied, invoiceWas);
+	ibValueMetaObject* goodsNow = goods(edited, invoiceNow);
+	ASSERT_NE(goodsWas, nullptr);
+	ASSERT_NE(goodsNow, nullptr);
+	const ibValueMetaObjectAttributeBase* amountWas = field(applied, goodsWas, wxT("Amount"));
+	const ibValueMetaObjectAttributeBase* amountNow = field(edited, goodsNow, wxT("Amount"));
+	ASSERT_NE(amountWas, nullptr);
+	ASSERT_NE(amountNow, nullptr);
+	ASSERT_EQ(goodsWas->GetMetaID(), goodsNow->GetMetaID());
+	ASSERT_EQ(amountWas->GetMetaID(), amountNow->GetMetaID());
+	const auto number = [](const ibValueMetaObjectAttributeBase* attribute, unsigned char precision, unsigned char scale) {
+		attribute->GetTypeDesc().ClearMetaType();
+		attribute->GetTypeDesc().SetNumber(precision, scale);
+	};
+	const auto goodsNames = [amountNow](const std::vector<ibString>& said) {
+		return said.size() == 1 && said.front().Contains(wxT("Invoice.Goods")) && said.front().Contains(amountNow->GetSynonym());
+	};
+
+	number(amountWas, 10, 0);
+	number(amountNow, 12, 2);
+	EXPECT_TRUE(refusalsOf(goodsWas, goodsNow).empty()) << "more whole and more fractional digits hold what was";
+	number(amountNow, 10, 2);
+	EXPECT_TRUE(goodsNames(refusalsOf(goodsWas, goodsNow))) << "ten digits still, two whole ones lost";
+	number(amountWas, 15, 3);
+	number(amountNow, 16, 2);
+	EXPECT_TRUE(goodsNames(refusalsOf(goodsWas, goodsNow))) << "a whole digit more, a fractional one lost";
+	text(amountWas, 11);
+	text(amountNow, 6);
+	EXPECT_TRUE(goodsNames(refusalsOf(goodsWas, goodsNow))) << "a shorter string";
+	digits(amountNow, 5);
+	EXPECT_TRUE(refusalsOf(goodsWas, goodsNow).empty()) << "a string turned into a number is no narrowing";
+
+	// …and the object's own field, by the same rule on its own table.
+	text(invoiceNow->GetDocumentNumber(), 11);
+	const ibValueMetaObjectAttributeBase* commentWas = field(applied, invoiceWas, wxT("Comment"));
+	const ibValueMetaObjectAttributeBase* commentNow = field(edited, invoiceNow, wxT("Comment"));
+	ASSERT_NE(commentWas, nullptr);
+	ASSERT_NE(commentNow, nullptr);
+	ASSERT_EQ(commentWas->GetMetaID(), commentNow->GetMetaID());
+	text(commentWas, 100);
+	text(commentNow, 100);
+	EXPECT_TRUE(refusalsOf(invoiceWas, invoiceNow).empty()) << "the same field narrows nothing";
+	text(commentNow, 50);
+	const std::vector<ibString> said = refusalsOf(invoiceWas, invoiceNow);
+	ASSERT_EQ(said.size(), 1u);
+	EXPECT_TRUE(said.front().Contains(wxT("Invoice")) && said.front().Contains(commentNow->GetSynonym())) << said.front();
 }
 
 // An account's analytics are rows of its kinds section: seed rows of the section's own table, found by the account

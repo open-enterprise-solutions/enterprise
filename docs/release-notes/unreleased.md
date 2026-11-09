@@ -326,6 +326,11 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   can come in while it runs. An apply of modules and forms only still asks nothing (#404). Deleting
   an object the base holds counts as a change of structure from the start too: before the configuration was
   written, the deleted object's table was still counted.
+- **A document's number and an attribute are not narrowed, as a catalog's code is not.** A number made shorter -
+  bound to the numerator of a shorter number (#661) - and an attribute of a catalog or a document, its own or a
+  tabular section's, given a shorter string or fewer whole or fractional digits (`Number(10,0)` to `Number(10,2)`)
+  reached the base as an in-place type change, which Firebird refuses, and the apply failed on a physical column
+  name. They are refused before the apply now, naming the object, the section and the field (#414).
 - **Typing a number code finds the item wherever it stands.** A catalog whose code is a number was searched among
   its first hundred items only; `12` now finds 12, 120 to 129, 1200 to 1299 and so on, through the code's index.
 - **Output list names a column by its header**, the field's synonym, not by the field's name.

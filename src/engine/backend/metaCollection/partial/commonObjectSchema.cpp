@@ -97,6 +97,51 @@ void ibValueMetaObjectRecordDataMutableRef::ContributeTables(ibSchemaSnapshot& o
 	// common attribute may be indexed exactly like the object's own.
 	ContributeAttributeIndexes(t, GetGenericAttributeArrayObject(), { GetDataReference()->GetQueryColumn() });
 
+	// ⭐ A FIELD A PERSON DECLARED IS NOT NARROWED (#414) - the object's own and each tabular section's, the same in a
+	// catalog and in a document, so asked here, where both declare theirs: a string part no shorter, a number part with no
+	// fewer integer and no fewer fractional digits. Firebird refuses an in-place change that does not widen, whatever the
+	// rows hold ("New scale specified for column ... must be at most 0"), and the apply failed on a statement naming a
+	// physical column; asked here, it is refused before the first statement, naming the object and the field. A type
+	// turned between a string and a number is no narrowing: the values of the type removed are cleared, and the ledger
+	// counts them. Compared with what the APPLIED configuration declared (`baseline`), never with the rows. (A code, a
+	// description and a document's number are their kind's to ask, with a rule of their own: #646.)
+	const auto notNarrowed = [](const ibString& owner, std::vector<ibValueMetaObjectAttributeBase*> attributes) {
+		return [owner, attributes = std::move(attributes)](const ibSchemaTable* baseline, ibRestructureInfo* report) -> bool {
+			if (baseline == nullptr)
+				return true;
+			bool passed = true;
+			for (const ibValueMetaObjectAttributeBase* attribute : attributes) {
+				const ibBackendQueryColumn* const column = attribute->GetQueryColumn();
+				const auto applied = std::find_if(baseline->m_columns.begin(), baseline->m_columns.end(),
+					[column](const ibSchemaColumn& c) { return c.m_id == column->GetColumnId() && c.m_column != nullptr; });
+				if (applied == baseline->m_columns.end())
+					continue;
+				const ibTypeDescription& was = applied->m_column->GetTypeDesc();
+				const ibTypeDescription& now = column->GetTypeDesc();
+				// A length or a count of digits of 0 holds anything.
+				const bool shorter = was.ContainType(ibValueTypes::TYPE_STRING) && now.ContainType(ibValueTypes::TYPE_STRING)
+					&& now.GetLength() != 0 && (was.GetLength() == 0 || now.GetLength() < was.GetLength());
+				// …and a number's digits are counted on both sides of the point: Number(10,0) to Number(10,2) keeps ten
+				// digits and loses two whole ones.
+				const bool fewerDigits = was.ContainType(ibValueTypes::TYPE_NUMBER) && now.ContainType(ibValueTypes::TYPE_NUMBER)
+					&& now.GetPrecision() != 0 && (was.GetPrecision() == 0
+						|| now.GetPrecision() - now.GetScale() < was.GetPrecision() - was.GetScale() || now.GetScale() < was.GetScale());
+				if (shorter && report != nullptr)
+					report->AppendError(ibString::Format(_("%s: the %s cannot be shorter than it was (%u, now %u)"), owner,
+						attribute->GetSynonym(), unsigned(was.GetLength()), unsigned(now.GetLength())));
+				if (fewerDigits && report != nullptr)
+					report->AppendError(ibString::Format(
+						_("%s: the %s cannot hold fewer digits than it did (%u integer and %u fractional, now %u and %u)"), owner,
+						attribute->GetSynonym(), unsigned(was.GetPrecision() - was.GetScale()), unsigned(was.GetScale()),
+						unsigned(now.GetPrecision() - now.GetScale()), unsigned(now.GetScale())));
+				if (shorter || fewerDigits)
+					passed = false;
+			}
+			return passed;
+		};
+	};
+	t.m_beforeChange += notNarrowed(GetName(), GetAttributeArrayObject());
+
 	// --- tabular sections — each its own table ---
 	for (const auto tab : GetTableArrayObject()) {
 		ibSchemaTable& tt = out.CreateSchemaTable(tab->GetQueryable());
@@ -109,6 +154,7 @@ void ibValueMetaObjectRecordDataMutableRef::ContributeTables(ibSchemaSnapshot& o
 		// Per-attribute secondary indexes on the section's own columns — no single row reference
 		// (browsing is per-owner by line), so the ordered variant degrades to a plain index here.
 		ContributeAttributeIndexes(tt, tab->GetGenericAttributeArrayObject());
+		tt.m_beforeChange += notNarrowed(GetName() + ibT(".") + tab->GetName(), tab->GetAttributeArrayObject());
 	}
 }
 
@@ -451,4 +497,43 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 			return passed;
 		};
 	}
+}
+
+void ibValueMetaObjectRecordDataRecorderRef::ContributeTables(ibSchemaSnapshot& out) const
+{
+	// STRUCTURE: the base builds the main record table (+ tabular sections) and Adds it to the snapshot.
+	ibValueMetaObjectRecordDataMutableRef::ContributeTables(out);
+	ibSchemaTable& t = out.Shared(GetMetaID(), GetPhysicalTableName());   // the main table the base just created
+
+	// ⭐ A DOCUMENT'S NUMBER IS NOT NARROWED (#414), as a catalog's code is not (#646): no shorter, no fewer digits, not
+	// turned from a string into a number or back. Made shorter - bound to the numerator of a shorter number (#661) - it
+	// reached the base as an in-place type change, which Firebird refuses, and the apply failed on a physical column.
+	// Compared with what the APPLIED configuration declared (`baseline`), never with the rows. A table new to the applied
+	// configuration has nothing to narrow.
+	t.m_beforeChange += [this](const ibSchemaTable* baseline, ibRestructureInfo* report) -> bool {
+		if (baseline == nullptr)
+			return true;
+		const ibValueMetaObjectAttributeBase* const attribute = GetDocumentNumber();
+		const ibBackendQueryColumn* const column = attribute->GetQueryColumn();
+		const auto applied = std::find_if(baseline->m_columns.begin(), baseline->m_columns.end(),
+			[column](const ibSchemaColumn& c) { return c.m_id == column->GetColumnId() && c.m_column != nullptr; });
+		if (applied == baseline->m_columns.end())
+			return true;
+		const ibTypeDescription& was = applied->m_column->GetTypeDesc();
+		const ibTypeDescription& now = column->GetTypeDesc();
+		const bool number = now.ContainType(ibValueTypes::TYPE_NUMBER);
+		const unsigned before = number ? was.GetPrecision() : was.GetLength();   // a number's digits, a string's length
+		const unsigned after  = number ? now.GetPrecision() : now.GetLength();
+		ibString refusal;
+		if (number != was.ContainType(ibValueTypes::TYPE_NUMBER))
+			refusal = ibString::Format(_("%s: the %s cannot change between a string and a number"), GetName(), attribute->GetSynonym());
+		else if (after != 0 && (before == 0 || after < before))   // a length or a count of digits of 0 holds anything
+			refusal = ibString::Format(_("%s: the %s cannot be shorter than it was (%u, now %u)"), GetName(), attribute->GetSynonym(),
+				before, after);
+		if (refusal.IsEmpty())
+			return true;
+		if (report != nullptr)
+			report->AppendError(refusal);
+		return false;
+	};
 }

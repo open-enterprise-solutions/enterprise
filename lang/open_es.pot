@@ -13648,6 +13648,11 @@ msgstr ""
 msgid "%s: the %s cannot be shorter than it was (%u, now %u)"
 msgstr ""
 
+#: src/engine/backend/metaCollection/partial/commonObjectSchema.cpp
+#, c-format
+msgid "%s: the %s cannot hold fewer digits than it did (%u integer and %u fractional, now %u and %u)"
+msgstr ""
+
 #: src/engine/backend/databaseLayer/databaseMaterializeBuilder.cpp
 msgid "A reading by the movement was handed a surface without its movements"
 msgstr ""

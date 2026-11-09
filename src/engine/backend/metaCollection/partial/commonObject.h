@@ -1281,6 +1281,9 @@ protected:
 	// matches against.
 	virtual ibValueMetaObjectAttributeBase* GetAttributeForCode() const override { return m_propertyAttributeNumber->GetMetaObject(); }
 
+	// Declare the main table (via the base) + the check before the update that its number is not narrowed.
+	virtual void ContributeTables(ibSchemaSnapshot& out) const override;
+
 	//load & save metaData from DB
 	virtual bool ReadData(const ibDataNode& node) override;
 	virtual bool WriteData(ibDataNode& node) const override;

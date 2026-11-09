@@ -13983,6 +13983,11 @@ msgstr "%s: %s не можна переводити з рядка на числ�
 msgid "%s: the %s cannot be shorter than it was (%u, now %u)"
 msgstr "%s: %s не може бути коротшим, ніж був (%u, тепер %u)"
 
+#: src/engine/backend/metaCollection/partial/commonObjectSchema.cpp
+#, c-format
+msgid "%s: the %s cannot hold fewer digits than it did (%u integer and %u fractional, now %u and %u)"
+msgstr "%s: %s не може містити менше розрядів, ніж було (%u цілих і %u дробових, тепер %u і %u)"
+
 #: src/engine/backend/databaseLayer/databaseMaterializeBuilder.cpp
 msgid "A reading by the movement was handed a surface without its movements"
 msgstr "Читанню за рухами передано джерело без рухів"
