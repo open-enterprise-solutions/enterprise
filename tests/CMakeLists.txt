@@ -60,6 +60,7 @@ add_executable(oes_tests
     test_jobSchedule.cpp
     test_choiceLinkDescription.cpp
     test_choiceLinkClear.cpp
+    test_fillCheck.cpp
     test_style.cpp
     test_formFieldChoice.cpp
     test_module_manager_split.cpp
