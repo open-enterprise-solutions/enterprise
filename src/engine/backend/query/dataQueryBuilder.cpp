@@ -378,6 +378,18 @@ ibDataQueryBuilder& ibDataQueryBuilder::OrderBy(const std::vector<const ibBacken
 			further.push_back(by);
 			OrderBy(further, ascending);
 		}
+	// ⭐ …AND IN A GROUPED STATEMENT THE WALK IS A KEY AS WELL, as it is for the column overload above: the lowering
+	// lets a sort walk on from a key (`GROUP BY T.Doc ORDER BY T.Doc.Date` — the key fixes everything it walks into,
+	// so the groups stay the same), and the provider sorts only by what its statement groups by. Not grouped, the
+	// sort was dropped without a word — through a reference of several kinds the rows came back in the order the
+	// server liked (#410).
+	if (path.size() > 1 && (!m_groupBy.empty() || !m_aggregates.empty())) {
+		bool aKey = false;
+		for (size_t i = 0; i < m_groupPaths.size() && !aKey; ++i)
+			aKey = m_groupPaths[i] == path && !m_groupExprs[i];
+		if (!aKey)
+			GroupBy(path);
+	}
 	ibQuerySortItem s;
 	s.m_col       = path.back();
 	s.m_ascending = ascending;
