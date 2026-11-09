@@ -29,7 +29,7 @@ void ibValueManagerDataObjectAccumulationRegister::FillManagerMethods(ibMemberTa
 {
 	helper.AppendFunc(ibT("CreateRecordSet"), ibT("CreateRecordSet()"));
 	helper.AppendFunc(ibT("CreateRecordKey"), ibT("CreateRecordKey()"));
-	helper.AppendFunc(ibT("Balance"), 2, ibT("Balance(period, filter...)"));
+	helper.AppendFunc(ibT("Balance"), 4, ibT("Balance(period, filter, dimensions, resources)"));
 	helper.AppendFunc(ibT("Turnovers"), 4, ibT("Turnovers(beginOfPeriod, endOfPeriod, filter, periodicity)"));
 	helper.AppendFunc(ibT("Select"), ibT("Select()"));
 	helper.AppendFunc(ibT("GetForm"), 3, ibT("GetForm(string, owner, guid)"));
@@ -62,7 +62,9 @@ bool ibValueManagerDataObjectAccumulationRegister::CallAsFunc(const long lMethod
 	// ibRegArg answers "absent" for a slot nobody passed, so the arity forks go too.
 	case eBalance:
 		pvarRetValue = Balance(ibRegArg(paParams, lSizeArray, ibRegBalanceArg::Period),
-		                       ibRegArg(paParams, lSizeArray, ibRegBalanceArg::Filter));
+		                       ibRegArg(paParams, lSizeArray, ibRegBalanceArg::Filter),
+		                       ibRegArg(paParams, lSizeArray, ibRegBalanceArg::Count),        // dimensions — the manager's own two follow the table's
+		                       ibRegArg(paParams, lSizeArray, ibRegBalanceArg::Count + 1));   // resources
 		return true;
 	case eTurnover:
 		pvarRetValue = Turnovers(ibRegArg(paParams, lSizeArray, ibRegTurnoverArg::Begin),

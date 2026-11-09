@@ -31,6 +31,7 @@
 #include <nlohmann/json.hpp>
 
 #include "backend/appData.h"
+#include "backend/backend_exception.h"
 #include "backend/compiler/compileCode.h"
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/databaseMaterializeBuilder.h"
@@ -42,12 +43,15 @@
 #include "backend/metaCollection/resource/metaResourceObject.h"
 #include "backend/metaCollection/partial/accumulationRegister.h"
 #include "backend/metaCollection/partial/accumulationRegisterEnum.h"
+#include "backend/metaCollection/partial/accumulationRegisterManager.h"   // the manager's Balance (#409)
 #include "backend/metaCollection/partial/registerQueryLowering.h"
 #include "backend/metaCollection/partial/reference/reference.h"
 #include "backend/query/columnLayout.h"
 #include "backend/query/dataQueryBuilder.h"
 #include "backend/query/schemaSnapshot.h"
 #include "backend/system/value/valueBoundary.h"
+#include "backend/system/value/valueTable.h"
+#include "backend/session/session.h"
 #include "core/clsid.h"
 
 namespace {
@@ -834,4 +838,59 @@ TEST_F(AcceptanceAccumulation, RepostingAndUnpostingChangeTheBalance)
 	if (!ready) return;
 	PostOpening();
 	ApplyRepostAndUnpost();
+}
+
+// #409 — the manager's Balance takes what the reading is cut to: a comma list of dimensions and one of resources,
+// either one folding the rows to those dimensions and adding up those resources. A resource's column is the
+// resource's own name, as the value table a script gets back is read: `Total("Quantity")`.
+TEST_F(AcceptanceAccumulation, TheManagersBalanceIsCutToTheDimensionsAndResourcesItIsGiven)
+{
+	if (!ready) return;
+	PostOpening();
+	// The manager reads through the session's connection, as a script does (ibRequireOpenBase).
+	ibSession session(wxT("balance-cut"), ibSessionKind::Service);
+	ibSessionScope bound(&session);
+	ibValueManagerDataObjectAccumulationRegister manager(reg);
+	const ibValue after(ibDateTime(2027, 1, 1, 0, 0, 0));   // past every movement of the fixture
+
+	const auto tableOf = [](const ibValue& value) {
+		ibValueModelTable* table = nullptr;
+		EXPECT_TRUE(value.ConvertToValue(table) && table != nullptr);
+		return table;
+	};
+	const auto hasColumn = [](ibValueModelTable* table, const ibString& name) {
+		return table->GetColumnCollection()->GetColumnByName(name) != nullptr;
+	};
+
+	{
+		ibValueModelTable* const all = tableOf(manager.Balance(after));
+		ASSERT_NE(all, nullptr);
+		EXPECT_TRUE(hasColumn(all, wxT("Quantity"))) << "the resource's own name";
+		EXPECT_FALSE(hasColumn(all, wxT("QuantityBalance")));
+		EXPECT_TRUE(hasColumn(all, wxT("Warehouse")));
+		EXPECT_TRUE(hasColumn(all, wxT("Item")));
+		ExpectNear(all->TotalOf(wxT("Quantity")).GetNumber(), wxT("130.18"), wxT("every line"));
+	}
+	{
+		// No dimension: one line, the whole balance.
+		ibValueModelTable* const total = tableOf(manager.Balance(after, ibValue(), ibValue(ibString()), ibValue(ibString(wxT("Quantity")))));
+		ASSERT_NE(total, nullptr);
+		EXPECT_EQ(total->GetRowCount(), 1);
+		EXPECT_FALSE(hasColumn(total, wxT("Warehouse")));
+		ExpectNear(total->TotalOf(wxT("Quantity")).GetNumber(), wxT("130.18"), wxT("the whole balance"));
+	}
+	{
+		// By warehouse, every resource (left out).
+		ibValueModelTable* const byWarehouse = tableOf(manager.Balance(after, ibValue(), ibValue(ibString(wxT("warehouse")))));
+		ASSERT_NE(byWarehouse, nullptr);
+		EXPECT_EQ(byWarehouse->GetRowCount(), 2) << "kitchen and bar";
+		EXPECT_TRUE(hasColumn(byWarehouse, wxT("Warehouse"))) << "named as declared, whatever the case it was asked in";
+		EXPECT_FALSE(hasColumn(byWarehouse, wxT("Item")));
+		ExpectNear(byWarehouse->TotalOf(wxT("Quantity")).GetNumber(), wxT("130.18"), wxT("by warehouse"));
+	}
+
+	EXPECT_THROW(manager.Balance(after, ibValue(), ibValue(ibString(wxT("Shelf")))), ibBackendCoreException)
+		<< "a name that is not a dimension refuses";
+	EXPECT_THROW(manager.Balance(after, ibValue(), ibValue(), ibValue(ibString(wxT("Weight")))), ibBackendCoreException)
+		<< "nor a resource";
 }
