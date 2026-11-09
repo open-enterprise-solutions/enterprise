@@ -28,6 +28,8 @@ ibValueRecordDataObjectChartOfCharacteristicTypes::ibStandardCommandSet ibValueR
 
 void ibValueRecordDataObjectChartOfCharacteristicTypes::CallAsAction(const ibActionID& action, ibBackendValueForm* srcForm)
 {
+	// A command of the object's form: its write checks the required fields (#424).
+	const ibFillCheckScope fillCheck(*this);
 	switch (action)
 	{
 	case eDefActionAndClose:

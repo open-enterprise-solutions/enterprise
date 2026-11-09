@@ -3398,7 +3398,7 @@ msgstr "Дані"
 msgid "What the field may hold: one or several types - primitives (string with a length, number with precision and scale, date, boolean) and references. It decides the database columns: a composite type is stored as a type tag plus one column per kind, so adding a type changes the table."
 msgstr "Що може зберігати поле: один або кілька типів - примітивні (рядок із довжиною, число з точністю та масштабом, дата, булеве) і посилання. Від нього залежать колонки бази даних: складений тип зберігається як ознака типу плюс по колонці на кожен вид, тому додавання типу змінює таблицю."
 
-#: src/engine/backend/metaCollection/attribute/metaAttributeObject.h:309
+#: src/engine/backend/metaCollection/attribute/metaAttributeObject.h:316
 #: src/engine/backend/system/systemManagerEnum.h:169
 #: src/engine/frmclient/win/dlgs/choiceParameters/choiceParameters.cpp:226
 #: src/engine/frmclient/win/dlgs/choiceParameters/choiceParameters.cpp:264
@@ -3411,9 +3411,9 @@ msgstr "Реквізит"
 msgid "Fill check"
 msgstr "Перевірка заповнення"
 
-#: src/engine/backend/metaCollection/attribute/metaAttributeObject.h:310
-msgid "The field must be filled: a write that leaves it empty is refused with a message naming the field (and the line, in a tabular section or a record set), and the form shows it as required."
-msgstr "Поле має бути заповнене: запис із порожнім полем відхиляється з повідомленням, у якому назване поле (і рядок, якщо це таблична частина або набір записів), а форма показує його як обов'язкове."
+#: src/engine/backend/metaCollection/attribute/metaAttributeObject.h:316
+msgid "The field must be filled: a write from the object's form, a posting and a record set's write refuse to leave it empty, with a message naming the field (and the line, in a tabular section or a record set); a script's Write() of an object stores what it is given, and CheckFilling() asks. The form shows the field as required."
+msgstr "Поле має бути заповнене: запис із форми об'єкта, проведення та запис набору записів не залишають його порожнім і повідомляють, яке поле не заповнене (і рядок, якщо це таблична частина або набір записів); Write() об'єкта зі скрипту записує те, що йому дали, а CheckFilling() перевіряє. Форма показує поле як обов'язкове."
 
 #: src/engine/backend/metaCollection/attribute/metaAttributeObject.h:311
 #: src/engine/backend/system/value/valueTable.h:162

@@ -2898,6 +2898,11 @@ bool ibValueRecordDataObjectHierarchyRef::WriteObject()
 	if (!appData->StudioMode())
 		CheckPredefinedTables(*this);
 
+	// After the handlers too, which may fill what was empty (the code above). Only a write from the
+	// object's form checks; a script's Write() stores what it is given (#424).
+	if (IsFillCheckRequired())
+		RequireFilling();
+
 	if (!SaveData())
 		return refuse(_("%s: failed to save the object data"));
 
@@ -3276,6 +3281,12 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 		if (standartProcessing.GetBoolean())
 			GenerateUniqueIdentifier(prefix.GetString());
 	}
+
+	// A POSTING CHECKS, from a form or from a script: the movements are computed from these fields. A plain
+	// write checks only from the object's form, and undoing a posting never does (#424).
+	if (writeMode == ibDocumentWriteMode::ibDocumentWriteMode_Posting
+	    || (writeMode == ibDocumentWriteMode::ibDocumentWriteMode_Write && IsFillCheckRequired()))
+		RequireFilling();
 
 	if (!SaveData())
 		return refuse(_("%s: failed to save the object data"));
