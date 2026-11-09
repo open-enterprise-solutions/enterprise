@@ -134,6 +134,11 @@ public:
 	*/
 	ibValueFrame* CreateObject(const ibString& className, ibValueFrame* parentControl = nullptr);
 
+	// …and one made from a COPY — the node as a form holds a control (SaveNode), the item it sits in with it: put in what
+	// it is pasted on, else in the first of its parents that makes one of its class, under this form's ids and with
+	// names unique on it. The designer's paste and form_paste both. Null: nothing there takes it, or it did not read.
+	ibValueFrame* PasteObject(ibValueFrame* dstObject, const ibDataNode& copied);
+
 public:
 
 	// ⭐⭐ BORN WITH WHAT IT WAS ASKED FOR. The opening parameters arrive here, in the constructor, so

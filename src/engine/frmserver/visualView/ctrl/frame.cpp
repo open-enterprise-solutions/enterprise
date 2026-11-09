@@ -62,11 +62,6 @@ ibString ibValueFrame::GetObjectTypeName() const
 	return _("Class not registered");
 }
 
-#define	headerBlock 0x012230
-#define	dataBlock 0x012250
-#define	childBlock 0x012270
-#define	frameBlock 0x012290
-
 bool ibValueFrame::IsEditable() const
 {
 	const ibValueForm* handler = GetOwnerForm();
@@ -197,20 +192,8 @@ bool ibValueFrame::CopyNode(ibDataNode& node) const
 	node.SetValue(ibProtocol::ibForm::Name,      GetControlName());
 	node.SetValue(ibProtocol::ibForm::Expanded,  m_expanded);
 
-	for (unsigned int idx = 0; idx < ibPropertyObject::GetPropertyCount(); idx++)
-		if (ibProperty* prop = ibPropertyObject::GetProperty(idx)) {
-			ibDataValue value;
-			if (!prop->CopyNodeValue(value))
-				return false;
-			node.SetProperty(prop->GetName(), value);
-		}
-	for (unsigned int idx = 0; idx < ibPropertyObject::GetEventCount(); idx++)
-		if (ibEvent* event = ibPropertyObject::GetEvent(idx)) {
-			ibDataValue value;
-			if (!event->CopyNodeValue(value))
-				return false;
-			node.SetProperty(event->GetName(), value);
-		}
+	if (!CopyProperty(node))
+		return false;
 
 	if (!CopyData(node))
 		return false;
@@ -232,14 +215,8 @@ bool ibValueFrame::PasteNode(const ibDataNode& node)
 	SetControlName(node.GetValue<ibString>(ibProtocol::ibForm::Name));
 	m_expanded = node.GetValue<bool>(ibProtocol::ibForm::Expanded);
 
-	for (unsigned int idx = 0; idx < ibPropertyObject::GetPropertyCount(); idx++)
-		if (ibProperty* prop = ibPropertyObject::GetProperty(idx))
-			if (!prop->PasteNodeValue(node.GetProperty(prop->GetName())))
-				return false;
-	for (unsigned int idx = 0; idx < ibPropertyObject::GetEventCount(); idx++)
-		if (ibEvent* event = ibPropertyObject::GetEvent(idx))
-			if (!event->PasteNodeValue(node.GetProperty(event->GetName())))
-				return false;
+	if (!PasteProperty(node))
+		return false;
 
 	if (!PasteData(node))
 		return false;
@@ -304,79 +281,12 @@ bool ibValueFrame::ChangeChildPosition(ibValueFrame* obj, unsigned int pos)
 	return ibPropertyObjectHelper::ChangeChildPosition(obj, pos);
 }
 
-//*******************************************************************
-
-ibValueFrame* ibValueFrame::CreatePasteObject(const ibReaderMemory& reader,
-	ibValueForm* dstForm, ibValueFrame* dstParent)
+ibValueFrame* ibValueFrame::SkipSizerItems()
 {
-	std::shared_ptr <ibReaderMemory>readerHeaderMemory(reader.open_chunk(headerBlock));
-	if (readerHeaderMemory == nullptr)
-		return nullptr;
-
-	readerHeaderMemory->r_s32();   // version — reserved; READ, because it advances the cursor
-	const ibClassID& clsid = readerHeaderMemory->r_u64();
-
-	return dstForm->NewObject(clsid, dstParent);
-}
-
-//*******************************************************************
-
-bool ibValueFrame::CopyObject(ibWriterMemory& writer) const
-{
-	ibWriterMemory writerHeaderMemory;
-	writerHeaderMemory.w_s32(0); //reserved
-	writerHeaderMemory.w_u64(GetClassType()); //get class type 
-	writer.w_chunk(headerBlock, writerHeaderMemory.pointer(), writerHeaderMemory.size());
-	ibWriterMemory writerDataMemory;
-	if (!CopyProperty(writerDataMemory))
-		return false;
-	writer.w_chunk(dataBlock, writerDataMemory.pointer(), writerDataMemory.size());
-	ibWriterMemory writerChildMemory;
-	for (unsigned int idx = 0; idx < GetChildCount(); idx++) {
-		ibWriterMemory writerMemory;
-		ibValueFrame* obj = GetChild(idx);
-		if (!obj->CopyObject(writerMemory))
-			return false;
-		writerChildMemory.w_chunk(obj->GetClassType(), writerMemory.pointer(), writerMemory.size());
-	}
-	writer.w_chunk(childBlock, writerChildMemory.pointer(), writerChildMemory.size());
-	return true;
-}
-
-bool ibValueFrame::PasteObject(ibReaderMemory& reader)
-{
-	ibValueForm* valueForm = GetOwnerForm();
-	if (valueForm == nullptr) return false;
-
-	std::shared_ptr <ibReaderMemory>readerHeaderMemory(reader.open_chunk(headerBlock));
-
-	// Both are READ, not used: the header's two fields have to leave the cursor past them.
-	readerHeaderMemory->r_s32();   // version — reserved
-	readerHeaderMemory->r_u64();   // clsid — the form below is resolved by name, not by this
-
-	std::shared_ptr <ibReaderMemory> readerChildMemory(reader.open_chunk(childBlock));
-	if (readerChildMemory != nullptr) {
-		ibReaderMemory* prevReaderMemory = nullptr;
-		do {
-			ibClassID founded_clsid = 0;
-			ibReaderMemory* readerMemory = readerChildMemory->open_chunk_iterator(founded_clsid, &*prevReaderMemory);
-			if (readerMemory == nullptr)
-				break;
-			if (founded_clsid > 0) {
-				ibValueFrame* valueFrame = valueForm->NewObject(founded_clsid, this, false);
-				if (valueFrame != nullptr && !valueFrame->PasteObject(*readerMemory))
-					return false;
-			}
-			prevReaderMemory = readerMemory;
-		} while (true);
-	}
-
-	std::shared_ptr <ibReaderMemory>readerDataMemory(reader.open_chunk(dataBlock));
-	if (!PasteProperty(*readerDataMemory))
-		return false;
-
-	valueForm->ResolveNameConflict(this);
-	return true;
+	ibValueFrame* control = this;
+	while (control != nullptr && control->GetComponentType() == COMPONENT_TYPE_SIZERITEM)
+		control = control->GetChildCount() > 0 ? control->GetChild(0) : nullptr;
+	return control;
 }
 
 std::shared_ptr<ibProcUnit> ibValueFrame::GetFormProcUnit() const

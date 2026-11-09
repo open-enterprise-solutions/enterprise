@@ -12,7 +12,7 @@ class BACKEND_API ibMetaDataReport :
 public:
 
 	ibMetaDataReport();
-	ibMetaDataReport(ibMetaData* metaData, ibValueMetaObjectReport* report = nullptr);
+	ibMetaDataReport(ibMetaData* metaData, ibValueMetaObjectReport* report);
 	virtual ~ibMetaDataReport();
 
 	virtual ibValueMetaObjectReport* GetReport() const; // out-of-line: m_commonObject is ibValuePtr
@@ -86,7 +86,7 @@ public:
 protected:
 
 	//loader/saver/deleter: (header sign/version/guid read+written inside LoadCommonTree/SaveCommonTree)
-	bool LoadCommonTree(ibValueMetaObjectReport* root, const ibClassID& clsid, ibReaderMemory& readerData, bool resetId = false);
+	bool LoadCommonTree(ibValueMetaObjectReport* root, const ibClassID& clsid, ibReaderMemory& readerData);
 	bool SaveCommonTree(const ibClassID& clsid, ibWriterMemory& writerData, int flags = defaultFlag);
 	bool DeleteCommonTree(const ibClassID& clsid);
 

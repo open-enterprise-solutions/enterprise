@@ -492,3 +492,8 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   name. Sent `{name: …}`, it answered with a binding nobody asked for: the button kept the command it had and its
   item type became a number no type carries. A command binding now reads only the shape it is written in, `hops`
   and `commandType`, and replaces what it held.
+- **A data processor or a report read from its file into a configuration keeps its forms' bindings.** Its objects
+  were given new ids, but its forms still held the file's: a button named the command of the object the file was
+  saved from, a field its attribute. Read into the configuration it came from, the copy's form ran the original's
+  command. The file is now read on its own and pasted in, as a copy made in the designer is pasted. And a pasted
+  button names the pasted object's command — in the designer's copy and paste too, where it kept the original's.

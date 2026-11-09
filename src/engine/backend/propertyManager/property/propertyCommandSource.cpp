@@ -65,6 +65,67 @@ bool ibPropertyCommandSource::WriteNodeValue(ibDataValue& value) const
 	return ibCommandDescriptionMemory::WriteNode(value, GetValueAsCommandDesc());
 }
 
+#include "backend/metaData.h"                           // FindAnyObjectByFilter / MetaIdByGuid — a command by id, back by guid
+#include "backend/metaCollection/metaCommandObject.h"   // ibValueMetaObjectCommand — what a hop names
+#include "core/memory/memoryStream.h"                   // ibReaderMemory / ibWriterMemory — the guid-keyed blob
+
+// COPY / PASTE — ibPropertySource's pair on the command side. A hop is asked as the walk asks it
+// (ibValueForm::GetCommandByHop): a COMMAND, config-wide, by its id; one that is rides its guid — GetCommonGuid, the
+// copy-guid while its object is being copied — and the paste resolves it back through MetaIdByGuid onto the pasted
+// command. Every other hop stays as it is: the form's own command (its ids are a range of their own,
+// kFormCommandIdBase), a control, a standard action.
+static const unsigned char kHopRaw = 0, kHopGuid = 1;
+
+bool ibPropertyCommandSource::CopyNodeValue(ibDataValue& value) const
+{
+	const ibPropertyObject* const owner = m_owner;   // CONST: the non-const GetMetaData wxFAILs
+	const ibMetaData* const metaData = owner != nullptr ? owner->GetMetaData() : nullptr;
+	const ibCommandDescription& desc = GetValueAsCommandDesc();
+	ibWriterMemory writer;
+	writer.w_u32((unsigned int)desc.GetHopCount());
+	for (const ibCommandHop& hop : desc.GetPath()) {
+		const ibValueMetaObjectCommand* const command = metaData != nullptr
+			? metaData->FindAnyObjectByFilter<ibValueMetaObjectCommand>(hop.m_id, { g_metaCommonCommandCLSID, g_metaCommandCLSID }, true)
+			: nullptr;
+		if (command != nullptr) { writer.w_u8(kHopGuid); writer.w_stringZ(command->GetCommonGuid().str()); }
+		else                    { writer.w_u8(kHopRaw);  writer.w_u32((unsigned int)hop.m_id); }
+	}
+	writer.w_u32((unsigned int)desc.GetCommandType());
+	value = ibDataValue::Binary(writer.buffer());
+	return true;
+}
+
+bool ibPropertyCommandSource::PasteNodeValue(const ibDataValue& value)
+{
+	const ibMemoryBuffer& data = value.AsBinary();
+	if (data.GetDataLen() == 0)
+		return true;
+	const ibPropertyObject* const owner = m_owner;
+	const ibMetaData* const metaData = owner != nullptr ? owner->GetMetaData() : nullptr;
+	ibCommandDescription& desc = GetValueAsCommandDesc();
+	desc.ClearCommand();
+	ibReaderMemory reader(data);
+	if (reader.elapsed() < static_cast<int>(sizeof(std::uint32_t)))
+		return true;
+	const unsigned int count = reader.r_u32();
+	for (unsigned int i = 0; i < count; i++) {
+		// A hop is variable-length (a tag, then a guid string or a raw id): a blob shorter than its count stops with
+		// the hops it really had, as ibPropertySource::PasteNodeValue does.
+		if (reader.eof())
+			break;
+		if (reader.r_u8() == kHopGuid) {
+			const ibGuid guid(reader.r_stringZ());
+			desc.AppendCommand(metaData != nullptr ? metaData->MetaIdByGuid(guid) : ibMetaID(wxNOT_FOUND));   // the pasted command's
+		}
+		else {
+			desc.AppendCommand((ibMetaID)reader.r_u32());
+		}
+	}
+	if (!reader.eof())
+		desc.SetCommandType((ibInterfaceCommandType)reader.r_u32());
+	return true;
+}
+
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties — the row's keys
 
 bool ibPropertyCommandSource::GetProtocolValue(ibDataNode& row, ibReader reader)

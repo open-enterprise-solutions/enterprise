@@ -11,16 +11,16 @@
 // standing at the keyboard had just copied, and would block on the lock while a
 // window holds it. Two callers, one board, no way to tell whose turn it is.
 //
-// So the machine caller gets a board of its own. Same PAYLOAD — the bytes
-// ibValueMetaObject::CopyObject writes, unchanged — carried in a different
-// pocket. Nothing about copy or paste is re-implemented here; this file is the
-// pocket and nothing else.
+// So the machine caller gets a board of its own. Same PAYLOAD — what the
+// designer's own copy makes, unchanged — carried in a different pocket. Nothing
+// about copy or paste is re-implemented here; this file is the pocket and
+// nothing else.
 //
-// ⭐ ONE PAIR OF VERBS, SEVERAL FAMILIES. A metaobject and a form control answer
-// the SAME two methods (CopyObject(writer) / PasteObject(reader)), so the tools
-// over them are one idea twice, not two ideas. The KIND below is what keeps a
-// control from being pasted into a metadata tree — a refusal that reads, rather
-// than a payload that lands somewhere it cannot work.
+// ⭐ ONE PAIR OF VERBS, SEVERAL FAMILIES. A metaobject is copied and pasted by
+// its metadata (CopyMetaObject / PasteMetaObject), a form control by its form
+// (SaveNode / ibValueForm::PasteObject) — the doors the designer takes. The
+// KIND below is what keeps a control from being pasted into a metadata tree — a
+// refusal that reads, rather than a payload that lands somewhere it cannot work.
 //
 // Slots are named so a caller scripting a sequence can hold two things at once
 // (copy A, copy B, paste both). One name defaulted IS the single-buffer case;
@@ -40,8 +40,8 @@
 // the payloads are all chunked memory and would half-parse into each other.
 enum class ibMcpClipboardKind {
 	None,
-	Metadata,		// ibValueMetaObject::CopyObject
-	Control,		// ibValueFrame::CopyObject
+	Metadata,		// ibMetaData::CopyMetaObject
+	Control,		// ibValueFrame::SaveNode
 	Cells			// a rectangle out of an ibSpreadsheetDescription
 };
 
@@ -57,11 +57,11 @@ struct FRMSERVER_API ibMcpClipboardSlot {
 	ibString m_name;
 	ibString m_what;			// its class as a script spells it: "Document", "Button"
 
-	// ⭐ THE PAYLOAD IS A NODE, whatever family it came from. Cells describe
-	// themselves as nodes already; a metaobject and a control describe
-	// themselves as the chunked memory their own CopyObject writes, which goes
-	// in as one Binary field. One member either way — so a later "hand me the
-	// copy as JSON" is this, rendered, and not a second thing to build.
+	// ⭐ THE PAYLOAD IS A NODE, whatever family it came from. Cells and a
+	// control describe themselves as nodes already; a metaobject as the chunked
+	// memory its metadata's CopyMetaObject writes, which goes in as one Binary
+	// field. One member either way — so a later "hand me the copy as JSON" is
+	// this, rendered, and not a second thing to build.
 	ibDataNode m_payload;
 
 	bool IsEmpty() const { return m_kind == ibMcpClipboardKind::None; }

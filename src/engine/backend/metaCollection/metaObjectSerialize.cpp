@@ -196,7 +196,7 @@ bool ibValueMetaObject::BuildDataNode(ibDataNode& node, int flags)
 // (factory-create by clsid + recurse), then own data via LoadNode, then the load
 // event (OnLoadMetaObject). Predefined children created in OnCreateMetaObject stay;
 // we only APPEND the serialized ones.
-bool ibValueMetaObject::ApplyDataNode(const ibDataNode& node, bool resetId)
+bool ibValueMetaObject::ApplyDataNode(const ibDataNode& node)
 {
 	for (const ibDataNode& childNode : node.Children()) {
 		// ⭐⭐ A CHILD NODE IS A CHILD METAOBJECT ONLY IF ITS CLSID SAYS SO. The id is KIND-TYPED
@@ -234,7 +234,7 @@ bool ibValueMetaObject::ApplyDataNode(const ibDataNode& node, bool resetId)
 				_("Unknown metadata class id %lld while loading subtree of '%s'"),
 				(long long)childNode.GetClsid(), GetName());
 		newMetaObject->SetMetaData(m_metaData);
-		newMetaObject->ApplyDataNode(childNode, resetId); // throws on error
+		newMetaObject->ApplyDataNode(childNode); // throws on error
 	}
 
 	if (!LoadNode(node))
@@ -242,8 +242,6 @@ bool ibValueMetaObject::ApplyDataNode(const ibDataNode& node, bool resetId)
 	if (!OnLoadMetaObject(m_metaData))
 		ibBackendCoreException::Error(_("OnLoadMetaObject failed for '%s'"), GetName());
 
-	if (resetId)
-		ResetId();
 	return true;
 }
 

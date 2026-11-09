@@ -1,6 +1,7 @@
 ﻿#include "form.h"
 #include "frmserver/visualView/ctrl/sizer.h"
 #include "backend/backend_exception.h"   // ibBackendException — a control that refuses to build keeps its reason
+#include "core/serialize/dataBuilder.h"   // ibDataNode — a pasted control, as a form holds it
 
 #include <algorithm>
 #include <cwctype>
@@ -290,4 +291,74 @@ ibValueFrame* ibValueForm::CreateObject(const ibString& className, ibValueFrame*
 	}
 
 	return object;
+}
+
+namespace {
+
+// The ids of a control and of what is in it — made for what has none (put on the form).
+void GenerateId(ibValueFrame* object)
+{
+	for (unsigned int idx = 0; idx < object->GetChildCount(); idx++)
+		GenerateId(object->GetChild(idx));
+	if (object->GetControlID() == 0)
+		object->GenerateNewID();
+}
+
+// …and taken off — a pasted copy's were those of the form it was copied from (the desktop's ResetId).
+void ResetId(ibValueFrame* object)
+{
+	for (unsigned int idx = 0; idx < object->GetChildCount(); idx++)
+		ResetId(object->GetChild(idx));
+	object->SetControlID(0);
+}
+
+// The names of a control and of what is in it made unique on its form — a pasted copy's (the desktop's PasteObject).
+void ResolveNameConflict(ibValueForm* form, ibValueFrame* object)
+{
+	form->ResolveNameConflict(object);
+	for (unsigned int idx = 0; idx < object->GetChildCount(); idx++)
+		ResolveNameConflict(form, object->GetChild(idx));
+}
+
+}
+
+ibValueFrame* ibValueForm::PasteObject(ibValueFrame* dstObject, const ibDataNode& copied)
+{
+	// The copy read as the form reads a control of its own (LoadNode), made in what it is pasted on, then taken off it:
+	// anchored across that — a child is owned by its parent's list.
+	ibValueFrame* parentObject = dstObject->GetComponentType() == COMPONENT_TYPE_SIZERITEM ? dstObject->GetParent() : dstObject;
+	ibDataNode node = copied;
+	ibValueFrame* const clipboard = NewObject(node.GetClsid(), parentObject, false);
+	if (clipboard == nullptr)
+		return nullptr;
+	const ibValuePtr<ibValueFrame> clipboardKeep(clipboard);
+	const bool loaded = clipboard->LoadNode(node);
+	parentObject->RemoveChild(clipboard);
+	clipboard->SetParent(nullptr);
+	if (!loaded)
+		return nullptr;
+
+	// If it cannot be put in what it was pasted on, it is put in its parent, right after it — and so on up: the first
+	// that makes one of its class (CreateObject — the one made only asked).
+	const ibValueFrame* const content = clipboard->SkipSizerItems();
+	if (content == nullptr)
+		return nullptr;
+	for (; parentObject != nullptr; parentObject = parentObject->GetParent()) {
+		if (parentObject->GetComponentType() == COMPONENT_TYPE_SIZERITEM)
+			continue;
+		if (ibValueFrame* const made = CreateObject(content->GetClassName(), parentObject)) {
+			parentObject->RemoveChild(made);
+			break;
+		}
+	}
+	if (parentObject == nullptr)
+		return nullptr;
+
+	// …under this form's ids, its names unique on it — the ids first: a name is compared with the controls that have one.
+	ResetId(clipboard);
+	parentObject->AddChild(clipboard);
+	clipboard->SetParent(parentObject);
+	GenerateId(clipboard);
+	::ResolveNameConflict(this, clipboard);
+	return clipboard;
 }

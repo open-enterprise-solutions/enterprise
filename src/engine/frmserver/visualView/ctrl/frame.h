@@ -370,10 +370,6 @@ public:
 
 	virtual bool GetControlValue(ibValue& pvarControlVal) const { return false; }
 
-	// memory reader form clpboard 
-	static ibValueFrame* CreatePasteObject(const ibReaderMemory& reader,
-		ibValueForm* dstForm, ibValueFrame* dstParent);
-
 	/**
 	* Property events
 	*/
@@ -389,10 +385,8 @@ public:
 	* Devuelve la posicion del hijo o GetChildCount() en caso de no encontrarlo
 	*/
 	bool ChangeChildPosition(ibValueFrame* obj, unsigned int pos);
-
-	//copy & paste object 
-	virtual bool CopyObject(ibWriterMemory& writer) const;
-	virtual bool PasteObject(ibReaderMemory& reader);
+	// The control a sizer item holds — this, when it is not one: the item itself is never what is selected or pasted.
+	ibValueFrame* SkipSizerItems();
 
 public:
 

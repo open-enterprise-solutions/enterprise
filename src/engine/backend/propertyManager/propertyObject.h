@@ -766,9 +766,9 @@ public:
 
 protected:
 
-	//copy & paste property
-	bool CopyProperty(ibWriterMemory& writer) const;
-	bool PasteProperty(ibReaderMemory& reader);
+	//copy & paste property — every property and event through its Copy / PasteNodeValue pair; the bytes are the caller's
+	bool CopyProperty(ibDataNode& node) const;
+	bool PasteProperty(const ibDataNode& node);
 
 	ibPropertyCategory* m_category;
 

@@ -750,10 +750,7 @@ ibValueFrame* ibValueForm::CreateControl(const ibString& clsControl, ibValueFram
 	m_formCollectionControl->InvalidateNames();
 
 	//return value
-	if (newControl->GetComponentType() == COMPONENT_TYPE_SIZERITEM)
-		return newControl->GetChild(0);
-
-	return newControl;
+	return newControl->SkipSizerItems();
 }
 
 void ibValueForm::RemoveControl(ibValueFrame* control)

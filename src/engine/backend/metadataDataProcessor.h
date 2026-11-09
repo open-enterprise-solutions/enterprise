@@ -9,7 +9,7 @@ class BACKEND_API ibMetaDataDataProcessor :
 public:
 
 	ibMetaDataDataProcessor();
-	ibMetaDataDataProcessor(ibMetaData* metaData, ibValueMetaObjectDataProcessor* srcDataProcessor = nullptr);
+	ibMetaDataDataProcessor(ibMetaData* metaData, ibValueMetaObjectDataProcessor* srcDataProcessor);
 	virtual ~ibMetaDataDataProcessor();
 
 	virtual ibValueMetaObjectDataProcessor* GetDataProcessor() const; // out-of-line: m_commonObject is ibValuePtr
@@ -83,7 +83,7 @@ public:
 protected:
 
 	//loader/saver/deleter: (header sign/version/guid read+written inside LoadCommonTree/SaveCommonTree)
-	bool LoadCommonTree(ibValueMetaObjectDataProcessor* root, const ibClassID& clsid, ibReaderMemory& readerData, bool resetId = false);
+	bool LoadCommonTree(ibValueMetaObjectDataProcessor* root, const ibClassID& clsid, ibReaderMemory& readerData);
 	bool SaveCommonTree(const ibClassID& clsid, ibWriterMemory& writerData, int flags = defaultFlag);
 	bool DeleteCommonTree(const ibClassID& clsid);
 

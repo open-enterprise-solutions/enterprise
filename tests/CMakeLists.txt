@@ -206,6 +206,7 @@ add_executable(oes_tests
     test_commandDescription.cpp
     test_tabularHop.cpp
     test_sourceHopChain.cpp
+    test_metadataMergeIds.cpp
     test_modelFetchDoor.cpp
     test_workerPoolDrop.cpp
     test_workerPoolFiber.cpp

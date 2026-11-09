@@ -46,23 +46,7 @@ m_moduleManager(nullptr),
 m_commonObject(srcReport),
 m_version(version_oes_last)
 {
-	if (srcReport == nullptr) {
-		ibValueMetaObject* commonMetaObject = metaData->GetCommonMetaObject();
-		wxASSERT(commonMetaObject);
-		//create main metaObject
-		m_commonObject = new ibValueMetaObjectReport();
-		ibNameRequest request;
-		request.m_clsid = g_metaReportCLSID;
-		request.m_prefix = m_commonObject->GetClassName();
-		m_commonObject->SetName(ibMetaData::GetNewName(nullptr, request));
-		if (commonMetaObject != nullptr) {
-			m_commonObject->SetParent(commonMetaObject);
-			commonMetaObject->AddChild(m_commonObject);
-		}
-	}
-
-	// m_commonObject (ibValuePtr) holds the member ref; for the inner case AddChild
-	// added the parent's own ref separately.
+	// m_commonObject (ibValuePtr) holds the member ref beside the configuration's own.
 	m_commonObject->InvalidateNames();
 
 	m_ownerMeta = metaData;
@@ -320,22 +304,8 @@ bool ibMetaDataReport::LoadFromBuffer(const ibMemoryBuffer& buffer, const ibStri
 
 	m_fullPath = fullPath;
 
-	// Inner (read object + copy into a config): the report is a child of the
-	// configuration tree — load into the existing root, no swap. resetId=true
-	// regenerates every loaded node's metaId from the config counter (m_ownerMeta,
-	// stamped via OnCreateMetaObject) so the file's ids can't collide with existing
-	// config objects; ResetAll then gives the root a fresh guid too (its ctor clsid
-	// keys on guid). Without this the import re-registers a live clsid → "Object is
-	// exist" → throw out of RunDatabase.
-	if (!m_commonObject->IsExternalCreate()) {
-		if (!m_commonObject->OnCreateMetaObject(m_ownerMeta, newObjectFlag))
-			return false;
-		if (!LoadCommonTree(m_commonObject, g_metaExternalReportCLSID, readerData, /*resetId*/ true))
-			return false;
-		m_commonObject->ResetAll();
-		m_commonObject->BuildNewName();
-		return LoadDatabase();
-	}
+	// (A file read INTO a configuration is read here on its own, with its own ids, and then pasted into it — the paste
+	// gives its objects their ids and re-homes what holds them: ReadExternal, schema/designer/metaData.cpp, #578.)
 
 	// External (start from file): standalone report — detached-root swap. Build a
 	// fresh root and load into it; on failure the live report is untouched.
@@ -435,7 +405,7 @@ bool ibMetaDataReport::SaveToBuffer(ibWriterMemory& writerData, const ibString& 
 	return true;
 }
 
-bool ibMetaDataReport::LoadCommonTree(ibValueMetaObjectReport* root, const ibClassID& clsid, ibReaderMemory& readerData, bool resetId)
+bool ibMetaDataReport::LoadCommonTree(ibValueMetaObjectReport* root, const ibClassID& clsid, ibReaderMemory& readerData)
 {
 	// Header (sign + version + guid) leads the tree blob in the same stream — read
 	// and validate it here so the common-tree blob stays self-describing (was the
@@ -472,15 +442,15 @@ bool ibMetaDataReport::LoadCommonTree(ibValueMetaObjectReport* root, const ibCla
 		return true;
 
 	// Parse the inner content into the universal structure tree, then apply into
-	// the caller-provided root (the live tree for the inner case, a detached fresh
-	// root for the external start-from-file swap). ApplyDataNode throws
+	// the caller-provided root (a detached fresh root for the start-from-file
+	// swap). ApplyDataNode throws
 	// ibBackendException on a factory miss / bad data — catch at this container
 	// boundary and report false (the caller discards the fresh root).
 	ibDataNode rootNode(root->GetClassType(), (ibMetaID)meta_id);
 	ibBinaryProvider provider;
 	provider.Read(*readerMetaMemory, rootNode);
 	try {
-		root->ApplyDataNode(rootNode, resetId);
+		root->ApplyDataNode(rootNode);
 
 		// ⭐ AND EVERYONE WATCHING IS TOLD IT IS READ IN — the stage a tree answers by drawing the
 		// whole thing. Said HERE rather than by each caller of the load, because there are several

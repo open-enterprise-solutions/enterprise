@@ -535,71 +535,55 @@ unsigned int ibPropertyObject::GetPropertyIndex(const ibString& nameParam) const
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// Copy/paste build ONE node tree (props + events as named values under two child
-// sub-nodes) and let the binary provider do the single byte transport to/from the
-// clipboard. No per-property byte writer — each property yields its node value.
-bool ibPropertyObject::CopyProperty(ibWriterMemory& writer) const
+// Copy/paste fill ONE node — props + events as named values on it, as a control writes them; each property yields
+// its node value. The one walk a metaobject's payload and a form's control both take.
+bool ibPropertyObject::CopyProperty(ibDataNode& node) const
 {
-	ibDataBuilder builder;
-
-	ibDataNode& propsNode = builder.Root().Child(ibT("props"));
 	for (unsigned int idx = 0; idx < GetPropertyCount(); idx++) {
 		ibProperty* prop = GetProperty(idx);
 		wxASSERT(prop);
 		ibDataValue value;
 		if (!prop->CopyNodeValue(value))
 			return false;
-		propsNode.SetProperty(prop->GetName(), value);
+		node.SetProperty(prop->GetName(), value);
 	}
-
-	ibDataNode& eventsNode = builder.Root().Child(ibT("events"));
 	for (unsigned int idx = 0; idx < GetEventCount(); idx++) {
 		ibEvent* event = GetEvent(idx);
 		wxASSERT(event);
 		ibDataValue value;
 		if (!event->CopyNodeValue(value))
 			return false;
-		eventsNode.SetProperty(event->GetName(), value);
+		node.SetProperty(event->GetName(), value);
 	}
-
-	return builder.Save(ibBinaryProvider(), writer);
+	return true;
 }
 
-bool ibPropertyObject::PasteProperty(ibReaderMemory& reader)
+bool ibPropertyObject::PasteProperty(const ibDataNode& node)
 {
-	ibDataBuilder builder;
-	if (!builder.Load(ibBinaryProvider(), reader))
-		return false;
-
 	// PASTE IS A MERGE BY NAME, and the loop is over the TARGET's properties for that reason: what
 	// both sides have is carried over, what only the source has is dropped, and what only the
 	// TARGET has KEEPS ITS DEFAULT. That last case is why the absent value is skipped instead of
 	// being handed over as an empty ibDataValue — a property type that (rightly) refuses an empty
 	// value made the whole paste fail, so pasting a Document onto a Constant died instead of
 	// copying the properties the two do share. "Nothing arrived" is not "an empty value arrived".
-	if (auto propsNode = builder.Root().FindChild(ibT("props"))) {
-		for (unsigned int idx = 0; idx < GetPropertyCount(); idx++) {
-			ibProperty* prop = GetProperty(idx);
-			wxASSERT(prop);
-			auto incoming = propsNode->FindProperty(prop->GetName());
-			if (!incoming)
-				continue;
-			if (!prop->PasteNodeValue(*incoming))
-				return false;
-		}
+	for (unsigned int idx = 0; idx < GetPropertyCount(); idx++) {
+		ibProperty* prop = GetProperty(idx);
+		wxASSERT(prop);
+		auto incoming = node.FindProperty(prop->GetName());
+		if (!incoming)
+			continue;
+		if (!prop->PasteNodeValue(*incoming))
+			return false;
 	}
-	if (auto eventsNode = builder.Root().FindChild(ibT("events"))) {
-		for (unsigned int idx = 0; idx < GetEventCount(); idx++) {
-			ibEvent* event = GetEvent(idx);
-			wxASSERT(event);
-			auto incoming = eventsNode->FindProperty(event->GetName());
-			if (!incoming)
-				continue;
-			if (!event->PasteNodeValue(*incoming))
-				return false;
-		}
+	for (unsigned int idx = 0; idx < GetEventCount(); idx++) {
+		ibEvent* event = GetEvent(idx);
+		wxASSERT(event);
+		auto incoming = node.FindProperty(event->GetName());
+		if (!incoming)
+			continue;
+		if (!event->PasteNodeValue(*incoming))
+			return false;
 	}
-
 	return true;
 }
 

@@ -559,11 +559,10 @@ public:
 	// the top-level ibDataBuilder + ibBinaryProvider; this node owns only the
 	// metaobject<->node mapping (each node carries its own m_metaData).
 	//   ApplyDataNode - factory-create children by clsid + LoadNode(this) +
-	//                   OnLoadMetaObject; `resetId` regenerates each metaId (grafting a
-	//                   file subtree into a config). Throws ibBackendException on bad data.
+	//                   OnLoadMetaObject, with the ids the node carries. Throws ibBackendException on bad data.
 	//   BuildDataNode - SaveNode(this) + OnSaveMetaObject + children recursed.
 	//   DeleteSubtree - purge IsDeleted descendants (detach).
-	bool ApplyDataNode(const ibDataNode& node, bool resetId = false);
+	bool ApplyDataNode(const ibDataNode& node);
 	bool BuildDataNode(ibDataNode& node, int flags = defaultFlag);
 	bool DeleteSubtree();
 

@@ -1781,19 +1781,16 @@ MCP_TOOL_REGISTER_DESIGNER(ibMcpToolFormBind);
 // form_copy / form_paste
 //---------------------------------------------------------------------------
 //
-// ⭐ THE SAME TWO METHODS THE METADATA TREE USES. ibValueFrame answers
-// CopyObject(writer) / PasteObject(reader) with the same signature
-// ibValueMetaObject does, so these tools are metadata_copy and metadata_paste
-// again with a different finder — one idea twice, not two ideas. The clipboard
-// they share knows which family it is holding and refuses the crossing.
+// ⭐ THE DESIGNER'S OWN COPY AND PASTE. The copy is the node as the form holds
+// the control (SaveNode), the item it sits in with it — what the form editor
+// puts on the client's board; the paste is the form's (ibValueForm::PasteObject),
+// the one the editor's Paste takes. The clipboard knows which family it is
+// holding and refuses the crossing.
 //
-// ⭐ AND NOT THROUGH THE OS CLIPBOARD, which is where ibValueForm::CopyObject
-// (formFactory.cpp) puts it: that board belongs to the person at the keyboard,
-// a tool writing to it would overwrite what they had just copied, and reaching
-// it needs a lock a window may be holding. The payload is the same bytes; only
-// the pocket differs. The `copyBlock` flag the designer's format carries says
-// whether to CLEAR the system board after a paste — a question this board does
-// not have, so the chunk is not written.
+// ⭐ AND NOT THROUGH THE OS CLIPBOARD: that board belongs to the person at the
+// keyboard, a tool writing to it would overwrite what they had just copied, and
+// reaching it needs a lock a window may be holding. The payload is the same
+// node; only the pocket differs.
 //
 // A control copies its whole subtree, so copying a group copies what is in it.
 //
@@ -1848,9 +1845,13 @@ public:
 			return false;
 		}
 
-		ibWriterMemory writer;
+		// The item it is in goes with it — how it sits is part of it (the designer's copy, ibVisualEditor::CopyObject).
+		const ibValueFrame* copiedObject = control;
+		if (control->GetParent() != nullptr && control->GetParent()->GetComponentType() == COMPONENT_TYPE_SIZERITEM)
+			copiedObject = control->GetParent();
+		ibDataNode copied(copiedObject->GetClassType(), copiedObject->GetControlID());
 
-		if (!control->CopyObject(writer)) {
+		if (!copiedObject->SaveNode(copied)) {
 			refusal = ibString::Format(ibMcpText("'%s' could not be copied."),
 				control->GetControlName());
 			form->DecrRef();
@@ -1864,13 +1865,11 @@ public:
 		slot.m_kind = ibMcpClipboardKind::Control;
 		slot.m_name = control->GetControlName();
 		slot.m_what = control->GetClassName();
-		slot.m_payload = ibDataNode();
-		slot.m_payload.SetValue(ibT("bytes"), writer.buffer());
+		slot.m_payload = copied;
 
 		result.SetValue(ibT("slot"), slotName.IsEmpty() ? ibString(ibT("default")) : slotName);
 		result.SetValue(ibT("name"), slot.m_name);
 		result.SetValue(ibT("class"), slot.m_what);
-		result.AddField(ibT("bytes"), ibDataValue::Int((std::int64_t)writer.size()));
 
 		form->DecrRef();
 		return true;
@@ -1936,15 +1935,11 @@ public:
 			}
 		}
 
-		ibMemoryBuffer bytes = slot.m_payload.GetValue<ibMemoryBuffer>(ibT("bytes"));
+		// THE DESIGNER'S PASTE — the form puts it: in `parent`, else in the first of its parents that takes one of its
+		// class, under this form's ids, its names unique on it. Nothing here has to know what was copied.
+		ibValueFrame* const pasted = form->PasteObject(parent, slot.m_payload);
 
-		ibReaderMemory reader(bytes);
-
-		// THE PAYLOAD SAYS WHICH CLASS. The factory reads it and makes the
-		// control; nothing here has to know what was copied.
-		ibValueFrame* created = ibValueFrame::CreatePasteObject(reader, form, parent);
-
-		if (created == nullptr) {
+		if (pasted == nullptr) {
 			refusal = ibString::Format(
 				ibMcpText("A %s cannot go there. form_get shows what each control already holds."),
 				slot.m_what);
@@ -1952,19 +1947,7 @@ public:
 			return false;
 		}
 
-		if (!created->PasteObject(reader)) {
-			// ⚠ REMOVE, AND NOTHING ELSE. RemoveChild drops the OWNING handle and
-			// destroys a sole-owned child on the spot (propertyObject.h says so
-			// where it is defined), so a wxDELETE after it frees the same object
-			// twice. The metadata paste cleans up the same way, by the same rule:
-			// the parent took ownership at creation, so give it back — do not
-			// reach past the owner.
-			if (ibValueFrame* owner = created->GetParent())
-				owner->RemoveChild(created);
-			refusal = ibString::Format(ibMcpText("'%s' could not be pasted here."), slot.m_name);
-			form->DecrRef();
-			return false;
-		}
+		ibValueFrame* const created = pasted->SkipSizerItems();
 
 		const ibString name = ArgName().Text(params);
 		if (!name.IsEmpty())

@@ -24,39 +24,6 @@
 
 namespace {
 
-// The control a sizer item holds — the item itself is never what is selected.
-ibValueFrame* SkipSizerItems(ibValueFrame* obj)
-{
-	while (obj != nullptr && obj->GetComponentType() == COMPONENT_TYPE_SIZERITEM)
-		obj = obj->GetChildCount() > 0 ? obj->GetChild(0) : nullptr;
-	return obj;
-}
-
-// The ids of a control and of what is in it — made for what has none (put on the form).
-void GenerateId(ibValueFrame* object)
-{
-	for (unsigned int idx = 0; idx < object->GetChildCount(); idx++)
-		GenerateId(object->GetChild(idx));
-	if (object->GetControlID() == 0)
-		object->GenerateNewID();
-}
-
-// …and taken off — a pasted copy's were those of the form it was copied from (the desktop's ResetId).
-void ResetId(ibValueFrame* object)
-{
-	for (unsigned int idx = 0; idx < object->GetChildCount(); idx++)
-		ResetId(object->GetChild(idx));
-	object->SetControlID(0);
-}
-
-// The names of a control and of what is in it made unique on its form — a pasted copy's (the desktop's PasteObject).
-void ResolveNameConflict(ibValueForm* form, ibValueFrame* object)
-{
-	form->ResolveNameConflict(object);
-	for (unsigned int idx = 0; idx < object->GetChildCount(); idx++)
-		ResolveNameConflict(form, object->GetChild(idx));
-}
-
 // Bind a just-created control to a source path — the drop counterpart of BuildForm's per-control
 // SetSource. Goes through the COMMON source factory: SetDefaultSourceType is a non-virtual helper over the
 // mutable GetSourceDesc (twin of SetDefaultMetaType over GetTypeDesc), so the editor needs no concrete-
@@ -352,7 +319,7 @@ ibValueFrame* ibFormDesignView::CreateControlOfClass(ibValueFrame* parentHint, c
 
 	// Unwrap the sizer-item wrapper to the real control, then bind BEFORE the build: InsertObject runs the
 	// control's Create -> Update pipeline, and Update reads the binding — so it renders correct on first paint.
-	ibValueFrame* control = SkipSizerItems(obj);
+	ibValueFrame* control = obj->SkipSizerItems();
 	if (control != nullptr && bind)
 		bind(control);
 
@@ -365,51 +332,20 @@ ibValueFrame* ibFormDesignView::PasteObject(ibValueFrame* dstObject, const ibDat
 {
 	wxASSERT(m_valueForm);
 
-	// The copy read as the form reads a control of its own (LoadNode), made in what it is pasted on, then taken off it:
-	// anchored across that — a child is owned by its parent's list.
-	ibValueFrame* parentObject = dstObject->GetComponentType() == COMPONENT_TYPE_SIZERITEM ? dstObject->GetParent() : dstObject;
-	ibDataNode node = copied;
-	ibValueFrame* const clipboard = m_valueForm->NewObject(node.GetClsid(), parentObject, false);
-	if (clipboard == nullptr)
+	// Put by the form (ibValueForm::PasteObject); built here, where it landed — right after what it was pasted on.
+	ibValueFrame* const pasted = m_valueForm->PasteObject(dstObject, copied);
+	if (pasted == nullptr)
 		return nullptr;
-	const ibValuePtr<ibValueFrame> clipboardKeep(clipboard);
-	const bool loaded = clipboard->LoadNode(node);
-	parentObject->RemoveChild(clipboard);
-	clipboard->SetParent(nullptr);
-	if (!loaded)
-		return nullptr;
-
-	// If it cannot be put in what it was pasted on, it is put in its parent, right after it — and so on up: the first
-	// that makes one of its class (CreateObject — the one made only asked).
-	ibValueFrame* const content = SkipSizerItems(clipboard);
-	if (content == nullptr)
-		return nullptr;
-	for (; parentObject != nullptr; parentObject = parentObject->GetParent()) {
-		if (parentObject->GetComponentType() == COMPONENT_TYPE_SIZERITEM)
-			continue;
-		if (ibValueFrame* const made = m_valueForm->CreateObject(content->GetClassName(), parentObject)) {
-			parentObject->RemoveChild(made);
-			break;
-		}
-	}
-	if (parentObject == nullptr)
-		return nullptr;
-
-	// …under this form's ids, its names unique on it — the ids first: a name is compared with the controls that have one.
-	ResetId(clipboard);
-	parentObject->AddChild(clipboard);
-	clipboard->SetParent(parentObject);
-	GenerateId(clipboard);
-	ResolveNameConflict(m_valueForm, clipboard);
-	InsertObject(clipboard, parentObject, CalcPositionOfInsertion(dstObject, parentObject));
-	return content;
+	ibValueFrame* const parentObject = pasted->GetParent();
+	InsertObject(pasted, parentObject, CalcPositionOfInsertion(dstObject, parentObject));
+	return pasted->SkipSizerItems();
 }
 
 void ibFormDesignView::InsertObject(ibValueFrame* object, ibValueFrame* parent, int pos)
 {
-	// The desktop's InsertObjectCmd::Do — CreateObject put it in its parent already, at the end: its ids, its place,
-	// its controls, the form's names. Not undoable here: the client takes the form answered as an edit of its own.
-	GenerateId(object);
+	// The desktop's InsertObjectCmd::Do — the form put it in its parent already, at the end, with its ids (CreateObject,
+	// PasteObject): its place, its controls, the form's names. Not undoable here: the client takes the form answered as
+	// an edit of its own.
 	if (pos >= 0)
 		parent->ChangeChildPosition(object, pos);
 	CreateControl(object, true);

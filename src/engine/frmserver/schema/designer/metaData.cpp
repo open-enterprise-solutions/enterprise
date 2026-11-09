@@ -67,27 +67,28 @@ ibMetaDataConfigurationBase* FindConfiguration(const ibSession& session, const i
 
 // A DATA PROCESSOR OR A REPORT IS KEPT IN A FILE APART — the desktop's tree read one from it and wrote it into one
 // (ibConfigurationTree::InsertItem, ReplaceItem, SaveItem), through these readers. One of that class read from that file of
-// the session's temporary storage into the configuration, under its root. Null: the file is not one — and what the reader
-// had put in before reading is taken away again, so a bad file leaves nothing behind.
+// the session's temporary storage into the configuration, under its root.
+//
+// ⭐ READ AS A FILE IS OPENED, PUT IN AS A COPY IS PASTED (#578). The file's ids are its own and would collide with the
+// configuration's, and so would whatever holds them — a form's button its command, a field its attribute. So the file is
+// read on its own, in a tree of its own, and its root is copied and pasted under the configuration's: the paste gives
+// every object its id and re-homes what holds one, as it does for a copy made in the designer. Null: the file is not
+// one, or the paste refused it — and the configuration is as it was.
 ibValueMetaObject* ReadExternal(ibMetaData* metaData, const ibClassID& clsid, const ibString& file)
 {
-	ibValueMetaObject* read = nullptr;
-	bool loaded = false;
+	ibWriterMemory copied;
 	if (clsid == g_metaDataProcessorCLSID) {
-		// A reader only — what it reads lives on in this configuration, so it is never closed (the desktop's InsertItem).
-		const std::shared_ptr<ibMetaDataDataProcessor> reader = std::make_shared<ibMetaDataDataProcessor>(metaData);
-		read = reader->GetDataProcessor();
-		loaded = reader->LoadFromTempFile(file);
+		const std::shared_ptr<ibMetaDataDataProcessor> reader = ibMetaData::MakeShared<ibMetaDataDataProcessor>();
+		if (!reader->LoadFromTempFile(file) || !reader->CopyMetaObject(reader->GetDataProcessor(), copied))
+			return nullptr;
 	}
 	else {
-		const std::shared_ptr<ibMetaDataReport> reader = std::make_shared<ibMetaDataReport>(metaData);
-		read = reader->GetReport();
-		loaded = reader->LoadFromTempFile(file);
+		const std::shared_ptr<ibMetaDataReport> reader = ibMetaData::MakeShared<ibMetaDataReport>();
+		if (!reader->LoadFromTempFile(file) || !reader->CopyMetaObject(reader->GetReport(), copied))
+			return nullptr;
 	}
-	if (loaded)
-		return read;
-	metaData->GetCommonMetaObject()->RemoveChild(read);
-	return nullptr;
+	ibReaderMemory pasted(copied.pointer(), copied.size());
+	return metaData->PasteMetaObject(clsid, metaData->GetCommonMetaObject(), pasted);
 }
 
 // …and that one written into that file.

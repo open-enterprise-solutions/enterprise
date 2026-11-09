@@ -11,6 +11,7 @@
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/query/queryableFactory.h"   // ibQueryableFactory::Register/Unregister — the per-config source registry
 #include "backend/query/schemaSnapshot.h"     // ibSchemaSnapshot — BuildSchemaSnapshot
+#include "core/serialize/dataBuilder.h"       // ibDataBuilder / ibBinaryProvider — a copied object's properties, as bytes
 
 #include <algorithm>
 #include <cwctype>
@@ -530,7 +531,10 @@ bool ibMetaData::CopyMetaObject(const ibValueMetaObject* object, ibWriterMemory&
 
 			ibWriterMemory writerDataMemory;
 
-			if (!copyObject->CopyProperty(writerDataMemory))
+			ibDataBuilder properties;
+			if (!copyObject->CopyProperty(properties.Root()))
+				return false;
+			if (!properties.Save(ibBinaryProvider(), writerDataMemory))
 				return false;
 
 			if (!copyObject->SaveInterface(writerDataMemory))
@@ -583,7 +587,8 @@ ibValueMetaObject* ibMetaData::PasteMetaObject(const ibClassID& clsid,
 
 			std::shared_ptr <ibReaderMemory>readerDataMemory(reader.open_chunk(dataBlock));
 
-			if (!pasteObject->PasteProperty(*readerDataMemory))
+			ibDataBuilder properties;
+			if (!properties.Load(ibBinaryProvider(), *readerDataMemory) || !pasteObject->PasteProperty(properties.Root()))
 				return false;
 
 			pasteObject->BuildNewName();
@@ -691,7 +696,8 @@ ibValueMetaObject* ibMetaData::PasteMetaObject(const ibClassID& clsid,
 
 			std::shared_ptr <ibReaderMemory>readerDataMemory(reader.open_chunk(dataBlock));
 
-			if (!pasteObject->PasteProperty(*readerDataMemory))
+			ibDataBuilder properties;
+			if (!properties.Load(ibBinaryProvider(), *readerDataMemory) || !pasteObject->PasteProperty(properties.Root()))
 				return false;
 
 			pasteObject->BuildNewName();

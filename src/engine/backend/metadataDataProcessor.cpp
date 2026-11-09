@@ -47,24 +47,8 @@ m_moduleManager(nullptr),
 m_commonObject(srcDataProcessor),
 m_version(version_oes_last)
 {
-	if (srcDataProcessor == nullptr) {
-		ibValueMetaObject* commonMetaObject = metaData->GetCommonMetaObject();
-		wxASSERT(commonMetaObject);
-		//create main metaObject
-		m_commonObject = new ibValueMetaObjectDataProcessor();
-		ibNameRequest request;
-		request.m_clsid = g_metaDataProcessorCLSID;
-		request.m_prefix = m_commonObject->GetClassName();
-		m_commonObject->SetName(ibMetaData::GetNewName(nullptr, request));
-		if (commonMetaObject != nullptr) {
-			m_commonObject->SetParent(commonMetaObject);
-			commonMetaObject->AddChild(m_commonObject);
-		}
-	}
-
 	m_commonObject->InvalidateNames();
-	// m_commonObject (ibValuePtr) holds the member ref; for the inner case AddChild
-	// added the parent's own ref separately.
+	// m_commonObject (ibValuePtr) holds the member ref beside the configuration's own.
 
 	m_ownerMeta = metaData;
 }
@@ -314,22 +298,8 @@ bool ibMetaDataDataProcessor::LoadFromBuffer(const ibMemoryBuffer& buffer, const
 
 	m_fullPath = fullPath;
 
-	// Inner (read object + copy into a config): the data processor is a child of
-	// the configuration tree — load into the existing root, no swap. resetId=true
-	// regenerates every loaded node's metaId from the config counter (m_ownerMeta,
-	// stamped via OnCreateMetaObject) so the file's ids can't collide with existing
-	// config objects; ResetAll then gives the root a fresh guid too (its ctor clsid
-	// keys on guid). Without this the import re-registers a live clsid → "Object is
-	// exist" → throw out of RunDatabase.
-	if (!m_commonObject->IsExternalCreate()) {
-		if (!m_commonObject->OnCreateMetaObject(m_ownerMeta, newObjectFlag))
-			return false;
-		if (!LoadCommonTree(m_commonObject, g_metaExternalDataProcessorCLSID, readerData, /*resetId*/ true))
-			return false;
-		m_commonObject->ResetAll();
-		m_commonObject->BuildNewName();
-		return LoadDatabase();
-	}
+	// (A file read INTO a configuration is read here on its own, with its own ids, and then pasted into it — the paste
+	// gives its objects their ids and re-homes what holds them: ReadExternal, schema/designer/metaData.cpp, #578.)
 
 	// External (start from file): standalone data processor — detached-root swap.
 	// Build a fresh root and load into it; on failure the live processor is
@@ -430,7 +400,7 @@ bool ibMetaDataDataProcessor::SaveToBuffer(ibWriterMemory& writerData, const ibS
 	return true;
 }
 
-bool ibMetaDataDataProcessor::LoadCommonTree(ibValueMetaObjectDataProcessor* root, const ibClassID& clsid, ibReaderMemory& readerData, bool resetId)
+bool ibMetaDataDataProcessor::LoadCommonTree(ibValueMetaObjectDataProcessor* root, const ibClassID& clsid, ibReaderMemory& readerData)
 {
 	// Header (sign + version + guid) leads the tree blob in the same stream — read
 	// and validate it here so the common-tree blob stays self-describing (was the
@@ -471,15 +441,15 @@ bool ibMetaDataDataProcessor::LoadCommonTree(ibValueMetaObjectDataProcessor* roo
 		return true;
 
 	// Parse the inner content into the universal structure tree, then apply into
-	// the caller-provided root (the live tree for the inner case, a detached fresh
-	// root for the external start-from-file swap). ApplyDataNode throws
+	// the caller-provided root (a detached fresh root for the start-from-file
+	// swap). ApplyDataNode throws
 	// ibBackendException on a factory miss / bad data — catch at this container
 	// boundary and report false (the caller discards the fresh root).
 	ibDataNode rootNode(root->GetClassType(), (ibMetaID)meta_id);
 	ibBinaryProvider provider;
 	provider.Read(*readerMetaMemory, rootNode);
 	try {
-		root->ApplyDataNode(rootNode, resetId);
+		root->ApplyDataNode(rootNode);
 
 		// ⭐ AND EVERYONE WATCHING IS TOLD IT IS READ IN — the stage a tree answers by drawing the
 		// whole thing. Said HERE rather than by each caller of the load, because there are several

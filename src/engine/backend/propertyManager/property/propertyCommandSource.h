@@ -40,6 +40,11 @@ public:
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
 	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
+	// Copy & paste — their OWN binary, as ibPropertySource's: a hop naming a command rides its GUID, so a paste
+	// re-homes the binding onto the pasted command, not the original (#668). Transient — the first save re-emits raw.
+	virtual bool CopyNodeValue(ibDataValue& value) const override;
+	virtual bool PasteNodeValue(const ibDataValue& value) override;
+
 	// …and the commands of the owner's form it may name, as the desktop's picker gathered them over the owner's command
 	// door (advpropCommandSource.cpp): CommandTree, the form editor's (ibBackendCommandReceiver::WriteCommandTree).
 	virtual bool GetProtocolValue(ibDataNode& row, ibReader reader) override;
