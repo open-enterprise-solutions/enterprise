@@ -486,8 +486,7 @@ void ibValueReferenceDataObject::PrepareRef(bool createData)
 		for (const auto object : m_metaObject->GetTableArrayObject()) {
 			if (object->IsDeleted())
 				continue;
-			m_listObjectValue.insert_or_assign(object->GetMetaID(),
-				new ibValueTabularSectionDataObjectRef(this, object));
+			SetTable(object->GetMetaID(), new ibValueTabularSectionDataObjectRef(this, object));
 		}
 	}
 	else {
@@ -734,6 +733,9 @@ bool ibValueReferenceDataObject::GetValueByMetaID(const ibMetaID& id, ibValue& p
 	// follows above and GetPropVal follows below. The values live in the map PrepareRef fills; before
 	// it has run the map is empty, and "the field is not there" is not the truth about the object.
 	const_cast<ibValueReferenceDataObject*>(this)->PrepareRef();
+
+	if (GetTableValue(id, pvarMetaVal))
+		return true;
 
 	auto it = m_listObjectValue.find(id);
 	//wxASSERT(it != m_listObjectValue.end());
@@ -1029,9 +1031,7 @@ bool ibValueReferenceDataObject::GetPropVal(const long lPropNum, ibValue& pvarPr
 	const ibMetaID& id = m_members.GetPropData(lPropNum);
 	if (!m_metaObject->IsDataReference(id)) {
 		if (lPropAlias == eTable && !GetValueByMetaID(id, pvarPropVal)) {
-			m_listObjectValue.insert_or_assign(id,
-				new ibValueTabularSectionDataObjectRef(this, m_metaObject->FindTableObjectByFilter(id), !m_newObject)
-			);
+			SetTable(id, new ibValueTabularSectionDataObjectRef(this, m_metaObject->FindTableObjectByFilter(id), !m_newObject));
 		}
 		if (lPropAlias == eTable && GetValueByMetaID(id, pvarPropVal)) {
 			ibValueTabularSectionDataObjectRef* tabularSection = nullptr;

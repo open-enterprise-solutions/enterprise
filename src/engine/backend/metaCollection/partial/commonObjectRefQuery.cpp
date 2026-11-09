@@ -59,10 +59,11 @@ bool ibValueRecordDataObjectRef::ReadData(const ibGuid& srcGuid)
 			if (!m_metaObject->IsDataReference(object->GetMetaID()))
 				m_listObjectValue[object->GetMetaID()] = selection.GetValue(object->GetQueryColumn());
 		}
+		// A section read again is put in place of the one read before; whoever still holds the old one keeps
+		// it, and this object with it (valuePart.h). Held before it is read.
 		for (const auto object : m_metaObject->GetGenericTableArrayObject()) {
-			ibValueTabularSectionDataObjectRef* tabularSection = new ibValueTabularSectionDataObjectRef(this, object);
-			if (!tabularSection->LoadData(srcGuid)) succes = false;
-			m_listObjectValue.insert_or_assign(object->GetMetaID(), tabularSection);
+			SetTable(object->GetMetaID(), new ibValueTabularSectionDataObjectRef(this, object));
+			if (!FindTable(object->GetMetaID())->LoadData(srcGuid)) succes = false;
 		}
 	}
 	// selection's destructor closes the cursor + statement (RAII).
@@ -386,14 +387,14 @@ bool ibValueRecordDataObjectRef::SaveData()
 	// so a sandbox's write keeps writing them all.
 	if (!hasError && (m_newObject || m_objModified || ibBackendException::IsEvalMode())) {
 		for (const auto object : m_metaObject->GetGenericTableArrayObject()) {
-			ibValueTabularSectionDataObjectBase* tabularSection = nullptr;
-			if (m_listObjectValue[object->GetMetaID()].ConvertToValue(tabularSection)) {
-				if (!tabularSection->SaveData()) {
-					hasError = true;
-					break;
-				}
+			// A section this kind does not use (an empty hold) has nothing to write; one that is not there at all
+			// is an object that was never made whole.
+			const auto held = m_listTableValue.find(object->GetMetaID());
+			if (held == m_listTableValue.end()) {
+				hasError = true;
+				break;
 			}
-			else if (m_listObjectValue[object->GetMetaID()].GetType() != TYPE_NULL) {
+			if (held->second && !held->second->SaveData()) {
 				hasError = true;
 				break;
 			}
@@ -413,12 +414,10 @@ bool ibValueRecordDataObjectRef::DeleteData()
 		return true;
 	//table parts
 	for (const auto object : m_metaObject->GetTableArrayObject()) {
-		ibValueTabularSectionDataObjectBase* tabularSection = nullptr;
-		if (m_listObjectValue[object->GetMetaID()].ConvertToValue(tabularSection)) {
-			if (!tabularSection->DeleteData())
-				return false;
-		}
-		else if (m_listObjectValue[object->GetMetaID()].GetType() != TYPE_NULL)
+		const auto held = m_listTableValue.find(object->GetMetaID());
+		if (held == m_listTableValue.end())
+			return false;
+		if (held->second && !held->second->DeleteData())
 			return false;
 
 	}

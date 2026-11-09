@@ -6,7 +6,9 @@
 
 #include "backend/metaCollection/table/metaTableObject.h"
 
-class BACKEND_API ibValueTabularSectionDataObjectBase : public ibValueModelStorage {
+// A tabular section is PART of its object (valuePart.h, #645): holding the section holds the object, and the
+// object keeps it through ibValueDataObject::m_listTableValue, which does not count the object.
+class BACKEND_API ibValueTabularSectionDataObjectBase : public ibValuePart<ibValueModelStorage> {
 	public:
 protected:
 
@@ -315,6 +317,11 @@ public:
 
 protected:
 
+	// The whole this section is part of: its object.
+	virtual ibValue* GetWholeValue() const override {
+		return m_objectValue != nullptr ? m_objectValue->GetDataValue() : nullptr;
+	}
+
 	bool m_readOnly;
 
 	// The display order, as of the view generation it was read at — see DisplayNumberOf.
@@ -324,6 +331,8 @@ protected:
 
 	const ibValueMetaObjectTableData* m_metaTable;
 
+	// The object this section is part of. Not counted here: the section's own count is the object's too
+	// (GetWholeValue), so the object is alive for as long as the section is.
 	ibValueDataObject* m_objectValue;
 	ibValuePtr<ibValueTabularSectionDataObjectColumnCollection> m_recordColumnCollection;
 };

@@ -178,7 +178,8 @@ bool ibValueSelectorRecordDataObject::GetPropVal(const long lPropNum, ibValue& p
 		}
 	}
 	if (id != m_metaObject->GetMetaID()) {
-		pvarPropVal = m_listObjectValue.at(id);
+		if (!GetTableValue(id, pvarPropVal))
+			pvarPropVal = m_listObjectValue.at(id);
 		return true;
 	}
 	pvarPropVal = ibValueReferenceDataObject::Create(m_metaObject, m_objGuid);

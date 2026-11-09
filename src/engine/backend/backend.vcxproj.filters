@@ -555,6 +555,7 @@
     <ClInclude Include="moduleInfo.h" />
     <ClInclude Include="tabularModel.h" />
     <ClInclude Include="valueInfo.h" />
+    <ClInclude Include="valuePart.h" />
     <ClInclude Include="standardCommand.h" />
     <ClInclude Include="compiler\value.h">
       <Filter>compiler</Filter>
