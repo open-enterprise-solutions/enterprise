@@ -3733,8 +3733,14 @@ void ibTreeCtrl::OnRenameTimer()
 
 void ibTreeCtrl::OnMouse( wxMouseEvent &event )
 {
+    // SEAM vs wx: an empty tree passes the click on - eaten here, the right one's release never reached the system's
+    // handler and no context menu event was born (the form's attributes, none yet: no menu to add one), nor did the
+    // left one give the tree the focus
     if ( !m_anchor )
+    {
+        event.Skip();
         return;
+    }
 
     wxPoint pt = CalcUnscrolledPosition(event.GetPosition());
 

@@ -4229,7 +4229,12 @@ void ibTreeListMainWindow::OnMouse(wxMouseEvent & event) {
 
 	// send event to user code
 	if (m_owner->GetEventHandler()->ProcessEvent(event)) return; // handled (and not skipped) in user code
-	if (!m_rootItem) return;
+	// SEAM vs wx: an empty tree passes the click on, as ibTreeCtrl's - eaten here, the right one's release never reached
+	// the system's handler and no context menu event was born, nor did the left one give the window the focus
+	if (!m_rootItem) {
+		event.Skip();
+		return;
+	}
 
 
 	// ---------- DETERMINE EVENT ----------
