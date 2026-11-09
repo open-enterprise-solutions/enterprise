@@ -4,6 +4,13 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Breaking changes
 
+- **A script's `Write()` no longer checks the required fields** of a catalog, a document, a chart or a
+  parameterized job (#424). The check is now the object's own `CheckFilling()`: it tells each empty
+  field (and each empty column on a line) to the messages and answers `True` or `False`, refusing
+  nothing. A write checks only when it comes from the object's form (Save, Save and close, Post) or
+  posts a document; undoing a posting and setting the deletion mark never check, and a record set or a
+  constant checks as before. A module that relied on `Write()` to refuse a half-filled object asks
+  `If Not Obj.CheckFilling() Then … EndIf` before it writes.
 - **In a date pattern `MM` is the month and `mm` the minutes**, as everywhere else they are written;
   the seconds are `ss`. It was the other way round. A stored format such as `DF=dd.mm.yyyy` now
   prints the minutes where the month was, and nothing reports it: change `mm` to `MM` (and `MM` to

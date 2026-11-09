@@ -343,6 +343,22 @@ public:
 	//save source modify  
 	virtual bool SaveModify() { return true; }
 
+	// ⭐ THE FILLING CHECK IS THE FORM'S (#424). A required field is a promise made to a PERSON, so a write
+	// that person asked for — the object form's Save, Save and close, Post — refuses an unfilled one, and a
+	// script's Write() does not: a script asks CheckFilling() itself when it wants the answer. The form's
+	// commands hold this for the length of their write; the write asks IsFillCheckRequired().
+	class ibFillCheckScope {
+	public:
+		explicit ibFillCheckScope(ibSourceDataObject& source) : m_source(source), m_was(source.m_fillCheck) { source.m_fillCheck = true; }
+		~ibFillCheckScope() { m_source.m_fillCheck = m_was; }
+		ibFillCheckScope(const ibFillCheckScope&) = delete;
+		ibFillCheckScope& operator=(const ibFillCheckScope&) = delete;
+	private:
+		ibSourceDataObject& m_source;
+		const bool m_was;
+	};
+	bool IsFillCheckRequired() const { return m_fillCheck; }
+
 	//check is changes data in db
 	virtual bool ModifiesData() { return false; }
 
@@ -472,6 +488,9 @@ protected:
 	// Empty by default; populated by concrete-source overrides of
 	// TryAcquireFormLock.
 	ibLockHandle m_formLockHandle;
+
+	// Set by ibFillCheckScope while the object's form writes it.
+	bool m_fillCheck = false;
 
 	// Per-instance self-description — created WITH the source, owner-bound at construction. ONLY
 	// subclasses fill it (each source builds its own nodes); external code reads it via GetSourceExplorer.

@@ -1856,7 +1856,7 @@ msgid "Fill check"
 msgstr ""
 
 #: src/engine/backend/metaCollection/attribute/metaAttributeObject.h:309
-msgid "The field must be filled: a write that leaves it empty is refused with a message naming the field (and the line, in a tabular section or a record set), and the form shows it as required."
+msgid "The field must be filled: a write from the object's form, a posting and a record set's write refuse to leave it empty, with a message naming the field (and the line, in a tabular section or a record set); a script's Write() of an object stores what it is given, and CheckFilling() asks. The form shows the field as required."
 msgstr ""
 
 #: src/engine/backend/metaCollection/attribute/metaAttributeObject.h:310

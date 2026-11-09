@@ -1890,8 +1890,8 @@ msgid "Fill check"
 msgstr "Перевірка заповнення"
 
 #: src/engine/backend/metaCollection/attribute/metaAttributeObject.h:309
-msgid "The field must be filled: a write that leaves it empty is refused with a message naming the field (and the line, in a tabular section or a record set), and the form shows it as required."
-msgstr "Поле має бути заповнене: запис із порожнім полем відхиляється з повідомленням, у якому назване поле (і рядок, якщо це таблична частина або набір записів), а форма показує його як обов'язкове."
+msgid "The field must be filled: a write from the object's form, a posting and a record set's write refuse to leave it empty, with a message naming the field (and the line, in a tabular section or a record set); a script's Write() of an object stores what it is given, and CheckFilling() asks. The form shows the field as required."
+msgstr "Поле має бути заповнене: запис із форми об'єкта, проведення та запис набору записів не залишають його порожнім і повідомляють, яке поле не заповнене (і рядок, якщо це таблична частина або набір записів); Write() об'єкта зі скрипту записує те, що йому дали, а CheckFilling() перевіряє. Форма показує поле як обов'язкове."
 
 #: src/engine/backend/metaCollection/attribute/metaAttributeObject.h:310
 #: src/engine/backend/system/value/valueTable.h:156

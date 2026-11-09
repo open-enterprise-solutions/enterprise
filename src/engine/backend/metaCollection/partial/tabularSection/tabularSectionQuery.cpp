@@ -146,16 +146,14 @@ bool ibValueTabularSectionDataObjectRef::LoadData(const ibGuid& srcGuid, bool cr
 
 #include "backend/system/systemManager.h"
 
-bool ibValueTabularSectionDataObjectRef::SaveData()
+bool ibValueTabularSectionDataObjectRef::CheckFilling() const
 {
 	if (m_readOnly)
 		return true;
 
-	bool hasError = false;
 	// The attributes are asked for once: the list is built by a walk of the metaobject each time it is asked, and
 	// asked per line it was a pass over the section's attributes for every one of a payroll's 72 234 lines.
 	const auto attributes = m_metaTable->GetGenericAttributeArrayObject();
-	//check fill attributes
 	bool fillCheck = true; long currLine = 1;
 	for (long row = 0; row < GetRowCount(); row++) {
 		const ibComposerNode* node = GetViewData<ibComposerNode>(GetItem(row));   // the line, once
@@ -172,10 +170,19 @@ bool ibValueTabularSectionDataObjectRef::SaveData()
 		}
 		currLine++;
 	}
+	return fillCheck;
+}
 
-	if (!fillCheck)
-		return false;
+// The lines are stored as they are: whether their required fields are filled is CheckFilling's question,
+// asked by the object form's write and by posting, not by every write (#424).
+bool ibValueTabularSectionDataObjectRef::SaveData()
+{
+	if (m_readOnly)
+		return true;
 
+	bool hasError = false;
+	// Asked once, as in CheckFilling: a walk of the metaobject each time it is asked.
+	const auto attributes = m_metaTable->GetGenericAttributeArrayObject();
 	if (!ibValueTabularSectionDataObjectRef::DeleteData())
 		return false;
 
