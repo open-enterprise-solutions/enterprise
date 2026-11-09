@@ -213,35 +213,83 @@ void ibValueModelTableBox::AddColumnGroup()
 
 void ibValueModelTableBox::CreateColumnCollection()
 {
-	if (appData->DesignerMode() || m_formOwner == nullptr || m_tableModel == nullptr)
+	if (m_formOwner == nullptr)
 		return;
 
-	//clear all children — owning handles release the column controls (cascade)
-	RemoveAllChildren();
+	// Through the form, which tells the host that draws them — in the designer and on an open form alike.
+	while (GetChildCount() != 0)
+		m_formOwner->RemoveControl(GetChild(0));
 
-	//create new columns
-	ibValueModel::ibValueModelColumnCollection* tableColumns = m_tableModel->GetColumnCollection();
-	wxASSERT(tableColumns);
-	if (tableColumns == nullptr)
+	const ibSourceDescription& bound = GetSourceDesc();
+	if (bound.IsOk()) {
+		// WALK the path from the head attribute DOWN to the node it reaches: a tabular section is a CHILD of the
+		// object's explorer (its own helpers are the columns); a list attribute IS the head. The columns come
+		// FAMILY-BLIND from that explorer — a metaobject source yields its attributes, a queryable dynamic list its
+		// query columns.
+		const std::vector<ibSourceHop>& path = bound.GetPath();
+		ibBackendFormAttributeValue* holder = FindSourceHolder(bound.GetFirst());
+		ibSourceDataObject* source = holder != nullptr ? holder->GetSourceValue() : nullptr;
+		const ibSourceExplorer* explorer = source != nullptr ? source->GetSourceExplorer() : nullptr;
+		for (size_t i = 1; i < path.size() && explorer != nullptr; i++)
+			explorer = explorer->FindById(path[i].m_id);
+		if (explorer == nullptr)
+			return;
+
+		// SNAPSHOT the columns BEFORE creating any control: a column's SetSource re-materialises the holder's
+		// source, and a source whose explorer is made anew on each ask (a value table) CLEARS the helper vector
+		// this would read through — only the FIRST column would read real data. A table among the fields is no
+		// column.
+		struct ColumnSnap { ibSourceId id; ibString name; ibString group; bool visible; };
+		std::vector<ColumnSnap> snaps;
+		for (unsigned int idx = 0; idx < explorer->GetHelperCount(); idx++) {
+			const ibSourceExplorer* field = explorer->GetHelper(idx);
+			if (field == nullptr || field->IsTableSection())
+				continue;
+			snaps.push_back({ field->GetSourceId(), field->GetSourceName(), field->GetSourceGroup(), field->IsVisible() });
+		}
+
+		for (const ColumnSnap& snap : snaps) {
+			// COLUMNS THAT NAME THE SAME FAMILY COME OUT IN ONE GROUP (GetColumnGroupHolder).
+			ibValueModelTableBoxColumn* column = dynamic_cast<ibValueModelTableBoxColumn*>(
+				m_formOwner->CreateControl(ibT("TableboxColumn"), GetColumnGroupHolder(snap.group)));
+			if (column == nullptr)
+				continue;
+			column->SetControlName(GetControlName() + snap.name);
+			// A table of one column shows it, whatever the source says of it.
+			column->SetVisibleColumn(snap.visible || snaps.size() == 1);
+			// The table's own hops (with any pinned types), then the field. Its caption is not written: a column
+			// is captioned by what it is bound to while it has no Title of its own.
+			ibSourceDescription columnDesc;
+			for (const ibSourceHop& hop : path)
+				columnDesc.AppendSource(hop.m_id, hop.m_type);
+			columnDesc.AppendSource(snap.id);
+			column->SetSource(columnDesc);
+		}
+		return;
+	}
+
+	// BOUND BY NONE — a value handed from code, or a table given only a Type: the model's own columns, each reading
+	// its column of the model, captioned as the model captions it.
+	ibValueModel::ibValueModelColumnCollection* columns = m_tableModel != nullptr ? m_tableModel->GetColumnCollection() : nullptr;
+	if (columns == nullptr)
 		return;
 
-	for (unsigned int idx = 0; idx < tableColumns->GetColumnCount(); idx++) {
-
-		ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* columnInfo = tableColumns->GetColumnInfo(idx);
-		ibValueModelTableBoxColumn* newTableBoxColumn =
-			m_formOwner->NewObject<ibValueModelTableBoxColumn>(g_controlTableBoxColumnCLSID, this);
-		if (columnInfo == nullptr || newTableBoxColumn == nullptr)
+	for (unsigned int idx = 0; idx < columns->GetColumnCount(); idx++) {
+		ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* columnInfo = columns->GetColumnInfo(idx);
+		if (columnInfo == nullptr)
 			continue;
-
-		const ibTypeDescription& typeDescription = columnInfo->GetColumnType();
-		if (typeDescription.IsOk())
-			newTableBoxColumn->SetDefaultMetaType(typeDescription);
+		ibValueModelTableBoxColumn* column =
+			dynamic_cast<ibValueModelTableBoxColumn*>(m_formOwner->CreateControl(ibT("TableboxColumn"), this));
+		if (column == nullptr)
+			continue;
+		const ibTypeDescription& columnType = columnInfo->GetColumnType();
+		if (columnType.IsOk())
+			column->SetDefaultMetaType(columnType);
 		else
-			newTableBoxColumn->SetDefaultMetaType(ibValueTypes::TYPE_STRING);
-
-		newTableBoxColumn->SetCaption(columnInfo->GetColumnCaption());
-		newTableBoxColumn->SetWidthColumn(columnInfo->GetColumnWidth());
-		newTableBoxColumn->SetModelColumn(columnInfo->GetColumnID());
+			column->SetDefaultMetaType(ibValueTypes::TYPE_STRING);
+		column->SetCaption(columnInfo->GetColumnCaption());
+		column->SetWidthColumn(columnInfo->GetColumnWidth());
+		column->SetModelColumn(columnInfo->GetColumnID());
 	}
 }
 
@@ -1574,12 +1622,10 @@ bool ibValueModelTableBox::SetPropVal(const long lPropNum, const ibValue& varPro
 	}
 	else if (lPropAlias == eProperty) {
 		// …and a SOURCE written at run time (`Table.Source = "Prices"`) is a new table too: the change makes the model
-		// anew (OnPropertyChanged), and its columns are built below, as a written Value's are.
+		// and its columns anew (OnPropertyChanged).
 		const unsigned int idx = m_members.GetPropData(lPropNum);
-		if (GetPropertyByIndex(idx) == m_propertySource) {
+		if (GetPropertyByIndex(idx) == m_propertySource)
 			m_tableCurrentLine.Reset();
-			refreshColumn = true;
-		}
 	}
 
 	bool result = ibValueFrame::SetPropVal(lPropNum, varPropVal);

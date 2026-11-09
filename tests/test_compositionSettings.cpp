@@ -1220,7 +1220,7 @@ TEST(CompositionConditionalAppearance, ADeeperSettingPaintsOverAndAFieldFindsIts
 	node.m_settings.m_conditionalAppearance.m_rules.push_back(onAmount);
 	output.m_rowGroups.push_back(node);
 
-	std::vector<ibQueryLowering::OutputColumn> schema(2);
+	std::vector<ibQueryLowering::ibQueryOutputColumn> schema(2);
 	schema[0].m_name = wxT("Item");
 	schema[1].m_name = wxT("Amount");
 	const std::vector<ibValue> row = { ibValue(ibString(wxT("Sugar"))), ibValue(3) };
@@ -1248,7 +1248,7 @@ TEST(CompositionConditionalAppearance, AFieldThroughAReferenceIsFoundByTheColumn
 	DeclareZeroth(composer, zeroth);
 	ibDataComposer::Output& output = composer.Outputs().front();
 
-	std::vector<ibQueryLowering::OutputColumn> schema(1);
+	std::vector<ibQueryLowering::ibQueryOutputColumn> schema(1);
 	schema[0].m_name = wxT("RecorderSupplier");
 	const ibDataComposer::ConditionalAppearance appearance = composer.ConditionalAppearanceFor(output);
 	ibCompositionLineAttr attr;

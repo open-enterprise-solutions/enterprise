@@ -63,6 +63,13 @@ public:
 	// .m_type where they must know it (the walk's gate, the drift check). The correspondence travels intact:
 	// a hop ALWAYS carries its expected type, never an id stripped of it.
 	const std::vector<ibSourceHop>& GetPath() const { return m_listSource; }
+
+	// THE SAME FIELD — hop by hop, by id. A binding may pin a hop's type (a composite reference) and a path made in the
+	// designer does not, so the pin is not what tells two fields apart; a hop's own == compares it, for the walk's gate.
+	bool operator==(const ibSourceDescription& other) const {
+		return std::equal(m_listSource.begin(), m_listSource.end(), other.m_listSource.begin(), other.m_listSource.end(),
+			[](const ibSourceHop& one, const ibSourceHop& two) { return one.m_id == two.m_id; });
+	}
 };
 
 // A DUMB serializer for a source-description path — the head is a FORM-LOCAL attribute id, each deeper hop a

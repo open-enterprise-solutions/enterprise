@@ -250,7 +250,7 @@ bool ibDataRamComposer::Run(ibCompositionDriver& driver)
 		//
 		// The grouping is still there — it is the LEVELS that carry it (a heading line, the records
 		// under it, the outline that folds them), which is where a list's structure has always lived.
-		ibQueryLowering::OutputColumn column;
+		ibQueryLowering::ibQueryOutputColumn column;
 		column.m_name     = field;
 		column.m_alias    = field;
 		column.m_byAlias  = true;    // read by name — a RAM table has no query column to point at

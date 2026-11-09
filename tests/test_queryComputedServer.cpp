@@ -85,12 +85,12 @@ public:
 	ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& /*extra*/) const override {
 		return m_build ? m_build() : ibQueryRamTable();
 	}
-	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_cols; }
+	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override { return m_cols; }
 	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override {
 		for (const ibBackendQueryColumn* c : m_cols) if (c->GetName() == name) return c;
 		return nullptr;
 	}
-	bool OwnsColumn(const ibBackendQueryColumn* col) const override {
+	bool ContainColumn(const ibBackendQueryColumn* col) const override {
 		for (const ibBackendQueryColumn* c : m_cols) if (c == col) return true;
 		return false;
 	}
@@ -118,12 +118,12 @@ public:
 	}
 	void AddCol(const ibBackendQueryColumn* c) { m_cols.push_back(c); }
 	bool     IsComputedInRam()   const override { return false; }
-	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_cols; }
+	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override { return m_cols; }
 	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override {
 		for (const ibBackendQueryColumn* c : m_cols) if (c->GetName() == name) return c;
 		return nullptr;
 	}
-	bool OwnsColumn(const ibBackendQueryColumn* col) const override {
+	bool ContainColumn(const ibBackendQueryColumn* col) const override {
 		for (const ibBackendQueryColumn* c : m_cols) if (c == col) return true;
 		return false;
 	}

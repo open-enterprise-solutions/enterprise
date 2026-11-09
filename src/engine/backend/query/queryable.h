@@ -640,7 +640,7 @@ struct ibSubqueryOutput
 	ibTypeDescription           m_type;            // empty = unknown (a computed expression)
 	
 	// ⭐ AND WHO KEEPS `m_col` ALIVE, when it is not the metadata. The inner SELECT's schema owns the
-	// columns IT minted (a dot-walk leaf, a synthetic measure) through OutputColumn::m_ownedCol, and
+	// columns IT minted (a dot-walk leaf, a synthetic measure) through ibQueryOutputColumn::m_ownedCol, and
 	// that schema is a LOCAL of the function that builds this list — so a wrapper holding the bare
 	// pointer outlived the storage and read through freed memory (2026-08-19: the row values came
 	// back EMPTY, which folded 56 rows into one group and printed a blank report).
@@ -649,9 +649,9 @@ struct ibSubqueryOutput
 	std::shared_ptr<ibBackendQueryColumn> m_owned;
 	
 	// ⭐ WHETHER WHAT IT READS MAY BE SHOWN (functional options) — the inner schema's answer
-	// (OutputColumn::m_available). `m_col` may be a walk's leaf, which answers for itself alone.
+	// (ibQueryOutputColumn::m_available). `m_col` may be a walk's leaf, which answers for itself alone.
 	bool                                  m_available = true;
-	// …and what it is in a balance — the inner schema's answer too (OutputColumn::GetBalanceRole): the query's
+	// …and what it is in a balance — the inner schema's answer too (ibQueryOutputColumn::GetBalanceRole): the query's
 	// own `ROLE` where it said one, else the column's. With a period's seniority beside it.
 	ibBalanceRole                         m_balanceRole = ibBalanceRole::None;
 	int                                   m_periodRank  = 0;
@@ -682,10 +682,10 @@ public:
 	// source's own column object. Attribute-level resolution (the DB field machinery) is
 	// reached, when needed, via AsRowReader(). (docs/private/query-language-arc.md §22.4b)
 
-	// Does THIS source own the column? — column->leaf routing for multi-source composition
-	// (which leaf a Where / join-key / output column belongs to). Default: the column
-	// resolves to one of OUR columns (by name). (docs §22.1)
-	virtual bool OwnsColumn(const ibBackendQueryColumn* col) const {
+	// Does THIS source contain the column? — column->leaf routing for multi-source composition
+	// (which leaf a Where / join-key / output column belongs to). Default: the column is one of
+	// OUR columns (by name, then the id), as a type description contains a type (ContainType). (docs §22.1)
+	virtual bool ContainColumn(const ibBackendQueryColumn* col) const {
 		// Identity by model-id, NOT merely by name: two joined sources can each expose an attribute with
 		// the SAME name (e.g. "Reference"), and a name-only check would let BOTH claim the other's column —
 		// the RAM stitch would then read a foreign field off this leaf's own SELECT * (fld<id>_TYPE not
@@ -698,7 +698,7 @@ public:
 	// ALL columns this source exposes — for SELECT * (a nested subquery over `From(src)`
 	// with no explicit Select list derives its columns from here). Default: none; a record
 	// source returns its attributes, a temp source its temp columns. (docs §22 nested subquery)
-	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const { return {}; }
+	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const { return {}; }
 
 	// ⭐ DID THIS SOURCE MINT THAT COLUMN — and if so, here is its STORAGE, so whoever still needs
 	// the column past the run keeps it by raising a refcount instead of copying it (a copy answers
@@ -914,7 +914,7 @@ public:
 // query reads / filters / joins / unions / totals over it like any computed source. It is a
 // pure L3 construct — it names no attribute, no L1 cursor (it is a computed/RAM source, so
 // AsRowReader() stays null). Columns = the inner explicit Select(col, alias) list, or — for
-// SELECT * — the inner PRIMARY source's full column set (GetColumns). The bodies that touch
+// SELECT * — the inner PRIMARY source's full column set (GetQueryColumns). The bodies that touch
 // ibDataQueryBuilder live out-of-line (queryProvider.cpp), so this header forward-declares
 // the inner door only. (docs/private/query-language-arc.md §22 nested subquery)
 // ==========================================================================
@@ -939,21 +939,15 @@ public:
 		return nullptr;
 	}
 
-	bool OwnsColumn(const ibBackendQueryColumn* col) const override {
+	bool ContainColumn(const ibBackendQueryColumn* col) const override {
 		for (const ibBackendQueryColumn* c : m_columns)
 			if (c == col) return true;
 		return false;
 	}
-	// …and the narrower question: did this wrapper ALLOCATE the column, so that it DIES with the
-	// wrapper? A published column may equally be the inner source's own — owned by the metadata and
-	// outliving everything. Anything that keeps a column pointer past the run must tell the two apart.
-	bool OwnsColumnStorage(const ibBackendQueryColumn* col) const {
-		for (const std::shared_ptr<ibBackendQueryColumn>& c : m_ownedColumns)
-			if (c.get() == col) return true;
-		return false;
-	}
-	// …and the answer that lets a consumer KEEP it: the storage itself, so holding on to a published
-	// column is a matter of raising its refcount rather than copying it. A wrapper dies at the end of
+	// …and the narrower question — did this wrapper ALLOCATE the column, so that it DIES with the wrapper?
+	// A published column may equally be the inner source's own, owned by the metadata and outliving
+	// everything. Answered with the one thing that lets a consumer KEEP it: the storage itself, so holding
+	// on to a published column is a matter of raising its refcount rather than copying it. A wrapper dies at the end of
 	// the run; whoever still needs the column simply shares its ownership and the column lives on —
 	// the SAME column, same id, same type. Empty when this wrapper did not allocate it (a metadata
 	// column outlives everything and needs no keeping).
@@ -967,7 +961,7 @@ public:
 	// would silently be the one nobody remembered to keep).
 	const std::vector<std::shared_ptr<ibBackendQueryColumn>>& SharedColumns() const { return m_ownedColumns; }
 	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override { return Column(name); }
-	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_columns; }
+	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override { return m_columns; }
 	// ⭐ …AND WHICH OF THEM IS THE ROW — the inner source's key, republished as THIS wrapper's own
 	// columns. Same shape ibAliasQueryable answers with, for the same reason: a wrapper is the same
 	// rows under new column identities, so "which column is the row" has to travel with them.
@@ -1024,7 +1018,7 @@ private:
 //
 // ⭐⭐ A SOURCE IS IDENTIFIED BY ITS COLUMNS, so two readings of one table need two sets of them.
 //
-// Everything in this tier routes a column to its source by ASKING THE SOURCES: `OwnsColumn(col)`
+// Everything in this tier routes a column to its source by ASKING THE SOURCES: `ContainColumn(col)`
 // decides which leaf of a join a value is read from, which side of an ON a key belongs to, which
 // table qualifies it in SQL. That question has one answer per column — and a self-join hands the
 // same column object to both sides, so the answer is "the left one", always. Measured 2026-09-05 on
@@ -1033,7 +1027,7 @@ private:
 // `B.Period` came back holding `A.Period`. A wrong number that looks right — the join had run.
 //
 // The alias is not a label on a shared column; it IS a second source. So it gets its own column
-// objects, and every existing road answers correctly with nothing taught to it: `OwnsColumn` tells
+// objects, and every existing road answers correctly with nothing taught to it: `ContainColumn` tells
 // the sides apart, the referenced-column set stops folding `A.Period` and `B.Period` into one entry,
 // and the projection's duplicate-id machinery sees two distinct ids.
 //
@@ -1113,7 +1107,7 @@ public:
 		return nullptr;
 	}
 
-	bool OwnsColumn(const ibBackendQueryColumn* col) const override {
+	bool ContainColumn(const ibBackendQueryColumn* col) const override {
 		for (const std::shared_ptr<ibAliasColumn>& c : m_owned)
 			if (c.get() == col) return true;
 		return false;
@@ -1125,13 +1119,13 @@ public:
 	}
 	// ⭐ A NAME THE TABLE ANSWERS TO GETS A TWIN, whether or not it is in the published face.
 	//
-	// `GetColumns()` is the SELECT * face and it is narrower than what a source can RESOLVE: a record
+	// `GetQueryColumns()` is the SELECT * face and it is narrower than what a source can RESOLVE: a record
 	// answers by name for common attributes it does not list, a register for its identity columns.
 	// Minting only from the published set would leave those names resolving to the ORIGIN's column —
 	// which belongs to the other side of the join, and reads its value. So the twin is minted on
 	// demand, and the published face stays exactly what the origin publishes.
 	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override;
-	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_published; }
+	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override { return m_published; }
 	std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;
 	const ibBackendQueryColumn*              GetHierarchyColumn() const override;
 
@@ -1225,7 +1219,7 @@ public:
 	virtual const ibBackendQueryable* NavigationSource() const { return m_reg->GetQueryable(); }
 
 	virtual const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override { return NavigationSource()->ResolveColumnByName(name); }
-	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override { return NavigationSource()->GetColumns(); }
+	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override { return NavigationSource()->GetQueryColumns(); }
 	virtual ibString GetQueryTableName() const override { return NavigationSource()->GetQueryTableName(); }
 	virtual ibString GetQueryName()       const override { return NavigationSource()->GetQueryName(); }
 	virtual const ibMetaData* GetMetaData() const override { return m_reg->GetQueryable()->GetMetaData(); }

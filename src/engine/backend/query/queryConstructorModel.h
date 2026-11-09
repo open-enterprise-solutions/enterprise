@@ -18,7 +18,7 @@
 //      invisible in the role editor (2026-08-06) — the same defect, one layer up.
 //
 //   2. FIELDS ARE ASKED OF THE SOURCE. A real source answers through its descriptor
-//      (FillSourceExplorer — the same call a dynamic list fills its columns with); a NESTED table
+//      (GetQueryColumns — the columns a query reads it by); a NESTED table
 //      (a subquery standing where a table would) answers with its own projections. Both are
 //      answers to one question, so the shell asks the SOURCE which it is rather than branching on
 //      a type — and a source kind added later needs no new branch up in the dialog.
@@ -74,8 +74,8 @@ public:
 
 protected:
 
-	// A TABLE OF THE CONFIGURATION answers through its descriptor (FillSourceExplorer) — the very call a dynamic list
-	// fills its columns with — asked with the arguments the FROM writes, by its id with none.
+	// A TABLE OF THE CONFIGURATION answers through its descriptor (GetQueryColumns) — the columns a query reads it by —
+	// asked with the arguments the FROM writes, by its id with none.
 	virtual std::vector<ibQueryConstructorField> GetTableFields(const ibQuerySource& source) const override;
 	virtual std::vector<ibQueryConstructorField> GetTableFields(ibMetaID table) const override;
 	// The engine reads the class itself (clsid.h — the kind is in the id): a reference with a descriptor behind it.

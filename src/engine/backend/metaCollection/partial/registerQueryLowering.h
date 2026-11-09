@@ -861,7 +861,7 @@ inline ibString ibRegQualifiedEqParams(const ibValueMetaObjectAttributeBase* a, 
 // ⭐ WHAT A FILTER MAY NAME IS DECIDED BY WHAT THE READING DOES TO THE RECORDS — not by the register.
 // A balance, a turnover, a totals row FOLD: a resource there is the folded value, and a condition over
 // a fold belongs to the result rather than to an argument of the source — the same rule
-// FillConditionExplorer offers to the window, so the two cannot disagree. Such a reading is filtered
+// GetConditionColumns offers to the window, so the two cannot disagree. Such a reading is filtered
 // by its DIMENSIONS. A reading of the records as they were written folds nothing: every column of a
 // record is still a column there, and the name is resolved exactly as a query's `WHERE Recorder = …`
 // resolves it — by the register's own source (ResolveColumnByName), so the two producers of a
@@ -1358,7 +1358,7 @@ inline void ibAppendRegisterPeriodicityParameter(std::vector<ibQuerySourceParame
 // exposes the columns of its VIEW, and that view's column set is built from the register's own
 // dimensions and resources (accumulationRegisterSchema.cpp) and cached — metadata only, so this
 // answer costs nothing and works on a base that has never been opened. Deliberately NOT the
-// companion's GetColumns(): in RAM mode a companion navigates through the register itself and
+// companion's GetQueryColumns(): in RAM mode a companion navigates through the register itself and
 // would report the MOVEMENT columns, which is the one answer that would mislead here.
 // ⭐⭐ THE PERIODICITY DECIDES WHICH COLUMNS EXIST, and this is the rule, written where the columns
 // are handed out:
@@ -1604,10 +1604,10 @@ inline ibTempColumn ibRegAttributeColumn(const ibValueMetaObjectAttributeBase* a
 	return spreads
 		? ibTempColumn(name, attribute->GetPhysicalName(),
 		               stored, id, synonym,
-		               ibBackendQueryColumn::Kind::Composite, attribute->GetColumnPicture()).StandsFor(attribute)
+		               ibBackendQueryColumn::Kind::Composite).StandsFor(attribute->GetQueryColumn())
 		: ibTempColumn(name, ibRegValueField(attribute),
 		               stored, id, synonym,
-		               ibBackendQueryColumn::Kind::Computed, attribute->GetColumnPicture()).StandsFor(attribute);
+		               ibBackendQueryColumn::Kind::Computed).StandsFor(attribute->GetQueryColumn());
 }
 
 // ============================================================================
@@ -1745,7 +1745,7 @@ inline void ibRegSelfSourceFromDeclaration(ibSchemaTable& t, const ibMetaData* m
 inline ibValue ibRegSelectionToTable(ibDataQueryResult& selection, const ibBackendQueryable* shape)
 {
 	if (shape != nullptr)
-		selection.SetMaterialiseColumns(shape->GetColumns());
+		selection.SetMaterialiseColumns(shape->GetQueryColumns());
 	return selection.Select().Snapshot().ToValueTable();
 }
 

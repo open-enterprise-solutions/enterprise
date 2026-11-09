@@ -39,13 +39,13 @@ const ibSourceExplorer* ibValueRecordDataObjectCatalog::GetSourceExplorer() cons
 	ibValueMetaObjectCatalog* metaRef = nullptr;
 
 	if (m_metaObject->ConvertToValue(metaRef)) {
-		m_sourceExplorer.AppendColumn(metaRef->GetDataCode()->GetQueryColumn(), false);
-		m_sourceExplorer.AppendColumn(metaRef->GetDataDescription()->GetQueryColumn());
+		m_sourceExplorer.AppendColumn(metaRef->GetDataCode(), metaRef->GetDataCode()->GetColumnId(), false);
+		m_sourceExplorer.AppendColumn(metaRef->GetDataDescription(), metaRef->GetDataDescription()->GetColumnId());
 		ibValueMetaObjectAttributePredefined* defOwner = metaRef->GetCatalogOwner();
 		if (defOwner != nullptr && defOwner->GetClsidCount() > 0) {
-			m_sourceExplorer.AppendColumn(metaRef->GetCatalogOwner()->GetQueryColumn());
+			m_sourceExplorer.AppendColumn(metaRef->GetCatalogOwner(), metaRef->GetCatalogOwner()->GetColumnId());
 		}
-		m_sourceExplorer.AppendColumn(metaRef->GetDataParent()->GetQueryColumn());
+		m_sourceExplorer.AppendColumn(metaRef->GetDataParent(), metaRef->GetDataParent()->GetColumnId());
 	}
 
 	for (const auto object : m_metaObject->GetAttributeArrayObject()) {
@@ -54,7 +54,7 @@ const ibSourceExplorer* ibValueRecordDataObjectCatalog::GetSourceExplorer() cons
 			if (attrUse == ibItemMode::ibItemMode_Item
 				|| attrUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (!m_metaObject->IsDataReference(object->GetMetaID())) {
-					m_sourceExplorer.AppendColumn(object->GetQueryColumn());
+					m_sourceExplorer.AppendColumn(object, object->GetColumnId());
 				}
 			}
 		}
@@ -62,7 +62,7 @@ const ibSourceExplorer* ibValueRecordDataObjectCatalog::GetSourceExplorer() cons
 			if (attrUse == ibItemMode::ibItemMode_Folder ||
 				attrUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (!m_metaObject->IsDataReference(object->GetMetaID())) {
-					m_sourceExplorer.AppendColumn(object->GetQueryColumn());
+					m_sourceExplorer.AppendColumn(object, object->GetColumnId());
 				}
 			}
 		}
@@ -75,7 +75,7 @@ const ibSourceExplorer* ibValueRecordDataObjectCatalog::GetSourceExplorer() cons
 				|| tableUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (object != nullptr && !object->IsDeleted()) {
 					ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
-					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol->GetQueryColumn());
+					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol, tblCol->GetColumnId());
 				}
 			}
 		}
@@ -84,7 +84,7 @@ const ibSourceExplorer* ibValueRecordDataObjectCatalog::GetSourceExplorer() cons
 				tableUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (object != nullptr && !object->IsDeleted()) {
 					ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
-					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol->GetQueryColumn());
+					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol, tblCol->GetColumnId());
 				}
 			}
 		}

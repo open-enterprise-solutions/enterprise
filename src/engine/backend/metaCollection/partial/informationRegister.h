@@ -44,10 +44,10 @@ public:
 	// its companion does not redirect navigation, unlike the accumulation register's views — so the
 	// answer is the register's, asked once and not restated here. Without this the base answers
 	// nothing and the slice stands in a catalogue as a leaf with no fields to select.
-	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
+	std::vector<const ibBackendQueryColumn*> GetQueryColumns(const std::vector<ibValue>& args) const override;
 	// Slice(moment, condition). The condition may name ANYTHING the slice carries — unlike a
 	// balance, a slice folds nothing: it picks one row per key, and every column of that row is
-	// still a column, attributes included. So FillConditionExplorer is left at the base, which
+	// still a column, attributes included. So GetConditionColumns is left at the base, which
 	// answers with the whole source.
 	void DescribeParameters(std::vector<ibQuerySourceParameter>& out) const override;
 private:
@@ -425,10 +425,10 @@ const ibBackendQueryable* ibInfoRegisterSliceDescriptor<TSlice>::CreateQueryable
 }
 
 template <typename TSlice>
-void ibInfoRegisterSliceDescriptor<TSlice>::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+std::vector<const ibBackendQueryColumn*> ibInfoRegisterSliceDescriptor<TSlice>::GetQueryColumns(const std::vector<ibValue>& /*args*/) const
 {
-	if (m_reg != nullptr)
-		m_reg->FillSourceExplorer(explorer);
+	const ibBackendQueryable* queryable = m_reg != nullptr ? m_reg->GetQueryable() : nullptr;
+	return queryable != nullptr ? queryable->GetQueryColumns() : std::vector<const ibBackendQueryColumn*>();
 }
 
 template <typename TSlice>

@@ -194,7 +194,7 @@ public:
 	//operator '!=' — the same one answer, negated. Never a third telling of it.
 	virtual bool CompareValueNE(const ibVariant& cParam) const override { return CompareValueLS(cParam) != 0; }
 
-	virtual bool FindValue(const ibString& findData, std::vector<ibValue>& listValue) const;
+	virtual bool FindValue(const ibString& input, const ibChoiceCondition& condition, std::vector<ibValue>& out) const override;
 
 	//support source set/get data — ibValueDataObject value primitive (presentation + runtime read/copy)
 	virtual bool SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal) override;

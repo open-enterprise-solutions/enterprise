@@ -21,7 +21,7 @@ class BACKEND_API ibTabularQueryable : public ibBackendQueryable {
 public:
 	explicit ibTabularQueryable(const ibValueMetaObjectTableDataRef* meta) : m_meta(meta) {}
 	virtual const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override;   // attribute-by-name AS a column + the owner Ref
-	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override;                   // the section's own attributes + Ref
+	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override;                   // the section's own attributes + Ref
 	virtual ibString GetQueryTableName() const override;
 	virtual ibString GetQueryName() const override;   // the section's user-facing name (change ledger)
 	virtual const ibMetaData* GetMetaData() const override;                  // metadata context for column-based value reads
@@ -54,6 +54,9 @@ public:
 	// catalogue and every other reader of a source's shape. A tabular section answers with its own
 	// attributes (line number + the columns declared in it); left unanswered, the base filled
 	// nothing and a section stood in the tree as a leaf that could be joined and selected from.
+	std::vector<const ibBackendQueryColumn*> GetQueryColumns(const std::vector<ibValue>& args) const override;
+	// …and the SOURCE's side — the section's real columns, its attributes as themselves, for a list or a report
+	// that binds to them.
 	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
 private:
 	ibValueMetaObjectTableDataRef* m_meta;

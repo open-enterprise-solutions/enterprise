@@ -101,10 +101,11 @@ protected:
 		virtual valT GetEnumValue() const override { return m_value; }
 		virtual void SetEnumValue(const valT& v) override { m_value = v; }
 
-		virtual bool FindValue(const ibString& findData, std::vector<ibValue>& listValue) const override {
+		// A member of a built-in enumeration has no fields for a condition to narrow by.
+		virtual bool FindValue(const ibString& input, const ibChoiceCondition& /*condition*/, std::vector<ibValue>& out) const override {
 			const ibValuePtr<ibValueEnumeration<valType>> enumOwner(ibValue::CreateObject(m_clsid));
 			for (auto& e : enumOwner->m_listEnumData) {
-				if (e.second.Contains(findData)) {
+				if (e.second.Contains(input)) {
 					ibValueEnumerationVariant<valType>* enumValue = new ibValueEnumerationVariant<valType>(e.first, m_clsid);
 					if (enumValue != nullptr) {
 						enumValue->CreateEnumeration(
@@ -112,12 +113,12 @@ protected:
 							enumOwner->GetEnumDescription(e.first),
 							e.first
 						);
-						listValue.push_back(enumValue);
+						out.push_back(enumValue);
 					}
 				}
 			}
-			std::sort(listValue.begin(), listValue.end(), [](const ibValue& a, const ibValue& b) { return a.GetString() < b.GetString(); });
-			return listValue.size() > 0;
+			std::sort(out.begin(), out.end(), [](const ibValue& a, const ibValue& b) { return a.GetString() < b.GetString(); });
+			return out.size() > 0;
 		}
 
 		//operator '=='
@@ -399,9 +400,10 @@ public:
 		return false;
 	}
 
-	virtual bool FindValue(const ibString& findData, std::vector<ibValue>& listValue) const override {
+	// A member of a built-in enumeration has no fields for a condition to narrow by.
+	virtual bool FindValue(const ibString& input, const ibChoiceCondition& /*condition*/, std::vector<ibValue>& out) const override {
 		for (auto& e : m_listEnumData) {
-			if (e.second.Contains(findData)) {
+			if (e.second.Contains(input)) {
 				ibValueEnumerationVariant<valT>* enumValue = new ibValueEnumerationVariant<valT>(e.first, ibValue::GetClassType());
 				if (enumValue != nullptr) {
 					enumValue->CreateEnumeration(
@@ -409,12 +411,12 @@ public:
 						GetEnumDescription(e.first),
 						e.first
 					);
-					listValue.push_back(enumValue);
+					out.push_back(enumValue);
 				}
 			}
 		}
-		std::sort(listValue.begin(), listValue.end(), [](const ibValue& a, const ibValue& b) { return a.GetString() < b.GetString(); });
-		return listValue.size() > 0;
+		std::sort(out.begin(), out.end(), [](const ibValue& a, const ibValue& b) { return a.GetString() < b.GetString(); });
+		return out.size() > 0;
 	}
 
 	//operator '=='

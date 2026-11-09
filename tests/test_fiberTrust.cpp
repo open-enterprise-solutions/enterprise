@@ -287,7 +287,7 @@ TEST(FiberTrust, ARoleHandlerThatAsksThroughTheGateDoesNotHang)
 
 	const ibBackendQueryable* source = catalog->GetQueryable();
 	ASSERT_NE(source, nullptr);
-	const std::vector<const ibBackendQueryColumn*> columns = source->GetColumns();
+	const std::vector<const ibBackendQueryColumn*> columns = source->GetQueryColumns();
 	ASSERT_FALSE(columns.empty());
 	const ibBackendQueryColumn* column = columns.front();
 	ASSERT_NE(column, nullptr);

@@ -57,8 +57,6 @@ public:
 
 #pragma endregion
 
-	const class ibBackendSourceColumn* GetSourceAttributeObject() const;
-
 	// Available source HOLDERS from the owning control's type factory (the picker enumerates
 	// these as roots instead of a single source). An empty list means the binding has a single
 	// fixed source (legacy behaviour).

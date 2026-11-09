@@ -49,7 +49,7 @@ public:
 
 	// One output column the script reads back. A plain / dot-walk / aggregate column
 	// is read either by source column (GetValue) or by door alias (GetColumn).
-	struct OutputColumn
+	struct ibQueryOutputColumn
 	{
 		ibString                    m_name;             // script-visible output name
 		// (⚠ AND NO TITLE HERE. What a column is CALLED belongs to the composition, not to the query:
@@ -123,7 +123,7 @@ public:
 	// unsupported construct (with the AST source span). Returns the move-only selection.
 	static ibDataQueryResult Execute(const ibQuerySelect& ast,
 	                                 const std::map<ibString, ibValue>& params,
-	                                 std::vector<OutputColumn>& outSchema);
+	                                 std::vector<ibQueryOutputColumn>& outSchema);
 
 	// RESOLVE THE NAMES, RUN NOTHING. Parsing this language cannot tell a field that exists from one
 	// that does not — `DataVersionPredefinedName` is a perfectly legal identifier — because names are
@@ -141,7 +141,7 @@ public:
 	// found" would be worse than the gap it closes.
 	// BACKEND_API on the method, not the class: this is the first member reached from OUTSIDE the
 	// backend DLL (the constructor's verdict line), and exporting the whole class would drag its
-	// nested PackageResult — a move-only type holding unique_ptr — across the boundary for nothing.
+	// nested ibQueryPackageResult — a move-only type holding unique_ptr — across the boundary for nothing.
 	BACKEND_API static void CheckNames(const ibQueryPackage& package,
 	                                   const std::map<ibString, ibValue>& params);
 
@@ -157,16 +157,6 @@ public:
 	// cannot be resolved without running (a package temp table, a nested query) is left whole.
 	BACKEND_API static int PruneUnresolved(ibQueryPackage& package,
 	                                       const std::map<ibString, ibValue>& params);
-
-	// ⭐ WHAT IS FILTERED AROUND A VIRTUAL TABLE THAT ITS OWN PARAMETERS WOULD TAKE — one sentence per such
-	// condition, saying which table, which condition and which parameter it belongs in.
-	//
-	// Not a refusal: the query is correct and answers the same rows. It is the most expensive correct
-	// query there is — around the table the register is read and folded WHOLE and most of it thrown away,
-	// inside it the rows are selected before the fold (Max, 2026-09-17: "a virtual table hands you the
-	// filtered table at once"). A condition qualifies when every field it names is one the table offers
-	// for that parameter (FillConditionExplorer — the same list the constructor's mouse picks from).
-	BACKEND_API static std::vector<ibString> FiltersAroundVirtualTables(const ibQueryPackage& package);
 
 	// WHICH PROJECTIONS THIS QUERY STILL HAS TO GROUP BY — the ONE door for "can this be grouped".
 	//
@@ -221,7 +211,7 @@ public:
 	// showing the query's fields and a host running it cannot disagree about whether it is sound.
 	BACKEND_API static void DescribeOutput(const ibQuerySelect& ast,
 	                                       const std::map<ibString, ibValue>& params,
-	                                       std::vector<OutputColumn>& outSchema);
+	                                       std::vector<ibQueryOutputColumn>& outSchema);
 
 	// === A PACKAGE — several statements as ONE trip (docs/private/query-constructor.md §5) ===
 	//
@@ -236,7 +226,7 @@ public:
 	// The temp tables live for the WHOLE package (not one execution, as a single query's scope
 	// does): that is what lets statement 3 read what statement 2 left, and it is why DROP exists
 	// — releasing early inside a long package has to be sayable rather than left to scope.
-	struct PackageResult
+	struct ibQueryPackageResult
 	{
 		// ONTO <name> — what this statement called its result. Empty for the ordinary unnamed one.
 		// It is the whole reason ONTO exists: a caller asks for "Sales" instead of "the third
@@ -253,7 +243,7 @@ public:
 		// selections it related stayed untouched beside it. A LINK is a STATEMENT now: it reconciles
 		// the two named selections IN PLACE and answers with the number of rows it removed.
 		std::unique_ptr<ibDataQueryResult> m_result;         // the table of a plain select (null otherwise)
-		std::vector<OutputColumn>          m_schema;         // its output columns, in projection order
+		std::vector<ibQueryOutputColumn>          m_schema;         // its output columns, in projection order
 
 		// ⭐⭐ WHO KEEPS THE TEMP TABLES ALIVE WHILE THIS RESULT IS READ. A package's own store used to
 		// be a LOCAL of ExecutePackage, on the reasoning that "a temp table nobody is keeping dies
@@ -279,7 +269,7 @@ public:
 	// they die with the call. Non-null (a script's `TempTablesManager`): they outlive it, so a
 	// LATER query attached to the same store reads what this one left. Same mechanism, different
 	// holder — which is the whole difference between "a batch" and "a set of tables I am keeping".
-	static std::vector<PackageResult> ExecutePackage(const ibQueryPackage& package,
+	static std::vector<ibQueryPackageResult> ExecutePackage(const ibQueryPackage& package,
 	                                                 const std::map<ibString, ibValue>& params,
 	                                                 class ibQueryTempTableStore* store = nullptr);
 
@@ -296,18 +286,18 @@ public:
 	// has not written — and it is left out.
 	//
 	// Empty head = nothing to place (no usable link).
-	struct JoinStep
+	struct ibQueryJoinStep
 	{
 		ibString           m_name;   // the selection joined at this step
 		ibQueryJoinKindAst m_kind = ibQueryJoinKindAst::Inner;
 		ibQueryAstExprPtr  m_on;     // the condition, ANDed if two links relate the same pair
 	};
-	struct FromTree
+	struct ibQueryFromTree
 	{
 		ibString              m_head;    // the selection the tree starts from
-		std::vector<JoinStep> m_steps;   // …and what hangs off it, in the order it must be written
+		std::vector<ibQueryJoinStep> m_steps;   // …and what hangs off it, in the order it must be written
 	};
-	static FromTree PlacePackageLinks(const std::vector<ibQueryPackageLink>& links,
+	static ibQueryFromTree PlacePackageLinks(const std::vector<ibQueryPackageLink>& links,
 	                                  const std::vector<ibString>& declared);
 
 	// ⭐⭐ RUN WHAT PREPARES, AND ONLY THAT — every `INTO` statement of this package, in order, into
@@ -334,7 +324,7 @@ public:
 	// (no row cursor to anchor).
 	static ibDataQueryResult Execute(const ibQuerySelect& ast,
 	                                 const std::map<ibString, ibValue>& params,
-	                                 std::vector<OutputColumn>& outSchema,
+	                                 std::vector<ibQueryOutputColumn>& outSchema,
 	                                 const ibReadPageRequest& page);
 
 	// The paged read WITH the build-once page cache (Lever 1, docs §20): the door
@@ -343,7 +333,7 @@ public:
 	// SQL-determining input — the L5 composer signs its rendered text + params).
 	static ibDataQueryResult Execute(const ibQuerySelect& ast,
 	                                 const std::map<ibString, ibValue>& params,
-	                                 std::vector<OutputColumn>& outSchema,
+	                                 std::vector<ibQueryOutputColumn>& outSchema,
 	                                 const ibReadPageRequest& page,
 	                                 ibRenderedPageCache& cache, const ibPageSignature& signature);
 
@@ -351,7 +341,7 @@ private:
 	// `cache` and `signature` go together: both null for a read that is not cached.
 	static ibDataQueryResult ExecuteImpl(const ibQuerySelect& ast,
 	                                     const std::map<ibString, ibValue>& params,
-	                                     std::vector<OutputColumn>& outSchema,
+	                                     std::vector<ibQueryOutputColumn>& outSchema,
 	                                     const ibReadPageRequest& page,
 	                                     ibRenderedPageCache* cache, const ibPageSignature* signature);
 
@@ -361,7 +351,7 @@ private:
 	// attribute" — the name is not unknown, there is nowhere to read it from.
 	static ibDataQueryResult ExecuteSourceless(const ibQuerySelect& ast,
 	                                           const std::map<ibString, ibValue>& params,
-	                                           std::vector<OutputColumn>& outSchema);
+	                                           std::vector<ibQueryOutputColumn>& outSchema);
 
 public:
 
@@ -388,7 +378,7 @@ public:
 	// were written rows-first, and the shape belongs to whoever is laying it out.
 	static ibDataQueryResult ExecuteTotals(const ibQuerySelect& ast,
 	                                       const std::map<ibString, ibValue>& params,
-	                                       std::vector<OutputColumn>& outSchema,
+	                                       std::vector<ibQueryOutputColumn>& outSchema,
 	                                       const ibReadPageRequest& page = ibReadPageRequest{},
 	                                       bool* outServerGroupedLevel = nullptr,
 	                                       bool withDetails = false,

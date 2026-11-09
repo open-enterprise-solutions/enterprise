@@ -298,6 +298,22 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   where the base already holds one (remove the lines held there first). A line the configuration
   stops declaring stays, an ordinary line.
 
+## Forms
+
+- **A form field says how its value is chosen, over what its attribute says.** A text field and a
+  table column have `QuickChoice` (Auto — as the type says, Use, Don't use) and `ChoiceFoldersAndItems`
+  (Auto — as the attribute's Select says, Items, Folders, Folders and items), and in the `Choice`
+  category the attribute's own two: `TypeLink` and `ChoiceParameters`. A form's attribute has none:
+  one reached through the dot cannot be edited, so the control is the one place a link on a form is
+  set. The form is their source — they name its attributes and the fields of what each holds. The
+  field's rows narrow the list over the bound field's: a row for the same parameter replaces that
+  one, the others are added. A value written into the field is narrowed by its link by type. A value
+  typed or chosen into a field or a cell empties the fields whose links name it, unless the row says
+  Keep — the cell of a column in the row being edited; a module writing the attribute empties
+  nothing. MCP:
+  `form_set {control, property: "ChoiceParameters", value: {"Owner": "Counterparty"}}`, in the shape
+  `metadata_set_choice` takes.
+
 ## Fixes
 
 - **A thin designer in an application server gets exclusive mode.** The server's own login counted as another
@@ -319,6 +335,14 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **A column whose choice parameters take a value from a header field is emptied in every row when that field
   changes.** A contract column filtered by the header's counterparty kept its contracts when the counterparty
   changed, in a form and from a module alike; a row marked *Keep* still keeps its value.
+- **Text typed into a field finds no more than its choice form shows.** The choice parameters — the attribute's
+  and the field's own — narrowed the choice form but not the search by typed text or the quick choice, so a
+  contract of another counterparty could be typed in.
+- **The designer's choice parameters dialog shows the parameter picked in a row, and the form wizard opens with a
+  kind checked.** A drop-down list showed its first item without choosing it, and a group of radio buttons came up
+  with none on.
+- **MCP: `form_set` of `ChoiceParameters` refuses a row the designer's dialog would not offer**, and names the
+  parameters it would.
 
 - **`ThisForm.<attribute> = value` writes into the attribute.** It overwrote the attribute's own entry,
   and the attribute kept its old value.

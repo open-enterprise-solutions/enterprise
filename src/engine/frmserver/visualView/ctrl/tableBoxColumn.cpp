@@ -20,7 +20,7 @@ bool ibValueModelTableBoxColumn::GetChoiceForm(ibPropertyList* property)
 			// Resolve the bound field through the source explorer (WalkSource), NOT the form's own metaobject:
 			// a dotted path's leaf — or a value-table / dynamic-list column with NO backing metaobject — is
 			// missed by a source-scoped FindAnyObjectByFilter (and asserts). Mirror ibValueTextCtrl::GetChoiceForm.
-			const ibBackendSourceColumn* column = m_propertySource->GetSourceAttributeObject();
+			const ibBackendSourceColumn* column = WalkSource(GetSourceDesc());
 			if (column != nullptr) {
 				const ibCtorMetaValueType* so = metaData->GetTypeCtor(column->GetTypeDesc().GetFirstClsid());
 				if (so != nullptr)
@@ -95,14 +95,14 @@ const ibMetaData* ibValueModelTableBoxColumn::GetMetaData() const
 
 ibString ibValueModelTableBoxColumn::GetControlTitle() const
 {
-	// Explicit Title wins; otherwise the binding's presentation synonym (field synonym | form-attribute
-	// Synonym/Name), resolved once via GetSourceAbstractColumn; else fall back to the control's own name.
+	// Explicit Title wins; otherwise the synonym of the column the binding reaches (WalkSource: a field, or the form's
+	// attribute bound whole); else fall back to the control's own name.
 	if (!m_propertyTitle->IsEmptyProperty()) {
 		return m_propertyTitle->GetValueAsTranslateString();
 	}
 	else if (!m_propertySource->IsEmptyProperty()) {
-		const ibBackendAbstractColumn* column = GetSourceAbstractColumn();
-		if (column != nullptr)   // null when the bound field is gone / whole-attribute binding
+		const ibBackendSourceColumn* column = WalkSource(GetSourceDesc());
+		if (column != nullptr)   // null when the bound field is gone
 			return column->GetSynonym();
 	}
 
@@ -310,10 +310,27 @@ bool ibValueModelTableBoxColumn::CanDeleteControl() const
 
 bool ibValueModelTableBoxColumn::SetControlValue(const ibValue& varControlVal)
 {
-	// Written into the CURRENT ROW's cell; the client reads it back with the next fetch of that row.
+	// A dot-path or a foreign-root (header) column is resolved, not stored (IsReadOnly): there is no cell to write.
+	const ibValueModelTableBox* owner = GetOwner();
+	if (owner != nullptr && (owner->IsPathColumn(this) || owner->IsForeignColumn(this)))
+		return false;
+
+	// Written into the CURRENT ROW's cell; the client reads it back with the next fetch of that row — narrowed first by
+	// the column's own link by type (#616), as a form field's is (ibValueTextCtrl::SetControlValue).
+	ibValue value = varControlVal;
+	ibValue adjusted;
+	if (ibChoiceLinkResolver::Adjust(ibChoiceHolder(m_formOwner), GetTypeLink(), varControlVal, adjusted))
+		value = adjusted;
+
+	ibValue before;
+	GetControlValue(before);
+
 	ibValueModel::ibValueModelReturnLine* currentLine = GetCurrentLine();
 	if (currentLine != nullptr)
-		currentLine->SetValueByMetaID(GetModelColumn(), varControlVal);
+		currentLine->SetValueByMetaID(GetModelColumn(), value);
+
+	// …and the controls chosen within this cell are emptied, on a change (#616) — the other cells of its row among them.
+	ibTypeControlFactory::ClearLinked(this, before);
 
 	if (m_formOwner != nullptr)
 		m_formOwner->RefreshForm();
@@ -335,6 +352,29 @@ ibChoiceHolder ibValueModelTableBoxColumn::GetChoiceHolder() const
 	if (m_formOwner != nullptr)
 		holder.m_source = m_formOwner->GetSourceObject();   // …and the header, for a link that names it
 	return holder;
+}
+
+// THE COLUMN'S OWN WORD over what its type says (issue #259), as a form field says it (ibValueTextCtrl).
+bool ibValueModelTableBoxColumn::HasQuickChoice() const
+{
+	switch (m_propertyQuickChoice->GetValueAsEnum()) {
+	case ibQuickChoiceMode::ibQuickChoiceMode_Use: return true;
+	case ibQuickChoiceMode::ibQuickChoiceMode_DontUse: return false;
+	case ibQuickChoiceMode::ibQuickChoiceMode_Auto: break;
+	}
+	return ibValueControl::HasQuickChoice();
+}
+
+// …and over what its attribute's Select says.
+ibSelectMode ibValueModelTableBoxColumn::GetSelectMode() const
+{
+	switch (m_propertyChoiceFoldersAndItems->GetValueAsEnum()) {
+	case ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_Items: return ibSelectMode::ibSelectMode_Items;
+	case ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_Folders: return ibSelectMode::ibSelectMode_Folders;
+	case ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_FoldersAndItems: return ibSelectMode::ibSelectMode_FoldersAndItems;
+	case ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_Auto: break;
+	}
+	return ibTypeControlFactory::GetSelectMode();
 }
 
 bool ibValueModelTableBoxColumn::GetControlValue(ibValue& pvarControlVal) const
@@ -376,6 +416,10 @@ bool ibValueModelTableBoxColumn::ReadData(const ibDataNode& node)
 	m_propertyReorderable->SetNodeValue(node.GetProperty(m_propertyReorderable->GetName()));
 	m_propertyChoiceForm->SetNodeValue(node.GetProperty(m_propertyChoiceForm->GetName()));
 	m_propertySource->SetNodeValue(node.GetProperty(m_propertySource->GetName()));
+	m_propertyQuickChoice->SetNodeValue(node.GetProperty(m_propertyQuickChoice->GetName()));
+	m_propertyChoiceFoldersAndItems->SetNodeValue(node.GetProperty(m_propertyChoiceFoldersAndItems->GetName()));
+	m_propertyTypeLink->SetNodeValue(node.GetProperty(m_propertyTypeLink->GetName()));
+	m_propertyChoiceParameters->SetNodeValue(node.GetProperty(m_propertyChoiceParameters->GetName()));
 
 	//events
 	m_eventOnChange->SetNodeValue(node.GetProperty(m_eventOnChange->GetName()));
@@ -411,6 +455,10 @@ bool ibValueModelTableBoxColumn::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyReorderable->GetName(), m_propertyReorderable->GetNodeValue());
 	node.SetProperty(m_propertyChoiceForm->GetName(), m_propertyChoiceForm->GetNodeValue());
 	node.SetProperty(m_propertySource->GetName(), m_propertySource->GetNodeValue());
+	node.SetProperty(m_propertyQuickChoice->GetName(), m_propertyQuickChoice->GetNodeValue());
+	node.SetProperty(m_propertyChoiceFoldersAndItems->GetName(), m_propertyChoiceFoldersAndItems->GetNodeValue());
+	node.SetProperty(m_propertyTypeLink->GetName(), m_propertyTypeLink->GetNodeValue());
+	node.SetProperty(m_propertyChoiceParameters->GetName(), m_propertyChoiceParameters->GetNodeValue());
 
 	//events
 	node.SetProperty(m_eventOnChange->GetName(), m_eventOnChange->GetNodeValue());

@@ -7,7 +7,7 @@
 
 ///////////////////////////////////////////////////////////////////////////
 #include "backend/backend_type.h"
-#include "core/description/sourceDescription.h"   // ibSourceDescription::GetPath (GetSourceAbstractColumn inline)
+#include "core/description/sourceDescription.h"   // ibSourceDescription — the binding path (GetSourceDesc)
 #include "backend/compiler/value.h"
 #include "backend/createRequest.h"   // ibSelectMode (GetSelectMode's return type)
 #include "backend/choiceLinkResolver.h"             // ibChoiceHolder — who holds this control's field
@@ -31,13 +31,29 @@ class FRMSERVER_API ibControlFrame;
 class FRMSERVER_API ibTypeControlFactory : public ibBackendTypeSourceFactory {
 public:
 
-	//////////////////////////////////////////////////
-	virtual const ibBackendSourceColumn* GetSourceAttributeObject() const = 0;
-	//////////////////////////////////////////////////
+	// What may be picked from a hierarchical catalog — asked of the source holding the bound field; a text field and a
+	// table column answer with their own word over it (ChoiceFoldersAndItems).
+	virtual ibSelectMode GetSelectMode() const;
+
+	// ⭐ THE CONTROL'S OWN LINKS (#616) — a link by type and choice parameters said on the control, for a field reached
+	// through the dot that has no attribute of its own to declare them. Their paths are the form's, as the binding's are,
+	// and the form is their source (ibChoiceHolder over it). Empty by default: a control saying nothing adds nothing to
+	// what its bound field says.
+	virtual const ibChoiceTypeLinkDescription& GetTypeLink() const;
+	virtual const ibChoiceParametersDescription& GetChoiceParameters() const;
+
+	// GetSourceList is NOT implemented here — each concrete control overrides
+	// ibBackendTypeSourceFactory::GetSourceList(out) using its own GetOwnerForm()
+	// + GetFilterSourceDataType() (no cross-cast). See widgets / tableBox.
+
+	// (A VALUE IS *NOT* ADJUSTED HERE. It was, for one draft — and a form is one way a value arrives,
+	//  not the way it arrives most: a script, a record set written on the server and a data exchange
+	//  reach the same fields with no control anywhere. The narrowing belongs where the data is, so it
+	//  happens in the holder's own write, through ibChoiceLinkResolver::Adjust — Max, 2026-09-23.)
 
 	// THE ONE ROUTE every value editor walks when its Select button is pressed:
 	//
-	//   Undefined      -> GetDataType() decides the type (asking only when the cell
+	//   Undefined      -> ShowSelectType decides the type (asking only when the cell
 	//                     admits more than one) and the value is created;
 	//   typed value    -> the quick choice for that type, and if the type has none,
 	//                     the metaobject's own selection form.
@@ -50,55 +66,25 @@ public:
 	// A number and a date are picked by the client itself (a calculator, a calendar):
 	// what comes back is typed into the field like anything else.
 	static bool ChooseValue(ibControlFrame* ownerValue, const class ibValueMetaObject* choiceForm = nullptr);
+	// …AND WHAT IS FOUND IN IT WITHOUT A FORM — the values of `value`'s kind `input` names (ibValue::FindValue), among
+	// what a choice in `ownerValue` is made under: its field's parameters and its own over them (ibChoiceLinkResolver::
+	// Resolve). Asked by the text typed into a control and by its quick choice, so neither finds more than the choice
+	// form shows (#616, Max 2026-11-09).
+	static bool FindValue(ibControlFrame* ownerValue, const ibValue& value, const ibString& input,
+		std::vector<ibValue>& out);
 
-	// A NUMBER ON ITS CALCULATOR, A DATE ON ITS CALENDAR — the desktop's SimpleChoice, drawn by the client under the
-	// field pressed (ibProtocol::ibRequest::ibKind::SimpleChoice); the value chosen is handed to the field. False when the type
-	// is neither.
-	static bool SimpleChoice(ibControlFrame* ownerValue, const ibClassID& clsid, const ibMetaData* metaData);
-
-	// The short list a value of this type is picked from (an enumeration's members, a boolean, a
-	// small reference list), put to the person as a choice. False when the type has none.
-	static bool QuickChoice(ibControlFrame* ownerValue, const ibClassID& clsid, const ibMetaData* metaData);
-	// …and the same list NARROWED BY WHAT WAS TYPED: one match is taken at once, several are put
-	// to the person; typed text that matches nothing changes nothing.
-	static void QuickChoice(ibControlFrame* controlValue, ibValue& newValue, const ibString& strData);
-
+	// The type a value is created of, out of those a description admits — an "any" offers every reference it admits; asked
+	// of the person when there are several, 0 when the person closes the choice.
 	static ibClassID ShowSelectType(const ibMetaData* metadata, const ibTypeDescription& typeDescription);
 
-	//////////////////////////////////////////////////
+	// ⭐ …AND WHAT A WRITE THROUGH A CONTROL LEAVES STALE (#616): `changed` showed `before`, and if it shows anything else
+	// now, every control of its form whose OWN links name its field — a link by type, or a row that does not say Keep — is
+	// emptied through its own door, to the empty value of its type. Asked by the control's write, the one door a value
+	// typed or chosen into it passes; the emptied control's write asks it in turn, so the chain follows by itself and stops
+	// where a value is already empty. The data's own links are its record's to empty (ibChoiceLinkResolver::ClearLinked).
+	static void ClearLinked(ibControlFrame* changed, const ibValue& before);
 
-	ibSelectMode GetSelectMode() const;
-	
-	//Create value by selected type
-	virtual ibValue CreateValue() const;
-
-	//Get data type
-	virtual ibClassID GetDataType() const;
-
-	// The bound source's PRESENTATION (name / synonym / comment), resolved ONCE: a metadata FIELD -> its
-	// column (is-a presentation); a whole FORM ATTRIBUTE (no field column) -> the head attribute (also a
-	// presentation). Controls read GetSynonym/GetName/GetComment off it, blind to metadata vs attribute.
-	const ibBackendAbstractColumn* GetSourceAbstractColumn() const {
-		if (const ibBackendSourceColumn* column = GetSourceAttributeObject())
-			return column;
-		const ibSourceDescription& desc = GetSourceDesc();
-		return desc.IsOk() ? FindSourceHolder(desc.GetFirst()) : nullptr;   // whole-attribute → the head holder
-	}
-
-	// Designer: (re)build the control's DEFAULT child controls from its bound source explorer — a
-	// tablebox fills its columns (the runtime CreateColumnCollection is DesignerMode-gated, so the
-	// designer needs this twin). Default no-op; called after a drag-to-create drop AND by the inspector's
-	// Source-change refill — ONE source-explorer traversal point, no duplication.
-	virtual void RefillFromSource() { }
-
-	// GetSourceList is NOT implemented here — each concrete control overrides
-	// ibBackendTypeSourceFactory::GetSourceList(out) using its own GetOwnerForm()
-	// + GetFilterSourceDataType() (no cross-cast). See widgets / tableBox.
-
-	// (A VALUE IS *NOT* ADJUSTED HERE. It was, for one draft — and a form is one way a value arrives,
-	//  not the way it arrives most: a script, a record set written on the server and a data exchange
-	//  reach the same fields with no control anywhere. The narrowing belongs where the data is, so it
-	//  happens in the holder's own write, through ibChoiceLinkResolver::Adjust — Max, 2026-09-23.)
+protected:
 
 	// ⭐ WHO HOLDS THIS CONTROL'S FIELD — the form's source for a control on a form, the ROW for a table
 	// column. One question, asked the way this class already asks GetOwnerForm / GetSourceObject; the
@@ -111,6 +97,16 @@ public:
 	// Empty by default: a control bound to nothing — a filter cell, a script's value — holds no fields
 	// and nothing is chosen within it.
 	virtual ibChoiceHolder GetChoiceHolder() const { return ibChoiceHolder(); }
+
+private:
+
+	// The short list `current` is picked from (an enumeration's members, a boolean, a small reference list), found as the
+	// typed text is (FindValue), put to the person as a choice. False when its type has none.
+	static bool QuickChoice(ibControlFrame* ownerValue, const ibValue& current, const ibMetaData* metaData);
+	// A NUMBER ON ITS CALCULATOR, A DATE ON ITS CALENDAR — the desktop's SimpleChoice, drawn by the client under the
+	// field pressed (ibProtocol::ibRequest::ibKind::SimpleChoice); the value chosen is handed to the field. False when the type
+	// is neither. Asked first by the quick choice.
+	static bool SimpleChoice(ibControlFrame* ownerValue, const ibValue& current, const ibMetaData* metaData);
 };
 
 #endif

@@ -74,7 +74,7 @@ public:
 		// when a column tree-node is selected) AND a source-column descriptor (ibBackendSourceColumn — the
 		// ABSTRACT source column, NOT a QueryColumn: a value-table pulls from RAM, it is not a DB query like
 		// the dynamic list) so the bound tablebox reads its header / type through the SAME explorer ->
-		// WalkColumns -> GetSourceAbstractColumn presentation seam a metadata field uses — the column's
+		// WalkColumns -> GetSourceSynonym presentation seam a metadata field uses — the column's
 		// Caption IS its header (GetSynonym). ibValue stays the FIRST base via ibValueModelColumnInfo ->
 		// ibValueDynamicMembers -> ibValue (offset 0); ibPropertyObject + ibBackendTypeConfigFactory follow
 		// (the base order ibFormAttribute uses); the type factory is mandatory (ibPropertyType resolves its
@@ -126,7 +126,7 @@ public:
 
 			// --- ibBackendSourceColumn — SOURCE-COLUMN presentation. The value-table's explorer vends THIS as
 			// each column's descriptor, so the bound tablebox resolves the header (GetSynonym = Caption) and
-			// type through the same WalkColumns / GetSourceAbstractColumn seam a metadata field uses. GetComment
+			// type through the same WalkColumns / GetSourceSynonym seam a metadata field uses. GetComment
 			// stays the base default (empty) — a column carries no comment. ------------------------------------
 			virtual ibString GetName() const override { return m_propertyName->GetValueAsString(); }
 			// Header = the Caption; empty Caption falls back to the auto-generated synonym of the Name — the

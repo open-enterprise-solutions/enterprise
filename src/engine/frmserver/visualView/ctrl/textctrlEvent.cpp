@@ -24,7 +24,7 @@ bool ibValueTextCtrl::TextProcessing(const ibString& strData)
 		return false;
 	if (strData.Length() > 0) {
 		std::vector<ibValue> listValue;
-		if (newValue.FindValue(strData, listValue)) {
+		if (ibTypeControlFactory::FindValue(this, newValue, strData, listValue)) {
 			SetControlValue(listValue.at(0));
 		}
 		else {

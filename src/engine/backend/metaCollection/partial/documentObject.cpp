@@ -62,19 +62,19 @@ const ibSourceExplorer* ibValueRecordDataObjectDocument::GetSourceExplorer() con
 	ibValueMetaObjectDocument* metaRef = nullptr;
 
 	if (m_metaObject->ConvertToValue(metaRef)) {
-		m_sourceExplorer.AppendColumn(metaRef->GetDocumentNumber()->GetQueryColumn(), false);
-		m_sourceExplorer.AppendColumn(metaRef->GetDocumentDate()->GetQueryColumn());
+		m_sourceExplorer.AppendColumn(metaRef->GetDocumentNumber(), metaRef->GetDocumentNumber()->GetColumnId(), false);
+		m_sourceExplorer.AppendColumn(metaRef->GetDocumentDate(), metaRef->GetDocumentDate()->GetColumnId());
 	}
 
 	for (const auto object : m_metaObject->GetAttributeArrayObject()) {
-		m_sourceExplorer.AppendColumn(object->GetQueryColumn());
+		m_sourceExplorer.AppendColumn(object, object->GetColumnId());
 	}
 
 	for (const auto object : m_metaObject->GetTableArrayObject()) {
 		if (object != nullptr && !object->IsDeleted()) {
 			ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
 			for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) 
-				tblNode.AppendColumn(tblCol->GetQueryColumn());
+				tblNode.AppendColumn(tblCol, tblCol->GetColumnId());
 		}
 	}
 

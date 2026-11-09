@@ -188,7 +188,7 @@ private:
 	ibReadPageRequest m_page;
 	ColumnIdOf        m_idOf;   // the reader's column id by output name — empty: the output column's own
 
-	std::vector<ibQueryLowering::OutputColumn> m_schema;
+	std::vector<ibQueryLowering::ibQueryOutputColumn> m_schema;
 	std::vector<Row>                           m_rows;
 };
 

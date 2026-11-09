@@ -44,16 +44,16 @@ const ibSourceExplorer* ibValueRecordDataObjectParameterizedJob::GetSourceExplor
 	ibValueMetaObjectParameterizedJob* metaRef = nullptr;
 
 	if (m_metaObject->ConvertToValue(metaRef)) {
-		m_sourceExplorer.AppendColumn(metaRef->GetDataCode()->GetQueryColumn(), false);
-		m_sourceExplorer.AppendColumn(metaRef->GetDataDescription()->GetQueryColumn());
-		m_sourceExplorer.AppendColumn(metaRef->GetDataParent()->GetQueryColumn());
+		m_sourceExplorer.AppendColumn(metaRef->GetDataCode(), metaRef->GetDataCode()->GetColumnId(), false);
+		m_sourceExplorer.AppendColumn(metaRef->GetDataDescription(), metaRef->GetDataDescription()->GetColumnId());
+		m_sourceExplorer.AppendColumn(metaRef->GetDataParent(), metaRef->GetDataParent()->GetColumnId());
 		// The job's own four. They are ordinary columns of the row, which is exactly why the list,
 		// the filters and any report over "which jobs fail most" cost this subsystem nothing.
 		if (m_objMode == ibObjectMode::OBJECT_ITEM) {
-			m_sourceExplorer.AppendColumn(metaRef->GetDataActive()->GetQueryColumn());
-			m_sourceExplorer.AppendColumn(metaRef->GetDataSchedule()->GetQueryColumn());
-			m_sourceExplorer.AppendColumn(metaRef->GetDataLastRun()->GetQueryColumn());
-			m_sourceExplorer.AppendColumn(metaRef->GetDataNextRun()->GetQueryColumn());
+			m_sourceExplorer.AppendColumn(metaRef->GetDataActive(), metaRef->GetDataActive()->GetColumnId());
+			m_sourceExplorer.AppendColumn(metaRef->GetDataSchedule(), metaRef->GetDataSchedule()->GetColumnId());
+			m_sourceExplorer.AppendColumn(metaRef->GetDataLastRun(), metaRef->GetDataLastRun()->GetColumnId());
+			m_sourceExplorer.AppendColumn(metaRef->GetDataNextRun(), metaRef->GetDataNextRun()->GetColumnId());
 		}
 	}
 
@@ -63,7 +63,7 @@ const ibSourceExplorer* ibValueRecordDataObjectParameterizedJob::GetSourceExplor
 			? (attrUse == ibItemMode::ibItemMode_Item || attrUse == ibItemMode::ibItemMode_Folder_Item)
 			: (attrUse == ibItemMode::ibItemMode_Folder || attrUse == ibItemMode::ibItemMode_Folder_Item);
 		if (wanted && !m_metaObject->IsDataReference(object->GetMetaID()))
-			m_sourceExplorer.AppendColumn(object->GetQueryColumn());
+			m_sourceExplorer.AppendColumn(object, object->GetColumnId());
 	}
 
 	for (const auto object : m_metaObject->GetTableArrayObject()) {
@@ -74,7 +74,7 @@ const ibSourceExplorer* ibValueRecordDataObjectParameterizedJob::GetSourceExplor
 		if (wanted && object != nullptr && !object->IsDeleted()) {
 			ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
 			for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject())
-				tblNode.AppendColumn(tblCol->GetQueryColumn());
+				tblNode.AppendColumn(tblCol, tblCol->GetColumnId());
 		}
 	}
 

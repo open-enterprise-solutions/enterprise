@@ -429,7 +429,7 @@ Figures are `<Resource>` + the figure word: `AmountTurnoverDr`, `AmountBalance` 
 
 **Filters go INSIDE the table's brackets, never into the WHERE around it** — every register's condition is
 applied before the fold, and it takes any predicate (NOT, OR, IN, IN (SELECT), a walk such as
-`NOT Account.OffBalance`). `query_check` lists what is left outside as `tableParameters`.
+`NOT Account.OffBalance`).
 
 **Conditions are written in the names the table publishes**, not the line's:
 

@@ -552,6 +552,7 @@
       <Filter>propertyManager\property</Filter>
     </ClInclude>
     <ClInclude Include="srcObject.h" />
+    <ClInclude Include="srcColumn.h" />
     <ClInclude Include="moduleInfo.h" />
     <ClInclude Include="tabularModel.h" />
     <ClInclude Include="valueInfo.h" />

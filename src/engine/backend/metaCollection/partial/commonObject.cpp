@@ -1954,13 +1954,13 @@ const ibSourceExplorer* ibValueRecordDataObject::GetSourceExplorer() const
 		return &m_sourceExplorer;   // built at this version of the metadata already — read as it is
 
 	for (const auto object : metaObject->GetGenericAttributeArrayObject()) {
-		m_sourceExplorer.AppendColumn(object->GetQueryColumn());
+		m_sourceExplorer.AppendColumn(object, object->GetColumnId());
 	}
 
 	for (const auto object : metaObject->GetGenericTableArrayObject()) {
 		if (object != nullptr && !object->IsDeleted()) {
 			ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
-			for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol->GetQueryColumn());
+			for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol, tblCol->GetColumnId());
 		}
 	}
 
@@ -2085,9 +2085,10 @@ ibValue ibValueRecordDataObject::AdjustValue(const ibMetaID& id, const ibValue& 
 std::vector<ibMetaID> ibValueRecordDataObject::GetLinked(const ibMetaID& edited) const
 {
 	std::vector<ibMetaID> linked;
+	const ibSourceDescription changed(edited);
 	for (const ibValueMetaObjectAttributeBase* attribute : GetMetaObject()->GetGenericAttributeArrayObject()) {
-		if (attribute->IsAllowed() && ibChoiceLinkResolver::IsLinked(attribute->GetMetaID(),
-			attribute->GetTypeLink(), attribute->GetChoiceParameters(), edited))
+		if (attribute->IsAllowed() && attribute->GetMetaID() != edited
+			&& ibChoiceLinkResolver::IsLinked(attribute->GetTypeLink(), attribute->GetChoiceParameters(), changed))
 			linked.push_back(attribute->GetMetaID());
 	}
 	return linked;
@@ -2558,14 +2559,14 @@ const ibSourceExplorer* ibValueRecordDataObjectRef::GetSourceExplorer() const
 
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 		if (!m_metaObject->IsDataReference(object->GetMetaID())) {
-			m_sourceExplorer.AppendColumn(object->GetQueryColumn(), object != attribute);
+			m_sourceExplorer.AppendColumn(object, object->GetColumnId(), object != attribute);
 		}
 	}
 
 	for (const auto object : m_metaObject->GetGenericTableArrayObject()) {
 		if (object != nullptr && !object->IsDeleted()) {
 			ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
-			for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol->GetQueryColumn());
+			for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol, tblCol->GetColumnId());
 		}
 	}
 
@@ -2739,7 +2740,7 @@ const ibSourceExplorer* ibValueRecordDataObjectHierarchyRef::GetSourceExplorer()
 			if (attrUse == ibItemMode::ibItemMode_Item
 				|| attrUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (!m_metaObject->IsDataReference(object->GetMetaID())) {
-					m_sourceExplorer.AppendColumn(object->GetQueryColumn(), object != attribute);
+					m_sourceExplorer.AppendColumn(object, object->GetColumnId(), object != attribute);
 				}
 			}
 		}
@@ -2747,7 +2748,7 @@ const ibSourceExplorer* ibValueRecordDataObjectHierarchyRef::GetSourceExplorer()
 			if (attrUse == ibItemMode::ibItemMode_Folder ||
 				attrUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (!m_metaObject->IsDataReference(object->GetMetaID())) {
-					m_sourceExplorer.AppendColumn(object->GetQueryColumn(), object != attribute);
+					m_sourceExplorer.AppendColumn(object, object->GetColumnId(), object != attribute);
 				}
 			}
 		}
@@ -2760,7 +2761,7 @@ const ibSourceExplorer* ibValueRecordDataObjectHierarchyRef::GetSourceExplorer()
 				|| tableUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (object != nullptr && !object->IsDeleted()) {
 					ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
-					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol->GetQueryColumn());
+					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol, tblCol->GetColumnId());
 				}
 			}
 		}
@@ -2769,7 +2770,7 @@ const ibSourceExplorer* ibValueRecordDataObjectHierarchyRef::GetSourceExplorer()
 				tableUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (object != nullptr && !object->IsDeleted()) {
 					ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
-					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol->GetQueryColumn());
+					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol, tblCol->GetColumnId());
 				}
 			}
 		}
@@ -3720,7 +3721,7 @@ const ibSourceExplorer* ibValueRecordManagerObject::GetSourceExplorer() const
 		return &m_sourceExplorer;   // built at this version of the metadata already — read as it is
 
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
-		m_sourceExplorer.AppendColumn(object->GetQueryColumn());
+		m_sourceExplorer.AppendColumn(object, object->GetColumnId());
 	}
 
 	return &m_sourceExplorer;

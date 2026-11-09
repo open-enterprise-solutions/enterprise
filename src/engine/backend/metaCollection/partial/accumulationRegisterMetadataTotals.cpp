@@ -56,7 +56,7 @@ static void SeedRamTableFromView(ibQueryRamTable& table, const ibBackendQueryabl
 	const bool subordinate = reg != nullptr && reg->HasRecorder();
 	const ibString recorderName = subordinate && reg->GetRegisterRecorder()   != nullptr ? reg->GetRegisterRecorder()->GetName()   : ibString();
 	const ibString lineName     = subordinate && reg->GetRegisterLineNumber() != nullptr ? reg->GetRegisterLineNumber()->GetName() : ibString();
-	for (const ibBackendQueryColumn* col : view->GetColumns()) {
+	for (const ibBackendQueryColumn* col : view->GetQueryColumns()) {
 		if (col == nullptr)
 			continue;
 		if (!periodName.IsEmpty() && !ibRegisterViewColumnFits(col->GetName(), periodName, fold, recorderName, lineName))

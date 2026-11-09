@@ -49,10 +49,10 @@ public:
 	// from the VIEW's shape, which is metadata-only, so no companion is built and no database
 	// is touched. (Left unimplemented, the base returns nothing, and a virtual table shows in
 	// the tree as a childless leaf — visible, addable, and with no field to select.)
-	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
+	std::vector<const ibBackendQueryColumn*> GetQueryColumns(const std::vector<ibValue>& args) const override;
 	// Balance(moment, condition) — see the bodies at the bottom of this header.
 	void DescribeParameters(std::vector<ibQuerySourceParameter>& out) const override;
-	void FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
+	std::vector<const ibBackendQueryColumn*> GetConditionColumns(const ibString& slot) const override;
 private:
 	ibValueMetaObjectAccumulationRegister* m_reg;
 	// (no companion member: the base owns what MakeCompanion builds — queryableFactory.h)
@@ -70,14 +70,12 @@ public:
 	                                          const std::vector<ibQueryPredicatePtr>& conditions,
 	                                          const ibQueryReadColumns& read) override;
 	const ibBackendQueryable* GetConditionScope() const override;
-	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
-	// …AND WITH THE CALL'S ARGUMENTS, because the periodicity decides which columns exist.
-	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer,
-	                        const std::vector<ibValue>& args) const override;
+	// …WITH THE CALL'S ARGUMENTS, because the periodicity decides which columns exist.
+	std::vector<const ibBackendQueryColumn*> GetQueryColumns(const std::vector<ibValue>& args) const override;
 	// Turnovers(<begin>, <end>, <periodicity>, <condition>) — the interval, how finely it is read,
 	// and what to fold over.
 	void DescribeParameters(std::vector<ibQuerySourceParameter>& out) const override;
-	void FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
+	std::vector<const ibBackendQueryColumn*> GetConditionColumns(const ibString& slot) const override;
 private:
 	ibValueMetaObjectAccumulationRegister* m_reg;
 	// (no companion member — see the balance descriptor above)
@@ -98,13 +96,11 @@ public:
 	                                          const std::vector<ibQueryPredicatePtr>& conditions,
 	                                          const ibQueryReadColumns& read) override;
 	const ibBackendQueryable* GetConditionScope() const override;
-	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
-	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer,
-	                        const std::vector<ibValue>& args) const override;
+	std::vector<const ibBackendQueryColumn*> GetQueryColumns(const std::vector<ibValue>& args) const override;
 	// BalanceAndTurnovers(<begin>, <end>, <periodicity>, <condition>) — the interval, the granularity
 	// the rows roll up to, and what to fold over.
 	void DescribeParameters(std::vector<ibQuerySourceParameter>& out) const override;
-	void FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
+	std::vector<const ibBackendQueryColumn*> GetConditionColumns(const ibString& slot) const override;
 private:
 	ibValueMetaObjectAccumulationRegister*          m_reg;
 	// (no companion member — see the balance descriptor above)
@@ -693,10 +689,10 @@ public:
 	}
 
 	// SELECT * asks the same question of every column, so it is answered the same way.
-	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override
+	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override
 	{
 		std::vector<const ibBackendQueryColumn*> out;
-		for (const ibBackendQueryColumn* col : ibAccumulationTotalsQueryable::GetColumns())
+		for (const ibBackendQueryColumn* col : ibAccumulationTotalsQueryable::GetQueryColumns())
 			if (col != nullptr && ibRegisterFoldOffersColumn(m_reg, col->GetName(), m_fold))
 				out.push_back(col);
 		return out;
@@ -761,10 +757,10 @@ public:
 		return KeyColumns(m_fold);
 	}
 
-	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override
+	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override
 	{
 		std::vector<const ibBackendQueryColumn*> out;
-		for (const ibBackendQueryColumn* col : ibAccumulationTotalsQueryable::GetColumns())
+		for (const ibBackendQueryColumn* col : ibAccumulationTotalsQueryable::GetQueryColumns())
 			if (col != nullptr && ibRegisterFoldOffersColumn(m_reg, col->GetName(), m_fold))
 				out.push_back(col);
 		return out;
@@ -784,17 +780,17 @@ private:
 //  produces is the same sentence for every register that folds an interval -- day, second,
 //  recorder, line -- and two copies of it are two answers to "does this reading have a Period".)
 
-inline void ibFillExplorerFromRegisterView(const ibValueMetaObjectAccumulationRegister* reg,
-	const ibString& viewName, ibValueMetaObjectAccumulationRegister::ibViewShape shape,
-	ibSourceDataObject::ibSourceExplorer& explorer, const ibRegFold& fold = ibRegFold())
+inline std::vector<const ibBackendQueryColumn*> ibRegisterViewColumns(const ibValueMetaObjectAccumulationRegister* reg,
+	const ibString& viewName, ibValueMetaObjectAccumulationRegister::ibViewShape shape, const ibRegFold& fold = ibRegFold())
 {
+	std::vector<const ibBackendQueryColumn*> out;
 	if (reg == nullptr)
-		return;
+		return out;
 	const ibBackendQueryable* view = reg->GetViewQueryable(viewName, shape);
 	if (view == nullptr)
-		return;
+		return out;
 
-	// ⭐⭐ WHAT THE VIEW PUBLISHES IS WHAT IS SHOWN — the accounting register's rule (FillExplorerFromShape),
+	// ⭐⭐ WHAT THE VIEW PUBLISHES IS WHAT IS SHOWN — the accounting register's rule (ShapeColumns),
 	// arrived at there on 2026-09-16 and now here.
 	//
 	// This used to swap in the register's ATTRIBUTE whose id a column carries, because a view column was a
@@ -809,15 +805,30 @@ inline void ibFillExplorerFromRegisterView(const ibValueMetaObjectAccumulationRe
 	const ibString periodName = reg->GetRegisterPeriod() != nullptr
 		? reg->GetRegisterPeriod()->GetName() : ibString();
 
-	for (const ibBackendQueryColumn* col : view->GetColumns()) {
+	for (const ibBackendQueryColumn* col : view->GetQueryColumns()) {
 		if (col == nullptr)
 			continue;
 		if (!periodName.IsEmpty() && !ibRegisterViewColumnFits(col->GetName(), periodName, fold,
 				reg->HasRecorder() && reg->GetRegisterRecorder()   != nullptr ? reg->GetRegisterRecorder()->GetName()   : ibString(),
 				reg->HasRecorder() && reg->GetRegisterLineNumber() != nullptr ? reg->GetRegisterLineNumber()->GetName() : ibString()))
 			continue;
-		explorer.AppendColumn(col);
+		out.push_back(col);
 	}
+	return out;
+}
+
+// A FOLDED TABLE IS FILTERED BY ITS DIMENSIONS, never by a resource — the rule of all three tables below:
+// the resource is what the table folded, and a condition over a fold belongs to the RESULT, not to an
+// argument of the source. Offered as the query sees them — each dimension's query face.
+inline std::vector<const ibBackendQueryColumn*> ibRegisterDimensionColumns(const ibValueMetaObjectAccumulationRegister* reg)
+{
+	std::vector<const ibBackendQueryColumn*> out;
+	if (reg == nullptr)
+		return out;
+	for (const ibValueMetaObjectAttributeBase* dimension : reg->GetDimensionArrayObject())
+		if (dimension != nullptr)
+			out.push_back(dimension->GetQueryColumn());
+	return out;
 }
 
 // ⭐⭐ THE ARGUMENTS HAVE NAMES, AND THE NAMES ARE THESE.
@@ -925,10 +936,10 @@ inline const ibBackendQueryable* ibAccumRegisterBalanceDescriptor::CreateQueryab
 	return MakeCompanionFor<ibBalanceQueryable>(conditions, paParams, lSizeArray, m_reg, period, filter);
 }
 
-inline void ibAccumRegisterBalanceDescriptor::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+inline std::vector<const ibBackendQueryColumn*> ibAccumRegisterBalanceDescriptor::GetQueryColumns(const std::vector<ibValue>& /*args*/) const
 {
-	ibFillExplorerFromRegisterView(m_reg, m_reg->GetBalanceViewName(),
-		ibValueMetaObjectAccumulationRegister::ibViewShape::Balance, explorer);
+	return ibRegisterViewColumns(m_reg, m_reg->GetBalanceViewName(),
+		ibValueMetaObjectAccumulationRegister::ibViewShape::Balance);
 }
 
 // Balance(<moment>, <condition>) — the simplest shape there is: WHEN, and OVER WHAT.
@@ -953,13 +964,9 @@ inline void ibAccumRegisterBalanceDescriptor::DescribeParameters(std::vector<ibQ
 // A BALANCE IS FILTERED BY ITS DIMENSIONS, never by a resource. The resource is what the table
 // folded — filtering by it would ask the engine to select on a sum it has not computed yet, and the
 // honest place for that question is a condition over the RESULT, not an argument of the source.
-inline void ibAccumRegisterBalanceDescriptor::FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+inline std::vector<const ibBackendQueryColumn*> ibAccumRegisterBalanceDescriptor::GetConditionColumns(const ibString& /*slot*/) const
 {
-	if (m_reg == nullptr)
-		return;
-	for (const ibValueMetaObjectAttributeBase* dimension : m_reg->GetDimensionArrayObject())
-		if (dimension != nullptr)
-			explorer.AppendColumn(dimension->GetQueryColumn(), /*enabled*/ true, /*visible*/ true);
+	return ibRegisterDimensionColumns(m_reg);
 }
 
 inline ibAccumRegisterTurnoverDescriptor::~ibAccumRegisterTurnoverDescriptor() = default;
@@ -1010,21 +1017,14 @@ inline const ibBackendQueryable* ibAccumRegisterTurnoverDescriptor::CreateQuerya
 	return MakeCompanionFor<ibTurnoverQueryable>(conditions, paParams, lSizeArray, m_reg, begin, end, filter, fold);
 }
 
-inline void ibAccumRegisterTurnoverDescriptor::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
-{
-	ibFillExplorerFromRegisterView(m_reg, m_reg->GetTurnoverViewName(),
-		ibValueMetaObjectAccumulationRegister::ibViewShape::Turnovers, explorer);
-}
-
 // THE PERIODICITY IS THE THIRD ARGUMENT — (begin, end, periodicity, condition). Read as the word the
 // constructor wrote; anything else (a parameter, nothing at all) leaves it empty, which means "not
 // decided" and shows every projection. `ibRegisterFoldOfArgs` reads it BY THE NAMED SLOT and lives in
 // registerQueryLowering.h with the other call helpers.
-inline void ibAccumRegisterTurnoverDescriptor::FillSourceExplorer(
-	ibSourceDataObject::ibSourceExplorer& explorer, const std::vector<ibValue>& args) const
+inline std::vector<const ibBackendQueryColumn*> ibAccumRegisterTurnoverDescriptor::GetQueryColumns(const std::vector<ibValue>& args) const
 {
-	ibFillExplorerFromRegisterView(m_reg, m_reg->GetTurnoverViewName(),
-		ibValueMetaObjectAccumulationRegister::ibViewShape::Turnovers, explorer,
+	return ibRegisterViewColumns(m_reg, m_reg->GetTurnoverViewName(),
+		ibValueMetaObjectAccumulationRegister::ibViewShape::Turnovers,
 		ibRegisterFoldOfArgs(args, ibRegTurnoverArg::Periodicity));
 }
 
@@ -1052,13 +1052,9 @@ inline void ibAccumRegisterTurnoverDescriptor::DescribeParameters(std::vector<ib
 // A TURNOVER IS FILTERED BY ITS DIMENSIONS, never by a resource — the same rule as the balance, and
 // for the same reason: the resource is what the table folded, and a condition over a fold belongs
 // to the RESULT, not to an argument of the source.
-inline void ibAccumRegisterTurnoverDescriptor::FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+inline std::vector<const ibBackendQueryColumn*> ibAccumRegisterTurnoverDescriptor::GetConditionColumns(const ibString& /*slot*/) const
 {
-	if (m_reg == nullptr)
-		return;
-	for (const ibValueMetaObjectAttributeBase* dimension : m_reg->GetDimensionArrayObject())
-		if (dimension != nullptr)
-			explorer.AppendColumn(dimension->GetQueryColumn(), /*enabled*/ true, /*visible*/ true);
+	return ibRegisterDimensionColumns(m_reg);
 }
 
 inline ibAccumRegisterBalanceAndTurnoverDescriptor::~ibAccumRegisterBalanceAndTurnoverDescriptor() = default;
@@ -1116,17 +1112,10 @@ inline const ibBackendQueryable* ibAccumRegisterBalanceAndTurnoverDescriptor::Cr
 		m_reg, begin, end, fold, filter);
 }
 
-inline void ibAccumRegisterBalanceAndTurnoverDescriptor::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+inline std::vector<const ibBackendQueryColumn*> ibAccumRegisterBalanceAndTurnoverDescriptor::GetQueryColumns(const std::vector<ibValue>& args) const
 {
-	ibFillExplorerFromRegisterView(m_reg, m_reg->GetBalanceAndTurnoverViewName(),
-		ibValueMetaObjectAccumulationRegister::ibViewShape::BalanceAndTurnovers, explorer);
-}
-
-inline void ibAccumRegisterBalanceAndTurnoverDescriptor::FillSourceExplorer(
-	ibSourceDataObject::ibSourceExplorer& explorer, const std::vector<ibValue>& args) const
-{
-	ibFillExplorerFromRegisterView(m_reg, m_reg->GetBalanceAndTurnoverViewName(),
-		ibValueMetaObjectAccumulationRegister::ibViewShape::BalanceAndTurnovers, explorer,
+	return ibRegisterViewColumns(m_reg, m_reg->GetBalanceAndTurnoverViewName(),
+		ibValueMetaObjectAccumulationRegister::ibViewShape::BalanceAndTurnovers,
 		ibRegisterFoldOfArgs(args, ibRegBalTurnArg::Periodicity));
 }
 
@@ -1173,13 +1162,9 @@ inline void ibAccumRegisterBalanceAndTurnoverDescriptor::DescribeParameters(std:
 	ibAppendRegisterConditionParameter(out);
 }
 
-inline void ibAccumRegisterBalanceAndTurnoverDescriptor::FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+inline std::vector<const ibBackendQueryColumn*> ibAccumRegisterBalanceAndTurnoverDescriptor::GetConditionColumns(const ibString& /*slot*/) const
 {
-	if (m_reg == nullptr)
-		return;
-	for (const ibValueMetaObjectAttributeBase* dimension : m_reg->GetDimensionArrayObject())
-		if (dimension != nullptr)
-			explorer.AppendColumn(dimension->GetQueryColumn(), /*enabled*/ true, /*visible*/ true);
+	return ibRegisterDimensionColumns(m_reg);
 }
 
 //********************************************************************************************

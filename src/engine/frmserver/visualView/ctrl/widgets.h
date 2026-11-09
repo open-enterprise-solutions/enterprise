@@ -131,11 +131,6 @@ class ibValueStaticText : public ibValueWindow,
 	// A bound field this base does not use takes the text with it.
 	virtual bool IsAvailable() const override { return m_propertySource->IsAvailable() && ibValueWindow::IsAvailable(); }
 
-	//Get source attribute
-	virtual const ibBackendSourceColumn* GetSourceAttributeObject() const {
-		return m_propertySource->GetSourceAttributeObject();
-	}
-
 	//get form owner
 	virtual ibValueForm* GetOwnerForm() const { return m_formOwner; }
 
@@ -256,11 +251,6 @@ class ibValueTextCtrl : public ibValueWindow,
 	// Select and Clear alike; Open only reads, and stays.
 	virtual bool IsReadOnly() const override;
 
-	//Get source attribute
-	virtual const ibBackendSourceColumn* GetSourceAttributeObject() const {
-		return m_propertySource->GetSourceAttributeObject();
-	}
-
 	//get form owner
 	virtual ibValueForm* GetOwnerForm() const { return m_formOwner; }
 
@@ -321,6 +311,13 @@ public:
 	// A control on a form stands on the form's source: that is what holds this field and its neighbours.
 	virtual ibChoiceHolder GetChoiceHolder() const override;
 
+	// The field's own word over its type's and its attribute's (issue #259): QuickChoice and ChoiceFoldersAndItems.
+	virtual bool HasQuickChoice() const override;
+	virtual ibSelectMode GetSelectMode() const override;
+	// …and its own links (#616): TypeLink and ChoiceParameters.
+	virtual const ibChoiceTypeLinkDescription& GetTypeLink() const override { return m_propertyTypeLink->GetValueAsLinkDesc(); }
+	virtual const ibChoiceParametersDescription& GetChoiceParameters() const override { return m_propertyChoiceParameters->GetValueAsParametersDesc(); }
+
 public:
 
 	virtual void ChoiceProcessing(ibValue& vSelected);
@@ -368,6 +365,20 @@ private:
 	ibPropertyList* m_propertyChoiceForm = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryData, ibT("ChoiceForm"), _("Choice form"),
 		_("Which form opens when the user presses Select: one of the forms of the value's type. Empty: the type's default choice form."),
 		&ibValueTextCtrl::GetChoiceForm, wxNOT_FOUND);
+	ibPropertyEnum<ibValueEnumQuickChoiceMode>* m_propertyQuickChoice = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumQuickChoiceMode>>(m_categoryData, ibT("QuickChoice"), _("Quick choice"),
+		_("How a reference is picked into the field when Select is pressed. Auto: as its type says (the catalog's or the document's own Quick choice). Use: a drop-down of the matching items. Don't use: the list form."),
+		ibQuickChoiceMode::ibQuickChoiceMode_Auto);
+	ibPropertyEnum<ibValueEnumChoiceFoldersAndItems>* m_propertyChoiceFoldersAndItems = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumChoiceFoldersAndItems>>(m_categoryData, ibT("ChoiceFoldersAndItems"), _("Choice folders and items"),
+		_("For a field referring to a hierarchical catalog: what may be picked into it - items, folders, or both. Auto: what the bound attribute's Select says."),
+		ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_Auto);
+
+	// ⭐ THE FIELD'S OWN LINKS (#616) — the classes and names an attribute's are, for a field reached through the dot that has
+	// no attribute of its own to declare them; their paths are the form's, as the binding's are.
+	ibPropertyCategory* m_categoryChoice = ibPropertyObject::CreatePropertyCategory(ibT("Choice"), _("Choice"));
+	ibPropertyChoiceLink* m_propertyTypeLink = ibPropertyObject::CreateProperty<ibPropertyChoiceLink>(m_categoryChoice, ibT("TypeLink"), _("Link by type"),
+		_("The field whose value decides the TYPE of a value written into this one: a characteristic gives the type it declares, a field holding a type description gives that, and any other field gives the type of the value standing in it. Offered: what the form reaches - its attributes and their fields. Empty: only the bound field's own link applies."));
+	ibPropertyChoiceParameters* m_propertyChoiceParameters = ibPropertyObject::CreateProperty<ibPropertyChoiceParameters>(m_categoryChoice, ibT("ChoiceParameters"), _("Choice parameters"),
+		_("What is shown in the list when a reference is chosen into the field, on top of what the bound field itself declares: a row per parameter - which field of the chosen object it filters, which field the form reaches gives the value (an attribute or a field of one), and what becomes of a chosen value when that field changes."));
 
 	ibPropertyCategory* m_categoryButton = ibPropertyObject::CreatePropertyCategory(ibT("Button"), _("Button"));
 	ibPropertyBoolean* m_propertySelectButton = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryButton, ibT("ButtonSelect"), _("Select button"),
@@ -426,12 +437,7 @@ class ibValueCheckbox : public ibValueWindow,
 	// (for action buttons, not data controls).
 	virtual bool IsReadOnly() const override;
 
-	//get source attribute
-	virtual const ibBackendSourceColumn* GetSourceAttributeObject() const {
-		return m_propertySource->GetSourceAttributeObject();
-	}
-
-	//get form owner 
+	//get form owner
 	virtual ibValueForm* GetOwnerForm() const { return m_formOwner; }
 
 	//get metaData

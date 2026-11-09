@@ -38,7 +38,7 @@
 //   * CONDITION — a predicate. Identifiers in it are THIS TABLE'S columns; `&name` is still an
 //                 ordinary query parameter, so the two cannot be confused (the ampersand is the
 //                 distinction). Which columns are admissible is a question of its own —
-//                 FillConditionExplorer — because a balance may be filtered by its dimensions
+//                 GetConditionColumns — because a balance may be filtered by its dimensions
 //                 but not by a resource it folded, while a slice admits every attribute it carries.
 struct ibQuerySourceParameter
 {

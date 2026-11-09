@@ -186,7 +186,7 @@ void ibSpreadsheetComposeDriver::OnOutputBegin(const ibCompositionOutputInfo& in
 	for (size_t i = 0; i < info.m_schema.size(); ++i)
 		m_paths.push_back(info.PathOf(i));
 	// …AND HOW EACH COLUMN WRITES ITS FIGURES — the format its field's APPEARANCE says, in the language in
-	// force, else the one its type gives (OutputColumn::GetTypeDesc) — the way a list column's Format stands
+	// force, else the one its type gives (ibQueryOutputColumn::GetTypeDesc) — the way a list column's Format stands
 	// over its type (GetFormatFromColumn). Once here rather than once per cell.
 	m_formats.clear();
 	m_formats.resize(info.m_schema.size());
@@ -362,7 +362,7 @@ void ibSpreadsheetComposeDriver::PrintCrossDetail(int level, const ibComposition
 	++m_crossDetailRows;
 }
 
-void ibSpreadsheetComposeDriver::TakeSchema(const std::vector<ibQueryLowering::OutputColumn>& schema)
+void ibSpreadsheetComposeDriver::TakeSchema(const std::vector<ibQueryLowering::ibQueryOutputColumn>& schema)
 {
 	if (m_document == nullptr)
 		return;
@@ -437,7 +437,7 @@ void ibSpreadsheetComposeDriver::TakeSchema(const std::vector<ibQueryLowering::O
 	size_t widestLevel = 1;
 	{
 		std::map<int, size_t> perLevel;
-		for (const ibQueryLowering::OutputColumn& column : schema)
+		for (const ibQueryLowering::ibQueryOutputColumn& column : schema)
 			if (column.m_role == ibQueryLowering::ibColumnRole::Dimension)
 				widestLevel = std::max(widestLevel, ++perLevel[column.m_level]);
 	}
@@ -495,7 +495,7 @@ void ibSpreadsheetComposeDriver::TakeSchema(const std::vector<ibQueryLowering::O
 	// stands for everything — so with no measures it has nothing at all to say, and printing it
 	// leaves a blank stripe above the first heading.
 	m_hasMeasures = false;
-	for (const ibQueryLowering::OutputColumn& column : schema)
+	for (const ibQueryLowering::ibQueryOutputColumn& column : schema)
 		if (column.m_role == ibQueryLowering::ibColumnRole::Measure) { m_hasMeasures = true; break; }
 
 	// THE TITLE AND THE PARAMETER LINES BELONG TO THE REPORT, not to each section — repeating them
@@ -981,7 +981,7 @@ namespace {
 
 // THE VALUES ONE LEVEL OWNS. A level may group by several fields; they are welded into one heading,
 // so all of them belong to it and none of them to the levels above (which are already written).
-std::vector<ibValue> ibValuesOfLevel(const std::vector<ibQueryLowering::OutputColumn>& schema,
+std::vector<ibValue> ibValuesOfLevel(const std::vector<ibQueryLowering::ibQueryOutputColumn>& schema,
 	const std::vector<ibValue>& values, int dimLevel)
 {
 	std::vector<ibValue> own;
@@ -994,7 +994,7 @@ std::vector<ibValue> ibValuesOfLevel(const std::vector<ibQueryLowering::OutputCo
 // …AND WHICH COLUMNS THOSE WERE, in the same order. The values above travel on their own — a key
 // keeps figures, not schema indices — so when a cell has to say WHAT FIELD its value is a reading
 // of, this is what maps the n-th value of a level back to the column it came from.
-std::vector<size_t> ibColumnsOfLevel(const std::vector<ibQueryLowering::OutputColumn>& schema, int dimLevel)
+std::vector<size_t> ibColumnsOfLevel(const std::vector<ibQueryLowering::ibQueryOutputColumn>& schema, int dimLevel)
 {
 	std::vector<size_t> own;
 	for (size_t i = 0; i < schema.size(); ++i)
@@ -1301,7 +1301,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 	size_t rowDimWidth = 0;
 	{
 		std::map<int, size_t> perLevel;
-		for (const ibQueryLowering::OutputColumn& column : m_schema)
+		for (const ibQueryLowering::ibQueryOutputColumn& column : m_schema)
 			if (column.m_role == ibQueryLowering::ibColumnRole::Dimension
 			    && column.m_level >= 0 && static_cast<size_t>(column.m_level) < m_rowLevels)
 				rowDimWidth = std::max(rowDimWidth, ++perLevel[column.m_level]);
@@ -1368,7 +1368,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 		std::map<int, ibString> caption;   // column within the dimension area -> its names, joined
 		std::map<int, int> filled;
 		for (size_t i = 0; i < m_schema.size(); ++i) {
-			const ibQueryLowering::OutputColumn& column = m_schema[i];
+			const ibQueryLowering::ibQueryOutputColumn& column = m_schema[i];
 			if (column.m_role != ibQueryLowering::ibColumnRole::Dimension
 			    || column.m_level < 0 || static_cast<size_t>(column.m_level) >= m_rowLevels)
 				continue;

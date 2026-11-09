@@ -25,6 +25,42 @@ template <class T> class ibValuePtr;
 
 class ibValue;
 
+// ⭐ THE CONDITION A FIELD IS CHOSEN UNDER, ANSWERED ONCE. Four callers ask it — the choice form, the
+// quick-choice drop-down, the adjustment of a value on write, and the filter of a list or column — and
+// four answers would drift, on somebody else's configuration, months later
+// (docs/private/choice-links.md § 7). ibChoiceLinkResolver produces it.
+//
+// ⭐ HERE, BESIDE THE VALUE, because a value is FOUND under it (FindValue): the text typed into a field finds no more
+// than its choice form shows (Max, 2026-11-09).
+//
+// ⭐ A CLASSIFICATION, NOT A FILTER. The two halves are different things: the type decides WHICH LIST
+// opens, the filter decides WHAT IS SHOWN in it. A caller handed only a filter would have to re-derive
+// the type from somewhere, and would get it wrong the first time the type was the only thing that
+// changed.
+struct ibChoiceCondition {
+
+	// 🛑 A SETTLED TYPE STOOD HERE AND NARROWED NOTHING. The resolver computed it — what the governing
+	// field settles the chosen field's type to — and the only reader it ever had was a report: a list is
+	// narrowed by the parameters below (valueDynamicList.cpp), and the control has already chosen which
+	// metaobject opens before it asks for a condition. What a field may HOLD is decided where the value
+	// is written, by the one verb (ibValue::AdjustValue), so the second machinery for it is gone
+	// (measured and removed 2026-09-24).
+
+	// ⭐⭐ THE CHOICE PARAMETERS, AS THE PAIRS THEY ARE — a field of what is being chosen, and the
+	// value it must equal. That is what an author wrote (`Owner ← Counterparty`) and what the list is
+	// CREATED with; there is nothing in between for either end to get wrong.
+	//
+	// 🛑 THIS WAS AN ibFilterDescription, AND THAT WAS A ROAD TOO MANY. A filter description is what a
+	// composer is BUILT FROM, so handing one to a list that already exists changes a description
+	// nobody reads again — the composer had already been made from the old one, and nothing re-runs it
+	// (Max, 2026-09-23: "the filters will not work, it is a composer; you have to pass these settings
+	// at the moment the source object is formed"). The pairs go to `AddFilter` at creation, the same
+	// door a folder-select list is born with its `IsFolder = true` through.
+	//
+	// Empty: nothing narrows the rows.
+	std::map<ibString, ibValue> m_parameters;
+};
+
 // Cursor-based iteration state. Yielded by ibValue::CreateIterator()
 // and driven by OPER_FOREACH / OPER_NEXT_ITER. Wrapped in shared_ptr
 // (held by the runtime ibValueIterator), no manual delete.
@@ -1184,7 +1220,10 @@ public:
 
 	// (SetValue, SetData and SetBoolean / SetNumber / SetDate / SetString — a text read as the kind — are the variant's.)
 
-	BACKEND_API virtual bool FindValue(const ibString& findData, std::vector<ibValue>& listValue) const;
+	// The values of this kind `input` names, among those `condition` leaves — a choice's parameters narrow what typing
+	// finds as they narrow the choice form; an empty condition narrows nothing.
+	BACKEND_API virtual bool FindValue(const ibString& input, const ibChoiceCondition& condition,
+		std::vector<ibValue>& out) const;
 
 	BACKEND_API virtual ibValue GetValue(bool getThis = false) const;
 

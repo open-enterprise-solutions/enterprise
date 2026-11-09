@@ -4,6 +4,7 @@
 #include "core/variant.h"
 #include "backend/propertyManager/propertyObject.h"
 #include "core/description/choiceLinkDescription.h"
+#include "backend/srcColumn.h"   // ibBackendSourceColumn — what a field beside this one is (ibChoiceHolderField)
 
 #include <atomic>
 #include <mutex>
@@ -63,9 +64,9 @@ public:
 	ibChoiceParametersDescription& GetParametersDesc() { RefreshParametersDesc(); return m_paramsDesc; }
 	const ibChoiceParametersDescription& GetParametersDesc() const { RefreshParametersDesc(); return m_paramsDesc; }
 
-	// The two lists a row is made from — the fields of what is chosen, per type, and the fields beside this one.
+	// The fields of what is chosen, per type — what a row may fill. Where its value comes from is one of the fields
+	// beside this one (ibChoiceHolderFields).
 	void GetParameterList(const ibClassID& ofType, ibPropertyChoiceList& list) const;
-	void GetSourceList(ibPropertyChoiceList& list) const;
 
 	const ibPropertyObject* GetOwnerProperty() const { return m_ownerProperty; }
 
@@ -105,8 +106,27 @@ protected:
 // design one; this header is seen by five files.
 //
 // Empty only when the field is genuinely gone; the caller then says so in its own words.
-BACKEND_API ibString ibChoiceHolderFieldName(const ibPropertyObject* owner, const ibMetaID& id);
+BACKEND_API ibString ibChoiceHolderFieldName(const ibPropertyObject* owner, const ibSourceDescription& path);
 BACKEND_API ibString ibChoiceTargetFieldName(const ibPropertyObject* owner, const ibMetaID& id);
+
+// ⭐⭐ A FIELD STANDING BESIDE THIS ONE — the PATH a row or a link stores, the COLUMN it is (its name, synonym, type and
+// picture are the column's: an attribute of the configuration, a form's own attribute and a field reached through one
+// all are one), and how it is SPELLED from here. One shape for every owner, so the lists, the summaries and MCP read
+// the same fields the same way (#616).
+struct ibChoiceHolderField {
+	ibSourceDescription          m_path;
+	const ibBackendSourceColumn* m_column = nullptr;
+	ibString                     m_spelled;
+};
+
+// …and all of them: an attribute's — its holder's other attributes, and for a column the header's; a form's own
+// attribute's — the form's other ones; a CONTROL's — what it reaches through the form: the form's attributes, the fields
+// of what each holds one step through, and for a column the other cells of its row. Never the field itself.
+//
+// ⚠ NOT NARROWED, and that is the difference from the link by type (ibVariantChoiceLink::GetValueList): a link needs a
+// field that CARRIES a type, a parameter needs a VALUE, and any field has one. Narrowing this would refuse the ordinary
+// case of a date or a number standing in a condition.
+BACKEND_API std::vector<ibChoiceHolderField> ibChoiceHolderFields(const ibPropertyObject* owner);
 
 // ⭐ WHAT THIS FIELD STANDS IN — the object or the tabular section whose other fields are its
 // neighbours. The editor names its two lists by what they hold, and this is the name of the second:
@@ -131,7 +151,7 @@ BACKEND_API ibString ibChoiceHolderName(const ibPropertyObject* owner);
 //
 // It is the field NAMED THE SAME, else the only candidate there is, else 0 — an author who named two
 // fields alike has already answered, and that stays true however many others would also fit by type.
-BACKEND_API void ibChoiceParametersForSource(const ibPropertyObject* owner, const ibMetaID& sourceId,
+BACKEND_API void ibChoiceParametersForSource(const ibPropertyObject* owner, const ibChoiceHolderField& source,
 	std::vector<ibMetaID>& out, ibMetaID* obvious = nullptr);
 
 #endif

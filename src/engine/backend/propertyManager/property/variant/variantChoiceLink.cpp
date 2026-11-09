@@ -1,10 +1,12 @@
-#include "variantChoiceLink.h"   // …and, beside these two classes, the two name lookups they draw with
+#include "variantChoiceLink.h"   // …and, beside these two classes, the name lookups they draw with
 #include "backend/propertyManager/property/propertyChoiceLink.h"   // ibFieldReferenceTypes, ibChoiceOwnerRow — declared there
 #include "backend/choiceLinkResolver.h"                    // CanGovern — the reading this offer must agree with
 #include "backend/metaData.h"                              // …and the counter a configuration moves when something is removed
 #include "backend/objCtor.h"                               // ibCtorMetaValueType — what a reference type names, by its id
 #include "backend/metaCollection/partial/commonObject.h"   // the objects and their fields
 #include "backend/metaCollection/partial/catalog.h"        // ListOwner and the Owner attribute it declares
+#include "backend/backend_type.h"                          // ibBackendTypeSourceFactory — a control
+#include "backend/srcDataObject.h"                         // the form — a source over its own attributes
 
 #include <algorithm>   // a deleted field taken out of the neighbourhood, a row naming one out of the table
 
@@ -19,10 +21,47 @@ const ibValueMetaObjectAttributeBase* SelfAttribute(const ibPropertyObject* owne
 	return dynamic_cast<const ibValueMetaObjectAttributeBase*>(owner);
 }
 
-ibMetaID SelfId(const ibPropertyObject* owner)
+// ⭐ …OR A CONTROL (#616) — a text field or a table's column, the only other place a link lives. Bound through the dot,
+// it may stand on a field that exists nowhere else to declare a link — a field of what a form's attribute holds — so it
+// says its own: its links name what the FORM reaches, the form being their source, and its paths are the form's, as its
+// binding is.
+const ibBackendTypeSourceFactory* SelfControl(const ibPropertyObject* owner)
 {
-	const ibValueMetaObjectAttributeBase* self = SelfAttribute(owner);
-	return self != nullptr ? self->GetMetaID() : 0;
+	return dynamic_cast<const ibBackendTypeSourceFactory*>(owner);
+}
+
+// The form a control stands in — the top of its tree, the first SOURCE above it (a table and a group are none). Null
+// for an attribute of the configuration.
+const ibSourceDataObject* SelfForm(const ibPropertyObject* owner)
+{
+	if (SelfControl(owner) == nullptr)
+		return nullptr;
+	for (const ibPropertyObject* above = owner->GetOwner(); above != nullptr; above = above->GetOwner()) {
+		if (const ibSourceDataObject* form = dynamic_cast<const ibSourceDataObject*>(above))
+			return form;
+	}
+	return nullptr;
+}
+
+// ⭐⭐ THE FIELD AS A COLUMN — what its type, and its neighbours' names, synonyms, types and pictures are read off. An
+// attribute of the configuration IS one; a control stands on the column its binding reaches (the dot). One answer, so
+// this file does not ask two classes the same four questions (Max, 2026-11-09: "ibBackendFormAttributeValue and
+// ibValueMetaObjectAttributeBase already sit on ibBackendSourceColumn").
+const ibBackendSourceColumn* SelfColumn(const ibPropertyObject* owner)
+{
+	if (const ibBackendSourceColumn* column = dynamic_cast<const ibBackendSourceColumn*>(owner))
+		return column;
+	const ibBackendTypeSourceFactory* control = SelfControl(owner);
+	return control != nullptr ? control->WalkSource(control->GetSourceDesc()) : nullptr;
+}
+
+// …AND WHERE IT STANDS — the path a row or a link naming it would store: an attribute by its id, a control by its binding.
+ibSourceDescription SelfPath(const ibPropertyObject* owner)
+{
+	if (const ibValueMetaObjectAttributeBase* self = SelfAttribute(owner))
+		return ibSourceDescription(self->GetMetaID());
+	const ibBackendTypeSourceFactory* control = SelfControl(owner);
+	return control != nullptr ? control->GetSourceDesc() : ibSourceDescription();
 }
 
 // ⭐⭐ THE FIELDS STANDING BESIDE THIS ONE — the neighbours of ITS OWN HOLDER, and that is the whole
@@ -77,8 +116,8 @@ std::vector<ibValueMetaObjectAttributeBase*> HolderAttributes(const ibPropertyOb
 // Warehouse in every row is the ordinary case), and spelled bare the two were two identical lines:
 // the designer drew them alike and a caller naming one got whichever came last.
 //
-// The id is what is stored; this is only how it is said — and every list and every summary here says
-// it through this one function, so the designer, the inspector's row and MCP cannot spell it apart.
+// The path is what is stored; this is only how it is said — and every list and every summary here says
+// it through ibChoiceHolderFields, so the designer, the inspector's row and MCP cannot spell it apart.
 ibString NeighbourName(const ibPropertyObject* owner, const ibValueMetaObjectAttributeBase* field)
 {
 	const ibValueMetaObjectAttributeBase* self = SelfAttribute(owner);
@@ -86,6 +125,33 @@ ibString NeighbourName(const ibPropertyObject* owner, const ibValueMetaObjectAtt
 	if (self == nullptr || holder == nullptr || holder == self->GetParent())
 		return field->GetName();
 	return holder->GetName() + ibT(".") + field->GetName();
+}
+
+// What a form's attribute holds, as a source — its fields are a control's neighbours one step through it. None: it
+// holds a plain value, which has no fields.
+ibSourceDataObject* HeldSource(const ibSourceDataObject& form, const ibSourceId& attribute)
+{
+	ibValue held;
+	ibSourceDataObject* source = nullptr;
+	if (!form.GetValueBySourceHop(ibSourceHop{ attribute }, held) || !held.ConvertToValue(source))
+		return nullptr;
+	return source;
+}
+
+// The fields of `fields` that are values — a table among them is no field: its rows are its own to answer — each one
+// step under `head`, spelled under `spelled`.
+void AppendFields(const ibSourceDataObject::ibSourceExplorer* fields, const ibSourceDescription& head,
+	const ibString& spelled, std::vector<ibChoiceHolderField>& out)
+{
+	for (unsigned int idx = 0; fields != nullptr && idx < fields->GetHelperCount(); ++idx) {
+		const ibSourceDataObject::ibSourceExplorer* node = fields->GetHelper(idx);
+		if (node == nullptr || node->IsTableSection() || node->GetColumn() == nullptr)
+			continue;
+		ibSourceDescription path(head);
+		path.AppendSource(node->GetSourceId());
+		out.push_back(ibChoiceHolderField{ path, node->GetColumn(),
+			spelled.IsEmpty() ? node->GetSourceName() : spelled + ibT(".") + node->GetSourceName() });
+	}
 }
 
 // ⭐⭐ WHAT A REFERENCE TYPE NAMES — the metaobject of the kind asked, or none. One look-up, so "what counts
@@ -104,12 +170,13 @@ const T* ReferencedObject(const ibMetaData* metaData, const ibClassID& clsid)
 	return !target->IsDeleted() ? target : nullptr;
 }
 
-// …and everything THIS field refers to. A composite field refers to more than one thing.
+// …and everything THIS field refers to — read off what it holds, its column's type. A composite field refers to more
+// than one thing.
 template <typename T>
 std::vector<const T*> ReferencedObjects(const ibPropertyObject* owner)
 {
 	std::vector<const T*> out;
-	const ibValueMetaObjectAttributeBase* self = SelfAttribute(owner);
+	const ibBackendSourceColumn* self = SelfColumn(owner);
 	if (self == nullptr)
 		return out;
 	for (const ibClassID& clsid : self->GetTypeDesc().GetClsidList()) {
@@ -119,11 +186,11 @@ std::vector<const T*> ReferencedObjects(const ibPropertyObject* owner)
 	return out;
 }
 
-// CAN `field` HOLD A VALUE OF `other`? A condition holds a field against a value, so a field that cannot
+// CAN `field` HOLD A VALUE OF WHAT `other` HOLDS? A condition holds a field against a value, so a field that cannot
 // hold what the other one holds would pair them into a condition that never matches.
-bool AcceptsAnyOf(const ibValueMetaObjectAttributeBase* field, const ibValueMetaObjectAttributeBase* other)
+bool AcceptsAnyOf(const ibValueMetaObjectAttributeBase* field, const ibTypeDescription& other)
 {
-	for (const ibClassID& held : other->GetTypeDesc().GetClsidList()) {
+	for (const ibClassID& held : other.GetClsidList()) {
 		if (field->GetTypeDesc().ContainType(held))
 			return true;
 	}
@@ -132,38 +199,62 @@ bool AcceptsAnyOf(const ibValueMetaObjectAttributeBase* field, const ibValueMeta
 
 }
 
-// The two name lookups the header declares — each asked of the place such a field actually lives.
-ibString ibChoiceHolderFieldName(const ibPropertyObject* owner, const ibMetaID& id)
+// ⭐ A FIELD STANDING BESIDE THIS ONE — whoever holds it: an object's attribute (its holder's, and for a column the
+// header's too: HolderAttributes), or what a control reaches through the form, its source (#616): an attribute of the
+// form, and a field of what it holds.
+std::vector<ibChoiceHolderField> ibChoiceHolderFields(const ibPropertyObject* owner)
 {
-	for (const ibValueMetaObjectAttributeBase* field : HolderAttributes(owner)) {
-		if (field->GetMetaID() == id)
-			return NeighbourName(owner, field);
+	std::vector<ibChoiceHolderField> out;
+	for (const ibValueMetaObjectAttributeBase* field : HolderAttributes(owner))
+		out.push_back(ibChoiceHolderField{ ibSourceDescription(field->GetMetaID()), field, NeighbourName(owner, field) });
+
+	// The form's attributes, as the form lists them, and one step further, into what each holds.
+	const ibSourceDataObject* form = SelfForm(owner);
+	const ibSourceDataObject::ibSourceExplorer* attributes = form != nullptr ? form->GetSourceExplorer() : nullptr;
+	for (unsigned int idx = 0; attributes != nullptr && idx < attributes->GetHelperCount(); ++idx) {
+		const ibSourceDataObject::ibSourceExplorer* node = attributes->GetHelper(idx);
+		if (node == nullptr || node->IsTableSection() || node->GetColumn() == nullptr)
+			continue;
+		const ibSourceDescription path(node->GetSourceId());
+		out.push_back(ibChoiceHolderField{ path, node->GetColumn(), node->GetSourceName() });
+		const ibSourceDataObject* held = HeldSource(*form, node->GetSourceId());
+		AppendFields(held != nullptr ? held->GetSourceExplorer() : nullptr, path, node->GetSourceName(), out);
+	}
+
+	// ⭐ NOT ITSELF: a field cannot govern itself, and does not narrow itself — said here, so no list has to.
+	const ibSourceDescription self = SelfPath(owner);
+	std::erase_if(out, [&self](const ibChoiceHolderField& field) { return field.m_path == self; });
+	return out;
+}
+
+// The name lookups the header declares — each asked of the place such a field actually lives.
+ibString ibChoiceHolderFieldName(const ibPropertyObject* owner, const ibSourceDescription& path)
+{
+	for (const ibChoiceHolderField& field : ibChoiceHolderFields(owner)) {
+		if (field.m_path == path)
+			return field.m_spelled;
 	}
 	return ibEmptyString;
 }
 
-void ibChoiceParametersForSource(const ibPropertyObject* owner, const ibMetaID& sourceId,
+void ibChoiceParametersForSource(const ibPropertyObject* owner, const ibChoiceHolderField& source,
 	std::vector<ibMetaID>& out, ibMetaID* obvious)
 {
 	if (obvious != nullptr)
 		*obvious = 0;
 
-	// The attribute the value will come from — its name and what it holds are the two things asked about.
-	const ibValueMetaObjectAttributeBase* source = nullptr;
-	for (const ibValueMetaObjectAttributeBase* field : HolderAttributes(owner)) {
-		if (field->GetMetaID() == sourceId) { source = field; break; }
-	}
-	if (source == nullptr)
+	// The field the value will come from — its name and what it holds are the two things asked about.
+	if (source.m_column == nullptr)
 		return;
 
 	ibMetaID byName = 0;
 
 	for (const ibValueMetaObjectRecordData* target : ReferencedObjects<ibValueMetaObjectRecordData>(owner)) {
 		for (const ibValueMetaObjectAttributeBase* field : target->GetGenericAttributeArrayObject()) {
-			if (field->IsDeleted() || !AcceptsAnyOf(field, source))
+			if (field->IsDeleted() || !AcceptsAnyOf(field, source.m_column->GetTypeDesc()))
 				continue;
 
-			if (byName == 0 && field->GetName().IsSameAs(source->GetName(), false))
+			if (byName == 0 && field->GetName().IsSameAs(source.m_column->GetName(), false))
 				byName = field->GetMetaID();
 			else
 				out.push_back(field->GetMetaID());
@@ -185,7 +276,13 @@ ibString ibChoiceHolderName(const ibPropertyObject* owner)
 {
 	const ibValueMetaObjectAttributeBase* self = SelfAttribute(owner);
 	const ibValueMetaObject* holder = self != nullptr ? self->GetParent() : nullptr;
-	return holder != nullptr ? holder->GetName() : ibString();
+	if (holder != nullptr)
+		return holder->GetName();
+
+	// A control stands in its form — named as the form lists itself.
+	const ibSourceDataObject* form = SelfForm(owner);
+	const ibSourceDataObject::ibSourceExplorer* fields = form != nullptr ? form->GetSourceExplorer() : nullptr;
+	return fields != nullptr ? fields->GetSourceName() : ibString();
 }
 
 ibString ibChoiceTargetFieldName(const ibPropertyObject* owner, const ibMetaID& id)
@@ -220,8 +317,6 @@ void ibFieldReferenceTypes(const ibPropertyObject* owner, ibPropertyChoiceList& 
 // deleting it sticks (Max, 2026-09-23).
 bool ibChoiceOwnerRow(const ibPropertyObject* owner, ibChoiceParameterRowDescription& row)
 {
-	const ibMetaID selfId = SelfId(owner);
-
 	for (const ibValueMetaObjectCatalog* target : ReferencedObjects<ibValueMetaObjectCatalog>(owner)) {
 		// A catalog that owns nothing has an Owner attribute with no types declared — asking it for its
 		// clsid list is how the tree itself tells the two apart (catalog.h, GetCatalogOwner).
@@ -230,13 +325,12 @@ bool ibChoiceOwnerRow(const ibPropertyObject* owner, ibChoiceParameterRowDescrip
 			continue;
 
 		// …and a neighbour that can supply one: a field whose type meets what the owner may be.
-		for (const ibValueMetaObjectAttributeBase* neighbour : HolderAttributes(owner)) {
-			if (neighbour->GetMetaID() == selfId || !AcceptsAnyOf(ownerField, neighbour))
+		for (const ibChoiceHolderField& neighbour : ibChoiceHolderFields(owner)) {
+			if (!AcceptsAnyOf(ownerField, neighbour.m_column->GetTypeDesc()))
 				continue;
 
 			row.m_parameter = ownerField->GetMetaID();
-			row.m_source.ClearSource();
-			row.m_source.AppendSource(neighbour->GetMetaID());
+			row.m_source = neighbour.m_path;
 			row.m_onChange = ibChoiceParameterOnChange::Clear;
 			return true;
 		}
@@ -267,16 +361,14 @@ void ibVariantChoiceLink::RefreshLinkDesc() const
 	const std::lock_guard<std::mutex> lock(m_refreshMutex);
 	if (object_version == m_object_version.load(std::memory_order_relaxed))
 		return;
-	if (ibChoiceHolderFieldName(m_ownerProperty, m_linkDesc.m_source.GetFirst()).IsEmpty())
+	if (ibChoiceHolderFieldName(m_ownerProperty, m_linkDesc.m_source).IsEmpty())
 		m_linkDesc = ibChoiceTypeLinkDescription();
 	m_object_version.store(object_version, std::memory_order_release);
 }
 
 // THE GOVERNING FIELD'S NAME — one word on the inspector's row, because that is the question the row
-// answers: which field gives this one its type.
-//
-// A path is shown by its LAST segment for the same reason: the segments before it are how the field was
-// reached, not what it is.
+// answers: which field gives this one its type — spelled as it is offered, through the dot where it was
+// reached through one.
 //
 // ⚠ AND A LINK THAT NAMES SOMETHING GONE SAYS SO. Leaving the row empty there would make a broken link
 // look exactly like no link at all, which is the one thing a summary must never do.
@@ -286,13 +378,16 @@ ibString ibVariantChoiceLink::GetString() const
 	if (!linkDesc.IsOk())
 		return ibEmptyString;
 
-	const ibString name = ibChoiceHolderFieldName(m_ownerProperty, linkDesc.m_source.GetLeaf());
+	const ibString name = ibChoiceHolderFieldName(m_ownerProperty, linkDesc.m_source);
 	return !name.IsEmpty() ? name : ibString(_("<the field it named is gone>"));
 }
 
 // ⚠ THE METADATA COMES FROM THE PROPERTY'S OWNER, never from the active configuration: several are open
 // at once, and the one that matters is the one this property was created inside. Taking the active one
 // answers plausibly and wrongly.
+//
+// ⚠ THE NUMBER ONLY SAYS WHICH ROW — a field is its PATH, carried by the row's value: a control's neighbours are
+// reached through the dot, and one id is not enough to tell `Warehouse` from `Object.Warehouse`.
 ibPropertyChoiceMode ibVariantChoiceLink::GetValueList(ibPropertyChoiceList& list) const
 {
 	const ibPropertyObject* owner = m_ownerProperty;
@@ -300,24 +395,19 @@ ibPropertyChoiceMode ibVariantChoiceLink::GetValueList(ibPropertyChoiceList& lis
 	if (metaData == nullptr)
 		return ibPropertyChoiceMode::None;
 
-	const ibMetaID self = SelfId(owner);
-
-	for (const ibValueMetaObjectAttributeBase* field : HolderAttributes(owner)) {
-		if (field->GetMetaID() == self)
-			continue;   // a field cannot govern itself
-
+	for (const ibChoiceHolderField& field : ibChoiceHolderFields(owner)) {
 		// ⭐ THE SAME ANSWER THE RESOLVER READS BY. Which fields can give a type is said ONCE, beside the
 		// reading itself (ibChoiceLinkResolver::CanGovern) — a second rule here is a designer that offers
 		// a field the runtime cannot read, and the drift would be silent.
-		if (!ibChoiceLinkResolver::CanGovern(field->GetTypeDesc()))
+		if (!ibChoiceLinkResolver::CanGovern(field.m_column->GetTypeDesc()))
 			continue;
 
 		ibChoiceTypeLinkDescription linkDesc;
-		linkDesc.m_source.AppendSource(field->GetMetaID());
+		linkDesc.m_source = field.m_path;
 
-		list.Add(field->GetMetaID(), NeighbourName(owner, field), field->GetSynonym(),
+		list.Add(static_cast<long>(list.GetCount() + 1), field.m_spelled, field.m_column->GetSynonym(),
 			ibVariant(new ibVariantChoiceLink(owner, linkDesc)),
-			field->GetClassType());
+			field.m_column->GetColumnPicture());
 	}
 
 	return ibPropertyChoiceMode::Single;
@@ -343,7 +433,7 @@ void ibVariantChoiceParameters::RefreshParametersDesc() const
 	std::vector<ibChoiceParameterRowDescription>& rows = m_paramsDesc.m_rows;
 	std::erase_if(rows, [this, metaData](const ibChoiceParameterRowDescription& row) {
 		return metaData->FindAnyObjectByFilter(row.m_parameter, true) == nullptr
-			|| ibChoiceHolderFieldName(m_ownerProperty, row.m_source.GetFirst()).IsEmpty();
+			|| ibChoiceHolderFieldName(m_ownerProperty, row.m_source).IsEmpty();
 	});
 	m_object_version.store(object_version, std::memory_order_release);
 }
@@ -394,23 +484,5 @@ void ibVariantChoiceParameters::GetParameterList(const ibClassID& ofType, ibProp
 	for (const ibValueMetaObjectAttributeBase* field : target->GetGenericAttributeArrayObject()) {
 		if (!field->IsDeleted())
 			list.Add(field->GetMetaID(), field->GetName(), field->GetSynonym(), ibVariant(field->GetMetaID()), field->GetClassType());
-	}
-}
-
-// ⭐ THE FIELDS STANDING BESIDE THIS ONE — HolderAttributes: an object's other attributes, and for a column
-// the other columns of its row and then the attributes of the object above it, one hop each.
-//
-// ⚠ NOT NARROWED, and that is the difference from the link by type. A link needs a field that CARRIES a
-// type; a parameter needs a VALUE, and any field has one. Narrowing this list would refuse the ordinary
-// case of a date or a number standing in a condition.
-void ibVariantChoiceParameters::GetSourceList(ibPropertyChoiceList& list) const
-{
-	const ibPropertyObject* owner = m_ownerProperty;
-	const ibMetaID selfId = SelfId(owner);
-
-	for (const ibValueMetaObjectAttributeBase* field : HolderAttributes(owner)) {
-		if (field->GetMetaID() == selfId)
-			continue;   // a field does not narrow itself
-		list.Add(field->GetMetaID(), NeighbourName(owner, field), field->GetSynonym(), ibVariant(field->GetMetaID()), field->GetClassType());
 	}
 }

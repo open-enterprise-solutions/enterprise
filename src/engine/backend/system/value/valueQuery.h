@@ -158,7 +158,7 @@ class BACKEND_API ibValueQueryResult : public ibValueDynamicMembers
 	enum { enSelect = 0, enUnload = 1 };
 
 	std::unique_ptr<ibDataQueryResult>         m_result;   // move-only L3 result (cursor); consumed by Select()
-	std::vector<ibQueryLowering::OutputColumn> m_schema;
+	std::vector<ibQueryLowering::ibQueryOutputColumn> m_schema;
 	bool                                       m_hasTotals = false;   // the query had a TOTALS clause
 
 	// ⭐ THE STATE THIS ANSWER WAS READ IN, held for as long as the answer is. A script runs a query
@@ -173,7 +173,7 @@ class BACKEND_API ibValueQueryResult : public ibValueDynamicMembers
 	// the whole of its job. (Null when a TempTablesManager owns the store instead.)
 	//
 	// 🛑 Without it, `SELECT … INTO T …; SELECT … FROM T` read a column at 0xdddddddd and took the
-	// process down on the first field (dump 2026-09-04) — see ibQueryLowering::PackageResult::m_temps.
+	// process down on the first field (dump 2026-09-04) — see ibQueryLowering::ibQueryPackageResult::m_temps.
 	std::shared_ptr<ibQueryTempTableStore>  m_temps;
 
 	void FillMembers(ibMemberTable& helper) const;
@@ -184,7 +184,7 @@ class BACKEND_API ibValueQueryResult : public ibValueDynamicMembers
 
 public:
 	ibValueQueryResult();                                                                            // empty
-	ibValueQueryResult(ibDataQueryResult&& result, std::vector<ibQueryLowering::OutputColumn> schema, bool hasTotals,
+	ibValueQueryResult(ibDataQueryResult&& result, std::vector<ibQueryLowering::ibQueryOutputColumn> schema, bool hasTotals,
 	                   std::shared_ptr<ibQueryReadState> snapshot = nullptr,
 	                   std::shared_ptr<ibQueryTempTableStore> temps = nullptr);
 	~ibValueQueryResult() override;
@@ -203,7 +203,7 @@ class BACKEND_API ibValueQuerySelect : public ibValueDynamicMembers
 	// HasChildren() / Select() descend). m_schema names the output columns for Field + properties.
 	std::unique_ptr<ibDataQueryResult>         m_flat;
 	std::unique_ptr<ibSelector>                m_tree;
-	std::vector<ibQueryLowering::OutputColumn> m_schema;
+	std::vector<ibQueryLowering::ibQueryOutputColumn> m_schema;
 
 	// The read's state, inherited from the QueryResult this selection came out of — see the note
 	// there. A flat selection needs it most: its cursor is still live and draws rows on demand.
@@ -215,16 +215,16 @@ class BACKEND_API ibValueQuerySelect : public ibValueDynamicMembers
 	std::shared_ptr<ibQueryTempTableStore>  m_temps;
 
 	void    FillMembers(ibMemberTable& helper) const;
-	ibValue ReadColumn(const ibQueryLowering::OutputColumn& oc) const;   // current row / node cell
+	ibValue ReadColumn(const ibQueryLowering::ibQueryOutputColumn& oc) const;   // current row / node cell
 
 public:
 	ibValueQuerySelect();                                                                            // empty
 	ibValueQuerySelect(std::unique_ptr<ibDataQueryResult> flat,
-	                   std::vector<ibQueryLowering::OutputColumn> schema,
+	                   std::vector<ibQueryLowering::ibQueryOutputColumn> schema,
 	                   std::shared_ptr<ibQueryReadState> snapshot = nullptr,
 	                   std::shared_ptr<ibQueryTempTableStore> temps = nullptr);                    // flat list
 	ibValueQuerySelect(ibSelector&& tree,
-	                   std::vector<ibQueryLowering::OutputColumn> schema,
+	                   std::vector<ibQueryLowering::ibQueryOutputColumn> schema,
 	                   std::shared_ptr<ibQueryReadState> snapshot = nullptr,
 	                   std::shared_ptr<ibQueryTempTableStore> temps = nullptr);                    // grouped / TOTALS
 	~ibValueQuerySelect() override;

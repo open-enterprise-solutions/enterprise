@@ -71,7 +71,6 @@ public:
 	virtual void ChoiceProcessing(ibValue& selected) override;
 
 	// ibTypeControlFactory — no column behind the cell: its type is the one it stands on.
-	virtual const ibBackendSourceColumn* GetSourceAttributeObject() const override { return nullptr; }
 	virtual ibSourceObject* GetSourceObject() const override { return nullptr; }
 	virtual ibSourceDescription& GetSourceDesc() const override { return m_sourceDesc; }
 	virtual const ibMetaData* GetMetaData() const override { return m_metaData; }

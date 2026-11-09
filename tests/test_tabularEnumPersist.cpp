@@ -212,7 +212,7 @@ TEST_F(TabularEnumPersist, GridCommit_ActuallySetsTheChosenMember) {
 TEST_F(TabularEnumPersist, FindValue_OnAnEmptyTypedEnumCell_FindsTheMemberByName) {
 	const ibValue empty(ibValueReferenceDataObject::Create(vatRates));
 	std::vector<ibValue> candidates;
-	const bool found = empty.FindValue(wxT("Vat10"), candidates);
+	const bool found = empty.FindValue(wxT("Vat10"), ibChoiceCondition(), candidates);
 	ASSERT_TRUE(found) << "ibValue::FindValue found nothing for an empty-but-typed EnumRef cell";
 	ASSERT_FALSE(candidates.empty());
 	EXPECT_EQ(candidates.front().GetString(), wxT("Vat10"));

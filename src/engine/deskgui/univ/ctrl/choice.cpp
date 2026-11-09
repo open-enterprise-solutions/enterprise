@@ -69,9 +69,11 @@ bool ibChoice::Create(wxWindow *parent, wxWindowID id,
                       const wxValidator& validator,
                       const wxString& name)
 {
-    wxString value;
-    if ( n )
-        value = choices[0];
+    // BORN WITH NOTHING CHOSEN, as the native choice is — the value shown is the selection. The univ original showed
+    // the first item while selecting none, so a cell's editor opened on an unset row showed `Filter.Ref`, gave back
+    // nothing, and the row came out empty (Max, 2026-11-09, the choice parameter links). A caller wanting an item
+    // shown selects it.
+    const wxString value;
     return ibComboBox::Create(parent, id, value,
                                  pos, size, n, choices,
                                  wxCB_READONLY | style, validator, name);

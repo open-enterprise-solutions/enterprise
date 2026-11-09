@@ -69,12 +69,12 @@ public:
 	const ibUniqueKey& GetQueryTableGuid() const override { return m_key; }
 	bool     IsComputedInRam()   const override { return m_computed; }
 	const ibMetaData* GetMetaData() const override { return nullptr; }
-	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_cols; }
+	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override { return m_cols; }
 	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override {
 		for (const ibBackendQueryColumn* c : m_cols) if (c->GetName() == name) return c;
 		return nullptr;
 	}
-	bool OwnsColumn(const ibBackendQueryColumn* col) const override {
+	bool ContainColumn(const ibBackendQueryColumn* col) const override {
 		for (const ibBackendQueryColumn* c : m_cols) if (c == col) return true;
 		return false;
 	}
@@ -117,12 +117,12 @@ public:
 	ibMetaID GetQueryTableId()   const override { return m_metaId; }
 	const ibUniqueKey& GetQueryTableGuid() const override { return m_key; }
 	const ibMetaData* GetMetaData() const override { return nullptr; }
-	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_cols; }
+	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override { return m_cols; }
 	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override {
 		for (const ibBackendQueryColumn* c : m_cols) if (c->GetName() == name) return c;
 		return nullptr;
 	}
-	bool OwnsColumn(const ibBackendQueryColumn* col) const override {
+	bool ContainColumn(const ibBackendQueryColumn* col) const override {
 		for (const ibBackendQueryColumn* c : m_cols) if (c == col) return true;
 		return false;
 	}
@@ -1654,7 +1654,7 @@ TEST(CteQueryable, MintsAFieldPerOutput)
 	fields[0].m_physical = wxT("fld1025");
 
 	const ibCteQueryable cte(wxT("q_sub0"), fields, 0);   // the ORDINAL — the kind is stamped on inside
-	ASSERT_EQ(cte.GetColumns().size(), 1u);
+	ASSERT_EQ(cte.GetQueryColumns().size(), 1u);
 	const ibBackendQueryColumn* date = cte.ResolveColumnByName(wxT("Date"));
 	ASSERT_NE(date, nullptr);
 	EXPECT_EQ(date->GetPhysicalName(), wxT("fld1025"));
@@ -1674,9 +1674,9 @@ TEST(CteQueryable, EveryMintedIdIsSyntheticAndDistinct)
 		fields[i].m_name = ibString::Format(wxT("F%u"), static_cast<unsigned>(i));
 
 	const ibCteQueryable cte(wxT("q_sub0"), fields, 0);
-	ASSERT_EQ(cte.GetColumns().size(), 10u);
+	ASSERT_EQ(cte.GetQueryColumns().size(), 10u);
 	std::set<ibMetaID> ids;
-	for (const ibBackendQueryColumn* c : cte.GetColumns()) {
+	for (const ibBackendQueryColumn* c : cte.GetQueryColumns()) {
 		EXPECT_TRUE(ibBackendQueryColumn::IsSyntheticId(c->GetColumnId())) << c->GetName();
 		ids.insert(c->GetColumnId());
 	}
@@ -1696,7 +1696,7 @@ TEST(CteQueryable, PublishesABorrowedColumnAsItself)
 	fields[1].m_borrowed = &moment;
 
 	const ibCteQueryable cte(wxT("q_sub0"), fields, 0);
-	ASSERT_EQ(cte.GetColumns().size(), 2u);
+	ASSERT_EQ(cte.GetQueryColumns().size(), 2u);
 	const ibBackendQueryColumn* found = cte.ResolveColumnByName(wxT("PointInTime"));
 	ASSERT_EQ(found, &moment);                        // the very column, not a copy of its name
 	// …and NOT this wrapper's storage: it belongs to the metaobject and outlives the run, so the

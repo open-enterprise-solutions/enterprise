@@ -332,7 +332,7 @@ TEST(QueryTempStore, AStoredTableKeepsItsColumnsAndRows)
 	const ibBackendQueryable* source = store.Sources().at(wxT("Sales"));
 	ASSERT_NE(nullptr, source);
 
-	const std::vector<const ibBackendQueryColumn*> columns = source->GetColumns();
+	const std::vector<const ibBackendQueryColumn*> columns = source->GetQueryColumns();
 	ASSERT_EQ(1u, columns.size());
 	EXPECT_EQ(wxT("Ref"), columns[0]->GetName());
 
@@ -364,7 +364,7 @@ TEST(QueryTempStore, AnIndexedEqualityReadsOnlyTheMatchingRows)
 
 	const ibBackendQueryable* source = store.Sources().at(wxT("Sales"));
 	ASSERT_NE(nullptr, source);
-	const std::vector<const ibBackendQueryColumn*> columns = source->GetColumns();
+	const std::vector<const ibBackendQueryColumn*> columns = source->GetQueryColumns();
 	ASSERT_EQ(1u, columns.size());
 
 	ibQueryCondition equality;
@@ -392,7 +392,7 @@ TEST(QueryTempStore, AnIndexedValueNothingCarriesReadsNothing)
 
 	const ibBackendQueryable* source = store.Sources().at(wxT("Sales"));
 	ibQueryCondition equality;
-	equality.m_col   = source->GetColumns()[0];
+	equality.m_col   = source->GetQueryColumns()[0];
 	equality.m_op    = ibQueryFilterOp::Equal;
 	equality.m_value = ibValue(ibString(wxT("Z")));
 
@@ -414,7 +414,7 @@ TEST(QueryTempStore, WithoutAnIndexEveryRowIsStillReturned)
 
 	const ibBackendQueryable* source = store.Sources().at(wxT("Sales"));
 	ibQueryCondition equality;
-	equality.m_col   = source->GetColumns()[0];
+	equality.m_col   = source->GetQueryColumns()[0];
 	equality.m_op    = ibQueryFilterOp::Equal;
 	equality.m_value = ibValue(ibString(wxT("A")));
 

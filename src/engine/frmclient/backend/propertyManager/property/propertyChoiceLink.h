@@ -2,6 +2,7 @@
 #define __PROPERTY_CHOICE_LINK_H__
 
 #include "frmclient/backend/propertyManager/propertyObject.h"   // ibPropertyChoiceList
+#include "core/description/sourceDescription.h"                  // ibSourceDescription — the path a source is stored by
 
 // THE DESKTOP'S HEADER OF THE TWO CHOICE PROPERTIES (backend/propertyManager/property/propertyChoiceLink.h), down to the
 // one question their windows ask outside them. The properties themselves are the server's: on the client a row is one
@@ -24,6 +25,9 @@ FRMCLIENT_API ibClassID ibFieldReferenceClass(const ibBackendProperty* property,
 // by the type's metaobject; and the fields beside this one that may supply a value (…::GetSourceList).
 FRMCLIENT_API void ibChoiceParameterList(const ibBackendProperty* property, const ibMetaID& type, ibPropertyChoiceList& list);
 FRMCLIENT_API void ibChoiceSourceList(const ibBackendProperty* property, ibPropertyChoiceList& list);
+// …and the path one of them stores, by its Id in that list — the hops a row or a link names it by: one for a neighbour of
+// an attribute, through the dot for what a control reaches (#616). The Id only says which row it is.
+FRMCLIENT_API ibSourceDescription ibChoiceSourcePath(const ibBackendProperty* property, const ibMetaID& sourceId);
 
 // Whether the row brought the lists the parameters' window is built of — the window is opened only then.
 FRMCLIENT_API bool ibChoiceHasLists(const ibBackendProperty* property);

@@ -92,15 +92,15 @@ ibDataDBComposer& ibDataDBComposer::FromText(const ibString& text)
 	return *this;
 }
 
-// A source's field as a walk takes it — its name, what it may hold, and whether the options leave it (a field
-// no column stands behind is not theirs to take).
-static ibQueryConstructorField ibWalkFieldOf(const ibString& name, const ibTypeDescription& type,
-	const ibBackendSourceColumn* column)
+// A source's field as a walk takes it — its name, what it may hold, and whether the options leave it (asked of the
+// column by the caller: a query's own, or the one a node was built from; a field no column stands behind is not
+// theirs to take).
+static ibQueryConstructorField ibWalkFieldOf(const ibString& name, const ibTypeDescription& type, bool available)
 {
 	ibQueryConstructorField field;
 	field.m_name      = name;
 	field.m_type      = type;
-	field.m_available = column == nullptr || column->IsAvailable();
+	field.m_available = available;
 	return field;
 }
 
@@ -130,9 +130,9 @@ void ibDataDBComposer::RefreshSourceFields()
 		for (const auto& direct : m_directSources) {
 			if (direct.second == nullptr)
 				continue;
-			for (const ibBackendQueryColumn* column : direct.second->GetColumns())
+			for (const ibBackendQueryColumn* column : direct.second->GetQueryColumns())
 				if (column != nullptr)
-					fields.push_back(ibWalkFieldOf(column->GetName(), column->GetTypeValueDesc(), column));
+					fields.push_back(ibWalkFieldOf(column->GetName(), column->GetTypeValueDesc(), column->IsAvailable()));
 		}
 
 		const ibQueryableFactory* const factory = m_metaData != nullptr
@@ -142,13 +142,9 @@ void ibDataDBComposer::RefreshSourceFields()
 				? factory->FindDescriptor(source.m_namespace, source.m_name) : nullptr;
 			if (descriptor == nullptr)
 				continue;   // a direct source (above), or a name nothing answers to
-			ibSourceDataObject::ibSourceExplorer explorer;
-			descriptor->FillSourceExplorer(explorer);
-			for (unsigned int i = 0; i < explorer.GetHelperCount(); ++i) {
-				const ibSourceDataObject::ibSourceExplorer* node = explorer.GetHelper(i);
-				if (node != nullptr)
-					fields.push_back(ibWalkFieldOf(node->GetSourceName(), node->GetTypeValueDesc(), node->GetColumn()));
-			}
+			for (const ibBackendQueryColumn* column : descriptor->GetQueryColumns({}))
+				if (column != nullptr)
+					fields.push_back(ibWalkFieldOf(column->GetName(), column->GetTypeValueDesc(), column->IsAvailable()));
 		}
 	}
 	m_sourceFields = std::make_shared<const std::vector<ibQueryConstructorField>>(std::move(fields));
@@ -640,7 +636,7 @@ ibString ibDataDBComposer::WhenNothingChosen(const Output& output) const
 // Asking the query tier would mean holding its select; accepting both spellings of one name costs
 // nothing and cannot say yes to a different field — the segments are the same words in the same
 // order either way.
-bool ibComposerColumnAnswersTo(const ibQueryLowering::OutputColumn& oc, const ibString& path)
+bool ibComposerColumnAnswersTo(const ibQueryLowering::ibQueryOutputColumn& oc, const ibString& path)
 {
 	if (path.IsEmpty())
 		return false;
@@ -1283,7 +1279,7 @@ ibString ibDataDBComposer::RenderTextFor(const std::vector<const Output*>& outpu
 		// but the find by name does not answer it — so spelling it here refused the whole read: a chart of
 		// accounts has no IsFolder, and its list would not open. The same gate the query seed and the field
 		// catalogue ask.
-		for (const ibBackendQueryColumn* col : src->GetColumns()) {
+		for (const ibBackendQueryColumn* col : src->GetQueryColumns()) {
 			if (col == nullptr || col->GetName().IsEmpty() || !col->IsAllowed())
 				continue;
 			if (!proj.IsEmpty())
@@ -1734,7 +1730,7 @@ void ibDataDBComposer::SplitSourceText() const
 		// ⭐ PLACED BY THE ENGINE'S OWN PLACER, not by a second reading of the links here. `LINK`
 		// declares relations as a set; which of them stands where in the FROM is one question with
 		// one answer, and ibQueryLowering::PlacePackageLinks is it.
-		const ibQueryLowering::FromTree tree =
+		const ibQueryLowering::ibQueryFromTree tree =
 			ibQueryLowering::PlacePackageLinks(package.m_links, declared);
 
 		// NOTHING USABLE WAS WRITTEN YET — every link is a row somebody opened and left. That is an
@@ -1743,7 +1739,7 @@ void ibDataDBComposer::SplitSourceText() const
 		// `LINK` section inside brackets and fail as a syntax error nobody caused.
 		if (!tree.m_head.IsEmpty()) {
 			m_resolved.m_from = tree.m_head;
-			for (const ibQueryLowering::JoinStep& step : tree.m_steps) {
+			for (const ibQueryLowering::ibQueryJoinStep& step : tree.m_steps) {
 				ibString kind;
 				switch (step.m_kind) {
 				case ibQueryJoinKindAst::Left:  kind = ibQueryKeywordText(ibQueryKeyword::Left)  + ibT(" "); break;
@@ -1765,7 +1761,7 @@ void ibDataDBComposer::SplitSourceText() const
 			// honest fallback is the star — with the duplicate-name hazard then visible in the
 			// author's own text.
 			std::vector<ibString> placed{ tree.m_head };
-			for (const ibQueryLowering::JoinStep& step : tree.m_steps)
+			for (const ibQueryLowering::ibQueryJoinStep& step : tree.m_steps)
 				placed.push_back(step.m_name);
 
 			ibString qualified;

@@ -39,9 +39,9 @@ const ibSourceExplorer* ibValueRecordDataObjectChartOfCalculationTypes::GetSourc
 	ibValueMetaObjectChartOfCalculationTypes* metaRef = nullptr;
 
 	if (m_metaObject->ConvertToValue(metaRef)) {
-		m_sourceExplorer.AppendColumn(metaRef->GetDataCode()->GetQueryColumn(), /*enabled*/ false, /*visible*/ true);
-		m_sourceExplorer.AppendColumn(metaRef->GetDataDescription()->GetQueryColumn(), /*enabled*/ true, /*visible*/ true);
-		m_sourceExplorer.AppendColumn(metaRef->GetDataParent()->GetQueryColumn(), /*enabled*/ true, /*visible*/ true);
+		m_sourceExplorer.AppendColumn(metaRef->GetDataCode(), metaRef->GetDataCode()->GetColumnId(), /*enabled*/ false, /*visible*/ true);
+		m_sourceExplorer.AppendColumn(metaRef->GetDataDescription(), metaRef->GetDataDescription()->GetColumnId(), /*enabled*/ true, /*visible*/ true);
+		m_sourceExplorer.AppendColumn(metaRef->GetDataParent(), metaRef->GetDataParent()->GetColumnId(), /*enabled*/ true, /*visible*/ true);
 	}
 
 	for (const auto object : m_metaObject->GetAttributeArrayObject()) {
@@ -50,7 +50,7 @@ const ibSourceExplorer* ibValueRecordDataObjectChartOfCalculationTypes::GetSourc
 			if (attrUse == ibItemMode::ibItemMode_Item
 				|| attrUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (!m_metaObject->IsDataReference(object->GetMetaID())) {
-					m_sourceExplorer.AppendColumn(object->GetQueryColumn(), /*enabled*/ true, /*visible*/ true);
+					m_sourceExplorer.AppendColumn(object, object->GetColumnId(), /*enabled*/ true, /*visible*/ true);
 				}
 			}
 		}
@@ -58,7 +58,7 @@ const ibSourceExplorer* ibValueRecordDataObjectChartOfCalculationTypes::GetSourc
 			if (attrUse == ibItemMode::ibItemMode_Folder ||
 				attrUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (!m_metaObject->IsDataReference(object->GetMetaID())) {
-					m_sourceExplorer.AppendColumn(object->GetQueryColumn(), /*enabled*/ true, /*visible*/ true);
+					m_sourceExplorer.AppendColumn(object, object->GetColumnId(), /*enabled*/ true, /*visible*/ true);
 				}
 			}
 		}
@@ -71,7 +71,7 @@ const ibSourceExplorer* ibValueRecordDataObjectChartOfCalculationTypes::GetSourc
 				|| tableUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (object != nullptr && !object->IsDeleted()) {
 					ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
-					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol->GetQueryColumn(), /*enabled*/ true, /*visible*/ true);
+					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol, tblCol->GetColumnId(), /*enabled*/ true, /*visible*/ true);
 				}
 			}
 		}
@@ -80,7 +80,7 @@ const ibSourceExplorer* ibValueRecordDataObjectChartOfCalculationTypes::GetSourc
 				tableUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (object != nullptr && !object->IsDeleted()) {
 					ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
-					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol->GetQueryColumn(), /*enabled*/ true, /*visible*/ true);
+					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol, tblCol->GetColumnId(), /*enabled*/ true, /*visible*/ true);
 				}
 			}
 		}

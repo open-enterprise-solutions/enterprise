@@ -109,18 +109,18 @@ const ibSourceExplorer* ibValueRecordDataObjectChartOfAccounts::GetSourceExplore
 		// mints, so it is shown and not edited; in a chart of accounts the code IS the account — "51",
 		// "60.01" — and it is the first thing a person writes when adding one. Locking it made an
 		// account impossible to name at all.
-		m_sourceExplorer.AppendColumn(metaRef->GetDataCode()->GetQueryColumn());
-		m_sourceExplorer.AppendColumn(metaRef->GetDataDescription()->GetQueryColumn());
-		m_sourceExplorer.AppendColumn(metaRef->GetDataParent()->GetQueryColumn());
+		m_sourceExplorer.AppendColumn(metaRef->GetDataCode(), metaRef->GetDataCode()->GetColumnId());
+		m_sourceExplorer.AppendColumn(metaRef->GetDataDescription(), metaRef->GetDataDescription()->GetColumnId());
+		m_sourceExplorer.AppendColumn(metaRef->GetDataParent(), metaRef->GetDataParent()->GetColumnId());
 		// WHAT KIND OF ACCOUNT THIS IS. It was missing here, so a generated form showed an account as
 		// if it were a plain catalog item — code, description, parent — with no way to say whether it
 		// is active, passive or both. It is a declared TYPE (the AccountType enumeration), so the form
 		// builds the editor from the attribute itself; nothing here spells the three members out.
-		m_sourceExplorer.AppendColumn(metaRef->GetAccountType()->GetQueryColumn());
+		m_sourceExplorer.AppendColumn(metaRef->GetAccountType(), metaRef->GetAccountType()->GetColumnId());
 		// Off-balance belongs beside it: it is not a way of KEEPING the account, it is a statement
 		// about the account itself — this one stands outside the balance — and it is answered once,
 		// per account, like the kind is.
-		m_sourceExplorer.AppendColumn(metaRef->GetOffBalance()->GetQueryColumn());
+		m_sourceExplorer.AppendColumn(metaRef->GetOffBalance(), metaRef->GetOffBalance()->GetColumnId());
 
 		// ⭐⭐ …AND EVERY KIND OF ACCOUNTING THE CHART DECLARES, as a tick-box of its own. What stood here
 		// said that Quantitative and Currency were not attributes of an account and must not be drawn as
@@ -134,7 +134,7 @@ const ibSourceExplorer* ibValueRecordDataObjectChartOfAccounts::GetSourceExplore
 		//  is a column of that table and arrives with it.)
 		for (const ibValueMetaObjectAccountingKind* kind : metaRef->GetAccountingKindArrayObject())
 			if (kind != nullptr && !kind->IsDeleted())
-				m_sourceExplorer.AppendColumn(kind->GetQueryColumn());
+				m_sourceExplorer.AppendColumn(kind, kind->GetColumnId());
 
 		// (The analytics-kinds section is NOT appended by hand here. It used to be, because it was the
 		//  only way to reach it: its clsid was missing from the tabular-section filter, so the general
@@ -147,11 +147,11 @@ const ibSourceExplorer* ibValueRecordDataObjectChartOfAccounts::GetSourceExplore
 		ibItemMode attrUse = object->GetItemMode();
 		if (m_objMode == ibObjectMode::OBJECT_ITEM) {
 			if (attrUse == ibItemMode::ibItemMode_Item || attrUse == ibItemMode::ibItemMode_Folder_Item) {
-				if (!m_metaObject->IsDataReference(object->GetMetaID())) m_sourceExplorer.AppendColumn(object->GetQueryColumn());
+				if (!m_metaObject->IsDataReference(object->GetMetaID())) m_sourceExplorer.AppendColumn(object, object->GetColumnId());
 			}
 		} else {
 			if (attrUse == ibItemMode::ibItemMode_Folder || attrUse == ibItemMode::ibItemMode_Folder_Item) {
-				if (!m_metaObject->IsDataReference(object->GetMetaID())) m_sourceExplorer.AppendColumn(object->GetQueryColumn());
+				if (!m_metaObject->IsDataReference(object->GetMetaID())) m_sourceExplorer.AppendColumn(object, object->GetColumnId());
 			}
 		}
 	}
@@ -162,14 +162,14 @@ const ibSourceExplorer* ibValueRecordDataObjectChartOfAccounts::GetSourceExplore
 			if (tableUse == ibItemMode::ibItemMode_Item || tableUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (object != nullptr && !object->IsDeleted()) {
 					ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
-					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol->GetQueryColumn());
+					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol, tblCol->GetColumnId());
 				}
 			}
 		} else {
 			if (tableUse == ibItemMode::ibItemMode_Folder || tableUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (object != nullptr && !object->IsDeleted()) {
 					ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
-					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol->GetQueryColumn());
+					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol, tblCol->GetColumnId());
 				}
 			}
 		}

@@ -31,7 +31,7 @@
 #include <algorithm>   // std::find_if — which rule field the read does not carry
 #include <deque>   // the walk's descents and closing buffers, one per depth
 
-ibDataQueryResult ibDataDBComposer::Execute(std::vector<ibQueryLowering::OutputColumn>& schema, bool& hasTotals)
+ibDataQueryResult ibDataDBComposer::Execute(std::vector<ibQueryLowering::ibQueryOutputColumn>& schema, bool& hasTotals)
 {
 	return Execute(schema, hasTotals, ibReadPageRequest{});
 }
@@ -39,14 +39,14 @@ ibDataQueryResult ibDataDBComposer::Execute(std::vector<ibQueryLowering::OutputC
 // THE TWO SHORT FORMS forward with a LOCAL: a caller that does not ask whether the server grouped is
 // a caller that does not care, and the answer dies with the call rather than waiting on the object
 // for somebody it was not about.
-ibDataQueryResult ibDataDBComposer::Execute(std::vector<ibQueryLowering::OutputColumn>& schema, bool& hasTotals,
+ibDataQueryResult ibDataDBComposer::Execute(std::vector<ibQueryLowering::ibQueryOutputColumn>& schema, bool& hasTotals,
                                           const ibReadPageRequest& page)
 {
 	bool serverGrouped = false;
 	return Execute(schema, hasTotals, page, serverGrouped);
 }
 
-ibDataQueryResult ibDataDBComposer::Execute(std::vector<ibQueryLowering::OutputColumn>& schema, bool& hasTotals,
+ibDataQueryResult ibDataDBComposer::Execute(std::vector<ibQueryLowering::ibQueryOutputColumn>& schema, bool& hasTotals,
                                           const ibReadPageRequest& page, bool& serverGrouped)
 {
 	EnsureAst();
@@ -148,7 +148,7 @@ static bool OutputWrites(const ibDataComposer::Output& output, ibSelectorNodeKin
 // reading of its own here, which ANDed the root whatever its kind and let a switched-off line inside an OR group
 // answer "yes" for the whole group.
 bool ibDataDBComposer::LevelShows(const Output& output, int depth, ibSelectorNodeKind kind,
-	const std::vector<ibQueryLowering::OutputColumn>& schema, const std::vector<ibValue>& row) const
+	const std::vector<ibQueryLowering::ibQueryOutputColumn>& schema, const std::vector<ibValue>& row) const
 {
 	// Depth 0 is the grand total and belongs to no level; past the last level of either axis there
 	// is nothing left to hide by.
@@ -176,7 +176,7 @@ bool ibDataDBComposer::LevelShows(const Output& output, int depth, ibSelectorNod
 // One that this result does not carry orders nothing — the same answer the filter gives, and for
 // the same reason: a report with a stale line still prints.
 std::vector<ibSelectorSort> ibDataDBComposer::LevelOrder(const Output& output, int depth,
-	const std::vector<ibQueryLowering::OutputColumn>& schema) const
+	const std::vector<ibQueryLowering::ibQueryOutputColumn>& schema) const
 {
 	std::vector<ibSelectorSort> keys;
 	// Depth 0 is the grand total — one node, and one node has no order. Past the last level of
@@ -189,7 +189,7 @@ std::vector<ibSelectorSort> ibDataDBComposer::LevelOrder(const Output& output, i
 	for (const ibSortLineDescription& line : level.m_settings.m_sort.m_lines) {
 		if (line.m_path.IsEmpty())
 			continue;   // a line with no field is the absence of one — same rule as the output's sort
-		for (const ibQueryLowering::OutputColumn& oc : schema) {
+		for (const ibQueryLowering::ibQueryOutputColumn& oc : schema) {
 			if (!oc.m_name.IsSameAs(line.m_path, false) && !oc.m_alias.IsSameAs(line.m_path, false))
 				continue;
 			// ⭐ READ THE NODE THE WAY THE WALK READS IT. An aggregate is reached by its alias and a
@@ -293,7 +293,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 	ibReadPageRequest page;
 	const bool paged = driver.GetPageRequest(page);
 
-	std::vector<ibQueryLowering::OutputColumn> schema;
+	std::vector<ibQueryLowering::ibQueryOutputColumn> schema;
 	bool hasTotals = false;
 	// ⭐ AND WHETHER THE DBMS GROUPED — this read's own answer, held for as long as this walk needs
 	// it and no longer. A SHARED read is never server-grouped (that road is a paged single-level
@@ -442,7 +442,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 			for (const ibString& name : shown)
 				if (ibComposerColumnAnswersTo(schema[i], name)) { shows = true; break; }
 			// …and a column of something this base does not use is not shown, whoever chose it — the
-			// columns a star was materialised into included (OutputColumn::m_available).
+			// columns a star was materialised into included (ibQueryOutputColumn::m_available).
 			info.m_shown[i] = shows && schema[i].m_available;
 		}
 	}
@@ -468,7 +468,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 		// 🛑 EVERYTHING WORKED OUT PER COLUMN MOVES WITH IT — the appearance too. Left in the query's order, the
 		// formats went to whichever column stood there afterwards: a report's expense in money, its closing
 		// quantity in its type's format and its value in none (Max, 2026-09-29: "did you set that on purpose?").
-		std::vector<ibQueryLowering::OutputColumn> columns;
+		std::vector<ibQueryLowering::ibQueryOutputColumn> columns;
 		std::vector<ibString> titles, paths;
 		std::vector<ibAppearanceDescription> appearances;
 		std::vector<bool> shown;
@@ -519,7 +519,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 		ibString unread;
 		for (const ibString& path : ibComposerRuleFieldsOf(output, GetCurrentConditionalAppearanceDesc())) {
 			const auto carried = std::find_if(schema.begin(), schema.end(),
-				[&path](const ibQueryLowering::OutputColumn& oc) { return ibComposerColumnAnswersTo(oc, path); });
+				[&path](const ibQueryLowering::ibQueryOutputColumn& oc) { return ibComposerColumnAnswersTo(oc, path); });
 			if (carried == schema.end())
 				unread += (unread.IsEmpty() ? ibString() : ibString(ibT(", "))) + path;
 		}
@@ -536,7 +536,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 		while (result.Next()) {
 			hearCancel();
 			for (size_t i = 0; i < schema.size(); ++i) {
-				const ibQueryLowering::OutputColumn& oc = schema[i];
+				const ibQueryLowering::ibQueryOutputColumn& oc = schema[i];
 				if (!oc.m_objectPrefix.empty() && oc.m_col != nullptr)
 					row[i] = result.GetColumn(oc.m_objectPrefix, oc.m_col);
 				else
@@ -574,7 +574,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 		while (result.Next()) {
 			hearCancel();
 			for (size_t i = 0; i < schema.size(); ++i) {
-				const ibQueryLowering::OutputColumn& oc = schema[i];
+				const ibQueryLowering::ibQueryOutputColumn& oc = schema[i];
 				if (!oc.m_objectPrefix.empty() && oc.m_col != nullptr)
 					row[i] = result.GetColumn(oc.m_objectPrefix, oc.m_col);
 				else
@@ -680,7 +680,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 			while (level.Next()) {
 				hearCancel();
 				for (size_t i = 0; i < schema.size(); ++i) {
-					const ibQueryLowering::OutputColumn& oc = schema[i];
+					const ibQueryLowering::ibQueryOutputColumn& oc = schema[i];
 					row[i] = oc.m_byAlias ? level.GetColumn(oc.m_alias) : level.GetValue(oc.m_col);
 				}
 
@@ -761,7 +761,7 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 				// node needs, what is PRINTED is what this node was told to show. Nothing told = the
 				// grouping's key and the figures, and a field appears when somebody adds it.
 				for (size_t i = 0; !everyField && i < schema.size(); ++i) {
-					const ibQueryLowering::OutputColumn& oc = schema[i];
+					const ibQueryLowering::ibQueryOutputColumn& oc = schema[i];
 					if (oc.m_role == ibQueryLowering::ibColumnRole::Dimension)
 						continue;               // a heading's key — printed because it IS the grouping
 					// ⭐ …AND A RESOURCE IS ALWAYS PRINTED. It was declared on purpose ("I have to add
@@ -988,7 +988,7 @@ std::vector<const ibDataComposer::Output*> ibDataDBComposer::BranchableOutputs()
 // them lets it go (ReleaseSharedRead, called where the output ends) — a composition left on screen
 // must not sit on an open cursor.
 ibDataQueryResult* ibDataDBComposer::SharedReadFor(const Output& output,
-	std::vector<ibQueryLowering::OutputColumn>& schema, bool& hasTotals)
+	std::vector<ibQueryLowering::ibQueryOutputColumn>& schema, bool& hasTotals)
 {
 	if (m_sharedRead == nullptr && m_sharedBranches.empty()) {
 		const std::vector<const Output*> together = BranchableOutputs();
@@ -1022,7 +1022,7 @@ ibDataQueryResult* ibDataDBComposer::SharedReadFor(const Output& output,
 		ibSourceMetaDataScope mdScope(m_metaData);
 		ibNamedResultScope    namedScope(named);   // the package's own selections, as in Execute
 
-		std::vector<ibQueryLowering::OutputColumn> shared;
+		std::vector<ibQueryLowering::ibQueryOutputColumn> shared;
 		// ⚠ NO PAGE HERE. A shared read serves a REPORT — several tables of one sheet — and a page is
 		// a question a list asks about ONE ladder. A paged output never reaches this road at all
 		// (a list has one output and no branches to share with).
@@ -1096,8 +1096,8 @@ bool ibDataDBComposer::ReadsAsBranch(const Output& output) const
 //
 // Matched by NAME, which is how the composer already reads a schema everywhere else (a level's sort,
 // a level's filter): the settings speak paths, and a path is what the query named the column.
-std::vector<ibQueryLowering::OutputColumn> ibDataDBComposer::SchemaFor(const Output& output,
-	const std::vector<ibQueryLowering::OutputColumn>& shared) const
+std::vector<ibQueryLowering::ibQueryOutputColumn> ibDataDBComposer::SchemaFor(const Output& output,
+	const std::vector<ibQueryLowering::ibQueryOutputColumn>& shared) const
 {
 	// What this output names: its levels' fields, the resources (which every output rolls), and
 	// whatever it selected outright.
@@ -1121,8 +1121,8 @@ std::vector<ibQueryLowering::OutputColumn> ibDataDBComposer::SchemaFor(const Out
 	for (const ibString& name : ProjectionFor(output))
 		take(name);
 
-	std::vector<ibQueryLowering::OutputColumn> schema;
-	for (const ibQueryLowering::OutputColumn& column : shared) {
+	std::vector<ibQueryLowering::ibQueryOutputColumn> schema;
+	for (const ibQueryLowering::ibQueryOutputColumn& column : shared) {
 		bool wanted = false;
 		for (const ibString& path : mine)
 			if (column.m_name.IsSameAs(path, false) || column.m_alias.IsSameAs(path, false)) { wanted = true; break; }
@@ -1136,7 +1136,7 @@ std::vector<ibQueryLowering::OutputColumn> ibDataDBComposer::SchemaFor(const Out
 }
 
 ibDataQueryResult ibDataDBComposer::ExecuteFor(const Output& output,
-	std::vector<ibQueryLowering::OutputColumn>& schema, bool& hasTotals, const ibReadPageRequest& page,
+	std::vector<ibQueryLowering::ibQueryOutputColumn>& schema, bool& hasTotals, const ibReadPageRequest& page,
 	bool& serverGrouped)
 {
 	if (&output == &Root())

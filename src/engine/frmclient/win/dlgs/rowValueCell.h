@@ -84,7 +84,6 @@ public:
 	// --- ibTypeControlFactory — answered only where a type was declared -------------------------
 	// No metadata COLUMN behind this cell: it edits a line of a settings description, not a form
 	// attribute. The type below is what the gate actually consults.
-	virtual const ibBackendSourceColumn* GetSourceAttributeObject() const override { return nullptr; }
 	virtual ibSourceObject* GetSourceObject() const override { return nullptr; }
 	virtual ibSourceDescription& GetSourceDesc() const override { return m_sourceDesc; }
 	// ⚠ THE DOOR IS HANDED IN, NEVER REACHED FOR — see MetaOf above. A cell whose row declares

@@ -91,30 +91,31 @@ ibValue::ibValue(const ibVariant& variant)
 	DEBUG_VALUE_CREATE();
 }
 
-bool ibValue::FindValue(const ibString& findData, std::vector<ibValue>& listValue) const
+// A primitive is read out of the text, and has no fields for a condition to narrow by.
+bool ibValue::FindValue(const ibString& input, const ibChoiceCondition& condition, std::vector<ibValue>& out) const
 {
 	if (m_pRef != nullptr && IsReference())
-		return GetRef()->FindValue(findData, listValue);
+		return GetRef()->FindValue(input, condition, out);
 
 	try {
 		if (m_typeClass == ibValueTypes::TYPE_BOOLEAN) {
 			ibValue cFounded;
-			cFounded.SetBoolean(findData);
-			listValue.emplace_back(cFounded);
-			if (cFounded.GetBoolean()) listValue.emplace_back(false);
-			else listValue.emplace_back(true);
+			cFounded.SetBoolean(input);
+			out.emplace_back(cFounded);
+			if (cFounded.GetBoolean()) out.emplace_back(false);
+			else out.emplace_back(true);
 			return true;
 		}
 		else if (m_typeClass == ibValueTypes::TYPE_NUMBER) {
-			listValue.emplace_back().SetNumber(findData);
+			out.emplace_back().SetNumber(input);
 			return true;
 		}
 		else if (m_typeClass == ibValueTypes::TYPE_DATE) {
-			listValue.emplace_back().SetDate(findData);
+			out.emplace_back().SetDate(input);
 			return true;
 		}
 		else if (m_typeClass == ibValueTypes::TYPE_STRING) {
-			listValue.emplace_back().SetString(findData);
+			out.emplace_back().SetString(input);
 			return true;
 		}
 	}

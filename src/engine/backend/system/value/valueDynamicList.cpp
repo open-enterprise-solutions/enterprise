@@ -17,78 +17,71 @@
 
 #include <algorithm>                                  // std::find — a name's id already taken in the query's columns
 
-namespace {
-// (ibDynamicListProvider DELETED — the dynamic list fetches through the base ibValueModel::RunComposerPage now,
-//  like every other model: ONE fetch in the parent. Its keyset provider + ibDynamicListNode are gone;
-//  RunComposerPage yields ibComposerNode, read through the base GetViewData<ibValueTreeNode>.)
-
-// Column collection straight off the queryable — columns are the queryable's
-// columns (GetColumnId / GetName), NOT metaobject attributes.
-class ibDynamicListColumns : public ibValueModelCursor::ibValueModelColumnCollection {
+// ⭐ THE LIST'S COLUMNS — one collection, two ways in: the columns of the queryable the list reads, or the outputs of
+// the arbitrary query it reads instead. A query's column is an ibBackendQueryColumn exactly as a queryable's is (the
+// lowering hands one back for every output, synthesising it where the column is computed), so it is one class with
+// two ways in — not a second idea of what a column is.
+//
+// Each column is the LIST's own and, like a value table's or a value list's, a column of the list as a SOURCE
+// (ibBackendSourceColumn): the explorer vends it as it is. The query's column stays INSIDE, the one it is a facade
+// over — the source does not meet the query.
+class ibValueDynamicListColumnCollection : public ibValueModelCursor::ibValueModelColumnCollection {
 public:
-	class ColInfo : public ibValueModelColumnInfo {
+	class ibValueDynamicListColumnInfo : public ibValueModelColumnInfo, public ibBackendSourceColumn {
 	public:
-		explicit ColInfo(const ibBackendQueryColumn* col) : m_col(col) {}
-		virtual unsigned int GetColumnID() const override { return m_col != nullptr ? m_col->GetColumnId() : 0; }
-		virtual ibString GetColumnName() const override { return m_col != nullptr ? m_col->GetName() : ibString(); }
-		// …and how it reads: the column's synonym, as a metaobject's column reads (commonObject.h) — the name is the designer's.
-		virtual ibString GetColumnCaption() const override { return m_col != nullptr ? m_col->GetSynonym() : ibString(); }
-		// Name + id + TYPE straight off the column (an attribute IS-A column → GetTypeDesc is free).
-		// Enough to render/edit a cell type-aware; for 90% of sources nothing else is needed.
-		virtual const ibTypeDescription GetColumnType() const override { return m_col != nullptr ? m_col->GetTypeDesc() : ibTypeDescription(); }
-		// The wrapped column already tells the declaration from what a value may be — pass it on.
-		virtual const ibTypeDescription GetColumnTypeValue() const override { return m_col != nullptr ? m_col->GetTypeValueDesc() : ibTypeDescription(); }
-		virtual bool IsColumnAvailable() const override { return m_col == nullptr || m_col->IsAvailable(); }
-	private:
-		const ibBackendQueryColumn* m_col;
-	};
+		ibValueDynamicListColumnInfo(ibString name, const ibBackendQueryColumn* col, ibMetaID id,
+			const ibTypeDescription& type = ibTypeDescription(), bool walkAvailable = true)
+			: m_name(std::move(name)), m_col(col), m_id(id), m_type(type), m_walkAvailable(walkAvailable) {}
 
-	explicit ibDynamicListColumns(const ibBackendQueryable* queryable) {
-		// ALL columns — the runtime model collection must resolve any column a tablebox references (including a
-		// system one the user re-shows). The DEFAULT-vs-hidden split is on the SOURCE EXPLORER (GetSourceExplorer),
-		// which the tablebox column auto-creation reads to set each column's visibility.
-		if (queryable != nullptr)
-			for (const ibBackendQueryColumn* c : queryable->GetColumns())
-				m_cols.push_back(new ColInfo(c));
-	}
-	virtual ~ibDynamicListColumns() { for (auto* c : m_cols) delete c; }
-
-	virtual ibValueModelColumnInfo* GetColumnInfo(unsigned int idx) const override {
-		return idx < m_cols.size() ? m_cols[idx] : nullptr;
-	}
-	virtual unsigned int GetColumnCount() const override { return static_cast<unsigned int>(m_cols.size()); }
-
-private:
-	std::vector<ColInfo*> m_cols;
-};
-
-// The same collection over an ARBITRARY QUERY's output schema. A query's column is an
-// ibBackendQueryColumn exactly as a queryable's is (the lowering hands one back for every output,
-// synthesising it where the column is computed), so this is the same class with a different way in
-// — not a second idea of what a column is.
-class ibQuerySchemaColumns : public ibValueModelCursor::ibValueModelColumnCollection {
-public:
-	class ColInfo : public ibValueModelColumnInfo {
-	public:
-		ColInfo(ibString name, const ibBackendQueryColumn* col, ibMetaID id, bool walkAvailable = true)
-			: m_name(std::move(name)), m_col(col), m_id(id), m_walkAvailable(walkAvailable) {}
 		virtual unsigned int GetColumnID() const override { return m_id; }
+		virtual ibString GetColumnName() const override { return GetName(); }
+		virtual ibString GetColumnCaption() const override { return GetSynonym(); }
+		virtual const ibTypeDescription GetColumnType() const override { return GetTypeDesc(); }
+		virtual const ibTypeDescription GetColumnTypeValue() const override { return GetTypeValueDesc(); }
+		virtual bool IsColumnAvailable() const override { return IsAvailable(); }
+
 		// THE QUERY'S NAME FOR IT, not the underlying column's. `Owner.Code AS Supplier` is called
 		// `Supplier` here and nowhere else — that is the whole point of writing the query.
-		virtual ibString GetColumnName() const override { return m_name; }
-		virtual ibString GetColumnCaption() const override { return m_name; }
-		virtual const ibTypeDescription GetColumnType() const override { return m_col != nullptr ? m_col->GetTypeDesc() : ibTypeDescription(); }
-		virtual const ibTypeDescription GetColumnTypeValue() const override { return m_col != nullptr ? m_col->GetTypeValueDesc() : ibTypeDescription(); }
+		virtual ibString GetName() const override { return m_name; }
+		// …and how it reads: the FIELD's synonym while it is the field — under its own name it keeps the field's id
+		// (the numbering below), as a metaobject's column reads (commonObject.h); a renamed or computed output is
+		// called what the query calls it.
+		virtual ibString GetSynonym() const override {
+			return m_col != nullptr && m_col->GetColumnId() == m_id ? m_col->GetSynonym() : m_name;
+		}
+		// What it holds as the query says it (ibQueryOutputColumn::GetTypeDesc): the type the query states, else its column's.
+		virtual ibTypeDescription& GetTypeDesc() const override {
+			return m_type.IsOk() || m_col == nullptr ? m_type : m_col->GetTypeDesc();
+		}
+		// The wrapped column already tells the declaration from what a value may be — pass it on.
+		virtual ibTypeDescription& GetTypeValueDesc() const override {
+			return m_type.IsOk() || m_col == nullptr ? m_type : m_col->GetTypeValueDesc();
+		}
 		// The column's own answer, asked live — AND what the query knew of the road to it: a walk read
 		// through its real LEAF hands over that leaf, which answers for itself alone
-		// (OutputColumn::m_available).
-		virtual bool IsColumnAvailable() const override { return m_walkAvailable && (m_col == nullptr || m_col->IsAvailable()); }
+		// (ibQueryOutputColumn::m_available).
+		virtual bool IsAvailable() const override { return m_walkAvailable && (m_col == nullptr || m_col->IsAvailable()); }
+		virtual ibPictureDescription GetColumnPicture() const override {
+			return m_col != nullptr ? m_col->GetColumnPicture() : ibBackendSourceColumn::GetColumnPicture();
+		}
+
 	private:
 		ibString                    m_name;
 		const ibBackendQueryColumn* m_col;
 		ibMetaID                    m_id;
+		mutable ibTypeDescription   m_type;            // stated by the query; empty — its column's
 		bool                        m_walkAvailable;
 	};
+
+	// A QUERYABLE's: ALL its columns — the runtime model collection must resolve any column a tablebox references
+	// (including a system one the user re-shows). The DEFAULT-vs-hidden split is on the SOURCE EXPLORER
+	// (GetSourceExplorer), which the tablebox column auto-creation reads to set each column's visibility.
+	explicit ibValueDynamicListColumnCollection(const ibBackendQueryable* queryable) {
+		if (queryable != nullptr)
+			for (const ibBackendQueryColumn* c : queryable->GetQueryColumns())
+				if (c != nullptr)
+					m_cols.push_back(new ibValueDynamicListColumnInfo(c->GetName(), c, c->GetColumnId()));
+	}
 
 	// ⭐⭐ AN OUTPUT IS KNOWN BY ITS NAME, AND ITS ID FOLLOWS THE NAME. A form's column is bound to the list by
 	// id (ibSourceHop) and that id goes to the file, while the id the query gives a renamed or computed output
@@ -98,9 +91,9 @@ public:
 	// and the column went blank (2026-10-28). A declared attribute under its own name keeps the attribute's id
 	// — the row's key, its folder flag and the commands read it by that id; every other output is numbered
 	// from its name.
-	explicit ibQuerySchemaColumns(const std::vector<ibQueryLowering::OutputColumn>& schema) {
+	explicit ibValueDynamicListColumnCollection(const std::vector<ibQueryLowering::ibQueryOutputColumn>& schema) {
 		std::vector<ibMetaID> taken;
-		for (const ibQueryLowering::OutputColumn& oc : schema) {
+		for (const ibQueryLowering::ibQueryOutputColumn& oc : schema) {
 			ibMetaID id = wxNOT_FOUND;
 			if (oc.m_col != nullptr && !ibBackendQueryColumn::IsSyntheticId(oc.m_col->GetColumnId())
 			    && oc.m_col->GetName().IsSameAs(oc.m_name, false))
@@ -116,12 +109,12 @@ public:
 				}
 			}
 			taken.push_back(id);
-			m_cols.push_back(new ColInfo(oc.m_name, oc.m_col, id, oc.m_available));
+			m_cols.push_back(new ibValueDynamicListColumnInfo(oc.m_name, oc.m_col, id, oc.m_type, oc.m_available));
 		}
 	}
-	virtual ~ibQuerySchemaColumns() { for (auto* c : m_cols) delete c; }
+	virtual ~ibValueDynamicListColumnCollection() { for (auto* c : m_cols) delete c; }
 
-	virtual ibValueModelColumnInfo* GetColumnInfo(unsigned int idx) const override {
+	virtual ibValueDynamicListColumnInfo* GetColumnInfo(unsigned int idx) const override {
 		return idx < m_cols.size() ? m_cols[idx] : nullptr;
 	}
 	virtual unsigned int GetColumnCount() const override { return static_cast<unsigned int>(m_cols.size()); }
@@ -132,8 +125,13 @@ private:
 	static_assert(ibBackendQueryColumn::CanComposeSyntheticId(static_cast<ibMetaID>(s_nameBodies - 1)),
 		"a name's body must still take a kind");
 
-	std::vector<ColInfo*> m_cols;
+	std::vector<ibValueDynamicListColumnInfo*> m_cols;
 };
+
+namespace {
+// (ibDynamicListProvider DELETED — the dynamic list fetches through the base ibValueModel::RunComposerPage now,
+//  like every other model: ONE fetch in the parent. Its keyset provider + ibDynamicListNode are gone;
+//  RunComposerPage yields ibComposerNode, read through the base GetViewData<ibValueTreeNode>.)
 
 // Script return-line over a row node: its columns are read as fields. Through GetRowValues, because the row a script holds
 // may be the stub `CurrentRow = reference` stood on, with the key and no cells; a read here is one script's, not the
@@ -278,14 +276,14 @@ void ibValueDynamicList::RebuildSource()
 			// window asks the text the same question and shows the answer under the editor.
 			m_querySchema.clear();
 		}
-		m_columns = new ibQuerySchemaColumns(m_querySchema);   // ibValuePtr owns
+		m_columns = new ibValueDynamicListColumnCollection(m_querySchema);   // ibValuePtr owns
 		PruneUnresolvedSettings();   // the query decides which fields exist; the settings follow it
 		NotifyReset();
 		return;
 	}
 
 	// Rebuild columns + composer from the current source (the property's queryable, resolved above).
-	m_columns = (queryable != nullptr) ? new ibDynamicListColumns(queryable) : nullptr;   // ibValuePtr owns
+	m_columns = (queryable != nullptr) ? new ibValueDynamicListColumnCollection(queryable) : nullptr;   // ibValuePtr owns
 	if (queryable != nullptr) {
 		// A dynamic list is a DB model — rebind the source on its own ibDataDBComposer (m_composer, keeping settings).
 		m_composer.FromSource(queryable);
@@ -342,7 +340,7 @@ ibString ibValueDynamicList::SeedArbitraryQuery() const
 	select.m_from.m_alias = descriptor->GetName();
 	const ibString prefix = select.m_from.m_alias + ibT(".");
 
-	for (const ibBackendQueryColumn* column : queryable->GetColumns()) {
+	for (const ibBackendQueryColumn* column : queryable->GetQueryColumns()) {
 		if (column == nullptr || column->GetName().IsEmpty() || !column->IsAllowed())
 			continue;
 		ibQueryProjection projection;
@@ -442,7 +440,7 @@ static bool ibSourceHasColumn(const ibBackendQueryable* queryable, const ibBacke
 {
 	if (queryable == nullptr || column == nullptr || !column->IsAllowed())
 		return false;   // switched off — vended by the source, answered by no find (see the composer's SELECT)
-	for (const ibBackendQueryColumn* col : queryable->GetColumns())
+	for (const ibBackendQueryColumn* col : queryable->GetQueryColumns())
 		if (col == column)
 			return true;
 	return false;
@@ -530,6 +528,11 @@ bool ibValueDynamicList::GetValueByMetaID(const ibDataViewItem& item, const ibMe
 {
 	ibValueTreeNode* node = GetViewData<ibValueTreeNode>(item);
 	return node != nullptr && node->GetValue(id, pvarMetaVal);
+}
+
+ibValueModel::ibValueModelColumnCollection* ibValueDynamicList::GetColumnCollection() const
+{
+	return m_columns;
 }
 
 ibValueModel::ibValueModelReturnLine* ibValueDynamicList::GetRowAt(const ibDataViewItem& line)
@@ -672,11 +675,11 @@ ibValue ibValueDynamicList::GetItemSelectValue(const ibDataViewItem& item) const
 
 const ibSourceExplorer* ibValueDynamicList::GetSourceExplorer() const
 {
-	// The explorer's columns come from the QUERYABLE, not a metaobject - the dynamic list is
-	// queryable-based. Use the COLUMN-overload (a queryable column IS-A ibBackendSourceColumn): it
-	// carries the descriptor on the node (m_col -> GetSourceAttributeObject, so the binding resolves and
-	// the header shows the real SYNONYM, not the control name) — the 3-arg plain-value overload set
-	// neither m_col nor the synonym (synonym defaulted to the name). null / !IsAllowed are skipped inside.
+	// The explorer's columns are columns of the SOURCE — the source's fields, or over an arbitrary query the list's
+	// own columns — and go in through the COLUMN-overload: it carries the descriptor on the node (m_col -> the dot,
+	// WalkSource, so the binding resolves and the header shows the real SYNONYM, not the control name) — the 3-arg
+	// plain-value overload sets neither m_col nor the synonym (synonym defaulted to the name). null / !IsAllowed are
+	// skipped inside.
 	// Root flagged a TABLE SECTION — a dynamic list IS a table, so IsTableSource() reports true and the
 	// attribute drags as a tablebox (metadata-free, same as the value-table / object lists).
 	if (!m_sourceExplorer.Reset(GetSourceMetaData()->GetFactoryCountChanges(),
@@ -684,10 +687,10 @@ const ibSourceExplorer* ibValueDynamicList::GetSourceExplorer() const
 		return &m_sourceExplorer;   // built at this version of the metadata, of this source and query — read as it is
 	// The list is a MIRROR: it resets the explorer and hands it to the source descriptor (the single bridge), which
 	// forwards the fill to the metaobject — the same one that lists/runs commands and resolves select.
-	if (!IsArbitraryQuery())
+	if (!IsArbitraryQuery()) {
 		if (const ibQueryableSourceDescriptor* holder = GetSourceDescriptor())
 			holder->FillSourceExplorer(m_sourceExplorer);
-
+	}
 	// ⭐ OVER AN ARBITRARY QUERY, WHAT THE QUERY READS — its output columns, since that is what the list
 	// shows, and a field a person can SEE in the list but cannot filter, sort or group by is the defect Max
 	// reported ("I add fields to the query and I do not see them in the filters").
@@ -699,25 +702,16 @@ const ibSourceExplorer* ibValueDynamicList::GetSourceExplorer() const
 	// IsFolder` on a query without it (2026-10-28). The main table's fields stay reachable through the
 	// query's reference to its row (`Ref.Code`).
 	//
-	// (A name the query gives twice is offered once.)
-	for (const ibQueryLowering::OutputColumn& column : m_querySchema) {
-		if (column.m_name.IsEmpty())
-			continue;
-		const bool already = m_sourceExplorer.FindByName(column.m_name) != nullptr;
-		if (already)
-			continue;
-
-		// The column's own DESCRIPTOR when the list knows the output by the column's id — a declared
-		// attribute the query did not rename: that is what carries the synonym and the binding, so a plain
-		// projection reads in the pickers exactly as the field does. Any other (`Owner.Code AS Supplier`, a
-		// figure) is appended by name, type and the id the list numbered it with: the name is the query's,
-		// and it belongs to no attribute to borrow a synonym from.
-		const ibMetaID id = GetColumnIDByName(column.m_name);
-		if (column.m_col != nullptr && column.m_col->GetColumnId() == id)
-			m_sourceExplorer.AppendColumn(column.m_col);
-		else
-			m_sourceExplorer.AppendColumn(column.m_name, id, column.GetTypeDesc());
-	}
+	// Each output is the list's OWN column (ibValueDynamicListColumnCollection) — a column of the list as a source, as a value
+	// table's is: a field the query did not rename reads in the pickers exactly as the field does, any other
+	// (`Owner.Code AS Supplier`, a figure) by the query's name. (A name the query gives twice is offered once.)
+	else if (m_columns != nullptr)
+		for (unsigned int i = 0; i < m_columns->GetColumnCount(); ++i) {
+			const ibValueDynamicListColumnCollection::ibValueDynamicListColumnInfo* column = m_columns->GetColumnInfo(i);
+			if (column->GetName().IsEmpty() || m_sourceExplorer.FindByName(column->GetName()) != nullptr)
+				continue;
+			m_sourceExplorer.AppendColumn(column, static_cast<ibMetaID>(column->GetColumnID()));   // the id, said as one (valueTable.cpp)
+		}
 	// The list's DEFAULT view rides onto the explorer: a Choice list stamps the choice flag the form auto-build copies
 	// onto the mainTableBox (where it serialises per-form). A Normal list leaves it off. This is the ONE propagation.
 	m_sourceExplorer.SetChoiceMode(m_view == ibDynamicListView_Choice);

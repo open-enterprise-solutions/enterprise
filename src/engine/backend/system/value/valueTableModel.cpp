@@ -35,7 +35,7 @@ bool ibValueModelTable::SetValueByRow(const ibVariant& variant,
 	ibValue cValue; node->GetValue(col, cValue);
 	if (strData.Length() > 0) {
 		std::vector<ibValue> listValue;
-		if (cValue.FindValue(strData, listValue)) {
+		if (cValue.FindValue(strData, ibChoiceCondition(), listValue)) {
 			node->SetValue(
 				col, ibValueTypeDescription::AdjustValue(typeDescription, listValue.at(0))
 			);

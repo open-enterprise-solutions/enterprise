@@ -561,7 +561,7 @@ private:
 	TreeIcons PrepareIcons(ibTreeCtrl* tree) const;
 	int KindIcon(TreeIcons& icons, const wxString& kind) const;
 	// THE PICTURE FOR ONE FIELD — its own if the column gave one, the plain field picture if not.
-	// Nothing here reads a metatype: the column already answered (ibBackendSourceColumn::GetColumnPicture).
+	// Nothing here reads a metatype: the column already answered (ibBackendQueryColumn::GetColumnPicture).
 	int FieldIcon(TreeIcons& icons, const ibQueryConstructorField& field) const;
 	// The same question for a row of ANY grid in this window: a column answers with its own
 	// picture, a dot-walk with the picture of the field it ends on, an expression with none (the

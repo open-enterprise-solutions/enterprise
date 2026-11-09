@@ -4,7 +4,7 @@
 #include <vector>
 
 #include "backend/srcObject.h"          // ibSourceObject (base) + ibValueMetaObjectCompositeData fwd
-#include "backend/query/queryColumn.h"  // ibBackendQueryColumn / ibBackendSourceColumn / ibTypeDescription (nested ibSourceExplorer)
+#include "backend/srcColumn.h"          // ibBackendSourceColumn / ibTypeDescription (a node's descriptor, nested ibSourceExplorer)
 #include "backend/uniqueKey.h"          // ibUniqueKey (GetGuid)
 #include "backend/lock/lockHandle.h"    // ibLockHandle (m_formLockHandle)
 #include "backend/lock/lockTypes.h"     // ibLockMode (TryAcquireFormLock)
@@ -30,8 +30,8 @@ public:
 	// ibSourceExplorer: a source's column/field TEMPLATE (one-time form generation + the picker),
 	// NESTED in ibSourceDataObject -- a node is only ever produced by / bound to a source, so the
 	// type lives inside the source's type. METADATA-FREE: a node holds plain values (name / synonym /
-	// id / type) + UI flags; a column is appended from the neutral ibBackendQueryColumn (a metaobject
-	// attribute IS one, a queryable column IS one) -- never a metaobject pointer.
+	// id / type) + UI flags; a column is appended as its source column (an attribute, a value table's column) or
+	// by plain values -- never a metaobject pointer.
 	class ibSourceExplorer {
 	public:
 
@@ -147,39 +147,20 @@ public:
 		bool ContainType(const ibValueTypes& valType) const { return m_sourceInfo.m_typeDesc.ContainType(valType); }
 		bool ContainType(const ibClassID& cid) const { return m_sourceInfo.m_typeDesc.ContainType(cid); }
 
-		// Append a COLUMN from its neutral descriptor (an attribute / a queryable column — both
-		// ibBackendQueryColumn). Skipped when the column is not allowed (a deleted / disabled field):
-		// the metadata judgement lives on the column, not here.
-		// `group` names the group these columns belong with (see GetSourceGroup); empty = on its own.
-		void AppendColumn(const ibBackendQueryColumn* col, bool enabled = true, bool visible = true,
-			const ibString& group = ibEmptyString) {
-			if (col == nullptr || !col->IsAllowed()) return;
-			// BOTH ANSWERS AT ONCE: the DECLARATION (a characteristic must say it is one — inspector,
-			// generated column, type picker) and what a value here may BE (the chart's references —
-			// what a branch walks into and what storage lays out). Equal for every ordinary field.
-			m_arraySource.emplace_back(ibSourceExplorer{ col->GetName(), col->GetSynonym(), col->GetColumnId(),
-				col->GetTypeDesc(), col->GetTypeValueDesc(), /*tableSection*/false, /*select*/true, enabled, visible });
-			m_arraySource.back().m_sourceInfo.m_owner = m_sourceInfo.m_owner;   // child fetches through the same source
-			m_arraySource.back().m_sourceInfo.m_col = col;                      // keep the descriptor (a query column IS-A source column)
-			m_arraySource.back().m_sourceInfo.m_srcGroup = group;
-		}
-
-		// Append a COLUMN by plain values (a queryable column with no descriptor object).
+		// Append a COLUMN by plain values (a column with no descriptor behind it).
 		void AppendColumn(const ibString& name, const ibMetaID& id, const ibTypeDescription& typeDesc) {
 			m_arraySource.emplace_back(ibSourceExplorer{ name, id, typeDesc }).m_sourceInfo.m_owner = m_sourceInfo.m_owner;
 		}
 
-		// Append a COLUMN from an ABSTRACT source-column descriptor + its id. Unlike the ibBackendQueryColumn
-		// overload (a DB / queryable column that carries its own GetColumnId), a plain source column (e.g. a
-		// RAM value-table column) has no query identity, so the id is passed explicitly. The descriptor is
-		// KEPT (m_col) so WalkColumns returns it as the leaf — the header / type resolve through it.
+		// Append a COLUMN from its source-column descriptor + its id (an attribute's column id, a value table's
+		// column number). The descriptor is KEPT (m_col) so WalkColumns returns it as the leaf — the header /
+		// type resolve through it.
 		// 🛑⭐⭐ A FLAG IS NOT AN ID, and this overload exists to say so at COMPILE time. `ibMetaID` is an
 		// integer, so `AppendColumn(col, /*enabled*/true, /*visible*/false)` on a plain source column
 		// binds to the overload below with `true` silently becoming id 1 — every column appended under
 		// the same id, the flags shifted one place along, and not a word from the compiler.
 		//
-		// ⚠ IT HAPPENED. An attribute stopped being an ibBackendQueryColumn and began HOLDING one, so
-		// call sites that had been binding to the query-column overload above quietly moved here. The
+		// ⚠ IT HAPPENED. Call sites appending an attribute with its flags quietly bound here once, and the
 		// lists they built showed every column under one header and could not find a single value
 		// (2026-09-06). A refactor driven by the COMPILER's error list cannot see this by
 		// construction: nothing failed to compile.

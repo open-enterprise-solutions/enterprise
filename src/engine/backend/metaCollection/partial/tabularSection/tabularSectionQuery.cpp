@@ -58,7 +58,7 @@ const ibBackendQueryColumn* ibTabularQueryable::ResolveColumnByName(const ibStri
 	if (ownerRef != nullptr && !ownerRef->GetName().IsEmpty() && stringUtils::IsSameAs(name, ownerRef->GetName()))
 		return ownerRef;
 	// The attribute's QUERY FACE — it holds one rather than being one (docs/private/ownership-authority.md) — found in the
-	// SAME list GetColumns vends. The table's children alone missed what its owner carries into it: the account's
+	// SAME list GetQueryColumns vends. The table's children alone missed what its owner carries into it: the account's
 	// kinds table shows a tick-box per breakdown accounting kind of its chart, and `K.Quantitative` was refused as
 	// an unknown attribute while `SELECT *` returned it (2026-09-17).
 	for (const auto attribute : m_meta->GetGenericAttributeArrayObject())
@@ -67,10 +67,22 @@ const ibBackendQueryColumn* ibTabularQueryable::ResolveColumnByName(const ibStri
 	return nullptr;
 }
 
-std::vector<const ibBackendQueryColumn*> ibTabularQueryable::GetColumns() const
+std::vector<const ibBackendQueryColumn*> ibTabularQueryable::GetQueryColumns() const
 {
 	std::vector<const ibBackendQueryColumn*> columns;
+	// ⭐⭐ THE OWNER, SHOWN AS A FIELD OF THE SECTION.
+	//
+	// A section's rows already carry their owner — the row key it stores IS the owner's reference
+	// key, the same sixteen bytes. That was only ever a physical detail, invisible to anyone writing
+	// a query, so a line of a document could not be joined back to the document it belongs to
+	// without leaving the query language.
+	//
+	// Shown FIRST because it is what a reader looks for: `Ref` selects the owner, joins to it, and
+	// dot-walks through it exactly as a reference in any other field does. The type is constant —
+	// a section belongs to one owner — so nothing about it is read from a row.
 	columns.push_back(OwnerRefColumn());
+	// THE SECTION'S OWN ATTRIBUTES — asked of the metaobject rather than restated, so a column added
+	// to the section tomorrow shows up with nothing edited in this file.
 	for (const auto attribute : m_meta->GetGenericAttributeArrayObject())
 		if (attribute != nullptr) columns.push_back(attribute->GetQueryColumn());
 	return columns;

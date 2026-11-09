@@ -31,18 +31,15 @@ void ibValueMetaObjectRecordDataRef::FillSourceExplorer(ibSourceDataObject::ibSo
 {
 	for (const ibValueMetaObjectAttributeBase* a : GetGenericAttributeArrayObject())
 		if (a != nullptr)
-			// 🛑⭐⭐ THE FACADE, NOT THE ATTRIBUTE — and the difference is a SILENT OVERLOAD SHIFT. An
-			// attribute stopped being an `ibBackendQueryColumn` when it began HOLDING one, so this
-			// call stopped binding to `AppendColumn(const ibBackendQueryColumn*, bool, bool, …)` and
-			// began binding to `AppendColumn(const ibBackendSourceColumn*, const ibMetaID& id, bool,
-			// bool, …)` — whose SECOND parameter is the id. `true` converted to 1, every column was
-			// appended under the same id, and the flags shifted one place along.
+			// 🛑⭐⭐ THE ID, SAID — the SECOND parameter is the id. Written as a flag
+			// (`AppendColumn(a, /*enabled*/true, …)`) it once converted to 1: every column was appended
+			// under the same id, and the flags shifted one place along.
 			//
 			// ⚠ IT COMPILED, because bool converts to an integer without a word. What it produced was
 			// a list whose every column header read the same and whose values could not be found at
 			// all — an assert deep in GetValueByMetaID, three tiers from here (Max, 2026-09-06,
 			// pointing straight at this line: "the id is lost here").
-			explorer.AppendColumn(a->GetQueryColumn(), /*enabled*/true,
+			explorer.AppendColumn(a, a->GetColumnId(), /*enabled*/true,
 				/*visible*/ IsDataReference(a->GetMetaID()));
 }
 
@@ -53,27 +50,9 @@ void ibValueMetaObjectRecordDataMutableRef::FillSourceExplorer(ibSourceDataObjec
 		if (a == nullptr) continue;
 		const ibMetaID id = a->GetMetaID();
 		const bool hidden = IsDataReference(id) || IsDataDeletionMark(id) || IsDataVersion(id);
-		explorer.AppendColumn(a->GetQueryColumn(), /*enabled*/true, /*visible*/ !hidden);
+		explorer.AppendColumn(a, a->GetColumnId(), /*enabled*/true, /*visible*/ !hidden);
 	}
 
-}
-
-// A RECORDER adds one field to that: the MOMENT — appended by hand, and that is the whole point of
-// it. It is deliberately absent from the generic list (the list that becomes columns, object members
-// and form fields), so this is the ONE place it surfaces: the field tree a query is written against.
-//
-// What is appended is the moment AS A COLUMN — constructed from the date and the reference, which is
-// what the layout describes, the sort orders by and the codec reads. NOT VISIBLE: `visible` is what
-// makes a field a DEFAULT COLUMN, and the moment is not something anyone wants to read in a list —
-// it is an addressable point for a query to compare against, the same standing the reference and the
-// deletion mark have.
-void ibValueMetaObjectRecordDataRecorderRef::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
-{
-	ibValueMetaObjectRecordDataMutableRef::FillSourceExplorer(explorer);
-	// Taken from the QUERYABLE, which is where a constructed column lives — the field tree then offers
-	// exactly what a query can resolve, because both come from one place.
-	if (const ibBackendQueryable* queryable = GetQueryable())
-		explorer.AppendColumn(queryable->ResolveColumnByName(GetPointInTime()->GetName()), /*enabled*/true, /*visible*/false);
 }
 
 // CATALOG variant — reference / deletion mark / data version / predefined name / parent / is-folder hidden;
@@ -99,7 +78,7 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::FillSourceExplorer(ibSource
 		const bool hidden = IsDataReference(id) || IsDataDeletionMark(id) || IsDataVersion(id)
 		                 || IsDataPredefinedName(id) || IsDataFolder(id)
 		                 || (IsDataParent(id) && parentIsTheTree);
-		explorer.AppendColumn(a->GetQueryColumn(), /*enabled*/true, /*visible*/ !hidden);
+		explorer.AppendColumn(a, a->GetColumnId(), /*enabled*/true, /*visible*/ !hidden);
 	}
 
 	// ⭐ AND NO MOMENT HERE. A moment is a DATE plus the record standing at it, and a catalogue has no
@@ -456,7 +435,7 @@ void ibValueMetaObjectRegisterData::FillSourceExplorer(ibSourceDataObject::ibSou
 {
 	for (const ibValueMetaObjectAttributeBase* a : GetGenericAttributeArrayObject())
 		if (a != nullptr)
-			explorer.AppendColumn(a->GetQueryColumn(), /*enabled*/true, /*visible*/ true);
+			explorer.AppendColumn(a, a->GetColumnId(), /*enabled*/true, /*visible*/ true);
 }
 
 // (Default presentation sort REMOVED from here — it is now set at LIST CREATION (CreateSourceObject / GetListForm)

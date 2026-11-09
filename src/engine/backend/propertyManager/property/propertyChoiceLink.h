@@ -58,7 +58,8 @@ public:
 
 	// …and what its window asks of the configuration, as the old desktop's link-by-type window did when it opened
 	// (now frmclient/win/dlgs/choiceLink): Targets — the reference types of the field (ibFieldReferenceTypes), each its Id,
-	// Title, Type (the class its reference is registered under) and Picture.
+	// Title, Type (the class its reference is registered under) and Picture; Sources — the fields that may govern it,
+	// each its Id (the row's), Title, Picture and Path (the hops the link stores).
 	virtual bool GetProtocolValue(ibDataNode& row, ibReader reader) override;
 };
 
@@ -77,13 +78,9 @@ public:
 	void SetValue(const ibChoiceParametersDescription& val);
 
 	// The fields of what this one refers to — what a row may fill. A composite field answers per type,
-	// which is why the type is asked for rather than assumed.
+	// which is why the type is asked for rather than assumed. Where a row's value comes from is one of the
+	// fields beside this one (ibChoiceHolderFields, variant/variantChoiceLink.h).
 	void GetParameterList(const ibClassID& ofType, ibPropertyChoiceList& list) const;
-
-	// The fields that may supply a value: this field's neighbours in its own holder, one hop each.
-	// Anything may supply a VALUE — unlike a link by type, which needs a field that carries a TYPE —
-	// so the list is not narrowed.
-	void GetSourceList(ibPropertyChoiceList& list) const;
 
 	ibPropertyChoiceParameters(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString)
 		: ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())) {}
@@ -107,8 +104,9 @@ public:
 
 	// …and what its window asks of the configuration, as the old desktop's choice-parameters window did when it opened
 	// (now frmclient/win/dlgs/choiceParameters): Targets as the link's, each its children the fields a row may fill
-	// (GetParameterList); Sources — the fields beside it that may supply a value (GetSourceList), Title the holder they
-	// stand in, each its children (Id) the parameters it could fill, the likeliest first, and Default the obvious one.
+	// (GetParameterList); Sources — the fields beside it that may supply a value (ibChoiceHolderFields), Title the holder
+	// they stand in, each its Id (the row's), Title, Picture, Path (the hops a row stores), its children (Id) the
+	// parameters it could fill, the likeliest first, and Default the obvious one.
 	virtual bool GetProtocolValue(ibDataNode& row, ibReader reader) override;
 };
 

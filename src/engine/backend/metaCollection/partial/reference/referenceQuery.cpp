@@ -180,7 +180,7 @@ void ibValueReferenceDataObject::ReadBatch()
 	}
 }
 
-bool ibValueReferenceDataObject::FindValue(const ibString& findData, std::vector<ibValue>& listValue) const
+bool ibValueReferenceDataObject::FindValue(const ibString& input, const ibChoiceCondition& condition, std::vector<ibValue>& out) const
 {
 	// ⭐ THE MANAGER IS ASKED FIRST — ChoiceDataGetProcessing(ChoiceData, Parameters, StandardProcessing), in
 	// its module and in its event handlers. Every quick choice and every choice by typed text comes through
@@ -189,7 +189,7 @@ bool ibValueReferenceDataObject::FindValue(const ibString& findData, std::vector
 	if (m_metaObject->AccessRight_Show()) {
 		const ibValuePtr<ibValueArray> choiceData(new ibValueArray());
 		const ibValuePtr<ibValueStructure> parameters(new ibValueStructure());
-		parameters->Insert(ibT("SearchString"), findData);
+		parameters->Insert(ibT("SearchString"), input);
 
 		ibValue choiceDataValue(choiceData);
 		ibValue parametersValue(parameters);
@@ -197,8 +197,8 @@ bool ibValueReferenceDataObject::FindValue(const ibString& findData, std::vector
 		ibValue* params[] = { &choiceDataValue, &parametersValue, &standardProcessing };
 		ibRuntimeModuleDataObject::ExecAsManagerEvent(m_metaObject, ibT("ChoiceDataGetProcessing"), params, 3);
 		if (!standardProcessing.GetBoolean()) {
-			listValue = choiceData->Values();
-			return !listValue.empty();
+			out = choiceData->Values();
+			return !out.empty();
 		}
 	}
 
@@ -268,10 +268,19 @@ bool ibValueReferenceDataObject::FindValue(const ibString& findData, std::vector
 		// asks. `Contains(wxEmptyString)` is true of every string, so the old code proved that per row
 		// by materialising every attribute of it first. Nothing about the row can change the answer,
 		// so nothing about the row is read.
-		const bool everything = findData.IsEmpty();
+		const bool everything = input.IsEmpty();
 
 		ibDataQueryBuilder q;
 		q.From(m_metaObject->GetQueryable());
+
+		// ⭐ AMONG WHAT THE CHOICE IS MADE UNDER — each `field = value` pair, as the choice form's list is born with it
+		// (ibNewList, valueDynamicList.cpp): what is typed finds no more than the form would show (Max, 2026-11-09, a
+		// typed warehouse taken that its narrowed list did not hold). A pair naming a field this kind has not is another
+		// type's of a composite field, and narrows nothing here.
+		for (const std::pair<const ibString, ibValue>& parameter : condition.m_parameters) {
+			if (const ibBackendQueryColumn* column = m_metaObject->GetQueryable()->ResolveColumnByName(parameter.first))
+				q.Where(column, parameter.second);
+		}
 
 		// ⭐⭐ THE TEXT IS LOOKED FOR IN THE DATABASE, NOT AMONG THE FIRST HUNDRED ROWS. The read below
 		// took the table's first 101 rows with no condition and matched the text among them, so in a
@@ -293,13 +302,13 @@ bool ibValueReferenceDataObject::FindValue(const ibString& findData, std::vector
 					|| attribute->ContainType(ibValueTypes::TYPE_NUMBER));
 			});
 		if (!everything && textOnly) {
-			const bool digits = std::all_of(findData.begin(), findData.end(),
+			const bool digits = std::all_of(input.begin(), input.end(),
 				[](ibChar c) { return c >= ibT('0') && c <= ibT('9'); });
-			const auto beginsWith = [&findData](const ibValueMetaObjectAttributeBase* attribute) -> ibQueryPredicatePtr {
+			const auto beginsWith = [&input](const ibValueMetaObjectAttributeBase* attribute) -> ibQueryPredicatePtr {
 				size_t first = 0;
-				while (first + 1 < findData.length() && findData[first] == ibT('0'))
+				while (first + 1 < input.length() && input[first] == ibT('0'))
 					++first;   // a number keeps no leading zeros, so neither does what it begins with
-				const ibString typed = findData.Mid(first);
+				const ibString typed = input.Mid(first);
 				const size_t length = attribute->GetTypeDesc().GetPrecision();
 				if (typed.length() > length)
 					return nullptr;   // more digits than the code has: it begins with none of them
@@ -323,7 +332,7 @@ bool ibValueReferenceDataObject::FindValue(const ibString& findData, std::vector
 				ibQueryPredicatePtr leaf;
 				if (attribute->ContainType(ibValueTypes::TYPE_STRING))
 					leaf = ibQueryPredicate::Leaf(
-						ibQueryCondition{ attribute->GetQueryColumn(), ibQueryFilterOp::Like, ibValue(ibT("%") + findData + ibT("%")) });
+						ibQueryCondition{ attribute->GetQueryColumn(), ibQueryFilterOp::Like, ibValue(ibT("%") + input + ibT("%")) });
 				else if (digits)
 					leaf = beginsWith(attribute);
 				if (!leaf)
@@ -359,11 +368,11 @@ bool ibValueReferenceDataObject::FindValue(const ibString& findData, std::vector
 			for (const ibValueMetaObjectAttributeBase* attribute : searched) {
 				if (attribute != nullptr) {
 					const ibString text = row.GetValue(attribute->GetQueryColumn()).GetString();
-					if (stringUtils::IsSameAs(text, findData))
+					if (stringUtils::IsSameAs(text, input))
 						return attributeAt * 3;
-					if (text.Lower().StartsWith(findData.Lower()))
+					if (text.Lower().StartsWith(input.Lower()))
 						return attributeAt * 3 + 1;
-					if (text.Lower().Contains(findData.Lower()))
+					if (text.Lower().Contains(input.Lower()))
 						return attributeAt * 3 + 2;
 				}
 				++attributeAt;
@@ -391,7 +400,7 @@ bool ibValueReferenceDataObject::FindValue(const ibString& findData, std::vector
 				wxASSERT_MSG(false, wxT("FindValue: the identity column did not answer with a reference"));
 				return false;
 			}
-			if (everything || ibValueDataObjectComparator(m_metaObject, rowReference->GetGuid().GetGuid(), selection).Matches(findData))
+			if (everything || ibValueDataObjectComparator(m_metaObject, rowReference->GetGuid().GetGuid(), selection).Matches(input))
 				ranked.emplace_back(everything ? 0 : rankOf(selection), rowValue);
 		}
 		// Over the ceiling — hand back NOTHING rather than a truncated list. A list cut off at a
@@ -406,8 +415,8 @@ bool ibValueReferenceDataObject::FindValue(const ibString& findData, std::vector
 				return a.first != b.first ? a.first < b.first : a.second.GetString() < b.second.GetString();
 			});
 		for (const std::pair<int, ibValue>& entry : ranked)
-			listValue.push_back(entry.second);
-		return listValue.size() > 0;
+			out.push_back(entry.second);
+		return out.size() > 0;
 	}
 	catch (...) { return false; }
 }

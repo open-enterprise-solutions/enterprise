@@ -540,7 +540,7 @@ TEST(RegisterSurface, AChangedShapeRebuildsAndTheOldPointerStaysAlive) {
 
     const ibBackendQueryable* before = cache.Obtain(wxT("k"), wxT("sig-1"), wxT("T"), nullptr, one);
     ASSERT_NE(nullptr, before);
-    EXPECT_EQ(1u, before->GetColumns().size());
+    EXPECT_EQ(1u, before->GetQueryColumns().size());
 
     // ⭐ THE SIGNATURE IS WHAT REBUILDS IT. Keyed by name alone, a surface asked for before the
     // register's attributes were read stays empty for the life of the session — that is the scar
@@ -548,12 +548,12 @@ TEST(RegisterSurface, AChangedShapeRebuildsAndTheOldPointerStaysAlive) {
     const ibBackendQueryable* after = cache.Obtain(wxT("k"), wxT("sig-2"), wxT("T"), nullptr, two);
     ASSERT_NE(nullptr, after);
     EXPECT_NE(before, after);
-    EXPECT_EQ(2u, after->GetColumns().size());
+    EXPECT_EQ(2u, after->GetQueryColumns().size());
 
     // ⚠ AND THE OLD ONE IS RETIRED, NOT DESTROYED — a reader may still hold the pointer handed out
     // earlier. Reading through it after the rebuild is the whole reason the retired list exists; if
     // this ever becomes a use-after-free, it fails here rather than in somebody's report.
-    EXPECT_EQ(1u, before->GetColumns().size());
+    EXPECT_EQ(1u, before->GetQueryColumns().size());
 }
 
 TEST(RegisterSurface, ADerivedColumnSaysByItsSignThatNobodyDeclaredIt) {
@@ -864,14 +864,14 @@ class ConditionSurface : public ibBackendQueryable {
 public:
 	explicit ConditionSurface(const ibString& name) : m_name(name) {}
 	void Add(const ibBackendQueryColumn* column) { m_columns.push_back(column); }
-	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_columns; }
+	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override { return m_columns; }
 	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override {
 		for (const ibBackendQueryColumn* column : m_columns)
 			if (column->GetName().IsSameAs(name, false))
 				return column;
 		return nullptr;
 	}
-	bool OwnsColumn(const ibBackendQueryColumn* column) const override {
+	bool ContainColumn(const ibBackendQueryColumn* column) const override {
 		return std::find(m_columns.begin(), m_columns.end(), column) != m_columns.end();
 	}
 	ibString GetQueryTableName() const override { return m_name; }

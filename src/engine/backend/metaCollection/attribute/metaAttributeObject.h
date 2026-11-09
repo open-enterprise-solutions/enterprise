@@ -4,7 +4,8 @@
 #include "backend/metaCollection/metaObject.h"
 #include "backend/backend_type.h"
 #include "backend/objCtorDefs.h"
-#include "backend/query/queryColumn.h"   // ibBackendSourceColumn (the attribute's own face) + ibBackendQueryColumn (the face it HOLDS)
+#include "backend/srcColumn.h"           // ibBackendSourceColumn (the attribute's own face)
+#include "backend/query/queryColumn.h"   // ibBackendQueryColumn (the face it HOLDS)
 
 #include <memory>   // the query face is held, not inherited — see ibMetaAttributeColumn below
 
@@ -109,7 +110,7 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 		if (m_column) m_column->Detach();   // the whole interaction between the two ownerships
 	}
 
-	// A METAOBJECT COLUMN WEARS ITS OWN PICTURE. The column face asks (queryColumn.h), the
+	// A METAOBJECT COLUMN WEARS ITS OWN PICTURE. The column face asks (srcColumn.h), the
 	// metaobject answers with its class — the number its icon is registered under — so a dimension, a
 	// resource and a plain attribute are told apart by whoever draws them, and neither the drawer nor
 	// this class holds a list of kinds: each level's class already wears its own icon in its own tree.
@@ -189,7 +190,7 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 	// overrider trick as GetName: the column synonym IS the metaobject synonym (the UI caption).
 	virtual ibString GetSynonym() const override      { return ibValueMetaObject::GetSynonym(); }
 	// …and GetComment the same way. It was ambiguous all along (ibValueMetaObject declares one and
-	// ibBackendAbstractColumn declares another); nothing had called it THROUGH the attribute until
+	// ibBackendSourceColumn declares another); nothing had called it THROUGH the attribute until
 	// the query facade began forwarding to it, and an ambiguity nobody exercises is silent.
 	virtual ibString GetComment() const override      { return ibValueMetaObject::GetComment(); }
 	// IsAllowed (column base) routes to the metaobject's (IsEnabled && !IsDeleted) — so the source

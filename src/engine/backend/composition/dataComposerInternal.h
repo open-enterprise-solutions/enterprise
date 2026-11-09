@@ -19,11 +19,11 @@
 // ⭐ DOES THIS COLUMN ANSWER TO THIS PATH — and the two are NOT spelled the same. A path is what a
 // person picked (`Ref.Date`, `Sales.Qty`); the OUTPUT NAME the engine gives it drops a leading
 // source qualifier and CONCATENATES the walk (`ibQueryProposedName`): `RefDate`, `Qty`.
-bool ibComposerColumnAnswersTo(const ibQueryLowering::OutputColumn& oc, const ibString& path);
+bool ibComposerColumnAnswersTo(const ibQueryLowering::ibQueryOutputColumn& oc, const ibString& path);
 
 // A ROW OF THE WALK, READ BY FIELD — what the evaluator is handed as the row (ibCompositionValueOf): a column's name,
 // else its alias. Asked by the walk hiding a heading and by the conditional appearance marking a line.
-ibCompositionValueOf ibComposerRowValueOf(const std::vector<ibQueryLowering::OutputColumn>& schema,
+ibCompositionValueOf ibComposerRowValueOf(const std::vector<ibQueryLowering::ibQueryOutputColumn>& schema,
                                           const std::vector<ibValue>& row);
 
 // «CONTAINS» AS THE LIKE PATTERN IT STANDS FOR — `%value%`, a `%` or `_` typed into the value left a wildcard. One

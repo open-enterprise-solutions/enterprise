@@ -265,16 +265,12 @@ public:
 
 	// WHAT COLUMNS THIS TABLE HAS, asked without running it — the query constructor's catalogue.
 	// Answered from the SHAPE, which is metadata plus the call's arguments and touches no database.
-	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
-
-	// …AND WITH THE CALL'S ARGUMENTS, because the REQUESTED KINDS decide which columns exist. That is
+	// WITH THE CALL'S ARGUMENTS, because the REQUESTED KINDS decide which columns exist. That is
 	// the structural difference from every other register in the tree: the output schema follows the
 	// arguments of the call, not the metaobject.
-	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer,
-	                        const std::vector<ibValue>& args) const override;
+	std::vector<const ibBackendQueryColumn*> GetQueryColumns(const std::vector<ibValue>& args) const override;
 	void DescribeParameters(std::vector<ibQuerySourceParameter>& out) const override;
-	void FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
-	void FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer, const ibString& slot) const override;
+	std::vector<const ibBackendQueryColumn*> GetConditionColumns(const ibString& slot) const override;
 
 private:
 	ibValueMetaObjectAccountingRegister* m_reg;

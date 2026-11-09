@@ -7,6 +7,7 @@
 #include <algorithm>   // std::find — a type offered once, whichever "any" named it
 
 #include "frmserver/visualView/ctrl/frame.h"
+#include "frmserver/visualView/ctrl/form.h"                           // the form — the source a control's own links are read in
 #include "frmserver/visualView/choiceRequest.h"                      // ibRequestChoice, ibRequestQuickChoice — "pick one of these"
 #include "backend/backend_mainFrame.h"                                    // the frame a request to the person goes through
 #include "core/serialize/dataBuilder.h"                                // the request and its answer
@@ -26,24 +27,22 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibValue
 
 	ibValue current;
 	ownerValue->GetControlValue(current);
+	const ibMetaData* metaData = factory->GetMetaData();
 
-	// UNDEFINED = the type is not settled yet. GetDataType answers it — from the metadata by default, asking the
-	// person only when the cell admits more than one type, and overridden outright by a cell that already knows
-	// (a filter's left side is always a field). Settled, the cell stands on it, and the value of that type is
-	// chosen right after, in the same press.
+	// UNDEFINED = the type is not settled yet. The control's own Type answers it (ShowSelectType over what a value of it
+	// may be), asking the person only when the cell admits more than one type. Settled, the cell stands on it, and the
+	// value of that type is chosen right after, in the same press.
 	if (current.GetType() == ibValueTypes::TYPE_EMPTY) {
 		// THE DESIGNER'S OWN WINDOW asks both — the type and a declared value of it — so an empty cell reaches a value
 		// in one click, as the desktop's. Whether anything referenceable is admitted is the window's question: it
 		// answers `false` for a declaration with none, and the road below carries on unchanged.
-		if (appData->DesignerMode()
-			&& ibShowPredefinedSelector(ownerValue, factory->GetTypeDesc(), factory->GetMetaData()))
+		if (appData->DesignerMode() && ibShowPredefinedSelector(ownerValue, factory->GetTypeDesc(), metaData))
 			return true;
 
-		const ibClassID clsid = factory->GetDataType();
-		const ibMetaData* metaData = factory->GetMetaData();
-		if (clsid == 0 || metaData == nullptr || !metaData->IsRegisterCtor(clsid))
+		const ibClassID settled = ShowSelectType(metaData, factory->GetTypeValueDesc());
+		if (settled == 0 || metaData == nullptr || !metaData->IsRegisterCtor(settled))
 			return false;   // the person closed the type choice
-		current = metaData->CreateObject(clsid);
+		current = metaData->CreateObject(settled);
 		ownerValue->SetControlValue(current);   // the cell now stands on its settled type
 	}
 
@@ -56,8 +55,6 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibValue
 	if (clsid == g_valueTypeDescriptionCLSID)
 		return false;
 
-	const ibMetaData* metaData = factory->GetMetaData();
-
 	// IN THE DESIGNER EVERY REFERENCE ASKS ITS DECLARED VALUES — a catalog, a document and an enumeration, one window,
 	// one habit (Max, 2026-08-28). A cell that declares nothing is standing on the type it already holds.
 	if (appData->DesignerMode()) {
@@ -67,7 +64,7 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibValue
 			return true;
 	}
 
-	if (ibTypeControlFactory::QuickChoice(ownerValue, clsid, metaData))
+	if (QuickChoice(ownerValue, current, metaData))
 		return true;
 
 	const ibCtorMetaValueType* so = metaData != nullptr ? metaData->GetTypeCtor(clsid) : nullptr;
@@ -77,10 +74,10 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibValue
 			// the FIELD being filled, and WHERE the values its link names are read. The second is the
 			// control's own answer — the form's source for a control on a form, the row being edited
 			// for a table column — so the list is narrowed by exactly what the person can see beside
-			// the field they are filling.
-			const ibChoiceHolder holder = factory->GetChoiceHolder();
-			const ibChoiceCondition condition = ibChoiceLinkResolver::Resolve(holder,
-				factory->GetSourceDesc().GetLeaf());
+			// the field they are filling; the control's own rows over it are read in the form.
+			const ibChoiceCondition condition = ibChoiceLinkResolver::Resolve(factory->GetChoiceHolder(),
+				factory->GetSourceDesc().GetLeaf(), factory->GetChoiceParameters(),
+				ibChoiceHolder(ownerValue->GetOwnerForm()));
 
 			// ⭐ WHAT THE FORM IS MADE WITH: which form the author picked, and — as one named part of
 			// it — the choice. The condition goes in WHOLE, empty or not: "nothing narrows this" is a
@@ -94,18 +91,51 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibValue
 	return false;
 }
 
-bool ibTypeControlFactory::SimpleChoice(ibControlFrame* ownerValue, const ibClassID& clsid, const ibMetaData* metaData)
+bool ibTypeControlFactory::FindValue(ibControlFrame* ownerValue, const ibValue& value, const ibString& input,
+	std::vector<ibValue>& out)
 {
-	const ibValueTypes valType = ibValue::GetVTByID(clsid);
+	const ibTypeControlFactory* factory = dynamic_cast<const ibTypeControlFactory*>(ownerValue);
+	if (factory == nullptr)
+		return false;
+
+	// The same condition the choice form is made with (ChooseValue) — typing finds no more than the form shows.
+	const ibChoiceCondition condition = ibChoiceLinkResolver::Resolve(factory->GetChoiceHolder(),
+		factory->GetSourceDesc().GetLeaf(), factory->GetChoiceParameters(), ibChoiceHolder(ownerValue->GetOwnerForm()));
+	return value.FindValue(input, condition, out);
+}
+
+void ibTypeControlFactory::ClearLinked(ibControlFrame* changed, const ibValue& before)
+{
+	const ibTypeControlFactory* factory = dynamic_cast<const ibTypeControlFactory*>(changed);
+	ibValueForm* const form = changed != nullptr ? changed->GetOwnerForm() : nullptr;
+	if (factory == nullptr || form == nullptr)
+		return;
+
+	// On a CHANGE only — what the control shows now, after its own adjustment; writing what is already there makes
+	// nothing stale, and is where a chain that names itself in a circle stops.
+	ibValue after;
+	changed->GetControlValue(after);
+	if (after.GetClassType() == before.GetClassType() && after == before)
+		return;
+
+	const ibSourceDescription& edited = factory->GetSourceDesc();
+	for (ibValueControl* control : form->GetControlList()) {
+		ibTypeControlFactory* linked = dynamic_cast<ibTypeControlFactory*>(control);
+		if (linked != nullptr && linked != factory
+			&& ibChoiceLinkResolver::IsLinked(linked->GetTypeLink(), linked->GetChoiceParameters(), edited))
+			control->SetControlValue(linked->AdjustValue());
+	}
+}
+
+bool ibTypeControlFactory::SimpleChoice(ibControlFrame* ownerValue, const ibValue& current, const ibMetaData* metaData)
+{
+	const ibValueTypes valType = ibValue::GetVTByID(current.GetClassType());
 	if (ownerValue == nullptr || (valType != ibValueTypes::TYPE_NUMBER && valType != ibValueTypes::TYPE_DATE))
 		return false;
 
 	ibBackendDocFrame* const frame = ibSession::CurrentFrame();
 	if (frame == nullptr)
 		return false;
-
-	ibValue current;
-	ownerValue->GetControlValue(current);
 
 	ibDataNode request;
 	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<std::int32_t>(ibProtocol::ibRequest::ibKind::SimpleChoice));
@@ -121,20 +151,18 @@ bool ibTypeControlFactory::SimpleChoice(ibControlFrame* ownerValue, const ibClas
 	return true;   // the type has its own window — shown, whatever the person did with it
 }
 
-bool ibTypeControlFactory::QuickChoice(ibControlFrame* ownerValue, const ibClassID& clsid, const ibMetaData* metaData)
+bool ibTypeControlFactory::QuickChoice(ibControlFrame* ownerValue, const ibValue& current, const ibMetaData* metaData)
 {
 	if (ownerValue == nullptr || !ownerValue->HasQuickChoice())
 		return false;
 
 	// A number and a date first, on their own windows — the desktop's order.
-	if (ibTypeControlFactory::SimpleChoice(ownerValue, clsid, metaData))
+	if (SimpleChoice(ownerValue, current, metaData))
 		return true;
 
-	ibValue current;
-	ownerValue->GetControlValue(current);
-
+	// The short list, among what the choice is made under — the form's list would show no more.
 	std::vector<ibValue> values;
-	if (!current.FindValue(ibEmptyString, values))
+	if (!FindValue(ownerValue, current, ibEmptyString, values))
 		return false;
 
 	std::vector<ibChoiceItem> items;
@@ -147,53 +175,6 @@ bool ibTypeControlFactory::QuickChoice(ibControlFrame* ownerValue, const ibClass
 	return true;   // the type has a quick choice — offered, whatever the person did with it
 }
 
-void ibTypeControlFactory::QuickChoice(ibControlFrame* controlValue, ibValue& newValue, const ibString& strData)
-{
-	if (controlValue == nullptr)
-		return;
-
-	if (strData.Length() == 0) {
-		controlValue->ChoiceProcessing(newValue);
-		return;
-	}
-
-	std::vector<ibValue> values;
-	if (!newValue.FindValue(strData, values) || values.empty())
-		return;
-
-	if (values.size() == 1) {
-		controlValue->ChoiceProcessing(values.front());
-		return;
-	}
-
-	std::vector<ibChoiceItem> items;
-	for (size_t idx = 0; idx < values.size(); idx++)
-		items.push_back(ibChoiceItem{ static_cast<std::int32_t>(idx), values[idx].GetString(), ibPictureDescription(), values[idx] == newValue });
-
-	ibBackendDocFrame* const frame = ibSession::CurrentFrame();
-	if (frame == nullptr)
-		return;
-
-	// Several match what was typed: the person picks one — or, closing the list, is asked whether to give the
-	// typed text up (the field goes back to what it held) or to pick after all.
-	for (;;) {
-		std::int32_t chosen = 0;
-		if (ibRequestQuickChoice(items, chosen)) {
-			controlValue->ChoiceProcessing(values[static_cast<size_t>(chosen)]);
-			return;
-		}
-		const int answer = frame->ShowModalMessage(
-			_("Incorrect data entered into field. Do you want to cancel?"), ibString(),
-			wxYES_NO | wxICON_QUESTION);
-		if (answer != wxNO) {
-			ibValue retValue;
-			if (controlValue->GetControlValue(retValue))
-				controlValue->ChoiceProcessing(retValue);
-			return;
-		}
-	}
-}
-
 /////////////////////////////////////////////////////////////////////
 
 ibSelectMode ibTypeControlFactory::GetSelectMode() const
@@ -204,18 +185,16 @@ ibSelectMode ibTypeControlFactory::GetSelectMode() const
 	return GetChoiceHolder().GetSelectMode(GetSourceDesc().GetLeaf());
 }
 
-ibValue ibTypeControlFactory::CreateValue() const
+const ibChoiceTypeLinkDescription& ibTypeControlFactory::GetTypeLink() const
 {
-	// Value creation is the FACTORY's job — it knows its bound Type (GetTypeDesc); delegating to
-	// the source attribute was a duplicate of exactly this.
-	return ibBackendTypeSourceFactory::CreateValue();
+	static const ibChoiceTypeLinkDescription s_none;
+	return s_none;
 }
 
-ibClassID ibTypeControlFactory::GetDataType() const
+const ibChoiceParametersDescription& ibTypeControlFactory::GetChoiceParameters() const
 {
-	// Type + metadata come from the factory itself — its bound source property already reflects
-	// the resolved field's Type.
-	return ShowSelectType(GetMetaData(), GetTypeValueDesc());
+	static const ibChoiceParametersDescription s_none;
+	return s_none;
 }
 
 ibClassID ibTypeControlFactory::ShowSelectType(const ibMetaData* metaData, const ibTypeDescription& typeDescription)

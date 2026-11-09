@@ -11,11 +11,12 @@
 #include "backend/propertyManager/property/propertyBoolean.h"  // ibPropertyBoolean — the "arbitrary query" flag
 #include "backend/propertyManager/property/propertyString.h"   // ibPropertyString — the custom query text
 #include "backend/createRequest.h"   // ibCreateRequest — what narrows a list, handed in at CREATION
-#include "backend/query/queryLowering.h"              // ibQueryLowering::OutputColumn — what the arbitrary query produces
+#include "backend/query/queryLowering.h"              // ibQueryLowering::ibQueryOutputColumn — what the arbitrary query produces
 
 class ibBackendQueryable;
 class ibBackendQueryColumn;
 class ibQueryableSourceDescriptor;
+class ibValueDynamicListColumnCollection;   // the list's columns — valueDynamicList.cpp
 
 constexpr ibClassID g_valueDynamicListCLSID = value_to_clsid("VL_DLST");
 
@@ -183,7 +184,7 @@ public:
 	virtual bool SetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, const ibValue& varMetaVal) override { return false; }
 	
 
-	virtual ibValueModelColumnCollection* GetColumnCollection() const override { return m_columns; }
+	virtual ibValueModelColumnCollection* GetColumnCollection() const override;
 	virtual ibValueModelReturnLine* GetRowAt(const ibDataViewItem& line) override;
 	virtual Features GetFeatures() const override;
 	virtual bool EditableLine(const ibDataViewItem& item, unsigned int col) const override { return false; }
@@ -306,15 +307,15 @@ private:
 
 	// The dynamic list uses the ONE base composer (GetModelComposer()); its SETTINGS are the
 	// description in the "Settings" property above, and there is no live object over them.
-	ibValuePtr<ibValueModelColumnCollection> m_columns;   // queryable-derived columns
+	ibValuePtr<ibValueDynamicListColumnCollection> m_columns;   // the list's own columns — its queryable's, or its query's outputs
 
 	// WHAT THE ARBITRARY QUERY PRODUCES, and what went wrong if it produces nothing. Rebuilt on every
 	// RebuildSource — which is what makes the pickers follow the text: change the query, and the
 	// filters / sorts / groupings are offering the new fields the moment the change is applied.
 	//
-	// The schema OWNS its synthetic columns (OutputColumn::m_ownedCol), so it outlives the door that
+	// The schema OWNS its synthetic columns (ibQueryOutputColumn::m_ownedCol), so it outlives the door that
 	// resolved it — which it has to: nothing here reads rows, the columns are just being named.
-	std::vector<ibQueryLowering::OutputColumn> m_querySchema;
+	std::vector<ibQueryLowering::ibQueryOutputColumn> m_querySchema;
 	// (⛔ `m_queryError` STOOD HERE — the engine's verdict on the query, written in the catch and read
 	//  by an accessor that has gone with the flag. The settings window asks the same question of the
 	//  TEXT itself now (ibQueryFieldsOfText), which is where a person can act on the answer.)

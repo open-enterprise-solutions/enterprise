@@ -58,7 +58,7 @@ void ibValueMetaObjectCalculationRegister::ContributeTables(ibSchemaSnapshot& ou
 	if (HasRecalculation()) {
 		const ibRecalculationQueryable* marks = GetRecalculationQueryable();
 		ibSchemaTable& t = out.CreateSchemaTable(marks);
-		for (const ibBackendQueryColumn* column : marks->GetColumns())
+		for (const ibBackendQueryColumn* column : marks->GetQueryColumns())
 			t.Add(column);
 		ibDeclareLookupIndex(t, t.m_name + ibT("_LIX"), marks->GetPrimaryKeyColumns());
 	}

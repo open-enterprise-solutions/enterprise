@@ -43,28 +43,19 @@ const ibBackendQueryable* ibTabularSourceDescriptor::CreateQueryable(ibValue** /
 	return &m_queryable;
 }
 
+std::vector<const ibBackendQueryColumn*> ibTabularSourceDescriptor::GetQueryColumns(const std::vector<ibValue>& /*args*/) const
+{
+	// What its queryable reads — the owner first, then the section's own attributes (ibTabularQueryable::GetQueryColumns).
+	return m_meta != nullptr ? m_queryable.GetQueryColumns() : std::vector<const ibBackendQueryColumn*>();
+}
+
 void ibTabularSourceDescriptor::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
 {
 	if (m_meta == nullptr)
 		return;
-	// ⭐⭐ THE OWNER, SHOWN AS A FIELD OF THE SECTION.
-	//
-	// A section's rows already carry their owner — the row key it stores IS the owner's reference
-	// key, the same sixteen bytes. That was only ever a physical detail, invisible to anyone writing
-	// a query, so a line of a document could not be joined back to the document it belongs to
-	// without leaving the query language.
-	//
-	// Shown FIRST because it is what a reader looks for: `Ref` selects the owner, joins to it, and
-	// dot-walks through it exactly as a reference in any other field does. The type is constant —
-	// a section belongs to one owner — so nothing about it is read from a row.
-	explorer.AppendColumn(m_queryable.OwnerRefColumn(), /*enabled*/ true, /*visible*/ true);
-
-	// THE SECTION'S OWN ATTRIBUTES — the same list its queryable exposes as columns, because an
-	// attribute IS a column. Asked of the metaobject rather than restated here, so a column added
-	// to the section tomorrow shows up with nothing edited in this file.
 	for (const ibValueMetaObjectAttributeBase* attribute : m_meta->GetGenericAttributeArrayObject())
 		if (attribute != nullptr)
-			explorer.AppendColumn(attribute->GetQueryColumn(), /*enabled*/ true, /*visible*/ true);
+			explorer.AppendColumn(attribute, attribute->GetColumnId());
 }
 
 ibTypeDescription ibValueMetaObjectTableData::GetTypeDesc() const

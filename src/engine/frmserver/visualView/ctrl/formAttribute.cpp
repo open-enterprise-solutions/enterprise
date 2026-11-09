@@ -951,6 +951,41 @@ bool ibFormAttributeValue::SetValueByPath(const std::vector<ibSourceHop>& tail, 
 	return src != nullptr && src->SetValueBySourceHop(tail.front(), value);
 }
 
+//*********************************************************************************************
+//*                    the form as a source — over its own attributes (issue #259)            *
+//*********************************************************************************************
+
+// ⭐ MADE OF THE ATTRIBUTES AS THEY STAND, every time it is asked: the form adds, removes, renames and retypes them while
+// it is open (its module too), and the explorer is their reading — a copy kept beside them would be one more thing to
+// keep in step. A table-kind attribute is a table node: the rows it holds are its own to answer (ClearLinked's walk).
+// Any other is a COLUMN node, and the column is the holder itself (ibBackendFormAttributeValue IS one): what the node
+// says of it — name, synonym, type, picture — is the attribute's own answer, read by whoever lists the form's fields.
+const ibSourceDataObject::ibSourceExplorer* ibValueForm::GetSourceExplorer() const
+{
+	m_sourceExplorer.Reset(GetControlName(), GetCaption(), 0, ibTypeDescription(GetClassType()), false, false);
+	for (const ibValuePtr<ibFormAttributeValue>& attribute : m_attributes) {
+		const ibFormAttributeValue* holder = attribute;
+		if (holder->m_attribute->GetSourceDataType() == ibSourceDataType::ibSourceDataType_table)
+			m_sourceExplorer.AppendTable(holder->GetName(), holder->GetSynonym(), holder->GetId(), holder->GetTypeDesc());
+		else
+			m_sourceExplorer.AppendColumn(holder, holder->GetId());
+	}
+	return &m_sourceExplorer;
+}
+
+// A hop is an attribute's id; the value is the attribute's own, read and written through its one door.
+bool ibValueForm::GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const
+{
+	const ibFormAttributeValue* attribute = FindAttributeById(hop.m_id);
+	return attribute != nullptr && attribute->GetValueByPath({}, out);
+}
+
+bool ibValueForm::SetValueBySourceHop(const ibSourceHop& hop, const ibValue& value)
+{
+	ibFormAttributeValue* attribute = FindAttributeById(hop.m_id);
+	return attribute != nullptr && attribute->SetValueByPath({}, value);
+}
+
 ibSourceDataType ibFormAttributeValue::ibFormAttribute::GetSourceDataType() const
 {
 	// A table-kind Type → table; everything else (object, reference, primitive) → attribute.

@@ -190,7 +190,7 @@ public:
 	// vends a column that IS a reference, and the next statement must be able to walk into it —
 	// `Tmp.OwnerRef.Description` parses, runs, and has to be OFFERABLE. Reading only the projection
 	// NAMES left every temp-table field a dead leaf with no [+], which is the design-time half of
-	// "the temp table does not inherit the type" (the runtime half was OutputColumn::m_type).
+	// "the temp table does not inherit the type" (the runtime half was ibQueryOutputColumn::m_type).
 	//
 	// `package` / `beforeStatement` — because resolving a projection means resolving it against the
 	// making select's OWN sources, and one of those may itself be an earlier temp table.

@@ -171,7 +171,7 @@ const ibSourceExplorer* ibValueRecordDataObjectConstant::GetSourceExplorer() con
 		false, true))
 		return &m_sourceExplorer;   // built at this version of the metadata already — read as it is
 
-	m_sourceExplorer.AppendColumn(m_metaObject->GetValueColumn()->GetQueryColumn());
+	m_sourceExplorer.AppendColumn(m_metaObject->GetValueColumn(), m_metaObject->GetValueColumn()->GetColumnId());
 	return &m_sourceExplorer;
 }
 

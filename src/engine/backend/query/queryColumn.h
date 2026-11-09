@@ -15,18 +15,21 @@
 // attribute metaobject can name it without dragging in the full queryable.h (and
 // model.h) weight.
 //
-// ⚠ AN ATTRIBUTE IS NOT ONE OF THESE — IT HOLDS ONE. It stays an ibBackendSourceColumn (the
-// descriptive face the form binding walks to) and carries its QUERY face as a member,
-// ibValueMetaObjectAttributeBase::ibMetaAttributeColumn, held by shared_ptr. The reason is
-// ownership: the attribute lives under the runtime's own reference count and this interface is
-// held by std::shared_ptr, and two counts over one object each believe they may destroy it.
-// See docs/private/ownership-authority.md. Nothing on THIS side changed — every tier below the L3 door
-// still meets a plain ibBackendQueryColumn and knows nothing about where it came from.
+// ⚠ THE COLUMN OF A QUERY, AND OF NOTHING ELSE — it lives on shared_ptr; a source's column is a facade over a
+// runtime value, and the two do not meet (Max, 2026-11-09: "two different worlds"). An attribute is not one of
+// these — it HOLDS one, ibValueMetaObjectAttributeBase::ibMetaAttributeColumn, because the attribute lives under
+// the runtime's own reference count, and two counts over one object each believe they may destroy it
+// (docs/private/ownership-authority.md). Every tier below the L3 door meets a plain ibBackendQueryColumn and
+// knows nothing about where it came from.
+//
+// It answers the questions a person's view asks — a synonym, a picture, availability — ITSELF: an attribute's
+// through its bridge, an alias's through the column it stores.
 
-#include "core/description/typeDescription.h"    // ibTypeDescription (the column's L3 type)
-#include "backend/databaseLayer/columnType.h"   // ibColumnType — the canonical type a column's field declares
+#include "backend/backend.h"                       // BACKEND_API
+#include "core/description/typeDescription.h"      // ibTypeDescription (the column's L3 type)
 #include "core/description/pictureDescription.h"   // ibPictureDescription — the column's picture, by its number (GetColumnPicture)
-#include "core/query/queryBalanceRole.h"      // ibBalanceRole — what a column is in a balance (GetBalanceRole)
+#include "core/query/queryBalanceRole.h"            // ibBalanceRole — what a column is in a balance (GetBalanceRole)
+#include "backend/databaseLayer/columnType.h"     // ibColumnType — the canonical type a column's field declares
 
 #include <limits>   // numeric_limits — the ceiling a composed id may not pass (CanComposeSyntheticId)
 #include <memory>   // enable_shared_from_this — a column carries its own control block (see below)
@@ -95,86 +98,6 @@ enum ibFieldTypes {
 //  column-layout tier: DescribeColumnLayout (slots) / ColumnFieldNames / ColumnFieldList. The enum
 //  ibFieldTypes above stays — it is the persisted _TYPE discriminator value, used by the codec.)
 
-// ibBackendSourceColumn — the SOURCE/UI face of a column: name, synonym, type. The minimal
-// "column, like a DB column". It is the BASE of ibBackendQueryColumn (every query/DB column IS a
-// source column) and, through it, of the attribute metaobject — so the source-binding dot-walk
-// (ibBackendTypeSourceFactory) returns THIS, blind to the concrete class: a metaobject attribute
-// OR a dynamic list's queryable column, both already ARE an ibBackendSourceColumn, no adapter.
-// ibBackendAbstractColumn — the NAME / SYNONYM / COMMENT face shared by a metadata source column
-// AND a form attribute (the "linking element"): a control reads the caption / comment from it without
-// knowing which it is. Both ibBackendSourceColumn (metadata / query column) and the form attribute
-// (ibBackendFormAttributeValue) derive it, so ONE resolver returns either, uniformly.
-class BACKEND_API ibBackendAbstractColumn
-{
-public:
-	virtual ~ibBackendAbstractColumn() = default;
-
-	// Logical identifier — what a script / the L4 parser refers to.
-	virtual ibString GetName() const = 0;
-
-	// Display caption. Defaults to the logical name; a metaobject column / a form attribute override
-	// it with their synonym.
-	virtual ibString GetSynonym() const { return GetName(); }
-
-	// Tooltip / comment. Empty by default; a metaobject column / a form attribute override it.
-	virtual ibString GetComment() const { return ibEmptyString; }
-};
-
-class BACKEND_API ibBackendSourceColumn : public ibBackendAbstractColumn
-{
-public:
-	virtual ~ibBackendSourceColumn() = default;
-
-	// GetName / GetSynonym / GetComment come from ibBackendAbstractColumn.
-
-	// The column's L3 type — CLSIDs + number / string / date qualifiers. The single source of
-	// "what this column holds". The SAME accessor the attribute already exposes — free.
-	virtual ibTypeDescription& GetTypeDesc() const = 0;
-
-	// WHAT A VALUE HERE MAY BE — the same object for every ordinary column. Declared on BOTH bases (the
-	// type factory names it too, backend_type.h) for the same reason GetTypeDesc is: an attribute is a
-	// column AND a type factory, and one overrider then answers for both. A column that stands behind
-	// no declaration of its own — temp, computed — inherits this default and never differs.
-	virtual ibTypeDescription& GetTypeValueDesc() const { return GetTypeDesc(); }
-
-	// Is the column usable / shown? A plain (queryable) column always is; a metaobject attribute
-	// overrides — a deleted or access-denied field is not. The metadata-agnostic source explorer
-	// gates on THIS instead of poking the metaobject.
-	virtual bool IsAllowed() const { return true; }
-
-	// Is the column AVAILABLE in this base — a functional option's question, and NOT IsAllowed. A column
-	// that is not allowed is not there; one that is not available is there, read and written like any
-	// other, and only the interface does not offer it (functionalOptionGate.h). A plain column always is;
-	// a metaobject attribute asks its metaobject. Last in the class: a virtual added in the middle moves
-	// every slot after it for whatever was built before it.
-	virtual bool IsAvailable() const { return true; }
-
-	// THE COLUMN'S OWN PICTURE — asked of the column, never deduced by the reader. The default is
-	// the plain ATTRIBUTE picture, so every column is dressed even when it stands behind no
-	// metaobject (a view's column, a temp table's); a column that IS a metaobject answers with its
-	// metatype's. That is what keeps a dimension from looking like a resource without anybody,
-	// anywhere, keeping a list of kinds and a switch over it — a metatype added tomorrow is dressed
-	// the day it registers.
-	//
-	// ⭐ A NUMBER, NOT AN IMAGE: the class whose picture it is, as a tree row names one to the client
-	// (ibBackendPicture::SendPicture). Whoever draws it makes its own image from it — the desktop beside
-	// the server, the client from the server's answer.
-	//
-	// Body in metaAttributeObject_res.cpp, next to the attribute class it names: this header must not
-	// pull the metadata tree in (the attribute metaobject includes THIS file).
-	virtual ibPictureDescription GetColumnPicture() const;
-
-	// …AND WHAT IT IS IN A BALANCE (ibBalanceRole) — a fact about the column a person is shown, like its
-	// picture, so it is asked here, where the field lists see a column. Answered by the view that published
-	// it; an ordinary column is an ordinary value. Last in the class, for the reason IsAvailable gives.
-	virtual ibBalanceRole GetBalanceRole() const { return ibBalanceRole::None; }
-	// …and, for a PERIOD, its SENIORITY — the smaller is compared first; what tells two readings of one key apart
-	// in time. A query's own `ROLE PERIOD n` counts first; a source orders its own after those (ibSourcePeriodRank:
-	// the period, then a recorder, then a line number); 0 = unranked, after all of them in the order read. A
-	// select's own order cannot say it — a report may read the recorder before the period.
-	virtual int GetPeriodRank() const { return 0; }
-};
-
 // ⭐⭐ A COLUMN CARRIES ITS OWN CONTROL BLOCK, so nobody ever has to invent a second one.
 //
 // A `shared_ptr` built from a raw pointer CANNOT tell that the object is already owned: it makes
@@ -193,15 +116,51 @@ public:
 // It also retires the question `ibBackendQueryable::ShareColumn` was invented to answer. That asks
 // every SOURCE in turn "did you mint this column, and if so give me its storage"; asking the column
 // itself needs no loop and no knowledge of where it came from. (docs/private/ownership-authority.md)
-class BACKEND_API ibBackendQueryColumn : public ibBackendSourceColumn,
-                                         public std::enable_shared_from_this<ibBackendQueryColumn>
+class BACKEND_API ibBackendQueryColumn : public std::enable_shared_from_this<ibBackendQueryColumn>
 {
 public:
 	virtual ~ibBackendQueryColumn() = default;
 
+	// Logical identifier — what a script / the L4 parser refers to.
+	virtual ibString GetName() const = 0;
+
+	// Display caption. Defaults to the logical name; an attribute's column answers with the attribute's synonym, a
+	// view's with the caption it was published with.
+	virtual ibString GetSynonym() const { return GetName(); }
+
+	// Tooltip / comment. Empty by default; an attribute's column answers with the attribute's.
+	virtual ibString GetComment() const { return ibEmptyString; }
+
 	// Base physical column (db field name). The lowering derives the actual
 	// per-type physical columns from this plus the type description.
 	virtual ibString GetPhysicalName() const = 0;
+
+	// The column's L3 type — CLSIDs + number / string / date qualifiers. The single source of
+	// "what this column holds".
+	virtual ibTypeDescription& GetTypeDesc() const = 0;
+
+	// WHAT A VALUE HERE MAY BE — what the storage lays out and a dot-walk branches into: a characteristic's chart's
+	// own references. The same object for every ordinary column.
+	virtual ibTypeDescription& GetTypeValueDesc() const { return GetTypeDesc(); }
+
+	// Is the column THERE — a deleted or access-denied field is not: the schema does not keep it, and nothing lists it.
+	virtual bool IsAllowed() const { return true; }
+
+	// Is it AVAILABLE in this base — a functional option's question, and NOT IsAllowed: a column that is not
+	// available is read and written like any other, and only what is computed from it is not shown (IsExprAvailable).
+	virtual bool IsAvailable() const { return true; }
+
+	// WHAT IT IS IN A BALANCE (ibBalanceRole) — answered by the view that published it; an ordinary column is an
+	// ordinary value. And, for a PERIOD, its SENIORITY — the smaller is compared first; a query's own `ROLE PERIOD n`
+	// counts first, a source orders its own after those (ibSourcePeriodRank); 0 = unranked.
+	virtual ibBalanceRole GetBalanceRole() const { return ibBalanceRole::None; }
+	virtual int GetPeriodRank() const { return 0; }
+
+	// THE COLUMN'S OWN PICTURE — asked of the column, never deduced by the reader. The default is the plain ATTRIBUTE
+	// picture, so a column that stands behind no metaobject (a view's, a temp table's) is dressed too; an attribute's
+	// column answers with the attribute's. A NUMBER, NOT AN IMAGE — whoever draws it makes its own image from it.
+	// Body in metaAttributeObject_res.cpp, beside the picture it names: this header must not pull the metadata tree in.
+	virtual ibPictureDescription GetColumnPicture() const;
 
 	// The column's id WITHIN its source/model — the key its source reads a value by.
 	// For a DB / attribute column this IS the metaID; for a computed / temp column it

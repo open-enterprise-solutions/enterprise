@@ -88,7 +88,7 @@ bool ibValueTabularSectionDataObjectBase::SetValueByRow(const ibVariant& variant
 			// Reporting success there tells the view the cell took a value it never stored.
 			if (strData.Length() > 0) {
 				std::vector<ibValue> listValue;
-				const bool found = newValue.FindValue(strData, listValue);
+				const bool found = newValue.FindValue(strData, ibChoiceCondition(), listValue);
 
 				if (!found)
 					return false;

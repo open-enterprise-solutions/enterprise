@@ -1084,7 +1084,7 @@ public:
 			try {
 				ibValue& cValue = m_nodeValues.at(col);
 				std::vector<ibValue> listValue;
-				if (cValue.FindValue(variant.GetString(), listValue)) {
+				if (cValue.FindValue(variant.GetString(), ibChoiceCondition(), listValue)) {
 					const ibValue& cFoundedValue = listValue.at(0);
 					if (notify && m_valueTable != nullptr && cValue != cFoundedValue)
 						m_valueTable->RowValueChanged(this, col);

@@ -5,7 +5,7 @@
 #include "variantType.h"
 #include "core/description/sourceDescription.h"
 
-class BACKEND_API ibBackendSourceColumn;   // queryColumn.h — neutral source-column the dot returns
+class BACKEND_API ibBackendSourceColumn;   // srcColumn.h — neutral source-column the dot returns
 
 class BACKEND_API ibVariantAttributeSource : public ibVariantAttribute {
 protected:
@@ -74,10 +74,6 @@ public:
 	}
 
 	ibVariantAttributeSource* GetSourceAttribute() const { return m_attributeSource; }
-
-	//////////////////////////////////////////////////
-
-	const ibBackendSourceColumn* GetSourceAttributeObject() const;
 
 	//////////////////////////////////////////////////
 

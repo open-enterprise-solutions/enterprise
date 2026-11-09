@@ -131,7 +131,7 @@ bool ibValueValueList::SetValueByRow(const ibVariant& variant, const ibDataViewI
 		const ibString& text = variant.GetString();
 		ibValue cell; node->GetValue(col, cell);
 		std::vector<ibValue> found;
-		if (!text.IsEmpty() && cell.FindValue(text, found))
+		if (!text.IsEmpty() && cell.FindValue(text, ibChoiceCondition(), found))
 			return node->SetValue(col, found.at(0));
 		return node->SetValue(col, ibValue(variant));
 	}

@@ -91,7 +91,7 @@ public:
 	explicit ibSequenceQueryable(const ibValueMetaObjectSequence* seq);
 
 	virtual const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override;
-	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override;
+	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override;
 
 private:
 	const ibValueMetaObjectSequence* m_seq;
@@ -108,7 +108,7 @@ public:
 	explicit ibSequenceBordersQueryable(const ibValueMetaObjectSequence* seq) : m_seq(seq) {}
 
 	virtual const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override;
-	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override;
+	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override;
 	virtual ibString GetQueryTableName() const override;
 	virtual const ibUniqueKey& GetQueryTableGuid() const override;
 	virtual ibString GetQueryName() const override;
@@ -129,7 +129,7 @@ public:
 	ibString GetName() const override;
 	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
 	const ibSequenceBordersQueryable* GetQueryable() const { return &m_queryable; }
-	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
+	std::vector<const ibBackendQueryColumn*> GetQueryColumns(const std::vector<ibValue>& args) const override;
 private:
 	ibValueMetaObjectSequence* m_meta;
 	ibSequenceBordersQueryable m_queryable;

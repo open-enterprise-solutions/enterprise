@@ -25,7 +25,7 @@ public:
 	ibTypeDescription& GetTypeDesc()     const override { return m_type; }
 	ibMetaID           GetColumnId()     const override { return m_id; }
 	// ⭐ WHETHER WHAT IT WAS MADE FROM MAY BE SHOWN (functional options) — the select that made the table
-	// answered it (OutputColumn::m_available), and the table keeps the answer. It answered yes for
+	// answered it (ibQueryOutputColumn::m_available), and the table keeps the answer. It answered yes for
 	// everything before, so a report reading a temp table showed what the base does not use.
 	bool               IsAvailable()     const override { return m_available; }
 
@@ -82,7 +82,7 @@ public:
 		return nullptr;
 	}
 
-	bool OwnsColumn(const ibBackendQueryColumn* col) const override
+	bool ContainColumn(const ibBackendQueryColumn* col) const override
 	{
 		for (const auto& c : m_columns)
 			if (c.get() == col) return true;
@@ -91,7 +91,7 @@ public:
 
 	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override { return Column(name); }
 
-	std::vector<const ibBackendQueryColumn*> GetColumns() const override
+	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override
 	{
 		std::vector<const ibBackendQueryColumn*> out;
 		out.reserve(m_columns.size());

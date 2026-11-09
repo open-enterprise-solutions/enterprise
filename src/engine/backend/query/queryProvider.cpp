@@ -295,7 +295,7 @@ ibDataQueryResult ibComputedProvider::ExecuteRead(const ibDataQuerySpec& given, 
 	// when a folder is browsed, the rows with no parent at the top. Not taken, a list of a query read in memory
 	// answered every folder with the whole list — the folder in it, opened in itself without end (2026-10-29).
 	if (req.m_hierarchyFilter && !req.m_flatScan && req.m_hierarchyCol != nullptr && spec.m_queryable != nullptr) {
-		const ibBackendQueryColumn* const parentCol = spec.m_queryable->OwnsColumn(req.m_hierarchyCol)
+		const ibBackendQueryColumn* const parentCol = spec.m_queryable->ContainColumn(req.m_hierarchyCol)
 			? req.m_hierarchyCol : spec.m_queryable->ResolveColumnByName(req.m_hierarchyCol->GetName());
 		if (parentCol != nullptr) {
 			ibQueryRamTable level = RamTableOf(cols);
@@ -497,7 +497,7 @@ public:
 	// 🛑 WHAT IT NEEDS FROM THE COLUMN IT STANDS FOR IS TAKEN HERE, NOT KEPT AS A POINTER. It asks
 	// exactly two things — the physical name and the type — and both are known at construction, so
 	// holding the column afterwards buys nothing and costs a lifetime: the source may be a nested
-	// wrapper's own column, which dies with that wrapper (see ibSubqueryQueryable::OwnsColumnStorage),
+	// wrapper's own column, which dies with that wrapper (see ibSubqueryQueryable::ShareColumn),
 	// while this alias is read for as long as the outer query runs. That is what crashed on 2026-08-19
 	// — `GetTypeDesc` through a freed column (0xdddddddd) while a report was being composed.
 	// `available` — what the road to `from` adds: a dot-walk's hops before its leaf (one of them hidden and
@@ -594,7 +594,7 @@ const ibBackendQueryable* OwnerOfNamedLeaf(const ibQueryCondition& c, const std:
 	const ibBackendQueryColumn* head = c.m_path.empty() ? c.m_col : c.m_path.front();
 	const ibBackendQueryable* owner = nullptr;
 	for (const ibBackendQueryable* source : sources)
-		if (source != nullptr && head != nullptr && source->OwnsColumn(head)) {
+		if (source != nullptr && head != nullptr && source->ContainColumn(head)) {
 			owner = source;
 			break;
 		}
@@ -728,7 +728,7 @@ ibSubqueryQueryable::ibSubqueryQueryable(const ibDataQueryBuilder& inner, long t
 	for (const auto& sc : m_inner->GetSelectColumns())
 		if (sc.first != nullptr) passedThrough.insert(sc.first->GetColumnId());
 	if (const ibBackendQueryable* primary = m_inner->GetPrimarySource())
-		for (const ibBackendQueryColumn* c : primary->GetColumns())
+		for (const ibBackendQueryColumn* c : primary->GetQueryColumns())
 			if (c != nullptr) passedThrough.insert(c->GetColumnId());
 	size_t nextSlot = 0;
 	auto mintId = [&passedThrough, &nextSlot]() {
@@ -796,7 +796,7 @@ ibSubqueryQueryable::ibSubqueryQueryable(const ibDataQueryBuilder& inner, long t
 		}
 	}
 	else if (const ibBackendQueryable* primary = m_inner->GetPrimarySource()) {
-		m_columns = primary->GetColumns();
+		m_columns = primary->GetQueryColumns();
 		m_readFrom = m_columns;
 		m_readAlias.assign(m_columns.size(), ibEmptyString);
 	}
@@ -1149,7 +1149,7 @@ std::vector<ibQueryCondition> LeafConditions(const ibDataQuerySpec& spec, const 
 {
 	std::vector<ibQueryCondition> out;
 	for (const ibQueryCondition& c : *spec.m_conditions)
-		if (c.m_col != nullptr && leaf->OwnsColumn(c.m_col))
+		if (c.m_col != nullptr && leaf->ContainColumn(c.m_col))
 			out.push_back(c);
 	return out;
 }
@@ -1445,7 +1445,7 @@ bool SubtreeProvides(const ibQueryNode* node, const ibBackendQueryColumn* col)
 	std::vector<const ibQueryNode*> leaves;
 	CollectLeaves(node, leaves);
 	for (const ibQueryNode* leaf : leaves)
-		if (leaf->m_queryable != nullptr && leaf->m_queryable->OwnsColumn(col))
+		if (leaf->m_queryable != nullptr && leaf->m_queryable->ContainColumn(col))
 			return true;
 	return false;
 }
@@ -1706,7 +1706,7 @@ ibQueryRamTable ResolveComputedDotWalks(ibQueryRamTable rows, const ibBackendQue
 				// cells are filed under the twin's id — so `Account.Code` and `CorrAccount.Code` are two
 				// cells of the row, not one cell written twice.
 				const ibBackendQueryColumn* readLeaf = bring;
-				if (!tgtQ->OwnsColumn(bring))
+				if (!tgtQ->ContainColumn(bring))
 					if (const ibBackendQueryColumn* own = tgtQ->ResolveColumnByName(bring->GetName()))
 						readLeaf = own;
 				// …for the references these rows hold, and no others (MaterialiseLeafToRam)
@@ -1774,7 +1774,7 @@ ibQueryRamTable ComputeRowsResolved(const ibDataQuerySpec& spec,
 				rows = ibQueryComposer::FilterRows(rows, ibQueryPredicate::Leaf(c).get());
 	}
 
-	present = spec.m_queryable->GetColumns();
+	present = spec.m_queryable->GetQueryColumns();
 	rows = ResolveComputedDotWalks(std::move(rows), spec.m_queryable, spec, present);
 
 	// A dot-walk (Ref.Field = X) or computed-expr (Qty * Price > N) WHERE — the reference leaf is now a
@@ -1791,7 +1791,7 @@ ibQueryRamTable ComputeRowsResolved(const ibDataQuerySpec& spec,
 // A column of `from` whose reference resolves to `to` — the referencing side of an auto-join.
 const ibBackendQueryColumn* ReferenceColumnTo(const ibBackendQueryable* from, const ibBackendQueryable* to)
 {
-	for (const ibBackendQueryColumn* c : from->GetColumns())
+	for (const ibBackendQueryColumn* c : from->GetQueryColumns())
 		if (c != nullptr && from->GetProvider().ResolveReferenceTarget(from, c) == to) return c;
 	return nullptr;
 }
@@ -2641,7 +2641,7 @@ ibQueryRamTable MaterialiseNode(const ibQueryNode* node, const std::vector<const
 	if (node->m_kind == ibQueryNode::Kind::Source) {
 		std::vector<const ibBackendQueryColumn*> mine;
 		for (const ibBackendQueryColumn* c : refCols)
-			if (node->m_queryable->OwnsColumn(c))
+			if (node->m_queryable->ContainColumn(c))
 				mine.push_back(c);
 		// ⭐ WHAT THIS LEAF AGREED TO READ. A column no source claims is silently absent from the
 		// composed rows, and everything downstream then reads it as empty — a dimension that folds
@@ -2655,7 +2655,7 @@ ibQueryRamTable MaterialiseNode(const ibQueryNode* node, const std::vector<const
 		ibJournalIf {
 			ibString claimed, orphaned;
 			for (const ibBackendQueryColumn* c : refCols) {
-				if (node->m_queryable->OwnsColumn(c))
+				if (node->m_queryable->ContainColumn(c))
 					claimed += (claimed.IsEmpty() ? ibString() : ibString(ibT(", "))) + c->GetName();
 				else if (!SubtreeProvides(spec.m_root, c))
 					orphaned += (orphaned.IsEmpty() ? ibString() : ibString(ibT(", "))) + c->GetName();
@@ -2671,7 +2671,7 @@ ibQueryRamTable MaterialiseNode(const ibQueryNode* node, const std::vector<const
 			: LeafConditions(spec, node->m_queryable);
 		if (extra != nullptr)
 			for (const ibQueryCondition& e : *extra)
-				if (e.m_col != nullptr && node->m_queryable->OwnsColumn(e.m_col))
+				if (e.m_col != nullptr && node->m_queryable->ContainColumn(e.m_col))
 					conds.push_back(e);
 		return MaterialiseLeaf(node->m_queryable, spec.m_holder, conds, mine);
 	}
@@ -3878,7 +3878,7 @@ std::unique_ptr<ibTempTableManager> PromoteComputedLeaf(
 	std::vector<ibQueryCondition> conds;
 	std::vector<ibQueryCondition> computedConds;
 	for (const ibQueryCondition& c : *spec.m_conditions) {
-		const bool owned = c.m_col != nullptr && computed->OwnsColumn(c.m_col);
+		const bool owned = c.m_col != nullptr && computed->ContainColumn(c.m_col);
 		conds.push_back(owned ? SubtreeResolved(c, { computed }) : c);
 		if (owned)
 			computedConds.push_back(conds.back());
@@ -3916,7 +3916,7 @@ std::unique_ptr<ibTempTableManager> PromoteComputedLeaf(
 	bool remapOk = true;
 	auto remap = [&](const ibBackendQueryColumn* col) -> const ibBackendQueryColumn* {
 		if (col == nullptr)               return nullptr;
-		if (!computed->OwnsColumn(col))   return col;
+		if (!computed->ContainColumn(col))   return col;
 		const ibBackendQueryColumn* t = temp->ResolveColumnByName(col->GetName());
 		if (t == nullptr) remapOk = false;
 		return t;
@@ -4132,7 +4132,7 @@ std::unique_ptr<ibTempTableManager> PromoteSingleComputed(
 	std::vector<ibQueryCondition> ownConds;
 	if (spec.m_conditions)
 		for (const ibQueryCondition& c : *spec.m_conditions)
-			if (c.m_path.empty() && !c.m_expr && c.m_col != nullptr && q->OwnsColumn(c.m_col)) ownConds.push_back(c);
+			if (c.m_path.empty() && !c.m_expr && c.m_col != nullptr && q->ContainColumn(c.m_col)) ownConds.push_back(c);
 	ibQueryRamTable rows = q->ComputeRows(ownConds);
 	// The single-source twin of PromoteComputedLeaf, and it used to make the same three decisions in
 	// silence. Same words as its neighbour: what happened, to what, and how much of it there was.

@@ -30,8 +30,6 @@ struct ibChooseValueRequest {
 class FRMCLIENT_API ibTypeControlFactory : public ibBackendTypeSourceFactory {
 public:
 
-	virtual const ibBackendSourceColumn* GetSourceAttributeObject() const = 0;
-
 	// THE ONE DOOR a value is chosen through — a field's Select, a server's question: the values offered dropped as a list;
 	// none offered — the type settled, then a primitive chosen on its calculator, its calendar or its list, a value of the
 	// server's type on the server. The one picked goes to ownerValue->ChoiceProcessing.

@@ -37,6 +37,11 @@ public:
 		m_meta->FillSourceExplorer(explorer);
 	}
 
+	// …and the same table as the QUERY reads it: the queryable's own columns (an attribute's through its bridge).
+	std::vector<const ibBackendQueryColumn*> GetQueryColumns(const std::vector<ibValue>& /*args*/) const override {
+		return m_queryable.GetQueryColumns();
+	}
+
 	// Restore ROW-KEY from a row's identity VALUE — read the source's PRIMARY-KEY columns off it (the SAME columns
 	// the fetch stamps into a node's m_rowKey, so the restore stub matches). UNIVERSAL via the source hop gate: a
 	// record's reference yields its self-reference, a register's record-manager decomposes into its composite key.

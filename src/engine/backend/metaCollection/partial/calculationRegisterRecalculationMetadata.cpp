@@ -23,7 +23,7 @@
 
 // The recorder, the type, the month where the register keeps action periods, then the dimensions — every one the
 // register's own column.
-std::vector<const ibBackendQueryColumn*> ibRecalculationQueryable::GetColumns() const
+std::vector<const ibBackendQueryColumn*> ibRecalculationQueryable::GetQueryColumns() const
 {
 	std::vector<const ibBackendQueryColumn*> columns{ m_reg->GetRegisterRecorder()->GetQueryColumn(),
 		m_reg->GetCalculationType()->GetQueryColumn() };
@@ -36,7 +36,7 @@ std::vector<const ibBackendQueryColumn*> ibRecalculationQueryable::GetColumns() 
 
 const ibBackendQueryColumn* ibRecalculationQueryable::ResolveColumnByName(const ibString& name) const
 {
-	for (const ibBackendQueryColumn* column : GetColumns())
+	for (const ibBackendQueryColumn* column : GetQueryColumns())
 		if (column->GetName().IsSameAs(name, false))
 			return column;
 	return nullptr;
@@ -69,10 +69,9 @@ const ibBackendQueryable* ibRecalculationSourceDescriptor::CreateQueryable(ibVal
 }
 
 // A column of the marks IS the register's attribute.
-void ibRecalculationSourceDescriptor::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+std::vector<const ibBackendQueryColumn*> ibRecalculationSourceDescriptor::GetQueryColumns(const std::vector<ibValue>& /*args*/) const
 {
-	for (const ibBackendQueryColumn* column : m_queryable.GetColumns())
-		explorer.AppendColumn(column, /*enabled*/ true, /*visible*/ true);
+	return m_queryable.GetQueryColumns();
 }
 
 //***********************************************************************
@@ -185,7 +184,7 @@ ibRecalculationSpec ibRecalculationSpecOf(const ibValueMetaObjectCalculationRegi
 
 	// The marks' own columns, which are the register's (ibRecalculationQueryable), in their order.
 	v.m_table = reg->GetPhysicalTableName();
-	for (const ibBackendQueryColumn* column : reg->GetRecalculationQueryable()->GetColumns())
+	for (const ibBackendQueryColumn* column : reg->GetRecalculationQueryable()->GetQueryColumns())
 		for (const ibString& field : ColumnFieldNames(column))
 			v.m_mark.push_back(field);
 

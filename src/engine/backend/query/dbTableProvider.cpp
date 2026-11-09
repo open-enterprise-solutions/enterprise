@@ -210,7 +210,7 @@ ibString SelfReferenceField(const ibBackendQueryable* queryable)
 // that does not select it is refused in the author's words — the query is theirs, `q_sub0` is the wrapper's.
 static const ibBackendQueryColumn* HierarchyColumnOf(const ibBackendQueryable* queryable, const ibBackendQueryColumn* listed)
 {
-	if (listed == nullptr || queryable->OwnsColumn(listed))
+	if (listed == nullptr || queryable->ContainColumn(listed))
 		return listed;
 	if (const ibBackendQueryColumn* const read = queryable->ResolveColumnByName(listed->GetName()))
 		return read;
@@ -1090,7 +1090,7 @@ const ibBackendQueryable* ColocatedOwner(const ColocatedLeaves& leaves, const ib
 	// left standing on purpose after two attempts to fix it here were measured and reverted — the
 	// reasoning is kept so the third attempt starts further along than the first two did.
 	//
-	// `OwnsColumn` decides by MODEL-ID, on a premise written over it: *"the model-id (attribute
+	// `ContainColumn` decides by MODEL-ID, on a premise written over it: *"the model-id (attribute
 	// metaID) is config-unique, so each column belongs to exactly one"*. True of attributes, and
 	// FALSE of the sources that REPUBLISH them. A register's derived surfaces (Balance, Turnovers,
 	// the totals bundle) publish the register's attributes AS THEMSELVES, metaID included — and
@@ -1121,7 +1121,7 @@ const ibBackendQueryable* ColocatedOwner(const ColocatedLeaves& leaves, const ib
 	// from ownership again; ownership is where it shows, not where it lives.
 	// ⭐⭐ THE EXACT OBJECT FIRST, and only then the question that has to reason.
 	//
-	// `OwnsColumn` decides by MODEL-ID, on a premise written over it: *"the model-id (attribute
+	// `ContainColumn` decides by MODEL-ID, on a premise written over it: *"the model-id (attribute
 	// metaID) is config-unique, so each column belongs to exactly one"*. True of attributes, and
 	// FALSE of the sources that REPUBLISH them — a register's derived surfaces (Balance, Turnovers,
 	// the totals bundle) publish the register's attributes AS THEMSELVES, metaID included, because
@@ -1143,11 +1143,11 @@ const ibBackendQueryable* ColocatedOwner(const ColocatedLeaves& leaves, const ib
 	// rather than the object itself (a locally-made twin — derivedStateBuilder).
 	for (const ibBackendQueryable* q : leaves)
 		if (q != nullptr)
-			for (const ibBackendQueryColumn* c : q->GetColumns())
+			for (const ibBackendQueryColumn* c : q->GetQueryColumns())
 				if (c == col) return q;
 
 	for (const ibBackendQueryable* q : leaves)
-		if (q != nullptr && q->OwnsColumn(col)) return q;
+		if (q != nullptr && q->ContainColumn(col)) return q;
 
 	return nullptr;
 }
@@ -1332,7 +1332,7 @@ ibQueryRelPtr BuildColocatedFrom(const ibQueryNode* node, const ColocatedLeaves&
 		ColocatedLeaves sideLeaves;
 		if (side != nullptr && CollectColocatedLeaves(side, sideLeaves))
 			for (const ibBackendQueryable* q : sideLeaves)
-				if (q != nullptr && q->OwnsColumn(col))
+				if (q != nullptr && q->ContainColumn(col))
 					return ColocatedQualOf(q);
 		return ColocatedQual(leaves, col);   // single-sided key: the old answer is the only one
 	};
@@ -1351,7 +1351,7 @@ ibQueryRelPtr BuildColocatedFrom(const ibQueryNode* node, const ColocatedLeaves&
 			ColocatedLeaves sideLeaves;
 			if (side != nullptr && CollectColocatedLeaves(side, sideLeaves))
 				for (const ibBackendQueryable* q : sideLeaves)
-					if (q != nullptr && q->OwnsColumn(col))
+					if (q != nullptr && q->ContainColumn(col))
 						return RowKeyColumn(q) == col ? RowKeyIndexPrefix(col, ColocatedQualOf(q)) : nullptr;
 			return nullptr;
 		};
@@ -1591,7 +1591,7 @@ ibQueryExprPtr ColocatedWhere(const ibDataQuerySpec& spec, const ColocatedLeaves
 	for (const ibBackendQueryable* q : leaves) {
 		std::vector<ibQueryCondition> conds;
 		for (const ibQueryCondition& c : *spec.m_conditions)
-			if (c.m_col != nullptr && q->OwnsColumn(c.m_col)) conds.push_back(c);
+			if (c.m_col != nullptr && q->ContainColumn(c.m_col)) conds.push_back(c);
 		if (auto p = ibMetaIRBuilder::BuildFilterPredicate(q, conds, ColocatedQualOf(q)))
 			where = AndFold(where, p);
 	}
@@ -4395,7 +4395,7 @@ static bool TotalsShapeFoldable(const ibDataQuerySpec& spec, bool rollup)
 			if (const ibQueryColumnSelect* projected = SelectExprOf(spec, a.m_col)) {
 				std::vector<const ibBackendQueryColumn*> reads;
 				if (!CollectExprColumns(projected->m_expr.get(), reads)
-				    || std::any_of(reads.begin(), reads.end(), [q](const ibBackendQueryColumn* c) { return !q->OwnsColumn(c); }))
+				    || std::any_of(reads.begin(), reads.end(), [q](const ibBackendQueryColumn* c) { return !q->ContainColumn(c); }))
 					RollupDecline(ibT("'%s' folds '%s', which the source's row does not answer alone"),
 					              a.m_alias, projected->m_alias);
 			}
@@ -5757,7 +5757,7 @@ static bool SortFollowsFromDistinct(const ibDataQuerySpec& spec, const ibQuerySo
 	if (distinguishes(head))
 		return !s.m_path.empty();   // a distinguished column itself is selected already
 	const std::vector<const ibBackendQueryColumn*> keys = spec.m_queryable->GetPrimaryKeyColumns();
-	return spec.m_queryable->OwnsColumn(head) && !keys.empty() && std::all_of(keys.begin(), keys.end(), distinguishes);
+	return spec.m_queryable->ContainColumn(head) && !keys.empty() && std::all_of(keys.begin(), keys.end(), distinguishes);
 }
 
 // ⭐ DOES THIS READ STAND ON A JOIN CHAIN — a reference walk in a projected path (SelectPath), a FILTER
@@ -5909,7 +5909,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 				for (const ibBackendQueryColumn* col : *spec.m_distinctBy) {
 					if (col == nullptr || col->IsSyntheticColumn())
 						continue;   // its parts are somebody else's fields — they project themselves
-					if (!queryable->OwnsColumn(col))
+					if (!queryable->ContainColumn(col))
 						continue;   // a walked leaf — appended below, qualified by its join alias
 					for (const ibString& field : ColumnFieldNames(col)) {
 						if (std::find(written.begin(), written.end(), field) != written.end())

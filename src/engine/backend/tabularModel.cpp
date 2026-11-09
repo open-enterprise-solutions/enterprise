@@ -706,12 +706,13 @@ std::vector<ibMetaID> ibValueModel::GetLinked(const ibMetaID& edited) const
 	ibValueModelColumnCollection* colCollection = GetColumnCollection();
 	if (colCollection == nullptr)
 		return linked;
+	const ibSourceDescription changed(edited);
 	for (unsigned int idx = 0; idx < colCollection->GetColumnCount(); ++idx) {
 		const ibValueModelColumnCollection::ibValueModelColumnInfo* columnInfo = colCollection->GetColumnInfo(idx);
 		if (columnInfo == nullptr)
 			continue;
 		const ibMetaID column = columnInfo->GetColumnID();
-		if (ibChoiceLinkResolver::IsLinked(column, GetTypeLink(column), GetChoiceParameters(column), edited))
+		if (column != edited && ibChoiceLinkResolver::IsLinked(GetTypeLink(column), GetChoiceParameters(column), changed))
 			linked.push_back(column);
 	}
 	return linked;

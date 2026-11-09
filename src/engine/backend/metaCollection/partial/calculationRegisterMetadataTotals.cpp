@@ -429,9 +429,9 @@ const ibBackendQueryable* ibValueMetaObjectCalculationRegister::GetFactSurface()
 		const ibTypeDescription& day = GetActionPeriodStart()->GetTypeDesc();
 		const ibMetaID dayId = GetActionPeriodStart()->GetMetaID();
 		columns.push_back(ibTempColumn(ibCalcFactColumn::PositionStart, ibCalcPositionFirst, day, ibRegDerivedColumnId(dayId, 1),
-			_("Position start"), ibBackendQueryColumn::Kind::Computed, GetActionPeriodStart()->GetColumnPicture()));
+			_("Position start"), ibBackendQueryColumn::Kind::Computed).StandsFor(GetActionPeriodStart()->GetQueryColumn()));
 		columns.push_back(ibTempColumn(ibCalcFactColumn::PositionEnd, ibCalcPositionLast, day, ibRegDerivedColumnId(dayId, 2),
-			_("Position end"), ibBackendQueryColumn::Kind::Computed, GetActionPeriodStart()->GetColumnPicture()));
+			_("Position end"), ibBackendQueryColumn::Kind::Computed).StandsFor(GetActionPeriodStart()->GetQueryColumn()));
 	});
 }
 
@@ -588,7 +588,7 @@ ibQueryRamTable ibCalcFactQueryable::ComputeRows(const std::vector<ibQueryCondit
 	const ibBackendQueryable* surface = NavigationSource();
 	if (surface == nullptr)
 		return out;
-	const std::vector<const ibBackendQueryColumn*> columns = surface->GetColumns();
+	const std::vector<const ibBackendQueryColumn*> columns = surface->GetQueryColumns();
 	for (const ibBackendQueryColumn* column : columns)
 		out.AddColumn(column->GetColumnId(), column->GetName(), column->GetTypeDesc());
 	if (!m_reg->IsUseActionPeriod())
@@ -700,32 +700,32 @@ void ibCalcFactSourceDescriptor::DescribeParameters(std::vector<ibQuerySourcePar
 	ibAppendRegisterConditionParameter(out);
 }
 
-// A dimension of a reading IS the dimension (the note in ibFillExplorerFromRegisterView): handed over as the
-// register's own attribute wherever the column is one.
-void ibCalcFactSourceDescriptor::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+// WHAT THE SURFACE PUBLISHES IS WHAT IS SHOWN — the accumulation register's rule (ibRegisterViewColumns). A record's
+// column says what it is itself (ibRegAttributeColumn: the caption, the stored type, the attribute it stands for), so
+// no attribute is swapped in by id: the swap only took away what the surface knows — a section's own name with it.
+static std::vector<const ibBackendQueryColumn*> ibCalcSurfaceColumns(const ibBackendQueryable* surface)
 {
-	const ibBackendQueryable* surface = m_meta->GetFactSurface();
-	if (surface == nullptr)
-		return;
-	for (const ibBackendQueryColumn* column : surface->GetColumns()) {
-		if (const ibValueMetaObjectAttributeBase* attribute = m_meta->FindAnyAttributeObjectByFilter(column->GetColumnId()))
-			explorer.AppendColumn(attribute->GetQueryColumn(), /*enabled*/ true, /*visible*/ true);
-		else
-			explorer.AppendColumn(column);
-	}
+	return surface != nullptr ? surface->GetQueryColumns() : std::vector<const ibBackendQueryColumn*>();
+}
+
+std::vector<const ibBackendQueryColumn*> ibCalcFactSourceDescriptor::GetQueryColumns(const std::vector<ibValue>& /*args*/) const
+{
+	return ibCalcSurfaceColumns(m_meta->GetFactSurface());
 }
 
 // What the reading can narrow inside (ComputeRows): the dimensions — every table — and a record's type, month and
 // recorder — the records it produces. Any other condition is correct in the WHERE, applied over the rows once computed.
-void ibCalcFactSourceDescriptor::FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+std::vector<const ibBackendQueryColumn*> ibCalcFactSourceDescriptor::GetConditionColumns(const ibString& /*slot*/) const
 {
+	std::vector<const ibBackendQueryColumn*> out;
 	for (const ibValueMetaObjectDimension* dimension : m_meta->GetDimensionArrayObject())
-		explorer.AppendColumn(dimension->GetQueryColumn(), /*enabled*/ true, /*visible*/ true);
+		out.push_back(dimension->GetQueryColumn());
 	for (const ibValueMetaObjectAttributeBase* part : { static_cast<const ibValueMetaObjectAttributeBase*>(m_meta->GetCalculationType()),
 			static_cast<const ibValueMetaObjectAttributeBase*>(m_meta->GetActionPeriod()),
 			static_cast<const ibValueMetaObjectAttributeBase*>(m_meta->GetRegisterRecorder()) })
 		if (part != nullptr)
-			explorer.AppendColumn(part->GetQueryColumn(), /*enabled*/ true, /*visible*/ true);
+			out.push_back(part->GetQueryColumn());
+	return out;
 }
 
 // ============================================================================
@@ -1377,7 +1377,7 @@ const ibBackendQueryable* ibValueMetaObjectCalculationRegister::GetBaseSurface(c
 			const ibString name = resource->GetName() + ibCalcBaseName;
 			columns.push_back(ibTempColumn(name, name, resource->GetTypeDesc(), ibRegDerivedColumnId(resource->GetMetaID(), ibCalcBaseColumn_Figure),
 				ibRegColumnCaptionOf(resource->GetSynonym(), _("Base")),
-				ibBackendQueryColumn::Kind::Computed, resource->GetColumnPicture()).StandsFor(resource));
+				ibBackendQueryColumn::Kind::Computed).StandsFor(resource->GetQueryColumn()));
 		}
 		for (const ibValueMetaObjectAttributeBase* field : sections)
 			columns.push_back(ibRegAttributeColumn(field, field->GetName() + ibCalcBaseSectionName,
@@ -1409,7 +1409,7 @@ ibQueryRamTable ibCalcBaseQueryable::ComputeRows(const std::vector<ibQueryCondit
 	const ibBackendQueryable* surface = NavigationSource();
 	if (surface == nullptr)
 		return out;
-	for (const ibBackendQueryColumn* column : surface->GetColumns())
+	for (const ibBackendQueryColumn* column : surface->GetQueryColumns())
 		out.AddColumn(column->GetColumnId(), column->GetName(), column->GetTypeDesc());
 
 	const std::vector<const ibValueMetaObjectAttributeBase*> record = ibCalcRecordAttributes(m_reg);
@@ -1535,27 +1535,19 @@ void ibCalcBaseSourceDescriptor::DescribeParameters(std::vector<ibQuerySourcePar
 	ibAppendRegisterConditionParameter(out);
 }
 
-// A record's column IS the register's attribute (the note in ibFillExplorerFromRegisterView); a figure and a section
-// are their own.
-void ibCalcBaseSourceDescriptor::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+// What the base's surface publishes (ibCalcSurfaceColumns) — a record's columns, a figure and a section alike.
+std::vector<const ibBackendQueryColumn*> ibCalcBaseSourceDescriptor::GetQueryColumns(const std::vector<ibValue>& /*args*/) const
 {
-	const ibBackendQueryable* surface = m_meta->GetBaseSurface(m_base);
-	if (surface == nullptr)
-		return;
-	for (const ibBackendQueryColumn* column : surface->GetColumns()) {
-		if (const ibValueMetaObjectAttributeBase* attribute = m_meta->FindAnyAttributeObjectByFilter(column->GetColumnId()))
-			explorer.AppendColumn(attribute->GetQueryColumn(), /*enabled*/ true, /*visible*/ true);
-		else
-			explorer.AppendColumn(column);
-	}
+	return ibCalcSurfaceColumns(m_meta->GetBaseSurface(m_base));
 }
 
 // What the records can be selected by inside: their own fields.
-void ibCalcBaseSourceDescriptor::FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+std::vector<const ibBackendQueryColumn*> ibCalcBaseSourceDescriptor::GetConditionColumns(const ibString& /*slot*/) const
 {
-	const auto append = [&explorer](const ibValueMetaObjectAttributeBase* field) {
+	std::vector<const ibBackendQueryColumn*> out;
+	const auto append = [&out](const ibValueMetaObjectAttributeBase* field) {
 		if (field != nullptr)
-			explorer.AppendColumn(field->GetQueryColumn(), /*enabled*/ true, /*visible*/ true);
+			out.push_back(field->GetQueryColumn());
 	};
 	for (const ibValueMetaObjectDimension* dimension : m_meta->GetDimensionArrayObject())
 		append(dimension);
@@ -1565,6 +1557,7 @@ void ibCalcBaseSourceDescriptor::FillConditionExplorer(ibSourceDataObject::ibSou
 	append(m_meta->GetRegistrationPeriod());
 	for (const ibValueMetaObjectAttributeBase* attribute : m_meta->GetAttributeArrayObject())
 		append(attribute);
+	return out;
 }
 
 // ============================================================================
@@ -1685,7 +1678,7 @@ const ibBackendQueryable* ibValueMetaObjectCalculationRegister::GetScheduleDataS
 				const ibString name = resource->GetName() + ibCalcSchedulePeriodName(period);
 				columns.push_back(ibTempColumn(name, name, resource->GetTypeDesc(), ibRegDerivedColumnId(resource->GetMetaID(), period),
 					ibRegColumnCaptionOf(resource->GetSynonym(), ibCalcSchedulePeriodCaption(period)),
-					ibBackendQueryColumn::Kind::Computed, resource->GetColumnPicture()).StandsFor(resource));
+					ibBackendQueryColumn::Kind::Computed).StandsFor(resource->GetQueryColumn()));
 			}
 		}
 	});
@@ -1712,7 +1705,7 @@ ibQueryRamTable ibCalcScheduleDataQueryable::ComputeRows(const std::vector<ibQue
 	const ibBackendQueryable* surface = NavigationSource();
 	if (surface == nullptr)
 		return out;
-	for (const ibBackendQueryColumn* column : surface->GetColumns())
+	for (const ibBackendQueryColumn* column : surface->GetQueryColumns())
 		out.AddColumn(column->GetColumnId(), column->GetName(), column->GetTypeDesc());
 
 	const ibMetaData* metaData = m_reg->GetMetaData();
@@ -2297,11 +2290,12 @@ void ibCalcScheduleDataSourceDescriptor::DescribeParameters(std::vector<ibQueryS
 }
 
 // What the records can be selected by inside: their own fields.
-void ibCalcScheduleDataSourceDescriptor::FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+std::vector<const ibBackendQueryColumn*> ibCalcScheduleDataSourceDescriptor::GetConditionColumns(const ibString& /*slot*/) const
 {
-	const auto append = [&explorer](const ibValueMetaObjectAttributeBase* field) {
+	std::vector<const ibBackendQueryColumn*> out;
+	const auto append = [&out](const ibValueMetaObjectAttributeBase* field) {
 		if (field != nullptr)
-			explorer.AppendColumn(field->GetQueryColumn(), /*enabled*/ true, /*visible*/ true);
+			out.push_back(field->GetQueryColumn());
 	};
 	for (const ibValueMetaObjectDimension* dimension : m_meta->GetDimensionArrayObject())
 		append(dimension);
@@ -2310,18 +2304,11 @@ void ibCalcScheduleDataSourceDescriptor::FillConditionExplorer(ibSourceDataObjec
 	append(m_meta->GetRegisterRecorder());
 	for (const ibValueMetaObjectAttributeBase* attribute : m_meta->GetAttributeArrayObject())
 		append(attribute);
+	return out;
 }
 
-// A record's column IS the register's attribute (the note in ibFillExplorerFromRegisterView); a sum is its own.
-void ibCalcScheduleDataSourceDescriptor::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+// What the schedule's surface publishes (ibCalcSurfaceColumns) — a record's columns and its sums alike.
+std::vector<const ibBackendQueryColumn*> ibCalcScheduleDataSourceDescriptor::GetQueryColumns(const std::vector<ibValue>& /*args*/) const
 {
-	const ibBackendQueryable* surface = m_meta->GetScheduleDataSurface();
-	if (surface == nullptr)
-		return;
-	for (const ibBackendQueryColumn* column : surface->GetColumns()) {
-		if (const ibValueMetaObjectAttributeBase* attribute = m_meta->FindAnyAttributeObjectByFilter(column->GetColumnId()))
-			explorer.AppendColumn(attribute->GetQueryColumn(), /*enabled*/ true, /*visible*/ true);
-		else
-			explorer.AppendColumn(column);
-	}
+	return ibCalcSurfaceColumns(m_meta->GetScheduleDataSurface());
 }

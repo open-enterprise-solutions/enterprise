@@ -36,17 +36,16 @@ public:
 	// for the ordinary one.
 	ibTempColumn(const ibString& name, const ibString& physical,
 	             const ibTypeDescription& type, ibMetaID modelId, const ibString& synonym = ibEmptyString,
-	             Kind kind = Kind::Composite, const ibPictureDescription& picture = ibPictureDescription())
+	             Kind kind = Kind::Composite)
 		: m_name(name), m_physical(physical), m_type(type), m_modelId(modelId), m_synonym(synonym),
-		  m_kind(kind), m_picture(picture) {}
+		  m_kind(kind) {}
 
-	// ⭐ THE PICTURE THIS COLUMN IS DRAWN WITH, handed over by whoever published it. A derived surface's
-	// column is computed — a balance, a turnover, a side of a dimension — and stands for something the
-	// configuration declared; the publisher knows which, so it hands the picture over at that moment.
-	// None given, the base's default stands, which is right for an ordinary temp table: its columns are
-	// made by whoever filled it and stand for nothing.
+	// ⭐ THE PICTURE THIS COLUMN IS DRAWN WITH — that of what it stands for (StandsFor), asked of it: a derived
+	// surface's column is computed — a balance, a turnover, a side of a dimension — and is drawn as the
+	// declaration it is a figure of. Standing for nothing, the base's default, which is right for an ordinary
+	// temp table: its columns are made by whoever filled it.
 	ibPictureDescription GetColumnPicture() const override {
-		return !m_picture.IsEmptyPicture() ? m_picture : ibBackendQueryColumn::GetColumnPicture();
+		return m_standsFor != nullptr ? m_standsFor->GetColumnPicture() : ibBackendQueryColumn::GetColumnPicture();
 	}
 
 	// ⭐ A TEMP TABLE'S COLUMN IS COMPOSITE — it has real fields and spreads into them. A DECLARED
@@ -70,10 +69,9 @@ public:
 	ibString           GetSynonym()      const override { return m_synonym.IsEmpty() ? m_name : m_synonym; }
 
 	// ⭐ WHAT IT STANDS FOR, when that is something the configuration declared — a register's dimension,
-	// resource or analytics slot published into a view. Handed over by the publisher at the moment it hands
-	// over the picture; the attribute lives as long as the configuration, and so does the surface this
-	// column belongs to.
-	ibTempColumn& StandsFor(const ibBackendSourceColumn* declared) { m_standsFor = declared; return *this; }
+	// resource or analytics slot published into a view: its QUERY face (the attribute's bridge), handed over by
+	// the publisher, and the road to the attribute from there — its picture, its availability.
+	ibTempColumn& StandsFor(const ibBackendQueryColumn* declared) { m_standsFor = declared; return *this; }
 
 	// …AND WHAT IT IS IN A BALANCE (ibBalanceRole), handed over at the same moment by the view that
 	// publishes it. An ordinary temp table's column is an ordinary value.
@@ -93,8 +91,7 @@ private:
 	ibMetaID                  m_modelId;
 	ibString                  m_synonym;    // empty = the name
 	Kind                      m_kind = Kind::Composite;   // see GetColumnKind
-	ibPictureDescription      m_picture;    // none = the base's default
-	const ibBackendSourceColumn* m_standsFor = nullptr;   // see StandsFor
+	const ibBackendQueryColumn* m_standsFor = nullptr;   // see StandsFor
 	ibBalanceRole                m_balanceRole = ibBalanceRole::None;   // see PlaysInBalance
 	int                          m_periodRank  = 0;
 };
@@ -132,8 +129,8 @@ public:
 	}
 
 	// Ownership by object identity (temp columns are not attributes — ResolveAttribute
-	// by name is null, so the default OwnsColumn fails; match the column pointer instead).
-	bool OwnsColumn(const ibBackendQueryColumn* col) const override
+	// by name is null, so the default ContainColumn fails; match the column pointer instead).
+	bool ContainColumn(const ibBackendQueryColumn* col) const override
 	{
 		for (const auto& c : m_columns)
 			if (c.get() == col) return true;
@@ -144,7 +141,7 @@ public:
 	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override { return Column(name); }
 
 	// All exposed columns — for SELECT * over this temp source (nested subquery).
-	std::vector<const ibBackendQueryColumn*> GetColumns() const override
+	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override
 	{
 		std::vector<const ibBackendQueryColumn*> out;
 		out.reserve(m_columns.size());
@@ -236,14 +233,14 @@ public:
 			if (c.GetName() == name) return &c;
 		return nullptr;
 	}
-	std::vector<const ibBackendQueryColumn*> GetColumns() const override
+	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override
 	{
 		std::vector<const ibBackendQueryColumn*> out;
 		out.reserve(m_columns.size());
 		for (const ibTempColumn& c : m_columns) out.push_back(&c);
 		return out;
 	}
-	bool OwnsColumn(const ibBackendQueryColumn* col) const override
+	bool ContainColumn(const ibBackendQueryColumn* col) const override
 	{
 		for (const ibTempColumn& c : m_columns)
 			if (&c == col) return true;
@@ -309,8 +306,8 @@ public:
 			if (c->GetName() == name) return c;
 		return nullptr;
 	}
-	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_columns; }
-	bool OwnsColumn(const ibBackendQueryColumn* col) const override
+	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override { return m_columns; }
+	bool ContainColumn(const ibBackendQueryColumn* col) const override
 	{
 		for (const ibBackendQueryColumn* c : m_columns)
 			if (c == col) return true;
@@ -463,8 +460,8 @@ public:
 			if (c != nullptr && c->GetName() == name) return c;
 		return nullptr;
 	}
-	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_columns; }
-	bool OwnsColumn(const ibBackendQueryColumn* col) const override
+	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override { return m_columns; }
+	bool ContainColumn(const ibBackendQueryColumn* col) const override
 	{
 		for (const ibBackendQueryColumn* c : m_columns)
 			if (c == col) return true;

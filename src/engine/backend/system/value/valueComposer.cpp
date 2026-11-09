@@ -86,7 +86,7 @@ bool ibValueDataComposer::CallAsFunc(const long lMethodNum, ibValue& pvarRetValu
 		// (the walk may have no live session to read from), runtime surfaces the real error.
 		if (m_composer.HasSource()) {
 			try {
-				std::vector<ibQueryLowering::OutputColumn> schema;
+				std::vector<ibQueryLowering::ibQueryOutputColumn> schema;
 				bool hasTotals = false;
 				ibDataQueryResult r = m_composer.Execute(schema, hasTotals);
 				pvarRetValue = new ibValueQueryResult(std::move(r), std::move(schema), hasTotals);

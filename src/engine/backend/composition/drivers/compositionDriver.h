@@ -15,7 +15,7 @@
 
 #include "backend/backend_core.h"
 #include "backend/compiler/value.h"           // ibValue — the row a driver is handed
-#include "backend/query/queryLowering.h"      // ibQueryLowering::OutputColumn — the schema of an output
+#include "backend/query/queryLowering.h"      // ibQueryLowering::ibQueryOutputColumn — the schema of an output
 #include "core/description/compositionDescription.h"   // ibCompositionOutputKind — what an output IS
 
 #include "core/graphics/colour.h"   // ibCompositionAttr — what a cell is drawn with, as data
@@ -60,7 +60,7 @@ enum class ibCompositionAxis
 struct ibCompositionOutputInfo
 {
 	ibCompositionOutputKind                    m_kind = ibCompositionOutputKind::Grouping;
-	std::vector<ibQueryLowering::OutputColumn> m_schema;
+	std::vector<ibQueryLowering::ibQueryOutputColumn> m_schema;
 	ibString                                   m_name;   // what the output is called, when it is
 	const class ibMetaData*                    m_metaData = nullptr;   // the configuration its setting's values are read in
 	// …and HOW MANY OUTPUTS THE RUN DRAWS, this one among them. A caption tells one block from the others,
@@ -151,7 +151,7 @@ struct ibCompositionOutputInfo
 	// "which axis is this column?", so that is what it gets — handing it the seam and letting every
 	// printer write `column.m_level < info.m_rowLevels` is the same rule spelled out in as many
 	// places as there are drivers, and it is wrong in all of them the day a third axis exists.
-	ibCompositionAxis AxisOf(const ibQueryLowering::OutputColumn& column) const {
+	ibCompositionAxis AxisOf(const ibQueryLowering::ibQueryOutputColumn& column) const {
 		if (column.m_role != ibQueryLowering::ibColumnRole::Dimension || column.m_level < 0)
 			return ibCompositionAxis::None;
 		return (static_cast<size_t>(column.m_level) < m_rowLevels)

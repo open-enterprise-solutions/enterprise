@@ -22,6 +22,16 @@ void ibValueTextCtrl::OnPropertyRefresh()
 			&& so->GetMetaTypeCtor() == ibCtorObjectMetaType::ibCtorObjectMetaType_Reference;
 	}
 	HideProperty(m_propertyChoiceForm, !hasChoice);
+
+	// How a reference is picked — only where the control holds a reference.
+	bool hasReference = false;
+	for (const ibClassID& clsid : GetTypeDesc().GetClsidList())
+		hasReference = hasReference || ::IsReference(clsid);
+	HideProperty(m_propertyQuickChoice, !hasReference);
+	HideProperty(m_propertyChoiceFoldersAndItems, !hasReference);
+	// …and what narrows its list (#616). The link by type stays, as an attribute's does: a field is typed before the
+	// field that will type it is thought of, and a row that comes and goes with that order cannot be found.
+	HideProperty(m_propertyChoiceParameters, !hasReference);
 }
 
 bool ibValueTextCtrl::OnPropertyChanging(ibProperty* property, const ibVariant& newValue)

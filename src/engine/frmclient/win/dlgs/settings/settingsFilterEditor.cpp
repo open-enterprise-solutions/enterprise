@@ -51,7 +51,6 @@ public:
 	// --- ibTypeControlFactory — the gate's questions -----------------------------
 	// No metadata COLUMN behind this cell: a filter line binds a path the user picked,
 	// not a form attribute. The type below is what the gate actually consults.
-	virtual const ibBackendSourceColumn* GetSourceAttributeObject() const override { return nullptr; }
 	virtual ibSourceObject* GetSourceObject() const override { return nullptr; }
 	virtual ibSourceDescription& GetSourceDesc() const override { return m_sourceDesc; }
 	virtual const ibMetaData* GetMetaData() const override { return activeMetaData; }

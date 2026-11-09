@@ -118,7 +118,7 @@ private:
 	// lays out columns without announcing an output (a bare header, every test that does exactly
 	// that) has no titles here at all. Reading the member instead printed a header of empty cells —
 	// the column names simply vanished.
-	ibString ColumnTitle(size_t column, const std::vector<ibQueryLowering::OutputColumn>& schema) const {
+	ibString ColumnTitle(size_t column, const std::vector<ibQueryLowering::ibQueryOutputColumn>& schema) const {
 		if (column < m_titles.size() && !m_titles[column].IsEmpty())
 			return m_titles[column];
 		return column < schema.size() ? schema[column].m_name : ibString();
@@ -314,7 +314,7 @@ private:
 		const std::vector<ibValue>& values);
 	// The output's columns, taken as the output begins. Not an event of its own any more: "which
 	// columns" is part of "an output is starting", and two verbs for it were two places to answer.
-	void TakeSchema(const std::vector<ibQueryLowering::OutputColumn>& schema);
+	void TakeSchema(const std::vector<ibQueryLowering::ibQueryOutputColumn>& schema);
 	void WriteCrossTable();
 	// What one level of a column key reads as in a header cell — the key of dimension level `dimLevel`.
 	ibString HeadingText(const std::vector<ibValue>& values, int dimLevel) const;
@@ -328,7 +328,7 @@ private:
 	ibValue ChainOfColumnKey(const CrossKey& key) const;
 	// The schema, kept because a table's header is written at the END — when the width is finally
 	// known — and by then the walk is over.
-	std::vector<ibQueryLowering::OutputColumn> m_schema;
+	std::vector<ibQueryLowering::ibQueryOutputColumn> m_schema;
 	// WHERE A COLUMN KEY SITS, adding it if this is its first sighting. First-seen order IS the
 	// column order — the read already came back sorted (the query's ORDER BY, the level's own sort),
 	// so re-sorting here would be a second opinion about an order somebody already stated.

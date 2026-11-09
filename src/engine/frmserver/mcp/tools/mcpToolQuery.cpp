@@ -358,12 +358,11 @@ public:
 			"rather than running it as a statement, and a nested source does not carry every word "
 			"a statement does - TOTALS is the composer's own to place, with report_level and "
 			"report_resource. A JOIN is fine.\n"
-			"And `tableParameters`: each WHERE condition that filters a VIRTUAL TABLE (a balance, "
-			"turnovers, a slice) by fields its own parameters take. Move it INSIDE the table's "
-			"brackets - Balance(&At, Warehouse = &W), BalanceAndTurnovers(&From, &To, , , "
-			"NOT Account.OffBalance) - so the rows are selected before the fold instead of the whole "
-			"register being read and thrown away. Any predicate is taken there: NOT, OR, IN, "
-			"IN (SELECT ...), a walk through a reference.");
+			"A condition on a VIRTUAL TABLE (a balance, turnovers, a slice) by fields its own "
+			"parameters take belongs INSIDE the table's brackets - Balance(&At, Warehouse = &W), "
+			"BalanceAndTurnovers(&From, &To, , , NOT Account.OffBalance) - so the rows are selected "
+			"before the fold instead of the whole register being read and thrown away. Any predicate "
+			"is taken there: NOT, OR, IN, IN (SELECT ...), a walk through a reference.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -405,15 +404,6 @@ public:
 			// here the tree is named, because a tool is not standing inside one.
 			const ibSourceMetaDataScope resolveAgainst(activeMetaData);
 			ibQueryLowering::CheckNames(package, std::map<ibString, ibValue>());
-
-			// ⭐ A SOUND QUERY CAN STILL READ THE WHOLE REGISTER TO ANSWER ABOUT ONE WAREHOUSE. Said beside
-			// the verdict, in the engine's words: which condition stands in the WHERE and which parameter
-			// of the table takes it.
-			std::vector<ibDataValue> advice;
-			for (const ibString& sentence : ibQueryLowering::FiltersAroundVirtualTables(package))
-				advice.push_back(ibDataValue::String(sentence));
-			if (!advice.empty())
-				result.AddField(ibT("tableParameters"), ibDataValue::Array(advice));
 		}
 		// ⚠ TWO DIFFERENT FAILURES, TWO VARIETIES, TOLD APART BY WHICH ARRIVED. The
 		// lowering raises a NAME refusal (the text reads and asks for something that is

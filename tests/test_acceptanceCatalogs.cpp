@@ -349,7 +349,7 @@ struct AcceptanceCatalogs : ::testing::Test {
 		composer.FromSource(contracts->GetQueryable());
 		composer.Select(contracts->GetDataCode()->GetQueryColumn());
 		composer.UserSettings().m_filter.Append(path, comparison, ibStoreValue(value));
-		std::vector<ibQueryLowering::OutputColumn> schema;
+		std::vector<ibQueryLowering::ibQueryOutputColumn> schema;
 		bool hasTotals = false;
 		ibDataQueryResult rows = composer.Execute(schema, hasTotals);
 		std::set<ibString> codes;
@@ -363,7 +363,7 @@ struct AcceptanceCatalogs : ::testing::Test {
 		ibValueReferenceDataObject* ref = holder.ConvertToType<ibValueReferenceDataObject>();
 		std::vector<ibValue> list;
 		if (ref != nullptr)
-			ref->FindValue(wxEmptyString, list);
+			ref->FindValue(wxEmptyString, ibChoiceCondition(), list);
 		std::map<ibString, ibValue> all = goodsRef;
 		all.insert(partyRef.begin(), partyRef.end());
 		all.insert(contractRef.begin(), contractRef.end());

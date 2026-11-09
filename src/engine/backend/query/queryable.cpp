@@ -85,7 +85,7 @@ ibMetaID ibBackendQueryable::GetQueryTableId() const
 ibAliasQueryable::ibAliasQueryable(const ibBackendQueryable* origin, const ibString& sqlAlias)
 	: m_origin(origin), m_sqlAlias(sqlAlias)
 {
-	for (const ibBackendQueryColumn* c : origin->GetColumns()) {
+	for (const ibBackendQueryColumn* c : origin->GetQueryColumns()) {
 		if (c == nullptr)
 			continue;
 		m_published.push_back(m_owned.emplace_back(std::make_shared<ibAliasColumn>(c)).get());
@@ -113,7 +113,7 @@ const ibBackendQueryColumn* ibAliasQueryable::ResolveColumnByName(const ibString
 // The key / hierarchy columns are the ORIGIN's answers, translated to OUR twins: they are read
 // through this reading of the table, so handing back the origin's objects would route them to the
 // other side of the join — the very confusion this class exists to end. A column the origin names
-// but does not publish (it is not in GetColumns) is dropped rather than passed through untranslated.
+// but does not publish (it is not in GetQueryColumns) is dropped rather than passed through untranslated.
 std::vector<const ibBackendQueryColumn*> ibAliasQueryable::GetPrimaryKeyColumns() const
 {
 	std::vector<const ibBackendQueryColumn*> keys;

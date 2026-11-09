@@ -138,9 +138,9 @@ const ibBackendQueryColumn* ibSequenceQueryable::ResolveColumnByName(const ibStr
 // …and it is PROJECTED beside the stored columns, so `SELECT *` and the composer's default fields
 // carry it too. One surface answers both questions — a column resolvable by name and missing from
 // the projection is the half-answer this pair always produces when they are kept apart.
-std::vector<const ibBackendQueryColumn*> ibSequenceQueryable::GetColumns() const
+std::vector<const ibBackendQueryColumn*> ibSequenceQueryable::GetQueryColumns() const
 {
-	std::vector<const ibBackendQueryColumn*> columns = ibRegisterDataQueryable::GetColumns();
+	std::vector<const ibBackendQueryColumn*> columns = ibRegisterDataQueryable::GetQueryColumns();
 	if (const ibBackendQueryColumn* moment = m_seq->GetMomentColumn())
 		columns.push_back(moment);
 	return columns;
@@ -155,19 +155,16 @@ std::vector<const ibBackendQueryColumn*> ibSequenceQueryable::GetColumns() const
 // the opposite reason: it is asked for constantly in a query and means nothing as a list column
 // (Max, 2026-09-18: "it must be there for the border and for the ordinary selection alike; there is
 // no need to see it in the list"). The reference system lists exactly the recorder, the period, the dimensions and
-// the moment — and nothing else.
+// the moment — and nothing else. The MOMENT is a column of the QUERY (the queryable constructs it), so it is
+// offered where the query is written and not here: a source lists the fields that are.
 void ibValueMetaObjectSequence::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
 {
 	for (const ibValueMetaObjectAttributeBase* attribute : GetGenericAttributeArrayObject()) {
 		if (attribute == nullptr)
 			continue;
 		const bool bookkeeping = attribute == GetRegisterActive() || attribute == GetRegisterLineNumber();
-		explorer.AppendColumn(attribute->GetQueryColumn(), /*enabled*/ true, /*visible*/ !bookkeeping);
+		explorer.AppendColumn(attribute, attribute->GetColumnId(), /*enabled*/ true, /*visible*/ !bookkeeping);
 	}
-	// …and the moment, from the QUERYABLE — where a constructed column lives, so the tree offers
-	// exactly what a query can resolve.
-	if (const ibBackendQueryable* queryable = GetQueryable())
-		explorer.AppendColumn(queryable->ResolveColumnByName(GetPointInTime()->GetName()), /*enabled*/ true, /*visible*/ false);
 }
 
 //***********************************************************************
@@ -176,7 +173,7 @@ void ibValueMetaObjectSequence::FillSourceExplorer(ibSourceDataObject::ibSourceE
 
 // The key, and what the key has got to. A border says the moment the way a registration says it: the
 // recorder and its date, because the border IS the last registration everything is done up to.
-std::vector<const ibBackendQueryColumn*> ibSequenceBordersQueryable::GetColumns() const
+std::vector<const ibBackendQueryColumn*> ibSequenceBordersQueryable::GetQueryColumns() const
 {
 	std::vector<const ibBackendQueryColumn*> columns;
 	for (const ibValueMetaObjectDimension* dimension : m_seq->GetDimensionArrayObject())
@@ -199,7 +196,7 @@ std::vector<const ibBackendQueryColumn*> ibSequenceBordersQueryable::GetPrimaryK
 
 const ibBackendQueryColumn* ibSequenceBordersQueryable::ResolveColumnByName(const ibString& name) const
 {
-	for (const ibBackendQueryColumn* column : GetColumns())
+	for (const ibBackendQueryColumn* column : GetQueryColumns())
 		if (column->GetName().IsSameAs(name, false))
 			return column;
 	return nullptr;
@@ -230,10 +227,9 @@ const ibBackendQueryable* ibSequenceBordersSourceDescriptor::CreateQueryable(ibV
 	return &m_queryable;   // no arguments: a border is a fact of the key, not a reading as of a moment
 }
 
-void ibSequenceBordersSourceDescriptor::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+std::vector<const ibBackendQueryColumn*> ibSequenceBordersSourceDescriptor::GetQueryColumns(const std::vector<ibValue>& /*args*/) const
 {
-	for (const ibBackendQueryColumn* column : m_queryable.GetColumns())
-		explorer.AppendColumn(column);
+	return m_queryable.GetQueryColumns();
 }
 
 //***********************************************************************
@@ -261,7 +257,7 @@ void ibValueMetaObjectSequence::ContributeTables(ibSchemaSnapshot& out) const
 	if (HasBorders()) {
 		const ibSequenceBordersQueryable* borders = GetBordersQueryable();
 		ibSchemaTable& t = out.CreateSchemaTable(borders);
-		for (const ibBackendQueryColumn* column : borders->GetColumns()) {
+		for (const ibBackendQueryColumn* column : borders->GetQueryColumns()) {
 			// ⚠ A SYNTHETIC COLUMN IS STORED NOWHERE. The moment is the period and the recorder, and
 			// asking for a column of its own asks for their fields a second time — which Firebird says
 			// plainly: "violation of PRIMARY or UNIQUE KEY … FLD…_D on SEQUENCE…_BORDERS" (2026-09-18).

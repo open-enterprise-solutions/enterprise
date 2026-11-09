@@ -348,7 +348,7 @@ void ibValueQueryable::MaterialiseThenRam(ibLinqMethod method, ibValue& ret, ibV
 	// single-key sources, structures otherwise — folded Where/OrderBy/Take stay
 	// server-side), then run the op there with the ordinary RAM machinery.
 	const ibBackendQueryColumn* refCol = RowReferenceColumn();
-	const std::vector<const ibBackendQueryColumn*> cols = m_queryable->GetColumns();
+	const std::vector<const ibBackendQueryColumn*> cols = m_queryable->GetQueryColumns();
 	ibValueArray* arr = new ibValueArray();
 	ibValue host(arr);   // owns via TYPE_REFFER for the dispatch below
 	ibDataQueryResult sel = ExecuteAccumulated();
@@ -445,7 +445,7 @@ bool ibValueQueryable::JoinPushDown(ibValue& ret, ibValue** args, long n)
 			alias.push_back(pfx + ibT("ref"));
 			return;
 		}
-		const std::vector<const ibBackendQueryColumn*> all = q->GetColumns();
+		const std::vector<const ibBackendQueryColumn*> all = q->GetQueryColumns();
 		for (size_t i = 0; i < all.size(); ++i) {
 			if (all[i] == nullptr) continue;
 			cols.push_back(all[i]);
@@ -627,14 +627,14 @@ void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibV
 		ibReadPageRequest page;
 		page.m_count = 1;
 		ibDataQueryResult sel = m_builder.Execute(page);
-		if (sel.Next()) ret = RowValue(sel, RowReferenceColumn(), m_queryable->GetColumns(), m_projectCol, m_projectAlias);
+		if (sel.Next()) ret = RowValue(sel, RowReferenceColumn(), m_queryable->GetQueryColumns(), m_projectCol, m_projectAlias);
 		else            ret = ibValue();   // empty selection -> Undefined (both variants, v1)
 		return;
 	}
 
 	case M::ToArray: {
 		const ibBackendQueryColumn* refCol = RowReferenceColumn();
-		const std::vector<const ibBackendQueryColumn*> cols = m_queryable->GetColumns();
+		const std::vector<const ibBackendQueryColumn*> cols = m_queryable->GetQueryColumns();
 		ibValueArray* arr = new ibValueArray();
 		ibDataQueryResult sel = ExecuteAccumulated();
 		while (sel.Next())
@@ -656,7 +656,7 @@ void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibV
 		// `Data.Catalogs.Goods.ToTable()` on a nine-row catalog took the whole application down; the same rows
 		// iterated by foreach came back fine.
 		ibDataQueryResult sel = ExecuteAccumulated();
-		sel.SetMaterialiseColumns(m_queryable->GetColumns());
+		sel.SetMaterialiseColumns(m_queryable->GetQueryColumns());
 		ret = sel.Select().Snapshot().ToValueTable();
 		return;
 	}
@@ -814,7 +814,7 @@ std::shared_ptr<ibValueIteratorState> ibValueQueryable::CreateIterator()
 		return nullptr;
 	// References for single-key sources, structure rows otherwise (registers / Data.From).
 	return std::make_shared<ibQueryableIteratorState>(
-		m_builder, m_take, RowReferenceColumn(), m_queryable->GetColumns(), m_ownedSource, m_projectCol, m_projectAlias);
+		m_builder, m_take, RowReferenceColumn(), m_queryable->GetQueryColumns(), m_ownedSource, m_projectCol, m_projectAlias);
 }
 
 //////////////////////////////////////////////////////////////////////

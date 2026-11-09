@@ -23,13 +23,16 @@
 //	(Max: "everything to do with the request lives there"; "the choice one is
 //	part of the form one, they will probably live together").
 //
+//	The CONDITION went on to value.h (ibChoiceCondition), beside the value: a value
+//	is found under it as well as chosen (FindValue), and value.h is under everything.
+//
 //	The select mode's SCRIPT FACE stayed behind in metaObjectEnum.h, with the
 //	other enumerations a module can name: that is a different subject — what a
 //	script may spell — and the registration and wire name are unchanged either
 //	way.
 ////////////////////////////////////////////////////////////////////////////
 
-#include "backend/compiler/value.h"    // a condition narrows ROWS by a parameter's runtime VALUE
+#include "backend/compiler/value.h"    // ibChoiceCondition — what a choice narrows its ROWS by; a parameter's runtime VALUE
 #include "backend/uniqueKey.h"         // the key a form is opened under
 
 #include <map>
@@ -40,39 +43,6 @@ enum ibSelectMode {
 	ibSelectMode_Items = 1,
 	ibSelectMode_Folders,
 	ibSelectMode_FoldersAndItems
-};
-
-// ⭐ THE CONDITION A FIELD IS CHOSEN UNDER, ANSWERED ONCE. Four callers ask it — the choice form, the
-// quick-choice drop-down, the adjustment of a value on write, and the filter of a list or column — and
-// four answers would drift, on somebody else's configuration, months later
-// (docs/private/choice-links.md § 7). ibChoiceLinkResolver produces it.
-//
-// ⭐ A CLASSIFICATION, NOT A FILTER. The two halves are different things: the type decides WHICH LIST
-// opens, the filter decides WHAT IS SHOWN in it. A caller handed only a filter would have to re-derive
-// the type from somewhere, and would get it wrong the first time the type was the only thing that
-// changed.
-struct ibChoiceCondition {
-
-	// 🛑 A SETTLED TYPE STOOD HERE AND NARROWED NOTHING. The resolver computed it — what the governing
-	// field settles the chosen field's type to — and the only reader it ever had was a report: a list is
-	// narrowed by the parameters below (valueDynamicList.cpp), and the control has already chosen which
-	// metaobject opens before it asks for a condition. What a field may HOLD is decided where the value
-	// is written, by the one verb (ibValue::AdjustValue), so the second machinery for it is gone
-	// (measured and removed 2026-09-24).
-
-	// ⭐⭐ THE CHOICE PARAMETERS, AS THE PAIRS THEY ARE — a field of what is being chosen, and the
-	// value it must equal. That is what an author wrote (`Owner ← Counterparty`) and what the list is
-	// CREATED with; there is nothing in between for either end to get wrong.
-	//
-	// 🛑 THIS WAS AN ibFilterDescription, AND THAT WAS A ROAD TOO MANY. A filter description is what a
-	// composer is BUILT FROM, so handing one to a list that already exists changes a description
-	// nobody reads again — the composer had already been made from the old one, and nothing re-runs it
-	// (Max, 2026-09-23: "the filters will not work, it is a composer; you have to pass these settings
-	// at the moment the source object is formed"). The pairs go to `AddFilter` at creation, the same
-	// door a folder-select list is born with its `IsFolder = true` through.
-	//
-	// Empty: nothing narrows the rows.
-	std::map<ibString, ibValue> m_parameters;
 };
 
 // ⭐ EVERYTHING ONE CHOICE IS ASKED WITH, IN ONE ARGUMENT. `ProcessChoice` used to take the form name

@@ -34,7 +34,7 @@
 #include "backend/backend_core.h"
 #include "backend/compiler/value.h"        // ibValue — driver rows / parameters
 #include "core/query/queryAST.h"        // ibQuerySelectPtr — the cached parse
-#include "backend/query/queryLowering.h"   // ibQueryLowering::OutputColumn (+ ibBackendQueryColumn)
+#include "backend/query/queryLowering.h"   // ibQueryLowering::ibQueryOutputColumn (+ ibBackendQueryColumn)
 #include "backend/query/queryTempStore.h"  // ibQueryTempTableStore — what the preparing statements made
 #include "drivers/compositionDriver.h"             // ibCompositionDriver / ibCompositionOutputInfo — the contract, cut out on 2026-08-28
 #include "compositionCondition.h"                  // the evaluator — how a row in hand is read against a condition (SubtreeOf feeds it)
@@ -994,7 +994,7 @@ public:
 		// A LINE'S — the rules that hold on its row: the setting's, then the output's, then its node's (a deeper storey
 		// paints over); one naming no field paints the line, one naming fields paints those columns. Into `attr`, the
 		// walk's buffer, refilled where it stands. False when nothing held.
-		bool AttrFor(const GroupNode* node, const std::vector<ibQueryLowering::OutputColumn>& schema,
+		bool AttrFor(const GroupNode* node, const std::vector<ibQueryLowering::ibQueryOutputColumn>& schema,
 			const std::vector<ibValue>& row, ibCompositionLineAttr& attr) const;
 	};
 	ConditionalAppearance ConditionalAppearanceFor(const Output& output) const;
@@ -1393,7 +1393,7 @@ public:
 
 	// Execute for ONE output: the cached parse for the first, a fresh render + parse for any other.
 	// `serverGrouped` — see the Execute overload that answers it: the fact belongs to THIS read.
-	ibDataQueryResult ExecuteFor(const Output& output, std::vector<ibQueryLowering::OutputColumn>& schema,
+	ibDataQueryResult ExecuteFor(const Output& output, std::vector<ibQueryLowering::ibQueryOutputColumn>& schema,
 		bool& hasTotals, const ibReadPageRequest& page, bool& serverGrouped);
 
 private:
@@ -1426,7 +1426,7 @@ private:
 	size_t BranchIndexOf(const Output& output) const;
 	// The read this output should walk — built on first ask, null when it reads for itself.
 	ibDataQueryResult* SharedReadFor(const Output& output,
-		std::vector<ibQueryLowering::OutputColumn>& schema, bool& hasTotals);
+		std::vector<ibQueryLowering::ibQueryOutputColumn>& schema, bool& hasTotals);
 	// …and released when the last branch has been served.
 	void ReleaseSharedRead(const Output& output);
 	// Is this output one of the branches of the shared read? (Null / empty share = nobody is.)
@@ -1434,8 +1434,8 @@ private:
 	// ⭐ THE COLUMNS THIS OUTPUT ACTUALLY SHOWS, out of the shared read's schema. One read publishes
 	// every branch's keys; a branch prints its OWN — otherwise each table on the sheet would carry an
 	// empty column for every heading of its neighbours.
-	std::vector<ibQueryLowering::OutputColumn> SchemaFor(const Output& output,
-		const std::vector<ibQueryLowering::OutputColumn>& shared) const;
+	std::vector<ibQueryLowering::ibQueryOutputColumn> SchemaFor(const Output& output,
+		const std::vector<ibQueryLowering::ibQueryOutputColumn>& shared) const;
 
 	// ⭐ THE SHARED READ, BUILT BY WHOEVER NEEDS IT FIRST and released by the last branch that used
 	// it. There is no "the run is starting" hook and there does not need to be one: the outputs are
@@ -1448,7 +1448,7 @@ private:
 	// signature. `mutable` would have kept a const method that quietly does not behave like one,
 	// which is a lie told to the compiler to avoid rewording one declaration.
 	std::shared_ptr<ibDataQueryResult>         m_sharedRead;
-	std::vector<ibQueryLowering::OutputColumn> m_sharedSchema;
+	std::vector<ibQueryLowering::ibQueryOutputColumn> m_sharedSchema;
 	std::vector<const Output*>                 m_sharedBranches;
 	size_t                                     m_branchesServed = 0;
 
@@ -1470,7 +1470,7 @@ private:
 	// ⚠ AND THE NODE'S KIND TRAVELS WITH THE DEPTH: a RECORD's level is not found by counting, since
 	// it writes no key and has no depth of its own (see LevelAt).
 	bool LevelShows(const Output& output, int depth, ibSelectorNodeKind kind,
-		const std::vector<ibQueryLowering::OutputColumn>& schema, const std::vector<ibValue>& row) const;
+		const std::vector<ibQueryLowering::ibQueryOutputColumn>& schema, const std::vector<ibValue>& row) const;
 
 	// …AND IN WHAT ORDER DOES IT HAND THEM OVER? The twin of LevelShows, and the half a level's
 	// settings carried without anybody reading it: the window writes a sort onto the node a person
@@ -1480,15 +1480,15 @@ private:
 	// not reach the WHERE and a level's sort does not reach the ORDER BY, because both are about how
 	// one level is presented while the figures above it stay computed from every row.
 	std::vector<ibSelectorSort> LevelOrder(const Output& output, int depth,
-		const std::vector<ibQueryLowering::OutputColumn>& schema) const;
+		const std::vector<ibQueryLowering::ibQueryOutputColumn>& schema) const;
 
 public:
 
 	// Render -> parse -> lower -> run. Fills the output schema; `hasTotals` reports a folded (TOTALS) result.
-	ibDataQueryResult Execute(std::vector<ibQueryLowering::OutputColumn>& schema, bool& hasTotals);
+	ibDataQueryResult Execute(std::vector<ibQueryLowering::ibQueryOutputColumn>& schema, bool& hasTotals);
 
 	// The PAGED read — the driver's envelope threaded into the lowering's paged terminal.
-	ibDataQueryResult Execute(std::vector<ibQueryLowering::OutputColumn>& schema, bool& hasTotals,
+	ibDataQueryResult Execute(std::vector<ibQueryLowering::ibQueryOutputColumn>& schema, bool& hasTotals,
 	                          const ibReadPageRequest& page);
 
 	// ⭐⭐ …AND THE SAME READ THAT ALSO SAYS WHETHER THE DBMS DID THE GROUPING (Max, 2026-08-28: heal
@@ -1500,7 +1500,7 @@ public:
 	// ⚠ A member made the answer OUTLIVE the question. Whoever read it later got the last read's
 	// verdict whether or not it was about their output — the two overloads above forward here with a
 	// local, so nothing keeps it after the caller has used it.
-	ibDataQueryResult Execute(std::vector<ibQueryLowering::OutputColumn>& schema, bool& hasTotals,
+	ibDataQueryResult Execute(std::vector<ibQueryLowering::ibQueryOutputColumn>& schema, bool& hasTotals,
 	                          const ibReadPageRequest& page, bool& serverGrouped);
 
 	// The full cycle into the given driver.

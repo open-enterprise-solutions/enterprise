@@ -73,8 +73,8 @@ ibString ibValueCheckbox::GetControlTitle() const
 		return m_propertyTitle->GetValueAsTranslateString();
 	}
 	else if (!m_propertySource->IsEmptyProperty()) {
-		const ibBackendAbstractColumn* column = GetSourceAbstractColumn();
-		if (column != nullptr)   // null when the bound field is gone / whole-attribute binding
+		const ibBackendSourceColumn* column = WalkSource(GetSourceDesc());
+		if (column != nullptr)   // null when the bound field is gone
 			return column->GetSynonym();
 	}
 	return ibEmptyString;

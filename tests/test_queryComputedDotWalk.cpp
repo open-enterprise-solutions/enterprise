@@ -73,7 +73,7 @@ public:
 	ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& /*extra*/) const override {
 		return m_build ? m_build() : ibQueryRamTable();
 	}
-	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_cols; }
+	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override { return m_cols; }
 	std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override {
 		return m_pk != nullptr ? std::vector<const ibBackendQueryColumn*>{ m_pk }
 		                       : std::vector<const ibBackendQueryColumn*>{};
@@ -82,7 +82,7 @@ public:
 		for (const ibBackendQueryColumn* c : m_cols) if (c->GetName() == name) return c;
 		return nullptr;
 	}
-	bool OwnsColumn(const ibBackendQueryColumn* col) const override {
+	bool ContainColumn(const ibBackendQueryColumn* col) const override {
 		for (const ibBackendQueryColumn* c : m_cols) if (c == col) return true;
 		return false;
 	}

@@ -236,10 +236,10 @@ const ibBackendQueryColumn* ibRecorderQueryable::ResolveColumnByName(const ibStr
 // …and it is a field of this source like any other, so `SELECT *` carries it. Nothing stores it, so
 // the projection writes no field for it; the READ constructs it out of the date and the reference,
 // which the same select carries anyway.
-std::vector<const ibBackendQueryColumn*> ibRecorderQueryable::GetColumns() const
+std::vector<const ibBackendQueryColumn*> ibRecorderQueryable::GetQueryColumns() const
 {
 	std::vector<const ibBackendQueryColumn*> cols =
-		ibRecordQueryable<ibValueMetaObjectRecordDataRecorderRef>::GetColumns();
+		ibRecordQueryable<ibValueMetaObjectRecordDataRecorderRef>::GetQueryColumns();
 	cols.push_back(&m_momentColumn);
 	return cols;
 }
@@ -408,7 +408,7 @@ const ibBackendQueryColumn* ibRegisterDataQueryable::ResolveColumnByName(const i
 	const ibValueMetaObjectAttributeBase* attribute = m_meta->FindAnyAttributeObjectByFilter(name);
 	return attribute != nullptr ? attribute->GetQueryColumn() : nullptr;
 }
-std::vector<const ibBackendQueryColumn*> ibRegisterDataQueryable::GetColumns() const {
+std::vector<const ibBackendQueryColumn*> ibRegisterDataQueryable::GetQueryColumns() const {
 	// All generic attributes — the register's generic array ALREADY spans the
 	// predefineds (recorder / line / period), the dimensions, the resources and
 	// the plain attributes. Mirrors ibRecordQueryable. Drives the L5 composer's

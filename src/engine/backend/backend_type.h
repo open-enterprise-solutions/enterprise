@@ -4,7 +4,8 @@
 #include <vector>
 
 #include "core/description/typeDescription.h"
-#include "backend/query/queryColumn.h"     // ibBackendAbstractColumn (name/synonym/comment) + ibBackendSourceColumn
+#include "backend/compiler/value.h"        // ibValue — what a type creates and adjusts (CreateValue / AdjustValue)
+#include "backend/srcColumn.h"             // ibBackendSourceColumn — what a form attribute is, and what the dot returns
 #include "core/description/sourceDescription.h"     // ibSourceDescription — control's bound source path (GetSourceDesc / SetDefaultSourceType)
 #include "core/selectorDataType.h"                  // ibSelectorDataType — the shape a type is picked in (GetFilterDataType)
 
@@ -176,28 +177,28 @@ enum ibSourceDataType {
 //////////////////////////////////////////////////////////////
 
 // The form's per-attribute HOLDER as a backend interface — it pairs an attribute
-// (its DEFINITION, name/type/id) with the VALUE/source that attribute manages. Inherits
-// nothing; implemented on the frontend (ibFormAttributeValue), where all the logic lives.
+// (its DEFINITION, name/type/id) with the VALUE/source that attribute manages. Implemented
+// on the frontend (ibFormAttributeValue), where all the logic lives.
 // GetSourceList vends THESE — attribute + value together — not bare attributes: a source
 // picker reads the columns through GetSourceValue()->GetSourceExplorer(), never the concrete
 // value type. The source is produced by the holder (it materialises the value from the
 // attribute's Type), so the attribute itself stays value-free.
-class BACKEND_API ibBackendFormAttributeValue : public ibBackendAbstractColumn {
+//
+// ⭐ A COLUMN OF A SOURCE, as an attribute of the configuration is (ibBackendSourceColumn): the form is the source
+// it stands in. Name, synonym, comment and Type are answered the column's way, so the dot (WalkSource) returns a
+// form's attribute bound whole the way it returns a field bound through one, and nobody asks which.
+class BACKEND_API ibBackendFormAttributeValue : public ibBackendSourceColumn {
 public:
 	virtual ~ibBackendFormAttributeValue() = default;
 	// FAÇADE — the holder answers for its (private, internal) attribute directly; the concrete
 	// description is NEVER handed out. Outside code reads name / id / type / source through here.
-
-	// ibBackendAbstractColumn — the attribute answers Name / Synonym / Comment like a metadata
-	// column, so ONE resolver returns either. The class IS an attribute, so the accessors carry no
-	// "Attribute" noise: GetName / GetId / IsMain. GetName IS the attribute's name (the abstract
-	// column's); GetSynonym / GetComment are overridden by the concrete holder from its properties.
+	// The class IS an attribute, so the accessors carry no "Attribute" noise: GetName / GetId / IsMain;
+	// GetSynonym / GetComment / GetTypeDesc are the column's, overridden by the concrete holder.
 	virtual ibString GetName() const override = 0;
 	virtual ibMetaID GetId() const = 0;
 
 	virtual bool IsMain() const = 0;
 
-	virtual const ibTypeDescription& GetTypeDesc() const = 0;
 	virtual class ibSourceDataObject* GetSourceValue() const = 0;
 };
 
@@ -234,10 +235,11 @@ public:
 
 	// The "dot": feed a source DESCRIPTION (the binding path wrapper), get back the leaf COLUMN. Its head
 	// (path[0]) gates to one of THIS context's source attributes (GetSourceList); deeper hops resolve as its
-	// fields. The result is the neutral ibBackendSourceColumn (a metaobject attribute OR a queryable column),
-	// so the caller never sees the concrete class. Null = a whole-attribute binding (length 1) or a BROKEN
-	// path (a hop no longer resolves). `valid`/`outText` (optional) report resolvability and the dotted
-	// display "Attr.Field.Sub". Takes the wrapper (not a bare vector) — resolution is source-explorer-driven.
+	// fields. The result is the neutral ibBackendSourceColumn (a metaobject attribute, a view's column — or, for
+	// a whole-attribute binding (length 1), the form's attribute itself), so the caller never sees the concrete
+	// class. Null = a BROKEN path (a hop no longer resolves) or none. `valid`/`outText` (optional) report
+	// resolvability and the dotted display "Attr.Field.Sub". Takes the wrapper (not a bare vector) — resolution
+	// is source-explorer-driven.
 	const ibBackendSourceColumn* WalkSource(const ibSourceDescription& desc,
 		bool* valid = nullptr, ibString* outText = nullptr) const;
 

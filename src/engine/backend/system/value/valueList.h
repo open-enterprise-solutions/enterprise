@@ -3,7 +3,7 @@
 
 #include "backend/tabularModel.h"
 #include "backend/srcDataObject.h"       // ibSourceDataObject — a value list is a form's data source, as a table is
-#include "backend/query/queryColumn.h"   // ibBackendSourceColumn — a column of the list describes itself to a form
+#include "backend/srcColumn.h"          // ibBackendSourceColumn — a column of the list describes itself to a form
 
 constexpr ibClassID g_valueListCLSID = value_to_clsid("VL_VLST");
 constexpr ibClassID g_valueListItemCLSID = system_to_clsid("VL_VLIT");

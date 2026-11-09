@@ -105,7 +105,7 @@ public:
 			// person's sheet does not have (2026-10-28). The lines drop its value to match (ShownValues).
 			if (!info.ShowsColumn(i))
 				continue;
-			const ibQueryLowering::OutputColumn& oc = info.m_schema[i];
+			const ibQueryLowering::ibQueryOutputColumn& oc = info.m_schema[i];
 			ibComposedColumn c;
 			c.m_title = info.TitleOf(i);   // the output's own wording, falling back to the name
 			// …and the NAME of the field it reads, where the composition knows one: a level's column is read one

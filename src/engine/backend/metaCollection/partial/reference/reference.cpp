@@ -882,7 +882,7 @@ const ibSourceExplorer* ibValueReferenceDataObject::GetSourceExplorer() const
 		ibT("Ref"), _("Ref"), metaObject->GetMetaID(), GetClassType(), false, false))
 		return &m_sourceExplorer;   // built at this version of the metadata already — read as it is
 	for (const auto object : metaObject->GetGenericAttributeArrayObject())
-		m_sourceExplorer.AppendColumn(object->GetQueryColumn());
+		m_sourceExplorer.AppendColumn(object, object->GetColumnId());
 	return &m_sourceExplorer;
 }
 

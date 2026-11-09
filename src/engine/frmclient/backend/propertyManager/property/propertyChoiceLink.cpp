@@ -94,6 +94,33 @@ ibString ibChoiceHolderName(const ibBackendProperty* property)
 	return sources ? sources->GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Title) : ibString();
 }
 
+ibSourceDescription ibChoiceSourcePath(const ibBackendProperty* property, const ibMetaID& sourceId)
+{
+	ibSourceDescription path;
+	const ibDataNode row = RowOf(property);
+	const auto sources = row.FindChild(ibProtocol::ibSchema::ibProperties::Sources);
+	if (!sources)
+		return path;
+	for (const ibDataNode& source : sources->Children()) {
+		if ((ibMetaID)source.GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Id) != sourceId)
+			continue;
+		// The hops as a Source's rows carry them (ibFormDesignView::ReadPath reads them back the same way).
+		const auto hops = source.FindField(ibProtocol::ibView::ibFormDesigner::Path);
+		if (!hops || hops->Kind() != ibDataKind::Array)
+			return ibSourceDescription(static_cast<ibSourceId>(sourceId));   // an older server's: the Id is the field's
+		for (const ibDataValue& hop : hops->AsArray()) {
+			if (hop.Kind() != ibDataKind::Child || !hop.AsChild())
+				continue;
+			unsigned long long type = 0;
+			hop.AsChild()->GetValue<ibString>(ibProtocol::ibView::ibFormDesigner::Type).ToULongLong(&type);
+			path.AppendSource(static_cast<ibSourceId>(hop.AsChild()->GetValue<std::int32_t>(ibProtocol::ibView::ibFormDesigner::Id)),
+				type != 0 ? static_cast<ibClassID>(type) : g_valueUndefinedCLSID);
+		}
+		return path;
+	}
+	return path;
+}
+
 void ibChoiceParametersForSource(const ibBackendProperty* property, const ibMetaID& sourceId,
 	std::vector<ibMetaID>& out, ibMetaID* obvious)
 {

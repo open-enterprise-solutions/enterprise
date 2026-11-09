@@ -8,7 +8,7 @@
 #include "backend/propertyManager/property/propertyDynamicSource.h"  // ibPropertyDynamicSource — the "Source" property
 #include "backend/propertyManager/property/propertyDataComposition.h" // ibPropertyDataComposition — the "Settings…" action, this type's own
 #include "backend/propertyManager/property/propertyString.h"         // ibPropertyString — the query text
-#include "backend/query/queryLowering.h"              // ibQueryLowering::OutputColumn — what the query produces
+#include "backend/query/queryLowering.h"              // ibQueryLowering::ibQueryOutputColumn — what the query produces
 #include "backend/query/queryConstructorModel.h"      // ibQueryConstructorField — what a window offers to pick from
 
 #include <atomic>   // the rented read says WHICH THREAD it is on — see m_fetchThread
@@ -486,7 +486,7 @@ private:
 
 	// WHAT THE QUERY PRODUCES, rebuilt on every RebuildSource — which is what makes
 	// the field pickers follow the text.
-	std::vector<ibQueryLowering::OutputColumn> m_querySchema;
+	std::vector<ibQueryLowering::ibQueryOutputColumn> m_querySchema;
 	ibString                                   m_queryError;   // the ENGINE's words, verbatim
 
 	// The SOURCE config, STORED (what GetSourceMetaData returns) — captured from the

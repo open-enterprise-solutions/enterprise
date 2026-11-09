@@ -17,8 +17,8 @@ bool ibValueTextCtrl::GetChoiceForm(ibPropertyList* property)
 		if (!m_propertySource->IsEmptyProperty()) {
 			// Resolve the bound attribute config-wide — a dotted path's leaf lives in a
 			// referenced type, not the form's own metaobject (so the source-scoped lookup
-			// here would miss it and assert). GetSourceAttributeObject handles both.
-			const ibBackendSourceColumn* attribute = m_propertySource->GetSourceAttributeObject();
+			// here would miss it and assert). The dot (WalkSource) handles both.
+			const ibBackendSourceColumn* attribute = WalkSource(GetSourceDesc());
 			if (attribute != nullptr) {
 				const ibCtorMetaValueType* so = metaData->GetTypeCtor(attribute->GetTypeDesc().GetFirstClsid());
 				if (so != nullptr) {
@@ -117,8 +117,8 @@ ibString ibValueTextCtrl::GetControlTitle() const
 		return m_propertyTitle->GetValueAsTranslateString();
 	}
 	else if (!m_propertySource->IsEmptyProperty()) {
-		const ibBackendAbstractColumn* column = GetSourceAbstractColumn();
-		if (column != nullptr)   // null when the bound field is gone / whole-attribute binding
+		const ibBackendSourceColumn* column = WalkSource(GetSourceDesc());
+		if (column != nullptr)   // null when the bound field is gone
 			return column->GetSynonym();
 	}
 	return ibEmptyString;
@@ -197,14 +197,30 @@ bool ibValueTextCtrl::GetControlValue(ibValue& pvarControlVal) const
 
 bool ibValueTextCtrl::SetControlValue(const ibValue& varControlVal)
 {
-	// A bound DIRECT-FIELD source writes back through the form (the head selects the attribute; a
-	// dotted reference path is read-only → no-op). Adjusting the value to the bound Type is the
-	// factory's job in EVERY case (bound or not), so it is unconditional.
+	// A bound source writes back through the form — a whole attribute or a field of it, the column the dot finds
+	// (the head selects the attribute; a dotted reference path is read-only → no-op). Adjusting the value to the
+	// bound Type is the factory's job in EVERY case (bound or not), so it is unconditional.
+	//
+	// ⭐ THE FIELD'S OWN LINK BY TYPE NARROWS IT FIRST (#616) — the one verb a holder writes through
+	// (ibChoiceLinkResolver::Adjust), the form being its source. It is an exception to "where the data is, not where the
+	// window is" (choiceLinkResolver.h), and only because the link is the control's: a field reached through the dot
+	// has no attribute to carry it, so no other write knows of it.
+	ibValue value = varControlVal;
+	ibValue adjusted;
+	if (ibChoiceLinkResolver::Adjust(ibChoiceHolder(m_formOwner), GetTypeLink(), varControlVal, adjusted))
+		value = adjusted;
+
+	ibValue before;
+	GetControlValue(before);
+
 	const ibBackendSourceColumn* column = !m_propertySource->IsEmptyProperty()
-		? m_propertySource->GetSourceAttributeObject() : nullptr;
+		? WalkSource(GetSourceDesc()) : nullptr;
 	if (column != nullptr && m_formOwner != nullptr)
-		m_formOwner->SetValueByAttributePath(m_propertySource->GetValueAsSourceDesc(), varControlVal);
-	m_selValue = ibTypeControlFactory::AdjustValue(varControlVal);
+		m_formOwner->SetValueByAttributePath(m_propertySource->GetValueAsSourceDesc(), value);
+	m_selValue = ibTypeControlFactory::AdjustValue(value);
+
+	// …and the controls chosen within this field are emptied, on a change (#616).
+	ibTypeControlFactory::ClearLinked(this, before);
 
 	// The text the field shows is formatted from the value on the next Update — nothing is pushed.
 	m_formOwner->RefreshForm();
@@ -212,9 +228,43 @@ bool ibValueTextCtrl::SetControlValue(const ibValue& varControlVal)
 	return true;
 }
 
+// ⭐ THE SOURCE THE BOUND FIELD STANDS IN — asked by the binding's leaf, so it is the one that has that field (issue #259).
+// An attribute of the form itself stands in the form, the source over its attributes: asked of the main object, its
+// form-local id named nothing there, or a field of the object's that happened to have the same small number. A field
+// of what an attribute holds stands in that attribute's source, which is the main object only for the main attribute.
 ibChoiceHolder ibValueTextCtrl::GetChoiceHolder() const
 {
-	return m_formOwner != nullptr ? ibChoiceHolder(m_formOwner->GetSourceObject()) : ibChoiceHolder();
+	if (m_formOwner == nullptr)
+		return ibChoiceHolder();
+	const ibSourceDescription& path = GetSourceDesc();
+	if (path.GetHopCount() == 1)
+		return ibChoiceHolder(m_formOwner);
+	const ibBackendFormAttributeValue* head = path.GetHopCount() > 1 ? FindSourceHolder(path.GetFirst()) : nullptr;
+	ibSourceDataObject* const source = head != nullptr ? head->GetSourceValue() : nullptr;
+	return ibChoiceHolder(source != nullptr ? source : m_formOwner->GetSourceObject());
+}
+
+// THE FIELD'S OWN WORD over what its type says (issue #259): Use and Don't use say it outright, Auto asks the type.
+bool ibValueTextCtrl::HasQuickChoice() const
+{
+	switch (m_propertyQuickChoice->GetValueAsEnum()) {
+	case ibQuickChoiceMode::ibQuickChoiceMode_Use: return true;
+	case ibQuickChoiceMode::ibQuickChoiceMode_DontUse: return false;
+	case ibQuickChoiceMode::ibQuickChoiceMode_Auto: break;
+	}
+	return ibValueWindow::HasQuickChoice();
+}
+
+// …and over what its attribute's Select says: a form may let folders be picked into a field whose attribute takes items.
+ibSelectMode ibValueTextCtrl::GetSelectMode() const
+{
+	switch (m_propertyChoiceFoldersAndItems->GetValueAsEnum()) {
+	case ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_Items: return ibSelectMode::ibSelectMode_Items;
+	case ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_Folders: return ibSelectMode::ibSelectMode_Folders;
+	case ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_FoldersAndItems: return ibSelectMode::ibSelectMode_FoldersAndItems;
+	case ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_Auto: break;
+	}
+	return ibTypeControlFactory::GetSelectMode();
 }
 
 //*******************************************************************
@@ -233,6 +283,10 @@ bool ibValueTextCtrl::ReadData(const ibDataNode& node)
 	m_propertyClearButton->SetNodeValue(node.GetProperty(m_propertyClearButton->GetName()));
 	m_propertyChoiceForm->SetNodeValue(node.GetProperty(m_propertyChoiceForm->GetName()));
 	m_propertySource->SetNodeValue(node.GetProperty(m_propertySource->GetName()));
+	m_propertyQuickChoice->SetNodeValue(node.GetProperty(m_propertyQuickChoice->GetName()));
+	m_propertyChoiceFoldersAndItems->SetNodeValue(node.GetProperty(m_propertyChoiceFoldersAndItems->GetName()));
+	m_propertyTypeLink->SetNodeValue(node.GetProperty(m_propertyTypeLink->GetName()));
+	m_propertyChoiceParameters->SetNodeValue(node.GetProperty(m_propertyChoiceParameters->GetName()));
 
 	//events
 	m_eventOnChange->SetNodeValue(node.GetProperty(m_eventOnChange->GetName()));
@@ -257,6 +311,10 @@ bool ibValueTextCtrl::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyClearButton->GetName(), m_propertyClearButton->GetNodeValue());
 	node.SetProperty(m_propertyChoiceForm->GetName(), m_propertyChoiceForm->GetNodeValue());
 	node.SetProperty(m_propertySource->GetName(), m_propertySource->GetNodeValue());
+	node.SetProperty(m_propertyQuickChoice->GetName(), m_propertyQuickChoice->GetNodeValue());
+	node.SetProperty(m_propertyChoiceFoldersAndItems->GetName(), m_propertyChoiceFoldersAndItems->GetNodeValue());
+	node.SetProperty(m_propertyTypeLink->GetName(), m_propertyTypeLink->GetNodeValue());
+	node.SetProperty(m_propertyChoiceParameters->GetName(), m_propertyChoiceParameters->GetNodeValue());
 
 	//events
 	node.SetProperty(m_eventOnChange->GetName(), m_eventOnChange->GetNodeValue());

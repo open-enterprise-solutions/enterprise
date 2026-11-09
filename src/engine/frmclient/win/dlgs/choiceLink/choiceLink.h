@@ -45,9 +45,10 @@ private:
 	// ONE CANDIDATE — the field, as it is called and as it is drawn. Id 0 is "nothing governs it",
 	// which is a choice like any other and so stands in the same list rather than beside it as a button.
 	struct ibCandidate {
-		ibMetaID m_id = 0;
-		wxString m_label;
-		wxIcon   m_icon;
+		ibMetaID            m_id = 0;
+		ibSourceDescription m_path;   // a field's — the hops the link stores (a type's: none)
+		wxString            m_label;
+		wxIcon              m_icon;
 	};
 
 	void BuildControls();

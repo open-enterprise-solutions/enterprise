@@ -7,8 +7,8 @@
 
 #include "docViewFormEdit.h"
 
-#include "backend/query/queryColumn.h"                   // ibBackendSourceColumn::GetName — a dropped control named after its field
-#include "backend/srcDataObject.h"                       // ibSourceExplorer — a dropped path's leaf type → the control's class
+#include "backend/srcColumn.h"                           // ibBackendSourceColumn::GetName — a dropped control named after its field
+#include "backend/srcDataObject.h"                      // ibSourceExplorer — a dropped path's leaf type → the control's class
 #include "backend/system/value/valueDataComposition.h"   // g_valueDataCompositionCLSID — drops as a gridbox
 #include "backend/system/value/valueJob.h"               // g_valueScheduleCLSID — a dropped schedule builds as static text
 #include "backend/system/value/valueSpreadsheet.h"       // g_valueSpreadsheetCLSID — so does a document
@@ -66,20 +66,20 @@ void SetBoundSource(ibValueFrame* control, const ibSourceDescription& desc)
 	ibTypeControlFactory* factory = dynamic_cast<ibTypeControlFactory*>(control);
 	if (factory == nullptr)
 		return;
-	factory->SetDefaultSourceType(desc);
 
 	// Give the dropped control a NAME (identifier), like BuildForm, so it isn't a bare "Textctrl1".
 	// A NESTED binding (a NON-main head attribute + a deeper leaf, e.g. Catalog1.Section) CONCATENATES
 	// its segments — the dotted path becomes one joined identifier ("Catalog1Section"), never a literal
-	// dot. A direct field on the (implicit) MAIN attribute keeps just the field name; a BARE attribute
-	// (no leaf column) falls back to the attribute name. The TITLE (form label) is NOT assigned here —
-	// the control DERIVES it on render from the binding (GetControlTitle: Title -> field synonym ->
-	// attribute Synonym/Name).
+	// dot. A direct field on the (implicit) MAIN attribute keeps just the field name; a BARE attribute is
+	// its own leaf, named once; a path that no longer resolves falls back to the attribute name. The TITLE
+	// (form label) is NOT assigned here — the control DERIVES it on render from the binding
+	// (GetControlTitle: Title -> the synonym of what it is bound to).
 	ibString name;
 	ibBackendFormAttributeValue* head = !desc.IsOk() ? nullptr : factory->FindSourceHolder(desc.GetFirst());
-	if (head != nullptr && !head->IsMain())
+	const ibBackendSourceColumn* leaf = factory->WalkSource(desc);
+	if (head != nullptr && !head->IsMain() && leaf != head)
 		name = head->GetName();
-	if (const ibBackendSourceColumn* leaf = factory->GetSourceAttributeObject())
+	if (leaf != nullptr)
 		name += leaf->GetName();
 	if (name.IsEmpty() && head != nullptr)
 		name = head->GetName();
@@ -93,6 +93,15 @@ void SetBoundSource(ibValueFrame* control, const ibSourceDescription& desc)
 		if (ibValueForm* form = control->GetOwnerForm())
 			form->ResolveNameConflict(control);
 	}
+
+	// …then THE SOURCE, set as the inspector and a script set it (ibFormDesignView::SetProperty, ibValueFrame::
+	// SetPropVal): through its property, the control told of it (OnPropertyChanged); a table takes its source's
+	// columns there, named after it, hence after the name.
+	ibProperty* const property = control->GetProperty(ibT("Source"));
+	const ibVariant oldValue = property != nullptr ? property->GetValue() : ibVariant();
+	factory->SetDefaultSourceType(desc);
+	if (property != nullptr)
+		control->OnPropertyChanged(property, oldValue, property->GetValue());
 }
 
 // Resolve the control class for a dropped source path — the DROP side's type->control choice (the canon:
@@ -347,13 +356,8 @@ ibValueFrame* ibFormDesignView::CreateControlOfClass(ibValueFrame* parentHint, c
 	if (control != nullptr && bind)
 		bind(control);
 
-	InsertObject(obj, parent, CalcPositionOfInsertion(parentHint, parent));   // builds the widget (already bound)
-
-	// A source-bound control (a tablebox) fills its DEFAULT columns from its source explorer now the widget
-	// exists — the designer twin of the runtime CreateColumnCollection. A no-op for a scalar / a plain button
-	// (not an ibTypeControlFactory).
-	if (ibTypeControlFactory* factory = dynamic_cast<ibTypeControlFactory*>(control))
-		factory->RefillFromSource();
+	// Builds the widget, already bound — a table with the columns its source gave it (SetBoundSource).
+	InsertObject(obj, parent, CalcPositionOfInsertion(parentHint, parent));
 	return control;
 }
 

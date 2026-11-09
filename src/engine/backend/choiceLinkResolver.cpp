@@ -232,6 +232,14 @@ ibChoiceCondition ibChoiceLinkResolver::Resolve(const ibChoiceHolder& holder, co
 	return condition;
 }
 
+ibChoiceCondition ibChoiceLinkResolver::Resolve(const ibChoiceHolder& holder, const ibMetaID& field,
+	const ibChoiceParametersDescription& params, const ibChoiceHolder& paramsHolder)
+{
+	ibChoiceCondition condition = Resolve(holder, field);
+	ResolveParameters(params, paramsHolder, condition);
+	return condition;
+}
+
 bool ibChoiceLinkResolver::Adjust(const ibChoiceHolder& holder, const ibChoiceTypeLinkDescription& link,
 	const ibValue& value, ibValue& adjusted)
 {
@@ -279,15 +287,15 @@ bool ibChoiceLinkResolver::Adjust(const ibChoiceHolder& holder, const ibChoiceTy
 
 // The type it was chosen under changed: the value is of the wrong type now, and there is no question to
 // ask about it. A parameter row is gentler — it carries the author's answer.
-bool ibChoiceLinkResolver::IsLinked(const ibMetaID& field, const ibChoiceTypeLinkDescription& link,
-	const ibChoiceParametersDescription& params, const ibMetaID& edited)
+bool ibChoiceLinkResolver::IsLinked(const ibChoiceTypeLinkDescription& link, const ibChoiceParametersDescription& params,
+	const ibSourceDescription& edited)
 {
-	if (field == edited)
+	if (!edited.IsOk())
 		return false;
-	if (link.m_source.GetLeaf() == edited)
+	if (link.m_source == edited)
 		return true;
 	for (const ibChoiceParameterRowDescription& row : params.m_rows) {
-		if (row.m_source.GetLeaf() == edited && row.m_onChange != ibChoiceParameterOnChange::Keep)
+		if (row.m_source == edited && row.m_onChange != ibChoiceParameterOnChange::Keep)
 			return true;
 	}
 	return false;

@@ -201,7 +201,7 @@ TEST(QueryDescribeOutput, ASourcelessQueryIsDescribedByItsProjectionsAlone)
 	const ibQuerySelectPtr select = Parse(wxT("SELECT 1 AS One, 2 AS Two"));
 	ASSERT_NE(nullptr, select);
 
-	std::vector<ibQueryLowering::OutputColumn> schema;
+	std::vector<ibQueryLowering::ibQueryOutputColumn> schema;
 	ibQueryLowering::DescribeOutput(*select, {}, schema);
 
 	ASSERT_EQ(2u, schema.size());
@@ -219,7 +219,7 @@ TEST(QueryDescribeOutput, AColumnWithNoTableToReadItFromIsRefusedWithTheReason)
 	const ibQuerySelectPtr select = Parse(wxT("SELECT Code"));
 	ASSERT_NE(nullptr, select);
 
-	std::vector<ibQueryLowering::OutputColumn> schema;
+	std::vector<ibQueryLowering::ibQueryOutputColumn> schema;
 	EXPECT_THROW(ibQueryLowering::DescribeOutput(*select, {}, schema), ibBackendException);
 }
 
@@ -305,7 +305,7 @@ TEST(QueryDescribing, AnUnsetParameterInAConditionTheTableConsumesIsNotAMistake)
 		wxT("FROM AccumulationRegister.Stock.Balance(&At, Warehouse = &Warehouse) AS B"));
 	EXPECT_NO_THROW(ibQueryLowering::CheckNames(package, {}));
 
-	std::vector<ibQueryLowering::OutputColumn> schema;
+	std::vector<ibQueryLowering::ibQueryOutputColumn> schema;
 	ASSERT_NO_THROW(ibQueryLowering::DescribeOutput(*package.SingleSelect(), {}, schema));
 	ASSERT_EQ(2u, schema.size());
 	EXPECT_EQ(wxT("Item"), schema[0].m_name);
@@ -335,7 +335,7 @@ TEST(QueryDescribing, AConditionAskedForItsValueIsABooleanOutput)
 		wxT("FROM AccumulationRegister.Stock.Balance(&At) AS B WHERE (B.QuantityBalance > 0) = TRUE"));
 	EXPECT_NO_THROW(ibQueryLowering::CheckNames(package, {}));
 
-	std::vector<ibQueryLowering::OutputColumn> schema;
+	std::vector<ibQueryLowering::ibQueryOutputColumn> schema;
 	ASSERT_NO_THROW(ibQueryLowering::DescribeOutput(*package.SingleSelect(), {}, schema));
 	ASSERT_EQ(3u, schema.size());
 	EXPECT_EQ(wxT("InStock"), schema[1].m_name);
@@ -526,7 +526,7 @@ TEST(QueryGrouping, ARunQueryIsRefusedAsTheCheckRefusesIt)
 		wxT("SELECT S.Region, S.Period, SUM(S.Amount) AS Total FROM Document.Sales AS S GROUP BY S.Region"));
 	EXPECT_THROW(ibQueryLowering::CheckNames(incomplete, {}), ibBackendException);
 
-	std::vector<ibQueryLowering::OutputColumn> schema;
+	std::vector<ibQueryLowering::ibQueryOutputColumn> schema;
 	ibString refusal;
 	try { ibQueryLowering::DescribeOutput(*incomplete.SingleSelect(), {}, schema); }
 	catch (const ibBackendException& error) { refusal = error.GetErrorDescription(); }
@@ -1254,13 +1254,13 @@ TEST(QueryComposerCross, TheOutputInfoClassifiesAHeadingByItsAxis)
 	ibCompositionOutputInfo info;
 	info.m_rowLevels = 2;   // two headings down the page, everything deeper reads across
 
-	ibQueryLowering::OutputColumn first;
+	ibQueryLowering::ibQueryOutputColumn first;
 	first.m_role = ibQueryLowering::ibColumnRole::Dimension;
 	first.m_level = 0;
-	ibQueryLowering::OutputColumn third;
+	ibQueryLowering::ibQueryOutputColumn third;
 	third.m_role = ibQueryLowering::ibColumnRole::Dimension;
 	third.m_level = 2;
-	ibQueryLowering::OutputColumn measure;
+	ibQueryLowering::ibQueryOutputColumn measure;
 	measure.m_role = ibQueryLowering::ibColumnRole::Measure;
 
 	EXPECT_EQ(ibCompositionAxis::Rows,    info.AxisOf(first));
@@ -1574,7 +1574,7 @@ TEST(QueryComposerTotals, AResourceWrittenAsAnExpressionFoldsOverAUnion)
 	composer.TotalBy(ibT("Counterparty"));
 	composer.Select(ibT("Charged")).Select(ibT("Paid")).Select(ibT("Balance"));   // a figure is folded when it is shown
 
-	std::vector<ibQueryLowering::OutputColumn> schema;
+	std::vector<ibQueryLowering::ibQueryOutputColumn> schema;
 	bool hasTotals = false;
 	ibDataQueryResult rows = ibMakeEmptyQueryResult(nullptr);
 	ASSERT_NO_THROW(rows = composer.Execute(schema, hasTotals)) << composer.RenderText();
@@ -1582,7 +1582,7 @@ TEST(QueryComposerTotals, AResourceWrittenAsAnExpressionFoldsOverAUnion)
 
 	// Read as the report reads it: through the column the schema hands back for the figure.
 	const auto figure = std::find_if(schema.begin(), schema.end(),
-		[](const ibQueryLowering::OutputColumn& oc) { return oc.m_name == ibT("Balance"); });
+		[](const ibQueryLowering::ibQueryOutputColumn& oc) { return oc.m_name == ibT("Balance"); });
 	ASSERT_NE(schema.end(), figure);
 	const ibSelector totals = rows.Select(ibSelectKind::ibSelectKind_ByGroups);
 	const ibValue balanceTotal = figure->m_byAlias ? totals.GetTotalColumn(figure->m_alias) : totals.GetTotal(figure->m_col);

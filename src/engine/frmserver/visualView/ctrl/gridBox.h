@@ -50,7 +50,6 @@ class ibValueGridBox : public ibValueWindowComposite, public ibTypeControlFactor
 	// was empty, and the answer went through a variant that was never made.
 	virtual ibSourceObject* GetSourceObject() const override;
 	virtual ibSourceDescription& GetSourceDesc() const override { return m_propertySource->GetValueAsSourceDesc(); }
-	virtual const ibBackendSourceColumn* GetSourceAttributeObject() const override { return m_propertySource->GetSourceAttributeObject(); }
 	virtual bool IsUnbound() const override { return m_propertySource->IsEmptyProperty(); }
 	// Bound to a field this base does not use -> not available (the chrome gate in window.cpp).
 	virtual bool IsAvailable() const override { return m_propertySource->IsAvailable() && ibValueWindowComposite::IsAvailable(); }

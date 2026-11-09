@@ -8,7 +8,6 @@
 #include "backend/metaCollection/genericData.h"   // ResolveQueryConstant — …typed by its empty reference
 #include "backend/appData.h"             // ibApplicationInstance::GetQueryableFactory (no config open)
 #include "backend/metaData.h"            // ibMetaData::GetSourceFactory — the config the query runs on behalf of
-#include "backend/srcDataObject.h"       // ibSourceDataObject::ibSourceExplorer — what a source answers its fields with
 
 #include <algorithm>
 
@@ -21,25 +20,38 @@
 // so a person picked a Russian synonym in the tree and read `Employee` in the text beside it — two
 // vocabularies for one field, and the synonym in whichever language happened to be filled. The query
 // constructor is where the query language is written; its tree speaks that language.
-static ibQueryConstructorField FieldOfExplorer(const ibQueryConstructorModel& model,
-                                               const ibSourceDataObject::ibSourceExplorer& node)
+//
+// ⭐ A COLUMN OF THE QUERY, asked of itself — the constructor is where a query is written, and it reads the
+// source the way the query does (ibQueryableSourceDescriptor::GetQueryColumns), not the way a form binds to it.
+static ibQueryConstructorField FieldOfColumn(const ibQueryConstructorModel& model, const ibBackendQueryColumn& column)
 {
 	ibQueryConstructorField field;
-	field.m_name           = node.GetSourceName();
-	field.m_presentation   = node.GetSourceName();
+	field.m_name           = column.GetName();
+	field.m_presentation   = column.GetName();
 	// ⭐ WHAT IT HOLDS (GetTypeValueDesc), the types the query walks it by (ResolveReferenceTargets): a field
 	// declared `AnyRef` unfolds into every reference of the configuration, a characteristic into its chart's.
 	// Read by the declaration, both were offered as a leaf, or as a [+] with nothing behind it.
 	// A reference field can be dot-walked further (Supplier.Region.Country) — the shell shows it with
 	// a [+] and asks again with the leaf's own source.
-	field.m_type           = node.GetTypeValueDesc();
+	field.m_type           = column.GetTypeValueDesc();
 	model.ResolveReference(field);
-	field.m_picture        = node.GetSourcePicture();   // the column's own picture, asked not deduced
-	field.m_available      = node.GetColumn() == nullptr || node.GetColumn()->IsAvailable();
+	field.m_picture        = column.GetColumnPicture();   // the column's own picture, asked not deduced
+	field.m_available      = column.IsAvailable();
 	// …what a person calls it, and what it is in a balance — for the hosts that fill a field in from them.
-	field.m_caption        = node.GetSourceSynonym();
-	field.m_balanceRole    = node.GetColumn() != nullptr ? node.GetColumn()->GetBalanceRole() : ibBalanceRole::None;
+	field.m_caption        = column.GetSynonym();
+	field.m_balanceRole    = column.GetBalanceRole();
 	return field;
+}
+
+// THE FIELDS OF THESE COLUMNS — the ones that are there: a deleted or disabled field is not offered.
+static std::vector<ibQueryConstructorField> FieldsOfColumns(const ibQueryConstructorModel& model,
+                                                            const std::vector<const ibBackendQueryColumn*>& columns)
+{
+	std::vector<ibQueryConstructorField> out;
+	for (const ibBackendQueryColumn* column : columns)
+		if (column != nullptr && column->IsAllowed())
+			out.push_back(FieldOfColumn(model, *column));
+	return out;
 }
 
 // THE DESCRIPTOR BEHIND A SOURCE, or null. The table's fields and both parameter questions need it, and
@@ -123,25 +135,14 @@ std::vector<ibQuerySourceParameter> ibQueryConstructorModel::GetSourceParameters
 
 std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetConditionFields(const ibQuerySource& source, const ibString& slot) const
 {
-	std::vector<ibQueryConstructorField> out;
 	ibQueryableSourceDescriptor* descriptor = DescriptorOf(Factory(), source);
 	if (descriptor == nullptr)
-		return out;
+		return {};
 
 	// ⚠ THE CONDITION'S OWN SET, not the source's output. A balance RETURNS its resources and is
 	// FILTERED BY its dimensions only — the engine reading a balance sees nothing but the
 	// dimensions, so offering a resource here would offer a filter it cannot honour.
-	ibSourceDataObject::ibSourceExplorer explorer;
-	descriptor->FillConditionExplorer(explorer, slot);
-
-	for (unsigned int i = 0; i < explorer.GetHelperCount(); ++i) {
-		const ibSourceDataObject::ibSourceExplorer* node = explorer.GetHelper(i);
-		if (node == nullptr || node->IsTableSection())
-			continue;
-
-		out.push_back(FieldOfExplorer(*this, *node));
-	}
-	return out;
+	return FieldsOfColumns(*this, descriptor->GetConditionColumns(slot));
 }
 
 ibClassID ibQueryConstructorModel::ReferenceOfTable(const std::vector<ibString>& path) const
@@ -168,15 +169,13 @@ ibString ibQueryConstructorModel::TableOfReference(ibClassID reference) const
 	return descriptor != nullptr ? descriptor->GetNamespace() + ibT(".") + descriptor->GetName() : ibString();
 }
 
-// A REAL SOURCE answers through its descriptor — the very call a dynamic list fills its columns
-// with. The constructor asks the source exactly as a form does; there is one answer to "which
-// fields does this source have" and this is it.
+// A SOURCE answers through its descriptor, with the columns a query reads it by (GetQueryColumns) — a table's
+// and a virtual table's alike; there is one answer to "which fields can a query select here" and this is it.
 std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetTableFields(const ibQuerySource& source) const
 {
-	std::vector<ibQueryConstructorField> out;
 	ibQueryableSourceDescriptor* const descriptor = DescriptorOf(Factory(), source);
 	if (descriptor == nullptr)
-		return out;
+		return {};
 
 	// ⭐ ASKED WITH THE CALL'S ARGUMENTS, because for a parameterized table they decide the columns
 	// (a register's turnovers reads at the granularity its periodicity names). Only the arguments
@@ -217,20 +216,10 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetTableFields(con
 		args.push_back(ibValue());
 	}
 
-	ibSourceDataObject::ibSourceExplorer explorer;
-	descriptor->FillSourceExplorer(explorer, args);
-
-	for (unsigned int i = 0; i < explorer.GetHelperCount(); ++i) {
-		const ibSourceDataObject::ibSourceExplorer* node = explorer.GetHelper(i);
-		if (node == nullptr || node->IsTableSection())
-			continue;   // a section is a table of its own, not a field of this one
-
-		// WALKABLE IS "ANY REFERENCE", not "exactly one" — see ResolveReference. A composite names
-		// several types and the engine walks it (one join sub-tree per alternative, the leaf
-		// COALESCEd), so what is offered matches what the query can then do.
-		out.push_back(FieldOfExplorer(*this, *node));
-	}
-	return out;
+	// WALKABLE IS "ANY REFERENCE", not "exactly one" — see ResolveReference. A composite names
+	// several types and the engine walks it (one join sub-tree per alternative, the leaf
+	// COALESCEd), so what is offered matches what the query can then do.
+	return FieldsOfColumns(*this, descriptor->GetQueryColumns(args));
 }
 
 // ONE LEVEL DOWN A REFERENCE: the table the factory holds under the id the reference names. The walk stays
@@ -238,25 +227,15 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetTableFields(con
 // nothing edited here.
 std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetTableFields(ibMetaID table) const
 {
-	std::vector<ibQueryConstructorField> out;
 	ibQueryableFactory* factory = Factory();
 	if (factory == nullptr)
-		return out;
+		return {};
 
 	ibQueryableSourceDescriptor* descriptor = factory->ResolveDescriptorById(table);
 	if (descriptor == nullptr)
-		return out;   // a type with no queryable (a report, a data processor) — not a table
+		return {};   // a type with no queryable (a report, a data processor) — not a table
 
-	ibSourceDataObject::ibSourceExplorer explorer;
-	descriptor->FillSourceExplorer(explorer);
-
-	for (unsigned int i = 0; i < explorer.GetHelperCount(); ++i) {
-		const ibSourceDataObject::ibSourceExplorer* node = explorer.GetHelper(i);
-		if (node == nullptr || node->IsTableSection())
-			continue;
-		out.push_back(FieldOfExplorer(*this, *node));
-	}
-	return out;
+	return FieldsOfColumns(*this, descriptor->GetQueryColumns({}));
 }
 
 // No lookup table: a reference's clsid is CONSTRUCTIVE — the low 56 bits ARE the metaID of what it refers
@@ -267,7 +246,7 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetTableFields(ibM
 // field in the configuration and put an unfoldable [+] on all of them, behind which there was nothing.
 // The question is whether a class is a REFERENCE, which the id answers by its kind alone (the high byte IS
 // the kind, no metadata lookup). A barrier (`AnyRef`, `CatalogRef`) names no table: a field declared with
-// one holds its members (FieldOfExplorer), and one with none to hold is a leaf.
+// one holds its members (FieldOfColumn), and one with none to hold is a leaf.
 std::vector<ibMetaID> ibQueryConstructorModel::ConvertToMetaIds(const std::vector<ibClassID>& clsids) const
 {
 	std::vector<ibMetaID> tables;
@@ -328,13 +307,13 @@ std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const ibString& text,
 				if (statement.m_select && !statement.m_select->m_ontoName.IsEmpty())
 					declared.push_back(statement.m_select->m_ontoName);
 
-			const ibQueryLowering::FromTree tree =
+			const ibQueryLowering::ibQueryFromTree tree =
 				ibQueryLowering::PlacePackageLinks(package.m_links, declared);
 
 			std::vector<ibString> placed;
 			if (!tree.m_head.IsEmpty()) {
 				placed.push_back(tree.m_head);
-				for (const ibQueryLowering::JoinStep& step : tree.m_steps)
+				for (const ibQueryLowering::ibQueryJoinStep& step : tree.m_steps)
 					placed.push_back(step.m_name);
 			}
 

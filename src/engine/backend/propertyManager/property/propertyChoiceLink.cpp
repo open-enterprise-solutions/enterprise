@@ -89,11 +89,6 @@ void ibPropertyChoiceParameters::GetParameterList(const ibClassID& ofType, ibPro
 	get_cell_variant<ibVariantChoiceParameters>()->GetParameterList(ofType, list);
 }
 
-void ibPropertyChoiceParameters::GetSourceList(ibPropertyChoiceList& list) const
-{
-	get_cell_variant<ibVariantChoiceParameters>()->GetSourceList(list);
-}
-
 bool ibPropertyChoiceParameters::SetDataValue(const ibValue& varPropVal) { return false; }
 
 bool ibPropertyChoiceParameters::GetDataValue(ibValue& pvarPropVal) const
@@ -118,6 +113,7 @@ bool ibPropertyChoiceParameters::WriteNodeValue(ibDataValue& value) const
 #include "protocol/protocolDesigner.h"         // ibProtocol::ibSchema::ibProperties — the row's keys
 #include "backend/backend_picture.h"   // ibBackendPicture::SendPicture — a type's, a field's picture, by its id
 #include "backend/metaData.h"          // GetIDObjectFromMetaID — the class a target's reference is registered under
+#include "backend/choiceLinkResolver.h" // CanGovern — which fields beside it may govern a link
 
 namespace {
 
@@ -155,13 +151,49 @@ void AppendTargets(ibDataNode& row, const ibPropertyObject* owner, const ibPrope
 	row.SetProperty(ibProtocol::ibSchema::ibProperties::Targets, ibDataValue::Child(targets));
 }
 
+// ⭐ ONE FIELD BESIDE IT — its Id (which row of the list: a number says no more, two fields reached through the dot may
+// end in one id), Title, Picture and its Path, the hops a row or a link stores (#616) — written as a Source's rows and
+// the attribute tree's write theirs (propertySource.cpp): children Id, Type.
+ibDataNode& AppendSource(ibDataNode& sources, const ibChoiceHolderField& field, const ibMetaData* metaData)
+{
+	ibDataNode& source = sources.AddChild(0, static_cast<ibMetaID>(sources.Children().size() + 1));
+	source.SetValue(ibProtocol::ibSchema::ibProperties::Id, static_cast<std::int32_t>(sources.Children().size()));
+	source.SetValue(ibProtocol::ibSchema::ibProperties::Title, field.m_spelled);
+	const ibPictureDescription picture = field.m_column->GetColumnPicture();
+	if (!picture.IsEmptyPicture())
+		source.SetValue(ibProtocol::ibSchema::ibProperties::Picture, ibBackendPicture::SendPicture(picture, metaData));
+
+	std::vector<ibDataValue> hops;
+	for (const ibSourceHop& hop : field.m_path.GetPath()) {
+		std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
+		node->SetValue(ibProtocol::ibView::ibFormDesigner::Id, static_cast<std::int32_t>(hop.m_id));
+		if (hop.m_type != g_valueUndefinedCLSID)
+			node->SetValue(ibProtocol::ibView::ibFormDesigner::Type, ibString::Format(ibT("%llu"), static_cast<unsigned long long>(hop.m_type)));
+		hops.push_back(ibDataValue::Child(node));
+	}
+	source.AddField(ibProtocol::ibView::ibFormDesigner::Path, ibDataValue::Array(std::move(hops)));
+	return source;
+}
+
 } // namespace
 
+// The link's Sources are the fields that may govern it — what its list offers, by the resolver's own rule (CanGovern),
+// each with the path it stores.
 bool ibPropertyChoiceLink::GetProtocolValue(ibDataNode& row, ibReader reader)
 {
 	if (!ibProperty::GetProtocolValue(row, reader))
 		return false;
 	AppendTargets(row, m_owner, nullptr);
+	const ibPropertyObject* const owner = m_owner;   // CONST: the non-const GetMetaData wxFAILs
+	const ibMetaData* const metaData = owner != nullptr ? owner->GetMetaData() : nullptr;
+
+	auto sources = std::make_shared<ibDataNode>();
+	sources->SetValue(ibProtocol::ibSchema::ibProperties::Title, ibChoiceHolderName(m_owner));
+	for (const ibChoiceHolderField& field : ibChoiceHolderFields(m_owner)) {
+		if (ibChoiceLinkResolver::CanGovern(field.m_column->GetTypeDesc()))
+			AppendSource(*sources, field, metaData);
+	}
+	row.SetProperty(ibProtocol::ibSchema::ibProperties::Sources, ibDataValue::Child(sources));
 	return true;
 }
 
@@ -175,13 +207,11 @@ bool ibPropertyChoiceParameters::GetProtocolValue(ibDataNode& row, ibReader read
 
 	auto sources = std::make_shared<ibDataNode>();
 	sources->SetValue(ibProtocol::ibSchema::ibProperties::Title, ibChoiceHolderName(m_owner));
-	ibPropertyChoiceList neighbours;
-	GetSourceList(neighbours);
-	for (unsigned int index = 0; index < neighbours.GetCount(); ++index) {
-		ibDataNode& source = AppendItem(*sources, neighbours, index, metaData);
+	for (const ibChoiceHolderField& field : ibChoiceHolderFields(m_owner)) {
+		ibDataNode& source = AppendSource(*sources, field, metaData);
 		std::vector<ibMetaID> fits;
 		ibMetaID obvious = 0;
-		ibChoiceParametersForSource(m_owner, static_cast<ibMetaID>(neighbours.GetId(index)), fits, &obvious);
+		ibChoiceParametersForSource(m_owner, field, fits, &obvious);
 		if (obvious != 0)
 			source.SetValue(ibProtocol::ibSchema::ibProperties::Default, static_cast<std::int32_t>(obvious));
 		for (const ibMetaID& fit : fits) {

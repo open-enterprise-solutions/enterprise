@@ -2,7 +2,7 @@
 #define __CHOICE_LINK_RESOLVER_H__
 
 #include "core/description/choiceLinkDescription.h"
-#include "backend/createRequest.h"   // ibChoiceCondition — what this produces
+#include "backend/createRequest.h"   // ibSelectMode, ibCreateRequest — what a choice is asked with (ibChoiceCondition, what this produces, is value.h's)
 #include "backend/tabularDataObject.h"              // the TABLE shape of a source, its row hop, and ibDataViewItem
                                                     // complete — the holder below keeps one BY VALUE
 
@@ -86,6 +86,12 @@ public:
 	// A field the holder does not answer for — a control bound to nothing, a filter cell, a script's
 	// value — carries no condition, which is the honest answer there rather than a refusal.
 	static ibChoiceCondition Resolve(const ibChoiceHolder& holder, const ibMetaID& field);
+	// ⭐ …AND A CONTROL'S OWN PARAMETERS OVER THE FIELD'S (#616): a field reached through the dot has no attribute to
+	// declare them, so its control does — in the form's paths, read in `paramsHolder`. A parameter both name is narrowed
+	// by the control's, the nearer word. Asked by every road a control's value is found by — its choice form, its quick
+	// choice and the text typed into it — so typing finds no more than the form shows (Max, 2026-11-09).
+	static ibChoiceCondition Resolve(const ibChoiceHolder& holder, const ibMetaID& field,
+		const ibChoiceParametersDescription& params, const ibChoiceHolder& paramsHolder);
 
 	// ⭐⭐ A NEW RECORD MADE IN A NARROWED LIST IS BORN MATCHING IT. The list a person pressed Add in
 	// shows only contracts of one counterparty; a new row without that counterparty is not merely
@@ -97,11 +103,14 @@ public:
 	// is written — the owner, a flag, whatever the parameters name — where the new record has the field.
 	static void Fill(ibChoiceHolder& holder, const ibCreateRequest& request);
 
-	// IS `field` LINKED TO `edited` — its value chosen within it, read off what governs the field: its link by
-	// type, or a parameter row that does not say Keep. The rule ClearLinked empties by, said once; a source
-	// asks it of each of its own fields when it lists the linked ones (ibSourceDataObject::GetLinked).
-	static bool IsLinked(const ibMetaID& field, const ibChoiceTypeLinkDescription& link,
-		const ibChoiceParametersDescription& params, const ibMetaID& edited);
+	// IS A FIELD LINKED TO `edited` — its value chosen within it, read off what governs the field: its link by type,
+	// or a parameter row that does not say Keep. The rule ClearLinked empties by, said once, BY PATH: the whole path
+	// names a field, and two reached through the dot may end in one id. Asked by a source of each of its own fields
+	// when it lists the linked ones (ibSourceDataObject::GetLinked), its field's id one hop; and of a control's own
+	// links, in the form's paths (ibTypeControlFactory::ClearLinked). A field is not linked to itself — the asker,
+	// who knows which field it is asking about, passes that one over.
+	static bool IsLinked(const ibChoiceTypeLinkDescription& link, const ibChoiceParametersDescription& params,
+		const ibSourceDescription& edited);
 
 	// ⭐⭐ A VALUE WAS WRITTEN INTO ONE OF THIS SOURCE'S FIELDS — and every field chosen WITHIN the old
 	// one is now a contract with the previous counterparty. They are emptied, to the empty value of

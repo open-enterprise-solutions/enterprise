@@ -276,55 +276,43 @@ public:
 	// IS the call: Balance(moment, condition); Turnovers(begin, end, periodicity, condition).
 	virtual void DescribeParameters(std::vector<ibQuerySourceParameter>& /*out*/) const {}
 
+	// ⭐⭐ WHAT COLUMNS THIS TABLE HAS, ASKED WITHOUT RUNNING IT — the QUERY's own columns, for the readers that
+	// want the shape rather than the rows (the constructor's catalogue, a report's Fields page). Each answers
+	// for itself: its name, type, picture, availability, caption and what it is in a balance. A virtual table's
+	// columns live here and only here — a balance or a turnover is not a source anybody binds a form to.
+	//
+	// ASKED WITH THE CALL'S ARGUMENTS, because for some sources the ARGUMENTS DECIDE THE COLUMNS. A register's
+	// turnovers is the case: its periodicity says at what granularity the interval is read, and that is not a
+	// filter over a fixed set of columns — it IS which columns exist. Ask for months and there is one period
+	// column, rolled to the month; ask for the recorder and the document comes with it; leave it out and the
+	// table offers every projection it can make, for the author to choose from.
+	//
+	// ⚠ ONLY WHAT IS KNOWN AT DESIGN TIME reaches here. An argument written as `&Period` has no value
+	// until the query runs, and arrives empty — which is right: the shape is then whatever the table
+	// can offer, exactly as with no argument at all. (None → no columns.)
+	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns(const std::vector<ibValue>& /*args*/) const { return {}; }
+
 	// WHICH COLUMNS A CONDITION PARAMETER MAY NAME. Defaults to everything the source has, which is
 	// right for a slice — it carries its dimensions, resources and attributes, and any of them can
 	// be filtered. A folded table overrides: a balance is filtered by the dimensions it is grouped
 	// by, never by a resource it summed, and offering the resource would be offering a filter the
-	// engine cannot honour.
+	// engine cannot honour. A separate question from GetQueryColumns on purpose: "what do you RETURN" and
+	// "what may I FILTER BY" are different sets the moment a table folds anything.
 	//
-	// A separate question from FillSourceExplorer on purpose: "what do you RETURN" and "what may I
-	// FILTER BY" are different sets the moment a table folds anything.
-	virtual void FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const {
-		FillSourceExplorer(explorer);
+	// ⭐⭐ ASKED ABOUT ONE SLOT — because a source may admit different fields in different condition slots,
+	// and answering with their union is wrong in BOTH directions. An accounting register is the case:
+	// `AccountCondition` (and its Dr / Cr / Corr siblings) admit ACCOUNTS and nothing else — the source
+	// consumes them and folds by them, and a leaf about anything else is silently dropped, i.e. reports
+	// more than was asked for. The general `Condition` admits the ordinary fields — dimensions and the
+	// analytics slots — and offering it accounts instead hides everything a filter is normally written with.
+	// `slot` empty = the general condition.
+	virtual std::vector<const ibBackendQueryColumn*> GetConditionColumns(const ibString& /*slot*/) const {
+		return GetQueryColumns({});
 	}
 
-	// ⭐⭐ THE SAME QUESTION, ASKED ABOUT ONE SLOT — because a source may admit different fields in
-	// different condition slots, and answering with their union is wrong in BOTH directions.
-	//
-	// An accounting register is the case: `AccountCondition` (and its Dr / Cr / Corr siblings) admit
-	// ACCOUNTS and nothing else — the source consumes them and folds by them, and a leaf about
-	// anything else is silently dropped, i.e. reports more than was asked for. The general
-	// `Condition` admits the ordinary fields — dimensions and the analytics slots — and offering it
-	// accounts instead hides everything a filter is normally written with.
-	//
-	// `slot` empty = the general condition, which is what the plain overload above answers.
-	virtual void FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer,
-	                                   const ibString& slot) const {
-		FillConditionExplorer(explorer);
-	}
-
-	// ⭐⭐ THE SAME QUESTION, ASKED WITH THE CALL'S ARGUMENTS — because for some sources the ARGUMENTS
-	// DECIDE THE COLUMNS.
-	//
-	// A register's turnovers is the case: its periodicity says at what granularity the interval is
-	// read, and that is not a filter over a fixed set of columns — it IS which columns exist. Ask for
-	// months and there is one period column, rolled to the month; ask for the recorder and the
-	// document comes with it; leave it out and the table offers every projection it can make, for the
-	// author to choose from.
-	//
-	// The default forwards to the parameterless one: a source whose shape does not depend on its call
-	// (every ordinary table, a slice) needs to know nothing about this.
-	//
-	// ⚠ ONLY WHAT IS KNOWN AT DESIGN TIME reaches here. An argument written as `&Period` has no value
-	// until the query runs, and arrives empty — which is right: the shape is then whatever the table
-	// can offer, exactly as with no argument at all.
-	virtual void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer,
-	                                const std::vector<ibValue>& /*args*/) const {
-		FillSourceExplorer(explorer);
-	}
-
-	// FILL the list's columns into the source explorer — the whole append loop (system columns hidden) lives on
-	// the SOURCE. The dynamic list just resets the explorer and hands it here. (None → left empty.)
+	// FILL the list's columns into the source explorer — the SOURCE's side, which a dynamic list and a form bind
+	// to: real columns, never a virtual table's. The whole append loop (system columns hidden) lives on the
+	// SOURCE; the dynamic list just resets the explorer and hands it here. (None → left empty.)
 	virtual void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& /*explorer*/) const {}
 
 	// ---- COMMAND INTERFACE: the command band (list the commands, run one by id). ----

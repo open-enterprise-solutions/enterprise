@@ -69,8 +69,8 @@ public:
 	                                          const ibQueryReadColumns& read) override;
 	const ibBackendQueryable* GetConditionScope() const override;
 	void DescribeParameters(std::vector<ibQuerySourceParameter>& out) const override;
-	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
-	void FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
+	std::vector<const ibBackendQueryColumn*> GetQueryColumns(const std::vector<ibValue>& args) const override;
+	std::vector<const ibBackendQueryColumn*> GetConditionColumns(const ibString& slot) const override;
 private:
 	ibValueMetaObjectCalculationRegister* m_meta;
 };
@@ -94,8 +94,8 @@ public:
 	                                          const ibQueryReadColumns& read) override;
 	const ibBackendQueryable* GetConditionScope() const override;
 	void DescribeParameters(std::vector<ibQuerySourceParameter>& out) const override;
-	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
-	void FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
+	std::vector<const ibBackendQueryColumn*> GetQueryColumns(const std::vector<ibValue>& args) const override;
+	std::vector<const ibBackendQueryColumn*> GetConditionColumns(const ibString& slot) const override;
 private:
 	ibValueMetaObjectCalculationRegister* m_meta;
 };
@@ -119,8 +119,8 @@ public:
 	                                                  const ibQueryReadColumns& read) override;
 	virtual const ibBackendQueryable* GetConditionScope() const override;
 	virtual void DescribeParameters(std::vector<ibQuerySourceParameter>& out) const override;
-	virtual void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
-	virtual void FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
+	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns(const std::vector<ibValue>& args) const override;
+	virtual std::vector<const ibBackendQueryColumn*> GetConditionColumns(const ibString& slot) const override;
 private:
 	ibValueMetaObjectCalculationRegister*       m_meta;
 	const ibValueMetaObjectCalculationRegister* m_base;   // the register the base is read from
@@ -135,7 +135,7 @@ public:
 	explicit ibRecalculationQueryable(const ibValueMetaObjectCalculationRegister* reg) : m_reg(reg) {}
 
 	virtual const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override;
-	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override;
+	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override;
 	virtual ibString GetQueryTableName() const override;
 	virtual const ibUniqueKey& GetQueryTableGuid() const override;
 	virtual ibString GetQueryName() const override;
@@ -143,7 +143,7 @@ public:
 	virtual const ibMetaData* GetMetaData() const override;
 	// What a mark is found by, and a clear deletes by: the recorder, the type, the dimensions, the month. All of them
 	// — every column is the key.
-	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override { return GetColumns(); }
+	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override { return GetQueryColumns(); }
 
 private:
 	const ibValueMetaObjectCalculationRegister* m_reg;
@@ -156,7 +156,7 @@ public:
 	ibString GetName() const override;
 	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
 	const ibRecalculationQueryable* GetQueryable() const { return &m_queryable; }
-	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
+	std::vector<const ibBackendQueryColumn*> GetQueryColumns(const std::vector<ibValue>& args) const override;
 private:
 	ibValueMetaObjectCalculationRegister* m_meta;
 	ibRecalculationQueryable              m_queryable;

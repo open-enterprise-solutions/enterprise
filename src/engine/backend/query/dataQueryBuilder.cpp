@@ -107,7 +107,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::JoinNode(const ibBackendQueryable* query
 	                                 ibJoinCompareOp& op) {
 		if (left == nullptr || right == nullptr || queryable == nullptr)
 			return;
-		if (queryable->OwnsColumn(left) && !queryable->OwnsColumn(right)) {
+		if (queryable->ContainColumn(left) && !queryable->ContainColumn(right)) {
 			std::swap(left, right);
 			op = ibMirrorJoinOp(op);
 		}

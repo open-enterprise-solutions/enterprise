@@ -138,13 +138,6 @@ bool ibVariantSource::IsEmptySource() const
 	return !valid;
 }
 
-const ibBackendSourceColumn* ibVariantSource::GetSourceAttributeObject() const
-{
-	// Just hand the source-id path to the OWNER factory's dot — it resolves the leaf column
-	// (null for a whole-attribute binding or a broken path).
-	return m_ownerProperty != nullptr ? m_ownerProperty->WalkSource(m_sourceDesc) : nullptr;
-}
-
 // The same walk the dot makes (WalkSource: the head gates to the form's attribute, the hops walk its explorer),
 // asked the one question more it answers on the way.
 bool ibVariantSource::IsSourceAvailable() const
@@ -166,8 +159,9 @@ void ibVariantSource::RefreshTypeFromSource() const
 	// Type FOLLOWS the source through the explorer walk (metadata-agnostic). WalkSource gates path[0] to the
 	// holder and walks the explorer to the leaf column, whose GetTypeDesc() is authoritative — so a value-table
 	// / dynamic-list column (no metaobject) gets its REAL type, never a config-wide FindAnyObjectByFilter
-	// collision. A whole-attribute binding (path size 1) has NO explorer leaf → the gate attribute's OWN Type
-	// via the holder (SetFromMetaDesc(path[0]) resolves it in DoSetFromMetaId); an empty path clears the helper.
+	// collision. A whole-attribute binding (path size 1) is its own leaf — the gate attribute, its OWN Type.
+	// No leaf — a path that no longer resolves → seeded from the gate attribute (SetFromMetaDesc(path[0]) resolves
+	// it in DoSetFromMetaId); an empty path clears the helper.
 	const ibBackendSourceColumn* leaf = m_ownerProperty != nullptr
 		? m_ownerProperty->WalkSource(m_sourceDesc) : nullptr;
 	if (leaf != nullptr)

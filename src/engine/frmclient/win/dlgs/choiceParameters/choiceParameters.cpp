@@ -120,7 +120,7 @@ void ibDialogChoiceParameters::BuildCatalogue()
 	ibPropertyChoiceList sources;
 	ibChoiceSourceList(m_property, sources);
 	for (unsigned int idx = 0; idx < sources.GetCount(); idx++) {
-		keep(m_sources, sources, idx, ibSourceDescription((ibMetaID)sources.GetId(idx)));
+		keep(m_sources, sources, idx, ibChoiceSourcePath(m_property, (ibMetaID)sources.GetId(idx)));
 		m_sourceWords.Add(m_sources.back().m_label);
 	}
 

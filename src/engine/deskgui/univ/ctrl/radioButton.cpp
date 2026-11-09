@@ -61,6 +61,12 @@ bool ibRadioButton::Create(wxWindow *parent,
         return false;
     }
 
+    // A GROUP ALWAYS HAS ONE CHECKED, and the first one is it until somebody says otherwise — the native button's
+    // rule. The fork dropped it, so a dialog written against the native one opened with none checked while its
+    // fields already named the first (Max, 2026-11-09, the form wizard's kinds).
+    if ( GetFirstInGroup() == this )
+        SetValue(true);
+
     return true;
 }
 

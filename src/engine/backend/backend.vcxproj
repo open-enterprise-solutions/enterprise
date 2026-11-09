@@ -356,6 +356,7 @@
     <ClInclude Include="propertyManager\property\variant\variantType.h" />
     <ClInclude Include="roleHelper.h" />
     <ClInclude Include="srcObject.h" />
+    <ClInclude Include="srcColumn.h" />
     <ClInclude Include="srcDataObject.h" />
     <ClInclude Include="tabularDataObject.h" />
     <ClInclude Include="interfaceHelper.h" />

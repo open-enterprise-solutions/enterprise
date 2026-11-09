@@ -31,23 +31,23 @@ namespace {
 
 // One output column, named. The driver reads the NAME only, so a schema entry
 // with no query column behind it is enough here.
-ibQueryLowering::OutputColumn Col(const ibString& name) {
-	ibQueryLowering::OutputColumn c;
+ibQueryLowering::ibQueryOutputColumn Col(const ibString& name) {
+	ibQueryLowering::ibQueryOutputColumn c;
 	c.m_name = name;
 	return c;
 }
 
-std::vector<ibQueryLowering::OutputColumn> Schema() {
+std::vector<ibQueryLowering::ibQueryOutputColumn> Schema() {
 	return { Col(wxT("Partner")), Col(wxT("Amount")) };
 }
 
 // ⭐ AN OUTPUT IS ANNOUNCED WITH ITS SCHEMA — there is no separate "here are the columns" event any
 // more, because which columns an output has is part of that output starting. The titles default to
 // the column names, which is what the composer fills in when nothing overrode them.
-ibCompositionOutputInfo SchemaInfo(std::vector<ibQueryLowering::OutputColumn> schema) {
+ibCompositionOutputInfo SchemaInfo(std::vector<ibQueryLowering::ibQueryOutputColumn> schema) {
 	ibCompositionOutputInfo info;
 	info.m_schema = std::move(schema);
-	for (const ibQueryLowering::OutputColumn& column : info.m_schema) {
+	for (const ibQueryLowering::ibQueryOutputColumn& column : info.m_schema) {
 		info.m_titles.push_back(column.m_name);
 		// …AND THE FIELD ITSELF, which is what a cell's details parameter is stamped with. Here the
 		// path and the name are the same word; in a composition they are not, which is precisely why
@@ -87,16 +87,16 @@ std::shared_ptr<ibSpreadsheetObject> MakeDocument() {
 // dimension columns — a level may be made of SEVERAL fields, so "the n-th dimension column" and
 // "the n-th level" stopped being the same number. A schema entry with no level (-1) is not a
 // dimension the layout can place, so every Dim() here names its own.
-ibQueryLowering::OutputColumn Dim(const ibString& name, int level) {
-	ibQueryLowering::OutputColumn c;
+ibQueryLowering::ibQueryOutputColumn Dim(const ibString& name, int level) {
+	ibQueryLowering::ibQueryOutputColumn c;
 	c.m_name = name;
 	c.m_role = ibQueryLowering::ibColumnRole::Dimension;
 	c.m_level = level;
 	return c;
 }
 
-ibQueryLowering::OutputColumn Measure(const ibString& name) {
-	ibQueryLowering::OutputColumn c;
+ibQueryLowering::ibQueryOutputColumn Measure(const ibString& name) {
+	ibQueryLowering::ibQueryOutputColumn c;
 	c.m_name = name;
 	c.m_role = ibQueryLowering::ibColumnRole::Measure;
 	return c;
@@ -104,8 +104,8 @@ ibQueryLowering::OutputColumn Measure(const ibString& name) {
 
 // A PROJECTED FIELD — what a DETAIL row says about itself. Not a dimension and not a figure, which
 // is exactly the role the lowering stamps on everything a query merely selects.
-ibQueryLowering::OutputColumn Detail(const ibString& name) {
-	ibQueryLowering::OutputColumn c;
+ibQueryLowering::ibQueryOutputColumn Detail(const ibString& name) {
+	ibQueryLowering::ibQueryOutputColumn c;
 	c.m_name = name;
 	c.m_role = ibQueryLowering::ibColumnRole::Detail;
 	return c;
@@ -581,13 +581,13 @@ namespace {
 // A table's schema: row headings, column headings, and what stands where they meet. The AXIS is not
 // in the schema — it is the OUTPUT INFO's answer, read off `m_rowLevels` — so a cross schema is an
 // ordinary schema whose deeper dimensions happen to read across the page.
-ibCompositionOutputInfo CrossInfo(const std::vector<ibQueryLowering::OutputColumn>& schema, size_t rowLevels)
+ibCompositionOutputInfo CrossInfo(const std::vector<ibQueryLowering::ibQueryOutputColumn>& schema, size_t rowLevels)
 {
 	ibCompositionOutputInfo info;
 	info.m_kind      = ibCompositionOutputKind::Table;
 	info.m_schema    = schema;
 	info.m_rowLevels = rowLevels;
-	for (const ibQueryLowering::OutputColumn& column : info.m_schema)
+	for (const ibQueryLowering::ibQueryOutputColumn& column : info.m_schema)
 		info.m_paths.push_back(column.m_name);
 	return info;
 }
@@ -693,7 +693,7 @@ TEST(SpreadsheetCross, ADetailRecordIsALineOfTheTableWithItsOwnCells)
 	auto doc = MakeDocument();
 	ibSpreadsheetComposeDriver driver(doc.get());
 
-	const std::vector<ibQueryLowering::OutputColumn> schema =
+	const std::vector<ibQueryLowering::ibQueryOutputColumn> schema =
 		{ Dim(wxT("Partner"), 0), Dim(wxT("Warehouse"), 1), Measure(wxT("Amount")), Detail(wxT("Doc")) };
 
 	driver.OnOutputBegin(CrossInfo(schema, 1));
@@ -744,7 +744,7 @@ TEST(SpreadsheetCross, ColumnTotalsComeFromTheRootAndCloseTheTable)
 	auto doc = MakeDocument();
 	ibSpreadsheetComposeDriver driver(doc.get());
 
-	const std::vector<ibQueryLowering::OutputColumn> schema =
+	const std::vector<ibQueryLowering::ibQueryOutputColumn> schema =
 		{ Dim(wxT("Partner"), 0), Dim(wxT("Warehouse"), 1), Measure(wxT("Amount")) };
 
 	driver.OnOutputBegin(CrossInfo(schema, 1));
@@ -778,7 +778,7 @@ TEST(SpreadsheetCross, TheColumnTotalsSettleTheOrderOfTheColumns)
 	auto doc = MakeDocument();
 	ibSpreadsheetComposeDriver driver(doc.get());
 
-	const std::vector<ibQueryLowering::OutputColumn> schema =
+	const std::vector<ibQueryLowering::ibQueryOutputColumn> schema =
 		{ Dim(wxT("Partner"), 0), Dim(wxT("Warehouse"), 1), Measure(wxT("Amount")) };
 
 	driver.OnOutputBegin(CrossInfo(schema, 1));

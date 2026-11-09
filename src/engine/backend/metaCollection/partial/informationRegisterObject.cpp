@@ -66,20 +66,20 @@ const ibSourceExplorer* ibValueRecordManagerObjectInformationRegister::GetSource
 
 	if (m_metaObject->ConvertToValue(metaRef)) {
 		if (metaRef->GetPeriodicity() != ibPeriodicity::eNonPeriodic) {
-			m_sourceExplorer.AppendColumn(metaRef->GetRegisterPeriod()->GetQueryColumn());
+			m_sourceExplorer.AppendColumn(metaRef->GetRegisterPeriod(), metaRef->GetRegisterPeriod()->GetColumnId());
 		}
 	}
 
 	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
-		m_sourceExplorer.AppendColumn(object->GetQueryColumn());
+		m_sourceExplorer.AppendColumn(object, object->GetColumnId());
 	}
 
 	for (const auto object : m_metaObject->GetResourceArrayObject()) {
-		m_sourceExplorer.AppendColumn(object->GetQueryColumn());
+		m_sourceExplorer.AppendColumn(object, object->GetColumnId());
 	}
 
 	for (const auto object : m_metaObject->GetAttributeArrayObject()) {
-		m_sourceExplorer.AppendColumn(object->GetQueryColumn());
+		m_sourceExplorer.AppendColumn(object, object->GetColumnId());
 	}
 
 	return &m_sourceExplorer;

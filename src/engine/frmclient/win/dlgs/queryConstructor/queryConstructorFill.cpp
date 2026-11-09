@@ -903,7 +903,7 @@ void queryctor::ibQueryDropSourceReferences(ibQuerySelect& select, const wxStrin
 // found a week later, on the numbers.
 
 // THE PICTURE FOR ONE FIELD. The column already answered what it looks like
-// (ibBackendSourceColumn::GetColumnPicture — an attribute by default, a dimension / a resource when
+// (ibBackendQueryColumn::GetColumnPicture — an attribute by default, a dimension / a resource when
 // the metaobject says so), so this only has to put that picture in THIS tree's list and remember
 // where. Nothing here knows a metatype name, and nothing switches over a kind: a new kind of
 // column arrives dressed on the day it answers with its own picture, with this file untouched.

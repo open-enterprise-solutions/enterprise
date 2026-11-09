@@ -72,7 +72,7 @@ class BACKEND_API ibValueMetaObjectRecordDataRef;
 class BACKEND_API ibValueMetaObjectRegisterData;
 
 class BACKEND_API ibSourceDataObject;
-class BACKEND_API ibBackendSourceColumn;   // queryColumn.h — neutral source column (GetSourceColumn)
+class BACKEND_API ibBackendSourceColumn;   // srcColumn.h — a source's column
 
 class BACKEND_API ibValueManagerDataObject;
 
@@ -466,7 +466,7 @@ public:
 	}
 
 	// All generic attributes (predefined + plain), each by its query face. Drives SELECT * over this source.
-	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override {
+	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override {
 		std::vector<const ibBackendQueryColumn*> cols;
 		for (const ibValueMetaObjectAttributeBase* a : m_meta->GetGenericAttributeArrayObject())
 			if (a != nullptr) cols.push_back(a->GetQueryColumn());
@@ -1110,7 +1110,7 @@ public:
 	// The moment answers first, then the attributes — a query naming it resolves to the column that
 	// knows how to build it. (Bodies in commonObjectMetaQuery.cpp.)
 	virtual const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override;
-	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override;
+	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override;
 
 	// ⭐ …AND ITS RECORDS ARE ORDERED BY THE MOMENT: the date, then the reference standing at it — the moment's own
 	// two columns (Max, 2026-09-29: "the reference takes all its sorting from the point in time").
@@ -1226,10 +1226,9 @@ public:
 	// (THE MOMENT AS A COLUMN lives in the QUERYABLE — ibRecorderQueryable, below. A metaobject holds
 	//  what it DECLARES, which is physical: the attributes and their properties. A column that is
 	//  constructed rather than stored belongs where the reading happens, the same way a tabular
-	//  section's owner reference belongs to ibTabularQueryable and not to the section metaobject.)
-
-	// The base variant plus the moment, which only this layer has.
-	virtual void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
+	//  section's owner reference belongs to ibTabularQueryable and not to the section metaobject. And so it
+	//  is offered where a query is written — the queryable's columns — and in no source: a source lists
+	//  the fields that are.)
 
 	//events:
 	virtual bool OnCreateMetaObject(ibMetaData* metaData, int flags) override;
@@ -1632,7 +1631,7 @@ class BACKEND_API ibRegisterDataQueryable : public ibBackendQueryable {
 public:
 	explicit ibRegisterDataQueryable(const ibValueMetaObjectRegisterData* meta) : m_meta(meta) {}
 	virtual const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override;   // attribute-by-name AS a column
-	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override;   // identity (recorder+line / period) ++ dims ++ generic attrs
+	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override;   // identity (recorder+line / period) ++ dims ++ generic attrs
 	virtual ibString GetQueryTableName() const override;
 	virtual ibString GetQueryName() const override;   // the metaobject's user-facing name (change ledger)
 	virtual const ibMetaData* GetMetaData() const override;                      // metadata context for column-based value reads

@@ -34,19 +34,19 @@ struct ibQueryConstructorField
 	// WHAT IT HOLDS. The explorer node already knows; carrying it here is what lets a host ask a
 	// type question (which aggregates fit this field?) without walking the metadata itself.
 	ibTypeDescription m_type;
-	// HOW IT LOOKS, taken from the COLUMN (ibBackendSourceColumn::GetColumnPicture) rather than
+	// HOW IT LOOKS, taken from the COLUMN (ibBackendQueryColumn::GetColumnPicture) rather than
 	// decided by the shell: a dimension, a resource and a plain attribute each answer with their
 	// own, and a shell that draws them holds no list of kinds. Empty only for a field standing
 	// behind no column at all — the drawer then uses its default picture.
 	ibPictureDescription m_picture;
-	// WHETHER A PERSON IS OFFERED IT — asked of the COLUMN too (ibBackendSourceColumn::IsAvailable), so
+	// WHETHER A PERSON IS OFFERED IT — asked of the COLUMN too (ibBackendQueryColumn::IsAvailable), so
 	// the functional options of the base answer, and a dot-walk is available only while every hop is.
 	// The query constructor does not read it: a query is written against the schema, which options leave
 	// alone. The settings pickers and a composition's run do, since what they offer or print is what a
 	// person may see.
 	bool m_available = true;
 	// ⭐ WHAT THE SOURCE CALLS IT, and WHAT IT IS IN A BALANCE — asked of the COLUMN a plain projection reads
-	// (its synonym, ibBackendSourceColumn::GetBalanceRole), empty / None for anything computed. The
+	// (its synonym, ibBackendQueryColumn::GetBalanceRole), empty / None for anything computed. The
 	// constructor still shows the NAME (m_presentation); these are what a composition fills a field in
 	// with before anybody says otherwise — its generated title, and its role.
 	ibString      m_caption;

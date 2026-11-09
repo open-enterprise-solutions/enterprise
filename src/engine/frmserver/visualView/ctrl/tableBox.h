@@ -126,16 +126,18 @@ class ibValueModelTableBox : public ibValueWindowComposite,
 	// group of that name, made on the first ask and found again on every later one.
 	//
 	// THE one description of "when a group opens", shared by both builders — the auto-built
-	// form (ibValueForm::BuildForm) and the designer's refill-from-source. Written twice,
-	// they would drift; and finding the group BY NAME rather than by remembering a run also
+	// form (ibValueForm::BuildForm) and a table given a source (CreateColumnCollection). Written
+	// twice, they would drift; and finding the group BY NAME rather than by remembering a run also
 	// means the source may hand its columns out in any order.
 	//
 	// `created` (optional) says a group control was just made, which the designer needs in
 	// order to tell its editor about it.
 	ibValueFrame* GetColumnGroupHolder(const ibString& group, bool* created = nullptr);
 
-	// THE COLUMNS OF A MODEL THAT NAMES ITS OWN (AutoCreateColumn) — a value handed to the table from
-	// code: the column controls are rebuilt from the model's column collection. Not in the designer.
+	// ⭐ THE DEFAULT COLUMNS, built anew whenever the table is given a source (OnPropertyChanged — the inspector, a
+	// script, a drop in the designer) and when code hands it a value whose model names its own (AutoCreateColumn).
+	// Bound by a path — a column per field of what the path reaches, bound through the path; bound by none — a column
+	// per column of the model, reading it. The columns it had go first.
 	void CreateColumnCollection();
 
 	void CreateTable(bool recreateModel = false);
@@ -157,15 +159,9 @@ public:
 
 	virtual ~ibValueModelTableBox();
 
-	// Designer: rebuild the DEFAULT columns from the bound source explorer (walks the path to the leaf
-	// section / list). Shared by the drag-to-create drop and the inspector's Source-change refill.
-	virtual void RefillFromSource() override;
-
 	// Available sources = the owning form's attributes of THIS control's kind (table).
 	virtual bool GetSourceList(std::vector<ibBackendFormAttributeValue*>& out) const override;
 
-	//Get source attribute
-	virtual const class ibBackendSourceColumn* GetSourceAttributeObject() const { return m_propertySource->GetSourceAttributeObject(); }
 	// Unbound (no source picked) -> the table is not shown (ibValueWindow::Update writes Visible off).
 	// Ask the PROPERTY (IsEmptyProperty), NOT GetSourceDesc — the latter walks the source and can be
 	// broken; the property flag is cheap and safe.
@@ -733,8 +729,6 @@ public:
 	// GetTypeDesc): read it, or assign to bind (GetSourceDesc() = desc). No separate setter.
 	virtual ibSourceDescription& GetSourceDesc() const override { return m_propertySource->GetValueAsSourceDesc(); }
 
-	//Get source attribute
-	virtual const class ibBackendSourceColumn* GetSourceAttributeObject() const { return m_propertySource->GetSourceAttributeObject(); }
 	virtual ibSelectorDataType GetFilterDataType() const { return ibSelectorDataType::ibSelectorDataType_reference; }
 	virtual ibSourceDataType GetFilterSourceDataType() const { return ibSourceDataType::ibSourceDataType_tableColumn; }
 
@@ -795,6 +789,13 @@ public:
 	// A column stands on the ROW being edited: its neighbours are the other cells of that row.
 	virtual ibChoiceHolder GetChoiceHolder() const override;
 
+	// The column's own word over its type's and its attribute's (issue #259) — as a form field says it.
+	virtual bool HasQuickChoice() const override;
+	virtual ibSelectMode GetSelectMode() const override;
+	// …and its own links (#616): TypeLink and ChoiceParameters.
+	virtual const ibChoiceTypeLinkDescription& GetTypeLink() const override { return m_propertyTypeLink->GetValueAsLinkDesc(); }
+	virtual const ibChoiceParametersDescription& GetChoiceParameters() const override { return m_propertyChoiceParameters->GetValueAsParametersDesc(); }
+
 	//choice processing
 	virtual void ChoiceProcessing(ibValue& vSelected);
 
@@ -838,6 +839,19 @@ private:
 	ibPropertyList* m_propertyChoiceForm = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryData, ibT("ChoiceForm"), _("Choice form"),
 		_("Which form opens when the user presses Select in the cell: one of the forms of the value's type. Empty: the type's default choice form."),
 		&ibValueModelTableBoxColumn::GetChoiceForm);
+	ibPropertyEnum<ibValueEnumQuickChoiceMode>* m_propertyQuickChoice = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumQuickChoiceMode>>(m_categoryData, ibT("QuickChoice"), _("Quick choice"),
+		_("How a reference is picked into the cell when Select is pressed. Auto: as its type says (the catalog's or the document's own Quick choice). Use: a drop-down of the matching items. Don't use: the list form."),
+		ibQuickChoiceMode::ibQuickChoiceMode_Auto);
+	ibPropertyEnum<ibValueEnumChoiceFoldersAndItems>* m_propertyChoiceFoldersAndItems = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumChoiceFoldersAndItems>>(m_categoryData, ibT("ChoiceFoldersAndItems"), _("Choice folders and items"),
+		_("For a column referring to a hierarchical catalog: what may be picked into its cells - items, folders, or both. Auto: what the bound attribute's Select says."),
+		ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_Auto);
+
+	// ⭐ THE COLUMN'S OWN LINKS (#616), as a form field's are (ibValueTextCtrl) — and a column also reads the cells of its row.
+	ibPropertyCategory* m_categoryChoice = ibPropertyObject::CreatePropertyCategory(ibT("Choice"), _("Choice"));
+	ibPropertyChoiceLink* m_propertyTypeLink = ibPropertyObject::CreateProperty<ibPropertyChoiceLink>(m_categoryChoice, ibT("TypeLink"), _("Link by type"),
+		_("The field whose value decides the TYPE of a value written into the column's cell: a characteristic gives the type it declares, a field holding a type description gives that, and any other field gives the type of the value standing in it. Offered: what the form reaches - its attributes and their fields. Empty: only the bound field's own link applies."));
+	ibPropertyChoiceParameters* m_propertyChoiceParameters = ibPropertyObject::CreateProperty<ibPropertyChoiceParameters>(m_categoryChoice, ibT("ChoiceParameters"), _("Choice parameters"),
+		_("What is shown in the list when a reference is chosen into the column's cell, on top of what the bound field itself declares: a row per parameter - which field of the chosen object it filters, which field the form reaches gives the value (an attribute or a field of one), and what becomes of a chosen value when that field changes."));
 
 	ibPropertyCategory* m_categoryButton = ibPropertyObject::CreatePropertyCategory(ibT("Button"), _("Button"));
 	ibPropertyBoolean* m_propertySelectButton = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryButton, ibT("ButtonSelect"), _("Select button"),

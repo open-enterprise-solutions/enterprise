@@ -165,7 +165,7 @@ bool ibValueQueryExec::RunPackage(std::vector<ibValue>& out, std::vector<ibStrin
 	const std::shared_ptr<ibQueryReadState> readsOneState;   // ⛔ NOT OPENED — see queryReadState.h
 
 	try {
-		for (ibQueryLowering::PackageResult& r : ibQueryLowering::ExecutePackage(m_package, m_params, store)) {
+		for (ibQueryLowering::ibQueryPackageResult& r : ibQueryLowering::ExecutePackage(m_package, m_params, store)) {
 			// ONE KIND PER POSITION, and only two of them. A statement that produced a table hands
 			// back a RESULT — including a create-temp statement, whose result is one column and one
 			// row holding the record count. A DROP has no result at all and hands back the UNDEFINED
@@ -279,7 +279,7 @@ ibValueQueryResult::ibValueQueryResult()
 }
 
 ibValueQueryResult::ibValueQueryResult(ibDataQueryResult&& result,
-                                       std::vector<ibQueryLowering::OutputColumn> schema, bool hasTotals,
+                                       std::vector<ibQueryLowering::ibQueryOutputColumn> schema, bool hasTotals,
                                        std::shared_ptr<ibQueryReadState> snapshot,
                                        std::shared_ptr<ibQueryTempTableStore> temps)
 	: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE)
@@ -375,7 +375,7 @@ ibValueQuerySelect::ibValueQuerySelect()
 }
 
 ibValueQuerySelect::ibValueQuerySelect(std::unique_ptr<ibDataQueryResult> flat,
-                                       std::vector<ibQueryLowering::OutputColumn> schema,
+                                       std::vector<ibQueryLowering::ibQueryOutputColumn> schema,
                                        std::shared_ptr<ibQueryReadState> snapshot,
                                        std::shared_ptr<ibQueryTempTableStore> temps)
 	: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE)
@@ -388,7 +388,7 @@ ibValueQuerySelect::ibValueQuerySelect(std::unique_ptr<ibDataQueryResult> flat,
 }
 
 ibValueQuerySelect::ibValueQuerySelect(ibSelector&& tree,
-                                       std::vector<ibQueryLowering::OutputColumn> schema,
+                                       std::vector<ibQueryLowering::ibQueryOutputColumn> schema,
                                        std::shared_ptr<ibQueryReadState> snapshot,
                                        std::shared_ptr<ibQueryTempTableStore> temps)
 	: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE)
@@ -402,7 +402,7 @@ ibValueQuerySelect::ibValueQuerySelect(ibSelector&& tree,
 
 ibValueQuerySelect::~ibValueQuerySelect() = default;
 
-ibValue ibValueQuerySelect::ReadColumn(const ibQueryLowering::OutputColumn& oc) const
+ibValue ibValueQuerySelect::ReadColumn(const ibQueryLowering::ibQueryOutputColumn& oc) const
 {
 	// A reference / enum / composite dot-walk leaf reassembles from its prefixed field spread.
 	if (m_flat != nullptr) {
@@ -492,7 +492,7 @@ bool ibValueQuerySelect::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue
 	case enTotal: {
 		if (lSizeArray < 1 || m_tree == nullptr) { pvarRetValue = ibValue(); return true; }
 		const ibString name = paParams[0]->GetString();
-		for (const ibQueryLowering::OutputColumn& oc : m_schema)
+		for (const ibQueryLowering::ibQueryOutputColumn& oc : m_schema)
 			if (oc.m_name.CmpNoCase(name) == 0) {
 				pvarRetValue = oc.m_byAlias ? m_tree->GetTotalColumn(oc.m_alias) : m_tree->GetTotal(oc.m_col);
 				return true;

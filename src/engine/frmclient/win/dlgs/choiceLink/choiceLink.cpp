@@ -71,10 +71,14 @@ void ibDialogChoiceLink::BuildCatalogue()
 	none.m_label = _("<not set> - the field opens the list its own type declares");
 	m_fields.push_back(none);
 
+	// The fields that may govern it are the row's Sources, each with the path the link stores — through the dot for a
+	// control's (#616): an id alone does not say which field it is.
 	ibPropertyChoiceList fields;
-	m_property->GetValueList(fields);
-	for (unsigned int idx = 0; idx < fields.GetCount(); idx++)
+	ibChoiceSourceList(m_property, fields);
+	for (unsigned int idx = 0; idx < fields.GetCount(); idx++) {
 		keep(m_fields, fields, idx);
+		m_fields.back().m_path = ibChoiceSourcePath(m_property, m_fields.back().m_id);
+	}
 
 	ibPropertyChoiceList types;
 	ibFieldReferenceTypes(m_property, types);
@@ -165,9 +169,8 @@ void ibDialogChoiceLink::BuildControls()
 	}
 
 	// The row standing on what is set now — read from the buffer, so reopening shows what was chosen.
-	const ibMetaID governing = m_link.m_source.GetLeaf();
-	for (size_t idx = 0; idx < m_fields.size(); idx++) {
-		if (m_fields[idx].m_id == governing) {
+	for (size_t idx = 1; m_link.IsOk() && idx < m_fields.size(); idx++) {
+		if (m_fields[idx].m_path == m_link.m_source) {
 			m_list->Select(m_model->GetItem((unsigned int)idx));
 			break;
 		}
@@ -182,8 +185,7 @@ void ibDialogChoiceLink::BuildControls()
 		// <not set> takes the link off AND the governed type with it: a type governed by nobody is a
 		// leftover that reads as a setting.
 		m_link.Clear();
-		if (m_fields[(size_t)line].m_id != 0)
-			m_link.m_source.AppendSource(m_fields[(size_t)line].m_id);
+		m_link.m_source = m_fields[(size_t)line].m_path;
 
 		ShowSelected();
 	});

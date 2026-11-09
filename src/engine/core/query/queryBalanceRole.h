@@ -7,7 +7,7 @@
 //
 // ⭐⭐ SAID BY WHOEVER KNOWS, AND READ BY WHOEVER FOLDS. A register's balance-and-turnovers view knows
 // which of its columns is the moment a row stands at, which keep one balance apart from another, and
-// which are the balance's two edges — it publishes them on its columns (L3, ibBackendSourceColumn).
+// which are the balance's two edges — it publishes them on its columns (L3, ibBackendQueryColumn).
 // A composition fills a field in with that answer and lets a person overrule it (its Fields page, the
 // description's field entry). The query says it in its own words — `<expr> ROLE OPENING AS x` — and a
 // `TOTALS SUM(x)` over such a field is taken at each key's first moment (a closing one at its last).

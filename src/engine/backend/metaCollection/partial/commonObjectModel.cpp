@@ -36,7 +36,7 @@ bool ibValueRecordSetObject::SetValueByRow(const ibVariant& variant,
 	ibValue newValue = metaObjectAttribute->CreateValue();
 	if (strData.Length() > 0) {
 		std::vector<ibValue> listValue;
-		if (newValue.FindValue(strData, listValue)) {
+		if (newValue.FindValue(strData, ibChoiceCondition(), listValue)) {
 			return node->SetValue(col, listValue.at(0));
 		}
 		else {

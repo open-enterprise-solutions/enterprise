@@ -288,7 +288,7 @@ std::vector<ibCompositionRule> ibCompositionRulesOf(const ibConditionalAppearanc
 
 // A ROW OF THE WALK, READ BY FIELD — the names a person picked from: a column's name, else its alias. A name
 // this result does not carry answers nothing, and the caller decides what "nothing" means for it.
-ibCompositionValueOf ibComposerRowValueOf(const std::vector<ibQueryLowering::OutputColumn>& schema,
+ibCompositionValueOf ibComposerRowValueOf(const std::vector<ibQueryLowering::ibQueryOutputColumn>& schema,
 	const std::vector<ibValue>& row)
 {
 	// ⚠ A PATH IS NOT SPELLED AS ITS COLUMN — `Recorder.Supplier` is read as `RecorderSupplier`; asked by the literal
@@ -343,7 +343,7 @@ ibDataComposer::ConditionalAppearance ibDataComposer::ConditionalAppearanceFor(c
 }
 
 bool ibDataComposer::ConditionalAppearance::AttrFor(const GroupNode* node,
-	const std::vector<ibQueryLowering::OutputColumn>& schema, const std::vector<ibValue>& row,
+	const std::vector<ibQueryLowering::ibQueryOutputColumn>& schema, const std::vector<ibValue>& row,
 	ibCompositionLineAttr& attr) const
 {
 	// THE WALK'S BUFFER, REFILLED WHERE IT STANDS — cleared, never freed, so a line allocates nothing once the first

@@ -22,7 +22,7 @@
 // ibDataComposer::PruneUnresolvedSettings, which answers HOW MUCH went so a person can be told.
 
 #include "metaObject.h"
-#include "backend/query/queryColumn.h"                           // ibBackendSourceColumn — a composer IS a column of its report
+#include "backend/srcColumn.h"                                  // ibBackendSourceColumn — a composer IS a column of its report
 #include "backend/propertyManager/property/propertyTemplate.h"   // what it holds, of its kind
 
 class ibTemplateProvider;

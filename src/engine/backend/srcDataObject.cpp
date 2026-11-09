@@ -203,12 +203,13 @@ std::vector<ibMetaID> ibSourceDataObject::GetLinked(const ibMetaID& edited) cons
 	const ibSourceExplorer* fields = GetSourceExplorer();
 	if (fields == nullptr)
 		return linked;
+	const ibSourceDescription changed(edited);
 	for (unsigned int idx = 0; idx < fields->GetHelperCount(); ++idx) {
 		const ibSourceExplorer* node = fields->GetHelper(idx);
 		if (node == nullptr || node->IsTableSection())
 			continue;
 		const ibMetaID field = node->GetSourceId();
-		if (ibChoiceLinkResolver::IsLinked(field, GetTypeLink(field), GetChoiceParameters(field), edited))
+		if (field != edited && ibChoiceLinkResolver::IsLinked(GetTypeLink(field), GetChoiceParameters(field), changed))
 			linked.push_back(field);
 	}
 	return linked;

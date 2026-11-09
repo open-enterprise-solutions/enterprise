@@ -167,7 +167,7 @@ TEST_F(TempDbSqliteFix, DoorReadsBackExactCellValues)
 	ASSERT_NE(temp, nullptr);
 
 	auto colById = [&](ibMetaID id) -> const ibBackendQueryColumn* {
-		for (const ibBackendQueryColumn* c : temp->GetColumns())
+		for (const ibBackendQueryColumn* c : temp->GetQueryColumns())
 			if (c->GetColumnId() == id) return c;
 		return nullptr;
 	};
@@ -228,7 +228,7 @@ TEST_F(TempDbSqliteFix, WriteDoorInsertReadDeleteRoundTrip)
 	ASSERT_NE(temp, nullptr);
 
 	auto colById = [&](ibMetaID id) -> const ibBackendQueryColumn* {
-		for (const ibBackendQueryColumn* c : temp->GetColumns())
+		for (const ibBackendQueryColumn* c : temp->GetQueryColumns())
 			if (c->GetColumnId() == id) return c;
 		return nullptr;
 	};
@@ -300,7 +300,7 @@ struct DoorRows {
 		if (!mgr) return false;
 		temp = mgr->Queryable();
 		if (!temp) return false;
-		for (const ibBackendQueryColumn* c : temp->GetColumns()) {
+		for (const ibBackendQueryColumn* c : temp->GetQueryColumns()) {
 			if      (c->GetColumnId() == ID)   cId   = c;
 			else if (c->GetColumnId() == NAME) cName = c;
 			else if (c->GetColumnId() == AMT)  cAmt  = c;
@@ -434,7 +434,7 @@ struct KeyTable {
 		if (!mgr) return false;
 		temp = mgr->Queryable();
 		if (temp == nullptr) return false;
-		for (const ibBackendQueryColumn* c : temp->GetColumns())
+		for (const ibBackendQueryColumn* c : temp->GetQueryColumns())
 			if (c->GetColumnId() == keyId) k = c;
 		return k != nullptr;
 	}

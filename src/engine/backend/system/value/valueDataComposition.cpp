@@ -323,7 +323,7 @@ ibString ibValueDataComposition::SeedQuery() const
 	select.m_from.m_alias = descriptor->GetName();
 	const ibString prefix = select.m_from.m_alias + ibT(".");
 
-	for (const ibBackendQueryColumn* column : queryable->GetColumns()) {
+	for (const ibBackendQueryColumn* column : queryable->GetQueryColumns()) {
 		if (column == nullptr || column->GetName().IsEmpty() || !column->IsAllowed())
 			continue;
 		ibQueryProjection projection;
@@ -1048,21 +1048,17 @@ const ibSourceExplorer* ibValueDataComposition::GetSourceExplorer() const
 	// …AND WHAT THE QUERY ADDS ON TOP. The source's fields are there because the rows are its rows; the
 	// query's output columns are there because that is what the composition actually shows. Added, not
 	// substituted — and a name the source already offers is not added twice.
-	for (const ibQueryLowering::OutputColumn& column : m_querySchema) {
+	for (const ibQueryLowering::ibQueryOutputColumn& column : m_querySchema) {
 		if (column.m_name.IsEmpty())
 			continue;
 		if (m_sourceExplorer.FindByName(column.m_name) != nullptr)
 			continue;
 
-		// The column's own DESCRIPTOR when the query did not rename it — that is what carries the
-		// synonym and the binding. A RENAMED one (`Owner.Code AS Supplier`) is appended by name and
-		// type: the new name is the query's, and it belongs to no attribute to borrow a synonym from.
-		if (column.m_col != nullptr && column.m_col->GetName().IsSameAs(column.m_name, false))
-			m_sourceExplorer.AppendColumn(column.m_col);
-		else
-			m_sourceExplorer.AppendColumn(column.m_name,
-				column.m_col != nullptr ? column.m_col->GetColumnId() : wxNOT_FOUND,
-				column.GetTypeDesc());
+		// BY NAME AND TYPE — an output the source's own fields above do not already hold is the query's (a walk,
+		// a rename, a figure): it has no field of the source behind it, and the source does not meet the query.
+		m_sourceExplorer.AppendColumn(column.m_name,
+			column.m_col != nullptr ? column.m_col->GetColumnId() : wxNOT_FOUND,
+			column.GetTypeDesc());
 	}
 	return &m_sourceExplorer;
 }

@@ -1983,14 +1983,14 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetShapeQueryable
 			const ibValueMetaObjectAttributeBase* kindSlot = GetAccountDimensionKindSlot(creditSide, no);
 			if (kinds.empty() && kindSlot != nullptr)
 				columns.push_back(ibTempColumn(name + ibT("Kind"), name + ibT("Kind"),
-				                               kindSlot->GetTypeDesc(), ibRegDerivedColumnId(kindSlot->GetMetaID())).StandsFor(kindSlot));
+				                               kindSlot->GetTypeDesc(), ibRegDerivedColumnId(kindSlot->GetMetaID())).StandsFor(kindSlot->GetQueryColumn()));
 
 			// What the slot HOLDS (GetTypeValueDesc), not what it declares: the declaration is the chart's
 			// characteristic, one class no value carries, and a column of this table is a plain column with
 			// no chart to expand it through — typed by the declaration, it could not be opened in a field
 			// picker, offered no value to filter by, and adjusted every counterparty poured into it to
 			// nothing (2026-09-15).
-			columns.push_back(ibTempColumn(name, name, slot->GetTypeValueDesc(), ibRegDerivedColumnId(slot->GetMetaID())).StandsFor(slot)
+			columns.push_back(ibTempColumn(name, name, slot->GetTypeValueDesc(), ibRegDerivedColumnId(slot->GetMetaID())).StandsFor(slot->GetQueryColumn())
 				.PlaysInBalance(ibBalanceRole::Dimension));
 		}
 	};
@@ -2056,7 +2056,7 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetShapeQueryable
 		columns.push_back(ibTempColumn(FigureName(resource, suffix), FigureField(resource, suffix),
 		                               resource->GetTypeDesc(), ibRegDerivedColumnId(resource->GetMetaID(), ++figureNo),
 		                               ibRegColumnCaptionOf(resource->GetSynonym(), ibRegSidedCaption(figure, credit)),
-		                               ibBackendQueryColumn::Kind::Computed, resource->GetColumnPicture()).StandsFor(resource)
+		                               ibBackendQueryColumn::Kind::Computed).StandsFor(resource->GetQueryColumn())
 		                  .PlaysInBalance(ibRegFigureBalanceRole(figure)));   // the figure's word, not the sided spelling
 	};
 
@@ -2066,7 +2066,7 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetShapeQueryable
 		columns.push_back(ibTempColumn(FigureName(resource, figure), FigureField(resource, figure),
 		                               resource->GetTypeDesc(), ibRegDerivedColumnId(resource->GetMetaID(), ++figureNo),
 		                               ibRegColumnCaptionOf(resource->GetSynonym(), ibRegFigureCaption(figure)),
-		                               ibBackendQueryColumn::Kind::Computed, resource->GetColumnPicture()).StandsFor(resource)
+		                               ibBackendQueryColumn::Kind::Computed).StandsFor(resource->GetQueryColumn())
 		                  .PlaysInBalance(ibRegFigureBalanceRole(figure)));
 	};
 
@@ -2169,7 +2169,7 @@ void SeedFromShape(ibQueryRamTable& table, const ibBackendQueryable* shape)
 		return;
 	// Typed by what the column HOLDS (GetTypeValueDesc): a cell of this table receives a stored value, and
 	// a column typed by a characteristic's declaration adjusts every counterparty put into it to nothing.
-	for (const ibBackendQueryColumn* col : shape->GetColumns())
+	for (const ibBackendQueryColumn* col : shape->GetQueryColumns())
 		if (col != nullptr)
 			table.AddColumn(col->GetColumnId(), col->GetName(), col->GetTypeValueDesc());
 }
@@ -3063,7 +3063,7 @@ ibQueryRelPtr ibValueMetaObjectAccountingRegister::BuildDrCrTurnoverRelation(
 				labelOf[FigureField(resource, figure)] = ibSqlAliasOf(FigureField(resource, figure));
 
 	std::vector<ibQueryProjItem> projection;
-	for (const ibBackendQueryColumn* column : published->GetColumns())
+	for (const ibBackendQueryColumn* column : published->GetQueryColumns())
 		for (const ibColumnSlot& slot : DescribeColumnLayout(column)) {
 			const auto found = labelOf.find(slot.m_name);
 			projection.push_back({ ibCol(inner, found != labelOf.end() ? found->second : slot.m_name), slot.m_name });
@@ -3090,7 +3090,7 @@ ibQueryRelPtr ibValueMetaObjectAccountingRegister::BuildDrCrTurnoverRelation(
 	const ibString named = ibT("drcr_n");
 	std::vector<ibQueryProjItem> outputs;
 	std::vector<ibQueryExprPtr>  groupKeys;
-	for (const ibBackendQueryColumn* column : published->GetColumns()) {
+	for (const ibBackendQueryColumn* column : published->GetQueryColumns()) {
 		const std::vector<ibColumnSlot> slots = DescribeColumnLayout(column);
 		const bool figure = !slots.empty() && figureFields.contains(slots.front().m_name);
 		std::unordered_map<ibString, ibQueryExprPtr> asRead;
@@ -3140,7 +3140,7 @@ ibQueryRelPtr ibValueMetaObjectAccountingRegister::BuildDrCrTurnoverRelation(
 	}
 
 	std::vector<ibQueryProjItem> judged;
-	for (const ibBackendQueryColumn* column : published->GetColumns())
+	for (const ibBackendQueryColumn* column : published->GetQueryColumns())
 		for (const ibColumnSlot& slot : DescribeColumnLayout(column)) {
 			const ibQueryExprPtr value = ibCol(pairs, slot.m_name);
 			const auto figure = figureOf.find(slot.m_name);
@@ -5670,11 +5670,11 @@ public:
 		const ibBackendQueryable* shape = Shape();
 		return shape != nullptr ? shape->ResolveColumnByName(name) : nullptr;
 	}
-	std::vector<const ibBackendQueryColumn*> GetColumns() const override {
+	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override {
 		const ibBackendQueryable* shape = Shape();
-		return shape != nullptr ? shape->GetColumns() : std::vector<const ibBackendQueryColumn*>();
+		return shape != nullptr ? shape->GetQueryColumns() : std::vector<const ibBackendQueryColumn*>();
 	}
-	bool OwnsColumn(const ibBackendQueryColumn* col) const override {
+	bool ContainColumn(const ibBackendQueryColumn* col) const override {
 		return col != nullptr && ResolveColumnByName(col->GetName()) == col;
 	}
 	ibBackendQueryProvider& GetProvider() const override {
@@ -5727,15 +5727,15 @@ ibString ShapeWord(ibAcctShape shape)
 // through the find it already answers a query's column names with, so nothing is listed and nothing is
 // allocated to ask. The neighbour had the same list with the same class of hole.
 // (Its one caller is gone: a surface's column now carries its own caption and picture, so nothing has
-//  to look the attribute up to borrow them — see FillExplorerFromShape just below.)
+//  to look the attribute up to borrow them — see ShapeColumns just below.)
 
-void FillExplorerFromShape(const ibValueMetaObjectAccountingRegister* reg, ibAcctShape shape,
-                           const std::vector<ibValue>& kindsDr, const std::vector<ibValue>& kindsCr,
-                           const ibRegFold& fold, ibSourceDataObject::ibSourceExplorer& explorer)
+std::vector<const ibBackendQueryColumn*> ShapeColumns(const ibValueMetaObjectAccountingRegister* reg, ibAcctShape shape,
+                                                      const std::vector<ibValue>& kindsDr, const std::vector<ibValue>& kindsCr,
+                                                      const ibRegFold& fold)
 {
 	const ibBackendQueryable* built = reg != nullptr ? reg->GetShapeQueryable(shape, kindsDr, kindsCr, fold) : nullptr;
 	if (built == nullptr)
-		return;
+		return {};
 
 	// ⭐⭐ WHAT THE SURFACE PUBLISHES IS WHAT IS SHOWN. This used to swap in the ATTRIBUTE whose id the
 	// column carries — a way of borrowing its caption and its picture back when a surface column had
@@ -5743,9 +5743,11 @@ void FillExplorerFromShape(const ibValueMetaObjectAccountingRegister* reg, ibAcc
 	// become a lie: a surface column is not always an attribute of the movements under the same name,
 	// and the swap published `Currency` where the surface has `CurrencyDr`, and drew the pair with two
 	// different pictures (Max saw it in the query constructor, 2026-09-16).
-	for (const ibBackendQueryColumn* col : built->GetColumns())
+	std::vector<const ibBackendQueryColumn*> out;
+	for (const ibBackendQueryColumn* col : built->GetQueryColumns())
 		if (col != nullptr)
-			explorer.AppendColumn(col);
+			out.push_back(col);
+	return out;
 }
 
 // (The two ArgAt overloads that stood here were ibRegArg under another name — reading slot N of an
@@ -5978,19 +5980,10 @@ const ibBackendQueryable* ibAcctSourceDescriptor::CreateQueryable(ibValue** paPa
 	return nullptr;
 }
 
-void ibAcctSourceDescriptor::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
-{
-	// No arguments: the catalogue shows the breakdown AS THE REGISTER HAS IT (the slots as they stand),
-	// which is also what a call with no kinds returns. What the window offers and what the read gives
-	// back are the same answer, asked of the same function.
-	ibRegFold fold;
-	if (m_shape == ibAcctShape::Records)
-		fold.m_kind = ibRegGranularity::Record;
-	FillExplorerFromShape(m_reg, m_shape, {}, {}, fold, explorer);
-}
-
-void ibAcctSourceDescriptor::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer,
-                                                const std::vector<ibValue>& args) const
+// No arguments: the catalogue shows the breakdown AS THE REGISTER HAS IT (the slots as they stand),
+// which is also what a call with no kinds returns. What the window offers and what the read gives
+// back are the same answer, asked of the same function.
+std::vector<const ibBackendQueryColumn*> ibAcctSourceDescriptor::GetQueryColumns(const std::vector<ibValue>& args) const
 {
 	const ibAcctArgs layout = ibAcctArgs::For(m_shape, m_reg->IsCorrespondence());
 
@@ -5998,9 +5991,9 @@ void ibAcctSourceDescriptor::FillSourceExplorer(ibSourceDataObject::ibSourceExpl
 	if (m_shape == ibAcctShape::Records)
 		fold.m_kind = ibRegGranularity::Record;
 
-	FillExplorerFromShape(m_reg, m_shape,
+	return ShapeColumns(m_reg, m_shape,
 		ibAcctReadKinds(ibRegArg(args, layout.m_kindsDr)),
-		ibAcctReadKinds(ibRegArg(args, layout.m_kindsCr)), fold, explorer);
+		ibAcctReadKinds(ibRegArg(args, layout.m_kindsCr)), fold);
 }
 
 void ibAcctSourceDescriptor::DescribeParameters(std::vector<ibQuerySourceParameter>& out) const
@@ -6128,8 +6121,8 @@ void ibAcctSourceDescriptor::DescribeParameters(std::vector<ibQuerySourceParamet
 // the table folded, and a condition over a fold belongs to the RESULT rather than to an argument of
 // the source.
 //
-// ⭐⭐ EVERY SLOT ASKS ITS OWN QUESTION, so every slot gets its own list — the overload below. This
-// one answers for the general `Condition`: the analytics VALUES and the dimensions.
+// ⭐⭐ EVERY SLOT ASKS ITS OWN QUESTION, so every slot gets its own list — the account slots theirs (the
+// first branch below). The general `Condition` is answered with the analytics VALUES and the dimensions.
 //
 // Both halves of that were once wrong in opposite directions. The dimensions were the only thing
 // offered, so the general slot was empty of the analytics a filter is normally written with; then the
@@ -6138,10 +6131,41 @@ void ibAcctSourceDescriptor::DescribeParameters(std::vector<ibQuerySourceParamet
 // predicate but the hierarchy SCOPE: it decides which accounts are admitted and which one each row
 // is reported under. A field that is a scope in one slot and a filter in another is one question
 // with two answers, honoured by two different mechanisms.
-void ibAcctSourceDescriptor::FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+//
+// ⭐⭐ THE ACCOUNT SLOTS ARE ABOUT THE ACCOUNT — so the account is all they are offered.
+//
+// `AccountCondition` / `…Dr` / `…Cr` / `CorrAccountCondition` are CONSUMED by this source: the plain
+// naming of the account written there becomes the hierarchy scope that decides which one each row is
+// reported under (ScopeFromAccountCondition), and whatever else is said about the account — through it
+// (`Account.OffBalance`), under NOT, in an OR — selects the rows before the fold (SplitAccountCondition).
+std::vector<const ibBackendQueryColumn*> ibAcctSourceDescriptor::GetConditionColumns(const ibString& slot) const
 {
+	std::vector<const ibBackendQueryColumn*> out;
 	if (m_reg == nullptr)
-		return;
+		return out;
+	const ibAcctConditionScope* scope = static_cast<const ibAcctConditionScope*>(GetConditionScope());
+	if (scope == nullptr)
+		return out;
+
+	if (slot.Contains(ibT("AccountCondition")) || slot.Contains(ibT("CorrAccountCondition"))) {
+		// Which side this slot is about is written in its own name: the matrix names Dr and Cr, a
+		// one-figure turnover filtered by its counterpart says Corr, and a one-sided register says
+		// neither. Reading the name is not a lettering trick — these are the slot names this same
+		// descriptor publishes in DescribeParameters, a few lines up.
+		//
+		// ⭐ AND THE ACCOUNT IS OFFERED BY THE NAME THE TABLE IS SELECTED BY: `Account` in a balance or a
+		// turnover, `AccountDr` / `AccountCr` in the matrix. A table that is not selected by a credit account
+		// is not offered one; the corresponding-account slot of a turnover offers `CorrAccount`.
+		const bool corrSlot   = slot.Contains(ibT("CorrAccountCondition"));
+		const bool creditSide = !corrSlot && slot.Contains(ibT("Cr"));
+		const ibValueMetaObjectAttributeBase* const accountCr = m_reg->GetRegisterAccountCr();
+		const ibString name = corrSlot ? (m_shape == ibAcctShape::Turnovers ? ibValueMetaObjectAccountingRegister::CorrAccountColumnName() : ibString())
+			: !creditSide ? PublishedAccountName(m_reg, m_shape)
+			: (PairedRow(m_reg, m_shape) && accountCr != nullptr ? accountCr->GetName() : ibString());
+		if (const ibBackendQueryColumn* column = name.IsEmpty() ? nullptr : scope->ResolveColumnByName(name))
+			out.push_back(column);
+		return out;
+	}
 
 	// ⭐⭐ WHAT THE TOTALS TABLE ACTUALLY HOLDS — the accounts, their analytics and the dimensions, and
 	// nothing else. That is not a policy about what is useful to filter by; it is the shape of the
@@ -6169,13 +6193,10 @@ void ibAcctSourceDescriptor::FillConditionExplorer(ibSourceDataObject::ibSourceE
 	// gives them: `AccountDimension1` and `Currency` in a balance, `AccountDimensionDr1` / `…Cr1` and
 	// `CurrencyDr` / `CurrencyCr` in the matrix. The movements' spelling was offered here, and a balance
 	// offered a filter over `AccountDimensionDr1` its rows do not have.
-	const ibAcctConditionScope* scope = static_cast<const ibAcctConditionScope*>(GetConditionScope());
-	if (scope == nullptr)
-		return;
 	const bool paired = PairedRow(m_reg, m_shape);
-	const auto offer = [&explorer, scope](const ibString& name) {
+	const auto offer = [&out, scope](const ibString& name) {
 		if (const ibBackendQueryColumn* column = scope->ResolveColumnByName(name))
-			explorer.AppendColumn(column, /*enabled*/ true, /*visible*/ true);
+			out.push_back(column);
 	};
 	for (const bool creditSide : { false, true }) {
 		if (creditSide && !paired)
@@ -6212,45 +6233,6 @@ void ibAcctSourceDescriptor::FillConditionExplorer(ibSourceDataObject::ibSourceE
 			if (dimension != nullptr && m_reg->GetFieldSide(/*creditSide*/ true, dimension) != nullptr)
 				offer(ibValueMetaObjectAccountingRegister::CorrFieldColumnName(dimension->GetName()));
 	}
-}
-
-// ⭐⭐ THE ACCOUNT SLOTS ARE ABOUT THE ACCOUNT — so the account is all they are offered.
-//
-// `AccountCondition` / `…Dr` / `…Cr` / `CorrAccountCondition` are CONSUMED by this source: the plain
-// naming of the account written there becomes the hierarchy scope that decides which one each row is
-// reported under (ScopeFromAccountCondition), and whatever else is said about the account — through it
-// (`Account.OffBalance`), under NOT, in an OR — selects the rows before the fold (SplitAccountCondition).
-//
-// The general `Condition` is the place for everything else, and it answers with the list above.
-void ibAcctSourceDescriptor::FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer,
-                                                   const ibString& slot) const
-{
-	if (m_reg == nullptr)
-		return;
-
-	if (!slot.Contains(ibT("AccountCondition")) && !slot.Contains(ibT("CorrAccountCondition"))) {
-		FillConditionExplorer(explorer);   // the general condition — dimensions and the analytics values
-		return;
-	}
-
-	// Which side this slot is about is written in its own name: the matrix names Dr and Cr, a
-	// one-figure turnover filtered by its counterpart says Corr, and a one-sided register says
-	// neither. Reading the name is not a lettering trick — these are the slot names this same
-	// descriptor publishes in DescribeParameters, a few lines up.
-	//
-	// ⭐ AND THE ACCOUNT IS OFFERED BY THE NAME THE TABLE IS SELECTED BY: `Account` in a balance or a
-	// turnover, `AccountDr` / `AccountCr` in the matrix. A table that is not selected by a credit account
-	// is not offered one; the corresponding-account slot of a turnover offers `CorrAccount`.
-	const bool corrSlot   = slot.Contains(ibT("CorrAccountCondition"));
-	const bool creditSide = !corrSlot && slot.Contains(ibT("Cr"));
-	const ibAcctConditionScope* scope = static_cast<const ibAcctConditionScope*>(GetConditionScope());
-	if (scope == nullptr)
-		return;
-	const ibValueMetaObjectAttributeBase* const accountCr = m_reg->GetRegisterAccountCr();
-	const ibString name = corrSlot ? (m_shape == ibAcctShape::Turnovers ? ibValueMetaObjectAccountingRegister::CorrAccountColumnName() : ibString())
-		: !creditSide ? PublishedAccountName(m_reg, m_shape)
-		: (PairedRow(m_reg, m_shape) && accountCr != nullptr ? accountCr->GetName() : ibString());
-	if (const ibBackendQueryColumn* column = name.IsEmpty() ? nullptr : scope->ResolveColumnByName(name))
-		explorer.AppendColumn(column, /*enabled*/ true, /*visible*/ true);
+	return out;
 }
 

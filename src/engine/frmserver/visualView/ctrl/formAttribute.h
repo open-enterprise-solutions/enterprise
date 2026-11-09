@@ -207,7 +207,7 @@ public:
 	ibString GetComment() const override { return m_attribute->GetComment(); }
 	ibMetaID GetId() const override { return m_attribute->GetId(); }
 	bool     IsMain() const override { return m_attribute->IsMain(); }
-	const ibTypeDescription& GetTypeDesc() const override { return m_attribute->GetTypeDesc(); }
+	ibTypeDescription& GetTypeDesc() const override { return m_attribute->GetTypeDesc(); }
 
 	// …and, past the interface: whether the module added it (ibValueForm::AddAttribute(name, typeDesc)), and what it
 	// asks of its filling — read by the form's own pass (ibValueForm::CheckFilling).

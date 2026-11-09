@@ -420,8 +420,6 @@ const ibFormatString& ibBackendTypeConfigFactory::GetFormatFromColumn(const ibTr
 
 /////////////////////////////////////////////////////////////////////////////////////
 
-#include "backend/query/queryColumn.h"                      // ibBackendSourceColumn — the leaf the dot returns
-
 const ibBackendSourceColumn* ibBackendTypeSourceFactory::WalkSource(
 	const ibSourceDescription& desc, bool* valid, ibString* outText) const
 {
@@ -433,8 +431,8 @@ const ibBackendSourceColumn* ibBackendTypeSourceFactory::WalkSource(
 	ibBackendFormAttributeValue* headHolder = FindSourceHolder(desc.GetFirst());
 	if (headHolder == nullptr) return nullptr;
 	if (outText != nullptr) *outText = headHolder->GetName();
-	// A whole-attribute binding (length 1) is valid with no column leaf.
-	if (path.size() == 1) { if (valid != nullptr) *valid = true; return nullptr; }
+	// A whole-attribute binding (length 1): the attribute IS the column it is bound to.
+	if (path.size() == 1) { if (valid != nullptr) *valid = true; return headHolder; }
 
 	// Deeper hops delegate to THE shared structure-resolve hop — it walks each source's EXPLORER (the same
 	// self-describing structure the runtime value-hop steps), descending into each reference's OWN columns.

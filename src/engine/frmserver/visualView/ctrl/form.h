@@ -5,6 +5,7 @@
 #include "frmserver/docView/docView.h"   // ibDocument / ibMetaDocument — the doc-parent a form opens under
 #include "core/description/sourceDescription.h"   // ibSourceDescription — the binding-path wrapper (Get/SetValueByAttributePath)
 #include "backend/backend_command.h"   // ibBackendCommandSender — the form IS-A command-hop source (entry gate)
+#include "backend/srcDataObject.h"     // ibSourceDataObject — the form is a source over its own attributes
 
 #include <chrono>   // an attached procedure's interval and due time
 #include <memory>   // std::unique_ptr — owns the form's attribute/value registry entries
@@ -46,7 +47,8 @@ class FRMSERVER_API ibValueForm :
 	// this-adjustment, which the cast to void(ibValue::*) would otherwise drop.
 	// The form is the command SOURCE / ENTRY hop of the walk — the ibBackendCommandSender contract comes through
 	// ibBackendValueForm (server-side, so a headless caller can walk commands); ibValueForm IMPLEMENTS GetCommandByHop.
-	public ibValueFrame, public ibBackendValueForm, public ibRuntimeModuleDataObject
+	// …and a SOURCE over its own attributes (ibSourceDataObject): a hop is an attribute's id.
+	public ibValueFrame, public ibBackendValueForm, public ibRuntimeModuleDataObject, public ibSourceDataObject
 {
 public:
 
@@ -203,6 +205,22 @@ public:
 	// complete ibValueFormAttribute type.
 	virtual ibSourceDataObject* GetSourceObject() const;
 	virtual const ibValueMetaObjectFormBase* GetFormMetaObject() const { return m_metaFormObject; }
+
+	// ⭐⭐ THE FORM IS A SOURCE ITSELF — over its own attributes, as an object is over its fields (issue #259). Its explorer
+	// is made of them as they stand, and a hop is an attribute's id. It is the source a control's own links are read in
+	// (#616): their paths are the form's, as its binding is. No metaobject, and counted as the form value is. Bodies in
+	// formAttribute.cpp.
+	virtual const ibMetaData* GetSourceMetaData() const override { return GetMetaData(); }
+	virtual ibClassID GetSourceClassType() const override { return GetClassType(); }
+	virtual ibString GetSourceCaption() const override { return GetCaption(); }
+	virtual void SourceIncrRef() override { ibValue::IncrRef(); }
+	virtual void SourceDecrRef() override { ibValue::DecrRef(); }
+	virtual bool IsEmpty() const override { return false; }
+	virtual const ibUniqueKey& GetGuid() const override { return m_formKey; }
+	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const override { return nullptr; }
+	virtual const ibSourceExplorer* GetSourceExplorer() const override;
+	virtual bool GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const override;
+	virtual bool SetValueBySourceHop(const ibSourceHop& hop, const ibValue& value) override;
 
 	//****************************************************************************
 	//*           Attribute store — the form's typed source registry            *

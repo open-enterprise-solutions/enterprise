@@ -1019,15 +1019,14 @@ void ibValueMetaObjectAccountingRegister::FillSourceExplorer(ibSourceDataObject:
 	//
 	// …AND THE TWO STACK LIKE THE BREAKDOWN DOES: a side's split fields are one thing to read, so they
 	// share a group and the form draws them as one cell rather than a header per column.
-	struct ibPostingColumn { const ibBackendQueryColumn* m_column; const ibValueMetaObjectAttributeBase* m_field; ibString m_group; };
+	struct ibPostingColumn { const ibValueMetaObjectAttributeBase* m_field; ibString m_group; };
 	std::vector<ibPostingColumn> posting;
 	std::set<const ibValueMetaObjectAttributeBase*> inBlock;
 
-	const auto place = [&](const ibValueMetaObjectAttributeBase* field, const ibBackendQueryColumn* column,
-		const ibString& group) {
-		if (field == nullptr || column == nullptr)
+	const auto place = [&](const ibValueMetaObjectAttributeBase* field, const ibString& group) {
+		if (field == nullptr)
 			return;
-		posting.push_back({ column, field, group });
+		posting.push_back({ field, group });
 		inBlock.insert(field);
 	};
 
@@ -1035,22 +1034,18 @@ void ibValueMetaObjectAccountingRegister::FillSourceExplorer(ibSourceDataObject:
 		for (unsigned int idx = 0; idx < GetAccountDimensionCount(); idx++) {
 			const ibValueMetaObjectAttributeBase* kindSlot = GetAccountDimensionKindSlot(creditSide, idx);
 			const ibValueMetaObjectAttributeBase* slot     = GetAccountDimensionSlot(creditSide, idx);
-			if (kindSlot != nullptr) place(kindSlot, kindSlot->GetQueryColumn(), GetSourceGroupOf(kindSlot));
-			if (slot     != nullptr) place(slot,     slot->GetQueryColumn(),     GetSourceGroupOf(slot));
+			if (kindSlot != nullptr) place(kindSlot, GetSourceGroupOf(kindSlot));
+			if (slot     != nullptr) place(slot,     GetSourceGroupOf(slot));
 		}
 		const ibString group = creditSide ? ibT("RegisterFieldCrGroup") : ibT("RegisterFieldDrGroup");
-		const auto placeSide = [&](const ibValueMetaObjectAttributeBase* field) {
-			const ibValueMetaObjectAttributeBase* side = GetFieldSide(creditSide, field);
-			place(side, side != nullptr ? side->GetQueryColumn() : nullptr, group);
-		};
 		for (const auto dimension : GetDimensionArrayObject())
-			placeSide(dimension);
+			place(GetFieldSide(creditSide, dimension), group);
 		for (const auto resource : GetResourceArrayObject())
-			placeSide(resource);
+			place(GetFieldSide(creditSide, resource), group);
 	};
 
 	const ibValueMetaObjectAttributeBase* account = GetRegisterAccount();
-	place(account, account != nullptr ? account->GetQueryColumn() : nullptr, GetSourceGroupOf(account));
+	place(account, GetSourceGroupOf(account));
 	appendSide(/*creditSide*/ false);
 
 	// The credit block exists only where a line names both accounts. One-sided, the row IS a side and
@@ -1058,7 +1053,7 @@ void ibValueMetaObjectAccountingRegister::FillSourceExplorer(ibSourceDataObject:
 	// block anyway would put every one of them in the list twice.
 	if (IsCorrespondence()) {
 		const ibValueMetaObjectAttributeBase* accountCr = GetRegisterAccountCr();
-		place(accountCr, accountCr != nullptr ? accountCr->GetQueryColumn() : nullptr, GetSourceGroupOf(accountCr));
+		place(accountCr, GetSourceGroupOf(accountCr));
 		appendSide(/*creditSide*/ true);
 	}
 
@@ -1071,13 +1066,13 @@ void ibValueMetaObjectAccountingRegister::FillSourceExplorer(ibSourceDataObject:
 			// Part of the posting: laid out with the block, at the debit account's place.
 			if (attribute == account)
 				for (const ibPostingColumn& member : posting)
-					explorer.AppendColumn(member.m_column, /*enabled*/true,
+					explorer.AppendColumn(member.m_field, member.m_field->GetColumnId(), /*enabled*/true,
 						/*visible*/ !IsAccountDimensionKindColumn(member.m_field), member.m_group);
 			continue;
 		}
 
 		// Everything else in its own place.
-		explorer.AppendColumn(attribute->GetQueryColumn(), /*enabled*/true, /*visible*/ true, GetSourceGroupOf(attribute));
+		explorer.AppendColumn(attribute, attribute->GetColumnId(), /*enabled*/true, /*visible*/ true, GetSourceGroupOf(attribute));
 	}
 }
 

@@ -77,7 +77,7 @@ TEST(XmlNodeType, TheFifteenKindsKeepTheirNamesAndNumbers) {
 	// any other member's name, so a single, exact hit is expected; two swapped AddEnumeration lines
 	// would hand back the wrong member number here too.
 	std::vector<ibValue> byName;
-	ASSERT_TRUE(owner.FindValue(ibT("StartElement"), byName));
+	ASSERT_TRUE(owner.FindValue(ibT("StartElement"), ibChoiceCondition(), byName));
 	ASSERT_EQ(1u, byName.size());
 	EXPECT_EQ(static_cast<int>(ibXmlNodeType_StartElement), byName.front().GetInteger());
 }

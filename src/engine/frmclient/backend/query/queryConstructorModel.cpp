@@ -178,7 +178,7 @@ ibPictureDescription PictureOf(const ibDataValue& picture)
 	return ibPictureDescription();
 }
 
-// ONE FIELD AS THE DESKTOP'S FieldOfExplorer MAKES IT — from a row the server wrote as a settings field tree reads it;
+// ONE FIELD AS THE DESKTOP'S FieldOfColumn MAKES IT — from a row the server wrote as a settings field tree reads it;
 // what its type refers to, asked of the references the server described with the same answer.
 ibQueryConstructorField FieldOfRow(const ibQueryConstructorModel& model, ibSettingsPlainField&& row)
 {
@@ -329,7 +329,7 @@ std::vector<ibQuerySourceParameter> ibQueryConstructorModel::GetSourceParameters
 	return out;
 }
 
-// THE CONDITION'S OWN SET (the descriptor's FillConditionExplorer) — request Fields with the slot.
+// THE CONDITION'S OWN SET (the descriptor's GetConditionColumns) — request Fields with the slot.
 std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetConditionFields(const ibQuerySource& source,
 	const ibString& slot) const
 {
