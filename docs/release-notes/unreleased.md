@@ -505,3 +505,7 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **On macOS closing a dialog no longer crashes the program** when the focus is in an empty field with a hint.
 - **On macOS menu icons stand level with their items' text.** On a Retina screen each icon sat half a line above
   its label, and the first one was cut by the menu's edge.
+- **MCP: `config_apply` says what it applied.** Its `changes` counted the structure work, so an apply of data
+  processors, reports, modules or forms, which live in no table, answered `changes: 0` with an empty ledger
+  while it applied them. `changes` and `objects` are now the objects the apply carried, in `database_diff`'s
+  words; the structure work stays in `ledger`, `structureChanges` long.

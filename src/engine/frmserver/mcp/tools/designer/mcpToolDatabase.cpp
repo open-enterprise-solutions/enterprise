@@ -73,6 +73,65 @@ ibString StatusWord(ibMetaDiffStatus status)
 }
 
 
+// ⭐ WHAT DIFFERS BETWEEN THE BASE AND THE CONFIGURATION, in objects — database_diff's list, and the account
+// config_apply gives of what it carried (#311). One rendering for both, so what a caller was shown before an apply
+// and what the apply says it did are the same words. Answers how many differ; at most `limit` of them are
+// rendered into `entries`, the rest only counted - a truncated list must not lie about the total.
+int ListDifferences(const std::vector<ibMetaDiffRecord>& records, bool withProperties, std::int32_t limit,
+	std::vector<ibDataValue>& entries)
+{
+	int differing = 0;
+
+	for (const ibMetaDiffRecord& record : records) {
+
+		// Group rows are the tree's own scaffolding (Catalogs, Documents, …) and say nothing
+		// a caller can act on; an unchanged object says nothing either. Both are skipped so
+		// what remains is the answer rather than the walk.
+		if (record.IsGroup() || record.m_status == ibMetaDiffStatus::Same)
+			continue;
+
+		if (record.IsProperty() && !withProperties)
+			continue;
+
+		// 🛑 CREATED AND DELETED WITHOUT EVER BEING APPLIED IS NOT A DIFFERENCE. An object marked
+		// deleted stays in the tree until the configuration is written, so one that the database
+		// has never heard of shows up here as ADDED — and a caller reading the diff is told to
+		// expect a table for something metadata_get answers "nothing has this id" about. Anything
+		// the database DOES hold still reports, deleted or not: that is a removal, which is the
+		// one thing this list must never hide.
+		if (record.m_status == ibMetaDiffStatus::OnlyInRight) {
+			const ibValueMetaObject* object = record.GetAnyObject();
+			if (object != nullptr && object->IsDeleted())
+				continue;
+		}
+
+		differing++;
+
+		if ((int)entries.size() >= limit)
+			continue;
+
+		std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
+
+		entry->SetValue(ibT("status"), StatusWord(record.m_status));
+
+		if (record.IsProperty()) {
+			entry->SetValue(ibT("property"), record.m_propertyName);
+			entry->SetValue(ibT("inDatabase"), record.m_leftValue);
+			entry->SetValue(ibT("inConfiguration"), record.m_rightValue);
+		}
+		else if (const ibValueMetaObject* object = record.GetAnyObject()) {
+			ibMcpSayObject(object, *entry);
+		}
+
+		entry->AddField(ibT("depth"), ibDataValue::Int((std::int64_t)record.m_depth));
+
+		entries.push_back(ibDataValue::Child(entry));
+	}
+
+	return differing;
+}
+
+
 // The arguments this file's tools take — declared once, and read through the same
 // objects in Call, so the name a caller is told cannot drift from the name looked for.
 const ibArg& ArgConfirm()
@@ -320,7 +379,12 @@ public:
 			"itself is stored first either way, as the designer's button stores it, and survives "
 			"closing the designer - config_rollback takes the database's copy back. Saving first "
 			"costs nothing here - config_save stores the configuration without touching the "
-			"structure, so the ledger this hands back still holds everything the base has not got.");
+			"structure, so the ledger this hands back still holds everything the base has not got.\n"
+			"THE ANSWER: `changes` counts the objects the apply carried - the list database_diff gave just "
+			"before it, in `objects` (`shown` when it is longer than that) - and `ledger` is the structure "
+			"work that needed, `structureChanges` long. They differ by design: a module, a form, a data "
+			"processor or a report lives in no table, so an apply of only those has many changes and an "
+			"empty ledger.");
 	}
 
 	const std::vector<ibMcpArgument>& Arguments() const override
@@ -347,6 +411,17 @@ public:
 		}
 
 		const bool commit = asked->AsBool();
+
+		// ⭐⭐ WHAT THE APPLY CARRIES, IN OBJECTS - taken BEFORE it, because afterwards the base holds it and there is
+		// nothing left to compare (#311). The ledger below is the STRUCTURE the apply touched, and that is not the
+		// same question: seventy-six data processors, seventy-five reports and their attributes need no table, so a
+		// whole apply of them came back as `changes: 0` with an empty ledger while database_diff had listed every one
+		// a moment earlier and was empty a moment later. The caller could not tell whether its work got in.
+		std::vector<ibDataValue> objects;
+		int carried = 0;
+		if (ibMetaDataConfigurationBase* const baseline = config->GetConfiguration())
+			carried = ListDifferences(ibMetaDiffWalker::Walk(baseline->GetCommonMetaObject(), config->GetCommonMetaObject()),
+				/*withProperties*/ false, /*limit*/ 200, objects);
 
 		// WHAT THE LEDGER SAID, captured as the decision is made — afterwards it belongs to the
 		// next apply, and a caller that declined would have nothing to show for it.
@@ -415,7 +490,11 @@ public:
 				sawErrors = true;
 		}
 
-		result.AddField(ibT("changes"), ibDataValue::Int((std::int64_t)ledger.size()));
+		result.AddField(ibT("changes"), ibDataValue::Int((std::int64_t)carried));
+		result.AddField(ibT("objects"), ibDataValue::Array(objects));
+		if ((int)objects.size() < carried)
+			result.AddField(ibT("shown"), ibDataValue::Int((std::int64_t)objects.size()));
+		result.AddField(ibT("structureChanges"), ibDataValue::Int((std::int64_t)ledger.size()));
 		result.AddField(ibT("ledger"), ibDataValue::Array(ledger));
 		result.AddField(ibT("applied"), ibDataValue::Bool(applied));
 
@@ -619,60 +698,12 @@ public:
 		const std::vector<ibMetaDiffRecord> records = ibMetaDiffWalker::Walk(
 			baseline->GetCommonMetaObject(), metaData->GetCommonMetaObject());
 
-		const bool withProperties = ArgProperties().Flag(params);
-
 		std::int32_t limit = (std::int32_t)ArgLimit().Whole(params);
 		if (limit <= 0)
 			limit = 200;
 
 		std::vector<ibDataValue> entries;
-		int differing = 0;
-
-		for (const ibMetaDiffRecord& record : records) {
-
-			// Group rows are the tree's own scaffolding (Catalogs, Documents, …) and say nothing
-			// a caller can act on; an unchanged object says nothing either. Both are skipped so
-			// what remains is the answer rather than the walk.
-			if (record.IsGroup() || record.m_status == ibMetaDiffStatus::Same)
-				continue;
-
-			if (record.IsProperty() && !withProperties)
-				continue;
-
-			// 🛑 CREATED AND DELETED WITHOUT EVER BEING APPLIED IS NOT A DIFFERENCE. An object marked
-			// deleted stays in the tree until the configuration is written, so one that the database
-			// has never heard of shows up here as ADDED — and a caller reading the diff is told to
-			// expect a table for something metadata_get answers "nothing has this id" about. Anything
-			// the database DOES hold still reports, deleted or not: that is a removal, which is the
-			// one thing this list must never hide.
-			if (record.m_status == ibMetaDiffStatus::OnlyInRight) {
-				const ibValueMetaObject* object = record.GetAnyObject();
-				if (object != nullptr && object->IsDeleted())
-					continue;
-			}
-
-			differing++;
-
-			if ((int)entries.size() >= limit)
-				continue;   // still counted — a truncated list must not lie about the total
-
-			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-
-			entry->SetValue(ibT("status"), StatusWord(record.m_status));
-
-			if (record.IsProperty()) {
-				entry->SetValue(ibT("property"), record.m_propertyName);
-				entry->SetValue(ibT("inDatabase"), record.m_leftValue);
-				entry->SetValue(ibT("inConfiguration"), record.m_rightValue);
-			}
-			else if (const ibValueMetaObject* object = record.GetAnyObject()) {
-				ibMcpSayObject(object, *entry);
-			}
-
-			entry->AddField(ibT("depth"), ibDataValue::Int((std::int64_t)record.m_depth));
-
-			entries.push_back(ibDataValue::Child(entry));
-		}
+		const int differing = ListDifferences(records, ArgProperties().Flag(params), limit, entries);
 
 		result.AddField(ibT("differences"), ibDataValue::Int((std::int64_t)differing));
 
