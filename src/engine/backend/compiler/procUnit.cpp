@@ -1004,26 +1004,35 @@ inline void CompareValueNE(ibValue& cValue1, const ibValue& cValue2, const ibVal
 // out-of-line place — see the raise-helper note above.
 IB_NOINLINE void RaiseMemberNotFound(const ibValue& variable, const ibString& name)
 {
-	// A GLOBAL FUNCTION asked of a value is the commonest shape of this failure and the
-	// one a plain "no such member" explains worst. `x.ValueIsFilled()` reads like a method
-	// call, but ValueIsFilled is a function that TAKES the value — no receiver anywhere
-	// has it, so no amount of looking at x helps. Say what has to change instead.
+	// The receiver is deliberately NOT named — asking a value what it is means calling into
+	// it, and a reference answers by reading, which can recurse or raise. See the note beside
+	// the message texts in backend_exception.cpp.
+
+	// Which of the two it is depends on the VALUE, not on the opcode — so the
+	// choice belongs here rather than at each of the call sites.
+	Raise(variable.IsReference() ? ibScriptError_MemberNotFound : ibScriptError_MemberNotAggregate, name);
+}
+
+// A METHOD the value does not have. A GLOBAL FUNCTION asked of a value is the commonest shape of
+// this failure and the one a plain "no such member" explains worst. `x.ValueIsFilled()` reads like
+// a method call, but ValueIsFilled is a function that TAKES the value — no receiver anywhere has
+// it, so no amount of looking at x helps.
+//
+// ⚠ ONLY FOR A CALL (#365). A member READ or WRITE is a property, and a property is named whatever
+// it is named: `Doc.Date` and `Params.Type` were answered "'Date' is a global function - it is not
+// a member of this value" when the receiver simply had no such property, which reads as the
+// compiler taking `.Date` for a call of Date() - and sent people looking at the parser instead of
+// at the value.
+IB_NOINLINE void RaiseMethodNotFound(const ibValue& variable, const ibString& name)
+{
 	const ibValue::ibMemberTable* const globals =
 		ibValue::ibMemberTable::Shared<&ibValueSystemFunction_BindNames>();
 	if (globals != nullptr && globals->FindMethod(name) >= 0) {
 		Raise(ibScriptError_MemberIsGlobalFunction, name);
 	}
 
-	// The receiver is deliberately NOT named — asking a value what it is means calling into
-	// it, and a reference answers by reading, which can recurse or raise. See the note beside
-	// the message texts in backend_exception.cpp.
-
-	// Which of the two it is depends on the VALUE, not on the opcode — so the
-	// choice belongs here rather than at each of the three call sites.
-	Raise(variable.IsReference() ? ibScriptError_MemberNotFound : ibScriptError_MemberNotAggregate, name);
+	RaiseMemberNotFound(variable, name);
 }
-
-#define CheckAndError(variable, name) RaiseMemberNotFound(variable, name)
 
 //Index arrays
 inline bool SetArrayValue(ibValue& cValue1, const ibValue& cValue2, ibValue& cValue3)
@@ -1529,7 +1538,7 @@ start_label:
 				// and its text is read where it lies — no copy, nothing converted on the way to FindProp.
 				const ibString& strPropName = m_pByteCode->m_listConst[index2].m_sData;
 				const long lPropNum = variable1.FindProp(strPropName);
-				if (lPropNum < 0) CheckAndError(variable1, strPropName);
+				if (lPropNum < 0) RaiseMemberNotFound(variable1, strPropName);
 				if (!variable1.IsPropWritable(lPropNum)) Raise(ibScriptError_PropNotWritable, strPropName);
 				variable1.SetPropVal(lPropNum, GetValue(cvariable3));
 				if (array1 == DEF_VAR_TEMP_MOVE)
@@ -1541,7 +1550,7 @@ start_label:
 				ibValue* pRetValue = &variable1;
 				const ibString& strPropName = m_pByteCode->m_listConst[index3].m_sData;
 				const long lPropNum = variable2.FindProp(strPropName);
-				if (lPropNum < 0) CheckAndError(variable2, strPropName);
+				if (lPropNum < 0) RaiseMemberNotFound(variable2, strPropName);
 				if (!variable2.IsPropReadable(lPropNum)) Raise(ibScriptError_PropNotReadable, strPropName);
 				// Scope-local props (ThisObject / ThisForm / RegisterRecords)
 				// are bc-internal: host's own code reaches them through
@@ -1603,7 +1612,7 @@ start_label:
 				long lMethodNum = pVariable2->FindMethod(funcName);
 
 				if (lMethodNum < 0)
-					CheckAndError(variable2, funcName);
+					RaiseMethodNotFound(variable2, funcName);
 
 				// The frame must cover what the METHOD may read, not merely what
 				// the caller passed: implementations index paParams[0..GetNParams)

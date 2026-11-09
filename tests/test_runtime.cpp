@@ -2124,6 +2124,48 @@ TEST(RuntimeTest, NewAsAStatementIsReadOnToo) {
 	EXPECT_TRUE(TryExecute(pu, cc.m_cByteCode));
 }
 
+TEST(RuntimeTest, AMissingPropertyNamedLikeAGlobalFunctionIsAMissingProperty) {
+	// `P.Type` on a value with no Type was answered "'Type' is a global function - it is not a member of this
+	// value" (#365): it read as the compiler taking `.Type` for a call of Type(). After a dot a READ or a WRITE is
+	// a property, whatever it is named; the global-function sentence is for a CALL, `x.ValueIsFilled()`.
+	const auto raised = [](const wxChar* src) {
+		ibCompileCode cc(wxT("test"), wxT("memory"), false);
+		ibString error;
+		EXPECT_TRUE(TryCompileNamed(cc, src, error)) << error.ToStdString();
+		ibProcUnit pu;
+		try {
+			pu.Execute(cc.m_cByteCode);
+		}
+		catch (const ibBackendException& err) {
+			return err.GetErrorDescription();
+		}
+		return ibString();
+	};
+
+	// A property that is there is read, however it is named.
+	{
+		ibCompileCode cc(wxT("test"), wxT("memory"), false);
+		ASSERT_TRUE(TryCompile(cc, wxT("var t public; var p; p = New Structure(\"Type, Date\", 1, 2); t = p.Type * 10 + p.Date;\n")));
+		ibProcUnit pu;
+		ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+		ibValue val;
+		ASSERT_TRUE(pu.GetPropVal(wxT("t"), val));
+		EXPECT_EQ(val.GetInteger(), 12);
+	}
+
+	const ibString read = raised(wxT("var t; var p; p = New Structure(\"A\", 1); t = p.Type;\n"));
+	EXPECT_TRUE(read.Contains(wxT("'Type'"))) << read.ToStdString();
+	EXPECT_FALSE(read.Contains(wxT("global function"))) << read.ToStdString();
+
+	const ibString written = raised(wxT("var p; p = New Structure(\"A\", 1); p.Date = 2;\n"));
+	EXPECT_TRUE(written.Contains(wxT("'Date'"))) << written.ToStdString();
+	EXPECT_FALSE(written.Contains(wxT("global function"))) << written.ToStdString();
+
+	// A call still says what a global function is.
+	const ibString called = raised(wxT("var t; var p; p = New Structure(\"A\", 1); t = p.ValueIsFilled();\n"));
+	EXPECT_TRUE(called.Contains(wxT("global function"))) << called.ToStdString();
+}
+
 TEST(RuntimeTest, AFunctionWinsOverAVariableOfItsName) {
 	// Names are read whatever their case, so `before = Before();` had the variable hide the module's function and
 	// the run failed with "value is not a callable function" (#646). The function wins, as a system one already did,
