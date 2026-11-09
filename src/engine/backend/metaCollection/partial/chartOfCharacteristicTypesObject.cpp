@@ -87,7 +87,8 @@ enum Func {
 	enGetTemplate,
 	enGetMetadata,
 	enLock,
-	enUnlock
+	enUnlock,
+	enCheckFilling
 };
 
 //****************************************************************************
@@ -115,6 +116,7 @@ void ibValueRecordDataObjectChartOfCharacteristicTypes::FillMethods(ibMemberTabl
 	helper.AppendFunc(ibT("GetMetadata"), ibT("GetMetadata()"));
 	helper.AppendProc(ibT("Lock"),   ibT("Lock()"));
 	helper.AppendProc(ibT("Unlock"), ibT("Unlock()"));
+	helper.AppendFunc(ibT("CheckFilling"), ibT("CheckFilling()"));   // appended: the order is load-bearing
 }
 
 bool ibValueRecordDataObjectChartOfCharacteristicTypes::SetPropVal(const long lPropNum, const ibValue& varPropVal)
@@ -177,6 +179,9 @@ bool ibValueRecordDataObjectChartOfCharacteristicTypes::CallAsFunc(const long lM
 {
 	switch (lMethodNum)
 	{
+	case Func::enCheckFilling:
+		pvarRetValue = CheckFilling();
+		return true;
 	case enIsNew:
 		pvarRetValue = m_newObject;
 		return true;
