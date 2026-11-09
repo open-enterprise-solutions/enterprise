@@ -13,9 +13,12 @@ void ibAppDesigner::OnMouseEvent(wxMouseEvent& event)
 {
 	// A CLICK IN A FORM'S EDITOR SELECTS WHAT IT IS ON — the desktop designer's: a control's window takes the click
 	// itself, so the host it is drawn in is told from here (the runtime's host does nothing with it).
+	// ⚠ NOT A CLICK IN A WINDOW OF ITS OWN — a menu, a dialog — that the editor is the parent of: the menu shown over the
+	// form is the host's child, and a click on its item selected the form before the item ran ("Add page" made a page
+	// on the form, and the client fell on a page with no notebook).
 	if (event.LeftIsDown() || event.RightIsDown()) {
 		wxWindow* currentWindow = dynamic_cast<wxWindow*>(event.GetEventObject()); wxWindow* windowFocus = currentWindow;
-		while (windowFocus && dynamic_cast<ibVisualHostClient*>(windowFocus) == nullptr) {
+		while (windowFocus && !windowFocus->IsTopLevel() && dynamic_cast<ibVisualHostClient*>(windowFocus) == nullptr) {
 			windowFocus = windowFocus->GetParent();
 		}
 		if (windowFocus) {
