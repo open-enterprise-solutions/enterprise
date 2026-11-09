@@ -142,7 +142,7 @@ wxSize ibAnyButton::DoGetBestClientSize() const
 void ibAnyButton::DoDraw(ibControlRenderer *renderer)
 {
     // SEAM vs univ: the canon drew DrawButtonBorder here ON TOP of the
-    // STATIC window border from the NC pass — two flat 1px frames side by
+    // STATIC window border (ibWindow::TryBefore) — two flat 1px frames side by
     // side read as one fat border. The window border is the only frame now
     // (the theme highlights it for the default/focused button itself).
     renderer->DrawButtonLabel(m_bitmap, m_marginBmpX, m_marginBmpY);

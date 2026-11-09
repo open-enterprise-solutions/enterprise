@@ -80,8 +80,15 @@ void ibStaticText::DoDraw(ibControlRenderer *renderer)
         return;
     }
 
-    // a link: the same label, underlined in the theme's link colour
+    // a link: the same label, underlined in the theme's link colour - where Tab stands, on the accent's pale pad, as a
+    // link button's (ibButton::DoDraw): no frame of its own shows the focus
     wxDC& dc = renderer->GetDC();
+    if ( GetStateFlags() & wxCONTROL_FOCUSED )
+    {
+        dc.SetPen(*wxTRANSPARENT_PEN);
+        dc.SetBrush(wxBrush(wxTHEME_COLOUR(HIGHLIGHT).ChangeLightness(170)));
+        dc.DrawRectangle(renderer->GetRect());
+    }
     dc.SetBackgroundMode(wxBRUSHSTYLE_TRANSPARENT);
     dc.SetFont(GetFont().Underlined());
     dc.SetTextForeground(wxTHEME_COLOUR(HYPERLINK));

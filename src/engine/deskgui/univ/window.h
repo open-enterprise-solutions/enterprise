@@ -171,10 +171,6 @@ public:
     // this function
     void RefreshScrollbars();
 
-    // repaint the window border (e.g. on focus change — the border colour
-    // follows the state flags)
-    void RefreshBorder();
-
     // erase part of the control
     virtual void EraseBackground(wxDC& dc, const wxRect& rect);
 
@@ -221,6 +217,10 @@ protected:
     // scrollbars inside it. The whole window, unless a control puts something beside its frame (ibControl's title).
     virtual wxRect GetBorderRect() const { return wxRect(GetSize()); }
 
+    // SEAM vs univ: the non-client part - the border, the corner between the scrollbars - painted in the window's
+    // paint, before the window's own handler paints the client area; drawn anew as the window gains or loses the focus
+    virtual bool TryBefore(wxEvent& event) override;
+
     // we deal with the scrollbars in these functions
     virtual void DoSetClientSize(int width, int height) override;
     virtual void DoGetClientSize(int *width, int *height) const override;
@@ -228,7 +228,6 @@ protected:
 
     // event handlers
     void OnSize(wxSizeEvent& event);
-    void OnNcPaint(wxNcPaintEvent& event);
     void OnPaint(wxPaintEvent& event);
     void OnErase(wxEraseEvent& event);
     void OnMouseCaptureLost(wxMouseCaptureLostEvent& event);

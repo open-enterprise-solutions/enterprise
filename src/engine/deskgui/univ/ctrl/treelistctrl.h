@@ -551,6 +551,10 @@ public:
 	virtual wxSize DoGetBestSize() const;
 
 protected:
+	// the frame round the header and the tree, as ibListCtrl's - with no border asked, one all the same: the focus
+	// inside shows on it (ibWindow::IsFocused)
+	virtual wxBorder GetDefaultBorder() const override { return wxBORDER_THEME; }
+
 	// header window, responsible for column visualization and manipulation
 	ibTreeListHeaderWindow* GetHeaderWindow() const
 	{

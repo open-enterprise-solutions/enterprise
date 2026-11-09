@@ -1,7 +1,7 @@
 #include "fontcolorsettings.h"
 #include "settingsxml.h"
 
-#include <wx/stc/stc.h>
+#include "deskgui/univ/stc/stc.h"
 #include "core/localization/dictionary.h"   // _() — the dialog's words
 
 // Every kind on the one paper colour; what tells them apart is the ink.
@@ -54,29 +54,29 @@ wxFont ibFontColorSettings::GetFont(DisplayItem displayItem) const
 	return font;
 }
 
-void ibFontColorSettings::Apply(wxStyledTextCtrl& text) const
+void ibFontColorSettings::Apply(ibStyledTextCtrl& text) const
 {
 	// The default style first: StyleClearAll copies it into every style, so those not set below — annotations,
 	// indent guides, call tips — get the chosen font too, and zoom grows them all from one size.
 	const Colors& plain = m_colors[DisplayItem_Default];
-	text.StyleSetFont(wxSTC_STYLE_DEFAULT, m_font);
-	text.StyleSetForeground(wxSTC_STYLE_DEFAULT, plain.foreColor);
-	text.StyleSetBackground(wxSTC_STYLE_DEFAULT, plain.backColor);
+	text.StyleSetFont(ibSTC_STYLE_DEFAULT, m_font);
+	text.StyleSetForeground(ibSTC_STYLE_DEFAULT, plain.foreColor);
+	text.StyleSetBackground(ibSTC_STYLE_DEFAULT, plain.backColor);
 	text.StyleClearAll();
 
 	static const struct { int style; DisplayItem kind; } s_lexerStyles[] = {
-		{ wxSTC_C_DEFAULT, DisplayItem_Default },
-		{ wxSTC_C_IDENTIFIER, DisplayItem_Default },
-		{ wxSTC_C_COMMENT, DisplayItem_Comment },
-		{ wxSTC_C_COMMENTLINE, DisplayItem_Comment },
-		{ wxSTC_C_COMMENTDOC, DisplayItem_Comment },
-		{ wxSTC_C_PREPROCESSOR, DisplayItem_Preprocessor },
-		{ wxSTC_C_WORD, DisplayItem_Keyword },
-		{ wxSTC_C_OPERATOR, DisplayItem_Operator },
-		{ wxSTC_C_STRING, DisplayItem_String },
-		{ wxSTC_C_STRINGEOL, DisplayItem_String },
-		{ wxSTC_C_CHARACTER, DisplayItem_String },
-		{ wxSTC_C_NUMBER, DisplayItem_Number },
+		{ ibSTC_C_DEFAULT, DisplayItem_Default },
+		{ ibSTC_C_IDENTIFIER, DisplayItem_Default },
+		{ ibSTC_C_COMMENT, DisplayItem_Comment },
+		{ ibSTC_C_COMMENTLINE, DisplayItem_Comment },
+		{ ibSTC_C_COMMENTDOC, DisplayItem_Comment },
+		{ ibSTC_C_PREPROCESSOR, DisplayItem_Preprocessor },
+		{ ibSTC_C_WORD, DisplayItem_Keyword },
+		{ ibSTC_C_OPERATOR, DisplayItem_Operator },
+		{ ibSTC_C_STRING, DisplayItem_String },
+		{ ibSTC_C_STRINGEOL, DisplayItem_String },
+		{ ibSTC_C_CHARACTER, DisplayItem_String },
+		{ ibSTC_C_NUMBER, DisplayItem_Number },
 	};
 	for (const auto& [style, kind] : s_lexerStyles) {
 		text.StyleSetFont(style, GetFont(kind));
@@ -90,7 +90,7 @@ void ibFontColorSettings::Apply(wxStyledTextCtrl& text) const
 
 	// The whole font, not its size alone: with the size only, the margin kept the default face until some later
 	// style change pulled the font through.
-	text.StyleSetFont(wxSTC_STYLE_LINENUMBER, GetFont(DisplayItem_Number));
+	text.StyleSetFont(ibSTC_STYLE_LINENUMBER, GetFont(DisplayItem_Number));
 
 	// The caret is the paper's opposite, so it shows on any paper.
 	const wxColour& paper = plain.backColor;

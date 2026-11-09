@@ -17,7 +17,7 @@
 #define DEF_BREAKPOINT_ID 1
 #define DEF_FOLDING_ID 2
 
-wxIMPLEMENT_CLASS(ibCodeEditor, wxStyledTextCtrl);
+wxIMPLEMENT_CLASS(ibCodeEditor, ibStyledTextCtrl);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -38,31 +38,31 @@ wxString ibCodeEditor::MakeProcedureTemplate(const wxString& name, const wxStrin
 // ⚠ THE SYNTAX IS THE TAB'S, and it comes with the tab's view (SetCodeStyle): until then — and for a text with no tab — the
 // stream reads the default a session's compile state starts with (ibCompileState: CES).
 ibCodeEditor::ibCodeEditor()
-	: wxStyledTextCtrl(), m_ac(this), m_ct(this), m_tc(CODE_CES)
+	: ibStyledTextCtrl(), m_ac(this), m_ct(this), m_tc(CODE_CES)
 {
 }
 
 ibCodeEditor::ibCodeEditor(ibTabDocument* document, wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size, long style, const wxString& name)
-	: wxStyledTextCtrl(parent, id, pos, size, style, name),
+	: ibStyledTextCtrl(parent, id, pos, size, style, name),
 	  m_document(document), m_ac(this), m_ct(this), m_tc(CODE_CES)
 {
 	// initialize styles
 	StyleClearAll();
 
 	//set Lexer to LEX_CONTAINER: This will trigger the styleneeded event so you can do your own highlighting
-	SetLexer(wxSTC_LEX_CONTAINER);
+	SetLexer(ibSTC_LEX_CONTAINER);
 
 	//Set margin cursor
 	for (int margin = 0; margin < GetMarginCount(); margin++)
-		SetMarginCursor(margin, wxSTC_CURSORARROW);
+		SetMarginCursor(margin, ibSTC_CURSORARROW);
 
 	//register event
-	Connect(wxEVT_STC_MARGINCLICK, wxStyledTextEventHandler(ibCodeEditor::OnMarginClick), nullptr, this);
-	Connect(wxEVT_STC_STYLENEEDED, wxStyledTextEventHandler(ibCodeEditor::OnStyleNeeded), nullptr, this);
-	Connect(wxEVT_STC_MODIFIED, wxStyledTextEventHandler(ibCodeEditor::OnTextChange), nullptr, this);
+	Connect(ibEVT_STC_MARGINCLICK, ibStyledTextEventHandler(ibCodeEditor::OnMarginClick), nullptr, this);
+	Connect(ibEVT_STC_STYLENEEDED, ibStyledTextEventHandler(ibCodeEditor::OnStyleNeeded), nullptr, this);
+	Connect(ibEVT_STC_MODIFIED, ibStyledTextEventHandler(ibCodeEditor::OnTextChange), nullptr, this);
 
 	Connect(wxEVT_KEY_DOWN, wxKeyEventHandler(ibCodeEditor::OnKeyDown), nullptr, this);
-	Connect(wxEVT_STC_CHARADDED, wxStyledTextEventHandler(ibCodeEditor::OnCharAdded), nullptr, this);
+	Connect(ibEVT_STC_CHARADDED, ibStyledTextEventHandler(ibCodeEditor::OnCharAdded), nullptr, this);
 	Connect(wxEVT_MOTION, wxMouseEventHandler(ibCodeEditor::OnMouseMove), nullptr, this);
 
 	// On zoom step the line height jumps immediately while STC's per-page
@@ -71,9 +71,9 @@ ibCodeEditor::ibCodeEditor(ibTabDocument* document, wxWindow* parent, wxWindowID
 	// zoomed text metrics and force a single repaint — keeps vertical
 	// and horizontal scaling visually in sync without re-running the
 	// lexer over the whole document on every wheel tick.
-	Bind(wxEVT_STC_ZOOM, [this](wxStyledTextEvent& evt) {
+	Bind(ibEVT_STC_ZOOM, [this](ibStyledTextEvent& evt) {
 		if (GetMarginWidth(DEF_LINENUMBER_ID) > 0)
-			SetMarginWidth(DEF_LINENUMBER_ID, TextWidth(wxSTC_STYLE_LINENUMBER, "_9999999"));
+			SetMarginWidth(DEF_LINENUMBER_ID, TextWidth(ibSTC_STYLE_LINENUMBER, "_9999999"));
 
 		const int symbolMargin = std::max(FromDIP(16), TextHeight(0));
 		if (GetMarginWidth(DEF_BREAKPOINT_ID) > 0)
@@ -87,12 +87,12 @@ ibCodeEditor::ibCodeEditor(ibTabDocument* document, wxWindow* parent, wxWindowID
 	});
 
 	//set edge mode
-	SetEdgeMode(wxSTC_EDGE_MULTILINE);
+	SetEdgeMode(ibSTC_EDGE_MULTILINE);
 
 	// set visibility
-	SetVisiblePolicy(wxSTC_VISIBLE_STRICT | wxSTC_VISIBLE_SLOP, 1);
-	SetXCaretPolicy(wxSTC_CARET_EVEN | wxSTC_VISIBLE_STRICT | wxSTC_CARET_SLOP, 1);
-	SetYCaretPolicy(wxSTC_CARET_EVEN | wxSTC_VISIBLE_STRICT | wxSTC_CARET_SLOP, 1);
+	SetVisiblePolicy(ibSTC_VISIBLE_STRICT | ibSTC_VISIBLE_SLOP, 1);
+	SetXCaretPolicy(ibSTC_CARET_EVEN | ibSTC_VISIBLE_STRICT | ibSTC_CARET_SLOP, 1);
+	SetYCaretPolicy(ibSTC_CARET_EVEN | ibSTC_VISIBLE_STRICT | ibSTC_CARET_SLOP, 1);
 
 	// Set the marker bitmaps.
 	MarkerDefineBitmap(Breakpoint, wxMEMORY_BITMAP(Breakpoint_png));
@@ -108,38 +108,38 @@ ibCodeEditor::ibCodeEditor(ibTabDocument* document, wxWindow* parent, wxWindowID
 	MarkerDefineBitmap(ConditionalBreakpoint, wxBitmap(conditionalBreakpoint));
 
 	//markers
-	MarkerDefine(wxSTC_MARKNUM_FOLDER, wxSTC_MARK_BOXPLUS, *wxWHITE, *wxBLACK);
-	MarkerDefine(wxSTC_MARKNUM_FOLDEROPEN, wxSTC_MARK_BOXMINUS, *wxWHITE, *wxBLACK);
-	MarkerDefine(wxSTC_MARKNUM_FOLDERSUB, wxSTC_MARK_VLINE, *wxWHITE, *wxBLACK);
-	MarkerDefine(wxSTC_MARKNUM_FOLDEREND, wxSTC_MARK_BOXPLUSCONNECTED, *wxWHITE, *wxBLACK);
-	MarkerDefine(wxSTC_MARKNUM_FOLDEROPENMID, wxSTC_MARK_BOXMINUSCONNECTED, *wxWHITE, *wxBLACK);
-	MarkerDefine(wxSTC_MARKNUM_FOLDERMIDTAIL, wxSTC_MARK_TCORNER, *wxWHITE, *wxBLACK);
-	MarkerDefine(wxSTC_MARKNUM_FOLDERTAIL, wxSTC_MARK_LCORNER, *wxWHITE, *wxBLACK);
+	MarkerDefine(ibSTC_MARKNUM_FOLDER, ibSTC_MARK_BOXPLUS, *wxWHITE, *wxBLACK);
+	MarkerDefine(ibSTC_MARKNUM_FOLDEROPEN, ibSTC_MARK_BOXMINUS, *wxWHITE, *wxBLACK);
+	MarkerDefine(ibSTC_MARKNUM_FOLDERSUB, ibSTC_MARK_VLINE, *wxWHITE, *wxBLACK);
+	MarkerDefine(ibSTC_MARKNUM_FOLDEREND, ibSTC_MARK_BOXPLUSCONNECTED, *wxWHITE, *wxBLACK);
+	MarkerDefine(ibSTC_MARKNUM_FOLDEROPENMID, ibSTC_MARK_BOXMINUSCONNECTED, *wxWHITE, *wxBLACK);
+	MarkerDefine(ibSTC_MARKNUM_FOLDERMIDTAIL, ibSTC_MARK_TCORNER, *wxWHITE, *wxBLACK);
+	MarkerDefine(ibSTC_MARKNUM_FOLDERTAIL, ibSTC_MARK_LCORNER, *wxWHITE, *wxBLACK);
 
 	// annotations
-	AnnotationSetVisible(wxSTC_ANNOTATION_BOXED);
+	AnnotationSetVisible(ibSTC_ANNOTATION_BOXED);
 
 	// Set fold flags
-	SetFoldFlags(wxSTC_FOLDFLAG_LINEBEFORE_CONTRACTED | wxSTC_FOLDFLAG_LINEAFTER_CONTRACTED);
+	SetFoldFlags(ibSTC_FOLDFLAG_LINEBEFORE_CONTRACTED | ibSTC_FOLDFLAG_LINEAFTER_CONTRACTED);
 
 	// Brace highlight: foreground only, no bold or background, so the
 	// surrounding font metrics stay stable while the caret moves over
-	// braces. Triggered from wxEVT_STC_UPDATEUI via our manual matcher
-	// (wxSTC's BraceMatch needs the lexer to style brace characters
+	// braces. Triggered from ibEVT_STC_UPDATEUI via our manual matcher
+	// (ibSTC's BraceMatch needs the lexer to style brace characters
 	// and our custom styler doesn't, so it returns -1).
-	StyleSetForeground(wxSTC_STYLE_BRACELIGHT, *wxRED);
-	StyleSetForeground(wxSTC_STYLE_BRACEBAD, *wxRED);
+	StyleSetForeground(ibSTC_STYLE_BRACELIGHT, *wxRED);
+	StyleSetForeground(ibSTC_STYLE_BRACEBAD, *wxRED);
 
-	Bind(wxEVT_STC_UPDATEUI, &ibCodeEditor::OnUpdateUI, this);
+	Bind(ibEVT_STC_UPDATEUI, &ibCodeEditor::OnUpdateUI, this);
 
-	// Custom context menu — replaces wxSTC's built-in popup with one
+	// Custom context menu — replaces ibSTC's built-in popup with one
 	// that adds the Syntax Helper Look-Up item alongside the standard
 	// edit actions. The Look-Up item posts wxID_FRONTEND_SYNTAX_HELPER_LOOKUP
 	// upward through the parent chain so the host frame
 	// (mainFrameDesigner's OpenHelpForCursor binding) handles it without
 	// the editor depending on the downstream designer header. See
 	// subphase 1.3 — codeEditor knows nothing about the help corpus.
-	UsePopUp(wxSTC_POPUP_NEVER);
+	UsePopUp(ibSTC_POPUP_NEVER);
 	Bind(wxEVT_CONTEXT_MENU, &ibCodeEditor::OnContextMenu, this);
 	Bind(wxEVT_MENU, [this](wxCommandEvent&) { Cut();        }, wxID_CUT);
 	Bind(wxEVT_MENU, [this](wxCommandEvent&) { Copy();       }, wxID_COPY);
@@ -147,7 +147,7 @@ ibCodeEditor::ibCodeEditor(ibTabDocument* document, wxWindow* parent, wxWindowID
 	Bind(wxEVT_MENU, [this](wxCommandEvent&) { SelectAll();  }, wxID_SELECTALL);
 	Bind(wxEVT_MENU, [this](wxCommandEvent& ev) {
 		// Walk parent chain firing wxEVT_MENU at every wxWindow until
-		// one handles. wxStyledTextCtrl's PopupMenu does not always
+		// one handles. ibStyledTextCtrl's PopupMenu does not always
 		// propagate through wxAUI / wxAuiDocMDIFrame parents to the
 		// outermost host where the host Bind() lives.
 		wxCommandEvent up(wxEVT_MENU, wxID_FRONTEND_SYNTAX_HELPER_LOOKUP);
@@ -168,7 +168,7 @@ ibCodeEditor::ibCodeEditor(ibTabDocument* document, wxWindow* parent, wxWindowID
 	//SetCaretLineVisible(true);
 
 	// miscellaneous
-	SetLayoutCache(wxSTC_CACHE_PAGE);
+	SetLayoutCache(ibSTC_CACHE_PAGE);
 
 	//Turn the fold markers red when the caret is a line in the group (optional)
 	MarkerEnableHighlight(true);
@@ -205,11 +205,11 @@ bool ibCodeEditor::TryBefore(wxEvent& event)
 	if (type == wxEVT_PAINT ||
 		type == wxEVT_NC_PAINT ||
 		type == wxEVT_ERASE_BACKGROUND) {
-		return wxStyledTextCtrl::TryBefore(event);
+		return ibStyledTextCtrl::TryBefore(event);
 	}
 	if (m_ct.Active()) {
 		if (type == wxEVT_KEY_DOWN) {
-			m_ct.CallEvent(event); return wxStyledTextCtrl::TryBefore(event);
+			m_ct.CallEvent(event); return ibStyledTextCtrl::TryBefore(event);
 		}
 	}
 
@@ -217,7 +217,7 @@ bool ibCodeEditor::TryBefore(wxEvent& event)
 		return true;
 	if (m_ct.CallEvent(event))
 		return true;
-	else return wxStyledTextCtrl::TryBefore(event);
+	else return ibStyledTextCtrl::TryBefore(event);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -279,32 +279,32 @@ void ibCodeEditor::SetEditorSettings(const ibEditorSettings& settings)
 	m_indentationSize = settings.GetIndentSize();
 	settings.Apply(*this);
 
-	SetMarginType(DEF_LINENUMBER_ID, wxSTC_MARGIN_NUMBER);
+	SetMarginType(DEF_LINENUMBER_ID, ibSTC_MARGIN_NUMBER);
 	SetMarginWidth(DEF_LINENUMBER_ID, 0);
 
 	if (settings.GetShowLineNumbers()) {
 		// Figure out how wide the margin needs to be do display
 		// the most m_number of linqes we'd reasonbly have.
-		SetMarginWidth(DEF_LINENUMBER_ID, TextWidth(wxSTC_STYLE_LINENUMBER, "_9999999"));
+		SetMarginWidth(DEF_LINENUMBER_ID, TextWidth(ibSTC_STYLE_LINENUMBER, "_9999999"));
 	}
 
 	// Symbol margins (breakpoint + fold) sized off the current line
 	// height so they scale together with the editor zoom — using a
 	// fixed FromDIP(16) baseline left the gutter too narrow when the
 	// font was zoomed in, with icons floating in a tiny strip next to
-	// large text. The wxEVT_STC_ZOOM handler refreshes the same widths
+	// large text. The ibEVT_STC_ZOOM handler refreshes the same widths
 	// on every wheel tick.
 	const int symbolMargin = std::max(FromDIP(16), TextHeight(0));
 
-	SetMarginType(DEF_BREAKPOINT_ID, wxSTC_MARGIN_SYMBOL);
-	SetMarginMask(DEF_BREAKPOINT_ID, ~(1024 | 256 | 512 | 128 | 64 | wxSTC_MASK_FOLDERS));
+	SetMarginType(DEF_BREAKPOINT_ID, ibSTC_MARGIN_SYMBOL);
+	SetMarginMask(DEF_BREAKPOINT_ID, ~(1024 | 256 | 512 | 128 | 64 | ibSTC_MASK_FOLDERS));
 
 	SetMarginWidth(DEF_BREAKPOINT_ID, symbolMargin);
 	SetMarginSensitive(DEF_BREAKPOINT_ID, true);
 
 	// folding
-	SetMarginType(DEF_FOLDING_ID, wxSTC_MARGIN_SYMBOL);
-	SetMarginMask(DEF_FOLDING_ID, wxSTC_MASK_FOLDERS);
+	SetMarginType(DEF_FOLDING_ID, ibSTC_MARGIN_SYMBOL);
+	SetMarginMask(DEF_FOLDING_ID, ibSTC_MASK_FOLDERS);
 
 	SetMarginWidth(DEF_FOLDING_ID, symbolMargin);
 	SetMarginSensitive(DEF_FOLDING_ID, true);
@@ -312,7 +312,7 @@ void ibCodeEditor::SetEditorSettings(const ibEditorSettings& settings)
 	// Three-step gradient across the gutter — leftmost (line numbers)
 	// darkest, breakpoint medium, fold margin lightest — so the gutter
 	// reads as a layered band that fades into the text area on the right.
-	// LINENUMBER margin bg comes from wxSTC_STYLE_LINENUMBER style (set
+	// LINENUMBER margin bg comes from ibSTC_STYLE_LINENUMBER style (set
 	// in SetFontColorSettings); the symbol margins get explicit colors.
 	SetMarginBackground(DEF_BREAKPOINT_ID, wxColour(0xF0, 0xF0, 0xF0));
 	SetMarginBackground(DEF_FOLDING_ID,    wxColour(0xF6, 0xF6, 0xF6));
@@ -330,12 +330,12 @@ void ibCodeEditor::SetFontColorSettings(const ibFontColorSettings& settings)
 	// (line-number margin is leftmost; breakpoint + fold margins step
 	// progressively lighter, see the SetMarginBackground calls in
 	// SetEditorSettings).
-	StyleSetForeground(wxSTC_STYLE_LINENUMBER, wxColour(0xA0, 0xA0, 0xA0));
-	StyleSetBackground(wxSTC_STYLE_LINENUMBER, wxColour(0xE8, 0xE8, 0xE8));
+	StyleSetForeground(ibSTC_STYLE_LINENUMBER, wxColour(0xA0, 0xA0, 0xA0));
+	StyleSetBackground(ibSTC_STYLE_LINENUMBER, wxColour(0xE8, 0xE8, 0xE8));
 
 	// Matching braces red; their font is the chosen one already, StyleClearAll copied it in.
-	StyleSetForeground(wxSTC_STYLE_BRACELIGHT, *wxRED);
-	StyleSetForeground(wxSTC_STYLE_BRACEBAD, *wxRED);
+	StyleSetForeground(ibSTC_STYLE_BRACELIGHT, *wxRED);
+	StyleSetForeground(ibSTC_STYLE_BRACEBAD, *wxRED);
 }
 
 bool ibCodeEditor::LoadModule()
@@ -499,10 +499,10 @@ void ibCodeEditor::FindText(const wxString& findString, int wxflags)
 {
 	int sciflags = 0;
 	if ((wxflags & wxFR_WHOLEWORD) != 0) {
-		sciflags |= wxSTC_FIND_WHOLEWORD;
+		sciflags |= ibSTC_FIND_WHOLEWORD;
 	}
 	if ((wxflags & wxFR_MATCHCASE) != 0) {
-		sciflags |= wxSTC_FIND_MATCHCASE;
+		sciflags |= ibSTC_FIND_MATCHCASE;
 	}
 	int result = 0;
 	if ((wxflags & wxFR_DOWN) != 0) {
@@ -515,7 +515,7 @@ void ibCodeEditor::FindText(const wxString& findString, int wxflags)
 		ibCodeEditor::SearchAnchor();
 		result = ibCodeEditor::SearchPrev(sciflags, findString);
 	}
-	if (wxSTC_INVALID_POSITION == result) {
+	if (ibSTC_INVALID_POSITION == result) {
 		ibMessageBox(ibString::Format(_("\"%s\" not found!"), findString.c_str()),
 			_("Not Found!"), wxICON_ERROR, (wxWindow*)this);
 	}
@@ -578,7 +578,7 @@ void ibCodeEditor::HighlightSyntaxAndCalculateFoldLevel(const int fromPos, const
 
 	//remove old styling
 	ibCodeEditor::StartStyling(fromPos); //from here
-	ibCodeEditor::SetStyling(toPos - fromPos, wxSTC_C_COMMENT); //with that length and style -> cleared
+	ibCodeEditor::SetStyling(toPos - fromPos, ibSTC_C_COMMENT); //with that length and style -> cleared
 
 	ibString word;
 	unsigned int currPos = fromPos;
@@ -597,36 +597,36 @@ void ibCodeEditor::HighlightSyntaxAndCalculateFoldLevel(const int fromPos, const
 			// (`q.Execute().Select()` — `Select` is the method): style it as a plain identifier.
 			if (keyWord != wxNOT_FOUND && !prevWasDot) {
 				if (word.Left(1) == '#') {
-					appendStyle(wxSTC_C_PREPROCESSOR);
+					appendStyle(ibSTC_C_PREPROCESSOR);
 				}
 				else {
-					appendStyle(wxSTC_C_STRING);
+					appendStyle(ibSTC_C_STRING);
 				}
 			}
 			else {
-				appendStyle(wxSTC_C_WORD);
+				appendStyle(ibSTC_C_WORD);
 			}
 			prevWasDot = false;
 		}
 		else if (m_tc.IsNumber() || m_tc.IsString() || m_tc.IsDate()) {
 			if (m_tc.IsNumber()) {
 				(void)m_tc.GetNumber();
-				appendStyle(wxSTC_C_NUMBER);
+				appendStyle(ibSTC_C_NUMBER);
 			}
 			else if (m_tc.IsString()) {
 				(void)m_tc.GetString();
-				appendStyle(wxSTC_C_OPERATOR);
+				appendStyle(ibSTC_C_OPERATOR);
 			}
 			else if (m_tc.IsDate()) {
 				(void)m_tc.GetDate();
-				appendStyle(wxSTC_C_OPERATOR);
+				appendStyle(ibSTC_C_OPERATOR);
 			}
 			prevWasDot = false;
 		}
 		else {
 			ibChar b = 0;
 			(void)m_tc.GetByte(b);
-			appendStyle(wxSTC_C_IDENTIFIER);
+			appendStyle(ibSTC_C_IDENTIFIER);
 			// keep "after dot" across intervening whitespace, so `obj . Select` is handled too
 			if (b == '.')                                             prevWasDot = true;
 			else if (b != ' ' && b != '\t' && b != '\r' && b != '\n') prevWasDot = false;
@@ -640,7 +640,7 @@ void ibCodeEditor::HighlightSyntaxAndCalculateFoldLevel(const int fromPos, const
 //                                                          EVENT                                                                         //
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void ibCodeEditor::OnStyleNeeded(wxStyledTextEvent& event)
+void ibCodeEditor::OnStyleNeeded(ibStyledTextEvent& event)
 {
 	/*this is called every time the styler detects a line that needs style, so we style that range.
 	This will save a lot of performance since we only style text when needed instead of parsing the whole file every time.*/
@@ -685,7 +685,7 @@ void ibCodeEditor::OnStyleNeeded(wxStyledTextEvent& event)
 	event.Skip();
 }
 
-void ibCodeEditor::OnMarginClick(wxStyledTextEvent& event)
+void ibCodeEditor::OnMarginClick(ibStyledTextEvent& event)
 {
 	const int line_from_pos = LineFromPosition(event.GetPosition());
 
@@ -703,12 +703,12 @@ void ibCodeEditor::OnMarginClick(wxStyledTextEvent& event)
 	event.Skip();
 }
 
-void ibCodeEditor::OnTextChange(wxStyledTextEvent& event)
+void ibCodeEditor::OnTextChange(ibStyledTextEvent& event)
 {
 	const int modFlags = event.GetModificationType();
 
-	if ((modFlags & (wxSTC_MOD_INSERTTEXT)) == 0 &&
-		(modFlags & (wxSTC_MOD_DELETETEXT)) == 0)
+	if ((modFlags & (ibSTC_MOD_INSERTTEXT)) == 0 &&
+		(modFlags & (ibSTC_MOD_DELETETEXT)) == 0)
 		return;
 
 	if (!m_initialized)
@@ -750,9 +750,9 @@ void ibCodeEditor::OnTextChange(wxStyledTextEvent& event)
 		if (!m_tc.HasLexem()) {
 			m_tc.Translate();
 		}
-		else if ((modFlags & (wxSTC_MOD_INSERTTEXT | wxSTC_MOD_DELETETEXT)) != 0) {
+		else if ((modFlags & (ibSTC_MOD_INSERTTEXT | ibSTC_MOD_DELETETEXT)) != 0) {
 
-			const bool deleted = (modFlags & wxSTC_MOD_DELETETEXT) != 0;
+			const bool deleted = (modFlags & ibSTC_MOD_DELETETEXT) != 0;
 			const int  sign = deleted ? -1 : 1;
 
 			ibTranslateCode::ibTextEdit edit;
@@ -882,13 +882,13 @@ ibCodeEditor::StringLiteralSpan ibCodeEditor::GetStringLiteralUnderCursor()
 	// The editor already keeps the module's token stream (m_tc) for the colouring and the completion,
 	// and a literal is one of its tokens. The scan this replaced counted quotes from the top of the
 	// document by itself, and went wrong in two ways:
-	//  - it compared the caret, a wxSTC position (a BYTE offset into UTF-8), with an index into
+	//  - it compared the caret, a ibSTC position (a BYTE offset into UTF-8), with an index into
 	//    GetText() (a CHARACTER count). Every non-ASCII character above the query - a Russian message
 	//    in a Tstr() - put the caret further on than the scan believed: a click near the end of a
 	//    query opened the constructor on the NEXT literal ("MonthEnd" - not a query), and OK wrote
 	//    the result that many bytes too early, over the code in front of the literal;
 	//  - it did not know comments, so one quote in a `//` line turned every literal below it inside out.
-	// The stream's m_numUtf8String IS a wxSTC position, and a comment never becomes a token.
+	// The stream's m_numUtf8String IS a ibSTC position, and a comment never becomes a token.
 	//
 	// ⚠ A STREAM OF ITS OWN, NOT THE EDITOR'S KEPT ONE. m_tc is patched edit by edit (OnTextChange), and
 	// after the text is replaced WHOLE - a SetText on a live editor, a delete-all then an insert-all - the
@@ -957,9 +957,9 @@ ibCodeEditor::StringLiteralSpan ibCodeEditor::GetStringLiteralUnderCursor()
 }
 
 // The indent a literal's continuation lines take: the text in front of `position` on its line, a tab
-// kept a tab and anything else a space - counted in CHARACTERS, since a wxSTC position counts bytes
+// kept a tab and anything else a space - counted in CHARACTERS, since a ibSTC position counts bytes
 // and a Cyrillic name in front of the quote is one column, not two.
-static wxString IndentBefore(wxStyledTextCtrl& editor, int position)
+static wxString IndentBefore(ibStyledTextCtrl& editor, int position)
 {
 	const wxString lead = editor.GetTextRange(editor.PositionFromLine(editor.LineFromPosition(position)), position);
 	wxString indent;
@@ -1036,10 +1036,11 @@ void ibCodeEditor::OnMouseMove(wxMouseEvent& event)
 #include "frmclient/win/dlgs/formatConstructor/formatConstructor.h"         // …and for a format string
 #include "frmclient/win/dlgs/linqConstructor/linqConstructor.h"             // …and a LINQ block, at the caret
 #include "frmclient/artProvider/artProvider.h"                      // wxART_QUERY_CONSTRUCTOR — the icon, registered not embedded
+#include "deskgui/univ/menu.h"                                      // ibMenu — the menu the theme draws
 
 void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 {
-	wxMenu menu;
+	ibMenu menu;
 
 	// The line the menu is about: the one under the mouse, or the caret's when it came from the keyboard.
 	const wxPoint clickAt = event.GetPosition();
@@ -1141,7 +1142,7 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 			return;
 		unsigned int from = 0, to = 0;
 		if (dialog.GetReplacedSpan(from, to)) {
-			// Characters to wxSTC positions: the document counts BYTES of UTF-8.
+			// Characters to ibSTC positions: the document counts BYTES of UTF-8.
 			SetTargetStart((int)text.Left(from).ToUTF8().length());
 			SetTargetEnd((int)text.Left(to).ToUTF8().length());
 			ReplaceTarget(block);

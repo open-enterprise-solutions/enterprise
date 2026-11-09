@@ -5,6 +5,9 @@
 #include <wx/rawbmp.h>
 #include <wx/xpmdecod.h>
 
+#include "deskgui/univ/theme.h"
+#include "deskgui/univ/colourScheme.h"
+
 #if defined(__WXMSW__) || defined(__WXOSX__)
 #define wxPy_premultiply(p, a)   ((p) * (a) / 0xff)
 #else
@@ -142,52 +145,30 @@ const wxBitmap* ibListBoxVisualData::GetImage(int i) const
 		return nullptr;
 }
 
+// The theme's colours, not the system's - the paper and the text an input surface's, the selection the highlight, the
+// row under the mouse the control's current colour, the frame the dark shadow; as the code editor's own list takes them
+// (deskgui/univ/stc/PlatWX.cpp). There is no native painter, so every colour is one.
 void ibListBoxVisualData::ComputeColours()
 {
-	// wxSYS_COLOUR_BTNSHADOW seems to be the closest match with most themes.
-	m_borderColour = wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW);
+	m_borderColour = wxTHEME_COLOUR(SHADOW_DARK);
 
 	if (m_useDefaultBgColour)
-		m_bgColour = wxSystemSettings::GetColour(wxSYS_COLOUR_LISTBOX);
+		m_bgColour = wxTHEME_COLOUR(WINDOW);
 
 	if (m_useDefaultTextColour)
-		m_textColour = wxSystemSettings::GetColour(wxSYS_COLOUR_LISTBOXTEXT);
+		m_textColour = wxTHEME_COLOUR(CONTROL_TEXT);
 
-	if (m_hasListCtrlAppearance)
-	{
-		// If m_highlightBgColour and/or m_currentBgColour are not
-		// explicitly set, set them to wxNullColour to indicate that they
-		// should be drawn with wxRendererNative.
-		if (m_useDefaultHighlightBgColour)
-			m_highlightBgColour = wxNullColour;
+	if (m_useDefaultHighlightBgColour)
+		m_highlightBgColour = wxTHEME_COLOUR(HIGHLIGHT);
 
-		if (m_useDefaultCurrentBgColour)
-			m_currentBgColour = wxNullColour;
+	if (m_useDefaultHighlightTextColour)
+		m_highlightTextColour = wxTHEME_COLOUR(HIGHLIGHT_TEXT);
 
-#ifdef __WXMSW__
-		if (m_useDefaultHighlightTextColour)
-			m_highlightTextColour =
-			wxSystemSettings::GetColour(wxSYS_COLOUR_LISTBOXTEXT);
-#else
-		if (m_useDefaultHighlightTextColour)
-			m_highlightTextColour = wxSystemSettings::GetColour(
-				wxSYS_COLOUR_LISTBOXHIGHLIGHTTEXT);
-#endif
+	if (m_useDefaultCurrentBgColour)
+		m_currentBgColour = wxTHEME_COLOUR(CONTROL_CURRENT);
 
-		if (m_useDefaultCurrentTextColour)
-			m_currentTextColour = wxSystemSettings::GetColour(
-				wxSYS_COLOUR_LISTBOXTEXT);
-	}
-	else
-	{
-		if (m_useDefaultHighlightBgColour)
-			m_highlightBgColour =
-			wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT);
-
-		if (m_useDefaultHighlightTextColour)
-			m_highlightTextColour =
-			wxSystemSettings::GetColour(wxSYS_COLOUR_LISTBOXHIGHLIGHTTEXT);
-	}
+	if (m_useDefaultCurrentTextColour)
+		m_currentTextColour = wxTHEME_COLOUR(CONTROL_TEXT);
 }
 
 static void SetColourHelper(bool& isDefault, wxColour& itemColour,

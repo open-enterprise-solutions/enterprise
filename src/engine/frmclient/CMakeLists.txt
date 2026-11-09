@@ -45,7 +45,6 @@ target_link_libraries(frmclient
         wx::aui
         wx::html
         wx::propgrid
-        wx::stc
         wx::base
         wx::xml
 )

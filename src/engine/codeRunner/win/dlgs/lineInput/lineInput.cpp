@@ -5,18 +5,18 @@
 
 #include "lineInput.h"
 
-ibDialogLineInput::ibDialogLineInput(wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) : wxDialog(parent, id, title, pos, size, style)
+ibDialogLineInput::ibDialogLineInput(wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) : ibDialog(parent, id, title, pos, size, style)
 {
 	this->SetSizeHints(wxDefaultSize, wxDefaultSize);
 
 	wxBoxSizer* bSizerTotal = new wxBoxSizer(wxHORIZONTAL);
 	wxBoxSizer* bSizerLeft = new wxBoxSizer(wxVERTICAL);
 
-	m_staticTextLine = new wxStaticText(this, wxID_ANY, _("Enter line number:"), wxDefaultPosition, wxDefaultSize, 0);
+	m_staticTextLine = new ibStaticText(this, wxID_ANY, _("Enter line number:"), wxDefaultPosition, wxDefaultSize, 0);
 	m_staticTextLine->Wrap(-1);
 	bSizerLeft->Add(m_staticTextLine, 0, wxEXPAND | wxTOP | wxRIGHT | wxLEFT, FromDIP(5));
 
-	m_lineNumber = new wxTextCtrl(this, wxID_ANY, wxT("1"), wxDefaultPosition, wxDefaultSize, 0);
+	m_lineNumber = new ibTextCtrl(this, wxID_ANY, wxT("1"), wxDefaultPosition, wxDefaultSize, 0);
 	bSizerLeft->Add(m_lineNumber, 0, wxTOP | wxRIGHT | wxLEFT, FromDIP(5));
 
 	bSizerTotal->Add(bSizerLeft, 0, wxEXPAND, FromDIP(5));
@@ -24,10 +24,10 @@ ibDialogLineInput::ibDialogLineInput(wxWindow* parent, wxWindowID id, const wxSt
 	wxBoxSizer* bSizerRight;
 	bSizerRight = new wxBoxSizer(wxVERTICAL);
 
-	m_buttonGoTo = new wxButton(this, wxID_ANY, _("Go to"), wxDefaultPosition, wxDefaultSize, 0);
+	m_buttonGoTo = new ibButton(this, wxID_ANY, _("Go to"), wxDefaultPosition, wxDefaultSize, 0);
 	bSizerRight->Add(m_buttonGoTo, 0, wxTOP | wxRIGHT | wxLEFT, FromDIP(5));
 
-	m_buttonCancel = new wxButton(this, wxID_ANY, _("Cancel"), wxDefaultPosition, wxDefaultSize, 0);
+	m_buttonCancel = new ibButton(this, wxID_ANY, _("Cancel"), wxDefaultPosition, wxDefaultSize, 0);
 	bSizerRight->Add(m_buttonCancel, 0, wxBOTTOM | wxRIGHT | wxLEFT, FromDIP(5));
 
 	bSizerTotal->Add(bSizerRight, 0, 0, FromDIP(5));

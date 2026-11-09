@@ -13,6 +13,8 @@
 #include <wx/wxprec.h>
 
 #include "deskgui/univ/splitterWindow.h"
+#include "deskgui/univ/colourScheme.h"
+#include "deskgui/univ/theme.h"
 
 #include <wx/dcclient.h>
 #include <wx/renderer.h>
@@ -100,7 +102,8 @@ ibSplitterWindow::~ibSplitterWindow()
 // entering/leaving sash
 // ----------------------------------------------------------------------------
 
-// SEAM vs wx: the sash does not light up under the mouse - it is the background (DrawSash); the cursor shows it
+// SEAM vs wx: the sash does not light up under the mouse - it is the background and its grip (DrawSash); the cursor
+// shows it
 void ibSplitterWindow::OnEnterSash()
 {
     SetResizeCursor();
@@ -540,9 +543,25 @@ void ibSplitterWindow::DrawSash(wxDC& dc)
     // dialog's face too, but the system's (BTNFACE): a light bar between the panes on Luna's chrome, and macOS draws
     // its own divider
     const wxSize size = GetClientSize();
-    EraseBackground(dc, m_splitMode == wxSPLIT_VERTICAL
+    const wxRect sash = m_splitMode == wxSPLIT_VERTICAL
                             ? wxRect(m_sashPosition, 0, GetSashSize(), size.y)
-                            : wxRect(0, m_sashPosition, size.x, GetSashSize()));
+                            : wxRect(0, m_sashPosition, size.x, GetSashSize());
+    EraseBackground(dc, sash);
+
+    // the grip: a row of dots along the sash's middle, the theme's shadow - the background alone hid the sash
+    // between two panes of one colour
+    const int dot = FromDIP(2), step = FromDIP(4), dots = 5;
+    const wxPoint centre(sash.x + sash.width / 2, sash.y + sash.height / 2);
+    dc.SetPen(*wxTRANSPARENT_PEN);
+    dc.SetBrush(wxTHEME_COLOUR(SHADOW_DARK));
+    for ( int i = 0; i < dots; ++i )
+    {
+        const int along = (i - dots / 2) * step - dot / 2;
+        if ( m_splitMode == wxSPLIT_VERTICAL )
+            dc.DrawRectangle(centre.x - dot / 2, centre.y + along, dot, dot);
+        else
+            dc.DrawRectangle(centre.x + along, centre.y - dot / 2, dot, dot);
+    }
 }
 
 // Draw the sash tracker (for whilst moving the sash)

@@ -13,7 +13,7 @@ class FRMCLIENT_API ibTextEditorPrintout : public wxPrintout {
 public:
 
 	//! constructor
-	ibTextEditorPrintout(wxStyledTextCtrl *edit, const wxString& title = "");
+	ibTextEditorPrintout(ibStyledTextCtrl *edit, const wxString& title = "");
 
 	//! event handlers
 	bool OnPrintPage(int page) wxOVERRIDE;
@@ -24,7 +24,7 @@ public:
 	void GetPageInfo(int *minPage, int *maxPage, int *selPageFrom, int *selPageTo) wxOVERRIDE;
 
 private:
-	wxStyledTextCtrl*m_edit;
+	ibStyledTextCtrl*m_edit;
 	wxArrayInt m_pageEnds;
 	wxRect m_pageRect;
 	wxRect m_printRect;

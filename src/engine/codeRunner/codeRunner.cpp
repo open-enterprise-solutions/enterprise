@@ -6,6 +6,9 @@
 #include "codeRunner/mainFrame/settings/editorsettings.h"
 #include "codeRunner/mainFrame/settings/fontcolorsettings.h"
 
+#include "deskgui/univ/theme/luna_toolbarart.h"
+
+#include <wx/aui/auibar.h>
 #include <wx/filedlg.h>
 #include <wx/aboutdlg.h>
 #include <wx/wfstream.h>
@@ -110,7 +113,7 @@ void ibFrameCodeRunner::OnMenuAbout(wxCommandEvent&)
 void ibFrameCodeRunner::OnMenuEdit(wxCommandEvent& event)
 {
 	// Forward standard wxID_UNDO / wxID_REDO / wxID_CUT / wxID_COPY /
-	// wxID_PASTE / wxID_SELECTALL to the wxStyledTextCtrl base — it
+	// wxID_PASTE / wxID_SELECTALL to the ibStyledTextCtrl base — it
 	// implements all of them. Frame's own menu shortcuts dispatch
 	// here when focus isn't already inside the editor (which would
 	// route them directly).
@@ -195,7 +198,7 @@ ibFrameCodeRunner::ibFrameCodeRunner(wxWindow* parent, wxWindowID id, const wxSt
 {
 	this->SetSizeHints(wxDefaultSize, wxDefaultSize);
 
-	// Menu bar — File / Edit / Help. Standard wxID_* IDs let wxSTC
+	// Menu bar — File / Edit / Help. Standard wxID_* IDs let ibSTC
 	// pick up Edit shortcuts directly when the editor has focus.
 	wxMenuBar* menuBar = new wxMenuBar();
 
@@ -238,8 +241,12 @@ ibFrameCodeRunner::ibFrameCodeRunner(wxWindow* parent, wxWindowID id, const wxSt
 
 	// Top toolbar — same command set as designer's module-editor
 	// docview minus document-only items (Goto line / Procedures &
-	// functions don't apply without a backing module).
-	wxToolBar* toolbar = CreateToolBar(wxTB_FLAT | wxTB_HORIZONTAL);
+	// functions don't apply without a backing module). The desktop's toolbar, as frmclient's are: wxAuiToolBar in the
+	// Luna art, at the top of the window's sizer.
+	wxBoxSizer* bSizerMain = new wxBoxSizer(wxVERTICAL);
+
+	wxAuiToolBar* toolbar = new wxAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_LAYOUT);
+	toolbar->SetArtProvider(new wxAuiLunaToolBarArt());
 	toolbar->AddTool(wxID_CR_ADD_COMMENTS,    _("Add comments"),    wxArtProvider::GetBitmapBundle(wxART_ADD_COMMENT,   wxART_DOC_MODULE), _("Add"));
 	toolbar->AddTool(wxID_CR_REMOVE_COMMENTS, _("Remove comments"), wxArtProvider::GetBitmapBundle(wxART_REMOVE_COMMENT, wxART_DOC_MODULE), _("Remove"));
 	toolbar->AddSeparator();
@@ -250,6 +257,7 @@ ibFrameCodeRunner::ibFrameCodeRunner(wxWindow* parent, wxWindowID id, const wxSt
 	toolbar->AddTool(wxID_CR_GOTO_LINE,       _("Goto line"),                wxArtProvider::GetBitmapBundle(wxART_GOTO_LINE,    wxART_DOC_MODULE), _("Goto"));
 	toolbar->AddTool(wxID_CR_PROC_AND_FUNC,   _("Procedures and functions"), wxArtProvider::GetBitmapBundle(wxART_PROC_AND_FUNC, wxART_DOC_MODULE), _("Procedures and functions"));
 	toolbar->Realize();
+	bSizerMain->Add(toolbar, 0, wxEXPAND);
 
 	Connect(wxID_CR_ADD_COMMENTS,    wxEVT_TOOL, wxCommandEventHandler(ibFrameCodeRunner::OnToolbarCommand));
 	Connect(wxID_CR_REMOVE_COMMENTS, wxEVT_TOOL, wxCommandEventHandler(ibFrameCodeRunner::OnToolbarCommand));
@@ -258,8 +266,6 @@ ibFrameCodeRunner::ibFrameCodeRunner(wxWindow* parent, wxWindowID id, const wxSt
 	Connect(wxID_CR_DECREASE_INDENT, wxEVT_TOOL, wxCommandEventHandler(ibFrameCodeRunner::OnToolbarCommand));
 	Connect(wxID_CR_GOTO_LINE,       wxEVT_TOOL, wxCommandEventHandler(ibFrameCodeRunner::OnToolbarCommand));
 	Connect(wxID_CR_PROC_AND_FUNC,   wxEVT_TOOL, wxCommandEventHandler(ibFrameCodeRunner::OnToolbarCommand));
-
-	wxBoxSizer* bSizerMain = new wxBoxSizer(wxVERTICAL);
 
 	// The code editor, the old desktop front's copied whole (win/editor/codeEditor), with no
 	// document behind it: highlighter / fold / auto-indent / format & indent commands all live in
@@ -284,20 +290,20 @@ ibFrameCodeRunner::ibFrameCodeRunner(wxWindow* parent, wxWindowID id, const wxSt
 	wxArrayString syntaxItems;
 	syntaxItems.Add(wxT("VES"));
 	syntaxItems.Add(wxT("CES"));
-	m_syntaxChoice = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, syntaxItems);
+	m_syntaxChoice = new ibChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, syntaxItems);
 	m_syntaxChoice->SetSelection(ibCompileCode::GetCodeStyle() == CODE_CES ? 1 : 0);
 	m_syntaxChoice->SetToolTip(_("Script syntax mode"));
 	bSizerButton->Add(m_syntaxChoice, 0, wxALL, 5);
 
-	m_buttonSyntaxCheck = new wxButton(this, wxID_ANY, _("Syntax control"));
+	m_buttonSyntaxCheck = new ibButton(this, wxID_ANY, _("Syntax control"));
 	m_buttonSyntaxCheck->SetForegroundColour(wxColour(255, 0, 0));
 	bSizerButton->Add(m_buttonSyntaxCheck, 0, wxALL, 5);
 
-	m_buttonRunCode = new wxButton(this, wxID_ANY, _("Run code"));
+	m_buttonRunCode = new ibButton(this, wxID_ANY, _("Run code"));
 	m_buttonRunCode->SetBackgroundColour(wxColour(128, 255, 128));
 	bSizerButton->Add(m_buttonRunCode, 1, wxALL, 5);
 
-	m_buttonClearOutput = new wxButton(this, wxID_ANY, _("Clear output"));
+	m_buttonClearOutput = new ibButton(this, wxID_ANY, _("Clear output"));
 	m_buttonClearOutput->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT));
 	m_buttonClearOutput->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW));
 	bSizerButton->Add(m_buttonClearOutput, 0, wxALL, 5);
@@ -305,7 +311,7 @@ ibFrameCodeRunner::ibFrameCodeRunner(wxWindow* parent, wxWindowID id, const wxSt
 	bSizerMain->Add(bSizerButton, 0, wxEXPAND, 5);
 
 	// Output panel — read-only STC for script Message() output.
-	m_output = new wxStyledTextCtrl(this, wxID_ANY);
+	m_output = new ibStyledTextCtrl(this, wxID_ANY);
 	m_output->SetUseTabs(true);
 	m_output->SetTabWidth(4);
 	m_output->SetIndent(4);
@@ -316,14 +322,14 @@ ibFrameCodeRunner::ibFrameCodeRunner(wxWindow* parent, wxWindowID id, const wxSt
 	m_output->SetMarginWidth(2, 0);
 	m_output->SetIndentationGuides(true);
 	m_output->SetReadOnly(true);
-	m_output->SetMarginType(0, wxSTC_MARGIN_NUMBER);
-	m_output->SetMarginWidth(0, m_output->TextWidth(wxSTC_STYLE_LINENUMBER, wxT("_99999")));
+	m_output->SetMarginType(0, ibSTC_MARGIN_NUMBER);
+	m_output->SetMarginWidth(0, m_output->TextWidth(ibSTC_STYLE_LINENUMBER, wxT("_99999")));
 	m_output->SetSelBackground(true, wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT));
 	m_output->SetSelForeground(true, wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHTTEXT));
-	m_output->SetCodePage(wxSTC_CP_UTF8);
+	m_output->SetCodePage(ibSTC_CP_UTF8);
 
 	for (int margin = 0; margin < m_output->GetMarginCount(); margin++)
-		m_output->SetMarginCursor(margin, wxSTC_CURSORARROW);
+		m_output->SetMarginCursor(margin, ibSTC_CURSORARROW);
 
 	bSizerMain->Add(m_output, 1, wxEXPAND | wxALL, 5);
 

@@ -2278,7 +2278,9 @@ void ibTextCtrl::ShowPosition(wxTextPos pos)
                 if ( PositionToXY(pos, &col, &row) )
                 {
                     wxString lineText = GetLineText(row);
-                    wxCoord x2 = x + GetTextWidth(lineText[(size_t)col]);
+                    // SEAM vs univ: at the end of the line no character stands at the caret - lineText[col] read past
+                    // the end (the debug iterator's assert at a click there); the room of an average one is shown
+                    wxCoord x2 = x + ((size_t)col < lineText.length() ? GetTextWidth(lineText[(size_t)col]) : wChar);
                     if ( x2 > xStart + rectText.width )
                     {
                         // we want the position of this column be 1/3 to the
@@ -4023,14 +4025,6 @@ bool ibTextCtrl::SendAutoScrollEvents(wxScrollWinEvent& event) const
 // refresh
 // ----------------------------------------------------------------------------
 
-void ibTextCtrl::RefreshSelection()
-{
-    if ( HasSelection() )
-    {
-        RefreshTextRange(m_selStart, m_selEnd);
-    }
-}
-
 void ibTextCtrl::RefreshLineRange(wxTextCoord lineFirst, wxTextCoord lineLast)
 {
     wxASSERT_MSG( lineFirst <= lineLast || !lineLast,
@@ -5477,11 +5471,8 @@ ibStdTextCtrlInputHandler::HandleFocus(ibInputConsumer *consumer,
 {
     ibTextCtrl *text = wxStaticCast(consumer->GetInputWindow(), ibTextCtrl);
 
-    // the selection appearance changes depending on whether we have the focus
-    text->RefreshSelection();
-
-    // ...and so does the border colour (focused = accent highlight)
-    text->RefreshBorder();
+    // the selection appearance and the border colour (focused = accent highlight) change with the focus: the window is
+    // drawn anew as it gains or loses it (ibWindow::TryBefore)
 
     if (event.GetEventType() == wxEVT_SET_FOCUS)
     {

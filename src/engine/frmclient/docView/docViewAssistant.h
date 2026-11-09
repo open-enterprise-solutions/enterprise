@@ -13,7 +13,7 @@
 class ibTextCtrl;
 class ibButton;
 class ibStaticText;
-class wxStyledTextCtrl;
+class ibStyledTextCtrl;
 
 class ibAssistantDocument : public ibTabDocument {
 public:
@@ -73,7 +73,7 @@ private:
 	// what the AUTHOR chose to emphasise — a heading, a bold clause, a fenced
 	// snippet — instead of a rule in the widget deciding for it. And it takes
 	// the platform's shared font, the one the code editor uses everywhere.
-	wxStyledTextCtrl* m_transcript = nullptr;
+	ibStyledTextCtrl* m_transcript = nullptr;
 	ibTextCtrl*       m_input      = nullptr;
 	ibButton*         m_send       = nullptr;
 

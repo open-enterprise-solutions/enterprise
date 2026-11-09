@@ -6,7 +6,7 @@
 #include <wx/docview.h>
 #include <wx/cmdproc.h>
 #include <wx/listctrl.h>
-#include <wx/stc/stc.h>
+#include "deskgui/univ/stc/stc.h"
 
 #include <vector>
 #include <array>
@@ -28,12 +28,12 @@
 class ibReaderMemory;
 
 // Forwards wxCommandProcessor's undo/redo stack to the underlying
-// wxStyledTextCtrl — STC owns its own undo buffer, but ibDocument
+// ibStyledTextCtrl — STC owns its own undo buffer, but ibDocument
 // expects a wxCommandProcessor on the document side.
 class ibModuleCommandProcessor : public wxCommandProcessor {
-	wxStyledTextCtrl* m_codeEditor = nullptr;
+	ibStyledTextCtrl* m_codeEditor = nullptr;
 public:
-	explicit ibModuleCommandProcessor(wxStyledTextCtrl* codeEditor)
+	explicit ibModuleCommandProcessor(ibStyledTextCtrl* codeEditor)
 		: m_codeEditor(codeEditor) {}
 
 	bool Undo() override        { m_codeEditor->Undo(); return true; }
@@ -44,21 +44,21 @@ public:
 
 ///////////////////////////////////////////////////////////////////////////
 
-#define wxSTC_FOLDLEVELBASE_FLAG 0x400
+#define ibSTC_FOLDLEVELBASE_FLAG 0x400
 
-#define wxSTC_FOLDLEVELWHITE_FLAG 0x1000
-#define wxSTC_FOLDLEVELHEADER_FLAG 0x2000
-#define wxSTC_FOLDLEVELELSE_FLAG 0x4000
+#define ibSTC_FOLDLEVELWHITE_FLAG 0x1000
+#define ibSTC_FOLDLEVELHEADER_FLAG 0x2000
+#define ibSTC_FOLDLEVELELSE_FLAG 0x4000
 
 // The core spells the fold levels without Scintilla (core/compiler/scriptFoldCode.h): the same numbers.
-static_assert(ibFoldCode::FoldLevelBase == wxSTC_FOLDLEVELBASE, "the core's fold base is Scintilla's");
-static_assert(ibFoldCode::FoldLevelWhite == wxSTC_FOLDLEVELWHITEFLAG, "the core's closer flag is Scintilla's");
-static_assert(ibFoldCode::FoldLevelHeader == wxSTC_FOLDLEVELHEADERFLAG, "the core's opener flag is Scintilla's");
-static_assert(ibFoldCode::FoldLevelElse == wxSTC_FOLDLEVELELSE_FLAG, "the core's else mark is the editor's");
+static_assert(ibFoldCode::FoldLevelBase == ibSTC_FOLDLEVELBASE, "the core's fold base is Scintilla's");
+static_assert(ibFoldCode::FoldLevelWhite == ibSTC_FOLDLEVELWHITEFLAG, "the core's closer flag is Scintilla's");
+static_assert(ibFoldCode::FoldLevelHeader == ibSTC_FOLDLEVELHEADERFLAG, "the core's opener flag is Scintilla's");
+static_assert(ibFoldCode::FoldLevelElse == ibSTC_FOLDLEVELELSE_FLAG, "the core's else mark is the editor's");
 
 ///////////////////////////////////////////////////////////////////////////
 
-class ibCodeEditor : public wxStyledTextCtrl {
+class ibCodeEditor : public ibStyledTextCtrl {
 
 protected:
 	// Marker IDs — protected so designer's ibCodeEditorDesigner subclass
@@ -99,7 +99,7 @@ public:
 		wxString m_text;         // the string's VALUE — quotes stripped, "" unescaped, `|` markers removed
 		bool     Found() const { return m_start >= 0 && m_end > m_start; }
 	};
-	// NOT const: reading the document and the caret goes through wxStyledTextCtrl's own non-const
+	// NOT const: reading the document and the caret goes through ibStyledTextCtrl's own non-const
 	// accessors, and casting that away to decorate this one with `const` would be lying about the
 	// object to satisfy a keyword.
 	StringLiteralSpan GetStringLiteralUnderCursor();
@@ -134,7 +134,7 @@ public:
 	ibCodeEditor(wxWindow* parent, wxWindowID id = wxID_ANY,
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize, long style = 0,
-		const wxString& strName = wxSTCNameStr);
+		const wxString& strName = ibSTCNameStr);
 	virtual ~ibCodeEditor();
 
 	int GetRealPosition();
@@ -190,7 +190,7 @@ public:
 	void SetDebugValue(const wxString& value);
 
 	// ⚠ THE EDITOR'S OWN POSITION, NOT THE COMPILER'S. GetRealPosition counts CHARACTERS, which is
-	// what a caret means to the compiler; a window is placed by wxSTC's document position, which is
+	// what a caret means to the compiler; a window is placed by ibSTC's document position, which is
 	// a byte offset. Any non-ASCII above the caret pulls the two apart, and the tip is drawn that
 	// much too early — measured 2026-09-07 on a module whose messages are in Russian, where it
 	// landed four lines above the call it described. This is the SECOND caller that had it; the
@@ -203,11 +203,11 @@ public:
 		if (type == wxEVT_PAINT ||
 			type == wxEVT_NC_PAINT ||
 			type == wxEVT_ERASE_BACKGROUND) {
-			return wxStyledTextCtrl::TryBefore(event);
+			return ibStyledTextCtrl::TryBefore(event);
 		}
 		if (m_ct.Active()) {
 			if (type == wxEVT_KEY_DOWN) {
-				m_ct.CallEvent(event); return wxStyledTextCtrl::TryBefore(event);
+				m_ct.CallEvent(event); return ibStyledTextCtrl::TryBefore(event);
 			}
 		}
 
@@ -215,19 +215,19 @@ public:
 			return true;
 		if (m_ct.CallEvent(event))
 			return true;
-		else return wxStyledTextCtrl::TryBefore(event);
+		else return ibStyledTextCtrl::TryBefore(event);
 	}
 
 protected:
 
 	// Events
-	void OnStyleNeeded(wxStyledTextEvent& event);
-	void OnMarginClick(wxStyledTextEvent& event);
-	void OnTextChange(wxStyledTextEvent& event);
+	void OnStyleNeeded(ibStyledTextEvent& event);
+	void OnMarginClick(ibStyledTextEvent& event);
+	void OnTextChange(ibStyledTextEvent& event);
 
 	void OnKeyDown(wxKeyEvent& event);
-	void OnCharAdded(wxStyledTextEvent& event);
-	void OnUpdateUI(wxStyledTextEvent& event);
+	void OnCharAdded(ibStyledTextEvent& event);
+	void OnUpdateUI(ibStyledTextEvent& event);
 	void OnMouseMove(wxMouseEvent& event);
 
 	// ---- Debugger integration hooks ----
@@ -329,7 +329,7 @@ protected:
 	// breakpoint condition there; a host with no debugger adds nothing. Last in the class: a virtual
 	// added between others moves every one after it in the table, and an object built before reads
 	// the wrong slot.
-	virtual void AppendDebugMenu(wxMenu& /*menu*/, int /*line*/) {}
+	virtual void AppendDebugMenu(ibMenu& /*menu*/, int /*line*/) {}
 
 	// What the breakpoint margin says about the line under the mouse - the designer answers with the
 	// breakpoint's condition. False: nothing to say, `hint` untouched.

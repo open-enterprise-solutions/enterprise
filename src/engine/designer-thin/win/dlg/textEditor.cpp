@@ -21,24 +21,24 @@ ibDialogTextEditor::ibDialogTextEditor(wxWindow* parent, const wxString& caption
 		wxDefaultPosition, wxDefaultSize,
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 {
-	m_text = new wxStyledTextCtrl(this, wxID_ANY);
+	m_text = new ibStyledTextCtrl(this, wxID_ANY);
 
 	// PROSE, NOT CODE. No lexer is set on purpose — markdown highlighting would colour a
 	// paragraph by guessing at it, and a wrong guess in a note is worse than no colour. What is
 	// borrowed from the editor is only what prose actually needs.
-	m_text->SetLexer(wxSTC_LEX_NULL);
+	m_text->SetLexer(ibSTC_LEX_NULL);
 
 	// A monospaced face so a table or a fenced block lines up; taken from the system rather than
 	// named, since a hard-coded family is the thing that looks wrong on the one machine nobody
 	// tested on.
 	wxFont face = wxSystemSettings::GetFont(wxSYS_ANSI_FIXED_FONT);
 	if (face.IsOk())
-		m_text->StyleSetFont(wxSTC_STYLE_DEFAULT, face);
+		m_text->StyleSetFont(ibSTC_STYLE_DEFAULT, face);
 	m_text->StyleClearAll();
 
 	// ⭐ WRAPPED, because these are sentences. A note is read, not scrolled sideways — and the
 	// one habit borrowed from the code editor that would be wrong here is a horizontal scrollbar.
-	m_text->SetWrapMode(wxSTC_WRAP_WORD);
+	m_text->SetWrapMode(ibSTC_WRAP_WORD);
 	m_text->SetMarginWidth(0, 0);   // no line numbers: nobody cites a note by line
 	m_text->SetMarginWidth(1, 0);   // …and no fold margin either
 	m_text->SetUseTabs(false);

@@ -29,6 +29,7 @@
 
 #include <wx/control.h>
 #include <wx/arrstr.h>      // wxSplit — a title's lines
+#include <wx/graphics.h>
 
 #ifndef WX_PRECOMP
     #include <wx/app.h>
@@ -49,7 +50,6 @@ wxIMPLEMENT_DYNAMIC_CLASS(ibControl, ibWindow);
 // not the native wxControlBase branch
 wxBEGIN_EVENT_TABLE(ibControl, ibWindow)
     WX_EVENT_TABLE_INPUT_CONSUMER(ibControl)
-    EVT_NC_PAINT(ibControl::OnNcPaint)
 wxEND_EVENT_TABLE()
 
 WX_FORWARD_TO_INPUT_CONSUMER(ibControl)
@@ -250,13 +250,11 @@ void ibControl::OnTitleChanged()
     wxWindow::Refresh();
 }
 
-void ibControl::OnNcPaint(wxNcPaintEvent& event)
+bool ibControl::TryBefore(wxEvent& event)
 {
     // the border is ibWindow's
-    event.Skip();
-
-    if ( m_title.empty() || !m_renderer )
-        return;
+    if ( event.GetEventType() != wxEVT_PAINT || m_title.empty() || !m_renderer )
+        return ibWindow::TryBefore(event);
 
     const int column = GetTitleWidth();
     const wxSize size = GetSize();
@@ -264,7 +262,11 @@ void ibControl::OnNcPaint(wxNcPaintEvent& event)
     const wxRect rectTitle(m_titlePosition == wxLEFT ? 0 : rectColumn.x + TitleGap(*this), 0,
                            column - TitleGap(*this), size.y);
 
-    wxWindowDC dc(this);
+    // the paint DC over the whole window, as ibWindow::TryBefore's
+    wxPaintDC dc(this);
+    dc.SetDeviceOrigin(0, 0);
+    if ( wxGraphicsContext* const gc = dc.GetGraphicsContext() )
+        gc->ResetClip();
 
     // the column stands on what the control stands on - its parent's surface, not its own face
     wxWindow* const parent = GetParent();
@@ -286,6 +288,8 @@ void ibControl::OnNcPaint(wxNcPaintEvent& event)
     // only the disabled state reaches it: a title is not focused, pressed nor hovered - the control is
     m_renderer->DrawLabel(dc, title, rectTitle, GetStateFlags() & wxCONTROL_DISABLED,
                           wxALIGN_LEFT | wxALIGN_CENTRE_VERTICAL);
+
+    return ibWindow::TryBefore(event);
 }
 
 #endif // wxUSE_CONTROLS

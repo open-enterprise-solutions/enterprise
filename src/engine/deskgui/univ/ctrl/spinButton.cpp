@@ -34,6 +34,7 @@
 #include "deskgui/univ/renderer.h"
 #include "deskgui/univ/inputHandler.h"
 #include "deskgui/univ/theme.h"
+#include "deskgui/univ/colourScheme.h"
 
 // ============================================================================
 // implementation of ibSpinButton
@@ -288,9 +289,31 @@ void ibSpinButton::DoDraw(ibControlRenderer *renderer)
     wxRect rectArrow1, rectArrow2;
     CalcArrowRects(&rectArrow1, &rectArrow2);
 
+    // SEAM vs univ: each arrow drawn as the combo box's button is (ibComboBox::DoDraw) - a flat pad in the arrow's
+    // state, pressed or under the mouse, and the arrow in a third of it; given the whole half, the arrow took it all
     wxDC& dc = renderer->GetDC();
-    m_arrows.DrawArrow(ibScrollArrows::Arrow_First, dc, rectArrow1);
-    m_arrows.DrawArrow(ibScrollArrows::Arrow_Second, dc, rectArrow2);
+    ibColourScheme* const scheme = ibThemeEngine::Get()->GetColourScheme();
+
+    const ibScrollArrows::Arrow arrows[] = { ibScrollArrows::Arrow_First, ibScrollArrows::Arrow_Second };
+    const wxRect rects[] = { rectArrow1, rectArrow2 };
+    for ( int n = 0; n < 2; n++ )
+    {
+        const int state = GetArrowState(arrows[n]);
+
+        wxColour pad = scheme->Get(ibColourScheme::CONTROL);
+        if ( state & wxCONTROL_PRESSED )
+            pad = scheme->Get(ibColourScheme::CONTROL_PRESSED);
+        else if ( state & wxCONTROL_CURRENT )
+            pad = scheme->Get(ibColourScheme::CONTROL_CURRENT);
+
+        dc.SetPen(*wxTRANSPARENT_PEN);
+        dc.SetBrush(wxBrush(pad));
+        dc.DrawRectangle(rects[n]);
+
+        wxRect rectArrow = rects[n];
+        rectArrow.Deflate(rects[n].width / 3, rects[n].height / 3);
+        m_arrows.DrawArrow(arrows[n], dc, rectArrow);
+    }
 }
 
 // ----------------------------------------------------------------------------

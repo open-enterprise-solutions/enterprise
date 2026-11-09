@@ -32,7 +32,7 @@
 #include <wx/textctrl.h>
 #include <wx/listbox.h>
 #include "deskgui/univ/ctrl/treeCtrl.h"
-#include <wx/stc/stc.h>
+#include "deskgui/univ/stc/stc.h"
 
 #include "core/query/queryAST.h"
 #include "frmclient/backend/query/queryConstructorModel.h"
@@ -140,7 +140,7 @@ private:
 	int         m_fieldIcon = wxNOT_FOUND;
 	ibTreeCtrl* m_language  = nullptr;
 	// The same styled editor the constructor's text pane uses — one language, one look.
-	class wxStyledTextCtrl* m_text = nullptr;
+	class ibStyledTextCtrl* m_text = nullptr;
 
 	// The role, when it is offered (OfferRole) — the button hidden otherwise.
 	class ibButton* m_roleButton = nullptr;

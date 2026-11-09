@@ -45,7 +45,7 @@
 #include <wx/artprov.h>
 #include <wx/settings.h>   // wxSystemSettings — a generated title reads grey
 #include <wx/menu.h>
-#include <wx/stc/stc.h>   // wxStyledTextCtrl — the query editor
+#include "deskgui/univ/stc/stc.h"   // ibStyledTextCtrl — the query editor
 #include <wx/dnd.h>       // wxDropSource / wxTextDataObject — the drag half
 
 #include "frmclient/win/dlgs/callbackDropTarget.h"   // the drop half: a drop raises the same verb a button does
@@ -3957,14 +3957,14 @@ wxWindow* ibComposerSettingsPanel::BuildQueryPage(wxWindow* parent)
 	// language's own keyword set, line numbers. A query is query text wherever it is shown, and
 	// showing it as grey characters HERE while it is highlighted THERE is one language wearing
 	// two faces.
-	m_queryText = new wxStyledTextCtrl(panel, wxID_ANY);
+	m_queryText = new ibStyledTextCtrl(panel, wxID_ANY);
 	ibStyleQueryText(m_queryText);
 	// THE TEXT IS THE DESCRIPTION'S, and there is no second copy of it to fall out of step with.
 	m_queryText->SetText(m_edited.m_query);
 	// ⭐ BOUND AFTER THE FILL, deliberately: the initial SetText is not somebody typing, and a
 	// handler bound before it would report the composition as modified the instant it was opened.
 	// No flag is needed to tell the two apart — the order does it.
-	m_queryText->Bind(wxEVT_STC_MODIFIED, &ibComposerSettingsPanel::OnQueryTextChanged, this);
+	m_queryText->Bind(ibEVT_STC_MODIFIED, &ibComposerSettingsPanel::OnQueryTextChanged, this);
 	sizer->Add(m_queryText, 1, wxLEFT | wxRIGHT | wxEXPAND, FromDIP(4));
 
 	// THE ENGINE'S OWN WORDS, verbatim — a query that cannot be described cannot be run, and
@@ -5140,14 +5140,14 @@ void ibComposerSettingsPanel::ApplyPendingQueryText()
 // text MEANS costs a describe, a parameter sync and a settings prune; ANNOUNCING it can cost a whole
 // form-editor re-render at the listener. Both wait for the pause — see RefreshFromQueryText.
 //
-// ⚠ INSERT / DELETE ONLY — wxSTC_MOD_* also reports styling, folding and selection, which are not
+// ⚠ INSERT / DELETE ONLY — ibSTC_MOD_* also reports styling, folding and selection, which are not
 // changes to the text. The code editor filters on exactly this pair, for exactly this reason.
-void ibComposerSettingsPanel::OnQueryTextChanged(wxStyledTextEvent& event)
+void ibComposerSettingsPanel::OnQueryTextChanged(ibStyledTextEvent& event)
 {
 	event.Skip();
 
 	const int modFlags = event.GetModificationType();
-	if ((modFlags & (wxSTC_MOD_INSERTTEXT | wxSTC_MOD_DELETETEXT)) == 0)
+	if ((modFlags & (ibSTC_MOD_INSERTTEXT | ibSTC_MOD_DELETETEXT)) == 0)
 		return;
 	if (m_queryText == nullptr || m_readOnly)
 		return;

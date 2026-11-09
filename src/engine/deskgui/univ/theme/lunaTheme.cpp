@@ -745,6 +745,9 @@ wxBitmap ibLunaRenderer::CreateIndicatorBitmap(int flags, bool radio) {
 
 	const bool on = (flags & wxCONTROL_CHECKED) != 0;
 	const bool disabled = (flags & wxCONTROL_DISABLED) != 0;
+	// where Tab stands: the box and the circle have no frame of their own to show the focus, as a field's or a button's
+	// does (DrawBorder, DrawButtonBorder) - the accent's ring round the indicator, in the margin it leaves
+	const bool focused = (flags & wxCONTROL_FOCUSED) != 0 && !disabled;
 
 	wxColour face = on ? kAccent : kContent;
 	wxColour border = on ? kAccentDeep : kBorder;
@@ -788,6 +791,14 @@ wxBitmap ibLunaRenderer::CreateIndicatorBitmap(int flags, bool radio) {
 			gc->DrawEllipse(centre - radiusDot, centre - radiusDot,
 				2.0 * radiusDot, 2.0 * radiusDot);
 		}
+
+		if (focused) {
+			const double radiusFocus = centre - 0.5;
+			gc->SetPen(wxPen(kAccentDeep));
+			gc->SetBrush(*wxTRANSPARENT_BRUSH);
+			gc->DrawEllipse(centre - radiusFocus, centre - radiusFocus,
+				2.0 * radiusFocus, 2.0 * radiusFocus);
+		}
 	}
 	else {
 		const wxRect rect(1, 1, size - 2, size - 2);
@@ -811,6 +822,12 @@ wxBitmap ibLunaRenderer::CreateIndicatorBitmap(int flags, bool radio) {
 			dc.SetPen(*wxTRANSPARENT_PEN);
 			dc.SetBrush(wxBrush(disabled ? kBorder : kAccent));
 			dc.DrawRectangle(rectMark);
+		}
+
+		if (focused) {
+			dc.SetPen(wxPen(kAccentDeep));
+			dc.SetBrush(*wxTRANSPARENT_BRUSH);
+			dc.DrawRoundedRectangle(wxRect(0, 0, size, size), 3);
 		}
 	}
 

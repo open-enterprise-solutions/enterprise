@@ -3,13 +3,13 @@
 
 #include <wx/cmdproc.h>
 #include <wx/print.h>
-#include <wx/stc/stc.h>
+#include "deskgui/univ/stc/stc.h"
 
 class ibTextCommandProcessor :
 	public wxCommandProcessor {
 public:
 
-	ibTextCommandProcessor(wxStyledTextCtrl* codeEditor) :
+	ibTextCommandProcessor(ibStyledTextCtrl* codeEditor) :
 		wxCommandProcessor(), m_codeEditor(codeEditor) {
 	}
 
@@ -27,16 +27,16 @@ public:
 	virtual bool CanRedo() const override { return m_codeEditor->CanRedo(); }
 
 private:
-	wxStyledTextCtrl* m_codeEditor;
+	ibStyledTextCtrl* m_codeEditor;
 };
 
-class ibTextEditor : public wxStyledTextCtrl {
+class ibTextEditor : public ibStyledTextCtrl {
 public:
 
 	ibTextEditor(class ibFrontendDocument *doc, wxWindow* parent, wxWindowID id = wxID_ANY,
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize, long style = 0,
-		const wxString& name = wxSTCNameStr);
+		const wxString& name = ibSTCNameStr);
 
 private:
 

@@ -22,8 +22,10 @@
     <ResourceCompile Include="deskgui.rc" />
   </ItemGroup>
   <!-- THE DESKTOP'S USER INTERFACE LIBRARY - what the desktop's programs draw their windows with (deskgui.h): the
-       custom-drawn engine and its Luna theme, the forks of wx's generic controls and ours, the dock art. Of the engine,
-       the core alone; of wx, the core, the base and AUI. -->
+       custom-drawn engine and its Luna theme, the forks of wx's generic controls and ours, the dock art, the code
+       editor's host (univ\stc). Of the engine, the core alone; of wx, the core, the base and AUI. Scintilla and
+       Lexilla are in src\3rdparty (a release copy and a submodule), built by univ\stc\scintilla and
+       univ\stc\lexilla; their headers are on the include path. -->
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
     <ProjectGuid>{A1B2C3D4-0011-4E5F-8A9B-C0D1E2F30011}</ProjectGuid>
@@ -89,13 +91,13 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <AdditionalIncludeDirectories>$(oesEngine);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(oesEngine);$(oes3rdParty)scintilla\include;$(oes3rdParty)scintilla\src;$(oes3rdParty)lexilla\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>core.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>core.lib;scintilla.lib;lexilla.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -183,6 +185,7 @@
     <ClCompile Include="univ\ctrl\toolBar.cpp" />
     <ClCompile Include="univ\ctrl\treeCtrl.cpp" />
     <ClCompile Include="univ\ctrl\treelistctrl.cpp" />
+    <ClCompile Include="univ\ctrl\vListBox.cpp" />
     <ClCompile Include="univ\dataview\datavcmn.cpp" />
     <ClCompile Include="univ\dataview\datavgen.cpp" />
     <ClCompile Include="univ\dataview\datavgen.paged.cpp" />
@@ -209,6 +212,9 @@
     <ClCompile Include="univ\theme\luna_toolbarart.cpp" />
     <ClCompile Include="univ\theme\themeRenderer.cpp" />
     <ClCompile Include="univ\splitterWindow.cpp" />
+    <ClCompile Include="univ\stc\PlatWX.cpp" />
+    <ClCompile Include="univ\stc\ScintillaWX.cpp" />
+    <ClCompile Include="univ\stc\stc.cpp" />
     <ClCompile Include="univ\theme.cpp" />
     <ClCompile Include="univ\textEntryDialog.cpp" />
     <ClCompile Include="univ\textValidator.cpp" />
@@ -253,6 +259,7 @@
     <ClInclude Include="univ\ctrl\toolBar.h" />
     <ClInclude Include="univ\ctrl\treeCtrl.h" />
     <ClInclude Include="univ\ctrl\treelistctrl.h" />
+    <ClInclude Include="univ\ctrl\vListBox.h" />
     <ClInclude Include="univ\customBgWin.h" />
     <ClInclude Include="univ\dataview\datavgen.h" />
     <ClInclude Include="univ\dataview\datavgen.paged.private.h" />
@@ -285,6 +292,9 @@
     <ClInclude Include="univ\theme\luna_toolbarart.h" />
     <ClInclude Include="univ\theme\themeRenderer.h" />
     <ClInclude Include="univ\splitterWindow.h" />
+    <ClInclude Include="univ\stc\PlatWX.h" />
+    <ClInclude Include="univ\stc\ScintillaWX.h" />
+    <ClInclude Include="univ\stc\stc.h" />
     <ClInclude Include="univ\theme.h" />
     <ClInclude Include="univ\textEntryDialog.h" />
     <ClInclude Include="univ\textSizerWrapper.h" />

@@ -3,18 +3,20 @@
 
 #include <wx/wx.h>
 #include <wx/hashset.h>
-#include <wx/vlbox.h>
 #include <wx/listctrl.h>
 #include <wx/toplevel.h>
 #include <wx/tokenzr.h>
-#include <wx/renderer.h>
 #include <wx/wupdlock.h>
+
+#include "deskgui/univ/ctrl/vListBox.h"
 
 #include "listBoxVisualData.h"
 
 // The class is intended to look like a standard listbox (with an optional
 // icon). However, it needs to look like it has focus even when it doesn't.
-class ibCodeEditorListBox : public wxSystemThemedControl<wxVListBox>
+// The library's virtual list (ibVListBox) in the theme's colours - as the code editor's own autocompletion list is
+// (deskgui/univ/stc/PlatWX.cpp, ibSTCListBox).
+class ibCodeEditorListBox : public ibVListBox
 {
 public:
 	ibCodeEditorListBox(wxWindow*, ibListBoxVisualData*, int);
@@ -50,7 +52,7 @@ protected:
 	void OnMouseMotion(wxMouseEvent& event);
 	void OnMouseLeaveWindow(wxMouseEvent& event);
 
-	// wxVListBox overrides
+	// ibVListBox overrides
 	virtual wxCoord OnMeasureItem(size_t) const override;
 	virtual void OnDrawItem(wxDC&, const wxRect &, size_t) const override;
 	virtual void OnDrawBackground(wxDC&, const wxRect&, size_t) const override;

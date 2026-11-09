@@ -67,11 +67,11 @@ void ibFrontendTextEditView::OnFind(wxFindDialogEvent& event)
 	int sciflags = 0;
 	if ((wxflags & wxFR_WHOLEWORD) != 0)
 	{
-		sciflags |= wxSTC_FIND_WHOLEWORD;
+		sciflags |= ibSTC_FIND_WHOLEWORD;
 	}
 	if ((wxflags & wxFR_MATCHCASE) != 0)
 	{
-		sciflags |= wxSTC_FIND_MATCHCASE;
+		sciflags |= ibSTC_FIND_MATCHCASE;
 	}
 	int result;
 	if ((wxflags & wxFR_DOWN) != 0)
@@ -86,7 +86,7 @@ void ibFrontendTextEditView::OnFind(wxFindDialogEvent& event)
 		m_textEditor->SearchAnchor();
 		result = m_textEditor->SearchPrev(sciflags, event.GetFindString());
 	}
-	if (wxSTC_INVALID_POSITION == result)
+	if (ibSTC_INVALID_POSITION == result)
 	{
 		ibMessageBox(ibString::Format(_("\"%s\" not found!"), event.GetFindString().c_str()), _("Not Found!"), wxICON_ERROR, (wxWindow*)event.GetClientData());
 	}

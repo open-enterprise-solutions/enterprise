@@ -2,7 +2,7 @@
 #define __IB_POPUP_WND_H__
 
 #include <wx/wx.h>
-#include <wx/stc/stc.h>
+#include "deskgui/univ/stc/stc.h"
 
 #include "listBoxWnd.h"
 #include "listBoxVisualData.h"

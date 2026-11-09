@@ -3,11 +3,11 @@
 
 #include <wx/wx.h>
 #include <wx/dcbuffer.h>
-#include <wx/stc/stc.h>
+#include "deskgui/univ/stc/stc.h"
 
 #include "helpers/fontAscent.h"
 
-class wxSTCCallTip;
+class ibSTCCallTip;
 
 /**
  */
@@ -15,7 +15,7 @@ class ibCallTip
 {
 public:
 
-	ibCallTip(wxStyledTextCtrl* owner);
+	ibCallTip(ibStyledTextCtrl* owner);
 	~ibCallTip();
 
 	// Disable copy — owns m_callTip / m_evtHandler.
@@ -77,9 +77,9 @@ private:
 	int               m_tabSize          = 0;     // Tab size in pixels, <=0 no TAB expand
 	bool              m_useStyleCallTip  = false; // if true, STYLE_CALLTIP should be used
 
-	wxStyledTextCtrl* m_owner            = nullptr;
+	ibStyledTextCtrl* m_owner            = nullptr;
 
-	wxSTCCallTip*     m_callTip          = nullptr;
+	ibSTCCallTip*     m_callTip          = nullptr;
 	wxEvtHandler*     m_evtHandler       = nullptr;
 
 	bool              m_inCallTipMode    = false;
@@ -101,24 +101,24 @@ private:
 
 #include "helpers/popupWnd.h"
 
-class wxSTCCallTip : public ibCodeEditorPopupWindow
+class ibSTCCallTip : public ibCodeEditorPopupWindow
 {
 public:
-	wxSTCCallTip(wxWindow* parent, ibCallTip* ct) :
+	ibSTCCallTip(wxWindow* parent, ibCallTip* ct) :
 		ibCodeEditorPopupWindow(parent), m_ct(ct)
 	{
-		Bind(wxEVT_LEFT_DOWN, &wxSTCCallTip::OnLeftDown, this);
-		Bind(wxEVT_SIZE, &wxSTCCallTip::OnSize, this);
-		Bind(wxEVT_PAINT, &wxSTCCallTip::OnPaint, this);
+		Bind(wxEVT_LEFT_DOWN, &ibSTCCallTip::OnLeftDown, this);
+		Bind(wxEVT_SIZE, &ibSTCCallTip::OnSize, this);
+		Bind(wxEVT_PAINT, &ibSTCCallTip::OnPaint, this);
 
 #ifdef __WXMSW__
-		Bind(wxEVT_ERASE_BACKGROUND, &wxSTCCallTip::OnEraseBackground, this);
+		Bind(wxEVT_ERASE_BACKGROUND, &ibSTCCallTip::OnEraseBackground, this);
 		SetBackgroundStyle(wxBG_STYLE_ERASE);
 #else
 		SetBackgroundStyle(wxBG_STYLE_PAINT);
 #endif
 
-		SetName("wxSTCCallTip");
+		SetName("ibSTCCallTip");
 	}
 
 	void DrawBack(const wxSize& size)

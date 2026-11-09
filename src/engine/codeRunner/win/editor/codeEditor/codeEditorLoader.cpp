@@ -62,11 +62,11 @@ namespace {
 void StripEOL(wxString& s, int eolMode)
 {
 	switch (eolMode) {
-	case wxSTC_EOL_CRLF:
+	case ibSTC_EOL_CRLF:
 		s.Replace(wxT("\r"), wxEmptyString);
 		s.Replace(wxT("\n"), wxEmptyString);
 		break;
-	case wxSTC_EOL_CR:
+	case ibSTC_EOL_CR:
 		s.Replace(wxT("\r"), wxEmptyString);
 		break;
 	default:
@@ -79,8 +79,8 @@ void StripEOL(wxString& s, int eolMode)
 void AppendEOL(wxString& s, int eolMode)
 {
 	switch (eolMode) {
-	case wxSTC_EOL_CRLF: s += wxT("\r\n"); break;
-	case wxSTC_EOL_CR:   s += wxT("\r");   break;
+	case ibSTC_EOL_CRLF: s += wxT("\r\n"); break;
+	case ibSTC_EOL_CR:   s += wxT("\r");   break;
 	default:             s += wxT("\n");   break;
 	}
 }
@@ -203,7 +203,7 @@ void ibCodeEditor::PrepareTABs()
 	// matched (cursor on a free-form line with stray CR/LF).
 	StripEOL(rawBufferLine, eolMode);
 
-	int foldLevel = level ^ wxSTC_FOLDLEVELBASE_FLAG;
+	int foldLevel = level ^ ibSTC_FOLDLEVELBASE_FLAG;
 
 	// CES brace-less single-statement form: `if (cond)`, `while (cond)`,
 	// `for (...)`. Fold parser tracks only `{...}` braces, so the body line
@@ -248,10 +248,10 @@ void ibCodeEditor::PrepareTABs()
 		}
 	};
 
-	if ((level & wxSTC_FOLDLEVELHEADER_FLAG) != 0) {
+	if ((level & ibSTC_FOLDLEVELHEADER_FLAG) != 0) {
 		// Procedure/Function/If/While/Try header — line itself sits at
 		// foldLevel; Enter on the header opens its body, +1 indent.
-		foldLevel ^= wxSTC_FOLDLEVELHEADER_FLAG;
+		foldLevel ^= ibSTC_FOLDLEVELHEADER_FLAG;
 		applyIndent(foldLevel + softBodyExtra);
 		if (startLinePos + foldLevel != currPosition) foldLevel++;
 		// Inside-brace body of a soft-scope `{` opener: lines inside the
@@ -259,22 +259,22 @@ void ibCodeEditor::PrepareTABs()
 		// body of `if (x)\n\t{` lands at the brace level only.
 		foldLevel += softBodyExtra;
 	}
-	else if ((level & wxSTC_FOLDLEVELELSE_FLAG) != 0) {
+	else if ((level & ibSTC_FOLDLEVELELSE_FLAG) != 0) {
 		// Else/ElseIf/Except — pseudo-header at child indent; visually
 		// aligns to parent indent (foldLevel - 1).
-		foldLevel ^= wxSTC_FOLDLEVELELSE_FLAG;
+		foldLevel ^= ibSTC_FOLDLEVELELSE_FLAG;
 		if (foldLevel >= 0 && LineLength(currLine) > 0)
 			applyIndent(std::max(0, foldLevel - 1) + softBodyExtra);
 		if (startLinePos + foldLevel - 1 == currPosition) foldLevel--;
 	}
-	else if ((level & wxSTC_FOLDLEVELWHITE_FLAG) != 0) {
+	else if ((level & ibSTC_FOLDLEVELWHITE_FLAG) != 0) {
 		// EndProcedure/EndFunction/EndIf/EndDo/EndTry — closer at parent
 		// indent; the WHITE flag's level is already child, so subtract 1.
-		foldLevel = (foldLevel ^ wxSTC_FOLDLEVELWHITE_FLAG) - 1;
+		foldLevel = (foldLevel ^ ibSTC_FOLDLEVELWHITE_FLAG) - 1;
 		if (foldLevel >= 0 && LineLength(currLine) > 0)
 			applyIndent(foldLevel + softBodyExtra);
 	}
-	else if ((level & wxSTC_FOLDLEVELBASE_FLAG) != 0) {
+	else if ((level & ibSTC_FOLDLEVELBASE_FLAG) != 0) {
 		// Plain code line inside a block — indent matches foldLevel.
 		if (foldLevel >= 0 && LineLength(currLine) > 0)
 			applyIndent(foldLevel + softBodyExtra);
@@ -294,7 +294,7 @@ void ibCodeEditor::PrepareTABs()
 	AppendEOL(rawBufferLine, eolMode);
 	rawBufferLine.append(foldLevel, wxT('\t'));
 
-	// wxSTC byte-positions: convert to UTF-8 once for both ReplaceTargetRaw
+	// ibSTC byte-positions: convert to UTF-8 once for both ReplaceTargetRaw
 	// and the post-replace caret math.
 	const auto utf8 = rawBufferLine.utf8_str();
 	SetTargetStart((int)startLinePos);
@@ -312,17 +312,17 @@ void ibCodeEditor::PrepareTABs()
 namespace {
 int ComputeTargetIndent(int level)
 {
-	int foldLevel = level ^ wxSTC_FOLDLEVELBASE_FLAG;
+	int foldLevel = level ^ ibSTC_FOLDLEVELBASE_FLAG;
 
-	if ((level & wxSTC_FOLDLEVELHEADER_FLAG) != 0) {
-		return std::max(0, foldLevel ^ wxSTC_FOLDLEVELHEADER_FLAG);
+	if ((level & ibSTC_FOLDLEVELHEADER_FLAG) != 0) {
+		return std::max(0, foldLevel ^ ibSTC_FOLDLEVELHEADER_FLAG);
 	}
-	if ((level & wxSTC_FOLDLEVELELSE_FLAG) != 0) {
-		const int parent = (foldLevel ^ wxSTC_FOLDLEVELELSE_FLAG) - 1;
+	if ((level & ibSTC_FOLDLEVELELSE_FLAG) != 0) {
+		const int parent = (foldLevel ^ ibSTC_FOLDLEVELELSE_FLAG) - 1;
 		return std::max(0, parent);
 	}
-	if ((level & wxSTC_FOLDLEVELWHITE_FLAG) != 0) {
-		return std::max(0, (foldLevel ^ wxSTC_FOLDLEVELWHITE_FLAG) - 1);
+	if ((level & ibSTC_FOLDLEVELWHITE_FLAG) != 0) {
+		return std::max(0, (foldLevel ^ ibSTC_FOLDLEVELWHITE_FLAG) - 1);
 	}
 	return std::max(0, foldLevel);
 }
@@ -363,9 +363,9 @@ void ibCodeEditor::FormatSelection()
 	EndUndoAction();
 }
 
-// Brace pair highlight on caret movement. wxSTC's BraceHighlight wants
+// Brace pair highlight on caret movement. ibSTC's BraceHighlight wants
 // matched positions; we resolve them manually because the custom styler
-// doesn't tag braces, and wxSTC's BraceMatch fails without that. Three
+// doesn't tag braces, and ibSTC's BraceMatch fails without that. Three
 // pairs supported: `{}`, `()`, `[]`.
 namespace {
 
@@ -386,7 +386,7 @@ wxChar PairOf(wxChar c)
 
 } // namespace
 
-void ibCodeEditor::OnUpdateUI(wxStyledTextEvent& event)
+void ibCodeEditor::OnUpdateUI(ibStyledTextEvent& event)
 {
 	const int caret = GetCurrentPos();
 
@@ -409,7 +409,7 @@ void ibCodeEditor::OnUpdateUI(wxStyledTextEvent& event)
 	}
 
 	if (bracePos < 0) {
-		BraceHighlight(wxSTC_INVALID_POSITION, wxSTC_INVALID_POSITION);
+		BraceHighlight(ibSTC_INVALID_POSITION, ibSTC_INVALID_POSITION);
 		event.Skip();
 		return;
 	}
@@ -443,20 +443,20 @@ void ibCodeEditor::OnUpdateUI(wxStyledTextEvent& event)
 	event.Skip();
 }
 
-// Auto-align a typed brace. Fires from wxEVT_STC_CHARADDED on every
+// Auto-align a typed brace. Fires from ibEVT_STC_CHARADDED on every
 // character; gates on `{` / `}` and rewrites the leading indent only
 // when the line so far is whitespace-only. Mixed-content typing like
 // `foo();}` is left alone — the user clearly didn't intend a fresh
 // closer there.
 //
-// `}` matching is a manual backward depth walk over raw bytes — wxSTC's
+// `}` matching is a manual backward depth walk over raw bytes — ibSTC's
 // `BraceMatch` requires the lexer to style brace characters and our
 // custom styler doesn't, so it returns -1 here.
 //
 // `{` on a blank line right after a CES single-statement header
 // (`if (cond)` / `while (cond)` / `for (...)`) absorbs the pending
 // soft-body bump (Allman style): `{` sits at the header's indent.
-void ibCodeEditor::OnCharAdded(wxStyledTextEvent& event)
+void ibCodeEditor::OnCharAdded(ibStyledTextEvent& event)
 {
 	const int key = event.GetKey();
 	if (key != '}' && key != '{') {
@@ -537,7 +537,7 @@ void ibCodeEditor::IncreaseIndent()
 {
 	if (!IsEditable())
 		return;
-	// wxSTC's Tab() command — with selection, indents every covered
+	// ibSTC's Tab() command — with selection, indents every covered
 	// line by IndentSize; without selection, inserts a tab at caret.
 	Tab();
 }
@@ -659,7 +659,7 @@ void ibCodeEditor::LoadAutoComplete()
 void ibCodeEditor::LoadCallTip()
 {
 	// ⚠ TWO POSITIONS, AND THEY ARE NOT THE SAME NUMBER. The compiler measures a caret in
-	// CHARACTERS (GetRealPosition counts them); wxSTC places a window by its own document position,
+	// CHARACTERS (GetRealPosition counts them); ibSTC places a window by its own document position,
 	// which is a BYTE offset. Any non-ASCII text above the caret pulls them apart — measured
 	// 2026-09-07 on a module whose messages are in Russian: the call tip was drawn four lines above
 	// the call it described.

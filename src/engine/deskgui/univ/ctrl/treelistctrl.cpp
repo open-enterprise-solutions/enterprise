@@ -598,6 +598,8 @@ public:
 	virtual bool SetForegroundColour(const wxColour& colour);
 	// the content moved, by whatever scrolled it — the scrollbar, the keyboard, Scroll(): the header follows
 	virtual void ScrollWindow(int dx, int dy, const wxRect* rect = nullptr) override;
+	// the focus here is the control's: its frame shows it (ibWindow::IsFocused), as the grid's window answers
+	virtual wxWindow* GetMainWindowOfCompositeControl() override { return m_owner; }
 
 	// drop over item
 	void SetDragItem(const wxTreeItemId& item = (wxTreeItemId*)nullptr);

@@ -510,7 +510,7 @@ public:
 				// `Warehouse = &Store AND Item = &Item` in a one-line plain box reads as a string
 				// rather than as language, and nothing tells the author that `&Store` is a value
 				// arriving from outside.
-				row.m_code = new wxStyledTextCtrl(this, wxID_ANY, wxDefaultPosition,
+				row.m_code = new ibStyledTextCtrl(this, wxID_ANY, wxDefaultPosition,
 					wxSize(FromDIP(360), FromDIP(90)));
 				ibStyleQueryText(row.m_code);
 				// …AND A FIELD, NOT A FILE. A condition here is a few lines at most; a column of line numbers
@@ -519,7 +519,7 @@ public:
 				// multi-line box: no margin, and a long condition wraps instead of scrolling sideways.
 				row.m_code->SetMarginWidth(0, 0);
 				row.m_code->SetUseHorizontalScrollBar(false);
-				row.m_code->SetWrapMode(wxSTC_WRAP_WORD);
+				row.m_code->SetWrapMode(ibSTC_WRAP_WORD);
 				row.m_code->SetText(written);
 				ibMarkQueryText(row.m_code);
 				row.m_code->SetReadOnly(m_readOnly);
@@ -573,7 +573,7 @@ public:
 				//
 				// One kind of editor, two heights. What differs between a value and a condition is
 				// how much room it needs and whether the "..." is offered, not what it IS.
-				row.m_code = new wxStyledTextCtrl(this, wxID_ANY, wxDefaultPosition,
+				row.m_code = new ibStyledTextCtrl(this, wxID_ANY, wxDefaultPosition,
 					wxSize(FromDIP(360), FromDIP(24)));
 				ibStyleQueryText(row.m_code);
 				// …AND NO LINE NUMBER ON ONE LINE. The margin earns its room where the engine can
@@ -671,7 +671,7 @@ private:
 	// row holds the same language; a value gets one line of it and a condition several.
 	struct Row
 	{
-		wxStyledTextCtrl* m_code   = nullptr;
+		ibStyledTextCtrl* m_code   = nullptr;
 		ibChoice*         m_choice = nullptr;   // a closed set of values (the source declared one)
 
 		wxString Text() const {

@@ -616,11 +616,11 @@ private:
 	class ibDataViewCtrl*   m_statements     = nullptr;   // the package — one row per statement
 	class ibQueryGridModel* m_statementModel = nullptr;
 	ibNotebook*    m_notebook   = nullptr;
-	// THE QUERY TEXT, in a real code editor (wxStyledTextCtrl) with the SQL lexer. The round trip IS
+	// THE QUERY TEXT, in a real code editor (ibStyledTextCtrl) with the SQL lexer. The round trip IS
 	// the feature, so the text is on screen the whole time — and text that is on screen the whole time
 	// should be readable: keywords apart from names, strings apart from numbers. The keyword set comes
 	// from the LANGUAGE'S OWN TABLE (ibAllQueryKeywords), never a list typed here.
-	class wxStyledTextCtrl* m_preview = nullptr;
+	class ibStyledTextCtrl* m_preview = nullptr;
 	ibStaticText*  m_status      = nullptr;   // the engine's verdict on the query as it stands
 	// TWO STRIPS OF TABS DOWN THE RIGHT EDGE, one per level, and both mean the same thing: "the
 	// query the tabs are currently showing". A list box was the first shape for the branches and it
@@ -779,7 +779,7 @@ FRMCLIENT_API bool ibPickGroupingScope(wxWindow* parent,
                                       const std::vector<wxString>& separators,
                                       wxString& inOut);
 
-FRMCLIENT_API void ibStyleQueryText(class wxStyledTextCtrl* text);
+FRMCLIENT_API void ibStyleQueryText(class ibStyledTextCtrl* text);
 
 // The indicator `&name` is painted with. An INDICATOR and not a style, because the lexer owns the
 // styles and repaints them; indicators are drawn on top and survive re-lexing.
@@ -792,6 +792,6 @@ constexpr int kQueryPlacedWordIndicator = 9;
 // marked. Every `&name`: a parameter is a value handed in from outside, and reading exactly like a column
 // of the query is how somebody spends a while wondering why "that field" cannot be found. And every word
 // that is the language's by its place (kQueryPlacedWordIndicator), read off the engine's own tokens.
-FRMCLIENT_API void ibMarkQueryText(class wxStyledTextCtrl* text);
+FRMCLIENT_API void ibMarkQueryText(class ibStyledTextCtrl* text);
 
 #endif // __QUERY_CONSTRUCTOR_DLG_H__

@@ -1,17 +1,17 @@
 #include "textEditor.h"
 
 ibTextEditor::ibTextEditor(ibFrontendDocument* document, wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size, long style, const wxString& name)
-	: wxStyledTextCtrl(parent, id, pos, size, style, name), m_document(document)
+	: ibStyledTextCtrl(parent, id, pos, size, style, name), m_document(document)
 {
 	//Set margin cursor
-	for (int margin = 0; margin < wxStyledTextCtrl::GetMarginCount(); margin++)
-		wxStyledTextCtrl::SetMarginCursor(margin, wxSTC_CURSORARROW);
+	for (int margin = 0; margin < ibStyledTextCtrl::GetMarginCount(); margin++)
+		ibStyledTextCtrl::SetMarginCursor(margin, ibSTC_CURSORARROW);
 
 	// subscribe to changes in the text control to update the document state
 	// when it's modified
-	wxStyledTextCtrl::Connect
+	ibStyledTextCtrl::Connect
 	(
-		wxEVT_STC_CHANGE,
+		ibEVT_STC_CHANGE,
 		wxCommandEventHandler(ibTextEditor::OnTextChange),
 		nullptr,
 		this

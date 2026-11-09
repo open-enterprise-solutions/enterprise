@@ -39,9 +39,10 @@ target_include_directories(codeRunner PRIVATE
 )
 
 # THE CODE EDITOR IS ITS OWN — copied whole from the old desktop front, with the art, the settings and the two
-# dialogs it opens (win/, artProvider/, mainFrame/settings/), so this program links the backend and wx and nothing
-# else of ours, as the launcher does. wx::xml is the settings' reader.
+# dialogs it opens (win/, artProvider/, mainFrame/settings/); the Scintilla host under it is the desktop's user
+# interface library's (deskgui/univ/stc), as the launcher's windows are. wx::xml is the settings' reader.
 target_link_libraries(codeRunner PRIVATE
+    deskgui
     backend
-    wx::core wx::stc wx::qa wx::base wx::xml
+    wx::core wx::aui wx::qa wx::base wx::xml
 )

@@ -284,6 +284,14 @@ void ibButton::DoDraw(ibControlRenderer *renderer)
     dc.SetTextForeground(m_isHyperlink && !(flags & wxCONTROL_DISABLED) ? wxTHEME_COLOUR(HYPERLINK)
                                                                          : GetForegroundColour());
 
+    // …and where Tab stands, on the accent's pale pad: a link has no frame to show the focus, as a button's does
+    if ( m_isHyperlink && (flags & wxCONTROL_FOCUSED) )
+    {
+        dc.SetPen(*wxTRANSPARENT_PEN);
+        dc.SetBrush(wxBrush(wxTHEME_COLOUR(HIGHLIGHT).ChangeLightness(170)));
+        dc.DrawRectangle(rect);
+    }
+
     const wxString label = HasFlag(wxBU_NOTEXT) ? wxString() : GetLabelText();
     const wxBitmap bmp = BitmapForCurrentState();
     const int bmpW = bmp.IsOk() ? bmp.GetLogicalWidth() : 0;
@@ -421,7 +429,7 @@ void ibButton::SetHyperlink(bool isHyperlink)
         return;
     m_isHyperlink = isHyperlink;
 
-    // No frame: the border is this window's own (the NC pass draws it), so it goes with the style - at the wx level
+    // No frame: the border is this window's own (ibWindow::TryBefore draws it), so it goes with the style - at the wx level
     // only, as ibWindow::Create sets it: the native host never draws one.
     wxWindowBase::SetWindowStyleFlag((GetWindowStyleFlag() & ~wxBORDER_MASK)
                                      | (isHyperlink ? wxBORDER_NONE : GetDefaultBorder()));

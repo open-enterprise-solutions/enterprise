@@ -16,6 +16,9 @@
     <Filter Include="univ\theme">
       <UniqueIdentifier>{7c1e4a2b-9d3f-4e5a-8b6c-0d1e2f3a0005}</UniqueIdentifier>
     </Filter>
+    <Filter Include="univ\stc">
+      <UniqueIdentifier>{7c1e4a2b-9d3f-4e5a-8b6c-0d1e2f3a0006}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="univ\choiceDialog.cpp">
@@ -114,6 +117,9 @@
     <ClCompile Include="univ\ctrl\treelistctrl.cpp">
       <Filter>univ\ctrl</Filter>
     </ClCompile>
+    <ClCompile Include="univ\ctrl\vListBox.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
     <ClCompile Include="univ\dataview\datavcmn.cpp">
       <Filter>univ\dataview</Filter>
     </ClCompile>
@@ -191,6 +197,15 @@
     </ClCompile>
     <ClCompile Include="univ\splitterWindow.cpp">
       <Filter>univ</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\stc\PlatWX.cpp">
+      <Filter>univ\stc</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\stc\ScintillaWX.cpp">
+      <Filter>univ\stc</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\stc\stc.cpp">
+      <Filter>univ\stc</Filter>
     </ClCompile>
     <ClCompile Include="univ\theme.cpp">
       <Filter>univ</Filter>
@@ -316,6 +331,9 @@
     <ClInclude Include="univ\ctrl\treelistctrl.h">
       <Filter>univ\ctrl</Filter>
     </ClInclude>
+    <ClInclude Include="univ\ctrl\vListBox.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
     <ClInclude Include="univ\customBgWin.h">
       <Filter>univ</Filter>
     </ClInclude>
@@ -411,6 +429,15 @@
     </ClInclude>
     <ClInclude Include="univ\splitterWindow.h">
       <Filter>univ</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\stc\PlatWX.h">
+      <Filter>univ\stc</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\stc\ScintillaWX.h">
+      <Filter>univ\stc</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\stc\stc.h">
+      <Filter>univ\stc</Filter>
     </ClInclude>
     <ClInclude Include="univ\theme.h">
       <Filter>univ</Filter>

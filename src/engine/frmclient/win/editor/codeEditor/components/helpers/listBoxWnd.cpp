@@ -1,14 +1,16 @@
 #include "listBoxWnd.h"
 
+#include "deskgui/univ/renderer.h"   // the focus rectangle of the classic look - the theme renderer's
+
 #define EXTENT_TEST wxT(" `~!@#$%^&*()-_=+\\|[]{};:\"\'<,>.?/1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
 ibCodeEditorListBox::ibCodeEditorListBox(wxWindow* parent, ibListBoxVisualData* v, int ht)
-	:wxSystemThemedControl<wxVListBox>(),
+	:ibVListBox(),
 	m_visualData(v), m_maxStrWidth(0), m_currentRow(wxNOT_FOUND),
 	m_aveCharWidth(8), m_textHeight(ht), m_itemHeight(ht),
 	m_textTopGap(0), m_imageAreaWidth(0), m_imageAreaHeight(0)
 {
-	wxVListBox::Create(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+	ibVListBox::Create(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxBORDER_NONE, "AutoCompListBox");
 
 	m_imagePadding = FromDIP(1);
@@ -19,18 +21,12 @@ ibCodeEditorListBox::ibCodeEditorListBox(wxWindow* parent, ibListBoxVisualData* 
 
 	Bind(wxEVT_SYS_COLOUR_CHANGED, &ibCodeEditorListBox::OnSysColourChanged, this);
 
+	// No system theme to enable and no parent's background for a native painter to take its colours from - the rows
+	// are drawn in the theme's (ibListBoxVisualData::ComputeColours).
 	if (m_visualData->HasListCtrlAppearance())
 	{
-		EnableSystemTheme();
 		Bind(wxEVT_MOTION, &ibCodeEditorListBox::OnMouseMotion, this);
 		Bind(wxEVT_LEAVE_WINDOW, &ibCodeEditorListBox::OnMouseLeaveWindow, this);
-
-#ifdef __WXMSW__
-		// On MSW when using wxRendererNative to draw items in list control
-		// style, the colours used seem to be based on the parent's
-		// background colour. So set the popup's background.
-		parent->SetOwnBackgroundColour(m_visualData->GetBgColour());
-#endif
 	}
 }
 
@@ -190,8 +186,9 @@ void ibCodeEditorListBox::OnMouseLeaveWindow(wxMouseEvent& event)
 
 void ibCodeEditorListBox::OnMouseMotion(wxMouseEvent& event)
 {
+	// the mouse comes in the window's coordinates, the rows are the client area's
 	const int old = m_currentRow;
-	m_currentRow = VirtualHitTest(event.GetY());
+	m_currentRow = VirtualHitTest(event.GetY() - GetClientAreaOrigin().y);
 
 	if (old != m_currentRow)
 	{
@@ -289,38 +286,21 @@ void ibCodeEditorListBox::OnDrawBackground(wxDC &dc, const wxRect &rect, size_t 
 		}
 #endif // __WXMSW__
 
-		if (highlightBgColour.IsOk())
-		{
-			wxDCBrushChanger bc(dc, highlightBgColour);
-			wxDCPenChanger   pc(dc, highlightBgColour);
-			dc.DrawRectangle(selectionRect);
-		}
-		else
-		{
-			wxRendererNative::GetDefault().DrawItemSelectionRect(
-				const_cast<ibCodeEditorListBox*>(this), dc, selectionRect,
-				wxCONTROL_SELECTED | wxCONTROL_FOCUSED);
-		}
+		// The colour is always one (ComputeColours) - no native pad; the classic look's focus rectangle is the theme
+		// renderer's.
+		wxDCBrushChanger bc(dc, highlightBgColour);
+		wxDCPenChanger   pc(dc, highlightBgColour);
+		dc.DrawRectangle(selectionRect);
 
 		if (!m_visualData->HasListCtrlAppearance())
-			wxRendererNative::GetDefault().DrawFocusRect(
-				const_cast<ibCodeEditorListBox*>(this), dc, selectionRect);
+			GetRenderer()->DrawFocusRect(const_cast<ibCodeEditorListBox*>(this), dc, selectionRect);
 	}
 	else if (static_cast<int>(n) == m_currentRow)
 	{
 		const wxColour& currentBgColour = m_visualData->GetCurrentBgColour();
 
-		if (currentBgColour.IsOk())
-		{
-			wxDCBrushChanger bc(dc, currentBgColour);
-			wxDCPenChanger   pc(dc, currentBgColour);
-			dc.DrawRectangle(rect);
-		}
-		else
-		{
-			wxRendererNative::GetDefault().DrawItemSelectionRect(
-				const_cast<ibCodeEditorListBox*>(this), dc, rect,
-				wxCONTROL_CURRENT | wxCONTROL_FOCUSED);
-		}
+		wxDCBrushChanger bc(dc, currentBgColour);
+		wxDCPenChanger   pc(dc, currentBgColour);
+		dc.DrawRectangle(rect);
 	}
 }

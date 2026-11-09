@@ -56,7 +56,7 @@
 #include <wx/artprov.h>
 #include <wx/dnd.h>
 #include <wx/wupdlock.h>
-#include <wx/stc/stc.h>
+#include "deskgui/univ/stc/stc.h"
 
 #include "../callbackDropTarget.h"   // the same-process drag: a drop is a notification, the source knows what moved
 #include "deskgui/univ/dataview/dataviewEditOnActivate.h"   // a double-click opens the cell

@@ -305,9 +305,6 @@ public:
     // the text area of a field whose width is set, in DIP (GetMinSize)
     static constexpr int kMinimumTextWidth = 56;
 
-    // only for ibStdTextCtrlInputHandler
-    void RefreshSelection();
-
     // override wxScrollHelper method to prevent (auto)scrolling beyond the end
     // of line
     virtual bool SendAutoScrollEvents(wxScrollWinEvent& event) const override;

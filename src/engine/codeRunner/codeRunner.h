@@ -5,13 +5,12 @@
 #include <vector>
 
 #include <wx/string.h>
-#include <wx/button.h>
-#include <wx/choice.h>
 #include <wx/sizer.h>
 #include <wx/statusbr.h>
 #include <wx/frame.h>
-#include <wx/stc/stc.h>
-#include <wx/toolbar.h>
+#include "deskgui/univ/ctrl/button.h"
+#include "deskgui/univ/ctrl/choice.h"
+#include "deskgui/univ/stc/stc.h"
 #include <wx/menu.h>
 
 ///////////////////////////////////////////////////////////////////////////
@@ -39,11 +38,11 @@ protected:
 	std::vector<class ibValue> m_listContextManager;
 
 	ibCodeEditor*     m_codeEditor;
-	wxChoice*         m_syntaxChoice;
-	wxButton*         m_buttonSyntaxCheck;
-	wxButton*         m_buttonRunCode;
-	wxButton*         m_buttonClearOutput;
-	wxStyledTextCtrl* m_output;
+	ibChoice*         m_syntaxChoice;
+	ibButton*         m_buttonSyntaxCheck;
+	ibButton*         m_buttonRunCode;
+	ibButton*         m_buttonClearOutput;
+	ibStyledTextCtrl* m_output;
 	wxStatusBar*      m_statusBar;
 
 	void SyntaxCheckOnButtonClick(wxCommandEvent& event);

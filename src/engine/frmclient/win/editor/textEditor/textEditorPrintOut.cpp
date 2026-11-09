@@ -11,7 +11,7 @@
 // ibTextEditorPrintout
 //----------------------------------------------------------------------------
 
-ibTextEditorPrintout::ibTextEditorPrintout(wxStyledTextCtrl*edit, const wxString& title)
+ibTextEditorPrintout::ibTextEditorPrintout(ibStyledTextCtrl*edit, const wxString& title)
 	: wxPrintout(title)
 	, m_edit(edit)
 {

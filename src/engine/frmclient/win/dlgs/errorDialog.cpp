@@ -20,24 +20,24 @@ ibDialogError::ibDialogError(ibFrontendMainFrame* parent, wxWindowID id,
 	ibDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
 	wxBoxSizer* bSizerMain = new wxBoxSizer(wxHORIZONTAL);
 
-	m_errorOutput = new wxStyledTextCtrl(this, wxID_ANY, wxDefaultPosition, wxSize(550, 250), 0, wxEmptyString);
+	m_errorOutput = new ibStyledTextCtrl(this, wxID_ANY, wxDefaultPosition, wxSize(550, 250), 0, wxEmptyString);
 
 	// initialize styles
 	m_errorOutput->StyleClearAll();
 
 	//set Lexer to LEX_CONTAINER: This will trigger the styleneeded event so you can do your own highlighting
-	m_errorOutput->SetLexer(wxSTC_LEX_CONTAINER);
+	m_errorOutput->SetLexer(ibSTC_LEX_CONTAINER);
 
 	//Set margin cursor
 	for (int margin = 0; margin < m_errorOutput->GetMarginCount(); margin++)
-		m_errorOutput->SetMarginCursor(margin, wxSTC_CURSORARROW);
+		m_errorOutput->SetMarginCursor(margin, ibSTC_CURSORARROW);
 
-	m_errorOutput->SetMarginType(DEF_LINENUMBER_ID, wxSTC_MARGIN_NUMBER);
+	m_errorOutput->SetMarginType(DEF_LINENUMBER_ID, ibSTC_MARGIN_NUMBER);
 	m_errorOutput->SetMarginWidth(DEF_LINENUMBER_ID, 0);
 
 	// set margin as unused
-	m_errorOutput->SetMarginType(DEF_IMAGE_ID, wxSTC_MARGIN_SYMBOL);
-	m_errorOutput->SetMarginMask(DEF_IMAGE_ID, ~(1024 | 256 | 512 | 128 | 64 | wxSTC_MASK_FOLDERS));
+	m_errorOutput->SetMarginType(DEF_IMAGE_ID, ibSTC_MARGIN_SYMBOL);
+	m_errorOutput->SetMarginMask(DEF_IMAGE_ID, ~(1024 | 256 | 512 | 128 | 64 | ibSTC_MASK_FOLDERS));
 	m_errorOutput->StyleSetBackground(DEF_IMAGE_ID, *wxWHITE);
 
 	m_errorOutput->SetMarginWidth(DEF_IMAGE_ID, FromDIP(16));
@@ -72,7 +72,7 @@ ibDialogError::ibDialogError(ibFrontendMainFrame* parent, wxWindowID id,
 	// The report in the code's font and colours, without line numbers.
 	parent->GetEditorSettings().Apply(*m_errorOutput);
 	parent->GetFontColorSettings().Apply(*m_errorOutput);
-	m_errorOutput->SetMarginType(DEF_LINENUMBER_ID, wxSTC_MARGIN_NUMBER);
+	m_errorOutput->SetMarginType(DEF_LINENUMBER_ID, ibSTC_MARGIN_NUMBER);
 	m_errorOutput->SetMarginWidth(DEF_LINENUMBER_ID, 0);
 
 	/** Enumeration of commands and child windows. */

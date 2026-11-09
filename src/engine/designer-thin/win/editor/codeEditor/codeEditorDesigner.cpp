@@ -7,7 +7,7 @@
 #include "designer-thin/backend/debugger/debugClient.h"
 #include "designer-thin/docManager/templates/docViewModuleEditor.h"
 
-#include <wx/menu.h>
+#include "deskgui/univ/menu.h"
 #include "deskgui/univ/textEntryDialog.h"   // ibTextEntryDialog - the breakpoint's condition
 #include "frmclient/artProvider/artProvider.h"   // wxART_BREAKPOINT_CONDITION
 
@@ -66,7 +66,7 @@ bool ibCodeEditorDesigner::GetDebugPointHint(int line, wxString& hint)
 }
 
 // ⭐ A CONDITION IS A PROPERTY OF THE BREAKPOINT, set where the breakpoint is: on its line — the desktop's.
-void ibCodeEditorDesigner::AppendDebugMenu(wxMenu& menu, int line)
+void ibCodeEditorDesigner::AppendDebugMenu(ibMenu& menu, int line)
 {
 	if (debugClient == nullptr || m_moduleDocument == nullptr)
 		return;

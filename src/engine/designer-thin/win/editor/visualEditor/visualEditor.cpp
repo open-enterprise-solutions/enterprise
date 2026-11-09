@@ -287,7 +287,7 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::ScrollToObject(
 		return;
 
 	// The card scrolls in the canvas.
-	wxScrolledCanvas* const canvas = GetContentWindow();
+	wxScrolledWindow* const canvas = GetContentWindow();
 	int stepx, stepy;
 	canvas->GetScrollPixelsPerUnit(&stepx, &stepy);
 	const wxRect viewRect(canvas->GetClientRect());
@@ -321,7 +321,7 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::UpdateVirtualSi
 	m_back->SetClientSize(m_back->GetBestSize());
 
 	// Unscrolled: scrolled, the card stands where the scrolling moved it, and the canvas would shrink by twice that.
-	wxScrolledCanvas* const canvas = GetContentWindow();
+	wxScrolledWindow* const canvas = GetContentWindow();
 	const wxPoint margin = canvas->CalcUnscrolledPosition(m_back->GetPosition());
 	canvas->SetVirtualSize(m_back->GetSize() + wxSize(margin.x * 2, margin.y * 2));
 	canvas->Refresh();

@@ -9,6 +9,8 @@
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/mainFrame/settings/fontcolorsettings.h"
 
+#include "deskgui/univ/menu.h"
+
 /** Enumeration of commands and child windows. */
 enum
 {
@@ -18,7 +20,7 @@ enum
 	idcmdClear = 17,
 };
 
-wxBEGIN_EVENT_TABLE(ibOutputWindow, wxStyledTextCtrl)
+wxBEGIN_EVENT_TABLE(ibOutputWindow, ibStyledTextCtrl)
 EVT_CONTEXT_MENU(ibOutputWindow::OnContextMenu)
 EVT_MENU(idcmdClear, ibOutputWindow::OnClearOutput)
 wxEND_EVENT_TABLE()
@@ -27,17 +29,17 @@ wxEND_EVENT_TABLE()
 #define DEF_IMAGE_ID 1
 
 ibOutputWindow::ibOutputWindow(ibFrontendMainFrame* parent, wxWindowID winid)
-	: wxStyledTextCtrl(parent, winid, wxDefaultPosition, wxDefaultSize)
+	: ibStyledTextCtrl(parent, winid, wxDefaultPosition, wxDefaultSize)
 {
 	// initialize styles
 	StyleClearAll();
 
 	//set Lexer to LEX_CONTAINER: This will trigger the styleneeded event so you can do your own highlighting
-	SetLexer(wxSTC_LEX_CONTAINER);
+	SetLexer(ibSTC_LEX_CONTAINER);
 
 	//Set margin cursor
 	for (int margin = 0; margin < GetMarginCount(); margin++)
-		SetMarginCursor(margin, wxSTC_CURSORARROW);
+		SetMarginCursor(margin, ibSTC_CURSORARROW);
 
 	// The level of a message is the picture in the margin - the provider's (artProvider/service/output*.svg).
 	const wxSize markerSize = FromDIP(wxSize(12, 12));
@@ -60,20 +62,20 @@ void ibOutputWindow::SetFontColorSettings(const ibFontColorSettings& settings)
 {
 	// The messages in the code's font, selected in the selection's colours; the paper stays the window's own.
 	StyleClearAll();
-	StyleSetFont(wxSTC_STYLE_DEFAULT, settings.GetFont());
-	StyleSetFont(wxSTC_C_DEFAULT, settings.GetFont(ibFontColorSettings::DisplayItem_Default));
-	StyleSetFont(wxSTC_C_IDENTIFIER, settings.GetFont(ibFontColorSettings::DisplayItem_Default));
+	StyleSetFont(ibSTC_STYLE_DEFAULT, settings.GetFont());
+	StyleSetFont(ibSTC_C_DEFAULT, settings.GetFont(ibFontColorSettings::DisplayItem_Default));
+	StyleSetFont(ibSTC_C_IDENTIFIER, settings.GetFont(ibFontColorSettings::DisplayItem_Default));
 
 	const ibFontColorSettings::Colors& selection = settings.GetColors(ibFontColorSettings::DisplayItem_Selection);
 	SetSelForeground(true, selection.foreColor);
 	SetSelBackground(true, selection.backColor);
 
-	SetMarginType(DEF_LINENUMBER_ID, wxSTC_MARGIN_NUMBER);
+	SetMarginType(DEF_LINENUMBER_ID, ibSTC_MARGIN_NUMBER);
 	SetMarginWidth(DEF_LINENUMBER_ID, 0);
 
 	// set margin as unused
-	SetMarginType(DEF_IMAGE_ID, wxSTC_MARGIN_SYMBOL);
-	SetMarginMask(DEF_IMAGE_ID, ~(1024 | 256 | 512 | 128 | 64 | wxSTC_MASK_FOLDERS));
+	SetMarginType(DEF_IMAGE_ID, ibSTC_MARGIN_SYMBOL);
+	SetMarginMask(DEF_IMAGE_ID, ~(1024 | 256 | 512 | 128 | 64 | ibSTC_MASK_FOLDERS));
 	StyleSetBackground(DEF_IMAGE_ID, *wxWHITE);
 
 	SetMarginWidth(DEF_IMAGE_ID, FromDIP(16));
@@ -108,7 +110,7 @@ void ibOutputWindow::Output(const wxString& message, ibProtocol::ibFrame::ibMess
 	}
 
 	if (mainFrame->IsShown()) {
-		wxStyledTextCtrl::SetFocus();
+		ibStyledTextCtrl::SetFocus();
 	}
 
 	// update output window
@@ -118,7 +120,7 @@ void ibOutputWindow::Output(const wxString& message, ibProtocol::ibFrame::ibMess
 void ibOutputWindow::Clear()
 {
 	SetEditable(true);
-	wxStyledTextCtrl::ClearAll();
+	ibStyledTextCtrl::ClearAll();
 	SetEditable(false);
 }
 
@@ -131,19 +133,19 @@ void ibOutputWindow::OnContextMenu(wxContextMenuEvent& event)
 	  Show context menu at event point if it's within the window,
 	  or at caret location if not
 	*/
-	wxHitTest ht = wxStyledTextCtrl::HitTest(pt);
+	wxHitTest ht = ibStyledTextCtrl::HitTest(pt);
 	if (ht != wxHT_WINDOW_INSIDE) {
 		pt = this->PointFromPosition(this->GetCurrentPos());
 	}
 
 	// On the stack — PopupMenu does not take ownership and blocks until dismissed.
-	wxMenu popupMenu;
+	ibMenu popupMenu;
 
 	wxMenuItem* menuItemCopy = popupMenu.Append(idcmdCopy, _("Copy"));
-	menuItemCopy->Enable(wxStyledTextCtrl::CanCopy());
+	menuItemCopy->Enable(ibStyledTextCtrl::CanCopy());
 	popupMenu.Append(idcmdClear, _("Clear"));
 
-	wxStyledTextCtrl::PopupMenu(&popupMenu, pt);
+	ibStyledTextCtrl::PopupMenu(&popupMenu, pt);
 }
 
 void ibOutputWindow::OnClearOutput(wxCommandEvent& event)

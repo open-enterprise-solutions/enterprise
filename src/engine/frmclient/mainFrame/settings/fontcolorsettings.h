@@ -11,7 +11,7 @@
 
 #include "frmclient/frmclient.h"
 
-class wxStyledTextCtrl;
+class ibStyledTextCtrl;
 class wxXmlNode;
 
 class FRMCLIENT_API ibFontColorSettings
@@ -61,7 +61,7 @@ public:
 
 	// Paints a text control in these: each kind of text the C lexer tells apart in its font and colours, the
 	// selection, the line numbers, and a caret that shows on the paper.
-	void Apply(wxStyledTextCtrl& text) const;
+	void Apply(ibStyledTextCtrl& text) const;
 
 	// The settings as a node named by the tag; Load reads one back, keeping
 	// the default for a kind the node does not name.

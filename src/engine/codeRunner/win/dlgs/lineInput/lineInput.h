@@ -4,26 +4,26 @@
 #include <wx/artprov.h>
 #include <wx/xrc/xmlres.h>
 #include <wx/string.h>
-#include <wx/stattext.h>
+#include "deskgui/univ/ctrl/staticText.h"
 #include <wx/gdicmn.h>
 #include <wx/font.h>
 #include <wx/colour.h>
 #include <wx/settings.h>
-#include <wx/textctrl.h>
+#include "deskgui/univ/ctrl/textCtrl.h"
 #include <wx/sizer.h>
 #include <wx/bitmap.h>
 #include <wx/image.h>
 #include <wx/icon.h>
-#include <wx/button.h>
-#include <wx/dialog.h>
+#include "deskgui/univ/ctrl/button.h"
+#include "deskgui/univ/dialog.h"
 #include "core/localization/dictionary.h"   // _() — the dialog's words
 
-class ibDialogLineInput : public wxDialog
+class ibDialogLineInput : public ibDialog
 {
-	wxStaticText* m_staticTextLine;
-	wxTextCtrl* m_lineNumber;
-	wxButton* m_buttonGoTo;
-	wxButton* m_buttonCancel;
+	ibStaticText* m_staticTextLine;
+	ibTextCtrl* m_lineNumber;
+	ibButton* m_buttonGoTo;
+	ibButton* m_buttonCancel;
 
 public:
 

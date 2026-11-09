@@ -34,3 +34,6 @@
 [submodule "src/3rdparty/date"]
 	path = src/3rdparty/date
 	url = https://github.com/HowardHinnant/date.git
+[submodule "src/3rdparty/lexilla"]
+	path = src/3rdparty/lexilla
+	url = https://github.com/ScintillaOrg/lexilla.git

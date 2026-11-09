@@ -23,7 +23,7 @@ protected:
 	virtual void OnPatchModule(int line, int linesAdded, bool atLineStart) override;
 	virtual void OnEvaluateToolTip(const wxString& expression) override;
 	virtual void RefreshBreakpointMarkers() override;
-	virtual void AppendDebugMenu(wxMenu& menu, int line) override;
+	virtual void AppendDebugMenu(ibMenu& menu, int line) override;
 	virtual bool GetDebugPointHint(int line, wxString& hint) override;
 
 private:

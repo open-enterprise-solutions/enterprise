@@ -1,14 +1,14 @@
 #include "editorsettings.h"
 #include "settingsxml.h"
 
-#include <wx/stc/stc.h>
+#include "deskgui/univ/stc/stc.h"
 
 void ibEditorSettings::SetIndentSize(unsigned int indentSize)
 {
 	m_indentSize = indentSize > 32 ? 32 : indentSize;
 }
 
-void ibEditorSettings::Apply(wxStyledTextCtrl& text) const
+void ibEditorSettings::Apply(ibStyledTextCtrl& text) const
 {
 	text.SetIndent(m_indentSize);
 	text.SetTabWidth(m_indentSize);
@@ -18,7 +18,7 @@ void ibEditorSettings::Apply(wxStyledTextCtrl& text) const
 	text.SetTabIndents(m_useTabs);
 	text.SetBackSpaceUnIndents(m_useTabs);
 
-	text.SetViewWhiteSpace(m_showWhiteSpace ? wxSTC_WS_VISIBLEALWAYS : wxSTC_WS_INVISIBLE);
+	text.SetViewWhiteSpace(m_showWhiteSpace ? ibSTC_WS_VISIBLEALWAYS : ibSTC_WS_INVISIBLE);
 }
 
 wxXmlNode* ibEditorSettings::Save(const wxString& tag) const

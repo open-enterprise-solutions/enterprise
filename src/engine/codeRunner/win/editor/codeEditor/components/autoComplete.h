@@ -25,7 +25,7 @@ class ibAutoComplete
 
 public:
 
-	ibAutoComplete(wxStyledTextCtrl* textCtrl);
+	ibAutoComplete(ibStyledTextCtrl* textCtrl);
 	virtual ~ibAutoComplete();
 
 	/// Is the auto completion list displayed?
@@ -82,7 +82,7 @@ private:
 
 	ibCodeEditorListBoxWin*              m_listBoxWin       = nullptr;
 	ibListBoxVisualData*          m_visualData       = nullptr;
-	wxStyledTextCtrl*             m_owner            = nullptr;
+	ibStyledTextCtrl*             m_owner            = nullptr;
 	wxEvtHandler*                 m_evtHandler       = nullptr;
 
 	/// Should autocompletion be canceled if editor's currentPos <= startPos?

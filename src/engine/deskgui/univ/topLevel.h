@@ -23,6 +23,7 @@
 #include <wx/toplevel.h>
 #include <wx/dcclient.h>
 #include <wx/dcmemory.h>
+#include <wx/graphics.h>
 #include <wx/cshelp.h>
 #include <wx/utils.h>
 
@@ -297,6 +298,11 @@ long ibTopLevelWindow<W>::GetDecorationsStyle() const
 template <class W>
 void ibTopLevelWindow<W>::RefreshTitleBar()
 {
+#ifdef __WXOSX__
+    // SEAM vs wxOSX: the paint is raised only when what is dirty touches the client area (wxWindowMac::MacDoRedraw) -
+    // the strips alone were never painted; the whole window, the decorations painted with it (OnPaint)
+    this->Refresh(false);
+#else
     const wxSize size = this->GetSize();
     const wxRect client(GetClientAreaOrigin(), this->GetClientSize());
 
@@ -304,6 +310,7 @@ void ibTopLevelWindow<W>::RefreshTitleBar()
     this->RefreshRect(wxRect(0, client.y, client.x, size.y - client.y), false);
     this->RefreshRect(wxRect(client.GetRight() + 1, client.y, size.x - client.GetRight() - 1, size.y - client.y), false);
     this->RefreshRect(wxRect(client.x, client.GetBottom() + 1, client.width, size.y - client.GetBottom() - 1), false);
+#endif // __WXOSX__
 }
 
 template <class W>
@@ -345,10 +352,13 @@ void ibTopLevelWindow<W>::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
     wxPaintDC dcPaint(this);
 
-    // the paint DC begins at the client area (GetClientAreaOrigin), the decorations are round it: the whole window.
+    // the paint DC begins at the client area (GetClientAreaOrigin), the decorations are round it: the whole window -
+    // wxOSX's is clipped to the client area too (wxPaintDCImpl), the clip taken off (ibWindow::TryBefore).
     // Not wxBufferedDC: it blits no more than its DC's size, the client size (wxClientDCImpl::DoGetSize) - the frame's
     // bottom and right were left unpainted, what was behind the window showing there
     dcPaint.SetDeviceOrigin(0, 0);
+    if ( wxGraphicsContext* const gc = dcPaint.GetGraphicsContext() )
+        gc->ResetClip();
     const wxSize size = this->GetSize();
     wxBitmap buffer(size);
     wxMemoryDC dc(buffer);

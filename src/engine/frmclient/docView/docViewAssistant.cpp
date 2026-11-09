@@ -7,7 +7,7 @@
 #include <wx/sizer.h>
 #include "deskgui/univ/splitterWindow.h"
 #include "deskgui/univ/ctrl/staticText.h"
-#include <wx/stc/stc.h>
+#include "deskgui/univ/stc/stc.h"
 #include "deskgui/univ/ctrl/textCtrl.h"
 #include <wx/weakref.h>
 
@@ -17,7 +17,7 @@ namespace {
 // modification, our own included — so the flag comes off for the write and goes
 // straight back on. Without this the transcript silently stays empty, which
 // reads as "nothing happened" rather than as "the control refused".
-void AppendTranscript(wxStyledTextCtrl* transcript, const wxString& text)
+void AppendTranscript(ibStyledTextCtrl* transcript, const wxString& text)
 {
 	if (transcript == nullptr)
 		return;
@@ -102,58 +102,58 @@ void ibAssistantView::BuildLayout(wxWindow* parent)
 		font = wxFont(10, wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL);
 	}
 
-	m_transcript = new wxStyledTextCtrl(splitter, wxID_ANY);
+	m_transcript = new ibStyledTextCtrl(splitter, wxID_ANY);
 
 	if (font.IsOk()) {
-		m_transcript->StyleSetFont(wxSTC_STYLE_DEFAULT, font);
+		m_transcript->StyleSetFont(ibSTC_STYLE_DEFAULT, font);
 		m_transcript->StyleClearAll();
 	}
 
 	// The author chose the emphasis when they wrote the markdown; this only
 	// renders it.
 	//
-	// ⚠ BY NAME, not by number. This wx carries Lexilla (src/stc/lexilla), where
-	// lexers are created on request from a NAME — the old numeric SetLexer is
-	// the legacy door and colours nothing, which is exactly how this arrived:
-	// styles set, lexer silent, text flat.
+	// ⚠ BY NAME, not by number. Lexilla (src/3rdparty/lexilla) creates its
+	// lexers from a NAME; the number is the legacy door, and wx's coloured
+	// nothing — which is exactly how this arrived: styles set, lexer silent,
+	// text flat.
 	m_transcript->SetLexerLanguage(wxT("markdown"));
 
 	// And colours, because weight alone is nearly invisible on a heading. Kept
 	// to a handful of foreground colours over the inherited background, so the
 	// window still follows whatever theme the shared settings carry.
-	m_transcript->StyleSetForeground(wxSTC_MARKDOWN_HEADER1, wxColour(0, 64, 128));
-	m_transcript->StyleSetForeground(wxSTC_MARKDOWN_HEADER2, wxColour(0, 64, 128));
-	m_transcript->StyleSetForeground(wxSTC_MARKDOWN_HEADER3, wxColour(0, 64, 128));
-	m_transcript->StyleSetBold(wxSTC_MARKDOWN_HEADER1, true);
-	m_transcript->StyleSetBold(wxSTC_MARKDOWN_HEADER2, true);
-	m_transcript->StyleSetBold(wxSTC_MARKDOWN_HEADER3, true);
-	m_transcript->StyleSetBold(wxSTC_MARKDOWN_STRONG1, true);
-	m_transcript->StyleSetBold(wxSTC_MARKDOWN_STRONG2, true);
-	m_transcript->StyleSetItalic(wxSTC_MARKDOWN_EM1, true);
-	m_transcript->StyleSetItalic(wxSTC_MARKDOWN_EM2, true);
+	m_transcript->StyleSetForeground(ibSTC_MARKDOWN_HEADER1, wxColour(0, 64, 128));
+	m_transcript->StyleSetForeground(ibSTC_MARKDOWN_HEADER2, wxColour(0, 64, 128));
+	m_transcript->StyleSetForeground(ibSTC_MARKDOWN_HEADER3, wxColour(0, 64, 128));
+	m_transcript->StyleSetBold(ibSTC_MARKDOWN_HEADER1, true);
+	m_transcript->StyleSetBold(ibSTC_MARKDOWN_HEADER2, true);
+	m_transcript->StyleSetBold(ibSTC_MARKDOWN_HEADER3, true);
+	m_transcript->StyleSetBold(ibSTC_MARKDOWN_STRONG1, true);
+	m_transcript->StyleSetBold(ibSTC_MARKDOWN_STRONG2, true);
+	m_transcript->StyleSetItalic(ibSTC_MARKDOWN_EM1, true);
+	m_transcript->StyleSetItalic(ibSTC_MARKDOWN_EM2, true);
 	// A HEADING IS ALSO A SIZE. Colour alone at eight points is a difference a
 	// reader has to look for; the point of a heading is to be found without
 	// looking.
-	m_transcript->StyleSetSize(wxSTC_MARKDOWN_HEADER1, font.IsOk() ? font.GetPointSize() + 3 : 13);
-	m_transcript->StyleSetSize(wxSTC_MARKDOWN_HEADER2, font.IsOk() ? font.GetPointSize() + 2 : 12);
+	m_transcript->StyleSetSize(ibSTC_MARKDOWN_HEADER1, font.IsOk() ? font.GetPointSize() + 3 : 13);
+	m_transcript->StyleSetSize(ibSTC_MARKDOWN_HEADER2, font.IsOk() ? font.GetPointSize() + 2 : 12);
 
-	m_transcript->StyleSetForeground(wxSTC_MARKDOWN_CODE, wxColour(128, 0, 0));
-	m_transcript->StyleSetForeground(wxSTC_MARKDOWN_CODE2, wxColour(128, 0, 0));
+	m_transcript->StyleSetForeground(ibSTC_MARKDOWN_CODE, wxColour(128, 0, 0));
+	m_transcript->StyleSetForeground(ibSTC_MARKDOWN_CODE2, wxColour(128, 0, 0));
 
 	// BACKGROUNDS, not just letters. A fenced block should read as a block — and
 	// a band of colour also answers the question "is the lexer alive at all"
 	// without anyone having to squint at a hue.
-	m_transcript->StyleSetBackground(wxSTC_MARKDOWN_CODEBK, wxColour(242, 242, 242));
-	m_transcript->StyleSetForeground(wxSTC_MARKDOWN_CODEBK, wxColour(64, 64, 64));
-	m_transcript->StyleSetBackground(wxSTC_MARKDOWN_BLOCKQUOTE, wxColour(240, 246, 240));
-	m_transcript->StyleSetForeground(wxSTC_MARKDOWN_BLOCKQUOTE, wxColour(0, 96, 0));
+	m_transcript->StyleSetBackground(ibSTC_MARKDOWN_CODEBK, wxColour(242, 242, 242));
+	m_transcript->StyleSetForeground(ibSTC_MARKDOWN_CODEBK, wxColour(64, 64, 64));
+	m_transcript->StyleSetBackground(ibSTC_MARKDOWN_BLOCKQUOTE, wxColour(240, 246, 240));
+	m_transcript->StyleSetForeground(ibSTC_MARKDOWN_BLOCKQUOTE, wxColour(0, 96, 0));
 
 	// A transcript is read, not edited. Margins off: there is no line to jump to
 	// here, and a number column would only take width from the text.
 	m_transcript->SetReadOnly(true);
 	m_transcript->SetMarginWidth(0, 0);
 	m_transcript->SetMarginWidth(1, 0);
-	m_transcript->SetWrapMode(wxSTC_WRAP_WORD);
+	m_transcript->SetWrapMode(ibSTC_WRAP_WORD);
 
 	// --- the lower pane: what a person would write ------------------------
 	ibPanel* bottom = new ibPanel(splitter, wxID_ANY);

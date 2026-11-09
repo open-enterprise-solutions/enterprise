@@ -9,7 +9,7 @@
 #include "frmclient/win/dlgs/queryConstructor/queryConstructor.h"   // the Query tab's constructor button, its styling
 #include "frmclient/backend/query/queryConstructorModel.h"          // ibListSourceFields — the list's fields, asked of its tab
 #include "frmclient/backend/metaData.h"                            // …the tab its configuration handle carries
-#include <wx/stc/stc.h>                                            // the arbitrary query is shown in the styled editor
+#include "deskgui/univ/stc/stc.h"                                  // the arbitrary query is shown in the styled editor
 
 #include "frmclient/backend/appData.h"                        // appData->DesignerMode() — the Query tab is a developer tool
 #include "frmclient/backend/serialize/dataProtocol.h"         // the setting and its fields, as the server's question carries them
@@ -259,7 +259,7 @@ wxWindow* ibListSettingsPanel::BuildQueryPage(wxWindow* parent)
 	// keyword set, the engine's font and colours, line numbers. An arbitrary query is query text
 	// wherever it is shown, and showing it as grey characters HERE while it is highlighted THERE is
 	// the same language wearing two faces.
-	m_queryText = new wxStyledTextCtrl(page, wxID_ANY);
+	m_queryText = new ibStyledTextCtrl(page, wxID_ANY);
 	ibStyleQueryText(m_queryText);
 	sizer->Add(m_queryText, 1, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, FromDIP(6));
 

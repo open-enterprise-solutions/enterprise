@@ -2,25 +2,25 @@
 #define _FUNCTIONLIST_H__
 
 #include <wx/sizer.h>
-#include <wx/button.h>
-#include <wx/checkbox.h>
-#include <wx/dialog.h>
-#include <wx/listctrl.h>
+#include "deskgui/univ/ctrl/button.h"
+#include "deskgui/univ/ctrl/checkBox.h"
+#include "deskgui/univ/dialog.h"
+#include "deskgui/univ/ctrl/listCtrl.h"
 
 class ibCodeEditor;
 
 #include <map>
 
-struct ibFunctionList : public wxDialog
+struct ibFunctionList : public ibDialog
 {
 	wxArrayString aListName;
 	wxArrayInt aListImage;
 
-	wxCheckBox *m_Sort;
-	wxButton *m_Cancel;
-	wxButton *m_OK;
+	ibCheckBox *m_Sort;
+	ibButton *m_Cancel;
+	ibButton *m_OK;
 
-	wxListCtrl *m_listProcedures;
+	ibListCtrl *m_listProcedures;
 
 	ibCodeEditor *m_codeEditor;
 

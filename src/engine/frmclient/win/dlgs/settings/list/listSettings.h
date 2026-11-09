@@ -7,7 +7,7 @@
 #include <wx/combobox.h>
 #include <wx/choice.h>
 #include <wx/textctrl.h>
-#include <wx/stc/stc.h>
+#include "deskgui/univ/stc/stc.h"
 #include <wx/checkbox.h>
 
 #include <memory>
@@ -215,7 +215,7 @@ private:
 	// (⛔ THE "ARBITRARY QUERY" CHECKBOX STOOD HERE — a second spelling of "the description carries a
 	//  query". See BuildQueryPage: the two disagreed, and the text won by accident.)
 	// The arbitrary query, in the SAME styled editor the constructor uses — one language, one look.
-	class wxStyledTextCtrl* m_queryText = nullptr;
+	class ibStyledTextCtrl* m_queryText = nullptr;
 	class ibButton* m_queryBuild = nullptr;   // opens the query constructor ON this text and writes back into it
 	class ibStaticText* m_queryError = nullptr;   // the ENGINE's verdict, verbatim; hidden when the query resolves
 	ibString            m_queryFault;             // what it said, kept so the line can be shown on open too

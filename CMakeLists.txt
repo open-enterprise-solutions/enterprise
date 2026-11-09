@@ -378,6 +378,37 @@ if(NOT MSVC)
     target_compile_options(date-tz PRIVATE -w)
 endif()
 
+# THE CODE EDITOR'S COMPONENT (deskgui/univ/stc) — Scintilla, and the lexers Lexilla names, under the editor's host in
+# deskgui: in src/3rdparty (Scintilla a release copy, Lexilla a submodule), built here from the files their own Visual
+# Studio projects compile, as deskgui/univ/stc/scintilla/scintilla.vcxproj and deskgui/univ/stc/lexilla/lexilla.vcxproj
+# build them. Their
+# platform folders are not compiled: the platform is the host's PlatWX. Hidden like the libraries above, so that
+# deskgui shows only what DESKGUI_API shows; LEXILLA_NO_EXPORT keeps Lexilla's entry points from asking otherwise.
+file(GLOB OES_SCINTILLA_SOURCES "${OES_3RDPARTY_DIR}/scintilla/src/*.cxx")
+add_library(scintilla STATIC ${OES_SCINTILLA_SOURCES})
+target_include_directories(scintilla PUBLIC
+    "${OES_3RDPARTY_DIR}/scintilla/include"
+    "${OES_3RDPARTY_DIR}/scintilla/src")
+set_target_properties(scintilla PROPERTIES POSITION_INDEPENDENT_CODE ON CXX_VISIBILITY_PRESET hidden)
+file(GLOB OES_LEXILLA_SOURCES
+    "${OES_3RDPARTY_DIR}/lexilla/lexers/*.cxx"
+    "${OES_3RDPARTY_DIR}/lexilla/lexlib/*.cxx")
+add_library(lexilla STATIC ${OES_LEXILLA_SOURCES} "${OES_3RDPARTY_DIR}/lexilla/src/Lexilla.cxx")
+target_include_directories(lexilla
+    PUBLIC  "${OES_3RDPARTY_DIR}/lexilla/include"
+    PRIVATE "${OES_3RDPARTY_DIR}/lexilla/lexlib")
+target_link_libraries(lexilla PUBLIC scintilla)
+target_compile_definitions(lexilla PRIVATE LEXILLA_NO_EXPORT)
+set_target_properties(lexilla PROPERTIES POSITION_INDEPENDENT_CODE ON CXX_VISIBILITY_PRESET hidden)
+# Another tree's sources: their warnings are not ours to read. Some lexers carry UTF-8 in their sources.
+if(MSVC)
+    target_compile_options(scintilla PRIVATE /W0)
+    target_compile_options(lexilla PRIVATE /W0 /source-charset:utf-8)
+else()
+    target_compile_options(scintilla PRIVATE -w)
+    target_compile_options(lexilla PRIVATE -w)
+endif()
+
 if(WIN32)
     add_compile_definitions(
         WIN32

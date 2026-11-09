@@ -9,7 +9,7 @@
 
 #include <wx/wx.h>
 
-class wxStyledTextCtrl;
+class ibStyledTextCtrl;
 class wxXmlNode;
 class wxString;
 
@@ -43,7 +43,7 @@ public:
 	void SetShowWhiteSpace(bool showWhiteSpace) { m_showWhiteSpace = showWhiteSpace; }
 
 	// Sets a text control's indent, its tabs and whether it shows white space.
-	void Apply(wxStyledTextCtrl& text) const;
+	void Apply(ibStyledTextCtrl& text) const;
 
 	// The settings as a node named by the tag; Load reads one back, keeping
 	// the default for whatever the node does not name.

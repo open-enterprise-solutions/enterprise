@@ -52,7 +52,7 @@ public:
     virtual bool CanBeHighlighted() const override { return true; }
 
 protected:
-    // choose the default border for this window (drawn by the NC pass —
+    // choose the default border for this window (drawn by ibWindow::TryBefore —
     // the ONLY frame of the button, see the SEAM note in DoDraw)
     virtual wxBorder GetDefaultBorder() const override { return wxBORDER_STATIC; }
 

@@ -26,7 +26,7 @@
 #include "deskgui/univ/messageDialog.h"
 #include <wx/dnd.h>
 #include <wx/imaglist.h>
-#include <wx/stc/stc.h>
+#include "deskgui/univ/stc/stc.h"
 #include <wx/choice.h>     // the role constructor — the word picked
 #include "deskgui/univ/ctrl/spinCtrl.h"   // …and a period's number
 #include <iterator>        // std::size — GCC does not bring it along with the rest
@@ -147,7 +147,7 @@ ibDialogQueryExpression::ibDialogQueryExpression(wxWindow* parent, const wxStrin
 	// THE SAME STYLED EDITOR the constructor's text pane uses — one language, one look, one helper.
 	// An expression is query text like any other, and it was the last place still shown as plain
 	// grey characters.
-	m_text = new wxStyledTextCtrl(this, wxID_ANY, wxDefaultPosition, FromDIP(wxSize(-1, 150)));
+	m_text = new ibStyledTextCtrl(this, wxID_ANY, wxDefaultPosition, FromDIP(wxSize(-1, 150)));
 	ibStyleQueryText(m_text);
 	if (existing) {
 		m_text->SetText(ibRenderQueryExpr(*existing));

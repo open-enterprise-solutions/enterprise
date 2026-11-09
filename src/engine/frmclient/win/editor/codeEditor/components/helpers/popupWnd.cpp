@@ -35,7 +35,7 @@ bool ibCodeEditorPopupBase::Show(bool show)
 			//add drop shadow 
 			::SetClassLong(hWnd, GCL_STYLE, ::GetClassLong(hWnd, GCL_STYLE) | CS_DROPSHADOW);
 
-			if (GetName() == wxT("wxSTCCallTip"))
+			if (GetName() == wxT("ibSTCCallTip"))
 				::AnimateWindow(hWnd, 25, AW_BLEND);
 			else
 				::ShowWindow(hWnd, SW_SHOWNA);
@@ -250,10 +250,7 @@ ibCodeEditorListBoxWin::ibCodeEditorListBoxWin(wxWindow* parent, ibListBoxVisual
 
 	m_listBox->SetContainerBorderSize(borderThickness);
 
-	// When drawing highlighting in listctrl style with wxRendererNative on MSW,
-	// the colours used seem to be based on the background of the parent window.
-	// So manually paint this window to give it the border colour instead of
-	// setting the background colour.
+	// The frame round the list is this window, painted in the border colour.
 	Bind(wxEVT_PAINT, &ibCodeEditorListBoxWin::OnPaint, this);
 
 	SetBackgroundStyle(wxBG_STYLE_PAINT);

@@ -3,7 +3,7 @@
 
 #include <wx/artprov.h>
 #include <wx/xrc/xmlres.h>
-#include <wx/stc/stc.h>
+#include "deskgui/univ/stc/stc.h"
 #include <wx/gdicmn.h>
 #include <wx/font.h>
 #include <wx/colour.h>
@@ -41,7 +41,7 @@ private:
 	void OnButtonGotoDesignerClick(wxCommandEvent& event);
 	void OnButtonCloseWindowClick(wxCommandEvent& event);
 
-	wxStyledTextCtrl* m_errorOutput;
+	ibStyledTextCtrl* m_errorOutput;
 
 	ibButton* m_buttonCloseProgram;
 	ibButton* m_buttonGotoDesigner;

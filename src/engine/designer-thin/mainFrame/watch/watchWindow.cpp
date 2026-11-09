@@ -168,7 +168,9 @@ void ibWatchWindow::SelectNext(const wxTreeItemId& next)
 
 void ibWatchWindow::FitColumns()
 {
-	const int share = GetClientSize().GetWidth() - GetColumnWidth(kColumnType);
+	// Two pixels short of the client, as the locals' (ibLocalWindow::FitColumns): the tree list scrolls two pixels past
+	// its columns (AdjustMyScrollbars) - fitted to the client whole, it kept a scroll bar, jumping as it was sized.
+	const int share = GetClientSize().GetWidth() - 2 - GetColumnWidth(kColumnType);
 	if (share <= 0)
 		return;
 

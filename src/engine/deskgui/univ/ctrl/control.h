@@ -136,6 +136,9 @@ protected:
     // the title is drawn beside the frame, outside the client area: the frame's rect leaves its column out
     virtual wxRect GetBorderRect() const override;
 
+    // the title drawn in its column, by the theme, in the window's paint as the border is (ibWindow::TryBefore)
+    virtual bool TryBefore(wxEvent& event) override;
+
     // wxControlBase shim: a control knows no text of its own - no size from it
     virtual wxSize DoGetSizeFromTextSize(int WXUNUSED(xlen), int WXUNUSED(ylen) = -1) const { return wxSize(-1, -1); }
 
@@ -152,9 +155,6 @@ protected:
     // label (but, unlike SetLabel(), don't call the base class SetLabel() thus
     // avoiding to change wxControlBase::m_labelOrig)
     void UnivDoSetLabel(const wxString& label);
-
-    // the title drawn in its column, by the theme, after the border (the non-client pass, as the border)
-    void OnNcPaint(wxNcPaintEvent& event);
 
 private:
     // the client area moved within the window: laid out and drawn anew, the best size asked again

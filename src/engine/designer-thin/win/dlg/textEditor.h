@@ -22,7 +22,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "deskgui/univ/dialog.h"
-#include <wx/stc/stc.h>
+#include "deskgui/univ/stc/stc.h"
 
 class ibDialogTextEditor : public ibDialog {
 public:
@@ -38,7 +38,7 @@ public:
 
 private:
 
-	wxStyledTextCtrl* m_text = nullptr;
+	ibStyledTextCtrl* m_text = nullptr;
 };
 
 #endif // !_IB_DIALOG_TEXT_EDITOR_H_

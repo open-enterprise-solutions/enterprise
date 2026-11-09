@@ -15,7 +15,7 @@ inline int RoundXYPosition(float xyPos) {
 
 #define EXTENT_TEST wxT(" `~!@#$%^&*()-_=+\\|[]{};:\"\'<,>.?/1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
-ibCallTip::ibCallTip(wxStyledTextCtrl* owner)
+ibCallTip::ibCallTip(ibStyledTextCtrl* owner)
 	: m_owner(owner)
 {
 #ifdef __APPLE__
@@ -309,7 +309,7 @@ void ibCallTip::Show(int currentPos, const wxString& sTitleText)
 	m_clickPlace = 0;
 	m_val = sTitleText;
 
-	m_callTip = new wxSTCCallTip(m_owner, this);
+	m_callTip = new ibSTCCallTip(m_owner, this);
 
 	m_evtHandler = new wxEvtHandler();
 	m_evtHandler->Bind(wxEVT_KEY_DOWN, &ibCallTip::OnKeyDown, this);
@@ -349,7 +349,7 @@ void ibCallTip::Show(int currentPos, const wxString& sTitleText)
 
 	// Match the editor's currently displayed font size (base + zoom delta);
 	// see ibAutoComplete::Start for the same pattern.
-	wxFont baseFont = m_owner->StyleGetFont(wxSTC_STYLE_DEFAULT);
+	wxFont baseFont = m_owner->StyleGetFont(ibSTC_STYLE_DEFAULT);
 	baseFont.SetPointSize(std::max(1, baseFont.GetPointSize() + m_owner->GetZoom()));
 	m_font = wxFontWithAscent(baseFont);
 	dc.SetFont(m_font);

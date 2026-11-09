@@ -1,6 +1,7 @@
 # =============================================================================
 # deskgui — the desktop's user interface library: what the desktop's programs draw their windows with (deskgui.h).
-# The thin client's windows (frmclient) and the launcher link it; of the engine, the core alone - no protocol, no backend.
+# The thin client's windows (frmclient), the launcher and the code runner link it; of the engine, the core alone - no
+# protocol, no backend.
 # =============================================================================
 
 # CONFIGURE_DEPENDS — see the note in backend/CMakeLists.txt. Every source here is in the build but the listed units —
@@ -13,6 +14,10 @@ list(FILTER DESKGUI_SOURCES EXCLUDE REGEX "/statusBar\\.cpp$")
 list(FILTER DESKGUI_SOURCES EXCLUDE REGEX "/settings\\.cpp$")
 list(FILTER DESKGUI_SOURCES EXCLUDE REGEX "theme/theme_win32\\.cpp$")
 list(FILTER DESKGUI_SOURCES EXCLUDE REGEX "/frame\\.cpp$")
+# the code editor's host draws through Cocoa on macOS, as wx's own (STC_OSX_COCOA in its files.cmake)
+if(APPLE)
+    list(APPEND DESKGUI_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/univ/stc/PlatWXcocoa.mm")
+endif()
 
 add_library(deskgui SHARED ${DESKGUI_SOURCES})
 
@@ -56,6 +61,13 @@ target_link_libraries(deskgui
         wx::aui
         wx::base
 )
+
+# THE CODE EDITOR'S HOST (univ/stc) — over Scintilla and Lexilla, src/3rdparty's, the root CMakeLists builds them; their
+# headers arrive with the targets.
+target_link_libraries(deskgui PRIVATE scintilla lexilla)
+if(APPLE)
+    target_link_libraries(deskgui PRIVATE "-framework AppKit")
+endif()
 
 # WHAT IT EXPORTS, AND NOTHING ELSE — as a DLL does, like frmclient: hidden by default, DESKGUI_API shows what is meant
 # to be seen.

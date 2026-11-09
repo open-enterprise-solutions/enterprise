@@ -10,7 +10,7 @@
 // in the core beside the translator, and both editors hold the one copy under the same name (m_fp).
 //
 // ⭐ THE ANSWER IS SCINTILLA'S FOLD LEVEL, as a number: the core has no Scintilla, so the flags are spelled here
-// with Scintilla's values (wxSTC_FOLDLEVELBASE / WHITEFLAG / HEADERFLAG, and the editors' ELSE mark), and the
+// with Scintilla's values (ibSTC_FOLDLEVELBASE / WHITEFLAG / HEADERFLAG, and the editors' ELSE mark), and the
 // editor hands the levels to its control (SetFoldLevel) itself.
 //
 // ⭐ THE SYNTAX IS THE STREAM'S: the folds are read in the syntax the lexems were read in (GetCodeStyle) — the
@@ -30,10 +30,10 @@ public:
 
 	// Scintilla's fold-level encoding — what GetFoldMask answers and the editors' indentation decodes.
 	enum : int {
-		FoldLevelBase   = 0x400,    // wxSTC_FOLDLEVELBASE_FLAG
-		FoldLevelWhite  = 0x1000,   // wxSTC_FOLDLEVELWHITE_FLAG: a closer line
-		FoldLevelHeader = 0x2000,   // wxSTC_FOLDLEVELHEADER_FLAG: an opener line
-		FoldLevelElse   = 0x4000,   // wxSTC_FOLDLEVELELSE_FLAG: Else / ElseIf / Except on a net-zero line
+		FoldLevelBase   = 0x400,    // ibSTC_FOLDLEVELBASE_FLAG
+		FoldLevelWhite  = 0x1000,   // ibSTC_FOLDLEVELWHITE_FLAG: a closer line
+		FoldLevelHeader = 0x2000,   // ibSTC_FOLDLEVELHEADER_FLAG: an opener line
+		FoldLevelElse   = 0x4000,   // ibSTC_FOLDLEVELELSE_FLAG: Else / ElseIf / Except on a net-zero line
 	};
 
 	ibFoldCode();

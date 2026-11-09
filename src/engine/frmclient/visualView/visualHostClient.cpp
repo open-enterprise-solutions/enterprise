@@ -190,8 +190,8 @@ ibVisualHostClient::ibVisualHostClient(ibFrontendMainFrame& frame, wxWindow* par
 {
 	// ⭐ A FRAME AROUND THE WINDOW THE CONTROLS SCROLL IN, that one filling it — the desktop's facade (ibVisualHost): the
 	// command bar stands above it (Build) and stays where it is while the controls scroll; it scrolled away with them when
-	// this one was the scrolling window (2026-10-22).
-	m_contentWindow = new wxScrolledCanvas(this, wxID_ANY);
+	// this one was the scrolling window (2026-10-22). A panel's (wxNavigationEnabled): Tab goes through the controls in it.
+	m_contentWindow = new wxScrolledWindow(this, wxID_ANY);
 	m_contentWindow->SetDoubleBuffered(true);
 	m_contentWindow->SetScrollRate(5, 5);
 #ifdef __WXOSX__

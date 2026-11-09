@@ -40,51 +40,51 @@ using namespace queryctor;
 // The font and the colours are the ENGINE'S defaults (ibFontColorSettings, default-constructed —
 // the same object the code editor styles itself from), so this pane looks like every other place
 // code is shown in the product rather than like a window with opinions.
-void ibStyleQueryText(wxStyledTextCtrl* text)
+void ibStyleQueryText(ibStyledTextCtrl* text)
 {
 	const ibFontColorSettings settings;
 	wxFont font = settings.GetFont();
 
-	text->SetLexer(wxSTC_LEX_CPP);
+	text->SetLexer(ibSTC_LEX_CPP);
 	text->SetKeyWords(0, ibAllQueryKeywords());
 
 	// STYLE_DEFAULT first, then StyleClearAll — the cascade carries the font and the base colours to
 	// every style index, so only the ones that DIFFER are set afterwards.
-	text->StyleSetFont(wxSTC_STYLE_DEFAULT, font);
-	text->StyleSetForeground(wxSTC_STYLE_DEFAULT,
+	text->StyleSetFont(ibSTC_STYLE_DEFAULT, font);
+	text->StyleSetForeground(ibSTC_STYLE_DEFAULT,
 		settings.GetColors(ibFontColorSettings::DisplayItem_Default).foreColor);
-	text->StyleSetBackground(wxSTC_STYLE_DEFAULT,
+	text->StyleSetBackground(ibSTC_STYLE_DEFAULT,
 		settings.GetColors(ibFontColorSettings::DisplayItem_Default).backColor);
 	text->StyleClearAll();
 
 	const ibFontColorSettings::Colors keyword = settings.GetColors(ibFontColorSettings::DisplayItem_Keyword);
-	text->StyleSetForeground(wxSTC_C_WORD, keyword.foreColor);
-	text->StyleSetBold(wxSTC_C_WORD, keyword.bold);
-	text->StyleSetForeground(wxSTC_C_STRING,
+	text->StyleSetForeground(ibSTC_C_WORD, keyword.foreColor);
+	text->StyleSetBold(ibSTC_C_WORD, keyword.bold);
+	text->StyleSetForeground(ibSTC_C_STRING,
 		settings.GetColors(ibFontColorSettings::DisplayItem_String).foreColor);
 	// A DATE literal is written in apostrophes ('20260101'), which the C lexer reads as a character
 	// constant — so it takes the string colour, the way the pane's reader means it.
-	text->StyleSetForeground(wxSTC_C_CHARACTER,
+	text->StyleSetForeground(ibSTC_C_CHARACTER,
 		settings.GetColors(ibFontColorSettings::DisplayItem_String).foreColor);
-	text->StyleSetForeground(wxSTC_C_NUMBER,
+	text->StyleSetForeground(ibSTC_C_NUMBER,
 		settings.GetColors(ibFontColorSettings::DisplayItem_Number).foreColor);
 	// The three comment styles the C lexer can emit — `//` is the one our language has, the other two
 	// cost nothing to colour and keep a pasted block from looking like broken code.
 	const ibFontColorSettings::Colors comment = settings.GetColors(ibFontColorSettings::DisplayItem_Comment);
-	text->StyleSetForeground(wxSTC_C_COMMENTLINE, comment.foreColor);
-	text->StyleSetForeground(wxSTC_C_COMMENT, comment.foreColor);
-	text->StyleSetForeground(wxSTC_C_COMMENTDOC, comment.foreColor);
-	text->StyleSetForeground(wxSTC_C_OPERATOR,
+	text->StyleSetForeground(ibSTC_C_COMMENTLINE, comment.foreColor);
+	text->StyleSetForeground(ibSTC_C_COMMENT, comment.foreColor);
+	text->StyleSetForeground(ibSTC_C_COMMENTDOC, comment.foreColor);
+	text->StyleSetForeground(ibSTC_C_OPERATOR,
 		settings.GetColors(ibFontColorSettings::DisplayItem_Operator).foreColor);
 
 	// LINE NUMBERS. The engine reports where it stopped as `line N (position M)` — that is the whole
 	// reason they earn their room here: without them the verdict line names a place the reader has
 	// to count to. The margin is sized to the text, so it does not take a fixed slice of a short
 	// query, and the folding margin stays off (there is nothing to fold in one statement).
-	text->SetMarginType(0, wxSTC_MARGIN_NUMBER);
-	text->StyleSetForeground(wxSTC_STYLE_LINENUMBER,
+	text->SetMarginType(0, ibSTC_MARGIN_NUMBER);
+	text->StyleSetForeground(ibSTC_STYLE_LINENUMBER,
 		settings.GetColors(ibFontColorSettings::DisplayItem_Comment).foreColor);
-	text->SetMarginWidth(0, text->TextWidth(wxSTC_STYLE_LINENUMBER, wxT("_9999")));
+	text->SetMarginWidth(0, text->TextWidth(ibSTC_STYLE_LINENUMBER, wxT("_9999")));
 	text->SetMarginWidth(1, 0);
 	text->SetTabWidth(4);
 	text->SetUseHorizontalScrollBar(true);
@@ -96,18 +96,18 @@ void ibStyleQueryText(wxStyledTextCtrl* text)
 	// because the lexer owns the styles and would repaint over anything set there; an indicator is
 	// drawn on top and survives re-lexing. The colour is the preprocessor slot — the same one the
 	// code editor uses for "this is substituted, not evaluated here".
-	text->IndicatorSetStyle(kQueryParameterIndicator, wxSTC_INDIC_TEXTFORE);
+	text->IndicatorSetStyle(kQueryParameterIndicator, ibSTC_INDIC_TEXTFORE);
 	text->IndicatorSetForeground(kQueryParameterIndicator,
 		settings.GetColors(ibFontColorSettings::DisplayItem_Preprocessor).foreColor);
 	// A WORD OF THE LANGUAGE BY ITS PLACE wears the keyword's colour — it is one there, and only there.
-	text->IndicatorSetStyle(kQueryPlacedWordIndicator, wxSTC_INDIC_TEXTFORE);
+	text->IndicatorSetStyle(kQueryPlacedWordIndicator, ibSTC_INDIC_TEXTFORE);
 	text->IndicatorSetForeground(kQueryPlacedWordIndicator, keyword.foreColor);
 
 	// AND RE-MARKED AS IT IS TYPED. Marking only where the text is set programmatically leaves a
 	// parameter plain until something else happens to refill the pane — the colour arrives late,
 	// which reads as a glitch rather than as a rule. The lexer repaints on every change; this
 	// follows it, because an indicator is not restored by the lexer.
-	text->Bind(wxEVT_STC_CHANGE, [text](wxStyledTextEvent& event) {
+	text->Bind(ibEVT_STC_CHANGE, [text](ibStyledTextEvent& event) {
 		event.Skip();
 		ibMarkQueryText(text);
 	});
@@ -119,7 +119,7 @@ void ibStyleQueryText(wxStyledTextCtrl* text)
 // one. The C lexer colours by the word alone and cannot tell the two apart, so these are marked here.
 //
 // A text the lexer refuses — a string still being typed — marks no words: the parameters above still stand.
-static void MarkPlacedWords(wxStyledTextCtrl* text)
+static void MarkPlacedWords(ibStyledTextCtrl* text)
 {
 	text->SetIndicatorCurrent(kQueryPlacedWordIndicator);
 	text->IndicatorClearRange(0, text->GetTextLength());
@@ -185,7 +185,7 @@ static void MarkPlacedWords(wxStyledTextCtrl* text)
 // then, because the text it marked is gone. Scanning here rather than asking the lexer keeps this
 // independent of which lexer the pane uses; the rule is the language's own and fits in one line of
 // prose: an ampersand followed by a name.
-void ibMarkQueryText(wxStyledTextCtrl* text)
+void ibMarkQueryText(ibStyledTextCtrl* text)
 {
 	if (text == nullptr)
 		return;
@@ -568,7 +568,7 @@ ibDialogQueryConstructor::ibDialogQueryConstructor(wxWindow* parent, const ibQue
 	// The control itself stays a child of this dialog, hidden. It is where the text LIVES — every
 	// fill writes to it, the selection verbs read it — and the window borrows it while it is open.
 	// One control, one text, no second copy to keep in step.
-	m_preview = new wxStyledTextCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize);
+	m_preview = new ibStyledTextCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize);
 	ibStyleQueryText(m_preview);
 	m_preview->Bind(wxEVT_KILL_FOCUS, &ibDialogQueryConstructor::OnPreviewFocusLost, this);
 	m_preview->Show(false);
@@ -906,6 +906,19 @@ wxWindow* ibDialogQueryConstructor::BuildTablesPage(wxWindow* parent)
 
 	splitterInner->SplitVertically(middlePane, rightPane, FromDIP(300));
 	splitterOuter->SplitVertically(leftPane, splitterInner, FromDIP(240));
+
+	// THE THREE LISTS OF ONE WIDTH (a colleague's word, 2026-11-09: they stood 234 / 258 / 411 px). The middle and the
+	// right pane each carry a column of arrows the left one has not, so the panes are not thirds: the left is a list,
+	// the others a list and the arrows. Set at EVERY width the splitter is given, the last one being the window's own:
+	// set once, at the first width, and carried by the gravities, they kept a width the window did not (2026-11-09: 640
+	// / 190 / 160 px). A divider moved by hand holds until the window is sized again.
+	splitterOuter->Bind(wxEVT_SIZE, [this, toTables, splitterOuter, splitterInner](wxSizeEvent& event) {
+		const int arrows = toTables->GetMinSize().x + 2 * FromDIP(3);
+		const int list = (event.GetSize().x - 2 * arrows - 2 * splitterOuter->GetSashSize()) / 3;
+		splitterOuter->SetSashPosition(list);
+		splitterInner->SetSashPosition(list + arrows);
+		event.Skip();
+	});
 
 	wxBoxSizer* pageSizer = new wxBoxSizer(wxVERTICAL);
 	pageSizer->Add(splitterOuter, 1, wxEXPAND | wxALL, FromDIP(4));

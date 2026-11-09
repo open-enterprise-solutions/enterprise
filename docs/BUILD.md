@@ -115,6 +115,14 @@ XML is the core's as well: Expat (`<expat.h>`, tag `R_2_9_0`; the static `expat`
 `core/xml/expat/expat_config.h`, `core/xml/expat/expat.vcxproj` in the solution, linked into core only), read and
 written through `core/xml/xmlText.h`.
 
+The desktop's code editor has Scintilla and Lexilla (`src/3rdparty/scintilla` 5.6.9, `src/3rdparty/lexilla` 5.5.5).
+**Lexilla is a submodule** (its official repository, `ScintillaOrg/lexilla`, at the release tag `rel-5-5-5`);
+**Scintilla is a release copy**: its own source is Mercurial, and GitHub has only unofficial mirrors. Built as the
+static `scintilla` and `lexilla` targets (`deskgui/univ/stc/scintilla/scintilla.vcxproj`,
+`deskgui/univ/stc/lexilla/lexilla.vcxproj` in the solution), linked into deskgui only, under its `ibStyledTextCtrl`.
+Updating Lexilla is moving the submodule to the new release tag; updating Scintilla is replacing its folder with the
+new release archive; then the control is regenerated: `py -3.9 gen_iface.py` in `deskgui/univ/stc`.
+
 **nlohmann/json is the upstream repository, pinned to a release** (`src/3rdparty/nlohmann`). Updating it is
 moving the pin:
 `git -C src/3rdparty/nlohmann fetch --tags && git -C src/3rdparty/nlohmann checkout vX.Y.Z`, then commit

@@ -11,7 +11,7 @@
 #include <vector>
 #include <algorithm>
 
-ibAutoComplete::ibAutoComplete(wxStyledTextCtrl* textCtrl)
+ibAutoComplete::ibAutoComplete(ibStyledTextCtrl* textCtrl)
 	: m_visualData(new ibListBoxVisualData(5)),
 	  m_owner(textCtrl)
 {
@@ -45,7 +45,7 @@ void ibAutoComplete::Start(const wxString& currentWord,
 	// listbox stays proportional to the font — at default zoom the box
 	// is 225x200; zooming in/out grows or shrinks it by the same factor
 	// the font does (clamped against a 1pt floor).
-	const int basePts = std::max(1, m_owner->StyleGetFont(wxSTC_STYLE_DEFAULT).GetPointSize());
+	const int basePts = std::max(1, m_owner->StyleGetFont(ibSTC_STYLE_DEFAULT).GetPointSize());
 	const int actualPts = std::max(1, basePts + m_owner->GetZoom());
 	const double scale = double(actualPts) / double(basePts);
 	m_listBoxWin->SetSize(int(225 * scale), int(200 * scale));
@@ -62,7 +62,7 @@ void ibAutoComplete::Start(const wxString& currentWord,
 	// base font in StyleGetFont and renders it scaled by GetZoom(). Without
 	// applying the zoom delta, the dropdown stays at the unzoomed size and
 	// looks tiny next to a zoomed-in editor (or oversized when zoomed out).
-	wxFont font = m_owner->StyleGetFont(wxSTC_STYLE_DEFAULT);
+	wxFont font = m_owner->StyleGetFont(ibSTC_STYLE_DEFAULT);
 	font.SetPointSize(std::max(1, font.GetPointSize() + m_owner->GetZoom()));
 	listBox->SetListBoxFont(font);
 

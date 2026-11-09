@@ -391,7 +391,7 @@ private:
 	//
 	// Storing the text is cheap and happens on every keystroke; working out what it MEANS is not, so
 	// it happens when the typing stops (OnIdleApplyQuery).
-	void OnQueryTextChanged(class wxStyledTextEvent&);
+	void OnQueryTextChanged(class ibStyledTextEvent&);
 	void OnIdleApplyQuery(wxIdleEvent&);
 	// Re-read the source from the text that is already there, and refresh everything that follows
 	// from it — fields, editors, parameters, the error line.
@@ -677,7 +677,7 @@ private:
 	// THE SAME STYLED EDITOR the query constructor and the list settings use: SQL lexer, the
 	// language's own keywords, line numbers. Query text is query text wherever it is shown; grey
 	// characters here while it is highlighted there is one language wearing two faces.
-	class wxStyledTextCtrl* m_queryText = nullptr;
+	class ibStyledTextCtrl* m_queryText = nullptr;
 	ibStaticText* m_queryError = nullptr;
 };
 
