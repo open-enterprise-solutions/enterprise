@@ -145,6 +145,10 @@ public:
         event.Skip();
     }
 
+    // SEAM vs wx: ibTextCtrl answers its best size by the client's - sixteen lines wide - and wxWindowBase::GetBestSize
+    // asks that first: the range's size below was never asked, and every spin control stood as wide as a field
+    virtual wxSize DoGetBestClientSize() const override { return wxDefaultSize; }
+
     virtual wxSize DoGetBestSize() const override
     {
         wxString minVal = m_spin->DoValueToText(m_spin->m_min);
