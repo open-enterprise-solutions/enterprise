@@ -3861,6 +3861,10 @@ void ibTreeListMainWindow::OnChar(wxKeyEvent & event) {
 	nevent.SetKeyEvent(event);
 	if (SendEvent(0, nullptr, &nevent)) return; // char event handled in user code
 
+	// SEAM vs wx: the window takes every key (wxWANTS_CHARS) and Tab came here - handed back to the navigation from
+	// the control this window is inside, as the data view's main window does (ibDataViewMainWindow); it stayed here
+	if (m_owner->HandleAsNavigationKey(event)) return;
+
 	// if no item current, select root
 	bool curItemSet = false;
 	if (!m_curItem) {

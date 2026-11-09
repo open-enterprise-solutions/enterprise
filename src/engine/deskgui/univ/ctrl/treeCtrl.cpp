@@ -3214,6 +3214,11 @@ void ibTreeCtrl::OnKeyDown( wxKeyEvent &event )
 
 void ibTreeCtrl::OnChar( wxKeyEvent &event )
 {
+    // SEAM vs wx: the tree takes every key (wxWANTS_CHARS) and Tab came here - handed back to the navigation, as the
+    // list's (ibListMainWindow::OnChar); it stayed in the tree
+    if ( HandleAsNavigationKey(event) )
+        return;
+
     if ( (m_current == nullptr) || (m_key_current == nullptr) )
     {
         event.Skip();
