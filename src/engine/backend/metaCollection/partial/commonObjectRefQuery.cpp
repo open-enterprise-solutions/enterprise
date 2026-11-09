@@ -308,13 +308,16 @@ void ibValueRecordDataObjectRef::CommitDeleteScope(ibConnectionScope& scope,
 		valueForm->NotifyDelete(GetReference());
 }
 
-bool ibValueRecordDataObjectRef::SaveData()
+bool ibValueRecordDataObjectRef::CheckFilling(ibString* unfilled) const
 {
-	//check fill attributes — find() so the probe doesn't auto-insert
-	//an empty value into m_listObjectValue.
+	// find() so the probe doesn't auto-insert an empty value into m_listObjectValue.
 	bool fillCheck = true;
-	ibString unfilled;   // the fields that refused, by name — carried up, not only whispered
 	wxASSERT(m_metaObject);
+	const auto name = [unfilled](const ibString& synonym) {
+		if (unfilled == nullptr) return;
+		if (!unfilled->IsEmpty()) *unfilled << ibT(", ");
+		*unfilled << synonym;
+	};
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 		if (!object->FillCheck()) continue;
 		// A REQUIREMENT ONLY BINDS WHERE THE FIELD APPLIES. An attribute declared for items alone
@@ -326,22 +329,43 @@ bool ibValueRecordDataObjectRef::SaveData()
 			ibString fillError =
 				ibString::Format(_("""%s"" is a required field"), object->GetSynonym());
 			ibValueSystemFunction::Message(fillError, ibStatusMessage::ibStatusMessage_Information);
-			if (!unfilled.IsEmpty()) unfilled << ibT(", ");
-			unfilled << object->GetSynonym();
+			name(object->GetSynonym());
 			fillCheck = false;
 		}
 	}
 
-	// THE REFUSAL NAMES ITS FIELDS. The per-field line above goes to the message pane, which is
-	// collapsed by default — so the user was left with "failed to save the object data", a sentence
-	// that says something went wrong and nothing about what to do. Raising here puts the names in
-	// the dialog the user is already looking at.
-	if (!fillCheck) {
+	// …and the lines of the tabular sections, each of which tells its own empty fields by line.
+	for (const auto object : m_metaObject->GetGenericTableArrayObject()) {
+		const auto it = m_listObjectValue.find(object->GetMetaID());
+		ibValueTabularSectionDataObjectBase* tabularSection = nullptr;
+		if (it == m_listObjectValue.end() || !it->second.ConvertToValue(tabularSection) || tabularSection == nullptr)
+			continue;
+		if (!tabularSection->CheckFilling()) {
+			name(object->GetSynonym());
+			fillCheck = false;
+		}
+	}
+	return fillCheck;
+}
+
+void ibValueRecordDataObjectRef::RequireFilling() const
+{
+	// THE REFUSAL NAMES ITS FIELDS. The per-field line goes to the message pane, which is collapsed by
+	// default — so the user was left with "failed to save the object data", a sentence that says
+	// something went wrong and nothing about what to do. Raising here puts the names in the dialog the
+	// user is already looking at.
+	ibString unfilled;
+	if (!CheckFilling(&unfilled))
 		ibBackendCoreException::Error(_("%s: required fields are not filled: %s"),
 			GetSourceCaption(), unfilled);
-		return false;
-	}
+}
 
+// ⭐ A WRITE STORES WHAT IT IS GIVEN (#424). Whether the required fields are filled is CheckFilling's
+// question — asked by the object form's write and by posting (RequireFilling), and by a script that wants
+// it — not by every write: an exchange, a migration, a processing that fills an object in two passes
+// writes it half-filled on purpose.
+bool ibValueRecordDataObjectRef::SaveData()
+{
 	m_objGuid = ibGuid(m_reference_impl->m_guid);
 
 	// WRITE the main row through the L3 door — BY COLUMN, no statement, no positions visible

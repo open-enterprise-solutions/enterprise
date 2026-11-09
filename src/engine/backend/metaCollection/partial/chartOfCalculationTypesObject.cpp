@@ -110,7 +110,8 @@ enum Func {
 	enGetTemplate,
 	enGetMetadata,
 	enLock,
-	enUnlock
+	enUnlock,
+	enCheckFilling
 };
 
 //****************************************************************************
@@ -138,6 +139,7 @@ void ibValueRecordDataObjectChartOfCalculationTypes::FillMethods(ibMemberTable& 
 	helper.AppendFunc(ibT("GetMetadata"), ibT("GetMetadata()"));
 	helper.AppendProc(ibT("Lock"),   ibT("Lock()"));
 	helper.AppendProc(ibT("Unlock"), ibT("Unlock()"));
+	helper.AppendFunc(ibT("CheckFilling"), ibT("CheckFilling()"));   // appended: the order is load-bearing
 }
 
 bool ibValueRecordDataObjectChartOfCalculationTypes::SetPropVal(const long lPropNum, const ibValue& varPropVal)
@@ -200,6 +202,9 @@ bool ibValueRecordDataObjectChartOfCalculationTypes::CallAsFunc(const long lMeth
 {
 	switch (lMethodNum)
 	{
+	case Func::enCheckFilling:
+		pvarRetValue = CheckFilling();
+		return true;
 	case enIsNew:
 		pvarRetValue = m_newObject;
 		return true;

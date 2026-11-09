@@ -2458,6 +2458,16 @@ public:
 
 public:
 	virtual void SetDeletionMark(bool deletionMark = true);
+
+	// THE FILLING CHECK, ON ITS OWN (#424): every required field that applies to this object, and every
+	// required field on every line of its tabular sections. Each empty one is told to the messages; the
+	// answer is whether all of them are filled. It raises nothing and writes nothing — the script's
+	// CheckFilling(). `unfilled`, when given, gets the names, for the refusal below.
+	bool CheckFilling(ibString* unfilled = nullptr) const;
+
+	// The refusal a write from the form gives (and posting): CheckFilling, then the sentence that names
+	// the fields. SaveData no longer checks — a script's Write() stores what it is given.
+	void RequireFilling() const;
 protected:
 
 	virtual bool ReadData();

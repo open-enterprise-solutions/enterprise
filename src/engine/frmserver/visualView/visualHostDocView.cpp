@@ -150,7 +150,11 @@ bool ibFormVisualDocument::Save()
 	bool success = true;
 
 	try {
-		success = sourceObject != nullptr ? sourceObject->SaveModify() : true;
+		// The person saves the form: the write checks the required fields (#424) — a script's does not.
+		if (sourceObject != nullptr) {
+			const ibSourceDataObject::ibFillCheckScope fillCheck(*sourceObject);
+			success = sourceObject->SaveModify();
+		}
 	}
 	catch (const ibCoreException&) {
 		// Every refusal — no right, a version conflict, the object's own OnWrite — was reported where it

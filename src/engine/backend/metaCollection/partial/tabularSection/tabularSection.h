@@ -287,6 +287,9 @@ public:
 	virtual bool SaveData() { return true; }
 	virtual bool DeleteData() { return true; }
 
+	// Every required field on every line filled? Each empty one is told to the messages (#424).
+	virtual bool CheckFilling() const { return true; }
+
 	virtual bool LoadDataFromTable(ibValueModel* srcTable);
 	virtual ibValuePtr<ibValueModel> SaveDataToTable() const;
 
@@ -374,6 +377,8 @@ class BACKEND_API ibValueTabularSectionDataObjectRef : public ibValueTabularSect
 	virtual bool LoadData(const ibGuid& srcGuid, bool createData = true);
 	virtual bool SaveData();
 	virtual bool DeleteData();
+
+	virtual bool CheckFilling() const override;
 
 	//set meta/get meta
 	virtual bool SetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, const ibValue& varMetaVal);
