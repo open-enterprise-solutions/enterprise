@@ -13696,3 +13696,13 @@ msgstr ""
 #: src/engine/frmserver/schema/style.cpp
 msgid "The theme could not be kept"
 msgstr ""
+
+#: src/engine/backend/metaCollection/partial/accumulationRegisterManager_impl.cpp
+#, c-format
+msgid "Balance: '%s' is not a dimension of the register"
+msgstr ""
+
+#: src/engine/backend/metaCollection/partial/accumulationRegisterManager_impl.cpp
+#, c-format
+msgid "Balance: '%s' is not a resource of the register"
+msgstr ""

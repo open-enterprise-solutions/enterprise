@@ -24,6 +24,9 @@ posting check and a script all ask the same reading.
   and by LINQ alike;
   they lower into the same door every query goes through, rights and row restrictions included
   ([access-rights.md](access-rights.md)). A script's manager methods read the same tables.
+  `AccumulationRegisters.Stock.Balance(period, filter, dimensions, resources)` returns a value table; the last two
+  are comma lists, and either one stated folds the lines to those dimensions and adds up those resources (left out,
+  all of them). Its resource columns are the resources' own names - `Total("Quantity")`, not `QuantityBalance`.
 - **Periodicity is a reading's parameter, not the register's.** One register answers by day, month or
   quarter: `BalanceAndTurnovers` takes the begin, the end, the periodicity and a filter, and reports the
   opening, receipt, expense, turnover and closing per period.

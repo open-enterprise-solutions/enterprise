@@ -14034,3 +14034,13 @@ msgstr "Тема оформления интерфейса:"
 #: src/engine/frmserver/schema/style.cpp
 msgid "The theme could not be kept"
 msgstr "Не удалось сохранить тему"
+
+#: src/engine/backend/metaCollection/partial/accumulationRegisterManager_impl.cpp
+#, c-format
+msgid "Balance: '%s' is not a dimension of the register"
+msgstr "Balance: '%s' не является измерением регистра"
+
+#: src/engine/backend/metaCollection/partial/accumulationRegisterManager_impl.cpp
+#, c-format
+msgid "Balance: '%s' is not a resource of the register"
+msgstr "Balance: '%s' не является ресурсом регистра"

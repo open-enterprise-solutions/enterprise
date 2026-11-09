@@ -53,6 +53,9 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **A string becomes a number only when the whole of it is one.** `Number("234,8")` gave 234 and
   `Number("12x")` gave 12; both are now refused with "Cannot convert string to number". Spaces around the
   number are still allowed.
+- **The value table an accumulation register's `Balance` returns names a resource's column by the resource**:
+  `Quantity`, not `QuantityBalance`. A module that reads `QuantityBalance` from it raises "Table column not
+  found": read `Quantity`. The query virtual table keeps `QuantityBalance` (#409).
 
 ## Script language
 
@@ -300,6 +303,9 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Fixes
 
+- **An accumulation register's `Balance` takes the dimensions and the resources** as its third and fourth
+  arguments, comma lists: `Balance(, Filter, "", "Quantity")` is one line with the whole balance. A name that
+  is not the register's refuses, naming it. It took two arguments and refused a third (#409).
 - **A thin designer in an application server gets exclusive mode.** The server's own login counted as another
   session, so applying a configuration was refused with "other sessions are connected" when nobody else was. A job
   running at that moment still refuses, and now says so: it ends by itself, and the request can be made again.
