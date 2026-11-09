@@ -296,8 +296,8 @@ TEST(FormFieldChoice, TextctrlKeepsItsOwnLinks)
 	ibChoiceParametersDescription paramsDesc;
 	paramsDesc.SetRow(Row(41, 3));
 	rows->SetValue(paramsDesc);
-	EXPECT_TRUE(written.m_factory->GetTypeLink() == linkDesc);
-	EXPECT_TRUE(written.m_factory->GetChoiceParameters() == paramsDesc);
+	EXPECT_TRUE(written.m_frame->GetTypeLink() == linkDesc);
+	EXPECT_TRUE(written.m_frame->GetChoiceParameters() == paramsDesc);
 
 	ibDataNode node;
 	ASSERT_TRUE(written.m_frame->WriteData(node));
@@ -305,6 +305,6 @@ TEST(FormFieldChoice, TextctrlKeepsItsOwnLinks)
 	TextctrlUnderTest read;
 	ASSERT_TRUE(read.IsOk());
 	ASSERT_TRUE(read.m_frame->ReadData(node));
-	EXPECT_TRUE(read.m_factory->GetTypeLink() == linkDesc);
-	EXPECT_TRUE(read.m_factory->GetChoiceParameters() == paramsDesc);
+	EXPECT_TRUE(read.m_frame->GetTypeLink() == linkDesc);
+	EXPECT_TRUE(read.m_frame->GetChoiceParameters() == paramsDesc);
 }
