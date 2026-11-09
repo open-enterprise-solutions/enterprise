@@ -443,17 +443,43 @@ public:
 		dc.DrawLabel(label, bitmap, rect, wxALIGN_CENTRE);
 	}
 
-	virtual void DrawTab(wxDC& dc, const wxRect& rect, wxDirection WXUNUSED(dir),
+	virtual void DrawTab(wxDC& dc, const wxRect& rect, wxDirection dir,
 		const wxString& label, const wxBitmap& bitmap = wxNullBitmap,
 		int flags = 0, int indexAccel = -1) override {
 		const bool selected = (flags & wxCONTROL_SELECTED) != 0;
+		const wxColour face = selected ? m_scheme->Get(ibColourScheme::WINDOW)
+		                               : m_scheme->Get(ibColourScheme::CONTROL);
 		dc.SetPen(wxPen(m_scheme->Get(ibColourScheme::SHADOW_IN)));
-		dc.SetBrush(wxBrush(selected ? m_scheme->Get(ibColourScheme::WINDOW)
-		                             : m_scheme->Get(ibColourScheme::CONTROL)));
+		dc.SetBrush(wxBrush(face));
 		dc.DrawRectangle(rect);
 		// the label and the tab's picture beside it - DrawLabel's road (DrawButtonLabel), of the picture too: dropped
 		// here, no tab showed the one its book was given
-		DrawButtonLabel(dc, label, bitmap, rect, flags, wxALIGN_CENTRE, indexAccel);
+		if (dir != wxLEFT && dir != wxRIGHT) {
+			DrawButtonLabel(dc, label, bitmap, rect, flags, wxALIGN_CENTRE, indexAccel);
+			return;
+		}
+
+		// A TAB DOWN A SIDE has its label along it (the book turns its geometry, GetTabSize): drawn across into a
+		// bitmap of the tab turned, then turned back - read top down on the right, bottom up on the left; the picture
+		// turned the other way first, so it stands upright. The canon's road (theme_win32's DrawTab); drawn across,
+		// as it was here, the label was cut to the tab's width.
+		const wxRect inside = rect.Deflate(1, 1);   // inside the tab's line
+		const double scale = dc.GetContentScaleFactor();
+		wxBitmap across;
+		across.CreateWithLogicalSize(inside.height, inside.width, scale);
+		{
+			wxMemoryDC dcMem(across);
+			dcMem.SetBackground(wxBrush(face));
+			dcMem.Clear();
+			dcMem.SetFont(dc.GetFont());
+			dcMem.SetTextForeground(dc.GetTextForeground());
+			const wxBitmap picture = bitmap.IsOk()
+				? wxBitmap(bitmap.ConvertToImage().Rotate90(dir == wxLEFT), -1, bitmap.GetScaleFactor())
+				: wxNullBitmap;
+			DrawButtonLabel(dcMem, label, picture, wxRect(0, 0, inside.height, inside.width), flags, wxALIGN_CENTRE,
+				indexAccel);
+		}
+		dc.DrawBitmap(wxBitmap(across.ConvertToImage().Rotate90(dir == wxRIGHT), -1, scale), inside.GetPosition());
 	}
 
 	// sliders: not revived yet — simple flat geometry
