@@ -87,6 +87,7 @@
 
 #include "frmserver/mcp/mcpDebugBridge.h"   // the run is asked for over the debugger's wire
 #include "backend/debugger/debugClient.h" // …and there has to BE one to ask over
+#include "core/startProcess.h"            // ibProcessExists — the application app_run started, still there
 
 #include "backend/compiler/scriptCheck.h"     // the code is CHECKED here, before anything is sent
 #include "backend/session/session.h"          // ibSession::Current — whose worker the check is handed to
@@ -230,9 +231,20 @@ ibMcpDebugBridge* JobBridge(ibString& refusal)
 	}
 
 	// Asked of the wire, an absent application read as one that "did not answer in time", in milliseconds.
+	//
+	// ⭐ AND THE REFUSAL NAMES THE DEBUGGER (#362). The code reaches an application ONLY over the debugger's
+	// connection, so one started with `debug: false` is running and still out of reach. "No application is
+	// attached - app_run starts one" was read as "start another": app_run without restart sees no debug session
+	// and starts a second application beside the first, on the same base.
 	if (!bridge->GetStop().m_connected) {
-		refusal = ibMcpText("No application is attached, so there is nothing to run the code in, and a run "
-			"dies with the application it ran in. app_run starts one.");
+		const long started = ibMcpStartedApplication();
+		refusal = started != 0 && ibProcessExists(started)
+			? ibMcpText("The application started from here is running without the debugger, and code is sent to "
+				"an application only over the debugger's connection. app_run with restart: true brings it back "
+				"with the debugger (debug is true unless debug: false is passed); then run the code again.")
+			: ibMcpText("No application is attached to the debugger, so there is nothing to run the code in, and a "
+				"run dies with the application it ran in. app_run starts one with the debugger attached - its "
+				"default; one started with debug: false cannot be reached from here.");
 		return nullptr;
 	}
 

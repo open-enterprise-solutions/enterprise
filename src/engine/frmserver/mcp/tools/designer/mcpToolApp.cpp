@@ -45,7 +45,8 @@ const ibArg& ArgDebug()
 	static const ibArg s_a(ibT("debug"), ibArg::Kind::Flag,
 		ibMcpText("Start it with the debugger attached, so breakpoints set through debug_breakpoint "
 		  "are honoured. Default true - the reason a tool starts an application is usually "
-		  "to watch it."));
+		  "to watch it. code_run, code_status, code_cancel and debug_sandbox reach an application "
+		  "only over this connection: one started with debug: false is out of their reach."));
 	return s_a;
 }
 
@@ -196,16 +197,25 @@ public:
 			return false;
 		}
 
-		// ONE DEBUGGER AT A TIME — the same guard the menu keeps. A second debug launch attaches
-		// nothing and leaves the caller waiting at a breakpoint that will never be hit.
-		if (debugClient != nullptr && debugClient->HasConnections() && !restart && withDebug) {
+		// ONE RUN AT A TIME, asked as StopStartedApplication asks it: the debugger's connection, and the process this
+		// designer started, with the debugger or without it. A second debug launch attaches nothing and leaves the
+		// caller waiting at a breakpoint that will never be hit; and the run remembered is the last one, so one
+		// started beside a run without the debugger took its place, and a restart ended only the second (#362: that
+		// run was out of code_run's reach, and app_run started another beside it, on the same base).
+		const long lastStarted = ibMcpStartedApplication();
+		const bool debugging = debugClient != nullptr && debugClient->HasConnections();
+		if (!restart && (debugging || (lastStarted != 0 && ibProcessExists(lastStarted)))) {
 			// ⭐ A REFUSAL THAT NAMES THE DOOR. "Let it finish" is advice a tool cannot act on,
 			// and it is not even what the caller wants — they want the new code running.
-			refusal = ibMcpText("A debug session is already running. Pass restart: true to end it "
-				"and come up again with the current configuration - that is what to do after "
-				"changing a module, because a running application keeps the bytecode it "
-				"started with. (debug_sessions reports the address, and app_stop ends it "
-				"without starting anything.)");
+			refusal = debugging
+				? ibMcpText("A debug session is already running. Pass restart: true to end it "
+					"and come up again with the current configuration - that is what to do after "
+					"changing a module, because a running application keeps the bytecode it "
+					"started with. (debug_sessions reports the address, and app_stop ends it "
+					"without starting anything.)")
+				: ibMcpText("The application started from here is still running, without the debugger. Pass "
+					"restart: true to end it and come up again - with the debugger unless debug: false is "
+					"passed, and code_run needs it. (app_stop ends it without starting anything.)");
 			return false;
 		}
 

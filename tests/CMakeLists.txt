@@ -227,6 +227,7 @@ add_executable(oes_tests
     test_configCheckRegisters.cpp
     test_mcpPictureSet.cpp
     test_mcpConfigApply.cpp
+    test_mcpCodeRunDebug.cpp
     test_lockRace.cpp
     test_clientListener.cpp
 )

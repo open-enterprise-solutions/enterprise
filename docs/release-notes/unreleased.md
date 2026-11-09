@@ -509,3 +509,9 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   processors, reports, modules or forms, which live in no table, answered `changes: 0` with an empty ledger
   while it applied them. `changes` and `objects` are now the objects the apply carried, in `database_diff`'s
   words; the structure work stays in `ledger`, `structureChanges` long.
+- **MCP: `code_run` says it needs the debugger.** It reaches an application only over the debugger's connection,
+  and an application started with `app_run {debug: false}` was refused as "no application is attached - app_run
+  starts one", so a second application was started beside the first. The refusal now says that the running one has
+  no debugger and names `app_run` with `restart: true`; `app_run`'s `debug` says which verbs need it. And `app_run`
+  no longer starts a second application beside one it started without the debugger: it asks for `restart: true`,
+  as it did beside a debug session.
