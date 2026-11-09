@@ -378,6 +378,31 @@ ibDataQueryBuilder& ibDataQueryBuilder::OrderBy(const std::vector<const ibBacken
 			further.push_back(by);
 			OrderBy(further, ascending);
 		}
+	// ⭐ …AND IN A GROUPED STATEMENT A WALK ON FROM A KEY IS A KEY AS WELL, as it is for the column overload above: the
+	// lowering lets a sort walk on from a key (`GROUP BY T.Doc ORDER BY T.Doc.Date` — the key fixes everything it walks
+	// into, so the groups stay the same), and the provider sorts only by what its statement groups by. Not grouped,
+	// the sort was dropped without a word — through a reference of several kinds the rows came back in the order the
+	// server liked (#410).
+	//
+	// ⚠ ONLY ON FROM A KEY, as the column overload asks `aKey`. Over a virtual table a grouped query may sort by any
+	// walk, and a walk no key fixes, grouped by, splits the groups: `SUM(…) ORDER BY T.Doc.Date` would come back a row
+	// per document instead of one.
+	if (path.size() > 1) {
+		bool aKey = false, onFromAKey = false;
+		for (size_t i = 0; i < m_groupBy.size(); ++i) {
+			if (m_groupExprs[i])
+				continue;
+			const std::vector<const ibBackendQueryColumn*> key = m_groupPaths[i].empty()
+				? std::vector<const ibBackendQueryColumn*>{ m_groupBy[i] } : m_groupPaths[i];
+			bool walksOn = key.size() < path.size();
+			for (size_t k = 0; k < key.size() && walksOn; ++k)
+				walksOn = key[k] == path[k];
+			aKey = aKey || key == path;
+			onFromAKey = onFromAKey || walksOn;
+		}
+		if (onFromAKey && !aKey)
+			GroupBy(path);
+	}
 	ibQuerySortItem s;
 	s.m_col       = path.back();
 	s.m_ascending = ascending;

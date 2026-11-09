@@ -324,6 +324,10 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **An accumulation register's `Balance` takes the dimensions and the resources** as its third and fourth
   arguments, comma lists: `Balance(, Filter, "", "Quantity")` is one line with the whole balance. A name that
   is not the register's refuses, naming it. It took two arguments and refused a third (#409).
+- **A grouped query sorts by a field of a key of several reference types.** `GROUP BY T.Doc ORDER BY T.Doc.Date`, where
+  `Doc` may hold one of several document types, came back in whatever order the server liked: a sort that walked on
+  from a group key was not grouped by, and the statement dropped it without a word. The walk is now a key of the
+  statement as well — the groups stay the same, since the key fixes everything it walks into (#410).
 - **A thin designer in an application server gets exclusive mode.** The server's own login counted as another
   session, so applying a configuration was refused with "other sessions are connected" when nobody else was. A job
   running at that moment still refuses, and now says so: it ends by itself, and the request can be made again.
