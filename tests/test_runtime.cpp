@@ -36,6 +36,7 @@
 #include "protocol/protocol.h"                       // the state a client reads a tile from
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibFormDesigner
 #include "backend/backend_mainFrame.h"               // a frame so the form can be born
+#include "framedSession.h"                            // KeyFrame, FramedSession — the frame a form is born against
 #include "backend/metaCollection/metaModuleObject.h" // a form module, so the bind has somewhere to live
 #include "backend/metadataConfiguration.h"           // the module's file name is asked of its metadata
 #include "backend/metaCollection/metaFormObject.h"  // a common form: what a tile's form is created by
@@ -3925,30 +3926,7 @@ TEST(RuntimeTest, AnArrayWalkedAndRewalkedIsLetGoOfOnce) {
 // to the object. A script that writes DataSource.B must change that object,
 // and a read-only slot must not answer as if the read had succeeded.
 // GetBoundValue is the form's own read; the test reaches it through a form.
-// A form is born against the session's frame. This one only has to name a key.
-struct KeyFrame : ibBackendDocFrame {
-	explicit KeyFrame(ibSessionHolder&& holder) : ibBackendDocFrame(std::move(holder)) {}
-	void SetTitle(const ibString&) override {}
-	void SetStatusText(const ibString&, int) override {}
-	void RefreshFrame() override {}
-	void RaiseFrame() override {}
-	ibUniqueKey CreateFormUniqueKey(const ibBackendControlFrame*,
-		const ibSourceDataObject*, const ibUniqueKey& formGuid) override
-	{
-		if (formGuid.isValid())
-			return formGuid;
-		ibUniqueKey made = wxNewUniqueGuid;
-		return made;
-	}
-};
-
-struct FramedSession : ibSession {
-	using ibSession::ibSession;
-	ibBackendDocFrame* GetFrame() const override { return m_frame; }
-	void Attach(ibBackendDocFrame* frame) { m_frame = frame; }
-	ibBackendDocFrame* m_frame = nullptr;
-};
-
+// A form is born against the session's frame (framedSession.h).
 struct ReadableForm : ibValueForm {
 	// A form with no module meta keeps a bind as any form does: in its maps.
 	bool ReadBound(const ibString& name, ibValue& out) { return GetBoundValue(name, out); }

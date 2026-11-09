@@ -25,6 +25,7 @@
 #include "core/serialize/dataBuilder.h"
 #include "frmserver/mcp/mcpTool.h"
 #include "frmserver/visualView/ctrl/form.h"   // ibValueForm — what the frame makes
+#include "framedSession.h"                     // KeyFrame, FramedSession — a designer's session has a frame
 
 namespace {
 
@@ -123,36 +124,6 @@ struct McpFormSetCommand : ::testing::Test {
 		if (m_ownsApp && ibApplicationInstance::Get() != nullptr)
 			ibApplicationInstance::DestroyAppDataEnv();
 	}
-};
-
-// A form is born against the session's frame (test_runtime.cpp's KeyFrame): a designer's session has one.
-struct KeyFrame : ibBackendDocFrame {
-	explicit KeyFrame(ibSessionHolder&& holder) : ibBackendDocFrame(std::move(holder)) {}
-	void SetTitle(const ibString&) override {}
-	void SetStatusText(const ibString&, int) override {}
-	void RefreshFrame() override {}
-	void RaiseFrame() override {}
-	// The low-level factory, as the client host's (ibClientFrame::CreateNewForm): the form and nothing more.
-	ibBackendValueForm* CreateNewForm(const ibFormRequest& request, const ibValueMetaObjectFormBase* creator,
-		ibBackendControlFrame* ownerControl, ibSourceDataObject* srcObject) override
-	{
-		return new ibValueForm(request, creator, dynamic_cast<ibControlFrame*>(ownerControl), srcObject);
-	}
-	ibUniqueKey CreateFormUniqueKey(const ibBackendControlFrame*,
-		const ibSourceDataObject*, const ibUniqueKey& formGuid) override
-	{
-		if (formGuid.isValid())
-			return formGuid;
-		ibUniqueKey made = wxNewUniqueGuid;
-		return made;
-	}
-};
-
-struct FramedSession : ibSession {
-	using ibSession::ibSession;
-	ibBackendDocFrame* GetFrame() const override { return m_frame; }
-	void Attach(ibBackendDocFrame* frame) { m_frame = frame; }
-	ibBackendDocFrame* m_frame = nullptr;
 };
 
 bool CallTool(const wxChar* name, const ibDataNode& params, ibDataNode& result, ibString& refusal)

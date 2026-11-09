@@ -14,8 +14,8 @@
 //     survive the form's save and load;
 //   * a Textctrl's own TypeLink and ChoiceParameters (#616) survive the save and load, a path through the dot whole.
 //
-// DB-FREE AND UI-FREE: a fresh ibMetaDataConfigurationFile that is never run, a form made in the test, and a control
-// made by its own ctor.
+// DB-FREE AND UI-FREE: a fresh ibMetaDataConfigurationFile that is never run, a form made in the test on a session with
+// a frame (framedSession.h), and a control made by its own ctor.
 // =============================================================================
 
 #include <gtest/gtest.h>
@@ -38,6 +38,9 @@
 #include "frmserver/visualView/ctrl/widgets.h"       // g_controlTextCtrlCLSID
 #include "frmserver/visualView/ctrl/form.h"
 #include "frmserver/visualView/ctrl/formAttribute.h"
+#include "framedSession.h"                           // KeyFrame, FramedSession — the frame a form is born against
+
+#include <memory>
 
 namespace {
 
@@ -67,6 +70,11 @@ struct FormAttributeChoice : ::testing::Test {
 	ibValueMetaObjectAttributeBase* contractCounterparty = nullptr;   // parameters: fields of the chosen contract
 	ibValueMetaObjectAttributeBase* contractOrganisation = nullptr;
 
+	// A form is born against its session's frame (framedSession.h).
+	std::shared_ptr<FramedSession> session;
+	std::unique_ptr<KeyFrame> frame;
+	std::unique_ptr<ibSessionScope> scope;
+
 	ChoiceForm* form = nullptr;
 	ibValue formValue;   // holds the form
 	ibFormAttributeValue* counterparty = nullptr;
@@ -95,6 +103,11 @@ struct FormAttributeChoice : ::testing::Test {
 		contractOrganisation = Attribute(contracts, wxT("Organisation"));
 		ASSERT_TRUE(contractCounterparty && contractOrganisation);
 
+		session = std::make_shared<FramedSession>(wxT("form-attribute-choice"), ibSessionKind::Enterprise);
+		frame = std::make_unique<KeyFrame>(ibApplicationInstance::GetSessionRegistry()->MintUnlisted(session));
+		session->Attach(frame.get());
+		scope = std::make_unique<ibSessionScope>(session.get());
+
 		form = new ChoiceForm();
 		formValue = ibValue(static_cast<ibValue*>(form));
 		form->m_metaData = &cfg;
@@ -106,6 +119,9 @@ struct FormAttributeChoice : ::testing::Test {
 
 	void TearDown() override {
 		formValue = ibValue();
+		scope.reset();
+		frame.reset();
+		session.reset();
 		if (ibApplicationInstance::Get() != nullptr)
 			ibApplicationInstance::DestroyAppDataEnv();
 	}
