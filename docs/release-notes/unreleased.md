@@ -349,6 +349,12 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Fixes
 
+- **A sequence with no dimensions moves its border.** Posting a document registered in it was refused: "an upsert
+  into '…_Borders' names no key columns". Its one border is one row, replaced as the documents are posted.
+- **Deleting a register no longer leaves its tables behind in the list of sources.** An accounting register with
+  correspondence, or an accumulation register with balances, deleted and applied, kept `.DrCrTurnovers` (or
+  `.Balance` and `.BalanceAndTurnovers`) in the query constructor's list; the next time the list was read, the
+  designer closed.
 - **One palette for every window.** Dialogs and panels are the theme's light surface, controls its powder; windows
   that set colours of their own (user lists, authorization, the designer's panels and lists, the code editor's
   margin) take the theme's instead, and no longer stand out.

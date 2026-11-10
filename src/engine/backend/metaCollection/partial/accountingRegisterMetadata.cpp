@@ -439,9 +439,14 @@ bool ibValueMetaObjectAccountingRegister::OnReloadMetaObject()
 	// So the answer is re-taken on reload, which is what a designer edit ends in. Unregistering is
 	// unconditional (removing what is not there is a no-op) and registering follows the mode as it is
 	// NOW — the same rule, asked again rather than remembered.
+	//
+	// 🛑 …AND A DELETED REGISTER OFFERS NOTHING. Removing an object reloads it after the delete
+	// (ibMetaData::RemoveMetaObject), and this put `.DrCrTurnovers` back into the catalogue of a register
+	// that was gone: the apply destroyed it, the descriptor stayed, and the next list of sources called
+	// into freed memory — the designer fell over on `query_sources` (2026-11-11).
 	if (m_metaData != nullptr) {
 		m_metaData->UnregisterSource(&m_drCrTurnover);
-		if (IsCorrespondence())
+		if (IsCorrespondence() && !IsDeleted())
 			m_metaData->RegisterSource(&m_drCrTurnover);
 	}
 

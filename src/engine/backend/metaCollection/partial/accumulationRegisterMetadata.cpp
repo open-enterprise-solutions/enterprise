@@ -199,11 +199,12 @@ bool ibValueMetaObjectAccumulationRegister::OnReloadMetaObject()
 	//
 	// So the answer is re-taken on reload, which is what a designer edit ends in. Unregistering is
 	// unconditional (removing what is not there is a no-op) and registering follows the type as it
-	// is NOW — same rule, asked again rather than remembered.
+	// is NOW — same rule, asked again rather than remembered. A DELETED register offers nothing: the
+	// delete reloads it too, and the two tables outlived it (see the accounting register's reload).
 	if (m_metaData != nullptr) {
 		m_metaData->UnregisterSource(&m_balance);
 		m_metaData->UnregisterSource(&m_balanceAndTurnover);
-		if (GetRegisterType() == ibRegisterType::eBalances) {
+		if (GetRegisterType() == ibRegisterType::eBalances && !IsDeleted()) {
 			m_metaData->RegisterSource(&m_balance);
 			m_metaData->RegisterSource(&m_balanceAndTurnover);
 		}

@@ -55,6 +55,7 @@ struct SequenceBorderFix : ::testing::Test {
 	ibValueMetaObject*          document = nullptr;
 	ibValueMetaObjectSequence*  seq      = nullptr;
 	int                         line     = 0;
+	bool                        keyed    = true;   // one dimension, "the warehouse"; off, the sequence is one border
 
 	void SetUp() override {
 		if (!m_wxInit.IsOk())
@@ -79,10 +80,12 @@ struct SequenceBorderFix : ::testing::Test {
 
 		// One dimension - "the warehouse" - held as a string, and the document as the recorder: what binding
 		// a document to the sequence does (documentMetadataProperty.cpp), said directly.
-		ibValueMetaObject* dimension = cfg->CreateMetaObject(g_metaDimensionCLSID, seq, false);
-		ASSERT_NE(dimension, nullptr);
-		ASSERT_EQ(seq->GetDimensionArrayObject().size(), 1u);
-		seq->GetDimensionArrayObject().front()->GetTypeDesc().SetDefaultMetaType(ibValueTypes::TYPE_STRING);
+		if (keyed) {
+			ibValueMetaObject* dimension = cfg->CreateMetaObject(g_metaDimensionCLSID, seq, false);
+			ASSERT_NE(dimension, nullptr);
+			ASSERT_EQ(seq->GetDimensionArrayObject().size(), 1u);
+			seq->GetDimensionArrayObject().front()->GetTypeDesc().SetDefaultMetaType(ibValueTypes::TYPE_STRING);
+		}
 		seq->GetRegisterRecorder()->GetTypeDesc().AppendMetaType(reference_to_clsid(document->GetMetaID(), clsid_metaclass(document->GetClassType())));
 		ASSERT_TRUE(seq->HasBorders()) << "the borders' holder is numbered with the sequence";
 
@@ -94,15 +97,19 @@ struct SequenceBorderFix : ::testing::Test {
 		// The two tables, made of exactly the fields the metaobject lays out - SQLite asks for no types.
 		std::vector<const ibBackendQueryColumn*> registration = {
 			seq->GetRegisterActive()->GetQueryColumn(), seq->GetRegisterPeriod()->GetQueryColumn(),
-			seq->GetRegisterRecorder()->GetQueryColumn(), seq->GetRegisterLineNumber()->GetQueryColumn(),
-			Dimension() };
+			seq->GetRegisterRecorder()->GetQueryColumn(), seq->GetRegisterLineNumber()->GetQueryColumn() };
 		std::vector<const ibBackendQueryColumn*> border = {
-			Dimension(), seq->GetRegisterPeriod()->GetQueryColumn(), seq->GetRegisterRecorder()->GetQueryColumn() };
+			seq->GetRegisterPeriod()->GetQueryColumn(), seq->GetRegisterRecorder()->GetQueryColumn() };
+		if (keyed) {
+			registration.push_back(Dimension());
+			border.insert(border.begin(), Dimension());
+		}
 
 		db->RunQuery(wxT("%s"), wxT("CREATE TABLE ") + seq->GetQueryable()->GetQueryTableName()
 			+ wxT(" (") + FieldList(registration, true) + wxT(")"));
 		db->RunQuery(wxT("%s"), wxT("CREATE TABLE ") + seq->GetBordersTableName()
-			+ wxT(" (") + FieldList(border, true) + wxT(", UNIQUE (") + FieldList({ Dimension() }) + wxT("))"));
+			+ wxT(" (") + FieldList(border, true)
+			+ (keyed ? wxT(", UNIQUE (") + FieldList({ Dimension() }) + wxT(")") : ibString()) + wxT(")"));
 	}
 	void TearDown() override {
 		if (cfg) cfg->CloseDatabase();
@@ -158,7 +165,8 @@ struct SequenceBorderFix : ::testing::Test {
 		Assign(row, seq->GetRegisterPeriod()->GetQueryColumn(), ibValue(when));
 		Assign(row, seq->GetRegisterRecorder()->GetQueryColumn(), recorder);
 		Assign(row, seq->GetRegisterLineNumber()->GetQueryColumn(), ibValue(ibNumber(++line)));
-		Assign(row, Dimension(), ibValue(warehouse));
+		if (keyed)
+			Assign(row, Dimension(), ibValue(warehouse));
 		ibDatabaseQueryBuilder insert;
 		ASSERT_GE(insert.Execute(ibInsert(seq->GetQueryable()->GetQueryTableName(), row)), 0);
 		ibSequenceBorderWritten(seq, recorder);
@@ -178,7 +186,7 @@ struct SequenceBorderFix : ::testing::Test {
 	}
 
 	ibValue Border(const ibString& warehouse) const {
-		return ibSequenceBorderGet(seq, { ibValue(warehouse) });
+		return ibSequenceBorderGet(seq, keyed ? std::vector<ibValue>{ ibValue(warehouse) } : std::vector<ibValue>());
 	}
 	static bool Same(const ibValue& a, const ibValue& b) {
 		return !a.IsEmpty() && !b.IsEmpty() && a.CompareValueLS(b) == 0 && b.CompareValueLS(a) == 0;
@@ -258,6 +266,34 @@ TEST_F(SequenceBorderFix, RepostingInOrderWalksTheBorderToTheEnd) {
 	EXPECT_TRUE(Same(Border(wxT("kitchen")), Moment(kDay2, r2)));
 	Clear(r3); Post(r3, kDay3, wxT("kitchen"));
 	EXPECT_TRUE(Same(Border(wxT("kitchen")), Moment(kDay3, r3)));
+}
+
+// 🛑 …AND A SEQUENCE WITH NO DIMENSIONS, whose one border is the whole table. Its row has no column to be
+// matched by, and the move was an upsert matched by nothing - refused, so posting any of its documents
+// failed (2026-11-11). It steps forward as a warehouse's does, and stays ONE row.
+namespace {
+struct SequenceOneBorderFix : SequenceBorderFix {
+	SequenceOneBorderFix() { keyed = false; }
+	long Rows(const ibString& table) const {
+		long n = -1;
+		ibDatabaseResultSet* rs = db->RunQueryWithResults(wxT("%s"), wxT("SELECT COUNT(*) FROM ") + table);
+		if (rs != nullptr) {
+			if (rs->Next()) n = rs->GetResultInt(1);
+			db->CloseResultSet(rs);
+		}
+		return n;
+	}
+};
+} // namespace
+
+TEST_F(SequenceOneBorderFix, PostedInTurnTheOneBorderStepsForward) {
+	ASSERT_TRUE(seq->GetDimensionArrayObject().empty());
+	const ibValue r1 = NewDocument(), r2 = NewDocument();
+	Post(r1, kDay1, ibString());
+	EXPECT_TRUE(Same(Border(ibString()), Moment(kDay1, r1)));
+	Post(r2, kDay2, ibString());
+	EXPECT_TRUE(Same(Border(ibString()), Moment(kDay2, r2)));
+	EXPECT_EQ(Rows(seq->GetBordersTableName()), 1);
 }
 
 // =============================================================================

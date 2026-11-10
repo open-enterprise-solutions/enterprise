@@ -429,8 +429,15 @@ void ibSequenceBorderSet(const ibValueMetaObjectSequence* seq, const std::vector
 	for (const ibDmlAssign& one : AssignmentsFor(seq->GetRegisterRecorder()->GetQueryColumn(), metaData, recorder))
 		assignments.push_back(one);
 
+	// ⚠ A SEQUENCE WITH NO DIMENSIONS HAS ONE BORDER, AND THE WHOLE TABLE IS ITS KEY (SameKey) — so there is
+	// no column to match the row by, and an upsert matched by nothing is refused, rightly. The row there is
+	// taken out and the new one written, as the drop above takes it out: posting a document of such a
+	// sequence refused "an upsert into '…_Borders' names no key columns" (2026-11-11).
 	ibDatabaseQueryBuilder set;
-	if (set.Execute(ibUpsert(table, assignments, matchKeys)) < 0)
+	const bool moved = matchKeys.empty()
+		? set.Execute(ibDelete(table, SameKey(seq, key, ibEmptyString))) >= 0 && set.Execute(ibInsert(table, assignments)) >= 0
+		: set.Execute(ibUpsert(table, assignments, matchKeys)) >= 0;
+	if (!moved)
 		ibBackendCoreException::Error(_("Sequence '%s': failed to move the border"), seq->GetSynonym());
 }
 
