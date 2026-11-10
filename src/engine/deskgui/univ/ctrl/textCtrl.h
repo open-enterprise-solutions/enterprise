@@ -272,6 +272,10 @@ public:
     virtual bool SetFont(const wxFont &font) override;
     virtual bool Enable(bool enable = true) override;
 
+    // SEAM vs MSW: a single-line field come to from the keyboard has its text selected, as the dialog manager selects
+    // an EDIT's (wxWindowMSW asks the EDIT for DLGC_HASSETSEL - this field is no EDIT)
+    virtual void SetFocusFromKbd() override;
+
     // A WIDTH THAT IS SET IS ANSWERED NO NARROWER THAN THE FIELD CAN BE TYPED IN. A form author gives a field a width
     // (a sum: 72 pixels), and the title and the field's buttons are drawn inside that same width, so on a narrow field
     // they used up all of it and left the text none - a field with nowhere to enter the value. Asked here, of the

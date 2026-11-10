@@ -119,13 +119,10 @@ protected:
 			wnd->Show(false);
 		}
 		else if (m_curPage == wxNOT_FOUND) {
-			wxAuiTabCtrl* ctrl;
-			int ctrl_idx;
-			if (FindTab(wnd, &ctrl, &ctrl_idx)) {
-				m_curPage = sel_pane;
-				ctrl->SetActivePage(n);
-				isShown = true;
-			}
+			// the page is chosen by the base below, not here: chosen here, the base took it for the same page clicked
+			// again and gave the focus to the tab strip - inside the page's own focus, which opens the notebook
+			// (OnChildFocusNotebook), so the page heard it lost the focus before it heard it gained it, and kept a
+			// focus it did not have (the messages' editor moving a field's caret on its every blink)
 			wnd->Show(true);
 		}
 
@@ -134,7 +131,8 @@ protected:
 			paneInfo.Resizable(isShown);
 			paneInfo.Layer(1);
 			if (isShown) {
-				paneInfo.BestSize(GetBestSize());
+				// the pages' size: ours answers none while no page is chosen, and the base chooses it below
+				paneInfo.BestSize(wxAuiNotebook::DoGetBestSize());
 			}
 			else {
 				// AUI keeps the pane at its current height unless we cycle

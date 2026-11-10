@@ -115,6 +115,9 @@ bool ibTextEntryDialog::TransferDataToWindow()
     if ( m_textctrl )
     {
         m_textctrl->SetValue(m_value);
+        // the value offered whole, as a native rename offers it: typing replaces it, an arrow keeps it (SetValue leaves
+        // the caret at 0)
+        m_textctrl->SelectAll();
         m_textctrl->SetFocus();
     }
 

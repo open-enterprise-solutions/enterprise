@@ -321,6 +321,11 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Fixes
 
+- **A field's caret stays in the field once the messages have opened.** The messages pane, opening as the first
+  message came, gave the focus to its tabs while its editor was taking it; the editor went on believing it held the
+  focus and moved the caret of whatever field was being typed in onto its own place — under the field's title.
+- **A field reached by Tab has its text selected, and so has the value a rename dialog offers**, as in any Windows
+  field: typing replaces it, an arrow keeps it. The caret stood at the start.
 - **An event handler typed in the thin designer's inspector is kept.** The procedure was written into the module,
   but the event — a form command's Action, a control's event — went to the server with its old, empty handler ahead
   of the new one, and the server kept the empty one.

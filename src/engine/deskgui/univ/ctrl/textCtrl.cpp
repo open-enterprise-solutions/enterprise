@@ -4671,6 +4671,15 @@ bool ibTextCtrl::Enable(bool enable)
     return true;
 }
 
+void ibTextCtrl::SetFocusFromKbd()
+{
+    // selected first: the wxEVT_SET_FOCUS handler finds the selection already made (wxWindowMSW's order)
+    if ( IsSingleLine() )
+        SelectAll();
+
+    ibControl::SetFocusFromKbd();
+}
+
 void ibTextCtrl::CreateCaret()
 {
     // SEAM vs univ: the canon gave read-only controls no caret at all; the
