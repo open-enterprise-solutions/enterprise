@@ -183,6 +183,10 @@ struct AcceptanceAccumulation : ::testing::Test {
 		warehouse->SetName(wxT("Warehouse"));
 		item->SetName(wxT("Item"));
 		resource->SetName(wxT("Quantity"));
+		// The quantities posted carry two decimals: a resource is declared to hold them. Left at its default, the
+		// resource was a whole number - the queries, read raw, never said so, but the manager's Balance answers a value
+		// table, whose cells are of the declared type, and gave 130 for 130.18.
+		resource->GetTypeDesc().SetNumber(15, 2);
 		warehouse->GetTypeDesc().SetDefaultMetaType(ibValueTypes::TYPE_STRING);
 		item->GetTypeDesc().SetDefaultMetaType(ibValueTypes::TYPE_STRING);
 
