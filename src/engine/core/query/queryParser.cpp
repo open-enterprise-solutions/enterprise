@@ -1442,8 +1442,10 @@ ibQueryAstExprPtr ibQueryParser::ParsePrimary()
 	if (tk.m_kind == ibQueryTokenKind::Keyword && ibIsRankingKeyword(tk.m_keyword))
 		return ParseRanking();
 
-	// value(<Kind>.<Name>.<Member>) — a literal reference constant (empty ref / predefined), resolved at lowering
-	if (tk.IsKeyword(ibQueryKeyword::Value))
+	// value(<Kind>.<Name>.<Member>) — a literal reference constant (empty ref / predefined), resolved at lowering.
+	// Without a `(` it is a COLUMN, as an aggregate's name is: a constant's one field is called `Value`, and
+	// `SELECT Value FROM Constant.Rate` died on "expected '(' after VALUE" (2026-11-11).
+	if (tk.IsKeyword(ibQueryKeyword::Value) && PeekIsPunct(1, ibT('(')))
 		return ParseValueConstant();
 
 	// CAST(<expr> AS <Kind>.<Name>) [ . field … ] — narrow a composite reference so it can be walked.

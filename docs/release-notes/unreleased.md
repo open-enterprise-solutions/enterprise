@@ -281,8 +281,12 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   each keeps its first characters, and the apply says how many it cuts.
 - **A refusal of a name in ORDER BY, TOTALS BY or INDEX BY says where the name is**, as everywhere else in a query.
   `INDEX BY` over a field the statement does not output is refused; before, it built no index and said nothing.
+  `VALUE(...)` naming a metaobject or a member the configuration does not have is refused by the check too, not only
+  when the query runs.
   Over MCP, `query_check` and `report_query` no longer call every refusal a missing name: a rule of the language
   (a field not grouped, a string of no limit compared bare) is reported as the refusal it is.
+- **A constant can be picked in the query constructor again.** It offers its `Value` field, `SELECT *` reads it, and
+  `SELECT Value FROM Constant.Rate` parses - a bare `Value` was taken for `VALUE(...)`.
 - **A string's allowed length and a number's sign are set beside the length.** *Allowed length* (Variable or Fixed —
   a fixed string is padded with spaces) and *Non-negative* in the properties and the type dialog. A non-negative number
   takes no value below zero: one written is 0, and the apply makes the stored ones 0 and says how many. A number is kept

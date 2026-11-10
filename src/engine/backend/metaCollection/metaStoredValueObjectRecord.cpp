@@ -25,6 +25,16 @@ const ibBackendQueryColumn* ibConstantQueryable::ResolveColumnByName(const ibStr
 	const ibValueMetaObjectStoredValue::ibValueMetaObjectConstantColumn* column = m_meta->GetValueColumn();
 	return column != nullptr && name.IsSameAs(column->GetName(), false) ? column->GetQueryColumn() : nullptr;
 }
+// …and LISTS it: a query reads a source's columns from here — `SELECT *`, the query constructor's tree — and no longer
+// from its explorer, which is the form's (a source's column and a query's are two worlds since #616). Unlisted, a
+// constant offered no field to select.
+std::vector<const ibBackendQueryColumn*> ibConstantQueryable::GetQueryColumns() const
+{
+	const ibValueMetaObjectStoredValue::ibValueMetaObjectConstantColumn* column = m_meta->GetValueColumn();
+	if (column == nullptr)
+		return {};
+	return { column->GetQueryColumn() };
+}
 // The metaobject behind this source — the guid and the metaID are READ OFF IT (see
 // ibBackendQueryable::GetQueryTableGuid), not answered a second time here.
 const ibValueMetaObjectGenericData* ibConstantQueryable::GetSourceMetaObject() const { return m_meta; }

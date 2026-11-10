@@ -6646,24 +6646,28 @@ void CheckSelectNames(const ibQuerySelect& astAsWritten, const std::map<ibString
 	// ⭐ A CAST'S TYPE IS A NAME TOO — a primitive, or a table a reference points at — and one that is neither is
 	// said here, where the text is judged, in the words the run would use (CastTargetType). It needs no source,
 	// so it is asked before the check may fall silent over tables it cannot see: a temporary table described by
-	// CASTs reads a table handed in, which is exactly such a source.
-	std::function<void(const ibQueryAstExprPtr&)> checkCasts = [&checkCasts](const ibQueryAstExprPtr& e) {
+	// CASTs reads a table handed in, which is exactly such a source. So is a VALUE's — `VALUE(Enum.Kind.Retail)` names a
+	// metaobject and its member, and is settled through the door every constant passes (EvalValue): one that is not
+	// there went through the check and was refused only when the query ran (2026-11-11).
+	std::function<void(const ibQueryAstExprPtr&)> checkSourcelessNames = [&](const ibQueryAstExprPtr& e) {
 		if (!e)
 			return;
 		if (e->m_kind == ibQueryAstExprKind::Cast)
 			CastTargetType(*e);
-		ibQueryForEachChild(*e, [&checkCasts](const ibQueryAstExprPtr& child) { checkCasts(child); });
+		else if (e->m_kind == ibQueryAstExprKind::Value)
+			EvalValue(*e, params);
+		ibQueryForEachChild(*e, [&checkSourcelessNames](const ibQueryAstExprPtr& child) { checkSourcelessNames(child); });
 	};
 	for (const ibQueryProjection& projection : ast.m_projections)
-		checkCasts(projection.m_expr);
-	checkCasts(ast.m_where);
-	checkCasts(ast.m_having);
+		checkSourcelessNames(projection.m_expr);
+	checkSourcelessNames(ast.m_where);
+	checkSourcelessNames(ast.m_having);
 	for (const ibQueryAstExprPtr& key : ast.m_groupBy)
-		checkCasts(key);
+		checkSourcelessNames(key);
 	for (const ibQueryAstJoin& join : ast.m_joins)
-		checkCasts(join.m_on);
+		checkSourcelessNames(join.m_on);
 	for (const ibQueryOrderItem& item : ast.m_orderBy)
-		checkCasts(item.m_expr);
+		checkSourcelessNames(item.m_expr);
 	// …and INDEX BY, asked of the outputs alone, so a statement over a table handed in is judged too.
 	CheckIndexNamesOutputs(ast);
 

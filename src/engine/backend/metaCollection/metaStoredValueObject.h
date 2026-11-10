@@ -28,6 +28,7 @@ class BACKEND_API ibConstantQueryable : public ibBackendQueryable {
 public:
 	explicit ibConstantQueryable(const ibValueMetaObjectStoredValue* meta) : m_meta(meta) {}
 	virtual const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override;   // -> the constant's value column
+	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override;            // { the value column } — SELECT *, the constructor
 	virtual ibString GetQueryTableName() const override;
 	virtual const ibMetaData* GetMetaData() const override;                      // metadata context for column-based value reads
 	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const override;   // = m_meta — the guid / metaID are read off it

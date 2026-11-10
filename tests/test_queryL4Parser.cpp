@@ -176,6 +176,23 @@ TEST(QueryL4Parser, AnAggregateNameWithoutACallIsAColumn)
 	EXPECT_EQ(sel->m_projections[1].m_expr->m_path[0], wxT("Count"));
 }
 
+TEST(QueryL4Parser, ValueWithoutACallIsAColumn)
+{
+	// …AND AT VALUE. A constant's one field is called `Value`, and `SELECT Value FROM Constant.Rate` died on
+	// "expected '(' after VALUE": the branch took the word before asking whether a call followed.
+	auto sel = Parse(wxT("SELECT Value, VALUE(Enum.Kind.Retail) AS k FROM Constant.Rate"));
+	ASSERT_TRUE(sel != nullptr);
+	ASSERT_EQ(sel->m_projections.size(), 2u);
+
+	const ibQueryAstExprPtr& field = sel->m_projections[0].m_expr;
+	EXPECT_EQ(field->m_kind, ibQueryAstExprKind::Column);
+	ASSERT_EQ(field->m_path.size(), 1u);
+	EXPECT_EQ(field->m_path[0], wxT("Value"));
+
+	// …and with its bracket it is still the reference constant.
+	EXPECT_EQ(sel->m_projections[1].m_expr->m_kind, ibQueryAstExprKind::Value);
+}
+
 TEST(QueryL4Parser, CountStar)
 {
 	auto sel = Parse(wxT("SELECT COUNT(*) AS n FROM Document.Orders"));
