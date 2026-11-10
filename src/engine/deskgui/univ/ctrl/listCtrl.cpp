@@ -934,10 +934,10 @@ protected:
     // find the first item starting with the given prefix after the given item
     size_t PrefixFindItem(size_t item, const wxString& prefix) const;
 
-    // get the colour to be used for drawing the rules
+    // get the colour to be used for drawing the rules: the theme's, as every table's (ibDataViewCtrl::GetRuleColour)
     wxColour GetRuleColour() const
     {
-        return wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT);
+        return wxTHEME_COLOUR(CONTROL);
     }
 
 private:
@@ -1974,7 +1974,8 @@ void ibListHeaderWindow::OnPaint( wxPaintEvent &WXUNUSED(event) )
     parent->CalcUnscrolledPosition(w, 0, &w, nullptr);
 
     dc.SetBackgroundMode(wxBRUSHSTYLE_TRANSPARENT);
-    dc.SetTextForeground(wxTHEME_COLOUR(CONTROL_TEXT));
+    // the columns' titles in the list's text, as the data view's header (SetHeaderAttr)
+    dc.SetTextForeground(m_owner->GetForegroundColour());
 
     int x = HEADER_OFFSET_X;
     int numColumns = m_owner->GetColumnCount();
@@ -6788,7 +6789,7 @@ ibListCtrl::GetClassDefaultAttributes(wxWindowVariant variant)
 #else
     wxUnusedVar(variant);
     wxVisualAttributes attr;
-    attr.colFg = wxTHEME_COLOUR(CONTROL_TEXT); // SEAM: theme, as ibTreeCtrl's
+    attr.colFg = wxTHEME_COLOUR(CONTROL_TEXT_ALTERNATE); // SEAM: theme, a table's text, as ibDataViewCtrl's
     attr.colBg = wxTHEME_COLOUR(WINDOW); // SEAM: theme, as ibTreeCtrl's
     attr.font  = wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT);
     return attr;

@@ -157,16 +157,14 @@ public:
 		return m_title;
 	}
 
+	// SEAM vs wx: the width ASKED for, as a drag's (WXOnResize) - what it is shown at is the fit's (UpdateColumnSizes).
+	// wx wrote it into the width shown: the columns stood at their raw widths until the next fit, and a server's answer
+	// laying each column's width on again (a sort) made a stretched table jump (Max, 2026-11-10). The same width asked
+	// again changes nothing.
 	virtual void SetWidth(int width) wxOVERRIDE
 	{
-		// Call the actual update method, used for both automatic and "manual"
-		// width changes.
-		WXUpdateWidth(width);
-
-		// Do remember the last explicitly set width: this is used to prevent
-		// UpdateColumnSizes() from resizing the last column to be smaller than
-		// this size.
-		m_manuallySetWidth = width;
+		if (width != m_manuallySetWidth)
+			WXOnResize(width);
 	}
 	virtual int GetWidth() const wxOVERRIDE;
 
@@ -237,19 +235,7 @@ public:
 	void SetFooterAlignment(wxAlignment align) { m_footer_column.SetAlignment(align); }
 	wxAlignment GetFooterAlignment() const { return m_footer_column.GetAlignment(); }
 
-	// This method is specific to the generic implementation and is used only
-	// by wxWidgets itself.
-	void WXUpdateWidth(int width)
-	{
-		if (width == m_width)
-			return;
-
-		m_width = width;
-		UpdateWidth();
-	}
-
-	// This method is also internal and called when the column is resized by
-	// user interactively.
+	// This method is internal: the width asked for by the user's drag, and by SetWidth.
 	void WXOnResize(int width);
 
 	// THE WIDTH AS ASKED FOR, RECORDED QUIETLY. Same effect as WXOnResize minus the
@@ -852,6 +838,7 @@ public:
 	ibDataViewMainWindow* DevicePosToDataViewWindow(wxPoint pos) const;
 	ibDataViewMainWindow* DevicePosToDataViewWindow(int x, int y) const;
 
+	// A rows window's point to the table's (Unscrolled) and back (Scrolled): the window's offset and its scroll, both.
 	void    CalcDataViewWindowUnscrolledPosition(int x, int y, int* xx, int* yy,
 		const ibDataViewMainWindow* tableWindow) const;
 	wxPoint CalcDataViewWindowUnscrolledPosition(const wxPoint& pt,
@@ -1374,12 +1361,11 @@ public:
 	void RefreshRow(unsigned int row) { RefreshRows(row, row); }
 	void RefreshRows(unsigned int from, unsigned int to);
 	void RefreshRowsAfter(unsigned int firstRow);
+	// The rows' rectangle, in the table's coordinates (GetLinesRect), refreshed in every rows window at its place there.
+	void RefreshLinesRect(const wxRect& rect);
 
 	// returns the colour to be used for drawing the rules
-	wxColour GetRuleColour() const
-	{
-		return wxSystemSettings::GetColour(wxSYS_COLOUR_3DLIGHT);
-	}
+	wxColour GetRuleColour() const;
 
 	wxRect GetLinesRect(unsigned int rowFrom, unsigned int rowTo) const;
 

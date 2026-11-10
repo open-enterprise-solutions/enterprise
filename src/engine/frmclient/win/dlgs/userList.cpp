@@ -74,7 +74,6 @@ ibDialogUserList::ibDialogUserList(wxWindow* parent, wxWindowID id, const wxStri
 	m_toolEdit = m_toolbarMain->AddTool(wxID_USERS_TOOL_EDIT, _("Edit"), ibBackendPicture::GetPicture(g_picEditCLSID), wxNullBitmap, wxITEM_NORMAL, wxEmptyString, wxEmptyString, nullptr);
 	m_toolDelete = m_toolbarMain->AddTool(wxID_USERS_TOOL_DELETE, _("Delete"), ibBackendPicture::GetPicture(g_picDeleteCLSID), wxNullBitmap, wxITEM_NORMAL, wxEmptyString, wxEmptyString, nullptr);
 
-	m_toolbarMain->SetForegroundColour(wxDefaultStypeFGColour);
 	m_toolbarMain->SetBackgroundColour(wxDefaultStypeBGColour);
 
 	m_toolbarMain->Realize();
@@ -96,11 +95,10 @@ ibDialogUserList::ibDialogUserList(wxWindow* parent, wxWindowID id, const wxStri
 	m_dataEditor->GetRootColumnGroup()->AppendColumn(columnName);
 	m_dataEditor->GetRootColumnGroup()->AppendColumn(columnFullName);
 
-	m_dataEditor->SetForegroundColour(wxDefaultStypeFGColour);
 	//m_dataEditor->SetBackgroundColour(wxDefaultStypeBGColour);
 
 	wxItemAttr attr(
-		wxDefaultStypeFGColour,
+		wxNullColour,   // the text: the table's
 		wxDefaultStypeBGColour,
 		m_dataEditor->GetFont()
 	);

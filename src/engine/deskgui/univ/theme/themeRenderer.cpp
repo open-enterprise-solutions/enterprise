@@ -36,6 +36,10 @@
 #include "deskgui/univ/colourScheme.h"
 
 #include <wx/control.h>     // wxControl::Ellipsize, for DrawItemText and DrawHeaderButtonContents
+#include <wx/graphics.h>    // the expander's chevron, smoothed
+#include <wx/image.h>
+
+#include <memory>
 
 // ----------------------------------------------------------------------------
 // constants
@@ -481,20 +485,52 @@ int ibThemeRenderer::DrawHeaderButtonContents(wxWindow* win, wxDC& dc, const wxR
 }
 
 // SEAM vs univ: the expander of every tree, grid and outline is the theme's (the delegate was wx's generic 16x16
-// box): a flat button - a thin border, the control's background, a minus always and the bar making it a plus while
-// collapsed, the spreadsheet's outline button
-void ibThemeRenderer::DrawTreeItemButton(wxWindow* WXUNUSED(win), wxDC& dc, const wxRect& rect, int flags)
+// box): a chevron, no box - pointing right while collapsed, down when expanded (Max, 2026-11-10, the way a modern
+// tree draws it), in the sort arrow's dark shadow. SMOOTHED, a DIP and a half thick, round at its ends - drawn on
+// whole pixels it read faint beside the system's glyph the old tables had (Max, 2026-11-10: "the chevrons show very
+// weakly"). Into an image of its own, laid on the DC as a picture: wxMSW's GDI+ context made over a DC takes its
+// device origin but not its logical one (msw/graphics.cpp), which a tree's DC may carry, and a picture is laid at
+// the logical place
+void ibThemeRenderer::DrawTreeItemButton(wxWindow* win, wxDC& dc, const wxRect& rect, int flags)
 {
-    wxDCPenChanger penChanger(dc, wxPen(m_scheme->Get(ibColourScheme::SHADOW_IN)));
-    wxDCBrushChanger brushChanger(dc, wxBrush(m_scheme->Get(ibColourScheme::CONTROL)));
-    dc.DrawRectangle(rect);
+    if ( rect.width <= 0 || rect.height <= 0 )
+        return;
 
-    dc.SetPen(wxPen(m_scheme->Get(ibColourScheme::CONTROL_TEXT)));
-    const wxCoord yMiddle = rect.y + rect.height / 2;
-    const wxCoord xMiddle = rect.x + rect.width / 2;
-    dc.DrawLine(rect.x + 2, yMiddle, rect.GetRight() - 1, yMiddle);
-    if ( !(flags & wxCONTROL_EXPANDED) )
-        dc.DrawLine(xMiddle, rect.y + 2, xMiddle, rect.GetBottom() - 1);
+    wxImage glyph(rect.width, rect.height);
+    glyph.InitAlpha();
+    memset(glyph.GetAlpha(), 0, static_cast<size_t>(rect.width) * rect.height);   // transparent, the row shows through
+
+    const double dip = win != nullptr ? win->GetDPIScaleFactor() : 1.0;
+    {
+        const std::unique_ptr<wxGraphicsContext> gc(wxGraphicsContext::Create(glyph));
+        if ( !gc )
+            return;
+        gc->SetAntialiasMode(wxANTIALIAS_DEFAULT);
+        gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(m_scheme->Get(ibColourScheme::SHADOW_DARK))
+            .Width(1.5 * dip).Cap(wxCAP_ROUND).Join(wxJOIN_ROUND)));
+
+        const double side = wxMin(rect.width, rect.height);
+        const double arm = side * 0.36;   // half the chevron's span; its depth is half of that
+        const double xMiddle = rect.width / 2.0;
+        const double yMiddle = rect.height / 2.0;
+
+        wxGraphicsPath path = gc->CreatePath();
+        if ( flags & wxCONTROL_EXPANDED )
+        {
+            path.MoveToPoint(xMiddle - arm, yMiddle - arm / 2);
+            path.AddLineToPoint(xMiddle, yMiddle + arm / 2);
+            path.AddLineToPoint(xMiddle + arm, yMiddle - arm / 2);
+        }
+        else
+        {
+            path.MoveToPoint(xMiddle - arm / 2, yMiddle - arm);
+            path.AddLineToPoint(xMiddle + arm / 2, yMiddle);
+            path.AddLineToPoint(xMiddle - arm / 2, yMiddle + arm);
+        }
+        gc->StrokePath(path);
+    }   // the context writes the image as it goes
+
+    dc.DrawBitmap(wxBitmap(glyph), rect.x, rect.y, true);
 }
 
 wxSize ibThemeRenderer::GetExpanderSize(wxWindow* win)
@@ -1193,6 +1229,19 @@ void ibThemeRenderer::DrawStatusField(wxDC& dc,
 }
 
 #endif // wxUSE_STATUSBAR
+
+// SEAM vs univ (which had none - the system's tooltip showed over the theme): a tip reads as a field's content does,
+// the content's plate in the border tier's frame, the theme's text in the middle - the window is sized to the text with
+// even margins round it (Max, 2026-11-10: "the tooltip can be taken too")
+void ibThemeRenderer::DrawToolTip(wxDC& dc, const wxRect& rect, const wxString& text)
+{
+    wxDCBrushChanger brushChanger(dc, wxBrush(m_scheme->Get(ibColourScheme::CONTROL)));
+    wxDCPenChanger penChanger(dc, wxPen(m_scheme->Get(ibColourScheme::SHADOW_IN)));
+    dc.DrawRectangle(rect);
+
+    wxDCTextColourChanger textChanger(dc, m_scheme->Get(ibColourScheme::CONTROL_TEXT));
+    dc.DrawLabel(text, rect, wxALIGN_CENTRE);
+}
 
 // ----------------------------------------------------------------------------
 // top level windows

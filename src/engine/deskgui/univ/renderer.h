@@ -369,6 +369,9 @@ public:
                                  int flags = 0, int style = 0) = 0;
 #endif // wxUSE_STATUSBAR
 
+    // draw a tooltip - its plate, its frame and its text - over the whole of the tooltip's window (ibToolTipWindow)
+    virtual void DrawToolTip(wxDC& dc, const wxRect& rect, const wxString& text) = 0;
+
     // draw complete frame/dialog titlebar
     virtual void DrawFrameTitleBar(wxDC& dc,
                                    const wxRect& rect,
@@ -781,6 +784,9 @@ public:
                                  int flags = 0, int style = 0) override
         { m_renderer->DrawStatusField(dc, rect, label, flags, style); }
 #endif // wxUSE_STATUSBAR
+
+    virtual void DrawToolTip(wxDC& dc, const wxRect& rect, const wxString& text) override
+        { m_renderer->DrawToolTip(dc, rect, text); }
 
     virtual void DrawFrameTitleBar(wxDC& dc,
                                    const wxRect& rect,

@@ -43,16 +43,13 @@ public:
         Create(parent, id, title, pos, size, style, name);
     }
 
-    // wxDialog's, with its defaults
+    // wxDialog's, with its defaults - under the drop shadow a menu casts
     bool Create(wxWindow *parent, wxWindowID id,
                 const wxString& title,
                 const wxPoint& pos = wxDefaultPosition,
                 const wxSize& size = wxDefaultSize,
                 long style = wxDEFAULT_DIALOG_STYLE,
-                const wxString& name = wxASCII_STR(wxDialogNameStr))
-    {
-        return ibTopLevelWindow<wxDialog>::Create(parent, id, title, pos, size, style, name);
-    }
+                const wxString& name = wxASCII_STR(wxDialogNameStr));
 
     // wxDialogBase's, of the library's static texts: the message wrapped at widthMax, a text per line - the wrapper's
     // texts when one is given (textSizerWrapper.h)

@@ -44,6 +44,9 @@ public:
         CONTROL_TEXT_DISABLED,
         CONTROL_TEXT_DISABLED_SHADOW,
 
+        // the alternate text: a table's values and columns, the start page's
+        CONTROL_TEXT_ALTERNATE,
+
         // the scrollbar background colour for the normal and pressed states
         SCROLLBAR,
         SCROLLBAR_PRESSED,

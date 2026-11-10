@@ -258,6 +258,12 @@
     <ClCompile Include="univ\textValidator.cpp">
       <Filter>univ</Filter>
     </ClCompile>
+    <ClCompile Include="univ\toolTip.cpp">
+      <Filter>univ</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\topLevel.cpp">
+      <Filter>univ</Filter>
+    </ClCompile>
     <ClCompile Include="univ\window.cpp">
       <Filter>univ</Filter>
     </ClCompile>
@@ -536,6 +542,9 @@
       <Filter>univ</Filter>
     </ClInclude>
     <ClInclude Include="univ\textValidator.h">
+      <Filter>univ</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\toolTip.h">
       <Filter>univ</Filter>
     </ClInclude>
     <ClInclude Include="univ\topLevel.h">

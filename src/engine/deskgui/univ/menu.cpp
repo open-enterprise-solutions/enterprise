@@ -150,6 +150,16 @@ public:
     // override the base class version to dismiss any open submenus
     virtual void Dismiss();
 
+#ifdef __WXMSW__
+    // SEAM vs univ: shown as the code editor's lists are (ibCodeEditorPopupBase) - a top-level popup that does not
+    // activate, under the system's drop shadow; a child of the desktop, as wx makes a popup, casts none (Max,
+    // 2026-11-10: "the menu has no such shading at its edges")
+    virtual bool Show(bool show = true) override;
+
+    // a click on the menu does not activate it: the frame keeps the focus and the menu its tracking
+    virtual bool MSWHandleMessage(WXLRESULT *result, WXUINT message, WXWPARAM wParam, WXLPARAM lParam) override;
+#endif
+
     // called when a submenu is dismissed
     void OnSubmenuDismiss(bool dismissParent);
 
@@ -348,8 +358,9 @@ ibPopupMenuWindow::ibPopupMenuWindow(wxWindow *parent, ibMenu *menu)
     ResetCurrent();
 
     // SEAM vs univ: wxBORDER_RAISED here is the NATIVE 3-D edge; the flat
-    // look draws its own 1px palette border in OnPaint instead
-    (void)Create(parent, wxBORDER_NONE);
+    // look draws its own 1px palette border in OnPaint instead. A top-level
+    // popup (wxPU_CONTAINS_CONTROLS), as the shadow needs one (Show)
+    (void)Create(parent, wxBORDER_NONE | wxPU_CONTAINS_CONTROLS);
 
     SetCursor(wxCURSOR_ARROW);
 
@@ -368,6 +379,36 @@ ibPopupMenuWindow::~ibPopupMenuWindow()
 
     m_menu->m_popupMenu = nullptr;
 }
+
+#ifdef __WXMSW__
+
+bool ibPopupMenuWindow::Show(bool show)
+{
+    if (!show)
+        return wxPopupTransientWindow::Show(false);
+
+    // shown without being activated: the window's state first, then the native show that does not activate
+    if (!wxWindowBase::Show(true))
+        return false;
+
+    const HWND hWnd = reinterpret_cast<HWND>(GetHandle());
+    ::SetClassLong(hWnd, GCL_STYLE, ::GetClassLong(hWnd, GCL_STYLE) | CS_DROPSHADOW);
+    ::ShowWindow(hWnd, SW_SHOWNA);
+    ::SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    return true;
+}
+
+bool ibPopupMenuWindow::MSWHandleMessage(WXLRESULT *result, WXUINT message, WXWPARAM wParam, WXLPARAM lParam)
+{
+    if (message == WM_MOUSEACTIVATE)
+    {
+        *result = MA_NOACTIVATE;
+        return true;
+    }
+    return wxPopupTransientWindow::MSWHandleMessage(result, message, wParam, lParam);
+}
+
+#endif // __WXMSW__
 
 // ----------------------------------------------------------------------------
 // ibPopupMenuWindow current item/node handling

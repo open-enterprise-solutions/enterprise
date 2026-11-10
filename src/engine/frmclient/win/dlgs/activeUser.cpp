@@ -3,7 +3,6 @@
 #include "frmclient/mainFrame/mainFrame.h"
 #include "protocol/protocol.h"
 #include "frmclient/win/picture.h"
-#include "frmclient/visualView/ctrl/frame.h"   // wxDefaultStypeFGColour — the desktop's dialog took it from there
 #include "frmclient/backend/appData.h"        // DesignerMode — whose the context menus are
 
 #include "deskgui/univ/menu.h"
@@ -151,9 +150,6 @@ ibDialogActiveUser::ibDialogActiveUser(wxWindow* parent, const ibProtocolNode& s
 
 	ibDialog::SetIcon(dlg_icon);
 	ibDialog::SetFocus();
-
-	m_activeTable->SetForegroundColour(wxDefaultStypeFGColour);
-	m_locksTable->SetForegroundColour(wxDefaultStypeFGColour);
 
 	RefreshActiveUserTable(shown);
 	RefreshLocksTable(shown);

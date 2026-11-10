@@ -10,6 +10,7 @@
 #include <set>
 
 #include "deskgui/univ/choiceDialog.h"   // ibSingleChoiceDialog, ibMultiChoiceDialog — the theme, a server's choice
+#include "deskgui/univ/topLevel.h"   // ibWindowShowLocker — the window on the screen whole
 #include <wx/config.h>
 #include <wx/file.h>
 #include <wx/filedlg.h>
@@ -821,8 +822,12 @@ bool ibFrontendMainFrame::Show(bool show)
 			wxLogWarning(wxT("%s"), wxString(assistantRefusal));
 	}
 
-	if (!wxAuiMDIParentFrame::Show(true))
-		return false;
+	{
+		// …on the screen whole, the panes and the start page painted: a white window first, its parts after, otherwise
+		const ibWindowShowLocker locker(this);
+		if (!wxAuiMDIParentFrame::Show(true))
+			return false;
+	}
 	SetFocus();
 	Raise();
 	// …and the messages its start said, opened below — the desktop's (ibFrontendMainFrameEnterprise::Show): drawn before
@@ -2166,7 +2171,6 @@ namespace {
 // The interior palette, spelled where it is used — the same values the rest of the
 // chrome carries (see luna_dockart.cpp).
 const wxColour kStatusBarGround(0xC8, 0xD6, 0xDF);   // #C8D6DF light dusty
-const wxColour kStatusBarInk   (0x3F, 0x5C, 0x77);   // #3F5C77 deep dusty blue
 
 // The lamp. Muted rather than a signal green: it reports a steady state, and the
 // bar it sits in is a quiet one.
@@ -2182,9 +2186,8 @@ ibDocBottomStatusBar::ibDocBottomStatusBar(wxWindow* parent, wxWindowID id, long
 	: wxStatusBar(parent, id, style, name)
 {
 	// Light dusty bar — sits between the powder-blue workspace and the cream content
-	// panes; deep-blue text reads cleanly against it.
+	// panes; the theme's text reads cleanly against it.
 	SetBackgroundColour(kStatusBarGround);
-	SetForegroundColour(kStatusBarInk);
 
 	// -1 is "share what is left"; a positive number is a fixed width. So the message
 	// grows with the window and the lamp keeps its place at the right-hand end.

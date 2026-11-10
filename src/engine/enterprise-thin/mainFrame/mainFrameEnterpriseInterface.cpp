@@ -14,10 +14,9 @@
 #define THEME_COLOUR_MAIN    wxColour(0xB8, 0xC9, 0xD4)  // #B8C9D4 powder blue
 #define THEME_COLOUR_BORDER  wxColour(0xA8, 0xBA, 0xC8)  // #A8BAC8 light dusty
 
-// The text of the panel's pages — the forms' own ink (frmclient/visualView/ctrl/frame.h).
-#define wxDefaultStypeFGColour wxColour(0x3F, 0x5C, 0x77)  // #3F5C77 deep dusty blue
-
 #include "frmclient/win/picture.h"   // the pictures, as they travel
+#include "deskgui/univ/theme.h"          // the text of the panel's pages: the theme's alternate text
+#include "deskgui/univ/colourScheme.h"
 #include "deskgui/univ/ctrl/control.h"
 #include "deskgui/univ/ctrl/staticText.h"
 #include "deskgui/univ/ctrl/staticBitmap.h"
@@ -410,7 +409,7 @@ class ibSubSystemWindow : public ibWindow {
 
 	private:
 
-		unsigned int m_flags = wxAUI_TB_TEXT | wxAUI_NB_LEFT;
+		unsigned int m_flags = wxAUI_NB_TOP | wxAUI_NB_LEFT;   // the tool bar's wxAUI_TB_TEXT stood here: the same bit
 
 		ibProtocolNode m_section;   // a tree of its own (Clone) — the panel outlives the answer it came in
 		wxPopupTransientWindow* m_popupWindow;
@@ -457,7 +456,7 @@ class ibSubSystemWindow : public ibWindow {
 			ibControl::Create(parent, id, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
 
 			SetBackgroundStyle(wxBG_STYLE_PAINT);
-			SetForegroundColour(wxDefaultStypeFGColour);
+			SetForegroundColour(wxTHEME_COLOUR(CONTROL_TEXT_ALTERNATE));
 			EnableVisibleFocus(false);
 
 			// The caption is four points larger than the system's normal text: it is what a person came to
@@ -667,7 +666,7 @@ class ibSubSystemWindow : public ibWindow {
 				Layout();
 
 				SetBackgroundColour(*wxWHITE);
-				SetForegroundColour(wxDefaultStypeFGColour);
+				SetForegroundColour(wxTHEME_COLOUR(CONTROL_TEXT_ALTERNATE));
 			}
 
 		private:
@@ -694,7 +693,7 @@ class ibSubSystemWindow : public ibWindow {
 				wxBoxSizer* sizerBlock = new wxBoxSizer(wxVERTICAL);
 				ibStaticText* st = new ibStaticText(this, wxID_ANY, caption, wxDefaultPosition, wxDefaultSize, 0);
 
-				st->SetForegroundColour(wxDefaultStypeFGColour);
+				st->SetForegroundColour(wxTHEME_COLOUR(CONTROL_TEXT_ALTERNATE));
 				st->Wrap(-1);
 				st->SetFont([]{ wxFont f = wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT); f.SetPointSize(f.GetPointSize() + 3); f.MakeBold(); return f; }());
 				if (!tooltip.IsEmpty())

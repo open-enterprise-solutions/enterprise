@@ -817,10 +817,7 @@ public:
 	}
 
 	static wxVisualAttributes
-		GetClassDefaultAttributes(wxWindowVariant variant = wxWINDOW_VARIANT_NORMAL)
-	{
-		return wxControl::GetCompositeControlsDefaultAttributes(variant);
-	}
+		GetClassDefaultAttributes(wxWindowVariant variant = wxWINDOW_VARIANT_NORMAL);
 
 protected:
 	virtual void DoSetExpanderColumn() = 0;

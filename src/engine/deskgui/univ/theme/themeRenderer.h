@@ -175,6 +175,8 @@ public:
     virtual wxSize GetStatusBarFieldMargins() const override;
 #endif // wxUSE_STATUSBAR
 
+    virtual void DrawToolTip(wxDC& dc, const wxRect& rect, const wxString& text) override;
+
     virtual wxCoord GetCheckItemMargin() const override { return 0; }
 
 

@@ -278,6 +278,9 @@ public:
 			wxDefaultPosition, wxDefaultSize,
 			wxHD_DEFAULT_STYLE | wxHD_BITMAP_ON_RIGHT)
 	{
+		// SEAM vs wx: the header's text is its table's (CONTROL_TEXT_ALTERNATE, or the table's own) - not a header's
+		// black (Max, 2026-11-10: the columns as the values); a header attribute's colour goes over it (SetHeaderAttr)
+		SetOwnForegroundColour(parent->GetForegroundColour());
 	}
 
 	ibDataViewCtrl* GetOwner() const
@@ -807,6 +810,7 @@ public:
 			wxDefaultPosition, wxDefaultSize,
 			wxHD_BITMAP_ON_RIGHT)
 	{
+		SetOwnForegroundColour(parent->GetForegroundColour());   // the table's text, as the header's
 	}
 
 	ibDataViewCtrl* GetOwner() const
@@ -2042,9 +2046,12 @@ void ibDataViewCtrl::DrawCellBackground(ibDataViewRenderer* cell, wxDC& dc, cons
 		rectBg.width--;
 	}
 
+	// A HIERARCHY'S CRUMB (the folders above the rows shown, frozen at the top) is a caption row, as the property
+	// grid's category is: the theme's caption tier, not a colour of its own (Max, 2026-11-10: "does the frozen part
+	// go through the theme?" - it was #C5DCE8, written here)
 	if (mode == ibDataViewTreeNodeViewMode::ibDataViewHierarchy)
 	{
-		const wxColour& colour = wxColour(197, 220, 232);
+		const wxColour colour = wxTHEME_COLOUR(TITLEBAR);
 		wxDCPenChanger changePen(dc, colour);
 		wxDCBrushChanger changeBrush(dc, colour);
 
@@ -2805,28 +2812,11 @@ int ibDataViewCtrl::GetColumnStart(int column) const
 
 unsigned int ibDataViewCtrl::GetFirstVisibleRow() const
 {
-	int x = 0;
-	int y = 0;
-
-	CalcUnscrolledPosition(x, y, &x, &y);
-
-	// `m_tableAreaWin`'s virtual size has the frozen-row offset
-	// subtracted (RecalculateDisplay → SetVirtualSize), so its
-	// logical y=0 corresponds to the first NON-frozen row.
-	// `GetLineAt(y)` expects y in full-tree coords (row 0 = first
-	// row in m_root, frozen or not), so shift by the frozen-area
-	// offset before mapping y → row.  Mirrors what DrawTableContent
-	// does explicitly at lines ~6812-6818 by passing `gridOffset.y`
-	// into CalcDataViewWindowUnscrolledPosition.  Without this shift,
-	// scrolling inside a drilled subfolder leaves topRow stuck at
-	// row 0 (the topmost crumb) and DerivePagedThumb's dataBehind
-	// branch never fires.
-	if (m_tableAreaWin) {
-		const wxPoint offset = GetDataViewWindowOffset(m_tableAreaWin);
-		y += offset.y;
-	}
-
-	return GetLineAt(y);
+	// The rows window's top line, in the table's coordinates: `m_tableAreaWin` shows the table past the frozen rows
+	// (CalcDataViewWindowUnscrolledPosition), and GetLineAt counts from the first row of all. Read as the control's
+	// own top, scrolling inside a drilled subfolder left the top row stuck at row 0 (the topmost crumb) and
+	// DerivePagedThumb's dataBehind branch never fired.
+	return GetLineAt(CalcDataViewWindowUnscrolledPosition(wxPoint(0, 0), m_tableAreaWin).y);
 }
 
 unsigned int ibDataViewCtrl::GetLastVisibleRow()
@@ -2970,83 +2960,37 @@ void ibDataViewCtrl::SendSelectionChangedEvent(const ibDataViewItem& item)
 
 void ibDataViewCtrl::RefreshRows(unsigned int from, unsigned int to)
 {
-	wxRect rect = GetLinesRect(from, to);
-
-	CalcScrolledPosition(rect.x, rect.y, &rect.x, &rect.y);
-
-	wxSize client_size = GetClientSize();
-	wxRect client_rect(0, 0, client_size.x, client_size.y);
-	wxRect intersect_rect = client_rect.Intersect(rect);
-
-	if (!intersect_rect.IsEmpty())
-	{
-		// Copy rectangle can get scroll offsets..
-		int rect_x = intersect_rect.GetX();
-		int rect_y = intersect_rect.GetY();
-
-		int rectWidth = intersect_rect.GetWidth();
-		int rectHeight = intersect_rect.GetHeight();
-
-		if (m_tableAreaWin)
-		{
-			wxRect anotherrect(rect_x, rect_y, rectWidth, rectHeight);
-			anotherrect.Offset(GetDataViewWindowOffset(m_tableAreaWin));
-			m_tableAreaWin->Refresh(true, &anotherrect);
-		}
-
-		if (m_tableFrozenRowAreaWin) {
-			wxRect anotherrect(rect_x, rect_y, rectWidth, rectHeight);
-			anotherrect.Offset(GetDataViewWindowOffset(m_tableFrozenRowAreaWin));
-			m_tableFrozenRowAreaWin->Refresh(true, &anotherrect);
-		}
-
-		if (m_tableFrozenColAreaWin) {
-			wxRect anotherrect(rect_x, rect_y, rectWidth, rectHeight);
-			anotherrect.Offset(GetDataViewWindowOffset(m_tableFrozenColAreaWin));
-			m_tableFrozenColAreaWin->Refresh(true, &anotherrect);
-		}
-
-		if (m_tableFrozenCornerAreaWin) {
-			wxRect anotherrect(rect_x, rect_y, rectWidth, rectHeight);
-			anotherrect.Offset(GetDataViewWindowOffset(m_tableFrozenCornerAreaWin));
-			m_tableFrozenCornerAreaWin->Refresh(true, &anotherrect);
-		}
-	}
+	RefreshLinesRect(GetLinesRect(from, to));
 }
 
 void ibDataViewCtrl::RefreshRowsAfter(unsigned int firstRow)
 {
-	wxSize client_size = GetClientSize();
-	int start = GetLineStart(firstRow);
-	CalcScrolledPosition(start, 0, &start, NULL);
-	if (start > client_size.y) return;
+	// down to the bottom of every window, past the last row: rows deleted leave their place to be cleared
+	RefreshLinesRect(wxRect(0, GetLineStart(firstRow), INT_MAX, INT_MAX / 2));
+}
 
-	wxRect rect(0, start, client_size.x, client_size.y - start);
-
-	if (m_tableAreaWin)
+// SEAM vs wx (one rows window there): each rows window is refreshed at the rectangle's place IN IT
+// (CalcDataViewWindowScrolledPosition), as GetItemRect places a cell and the paint lays the rows.
+void ibDataViewCtrl::RefreshLinesRect(const wxRect& rect)
+{
+	for (ibDataViewMainWindow* const window : { m_tableAreaWin, m_tableFrozenRowAreaWin, m_tableFrozenColAreaWin, m_tableFrozenCornerAreaWin })
 	{
-		wxRect anotherrect(rect);
-		anotherrect.Offset(GetDataViewWindowOffset(m_tableAreaWin));
-		m_tableAreaWin->Refresh(true, &anotherrect);
-	}
+		if (window == nullptr)
+			continue;
 
-	if (m_tableFrozenRowAreaWin) {
-		wxRect anotherrect(rect);
-		anotherrect.Offset(GetDataViewWindowOffset(m_tableFrozenRowAreaWin));
-		m_tableFrozenRowAreaWin->Refresh(true, &anotherrect);
+		wxRect placed(rect);
+		CalcDataViewWindowScrolledPosition(placed.x, placed.y, &placed.x, &placed.y, window);
+		placed.Intersect(wxRect(window->GetClientSize()));
+		if (!placed.IsEmpty())
+			window->Refresh(true, &placed);
 	}
+}
 
-	if (m_tableFrozenColAreaWin) {
-		wxRect anotherrect(rect);
-		anotherrect.Offset(GetDataViewWindowOffset(m_tableFrozenColAreaWin));
-		m_tableFrozenColAreaWin->Refresh(true, &anotherrect);
-	}
-
-	if (m_tableFrozenCornerAreaWin) {
-		wxRect anotherrect(rect);
-		anotherrect.Offset(GetDataViewWindowOffset(m_tableFrozenCornerAreaWin));
-		m_tableFrozenCornerAreaWin->Refresh(true, &anotherrect);
-	}
+// SEAM vs wx: the rules are the theme's - every table's lines one light colour of it (Max, 2026-11-10), where wx took
+// the system's 3D light
+wxColour ibDataViewCtrl::GetRuleColour() const
+{
+	return wxTHEME_COLOUR(CONTROL);
 }
 
 wxRect ibDataViewCtrl::GetLinesRect(unsigned int rowFrom, unsigned int rowTo) const
@@ -3695,20 +3639,11 @@ wxRect ibDataViewCtrl::GetItemRect(const ibDataViewItem& item,
 
 	wxRect itemRect(xpos + indent, cellTop, width - indent, cellHeight);
 
+	// to the place in the window the cell is shown in
 	ibDataViewMainWindow* tableWindow = CellToDataViewWindow(item, column);
-	const wxPoint winOffset = GetDataViewWindowOffset(tableWindow);
-	itemRect.Offset(-winOffset);
-
-	const wxPoint preScroll = itemRect.GetPosition();
-	// convert to scrolled coords
 	CalcDataViewWindowScrolledPosition(itemRect.x, itemRect.y,
 		&itemRect.x, &itemRect.y, tableWindow);
 
-	const char* winType =
-		tableWindow == m_tableAreaWin              ? "data" :
-		tableWindow == m_tableFrozenRowAreaWin     ? "frozenRow" :
-		tableWindow == m_tableFrozenColAreaWin     ? "frozenCol" :
-		tableWindow == m_tableFrozenCornerAreaWin  ? "corner" : "?";
 	const int clientH = GetClientSize().y;
 	const bool offscreen = (itemRect.GetBottom() < 0 || itemRect.GetTop() > clientH);
 	
@@ -4973,6 +4908,11 @@ ibDataViewMainWindow* ibDataViewCtrl::DevicePosToDataViewWindow(int x, int y) co
 	return NULL;
 }
 
+// THE TABLE AND A ROWS WINDOW, BOTH WAYS — the one conversion. A rows window shows the table from its offset on
+// (GetDataViewWindowOffset: past the frozen rows and columns), scrolled as it scrolls (a frozen part does not scroll
+// its way). The offset was every caller's own: the paint and GetItemRect took it off, the mouse and the first visible
+// row put it on, and the row refresh ADDED it where it is taken off — under a hierarchy's crumbs the refresh landed
+// below the row, and the row a click unselected stayed painted selected (Max, 2026-11-10).
 void ibDataViewCtrl::CalcDataViewWindowUnscrolledPosition(int x, int y, int* xx, int* yy,
 	const ibDataViewMainWindow* tableWindow) const
 {
@@ -4985,6 +4925,12 @@ void ibDataViewCtrl::CalcDataViewWindowUnscrolledPosition(int x, int y, int* xx,
 		if (xx && (tableWindow->GetType() & ibDataViewMainWindow::ibDataViewWindowFrozenCol))
 			*xx = x;
 	}
+
+	const wxPoint offset = GetDataViewWindowOffset(tableWindow);
+	if (xx)
+		*xx += offset.x;
+	if (yy)
+		*yy += offset.y;
 }
 
 wxPoint ibDataViewCtrl::CalcDataViewWindowUnscrolledPosition(const wxPoint& pt,
@@ -4998,6 +4944,10 @@ wxPoint ibDataViewCtrl::CalcDataViewWindowUnscrolledPosition(const wxPoint& pt,
 void ibDataViewCtrl::CalcDataViewWindowScrolledPosition(int x, int y, int* xx, int* yy,
 	const ibDataViewMainWindow* tableWindow) const
 {
+	const wxPoint offset = GetDataViewWindowOffset(tableWindow);
+	x -= offset.x;
+	y -= offset.y;
+
 	CalcScrolledPosition(x, y, xx, yy);
 
 	if (tableWindow)
@@ -6468,16 +6418,18 @@ bool ibDataViewCtrl::SetHeaderAttr(const wxItemAttr& attr)
 
 	// Call all functions unconditionally to reset the previously set
 	// attributes, if any.
+	// a colour not given is the table's text, as the header was made with (ibDataViewHeaderWindow)
+	const wxColour text = attr.HasTextColour() ? attr.GetTextColour() : GetForegroundColour();
 	if (m_headerAreaWin)
 	{
-		m_headerAreaWin->SetForegroundColour(attr.GetTextColour());
+		m_headerAreaWin->SetForegroundColour(text);
 		m_headerAreaWin->SetBackgroundColour(attr.GetBackgroundColour());
 		m_headerAreaWin->SetFont(attr.GetFont());
 	}
 
 	if (m_footerAreaWin)
 	{
-		m_footerAreaWin->SetForegroundColour(attr.GetTextColour());
+		m_footerAreaWin->SetForegroundColour(text);
 		m_footerAreaWin->SetBackgroundColour(attr.GetBackgroundColour());
 		m_footerAreaWin->SetFont(attr.GetFont());
 	}
@@ -6983,26 +6935,17 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 		return;
 	}
 
-	// prepare the DC
+	// prepare the DC: the table drawn in its coordinates, its origin where this window shows it
 	ibDataViewCtrl::PrepareDC(dc);
 
-	wxPoint dcOrigin = dc.GetDeviceOrigin() - GetDataViewWindowOffset(tableWindow);
-
-	if (tableWindow->GetType() & ibDataViewMainWindow::ibDataViewWindowFrozenRow)
-		dcOrigin.y = 0;
-
-	if (tableWindow->GetType() & ibDataViewMainWindow::ibDataViewWindowFrozenCol)
-		dcOrigin.x = 0;
-
+	const wxPoint dcOrigin = CalcDataViewWindowScrolledPosition(wxPoint(0, 0), tableWindow);
 	dc.SetDeviceOrigin(dcOrigin.x, dcOrigin.y);
 	dc.SetFont(GetFont());
 
 	int top, bottom, left, right;
 
-	wxPoint gridOffset = GetDataViewWindowOffset(tableWindow);
-
-	CalcDataViewWindowUnscrolledPosition(gridOffset.x, gridOffset.y, &left, &top, tableWindow);
-	CalcDataViewWindowUnscrolledPosition(cw + gridOffset.x, ch + gridOffset.y, &right, &bottom, tableWindow);
+	CalcDataViewWindowUnscrolledPosition(0, 0, &left, &top, tableWindow);
+	CalcDataViewWindowUnscrolledPosition(cw, ch, &right, &bottom, tableWindow);
 
 	// compute which items needs to be redrawn
 	//
@@ -7672,18 +7615,42 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 					// different one on the DC).
 					ibDataViewItemAttr attr;
 					GetModel()->GetAttr(gitem, expander->GetModelColumn(), attr);
-					const wxColour fg = sel ? wxTHEME_COLOUR(HIGHLIGHT_TEXT)
-					                  : attr.HasColour() ? typeConv::ColourToWxColour(attr.GetColour())
-					                  : GetForegroundColour();
-					int flags = 0;
-					if (sel)          flags |= wxCONTROL_SELECTED;
-					if (!IsEnabled()) flags |= wxCONTROL_DISABLED;
 					const wxRect capRect(capX, grp_line, rightX - capX, lh);
-					wxDCClipper     clip(dc, capRect);
-					wxDCFontChanger fontChg(dc, attr.HasFont() ? ibEffectiveFont(attr, GetFont()) : GetFont());
-					dc.SetTextForeground(fg);
-					ibThemeEngine::Get()->GetRenderer()->DrawItemText(this, dc, grpCaption, capRect,
-						wxALIGN_LEFT | wxALIGN_CENTRE_VERTICAL, flags, wxELLIPSIZE_END);
+
+					// THE CAPTION READS AS THE BACKGROUND UNDER IT: a row selection selects it whole, a cell
+					// selection only where it crosses the selected cell - elsewhere it stands on the row's faint
+					// hint, and the selected colour there was white on pale pink (Max, 2026-11-10: "hard to make
+					// out"). Laid out on the whole span, shown part by part.
+					wxRect selRect;
+					if (sel && m_selectionMode != ibDataViewSelectionMode::ibDataViewSelectCell)
+						selRect = capRect;
+					else if (sel && selectedCol != nullptr && GetColumnCellRect(selectedCol, grp_line, lh, selRect))
+						selRect.Intersect(capRect);
+
+					const auto drawCaption = [&](const wxRect& part, bool selectedPart) {
+						if (part.IsEmpty())
+							return;
+						const wxColour fg = selectedPart ? wxTHEME_COLOUR(HIGHLIGHT_TEXT)
+						                  : attr.HasColour() ? typeConv::ColourToWxColour(attr.GetColour())
+						                  : GetForegroundColour();
+						int flags = 0;
+						if (selectedPart) flags |= wxCONTROL_SELECTED;
+						if (!IsEnabled()) flags |= wxCONTROL_DISABLED;
+						wxDCClipper     clip(dc, part);
+						wxDCFontChanger fontChg(dc, attr.HasFont() ? ibEffectiveFont(attr, GetFont()) : GetFont());
+						dc.SetTextForeground(fg);
+						ibThemeEngine::Get()->GetRenderer()->DrawItemText(this, dc, grpCaption, capRect,
+							wxALIGN_LEFT | wxALIGN_CENTRE_VERTICAL, flags, wxELLIPSIZE_END);
+					};
+
+					if (selRect.IsEmpty()) {
+						drawCaption(capRect, false);
+					}
+					else {
+						drawCaption(wxRect(capRect.x, capRect.y, selRect.x - capRect.x, capRect.height), false);
+						drawCaption(selRect, true);
+						drawCaption(wxRect(selRect.GetRight() + 1, capRect.y, capRect.GetRight() - selRect.GetRight(), capRect.height), false);
+					}
 				}
 			}
 			grp_line += lh;
@@ -7995,9 +7962,10 @@ void ibDataViewCtrl::ProcessTableMouseEvent(wxMouseEvent& event, ibDataViewMainW
 	// store position, before it's modified in the next step
 	const wxPoint posEvent = event.GetPosition();
 
+	// the event goes on at the control's place - the drag and a cell's activation read it so
 	event.SetPosition(posEvent + GetDataViewWindowOffset(tableWin));
 
-	const wxPoint unscrolledPos = CalcDataViewWindowUnscrolledPosition(event.GetPosition(), tableWin);
+	const wxPoint unscrolledPos = CalcDataViewWindowUnscrolledPosition(posEvent, tableWin);
 
 	// WHICH CELL WAS CLICKED — asked of the layout, so a column stacked under a group can be
 	// reached at all. This used to add up widths left to right and take the first column whose
@@ -9355,7 +9323,7 @@ void ibDataViewBusyWindow::OnPaint(wxPaintEvent& WXUNUSED(event))
 	// A plate in the list's own background colour, not a translucent veil: this
 	// window has no idea what is underneath it (that is the rows' window, and on
 	// the blind stretch it is frozen), so there is nothing to blend with.
-	const wxColour plate = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW);
+	const wxColour plate = wxTHEME_COLOUR(WINDOW);
 	dc.SetBackground(wxBrush(plate));
 	dc.Clear();
 
@@ -9373,7 +9341,7 @@ void ibDataViewBusyWindow::OnPaint(wxPaintEvent& WXUNUSED(event))
 	if (!gc)
 		return;                            // no graphics backend — skip, never fail a paint
 
-	const wxColour frame = wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW);
+	const wxColour frame = wxTHEME_COLOUR(SHADOW_DARK);   // the theme's wxSYS_COLOUR_BTNSHADOW
 	gc->SetBrush(wxBrush(plate));
 	gc->SetPen(wxPen(wxColour(frame.Red(), frame.Green(), frame.Blue(), 90), 1));
 	gc->DrawRoundedRectangle(0.5, 0.5, size.x - 1.0, size.y - 1.0, 6.0);

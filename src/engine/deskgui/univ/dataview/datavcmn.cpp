@@ -1610,6 +1610,16 @@ void ibDataViewCtrlBase::StartEditor(const ibDataViewItem& item, unsigned int co
 	EditItem(item, GetRootColumnGroup()->GetColumn(column));
 }
 
+// SEAM vs wx: a table's text is the theme's alternate text (CONTROL_TEXT_ALTERNATE), the rest wx's composite
+// controls' - the text of everything else is the theme's black (Max, 2026-11-10)
+/* static */
+wxVisualAttributes ibDataViewCtrlBase::GetClassDefaultAttributes(wxWindowVariant variant)
+{
+	wxVisualAttributes attr = wxControl::GetCompositeControlsDefaultAttributes(variant);
+	attr.colFg = wxTHEME_COLOUR(CONTROL_TEXT_ALTERNATE);
+	return attr;
+}
+
 #if wxUSE_DRAG_AND_DROP
 
 /* static */

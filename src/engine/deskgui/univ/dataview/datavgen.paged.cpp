@@ -988,9 +988,15 @@ void ibDataViewCtrl::DispatchPagedFetch(ibFetchDirection dir, int batch)
 		// the reasons for it.
 		//
 		// One backward page, once, per such fetch.
-		if (req->m_backfill == 0 && viewport > 1
+		//
+		// ⚠ AT LEAST ONE — a sort's saved screen offset (above) is a few rows, and the top is told only by FEWER rows
+		// coming than were asked: a row the new order put that many rows deep or more came with exactly as many above
+		// it, the read could not say it stood at the top, and the scroll bar showed until a backward read came back
+		// empty (Max, 2026-11-10: "on a sort a scroll bar appears for a moment"). A page's worth tells it for any list
+		// that fits the window.
+		if (viewport > 1
 		    && (req->m_restoreAnchor.IsOk() || req->m_savedFocus.IsOk() || req->m_restoreSelection.IsOk()))
-			req->m_backfill = viewport;
+			req->m_backfill = wxMax(req->m_backfill, viewport);
 
 		// ARMED, SO DISARM NOW. The flag goes down at dispatch, not when the answer
 		// lands: idle fires every pass and would otherwise start a second reset over

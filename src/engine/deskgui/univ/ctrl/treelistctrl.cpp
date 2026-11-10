@@ -1956,6 +1956,10 @@ bool ibTreeListMainWindow::Create(ibTreeListCtrl* parent,
 	m_owner = parent;
 	m_main_column = 0;
 
+	// the row's height from the font: computed only when pictures, a font or a spacing were given, a tree list with
+	// none of them (the debugger's watch) kept its rows as high as their text (Max, 2026-11-10: "a small row height")
+	CalculateLineHeight();
+
 	return true;
 }
 

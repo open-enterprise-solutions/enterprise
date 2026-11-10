@@ -21,12 +21,10 @@ class ibDataViewColumnGroup;
 class ibFrontendView;
 class ibViewCommandBar;
 
-// Default foreground / background for designer-created form controls,
-// toolbars, dataviews, dialogs. Aligned with interior palette: deep
-// dusty blue text on cream content surface. Was Windows-blue accent
-// (#0078D7) + light off-white grey (#EBEBF1) - both clashed with the
-// powder-blue + cream + terracotta palette.
-#define wxDefaultStypeFGColour wxColour(0x3F, 0x5C, 0x77)  // #3F5C77 deep dusty blue
+// Default background for designer-created form controls, toolbars,
+// dataviews, dialogs: the cream content surface of the interior palette
+// (the text on it is the theme's). Was a light off-white grey (#EBEBF1)
+// that clashed with the powder-blue + cream + terracotta palette.
 #define wxDefaultStypeBGColour wxColour(0xFA, 0xF7, 0xF0)  // #FAF7F0 cream content
 
 class ibTabDocument;

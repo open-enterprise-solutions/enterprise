@@ -3552,7 +3552,7 @@ void ibGrid::Init()
 
 	m_zoomScale = 1.0f;
 
-	m_gridLineColour = wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE);
+	m_gridLineColour = wxTHEME_COLOUR(CONTROL);   // the theme's, as every table's rules (ibDataViewCtrl::GetRuleColour)
 	m_gridLinesEnabled = true;
 	m_gridLinesClipHorz =
 		m_gridLinesClipVert = true;

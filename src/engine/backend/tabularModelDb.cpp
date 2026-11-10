@@ -381,7 +381,11 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// with only the dimension, the diagnostic log proved it). So the composer renders a PLAIN level SELECT
 	// (TakeGroups dropped the grouping) and the provider scopes it to the parent. Only an EXPLICIT user
 	// grouping (Elements) drills through the composer here, layered on top of the base parent-hierarchy.
-	if (grouping && !hierarchy) {
+	//
+	// ⚠ …AND A TREE RUNG UNDER A GROUP STANDS INSIDE IT TOO. The rungs above are scoped whatever the browsed rung
+	// is: a tree under "by tax number" reads the catalog's roots of THAT number. Scoped only when the browsed rung
+	// was a group's, a heading opened onto every row of the catalog (Max, 2026-11-10: "the grouping works wrong").
+	if (grouping) {
 		// THE MODEL SAYS WHERE THE READER STANDS — this rung, this value. (What that means for the read
 		// is the engine's question; the operator is not chosen here.)
 		for (size_t k = 0; k < depth && k < dims.size(); ++k)

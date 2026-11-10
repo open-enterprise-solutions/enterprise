@@ -223,8 +223,14 @@ protected:
     virtual wxRect GetBorderRect() const { return wxRect(GetSize()); }
 
     // SEAM vs univ: the non-client part - the border, the corner between the scrollbars - painted in the window's
-    // paint, before the window's own handler paints the client area; drawn anew as the window gains or loses the focus
+    // paint, before the window's own handler paints the client area; drawn anew as the window gains or loses the focus.
+    // The mouse over a window with a tip, and what ends it, handed to the theme's tooltip (ibToolTipWindow)
     virtual bool TryBefore(wxEvent& event) override;
+
+    // SEAM vs wx: a window's tip is the theme's tooltip's (ibToolTipWindow), kept from the system's tooltip control -
+    // wx's own keeps it (wxWindowBase), the platform's is not asked; a tip set or changed under the mouse shows as it is
+    virtual void DoSetToolTip(wxToolTip *tip) override;
+    virtual void DoSetToolTipText(const wxString& tip) override;
 
     // the window's frame round rect (GetBorderRect), drawn in the paint before the window's handler (TryBefore): the
     // theme's border of the window's kind (GetBorder) in its state

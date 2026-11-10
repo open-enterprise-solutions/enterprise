@@ -23,6 +23,7 @@
 #include <wx/wxprec.h>
 
 #include "deskgui/univ/window.h"
+#include "deskgui/univ/toolTip.h"   // the tip of a window: the theme's tooltip shows it
 
 #include <wx/dcbuffer.h>
 #include <wx/graphics.h>
@@ -295,6 +296,23 @@ bool ibWindow::TryBefore(wxEvent& event)
 {
     const wxEventType type = event.GetEventType();
 
+    // THE MOUSE OVER A WINDOW WITH A TIP goes to the theme's tooltip, before the window's own handler: a move tracks the
+    // tip, a press, a wheel, a key or leaving the window ends it
+    if ( GetToolTip() != nullptr )
+    {
+        if ( type == wxEVT_MOTION )
+        {
+            if ( ibToolTipWindow *const tip = ibToolTipWindow::Get() )
+                tip->Track(this, wxGetMousePosition());
+        }
+        else if ( type == wxEVT_LEAVE_WINDOW || type == wxEVT_LEFT_DOWN || type == wxEVT_RIGHT_DOWN
+               || type == wxEVT_MIDDLE_DOWN || type == wxEVT_MOUSEWHEEL || type == wxEVT_KEY_DOWN )
+        {
+            if ( ibToolTipWindow *const tip = ibToolTipWindow::Get() )
+                tip->Dismiss();
+        }
+    }
+
     if ( type == wxEVT_SET_FOCUS || type == wxEVT_KILL_FOCUS )
     {
         // the window whose frame shows the focus - a composite control's, for the window inside it (IsFocused)
@@ -345,6 +363,24 @@ bool ibWindow::TryBefore(wxEvent& event)
     }
 
     return wxWindow::TryBefore(event);
+}
+
+void ibWindow::DoSetToolTip(wxToolTip *tip)
+{
+    wxWindowBase::DoSetToolTip(tip);
+
+    // set or taken away under the mouse - the code editor's tip of the word the pointer is on - it shows, or goes, now
+    if ( ibToolTipWindow *const tipWindow = ibToolTipWindow::Get() )
+        tipWindow->Track(this, wxGetMousePosition());
+}
+
+void ibWindow::DoSetToolTipText(const wxString& tip)
+{
+    // wxWindowBase's: the tip there given its new text, or a new one made through DoSetToolTip
+    wxWindowBase::DoSetToolTipText(tip);
+
+    if ( ibToolTipWindow *const tipWindow = ibToolTipWindow::Get() )
+        tipWindow->Track(this, wxGetMousePosition());
 }
 
 void ibWindow::DrawBorder(wxDC& dc, const wxRect& rect)

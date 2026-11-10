@@ -697,7 +697,6 @@ void ibDialogPredefinedEditor::CreateDialogView()
 	m_toolbarTableEditor->EnableTool(wxID_TOOL_EDIT, m_tableModelStore->IsEnabled(ibDataViewItem(nullptr), model_name));
 	m_toolbarTableEditor->EnableTool(wxID_TOOL_DELETE, m_tableModelStore->IsEnabled(ibDataViewItem(nullptr), model_name));
 
-	m_toolbarTableEditor->SetForegroundColour(wxDefaultStypeFGColour);
 	m_toolbarTableEditor->SetBackgroundColour(wxDefaultStypeBGColour);
 
 	m_toolbarTableEditor->Realize();
@@ -725,7 +724,6 @@ void ibDialogPredefinedEditor::CreateDialogView()
 	m_tableEditor->GetRootColumnGroup()->AppendColumn(columnCode);
 	m_tableEditor->GetRootColumnGroup()->AppendColumn(columnDescription);
 
-	m_tableEditor->SetForegroundColour(wxDefaultStypeFGColour);
 	//m_tableEditor->SetBackgroundColour(wxDefaultStypeBGColour);
 
 	m_tableEditor->AssociateModel(m_tableModelStore);

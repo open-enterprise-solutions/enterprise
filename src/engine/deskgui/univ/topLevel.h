@@ -28,6 +28,27 @@
 #include <wx/utils.h>
 
 //-----------------------------------------------------------------------------
+// ibWindowShowLocker
+//-----------------------------------------------------------------------------
+
+// A TOP-LEVEL WINDOW SHOWN WHOLE, as wxWindowUpdateLocker holds a window still: kept off the screen while it is shown
+// (MSW: DWMWA_CLOAK), painted whole as it leaves the scope - every window in it - and only then on the screen. Shown,
+// the system paints a window by parts, one paint each, as the queue gets to them: a white window, then its parts, a
+// dialog half painted (Max, 2026-11-10: "the window should appear only once everything has loaded"). A window shown
+// already is left as it is
+class DESKGUI_API ibWindowShowLocker
+{
+public:
+    explicit ibWindowShowLocker(wxTopLevelWindow *window);
+    ~ibWindowShowLocker();
+
+private:
+    wxTopLevelWindow *m_window;   // the window kept off the screen - none when it was shown already
+
+    wxDECLARE_NO_COPY_CLASS(ibWindowShowLocker);
+};
+
+//-----------------------------------------------------------------------------
 // ibTopLevelWindow
 //-----------------------------------------------------------------------------
 
@@ -55,6 +76,9 @@ public:
 
     // the part of the window at the point of the client area: wxHT_TOPLEVEL_xxx
     long HitTest(const wxPoint& pt) const;
+
+    // W's, on the screen whole (ibWindowShowLocker) - a dialog's ShowModal shows it here too
+    virtual bool Show(bool show = true) override;
 
     virtual wxPoint GetClientAreaOrigin() const override;
     virtual wxSize GetMinSize() const override;
@@ -177,6 +201,13 @@ wxPoint ibTopLevelWindow<W>::GetClientPoint(const wxMouseEvent& event) const
 #else
     return event.GetPosition();
 #endif
+}
+
+template <class W>
+bool ibTopLevelWindow<W>::Show(bool show)
+{
+    const ibWindowShowLocker locker(this);
+    return W::Show(show);
 }
 
 template <class W>

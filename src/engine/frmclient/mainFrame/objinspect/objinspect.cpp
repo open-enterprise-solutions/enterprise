@@ -319,7 +319,6 @@ ibPropertyGridManager* ibObjectInspector::CreatePropertyGridManager(wxWindow* pa
 	pg->SetDescBoxHeight(descBoxHeight);
 	pg->SendSizeEvent();
 
-	pg->SetForegroundColour(wxDefaultStypeFGColour);
 	pg->SetBackgroundColour(wxDefaultStypeBGColour);
 
 	// the grid's colours (margin, captions, cells, disabled text, selection) are the theme's — the grid asks for

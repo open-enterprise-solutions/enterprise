@@ -68,6 +68,10 @@ target_link_libraries(deskgui PRIVATE scintilla lexilla)
 if(APPLE)
     target_link_libraries(deskgui PRIVATE "-framework AppKit")
 endif()
+if(WIN32)
+    # a top-level window kept off the screen until it is painted whole (ibWindowShowLocker: DWMWA_CLOAK)
+    target_link_libraries(deskgui PRIVATE dwmapi)
+endif()
 
 # WHAT IT EXPORTS, AND NOTHING ELSE — as a DLL does, like frmclient: hidden by default, DESKGUI_API shows what is meant
 # to be seen.

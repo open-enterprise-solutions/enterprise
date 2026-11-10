@@ -313,7 +313,6 @@ void ibAuditLogView::BuildLayout(wxWindow* parent)
 	m_toolbarMain->AddStretchSpacer(1);
 	m_toolbarMain->AddControl(m_tailCheck);
 
-	m_toolbarMain->SetForegroundColour(wxDefaultStypeFGColour);
 	m_toolbarMain->SetBackgroundColour(wxDefaultStypeBGColour);
 	m_toolbarMain->Realize();
 	m_toolbarMain->Bind(wxEVT_MENU, &ibAuditLogView::OnCommandMenu, this);
@@ -354,8 +353,7 @@ void ibAuditLogView::BuildLayout(wxWindow* parent)
 		new ibDataViewTextRenderer(wxT("string"), wxDATAVIEW_CELL_INERT),
 		ibAuditLogModel::kColRef, parent->FromDIP(80), wxALIGN_LEFT, 0));
 
-	m_dataEditor->SetForegroundColour(wxDefaultStypeFGColour);
-	wxItemAttr attr(wxDefaultStypeFGColour, wxDefaultStypeBGColour,
+	wxItemAttr attr(wxNullColour, wxDefaultStypeBGColour,   // the text: the table's
 		m_dataEditor->GetFont());
 	m_dataEditor->SetHeaderAttr(attr);
 

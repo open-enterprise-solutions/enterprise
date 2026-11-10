@@ -18,6 +18,9 @@
 #include <wx/aui/framemanager.h>
 #include <wx/aui/dockart.h>
 
+#include "deskgui/univ/theme.h"  // the tab text: the theme's
+#include "deskgui/univ/colourScheme.h"
+
 #ifdef __WXOSX__
 #include <wx/osx/private.h>
 #endif
@@ -186,8 +189,6 @@ static const unsigned char list_bits[] = {
    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
    0x0f, 0xf8, 0xff, 0xff, 0x0f, 0xf8, 0x1f, 0xfc, 0x3f, 0xfe, 0x7f, 0xff,
    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
-
-#define THEME_COLOUR_BORDER wxColour(41, 57, 85) 
 
 wxAuiLunaTabArt::wxAuiLunaTabArt()
 {
@@ -658,17 +659,10 @@ void wxAuiLunaTabArt::DrawTab(wxDC& dc,
 		caption,
 		tab_width - (text_offset - tab_x) - close_button_width);
 
-	// draw tab text — deep dusty blue (#3F5C77) on the light dusty
-	// inactive strip; black on the cream active tab. Active still
-	// distinctly weightier.
-	if (!page.active)
-	{
-		dc.SetTextForeground(wxColour(0x3F, 0x5C, 0x77));
-	}
-	else
-	{
-		dc.SetTextForeground(*wxBLACK);
-	}
+	// draw tab text — the theme's text, on the light dusty inactive strip and the cream active tab alike (Max,
+	// 2026-11-10: by default everything black; the inactive one was #3F5C77). The active one is still weightier: its
+	// font is bold.
+	dc.SetTextForeground(wxTHEME_COLOUR(CONTROL_TEXT));
 
 	dc.DrawText(draw_text,
 		text_offset,

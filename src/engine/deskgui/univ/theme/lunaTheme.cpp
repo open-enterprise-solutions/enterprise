@@ -71,7 +71,9 @@ public:
 
 // the object inspector's palette for the whole theme (Max, 2026-11-10: "too greyish a theme"): a control and a
 // scroll bar are the powder its margin is, a dialog and a panel the light caption tier under them (a button stays
-// lighter than the surface it sits on, so it still reads as one); the chrome-light tier stays a caption's
+// lighter than the surface it sits on, so it still reads as one); the chrome-light tier stays a caption's. The text is
+// black, the alternate text the deep dusty blue the forms' tables had - a table's values and columns, the start page
+// (Max, 2026-11-10: "by default black, an alternate display beside it") - the desktop painted it in by hand
 wxColour ibLunaColourScheme::Get(ibLunaColourScheme::StdColour col) const {
 	switch (col) {
 		case WINDOW:                      return kContent;
@@ -81,6 +83,7 @@ wxColour ibLunaColourScheme::Get(ibLunaColourScheme::StdColour col) const {
 		case CONTROL_TEXT:                return *wxBLACK;
 		case CONTROL_TEXT_DISABLED:       return kDisabledText;
 		case CONTROL_TEXT_DISABLED_SHADOW:return kChromeLight;
+		case CONTROL_TEXT_ALTERNATE:      return kCaptionBottom;
 		case SCROLLBAR:                   return kPowder;
 		case SCROLLBAR_PRESSED:           return kBorder;
 		case HIGHLIGHT:                   return kAccent;

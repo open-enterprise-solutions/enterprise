@@ -25,6 +25,10 @@
 #include "deskgui/univ/ctrl/button.h"
 #include "deskgui/univ/ctrl/staticLine.h"
 
+#ifdef __WXMSW__
+    #include <wx/msw/private.h>
+#endif
+
 //-----------------------------------------------------------------------------
 // ibDialog
 //-----------------------------------------------------------------------------
@@ -35,6 +39,22 @@ wxBEGIN_EVENT_TABLE(ibDialog, wxDialog)
     EVT_CHAR_HOOK(ibDialog::OnCharHook)
     EVT_CLOSE(ibDialog::OnCloseWindow)
 wxEND_EVENT_TABLE()
+
+bool ibDialog::Create(wxWindow *parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size,
+                      long style, const wxString& name)
+{
+    if ( !ibTopLevelWindow<wxDialog>::Create(parent, id, title, pos, size, style, name) )
+        return false;
+
+#ifdef __WXMSW__
+    // SEAM vs univ: the drop shadow a menu casts (ibPopupMenuWindow::Show) - the native window is made without a frame
+    // (ibTopLevelWindow), and a window with none casts no shadow of the system's own (Max, 2026-11-10: "the dialogs
+    // should cast a shadow too"). A class's style: every frameless top-level window of the class casts it
+    const HWND hWnd = GetHwnd();
+    ::SetClassLongPtr(hWnd, GCL_STYLE, ::GetClassLongPtr(hWnd, GCL_STYLE) | CS_DROPSHADOW);
+#endif
+    return true;
+}
 
 wxSizer *ibDialog::CreateTextSizer(const wxString& message, int widthMax)
 {
@@ -203,6 +223,25 @@ void ibDialog::OnCharHook(wxKeyEvent& event)
     {
         // Skip the call to event.Skip() below, we did handle this key.
         return;
+    }
+
+    // ENTER CLICKS THE BUTTON - the focused one, else the default one - as wxMSW's dialog navigation does for wxButton
+    // (wxWindowMSW::MSWProcessMessage): it found no ibButton, and the native dialog swallowed the key (Max, 2026-11-10:
+    // "Enter does not react"). A window taking every key itself (wxWANTS_CHARS: a field, the code editor, a table) keeps
+    // Enter, as wx leaves it to a window that wants it - a field clicks the default button itself
+    // (ibTextCtrl::ClickDefaultButtonIfPossible)
+    const int key = event.GetKeyCode();
+    if ( (key == WXK_RETURN || key == WXK_NUMPAD_ENTER) && !event.HasModifiers() )
+    {
+        wxWindow *const focus = FindFocus();
+        if ( ibButton::ClickIfPossible(wxDynamicCast(focus, ibButton)) )
+            return;
+
+        bool wantsEnter = false;
+        for ( wxWindow *win = focus; win != nullptr && win != this && !wantsEnter; win = win->GetParent() )
+            wantsEnter = win->HasFlag(wxWANTS_CHARS);
+        if ( !wantsEnter && ibButton::ClickIfPossible(wxDynamicCast(GetDefaultItem(), ibButton)) )
+            return;
     }
 
     // wxDialogBase's: a button of wx's own

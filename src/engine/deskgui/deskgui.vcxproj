@@ -97,7 +97,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>core.lib;scintilla.lib;lexilla.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>core.lib;scintilla.lib;lexilla.lib;dwmapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -231,6 +231,8 @@
     <ClCompile Include="univ\theme.cpp" />
     <ClCompile Include="univ\textEntryDialog.cpp" />
     <ClCompile Include="univ\textValidator.cpp" />
+    <ClCompile Include="univ\toolTip.cpp" />
+    <ClCompile Include="univ\topLevel.cpp" />
     <ClCompile Include="univ\window.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -327,6 +329,7 @@
     <ClInclude Include="univ\textEntryDialog.h" />
     <ClInclude Include="univ\textSizerWrapper.h" />
     <ClInclude Include="univ\textValidator.h" />
+    <ClInclude Include="univ\toolTip.h" />
     <ClInclude Include="univ\topLevel.h" />
     <ClInclude Include="univ\window.h" />
     <ClInclude Include="deskgui.h" />
