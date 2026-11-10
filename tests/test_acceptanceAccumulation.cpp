@@ -43,7 +43,7 @@
 #include "backend/metaCollection/resource/metaResourceObject.h"
 #include "backend/metaCollection/partial/accumulationRegister.h"
 #include "backend/metaCollection/partial/accumulationRegisterEnum.h"
-#include "backend/metaCollection/partial/accumulationRegisterManager.h"   // the manager's Balance (#409)
+#include "backend/metaCollection/partial/accumulationRegisterManager.h"   // the manager a script calls Balance on (#409)
 #include "backend/metaCollection/partial/registerQueryLowering.h"
 #include "backend/metaCollection/partial/reference/reference.h"
 #include "backend/query/columnLayout.h"
@@ -847,11 +847,24 @@ TEST_F(AcceptanceAccumulation, TheManagersBalanceIsCutToTheDimensionsAndResource
 {
 	if (!ready) return;
 	PostOpening();
-	// The manager reads through the session's connection, as a script does (ibRequireOpenBase).
-	ibSession session(wxT("balance-cut"), ibSessionKind::Service);
-	ibSessionScope bound(&session);
-	ibValueManagerDataObjectAccumulationRegister manager(reg);
+	// The manager reads through the session's connection, as a script does (ibRequireOpenBase) — a session held as
+	// the registry holds one: bound off the stack, it was no session at all ("ses_query: no active session").
+	const auto session = std::make_shared<ibSession>(wxT("balance-cut"), ibSessionKind::Service);
+	ibSessionScope bound(session.get());
 	const ibValue after(ibDateTime(2027, 1, 1, 0, 0, 0));   // past every movement of the fixture
+
+	// Balance as a script calls it: the manager the register hands out, its method by name — the manager's class is
+	// not exported, and a call of its own member does not link on Windows (InformationRegisterGet asks the same way).
+	const ibValueMetaObjectGenericData& data = *reg;
+	const ibValuePtr<ibValueManagerDataObject> manager = data.CreateManagerDataObjectValue();
+	const auto balance = [&manager](std::vector<ibValue> args) {
+		std::vector<ibValue*> params;
+		for (ibValue& arg : args)
+			params.push_back(&arg);
+		ibValue answer;
+		EXPECT_TRUE(manager->CallAsFunc(manager->FindMethod(wxT("Balance")), answer, params.data(), static_cast<long>(params.size())));
+		return answer;
+	};
 
 	const auto tableOf = [](const ibValue& value) {
 		ibValueModelTable* table = nullptr;
@@ -863,7 +876,7 @@ TEST_F(AcceptanceAccumulation, TheManagersBalanceIsCutToTheDimensionsAndResource
 	};
 
 	{
-		ibValueModelTable* const all = tableOf(manager.Balance(after));
+		ibValueModelTable* const all = tableOf(balance({ after }));
 		ASSERT_NE(all, nullptr);
 		EXPECT_TRUE(hasColumn(all, wxT("Quantity"))) << "the resource's own name";
 		EXPECT_FALSE(hasColumn(all, wxT("QuantityBalance")));
@@ -873,7 +886,7 @@ TEST_F(AcceptanceAccumulation, TheManagersBalanceIsCutToTheDimensionsAndResource
 	}
 	{
 		// No dimension: one line, the whole balance.
-		ibValueModelTable* const total = tableOf(manager.Balance(after, ibValue(), ibValue(ibString()), ibValue(ibString(wxT("Quantity")))));
+		ibValueModelTable* const total = tableOf(balance({ after, ibValue(), ibValue(ibString()), ibValue(ibString(wxT("Quantity"))) }));
 		ASSERT_NE(total, nullptr);
 		EXPECT_EQ(total->GetRowCount(), 1);
 		EXPECT_FALSE(hasColumn(total, wxT("Warehouse")));
@@ -881,7 +894,7 @@ TEST_F(AcceptanceAccumulation, TheManagersBalanceIsCutToTheDimensionsAndResource
 	}
 	{
 		// By warehouse, every resource (left out).
-		ibValueModelTable* const byWarehouse = tableOf(manager.Balance(after, ibValue(), ibValue(ibString(wxT("warehouse")))));
+		ibValueModelTable* const byWarehouse = tableOf(balance({ after, ibValue(), ibValue(ibString(wxT("warehouse"))) }));
 		ASSERT_NE(byWarehouse, nullptr);
 		EXPECT_EQ(byWarehouse->GetRowCount(), 2) << "kitchen and bar";
 		EXPECT_TRUE(hasColumn(byWarehouse, wxT("Warehouse"))) << "named as declared, whatever the case it was asked in";
@@ -889,8 +902,8 @@ TEST_F(AcceptanceAccumulation, TheManagersBalanceIsCutToTheDimensionsAndResource
 		ExpectNear(byWarehouse->TotalOf(wxT("Quantity")).GetNumber(), wxT("130.18"), wxT("by warehouse"));
 	}
 
-	EXPECT_THROW(manager.Balance(after, ibValue(), ibValue(ibString(wxT("Shelf")))), ibBackendCoreException)
+	EXPECT_THROW(balance({ after, ibValue(), ibValue(ibString(wxT("Shelf"))) }), ibBackendCoreException)
 		<< "a name that is not a dimension refuses";
-	EXPECT_THROW(manager.Balance(after, ibValue(), ibValue(), ibValue(ibString(wxT("Weight")))), ibBackendCoreException)
+	EXPECT_THROW(balance({ after, ibValue(), ibValue(), ibValue(ibString(wxT("Weight"))) }), ibBackendCoreException)
 		<< "nor a resource";
 }

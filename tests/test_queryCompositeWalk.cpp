@@ -506,13 +506,34 @@ TEST_F(QueryCompositeWalk, AGroupedQueryOrdersByTheDateOfItsReferenceKey)
 		Column(query + wxT(" DESC"), wxT("N"), Interval()));
 }
 
-// A walk that goes on from NO key is not grouped by: the virtual table lets the sort through, and grouped by, it
-// would split the one total into a row per document.
+// The door's own rule, asked of the door: a sort's walk is grouped by only where it goes on from a key. The query
+// language refuses the other sort itself; the door is everyone's — a report's levels, a list, a script — and a walk no
+// key fixes, grouped by, would split the groups: one total a row per document.
 TEST_F(QueryCompositeWalk, ASortThatWalksOnFromNoKeyKeepsTheGroups)
 {
-	FillSettlements();
-	EXPECT_EQ(std::vector<ibString>{ wxT("22") }, Column(
-		wxT("SELECT SUM(T.AmountClosingBalance) AS S ")
-		wxT("FROM AccumulationRegister.Settlements.BalanceAndTurnovers(&From, &To, Recorder) AS T ")
-		wxT("ORDER BY T.Doc.Date"), wxT("S"), Interval()));
+	BuildSettlements();
+	const ibBackendQueryColumn* const doc = settled->GetQueryColumn();
+	const ibBackendQueryColumn* const recorder = settlements->GetRegisterRecorder()->GetQueryColumn();
+	const ibBackendQueryColumn* const amount = settlements->GetResourceArrayObject().front()->GetQueryColumn();
+	const std::vector<const ibBackendQueryColumn*> docDate{ doc, docA->GetDocumentDate()->GetQueryColumn() };
+
+	ibDataQueryBuilder onFromTheKey;
+	onFromTheKey.From(settlements->GetQueryable());
+	onFromTheKey.GroupBy(doc);
+	onFromTheKey.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, amount, wxT("S"));
+	onFromTheKey.OrderBy(docDate, true);
+	EXPECT_EQ(onFromTheKey.GetGroupBy().size(), 2u) << "the walk on from the key is a key as well";
+
+	ibDataQueryBuilder onFromAnother;
+	onFromAnother.From(settlements->GetQueryable());
+	onFromAnother.GroupBy(recorder);
+	onFromAnother.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, amount, wxT("S"));
+	onFromAnother.OrderBy(docDate, true);
+	EXPECT_EQ(onFromAnother.GetGroupBy().size(), 1u) << "a walk on from what is not a key adds no group";
+
+	ibDataQueryBuilder noKey;
+	noKey.From(settlements->GetQueryable());
+	noKey.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, amount, wxT("S"));
+	noKey.OrderBy(docDate, true);
+	EXPECT_TRUE(noKey.GetGroupBy().empty()) << "one total stays one";
 }

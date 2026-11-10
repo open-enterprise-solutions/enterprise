@@ -384,9 +384,9 @@ ibDataQueryBuilder& ibDataQueryBuilder::OrderBy(const std::vector<const ibBacken
 	// the sort was dropped without a word — through a reference of several kinds the rows came back in the order the
 	// server liked (#410).
 	//
-	// ⚠ ONLY ON FROM A KEY, as the column overload asks `aKey`. Over a virtual table a grouped query may sort by any
-	// walk, and a walk no key fixes, grouped by, splits the groups: `SUM(…) ORDER BY T.Doc.Date` would come back a row
-	// per document instead of one.
+	// ⚠ ONLY ON FROM A KEY, as the column overload asks `aKey`. The query language refuses any other sort of a grouped
+	// statement itself (ridesAGroupKey); the door is everyone's — a report's levels, a list, a script — and a walk no
+	// key fixes, grouped by, splits the groups: `SUM(…)` sorted by `Doc.Date` would come back a row per document.
 	if (path.size() > 1) {
 		bool aKey = false, onFromAKey = false;
 		for (size_t i = 0; i < m_groupBy.size(); ++i) {
