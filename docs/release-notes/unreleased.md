@@ -279,6 +279,9 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   stores text of any size, never indexed. A query compares, orders and groups it only cast to a length:
   `CAST(Comment AS String(100))`, cut by the database. Made unlimited, a field keeps its values; given a length back,
   each keeps its first characters, and the apply says how many it cuts.
+- **A refusal of a name in ORDER BY, TOTALS BY or INDEX BY says where the name is**, as everywhere else in a query.
+  Over MCP, `query_check` and `report_query` no longer call every refusal a missing name: a rule of the language
+  (a field not grouped, a string of no limit compared bare) is reported as the refusal it is.
 - **A string's allowed length and a number's sign are set beside the length.** *Allowed length* (Variable or Fixed —
   a fixed string is padded with spaces) and *Non-negative* in the properties and the type dialog. A non-negative number
   takes no value below zero: one written is 0, and the apply makes the stored ones 0 and says how many. A number is kept

@@ -406,9 +406,10 @@ public:
 			ibQueryLowering::CheckNames(package, std::map<ibString, ibValue>());
 		}
 		// ⚠ TWO DIFFERENT FAILURES, TWO VARIETIES, TOLD APART BY WHICH ARRIVED. The
-		// lowering raises a NAME refusal (the text reads and asks for something that is
-		// not there); the lexer and parser raise a SYNTAX one. Both carry the span,
-		// which is the whole value of this branch of the family existing.
+		// lowering raises a NAME refusal (the text reads and this configuration refuses it:
+		// a name that is not there, or a rule the names break); the lexer and parser raise
+		// a SYNTAX one. Both carry the span, which is the whole value of this branch of the
+		// family existing.
 		//
 		// 🛑 IT USED TO GUESS FROM THE POSITION: 0:0 meant a name, anything else a typo.
 		// That held only while an unresolved source had nowhere to point, and the moment
@@ -496,8 +497,9 @@ public:
 		// failures have different remedies and pointing at the wrong one costs a
 		// round trip every time.
 		result.SetValue(ibT("nextStep"), stage == ibT("names")
-			? ibMcpText("A name in the query does not resolve. query_sources lists what can be read "
-			    "from, query_fields what a source has.")
+			? ibMcpText("The query reads, and this configuration refuses it - the problem says why. For "
+			    "a name that is not there, query_sources lists what can be read from, query_fields "
+			    "what a source has.")
 			: ibMcpText("The engine could not read the text at that position."));
 
 		return true;

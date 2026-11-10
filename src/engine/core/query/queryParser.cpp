@@ -499,6 +499,7 @@ ibQuerySelectPtr ibQueryParser::ParseSelectStatement()
 		ExpectKw(ibQueryKeyword::By, ibT("BY after INDEX"));
 		do {
 			auto column = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
+			column->m_line = Cur().m_line; column->m_col = Cur().m_col;
 			column->m_path = ParseDottedName();
 			sel->m_indexBy.push_back(column);
 		} while (AcceptPunct(ibT(',')));
@@ -783,6 +784,7 @@ void ibQueryParser::ParseOrderBy(ibQuerySelect& sel)
 		}
 		else {
 			it.m_expr = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
+			it.m_expr->m_line = tk.m_line; it.m_expr->m_col = tk.m_col;
 			// ⚠ IN AN ORDER BY ITEM, A KEYWORD IS A NAME — the same rule that already holds after a `.`,
 			// one position earlier. A configuration naming an attribute `Order`, `Value`, `Count` or
 			// `Group` does not consult our keyword table first. Before this, an enumeration's own
@@ -818,6 +820,7 @@ ibQueryTotalField ibQueryParser::ParseTotalField()
 {
 	ibQueryTotalField f;
 	f.m_expr = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
+	f.m_expr->m_line = Cur().m_line; f.m_expr->m_col = Cur().m_col;
 	// ⭐⭐ A FIELD MAY BE CALLED AFTER A KEYWORD, and here that is not ambiguity — it is an ATTRIBUTE
 	// NAME. A constant's attribute is literally `Value`, and `VALUE` is a keyword of this language
 	// (the `value()` metaobject constant), so `BY Value` died as "expected a name" while

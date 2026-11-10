@@ -6272,7 +6272,7 @@ void CheckUnlimitedStringsAreCast(const ibQuerySelect& ast, const std::vector<ib
 {
 	// Asked of the column's LAYOUT, not of its length: a raw column's 0 is the 255 it was always given. A name that
 	// does not resolve is the name check's to report, in its own words — silence here.
-	const auto refuse = [&sources](const ibQueryAstExprPtr& e) {
+	const auto refuse = [&sources](const ibQueryAstExprPtr& e, const ibQueryAstExpr* at = nullptr) {
 		if (!e || e->m_kind != ibQueryAstExprKind::Column || e->m_path.empty())
 			return;
 		std::vector<const ibBackendQueryColumn*> cols;
@@ -6285,7 +6285,8 @@ void CheckUnlimitedStringsAreCast(const ibQuerySelect& ast, const std::vector<ib
 				[](const ibColumnSlot& slot) { return slot.m_type.m_kind == ibCanonicalKind::Text; }))
 			return;
 		const ibString name = ibRenderQueryExpr(*e);
-		ThrowQueryException(e->m_line, e->m_col, ibString::Format(
+		const ibQueryAstExpr& place = at ? *at : *e;
+		ThrowQueryException(place.m_line, place.m_col, ibString::Format(
 			_("'%s' is a string of unlimited length: it is compared, ordered and grouped only cast to a length - CAST(%s AS String(100))"),
 			name, name));
 	};
@@ -6332,14 +6333,15 @@ void CheckUnlimitedStringsAreCast(const ibQuerySelect& ast, const std::vector<ib
 		walk(key);
 	}
 	// An ORDER BY may name an OUTPUT (CheckSelectNames): `ORDER BY Comment` over `CAST(Comment AS String(100)) AS
-	// Comment` sorts the cast, not the column it shares a name with.
+	// Comment` sorts the cast, not the column it shares a name with. Either way it is said at the ORDER BY's name: the
+	// sort is asked there.
 	for (const ibQueryOrderItem& item : ast.m_orderBy) {
 		const ibQueryAstExprPtr& e = item.m_expr;
 		const auto output = e && e->m_kind == ibQueryAstExprKind::Column && e->m_path.size() == 1
 			? std::find_if(ast.m_projections.begin(), ast.m_projections.end(),
 				[&e](const ibQueryProjection& p) { return ibQueryOutputName(p).IsSameAs(e->m_path.front(), false); })
 			: ast.m_projections.end();
-		refuse(output != ast.m_projections.end() ? output->m_expr : e);
+		refuse(output != ast.m_projections.end() ? output->m_expr : e, e.get());
 		walk(e);
 	}
 }

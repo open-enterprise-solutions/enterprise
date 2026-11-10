@@ -2935,12 +2935,13 @@ public:
 				// THE RULE THIS LEAVES: a door may refuse what is WRONG. What is merely unsupported
 				// today is the engine's business to finish, not this tool's to forbid.
 			}
-			// THE TWO VARIETIES, CAUGHT BY TYPE — a name that does not exist, and a text that does not
-			// parse. This used to read the POSITION to tell them apart (0:0 meant a name), which
-			// stopped being true the moment an unresolved source learnt to point at its own FROM.
+			// THE TWO VARIETIES, CAUGHT BY TYPE — a text this configuration refuses (a name it does not
+			// have, or a rule the names break), and a text that does not parse. This used to read the
+			// POSITION to tell them apart (0:0 meant a name), which stopped being true the moment an
+			// unresolved source learnt to point at its own FROM.
 			catch (const ibBackendQueryNameException& e) {
-				refusal = ibString::Format(ibMcpText("The query names something this configuration does "
-					"not have: %s. Nothing was written."), e.GetErrorDescription());
+				refusal = ibString::Format(ibMcpText("This configuration refuses the query: %s. Nothing was "
+					"written."), e.GetErrorDescription());
 				return false;
 			}
 			catch (const ibBackendQuerySourceException& e) {
