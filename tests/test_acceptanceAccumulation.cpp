@@ -870,7 +870,11 @@ TEST_F(AcceptanceAccumulation, TheManagersBalanceIsCutToTheDimensionsAndResource
 		return answer;
 	};
 
-	// the table lives in the answer: held by the caller, not read out of a temporary that dies with the line
+	// the table lives in the answer: held by the caller, not read out of a temporary that dies with the line.
+	// ⚠ Its pointer is not a const local: MSVC 2022 (Debug x64) took `T* const t = tableOf(answer)` for a constant -
+	// the lambda is implicitly constexpr and its evaluation starts from nullptr - and passed a literal 0 to every later
+	// use of t, while the stack held the table and the ASSERT on it passed (cdb, 2026-11-10: `xor edx,edx` at
+	// hasColumn's call). GCC and Clang read the variable.
 	const auto tableOf = [](const ibValue& value) {
 		ibValueModelTable* table = nullptr;
 		EXPECT_TRUE(value.ConvertToValue(table) && table != nullptr);
@@ -882,7 +886,7 @@ TEST_F(AcceptanceAccumulation, TheManagersBalanceIsCutToTheDimensionsAndResource
 
 	{
 		const ibValue answer = balance({ after });
-		ibValueModelTable* const all = tableOf(answer);
+		ibValueModelTable* all = tableOf(answer);
 		ASSERT_NE(all, nullptr);
 		EXPECT_TRUE(hasColumn(all, wxT("Quantity"))) << "the resource's own name";
 		EXPECT_FALSE(hasColumn(all, wxT("QuantityBalance")));
@@ -893,7 +897,7 @@ TEST_F(AcceptanceAccumulation, TheManagersBalanceIsCutToTheDimensionsAndResource
 	{
 		// No dimension: one line, the whole balance.
 		const ibValue answer = balance({ after, ibValue(), ibValue(ibString()), ibValue(ibString(wxT("Quantity"))) });
-		ibValueModelTable* const total = tableOf(answer);
+		ibValueModelTable* total = tableOf(answer);
 		ASSERT_NE(total, nullptr);
 		EXPECT_EQ(total->GetRowCount(), 1);
 		EXPECT_FALSE(hasColumn(total, wxT("Warehouse")));
@@ -902,7 +906,7 @@ TEST_F(AcceptanceAccumulation, TheManagersBalanceIsCutToTheDimensionsAndResource
 	{
 		// By warehouse, every resource (left out).
 		const ibValue answer = balance({ after, ibValue(), ibValue(ibString(wxT("warehouse"))) });
-		ibValueModelTable* const byWarehouse = tableOf(answer);
+		ibValueModelTable* byWarehouse = tableOf(answer);
 		ASSERT_NE(byWarehouse, nullptr);
 		EXPECT_EQ(byWarehouse->GetRowCount(), 2) << "kitchen and bar";
 		EXPECT_TRUE(hasColumn(byWarehouse, wxT("Warehouse"))) << "named as declared, whatever the case it was asked in";
