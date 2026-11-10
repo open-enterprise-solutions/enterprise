@@ -866,6 +866,7 @@ TEST_F(AcceptanceAccumulation, TheManagersBalanceIsCutToTheDimensionsAndResource
 		return answer;
 	};
 
+	// the table lives in the answer: held by the caller, not read out of a temporary that dies with the line
 	const auto tableOf = [](const ibValue& value) {
 		ibValueModelTable* table = nullptr;
 		EXPECT_TRUE(value.ConvertToValue(table) && table != nullptr);
@@ -876,7 +877,8 @@ TEST_F(AcceptanceAccumulation, TheManagersBalanceIsCutToTheDimensionsAndResource
 	};
 
 	{
-		ibValueModelTable* const all = tableOf(balance({ after }));
+		const ibValue answer = balance({ after });
+		ibValueModelTable* const all = tableOf(answer);
 		ASSERT_NE(all, nullptr);
 		EXPECT_TRUE(hasColumn(all, wxT("Quantity"))) << "the resource's own name";
 		EXPECT_FALSE(hasColumn(all, wxT("QuantityBalance")));
@@ -886,7 +888,8 @@ TEST_F(AcceptanceAccumulation, TheManagersBalanceIsCutToTheDimensionsAndResource
 	}
 	{
 		// No dimension: one line, the whole balance.
-		ibValueModelTable* const total = tableOf(balance({ after, ibValue(), ibValue(ibString()), ibValue(ibString(wxT("Quantity"))) }));
+		const ibValue answer = balance({ after, ibValue(), ibValue(ibString()), ibValue(ibString(wxT("Quantity"))) });
+		ibValueModelTable* const total = tableOf(answer);
 		ASSERT_NE(total, nullptr);
 		EXPECT_EQ(total->GetRowCount(), 1);
 		EXPECT_FALSE(hasColumn(total, wxT("Warehouse")));
@@ -894,7 +897,8 @@ TEST_F(AcceptanceAccumulation, TheManagersBalanceIsCutToTheDimensionsAndResource
 	}
 	{
 		// By warehouse, every resource (left out).
-		ibValueModelTable* const byWarehouse = tableOf(balance({ after, ibValue(), ibValue(ibString(wxT("warehouse"))) }));
+		const ibValue answer = balance({ after, ibValue(), ibValue(ibString(wxT("warehouse"))) });
+		ibValueModelTable* const byWarehouse = tableOf(answer);
 		ASSERT_NE(byWarehouse, nullptr);
 		EXPECT_EQ(byWarehouse->GetRowCount(), 2) << "kitchen and bar";
 		EXPECT_TRUE(hasColumn(byWarehouse, wxT("Warehouse"))) << "named as declared, whatever the case it was asked in";
