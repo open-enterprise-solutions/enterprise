@@ -151,13 +151,22 @@ ibPGEditorDialogAdapter* ibPGListProperty::GetEditorDialog() const
 			const ibPGChoices& choices = dlgProp->GetChoices();
 			const long selected = ReadId(prop->GetValue());
 
+			int selectedRow = wxNOT_FOUND;
 			for (unsigned int idx = 0; idx < choices.GetCount(); idx++) {
 				wxVector<ibVariant> values;
 				values.push_back(ibVariant(new ibDataViewIconText(choices.GetLabel(idx), choices.Item(idx).GetBitmap())));
 				lc->AppendItem(values);
 				if (selected == choices.GetValue(idx))
-					lc->SelectRow(idx);
+					selectedRow = static_cast<int>(idx);
 			}
+
+			// …the value's row selected once all are in: a row appended is selected (DoItemInserted - a table's Add lands
+			// on its new row), and the value's, selected in the middle, gave way to the last row (Max, 2026-11-10: "I choose
+			// English and the Russian row stays selected")
+			if (selectedRow != wxNOT_FOUND)
+				lc->SelectRow(static_cast<unsigned int>(selectedRow));
+			else
+				lc->UnselectAll();
 
 			const int res = dlg->ShowModal();
 			const int row = lc->GetSelectedRow();
