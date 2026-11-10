@@ -5741,6 +5741,11 @@ msgstr "'%s' не группируется и не агрегируется: д�
 msgid "'%s' is a string of unlimited length: it is compared, ordered and grouped only cast to a length - CAST(%s AS String(100))"
 msgstr "'%s' - строка неограниченной длины: сравнивать, сортировать и группировать её можно только приведённой к длине - CAST(%s AS String(100))"
 
+#: src/engine/backend/query/queryLowering.cpp:6603
+#, c-format
+msgid "'%s' is not a field of the table this statement makes: INDEX BY names its output fields"
+msgstr "'%s' - не поле таблицы, которую создаёт этот запрос: в INDEX BY указываются её выходные поля"
+
 #: src/engine/backend/query/queryLowering.cpp:6279
 #, c-format
 msgid "the link on '%s' refers to '%s', which this query reads AFTER it: a link can only relate tables that are already read - move the table earlier, or write this as a condition"

@@ -176,8 +176,8 @@ void ThrowQueryException(unsigned int line, unsigned int col, const ibString& ms
 	// shifted. Printing both spellings of the same number was one of the two ways a position here
 	// could mislead.
 	// THE NAME VARIETY, not the syntax one: everything raised through here is the LOWERING refusing —
-	// the text read perfectly and asked for something that is not there. The lexer and the parser
-	// raise the other (queryException.h).
+	// the text read perfectly and the configuration refuses it, a name that is not there or a rule the
+	// names break. The lexer and the parser raise the other (queryException.h).
 	if (line == 0)
 		ibBackendQueryNameException::Error(_("Query: %s"), msg);
 	else
@@ -6576,6 +6576,35 @@ void CheckTotalsNameSelectedFields(const ibQuerySelect& ast)
 		check(resource.m_expr);
 }
 
+// ⚠ INDEX BY NAMES THE TABLE THIS STATEMENT MAKES — its output fields, by the names the run gives them (OutputNameFor)
+// and keys the index by (the last segment written). A name that is none of them built no index and said nothing: the
+// statements after it read the table whole, and a typo cost exactly the speed it was written for. Said by the check
+// (CheckSelectNames) and by the run that stores the table, as CheckTotalsNameSelectedFields is.
+void CheckIndexNamesOutputs(const ibQuerySelect& ast)
+{
+	if (ast.m_indexBy.empty() || ast.m_selectAll)
+		return;
+
+	std::vector<ibString> outputs;
+	int idx = 0;
+	for (const ibQueryProjection& p : ast.m_projections) {
+		if (p.m_star)
+			return;                                         // its fields are a source's: nothing here to judge by
+		if (p.m_expr)
+			outputs.push_back(OutputNameFor(ast, p, idx++));
+	}
+
+	for (const ibQueryAstExprPtr& column : ast.m_indexBy) {
+		if (!column || column->m_path.empty())
+			continue;
+		const ibString& name = column->m_path.back();
+		if (std::none_of(outputs.begin(), outputs.end(),
+				[&name](const ibString& output) { return output.IsSameAs(name, false); }))
+			ThrowQueryException(column->m_line, column->m_col,
+				_("'%s' is not a field of the table this statement makes: INDEX BY names its output fields"), name);
+	}
+}
+
 void CheckSelectNames(const ibQuerySelect& astAsWritten, const std::map<ibString, ibValue>& params)
 {
 	// ⭐ JUDGE WHAT WILL RUN, NOT WHAT WAS TYPED. The execution reorders a run of INNER joins so a
@@ -6635,6 +6664,8 @@ void CheckSelectNames(const ibQuerySelect& astAsWritten, const std::map<ibString
 		checkCasts(join.m_on);
 	for (const ibQueryOrderItem& item : ast.m_orderBy)
 		checkCasts(item.m_expr);
+	// …and INDEX BY, asked of the outputs alone, so a statement over a table handed in is judged too.
+	CheckIndexNamesOutputs(ast);
 
 	std::vector<ibSourceBinding> sources;
 	if (!BuildCheckSources(ast, params, sources, /*reportMissing=*/true, /*tolerateOpaque=*/true)) {
@@ -7152,6 +7183,7 @@ void ibQueryLowering::PreparePackage(const ibQueryPackage& package,
 		if (store.Has(ast.m_intoTemp))
 			ThrowQueryException(0, 0, ibString::Format(
 				_("temporary table '%s' already exists"), ast.m_intoTemp));
+		CheckIndexNamesOutputs(ast);   // before a row is read
 
 		std::vector<ibQueryOutputColumn> schema;
 		ibDataQueryResult read = ast.m_hasTotals
@@ -7574,6 +7606,7 @@ std::vector<ibQueryLowering::ibQueryPackageResult> ibQueryLowering::ExecutePacka
 		// prepared selections into one query nobody wrote (Max, 2026-08-21, on seeing it). What the
 		// links mean is assembled AFTER the statements, as the package's FINAL query (below).
 		const ibQuerySelect& ast = *statement.m_select;
+		CheckIndexNamesOutputs(ast);   // before a row is read
 
 		ibQueryPackageResult r;
 		r.m_hasTotals = ast.m_hasTotals;
@@ -7638,8 +7671,8 @@ std::vector<ibQueryLowering::ibQueryPackageResult> ibQueryLowering::ExecutePacka
 		r.m_intoTemp = ast.m_intoTemp;
 
 		// INDEX BY — the columns the store builds a lookup over, named as the OUTPUT names, because
-		// that is what the later statements select by. A name the projection did not produce simply
-		// is not there to index.
+		// that is what the later statements select by. A name the projection did not produce was
+		// refused before the read (CheckIndexNamesOutputs).
 		std::vector<ibString> indexed;
 		for (const ibQueryAstExprPtr& column : ast.m_indexBy)
 			if (column && !column->m_path.empty())

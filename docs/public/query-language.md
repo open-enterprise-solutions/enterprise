@@ -47,8 +47,8 @@ a script, a report, a list - is one place for rights, row restrictions, locks an
   as SQL defines them - and a computed side's keys are pushed into the database side's read, so only rows
   that can join are fetched.
 - **A refusal says where.** A form the language does not take is refused at its position with a sentence
-  - `INDEX BY` without `INTO`, `TOTALS` with `INTO`, a hierarchy over a level of several fields - never
-  read as something else.
+  - `INDEX BY` without `INTO` or over a field the statement does not output, `TOTALS` with `INTO`, a
+  hierarchy over a level of several fields - never read as something else.
 - **Measured.** Each query's road and the time of each stage go to the technology journal.
 
 ## Where it stops
