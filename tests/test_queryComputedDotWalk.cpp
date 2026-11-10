@@ -78,10 +78,6 @@ public:
 		return m_pk != nullptr ? std::vector<const ibBackendQueryColumn*>{ m_pk }
 		                       : std::vector<const ibBackendQueryColumn*>{};
 	}
-	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override {
-		for (const ibBackendQueryColumn* c : m_cols) if (c->GetName() == name) return c;
-		return nullptr;
-	}
 	bool ContainColumn(const ibBackendQueryColumn* col) const override {
 		for (const ibBackendQueryColumn* c : m_cols) if (c == col) return true;
 		return false;

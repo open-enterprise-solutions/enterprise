@@ -82,7 +82,7 @@ BACKEND_API size_t ibSequenceRestore(const ibValueMetaObjectSequence* seq, const
 // and everything it declares is physical. The moment is CONSTRUCTED, so it belongs where the reading
 // is — `ibRecorderQueryable` stands over the record queryable exactly so (commonObject.h).
 //
-// ⚠ AND IT ANSWERS BEFORE THE ATTRIBUTES. `PointInTime` is the name of the predefined attribute that
+// ⚠ AND IT IS LISTED INSTEAD OF THE ATTRIBUTE. `PointInTime` is the name of the predefined attribute that
 // TYPES the moment and stores nothing; asked of the attributes, the register's surface answered with
 // a column over fields no table has — the value read back empty and an ORDER BY had nothing to sort
 // (2026-09-18).
@@ -90,7 +90,6 @@ class BACKEND_API ibSequenceQueryable : public ibRegisterDataQueryable {
 public:
 	explicit ibSequenceQueryable(const ibValueMetaObjectSequence* seq);
 
-	virtual const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override;
 	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override;
 
 private:
@@ -107,7 +106,6 @@ class BACKEND_API ibSequenceBordersQueryable : public ibBackendQueryable {
 public:
 	explicit ibSequenceBordersQueryable(const ibValueMetaObjectSequence* seq) : m_seq(seq) {}
 
-	virtual const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override;
 	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override;
 	virtual ibString GetQueryTableName() const override;
 	virtual const ibUniqueKey& GetQueryTableGuid() const override;
@@ -136,45 +134,6 @@ private:
 };
 
 class BACKEND_API ibValueMetaObjectSequence : public ibValueMetaObjectRegisterData {
-public:
-
-	// ⭐⭐ THE MOMENT OF A REGISTRATION, AS A COLUMN OF THE SELECTION — its period together with the
-	// document that registered it, so two registrations of one period are still ordered, and a border
-	// is COMPARED and SORTED by one thing rather than by a date with a tie-break written out at every
-	// caller (Max, 2026-09-18: "the moment has to be in the selection itself").
-	//
-	// It is INSIDE the kind that publishes it, the way the document's own moment is inside its
-	// reading surface (ibRecorderQueryable::ibBackendColumnPointInTime): a constructed column is not a
-	// thing of the header, it is a thing of its owner.
-	//
-	// Nothing stores it — its layout is the period's fields and then the recorder's, which is what
-	// makes the existing machinery work on it: sorting by the moment IS sorting by the date and then
-	// by the reference's own two fields, and a comparison decomposes over the same ones. Its IDENTITY
-	// is the PointInTime attribute's: the attribute names and types it, this builds it.
-	class BACKEND_API ibBackendColumnPointInTime : public ibBackendQueryColumn {
-	public:
-		explicit ibBackendColumnPointInTime(const ibValueMetaObjectSequence* seq) : m_seq(seq) {}
-
-		ibString GetName()         const override;
-		ibString GetSynonym()      const override;
-		ibString GetPhysicalName() const override;
-		ibMetaID GetColumnId()     const override;
-		ibTypeDescription& GetTypeDesc() const override;
-		bool     IsAvailable()     const override;   // the PointInTime attribute's too — and so its sequence's
-
-		// Where it lies: nowhere of its own — in the PERIOD, then in the RECORDER.
-		std::vector<ibColumnSlot> DescribeLayout() const override;
-		Kind GetColumnKind() const override { return Kind::Synthetic; }
-
-		bool ReadValue(const ibString& fieldName, const class ibMetaData* metaData,
-		               class ibValue& retValue, class ibQueryResult& result, bool createData = false) const override;
-		void BindValue(class ibQueryStatement& statement, const class ibMetaData* metaData,
-		               const class ibValue& value, int& position) const override;
-
-	private:
-		const ibValueMetaObjectSequence* m_seq;
-	};
-
 private:
 	// A LIST FORM ONLY — of the registrations: what is registered, for which key, at which moment.
 	// There is no record to open on its own (a registration belongs to its recorder, as a movement
@@ -330,10 +289,10 @@ public:
 	}
 
 	// The moment, as the selection sees it — named and typed here, built out of the period and the
-	// recorder by ibBackendColumnPointInTime. Declared the way the document declares its own: a special
+	// recorder by the document's moment column. Declared the way the document declares its own: a special
 	// type, registered like an attribute, stored nowhere.
 	ibValueMetaObjectAttributePredefined* GetPointInTime() const { return m_propertyAttributePointInTime->GetMetaObject(); }
-	const ibBackendColumnPointInTime* GetMomentColumn() const { return &m_momentColumn; }
+	const ibRecorderQueryable::ibBackendColumnPointInTime* GetMomentColumn() const { return &m_momentColumn; }
 
 private:
 	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(ibT("Data"), _("Data"));
@@ -361,7 +320,13 @@ private:
 			  "registrations of one period are still ordered. Not stored - built from the two; a border is compared and "
 			  "sorted by it."), value_to_clsid(ibT("PointInTime"))));
 
-	ibBackendColumnPointInTime m_momentColumn{ this };
+	// ⭐⭐ THE MOMENT OF A REGISTRATION, AS A COLUMN OF THE SELECTION — its period together with the
+	// document that registered it, so two registrations of one period are still ordered, and a border
+	// is COMPARED and SORTED by one thing rather than by a date with a tie-break written out at every
+	// caller (Max, 2026-09-18: "the moment has to be in the selection itself"). The document's own moment
+	// column, given the sequence's three attributes: the PointInTime that names and types it, and the
+	// period and the recorder it lies in.
+	ibRecorderQueryable::ibBackendColumnPointInTime m_momentColumn{ GetPointInTime(), GetRegisterPeriod(), GetRegisterRecorder() };
 
 	// ⭐ THIS KIND'S OWN READING SURFACE, and the reason it exists: only the descriptor of the kind
 	// that BUILDS a column can hand it out. Registered in OnAfterRun after the register base has

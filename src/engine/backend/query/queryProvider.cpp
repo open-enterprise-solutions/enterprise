@@ -912,11 +912,10 @@ ibSubqueryQueryable::ibSubqueryQueryable(const ibDataQueryBuilder& inner, long t
 
 ibSubqueryQueryable::~ibSubqueryQueryable() = default;   // unique_ptr<ibDataQueryBuilder> — complete here
 
-// Vends the computed (RAM) provider — the stateless static every computed source uses.
+// Vends the computed (RAM) provider — the one every computed source uses.
 ibBackendQueryProvider& ibSubqueryQueryable::GetProvider() const
 {
-	static ibComputedProvider s_computedProvider;
-	return s_computedProvider;
+	return ibComputedProviderInstance();
 }
 
 // Run the inner query (with the outer's pushed-down conditions) and materialise its rows

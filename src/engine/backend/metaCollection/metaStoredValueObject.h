@@ -22,13 +22,12 @@ class ibStructureBatch;   // per-table DDL/seed batch — ProcessAttribute pours
 // table). The constant no longer IS a queryable; it VENDS this adapter (a stable
 // member), which forwards to the constant's own query methods. Nor is the constant a
 // COLUMN any more: it HAS one (ibValueMetaObjectConstantColumn, nested below), and
-// this queryable resolves its single column to it.
+// this queryable lists its single column.
 class ibValueMetaObjectStoredValue;
 class BACKEND_API ibConstantQueryable : public ibBackendQueryable {
 public:
 	explicit ibConstantQueryable(const ibValueMetaObjectStoredValue* meta) : m_meta(meta) {}
-	virtual const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override;   // -> the constant's value column
-	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override;            // { the value column } — SELECT *, the constructor
+	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override;            // { the value column } — SELECT *, the constructor, a name
 	virtual ibString GetQueryTableName() const override;
 	virtual const ibMetaData* GetMetaData() const override;                      // metadata context for column-based value reads
 	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const override;   // = m_meta — the guid / metaID are read off it

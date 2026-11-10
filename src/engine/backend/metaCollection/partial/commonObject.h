@@ -448,24 +448,11 @@ public:
 	explicit ibRecordQueryable(const TMeta* meta)
 		: m_meta(meta), m_sortOrder(meta, [this] { return GetSortParts(); }) {}
 
-	// The attribute by name, answered with ITS QUERY FACE. An attribute is not a query column: it
-	// HOLDS one, because the two live under different ownerships (docs/private/ownership-authority.md). The
-	// L3 surface is unchanged — it still receives an ibBackendQueryColumn and still names no
-	// attribute on its contract.
-	// ⭐ THE OBJECT'S OWN FIND ANSWERS IT. This carried a clsid list of its own — a second answer to a
-	// question the metaobject already answers — and the two drifted the moment an arrangement grew a
-	// new kind of attribute: a chart of accounts declares ACCOUNTING KINDS, they went into the schema,
-	// into the account's form and into `SELECT *`, and a query naming one was refused with "unknown
-	// attribute 'Quantitative'" (measured over MCP on a copy, 2026-09-16).
-	// (The ORDER answers first — the one column here nothing declared; a walk through a reference finds it by name.)
-	virtual const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override {
-		if (name.IsSameAs(m_sortOrder.GetName(), false))
-			return &m_sortOrder;
-		const ibValueMetaObjectAttributeBase* attribute = m_meta->FindAnyAttributeObjectByFilter(name);
-		return attribute != nullptr ? attribute->GetQueryColumn() : nullptr;
-	}
-
-	// All generic attributes (predefined + plain), each by its query face. Drives SELECT * over this source.
+	// All generic attributes (predefined + common + plain), each by its QUERY FACE — an attribute is not a query
+	// column, it HOLDS one, because the two live under different ownerships (docs/private/ownership-authority.md).
+	// Drives SELECT *, and a name (ResolveColumnByName searches this list, then the sort order). ⭐ THE OBJECT'S
+	// OWN LIST ANSWERS IT: a clsid list of its own drifted the moment a chart of accounts grew ACCOUNTING KINDS —
+	// in the schema, the form and `SELECT *`, and refused by name: "unknown attribute 'Quantitative'" (2026-09-16).
 	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override {
 		std::vector<const ibBackendQueryColumn*> cols;
 		for (const ibValueMetaObjectAttributeBase* a : m_meta->GetGenericAttributeArrayObject())
@@ -1107,9 +1094,8 @@ class BACKEND_API ibRecorderQueryable : public ibRecordQueryable<ibValueMetaObje
 public:
 	explicit ibRecorderQueryable(const ibValueMetaObjectRecordDataRecorderRef* meta);
 
-	// The moment answers first, then the attributes — a query naming it resolves to the column that
-	// knows how to build it. (Bodies in commonObjectMetaQuery.cpp.)
-	virtual const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override;
+	// The attributes, then the moment — a query naming it resolves to the column that knows how to build
+	// it. (Bodies in commonObjectMetaQuery.cpp.)
 	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override;
 
 	// ⭐ …AND ITS RECORDS ARE ORDERED BY THE MOMENT: the date, then the reference standing at it — the moment's own
@@ -1124,16 +1110,24 @@ public:
 	// performs cannot describe it — and rather than teaching the codec about moments, the column
 	// overrides the read and assembles the value out of the date and the reference, each of which is
 	// read exactly as it is read anywhere else.
+	//
+	// ⭐ GIVEN ITS THREE ATTRIBUTES — the moment, and the date and the reference it lies in — so the one
+	// class serves the document (PointInTime: Date, Reference) and the sequence (PointInTime: Period,
+	// Recorder). It was two, the same body twice, and the sequence's read had learned to take an alias
+	// (2026-09-18) while the document's had not.
 	class BACKEND_API ibBackendColumnPointInTime : public ibBackendQueryColumn {
 	public:
-		explicit ibBackendColumnPointInTime(const ibValueMetaObjectRecordDataRecorderRef* owner) : m_owner(owner) {}
+		ibBackendColumnPointInTime(const ibValueMetaObjectAttributePredefined* moment,
+		                           const ibValueMetaObjectAttributePredefined* date,
+		                           const ibValueMetaObjectAttributePredefined* reference)
+			: m_moment(moment), m_date(date), m_reference(reference) {}
 
 		ibString GetName()         const override;
 		ibString GetSynonym()      const override;
 		ibString GetPhysicalName() const override;
 		ibMetaID GetColumnId()     const override;
 		ibTypeDescription& GetTypeDesc() const override;
-		bool     IsAvailable()     const override;   // the moment attribute's too — and so its document's
+		bool     IsAvailable()     const override;   // the moment attribute's too — and so its owner's
 
 		// WHERE IT LIES: nowhere of its own — in the DATE, then in the REFERENCE. Answering with their
 		// layouts is what makes the existing mechanisms work on it: a sort emits date, then identifier
@@ -1155,11 +1149,13 @@ public:
 		               const class ibValue& value, int& position) const override;
 
 	private:
-		const ibValueMetaObjectRecordDataRecorderRef* m_owner;
+		const ibValueMetaObjectAttributePredefined* m_moment;
+		const ibValueMetaObjectAttributePredefined* m_date;
+		const ibValueMetaObjectAttributePredefined* m_reference;
 	};
 
 private:
-	ibBackendColumnPointInTime m_momentColumn;   // `m_meta` above is already the recorder — see the template
+	ibBackendColumnPointInTime m_momentColumn;   // the document's: its PointInTime, in its Date and its Reference
 };
 
 // ==========================================================================
@@ -1633,7 +1629,6 @@ public:
 class BACKEND_API ibRegisterDataQueryable : public ibBackendQueryable {
 public:
 	explicit ibRegisterDataQueryable(const ibValueMetaObjectRegisterData* meta) : m_meta(meta) {}
-	virtual const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override;   // attribute-by-name AS a column
 	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override;   // identity (recorder+line / period) ++ dims ++ generic attrs
 	virtual ibString GetQueryTableName() const override;
 	virtual ibString GetQueryName() const override;   // the metaobject's user-facing name (change ledger)
@@ -1708,8 +1703,8 @@ public:
 
 	// ⭐⭐ WHICH ATTRIBUTE IS THIS COLUMN? — `FindAnyAttributeObjectByFilter(id)`, further down this
 	// class. It exists, it is the ECONOMICAL form (one walk over the children, the id compared as it
-	// goes, a clsid filter deciding what counts — no array built, nothing allocated), and it is the
-	// very function `ibRegisterDataQueryable::ResolveColumnByName` answers a query's column names with.
+	// goes, a clsid filter deciding what counts — no array built, nothing allocated), over the same
+	// children the register's list is made of (GetGenericAttributeArrayObject).
 	//
 	// Said here because both registers grew a hand-written list to answer it instead — period,
 	// dimensions, resources — and both lists were short: one did not know the recorder or the line

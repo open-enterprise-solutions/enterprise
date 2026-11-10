@@ -20,8 +20,7 @@ class ibValueMetaObjectTableDataRef;    // DB-backed tabular section (reference 
 class BACKEND_API ibTabularQueryable : public ibBackendQueryable {
 public:
 	explicit ibTabularQueryable(const ibValueMetaObjectTableDataRef* meta) : m_meta(meta) {}
-	virtual const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override;   // attribute-by-name AS a column + the owner Ref
-	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override;                   // the section's own attributes + Ref
+	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override;                   // the owner Ref + the section's own attributes
 	virtual ibString GetQueryTableName() const override;
 	virtual ibString GetQueryName() const override;   // the section's user-facing name (change ledger)
 	virtual const ibMetaData* GetMetaData() const override;                  // metadata context for column-based value reads
@@ -86,6 +85,11 @@ public:
 
 	//get table class
 	ibTypeDescription GetTypeDesc() const;
+
+	// …and its COLUMNS, into the node an object's explorer appended for it (AppendTable) — the one fill for
+	// every object that has sections (nine builders wrote the loop each) and for the section's own source
+	// (ibTabularSourceDescriptor). The explorer knows no metaobject; the section knows its fields.
+	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const;
 
 	virtual ibClassID ResolveChild(const ibClassID& clsid) const {
 		if (clsid == g_metaAttributeCLSID)

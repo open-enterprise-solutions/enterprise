@@ -1957,12 +1957,8 @@ const ibSourceExplorer* ibValueRecordDataObject::GetSourceExplorer() const
 		m_sourceExplorer.AppendColumn(object, object->GetColumnId());
 	}
 
-	for (const auto object : metaObject->GetGenericTableArrayObject()) {
-		if (object != nullptr && !object->IsDeleted()) {
-			ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
-			for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol, tblCol->GetColumnId());
-		}
-	}
+	for (const auto object : metaObject->GetGenericTableArrayObject())
+		object->FillSourceExplorer(m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc()));
 
 	return &m_sourceExplorer;
 }
@@ -2563,12 +2559,8 @@ const ibSourceExplorer* ibValueRecordDataObjectRef::GetSourceExplorer() const
 		}
 	}
 
-	for (const auto object : m_metaObject->GetGenericTableArrayObject()) {
-		if (object != nullptr && !object->IsDeleted()) {
-			ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
-			for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol, tblCol->GetColumnId());
-		}
-	}
+	for (const auto object : m_metaObject->GetGenericTableArrayObject())
+		object->FillSourceExplorer(m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc()));
 
 	return &m_sourceExplorer;
 }
@@ -2734,47 +2726,13 @@ const ibSourceExplorer* ibValueRecordDataObjectHierarchyRef::GetSourceExplorer()
 		false, false))
 		return &m_sourceExplorer;   // built at this version of the metadata already — read as it is
 	ibValueMetaObjectAttributeBase* attribute = m_metaObject->GetAttributeForCode();
-	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
-		ibItemMode attrUse = object->GetItemMode();
-		if (m_objMode == ibObjectMode::OBJECT_ITEM) {
-			if (attrUse == ibItemMode::ibItemMode_Item
-				|| attrUse == ibItemMode::ibItemMode_Folder_Item) {
-				if (!m_metaObject->IsDataReference(object->GetMetaID())) {
-					m_sourceExplorer.AppendColumn(object, object->GetColumnId(), object != attribute);
-				}
-			}
-		}
-		else {
-			if (attrUse == ibItemMode::ibItemMode_Folder ||
-				attrUse == ibItemMode::ibItemMode_Folder_Item) {
-				if (!m_metaObject->IsDataReference(object->GetMetaID())) {
-					m_sourceExplorer.AppendColumn(object, object->GetColumnId(), object != attribute);
-				}
-			}
-		}
-	}
+	for (const auto object : m_metaObject->GetGenericAttributeArrayObject())
+		if (ibItemModeFits(object->GetItemMode(), m_objMode) && !m_metaObject->IsDataReference(object->GetMetaID()))
+			m_sourceExplorer.AppendColumn(object, object->GetColumnId(), object != attribute);
 
-	for (const auto object : m_metaObject->GetGenericTableArrayObject()) {
-		ibItemMode tableUse = object->GetTableUse();
-		if (m_objMode == ibObjectMode::OBJECT_ITEM) {
-			if (tableUse == ibItemMode::ibItemMode_Item
-				|| tableUse == ibItemMode::ibItemMode_Folder_Item) {
-				if (object != nullptr && !object->IsDeleted()) {
-					ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
-					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol, tblCol->GetColumnId());
-				}
-			}
-		}
-		else {
-			if (tableUse == ibItemMode::ibItemMode_Folder ||
-				tableUse == ibItemMode::ibItemMode_Folder_Item) {
-				if (object != nullptr && !object->IsDeleted()) {
-					ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
-					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol, tblCol->GetColumnId());
-				}
-			}
-		}
-	}
+	for (const auto object : m_metaObject->GetGenericTableArrayObject())
+		if (ibItemModeFits(object->GetTableUse(), m_objMode))
+			object->FillSourceExplorer(m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc()));
 
 	return &m_sourceExplorer;
 }

@@ -116,6 +116,22 @@ bool ibSourceDataObject::WalkColumns(const std::vector<ibSourceHop>& path, size_
 	return true;
 }
 
+// …AND THE LEVEL IT STANDS ON past the last hop — a section's columns (StepInto answers a section with the
+// section itself), the fields of what a reference points at — kept alive in the caller's `held`.
+const ibSourceDataObject::ibSourceExplorer* ibSourceDataObject::WalkColumns(const std::vector<ibSourceHop>& path,
+	size_t from, std::vector<ibValue>& held) const
+{
+	const ibSourceExplorer* explorer = GetSourceExplorer();
+	const ibTabularDataObject* table = nullptr;
+	for (size_t i = from; i < path.size() && explorer != nullptr; ++i) {
+		const ibSourceExplorer* node = explorer->FindById(path[i].m_id);
+		if (node == nullptr)
+			return nullptr;   // the hop no longer resolves
+		explorer = StepInto(node, path[i], table, held);
+	}
+	return explorer;
+}
+
 #include "backend/backend_exception.h"   // a name that names nothing raises
 #include "core/stringTokenizer.h"
 

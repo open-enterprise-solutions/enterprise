@@ -52,21 +52,10 @@ const ibBackendQueryColumn* ibTabularQueryable::OwnerRefColumn() const
 	return m_ownerRef.get();
 }
 
-const ibBackendQueryColumn* ibTabularQueryable::ResolveColumnByName(const ibString& name) const
-{
-	const ibBackendQueryColumn* const ownerRef = OwnerRefColumn();
-	if (ownerRef != nullptr && !ownerRef->GetName().IsEmpty() && stringUtils::IsSameAs(name, ownerRef->GetName()))
-		return ownerRef;
-	// The attribute's QUERY FACE — it holds one rather than being one (docs/private/ownership-authority.md) — found in the
-	// SAME list GetQueryColumns vends. The table's children alone missed what its owner carries into it: the account's
-	// kinds table shows a tick-box per breakdown accounting kind of its chart, and `K.Quantitative` was refused as
-	// an unknown attribute while `SELECT *` returned it (2026-09-17).
-	for (const auto attribute : m_meta->GetGenericAttributeArrayObject())
-		if (attribute != nullptr && stringUtils::IsSameAs(name, attribute->GetName()))
-			return attribute->GetQueryColumn();
-	return nullptr;
-}
-
+// What the section LISTS is what a name finds (ResolveColumnByName searches this list): the table's children
+// alone missed what its owner carries into it — the account's kinds table shows a tick-box per breakdown
+// accounting kind of its chart, and `K.Quantitative` was refused as an unknown attribute while `SELECT *`
+// returned it (2026-09-17).
 std::vector<const ibBackendQueryColumn*> ibTabularQueryable::GetQueryColumns() const
 {
 	std::vector<const ibBackendQueryColumn*> columns;

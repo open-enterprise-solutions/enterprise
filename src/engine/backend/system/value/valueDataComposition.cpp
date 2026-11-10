@@ -13,8 +13,7 @@
 #include "backend/moduleManager/moduleManager.h"       // the session root: common modules + the environment
 #include "backend/session/session.h"                   // ibSession::Current / GetPUState — where the root lives
 #include "backend/system/value/valueType.h"           // ibValueTypeDescription::AdjustValue — the result decides the type
-#include "backend/query/queryConstructorModel.h"      // ibQueryConstructorModel — the fields a window offers
-#include "core/query/queryRender.h"               // ibRenderQuery / ibQueryColumnFromPath — the seed query, written out
+#include "backend/query/queryConstructorModel.h"      // ibQueryConstructorModel — the fields a window offers; ibQueryTextOfSource — the seed
 #include "backend/backend_exception.h"               // the engine's verdict on a query that will not resolve
 #include "backend/srcDataObject.h"                   // ibSourceExplorer
 #include "core/serialize/dataBuilder.h"           // ibDataNode (object-level save/load)
@@ -295,45 +294,12 @@ void ibValueDataComposition::RebuildSource()
 	PruneUnresolvedSettings();   // the query decides which fields exist; the settings follow it
 }
 
-// THE QUERY THE SOURCE WOULD WRITE FOR ITSELF — a real query over the real source, rendered by the same
-// renderer the constructor round-trips through. Every column spelled out rather than `SELECT *`: the
+// THE QUERY THE SOURCE WOULD WRITE FOR ITSELF — every column spelled out rather than `SELECT *`: the
 // point of a composer is to CHANGE what is read, and changing a list of fields you can see is an edit,
-// while changing a star is a rewrite.
+// while changing a star is a rewrite. (ibQueryTextOfSource — the dynamic list's seed too.)
 ibString ibValueDataComposition::SeedQuery() const
 {
-	const ibBackendQueryable* queryable = GetSourceQueryable();
-	if (queryable == nullptr)
-		return ibEmptyString;
-
-	// THE NAME THE LANGUAGE KNOWS IT BY — `Catalog.Products`, which is what the lowering resolves a FROM
-	// against. Not the physical table: a query written against one is a query the config cannot be
-	// restructured under.
-	const ibQueryableSourceDescriptor* descriptor = GetSourceDescriptor();
-	if (descriptor == nullptr || descriptor->GetName().IsEmpty())
-		return ibEmptyString;
-
-	ibQuerySelect select;
-	if (!descriptor->GetNamespace().IsEmpty())
-		select.m_from.m_name.push_back(descriptor->GetNamespace());
-	select.m_from.m_name.push_back(descriptor->GetName());
-
-	// NAMED, AND EVERY FIELD QUALIFIED BY THAT NAME — a bare `Code` is unambiguous only until a SECOND
-	// table joins, and at that moment every field written before it becomes ambiguous at once. The same
-	// rule the query constructor holds to when it adds a table.
-	select.m_from.m_alias = descriptor->GetName();
-	const ibString prefix = select.m_from.m_alias + ibT(".");
-
-	for (const ibBackendQueryColumn* column : queryable->GetQueryColumns()) {
-		if (column == nullptr || column->GetName().IsEmpty() || !column->IsAllowed())
-			continue;
-		ibQueryProjection projection;
-		projection.m_expr = ibQueryColumnFromPath(prefix + column->GetName());
-		select.m_projections.push_back(std::move(projection));
-	}
-	if (select.m_projections.empty())
-		select.m_selectAll = true;   // a source that vends no columns: read it whole rather than read nothing
-
-	return ibRenderQuery(select);
+	return ibQueryTextOfSource(GetSourceDescriptor());
 }
 
 std::vector<ibQueryConstructorField> ibValueDataComposition::GetConstructorFields() const

@@ -229,9 +229,8 @@ void ibValueModelTableBox::CreateColumnCollection()
 		const std::vector<ibSourceHop>& path = bound.GetPath();
 		ibBackendFormAttributeValue* holder = FindSourceHolder(bound.GetFirst());
 		ibSourceDataObject* source = holder != nullptr ? holder->GetSourceValue() : nullptr;
-		const ibSourceExplorer* explorer = source != nullptr ? source->GetSourceExplorer() : nullptr;
-		for (size_t i = 1; i < path.size() && explorer != nullptr; i++)
-			explorer = explorer->FindById(path[i].m_id);
+		std::vector<ibValue> held;   // what the walk stepped through, alive while its level is read
+		const ibSourceExplorer* explorer = source != nullptr ? source->WalkColumns(path, 1, held) : nullptr;
 		if (explorer == nullptr)
 			return;
 

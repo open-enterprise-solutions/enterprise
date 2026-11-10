@@ -696,9 +696,14 @@ public:
 	}
 
 	// ALL columns this source exposes — for SELECT * (a nested subquery over `From(src)`
-	// with no explicit Select list derives its columns from here). Default: none; a record
-	// source returns its attributes, a temp source its temp columns. (docs §22 nested subquery)
-	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const { return {}; }
+	// with no explicit Select list derives its columns from here), and the fields the query
+	// constructor and the composer offer. A record source returns its attributes, a temp source
+	// its temp columns. (docs §22 nested subquery)
+	//
+	// ⚠ EVERY SOURCE ANSWERS — no default. It had one, `{}`, and a source that resolved its one
+	// column by name yet listed none (the constant) offered nothing to pick in the constructor, with
+	// nothing to say why (2026-11-11). A source that cannot list its columns has none.
+	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const = 0;
 
 	// ⭐ DID THIS SOURCE MINT THAT COLUMN — and if so, here is its STORAGE, so whoever still needs
 	// the column past the run keeps it by raising a refcount instead of copying it (a copy answers
@@ -724,11 +729,15 @@ public:
 
 	// THIS source's own column with the given name — for UNION, where each branch supplies
 	// the shared output columns BY NAME (catalog ∪ temp: each has its own "Code" column
-	// object). A non-attribute source (temp / subquery) overrides with its name lookup; null
-	// if absent. The DEFAULT (a record source) forwards to the row reader's attribute-by-name
-	// (an attribute IS a column) — defined out-of-line (queryProvider.cpp) so this header
-	// names no attribute / row-reader type.
-	virtual const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const;
+	// object); null if absent.
+	//
+	// ⭐ A HELPER OVER THE LIST, NOT A SECOND ANSWER (Max, 2026-11-11: "you get the list of all the
+	// columns anyway"). One of the columns GetQueryColumns lists, by name as the language compares
+	// names (case aside) — and then the sort order, the one column a source has without listing it
+	// (SELECT * must not carry it; a walk through a reference finds it by name). It was a virtual with
+	// sixteen answers of its own, and the constant resolved a column it did not list: the constructor
+	// offered nothing to pick. What a source can be asked by name is what it lists.
+	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const;
 
 	// --- physical layout -------------------------------------------------
 	// The real backing table for the main row scan.
@@ -960,7 +969,6 @@ public:
 	// hand-picking (the query result: it holds columns in four separate lists, and a list added later
 	// would silently be the one nobody remembered to keep).
 	const std::vector<std::shared_ptr<ibBackendQueryColumn>>& SharedColumns() const { return m_ownedColumns; }
-	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override { return Column(name); }
 	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override { return m_columns; }
 	// ⭐ …AND WHICH OF THEM IS THE ROW — the inner source's key, republished as THIS wrapper's own
 	// columns. Same shape ibAliasQueryable answers with, for the same reason: a wrapper is the same
@@ -1117,17 +1125,15 @@ public:
 			if (c.get() == col) return c;
 		return nullptr;
 	}
-	// ⭐ A NAME THE TABLE ANSWERS TO GETS A TWIN, whether or not it is in the published face.
-	//
-	// `GetQueryColumns()` is the SELECT * face and it is narrower than what a source can RESOLVE: a record
-	// answers by name for common attributes it does not list, a register for its identity columns.
-	// Minting only from the published set would leave those names resolving to the ORIGIN's column —
-	// which belongs to the other side of the join, and reads its value. So the twin is minted on
-	// demand, and the published face stays exactly what the origin publishes.
-	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override;
+	// ⭐ EVERY TWIN IS MINTED WITH THE READING — one per column the origin lists, and one for its sort
+	// order, the column it answers to without listing it. A name is then found among them like on any
+	// source (ResolveColumnByName); the ORIGIN's column, which belongs to the other side of the join, is
+	// never handed out. (They were minted on demand while a source could resolve names it did not list;
+	// since what it resolves is what it lists, there is nothing left to mint later — and no `mutable`.)
 	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override { return m_published; }
 	std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;
 	const ibBackendQueryColumn*              GetHierarchyColumn() const override;
+	const ibBackendQueryColumn*              GetSortColumn() const override { return m_sort; }
 
 	// …AND EVERYTHING ELSE IS THE ORIGIN'S, because it is the same table.
 	ibBackendQueryProvider& GetProvider()      const override { return m_origin->GetProvider(); }
@@ -1150,11 +1156,9 @@ private:
 	const ibBackendQueryable*                m_origin;
 	std::shared_ptr<const ibBackendQueryable> m_hold;     // set only when the origin is query-scoped
 	ibString                                 m_sqlAlias;
-	// EVERY twin this reading has minted — the published ones plus whatever a name lookup asked for.
-	// Mutable because minting is a lookup's business: the set is not state the query changes, it is
-	// the set of columns this reading has been ASKED about, and a const source answers by growing it.
-	mutable std::vector<std::shared_ptr<ibAliasColumn>> m_owned;
-	std::vector<const ibBackendQueryColumn*>            m_published;   // the SELECT * face — the origin's, twinned
+	std::vector<std::shared_ptr<ibAliasColumn>> m_owned;       // EVERY twin of this reading — the published ones and the sort order
+	std::vector<const ibBackendQueryColumn*>    m_published;   // the SELECT * face — the origin's, twinned
+	const ibBackendQueryColumn*                 m_sort = nullptr;   // the origin's sort order, twinned (not published)
 };
 
 // ⭐ WHAT THIS SOURCE / COLUMN STANDS FOR — one door, asked by every road that READS.
@@ -1218,7 +1222,6 @@ public:
 	// columns for a totals row.
 	virtual const ibBackendQueryable* NavigationSource() const { return m_reg->GetQueryable(); }
 
-	virtual const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override { return NavigationSource()->ResolveColumnByName(name); }
 	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override { return NavigationSource()->GetQueryColumns(); }
 	virtual ibString GetQueryTableName() const override { return NavigationSource()->GetQueryTableName(); }
 	virtual ibString GetQueryName()       const override { return NavigationSource()->GetQueryName(); }

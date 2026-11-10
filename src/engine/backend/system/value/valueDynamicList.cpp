@@ -6,7 +6,7 @@
 //  only for the deleted RunPage/ibDynamicListProvider; the fetch lives in the base RunComposerPage now.)
 #include "backend/query/queryColumn.h"               // ibBackendQueryColumn::GetColumnId
 #include "core/query/queryParser.h"               // the arbitrary query is READ by the engine's own parser
-#include "core/query/queryRender.h"               // ibRenderQuery / ibQueryColumnFromPath — the seed query, written out
+#include "backend/query/queryConstructorModel.h"  // ibQueryTextOfSource — the seed query, written out
 #include "backend/backend_exception.h"               // the engine's verdict on a query that will not resolve
 #include "backend/srcDataObject.h"                      // ibSourceExplorer
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject — GetItemKey row guid
@@ -302,55 +302,12 @@ void ibValueDynamicList::SetCustomQuery(const ibString& queryText)
 	m_composer.FromText(queryText);   // the dynamic list's own DB composer (FromText is DB-only)
 }
 
-// THE QUERY THE MAIN TABLE WOULD WRITE FOR ITSELF. Not a template with a hole in it — a real query
-// over the real source, rendered by the same renderer the constructor round-trips through, so what
-// appears when the box is ticked is something that already runs and can be opened in the constructor
-// on the spot.
-//
-// Every column, spelled out rather than `SELECT *`: the point of switching this on is to CHANGE what
-// is read, and changing a list of fields you can see is an edit, while changing a star is a rewrite.
+// THE QUERY THE MAIN TABLE WOULD WRITE FOR ITSELF — every column spelled out rather than `SELECT *`:
+// the point of switching this on is to CHANGE what is read, and changing a list of fields you can see is
+// an edit, while changing a star is a rewrite. (ibQueryTextOfSource — the composition's seed too.)
 ibString ibValueDynamicList::SeedArbitraryQuery() const
 {
-	const ibBackendQueryable* queryable = GetSourceQueryable();
-	if (queryable == nullptr)
-		return ibEmptyString;
-
-	// THE NAME THE LANGUAGE KNOWS IT BY — `Catalog.Products`, the descriptor's own namespace and name,
-	// which is exactly what the lowering resolves a FROM against. Not GetQueryName(): that is the
-	// physical table, and a query written against a physical table would be a query the config cannot
-	// be restructured under.
-	const ibQueryableSourceDescriptor* descriptor = GetSourceDescriptor();
-	if (descriptor == nullptr || descriptor->GetName().IsEmpty())
-		return ibEmptyString;
-
-	ibQuerySelect select;
-	if (!descriptor->GetNamespace().IsEmpty())
-		select.m_from.m_name.push_back(descriptor->GetNamespace());
-	select.m_from.m_name.push_back(descriptor->GetName());
-
-	// ⚠ NAMED, AND EVERY FIELD QUALIFIED BY THAT NAME — `Catalog.Products AS Products`, then
-	// `Products.Code`. Not decoration: a bare `Code` is unambiguous only until a SECOND table joins,
-	// and at that moment EVERY field written before it becomes ambiguous at once. The engine then
-	// refuses them, the refresh drops what no longer resolves, and the whole field list disappears in
-	// one gesture that had nothing to do with those fields. (Seen live: adding one field from the
-	// catalogue collapsed a seeded query to `SELECT *`.)
-	//
-	// This is the same rule the query constructor holds to when IT adds a table, and the seed has to
-	// hold to it too — a starting query that breaks on the first edit is worse than no starting query.
-	select.m_from.m_alias = descriptor->GetName();
-	const ibString prefix = select.m_from.m_alias + ibT(".");
-
-	for (const ibBackendQueryColumn* column : queryable->GetQueryColumns()) {
-		if (column == nullptr || column->GetName().IsEmpty() || !column->IsAllowed())
-			continue;
-		ibQueryProjection projection;
-		projection.m_expr = ibQueryColumnFromPath(prefix + column->GetName());
-		select.m_projections.push_back(std::move(projection));
-	}
-	if (select.m_projections.empty())
-		select.m_selectAll = true;   // a source that vends no columns: read it whole rather than read nothing
-
-	return ibRenderQuery(select);
+	return ibQueryTextOfSource(GetSourceDescriptor());
 }
 
 // (⛔ `SetArbitraryQuery(bool)` STOOD HERE — "ticking it seeds, unticking it clears". It had no

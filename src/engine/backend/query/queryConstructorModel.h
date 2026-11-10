@@ -105,4 +105,15 @@ private:
 BACKEND_API std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const ibString& text,
 	const ibMetaData* metaData, ibString* error = nullptr);
 
+// …AND THE OTHER WAY ROUND: THE QUERY A SOURCE WOULD WRITE FOR ITSELF — every field it lists spelled
+// out, `SELECT Products.Code, … FROM Catalog.Products AS Products`: what a list or a composition starts
+// from when its own query is switched on. Not a template with a hole in it — a real query over the real
+// source, rendered by the renderer the constructor round-trips through, so it runs and opens in the
+// constructor on the spot. Empty for a source the language has no name for.
+//
+// One body for the two that wrote it (ibValueDynamicList::SeedArbitraryQuery, ibValueDataComposition::
+// SeedQuery), and the fields are the DESCRIPTOR's (GetQueryColumns, no arguments): the text names the
+// source with none, so these are the columns that text reads.
+BACKEND_API ibString ibQueryTextOfSource(const ibQueryableSourceDescriptor* source);
+
 #endif

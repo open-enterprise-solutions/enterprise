@@ -1395,8 +1395,14 @@ inline bool ibRegisterViewColumnFits(const ibString& columnName, const ibString&
 		return fold.m_kind == ibRegGranularity::Auto
 		    || fold.m_kind == ibRegGranularity::Record;
 
-	// Not a period projection (a dimension, a resource) — always there, whatever the granularity.
-	if (!columnName.StartsWith(periodName))
+	// Not a period projection (a dimension, a resource) — always there, whatever the granularity. A projection
+	// is the period itself or the period rolled to a unit (`Period`, `PeriodMonth` — the names the view gives
+	// them, accumulationRegisterMetadataSchema.cpp), not every name that merely STARTS with the period's: a
+	// dimension called `PeriodKind` is a dimension, and the prefix alone dropped it from every reading but Auto.
+	ibString       unitWord;
+	ibTotalsPeriod unit;
+	if (!columnName.StartsWith(periodName, &unitWord)
+		|| (!unitWord.IsEmpty() && !ibReadPeriodUnit(unitWord, unit)))
 		return true;
 
 	// ⚠ NOTHING ASKED FOR MEANS NO PERIOD AT ALL — not "the period, undecided". Left out, this table

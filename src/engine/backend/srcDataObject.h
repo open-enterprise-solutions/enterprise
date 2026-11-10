@@ -444,6 +444,11 @@ public:
 	// level has nothing called, saying what that level offers; `walked` is what the path before `text` is called.
 	const ibSourceExplorer* WalkColumns(const ibString& text, const ibString& walked, ibSourceDescription& path,
 		std::vector<ibValue>& held) const;
+	// …AND THE SAME LEVEL, READ FROM THE HOPS a binding already holds (from `from` on): what a table box bound to a
+	// section lists, what the inspector offers as a bound table's columns. Null when a hop no longer resolves. They
+	// walked it by hand, id after id, and could not step through a reference.
+	const ibSourceExplorer* WalkColumns(const std::vector<ibSourceHop>& path, size_t from,
+		std::vector<ibValue>& held) const;
 
 protected:
 	

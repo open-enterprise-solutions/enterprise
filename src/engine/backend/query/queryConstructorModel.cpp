@@ -355,3 +355,45 @@ std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const ibString& text,
 	}
 	return fields;
 }
+
+// ------------------------------------------------------------------------------------------------
+// THE QUERY A SOURCE WOULD WRITE FOR ITSELF — see the header.
+// ------------------------------------------------------------------------------------------------
+
+#include "core/query/queryRender.h"                 // ibRenderQuery / ibQueryColumnFromPath — the query, written out
+
+ibString ibQueryTextOfSource(const ibQueryableSourceDescriptor* source)
+{
+	// THE NAME THE LANGUAGE KNOWS IT BY — `Catalog.Products`, the descriptor's own namespace and name,
+	// which is exactly what the lowering resolves a FROM against. Not the physical table: a query written
+	// against one is a query the configuration cannot be restructured under.
+	if (source == nullptr || source->GetName().IsEmpty())
+		return ibEmptyString;
+
+	ibQuerySelect select;
+	if (!source->GetNamespace().IsEmpty())
+		select.m_from.m_name.push_back(source->GetNamespace());
+	select.m_from.m_name.push_back(source->GetName());
+
+	// ⚠ NAMED, AND EVERY FIELD QUALIFIED BY THAT NAME — `Catalog.Products AS Products`, then
+	// `Products.Code`. Not decoration: a bare `Code` is unambiguous only until a SECOND table joins,
+	// and at that moment EVERY field written before it becomes ambiguous at once. The engine then
+	// refuses them, the refresh drops what no longer resolves, and the whole field list disappears in
+	// one gesture that had nothing to do with those fields. (Seen live: adding one field from the
+	// catalogue collapsed a seeded query to `SELECT *`.) The same rule the query constructor holds to
+	// when IT adds a table — a starting query that breaks on the first edit is worse than none.
+	select.m_from.m_alias = source->GetName();
+	const ibString prefix = select.m_from.m_alias + ibT(".");
+
+	for (const ibBackendQueryColumn* column : source->GetQueryColumns({})) {
+		if (column == nullptr || column->GetName().IsEmpty() || !column->IsAllowed())
+			continue;
+		ibQueryProjection projection;
+		projection.m_expr = ibQueryColumnFromPath(prefix + column->GetName());
+		select.m_projections.push_back(std::move(projection));
+	}
+	if (select.m_projections.empty())
+		select.m_selectAll = true;   // a source that vends no columns: read it whole rather than read nothing
+
+	return ibRenderQuery(select);
+}

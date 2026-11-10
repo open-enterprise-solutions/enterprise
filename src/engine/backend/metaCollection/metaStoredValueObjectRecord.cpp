@@ -15,19 +15,10 @@
 #include "backend/lock/lockManager.h"
 
 // --- vended queryable — the constant's single-row (sys_const) table navigation ---
-// The constant is the queryable's only column AND its one-row table; resolution by
-// name / id yields the constant itself (m_meta), the value comes via GetValueAttribute.
-// The constant HAS one column, and it answers to the name that column reports — `Value`. Asking the
-// column itself (rather than repeating the literal here) is what keeps the resolver and the catalogue
-// from ever disagreeing about what the field is called.
-const ibBackendQueryColumn* ibConstantQueryable::ResolveColumnByName(const ibString& name) const
-{
-	const ibValueMetaObjectStoredValue::ibValueMetaObjectConstantColumn* column = m_meta->GetValueColumn();
-	return column != nullptr && name.IsSameAs(column->GetName(), false) ? column->GetQueryColumn() : nullptr;
-}
-// …and LISTS it: a query reads a source's columns from here — `SELECT *`, the query constructor's tree — and no longer
-// from its explorer, which is the form's (a source's column and a query's are two worlds since #616). Unlisted, a
-// constant offered no field to select.
+// The constant HAS one column, and LISTS it under the name that column reports — `Value`: a query reads a
+// source's columns from here — `SELECT *`, the query constructor's tree, a name (ResolveColumnByName searches
+// this list) — and no longer from its explorer, which is the form's (a source's column and a query's are two
+// worlds since #616). Unlisted, a constant offered no field to select.
 std::vector<const ibBackendQueryColumn*> ibConstantQueryable::GetQueryColumns() const
 {
 	const ibValueMetaObjectStoredValue::ibValueMetaObjectConstantColumn* column = m_meta->GetValueColumn();

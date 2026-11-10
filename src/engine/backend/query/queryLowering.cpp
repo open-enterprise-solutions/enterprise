@@ -4888,13 +4888,6 @@ public:
 			out.push_back(c.get());
 		return out;
 	}
-	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override
-	{
-		for (const std::shared_ptr<ibTempColumn>& c : m_columns)
-			if (c->GetName().IsSameAs(name, false))
-				return c.get();
-		return nullptr;
-	}
 	bool ContainColumn(const ibBackendQueryColumn* col) const override
 	{
 		for (const std::shared_ptr<ibTempColumn>& c : m_columns)

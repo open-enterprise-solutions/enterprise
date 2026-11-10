@@ -1253,33 +1253,33 @@ ibString ibDataDBComposer::RenderTextFor(const std::vector<const Output*>& outpu
 
 		const Source& s0 = m_sources.front();
 
-		// A TRANSIENT (RAM / temp) source registered via FromSource(queryable) — reflect its
-		// columns straight off the live queryable (the factory carries no descriptor for it).
-		// Otherwise the factory resolves the metaobject source by name (READ-ONLY dictionary).
+		// THE FIELDS OF THE SOURCE, asked of the door its field list asks (RefreshSourceFields): a TRANSIENT
+		// (RAM / temp) source registered via FromSource(queryable) answers off the live queryable (the factory
+		// carries no descriptor for it); a metaobject source's DESCRIPTOR answers by name (READ-ONLY dictionary),
+		// with no arguments — the text below names the source with none.
 		// …and the source is only asked when the groupings above did not answer: a report that folds
 		// by something has already said what it reads.
-		const ibBackendQueryable* src = nullptr;
 		if (proj.IsEmpty()) {
 		const auto dit = m_directSources.find(s0.m_name);
-		if (dit != m_directSources.end())
-			src = dit->second;
-		else {
+		const ibBackendQueryable* const direct = dit != m_directSources.end() ? dit->second : nullptr;
+		const ibQueryableSourceDescriptor* descriptor = nullptr;
+		if (dit == m_directSources.end()) {
 			// Resolve through THIS query's OWN config factory (per-config sources); no config → the global base.
 			ibQueryableFactory* factory = m_metaData != nullptr ? m_metaData->GetSourceFactory() : nullptr;
 			if (factory == nullptr)
 				factory = ibApplicationInstance::GetQueryableFactory();
 			if (factory == nullptr)
 				ibBackendCoreException::Error(_("Composer: the query engine is not available (no application data)"));
-			src = factory->Resolve(s0.m_namespace, s0.m_name);
+			descriptor = factory->FindDescriptor(s0.m_namespace, s0.m_name);
 		}
-		if (src == nullptr)
+		if (direct == nullptr && descriptor == nullptr)
 			ibBackendCoreException::Error(_("Composer: unknown source '%s.%s'"), s0.m_namespace, s0.m_name);
 
 		// ⚠ A SWITCHED-OFF FIELD IS NOT READ. The source still vends it (the record's own load asks for it),
 		// but the find by name does not answer it — so spelling it here refused the whole read: a chart of
 		// accounts has no IsFolder, and its list would not open. The same gate the query seed and the field
 		// catalogue ask.
-		for (const ibBackendQueryColumn* col : src->GetQueryColumns()) {
+		for (const ibBackendQueryColumn* col : direct != nullptr ? direct->GetQueryColumns() : descriptor->GetQueryColumns({})) {
 			if (col == nullptr || col->GetName().IsEmpty() || !col->IsAllowed())
 				continue;
 			if (!proj.IsEmpty())

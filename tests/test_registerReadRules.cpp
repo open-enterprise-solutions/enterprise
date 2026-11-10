@@ -202,6 +202,20 @@ TEST(RegisterColumns, ADimensionIsThereOnEveryGranularity)
     }
 }
 
+// …AND ONE NAMED AFTER THE PERIOD IS STILL ONE. A projection is the period or the period rolled to a unit;
+// the prefix alone took `PeriodKind` for a projection and dropped it from every reading but Auto.
+TEST(RegisterColumns, ADimensionNamedAfterThePeriodIsStillADimension)
+{
+    for (const ibRegGranularity kind : { ibRegGranularity::Whole, ibRegGranularity::Auto,
+                                         ibRegGranularity::Period, ibRegGranularity::Calendar,
+                                         ibRegGranularity::Recorder, ibRegGranularity::Record })
+        EXPECT_TRUE(Fits(wxT("PeriodKind"), Fold(kind))) << static_cast<int>(kind);
+
+    // …while a unit's projection stays one: there on the undecided reading, not on the whole one.
+    EXPECT_TRUE (Fits(wxT("PeriodMonth"), Fold(ibRegGranularity::Auto)));
+    EXPECT_FALSE(Fits(wxT("PeriodMonth"), Fold(ibRegGranularity::Whole)));
+}
+
 // ⚠ A REGISTER WITH NO RECORDER AT ALL supplies no name for one, and the rule must not then match
 // the empty string against every column it is asked about.
 TEST(RegisterColumns, ARegisterWithoutARecorderIsAskedWithoutOne)
@@ -865,12 +879,6 @@ public:
 	explicit ConditionSurface(const ibString& name) : m_name(name) {}
 	void Add(const ibBackendQueryColumn* column) { m_columns.push_back(column); }
 	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override { return m_columns; }
-	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override {
-		for (const ibBackendQueryColumn* column : m_columns)
-			if (column->GetName().IsSameAs(name, false))
-				return column;
-		return nullptr;
-	}
 	bool ContainColumn(const ibBackendQueryColumn* column) const override {
 		return std::find(m_columns.begin(), m_columns.end(), column) != m_columns.end();
 	}

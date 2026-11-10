@@ -636,6 +636,11 @@ public:
 	virtual bool IsComputedInRam() const override { return !m_reg->HasMaterializedViews(); }
 	virtual ibQueryRelPtr GetSourceRelation(const ibString& alias) const override;
 
+	// A balance is one moment, read WHOLE — the list the descriptor gives the constructor, given here too
+	// (ibRegisterViewColumns). It listed the view unfiltered, and the two could part over a field named after
+	// the movement's identity.
+	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override;
+
 	// ⚠ NO KEY OF ITS OWN. A balance reads the SAME materialised table the totals surface keys —
 	// stored per period (the grain is a day), so a row there is period + dimensions and nothing
 	// else. The as-of date narrows which rows are read; it does not change what a row is.
@@ -680,23 +685,11 @@ public:
 	// result. A query that names a field and gets neither the field nor a complaint is the worst of
 	// the three possible answers.
 	//
-	// Refusing here makes the resolver raise "unknown attribute" NAMING the field — which is what an
-	// author who changed the periodicity and left the old fields behind needs to be told.
-	virtual const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override
-	{
-		return ibRegisterFoldOffersColumn(m_reg, name, m_fold)
-			? ibAccumulationTotalsQueryable::ResolveColumnByName(name) : nullptr;
-	}
-
-	// SELECT * asks the same question of every column, so it is answered the same way.
-	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override
-	{
-		std::vector<const ibBackendQueryColumn*> out;
-		for (const ibBackendQueryColumn* col : ibAccumulationTotalsQueryable::GetQueryColumns())
-			if (col != nullptr && ibRegisterFoldOffersColumn(m_reg, col->GetName(), m_fold))
-				out.push_back(col);
-		return out;
-	}
+	// Not listing it is what makes the resolver raise "unknown attribute" NAMING the field — which is what
+	// an author who changed the periodicity and left the old fields behind needs to be told. SELECT * asks
+	// the same list. (ibRegisterViewColumns — the descriptor's answer too, so the constructor and the run
+	// cannot list two shapes.)
+	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override;
 
 	// …AND THE KEY FOLLOWS THE SAME FOLD. Read whole, this reports one row per key with no date on
 	// it, so a period in the key would order the answer by a column it does not project; folded by
@@ -743,27 +736,14 @@ public:
 	virtual bool IsComputedInRam() const override;
 	virtual ibQueryRelPtr GetSourceRelation(const ibString& alias) const override;
 
-	// Same rule as the turnover reading — see ibTurnoverQueryable::ResolveColumnByName.
-	virtual const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override
-	{
-		return ibRegisterFoldOffersColumn(m_reg, name, m_fold)
-			? ibAccumulationTotalsQueryable::ResolveColumnByName(name) : nullptr;
-	}
+	// Same rule as the turnover reading — see ibTurnoverQueryable::GetQueryColumns.
+	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override;
 
 	// …and its key, for the same reason: the fold decides whether a row of this answer is per period,
 	// per movement, or one per key over the whole interval.
 	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override
 	{
 		return KeyColumns(m_fold);
-	}
-
-	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override
-	{
-		std::vector<const ibBackendQueryColumn*> out;
-		for (const ibBackendQueryColumn* col : ibAccumulationTotalsQueryable::GetQueryColumns())
-			if (col != nullptr && ibRegisterFoldOffersColumn(m_reg, col->GetName(), m_fold))
-				out.push_back(col);
-		return out;
 	}
 
 	virtual ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override;
@@ -780,13 +760,13 @@ private:
 //  produces is the same sentence for every register that folds an interval -- day, second,
 //  recorder, line -- and two copies of it are two answers to "does this reading have a Period".)
 
+// ⭐⭐ THE COLUMNS OF ONE READING OF A VIEW — the one loop around the rule, asked by the descriptor (by the view's
+// name, below), by the reading's own list (its NavigationSource) and by the RAM table a live reading seeds
+// (SeedRamTableFromView). Three copies of it were three answers to "which columns has this table".
 inline std::vector<const ibBackendQueryColumn*> ibRegisterViewColumns(const ibValueMetaObjectAccumulationRegister* reg,
-	const ibString& viewName, ibValueMetaObjectAccumulationRegister::ibViewShape shape, const ibRegFold& fold = ibRegFold())
+	const ibBackendQueryable* view, const ibRegFold& fold = ibRegFold())
 {
 	std::vector<const ibBackendQueryColumn*> out;
-	if (reg == nullptr)
-		return out;
-	const ibBackendQueryable* view = reg->GetViewQueryable(viewName, shape);
 	if (view == nullptr)
 		return out;
 
@@ -802,19 +782,17 @@ inline std::vector<const ibBackendQueryColumn*> ibRegisterViewColumns(const ibVa
 	// offered a recorder that was no period and a dimension that was no key (Max, 2026-09-29: "you do not work
 	// with the attribute, you get a set of virtual tables"). The id still matches the attribute's, so a read
 	// reaches the column exactly as on the movements table.
-	const ibString periodName = reg->GetRegisterPeriod() != nullptr
-		? reg->GetRegisterPeriod()->GetName() : ibString();
-
-	for (const ibBackendQueryColumn* col : view->GetQueryColumns()) {
-		if (col == nullptr)
-			continue;
-		if (!periodName.IsEmpty() && !ibRegisterViewColumnFits(col->GetName(), periodName, fold,
-				reg->HasRecorder() && reg->GetRegisterRecorder()   != nullptr ? reg->GetRegisterRecorder()->GetName()   : ibString(),
-				reg->HasRecorder() && reg->GetRegisterLineNumber() != nullptr ? reg->GetRegisterLineNumber()->GetName() : ibString()))
-			continue;
-		out.push_back(col);
-	}
+	for (const ibBackendQueryColumn* col : view->GetQueryColumns())
+		if (col != nullptr && ibRegisterFoldOffersColumn(reg, col->GetName(), fold))
+			out.push_back(col);
 	return out;
+}
+
+inline std::vector<const ibBackendQueryColumn*> ibRegisterViewColumns(const ibValueMetaObjectAccumulationRegister* reg,
+	const ibString& viewName, ibValueMetaObjectAccumulationRegister::ibViewShape shape, const ibRegFold& fold = ibRegFold())
+{
+	return reg != nullptr ? ibRegisterViewColumns(reg, reg->GetViewQueryable(viewName, shape), fold)
+	                      : std::vector<const ibBackendQueryColumn*>();
 }
 
 // A FOLDED TABLE IS FILTERED BY ITS DIMENSIONS, never by a resource — the rule of all three tables below:

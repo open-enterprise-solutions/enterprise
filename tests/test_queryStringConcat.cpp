@@ -51,10 +51,6 @@ public:
 	bool     IsComputedInRam()   const override { return false; }
 	const ibMetaData* GetMetaData() const override { return nullptr; }
 	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override { return m_cols; }
-	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override {
-		for (const ibBackendQueryColumn* c : m_cols) if (c->GetName() == name) return c;
-		return nullptr;
-	}
 	bool ContainColumn(const ibBackendQueryColumn* col) const override {
 		for (const ibBackendQueryColumn* c : m_cols) if (c == col) return true;
 		return false;

@@ -39,30 +39,14 @@
 // second spelling survive only while nobody crosses between the roads; the day a query reaches this
 // one, a table that plainly reports `Resource1Turnover` answers that it has no such column.
 //
-// `unitWord` empty = the interval is read WHOLE and the rows carry no date, so no period column at
-// all; a unit = `Period`, rolled to it. That is `ibRegisterViewColumnFits` — the same rule the source
-// explorer answers with, so what the catalogue offers and what the read returns cannot drift.
+// Folded WHOLE the rows carry no date, so no period column at all; by a unit, `Period`, rolled to it; the
+// movement's own identity only where a row is a movement. That is ibRegisterViewColumns — the very list the
+// descriptor and the reading give, so what the catalogue offers and what the read returns cannot drift.
 static void SeedRamTableFromView(ibQueryRamTable& table, const ibBackendQueryable* view,
                                  const ibValueMetaObjectAccumulationRegister* reg, const ibRegFold& fold)
 {
-	if (view == nullptr)
-		return;
-
-	const ibValueMetaObjectAttributeBase* period = reg != nullptr ? reg->GetRegisterPeriod() : nullptr;
-	const ibString periodName = period != nullptr ? period->GetName() : ibString();
-
-	// The movement's own identity travels with the same rule the field tree uses — a row that covers
-	// a whole interval was written by no one document, so it carries neither.
-	const bool subordinate = reg != nullptr && reg->HasRecorder();
-	const ibString recorderName = subordinate && reg->GetRegisterRecorder()   != nullptr ? reg->GetRegisterRecorder()->GetName()   : ibString();
-	const ibString lineName     = subordinate && reg->GetRegisterLineNumber() != nullptr ? reg->GetRegisterLineNumber()->GetName() : ibString();
-	for (const ibBackendQueryColumn* col : view->GetQueryColumns()) {
-		if (col == nullptr)
-			continue;
-		if (!periodName.IsEmpty() && !ibRegisterViewColumnFits(col->GetName(), periodName, fold, recorderName, lineName))
-			continue;
+	for (const ibBackendQueryColumn* col : ibRegisterViewColumns(reg, view, fold))
 		table.AddColumn(col->GetColumnId(), col->GetName(), col->GetTypeDesc());
-	}
 }
 
 // ⭐⭐ THE VIEW HAS TWO ARMS, SO EVERY READER MUST SAY WHICH ONE IT WANTS.
@@ -941,6 +925,23 @@ const ibBackendQueryable* ibAccumulationTotalsQueryable::NavigationSource() cons
 	default:
 		return m_reg->GetViewQueryable(m_reg->GetBalanceViewName(), ibViewShape::Balance);
 	}
+}
+
+// What each reading LISTS — its shape, folded the way the reading folds (a balance: whole). The same list the
+// descriptor answers with (ibRegisterViewColumns), and through it what a name resolves to.
+std::vector<const ibBackendQueryColumn*> ibBalanceQueryable::GetQueryColumns() const
+{
+	return ibRegisterViewColumns(m_reg, NavigationSource(), ibRegFold());
+}
+
+std::vector<const ibBackendQueryColumn*> ibTurnoverQueryable::GetQueryColumns() const
+{
+	return ibRegisterViewColumns(m_reg, NavigationSource(), m_fold);
+}
+
+std::vector<const ibBackendQueryColumn*> ibBalanceAndTurnoverQueryable::GetQueryColumns() const
+{
+	return ibRegisterViewColumns(m_reg, NavigationSource(), m_fold);
 }
 
 

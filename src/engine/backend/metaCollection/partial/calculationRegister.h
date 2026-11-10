@@ -134,7 +134,6 @@ class BACKEND_API ibRecalculationQueryable : public ibBackendQueryable {
 public:
 	explicit ibRecalculationQueryable(const ibValueMetaObjectCalculationRegister* reg) : m_reg(reg) {}
 
-	virtual const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override;
 	virtual std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override;
 	virtual ibString GetQueryTableName() const override;
 	virtual const ibUniqueKey& GetQueryTableGuid() const override;

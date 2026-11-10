@@ -287,6 +287,17 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   (a field not grouped, a string of no limit compared bare) is reported as the refusal it is.
 - **A constant can be picked in the query constructor again.** It offers its `Value` field, `SELECT *` reads it, and
   `SELECT Value FROM Constant.Rate` parses - a bare `Value` was taken for `VALUE(...)`.
+- **A query finds by name what the source lists, and nothing else.** One list answers `SELECT *`, the query
+  constructor and a field named in the text, for every source: a table, a reading of a register, a tabular section,
+  a temporary table, a nested query. What follows from it:
+  - a document's `PointInTime` reads under an alias — selected beside a joined table or out of a nested query it came
+    back empty;
+  - a register's `Balance` and `BalanceAndTurnovers` give in `SELECT *` the fields the constructor offers;
+  - a register dimension whose name starts with `Period` (`PeriodKind`) stays in every reading; it was taken for the
+    period at a granularity and left out of the ones that fold it;
+  - a field of an accounting register kept per side is named by its sides, `QuantityDr` and `QuantityCr`, as the
+    list shows it; the bare `Quantity` is refused;
+  - a field of a temporary table or a nested query is found whatever the case of its name, as a table's is.
 - **A string's allowed length and a number's sign are set beside the length.** *Allowed length* (Variable or Fixed —
   a fixed string is padded with spaces) and *Non-negative* in the properties and the type dialog. A non-negative number
   takes no value below zero: one written is 0, and the apply makes the stored ones 0 and says how many. A number is kept

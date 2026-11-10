@@ -89,8 +89,6 @@ public:
 		return false;
 	}
 
-	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override { return Column(name); }
-
 	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override
 	{
 		std::vector<const ibBackendQueryColumn*> out;

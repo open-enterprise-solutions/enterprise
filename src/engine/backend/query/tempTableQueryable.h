@@ -9,7 +9,7 @@
 // computed provider (its rows are a RAM table it already holds); the composer joins /
 // unions it with native sources (catalog / register) like any other leaf. (docs §22.1)
 
-#include "queryProvider.h"                              // ibComputedProvider (vended) + dataQueryBuilder.h / queryable.h
+#include "queryProvider.h"                              // dataQueryBuilder.h / queryable.h (ibComputedProviderInstance, vended)
 #include "backend/system/value/valueTable.h"           // ibValueModelTable — iterate the pre-filled table's columns
 
 #include <memory>
@@ -137,10 +137,8 @@ public:
 		return false;
 	}
 
-	// Temp columns aren't attributes — resolve a UNION branch's column by name here.
-	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override { return Column(name); }
-
-	// All exposed columns — for SELECT * over this temp source (nested subquery).
+	// All exposed columns — for SELECT * over this temp source (nested subquery), and a UNION branch's
+	// column by name (ResolveColumnByName searches this list).
 	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override
 	{
 		std::vector<const ibBackendQueryColumn*> out;
@@ -156,11 +154,7 @@ public:
 	bool IsComputedInRam() const override { return true; }
 
 	// --- the temp table VENDS the computed (RAM) provider; rows = the held table ----
-	ibBackendQueryProvider& GetProvider() const override
-	{
-		static ibComputedProvider s_computedProvider;   // stateless — reads the table from ComputeRows
-		return s_computedProvider;
-	}
+	ibBackendQueryProvider& GetProvider() const override { return ibComputedProviderInstance(); }   // reads the table from ComputeRows
 	// Convert the held runtime table into L3's own ibQueryRamTable at this ingest seam
 	// (this bridge is the one place a runtime table enters L3). Keyed by each column's
 	// source-id (GetColumnId) — the RAM source then reads every column by id.
@@ -227,12 +221,6 @@ public:
 	ibMetaID          GetQueryTableId()    const override { return 0; }                 // not a metaobject
 	const ibMetaData* GetMetaData()       const override { return m_metaData; }        // reference / enum reconstruction context
 
-	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override
-	{
-		for (const ibTempColumn& c : m_columns)
-			if (c.GetName() == name) return &c;
-		return nullptr;
-	}
 	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override
 	{
 		std::vector<const ibBackendQueryColumn*> out;
@@ -300,12 +288,6 @@ public:
 	// No row key and no keyset: a derived table is addressed by its declared key columns, never
 	// scrolled. An identity sort would invent an ordering nothing stores.
 
-	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override
-	{
-		for (const ibBackendQueryColumn* c : m_columns)
-			if (c->GetName() == name) return c;
-		return nullptr;
-	}
 	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override { return m_columns; }
 	bool ContainColumn(const ibBackendQueryColumn* col) const override
 	{
@@ -454,12 +436,6 @@ public:
 	// new column identities, so the answer has to be in the identities the outer query will see.
 	std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override { return m_keys; }
 
-	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override
-	{
-		for (const ibBackendQueryColumn* c : m_columns)
-			if (c != nullptr && c->GetName() == name) return c;
-		return nullptr;
-	}
 	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override { return m_columns; }
 	bool ContainColumn(const ibBackendQueryColumn* col) const override
 	{

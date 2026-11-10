@@ -34,14 +34,6 @@ std::vector<const ibBackendQueryColumn*> ibRecalculationQueryable::GetQueryColum
 	return columns;
 }
 
-const ibBackendQueryColumn* ibRecalculationQueryable::ResolveColumnByName(const ibString& name) const
-{
-	for (const ibBackendQueryColumn* column : GetQueryColumns())
-		if (column->GetName().IsSameAs(name, false))
-			return column;
-	return nullptr;
-}
-
 ibString ibRecalculationQueryable::GetQueryTableName() const { return m_reg->GetRecalculationTableName(); }
 const ibUniqueKey& ibRecalculationQueryable::GetQueryTableGuid() const { return m_reg->GetRecalculationObject()->GetGuid(); }
 ibString ibRecalculationQueryable::GetQueryName() const { return m_reg->GetRecalculationObject()->GetName(); }

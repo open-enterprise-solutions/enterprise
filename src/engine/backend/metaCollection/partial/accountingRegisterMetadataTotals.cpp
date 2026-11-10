@@ -5666,10 +5666,6 @@ public:
 		return m_reg->GetShapeQueryable(m_shape, {}, {}, fold);
 	}
 
-	const ibBackendQueryColumn* ResolveColumnByName(const ibString& name) const override {
-		const ibBackendQueryable* shape = Shape();
-		return shape != nullptr ? shape->ResolveColumnByName(name) : nullptr;
-	}
 	std::vector<const ibBackendQueryColumn*> GetQueryColumns() const override {
 		const ibBackendQueryable* shape = Shape();
 		return shape != nullptr ? shape->GetQueryColumns() : std::vector<const ibBackendQueryColumn*>();

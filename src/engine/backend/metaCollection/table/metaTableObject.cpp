@@ -51,9 +51,13 @@ std::vector<const ibBackendQueryColumn*> ibTabularSourceDescriptor::GetQueryColu
 
 void ibTabularSourceDescriptor::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
 {
-	if (m_meta == nullptr)
-		return;
-	for (const ibValueMetaObjectAttributeBase* attribute : m_meta->GetGenericAttributeArrayObject())
+	if (m_meta != nullptr)
+		m_meta->FillSourceExplorer(explorer);
+}
+
+void ibValueMetaObjectTableData::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+{
+	for (const ibValueMetaObjectAttributeBase* attribute : GetGenericAttributeArrayObject())
 		if (attribute != nullptr)
 			explorer.AppendColumn(attribute, attribute->GetColumnId());
 }

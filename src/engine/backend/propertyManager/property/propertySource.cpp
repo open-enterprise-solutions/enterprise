@@ -405,9 +405,8 @@ bool ibPropertySource::GetProtocolValue(ibDataNode& row, ibReader reader)
 		if (parentPath.size() >= 2) {
 			ibBackendFormAttributeValue* const headHolder = factory->FindSourceHolder(boundHead);
 			ibSourceDataObject* const headSrc = headHolder != nullptr ? headHolder->GetSourceValue() : nullptr;
-			const ibSourceExplorer* boundNode = headSrc != nullptr ? headSrc->GetSourceExplorer() : nullptr;
-			for (size_t i = 1; i < parentPath.size() && boundNode != nullptr; ++i)
-				boundNode = boundNode->FindById(parentPath[i].m_id);
+			std::vector<ibValue> held;   // what the walk stepped through, alive while its level is read
+			const ibSourceExplorer* boundNode = headSrc != nullptr ? headSrc->WalkColumns(parentPath, 1, held) : nullptr;
 			if (boundNode != nullptr)
 				AppendExplorerColumns(AppendSource(sources, boundNode->GetSourceName(), {}, {}, true), *boundNode, parentPath, metaData);
 		}

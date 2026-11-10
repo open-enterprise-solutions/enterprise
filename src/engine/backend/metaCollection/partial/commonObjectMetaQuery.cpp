@@ -211,31 +211,16 @@ std::vector<const ibBackendQueryColumn*> ibEnumQueryable::GetSortParts() const
 	return { m_meta->GetDataOrder()->GetQueryColumn(), m_meta->GetDataReference()->GetQueryColumn() };
 }
 
-// ⭐⭐ THE MOMENT READS ITSELF — the one column here that does.
-//
-// It has no field, so there is no `_TYPE` tag to dispatch on and the default read cannot describe it.
-// What it does have is the two columns it stands for: the DATE it happened at and the RECORD standing
-// there. Each is read exactly as it is read anywhere else — through its own column, by its own rules —
-// and the pair is handed to the value type, which is what knows how to be a moment.
-//
-// Nothing about moments is written in the codec, and nothing about columns is written in the value:
-// the column asks for two values, the type makes one out of them.
+// ⭐⭐ THE DOCUMENT'S READING CARRIES ITS MOMENT — its PointInTime, lying in its date and then in its reference.
 ibRecorderQueryable::ibRecorderQueryable(const ibValueMetaObjectRecordDataRecorderRef* meta)
-	: ibRecordQueryable<ibValueMetaObjectRecordDataRecorderRef>(meta), m_momentColumn(meta) {}
+	: ibRecordQueryable<ibValueMetaObjectRecordDataRecorderRef>(meta),
+	  m_momentColumn(meta->GetPointInTime(), meta->GetDocumentDate(), meta->GetDataReference()) {}
 
-// The MOMENT answers first, then the attributes: a query naming it resolves to the column that knows
-// how to build it. Without this the field tree offered a name the query could not resolve — a field
-// that exists only on screen. (The tabular section answers `Ref` the same way.)
-const ibBackendQueryColumn* ibRecorderQueryable::ResolveColumnByName(const ibString& name) const
-{
-	if (name.IsSameAs(m_momentColumn.GetName(), false))
-		return &m_momentColumn;
-	return ibRecordQueryable<ibValueMetaObjectRecordDataRecorderRef>::ResolveColumnByName(name);
-}
-
-// …and it is a field of this source like any other, so `SELECT *` carries it. Nothing stores it, so
-// the projection writes no field for it; the READ constructs it out of the date and the reference,
-// which the same select carries anyway.
+// …and it is a field of this source like any other, so `SELECT *` carries it and a query naming it resolves to
+// the column that knows how to build it — without it the field tree offered a name the query could not resolve,
+// a field that exists only on screen (the tabular section lists `Ref` the same way). Nothing stores it, so the
+// projection writes no field for it; the READ constructs it out of the date and the reference, which the same
+// select carries anyway.
 std::vector<const ibBackendQueryColumn*> ibRecorderQueryable::GetQueryColumns() const
 {
 	std::vector<const ibBackendQueryColumn*> cols =
@@ -250,6 +235,25 @@ std::vector<const ibBackendQueryColumn*> ibRecorderQueryable::GetSortParts() con
 	return { m_meta->GetDocumentDate()->GetQueryColumn(), m_meta->GetDataReference()->GetQueryColumn() };
 }
 
+// ==========================================================================
+// ibRecorderQueryable::ibBackendColumnPointInTime — THE MOMENT READS ITSELF (commonObject.h).
+//
+// It has no field, so there is no `_TYPE` tag to dispatch on and the default read cannot describe it.
+// What it does have is the two columns it stands for: the DATE it happened at and the RECORD standing
+// there. Each is read exactly as it is read anywhere else — through its own column, by its own rules —
+// and the pair is handed to the value type, which is what knows how to be a moment.
+//
+// Nothing about moments is written in the codec, and nothing about columns is written in the value:
+// the column asks for two values, the type makes one out of them.
+// ==========================================================================
+
+ibString ibRecorderQueryable::ibBackendColumnPointInTime::GetName()         const { return m_moment->GetName(); }
+ibString ibRecorderQueryable::ibBackendColumnPointInTime::GetSynonym()      const { return m_moment->GetSynonym(); }
+ibString ibRecorderQueryable::ibBackendColumnPointInTime::GetPhysicalName() const { return m_moment->GetPhysicalName(); }
+ibMetaID ibRecorderQueryable::ibBackendColumnPointInTime::GetColumnId()     const { return m_moment->GetColumnId(); }
+ibTypeDescription& ibRecorderQueryable::ibBackendColumnPointInTime::GetTypeDesc() const { return m_moment->GetTypeDesc(); }
+bool     ibRecorderQueryable::ibBackendColumnPointInTime::IsAvailable()     const { return m_moment->IsAvailable(); }
+
 // THE MOMENT LIES IN TWO OTHER COLUMNS — the date first, then the reference. Each of them already
 // describes itself (tag + value for the date; tag, metatype and identifier for the reference), so
 // this is their layouts one after the other and nothing else. Sorting by the moment then IS sorting
@@ -258,7 +262,7 @@ std::vector<const ibBackendQueryColumn*> ibRecorderQueryable::GetSortParts() con
 std::vector<ibColumnSlot> ibRecorderQueryable::ibBackendColumnPointInTime::DescribeLayout() const
 {
 	std::vector<ibColumnSlot> slots;
-	for (const ibBackendQueryColumn* part : { m_owner->GetDocumentDate()->GetQueryColumn(), m_owner->GetDataReference()->GetQueryColumn() }) {
+	for (const ibBackendQueryColumn* part : { m_date->GetQueryColumn(), m_reference->GetQueryColumn() }) {
 		if (part == nullptr) continue;
 		for (const ibColumnSlot& slot : DescribeColumnLayout(part)) {
 			// ⚠ WITHOUT THE PARTS' TYPE TAGS. A `_TYPE` field says WHICH of a column's admissible types
@@ -274,35 +278,40 @@ std::vector<ibColumnSlot> ibRecorderQueryable::ibBackendColumnPointInTime::Descr
 	return slots;
 }
 
-ibString ibRecorderQueryable::ibBackendColumnPointInTime::GetName() const { return m_owner->GetPointInTime()->GetName(); }
-ibString ibRecorderQueryable::ibBackendColumnPointInTime::GetSynonym() const { return m_owner->GetPointInTime()->GetSynonym(); }
-ibString ibRecorderQueryable::ibBackendColumnPointInTime::GetPhysicalName() const { return m_owner->GetPointInTime()->GetPhysicalName(); }
-ibMetaID ibRecorderQueryable::ibBackendColumnPointInTime::GetColumnId() const { return m_owner->GetPointInTime()->GetColumnId(); }
-ibTypeDescription& ibRecorderQueryable::ibBackendColumnPointInTime::GetTypeDesc() const { return m_owner->GetPointInTime()->GetTypeDesc(); }
-bool ibRecorderQueryable::ibBackendColumnPointInTime::IsAvailable() const { return m_owner->GetPointInTime()->IsAvailable(); }
-
 bool ibRecorderQueryable::ibBackendColumnPointInTime::ReadValue(const ibString& fieldName,
 	const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData) const
 {
-	const ibBackendQueryColumn* date = m_owner->GetDocumentDate()->GetQueryColumn();
-	const ibBackendQueryColumn* ref = m_owner->GetDataReference()->GetQueryColumn();
+	const ibBackendQueryColumn* date = m_date->GetQueryColumn();
+	const ibBackendQueryColumn* ref = m_reference->GetQueryColumn();
 	if (date == nullptr || ref == nullptr)
 		return false;
 
-	// ⚠ READ BY THE PARTS' OWN FIELD NAMES — `fld<date>_D`, `fld<ref>_RRRef` — because those are the
-	// only fields that exist. The moment has none of its own: nothing projects it (its layout names
-	// fields that belong to the date and the reference), and a declared query publishes those two
-	// columns physically, under exactly the same names they carry in the table. So one spelling works
-	// on both roads, and reading under this column's own name found nothing anywhere
-	// (`Field 'fld1672_D' not found in the resultset`, 2026-08-23).
+	// ⚠ READ BY THE PARTS' OWN FIELD NAMES — `fld<date>_D`, `fld<ref>_RRRef` — because on a plain read those
+	// are the only fields that exist. The moment has none of its own: nothing projects it (its layout names
+	// fields that belong to the date and the reference), and a declared query publishes those two columns
+	// physically, under exactly the same names they carry in the table. Reading under this column's own name
+	// found nothing anywhere (`Field 'fld1672_D' not found in the resultset`, 2026-08-23).
+	//
+	// 🛑⭐ …UNLESS THE READER WAS GIVEN A NAME, and then that name is the base. A JOIN projects every output
+	// under its ALIAS (`out_Border_D`, `out_Border_RRRef`) precisely because two sources may carry the same
+	// physical field — so a moment read by its parts' names found nothing there: `Field 'fld1563_D' not found
+	// in the resultset`, on any joined query selecting a sequence's moment (2026-09-18). The document's moment
+	// was read without this until the two became one column (2026-11-11).
+	// ⚠ …AND ITS OWN NAME IS NOT A PREFIX. A reader that holds this column asks it by the name the column
+	// answers to (`fld1566`), and NOTHING is stored under that name. Taking it for a prefix sent the list
+	// looking for `fld1566_D` (Max, 2026-09-18). A prefix is a name that is NOT ours.
 	//
 	// The two reads are the ordinary leaves: a DATE field, and a REFERENCE taking its own pair off its
 	// base name. No tag is consulted — the moment has none and needs none: what its halves are was
 	// decided when the pair was named.
+	const bool aliased = !fieldName.IsEmpty() && !fieldName.IsSameAs(GetPhysicalName(), false);
+	const ibString dateBase = aliased ? fieldName : date->GetPhysicalName();
+	const ibString refBase  = aliased ? fieldName : ref->GetPhysicalName();
+
 	ibValue vDate, vReference;
-	ibColumnCodec::ReadField(date->GetPhysicalName() + ibFieldSuffix(ibColumnRole::Date), ibFieldTypes_Date,
+	ibColumnCodec::ReadField(dateBase + ibFieldSuffix(ibColumnRole::Date), ibFieldTypes_Date,
 	                         date, metaData, vDate, result, createData);
-	ibColumnCodec::ReadField(ref->GetPhysicalName(), ibFieldTypes_Reference,
+	ibColumnCodec::ReadField(refBase, ibFieldTypes_Reference,
 	                         ref, metaData, vReference, result, createData);
 
 	retValue = new ibValuePointInTime(vDate.GetDate(), vReference);
@@ -404,10 +413,6 @@ const ibBackendQueryColumn* ibValueMetaObjectRecordDataHierarchyMutableRef::GetH
 // carried as real attributes; the consumer assembles the row identity. No reference.
 // ⭐ Answered with the attribute's QUERY FACE throughout this file: an attribute is not a query
 // column, it holds one (docs/private/ownership-authority.md). The signatures are untouched.
-const ibBackendQueryColumn* ibRegisterDataQueryable::ResolveColumnByName(const ibString& name) const {
-	const ibValueMetaObjectAttributeBase* attribute = m_meta->FindAnyAttributeObjectByFilter(name);
-	return attribute != nullptr ? attribute->GetQueryColumn() : nullptr;
-}
 std::vector<const ibBackendQueryColumn*> ibRegisterDataQueryable::GetQueryColumns() const {
 	// All generic attributes — the register's generic array ALREADY spans the
 	// predefineds (recorder / line / period), the dimensions, the resources and

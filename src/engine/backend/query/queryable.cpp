@@ -33,12 +33,16 @@ ibBackendQueryProvider& ibBackendQueryable::GetProvider() const
 	return s_dbProvider;
 }
 
-// Default: the base has no metadata to resolve a name against, so it owns no columns.
-// Every concrete source (record / register / constant / tabular = attribute-by-name;
-// temp / subquery = own column lookup) OVERRIDES this; the base is a null fallback.
-const ibBackendQueryColumn* ibBackendQueryable::ResolveColumnByName(const ibString& /*name*/) const
+// A column the source LISTS, by name — then its sort order. Listing and resolving were two answers to one
+// question, and a source that gave one without the other was half a source — the constant resolved `Value`
+// and listed nothing.
+const ibBackendQueryColumn* ibBackendQueryable::ResolveColumnByName(const ibString& name) const
 {
-	return nullptr;
+	for (const ibBackendQueryColumn* column : GetQueryColumns())
+		if (column != nullptr && column->GetName().IsSameAs(name, false))
+			return column;
+	const ibBackendQueryColumn* const sort = GetSortColumn();
+	return sort != nullptr && sort->GetName().IsSameAs(name, false) ? sort : nullptr;
 }
 
 // ⭐⭐ THE METAOBJECT IS ASKED ONCE, AND ITS GUID AND ID ARE READ OFF IT.
@@ -90,24 +94,9 @@ ibAliasQueryable::ibAliasQueryable(const ibBackendQueryable* origin, const ibStr
 			continue;
 		m_published.push_back(m_owned.emplace_back(std::make_shared<ibAliasColumn>(c)).get());
 	}
-}
-
-// Twinned on demand — see the header for why the published face is not enough. Matched by the ORIGIN
-// object rather than by the name a second time: two names could reach one column (a synonym, a
-// case difference), and minting a second twin for it would put the same field in the result twice
-// under two identities.
-const ibBackendQueryColumn* ibAliasQueryable::ResolveColumnByName(const ibString& name) const
-{
-	for (const std::shared_ptr<ibAliasColumn>& c : m_owned)
-		if (c->GetName().IsSameAs(name, false)) return c.get();
-
-	const ibBackendQueryColumn* const origin = m_origin->ResolveColumnByName(name);
-	if (origin == nullptr)
-		return nullptr;
-	for (const std::shared_ptr<ibAliasColumn>& c : m_owned)
-		if (c->Origin() == origin) return c.get();
-
-	return m_owned.emplace_back(std::make_shared<ibAliasColumn>(origin)).get();
+	// …and the sort order, which the origin answers to without listing it (see the header).
+	if (const ibBackendQueryColumn* const sort = origin->GetSortColumn())
+		m_sort = m_owned.emplace_back(std::make_shared<ibAliasColumn>(sort)).get();
 }
 
 // The key / hierarchy columns are the ORIGIN's answers, translated to OUR twins: they are read

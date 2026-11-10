@@ -70,13 +70,8 @@ const ibSourceExplorer* ibValueRecordDataObjectDocument::GetSourceExplorer() con
 		m_sourceExplorer.AppendColumn(object, object->GetColumnId());
 	}
 
-	for (const auto object : m_metaObject->GetTableArrayObject()) {
-		if (object != nullptr && !object->IsDeleted()) {
-			ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
-			for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) 
-				tblNode.AppendColumn(tblCol, tblCol->GetColumnId());
-		}
-	}
+	for (const auto object : m_metaObject->GetTableArrayObject())
+		object->FillSourceExplorer(m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc()));
 
 	return &m_sourceExplorer;
 }
