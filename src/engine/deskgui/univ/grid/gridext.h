@@ -23,6 +23,7 @@
 #include <iterator>
 #endif
 
+#include "core/variant.h"   // ibVariant — a cell's value (GetValueAsVariant)
 #include "deskgui/deskgui.h"
 #include "deskgui/univ/window.h"
 #include "deskgui/univ/dialog.h"
@@ -101,6 +102,7 @@ enum ibGridRenderStyle
 class DESKGUI_API ibGrid;
 class DESKGUI_API ibGridCellAttr;
 class ibGridCellAttrProviderData;
+class ibGridColAreaWindow;
 class ibGridColLabelWindow;
 class ibGridCornerLabelWindow;
 class DESKGUI_API ibGridEvent;
@@ -108,13 +110,12 @@ class ibGridRowAreaWindow;
 class ibGridRowLabelWindow;
 class ibGridRowOutlineWindow;
 class ibGridColOutlineWindow;
-class ibGridOutlineCornerWindow;
+class ibGridCornerPaneWindow;
 class ibGridWindow;
 class ibGridSubwindow;
 class ibGridTypeRegistry;
 class DESKGUI_API ibGridSelection;
 
-class WXDLLIMPEXP_FWD_CORE wxHeaderCtrl;
 class WXDLLIMPEXP_FWD_CORE wxCheckBox;
 class WXDLLIMPEXP_FWD_CORE wxComboBox;
 class WXDLLIMPEXP_FWD_CORE wxTextCtrl;
@@ -122,7 +123,7 @@ class WXDLLIMPEXP_FWD_CORE wxTextCtrl;
 class WXDLLIMPEXP_FWD_CORE wxSpinCtrl;
 #endif
 #if wxUSE_DATEPICKCTRL
-class WXDLLIMPEXP_FWD_CORE wxDatePickerCtrl;
+class ibDatePickerCtrl;
 #endif
 
 class ibGridFixedIndicesSet;
@@ -1443,12 +1444,12 @@ public:
 	virtual long GetValueAsLong(int row, int col);
 	virtual double GetValueAsDouble(int row, int col);
 	virtual bool GetValueAsBool(int row, int col);
-	virtual wxVariant GetValueAsVariant(int row, int col);
+	virtual ibVariant GetValueAsVariant(int row, int col);
 
 	virtual void SetValueAsLong(int row, int col, long value);
 	virtual void SetValueAsDouble(int row, int col, double value);
 	virtual void SetValueAsBool(int row, int col, bool value);
-	virtual void SetValueAsVariant(int row, int col, wxVariant value);
+	virtual void SetValueAsVariant(int row, int col, const ibVariant& value);
 
 	// For user defined types
 	virtual void* GetValueAsCustom(int row, int col, const wxString& typeName);
@@ -1880,7 +1881,7 @@ public:
 	void DrawCell(wxDC& dc, const ibGridCellCoords& coords) {
 		ibGridCellCache param; DrawCell(dc, coords, param);
 	}
-	void DrawBorder(wxDC& dc, const ibGridCellCacheArray& storage);
+	void DrawBorders(wxDC& dc, const ibGridCellCacheArray& storage);
 	void DrawHighlight(wxDC& dc, const ibGridCellCoordsArray& cells);
 	void DrawFrozenBorder(wxDC& dc, ibGridWindow* gridWindow);
 	void DrawLabelFrozenBorder(wxDC& dc, wxWindow* window, bool isRow);
@@ -2152,13 +2153,6 @@ public:
 
 	float	 GetGridZoom() const { return m_zoomScale; }
 
-	// this one will use wxHeaderCtrl for the column labels
-	bool UseNativeColHeader(bool native = true);
-
-	// this one will still draw them manually but using the native renderer
-	// instead of using the same appearance as for the row labels
-	void SetUseNativeColLabels(bool native = true);
-
 	void     SetRowLabelSize(int width);
 	void     SetColLabelSize(int height);
 	void     HideRowLabels() { SetRowLabelSize(0); }
@@ -2215,11 +2209,7 @@ public:
 
 	bool CanDragGridColEdges() const
 	{
-		// When using the native header window we can only resize the columns by
-		// dragging the dividers in the header itself, but not by dragging them
-		// in the grid because we can't make the native control enter into the
-		// column resizing mode programmatically.
-		return m_canDragGridSize && m_canDragColSize && !m_useNativeHeader;
+		return m_canDragGridSize && m_canDragColSize;
 	}
 
 	// These functions return whether the given row/column can be
@@ -2243,11 +2233,6 @@ public:
 	bool     EnableDragColMove(bool enable = true);
 	void     DisableDragColMove() { EnableDragColMove(false); }
 	bool     CanDragColMove() const { return m_canDragColMove; }
-
-	// interactive column hiding (enabled by default, works only for native header)
-	bool     EnableHidingColumns(bool enable = true);
-	void     DisableHidingColumns() { EnableHidingColumns(false); }
-	bool     CanHideColumns() const { return m_canHideColumns; }
 
 	// interactive resizing of grid cells (enabled by default)
 	void     EnableDragGridSize(bool enable = true);
@@ -2890,28 +2875,14 @@ public:
 		CalcDimensions();
 	}
 
-	// Accessors for component windows
-	wxWindow* GetGridWindow() const { return (wxWindow*)m_gridWin; }
-	wxWindow* GetFrozenCornerGridWindow()const { return (wxWindow*)m_frozenCornerGridWin; }
-	wxWindow* GetFrozenRowGridWindow() const { return (wxWindow*)m_frozenRowGridWin; }
-	wxWindow* GetFrozenColGridWindow() const { return (wxWindow*)m_frozenColGridWin; }
-	wxWindow* GetGridRowLabelWindow() const { return (wxWindow*)m_rowLabelWin; }
-	wxWindow* GetGridColLabelWindow() const { return m_colLabelWin; }
-	wxWindow* GetGridCornerLabelWindow() const { return (wxWindow*)m_cornerLabelWin; }
-
-	// Return true if native header is used by the grid.
-	bool IsUsingNativeHeader() const { return m_useNativeHeader; }
-
-	// This one can only be called if we are using the native header window
-	wxHeaderCtrl* GetGridColHeader() const
-	{
-		wxASSERT_MSG(m_useNativeHeader, "no column header window");
-
-		// static_cast<> doesn't work without the full class declaration in
-		// view and we prefer to avoid adding more compile-time dependencies
-		// even at the cost of using reinterpret_cast<>
-		return reinterpret_cast<wxHeaderCtrl*>(m_colLabelWin);
-	}
+	// Accessors for component windows - defined where their types are complete, a window without a cast
+	wxWindow* GetGridWindow() const;
+	wxWindow* GetFrozenCornerGridWindow() const;
+	wxWindow* GetFrozenRowGridWindow() const;
+	wxWindow* GetFrozenColGridWindow() const;
+	wxWindow* GetGridRowLabelWindow() const;
+	wxWindow* GetGridColLabelWindow() const;
+	wxWindow* GetGridCornerLabelWindow() const;
 
 	// Allow adjustment of scroll increment. The default is (15, 15).
 	void SetScrollLineX(int x) { m_xScrollPixelsPerLine = x; }
@@ -2927,9 +2898,8 @@ public:
 
 	// ------- sorting support
 
-	// ibGrid doesn't support sorting on its own but it can indicate the sort
-	// order in the column header (currently only if native header control is
-	// used though)
+	// ibGrid doesn't support sorting on its own, and its column header does
+	// not indicate the sort order yet
 
 	// return the column currently displaying the sort indicator or wxNOT_FOUND
 	// if none
@@ -2981,6 +2951,10 @@ protected:
 	virtual wxSize DoGetBestSize() const wxOVERRIDE;
 	virtual void DoEnable(bool enable) wxOVERRIDE;
 
+	// SEAM vs wx: the theme's frame, as the data view's and the list's - the theme's accent when the focus is inside the
+	// grid (ibGridSubwindow::GetMainWindowOfCompositeControl); the canon's grid had none
+	virtual wxBorder GetDefaultBorder() const wxOVERRIDE { return wxBORDER_THEME; }
+
 	bool m_created;
 
 	ibGridWindow* m_gridWin;
@@ -2995,20 +2969,10 @@ protected:
 	ibGridRowLabelWindow* m_rowLabelWin;
 	ibGridRowLabelWindow* m_rowFrozenLabelWin;
 
-	// the real type of the column window depends on m_useNativeHeader value:
-	// if it is true, its dynamic type is wxHeaderCtrl, otherwise it is
-	// ibGridColLabelWindow, use accessors below when the real type matters
-	wxWindow* m_colAreaWin;
-	wxWindow* m_colFrozenAreaWin;
-	wxWindow* m_colLabelWin;
-	wxWindow* m_colFrozenLabelWin;
-
-	ibGridColLabelWindow* GetColLabelWindow() const
-	{
-		wxASSERT_MSG(!m_useNativeHeader, "no column label window");
-
-		return reinterpret_cast<ibGridColLabelWindow*>(m_colLabelWin);
-	}
+	ibGridColAreaWindow* m_colAreaWin;
+	ibGridColAreaWindow* m_colFrozenAreaWin;
+	ibGridColLabelWindow* m_colLabelWin;
+	ibGridColLabelWindow* m_colFrozenLabelWin;
 
 	ibGridTableBase* m_table;
 	bool                      m_ownTable;
@@ -3149,9 +3113,6 @@ protected:
 
 	int m_sortCol;
 	bool m_sortIsAscending;
-
-	bool m_useNativeHeader,
-		m_nativeColumnLabels;
 
 	// get the col/row coords
 	int GetColWidth(int col, float scale = 1.0f) const;
@@ -3316,9 +3277,12 @@ protected:
 	ibGridRowOutlineWindow* m_rowFrozenOutlineWin = nullptr;
 	ibGridColOutlineWindow* m_colFrozenOutlineWin = nullptr;
 	// …and the chrome each pane does not reach: the strip above the row pane (it starts below the
-	// column chrome) and the strip left of the column pane. Colour only, no content.
-	ibGridOutlineCornerWindow* m_rowOutlineCornerWin = nullptr;
-	ibGridOutlineCornerWindow* m_colOutlineCornerWin = nullptr;
+	// column chrome) and the strip left of the column pane - the outline's and the area's. Colour and
+	// the pane's edge, no content.
+	ibGridCornerPaneWindow* m_rowOutlineCornerWin = nullptr;
+	ibGridCornerPaneWindow* m_colOutlineCornerWin = nullptr;
+	ibGridCornerPaneWindow* m_rowAreaCornerWin = nullptr;
+	ibGridCornerPaneWindow* m_colAreaCornerWin = nullptr;
 
 	//Row positions
 	wxArrayInt m_rowBrakeAt;
@@ -3336,7 +3300,6 @@ protected:
 	bool    m_canDragColSize;
 	bool    m_canDragRowMove;
 	bool    m_canDragColMove;
-	bool    m_canHideColumns;
 	bool    m_canDragGridSize;
 	bool    m_canDragCell;
 
@@ -3479,9 +3442,6 @@ protected:
 	friend class ibGridColOutlineWindow;
 	friend class ibGridWindow;
 	friend class ibGridHeaderRenderer;
-
-	friend class ibGridHeaderColumn;
-	friend class ibGridHeaderCtrl;
 
 private:
 	// This is called from both Create() and OnDPIChanged() to (re)initialize
@@ -3646,20 +3606,6 @@ private:
 	void DoEndMoveRow(int pos);
 	void DoEndMoveCol(int pos);
 
-	// Helper function returning the position (only the horizontal component
-	// really counts) corresponding to the given column drag-resize event.
-	//
-	// It's a bit ugly to create a phantom mouse position when we really only
-	// need the column width anyhow, but ibGrid code was originally written to
-	// expect the position and not the width and it's simpler to keep it happy
-	// by giving it the position than to change it.
-	wxPoint GetPositionForResizeEvent(int width) const;
-
-	// functions called by ibGridHeaderCtrl while resizing m_dragRowOrCol
-	void DoHeaderStartDragResizeCol(int col);
-	void DoHeaderDragResizeCol(int width);
-	void DoHeaderEndDragResizeCol(int width);
-
 	// process a TAB keypress
 	void DoGridProcessTab(wxKeyboardState& kbdState);
 
@@ -3731,13 +3677,6 @@ private:
 	// positive values are handled naturally, i.e. they just specify the size.
 	void DoSetRowSize(int row, int height);
 	void DoSetColSize(int col, int width);
-
-	// These methods can only be called when m_useNativeHeader is true and call
-	// SetColumnCount() and Set- or ResetColumnsOrder() as necessary on the
-	// native wxHeaderCtrl being used. Note that the first one already calls
-	// the second one, so it's never necessary to call both of them.
-	void SetNativeHeaderColCount();
-	void SetNativeHeaderColOrder();
 
 	// Return the editor which should be used for the current cell.
 	ibGridCellEditorPtr GetCurrentCellEditorPtr() const

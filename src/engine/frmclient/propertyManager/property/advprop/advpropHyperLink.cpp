@@ -7,54 +7,46 @@
 // ibPGHyperLinkProperty
 // -----------------------------------------------------------------------
 
-wxPG_IMPLEMENT_PROPERTY_CLASS(ibPGHyperLinkProperty, wxPGProperty, HyperLink)
+ibPG_IMPLEMENT_PROPERTY_CLASS(ibPGHyperLinkProperty, ibPGProperty, HyperLink)
 
 ibPGHyperLinkProperty::ibPGHyperLinkProperty(ibMetaID id, const ibMetaData& metaData, const wxString& label,
-	const wxString& name, const wxVariant& value) : wxPGProperty(label, name), m_metaId(id), m_metaData(metaData) {
+	const wxString& name, const ibVariant& value) : ibPGProperty(label, name), m_metaId(id), m_metaData(metaData) {
 
-	wxPGProperty::SetFlagRecursively(wxPGFlags::ReadOnly, true);
-	//wxPGProperty::SetFlagRecursively(wxPGFlags::Hidden, true);
-	wxPGProperty::SetFlagRecursively(wxPGFlags::NoEditor, true);
+	ibPGProperty::SetFlagRecursively(ibPGFlags::ReadOnly, true);
+	//ibPGProperty::SetFlagRecursively(ibPGFlags::Hidden, true);
+	ibPGProperty::SetFlagRecursively(ibPGFlags::NoEditor, true);
 
-	// 🛑 NO NAME HERE. This used to be born carrying `hyperLink_clicked`, which is the signal for
-	// "somebody just clicked" — so the cell said it about ITSELF, for its whole life. Every SetValue
-	// the grid makes (a rebuild, a refresh, a re-selection) then read as a click and queued another
-	// deferred OpenObjectForm; those fired against a document list that had moved on, and the
-	// designer went down inside ibDocManager::GetDocumentsVector (two dumps, 2026-08-24).
-	//
-	// The value is the property's, as it was given. The name is put on by the EDITOR at the click
-	// (propertyEditor.cpp) and taken off by OnSetValue below, which is what makes it an event.
-	wxPGProperty::SetValue(value);
+	// The value is the property's, as it was given: the click is not in it — it comes to OnEvent below, as an event
+	// (propertyEditor.cpp). 🛑 A click held in the value outlives it: when it was a name on wx's variant, a cell born
+	// carrying it read every SetValue the grid makes (a rebuild, a refresh, a re-selection) as a click, and the deferred
+	// OpenObjectForms fired against a document list that had moved on (two dumps, 2026-08-24).
+	ibPGProperty::SetValue(value);
 }
 
 ibPGHyperLinkProperty::~ibPGHyperLinkProperty()
 {
 }
 
-wxString ibPGHyperLinkProperty::ValueToString(wxVariant& value, wxPGPropValFormatFlags flags) const
+wxString ibPGHyperLinkProperty::ValueToString(ibVariant& value, ibPGPropValFormatFlags flags) const
 {
 	return _("Open");
 }
 
-bool ibPGHyperLinkProperty::StringToValue(wxVariant& variant,
+bool ibPGHyperLinkProperty::StringToValue(ibVariant& variant,
 	const wxString& text,
-	wxPGPropValFormatFlags flags) const
+	ibPGPropValFormatFlags flags) const
 {
 	return false;
 }
 
 #include "frmclient/docView/docView.h"   // docManager — the door that opens a metaobject
 
-void ibPGHyperLinkProperty::OnSetValue()
+bool ibPGHyperLinkProperty::OnEvent(ibPropertyGrid* WXUNUSED(propgrid), wxWindow* WXUNUSED(wnd_primary),
+	wxEvent& event)
 {
-	// THE NAME IS THE CLICK. The editor stamps the name onto whatever the cell carries and does not
-	// set a bool any more (propertyEditor.cpp), so a `GetBool()` here would never be true again —
-	// this cell's own value is `false` from its constructor.
-	if (wxT("hyperLink_clicked") == m_value.GetName()) {
-		// ⭐ TAKEN, SO ENDED — the same rule the composer's and the list's cells follow. A name left
-		// standing turns one click into every later refresh.
-		m_value.SetName(wxEmptyString);
-
+	// THE CLICK (the hyperlink's editor, propertyEditor.cpp) — the cell's own value is `false` from its constructor,
+	// the click is not in it.
+	if (event.GetEventType() == wxEVT_LEFT_DOWN) {
 		// THE LINK CARRIES ITS OBJECT — the one the server named, in the configuration its owner was opened from; the
 		// server opens it. Taken by value: the cell goes with the next selection.
 		if (m_metaId != 0) {
@@ -73,10 +65,12 @@ void ibPGHyperLinkProperty::OnSetValue()
 				}
 			);
 		}
+		return true;
 	}
+	return false;
 }
 
 void ibPGHyperLinkProperty::RefreshChildren()
 {
-	wxPGProperty::Enable(true);
+	ibPGProperty::Enable(true);
 }

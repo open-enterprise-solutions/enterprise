@@ -33,7 +33,7 @@ enum {
 #pragma region __command_h__
 class ibModifyPropertyCmd : public ibFormEditorCmd {
 public:
-	ibModifyPropertyCmd(ibValueFrame* object, ibProperty* prop, const wxVariant& newValue)
+	ibModifyPropertyCmd(ibValueFrame* object, ibProperty* prop, const ibVariant& newValue)
 		: m_object(object), m_property(prop), m_newValue(newValue)
 	{
 	}
@@ -45,7 +45,7 @@ protected:
 private:
 	ibValueFrame* m_object = nullptr;
 	ibProperty* m_property;
-	wxVariant m_newValue;
+	ibVariant m_newValue;
 };
 
 class ibShiftChildCmd : public ibFormEditorCmd {
@@ -241,8 +241,8 @@ ibDialogFormEditor::ibDialogFormEditor(ibValueForm* valueForm) :
 
 	CreateTree();
 
-	m_propertyGridManager = new wxPropertyGridManager(this, WXOES_PROPERTY_GRID, wxDefaultPosition, wxDefaultSize, wxPG_BOLD_MODIFIED | wxPG_SPLITTER_AUTO_CENTER | wxPG_DESCRIPTION | wxPG_TOOLTIPS | wxPGMAN_DEFAULT_STYLE);
-	m_propertyGridManager->SetExtraStyle(wxPG_EX_NATIVE_DOUBLE_BUFFERING);
+	m_propertyGridManager = new ibPropertyGridManager(this, WXOES_PROPERTY_GRID, wxDefaultPosition, wxDefaultSize, ibPG_BOLD_MODIFIED | ibPG_SPLITTER_AUTO_CENTER | ibPG_DESCRIPTION | ibPG_TOOLTIPS | ibPGMAN_DEFAULT_STYLE);
+	m_propertyGridManager->SetExtraStyle(ibPG_EX_NATIVE_DOUBLE_BUFFERING);
 
 	m_propertyGridPage = m_propertyGridManager->AddPage(_("Default"), wxNullBitmap);
 
@@ -416,7 +416,7 @@ void ibDialogFormEditor::OnSelChanged(wxTreeEvent& event)
 
 		struct ibPropertyConnector {
 
-			static void FillPropertyByFrameValue(wxPropertyGridPage* propertyGridPage, ibValueFrame* obj, std::map<wxPGProperty*, ibProperty*>& pgArray) {
+			static void FillPropertyByFrameValue(ibPropertyGridPage* propertyGridPage, ibValueFrame* obj, std::map<ibPGProperty*, ibProperty*>& pgArray) {
 				pgArray.clear(); propertyGridPage->Clear();
 
 				// The rows it holds, in the order the server sent them — and its sizer item's, which lays it out.
@@ -427,7 +427,7 @@ void ibDialogFormEditor::OnSelChanged(wxTreeEvent& event)
 						if (prop == nullptr)
 							continue;
 
-						wxPGProperty* pg = ibPropertyRegistry::Create(prop);
+						ibPGProperty* pg = ibPropertyRegistry::Create(prop);
 						propertyGridPage->Append(pg);
 						pg->RefreshChildren();
 
@@ -440,7 +440,7 @@ void ibDialogFormEditor::OnSelChanged(wxTreeEvent& event)
 				if (parent != nullptr && parent->GetComponentType() == COMPONENT_TYPE_SIZERITEM)
 					append(parent);
 
-				propertyGridPage->SetPropertyAttributeAll(wxPG_BOOL_USE_CHECKBOX, (long)1);
+				propertyGridPage->SetPropertyAttributeAll(ibPG_BOOL_USE_CHECKBOX, (long)1);
 			}
 		};
 
@@ -525,7 +525,7 @@ void ibDialogFormEditor::OnKeyDown(wxTreeEvent& event)
 	event.Skip();
 }
 
-void ibDialogFormEditor::OnPropertyGridChanging(wxPropertyGridEvent& event)
+void ibDialogFormEditor::OnPropertyGridChanging(ibPropertyGridEvent& event)
 {
 	auto it = m_pgArray.find(event.GetProperty());
 	if (it != m_pgArray.end()) {
@@ -537,9 +537,9 @@ void ibDialogFormEditor::OnPropertyGridChanging(wxPropertyGridEvent& event)
 	event.Skip();
 }
 
-void ibDialogFormEditor::OnPropertyGridItemSelected(wxPropertyGridEvent& event)
+void ibDialogFormEditor::OnPropertyGridItemSelected(ibPropertyGridEvent& event)
 {
-	wxPGProperty* propPtr = event.GetProperty();
+	ibPGProperty* propPtr = event.GetProperty();
 
 	// Update displayed description for the new selection
 	const wxString& helpString = propPtr->GetHelpString();

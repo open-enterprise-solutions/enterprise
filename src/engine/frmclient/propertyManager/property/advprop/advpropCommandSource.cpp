@@ -3,7 +3,7 @@
 #include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the binding's node
 #include "core/description/commandDescription.h"                                      // ibCommandDescriptionMemory
 
-#include "frmclient/propertyManager/property/private/prop.h"                    // wxPGPropertyFlags_*
+#include "frmclient/propertyManager/property/private/prop.h"                    // ibPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"        // ibPropertyRegistry::Register
 #include "frmclient/propertyManager/propertyEditor.h"
 #include "frmclient/win/picture.h"                                             // ibProtocolPicture — a command's picture
@@ -42,19 +42,19 @@ ibCommandDescription ReadCommand(const ibDataNode& row)
 }
 
 // The command a value binds, as the server stores it…
-ibCommandDescription ReadCommand(const wxVariant& value)
+ibCommandDescription ReadCommand(const ibVariant& value)
 {
 	ibCommandDescription desc;
-	ibCommandDescriptionMemory::ReadNode(ibVariantDataSerializable::GetNodeValue(value), desc);
+	ibCommandDescriptionMemory::ReadNode(ibVariantSerializable::GetNodeValue(value), desc);
 	return desc;
 }
 
 // …and the value of another one: the same property's, read as the words a picked row names it.
-wxVariant WriteCommand(const wxVariant& value, const ibCommandDescription& desc, const wxString& label)
+ibVariant WriteCommand(const ibCommandDescription& desc, const wxString& label)
 {
 	ibDataValue node;
 	ibCommandDescriptionMemory::WriteNode(node, desc);
-	return wxVariant(new ibVariantDataSerializable(value.GetType(), node, label));
+	return ibVariant(new ibVariantSerializable(node, label));
 }
 
 // One tree item that is a command: what it binds, and the words the cell shows until the server's come back.
@@ -71,7 +71,7 @@ public:
 // ibPGCommandSourceProperty
 // -----------------------------------------------------------------------
 
-wxPG_IMPLEMENT_PROPERTY_CLASS(ibPGCommandSourceProperty, wxPGProperty, TextCtrlAndButton)
+ibPG_IMPLEMENT_PROPERTY_CLASS(ibPGCommandSourceProperty, ibPGProperty, TextCtrlAndButton)
 
 // register the frontend editor for the server's command-source property — the binding as it stores it
 // (ibCommandDescriptionMemory), read as it wrote it (the row's Presentation).
@@ -80,7 +80,7 @@ class ibPropertyCommandSourceLoader
 public:
 	ibPropertyCommandSourceLoader()
 	{
-		ibPropertyRegistry::Register(wxT("ibPropertyCommandSource"), [](ibBackendProperty* property) -> wxPGProperty* {
+		ibPropertyRegistry::Register(wxT("ibPropertyCommandSource"), [](ibBackendProperty* property) -> ibPGProperty* {
 			ibDataNode row;
 			const auto tree = property->GetProtocolValue(row) ? row.FindChild(ibProtocol::ibSchema::ibProperties::CommandTree) : std::nullopt;
 			return new ibPGCommandSourceProperty(property->GetPropertyObject(), property->GetLabel(), property->GetName(),
@@ -90,17 +90,17 @@ public:
 } g_commandSourceLoader;
 
 ibPGCommandSourceProperty::ibPGCommandSourceProperty(const ibPropertyObject* property, const wxString& label,
-	const wxString& name, const wxVariant& value, const ibDataNode* tree) : wxPGProperty(label, name), m_propertyObject(property)
+	const wxString& name, const ibVariant& value, const ibDataNode* tree) : ibPGProperty(label, name), m_propertyObject(property)
 {
 	if (tree != nullptr) {
 		m_tree = *tree;
 		m_hasTree = true;
 	}
-	m_flags |= wxPGPropertyFlags_ActiveButton;   // the "…" button is always live
+	m_flags |= ibPGPropertyFlags_ActiveButton;   // the "…" button is always live
 	SetValue(value);
 }
 
-wxString ibPGCommandSourceProperty::ValueToString(wxVariant& variant, wxPGPropValFormatFlags WXUNUSED(flags)) const
+wxString ibPGCommandSourceProperty::ValueToString(ibVariant& variant, ibPGPropValFormatFlags WXUNUSED(flags)) const
 {
 	// The binding's name as the server wrote it; nothing bound, or no words for it: not selected.
 	const wxString words = variant.GetString();
@@ -137,17 +137,17 @@ void ibPGCommandSourceProperty::OnSetValue()
 		m_valueBitmapBundle = icon;
 }
 
-bool ibPGCommandSourceProperty::StringToValue(wxVariant& WXUNUSED(variant), const wxString& WXUNUSED(text),
-	wxPGPropValFormatFlags WXUNUSED(flags)) const
+bool ibPGCommandSourceProperty::StringToValue(ibVariant& WXUNUSED(variant), const wxString& WXUNUSED(text),
+	ibPGPropValFormatFlags WXUNUSED(flags)) const
 {
 	return false;   // read-only cell — the value is set only through the dialog
 }
 
-wxPGEditorDialogAdapter* ibPGCommandSourceProperty::GetEditorDialog() const
+ibPGEditorDialogAdapter* ibPGCommandSourceProperty::GetEditorDialog() const
 {
-	class ibPGEditorCommandSourceDialogAdapter : public wxPGEditorDialogAdapter {
+	class ibPGEditorCommandSourceDialogAdapter : public ibPGEditorDialogAdapter {
 	public:
-		virtual bool DoShowDialog(wxPropertyGrid* pg, wxPGProperty* prop) override
+		virtual bool DoShowDialog(ibPropertyGrid* pg, ibPGProperty* prop) override
 		{
 			ibPGCommandSourceProperty* dlgProp = wxDynamicCast(prop, ibPGCommandSourceProperty);
 			wxCHECK_MSG(dlgProp, false, "Function called for incompatible property");
@@ -165,7 +165,7 @@ wxPGEditorDialogAdapter* ibPGCommandSourceProperty::GetEditorDialog() const
 			ibDialog* dlg = new ibDialog(pg, wxID_ANY, _("Choice command"), wxDefaultPosition, wxDefaultSize,
 				wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER | wxCLIP_CHILDREN);
 			dlg->SetFont(pg->GetFont());
-			const int spacing = wxPropertyGrid::IsSmallScreen() ? 4 : 8;
+			const int spacing = ibPropertyGrid::IsSmallScreen() ? 4 : 8;
 
 			wxBoxSizer* topsizer = new wxBoxSizer(wxVERTICAL);
 			ibTreeCtrl* tc = new ibTreeCtrl(dlg, wxID_ANY, wxDefaultPosition, wxDefaultSize,
@@ -211,7 +211,7 @@ wxPGEditorDialogAdapter* ibPGCommandSourceProperty::GetEditorDialog() const
 			topsizer->Add(buttonSizer, wxSizerFlags(0).Right().Border(wxBOTTOM | wxRIGHT, spacing));
 			dlg->SetSizer(topsizer);
 			topsizer->SetSizeHints(dlg);
-			if (!wxPropertyGrid::IsSmallScreen()) {
+			if (!ibPropertyGrid::IsSmallScreen()) {
 				dlg->SetSize(dlg->FromDIP(wxSize(360, 320)));
 				dlg->Move(pg->GetGoodEditorDialogPosition(dlgProp, dlg->GetSize()));
 			}
@@ -224,7 +224,7 @@ wxPGEditorDialogAdapter* ibPGCommandSourceProperty::GetEditorDialog() const
 				// A group has no command — only a command commits; the same one again is no edit.
 				if (const ibTreeItemCommand* const d = dynamic_cast<const ibTreeItemCommand*>(tc->GetItemData(sel))) {
 					if (d->m_desc.IsOk() && !(current.IsOk() && current == d->m_desc)) {
-						SetValue(WriteCommand(dlgProp->GetValue(), d->m_desc, d->m_label));
+						SetValue(WriteCommand(d->m_desc, d->m_label));
 						applied = true;
 					}
 				}

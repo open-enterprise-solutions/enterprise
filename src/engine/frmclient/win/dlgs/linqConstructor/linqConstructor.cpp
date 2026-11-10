@@ -756,7 +756,7 @@ void ibDialogLinqConstructor::FillFields(ibTreeCtrl* tree, const wxTreeItemId& i
 	// A SOURCE WHOSE ROWS THE WALK CANNOT DESCRIBE is still a source: its fields are written in by
 	// hand, on the author's responsibility - a double click on this line asks for one.
 	tree->AppendItem(item, row.m_resolved
-		? ibString::Format(_("%s - its columns are not known before it runs: double-click to write one"), row.m_type)
+		? wxString::Format(_("%s - its columns are not known before it runs: double-click to write one"), row.m_type)
 		: _("not read as a table here - double-click to write a field by hand"),
 		-1, -1, new ibLinqNode(ibNodeKind::Hint, expression));
 }

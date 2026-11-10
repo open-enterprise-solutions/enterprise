@@ -98,6 +98,7 @@ static const wxCoord SLIDER_LABEL_MARGIN = 2;
 // ============================================================================
 
 wxBEGIN_EVENT_TABLE(ibSlider, ibControl)
+    EVT_PAINT(ibSlider::OnPaint)
     EVT_SIZE(ibSlider::OnSize)
 wxEND_EVENT_TABLE()
 
@@ -697,10 +698,10 @@ wxString ibSlider::FormatValue(int value) const
     return wxString::Format(wxT("%d"), value);
 }
 
-void ibSlider::DoDraw(ibControlRenderer *renderer)
+void ibSlider::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
+    ibThemePaintDC dc(this);
     ibRenderer *rend = GetRenderer();
-    wxDC& dc = renderer->GetDC();
     wxRect rectUpdate = GetUpdateClientRect();
 
     wxOrientation orient = GetOrientation();

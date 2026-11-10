@@ -10,7 +10,7 @@
 //
 // ⭐ IT IS A TRANSLATED STRING: the cell, the storage, undo and MCP are ibPropertyTString's. What it
 // adds is its reader, and in the property grid the format string constructor opened from each
-// language's box (wxFormatStringProperty).
+// language's box (ibFormatStringProperty).
 class FRMCLIENT_API ibPropertyFormat : public ibPropertyTString {
 public:
 

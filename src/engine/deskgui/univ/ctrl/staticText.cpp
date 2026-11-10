@@ -43,9 +43,34 @@
 // ============================================================================
 
 wxBEGIN_EVENT_TABLE(ibStaticText, ibControl)
+    EVT_PAINT(ibStaticText::OnPaint)
     EVT_LEFT_DOWN(ibStaticText::OnLeftDown)
     EVT_KEY_DOWN(ibStaticText::OnKeyDown)
 wxEND_EVENT_TABLE()
+
+namespace {
+
+// wxStaticTextBase's wxLabelWrapper (stattextcmn.cpp): the text broken into lines no wider than widthMax - for Wrap,
+// and for the drawing of a label of wxST_WRAP
+class LabelWrapper : public wxTextWrapper
+{
+public:
+    wxString WrapText(wxWindow *win, const wxString& text, int widthMax)
+    {
+        m_text.clear();
+        Wrap(win, text, widthMax);
+        return m_text;
+    }
+
+protected:
+    virtual void OnOutputLine(const wxString& line) override { m_text += line; }
+    virtual void OnNewLine() override { m_text += wxT('\n'); }
+
+private:
+    wxString m_text;
+};
+
+} // anonymous namespace
 
 // ----------------------------------------------------------------------------
 // creation
@@ -72,28 +97,38 @@ bool ibStaticText::Create(wxWindow *parent,
 // drawing
 // ----------------------------------------------------------------------------
 
-void ibStaticText::DoDraw(ibControlRenderer *renderer)
+void ibStaticText::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
+    ibThemePaintDC dc(this);
+
+    const wxRect rect(GetClientSize());
+    dc.SetBackgroundMode(wxBRUSHSTYLE_TRANSPARENT);
+
     if ( !m_isHyperlink || !IsEnabled() )
     {
-        renderer->DrawLabel();
+        dc.SetFont(GetFont());
+        dc.SetTextForeground(GetForegroundColour());
+
+        // SEAM vs univ: a label of wxST_WRAP breaks at the width it is drawn in, as wx's native one does (the property
+        // grid's description); the label itself stays whole, so a wider window takes it back in longer lines
+        LabelWrapper wrapper;
+        const wxString label = HasFlag(wxST_WRAP) ? wrapper.WrapText(this, GetLabelText(), rect.width) : GetLabelText();
+        if ( !label.empty() )
+            GetRenderer()->DrawLabel(dc, label, rect, GetStateFlags(), GetAlignment(), GetAccelIndex());
         return;
     }
 
     // a link: the same label, underlined in the theme's link colour - where Tab stands, on the accent's pale pad, as a
-    // link button's (ibButton::DoDraw): no frame of its own shows the focus
-    wxDC& dc = renderer->GetDC();
+    // link button's (ibButton::OnPaint): no frame of its own shows the focus
     if ( GetStateFlags() & wxCONTROL_FOCUSED )
     {
         dc.SetPen(*wxTRANSPARENT_PEN);
         dc.SetBrush(wxBrush(wxTHEME_COLOUR(HIGHLIGHT).ChangeLightness(170)));
-        dc.DrawRectangle(renderer->GetRect());
+        dc.DrawRectangle(rect);
     }
-    dc.SetBackgroundMode(wxBRUSHSTYLE_TRANSPARENT);
     dc.SetFont(GetFont().Underlined());
     dc.SetTextForeground(wxTHEME_COLOUR(HYPERLINK));
-    renderer->GetRenderer()->DrawLabel(dc, GetLabelText(), renderer->GetRect(), GetStateFlags(), GetAlignment(),
-                                       GetAccelIndex());
+    GetRenderer()->DrawLabel(dc, GetLabelText(), rect, GetStateFlags(), GetAlignment(), GetAccelIndex());
 }
 
 // ----------------------------------------------------------------------------
@@ -150,28 +185,10 @@ void ibStaticText::SetLabel(const wxString& str)
 
 void ibStaticText::Wrap(int width)
 {
-    // wxStaticTextBase's wxLabelWrapper (stattextcmn.cpp). SEAM vs wx: the label as drawn, GetLabelText() - GetLabel(),
-    // the window's, is empty here (DoGetBestClientSize) - and back with its '&' kept as it is
-    class LabelWrapper : public wxTextWrapper
-    {
-    public:
-        void WrapLabel(ibStaticText *text, int widthMax)
-        {
-            m_text.clear();
-            Wrap(text, text->GetLabelText(), widthMax);
-            text->SetLabelText(m_text);
-        }
-
-    protected:
-        virtual void OnOutputLine(const wxString& line) override { m_text += line; }
-        virtual void OnNewLine() override { m_text += wxT('\n'); }
-
-    private:
-        wxString m_text;
-    };
-
+    // SEAM vs wx: the label as drawn, GetLabelText() - GetLabel(), the window's, is empty here (DoGetBestClientSize) -
+    // and back with its '&' kept as it is
     LabelWrapper wrapper;
-    wrapper.WrapLabel(this, width);
+    SetLabelText(wrapper.WrapText(this, GetLabelText(), width));
     InvalidateBestSize();
 }
 
@@ -180,7 +197,7 @@ wxSize ibStaticText::DoGetBestClientSize() const
     wxInfoDC dc(wxConstCast(this, ibStaticText));
     dc.SetFont(GetFont());
 
-    // SEAM vs univ: the label as drawn (ibControlRenderer::DrawLabel) - SetLabel sets the visible label alone, and
+    // SEAM vs univ: the label as drawn (OnPaint) - SetLabel sets the visible label alone, and
     // GetLabel(), the window's, stayed empty: the text was measured as nothing
     wxCoord width = 0, height = 0;
     dc.GetMultiLineTextExtent(GetLabelText(), &width, &height);

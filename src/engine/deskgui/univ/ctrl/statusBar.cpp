@@ -42,6 +42,7 @@
 // ============================================================================
 
 wxBEGIN_EVENT_TABLE(ibStatusBarUniv, wxStatusBarBase)
+    EVT_PAINT(ibStatusBarUniv::OnPaint)
     EVT_SIZE(ibStatusBarUniv::OnSize)
 
     WX_EVENT_TABLE_INPUT_CONSUMER(ibStatusBarUniv)
@@ -104,14 +105,15 @@ wxRect ibStatusBarUniv::GetTotalFieldRect(wxCoord *borderBetweenFields)
     return rect;
 }
 
-void ibStatusBarUniv::DoDraw(ibControlRenderer *renderer)
+void ibStatusBarUniv::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
+    ibThemePaintDC dc(this);
+
     // get the fields rect
     wxCoord borderBetweenFields;
     wxRect rect = GetTotalFieldRect(&borderBetweenFields);
 
     // prepare the DC
-    wxDC& dc = renderer->GetDC();
     dc.SetFont(GetFont());
     dc.SetTextForeground(GetForegroundColour());
 

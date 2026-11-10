@@ -2429,7 +2429,7 @@ void wxWin32Renderer::DrawMenuItem(wxDC& dc,
     if ( bmp.IsOk() )
     {
         rect.SetRight(geometryInfo.GetLabelOffset());
-        ibControlRenderer::DrawBitmap(dc, bmp, rect);
+        ibRenderer::DrawBitmap(dc, bmp, rect);
     }
 
     // draw the label

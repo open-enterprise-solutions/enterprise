@@ -79,16 +79,10 @@ ibMetaTreeBase::ibMetaTreeBase(wxWindow* parent, long long tab, ibProtocol::ibVi
 
 	CreateToolBar(treeParent);
 
-	// Card-style depth: panel slightly darker than tree creates a
-	// "raised card" effect — the tree floats above the panel surround
-	// rather than blending into pure-white background. AUI's dark
-	// dock background already frames the pane; this is the inner tier.
-	this->SetBackgroundColour(wxColour(184, 201, 212));   // #B8C9D4 powder-blue panel
 	//Create main tree
 	// …an external file's root hidden: its groups are the tree (the desktop's).
 	m_metaTreeCtrl = new ibTreeCtrl(treeParent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_NO_LINES | wxTR_TWIST_BUTTONS | (!configuration ? wxTR_HIDE_ROOT : 0));
-	m_metaTreeCtrl->SetBackgroundColour(wxColour(250, 247, 240));  // #FAF7F0 cream tree (matches editor)
 	m_metaTreeCtrl->SetDoubleBuffered(true);
 
 	//set image list

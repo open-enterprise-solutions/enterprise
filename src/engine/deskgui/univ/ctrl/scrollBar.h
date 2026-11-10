@@ -128,7 +128,6 @@ public:
     virtual bool OnArrow(ibScrollArrows::Arrow arrow) override;
     virtual ibScrollArrows::Arrow HitTestArrow(const wxPoint& pt) const override;
 
-    // for ibControlRenderer::DrawScrollbar() only
     const ibScrollArrows& GetArrows() const { return m_arrows; }
 
     // returns one of wxHT_SCROLLBAR_XXX constants
@@ -139,8 +138,9 @@ public:
 
 protected:
     virtual wxSize DoGetBestClientSize() const override;
-    virtual void DoDraw(ibControlRenderer *renderer) override;
     virtual wxBorder GetDefaultBorder() const override { return wxBORDER_NONE; }
+
+    void OnPaint(wxPaintEvent& event);
 
     // forces update of thumb's visual appearance (does nothing if m_dirty=false)
     void UpdateThumb();
@@ -202,7 +202,6 @@ private:
     // the object handling the arrows
     ibScrollArrows m_arrows;
 
-    friend class ibControlRenderer; // for geometry methods
     friend class ibStdScrollBarInputHandler; // for geometry methods
 
     wxDECLARE_EVENT_TABLE();

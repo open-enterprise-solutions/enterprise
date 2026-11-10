@@ -1388,6 +1388,11 @@ public:
 	int GetLineAt(unsigned int y) const;       // y / m_lineHeight in fixed mode
 	int QueryAndCacheLineHeight(unsigned int row, ibDataViewItem item) const;
 
+	// SEAM vs wx: the width a tree row gives its expander - the slot of wx's renderers (16 DIP, the canon was laid out
+	// against them) with the theme's button centred in it; the theme's expander is the button alone, and taken for the
+	// slot it put the plus on the cell's edge
+	int GetExpanderWidth() const { return FromDIP(16); }
+
 	// The bitmap of a row's state picture (ibDataViewModel::GetRowPicture), from m_rowPictures; null for 0.
 	const wxBitmap& RowPictureBitmap(const ibPictureID& picture);
 

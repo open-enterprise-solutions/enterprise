@@ -211,7 +211,7 @@ public:
 			m_formHandler->Receive(m_formHandler->m_formNode);
 			return true;
 		}
-		virtual void ModifyProperty(ibProperty* prop, const wxVariant& oldValue, const wxVariant& newValue) override {
+		virtual void ModifyProperty(ibProperty* prop, const ibVariant& oldValue, const ibVariant& newValue) override {
 			m_formHandler->ModifyProperty(prop, oldValue, newValue);
 		}
 		virtual void MovePosition(ibValueFrame* control, ibValueFrame* parent, unsigned int pos) override {
@@ -644,7 +644,7 @@ public:
 	// it: under its name, its node value) and the control is drawn again with it, by a patch of the frame; a layer's (the
 	// command bar's, a command's of it) in the control's node, the form drawn again by the server; an attribute's, a form
 	// command's — the server's editor's door (Set). An event given a handler writes its procedure first (ModifyEvent).
-	void ModifyProperty(ibProperty* prop, const wxVariant& oldValue, const wxVariant& newValue);
+	void ModifyProperty(ibProperty* prop, const ibVariant& oldValue, const ibVariant& newValue);
 
 	// …and the attribute tree's, by the attribute's id (`Attribute`) — the server's editor's doors of the same names:
 	// a new one (String, uniquely named) and a pasted one, its name given (false: refused — empty, or another's), the main
@@ -851,7 +851,7 @@ public:
 
 	// THE DESKTOP'S ModifyEvent — an event given a handler: its procedure in the module renamed, deleted, found or
 	// written from the template with the event's parameters, and the Code page shown on it.
-	void ModifyEvent(ibProperty* event, const wxVariant& oldValue, const wxVariant& newValue);
+	void ModifyEvent(ibProperty* event, const ibVariant& oldValue, const ibVariant& newValue);
 
 	// The form opened as the runtime shows it (the Form menu's Test form).
 	void TestForm() { m_visualEditor->TestForm(); }
@@ -987,7 +987,7 @@ public:
 	// What the server says of it, asked as it is shown — the server's editor's Properties, with the form as it stands: the
 	// attribute's rows, or its column's.
 	virtual bool Fetch() override;
-	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
+	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue) override;
 
 	long long GetId() const { return m_attributeId; }
 	long long GetColumnId() const { return m_columnId; }
@@ -1031,7 +1031,7 @@ public:
 
 	// What the server says of it, asked as it is shown — as an attribute's is.
 	virtual bool Fetch() override;
-	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
+	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue) override;
 
 	long long GetId() const { return m_commandId; }
 	const wxString& GetName() const { return m_name; }
@@ -1068,7 +1068,7 @@ public:
 	// of what it had — a command's presentations (what its command is called, its picture) are its own and the server's
 	// to say — and its values as its node has them now.
 	virtual bool Fetch() override;
-	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
+	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue) override;
 
 	// Its node in the control's node — none: an empty node.
 	virtual ibProtocolNode FindNode(const ibProtocolNode& control) const = 0;
@@ -1137,7 +1137,7 @@ public:
 	virtual ibString GetObjectTypeName() const override { return ibProtocol::ibView::ibFormDesigner::CommandBarItem; }
 
 	// Its name stays unique among the bar's commands (the desktop's).
-	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue) override;
+	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue) override;
 
 	virtual ibProtocolNode FindNode(const ibProtocolNode& control) const override;
 	// …a command's own, by its name, among its bar's (Items) — none such: a new command's (CommandBarItem).

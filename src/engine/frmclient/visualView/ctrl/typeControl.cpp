@@ -4,8 +4,8 @@
 #include <algorithm>
 #include <utility>   // std::exchange — the owner told once
 
-#include <wx/calctrl.h>
-#include <wx/timectrl.h>
+#include "deskgui/univ/ctrl/calendarCtrl.h"
+#include "deskgui/univ/ctrl/timePickerCtrl.h"
 #include <wx/popupwin.h>
 #include <wx/sizer.h>
 #include <wx/settings.h>
@@ -397,8 +397,8 @@ bool ibTypeControlFactory::SimpleChoice(ibControlFrame* ownerValue, const ibClas
 	}
 	else if (valType == ibValueTypes::TYPE_DATE) {
 		class wxPopupDateTimeWindow : public wxPopupChoiceWindow {
-			wxCalendarCtrl* m_calendar = nullptr;
-			wxTimePickerCtrl* m_timePicker = nullptr;
+			ibCalendarCtrl* m_calendar = nullptr;
+			ibTimePickerCtrl* m_timePicker = nullptr;
 		public:
 
 			wxPopupDateTimeWindow(ibControlFrame* ownerValue, wxWindow* parent, int style = wxBORDER_NONE | wxPU_CONTAINS_CONTROLS | wxWANTS_CHARS) :
@@ -409,11 +409,11 @@ bool ibTypeControlFactory::SimpleChoice(ibControlFrame* ownerValue, const ibClas
 				wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 				wxBoxSizer* subSizer = new wxBoxSizer(wxHORIZONTAL);
 
-				m_calendar = new wxCalendarCtrl(this, wxID_ANY, wxDefaultDateTime,
+				m_calendar = new ibCalendarCtrl(this, wxID_ANY, wxDefaultDateTime,
 					wxDefaultPosition, wxDefaultSize, wxNO_BORDER);
 				mainSizer->Add(m_calendar, wxSizerFlags().Expand().Border(wxALL, FromDIP(2)));
 
-				m_timePicker = new wxTimePickerCtrl(this, wxID_ANY);
+				m_timePicker = new ibTimePickerCtrl(this, wxID_ANY);
 				subSizer->Add(m_timePicker, wxSizerFlags(3).Expand().Border(wxALL, FromDIP(2)));
 
 				ibButton* OKButton = new ibButton(this, wxID_OK);

@@ -1,28 +1,28 @@
 #ifndef __ADVPROP_SIZE_H__
 #define __ADVPROP_SIZE_H__
 
-#include <wx/propgrid/propgrid.h>
+#include "deskgui/univ/propgrid/propgrid.h"
 #include "frmclient/backend/backend_core.h"
 
 // -----------------------------------------------------------------------
 // ibPGSizeProperty
 // -----------------------------------------------------------------------
 
-// The wxPropertyGrid sample's wxSizeProperty, as the old desktop's.
-class ibPGSizeProperty : public wxPGProperty {
+// The ibPropertyGrid sample's ibSizeProperty, as the old desktop's.
+class ibPGSizeProperty : public ibPGProperty {
 public:
 	
-	ibPGSizeProperty(const wxString& label = wxPG_LABEL,
-		const wxString& name = wxPG_LABEL,
-		const wxVariant& value = wxNullVariant);
+	ibPGSizeProperty(const wxString& label = ibPG_LABEL,
+		const wxString& name = ibPG_LABEL,
+		const ibVariant& value = ibVariant());
 
-	virtual wxVariant ChildChanged(wxVariant& thisValue, int childIndex,
-		wxVariant& childValue) const override;
+	virtual ibVariant ChildChanged(ibVariant& thisValue, int childIndex,
+		ibVariant& childValue) const override;
 
 	virtual void RefreshChildren() override;
 
 private:
-	WX_PG_DECLARE_PROPERTY_CLASS(ibPGSizeProperty);
+	IB_PG_DECLARE_PROPERTY_CLASS(ibPGSizeProperty);
 };
 
 #endif

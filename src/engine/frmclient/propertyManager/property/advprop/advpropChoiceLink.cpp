@@ -15,27 +15,27 @@
 // ibPGChoiceLinkProperty
 // -----------------------------------------------------------------------
 
-wxPG_IMPLEMENT_PROPERTY_CLASS(ibPGChoiceLinkProperty, wxPGProperty, TextCtrlAndButton)
+ibPG_IMPLEMENT_PROPERTY_CLASS(ibPGChoiceLinkProperty, ibPGProperty, TextCtrlAndButton)
 
 namespace {
 
 // The description a value holds, as the server stores it…
 template <typename typeDescription>
-typeDescription ReadDescription(const wxVariant& value)
+typeDescription ReadDescription(const ibVariant& value)
 {
 	typeDescription desc;
-	ibChoiceLinkDescriptionMemory::ReadNode(ibVariantDataSerializable::GetNodeValue(value), desc);
+	ibChoiceLinkDescriptionMemory::ReadNode(ibVariantSerializable::GetNodeValue(value), desc);
 	return desc;
 }
 
 // …and the value of another one: the same property's, read as the server named the fields until its rows come back
 // (none: nothing).
 template <typename typeDescription>
-wxVariant WriteDescription(const wxVariant& value, const typeDescription& desc)
+ibVariant WriteDescription(const ibVariant& value, const typeDescription& desc)
 {
 	ibDataValue node;
 	ibChoiceLinkDescriptionMemory::WriteNode(node, desc);
-	return wxVariant(new ibVariantDataSerializable(value.GetType(), node, desc.IsOk() ? value.GetString() : wxString()));
+	return ibVariant(new ibVariantSerializable(node, desc.IsOk() ? value.GetString() : ibString()));
 }
 
 }
@@ -47,23 +47,23 @@ class ibPropertyChoiceLinkLoader
 public:
 	ibPropertyChoiceLinkLoader()
 	{
-		ibPropertyRegistry::Register(wxT("ibPropertyChoiceLink"), [](ibBackendProperty* property) -> wxPGProperty* {
+		ibPropertyRegistry::Register(wxT("ibPropertyChoiceLink"), [](ibBackendProperty* property) -> ibPGProperty* {
 			return new ibPGChoiceLinkProperty(property, property->GetLabel(), property->GetName(), property->GetValue());
 		});
-		ibPropertyRegistry::Register(wxT("ibPropertyChoiceParameters"), [](ibBackendProperty* property) -> wxPGProperty* {
+		ibPropertyRegistry::Register(wxT("ibPropertyChoiceParameters"), [](ibBackendProperty* property) -> ibPGProperty* {
 			return new ibPGChoiceParametersProperty(property, property->GetLabel(), property->GetName(), property->GetValue());
 		});
 	}
 } g_choiceLinkLoader;
 
 ibPGChoiceLinkProperty::ibPGChoiceLinkProperty(ibBackendProperty* property, const wxString& label,
-	const wxString& strName, const wxVariant& value)
-	: wxPGProperty(label, strName), m_property(property)
+	const wxString& strName, const ibVariant& value)
+	: ibPGProperty(label, strName), m_property(property)
 {
 	SetValue(value);
 }
 
-bool ibPGChoiceLinkProperty::OnEvent(wxPropertyGrid* propgrid, wxWindow* WXUNUSED(primary), wxEvent& event)
+bool ibPGChoiceLinkProperty::OnEvent(ibPropertyGrid* propgrid, wxWindow* WXUNUSED(primary), wxEvent& event)
 {
 	if (!propgrid->IsMainButtonEvent(event) || m_property == nullptr)
 		return false;
@@ -85,16 +85,16 @@ bool ibPGChoiceLinkProperty::OnEvent(wxPropertyGrid* propgrid, wxWindow* WXUNUSE
 // ibPGChoiceParametersProperty
 // -----------------------------------------------------------------------
 
-wxPG_IMPLEMENT_PROPERTY_CLASS(ibPGChoiceParametersProperty, wxPGProperty, TextCtrlAndButton)
+ibPG_IMPLEMENT_PROPERTY_CLASS(ibPGChoiceParametersProperty, ibPGProperty, TextCtrlAndButton)
 
 ibPGChoiceParametersProperty::ibPGChoiceParametersProperty(ibBackendProperty* property, const wxString& label,
-	const wxString& strName, const wxVariant& value)
-	: wxPGProperty(label, strName), m_property(property)
+	const wxString& strName, const ibVariant& value)
+	: ibPGProperty(label, strName), m_property(property)
 {
 	SetValue(value);
 }
 
-bool ibPGChoiceParametersProperty::OnEvent(wxPropertyGrid* propgrid, wxWindow* WXUNUSED(primary), wxEvent& event)
+bool ibPGChoiceParametersProperty::OnEvent(ibPropertyGrid* propgrid, wxWindow* WXUNUSED(primary), wxEvent& event)
 {
 	if (!propgrid->IsMainButtonEvent(event) || m_property == nullptr)
 		return false;

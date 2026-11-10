@@ -1,8 +1,8 @@
 ﻿#ifndef __ADVPROP_CHOICE_LINK_H__
 #define __ADVPROP_CHOICE_LINK_H__
 
-#include <wx/propgrid/propgrid.h>
-#include <wx/propgrid/props.h>
+#include "deskgui/univ/propgrid/propgrid.h"
+#include "deskgui/univ/propgrid/props.h"
 #include "frmclient/backend/backend_core.h"
 
 class FRMCLIENT_API ibBackendProperty;
@@ -22,22 +22,22 @@ class FRMCLIENT_API ibBackendProperty;
 //
 // The old desktop's, over the client's row: the name is
 // the server's Presentation, the candidates the row's choices.
-class ibPGChoiceLinkProperty : public wxPGProperty {
-	WX_PG_DECLARE_PROPERTY_CLASS(ibPGChoiceLinkProperty);
+class ibPGChoiceLinkProperty : public ibPGProperty {
+	IB_PG_DECLARE_PROPERTY_CLASS(ibPGChoiceLinkProperty);
 public:
 
-	ibPGChoiceLinkProperty(ibBackendProperty* property = nullptr, const wxString& label = wxPG_LABEL,
-		const wxString& name = wxPG_LABEL, const wxVariant& value = wxNullVariant);
+	ibPGChoiceLinkProperty(ibBackendProperty* property = nullptr, const wxString& label = ibPG_LABEL,
+		const wxString& name = ibPG_LABEL, const ibVariant& value = ibVariant());
 
-	virtual wxString ValueToString(wxVariant& value,
-		wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override { return value.GetString(); }
+	virtual wxString ValueToString(ibVariant& value,
+		ibPGPropValFormatFlags flags = ibPGPropValFormatFlags::Null) const override { return value.GetString(); }
 
-	virtual bool StringToValue(wxVariant& variant, const wxString& text,
-		wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override { return false; }
+	virtual bool StringToValue(ibVariant& variant, const wxString& text,
+		ibPGPropValFormatFlags flags = ibPGPropValFormatFlags::Null) const override { return false; }
 
 	// The click on "…" — the window edits a COPY and the value is posted only when it says something
 	// changed, which is what keeps Cancel a real cancel all the way up to the property.
-	virtual bool OnEvent(wxPropertyGrid* propgrid, wxWindow* primary, wxEvent& event) override;
+	virtual bool OnEvent(ibPropertyGrid* propgrid, wxWindow* primary, wxEvent& event) override;
 
 protected:
 
@@ -55,21 +55,21 @@ protected:
 //
 // The window's lists are the server's, brought on the row; a row without them names the rows and does not edit them
 // (see the .cpp).
-class ibPGChoiceParametersProperty : public wxPGProperty {
-	WX_PG_DECLARE_PROPERTY_CLASS(ibPGChoiceParametersProperty);
+class ibPGChoiceParametersProperty : public ibPGProperty {
+	IB_PG_DECLARE_PROPERTY_CLASS(ibPGChoiceParametersProperty);
 public:
 
-	ibPGChoiceParametersProperty(ibBackendProperty* property = nullptr, const wxString& label = wxPG_LABEL,
-		const wxString& name = wxPG_LABEL, const wxVariant& value = wxNullVariant);
+	ibPGChoiceParametersProperty(ibBackendProperty* property = nullptr, const wxString& label = ibPG_LABEL,
+		const wxString& name = ibPG_LABEL, const ibVariant& value = ibVariant());
 
-	virtual wxString ValueToString(wxVariant& value,
-		wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override { return value.GetString(); }
+	virtual wxString ValueToString(ibVariant& value,
+		ibPGPropValFormatFlags flags = ibPGPropValFormatFlags::Null) const override { return value.GetString(); }
 
-	virtual bool StringToValue(wxVariant& variant, const wxString& text,
-		wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override { return false; }
+	virtual bool StringToValue(ibVariant& variant, const wxString& text,
+		ibPGPropValFormatFlags flags = ibPGPropValFormatFlags::Null) const override { return false; }
 
 	// The click on "…" — the window edits a COPY and the value is posted only when it says something changed.
-	virtual bool OnEvent(wxPropertyGrid* propgrid, wxWindow* primary, wxEvent& event) override;
+	virtual bool OnEvent(ibPropertyGrid* propgrid, wxWindow* primary, wxEvent& event) override;
 
 protected:
 

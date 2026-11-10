@@ -19,12 +19,15 @@
     <Filter Include="univ\stc">
       <UniqueIdentifier>{7c1e4a2b-9d3f-4e5a-8b6c-0d1e2f3a0006}</UniqueIdentifier>
     </Filter>
+    <Filter Include="univ\propgrid">
+      <UniqueIdentifier>{7c1e4a2b-9d3f-4e5a-8b6c-0d1e2f3a0007}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="univ\choiceDialog.cpp">
       <Filter>univ</Filter>
     </ClCompile>
-    <ClCompile Include="univ\controlRenderer.cpp">
+    <ClCompile Include="univ\renderer.cpp">
       <Filter>univ</Filter>
     </ClCompile>
     <ClCompile Include="univ\ctrl\anyButton.cpp">
@@ -34,6 +37,9 @@
       <Filter>univ\ctrl</Filter>
     </ClCompile>
     <ClCompile Include="univ\ctrl\button.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\calendarCtrl.cpp">
       <Filter>univ\ctrl</Filter>
     </ClCompile>
     <ClCompile Include="univ\ctrl\checkBox.cpp">
@@ -48,7 +54,16 @@
     <ClCompile Include="univ\ctrl\comboBox.cpp">
       <Filter>univ\ctrl</Filter>
     </ClCompile>
+    <ClCompile Include="univ\ctrl\comboCtrl.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
     <ClCompile Include="univ\ctrl\control.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\datePickerCtrl.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\editableListBox.cpp">
       <Filter>univ\ctrl</Filter>
     </ClCompile>
     <ClCompile Include="univ\ctrl\gauge.cpp">
@@ -103,6 +118,9 @@
       <Filter>univ\ctrl</Filter>
     </ClCompile>
     <ClCompile Include="univ\ctrl\textCtrl.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\timePickerCtrl.cpp">
       <Filter>univ\ctrl</Filter>
     </ClCompile>
     <ClCompile Include="univ\ctrl\toggleButton.cpp">
@@ -180,6 +198,30 @@
     <ClCompile Include="univ\propertySheetDialog.cpp">
       <Filter>univ</Filter>
     </ClCompile>
+    <ClCompile Include="univ\propgrid\advprops.cpp">
+      <Filter>univ\propgrid</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\propgrid\editors.cpp">
+      <Filter>univ\propgrid</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\propgrid\manager.cpp">
+      <Filter>univ\propgrid</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\propgrid\property.cpp">
+      <Filter>univ\propgrid</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\propgrid\propgrid.cpp">
+      <Filter>univ\propgrid</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\propgrid\propgridiface.cpp">
+      <Filter>univ\propgrid</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\propgrid\propgridpagestate.cpp">
+      <Filter>univ\propgrid</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\propgrid\props.cpp">
+      <Filter>univ\propgrid</Filter>
+    </ClCompile>
     <ClCompile Include="univ\theme\lunaTheme.cpp">
       <Filter>univ\theme</Filter>
     </ClCompile>
@@ -244,6 +286,9 @@
     <ClInclude Include="univ\ctrl\button.h">
       <Filter>univ\ctrl</Filter>
     </ClInclude>
+    <ClInclude Include="univ\ctrl\calendarCtrl.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
     <ClInclude Include="univ\ctrl\checkBox.h">
       <Filter>univ\ctrl</Filter>
     </ClInclude>
@@ -256,7 +301,16 @@
     <ClInclude Include="univ\ctrl\comboBox.h">
       <Filter>univ\ctrl</Filter>
     </ClInclude>
+    <ClInclude Include="univ\ctrl\comboCtrl.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
     <ClInclude Include="univ\ctrl\control.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\datePickerCtrl.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\editableListBox.h">
       <Filter>univ\ctrl</Filter>
     </ClInclude>
     <ClInclude Include="univ\ctrl\floatingNotebook.h">
@@ -317,6 +371,9 @@
       <Filter>univ\ctrl</Filter>
     </ClInclude>
     <ClInclude Include="univ\ctrl\textCtrl.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\timePickerCtrl.h">
       <Filter>univ\ctrl</Filter>
     </ClInclude>
     <ClInclude Include="univ\ctrl\toggleButton.h">
@@ -408,6 +465,36 @@
     </ClInclude>
     <ClInclude Include="univ\propertySheetDialog.h">
       <Filter>univ</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\propgrid\advprops.h">
+      <Filter>univ\propgrid</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\propgrid\editors.h">
+      <Filter>univ\propgrid</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\propgrid\manager.h">
+      <Filter>univ\propgrid</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\propgrid\private.h">
+      <Filter>univ\propgrid</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\propgrid\property.h">
+      <Filter>univ\propgrid</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\propgrid\propgrid.h">
+      <Filter>univ\propgrid</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\propgrid\propgriddefs.h">
+      <Filter>univ\propgrid</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\propgrid\propgridiface.h">
+      <Filter>univ\propgrid</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\propgrid\propgridpagestate.h">
+      <Filter>univ\propgrid</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\propgrid\props.h">
+      <Filter>univ\propgrid</Filter>
     </ClInclude>
     <ClInclude Include="univ\renderer.h">
       <Filter>univ</Filter>

@@ -41,6 +41,10 @@ wxIMPLEMENT_DYNAMIC_CLASS(ibStaticBox, ibControl);
 // implementation
 // ============================================================================
 
+wxBEGIN_EVENT_TABLE(ibStaticBox, ibControl)
+    EVT_PAINT(ibStaticBox::OnPaint)
+wxEND_EVENT_TABLE()
+
 // ----------------------------------------------------------------------------
 // ibStaticBox
 // ----------------------------------------------------------------------------
@@ -64,11 +68,16 @@ bool ibStaticBox::Create(wxWindow *parent,
     return true;
 }
 
-void ibStaticBox::DoDraw(ibControlRenderer *renderer)
+void ibStaticBox::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
-    // we never have a border, so don't call the base class version which draws
-    // it
-    renderer->DrawFrame();
+    ibThemePaintDC dc(this);
+
+    dc.SetFont(GetFont());
+    dc.SetTextForeground(GetForegroundColour());
+    dc.SetTextBackground(GetBackgroundColour());
+
+    GetRenderer()->DrawFrame(dc, GetLabelText(), wxRect(GetClientSize()), GetStateFlags(), GetAlignment(),
+                             GetAccelIndex());
 }
 
 // ----------------------------------------------------------------------------

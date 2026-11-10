@@ -23,7 +23,7 @@
   </ItemGroup>
   <!-- THE DESKTOP'S USER INTERFACE LIBRARY - what the desktop's programs draw their windows with (deskgui.h): the
        custom-drawn engine and its Luna theme, the forks of wx's generic controls and ours, the dock art, the code
-       editor's host (univ\stc). Of the engine, the core alone; of wx, the core, the base and AUI. Scintilla and
+       editor's host (univ\stc), the property grid (univ\propgrid). Of the engine, the core alone; of wx, the core, the base and AUI. Scintilla and
        Lexilla are in src\3rdparty (a release copy and a submodule), built by univ\stc\scintilla and
        univ\stc\lexilla; their headers are on the include path. -->
   <PropertyGroup Label="Globals">
@@ -154,15 +154,19 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="univ\choiceDialog.cpp" />
-    <ClCompile Include="univ\controlRenderer.cpp" />
+    <ClCompile Include="univ\renderer.cpp" />
     <ClCompile Include="univ\ctrl\anyButton.cpp" />
     <ClCompile Include="univ\ctrl\bmpButton.cpp" />
     <ClCompile Include="univ\ctrl\button.cpp" />
+    <ClCompile Include="univ\ctrl\calendarCtrl.cpp" />
     <ClCompile Include="univ\ctrl\checkBox.cpp" />
     <ClCompile Include="univ\ctrl\checkListBox.cpp" />
     <ClCompile Include="univ\ctrl\choice.cpp" />
     <ClCompile Include="univ\ctrl\comboBox.cpp" />
+    <ClCompile Include="univ\ctrl\comboCtrl.cpp" />
     <ClCompile Include="univ\ctrl\control.cpp" />
+    <ClCompile Include="univ\ctrl\datePickerCtrl.cpp" />
+    <ClCompile Include="univ\ctrl\editableListBox.cpp" />
     <ClCompile Include="univ\ctrl\gauge.cpp" />
     <ClCompile Include="univ\ctrl\listBox.cpp" />
     <ClCompile Include="univ\ctrl\listCtrl.cpp" />
@@ -181,6 +185,7 @@
     <ClCompile Include="univ\ctrl\staticLine.cpp" />
     <ClCompile Include="univ\ctrl\staticText.cpp" />
     <ClCompile Include="univ\ctrl\textCtrl.cpp" />
+    <ClCompile Include="univ\ctrl\timePickerCtrl.cpp" />
     <ClCompile Include="univ\ctrl\toggleButton.cpp" />
     <ClCompile Include="univ\ctrl\toolBar.cpp" />
     <ClCompile Include="univ\ctrl\treeCtrl.cpp" />
@@ -206,6 +211,14 @@
     <ClCompile Include="univ\numValidator.cpp" />
     <ClCompile Include="univ\panel.cpp" />
     <ClCompile Include="univ\propertySheetDialog.cpp" />
+    <ClCompile Include="univ\propgrid\advprops.cpp" />
+    <ClCompile Include="univ\propgrid\editors.cpp" />
+    <ClCompile Include="univ\propgrid\manager.cpp" />
+    <ClCompile Include="univ\propgrid\property.cpp" />
+    <ClCompile Include="univ\propgrid\propgrid.cpp" />
+    <ClCompile Include="univ\propgrid\propgridiface.cpp" />
+    <ClCompile Include="univ\propgrid\propgridpagestate.cpp" />
+    <ClCompile Include="univ\propgrid\props.cpp" />
     <ClCompile Include="univ\theme\lunaTheme.cpp" />
     <ClCompile Include="univ\theme\luna_dockart.cpp" />
     <ClCompile Include="univ\theme\luna_tabart.cpp" />
@@ -230,11 +243,15 @@
     <ClInclude Include="univ\ctrl\auiToolBar.h" />
     <ClInclude Include="univ\ctrl\bmpButton.h" />
     <ClInclude Include="univ\ctrl\button.h" />
+    <ClInclude Include="univ\ctrl\calendarCtrl.h" />
     <ClInclude Include="univ\ctrl\checkBox.h" />
     <ClInclude Include="univ\ctrl\checkListBox.h" />
     <ClInclude Include="univ\ctrl\choice.h" />
     <ClInclude Include="univ\ctrl\comboBox.h" />
+    <ClInclude Include="univ\ctrl\comboCtrl.h" />
     <ClInclude Include="univ\ctrl\control.h" />
+    <ClInclude Include="univ\ctrl\datePickerCtrl.h" />
+    <ClInclude Include="univ\ctrl\editableListBox.h" />
     <ClInclude Include="univ\ctrl\floatingNotebook.h" />
     <ClInclude Include="univ\ctrl\gauge.h" />
     <ClInclude Include="univ\ctrl\listBox.h" />
@@ -255,6 +272,7 @@
     <ClInclude Include="univ\ctrl\staticText.h" />
     <ClInclude Include="univ\ctrl\statusBar.h" />
     <ClInclude Include="univ\ctrl\textCtrl.h" />
+    <ClInclude Include="univ\ctrl\timePickerCtrl.h" />
     <ClInclude Include="univ\ctrl\toggleButton.h" />
     <ClInclude Include="univ\ctrl\toolBar.h" />
     <ClInclude Include="univ\ctrl\treeCtrl.h" />
@@ -285,6 +303,16 @@
     <ClInclude Include="univ\numValidator.h" />
     <ClInclude Include="univ\panel.h" />
     <ClInclude Include="univ\propertySheetDialog.h" />
+    <ClInclude Include="univ\propgrid\advprops.h" />
+    <ClInclude Include="univ\propgrid\editors.h" />
+    <ClInclude Include="univ\propgrid\manager.h" />
+    <ClInclude Include="univ\propgrid\private.h" />
+    <ClInclude Include="univ\propgrid\property.h" />
+    <ClInclude Include="univ\propgrid\propgrid.h" />
+    <ClInclude Include="univ\propgrid\propgriddefs.h" />
+    <ClInclude Include="univ\propgrid\propgridiface.h" />
+    <ClInclude Include="univ\propgrid\propgridpagestate.h" />
+    <ClInclude Include="univ\propgrid\props.h" />
     <ClInclude Include="univ\renderer.h" />
     <ClInclude Include="univ\scrollTimer.h" />
     <ClInclude Include="univ\theme\luna_dockart.h" />

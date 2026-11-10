@@ -230,7 +230,7 @@ void ibDataViewMetaDiffModel::GetValue(ibVariant& variant,
 		if (rec.IsMergeCandidate())
 			// static_cast, because m_selected is a std::vector<bool>: indexing it yields a
 			// PROXY (std::vector<bool>::reference), not a bool, and libc++ offers several
-			// equally good conversions from it — ibVariant(bool) / (int) / (wxAny) — so the
+			// equally good conversions from it — ibVariant(bool) / (int) / (long) — so the
 			// call is ambiguous there while it compiles on MSVC and libstdc++.
 			variant = ibVariant(static_cast<bool>(m_selected[idx]));
 		else if (HasMergeCandidateDescendant(idx))

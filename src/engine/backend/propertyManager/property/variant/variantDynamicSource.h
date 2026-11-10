@@ -3,7 +3,6 @@
 
 #include "backend/backend_core.h"
 #include "core/variant.h"
-#include <wx/variant.h>
 
 class BACKEND_API ibBackendQueryable;
 class ibQueryableSourceDescriptor;

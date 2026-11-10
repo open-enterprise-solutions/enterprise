@@ -229,7 +229,7 @@ void ibGridEditor::ibPropertyGridEditorSpreadsheet::OnPropertyRefresh()
 	HideProperty(m_propertyParameter, !byParameter);
 }
 
-void ibGridEditor::ibPropertyGridEditorSpreadsheet::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
+void ibGridEditor::ibPropertyGridEditorSpreadsheet::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
 {
 	for (const ibGridBlockCoords& coords : m_selection)
 		ibPropertyGridEditorSpreadsheet::OnPropertyChanged(property, coords);

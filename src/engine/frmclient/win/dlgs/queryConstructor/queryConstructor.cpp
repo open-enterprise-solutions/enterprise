@@ -82,8 +82,6 @@ void ibStyleQueryText(ibStyledTextCtrl* text)
 	// to count to. The margin is sized to the text, so it does not take a fixed slice of a short
 	// query, and the folding margin stays off (there is nothing to fold in one statement).
 	text->SetMarginType(0, ibSTC_MARGIN_NUMBER);
-	text->StyleSetForeground(ibSTC_STYLE_LINENUMBER,
-		settings.GetColors(ibFontColorSettings::DisplayItem_Comment).foreColor);
 	text->SetMarginWidth(0, text->TextWidth(ibSTC_STYLE_LINENUMBER, wxT("_9999")));
 	text->SetMarginWidth(1, 0);
 	text->SetTabWidth(4);
@@ -675,7 +673,7 @@ wxWindow* ibDialogQueryConstructor::BuildPackagePage(wxWindow* parent)
 		if (statement.IsLink())
 			return statement.m_linkIndex >= 0
 			    && (std::size_t)statement.m_linkIndex < m_package.m_links.size()
-				? ibString::Format(_("links %s"), m_package.m_links[statement.m_linkIndex].m_left)
+				? wxString::Format(_("links %s"), m_package.m_links[statement.m_linkIndex].m_left)
 				: _("links the named selections");
 		if (statement.m_select && !statement.m_select->m_intoTemp.IsEmpty())
 			return ibString::Format(_("makes the temp table %s"), statement.m_select->m_intoTemp);

@@ -163,9 +163,6 @@ ibDialogLauncher::ibDialogLauncher(wxWindow* parent, wxWindowID id, const wxStri
 	Bind(wxEVT_CLOSE_WINDOW, &ibDialogLauncher::OnCloseWindow, this);
 
 	this->SetSizeHints(wxDefaultSize, wxDefaultSize);
-	// Interior palette — powder-blue frame (matches enterprise / designer
-	// chrome). Was system BTNFACE (Win98 light grey).
-	this->SetBackgroundColour(wxColour(0xB8, 0xC9, 0xD4));  // #B8C9D4 powder blue
 
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxHORIZONTAL);
 	wxBoxSizer* sizerLeft = new wxBoxSizer(wxVERTICAL);

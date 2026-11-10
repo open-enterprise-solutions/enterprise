@@ -1,7 +1,7 @@
 #ifndef __ADVPROP_CHART_BINDING_H__
 #define __ADVPROP_CHART_BINDING_H__
 
-#include <wx/propgrid/propgrid.h>
+#include "deskgui/univ/propgrid/propgrid.h"
 #include "frmclient/backend/backend_type.h"
 #include "frmclient/backend/propertyManager/propertyObject.h"   // ibPropertyChoiceList — the row's own answer
 
@@ -19,37 +19,37 @@
 // ⭐ THE CHOICES ARRIVE WITH THE ROW (the server's GetValueList: Choices, Multiple when a set may be ticked), and the
 // value is the property's node form — an Array of metaobject ids (ibMetaDescriptionMemory). Nothing is asked to draw or
 // edit it: the dialog ticks, OK hands the ids back, and the row's Set sends them.
-class ibPGChartBindingProperty : public wxPGProperty {
+class ibPGChartBindingProperty : public ibPGProperty {
 public:
 
 	bool IsSet() const { return m_choiceMode == ibPropertyChoiceMode::Mult; }
 
-	ibPGChartBindingProperty(const wxString& label = wxPG_LABEL, const wxString& name = wxPG_LABEL,
-		const wxVariant& value = wxVariant(),
+	ibPGChartBindingProperty(const wxString& label = ibPG_LABEL, const wxString& name = ibPG_LABEL,
+		const ibVariant& value = ibVariant(),
 		const ibPropertyChoiceList& choices = ibPropertyChoiceList(),
 		ibPropertyChoiceMode mode = ibPropertyChoiceMode::Single);
 
-	virtual wxString ValueToString(wxVariant& value,
-		wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override;
+	virtual wxString ValueToString(ibVariant& value,
+		ibPGPropValFormatFlags flags = ibPGPropValFormatFlags::Null) const override;
 
-	virtual bool StringToValue(wxVariant& variant,
+	virtual bool StringToValue(ibVariant& variant,
 		const wxString& text,
-		wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override;
+		ibPGPropValFormatFlags flags = ibPGPropValFormatFlags::Null) const override;
 
-	virtual bool IntToValue(wxVariant& value,
+	virtual bool IntToValue(ibVariant& value,
 		int number,
-		wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override;
+		ibPGPropValFormatFlags flags = ibPGPropValFormatFlags::Null) const override;
 
-	virtual wxPGEditorDialogAdapter* GetEditorDialog() const override;
+	virtual ibPGEditorDialogAdapter* GetEditorDialog() const override;
 
 	// The ids a value holds, and the same property's value holding others.
-	static std::vector<ibMetaID> IdsOf(const wxVariant& value);
-	static wxVariant ValueOf(const wxVariant& value, const std::vector<ibMetaID>& ids);
+	static std::vector<ibMetaID> IdsOf(const ibVariant& value);
+	static ibVariant ValueOf(const ibVariant& value, const std::vector<ibMetaID>& ids);
 
 protected:
 	ibPropertyChoiceMode m_choiceMode = ibPropertyChoiceMode::Single;
 private:
-	WX_PG_DECLARE_PROPERTY_CLASS(ibPGChartBindingProperty);
+	IB_PG_DECLARE_PROPERTY_CLASS(ibPGChartBindingProperty);
 };
 
 #endif

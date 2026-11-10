@@ -14,19 +14,19 @@ public:
 	void SetValue(const ibString& val);
 
 	ibPropertyFont(ibPropertyCategory* cat, const ibString& name, const wxFont& f = wxNullFont)
-		: ibPropertySerializable(cat, name, wxNullVariant)
+		: ibPropertySerializable(cat, name, ibVariant())
 	{
 		SetValue(f);
 	}
 
 	ibPropertyFont(ibPropertyCategory* cat, const ibString& name, const ibString& label, const wxFont& f = wxNullFont)
-		: ibPropertySerializable(cat, name, label, wxNullVariant)
+		: ibPropertySerializable(cat, name, label, ibVariant())
 	{
 		SetValue(f);
 	}
 
 	ibPropertyFont(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString, const wxFont& f = wxNullFont)
-		: ibPropertySerializable(cat, name, label, helpString, wxNullVariant)
+		: ibPropertySerializable(cat, name, label, helpString, ibVariant())
 	{
 		SetValue(f);
 	}

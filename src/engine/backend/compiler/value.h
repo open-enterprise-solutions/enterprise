@@ -1202,7 +1202,8 @@ public:
 	// (THE KIND, THE EMPTY AND THE NULL — SetType, GetType, IsEmpty, IsNull — are the variant's. IsNull is the SQL null
 	//  the query layer keys on: the `Null` literal and a NULL DB column, distinct from Undefined.)
 
-	BACKEND_API virtual ibString GetClassName() const;
+	// the variant's, answered by the registry (a class not registered raises)
+	BACKEND_API virtual ibString GetClassName() const override;
 	BACKEND_API virtual ibClassID GetClassType() const override;
 
 	// Beside its overload with parameters, which would hide the variant's otherwise.

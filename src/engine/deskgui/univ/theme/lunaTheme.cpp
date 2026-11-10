@@ -16,22 +16,17 @@
 #include "deskgui/univ/renderer.h"
 #include "deskgui/univ/colourScheme.h"
 #include "deskgui/univ/inputConsumer.h"
-#include "deskgui/univ/topLevel.h"
 #include "deskgui/univ/window.h"
 #include "deskgui/univ/theme/themeRenderer.h"
-#include "deskgui/univ/menu.h"
-#include "deskgui/univ/menuItem.h"
-#include "deskgui/univ/ctrl/textCtrl.h"
-#include "deskgui/univ/ctrl/listBox.h"
-#include "deskgui/univ/ctrl/button.h"
 
 namespace {
 
 // palette tiers (docs/private/ui-palette.md — reuse a tier, don't invent a shade)
-const wxColour kChrome(0xB8, 0xC9, 0xD4);        // chrome        #B8C9D4
 const wxColour kChromeLight(0xC8, 0xD6, 0xDF);   // chrome-light  #C8D6DF
+const wxColour kPowder(0xE6, 0xEE, 0xF5);        // powder        #E6EEF5
 const wxColour kContent(0xFA, 0xF7, 0xF0);       // content       #FAF7F0
 const wxColour kBorder(0xA8, 0xBA, 0xC8);        // border        #A8BAC8
+const wxColour kDisabledText(0x94, 0xA6, 0xB4);  // disabled-text #94A6B4
 const wxColour kCaptionTop(0x5A, 0x7B, 0x95);    // caption-active-top
 const wxColour kCaptionBottom(0x3F, 0x5C, 0x77); // caption-active-bottom
 const wxColour kCaptionInactiveTop(0xD8, 0xE2, 0xEB);    // caption-inactive-top
@@ -65,35 +60,6 @@ const wxCoord MENU_SEPARATOR_HEIGHT = 3;
 } // anonymous namespace
 
 // ----------------------------------------------------------------------------
-// ibLunaMenuGeometryInfo (FORKED from wxWin32MenuGeometryInfo)
-// ----------------------------------------------------------------------------
-
-class ibLunaMenuGeometryInfo : public ibMenuGeometryInfo {
-public:
-	virtual wxSize GetSize() const override { return m_size; }
-
-	wxCoord GetLabelOffset() const { return m_ofsLabel; }
-	wxCoord GetAccelOffset() const { return m_ofsAccel; }
-
-	wxCoord GetItemHeight() const { return m_heightItem; }
-
-private:
-	// the total size of the menu
-	wxSize m_size;
-
-	// the offset of the start of the menu item label
-	wxCoord m_ofsLabel;
-
-	// the offset of the start of the accel label
-	wxCoord m_ofsAccel;
-
-	// the height of a normal (not separator) item
-	wxCoord m_heightItem;
-
-	friend class ibLunaRenderer;
-};
-
-// ----------------------------------------------------------------------------
 // ibLunaColourScheme
 // ----------------------------------------------------------------------------
 
@@ -103,16 +69,19 @@ public:
 	virtual wxColour GetBackground(ibWindow* win) const override;
 };
 
+// the object inspector's palette for the whole theme (Max, 2026-11-10: "too greyish a theme"): a control and a
+// scroll bar are the powder its margin is, a dialog and a panel the light caption tier under them (a button stays
+// lighter than the surface it sits on, so it still reads as one); the chrome-light tier stays a caption's
 wxColour ibLunaColourScheme::Get(ibLunaColourScheme::StdColour col) const {
 	switch (col) {
 		case WINDOW:                      return kContent;
-		case CONTROL:                     return kChromeLight;
-		case CONTROL_PRESSED:             return kChromeLight.ChangeLightness(92);
-		case CONTROL_CURRENT:             return kChromeLight.ChangeLightness(106);
+		case CONTROL:                     return kPowder;
+		case CONTROL_PRESSED:             return kPowder.ChangeLightness(92);
+		case CONTROL_CURRENT:             return kPowder.ChangeLightness(106);
 		case CONTROL_TEXT:                return *wxBLACK;
-		case CONTROL_TEXT_DISABLED:       return kBorder;
+		case CONTROL_TEXT_DISABLED:       return kDisabledText;
 		case CONTROL_TEXT_DISABLED_SHADOW:return kChromeLight;
-		case SCROLLBAR:                   return kChromeLight;
+		case SCROLLBAR:                   return kPowder;
 		case SCROLLBAR_PRESSED:           return kBorder;
 		case HIGHLIGHT:                   return kAccent;
 		case HIGHLIGHT_TEXT:              return *wxWHITE;
@@ -126,8 +95,8 @@ wxColour ibLunaColourScheme::Get(ibLunaColourScheme::StdColour col) const {
 		case TITLEBAR_TEXT:               return kCaptionBottom;
 		case TITLEBAR_ACTIVE_TEXT:        return *wxWHITE;
 		case GAUGE:                       return kAccent;
-		case DESKTOP:                     return kChrome;
-		case FRAME:                       return kChrome;
+		case DESKTOP:                     return kCaptionInactiveTop;
+		case FRAME:                       return kCaptionInactiveTop;
 		case MAX:                         break;
 	}
 	wxFAIL_MSG(wxT("invalid standard colour"));
@@ -150,17 +119,17 @@ wxColour ibLunaColourScheme::GetBackground(ibWindow* win) const {
 		return col;
 	}
 
-	// a button inside a field ("...", "×") is flat: the field's surface, its own colour or the theme's, until the
-	// mouse is over it — hovered or pressed it is a button below, with the button's chrome
-	ibTextCtrl* const field = dynamic_cast<ibTextCtrl*>(win->GetParent());
-	if (field != nullptr && dynamic_cast<ibButton*>(win) != nullptr
+	// a button without a border (a field's "...", "×") is flat: the surface under it, its parent's own colour or the
+	// theme's, until the mouse is over it — hovered or pressed it is a button below, with the button's chrome
+	ibWindow* const parent = dynamic_cast<ibWindow*>(win->GetParent());
+	if (parent != nullptr && win->CanBeHighlighted() && !win->HasTransparentBackground()
+			&& win->GetBorder() == wxBORDER_NONE
 			&& (win->GetStateFlags() & (wxCONTROL_CURRENT | wxCONTROL_PRESSED)) == 0)
-		return GetBackground(field);
+		return GetBackground(parent);
 
 	// input surfaces (text fields, list boxes — the win32 canon classified
 	// the same way) live on the content colour, not on the chrome
-	if (dynamic_cast<ibTextCtrl*>(win) != nullptr ||
-			dynamic_cast<ibListBox*>(win) != nullptr)
+	if (win->HasContentBackground())
 		return Get(WINDOW);
 
 	// highlightable controls (buttons and friends) take the control colour
@@ -271,17 +240,15 @@ public:
 	// text line, visually clipping font descenders — give the line breathing
 	// room (Total and Client MUST stay exact inverses: best-size goes through
 	// the former, layout through the latter)
-	virtual wxRect GetTextTotalArea(const ibTextCtrl* text,
-		const wxRect& rect) const override {
+	virtual wxRect GetTextTotalArea(const wxRect& rect) const override {
 		wxRect total = rect;
-		total.Inflate(GetTextBorderWidth(text) + 3, GetTextBorderWidth(text) + 1);
+		total.Inflate(GetTextBorderWidth() + 3, GetTextBorderWidth() + 1);
 		return total;
 	}
 
-	virtual wxRect GetTextClientArea(const ibTextCtrl* text, const wxRect& rect,
-		wxCoord* extraSpaceBeyond) const override {
+	virtual wxRect GetTextClientArea(const wxRect& rect, wxCoord* extraSpaceBeyond) const override {
 		wxRect client = rect;
-		client.Deflate(GetTextBorderWidth(text) + 3, GetTextBorderWidth(text) + 1);
+		client.Deflate(GetTextBorderWidth() + 3, GetTextBorderWidth() + 1);
 
 		if (extraSpaceBeyond != nullptr)
 			*extraSpaceBeyond = 0;
@@ -548,12 +515,9 @@ public:
 	}
 
 	virtual void DrawMenuItem(wxDC& dc, wxCoord y,
-		const ibMenuGeometryInfo& gi, const wxString& label,
+		const ibMenuGeometryInfo& geometryInfo, const wxString& label,
 		const wxString& accel, const wxBitmap& bitmap = wxNullBitmap,
 		int flags = 0, int indexAccel = -1) override {
-		const ibLunaMenuGeometryInfo& geometryInfo =
-			(const ibLunaMenuGeometryInfo&)gi;
-
 		wxRect rect;
 		rect.x = MENU_SIDE_MARGIN;
 		rect.y = y;
@@ -580,7 +544,7 @@ public:
 
 		if (bmp.IsOk()) {
 			rect.SetRight(geometryInfo.GetLabelOffset());
-			ibControlRenderer::DrawBitmap(dc, bmp, rect);
+			ibRenderer::DrawBitmap(dc, bmp, rect);
 		}
 
 		// draw the label
@@ -666,92 +630,23 @@ public:
 		return wxSize(sizeText.x + 16, sizeText.y + 8);
 	}
 
-	// FORKED from wxWin32Renderer::GetMenuGeometry — the canon authority on
-	// the univ menu layout contract: it MUST call SetGeometry on every item
-	// (ibMenuItem::GetPosition/GetHeight assert otherwise)
-	virtual ibMenuGeometryInfo* GetMenuGeometry(wxWindow* win,
-		const ibMenu& menu) const override {
-		// prepare the dc: for now we draw all the items with the system font
-		wxInfoDC dc(win);
-		dc.SetFont(wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT));
-
-		// the height of a normal item
-		wxCoord heightText = dc.GetCharHeight();
-
-		// the total height, from below the empty strip at the top
-		wxCoord height = MENU_SIDE_MARGIN;
-
-		// the max length of label and accel strings: the menu width is the
-		// sum of them, even if they're for different items (as the accels
-		// should be aligned)
-		//
-		// the max length of the bitmap is never 0 as Windows always leaves
-		// enough space for a check mark indicator
-		wxCoord widthLabelMax = 0,
-		        widthAccelMax = 0,
-		        widthBmpMax = MENU_LEFT_MARGIN;
-
-		for (wxMenuItemList::compatibility_iterator node = menu.GetMenuItems().GetFirst();
-		     node;
-		     node = node->GetNext()) {
-			// height of this item
-			wxCoord h;
-
-			ibMenuItem* item = static_cast<ibMenuItem*>(node->GetData());
-			if (item->IsSeparator()) {
-				h = MENU_SEPARATOR_HEIGHT;
-			}
-			else { // not separator
-				h = heightText;
-
-				wxCoord widthLabel;
-				dc.GetTextExtent(item->GetItemLabelText(), &widthLabel, nullptr);
-				if (widthLabel > widthLabelMax) {
-					widthLabelMax = widthLabel;
-				}
-
-				wxCoord widthAccel;
-				dc.GetTextExtent(item->GetAccelString(), &widthAccel, nullptr);
-				if (widthAccel > widthAccelMax) {
-					widthAccelMax = widthAccel;
-				}
-
-				const wxBitmap& bmp = item->GetBitmap();
-				if (bmp.IsOk()) {
-					// logical: the width it is drawn at (scale 2 on OSX Retina)
-					wxCoord widthBmp = bmp.GetLogicalSize().x;
-					if (widthBmp > widthBmpMax)
-						widthBmpMax = widthBmp;
-				}
-				//else if ( item->IsCheckable() ): no need to check for this
-				// as MENU_LEFT_MARGIN is big enough to show the check mark
-			}
-
-			h += 2 * MENU_VERT_MARGIN;
-
-			// remember the item position and height
-			item->SetGeometry(height, h);
-
-			height += h;
-		}
-
-		// bundle the metrics into a struct and return it
-		ibLunaMenuGeometryInfo* gi = new ibLunaMenuGeometryInfo;
-
-		gi->m_ofsLabel = MENU_SIDE_MARGIN + widthBmpMax + 2 * MENU_BMP_MARGIN;
-		gi->m_ofsAccel = gi->m_ofsLabel + widthLabelMax;
-		if (widthAccelMax > 0) {
-			// if we actually have any accels, add a margin
-			gi->m_ofsAccel += MENU_ACCEL_MARGIN;
-		}
-
-		gi->m_heightItem = heightText + 2 * MENU_VERT_MARGIN;
-
-		gi->m_size.x = gi->m_ofsAccel + widthAccelMax + MENU_RIGHT_MARGIN + MENU_SIDE_MARGIN;
-		gi->m_size.y = height + MENU_SIDE_MARGIN;
-
-		return gi;
+	// the menu's metrics (FORKED from wxWin32Renderer::GetMenuGeometry, which laid the menu out with them itself; the
+	// menu does now, ibMenu::GetGeometryInfo)
+	virtual wxSize GetMenuMargin() const override {
+		return wxSize(MENU_SIDE_MARGIN, MENU_SIDE_MARGIN);
 	}
+	virtual wxCoord GetMenuItemHeight(wxCoord heightText) const override {
+		return heightText + 2 * MENU_VERT_MARGIN;
+	}
+	virtual wxCoord GetMenuSeparatorHeight() const override {
+		return MENU_SEPARATOR_HEIGHT + 2 * MENU_VERT_MARGIN;
+	}
+	// never less than MENU_LEFT_MARGIN: Windows always leaves enough space for a check mark indicator
+	virtual wxCoord GetMenuBitmapWidth(wxCoord widthBitmap) const override {
+		return wxMax(widthBitmap, MENU_LEFT_MARGIN) + 2 * MENU_BMP_MARGIN;
+	}
+	virtual wxCoord GetMenuAccelMargin() const override { return MENU_ACCEL_MARGIN; }
+	virtual wxCoord GetMenuSubmenuWidth() const override { return MENU_RIGHT_MARGIN; }
 
 private:
 	// draw the indicator into a fresh bitmap; size follows the system font

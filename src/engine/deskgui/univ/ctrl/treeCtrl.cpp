@@ -600,7 +600,7 @@ ibTreeTextCtrl::ibTreeTextCtrl(ibTreeCtrl *owner,
     // SEAM: GetSizeFromTextSize lived in wxControlBase — take the theme
     // text paddings instead
     wxSize fullSize = ibThemeEngine::Get()->GetRenderer()
-        ->GetTextTotalArea(this, wxRect(textSize)).GetSize();
+        ->GetTextTotalArea(wxRect(textSize)).GetSize();
 
     // Ensure that the text field covers tree item.
     fullSize.x = wxMax(fullSize.x, textSize.x + 5);
@@ -745,7 +745,7 @@ void ibTreeTextCtrl::IncreaseSizeForText( const wxString& text )
     // SEAM: GetSizeFromText lived in wxControlBase — measure through the
     // theme text paddings instead
     int sx = ibThemeEngine::Get()->GetRenderer()
-        ->GetTextTotalArea(this, wxRect(GetTextExtent(text))).GetSize().x;
+        ->GetTextTotalArea(wxRect(GetTextExtent(text))).GetSize().x;
     if (myPos.x + sx > parentSize.x)
         sx = parentSize.x - myPos.x;
     if (sx > mySize.x)
@@ -3012,8 +3012,10 @@ ibTreeCtrl::PaintLevel(ibTreeItem *item,
             }
             else // no custom buttons
             {
-                const int wImage = FromDIP(9);
-                const int hImage = FromDIP(9);
+                ibRenderer* const renderer = ibThemeEngine::Get()->GetRenderer();
+                const wxSize sizeImage = renderer->GetExpanderSize(this);
+                const int wImage = sizeImage.x;
+                const int hImage = sizeImage.y;
 
                 int flag = 0;
                 if (item->IsExpanded())
@@ -3023,7 +3025,7 @@ ibTreeCtrl::PaintLevel(ibTreeItem *item,
                 if (item->IsSelected())
                     flag |= wxCONTROL_SELECTED;
 
-                wxRendererNative::Get().DrawTreeItemButton
+                renderer->DrawTreeItemButton
                                         (
                                             this,
                                             dc,
@@ -3085,7 +3087,7 @@ void ibTreeCtrl::DrawDropEffect(ibTreeItem *item)
         if ( item->HasPlus() )
         {
             // it's a folder, indicate it by a border
-            DrawBorder(item);
+            DrawDropBorder(item);
         }
         else
         {
@@ -3103,9 +3105,9 @@ void ibTreeCtrl::DrawDropEffect(ibTreeItem *item)
     }
 }
 
-void ibTreeCtrl::DrawBorder(const wxTreeItemId &item)
+void ibTreeCtrl::DrawDropBorder(const wxTreeItemId &item)
 {
-    wxCHECK_RET( item.IsOk(), "invalid item in ibTreeCtrl::DrawLine" );
+    wxCHECK_RET( item.IsOk(), "invalid item in ibTreeCtrl::DrawDropBorder" );
 
     ibTreeItem *i = GetItemPtr(item);
 

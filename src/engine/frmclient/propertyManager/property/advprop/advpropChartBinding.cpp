@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-#include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frmclient/propertyManager/property/private/prop.h"             // ibPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 #include "frmclient/propertyManager/propertyEditor.h"
 #include "frmclient/win/ctrls/checktree.h"
@@ -15,7 +15,7 @@
 // ibPGChartBindingProperty
 // -----------------------------------------------------------------------
 
-wxPG_IMPLEMENT_PROPERTY_CLASS(ibPGChartBindingProperty, wxPGProperty, ComboBoxAndButton)
+ibPG_IMPLEMENT_PROPERTY_CLASS(ibPGChartBindingProperty, ibPGProperty, ComboBoxAndButton)
 
 // register frontend property — one editor, every property that names metaobjects (see the header)
 class ibPropertyChartBindingLoader
@@ -23,7 +23,7 @@ class ibPropertyChartBindingLoader
 public:
 	ibPropertyChartBindingLoader()
 	{
-		const auto maker = [](ibBackendProperty* property) -> wxPGProperty* {
+		const auto maker = [](ibBackendProperty* property) -> ibPGProperty* {
 			ibPropertyChoiceList choices;
 			const ibPropertyChoiceMode mode = property->GetValueList(choices);
 			return new ibPGChartBindingProperty(property->GetLabel(), property->GetName(),
@@ -38,10 +38,10 @@ public:
 } g_chartBindingLoader;
 
 // The row's value, its node form: an Array of ids; anything else (no value yet) holds none.
-std::vector<ibMetaID> ibPGChartBindingProperty::IdsOf(const wxVariant& value)
+std::vector<ibMetaID> ibPGChartBindingProperty::IdsOf(const ibVariant& value)
 {
 	std::vector<ibMetaID> ids;
-	const ibDataValue node = ibVariantDataSerializable::GetNodeValue(value);
+	const ibDataValue node = ibVariantSerializable::GetNodeValue(value);
 	if (node.Kind() != ibDataKind::Array)
 		return ids;
 	for (const ibDataValue& item : node.AsArray())
@@ -50,28 +50,28 @@ std::vector<ibMetaID> ibPGChartBindingProperty::IdsOf(const wxVariant& value)
 }
 
 // …named by the cell (ValueToString).
-wxVariant ibPGChartBindingProperty::ValueOf(const wxVariant& value, const std::vector<ibMetaID>& ids)
+ibVariant ibPGChartBindingProperty::ValueOf(const ibVariant& value, const std::vector<ibMetaID>& ids)
 {
 	std::vector<ibDataValue> items;
 	for (const ibMetaID id : ids)
 		items.push_back(ibDataValue::Int(id));
-	return wxVariant(new ibVariantDataSerializable(value.GetType(), ibDataValue::Array(items), wxEmptyString));
+	return ibVariant(new ibVariantSerializable(ibDataValue::Array(items), wxEmptyString));
 }
 
 ibPGChartBindingProperty::ibPGChartBindingProperty(const wxString& label, const wxString& strName,
-	const wxVariant& value, const ibPropertyChoiceList& choices, ibPropertyChoiceMode mode)
-	: wxPGProperty(label, strName), m_choiceMode(mode)
+	const ibVariant& value, const ibPropertyChoiceList& choices, ibPropertyChoiceMode mode)
+	: ibPGProperty(label, strName), m_choiceMode(mode)
 {
 	for (unsigned int idx = 0; idx < choices.GetCount(); idx++)
 		m_choices.Add(choices.GetLabel(idx), choices.GetBitmap(idx), choices.GetId(idx));
 
-	m_flags |= wxPGPropertyFlags_ActiveButton; // Property button always enabled.
+	m_flags |= ibPGPropertyFlags_ActiveButton; // Property button always enabled.
 
 	SetValue(value);
 }
 
 // The names of what it holds, as the desktop's value string lists them.
-wxString ibPGChartBindingProperty::ValueToString(wxVariant& value, wxPGPropValFormatFlags WXUNUSED(flags)) const
+wxString ibPGChartBindingProperty::ValueToString(ibVariant& value, ibPGPropValFormatFlags WXUNUSED(flags)) const
 {
 	wxString text;
 	for (const ibMetaID id : IdsOf(value)) {
@@ -85,14 +85,14 @@ wxString ibPGChartBindingProperty::ValueToString(wxVariant& value, wxPGPropValFo
 	return text;
 }
 
-bool ibPGChartBindingProperty::StringToValue(wxVariant& WXUNUSED(variant), const wxString& WXUNUSED(text),
-	wxPGPropValFormatFlags WXUNUSED(flags)) const
+bool ibPGChartBindingProperty::StringToValue(ibVariant& WXUNUSED(variant), const wxString& WXUNUSED(text),
+	ibPGPropValFormatFlags WXUNUSED(flags)) const
 {
 	return false;
 }
 
 // One picked from the drop-down: it alone — the desktop's SetDefaultMetaType.
-bool ibPGChartBindingProperty::IntToValue(wxVariant& value, int number, wxPGPropValFormatFlags WXUNUSED(flags)) const
+bool ibPGChartBindingProperty::IntToValue(ibVariant& value, int number, ibPGPropValFormatFlags WXUNUSED(flags)) const
 {
 	if (number < 0 || number >= static_cast<int>(m_choices.GetCount()))
 		return false;
@@ -100,9 +100,9 @@ bool ibPGChartBindingProperty::IntToValue(wxVariant& value, int number, wxPGProp
 	return true;
 }
 
-wxPGEditorDialogAdapter* ibPGChartBindingProperty::GetEditorDialog() const
+ibPGEditorDialogAdapter* ibPGChartBindingProperty::GetEditorDialog() const
 {
-	class ibPGEditorChartBindingDialogAdapter : public wxPGEditorDialogAdapter {
+	class ibPGEditorChartBindingDialogAdapter : public ibPGEditorDialogAdapter {
 
 		class ibTreeItemPropertyData : public wxTreeItemData {
 			ibMetaID m_metaId;
@@ -113,7 +113,7 @@ wxPGEditorDialogAdapter* ibPGChartBindingProperty::GetEditorDialog() const
 
 	public:
 
-		virtual bool DoShowDialog(wxPropertyGrid* pg, wxPGProperty* prop) wxOVERRIDE
+		virtual bool DoShowDialog(ibPropertyGrid* pg, ibPGProperty* prop) wxOVERRIDE
 		{
 			ibPGChartBindingProperty* dlgProp = wxDynamicCast(prop, ibPGChartBindingProperty);
 			wxCHECK_MSG(dlgProp, false, "Function called for incompatible property");
@@ -126,7 +126,7 @@ wxPGEditorDialogAdapter* ibPGChartBindingProperty::GetEditorDialog() const
 
 			dlg->SetFont(pg->GetFont()); // To allow entering chars of the same set as the propGrid
 
-			const int spacing = wxPropertyGrid::IsSmallScreen() ? 4 : 8;
+			const int spacing = ibPropertyGrid::IsSmallScreen() ? 4 : 8;
 			wxBoxSizer* topsizer = new wxBoxSizer(wxVERTICAL);
 			wxBoxSizer* rowsizer = new wxBoxSizer(wxHORIZONTAL);
 
@@ -141,7 +141,7 @@ wxPGEditorDialogAdapter* ibPGChartBindingProperty::GetEditorDialog() const
 			topsizer->Add(rowsizer, wxSizerFlags(1).Expand());
 
 			tc->SetDoubleBuffered(true);
-			tc->Enable(!dlgProp->HasFlag(wxPGFlags::ReadOnly));
+			tc->Enable(!dlgProp->HasFlag(ibPGFlags::ReadOnly));
 
 			ibStdDialogButtonSizer* buttonSizer = dlg->CreateStdDialogButtonSizer(wxOK | wxCANCEL);
 			topsizer->Add(buttonSizer, wxSizerFlags(0).Right().Border(wxBOTTOM | wxRIGHT, spacing));
@@ -149,7 +149,7 @@ wxPGEditorDialogAdapter* ibPGChartBindingProperty::GetEditorDialog() const
 			dlg->SetSizer(topsizer);
 			topsizer->SetSizeHints(dlg);
 
-			if (!wxPropertyGrid::IsSmallScreen()) {
+			if (!ibPropertyGrid::IsSmallScreen()) {
 				dlg->SetSize(dlg->FromDIP(wxSize(400, 300)));
 				dlg->Move(pg->GetGoodEditorDialogPosition(prop, dlg->GetSize()));
 			}
@@ -160,7 +160,7 @@ wxPGEditorDialogAdapter* ibPGChartBindingProperty::GetEditorDialog() const
 
 			// The candidates are the row's own choices — one item per object.
 			wxImageList* imageList = tc->GetImageList();
-			const wxPGChoices& choices = dlgProp->GetChoices();
+			const ibPGChoices& choices = dlgProp->GetChoices();
 			for (unsigned int idx = 0; idx < choices.GetCount(); idx++) {
 				const ibMetaID id = choices.GetValue(idx);
 				const wxBitmapBundle& bitmap = choices.Item(idx).GetBitmap();

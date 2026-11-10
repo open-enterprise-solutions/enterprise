@@ -22,7 +22,7 @@
 #include <wx/crt.h>
 #endif
 
-#include <wx/datectrl.h>
+#include "deskgui/univ/ctrl/datePickerCtrl.h"
 #include <wx/except.h>
 #include "deskgui/univ/ctrl/spinCtrl.h"
 #include "deskgui/univ/ctrl/choice.h"
@@ -30,6 +30,7 @@
 #include <wx/renderer.h>
 #include "deskgui/univ/renderer.h"
 #include "deskgui/univ/theme.h"  // the check box: the theme's renderer
+#include "deskgui/univ/colourScheme.h"  // the selected text: the theme's colour
 #include <wx/uilocale.h>
 
 #if wxUSE_ACCESSIBILITY
@@ -681,7 +682,7 @@ ibDataViewCustomRendererBase::WXCallRender(wxRect rectCell, wxDC* dc, int state)
 	// custom colours may be unreadable on it
 	wxColour col;
 	if (state & wxDATAVIEW_CELL_SELECTED)
-		col = wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHTTEXT);
+		col = wxTHEME_COLOUR(HIGHLIGHT_TEXT);
 	else if (m_attr.HasColour())
 		col = typeConv::ColourToWxColour(m_attr.GetColour());
 	else // use default foreground
@@ -773,10 +774,10 @@ ibDataViewCustomRendererBase::RenderText(const wxString& text,
 
 	// ⭐⭐ THE ORDINARY CELL IS DRAWN AS TEXT, not as a themed item, and that is most of them: not
 	// selected, not disabled, and short enough to fit. DrawItemText is the right call for the other
-	// cases and the wrong price for this one - on MSW it opens a THEME HANDLE per call, runs
-	// Ellipsize (which searches for a width by measuring repeatedly) and then draws through uxtheme.
-	// Measured on a grid scroll, 2026-09-06: DrawItemText 20.97% of the whole process, of which the
-	// theme handle 3.77% and Ellipsize 5.12% - paid on every cell, to decide nothing.
+	// cases and the wrong price for this one - it runs Ellipsize (which searches for a width by
+	// measuring repeatedly). Measured on a grid scroll, 2026-09-06, when it was the native one:
+	// DrawItemText 20.97% of the whole process, of which the theme handle 3.77% and Ellipsize 5.12% -
+	// paid on every cell, to decide nothing. It is the theme's now (ibThemeRenderer::DrawItemText).
 	//
 	// ⚠ WHAT IT DOES NOT CHANGE. The colour is already set by WXCallRender (wxDCTextColourChanger)
 	// and the rectangle is already placed and narrowed by it for the alignment, so a cell that fits
@@ -794,7 +795,7 @@ ibDataViewCustomRendererBase::RenderText(const wxString& text,
 		}
 	}
 
-	wxRendererNative::Get().DrawItemText(
+	ibThemeEngine::Get()->GetRenderer()->DrawItemText(
 		owner,
 		*dc,
 		text,
@@ -1981,7 +1982,7 @@ ibDataViewDateRenderer::ibDataViewDateRenderer(const wxString& varianttype,
 wxWindow*
 ibDataViewDateRenderer::CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const ibVariant& value)
 {
-	return new wxDatePickerCtrl
+	return new ibDatePickerCtrl
 	(
 		parent,
 		wxID_ANY,
@@ -1993,7 +1994,7 @@ ibDataViewDateRenderer::CreateEditorCtrl(wxWindow* parent, wxRect labelRect, con
 
 bool ibDataViewDateRenderer::GetValueFromEditorCtrl(wxWindow* editor, ibVariant& value)
 {
-	wxDatePickerCtrl* ctrl = static_cast<wxDatePickerCtrl*>(editor);
+	ibDatePickerCtrl* ctrl = static_cast<ibDatePickerCtrl*>(editor);
 	value = typeConv::WxDateTimeToDateTime(ctrl->GetValue());
 	return true;
 }

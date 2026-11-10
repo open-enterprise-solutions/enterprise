@@ -51,15 +51,18 @@ public:
     // before — the toggle button never got its pressed background)
     virtual bool CanBeHighlighted() const override { return true; }
 
+    // the button's face: the theme's surface in its state, or its background bitmap
+    virtual void EraseBackground(wxDC& dc, const wxRect& rect) override;
+
 protected:
     // choose the default border for this window (drawn by ibWindow::TryBefore —
-    // the ONLY frame of the button, see the SEAM note in DoDraw)
+    // the ONLY frame of the button, see the SEAM note in OnPaint)
     virtual wxBorder GetDefaultBorder() const override { return wxBORDER_STATIC; }
 
     virtual wxSize DoGetBestClientSize() const override;
 
-    virtual bool DoDrawBackground(wxDC& dc) override;
-    virtual void DoDraw(ibControlRenderer *renderer) override;
+    void OnPaint(wxPaintEvent& event);
+
     // current state
     bool m_isPressed,
          m_isDefault;
@@ -71,6 +74,7 @@ protected:
 
 private:
     wxDECLARE_NO_COPY_CLASS(ibAnyButton);
+    wxDECLARE_EVENT_TABLE();
 };
 
 // ----------------------------------------------------------------------------

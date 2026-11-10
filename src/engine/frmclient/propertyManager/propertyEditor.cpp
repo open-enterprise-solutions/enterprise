@@ -1,23 +1,23 @@
 #include "propertyEditor.h"
 
-#include <wx/propgrid/propgrid.h>
-#include <wx/propgrid/props.h>
+#include "deskgui/univ/propgrid/propgrid.h"
+#include "deskgui/univ/propgrid/props.h"
 
 #include "frmclient/propertyManager/property/private/prop.h"
 
-#include <wx/odcombo.h>
-#include <wx/stattext.h>
+#include "deskgui/univ/ctrl/comboBox.h"     // ibComboBox — the combo and button cell's editor
+#include "deskgui/univ/ctrl/staticText.h"   // ibStaticText — the link cell's editor
 
 // -----------------------------------------------------------------------
 // wxComboBox-based property editor
 // -----------------------------------------------------------------------
 
-WX_PG_IMPLEMENT_INTERNAL_EDITOR_CLASS(ComboBoxAndButton,
-	wxPGComboBoxAndButtonEditor,
-	wxPGComboBoxEditor)
+IB_PG_IMPLEMENT_INTERNAL_EDITOR_CLASS(ComboBoxAndButton,
+	ibPGComboBoxAndButtonEditor,
+	ibPGComboBoxEditor)
 
-	wxPGWindowList wxPGComboBoxAndButtonEditor::CreateControls(wxPropertyGrid* propGrid,
-		wxPGProperty* property,
+	ibPGWindowList ibPGComboBoxAndButtonEditor::CreateControls(ibPropertyGrid* propGrid,
+		ibPGProperty* property,
 		const wxPoint& pos,
 		const wxSize& sz) const
 {
@@ -41,13 +41,13 @@ WX_PG_IMPLEMENT_INTERNAL_EDITOR_CLASS(ComboBoxAndButton,
 	wxSize ch_sz(sz.x - bt->GetSize().x, sz.y);
 
 #ifdef __WXOSX__
-	ch_sz.x -= 2; // was wxPG_TEXTCTRL_AND_BUTTON_SPACING, removed in wxWidgets 3.3
+	ch_sz.x -= 2; // was ibPG_TEXTCTRL_AND_BUTTON_SPACING, removed in wxWidgets 3.3
 #endif
 
 	wxWindow* ch = CreateControlsBase(propGrid, property,
 		pos, ch_sz, 0);
 
-	if (!property->HasFlag(wxPGPropertyFlags_ActiveButton)) {
+	if (!property->HasFlag(ibPGPropertyFlags_ActiveButton)) {
 		bt->Disable();
 	}
 
@@ -56,16 +56,16 @@ WX_PG_IMPLEMENT_INTERNAL_EDITOR_CLASS(ComboBoxAndButton,
 #endif
 
 
-	return wxPGWindowList(ch, bt);
+	return ibPGWindowList(ch, bt);
 }
 
-bool wxPGComboBoxAndButtonEditor::OnEvent(wxPropertyGrid* propGrid,
-	wxPGProperty* property,
+bool ibPGComboBoxAndButtonEditor::OnEvent(ibPropertyGrid* propGrid,
+	ibPGProperty* property,
 	wxWindow* ctrl,
 	wxEvent& event) const
 {
-	wxOwnerDrawnComboBox* cb =
-		dynamic_cast<wxOwnerDrawnComboBox*>(ctrl);
+	ibComboBox* cb =
+		dynamic_cast<ibComboBox*>(ctrl);
 
 	wxWindow* textCtrl = cb ?
 		cb->GetTextCtrl() : nullptr;
@@ -74,72 +74,72 @@ bool wxPGComboBoxAndButtonEditor::OnEvent(wxPropertyGrid* propGrid,
 		propGrid->GetEditorControlSecondary();
 
 	if (wndEditor2 != nullptr) {
-		bool needButton = property->HasFlag(wxPGPropertyFlags_ActiveButton);
+		bool needButton = property->HasFlag(ibPGPropertyFlags_ActiveButton);
 		if (needButton != wndEditor2->IsEnabled()) {
 			wndEditor2->Enable(needButton);
 		}
 	}
 
-	if (wxPGTextCtrlEditor::OnTextCtrlEvent(propGrid, property, textCtrl, event))
+	if (ibPGTextCtrlEditor::OnTextCtrlEvent(propGrid, property, textCtrl, event))
 		return true;
 
-	return wxPGChoiceEditor::OnEvent(propGrid, property, ctrl, event);
+	return ibPGChoiceEditor::OnEvent(propGrid, property, ctrl, event);
 }
 
-void wxPGComboBoxAndButtonEditor::UpdateControl(wxPGProperty* property, wxWindow* ctrl) const
+void ibPGComboBoxAndButtonEditor::UpdateControl(ibPGProperty* property, wxWindow* ctrl) const
 {
-	wxOwnerDrawnComboBox* cb = (wxOwnerDrawnComboBox*)ctrl;
+	ibComboBox* cb = (ibComboBox*)ctrl;
 	const int index = property->GetChoiceSelection();
-	wxString s = property->GetValueAsString(wxPGPropValFormatFlags::EditableValue);
+	wxString s = property->GetValueAsString(ibPGPropValFormatFlags::EditableValue);
 	cb->SetSelection(index);
 	property->GetGrid()->SetupTextCtrlValue(s);
 	cb->SetValue(s);
 }
 
-bool wxPGComboBoxAndButtonEditor::GetValueFromControl(wxVariant& variant, wxPGProperty* property, wxWindow* ctrl) const
+bool ibPGComboBoxAndButtonEditor::GetValueFromControl(ibVariant& variant, ibPGProperty* property, wxWindow* ctrl) const
 {
-	wxOwnerDrawnComboBox* cb = (wxOwnerDrawnComboBox*)ctrl;
+	ibComboBox* cb = (ibComboBox*)ctrl;
 	wxString textVal = cb->GetValue();
 
 	if (property->UsesAutoUnspecified() && textVal.empty()) {
-		variant.MakeNull();
+		variant.Reset();
 		return true;
 	}
 
 	int selection = cb->FindString(textVal); bool res = true;
 
 	if (selection != wxNOT_FOUND) {
-		res = property->IntToValue(variant, selection, wxPGPropValFormatFlags::EditableValue | wxPGPropValFormatFlags::PropertySpecific);
+		res = property->IntToValue(variant, selection, ibPGPropValFormatFlags::EditableValue | ibPGPropValFormatFlags::PropertySpecific);
 	}
 	else {
-		res = property->StringToValue(variant, textVal, wxPGPropValFormatFlags::EditableValue | wxPGPropValFormatFlags::PropertySpecific);
+		res = property->StringToValue(variant, textVal, ibPGPropValFormatFlags::EditableValue | ibPGPropValFormatFlags::PropertySpecific);
 	}
 
 	// Changing unspecified always causes event (returning
 	// true here should be enough to trigger it).
-	if (!res && variant.IsNull())
+	if (!res && variant.GetType() == ibValueTypes::TYPE_EMPTY)
 		res = true;
 
 	return res;
 }
 
-wxPGComboBoxAndButtonEditor::~wxPGComboBoxAndButtonEditor()
+ibPGComboBoxAndButtonEditor::~ibPGComboBoxAndButtonEditor()
 {
-	wxPG_EDITOR(ComboBoxAndButton) = nullptr;
+	ibPG_EDITOR(ComboBoxAndButton) = nullptr;
 }
 
-WX_PG_IMPLEMENT_INTERNAL_EDITOR_CLASS(HyperLink,
-	wxPGHyperLinkEditor,
-	wxPGEditor)
+IB_PG_IMPLEMENT_INTERNAL_EDITOR_CLASS(HyperLink,
+	ibPGHyperLinkEditor,
+	ibPGEditor)
 
-	wxPGWindowList wxPGHyperLinkEditor::CreateControls(wxPropertyGrid* propGrid,
-		wxPGProperty* property,
+	ibPGWindowList ibPGHyperLinkEditor::CreateControls(ibPropertyGrid* propGrid,
+		ibPGProperty* property,
 		const wxPoint& pos,
 		const wxSize& sz) const
 {
 
 	// Use two stage creation to allow cleaner display on wxMSW
-	wxStaticText* ctrl = new wxStaticText();
+	ibStaticText* ctrl = new ibStaticText();
 
 #ifdef __WXMSW__
 	ctrl->Hide();
@@ -153,16 +153,12 @@ WX_PG_IMPLEMENT_INTERNAL_EDITOR_CLASS(HyperLink,
 		wxBORDER_NONE);
 
 	ctrl->SetBackgroundColour(propGrid->GetPropertyBackgroundColour(property));
-	ctrl->SetForegroundColour(propGrid->GetPropertyTextColour(property));
 
-	wxFont font = ctrl->GetFont();
-	font.SetUnderlined(true);
-	ctrl->SetFont(font);
-
-	ctrl->SetCursor(wxCURSOR_HAND);
+	// a link as the library draws one: underlined in the theme's link colour, the hand over it
+	ctrl->SetHyperlink();
 
 	// Connect all required events to grid's OnCustomEditorEvent
-	// (all relevenat wxTextCtrl, wxComboBox and wxButton events are
+	// (all relevenat ibTextCtrl, wxComboBox and wxButton events are
 	// already connected)
 
 #ifdef __WXMSW__
@@ -172,55 +168,41 @@ WX_PG_IMPLEMENT_INTERNAL_EDITOR_CLASS(HyperLink,
 	return ctrl;
 }
 
-bool wxPGHyperLinkEditor::OnEvent(wxPropertyGrid* propGrid,
-	wxPGProperty* property,
+bool ibPGHyperLinkEditor::OnEvent(ibPropertyGrid* propGrid,
+	ibPGProperty* property,
 	wxWindow* wnd,
 	wxEvent& event) const
 {
 	if (event.GetEventType() == wxEVT_LEFT_DOWN)
 	{
-		wxStaticText* ctrl = wxDynamicCast(wnd, wxStaticText);
+		ibStaticText* ctrl = wxDynamicCast(wnd, ibStaticText);
 		if (ctrl)
 		{
-			// ⭐⭐ THE CLICK IS A NAME STAMPED ON THE VALUE — the data is left alone, so the cell still
-			// has its variant to read and to clone. What the cell watches for is the NAME, never a
-			// bool: there is no payload here to test.
-			wxVariant variant = property->GetValue();
-			variant.SetName(wxT("hyperLink_clicked"));
-			property->SetValue(variant);
-
-			// 🛑 AND THE NAME IS *NOT* TAKEN BACK OFF HERE. Putting a second SetValue in — stamp, let
-			// the cell react, un-stamp — reads as the tidy fix and is not one: every cell's OnSetValue
-			// runs a second time inside this click, and the ones that DEFER their work (all of them —
-			// a modal opened inside a click takes the mouse with it) then run against a grid that has
-			// moved on. It cost a crash in the hyperlink's deferred OpenObjectForm and stopped the
-			// composer's window from opening at all (measured, 2026-08-24).
-			//
-			// The click is CONSUMED BY WHOEVER ANSWERS IT — see the composer's and the list's cells:
-			// they clear the name off m_value the moment they take it. That is the reader ending its
-			// own signal, which is one place per road rather than one guess for all of them.
+			// ⭐⭐ THE CLICK IS THE CELL'S — answered in its own OnEvent, which the grid calls right after this one,
+			// inside the same event (ibPropertyGrid::HandleCustomEditorEvent): what the cell sets there by
+			// SetValueInEvent is the pending value. The value is left alone — the cell still has it to read. Before the
+			// fork the click was a name stamped on the value (wx's variant had one; the core's has none), and every
+			// SetValue that came after it found the name still standing.
 			return true;
 		}
 	}
 	return false;
 }
 
-void wxPGHyperLinkEditor::UpdateControl(wxPGProperty* property, wxWindow* wnd) const
+void ibPGHyperLinkEditor::UpdateControl(ibPGProperty* property, wxWindow* wnd) const
 {
-	wxStaticText* ctrl = (wxStaticText*)wnd;
-	assert(ctrl && ctrl->IsKindOf(CLASSINFO(wxStaticText)));
+	assert(wxDynamicCast(wnd, ibStaticText) != nullptr);
 }
 
-bool wxPGHyperLinkEditor::GetValueFromControl(wxVariant& variant, wxPGProperty* property, wxWindow* wnd) const
+bool ibPGHyperLinkEditor::GetValueFromControl(ibVariant& variant, ibPGProperty* property, wxWindow* wnd) const
 {
-	wxStaticText* ctrl = (wxStaticText*)wnd;
-	assert(ctrl && ctrl->IsKindOf(CLASSINFO(wxStaticText)));
+	assert(wxDynamicCast(wnd, ibStaticText) != nullptr);
 	return false;
 }
 
-wxPGHyperLinkEditor::~wxPGHyperLinkEditor()
+ibPGHyperLinkEditor::~ibPGHyperLinkEditor()
 {
-	wxPG_EDITOR(HyperLink) = nullptr;
+	ibPG_EDITOR(HyperLink) = nullptr;
 }
 
 #include <wx/module.h>
@@ -231,8 +213,8 @@ public:
 	wxOESEditorModule() : wxModule() {}
 	virtual bool OnInit() {
 		//register new editor 
-		wxPGRegisterEditorClass(ComboBoxAndButton);
-		wxPGRegisterEditorClass(HyperLink);
+		ibPGRegisterEditorClass(ComboBoxAndButton);
+		ibPGRegisterEditorClass(HyperLink);
 		return true;
 	}
 	virtual void OnExit() {}

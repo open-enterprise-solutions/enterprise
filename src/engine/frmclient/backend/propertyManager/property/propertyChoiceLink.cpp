@@ -24,7 +24,7 @@ void AddItem(ibPropertyChoiceList& list, const ibDataNode& item)
 {
 	const ibString title = item.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Title);
 	const std::int32_t id = item.GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Id);
-	list.Add(id, title, ibEmptyString, wxVariant((long)id),
+	list.Add(id, title, ibEmptyString, ibVariant((long)id),
 		ibProtocolPicture(item, ibProtocol::ibSchema::ibProperties::Picture));
 }
 

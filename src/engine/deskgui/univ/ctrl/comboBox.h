@@ -1,22 +1,20 @@
-// OWN deskgui control (replaces the FORKED univ version): the univ combobox
-// rode the generic wxComboCtrl host which lives outside the deskgui theme
-// chain; this one is a pure deskgui composition — an ibControl host drawing
-// the value area + drop arrow, an ibTextCtrl child for editable mode and a
-// transient popup window with an ibListBox carrying the items.
+// OWN deskgui control (replaces the FORKED univ version): the combo box - ibComboCtrl (comboCtrl.h, the value area,
+// the drop button, the text child) with a list of the items it keeps itself (wxItemContainer) and draws itself, as
+// wx's wxOwnerDrawnComboBox does: OnDrawItem paints an item in the list and the chosen one in the value's strip
+// (SetCustomPaintWidth, wxODCB_PAINTING_CONTROL). The default draws the text - a combo that draws nothing of its own
+// looks as a list box does.
 
 #ifndef _DESKGUI_UNIV_COMBOBOX_H_
 #define _DESKGUI_UNIV_COMBOBOX_H_
 
-#include "deskgui/deskgui.h"
-
-#include "deskgui/univ/inputHandler.h"
-#include "deskgui/univ/ctrl/control.h"
+#include "deskgui/univ/ctrl/comboCtrl.h"
 
 #include <wx/ctrlsub.h>
+#include <wx/odcombo.h>   // wxODCB_PAINTING_CONTROL / _SELECTED, wxODCB_DCLICK_CYCLES - wx's flags, as wxCB_READONLY
 
-class ibListBox;
-class ibTextCtrl;
-class ibComboPopupWindow;
+#include <vector>
+
+class ibVListBoxComboPopup;
 
 // ----------------------------------------------------------------------------
 // actions
@@ -27,15 +25,11 @@ class ibComboPopupWindow;
 #define ibACTION_COMBOBOX_SELECT_PREV wxT("prev")
 #define ibACTION_COMBOBOX_SELECT      wxT("select")
 
-// show/hide the popup listbox
-#define ibACTION_COMBOBOX_POPUP       wxT("popup")
-#define ibACTION_COMBOBOX_DISMISS     wxT("dismiss")
-
 // ----------------------------------------------------------------------------
 // ibComboBox: a combination of a value area, a drop button and a popup list
 // ----------------------------------------------------------------------------
 
-class DESKGUI_API ibComboBox : public ibControl, public wxItemContainer
+class DESKGUI_API ibComboBox : public ibComboCtrl, public wxItemContainer
 {
 public:
     // ctors and such
@@ -89,50 +83,25 @@ public:
 
     virtual ~ibComboBox();
 
-    // value access (the full wxTextEntry surface lives on the editable
-    // child; the combo itself only needs the value semantics)
-    wxString GetValue() const;
-    void SetValue(const wxString& value);
-    void ChangeValue(const wxString& value);
-    void SetInsertionPointEnd();
-
-    bool IsEditable() const { return !HasFlag(wxCB_READONLY); }
-
-    // popup control
-    void ShowPopup();
-    void HidePopup();
-    bool IsPopupShown() const;
-
-    // wxItemContainer implementation (items live in the popup ibListBox)
-    virtual void DoClear() override;
-    virtual void DoDeleteOneItem(unsigned int n) override;
+    // wxItemContainer implementation (the items are kept here, the popup list shows them)
     virtual unsigned int GetCount() const override;
     virtual wxString GetString(unsigned int n) const override;
     virtual void SetString(unsigned int n, const wxString& s) override;
-    virtual int FindString(const wxString& s, bool bCase = false) const override;
     virtual void SetSelection(int n) override;
     virtual int GetSelection() const override;
     virtual wxString GetStringSelection() const override;
-
-    virtual wxClientDataType GetClientDataType() const override;
-    virtual void SetClientDataType(wxClientDataType clientDataItemsType) override;
 
     // actions
     virtual bool PerformAction(const ibControlAction& action,
                                long numArg = -1l,
                                const wxString& strArg = wxEmptyString) override;
 
-    static ibInputHandler *GetStdInputHandler(ibInputHandler *handlerDef);
-    virtual ibInputHandler *DoGetStdInputHandler(ibInputHandler *handlerDef) override
-    {
-        return GetStdInputHandler(handlerDef);
-    }
-
-    // implementation only: called by the popup window / popup listbox
+    // implementation only: called by the popup list - the item chosen there (or stepped to, OnComboDoubleClick)
     void OnPopupSelect(int selection);
-    void OnPopupDismiss();
 
 protected:
+    virtual void DoClear() override;
+    virtual void DoDeleteOneItem(unsigned int n) override;
     virtual int DoInsertItems(const wxArrayStringsAdapter& items,
                               unsigned int pos,
                               void **clientData, wxClientDataType type) override;
@@ -140,18 +109,13 @@ protected:
     virtual void DoSetItemClientData(unsigned int n, void* clientData) override;
     virtual void* DoGetItemClientData(unsigned int n) const override;
 
-    // geometry/drawing
-    virtual wxSize DoGetBestClientSize() const override;
-    virtual void DoDraw(ibControlRenderer *renderer) override;
-
-    // the rect of the drop button (client coords)
-    wxRect GetButtonRect() const;
-    // the rect of the value area (client coords)
-    wxRect GetValueRect() const;
-
-    // event handlers
-    void OnLeftDown(wxMouseEvent& event);
-    void OnSize(wxSizeEvent& event);
+    // THE ITEMS ARE DRAWN BY THE COMBO (wx's wxOwnerDrawnComboBox): the list asks it for each item, the value's strip
+    // for the chosen one with wxODCB_PAINTING_CONTROL; wxODCB_PAINTING_SELECTED marks the item under the mouse or the
+    // keys. A derived combo draws its own.
+    virtual void OnDrawItem(wxDC& dc, const wxRect& rect, int item, int flags) const;
+    virtual wxCoord OnMeasureItem(size_t item) const;
+    virtual wxCoord OnMeasureItemWidth(size_t item) const;
+    virtual void OnDrawBackground(wxDC& dc, const wxRect& rect, int item, int flags) const;
 
     // send wxEVT_COMBOBOX for the current selection
     void SendComboEvent();
@@ -159,22 +123,19 @@ protected:
     // common part of all ctors
     void Init();
 
-    // get the popup listbox (always exists after Create)
-    ibListBox *GetLBox() const { return m_lbox; }
-
 private:
-    // the popup window owning the listbox (child of this control,
-    // created in Create(), destroyed with it)
-    ibComboPopupWindow *m_popup;
+    // the popup list showing the items (the host's popup, created in Create(), destroyed with it)
+    ibVListBoxComboPopup *m_list;
 
-    // the items listbox inside m_popup
-    ibListBox *m_lbox;
+    // the items and their client data (wxItemContainer keeps the data's kind and the objects' ownership)
+    wxArrayString m_strings;
+    std::vector<void*> m_clientData;
 
-    // the value text box (read-only one for wxCB_READONLY) — the combo IS
-    // a text box + a drop-down list
-    ibTextCtrl *m_text;
+    // the chosen item - the list's own selection is the one under the mouse while it is open
+    int m_selection;
 
-    wxDECLARE_EVENT_TABLE();
+    friend class ibVListBoxComboPopup;
+
     wxDECLARE_DYNAMIC_CLASS(ibComboBox);
 };
 

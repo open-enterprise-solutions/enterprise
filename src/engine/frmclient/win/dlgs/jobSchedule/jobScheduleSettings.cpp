@@ -98,14 +98,14 @@ wxWindow* ibDialogJobSchedule::BuildGeneralPage(wxWindow* parent)
 
 	wxBoxSizer* fromRow = new wxBoxSizer(wxHORIZONTAL);
 	m_activeFromUse = new ibCheckBox(rangeBox->GetStaticBox(), wxID_ANY, _("Start date:"));
-	m_activeFrom = new wxDatePickerCtrl(rangeBox->GetStaticBox(), wxID_ANY);
+	m_activeFrom = new ibDatePickerCtrl(rangeBox->GetStaticBox(), wxID_ANY);
 	fromRow->Add(m_activeFromUse, wxSizerFlags(0).CenterVertical().Border(wxRIGHT, FromDIP(6)));
 	fromRow->Add(m_activeFrom, wxSizerFlags(0).CenterVertical());
 	rangeBox->Add(fromRow, wxSizerFlags(0).Expand().Border(wxALL, FromDIP(4)));
 
 	wxBoxSizer* toRow = new wxBoxSizer(wxHORIZONTAL);
 	m_activeToUse = new ibCheckBox(rangeBox->GetStaticBox(), wxID_ANY, _("End date:"));
-	m_activeTo = new wxDatePickerCtrl(rangeBox->GetStaticBox(), wxID_ANY);
+	m_activeTo = new ibDatePickerCtrl(rangeBox->GetStaticBox(), wxID_ANY);
 	toRow->Add(m_activeToUse, wxSizerFlags(0).CenterVertical().Border(wxRIGHT, FromDIP(6)));
 	toRow->Add(m_activeTo, wxSizerFlags(0).CenterVertical());
 	rangeBox->Add(toRow, wxSizerFlags(0).Expand().Border(wxALL, FromDIP(4)));
@@ -136,10 +136,10 @@ wxWindow* ibDialogJobSchedule::BuildDailyPage(wxWindow* parent)
 
 	wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
 	row->Add(new ibStaticText(windowBox->GetStaticBox(), wxID_ANY, _("From:")), wxSizerFlags(0).CenterVertical().Border(wxRIGHT, FromDIP(4)));
-	m_windowStart = new wxTimePickerCtrl(windowBox->GetStaticBox(), wxID_ANY);
+	m_windowStart = new ibTimePickerCtrl(windowBox->GetStaticBox(), wxID_ANY);
 	row->Add(m_windowStart, wxSizerFlags(0).CenterVertical().Border(wxRIGHT, FromDIP(10)));
 	row->Add(new ibStaticText(windowBox->GetStaticBox(), wxID_ANY, _("to:")), wxSizerFlags(0).CenterVertical().Border(wxRIGHT, FromDIP(4)));
-	m_windowEnd = new wxTimePickerCtrl(windowBox->GetStaticBox(), wxID_ANY);
+	m_windowEnd = new ibTimePickerCtrl(windowBox->GetStaticBox(), wxID_ANY);
 	row->Add(m_windowEnd, wxSizerFlags(0).CenterVertical());
 	windowBox->Add(row, wxSizerFlags(0).Expand().Border(wxALL, FromDIP(4)));
 
@@ -150,7 +150,7 @@ wxWindow* ibDialogJobSchedule::BuildDailyPage(wxWindow* parent)
 	ibStaticBoxSizer* stopBox = new ibStaticBoxSizer(wxVERTICAL, page, _("Do not start after"));
 	wxBoxSizer* stopRow = new wxBoxSizer(wxHORIZONTAL);
 	m_stopAfterUse = new ibCheckBox(stopBox->GetStaticBox(), wxID_ANY, _("Time:"));
-	m_stopAfter = new wxTimePickerCtrl(stopBox->GetStaticBox(), wxID_ANY);
+	m_stopAfter = new ibTimePickerCtrl(stopBox->GetStaticBox(), wxID_ANY);
 	stopRow->Add(m_stopAfterUse, wxSizerFlags(0).CenterVertical().Border(wxRIGHT, FromDIP(6)));
 	stopRow->Add(m_stopAfter, wxSizerFlags(0).CenterVertical());
 	stopBox->Add(stopRow, wxSizerFlags(0).Expand().Border(wxALL, FromDIP(4)));
@@ -261,7 +261,7 @@ wxWindow* ibDialogJobSchedule::BuildMonthlyPage(wxWindow* parent)
 //*                        buffer <-> controls                          *
 //***********************************************************************
 
-int ibDialogJobSchedule::MinutesFrom(wxTimePickerCtrl* ctrl, const ibCheckBox* use)
+int ibDialogJobSchedule::MinutesFrom(ibTimePickerCtrl* ctrl, const ibCheckBox* use)
 {
 	if (ctrl == nullptr || (use != nullptr && !use->GetValue()))
 		return -1;
@@ -271,7 +271,7 @@ int ibDialogJobSchedule::MinutesFrom(wxTimePickerCtrl* ctrl, const ibCheckBox* u
 	return hour * 60 + minute;
 }
 
-void ibDialogJobSchedule::MinutesTo(wxTimePickerCtrl* ctrl, ibCheckBox* use, int minutes)
+void ibDialogJobSchedule::MinutesTo(ibTimePickerCtrl* ctrl, ibCheckBox* use, int minutes)
 {
 	const bool declared = minutes >= 0;
 	if (use != nullptr)

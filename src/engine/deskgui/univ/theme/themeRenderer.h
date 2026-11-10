@@ -42,6 +42,18 @@ public:
 
 
     virtual void DrawFocusRect(wxWindow* win, wxDC& dc, const wxRect& rect, int flags = 0) override;
+    virtual void DrawItemSelectionRect(wxWindow* win, wxDC& dc, const wxRect& rect, int flags = 0) override;
+    virtual void DrawItemText(wxWindow* win, wxDC& dc, const wxString& text, const wxRect& rect,
+                              int align = wxALIGN_LEFT | wxALIGN_TOP, int flags = 0,
+                              wxEllipsizeMode ellipsizeMode = wxELLIPSIZE_END) override;
+    virtual int DrawHeaderButton(wxWindow* win, wxDC& dc, const wxRect& rect, int flags = 0,
+                                 wxHeaderSortIconType sortArrow = wxHDR_SORT_ICON_NONE,
+                                 wxHeaderButtonParams* params = nullptr) override;
+    virtual int DrawHeaderButtonContents(wxWindow* win, wxDC& dc, const wxRect& rect, int flags = 0,
+                                         wxHeaderSortIconType sortArrow = wxHDR_SORT_ICON_NONE,
+                                         wxHeaderButtonParams* params = nullptr) override;
+    virtual void DrawTreeItemButton(wxWindow* win, wxDC& dc, const wxRect& rect, int flags = 0) override;
+    virtual wxSize GetExpanderSize(wxWindow* win) override;
 
     virtual void DrawLabel(wxDC& dc,
                            const wxString& label,
@@ -137,10 +149,8 @@ public:
 
     virtual void DrawLineWrapMark(wxDC& dc, const wxRect& rect) override;
 
-    virtual wxRect GetTextTotalArea(const ibTextCtrl *text,
-                                    const wxRect& rect) const override;
-    virtual wxRect GetTextClientArea(const ibTextCtrl *text,
-                                     const wxRect& rect,
+    virtual wxRect GetTextTotalArea(const wxRect& rect) const override;
+    virtual wxRect GetTextClientArea(const wxRect& rect,
                                      wxCoord *extraSpaceBeyond) const override;
 #endif // wxUSE_TEXTCTRL
 
@@ -347,7 +357,7 @@ protected:
 
 #if wxUSE_TEXTCTRL
     // return the width of the border around the text area in the text control
-    virtual int GetTextBorderWidth(const ibTextCtrl *text) const;
+    virtual int GetTextBorderWidth() const;
 #endif // wxUSE_TEXTCTRL
 
     // SEAM vs univ: a top-level window's title bar and its buttons - static in the canon's .cpp, here for a theme

@@ -46,6 +46,10 @@
 // ibRadioButton
 // ----------------------------------------------------------------------------
 
+wxBEGIN_EVENT_TABLE(ibRadioButton, ibCheckBox)
+    EVT_PAINT(ibRadioButton::OnPaint)
+wxEND_EVENT_TABLE()
+
 bool ibRadioButton::Create(wxWindow *parent,
                         wxWindowID id,
                         const wxString &label,
@@ -195,9 +199,10 @@ wxSize ibRadioButton::GetBitmapSize() const
                     : GetRenderer()->GetRadioBitmapSize();
 }
 
-void ibRadioButton::DoDraw(ibControlRenderer *renderer)
+void ibRadioButton::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
-    wxDC& dc = renderer->GetDC();
+    ibThemePaintDC dc(this);
+
     dc.SetFont(GetFont());
     dc.SetTextForeground(GetForegroundColour());
 
@@ -206,11 +211,11 @@ void ibRadioButton::DoDraw(ibControlRenderer *renderer)
     if ( status == Status_Checked )
         flags |= wxCONTROL_CHECKED;
 
-    renderer->GetRenderer()->
+    GetRenderer()->
         DrawRadioButton(dc,
                         GetLabel(),
                         GetBitmap(GetState(flags), status),
-                        renderer->GetRect(),
+                        wxRect(GetClientSize()),
                         flags,
                         GetWindowStyle() & wxALIGN_RIGHT ? wxALIGN_RIGHT
                                                          : wxALIGN_LEFT,

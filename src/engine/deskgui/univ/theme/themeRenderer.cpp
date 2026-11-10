@@ -33,8 +33,9 @@
 
 #include "deskgui/univ/theme/themeRenderer.h"
 #include "deskgui/univ/window.h"
-#include "deskgui/univ/topLevel.h"
 #include "deskgui/univ/colourScheme.h"
+
+#include <wx/control.h>     // wxControl::Ellipsize, for DrawItemText and DrawHeaderButtonContents
 
 // ----------------------------------------------------------------------------
 // constants
@@ -231,6 +232,274 @@ ibThemeRenderer::DrawFocusRect(wxWindow* WXUNUSED(win), wxDC& dc, const wxRect& 
         dc.DrawPoint(x1, z);
 
     dc.SetLogicalFunction(wxCOPY);
+}
+
+// SEAM vs univ: the selection of every list's and data view's item is the theme's (the delegate was the system's - the
+// explorer's pale blue under the theme's white selected text, which it hid): the highlight in a focused window, paler
+// in one without the focus, as ibTreeCtrl's; an item current but not selected gets the focus rect, as wx's generic
+void ibThemeRenderer::DrawItemSelectionRect(wxWindow* win, wxDC& dc, const wxRect& rect, int flags)
+{
+    if ( !(flags & wxCONTROL_SELECTED) )
+    {
+        if ( (flags & wxCONTROL_CURRENT) && (flags & wxCONTROL_FOCUSED) )
+            DrawFocusRect(win, dc, rect, flags);
+        return;
+    }
+
+    wxColour colour = m_scheme->Get(ibColourScheme::HIGHLIGHT);
+    if ( !(flags & wxCONTROL_FOCUSED) )
+        colour = colour.ChangeLightness(130);
+
+    wxDCPenChanger penChanger(dc, *wxTRANSPARENT_PEN);
+    wxDCBrushChanger brushChanger(dc, wxBrush(colour));
+    dc.DrawRectangle(rect);
+}
+
+// SEAM vs univ: an item's text on that selection is the theme's too (FORKED from wxRendererGeneric::DrawItemText; the
+// delegate drew it through the system's theme, in its own colour for a selected item): the highlight's text on a
+// selected item, the disabled text on a disabled one, else the colour the caller set on the DC
+void ibThemeRenderer::DrawItemText(wxWindow* WXUNUSED(win), wxDC& dc, const wxString& text, const wxRect& rect,
+                                   int align, int flags, wxEllipsizeMode ellipsizeMode)
+{
+    wxColour textColour;
+    if ( flags & wxCONTROL_SELECTED )
+        textColour = m_scheme->Get(ibColourScheme::HIGHLIGHT_TEXT);
+    else if ( flags & wxCONTROL_DISABLED )
+        textColour = m_scheme->Get(ibColourScheme::CONTROL_TEXT_DISABLED);
+
+    // the default flags would consume the ampersands in the text and expand its tabs
+    const wxString paintText = wxControl::Ellipsize(text, dc, ellipsizeMode, rect.GetWidth(), wxELLIPSIZE_FLAGS_NONE);
+
+    wxDCTextColourChanger setTextFg(dc);
+    if ( textColour.IsOk() )
+        setTextFg.Set(textColour);
+    wxDCTextBgColourChanger setTextBg(dc, wxTransparentColour);
+    dc.DrawLabel(paintText, rect, align);
+}
+
+// SEAM vs univ: every column header's button is the theme's (the delegate was the system's - the explorer's white
+// header, the data view's its own 3D pens): the control's face, lighter under the mouse and darker pressed, with a rule
+// down its right and along its bottom; the filler past the last column (wxCONTROL_DIRTY) has none on its right, the
+// control's edge is there. A header in a control without a border frames the control's outer edges too, in the same
+// rule - the top of a button on its top edge, the left of one on its left edge (a column header: all of them and the
+// first; the grid's row labels: the first and all of them), or that edge reads as cut off (Max, 2026-08-19: "on the left
+// something ate it")
+int ibThemeRenderer::DrawHeaderButton(wxWindow* win, wxDC& dc, const wxRect& rect, int flags,
+                                      wxHeaderSortIconType sortArrow, wxHeaderButtonParams* params)
+{
+    ibColourScheme::StdColour face = ibColourScheme::CONTROL;
+    if ( flags & wxCONTROL_PRESSED )
+        face = ibColourScheme::CONTROL_PRESSED;
+    else if ( flags & wxCONTROL_CURRENT )
+        face = ibColourScheme::CONTROL_CURRENT;
+    DrawSolidRect(dc, m_scheme->Get(face), rect);
+
+    wxDCPenChanger penChanger(dc, wxPen(m_scheme->Get(ibColourScheme::SHADOW_IN)));
+    if ( !(flags & wxCONTROL_DIRTY) )
+        dc.DrawLine(rect.GetRight(), rect.GetTop(), rect.GetRight(), rect.GetBottom() + 1);
+    dc.DrawLine(rect.GetLeft(), rect.GetBottom(), rect.GetRight() + 1, rect.GetBottom());
+
+    const wxWindow* const control = win->GetParent();
+    if ( control != nullptr && control->GetBorder() == wxBORDER_NONE )
+    {
+        if ( rect.GetTop() <= 0 )
+            dc.DrawLine(rect.GetLeft(), rect.GetTop(), rect.GetRight() + 1, rect.GetTop());
+        if ( rect.GetLeft() <= 0 )
+            dc.DrawLine(rect.GetLeft(), rect.GetTop(), rect.GetLeft(), rect.GetBottom() + 1);
+    }
+
+    return DrawHeaderButtonContents(win, dc, rect, flags, sortArrow, params);
+}
+
+// SEAM vs univ: the button's contents in the theme's colours (FORKED from wxRendererGeneric::DrawHeaderButtonContents,
+// a title of several lines measured whole, as the data view's header has them): the title in the window's own colour
+// if it has one, else the control's text, the disabled text when disabled; the sort arrow in the dark shadow; a
+// selected column underlined in the highlight
+int ibThemeRenderer::DrawHeaderButtonContents(wxWindow* win, wxDC& dc, const wxRect& rect, int flags,
+                                              wxHeaderSortIconType sortArrow, wxHeaderButtonParams* params)
+{
+    int labelWidth = 0;
+
+    // Mark this item as selected.  For the generic version we'll just draw an
+    // underline
+    if ( flags & wxCONTROL_SELECTED )
+    {
+        const int penwidth = 3;
+        int y = rect.y + rect.height + 1 - penwidth;
+        wxColour c = (params && params->m_selectionColour.IsOk()) ?
+            params->m_selectionColour : m_scheme->Get(ibColourScheme::HIGHLIGHT);
+        wxPen pen(c, penwidth);
+        pen.SetCap(wxCAP_BUTT);
+        wxDCPenChanger setPen(dc, pen);
+        dc.DrawLine(rect.x, y, rect.x + rect.width, y);
+    }
+
+    // Draw an up or down arrow
+    int arrowSpace = 0;
+    if ( sortArrow != wxHDR_SORT_ICON_NONE )
+    {
+        wxRect ar = rect;
+
+        // make a rect for the arrow
+        ar.SetSize(wxWindow::FromDIP(wxSize(8, 4), win));
+        ar.y += (rect.height - ar.height) / 2;
+        ar.x = ar.x + rect.width - 3 * ar.width / 2;
+        arrowSpace = 3 * ar.width / 2; // space to preserve when drawing the label
+
+        wxPoint triPt[3];
+        if ( sortArrow & wxHDR_SORT_ICON_UP )
+        {
+            triPt[0].x = ar.width / 2;
+            triPt[0].y = 0;
+            triPt[1].x = ar.width;
+            triPt[1].y = ar.height;
+            triPt[2].x = 0;
+            triPt[2].y = ar.height;
+        }
+        else
+        {
+            triPt[0].x = 0;
+            triPt[0].y = 0;
+            triPt[1].x = ar.width;
+            triPt[1].y = 0;
+            triPt[2].x = ar.width / 2;
+            triPt[2].y = ar.height;
+        }
+
+        wxColour c = (params && params->m_arrowColour.IsOk()) ?
+            params->m_arrowColour : m_scheme->Get(ibColourScheme::SHADOW_DARK);
+
+        wxDCPenChanger setPen(dc, c);
+        wxDCBrushChanger setBrush(dc, c);
+
+        wxDCClipper clip(dc, rect);
+        dc.DrawPolygon(3, triPt, ar.x, ar.y);
+    }
+    labelWidth += arrowSpace;
+
+    int bmpWidth = 0;
+
+    // draw the bitmap if there is one
+    if ( params && params->m_labelBitmap.IsOk() )
+    {
+        int w = params->m_labelBitmap.GetLogicalWidth();
+        int h = params->m_labelBitmap.GetLogicalHeight();
+
+        const int margin = 1; // an extra pixel on either side of the bitmap
+
+        bmpWidth = w + 2 * margin;
+        labelWidth += bmpWidth;
+
+        int x = rect.x + margin;
+        const int y = rect.y + wxMax(1, (rect.height - h) / 2);
+
+        const int extraSpace = rect.width - labelWidth;
+        if ( params->m_labelText.empty() && extraSpace > 0 )
+        {
+            // use the alignment flags
+            switch ( params->m_labelAlignment )
+            {
+                default:
+                case wxALIGN_LEFT:
+                    break;
+
+                case wxALIGN_CENTER:
+                    x += extraSpace / 2;
+                    break;
+
+                case wxALIGN_RIGHT:
+                    x += extraSpace;
+                    break;
+            }
+        }
+
+        wxDCClipper clip(dc, rect);
+        dc.DrawBitmap(params->m_labelBitmap, x, y, true);
+    }
+
+    // Draw a label if one is given
+    if ( params && !params->m_labelText.empty() )
+    {
+        const int margin = 5;   // number of pixels to reserve on either side of the label
+        labelWidth += 2 * margin;
+
+        wxFont font = params->m_labelFont.IsOk() ?
+            params->m_labelFont : win->GetFont();
+        wxColour clr;
+        if ( flags & wxCONTROL_DISABLED )
+            clr = m_scheme->Get(ibColourScheme::CONTROL_TEXT_DISABLED);
+        else if ( params->m_labelColour.IsOk() )
+            clr = params->m_labelColour;
+        else if ( win->UseForegroundColour() )
+            clr = win->GetForegroundColour();
+        else
+            clr = m_scheme->Get(ibColourScheme::CONTROL_TEXT);
+
+        wxString label(params->m_labelText);
+
+        wxDCFontChanger setFont(dc, font);
+        wxDCTextColourChanger setTextFg(dc, clr);
+        wxDCTextBgModeChanger setBgMode(dc, wxBRUSHSTYLE_TRANSPARENT);
+
+        int tw, th;
+        dc.GetMultiLineTextExtent(label, &tw, &th);
+
+        int x = rect.x + bmpWidth + margin;
+        const int y = rect.y + wxMax(0, (rect.height - th) / 2);
+
+        // truncate and add an ellipsis (...) if the text is too wide.
+        const int availWidth = rect.width - labelWidth;
+        if ( tw > availWidth )
+        {
+            label = wxControl::Ellipsize(label, dc, wxELLIPSIZE_END, availWidth, wxELLIPSIZE_FLAGS_NONE);
+            tw = dc.GetTextExtent(label).x;
+        }
+        else // enough space, we can respect alignment
+        {
+            switch ( params->m_labelAlignment )
+            {
+                default:
+                case wxALIGN_LEFT:
+                    break;
+
+                case wxALIGN_CENTER:
+                    x += (availWidth - tw) / 2;
+                    break;
+
+                case wxALIGN_RIGHT:
+                    x += availWidth - tw;
+                    break;
+            }
+        }
+
+        dc.DrawText(label, x, y);
+
+        labelWidth += tw;
+    }
+
+    return labelWidth;
+}
+
+// SEAM vs univ: the expander of every tree, grid and outline is the theme's (the delegate was wx's generic 16x16
+// box): a flat button - a thin border, the control's background, a minus always and the bar making it a plus while
+// collapsed, the spreadsheet's outline button
+void ibThemeRenderer::DrawTreeItemButton(wxWindow* WXUNUSED(win), wxDC& dc, const wxRect& rect, int flags)
+{
+    wxDCPenChanger penChanger(dc, wxPen(m_scheme->Get(ibColourScheme::SHADOW_IN)));
+    wxDCBrushChanger brushChanger(dc, wxBrush(m_scheme->Get(ibColourScheme::CONTROL)));
+    dc.DrawRectangle(rect);
+
+    dc.SetPen(wxPen(m_scheme->Get(ibColourScheme::CONTROL_TEXT)));
+    const wxCoord yMiddle = rect.y + rect.height / 2;
+    const wxCoord xMiddle = rect.x + rect.width / 2;
+    dc.DrawLine(rect.x + 2, yMiddle, rect.GetRight() - 1, yMiddle);
+    if ( !(flags & wxCONTROL_EXPANDED) )
+        dc.DrawLine(xMiddle, rect.y + 2, xMiddle, rect.GetBottom() - 1);
+}
+
+wxSize ibThemeRenderer::GetExpanderSize(wxWindow* win)
+{
+    return win->FromDIP(wxSize(9, 9));
 }
 
 void ibThemeRenderer::DrawLabel(wxDC& dc,
@@ -825,25 +1094,24 @@ void ibThemeRenderer::DrawLineWrapMark(wxDC& WXUNUSED(dc),
     // nothing by default
 }
 
-int ibThemeRenderer::GetTextBorderWidth(const ibTextCtrl * WXUNUSED(text)) const
+int ibThemeRenderer::GetTextBorderWidth() const
 {
     return 1;
 }
 
 wxRect
-ibThemeRenderer::GetTextTotalArea(const ibTextCtrl *text, const wxRect& rect) const
+ibThemeRenderer::GetTextTotalArea(const wxRect& rect) const
 {
     wxRect rectTotal = rect;
-    rectTotal.Inflate(GetTextBorderWidth(text));
+    rectTotal.Inflate(GetTextBorderWidth());
     return rectTotal;
 }
 
-wxRect ibThemeRenderer::GetTextClientArea(const ibTextCtrl *text,
-                                        const wxRect& rect,
+wxRect ibThemeRenderer::GetTextClientArea(const wxRect& rect,
                                         wxCoord *extraSpaceBeyond) const
 {
     wxRect rectText = rect;
-    rectText.Deflate(GetTextBorderWidth(text));
+    rectText.Deflate(GetTextBorderWidth());
 
     if ( extraSpaceBeyond )
         *extraSpaceBeyond = 0;

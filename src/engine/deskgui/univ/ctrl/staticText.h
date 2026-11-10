@@ -75,9 +75,6 @@ public:
     bool IsHyperlink() const { return m_isHyperlink; }
 
 protected:
-    // draw the control
-    virtual void DoDraw(ibControlRenderer *renderer) override;
-
     // SEAM vs univ: wxGenericStaticText supplied the best size before the
     // rebase onto ibControl — measure the label ourselves
     virtual wxSize DoGetBestClientSize() const override;
@@ -85,6 +82,7 @@ protected:
     virtual void WXSetVisibleLabel(const wxString& str);
     virtual wxString WXGetVisibleLabel() const;
 
+    void OnPaint(wxPaintEvent& event);
     void OnLeftDown(wxMouseEvent& event);
     void OnKeyDown(wxKeyEvent& event);
 

@@ -4,7 +4,7 @@
 #include "frmclient/backend/propertyManager/propertyManager.h"
 
 #include <wx/aui/auibook.h>
-#include <wx/propgrid/manager.h>
+#include "deskgui/univ/propgrid/manager.h"
 #include <wx/config.h>
 
 #if !wxUSE_PROPGRID
@@ -36,28 +36,28 @@ public:
 
 	virtual ~ibObjectInspector();
 
-	wxPropertyGridManager* GetPropertyManager() const { return m_pg; }
+	ibPropertyGridManager* GetPropertyManager() const { return m_pg; }
 
 	// Hides or reveals a property.
 	// hide - If true, hides property, otherwise reveals it.
 	// flags - By default changes are applied recursively. Set this parameter
-	//   wxPG_DONT_RECURSE to prevent this.
-	bool HideProperty(wxPGPropArg id,
+	//   ibPG_DONT_RECURSE to prevent this.
+	bool HideProperty(ibPGPropArg id,
 		bool hide = true,
-		wxPGPropertyValuesFlags flags = wxPGPropertyValuesFlags::Recurse) { return m_pg->HideProperty(id, hide, flags); }
+		ibPGPropertyValuesFlags flags = ibPGPropertyValuesFlags::Recurse) { return m_pg->HideProperty(id, hide, flags); }
 
-	bool ShowProperty(wxPGPropArg id,
+	bool ShowProperty(ibPGPropArg id,
 		bool show = true,
-		wxPGPropertyValuesFlags flags = wxPGPropertyValuesFlags::Recurse) {
+		ibPGPropertyValuesFlags flags = ibPGPropertyValuesFlags::Recurse) {
 		return m_pg->HideProperty(id, !show, flags);
 	}
 
 	// The object's push lands here (see ibPropertyObjectNotifier): resolve the ibProperty
-	// to the wxPGProperty currently rendering it and hide/reveal that one.
+	// to the ibPGProperty currently rendering it and hide/reveal that one.
 	bool PropertyHidden(const ibProperty* property, bool hide);
 
-	wxPGProperty* GetProperty(ibProperty* prop) const;
-	wxPGProperty* GetEvent(ibEvent* event) const;
+	ibPGProperty* GetProperty(ibProperty* prop) const;
+	ibPGProperty* GetEvent(ibEvent* event) const;
 
 	// Services for the observers
 	void SelectObject(ibPropertyObject* selobj, bool force = false) {
@@ -95,17 +95,17 @@ public:
 
 protected:
 
-	void OnPropertyGridChanging(wxPropertyGridEvent& event);
-	void OnPropertyGridChanged(wxPropertyGridEvent& event);
-	void OnPropertyGridExpand(wxPropertyGridEvent& event);
-	void OnPropertyGridItemSelected(wxPropertyGridEvent& event);
+	void OnPropertyGridChanging(ibPropertyGridEvent& event);
+	void OnPropertyGridChanged(ibPropertyGridEvent& event);
+	void OnPropertyGridExpand(ibPropertyGridEvent& event);
+	void OnPropertyGridItemSelected(ibPropertyGridEvent& event);
 
 	void OnBitmapPropertyChanged(wxCommandEvent& event);
 	void OnChildFocus(wxChildFocusEvent& event);
 
 private:
 
-	int StringToBits(const wxString& strVal, wxPGChoices& constants) {
+	int StringToBits(const wxString& strVal, ibPGChoices& constants) {
 		wxStringTokenizer strTok(strVal, wxT(" |"));
 		int val = 0;
 		while (strTok.HasMoreTokens())
@@ -143,7 +143,7 @@ private:
 		else {
 			pageName = wxT("default");
 		}
-		wxPropertyGridManager* pg = m_pg; //(addingEvents ? m_eg : m_pg);
+		ibPropertyGridManager* pg = m_pg; //(addingEvents ? m_eg : m_pg);
 		int pageIndex = pg->GetPageByName(pageName);
 		if (pageIndex == wxNOT_FOUND) {
 			//pg->AddPage( pageName, obj_info->GetSmallIconFile() );
@@ -152,7 +152,7 @@ private:
 
 		const wxString& catName = category->GetName();
 		if (!stringUtils::IsSameAs(catName, propertyDefName)) {
-			wxPGProperty* id = pg->Append(new wxPropertyCategory(category->GetLabel(), catName));
+			ibPGProperty* id = pg->Append(new ibPGCategoryProperty(category->GetLabel(), catName));
 			AddItems(name, obj, category, itemMap);
 			std::map< wxString, bool >::iterator it = m_isExpanded.find(catName);
 			if (it != m_isExpanded.end()) {
@@ -168,7 +168,7 @@ private:
 			AddItems(name, obj, category, itemMap);
 		}
 
-		pg->SetPropertyAttributeAll(wxPG_BOOL_USE_CHECKBOX, (long)1);
+		pg->SetPropertyAttributeAll(ibPG_BOOL_USE_CHECKBOX, (long)1);
 	}
 
 	void AddItems(const wxString& name, ibPropertyObject* obj, ibPropertyCategory* category, std::map<wxString, ibProperty*>& properties) {
@@ -187,9 +187,9 @@ private:
 				if (m_currentSel != nullptr) {
 					m_currentSel->OnPropertyCreated(prop);
 				}
-				wxPGProperty* pg = GetProperty(prop);
+				ibPGProperty* pg = GetProperty(prop);
 				if (pg != nullptr) {
-					wxPGProperty* id = m_pg->Append(pg);
+					ibPGProperty* id = m_pg->Append(pg);
 					if (m_style != wxOES_OI_MULTIPAGE_STYLE) {
 						// Per-class tint — interior palette. Window props get
 						// the warm focal hue (light terracotta), common get
@@ -216,7 +216,7 @@ private:
 					id->RefreshChildren();
 
 					properties.insert(std::map<wxString, ibProperty*>::value_type(strPropName, prop));
-					m_propMap.insert(std::map< wxPGProperty*, ibProperty*>::value_type(id, prop));
+					m_propMap.insert(std::map< ibPGProperty*, ibProperty*>::value_type(id, prop));
 				}
 
 				if (m_currentSel != nullptr) {
@@ -237,7 +237,7 @@ private:
 
 			const wxString& catName = category->GetName();
 			if (!stringUtils::IsSameAs(catName, propertyDefName)) {
-				wxPGProperty* catId = m_pg->AppendIn(catName, new wxPropertyCategory(nextCat->GetLabel(), nextCat->GetName()));
+				ibPGProperty* catId = m_pg->AppendIn(catName, new ibPGCategoryProperty(nextCat->GetLabel(), nextCat->GetName()));
 				AddItems(nextCat->GetName(), obj, nextCat, properties);
 				std::map< wxString, bool >::iterator it = m_isExpanded.find(nextCat->GetName());
 				if (it != m_isExpanded.end())
@@ -251,7 +251,7 @@ private:
 				}
 			}
 			else {
-				m_pg->Append(new wxPropertyCategory(nextCat->GetLabel(), nextCat->GetName()));   // the category is the point; the handle is not used
+				m_pg->Append(new ibPGCategoryProperty(nextCat->GetLabel(), nextCat->GetName()));   // the category is the point; the handle is not used
 				AddItems(nextCat->GetName(), obj, nextCat, properties);
 			}
 		}
@@ -269,9 +269,9 @@ private:
 
 			// We do not want to duplicate inherited events
 			if (!events.contains(eventName)) {
-				wxPGProperty* eg = GetEvent(event);
+				ibPGProperty* eg = GetEvent(event);
 				if (eg != nullptr) {
-					wxPGProperty* id = m_pg->Append(eg);
+					ibPGProperty* id = m_pg->Append(eg);
 					m_pg->SetPropertyHelpString(id, ibGetTranslation(event->GetHelp()));
 					if (m_style != wxOES_OI_MULTIPAGE_STYLE) {
 						// Per-class tint — interior palette (see above).
@@ -293,7 +293,7 @@ private:
 						}
 					}
 					events.insert(std::map<wxString, ibEvent*>::value_type(eventName, event));
-					m_eventMap.insert(std::map< wxPGProperty*, ibEvent*>::value_type(id, event));
+					m_eventMap.insert(std::map< ibPGProperty*, ibEvent*>::value_type(id, event));
 				}
 			}
 		}
@@ -310,7 +310,7 @@ private:
 
 			const wxString& catName = category->GetName();
 			if (!stringUtils::IsSameAs(catName, propertyDefName)) {
-				wxPGProperty* catId = m_pg->AppendIn(wxString(category->GetName()), new wxPropertyCategory(nextCat->GetLabel(), nextCat->GetName()));
+				ibPGProperty* catId = m_pg->AppendIn(wxString(category->GetName()), new ibPGCategoryProperty(nextCat->GetLabel(), nextCat->GetName()));
 				AddItems(nextCat->GetName(), obj, nextCat, events);
 				std::map< wxString, bool >::iterator it = m_isExpanded.find(nextCat->GetName());
 				if (it != m_isExpanded.end()) {
@@ -323,7 +323,7 @@ private:
 				}
 			}
 			else {
-				m_pg->Append(new wxPropertyCategory(nextCat->GetLabel(), nextCat->GetName()));   // the category is the point; the handle is not used
+				m_pg->Append(new ibPGCategoryProperty(nextCat->GetLabel(), nextCat->GetName()));   // the category is the point; the handle is not used
 				AddItems(nextCat->GetName(), obj, nextCat, events);
 			}
 		}
@@ -331,24 +331,24 @@ private:
 
 	friend class ibFrontendMainFrame;
 
-	wxPropertyGridManager* CreatePropertyGridManager(wxWindow* parent, wxWindowID id) const;
+	ibPropertyGridManager* CreatePropertyGridManager(wxWindow* parent, wxWindowID id) const;
 
 	void Create(ibPropertyObject* object, bool force = false);
 
-	bool ModifyProperty(ibProperty* prop, const wxVariant& newValue);
-	bool ModifyEvent(ibEvent* event, const wxVariant& newValue);
+	bool ModifyProperty(ibProperty* prop, const ibVariant& newValue);
+	bool ModifyEvent(ibEvent* event, const ibVariant& newValue);
 
 	// The row last selected (m_strSelPropItem) when it is still shown, else the name — its editor focused when `focus`.
 	void RestoreLastSelectedPropItem(bool focus) {
 
-		wxPGProperty* propPtr = !m_strSelPropItem.IsEmpty() ? m_pg->GetPropertyByName(m_strSelPropItem) : nullptr;
+		ibPGProperty* propPtr = !m_strSelPropItem.IsEmpty() ? m_pg->GetPropertyByName(m_strSelPropItem) : nullptr;
 		if (propPtr == nullptr || !propPtr->IsVisible())
 			propPtr = m_pg->GetPropertyByName(wxT("name"));
 		if (propPtr != nullptr) {
 
 			m_pg->SelectProperty(propPtr, focus);
 
-			std::map< wxPGProperty*, ibProperty*>::iterator itProperty = m_propMap.find(propPtr);
+			std::map< ibPGProperty*, ibProperty*>::iterator itProperty = m_propMap.find(propPtr);
 			if (itProperty != m_propMap.end()) {
 				ibProperty* prop_ptr = itProperty->second;
 				// Update displayed description for the new selection
@@ -359,7 +359,7 @@ private:
 				return;
 			}
 
-			std::map< wxPGProperty*, ibEvent*>::iterator itEvent = m_eventMap.find(propPtr);
+			std::map< ibPGProperty*, ibEvent*>::iterator itEvent = m_eventMap.find(propPtr);
 			if (itEvent != m_eventMap.end()) {
 				ibEvent* event_ptr = itEvent->second;
 				// Update displayed description for the new selection
@@ -374,12 +374,12 @@ private:
 		m_pg->SetDescription(wxEmptyString, wxEmptyString);
 	}
 
-	wxPropertyGridManager* m_pg;
+	ibPropertyGridManager* m_pg;
 
 	std::map< wxString, bool > m_isExpanded;
 
-	std::map< wxPGProperty*, ibProperty*> m_propMap;
-	std::map< wxPGProperty*, ibEvent*> m_eventMap;
+	std::map< ibPGProperty*, ibProperty*> m_propMap;
+	std::map< ibPGProperty*, ibEvent*> m_eventMap;
 
 	ibPropertyObject* m_currentSel;
 
@@ -388,7 +388,7 @@ private:
 	std::unique_ptr<ibPropertyObjectNotifier> m_notifier;
 
 	// Deferred / coalesced rebuild. A child edit bubbles back here to re-Create the grid, but Create()
-	// Clear()s it — fatal if a wxPG change event is still dispatching on one of those properties, and
+	// Clear()s it — fatal if an ibPG change event is still dispatching on one of those properties, and
 	// wasteful when several selects fire in one refresh burst. m_inGridEvent marks "an event is in flight"
 	// (set by the change handlers); m_rebuildScheduled marks "a rebuild is already queued". While either
 	// holds, Create() stashes the target and posts ONE CallAfter instead of rebuilding inline.

@@ -190,7 +190,7 @@ protected:
     virtual wxNotebookPage *DoRemovePage(size_t nPage) ;
 
     // drawing
-    virtual void DoDraw(ibControlRenderer *renderer) override;
+    void OnPaint(wxPaintEvent& event);
     void DoDrawTab(wxDC& dc, const wxRect& rect, size_t n);
 
     // resizing
@@ -313,6 +313,7 @@ protected:
     int m_selection = wxNOT_FOUND;
 
     wxDECLARE_DYNAMIC_CLASS(ibNotebook);
+    wxDECLARE_EVENT_TABLE();
 };
 
 #endif // _DESKGUI_UNIV_NOTEBOOK_H_

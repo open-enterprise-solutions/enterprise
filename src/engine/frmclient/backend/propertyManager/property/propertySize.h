@@ -14,19 +14,19 @@ public:
 	void SetValue(const ibString& val);
 
 	ibPropertySize(ibPropertyCategory* cat, const ibString& name, const wxSize& s = wxDefaultSize)
-		: ibPropertySerializable(cat, name, wxNullVariant)
+		: ibPropertySerializable(cat, name, ibVariant())
 	{
 		SetValue(s);
 	}
 
 	ibPropertySize(ibPropertyCategory* cat, const ibString& name, const ibString& label, const wxSize& s = wxDefaultSize)
-		: ibPropertySerializable(cat, name, label, wxNullVariant)
+		: ibPropertySerializable(cat, name, label, ibVariant())
 	{
 		SetValue(s);
 	}
 
 	ibPropertySize(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString, const wxSize& s = wxDefaultSize)
-		: ibPropertySerializable(cat, name, label, helpString, wxNullVariant)
+		: ibPropertySerializable(cat, name, label, helpString, ibVariant())
 	{
 		SetValue(s);
 	}

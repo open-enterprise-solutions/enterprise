@@ -573,7 +573,7 @@ class FRMCLIENT_API ibGridEditor : public ibGrid {
 		*/
 		virtual void OnPropertyCreated(ibProperty* property);
 		virtual void OnPropertyRefresh() override;
-		virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue);
+		virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue);
 
 		friend class ibGridEditor;
 

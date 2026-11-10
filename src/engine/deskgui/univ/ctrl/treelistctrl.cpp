@@ -40,6 +40,9 @@
 #if wxCHECK_VERSION(2, 7, 0)
 #include <wx/renderer.h>
 #endif
+#include "deskgui/univ/renderer.h"
+#include "deskgui/univ/theme.h"  // the expander and the header's buttons: the theme's renderer
+#include "deskgui/univ/colourScheme.h"  // the selection and the background: the theme's colours
 #include <wx/apptrait.h>
 #include <wx/dcbuffer.h>
 #include <wx/tooltip.h>
@@ -85,12 +88,7 @@ static const int LINEHEIGHT = 10;
 static const int LINEATROOT = 5;
 static const int MARGIN = 2;
 static const int MININDENT = 16;
-static const int BTNWIDTH = 9;
-static const int BTNHEIGHT = 9;
-static const int EXTRA_WIDTH = 4;
-static const int EXTRA_HEIGHT = 4;
 static const int HEADER_OFFSET_X = 0;  // changed from 1 to 0 on 2009.03.10 for Windows (other OS untested)
-static const int HEADER_OFFSET_Y = 1;
 
 static const int DRAG_TIMER_TICKS = 250; // minimum drag wait time in ms
 static const int FIND_TIMER_TICKS = 500; // minimum find wait time in ms
@@ -148,7 +146,6 @@ public:
 
 	virtual ~ibTreeListHeaderWindow();
 
-	void DoDrawRect(wxDC* dc, int x, int y, int w, int h);
 	void DrawCurrent();
 	void AdjustDC(wxDC& dc);
 
@@ -1289,50 +1286,11 @@ ibTreeListHeaderWindow::ibTreeListHeaderWindow(wxWindow* win,
 
 	m_owner = owner;
 	m_resizeCursor = new wxCursor(wxCURSOR_SIZEWE);
-
-#if !wxCHECK_VERSION(2, 5, 0)
-	SetBackgroundColour(wxSystemSettings::GetSystemColour(wxSYS_COLOUR_BTNFACE));
-#else
-	SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE));
-#endif
 }
 
 ibTreeListHeaderWindow::~ibTreeListHeaderWindow()
 {
 	delete m_resizeCursor;
-}
-
-void ibTreeListHeaderWindow::DoDrawRect(wxDC* dc, int x, int y, int w, int h)
-{
-#if !wxCHECK_VERSION(2, 5, 0)
-	wxPen pen(wxSystemSettings::GetSystemColour(wxSYS_COLOUR_BTNSHADOW), 1, wxSOLID);
-#else
-	wxPen pen(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW), 1, wxPENSTYLE_SOLID);
-#endif
-
-	const int m_corner = 1;
-
-	dc->SetBrush(*wxTRANSPARENT_BRUSH);
-#if defined( __WXOSX__  )
-	dc->SetPen(pen);
-#else // !GTK, !Mac
-	dc->SetPen(*wxBLACK_PEN);
-#endif
-	dc->DrawLine(x + w - m_corner + 1, y, x + w, y + h);  // right (outer)
-	dc->DrawRectangle(x, y + h, w + 1, 1);          // bottom (outer)
-
-#if defined( __WXOSX__  )
-	pen = wxPen(wxColour(0x88, 0x88, 0x88), 1, wxPENSTYLE_SOLID);
-#endif
-	dc->SetPen(pen);
-	dc->DrawLine(x + w - m_corner, y, x + w - 1, y + h);  // right (inner)
-	dc->DrawRectangle(x + 1, y + h - 1, w - 2, 1);      // bottom (inner)
-
-	dc->SetPen(*wxWHITE_PEN);
-	dc->DrawRectangle(x, y, w - m_corner + 1, 1);   // top (outer)
-	dc->DrawRectangle(x, y, 1, h);              // left (outer)
-	dc->DrawLine(x, y + h - 1, x + 1, y + h - 1);
-	dc->DrawLine(x + w - 1, y, x + w - 1, y + 1);
 }
 
 // shift the DC origin to match the position of the main window horz
@@ -1350,8 +1308,9 @@ void ibTreeListHeaderWindow::AdjustDC(wxDC& dc)
 
 void ibTreeListHeaderWindow::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
-	wxAutoBufferedPaintDC dc(this);
+	ibThemePaintDC dc(this);
 	AdjustDC(dc);
+	ibRenderer* const renderer = ibThemeEngine::Get()->GetRenderer();
 
 	int x = HEADER_OFFSET_X;
 
@@ -1361,16 +1320,13 @@ void ibTreeListHeaderWindow::OnPaint(wxPaintEvent& WXUNUSED(event))
 	m_owner->CalcUnscrolledPosition(w, 0, &w, nullptr);
 	dc.SetBackgroundMode(wxTRANSPARENT);
 
-#if wxCHECK_VERSION_FULL(2, 7, 0, 1)
 	int numColumns = GetColumnCount();
 	for (int i = 0; i < numColumns && x < w; i++)
 	{
 		if (!IsColumnShown(i)) continue; // do next column if not shown
 
+		// SEAM vs wx: no label colour of the system's - the title is the theme's (ibThemeRenderer::DrawHeaderButton)
 		wxHeaderButtonParams params;
-
-		// TODO: columnInfo should have label colours...
-		params.m_labelColour = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT);
 		params.m_labelFont = GetFont();
 
 		ibTreeListColumnInfo& column = GetColumn(i);
@@ -1390,103 +1346,13 @@ void ibTreeListHeaderWindow::OnPaint(wxPaintEvent& WXUNUSED(event))
 		if ((image != -1) && imageList)
 			params.m_labelBitmap = imageList->GetBitmap(image);
 
-		wxRendererNative::Get().DrawHeaderButton(this, dc, rect, flags, wxHDR_SORT_ICON_NONE, &params);
+		renderer->DrawHeaderButton(this, dc, rect, flags, wxHDR_SORT_ICON_NONE, &params);
 	}
 
 	if (x < w) {
 		wxRect rect(x, 0, w - x, h);
-		wxRendererNative::Get().DrawHeaderButton(this, dc, rect);
+		renderer->DrawHeaderButton(this, dc, rect, wxCONTROL_DIRTY);
 	}
-
-#else  // not 2.7.0.1+
-
-	dc.SetFont(GetFont());
-
-	// do *not* use the listctrl colour for headers - one day we will have a
-	// function to set it separately
-	//dc.SetTextForeground( *wxBLACK );
-#if !wxCHECK_VERSION(2, 5, 0)
-	dc.SetTextForeground(wxSystemSettings::GetSystemColour(wxSYS_COLOUR_WINDOWTEXT));
-#else
-	dc.SetTextForeground(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT));
-#endif
-
-	int numColumns = GetColumnCount();
-	for (int i = 0; i < numColumns && x < w; i++)
-	{
-		if (!IsColumnShown(i)) continue; // do next column if not shown
-
-		ibTreeListColumnInfo& column = GetColumn(i);
-		int wCol = column.GetWidth();
-
-		// the width of the rect to draw: make it smaller to fit entirely
-		// inside the column rect
-		int cw = wCol - 2;
-
-#if !wxCHECK_VERSION(2, 7, 0)
-		dc.SetPen(*wxWHITE_PEN);
-		DoDrawRect(&dc, x, HEADER_OFFSET_Y, cw, h - 2);
-#else
-		wxRect rect(x, HEADER_OFFSET_Y, cw, h - 2);
-		wxRendererNative::GetDefault().DrawHeaderButton(this, dc, rect);
-#endif
-
-		// if we have an image, draw it on the right of the label
-		int image = column.GetImage(); //item.m_image;
-		int ix = -2, iy = 0;
-		wxImageList* imageList = m_owner->GetImageList();
-		if ((image != -1) && imageList) {
-			imageList->GetSize(image, ix, iy);
-		}
-
-		// extra margins around the text label
-		int text_width = 0;
-		int text_x = x;
-		int image_offset = cw - ix - 1;
-
-		switch (column.GetAlignment()) {
-		case wxALIGN_LEFT:
-			text_x += EXTRA_WIDTH;
-			cw -= ix + 2;
-			break;
-		case wxALIGN_RIGHT:
-			dc.GetTextExtent(column.GetText(), &text_width, nullptr);
-			text_x += cw - text_width - EXTRA_WIDTH - MARGIN;
-			image_offset = 0;
-			break;
-		case wxALIGN_CENTER:
-			dc.GetTextExtent(column.GetText(), &text_width, nullptr);
-			text_x += (cw - text_width) / 2 + ix + 2;
-			image_offset = (cw - text_width - ix - 2) / 2 - MARGIN;
-			break;
-		}
-
-		// draw the image
-		if ((image != -1) && imageList) {
-			imageList->Draw(image, dc, x + image_offset/*cw - ix - 1*/,
-				HEADER_OFFSET_Y + (h - 4 - iy) / 2,
-				wxIMAGELIST_DRAW_TRANSPARENT);
-		}
-
-		// draw the text clipping it so that it doesn't overwrite the column boundary
-		wxDCClipper clipper(dc, x, HEADER_OFFSET_Y, cw, h - 4);
-		dc.DrawText(column.GetText(), text_x, HEADER_OFFSET_Y + EXTRA_HEIGHT);
-
-		// next column
-		x += wCol;
-	}
-
-	int more_w = m_owner->GetSize().x - x - HEADER_OFFSET_X;
-	if (more_w > 0) {
-#if !wxCHECK_VERSION(2, 7, 0)
-		DoDrawRect(&dc, x, HEADER_OFFSET_Y, more_w, h - 2);
-#else
-		wxRect rect(x, HEADER_OFFSET_Y, more_w, h - 2);
-		wxRendererNative::GetDefault().DrawHeaderButton(this, dc, rect);
-#endif
-	}
-
-#endif // 2.7.0.1
 }
 
 void ibTreeListHeaderWindow::DrawCurrent()
@@ -1993,13 +1859,9 @@ void ibTreeListMainWindow::Init() {
 	m_indent = MININDENT; // min. indent
 	m_linespacing = 4;
 
-#if !wxCHECK_VERSION(2, 5, 0)
-	m_hilightBrush = new wxBrush(wxSystemSettings::GetSystemColour(wxSYS_COLOUR_HIGHLIGHT), wxSOLID);
-	m_hilightUnfocusedBrush = new wxBrush(wxSystemSettings::GetSystemColour(wxSYS_COLOUR_BTNSHADOW), wxSOLID);
-#else
-	m_hilightBrush = new wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT), wxBRUSHSTYLE_SOLID);
-	m_hilightUnfocusedBrush = new wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW), wxBRUSHSTYLE_SOLID);
-#endif
+	// SEAM: the theme's selection, as ibTreeCtrl's - not the system's
+	m_hilightBrush = new wxBrush(wxTHEME_COLOUR(HIGHLIGHT), wxBRUSHSTYLE_SOLID);
+	m_hilightUnfocusedBrush = new wxBrush(wxTHEME_COLOUR(HIGHLIGHT).ChangeLightness(130), wxBRUSHSTYLE_SOLID);
 
 	m_imageListNormal = (wxImageList*)nullptr;
 	m_imageListButtons = (wxImageList*)nullptr;
@@ -2063,11 +1925,8 @@ bool ibTreeListMainWindow::Create(ibTreeListCtrl* parent,
 	SetValidator(validator);
 #endif
 
-#if !wxCHECK_VERSION(2, 5, 0)
-	SetBackgroundColour(wxSystemSettings::GetSystemColour(wxSYS_COLOUR_LISTBOX));
-#else
-	SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_LISTBOX));
-#endif
+	// SEAM: the theme's content colour, as ibTreeCtrl's - not the system's list box
+	SetBackgroundColour(wxTHEME_COLOUR(WINDOW));
 	// prevent any background repaint in order to reducing flicker
 	SetBackgroundStyle(wxBG_STYLE_CUSTOM);
 
@@ -3423,11 +3282,8 @@ void ibTreeListMainWindow::PaintItem(ibTreeListItem * item, wxDC & dc) {
 
 	wxColour colText = GetItemTextColour(item);
 	wxColour colBg = GetItemBackgroundColour(item);
-#if !wxCHECK_VERSION(2, 5, 0)
-	wxColour colTextHilight = wxSystemSettings::GetSystemColour(wxSYS_COLOUR_HIGHLIGHTTEXT);
-#else
-	wxColour colTextHilight = wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHTTEXT);
-#endif
+	// SEAM: the theme's selected text, as ibTreeCtrl's
+	wxColour colTextHilight = wxTHEME_COLOUR(HIGHLIGHT_TEXT);
 	int total_w = m_owner->GetHeaderWindow()->GetWidth();
 	int total_h = GetLineHeight(item);
 	int off_h = HasFlag(wxTR_ROW_LINES) ? 1 : 0;
@@ -3726,20 +3582,9 @@ void ibTreeListMainWindow::PaintLevel(ibTreeListItem * item, wxDC & dc,
 			else { // if (HasFlag(wxTR_HAS_BUTTONS))
 
 				// draw the plus sign here
-#if !wxCHECK_VERSION(2, 7, 0)
-				dc.SetPen(*wxGREY_PEN);
-				dc.SetBrush(*wxWHITE_BRUSH);
-				dc.DrawRectangle(x - m_btnWidth2, y_mid - m_btnHeight2, m_btnWidth, m_btnHeight);
-				dc.SetPen(*wxBLACK_PEN);
-				dc.DrawLine(x - (m_btnWidth2 - 2), y_mid, x + (m_btnWidth2 - 1), y_mid);
-				if (!item->IsExpanded()) { // change "-" to "+"
-					dc.DrawLine(x, y_mid - (m_btnHeight2 - 2), x, y_mid + (m_btnHeight2 - 1));
-				}
-#else
 				wxRect rect(x - m_btnWidth2, y_mid - m_btnHeight2, m_btnWidth, m_btnHeight);
 				int flag = item->IsExpanded() ? wxCONTROL_EXPANDED : 0;
-				wxRendererNative::GetDefault().DrawTreeItemButton(this, dc, rect, flag);
-#endif
+				ibThemeEngine::Get()->GetRenderer()->DrawTreeItemButton(this, dc, rect, flag);
 			}
 		}
 	}
@@ -3803,8 +3648,9 @@ void ibTreeListMainWindow::OnPaint(wxPaintEvent & WXUNUSED(event)) {
 		m_imageListButtons->GetSize(0, m_btnWidth, m_btnHeight);
 	}
 	else if (HasButtons()) {
-		m_btnWidth = BTNWIDTH;
-		m_btnHeight = BTNHEIGHT;
+		const wxSize sizeButton = ibThemeEngine::Get()->GetRenderer()->GetExpanderSize(this);
+		m_btnWidth = sizeButton.x;
+		m_btnHeight = sizeButton.y;
 	}
 	m_btnWidth2 = m_btnWidth / 2;
 	m_btnHeight2 = m_btnHeight / 2;
@@ -4890,16 +4736,10 @@ void ibTreeListCtrl::CalculateAndSetHeaderHeight()
 
 		// we use 'g' to get the descent, too
 		int h;
-#if wxCHECK_VERSION_FULL(2, 7, 0, 1)
 #ifdef __WXMSW__
-		h = (int)(wxRendererNative::Get().GetHeaderButtonHeight(m_header_win) * 0.8) + 2;
+		h = (int)(ibThemeEngine::Get()->GetRenderer()->GetHeaderButtonHeight(m_header_win) * 0.8) + 2;
 #else
-		h = wxRendererNative::Get().GetHeaderButtonHeight(m_header_win);
-#endif
-#else
-		int w, d;
-		m_header_win->GetTextExtent(_T("Hg"), &w, &h, &d);
-		h += d + 2 * HEADER_OFFSET_Y + EXTRA_HEIGHT;
+		h = ibThemeEngine::Get()->GetRenderer()->GetHeaderButtonHeight(m_header_win);
 #endif
 
 		// only update if changed

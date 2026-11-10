@@ -66,7 +66,7 @@ protected:
     void OnSize(wxSizeEvent& event);
 
     // draw the statusbar
-    virtual void DoDraw(ibControlRenderer *renderer) override;
+    void OnPaint(wxPaintEvent& event);
 
     // tell them about our preferred height
     virtual wxSize DoGetBestSize() const override;

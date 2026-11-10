@@ -198,7 +198,7 @@ class ibVisualEditorModifyPropertyCmd :
 	public ibVisualEditorCmd {
 public:
 
-	ibVisualEditorModifyPropertyCmd(ibVisualEditorNotebook::ibVisualEditor* visualEditor, ibProperty* prop, const wxVariant& oldValue, const wxVariant& newValue);
+	ibVisualEditorModifyPropertyCmd(ibVisualEditorNotebook::ibVisualEditor* visualEditor, ibProperty* prop, const ibVariant& oldValue, const ibVariant& newValue);
 
 protected:
 
@@ -209,16 +209,16 @@ private:
 	// The property set to that value, the control drawn as it says — both found again by the control's id and the
 	// property's name: the rows the server answers make the control's properties anew (UpdateControl), and a pointer
 	// kept from the edit before pointed at one gone.
-	void SetValue(const wxVariant& value);
+	void SetValue(const ibVariant& value);
 
 	ibVisualEditorNotebook::ibVisualEditor* m_visualEditor;
 
 	long long m_controlId;
 	wxString m_name;
-	wxVariant m_oldValue, m_newValue;
+	ibVariant m_oldValue, m_newValue;
 };
 
-ibVisualEditorModifyPropertyCmd::ibVisualEditorModifyPropertyCmd(ibVisualEditorNotebook::ibVisualEditor* visualEditor, ibProperty* prop, const wxVariant& oldValue, const wxVariant& newValue) : m_visualEditor(visualEditor),
+ibVisualEditorModifyPropertyCmd::ibVisualEditorModifyPropertyCmd(ibVisualEditorNotebook::ibVisualEditor* visualEditor, ibProperty* prop, const ibVariant& oldValue, const ibVariant& newValue) : m_visualEditor(visualEditor),
 m_controlId(dynamic_cast<ibValueFrame*>(prop->GetPropertyObject())->GetControlID()), m_name(prop->GetName()),
 m_oldValue(oldValue), m_newValue(newValue)
 {
@@ -234,7 +234,7 @@ void ibVisualEditorModifyPropertyCmd::DoRestore()
 	SetValue(m_oldValue);
 }
 
-void ibVisualEditorModifyPropertyCmd::SetValue(const wxVariant& value)
+void ibVisualEditorModifyPropertyCmd::SetValue(const ibVariant& value)
 {
 	ibValueForm* const valueForm = m_visualEditor->GetValueForm();
 	ibValueFrame* const control = valueForm == nullptr ? nullptr
@@ -552,8 +552,8 @@ void ibVisualEditorNotebook::ibVisualEditor::ExpandObject(ibValueFrame* obj, boo
 
 /////////////////////////////////////////////////////////////////////////////////////
 
-void ibVisualEditorNotebook::ibVisualEditor::ModifyProperty(ibProperty* prop, const wxVariant& oldValue,
-	const wxVariant& newValue)
+void ibVisualEditorNotebook::ibVisualEditor::ModifyProperty(ibProperty* prop, const ibVariant& oldValue,
+	const ibVariant& newValue)
 {
 	// The pair is the value before the edit and after it, as the inspector moves them (the desktop's); what goes to the
 	// server, the property's node.
@@ -1053,7 +1053,7 @@ bool ibValueLayerObject::IsEditable() const
 	return m_formHandler->IsEditable();
 }
 
-void ibValueLayerObject::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
+void ibValueLayerObject::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
 {
 	m_formHandler->ModifyProperty(property, oldValue, newValue);
 }
@@ -1167,7 +1167,7 @@ void ibValueCommandBar::ExecuteMenu(int menuId)
 
 ///////////////////////////////////////////////////////////////////////////////
 
-bool ibValueCommandBarItem::OnPropertyChanging(ibProperty* property, const wxVariant& newValue)
+bool ibValueCommandBarItem::OnPropertyChanging(ibProperty* property, const ibVariant& newValue)
 {
 	// Name must stay unique among the bar's items.
 	if (property->GetName() != ibProtocol::ibView::ibFormDesigner::Name)

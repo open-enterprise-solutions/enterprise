@@ -12,19 +12,19 @@ public:
 	void SetValue(const bool boolean);
 
 	ibPropertyBoolean(ibPropertyCategory* cat, const ibString& name,
-		const bool& value = false) : ibPropertySerializable(cat, name, wxNullVariant)
+		const bool& value = false) : ibPropertySerializable(cat, name, ibVariant())
 	{
 		SetValue(value);
 	}
 
 	ibPropertyBoolean(ibPropertyCategory* cat, const ibString& name, const ibString& label,
-		const bool& value = false) : ibPropertySerializable(cat, name, label, wxNullVariant)
+		const bool& value = false) : ibPropertySerializable(cat, name, label, ibVariant())
 	{
 		SetValue(value);
 	}
 
 	ibPropertyBoolean(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString,
-		const bool& value = false) : ibPropertySerializable(cat, name, label, helpString, wxNullVariant)
+		const bool& value = false) : ibPropertySerializable(cat, name, label, helpString, ibVariant())
 	{
 		SetValue(value);
 	}

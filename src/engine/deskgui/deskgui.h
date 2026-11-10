@@ -17,4 +17,10 @@
 #define DESKGUI_API IB_IMPORT
 #endif
 
+// A WINDOW'S TEXT IS wx's (Max, 2026-11-10): the core's _() answers an ibString (core/localization/dictionary.h), and
+// what draws windows hands its text to wx — formats it, logs it, picks it in a ternary, as the forks of wx's code do.
+// So under this library _() is the same translation as wx's string; the literal-only check stays (ibTranslateLiteral).
+#undef _
+#define _(s) ibTranslateLiteral((s)).ToWxString()
+
 #endif

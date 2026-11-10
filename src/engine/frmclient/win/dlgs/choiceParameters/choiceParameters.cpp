@@ -261,7 +261,7 @@ wxSizer* ibDialogChoiceParameters::BuildRowsPane()
 		new ibDataViewChoiceRenderer(m_parameterWords, wxDATAVIEW_CELL_EDITABLE),
 		kGridCol1, FromDIP(196), wxAlignment::wxALIGN_LEFT));
 	m_rows->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(m_holder.IsEmpty()
-		? _("Attribute") : ibString::Format(_("Attribute of %s"), m_holder),
+		? _("Attribute") : wxString::Format(_("Attribute of %s"), m_holder),
 		new ibDataViewChoiceRenderer(m_sourceWords, wxDATAVIEW_CELL_EDITABLE),
 		kGridCol2, FromDIP(168), wxAlignment::wxALIGN_LEFT));
 	m_rows->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("On change"),

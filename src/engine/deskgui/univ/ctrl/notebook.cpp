@@ -107,6 +107,10 @@ wxEND_EVENT_TABLE()
 // implementation
 // ============================================================================
 
+wxBEGIN_EVENT_TABLE(ibNotebook, ibControl)
+    EVT_PAINT(ibNotebook::OnPaint)
+wxEND_EVENT_TABLE()
+
 // ----------------------------------------------------------------------------
 // ibNotebook creation
 // ----------------------------------------------------------------------------
@@ -501,11 +505,12 @@ void ibNotebook::DoDrawTab(wxDC& dc, const wxRect& rect, size_t n)
                    );
 }
 
-void ibNotebook::DoDraw(ibControlRenderer *renderer)
+void ibNotebook::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
+    ibThemePaintDC dc(this);
+
     //wxRect rectUpdate = GetUpdateClientRect(); -- unused
 
-    wxDC& dc = renderer->GetDC();
     dc.SetFont(GetFont());
     dc.SetTextForeground(GetForegroundColour());
 

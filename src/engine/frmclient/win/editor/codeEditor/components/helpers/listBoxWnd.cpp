@@ -186,9 +186,8 @@ void ibCodeEditorListBox::OnMouseLeaveWindow(wxMouseEvent& event)
 
 void ibCodeEditorListBox::OnMouseMotion(wxMouseEvent& event)
 {
-	// the mouse comes in the window's coordinates, the rows are the client area's
 	const int old = m_currentRow;
-	m_currentRow = VirtualHitTest(event.GetY() - GetClientAreaOrigin().y);
+	m_currentRow = VirtualHitTest(event.GetY());
 
 	if (old != m_currentRow)
 	{

@@ -45,10 +45,6 @@ ibWatchWindow::ibWatchWindow(wxWindow* parent, wxWindowID id)
 		wxTR_HIDE_ROOT | wxTR_FULL_ROW_HIGHLIGHT | wxTR_ROW_LINES | wxTR_HAS_BUTTONS,
 		wxDefaultValidator, wxT("watch"))   // the name given: the control's default one is not exported from its library
 {
-	// Light cream: one tier lighter than the editor, so the debugger's lists read as the lightest
-	// content, where the eye lands most while debugging.
-	SetBackgroundColour(wxColour(0xFD, 0xFB, 0xF5));
-
 	AddColumn(_("Name"), 0, wxALIGN_LEFT);
 	AddColumn(_("Value"), 0, wxALIGN_LEFT);
 	AddColumn(_("Type"), FromDIP(120), wxALIGN_LEFT);

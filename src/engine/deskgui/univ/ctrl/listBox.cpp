@@ -93,6 +93,7 @@ protected:
 // ============================================================================
 
 wxBEGIN_EVENT_TABLE(ibListBox, ibControl)
+    EVT_PAINT(ibListBox::OnPaint)
     EVT_SIZE(ibListBox::OnSize)
 wxEND_EVENT_TABLE()
 
@@ -724,10 +725,11 @@ wxBorder ibListBox::GetDefaultBorder() const
     return wxBORDER_SUNKEN;
 }
 
-void ibListBox::DoDraw(ibControlRenderer *renderer)
+void ibListBox::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
+    ibThemePaintDC dc(this);
+
     // adjust the DC to account for scrolling
-    wxDC& dc = renderer->GetDC();
     PrepareDC(dc);
     dc.SetFont(GetFont());
 
@@ -754,13 +756,50 @@ void ibListBox::DoDraw(ibControlRenderer *renderer)
     wxLogTrace(wxT("listbox"), wxT("Repainting items %d..%d"),
                itemFirst, itemLast);
 
-    DoDrawRange(renderer, itemFirst, itemLast);
+    // note that SetClippingRegion() needs the physical (unscrolled)
+    // coordinates while we use the logical (scrolled) ones for the drawing
+    // itself
+    wxRect rect;
+    wxSize size = GetClientSize();
+    rect.width = size.x;
+    rect.height = size.y;
+
+    // keep the text inside the client rect or we will overwrite the vertical
+    // scrollbar for the long strings
+    dc.SetClippingRegion(rect.x, rect.y, rect.width + 1, rect.height + 1);
+
+    // adjust the rect position now
+    CalcScrolledPosition(rect.x, rect.y, &rect.x, &rect.y);
+    rect.y += itemFirst*lineHeight;
+    rect.height = lineHeight;
+
+    // the rect should go to the right visible border so adjust the width if x
+    // is shifted (rightmost point should stay the same)
+    rect.width -= rect.x;
+
+    // we'll keep the text colour unchanged
+    dc.SetTextForeground(GetForegroundColour());
+
+    // an item should have the focused rect only when the lbox has focus, so
+    // make sure that we never set wxCONTROL_FOCUSED flag if it doesn't
+    const int itemCurrent = FindFocus() == this ? GetCurrentItem() : -1;
+    for ( size_t n = itemFirst; n < itemLast; n++ )
+    {
+        int flags = 0;
+        if ( (int)n == itemCurrent )
+            flags |= wxCONTROL_FOCUSED;
+        if ( IsSelected(n) )
+            flags |= wxCONTROL_SELECTED;
+
+        OnDrawItem(dc, rect, n, flags);
+
+        rect.y += lineHeight;
+    }
 }
 
-void ibListBox::DoDrawRange(ibControlRenderer *renderer,
-                            int itemFirst, int itemLast)
+void ibListBox::OnDrawItem(wxDC& dc, const wxRect& rect, size_t n, int flags) const
 {
-    renderer->DrawItems(this, itemFirst, itemLast);
+    GetRenderer()->DrawItem(dc, GetString(n), rect, flags);
 }
 
 // ----------------------------------------------------------------------------

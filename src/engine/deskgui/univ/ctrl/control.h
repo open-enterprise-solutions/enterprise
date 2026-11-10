@@ -16,7 +16,6 @@
 
 #include "deskgui/deskgui.h"
 
-class ibControlRenderer;
 class ibInputHandler;
 class ibRenderer;
 

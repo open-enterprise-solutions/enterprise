@@ -22,6 +22,8 @@
 
 #include <wx/dcbuffer.h>
 #include <wx/renderer.h>
+#include "deskgui/univ/renderer.h"
+#include "deskgui/univ/theme.h"  // the buttons: the theme's renderer
 
 // ----------------------------------------------------------------------------
 // constants
@@ -39,224 +41,6 @@ namespace
 // ============================================================================
 // ibHeaderGenericCtrl implementation
 // ============================================================================
-
-void DrawHeaderButton(wxWindow* win,
-	wxDC& dc,
-	const wxRect& rect,
-	int flags = 0,
-	wxHeaderSortIconType sortArrow = wxHDR_SORT_ICON_NONE,
-	wxHeaderButtonParams* params = NULL)
-{
-	static wxPen shadowPen(wxSystemSettings::GetColour(wxSYS_COLOUR_3DSHADOW));
-
-	dc.SetPen(shadowPen);
-	dc.DrawLine(rect.GetRight(), rect.GetTop(),
-		rect.GetRight(), rect.GetBottom());
-	dc.DrawLine(rect.GetLeft(), rect.GetBottom(),
-		rect.GetRight() + 1, rect.GetBottom());
-
-	// As above, don't draw the outer border if the control has its own one.
-	int ofs = 0;
-	if (win->GetBorder() == wxBORDER_NONE)
-	{
-		dc.DrawLine(rect.GetLeft(), rect.GetTop(),
-			rect.GetRight(), rect.GetTop());
-
-		ofs = 1;
-	}
-
-	static wxPen lightPen(wxSystemSettings::GetColour(wxSYS_COLOUR_3DLIGHT));
-
-	// ⭐ THE OUTER LEFT EDGE IS DRAWN LIKE THE OUTER RIGHT ONE — in SHADOW, not in light.
-	//
-	// The pair of pens below is the old 3D button look: a shadow line down the right of every
-	// column and a light line down its left. Between two columns that reads fine (the shadow is
-	// the separator), but at the very first column the light line IS the control's left edge — and
-	// against a white header it is invisible. The right-hand edge, being shadow, is not: the grid
-	// then looks bordered on the right and cut off on the left (Max, 2026-08-19: "on the right it
-	// is fine, on the left something ate it — and it is like that absolutely everywhere").
-	//
-	// Only the leftmost column is affected; every other column keeps its light line, because there
-	// the shadow of the column before it is already the separator and two dark lines side by side
-	// would read as a gap.
-	const bool outerLeftEdge = rect.GetLeft() <= 0;
-	dc.SetPen(outerLeftEdge ? shadowPen : lightPen);
-	dc.DrawLine(rect.GetLeft(), rect.GetTop() + ofs,
-		rect.GetLeft(), rect.GetBottom());
-
-	// ⚠ AND IT STARTS ONE PIXEL IN AT THE OUTER EDGE. This light line is drawn AFTER the vertical
-	// one and from the same x, so at the leftmost column it repainted the top pixel of the dark
-	// edge — a single light dot in the corner, which is exactly what it looked like.
-	dc.SetPen(lightPen);
-	dc.DrawLine(rect.GetLeft() + (outerLeftEdge ? 1 : 0), rect.GetTop() + ofs,
-		rect.GetRight(), rect.GetTop() + ofs);
-
-	int labelWidth = 0;
-
-	// Mark this item as selected.  For the generic version we'll just draw an
-	// underline
-	if (flags & wxCONTROL_SELECTED)
-	{
-		// draw a line at the bottom of the header button, overlaying the
-		// native hot-tracking line (on XP)
-		const int penwidth = 3;
-		int y = rect.y + rect.height + 1 - penwidth;
-		wxColour c = (params && params->m_selectionColour.IsOk()) ?
-			params->m_selectionColour : colour_selection;
-		wxPen pen(c, penwidth);
-		pen.SetCap(wxCAP_BUTT);
-		wxDCPenChanger setPen(dc, pen);
-		dc.DrawLine(rect.x, y, rect.x + rect.width, y);
-	}
-
-	// Draw an up or down arrow
-	int arrowSpace = 0;
-	if (sortArrow != wxHDR_SORT_ICON_NONE)
-	{
-		wxRect ar = rect;
-
-		// make a rect for the arrow
-		ar.SetSize(wxWindow::FromDIP(wxSize(8, 4), win));
-		ar.y += (rect.height - ar.height) / 2;
-		ar.x = ar.x + rect.width - 3 * ar.width / 2;
-		arrowSpace = 3 * ar.width / 2; // space to preserve when drawing the label
-
-		wxPoint triPt[3];
-		if (sortArrow & wxHDR_SORT_ICON_UP)
-		{
-			triPt[0].x = ar.width / 2;
-			triPt[0].y = 0;
-			triPt[1].x = ar.width;
-			triPt[1].y = ar.height;
-			triPt[2].x = 0;
-			triPt[2].y = ar.height;
-		}
-		else
-		{
-			triPt[0].x = 0;
-			triPt[0].y = 0;
-			triPt[1].x = ar.width;
-			triPt[1].y = 0;
-			triPt[2].x = ar.width / 2;
-			triPt[2].y = ar.height;
-		}
-
-		wxColour c = (params && params->m_arrowColour.IsOk()) ?
-			params->m_arrowColour : wxSystemSettings::GetColour(wxSYS_COLOUR_3DSHADOW);
-
-		wxDCPenChanger setPen(dc, c);
-		wxDCBrushChanger setBrush(dc, c);
-
-		wxDCClipper clip(dc, rect);
-		dc.DrawPolygon(3, triPt, ar.x, ar.y);
-	}
-	labelWidth += arrowSpace;
-
-	int bmpWidth = 0;
-
-	// draw the bitmap if there is one
-	if (params && params->m_labelBitmap.IsOk())
-	{
-		int w = params->m_labelBitmap.GetLogicalWidth();
-		int h = params->m_labelBitmap.GetLogicalHeight();
-
-		const int margin = 1; // an extra pixel on either side of the bitmap
-
-		bmpWidth = w + 2 * margin;
-		labelWidth += bmpWidth;
-
-		int x = rect.x + margin;
-		const int y = rect.y + wxMax(1, (rect.height - h) / 2);
-
-		const int extraSpace = rect.width - labelWidth;
-		if (params->m_labelText.empty() && extraSpace > 0)
-		{
-			// use the alignment flags
-			switch (params->m_labelAlignment)
-			{
-			default:
-			case wxALIGN_LEFT:
-				break;
-
-			case wxALIGN_CENTER:
-				x += extraSpace / 2;
-				break;
-
-			case wxALIGN_RIGHT:
-				x += extraSpace;
-				break;
-			}
-		}
-
-		wxDCClipper clip(dc, rect);
-		dc.DrawBitmap(params->m_labelBitmap, x, y, true);
-	}
-
-	// Draw a label if one is given
-	if (params && !params->m_labelText.empty())
-	{
-		const int margin = 5;   // number of pixels to reserve on either side of the label
-		labelWidth += 2 * margin;
-
-		wxFont font = params->m_labelFont.IsOk() ?
-			params->m_labelFont : win->GetFont();
-		wxColour clr = params->m_labelColour.IsOk() ?
-			params->m_labelColour : win->GetForegroundColour();
-
-		if (flags & wxCONTROL_DISABLED)
-		{
-			clr = wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT);
-		}
-
-		wxString label(params->m_labelText);
-
-		wxDCFontChanger setFont(dc, font);
-		wxDCTextColourChanger setTextFg(dc, clr);
-		wxDCTextBgModeChanger setBgMode(dc, wxBRUSHSTYLE_TRANSPARENT);
-
-		int tw, th;
-		dc.GetMultiLineTextExtent(label, &tw, &th);
-
-		int x = rect.x + bmpWidth + margin;
-		const int y = rect.y + wxMax(0, (rect.height - th) / 2);
-
-		// truncate and add an ellipsis (...) if the text is too wide.
-		const int availWidth = rect.width - labelWidth;
-
-#if wxUSE_CONTROLS
-		if (tw > availWidth)
-		{
-			label = wxControl::Ellipsize(label,
-				dc,
-				wxELLIPSIZE_END,
-				availWidth,
-				wxELLIPSIZE_FLAGS_NONE);
-			tw = dc.GetTextExtent(label).x;
-		}
-		else // enough space, we can respect alignment
-#endif // wxUSE_CONTROLS
-		{
-			switch (params->m_labelAlignment)
-			{
-			default:
-			case wxALIGN_LEFT:
-				break;
-
-			case wxALIGN_CENTER:
-				x += (availWidth - tw) / 2;
-				break;
-
-			case wxALIGN_RIGHT:
-				x += availWidth - tw;
-				break;
-			}
-		}
-
-		dc.DrawText(label, x, y);
-
-		labelWidth += tw;
-	}
-}
 
 // ----------------------------------------------------------------------------
 // ibHeaderGenericCtrl creation
@@ -350,7 +134,7 @@ void ibHeaderGenericCtrl::DoScrollHorz(int dx)
 wxSize ibHeaderGenericCtrl::DoGetBestSize() const
 {
 	wxWindow* win = GetParent();
-	int height = wxRendererNative::Get().GetHeaderButtonHeight(win) * wxMax(m_numHeight, 1);
+	int height = ibThemeEngine::Get()->GetRenderer()->GetHeaderButtonHeight(win) * wxMax(m_numHeight, 1);
 
 	// the vertical size is rather arbitrary but it looks better if we leave
 	// some space around the text
@@ -812,8 +596,8 @@ void ibHeaderGenericCtrl::OnPaint(wxPaintEvent& WXUNUSED(event))
 	int w, h;
 	GetClientSize(&w, &h);
 
-	wxAutoBufferedPaintDC dc(this);
-	dc.Clear();
+	ibThemePaintDC dc(this);
+	ibRenderer* const renderer = ibThemeEngine::Get()->GetRenderer();
 
 	std::vector<ibHeaderButton> cells;
 	BuildHeaderButtons(cells, h);
@@ -841,7 +625,7 @@ void ibHeaderGenericCtrl::OnPaint(wxPaintEvent& WXUNUSED(event))
 		{
 			// A group title is not hovered / sorted / clicked — it labels columns,
 			// it is not one.
-			state = wxCONTROL_SELECTED;
+			state = wxCONTROL_CURRENT;
 		}
 
 		if (!cell.isGroup)
@@ -865,17 +649,16 @@ void ibHeaderGenericCtrl::OnPaint(wxPaintEvent& WXUNUSED(event))
 		params.m_labelBitmap = cell.bitmap.GetBitmapFor(this);
 		params.m_labelAlignment = cell.align;
 
-		DrawHeaderButton(this, dc, rect, state, sortArrow, &params);
+		renderer->DrawHeaderButton(this, dc, rect, state, sortArrow, &params);
 	}
 
 	const int xend = GetHeaderButtonsEnd(cells) + m_scrollOffset;
 	if (xend < w)
 	{
-		int state = wxCONTROL_NONE;
+		int state = wxCONTROL_DIRTY;
 		if (!IsEnabled())
 			state |= wxCONTROL_DISABLED;
-		DrawHeaderButton(
-			this, dc, wxRect(xend, 0, w - xend, h));
+		renderer->DrawHeaderButton(this, dc, wxRect(xend, 0, w - xend, h), state);
 	}
 }
 

@@ -11,22 +11,22 @@ public:
 	long GetValueAsInteger() const;
 	void SetValue(const long& i);
 
-	ibPropertyEnumBase(ibPropertyCategory* cat, const ibString& name) : ibPropertySerializable(cat, name, wxNullVariant)
+	ibPropertyEnumBase(ibPropertyCategory* cat, const ibString& name) : ibPropertySerializable(cat, name, ibVariant())
 	{
 	}
 
 	ibPropertyEnumBase(ibPropertyCategory* cat, const ibString& name, const ibString& label)
-		: ibPropertySerializable(cat, name, label, wxNullVariant)
+		: ibPropertySerializable(cat, name, label, ibVariant())
 	{
 	}
 
 	ibPropertyEnumBase(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString)
-		: ibPropertySerializable(cat, name, label, helpString, wxNullVariant)
+		: ibPropertySerializable(cat, name, label, helpString, ibVariant())
 	{
 	}
 
 	// The choices this enum offers. Public because the FRONT builds the editor now and has
-	// to read them (it was protected while the property built its own wxPGProperty and only
+	// to read them (it was protected while the property built its own ibPGProperty and only
 	// needed them inside GetPGProperty).
 	virtual ibPropertyChoiceList GetEnumList() const = 0;
 

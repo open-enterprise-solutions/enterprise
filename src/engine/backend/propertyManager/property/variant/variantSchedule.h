@@ -13,8 +13,6 @@
 #include "backend/backend.h"
 #include "core/job/jobSchedule.h"
 
-#include <wx/variant.h>
-
 class BACKEND_API ibVariantSchedule : public ibVariant {
 public:
 

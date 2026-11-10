@@ -13,14 +13,13 @@
 #include <wx/aui/auibar.h>
 #include <wx/checkbox.h>
 #include "deskgui/univ/ctrl/choice.h"
-#include <wx/datectrl.h>
+#include "deskgui/univ/ctrl/datePickerCtrl.h"
 #include <wx/datetime.h>
 #include <wx/itemattr.h>
 #include <wx/sizer.h>
 #include "deskgui/univ/ctrl/staticText.h"
 #include "deskgui/univ/ctrl/textCtrl.h"
 #include <wx/timer.h>
-#include <wx/variant.h>
 
 namespace {
 
@@ -253,13 +252,13 @@ void ibAuditLogView::BuildLayout(wxWindow* parent)
 		0, wxALIGN_CENTER_VERTICAL | wxALL, parent->FromDIP(3));
 	wxDateTime defaultFrom = wxDateTime::Today();
 	defaultFrom.Subtract(wxDateSpan::Days(7));
-	m_fromDate = new wxDatePickerCtrl(parent, wxID_ANY, defaultFrom,
+	m_fromDate = new ibDatePickerCtrl(parent, wxID_ANY, defaultFrom,
 		wxDefaultPosition, wxDefaultSize, wxDP_DROPDOWN | wxDP_SHOWCENTURY);
 	filt->Add(m_fromDate, 0, wxALL, parent->FromDIP(3));
 
 	filt->Add(new ibStaticText(parent, wxID_ANY, _("To:")),
 		0, wxALIGN_CENTER_VERTICAL | wxALL, parent->FromDIP(3));
-	m_toDate = new wxDatePickerCtrl(parent, wxID_ANY, wxDateTime::Today(),
+	m_toDate = new ibDatePickerCtrl(parent, wxID_ANY, wxDateTime::Today(),
 		wxDefaultPosition, wxDefaultSize, wxDP_DROPDOWN | wxDP_SHOWCENTURY);
 	filt->Add(m_toDate, 0, wxALL, parent->FromDIP(3));
 

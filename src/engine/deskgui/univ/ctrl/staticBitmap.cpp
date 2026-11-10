@@ -43,6 +43,10 @@ wxIMPLEMENT_DYNAMIC_CLASS(ibStaticBitmap, ibControl);
 // implementation
 // ============================================================================
 
+wxBEGIN_EVENT_TABLE(ibStaticBitmap, ibControl)
+    EVT_PAINT(ibStaticBitmap::OnPaint)
+wxEND_EVENT_TABLE()
+
 // ----------------------------------------------------------------------------
 // ibStaticBitmap
 // ----------------------------------------------------------------------------
@@ -84,10 +88,13 @@ void ibStaticBitmap::SetBitmap(const wxBitmapBundle& bitmap)
 // drawing
 // ----------------------------------------------------------------------------
 
-void ibStaticBitmap::DoDraw(ibControlRenderer *renderer)
+void ibStaticBitmap::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
-    ibControl::DoDraw(renderer);
-    renderer->DrawBitmap(GetBitmap());
+    ibThemePaintDC dc(this);
+
+    const int style = GetWindowStyle();
+    ibRenderer::DrawBitmap(dc, GetBitmap(), wxRect(GetClientSize()), style & wxALIGN_MASK,
+                           style & wxBI_EXPAND ? wxEXPAND : wxSTRETCH_NOT);
 }
 
 #endif // wxUSE_STATBMP

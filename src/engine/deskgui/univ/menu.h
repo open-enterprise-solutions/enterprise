@@ -173,7 +173,7 @@ private:
 // ----------------------------------------------------------------------------
 
 #if 0 // GUI-REVIVE: univ menubar needs the univ frame (Attach(ibFrame*),
-      // DoDraw, the whole top-level wiring) — cut until the frame revives
+      // its paint, the whole top-level wiring) — cut until the frame revives
 
 class DESKGUI_API ibMenuBar : public wxMenuBarBase
 {
@@ -242,7 +242,7 @@ protected:
     void OnDismiss();
 
     // draw the menubar
-    virtual void DoDraw(ibControlRenderer *renderer) override;
+    void OnPaint(wxPaintEvent& event);
 
     // menubar geometry
     virtual wxSize DoGetBestClientSize() const override;

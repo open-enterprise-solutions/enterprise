@@ -18,8 +18,8 @@
 #include "deskgui/univ/ctrl/spinCtrl.h"
 #include "deskgui/univ/ctrl/choice.h"
 #include "deskgui/univ/ctrl/staticText.h"
-#include <wx/datectrl.h>
-#include <wx/timectrl.h>
+#include "deskgui/univ/ctrl/datePickerCtrl.h"
+#include "deskgui/univ/ctrl/timePickerCtrl.h"
 
 #include "frmclient/frmclient.h"   // FRMCLIENT_API
 #include "core/job/jobSchedule.h"
@@ -52,8 +52,8 @@ private:
 
 	// Helpers for the two representations that differ between UI and storage: a time is minutes
 	// from midnight (-1 = unset), and a mask is a check-list.
-	static int  MinutesFrom(wxTimePickerCtrl* ctrl, const ibCheckBox* use);
-	static void MinutesTo(wxTimePickerCtrl* ctrl, ibCheckBox* use, int minutes);
+	static int  MinutesFrom(ibTimePickerCtrl* ctrl, const ibCheckBox* use);
+	static void MinutesTo(ibTimePickerCtrl* ctrl, ibCheckBox* use, int minutes);
 	static void MaskTo(ibCheckListBox* list, std::uint32_t mask);
 	static std::uint32_t MaskFrom(const ibCheckListBox* list);
 
@@ -63,16 +63,16 @@ private:
 	ibSpinCtrl*        m_intervalValue   = nullptr;
 	ibChoice*          m_intervalUnit    = nullptr;   // seconds / minutes / hours / days
 	ibCheckBox*        m_activeFromUse   = nullptr;
-	wxDatePickerCtrl*  m_activeFrom      = nullptr;
+	ibDatePickerCtrl*  m_activeFrom      = nullptr;
 	ibCheckBox*        m_activeToUse     = nullptr;
-	wxDatePickerCtrl*  m_activeTo        = nullptr;
+	ibDatePickerCtrl*  m_activeTo        = nullptr;
 
 	// Daily
 	ibCheckBox*        m_windowUse       = nullptr;
-	wxTimePickerCtrl*  m_windowStart     = nullptr;
-	wxTimePickerCtrl*  m_windowEnd       = nullptr;
+	ibTimePickerCtrl*  m_windowStart     = nullptr;
+	ibTimePickerCtrl*  m_windowEnd       = nullptr;
 	ibCheckBox*        m_stopAfterUse    = nullptr;
-	wxTimePickerCtrl*  m_stopAfter       = nullptr;
+	ibTimePickerCtrl*  m_stopAfter       = nullptr;
 
 	// Weekly
 	ibCheckListBox*    m_weekDays        = nullptr;

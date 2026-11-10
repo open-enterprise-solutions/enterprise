@@ -1,6 +1,6 @@
 ﻿#include "advpropHyperLink.h"
 
-#include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frmclient/propertyManager/property/private/prop.h"             // ibPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties::Object — what the link opens
 
@@ -12,7 +12,7 @@ public:
 	{
 		// ibPropertyForm — a form metaobject's layout and module, not edited in the grid: the link opens the object the
 		// row names — the form.
-		ibPropertyRegistry::Register(wxT("ibPropertyForm"), [](ibBackendProperty* property) -> wxPGProperty* {
+		ibPropertyRegistry::Register(wxT("ibPropertyForm"), [](ibBackendProperty* property) -> ibPGProperty* {
 			ibDataNode row;
 			property->GetProtocolValue(row);
 			const ibPropertyObject* const owner = property->GetPropertyObject();   // CONST: the non-const GetMetaData wxFAILs

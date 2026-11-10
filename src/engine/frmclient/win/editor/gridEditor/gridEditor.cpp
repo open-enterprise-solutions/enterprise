@@ -123,9 +123,6 @@ ibGridEditor::ibGridEditor(ibMetaDocument* document,
 	ibGrid::SetDefaultCellAlignment(wxAlignment::wxALIGN_LEFT, wxAlignment::wxALIGN_BOTTOM);
 	ibGrid::SetTable(new ibGridEditorStringTable, true);
 
-	m_selectionBackground.Set(211, 217, 239);
-	m_selectionForeground.Set(0, 0, 0);
-
 	ibGrid::SetLabelFont(typeConv::FontToWxFont(ibDefaultSpreadsheetFont()));
 	ibGrid::SetDefaultCellFont(typeConv::FontToWxFont(ibDefaultSpreadsheetFont()));
 	ibGrid::SetDefaultCellBackgroundColour(typeConv::ColourToWxColour(ibDefaultSpreadsheetBackgroundColour()));
@@ -887,6 +884,13 @@ void ibGridEditor::OnScroll(wxScrollWinEvent& event)
 	int w, h;
 	m_gridWin->GetClientSize(&w, &h);
 
+	// WHERE THE SCROLLED PART SHOWS THE SHEET: below the frozen rows and right of the frozen columns
+	// (GetGridWindowOffset, as the labels paint it). The view start alone is the scroll, not the sheet:
+	// a report freezing its title over a tall row is taller than its count of rows, and the bottom
+	// never reached the last row there (Max, 2026-11-10: "the endless scroll does not work").
+	const wxPoint offset = ibGrid::GetGridWindowOffset(m_gridWin);
+	const int left = sx + offset.x, top = sy + offset.y;
+
 	int scroll = 0, page_scroll_x = 0, page_scroll_y = 0;
 
 	if (event.GetEventType() == wxEVT_SCROLLWIN_THUMBTRACK ||
@@ -940,18 +944,18 @@ void ibGridEditor::OnScroll(wxScrollWinEvent& event)
 		}
 	}
 
-	const int x0 = ibGrid::XToCol(sx, true);
-	const int y0 = ibGrid::YToRow(sy, true);
+	const int x0 = ibGrid::XToCol(left, true);
+	const int y0 = ibGrid::YToRow(top, true);
 
-	const int x1 = ibGrid::XToCol(sx + w, true);
-	const int y1 = ibGrid::YToRow(sy + h, true);
+	const int x1 = ibGrid::XToCol(left + w, true);
+	const int y1 = ibGrid::YToRow(top + h, true);
 
 	if (scroll > 0 && event.GetOrientation() == wxOrientation::wxVERTICAL) {
-		if (y1 >= ibGrid::GetNumberRows() - ibGrid::GetNumberFrozenRows() - 1) {
+		if (y1 >= ibGrid::GetNumberRows() - 1) {
 			// append enough rows to fit the requested scroll target — single
 			// AppendRows() per scroll produced visible "jerks" when the user
 			// page-scrolled or dragged the thumb.
-			const int targetBottom = sy + scroll + h;
+			const int targetBottom = top + scroll + h;
 			int rowsToAdd = 1;
 			const int rowStep = wxMax(1, ibCalcGridScale(m_defaultRowHeight, GetGridZoom()));
 			const int curBottom = ibGrid::GetRowBottom(ibGrid::GetNumberRows() - 1, GetGridZoom());
@@ -962,8 +966,8 @@ void ibGridEditor::OnScroll(wxScrollWinEvent& event)
 		}
 	}
 	else if (scroll > 0 && event.GetOrientation() == wxOrientation::wxHORIZONTAL) {
-		if (x1 >= ibGrid::GetNumberCols() - ibGrid::GetNumberFrozenCols() - 1) {
-			const int targetRight = sx + scroll + w;
+		if (x1 >= ibGrid::GetNumberCols() - 1) {
+			const int targetRight = left + scroll + w;
 			int colsToAdd = 1;
 			const int colStep = wxMax(1, ibCalcGridScale(m_defaultColWidth, GetGridZoom()));
 			const int curRight = ibGrid::GetColRight(ibGrid::GetNumberCols() - 1, GetGridZoom());
@@ -989,7 +993,7 @@ void ibGridEditor::OnScroll(wxScrollWinEvent& event)
 		// layout, the content is a floor for the DATA, and a file that brought its own
 		// rows has no breaks at all.
 		const int floor = wxMax(GetMaxRowBrake(), GetLastContentRow());
-		const int y = wxMax(ibGrid::YToRow(sy + h + scroll, true) + 1, floor + 1);
+		const int y = wxMax(ibGrid::YToRow(top + h + scroll, true) + 1, floor + 1);
 		if (y0 > floor && y0 != 0) {
 			const int extraRows = ibGrid::GetNumberRows() - y;
 			if (extraRows > 0)
@@ -999,7 +1003,7 @@ void ibGridEditor::OnScroll(wxScrollWinEvent& event)
 	}
 	else if (scroll < 0 && event.GetOrientation() == wxOrientation::wxHORIZONTAL) {
 		const int floor = wxMax(GetMaxColBrake(), GetLastContentCol());
-		const int x = wxMax(ibGrid::XToCol(sx + w + scroll, true), floor + 1);
+		const int x = wxMax(ibGrid::XToCol(left + w + scroll, true), floor + 1);
 		if (x0 > floor && x0 != 0) {
 			const int extraCols = ibGrid::GetNumberCols() - x;
 			if (extraCols > 0)
@@ -1038,15 +1042,10 @@ void ibGridEditor::OnSize(wxSizeEvent& event)
 	// ("infinite" scroll). Subtract the chrome width/height from the event size
 	// so we get the real gridWin-visible area — works even on the very first
 	// OnSize before CalcWindowSizes has run (can't rely on m_gridWin's client
-	// size then: it's still zero).
-	const int chromeX = ibCalcGridScale(m_rowLabelWidth, GetGridZoom())
-		+ (GridRowAreaEnabled() ? ibCalcGridScale(m_rowAreaWidth, GetGridZoom()) : 0)
-		+ GetRowOutlineSize();
-	const int chromeY = ibCalcGridScale(m_colLabelHeight, GetGridZoom())
-		+ (GridColAreaEnabled() ? ibCalcGridScale(m_colAreaHeight, GetGridZoom()) : 0)
-		+ GetColOutlineSize();
-	const int w = wxMax(0, event.m_size.x - chromeX);
-	const int h = wxMax(0, event.m_size.y - chromeY);
+	// size then: it's still zero). The chrome is the grid's one sum (GetGridOrigin).
+	const wxPoint chrome = ibGrid::GetGridOrigin();
+	const int w = wxMax(0, event.m_size.x - chrome.x);
+	const int h = wxMax(0, event.m_size.y - chrome.y);
 
 	FillVisibleArea(w, h);
 	event.Skip();
@@ -1066,14 +1065,9 @@ void ibGridEditor::FillVisibleArea(int width, int height)
 	int h = height;
 	if (w < 0 || h < 0) {
 		const wxSize client = ibGrid::GetClientSize();
-		const int chromeX = ibCalcGridScale(m_rowLabelWidth, GetGridZoom())
-			+ (GridRowAreaEnabled() ? ibCalcGridScale(m_rowAreaWidth, GetGridZoom()) : 0)
-			+ GetRowOutlineSize();
-		const int chromeY = ibCalcGridScale(m_colLabelHeight, GetGridZoom())
-			+ (GridColAreaEnabled() ? ibCalcGridScale(m_colAreaHeight, GetGridZoom()) : 0)
-			+ GetColOutlineSize();
-		w = wxMax(0, client.x - chromeX);
-		h = wxMax(0, client.y - chromeY);
+		const wxPoint chrome = ibGrid::GetGridOrigin();
+		w = wxMax(0, client.x - chrome.x);
+		h = wxMax(0, client.y - chrome.y);
 	}
 	if (w <= 0 || h <= 0)
 		return;

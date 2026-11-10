@@ -11,7 +11,7 @@
 //
 // Its owner makes it of the row and holds it till the next rows come (ibPropertyObject::Receive).
 //
-// ⭐ ITS VALUE IS ONE VARIANT, THE SAME FOR EVERY TYPE (ibVariantDataSerializable, Max, 2026-10-20) — the node the server
+// ⭐ ITS VALUE IS ONE VARIANT, THE SAME FOR EVERY TYPE (ibVariantSerializable, Max, 2026-10-20) — the node the server
 // stores it as, named by its class: what is read is held as it comes, what is written is what is held. Whoever sets and
 // gets it moves a variant and knows nothing of the node. The client's own properties (a sheet's cell's) hold theirs so
 // too: each is one of these, made of no row, set by the type it is.
@@ -32,9 +32,9 @@ public:
 protected:
 
 	// The client's own — made of no row (a sheet's cell's).
-	ibPropertySerializable(ibPropertyCategory* cat, const ibString& name, const wxVariant& value) : ibProperty(cat, name, value) {}
-	ibPropertySerializable(ibPropertyCategory* cat, const ibString& name, const ibString& label, const wxVariant& value) : ibProperty(cat, name, label, value) {}
-	ibPropertySerializable(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString, const wxVariant& value) : ibProperty(cat, name, label, helpString, value) {}
+	ibPropertySerializable(ibPropertyCategory* cat, const ibString& name, const ibVariant& value) : ibProperty(cat, name, value) {}
+	ibPropertySerializable(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibVariant& value) : ibProperty(cat, name, label, value) {}
+	ibPropertySerializable(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString, const ibVariant& value) : ibProperty(cat, name, label, helpString, value) {}
 
 	// A node arriving (a typed setter's, the gate's), held as it comes, named by its class. A node has no words: what
 	// reads here is the old ones until the rows come back.

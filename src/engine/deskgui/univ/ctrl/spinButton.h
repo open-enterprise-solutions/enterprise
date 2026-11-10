@@ -84,11 +84,12 @@ public:
 
 protected:
     virtual wxSize DoGetBestClientSize() const override;
-    virtual void DoDraw(ibControlRenderer *renderer) override;
     virtual wxBorder GetDefaultBorder() const override { return wxBORDER_NONE; }
 
     // the common part of all ctors
     void Init();
+
+    void OnPaint(wxPaintEvent& event);
 
     // normalize the value to fit into min..max range
     int NormalizeValue(int value) const;
@@ -115,6 +116,7 @@ private:
     int m_max;
 
     wxDECLARE_DYNAMIC_CLASS(ibSpinButton);
+    wxDECLARE_EVENT_TABLE();
 };
 
 // ----------------------------------------------------------------------------

@@ -151,10 +151,10 @@ protected:
 
     // overridden base class virtuals
     virtual wxSize DoGetBestClientSize() const override;
-    virtual void DoDraw(ibControlRenderer *renderer) override;
     virtual wxBorder GetDefaultBorder() const override { return wxBORDER_NONE; }
 
     // event handlers
+    void OnPaint(wxPaintEvent& event);
     void OnSize(wxSizeEvent& event);
 
     // common part of all ctors

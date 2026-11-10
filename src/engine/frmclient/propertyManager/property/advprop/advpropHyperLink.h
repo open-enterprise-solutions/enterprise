@@ -1,8 +1,8 @@
 #ifndef __ADVPROP_HYPERLINK_H__
 #define __ADVPROP_HYPERLINK_H__
 
-#include <wx/propgrid/propgrid.h>
-#include <wx/propgrid/advprops.h>
+#include "deskgui/univ/propgrid/propgrid.h"
+#include "deskgui/univ/propgrid/advprops.h"
 
 #include "frmclient/backend/backend_core.h"
 #include "frmclient/backend/metaData.h"   // ibMetaData — the configuration of the object it opens
@@ -13,21 +13,21 @@
 
 // THE LINK OPENS AN OBJECT — a module, a form, a template, whichever the server named in the row (ibProperties::Object):
 // what OpenForm takes, its id in its configuration. What the object is, the link does not know.
-class ibPGHyperLinkProperty : public wxPGProperty {
+class ibPGHyperLinkProperty : public ibPGProperty {
 public:
 
-	ibPGHyperLinkProperty(ibMetaID id = 0, const ibMetaData& metaData = ibMetaData(), const wxString& label = wxPG_LABEL,
-		const wxString& name = wxPG_LABEL, const wxVariant& value = wxNullVariant);
+	ibPGHyperLinkProperty(ibMetaID id = 0, const ibMetaData& metaData = ibMetaData(), const wxString& label = ibPG_LABEL,
+		const wxString& name = ibPG_LABEL, const ibVariant& value = ibVariant());
 	virtual ~ibPGHyperLinkProperty();
 
-	virtual wxString ValueToString(wxVariant& value,
-		wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override;
+	virtual wxString ValueToString(ibVariant& value,
+		ibPGPropValFormatFlags flags = ibPGPropValFormatFlags::Null) const override;
 
-	virtual bool StringToValue(wxVariant& variant,
+	virtual bool StringToValue(ibVariant& variant,
 		const wxString& text,
-		wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override;
+		ibPGPropValFormatFlags flags = ibPGPropValFormatFlags::Null) const override;
 
-	virtual void OnSetValue() override;
+	virtual bool OnEvent(ibPropertyGrid* propgrid, wxWindow* wnd_primary, wxEvent& event) override;
 
 	// Refresh values of child properties.
 	// Automatically called after value is set.
@@ -37,7 +37,7 @@ protected:
 	ibMetaID m_metaId = 0;
 	ibMetaData m_metaData;
 private:
-	WX_PG_DECLARE_PROPERTY_CLASS(ibPGHyperLinkProperty);
+	IB_PG_DECLARE_PROPERTY_CLASS(ibPGHyperLinkProperty);
 };
 
 #endif

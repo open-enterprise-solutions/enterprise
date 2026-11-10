@@ -209,7 +209,49 @@ wxToolBarToolBase *ibToolBar::AddSeparator()
     return InsertTool(GetToolsCount(), wxID_SEPARATOR, wxEmptyString,
         wxBitmapBundle(), wxBitmapBundle(), wxITEM_SEPARATOR);
 }
+
+bool ibToolBar::DeleteTool(int id)
+{
+    size_t pos = 0;
+    for ( wxToolBarToolsList::compatibility_iterator node = m_tools.GetFirst();
+          node;
+          node = node->GetNext(), pos++ )
+    {
+        if ( node->GetData()->GetId() == id )
+            return DeleteToolByPos(pos);
+    }
+    return false;
+}
+
+bool ibToolBar::DeleteToolByPos(size_t pos)
+{
+    wxCHECK_MSG( pos < GetToolsCount(), false,
+                 wxT("invalid position in ibToolBar::DeleteToolByPos()") );
+
+    wxToolBarToolsList::compatibility_iterator node = m_tools.Item(pos);
+    if ( !DoDeleteTool(pos, node->GetData()) )
+        return false;
+
+    delete node->GetData();
+    m_tools.Erase(node);
+    return true;
+}
+
+void ibToolBar::ToggleTool(int id, bool toggle)
+{
+    wxToolBarToolBase *tool = FindById(id);
+    if ( tool && tool->CanBeToggled() && tool->Toggle(toggle) )
+    {
+        UnToggleRadioGroup(tool);
+        DoToggleTool(tool, toggle);
+    }
+}
+
 wxIMPLEMENT_DYNAMIC_CLASS(ibToolBar, ibControl);
+
+wxBEGIN_EVENT_TABLE(ibToolBar, ibControl)
+    EVT_PAINT(ibToolBar::OnPaint)
+wxEND_EVENT_TABLE()
 
 // ----------------------------------------------------------------------------
 // ibToolBar creation
@@ -648,11 +690,12 @@ void ibToolBar::GetRectLimits(const wxRect& rect,
     }
 }
 
-void ibToolBar::DoDraw(ibControlRenderer *renderer)
+void ibToolBar::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
+    ibThemePaintDC dc(this);
+
     // prepare the variables used below
-    wxDC& dc = renderer->GetDC();
-    ibRenderer *rend = renderer->GetRenderer();
+    ibRenderer *rend = GetRenderer();
     dc.SetFont(GetFont());
 
     // draw the border separating us from the menubar (if there is no menubar

@@ -713,7 +713,6 @@ void ibVListBox::OnKeyDown(wxKeyEvent& event)
 // ibVListBox mouse handling
 // ----------------------------------------------------------------------------
 
-// SEAM vs wx: the mouse comes in the window's coordinates, the rows are the client area's - moved by its origin
 void ibVListBox::OnLeftDown(wxMouseEvent& event)
 {
     if ( !IsEnabled() )
@@ -721,7 +720,7 @@ void ibVListBox::OnLeftDown(wxMouseEvent& event)
 
     SetFocus();
 
-    int item = VirtualHitTest(event.GetPosition().y - GetClientAreaOrigin().y);
+    int item = VirtualHitTest(event.GetPosition().y);
 
     if ( item != wxNOT_FOUND )
     {
@@ -741,7 +740,7 @@ void ibVListBox::OnLeftDClick(wxMouseEvent& eventMouse)
     if ( !IsEnabled() )
         return;
 
-    int item = VirtualHitTest(eventMouse.GetPosition().y - GetClientAreaOrigin().y);
+    int item = VirtualHitTest(eventMouse.GetPosition().y);
     if ( item != wxNOT_FOUND )
     {
 

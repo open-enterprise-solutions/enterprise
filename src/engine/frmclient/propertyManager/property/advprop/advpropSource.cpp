@@ -3,13 +3,13 @@
 #include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the binding's node
 #include "core/description/sourceDescription.h"                                  // ibSourceDescriptionMemory — the binding
 
-#include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frmclient/propertyManager/property/private/prop.h"             // ibPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 #include "frmclient/propertyManager/propertyEditor.h"
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibProperties
 #include "deskgui/univ/messageDialog.h"
 
-wxPG_IMPLEMENT_PROPERTY_CLASS(ibPGDataSourceProperty, wxPGProperty, TextCtrlAndButton)
+ibPG_IMPLEMENT_PROPERTY_CLASS(ibPGDataSourceProperty, ibPGProperty, TextCtrlAndButton)
 
 namespace {
 
@@ -29,30 +29,29 @@ void ibSetSourcePicker(const ibSourcePicker& picker)
 namespace {
 
 // The binding a value holds, as the server stores it.
-ibSourceDescription ReadSource(const wxVariant& value)
+ibSourceDescription ReadSource(const ibVariant& value)
 {
 	ibSourceDescription desc;
-	ibSourceDescriptionMemory::ReadNode(ibVariantDataSerializable::GetNodeValue(value), desc);
+	ibSourceDescriptionMemory::ReadNode(ibVariantSerializable::GetNodeValue(value), desc);
 	return desc;
 }
 
 // …and the value of another one: the same property's, the words the server's to say.
-wxVariant WriteSource(const wxVariant& value, const ibSourceDescription& desc)
+ibVariant WriteSource(const ibSourceDescription& desc)
 {
 	ibDataValue node;
 	ibSourceDescriptionMemory::WriteNode(node, desc);
-	return wxVariant(new ibVariantDataSerializable(value.GetType(), node, wxEmptyString));
+	return ibVariant(new ibVariantSerializable(node, wxEmptyString));
 }
 
 // …and the type it holds, beside the path in the same value (SourceType: its node and its words) — the same property's,
 // as the Type row reads it; unbound, or bound and not yet named by the server — none.
-wxVariant ReadSourceType(const wxVariant& value)
+ibVariant ReadSourceType(const ibVariant& value)
 {
-	const ibDataValue node = ibVariantDataSerializable::GetNodeValue(value);
+	const ibDataValue node = ibVariantSerializable::GetNodeValue(value);
 	const auto type = node.Kind() == ibDataKind::Child
 		? node.AsChild()->FindChild(ibProtocol::ibSchema::ibProperties::SourceType) : std::nullopt;
-	return wxVariant(new ibVariantDataSerializable(value.GetType(),
-		type ? type->GetProperty(ibProtocol::ibSchema::ibProperties::Value) : ibDataValue(),
+	return ibVariant(new ibVariantSerializable(		type ? type->GetProperty(ibProtocol::ibSchema::ibProperties::Value) : ibDataValue(),
 		type ? type->GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Presentation) : ibString()));
 }
 
@@ -66,12 +65,12 @@ class ibPropertySourceLoader
 public:
 	ibPropertySourceLoader()
 	{
-		ibPropertyRegistry::Register(wxT("ibPropertySource"), [](ibBackendProperty* property) -> wxPGProperty* {
+		ibPropertyRegistry::Register(wxT("ibPropertySource"), [](ibBackendProperty* property) -> ibPGProperty* {
 			// …what it may be bound to, as the row says (an older server's says nothing: an attribute).
 			using ibSourceDataType = ibProtocol::ibSchema::ibProperties::ibSourceDataType;
 			ibSourceDataType filter = ibSourceDataType::Attribute;
 			std::vector<ibClassID> types;
-			wxVariant value = property->GetValue();
+			ibVariant value = property->GetValue();
 			ibDataNode row;
 			if (property->GetProtocolValue(row)) {
 				if (row.Has(ibProtocol::ibSchema::ibProperties::SourceDataType))
@@ -90,7 +89,7 @@ public:
 				ibSourceDescription written;
 				ibSourceDescriptionMemory::ReadNode(stated, written);
 				if (written.GetPath() == ReadSource(value).GetPath())
-					value = wxVariant(new ibVariantDataSerializable(value.GetType(), stated, value.GetString()));
+					value = ibVariant(new ibVariantSerializable(stated, value.GetString()));
 			}
 			return new ibPGDataSourceProperty(property->GetPropertyObject(), property->GetLabel(), property->GetName(),
 				value, filter, types);
@@ -99,40 +98,40 @@ public:
 }g_sourceLoader;
 
 ibPGDataSourceProperty::ibPGDataSourceProperty(const ibPropertyObject* property, const wxString& label,
-	const wxString& strName, const wxVariant& value, ibProtocol::ibSchema::ibProperties::ibSourceDataType filter,
+	const wxString& strName, const ibVariant& value, ibProtocol::ibSchema::ibProperties::ibSourceDataType filter,
 	const std::vector<ibClassID>& types) :
-	wxPGProperty(label, strName), m_owner(property), m_filterSourceDataType(filter)
+	ibPGProperty(label, strName), m_owner(property), m_filterSourceDataType(filter)
 {
 	// The Type row — the desktop's, over the type the binding holds (RefreshChildren), read only: its window offers the
 	// classes the row named (Classes — `types`), composite unless the control's is a table's shape (SourceType's Multiple).
-	const ibDataValue node = ibVariantDataSerializable::GetNodeValue(value);
+	const ibDataValue node = ibVariantSerializable::GetNodeValue(value);
 	const auto type = node.Kind() == ibDataKind::Child
 		? node.AsChild()->FindChild(ibProtocol::ibSchema::ibProperties::SourceType) : std::nullopt;
 	m_typeSelector = new ibPGTypeProperty(types, type && type->GetValue<bool>(ibProtocol::ibSchema::ibProperties::Multiple),
 		_("Type"), wxT("type"));
 	AddPrivateChild(m_typeSelector);
 
-	m_flags |= wxPGPropertyFlags_ActiveButton; // Property button always enabled.
+	m_flags |= ibPGPropertyFlags_ActiveButton; // Property button always enabled.
 
 	SetValue(value);
 }
 
-wxString ibPGDataSourceProperty::ValueToString(wxVariant& variant,
-	wxPGPropValFormatFlags WXUNUSED(flags)) const
+wxString ibPGDataSourceProperty::ValueToString(ibVariant& variant,
+	ibPGPropValFormatFlags WXUNUSED(flags)) const
 {
 	// …as the server wrote it; nothing bound, or bound and not yet named by the server — not selected.
 	const wxString words = variant.GetString();
 	return ReadSource(variant).IsOk() && !words.IsEmpty() ? words : wxString(_("<not selected>"));
 }
 
-bool ibPGDataSourceProperty::StringToValue(wxVariant& variant, const wxString& text, wxPGPropValFormatFlags flags) const
+bool ibPGDataSourceProperty::StringToValue(ibVariant& variant, const wxString& text, ibPGPropValFormatFlags flags) const
 {
 	// An empty text unbinds.
 	if (!text.IsEmpty())
 		return false;
 	ibSourceDescription desc = ReadSource(variant);
 	desc.ClearSource();
-	variant = WriteSource(variant, desc);
+	variant = WriteSource(desc);
 	return true;
 }
 
@@ -143,15 +142,15 @@ void ibPGDataSourceProperty::RefreshChildren()
 	// only.
 	m_typeSelector->Hide(!ReadSource(m_value).IsOk());
 	m_typeSelector->SetValue(ReadSourceType(m_value));
-	m_typeSelector->SetFlagRecursively(wxPGFlags::ReadOnly, true);
+	m_typeSelector->SetFlagRecursively(ibPGFlags::ReadOnly, true);
 	ibPGDataSourceProperty::SetExpanded(true);
 }
 
-wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
+ibPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 {
-	class ibPGEditorDataSourceDialogAdapter : public wxPGEditorDialogAdapter {
+	class ibPGEditorDataSourceDialogAdapter : public ibPGEditorDialogAdapter {
 	public:
-		virtual bool DoShowDialog(wxPropertyGrid* pg, wxPGProperty* prop) override
+		virtual bool DoShowDialog(ibPropertyGrid* pg, ibPGProperty* prop) override
 		{
 			ibPGDataSourceProperty* const cell = wxDynamicCast(prop, ibPGDataSourceProperty);
 			// No form holds the control (no picker set) — said, as before.
@@ -160,7 +159,7 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 					_("Choice source"), wxOK | wxICON_INFORMATION, pg);
 				return false;
 			}
-			const wxVariant value = cell->GetValue();
+			const ibVariant value = cell->GetValue();
 			const ibSourceDescription current = ReadSource(value);
 			ibSourceDescription binding = current;
 			if (!SourcePicker()(pg, cell->GetOwner(), cell->GetName(), cell->GetFilterSourceDataType(), binding))
@@ -169,7 +168,7 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 			if (binding.GetPath() == current.GetPath())
 				return false;
 			// …its words and the type beneath are the server's, with the control's rows it answers the edit with.
-			SetValue(WriteSource(value, binding));
+			SetValue(WriteSource(binding));
 			return true;
 		}
 	};

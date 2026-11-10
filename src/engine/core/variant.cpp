@@ -654,6 +654,14 @@ ibClassID ibVariant::GetClassType() const
 	return 0;   // an object that names no class of its own
 }
 
+ibString ibVariant::GetClassName() const
+{
+	if (m_pRef != nullptr && IsReference())
+		return m_pRef->GetClassName();
+	const char* const name = ::GetNameObjectFromVT(m_typeClass);   // the core's table (core/core.h)
+	return name != nullptr ? ibString(name) : ibString();          // …and an object that names none
+}
+
 ibClassID ibVariant::GetIDByVT(const ibValueTypes& valueType)
 {
 	return ::GetIDByVT(valueType);   // the core's table (core/core.h)

@@ -1,34 +1,34 @@
 #ifndef __ADVPROP_EVENT_H__
 #define __ADVPROP_EVENT_H__
 
-#include <wx/propgrid/propgrid.h>
+#include "deskgui/univ/propgrid/propgrid.h"
 
 // -----------------------------------------------------------------------
 // ibPGEventProperty
 // -----------------------------------------------------------------------
 
-class ibPGEventProperty : public wxStringProperty {
+class ibPGEventProperty : public ibStringProperty {
 public:
 
-	ibPGEventProperty(const wxString& label = wxPG_LABEL,
-		const wxString& name = wxPG_LABEL,
-		const wxVariant& value = wxNullVariant);
+	ibPGEventProperty(const wxString& label = ibPG_LABEL,
+		const wxString& name = ibPG_LABEL,
+		const ibVariant& value = ibVariant());
 
-	virtual wxString ValueToString(wxVariant& value,
-		wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override;
+	virtual wxString ValueToString(ibVariant& value,
+		ibPGPropValFormatFlags flags = ibPGPropValFormatFlags::Null) const override;
 
-	virtual bool StringToValue(wxVariant& variant,
+	virtual bool StringToValue(ibVariant& variant,
 		const wxString& text,
-		wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override;
+		ibPGPropValFormatFlags flags = ibPGPropValFormatFlags::Null) const override;
 
-	virtual wxPGEditorDialogAdapter* GetEditorDialog() const override;
+	virtual ibPGEditorDialogAdapter* GetEditorDialog() const override;
 
 	// The event's picture, answered when the grid draws (advpropValuePicture.h).
 	virtual wxSize OnMeasureImage(int item = -1) const override;
-	virtual void OnCustomPaint(wxDC& dc, const wxRect& rect, wxPGPaintData& paintdata) override;
+	virtual void OnCustomPaint(wxDC& dc, const wxRect& rect, ibPGPaintData& paintdata) override;
 
 private:
-	WX_PG_DECLARE_PROPERTY_CLASS(ibPGEventProperty);
+	IB_PG_DECLARE_PROPERTY_CLASS(ibPGEventProperty);
 };
 
 #endif

@@ -29,6 +29,8 @@
 #include <wx/tokenzr.h>
 #include <wx/renderer.h>
 #include "deskgui/univ/renderer.h"
+#include "deskgui/univ/theme.h"
+#include "deskgui/univ/colourScheme.h"  // the selection's and a disabled grid's colours: the theme's
 #include <wx/uilocale.h>
 
 #include "gridextprivate.h"
@@ -54,10 +56,12 @@ void ibGridCellRenderer::Draw(ibGrid& grid,
 	{
 		if (isSelected)
 		{
+			// SEAM vs wx: a grid without the focus keeps its selection, paler - the system's dark grey was the
+			// selection of none of the theme's controls
 			if (grid.HasFocus())
 				clr.SetColour(grid.GetSelectionBackground());
 			else
-				clr.SetColour(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW));
+				clr.SetColour(grid.GetSelectionBackground().ChangeLightness(150));
 		}
 		else
 		{
@@ -66,7 +70,7 @@ void ibGridCellRenderer::Draw(ibGrid& grid,
 	}
 	else // grey out fields if the grid is disabled
 	{
-		clr.SetColour(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE));
+		clr.SetColour(wxTHEME_COLOUR(CONTROL));
 	}
 
 	dc.SetBrush(clr);
@@ -92,7 +96,7 @@ void ibGridCellRenderer::SetTextColoursAndFont(const ibGrid& grid,
 			if (grid.HasFocus())
 				clr = grid.GetSelectionBackground();
 			else
-				clr = wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW);
+				clr = grid.GetSelectionBackground().ChangeLightness(150);
 			dc.SetTextBackground(clr);
 			dc.SetTextForeground(grid.GetSelectionForeground());
 		}
@@ -104,8 +108,8 @@ void ibGridCellRenderer::SetTextColoursAndFont(const ibGrid& grid,
 	}
 	else
 	{
-		dc.SetTextBackground(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE));
-		dc.SetTextForeground(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+		dc.SetTextBackground(wxTHEME_COLOUR(CONTROL));
+		dc.SetTextForeground(wxTHEME_COLOUR(CONTROL_TEXT_DISABLED));
 	}
 
 	// We need to adjust the font size by the ratio between the scale factor we

@@ -31,7 +31,7 @@
 #include <wx/textfile.h>
 #include <wx/tokenzr.h>
 #include <wx/renderer.h>
-#include <wx/datectrl.h>
+#include "deskgui/univ/ctrl/datePickerCtrl.h"
 #include <wx/uilocale.h>
 
 #include "gridextsel.h"
@@ -1755,7 +1755,7 @@ ibGridCellAutoWrapStringEditor::Create(wxWindow* parent,
 // Desired behavior is to close the editor control on ESC without updating the
 // table, and to close with update on ENTER. On wxMSW wxWANTS_CHARS is enough
 // for that, but on wxGTK a bit of special processing is required to forward
-// some of the key events from wxDatePickerCtrl to the generic cell editor
+// some of the key events from ibDatePickerCtrl to the generic cell editor
 // event handler.
 struct ibGridCellDateEditorKeyHandler
 {
@@ -1814,7 +1814,7 @@ void ibGridCellDateEditor::SetParameters(const wxString& params)
 void ibGridCellDateEditor::Create(wxWindow* parent, wxWindowID id,
 	wxEvtHandler* evtHandler)
 {
-	m_control = new wxDatePickerCtrl(parent, id,
+	m_control = new ibDatePickerCtrl(parent, id,
 		wxDefaultDateTime,
 		wxDefaultPosition,
 		wxDefaultSize,
@@ -1917,9 +1917,9 @@ wxString ibGridCellDateEditor::GetValue() const
 	return DatePicker()->GetValue().FormatISODate();
 }
 
-wxDatePickerCtrl* ibGridCellDateEditor::DatePicker() const
+ibDatePickerCtrl* ibGridCellDateEditor::DatePicker() const
 {
-	return static_cast<wxDatePickerCtrl*>(m_control);
+	return static_cast<ibDatePickerCtrl*>(m_control);
 }
 
 #endif // wxUSE_DATEPICKCTRL

@@ -34,12 +34,11 @@ ibClassID RegisterCtor(const ibDataNode& entry, const ibString& name)
 }
 
 // Its value as the server wrote it (ibPropertyInspector): a scalar a field, a composite a node — in the one variant,
-// named by its class and reading as its words.
-wxVariant ReceiveValue(const ibDataNode& row)
+// reading as its words.
+ibVariant ReceiveValue(const ibDataNode& row)
 {
 	const auto scalar = row.FindField(ibProtocol::ibSchema::ibProperties::Value);
-	return wxVariant(new ibVariantDataSerializable(row.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Class),
-		scalar ? *scalar : row.GetProperty(ibProtocol::ibSchema::ibProperties::Value),
+	return ibVariant(new ibVariantSerializable(scalar ? *scalar : row.GetProperty(ibProtocol::ibSchema::ibProperties::Value),
 		row.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Presentation)));
 }
 
@@ -67,13 +66,13 @@ ibPropertySerializable::ibPropertySerializable(ibPropertyCategory* cat, ibDataNo
 		if (choice.Has(ibProtocol::ibSchema::ibProperties::Type)) {
 			const ibString title = choice.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Title);
 			const ibClassID clsid = RegisterCtor(choice, title);
-			m_choices.Add(m_choices.GetCount(), title, ibEmptyString, wxVariant(wxULongLong(clsid)));
+			m_choices.Add(m_choices.GetCount(), title, ibEmptyString, ibVariant(ibNumber(clsid)));
 			continue;
 		}
 		if (!choice.FindField(ibProtocol::ibSchema::ibProperties::Id))
 			continue;
 		const long id = choice.GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Id);
-		m_choices.Add(id, choice.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Title), ibEmptyString, wxVariant(id),
+		m_choices.Add(id, choice.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Title), ibEmptyString, ibVariant(id),
 			ibProtocolPicture(choice, ibProtocol::ibSchema::ibProperties::Picture), ReceiveU64(choice, ibProtocol::ibSchema::ibProperties::Data));
 	}
 	m_mode = m_row.GetValue<bool>(ibProtocol::ibSchema::ibProperties::Multiple) ? ibPropertyChoiceMode::Mult
@@ -96,13 +95,13 @@ bool ibPropertySerializable::GetProtocolValue(ibDataNode& row) const
 
 bool ibPropertySerializable::ReadNodeValue(const ibDataValue& value)
 {
-	m_propValue = wxVariant(new ibVariantDataSerializable(GetType(), value, m_propValue.GetString()));
+	m_propValue = ibVariant(new ibVariantSerializable(value, m_propValue.GetString()));
 	return true;
 }
 
 bool ibPropertySerializable::WriteNodeValue(ibDataValue& value) const
 {
-	value = ibVariantDataSerializable::GetNodeValue(m_propValue);
+	value = ibVariantSerializable::GetNodeValue(m_propValue);
 	return true;
 }
 

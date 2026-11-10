@@ -1,8 +1,8 @@
 #ifndef __ADVPROP_DATA_COMPOSITION_H__
 #define __ADVPROP_DATA_COMPOSITION_H__
 
-#include <wx/propgrid/propgrid.h>
-#include <wx/propgrid/advprops.h>
+#include "deskgui/univ/propgrid/propgrid.h"
+#include "deskgui/univ/propgrid/advprops.h"
 
 #include "frmclient/backend/backend_core.h"
 
@@ -22,26 +22,26 @@ struct ibCompositionDescription;
 // (ibQueryFieldsOfText: fetch {Tab, Request: {Kind: Fields, Text}}).
 // -----------------------------------------------------------------------
 
-class ibPGDataCompositionProperty : public wxPGProperty {
+class ibPGDataCompositionProperty : public ibPGProperty {
 public:
 
 	using ibSettingsDoor = std::function<bool(ibCompositionDescription& desc, const ibMetaData* metaData)>;
 
-	ibPGDataCompositionProperty(const ibPropertyObject* property = nullptr, const wxString& label = wxPG_LABEL,
-		const wxString& name = wxPG_LABEL, const wxVariant& value = wxNullVariant,
+	ibPGDataCompositionProperty(const ibPropertyObject* property = nullptr, const wxString& label = ibPG_LABEL,
+		const wxString& name = ibPG_LABEL, const ibVariant& value = ibVariant(),
 		ibSettingsDoor door = ibSettingsDoor());
 	virtual ~ibPGDataCompositionProperty() override;
 
 	const ibPropertyObject* GetPropertyObject() const { return m_property; }
 
-	virtual wxString ValueToString(wxVariant& value,
-		wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override;
+	virtual wxString ValueToString(ibVariant& value,
+		ibPGPropValFormatFlags flags = ibPGPropValFormatFlags::Null) const override;
 
-	virtual bool StringToValue(wxVariant& variant,
+	virtual bool StringToValue(ibVariant& variant,
 		const wxString& text,
-		wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override;
+		ibPGPropValFormatFlags flags = ibPGPropValFormatFlags::Null) const override;
 
-	virtual void OnSetValue() override;
+	virtual bool OnEvent(ibPropertyGrid* propgrid, wxWindow* wnd_primary, wxEvent& event) override;
 
 	// Refresh values of child properties. Automatically called after value is set.
 	virtual void RefreshChildren() override;
@@ -55,7 +55,7 @@ protected:
 	ibSettingsDoor m_door;
 
 private:
-	WX_PG_DECLARE_PROPERTY_CLASS(ibPGDataCompositionProperty);
+	IB_PG_DECLARE_PROPERTY_CLASS(ibPGDataCompositionProperty);
 };
 
 #endif // __ADVPROP_DATA_COMPOSITION_H__

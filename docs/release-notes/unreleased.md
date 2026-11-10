@@ -321,6 +321,18 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Fixes
 
+- **One palette for every window.** Dialogs and panels are the theme's light surface, controls its powder; windows
+  that set colours of their own (user lists, authorization, the designer's panels and lists, the code editor's
+  margin) take the theme's instead, and no longer stand out.
+- **The property inspector, the date and time pickers and the calendar are drawn by the theme**, as the other
+  controls are: their colours, borders, expanders and check boxes, and a drop-down placed where it fits on the
+  screen.
+- **Ctrl+V, Ctrl+C, Ctrl+X and Ctrl+A in a field go to the field.** In the Watch window's name field the paste went
+  to the module open beside it.
+- **A spreadsheet with a row or column area keeps its scroll bars.** The cells were laid over them. The lines
+  between the outline, the area and the labels are drawn, and a report with frozen rows keeps adding rows as it is
+  scrolled down.
+- **A tree's expander sits in its slot**, not on the edge of the cell.
 - **A field's caret stays in the field once the messages have opened.** The messages pane, opening as the first
   message came, gave the focus to its tabs while its editor was taking it; the editor went on believing it held the
   focus and moved the caret of whatever field was being typed in onto its own place — under the field's title.

@@ -1,11 +1,11 @@
 #include "advpropColour.h"
 
-#include <wx/propgrid/advprops.h>   // wxPG_COLOUR_CUSTOM
+#include "deskgui/univ/propgrid/advprops.h"   // ibPG_COLOUR_CUSTOM
 #include <wx/colordlg.h>
-#include <wx/odcombo.h>
+#include "deskgui/univ/ctrl/comboBox.h"   // ibComboBox — the choice editor, its custom colour item
 
 #include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the colour's node
-#include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frmclient/propertyManager/property/private/prop.h"             // ibPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 #include "deskgui/typeconv.h"   // ColourToWxColour / WxColourToColour — the dialog's and the painter's colour
 
@@ -13,10 +13,10 @@ namespace {
 
 // The value of a colour: the same property's (the cell's own), its node the colour's text `r,g,b` as the server
 // stores it, read as that text.
-wxVariant WriteColour(const wxVariant& value, const ibColour& colour)
+ibVariant WriteColour(const ibColour& colour)
 {
 	const wxString text = colour.ToString();
-	return wxVariant(new ibVariantDataSerializable(value.GetType(), ibDataValue::String(text), text));
+	return ibVariant(new ibVariantSerializable(ibDataValue::String(text), text));
 }
 
 } // namespace
@@ -67,7 +67,7 @@ static const long gs_cp_es_normcolour_values[] = {
 	15,
 	16,
 	17,
-	wxPG_COLOUR_CUSTOM
+	ibPG_COLOUR_CUSTOM
 };
 
 static const ibColour gs_cp_es_normcolour_colours[] = {
@@ -91,7 +91,7 @@ static const ibColour gs_cp_es_normcolour_colours[] = {
 	ibColour(255, 255, 255)
 };
 
-wxPG_IMPLEMENT_PROPERTY_CLASS(ibPGColourProperty, wxEnumProperty, TextCtrlAndButton)
+ibPG_IMPLEMENT_PROPERTY_CLASS(ibPGColourProperty, ibEnumProperty, TextCtrlAndButton)
 
 // register frontend property
 class ibPropertyColourLoader
@@ -99,33 +99,33 @@ class ibPropertyColourLoader
 public:
 	ibPropertyColourLoader()
 	{
-		ibPropertyRegistry::Register(wxT("ibPropertyColour"), [](ibBackendProperty* property) -> wxPGProperty* {
+		ibPropertyRegistry::Register(wxT("ibPropertyColour"), [](ibBackendProperty* property) -> ibPGProperty* {
 			return new ibPGColourProperty(property->GetLabel(), property->GetName(), property->GetValue());
 		});
 	}
 }s_enumLoader;
 
-static wxPGChoices gs_ibPGColourProperty_choicesCache;
+static ibPGChoices gs_ibPGColourProperty_choicesCache;
 
 ibPGColourProperty::ibPGColourProperty(const wxString& label, const wxString& name,
-	const wxVariant& value)
-	: wxEnumProperty(label, name, gs_cp_es_normcolour_labels, gs_cp_es_normcolour_values,
+	const ibVariant& value)
+	: ibEnumProperty(label, name, gs_cp_es_normcolour_labels, gs_cp_es_normcolour_values,
 		&gs_ibPGColourProperty_choicesCache)
 {
-	m_flags |= wxPGPropertyFlags_StaticChoices; // Colour selection cannot be changed.
+	m_flags |= ibPGPropertyFlags_StaticChoices; // Colour selection cannot be changed.
 
 	m_value = value;
 
 	OnSetValue();
 }
 
-ibColour ibPGColourProperty::GetVal(const wxVariant* pVariant) const
+ibColour ibPGColourProperty::GetVal(const ibVariant* pVariant) const
 {
 	if (!pVariant)
 		pVariant = &m_value;
 
 	ibColour colour;
-	colour.FromString(ibVariantDataSerializable::GetNodeValue(*pVariant).AsString());
+	colour.FromString(ibVariantSerializable::GetNodeValue(*pVariant).AsString());
 	return colour;
 }
 
@@ -162,7 +162,7 @@ int ibPGColourProperty::ColToInd(const ibColour& colour) const
 	{
 		const int ind = m_choices[i].GetValue();
 		// Skip custom colour
-		if (ind == wxPG_COLOUR_CUSTOM)
+		if (ind == ibPG_COLOUR_CUSTOM)
 			continue;
 
 		if (colour == GetColour(i))
@@ -173,11 +173,11 @@ int ibPGColourProperty::ColToInd(const ibColour& colour) const
 
 int ibPGColourProperty::GetCustomColourIndex() const
 {
-	return m_choices.Index(wxPG_COLOUR_CUSTOM);
+	return m_choices.Index(ibPG_COLOUR_CUSTOM);
 }
 
-wxString ibPGColourProperty::ValueToString(wxVariant& value,
-	wxPGPropValFormatFlags WXUNUSED(flags)) const
+wxString ibPGColourProperty::ValueToString(ibVariant& value,
+	ibPGPropValFormatFlags WXUNUSED(flags)) const
 {
 	const ibColour colour = GetVal(&value);
 
@@ -195,7 +195,7 @@ wxString ibPGColourProperty::ValueToString(wxVariant& value,
 		(int)colour.m_blue);
 }
 
-bool ibPGColourProperty::StringToValue(wxVariant& value, const wxString& text, wxPGPropValFormatFlags flags) const
+bool ibPGColourProperty::StringToValue(ibVariant& value, const wxString& text, ibPGPropValFormatFlags flags) const
 {
 	const int custIndex = GetCustomColourIndex();
 	wxString custColName;
@@ -208,12 +208,12 @@ bool ibPGColourProperty::StringToValue(wxVariant& value, const wxString& text, w
 
 	if (colStr == custColName)
 	{
-		if (!(flags & wxPGPropValFormatFlags::EditableValue))
+		if (!(flags & ibPGPropValFormatFlags::EditableValue))
 			return false;
 
 		if (!QueryColourFromUser(value))
 		{
-			if (!(flags & wxPGPropValFormatFlags::PropertySpecific))
+			if (!(flags & ibPGPropValFormatFlags::PropertySpecific))
 				return false;
 			// If query for value comes from the event handler
 			// use current pending value to be processed later on in OnEvent().
@@ -225,10 +225,10 @@ bool ibPGColourProperty::StringToValue(wxVariant& value, const wxString& text, w
 	// A choice by its label first — the labels are ours, translated, and some (Brown, Orange) are
 	// not the colour database's.
 	int index;
-	wxVariant choice;
+	ibVariant choice;
 	if (ValueFromString_(choice, &index, colStr, flags) && index >= 0)
 	{
-		value = WriteColour(m_value, GetColour(index));
+		value = WriteColour(GetColour(index));
 		return true;
 	}
 
@@ -246,15 +246,15 @@ bool ibPGColourProperty::StringToValue(wxVariant& value, const wxString& text, w
 	if (!customColour.Set(colStr))
 		return false;
 
-	value = WriteColour(m_value, typeConv::WxColourToColour(customColour));
+	value = WriteColour(typeConv::WxColourToColour(customColour));
 	return true;
 }
 
-bool ibPGColourProperty::IntToValue(wxVariant& variant, int number, wxPGPropValFormatFlags flags) const
+bool ibPGColourProperty::IntToValue(ibVariant& variant, int number, ibPGPropValFormatFlags flags) const
 {
-	if (m_choices.GetValue(number) == wxPG_COLOUR_CUSTOM)
+	if (m_choices.GetValue(number) == ibPG_COLOUR_CUSTOM)
 	{
-		if (!(flags & wxPGPropValFormatFlags::PropertySpecific))
+		if (!(flags & ibPGPropValFormatFlags::PropertySpecific))
 			return QueryColourFromUser(variant);
 
 		// Call from event handler.
@@ -263,16 +263,16 @@ bool ibPGColourProperty::IntToValue(wxVariant& variant, int number, wxPGPropValF
 	}
 	else
 	{
-		variant = WriteColour(m_value, GetColour(number));
+		variant = WriteColour(GetColour(number));
 	}
 
 	return true;
 }
 
-bool ibPGColourProperty::ValidateValue(wxVariant& value, wxPGValidationInfo& WXUNUSED(validationInfo)) const
+bool ibPGColourProperty::ValidateValue(ibVariant& value, ibPGValidationInfo& WXUNUSED(validationInfo)) const
 {
-	// wxEnumProperty looks a text value up among the labels; ours is the colour's `r,g,b` (empty for none).
-	const wxString text = ibVariantDataSerializable::GetNodeValue(value).AsString();
+	// ibEnumProperty looks a text value up among the labels; ours is the colour's `r,g,b` (empty for none).
+	const wxString text = ibVariantSerializable::GetNodeValue(value).AsString();
 	if (text.empty())
 		return true;
 
@@ -280,13 +280,13 @@ bool ibPGColourProperty::ValidateValue(wxVariant& value, wxPGValidationInfo& WXU
 	return colour.FromString(text);
 }
 
-bool ibPGColourProperty::QueryColourFromUser(wxVariant& variant) const
+bool ibPGColourProperty::QueryColourFromUser(ibVariant& variant) const
 {
-	wxPropertyGrid* propgrid = GetGrid();
+	ibPropertyGrid* propgrid = GetGrid();
 	wxASSERT(propgrid);
 
 	// Must only occur when user triggers event
-	if (!propgrid->HasInternalFlag(wxPropertyGrid::wxPG_FL_IN_HANDLECUSTOMEDITOREVENT))
+	if (!propgrid->HasInternalFlag(ibPropertyGrid::ibPG_FL_IN_HANDLECUSTOMEDITOREVENT))
 		return false;
 
 	wxColourData data;
@@ -301,7 +301,7 @@ bool ibPGColourProperty::QueryColourFromUser(wxVariant& variant) const
 	wxColourDialog dialog(propgrid, &data);
 	if (dialog.ShowModal() == wxID_OK)
 	{
-		variant = WriteColour(m_value, typeConv::WxColourToColour(dialog.GetColourData().GetColour()));
+		variant = WriteColour(typeConv::WxColourToColour(dialog.GetColourData().GetColour()));
 
 		SetValueInEvent(variant);
 
@@ -312,7 +312,7 @@ bool ibPGColourProperty::QueryColourFromUser(wxVariant& variant) const
 }
 
 // Need to do some extra event handling.
-bool ibPGColourProperty::OnEvent(wxPropertyGrid* propgrid,
+bool ibPGColourProperty::OnEvent(ibPropertyGrid* propgrid,
 	wxWindow* WXUNUSED(primary),
 	wxEvent& event)
 {
@@ -328,8 +328,8 @@ bool ibPGColourProperty::OnEvent(wxPropertyGrid* propgrid,
 	{
 		// Must override index detection since at this point GetIndex()
 		// will return old value.
-		wxOwnerDrawnComboBox* cb =
-			static_cast<wxOwnerDrawnComboBox*>(propgrid->GetEditorControl());
+		ibComboBox* cb =
+			static_cast<ibComboBox*>(propgrid->GetEditorControl());
 
 		if (cb && cb->GetSelection() == GetCustomColourIndex())
 			askColour = true;
@@ -337,7 +337,7 @@ bool ibPGColourProperty::OnEvent(wxPropertyGrid* propgrid,
 
 	if (askColour && !propgrid->WasValueChangedInEvent())
 	{
-		wxVariant variant;
+		ibVariant variant;
 		if (QueryColourFromUser(variant))
 			return true;
 	}
@@ -346,11 +346,11 @@ bool ibPGColourProperty::OnEvent(wxPropertyGrid* propgrid,
 
 wxSize ibPGColourProperty::OnMeasureImage(int) const
 {
-	return wxPG_DEFAULT_IMAGE_SIZE;
+	return ibPG_DEFAULT_IMAGE_SIZE;
 }
 
 void ibPGColourProperty::OnCustomPaint(wxDC& dc, const wxRect& rect,
-	wxPGPaintData& paintdata)
+	ibPGPaintData& paintdata)
 {
 	ibColour col;
 

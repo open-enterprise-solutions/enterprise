@@ -40,6 +40,10 @@
 // implementation of ibSpinButton
 // ============================================================================
 
+wxBEGIN_EVENT_TABLE(ibSpinButton, ibControl)
+    EVT_PAINT(ibSpinButton::OnPaint)
+wxEND_EVENT_TABLE()
+
 // ----------------------------------------------------------------------------
 // creation
 // ----------------------------------------------------------------------------
@@ -284,14 +288,15 @@ bool ibSpinButton::OnArrow(ibScrollArrows::Arrow arrow)
 // drawing
 // ----------------------------------------------------------------------------
 
-void ibSpinButton::DoDraw(ibControlRenderer *renderer)
+void ibSpinButton::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
+    ibThemePaintDC dc(this);
+
     wxRect rectArrow1, rectArrow2;
     CalcArrowRects(&rectArrow1, &rectArrow2);
 
-    // SEAM vs univ: each arrow drawn as the combo box's button is (ibComboBox::DoDraw) - a flat pad in the arrow's
+    // SEAM vs univ: each arrow drawn as the combo box's button is (ibComboCtrl::OnPaint) - a flat pad in the arrow's
     // state, pressed or under the mouse, and the arrow in a third of it; given the whole half, the arrow took it all
-    wxDC& dc = renderer->GetDC();
     ibColourScheme* const scheme = ibThemeEngine::Get()->GetColourScheme();
 
     const ibScrollArrows::Arrow arrows[] = { ibScrollArrows::Arrow_First, ibScrollArrows::Arrow_Second };

@@ -13,7 +13,7 @@ ibCommonAttributeCompositionEditor::ibCommonAttributeCompositionEditor(wxWindow*
 	m_document(document)
 {
 	m_compositionCtrl = new ibCheckTree(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-		wxTR_HAS_BUTTONS | wxTR_ROW_LINES | wxTR_NO_LINES | wxTR_SINGLE | wxCR_EMPTY_CHECK | wxTR_TWIST_BUTTONS);
+		wxTR_HAS_BUTTONS | wxTR_NO_LINES | wxTR_SINGLE | wxCR_EMPTY_CHECK | wxTR_TWIST_BUTTONS);
 	m_compositionCtrl->SetDoubleBuffered(true);
 	m_compositionCtrl->Bind(wxEVT_CHECKTREE_CHOICE, &ibCommonAttributeCompositionEditor::OnCheckItem, this);
 

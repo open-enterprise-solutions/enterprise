@@ -11,90 +11,186 @@
     #include <wx/dcclient.h>
     #include <wx/validate.h>
     #include <wx/arrstr.h>
+    #include <wx/settings.h>
 #endif
-
-#include <wx/popupwin.h>
 
 #include "deskgui/univ/theme.h"
 #include "deskgui/univ/renderer.h"
 #include "deskgui/univ/colourScheme.h"
-#include "deskgui/univ/ctrl/listBox.h"
-#include "deskgui/univ/ctrl/textCtrl.h"
+#include "deskgui/univ/ctrl/vListBox.h"
+#include "deskgui/univ/ctrl/textCtrl.h"   // the chosen item's text, put straight into the field (SetSelection)
 
 // ----------------------------------------------------------------------------
-// ibComboPopupWindow: the transient window hosting the items listbox
+// ibVListBoxComboPopup: the combo box's drop-down (wx's wxVListBoxComboPopup)
 // ----------------------------------------------------------------------------
 
-class ibComboPopupWindow : public wxPopupTransientWindow
+// The list keeps no items: it is told their count and asks the combo to draw each (ibComboBox::OnDrawItem...). Its
+// own selection is the item under the mouse or the keys while it is open; the combo's - the chosen one - changes by a
+// choice (a click, Enter, a double click stepping the value) and by a value set that is an item's text. Closed
+// without a choice, the chosen item stays.
+class ibVListBoxComboPopup : public ibVListBox, public ibComboPopup
 {
 public:
-    ibComboPopupWindow(ibComboBox *combo)
-        : m_combo(combo)
+    explicit ibVListBoxComboPopup(ibComboBox *combo)
+        : m_comboBox(combo)
     {
-        (void)Create(combo, wxBORDER_NONE);
-
-        SetBackgroundColour(wxSCHEME_COLOUR(
-            ibThemeEngine::Get()->GetColourScheme(), WINDOW));
-
-        m_lbox = new ibListBox(this, wxID_ANY);
     }
 
-    ibListBox *GetLBox() const { return m_lbox; }
-
-    // show under the combo sized for the current items
-    void Popup()
+    // ibComboPopup
+    virtual bool Create(wxWindow* parent) override
     {
-        const wxSize sizeCombo = m_combo->GetSize();
+        if ( !ibVListBox::Create(parent, wxID_ANY) )
+            return false;
 
-        // the listbox fills the whole popup — its own flat border frames
-        // the popup, no extra chrome (an own border strip left dark glitchy
-        // edges and dead space around the list)
-        const int count = (int)m_lbox->GetCount();
-        int hLine = m_lbox->GetLineHeight();
-        if ( hLine <= 0 )
-            hLine = m_lbox->GetCharHeight();
-        if ( hLine <= 0 )
-            hLine = 16;
+        SetFont(m_comboBox->GetFont());
 
-        const int rows = wxMax(1, wxMin(count, 8));
-        const wxSize size(sizeCombo.x, rows*hLine + 4 /* border + breathing */);
+        Bind(wxEVT_MOTION, &ibVListBoxComboPopup::OnMouseMove, this);
+        Bind(wxEVT_LEFT_UP, &ibVListBoxComboPopup::OnLeftUp, this);
+        Bind(wxEVT_KEY_DOWN, &ibVListBoxComboPopup::OnKey, this);
+        return true;
+    }
 
-        SetSize(size);
-        m_lbox->SetSize(0, 0, size.x, size.y);
+    virtual wxWindow* GetControl() override { return this; }
 
-        Position(m_combo->ClientToScreen(wxPoint(0, 0)),
-                 wxSize(0, sizeCombo.y));
+    virtual void SetStringValue(const wxString& value) override
+    {
+        // the chosen item is the value's (wx's wxVListBoxComboPopup::SetStringValue): kept when it shows the value
+        // already - one of identical items -, else the item of the value; a text of no item keeps the chosen one
+        const int selection = m_comboBox->m_selection;
+        if ( selection != wxNOT_FOUND && m_comboBox->GetString(selection) == value )
+            return;
 
-        wxPopupTransientWindow::Popup();
+        const int item = m_comboBox->FindString(value, true);
+        if ( item != wxNOT_FOUND )
+            m_comboBox->m_selection = item;
+    }
+
+    virtual wxSize GetAdjustedSize(int minWidth, int WXUNUSED(prefHeight), int maxHeight) override
+    {
+        // as many rows as there are, up to eight - the drop-down the combo had; one empty row for no items
+        const size_t count = m_comboBox->GetCount();
+        const size_t rows = wxMin(count, (size_t)8);
+
+        int height = 0;
+        for ( size_t n = 0; n < rows; n++ )
+            height += m_comboBox->OnMeasureItem(n);
+        if ( count == 0 )
+            height = m_comboBox->GetRenderer()->GetListboxItemHeight(GetCharHeight());
+
+        // as wide as the combo - wider, if an item needs it, with the scroll bar's room when the rows overflow
+        int width = 0;
+        for ( size_t n = 0; n < count; n++ )
+            width = wxMax(width, (int)m_comboBox->OnMeasureItemWidth(n));
+        if ( count > rows )
+            width += wxSystemSettings::GetMetric(wxSYS_VSCROLL_X, this);
+
+        const wxSize border = GetWindowBorderSize();
+        return wxSize(wxMax(minWidth, width + border.x),
+                      wxMin(height + border.y, maxHeight));
+    }
+
+    virtual void OnPopup() override
+    {
+        // the combo's items, counted as the list drops down: told the count, the list measures its rows - asks the
+        // combo's OnMeasureItem, which a derived combo answers only once made (the grid's needs its property, set after
+        // ibComboBox::Create); wx made the list at the first drop-down (wxVListBoxComboPopup::LazyCreate) and marked
+        // the chosen item once sized
+        SetItemCount(m_comboBox->GetCount());
+        SetSelection(m_comboBox->GetSelection());
+    }
+
+    virtual void PaintComboControl(wxDC& dc, const wxRect& rect) override
+    {
+        const int item = m_comboBox->GetSelection();
+        m_comboBox->OnDrawBackground(dc, rect, item, wxODCB_PAINTING_CONTROL);
+        if ( item != wxNOT_FOUND )
+            m_comboBox->OnDrawItem(dc, rect, item, wxODCB_PAINTING_CONTROL);
+    }
+
+    virtual void OnComboDoubleClick() override
+    {
+        // the value steps to the next item, the last to the first (wx's wxODCB_DCLICK_CYCLES)
+        const int count = (int)m_comboBox->GetCount();
+        if ( count > 0 )
+            m_comboBox->OnPopupSelect((m_comboBox->GetSelection() + 1) % count);
     }
 
 protected:
-    virtual void OnDismiss() override
+    // ibVListBox
+    virtual void OnDrawItem(wxDC& dc, const wxRect& rect, size_t n) const override
     {
-        m_combo->OnPopupDismiss();
+        m_comboBox->OnDrawItem(dc, rect, (int)n, IsSelected(n) ? wxODCB_PAINTING_SELECTED : 0);
+    }
+
+    virtual wxCoord OnMeasureItem(size_t n) const override
+    {
+        return m_comboBox->OnMeasureItem(n);
+    }
+
+    virtual void OnDrawBackground(wxDC& dc, const wxRect& rect, size_t n) const override
+    {
+        m_comboBox->OnDrawBackground(dc, rect, (int)n, IsSelected(n) ? wxODCB_PAINTING_SELECTED : 0);
     }
 
 private:
-    ibComboBox *m_combo;
-    ibListBox *m_lbox;
+    int HitItem(const wxMouseEvent& event) const
+    {
+        return VirtualHitTest(event.GetPosition().y);
+    }
+
+    // the item under the mouse is the list's selection - the one Enter would choose
+    void OnMouseMove(wxMouseEvent& event)
+    {
+        const int item = HitItem(event);
+        if ( item != wxNOT_FOUND && item != GetSelection() )
+            SetSelection(item);
+        event.Skip();
+    }
+
+    void OnLeftUp(wxMouseEvent& event)
+    {
+        const int item = HitItem(event);
+        if ( item != wxNOT_FOUND )
+            m_comboBox->OnPopupSelect(item);
+        else
+            event.Skip();
+    }
+
+    // Enter chooses the list's item, Esc closes it as it was; the arrows walk it (ibVListBox::OnKeyDown)
+    void OnKey(wxKeyEvent& event)
+    {
+        switch ( event.GetKeyCode() )
+        {
+            case WXK_RETURN:
+            case WXK_NUMPAD_ENTER:
+                if ( GetSelection() != wxNOT_FOUND )
+                    m_comboBox->OnPopupSelect(GetSelection());
+                else
+                    m_comboBox->HidePopup();
+                break;
+
+            case WXK_ESCAPE:
+                m_comboBox->HidePopup();
+                break;
+
+            default:
+                event.Skip();
+        }
+    }
+
+    ibComboBox *m_comboBox;
 };
 
 // ----------------------------------------------------------------------------
 // ibComboBox creation
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibComboBox, ibControl);
-
-wxBEGIN_EVENT_TABLE(ibComboBox, ibControl)
-    EVT_LEFT_DOWN(ibComboBox::OnLeftDown)
-    EVT_SIZE(ibComboBox::OnSize)
-wxEND_EVENT_TABLE()
+wxIMPLEMENT_DYNAMIC_CLASS(ibComboBox, ibComboCtrl);
 
 void ibComboBox::Init()
 {
-    m_popup = nullptr;
-    m_lbox = nullptr;
-    m_text = nullptr;
+    m_list = nullptr;
+    m_selection = wxNOT_FOUND;
 }
 
 ibComboBox::ibComboBox(wxWindow *parent,
@@ -140,130 +236,42 @@ bool ibComboBox::Create(wxWindow *parent,
                         const wxValidator& validator,
                         const wxString& name)
 {
-    // the combo looks like a text field — same default border
-    if ( (style & wxBORDER_MASK) == 0 )
-        style |= wxBORDER_SUNKEN;
-
-    if ( !ibControl::Create(parent, id, pos, size, style, validator, name) )
+    if ( !ibComboCtrl::Create(parent, id, value, pos, size, style, validator, name) )
         return false;
 
-    // the popup with the items listbox exists from the start: the item
-    // storage lives in it and every wxItemContainer call delegates there
-    m_popup = new ibComboPopupWindow(this);
-    m_lbox = m_popup->GetLBox();
-
-    m_lbox->Bind(wxEVT_LISTBOX, [this](wxCommandEvent& event) {
-        OnPopupSelect(event.GetInt());
-    });
+    // the list exists from the start: it shows the items kept here
+    m_list = new ibVListBoxComboPopup(this);
+    SetPopupControl(m_list);
 
     for ( int i = 0; i < n; i++ )
-        m_lbox->Append(choices[i]);
+        Append(choices[i]);
 
-    // the combo IS a text box + a drop-down list: the value always lives in
-    // an ibTextCtrl child (read-only one for wxCB_READONLY) - born in its
-    // value area: a combo created at its final size (a cell's editor) gets no
-    // EVT_SIZE after this, and the child's own best width covered the button
-    const wxRect rectValue = GetValueRect();
-    m_text = new ibTextCtrl(this, wxID_ANY, value,
-                            rectValue.GetPosition(), rectValue.GetSize(),
-                            wxBORDER_NONE |
-                            ((style & wxCB_READONLY) ? wxTE_READONLY : 0));
-
-    // forward the text events under our id
-    m_text->Bind(wxEVT_TEXT, [this](wxCommandEvent& event) {
-        wxCommandEvent evt(wxEVT_TEXT, GetId());
-        evt.SetEventObject(this);
-        evt.SetString(event.GetString());
-        ProcessWindowEvent(evt);
-    });
-
-    if ( style & wxCB_READONLY )
-    {
-        // a click on the read-only value area opens the list
-        m_text->Bind(wxEVT_LEFT_DOWN, [this](wxMouseEvent&) {
-            if ( IsPopupShown() )
-                HidePopup();
-            else
-                ShowPopup();
-            Refresh();
-        });
-    }
-
-    SetInitialSize(size);
-    CreateInputHandler(ibINP_HANDLER_COMBOBOX);
+    // the value given is the chosen item when it is one's text (wx's wxVListBoxComboPopup::Populate)
+    if ( !value.empty() )
+        m_list->SetStringValue(value);
 
     return true;
 }
 
 ibComboBox::~ibComboBox()
 {
-    // m_popup/m_lbox/m_text are our children — destroyed by wxWindow
+    // the list is the host's popup — destroyed with it; the client objects are wxItemContainer's
 }
 
 // ----------------------------------------------------------------------------
-// value
+// the choice
 // ----------------------------------------------------------------------------
-
-wxString ibComboBox::GetValue() const
-{
-    return m_text->GetValue();
-}
-
-void ibComboBox::SetValue(const wxString& value)
-{
-    m_text->SetValue(value);
-}
-
-void ibComboBox::ChangeValue(const wxString& value)
-{
-    m_text->ChangeValue(value);
-}
-
-void ibComboBox::SetInsertionPointEnd()
-{
-    m_text->SetInsertionPointEnd();
-}
-
-// ----------------------------------------------------------------------------
-// popup
-// ----------------------------------------------------------------------------
-
-void ibComboBox::ShowPopup()
-{
-    if ( GetCount() == 0 || IsPopupShown() )
-        return;
-
-    m_popup->Popup();
-}
-
-void ibComboBox::HidePopup()
-{
-    if ( IsPopupShown() )
-        m_popup->Dismiss();
-}
-
-bool ibComboBox::IsPopupShown() const
-{
-    return m_popup && m_popup->IsShown();
-}
 
 void ibComboBox::OnPopupSelect(int selection)
 {
     HidePopup();
-    Refresh();
 
     if ( selection == wxNOT_FOUND )
         return;
 
-    ChangeValue(GetString(selection));
+    SetSelection(selection);
 
     SendComboEvent();
-}
-
-void ibComboBox::OnPopupDismiss()
-{
-    // refresh the drop button which was drawn pressed while shown
-    Refresh();
 }
 
 void ibComboBox::SendComboEvent()
@@ -276,50 +284,64 @@ void ibComboBox::SendComboEvent()
 }
 
 // ----------------------------------------------------------------------------
-// wxItemContainer — delegated to the popup listbox
+// wxItemContainer — the items kept here, the list told their count
 // ----------------------------------------------------------------------------
 
 void ibComboBox::DoClear()
 {
-    m_lbox->Clear();
+    m_strings.Clear();
+    m_clientData.clear();
+    m_selection = wxNOT_FOUND;
 }
 
 void ibComboBox::DoDeleteOneItem(unsigned int n)
 {
-    m_lbox->Delete(n);
+    m_strings.RemoveAt(n);
+    m_clientData.erase(m_clientData.begin() + n);
+
+    if ( m_selection == (int)n )
+        m_selection = wxNOT_FOUND;
+    else if ( m_selection > (int)n )
+        m_selection--;
 }
 
 unsigned int ibComboBox::GetCount() const
 {
-    return m_lbox->GetCount();
+    return m_strings.GetCount();
 }
 
 wxString ibComboBox::GetString(unsigned int n) const
 {
-    return m_lbox->GetString(n);
+    wxCHECK_MSG( n < m_strings.GetCount(), wxString(), wxT("ibComboBox::GetString: invalid index") );
+    return m_strings[n];
 }
 
 void ibComboBox::SetString(unsigned int n, const wxString& s)
 {
-    m_lbox->SetString(n, s);
+    wxCHECK_RET( n < m_strings.GetCount(), wxT("ibComboBox::SetString: invalid index") );
+
+    m_strings[n] = s;
+    if ( m_selection == (int)n )
+        ChangeValue(s);
+
+    m_list->Refresh();
 }
 
-int ibComboBox::FindString(const wxString& s, bool bCase) const
-{
-    return m_lbox->FindString(s, bCase);
-}
-
+// the chosen item and the text it shows: nothing chosen, nothing shown (wx's wxOwnerDrawnComboBox::SetSelection)
 void ibComboBox::SetSelection(int n)
 {
-    m_lbox->SetSelection(n);
+    wxCHECK_RET( n == wxNOT_FOUND || (n >= 0 && n < (int)GetCount()),
+                 wxT("ibComboBox::SetSelection: invalid index") );
 
-    if ( n >= 0 && n < (int)GetCount() )
-        ChangeValue(GetString(n));
+    // the text straight into the field, past the popup - the item is chosen here, not looked up by its text
+    m_selection = n;
+    GetTextCtrl()->ChangeValue(n == wxNOT_FOUND ? wxString() : GetString(n));
+    Refresh();
 }
 
 int ibComboBox::GetSelection() const
 {
-    return m_lbox->GetSelection();
+    return m_selection;
 }
 
 wxString ibComboBox::GetStringSelection() const
@@ -328,156 +350,81 @@ wxString ibComboBox::GetStringSelection() const
     return sel == wxNOT_FOUND ? wxString() : GetString(sel);
 }
 
-wxClientDataType ibComboBox::GetClientDataType() const
-{
-    return m_lbox->GetClientDataType();
-}
-
-void ibComboBox::SetClientDataType(wxClientDataType clientDataItemsType)
-{
-    m_lbox->SetClientDataType(clientDataItemsType);
-}
-
 int ibComboBox::DoInsertItems(const wxArrayStringsAdapter& items,
                               unsigned int pos,
                               void **clientData, wxClientDataType type)
 {
-    int index = wxNOT_FOUND;
-    for ( size_t i = 0; i < items.GetCount(); i++ )
+    const unsigned int count = items.GetCount();
+    for ( unsigned int i = 0; i < count; i++ )
     {
-        index = m_lbox->Insert(items[i], pos + i);
-        if ( clientData )
-        {
-            // NB: qualified — wxEvtHandler has same-named methods (seam 17)
-            if ( type == wxClientData_Object )
-                m_lbox->wxItemContainer::SetClientObject(index,
-                    (wxClientData *)clientData[i]);
-            else if ( type == wxClientData_Void )
-                m_lbox->wxItemContainer::SetClientData(index, clientData[i]);
-        }
+        m_strings.Insert(items[i], pos + i);
+        m_clientData.insert(m_clientData.begin() + pos + i, nullptr);
+        AssignNewItemClientData(pos + i, clientData, i, type);
     }
 
-    return index;
+    if ( m_selection != wxNOT_FOUND && (int)pos <= m_selection )
+        m_selection += count;
+
+    return pos + count - 1;
 }
 
 void ibComboBox::DoSetItemClientData(unsigned int n, void* clientData)
 {
-    m_lbox->wxItemContainer::SetClientData(n, clientData);
+    m_clientData[n] = clientData;
 }
 
 void* ibComboBox::DoGetItemClientData(unsigned int n) const
 {
-    return m_lbox->wxItemContainer::GetClientData(n);
+    return m_clientData[n];
 }
 
 // ----------------------------------------------------------------------------
-// geometry and drawing
+// the items' drawing
 // ----------------------------------------------------------------------------
 
-wxRect ibComboBox::GetButtonRect() const
+void ibComboBox::OnDrawItem(wxDC& dc, const wxRect& rect, int item, int flags) const
 {
-    const wxSize size = GetClientSize();
-    const int w = wxMin(size.y, size.x);
-    return wxRect(size.x - w, 0, w, size.y);
+    // the item's text as the list box draws its own (ibThemeRenderer::DrawItem) - the pad under the one marked is the
+    // background's
+    const wxColour colour = (flags & wxODCB_PAINTING_SELECTED) ? wxTHEME_COLOUR(HIGHLIGHT_TEXT)
+                                                                : wxTHEME_COLOUR(CONTROL_TEXT);
+    wxDCTextColourChanger colourChanger(dc, colour);
+
+    wxRect rectText = rect;
+    rectText.Deflate(2, 0);
+    dc.DrawLabel(GetString(item), rectText, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
 }
 
-wxRect ibComboBox::GetValueRect() const
+wxCoord ibComboBox::OnMeasureItem(size_t WXUNUSED(item)) const
 {
-    // the text child pads its own content — give it the full area left of
-    // the drop button (a vertical deflate here clipped the value line)
-    const wxSize size = GetClientSize();
-    return wxRect(0, 0, size.x - GetButtonRect().width - 1, size.y);
+    return GetRenderer()->GetListboxItemHeight(GetCharHeight());
 }
 
-wxSize ibComboBox::DoGetBestClientSize() const
+wxCoord ibComboBox::OnMeasureItemWidth(size_t item) const
 {
-    // the height is dictated by the text child (its font + its paddings);
-    // the width is uniform like the text field's, plus the square button
-    const wxSize sizeText = m_text ? m_text->GetBestSize()
-                                   : wxSize(100, GetCharHeight() + 8);
-
-    return wxSize(sizeText.x + sizeText.y, sizeText.y);
+    return GetTextExtent(GetString(item)).x + 4;
 }
 
-void ibComboBox::OnSize(wxSizeEvent& event)
+void ibComboBox::OnDrawBackground(wxDC& dc, const wxRect& rect, int WXUNUSED(item), int flags) const
 {
-    if ( m_text )
-    {
-        const wxRect rect = GetValueRect();
-        m_text->SetSize(rect.x, rect.y, rect.width, rect.height);
-    }
+    // the item marked in the list - a flat pad of the theme's highlight, as the list box's (ibVListBox)
+    if ( !(flags & wxODCB_PAINTING_SELECTED) )
+        return;
 
-    event.Skip();
-}
-
-void ibComboBox::DoDraw(ibControlRenderer *renderer)
-{
-    wxDC& dc = renderer->GetDC();
-    ibRenderer *rend = renderer->GetRenderer();
-
-    const wxRect rectButton = GetButtonRect();
-
-    // the value area is covered by the ibTextCtrl child — only the drop
-    // button is ours: flat pad + separator + arrow
-    int flags = GetStateFlags();
-    if ( IsPopupShown() )
-        flags |= wxCONTROL_PRESSED;
-
-    ibColourScheme* scheme = ibThemeEngine::Get()->GetColourScheme();
-
-    wxColour pad = scheme->Get(ibColourScheme::CONTROL);
-    if ( flags & wxCONTROL_PRESSED )
-        pad = scheme->Get(ibColourScheme::CONTROL_PRESSED);
-    else if ( flags & wxCONTROL_CURRENT )
-        pad = scheme->Get(ibColourScheme::CONTROL_CURRENT);
-
-    dc.SetPen(*wxTRANSPARENT_PEN);
-    dc.SetBrush(wxBrush(pad));
-    dc.DrawRectangle(rectButton);
-
-    // 1px separator between the value area and the button
-    dc.SetPen(wxPen(scheme->Get(ibColourScheme::SHADOW_IN)));
-    dc.DrawLine(rectButton.x, rectButton.y,
-                rectButton.x, rectButton.y + rectButton.height);
-
-    wxRect rectArrow = rectButton;
-    rectArrow.Deflate(rectButton.width / 3, rectButton.height / 3);
-    rend->DrawArrow(dc, wxDOWN, rectArrow, flags);
+    wxDCBrushChanger brushChanger(dc, wxBrush(wxTHEME_COLOUR(HIGHLIGHT)));
+    wxDCPenChanger penChanger(dc, *wxTRANSPARENT_PEN);
+    dc.DrawRectangle(rect);
 }
 
 // ----------------------------------------------------------------------------
 // input
 // ----------------------------------------------------------------------------
 
-void ibComboBox::OnLeftDown(wxMouseEvent& event)
-{
-    // a click on the drop button (the only part of the host not covered by
-    // the text child) toggles the popup
-    if ( IsPopupShown() )
-    {
-        HidePopup();
-        Refresh();
-    }
-    else if ( GetButtonRect().Contains(event.GetPosition()) )
-    {
-        ShowPopup();
-        Refresh();
-    }
-    else
-    {
-        event.Skip();
-    }
-}
-
 bool ibComboBox::PerformAction(const ibControlAction& action,
                                long numArg,
                                const wxString& strArg)
 {
-    if ( action == ibACTION_COMBOBOX_POPUP )
-        ShowPopup();
-    else if ( action == ibACTION_COMBOBOX_DISMISS )
-        HidePopup();
-    else if ( action == ibACTION_COMBOBOX_SELECT_NEXT )
+    if ( action == ibACTION_COMBOBOX_SELECT_NEXT )
     {
         const int sel = GetSelection();
         if ( sel + 1 < (int)GetCount() )
@@ -504,17 +451,9 @@ bool ibComboBox::PerformAction(const ibControlAction& action,
         }
     }
     else
-        return ibControl::PerformAction(action, numArg, strArg);
+        return ibComboCtrl::PerformAction(action, numArg, strArg);
 
     return true;
-}
-
-/* static */
-ibInputHandler *ibComboBox::GetStdInputHandler(ibInputHandler *handlerDef)
-{
-    // mouse handling is done by our own event handlers; keyboard goes to the
-    // editable child — the default control chain is enough here
-    return handlerDef;
 }
 
 #endif // wxUSE_COMBOBOX

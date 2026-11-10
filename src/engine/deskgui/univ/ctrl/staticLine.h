@@ -57,10 +57,11 @@ public:
                 const wxString &name = wxASCII_STR(wxStaticLineNameStr) );
 
 protected:
-    virtual void DoDraw(ibControlRenderer *renderer) override;
+    void OnPaint(wxPaintEvent& event);
 
 private:
     wxDECLARE_DYNAMIC_CLASS(ibStaticLine);
+    wxDECLARE_EVENT_TABLE();
 };
 
 #endif // _DESKGUI_UNIV_STATICLINE_H_

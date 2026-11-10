@@ -36,41 +36,96 @@
 
 class ibWindow;
 class wxDC;
-class ibCheckListBox;
-
-#if wxUSE_LISTBOX
-    class ibListBox;
-#endif // wxUSE_LISTBOX
-
-#if wxUSE_MENUS
-   class ibMenu;
-   class ibMenuGeometryInfo;
-#endif // wxUSE_MENUS
-
-class ibScrollBar;
-
-#if wxUSE_TEXTCTRL
-    class ibTextCtrl;
-#endif
-
-#if wxUSE_GAUGE
-    class ibGauge;
-#endif // wxUSE_GAUGE
 
 #include <wx/string.h>
 #include <wx/gdicmn.h>
 #include <wx/icon.h>
 
-// helper class used by ibMenu-related functions
+// ----------------------------------------------------------------------------
+// constants
+// ----------------------------------------------------------------------------
+
+// frame decorations type flags used in ibRenderer and ibColourScheme
+enum
+{
+    wxTOPLEVEL_ACTIVE          = 0x00000001,
+    wxTOPLEVEL_MAXIMIZED       = 0x00000002,
+    wxTOPLEVEL_TITLEBAR        = 0x00000004,
+    wxTOPLEVEL_ICON            = 0x00000008,
+    wxTOPLEVEL_RESIZEABLE      = 0x00000010,
+    wxTOPLEVEL_BORDER          = 0x00000020,
+    wxTOPLEVEL_BUTTON_CLOSE    = 0x01000000,
+    wxTOPLEVEL_BUTTON_MAXIMIZE = 0x02000000,
+    wxTOPLEVEL_BUTTON_ICONIZE =  0x04000000,
+    wxTOPLEVEL_BUTTON_RESTORE  = 0x08000000,
+    wxTOPLEVEL_BUTTON_HELP     = 0x10000000
+};
+
+// frame hit test return values:
+enum
+{
+    wxHT_TOPLEVEL_NOWHERE         = 0x00000000,
+    wxHT_TOPLEVEL_CLIENT_AREA     = 0x00000001,
+    wxHT_TOPLEVEL_ICON            = 0x00000002,
+    wxHT_TOPLEVEL_TITLEBAR        = 0x00000004,
+
+    wxHT_TOPLEVEL_BORDER_N        = 0x00000010,
+    wxHT_TOPLEVEL_BORDER_S        = 0x00000020,
+    wxHT_TOPLEVEL_BORDER_E        = 0x00000040,
+    wxHT_TOPLEVEL_BORDER_W        = 0x00000080,
+    wxHT_TOPLEVEL_BORDER_NE       = wxHT_TOPLEVEL_BORDER_N | wxHT_TOPLEVEL_BORDER_E,
+    wxHT_TOPLEVEL_BORDER_SE       = wxHT_TOPLEVEL_BORDER_S | wxHT_TOPLEVEL_BORDER_E,
+    wxHT_TOPLEVEL_BORDER_NW       = wxHT_TOPLEVEL_BORDER_N | wxHT_TOPLEVEL_BORDER_W,
+    wxHT_TOPLEVEL_BORDER_SW       = wxHT_TOPLEVEL_BORDER_S | wxHT_TOPLEVEL_BORDER_W,
+    wxHT_TOPLEVEL_ANY_BORDER      = 0x000000F0,
+
+    wxHT_TOPLEVEL_BUTTON_CLOSE    = /*0x01000000*/ wxTOPLEVEL_BUTTON_CLOSE,
+    wxHT_TOPLEVEL_BUTTON_MAXIMIZE = /*0x02000000*/ wxTOPLEVEL_BUTTON_MAXIMIZE,
+    wxHT_TOPLEVEL_BUTTON_ICONIZE =  /*0x04000000*/ wxTOPLEVEL_BUTTON_ICONIZE,
+    wxHT_TOPLEVEL_BUTTON_RESTORE  = /*0x08000000*/ wxTOPLEVEL_BUTTON_RESTORE,
+    wxHT_TOPLEVEL_BUTTON_HELP     = /*0x10000000*/ wxTOPLEVEL_BUTTON_HELP,
+    wxHT_TOPLEVEL_ANY_BUTTON      =   0x1F000000
+};
+
+#if wxUSE_MENUS
+
+// ----------------------------------------------------------------------------
+// ibMenuGeometryInfo: the layout of a menu's items, aligned for all of them
+// ----------------------------------------------------------------------------
+
+// SEAM vs univ: the menu lays itself out (ibMenu::GetGeometryInfo) from the theme's metrics (GetMenuMargin and the
+// rest below) and the theme draws its items by it; the canon's theme laid out the menu itself (GetMenuGeometry),
+// reading its items and setting their places, and returned its own subclass of this
 class DESKGUI_API ibMenuGeometryInfo
 {
 public:
     // get the total size of the menu
-    virtual wxSize GetSize() const = 0;
+    wxSize GetSize() const { return m_size; }
 
-    // GUI-REVIVE: defined in univ menu.cpp originally; inline until menu revives
-    virtual ~ibMenuGeometryInfo() = default;
+    // get the offset of the start of the items' labels and of their accel strings
+    wxCoord GetLabelOffset() const { return m_ofsLabel; }
+    wxCoord GetAccelOffset() const { return m_ofsAccel; }
+
+    // get the height of a normal (not separator) item
+    wxCoord GetItemHeight() const { return m_heightItem; }
+
+private:
+    // the total size of the menu
+    wxSize m_size;
+
+    // the offset of the start of the menu item label
+    wxCoord m_ofsLabel = 0;
+
+    // the offset of the start of the accel label
+    wxCoord m_ofsAccel = 0;
+
+    // the height of a normal (not separator) item
+    wxCoord m_heightItem = 0;
+
+    friend class ibMenu;
 };
+
+#endif // wxUSE_MENUS
 
 // ----------------------------------------------------------------------------
 // ibRenderer: abstract renderers interface
@@ -289,7 +344,7 @@ public:
 
     // draw a menu item (also used for submenus if flags has ISSUBMENU flag)
     //
-    // the geometryInfo is calculated by GetMenuGeometry() function from below
+    // the geometryInfo is the menu's (ibMenu::GetGeometryInfo), laid out by the metrics from below
     virtual void DrawMenuItem(wxDC& dc,
                               wxCoord y,
                               const ibMenuGeometryInfo& geometryInfo,
@@ -404,12 +459,10 @@ public:
 #if wxUSE_TEXTCTRL
     // convert between text rectangle and client rectangle for text controls:
     // the former is typically smaller to leave margins around text
-    virtual wxRect GetTextTotalArea(const ibTextCtrl *text,
-                                    const wxRect& rectText) const = 0;
+    virtual wxRect GetTextTotalArea(const wxRect& rectText) const = 0;
 
     // extra space is for line indicators
-    virtual wxRect GetTextClientArea(const ibTextCtrl *text,
-                                     const wxRect& rectTotal,
+    virtual wxRect GetTextClientArea(const wxRect& rectTotal,
                                      wxCoord *extraSpaceBeyond) const = 0;
 #endif // wxUSE_TEXTCTRL
 
@@ -448,13 +501,23 @@ public:
     // get the size of rectangle to use in the menubar for the given text rect
     virtual wxSize GetMenuBarItemSize(const wxSize& sizeText) const = 0;
 
-    // get the struct storing all layout info needed to draw all menu items
-    // (this can't be calculated for each item separately as they should be
-    // aligned)
-    //
-    // the returned pointer must be deleted by the caller
-    virtual ibMenuGeometryInfo *GetMenuGeometry(wxWindow *win,
-                                                const ibMenu& menu) const = 0;
+    // the metrics a menu lays its items out with (ibMenu::GetGeometryInfo):
+
+    // get the empty strip round the items, inside the menu's frame
+    virtual wxSize GetMenuMargin() const = 0;
+
+    // get the height of an item for the given height of its text, and of a separator
+    virtual wxCoord GetMenuItemHeight(wxCoord heightText) const = 0;
+    virtual wxCoord GetMenuSeparatorHeight() const = 0;
+
+    // get the width of the column of the items' pictures (and check marks) for the widest picture
+    virtual wxCoord GetMenuBitmapWidth(wxCoord widthBitmap) const = 0;
+
+    // get the gap between the labels and the accel strings, if there are any
+    virtual wxCoord GetMenuAccelMargin() const = 0;
+
+    // get the width of the column of the submenu indicators
+    virtual wxCoord GetMenuSubmenuWidth() const = 0;
 #endif // wxUSE_MENUS
 
 #if wxUSE_STATUSBAR
@@ -489,6 +552,14 @@ public:
 
     // virtual dtor for any base class
     virtual ~ibRenderer();
+
+    // a bitmap in rect: aligned, tiled or stretched over it (a window's background bitmap, a static bitmap's)
+    static void DrawBitmap(wxDC &dc,
+                           const wxBitmap& bitmap,
+                           const wxRect& rect,
+                           int alignment = wxALIGN_CENTRE |
+                                           wxALIGN_CENTRE_VERTICAL,
+                           wxStretch stretch = wxSTRETCH_NOT);
 };
 
 // ----------------------------------------------------------------------------
@@ -782,13 +853,11 @@ public:
 #endif // wxUSE_TOOLBAR
 
 #if wxUSE_TEXTCTRL
-    virtual wxRect GetTextTotalArea(const ibTextCtrl *text,
-                                    const wxRect& rect) const override
-        { return m_renderer->GetTextTotalArea(text, rect); }
-    virtual wxRect GetTextClientArea(const ibTextCtrl *text,
-                                     const wxRect& rect,
+    virtual wxRect GetTextTotalArea(const wxRect& rect) const override
+        { return m_renderer->GetTextTotalArea(rect); }
+    virtual wxRect GetTextClientArea(const wxRect& rect,
                                      wxCoord *extraSpaceBeyond) const override
-        { return m_renderer->GetTextClientArea(text, rect, extraSpaceBeyond); }
+        { return m_renderer->GetTextClientArea(rect, extraSpaceBeyond); }
 #endif // wxUSE_TEXTCTRL
 
 #if wxUSE_NOTEBOOK
@@ -819,9 +888,18 @@ public:
 #if wxUSE_MENUS
     virtual wxSize GetMenuBarItemSize(const wxSize& sizeText) const override
         { return m_renderer->GetMenuBarItemSize(sizeText); }
-    virtual ibMenuGeometryInfo *GetMenuGeometry(wxWindow *win,
-                                                const ibMenu& menu) const override
-        { return m_renderer->GetMenuGeometry(win, menu); }
+    virtual wxSize GetMenuMargin() const override
+        { return m_renderer->GetMenuMargin(); }
+    virtual wxCoord GetMenuItemHeight(wxCoord heightText) const override
+        { return m_renderer->GetMenuItemHeight(heightText); }
+    virtual wxCoord GetMenuSeparatorHeight() const override
+        { return m_renderer->GetMenuSeparatorHeight(); }
+    virtual wxCoord GetMenuBitmapWidth(wxCoord widthBitmap) const override
+        { return m_renderer->GetMenuBitmapWidth(widthBitmap); }
+    virtual wxCoord GetMenuAccelMargin() const override
+        { return m_renderer->GetMenuAccelMargin(); }
+    virtual wxCoord GetMenuSubmenuWidth() const override
+        { return m_renderer->GetMenuSubmenuWidth(); }
 #endif // wxUSE_MENUS
 
 #if wxUSE_STATUSBAR
@@ -861,72 +939,6 @@ public:
 
 protected:
     ibRenderer *m_renderer;
-};
-
-// ----------------------------------------------------------------------------
-// ibControlRenderer: wraps the ibRenderer functions in a form easy to use from
-// OnPaint()
-// ----------------------------------------------------------------------------
-
-class DESKGUI_API ibControlRenderer
-{
-public:
-    // create a renderer for this dc with this "fundamental" renderer
-    ibControlRenderer(ibWindow *control, wxDC& dc, ibRenderer *renderer);
-
-    // operations
-    void DrawLabel();
-    void DrawButtonLabel(const wxBitmap& bitmap = wxNullBitmap,
-                         wxCoord marginX = 0, wxCoord marginY = 0);
-#if wxUSE_LISTBOX
-    void DrawItems(const ibListBox *listbox,
-                   size_t itemFirst, size_t itemLast);
-#endif // wxUSE_LISTBOX
-#if wxUSE_CHECKLISTBOX
-    void DrawCheckItems(const ibCheckListBox *listbox,
-                        size_t itemFirst, size_t itemLast);
-#endif // wxUSE_CHECKLISTBOX
-    void DrawButtonBorder();
-    // the line must be either horizontal or vertical
-    void DrawLine(wxCoord x1, wxCoord y1, wxCoord x2, wxCoord y2);
-    void DrawFrame();
-    void DrawBitmap(const wxBitmap& bitmap);
-    void DrawBackgroundBitmap();
-    void DrawScrollbar(const ibScrollBar *scrollbar, int thumbPosOld);
-#if wxUSE_GAUGE
-    void DrawProgressBar(const ibGauge *gauge);
-#endif // wxUSE_GAUGE
-
-    // accessors
-    ibWindow *GetWindow() const { return m_window; }
-    ibRenderer *GetRenderer() const { return m_renderer; }
-
-    wxDC& GetDC() { return m_dc; }
-
-    const wxRect& GetRect() const { return m_rect; }
-    wxRect& GetRect() { return m_rect; }
-
-    // static helpers
-    static void DrawBitmap(wxDC &dc,
-                           const wxBitmap& bitmap,
-                           const wxRect& rect,
-                           int alignment = wxALIGN_CENTRE |
-                                           wxALIGN_CENTRE_VERTICAL,
-                           wxStretch stretch = wxSTRETCH_NOT);
-
-private:
-
-#if wxUSE_LISTBOX
-    // common part of DrawItems() and DrawCheckItems()
-    void DoDrawItems(const ibListBox *listbox,
-                     size_t itemFirst, size_t itemLast,
-                     bool isCheckLbox = false);
-#endif // wxUSE_LISTBOX
-
-    ibWindow *m_window;
-    ibRenderer *m_renderer;
-    wxDC& m_dc;
-    wxRect m_rect;
 };
 
 #endif // _DESKGUI_UNIV_RENDERER_H_

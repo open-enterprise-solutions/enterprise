@@ -1,8 +1,8 @@
 ﻿#ifndef __ADVPROP_FONT_H__
 #define __ADVPROP_FONT_H__
 
-#include <wx/propgrid/propgrid.h>
-#include <wx/propgrid/editors.h>
+#include "deskgui/univ/propgrid/propgrid.h"
+#include "deskgui/univ/propgrid/editors.h"
 #include "core/graphics/font.h"   // ibFont — what the cell holds, as its text
 
 #include "frmclient/backend/backend_core.h"
@@ -11,25 +11,25 @@
 // ibPGFontProperty
 // -----------------------------------------------------------------------
 
-// wxFontProperty, copied — over ibFont's text instead of a wxFont, which is what the server writes:
+// ibFontProperty, copied — over ibFont's text instead of a wxFont, which is what the server writes:
 // the cell's value goes back to the property as it is.
-class ibPGFontProperty : public wxEditorDialogProperty {
-	WX_PG_DECLARE_PROPERTY_CLASS(ibPGFontProperty)
+class ibPGFontProperty : public ibEditorDialogProperty {
+	IB_PG_DECLARE_PROPERTY_CLASS(ibPGFontProperty)
 public:
 
-	ibPGFontProperty(const wxString& label = wxPG_LABEL, const wxString& name = wxPG_LABEL, const wxVariant& value = wxNullVariant);
+	ibPGFontProperty(const wxString& label = ibPG_LABEL, const wxString& name = ibPG_LABEL, const ibVariant& value = ibVariant());
 	virtual ~ibPGFontProperty() = default;
 
-	virtual wxVariant ChildChanged(wxVariant& thisValue, int childIndex,
-		wxVariant& childValue) const override;
+	virtual ibVariant ChildChanged(ibVariant& thisValue, int childIndex,
+		ibVariant& childValue) const override;
 	virtual void RefreshChildren() override;
 
 protected:
-	virtual bool DisplayEditorDialog(wxPropertyGrid* pg, wxVariant& value) override;
+	virtual bool DisplayEditorDialog(ibPropertyGrid* pg, ibVariant& value) override;
 
 	// The font a value holds — the cell's own when none is given; for no font at all, the system's,
 	// which a change starts from.
-	ibFont GetVal(const wxVariant* pVariant = nullptr) const;
+	ibFont GetVal(const ibVariant* pVariant = nullptr) const;
 };
 
 #endif

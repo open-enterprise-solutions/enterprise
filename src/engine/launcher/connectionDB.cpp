@@ -61,8 +61,6 @@ ibDialogConnection::ibDialogConnection(wxWindow* parent, wxWindowID id, const wx
 	ibDialog(parent, id, title, pos, size, style)
 {
 	this->SetSizeHints(wxDefaultSize, wxDefaultSize);
-	// Interior palette — powder-blue dialog frame.
-	this->SetBackgroundColour(wxColour(0xB8, 0xC9, 0xD4));  // #B8C9D4 powder blue
 
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 

@@ -19,8 +19,8 @@
 #include "deskgui/deskgui.h"
 
 #include <wx/bitmap.h>      // for m_bitmapBg
+#include <wx/dcbuffer.h>    // for ibThemePaintDC
 
-class ibControlRenderer;
 class wxEventLoop;
 
 class ibMenu;
@@ -158,6 +158,10 @@ public:
     // only and doesn't get any input itself
     virtual bool IsStaticBox() const { return false; }
 
+    // return true if this window's background is the content's (a text field,
+    // a list box), not the chrome's (the theme decides its colour)
+    virtual bool HasContentBackground() const { return false; }
+
     // returns the (low level) renderer to use for drawing the control by
     // querying the current theme
     ibRenderer *GetRenderer() const { return m_renderer; }
@@ -171,7 +175,8 @@ public:
     // this function
     void RefreshScrollbars();
 
-    // erase part of the control
+    // erase part of the control: a window of a transparent background has its parent's drawn under it; a control's
+    // OnPaint gets its background with it from the ibThemePaintDC it paints on
     virtual void EraseBackground(wxDC& dc, const wxRect& rect);
 
     // overridden base class methods
@@ -221,6 +226,10 @@ protected:
     // paint, before the window's own handler paints the client area; drawn anew as the window gains or loses the focus
     virtual bool TryBefore(wxEvent& event) override;
 
+    // the window's frame round rect (GetBorderRect), drawn in the paint before the window's handler (TryBefore): the
+    // theme's border of the window's kind (GetBorder) in its state
+    virtual void DrawBorder(wxDC& dc, const wxRect& rect);
+
     // we deal with the scrollbars in these functions
     virtual void DoSetClientSize(int width, int height) override;
     virtual void DoGetClientSize(int *width, int *height) const override;
@@ -240,15 +249,6 @@ protected:
     void OnChar(wxKeyEvent& event);
     void OnKeyUp(wxKeyEvent& event);
 #endif // wxUSE_MENUS
-
-    // draw the control background, return true if done
-    virtual bool DoDrawBackground(wxDC& dc);
-
-    // draw the controls border
-    virtual void DoDrawBorder(wxDC& dc, const wxRect& rect);
-
-    // draw the controls contents
-    virtual void DoDraw(ibControlRenderer *renderer);
 
     // adjust the size of the window to take into account its borders
     wxSize AdjustSize(const wxSize& size) const;
@@ -314,6 +314,22 @@ private:
 
     wxDECLARE_DYNAMIC_CLASS(ibWindow);
     wxDECLARE_EVENT_TABLE();
+};
+
+// ----------------------------------------------------------------------------
+// ibThemePaintDC: the DC a control paints itself with in its OnPaint, as a wx control does with wxPaintDC - buffered,
+// the window's background (EraseBackground: the theme's, or the parent's under a transparent window) already in it;
+// its frame is drawn before the handler (ibWindow::TryBefore)
+// ----------------------------------------------------------------------------
+
+class ibThemePaintDC : public wxAutoBufferedPaintDC
+{
+public:
+    explicit ibThemePaintDC(ibWindow *window)
+        : wxAutoBufferedPaintDC(window)
+    {
+        window->EraseBackground(*this, wxRect(window->GetSize()));
+    }
 };
 
 #endif // _DESKGUI_UNIV_WINDOW_H_

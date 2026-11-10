@@ -257,6 +257,9 @@ public:
 
 	// Its class — a primitive's by its kind, an object's its own (0 when it names none).
 	CORE_API virtual ibClassID GetClassType() const;
+	// …and its class's NAME, the same way: a primitive's by the core's table (GetNameObjectFromVT, core/core.h), an
+	// object's its own (empty when it names none). The engine's value answers by its registry (backend's ibValue).
+	CORE_API virtual ibString GetClassName() const;
 
 	virtual bool Init() {
 		if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)

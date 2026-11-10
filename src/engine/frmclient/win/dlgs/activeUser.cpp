@@ -128,7 +128,6 @@ ibDialogActiveUser::ibDialogActiveUser(wxWindow* parent, const ibProtocolNode& s
 	ibDialog(parent, id, title, pos, size, style), m_activeTableScanner(new wxTimer)
 {
 	ibDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
-	this->SetBackgroundColour(wxColour(184, 201, 212));   // #B8C9D4 powder-blue dialog
 
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
@@ -137,12 +136,10 @@ ibDialogActiveUser::ibDialogActiveUser(wxWindow* parent, const ibProtocolNode& s
 
 	m_activeTable = new ibListCtrl(m_notebook, wxID_ANY, wxDefaultPosition,
 		wxDefaultSize, wxLC_REPORT | wxLC_SINGLE_SEL);
-	m_activeTable->SetBackgroundColour(wxColour(250, 250, 250));  // #fafafa list
 	m_notebook->AddPage(m_activeTable, _("Users"), true);
 
 	m_locksTable = new ibListCtrl(m_notebook, wxID_ANY, wxDefaultPosition,
 		wxDefaultSize, wxLC_REPORT | wxLC_SINGLE_SEL);
-	m_locksTable->SetBackgroundColour(wxColour(250, 250, 250));   // #fafafa list
 	m_notebook->AddPage(m_locksTable, _("Locks"), false);
 
 	ibDialog::SetSizer(mainSizer);

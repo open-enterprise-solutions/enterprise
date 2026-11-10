@@ -115,7 +115,7 @@ ibProperty* ibFormAttributeValue::CreateProperty(ibPropertyCategory* cat, ibData
 	return ibPropertyObject::CreateProperty<ibPropertySerializable>(cat, std::move(row));
 }
 
-void ibFormAttributeValue::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
+void ibFormAttributeValue::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
 {
 	m_formHandler->ModifyProperty(property, oldValue, newValue);
 }

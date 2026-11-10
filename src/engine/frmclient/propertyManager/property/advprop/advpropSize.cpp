@@ -1,32 +1,28 @@
 #include "advpropSize.h"
 
 #include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the size's node
-#include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frmclient/propertyManager/property/private/prop.h"             // ibPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 #include "deskgui/typeconv.h"   // the size as the server writes it
 
 // -----------------------------------------------------------------------
 // ibPGSizeProperty
 // -----------------------------------------------------------------------
-#if wxCHECK_VERSION(3, 1, 0)
-wxPG_IMPLEMENT_PROPERTY_CLASS(ibPGSizeProperty, wxPGProperty, TextCtrl)
-#else
-WX_PG_IMPLEMENT_PROPERTY_CLASS(ibPGSizeProperty, wxPGProperty, wxSize, const wxSize&, TextCtrl)
-#endif
+ibPG_IMPLEMENT_PROPERTY_CLASS(ibPGSizeProperty, ibPGProperty, TextCtrl)
 
 namespace {
 
 // The size a value holds, as the server writes it (its text)…
-wxSize ReadSize(const wxVariant& value)
+wxSize ReadSize(const ibVariant& value)
 {
-	return typeConv::StringToSize(ibVariantDataSerializable::GetNodeValue(value).AsString());
+	return typeConv::StringToSize(ibVariantSerializable::GetNodeValue(value).AsString());
 }
 
 // …and the value of another: the same property's, read as that text.
-wxVariant WriteSize(const wxVariant& value, const wxSize& size)
+ibVariant WriteSize(const wxSize& size)
 {
 	const wxString text = typeConv::SizeToString(size);
-	return wxVariant(new ibVariantDataSerializable(value.GetType(), ibDataValue::String(text), text));
+	return ibVariant(new ibVariantSerializable(ibDataValue::String(text), text));
 }
 
 } // namespace
@@ -37,7 +33,7 @@ class ibPropertySizeLoader
 public:
 	ibPropertySizeLoader()
 	{
-		ibPropertyRegistry::Register(wxT("ibPropertySize"), [](ibBackendProperty* property) -> wxPGProperty* {
+		ibPropertyRegistry::Register(wxT("ibPropertySize"), [](ibBackendProperty* property) -> ibPGProperty* {
 			return new ibPGSizeProperty(property->GetLabel(), property->GetName(), property->GetValue());
 		});
 	}
@@ -45,12 +41,12 @@ public:
 
 ibPGSizeProperty::ibPGSizeProperty(const wxString& label,
 	const wxString& strName,
-	const wxVariant& value) : wxPGProperty(label, strName)
+	const ibVariant& value) : ibPGProperty(label, strName)
 {
 	SetValue(value);
 	const wxSize size = ReadSize(value);
-	AddPrivateChild(new wxIntProperty(_("Width"), wxT("width"), size.x));
-	AddPrivateChild(new wxIntProperty(_("Height"), wxT("height"), size.y));
+	AddPrivateChild(new ibIntProperty(_("Width"), wxT("width"), size.x));
+	AddPrivateChild(new ibIntProperty(_("Height"), wxT("height"), size.y));
 }
 
 void ibPGSizeProperty::RefreshChildren()
@@ -63,10 +59,10 @@ void ibPGSizeProperty::RefreshChildren()
 	Item(1)->SetValue((long)size.y);
 }
 
-wxVariant ibPGSizeProperty::ChildChanged(wxVariant& thisValue, const int childIndex,
-	wxVariant& childValue) const {
+ibVariant ibPGSizeProperty::ChildChanged(ibVariant& thisValue, const int childIndex,
+	ibVariant& childValue) const {
 	wxSize size = ReadSize(thisValue);
-	const int val = childValue.GetLong();
+	const int val = childValue.GetInteger();
 	switch (childIndex)
 	{
 	case 0:
@@ -76,5 +72,5 @@ wxVariant ibPGSizeProperty::ChildChanged(wxVariant& thisValue, const int childIn
 		size.y = val;
 		break;
 	}
-	return WriteSize(thisValue, size);
+	return WriteSize(size);
 }

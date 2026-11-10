@@ -146,9 +146,6 @@ protected:
 
     virtual int DoListHitTest(const wxPoint& point) const;
 
-    // universal ibComboBox implementation internally uses ibListBox
-    friend class ibComboBox;
-
     virtual void DoSetFirstItem(int n);
 
     virtual void DoSetItemClientData(unsigned int n, void* clientData) override;
@@ -219,6 +216,9 @@ public:
     // idle processing
     virtual void OnInternalIdle() override;
 
+    // a list lives on the content colour, not on the chrome
+    virtual bool HasContentBackground() const override { return true; }
+
 protected:
     // geometry
     virtual wxSize DoGetBestClientSize() const override;
@@ -226,7 +226,6 @@ protected:
                            int width, int height,
                            int sizeFlags = wxSIZE_AUTO) override;
 
-    virtual void DoDraw(ibControlRenderer *renderer) override;
     virtual wxBorder GetDefaultBorder() const override;
 
     // special hook for ibCheckListBox which allows it to update its internal
@@ -238,6 +237,7 @@ protected:
     void Init();
 
     // event handlers
+    void OnPaint(wxPaintEvent& event);
     void OnSize(wxSizeEvent& event);
 
     // refresh the given item(s) or everything
@@ -256,9 +256,8 @@ protected:
     bool HasHorzScrollbar() const
         { return (m_windowStyle & wxLB_HSCROLL) != 0; }
 
-    // redraw the items in the given range only: called from DoDraw()
-    virtual void DoDrawRange(ibControlRenderer *renderer,
-                             int itemFirst, int itemLast);
+    // draw the item n in rect in the state of flags (selected, focused): called from OnPaint for each item it redraws
+    virtual void OnDrawItem(wxDC& dc, const wxRect& rect, size_t n, int flags) const;
 
     // update the scrollbars and then ensure that the item is visible
     void DoEnsureVisible(int n);

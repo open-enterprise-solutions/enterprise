@@ -15,19 +15,19 @@ public:
 	void SetValue(const ibString& val);
 
 	ibPropertyColour(ibPropertyCategory* cat, const ibString& name, const wxColour& c = wxNullColour)
-		: ibPropertySerializable(cat, name, wxNullVariant)
+		: ibPropertySerializable(cat, name, ibVariant())
 	{
 		SetValue(c);
 	}
 
 	ibPropertyColour(ibPropertyCategory* cat, const ibString& name, const ibString& label, const wxColour& c = wxNullColour)
-		: ibPropertySerializable(cat, name, label, wxNullVariant)
+		: ibPropertySerializable(cat, name, label, ibVariant())
 	{
 		SetValue(c);
 	}
 
 	ibPropertyColour(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString, const wxColour& c = wxNullColour)
-		: ibPropertySerializable(cat, name, label, helpString, wxNullVariant)
+		: ibPropertySerializable(cat, name, label, helpString, ibVariant())
 	{
 		SetValue(c);
 	}

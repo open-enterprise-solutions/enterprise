@@ -251,6 +251,12 @@ bool ibStyledTextCtrl::Create(wxWindow *parent,
     // And foreground for this one is hardcoded as white.
     StyleSetForeground(ibSTC_STYLE_CALLTIP, colFg);
 
+    // the fold margin in the gutter's colour (the line-number style's background, the theme's chrome) - Scintilla
+    // hatches it with the chrome and its highlight unless told a colour
+    const wxColour colGutter = wxTHEME_COLOUR(CONTROL);
+    SetFoldMarginColour(true, colGutter);
+    SetFoldMarginHiColour(true, colGutter);
+
     SetSelForeground(true, wxTHEME_COLOUR(HIGHLIGHT_TEXT));
     SetSelBackground(true, wxTHEME_COLOUR(HIGHLIGHT));
 
@@ -6113,17 +6119,16 @@ void ibStyledTextCtrl::OnSize(wxSizeEvent& evt) {
     evt.Skip();
 }
 
-// SEAM vs wx: the mouse comes in the window's coordinates, Scintilla takes the client area's - moved by its origin
 void ibStyledTextCtrl::OnMouseLeftDown(wxMouseEvent& evt) {
     SetFocus();
-    const wxPoint pt = evt.GetPosition() - GetClientAreaOrigin();
+    const wxPoint pt = evt.GetPosition();
     m_swx->DoLeftButtonDown(Point(pt.x, pt.y), m_stopWatch.Time(),
                             evt.ShiftDown(), evt.ControlDown(), evt.AltDown(), evt.MetaDown());
 }
 
 void ibStyledTextCtrl::OnMouseRightDown(wxMouseEvent& evt) {
     SetFocus();
-    const wxPoint pt = evt.GetPosition() - GetClientAreaOrigin();
+    const wxPoint pt = evt.GetPosition();
     m_swx->DoRightButtonDown(Point(pt.x, pt.y), m_stopWatch.Time(),
                              evt.ShiftDown(), evt.ControlDown(), evt.AltDown(), evt.MetaDown());
     // We need to call evt.Skip() to allow generating EVT_CONTEXT_MENU
@@ -6131,19 +6136,19 @@ void ibStyledTextCtrl::OnMouseRightDown(wxMouseEvent& evt) {
 }
 
 void ibStyledTextCtrl::OnMouseMove(wxMouseEvent& evt) {
-    const wxPoint pt = evt.GetPosition() - GetClientAreaOrigin();
+    const wxPoint pt = evt.GetPosition();
     m_swx->DoLeftButtonMove(Point(pt.x, pt.y), m_stopWatch.Time(),
                             evt.ShiftDown(), evt.ControlDown(), evt.AltDown(), evt.MetaDown());
 }
 
 void ibStyledTextCtrl::OnMouseLeftUp(wxMouseEvent& evt) {
-    const wxPoint pt = evt.GetPosition() - GetClientAreaOrigin();
+    const wxPoint pt = evt.GetPosition();
     m_swx->DoLeftButtonUp(Point(pt.x, pt.y), m_stopWatch.Time(),
                           evt.ShiftDown(), evt.ControlDown(), evt.AltDown(), evt.MetaDown());
 }
 
 void ibStyledTextCtrl::OnMouseMiddleUp(wxMouseEvent& evt) {
-    const wxPoint pt = evt.GetPosition() - GetClientAreaOrigin();
+    const wxPoint pt = evt.GetPosition();
     m_swx->DoMiddleButtonUp(Point(pt.x, pt.y));
 }
 

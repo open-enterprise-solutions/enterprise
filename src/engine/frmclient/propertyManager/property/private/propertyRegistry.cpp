@@ -1,16 +1,16 @@
 #include "propertyRegistry.h"
 
-#include <wx/propgrid/props.h>   // wxStringProperty — what a property of no registered type is shown by
+#include "deskgui/univ/propgrid/props.h"   // ibStringProperty — what a property of no registered type is shown by
 
 namespace {
 
 // A PROPERTY OF NO REGISTERED TYPE — a string, read-only, as it reads. A property is never dropped, and never guessed
 // from its shape: a type nobody taught the client says what it holds, and shows that it is not done.
-wxPGProperty* CreateAsString(ibBackendProperty* property)
+ibPGProperty* CreateAsString(ibBackendProperty* property)
 {
-	wxPGProperty* const shown = new wxStringProperty(property->GetLabel(), property->GetName(),
+	ibPGProperty* const shown = new ibStringProperty(property->GetLabel(), property->GetName(),
 		property->GetValue().GetString());
-	shown->ChangeFlag(wxPGFlags::ReadOnly, true);
+	shown->ChangeFlag(ibPGFlags::ReadOnly, true);
 	return shown;
 }
 
@@ -29,9 +29,9 @@ void ibPropertyRegistry::Register(const wxString& type, ibPropertyMaker maker)
 	GetEntries()[type] = std::move(maker);
 }
 
-wxPGProperty* ibPropertyRegistry::Create(ibBackendProperty* property)
+ibPGProperty* ibPropertyRegistry::Create(ibBackendProperty* property)
 {
-	wxPGProperty* result = nullptr;
+	ibPGProperty* result = nullptr;
 	const auto found = GetEntries().find(property->GetType());
 	if (found != GetEntries().end())
 		result = found->second(property);
@@ -40,15 +40,15 @@ wxPGProperty* ibPropertyRegistry::Create(ibBackendProperty* property)
 
 	result->SetHelpString(property->GetHelp());
 	if (!property->IsEditable())
-		result->ChangeFlag(wxPGFlags::ReadOnly, true);
+		result->ChangeFlag(ibPGFlags::ReadOnly, true);
 	return result;
 }
 
-wxPGChoices ibPropertyRegistry::GetChoices(ibBackendProperty* property)
+ibPGChoices ibPropertyRegistry::GetChoices(ibBackendProperty* property)
 {
 	ibPropertyChoiceList list;
 	property->GetValueList(list);
-	wxPGChoices choices;
+	ibPGChoices choices;
 	for (unsigned int index = 0; index < list.GetCount(); ++index)
 		choices.Add(list.GetLabel(index), static_cast<int>(list.GetId(index)));
 	return choices;

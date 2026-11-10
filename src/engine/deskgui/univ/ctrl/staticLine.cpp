@@ -43,6 +43,10 @@
 // ibStaticLine
 // ----------------------------------------------------------------------------
 
+wxBEGIN_EVENT_TABLE(ibStaticLine, ibControl)
+    EVT_PAINT(ibStaticLine::OnPaint)
+wxEND_EVENT_TABLE()
+
 bool ibStaticLine::Create(wxWindow *parent,
                           wxWindowID id,
                           const wxPoint &pos,
@@ -60,24 +64,15 @@ bool ibStaticLine::Create(wxWindow *parent,
     return true;
 }
 
-void ibStaticLine::DoDraw(ibControlRenderer *renderer)
+void ibStaticLine::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
-    // we never have a border, so don't call the base class version whcih draws
-    // it
-    wxSize sz = GetSize();
-    wxCoord x2, y2;
-    if ( IsVertical() )
-    {
-        x2 = 0;
-        y2 = sz.y;
-    }
-    else // horizontal
-    {
-        x2 = sz.x;
-        y2 = 0;
-    }
+    ibThemePaintDC dc(this);
 
-    renderer->DrawLine(0, 0, x2, y2);
+    const wxSize sz = GetSize();
+    if ( IsVertical() )
+        GetRenderer()->DrawVerticalLine(dc, 0, 0, sz.y);
+    else // horizontal
+        GetRenderer()->DrawHorizontalLine(dc, 0, 0, sz.x);
 }
 
 wxIMPLEMENT_DYNAMIC_CLASS(ibStaticLine, ibControl);

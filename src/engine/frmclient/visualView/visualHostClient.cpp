@@ -700,10 +700,10 @@ void ibVisualHostClient::Clear()
 	m_shape.clear();
 }
 
-ibValueFrame* ibVisualHostClient::GetObjectBase(const wxObject* wxobject) const
+ibValueFrame* ibVisualHostClient::GetObjectBase(const wxObject* ibobject) const
 {
 	for (const auto& [id, control] : m_controls) {
-		if (control->GetWindow() == wxobject)
+		if (control->GetWindow() == ibobject)
 			return control;
 	}
 	return nullptr;

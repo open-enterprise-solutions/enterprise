@@ -341,52 +341,45 @@ bool ibWindow::TryBefore(wxEvent& event)
         }
 #endif // wxUSE_SCROLLBAR
 
-        DoDrawBorder(dc, rect);
+        DrawBorder(dc, rect);
     }
 
     return wxWindow::TryBefore(event);
 }
 
+void ibWindow::DrawBorder(wxDC& dc, const wxRect& rect)
+{
+    m_renderer->DrawBorder(dc, GetBorder(), rect, GetStateFlags());
+}
+
+// SEAM vs univ: the paint of a window drawing nothing of its own - a panel, a frame: its background. A control paints
+// by its own event (its OnPaint on an ibThemePaintDC, the background already in it), its frame drawn before it
+// (TryBefore).
+// The canon's drawing doors (DoDrawBackground, DoDraw over an ibControlRenderer) are gone.
 void ibWindow::OnPaint(wxPaintEvent& event)
 {
     if ( !m_renderer )
     {
         // it is a native control which paints itself
         event.Skip();
+        return;
     }
-    else
-    {
-        // hide the caret for the WHOLE pass including the buffer blit: the
-        // system caret XORs the screen directly, and a blit over a shown
-        // caret desynchronizes it — stale inverted strokes stay behind
-        // (declared before the dc so it is destroyed AFTER the blit)
-#if wxUSE_CARET
-        wxCaretSuspend cs(this);
-#endif // wxUSE_CARET
 
-        // single buffered pass: background (the erase pass is disabled by
-        // wxBG_STYLE_PAINT in Init()) + the control itself; the buffer covers
-        // the client area only (GetClientSize: without the scrollbars), the
-        // corner between them is the border's (TryBefore)
-        // SEAM vs univ: wxBufferedDC over the paint DC, as wxBufferedPaintDC builds it - not wxAutoBufferedPaintDC, which
-        // asserts wxBG_STYLE_PAINT, and a window taking the erase back paints here too (the grid's outline corner,
-        // ibGridOutlineCornerWindow: wxBG_STYLE_ERASE from ibGridSubwindow, no paint of its own)
-        wxPaintDC dcPaint(this);
+    // one buffered pass (the erase pass is disabled by wxBG_STYLE_PAINT in Init()); the buffer covers the client area
+    // only (GetClientSize: without the scrollbars), the corner between them is the border's (TryBefore)
+    // SEAM vs univ: wxBufferedDC over the paint DC, as wxBufferedPaintDC builds it - not wxAutoBufferedPaintDC, which
+    // asserts wxBG_STYLE_PAINT, and a window taking the erase back (wxBG_STYLE_ERASE) with no paint of its own paints
+    // here too
+    wxPaintDC dcPaint(this);
 #if wxALWAYS_NATIVE_DOUBLE_BUFFER
-        wxDC& dc = dcPaint;
+    wxDC& dc = dcPaint;
 #else
-        wxBufferedDC dc(&dcPaint, GetClientSize());
-        // the window's font and colours, as wxBufferedPaintDC takes them
-        dc.GetImpl()->InheritAttributes(this);
+    wxBufferedDC dc(&dcPaint, GetClientSize());
+    // the window's font and colours, as wxBufferedPaintDC takes them
+    dc.GetImpl()->InheritAttributes(this);
 #endif
 
-        DoDrawBackground(dc);
-
-        ibControlRenderer renderer(this, dc, m_renderer);
-
-        // draw the control
-        DoDraw(&renderer);
-    }
+    EraseBackground(dc, wxRect(GetSize()));
 }
 
 // the event handler executed when the window background must be painted
@@ -407,20 +400,13 @@ void ibWindow::OnErase(wxEraseEvent& event)
     }
 
     // the corner between the scrollbars is the border's (TryBefore)
-    DoDrawBackground(*event.GetDC());
+    EraseBackground(*event.GetDC(), wxRect(GetSize()));
 }
 
-bool ibWindow::DoDrawBackground(wxDC& dc)
+void ibWindow::EraseBackground(wxDC& dc, const wxRect& rect)
 {
-    wxRect rect;
-
-    wxSize size = GetSize();  // Why not GetClientSize() ?
-    rect.x = 0;
-    rect.y = 0;
-    rect.width = size.x;
-    rect.height = size.y;
-
-    // SEAM vs univ: the parent may be a native host window (frame/dialog)
+    // SEAM vs univ: a transparent window's background is its parent's, drawn under it here (the canon's
+    // DoDrawBackground, the hook gone with the drawing doors); the parent may be a native host window (frame/dialog)
     // which has no univ EraseBackground — fall back to drawing ourselves then
     ibWindow * const parent = dynamic_cast<ibWindow*>(GetParent());
     if ( HasTransparentBackground() && !UseBgCol() && parent )
@@ -444,34 +430,25 @@ bool ibWindow::DoDrawBackground(wxDC& dc)
         dc.SetLogicalOrigin( x, y );
 
         // Adjust draw rect
-        rect.x = pos.x;
-        rect.y = pos.y;
+        wxRect rectParent = rect;
+        rectParent.Offset(pos);
 
         // Let parent draw the background
-        parent->EraseBackground( dc, rect );
+        parent->EraseBackground( dc, rectParent );
 
         // Restore DC logical origin
         dc.SetLogicalOrigin( org_x, org_y );
 #endif // !__WXDFB__
-    }
-    else
-    {
-        // Draw background ourselves
-        EraseBackground( dc, rect );
+        return;
     }
 
-    return true;
-}
-
-void ibWindow::EraseBackground(wxDC& dc, const wxRect& rect)
-{
     if ( GetBackgroundBitmap().IsOk() )
     {
         // Get the bitmap and the flags
         int alignment;
         wxStretch stretch;
         wxBitmap bmp = GetBackgroundBitmap(&alignment, &stretch);
-        ibControlRenderer::DrawBitmap(dc, bmp, rect, alignment, stretch);
+        ibRenderer::DrawBitmap(dc, bmp, rect, alignment, stretch);
     }
     else
     {
@@ -480,22 +457,6 @@ void ibWindow::EraseBackground(wxDC& dc, const wxRect& rect)
         m_renderer->DrawBackground(dc, wxTHEME_BG_COLOUR(this),
                                    rect, GetStateFlags());
     }
-}
-
-void ibWindow::DoDrawBorder(wxDC& dc, const wxRect& rect)
-{
-    // draw outline unless the update region is enitrely inside it in which
-    // case we don't need to do it
-#if 0 // doesn't seem to work, why?
-    if ( wxRegion(rect).Contains(GetUpdateRegion().GetBox()) != wxInRegion )
-#endif
-    {
-        m_renderer->DrawBorder(dc, GetBorder(), rect, GetStateFlags());
-    }
-}
-
-void ibWindow::DoDraw(ibControlRenderer * WXUNUSED(renderer))
-{
 }
 
 void ibWindow::Refresh(bool eraseBackground, const wxRect *rect)

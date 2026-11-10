@@ -284,6 +284,9 @@ public:
     virtual wxSize GetMinSize() const override;
     virtual wxSize GetMaxSize() const override;
 
+    // a field lives on the content colour, not on the chrome
+    virtual bool HasContentBackground() const override { return true; }
+
     // more readable flag testing methods
     bool IsPassword() const { return HasFlag(wxTE_PASSWORD); }
     bool WrapLines() const { return m_wrapLines; }
@@ -321,12 +324,16 @@ protected:
     virtual wxBorder GetDefaultBorder() const override { return wxBORDER_SUNKEN; }
 
     // override base class methods
-    virtual void DoDrawBorder(wxDC& dc, const wxRect& rect) override;
-    virtual void DoDraw(ibControlRenderer *renderer) override;
+    virtual void DrawBorder(wxDC& dc, const wxRect& rect) override;
 
     // calc the size from the text extent
     virtual wxSize DoGetBestClientSize() const override;
     virtual wxSize DoGetSizeFromTextSize(int xlen, int ylen = -1) const override;
+
+    // SEAM vs univ: the margins of wxMSW's field - the horizontal one stands on both sides of the text in place of the
+    // theme's padding (a grid's editor sets none: its text where the cell drew it), a vertical one it has not
+    virtual bool DoSetMargins(const wxPoint& pt) override;
+    virtual wxPoint DoGetMargins() const override;
 
     // implements Set/ChangeValue()
     virtual void DoSetValue(const wxString& value, int flags = 0) override;
@@ -337,6 +344,13 @@ protected:
     // reading the text from the event (the configuration tree's search, the help's). Its own get it here, before any
     // handler.
     virtual bool TryBefore(wxEvent& event) override;
+
+#if wxUSE_ACCEL
+    // SEAM vs univ: the keys used for editing the text are the field's, not an accelerator's - wxTextCtrlBase's own
+    // (FORKED from src/common/textcmn.cpp; this field is not derived from it): the window's Ctrl+V went to the active
+    // view and pasted into its editor, the Watch's name field got nothing
+    virtual bool ClaimsKeyBeforeAccelerator(const wxKeyEvent& event, int command) const override;
+#endif // wxUSE_ACCEL
 
     // common part of all ctors
     void Init();
@@ -513,6 +527,7 @@ protected:
 
     // event handlers
     // --------------
+    void OnPaint(wxPaintEvent& event);
     void OnChar(wxKeyEvent& event);
     void OnSize(wxSizeEvent& event);
 
@@ -618,6 +633,9 @@ private:
 
     // the rectangle (in client coordinates) to draw text inside
     wxRect m_rectText;
+
+    // the margin SetMargins gave the text on its left and right, -1 while the theme's padding stands
+    wxCoord m_marginText = -1;
 
     // the height of one line (cached value of GetCharHeight)
     wxCoord m_heightLine;

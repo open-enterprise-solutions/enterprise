@@ -21,7 +21,7 @@
 #include <vector>
 
 class wxAuiToolBar;
-class wxDatePickerCtrl;
+class ibDatePickerCtrl;
 class ibChoice;
 class ibTextCtrl;
 class wxCheckBox;
@@ -159,8 +159,8 @@ private:
 	void OnTimer(wxTimerEvent& event);
 
 	// Filter strip
-	wxDatePickerCtrl* m_fromDate     = nullptr;
-	wxDatePickerCtrl* m_toDate       = nullptr;
+	ibDatePickerCtrl* m_fromDate     = nullptr;
+	ibDatePickerCtrl* m_toDate       = nullptr;
 	ibChoice*         m_levelChoice  = nullptr;
 	ibChoice*         m_sourceChoice = nullptr;
 	ibTextCtrl*       m_userText     = nullptr;

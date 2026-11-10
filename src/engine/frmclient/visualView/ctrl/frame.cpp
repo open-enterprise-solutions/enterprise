@@ -53,7 +53,7 @@ bool ibValueFrame::Fetch()
 	return m_host.Fetch(this);
 }
 
-void ibValueFrame::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
+void ibValueFrame::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
 {
 	m_host.ModifyProperty(property, oldValue, newValue);
 }
@@ -87,7 +87,7 @@ ibValueFrame* ibValueFrame::FindControlByName(const wxString& controlName) const
 	return valueForm != nullptr ? DoFindControlByName(controlName, valueForm) : nullptr;
 }
 
-bool ibValueControl::OnPropertyChanging(ibProperty* property, const wxVariant& newValue)
+bool ibValueControl::OnPropertyChanging(ibProperty* property, const ibVariant& newValue)
 {
 	if (property->GetName() == ibProtocol::ibSchema::ibProperties::Name && FindControlByName(newValue.GetString()) != nullptr)
 		return false;

@@ -1,7 +1,7 @@
 #ifndef __PROPERTY_REGISTRY_H__
 #define __PROPERTY_REGISTRY_H__
 
-#include <wx/propgrid/propgrid.h>
+#include "deskgui/univ/propgrid/propgrid.h"
 
 #include <functional>
 #include <map>
@@ -15,11 +15,11 @@
 //
 // A property shown is the server's (ibPropertySerializable — a metaobject's, filled from its rows): its TYPE (GetType) is the
 // class the server names it by (ibPropertyBoolean; a template without its arguments: ibPropertyEnum), its value is as the server
-// stores it (GetValue: the one variant, ibVariantDataSerializable — its node a scalar, or a composite), its choices are
+// stores it (GetValue: the one variant, ibVariantSerializable — its node a scalar, or a composite), its choices are
 // what it may be set to (GetValueList). The client is told, per type, which widget shows it; the widget takes the value
 // and gives back the same property's value.
 //
-//   ibPropertyRegistry::Register(wxT("ibPropertyBoolean"), [](ibBackendProperty* property) -> wxPGProperty* {
+//   ibPropertyRegistry::Register(wxT("ibPropertyBoolean"), [](ibBackendProperty* property) -> ibPGProperty* {
 //       return new ibPGBooleanProperty(property->GetLabel(), property->GetName(), property->GetValue());
 //   });
 //
@@ -31,14 +31,14 @@ public:
 
 	// The widget showing the property — a window it opens asks the property's owner what it needs (a translated
 	// string's languages: the configuration the owner holds).
-	using ibPropertyMaker = std::function<wxPGProperty* (ibBackendProperty* property)>;
+	using ibPropertyMaker = std::function<ibPGProperty* (ibBackendProperty* property)>;
 
 	static void Register(const wxString& type, ibPropertyMaker maker);
 
 	// The widget for the property — its help and its read-only already said.
-	static wxPGProperty* Create(ibBackendProperty* property);
+	static ibPGProperty* Create(ibBackendProperty* property);
 	// The choices it offers, as the grid lists them: label, id.
-	static wxPGChoices GetChoices(ibBackendProperty* property);
+	static ibPGChoices GetChoices(ibBackendProperty* property);
 
 private:
 

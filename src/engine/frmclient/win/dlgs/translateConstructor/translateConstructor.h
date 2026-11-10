@@ -5,7 +5,7 @@
 // The TRANSLATION CONSTRUCTOR — one box per language over a translated text.
 ////////////////////////////////////////////////////////////////////////////
 //
-// ONE WINDOW, TWO WAYS IN. A caption in the property grid (wxTStringProperty) and a string literal
+// ONE WINDOW, TWO WAYS IN. A caption in the property grid (ibTStringProperty) and a string literal
 // in a module (the code editor's menu, beside the query constructor) hold the same thing - an
 // ibTranslateString, written `en = 'Total'; ru = '...';` - so both open this window over it. Two
 // windows would be two rules about what OK does to a text, and the grid's own already had three

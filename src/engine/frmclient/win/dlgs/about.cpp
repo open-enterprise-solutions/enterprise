@@ -12,9 +12,8 @@ static const wxString s_strContributors =
 
 namespace {
 
-// Compact read-only value field: no border, transparent background, fills
-// the 2nd column of the info grid. Looks like a label but the user can still
-// copy text out of it.
+// Compact read-only value field: no border, the theme's field colour, fills
+// the 2nd column of the info grid; the user can copy text out of it.
 ibTextCtrl* AddInfoRow(wxWindow* parent, wxFlexGridSizer* grid, const wxString& label, const wxString& value)
 {
 	ibStaticText* lbl = new ibStaticText(parent, wxID_ANY, label + wxT(":"));
@@ -22,7 +21,6 @@ ibTextCtrl* AddInfoRow(wxWindow* parent, wxFlexGridSizer* grid, const wxString& 
 
 	ibTextCtrl* field = new ibTextCtrl(parent, wxID_ANY, value,
 		wxDefaultPosition, wxDefaultSize, wxTE_READONLY | wxBORDER_NONE);
-	field->SetBackgroundColour(parent->GetBackgroundColour());
 	grid->Add(field, 1, wxEXPAND);
 
 	return field;
@@ -60,12 +58,10 @@ ibDialogAbout::ibDialogAbout(wxWindow* parent, const ibProtocolNode& shown, int 
 		wxT("(c) 2026 OES community"),
 		wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER_HORIZONTAL);
 	m_staticTextCommunity->SetFont(linkFont);
-	m_staticTextCommunity->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_HOTLIGHT));
-	m_staticTextCommunity->SetCursor(wxCURSOR_HAND);
-	m_staticTextCommunity->Bind(wxEVT_LEFT_UP,
-		[](wxMouseEvent& event) {
+	m_staticTextCommunity->SetHyperlink();
+	m_staticTextCommunity->Bind(wxEVT_BUTTON,
+		[](wxCommandEvent&) {
 			wxLaunchDefaultBrowser(wxT("https://github.com/open-enterprise-solutions/enterprise"));
-			event.Skip();
 		});
 	root->Add(m_staticTextCommunity, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, kPad);
 
@@ -111,7 +107,6 @@ ibDialogAbout::ibDialogAbout(wxWindow* parent, const ibProtocolNode& shown, int 
 			ibTextCtrl* list = new ibTextCtrl(pluginsSizer->GetStaticBox(), wxID_ANY,
 				text, wxDefaultPosition, FromDIP(wxSize(-1, 48)),
 				wxTE_MULTILINE | wxTE_READONLY | wxBORDER_NONE);
-			list->SetBackgroundColour(pluginsSizer->GetStaticBox()->GetBackgroundColour());
 			pluginsSizer->Add(list, 1, wxEXPAND | wxALL, kPad);
 
 			root->Add(pluginsSizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, kPad);
@@ -126,7 +121,6 @@ ibDialogAbout::ibDialogAbout(wxWindow* parent, const ibProtocolNode& shown, int 
 	m_textCtrlContributors = new ibTextCtrl(thanksSizer->GetStaticBox(), wxID_ANY,
 		s_strContributors, wxDefaultPosition, FromDIP(wxSize(-1, 64)),
 		wxTE_MULTILINE | wxTE_READONLY | wxBORDER_NONE);
-	m_textCtrlContributors->SetBackgroundColour(thanksSizer->GetStaticBox()->GetBackgroundColour());
 	thanksSizer->Add(m_textCtrlContributors, 1, wxEXPAND | wxALL, kPad);
 
 	root->Add(thanksSizer, 1, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, kPad);

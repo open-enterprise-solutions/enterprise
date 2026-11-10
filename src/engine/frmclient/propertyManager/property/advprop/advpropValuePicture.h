@@ -3,19 +3,19 @@
 
 #include <wx/bmpbndl.h>
 #include <wx/dc.h>
-#include <wx/propgrid/propgrid.h>
+#include "deskgui/univ/propgrid/propgrid.h"
 
 // ⭐ A VALUE'S PICTURE IS READ OFF THE VALUE WHEN THE GRID DRAWS, not stored in the property.
 //
-// wxPGProperty::SetValueImage refuses a property that is not on a grid yet ("Cannot set image for
+// ibPGProperty::SetValueImage refuses a property that is not on a grid yet ("Cannot set image for
 // detached property"), and ours are made — and given their value — before the inspector appends them:
 // the type's picture was set from its constructor's SetValue, which asserted in Debug and set no picture
 // at all in Release (2026-10-01). The grid asks OnMeasureImage on every paint and OnCustomPaint to draw,
 // so a property that answers those two from its own value has the right picture before it is attached,
-// when it is, and after every change. These are the two answers, given the way wxPGProperty gives them
+// when it is, and after every change. These are the two answers, given the way ibPGProperty gives them
 // for the bundle it stores.
 
-inline wxSize ibMeasureValuePicture(const wxBitmapBundle& picture, const wxPropertyGrid* grid)
+inline wxSize ibMeasureValuePicture(const wxBitmapBundle& picture, const ibPropertyGrid* grid)
 {
 	if (!picture.IsOk())
 		return wxSize(0, 0);
@@ -26,7 +26,7 @@ inline wxSize ibMeasureValuePicture(const wxBitmapBundle& picture, const wxPrope
 	return wxSize(wxRound(scale * bmp.GetWidth()), wxDefaultCoord);
 }
 
-inline void ibPaintValuePicture(const wxBitmapBundle& picture, wxDC& dc, const wxRect& rect, wxPGPaintData& paintData)
+inline void ibPaintValuePicture(const wxBitmapBundle& picture, wxDC& dc, const wxRect& rect, ibPGPaintData& paintData)
 {
 	if (!picture.IsOk())
 		return;

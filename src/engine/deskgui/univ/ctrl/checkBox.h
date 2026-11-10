@@ -134,7 +134,6 @@ protected:
     virtual void DoSet3StateValue(wxCheckBoxState state);
     virtual wxCheckBoxState DoGet3StateValue() const;
 
-    virtual void DoDraw(ibControlRenderer *renderer) override;
     virtual wxSize DoGetBestClientSize() const override;
 
     // get the size of the bitmap using either the current one or the default
@@ -143,6 +142,8 @@ protected:
 
     // common part of all ctors
     void Init();
+
+    void OnPaint(wxPaintEvent& event);
 
     // send command event notifying about the checkbox state change
     virtual void SendEvent();
@@ -175,6 +176,7 @@ private:
     bool m_isEditable = true;
 
     wxDECLARE_DYNAMIC_CLASS(ibCheckBox);
+    wxDECLARE_EVENT_TABLE();
 };
 
 #endif // _DESKGUI_UNIV_CHECKBOX_H_

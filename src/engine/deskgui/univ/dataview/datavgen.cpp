@@ -36,7 +36,8 @@
 #include <wx/popupwin.h>
 #include <wx/renderer.h>
 #include "deskgui/univ/renderer.h"
-#include "deskgui/univ/theme.h"  // the toggle's box: the theme's renderer
+#include "deskgui/univ/theme.h"  // the toggle's box and the selection: the theme's renderer
+#include "deskgui/univ/colourScheme.h"  // the selection's colours: the theme's
 #include "deskgui/univ/ctrl/textCtrl.h"  // the text renderer's editor
 #include <wx/graphics.h>   // the busy badge's arc (antialiased, alpha)
 #include <wx/dcbuffer.h>
@@ -3673,7 +3674,7 @@ wxRect ibDataViewCtrl::GetItemRect(const ibDataViewItem& item,
 	{
 		ibDataViewTreeNode* node = GetTreeNodeByRow(row);
 		indent = GetIndent() * node->GetIndentLevel();
-		indent += wxRendererNative::Get().GetExpanderSize(this).GetWidth();
+		indent += GetExpanderWidth();
 	}
 
 	const int lineStart  = GetLineStart(row);
@@ -5550,7 +5551,7 @@ ibDataViewCtrl::DropItemInfo ibDataViewCtrl::GetDropItemInfo(const wxCoord x, co
 			if (GetColumnLayout().GetBodyPlacement(expander, expanderPlace))
 				xStart = expanderPlace.x;
 
-			const int expanderWidth = wxRendererNative::Get().GetExpanderSize(this).GetWidth();
+			const int expanderWidth = GetExpanderWidth();
 
 			int level = node->GetIndentLevel();
 
@@ -5723,7 +5724,7 @@ wxBitmap ibDataViewCtrl::CreateItemBitmap(unsigned int row, int& indent)
 	{
 		ibDataViewTreeNode* node = GetTreeNodeByRow(row);
 		indent = GetIndent() * node->GetIndentLevel();
-		indent += wxRendererNative::Get().GetExpanderSize(this).GetWidth();
+		indent += GetExpanderWidth();
 	}
 	width -= indent;
 
@@ -7279,7 +7280,7 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 								clipRect.width = colRect.x;
 
 								wxDCClipper clip(dc, clipRect);
-								wxRendererNative::Get().DrawItemSelectionRect
+								ibThemeEngine::Get()->GetRenderer()->DrawItemSelectionRect
 								(
 									this,
 									dc,
@@ -7295,7 +7296,7 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 								clipRect.width = rowRect.width - clipRect.x;
 
 								wxDCClipper clip(dc, clipRect);
-								wxRendererNative::Get().DrawItemSelectionRect
+								ibThemeEngine::Get()->GetRenderer()->DrawItemSelectionRect
 								(
 									this,
 									dc,
@@ -7305,7 +7306,7 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 							}
 
 							// Draw column selection rect
-							wxRendererNative::Get().DrawItemSelectionRect
+							ibThemeEngine::Get()->GetRenderer()->DrawItemSelectionRect
 							(
 								this,
 								dc,
@@ -7342,7 +7343,7 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 			{
 				if (m_selectionMode == ibDataViewSelectionMode::ibDataViewSelectRow)
 				{
-					wxRendererNative::Get().DrawItemSelectionRect
+					ibThemeEngine::Get()->GetRenderer()->DrawItemSelectionRect
 					(
 						this,
 						dc,
@@ -7359,7 +7360,7 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 					// noticeable on light themes and barely there on
 					// dark.
 					{
-						const wxColour hl = wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT);
+						const wxColour hl = wxTHEME_COLOUR(HIGHLIGHT);
 						const wxColour bg = GetBackgroundColour();
 						const wxColour faint(
 							(hl.Red()   * 15 + bg.Red()   * 85) / 100,
@@ -7388,7 +7389,7 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 						{
 							// Strong native selection rect on the
 							// focused cell only.
-							wxRendererNative::Get().DrawItemSelectionRect
+							ibThemeEngine::Get()->GetRenderer()->DrawItemSelectionRect
 							(
 								this,
 								dc,
@@ -7403,7 +7404,7 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 				}
 				else
 				{
-					wxRendererNative::Get().DrawItemSelectionRect
+					ibThemeEngine::Get()->GetRenderer()->DrawItemSelectionRect
 					(
 						this,
 						dc,
@@ -7425,7 +7426,7 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 		int rect_h = GetLineHeight(m_dropItemInfo.m_row);
 		wxRect rect(x_start, rect_y, x_last - x_start, rect_h);
 
-		wxRendererNative::Get().DrawItemSelectionRect(this, dc, rect, wxCONTROL_SELECTED | wxCONTROL_FOCUSED);
+		ibThemeEngine::Get()->GetRenderer()->DrawItemSelectionRect(this, dc, rect, wxCONTROL_SELECTED | wxCONTROL_FOCUSED);
 	}
 #endif // wxUSE_DRAG_AND_DROP
 
@@ -7448,7 +7449,7 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 				grpCaptionColX += cc->GetWidth();
 		}
 	}
-	const int grpExpanderWidth = wxRendererNative::Get().GetExpanderSize(this).GetWidth();
+	const int grpExpanderWidth = GetExpanderWidth();
 
 	// redraw all cells for all rows which must be repainted and all columns
 	wxRect cell_rect;
@@ -7530,14 +7531,12 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 				if (m_viewMode == ibDataViewViewMode::ibDataViewTree)
 					indent = GetIndent() * node->GetIndentLevel();
 
-				// Get expander size
-				wxSize expSize = wxRendererNative::Get().GetExpanderSize(this);
-
 				// draw expander if needed
 				if (node->HasChildren())
 				{
+					const wxSize expSize = ibThemeEngine::Get()->GetRenderer()->GetExpanderSize(this);
 					wxRect rect = cell_rect;
-					rect.x += indent;
+					rect.x += indent + (GetExpanderWidth() - expSize.GetWidth()) / 2;   // centred in its slot
 					rect.y += (cell_rect.GetHeight() - expSize.GetHeight()) / 2; // center vertically
 					rect.width = expSize.GetWidth();
 					rect.height = expSize.GetHeight();
@@ -7552,10 +7551,10 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 					// happen if the column is very narrow)
 					wxDCClipper clip(dc, cell_rect);
 
-					wxRendererNative::Get().DrawTreeItemButton(this, dc, rect, flag);
+					ibThemeEngine::Get()->GetRenderer()->DrawTreeItemButton(this, dc, rect, flag);
 				}
 
-				indent += expSize.GetWidth();
+				indent += GetExpanderWidth();
 
 				// force the expander column to VERTICAL-center, but PRESERVE the renderer's HORIZONTAL
 				// alignment: SetValue picks it per value type (a numeric line-number column right-aligns),
@@ -7571,8 +7570,8 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 				if (item == m_dropItemInfo.m_row)
 				{
 					dropItemRect = cell_rect;
-					dropItemRect.x += expSize.GetWidth();
-					dropItemRect.width -= expSize.GetWidth();
+					dropItemRect.x += GetExpanderWidth();
+					dropItemRect.width -= GetExpanderWidth();
 					if (m_dropItemInfo.m_indentLevel >= 0)
 					{
 						int hintIndent = GetIndent() * m_dropItemInfo.m_indentLevel;
@@ -7667,13 +7666,13 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 					// Draw through the SAME path a data cell uses (ibDataViewCustomRendererBase::WXCallRender ->
 					// RenderText): set the DC colour + font like the cell does (row attribute wins, else the control's
 					// own foreground / font — NOT the system default, which the form may override), then paint via the
-					// NATIVE wxRendererNative::DrawItemText with the SELECTED flag — it owns the selection-colour logic
-					// (theme-aware), so a highlighted group header matches a highlighted detail cell exactly, rather
+					// theme's DrawItemText (ibThemeRenderer) with the SELECTED flag — it owns the selection-colour logic,
+					// so a highlighted group header matches a highlighted detail cell exactly, rather
 					// than a hand-picked HIGHLIGHTTEXT. The DC font is set explicitly (a cell above may have left a
 					// different one on the DC).
 					ibDataViewItemAttr attr;
 					GetModel()->GetAttr(gitem, expander->GetModelColumn(), attr);
-					const wxColour fg = sel ? wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHTTEXT)
+					const wxColour fg = sel ? wxTHEME_COLOUR(HIGHLIGHT_TEXT)
 					                  : attr.HasColour() ? typeConv::ColourToWxColour(attr.GetColour())
 					                  : GetForegroundColour();
 					int flags = 0;
@@ -7683,7 +7682,7 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 					wxDCClipper     clip(dc, capRect);
 					wxDCFontChanger fontChg(dc, attr.HasFont() ? ibEffectiveFont(attr, GetFont()) : GetFont());
 					dc.SetTextForeground(fg);
-					wxRendererNative::Get().DrawItemText(this, dc, grpCaption, capRect,
+					ibThemeEngine::Get()->GetRenderer()->DrawItemText(this, dc, grpCaption, capRect,
 						wxALIGN_LEFT | wxALIGN_CENTRE_VERTICAL, flags, wxELLIPSIZE_END);
 				}
 			}
@@ -7701,7 +7700,7 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 			rect_y += dropItemRect.height;                    // bottom insert
 
 		wxRect rect(dropItemRect.x, rect_y, dropItemRect.width, insertLineHeight);
-		wxRendererNative::Get().DrawItemSelectionRect(this, dc, rect, wxCONTROL_SELECTED);
+		ibThemeEngine::Get()->GetRenderer()->DrawItemSelectionRect(this, dc, rect, wxCONTROL_SELECTED);
 	}
 #endif // wxUSE_DRAG_AND_DROP
 }
@@ -8123,7 +8122,7 @@ void ibDataViewCtrl::ProcessTableMouseEvent(wxMouseEvent& event, ibDataViewMainW
 
 		int indent = node->GetIndentLevel();
 		itemOffset = GetIndent() * indent;
-		const int expWidth = wxRendererNative::Get().GetExpanderSize(this).GetWidth();
+		const int expWidth = GetExpanderWidth();
 
 		if (node->HasChildren())
 		{
@@ -9390,7 +9389,7 @@ void ibDataViewBusyWindow::OnPaint(wxPaintEvent& WXUNUSED(event))
 	const double turn  = (kTwoPi * m_phase) / kBusySteps;
 	const double sweep = kTwoPi * 0.75;
 
-	wxColour accent = wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT);
+	wxColour accent = wxTHEME_COLOUR(HIGHLIGHT);
 	gc->SetPen(wxPen(wxColour(accent.Red(), accent.Green(), accent.Blue(), 210),
 	                 wxMax(2, static_cast<int>(radius / 4))));
 	gc->SetBrush(*wxTRANSPARENT_BRUSH);

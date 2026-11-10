@@ -99,7 +99,7 @@ public:
 	virtual bool Fetch() override;
 	// One of them edited — the desktop's, told to the editor the form is drawn for (g_visualHostContext there; its host
 	// here, which a designer's host passes on).
-	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
+	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue) override;
 
 	// Its name, as the frame says it (the node's Name).
 	const wxString& GetControlName() const { return m_name; }

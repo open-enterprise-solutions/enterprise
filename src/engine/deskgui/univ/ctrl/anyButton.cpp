@@ -31,6 +31,9 @@
 // implementation
 // ============================================================================
 
+wxBEGIN_EVENT_TABLE(ibAnyButton, ibControl)
+    EVT_PAINT(ibAnyButton::OnPaint)
+wxEND_EVENT_TABLE()
 
 void ibAnyButton::Press()
 {
@@ -139,37 +142,43 @@ wxSize ibAnyButton::DoGetBestClientSize() const
 // drawing
 // ----------------------------------------------------------------------------
 
-void ibAnyButton::DoDraw(ibControlRenderer *renderer)
+void ibAnyButton::EraseBackground(wxDC& dc, const wxRect& rect)
 {
-    // SEAM vs univ: the canon drew DrawButtonBorder here ON TOP of the
-    // STATIC window border (ibWindow::TryBefore) — two flat 1px frames side by
-    // side read as one fat border. The window border is the only frame now
-    // (the theme highlights it for the default/focused button itself).
-    renderer->DrawButtonLabel(m_bitmap, m_marginBmpX, m_marginBmpY);
-}
-
-bool ibAnyButton::DoDrawBackground(wxDC& dc)
-{
-    wxRect rect;
-    wxSize size = GetSize();
-    rect.width = size.x;
-    rect.height = size.y;
-
     if ( GetBackgroundBitmap().IsOk() )
     {
         // get the bitmap and the flags
         int alignment;
         wxStretch stretch;
         wxBitmap bmp = GetBackgroundBitmap(&alignment, &stretch);
-        ibControlRenderer::DrawBitmap(dc, bmp, rect, alignment, stretch);
+        ibRenderer::DrawBitmap(dc, bmp, rect, alignment, stretch);
     }
     else
     {
         m_renderer->DrawButtonSurface(dc, wxTHEME_BG_COLOUR(this),
                                       rect, GetStateFlags());
     }
+}
 
-    return true;
+void ibAnyButton::OnPaint(wxPaintEvent& WXUNUSED(event))
+{
+    ibThemePaintDC dc(this);
+
+    // SEAM vs univ: the canon drew DrawButtonBorder here ON TOP of the
+    // STATIC window border (ibWindow::TryBefore) — two flat 1px frames side by
+    // side read as one fat border. The window border is the only frame now
+    // (the theme highlights it for the default/focused button itself).
+    const wxString label = GetLabelText();
+    if ( label.empty() && !m_bitmap.IsOk() )
+        return;
+
+    wxRect rectLabel(GetClientSize());
+    if ( m_bitmap.IsOk() )
+        rectLabel.Inflate(-m_marginBmpX, -m_marginBmpY);
+
+    dc.SetBackgroundMode(wxBRUSHSTYLE_TRANSPARENT);
+    dc.SetFont(GetFont());
+    dc.SetTextForeground(GetForegroundColour());
+    GetRenderer()->DrawButtonLabel(dc, label, m_bitmap, rectLabel, GetStateFlags(), GetAlignment(), GetAccelIndex());
 }
 
 // ============================================================================

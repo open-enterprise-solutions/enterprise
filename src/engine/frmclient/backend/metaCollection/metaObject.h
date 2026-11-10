@@ -42,7 +42,7 @@ public:
 	// object of this id in the configuration it was opened from: schema Properties, Save. False: refused.
 	bool Send(const ibString& name, const ibDataValue& value) const;
 	// …the value an edit in the inspector gives, the node its variant holds.
-	bool Send(const ibString& name, const wxVariant& value) const;
+	bool Send(const ibString& name, const ibVariant& value) const;
 
 	virtual ibString GetClassName() const override { return ibT("metaObject"); }
 	virtual ibString GetObjectTypeName() const override { return ibT("metaObject"); }
@@ -57,8 +57,8 @@ public:
 
 	// THE INSPECTOR SETS THE VALUE; the object is told. Before — the value it is to take, sent (Send): the server's answer
 	// is the leave, refused the value is not set. After — set: whoever shows it is told it is to be read anew (Cleared).
-	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue) override;
-	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
+	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue) override;
+	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue) override;
 
 	// ⭐ THE ROWS OF THE OBJECT OF THAT TAB AND ID, RECEIVED WITHOUT ASKING — shown beside an answer (an edit's, a new
 	// object's: the frame's Properties), or read before: true while the frame stays (ibFrontendMainFrame::GetFrameNumber),

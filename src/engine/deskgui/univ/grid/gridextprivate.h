@@ -15,8 +15,6 @@
 
 #if wxUSE_GRID
 
-#include "wx/headerctrl.h"
-
 // for ibGridOperations
 #include "gridextsel.h"
 
@@ -36,233 +34,6 @@ WX_DECLARE_HASH_MAP_WITH_DECL(wxLongLong_t, ibGridCellAttr*,
 // ----------------------------------------------------------------------------
 // private classes
 // ----------------------------------------------------------------------------
-
-// header column providing access to the column information stored in ibGrid
-// via wxHeaderColumn interface
-class ibGridHeaderColumn : public wxHeaderColumn
-{
-public:
-	ibGridHeaderColumn(ibGrid* grid, int col)
-		: m_grid(grid),
-		m_col(col)
-	{
-	}
-
-	virtual wxString GetTitle() const wxOVERRIDE { return m_grid->GetColLabelValue(m_col); }
-	virtual wxBitmap GetBitmap() const wxOVERRIDE { return wxNullBitmap; }
-	virtual wxBitmapBundle GetBitmapBundle() const wxOVERRIDE { return wxBitmapBundle(); }
-	virtual int GetWidth() const wxOVERRIDE { return m_grid->GetColSize(m_col); }
-	virtual int GetMinWidth() const wxOVERRIDE { return m_grid->GetColMinimalWidth(m_col); }
-	virtual wxAlignment GetAlignment() const wxOVERRIDE
-	{
-		int horz,
-			vert;
-		m_grid->GetColLabelAlignment(&horz, &vert);
-
-		return static_cast<wxAlignment>(horz);
-	}
-
-	virtual int GetFlags() const wxOVERRIDE
-	{
-		// we can't know in advance whether we can sort by this column or not
-		// with ibGrid API so suppose we can by default
-		int flags = wxCOL_SORTABLE;
-		if (m_grid->CanDragColSize(m_col))
-			flags |= wxCOL_RESIZABLE;
-		if (m_grid->CanDragColMove())
-			flags |= wxCOL_REORDERABLE;
-		if (GetWidth() == 0)
-			flags |= wxCOL_HIDDEN;
-
-		return flags;
-	}
-
-	virtual bool IsSortKey() const wxOVERRIDE
-	{
-		return m_grid->IsSortingBy(m_col);
-	}
-
-	virtual bool IsSortOrderAscending() const wxOVERRIDE
-	{
-		return m_grid->IsSortOrderAscending();
-	}
-
-private:
-	// these really should be const but are not because the column needs to be
-	// assignable to be used in a wxVector (in STL build, in non-STL build we
-	// avoid the need for this)
-	ibGrid* m_grid;
-	int m_col;
-};
-
-// header control retrieving column information from the grid
-class ibGridHeaderCtrl : public wxHeaderCtrl
-{
-public:
-	ibGridHeaderCtrl(ibGrid* owner)
-		: wxHeaderCtrl(owner,
-			wxID_ANY,
-			wxDefaultPosition,
-			wxDefaultSize,
-			(owner->CanHideColumns() ? wxHD_ALLOW_HIDE : 0) |
-			(owner->CanDragColMove() ? wxHD_ALLOW_REORDER : 0))
-	{
-		m_inResizing = 0;
-	}
-
-	// Special method to call from ibGrid::DoSetColSize(), see comments there.
-	void UpdateIfNotResizing(unsigned int idx)
-	{
-		if (!m_inResizing)
-			UpdateColumn(idx);
-	}
-
-protected:
-	virtual const wxHeaderColumn& GetColumn(unsigned int idx) const wxOVERRIDE
-	{
-		return m_columns[idx];
-	}
-
-	ibGrid* GetOwner() const { return static_cast<ibGrid*>(GetParent()); }
-
-private:
-	wxMouseEvent GetDummyMouseEvent() const
-	{
-		// make up a dummy event for the grid event to use -- unfortunately we
-		// can't do anything else here
-		wxMouseEvent e;
-		e.SetState(wxGetMouseState());
-		GetOwner()->ScreenToClient(&e.m_x, &e.m_y);
-		return e;
-	}
-
-	// override the base class method to update our m_columns array
-	virtual void OnColumnCountChanging(unsigned int count) wxOVERRIDE
-	{
-		const unsigned countOld = m_columns.size();
-		if (count < countOld)
-		{
-			// just discard the columns which don't exist any more (notice that
-			// we can't use resize() here as it would require the vector
-			// value_type, i.e. ibGridHeaderColumn to be default constructible,
-			// which it is not)
-			m_columns.erase(m_columns.begin() + count, m_columns.end());
-		}
-		else // new columns added
-		{
-			// add columns for the new elements
-			for (unsigned n = countOld; n < count; n++)
-				m_columns.push_back(ibGridHeaderColumn(GetOwner(), n));
-		}
-	}
-
-	// override to implement column auto sizing
-	virtual bool UpdateColumnWidthToFit(unsigned int idx, int WXUNUSED(widthTitle)) wxOVERRIDE
-	{
-		GetOwner()->HandleColumnAutosize(idx, GetDummyMouseEvent());
-
-		return true;
-	}
-
-	// overridden to react to the actions using the columns popup menu
-	virtual void UpdateColumnVisibility(unsigned int idx, bool show) wxOVERRIDE
-	{
-		GetOwner()->SetColSize(idx, show ? wxGRID_AUTOSIZE : 0);
-
-		// as this is done by the user we should notify the main program about
-		// it
-		GetOwner()->SendGridSizeEvent(ibEVT_GRID_COL_SIZE, idx,
-			GetDummyMouseEvent());
-	}
-
-	// overridden to react to the columns order changes in the customization
-	// dialog
-	virtual void UpdateColumnsOrder(const wxArrayInt& order) wxOVERRIDE
-	{
-		GetOwner()->SetColumnsOrder(order);
-	}
-
-
-	// event handlers forwarding wxHeaderCtrl events to ibGrid
-	void OnClick(wxHeaderCtrlEvent& event)
-	{
-		GetOwner()->SendEvent(ibEVT_GRID_LABEL_LEFT_CLICK,
-			-1, event.GetColumn(),
-			GetDummyMouseEvent());
-
-		GetOwner()->DoColHeaderClick(event.GetColumn());
-	}
-
-	void OnDoubleClick(wxHeaderCtrlEvent& event)
-	{
-		if (!GetOwner()->SendEvent(ibEVT_GRID_LABEL_LEFT_DCLICK,
-			-1, event.GetColumn(),
-			GetDummyMouseEvent()))
-		{
-			event.Skip();
-		}
-	}
-
-	void OnRightClick(wxHeaderCtrlEvent& event)
-	{
-		if (!GetOwner()->SendEvent(ibEVT_GRID_LABEL_RIGHT_CLICK,
-			-1, event.GetColumn(),
-			GetDummyMouseEvent()))
-		{
-			event.Skip();
-		}
-	}
-
-	void OnBeginResize(wxHeaderCtrlEvent& event)
-	{
-		GetOwner()->DoHeaderStartDragResizeCol(event.GetColumn());
-
-		event.Skip();
-	}
-
-	void OnResizing(wxHeaderCtrlEvent& event)
-	{
-		// Calling ibGrid method results in a call to our own UpdateColumn()
-		// because it ends up in ibGrid::SetColSize() which must indeed update
-		// the column when it's called by the program -- but in the case where
-		// the size change comes from the column itself, it is useless and, in
-		// fact, harmful, as it results in extra flicker due to the inefficient
-		// implementation of UpdateColumn() in wxMSW wxHeaderCtrl, so skip
-		// calling it from our overridden version by setting this flag for the
-		// duration of this function execution and checking it in our
-		// UpdateIfNotResizing().
-		m_inResizing++;
-
-		GetOwner()->DoHeaderDragResizeCol(event.GetWidth());
-
-		m_inResizing--;
-	}
-
-	void OnEndResize(wxHeaderCtrlEvent& event)
-	{
-		GetOwner()->DoHeaderEndDragResizeCol(event.GetWidth());
-
-		event.Skip();
-	}
-
-	void OnBeginReorder(wxHeaderCtrlEvent& event)
-	{
-		GetOwner()->DoStartMoveRowOrCol(event.GetColumn());
-	}
-
-	void OnEndReorder(wxHeaderCtrlEvent& event)
-	{
-		GetOwner()->DoEndMoveCol(event.GetNewOrder());
-	}
-
-	wxVector<ibGridHeaderColumn> m_columns;
-
-	// The count of OnResizing() call nesting, 0 if not inside it.
-	int m_inResizing;
-
-	wxDECLARE_EVENT_TABLE();
-	wxDECLARE_NO_COPY_CLASS(ibGridHeaderCtrl);
-};
 
 // common base class for various grid subwindows
 class ibGridSubwindow : public ibWindow
@@ -440,19 +211,27 @@ public:
 	virtual bool IsFrozen() const wxOVERRIDE { return true; }
 };
 
-// WHERE THE OUTLINE PANE MEETS THE REST OF THE CHROME. The row pane starts below the column
-// chrome and the column pane to the right of the row chrome, so the corner between them — and the
-// strip each pane runs past — belonged to nobody and came up as bare window background: a white
-// notch in the frame (Max, 2026-08-20: "you forgot the corner"). It carries no content, only the
-// chrome colour, so it needs no paint handler of its own.
-class ibGridOutlineCornerWindow : public ibGridSubwindow
+// WHERE A PANE MEETS THE REST OF THE CHROME — the outline's, the area's. The row pane starts below
+// the column chrome and the column pane to the right of the row chrome, so the corner between them —
+// and the strip each pane runs past — belonged to nobody and came up as bare window background: a
+// white notch in the frame (Max, 2026-08-20: "you forgot the corner"). It carries no content, only
+// the chrome colour and the edge of the pane it continues: the row pane's (wxVERTICAL) on its right,
+// the column pane's (wxHORIZONTAL) at its bottom - see ibGridRowOutlineWindow::OnPaint.
+class ibGridCornerPaneWindow : public ibGridSubwindow
 {
 public:
-	ibGridOutlineCornerWindow(ibGrid* parent) : ibGridSubwindow(parent) {}
+	ibGridCornerPaneWindow(ibGrid* parent, wxOrientation orient)
+		: ibGridSubwindow(parent), m_orient(orient) {}
 
 	virtual bool AcceptsFocus() const wxOVERRIDE { return false; }
 
-	wxDECLARE_NO_COPY_CLASS(ibGridOutlineCornerWindow);
+private:
+	void OnPaint(wxPaintEvent& event);
+
+	const wxOrientation m_orient;
+
+	wxDECLARE_EVENT_TABLE();
+	wxDECLARE_NO_COPY_CLASS(ibGridCornerPaneWindow);
 };
 
 class ibGridColLabelWindow : public ibGridSubwindow

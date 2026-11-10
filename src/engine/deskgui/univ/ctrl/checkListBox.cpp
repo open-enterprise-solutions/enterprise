@@ -176,10 +176,12 @@ wxSize ibCheckListBox::DoGetBestClientSize() const
     return size;
 }
 
-void ibCheckListBox::DoDrawRange(ibControlRenderer *renderer,
-                                 int itemFirst, int itemLast)
+void ibCheckListBox::OnDrawItem(wxDC& dc, const wxRect& rect, size_t n, int flags) const
 {
-    renderer->DrawCheckItems(this, itemFirst, itemLast);
+    if ( IsChecked(n) )
+        flags |= wxCONTROL_CHECKED;
+
+    GetRenderer()->DrawCheckItem(dc, GetString(n), wxNullBitmap, rect, flags);
 }
 
 // ----------------------------------------------------------------------------

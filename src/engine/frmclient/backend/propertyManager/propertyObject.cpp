@@ -22,7 +22,7 @@ static void Refuse(ibString* refusal, const ibString& text)
 		*refusal = text;
 }
 
-bool SetValue(ibPropertyObject* asked, ibProperty* property, const wxVariant& newValue, ibString* refusal)
+bool SetValue(ibPropertyObject* asked, ibProperty* property, const ibVariant& newValue, ibString* refusal)
 {
 	if (property == nullptr)
 		return false;
@@ -38,7 +38,7 @@ bool SetValue(ibPropertyObject* asked, ibProperty* property, const wxVariant& ne
 		return false;
 	}
 
-	const wxVariant oldValue = property->GetValue();
+	const ibVariant oldValue = property->GetValue();
 
 	// A VETO IS AN ANSWER, not a failure — an object refusing a value knows something the caller
 	// does not, and it is the same refusal a person meets in the inspector.
@@ -69,13 +69,13 @@ static bool SetNodeValue(ibPropertyObject* asked, typeProperty* property, const 
 	if (property == nullptr)
 		return false;
 
-	const wxVariant oldValue = property->GetValue();
+	const ibVariant oldValue = property->GetValue();
 	if (!property->SetNodeValue(newValue)) {
 		Refuse(refusal, ibString::Format(_("'%s' would not take that value."), property->GetName()));
 		return false;
 	}
-	const wxVariant readValue = property->GetValue();
-	if (readValue.GetData() != oldValue.GetData()) {
+	const ibVariant readValue = property->GetValue();
+	if (readValue.GetRef() != oldValue.GetRef()) {
 		property->SetValue(oldValue);
 		return door(asked, property, readValue, refusal);
 	}
@@ -94,13 +94,13 @@ static bool SetNodeValue(ibPropertyObject* asked, typeProperty* property, const 
 bool SetValue(ibPropertyObject* asked, ibProperty* property, const ibDataValue& newValue, ibString* refusal)
 {
 	return SetNodeValue(asked, property, newValue, refusal,
-		[](ibPropertyObject* asked, ibProperty* property, const wxVariant& value, ibString* refusal) {
+		[](ibPropertyObject* asked, ibProperty* property, const ibVariant& value, ibString* refusal) {
 			return SetValue(asked, property, value, refusal); },
-		[](ibPropertyObject* asked, ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) {
+		[](ibPropertyObject* asked, ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue) {
 			asked->OnPropertyChanged(property, oldValue, newValue); });
 }
 
-bool SetEvent(ibPropertyObject* asked, ibEvent* event, const wxVariant& newValue, ibString* refusal)
+bool SetEvent(ibPropertyObject* asked, ibEvent* event, const ibVariant& newValue, ibString* refusal)
 {
 	if (event == nullptr)
 		return false;
@@ -114,7 +114,7 @@ bool SetEvent(ibPropertyObject* asked, ibEvent* event, const wxVariant& newValue
 		return false;
 	}
 
-	const wxVariant oldValue = event->GetValue();
+	const ibVariant oldValue = event->GetValue();
 
 	if (!asked->OnEventChanging(event, newValue)) {
 		Refuse(refusal, ibString::Format(
@@ -135,9 +135,9 @@ bool SetEvent(ibPropertyObject* asked, ibEvent* event, const wxVariant& newValue
 bool SetEvent(ibPropertyObject* asked, ibEvent* event, const ibDataValue& newValue, ibString* refusal)
 {
 	return SetNodeValue(asked, event, newValue, refusal,
-		[](ibPropertyObject* asked, ibEvent* event, const wxVariant& value, ibString* refusal) {
+		[](ibPropertyObject* asked, ibEvent* event, const ibVariant& value, ibString* refusal) {
 			return SetEvent(asked, event, value, refusal); },
-		[](ibPropertyObject* asked, ibEvent* event, const wxVariant& oldValue, const wxVariant& newValue) {
+		[](ibPropertyObject* asked, ibEvent* event, const ibVariant& oldValue, const ibVariant& newValue) {
 			asked->OnEventChanged(event, oldValue, newValue); });
 }
 
@@ -160,14 +160,14 @@ ibString ibBackendProperty::GetType() const
 
 ///////////////////////////////////////////////////////////////////////////////
 
-void ibProperty::InitProperty(ibPropertyCategory* cat, const wxVariant& value)
+void ibProperty::InitProperty(ibPropertyCategory* cat, const ibVariant& value)
 {
 	m_owner->AddProperty(this);
 	if (cat != nullptr) cat->AddProperty(this);
 	DoSetValue(value);
 }
 
-void ibEvent::InitEvent(ibPropertyCategory* cat, const wxVariant& value)
+void ibEvent::InitEvent(ibPropertyCategory* cat, const ibVariant& value)
 {
 	m_owner->AddEvent(this);
 	if (cat != nullptr) cat->AddEvent(this);
@@ -249,7 +249,7 @@ bool ibBackendProperty::GetProtocolValue(ibDataNode& row) const
 	else
 		row.AddField(ibProtocol::ibSchema::ibProperties::Value, value);
 	// …and what it reads as.
-	row.SetValue(ibProtocol::ibSchema::ibProperties::Presentation, ibString(GetValue().MakeString()));
+	row.SetValue(ibProtocol::ibSchema::ibProperties::Presentation, GetValue().GetString());
 
 	if (!IsEditable())
 		row.SetValue(ibProtocol::ibSchema::ibProperties::ReadOnly, true);

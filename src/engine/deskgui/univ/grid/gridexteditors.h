@@ -506,7 +506,7 @@ public:
 	virtual wxString GetValue() const wxOVERRIDE;
 
 protected:
-	wxDatePickerCtrl* DatePicker() const;
+	ibDatePickerCtrl* DatePicker() const;
 
 private:
 	wxDateTime m_value;

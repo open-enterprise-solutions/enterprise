@@ -21,7 +21,7 @@ bool ibDialogUserItem::ReadUserData(const ibGuid& userGuid, bool copy)
 		// password; it does not inherit the hash.
 		m_bPasswordTouched = false;
 		m_textPassword->SetHint(!copy && userInfo.IsSetPassword()
-			? _("The password is set - type a new one to change it") : ibString());
+			? _("The password is set - type a new one to change it") : wxString());
 
 		if (userInfo.IsSetLanguage()) {
 
@@ -123,7 +123,7 @@ ibDialogUserItem::ibDialogUserItem(wxWindow* parent, wxWindowID id, const wxStri
 
 	wxImageList* imageList = new wxImageList(16, 16);
 
-	m_choiceRole = new ibCheckTree(m_other, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_HIDE_ROOT | wxTR_ROW_LINES | wxTR_SINGLE | wxCR_EMPTY_CHECK | wxTR_TWIST_BUTTONS);
+	m_choiceRole = new ibCheckTree(m_other, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_HIDE_ROOT | wxTR_SINGLE | wxCR_EMPTY_CHECK | wxTR_TWIST_BUTTONS);
 	m_choiceRole->AssignImageList(imageList);
 
 	const wxTreeItemId& root = m_choiceRole->AddRoot(wxT(""));

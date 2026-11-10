@@ -68,8 +68,6 @@ public:
     virtual bool HasTransparentBackground() override { return true; }
 
 protected:
-    virtual void DoDraw(ibControlRenderer *renderer) override;
-
     // size to the bitmap (the lost base did this in DoGetBestSize)
     virtual wxSize DoGetBestClientSize() const override
     {
@@ -78,11 +76,14 @@ protected:
             : wxSize(16, 16);
     }
 
+    void OnPaint(wxPaintEvent& event);
+
     // the bitmap bundle (lived in the lost wxStaticBitmapBase)
     wxBitmapBundle m_bitmapBundle;
 
 private:
     wxDECLARE_DYNAMIC_CLASS(ibStaticBitmap);
+    wxDECLARE_EVENT_TABLE();
 };
 
 #endif // _DESKGUI_UNIV_STATICBITMAP_H_

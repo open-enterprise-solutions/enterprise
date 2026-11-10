@@ -1,7 +1,7 @@
 ﻿#include "advpropFont.h"
 
 #include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the font's node
-#include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frmclient/propertyManager/property/private/prop.h"             // ibPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 #include "deskgui/typeconv.h"   // FontToWxFont / WxFontToFont — the dialog's font, and back
 
@@ -9,10 +9,10 @@ namespace {
 
 // The value of a font: the same property's (the cell's own), its node the font's text as the server stores it, read as
 // that text.
-wxVariant WriteFont(const wxVariant& value, const ibFont& font)
+ibVariant WriteFont(const ibFont& font)
 {
 	const wxString text = font.ToString();
-	return wxVariant(new ibVariantDataSerializable(value.GetType(), ibDataValue::String(text), text));
+	return ibVariant(new ibVariantSerializable(ibDataValue::String(text), text));
 }
 
 } // namespace
@@ -80,76 +80,76 @@ static long gs_fp_es_weight_values[] = {
 	ibFONTWEIGHT_EXTRAHEAVY
 };
 
-wxPG_IMPLEMENT_PROPERTY_CLASS(ibPGFontProperty, wxEditorDialogProperty, TextCtrlAndButton)
+ibPG_IMPLEMENT_PROPERTY_CLASS(ibPGFontProperty, ibEditorDialogProperty, TextCtrlAndButton)
 
 // register frontend property — the cell holds the font as the server writes it, so it goes back as it is
 class ibPropertyFontLoader
 {
 public:
 	ibPropertyFontLoader() {
-		ibPropertyRegistry::Register(wxT("ibPropertyFont"), [](ibBackendProperty* property) -> wxPGProperty* {
+		ibPropertyRegistry::Register(wxT("ibPropertyFont"), [](ibBackendProperty* property) -> ibPGProperty* {
 			return new ibPGFontProperty(property->GetLabel(), property->GetName(), property->GetValue());
 		});
 	}
 } g_fontLoader;
 
 ibPGFontProperty::ibPGFontProperty(const wxString& label, const wxString& name,
-	const wxVariant& value)
-	: wxEditorDialogProperty(label, name)
+	const ibVariant& value)
+	: ibEditorDialogProperty(label, name)
 {
 	SetValue(value);
 
 	// Initialize font family choices list
-	if (!wxPGGlobalVars->m_fontFamilyChoices)
+	if (!ibPGGlobalVars->m_fontFamilyChoices)
 	{
 		wxArrayString faceNames = wxFontEnumerator::GetFacenames();
 
 		faceNames.Sort();
 
-		wxPGGlobalVars->m_fontFamilyChoices = new wxPGChoices(faceNames);
+		ibPGGlobalVars->m_fontFamilyChoices = new ibPGChoices(faceNames);
 	}
 
 	const ibFont font = GetVal();
 
 	/* TRANSLATORS: Label of font point size */
-	AddPrivateChild(new wxIntProperty(_("Point Size"),
+	AddPrivateChild(new ibIntProperty(_("Point Size"),
 		wxS("Point Size"), (long)font.m_pointSize));
 
 	const wxString faceName = font.m_faceName;
 	// If font was not in there, add it now
 	if (!faceName.empty() &&
-		wxPGGlobalVars->m_fontFamilyChoices->Index(faceName) == wxNOT_FOUND)
-		wxPGGlobalVars->m_fontFamilyChoices->AddAsSorted(faceName);
+		ibPGGlobalVars->m_fontFamilyChoices->Index(faceName) == wxNOT_FOUND)
+		ibPGGlobalVars->m_fontFamilyChoices->AddAsSorted(faceName);
 
 	/* TRANSLATORS: Label of font face name */
-	wxPGProperty* p = new wxEnumProperty(_("Face Name"), wxS("Face Name"),
-		*wxPGGlobalVars->m_fontFamilyChoices);
+	ibPGProperty* p = new ibEnumProperty(_("Face Name"), wxS("Face Name"),
+		*ibPGGlobalVars->m_fontFamilyChoices);
 
-	p->SetValueFromString(faceName, wxPGPropValFormatFlags::FullValue);
+	p->SetValueFromString(faceName, ibPGPropValFormatFlags::FullValue);
 
 	AddPrivateChild(p);
 
 	/* TRANSLATORS: Label of font style */
-	AddPrivateChild(new wxEnumProperty(_("Style"), wxS("Style"),
+	AddPrivateChild(new ibEnumProperty(_("Style"), wxS("Style"),
 		gs_fp_es_style_labels, gs_fp_es_style_values,
 		font.m_style));
 
 	/* TRANSLATORS: Label of font weight */
-	AddPrivateChild(new wxEnumProperty(_("Weight"), wxS("Weight"),
+	AddPrivateChild(new ibEnumProperty(_("Weight"), wxS("Weight"),
 		gs_fp_es_weight_labels, gs_fp_es_weight_values,
 		font.m_weight));
 
 	/* TRANSLATORS: Label of underlined font */
-	AddPrivateChild(new wxBoolProperty(_("Underlined"), wxS("Underlined"),
+	AddPrivateChild(new ibBoolProperty(_("Underlined"), wxS("Underlined"),
 		font.m_underlined));
 
 	/* TRANSLATORS: Label of font family */
-	AddPrivateChild(new wxEnumProperty(_("Family"), wxS("Family"),
+	AddPrivateChild(new ibEnumProperty(_("Family"), wxS("Family"),
 		gs_fp_es_family_labels, gs_fp_es_family_values,
 		font.m_family));
 }
 
-bool ibPGFontProperty::DisplayEditorDialog(wxPropertyGrid* pg, wxVariant& value)
+bool ibPGFontProperty::DisplayEditorDialog(ibPropertyGrid* pg, ibVariant& value)
 {
 	wxFontData data;
 	data.SetInitialFont(typeConv::FontToWxFont(GetVal(&value)));
@@ -162,20 +162,20 @@ bool ibPGFontProperty::DisplayEditorDialog(wxPropertyGrid* pg, wxVariant& value)
 	}
 	if (dlg.ShowModal() == wxID_OK)
 	{
-		value = WriteFont(m_value, typeConv::WxFontToFont(dlg.GetFontData().GetChosenFont()));
+		value = WriteFont(typeConv::WxFontToFont(dlg.GetFontData().GetChosenFont()));
 		return true;
 	}
 
 	return false;
 }
 
-ibFont ibPGFontProperty::GetVal(const wxVariant* pVariant) const
+ibFont ibPGFontProperty::GetVal(const ibVariant* pVariant) const
 {
 	if (!pVariant)
 		pVariant = &m_value;
 
 	ibFont font;
-	if (!font.FromString(ibVariantDataSerializable::GetNodeValue(*pVariant).AsString()) || !font.IsOk())
+	if (!font.FromString(ibVariantSerializable::GetNodeValue(*pVariant).AsString()) || !font.IsOk())
 		font = typeConv::WxFontToFont(*wxNORMAL_FONT);
 	return font;
 }
@@ -185,36 +185,36 @@ void ibPGFontProperty::RefreshChildren()
 	if (!GetChildCount()) return;
 	const ibFont font = GetVal();
 	Item(0)->SetValue((long)font.m_pointSize);
-	Item(1)->SetValueFromString(font.m_faceName, wxPGPropValFormatFlags::FullValue);
+	Item(1)->SetValueFromString(font.m_faceName, ibPGPropValFormatFlags::FullValue);
 	Item(2)->SetValue((long)font.m_style);
 	Item(3)->SetValue((long)font.m_weight);
 	Item(4)->SetValue(font.m_underlined);
 	Item(5)->SetValue((long)font.m_family);
 }
 
-wxVariant ibPGFontProperty::ChildChanged(wxVariant& thisValue,
+ibVariant ibPGFontProperty::ChildChanged(ibVariant& thisValue,
 	int ind,
-	wxVariant& childValue) const
+	ibVariant& childValue) const
 {
 	ibFont font = GetVal(&thisValue);
 
 	if (ind == 0)
 	{
-		font.m_pointSize = childValue.GetLong();
+		font.m_pointSize = childValue.GetInteger();
 	}
 	else if (ind == 1)
 	{
 		wxString faceName;
-		int faceIndex = static_cast<int>(childValue.GetLong());
+		int faceIndex = static_cast<int>(childValue.GetInteger());
 
 		if (faceIndex >= 0)
-			faceName = wxPGGlobalVars->m_fontFamilyChoices->GetLabel(faceIndex);
+			faceName = ibPGGlobalVars->m_fontFamilyChoices->GetLabel(faceIndex);
 
 		font.m_faceName = faceName;
 	}
 	else if (ind == 2)
 	{
-		int st = static_cast<int>(childValue.GetLong());
+		int st = static_cast<int>(childValue.GetInteger());
 		if (st != ibFONTSTYLE_NORMAL &&
 			st != ibFONTSTYLE_SLANT &&
 			st != ibFONTSTYLE_ITALIC)
@@ -223,23 +223,23 @@ wxVariant ibPGFontProperty::ChildChanged(wxVariant& thisValue,
 	}
 	else if (ind == 3)
 	{
-		int wt = static_cast<int>(childValue.GetLong());
+		int wt = static_cast<int>(childValue.GetInteger());
 		if (wt < ibFONTWEIGHT_THIN || wt > ibFONTWEIGHT_EXTRAHEAVY)
 			wt = ibFONTWEIGHT_NORMAL;
 		font.m_weight = wt;
 	}
 	else if (ind == 4)
 	{
-		font.m_underlined = childValue.GetBool();
+		font.m_underlined = childValue.GetBoolean();
 	}
 	else if (ind == 5)
 	{
-		int fam = static_cast<int>(childValue.GetLong());
+		int fam = static_cast<int>(childValue.GetInteger());
 		if (fam < ibFONTFAMILY_DEFAULT ||
 			fam > ibFONTFAMILY_TELETYPE)
 			fam = ibFONTFAMILY_DEFAULT;
 		font.m_family = static_cast<ibFontFamily>(fam);
 	}
 
-	return WriteFont(thisValue, font);
+	return WriteFont(font);
 }

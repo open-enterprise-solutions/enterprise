@@ -11,17 +11,17 @@ public:
 	ibString GetValueAsString() const;
 	void SetValue(const ibString& strValue);
 
-	ibPropertyStringBase(ibPropertyCategory* cat, const ibString& name) : ibPropertySerializable(cat, name, wxNullVariant)
+	ibPropertyStringBase(ibPropertyCategory* cat, const ibString& name) : ibPropertySerializable(cat, name, ibVariant())
 	{
 	}
 
 	ibPropertyStringBase(ibPropertyCategory* cat, const ibString& name, const ibString& label)
-		: ibPropertySerializable(cat, name, label, wxNullVariant)
+		: ibPropertySerializable(cat, name, label, ibVariant())
 	{
 	}
 
 	ibPropertyStringBase(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString)
-		: ibPropertySerializable(cat, name, label, helpString, wxNullVariant)
+		: ibPropertySerializable(cat, name, label, helpString, ibVariant())
 	{
 	}
 
@@ -136,19 +136,19 @@ public:
 	// makes `(cat, name, text)` fit the second one as well — `C2668: ambiguous call` at every
 	// declaration (measured on the first build). The number property can afford one; this cannot.
 	ibPropertyTString(ibPropertyCategory* cat, const ibString& name,
-		const ibTranslateString& value) : ibPropertySerializable(cat, name, wxNullVariant)
+		const ibTranslateString& value) : ibPropertySerializable(cat, name, ibVariant())
 	{
 		SetValue(value);
 	}
 
 	ibPropertyTString(ibPropertyCategory* cat, const ibString& name, const ibString& label,
-		const ibTranslateString& value) : ibPropertySerializable(cat, name, label, wxNullVariant)
+		const ibTranslateString& value) : ibPropertySerializable(cat, name, label, ibVariant())
 	{
 		SetValue(value);
 	}
 
 	ibPropertyTString(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString,
-		const ibTranslateString& value) : ibPropertySerializable(cat, name, label, helpString, wxNullVariant)
+		const ibTranslateString& value) : ibPropertySerializable(cat, name, label, helpString, ibVariant())
 	{
 		SetValue(value);
 	}

@@ -76,9 +76,6 @@ public:
     void WXDestroyWithoutChildren();
 
 protected:
-    // draw the control
-    virtual void DoDraw(ibControlRenderer *renderer) override;
-
     // SEAM vs univ: the label's size, as wxStaticBox (msw/statbox.cpp) answers
     // - wxWindowBase's best size is the extent of the box's children, which
     // grows with every layout that widens them
@@ -87,8 +84,12 @@ protected:
     // get the size of the border
     wxRect GetBorderGeometry() const;
 
+    // draw the control
+    void OnPaint(wxPaintEvent& event);
+
 private:
     wxDECLARE_DYNAMIC_CLASS(ibStaticBox);
+    wxDECLARE_EVENT_TABLE();
 };
 
 // ----------------------------------------------------------------------------

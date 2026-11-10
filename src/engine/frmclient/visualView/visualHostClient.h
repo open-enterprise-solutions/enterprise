@@ -57,7 +57,7 @@ public:
 	// The tab it draws in — whose document the form's is.
 	long long GetTabId() const { return m_tabId; }
 	// The control a window drawn is — none: no control's (the desktop's GetObjectBase).
-	ibValueFrame* GetObjectBase(const wxObject* wxobject) const;
+	ibValueFrame* GetObjectBase(const wxObject* ibobject) const;
 
 	// THE DESIGNER'S HOST — the desktop's: the form drawn for its editor, what the person does with a control the
 	// editor's — nothing of it goes to the server (Send, Hold).
@@ -74,8 +74,8 @@ public:
 	virtual bool Fetch(ibValueFrame* WXUNUSED(control)) { return true; }
 	// A property of a control edited (ibValueFrame::OnPropertyChanged) — a designer's host gives it to its editor, which
 	// draws it; nothing of it is the runtime's.
-	virtual void ModifyProperty(ibProperty* WXUNUSED(property), const wxVariant& WXUNUSED(oldValue),
-		const wxVariant& WXUNUSED(newValue)) {}
+	virtual void ModifyProperty(ibProperty* WXUNUSED(property), const ibVariant& WXUNUSED(oldValue),
+		const ibVariant& WXUNUSED(newValue)) {}
 	// …and a control moved under `parent`, at `pos` among its children — a table's column by its header: a designer's
 	// host gives it to its editor, whose command it is; the runtime's table tells the server itself (Send).
 	virtual void MovePosition(ibValueFrame* WXUNUSED(control), ibValueFrame* WXUNUSED(parent), unsigned int WXUNUSED(pos)) {}

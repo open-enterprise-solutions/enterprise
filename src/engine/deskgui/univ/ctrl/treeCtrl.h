@@ -530,7 +530,7 @@ protected:
     // misc helpers
     void SendDeleteEvent(ibTreeItem *itemBeingDeleted);
 
-    void DrawBorder(const wxTreeItemId& item);
+    void DrawDropBorder(const wxTreeItemId& item);
     void DrawLine(const wxTreeItemId& item, bool below);
     void DrawDropEffect(ibTreeItem *item);
 

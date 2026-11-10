@@ -147,10 +147,10 @@ protected:
     virtual wxSize DoGetBestClientSize() const override;
     virtual int DoGetBestClientHeight(int width) const override;
 
-    virtual void DoDraw(ibControlRenderer *renderer) override;
-
     // common part of all ctors
     void Init();
+
+    void OnPaint(wxPaintEvent& event);
 
 private:
     wxBitmap BitmapForCurrentState() const;
@@ -167,6 +167,7 @@ private:
     bool           m_isHyperlink = false;
 
     wxDECLARE_DYNAMIC_CLASS(ibButton);
+    wxDECLARE_EVENT_TABLE();
 };
 
 #endif // _DESKGUI_UNIV_BUTTON_H_

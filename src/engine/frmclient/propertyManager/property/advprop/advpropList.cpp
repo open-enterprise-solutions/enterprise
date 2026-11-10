@@ -1,6 +1,6 @@
 #include "advpropList.h"
 #include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the chosen one's id
-#include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frmclient/propertyManager/property/private/prop.h"             // ibPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 #include "frmclient/propertyManager/propertyEditor.h"
 #include "deskgui/univ/dialog.h"
@@ -12,21 +12,21 @@
 // ibPGListProperty
 // -----------------------------------------------------------------------
 
-wxPG_IMPLEMENT_PROPERTY_CLASS(ibPGListProperty, wxPGProperty, ComboBoxAndButton)
+ibPG_IMPLEMENT_PROPERTY_CLASS(ibPGListProperty, ibPGProperty, ComboBoxAndButton)
 
 namespace {
 
 // The id a value holds — the chosen one's; none picked: wxNOT_FOUND…
-long ReadId(const wxVariant& value)
+long ReadId(const ibVariant& value)
 {
-	const ibDataValue node = ibVariantDataSerializable::GetNodeValue(value);
+	const ibDataValue node = ibVariantSerializable::GetNodeValue(value);
 	return node.Kind() == ibDataKind::Number ? static_cast<long>(node.AsInt()) : wxNOT_FOUND;
 }
 
 // …and the value of another: the same property's, named by the cell (ValueToString).
-wxVariant WriteId(const wxVariant& value, long id)
+ibVariant WriteId(long id)
 {
-	return wxVariant(new ibVariantDataSerializable(value.GetType(), ibDataValue::Int(id), wxEmptyString));
+	return ibVariant(new ibVariantSerializable(ibDataValue::Int(id), wxEmptyString));
 }
 
 } // namespace
@@ -39,7 +39,7 @@ public:
 	{
 		// ibPropertyList, whatever it lists — a language, a role: the choices are the row's (GetValueList, asked on the
 		// server), the value the chosen one's id.
-		const ibPropertyRegistry::ibPropertyMaker maker = [](ibBackendProperty* property) -> wxPGProperty* {
+		const ibPropertyRegistry::ibPropertyMaker maker = [](ibBackendProperty* property) -> ibPGProperty* {
 			ibPropertyChoiceList choices;
 			property->GetValueList(choices);
 			return new ibPGListProperty(property->GetLabel(), property->GetName(), choices, property->GetValue());
@@ -53,22 +53,22 @@ public:
 }g_listLoader;
 
 ibPGListProperty::ibPGListProperty(const wxString& label, const wxString& strName,
-	const ibPropertyChoiceList& choices, const wxVariant& value)
-	: wxPGProperty(label, strName)
+	const ibPropertyChoiceList& choices, const ibVariant& value)
+	: ibPGProperty(label, strName)
 {
-	wxPGChoices ch;
+	ibPGChoices ch;
 	for (unsigned int idx = 0; idx < choices.GetCount(); idx++) {
-		wxPGChoiceEntry item(choices.GetLabel(idx), choices.GetId(idx));
+		ibPGChoiceEntry item(choices.GetLabel(idx), choices.GetId(idx));
 		item.SetBitmap(choices.GetBitmap(idx));
 		ch.Add(item);
 	}
 	m_choices.Assign(ch);
 
-	m_flags |= wxPGPropertyFlags_ActiveButton; // Property button always enabled.
+	m_flags |= ibPGPropertyFlags_ActiveButton; // Property button always enabled.
 	SetValue(value);
 }
 
-wxString ibPGListProperty::ValueToString(wxVariant& value, wxPGPropValFormatFlags flags) const
+wxString ibPGListProperty::ValueToString(ibVariant& value, ibPGPropValFormatFlags flags) const
 {
 	const long id = ReadId(value);
 	for (unsigned int idx = 0; idx < m_choices.GetCount(); idx++) {
@@ -79,21 +79,21 @@ wxString ibPGListProperty::ValueToString(wxVariant& value, wxPGPropValFormatFlag
 	return wxEmptyString;
 }
 
-bool ibPGListProperty::StringToValue(wxVariant& variant,
+bool ibPGListProperty::StringToValue(ibVariant& variant,
 	const wxString& text,
-	wxPGPropValFormatFlags flags) const
+	ibPGPropValFormatFlags flags) const
 {
 	if (text.IsEmpty()) {
-		variant = WriteId(variant, wxNOT_FOUND);
+		variant = WriteId(wxNOT_FOUND);
 		return true;
 	}
 
 	return false;
 }
 
-bool ibPGListProperty::IntToValue(wxVariant& value, int number, wxPGPropValFormatFlags flags) const
+bool ibPGListProperty::IntToValue(ibVariant& value, int number, ibPGPropValFormatFlags flags) const
 {
-	value = WriteId(value, m_choices.GetValue(number));
+	value = WriteId(m_choices.GetValue(number));
 	return true;
 }
 
@@ -102,12 +102,12 @@ int ibPGListProperty::GetChoiceSelection() const
 	return m_choices.Index(ReadId(m_value));
 }
 
-wxPGEditorDialogAdapter* ibPGListProperty::GetEditorDialog() const
+ibPGEditorDialogAdapter* ibPGListProperty::GetEditorDialog() const
 {
-	class wxPGListEventAdapter : public wxPGEditorDialogAdapter {
+	class ibPGListEventAdapter : public ibPGEditorDialogAdapter {
 	public:
 
-		virtual bool DoShowDialog(wxPropertyGrid* pg, wxPGProperty* prop) wxOVERRIDE
+		virtual bool DoShowDialog(ibPropertyGrid* pg, ibPGProperty* prop) wxOVERRIDE
 		{
 			ibPGListProperty* dlgProp = wxDynamicCast(prop, ibPGListProperty);
 			wxCHECK_MSG(dlgProp, false, "Function called for incompatible property");
@@ -119,7 +119,7 @@ wxPGEditorDialogAdapter* ibPGListProperty::GetEditorDialog() const
 			dlg->SetFont(pg->GetFont()); // To allow entering chars of the same set as the propGrid
 
 			// Multi-line text editor dialog.
-			const int spacing = wxPropertyGrid::IsSmallScreen() ? 4 : 8;
+			const int spacing = ibPropertyGrid::IsSmallScreen() ? 4 : 8;
 			wxBoxSizer* topsizer = new wxBoxSizer(wxVERTICAL);
 			wxBoxSizer* rowsizer = new wxBoxSizer(wxHORIZONTAL);
 
@@ -133,7 +133,7 @@ wxPGEditorDialogAdapter* ibPGListProperty::GetEditorDialog() const
 			topsizer->Add(rowsizer, wxSizerFlags(1).Expand());
 
 			lc->SetDoubleBuffered(true);
-			lc->Enable(!dlgProp->HasFlag(wxPGFlags::ReadOnly));
+			lc->Enable(!dlgProp->HasFlag(ibPGFlags::ReadOnly));
 
 			ibStdDialogButtonSizer* buttonSizer = dlg->CreateStdDialogButtonSizer(wxOK | wxCANCEL);
 			topsizer->Add(buttonSizer, wxSizerFlags(0).Right().Border(wxBOTTOM | wxRIGHT, spacing));
@@ -141,14 +141,14 @@ wxPGEditorDialogAdapter* ibPGListProperty::GetEditorDialog() const
 			dlg->SetSizer(topsizer);
 			topsizer->SetSizeHints(dlg);
 
-			if (!wxPropertyGrid::IsSmallScreen()) {
+			if (!ibPropertyGrid::IsSmallScreen()) {
 				dlg->SetSize(dlg->FromDIP(wxSize(400, 300)));
 				dlg->Move(pg->GetGoodEditorDialogPosition(prop, dlg->GetSize()));
 			}
 
 			lc->SetFocus();
 
-			const wxPGChoices& choices = dlgProp->GetChoices();
+			const ibPGChoices& choices = dlgProp->GetChoices();
 			const long selected = ReadId(prop->GetValue());
 
 			for (unsigned int idx = 0; idx < choices.GetCount(); idx++) {
@@ -162,14 +162,14 @@ wxPGEditorDialogAdapter* ibPGListProperty::GetEditorDialog() const
 			const int res = dlg->ShowModal();
 			const int row = lc->GetSelectedRow();
 			if (res == wxID_OK && row != wxNOT_FOUND)
-				SetValue(WriteId(prop->GetValue(), choices.GetValue(static_cast<unsigned int>(row))));
+				SetValue(WriteId(choices.GetValue(static_cast<unsigned int>(row))));
 			else if (res == wxID_OK)
-				SetValue(WriteId(prop->GetValue(), wxNOT_FOUND));
+				SetValue(WriteId(wxNOT_FOUND));
 
 			dlg->Destroy();
 			return res == wxID_OK;
 		}
 	};
 
-	return new wxPGListEventAdapter();
+	return new ibPGListEventAdapter();
 }

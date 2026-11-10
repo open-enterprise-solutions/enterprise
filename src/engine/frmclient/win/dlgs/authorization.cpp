@@ -8,7 +8,6 @@
 ibDialogAuthentication::ibDialogAuthentication(const std::vector<ibString>& users, wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) : ibDialog(parent, id, title, pos, size, style)
 {
 	ibDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
-	this->SetBackgroundColour(wxColour(184, 201, 212));   // #B8C9D4 powder-blue dialog
 
 	// Consistent DIP-aware padding — previous layout used 5/9/10 px which looked
 	// asymmetric and didn't scale on HiDPI.

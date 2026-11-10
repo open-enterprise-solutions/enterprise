@@ -15,19 +15,19 @@ public:
 	int GetValueAsInteger() const { return static_cast<int>(GetNodeValue().AsInt()); }
 
 	ibPropertyInteger(ibPropertyCategory* cat, const ibString& name,
-		const int& value = 0) : ibPropertySerializable(cat, name, wxNullVariant)
+		const int& value = 0) : ibPropertySerializable(cat, name, ibVariant())
 	{
 		SetValue(value);
 	}
 
 	ibPropertyInteger(ibPropertyCategory* cat, const ibString& name, const ibString& label,
-		const int& value = 0) : ibPropertySerializable(cat, name, label, wxNullVariant)
+		const int& value = 0) : ibPropertySerializable(cat, name, label, ibVariant())
 	{
 		SetValue(value);
 	}
 
 	ibPropertyInteger(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString,
-		const int& value = 0) : ibPropertySerializable(cat, name, label, helpString, wxNullVariant)
+		const int& value = 0) : ibPropertySerializable(cat, name, label, helpString, ibVariant())
 	{
 		SetValue(value);
 	}
@@ -53,19 +53,19 @@ public:
 	unsigned int GetValueAsUInteger() const { return static_cast<unsigned int>(GetNodeValue().AsUInt()); }
 
 	ibPropertyUInteger(ibPropertyCategory* cat, const ibString& name,
-		const unsigned int& value = 0) : ibPropertySerializable(cat, name, wxNullVariant)
+		const unsigned int& value = 0) : ibPropertySerializable(cat, name, ibVariant())
 	{
 		SetValue(value);
 	}
 
 	ibPropertyUInteger(ibPropertyCategory* cat, const ibString& name, const ibString& label,
-		const unsigned int& value = 0) : ibPropertySerializable(cat, name, label, wxNullVariant)
+		const unsigned int& value = 0) : ibPropertySerializable(cat, name, label, ibVariant())
 	{
 		SetValue(value);
 	}
 
 	ibPropertyUInteger(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString,
-		const unsigned int& value = 0) : ibPropertySerializable(cat, name, label, helpString, wxNullVariant)
+		const unsigned int& value = 0) : ibPropertySerializable(cat, name, label, helpString, ibVariant())
 	{
 		SetValue(value);
 	}

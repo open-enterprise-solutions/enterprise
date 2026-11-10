@@ -27,52 +27,6 @@
 #include <wx/cshelp.h>
 #include <wx/utils.h>
 
-// ----------------------------------------------------------------------------
-// constants
-// ----------------------------------------------------------------------------
-
-// frame decorations type flags used in ibRenderer and ibColourScheme
-enum
-{
-    wxTOPLEVEL_ACTIVE          = 0x00000001,
-    wxTOPLEVEL_MAXIMIZED       = 0x00000002,
-    wxTOPLEVEL_TITLEBAR        = 0x00000004,
-    wxTOPLEVEL_ICON            = 0x00000008,
-    wxTOPLEVEL_RESIZEABLE      = 0x00000010,
-    wxTOPLEVEL_BORDER          = 0x00000020,
-    wxTOPLEVEL_BUTTON_CLOSE    = 0x01000000,
-    wxTOPLEVEL_BUTTON_MAXIMIZE = 0x02000000,
-    wxTOPLEVEL_BUTTON_ICONIZE =  0x04000000,
-    wxTOPLEVEL_BUTTON_RESTORE  = 0x08000000,
-    wxTOPLEVEL_BUTTON_HELP     = 0x10000000
-};
-
-// frame hit test return values:
-enum
-{
-    wxHT_TOPLEVEL_NOWHERE         = 0x00000000,
-    wxHT_TOPLEVEL_CLIENT_AREA     = 0x00000001,
-    wxHT_TOPLEVEL_ICON            = 0x00000002,
-    wxHT_TOPLEVEL_TITLEBAR        = 0x00000004,
-
-    wxHT_TOPLEVEL_BORDER_N        = 0x00000010,
-    wxHT_TOPLEVEL_BORDER_S        = 0x00000020,
-    wxHT_TOPLEVEL_BORDER_E        = 0x00000040,
-    wxHT_TOPLEVEL_BORDER_W        = 0x00000080,
-    wxHT_TOPLEVEL_BORDER_NE       = wxHT_TOPLEVEL_BORDER_N | wxHT_TOPLEVEL_BORDER_E,
-    wxHT_TOPLEVEL_BORDER_SE       = wxHT_TOPLEVEL_BORDER_S | wxHT_TOPLEVEL_BORDER_E,
-    wxHT_TOPLEVEL_BORDER_NW       = wxHT_TOPLEVEL_BORDER_N | wxHT_TOPLEVEL_BORDER_W,
-    wxHT_TOPLEVEL_BORDER_SW       = wxHT_TOPLEVEL_BORDER_S | wxHT_TOPLEVEL_BORDER_W,
-    wxHT_TOPLEVEL_ANY_BORDER      = 0x000000F0,
-
-    wxHT_TOPLEVEL_BUTTON_CLOSE    = /*0x01000000*/ wxTOPLEVEL_BUTTON_CLOSE,
-    wxHT_TOPLEVEL_BUTTON_MAXIMIZE = /*0x02000000*/ wxTOPLEVEL_BUTTON_MAXIMIZE,
-    wxHT_TOPLEVEL_BUTTON_ICONIZE =  /*0x04000000*/ wxTOPLEVEL_BUTTON_ICONIZE,
-    wxHT_TOPLEVEL_BUTTON_RESTORE  = /*0x08000000*/ wxTOPLEVEL_BUTTON_RESTORE,
-    wxHT_TOPLEVEL_BUTTON_HELP     = /*0x10000000*/ wxTOPLEVEL_BUTTON_HELP,
-    wxHT_TOPLEVEL_ANY_BUTTON      =   0x1F000000
-};
-
 //-----------------------------------------------------------------------------
 // ibTopLevelWindow
 //-----------------------------------------------------------------------------

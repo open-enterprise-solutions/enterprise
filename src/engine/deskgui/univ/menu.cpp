@@ -195,13 +195,13 @@ protected:
     // notify the menu when the window disappears from screen
     virtual void OnDismiss();
 
-    // SEAM vs univ: there the popup window was a univ wxWindow and DoDraw
+    // SEAM vs univ: there the popup window was a univ wxWindow and its drawing
     // overrode its paint pipeline; here the base is the native
     // wxPopupTransientWindow, so paint directly with the theme renderer
     void OnPaint(wxPaintEvent& event);
 
-    // draw the menu inside this window
-    void DoDraw(wxDC& dc, ibRenderer *rend);
+    // draw the menu's items inside this window
+    void DrawItems(wxDC& dc, ibRenderer *rend);
 
     // event handlers
     void OnLeftDown(wxMouseEvent& event);
@@ -322,6 +322,7 @@ wxEND_EVENT_TABLE()
 
 #if 0 // GUI-REVIVE: univ menubar needs univ frame
 wxBEGIN_EVENT_TABLE(ibMenuBar, wxMenuBarBase)
+    EVT_PAINT(ibMenuBar::OnPaint)
     EVT_KILL_FOCUS(ibMenuBar::OnKillFocus)
     EVT_KEY_DOWN(ibMenuBar::OnKeyDown)
     EVT_LEFT_DOWN(ibMenuBar::OnLeftDown)
@@ -560,8 +561,8 @@ ibPopupMenuWindow::GetMenuItemFromPoint(const wxPoint& pt) const
     // outside the window completely
     if ( HitTest(pt) == wxHT_WINDOW_INSIDE )
     {
-        // SEAM vs univ: the item's own place, as the theme laid it out (GetMenuGeometry) - not the heights summed
-        // from the top, which knew of no empty strip above the first item
+        // SEAM vs univ: the item's own place, as the menu laid it out (ibMenu::GetGeometryInfo) - not the heights
+        // summed from the top, which knew of no empty strip above the first item
         (void)m_menu->GetGeometryInfo();
         for ( ibMenuItemIter node = m_menu->GetMenuItems().GetFirst();
               node;
@@ -589,7 +590,7 @@ void ibPopupMenuWindow::RefreshItem(ibMenuItem *item)
 
     wxASSERT_MSG( IsShown(), wxT("can't refresh menu which is not shown") );
 
-    // FIXME: -1 here because of SetLogicalOrigin(1, 1) in DoDraw()
+    // FIXME: -1 here because of SetLogicalOrigin(1, 1) in DrawItems()
     RefreshRect(wxRect(0, item->GetPosition() - 1,
                 m_menu->GetGeometryInfo().GetSize().x, item->GetHeight()));
 }
@@ -599,16 +600,16 @@ void ibPopupMenuWindow::OnPaint(wxPaintEvent& WXUNUSED(event))
     wxPaintDC dc(this);
 
     // flat 1px border around the popup (replaces the native raised edge);
-    // DoDraw() then shifts the logical origin by (1, 1) to clear it
+    // DrawItems() then shifts the logical origin by (1, 1) to clear it
     dc.SetPen(wxPen(wxSCHEME_COLOUR(ibThemeEngine::Get()->GetColourScheme(),
                                     SHADOW_IN)));
     dc.SetBrush(*wxTRANSPARENT_BRUSH);
     dc.DrawRectangle(wxRect(GetClientSize()));
 
-    DoDraw(dc, m_menu->GetRenderer());
+    DrawItems(dc, m_menu->GetRenderer());
 }
 
-void ibPopupMenuWindow::DoDraw(wxDC& dc, ibRenderer *rend)
+void ibPopupMenuWindow::DrawItems(wxDC& dc, ibRenderer *rend)
 {
     // no clipping so far - do we need it? I don't think so as the menu is
     // never partially covered as it is always on top of everything
@@ -626,7 +627,7 @@ void ibPopupMenuWindow::DoDraw(wxDC& dc, ibRenderer *rend)
     {
         ibMenuItem *item = ibItem(node->GetData());
 
-        // SEAM vs univ: at its own place, as the theme laid it out (GetMenuGeometry) and the mouse finds it
+        // SEAM vs univ: at its own place, as the menu laid it out (ibMenu::GetGeometryInfo) and the mouse finds it
         // (GetMenuItemFromPoint) - not the heights summed from the top
         const wxCoord y = item->GetPosition();
 
@@ -1210,16 +1211,82 @@ ibMenu::~ibMenu()
 // ibMenu and ibMenuGeometryInfo
 // ----------------------------------------------------------------------------
 
-// ibMenuGeometryInfo::~ibMenuGeometryInfo() is defined inline in renderer.h
-
+// SEAM vs univ: the menu lays itself out from the theme's metrics (FORKED from wxWin32Renderer::GetMenuGeometry, the
+// canon's theme laid it out itself from the menu's items): every item gets its place (SetGeometry; GetPosition and
+// GetHeight assert otherwise), and the labels and the accel strings are aligned for all of them
 const ibMenuGeometryInfo& ibMenu::GetGeometryInfo() const
 {
     if ( !m_geometry )
     {
         if ( m_popupMenu )
         {
-            wxConstCast(this, ibMenu)->m_geometry =
-                GetRenderer()->GetMenuGeometry(m_popupMenu, *this);
+            const ibRenderer * const renderer = GetRenderer();
+
+            // the items' text is drawn with the system font (ibPopupMenuWindow::DrawItems)
+            wxInfoDC dc(m_popupMenu);
+            dc.SetFont(wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT));
+
+            const wxCoord heightText = dc.GetCharHeight();
+            const wxSize margin = renderer->GetMenuMargin();
+
+            // the total height, from below the empty strip at the top
+            wxCoord height = margin.y;
+
+            // the max length of label and accel strings: the menu width is the sum of them, even if they're for
+            // different items (as the accels should be aligned)
+            wxCoord widthLabelMax = 0,
+                    widthAccelMax = 0,
+                    widthBmpMax = 0;
+
+            for ( ibMenuItemIter node = GetMenuItems().GetFirst(); node; node = node->GetNext() )
+            {
+                ibMenuItem * const item = ibItem(node->GetData());
+
+                wxCoord h;
+                if ( item->IsSeparator() )
+                {
+                    h = renderer->GetMenuSeparatorHeight();
+                }
+                else // not separator
+                {
+                    h = renderer->GetMenuItemHeight(heightText);
+
+                    wxCoord widthLabel;
+                    dc.GetTextExtent(item->GetItemLabelText(), &widthLabel, nullptr);
+                    widthLabelMax = wxMax(widthLabelMax, widthLabel);
+
+                    wxCoord widthAccel;
+                    dc.GetTextExtent(item->GetAccelString(), &widthAccel, nullptr);
+                    widthAccelMax = wxMax(widthAccelMax, widthAccel);
+
+                    // logical: the width it is drawn at (scale 2 on OSX Retina)
+                    const wxBitmap& bmp = item->GetBitmap();
+                    if ( bmp.IsOk() )
+                        widthBmpMax = wxMax(widthBmpMax, bmp.GetLogicalSize().x);
+                }
+
+                // remember the item position and height
+                item->SetGeometry(height, h);
+
+                height += h;
+            }
+
+            ibMenuGeometryInfo * const gi = new ibMenuGeometryInfo;
+
+            gi->m_ofsLabel = margin.x + renderer->GetMenuBitmapWidth(widthBmpMax);
+            gi->m_ofsAccel = gi->m_ofsLabel + widthLabelMax;
+            if ( widthAccelMax > 0 )
+            {
+                // if we actually have any accels, add a margin
+                gi->m_ofsAccel += renderer->GetMenuAccelMargin();
+            }
+
+            gi->m_heightItem = renderer->GetMenuItemHeight(heightText);
+
+            gi->m_size.x = gi->m_ofsAccel + widthAccelMax + renderer->GetMenuSubmenuWidth() + margin.x;
+            gi->m_size.y = height + margin.y;
+
+            wxConstCast(this, ibMenu)->m_geometry = gi;
         }
         else
         {
@@ -2108,9 +2175,10 @@ void ibMenuBar::RefreshItem(size_t pos)
     RefreshRect(GetItemRect(pos));
 }
 
-void ibMenuBar::DoDraw(ibControlRenderer *renderer)
+void ibMenuBar::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
-    wxDC& dc = renderer->GetDC();
+    ibThemePaintDC dc(this);
+
     dc.SetFont(wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT));
 
     // redraw only the items which must be redrawn

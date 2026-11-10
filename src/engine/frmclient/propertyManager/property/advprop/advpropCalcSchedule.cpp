@@ -19,19 +19,19 @@ enum : std::int32_t {
 };
 
 // The schedule a value holds, as the server stores it…
-ibCalcScheduleDescription ReadSchedule(const wxVariant& value)
+ibCalcScheduleDescription ReadSchedule(const ibVariant& value)
 {
 	ibCalcScheduleDescription scheduleDesc;
-	ibCalcScheduleDescriptionMemory::ReadNode(ibVariantDataSerializable::GetNodeValue(value), scheduleDesc);
+	ibCalcScheduleDescriptionMemory::ReadNode(ibVariantSerializable::GetNodeValue(value), scheduleDesc);
 	return scheduleDesc;
 }
 
 // …and the value of another one: the same property's, named by the cell (ValueToString).
-wxVariant WriteSchedule(const wxVariant& value, const ibCalcScheduleDescription& scheduleDesc)
+ibVariant WriteSchedule(const ibCalcScheduleDescription& scheduleDesc)
 {
 	ibDataValue node;
 	ibCalcScheduleDescriptionMemory::WriteNode(node, scheduleDesc);
-	return wxVariant(new ibVariantDataSerializable(value.GetType(), node, wxEmptyString));
+	return ibVariant(new ibVariantSerializable(node, wxEmptyString));
 }
 
 } // namespace
@@ -40,7 +40,7 @@ wxVariant WriteSchedule(const wxVariant& value, const ibCalcScheduleDescription&
 // ibPGCalcScheduleProperty
 // -----------------------------------------------------------------------
 
-wxPG_IMPLEMENT_PROPERTY_CLASS(ibPGCalcScheduleProperty, wxPGProperty, Choice)
+ibPG_IMPLEMENT_PROPERTY_CLASS(ibPGCalcScheduleProperty, ibPGProperty, Choice)
 
 // register frontend property
 class ibPropertyCalcScheduleLoader
@@ -50,15 +50,15 @@ public:
 	{
 		// ibPropertyCalcSchedule — the schedule as the server stores it (ibCalcScheduleDescriptionMemory), the registers
 		// it may read the row's choices.
-		ibPropertyRegistry::Register(wxT("ibPropertyCalcSchedule"), [](ibBackendProperty* property) -> wxPGProperty* {
+		ibPropertyRegistry::Register(wxT("ibPropertyCalcSchedule"), [](ibBackendProperty* property) -> ibPGProperty* {
 			return new ibPGCalcScheduleProperty(property, property->GetLabel(), property->GetName(), property->GetValue());
 		});
 	}
 } g_calcScheduleLoader;
 
-wxPGChoices ibPGCalcScheduleProperty::GetChoices(const std::vector<ibDataNode>& items)
+ibPGChoices ibPGCalcScheduleProperty::GetChoices(const std::vector<ibDataNode>& items)
 {
-	wxPGChoices choices;
+	ibPGChoices choices;
 	choices.Add(_("<not set>"), 0);
 	for (const ibDataNode& item : items)
 		choices.Add(item.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Title), item.GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Id));   // names, as the type row names its types
@@ -76,8 +76,8 @@ std::vector<ibDataNode> ibPGCalcScheduleProperty::GetItems(std::int32_t kind) co
 }
 
 ibPGCalcScheduleProperty::ibPGCalcScheduleProperty(ibBackendProperty* property, const wxString& label,
-	const wxString& strName, const wxVariant& value)
-	: wxPGProperty(label, strName), m_property(property)
+	const wxString& strName, const ibVariant& value)
+	: ibPGProperty(label, strName), m_property(property)
 {
 	ibPropertyChoiceList registers;
 	if (m_property != nullptr)
@@ -97,11 +97,11 @@ ibPGCalcScheduleProperty::ibPGCalcScheduleProperty(ibBackendProperty* property, 
 		}
 	}
 
-	wxPGChoices valueChoices = GetChoices(GetItems(kListValue));
-	m_scheduleValue = new wxEnumProperty(_("Schedule value"), wxT("value"), valueChoices, 0);
+	ibPGChoices valueChoices = GetChoices(GetItems(kListValue));
+	m_scheduleValue = new ibEnumProperty(_("Schedule value"), wxT("value"), valueChoices, 0);
 	AddPrivateChild(m_scheduleValue);
-	wxPGChoices dateChoices = GetChoices(GetItems(kListDate));
-	m_scheduleDate = new wxEnumProperty(_("Schedule date"), wxT("date"), dateChoices, 0);
+	ibPGChoices dateChoices = GetChoices(GetItems(kListDate));
+	m_scheduleDate = new ibEnumProperty(_("Schedule date"), wxT("date"), dateChoices, 0);
 	AddPrivateChild(m_scheduleDate);
 
 	// the link rows of the register bound now — as many dimensions as the server listed, each with the fields that
@@ -115,9 +115,9 @@ ibPGCalcScheduleProperty::ibPGCalcScheduleProperty(ibBackendProperty* property, 
 			fields.push_back(field);
 		// Named as its neighbours are — what the row IS, not the field a configuration happens to link.
 		const wxString rowLabel = links.size() == 1 ? _("Schedule link")
-			: ibString::Format(_("Schedule link %u"), static_cast<unsigned>(idx + 1));
-		wxPGChoices fieldChoices = GetChoices(fields);
-		wxEnumProperty* row = new wxEnumProperty(rowLabel, wxString::Format(wxT("link%li"), static_cast<long>(dimension)),
+			: wxString::Format(_("Schedule link %u"), static_cast<unsigned>(idx + 1));
+		ibPGChoices fieldChoices = GetChoices(fields);
+		ibEnumProperty* row = new ibEnumProperty(rowLabel, wxString::Format(wxT("link%li"), static_cast<long>(dimension)),
 			fieldChoices, 0);
 		row->SetHelpString(ibString::Format(_("The field of the register that answers for the schedule's dimension '%s'."),
 			link.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Title)));
@@ -130,10 +130,10 @@ ibPGCalcScheduleProperty::ibPGCalcScheduleProperty(ibBackendProperty* property, 
 
 	// Read-only, the rows below as well, when the row brought no lists (see the header).
 	if (!m_hasLists)
-		wxPGProperty::SetFlagRecursively(wxPGFlags::ReadOnly, true);
+		ibPGProperty::SetFlagRecursively(ibPGFlags::ReadOnly, true);
 }
 
-wxString ibPGCalcScheduleProperty::ValueToString(wxVariant& value, wxPGPropValFormatFlags flags) const
+wxString ibPGCalcScheduleProperty::ValueToString(ibVariant& value, ibPGPropValFormatFlags flags) const
 {
 	// ⚠ NAMED BY THE CHOICES — the client holds no configuration to name the register by (the engine's variant asked
 	// it); the row's choices are named as the server named them.
@@ -144,11 +144,11 @@ wxString ibPGCalcScheduleProperty::ValueToString(wxVariant& value, wxPGPropValFo
 	return index != wxNOT_FOUND ? m_choices.GetLabel(index) : wxString();
 }
 
-bool ibPGCalcScheduleProperty::IntToValue(wxVariant& value, int number, wxPGPropValFormatFlags flags) const
+bool ibPGCalcScheduleProperty::IntToValue(ibVariant& value, int number, ibPGPropValFormatFlags flags) const
 {
 	ibCalcScheduleDescription sd = ReadSchedule(value);
 	sd.SetSchedule(m_choices.GetValue(number), 0, 0);
-	value = WriteSchedule(value, sd);
+	value = WriteSchedule(sd);
 	return true;
 }
 
@@ -157,10 +157,10 @@ int ibPGCalcScheduleProperty::GetChoiceSelection() const
 	return m_choices.Index(ReadSchedule(m_value).GetRegister());
 }
 
-wxVariant ibPGCalcScheduleProperty::ChildChanged(wxVariant& thisValue, int childIndex, wxVariant& childValue) const
+ibVariant ibPGCalcScheduleProperty::ChildChanged(ibVariant& thisValue, int childIndex, ibVariant& childValue) const
 {
 	ibCalcScheduleDescription sd = ReadSchedule(thisValue);
-	const ibMetaID id = childValue.GetLong();
+	const ibMetaID id = childValue.GetInteger();
 	if (childIndex == 0) {
 		sd.SetSchedule(sd.GetRegister(), id, sd.GetDate());
 	}
@@ -172,7 +172,7 @@ wxVariant ibPGCalcScheduleProperty::ChildChanged(wxVariant& thisValue, int child
 		if (link < m_linkDimensions.size())
 			sd.SetLink(m_linkDimensions[link], id);
 	}
-	return WriteSchedule(thisValue, sd);
+	return WriteSchedule(sd);
 }
 
 void ibPGCalcScheduleProperty::RefreshChildren()

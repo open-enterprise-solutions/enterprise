@@ -1859,11 +1859,10 @@ void ibSTCListBox::OnMouseLeaveWindow(wxMouseEvent& event)
     event.Skip();
 }
 
-// SEAM vs wx: the mouse comes in the window's coordinates, the rows are the client area's (ibVListBox::OnLeftDown)
 void ibSTCListBox::OnMouseMotion(wxMouseEvent& event)
 {
     const int old = m_currentRow;
-    m_currentRow = VirtualHitTest(event.GetY() - GetClientAreaOrigin().y);
+    m_currentRow = VirtualHitTest(event.GetY());
 
     if ( old != m_currentRow )
     {

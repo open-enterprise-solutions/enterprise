@@ -65,6 +65,10 @@ public:
 // ibCheckBox
 // ----------------------------------------------------------------------------
 
+wxBEGIN_EVENT_TABLE(ibCheckBox, ibControl)
+    EVT_PAINT(ibCheckBox::OnPaint)
+wxEND_EVENT_TABLE()
+
 void ibCheckBox::Init()
 {
     m_isPressed = false;
@@ -145,11 +149,12 @@ ibCheckBox::State ibCheckBox::GetState(int flags) const
         return State_Normal;
 }
 
-void ibCheckBox::DoDraw(ibControlRenderer *renderer)
+void ibCheckBox::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
+    ibThemePaintDC dc(this);
+
     int flags = GetStateFlags();
 
-    wxDC& dc = renderer->GetDC();
     dc.SetFont(GetFont());
     dc.SetTextForeground(GetForegroundColour());
 
@@ -162,11 +167,11 @@ void ibCheckBox::DoDraw(ibControlRenderer *renderer)
 
     wxBitmap bitmap(GetBitmap(GetState(flags), m_status));
 
-    renderer->GetRenderer()->
+    GetRenderer()->
         DrawCheckButton(dc,
                         GetLabelText(),
                         bitmap,
-                        renderer->GetRect(),
+                        wxRect(GetClientSize()),
                         flags,
                         GetWindowStyle() & wxALIGN_RIGHT ? wxALIGN_RIGHT
                                                          : wxALIGN_LEFT,

@@ -40,6 +40,8 @@
 #include "wx/renderer.h"
 #include "wx/dcbuffer.h"
 #include "deskgui/univ/renderer.h"
+#include "deskgui/univ/theme.h"
+#include "deskgui/univ/colourScheme.h"  // the list's colours: the theme's, as ibTreeCtrl's
 #include "wx/selstore.h"
 
 #include "wx/generic/private/drawbitmap.h"
@@ -1612,7 +1614,7 @@ void ibListLineData::ApplyAttributes(wxDC *dc,
         else
             colText = *wxBLACK;
 #else
-        colText = wxSystemSettings::GetColour(wxSYS_COLOUR_LISTBOXHIGHLIGHTTEXT);
+        colText = wxTHEME_COLOUR(HIGHLIGHT_TEXT); // SEAM: theme, not wxSYS
 #endif
     }
     else if ( attr && attr->HasTextColour() )
@@ -1634,15 +1636,14 @@ void ibListLineData::ApplyAttributes(wxDC *dc,
     // background
     if ( highlighted )
     {
-        // Use the renderer method to ensure that the selected items use the
-        // native look.
+        // SEAM: the theme's selection (ibThemeRenderer::DrawItemSelectionRect), not the native look - its pale blue
+        // hid the theme's white selected text
         int flags = wxCONTROL_SELECTED;
         if ( hasFocus )
             flags |= wxCONTROL_FOCUSED;
         if (current)
            flags |= wxCONTROL_CURRENT;
-        wxRendererNative::Get().
-            DrawItemSelectionRect( m_owner, *dc, rectHL, flags );
+        ibThemeEngine::Get()->GetRenderer()->DrawItemSelectionRect( m_owner, *dc, rectHL, flags );
     }
     else if ( attr && attr->HasBackgroundColour() )
     {
@@ -1901,15 +1902,13 @@ bool ibListHeaderWindow::Create( wxWindow *win,
     m_owner = owner;
     m_resizeCursor = new wxCursor( wxCURSOR_SIZEWE );
 
+    // SEAM vs wx: no colours of the system's set on the header - its buttons and their titles are the theme's
+    // (ibThemeRenderer::DrawHeaderButton, OnPaint)
 #if _USE_VISATTR
     wxVisualAttributes attr = wxPanel::GetClassDefaultAttributes();
-    SetOwnForegroundColour( attr.colFg );
-    SetOwnBackgroundColour( attr.colBg );
     if (!m_hasFont)
         SetOwnFont( attr.font );
 #else
-    SetOwnForegroundColour( wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT));
-    SetOwnBackgroundColour( wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE));
     if (!m_hasFont)
         SetOwnFont( wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT ));
 #endif
@@ -1964,10 +1963,8 @@ void ibListHeaderWindow::OnPaint( wxPaintEvent &WXUNUSED(event) )
 
     // SEAM vs wx: buffered - straight on the paint DC each button went over
     // the last on screen, and a column dragged wider flickered at every step
-    wxAutoBufferedPaintDC dc( this );
-
-    dc.SetBackground(wxBrush(GetBackgroundColour()));
-    dc.Clear();
+    ibThemePaintDC dc( this );
+    ibRenderer* const renderer = ibThemeEngine::Get()->GetRenderer();
 
     AdjustDC( dc );
 
@@ -1977,6 +1974,7 @@ void ibListHeaderWindow::OnPaint( wxPaintEvent &WXUNUSED(event) )
     parent->CalcUnscrolledPosition(w, 0, &w, nullptr);
 
     dc.SetBackgroundMode(wxBRUSHSTYLE_TRANSPARENT);
+    dc.SetTextForeground(wxTHEME_COLOUR(CONTROL_TEXT));
 
     int x = HEADER_OFFSET_X;
     int numColumns = m_owner->GetColumnCount();
@@ -2015,17 +2013,13 @@ void ibListHeaderWindow::OnPaint( wxPaintEvent &WXUNUSED(event) )
         if (i == 0)
            flags |= wxCONTROL_SPECIAL; // mark as first column
 
-        wxHeaderButtonParams headerBtnParams;
-        headerBtnParams.m_arrowColour = GetForegroundColour();
-
-        wxRendererNative::Get().DrawHeaderButton
+        renderer->DrawHeaderButton
                                 (
                                     this,
                                     dc,
                                     wxRect(x, HEADER_OFFSET_Y, cw, ch),
                                     flags,
-                                    sortArrow,
-                                    &headerBtnParams
+                                    sortArrow
                                 );
 
         // see if we have enough space for the column label
@@ -2101,7 +2095,7 @@ void ibListHeaderWindow::OnPaint( wxPaintEvent &WXUNUSED(event) )
     // leave an unpainted area when columns are removed (and it looks better)
     if ( x < w )
     {
-        wxRendererNative::Get().DrawHeaderButton
+        renderer->DrawHeaderButton
                                 (
                                     this,
                                     dc,
@@ -2557,23 +2551,9 @@ ibListMainWindow::ibListMainWindow( wxWindow *parent,
 {
     Init();
 
-    m_highlightBrush = new wxBrush
-                         (
-                            wxSystemSettings::GetColour
-                            (
-                                wxSYS_COLOUR_HIGHLIGHT
-                            ),
-                            wxBRUSHSTYLE_SOLID
-                         );
-
-    m_highlightUnfocusedBrush = new wxBrush
-                              (
-                                 wxSystemSettings::GetColour
-                                 (
-                                     wxSYS_COLOUR_BTNSHADOW
-                                 ),
-                                 wxBRUSHSTYLE_SOLID
-                              );
+    // SEAM: the theme's selection, as ibTreeCtrl's - not the system's
+    m_highlightBrush = new wxBrush(wxTHEME_COLOUR(HIGHLIGHT), wxBRUSHSTYLE_SOLID);
+    m_highlightUnfocusedBrush = new wxBrush(wxTHEME_COLOUR(HIGHLIGHT).ChangeLightness(130), wxBRUSHSTYLE_SOLID);
 
     wxVisualAttributes attr = ibListCtrl::GetClassDefaultAttributes();
     SetOwnForegroundColour( attr.colFg );
@@ -3246,7 +3226,7 @@ void ibListMainWindow::OnPaint( wxPaintEvent &WXUNUSED(event) )
         wxRect rect(GetLineHighlightRect(m_current));
         rect.Offset(origin);
 
-        wxRendererNative::Get().DrawFocusRect(this, dc, rect, flags);
+        ibThemeEngine::Get()->GetRenderer()->DrawFocusRect(this, dc, rect, flags);
     }
 #endif // !__WXMAC__
 
@@ -3257,17 +3237,19 @@ void ibListMainWindow::OnPaint( wxPaintEvent &WXUNUSED(event) )
 
 void ibListMainWindow::OnSysColourChanged( wxSysColourChangedEvent &event )
 {
-    SetOwnForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_LISTBOXTEXT));
-    SetOwnBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_LISTBOX));
+    // SEAM: the theme's colours (GetClassDefaultAttributes), as at the creation
+    const wxVisualAttributes attr = ibListCtrl::GetClassDefaultAttributes();
+    SetOwnForegroundColour(attr.colFg);
+    SetOwnBackgroundColour(attr.colBg);
 
     if ( m_highlightBrush )
     {
-        m_highlightBrush->SetColour(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT));
+        m_highlightBrush->SetColour(wxTHEME_COLOUR(HIGHLIGHT));
     }
 
     if ( m_highlightUnfocusedBrush )
     {
-        m_highlightUnfocusedBrush->SetColour(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW));
+        m_highlightUnfocusedBrush->SetColour(wxTHEME_COLOUR(HIGHLIGHT).ChangeLightness(130));
     }
 
     Refresh();
@@ -6010,7 +5992,7 @@ void ibListCtrl::CreateOrDestroyHeaderWindowAsNeeded()
                         wxSize
                         (
                           GetClientSize().x,
-                          wxRendererNative::Get().GetHeaderButtonHeight(this)
+                          ibThemeEngine::Get()->GetRenderer()->GetHeaderButtonHeight(this)
                         ),
                         wxTAB_TRAVERSAL
                       );
@@ -6806,8 +6788,8 @@ ibListCtrl::GetClassDefaultAttributes(wxWindowVariant variant)
 #else
     wxUnusedVar(variant);
     wxVisualAttributes attr;
-    attr.colFg = wxSystemSettings::GetColour(wxSYS_COLOUR_LISTBOXTEXT);
-    attr.colBg = wxSystemSettings::GetColour(wxSYS_COLOUR_LISTBOX);
+    attr.colFg = wxTHEME_COLOUR(CONTROL_TEXT); // SEAM: theme, as ibTreeCtrl's
+    attr.colBg = wxTHEME_COLOUR(WINDOW); // SEAM: theme, as ibTreeCtrl's
     attr.font  = wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT);
     return attr;
 #endif

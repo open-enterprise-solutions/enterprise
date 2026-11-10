@@ -647,6 +647,7 @@ wxBEGIN_EVENT_TABLE(ibTextCtrl, ibControl)
     EVT_MENU(wxID_SELECTALL, ibTextCtrl::OnContextMenuCommand)
     EVT_CHAR(ibTextCtrl::OnChar)
 
+    EVT_PAINT(ibTextCtrl::OnPaint)
     EVT_SIZE(ibTextCtrl::OnSize)
 wxEND_EVENT_TABLE()
 
@@ -880,6 +881,15 @@ bool ibTextCtrl::TryBefore(wxEvent& event)
 
     return ibControl::TryBefore(event);
 }
+
+#if wxUSE_ACCEL
+
+bool ibTextCtrl::ClaimsKeyBeforeAccelerator(const wxKeyEvent& event, int WXUNUSED(command)) const
+{
+    return IsUsedForEditing(event);
+}
+
+#endif // wxUSE_ACCEL
 
 void ibTextCtrl::Clear()
 {
@@ -1559,7 +1569,7 @@ void ibTextCtrl::SetSelection(wxTextPos from, wxTextPos to)
 
         if ( from != m_selStart || to != m_selEnd )
         {
-            // we need to use temp vars as RefreshTextRange() may call DoDraw()
+            // we need to use temp vars as RefreshTextRange() may call OnPaint()
             // directly and so m_selStart/End must be reset by then
             wxTextPos selStartOld = m_selStart,
                       selEndOld = m_selEnd;
@@ -1606,7 +1616,7 @@ void ibTextCtrl::ClearSelection()
 {
     if ( HasSelection() )
     {
-        // we need to use temp vars as RefreshTextRange() may call DoDraw()
+        // we need to use temp vars as RefreshTextRange() may call OnPaint()
         // directly (see above as well)
         wxTextPos selStart = m_selStart,
                   selEnd = m_selEnd;
@@ -2660,7 +2670,9 @@ wxSize ibTextCtrl::DoGetBestClientSize() const
     wxRect rectText;
     rectText.width = w;
     rectText.height = h;
-    wxRect rectTotal = GetRenderer()->GetTextTotalArea(this, rectText);
+    wxRect rectTotal = GetRenderer()->GetTextTotalArea(rectText);
+    if ( m_marginText != -1 )
+        rectTotal.width = rectText.width + 2 * m_marginText;
 
     // the default field is compact: the text line + the theme paddings,
     // nothing more (per the reference look — no button-height stretching)
@@ -2681,9 +2693,29 @@ wxSize ibTextCtrl::DoGetSizeFromTextSize(int xlen, int ylen) const
     wxRect rectText;
     rectText.width = xlen + 1;
     rectText.height = IsSingleLine() || ylen <= 0 ? GetLineHeight() : ylen;
-    wxRect rectTotal = GetRenderer()->GetTextTotalArea(this, rectText);
+    wxRect rectTotal = GetRenderer()->GetTextTotalArea(rectText);
+    if ( m_marginText != -1 )
+        rectTotal.width = rectText.width + 2 * m_marginText;
 
     return wxSize(rectTotal.width + GetButtonsWidth(), rectTotal.height) + GetWindowBorderSize();
+}
+
+bool ibTextCtrl::DoSetMargins(const wxPoint& pt)
+{
+    if ( pt.x != -1 )
+    {
+        m_marginText = pt.x;
+        UpdateTextRect();
+        Refresh();
+    }
+
+    // as wxMSW's: the vertical margin is not supported
+    return pt.y == -1;
+}
+
+wxPoint ibTextCtrl::DoGetMargins() const
+{
+    return wxPoint(m_marginText != -1 ? m_marginText : m_rectText.x, -1);
 }
 
 void ibTextCtrl::UpdateTextRect()
@@ -2702,7 +2734,12 @@ void ibTextCtrl::UpdateTextRect()
     }
 
     wxCoord *extraSpace = WrapLines() ? &WData().m_widthMark : nullptr;
-    m_rectText = GetRenderer()->GetTextClientArea(this, rectTotal, extraSpace);
+    m_rectText = GetRenderer()->GetTextClientArea(rectTotal, extraSpace);
+    if ( m_marginText != -1 )
+    {
+        m_rectText.x = rectTotal.x + m_marginText;
+        m_rectText.width = rectTotal.width - 2 * m_marginText;
+    }
 
     // code elsewhere is confused by negative rect size
     if ( m_rectText.width <= 0 )
@@ -2717,6 +2754,14 @@ void ibTextCtrl::UpdateTextRect()
     {
         m_rectText.y += (m_rectText.height - m_heightLine) / 2;
         m_rectText.height = m_heightLine;
+    }
+    // ... and one lower than its line with the theme's padding gives up the padding, not the line: a grid's editor
+    // is as tall as its row, and its text was cut to what the padding left
+    else if ( IsSingleLine() && m_heightLine > 0 && m_rectText.height < m_heightLine )
+    {
+        const wxCoord height = wxMin(m_heightLine, rectTotal.height);
+        m_rectText.y = rectTotal.y + (rectTotal.height - height) / 2;
+        m_rectText.height = wxMax(1, height);
     }
 
     if ( !IsSingleLine() )
@@ -3681,7 +3726,7 @@ void ibTextCtrl::ScrollText(wxTextCoord col)
         int dx = SData().m_ofsHorz - ofsHorz;
 
         // NB2: we call Refresh() below which results in a call to
-        //      DoDraw(), so we must update SData().m_ofsHorz before calling it
+        //      OnPaint(), so we must update SData().m_ofsHorz before calling it
         SData().m_ofsHorz = ofsHorz;
         SData().m_colStart = col;
 
@@ -4284,7 +4329,7 @@ void ibTextCtrl::RefreshLineWrapMarks(wxTextCoord rowFirst,
 // border drawing
 // ----------------------------------------------------------------------------
 
-void ibTextCtrl::DoDrawBorder(wxDC& dc, const wxRect& rect)
+void ibTextCtrl::DrawBorder(wxDC& dc, const wxRect& rect)
 {
     m_renderer->DrawTextBorder(dc, GetBorder(), rect, GetStateFlags());
 }
@@ -4299,7 +4344,7 @@ void ibTextCtrl::DoDrawBorder(wxDC& dc, const wxRect& rect)
    1. only the regions which must be updated are redrawn, this means that we
       never Refresh() the entire window but use RefreshPixelRange() and
       ScrollWindow() which only refresh small parts of it and iterate over the
-      update region in our DoDraw()
+      update region in our OnPaint()
 
    2. the text displayed on the screen is obtained using GetTextToShow(): it
       should be used for all drawing/measuring
@@ -4539,14 +4584,16 @@ void ibTextCtrl::DoDrawLineWrapMarks(wxDC& dc, const wxRect& rectUpdate)
     }
 }
 
-void ibTextCtrl::DoDraw(ibControlRenderer *renderer)
+void ibTextCtrl::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
-    // hide the caret while we're redrawing the window and show it after we are
-    // done with it
+    // hide the caret for the WHOLE pass including the buffer blit: the
+    // system caret XORs the screen directly, and a blit over a shown
+    // caret desynchronizes it — stale inverted strokes stay behind
+    // (declared before the dc so it is destroyed AFTER the blit)
     wxCaretSuspend cs(this);
+    ibThemePaintDC dc(this);
 
     // prepare the DC
-    wxDC& dc = renderer->GetDC();
     dc.SetFont(GetFont());
     dc.SetTextForeground(GetForegroundColour());
 

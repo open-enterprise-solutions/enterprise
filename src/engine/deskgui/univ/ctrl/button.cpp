@@ -80,6 +80,10 @@ wxArrayString WrappedLines(const wxWindow& window, const wxString& label, int wi
 // implementation
 // ============================================================================
 
+wxBEGIN_EVENT_TABLE(ibButton, ibAnyButton)
+    EVT_PAINT(ibButton::OnPaint)
+wxEND_EVENT_TABLE()
+
 // ----------------------------------------------------------------------------
 // creation
 // ----------------------------------------------------------------------------
@@ -253,7 +257,7 @@ int ibButton::DoGetBestClientHeight(int width) const
 // best width gets the height of its caption wrapped; a grid sizer asks once, at its widest item's minimum width - a
 // tile whose MinimumSize is narrower than its caption is wrapped there - and lays its cells out without asking again.
 // In a row (a box or a wrap sizer laid across) a tile is not asked and keeps its best size. A cell squeezed further
-// gets no more height, and DoDraw ends the line that does not fit with an ellipsis. Its own minimum stays a floor.
+// gets no more height, and OnPaint ends the line that does not fit with an ellipsis. Its own minimum stays a floor.
 wxSize ibButton::GetMinSizeFromKnownDirection(int direction, int size, int WXUNUSED(availableOtherDir))
 {
     if ( direction != wxHORIZONTAL || size <= 0 || m_bitmapPosition != wxTOP )
@@ -269,12 +273,13 @@ wxSize ibButton::GetMinSizeFromKnownDirection(int direction, int size, int WXUNU
 
 // The pieces - the bitmap, the label (its lines, in a tile), the note - laid out here and each drawn by the theme, which
 // gives it the state's look (a disabled label greyed, the default button's white); the face under them is the theme's
-// too (ibAnyButton::DoDrawBackground).
-void ibButton::DoDraw(ibControlRenderer *renderer)
+// too (ibAnyButton::EraseBackground).
+void ibButton::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
-    wxDC& dc = renderer->GetDC();
-    const wxRect rect = renderer->GetRect();
-    ibRenderer* const theme = renderer->GetRenderer();
+    ibThemePaintDC dc(this);
+
+    const wxRect rect(GetClientSize());
+    ibRenderer* const theme = GetRenderer();
     const int flags = GetStateFlags();
 
     // …a hyperlink's label underlined, in the theme's link colour.

@@ -5,7 +5,7 @@
 
 #include <wx/filename.h>
 
-#include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frmclient/propertyManager/property/private/prop.h"             // ibPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 #include "core/serialize/dataBuilder.h"   // ibDataNode — the row the configuration's pictures come with
 
@@ -16,15 +16,15 @@
 namespace {
 
 // The picture a value holds, as the server stores it…
-ibPictureDescription ReadPicture(const wxVariant& value)
+ibPictureDescription ReadPicture(const ibVariant& value)
 {
 	ibPictureDescription pictureDesc;
-	ibPictureDescriptionMemory::ReadNode(ibVariantDataSerializable::GetNodeValue(value), pictureDesc);
+	ibPictureDescriptionMemory::ReadNode(ibVariantSerializable::GetNodeValue(value), pictureDesc);
 	return pictureDesc;
 }
 
 // …and the value of another one: the same property's, read as where it comes from.
-wxVariant WritePicture(const wxVariant& value, const ibPictureDescription& pictureDesc)
+ibVariant WritePicture(const ibPictureDescription& pictureDesc)
 {
 	ibDataValue node;
 	ibPictureDescriptionMemory::WriteNode(node, pictureDesc);
@@ -35,37 +35,33 @@ wxVariant WritePicture(const wxVariant& value, const ibPictureDescription& pictu
 		words = _("Configuration picture");
 	else if (pictureDesc.m_type == ibPictureType::eFromFile)
 		words = _("External picture");
-	return wxVariant(new ibVariantDataSerializable(value.GetType(), node, words));
+	return ibVariant(new ibVariantSerializable(node, words));
 }
 
 // A FILE'S PICTURE, carried whole — as the server stores it…
-ibExternalPictureDescription ReadExternalPicture(const wxVariant& value)
+ibExternalPictureDescription ReadExternalPicture(const ibVariant& value)
 {
 	ibExternalPictureDescription pictureDesc;
-	ibExternalPictureDescriptionMemory::ReadNode(ibVariantDataSerializable::GetNodeValue(value), pictureDesc);
+	ibExternalPictureDescriptionMemory::ReadNode(ibVariantSerializable::GetNodeValue(value), pictureDesc);
 	return pictureDesc;
 }
 
-// …and a value of it, of the type named: read as the file's name.
-wxVariant WriteExternalPicture(const wxString& type, const ibExternalPictureDescription& pictureDesc)
+// …and a value of it: read as the file's name.
+ibVariant WriteExternalPicture(const ibExternalPictureDescription& pictureDesc)
 {
 	ibDataValue node;
 	ibExternalPictureDescriptionMemory::WriteNode(node, pictureDesc);
-	return wxVariant(new ibVariantDataSerializable(type, node,
+	return ibVariant(new ibVariantSerializable(node,
 		pictureDesc.IsEmptyPicture() ? wxString() : wxFileName(pictureDesc.m_img_name).GetFullName()));
 }
 
 }
 
 // -----------------------------------------------------------------------
-// wxPGPictureProperty
+// ibPGPictureProperty
 // -----------------------------------------------------------------------
 
-#if wxCHECK_VERSION(3, 1, 0)
-wxPG_IMPLEMENT_PROPERTY_CLASS(wxPGPictureProperty, wxPGProperty, TextCtrl)
-#else
-WX_PG_IMPLEMENT_PROPERTY_CLASS(wxPGPictureProperty, wxPGProperty, wxString, const wxString&, TextCtrl)
-#endif
+ibPG_IMPLEMENT_PROPERTY_CLASS(ibPGPictureProperty, ibPGProperty, TextCtrl)
 
 // register frontend property — each picture as the server stores it (ibPictureDescriptionMemory, the external one
 // ibExternalPictureDescriptionMemory: the file's image carried whole), and back as one.
@@ -74,15 +70,15 @@ class ibPropertyPictureLoader
 public:
 	ibPropertyPictureLoader()
 	{
-		ibPropertyRegistry::Register(wxT("ibPropertyPicture"), [](ibBackendProperty* property) -> wxPGProperty* {
+		ibPropertyRegistry::Register(wxT("ibPropertyPicture"), [](ibBackendProperty* property) -> ibPGProperty* {
 			// …and the configuration's pictures it may be loaded from, by name (the row's Pictures, its GetProtocolValue).
 			ibDataNode row;
 			property->GetProtocolValue(row);
-			return new wxPGPictureProperty(property->GetLabel(), property->GetName(), property->GetValue(),
+			return new ibPGPictureProperty(property->GetLabel(), property->GetName(), property->GetValue(),
 				row.GetProperty(ibProtocol::ibSchema::ibProperties::Pictures).AsChild(),
 				row.GetProperty(ibProtocol::ibSchema::ibProperties::ClassPictures).AsChild());
 		});
-		ibPropertyRegistry::Register(wxT("ibPropertyExternalPicture"), [](ibBackendProperty* property) -> wxPGProperty* {
+		ibPropertyRegistry::Register(wxT("ibPropertyExternalPicture"), [](ibBackendProperty* property) -> ibPGProperty* {
 			return new ibPGExternalImageProperty(property->GetLabel(), property->GetName(), property->GetValue());
 		});
 	}
@@ -90,15 +86,15 @@ public:
 
 static int s_indFilter = -1;
 
-wxPGPictureProperty::wxPGPictureProperty(const wxString& label,
+ibPGPictureProperty::ibPGPictureProperty(const wxString& label,
 	const wxString& strName,
-	const wxVariant& value,
+	const ibVariant& value,
 	const std::optional<ibDataNode>& pictures,
-	const std::optional<ibDataNode>& classes) : wxPGProperty(label, strName),
+	const std::optional<ibDataNode>& classes) : ibPGProperty(label, strName),
 	m_propertySource(nullptr),
 	m_propertyBackend(nullptr), m_propertyConfiguration(nullptr), m_propertyFile(nullptr)
 {
-	wxPGChoices sourceChoices, systemChoices, configurationChoices;
+	ibPGChoices sourceChoices, systemChoices, configurationChoices;
 
 	// Add 'source' property (common for all other children)
 	sourceChoices.Add(_("Load from backend"), eFromBackend);
@@ -106,13 +102,13 @@ wxPGPictureProperty::wxPGPictureProperty(const wxString& label,
 
 	unsigned int system_value = 0, system_config = 0;
 
-	wxPGChoiceEntry& entry =
+	ibPGChoiceEntry& entry =
 		systemChoices.AddAsSorted(wxEmptyString, system_value++);
 
 	m_valChoices.insert_or_assign(entry.GetValue(), 0);
 
 	for (auto so : ibBackendPicture::GetArrayPicture()) {
-		wxPGChoiceEntry& entry = systemChoices.AddAsSorted(so.m_name, system_value++);
+		ibPGChoiceEntry& entry = systemChoices.AddAsSorted(so.m_name, system_value++);
 		entry.SetBitmap(so.m_data);
 		m_valChoices.insert_or_assign(
 			entry.GetValue(), so.m_id
@@ -131,7 +127,7 @@ wxPGPictureProperty::wxPGPictureProperty(const wxString& label,
 			unsigned long long clsid = 0;
 			if (!id.ToULongLong(&clsid) || clsid == 0)
 				continue;
-			wxPGChoiceEntry& entry = systemChoices.AddAsSorted(
+			ibPGChoiceEntry& entry = systemChoices.AddAsSorted(
 				item.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Name), system_value++);
 			entry.SetBitmap(ibProtocolPicture(id));
 			m_valChoices.insert_or_assign(entry.GetValue(), static_cast<ibPictureID>(clsid));
@@ -140,7 +136,7 @@ wxPGPictureProperty::wxPGPictureProperty(const wxString& label,
 
 	// …and the configuration's — a server's property always has an owner, the object its row is of.
 	{
-		wxPGChoiceEntry& entry = configurationChoices.AddAsSorted(wxEmptyString, system_config++);
+		ibPGChoiceEntry& entry = configurationChoices.AddAsSorted(wxEmptyString, system_config++);
 		m_confChoices.insert_or_assign(entry.GetValue(), wxNullGuid);
 
 		// The configuration's pictures — the picture metaobjects of the owner's configuration, or of the one it extends:
@@ -154,7 +150,7 @@ wxPGPictureProperty::wxPGPictureProperty(const wxString& label,
 			ibProtocolPictureReceive(ids);
 			for (const ibDataNode& item : pictures->Children()) {
 				const wxString guid = item.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Guid);
-				wxPGChoiceEntry& entry = configurationChoices.AddAsSorted(
+				ibPGChoiceEntry& entry = configurationChoices.AddAsSorted(
 					item.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Name), system_config++);
 				entry.SetBitmap(ibProtocolPicture(item.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Id)));
 				m_confChoices.insert_or_assign(entry.GetValue(), ibGuid(guid));
@@ -164,25 +160,25 @@ wxPGPictureProperty::wxPGPictureProperty(const wxString& label,
 		sourceChoices.Add(_("Load from configuration"), eFromConfiguration);
 	}
 
-	m_propertySource = new wxEnumProperty(_("Source"), wxT("source"), sourceChoices);
+	m_propertySource = new ibEnumProperty(_("Source"), wxT("source"), sourceChoices);
 	m_propertySource->SetHelpString(_("Select a source picture"));
 
 	AddPrivateChild(m_propertySource);
 
-	m_propertyBackend = new wxEditEnumProperty(_("System"), wxT("system"), systemChoices);
+	m_propertyBackend = new ibEditEnumProperty(_("System"), wxT("system"), systemChoices);
 	m_propertyBackend->SetHelpString(_("Image from engine collections"));
 
 	AddPrivateChild(m_propertyBackend);
 
 	// Add 'configuration' property (common for all other children)
-	m_propertyConfiguration = new wxEditEnumProperty(_("Configuration"), wxT("configuration"), configurationChoices);
+	m_propertyConfiguration = new ibEditEnumProperty(_("Configuration"), wxT("configuration"), configurationChoices);
 	m_propertyConfiguration->SetHelpString(_("Image from configuration"));
 
 	AddPrivateChild(m_propertyConfiguration);
 
 	// Add 'file_path' property (common for 'Load From File' and 'Load From Embedded File' choices)
 	m_propertyFile = new ibPGExternalImageProperty(_("File path"), wxT("file_path"),
-		WriteExternalPicture(wxT("ibPropertyExternalPicture"), ReadPicture(value).m_img_data));
+		WriteExternalPicture(ReadPicture(value).m_img_data));
 	m_propertyFile->SetHelpString(_("Path to the image file."));
 
 	AddPrivateChild(m_propertyFile);
@@ -191,31 +187,31 @@ wxPGPictureProperty::wxPGPictureProperty(const wxString& label,
 	SetValue(value);
 }
 
-wxVariant wxPGPictureProperty::ChildChanged(wxVariant& thisValue, const int childIndex,
-	wxVariant& childValue) const
+ibVariant ibPGPictureProperty::ChildChanged(ibVariant& thisValue, const int childIndex,
+	ibVariant& childValue) const
 {
 	ibPictureDescription pictureDesc = ReadPicture(thisValue);
 	switch (childIndex)
 	{
 	case 0:
-		pictureDesc.m_type = static_cast<ibPictureType>(childValue.GetLong());
+		pictureDesc.m_type = static_cast<ibPictureType>(childValue.GetInteger());
 		break;
 	case 1:
-		pictureDesc.m_class_identifier = m_valChoices.at(childValue.GetLong());
+		pictureDesc.m_class_identifier = m_valChoices.at(childValue.GetInteger());
 		break;
 	case 2:
-		pictureDesc.m_meta_guid = m_confChoices.at(childValue.GetLong());
+		pictureDesc.m_meta_guid = m_confChoices.at(childValue.GetInteger());
 		break;
 	case 3:
 		pictureDesc.m_img_data = ReadExternalPicture(childValue);
 		break;
 	}
-	return WritePicture(thisValue, pictureDesc);
+	return WritePicture(pictureDesc);
 }
 
-void wxPGPictureProperty::RefreshChildren()
+void ibPGPictureProperty::RefreshChildren()
 {
-	if (!ibVariantDataSerializable::GetNodeValue(m_value).IsEmpty()) {
+	if (!ibVariantSerializable::GetNodeValue(m_value).IsEmpty()) {
 
 		m_propertySource->Hide(false);
 		m_propertySource->SetExpanded(true);
@@ -266,7 +262,7 @@ void wxPGPictureProperty::RefreshChildren()
 				m_propertyConfiguration->SetValue(wxNOT_FOUND);
 		}
 		else if (pd.m_type == ibPictureType::eFromFile) {
-			m_propertyFile->SetValue(WriteExternalPicture(wxT("ibPropertyExternalPicture"), pd.m_img_data));
+			m_propertyFile->SetValue(WriteExternalPicture(pd.m_img_data));
 		}
 	}
 	else {
@@ -284,19 +280,19 @@ void wxPGPictureProperty::RefreshChildren()
 		m_propertyFile->SetExpanded(false);
 	}
 
-	wxPGPictureProperty::SetExpanded(true);
+	ibPGPictureProperty::SetExpanded(true);
 }
 
 // -----------------------------------------------------------------------
 // ibPGExternalImageProperty
 // -----------------------------------------------------------------------
 
-wxPG_IMPLEMENT_PROPERTY_CLASS(ibPGExternalImageProperty, wxEditorDialogProperty, TextCtrlAndButton)
+ibPG_IMPLEMENT_PROPERTY_CLASS(ibPGExternalImageProperty, ibEditorDialogProperty, TextCtrlAndButton)
 
-const wxString& wxPGGetDefaultImageWildcard(int& indFilter)
+const wxString& ibPGGetDefaultImageWildcard(int& indFilter)
 {
 	// Form the wildcard, if not done yet
-	if (wxPGGlobalVars->m_pDefaultImageWildcard.empty()) {
+	if (ibPGGlobalVars->m_pDefaultImageWildcard.empty()) {
 
 		wxString str, ext; s_indFilter = 0;
 
@@ -330,27 +326,27 @@ const wxString& wxPGGetDefaultImageWildcard(int& indFilter)
 		str.append(wxS("All image files|") + ext + "|");
 		str.append(wxS("All files (*.*)|*.*"));
 
-		wxPGGlobalVars->m_pDefaultImageWildcard = str;
+		ibPGGlobalVars->m_pDefaultImageWildcard = str;
 	}
 
 	indFilter = s_indFilter;
-	return wxPGGlobalVars->m_pDefaultImageWildcard;
+	return ibPGGlobalVars->m_pDefaultImageWildcard;
 }
 
-ibPGExternalImageProperty::ibPGExternalImageProperty(const wxString& label, const wxString& name, const wxVariant& value)
-	: wxEditorDialogProperty(label, name)
+ibPGExternalImageProperty::ibPGExternalImageProperty(const wxString& label, const wxString& name, const ibVariant& value)
+	: ibEditorDialogProperty(label, name)
 {
-	m_flags |= wxPGPropertyFlags_ShowFullFileName;
-	m_flags &= ~wxPGPropertyFlags_ActiveButton; // Property button enabled only in not read-only mode.
+	m_flags |= ibPGPropertyFlags_ShowFullFileName;
+	m_flags &= ~ibPGPropertyFlags_ActiveButton; // Property button enabled only in not read-only mode.
 
-	m_wildcard = wxPGGetDefaultImageWildcard(m_indFilter);
+	m_wildcard = ibPGGetDefaultImageWildcard(m_indFilter);
 
 	SetValue(value);
 }
 
 void ibPGExternalImageProperty::OnCustomPaint(wxDC& dc,
 	const wxRect& rect,
-	wxPGPaintData& d)
+	ibPGPaintData& d)
 {
 	const ibExternalPictureDescription pictureDesc = ReadExternalPicture(GetValue());
 
@@ -380,17 +376,17 @@ void ibPGExternalImageProperty::OnCustomPaint(wxDC& dc,
 	}
 }
 
-bool ibPGExternalImageProperty::StringToValue(wxVariant& variant, const wxString& text, wxPGPropValFormatFlags flags) const
+bool ibPGExternalImageProperty::StringToValue(ibVariant& variant, const wxString& text, ibPGPropValFormatFlags flags) const
 {
 	if (text.IsEmpty()) {
-		variant = WriteExternalPicture(variant.GetType(), ibExternalPictureDescription());
+		variant = WriteExternalPicture(ibExternalPictureDescription());
 		return true;
 	}
 
 	return false;
 }
 
-bool ibPGExternalImageProperty::DisplayEditorDialog(wxPropertyGrid* pg, wxVariant& value)
+bool ibPGExternalImageProperty::DisplayEditorDialog(ibPropertyGrid* pg, ibVariant& value)
 {
 	wxFileName filename(ReadExternalPicture(value).m_img_name);
 
@@ -416,7 +412,7 @@ bool ibPGExternalImageProperty::DisplayEditorDialog(wxPropertyGrid* pg, wxVarian
 		ibExternalPictureDescription container;
 
 		if (ibBackendPicture::LoadFromFile(dlg.GetPath(), container)) {
-			value = WriteExternalPicture(value.GetType(), container);
+			value = WriteExternalPicture(container);
 			return true;
 		}
 	}

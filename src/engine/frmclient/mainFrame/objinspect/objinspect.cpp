@@ -8,8 +8,8 @@ enum {
 };
 
 namespace {
-	// RAII: mark a wxPG change event "in flight" for its whole handler, so any rebuild the edit triggers
-	// (Create) defers instead of Clear()ing the grid under the property wxPG is still dispatching on. Restores
+	// RAII: mark an ibPG change event "in flight" for its whole handler, so any rebuild the edit triggers
+	// (Create) defers instead of Clear()ing the grid under the property ibPG is still dispatching on. Restores
 	// on scope exit even through the handler's early returns / Veto paths.
 	struct ScopedFlag {
 		bool& m_flag;
@@ -23,8 +23,8 @@ namespace {
 // ---------------------------------------------------------
 
 // The inspector's end of the object's push channel: turns "this ibProperty is now
-// hidden" into the wxPG call. The object never names a widget; the mapping back to
-// wxPGProperty lives here, where the grid does.
+// hidden" into the ibPG call. The object never names a widget; the mapping back to
+// ibPGProperty lives here, where the grid does.
 class ibGenericPropertyObjectNotifier : public ibPropertyObjectNotifier
 {
 public:
@@ -128,8 +128,8 @@ void ibObjectInspector::Create(ibPropertyObject* object, bool force)
 	m_pendingObject = object;
 
 	// Defer + coalesce. A child edit routes back here to rebuild (RefreshEditor → attribute tree →
-	// SelectObject → Create), but the m_pg->Clear() below DESTROYS every wxPGProperty. If a wxPG change
-	// event is still being dispatched, that frees the very property wxPG is editing → use-after-free the
+	// SelectObject → Create), but the m_pg->Clear() below DESTROYS every ibPGProperty. If an ibPG change
+	// event is still being dispatched, that frees the very property ibPG is editing → use-after-free the
 	// moment the handler returns; and a burst of selects in one refresh would each Clear+refill (flicker,
 	// the "re-population on every child" churn). So while an event is in flight or a rebuild is already
 	// queued, record the target and post a SINGLE CallAfter — the grid rebuilds once, after the stack
@@ -252,16 +252,16 @@ void ibObjectInspector::Create(ibPropertyObject* object, bool force)
 	if (ShownObject() != nullptr) {
 		m_currentSel->OnRefresh();
 		for (auto prop : m_propMap) {
-			wxPGProperty* property = prop.first;
+			ibPGProperty* property = prop.first;
 			if (property != nullptr) {
-				wxPGProperty* parentProperty = property->GetParent();
+				ibPGProperty* parentProperty = property->GetParent();
 				if (parentProperty->IsCategory() &&
-					parentProperty->IsVisible() != (!property->HasFlag(wxPGFlags::Hidden))) {
+					parentProperty->IsVisible() != (!property->HasFlag(ibPGFlags::Hidden))) {
 					bool visible = false;
 					for (unsigned int idx = 0; idx < parentProperty->GetChildCount(); idx++) {
-						wxPGProperty* currChild = parentProperty->Item(idx);
+						ibPGProperty* currChild = parentProperty->Item(idx);
 						wxASSERT(currChild);
-						if (!currChild->HasFlag(wxPGFlags::Hidden))
+						if (!currChild->HasFlag(ibPGFlags::Hidden))
 							visible = true;
 					}
 					if (parentProperty->IsVisible() != visible)
@@ -289,20 +289,20 @@ void ibObjectInspector::ShowInspector()
 
 #include "frmclient/visualView/ctrl/frame.h"
 
-wxPropertyGridManager* ibObjectInspector::CreatePropertyGridManager(wxWindow* parent, wxWindowID id) const
+ibPropertyGridManager* ibObjectInspector::CreatePropertyGridManager(wxWindow* parent, wxWindowID id) const
 {
 	int pgStyle;
 	int defaultDescBoxHeight;
 
 	switch (m_style) {
 	case wxOES_OI_MULTIPAGE_STYLE:
-		pgStyle = wxPG_BOLD_MODIFIED | wxPG_SPLITTER_AUTO_CENTER | wxPG_TOOLBAR | wxPG_DESCRIPTION | wxPG_TOOLTIPS | wxPGMAN_DEFAULT_STYLE;
+		pgStyle = ibPG_BOLD_MODIFIED | ibPG_SPLITTER_AUTO_CENTER | ibPG_TOOLBAR | ibPG_DESCRIPTION | ibPG_TOOLTIPS | ibPGMAN_DEFAULT_STYLE;
 		defaultDescBoxHeight = 50;
 		break;
 	case wxOES_OI_DEFAULT_STYLE:
 	case wxOES_OI_SINGLE_PAGE_STYLE:
 	default:
-		pgStyle = wxPG_BOLD_MODIFIED | wxPG_SPLITTER_AUTO_CENTER | wxPG_DESCRIPTION| wxPG_TOOLTIPS | wxPGMAN_DEFAULT_STYLE;
+		pgStyle = ibPG_BOLD_MODIFIED | ibPG_SPLITTER_AUTO_CENTER | ibPG_DESCRIPTION| ibPG_TOOLTIPS | ibPGMAN_DEFAULT_STYLE;
 		defaultDescBoxHeight = 150;
 		break;
 	}
@@ -314,46 +314,36 @@ wxPropertyGridManager* ibObjectInspector::CreatePropertyGridManager(wxWindow* pa
 		descBoxHeight = defaultDescBoxHeight;
 	}
 
-	wxPropertyGridManager* pg = new wxPropertyGridManager(parent, id, wxDefaultPosition, wxDefaultSize, pgStyle);
-	pg->SetExtraStyle(wxPG_EX_NATIVE_DOUBLE_BUFFERING);
+	ibPropertyGridManager* pg = new ibPropertyGridManager(parent, id, wxDefaultPosition, wxDefaultSize, pgStyle);
+	pg->SetExtraStyle(ibPG_EX_NATIVE_DOUBLE_BUFFERING);
 	pg->SetDescBoxHeight(descBoxHeight);
 	pg->SendSizeEvent();
 
 	pg->SetForegroundColour(wxDefaultStypeFGColour);
 	pg->SetBackgroundColour(wxDefaultStypeBGColour);
 
-	// Margin + category captions = light dusty blue (one tier between
-	// cream cells and powder-blue chrome). Replaces darkened cream that
-	// looked muddy against the new palette.
-	pg->GetGrid()->SetMarginColour(wxColour(0xE6, 0xEE, 0xF5));            // #E6EEF5 light powder
-
-	pg->GetGrid()->SetCaptionBackgroundColour(wxColour(0xC8, 0xD6, 0xDF)); // #C8D6DF light dusty
-
-	pg->GetGrid()->SetCaptionTextColour(wxColour(0x3F, 0x5C, 0x77));       // #3F5C77 deep dusty blue
-	pg->GetGrid()->SetCellDisabledTextColour(wxColour(0x94, 0xA6, 0xB4));  // #94A6B4 dusty blue-grey
-
-	pg->GetGrid()->SetCellTextColour(*wxBLACK);
-
+	// the grid's colours (margin, captions, cells, disabled text, selection) are the theme's — the grid asks for
+	// them itself (ibPropertyGrid::RegainColours)
 	return pg;
 }
 
 bool ibObjectInspector::PropertyHidden(const ibProperty* property, bool hide)
 {
-	// m_propMap is keyed the way rendering needs it (wxPGProperty → ibProperty); the push
+	// m_propMap is keyed the way rendering needs it (ibPGProperty → ibProperty); the push
 	// arrives the other way round, so walk it. A property set is a screenful, and an object
 	// pushes only for the few properties it owns — a second map would cost more to keep in
 	// step (Clear() rebuilds it wholesale) than this walk costs to run.
 	for (const auto& prop : m_propMap) {
 		if (prop.second == property)
 			return HideProperty(prop.first, hide,    // NOT recursive: the object's own property, and a
-				wxPGPropertyValuesFlags::DontRecurse); // composite's children stay its editor's business —
+				ibPGPropertyValuesFlags::DontRecurse); // composite's children stay its editor's business —
 	}                                                // a type revealed showed every qualifier, not its own
 	return false;                                    // (RefreshChildren hides those the type does not take)
 }
 
-wxPGProperty* ibObjectInspector::GetProperty(ibProperty* prop) const
+ibPGProperty* ibObjectInspector::GetProperty(ibProperty* prop) const
 {
-	wxPGProperty* result = ibPropertyRegistry::Create(prop);
+	ibPGProperty* result = ibPropertyRegistry::Create(prop);
 	if (result != nullptr) {
 		result->SetHelpString(prop->GetHelp());
 		result->Enable(prop->IsEditable());
@@ -361,9 +351,9 @@ wxPGProperty* ibObjectInspector::GetProperty(ibProperty* prop) const
 	return result;
 }
 
-wxPGProperty* ibObjectInspector::GetEvent(ibEvent* event) const
+ibPGProperty* ibObjectInspector::GetEvent(ibEvent* event) const
 {
-	wxPGProperty* result = ibPropertyRegistry::Create(event);
+	ibPGProperty* result = ibPropertyRegistry::Create(event);
 	if (result != nullptr) {
 		result->SetHelpString(event->GetHelp());
 		result->Enable(event->IsEditable());
@@ -376,19 +366,19 @@ wxPGProperty* ibObjectInspector::GetEvent(ibEvent* event) const
 // inspector (the MCP server) had to carry its own copy of them. Same sequence, one home, and the
 // selection is what this window contributes: the property being edited may belong to a nested child
 // the selection only accumulates, so `asked` and the property's owner are not always the same.
-bool ibObjectInspector::ModifyProperty(ibProperty* prop, const wxVariant& newValue)
+bool ibObjectInspector::ModifyProperty(ibProperty* prop, const ibVariant& newValue)
 {
 	return ibPropertyGate::SetValue(m_currentSel, prop, newValue);
 }
 
-bool ibObjectInspector::ModifyEvent(ibEvent* event, const wxVariant& newValue)
+bool ibObjectInspector::ModifyEvent(ibEvent* event, const ibVariant& newValue)
 {
 	return ibPropertyGate::SetEvent(m_currentSel, event, newValue);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 
-void ibObjectInspector::OnPropertyGridChanging(wxPropertyGridEvent& event)
+void ibObjectInspector::OnPropertyGridChanging(ibPropertyGridEvent& event)
 {
 	ScopedFlag inEvent(m_inGridEvent);   // an edit here may bubble back to Create — keep it deferred
 
@@ -401,8 +391,8 @@ void ibObjectInspector::OnPropertyGridChanging(wxPropertyGridEvent& event)
 		return;
 	}
 
-	wxPGProperty* propPtr = event.GetProperty();
-	std::map< wxPGProperty*, ibProperty*>::iterator itProperty = m_propMap.find(propPtr);
+	ibPGProperty* propPtr = event.GetProperty();
+	std::map< ibPGProperty*, ibProperty*>::iterator itProperty = m_propMap.find(propPtr);
 	if (itProperty != m_propMap.end()) {
 		ibProperty* prop_ptr = itProperty->second;
 		// Update displayed description for the new selection
@@ -415,7 +405,7 @@ void ibObjectInspector::OnPropertyGridChanging(wxPropertyGridEvent& event)
 		return;
 	}
 
-	std::map< wxPGProperty*, ibEvent*>::iterator itEvent = m_eventMap.find(propPtr);
+	std::map< ibPGProperty*, ibEvent*>::iterator itEvent = m_eventMap.find(propPtr);
 	if (itEvent != m_eventMap.end()) {
 		ibEvent* event_ptr = itEvent->second;
 		// Update displayed description for the new selection
@@ -432,7 +422,7 @@ void ibObjectInspector::OnPropertyGridChanging(wxPropertyGridEvent& event)
 	m_pg->SetDescription(wxEmptyString, wxEmptyString);
 }
 
-void ibObjectInspector::OnPropertyGridChanged(wxPropertyGridEvent& event)
+void ibObjectInspector::OnPropertyGridChanged(ibPropertyGridEvent& event)
 {
 	ScopedFlag inEvent(m_inGridEvent);       // same as Changing — defer any rebuild the refresh triggers
 
@@ -460,14 +450,14 @@ void ibObjectInspector::OnPropertyGridChanged(wxPropertyGridEvent& event)
 	// anew — after this event, as a schedule's links are (ibPGCalcScheduleProperty::RefreshChildren).
 	//
 	// 🛑 ASKED OF THE PROPERTY, NOT OF THE ROW: a list made EMPTY — a new handler, no source yet — has no
-	// choices at all (wxPGChoices::IsOk is false), and a check that started from the row skipped exactly it.
+	// choices at all (ibPGChoices::IsOk is false), and a check that started from the row skipped exactly it.
 	for (const auto& prop : m_propMap) {
 		if (prop.first == nullptr || prop.second == nullptr)
 			continue;
 		ibPropertyChoiceList asked;
 		if (prop.second->GetValueList(asked) != ibPropertyChoiceMode::Single)
 			continue;   // not one of a list: nothing to go stale
-		const wxPGChoices& shown = prop.first->GetChoices();
+		const ibPGChoices& shown = prop.first->GetChoices();
 		bool same = asked.GetCount() == shown.GetCount();
 		for (unsigned int idx = 0; same && idx < asked.GetCount(); idx++)
 			same = asked.GetId(idx) == shown.GetValue(idx);
@@ -483,16 +473,16 @@ void ibObjectInspector::OnPropertyGridChanged(wxPropertyGridEvent& event)
 	{
 		m_currentSel->OnRefresh();
 		for (auto prop : m_propMap) {
-			wxPGProperty* property = prop.first;
+			ibPGProperty* property = prop.first;
 			if (property != nullptr) {
-				wxPGProperty* parentProperty = property->GetParent();
+				ibPGProperty* parentProperty = property->GetParent();
 				if (parentProperty->IsCategory() &&
-					parentProperty->IsVisible() != (!property->HasFlag(wxPGFlags::Hidden))) {
+					parentProperty->IsVisible() != (!property->HasFlag(ibPGFlags::Hidden))) {
 					bool visible = false;
 					for (unsigned int idx = 0; idx < parentProperty->GetChildCount(); idx++) {
-						wxPGProperty* currChild = parentProperty->Item(idx);
+						ibPGProperty* currChild = parentProperty->Item(idx);
 						wxASSERT(currChild);
-						if (!currChild->HasFlag(wxPGFlags::Hidden)) visible = true;
+						if (!currChild->HasFlag(ibPGFlags::Hidden)) visible = true;
 					}
 					if (parentProperty->IsVisible() != visible) parentProperty->Hide(!visible);
 				}
@@ -502,11 +492,11 @@ void ibObjectInspector::OnPropertyGridChanged(wxPropertyGridEvent& event)
 	event.Skip();
 }
 
-void ibObjectInspector::OnPropertyGridExpand(wxPropertyGridEvent& event)
+void ibObjectInspector::OnPropertyGridExpand(ibPropertyGridEvent& event)
 {
 	m_isExpanded[event.GetPropertyName()] = event.GetProperty()->IsExpanded();
 
-	wxPGProperty* egProp = m_pg->GetProperty(event.GetProperty()->GetName());
+	ibPGProperty* egProp = m_pg->GetProperty(event.GetProperty()->GetName());
 	if (egProp != nullptr) {
 		if (event.GetProperty()->IsExpanded()) {
 			m_pg->Expand(egProp);
@@ -517,12 +507,12 @@ void ibObjectInspector::OnPropertyGridExpand(wxPropertyGridEvent& event)
 	}
 }
 
-void ibObjectInspector::OnPropertyGridItemSelected(wxPropertyGridEvent& event)
+void ibObjectInspector::OnPropertyGridItemSelected(ibPropertyGridEvent& event)
 {
 	// ⚠ A SELECTION ARRIVES WITHOUT ANYBODY CLICKING: the grid re-selects its row when it is thawed,
 	// and a layout update thaws it (ibFrontendMainFrame::UpdateFrameManager → wxAuiManager::Update).
 	// That is how a dead object's row was selected in the dump of 2026-09-15. So the question is asked
-	// here too, and a rebuild asked from here waits for wxPG to finish selecting.
+	// here too, and a rebuild asked from here waits for ibPG to finish selecting.
 	ScopedFlag inEvent(m_inGridEvent);
 
 	if (ShownObject() == nullptr) {
@@ -531,10 +521,10 @@ void ibObjectInspector::OnPropertyGridItemSelected(wxPropertyGridEvent& event)
 		return;
 	}
 
-	wxPGProperty* propPtr = event.GetProperty();
+	ibPGProperty* propPtr = event.GetProperty();
 	if (propPtr != nullptr) {
 		m_strSelPropItem = m_pg->GetPropertyName(propPtr);
-		std::map< wxPGProperty*, ibProperty*>::iterator it = m_propMap.find(propPtr);
+		std::map< ibPGProperty*, ibProperty*>::iterator it = m_propMap.find(propPtr);
 		if (m_propMap.end() == it) {
 			// Could be a child property
 			propPtr = propPtr->GetParent();
@@ -553,7 +543,7 @@ void ibObjectInspector::OnBitmapPropertyChanged(wxCommandEvent& event)
 	ibJournalInfo(wxT("ui"), wxT("OI::BitmapPropertyChanged: %s"), event.GetString().c_str());
 
 	//if (!propVal.IsEmpty()) {
-	//	wxPGBitmapProperty* bp = wxDynamicCast(m_pg->GetPropertyByLabel(strPropName), wxPGBitmapProperty);
+	//	ibPGBitmapProperty* bp = wxDynamicCast(m_pg->GetPropertyByLabel(strPropName), ibPGBitmapProperty);
 	//	if (bp != nullptr) {
 	//		bp->UpdateChildValues(propVal);
 	//	}

@@ -75,13 +75,14 @@ protected:
     virtual wxSize DoGetBestClientSize() const override;
 
     // draw the control
-    virtual void DoDraw(ibControlRenderer *renderer) override;
+    void OnPaint(wxPaintEvent& event);
 
     // gauge state (lived in wxGaugeBase before the rebase onto ibControl)
     int m_rangeMax;
     int m_gaugePos;
 
     wxDECLARE_DYNAMIC_CLASS(ibGauge);
+    wxDECLARE_EVENT_TABLE();
 };
 
 #endif // _DESKGUI_UNIV_GAUGE_H_

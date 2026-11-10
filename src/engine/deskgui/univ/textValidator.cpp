@@ -33,6 +33,7 @@
 #include "wx/clipbrd.h"
 
 #include "deskgui/univ/ctrl/textCtrl.h"
+#include "deskgui/univ/ctrl/comboCtrl.h"
 #include "deskgui/univ/messageDialog.h"
 
 // ----------------------------------------------------------------------------
@@ -97,11 +98,14 @@ bool ibTextValidator::Copy(const ibTextValidator& val)
 
 ibTextCtrl *ibTextValidator::GetTextEntry()
 {
-    // SEAM vs wx: the library's text control only - a combo box keeps its text in a child of its own
+    // SEAM vs wx: the library's text control, or the one a combo keeps its text in (wx's took a wxComboCtrl as the
+    // text entry it is)
     if (ibTextCtrl* const text = wxDynamicCast(m_validatorWindow, ibTextCtrl))
         return text;
+    if (ibComboCtrl* const combo = wxDynamicCast(m_validatorWindow, ibComboCtrl))
+        return combo->GetTextCtrl();
 
-    wxFAIL_MSG("ibTextValidator can only be used with ibTextCtrl");
+    wxFAIL_MSG("ibTextValidator can only be used with ibTextCtrl or ibComboCtrl");
 
     return nullptr;
 }

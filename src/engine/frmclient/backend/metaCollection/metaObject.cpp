@@ -104,9 +104,9 @@ bool ibValueMetaObject::Send(const ibString& name, const ibDataValue& value) con
 	return frame->Call(ibProtocol::ibMethod::Schema, params, answer);
 }
 
-bool ibValueMetaObject::Send(const ibString& name, const wxVariant& value) const
+bool ibValueMetaObject::Send(const ibString& name, const ibVariant& value) const
 {
-	return Send(name, ibVariantDataSerializable::GetNodeValue(value));
+	return Send(name, ibVariantSerializable::GetNodeValue(value));
 }
 
 namespace {
@@ -176,12 +176,12 @@ ibProperty* ibValueMetaObject::CreateProperty(ibPropertyCategory* cat, ibDataNod
 	return ibPropertyObject::CreateProperty<ibPropertySerializable>(cat, std::move(row));
 }
 
-bool ibValueMetaObject::OnPropertyChanging(ibProperty* property, const wxVariant& newValue)
+bool ibValueMetaObject::OnPropertyChanging(ibProperty* property, const ibVariant& newValue)
 {
 	return Send(property->GetName(), newValue);
 }
 
-void ibValueMetaObject::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
+void ibValueMetaObject::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
 {
 	// …its rows came with the answer (Receive, by the tab and the id), taken in as it is read anew.
 	Cleared();

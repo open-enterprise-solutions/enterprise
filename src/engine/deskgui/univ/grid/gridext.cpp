@@ -44,7 +44,10 @@
 #include <wx/spinctrl.h>
 #include <wx/tokenzr.h>
 #include <wx/renderer.h>
-#include <wx/headerctrl.h>
+#include "deskgui/univ/renderer.h"
+#include "deskgui/univ/theme.h"  // the outline's button: the theme's renderer
+#include "deskgui/univ/colourScheme.h"  // the selection and the drag highlight: the theme's
+#include <wx/headerctrl.h>  // wxHeaderCtrl::MoveColumnInOrderArray, the columns' order
 #include <wx/hashset.h>
 
 #if wxUSE_CLIPBOARD
@@ -212,19 +215,6 @@ EVT_KEY_DOWN(ibGridCellEditorEvtHandler::OnKeyDown)
 EVT_CHAR(ibGridCellEditorEvtHandler::OnChar)
 wxEND_EVENT_TABLE()
 
-wxBEGIN_EVENT_TABLE(ibGridHeaderCtrl, wxHeaderCtrl)
-EVT_HEADER_CLICK(wxID_ANY, ibGridHeaderCtrl::OnClick)
-EVT_HEADER_DCLICK(wxID_ANY, ibGridHeaderCtrl::OnDoubleClick)
-EVT_HEADER_RIGHT_CLICK(wxID_ANY, ibGridHeaderCtrl::OnRightClick)
-
-EVT_HEADER_BEGIN_RESIZE(wxID_ANY, ibGridHeaderCtrl::OnBeginResize)
-EVT_HEADER_RESIZING(wxID_ANY, ibGridHeaderCtrl::OnResizing)
-EVT_HEADER_END_RESIZE(wxID_ANY, ibGridHeaderCtrl::OnEndResize)
-
-EVT_HEADER_BEGIN_REORDER(wxID_ANY, ibGridHeaderCtrl::OnBeginReorder)
-EVT_HEADER_END_REORDER(wxID_ANY, ibGridHeaderCtrl::OnEndReorder)
-wxEND_EVENT_TABLE()
-
 ibGridOperations& ibGridRowOperations::Dual() const
 {
 	static ibGridColumnOperations s_colOper;
@@ -330,30 +320,10 @@ void ibGridHeaderLabelsRenderer::DrawLabel(const ibGrid& grid,
 	dc.SetBackgroundMode(wxBRUSHSTYLE_TRANSPARENT);
 	dc.SetFont(grid.GetLabelFont(grid.GetGridZoom()));
 
-	// Draw text in a different colour and with a shadow when the control
-	// is disabled.
-	//
-	// Note that the colours used here are consistent with wxGenericStaticText
-	// rather than our own ibGridCellStringRenderer::SetTextColoursAndFont()
-	// because this results in a better disabled appearance for the default
-	// bold font used for the labels.
-	wxColour colText;
-	if (!grid.IsEnabled())
-	{
-		colText = wxSystemSettings::GetColour(wxSYS_COLOUR_BTNHIGHLIGHT);
-		dc.SetTextForeground(colText);
-
-		wxRect rectShadow = rect;
-		rectShadow.Offset(1, 1);
-		grid.DrawTextRectangle(dc, value, rectShadow,
-			horizAlign, vertAlign, textOrientation);
-
-		colText = wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW);
-	}
-	else
-	{
-		colText = grid.GetLabelTextColour();
-	}
+	// SEAM vs wx: a disabled grid's labels are in the theme's disabled text, flat as the theme's header titles
+	// (ibThemeRenderer::DrawHeaderButtonContents) - the system's embossed shadow was the old 3D look
+	const wxColour colText = grid.IsEnabled() ? grid.GetLabelTextColour()
+		: wxTHEME_COLOUR(CONTROL_TEXT_DISABLED);
 
 	dc.SetTextForeground(colText);
 
@@ -361,109 +331,37 @@ void ibGridHeaderLabelsRenderer::DrawLabel(const ibGrid& grid,
 }
 
 
+// SEAM vs wx: the grid's labels are the theme's header buttons (ibThemeRenderer::DrawHeaderButton), as every column
+// header of the library - flat, the control's face with a rule on the right and the bottom, framed on the outer edges
+// of a grid without a border; the canon drew them in the system's 3D pens, a light edge and a shadow one
 void ibGridRowHeaderRendererDefault::DrawBorder(const ibGrid& grid,
 	wxDC& dc,
 	wxRect& rect) const
 {
-	static wxPen shadowPen(wxSystemSettings::GetColour(wxSYS_COLOUR_3DSHADOW));
+	ibThemeEngine::Get()->GetRenderer()->DrawHeaderButton(grid.GetGridRowLabelWindow(), dc, rect,
+		grid.IsEnabled() ? 0 : wxCONTROL_DISABLED);
 
-	dc.SetPen(shadowPen);
-	dc.DrawLine(rect.GetRight(), rect.GetTop(),
-		rect.GetRight(), rect.GetBottom());
-
-	dc.DrawLine(rect.GetLeft(), rect.GetBottom(),
-		rect.GetRight() + 1, rect.GetBottom());
-
-	// Only draw the external borders when the containing control doesn't have
-	// any border, otherwise they would compound with the outer border which
-	// looks bad.
-	int ofs = 0;
-	if (grid.GetBorder() == wxBORDER_NONE)
-	{
-		dc.DrawLine(rect.GetLeft(), rect.GetTop(),
-			rect.GetLeft(), rect.GetBottom());
-
-		ofs = 1;
-	}
-
-	static wxPen lightPen(wxSystemSettings::GetColour(wxSYS_COLOUR_3DLIGHT));
-
-	dc.SetPen(lightPen);
-	dc.DrawLine(rect.GetLeft() + ofs, rect.GetTop(),
-		rect.GetLeft() + ofs, rect.GetBottom());
-	dc.DrawLine(rect.GetLeft() + ofs, rect.GetTop(),
-		rect.GetRight(), rect.GetTop());
-
-	rect.Deflate(1 + ofs);
+	rect.Deflate(grid.GetBorder() == wxBORDER_NONE ? 2 : 1);
 }
 
 void ibGridColumnHeaderRendererDefault::DrawBorder(const ibGrid& grid,
 	wxDC& dc,
 	wxRect& rect) const
 {
-	static wxPen shadowPen(wxSystemSettings::GetColour(wxSYS_COLOUR_3DSHADOW));
+	ibThemeEngine::Get()->GetRenderer()->DrawHeaderButton(grid.GetGridColLabelWindow(), dc, rect,
+		grid.IsEnabled() ? 0 : wxCONTROL_DISABLED);
 
-	dc.SetPen(shadowPen);
-	dc.DrawLine(rect.GetRight(), rect.GetTop(),
-		rect.GetRight(), rect.GetBottom());
-	dc.DrawLine(rect.GetLeft(), rect.GetBottom(),
-		rect.GetRight() + 1, rect.GetBottom());
-
-	// As above, don't draw the outer border if the control has its own one.
-	int ofs = 0;
-	if (grid.GetBorder() == wxBORDER_NONE)
-	{
-		dc.DrawLine(rect.GetLeft(), rect.GetTop(),
-			rect.GetRight(), rect.GetTop());
-
-		ofs = 1;
-	}
-
-	static wxPen lightPen(wxSystemSettings::GetColour(wxSYS_COLOUR_3DLIGHT));
-
-	dc.SetPen(lightPen);
-	dc.DrawLine(rect.GetLeft(), rect.GetTop() + ofs,
-		rect.GetLeft(), rect.GetBottom());
-	dc.DrawLine(rect.GetLeft(), rect.GetTop() + ofs,
-		rect.GetRight(), rect.GetTop() + ofs);
-
-	rect.Deflate(1 + ofs);
+	rect.Deflate(grid.GetBorder() == wxBORDER_NONE ? 2 : 1);
 }
 
 void ibGridCornerHeaderRendererDefault::DrawBorder(const ibGrid& grid,
 	wxDC& dc,
 	wxRect& rect) const
 {
-	static wxPen shadowPen(wxSystemSettings::GetColour(wxSYS_COLOUR_3DSHADOW));
+	ibThemeEngine::Get()->GetRenderer()->DrawHeaderButton(grid.GetGridCornerLabelWindow(), dc, rect,
+		grid.IsEnabled() ? 0 : wxCONTROL_DISABLED);
 
-	dc.SetPen(shadowPen);
-	dc.DrawLine(rect.GetRight() - 1, rect.GetBottom() - 1,
-		rect.GetRight() - 1, rect.GetTop());
-	dc.DrawLine(rect.GetRight() - 1, rect.GetBottom() - 1,
-		rect.GetLeft(), rect.GetBottom() - 1);
-
-	// As above, don't draw either of outer border if there is already a border
-	// around the entire window.
-	int ofs = 0;
-	if (grid.GetBorder() == wxBORDER_NONE)
-	{
-		dc.DrawLine(rect.GetLeft(), rect.GetTop(),
-			rect.GetRight(), rect.GetTop());
-		dc.DrawLine(rect.GetLeft(), rect.GetTop(),
-			rect.GetLeft(), rect.GetBottom());
-
-		ofs = 1;
-	}
-
-	static wxPen lightPen(wxSystemSettings::GetColour(wxSYS_COLOUR_3DLIGHT));
-
-	dc.SetPen(lightPen);
-	dc.DrawLine(rect.GetLeft() + 1, rect.GetTop() + ofs,
-		rect.GetRight() - 1, rect.GetTop() + ofs);
-	dc.DrawLine(rect.GetLeft() + ofs, rect.GetTop() + ofs,
-		rect.GetLeft() + ofs, rect.GetBottom() - 1);
-
-	rect.Deflate(1 + ofs);
+	rect.Deflate(grid.GetBorder() == wxBORDER_NONE ? 2 : 1);
 }
 
 // ----------------------------------------------------------------------------
@@ -1936,9 +1834,9 @@ bool ibGridTableBase::GetValueAsBool(int WXUNUSED(row), int WXUNUSED(col))
 	return false;
 }
 
-wxVariant ibGridTableBase::GetValueAsVariant(int WXUNUSED(row), int WXUNUSED(col))
+ibVariant ibGridTableBase::GetValueAsVariant(int WXUNUSED(row), int WXUNUSED(col))
 {
-	return wxVariant();
+	return ibVariant();
 }
 
 void ibGridTableBase::SetValueAsLong(int WXUNUSED(row), int WXUNUSED(col),
@@ -1957,7 +1855,7 @@ void ibGridTableBase::SetValueAsBool(int WXUNUSED(row), int WXUNUSED(col),
 }
 
 void ibGridTableBase::SetValueAsVariant(int WXUNUSED(row), int WXUNUSED(col),
-	wxVariant WXUNUSED(value))
+	const ibVariant& WXUNUSED(value))
 {
 }
 
@@ -2395,6 +2293,11 @@ void ibGridRowAreaWindow::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
 	wxPaintDC dc(this);
 
+	// the pane's edge toward the labels, on its right — see ibGridRowOutlineWindow::OnPaint
+	const wxSize size = GetClientSize();
+	dc.SetPen(wxPen(wxTHEME_COLOUR(SHADOW_IN)));
+	dc.DrawLine(size.x - 1, 0, size.x - 1, size.y);
+
 	// NO - don't do this because it will set both the x and y origin
 	// coords to match the parent scrolled window and we just want to
 	// set the y coord  - MB
@@ -2515,6 +2418,11 @@ wxEND_EVENT_TABLE()
 void ibGridColAreaWindow::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
 	wxPaintDC dc(this);
+
+	// the pane's edge toward the labels, at its bottom — see ibGridRowOutlineWindow::OnPaint
+	const wxSize size = GetClientSize();
+	dc.SetPen(wxPen(wxTHEME_COLOUR(SHADOW_IN)));
+	dc.DrawLine(0, size.y - 1, size.x, size.y - 1);
 
 	// NO - don't do this because it will set both the x and y origin
 	// coords to match the parent scrolled window and we just want to
@@ -2657,6 +2565,13 @@ wxEND_EVENT_TABLE()
 void ibGridRowOutlineWindow::OnPaint(wxPaintEvent&)
 {
 	wxPaintDC dc(this);
+	// A PANE BESIDE THE LABELS RULES ITS OWN EDGE TOWARD THEM — the outline's, the area's — as a
+	// label rules its right and its bottom (ibThemeRenderer::DrawHeaderButton): the labels' left rule
+	// was only ever the frame of a grid without a border, and with the theme's border the pane and the
+	// labels ran together (Max, 2026-11-10: "the lines are gone")
+	const wxSize size = GetClientSize();
+	dc.SetPen(wxPen(wxTHEME_COLOUR(SHADOW_IN)));
+	dc.DrawLine(size.x - 1, 0, size.x - 1, size.y);
 	// match the scroll offset convention used by RowAreaWindow::OnPaint. A FROZEN strip does not
 	// scroll — its rows sit where they always were, so shifting the origin would slide the buttons
 	// away from the very rows the freeze keeps in place.
@@ -2706,6 +2621,10 @@ wxEND_EVENT_TABLE()
 void ibGridColOutlineWindow::OnPaint(wxPaintEvent&)
 {
 	wxPaintDC dc(this);
+	// the pane's edge toward the labels, at its bottom — see ibGridRowOutlineWindow::OnPaint
+	const wxSize size = GetClientSize();
+	dc.SetPen(wxPen(wxTHEME_COLOUR(SHADOW_IN)));
+	dc.DrawLine(0, size.y - 1, size.x, size.y - 1);
 	if (m_owner->GetNumberCols() == 0) return;
 	int x = 0, y = 0;
 	if (!IsFrozen()) {   // a frozen strip does not scroll — see ibGridRowOutlineWindow::OnPaint
@@ -2741,6 +2660,22 @@ void ibGridColOutlineWindow::OnMouseEvent(wxMouseEvent& event)
 void ibGridColOutlineWindow::OnMouseWheel(wxMouseEvent& event)
 {
 	if (!m_owner->ProcessWindowEvent(event)) event.Skip();
+}
+
+wxBEGIN_EVENT_TABLE(ibGridCornerPaneWindow, ibGridSubwindow)
+EVT_PAINT(ibGridCornerPaneWindow::OnPaint)
+wxEND_EVENT_TABLE()
+
+// the edge of the pane the strip continues — see ibGridRowOutlineWindow::OnPaint
+void ibGridCornerPaneWindow::OnPaint(wxPaintEvent&)
+{
+	wxPaintDC dc(this);
+	const wxSize size = GetClientSize();
+	dc.SetPen(wxPen(wxTHEME_COLOUR(SHADOW_IN)));
+	if (m_orient == wxVERTICAL)
+		dc.DrawLine(size.x - 1, 0, size.x - 1, size.y);
+	else
+		dc.DrawLine(0, size.y - 1, size.x, size.y - 1);
 }
 
 void ibGridCornerLabelWindow::OnPaint(wxPaintEvent& WXUNUSED(event))
@@ -2820,7 +2755,7 @@ void ibGridWindow::OnPaint(wxPaintEvent& WXUNUSED(event))
 	if (m_type != ibGridWindow::ibGridWindowNormal)
 		m_owner->DrawFrozenBorder(dc, this);
 
-	m_owner->DrawBorder(dc, storage);
+	m_owner->DrawBorders(dc, storage);
 	m_owner->DrawHighlight(dc, dirtyCells);
 }
 
@@ -3347,8 +3282,10 @@ void ibGrid::Create()
 	m_colOutlineWin = new ibGridColOutlineWindow(this);
 	m_rowFrozenOutlineWin = new ibGridRowFrozenOutlineWindow(this);
 	m_colFrozenOutlineWin = new ibGridColFrozenOutlineWindow(this);
-	m_rowOutlineCornerWin = new ibGridOutlineCornerWindow(this);
-	m_colOutlineCornerWin = new ibGridOutlineCornerWindow(this);
+	m_rowOutlineCornerWin = new ibGridCornerPaneWindow(this, wxVERTICAL);
+	m_colOutlineCornerWin = new ibGridCornerPaneWindow(this, wxHORIZONTAL);
+	m_rowAreaCornerWin = new ibGridCornerPaneWindow(this, wxVERTICAL);
+	m_colAreaCornerWin = new ibGridCornerPaneWindow(this, wxHORIZONTAL);
 	m_rowLabelWin = new ibGridRowLabelWindow(this);
 
 	CreateColumnWindow();
@@ -3365,8 +3302,10 @@ void ibGrid::Create()
 #else
 	wxColour gfg = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT);
 	wxColour gbg = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW);
-	wxColour lfg = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT);
-	wxColour lbg = wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE);
+	// SEAM vs wx: the label strips are the theme's header - its text and the face of its buttons
+	// (ibGridColumnHeaderRendererDefault::DrawBorder), not the system's button face
+	wxColour lfg = wxTHEME_COLOUR(CONTROL_TEXT);
+	wxColour lbg = wxTHEME_COLOUR(CONTROL);
 #endif
 
 	m_cornerLabelWin->SetOwnForegroundColour(lfg);
@@ -3392,7 +3331,8 @@ void ibGrid::Create()
 	// rather than as part of its frame.
 	for (ibGridSubwindow* pane : { (ibGridSubwindow*)m_rowOutlineWin, (ibGridSubwindow*)m_colOutlineWin,
 	                               (ibGridSubwindow*)m_rowFrozenOutlineWin, (ibGridSubwindow*)m_colFrozenOutlineWin,
-	                               (ibGridSubwindow*)m_rowOutlineCornerWin, (ibGridSubwindow*)m_colOutlineCornerWin }) {
+	                               (ibGridSubwindow*)m_rowOutlineCornerWin, (ibGridSubwindow*)m_colOutlineCornerWin,
+	                               (ibGridSubwindow*)m_rowAreaCornerWin, (ibGridSubwindow*)m_colAreaCornerWin }) {
 		if (pane == nullptr)
 			continue;
 		pane->SetOwnForegroundColour(m_labelTextColour);
@@ -3435,20 +3375,10 @@ void ibGrid::InitPixelFields()
 
 void ibGrid::CreateColumnWindow()
 {
-	if (m_useNativeHeader)
-	{
-		m_colAreaWin = new ibGridColAreaWindow(this);
-		m_colAreaHeight = m_colAreaWin->GetBestSize().y;
-		m_colLabelWin = new ibGridHeaderCtrl(this);
-		m_colLabelHeight = m_colLabelWin->GetBestSize().y;
-	}
-	else // draw labels ourselves
-	{
-		m_colAreaWin = new ibGridColAreaWindow(this);
-		m_colAreaHeight = FromDIP(WXGRID_DEFAULT_COL_LABEL_HEIGHT);
-		m_colLabelWin = new ibGridColLabelWindow(this);
-		m_colLabelHeight = FromDIP(WXGRID_DEFAULT_COL_LABEL_HEIGHT);
-	}
+	m_colAreaWin = new ibGridColAreaWindow(this);
+	m_colAreaHeight = FromDIP(WXGRID_DEFAULT_COL_LABEL_HEIGHT);
+	m_colLabelWin = new ibGridColLabelWindow(this);
+	m_colLabelHeight = FromDIP(WXGRID_DEFAULT_COL_LABEL_HEIGHT);
 }
 
 bool ibGrid::CreateGrid(int numRows, int numCols,
@@ -3534,11 +3464,6 @@ ibGrid::SetTable(ibGridTableBase* table,
 		m_table->SetView(this);
 		m_ownTable = takeOwnership;
 
-		// Notice that this must be called after setting m_table as it uses it
-		// indirectly, via ibGrid::GetColLabelValue().
-		if (m_useNativeHeader)
-			SetNativeHeaderColCount();
-
 		m_selection = new ibGridSelection(this, selmode);
 		CalcDimensions();
 
@@ -3574,6 +3499,8 @@ void ibGrid::Init()
 	m_colFrozenOutlineWin = NULL;
 	m_rowOutlineCornerWin = NULL;
 	m_colOutlineCornerWin = NULL;
+	m_rowAreaCornerWin = NULL;
+	m_colAreaCornerWin = NULL;
 	m_colAreaWin = NULL;
 	m_colFrozenAreaWin = NULL;
 	m_colLabelWin = NULL;
@@ -3637,7 +3564,6 @@ void ibGrid::Init()
 
 	m_canDragRowMove = false;
 	m_canDragColMove = false;
-	m_canHideColumns = true;
 
 	m_cursorMode = WXGRID_CURSOR_SELECT_CELL;
 	m_winCapture = NULL;
@@ -3658,9 +3584,6 @@ void ibGrid::Init()
 	m_sortCol = wxNOT_FOUND;
 	m_sortIsAscending = true;
 
-	m_useNativeHeader =
-		m_nativeColumnLabels = false;
-
 	m_waitForSlowClick = false;
 
 	m_rowResizeCursor = wxCursor(wxCURSOR_SIZENS);
@@ -3668,8 +3591,10 @@ void ibGrid::Init()
 
 	m_currentCellCoords = ibGridNoCellCoords;
 
-	m_selectionBackground = wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT);
-	m_selectionForeground = wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHTTEXT);
+	// SEAM vs wx: the selection is the theme's highlight, a pale tint of it under the sheet's text - framed in the
+	// highlight itself (DrawCellHighlight); the system's was the explorer's blue, under the system's white text
+	m_selectionBackground = wxTHEME_COLOUR(HIGHLIGHT).ChangeLightness(172);
+	m_selectionForeground = wxTHEME_COLOUR(CONTROL_TEXT);
 
 	m_editable = true;  // default for whole grid
 	m_areaEnabled = true;  // default for area grid
@@ -3821,14 +3746,12 @@ void ibGrid::CalcDimensions()
 
 wxSize ibGrid::GetSizeAvailableForScrollTarget(const wxSize& size)
 {
-	wxPoint offset = GetGridWindowOffset(m_gridWin);
+	// the chrome is the grid's one sum (GetGridOrigin), the frozen part beyond it
+	const wxPoint chrome = GetGridOrigin();
+	const wxPoint offset = GetGridWindowOffset(m_gridWin);
 	wxSize sizeGridWin(size);
-	sizeGridWin.x -= (GridRowAreaEnabled() ? ibCalcGridScale(m_rowAreaWidth, GetGridZoom()) : 0)
-		+ GetRowOutlineSize()
-		+ ibCalcGridScale(m_rowLabelWidth, GetGridZoom()) + offset.x;
-	sizeGridWin.y -= (GridColAreaEnabled() ? ibCalcGridScale(m_colAreaHeight, GetGridZoom()) : 0)
-		+ GetColOutlineSize()
-		+ ibCalcGridScale(m_colLabelHeight, GetGridZoom()) + offset.y;
+	sizeGridWin.x -= chrome.x + offset.x;
+	sizeGridWin.y -= chrome.y + offset.y;
 
 	return sizeGridWin;
 }
@@ -3876,9 +3799,11 @@ void ibGrid::CalcWindowSizes()
 	const int yAfterChrome = origin.y;
 
 	// the grid may be too small to have enough space for the labels yet, don't
-	// size the windows to negative sizes in this case
-	int gw = cw - rowLabelW - rowOutlineW - fgw;
-	int gh = ch - colLabelH - colOutlineH - fgh;
+	// size the windows to negative sizes in this case. The cells get what the chrome leaves — its sum
+	// above, the areas in it: summed again without them, the cells ran past the client area by the
+	// area pane and covered the vertical scrollbar (Max, 2026-11-10: "the scroll on the right is gone")
+	int gw = cw - xAfterChrome - fgw;
+	int gh = ch - yAfterChrome - fgh;
 
 	if (gw < 0)
 		gw = 0;
@@ -3961,6 +3886,23 @@ void ibGrid::CalcWindowSizes()
 		m_colOutlineCornerWin->Show(show);
 		if (show)
 			m_colOutlineCornerWin->SetSize(rowOutlineW, 0, xAfterChrome - rowOutlineW, colOutlineH);
+	}
+
+	// THE SAME CORNERS OF THE AREA PANES, one band in: the row area starts below the column chrome and
+	// the corner label covers only the labels' width, so beside them and above the corner label the
+	// grid's own background showed, without an edge (Max, 2026-11-10: "the corner looks strange").
+	if (m_rowAreaCornerWin) {
+		const bool show = rowAreaWidth > 0 && yAfterChrome > colOutlineH;
+		m_rowAreaCornerWin->Show(show);
+		if (show)
+			m_rowAreaCornerWin->SetSize(rowOutlineW, colOutlineH, rowAreaWidth, yAfterChrome - colOutlineH);
+	}
+
+	if (m_colAreaCornerWin) {
+		const bool show = colAreaHeight > 0 && rowLabelW > 0;
+		m_colAreaCornerWin->Show(show);
+		if (show)
+			m_colAreaCornerWin->SetSize(rowOutlineW + rowAreaWidth, colOutlineH, rowLabelW, colAreaHeight);
 	}
 
 	if (m_rowFrozenLabelWin && m_rowFrozenLabelWin->IsShown())
@@ -4156,11 +4098,6 @@ bool ibGrid::Redimension(ibGridTableMessage& msg)
 		if (!m_colWidths.IsEmpty())
 			m_colWidths.Insert(m_defaultColWidth, pos, numCols);
 
-		// See comment for wxGRIDTABLE_NOTIFY_COLS_APPENDED case explaining
-		// why this has to be done here and not before.
-		if (m_useNativeHeader)
-			GetGridColHeader()->SetColumnCount(m_numCols);
-
 		UpdateCurrentCellOnRedim();
 
 		if (m_selection)
@@ -4199,12 +4136,6 @@ bool ibGrid::Redimension(ibGridTableMessage& msg)
 		if (!m_colWidths.IsEmpty())
 			m_colWidths.Add(m_defaultColWidth, numCols);
 
-		// Notice that this must be called after updating m_colWidths above
-		// as the native grid control will check whether the new columns
-		// are shown which results in accessing m_colWidths array.
-		if (m_useNativeHeader)
-			GetGridColHeader()->SetColumnCount(m_numCols);
-
 		UpdateCurrentCellOnRedim();
 
 		CalcDimensions();
@@ -4240,11 +4171,6 @@ bool ibGrid::Redimension(ibGridTableMessage& msg)
 
 		if (!m_colWidths.IsEmpty())
 			m_colWidths.RemoveAt(pos, numCols);
-
-		// See comment for wxGRIDTABLE_NOTIFY_COLS_APPENDED case explaining
-		// why this has to be done here and not before.
-		if (m_useNativeHeader)
-			GetGridColHeader()->SetColumnCount(m_numCols);
 
 		UpdateCurrentCellOnRedim();
 
@@ -4993,15 +4919,7 @@ void ibGrid::UpdateColumnSortingIndicator(int col)
 {
 	wxCHECK_RET(col != wxNOT_FOUND, "invalid column index");
 
-	if (m_useNativeHeader) {
-		m_colAreaWin->Refresh();
-		GetGridColHeader()->UpdateColumn(col);
-	}
-	else if (m_nativeColumnLabels) {
-		m_colAreaWin->Refresh();
-		m_colLabelWin->Refresh();
-	}
-	//else: sorting indicator display not yet implemented in grid version
+	// sorting indicator display not yet implemented in grid version
 }
 
 void ibGrid::SetSortingColumn(int col, bool ascending)
@@ -5870,22 +5788,6 @@ void ibGrid::DoGridDragResize(const wxPoint& position,
 	// TODO: generate RESIZING event, see #10754, if the size has changed.
 }
 
-wxPoint ibGrid::GetPositionForResizeEvent(int width) const
-{
-	wxCHECK_MSG(m_dragRowOrCol != -1, wxPoint(),
-		"shouldn't be called when not drag resizing");
-
-	// Note that we currently always use m_gridWin here as using
-	// ibGridHeaderCtrl is incompatible with using frozen rows/columns.
-	// This would need to be changed if they're allowed to be used together.
-	int x;
-	CalcGridWindowScrolledPosition(GetColLeft(m_dragRowOrCol, GetGridZoom()) + width, 0,
-		&x, NULL,
-		m_gridWin);
-
-	return wxPoint(x, 0);
-}
-
 void ibGrid::DoEndDragResizeRow(const wxMouseEvent& event, ibGridWindow* gridWindow)
 {
 	DoGridDragResize(event.GetPosition(), ibGridRowOperations(), gridWindow);
@@ -5912,40 +5814,6 @@ void ibGrid::DoEndDragResizeCol(const wxMouseEvent& event, ibGridWindow* gridWin
 	SendGridSizeEvent(ibEVT_GRID_COL_MODIFIED, m_dragRowOrCol, event);
 
 	m_dragRowOrCol = -1;
-}
-
-void ibGrid::DoHeaderStartDragResizeCol(int col)
-{
-	DoStartResizeRowOrCol(col, GetColSize(col));
-}
-
-void ibGrid::DoHeaderDragResizeCol(int width)
-{
-	DoGridDragResize(GetPositionForResizeEvent(width),
-		ibGridColumnOperations(),
-		m_gridWin);
-}
-
-void ibGrid::DoHeaderEndDragResizeCol(int width)
-{
-	// We can sometimes be called even when we're not resizing any more,
-	// although it's rather difficult to reproduce: one way to do it is to
-	// double click the column separator line while pressing Esc at the same
-	// time. There seems to be some kind of check for Esc inside the native
-	// header control and so an extra "end resizing" message gets generated.
-	if (m_dragRowOrCol == -1)
-		return;
-
-	// Unfortunately we need to create a dummy mouse event here to avoid
-	// modifying too much existing code. Note that only position and keyboard
-	// state parts of this event object are actually used, so the rest
-	// (even including some crucial parts, such as event type) can be left
-	// uninitialized.
-	wxMouseEvent e;
-	e.SetState(wxGetMouseState());
-	e.SetPosition(GetPositionForResizeEvent(width));
-
-	DoEndDragResizeCol(e, m_gridWin);
 }
 
 void ibGrid::DoStartMoveRowOrCol(int col)
@@ -6049,17 +5917,8 @@ void ibGrid::DoEndMoveCol(int pos)
 void ibGrid::RefreshAfterColPosChange()
 {
 	// and make the changes visible
-	if (m_useNativeHeader)
-	{
-		m_colAreaWin->Refresh();
-		SetNativeHeaderColOrder();
-	}
-	else
-	{
-		m_colAreaWin->Refresh();
-		m_colLabelWin->Refresh();
-	}
-
+	m_colAreaWin->Refresh();
+	m_colLabelWin->Refresh();
 	m_gridWin->Refresh();
 }
 
@@ -6111,35 +5970,12 @@ bool ibGrid::EnableDragColMove(bool enable)
 		(enable && m_colFrozenLabelWin))
 		return false;
 
-	if (m_useNativeHeader)
-	{
-		wxHeaderCtrl* header = GetGridColHeader();
-		long setFlags = header->GetWindowStyleFlag();
-
-		if (enable)
-			header->SetWindowStyleFlag(setFlags | wxHD_ALLOW_REORDER);
-		else
-			header->SetWindowStyleFlag(setFlags & ~wxHD_ALLOW_REORDER);
-	}
-
 	m_canDragColMove = enable;
 
 	// we use to call ResetColPos() from here if !enable but this doesn't seem
 	// right as it would mean there would be no way to "freeze" the current
 	// columns order by disabling moving them after putting them in the desired
 	// order, whereas now you can always call ResetColPos() manually if needed
-	return true;
-}
-
-bool ibGrid::EnableHidingColumns(bool enable)
-{
-	if (m_canHideColumns == enable || !m_useNativeHeader)
-		return false;
-
-	GetGridColHeader()->ToggleWindowStyle(wxHD_ALLOW_HIDE);
-
-	m_canHideColumns = enable;
-
 	return true;
 }
 
@@ -6218,7 +6054,7 @@ bool ibGrid::FreezeTo(int row, int col)
 
 	if (row >= m_numRows || col >= m_numCols ||
 		!m_rowAt.empty() || m_canDragRowMove ||
-		!m_colAt.empty() || m_canDragColMove || m_useNativeHeader)
+		!m_colAt.empty() || m_canDragColMove)
 		return false;
 
 	// freeze
@@ -6777,11 +6613,7 @@ void ibGrid::OnDPIChanged(wxDPIChangedEvent& event)
 		}
 	}
 
-	// Similarly for columns, except that here we need to update the native
-	// control even if none of the widths had been changed, as it's not going
-	// to do it on its own when redisplayed.
-	wxHeaderCtrl* const
-		colHeader = m_useNativeHeader ? GetGridColHeader() : NULL;
+	// Similarly for columns.
 	if (!m_colWidths.empty())
 	{
 		int total = 0;
@@ -6793,16 +6625,6 @@ void ibGrid::OnDPIChanged(wxDPIChangedEvent& event)
 				continue;
 
 			m_colWidths.Set(i, event.ScaleX(width));
-
-			if (colHeader)
-				colHeader->UpdateColumn(i);
-		}
-	}
-	else if (colHeader)
-	{
-		for (int i = 0; i < m_numCols; ++i)
-		{
-			colHeader->UpdateColumn(i);
 		}
 	}
 
@@ -7636,7 +7458,7 @@ void ibGrid::DrawCellHighlight(wxDC& dc, int row, int col, const ibGridCellAttr*
 	// out of the corners as little stubs. At a fixed 2px that was a pixel and the coordinates below
 	// were tuned around it; as soon as the width follows the zoom it is no longer a pixel. The line
 	// has to stop where it is told to stop.
-	wxPen framePen(*wxBLACK, framePenWidth, wxPENSTYLE_SOLID);
+	wxPen framePen(wxTHEME_COLOUR(HIGHLIGHT), framePenWidth, wxPENSTYLE_SOLID);
 	framePen.SetCap(wxCAP_BUTT);
 
 	////////////////////////////////////////////////////////////////////////
@@ -7721,7 +7543,7 @@ wxPen ibGrid::GetColGridLinePen(int WXUNUSED(col))
 // Asked HERE, of the pass whose subject IS borders, and per cell: whoever owns a pixel this paint
 // covered gets its border drawn. Their contents are untouched — only the line is restated — and
 // drawing the same line twice is invisible, so nothing has to be tracked.
-void ibGrid::DrawBorder(wxDC& dc, const ibGridCellCacheArray& storage)
+void ibGrid::DrawBorders(wxDC& dc, const ibGridCellCacheArray& storage)
 {
 	const auto borderOf = [&](int row, int col) {
 		if (row < 0 || col < 0)
@@ -8223,7 +8045,7 @@ void ibGrid::DrawRowArea(wxDC& dc, int row)
 {
 	if (m_rowAreaWin != NULL) {
 
-		static wxPen sectionPen(wxSystemSettings::GetColour(wxSYS_COLOUR_3DSHADOW));
+		const wxPen sectionPen(wxTHEME_COLOUR(SHADOW_IN));   // the rule of the theme's header buttons
 
 		wxRect rect(0, GetRowTop(row, GetGridZoom()), (GridRowAreaEnabled() ? ibCalcGridScale(m_rowAreaWidth, GetGridZoom()) : 0), GetRowHeight(row, GetGridZoom()));
 		const int flagSection = GetRowAreaValue(row);
@@ -8292,7 +8114,7 @@ void ibGrid::DrawRowLabel(wxDC& dc, int row)
 	else
 	{
 		// just highlight the current row
-		dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT)));
+		dc.SetPen(wxPen(wxTHEME_COLOUR(HIGHLIGHT)));
 		dc.DrawRectangle(rect);
 		rect.Deflate(GetBorder() == wxBORDER_NONE ? 2 : 1);
 	}
@@ -8302,51 +8124,6 @@ void ibGrid::DrawRowLabel(wxDC& dc, int row)
 
 	rend.DrawLabel(*this, dc, GetRowLabelValue(row),
 		rect, hAlign, vAlign, wxHORIZONTAL);
-}
-
-bool ibGrid::UseNativeColHeader(bool native)
-{
-	if (native == m_useNativeHeader)
-		return true;
-
-	// Using native control doesn't work if any columns are frozen currently.
-	if (native && m_numFrozenCols)
-		return false;
-
-	delete m_colLabelWin;
-	m_useNativeHeader = native;
-
-	CreateColumnWindow();
-
-	if (m_useNativeHeader)
-	{
-		SetNativeHeaderColCount();
-
-		wxHeaderCtrl* const colHeader = GetGridColHeader();
-		colHeader->SetBackgroundColour(GetLabelBackgroundColour());
-		colHeader->SetForegroundColour(GetLabelTextColour());
-		colHeader->SetFont(GetLabelFont(GetGridZoom()));
-	}
-
-	CalcWindowSizes();
-
-	return true;
-}
-
-void ibGrid::SetUseNativeColLabels(bool native)
-{
-	wxASSERT_MSG(!m_useNativeHeader,
-		"doesn't make sense when using native header");
-
-	m_nativeColumnLabels = native;
-	if (native)
-	{
-		int height = wxRendererNative::Get().GetHeaderButtonHeight(this);
-		SetColLabelSize(height);
-	}
-
-	GetColLabelWindow()->Refresh();
-	m_cornerLabelWin->Refresh();
 }
 
 void ibGrid::DrawColAreas(wxDC& dc, const wxArrayInt& cols)
@@ -8393,7 +8170,7 @@ void ibGrid::DrawColArea(wxDC& dc, int col)
 {
 	if (m_colAreaWin != NULL) {
 
-		static wxPen sectionPen(wxSystemSettings::GetColour(wxSYS_COLOUR_3DSHADOW));
+		const wxPen sectionPen(wxTHEME_COLOUR(SHADOW_IN));   // the rule of the theme's header buttons
 
 		wxRect rect(GetColLeft(col, GetGridZoom()), 0, GetColWidth(col, GetGridZoom()), (GridColAreaEnabled() ? ibCalcGridScale(m_colAreaHeight, GetGridZoom()) : 0));
 		const int flagSection = GetColAreaValue(col);
@@ -8438,19 +8215,7 @@ void ibGrid::DrawCornerLabel(wxDC& dc)
 		: static_cast<ibGridCornerHeaderRenderer&>
 		(gs_defaultHeaderRenderers.cornerRenderer);
 
-	if (m_nativeColumnLabels)
-	{
-		rect.Deflate(1);
-
-		wxRendererNative::Get().DrawHeaderButton(m_cornerLabelWin, dc, rect, 0);
-	}
-	else
-	{
-		rect.width++;
-		rect.height++;
-
-		rend.DrawBorder(*this, dc, rect);
-	}
+	rend.DrawBorder(*this, dc, rect);
 
 	wxString label = GetCornerLabelValue();
 	if (!label.IsEmpty())
@@ -8479,46 +8244,26 @@ void ibGrid::DrawColLabel(wxDC& dc, int col)
 		: static_cast<ibGridColumnHeaderRenderer&>
 		(gs_defaultHeaderRenderers.colRenderer);
 
-	if (m_nativeColumnLabels)
+	if (m_cursorMode == WXGRID_CURSOR_MOVE_COL)
 	{
-		wxRendererNative::Get().DrawHeaderButton
-		(
-			GetColLabelWindow(),
-			dc,
-			rect,
-			0,
-			IsSortingBy(col)
-			? IsSortOrderAscending()
-			? wxHDR_SORT_ICON_UP
-			: wxHDR_SORT_ICON_DOWN
-			: wxHDR_SORT_ICON_NONE
-		);
-		rect.Deflate(2);
+		// clear the background:
+		// when called from ProcessRowColLabelMouseEvent the background
+		// is not cleared at this point
+		wxDCBrushChanger setBrush(dc, m_colLabelWin->GetBackgroundColour());
+		wxDCPenChanger setPen(dc, *wxTRANSPARENT_PEN);
+		dc.DrawRectangle(rect);
 	}
+
+	// draw a border if the column is not being drag-moved
+	// (in that case it's omitted to have a 'pressed' appearance)
+	if (m_cursorMode != WXGRID_CURSOR_MOVE_COL || col != m_dragMoveRowOrCol)
+		rend.DrawBorder(*this, dc, rect);
 	else
 	{
-
-		if (m_cursorMode == WXGRID_CURSOR_MOVE_COL)
-		{
-			// clear the background:
-			// when called from ProcessRowColLabelMouseEvent the background
-			// is not cleared at this point
-			wxDCBrushChanger setBrush(dc, m_colLabelWin->GetBackgroundColour());
-			wxDCPenChanger setPen(dc, *wxTRANSPARENT_PEN);
-			dc.DrawRectangle(rect);
-		}
-
-		// draw a border if the column is not being drag-moved
-		// (in that case it's omitted to have a 'pressed' appearance)
-		if (m_cursorMode != WXGRID_CURSOR_MOVE_COL || col != m_dragMoveRowOrCol)
-			rend.DrawBorder(*this, dc, rect);
-		else
-		{
-			// just highlight the current column
-			dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT)));
-			dc.DrawRectangle(rect);
-			rect.Deflate(GetBorder() == wxBORDER_NONE ? 2 : 1);
-		}
+		// just highlight the current column
+		dc.SetPen(wxPen(wxTHEME_COLOUR(HIGHLIGHT)));
+		dc.DrawRectangle(rect);
+		rect.Deflate(GetBorder() == wxBORDER_NONE ? 2 : 1);
 	}
 
 	int hAlign, vAlign;
@@ -9556,6 +9301,41 @@ wxRect ibGrid::CellToRect(int row, int col) const
 	return rect;
 }
 
+wxWindow* ibGrid::GetGridWindow() const
+{
+	return m_gridWin;
+}
+
+wxWindow* ibGrid::GetFrozenCornerGridWindow() const
+{
+	return m_frozenCornerGridWin;
+}
+
+wxWindow* ibGrid::GetFrozenRowGridWindow() const
+{
+	return m_frozenRowGridWin;
+}
+
+wxWindow* ibGrid::GetFrozenColGridWindow() const
+{
+	return m_frozenColGridWin;
+}
+
+wxWindow* ibGrid::GetGridRowLabelWindow() const
+{
+	return m_rowLabelWin;
+}
+
+wxWindow* ibGrid::GetGridColLabelWindow() const
+{
+	return m_colLabelWin;
+}
+
+wxWindow* ibGrid::GetGridCornerLabelWindow() const
+{
+	return m_cornerLabelWin;
+}
+
 ibGridWindow* ibGrid::CellToGridWindow(int row, int col) const
 {
 	// It may happen that we're called during grid creation, when the current
@@ -10457,6 +10237,10 @@ void ibGrid::SetLabelBackgroundColour(const wxColour& colour)
 			m_rowOutlineCornerWin->SetBackgroundColour(colour);
 		if (m_colOutlineCornerWin)
 			m_colOutlineCornerWin->SetBackgroundColour(colour);
+		if (m_rowAreaCornerWin)
+			m_rowAreaCornerWin->SetBackgroundColour(colour);
+		if (m_colAreaCornerWin)
+			m_colAreaCornerWin->SetBackgroundColour(colour);
 
 		if (ShouldRefresh())
 		{
@@ -10484,9 +10268,6 @@ void ibGrid::SetLabelTextColour(const wxColour& colour)
 	{
 		m_labelTextColour = colour;
 
-		if (IsUsingNativeHeader())
-			GetGridColHeader()->SetForegroundColour(colour);
-
 		if (ShouldRefresh())
 		{
 			m_rowAreaWin->Refresh();
@@ -10500,9 +10281,6 @@ void ibGrid::SetLabelTextColour(const wxColour& colour)
 void ibGrid::SetLabelFont(const wxFont& font)
 {
 	m_labelFont = font;
-
-	if (IsUsingNativeHeader())
-		GetGridColHeader()->SetFont(font);
 
 	if (ShouldRefresh())
 	{
@@ -10693,20 +10471,13 @@ void ibGrid::SetColLabelValue(int col, const wxString& s)
 		m_table->SetColLabelValue(col, s);
 		if (ShouldRefresh())
 		{
-			if (m_useNativeHeader)
+			wxRect rect = CellToRect(0, col);
+			if (rect.width > 0)
 			{
-				GetGridColHeader()->UpdateColumn(col);
-			}
-			else
-			{
-				wxRect rect = CellToRect(0, col);
-				if (rect.width > 0)
-				{
-					CalcScrolledPosition(rect.x, 0, &rect.x, &rect.y);
-					rect.y = 0;
-					rect.height = (GridColAreaEnabled() ? ibCalcGridScale(m_colAreaHeight, GetGridZoom()) : 0) + ibCalcGridScale(m_colLabelHeight, GetGridZoom());
-					GetColLabelWindow()->Refresh(true, &rect);
-				}
+				CalcScrolledPosition(rect.x, 0, &rect.x, &rect.y);
+				rect.y = 0;
+				rect.height = (GridColAreaEnabled() ? ibCalcGridScale(m_colAreaHeight, GetGridZoom()) : 0) + ibCalcGridScale(m_colLabelHeight, GetGridZoom());
+				m_colLabelWin->Refresh(true, &rect);
 			}
 		}
 	}
@@ -11643,26 +11414,9 @@ int ibGrid::HitTestColOutlineButton(const wxPoint& pt) const
 	return -1;
 }
 
-static void DrawOutlineButton(wxDC& dc, const wxRect& btn, bool collapsed)
-{
-	// Flat, neat 10x10 button: thin 3D-shadow border, light background,
-	// centred minus bar (always) plus a vertical bar when collapsed — same
-	// visual language as Excel's outline buttons, no decorative brackets.
-	dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_3DSHADOW)));
-	dc.SetBrush(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE)));
-	dc.DrawRectangle(btn);
-
-	dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT)));
-	const int cy = btn.y + btn.height / 2;
-	const int cx = btn.x + btn.width / 2;
-	dc.DrawLine(btn.x + 2, cy, btn.GetRight() - 1, cy);
-	if (collapsed)
-		dc.DrawLine(cx, btn.y + 2, cx, btn.GetBottom() - 1);
-}
-
 void ibGrid::DrawRowOutline(wxDC& dc)
 {
-	const wxColour railColour = wxSystemSettings::GetColour(wxSYS_COLOUR_3DSHADOW);
+	const wxColour railColour = wxTHEME_COLOUR(SHADOW_DARK);   // the theme's wxSYS_COLOUR_3DSHADOW
 	dc.SetPen(wxPen(railColour));
 	for (size_t i = 0; i < m_rowGroupAt.size(); ++i) {
 		const ibGridCellGroup& g = m_rowGroupAt[i];
@@ -11684,13 +11438,15 @@ void ibGrid::DrawRowOutline(wxDC& dc)
 	}
 	for (size_t i = 0; i < m_rowGroupAt.size(); ++i) {
 		const wxRect btn = GetRowGroupButtonRect((int)i);
-		if (!btn.IsEmpty()) DrawOutlineButton(dc, btn, m_rowGroupAt[i].m_collapsed);
+		if (!btn.IsEmpty())
+			ibThemeEngine::Get()->GetRenderer()->DrawTreeItemButton(this, dc, btn,
+				m_rowGroupAt[i].m_collapsed ? wxCONTROL_NONE : wxCONTROL_EXPANDED);
 	}
 }
 
 void ibGrid::DrawColOutline(wxDC& dc)
 {
-	const wxColour railColour = wxSystemSettings::GetColour(wxSYS_COLOUR_3DSHADOW);
+	const wxColour railColour = wxTHEME_COLOUR(SHADOW_DARK);   // the theme's wxSYS_COLOUR_3DSHADOW
 	dc.SetPen(wxPen(railColour));
 	for (size_t i = 0; i < m_colGroupAt.size(); ++i) {
 		const ibGridCellGroup& g = m_colGroupAt[i];
@@ -11708,7 +11464,9 @@ void ibGrid::DrawColOutline(wxDC& dc)
 	}
 	for (size_t i = 0; i < m_colGroupAt.size(); ++i) {
 		const wxRect btn = GetColGroupButtonRect((int)i);
-		if (!btn.IsEmpty()) DrawOutlineButton(dc, btn, m_colGroupAt[i].m_collapsed);
+		if (!btn.IsEmpty())
+			ibThemeEngine::Get()->GetRenderer()->DrawTreeItemButton(this, dc, btn,
+				m_colGroupAt[i].m_collapsed ? wxCONTROL_NONE : wxCONTROL_EXPANDED);
 	}
 }
 
@@ -13134,23 +12892,16 @@ void ibGrid::SetColSize(int col, int width, float scale, bool sendUndoCommand)
 	// show the column back using its old size.
 	if (width == -1 && GetColWidth(col) != 0)
 	{
-		if (m_useNativeHeader)
-		{
-			width = GetGridColHeader()->GetColumnTitleWidth(col);
-		}
+		long w, h;
+		wxArrayString lines;
+		wxClientDC dc(m_colLabelWin);
+		dc.SetFont(GetLabelFont());
+		ParseLines(GetColLabelValue(col), lines);
+		if (GetColLabelTextOrientation() == wxHORIZONTAL)
+			GetTextBoxSize(dc, lines, &w, &h);
 		else
-		{
-			long w, h;
-			wxArrayString lines;
-			wxClientDC dc(m_colLabelWin);
-			dc.SetFont(GetLabelFont());
-			ParseLines(GetColLabelValue(col), lines);
-			if (GetColLabelTextOrientation() == wxHORIZONTAL)
-				GetTextBoxSize(dc, lines, &w, &h);
-			else
-				GetTextBoxSize(dc, lines, &h, &w);
-			width = w + 6;
-		}
+			GetTextBoxSize(dc, lines, &h, &w);
+		width = w + 6;
 
 		// Check that it is not less than the minimal width and do use the
 		// possibly greater than minimal-acceptable-width minimal-width itself
@@ -13216,18 +12967,7 @@ void ibGrid::DoSetColSize(int col, int width)
 	if (!diff)
 		return;
 
-	if (m_useNativeHeader)
-	{
-		// We have to update the native control if we're called from the
-		// program (directly or indirectly, e.g. via AutoSizeColumn()), but we
-		// want to avoid doing it when the column is being resized
-		// interactively, as this is unnecessary and results in very visible
-		// flicker, so take care to call the special method of our header
-		// control checking for whether it's being resized interactively
-		// instead of the usual UpdateColumn().
-		static_cast<ibGridHeaderCtrl*>(m_colLabelWin)->UpdateIfNotResizing(col);
-	}
-	//else: will be refreshed when the header is redrawn
+	// the header will be refreshed when it is redrawn
 
 	InvalidateBestSize();
 
@@ -13305,11 +13045,8 @@ void ibGrid::DoSetColSize(int col, int width)
 
 			FurtherWindowPartRefresher refreshFurtherPart(x);
 
-			// Refreshing the native header is unnecessary, as it updates
-			// itself correctly anyhow, and just results in extra flicker.
 			refreshFurtherPart(m_colAreaWin);
-			if (!IsUsingNativeHeader())
-				refreshFurtherPart(m_colLabelWin);
+			refreshFurtherPart(m_colLabelWin);
 
 			refreshFurtherPart(m_gridWin);
 
@@ -13391,25 +13128,6 @@ int  ibGrid::GetColMinimalAcceptableWidth(float scale) const
 int  ibGrid::GetRowMinimalAcceptableHeight(float scale) const
 {
 	return ibCalcGridScale(m_minAcceptableRowHeight, scale);
-}
-
-void ibGrid::SetNativeHeaderColCount()
-{
-	wxASSERT_MSG(m_useNativeHeader, "no column header window");
-
-	GetGridColHeader()->SetColumnCount(m_numCols);
-
-	SetNativeHeaderColOrder();
-}
-
-void ibGrid::SetNativeHeaderColOrder()
-{
-	wxASSERT_MSG(m_useNativeHeader, "no column header window");
-
-	if (!m_colAt.empty())
-		GetGridColHeader()->SetColumnsOrder(m_colAt);
-	else
-		GetGridColHeader()->ResetColumnsOrder();
 }
 
 // ----------------------------------------------------------------------------
@@ -13554,24 +13272,14 @@ ibGrid::AutoSizeColOrRow(int colOrRow, bool setAsMin, ibGridDirection direction)
 
 	if (column)
 	{
-		if (m_useNativeHeader)
-		{
-			extentLabel = GetGridColHeader()->GetColumnTitleWidth(colOrRow);
+		const wxSize
+			size = dc.GetMultiLineTextExtent(GetColLabelValue(colOrRow));
+		extentLabel = GetColLabelTextOrientation() == wxVERTICAL
+			? size.y
+			: size.x;
 
-			// Note that GetColumnTitleWidth already adds margins internally,
-			// so we don't need to add them here.
-		}
-		else
-		{
-			const wxSize
-				size = dc.GetMultiLineTextExtent(GetColLabelValue(colOrRow));
-			extentLabel = GetColLabelTextOrientation() == wxVERTICAL
-				? size.y
-				: size.x;
-
-			// Add some margins around text for better readability.
-			extentLabel += margin;
-		}
+		// Add some margins around text for better readability.
+		extentLabel += margin;
 	}
 	else
 	{
@@ -13618,21 +13326,14 @@ ibGrid::AutoSizeColOrRow(int colOrRow, bool setAsMin, ibGridDirection direction)
 		SetColSize(colOrRow, extentMax);
 		if (ShouldRefresh())
 		{
-			if (m_useNativeHeader)
-			{
-				GetGridColHeader()->UpdateColumn(colOrRow);
-			}
-			else
-			{
-				int cw, ch, dummy;
-				m_gridWin->GetClientSize(&cw, &ch);
-				wxRect rect(CellToRect(0, colOrRow));
-				rect.y = 0;
-				CalcScrolledPosition(rect.x, 0, &rect.x, &dummy);
-				rect.width = cw - rect.x;
-				rect.height = (GridColAreaEnabled() ? ibCalcGridScale(m_colAreaHeight, GetGridZoom()) : 0) + ibCalcGridScale(m_colLabelHeight, GetGridZoom());
-				GetColLabelWindow()->Refresh(true, &rect);
-			}
+			int cw, ch, dummy;
+			m_gridWin->GetClientSize(&cw, &ch);
+			wxRect rect(CellToRect(0, colOrRow));
+			rect.y = 0;
+			CalcScrolledPosition(rect.x, 0, &rect.x, &dummy);
+			rect.width = cw - rect.x;
+			rect.height = (GridColAreaEnabled() ? ibCalcGridScale(m_colAreaHeight, GetGridZoom()) : 0) + ibCalcGridScale(m_colLabelHeight, GetGridZoom());
+			m_colLabelWin->Refresh(true, &rect);
 		}
 	}
 	else

@@ -2,9 +2,9 @@
 
 #include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the schedule's node
 #include "frmclient/mainFrame/objinspect/objinspect.h"                  // the object shown — the property is found on it again
-#include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frmclient/propertyManager/property/private/prop.h"             // ibPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
-#include "frmclient/propertyManager/propertyEditor.h"                   // wxPGEditor_HyperLink — the click-only editor
+#include "frmclient/propertyManager/propertyEditor.h"                   // ibPGEditor_HyperLink — the click-only editor
 #include "frmclient/win/dlgs/jobSchedule/jobScheduleSettings.h"
 
 #include "core/description/jobScheduleDescription.h"
@@ -13,7 +13,7 @@
 // ibPGScheduleProperty
 // -----------------------------------------------------------------------
 
-wxPG_IMPLEMENT_PROPERTY_CLASS(ibPGScheduleProperty, wxPGProperty, HyperLink)
+ibPG_IMPLEMENT_PROPERTY_CLASS(ibPGScheduleProperty, ibPGProperty, HyperLink)
 
 // register frontend property — ibPropertySchedule; the schedule as the server stores it (ibJobScheduleDescriptionMemory)
 // is read when the dialog opens, so the cell carries only the row's words.
@@ -22,7 +22,7 @@ class ibPropertyScheduleLoader
 public:
 	ibPropertyScheduleLoader()
 	{
-		ibPropertyRegistry::Register(wxT("ibPropertySchedule"), [](ibBackendProperty* property) -> wxPGProperty* {
+		ibPropertyRegistry::Register(wxT("ibPropertySchedule"), [](ibBackendProperty* property) -> ibPGProperty* {
 			return new ibPGScheduleProperty(property->GetPropertyObject(), property->GetLabel(), property->GetName(),
 				property->GetValue());
 		});
@@ -30,14 +30,14 @@ public:
 }g_scheduleLoader;
 
 ibPGScheduleProperty::ibPGScheduleProperty(ibPropertyObject* property, const wxString& label,
-	const wxString& name, const wxVariant& value) : wxPGProperty(label, name), m_ownerProperty(property) {
+	const wxString& name, const ibVariant& value) : ibPGProperty(label, name), m_ownerProperty(property) {
 
-	wxPGProperty::SetFlagRecursively(wxPGFlags::ReadOnly, true);
-	wxPGProperty::SetFlagRecursively(wxPGFlags::NoEditor, true);
+	ibPGProperty::SetFlagRecursively(ibPGFlags::ReadOnly, true);
+	ibPGProperty::SetFlagRecursively(ibPGFlags::NoEditor, true);
 
 	// THE CELL KEEPS THE VARIANT IT WAS GIVEN — the click stamps the NAME onto it rather than
 	// replacing it (propertyEditor.cpp), so there is nothing to overwrite here.
-	wxPGProperty::SetValue(value);
+	ibPGProperty::SetValue(value);
 }
 
 ibPGScheduleProperty::~ibPGScheduleProperty()
@@ -48,31 +48,27 @@ ibPGScheduleProperty::~ibPGScheduleProperty()
 // practice: the row is rendered once and the dialog does not re-enter the grid, so after an edit
 // the cell kept describing the OLD schedule. A stale description is worse than no description,
 // because it is read as the value. The sentence lives in the dialog, where it is always current.
-wxString ibPGScheduleProperty::ValueToString(wxVariant& value, wxPGPropValFormatFlags flags) const
+wxString ibPGScheduleProperty::ValueToString(ibVariant& value, ibPGPropValFormatFlags flags) const
 {
 	return _("Open");
 }
 
-bool ibPGScheduleProperty::StringToValue(wxVariant& variant,
+bool ibPGScheduleProperty::StringToValue(ibVariant& variant,
 	const wxString& text,
-	wxPGPropValFormatFlags flags) const
+	ibPGPropValFormatFlags flags) const
 {
 	return false;
 }
 
-void ibPGScheduleProperty::OnSetValue()
+bool ibPGScheduleProperty::OnEvent(ibPropertyGrid* WXUNUSED(propgrid), wxWindow* WXUNUSED(wnd_primary),
+	wxEvent& event)
 {
-	// THE NAME IS THE CLICK — see the dynamic list's cell: the editor stamps the name onto whatever
-	// the cell carries, so testing the bool would be testing the payload instead of the signal.
-	if (wxT("hyperLink_clicked") == m_value.GetName()) {
-		// ⭐ TAKEN, SO ENDED — see the hyperlink's cell, where a name that outlived its click cost two
-		// crashes.
-		m_value.SetName(wxEmptyString);
-
+	// THE CLICK (the hyperlink's editor, propertyEditor.cpp).
+	if (event.GetEventType() == wxEVT_LEFT_DOWN) {
 		ibObjectInspector* const inspector = ibObjectInspector::GetObjectInspector();
 		ibPropertyObject* const owner = m_ownerProperty;
 		if (inspector == nullptr || owner == nullptr)
-			return;
+			return false;
 		// Deferred: the click is still being dispatched, and a modal dialog opened from inside a
 		// grid event runs the event loop over a property the grid may rebuild.
 		wxTheApp->CallAfter(
@@ -84,9 +80,9 @@ void ibPGScheduleProperty::OnSetValue()
 				if (property == nullptr)
 					return;
 
-				const wxVariant held = property->GetValue();
+				const ibVariant held = property->GetValue();
 				ibJobScheduleDescription schedule;
-				ibJobScheduleDescriptionMemory::ReadNode(ibVariantDataSerializable::GetNodeValue(held), schedule);
+				ibJobScheduleDescriptionMemory::ReadNode(ibVariantSerializable::GetNodeValue(held), schedule);
 				ibDialogJobSchedule dlg(nullptr, schedule);
 				if (dlg.ShowModal() != wxID_OK)
 					return;
@@ -100,13 +96,15 @@ void ibPGScheduleProperty::OnSetValue()
 				ibDataValue node;
 				if (property != nullptr && ibJobScheduleDescriptionMemory::WriteNode(node, dlg.GetSchedule()))
 					ibPropertyGate::SetValue(owner, property,
-						wxVariant(new ibVariantDataSerializable(held.GetType(), node, held.GetString())));
+						ibVariant(new ibVariantSerializable(node, held.GetString())));
 			}
 		);
+		return true;
 	}
+	return false;
 }
 
 void ibPGScheduleProperty::RefreshChildren()
 {
-	wxPGProperty::Enable(true);
+	ibPGProperty::Enable(true);
 }

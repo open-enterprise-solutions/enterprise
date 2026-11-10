@@ -247,15 +247,8 @@ void ibCodeEditor::SetEditorSettings(const ibEditorSettings& settings)
 	SetMarginWidth(DEF_FOLDING_ID, symbolMargin);
 	SetMarginSensitive(DEF_FOLDING_ID, true);
 
-	// Three-step gradient across the gutter — leftmost (line numbers)
-	// darkest, breakpoint medium, fold margin lightest — so the gutter
-	// reads as a layered band that fades into the text area on the right.
-	// LINENUMBER margin bg comes from ibSTC_STYLE_LINENUMBER style (set
-	// in SetFontColorSettings); the symbol margins get explicit colors.
-	SetMarginBackground(DEF_BREAKPOINT_ID, wxColour(0xF0, 0xF0, 0xF0));
-	SetMarginBackground(DEF_FOLDING_ID,    wxColour(0xF6, 0xF6, 0xF6));
-	SetFoldMarginColour(true,   wxColour(0xF6, 0xF6, 0xF6));
-	SetFoldMarginHiColour(true, wxColour(0xF6, 0xF6, 0xF6));
+	// The gutter is the theme's, as every editor's (ibStyledTextCtrl::Create): the line numbers' and the breakpoints'
+	// margins on the line-number style's background, the fold margin in the same colour.
 
 	m_enableAutoComplete = settings.GetEnableAutoComplete();
 }
@@ -263,13 +256,6 @@ void ibCodeEditor::SetEditorSettings(const ibEditorSettings& settings)
 void ibCodeEditor::SetFontColorSettings(const ibFontColorSettings& settings)
 {
 	settings.Apply(*this);
-
-	// Soften the gutter — muted gray digits on the darkest gradient step
-	// (line-number margin is leftmost; breakpoint + fold margins step
-	// progressively lighter, see the SetMarginBackground calls in
-	// SetEditorSettings).
-	StyleSetForeground(ibSTC_STYLE_LINENUMBER, wxColour(0xA0, 0xA0, 0xA0));
-	StyleSetBackground(ibSTC_STYLE_LINENUMBER, wxColour(0xE8, 0xE8, 0xE8));
 
 	// Matching braces red; their font is the chosen one already, StyleClearAll copied it in.
 	StyleSetForeground(ibSTC_STYLE_BRACELIGHT, *wxRED);

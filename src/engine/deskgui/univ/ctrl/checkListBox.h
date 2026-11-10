@@ -101,8 +101,7 @@ protected:
     virtual void DoClear() override;
 
     // draw the check items instead of the usual ones
-    virtual void DoDrawRange(ibControlRenderer *renderer,
-                             int itemFirst, int itemLast) override;
+    virtual void OnDrawItem(wxDC& dc, const wxRect& rect, size_t n, int flags) const override;
 
     // take them also into account for size calculation
     virtual wxSize DoGetBestClientSize() const override;

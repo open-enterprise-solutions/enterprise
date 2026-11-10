@@ -1,8 +1,8 @@
 ﻿#ifndef __ADVPROP_PICTURE_H__
 #define __ADVPROP_PICTURE_H__
 
-#include <wx/propgrid/propgrid.h>
-#include <wx/propgrid/advprops.h>
+#include "deskgui/univ/propgrid/propgrid.h"
+#include "deskgui/univ/propgrid/advprops.h"
 
 #include <map>
 #include <optional>   // the configuration's pictures, as the row brings them
@@ -17,28 +17,28 @@
 
 // THE PICTURE CELLS:a picture of a file, read
 // whole into the value (ibPGExternalImageProperty), and a picture by where it comes from — the engine's, the
-// configuration's, a file's (wxPGPictureProperty).
-class ibPGExternalImageProperty : public wxEditorDialogProperty {
+// configuration's, a file's (ibPGPictureProperty).
+class ibPGExternalImageProperty : public ibEditorDialogProperty {
 
 public:
 
-	ibPGExternalImageProperty(const wxString& label = wxPG_LABEL, const wxString& name = wxPG_LABEL, const wxVariant& value = wxVariant());
+	ibPGExternalImageProperty(const wxString& label = ibPG_LABEL, const wxString& name = ibPG_LABEL, const ibVariant& value = ibVariant());
 
 	virtual wxSize OnMeasureImage(int item) const override { return wxSize(16, 16); }
 	virtual void OnCustomPaint(wxDC& dc,
-		const wxRect& rect, wxPGPaintData& paintdata) override;
+		const wxRect& rect, ibPGPaintData& paintdata) override;
 
-	virtual wxString ValueToString(wxVariant& value,
-		wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override
+	virtual wxString ValueToString(ibVariant& value,
+		ibPGPropValFormatFlags flags = ibPGPropValFormatFlags::Null) const override
 	{
 		return value.GetString();
 	}
 
-	virtual bool StringToValue(wxVariant& variant,
+	virtual bool StringToValue(ibVariant& variant,
 		const wxString& text,
-		wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override;
+		ibPGPropValFormatFlags flags = ibPGPropValFormatFlags::Null) const override;
 
-	virtual bool DisplayEditorDialog(wxPropertyGrid* pg, wxVariant& value) override;
+	virtual bool DisplayEditorDialog(ibPropertyGrid* pg, ibVariant& value) override;
 
 protected:
 
@@ -51,48 +51,48 @@ protected:
 	wxBitmap   m_bitmap; // final thumbnail area
 
 private:
-	WX_PG_DECLARE_PROPERTY_CLASS(ibPGExternalImageProperty);
+	IB_PG_DECLARE_PROPERTY_CLASS(ibPGExternalImageProperty);
 };
 
 // -----------------------------------------------------------------------
-// wxPGPictureProperty
+// ibPGPictureProperty
 // -----------------------------------------------------------------------
 
-class wxPGPictureProperty : public wxPGProperty {
+class ibPGPictureProperty : public ibPGProperty {
 public:
 
-	wxPGPictureProperty(const wxString& label = wxPG_LABEL,
-		const wxString& name = wxPG_LABEL,
-		const wxVariant& value = wxVariant(),
+	ibPGPictureProperty(const wxString& label = ibPG_LABEL,
+		const wxString& name = ibPG_LABEL,
+		const ibVariant& value = ibVariant(),
 		const std::optional<ibDataNode>& pictures = std::nullopt,
 		const std::optional<ibDataNode>& classes = std::nullopt);
 
-	virtual ~wxPGPictureProperty() override {}
+	virtual ~ibPGPictureProperty() override {}
 
-	virtual wxString ValueToString(wxVariant& value, wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override { return value.GetString(); }
-	virtual bool StringToValue(wxVariant& variant,
+	virtual wxString ValueToString(ibVariant& value, ibPGPropValFormatFlags flags = ibPGPropValFormatFlags::Null) const override { return value.GetString(); }
+	virtual bool StringToValue(ibVariant& variant,
 		const wxString& text,
-		wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override {
+		ibPGPropValFormatFlags flags = ibPGPropValFormatFlags::Null) const override {
 		return false;
 	}
 
 	virtual void RefreshChildren() override;
-	virtual wxVariant ChildChanged(wxVariant& thisValue, int childIndex,
-		wxVariant& childValue) const override;
+	virtual ibVariant ChildChanged(ibVariant& thisValue, int childIndex,
+		ibVariant& childValue) const override;
 
 protected:
 
-	wxEnumProperty* m_propertySource;
+	ibEnumProperty* m_propertySource;
 
-	wxEditEnumProperty* m_propertyBackend;
-	wxEditEnumProperty* m_propertyConfiguration;
+	ibEditEnumProperty* m_propertyBackend;
+	ibEditEnumProperty* m_propertyConfiguration;
 	ibPGExternalImageProperty* m_propertyFile;
 
 	std::map<int, ibClassID> m_valChoices;
 	std::map<int, ibGuid> m_confChoices;
 
 private:
-	WX_PG_DECLARE_PROPERTY_CLASS(wxPGPictureProperty);
+	IB_PG_DECLARE_PROPERTY_CLASS(ibPGPictureProperty);
 };
 
 #endif

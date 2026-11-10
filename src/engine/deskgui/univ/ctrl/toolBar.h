@@ -60,6 +60,8 @@ public:
             const wxBitmapBundle& bmpDisabled = wxBitmapBundle(),
             const wxString& shortHelp = wxEmptyString);
     wxToolBarToolBase *AddSeparator();
+    bool DeleteTool(int id);
+    bool DeleteToolByPos(size_t pos);
     void SetToolBitmapSize(const wxSize& size) {
         m_defaultWidth = size.x;
         m_defaultHeight = size.y;
@@ -77,6 +79,7 @@ public:
         }
         return nullptr;
     }
+    void ToggleTool(int id, bool toggle);
     void UnToggleRadioGroup(wxToolBarToolBase *tool) {
         if ( !tool || tool->GetKind() != wxITEM_RADIO )
             return;
@@ -165,7 +168,8 @@ protected:
                                           const wxString& label) ;
 
     virtual wxSize DoGetBestClientSize() const override;
-    virtual void DoDraw(ibControlRenderer *renderer) override;
+
+    void OnPaint(wxPaintEvent& event);
 
     // get the bounding rect for the given tool
     wxRect GetToolRect(wxToolBarToolBase *tool) const;
@@ -201,6 +205,7 @@ private:
     wxCoord m_yMargin = 0;
 
     wxDECLARE_DYNAMIC_CLASS(ibToolBar);
+    wxDECLARE_EVENT_TABLE();
 };
 
 #endif // _DESKGUI_UNIV_TOOLBAR_H_

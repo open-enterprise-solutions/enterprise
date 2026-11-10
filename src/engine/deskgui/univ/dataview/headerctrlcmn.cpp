@@ -26,6 +26,8 @@
 
 #include <wx/rearrangectrl.h>
 #include <wx/renderer.h>
+#include "deskgui/univ/renderer.h"
+#include "deskgui/univ/theme.h"  // the buttons' margin: the theme's renderer's
 
 namespace
 {
@@ -108,7 +110,7 @@ int ibHeaderGenericCtrlBase::GetColumnTitleWidth(const wxHeaderColumn& col)
     int w = wxWindowBase::GetTextExtent(col.GetTitle()).x;
 
     // add some margin:
-    w += wxRendererNative::Get().GetHeaderButtonMargin(this);
+    w += ibThemeEngine::Get()->GetRenderer()->GetHeaderButtonMargin(this);
 
     // if a bitmap is used, add space for it and 2px border:
     wxBitmapBundle bmp = col.GetBitmapBundle();

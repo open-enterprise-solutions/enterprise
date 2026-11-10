@@ -61,9 +61,6 @@ public:
 protected:
     virtual wxBorder GetDefaultBorder() const override { return wxBORDER_NONE; }
 
-    // implement our own drawing
-    virtual void DoDraw(ibControlRenderer *renderer) override;
-
     // we use the radio button bitmaps for size calculation
     virtual wxSize GetBitmapSize() const override;
 
@@ -71,6 +68,9 @@ protected:
     // ChangeValue() above - and it is protected as it can only be called by
     // another radiobutton
     void ClearValue();
+
+    // implement our own drawing
+    void OnPaint(wxPaintEvent& event);
 
     // called when the radio button becomes checked: we clear all the buttons
     // in the same group with us here
@@ -88,6 +88,7 @@ protected:
 
 private:
     wxDECLARE_DYNAMIC_CLASS(ibRadioButton);
+    wxDECLARE_EVENT_TABLE();
 };
 
 #endif // _DESKGUI_UNIV_RADIOBUTTON_H_

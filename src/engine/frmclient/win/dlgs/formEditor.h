@@ -7,8 +7,8 @@
 #include "deskgui/univ/ctrl/treeCtrl.h"
 #include "deskgui/univ/menu.h"
 
-#include <wx/propgrid/propgrid.h>
-#include <wx/propgrid/manager.h>
+#include "deskgui/univ/propgrid/propgrid.h"
+#include "deskgui/univ/propgrid/manager.h"
 
 #include <map>
 
@@ -194,8 +194,8 @@ protected:
 	void OnEndDrag(wxTreeEvent& event);
 	void OnKeyDown(wxTreeEvent& event);
 
-	void OnPropertyGridChanging(wxPropertyGridEvent& event);
-	void OnPropertyGridItemSelected(wxPropertyGridEvent& event);
+	void OnPropertyGridChanging(ibPropertyGridEvent& event);
+	void OnPropertyGridItemSelected(ibPropertyGridEvent& event);
 
 	//special
 	void MovePosition(ibValueFrame* obj, bool right, unsigned int num = 1);
@@ -230,7 +230,7 @@ private:
 	std::vector<std::shared_ptr<ibFormEditorCmd>> m_cmdArray;
 
 	std::map<ibValueFrame*, wxTreeItemId> m_listItem;
-	std::map<wxPGProperty*, ibProperty*> m_pgArray;
+	std::map<ibPGProperty*, ibProperty*> m_pgArray;
 
 	std::map<wxString, int> m_iconIdx;
 
@@ -241,8 +241,8 @@ private:
 	wxImageList* m_iconList = nullptr;
 	ibTreeCtrl* m_treeControl;
 
-	wxPropertyGridManager* m_propertyGridManager;
-	wxPropertyGridPage* m_propertyGridPage;
+	ibPropertyGridManager* m_propertyGridManager;
+	ibPropertyGridPage* m_propertyGridPage;
 
 	ibStdDialogButtonSizer* m_sdbSizer;
 	wxTreeItemId m_draggedItem;
