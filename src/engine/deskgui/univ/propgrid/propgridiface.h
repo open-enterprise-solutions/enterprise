@@ -15,8 +15,6 @@
 
 #include "wx/defs.h"
 
-#if wxUSE_PROPGRID
-
 #include "deskgui/univ/propgrid/property.h"
 #include "deskgui/univ/propgrid/propgridpagestate.h"
 
@@ -1124,7 +1122,5 @@ private:
         return m_pState ? m_pState->GetGrid() : nullptr;
     }
 };
-
-#endif // wxUSE_PROPGRID
 
 #endif // _DESKGUI_UNIV_PROPGRID_PROPGRIDIFACE_H_

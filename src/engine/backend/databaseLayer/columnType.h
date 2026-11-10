@@ -19,6 +19,7 @@ enum class ibCanonicalKind
 	BigInt,    // 64-bit integer
 	Number,    // decimal(precision, scale)
 	String,    // varchar(length) / char(length) when m_fixed
+	Text,      // a string of no limit (a type's length 0) — text / a text blob; never indexed
 	Date,      // date / datetime / time — discriminated by m_datePrec
 	Blob,
 	Binary,    // fixed-length bytes (length) — indexable, unlike Blob
@@ -45,6 +46,7 @@ inline ibColumnType ibTypeBigInt()                  { ibColumnType t; t.m_kind =
 inline ibColumnType ibTypeNumber(int prec, int scl) { ibColumnType t; t.m_kind = ibCanonicalKind::Number; t.m_precision = prec; t.m_scale = scl; return t; }
 inline ibColumnType ibTypeString(int len)           { ibColumnType t; t.m_kind = ibCanonicalKind::String; t.m_length = len; return t; }
 inline ibColumnType ibTypeChar(int len)             { ibColumnType t; t.m_kind = ibCanonicalKind::String; t.m_length = len; t.m_fixed = true; return t; }
+inline ibColumnType ibTypeText()                    { ibColumnType t; t.m_kind = ibCanonicalKind::Text; return t; }
 inline ibColumnType ibTypeDate(ibDatePrec prec = ibDatePrec::DateTime) { ibColumnType t; t.m_kind = ibCanonicalKind::Date; t.m_datePrec = prec; return t; }
 inline ibColumnType ibTypeBlob()                    { ibColumnType t; t.m_kind = ibCanonicalKind::Blob; return t; }
 inline ibColumnType ibTypeBinary(int len)           { ibColumnType t; t.m_kind = ibCanonicalKind::Binary; t.m_length = len; return t; }

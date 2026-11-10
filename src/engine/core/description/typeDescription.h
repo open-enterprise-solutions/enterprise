@@ -7,6 +7,9 @@
 #include <vector>
 
 class ibMemoryBuffer;   // core/memory/memoryBuffer.h — ibTypeDescriptionMemory's byte form
+class ibNumber;         // core/fnumber.h — …and the values its qualifiers shape (Adjust)
+class ibDateTime;       // core/fdatetime.h
+class ibString;         // core/fstring.h
 
 enum ibAllowedLength {
 	ibAllowedLength_Variable,
@@ -22,7 +25,20 @@ struct ibQualifierNumber {
 	unsigned char m_precision;
 	unsigned char m_scale;
 	ibQualifierNumber(unsigned char precision = 10, char scale = 0, bool nonNegative = false) :
-		m_nonNegative(nonNegative), m_precision(precision), m_scale(scale) {
+		m_nonNegative(nonNegative), m_precision(precision), m_scale(ScaleWithin(precision, scale)) {
+	}
+
+	// ⭐ A VALUE TO THE QUALIFIER — the one rule each kind of value is shaped by, the server's and the client's
+	// (ibValueTypeDescription::AdjustValue, a copy each, had drifted apart). A number: rounded to the scale, kept within
+	// the digits - the most they hold, either sign: Number(5, 2) takes 999.99 - and none below zero when non-negative.
+	// Precision 0 is no limit on the digits; the sign rule still holds.
+	CORE_API ibNumber Adjust(const ibNumber& value) const;
+
+	// THE SCALE NEVER PASSES THE PRECISION — a number keeps no more decimals than it has digits; with no limit on the
+	// digits (0) none on the decimals either. The one rule every road takes: the designer's editors, a script's
+	// QualifierNumber, the assistant (Max, 2026-11-10: "the scale must not exceed the length")
+	static unsigned char ScaleWithin(unsigned char precision, unsigned char scale) {
+		return precision > 0 && scale > precision ? precision : scale;
 	}
 };
 
@@ -30,6 +46,9 @@ struct ibQualifierDate {
 	ibDateFractions m_dateTime;
 	ibQualifierDate(ibDateFractions dateTime = ibDateFractions::ibDateFractions_DateTime) : m_dateTime(dateTime) {
 	}
+
+	// …a date: its day alone (Date), its time of day alone - on the empty date (Time), both (DateTime)
+	CORE_API ibDateTime Adjust(const ibDateTime& value) const;
 };
 
 struct ibQualifierString {
@@ -41,6 +60,11 @@ struct ibQualifierString {
 	ibQualifierString(unsigned short length = 10, ibAllowedLength allowedLength = ibAllowedLength::ibAllowedLength_Variable) :
 		m_length(length), m_allowedLength(allowedLength) {
 	}
+
+	// …a string: cut to the length, a fixed one padded to it with spaces, as its column (CHAR) keeps it. ⚠ 0 IS NO
+	// LIMIT, NOT "CUT TO NOTHING": `Left(value, 0)` was an EMPTY string, and a value adjusted to such a type was wiped -
+	// typed in, saved, blank on the next read
+	CORE_API ibString Adjust(const ibString& value) const;
 };
 
 struct ibTypeDescription {
@@ -92,7 +116,7 @@ struct ibTypeDescription {
 
 		void SetNumber(unsigned char precision, unsigned char scale, bool nonNegative = false) {
 			m_number.m_precision = precision;
-			m_number.m_scale = scale;
+			m_number.m_scale = ibQualifierNumber::ScaleWithin(precision, scale);
 			m_number.m_nonNegative = nonNegative;
 		}
 
@@ -354,6 +378,11 @@ struct ibTypeDescription {
 	const ibQualifierNumber& GetNumberQualifier() const { return m_typeData.GetNumberQualifier(); }
 	const ibQualifierDate& GetDateQualifier() const { return m_typeData.GetDateQualifier(); }
 	const ibQualifierString& GetStringQualifier() const { return m_typeData.GetStringQualifier(); }
+
+	// …a value to them: its qualifier's (ibQualifierNumber::Adjust and its siblings), the overload the value picks
+	CORE_API ibNumber Adjust(const ibNumber& value) const;
+	CORE_API ibDateTime Adjust(const ibDateTime& value) const;
+	CORE_API ibString Adjust(const ibString& value) const;
 
 	//////////////////////////////////////////////////
 

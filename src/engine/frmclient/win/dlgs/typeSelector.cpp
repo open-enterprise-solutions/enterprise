@@ -141,13 +141,47 @@ bool ibShowTypeSelector(wxWindow* parent, ibSelectorDataType kind,
 	wxBoxSizer* stringSizer = new wxBoxSizer(wxHORIZONTAL);
 	ibStaticText* stSLength = new ibStaticText(dlg, wxID_ANY, _("Length:"));
 	stringSizer->Add(stSLength, 0, wxALL, dlg->FromDIP(5));
+	// …its length, whether a shorter string is padded to it (the allowed length), and NO LIMIT: the length 0
+	// (ibQualifierString). The check sets the length 0 and holds it, the allowed length with it, while it stays on; off,
+	// the length is the one it was (Max, 2026-11-10). A 0 typed in is no limit too: the check comes on with it
 	ibSpinCtrl* tcSLength = new ibSpinCtrl(dlg, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
 		wxSP_ARROW_KEYS, 0, MAX_LENGTH_STRING);
 	tcSLength->SetValue(working.GetLength());
-	tcSLength->Enable(allowEdit);
 	stringSizer->Add(tcSLength, 0, wxBOTTOM | wxRIGHT, 0);
-	tcSLength->Bind(wxEVT_COMMAND_SPINCTRL_UPDATED, [&working](wxSpinEvent& event) {
-		working.SetString(event.GetValue());
+	ibChoice* cSAllowedLength = new ibChoice(dlg, wxID_ANY);
+	cSAllowedLength->Append(_("Variable"));
+	cSAllowedLength->Append(_("Fixed"));
+	cSAllowedLength->SetSelection(working.GetAllowedLength());
+	stringSizer->Add(cSAllowedLength, 0, wxBOTTOM | wxLEFT, dlg->FromDIP(5));
+	ibCheckBox* cbSUnlimited = new ibCheckBox(dlg, wxID_ANY, _("Unlimited"));
+	cbSUnlimited->Enable(allowEdit);
+	stringSizer->Add(cbSUnlimited, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, dlg->FromDIP(5));
+
+	unsigned short lastLength = working.GetLength() > 0 ? working.GetLength() : ibQualifierString().m_length;
+	auto holdUnlimited = [allowEdit, tcSLength, cSAllowedLength, cbSUnlimited](bool noLimit) {
+		cbSUnlimited->SetValue(noLimit);
+		tcSLength->Enable(allowEdit && !noLimit);
+		cSAllowedLength->Enable(allowEdit && !noLimit);
+	};
+	holdUnlimited(working.GetLength() == 0);
+
+	tcSLength->Bind(wxEVT_COMMAND_SPINCTRL_UPDATED, [&working, &lastLength, holdUnlimited](wxSpinEvent& event) {
+		if (event.GetValue() > 0)
+			lastLength = static_cast<unsigned short>(event.GetValue());
+		working.SetString(event.GetValue(), event.GetValue() > 0 ? working.GetAllowedLength() : ibAllowedLength::ibAllowedLength_Variable);
+		holdUnlimited(event.GetValue() == 0);
+		event.Skip();
+	});
+	cSAllowedLength->Bind(wxEVT_COMMAND_CHOICE_SELECTED, [&working](wxCommandEvent& event) {
+		working.SetString(working.GetLength(), static_cast<ibAllowedLength>(event.GetSelection()));
+		event.Skip();
+	});
+	cbSUnlimited->Bind(wxEVT_CHECKBOX, [&working, &lastLength, tcSLength, cSAllowedLength, holdUnlimited](wxCommandEvent& event) {
+		const bool noLimit = event.IsChecked();
+		working.SetString(noLimit ? 0 : lastLength,
+			noLimit ? ibAllowedLength::ibAllowedLength_Variable : static_cast<ibAllowedLength>(cSAllowedLength->GetSelection()));
+		tcSLength->SetValue(working.GetLength());
+		holdUnlimited(noLimit);
 		event.Skip();
 	});
 	topsizer->Add(stringSizer, 0, 0, dlg->FromDIP(5));
@@ -160,22 +194,33 @@ bool ibShowTypeSelector(wxWindow* parent, ibSelectorDataType kind,
 	tcNLength->SetValue(working.GetPrecision());
 	tcNLength->Enable(allowEdit);
 	numberSizer->Add(tcNLength, 0, wxBOTTOM | wxRIGHT, 0);
-	tcNLength->Bind(wxEVT_COMMAND_SPINCTRL_UPDATED, [&working](wxSpinEvent& event) {
-		working.SetNumber(event.GetValue(), working.GetScale());
-		event.Skip();
-	});
-
 	ibStaticText* stNScale = new ibStaticText(dlg, wxID_ANY, _("Scale:"));
 	numberSizer->Add(stNScale, 0, wxTOP | wxBOTTOM | wxLEFT, dlg->FromDIP(5));
-	ibSpinCtrl* tcNScale = new ibSpinCtrl(dlg, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS);
+	ibSpinCtrl* tcNScale = new ibSpinCtrl(dlg, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
+		wxSP_ARROW_KEYS, 0, MAX_PRECISION_NUMBER);
 	tcNScale->SetValue(working.GetScale());
 	tcNScale->Enable(allowEdit);
 	numberSizer->Add(tcNScale, 0, wxRIGHT | wxLEFT, dlg->FromDIP(5));
-	tcNScale->Bind(wxEVT_COMMAND_SPINCTRL_UPDATED, [&working](wxSpinEvent& event) {
-		// Scale never exceeds precision — a number cannot keep more decimals than it has digits.
-		const unsigned short scale = working.GetPrecision() > event.GetValue()
-			? event.GetValue() : working.GetPrecision();
-		working.SetNumber(working.GetPrecision(), scale);
+	ibCheckBox* cbNNonNegative = new ibCheckBox(dlg, wxID_ANY, _("Non-negative"));
+	cbNNonNegative->SetValue(working.IsNonNegative());
+	cbNNonNegative->Enable(allowEdit);
+	numberSizer->Add(cbNNonNegative, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, dlg->FromDIP(5));
+
+	// The scale never passes the length — the type description's own rule (ibQualifierNumber::ScaleWithin): a length
+	// made shorter takes the scale down with it, a scale beyond the length stops at it, and the spin shows what was kept
+	tcNLength->Bind(wxEVT_COMMAND_SPINCTRL_UPDATED, [&working, tcNScale](wxSpinEvent& event) {
+		working.SetNumber(event.GetValue(), working.GetScale(), working.IsNonNegative());
+		tcNScale->SetValue(working.GetScale());
+		event.Skip();
+	});
+	tcNScale->Bind(wxEVT_COMMAND_SPINCTRL_UPDATED, [&working, tcNScale](wxSpinEvent& event) {
+		working.SetNumber(working.GetPrecision(), event.GetValue(), working.IsNonNegative());
+		if (tcNScale->GetValue() != working.GetScale())
+			tcNScale->SetValue(working.GetScale());
+		event.Skip();
+	});
+	cbNNonNegative->Bind(wxEVT_CHECKBOX, [&working](wxCommandEvent& event) {
+		working.SetNumber(working.GetPrecision(), working.GetScale(), event.IsChecked());
 		event.Skip();
 	});
 	topsizer->Add(numberSizer, 0, 0, dlg->FromDIP(5));
@@ -209,6 +254,12 @@ bool ibShowTypeSelector(wxWindow* parent, ibSelectorDataType kind,
 		for (unsigned int i = 0; i < stringSizer->GetItemCount(); i++) stringSizer->Show(i, vt == ibValueTypes::TYPE_STRING);
 		topsizer->Layout();
 	};
+
+	// The widest row and the tallest, measured while they still stand: hidden, they are no part of the size hints, and a
+	// string's length, its allowed length and its no-limit check stood past the dialog's right edge - opened, and
+	// again once the dialog was made smaller by hand (Max, 2026-11-10)
+	const wxSize qualifiers(std::max({ stringSizer->CalcMin().x, numberSizer->CalcMin().x, dateSizer->CalcMin().x }),
+		std::max({ stringSizer->CalcMin().y, numberSizer->CalcMin().y, dateSizer->CalcMin().y }));
 
 	for (unsigned int i = 0; i < numberSizer->GetItemCount(); i++) numberSizer->Hide(i);
 	for (unsigned int i = 0; i < dateSizer->GetItemCount(); i++)   dateSizer->Hide(i);
@@ -265,7 +316,11 @@ bool ibShowTypeSelector(wxWindow* parent, ibSelectorDataType kind,
 
 	dlg->SetSizer(topsizer);
 	topsizer->SetSizeHints(dlg);
-	dlg->SetSize(dlg->FromDIP(wxSize(400, 300)));
+	const wxSize frame = dlg->GetSize() - dlg->GetClientSize();
+	// …and no smaller than the hints with the one row shown at a time, whichever it is
+	const wxSize least(std::max(dlg->GetMinSize().x, qualifiers.x + frame.x), dlg->GetMinSize().y + qualifiers.y);
+	dlg->SetMinSize(least);
+	dlg->SetSize(wxSize(std::max(dlg->FromDIP(400), least.x), std::max(dlg->FromDIP(300), least.y)));
 	dlg->CenterOnParent();
 
 	const int result = dlg->ShowModal();

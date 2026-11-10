@@ -153,6 +153,17 @@ ibString ibDatabaseResultSetFirebird::GetResultString(int nField)
 		ConvertFromUnicodeStream((const char*)pVary->vary_string, strValue);
 		return strValue;
 	}
+	// A STRING OF NO LIMIT — a text blob (ibCanonicalKind::Text), its bytes the connection's charset as a VARCHAR's
+	if (nType == SQL_BLOB && pVar->sqlsubtype == isc_blob_text)
+	{
+		ibMemoryBuffer bytes;
+		GetResultBlob(nField, bytes);
+		const std::string text = bytes.GetDataLen() > 0
+			? std::string(static_cast<const char*>(bytes.GetData()), bytes.GetDataLen()) : std::string();
+		ibString strValue;
+		ConvertFromUnicodeStream(text.c_str(), strValue);
+		return strValue;
+	}
 
 	// Incompatible field type
 	// Set error codes and throw an exception here
@@ -535,15 +546,23 @@ void* ibDatabaseResultSetFirebird::GetResultBlob(int nField, ibMemoryBuffer& buf
 			tempBuffer.SetDataLen(bufferSize);
 			tempBuffer.SetBufSize(bufferSize);
 
-			// Unwrap the OESC magic-header envelope. Three cases:
-			//   1. Magic present, flag = zlib → decompress.
-			//   2. Magic present, flag = raw  → strip the 6-byte header.
-			//   3. No magic (legacy BLOB written before this code path) →
-			//      return the bytes verbatim.
-			// The decision lives entirely in Unwrap; the read path never
-			// branches on type-of-payload.
-			buffer = ibFirebirdBlobCompression::Unwrap(tempBuffer.GetData(),
-			                                           bufferSize);
+			// A TEXT BLOB (a string of no limit, ibCanonicalKind::Text) carries no envelope: it is written as the
+			// string's own bytes (ibDatabaseParameterFirebird::Set), and a string that begins as the magic does
+			// would have been unwrapped into something else.
+			if (pVar->sqlsubtype == isc_blob_text)
+				buffer = tempBuffer;
+			else
+			{
+				// Unwrap the OESC magic-header envelope. Three cases:
+				//   1. Magic present, flag = zlib → decompress.
+				//   2. Magic present, flag = raw  → strip the 6-byte header.
+				//   3. No magic (legacy BLOB written before this code path) →
+				//      return the bytes verbatim.
+				// The decision lives entirely in Unwrap; the read path never
+				// branches on type-of-payload.
+				buffer = ibFirebirdBlobCompression::Unwrap(tempBuffer.GetData(),
+				                                           bufferSize);
+			}
 		}
 		else if (nType == SQL_TEXT)
 		{

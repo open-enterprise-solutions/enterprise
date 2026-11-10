@@ -14,8 +14,6 @@
 #include "wx/wxprec.h"
 
 
-#if wxUSE_PROPGRID
-
 #ifndef WX_PRECOMP
     #include "wx/dc.h"
     #include "wx/settings.h"
@@ -2301,6 +2299,4 @@ void ibPropertyGridInterface::RegisterAdditionalEditors()
 // -----------------------------------------------------------------------
 
 #endif  // ibPG_INCLUDE_ADVPROPS
-
-#endif  // wxUSE_PROPGRID
 

@@ -15,8 +15,6 @@
 
 #include "wx/defs.h"
 
-#if wxUSE_PROPGRID
-
 #include "wx/scrolwin.h"
 #include "wx/recguard.h"
 #include "wx/time.h" // needed for wxMilliClock_t
@@ -2072,7 +2070,5 @@ protected:
 // for compatibility because user apps can be broken by removing it.
 #include "deskgui/univ/propgrid/props.h"
 #endif // !WXBUILDING
-
-#endif // wxUSE_PROPGRID
 
 #endif // _DESKGUI_UNIV_PROPGRID_PROPGRID_H_

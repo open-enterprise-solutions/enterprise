@@ -61,8 +61,11 @@ protected:
 
 	ibUIntProperty* m_precision;
 	ibUIntProperty* m_scale;
+	ibBoolProperty* m_nonNegative;
 	ibEnumProperty* m_date_time;
 	ibUIntProperty* m_length;
+	ibEnumProperty* m_allowedLength;
+	ibBoolProperty* m_unlimited;   // the length 0 (ibQualifierString): the length and the allowed length held
 
 	std::map<int, ibClassID> m_valChoices;
 };

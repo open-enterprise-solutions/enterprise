@@ -458,8 +458,12 @@ void ibCheckTree::On_Left_Down(wxMouseEvent& event)
 
 	if (id.IsOk() && i >= 0 && on_check_or_label(flags))
 	{
-		last_ld = id;
-		ldhighlight(id);
+		// The box is pressed, the label only selects: a row is looked at (what it holds, its qualifiers)
+		// without being checked — the release toggles the pressed row alone (On_Left_Up).
+		if (flags & wxTREE_HITTEST_ONITEMSTATEICON) {
+			last_ld = id;
+			ldhighlight(id);
+		}
 
 		ibCheckTree::SelectItem(id);
 	}

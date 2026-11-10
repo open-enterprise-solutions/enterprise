@@ -15,8 +15,6 @@
 
 #include "wx/defs.h"
 
-#if wxUSE_PROPGRID
-
 // -----------------------------------------------------------------------
 
 #include "deskgui/univ/propgrid/property.h"
@@ -885,7 +883,5 @@ private:
 };
 
 // -----------------------------------------------------------------------
-
-#endif // wxUSE_PROPGRID
 
 #endif // _DESKGUI_UNIV_PROPGRID_PROPS_H_

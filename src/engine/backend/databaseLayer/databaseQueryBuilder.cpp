@@ -1243,10 +1243,24 @@ ibString ibQueryRenderer::RenderExpr(const ibQueryExprPtr& expr)
 		if (m_dialect.m_substring.IsEmpty())
 			ibBackendQueryException::Throw(ibBackendQueryException::Kind::UnsupportedNode,
 				_("The database engine has no substring of its own"));
+		// ⭐ A POSITION THE STATEMENT KNOWS IS WRITTEN AS THE INTEGER IT IS, as the 1 is when none is given. Bound, it
+		// was refused twice on Firebird: a bare `?` after FROM / FOR is untyped, SQL -804 "Data type unknown" (the count
+		// of what a string given a length loses), and a key grouped by and sorted by binds its positions twice, which
+		// is two expressions to the engine, SQL -104 (`GROUP BY CAST(Comment AS String(3)) ORDER BY` it, 2026-11-10).
+		// Every road hands a position over as the number it is - the query's provider, a statement the structure builds
+		// by hand - so it is written here once. A position that is not a constant binds as it did.
+		const auto fill = [this](const ibString& tpl, const ibChar* key, const ibQueryExprPtr& arg) {
+			if (arg && arg->m_kind == ibQueryExprKind::Const && arg->m_const.GetType() == TYPE_NUMBER) {
+				ibString out = tpl;
+				out.Replace(key, ibString::Format(ibT("%d"), arg->m_const.GetNumber().ToInt()));
+				return out;
+			}
+			return FillRepeated(tpl, key, arg);
+		};
 		ibString out = FillRepeated(m_dialect.m_substring, ibT("{expr}"), expr->m_lhs);
-		out = expr->m_args.size() > 0 ? FillRepeated(out, ibT("{from}"), expr->m_args[0])
+		out = expr->m_args.size() > 0 ? fill(out, ibT("{from}"), expr->m_args[0])
 		                              : (out.Replace(ibT("{from}"), ibT("1")), out);
-		out = expr->m_args.size() > 1 ? FillRepeated(out, ibT("{len}"), expr->m_args[1])
+		out = expr->m_args.size() > 1 ? fill(out, ibT("{len}"), expr->m_args[1])
 		                              : (out.Replace(ibT("{len}"), ibT("0")), out);
 		return out;
 	}
@@ -1497,6 +1511,15 @@ ibString ibQueryRenderer::RenderDDL(const ibDdlStatement& ddl)
 		sql.Replace(ibT("{type}"),   MapType(ddl.m_columns[0].m_type));
 		return sql;
 	}
+	case ibDdlKind::RenameColumn: {
+		if (ddl.m_columns.size() < 2)
+			return ibString();
+		ibString sql = m_dialect.m_renameColumnTemplate;
+		sql.Replace(ibT("{table}"),  QuoteIdent(ddl.m_table));
+		sql.Replace(ibT("{column}"), QuoteIdent(ddl.m_columns[0].m_name));
+		sql.Replace(ibT("{name}"),   QuoteIdent(ddl.m_columns[1].m_name));
+		return sql;
+	}
 	case ibDdlKind::CreateIndex: {
 		// A descending twin exists only where the engine needs one (m_descendingIndexWord): elsewhere it renders
 		// empty, and its DROP below does the same, so it is never made and never missed.
@@ -1642,6 +1665,7 @@ ibString ibMapColumnType(const ibDialectDictionary& dialect, const ibColumnType&
 	case ibCanonicalKind::String:
 		return ibString::Format(type.m_fixed ? dialect.m_typeCharPattern : dialect.m_typeStringPattern,
 		                        type.m_length > 0 ? type.m_length : 255);
+	case ibCanonicalKind::Text:    return dialect.m_typeText;
 	case ibCanonicalKind::Number:
 		return ibString::Format(dialect.m_typeNumberPattern,
 		                        type.m_precision > 0 ? type.m_precision : 18, type.m_scale);

@@ -14,8 +14,6 @@
 #include "wx/wxprec.h"
 
 
-#if wxUSE_PROPGRID
-
 #ifndef WX_PRECOMP
     #include "wx/settings.h"
     #include "wx/textctrl.h"
@@ -2395,5 +2393,3 @@ ibPGVIterator ibPropertyGridManager::GetVIterator( int flags ) const
 {
     return ibPGVIterator(new ibPGVIteratorBase_Manager(const_cast<ibPropertyGridManager*>(this), flags));
 }
-
-#endif  // wxUSE_PROPGRID

@@ -275,6 +275,15 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   the precision, given in words or as a whole description. A type description read from a node refuses a length or a
   number of digits it would cut (past 65535 characters or 255 digits); a configuration saved before reads as it was
   written.
+- **A string can have no limit.** Its length 0 — *Unlimited length* in the properties, *Unlimited* in the type dialog —
+  stores text of any size, never indexed. A query compares, orders and groups it only cast to a length:
+  `CAST(Comment AS String(100))`, cut by the database. Made unlimited, a field keeps its values; given a length back,
+  each keeps its first characters, and the apply says how many it cuts.
+- **A string's allowed length and a number's sign are set beside the length.** *Allowed length* (Variable or Fixed —
+  a fixed string is padded with spaces) and *Non-negative* in the properties and the type dialog. A non-negative number
+  takes no value below zero: one written is 0, and the apply makes the stored ones 0 and says how many. A number is kept
+  within its digits (`Number(5, 2)` holds 999.99), and the scale never passes the precision. Over MCP
+  `metadata_set_type` takes `allowedLength`, `nonNegative` and `dateFraction`; what a call does not give, the field keeps.
 - **A report's composer is a template of the *Data composer* kind.** A template added to any object asks
   what it holds, a spreadsheet document or a data composer, the way a new form asks its kind; a common
   template is a spreadsheet. The kind is chosen once; the template's row in the properties reads it and
@@ -333,6 +342,9 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   between the outline, the area and the labels are drawn, and a report with frozen rows keeps adding rows as it is
   scrolled down.
 - **A tree's expander sits in its slot**, not on the edge of the cell.
+- **In the type dialog a click on a type's name selects it; the box checks it.** A type could not be looked at — what
+  it holds, its length — without being checked. The dialog is never narrower than the length, precision or date row,
+  and a disabled drop-down no longer opens.
 - **A field's caret stays in the field once the messages have opened.** The messages pane, opening as the first
   message came, gave the focus to its tabs while its editor was taking it; the editor went on believing it held the
   focus and moved the caret of whatever field was being typed in onto its own place — under the field's title.

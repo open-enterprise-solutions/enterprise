@@ -5737,6 +5737,10 @@ msgstr "Таблица '%s' не существует"
 msgid "'%s' is neither grouped nor aggregated: add it to GROUP BY, or wrap it in an aggregate"
 msgstr "'%s' не группируется и не агрегируется: добавьте его в GROUP BY или оберните в агрегатную функцию"
 
+#, c-format
+msgid "'%s' is a string of unlimited length: it is compared, ordered and grouped only cast to a length - CAST(%s AS String(100))"
+msgstr "'%s' - строка неограниченной длины: сравнивать, сортировать и группировать её можно только приведённой к длине - CAST(%s AS String(100))"
+
 #: src/engine/backend/query/queryLowering.cpp:6279
 #, c-format
 msgid "the link on '%s' refers to '%s', which this query reads AFTER it: a link can only relate tables that are already read - move the table earlier, or write this as a condition"
@@ -9113,6 +9117,18 @@ msgstr "Дата и время"
 
 msgid "Length"
 msgstr "Длина"
+
+msgid "Unlimited"
+msgstr "Неограниченная"
+
+msgid "Unlimited length"
+msgstr "Неограниченная длина"
+
+msgid "Allowed length"
+msgstr "Допустимая длина"
+
+msgid "Non-negative"
+msgstr "Неотрицательное"
 
 msgid "Select topic"
 msgstr "Выбор раздела"
@@ -12829,6 +12845,10 @@ msgstr "вложенность глубже, чем позволяет стек"
 #, c-format
 msgid "%s in %s: %s stored values will be cleared"
 msgstr "%s в %s: будет очищено сохранённых значений: %s"
+
+#, c-format
+msgid "%s in %s: %s stored values will be cut to the new length"
+msgstr "%s в %s: будет обрезано до новой длины сохранённых значений: %s"
 
 #: src/engine/backend/session/session.cpp:1081
 #, c-format

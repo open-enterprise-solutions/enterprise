@@ -5734,6 +5734,10 @@ msgstr "Таблиця '%s' не існує"
 msgid "'%s' is neither grouped nor aggregated: add it to GROUP BY, or wrap it in an aggregate"
 msgstr "'%s' не групується і не агрегується: додайте його до GROUP BY або оберніть в агрегатну функцію"
 
+#, c-format
+msgid "'%s' is a string of unlimited length: it is compared, ordered and grouped only cast to a length - CAST(%s AS String(100))"
+msgstr "'%s' - рядок необмеженої довжини: порівнювати, сортувати й групувати його можна лише приведеним до довжини - CAST(%s AS String(100))"
+
 #: src/engine/backend/query/queryLowering.cpp:6279
 #, c-format
 msgid "the link on '%s' refers to '%s', which this query reads AFTER it: a link can only relate tables that are already read - move the table earlier, or write this as a condition"
@@ -9110,6 +9114,18 @@ msgstr "Дата і час"
 
 msgid "Length"
 msgstr "Довжина"
+
+msgid "Unlimited"
+msgstr "Необмежена"
+
+msgid "Unlimited length"
+msgstr "Необмежена довжина"
+
+msgid "Allowed length"
+msgstr "Допустима довжина"
+
+msgid "Non-negative"
+msgstr "Невід'ємне"
 
 msgid "Select topic"
 msgstr "Вибір розділу"
@@ -12826,6 +12842,10 @@ msgstr "вкладеність глибша, ніж дозволяє стек"
 #, c-format
 msgid "%s in %s: %s stored values will be cleared"
 msgstr "%s у %s: буде очищено %s збережених значень"
+
+#, c-format
+msgid "%s in %s: %s stored values will be cut to the new length"
+msgstr "%s у %s: буде обрізано до нової довжини збережених значень: %s"
 
 #: src/engine/backend/session/session.cpp:1081
 #, c-format

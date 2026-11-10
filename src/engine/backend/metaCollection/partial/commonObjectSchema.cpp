@@ -118,9 +118,11 @@ void ibValueMetaObjectRecordDataMutableRef::ContributeTables(ibSchemaSnapshot& o
 					continue;
 				const ibTypeDescription& was = applied->m_column->GetTypeDesc();
 				const ibTypeDescription& now = column->GetTypeDesc();
-				// A length or a count of digits of 0 holds anything.
+				// A length or a count of digits of 0 holds anything. A string of no limit given a length is no in-place change
+				// at all: its column is made anew, the values cut to the length and the ledger counting them (AlterField —
+				// Max, 2026-11-10), so it is not refused here.
 				const bool shorter = was.ContainType(ibValueTypes::TYPE_STRING) && now.ContainType(ibValueTypes::TYPE_STRING)
-					&& now.GetLength() != 0 && (was.GetLength() == 0 || now.GetLength() < was.GetLength());
+					&& now.GetLength() != 0 && was.GetLength() != 0 && now.GetLength() < was.GetLength();
 				// …and a number's digits are counted on both sides of the point: Number(10,0) to Number(10,2) keeps ten
 				// digits and loses two whole ones.
 				const bool fewerDigits = was.ContainType(ibValueTypes::TYPE_NUMBER) && now.ContainType(ibValueTypes::TYPE_NUMBER)

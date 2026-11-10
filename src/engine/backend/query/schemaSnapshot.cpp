@@ -116,6 +116,7 @@ static size_t ibIndexFieldByteWidth(const ibColumnType& t)
 	case ibCanonicalKind::Number:  return (t.m_precision <= 4 ? 2u : t.m_precision <= 9 ? 4u
 	                                     : t.m_precision <= 18 ? 8u : 16u) + 1u;
 	case ibCanonicalKind::Blob:    return 32767u;   // never index a blob — force the hash
+	case ibCanonicalKind::Text:    return 32767u;   // …nor a string of no limit: a text blob on Firebird
 	case ibCanonicalKind::String:  return (size_t)((t.m_length > 0 ? t.m_length : 255) * 4 + 2);
 	}
 	return 8;
@@ -774,7 +775,8 @@ int AlterTable(ibStructureBatch& batch, const ibSchemaTable& old, const ibSchema
 	for (const ibSchemaColumn& c : cur.m_columns) {
 		const ibSchemaColumn* o = FindColumn(old.m_columns, c.m_id);
 		const size_t before = batch.StepCount();
-		const long long cleared = DiffColumnInto(batch, c.m_column, o != nullptr ? o->m_column : nullptr);   // errors THROW now
+		long long cut = 0;
+		const long long cleared = DiffColumnInto(batch, c.m_column, o != nullptr ? o->m_column : nullptr, &cut);   // errors THROW now
 		if (report != nullptr && batch.StepCount() != before) {   // a step was emitted -> a real change
 			if (o == nullptr)
 				report->AppendInfo(_("Add ") + ColName(c.m_column) + _(" to ") + LedgerName(cur));
@@ -784,12 +786,17 @@ int AlterTable(ibStructureBatch& batch, const ibSchemaTable& old, const ibSchema
 		// What a removed type costs, said while the person can still refuse the apply: the values
 		// are counted before the batch clears them. A derived table loses nothing — its rows are a
 		// reading of the movements, which say their own loss.
-		if (report != nullptr && cleared > 0 && !cur.m_derived) {
+		// …and what a string given a length back loses: the values are kept, their tail is not.
+		if (report != nullptr && (cleared > 0 || cut > 0) && !cur.m_derived) {
 			ibNumber::Format grouped;
 			grouped.groupSep = ibT(' ');
 			grouped.groupSize = 3;
-			report->AppendWarning(ibString::Format(_("%s in %s: %s stored values will be cleared"),
-				ColName(c.m_column), LedgerName(cur), ibNumber(cleared).ToString(grouped)));
+			if (cleared > 0)
+				report->AppendWarning(ibString::Format(_("%s in %s: %s stored values will be cleared"),
+					ColName(c.m_column), LedgerName(cur), ibNumber(cleared).ToString(grouped)));
+			if (cut > 0)
+				report->AppendWarning(ibString::Format(_("%s in %s: %s stored values will be cut to the new length"),
+					ColName(c.m_column), LedgerName(cur), ibNumber(cut).ToString(grouped)));
 		}
 	}
 	for (const ibSchemaColumn& o : old.m_columns) {

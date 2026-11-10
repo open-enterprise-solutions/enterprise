@@ -248,7 +248,9 @@ void ibComboCtrl::SetInsertionPointEnd()
 
 void ibComboCtrl::ShowPopup()
 {
-    if ( !m_popup || IsPopupShown() )
+    // a disabled host offers nothing to pick: its text child still takes the click, and the list opened over a value
+    // that cannot change (Max, 2026-11-10: the allowed length of a string of no limit)
+    if ( !m_popup || IsPopupShown() || !IsEnabled() )
         return;
 
     m_popup->SetStringValue(GetValue());

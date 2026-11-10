@@ -15,8 +15,6 @@
 
 #include "wx/defs.h"
 
-#if wxUSE_PROPGRID
-
 #include "deskgui/univ/propgrid/propgrid.h"
 #include "deskgui/univ/panel.h"           // ibPanel — the manager's window, the library's (wx's wxPanel)
 
@@ -626,7 +624,5 @@ inline int ibPropertyGridPage::GetIndex() const
 }
 
 // -----------------------------------------------------------------------
-
-#endif // wxUSE_PROPGRID
 
 #endif // _DESKGUI_UNIV_PROPGRID_MANAGER_H_

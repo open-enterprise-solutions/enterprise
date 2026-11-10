@@ -104,12 +104,14 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 		d.m_typeBoolean       = ibT("SMALLINT");
 		d.m_typeDate          = ibT("TIMESTAMP");
 		d.m_typeBlob          = ibT("BLOB");
+		d.m_typeText          = ibT("BLOB SUB_TYPE TEXT");   // the base's own charset: read and written as a string, not as bytes
 		d.m_typeGuid          = ibT("VARCHAR(36)");   // VARCHAR (not CHAR): carries vary_length, so a guid reads back exact — no charset-padded CHAR tail
 		// NUMERIC holds a wider range than DECIMAL (INT128-backed) — matches ibNumber.
 		d.m_typeNumberPattern = ibT("NUMERIC(%d,%d)");
 		d.m_rowLockSuffix     = ibT(" WITH LOCK");     // FB pessimistic row lock (not FOR UPDATE)
 		d.m_rowLockNoWaitSuffix = ibEmptyString;       // FB has no FOR UPDATE NOWAIT — noWait rides the TX (isc_tpb_nowait)
 		d.m_dropColumnClause  = ibT("DROP ");          // FB rejects the COLUMN keyword: ALTER TABLE t DROP c
+		d.m_renameColumnTemplate = ibT("ALTER TABLE {table} ALTER COLUMN {column} TO {name}");   // FB has no RENAME COLUMN
 		d.m_ddlCommitBeforeData = true;                // legacy isc_* API can't mix CREATE/ALTER + bound INSERT in one TX
 		// FB has no CREATE INDEX IF NOT EXISTS. It does not need one: indexes diff by name between the
 		// BASELINE and TARGET snapshots, so the differ emits a CREATE only where the baseline had none.

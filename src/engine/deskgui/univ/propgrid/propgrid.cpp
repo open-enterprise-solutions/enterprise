@@ -14,8 +14,6 @@
 #include "wx/wxprec.h"
 
 
-#if wxUSE_PROPGRID
-
 #ifndef WX_PRECOMP
     #include "wx/defs.h"
     #include "wx/object.h"
@@ -6438,5 +6436,3 @@ void ibPropertyGridPopulator::ProcessError( const wxString& msg )
 }
 
 // -----------------------------------------------------------------------
-
-#endif  // wxUSE_PROPGRID

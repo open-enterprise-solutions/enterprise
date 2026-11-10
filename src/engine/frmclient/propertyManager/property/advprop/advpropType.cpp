@@ -95,11 +95,23 @@ ibPGTypeProperty::ibPGTypeProperty(const std::vector<ibClassID>& listType, bool 
 	AddPrivateChild(m_precision);
 	m_scale = new ibUIntProperty(_("Scale"), wxT("scale"), 0);
 	AddPrivateChild(m_scale);
+	m_nonNegative = new ibBoolProperty(_("Non-negative"), wxT("non_negative"), false);
+	m_nonNegative->SetAttribute(ibPG_BOOL_USE_CHECKBOX, true);
+	AddPrivateChild(m_nonNegative);
 	{ ibPGChoices dtChoices = GetDateTime();
 	m_date_time = new ibEnumProperty(_("Date time"), wxT("date_time"), dtChoices, ibDateFractions::ibDateFractions_Date); }
 	AddPrivateChild(m_date_time);
 	m_length = new ibUIntProperty(_("Length"), wxT("length"), 0);
 	AddPrivateChild(m_length);
+	{ ibPGChoices allowedChoices;
+	allowedChoices.Add(_("Variable"), ibAllowedLength::ibAllowedLength_Variable);
+	allowedChoices.Add(_("Fixed"), ibAllowedLength::ibAllowedLength_Fixed);
+	m_allowedLength = new ibEnumProperty(_("Allowed length"), wxT("allowed_length"), allowedChoices,
+		ibAllowedLength::ibAllowedLength_Variable); }
+	AddPrivateChild(m_allowedLength);
+	m_unlimited = new ibBoolProperty(_("Unlimited length"), wxT("unlimited"), false);
+	m_unlimited->SetAttribute(ibPG_BOOL_USE_CHECKBOX, true);
+	AddPrivateChild(m_unlimited);
 
 	// Each type it may hold, named and drawn as the server offered it — in the server's order (GetTypesByFilter there:
 	// the primitives, the containers, each family before its members, AnyRef last).
@@ -127,32 +139,38 @@ bool ibPGTypeProperty::IntToValue(ibVariant& value, int number, ibPGPropValForma
 
 ibVariant ibPGTypeProperty::ChildChanged(ibVariant& thisValue, int childIndex, ibVariant& childValue) const
 {
+	// The child by itself, not by its place among the children: each setter is given the qualifiers it does not change
+	// as they are - SetNumber and SetString take the rest at their defaults, and a length changed lost the allowed one
 	ibTypeDescription td = ReadType(thisValue);
-	if (childIndex == 0 || childIndex == 1) {
-		long precision = (childIndex == 0)
-			? childValue.GetInteger() : m_precision->GetValue().GetInteger(),
-			scale = (childIndex == 1)
-			? childValue.GetInteger() : m_scale->GetValue().GetInteger();
-		if (precision > MAX_PRECISION_NUMBER) {
-			precision = m_precision->GetValue().GetInteger();
-			scale = m_scale->GetValue().GetInteger();
-		}
-		else if (precision == 0 || precision < scale) {
-			precision = m_precision->GetValue().GetInteger();
-			scale = m_scale->GetValue().GetInteger();
-		}
-		td.SetNumber(precision, scale);
+	const ibPGProperty* const child = Item(static_cast<unsigned int>(childIndex));
+	if (child == m_precision || child == m_scale) {
+		// a length the column cannot take, or none, is refused; a scale past the length stops at it - the type
+		// description's own rule (ibQualifierNumber::ScaleWithin)
+		long precision = child == m_precision ? childValue.GetInteger() : td.GetPrecision();
+		const long scale = child == m_scale ? childValue.GetInteger() : td.GetScale();
+		if (precision > MAX_PRECISION_NUMBER || precision == 0)
+			precision = td.GetPrecision();
+		td.SetNumber(precision, scale, td.IsNonNegative());
 	}
-	else if (childIndex == 2) {
-		long dateTime = childValue.GetInteger();
-		td.SetDate((ibDateFractions)dateTime);
+	else if (child == m_nonNegative) {
+		td.SetNumber(td.GetPrecision(), td.GetScale(), childValue.GetBoolean());
 	}
-	else if (childIndex == 3) {
+	else if (child == m_date_time) {
+		td.SetDate((ibDateFractions)childValue.GetInteger());
+	}
+	else if (child == m_length) {
+		// 0 is no limit - the check comes on with it (RefreshChildren)
 		long length = childValue.GetInteger();
-		if (length > MAX_LENGTH_STRING) {
-			length = m_length->GetValue().GetInteger();
-		}
-		td.SetString(length);
+		if (length > MAX_LENGTH_STRING)
+			length = td.GetLength();
+		td.SetString(length, length > 0 ? td.GetAllowedLength() : ibAllowedLength::ibAllowedLength_Variable);
+	}
+	else if (child == m_allowedLength) {
+		td.SetString(td.GetLength(), (ibAllowedLength)childValue.GetInteger());
+	}
+	else if (child == m_unlimited) {
+		// on: the length 0, held while it stays on (Max, 2026-11-10); off: a new attribute's length
+		td.SetString(childValue.GetBoolean() ? 0 : ibQualifierString().m_length, ibAllowedLength::ibAllowedLength_Variable);
 	}
 	return WriteType(thisValue, td);
 }
@@ -160,85 +178,33 @@ ibVariant ibPGTypeProperty::ChildChanged(ibVariant& thisValue, int childIndex, i
 void ibPGTypeProperty::RefreshChildren()
 {
 	const ibTypeDescription td = ReadType(m_value);
-	if (td.GetClsidCount() > 0) {
-		if (td.GetClsidCount() < 2) {
-			ibValueTypes id = ibValue::GetVTByID(td.GetFirstClsid());
-			if (id == ibValueTypes::TYPE_NUMBER) {
-				m_precision->Hide(false);
-				m_precision->SetExpanded(true);
-				m_scale->Hide(false);
-				m_scale->SetExpanded(true);
-				m_date_time->Hide(true);
-				m_date_time->SetExpanded(false);
-				m_length->Hide(true);
-				m_length->SetExpanded(false);
-			}
-			else if (id == ibValueTypes::TYPE_DATE) {
-				m_precision->Hide(true);
-				m_precision->SetExpanded(false);
-				m_scale->Hide(true);
-				m_scale->SetExpanded(false);
-				m_date_time->Hide(false);
-				m_precision->SetExpanded(true);
-				m_length->Hide(true);
-				m_length->SetExpanded(false);
-			}
-			else if (id == ibValueTypes::TYPE_STRING) {
-				m_precision->Hide(true);
-				m_precision->SetExpanded(false);
-				m_scale->Hide(true);
-				m_scale->SetExpanded(false);
-				m_date_time->Hide(true);
-				m_date_time->SetExpanded(false);
-				m_length->Hide(false);
-				m_length->SetExpanded(true);
-			}
-			else {
-				m_precision->Hide(true);
-				m_precision->SetExpanded(false);
-				m_scale->Hide(true);
-				m_scale->SetExpanded(false);
-				m_date_time->Hide(true);
-				m_date_time->SetExpanded(false);
-				m_length->Hide(true);
-				m_length->SetExpanded(false);
-			}
-		}
-		else {
-			m_precision->Hide(true);
-			m_precision->SetExpanded(false);
-			m_scale->Hide(true);
-			m_scale->SetExpanded(false);
-			m_date_time->Hide(true);
-			m_date_time->SetExpanded(false);
-			m_length->Hide(true);
-			m_length->SetExpanded(false);
-		}
 
-		for (unsigned int idx = 0; idx < td.GetClsidCount(); idx++) {
-			ibValueTypes id = ibValue::GetVTByID(td.GetByIdx(idx));
-			if (id == ibValueTypes::TYPE_NUMBER) {
-				m_precision->SetValue(td.GetPrecision());
-				m_scale->SetValue(td.GetScale());
-			}
-			else if (id == ibValueTypes::TYPE_DATE) {
-				m_date_time->SetValue(td.GetDateFraction());
-			}
-			else if (id == ibValueTypes::TYPE_STRING) {
-				m_length->SetValue(td.GetLength());
-			}
-		}
-	}
-	else {
-		m_precision->Hide(true);
-		m_precision->SetExpanded(false);
-		m_scale->Hide(true);
-		m_scale->SetExpanded(false);
-		m_date_time->Hide(true);
-		m_date_time->SetExpanded(false);
-		m_length->Hide(true);
-		m_length->SetExpanded(false);
-	}
+	// THE QUALIFIERS OF THE ONE TYPE IT HOLDS — none for several types, or for none; a string's length and allowed
+	// length held while it has no limit (the length 0)
+	const ibValueTypes held = td.GetClsidCount() == 1 ? ibValue::GetVTByID(td.GetFirstClsid()) : ibValueTypes::TYPE_EMPTY;
+	const auto show = [](ibPGProperty* child, bool shown) {
+		child->Hide(!shown);
+		child->SetExpanded(shown);
+	};
+	show(m_precision, held == ibValueTypes::TYPE_NUMBER);
+	show(m_scale, held == ibValueTypes::TYPE_NUMBER);
+	show(m_nonNegative, held == ibValueTypes::TYPE_NUMBER);
+	show(m_date_time, held == ibValueTypes::TYPE_DATE);
+	show(m_length, held == ibValueTypes::TYPE_STRING);
+	show(m_allowedLength, held == ibValueTypes::TYPE_STRING);
+	show(m_unlimited, held == ibValueTypes::TYPE_STRING);
+
+	m_precision->SetValue(td.GetPrecision());
+	m_scale->SetValue(td.GetScale());
+	m_nonNegative->SetValue(td.IsNonNegative());
+	m_date_time->SetValue(td.GetDateFraction());
+	m_length->SetValue(td.GetLength());
+	m_allowedLength->SetValue(td.GetAllowedLength());
+
+	const bool unlimited = td.GetLength() == 0;
+	m_unlimited->SetValue(unlimited);
+	m_length->Enable(!unlimited);
+	m_allowedLength->Enable(!unlimited);
 
 	ibPGTypeProperty::SetExpanded(true);
 }

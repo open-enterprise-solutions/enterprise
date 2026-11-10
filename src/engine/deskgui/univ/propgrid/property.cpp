@@ -14,8 +14,6 @@
 #include "wx/wxprec.h"
 
 
-#if wxUSE_PROPGRID
-
 #ifndef WX_PRECOMP
     #include "wx/dc.h"
     #include "wx/log.h"
@@ -3157,5 +3155,3 @@ bool ibPGAttributeStorage::GetNext(const_iterator& it, wxString& name, ibVariant
     ++it;
     return true;
 }
-
-#endif  // wxUSE_PROPGRID

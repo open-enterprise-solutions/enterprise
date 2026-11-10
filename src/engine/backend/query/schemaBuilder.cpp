@@ -96,6 +96,7 @@ int ibSchemaBuilder::Execute(const ibDdlStatement& ddl)
 	                       || ddl.m_kind == ibDdlKind::AddColumn
 	                       || ddl.m_kind == ibDdlKind::DropColumn
 	                       || ddl.m_kind == ibDdlKind::AlterColumn
+	                       || ddl.m_kind == ibDdlKind::RenameColumn
 	                       || ddl.m_kind == ibDdlKind::AlterTable;
 	if (shapeChanged)
 		h->DdlShapedTables().insert(ddl.m_table);
@@ -145,6 +146,12 @@ int ibSchemaBuilder::Execute(const ibDdlStatement& ddl)
 	case ibDdlKind::AlterColumn:
 		if (!onCreatedTable && ddl.m_columns.size() > 1) {
 			const ibDdlStatement undo = ibAlterColumn(ddl.m_table, ddl.m_columns[1]);
+			h->DdlUndoActions().push_back([undo](ibDatabaseLayer* c) { ibExecuteDdl(c, undo); });
+		}
+		break;
+	case ibDdlKind::RenameColumn:
+		if (!onCreatedTable && ddl.m_columns.size() > 1) {
+			const ibDdlStatement undo = ibRenameColumn(ddl.m_table, ddl.m_columns[1].m_name, ddl.m_columns[0].m_name);
 			h->DdlUndoActions().push_back([undo](ibDatabaseLayer* c) { ibExecuteDdl(c, undo); });
 		}
 		break;

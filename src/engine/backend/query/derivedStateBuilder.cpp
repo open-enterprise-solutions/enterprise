@@ -406,7 +406,8 @@ bool Collapse(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder)
 				id += ibString::Format(ibT("%lld"), v.GetValue());
 				break;
 			}
-			case ibCanonicalKind::String: {
+			case ibCanonicalKind::String:
+			case ibCanonicalKind::Text: {
 				const ibString v = rows.GetResultString(f.m_name);
 				value = ibConst(ibValue(v));
 				id += v;

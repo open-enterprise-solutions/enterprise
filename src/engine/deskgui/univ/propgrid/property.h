@@ -15,8 +15,6 @@
 
 #include "wx/defs.h"
 
-#if wxUSE_PROPGRID
-
 #include "deskgui/univ/propgrid/propgriddefs.h"
 #include "wx/bitmap.h"
 #include "wx/bmpbndl.h"
@@ -2078,7 +2076,5 @@ private:
 };
 
 // -----------------------------------------------------------------------
-
-#endif // wxUSE_PROPGRID
 
 #endif // _DESKGUI_UNIV_PROPGRID_PROPERTY_H_

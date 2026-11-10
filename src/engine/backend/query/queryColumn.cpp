@@ -47,6 +47,9 @@ ibColumnType PrimitiveType(ibValueTypes vt, const ibTypeDescription& td)
 		default:                                    return ibTypeDate(ibDatePrec::DateTime);
 		}
 	case ibValueTypes::TYPE_STRING:
+		// a length of 0 is no limit (ibQualifierString) — a column of no limit, not the 255 a raw column's 0 is
+		if (td.GetLength() == 0)
+			return ibTypeText();
 		return td.GetAllowedLength() == ibAllowedLength::ibAllowedLength_Fixed
 		     ? ibTypeChar(td.GetLength())
 		     : ibTypeString(td.GetLength());

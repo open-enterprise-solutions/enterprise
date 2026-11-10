@@ -146,31 +146,12 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 	if (typeDescription.ContainType(varValue.GetClassType())) {
 		ibValueTypes vt = ibValue::GetVTByID(varValue.GetClassType());
 		if (vt < ibValueTypes::TYPE_REFFER) {
-			if (vt == ibValueTypes::TYPE_NUMBER) {
-				// Precision 0 is "no limit", as a string's length 0 is (Unqualified) — no rounding.
-				if (typeDescription.GetPrecision() == 0)
-					return varValue;
-				return ibValueSystemFunction::Round(varValue, typeDescription.GetScale());
-			}
-			else if (vt == ibValueTypes::TYPE_DATE) {
-				if (typeDescription.GetDateFraction() == ibDateFractions::ibDateFractions_Date)
-					return ibValueSystemFunction::BegOfDay(varValue);
-				else if (typeDescription.GetDateFraction() == ibDateFractions::ibDateFractions_Time)
-					return varValue;
-				return varValue;
-			}
-			else if (vt == ibValueTypes::TYPE_STRING) {
-				// ⚠ ZERO LENGTH IS "UNLIMITED", NOT "TRUNCATE TO NOTHING". A string qualifier left at
-				// its default carries 0, and `Left(value, 0)` returns an EMPTY string — so adjusting a
-				// value to such a type WIPED it. Typed in, saved, blank on the next read, with the
-				// write reporting success all the way down.
-				//
-				// The same two-facts-one-number confusion as the driver's parameter clamp: only clamp
-				// where a limit was actually declared.
-				if (typeDescription.GetLength() == 0)
-					return varValue;
-				return ibValueSystemFunction::Left(varValue, typeDescription.GetLength());
-			}
+			if (vt == ibValueTypes::TYPE_NUMBER)
+				return ibValue(typeDescription.Adjust(varValue.GetNumber()));
+			else if (vt == ibValueTypes::TYPE_DATE)
+				return ibValue(typeDescription.Adjust(varValue.GetDate()));
+			else if (vt == ibValueTypes::TYPE_STRING)
+				return ibValue(typeDescription.Adjust(varValue.GetString()));
 		}
 		return varValue;
 	}
@@ -202,32 +183,16 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 
 			ibValueTypes vt = ibValue::GetVTByID(typeDescription.GetFirstClsid());
 			if (vt < ibValueTypes::TYPE_REFFER) {
-				if (vt == ibValueTypes::TYPE_NUMBER) {
-					if (typeDescription.GetPrecision() == 0)
-						return ibValue(varValue.GetNumber());   // no limit: the number as it is (the value may be of another type)
-					return ibValueSystemFunction::Round(varValue, typeDescription.GetScale());
-				}
-				else if (vt == ibValueTypes::TYPE_DATE) {
-					if (typeDescription.GetDateFraction() == ibDateFractions::ibDateFractions_Date)
-						return ibValueSystemFunction::BegOfDay(varValue);
-					else if (typeDescription.GetDateFraction() == ibDateFractions::ibDateFractions_Time)
-						return varValue;
-					return varValue.GetDate();
-				}
-				else if (vt == ibValueTypes::TYPE_STRING) {
-					// Same rule as the branch above: 0 is "no declared limit", not "empty".
-					//
-					// 🛑 BUT THIS BRANCH IS REACHED BY A VALUE THAT IS *NOT* A STRING, and "no limit" is no reason
-					// to leave it one. It returned the value as it came — so an Undefined adjusted to an unlimited
-					// string stayed Undefined, where its siblings above hand back a number and a date. The field
-					// then held no type at all: a characteristic whose kind says "string" was cleared to Undefined
-					// instead of "", and the cell threw away whatever was typed into it, having nothing to read it
-					// by (2026-09-23: under a string kind the cell stayed Undefined, while a boolean kind made it
-					// `False` and a date kind an empty date).
-					if (typeDescription.GetLength() == 0)
-						return ibValue(varValue.GetString());
-					return ibValueSystemFunction::Left(varValue, typeDescription.GetLength());
-				}
+				// 🛑 A VALUE THAT IS *NOT* OF THE TYPE reaches here, and is read as it first - an unlimited string
+				// handed back an Undefined as it came, where its siblings handed back a number and a date: a
+				// characteristic whose kind says "string" was cleared to Undefined instead of "", and the cell threw
+				// away whatever was typed into it, having nothing to read it by (2026-09-23)
+				if (vt == ibValueTypes::TYPE_NUMBER)
+					return ibValue(typeDescription.Adjust(varValue.GetNumber()));
+				else if (vt == ibValueTypes::TYPE_DATE)
+					return ibValue(typeDescription.Adjust(varValue.GetDate()));
+				else if (vt == ibValueTypes::TYPE_STRING)
+					return ibValue(typeDescription.Adjust(varValue.GetString()));
 				// …and a Boolean reads the value as one, as its three siblings do. It fell through to the empty
 				// Boolean below, so a 1 written into a Boolean field — or `CAST(1 AS Boolean)` — was `False`.
 				else if (vt == ibValueTypes::TYPE_BOOLEAN) {

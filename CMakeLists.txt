@@ -529,6 +529,9 @@ set(wxBUILD_TESTS    OFF CACHE BOOL "" FORCE)
 set(wxBUILD_SAMPLES  OFF CACHE BOOL "" FORCE)
 set(wxBUILD_DEMOS    OFF CACHE BOOL "" FORCE)
 set(wxBUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
+# wx's property grid is not ours to link: the grid is the desktop library's own fork (deskgui/univ/propgrid), which
+# asks nothing of this switch. Off, wx builds no wxpropgrid library and no XRC handler for it.
+set(wxUSE_PROPGRID OFF CACHE BOOL "" FORCE)
 
 # wx's own copies of the libraries whose name a user's system does not promise. On Linux wx takes the system's
 # when the build machine has them, and the build machine has what GTK's development packages pull in: the

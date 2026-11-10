@@ -2146,10 +2146,28 @@ ibQueryExprPtr ibMetaIRBuilder::BuildColumnExpr(const ibBackendQueryable* querya
 	case ibQueryColumnExprKind::DatePart:
 		return ibDatePartOf(BuildColumnExpr(queryable, expr->m_lhs, mainQual), expr->m_datePart);
 
-	case ibQueryColumnExprKind::Substring:
-		return ibSubstring(BuildColumnExpr(queryable, expr->m_lhs, mainQual),
-			expr->m_args.size() > 0 ? BuildColumnExpr(queryable, expr->m_args[0], mainQual) : nullptr,
-			expr->m_args.size() > 1 ? BuildColumnExpr(queryable, expr->m_args[1], mainQual) : nullptr);
+	case ibQueryColumnExprKind::Substring: {
+		// A position goes as the number it is, and the renderer writes it as that integer (ibQueryRenderer, Substring):
+		// cast as a projected constant is, NUMERIC(18,6), it is no position PostgreSQL's substring takes.
+		const auto position = [&](size_t i) -> ibQueryExprPtr {
+			if (expr->m_args.size() <= i || !expr->m_args[i])
+				return nullptr;
+			const ibQueryColumnExprPtr& arg = expr->m_args[i];
+			return arg->m_kind == ibQueryColumnExprKind::Const ? ibConst(arg->m_const) : BuildColumnExpr(queryable, arg, mainQual);
+		};
+		const ibQueryExprPtr cut = ibSubstring(BuildColumnExpr(queryable, expr->m_lhs, mainQual), position(0), position(1));
+		// ⭐ …AND A CONSTANT LENGTH IS THE STRING'S. `SUBSTRING(Comment, 1, 100)` and `CAST(Comment AS String(100))` are one
+		// reading, a string of 100 — and so a string of no limit, which an engine keeps as a text it cannot order or group
+		// by (a BLOB on Firebird), comes back as one it can. Past the longest string a field declares it stays as it was.
+		const ibQueryColumnExpr* const length = expr->m_args.size() > 1 ? expr->m_args[1].get() : nullptr;
+		if (length != nullptr && length->m_kind == ibQueryColumnExprKind::Const
+		    && length->m_const.GetType() == ibValueTypes::TYPE_NUMBER) {
+			const long n = static_cast<long>(length->m_const.GetNumber().ToInt());
+			if (n > 0 && n <= MAX_LENGTH_STRING)
+				return ibCast(cut, ibTypeString(static_cast<int>(n)));
+		}
+		return cut;
+	}
 
 	case ibQueryColumnExprKind::WindowAgg: {
 		// ⭐⭐ THE ONE FIGURE OF A REPORT THE SERVER CAN COMPUTE WITHOUT A PUSH-DOWN OF THE FOLD.

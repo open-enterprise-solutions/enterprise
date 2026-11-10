@@ -36,6 +36,25 @@ void ibDatabaseParameterFirebird::Set(const ibString& strValue)
 	m_nParameterType = ibDatabaseParameterFirebird::PARAM_STRING;
 	m_strValue = strValue;
 
+	// A STRING OF NO LIMIT — the slot described as a text blob (ibCanonicalKind::Text) has no buffer to copy into
+	// (AllocateParameterSpace): the string's own bytes go into a blob of their own (ResetBlob), with no envelope, and
+	// are read back as they are (ibDatabaseResultSetFirebird::GetResultBlob)
+	if ((m_pParameter->sqltype & ~1) == SQL_BLOB && m_pParameter->sqlsubtype == isc_blob_text) {
+		m_nParameterType = ibDatabaseParameterFirebird::PARAM_BLOB;
+		const std::string bytes = ConvertToUnicodeStream(m_strValue);
+		const size_t size = bytes.length();
+		if (size > 0) {
+			void* pBuffer = m_BufferValue.GetWriteBuf(size);
+			memcpy(pBuffer, bytes.data(), size);
+			m_BufferValue.UngetWriteBuf(size);
+		}
+		m_nBufferLength = static_cast<long unsigned int>(size);
+
+		m_nNullFlag = 0;
+		m_pParameter->sqlind = &m_nNullFlag; // NULL indicator
+		return;
+	}
+
 	// Set to SQL_TEXT manually. The bytes are made once and their length read off them — asking for the
 	// length separately converted the whole string a second time.
 	const std::string valueBuffer = ConvertToUnicodeStream(m_strValue);

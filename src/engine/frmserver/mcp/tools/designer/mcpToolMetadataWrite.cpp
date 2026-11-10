@@ -241,6 +241,32 @@ const ibArg& ArgScale()
 	return s_a;
 }
 
+const ibArg& ArgAllowedLength()
+{
+	static const ibArg s_a(ibT("allowedLength"), ibArg::Kind::Text,
+		ibMcpText("For String - Fixed pads a shorter string with spaces to its length (a CHAR column), Variable keeps it "
+			"as written. Not given, the field keeps the one it has; a string of no limit (length 0) is always Variable."),
+		/*required*/ false, { ibT("Variable"), ibT("Fixed") });
+	return s_a;
+}
+
+const ibArg& ArgNonNegative()
+{
+	static const ibArg s_a(ibT("nonNegative"), ibArg::Kind::Flag,
+		ibMcpText("For Number - true takes no value below zero: one is written as 0, and the values already stored are "
+			"made 0 when the configuration is applied. Not given, the field keeps the one it has."));
+	return s_a;
+}
+
+const ibArg& ArgDateFraction()
+{
+	static const ibArg s_a(ibT("dateFraction"), ibArg::Kind::Text,
+		ibMcpText("For Date - what it holds: the day alone (Date), the time of day alone (Time), or both (DateTime). "
+			"Not given, the field keeps the one it has."),
+		/*required*/ false, { ibT("Date"), ibT("Time"), ibT("DateTime") });
+	return s_a;
+}
+
 const ibArg& ArgTypeId()
 {
 	static const ibArg s_a(ibT("typeId"), ibArg::Kind::Whole,
@@ -1468,8 +1494,8 @@ public:
 	ibString GetDescription() const override
 	{
 		return ibMcpText("Give an attribute, a dimension or a resource its type - in words: String with a "
-			"length, Number with precision and scale, Date, Boolean, or a reference such as "
-			"CatalogRef.Goods. type_list shows what names exist.\n"
+			"length (0 - no limit) and an allowed length, Number with precision, scale and its sign, Date with what it "
+			"holds, Boolean, or a reference such as CatalogRef.Goods. type_list shows what names exist.\n"
 			"A catalog's or a chart's Code and Description and a document's Number take a String or a Number too - by "
 			"their own id, which metadata_get gives under the owner's property of that name, beside the type it holds.\n"
 			"WHICH REFERENCE, by what the field MEANS - a reference field may be as narrow or as wide as that:\n"
@@ -1494,7 +1520,8 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgType(), ArgTypeShape(), ArgLength(), ArgPrecision(), ArgScale(), ArgTypeId() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgType(), ArgTypeShape(), ArgLength(), ArgPrecision(), ArgScale(),
+			ArgAllowedLength(), ArgNonNegative(), ArgDateFraction(), ArgTypeId() };
 		return s_arguments;
 	}
 
@@ -1763,15 +1790,32 @@ public:
 
 		// The qualifiers only mean something for the type they belong to; set
 		// unconditionally they would silently rewrite a neighbour's. Asked before they are cast (`fits`).
+		//
+		// ⭐ …AND WHAT THE CALL DOES NOT SAY, THE FIELD KEEPS. SetString / SetNumber default their trailing qualifier,
+		// so a code made 30 long came back Variable and a non-negative sum took a sign again, without a word (Max,
+		// 2026-11-10). The field's type as it stands answers for an allowed length, a sign, a fraction not given.
+		const ibTypeDescription was = placed();
 		if (typeName.IsSameAs(ibT("String"), false)) {
 			if (!fits(true, false, length, precision, scale))
 				return false;
-			description.SetString(static_cast<unsigned short>(length));
+			const ibAllowedLength allowed = length == 0 ? ibAllowedLength::ibAllowedLength_Variable
+				: !ArgAllowedLength().Given(params) ? was.GetAllowedLength()
+				: ArgAllowedLength().Text(params).IsSameAs(ibT("Fixed"), false) ? ibAllowedLength::ibAllowedLength_Fixed
+				: ibAllowedLength::ibAllowedLength_Variable;
+			description.SetString(static_cast<unsigned short>(length), allowed);
 		}
 		else if (typeName.IsSameAs(ibT("Number"), false)) {
 			if (!fits(false, true, length, precision, scale))
 				return false;
-			description.SetNumber(static_cast<unsigned char>(precision), static_cast<unsigned char>(scale));
+			description.SetNumber(static_cast<unsigned char>(precision), static_cast<unsigned char>(scale),
+				ArgNonNegative().Given(params) ? ArgNonNegative().Flag(params) : was.IsNonNegative());
+		}
+		else if (typeName.IsSameAs(ibT("Date"), false)) {
+			const ibString fraction = ArgDateFraction().Text(params);
+			description.SetDate(!ArgDateFraction().Given(params) ? was.GetDateFraction()
+				: fraction.IsSameAs(ibT("Date"), false) ? ibDateFractions::ibDateFractions_Date
+				: fraction.IsSameAs(ibT("Time"), false) ? ibDateFractions::ibDateFractions_Time
+				: ibDateFractions::ibDateFractions_DateTime);
 		}
 
 		// ⭐ WRITTEN THROUGH THE VALUE, and then the value is placed — the inspector's own sequence,

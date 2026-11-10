@@ -15,8 +15,6 @@
 
 #include "wx/defs.h"
 
-#if wxUSE_PROPGRID
-
 #include "wx/window.h"
 
 #include "deskgui/univ/window.h"   // ibWindow — the buttons' strip (ibPGMultiButton)
@@ -499,7 +497,5 @@ protected:
 };
 
 // -----------------------------------------------------------------------
-
-#endif // wxUSE_PROPGRID
 
 #endif // _DESKGUI_UNIV_PROPGRID_EDITORS_H_

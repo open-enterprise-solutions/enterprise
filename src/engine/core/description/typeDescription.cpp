@@ -1,8 +1,55 @@
 #include "core/description/typeDescription.h"
 #include "core/memory/memoryBuffer.h"
 #include "core/serialize/dataBuilder.h"   // ibDataNode / ibDataValue (Child + Array)
+#include "core/fnumber.h"                 // …and the values the qualifiers shape (Adjust)
+#include "core/fdatetime.h"
+#include "core/fstring.h"
 
+#include <algorithm>                      // std::max — the digits a number's qualifier leaves before its point
 #include <limits>                         // what a qualifier's field holds
+
+////////////////////////////////////////////////////////////////////////
+
+ibNumber ibQualifierNumber::Adjust(const ibNumber& value) const
+{
+	ibNumber number = value;
+	if (m_precision > 0) {
+		number = number.Round(m_scale);
+		// (a description written before the scale was kept within the precision is read back as written)
+		const int digits = std::max(0, static_cast<int>(m_precision) - static_cast<int>(m_scale));
+		const ibNumber most = ibNumber(10).Pow(digits) - ibNumber(1) / ibNumber(10).Pow(static_cast<int>(m_scale));
+		if (number > most)
+			number = most;
+		else if (number < -most)
+			number = -most;
+	}
+	if (m_nonNegative && number.IsSign())
+		number = ibNumber(0);
+	return number;
+}
+
+ibDateTime ibQualifierDate::Adjust(const ibDateTime& value) const
+{
+	switch (m_dateTime) {
+	case ibDateFractions::ibDateFractions_Date: return value.GetDayStart();
+	case ibDateFractions::ibDateFractions_Time: return ibDateTime(value - value.GetDayStart());
+	default:                                    return value;
+	}
+}
+
+ibString ibQualifierString::Adjust(const ibString& value) const
+{
+	if (m_length == 0)
+		return value;
+	ibString text = value.length() > m_length ? value.Left(m_length) : value;
+	if (m_allowedLength == ibAllowedLength::ibAllowedLength_Fixed && text.length() < m_length)
+		text.Pad(m_length - text.length());
+	return text;
+}
+
+ibNumber ibTypeDescription::Adjust(const ibNumber& value) const   { return GetNumberQualifier().Adjust(value); }
+ibDateTime ibTypeDescription::Adjust(const ibDateTime& value) const { return GetDateQualifier().Adjust(value); }
+ibString ibTypeDescription::Adjust(const ibString& value) const   { return GetStringQualifier().Adjust(value); }
 
 ////////////////////////////////////////////////////////////////////////
 

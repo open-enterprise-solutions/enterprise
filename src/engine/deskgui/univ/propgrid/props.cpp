@@ -14,8 +14,6 @@
 #include "wx/wxprec.h"
 
 
-#if wxUSE_PROPGRID
-
 #ifndef WX_PRECOMP
     #include "wx/dirdlg.h"
     #include "wx/filedlg.h"
@@ -2646,5 +2644,3 @@ bool ibPGInDialogValidator::DoValidate( ibPropertyGrid* WXUNUSED(propGrid),
 #endif
 
 // -----------------------------------------------------------------------
-
-#endif  // wxUSE_PROPGRID

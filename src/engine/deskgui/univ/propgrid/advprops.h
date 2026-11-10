@@ -15,8 +15,6 @@
 
 #include "wx/defs.h"
 
-#if wxUSE_PROPGRID
-
 #include "deskgui/univ/propgrid/props.h"
 
 // -----------------------------------------------------------------------
@@ -466,7 +464,5 @@ private:
 #endif // wxUSE_SPINBTN
 
 // -----------------------------------------------------------------------
-
-#endif // wxUSE_PROPGRID
 
 #endif // _DESKGUI_UNIV_PROPGRID_ADVPROPS_H_

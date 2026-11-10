@@ -45,25 +45,14 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 	if (!typeDescription.IsOk())
 		return varValue;
 
-	const ibTypeDescription::ibTypeData& data = typeDescription.GetTypeData();
-
-	// OF THE TYPE ALREADY — shaped by its qualifiers, the engine's: a number to its scale, a date to its day, a string to
-	// its length (0 is "no limit", not "empty").
+	// OF THE TYPE ALREADY — shaped by its qualifiers, the engine's rule (ibTypeDescription::Adjust): a
+	// number to its scale and digits, a date to its fraction, a string to its length (0 is "no limit", not "empty").
 	const std::vector<ibClassID>& listed = typeDescription.GetClsidList();
 	if (std::find(listed.begin(), listed.end(), varValue.GetClassType()) != listed.end()) {
 		switch (ibValue::GetVTByID(varValue.GetClassType())) {
-		case ibValueTypes::TYPE_NUMBER:
-			if (data.GetPrecision() == 0)
-				return varValue;
-			return ibValue(varValue.GetNumber().Round(data.GetScale()));
-		case ibValueTypes::TYPE_DATE:
-			if (data.GetDateFraction() == ibDateFractions::ibDateFractions_Date)
-				return ibValue(varValue.GetDate().GetDayStart());
-			return varValue;
-		case ibValueTypes::TYPE_STRING:
-			if (data.GetLength() == 0)
-				return varValue;
-			return ibValue(ibString(varValue.GetString()).Left(data.GetLength()));
+		case ibValueTypes::TYPE_NUMBER: return ibValue(typeDescription.Adjust(varValue.GetNumber()));
+		case ibValueTypes::TYPE_DATE:   return ibValue(typeDescription.Adjust(varValue.GetDate()));
+		case ibValueTypes::TYPE_STRING: return ibValue(typeDescription.Adjust(varValue.GetString()));
 		default:
 			return varValue;
 		}
@@ -95,18 +84,9 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 	// …READ AS THE TYPE'S ONE CLASS — what a person typed, as a number, a date, a flag or a text.
 	if (typeDescription.GetClsidCount() == 1) {
 		switch (ibValue::GetVTByID(typeDescription.GetFirstClsid())) {
-		case ibValueTypes::TYPE_NUMBER:
-			if (data.GetPrecision() == 0)
-				return ibValue(varValue.GetNumber());
-			return ibValue(varValue.GetNumber().Round(data.GetScale()));
-		case ibValueTypes::TYPE_DATE:
-			if (data.GetDateFraction() == ibDateFractions::ibDateFractions_Date)
-				return ibValue(varValue.GetDate().GetDayStart());
-			return ibValue(varValue.GetDate());
-		case ibValueTypes::TYPE_STRING:
-			if (data.GetLength() == 0)
-				return ibValue(ibString(varValue.GetString()));
-			return ibValue(ibString(varValue.GetString()).Left(data.GetLength()));
+		case ibValueTypes::TYPE_NUMBER: return ibValue(typeDescription.Adjust(varValue.GetNumber()));
+		case ibValueTypes::TYPE_DATE:   return ibValue(typeDescription.Adjust(varValue.GetDate()));
+		case ibValueTypes::TYPE_STRING: return ibValue(typeDescription.Adjust(varValue.GetString()));
 		case ibValueTypes::TYPE_BOOLEAN:
 			return ibValue(varValue.GetBoolean());
 		default:

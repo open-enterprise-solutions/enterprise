@@ -20,8 +20,6 @@
 
 #include "core/variant.h"       // ibVariant — the value a property holds (wx's wxVariant, before the fork)
 
-#if wxUSE_PROPGRID
-
 #include "wx/colour.h"
 // complete: each is held by its value's own class (IB_PG_DECLARE_VARIANT_DATA below), not only named
 #include "wx/gdicmn.h"          // wxPoint, wxSize
@@ -549,7 +547,5 @@ protected:
 
 #define IB_PG_TOKENIZER2_END() \
     }
-
-#endif // wxUSE_PROPGRID
 
 #endif // _DESKGUI_UNIV_PROPGRID_PROPGRIDDEFS_H_

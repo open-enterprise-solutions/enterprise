@@ -256,6 +256,7 @@ struct ibDialectDictionary
 	ibString m_typeGuid          = ibT("VARCHAR(36)");   // VARCHAR (not CHAR): carries vary_length, so a guid reads back exact — no charset-padded CHAR tail (PG overrides to native UUID)
 	ibString m_typeStringPattern = ibT("VARCHAR(%d)");   // variable-length string
 	ibString m_typeCharPattern   = ibT("CHAR(%d)");      // fixed-length string
+	ibString m_typeText          = ibT("TEXT");          // a string of no limit (ibCanonicalKind::Text)
 	ibString m_typeBinaryPattern = ibT("BINARY(%d)");    // fixed-length bytes (reference _RRRef = pure guid); indexable for = joins
 	ibString m_typeNumberPattern = ibT("DECIMAL(%d,%d)");
 
@@ -274,6 +275,10 @@ struct ibDialectDictionary
 	// PG / Firebird "ALTER COLUMN c TYPE t"; SQLite leaves
 	// it EMPTY (no in-place type change) so the renderer THROWS rather than emulate.
 	ibString m_alterColumnTemplate = ibT("ALTER TABLE {table} ALTER COLUMN {column} TYPE {type}");
+
+	// RENAME COLUMN as a TEMPLATE — {table} {column} {name}. Default = PG / SQLite; Firebird spells it
+	// "ALTER COLUMN c TO n".
+	ibString m_renameColumnTemplate = ibT("ALTER TABLE {table} RENAME COLUMN {column} TO {name}");
 
 	// Multi-clause ALTER TABLE: "ALTER TABLE t ADD c1, ADD c2, DROP COLUMN c3" in one statement.
 	// FB / PG accept it; SQLite does NOT (one ADD/DROP per ALTER), so the structure builder

@@ -14,8 +14,6 @@
 #include "wx/wxprec.h"
 
 
-#if wxUSE_PROPGRID
-
 #ifndef WX_PRECOMP
     #include "wx/bitmap.h"
     #include "wx/event.h"
@@ -1958,5 +1956,3 @@ unsigned int ibPropertyGridPageState::GetActualVirtualHeight() const
 }
 
 // -----------------------------------------------------------------------
-
-#endif  // wxUSE_PROPGRID

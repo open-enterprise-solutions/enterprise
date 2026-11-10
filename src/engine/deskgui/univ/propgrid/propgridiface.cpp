@@ -14,8 +14,6 @@
 #include "wx/wxprec.h"
 
 
-#if wxUSE_PROPGRID
-
 #ifndef WX_PRECOMP
     #include "wx/bitmap.h"
     #include "wx/colour.h"
@@ -1223,6 +1221,4 @@ bool ibPropertyGridInterface::RestoreEditableState( const wxString& src, int res
 
     return res;
 }
-
-#endif  // wxUSE_PROPGRID
 

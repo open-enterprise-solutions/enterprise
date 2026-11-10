@@ -106,7 +106,10 @@ private:
 // the clear itself runs, taken before the batch does. A new or deleted column clears nothing in
 // place and returns 0. Errors THROW (DDL ones at Flush). What the caller tells a person about the
 // number is the caller's — the ledger lines live beside "Change …" in AlterTable.
+// `cut`, when given, adds how many stored values a string of no limit given a length loses characters of — kept,
+// not emptied, so a number of its own (ibStructureBatch::AlterField cuts them).
 // 🛑 Not the place for a metadata case — see the banner in schemaSnapshot.h.
-BACKEND_API long long DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, const ibBackendQueryColumn* dstCol);
+BACKEND_API long long DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, const ibBackendQueryColumn* dstCol,
+	long long* cut = nullptr);
 
 #endif // !__STRUCTURE_BATCH_H__

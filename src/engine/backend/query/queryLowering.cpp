@@ -2884,10 +2884,26 @@ ibQueryColumnExprPtr BuildColumnExprFromAst(const std::vector<ibSourceBinding>& 
 
 	// ⭐ A CAST STANDING AS A VALUE — the fourth question put to the value (ibValueAsType): answered over the row
 	// that came back, by both roads alike, with its input projected like PRESENTATION's.
-	case ibQueryAstExprKind::Cast:
+	//
+	// ⭐⭐ …EXCEPT A STRING FIELD BROUGHT TO A LENGTH, WHICH IS CUT, NOT ASKED (Max, 2026-11-10: "CAST(a string AS
+	// String(n)) is there to cut the string"). Its first n characters are a reading the engine computes —
+	// SUBSTRING(x, 1, n), a string of n (the provider's Substring) — so a string of no limit is compared, ordered and
+	// grouped by the server (CheckUnlimitedStringsAreCast), not over every row read back. A walk, or a value of any other
+	// type, stays the question it was.
+	case ibQueryAstExprKind::Cast: {
 		if (!e.m_arg)
 			ThrowQueryException(e.m_line, e.m_col, _("CAST takes the value it brings to a type"));
-		return ibQueryColumnExpr::AsType(AskedOfValue(sources, *e.m_arg, params), CastTargetType(e));
+		const ibTypeDescription type = CastTargetType(e);
+		if (type.GetClsidCount() == 1 && type.ContainType(ibValueTypes::TYPE_STRING) && type.GetLength() > 0
+		    && e.m_arg->m_kind == ibQueryAstExprKind::Column && !e.m_arg->m_arg) {
+			const std::vector<const ibBackendQueryColumn*> cols = ResolvePath(sources, *e.m_arg);
+			const ibBackendQueryColumn* const held = cols.size() == 1 ? cols.front() : nullptr;
+			if (held != nullptr && held->GetTypeDesc().GetClsidCount() == 1 && held->GetTypeDesc().ContainType(ibValueTypes::TYPE_STRING))
+				return ibQueryColumnExpr::Substring(BuildColumnExprFromAst(sources, *e.m_arg, params),
+					ibQueryColumnExpr::Const(ibValue(ibNumber(1))), ibQueryColumnExpr::Const(ibValue(ibNumber(static_cast<int>(type.GetLength())))));
+		}
+		return ibQueryColumnExpr::AsType(AskedOfValue(sources, *e.m_arg, params), type);
+	}
 
 	// ⭐⭐ A FOLD INSIDE AN EXPRESSION — declared as the aggregate it is, and referred to by name.
 	//
@@ -3917,6 +3933,7 @@ void ProjectPlainColumn(ibDataQueryBuilder& b, ibQueryOutputColumn& oc, const ib
 }
 
 void RefuseUngrouped(const ibQuerySelect& ast, const std::vector<ibSourceBinding>& sources);   // beside the rule, below
+void CheckUnlimitedStringsAreCast(const ibQuerySelect& ast, const std::vector<ibSourceBinding>& sources);   // …and this one
 
 // Populate the door from a single SELECT's clauses (projections / GROUP BY / HAVING / WHERE / ORDER /
 // DISTINCT). Shared by the top-level execute, nested subqueries, and JOIN queries. The source set
@@ -4003,6 +4020,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<ibString, ibValue>
 	// came back blank). Here is the one door every SELECT of every road is filled through, nested ones included.
 	if (aggregate)
 		RefuseUngrouped(ast, sources);
+	CheckUnlimitedStringsAreCast(ast, sources);
 
 	// projections -> output schema (+ door select for dot-walk / aggregates / explicit projection)
 	outSchema.clear();
@@ -6244,6 +6262,88 @@ void RefuseUngrouped(const ibQuerySelect& ast, const std::vector<ibSourceBinding
 		first->m_path.back()));
 }
 
+// ⭐⭐ A STRING OF UNLIMITED LENGTH IS COMPARED ONLY CAST TO A LENGTH — `CAST(Comment AS String(100))`, its first
+// hundred characters, and the language says so for every engine alike (Max, 2026-11-10). Its column is a text of no
+// size (ibCanonicalKind::Text), a text blob on Firebird that is neither sorted nor grouped there, so a bare one stands
+// in no comparison, IN or BETWEEN, no ORDER BY, GROUP BY or DISTINCT, no MIN, MAX or COUNT(DISTINCT). Read, LIKE,
+// IS NULL, SUBSTRING and the CAST itself take it as it is. Said by the check (CheckSelectNames) and by every query
+// that RUNS (PopulateBuilder), as RefuseUngrouped is.
+void CheckUnlimitedStringsAreCast(const ibQuerySelect& ast, const std::vector<ibSourceBinding>& sources)
+{
+	// Asked of the column's LAYOUT, not of its length: a raw column's 0 is the 255 it was always given. A name that
+	// does not resolve is the name check's to report, in its own words — silence here.
+	const auto refuse = [&sources](const ibQueryAstExprPtr& e) {
+		if (!e || e->m_kind != ibQueryAstExprKind::Column || e->m_path.empty())
+			return;
+		std::vector<const ibBackendQueryColumn*> cols;
+		try { cols = ResolvePath(sources, *e); }
+		catch (const ibCoreException&) { return; }
+		if (cols.empty())
+			return;
+		const std::vector<ibColumnSlot> layout = DescribeColumnLayout(cols.back());
+		if (std::none_of(layout.begin(), layout.end(),
+				[](const ibColumnSlot& slot) { return slot.m_type.m_kind == ibCanonicalKind::Text; }))
+			return;
+		const ibString name = ibRenderQueryExpr(*e);
+		ThrowQueryException(e->m_line, e->m_col, ibString::Format(
+			_("'%s' is a string of unlimited length: it is compared, ordered and grouped only cast to a length - CAST(%s AS String(100))"),
+			name, name));
+	};
+	// …wherever it is compared, or folded to one value, at any depth of an expression.
+	std::function<void(const ibQueryAstExprPtr&)> walk = [&walk, &refuse](const ibQueryAstExprPtr& e) {
+		if (!e)
+			return;
+		switch (e->m_kind) {
+		case ibQueryAstExprKind::Compare:
+			refuse(e->m_lhs);
+			refuse(e->m_rhs);
+			break;
+		case ibQueryAstExprKind::In:
+			refuse(e->m_lhs);
+			for (const ibQueryAstExprPtr& item : e->m_list)
+				refuse(item);
+			break;
+		case ibQueryAstExprKind::Between:
+			refuse(e->m_lhs);
+			refuse(e->m_low);
+			refuse(e->m_high);
+			break;
+		case ibQueryAstExprKind::Func:
+			if (e->m_func == ibQueryKeyword::Min || e->m_func == ibQueryKeyword::Max || e->m_distinctArg)
+				refuse(e->m_arg);
+			break;
+		default:
+			break;
+		}
+		ibQueryForEachOperand(*e, [&walk](const ibQueryAstExprPtr& child) { walk(child); });
+	};
+
+	for (const ibQueryProjection& projection : ast.m_projections) {
+		if (ast.m_distinct)
+			refuse(projection.m_expr);
+		walk(projection.m_expr);
+	}
+	walk(ast.m_where);
+	walk(ast.m_having);
+	for (const ibQueryAstJoin& join : ast.m_joins)
+		walk(join.m_on);
+	for (const ibQueryAstExprPtr& key : ast.m_groupBy) {
+		refuse(key);
+		walk(key);
+	}
+	// An ORDER BY may name an OUTPUT (CheckSelectNames): `ORDER BY Comment` over `CAST(Comment AS String(100)) AS
+	// Comment` sorts the cast, not the column it shares a name with.
+	for (const ibQueryOrderItem& item : ast.m_orderBy) {
+		const ibQueryAstExprPtr& e = item.m_expr;
+		const auto output = e && e->m_kind == ibQueryAstExprKind::Column && e->m_path.size() == 1
+			? std::find_if(ast.m_projections.begin(), ast.m_projections.end(),
+				[&e](const ibQueryProjection& p) { return ibQueryOutputName(p).IsSameAs(e->m_path.front(), false); })
+			: ast.m_projections.end();
+		refuse(output != ast.m_projections.end() ? output->m_expr : e);
+		walk(e);
+	}
+}
+
 // ⭐⭐ THE LINKS MUST NOT CONTRADICT ONE ANOTHER, and it is the ENGINE that says so.
 //
 // A join condition is a sentence about TWO tables. Two ways of writing one are not links at all, and
@@ -6565,6 +6665,7 @@ void CheckSelectNames(const ibQuerySelect& astAsWritten, const std::map<ibString
 	}
 
 	CheckJoinsAreConsistent(ast, sources);
+	CheckUnlimitedStringsAreCast(ast, sources);
 
 	// TWO LISTS, because one clause may legitimately name something the tables do not have.
 	//

@@ -67,7 +67,27 @@ void ibStructureBatch::DropField(const ibColumnSlot& slot)
 
 void ibStructureBatch::AlterField(const ibColumnSlot& slot, const ibColumnSlot& prev)
 {
-	m_steps.push_back(ibAlterColumn(m_table, ColumnOf(slot), ColumnOf(prev)));
+	// ⭐⭐ A STRING THAT GAINS OR LOSES ITS LIMIT IS MADE ANEW, ITS VALUES CARRIED OVER (Max, 2026-11-10). A text of no
+	// length is not a type an ALTER reaches everywhere: Firebird keeps it as a text blob and turns no column into one or
+	// back, SQLite changes no type in place at all. So the column as it stands steps aside under a second name and the
+	// field's own name is added anew — both in the DDL phase, so an index rebuilt over the field stands on its new type —
+	// and the data phase copies the values across, cut to the length when the limit comes back (as Adjust cuts them),
+	// then drops the old column. The ledger undoes the rename and the add in reverse if that phase fails.
+	if ((slot.m_type.m_kind == ibCanonicalKind::Text) == (prev.m_type.m_kind == ibCanonicalKind::Text)) {
+		m_steps.push_back(ibAlterColumn(m_table, ColumnOf(slot), ColumnOf(prev)));
+		return;
+	}
+	const ibString table = m_table, field = slot.m_name, held = slot.m_name + ibT("_N");
+	const ibColumnType type = slot.m_type;
+	Ddl(ibRenameColumn(table, field, held));
+	AddField(slot);
+	Insert([table, field, held, type]() {
+		const ibQueryExprPtr value = type.m_kind == ibCanonicalKind::Text ? ibCol(held)
+			: ibCast(ibSubstring(ibCol(held), ibConst(ibValue(1)), ibConst(ibValue(type.m_length))), ibTypeString(type.m_length));
+		ibDatabaseQueryBuilder().Execute(ibUpdate(table, { { field, value } }));
+		ibExecuteDdl(&ibSchemaBuilder().Connection(), ibDropColumn(table, held));
+		return true;   // a real failure THREW
+	});
 }
 
 void ibStructureBatch::CreateTable(std::vector<const ibBackendQueryColumn*> columns)
@@ -281,9 +301,10 @@ ibQueryExprPtr OfTarget(const ibString& fieldName, ibClassID clsid)
 		ibBinOp(ibQueryBinOp::Eq, ibCol(fieldName + ibFieldSuffix(ibColumnRole::ReferenceType)), ibConst(ibValue(ibNumber(clsid)))));
 }
 
-// UPDATE <table> SET <fld>_TYPE = 0 WHERE <where> — clear the variant tag of rows whose stored type
-// was just removed (so they read back as undefined, not as a now-missing sub-field). Returns how many
-// rows that empties, counted NOW, while the values are still there.
+// UPDATE <table> SET <column> = <value> WHERE <where> — empty what the type no longer admits: the variant
+// tag of rows whose stored type was just removed (the overload below — they read back as undefined, not as
+// a now-missing sub-field), a number below zero of a type made non-negative (DiffColumnInto). Returns how
+// many rows that empties, counted NOW, while the values are still there.
 //
 // ⭐⭐ POURED INTO THE BATCH, NOT RUN HERE. Every ADD / DROP this diff decides on is ACCUMULATED and
 // reaches the database later, at Flush; a cleanup executed on the spot therefore runs against the
@@ -295,27 +316,39 @@ ibQueryExprPtr OfTarget(const ibString& fieldName, ibClassID clsid)
 // through the DDL barrier so they land after the shape is settled. The order the cleanup needs is
 // preserved either way — the discriminator (_TYPE) is never added or dropped, only the per-type data
 // fields around it are, so clearing it after the drop reads the same as clearing it before.
-long long ClearRows(ibStructureBatch& batch, const ibString& fieldName, const ibQueryExprPtr& where)
+// How many rows of the batch's table `where` holds, asked NOW — before the batch changes them.
+long long CountRows(const ibStructureBatch& batch, const ibQueryExprPtr& where)
 {
-	const ibString& tableName = batch.GetTable();
 	ibQueryIR count;
-	count.m_root = ibProject(ibFilter(ibScan(tableName), where),
+	count.m_root = ibProject(ibFilter(ibScan(batch.GetTable()), where),
 		{ ibQueryProjItem{ ibFunc(ibT("COUNT"), {}), ibT("n") } });
 	ibQueryResult rows = ibDatabaseQueryBuilder().ExecuteIR(count);
-	const long long cleared = rows.Next() ? rows.GetResultLong(ibT("n")) : 0;
+	return rows.Next() ? rows.GetResultLong(ibT("n")) : 0;
+}
 
-	const ibString typeCol = fieldName + ibFieldSuffix(ibColumnRole::Discriminator);
-	batch.Insert([tableName, typeCol, where]() {
+long long ClearRows(ibStructureBatch& batch, const ibString& column, const ibQueryExprPtr& value, const ibQueryExprPtr& where)
+{
+	const ibString& tableName = batch.GetTable();
+	const long long cleared = CountRows(batch, where);
+
+	batch.Insert([tableName, column, value, where]() {
 		ibDatabaseQueryBuilder q;
-		q.Execute(ibUpdate(tableName, { { typeCol, ibConst(ibValue(0)) } }, where));
+		q.Execute(ibUpdate(tableName, { { column, value } }, where));
 		return true;   // a 0-row clear is the ordinary case; a real failure THREW
 	});
 	return cleared;
 }
 
+// …the variant tag, as above: a field whose stored type was removed reads back undefined.
+long long ClearRows(ibStructureBatch& batch, const ibString& fieldName, const ibQueryExprPtr& where)
+{
+	return ClearRows(batch, fieldName + ibFieldSuffix(ibColumnRole::Discriminator), ibConst(ibValue(0)), where);
+}
+
 } // namespace
 
-long long DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, const ibBackendQueryColumn* dstCol)
+long long DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, const ibBackendQueryColumn* dstCol,
+	long long* cut)
 {
 	// CREATE — pour the whole new column (the batch expands its layout: TYPE + per-type data + ref pair).
 	if (dstCol == nullptr) {
@@ -369,10 +402,27 @@ long long DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* sr
 				batch.AddField(*s);
 			}
 			else {
+				// …and a string of no limit given a length keeps what fits it (AlterField cuts the rest): the rows with a
+				// character past the length are counted while they still have it
+				if (cut != nullptr && d.m_type.m_kind == ibCanonicalKind::Text && s->m_type.m_kind == ibCanonicalKind::String)
+					*cut += CountRows(batch, ibBinOp(ibQueryBinOp::Ne,
+						ibCast(ibSubstring(ibCol(d.m_name), ibConst(ibValue(s->m_type.m_length + 1)), ibConst(ibValue(1))), ibTypeString(1)),
+						ibConst(ibValue(ibString()))));
 				batch.AlterField(*s, d);
 			}
 		}
 	}
+
+	// ⭐ A NUMBER MADE NON-NEGATIVE KEEPS NO STORED VALUE BELOW ZERO (Max, 2026-11-10). The sign is the type's rule,
+	// not the base's — the column stays the NUMERIC it was and no ALTER says anything — so the values already written
+	// are brought to it here, as Adjust brings one written now: below zero is 0, and counted for the ledger like any
+	// value a change empties.
+	if (srcTypeDesc.IsNonNegative() && !dstTypeDesc.IsNonNegative())
+		if (const ibColumnSlot* number = SlotOfRole(srcLayout, ibColumnRole::Number))
+			if (SlotOfRole(dstLayout, ibColumnRole::Number) != nullptr)
+				cleared += ClearRows(batch, number->m_name, ibConst(ibValue(0)), ibBinOp(ibQueryBinOp::And,
+					OfType(fieldName, ibPersistedTypeTag(ibColumnRole::Number)),
+					ibBinOp(ibQueryBinOp::Lt, ibCol(number->m_name), ibConst(ibValue(0)))));
 
 	// Reference pair — ONE shared (_RTRef clsid + _RRRef guid) per field that admits ANY reference target
 	// (columnLayout: present iff some clsid is a reference). It is therefore added / dropped on the field

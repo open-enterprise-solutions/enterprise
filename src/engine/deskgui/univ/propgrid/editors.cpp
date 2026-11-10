@@ -14,8 +14,6 @@
 #include "wx/wxprec.h"
 
 
-#if wxUSE_PROPGRID
-
 #ifndef WX_PRECOMP
     #include "wx/settings.h"
     #include "wx/textctrl.h"
@@ -2075,5 +2073,3 @@ void ibPGMultiButton::DoAddButton( wxWindow* button,
 }
 
 // -----------------------------------------------------------------------
-
-#endif  // wxUSE_PROPGRID

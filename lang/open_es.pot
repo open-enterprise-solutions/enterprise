@@ -5700,6 +5700,10 @@ msgstr ""
 msgid "'%s' is neither grouped nor aggregated: add it to GROUP BY, or wrap it in an aggregate"
 msgstr ""
 
+#, c-format
+msgid "'%s' is a string of unlimited length: it is compared, ordered and grouped only cast to a length - CAST(%s AS String(100))"
+msgstr ""
+
 #: src/engine/backend/query/queryLowering.cpp:6279
 #, c-format
 msgid "the link on '%s' refers to '%s', which this query reads AFTER it: a link can only relate tables that are already read - move the table earlier, or write this as a condition"
@@ -8905,6 +8909,18 @@ msgid "Date time"
 msgstr ""
 
 msgid "Length"
+msgstr ""
+
+msgid "Unlimited"
+msgstr ""
+
+msgid "Unlimited length"
+msgstr ""
+
+msgid "Allowed length"
+msgstr ""
+
+msgid "Non-negative"
 msgstr ""
 
 msgid "Select topic"
@@ -12212,6 +12228,10 @@ msgstr ""
 #: src/engine/backend/query/schemaSnapshot.cpp:704
 #, c-format
 msgid "%s in %s: %s stored values will be cleared"
+msgstr ""
+
+#, c-format
+msgid "%s in %s: %s stored values will be cut to the new length"
 msgstr ""
 
 #: src/engine/backend/session/session.cpp:1081

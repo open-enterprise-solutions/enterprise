@@ -724,7 +724,7 @@ struct ibAlterClause
 	ibDdlColumn m_column;   // Add: the full column; Drop: only m_column.m_name is used
 };
 
-enum class ibDdlKind { CreateTable, DropTable, AddColumn, DropColumn, AlterColumn, AlterTable, CreateIndex, DropIndex, Analyze };
+enum class ibDdlKind { CreateTable, DropTable, AddColumn, DropColumn, AlterColumn, RenameColumn, AlterTable, CreateIndex, DropIndex, Analyze };
 
 struct ibDdlStatement
 {
@@ -733,7 +733,8 @@ struct ibDdlStatement
 	ibString m_table;
 
 	// CreateTable: all columns. AddColumn / DropColumn: one column (m_columns[0];
-	// DropColumn uses only its m_name).
+	// DropColumn uses only its m_name). RenameColumn: the column (m_columns[0]) and the name it takes
+	// (m_columns[1]), names alone.
 	std::vector<ibDdlColumn> m_columns;
 
 	// AlterTable: the coalesced column clauses, rendered as one multi-clause ALTER.
@@ -863,6 +864,19 @@ inline ibDdlStatement ibAlterColumn(const ibString& table, ibDdlColumn column, i
 	s.m_table = table;
 	s.m_columns.push_back(std::move(column));
 	s.m_columns.push_back(std::move(prev));
+	return s;
+}
+
+// ALTER TABLE <table> RENAME COLUMN <column> TO <name> — the column under another name, its values with it. The
+// per-DBMS spelling is the dialect's m_renameColumnTemplate (Firebird: ALTER COLUMN … TO …).
+inline ibDdlStatement ibRenameColumn(const ibString& table, const ibString& column, const ibString& name)
+{
+	ibDdlStatement s(ibDdlKind::RenameColumn);
+	s.m_table = table;
+	ibDdlColumn from; from.m_name = column;
+	ibDdlColumn to;   to.m_name = name;
+	s.m_columns.push_back(std::move(from));
+	s.m_columns.push_back(std::move(to));
 	return s;
 }
 

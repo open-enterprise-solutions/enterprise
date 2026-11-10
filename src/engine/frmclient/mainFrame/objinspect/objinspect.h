@@ -7,10 +7,6 @@
 #include "deskgui/univ/propgrid/manager.h"
 #include <wx/config.h>
 
-#if !wxUSE_PROPGRID
-#error "wxUSE_PROPGRID must be set to 1 in your wxWidgets library."
-#endif
-
 #include "frmclient/frmclient.h"
 #include "deskgui/univ/panel.h"
 
