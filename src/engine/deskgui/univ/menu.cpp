@@ -158,6 +158,12 @@ public:
 
     // a click on the menu does not activate it: the frame keeps the focus and the menu its tracking
     virtual bool MSWHandleMessage(WXLRESULT *result, WXUINT message, WXWPARAM wParam, WXLPARAM lParam) override;
+
+    // nor focus it, as the code editor's lists refuse it (ibCodeEditorPopupWindow): top-level, wxPopupWindow::SetFocus
+    // is live, and wx focuses a clicked window that accepts it - the window that popped the menu lost the focus, its
+    // owner moved it on, and the menu shut on the press before the release chose the item (2026-11-11: the tree's
+    // Properties and Open did nothing)
+    virtual bool AcceptsFocus() const override { return false; }
 #endif
 
     // called when a submenu is dismissed
