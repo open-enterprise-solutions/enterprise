@@ -185,7 +185,6 @@ inline ibRegFold ibReadRegisterFold(const ibValue& given)
 
 	ibBackendCoreException::Error(
 		_("periodicity '%s' is not one of: Period, Record, Recorder, Auto, Second..Year"), word);
-	return fold;
 }
 
 // --- A DERIVED TOTALS TABLE AS A METAOBJECT -------------------------------------------------------
