@@ -25,7 +25,7 @@ public:
 	virtual bool OnClose(bool deleteWindow = true) override;
 
 	virtual wxPrintout* OnCreatePrintout() override;
-	virtual void OnCreateToolbar(wxAuiToolBar* toolbar) override;
+	virtual void OnCreateToolbar(ibAuiToolBar* toolbar) override;
 
 	ibCodeEditor* GetCodeEditor() const { return m_codeEditor; }
 

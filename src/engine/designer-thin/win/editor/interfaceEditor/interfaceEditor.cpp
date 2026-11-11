@@ -12,7 +12,6 @@ ibInterfaceEditor::ibInterfaceEditor(wxWindow* parent,
 	wxWindow(parent, winid, wxDefaultPosition, wxDefaultSize), m_document(document)
 {
 	m_interfaceCtrl = new ibCheckTree(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_HAS_BUTTONS | wxTR_NO_LINES | wxTR_SINGLE | wxCR_EMPTY_CHECK | wxTR_TWIST_BUTTONS);
-	m_interfaceCtrl->SetDoubleBuffered(true);
 	m_interfaceCtrl->Bind(wxEVT_CHECKTREE_CHOICE, &ibInterfaceEditor::OnCheckItem, this);
 
 	//set image list

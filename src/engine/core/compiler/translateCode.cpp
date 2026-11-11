@@ -1932,8 +1932,8 @@ size_t ibTranslateCode::CalcAllocSize() const {
 // A wxModule subclass used to sit here to preload the keyword table at startup.
 // It declared neither wxDECLARE_DYNAMIC_CLASS nor wxIMPLEMENT_DYNAMIC_CLASS —
 // wxModule::RegisterModules finds candidates through wxClassInfo, so without them
-// the class was never instantiated and OnInit never ran (compare wxFrontendModule
-// in frmclient/artProvider/artProvider.cpp, which has both). The table was in fact
+// the class was never instantiated and OnInit never ran (compare ibThemeModule
+// in deskgui/univ/theme.cpp, which has both). The table was in fact
 // being built by whichever ibTranslateCode ctor got there first. IsKeyWord's own
 // static now does the same job on first use, once, without a module to register.
 

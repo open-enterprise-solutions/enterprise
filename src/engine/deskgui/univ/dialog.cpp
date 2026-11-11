@@ -25,10 +25,6 @@
 #include "deskgui/univ/ctrl/button.h"
 #include "deskgui/univ/ctrl/staticLine.h"
 
-#ifdef __WXMSW__
-    #include <wx/msw/private.h>
-#endif
-
 //-----------------------------------------------------------------------------
 // ibDialog
 //-----------------------------------------------------------------------------
@@ -43,17 +39,9 @@ wxEND_EVENT_TABLE()
 bool ibDialog::Create(wxWindow *parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size,
                       long style, const wxString& name)
 {
-    if ( !ibTopLevelWindow<wxDialog>::Create(parent, id, title, pos, size, style, name) )
-        return false;
-
-#ifdef __WXMSW__
-    // SEAM vs univ: the drop shadow a menu casts (ibPopupMenuWindow::Show) - the native window is made without a frame
-    // (ibTopLevelWindow), and a window with none casts no shadow of the system's own (Max, 2026-11-10: "the dialogs
-    // should cast a shadow too"). A class's style: every frameless top-level window of the class casts it
-    const HWND hWnd = GetHwnd();
-    ::SetClassLongPtr(hWnd, GCL_STYLE, ::GetClassLongPtr(hWnd, GCL_STYLE) | CS_DROPSHADOW);
-#endif
-    return true;
+    // its shadow the system's, as every top-level window's of the theme (ibTopLevelWindow::Create) - Max, 2026-11-10:
+    // "the dialogs should cast a shadow too"
+    return ibTopLevelWindow<wxDialog>::Create(parent, id, title, pos, size, style, name);
 }
 
 wxSizer *ibDialog::CreateTextSizer(const wxString& message, int widthMax)

@@ -11,7 +11,7 @@
 #include "deskgui/univ/dialog.h"
 #include "deskgui/univ/ctrl/listBox.h"
 #include <wx/sizer.h>
-#include <wx/toolbar.h>
+#include "deskgui/univ/aui/auibar.h"
 
 #include <utility>   // std::swap, std::move — libstdc++ does not drag it in the way MSVC does
 #include <vector>
@@ -94,8 +94,7 @@ public:
 		  m_fields(fields), m_source(source)
 	{
 		wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
-		wxToolBar* toolbar = new wxToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-			wxTB_HORIZONTAL | wxTB_FLAT | wxTB_NODIVIDER);
+		ibAuiToolBar* toolbar = new ibAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, ibAUI_TB_HORIZONTAL);
 		toolbar->SetToolBitmapSize(FromDIP(wxSize(16, 16)));
 		toolbar->AddTool(wxID_ADD, _("Add"), ibSettingsArt(wxASCII_STR(wxART_NEW), this), _("Add (Ins)"));
 		toolbar->AddTool(wxID_REMOVE, _("Delete"), ibSettingsArt(wxASCII_STR(wxART_DELETE), this), _("Delete (Del)"));
@@ -201,8 +200,7 @@ ibConditionalAppearanceEditor::ibConditionalAppearanceEditor(wxWindow* parent,
 
 	// THE SAME COMMANDS AS THE SORT EDITOR, on the same kind of toolbar: add, delete, and the two that make an
 	// ordered list an ordered list — a later rule paints over an earlier one.
-	m_toolbar = new wxToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-		wxTB_HORIZONTAL | wxTB_FLAT | wxTB_NODIVIDER);
+	m_toolbar = new ibAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, ibAUI_TB_HORIZONTAL);
 	m_toolbar->SetToolBitmapSize(FromDIP(wxSize(16, 16)));
 	m_toolbar->AddTool(wxID_ADD, _("Add"), ibSettingsArt(wxASCII_STR(wxART_NEW), this), _("Add (Ins)"));
 	m_toolbar->AddTool(wxID_REMOVE, _("Delete"), ibSettingsArt(wxASCII_STR(wxART_DELETE), this), _("Delete (Del)"));

@@ -14,7 +14,6 @@ ibFunctionalOptionEditor::ibFunctionalOptionEditor(wxWindow* parent,
 {
 	m_membersCtrl = new ibCheckTree(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTR_HAS_BUTTONS | wxTR_NO_LINES | wxTR_SINGLE | wxCR_EMPTY_CHECK | wxTR_TWIST_BUTTONS);
-	m_membersCtrl->SetDoubleBuffered(true);
 	m_membersCtrl->Bind(wxEVT_CHECKTREE_CHOICE, &ibFunctionalOptionEditor::OnCheckItem, this);
 
 	m_membersCtrl->AssignImageList(

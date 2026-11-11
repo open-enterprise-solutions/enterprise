@@ -53,7 +53,7 @@ public:
 	// …and its command bar, drawn above its controls (the server's form's GetCommandBar).
 	ibViewCommandBar* GetCommandBar() const { return m_commandBar.get(); }
 	// The window the controls scroll in, filling this one under the command bar — the desktop's inner one.
-	wxScrolledWindow* GetContentWindow() const { return m_contentWindow; }
+	wxScrolled<ibPanel>* GetContentWindow() const { return m_contentWindow; }
 	// The tab it draws in — whose document the form's is.
 	long long GetTabId() const { return m_tabId; }
 	// The control a window drawn is — none: no control's (the desktop's GetObjectBase).
@@ -122,8 +122,8 @@ private:
 
 	wxString    m_formKey;             // the form drawn, as an event names it; empty — a view that is no form
 	std::string m_shape;               // the view as last built
-	wxScrolledWindow* m_contentWindow = nullptr;   // the controls' window, scrolling under the command bar
-	wxBoxSizer*       m_content = nullptr;         // the form's controls', laid out as the form says
+	wxScrolled<ibPanel>* m_contentWindow = nullptr;   // the controls' window, scrolling under the command bar
+	wxBoxSizer*          m_content = nullptr;         // the form's controls', laid out as the form says
 
 	std::unique_ptr<ibViewCommandBar> m_commandBar;   // its window stands above the controls' (Build)
 
@@ -175,7 +175,7 @@ public:
 #if wxUSE_MENUS
 	virtual wxMenuBar* CreateMenuBar() const override;
 #endif
-	virtual void OnCreateToolbar(wxAuiToolBar* toolbar) override;
+	virtual void OnCreateToolbar(ibAuiToolBar* toolbar) override;
 	virtual void OnActivateView(bool activate, ibFrontendView* activeView, ibFrontendView* deactiveView) override;
 
 	// The host a window of the view is in — none: it is in none (a cell's header). A form's tab: its one host, filling it.

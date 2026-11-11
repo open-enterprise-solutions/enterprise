@@ -546,7 +546,10 @@ void ibThemeRenderer::DrawLabel(wxDC& dc,
                               int indexAccel,
                               wxRect *rectBounds)
 {
-    DrawButtonLabel(dc, label, wxNullBitmap, rect, flags,
+    // SEAM vs univ: a label is not a button - the control's own bit (wxCONTROL_SPECIAL: a menu item's submenu, a tree's
+    // expanded node, a button's default) is not passed on: read as a default button's, a menu item with a submenu was
+    // drawn white (2026-11-11, Max: "the submenu is drawn white")
+    DrawButtonLabel(dc, label, wxNullBitmap, rect, flags & ~wxCONTROL_SPECIAL,
                     alignment, indexAccel, rectBounds);
 }
 
@@ -570,14 +573,10 @@ void ibThemeRenderer::DrawButtonLabel(wxDC& dc,
             rectLabel.Offset(1, 1);
         }
 
-        // draw shadow of the text
-        clrChanger.Set(m_penHighlight.GetColour());
-        wxRect rectShadow = rect;
-        rectShadow.Offset(1, 1);
-        dc.DrawLabel(label, rectShadow, alignment, indexAccel);
-
-        // make the main label text grey
-        clrChanger.Set(m_penDarkGrey.GetColour());
+        // SEAM vs univ: the theme's disabled text, plain (CONTROL_TEXT_DISABLED) - the canon's was embossed, a white
+        // shadow under a light grey, and on the theme's light surfaces nothing of it could be read (2026-11-11, Max:
+        // "all white, nothing to see" - the menu's disabled items)
+        clrChanger.Set(m_scheme->Get(ibColourScheme::CONTROL_TEXT_DISABLED));
 
         if ( flags & wxCONTROL_FOCUSED )
         {
@@ -1490,8 +1489,11 @@ void ibThemeRenderer::DrawFrameIcon(wxDC& dc,
 {
     if ( icon.IsOk() )
     {
+        // SEAM vs univ: in the middle of the square the title leaves it (DrawFrameTitle) - the canon drew it in the
+        // corner, of a Win95 caption barely higher than the icon
         wxRect r = GetFrameClientArea(rect, flags & ~wxTOPLEVEL_TITLEBAR);
-        dc.DrawIcon(icon, r.x, r.y);
+        dc.DrawIcon(icon, r.x + (FRAME_TITLEBAR_HEIGHT - icon.GetWidth()) / 2,
+                    r.y + (FRAME_TITLEBAR_HEIGHT - icon.GetHeight()) / 2);
     }
 }
 

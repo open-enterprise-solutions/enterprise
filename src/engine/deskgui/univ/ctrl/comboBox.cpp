@@ -284,7 +284,8 @@ void ibComboBox::SendComboEvent()
 }
 
 // ----------------------------------------------------------------------------
-// wxItemContainer — the items kept here, the list told their count
+// wxItemContainer — the items kept here, the list told their count; the best size measured again, as the native's
+// (wxChoice::DoInsertItems): a choice is as wide as its widest item (ibChoice)
 // ----------------------------------------------------------------------------
 
 void ibComboBox::DoClear()
@@ -292,6 +293,7 @@ void ibComboBox::DoClear()
     m_strings.Clear();
     m_clientData.clear();
     m_selection = wxNOT_FOUND;
+    InvalidateBestSize();
 }
 
 void ibComboBox::DoDeleteOneItem(unsigned int n)
@@ -303,6 +305,7 @@ void ibComboBox::DoDeleteOneItem(unsigned int n)
         m_selection = wxNOT_FOUND;
     else if ( m_selection > (int)n )
         m_selection--;
+    InvalidateBestSize();
 }
 
 unsigned int ibComboBox::GetCount() const
@@ -325,6 +328,7 @@ void ibComboBox::SetString(unsigned int n, const wxString& s)
         ChangeValue(s);
 
     m_list->Refresh();
+    InvalidateBestSize();
 }
 
 // the chosen item and the text it shows: nothing chosen, nothing shown (wx's wxOwnerDrawnComboBox::SetSelection)
@@ -365,6 +369,7 @@ int ibComboBox::DoInsertItems(const wxArrayStringsAdapter& items,
     if ( m_selection != wxNOT_FOUND && (int)pos <= m_selection )
         m_selection += count;
 
+    InvalidateBestSize();
     return pos + count - 1;
 }
 

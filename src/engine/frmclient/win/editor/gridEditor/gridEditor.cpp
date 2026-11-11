@@ -5,7 +5,7 @@
 
 #include "gridEditor.h"
 
-#include <wx/activityindicator.h>   // the "composing..." spinner — see ShowComposeState
+#include "deskgui/univ/ctrl/activityIndicator.h"   // the "composing..." spinner — see ShowComposeState
 #include "deskgui/univ/ctrl/staticText.h"
 
 #include "frmclient/docView/docView.h"
@@ -227,11 +227,12 @@ void ibGridEditor::ShowComposeState(ibProtocol::ibForm::ibSpreadsheet::ibCompose
 		if (state == ibProtocol::ibForm::ibSpreadsheet::ibComposeState::Composed)
 			return;   // nothing built, nothing to hide
 
+		// the theme's ground, the panel's and the spinner's alike - the system's set here, and wx's spinner erasing in its
+		// own, stood a grey square on the sheet (2026-11-11)
 		wxWindow* const panel = new ibPanel(this, wxID_ANY);
-		panel->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE));
 
 		wxBoxSizer* const sizer = new wxBoxSizer(wxHORIZONTAL);
-		m_composeSpinner = new wxActivityIndicator(panel);
+		m_composeSpinner = new ibActivityIndicator(panel);
 		sizer->Add(m_composeSpinner, 0, wxALL | wxALIGN_CENTER_VERTICAL, FromDIP(6));
 		m_composeText = new ibStaticText(panel, wxID_ANY, wxEmptyString);
 		sizer->Add(m_composeText, 0, wxALL | wxALIGN_CENTER_VERTICAL, FromDIP(6));
@@ -320,7 +321,7 @@ void ibGridEditor::SetCellDetailsParameter(const ibGridBlockCoords& coords, cons
 
 #pragma region events
 
-#include "frmclient/artProvider/artProvider.h"
+#include "deskgui/artProvider.h"
 
 void ibGridEditor::OnMouseLeftDown(ibGridEvent& event)
 {
@@ -559,6 +560,15 @@ void ibGridEditor::OnGridColSize(ibGridSizeEvent& event)
 
 void ibGridEditor::OnGridRowBrake(ibGridSizeEvent& event)
 {
+	// The print edge a fitted row moves (ibGrid::DoSetRowSize) is nobody's choice either — see m_quietSizing. A sheet
+	// whose text reached past its last break was marked changed by its own first showing and sent to the server,
+	// whose answer drew it a second time (2026-11-11, Max: "the first time I activate a spreadsheet document, it
+	// flickers")
+	if (m_quietSizing) {
+		event.Skip();
+		return;
+	}
+
 	if (m_document != nullptr) {
 
 		ibValueMetaObjectTemplateBase* creator = m_document->ConvertMetaObjectToType<ibValueMetaObjectTemplateBase>();
@@ -591,6 +601,12 @@ void ibGridEditor::OnGridRowBrake(ibGridSizeEvent& event)
 
 void ibGridEditor::OnGridColBrake(ibGridSizeEvent& event)
 {
+	// …as a row's (OnGridRowBrake)
+	if (m_quietSizing) {
+		event.Skip();
+		return;
+	}
+
 	if (m_document != nullptr) {
 
 		ibValueMetaObjectTemplateBase* creator = m_document->ConvertMetaObjectToType<ibValueMetaObjectTemplateBase>();

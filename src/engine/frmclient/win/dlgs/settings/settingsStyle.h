@@ -16,7 +16,7 @@
 #include <wx/window.h>
 #include <wx/withimages.h>
 
-#include "frmclient/artProvider/artProvider.h"   // the tabs' pictures (client wxART_FRONTEND)
+#include "deskgui/artProvider.h"   // the tabs' pictures (client wxART_FRONTEND)
 #include "deskgui/univ/dataview/dataview.h"
 
 // ONE PICTURE PER VERB. Art ids, not files: they follow the platform's theme, as

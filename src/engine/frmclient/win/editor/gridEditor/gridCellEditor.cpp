@@ -71,7 +71,11 @@ void ibGridEditor::ibGridEditorCellTextEditor::DoCreate(wxWindow* parent,
 					dc.GetMultiLineTextExtent(strValue, &intStringX, &intStringY, &intLineY);
 
 					text->GetSize(&intSizeX, &intSizeY);
-					text->SetSize(intSizeX, intStringY > intSizeY ? intStringY : intSizeY);
+
+					// the text's lines and the field's paddings round them: as high as the text alone, the field held a
+					// line less than it had, and the last one was not drawn (ibTextCtrl::GetRealTextArea)
+					const int intHeight = text->GetSizeFromTextSize(intStringX, intStringY).y;
+					text->SetSize(intSizeX, intHeight > intSizeY ? intHeight : intSizeY);
 
 					text->WriteText(wxT('\n'));
 				}

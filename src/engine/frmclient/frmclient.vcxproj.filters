@@ -4,9 +4,6 @@
     <Filter Include="artProvider">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5001}</UniqueIdentifier>
     </Filter>
-    <Filter Include="artProvider\private">
-      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5002}</UniqueIdentifier>
-    </Filter>
     <Filter Include="artProvider\splash">
       <UniqueIdentifier>{cb3a6cf5-1439-4492-bd72-160a7d1c1456}</UniqueIdentifier>
     </Filter>
@@ -56,9 +53,6 @@
   <ItemGroup>
     <ClCompile Include="frmclient.cpp" />
     <ClCompile Include="communicator.cpp" />
-    <ClCompile Include="artProvider\artProvider.cpp">
-      <Filter>artProvider</Filter>
-    </ClCompile>
     <ClCompile Include="docView\docView.cpp">
       <Filter>docView</Filter>
     </ClCompile>
@@ -301,12 +295,6 @@
     <ClInclude Include="frmclient.h" />
     <ClInclude Include="communicator.h" />
     <ClInclude Include="window_ptr.h" />
-    <ClInclude Include="artProvider\artProvider.h">
-      <Filter>artProvider</Filter>
-    </ClInclude>
-    <ClInclude Include="artProvider\private\picturePredefined.h">
-      <Filter>artProvider\private</Filter>
-    </ClInclude>
     <ClInclude Include="artProvider\splash\splashLogo.h">
       <Filter>artProvider\splash</Filter>
     </ClInclude>

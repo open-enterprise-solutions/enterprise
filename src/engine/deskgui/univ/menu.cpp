@@ -46,11 +46,16 @@
 
 #include <wx/popupwin.h>
 #include <wx/evtloop.h>
+#include <wx/app.h>
+#include <wx/weakref.h>
+
+#include <memory>
 
 #include "deskgui/univ/renderer.h"
 
 #ifdef __WXMSW__
     #include <wx/msw/private.h>
+    #include "deskgui/univ/topLevel.h"   // ibMSWShowShadowed — the popup's shadow, its own
 #endif // __WXMSW__
 
 typedef wxMenuItemList::compatibility_iterator ibMenuItemIter;
@@ -67,8 +72,6 @@ static inline ibMenu *ibSub(wxMenu *menu)
 // ----------------------------------------------------------------------------
 // ibMenuInfo contains all extra information about top level menus we need
 // ----------------------------------------------------------------------------
-
-#if 0 // GUI-REVIVE: menubar-only helper — cut until the univ frame revives
 
 class ibMenuInfo
 {
@@ -87,7 +90,7 @@ public:
         m_originalLabel = text;
 
         // remember the accel char (may be -1 if none)
-        m_indexAccel = ibControl::FindAccelIndex(text, &m_label);
+        m_indexAccel = wxControlBase::FindAccelIndex(text, &m_label);
 
         // calculate the width later, after the menu bar is created
         m_width = 0;
@@ -100,11 +103,11 @@ public:
     const wxString& GetLabel() const { return m_label; }
     const wxString& GetOriginalLabel() const { return m_originalLabel; }
     bool IsEnabled() const { return m_isEnabled; }
-    wxCoord GetWidth(ibMenuBar *menubar) const
+    wxCoord GetWidth(ibMenuBarWindow *window) const
     {
         if ( !m_width )
         {
-            wxConstCast(this, ibMenuInfo)->CalcWidth(menubar);
+            wxConstCast(this, ibMenuInfo)->CalcWidth(window);
         }
 
         return m_width;
@@ -113,16 +116,8 @@ public:
     int GetAccelIndex() const { return m_indexAccel; }
 
 private:
-    void CalcWidth(ibMenuBar *menubar)
-    {
-        wxSize size;
-        wxInfoDC dc(menubar);
-        dc.SetFont(wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT));
-        dc.GetTextExtent(m_label, &size.x, &size.y);
-
-        // adjust for the renderer we use and store the width
-        m_width = menubar->GetRenderer()->GetMenuBarItemSize(size).x;
-    }
+    // SEAM vs univ: measured in the bar's window - the bar has none of its own
+    void CalcWidth(ibMenuBarWindow *window);
 
     wxString m_label;
     wxString m_originalLabel;
@@ -130,8 +125,6 @@ private:
     int m_indexAccel;
     bool m_isEnabled;
 };
-
-#endif // GUI-REVIVE: menubar-only helper
 
 // ----------------------------------------------------------------------------
 // ibPopupMenuWindow: a popup window showing a menu
@@ -145,7 +138,7 @@ public:
     virtual ~ibPopupMenuWindow();
 
     // override the base class version to select the first item initially
-    virtual void Popup(ibWindow *focus = nullptr);
+    virtual void Popup(wxWindow *focus = nullptr) override;
 
     // override the base class version to dismiss any open submenus
     virtual void Dismiss();
@@ -290,6 +283,84 @@ private:
 };
 
 // ----------------------------------------------------------------------------
+// ibMenuBarWindow: the window a menubar is drawn in
+// ----------------------------------------------------------------------------
+
+// SEAM vs univ: the canon's menubar was this window, its menus' data are the
+// bar's (ibMenuBar). It takes neither the focus nor the mouse of its own: a
+// menu of it is shown as a popup menu is (ibWindow::DoPopupMenu - the menu
+// holding the mouse, the keys redirected to it), and when the mouse moves over
+// another title (ProcessMouseEvent) or an arrow key the menu left moves along
+// the bar (ProcessKeyDown), the menu shown is dismissed and the next one shown
+// in its place (PopupCurrentMenu)
+class ibMenuBarWindow : public ibWindow
+{
+public:
+    ibMenuBarWindow(ibMenuBar *menubar, wxWindow *parent);
+    virtual ~ibMenuBarWindow();
+
+    // get the rect of the item
+    wxRect GetItemRect(size_t pos) const;
+
+    // get the menu from the given point or -1 if none
+    int GetMenuFromPoint(const wxPoint& pos) const;
+
+    // refresh the given item
+    void RefreshItem(size_t pos);
+
+    // refresh all items after this one (including it)
+    void RefreshAllItemsAfter(size_t pos);
+
+    // show the menu of the given item, and the next ones the user moves to
+    void PopupMenu(size_t pos);
+
+    // the mouse moved over the bar while a menu of it is shown, the point the
+    // bar's: true if another menu is shown in its place
+    bool ProcessMouseEvent(const wxPoint& pt);
+
+    // a key the menu shown left: true if done
+    bool ProcessKeyDown(int key);
+
+protected:
+    virtual wxSize DoGetBestClientSize() const override;
+
+private:
+    // "fast" version of GetMenuCount()
+    size_t GetCount() const;
+
+    // get the (total) width of the specified menu
+    wxCoord GetItemWidth(size_t pos) const;
+
+    // the menu of the current item shown below it, until it is dismissed -
+    // and the next one, while the user moves to another (m_next)
+    void PopupCurrentMenu();
+
+    // hide the currently shown menu, the next one to show (or -1)
+    void DismissMenu(int next);
+
+    // event handlers
+    void OnPaint(wxPaintEvent& event);
+    void OnLeftDown(wxMouseEvent& event);
+
+    // the bar drawn, which deletes this window as it goes
+    ibMenuBar *m_menuBar;
+
+    // the item whose menu is shown or -1
+    int m_current;
+
+    // the item whose menu is shown next, as the one shown is dismissed, or -1
+    int m_next;
+
+    // the currently shown menu or nullptr
+    ibMenu *m_menuShown;
+
+    // it forgets the window as it goes (~ibMenuBar)
+    friend class ibMenuBar;
+
+    wxDECLARE_EVENT_TABLE();
+};
+
+// ----------------------------------------------------------------------------
 // ibMenuKbdRedirector: an event handler which redirects kbd input to ibMenu
 // ----------------------------------------------------------------------------
 
@@ -336,17 +407,10 @@ wxBEGIN_EVENT_TABLE(ibPopupMenuWindow, wxPopupTransientWindow)
 #endif
 wxEND_EVENT_TABLE()
 
-#if 0 // GUI-REVIVE: univ menubar needs univ frame
-wxBEGIN_EVENT_TABLE(ibMenuBar, wxMenuBarBase)
-    EVT_PAINT(ibMenuBar::OnPaint)
-    EVT_KILL_FOCUS(ibMenuBar::OnKillFocus)
-    EVT_KEY_DOWN(ibMenuBar::OnKeyDown)
-    EVT_LEFT_DOWN(ibMenuBar::OnLeftDown)
-    EVT_LEFT_UP(ibMenuBar::OnLeftUp)
-    EVT_MOTION(ibMenuBar::OnMouseMove)
-    EVT_MOUSE_CAPTURE_LOST(ibMenuBar::OnCaptureLost)
+wxBEGIN_EVENT_TABLE(ibMenuBarWindow, ibWindow)
+    EVT_PAINT(ibMenuBarWindow::OnPaint)
+    EVT_LEFT_DOWN(ibMenuBarWindow::OnLeftDown)
 wxEND_EVENT_TABLE()
-#endif // GUI-REVIVE
 
 // ============================================================================
 // implementation
@@ -397,11 +461,12 @@ bool ibPopupMenuWindow::Show(bool show)
     if (!wxWindowBase::Show(true))
         return false;
 
+    // left topmost, as wx makes a popup (WS_EX_TOPMOST) and as the tooltip stands (ibToolTip::Show): the shadow is a
+    // window of the system's, owned by no one - put among the frame's, it stayed where it was each time the frame came
+    // up with its windows, and the frame covered it (2026-11-11, measured: the menu at z34, the frame z41, its shadow
+    // z42; Max: "the shadow works every other time"). The menu shuts when it loses the mouse (OnCaptureLost)
     const HWND hWnd = reinterpret_cast<HWND>(GetHandle());
-    ::SetClassLong(hWnd, GCL_STYLE, ::GetClassLong(hWnd, GCL_STYLE) | CS_DROPSHADOW);
-    ::ShowWindow(hWnd, SW_SHOWNA);
-    ::SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-    return true;
+    return ibMSWShowShadowed(this, [hWnd] { ::ShowWindow(hWnd, SW_SHOWNA); return true; });
 }
 
 bool ibPopupMenuWindow::MSWHandleMessage(WXLRESULT *result, WXUINT message, WXWPARAM wParam, WXLPARAM lParam)
@@ -514,7 +579,7 @@ ibPopupMenuWindow::GetNextNode(ibMenuItemIter node) const
 // ibPopupMenuWindow popup/dismiss
 // ----------------------------------------------------------------------------
 
-void ibPopupMenuWindow::Popup(ibWindow *focus)
+void ibPopupMenuWindow::Popup(wxWindow *focus)
 {
     // check that the current item had been properly reset before
     wxASSERT_MSG( !m_nodeCurrent ||
@@ -540,9 +605,14 @@ void ibPopupMenuWindow::Popup(ibWindow *focus)
         // if we're shown, the parent menu must be also shown
         wxCHECK_RET( win, wxT("parent menu is not shown?") );
 
-        if ( !::SetWindowPos(GetHwnd(), GetHwndOf(win),
+        // SEAM vs univ: not activated (SWP_NOACTIVATE) - a menu never takes the activation from the window it is in.
+        // Activated, it deactivated the frame, the focus left the view, the view another took its place while the menu
+        // was open, and the menu bar built for that one deleted this one's under this very call (2026-11-11, a crash
+        // at the Refresh below). And on top, as said above (HWND_TOP): univ put it after its parent (the window given
+        // is the one it goes behind), under the parent menu it was to stand over
+        if ( !::SetWindowPos(GetHwnd(), HWND_TOP,
                              0, 0, 0, 0,
-                             SWP_NOMOVE | SWP_NOSIZE | SWP_NOREDRAW) )
+                             SWP_NOMOVE | SWP_NOSIZE | SWP_NOREDRAW | SWP_NOACTIVATE) )
         {
             wxLogLastError(wxT("SetWindowPos(HWND_TOP)"));
         }
@@ -863,21 +933,12 @@ void ibPopupMenuWindow::OnRightDown(wxMouseEvent& event)
 
 void ibPopupMenuWindow::OnLeftDown(wxMouseEvent& event)
 {
-#if 0 // GUI-REVIVE: menubar forwarding needs univ frame
-    ibMenuBar* menubar = m_menu->GetMenuBar();
-    if ( menubar && !GetMenuItemFromPoint(event.GetPosition()) && !ProcessLeftDown(event) )
-    {
-        wxPoint pos = event.GetPosition();
-        wxPoint posScreen = ClientToScreen(pos);
-        event.SetPosition(menubar->ScreenToClient(posScreen));
-        menubar->ProcessEvent(event);
-    }
-#endif // GUI-REVIVE
-
     // SEAM vs univ: there the generic wxPopupWindowHandler (pushed by the
     // generic Popup()) dismissed the menu on outside clicks; the MSW popup
     // relies on activation changes instead, which never happen while we hold
-    // the mouse capture — so dismiss here ourselves
+    // the mouse capture — so dismiss here ourselves. A menubar's menu too: a
+    // click on its title shuts it, as a native one (the canon passed the click
+    // on to the bar)
     if ( !ProcessLeftDown(event) &&
          HitTest(event.GetPosition()) == wxHT_WINDOW_OUTSIDE )
     {
@@ -895,19 +956,6 @@ void ibPopupMenuWindow::OnLeftUp(wxMouseEvent& event)
     {
         ActivateItem(ibItem(node->GetData()), WithMouse);
     }
-#if 0 // GUI-REVIVE: menubar forwarding needs univ frame
-    else
-    {
-        ibMenuBar* menubar = m_menu->GetMenuBar();
-        if ( menubar && !ProcessLeftDown(event) )
-        {
-            wxPoint pos = event.GetPosition();
-            wxPoint posScreen = ClientToScreen(pos);
-            event.SetPosition(menubar->ScreenToClient(posScreen));
-            menubar->ProcessEvent(event);
-        }
-    }
-#endif // GUI-REVIVE
 }
 
 void ibPopupMenuWindow::OnMouseMove(wxMouseEvent& event)
@@ -979,21 +1027,19 @@ void ibPopupMenuWindow::ProcessMouseMove(const wxPoint& pt)
 
             win->ProcessMouseMove(win->ScreenToClient(ptScreen));
         }
-#if 0 // GUI-REVIVE: menubar forwarding needs univ frame
         else // no parent menu
         {
-            ibMenuBar *menubar = m_menu->GetMenuBar();
-            if ( menubar )
+            ibMenuBar *menubar = wxDynamicCast(m_menu->GetMenuBar(), ibMenuBar);
+            if ( menubar && menubar->m_window )
             {
-                if ( menubar->ProcessMouseEvent(
-                            menubar->ScreenToClient(ptScreen)) )
+                ibMenuBarWindow * const win = menubar->m_window;
+                if ( win->ProcessMouseEvent(win->ScreenToClient(ptScreen)) )
                 {
                     // menubar has closed this menu and opened another one, probably
                     return;
                 }
             }
         }
-#endif // GUI-REVIVE
         //else: top level popup menu, no other processing to do
     }
 }
@@ -1039,15 +1085,9 @@ void ibPopupMenuWindow::OnMouseLeave(wxMouseEvent& event)
 
 void ibPopupMenuWindow::OnKeyDown(wxKeyEvent& event)
 {
-#if 0 // GUI-REVIVE: menubar forwarding needs univ frame
-    ibMenuBar *menubar = m_menu->GetMenuBar();
-
-    if ( menubar )
-    {
-        menubar->ProcessEvent(event);
-    }
-    else
-#endif // GUI-REVIVE
+    // SEAM vs univ: there a menubar's menu passed its keys to the bar; here the
+    // keys are redirected to the menu shown (ibMenuKbdRedirector), which leaves
+    // the bar those it does not take (ibMenu::ProcessKeyDown)
     if ( !ProcessKeyDown(event.GetKeyCode()) )
     {
         event.Skip();
@@ -1357,11 +1397,8 @@ void ibMenu::OnItemAdded(ibMenuItem *item)
 {
     InvalidateGeometryInfo();
 
-#if 0 // GUI-REVIVE: univ accel-table API not in the native build
-    AddAccelFor(item);
-#else
+    // its accelerator is its label's, asked when a key comes (ProcessAccelEvent)
     wxUnusedVar(item);
-#endif // wxUSE_ACCEL
 }
 
 void ibMenu::EndRadioGroup()
@@ -1404,9 +1441,43 @@ wxMenuItem *ibMenu::AppendSubMenu(ibMenu *submenu, const wxString& text,
                                              wxITEM_NORMAL, submenu));
 }
 
+// SEAM vs univ: an item made by the native factory (wxMenuItem::New) - the
+// creating Append, AppendSeparator, AppendSubMenu or Insert of wxMenuBase
+// called through a wxMenu* (the doc manager's file history, a menu copied
+// item by item) - is made again as the theme's, what it was given carried
+// over, and the native one goes: the creating calls return the new one
+// (DoAppend's). A caller that made the item itself must not touch it again
+static ibMenuItem *ibThemeItem(ibMenu *menu, wxMenuItem *item)
+{
+    if ( ibMenuItem * const themed = wxDynamicCast(item, ibMenuItem) )
+        return themed;
+
+    wxMenu * const submenu = item->GetSubMenu();
+    wxASSERT_MSG( !submenu || wxDynamicCast(submenu, ibMenu),
+                  wxT("a submenu of the theme's menu is the theme's (ibMenu)") );
+
+    // the new item holds the submenu - the native one would delete it
+    item->SetSubMenu(nullptr);
+
+    ibMenuItem * const themed = new ibMenuItem(menu, item->GetId(),
+                                               item->GetItemLabel(),
+                                               item->GetHelp(),
+                                               item->GetKind(),
+                                               ibSub(submenu));
+    if ( item->GetBitmapBundle().IsOk() )
+        themed->SetBitmap(item->GetBitmapBundle());
+    if ( !item->IsEnabled() )
+        themed->Enable(false);
+    if ( item->GetKind() == wxITEM_CHECK && item->IsChecked() )
+        themed->Check(true);
+
+    delete item;
+    return themed;
+}
+
 wxMenuItem* ibMenu::DoAppend(wxMenuItem *itemBase)
 {
-    ibMenuItem *item = ibItem(itemBase);
+    ibMenuItem *item = ibThemeItem(this, itemBase);
 
     if ( item->GetKind() == wxITEM_RADIO )
     {
@@ -1460,7 +1531,7 @@ wxMenuItem* ibMenu::DoAppend(wxMenuItem *itemBase)
 
 wxMenuItem* ibMenu::DoInsert(size_t pos, wxMenuItem *itemBase)
 {
-    ibMenuItem *item = ibItem(itemBase);
+    ibMenuItem *item = ibThemeItem(this, itemBase);
 
     if ( item->GetKind() == wxITEM_RADIO )
     {
@@ -1538,10 +1609,6 @@ wxMenuItem *ibMenu::DoRemove(wxMenuItem *item)
     if ( itemOld )
     {
         InvalidateGeometryInfo();
-
-#if 0 // GUI-REVIVE: univ accel-table API not in the native build
-        RemoveAccelFor(ibItem(item));
-#endif // wxUSE_ACCEL
     }
 
     return itemOld;
@@ -1581,20 +1648,28 @@ void ibMenu::Detach()
 // ibMenu misc functions
 // ----------------------------------------------------------------------------
 
-ibWindow *ibMenu::GetRootWindow() const
+wxWindow *ibMenu::GetRootWindow() const
 {
-    // SEAM vs univ: the menubar branch waits for the univ frame; GetWindow()
-    // walks up the submenu chain to the root menu's invoking window, which
-    // our ibWindow::PopupMenu(ibMenu*) entry guarantees to be an ibWindow
-    return wxDynamicCast(GetWindow(), ibWindow);
+    // SEAM vs univ: the root menu's - a menubar's menu the window the bar is
+    // drawn in (GetWindow() would give its frame), a popup one the window it
+    // was invoked by: an ib window (ibWindow::PopupMenu) or the native frame
+    // (ibFrame::DoPopupMenu)
+    const wxMenuBase *root = this;
+    while ( root->GetParent() )
+        root = root->GetParent();
+
+    if ( ibMenuBar *menubar = wxDynamicCast(root->GetMenuBar(), ibMenuBar) )
+        return menubar->m_window;
+
+    return root->GetInvokingWindow();
 }
 
 ibRenderer *ibMenu::GetRenderer() const
 {
     // SEAM vs univ: there the popup window was a univ wxWindow carrying a
-    // renderer; here take it from the invoking ibWindow (theme fallback)
-    ibWindow *win = GetRootWindow();
-    return win ? win->GetRenderer() : ibThemeEngine::Get()->GetRenderer();
+    // renderer; here the theme's, the one every ib window takes (ibWindow::Init)
+    // - the window it is shown over may be the native frame
+    return ibThemeEngine::Get()->GetRenderer();
 }
 
 void ibMenu::RefreshItem(ibMenuItem *item)
@@ -1648,22 +1723,13 @@ void ibMenu::OnDismiss(bool dismissParent)
     }
     else // no parent menu
     {
-#if 0 // GUI-REVIVE: univ menubar needs univ frame
-        // notify the menu bar if we're a top level menu
-        if ( m_menuBar )
-        {
-            m_menuBar->OnDismissMenu(dismissParent);
-        }
-        else // popup menu
-#else
+        // SEAM vs univ: a menubar's menu is shown as a popup one (ibMenuBarWindow),
+        // so its loop ends alike - the window that runs it is told nothing more
         wxUnusedVar(dismissParent);
-#endif // GUI-REVIVE
-        {
-            ibWindow * const win = wxDynamicCast(GetInvokingWindow(), ibWindow);
-            wxCHECK_RET( win, wxT("what kind of menu is this?") );
 
-            win->DismissPopupMenu();
-        }
+        wxCHECK_RET( GetRootWindow(), wxT("what kind of menu is this?") );
+
+        ibWindow::DismissPopupMenu();
     }
 }
 
@@ -1690,7 +1756,7 @@ void ibMenu::Popup(const wxPoint& pos, const wxSize& size, bool selectFirst)
 
     // the menu can't have the focus itself (it is a Windows limitation), so
     // always keep the focus at the originating window
-    ibWindow *focus = GetRootWindow();
+    wxWindow *focus = GetRootWindow();
 
     wxASSERT_MSG( focus, wxT("no window to keep focus on?") );
 
@@ -1714,7 +1780,14 @@ bool ibMenu::ProcessKeyDown(int key)
     wxCHECK_MSG( m_popupMenu, false,
                  wxT("can't process key events if not shown") );
 
-    return m_popupMenu->ProcessKeyDown(key);
+    if ( m_popupMenu->ProcessKeyDown(key) )
+        return true;
+
+    // SEAM vs univ: there the bar had a menubar's menu's keys first
+    // (ibPopupMenuWindow::OnKeyDown); here the menu does, and the bar has
+    // those it leaves - the arrows moving to the next menu
+    ibMenuBar * const menubar = wxDynamicCast(GetMenuBar(), ibMenuBar);
+    return menubar && menubar->m_window && menubar->m_window->ProcessKeyDown(key);
 }
 
 bool ibMenu::ClickItem(ibMenuItem *item)
@@ -1740,59 +1813,67 @@ bool ibMenu::ClickItem(ibMenuItem *item)
 // ibMenu accel support
 // ----------------------------------------------------------------------------
 
-#if 0 // GUI-REVIVE: the univ accel-table API (Add/Remove/GetMenuItem) does
-      // not exist in the native wxAcceleratorTable build
+#if wxUSE_ACCEL
 
+// SEAM vs univ: there the menu kept a table of its items' accelerators, made as
+// they came (AddAccelFor) - the univ table's API the native wxAcceleratorTable
+// has not. Here the item's label is asked when the key comes: the accelerator
+// is its text after the tab, and the key is matched as wx's generic table
+// matches it (wxAcceleratorTable::GetEntry - the code, then Ctrl, Shift, Alt
+// each as the key has it; Ctrl is Cmd on the Mac). The items are updated first,
+// as a native menu's are when its accelerator is translated (MSW sends
+// WM_INITMENUPOPUP): a disabled one leaves the key to the window with the
+// focus. The click comes after the key, not in it, as the menu asked for by its
+// letter does (ibFrame::OnCharHook) - the hook that raised the event waits on
+// its return, and a dialog the command opens would run its loop inside it. On
+// GTK3/Cocoa the same: the key comes to the frame first there too
+// (wxEVT_CHAR_HOOK), and the native menubar's accelerators these ports had are
+// not made - the bar is the theme's (2026-11-12, Max)
 bool ibMenu::ProcessAccelEvent(const wxKeyEvent& event)
 {
-    // do we have an item for this accel?
-    ibMenuItem *item = m_accelTable.GetMenuItem(event);
-    if ( item && item->IsEnabled() )
-    {
-        return ClickItem(item);
-    }
-
-    // try our submenus
     for ( ibMenuItemIter node = GetMenuItems().GetFirst();
           node;
           node = node->GetNext() )
     {
-        const ibMenuItem *item = node->GetData();
-        if ( item->IsSubMenu() && item->IsEnabled() )
+        ibMenuItem * const item = ibItem(node->GetData());
+
+        if ( item->IsSubMenu() )
         {
             // try its elements
-            if ( item->GetSubMenu()->ProcessAccelEvent(event) )
-            {
+            if ( item->IsEnabled() &&
+                 ibSub(item->GetSubMenu())->ProcessAccelEvent(event) )
                 return true;
-            }
+            continue;
         }
+
+        if ( item->GetAccelString().empty() )
+            continue;
+
+        const std::unique_ptr<wxAcceleratorEntry> accel(item->GetAccel());
+        if ( !accel || accel->GetKeyCode() != event.GetKeyCode() )
+            continue;
+
+        const int flags = accel->GetFlags();
+        if ( ((flags & wxACCEL_CTRL) != 0) != event.ControlDown() ||
+             ((flags & wxACCEL_SHIFT) != 0) != event.ShiftDown() ||
+             ((flags & wxACCEL_ALT) != 0) != event.AltDown() )
+            continue;
+
+        UpdateUI();
+        if ( !item->IsEnabled() )
+            return false;
+
+        const int id = item->GetId();
+        CallAfter([this, id]()
+        {
+            ibMenuItem * const clicked = ibItem(FindChildItem(id));
+            if ( clicked && clicked->IsEnabled() )
+                ClickItem(clicked);
+        });
+        return true;
     }
 
     return false;
-}
-
-void ibMenu::AddAccelFor(ibMenuItem *item)
-{
-    wxAcceleratorEntry *accel = item->GetAccel();
-    if ( accel )
-    {
-        accel->SetMenuItem(item);
-
-        m_accelTable.Add(*accel);
-
-        delete accel;
-    }
-}
-
-void ibMenu::RemoveAccelFor(ibMenuItem *item)
-{
-    wxAcceleratorEntry *accel = item->GetAccel();
-    if ( accel )
-    {
-        m_accelTable.Remove(*accel);
-
-        delete accel;
-    }
 }
 
 #endif // wxUSE_ACCEL
@@ -1994,118 +2075,111 @@ int ibMenuItem::GetRadioGroupEnd()
 
 wxIMPLEMENT_DYNAMIC_CLASS(ibMenu, wxMenu);
 wxIMPLEMENT_DYNAMIC_CLASS(ibMenuItem, wxMenuItem);
+wxIMPLEMENT_DYNAMIC_CLASS(ibMenuBar, wxMenuBar);
 
 // ----------------------------------------------------------------------------
 // ibMenuBar creation
 // ----------------------------------------------------------------------------
 
-#if 0 // GUI-REVIVE: univ menubar needs the univ frame — the whole
-      // implementation block is cut until ibFrame revives
-
-void ibMenuBar::Init()
+ibMenuBar::ibMenuBar(long style)
+         : wxMenuBar(style)
 {
-    m_frameLast = nullptr;
-
-    m_current = -1;
-
-    m_menuShown = nullptr;
-
-    m_shouldShowMenu = false;
+    m_window = nullptr;
 }
 
-ibMenuBar::ibMenuBar(long WXUNUSED(style))
+ibMenuBar::~ibMenuBar()
 {
-    Init();
+    // its window goes with it, once the event it may be in is over: the bar
+    // may go in a command chosen in its menu (ibMenuBarWindow::PopupCurrentMenu)
+    if ( m_window )
+    {
+        m_window->m_menuBar = nullptr;
+        m_window->Hide();
+        if ( wxTheApp )
+            wxTheApp->ScheduleForDestruction(m_window);
+        else
+            delete m_window;
+    }
 }
 
-ibMenuBar::ibMenuBar(size_t n, ibMenu *menus[], const wxString titles[], long WXUNUSED(style))
-{
-    Init();
-
-    for (size_t i = 0; i < n; ++i )
-        Append(menus[i], titles[i]);
-}
-
-void ibMenuBar::Attach(ibFrame *frame)
+void ibMenuBar::Attach(wxFrame *frame)
 {
     // maybe you really wanted to call Detach()?
     wxCHECK_RET( frame, wxT("ibMenuBar::Attach(nullptr) called") );
 
-    wxMenuBarBase::Attach(frame);
+    // the native bar's: its frame; its accelerators' table stays empty - the
+    // menus make none (ibMenu::ProcessAccelEvent)
+    wxMenuBar::Attach(frame);
 
-    if ( IsCreated() )
+    if ( m_window )
     {
         // reparent if necessary
-        if ( m_frameLast != frame )
+        if ( m_window->GetParent() != frame )
         {
-            Reparent(frame);
+            m_window->Reparent(frame);
         }
 
         // show it back - was hidden by Detach()
-        Show();
+        m_window->Show();
     }
     else // not created yet, do it now
     {
-        // we have no way to return the error from here anyhow :-(
-        (void)Create(frame, wxID_ANY);
-
-        SetCursor(wxCURSOR_ARROW);
-
-        SetFont(wxSystemSettings::GetFont(wxSYS_SYSTEM_FONT));
-
-        // calculate and set our height (it won't be changed any more)
-        SetSize(wxDefaultCoord, GetBestSize().y);
+        m_window = new ibMenuBarWindow(this, frame);
     }
-
-    // remember the last frame which had us to avoid unnecessarily reparenting
-    // above
-    m_frameLast = frame;
 }
 
 void ibMenuBar::Detach()
 {
     // don't delete the window because we may be reattached later, just hide it
-    if ( m_frameLast )
+    if ( m_window )
     {
-        Hide();
+        m_window->Hide();
     }
 
-    wxMenuBarBase::Detach();
-}
-
-ibMenuBar::~ibMenuBar()
-{
+    wxMenuBar::Detach();
 }
 
 // ----------------------------------------------------------------------------
 // ibMenuBar adding/removing items
 // ----------------------------------------------------------------------------
 
-bool ibMenuBar::Append(ibMenu *menu, const wxString& title)
+bool ibMenuBar::Append(wxMenu *menu, const wxString& title)
 {
-    return Insert(GetCount(), menu, title);
+    return Insert(GetMenuCount(), menu, title);
 }
 
-bool ibMenuBar::Insert(size_t pos, ibMenu *menu, const wxString& title)
+bool ibMenuBar::Insert(size_t pos, wxMenu *menu, const wxString& title)
 {
+    // the theme shows it (ibMenu::Popup): a native one has nothing to show it with
+    wxCHECK_MSG( wxDynamicCast(menu, ibMenu), false,
+                 wxT("a menu of the theme's menubar is the theme's (ibMenu)") );
+
     if ( !wxMenuBarBase::Insert(pos, menu, title) )
         return false;
 
-    menu->SetTitle( title );
+    // the base's, as the native bar does: the native menu's SetTitle puts a
+    // title item into its native menu
+    menu->wxMenuBase::SetTitle(title);
 
     m_menuInfos.insert(m_menuInfos.begin() + pos, ibMenuInfo(title));
 
-    RefreshAllItemsAfter(pos);
+    if ( m_window )
+        m_window->RefreshAllItemsAfter(pos);
 
     return true;
 }
 
-ibMenu *ibMenuBar::Replace(size_t pos, ibMenu *menu, const wxString& title)
+wxMenu *ibMenuBar::Replace(size_t pos, wxMenu *menu, const wxString& title)
 {
-    ibMenu *menuOld = wxMenuBarBase::Replace(pos, menu, title);
+    wxCHECK_MSG( wxDynamicCast(menu, ibMenu), nullptr,
+                 wxT("a menu of the theme's menubar is the theme's (ibMenu)") );
+
+    wxMenu *menuOld = wxMenuBarBase::Replace(pos, menu, title);
 
     if ( menuOld )
     {
+        menu->wxMenuBase::SetTitle(title);
+
         ibMenuInfo& info = m_menuInfos[pos];
 
         info.SetLabel(title);
@@ -2115,15 +2189,16 @@ ibMenu *ibMenuBar::Replace(size_t pos, ibMenu *menu, const wxString& title)
 
         // even if we change only this one, the new label has different width,
         // so we need to refresh everything beyond this item as well
-        RefreshAllItemsAfter(pos);
+        if ( m_window )
+            m_window->RefreshAllItemsAfter(pos);
     }
 
     return menuOld;
 }
 
-ibMenu *ibMenuBar::Remove(size_t pos)
+wxMenu *ibMenuBar::Remove(size_t pos)
 {
-    ibMenu *menuOld = wxMenuBarBase::Remove(pos);
+    wxMenu *menuOld = wxMenuBarBase::Remove(pos);
 
     if ( menuOld )
     {
@@ -2131,7 +2206,8 @@ ibMenu *ibMenuBar::Remove(size_t pos)
 
         // this doesn't happen too often, so don't try to be too smart - just
         // refresh everything
-        Refresh();
+        if ( m_window )
+            m_window->Refresh();
     }
 
     return menuOld;
@@ -2141,542 +2217,108 @@ ibMenu *ibMenuBar::Remove(size_t pos)
 // ibMenuBar top level menus access
 // ----------------------------------------------------------------------------
 
-size_t ibMenuBar::GetCount() const
-{
-    return m_menuInfos.size();
-}
-
-wxCoord ibMenuBar::GetItemWidth(size_t pos) const
-{
-    return m_menuInfos[pos].GetWidth(wxConstCast(this, ibMenuBar));
-}
-
 void ibMenuBar::EnableTop(size_t pos, bool enable)
 {
-    wxCHECK_RET( pos < GetCount(), wxT("invalid index in EnableTop") );
+    wxCHECK_RET( pos < GetMenuCount(), wxT("invalid index in EnableTop") );
 
     if ( enable != m_menuInfos[pos].IsEnabled() )
     {
         m_menuInfos[pos].SetEnabled(enable);
 
-        RefreshItem(pos);
+        if ( m_window )
+            m_window->RefreshItem(pos);
     }
     //else: nothing to do
 }
 
 bool ibMenuBar::IsEnabledTop(size_t pos) const
 {
-    wxCHECK_MSG( pos < GetCount(), false, wxT("invalid index in IsEnabledTop") );
+    wxCHECK_MSG( pos < GetMenuCount(), false, wxT("invalid index in IsEnabledTop") );
 
     return m_menuInfos[pos].IsEnabled();
 }
 
 void ibMenuBar::SetMenuLabel(size_t pos, const wxString& label)
 {
-    wxCHECK_RET( pos < GetCount(), wxT("invalid index in SetMenuLabel") );
+    wxCHECK_RET( pos < GetMenuCount(), wxT("invalid index in SetMenuLabel") );
 
     if ( label != m_menuInfos[pos].GetOriginalLabel() )
     {
         m_menuInfos[pos].SetLabel(label);
 
-        RefreshItem(pos);
+        // the new label has a width of its own
+        if ( m_window )
+            m_window->RefreshAllItemsAfter(pos);
     }
     //else: nothing to do
 }
 
 wxString ibMenuBar::GetMenuLabel(size_t pos) const
 {
-    wxCHECK_MSG( pos < GetCount(), wxEmptyString, wxT("invalid index in GetMenuLabel") );
+    wxCHECK_MSG( pos < GetMenuCount(), wxEmptyString, wxT("invalid index in GetMenuLabel") );
 
     return m_menuInfos[pos].GetOriginalLabel();
 }
 
 // ----------------------------------------------------------------------------
-// ibMenuBar drawing
+// ibMenuBar geometry: its window's
 // ----------------------------------------------------------------------------
 
-void ibMenuBar::RefreshAllItemsAfter(size_t pos)
+void ibMenuBar::DoGetSize(int *width, int *height) const
 {
-    if ( !IsCreated() )
-    {
-        // no need to refresh if nothing is shown yet
-        return;
-    }
-
-    wxRect rect = GetItemRect(pos);
-    rect.width = GetClientSize().x - rect.x;
-    RefreshRect(rect);
+    const wxSize size = m_window ? m_window->GetSize() : wxSize(0, 0);
+    if ( width )
+        *width = size.x;
+    if ( height )
+        *height = size.y;
 }
 
-void ibMenuBar::RefreshItem(size_t pos)
+void ibMenuBar::DoSetSize(int x, int y, int width, int height, int sizeFlags)
 {
-    wxCHECK_RET( pos != (size_t)-1,
-                 wxT("invalid item in ibMenuBar::RefreshItem") );
-
-    if ( !IsCreated() )
-    {
-        // no need to refresh if nothing is shown yet
-        return;
-    }
-
-    RefreshRect(GetItemRect(pos));
+    if ( m_window )
+        m_window->SetSize(x, y, width, height, sizeFlags);
 }
 
-void ibMenuBar::OnPaint(wxPaintEvent& WXUNUSED(event))
+wxSize ibMenuBar::DoGetBestSize() const
 {
-    ibThemePaintDC dc(this);
+    return m_window ? m_window->GetBestSize() : wxSize(0, 0);
+}
 
-    dc.SetFont(wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT));
-
-    // redraw only the items which must be redrawn
-
-    // we don't have to use GetUpdateClientRect() here because our client rect
-    // is the same as total one
-    wxRect rectUpdate = GetUpdateRegion().GetBox();
-
-    int flagsMenubar = GetStateFlags();
-
-    wxRect rect;
-    rect.y = 0;
-    rect.height = GetClientSize().y;
-
-    wxCoord x = 0;
-    size_t count = GetCount();
-    for ( size_t n = 0; n < count; n++ )
-    {
-        if ( x > rectUpdate.GetRight() )
-        {
-            // all remaining items are to the right of rectUpdate
-            break;
-        }
-
-        rect.x = x;
-        rect.width = GetItemWidth(n);
-        x += rect.width;
-        if ( x < rectUpdate.x )
-        {
-            // this item is still to the left of rectUpdate
-            continue;
-        }
-
-        int flags = flagsMenubar;
-        if ( m_current != -1 && n == (size_t)m_current )
-        {
-            flags |= wxCONTROL_SELECTED;
-        }
-
-        if ( !IsEnabledTop(n) )
-        {
-            flags |= wxCONTROL_DISABLED;
-        }
-
-        GetRenderer()->DrawMenuBarItem
-                       (
-                            dc,
-                            rect,
-                            m_menuInfos[n].GetLabel(),
-                            flags,
-                            m_menuInfos[n].GetAccelIndex()
-                       );
-    }
+wxWindow *ibMenuBar::GetWindow() const
+{
+    return m_window;
 }
 
 // ----------------------------------------------------------------------------
-// ibMenuBar geometry
+// ibMenuBar menus showing
 // ----------------------------------------------------------------------------
-
-wxRect ibMenuBar::GetItemRect(size_t pos) const
-{
-    wxASSERT_MSG( pos < GetCount(), wxT("invalid menu bar item index") );
-    wxASSERT_MSG( IsCreated(), wxT("can't call this method yet") );
-
-    wxRect rect;
-    rect.x =
-    rect.y = 0;
-    rect.height = GetClientSize().y;
-
-    for ( size_t n = 0; n < pos; n++ )
-    {
-        rect.x += GetItemWidth(n);
-    }
-
-    rect.width = GetItemWidth(pos);
-
-    return rect;
-}
-
-wxSize ibMenuBar::DoGetBestClientSize() const
-{
-    wxSize size;
-    if ( GetMenuCount() > 0 )
-    {
-        wxInfoDC dc(wxConstCast(this, ibMenuBar));
-        dc.SetFont(wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT));
-        dc.GetTextExtent(GetMenuLabel(0), &size.x, &size.y);
-
-        // adjust for the renderer we use
-        size = GetRenderer()->GetMenuBarItemSize(size);
-    }
-    else // empty menubar
-    {
-        size.x =
-        size.y = 0;
-    }
-
-    // the width is arbitrary, of course, for horizontal menubar
-    size.x = 100;
-
-    return size;
-}
-
-int ibMenuBar::GetMenuFromPoint(const wxPoint& pos) const
-{
-    if ( pos.x < 0 || pos.y < 0 || pos.y > GetClientSize().y )
-        return -1;
-
-    // do find it
-    wxCoord x = 0;
-    size_t count = GetCount();
-    for ( size_t item = 0; item < count; item++ )
-    {
-        x += GetItemWidth(item);
-
-        if ( x > pos.x )
-        {
-            return item;
-        }
-    }
-
-    // to the right of the last menu item
-    return -1;
-}
-
-// ----------------------------------------------------------------------------
-// ibMenuBar menu operations
-// ----------------------------------------------------------------------------
-
-void ibMenuBar::SelectMenu(size_t pos)
-{
-    SetFocus();
-    wxLogTrace(wxT("mousecapture"), wxT("Capturing mouse from ibMenuBar::SelectMenu"));
-    CaptureMouse();
-
-    DoSelectMenu(pos);
-}
-
-void ibMenuBar::DoSelectMenu(size_t pos)
-{
-    wxCHECK_RET( pos < GetCount(), wxT("invalid menu index in DoSelectMenu") );
-
-    int posOld = m_current;
-
-    m_current = pos;
-
-    if ( posOld != -1 )
-    {
-        // close the previous menu
-        if ( IsShowingMenu() )
-        {
-            // restore m_shouldShowMenu flag after DismissMenu() which resets
-            // it to false
-            bool old = m_shouldShowMenu;
-
-            DismissMenu();
-
-            m_shouldShowMenu = old;
-        }
-
-        RefreshItem((size_t)posOld);
-    }
-
-    RefreshItem(pos);
-}
 
 void ibMenuBar::PopupMenu(size_t pos)
 {
-    wxCHECK_RET( pos < GetCount(), wxT("invalid menu index in PopupCurrentMenu") );
+    wxCHECK_RET( m_window, wxT("can't show a menu of a menubar never attached") );
 
-    SetFocus();
-    DoSelectMenu(pos);
-    PopupCurrentMenu();
-}
-
-// ----------------------------------------------------------------------------
-// ibMenuBar input handing
-// ----------------------------------------------------------------------------
-
-/*
-   Note that ibMenuBar doesn't use ibInputHandler but handles keyboard and
-   mouse in the same way under all platforms. This is because it doesn't derive
-   from ibControl (which works with input handlers) but directly from ibWindow.
-
-   Also, menu bar input handling is rather simple, so maybe it's not really
-   worth making it themeable - at least I've decided against doing it now as it
-   would merging the changes back into trunk more difficult. But it still could
-   be done later if really needed.
- */
-
-void ibMenuBar::OnKillFocus(wxFocusEvent& event)
-{
-    if ( m_current != -1 )
-    {
-        RefreshItem((size_t)m_current);
-
-        m_current = -1;
-    }
-
-    event.Skip();
-}
-
-void ibMenuBar::OnLeftDown(wxMouseEvent& event)
-{
-    if ( HasCapture() )
-    {
-        OnDismiss();
-        event.Skip();
-    }
-    else // we didn't have mouse capture, capture it now
-    {
-        int item = GetMenuFromPoint(event.GetPosition());
-        if ( item == -1 )
-        {
-            if ( IsShowingMenu() )
-            {
-                DismissMenu(); // event outside menubar - dismiss
-                ReleaseMouseCapture(); // we could get capture back from popup window so release it
-                RefreshItem((size_t)m_current);
-                m_current = -1;
-            }
-        }
-        else if ( item == m_current && IsShowingMenu() )
-        {
-            // double-click
-            DismissMenu();
-            ReleaseMouseCapture();
-            RefreshItem((size_t)m_current);
-            m_current = -1;
-        }
-        else // on item
-        {
-            m_current = item;
-
-            wxLogTrace(wxT("mousecapture"), wxT("Capturing mouse from ibMenuBar::OnLeftDown"));
-            CaptureMouse();
-
-            // show it as selected
-            RefreshItem((size_t)m_current);
-
-            // show the menu
-            PopupCurrentMenu(false /* don't select first item - as Windows does */);
-        }
-    }
-}
-
-void ibMenuBar::OnLeftUp(wxMouseEvent& event)
-{
-    if ( !HasCapture() && IsShowingMenu() && GetMenuFromPoint(event.GetPosition()) == -1 )
-    {
-        DismissMenu();
-        ReleaseMouseCapture();
-        RefreshItem((size_t)m_current);
-        m_current = -1;
-    }
-}
-
-void ibMenuBar::OnMouseMove(wxMouseEvent& event)
-{
-    if ( HasCapture() )
-    {
-        (void)ProcessMouseEvent(event.GetPosition());
-    }
-    else
-    {
-        event.Skip();
-    }
-}
-
-bool ibMenuBar::ProcessMouseEvent(const wxPoint& pt)
-{
-    // a hack to ignore the extra mouse events MSW sends us: this is similar to
-    // wxUSE_MOUSEEVENT_HACK in wxWin itself but it isn't enough for us here as
-    // we get the messages from different windows (old and new popup menus for
-    // example)
-#ifdef __WXMSW__
-    static wxPoint s_ptLast;
-    if ( pt == s_ptLast )
-    {
-        return false;
-    }
-
-    s_ptLast = pt;
-#endif // __WXMSW__
-
-    int currentNew = GetMenuFromPoint(pt);
-    if ( (currentNew == -1) || (currentNew == m_current) )
-    {
-        return false;
-    }
-
-    // select the new active item
-    DoSelectMenu(currentNew);
-
-    // show the menu if we know that we should, even if we hadn't been showing
-    // it before (this may happen if the previous menu was disabled)
-    if ( m_shouldShowMenu && !m_menuShown)
-    {
-        // open the new menu if the old one we closed had been opened
-        PopupCurrentMenu(false /* don't select first item - as Windows does */);
-    }
-
-    return true;
-}
-
-void ibMenuBar::OnKeyDown(wxKeyEvent& event)
-{
-    // ensure that we have a current item - we might not have it if we're
-    // given the focus with Alt or F10 press (and under GTK+ the menubar
-    // somehow gets the keyboard events even when it doesn't have focus...)
-    if ( m_current == -1 )
-    {
-        if ( !HasCapture() )
-        {
-            SelectMenu(0);
-        }
-        else // we do have capture
-        {
-            // we always maintain a valid current item while we're in modal
-            // state (i.e. have the capture)
-            wxFAIL_MSG( wxT("how did we manage to lose current item?") );
-
-            return;
-        }
-    }
-
-    int key = event.GetKeyCode();
-
-    // first let the menu have it
-    if ( IsShowingMenu() && m_menuShown->ProcessKeyDown(key) )
-    {
-        return;
-    }
-
-    // cycle through the menu items when left/right arrows are pressed and open
-    // the menu when up/down one is
-    switch ( key )
-    {
-        case WXK_ALT:
-            // Alt must be processed at ibWindow level too
-            event.Skip();
-            // fall through
-
-        case WXK_ESCAPE:
-            // remove the selection and give the focus away
-            if ( m_current != -1 )
-            {
-                if ( IsShowingMenu() )
-                {
-                    DismissMenu();
-                }
-
-                OnDismiss();
-            }
-            break;
-
-        case WXK_LEFT:
-        case WXK_RIGHT:
-            {
-                size_t count = GetCount();
-                if ( count == 1 )
-                {
-                    // the item won't change anyhow
-                    break;
-                }
-                //else: otherwise, it will
-
-                // remember if we were showing a menu - if we did, we should
-                // show the new menu after changing the item
-                bool wasMenuOpened = IsShowingMenu();
-                if ( wasMenuOpened )
-                {
-                    DismissMenu();
-                }
-
-                // cast is safe as we tested for -1 above
-                size_t currentNew = (size_t)m_current;
-
-                if ( key == WXK_LEFT )
-                {
-                    if ( currentNew-- == 0 )
-                        currentNew = count - 1;
-                }
-                else // right
-                {
-                    if ( ++currentNew == count )
-                        currentNew = 0;
-                }
-
-                DoSelectMenu(currentNew);
-
-                if ( wasMenuOpened )
-                {
-                    PopupCurrentMenu();
-                }
-            }
-            break;
-
-        case WXK_DOWN:
-        case WXK_UP:
-        case WXK_RETURN:
-            // open the menu
-            PopupCurrentMenu();
-            break;
-
-        default:
-            // letters open the corresponding menu
-            {
-                bool unique;
-                int idxFound = FindNextItemForAccel(m_current, key, &unique);
-
-                if ( idxFound != -1 )
-                {
-                    if ( IsShowingMenu() )
-                    {
-                        DismissMenu();
-                    }
-
-                    DoSelectMenu((size_t)idxFound);
-
-                    // if the item is not unique, just select it but don't
-                    // activate as the user might have wanted to activate
-                    // another item
-                    //
-                    // also, don't try to open a disabled menu
-                    if ( unique && IsEnabledTop((size_t)idxFound) )
-                    {
-                        // open the menu
-                        PopupCurrentMenu();
-                    }
-
-                    // skip the "event.Skip()" below
-                    break;
-                }
-            }
-
-            event.Skip();
-    }
-}
-
-void ibMenuBar::OnCaptureLost(wxMouseCaptureLostEvent& WXUNUSED(event))
-{
-    if ( IsShowingMenu() )
-    {
-        DismissMenu();
-    }
+    m_window->PopupMenu(pos);
 }
 
 // ----------------------------------------------------------------------------
 // ibMenuBar accel handling
 // ----------------------------------------------------------------------------
+
+#if wxUSE_ACCEL
+
+bool ibMenuBar::ProcessAccelEvent(const wxKeyEvent& event)
+{
+    for ( size_t n = 0; n < GetMenuCount(); n++ )
+    {
+        // accels of the items in the disabled menus shouldn't work
+        if ( IsEnabledTop(n) && ibSub(GetMenu(n))->ProcessAccelEvent(event) )
+            return true;
+    }
+
+    return false;
+}
+
+#endif // wxUSE_ACCEL
 
 int ibMenuBar::FindNextItemForAccel(int idxStart, int key, bool *unique) const
 {
@@ -2698,7 +2340,12 @@ int ibMenuBar::FindNextItemForAccel(int idxStart, int key, bool *unique) const
 
     // loop through all items searching for the item with this
     // accel starting at the item after the current one
-    int count = GetCount();
+    int count = (int)m_menuInfos.size();
+    if ( count == 0 )
+    {
+        return -1;
+    }
+
     int n = idxStart == -1 ? 0 : idxStart + 1;
 
     if ( n == count )
@@ -2753,151 +2400,345 @@ int ibMenuBar::FindNextItemForAccel(int idxStart, int key, bool *unique) const
     return idxFound;
 }
 
-#if wxUSE_ACCEL
+// ----------------------------------------------------------------------------
+// ibMenuInfo
+// ----------------------------------------------------------------------------
 
-bool ibMenuBar::ProcessAccelEvent(const wxKeyEvent& event)
+void ibMenuInfo::CalcWidth(ibMenuBarWindow *window)
 {
-    size_t n = 0;
-    for ( ibMenuList::compatibility_iterator node = m_menus.GetFirst();
-          node;
-          node = node->GetNext(), n++ )
+    wxSize size;
+    wxInfoDC dc(window);
+    dc.SetFont(wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT));
+    dc.GetTextExtent(m_label, &size.x, &size.y);
+
+    // adjust for the renderer we use and store the width
+    m_width = window->GetRenderer()->GetMenuBarItemSize(size).x;
+}
+
+// ----------------------------------------------------------------------------
+// ibMenuBarWindow
+// ----------------------------------------------------------------------------
+
+ibMenuBarWindow::ibMenuBarWindow(ibMenuBar *menubar, wxWindow *parent)
+{
+    m_menuBar = menubar;
+    m_current = -1;
+    m_next = -1;
+    m_menuShown = nullptr;
+
+    // the canon's ibMenuBar::Attach
+    (void)Create(parent, wxID_ANY);
+
+    SetCursor(wxCURSOR_ARROW);
+
+    // calculate and set our height (it won't be changed any more)
+    SetSize(wxDefaultCoord, GetBestSize().y);
+}
+
+ibMenuBarWindow::~ibMenuBarWindow()
+{
+    // gone before its bar - a child of the frame, which went first: the bar
+    // draws nowhere until it is attached again
+    if ( m_menuBar )
+        m_menuBar->m_window = nullptr;
+}
+
+size_t ibMenuBarWindow::GetCount() const
+{
+    return m_menuBar ? m_menuBar->m_menuInfos.size() : 0;
+}
+
+wxCoord ibMenuBarWindow::GetItemWidth(size_t pos) const
+{
+    return m_menuBar->m_menuInfos[pos].GetWidth(wxConstCast(this, ibMenuBarWindow));
+}
+
+// ----------------------------------------------------------------------------
+// ibMenuBarWindow drawing
+// ----------------------------------------------------------------------------
+
+void ibMenuBarWindow::RefreshAllItemsAfter(size_t pos)
+{
+    wxRect rect = GetItemRect(pos);
+    rect.width = GetClientSize().x - rect.x;
+    RefreshRect(rect);
+}
+
+void ibMenuBarWindow::RefreshItem(size_t pos)
+{
+    wxCHECK_RET( pos != (size_t)-1,
+                 wxT("invalid item in ibMenuBarWindow::RefreshItem") );
+
+    RefreshRect(GetItemRect(pos));
+}
+
+void ibMenuBarWindow::OnPaint(wxPaintEvent& WXUNUSED(event))
+{
+    ibThemePaintDC dc(this);
+
+    dc.SetFont(wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT));
+
+    // redraw only the items which must be redrawn
+
+    // we don't have to use GetUpdateClientRect() here because our client rect
+    // is the same as total one
+    wxRect rectUpdate = GetUpdateRegion().GetBox();
+
+    int flagsMenubar = GetStateFlags();
+
+    wxRect rect;
+    rect.y = 0;
+    rect.height = GetClientSize().y;
+
+    wxCoord x = 0;
+    size_t count = GetCount();
+    for ( size_t n = 0; n < count; n++ )
     {
-        // accels of the items in the disabled menus shouldn't work
-        if ( m_menuInfos[n].IsEnabled() )
+        if ( x > rectUpdate.GetRight() )
         {
-            if ( node->GetData()->ProcessAccelEvent(event) )
-            {
-                // menu processed it
-                return true;
-            }
+            // all remaining items are to the right of rectUpdate
+            break;
+        }
+
+        rect.x = x;
+        rect.width = GetItemWidth(n);
+        x += rect.width;
+        if ( x < rectUpdate.x )
+        {
+            // this item is still to the left of rectUpdate
+            continue;
+        }
+
+        int flags = flagsMenubar;
+        if ( m_current != -1 && n == (size_t)m_current )
+        {
+            flags |= wxCONTROL_SELECTED;
+        }
+
+        if ( !m_menuBar->IsEnabledTop(n) )
+        {
+            flags |= wxCONTROL_DISABLED;
+        }
+
+        GetRenderer()->DrawMenuBarItem
+                       (
+                            dc,
+                            rect,
+                            m_menuBar->m_menuInfos[n].GetLabel(),
+                            flags,
+                            m_menuBar->m_menuInfos[n].GetAccelIndex()
+                       );
+    }
+}
+
+// ----------------------------------------------------------------------------
+// ibMenuBarWindow geometry
+// ----------------------------------------------------------------------------
+
+wxRect ibMenuBarWindow::GetItemRect(size_t pos) const
+{
+    wxASSERT_MSG( pos < GetCount(), wxT("invalid menu bar item index") );
+
+    wxRect rect;
+    rect.x =
+    rect.y = 0;
+    rect.height = GetClientSize().y;
+
+    for ( size_t n = 0; n < pos; n++ )
+    {
+        rect.x += GetItemWidth(n);
+    }
+
+    rect.width = GetItemWidth(pos);
+
+    return rect;
+}
+
+wxSize ibMenuBarWindow::DoGetBestClientSize() const
+{
+    // SEAM vs univ: the height of the font's line, not of the first menu's
+    // label - a bar attached empty and filled afterwards keeps the height it
+    // was made with (the ctor)
+    wxInfoDC dc(wxConstCast(this, ibMenuBarWindow));
+    dc.SetFont(wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT));
+
+    // adjust for the renderer we use
+    wxSize size = GetRenderer()->GetMenuBarItemSize(wxSize(0, dc.GetCharHeight()));
+
+    // the width is arbitrary, of course, for horizontal menubar
+    size.x = 100;
+
+    return size;
+}
+
+int ibMenuBarWindow::GetMenuFromPoint(const wxPoint& pos) const
+{
+    if ( pos.x < 0 || pos.y < 0 || pos.y > GetClientSize().y )
+        return -1;
+
+    // do find it
+    wxCoord x = 0;
+    size_t count = GetCount();
+    for ( size_t item = 0; item < count; item++ )
+    {
+        x += GetItemWidth(item);
+
+        if ( x > pos.x )
+        {
+            return item;
         }
     }
 
-    // not found
-    return false;
+    // to the right of the last menu item
+    return -1;
 }
 
-#endif // wxUSE_ACCEL
-
 // ----------------------------------------------------------------------------
-// ibMenuBar menus showing
+// ibMenuBarWindow menus showing
 // ----------------------------------------------------------------------------
 
-void ibMenuBar::PopupCurrentMenu(bool selectFirst)
+void ibMenuBarWindow::OnLeftDown(wxMouseEvent& event)
 {
-    wxCHECK_RET( m_current != -1, wxT("no menu to popup") );
-
-    // forgot to call DismissMenu()?
-    wxASSERT_MSG( !m_menuShown, wxT("shouldn't show two menus at once!") );
-
-    // in any case, we should show it - even if we won't
-    m_shouldShowMenu = true;
-
-    if ( IsEnabledTop(m_current) )
+    int item = GetMenuFromPoint(event.GetPosition());
+    if ( item == -1 )
     {
-        // remember the menu we show
-        m_menuShown = GetMenu(m_current);
+        event.Skip();
+        return;
+    }
 
-        // we don't show the menu at all if it has no items
-        if ( !m_menuShown->IsEmpty() )
-        {
-            // position it correctly: note that we must use screen coords and
-            // that we pass 0 as width to position the menu exactly below the
-            // item, not to the right of it
-            wxRect rectItem = GetItemRect(m_current);
+    PopupMenu(item);
+}
 
-            m_menuShown->Popup(ClientToScreen(rectItem.GetPosition()),
-                               wxSize(0, rectItem.GetHeight()),
-                               selectFirst);
-        }
-        else
+void ibMenuBarWindow::PopupMenu(size_t pos)
+{
+    wxCHECK_RET( pos < GetCount(), wxT("invalid menu index in PopupMenu") );
+
+    // one is shown already: its keys are its own (ibMenuKbdRedirector), but a
+    // menu asked for by its letter comes after the key (ibFrame::OnCharHook)
+    if ( m_menuShown )
+        return;
+
+    m_current = pos;
+
+    // show it as selected
+    RefreshItem(pos);
+
+    PopupCurrentMenu();
+}
+
+void ibMenuBarWindow::PopupCurrentMenu()
+{
+    // a command chosen in the menu is done as its loop ends
+    // (ibWindow::DoPopupMenu), and one may take the bar away, this window with
+    // it - nothing of it is touched then
+    const wxWeakRef<wxWindow> self(this);
+
+    while ( m_current != -1 )
+    {
+        m_next = -1;
+
+        // we don't show the menu at all if it is disabled or has no items -
+        // its title is selected all the same
+        ibMenu *menu = ibSub(m_menuBar->GetMenu(m_current));
+        if ( m_menuBar->IsEnabledTop(m_current) && !menu->IsEmpty() )
         {
-            // reset it back as no menu is shown
+            // the items as they are now, as for a popup menu
+            // (ibWindow::PopupMenu) - the frame's handlers answer
+            menu->UpdateUI();
+
+            // position it correctly: below the item
+            const wxRect rectItem = GetItemRect(m_current);
+
+            m_menuShown = menu;
+            DoPopupMenu(menu, rectItem.x, rectItem.GetBottom() + 1);
+            // ...the bar taken away from its window at once, the window only scheduled to go (~ibMenuBar): still here,
+            // it has no bar - its item refreshed then read the menus through none (2026-11-11, a command chosen in the
+            // menu that changed the view, designer-thin_24996_t29884_20261111T172053_0.dmp)
+            if ( !self || !m_menuBar )
+                return;
             m_menuShown = nullptr;
         }
+
+        // the next one the user moved to (DismissMenu), or none
+        const size_t current = m_current;
+        m_current = m_next;
+        m_next = -1;
+
+        RefreshItem(current);
+        if ( m_current != -1 )
+            RefreshItem(m_current);
     }
-    //else: don't show disabled menu
 }
 
-void ibMenuBar::DismissMenu()
+void ibMenuBarWindow::DismissMenu(int next)
 {
     wxCHECK_RET( m_menuShown, wxT("can't dismiss menu if none is shown") );
 
+    // the menu shown goes - its loop ends (PopupCurrentMenu), and the next one
+    // is shown in its place
+    m_next = next;
     m_menuShown->Dismiss();
-    OnDismissMenu();
+    DismissPopupMenu();
 }
 
-void ibMenuBar::OnDismissMenu(bool dismissMenuBar)
+bool ibMenuBarWindow::ProcessMouseEvent(const wxPoint& pt)
 {
-    m_shouldShowMenu = false;
-    m_menuShown = nullptr;
-    if ( dismissMenuBar )
+    if ( !m_menuShown )
+        return false;
+
+    int currentNew = GetMenuFromPoint(pt);
+    if ( (currentNew == -1) || (currentNew == m_current) )
     {
-        OnDismiss();
+        return false;
     }
+
+    // show the menu under the mouse in place of the one shown
+    DismissMenu(currentNew);
+
+    return true;
 }
 
-void ibMenuBar::OnDismiss()
+bool ibMenuBarWindow::ProcessKeyDown(int key)
 {
-    if ( ReleaseMouseCapture() )
+    if ( !m_menuShown )
+        return false;
+
+    // cycle through the menu items when left/right arrows are pressed - the
+    // menu shown is closed, the next one opened in its place
+    switch ( key )
     {
-        wxLogTrace(wxT("mousecapture"), wxT("Releasing mouse from ibMenuBar::OnDismiss"));
-    }
+        case WXK_LEFT:
+        case WXK_RIGHT:
+            {
+                size_t count = GetCount();
+                if ( count == 1 )
+                {
+                    // the item won't change anyhow
+                    return true;
+                }
+                //else: otherwise, it will
 
-    if ( m_current != -1 )
-    {
-        size_t current = m_current;
-        m_current = -1;
+                // cast is safe as a menu is shown
+                size_t currentNew = (size_t)m_current;
 
-        RefreshItem(current);
-        Update();
-    }
+                if ( key == WXK_LEFT )
+                {
+                    if ( currentNew-- == 0 )
+                        currentNew = count - 1;
+                }
+                else // right
+                {
+                    if ( ++currentNew == count )
+                        currentNew = 0;
+                }
 
-    GiveAwayFocus();
-}
-
-bool ibMenuBar::ReleaseMouseCapture()
-{
-#ifdef __WXX11__
-    // With wxX11, when a menu is closed by clicking away from it, a control
-    // under the click will still get an event, even though the menu has the
-    // capture (bug?). So that control may already have taken the capture by
-    // this point, preventing us from releasing the menu's capture. So to work
-    // around this, we release both captures, then put back the control's
-    // capture.
-    ibWindow *capture = GetCapture();
-    if ( capture )
-    {
-        capture->ReleaseMouse();
-
-        if ( capture == this )
+                DismissMenu((int)currentNew);
+            }
             return true;
-
-        bool had = HasCapture();
-
-        if ( had )
-            ReleaseMouse();
-
-        capture->CaptureMouse();
-
-        return had;
     }
-#else
-    if ( HasCapture() )
-    {
-        ReleaseMouse();
-        return true;
-    }
-#endif
+
     return false;
 }
-
-void ibMenuBar::GiveAwayFocus()
-{
-    GetFrame()->SetFocus();
-}
-
-#endif // GUI-REVIVE: univ menubar needs univ frame
 
 // ----------------------------------------------------------------------------
 // popup menu support
@@ -2957,15 +2798,29 @@ int ibWindow::GetPopupMenuSelectionFromUser(ibMenu& menu, int x, int y)
 
 bool ibWindow::DoPopupMenu(ibMenu *menu, int x, int y)
 {
+    return DoPopupMenu(this, menu, x, y);
+}
+
+bool ibWindow::DoPopupMenu(wxWindow *window, wxMenu *popup, int x, int y)
+{
+    ibMenu * const menu = ibSub(popup);
+
     wxCHECK_MSG( !ms_evtLoopPopup, false,
                  wxT("can't show more than one popup menu at a time") );
 
-#ifdef __WXMSW__
+    // SEAM vs univ: a menu of no items shows nothing and waits for nothing, as
+    // a native one: the canon ran its loop round a popup of no size, unseen,
+    // and the next click anywhere went to end it (a tool bar's overflow with
+    // every tool in sight, 2026-11-11)
+    if ( menu->IsEmpty() )
+        return false;
+
     // we need to change the cursor before showing the menu as, apparently, no
-    // cursor changes took place while the mouse is captured
-    wxCursor cursorOld = GetCursor();
-    SetCursor(wxCURSOR_ARROW);
-#endif // __WXMSW__
+    // cursor changes took place while the mouse is captured - on every port
+    // (the canon's was MSW's alone; GTK3 and Cocoa take the arrow too, as the
+    // window's own cursor, given back after the loop)
+    const wxCursor cursorOld = window->GetCursor();
+    window->SetCursor(wxCURSOR_ARROW);
 
 #if 0
     // flash any delayed log messages before showing the menu, otherwise it
@@ -2983,14 +2838,39 @@ bool ibWindow::DoPopupMenu(ibMenu *menu, int x, int y)
     Update();
 #endif // 0
 
-    menu->Popup(ClientToScreen(wxPoint(x, y)), wxSize(0,0));
+    // SEAM vs univ: the focus given back where it was as the menu goes (below),
+    // as a native menu leaves it: wx's popup on GTK and macOS gives it to this
+    // window (wxPopupTransientWindow::Popup), and a menubar's is not where the
+    // user typed; wxMSW's gives it to none
+    const wxWeakRef<wxWindow> focused(FindFocus());
+
+    menu->Popup(window->ClientToScreen(wxPoint(x, y)), wxSize(0,0));
 
     // SEAM vs univ: the canon warped the mouse pointer to the menu here
     // ("Windows itself doesn't do it, but IMHO this is nice") — it is not:
     // the cursor visibly jumps on every popup, so the warp is gone
 
-    // we have to redirect all keyboard input to the menu temporarily
-    PushEventHandler(new ibMenuKbdRedirector(menu));
+    // SEAM vs univ: the keys are the menu's while it is shown, taken at the
+    // window they come to - the one with the focus once the menu is up. The
+    // canon took them at this window, its popup having focused it; wxMSW's
+    // focuses none, and a menubar's menu, its bar never focused, heard no key:
+    // Down, Esc, Left and Right went to the frame (2026-11-11)
+    const wxWeakRef<wxWindow> keys(FindFocus() ? FindFocus() : window);
+    keys->PushEventHandler(new ibMenuKbdRedirector(menu));
+
+    // SEAM vs univ: its frame closed while the menu is shown (Alt+F4, the task bar) shuts the menu first, as a native
+    // one is, and the frame goes after the loop. Closed inside it, the frame was destroyed there - the menu's window
+    // with the capture and its handlers on it (wx asserts), and the loop with nothing left to end it: no window, and
+    // the process stayed (2026-11-11, a designer closed with a menu open)
+    const wxWeakRef<wxWindow> frame(wxGetTopLevelParent(window));
+    const auto onFrameClose = [menu](wxCloseEvent& event)
+    {
+        menu->Dismiss();
+        DismissPopupMenu();
+        event.Skip();
+    };
+    if ( frame )
+        frame->Bind(wxEVT_CLOSE_WINDOW, onFrameClose);
 
     // enter the local modal loop
     ms_evtLoopPopup = new wxEventLoop;
@@ -2998,8 +2878,16 @@ bool ibWindow::DoPopupMenu(ibMenu *menu, int x, int y)
 
     wxDELETE(ms_evtLoopPopup);
 
+    if ( frame )
+        frame->Unbind(wxEVT_CLOSE_WINDOW, onFrameClose);
+
     // remove the handler
-    PopEventHandler(true /* delete it */);
+    if ( keys )
+        keys->PopEventHandler(true /* delete it */);
+
+    // …and the focus where it was, before the command chosen runs (below)
+    if ( focused && focused != FindFocus() )
+        focused->SetFocus();
 
     // a right click outside the menu dismissed it - now the modal loop is gone
     // the click is the window's under the cursor, as a native menu leaves it:
@@ -3023,9 +2911,7 @@ bool ibWindow::DoPopupMenu(ibMenu *menu, int x, int y)
         }
     }
 
-#ifdef __WXMSW__
-    SetCursor(cursorOld);
-#endif // __WXMSW__
+    window->SetCursor(cursorOld);
 
     // the item clicked, now the loop is gone (ibPopupMenuWindow::ClickItem)
     if ( s_pendingClickItem )

@@ -8,8 +8,8 @@
 #include <wx/image.h>
 #include <wx/icon.h>
 #include <wx/gdicmn.h>
-#include <wx/aui/aui.h>
-#include <wx/aui/auibar.h>
+#include "deskgui/univ/aui/aui.h"
+#include "deskgui/univ/aui/auibar.h"
 #include <wx/font.h>
 #include <wx/colour.h>
 #include <wx/settings.h>
@@ -26,7 +26,7 @@
 #include "core/roleCompositionMode.h"   // ibRoleCompositionMode — the membership carries how the role combines
 
 #include "frmclient/win/ctrls/checktree.h"
-#include "deskgui/univ/theme/luna_tabart.h"
+#include "deskgui/univ/aui/auibook.h"
 #include "deskgui/univ/dialog.h"
 #include "deskgui/univ/panel.h"
 
@@ -70,7 +70,7 @@ private:
 	// The configuration's own language (the row the server marks Default) — the desktop's activeMetaData->GetLangCode().
 	wxString m_strDefaultLanguageCode;
 
-	wxAuiNotebook* m_mainNotebook;
+	ibAuiNotebook* m_mainNotebook;
 	ibPanel* m_main;
 	ibStaticText* m_staticName;
 	ibStaticText* m_staticFullName;

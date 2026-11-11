@@ -29,6 +29,7 @@
 #endif // WX_PRECOMP
 
 #include <wx/artprov.h>
+#include <wx/module.h>
 
 #include "deskgui/univ/renderer.h"
 #include "deskgui/univ/inputHandler.h"
@@ -138,6 +139,25 @@ ibThemeInfo::ibThemeInfo(Constructor c,
 
     return themeOld;
 }
+
+// ----------------------------------------------------------------------------
+// ibThemeModule
+// ----------------------------------------------------------------------------
+
+// SEAM vs univ: THE DEFAULT THEME SET AS wx STARTS, where the canon's wxApp::OnInitGui set it - not by the first window
+// that asks for it (Get): its pictures (GetArtProvider) are asked for before any window of ours is made, as a menu or a
+// toolbar is built.
+class ibThemeModule : public wxModule
+{
+public:
+    virtual bool OnInit() override { return ibThemeEngine::CreateDefault(); }
+    virtual void OnExit() override {}
+
+private:
+    wxDECLARE_DYNAMIC_CLASS(ibThemeModule);
+};
+
+wxIMPLEMENT_DYNAMIC_CLASS(ibThemeModule, wxModule);
 
 // ----------------------------------------------------------------------------
 // assorted trivial dtors

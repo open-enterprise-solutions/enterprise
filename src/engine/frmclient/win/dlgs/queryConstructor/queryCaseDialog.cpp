@@ -11,7 +11,7 @@
 #include "core/query/queryKeywords.h"
 #include "frmclient/backend/backend_exception.h"
 
-#include "artProvider/artProvider.h"
+#include "deskgui/artProvider.h"
 
 #include <wx/sizer.h>
 #include "deskgui/univ/ctrl/staticText.h"

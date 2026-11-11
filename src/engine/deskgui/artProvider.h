@@ -1,5 +1,8 @@
-#ifndef _APPBITMAPS_H__
-#define _APPBITMAPS_H__
+#ifndef _DESKGUI_ARTPROVIDER_H__
+#define _DESKGUI_ARTPROVIDER_H__
+
+// THE PICTURES THE THEME DRAWS, BY THEIR IDS — asked of wx's art provider (wxArtProvider::GetBitmap), answered by the
+// theme's (ibLunaArtProvider, theme/lunaTheme.cpp), which stands over wx's own and draws its stock ids too.
 
 #include <wx/artprov.h>
 

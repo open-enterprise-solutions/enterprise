@@ -3,10 +3,9 @@
 #include "designer-thin/backend/metaCollection/metaDiff.h"
 #include "frmclient/mainFrame/mainFrame.h"
 #include "deskgui/univ/dataview/dataview.h"
-#include "deskgui/univ/theme/luna_toolbarart.h"
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibConfigCompare
 
-#include <wx/aui/auibar.h>
+#include "deskgui/univ/aui/auibar.h"
 #include <wx/button.h>
 #include <wx/choice.h>
 #include "deskgui/univ/messageDialog.h"
@@ -78,9 +77,8 @@ void ibConfigCompareView::BuildLayout(wxWindow* parent)
 
 	// --- Toolbar -------------------------------------------------------
 
-	m_toolbar = new wxAuiToolBar(parent, wxID_ANY, wxDefaultPosition,
-		wxDefaultSize, wxAUI_TB_HORZ_TEXT);
-	m_toolbar->SetArtProvider(new wxAuiLunaToolBarArt());
+	m_toolbar = new ibAuiToolBar(parent, wxID_ANY, wxDefaultPosition,
+		wxDefaultSize, ibAUI_TB_HORZ_TEXT);
 
 	m_toolbar->AddTool(wxID_TOOL_SELECT_ALL, _("Select all differences"),
 		wxNullBitmap, _("Mark every non-Same row for merge"));

@@ -27,7 +27,7 @@
 
 constexpr ibClassID g_toolConfigCompareCLSID = make_clsid("TL_CCMP", ibClassKind_None);   // tool/doc id — not a registered type
 
-class wxAuiToolBar;
+class ibAuiToolBar;
 class ibButton;
 class ibChoice;
 class ibDataViewCtrl;
@@ -124,7 +124,7 @@ private:
 	void ExpandAllRecursive(const ibDataViewItem& parent);
 	void CollapseAllRecursive(const ibDataViewItem& parent);
 
-	wxAuiToolBar*  m_toolbar         = nullptr;
+	ibAuiToolBar*  m_toolbar         = nullptr;
 	ibDataViewCtrl* m_dataView       = nullptr;
 	ibChoice*      m_filterChoice    = nullptr;
 	ibChoice*      m_directionChoice = nullptr;

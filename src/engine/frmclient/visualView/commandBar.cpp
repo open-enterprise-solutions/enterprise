@@ -10,8 +10,8 @@
 
 #include "protocol/protocol.h"
 #include "frmclient/win/picture.h"
-#include "deskgui/univ/ctrl/auiToolBar.h"
-#include "deskgui/univ/theme/luna_toolbarart.h"
+#include "deskgui/univ/aui/auibar.h"
+#include "deskgui/univ/menu.h"
 #include "frmclient/visualView/visualHostClient.h"   // ibVisualHostClient::IsDesignerHost — the bar's real width in the editor
 
 namespace {
@@ -59,15 +59,14 @@ ibViewCommandBar::ibViewCommandBar(wxWindow* parent, const ibVisualHostClient& h
 	: m_sendCommand(std::move(sendCommand))
 {
 	m_bar = new ibAuiToolBar(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-		wxAUI_TB_NO_AUTORESIZE | wxAUI_TB_HORZ_TEXT | wxAUI_TB_OVERFLOW);
-	m_bar->SetArtProvider(new wxAuiLunaToolBarArt());
+		ibAUI_TB_NO_AUTORESIZE | ibAUI_TB_HORZ_TEXT | ibAUI_TB_OVERFLOW);
 	m_bar->SetDesignerMode(host.IsDesignerHost());   // show real width in the editor (no overflow collapse)
 
 	// Hidden until it has a command: an empty strip takes no room.
 	m_bar->Hide();
 
 	m_bar->Bind(wxEVT_TOOL, &ibViewCommandBar::OnTool, this);
-	m_bar->Bind(wxEVT_AUITOOLBAR_TOOL_DROPDOWN, &ibViewCommandBar::OnToolDropDown, this);
+	m_bar->Bind(ibEVT_AUITOOLBAR_TOOL_DROPDOWN, &ibViewCommandBar::OnToolDropDown, this);
 }
 
 wxWindow* ibViewCommandBar::GetWindow() const
@@ -77,7 +76,7 @@ wxWindow* ibViewCommandBar::GetWindow() const
 
 ibProtocolNode ibViewCommandBar::FindEntryByPosition(const wxPoint& point) const
 {
-	const wxAuiToolBarItem* const tool = m_bar->FindToolByPosition(point.x, point.y);
+	const ibAuiToolBarItem* const tool = m_bar->FindToolByPosition(point.x, point.y);
 	const std::vector<ibProtocolNode> entries = m_entries.Children();
 	const std::size_t idx = tool != nullptr ? static_cast<std::size_t>(tool->GetId() - kFirstToolId) : entries.size();
 	return idx < entries.size() ? entries[idx] : ibProtocolNode();
@@ -148,7 +147,7 @@ bool ibViewCommandBar::PopupGroup(int toolId)
 	// the places the server counts.
 	const ibProtocolNode group = entries[idx];
 	const std::vector<ibProtocolNode> members = group.Children();
-	wxMenu menu;
+	ibMenu menu;   // the theme's - the bar is a window of the theme's (ibAuiToolBar : ibControl)
 	for (std::size_t member = 0; member < members.size(); ++member) {
 		wxMenuItem* const item = menu.Append(kFirstMemberId + static_cast<int>(member), members[member].GetString(ibProtocol::ibForm::ibCommandBar::Caption));
 		const wxBitmap picture = ibProtocolPicture(members[member], ibProtocol::ibForm::ibCommandBar::Picture);
@@ -193,7 +192,7 @@ void ibViewCommandBar::OnTool(wxCommandEvent& event)
 	m_sendCommand(args);
 }
 
-void ibViewCommandBar::OnToolDropDown(wxAuiToolBarEvent& event)
+void ibViewCommandBar::OnToolDropDown(ibAuiToolBarEvent& event)
 {
 	// The arrow alone — a click on the tool's body comes as wxEVT_TOOL a moment later and opens the group there.
 	if (!event.IsDropDownClicked()) {

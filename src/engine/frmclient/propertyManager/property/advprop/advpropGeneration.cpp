@@ -171,7 +171,6 @@ ibPGEditorDialogAdapter* ibPGGenerationProperty::GetEditorDialog() const
 			rowsizer->Add(tc, wxSizerFlags(1).Expand().Border(wxALL, spacing));
 			topsizer->Add(rowsizer, wxSizerFlags(1).Expand());
 
-			tc->SetDoubleBuffered(true);
 			tc->Enable(!dlgProp->HasFlag(ibPGFlags::ReadOnly));
 
 			ibStdDialogButtonSizer* buttonSizer = dlg->CreateStdDialogButtonSizer(wxOK | wxCANCEL);

@@ -10,18 +10,29 @@
 #include <wx/dcgraph.h>
 #include <wx/settings.h>
 #include <wx/window.h>
+#include <wx/control.h>   // wxControl::Ellipsize - a pane caption's title cut to its room (DrawPaneCaption)
 #include <wx/artprov.h>
+#include <wx/bmpbndl.h>
+#include <wx/image.h>
+#include <wx/mstream.h>
+#include <wx/toolbar.h>   // wxTOOL_STYLE_* - a tool bar's button or separator (DrawToolBarButton)
 
+#include "core/utils/base64.h"   // ibBase64 - a picture's PNG written as text
+
+#include "deskgui/artProvider.h"   // the pictures' ids, the product's own
 #include "deskgui/univ/theme.h"
 #include "deskgui/univ/renderer.h"
 #include "deskgui/univ/colourScheme.h"
 #include "deskgui/univ/inputConsumer.h"
 #include "deskgui/univ/window.h"
+#include "deskgui/univ/aui/framemanager.h"   // ibAUI_BUTTON_* - the AUI buttons (DrawStripButton, DrawPaneButton)
 #include "deskgui/univ/theme/themeRenderer.h"
+#include "deskgui/univ/theme/private/picturePredefined.h"   // the pictures, a PNG in Base64 each
 
 namespace {
 
 // palette tiers (docs/private/ui-palette.md — reuse a tier, don't invent a shade)
+const wxColour kChrome(0xB8, 0xC9, 0xD4);        // chrome        #B8C9D4
 const wxColour kChromeLight(0xC8, 0xD6, 0xDF);   // chrome-light  #C8D6DF
 const wxColour kPowder(0xE6, 0xEE, 0xF5);        // powder        #E6EEF5
 const wxColour kContent(0xFA, 0xF7, 0xF0);       // content       #FAF7F0
@@ -33,6 +44,10 @@ const wxColour kCaptionInactiveTop(0xD8, 0xE2, 0xEB);    // caption-inactive-top
 const wxColour kCaptionInactiveBottom(0xC5, 0xD2, 0xDC); // caption-inactive-bottom
 const wxColour kAccent(0xD9, 0x77, 0x57);        // accent        #D97757
 const wxColour kAccentDeep(0xB8, 0x5A, 0x38);    // accent-deep   #B85A38
+
+// the shelf under an AUI book's tabs (DrawTabStrip): a neutral warm taupe between the cool strip and the cream pages - a
+// sandstone #E8D8BE read as too yellow
+const wxColour kShelf(0xE0, 0xD8, 0xCC);
 
 // menu metrics (FORKED from the wxWin32Renderer menu block — the only canon
 // implementation of the univ menu geometry contract; margins widened from
@@ -56,6 +71,61 @@ const wxCoord MENU_ACCEL_MARGIN = 16;
 // is 2 but Windows adds one extra pixel in the bottom margin, so take it into
 // account here
 const wxCoord MENU_SEPARATOR_HEIGHT = 3;
+
+// the glyphs of the AUI buttons, 16 x 16 bits each - an AUI book's (DrawStripButton): close, left, right, the list of the
+// tabs; a pane caption's (DrawPaneButton): close, maximize, restore, pin. One close glyph each on every platform - the
+// arts drew the one each platform's own close looked like.
+const int AUI_GLYPH_SIZE = 16;
+
+const unsigned char kStripCloseBits[] = {
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xe7, 0xf3, 0xcf, 0xf9,
+	0x9f, 0xfc, 0x3f, 0xfe, 0x3f, 0xfe, 0x9f, 0xfc, 0xcf, 0xf9, 0xe7, 0xf3,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+
+const unsigned char kStripLeftBits[] = {
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe, 0x7f, 0xfe, 0x3f, 0xfe,
+	0x1f, 0xfe, 0x0f, 0xfe, 0x1f, 0xfe, 0x3f, 0xfe, 0x7f, 0xfe, 0xff, 0xfe,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+
+const unsigned char kStripRightBits[] = {
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xdf, 0xff, 0x9f, 0xff, 0x1f, 0xff,
+	0x1f, 0xfe, 0x1f, 0xfc, 0x1f, 0xfe, 0x1f, 0xff, 0x9f, 0xff, 0xdf, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+
+const unsigned char kStripListBits[] = {
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0x0f, 0xf8, 0xff, 0xff, 0x0f, 0xf8, 0x1f, 0xfc, 0x3f, 0xfe, 0x7f, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+
+const unsigned char kPaneCloseBits[] = {
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xcf, 0xf3, 0x9f, 0xf9,
+	0x3f, 0xfc, 0x7f, 0xfe, 0x3f, 0xfc, 0x9f, 0xf9, 0xcf, 0xf3, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+
+const unsigned char kPaneMaximizeBits[] = {
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x07, 0xf0, 0xf7, 0xf7, 0x07, 0xf0,
+	0xf7, 0xf7, 0xf7, 0xf7, 0xf7, 0xf7, 0xf7, 0xf7, 0xf7, 0xf7, 0x07, 0xf0,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+
+const unsigned char kPaneRestoreBits[] = {
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x1f, 0xf0, 0x1f, 0xf0, 0xdf, 0xf7,
+	0x07, 0xf4, 0x07, 0xf4, 0xf7, 0xf5, 0xf7, 0xf1, 0xf7, 0xfd, 0xf7, 0xfd,
+	0x07, 0xfc, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+
+const unsigned char kPanePinBits[] = {
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x1f, 0xfc, 0xdf, 0xfc, 0xdf, 0xfc,
+	0xdf, 0xfc, 0xdf, 0xfc, 0xdf, 0xfc, 0x0f, 0xf8, 0x7f, 0xff, 0x7f, 0xff,
+	0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+
+// A glyph's bits (XBM) in a colour, the rest masked out.
+wxBitmap ibAuiBitmapFromBits(const unsigned char bits[], int w, int h, const wxColour& color)
+{
+	wxImage img = wxBitmap((const char*)bits, w, h).ConvertToImage();
+	img.Replace(0, 0, 0, 123, 123, 123);
+	img.Replace(255, 255, 255, color.Red(), color.Green(), color.Blue());
+	img.SetMaskColour(123, 123, 123);
+	return wxBitmap(img);
+}
 
 } // anonymous namespace
 
@@ -98,7 +168,7 @@ wxColour ibLunaColourScheme::Get(ibLunaColourScheme::StdColour col) const {
 		case TITLEBAR_TEXT:               return kCaptionBottom;
 		case TITLEBAR_ACTIVE_TEXT:        return *wxWHITE;
 		case GAUGE:                       return kAccent;
-		case DESKTOP:                     return kCaptionInactiveTop;
+		case DESKTOP:                     return kChrome;   // the docking's, round its panes (ibAuiManager)
 		case FRAME:                       return kCaptionInactiveTop;
 		case MAX:                         break;
 	}
@@ -154,12 +224,20 @@ wxColour ibLunaColourScheme::GetBackground(ibWindow* win) const {
 	// child is a frame, its default the workspace grey, and the home page's panes (ibPanel, transparent under the MDI
 	// client's colour) drew it in their header gaps while their labels drew the panel's own. Nor is the window's own
 	// default, the platform's: black on macOS, grey beside a dialog's chrome on Windows - the chrome a dialog takes
-	// (ibTopLevelWindow::Create). Content (a tree, a list, a grid) paints its own background, not through here.
+	// (ibTopLevelWindow::Create). Content (a tree, a list, a grid) paints its own background, not through here. A parent
+	// the background does not show through, with no colour of its own, is the surface it paints - this same answer for
+	// it: a panel over a report's sheet painted the sheet's colour, and its label stopped at it and drew the chrome round
+	// «Composing...» (2026-11-12, Max)
 	for (wxWindow* parent = win->GetParent(); parent != nullptr; parent = parent->GetParent()) {
 		if (parent->UseBgCol())
 			return parent->GetBackgroundColour();
-		if (!parent->HasTransparentBackground() || parent->IsTopLevel())
+		if (parent->IsTopLevel())
 			break;
+		if (!parent->HasTransparentBackground()) {
+			if (ibWindow* const surface = dynamic_cast<ibWindow*>(parent))
+				return GetBackground(surface);
+			break;
+		}
 	}
 	return Get(FRAME);
 }
@@ -170,7 +248,8 @@ wxColour ibLunaColourScheme::GetBackground(ibWindow* win) const {
 
 class ibLunaRenderer : public ibThemeRenderer {
 public:
-	ibLunaRenderer(const ibColourScheme* scheme) : ibThemeRenderer(scheme) {}
+	ibLunaRenderer(const ibColourScheme* scheme) : ibThemeRenderer(scheme),
+		m_paneCaptionFont(10, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL) {}
 
 	virtual wxBitmap GetRadioBitmap(int flags) override;
 	virtual wxBitmap GetCheckBitmap(int flags) override;
@@ -223,8 +302,10 @@ public:
 		const wxBitmap& image, const wxRect& rect, int flags = 0,
 		int alignment = wxALIGN_LEFT | wxALIGN_TOP, int indexAccel = -1,
 		wxRect* rectBounds = nullptr) override {
+		// for this label alone (a changer): set on the dc, the white stayed for whatever was drawn after it
+		wxDCTextColourChanger colChanger(dc);
 		if ((flags & wxCONTROL_ISDEFAULT) && !(flags & wxCONTROL_DISABLED))
-			dc.SetTextForeground(*wxWHITE);
+			colChanger.Set(*wxWHITE);
 
 		// the accent border already signals focus — the canon's dotted
 		// focus rect on top of it read as a second fat border
@@ -394,7 +475,24 @@ public:
 
 	virtual void DrawToolBarButton(wxDC& dc, const wxString& label,
 		const wxBitmap& bitmap, const wxRect& rect, int flags = 0,
-		long WXUNUSED(style) = 0, int WXUNUSED(tbarStyle) = 0) override {
+		long style = 0, int WXUNUSED(tbarStyle) = 0) override {
+		// a separator is a line of the palette border across the bar, three quarters of it (the canon's dispatch on the
+		// style: the line along the longer side)
+		if (style == wxTOOL_STYLE_SEPARATOR) {
+			dc.SetPen(wxPen(kBorder));
+			if (rect.height > rect.width) {
+				const wxCoord length = rect.height * 3 / 4;
+				const wxCoord x = rect.x + rect.width / 2, y = rect.y + (rect.height - length) / 2;
+				dc.DrawLine(x, y, x, y + length);
+			}
+			else {
+				const wxCoord length = rect.width * 3 / 4;
+				const wxCoord x = rect.x + (rect.width - length) / 2, y = rect.y + rect.height / 2;
+				dc.DrawLine(x, y, x + length, y);
+			}
+			return;
+		}
+
 		// a checked tool sits on a light accent pad, hover/press on a
 		// chrome pad; both get the 1px palette border
 		if (flags & (wxCONTROL_PRESSED | wxCONTROL_CURRENT | wxCONTROL_CHECKED)) {
@@ -410,7 +508,26 @@ public:
 			dc.SetBrush(wxBrush(pad));
 			dc.DrawRectangle(rect);
 		}
-		dc.DrawLabel(label, bitmap, rect, wxALIGN_CENTRE);
+		// the bitmap and the label on it, the label of a disabled tool greyed (DrawButtonLabel) - dc.DrawLabel drew it
+		// in the text colour whatever the state
+		DrawButtonLabel(dc, label, bitmap, rect, flags, wxALIGN_CENTRE);
+	}
+
+	// a bar's handle: the palette border's dots in a line along it, down a horizontal bar's start, across a vertical's
+	virtual void DrawGripper(wxDC& dc, const wxRect& rect, wxOrientation orient) override {
+		const wxCoord dot = dc.FromDIP(2), step = dc.FromDIP(4);
+		dc.SetPen(*wxTRANSPARENT_PEN);
+		dc.SetBrush(wxBrush(kBorder));
+		if (orient == wxHORIZONTAL) {
+			const wxCoord x = rect.x + (rect.width - dot) / 2;
+			for (wxCoord y = rect.y + step; y + dot + step <= rect.y + rect.height; y += step)
+				dc.DrawRectangle(x, y, dot, dot);
+		}
+		else {
+			const wxCoord y = rect.y + (rect.height - dot) / 2;
+			for (wxCoord x = rect.x + step; x + dot + step <= rect.x + rect.width; x += step)
+				dc.DrawRectangle(x, y, dot, dot);
+		}
 	}
 
 	virtual void DrawTab(wxDC& dc, const wxRect& rect, wxDirection dir,
@@ -431,7 +548,7 @@ public:
 
 		// A TAB DOWN A SIDE has its label along it (the book turns its geometry, GetTabSize): drawn across into a
 		// bitmap of the tab turned, then turned back - read top down on the right, bottom up on the left; the picture
-		// turned the other way first, so it stands upright. The canon's road (theme_win32's DrawTab); drawn across,
+		// turned the other way first, so it stands upright. The canon's road (DrawTab of wx's src/univ/themes/win32.cpp); drawn across,
 		// as it was here, the label was cut to the tab's width.
 		const wxRect inside = rect.Deflate(1, 1);   // inside the tab's line
 		const double scale = dc.GetContentScaleFactor();
@@ -450,6 +567,126 @@ public:
 				indexAccel);
 		}
 		dc.DrawBitmap(wxBitmap(across.ConvertToImage().Rotate90(dir == wxRIGHT), -1, scale), inside.GetPosition());
+	}
+
+	// AN AUI BOOK'S ROW (ibAuiTabContainer) is the palette's own, not a book's tab above (the art's, theme/luna_tabart,
+	// until 2026-11-11): the light dusty strip, and along the pages a warm shelf the selected tab stands on - its ends
+	// past the row's, so only its long sides show
+	virtual void DrawTabStrip(wxDC& dc, const wxRect& rect, wxDirection dir) override {
+		const bool bottom = dir == wxBOTTOM;
+		dc.SetPen(*wxTRANSPARENT_PEN);
+		dc.SetBrush(wxBrush(kChromeLight));
+		dc.DrawRectangle(rect.x, rect.y, rect.width, bottom ? rect.height : rect.height - 3);
+
+		dc.SetPen(wxPen(kBorder));
+		dc.SetBrush(wxBrush(kShelf));
+		dc.DrawRectangle(rect.x - 1, bottom ? rect.y : rect.y + rect.height - 4, rect.width + 2, 4);
+	}
+
+	// the selected tab is the pages' cream, its corners rounded off by a dot of the strip and its foot one with the shelf
+	// (a tab of a row under the pages: its head, a lighter line); the strip shows through the others
+	virtual void DrawStripTab(wxDC& dc, const wxRect& rect, wxDirection dir, int flags = 0) override {
+		if (!(flags & wxCONTROL_SELECTED))
+			return;
+
+		dc.SetPen(wxPen(kContent));
+		dc.SetBrush(wxBrush(kContent));
+		if (dir == wxBOTTOM) {
+			dc.DrawRectangle(rect.x - 2, rect.y - 1, rect.width + 3, rect.height + 4);
+			dc.SetPen(wxPen(kChromeLight.ChangeLightness(170)));
+			dc.DrawLine(rect.x + 1, rect.y, rect.x + rect.width, rect.y);
+			return;
+		}
+
+		dc.DrawRectangle(rect.x + 2, rect.y + 1, rect.width - 3, rect.height - 4);
+		dc.SetPen(wxPen(kChromeLight));
+		dc.DrawPoint(rect.x + 2, rect.y + 1);
+		dc.DrawPoint(rect.x + rect.width - 2, rect.y + 1);
+		dc.SetPen(wxPen(kShelf));
+		dc.DrawLine(rect.x + 1, rect.y + rect.height - 4, rect.x + rect.width, rect.y + rect.height - 4);
+	}
+
+	// the glyph black, grey while it cannot be pressed - and a tab's (flat) until the mouse is over it
+	virtual void DrawStripButton(wxDC& dc, const wxRect& rect, int button, int flags = 0) override {
+		const unsigned char* bits = nullptr;
+		switch (button) {
+			case ibAUI_BUTTON_CLOSE:      bits = kStripCloseBits; break;
+			case ibAUI_BUTTON_LEFT:       bits = kStripLeftBits;  break;
+			case ibAUI_BUTTON_RIGHT:      bits = kStripRightBits; break;
+			case ibAUI_BUTTON_WINDOWLIST: bits = kStripListBits;  break;
+			default:                      return;
+		}
+
+		const bool faint = (flags & wxCONTROL_DISABLED) != 0
+			|| ((flags & wxCONTROL_FLAT) && !(flags & (wxCONTROL_CURRENT | wxCONTROL_PRESSED)));
+		const wxRect glyph = wxRect(wxSize(AUI_GLYPH_SIZE, AUI_GLYPH_SIZE)).CentreIn(rect);
+		dc.DrawBitmap(ibAuiBitmapFromBits(bits, AUI_GLYPH_SIZE, AUI_GLYPH_SIZE,
+			faint ? wxColour(128, 128, 128) : *wxBLACK), glyph.GetPosition(), true);
+	}
+
+	// A PANE'S CAPTION IN THE DOCKING (ibAuiManager) is the palette's, as the frame's title bar is (the art's,
+	// theme/luna_dockart, until 2026-11-11): light under its blue title, the active pane's dusty blue under its white one
+	virtual void DrawPaneCaption(wxDC& dc, const wxRect& rect, const wxString& title, const wxBitmap& icon,
+		int flags = 0) override {
+		const bool active = (flags & wxCONTROL_FOCUSED) != 0;
+		dc.GradientFillLinear(rect, active ? kCaptionBottom : kCaptionInactiveTop,
+			active ? kCaptionTop : kCaptionInactiveBottom, wxSOUTH);
+
+		wxCoord x = rect.x + 3;
+		if (icon.IsOk()) {
+			const wxSize size = icon.GetLogicalSize();
+			dc.DrawBitmap(icon, rect.x + 2, rect.y + (rect.height - size.y) / 2, true);
+			x += size.x + 3;
+		}
+
+		// the title cut with an ellipsis two pixels short of the piece's end - the buttons stand past it
+		const wxCoord room = rect.x + rect.width - 2 - x;
+		if (title.empty() || room <= 0)
+			return;
+		dc.SetFont(m_paneCaptionFont);
+		dc.SetTextForeground(active ? *wxWHITE : kCaptionBottom);
+		const wxCoord height = dc.GetTextExtent(wxT("ABCDEFHXfgkj")).y;
+		dc.DrawText(wxControl::Ellipsize(title, dc, wxELLIPSIZE_END, room, wxELLIPSIZE_FLAGS_NONE),
+			x, rect.y + rect.height / 2 - height / 2 - 1);
+	}
+
+	// a caption's button: the glyph in the title's colour, on a lighter pad of the caption while the mouse is over it or
+	// presses it - pressed, a pixel down and right
+	virtual void DrawPaneButton(wxDC& dc, const wxRect& rect, int button, int flags = 0) override {
+		const unsigned char* bits = nullptr;
+		switch (button) {
+			case ibAUI_BUTTON_CLOSE:            bits = kPaneCloseBits; break;
+			case ibAUI_BUTTON_PIN:              bits = kPanePinBits; break;
+			case ibAUI_BUTTON_MAXIMIZE_RESTORE: bits = (flags & wxCONTROL_CHECKED) ? kPaneRestoreBits : kPaneMaximizeBits; break;
+			default:                            return;
+		}
+
+		const bool active = (flags & wxCONTROL_FOCUSED) != 0;
+		wxPoint glyph(rect.x, rect.y + rect.height / 2 - AUI_GLYPH_SIZE / 2);
+		if (flags & wxCONTROL_PRESSED)
+			glyph += wxPoint(1, 1);
+		if (flags & (wxCONTROL_CURRENT | wxCONTROL_PRESSED)) {
+			const wxColour caption = active ? kCaptionTop : kCaptionInactiveTop;
+			dc.SetPen(wxPen(caption.ChangeLightness(70)));
+			dc.SetBrush(wxBrush(caption.ChangeLightness(120)));
+			dc.DrawRectangle(glyph.x, glyph.y, AUI_GLYPH_SIZE - 1, AUI_GLYPH_SIZE - 1);
+		}
+		dc.DrawBitmap(ibAuiBitmapFromBits(bits, AUI_GLYPH_SIZE, AUI_GLYPH_SIZE, active ? *wxWHITE : kCaptionBottom),
+			glyph, true);
+	}
+
+	// the line round a pane: the palette border, its corners rounded
+	virtual void DrawPaneBorder(wxDC& dc, const wxRect& rect) override {
+		dc.SetPen(wxPen(kBorder));
+		dc.SetBrush(*wxTRANSPARENT_BRUSH);
+		dc.DrawRoundedRectangle(rect, 3);
+	}
+
+	// the bar between docks or panes: the palette border, flat
+	virtual void DrawSash(wxDC& dc, const wxRect& rect, wxOrientation WXUNUSED(orient)) override {
+		dc.SetPen(*wxTRANSPARENT_PEN);
+		dc.SetBrush(wxBrush(kBorder));
+		dc.DrawRectangle(rect);
 	}
 
 	// sliders: not revived yet — simple flat geometry
@@ -654,6 +891,8 @@ public:
 private:
 	// draw the indicator into a fresh bitmap; size follows the system font
 	wxBitmap CreateIndicatorBitmap(int flags, bool radio);
+
+	wxFont m_paneCaptionFont;   // a pane caption's title (DrawPaneCaption)
 };
 
 wxBitmap ibLunaRenderer::CreateIndicatorBitmap(int flags, bool radio) {
@@ -812,7 +1051,7 @@ void ibLunaRenderer::DrawFrameBackground(wxDC& dc, const wxRect& rect, int flags
 	const wxRect client = GetFrameClientArea(rect, flags);
 	const wxRect band(rect.x + line, rect.y + line, rect.width - 2 * line, client.y - rect.y - line);
 
-	// the palette's captions, the panes' (luna_dockart): the active one dusty blue under its white title, the inactive
+	// the palette's captions, the panes' (DrawPaneCaption): the active one dusty blue under its white title, the inactive
 	// one light under its blue title. The system's caption colour lightening to the right was a pale blue the white
 	// title hardly showed on (Max, 2026-11-07), and the platform's, not the theme's
 	const bool active = (flags & wxTOPLEVEL_ACTIVE) != 0;
@@ -865,6 +1104,222 @@ int ibLunaRenderer::GetFrameBorderWidth(int flags) const {
 }
 
 // ----------------------------------------------------------------------------
+// ibLunaArtProvider
+// ----------------------------------------------------------------------------
+
+// EVERY PICTURE HERE IS A PNG IN BASE64, one string each in private/picturePredefined.h: a master four times the size of
+// its drawing, scaled down here to the size asked. Its source is an SVG in tools/pictures/render.js, which draws the PNG
+// and writes the string; the groups are the debugger, the code editor and its autocomplete, the form designer, the
+// metadata tree, the service panes and the output window, the spreadsheet, the list commands and the query constructor,
+// and wx's own stock ids.
+
+// A master's PNG read from its Base64 - none when the text is no PNG.
+static wxImage ImageOfBase64(const wxString& png)
+{
+	ibMemoryBuffer data;
+	if (!ibBase64::Read(png, data))
+		return wxImage();
+	if (wxImage::FindHandler(wxBITMAP_TYPE_PNG) == nullptr)
+		wxImage::AddHandler(new wxPNGHandler());
+	wxMemoryInputStream stream(data.GetData(), data.GetDataLen());
+	return wxImage(stream, wxBITMAP_TYPE_PNG);
+}
+
+// THE BUNDLE CARRIES THE MASTER AT THE SIZE ASKED AND AT TWICE AND FOUR TIMES IT, so a display scaled to 150 or
+// 200 % is handed a picture drawn for it rather than the small one stretched - never larger than the master,
+// which would only be stretched in its turn.
+static wxBitmapBundle BundleOf(const wxString& png, const wxSize& size)
+{
+	const wxImage master = ImageOfBase64(png);
+	if (!master.IsOk())
+		return wxBitmapBundle();
+
+	wxVector<wxBitmap> bitmaps;
+	for (const int times : { 1, 2, 4 }) {
+		const wxSize at(size.x * times, size.y * times);
+		if (times > 1 && (at.x > master.GetWidth() || at.y > master.GetHeight()))
+			break;
+		bitmaps.push_back(wxBitmap(at == master.GetSize() ? master : master.Scale(at.x, at.y, wxIMAGE_QUALITY_HIGH)));
+	}
+	return wxBitmapBundle::FromBitmaps(bitmaps);
+}
+
+// THE THEME'S PICTURES (the canon's wxWin32ArtProvider): the product's own by their client and id (deskgui/artProvider.h)
+// and wx's stock ids for every client - pushed over wx's own as the theme is set (ibThemeEngine::Set).
+class ibLunaArtProvider : public wxArtProvider {
+protected:
+
+	virtual wxBitmapBundle CreateBitmapBundle(
+		const wxArtID& id,
+		const wxArtClient& client,
+		const wxSize& size) override {
+
+		// The pictures: a PNG master in Base64, scaled down to the size asked for (16x16 when none is).
+		static const struct { wxArtClient client; wxArtID id; const wxString& png; } s_allPictures[] =
+		{
+			// ******* wxART_VISUALHOST *******
+			{ wxART_VISUALHOST, wxART_NO_PICTURE, s_null_png },
+
+			// ******* wxART_FRONTEND ******* - moving a row is the stock arrow's act, so it is the stock arrow
+			// (wxART_EDIT and wxART_DELETE are stock ids themselves and are answered by the stock table below)
+			{ wxART_FRONTEND, wxART_ADD, s_add_png },
+			{ wxART_FRONTEND, wxART_UP, s_goUp_png },
+			{ wxART_FRONTEND, wxART_DOWN, s_goDown_png },
+			{ wxART_FRONTEND, wxART_SORT, s_sort_png },
+			{ wxART_FRONTEND, wxART_DATABASE, s_db_png },
+			{ wxART_FRONTEND, wxART_DATABASE_APPLY, s_dbApply_png },
+			{ wxART_FRONTEND, wxART_DATABASE_ROOLBACK, s_dbRollback_png },
+			{ wxART_FRONTEND, wxART_QUERY_CONSTRUCTOR, s_queryConstructor_png },
+			{ wxART_FRONTEND, wxART_TEMP_TABLE, s_tempTable_png },
+			{ wxART_FRONTEND, wxART_NESTED_QUERY, s_nestedQuery_png },
+			{ wxART_FRONTEND, wxART_ADD_QUERY, s_addQuery_png },
+			{ wxART_FRONTEND, wxART_ADD_NESTED, s_addNested_png },
+			{ wxART_FRONTEND, wxART_EDIT_NESTED, s_editNested_png },
+			{ wxART_FRONTEND, wxART_REPLACE_TABLE, s_replaceTable_png },
+			{ wxART_FRONTEND, wxART_ADD_EXPRESSION, s_addExpression_png },
+			{ wxART_FRONTEND, wxART_ADD_LINK, s_addLink_png },
+			{ wxART_FRONTEND, wxART_LINK_CONDITION, s_linkCondition_png },
+			{ wxART_FRONTEND, wxART_ADD_CONDITION, s_addCondition_png },
+			{ wxART_FRONTEND, wxART_DIRECTION, s_direction_png },
+			{ wxART_FRONTEND, wxART_ADD_SPLIT, s_addSplit_png },
+			{ wxART_FRONTEND, wxART_ADD_BRANCH, s_addBranch_png },
+			{ wxART_FRONTEND, wxART_ADD_JOIN, s_addJoin_png },
+			{ wxART_FRONTEND, wxART_COUNT_ROWS, s_countRows_png },
+			{ wxART_FRONTEND, wxART_TOTALS, s_totals_png },
+			{ wxART_FRONTEND, wxART_PARAMETERS, s_parameters_png },
+			{ wxART_FRONTEND, wxART_OUTPUT, s_output_png },
+			{ wxART_FRONTEND, wxART_SELECTED_FIELDS, s_selectedFields_png },
+			{ wxART_FRONTEND, wxART_FILTER, s_filter_png },
+			{ wxART_FRONTEND, wxART_GROUPING, s_grouping_png },
+			{ wxART_FRONTEND, wxART_TABLE, s_table_png },
+			{ wxART_FRONTEND, wxART_LINKS, s_links_png },
+			{ wxART_FRONTEND, wxART_SELECTION_LINKS, s_selectionLinks_png },
+			{ wxART_FRONTEND, wxART_ADVANCED, s_advanced_png },
+			{ wxART_FRONTEND, wxART_UNIONS, s_unions_png },
+			{ wxART_FRONTEND, wxART_INDEX, s_index_png },
+			{ wxART_FRONTEND, wxART_QUERY_BATCH, s_queryBatch_png },
+			{ wxART_FRONTEND, wxART_TRANSLATION_CONSTRUCTOR, s_translationConstructor_png },
+			{ wxART_FRONTEND, wxART_FORMAT_CONSTRUCTOR, s_formatConstructor_png },
+			{ wxART_FRONTEND, wxART_LINQ_CONSTRUCTOR, s_linqConstructor_png },
+			{ wxART_DEBUG, wxART_BREAKPOINT_CONDITION, s_breakpointCondition_png },
+			{ wxART_DOC_MODULE, wxART_SELECT_ALL, s_selectAll_png },
+
+			// ******* wxART_DOC_FORM *******
+			{ wxART_DOC_FORM, wxART_DESIGNER_PAGE, s_designerPage_png },
+			{ wxART_DOC_FORM, wxART_CODE_PAGE, s_codePage_png },
+
+			// ******* wxART_DOC_TEMPLATE *******
+			{ wxART_DOC_TEMPLATE, wxART_MERGE_CELL, s_mergeCells_png },
+			{ wxART_DOC_TEMPLATE, wxART_ADD_SECTION, s_addSection_png },
+			{ wxART_DOC_TEMPLATE, wxART_REMOVE_SECTION, s_removeSection_png },
+			{ wxART_DOC_TEMPLATE, wxART_SHOW_CELL, s_showCells_png },
+			{ wxART_DOC_TEMPLATE, wxART_SHOW_HEADER, s_showHeaders_png },
+			{ wxART_DOC_TEMPLATE, wxART_SHOW_SECTION, s_showSections_png },
+			{ wxART_DOC_TEMPLATE, wxART_BORDER, s_borders_png },
+
+			// ******* wxART_SERVICE *******
+			{ wxART_SERVICE, wxART_MESSAGE, s_message_png },
+			{ wxART_SERVICE, wxART_LOCAL_VARIABLE, s_variables_png },
+			{ wxART_SERVICE, wxART_STACK, s_stack_png },
+			{ wxART_SERVICE, wxART_WATCH, s_watch_png },
+			{ wxART_SERVICE, wxART_PROPERTY, s_property_png },
+
+			// ******* wxART_METATREE *******
+			{ wxART_METATREE, wxART_COMMON_FOLDER, s_commonFolder_png },
+			{ wxART_METATREE, wxART_SAVE_METADATA, s_saveMetadata_png },
+
+			// ******* wxART_DEBUG *******
+			{ wxART_DEBUG, wxART_DEBUG_START, s_start_png },
+			{ wxART_DEBUG, wxART_DEBUG_START_WITHOUT_DEBUGGING, s_startWithoutDebugging_png },
+			{ wxART_DEBUG, wxART_DEBUG_ATTACH, s_attach_png },
+			{ wxART_DEBUG, wxART_DEBUG_CONTINUE, s_continue_png },
+			{ wxART_DEBUG, wxART_DEBUG_PAUSE, s_pause_png },
+			{ wxART_DEBUG, wxART_DEBUG_STEP_INTO, s_stepInto_png },
+			{ wxART_DEBUG, wxART_DEBUG_STEP_OVER, s_stepOver_png },
+			{ wxART_DEBUG, wxART_DEBUG_STEP_OUT, s_stepOut_png },
+			{ wxART_DEBUG, wxART_DEBUG_STOP_DEBUGGING, s_stopDebugging_png },
+			{ wxART_DEBUG, wxART_DEBUG_STOP_PROGRAM, s_stopProgram_png },
+			{ wxART_DEBUG, wxART_DEBUG_REMOVE_ALL_BREAKPOINTS, s_removeAllBreakpoints_png },
+
+			// ******* wxART_DOC_MODULE *******
+			{ wxART_DOC_MODULE, wxART_ADD_COMMENT, s_addComment_png },
+			{ wxART_DOC_MODULE, wxART_REMOVE_COMMENT, s_removeComment_png },
+			{ wxART_DOC_MODULE, wxART_SYNTAX_CONTROL, s_syntaxControl_png },
+			{ wxART_DOC_MODULE, wxART_GOTO_LINE, s_gotoLine_png },
+			{ wxART_DOC_MODULE, wxART_PROC_AND_FUNC, s_proceduresFunctions_png },
+			{ wxART_DOC_MODULE, wxART_FORMAT_CODE, s_formatCode_png },
+			{ wxART_DOC_MODULE, wxART_INCREASE_INDENT, s_increaseIndent_png },
+			{ wxART_DOC_MODULE, wxART_DECREASE_INDENT, s_decreaseIndent_png },
+
+			// ******* wxART_AUTOCOMPLETE *******
+			{ wxART_AUTOCOMPLETE, wxART_FUNCTION, s_function_png },
+			{ wxART_AUTOCOMPLETE, wxART_PROCEDURE, s_procedure_png },
+			{ wxART_AUTOCOMPLETE, wxART_VARIABLE, s_variable_png },
+			{ wxART_AUTOCOMPLETE, wxART_VARIABLE_ALTERNATIVE, s_variableAlt_png },
+
+			// ******* wxART_SERVICE *******
+			{ wxART_SERVICE, wxART_OUTPUT_INFORMATION, s_outputInformation_png },
+			{ wxART_SERVICE, wxART_OUTPUT_WARNING, s_outputWarning_png },
+			{ wxART_SERVICE, wxART_OUTPUT_ERROR, s_outputError_png }
+		};
+
+		for (const auto& entry : s_allPictures) {
+			if (entry.client == client && entry.id == id)
+				return BundleOf(entry.png, size.IsFullySpecified() ? size : wxSize(16, 16));
+		}
+
+		// ⭐ WX'S OWN PICTURES, FOR EVERY CLIENT. This provider stands first (pushed over wx's), so a stock id asked
+		// anywhere - a menu, a toolbar, a button, a list, a message window - gets this drawing instead of Tango's
+		// or an XPM of wx's, and not one call site changes.
+		static const struct { wxArtID id; const wxString& png; } s_stockPictures[] =
+		{
+			{ wxART_DELETE, s_delete_png },
+			{ wxART_NEW, s_new_png },
+			{ wxART_EDIT, s_edit_png },
+			{ wxART_GO_UP, s_goUp_png },
+			{ wxART_GO_DOWN, s_goDown_png },
+			{ wxART_GO_BACK, s_goBack_png },
+			{ wxART_GO_FORWARD, s_goForward_png },
+			{ wxART_GO_DIR_UP, s_goDirUp_png },
+			{ wxART_COPY, s_copy_png },
+			{ wxART_CUT, s_cut_png },
+			{ wxART_PASTE, s_paste_png },
+			{ wxART_UNDO, s_undo_png },
+			{ wxART_REDO, s_redo_png },
+			{ wxART_FIND, s_find_png },
+			{ wxART_PLUS, s_plus_png },
+			{ wxART_MINUS, s_minus_png },
+			{ wxART_FILE_OPEN, s_fileOpen_png },
+			{ wxART_FILE_SAVE, s_fileSave_png },
+			{ wxART_FILE_SAVE_AS, s_fileSaveAs_png },
+			{ wxART_NORMAL_FILE, s_normalFile_png },
+			{ wxART_FOLDER, s_folder_png },
+			{ wxART_LIST_VIEW, s_listView_png },
+			{ wxART_REPORT_VIEW, s_reportView_png },
+			{ wxART_FULL_SCREEN, s_fullScreen_png },
+			{ wxART_HELP_BOOK, s_helpBook_png },
+			{ wxART_HELP_SETTINGS, s_helpSettings_png },
+			{ wxART_TICK_MARK, s_tickMark_png },
+			{ wxART_STOP, s_stop_png },
+			{ wxART_QUIT, s_quit_png },
+			{ wxART_MISSING_IMAGE, s_missingImage_png },
+			{ wxART_WARNING, s_warning_png },
+			{ wxART_ERROR, s_error_png },
+			{ wxART_INFORMATION, s_information_png },
+			{ wxART_QUESTION, s_question_png },
+			{ wxART_TIP, s_tip_png }
+		};
+
+		for (const auto& entry : s_stockPictures) {
+			if (entry.id == id)
+				return BundleOf(entry.png, size.IsFullySpecified() ? size : wxSize(16, 16));
+		}
+
+		return wxNullBitmap;
+	}
+};
+
+// ----------------------------------------------------------------------------
 // ibLunaTheme
 // ----------------------------------------------------------------------------
 
@@ -873,6 +1328,7 @@ public:
 
 	ibLunaTheme() {
 		m_renderer = nullptr;
+		m_artProvider = nullptr;
 	}
 
 	virtual ~ibLunaTheme() {
@@ -886,8 +1342,9 @@ public:
 	}
 
 	virtual wxArtProvider* GetArtProvider() override {
-		// the application-wide art provider serves the theme as well
-		return nullptr;
+		if (m_artProvider == nullptr)
+			m_artProvider = new ibLunaArtProvider;
+		return m_artProvider;
 	}
 
 	virtual ibInputHandler* GetInputHandler(const wxString& WXUNUSED(handlerType),
@@ -903,6 +1360,9 @@ public:
 private:
 	ibLunaRenderer* m_renderer;
 	ibLunaColourScheme m_scheme;
+	// pushed as the theme is set (ibThemeEngine::Set), wx's from then: deleted with the others as wx exits
+	// (wxArtProvider::CleanUpProviders), not here
+	ibLunaArtProvider* m_artProvider;
 
 	WX_DECLARE_THEME(luna)
 };

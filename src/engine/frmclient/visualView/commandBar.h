@@ -5,7 +5,7 @@
 #include <string>
 
 #include <wx/wx.h>
-#include <wx/aui/auibar.h>
+#include "deskgui/univ/aui/auibar.h"
 
 #include "frmclient/frmclient.h"
 #include "protocol/protocolNode.h"
@@ -41,7 +41,7 @@ private:
 	bool PopupGroup(int toolId);
 
 	void OnTool(wxCommandEvent& event);
-	void OnToolDropDown(wxAuiToolBarEvent& event);
+	void OnToolDropDown(ibAuiToolBarEvent& event);
 
 	ibAuiToolBar*       m_bar = nullptr;   // the parent's window
 	const ibSendCommand m_sendCommand;

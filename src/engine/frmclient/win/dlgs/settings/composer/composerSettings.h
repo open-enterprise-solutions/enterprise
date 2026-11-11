@@ -476,12 +476,12 @@ private:
 	// is chosen is what decides what "reload" means for everything to its right.
 	class ibDataViewCtrl*   m_variantView = nullptr;
 	class ibVariantModel*   m_variantModel = nullptr;
-	class wxToolBar*        m_variantBar = nullptr;   // Add / Copy / Delete — Delete greys on the last one
+	class ibAuiToolBar*        m_variantBar = nullptr;   // Add / Copy / Delete — Delete greys on the last one
 	// THE OTHER THREE BANDS, held for the same reason the first one is: view-only has to reach them.
 	// They were locals until then, which is exactly how a fourth one would go on being missed.
-	class wxToolBar*        m_structureBar = nullptr;
-	class wxToolBar*        m_resourceBar = nullptr;
-	class wxToolBar*        m_parameterBar = nullptr;
+	class ibAuiToolBar*        m_structureBar = nullptr;
+	class ibAuiToolBar*        m_resourceBar = nullptr;
+	class ibAuiToolBar*        m_parameterBar = nullptr;
 	// VIEW ONLY — see SetReadOnly. Held because the context menus ask it: a toolbar can be disabled,
 	// a menu has to decide not to appear.
 	bool                    m_readOnly = false;

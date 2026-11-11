@@ -20,11 +20,11 @@
 #include <memory>
 #include <vector>
 
-class wxAuiToolBar;
+class ibAuiToolBar;
 class ibDatePickerCtrl;
 class ibChoice;
 class ibTextCtrl;
-class wxCheckBox;
+class ibCheckBox;
 class wxTimer;
 class ibAuditLogModel;
 
@@ -165,10 +165,10 @@ private:
 	ibChoice*         m_sourceChoice = nullptr;
 	ibTextCtrl*       m_userText     = nullptr;
 	ibTextCtrl*       m_searchText   = nullptr;
-	wxCheckBox*       m_tailCheck    = nullptr;   // the toolbar's (wxAuiToolBar::AddControl takes a wxControl)
+	ibCheckBox*       m_tailCheck    = nullptr;   // the toolbar's
 
 	// AuiToolBar + DataView shell (mirrors ibDialogUserList).
-	wxAuiToolBar*    m_toolbarMain  = nullptr;
+	ibAuiToolBar*    m_toolbarMain  = nullptr;
 	ibDataViewCtrl*  m_dataEditor   = nullptr;
 	wxObjectDataPtr<ibAuditLogModel> m_model;
 	std::shared_ptr<wxTimer>         m_tailTimer;

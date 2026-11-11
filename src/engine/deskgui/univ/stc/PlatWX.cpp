@@ -54,6 +54,7 @@
 #include "deskgui/univ/theme.h"
 #include "deskgui/univ/colourScheme.h"
 #include "deskgui/univ/renderer.h"
+#include "deskgui/univ/messageDialog.h"   // ibMessageBox — an assertion's box, the theme's
 
 // SEAM vs wx: no DirectWrite surface - every surface draws through a wxDC, whatever technology Scintilla is told
 
@@ -2272,7 +2273,7 @@ void Platform::Assert(const char *c, const char *file, int line) noexcept {
     sprintf(buffer, "Assertion [%s] failed at %s %d", c, file, line);
     if (assertionPopUps) {
         /*int idButton = */
-        wxMessageBox(wxString::FromUTF8(buffer),
+        ibMessageBox(wxString::FromUTF8(buffer),
                      wxT("Assertion failure"),
                      wxICON_HAND | wxOK);
     } else {

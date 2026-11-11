@@ -54,15 +54,6 @@
     #include <wx/caret.h>
 #endif // wxUSE_CARET
 
-#if wxDEBUG_LEVEL >= 2
-    // turn Refresh() debugging on/off
-    #define WXDEBUG_REFRESH
-#endif
-
-#if defined(WXDEBUG_REFRESH) && defined(__WXMSW__)
-#include <wx/msw/private.h>
-#endif
-
 // ============================================================================
 // implementation
 // ============================================================================
@@ -111,16 +102,6 @@ public:
 
 wxBEGIN_EVENT_TABLE(ibWindow, wxWindow)
     EVT_SIZE(ibWindow::OnSize)
-
-#if 0 // GUI-REVIVE: accel handling needs univ menu — cut until menu revives
-    EVT_KEY_DOWN(ibWindow::OnKeyDown)
-#endif // wxUSE_ACCEL
-
-#if 0 // GUI-REVIVE: univ menu not revived yet
-    EVT_CHAR(ibWindow::OnChar)
-    EVT_KEY_UP(ibWindow::OnKeyUp)
-#endif // wxUSE_MENUS
-
     EVT_PAINT(ibWindow::OnPaint)
     EVT_MOUSE_CAPTURE_LOST(ibWindow::OnMouseCaptureLost)
     EVT_ERASE_BACKGROUND(ibWindow::OnErase)
@@ -140,9 +121,6 @@ void ibWindow::Init()
     m_isCurrent = false;
 
     m_renderer = ibThemeEngine::Get()->GetRenderer();
-
-    m_oldSize.x = wxDefaultCoord;
-    m_oldSize.y = wxDefaultCoord;
 
     // SEAM vs univ: the canon erased the background in a separate native
     // erase pass (OnErase) and painted the control in OnPaint — two passes
@@ -172,7 +150,6 @@ bool ibWindow::Create(wxWindow *parent,
     actualStyle &= ~wxVSCROLL;
     actualStyle &= ~wxHSCROLL;
 
-#ifdef __WXMSW__
     // without this, borders (non-client areas in general) are not repainted
     // correctly when resizing; apparently, native NC areas are fully repainted
     // even without this style by MSW, but wxUniv implements client area
@@ -180,8 +157,10 @@ bool ibWindow::Create(wxWindow *parent,
     //
     // FIXME: this is very expensive, we need to fix the (commented-out) code
     //        in OnSize() instead
+    //
+    // SEAM vs univ: on every port - the border is ours everywhere, and wxGTK, given no flag, repaints only what a
+    // resize uncovers as well
     actualStyle |= wxFULL_REPAINT_ON_RESIZE;
-#endif
 
     if ( !wxWindow::Create(parent, id, pos, size, actualStyle, name) )
         return false;
@@ -530,24 +509,6 @@ void ibWindow::Refresh(bool eraseBackground, const wxRect *rect)
     if ( !rect )
         rectWin = wxRect(GetSize());
 
-    // debugging helper
-#ifdef WXDEBUG_REFRESH
-    static bool s_refreshDebug = false;
-    if ( s_refreshDebug )
-    {
-        wxWindowDC dc(this);
-        dc.SetBrush(*wxCYAN_BRUSH);
-        dc.SetPen(*wxTRANSPARENT_PEN);
-        dc.DrawRectangle(rectWin);
-
-        // under Unix we use "--sync" X option for this
-        #if defined(__WXMSW__)
-            ::GdiFlush();
-            ::Sleep(200);
-        #endif // __WXMSW__
-    }
-#endif // WXDEBUG_REFRESH
-
     wxWindow::Refresh(eraseBackground, &rectWin);
 
     // Refresh all sub controls if any.
@@ -675,108 +636,6 @@ void ibWindow::OnSize(wxSizeEvent& event)
         PositionScrollbars();
     }
 #endif // wxUSE_SCROLLBAR
-
-#if 0   // ndef __WXMSW__
-    // Refresh the area (strip) previously occupied by the border
-
-    if ( !HasFlag(wxFULL_REPAINT_ON_RESIZE) && IsShown() )
-    {
-        // This code assumes that wxSizeEvent.GetSize() returns
-        // the area of the entire window, not just the client
-        // area.
-        wxSize newSize = event.GetSize();
-
-        if (m_oldSize.x == wxDefaultCoord && m_oldSize.y == wxDefaultCoord)
-        {
-            m_oldSize = newSize;
-            return;
-        }
-
-        if (HasFlag( wxSIMPLE_BORDER ))
-        {
-            if (newSize.y > m_oldSize.y)
-            {
-                wxRect rect;
-                rect.x = 0;
-                rect.width = m_oldSize.x;
-                rect.y = m_oldSize.y-2;
-                rect.height = 1;
-                Refresh( true, &rect );
-            }
-            else if (newSize.y < m_oldSize.y)
-            {
-                wxRect rect;
-                rect.y = newSize.y;
-                rect.x = 0;
-                rect.height = 1;
-                rect.width = newSize.x;
-                wxWindow::Refresh( true, &rect );
-            }
-
-            if (newSize.x > m_oldSize.x)
-            {
-                wxRect rect;
-                rect.y = 0;
-                rect.height = m_oldSize.y;
-                rect.x = m_oldSize.x-2;
-                rect.width = 1;
-                Refresh( true, &rect );
-            }
-            else if (newSize.x < m_oldSize.x)
-            {
-                wxRect rect;
-                rect.x = newSize.x;
-                rect.y = 0;
-                rect.width = 1;
-                rect.height = newSize.y;
-                wxWindow::Refresh( true, &rect );
-            }
-        }
-        else
-        if (HasFlag( wxSUNKEN_BORDER ) || HasFlag( wxRAISED_BORDER ) || HasFlag( wxBORDER_THEME ))
-        {
-            if (newSize.y > m_oldSize.y)
-            {
-                wxRect rect;
-                rect.x = 0;
-                rect.width = m_oldSize.x;
-                rect.y = m_oldSize.y-4;
-                rect.height = 2;
-                Refresh( true, &rect );
-            }
-            else if (newSize.y < m_oldSize.y)
-            {
-                wxRect rect;
-                rect.y = newSize.y;
-                rect.x = 0;
-                rect.height = 2;
-                rect.width = newSize.x;
-                wxWindow::Refresh( true, &rect );
-            }
-
-            if (newSize.x > m_oldSize.x)
-            {
-                wxRect rect;
-                rect.y = 0;
-                rect.height = m_oldSize.y;
-                rect.x = m_oldSize.x-4;
-                rect.width = 2;
-                Refresh( true, &rect );
-            }
-            else if (newSize.x < m_oldSize.x)
-            {
-                wxRect rect;
-                rect.x = newSize.x;
-                rect.y = 0;
-                rect.width = 2;
-                rect.height = newSize.y;
-                wxWindow::Refresh( true, &rect );
-            }
-        }
-
-        m_oldSize = newSize;
-    }
-#endif
 }
 
 wxSize ibWindow::GetWindowBorderSize() const
@@ -946,6 +805,13 @@ void ibWindow::PositionScrollbars()
     int height = m_scrollbarHorz ? m_scrollbarHorz->GetSize().y : 0;
     int width = m_scrollbarVert ? m_scrollbarVert->GetSize().x : 0;
 
+    // SEAM vs univ: the scrollbars painted again when one of them moved - a size that moved nothing left them as they
+    // were painted: a sizer sends the size to each of its windows at every layout, changed or not (wxSizerItem::
+    // SetDimension, wxSIZE_FORCE_EVENT), and a frame sized by its left edge painted the tree's scrollbar whole at every
+    // step, 6 ms of its 35 (2026-11-11, measured)
+    const wxRect placedVert = m_scrollbarVert ? m_scrollbarVert->GetRect() : wxRect(),
+                 placedHorz = m_scrollbarHorz ? m_scrollbarHorz->GetRect() : wxRect();
+
     wxRect rectBar;
     if ( m_scrollbarVert )
     {
@@ -979,7 +845,9 @@ void ibWindow::PositionScrollbars()
         m_scrollbarHorz->SetSize(rectBar, wxSIZE_NO_ADJUSTMENTS);
     }
 
-    RefreshScrollbars();
+    if ( (m_scrollbarVert && m_scrollbarVert->GetRect() != placedVert) ||
+         (m_scrollbarHorz && m_scrollbarHorz->GetRect() != placedHorz) )
+        RefreshScrollbars();
 #endif // wxUSE_SCROLLBAR
 }
 
@@ -1041,7 +909,14 @@ void ibWindow::SetScrollbar(int orient,
             }
             else // really remove the scrollbar
             {
-                delete scrollbar;
+                // SEAM vs univ: hidden now, destroyed once the events are done (ScheduleForDestruction) - not deleted
+                // here: a scrollbar goes away inside a size, where wxMSW defers the children's moves to its end
+                // (DeferWindowPos), and a window of that batch destroyed before its end makes the system drop the whole
+                // batch, silently: a form whose first layout made the scrollbar and second took it away left its table
+                // at its old size till a resize (2026-11-11, measured; the home page's lists, a document's table part).
+                // On GTK3/Cocoa nothing is deferred; the scrollbar is destroyed a moment later there as well
+                scrollbar->Hide();
+                wxTheApp->ScheduleForDestruction(scrollbar);
 
                 if ( orient & wxVERTICAL )
                     m_scrollbarVert = nullptr;
@@ -1365,179 +1240,11 @@ wxRect ibWindow::ScrollNoRefresh(int dx, int dy, const wxRect *rectTotal)
 // accelerators and menu hot keys
 // ----------------------------------------------------------------------------
 
-#if 0 // GUI-REVIVE: univ menu not revived yet
-    // the last window over which Alt was pressed (used by OnKeyUp)
-    ibWindow *ibWindow::ms_winLastAltPress = nullptr;
-#endif // wxUSE_MENUS
-
-#if 0 // GUI-REVIVE: accel handling needs univ menu — cut until menu revives
-
-void ibWindow::OnKeyDown(wxKeyEvent& event)
-{
-#if 0 // GUI-REVIVE: univ menu not revived yet
-    int key = event.GetKeyCode();
-    if ( !event.ControlDown() && (key == WXK_ALT || key == WXK_F10) )
-    {
-        ms_winLastAltPress = this;
-
-        // it can't be an accel anyhow
-        return;
-    }
-
-    ms_winLastAltPress = nullptr;
-#endif // wxUSE_MENUS
-
-#if wxUSE_ACCEL
-    for ( ibWindow *win = this; win; win = win->GetParent() )
-    {
-        int command = win->GetAcceleratorTable()->GetCommand(event);
-        if ( command != -1 )
-        {
-            wxCommandEvent eventCmd(wxEVT_MENU, command);
-            if ( win->GetEventHandler()->ProcessEvent(eventCmd) )
-            {
-                // skip "event.Skip()" below
-                return;
-            }
-        }
-
-        if ( win->IsTopLevel() )
-        {
-            // try the frame menu bar
-#if 0 // GUI-REVIVE: univ menu not revived yet
-            ibFrame *frame = wxDynamicCast(win, ibFrame);
-            if ( frame )
-            {
-                ibMenuBar *menubar = frame->GetMenuBar();
-                if ( menubar && menubar->ProcessAccelEvent(event) )
-                {
-                    // skip "event.Skip()" below
-                    return;
-                }
-            }
-#endif // wxUSE_MENUS
-
-#if wxUSE_BUTTON
-            // if it wasn't in a menu, try to find a button
-            if ( command != -1 )
-            {
-                ibWindow* child = win->FindWindow(command);
-                if ( child && wxDynamicCast(child, ibButton) )
-                {
-                    wxCommandEvent eventCmd(wxEVT_BUTTON, command);
-                    eventCmd.SetEventObject(child);
-                    if ( child->GetEventHandler()->ProcessEvent(eventCmd) )
-                    {
-                        // skip "event.Skip()" below
-                        return;
-                    }
-                }
-            }
-#endif // wxUSE_BUTTON
-
-            // don't propagate accels from the child frame to the parent one
-            break;
-        }
-    }
-#endif // wxUSE_ACCEL
-
-    event.Skip();
-}
-
-#endif // wxUSE_ACCEL
-
-#if 0 // GUI-REVIVE: univ menu not revived yet
-
-ibMenuBar *ibWindow::GetParentFrameMenuBar() const
-{
-    for ( const ibWindow *win = this; win; win = win->GetParent() )
-    {
-        if ( win->IsTopLevel() )
-        {
-            ibFrame *frame = wxDynamicCast(win, ibFrame);
-            if ( frame )
-            {
-                return frame->GetMenuBar();
-            }
-
-            // don't look further - we don't want to return the menubar of the
-            // parent frame
-            break;
-        }
-    }
-
-    return nullptr;
-}
-
-void ibWindow::OnChar(wxKeyEvent& event)
-{
-    if ( event.AltDown() && !event.ControlDown() )
-    {
-        int key = event.GetKeyCode();
-
-        ibMenuBar *menubar = GetParentFrameMenuBar();
-        if ( menubar )
-        {
-            int item = menubar->FindNextItemForAccel(-1, key);
-            if ( item != -1 )
-            {
-                menubar->PopupMenu((size_t)item);
-
-                // skip "event.Skip()" below
-                return;
-            }
-        }
-    }
-
-    // if Return was pressed, see if there's a default button to activate
-    if ( !event.HasModifiers() && event.GetKeyCode() == WXK_RETURN )
-    {
-        ibTopLevelWindow *
-            tlw = wxDynamicCast(wxGetTopLevelParent(this), ibTopLevelWindow);
-        if ( tlw )
-        {
-            ibButton *btn = wxDynamicCast(tlw->GetDefaultItem(), ibButton);
-            if ( btn )
-            {
-                wxCommandEvent evt(wxEVT_BUTTON, btn->GetId());
-                evt.SetEventObject(btn);
-                btn->Command(evt);
-                return;
-            }
-        }
-    }
-
-
-    event.Skip();
-}
-
-void ibWindow::OnKeyUp(wxKeyEvent& event)
-{
-    int key = event.GetKeyCode();
-    if ( !event.HasModifiers() && (key == WXK_ALT || key == WXK_F10) )
-    {
-        // only process Alt release specially if there were no other key
-        // presses since Alt had been pressed and if both events happened in
-        // the same window
-        if ( ms_winLastAltPress == this )
-        {
-            ibMenuBar *menubar = GetParentFrameMenuBar();
-            if ( menubar && this != menubar )
-            {
-                menubar->SelectMenu(0);
-            }
-        }
-    }
-    else
-    {
-        event.Skip();
-    }
-
-    // in any case reset it
-    ms_winLastAltPress = nullptr;
-}
-
-#endif // wxUSE_MENUS
+// SEAM vs univ: NO KEYS OF ITS OWN FOR THE MENUS - the canon's window looked for the accelerators and the menubar's
+// letters in every key it had (OnKeyDown, OnChar, OnKeyUp). Here the accelerators are the native frame's table
+// (wxFrame::MSWTranslateMessage, the items' ibMenu::UpdateAccel), the menubar's letters the frame's before a window
+// has the key (ibFrame::OnCharHook), Return the dialog's default button (ibDialog). Not kept: Alt or F10 alone
+// selecting the first title.
 
 // ----------------------------------------------------------------------------
 // MSW-specific section

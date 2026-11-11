@@ -10,7 +10,7 @@
 #include "../callbackDropTarget.h"      // one drop target for the product: a drop is a callback
 #include "queryFieldTree.h"              // the field row: its node, its walk, its drag
 
-#include "artProvider/artProvider.h"     // wxART_QUERY_CONSTRUCTOR - the window wears the menu item picture
+#include "deskgui/artProvider.h"     // wxART_QUERY_CONSTRUCTOR - the window wears the menu item picture
 #include <wx/artprov.h>
 
 #include "core/query/queryParser.h"

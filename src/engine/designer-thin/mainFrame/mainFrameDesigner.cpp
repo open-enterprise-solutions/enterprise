@@ -5,7 +5,7 @@
 
 #include "mainFrameDesigner.h"
 
-#include "frmclient/artProvider/artProvider.h"   // the debugger's pictures, Update database's
+#include "deskgui/artProvider.h"   // the debugger's pictures, Update database's
 #include "designer-thin/backend/debugger/debugClient.h"
 #include "designer-thin/mainFrame/local/localWindow.h"
 #include "designer-thin/mainFrame/stack/stackWindow.h"
@@ -47,7 +47,7 @@ void ibFrontendMainFrameDesigner::CreateGUI()
 	ibFrontendMainFrame::CreateGUI();
 
 	// The desktop designer's last button on the main toolbar — Configuration's Update database, the same command.
-	wxAuiToolBar* const mainFrameToolbar = GetMainFrameToolbar();
+	ibAuiToolBar* const mainFrameToolbar = GetMainFrameToolbar();
 	mainFrameToolbar->AddSeparator();
 	mainFrameToolbar->AddTool(wxID_DESIGNER_CONFIGURATION_UPDATE_DATABASE, _("Update database"), wxArtProvider::GetBitmapBundle(wxART_DATABASE_APPLY, wxART_FRONTEND, wxSize(16, 16)), _("Update database"), wxItemKind::wxITEM_NORMAL);
 	mainFrameToolbar->Realize();
@@ -114,7 +114,7 @@ void ibFrontendMainFrameDesigner::DrawFrame(const ibProtocolNode& frame, const i
 
 	// THE CAPTION — the desktop's Modify: "*" while somebody edited the configuration, "<!>" while the base does not hold
 	// it; as the root row says.
-	wxAuiPaneInfo& paneInfo = m_mgr.GetPane(wxAUI_PANE_METADATA);
+	ibAuiPaneInfo& paneInfo = m_mgr.GetPane(ibAUI_PANE_METADATA);
 	if (!paneInfo.IsOk())
 		return;
 

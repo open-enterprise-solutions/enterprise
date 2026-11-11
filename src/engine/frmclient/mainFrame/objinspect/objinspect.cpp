@@ -509,7 +509,7 @@ void ibObjectInspector::OnPropertyGridExpand(ibPropertyGridEvent& event)
 void ibObjectInspector::OnPropertyGridItemSelected(ibPropertyGridEvent& event)
 {
 	// ⚠ A SELECTION ARRIVES WITHOUT ANYBODY CLICKING: the grid re-selects its row when it is thawed,
-	// and a layout update thaws it (ibFrontendMainFrame::UpdateFrameManager → wxAuiManager::Update).
+	// and a layout update thaws it (ibFrontendMainFrame::UpdateFrameManager → ibAuiManager::Update).
 	// That is how a dead object's row was selected in the dump of 2026-09-15. So the question is asked
 	// here too, and a rebuild asked from here waits for ibPG to finish selecting.
 	ScopedFlag inEvent(m_inGridEvent);

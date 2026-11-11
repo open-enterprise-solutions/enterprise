@@ -217,7 +217,7 @@ EVT_PG_SELECTED(WXOES_PROPERTY_GRID, ibDialogFormEditor::OnPropertyGridItemSelec
 
 wxEND_EVENT_TABLE()
 
-#include "deskgui/univ/theme/luna_toolbarart.h"
+#include "deskgui/univ/aui/auibar.h"
 #include "frmclient/visualView/visualHostClient.h"
 
 ibDialogFormEditor::ibDialogFormEditor(ibValueForm* valueForm) :
@@ -226,8 +226,7 @@ ibDialogFormEditor::ibDialogFormEditor(ibValueForm* valueForm) :
 	wxBoxSizer* commonSizer = new wxBoxSizer(wxVERTICAL);
 	wxBoxSizer* controlSizer = new wxBoxSizer(wxHORIZONTAL);
 
-	m_mainToolBar = new wxAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_LAYOUT | wxAUI_TB_HORZ_TEXT);
-	m_mainToolBar->SetArtProvider(new wxAuiLunaToolBarArt());
+	m_mainToolBar = new ibAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, ibAUI_TB_HORZ_LAYOUT | ibAUI_TB_HORZ_TEXT);
 
 	m_toolUpItem = m_mainToolBar->AddTool(MENU_MOVE_UP, _("Up control"), wxArtProvider::GetBitmapBundle(wxASCII_STR(wxART_GO_UP), wxASCII_STR(wxART_TOOLBAR)), wxNullBitmap, wxITEM_NORMAL, wxEmptyString, wxEmptyString, NULL);
 	m_toolDownItem = m_mainToolBar->AddTool(MENU_MOVE_DOWN, _("Down control"), wxArtProvider::GetBitmapBundle(wxASCII_STR(wxART_GO_DOWN), wxASCII_STR(wxART_TOOLBAR)), wxNullBitmap, wxITEM_NORMAL, wxEmptyString, wxEmptyString, NULL);
@@ -237,7 +236,6 @@ ibDialogFormEditor::ibDialogFormEditor(ibValueForm* valueForm) :
 
 	m_treeControl = new ibTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_HAS_BUTTONS | wxSIMPLE_BORDER | wxTR_NO_LINES | wxTR_TWIST_BUTTONS);
 	controlSizer->Add(m_treeControl, 1, wxALL | wxEXPAND, FromDIP(5));
-	m_treeControl->SetDoubleBuffered(true);
 
 	CreateTree();
 

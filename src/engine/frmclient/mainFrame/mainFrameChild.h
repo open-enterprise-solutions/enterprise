@@ -3,7 +3,7 @@
 
 #include <memory>
 
-#include <wx/aui/aui.h>
+#include "deskgui/univ/aui/aui.h"
 #include <wx/cmdproc.h>
 #include <wx/utils.h>
 
@@ -12,152 +12,11 @@
 
 #include "frmclient/frmclient.h"
 
-// A TAB OF THE MAIN WINDOW — the old desktop's, carried over: an MDI child that joins
-// the notebook when it is shown, keeps its icon for the page, and leaves the notebook when it is destroyed.
-class FRMCLIENT_API ibAuiChildFrame :
-	public wxAuiMDIChildFrame {
-public:
-
-	ibAuiChildFrame() : wxAuiMDIChildFrame() {}
-	ibAuiChildFrame(wxAuiMDIParentFrame* parent,
-		wxWindowID winid,
-		const wxString& title,
-		const wxPoint& pos = wxDefaultPosition,
-		const wxSize& size = wxDefaultSize,
-		long style = wxDEFAULT_FRAME_STYLE,
-		const wxString& name = wxASCII_STR(wxFrameNameStr))
-		:
-		wxAuiMDIChildFrame(parent, winid, title, pos, size, style, name) {
-	}
-
-	virtual ~ibAuiChildFrame() {}
-
-	bool Create(wxAuiMDIParentFrame* parent,
-		wxWindowID id,
-		const wxString& title,
-		const wxPoint& pos = wxDefaultPosition,
-		const wxSize& size = wxDefaultSize,
-		long style = wxDEFAULT_FRAME_STYLE,
-		const wxString& name = wxASCII_STR(wxFrameNameStr)) {
-
-		wxAuiMDIClientWindow* pClientWindow = parent->GetClientWindow();
-		wxASSERT_MSG((pClientWindow != NULL), wxT("Missing MDI client window."));
-
-		// see comment in constructor
-		if (style & wxMINIMIZE)
-			m_activateOnCreate = false;
-
-		// create the window hidden to prevent flicker
-		wxWindow::Show(false);
-		wxWindow::Create(pClientWindow,
-			id,
-			wxDefaultPosition,
-			size,
-			wxNO_BORDER, name);
-
-		SetMDIParentFrame(parent);
-
-		m_title = title;
-		return true;
-	}
-
-	virtual bool Show(bool show = true) override {
-
-		wxAuiMDIClientWindow* pClientWindow = m_pMDIParentFrame->GetClientWindow();
-		wxASSERT_MSG((pClientWindow != NULL), wxT("Missing MDI client window."));
-
-		pClientWindow->Freeze();
-
-		if (wxAuiMDIChildFrame::Show(show)) {
-
-			const size_t idx = pClientWindow->FindPage(this);
-
-			if (show && idx == wxNOT_FOUND) {
-
-				const wxSize sizeIcon(wxSystemSettings::GetMetric(wxSYS_SMALLICON_X, this),
-					wxSystemSettings::GetMetric(wxSYS_SMALLICON_Y, this));
-
-				wxBitmap mdiChildIcon;
-				if (m_icons.IsOk())
-					mdiChildIcon.CopyFromIcon(m_icons.GetIcon(sizeIcon));
-				pClientWindow->AddPage(this, m_title, m_activateOnCreate, mdiChildIcon);
-			}
-
-			wxAuiTabCtrl* tabCtrl = nullptr; int page_tab_idx = 0;
-			if (pClientWindow->FindTab(this, &tabCtrl, &page_tab_idx)) {
-#ifdef __WXMSW__
-				tabCtrl->HandlePaint();
-#endif
-				tabCtrl->SetTabOffset(page_tab_idx);
-			}
-
-			// Check that the parent notion of the active child coincides with our one.
-			// This is less obvious that it seems because we must honour
-			// m_activateOnCreate flag but only if it's not the first child because
-			// this one becomes active unconditionally.
-			wxASSERT_MSG
-			(
-				(m_activateOnCreate || pClientWindow->GetPageCount() == 1)
-				== (m_pMDIParentFrame->GetActiveChild() == this),
-				wxS("Logic error: child [not] activated when it should [not] have been.")
-			);
-		}
-
-		pClientWindow->Thaw();
-
-		return true;
-	}
-
-	virtual bool Destroy() override {
-
-		wxAuiMDIParentFrame* pParentFrame = GetMDIParentFrame();
-		wxASSERT_MSG(pParentFrame, wxT("Missing MDI Parent Frame"));
-
-		bool success = false;
-
-		wxAuiMDIClientWindow* pClientWindow = pParentFrame->GetClientWindow();
-		wxASSERT_MSG(pClientWindow, wxT("Missing MDI Client Window"));
-
-		pClientWindow->Freeze();
-
-		if (pParentFrame->GetActiveChild() == this) {
-			// deactivate ourself
-			wxActivateEvent event(wxEVT_ACTIVATE, false, GetId());
-			event.SetEventObject(this);
-			GetEventHandler()->ProcessEvent(event);
-
-			pParentFrame->SetChildMenuBar(nullptr);
-		}
-
-		wxAuiTabCtrl* tabCtrl = nullptr; int page_tab_idx = 0;
-		if (pClientWindow->FindTab(this, &tabCtrl, &page_tab_idx)) {
-
-			// state the window hidden to prevent flicker
-			if (pClientWindow->GetPageCount() == 1)
-				tabCtrl->Show(false);
-
-			const int page_idx = pClientWindow->GetPageIndex(this);
-			success = page_idx != wxNOT_FOUND ?
-				pClientWindow->DeletePage(page_idx) : false;
-		}
-
-		pClientWindow->Thaw();
-
-		return success;
-	}
-
-	virtual void SetIcons(const wxIconBundle& icons) override {
-
-		m_icons = icons;
-		wxAuiMDIChildFrame::SetIcons(icons);
-	}
-};
-
 // THE TAB OF A DOCUMENT'S VIEW — the frame the doc manager's view shows in (ibFrontendMainFrame::CreateChildFrame): its
 // events go to the view and the manager first, its close is the view's, and the menu bar of its view is merged with the
-// main window's.
+// main window's. It joins the notebook when it is shown, under its icon (ibAuiMDIChildFrame::Show).
 class FRMCLIENT_API ibAuiDocChildFrame :
-	public ibDocChildFrameAny<ibAuiChildFrame, wxAuiMDIParentFrame> {
+	public ibDocChildFrameAny<ibAuiMDIChildFrame, ibAuiMDIParentFrame> {
 public:
 
 	// default ctor, use Create after it
@@ -166,7 +25,7 @@ public:
 	// ctor for a frame showing the given view of the specified document
 	ibAuiDocChildFrame(ibFrontendDocument* doc,
 		ibFrontendView* view,
-		wxAuiMDIParentFrame* parent,
+		ibAuiMDIParentFrame* parent,
 		wxWindowID id,
 		const wxString& title,
 		const wxPoint& pos = wxDefaultPosition,
@@ -182,7 +41,7 @@ public:
 
 	bool Create(ibFrontendDocument* doc,
 		ibFrontendView* view,
-		wxAuiMDIParentFrame* parent,
+		ibAuiMDIParentFrame* parent,
 		wxWindowID id,
 		const wxString& title,
 		const wxPoint& pos = wxDefaultPosition,
@@ -208,13 +67,11 @@ protected:
 
 	virtual bool Destroy() override {
 
-		wxAuiMDIParentFrame* pParentFrame = GetMDIParentFrame();
+		ibAuiMDIParentFrame* pParentFrame = GetMDIParentFrame();
 		wxASSERT_MSG(pParentFrame, wxT("Missing MDI Parent Frame"));
 
-		wxAuiMDIClientWindow* pClientWindow = pParentFrame->GetClientWindow();
+		ibAuiMDIClientWindow* pClientWindow = pParentFrame->GetClientWindow();
 		wxASSERT_MSG(pClientWindow, wxT("Missing MDI Client Window"));
-
-		pClientWindow->Freeze();
 
 		if (pParentFrame->GetActiveChild() == this) {
 			// deactivate ourself
@@ -234,7 +91,7 @@ protected:
 				wxWindow* new_active = nullptr;
 
 				// find out which onscreen tab ctrl owns this tab
-				wxAuiTabCtrl* tabCtrl = nullptr; int page_tab_idx = 0;
+				ibAuiTabCtrl* tabCtrl = nullptr; int page_tab_idx = 0;
 				if (pClientWindow->FindTab(this, &tabCtrl, &page_tab_idx)) {
 
 					bool is_curpage = page_idx == pClientWindow->GetSelection();
@@ -284,12 +141,8 @@ protected:
 			}
 		}
 
-		wxAuiTabCtrl* tabCtrl = nullptr; int page_tab_idx = 0;
+		ibAuiTabCtrl* tabCtrl = nullptr; int page_tab_idx = 0;
 		if (pClientWindow->FindTab(this, &tabCtrl, &page_tab_idx)) {
-
-			// state the window hidden to prevent flicker
-			if (pClientWindow->GetPageCount() == 1)
-				tabCtrl->Show(false);
 
 			// save active window pointer
 			wxWindow* new_active = pClientWindow->GetPage(pClientWindow->GetSelection());
@@ -306,8 +159,6 @@ protected:
 
 			pClientWindow->SetEvtHandlerEnabled(true);
 		}
-
-		pClientWindow->Thaw();
 
 		// This is a child window, so we need to delete it immediately instead of
 		// postponing it until idle time as we do with real TLWs.

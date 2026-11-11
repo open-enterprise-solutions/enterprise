@@ -49,16 +49,12 @@ public:
 	{
 		m_owner = owner;
 
-		// (⛔ NO wxBG_STYLE_PAINT HERE. Tried 2026-08-26 and REVERTED the same minute: it is only
-		//  true of the CELL window, which paints its whole rectangle itself (DrawGridSpace). The
-		//  label / area / outline strips paint their ITEMS and let the system fill everything around
-		//  them — the space below the last row, the strip's own margins. Denied that fill they
-		//  showed an uninitialised buffer: black bands across the headings. Whoever tries this again
-		//  must give each strip its own Clear() first, in its own colour.)
-		//
-		// SEAM vs wx: ibWindow sets wxBG_STYLE_PAINT for every window (its Init) - taken back for the strips, whose
-		// fill is then ibWindow's own erase, in the strip's own colour (SetOwnBackgroundColour, ibGrid::Create)
-		SetBackgroundStyle(wxBG_STYLE_ERASE);
+		// the strips paint as every ibWindow does (wxBG_STYLE_PAINT, its Init): a label / area / outline strip draws
+		// its items over the background its ibThemePaintDC gives it first, in the strip's own colour
+		// (SetOwnBackgroundColour, ibGrid::Create), in one buffer. Erased by the system on screen and painted after,
+		// a strip stood blank between the two — every step of a resize showed the headings empty (2026-11-11, Max:
+		// "when I resize, the spreadsheet document flickers"); buffered with no background (2026-08-26) it showed
+		// black bands
 	}
 
 	virtual wxWindow* GetMainWindowOfCompositeControl() wxOVERRIDE { return m_owner; }

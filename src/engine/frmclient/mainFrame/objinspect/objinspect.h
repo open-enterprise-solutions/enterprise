@@ -3,7 +3,7 @@
 
 #include "frmclient/backend/propertyManager/propertyManager.h"
 
-#include <wx/aui/auibook.h>
+#include "deskgui/univ/aui/auibook.h"
 #include "deskgui/univ/propgrid/manager.h"
 #include <wx/config.h>
 

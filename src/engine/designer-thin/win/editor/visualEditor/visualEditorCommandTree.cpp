@@ -114,7 +114,6 @@ ibCommandTree::ibVisualEditorCommandTree(ibVisualEditor* owner, wxWindow* parent
 {
 	m_tcCommands = new ibDesignerTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTR_DEFAULT_STYLE | wxTR_HIDE_ROOT | wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_FULL_ROW_HIGHLIGHT);
-	m_tcCommands->SetDoubleBuffered(true);   // no flicker on a rebuild
 	// Right-click anywhere in the tree -> add a command without leaving the form (bound on the tree, not the panel,
 	// so an empty-space click still fires).
 	m_tcCommands->Bind(wxEVT_CONTEXT_MENU, &ibVisualEditorCommandTree::OnContextMenu, this);

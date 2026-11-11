@@ -1,6 +1,6 @@
 ﻿#include "visualEditor.h"
-#include "frmclient/artProvider/artProvider.h"
-#include "deskgui/univ/theme/luna_tabart.h"
+#include "deskgui/artProvider.h"
+#include "deskgui/univ/aui/auibook.h"
 
 #include "frmclient/docView/docView.h"   // ibDOC_READONLY
 #include "core/serialize/dataBuilder.h"   // ibDataNode — an event's row, its Args
@@ -12,53 +12,52 @@
 
 void ibVisualEditorNotebook::CreateVisualEditor(ibModuleEditDocument* document, wxWindow* parent, wxWindowID id, long flags)
 {
-	wxAuiNotebook::AddPage(m_visualEditor, _("Designer"), false, wxArtProvider::GetBitmapBundle(wxART_DESIGNER_PAGE, wxART_DOC_FORM));
-	wxAuiNotebook::AddPage(m_codeEditor, _("Code"), false, wxArtProvider::GetBitmapBundle(wxART_CODE_PAGE, wxART_DOC_FORM));
+	ibAuiNotebook::AddPage(m_visualEditor, _("Designer"), false, wxArtProvider::GetBitmapBundle(wxART_DESIGNER_PAGE, wxART_DOC_FORM));
+	ibAuiNotebook::AddPage(m_codeEditor, _("Code"), false, wxArtProvider::GetBitmapBundle(wxART_CODE_PAGE, wxART_DOC_FORM));
 	m_visualEditor->SetReadOnly(flags == ibDOC_READONLY);
 	m_codeEditor->SetReadOnly(flags == ibDOC_READONLY);
-	wxAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_DESIGNER);
+	ibAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_DESIGNER);
 
-	wxAuiNotebook::Bind(wxEVT_AUINOTEBOOK_PAGE_CHANGED, &ibVisualEditorNotebook::OnPageChanged, this);
-	wxAuiNotebook::SetArtProvider(new wxAuiLunaTabArt());
+	ibAuiNotebook::Bind(ibEVT_AUINOTEBOOK_PAGE_CHANGED, &ibVisualEditorNotebook::OnPageChanged, this);
 }
 
 void ibVisualEditorNotebook::DestroyVisualEditor()
 {
-	wxAuiNotebook::Unbind(wxEVT_AUINOTEBOOK_PAGE_CHANGED, &ibVisualEditorNotebook::OnPageChanged, this);
+	ibAuiNotebook::Unbind(ibEVT_AUINOTEBOOK_PAGE_CHANGED, &ibVisualEditorNotebook::OnPageChanged, this);
 }
 
 bool ibVisualEditorNotebook::Undo()
 {
-	if (wxAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_DESIGNER)
+	if (ibAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_DESIGNER)
 		m_visualEditor->Undo();
-	else if (wxAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_CODE_EDITOR)
+	else if (ibAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_CODE_EDITOR)
 		m_codeEditor->Undo();
 	return true;
 }
 
 bool ibVisualEditorNotebook::Redo()
 {
-	if (wxAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_DESIGNER)
+	if (ibAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_DESIGNER)
 		m_visualEditor->Redo();
-	else if (wxAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_CODE_EDITOR)
+	else if (ibAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_CODE_EDITOR)
 		m_codeEditor->Redo();
 	return true;
 }
 
 bool ibVisualEditorNotebook::CanUndo() const
 {
-	if (wxAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_DESIGNER)
+	if (ibAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_DESIGNER)
 		return m_visualEditor->CanUndo();
-	else if (wxAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_CODE_EDITOR)
+	else if (ibAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_CODE_EDITOR)
 		return m_codeEditor->CanUndo();
 	return false;
 }
 
 bool ibVisualEditorNotebook::CanRedo() const
 {
-	if (wxAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_DESIGNER)
+	if (ibAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_DESIGNER)
 		return m_visualEditor->CanRedo();
-	else if (wxAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_CODE_EDITOR)
+	else if (ibAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_CODE_EDITOR)
 		return m_codeEditor->CanRedo();
 	return false;
 }
@@ -135,8 +134,8 @@ void ibVisualEditorNotebook::ModifyEvent(ibProperty* event, const ibVariant& old
 			}
 		}
 
-		if (wxAuiNotebook::GetSelection() != wxNOTEBOOK_PAGE_CODE_EDITOR)
-			wxAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_CODE_EDITOR);
+		if (ibAuiNotebook::GetSelection() != wxNOTEBOOK_PAGE_CODE_EDITOR)
+			ibAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_CODE_EDITOR);
 
 		if (!procFounded) {
 			int endPos = m_codeEditor->GetLineEndPosition(m_lineEnd);
@@ -155,13 +154,13 @@ void ibVisualEditorNotebook::ModifyEvent(ibProperty* event, const ibVariant& old
 
 void ibVisualEditorNotebook::ActivateEditor()
 {
-	if (wxAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_DESIGNER)
+	if (ibAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_DESIGNER)
 		m_visualEditor->ActivateEditor();
-	else if (wxAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_CODE_EDITOR)
+	else if (ibAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_CODE_EDITOR)
 		m_codeEditor->ActivateEditor();
 }
 
-void ibVisualEditorNotebook::OnPageChanged(wxAuiNotebookEvent& event) {
+void ibVisualEditorNotebook::OnPageChanged(ibAuiNotebookEvent& event) {
 	m_visualEditor->Activate();
 	event.Skip();
 }

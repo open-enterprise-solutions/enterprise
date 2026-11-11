@@ -8,7 +8,7 @@
 #include "frmclient/visualView/pageWindow.h"
 #include "frmclient/visualView/visualHostClient.h"   // a designer's host selects and moves by it
 #include "frmclient/win/picture.h"
-#include "deskgui/univ/theme/luna_tabart.h"
+#include "deskgui/univ/aui/auibook.h"
 
 namespace {
 
@@ -20,15 +20,15 @@ ibProtocol::ibForm::ibNotebook::ibTabLocation TabLocationOf(const ibProtocolNode
 }
 
 // The desktop's style of a notebook: its tabs where the form put them, moved and scrolled; split at runtime only, as
-// the desktop's (ibValueNotebook::Create) - with a split, wxAuiNotebook ends a drag inside its own tabs before it says
+// the desktop's (ibValueNotebook::Create) - with a split, ibAuiNotebook ends a drag inside its own tabs before it says
 // DRAG_DONE, so the designer would never hear that a page was moved.
 long NotebookStyleOf(const ibProtocolNode& node, const ibVisualHostClient& host)
 {
-	long style = (TabLocationOf(node) == ibProtocol::ibForm::ibNotebook::ibTabLocation::Bottom ? wxAUI_NB_BOTTOM : wxAUI_NB_TOP) |
-		wxAUI_NB_TAB_MOVE |
-		wxAUI_NB_SCROLL_BUTTONS;
+	long style = (TabLocationOf(node) == ibProtocol::ibForm::ibNotebook::ibTabLocation::Bottom ? ibAUI_NB_BOTTOM : ibAUI_NB_TOP) |
+		ibAUI_NB_TAB_MOVE |
+		ibAUI_NB_SCROLL_BUTTONS;
 	if (!host.IsDesignerHost())
-		style |= wxAUI_NB_TAB_SPLIT;
+		style |= ibAUI_NB_TAB_SPLIT;
 	return style;
 }
 
@@ -40,11 +40,10 @@ long NotebookStyleOf(const ibProtocolNode& node, const ibVisualHostClient& host)
 
 void ibValueNotebook::Create(wxWindow* parent, const ibProtocolNode& node)
 {
-	m_notebook = new wxAuiNotebook(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, NotebookStyleOf(node, GetVisualHost()));
-	m_notebook->SetArtProvider(new wxAuiLunaTabArt());
+	m_notebook = new ibAuiNotebook(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, NotebookStyleOf(node, GetVisualHost()));
 
-	m_notebook->Bind(wxEVT_AUINOTEBOOK_PAGE_CHANGED, &ibValueNotebook::OnPageChanged, this);
-	m_notebook->Bind(wxEVT_AUINOTEBOOK_DRAG_DONE, &ibValueNotebook::OnEndDrag, this);
+	m_notebook->Bind(ibEVT_AUINOTEBOOK_PAGE_CHANGED, &ibValueNotebook::OnPageChanged, this);
+	m_notebook->Bind(ibEVT_AUINOTEBOOK_DRAG_DONE, &ibValueNotebook::OnEndDrag, this);
 }
 
 void ibValueNotebook::Update(const ibProtocolNode& node)
@@ -78,7 +77,7 @@ void ibValueNotebook::SelectActivePage()
 	}
 }
 
-void ibValueNotebook::OnPageChanged(wxAuiNotebookEvent& event)
+void ibValueNotebook::OnPageChanged(ibAuiNotebookEvent& event)
 {
 	event.Skip();
 
@@ -107,7 +106,7 @@ void ibValueNotebook::OnPageChanged(wxAuiNotebookEvent& event)
 	}
 }
 
-void ibValueNotebook::OnEndDrag(wxAuiNotebookEvent& event)
+void ibValueNotebook::OnEndDrag(ibAuiNotebookEvent& event)
 {
 	event.Skip();
 
@@ -144,7 +143,7 @@ void ibValueNotebookPage::Update(const ibProtocolNode& node)
 {
 	const ibProtocolNode state = node.FindChild(ibProtocol::ibForm::ibState::State);
 	ibValueNotebook* const owner = GetNotebook();
-	wxAuiNotebook* const notebook = owner->m_notebook;
+	ibAuiNotebook* const notebook = owner->m_notebook;
 
 	// Its place among the pages that are on the notebook — those before it.
 	const bool shown = state.GetBool(ibProtocol::ibForm::ibState::Visible, true);
@@ -158,7 +157,7 @@ void ibValueNotebookPage::Update(const ibProtocolNode& node)
 	}
 
 	// The notebook selects a page of its own as pages come and go — not the person's pick, not told to the server.
-	wxEventBlocker blocker(notebook, wxEVT_AUINOTEBOOK_PAGE_CHANGED);
+	wxEventBlocker blocker(notebook, ibEVT_AUINOTEBOOK_PAGE_CHANGED);
 
 	const int was = notebook->GetPageIndex(m_page);
 	if (was != wxNOT_FOUND && was != pos)

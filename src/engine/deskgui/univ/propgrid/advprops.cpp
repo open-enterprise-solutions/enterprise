@@ -38,14 +38,9 @@
 #include <limits>
 #include <array>
 
-// Drawing ARGB on standard DC is supported by OSX and GTK3
-#if defined(__WXOSX__) || defined(__WXGTK3__)
-#define ibPG_DC_SUPPORTS_ALPHA 1
-#else
-#define ibPG_DC_SUPPORTS_ALPHA 0
-#endif // __WXOSX__ || __WXGTK3__
-
-#define ibPG_USE_GC_FOR_ALPHA  (wxUSE_GRAPHICS_CONTEXT && !ibPG_DC_SUPPORTS_ALPHA)
+// SEAM vs wx: a colour with alpha is drawn through a graphics context on every port - wx did it where the DC itself
+// draws none (MSW), and the context draws it on any (2026-11-11)
+#define ibPG_USE_GC_FOR_ALPHA  wxUSE_GRAPHICS_CONTEXT
 
 #if ibPG_USE_GC_FOR_ALPHA
 #include "wx/dcgraph.h"
@@ -104,14 +99,8 @@ bool operator == (const wxArrayInt& array1, const wxArrayInt& array2)
 
 #if wxUSE_SPINBTN
 
-
-#ifdef __WXMSW__
-  #define IS_MOTION_SPIN_SUPPORTED  1
-#else
-  #define IS_MOTION_SPIN_SUPPORTED  0
-#endif
-
-#if IS_MOTION_SPIN_SUPPORTED
+// SEAM vs wx: on every port - the button is the library's and the class below reads only wx's mouse events (wx kept
+// it to MSW)
 
 //
 // This class implements ability to rapidly change "spin" value
@@ -217,8 +206,6 @@ private:
     }
 };
 
-#endif  // IS_MOTION_SPIN_SUPPORTED
-
 
 IB_PG_IMPLEMENT_INTERNAL_EDITOR_CLASS(SpinCtrl,
                                       ibPGSpinCtrlEditor,
@@ -242,30 +229,21 @@ ibPGWindowList ibPGSpinCtrlEditor::CreateControls( ibPropertyGrid* propgrid, ibP
     if ( prop )
     {
         const int margin = 1;
-#if IS_MOTION_SPIN_SUPPORTED
         if ( prop->UseSpinMotion() )
         {
             wnd2 = new ibPGSpinButton();
         }
         else
-#endif
         {
             wnd2 = new ibSpinButton();
         }
 
-#ifdef __WXMSW__
         wnd2->Hide();
-#endif
         wnd2->Create(propgrid->GetPanel(), wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSP_VERTICAL);
         // Scale spin button to the required height (row height)
         wxSize butSz = wnd2->GetBestSize();
-#ifdef __WXGTK3__
-        // Under GTK+ 3 spin button is always horizontal and cannot be downscaled
-        int butWidth = butSz.x;
-#else
         double sc = (double)sz.y / butSz.y;
         int butWidth = wxMax(18, wxRound(sc*butSz.x));
-#endif
         tcSz.Set(sz.x - butWidth - margin, sz.y);
         wnd2->SetSize(pos.x + tcSz.x + margin, pos.y, butWidth, sz.y);
         wnd2->SetRange(ibPG_INT_MIN, ibPG_INT_MAX);
@@ -323,7 +301,6 @@ bool ibPGSpinCtrlEditor::OnEvent(ibPropertyGrid* propgrid, ibPGProperty* propert
         if ( evtType == wxEVT_SCROLL_LINEUP || evtType == wxEVT_SCROLL_LINEDOWN )
         {
             int spins = 1;
-#if IS_MOTION_SPIN_SUPPORTED
             if ( prop->UseSpinMotion() )
             {
                 ibPGSpinButton* spinButton =
@@ -332,7 +309,6 @@ bool ibPGSpinCtrlEditor::OnEvent(ibPropertyGrid* propgrid, ibPGProperty* propert
                 if ( spinButton )
                     spins = spinButton->GetSpins();
             }
-#endif
 
             long stepScale = (evtType == wxEVT_SCROLL_LINEUP) ? 1L : -1L;
             if ( bigStep )
@@ -396,15 +372,11 @@ ibPGWindowList ibPGDatePickerCtrlEditor::CreateControls( ibPropertyGrid* propgri
     ibDateProperty* prop = wxDynamicCast(property, ibDateProperty);
     wxCHECK_MSG(prop, nullptr, "ibDatePickerCtrl editor can only be used with ibDateProperty or derivative.");
 
-    // Use two stage creation to allow cleaner display on wxMSW
+    // Use two stage creation to allow cleaner display (SEAM vs wx: on every port, the control's own height as on MSW)
     ibDatePickerCtrl* ctrl = new ibDatePickerCtrl();
-#ifdef __WXMSW__
     ctrl->Hide();
     wxSize useSz = wxDefaultSize;
     useSz.x = sz.x;
-#else
-    wxSize useSz = sz;
-#endif
 
     wxDateTime dateValue(wxInvalidDateTime);
 
@@ -419,9 +391,7 @@ ibPGWindowList ibPGDatePickerCtrlEditor::CreateControls( ibPropertyGrid* propgri
                  useSz,
                  prop->GetDatePickerStyle() | wxNO_BORDER);
 
-#ifdef __WXMSW__
     ctrl->Show();
-#endif
 
     return ctrl;
 }
@@ -1953,7 +1923,7 @@ void ibImageFileProperty::OnCustomPaint( wxDC& dc,
 
 #if wxUSE_CHOICEDLG
 
-#include "wx/choicdlg.h"
+#include "deskgui/univ/choiceDialog.h"   // ibMultiChoiceDialog — the choices ticked in the theme's dialog
 
 ibPG_IMPLEMENT_PROPERTY_CLASS(ibMultiChoiceProperty,ibEditorDialogProperty,
                               TextCtrlAndButton)
@@ -2068,8 +2038,8 @@ bool ibMultiChoiceProperty::DisplayEditorDialog(ibPropertyGrid* pg, ibVariant& v
     wxArrayString labels = m_choices.GetLabels();
     unsigned int choiceCount = m_choices.GetCount();
 
-    // launch editor dialog
-    wxMultiChoiceDialog dlg( pg->GetPanel(),
+    // launch editor dialog - SEAM vs wx: the theme's (ibMultiChoiceDialog), as every dialog of the fork
+    ibMultiChoiceDialog dlg( pg->GetPanel(),
                              _("Make a selection:"),
                              m_dlgTitle.empty() ? GetLabel() : m_dlgTitle,
                              choiceCount,

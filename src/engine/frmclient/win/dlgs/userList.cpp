@@ -1,6 +1,6 @@
 #include "userList.h"
 #include "frmclient/backend/userInfo.h"   // the users — the server's schema behind the desktop's calls
-#include "deskgui/univ/theme/luna_toolbarart.h"
+#include "deskgui/univ/aui/auibar.h"
 #include "frmclient/backend/backend_picture.h"
 #include "core/picturePredefined.h"
 
@@ -66,15 +66,12 @@ ibDialogUserList::ibDialogUserList(wxWindow* parent, wxWindowID id, const wxStri
 
 	wxBoxSizer* sizerList = new wxBoxSizer(wxVERTICAL);
 
-	m_toolbarMain = new wxAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_TEXT);
-	m_toolbarMain->SetArtProvider(new wxAuiLunaToolBarArt());
+	m_toolbarMain = new ibAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, ibAUI_TB_HORZ_TEXT);
 
 	m_toolAdd = m_toolbarMain->AddTool(wxID_USERS_TOOL_ADD, _("Add"), ibBackendPicture::GetPicture(g_picAddCLSID), wxNullBitmap, wxITEM_NORMAL, wxEmptyString, wxEmptyString, nullptr);
 	m_toolCopy = m_toolbarMain->AddTool(wxID_USERS_TOOL_COPY, _("Copy"), ibBackendPicture::GetPicture(g_picCopyCLSID), wxNullBitmap, wxITEM_NORMAL, wxEmptyString, wxEmptyString, nullptr);
 	m_toolEdit = m_toolbarMain->AddTool(wxID_USERS_TOOL_EDIT, _("Edit"), ibBackendPicture::GetPicture(g_picEditCLSID), wxNullBitmap, wxITEM_NORMAL, wxEmptyString, wxEmptyString, nullptr);
 	m_toolDelete = m_toolbarMain->AddTool(wxID_USERS_TOOL_DELETE, _("Delete"), ibBackendPicture::GetPicture(g_picDeleteCLSID), wxNullBitmap, wxITEM_NORMAL, wxEmptyString, wxEmptyString, nullptr);
-
-	m_toolbarMain->SetBackgroundColour(wxDefaultStypeBGColour);
 
 	m_toolbarMain->Realize();
 	m_toolbarMain->Connect(wxEVT_MENU, wxCommandEventHandler(ibDialogUserList::OnCommandMenu), nullptr, this);
@@ -131,7 +128,7 @@ void ibDialogUserList::OnContextMenu(ibDataViewEvent& event)
 	ibMenu menu;
 
 	for (unsigned int idx = 0; idx < m_toolbarMain->GetToolCount(); idx++) {
-		wxAuiToolBarItem* tool = m_toolbarMain->FindToolByIndex(idx);
+		ibAuiToolBarItem* tool = m_toolbarMain->FindToolByIndex(idx);
 		if (tool) {
 			menu.Append(tool->GetId(), tool->GetLabel())->SetBitmap(tool->GetBitmapBundle());
 		}

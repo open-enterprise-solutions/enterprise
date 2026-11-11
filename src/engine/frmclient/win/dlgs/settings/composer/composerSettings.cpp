@@ -41,7 +41,7 @@
 #include "deskgui/univ/ctrl/notebook.h"
 #include <wx/panel.h>
 #include <wx/statbox.h>
-#include <wx/toolbar.h>
+#include "deskgui/univ/aui/auibar.h"
 #include <wx/artprov.h>
 #include <wx/settings.h>   // wxSystemSettings — a generated title reads grey
 #include <wx/menu.h>
@@ -1370,8 +1370,7 @@ public:
 	{
 		wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 
-		wxToolBar* bar = new wxToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-			wxTB_FLAT | wxTB_NODIVIDER | wxTB_HORIZONTAL);
+		ibAuiToolBar* bar = new ibAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, ibAUI_TB_HORIZONTAL);
 		bar->SetToolBitmapSize(FromDIP(wxSize(16, 16)));
 		// ⚠ ASCII ONLY IN UI LITERALS — this file has no BOM, so MSVC reads it as ANSI.
 		bar->AddTool(wxID_ADD, _("Add field"), ibSettingsArt(wxASCII_STR(wxART_NEW), this), _("Add field"));
@@ -1873,8 +1872,8 @@ void ibComposerSettingsPanel::SetReadOnly(bool readOnly)
 {
 	m_readOnly = readOnly;
 
-	wxToolBar* const bars[] = { m_variantBar, m_structureBar, m_resourceBar, m_parameterBar };
-	for (wxToolBar* bar : bars) {
+	ibAuiToolBar* const bars[] = { m_variantBar, m_structureBar, m_resourceBar, m_parameterBar };
+	for (ibAuiToolBar* bar : bars) {
 		if (bar != nullptr)
 			bar->Enable(!readOnly);
 	}
@@ -2341,8 +2340,7 @@ wxWindow* ibComposerSettingsPanel::BuildVariantPane(wxWindow* parent)
 	ibPanel* variantPane = new ibPanel(parent);
 	wxBoxSizer* variantSizer = new wxBoxSizer(wxVERTICAL);
 
-	m_variantBar = new wxToolBar(variantPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-		wxTB_HORIZONTAL | wxTB_FLAT | wxTB_NODIVIDER);
+	m_variantBar = new ibAuiToolBar(variantPane, wxID_ANY, wxDefaultPosition, wxDefaultSize, ibAUI_TB_HORIZONTAL);
 	m_variantBar->SetToolBitmapSize(FromDIP(wxSize(16, 16)));
 	m_variantBar->AddTool(ID_VARIANT_ADD, _("Add"),
 		ibSettingsArt(wxASCII_STR(wxART_NEW), this), _("Add variant"));
@@ -2398,8 +2396,8 @@ wxWindow* ibComposerSettingsPanel::BuildStructurePane(wxWindow* parent)
 	ibPanel* pane = new ibPanel(parent);
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 
-	wxToolBar* bar = m_structureBar = new wxToolBar(pane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-		wxTB_HORIZONTAL | wxTB_FLAT | wxTB_NODIVIDER);
+	ibAuiToolBar* bar = m_structureBar = new ibAuiToolBar(pane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+		ibAUI_TB_HORIZONTAL);
 	bar->SetToolBitmapSize(FromDIP(wxSize(16, 16)));
 	// ⚠ ASCII ONLY IN UI LITERALS — this file has no BOM (see the query page below).
 	bar->AddTool(ID_LEVEL_ADD, _("Add grouping"),
@@ -2578,8 +2576,7 @@ wxWindow* ibComposerSettingsPanel::BuildGroupingPage(wxWindow* parent)
 	}));
 	wxBoxSizer* rightSizer = new wxBoxSizer(wxVERTICAL);
 
-	wxToolBar* bar = new wxToolBar(right, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-		wxTB_FLAT | wxTB_NODIVIDER | wxTB_HORIZONTAL);
+	ibAuiToolBar* bar = new ibAuiToolBar(right, wxID_ANY, wxDefaultPosition, wxDefaultSize, ibAUI_TB_HORIZONTAL);
 	bar->AddTool(ID_GROUPFIELD_ADD, _("Add field"), ibSettingsArt(wxASCII_STR(wxART_NEW), this), _("Add field"));
 	bar->AddTool(ID_GROUPFIELD_REMOVE, _("Delete"), ibSettingsArt(wxASCII_STR(wxART_DELETE), this), _("Delete"));
 	bar->AddSeparator();
@@ -2704,8 +2701,7 @@ wxWindow* ibComposerSettingsPanel::BuildFieldSetPage(wxWindow* parent)
 	const int idUp     = ID_SELECTED_UP;
 	const int idDown   = ID_SELECTED_DOWN;
 
-	wxToolBar* bar = new wxToolBar(right, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-		wxTB_FLAT | wxTB_NODIVIDER | wxTB_HORIZONTAL);
+	ibAuiToolBar* bar = new ibAuiToolBar(right, wxID_ANY, wxDefaultPosition, wxDefaultSize, ibAUI_TB_HORIZONTAL);
 	bar->AddTool(idAdd, _("Add field"), ibSettingsArt(wxASCII_STR(wxART_NEW), this), _("Add field"));
 	bar->AddTool(ID_SELECTED_AUTO, _("Add \"Auto\""), ibSettingsArt(wxASCII_STR(wxART_GO_DIR_UP), this),
 		_("Everything the level above shows, in this place"));
@@ -3398,8 +3394,8 @@ wxWindow* ibComposerSettingsPanel::BuildResourcePage(wxWindow* parent)
 	ibPanel* rightPane = new ibPanel(split);
 	wxBoxSizer* right = new wxBoxSizer(wxVERTICAL);
 
-	wxToolBar* bar = m_resourceBar = new wxToolBar(rightPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-		wxTB_HORIZONTAL | wxTB_FLAT | wxTB_NODIVIDER);
+	ibAuiToolBar* bar = m_resourceBar = new ibAuiToolBar(rightPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+		ibAUI_TB_HORIZONTAL);
 	bar->SetToolBitmapSize(FromDIP(wxSize(16, 16)));
 	// ⭐ NO AGGREGATE CHOOSER ON THE BAR ANY MORE. Adding a field now lands the FIRST aggregate the
 	// engine admits for its type — `SUM(Amount)`, `COUNT(Description)` — and the choice of which one
@@ -3516,8 +3512,8 @@ wxWindow* ibComposerSettingsPanel::BuildParameterPage(wxWindow* parent, bool for
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 
 	if (!forReader) {
-		wxToolBar* bar = m_parameterBar = new wxToolBar(panel, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-			wxTB_HORIZONTAL | wxTB_FLAT | wxTB_NODIVIDER);
+		ibAuiToolBar* bar = m_parameterBar = new ibAuiToolBar(panel, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+			ibAUI_TB_HORIZONTAL);
 		bar->SetToolBitmapSize(FromDIP(wxSize(16, 16)));
 		bar->AddTool(ID_PARAM_ADD, _("Add"),
 			ibSettingsArt(wxASCII_STR(wxART_NEW), this), _("Add parameter"));

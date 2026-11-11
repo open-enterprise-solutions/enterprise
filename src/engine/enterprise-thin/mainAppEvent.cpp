@@ -21,11 +21,11 @@ void ibAppEnterprise::OnKeyEvent(wxKeyEvent& event)
 			event.Skip();
 			return;
 		}
-		wxAuiMDIChildFrame* childFrame = mainFrame->GetActiveChild();
+		ibAuiMDIChildFrame* childFrame = mainFrame->GetActiveChild();
 		if (childFrame != nullptr) {
 			// …and the frame is held WEAKLY: closed some other way before the call comes round, it is gone — not a
-			// pointer into freed memory. Its close asks the server (ibAuiChildFrame::OnCloseWindow).
-			wxWeakRef<wxAuiMDIChildFrame> frame(childFrame);
+			// pointer into freed memory. Its close asks the server (ibDocChildFrameAny::OnCloseWindow).
+			wxWeakRef<ibAuiMDIChildFrame> frame(childFrame);
 			CallAfter([frame]() { if (frame) frame->Close(); });
 		}
 	}
@@ -38,12 +38,12 @@ void ibAppEnterprise::OnSetFocus(wxFocusEvent& event)
 	// THE FOCUS GONE INTO A FORM BRINGS ITS TAB UP — the desktop's: a click into a tab's window that is not the selected
 	// one (the notebook split in two) selects it, and the selection is told to the server as a tab picked is.
 	wxWindow* child = dynamic_cast<wxWindow*>(event.GetEventObject());
-	while (child != nullptr && !child->IsKindOf(CLASSINFO(wxAuiMDIChildFrame))) {
+	while (child != nullptr && !child->IsKindOf(CLASSINFO(ibAuiMDIChildFrame))) {
 		child = child->GetParent();
 	}
 
 	if (child != nullptr && mainFrame != nullptr) {
-		wxAuiMDIClientWindow* client = mainFrame->GetClientWindow();
+		ibAuiMDIClientWindow* client = mainFrame->GetClientWindow();
 		const int new_selection = client->FindPage(child);
 		if (new_selection != wxNOT_FOUND && new_selection != client->GetSelection())
 			client->SetSelection(new_selection);

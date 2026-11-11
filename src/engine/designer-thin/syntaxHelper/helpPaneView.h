@@ -94,7 +94,7 @@ private:
 	std::shared_ptr<const ibHelpCorpus> m_corpus;
 	ibHelpEntry m_typeEntry;   // the type Entry answered last
 
-	class wxToolBar* m_toolbar         = nullptr;
+	class ibAuiToolBar* m_toolbar      = nullptr;
 	ibNotebook*       m_notebook       = nullptr;
 	ibHelpTreeView*   m_treeView       = nullptr;
 	ibHelpIndexView*  m_indexView      = nullptr;

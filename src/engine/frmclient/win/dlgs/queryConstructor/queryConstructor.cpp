@@ -217,10 +217,9 @@ void ibMarkQueryText(ibStyledTextCtrl* text)
 	}
 }
 
-wxToolBar* ibDialogQueryConstructor::MakeToolBar(wxWindow* parent)
+ibAuiToolBar* ibDialogQueryConstructor::MakeToolBar(wxWindow* parent)
 {
-	wxToolBar* bar = new wxToolBar(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-		wxTB_HORIZONTAL | wxTB_FLAT | wxTB_NODIVIDER);
+	ibAuiToolBar* bar = new ibAuiToolBar(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, ibAUI_TB_HORIZONTAL);
 	// 16×16 — a settings toolbar sits above a list, and the stock size (24 or 32, per theme) makes
 	// it the loudest thing on the page. Same call listSettings makes, for the same reason.
 	bar->SetToolBitmapSize(FromDIP(wxSize(16, 16)));
@@ -228,7 +227,7 @@ wxToolBar* ibDialogQueryConstructor::MakeToolBar(wxWindow* parent)
 	return bar;
 }
 
-void ibDialogQueryConstructor::AddTool(wxToolBar* bar, const wxString& label, const wxString& artId,
+void ibDialogQueryConstructor::AddTool(ibAuiToolBar* bar, const wxString& label, const wxString& artId,
                                        std::function<void(wxCommandEvent&)> handler)
 {
 	// ⚠ THE PRODUCT'S OWN IDS, NOT THE STOCK ONES. The frontend art provider serves exactly
@@ -252,7 +251,7 @@ void ibDialogQueryConstructor::AddTool(wxToolBar* bar, const wxString& label, co
 		bar->AddTool(id, label, bitmap, label);
 	}
 	else {
-		bar->SetWindowStyle(bar->GetWindowStyle() | wxTB_TEXT);
+		bar->SetWindowStyle(bar->GetWindowStyle() | ibAUI_TB_TEXT);
 		bar->AddTool(id, label, wxBitmapBundle(), label);
 	}
 	bar->Bind(wxEVT_TOOL, handler, id);
@@ -270,7 +269,7 @@ void ibDialogQueryConstructor::AddTool(wxToolBar* bar, const wxString& label, co
 // button that has no menu item and a menu item that does nothing. The toolbar records each verb as it
 // is added (AddTool); this replays that record. A tool added tomorrow is in the menu the same day,
 // with nothing edited here.
-void ibDialogQueryConstructor::AttachContextMenu(ibWindow* target, wxToolBar* bar)
+void ibDialogQueryConstructor::AttachContextMenu(ibWindow* target, ibAuiToolBar* bar)
 {
 	if (target == nullptr || bar == nullptr)
 		return;
@@ -646,7 +645,7 @@ wxWindow* ibDialogQueryConstructor::BuildPackagePage(wxWindow* parent)
 	ibPanel* panel = new ibPanel(parent);
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 
-	wxToolBar* bar = MakeToolBar(panel);
+	ibAuiToolBar* bar = MakeToolBar(panel);
 	AddTool(bar, _("Add query"), wxART_ADD_QUERY, [this](wxCommandEvent& e) { OnAddStatement(e); });
 	AddTool(bar, _("Delete"),    wxART_DELETE, [this](wxCommandEvent& e) { OnRemoveStatement(e); });
 	bar->AddSeparator();
@@ -745,7 +744,7 @@ wxWindow* ibDialogQueryConstructor::BuildTablesPage(wxWindow* parent)
 
 	wxBoxSizer* middle = new wxBoxSizer(wxVERTICAL);
 	middle->Add(new ibStaticText(middlePane, wxID_ANY, _("Tables")), 0, wxALL, FromDIP(3));
-	wxToolBar* middleBar = MakeToolBar(middlePane);
+	ibAuiToolBar* middleBar = MakeToolBar(middlePane);
 	// A NESTED TABLE IS A TABLE OF THIS QUERY, so it is added where the query's tables are — and it
 	// opens THIS SAME window one level down over the inner select.
 	AddTool(middleBar, _("Nested table"), wxART_ADD_NESTED,
@@ -808,7 +807,7 @@ wxWindow* ibDialogQueryConstructor::BuildTablesPage(wxWindow* parent)
 
 	wxBoxSizer* right = new wxBoxSizer(wxVERTICAL);
 	right->Add(new ibStaticText(rightPane, wxID_ANY, _("Fields")), 0, wxALL, FromDIP(3));
-	wxToolBar* rightBar = MakeToolBar(rightPane);
+	ibAuiToolBar* rightBar = MakeToolBar(rightPane);
 	AddTool(rightBar, _("Expression"), wxART_ADD_EXPRESSION, [this](wxCommandEvent& e) { OnAddFieldExpression(e); });
 	// EDIT THE CURRENT FIELD — the arbitrary-expression editor, over the field standing here. The
 	// same window the conditions, the joins and the totals open; there is one of it in this dialog.
@@ -938,7 +937,7 @@ wxWindow* ibDialogQueryConstructor::BuildLinksPage(wxWindow* parent)
 	// one thing cost a splitter, a refill and a drag protocol, and taught nothing the grid does not.
 	ibPanel* bottomPane = page;
 	wxBoxSizer* bottom = new wxBoxSizer(wxVERTICAL);
-	wxToolBar* bar = MakeToolBar(bottomPane);
+	ibAuiToolBar* bar = MakeToolBar(bottomPane);
 	// A LINK IS MADE HERE TOO, not only by adding a table. Joining a table that is already in the
 	// query — or writing a second condition between the same pair — had no verb at all: the only
 	// way to get a link was to add a source, which is a different act with a different meaning.
@@ -1035,7 +1034,7 @@ wxWindow* ibDialogQueryConstructor::BuildSelectionLinksPage(wxWindow* parent)
 	ibPanel* page = new ibPanel(parent);
 	wxBoxSizer* box = new wxBoxSizer(wxVERTICAL);
 
-	wxToolBar* bar = MakeToolBar(page);
+	ibAuiToolBar* bar = MakeToolBar(page);
 	AddTool(bar, _("Add link"), wxART_ADD_LINK, [this](wxCommandEvent& e) { OnSelectionLinkAdd(e); });
 	AddTool(bar, _("Delete"),   wxART_DELETE, [this](wxCommandEvent& e) { OnSelectionLinkRemove(e); });
 	bar->Realize();
@@ -1368,7 +1367,7 @@ wxWindow* ibDialogQueryConstructor::BuildConditionsPage(wxWindow* parent)
 	rightRow->Add(move, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, FromDIP(3));
 
 	wxBoxSizer* right = new wxBoxSizer(wxVERTICAL);
-	wxToolBar* bar = MakeToolBar(rightPane);
+	ibAuiToolBar* bar = MakeToolBar(rightPane);
 	AddTool(bar, _("Add"),    wxART_ADD_CONDITION, [this](wxCommandEvent& e) { OnAddCondition(e); });
 	AddTool(bar, _("Edit"),   wxART_EDIT, [this](wxCommandEvent& e) { OnEditCondition(e); });
 	AddTool(bar, _("Delete"), wxART_DELETE,    [this](wxCommandEvent& e) { OnRemoveCondition(e); });
@@ -1555,7 +1554,7 @@ wxWindow* ibDialogQueryConstructor::BuildOrderPage(wxWindow* parent)
 	rightRow->Add(move, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, FromDIP(3));
 
 	wxBoxSizer* right = new wxBoxSizer(wxVERTICAL);
-	wxToolBar* bar = MakeToolBar(rightPane);
+	ibAuiToolBar* bar = MakeToolBar(rightPane);
 	AddTool(bar, _("Direction"), wxART_DIRECTION, [this](wxCommandEvent& e) { OnToggleOrderDirection(e); });
 	bar->AddSeparator();
 	AddTool(bar, _("Move up"),   wxART_UP,   [this](wxCommandEvent&) { OnMoveOrder(-1); });
@@ -1667,7 +1666,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 	dimRow->Add(dimMove, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, FromDIP(3));
 
 	wxBoxSizer* dims = new wxBoxSizer(wxVERTICAL);
-	wxToolBar* dimBar = MakeToolBar(dimPane);
+	ibAuiToolBar* dimBar = MakeToolBar(dimPane);
 	// ⭐⭐ ADD A SEPARATOR — a NODE the groupings are hung on. Without one the tab behaves exactly as
 	// it always has (one hidden node, one ladder); with one, the levels added after it land on it,
 	// and a report reads each node as a selection of its own.
@@ -2177,7 +2176,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 	aggRow->Add(aggMove, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, FromDIP(3));
 
 	wxBoxSizer* aggs = new wxBoxSizer(wxVERTICAL);
-	wxToolBar* aggBar = MakeToolBar(aggPane);
+	ibAuiToolBar* aggBar = MakeToolBar(aggPane);
 	AddTool(aggBar, _("Edit"),   wxART_EDIT, [this](wxCommandEvent& e) { OnEditTotalsAggregate(e); });
 	AddTool(aggBar, _("Delete"), wxART_DELETE,    [this](wxCommandEvent& e) { OnRemoveTotalsAggregate(e); });
 	aggBar->Realize();
@@ -2383,7 +2382,7 @@ wxWindow* ibDialogQueryConstructor::BuildUnionsPage(wxWindow* parent)
 	// ---- LEFT: the branches.
 	ibPanel* leftPane = new ibPanel(splitter);
 	wxBoxSizer* left = new wxBoxSizer(wxVERTICAL);
-	wxToolBar* bar = MakeToolBar(leftPane);
+	ibAuiToolBar* bar = MakeToolBar(leftPane);
 	AddTool(bar, _("Add branch"),       wxART_ADD_BRANCH, [this](wxCommandEvent& e) { OnAddUnionBranch(e); });
 	// No copy picture in the product's set (artProvider.cpp serves add/edit/delete/up/down/sort), so
 	// this one falls through to its word — which AddTool now handles rather than drawing a blank.
@@ -2429,7 +2428,7 @@ wxWindow* ibDialogQueryConstructor::BuildUnionsPage(wxWindow* parent)
 	// THE FIELD MAP HAS ITS OWN VERBS, and they act on the PROJECTION a row stands for: the order of
 	// the output fields and whether one is there at all are decided here as readily as on the Fields
 	// tab, because this is where a person is looking when they think about the result's shape.
-	wxToolBar* fieldBar = MakeToolBar(rightPane);
+	ibAuiToolBar* fieldBar = MakeToolBar(rightPane);
 	AddTool(fieldBar, _("Delete"),    wxART_DELETE,  [this](wxCommandEvent& e) { OnRemoveUnionField(e); });
 	fieldBar->AddSeparator();
 	AddTool(fieldBar, _("Move up"),   wxART_UP,   [this](wxCommandEvent&) { OnMoveUnionField(-1); });

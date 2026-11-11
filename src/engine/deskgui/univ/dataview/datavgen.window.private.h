@@ -52,7 +52,8 @@ public:
 			owner, wxID_ANY, wxDefaultPosition, wxDefaultSize, additionalStyle | wxBORDER_NONE, name
 		);
 #else
-		Create(owner, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxWANTS_CHARS | wxBORDER_NONE, name);
+		// the same style as there: the caller's (wxCLIP_CHILDREN by default) was dropped on the other ports
+		Create(owner, wxID_ANY, wxDefaultPosition, wxDefaultSize, additionalStyle | wxBORDER_NONE, name);
 #endif
 
 		SetOwner(owner);

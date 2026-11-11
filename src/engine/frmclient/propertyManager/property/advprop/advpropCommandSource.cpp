@@ -170,7 +170,6 @@ ibPGEditorDialogAdapter* ibPGCommandSourceProperty::GetEditorDialog() const
 			wxBoxSizer* topsizer = new wxBoxSizer(wxVERTICAL);
 			ibTreeCtrl* tc = new ibTreeCtrl(dlg, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 				wxTR_HIDE_ROOT | wxTR_HAS_BUTTONS | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxSUNKEN_BORDER | wxTR_TWIST_BUTTONS);
-			tc->SetDoubleBuffered(true);
 			topsizer->Add(tc, wxSizerFlags(1).Expand().Border(wxALL, spacing));
 
 			wxImageList* images = new wxImageList(16, 16);

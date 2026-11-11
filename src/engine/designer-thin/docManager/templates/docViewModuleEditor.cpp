@@ -96,9 +96,9 @@ wxPrintout* ibModuleEditView::OnCreatePrintout()
 	return new ibTextEditorPrintout(m_codeEditor, m_viewDocument->GetTitle());
 }
 
-#include "frmclient/artProvider/artProvider.h"
+#include "deskgui/artProvider.h"
 
-void ibModuleEditView::OnCreateToolbar(wxAuiToolBar* toolbar)
+void ibModuleEditView::OnCreateToolbar(ibAuiToolBar* toolbar)
 {
 	if (m_codeEditor == nullptr)
 		return;

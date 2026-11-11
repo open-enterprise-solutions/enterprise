@@ -8,7 +8,7 @@
 #include "core/compiler/codeDef.h"           // KEY_FROM ... KEY_RESTRICT
 #include "core/stringUtils.h"
 #include "frmclient/backend/compiler/value.h"   // ibValue::GetIconGroup - a field's picture
-#include "frmclient/artProvider/artProvider.h"   // wxART_FRONTEND and the product's own pictures
+#include "deskgui/artProvider.h"   // wxART_FRONTEND and the product's own pictures
 #include "frmclient/mainFrame/mainFrame.h"       // the editor settings the block is coloured with
 #include "deskgui/univ/dataview/dataview.h"   // ibDataViewListCtrl - the platform's list, edited in place
 #include "deskgui/univ/dataview/dataviewEditOnActivate.h"   // …opened by a double-click
@@ -30,7 +30,7 @@
 #include "deskgui/univ/ctrl/spinCtrl.h"
 #include <wx/statbox.h>
 #include "deskgui/univ/textEntryDialog.h"
-#include <wx/toolbar.h>
+#include "deskgui/univ/aui/auibar.h"
 #include <wx/utils.h>
 
 #include <algorithm>
@@ -208,7 +208,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 		column->AddStretchSpacer();
 		return column;
 	};
-	const auto pane = [&](wxWindow* page, const wxString& title, wxToolBar* bar, wxWindow* body) {
+	const auto pane = [&](wxWindow* page, const wxString& title, ibAuiToolBar* bar, wxWindow* body) {
 		wxBoxSizer* column = new wxBoxSizer(wxVERTICAL);
 		column->Add(new ibStaticText(page, wxID_ANY, title), wxSizerFlags().Border(wxBOTTOM, gap / 2));
 		if (bar != nullptr) {
@@ -235,7 +235,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 		m_sources->AppendToggleColumn(Word(KEY_JOIN), wxDATAVIEW_CELL_ACTIVATABLE, FromDIP(40));
 		m_sources->AppendTextColumn(Word(KEY_ON), wxDATAVIEW_CELL_EDITABLE, FromDIP(100));
 		m_sources->AppendTextColumn(Word(KEY_EQUALS), wxDATAVIEW_CELL_EDITABLE, FromDIP(100));
-		wxToolBar* sourceBar = MakeBar(page);
+		ibAuiToolBar* sourceBar = MakeBar(page);
 		AddTool(sourceBar, _("Add as join"), wxART_ADD_JOIN, [this] { AddSelectedAsSource(true); });
 		AddTool(sourceBar, _("Delete"), wxART_DELETE, [this, removeSelected] { removeSelected(m_sources); });
 		row->Add(pane(page, _("Tables"), sourceBar, m_sources), wxSizerFlags(4).Expand().Border(wxALL, gap));
@@ -246,7 +246,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 		m_fields = makeList(page);
 		m_fields->AppendTextColumn(_("Column"), wxDATAVIEW_CELL_EDITABLE, FromDIP(110));
 		m_fields->AppendTextColumn(_("Expression"), wxDATAVIEW_CELL_EDITABLE, FromDIP(190));
-		wxToolBar* fieldBar = MakeBar(page);
+		ibAuiToolBar* fieldBar = MakeBar(page);
 		AddTool(fieldBar, _("Add an expression"), wxART_ADD_EXPRESSION, [this] {
 			wxVector<ibVariant> values;
 			values.push_back(ibVariant(wxString::Format(wxT("Column%d"), m_fields->GetItemCount() + 1)));
@@ -288,7 +288,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 		// A condition on the rows is read before grouping; one on the GROUPS after it, over the group's
 		// name - `grp.Values.Count() > 1`.
 		m_conditions->AppendToggleColumn(_("On groups"), wxDATAVIEW_CELL_ACTIVATABLE, FromDIP(80));
-		wxToolBar* bar = MakeBar(page);
+		ibAuiToolBar* bar = MakeBar(page);
 		AddTool(bar, _("Add a condition"), wxART_ADD_CONDITION, [this] {
 			wxVector<ibVariant> values;
 			values.push_back(ibVariant(wxString()));
@@ -323,7 +323,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 		m_groupKeys = makeList(page);
 		m_groupKeys->AppendTextColumn(_("Column"), wxDATAVIEW_CELL_EDITABLE, FromDIP(110));
 		m_groupKeys->AppendTextColumn(_("Grouped by"), wxDATAVIEW_CELL_EDITABLE, FromDIP(220));
-		wxToolBar* keyBar = MakeBar(page);
+		ibAuiToolBar* keyBar = MakeBar(page);
 		AddTool(keyBar, _("Delete"), wxART_DELETE, [this, removeSelected] { removeSelected(m_groupKeys); });
 		AddTool(keyBar, _("Move up"), wxART_UP, [this, moveSelected] { moveSelected(m_groupKeys, -1); });
 		AddTool(keyBar, _("Move down"), wxART_DOWN, [this, moveSelected] { moveSelected(m_groupKeys, +1); });
@@ -343,7 +343,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 		m_totals->AppendColumn(new ibDataViewColumn(_("Total"),
 			new ibDataViewChoiceRenderer(functions, wxDATAVIEW_CELL_EDITABLE), 1, FromDIP(80), wxALIGN_LEFT), wxT("string"));
 		m_totals->AppendTextColumn(_("Of the field"), wxDATAVIEW_CELL_EDITABLE, FromDIP(170));
-		wxToolBar* totalBar = MakeBar(page);
+		ibAuiToolBar* totalBar = MakeBar(page);
 		AddTool(totalBar, _("Count the rows"), wxART_COUNT_ROWS, [this] {
 			wxString name = wxT("Count");
 			const auto taken = [this](const wxString& candidate) {
@@ -405,7 +405,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 		m_order = makeList(page);
 		m_order->AppendTextColumn(_("Expression"), wxDATAVIEW_CELL_EDITABLE, FromDIP(320));
 		m_order->AppendToggleColumn(Word(KEY_DESCENDING), wxDATAVIEW_CELL_ACTIVATABLE, FromDIP(90));
-		wxToolBar* bar = MakeBar(page);
+		ibAuiToolBar* bar = MakeBar(page);
 		// An order written by hand - a total's column name, when the query groups.
 		AddTool(bar, _("Add an expression"), wxART_ADD_EXPRESSION, [this] {
 			wxVector<ibVariant> values;
@@ -1304,16 +1304,15 @@ bool ibDialogLinqConstructor::GetReplacedSpan(unsigned int& from, unsigned int& 
 	return m_replacing;
 }
 
-wxToolBar* ibDialogLinqConstructor::MakeBar(wxWindow* parent)
+ibAuiToolBar* ibDialogLinqConstructor::MakeBar(wxWindow* parent)
 {
-	wxToolBar* bar = new wxToolBar(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-		wxTB_FLAT | wxTB_HORIZONTAL | wxTB_NODIVIDER);
+	ibAuiToolBar* bar = new ibAuiToolBar(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, ibAUI_TB_HORIZONTAL);
 	// 16x16 - a toolbar above a list must not be the loudest thing on the page.
 	bar->SetToolBitmapSize(FromDIP(wxSize(16, 16)));
 	return bar;
 }
 
-void ibDialogLinqConstructor::AddTool(wxToolBar* bar, const wxString& label, const wxString& artId, std::function<void()> action)
+void ibDialogLinqConstructor::AddTool(ibAuiToolBar* bar, const wxString& label, const wxString& artId, std::function<void()> action)
 {
 	// THE PRODUCT'S OWN PICTURES first (wxART_FRONTEND serves ADD / EDIT / DELETE / UP / DOWN), the
 	// stock ones after, and the word when there is no picture at all - never an empty square.
@@ -1326,7 +1325,7 @@ void ibDialogLinqConstructor::AddTool(wxToolBar* bar, const wxString& label, con
 	if (bitmap.IsOk())
 		bar->AddTool(id, label, bitmap, label);
 	else {
-		bar->SetWindowStyle(bar->GetWindowStyle() | wxTB_TEXT);
+		bar->SetWindowStyle(bar->GetWindowStyle() | ibAUI_TB_TEXT);
 		bar->AddTool(id, label, wxBitmapBundle(), label);
 	}
 	bar->Bind(wxEVT_TOOL, [action](wxCommandEvent&) { action(); }, id);

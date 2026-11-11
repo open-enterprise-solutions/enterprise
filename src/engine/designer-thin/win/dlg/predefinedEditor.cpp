@@ -13,7 +13,7 @@
 #include "frmclient/win/dlgs/textWithDotsCell.h"        // ibTextWithDotsRenderer, ibTextCtrl — a value picked through "..."
 #include "frmclient/win/dlgs/typeSelector.h"            // ibShowTypeSelector — a type picked
 #include "deskgui/univ/menu.h"
-#include "deskgui/univ/theme/luna_toolbarart.h"
+#include "deskgui/univ/aui/auibar.h"
 #include "protocol/protocolDesigner.h"                          // ibProtocol::ibRequest::ibPredefinedSelector — what that window is given
 #include "deskgui/univ/ctrl/staticText.h"
 #include "deskgui/univ/ctrl/staticBox.h"
@@ -684,8 +684,7 @@ void ibDialogPredefinedEditor::CreateDialogView()
 
 	wxBoxSizer* sizerList = new wxBoxSizer(wxVERTICAL);
 
-	m_toolbarTableEditor = new wxAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_TEXT);
-	m_toolbarTableEditor->SetArtProvider(new wxAuiLunaToolBarArt());
+	m_toolbarTableEditor = new ibAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, ibAUI_TB_HORZ_TEXT);
 
 	m_toolAdd = m_toolbarTableEditor->AddTool(wxID_TOOL_ADD, _("Add"), ibBackendPicture::GetPicture(g_picAddCLSID), wxNullBitmap, wxITEM_NORMAL, wxEmptyString, wxEmptyString, nullptr);
 	m_toolCopy = m_toolbarTableEditor->AddTool(wxID_TOOL_COPY, _("Copy"), ibBackendPicture::GetPicture(g_picCopyCLSID), wxNullBitmap, wxITEM_NORMAL, wxEmptyString, wxEmptyString, nullptr);
@@ -696,8 +695,6 @@ void ibDialogPredefinedEditor::CreateDialogView()
 	m_toolbarTableEditor->EnableTool(wxID_TOOL_COPY, m_tableModelStore->IsEnabled(ibDataViewItem(nullptr), model_name));
 	m_toolbarTableEditor->EnableTool(wxID_TOOL_EDIT, m_tableModelStore->IsEnabled(ibDataViewItem(nullptr), model_name));
 	m_toolbarTableEditor->EnableTool(wxID_TOOL_DELETE, m_tableModelStore->IsEnabled(ibDataViewItem(nullptr), model_name));
-
-	m_toolbarTableEditor->SetBackgroundColour(wxDefaultStypeBGColour);
 
 	m_toolbarTableEditor->Realize();
 	m_toolbarTableEditor->Connect(wxEVT_MENU, wxCommandEventHandler(ibDialogPredefinedEditor::OnCommandMenu), nullptr, this);
@@ -746,7 +743,7 @@ void ibDialogPredefinedEditor::OnContextMenu(ibDataViewEvent& event)
 	ibMenu menu;
 
 	for (unsigned int idx = 0; idx < m_toolbarTableEditor->GetToolCount(); idx++) {
-		wxAuiToolBarItem* tool = m_toolbarTableEditor->FindToolByIndex(idx);
+		ibAuiToolBarItem* tool = m_toolbarTableEditor->FindToolByIndex(idx);
 		if (tool) {
 			wxMenuItem* item = menu.Append(tool->GetId(), tool->GetLabel());
 			item->Enable(m_tableModelStore->IsEnabled(ibDataViewItem(nullptr), model_name));

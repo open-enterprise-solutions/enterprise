@@ -1820,12 +1820,6 @@ private:
 	void OnSize(wxSizeEvent& event);
 	virtual wxSize GetSizeAvailableForScrollTarget(const wxSize& size) wxOVERRIDE;
 
-	// we need to return a special WM_GETDLGCODE value to process just the
-	// arrows but let the other navigation characters through
-#ifdef __WXMSW__
-	virtual WXLRESULT MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lParam) wxOVERRIDE;
-#endif // __WXMSW__
-
 	WX_FORWARD_TO_SCROLL_HELPER()
 
 private:

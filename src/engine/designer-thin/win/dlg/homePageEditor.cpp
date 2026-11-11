@@ -15,7 +15,7 @@
 
 #include "frmclient/backend/backend_picture.h"                 // ibBackendPicture::GetPicture — the toolbar art
 #include "core/picturePredefined.h"
-#include "deskgui/univ/theme/luna_toolbarart.h"
+#include "deskgui/univ/aui/auibar.h"
 #include "protocol/protocolDesigner.h"                                 // ibProtocol::ibSchema::ibHomePage — the forms' rows
 
 #include <map>
@@ -63,8 +63,7 @@ wxWindow* ibDialogHomePageEditor::CreateColumnPane(wxWindow* parent, ibHomePageC
 	ibStaticText* paneCaption = new ibStaticText(pane, wxID_ANY, caption);
 	paneSizer->Add(paneCaption, 0, wxALL, FromDIP(3));
 
-	wxAuiToolBar* toolbar = new wxAuiToolBar(pane, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_LAYOUT);
-	toolbar->SetArtProvider(new wxAuiLunaToolBarArt());
+	ibAuiToolBar* toolbar = new ibAuiToolBar(pane, wxID_ANY, wxDefaultPosition, wxDefaultSize, ibAUI_TB_HORZ_LAYOUT);
 
 	toolbar->AddTool(wxID_TOOL_ADD, _("Add"), ibBackendPicture::GetPicture(g_picAddCLSID));
 	toolbar->AddTool(wxID_TOOL_EDIT, _("Height"), ibBackendPicture::GetPicture(g_picEditCLSID));

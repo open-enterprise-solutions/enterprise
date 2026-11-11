@@ -50,10 +50,6 @@
 #define WXUNUSED_GTK(identifier)    identifier
 #endif
 
-#ifdef __WXOSX__
-#include <wx/osx/private.h>
-#endif
-
 // Required for wxIs... functions
 #include <ctype.h>
 
@@ -285,11 +281,8 @@ void ibGridCellEditor::Show(bool show, ibGridCellAttr* attr, float scale)
 			m_colBgOld = m_control->GetBackgroundColour();
 			m_control->SetBackgroundColour(attr->GetBackgroundColour());
 
-			// Workaround for GTK+1 font setting problem on some platforms
-#if !defined(__WXGTK__) || defined(__WXGTK20__)
 			m_fontOld = m_control->GetFont();
 			m_control->SetFont(attr->GetFont(scale));
-#endif
 
 			// can't do anything more in the base class version, the other
 			// attributes may only be used by the derived classes
@@ -310,14 +303,11 @@ void ibGridCellEditor::Show(bool show, ibGridCellAttr* attr, float scale)
 			m_colBgOld = wxNullColour;
 		}
 
-		// Workaround for GTK+1 font setting problem on some platforms
-#if !defined(__WXGTK__) || defined(__WXGTK20__)
 		if (m_fontOld.IsOk())
 		{
 			m_control->SetFont(m_fontOld);
 			m_fontOld = wxNullFont;
 		}
-#endif
 	}
 }
 
@@ -491,26 +481,12 @@ void ibGridCellTextEditor::SetSize(const wxRect& rectOrig)
 	//
 	// TODO: remove this if the text ctrl sizing is improved
 	//
-#if defined(__WXMSW__)
+	// SEAM vs wx: MSW's, on every port - the field is the library's
 	rect.x += 2;
 	rect.y += 2;
 
 	rect.width -= 2;
 	rect.height -= 2;
-#elif !defined(__WXGTK__)
-	int extra_x = 2;
-	int extra_y = 2;
-
-#if defined(__WXMOTIF__)
-	extra_x *= 2;
-	extra_y *= 2;
-#endif
-
-	rect.SetLeft(wxMax(0, rect.x - extra_x));
-	rect.SetTop(wxMax(0, rect.y - extra_y));
-	rect.SetRight(rect.GetRight() + 2 * extra_x);
-	rect.SetBottom(rect.GetBottom() + 2 * extra_y);
-#endif
 
 	ibGridCellEditor::SetSize(rect);
 }

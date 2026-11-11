@@ -116,8 +116,13 @@ public:
     int GetPopupMenuSelectionFromUser(ibMenu& menu, const wxPoint& pos = wxDefaultPosition);
     int GetPopupMenuSelectionFromUser(ibMenu& menu, int x, int y);
 
-    // this is wxUniv-specific private method to be used only by ibMenu
-    void DismissPopupMenu();
+    // SEAM vs univ: THE THEME'S MENU SHOWN OVER ANY WINDOW, at a point of its client area - an ib window's (DoPopupMenu
+    // below) and the native frame's (ibFrame::DoPopupMenu): of the window only where it is, its loop, the keys and the
+    // focus the menu's own; every menu here is an ibMenu (ibMenu's factories), the body in menu.cpp
+    static bool DoPopupMenu(wxWindow *window, wxMenu *menu, int x, int y);
+
+    // this is wxUniv-specific private method to be used only by ibMenu: the popup menu's loop ended
+    static void DismissPopupMenu();
 
     // miscellaneous other methods
     // ---------------------------
@@ -247,25 +252,11 @@ protected:
     void OnErase(wxEraseEvent& event);
     void OnMouseCaptureLost(wxMouseCaptureLostEvent& event);
 
-#if wxUSE_ACCEL // GUI-REVIVE: menus cut
-    void OnKeyDown(wxKeyEvent& event);
-#endif // wxUSE_ACCEL
-
-#if 0 // GUI-REVIVE: univ menu not revived yet
-    void OnChar(wxKeyEvent& event);
-    void OnKeyUp(wxKeyEvent& event);
-#endif // wxUSE_MENUS
-
     // adjust the size of the window to take into account its borders
     wxSize AdjustSize(const wxSize& size) const;
 
     // put the scrollbars along the edges of the window
     void PositionScrollbars();
-
-#if 0 // GUI-REVIVE: univ menu not revived yet
-    // return the menubar of the parent frame or nullptr
-    ibMenuBar *GetParentFrameMenuBar() const;
-#endif // wxUSE_MENUS
 
     // the renderer we use
     ibRenderer *m_renderer;
@@ -274,9 +265,6 @@ protected:
     wxBitmap  m_bitmapBg;
     int       m_alignBgBitmap;
     wxStretch m_stretchBgBitmap;
-
-    // old size
-    wxSize m_oldSize;
 
     // is the mouse currently inside the window?
     bool m_isCurrent:1;
@@ -312,11 +300,6 @@ private:
 
     // the current modal event loop for the popup menu we show or nullptr
     static wxEventLoop *ms_evtLoopPopup;
-
-#if 0 // GUI-REVIVE: accel/menubar Alt-navigation needs univ frame
-    // the last window over which Alt was pressed (used by OnKeyUp)
-    static ibWindow *ms_winLastAltPress;
-#endif // wxUSE_MENUS
 
     wxDECLARE_DYNAMIC_CLASS(ibWindow);
     wxDECLARE_EVENT_TABLE();

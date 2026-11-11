@@ -1,7 +1,7 @@
 #ifndef __PREDEFINED_EDITOR__
 #define __PREDEFINED_EDITOR__
 
-#include <wx/aui/auibar.h>
+#include "deskgui/univ/aui/auibar.h"
 
 #include "frmclient/backend/metaCollection/partial/commonObject.h"
 #include "deskgui/univ/dataview/dataview.h"
@@ -273,12 +273,12 @@ protected:
 
 private:
 
-	wxAuiToolBar* m_toolbarTableEditor;
+	ibAuiToolBar* m_toolbarTableEditor;
 
-	wxAuiToolBarItem* m_toolAdd;
-	wxAuiToolBarItem* m_toolCopy;
-	wxAuiToolBarItem* m_toolEdit;
-	wxAuiToolBarItem* m_toolDelete;
+	ibAuiToolBarItem* m_toolAdd;
+	ibAuiToolBarItem* m_toolCopy;
+	ibAuiToolBarItem* m_toolEdit;
+	ibAuiToolBarItem* m_toolDelete;
 
 	ibDataViewCtrl* m_tableEditor;
 

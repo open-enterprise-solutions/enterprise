@@ -7,11 +7,10 @@
 #include <wx/string.h>
 #include <wx/sizer.h>
 #include <wx/statusbr.h>
-#include <wx/frame.h>
+#include "deskgui/univ/frame.h"   // ibFrame and the menus it takes (ibMenuBar, ibMenu)
 #include "deskgui/univ/ctrl/button.h"
 #include "deskgui/univ/ctrl/choice.h"
 #include "deskgui/univ/stc/stc.h"
-#include <wx/menu.h>
 
 ///////////////////////////////////////////////////////////////////////////
 
@@ -27,7 +26,10 @@
 // commands without any document or debug client. Only the Run /
 // SyntaxCheck / Clear buttons live here; everything editor-related is
 // inherited.
-class ibFrameCodeRunner : public ibBackendDocFrame, public wxFrame {
+//
+// The frame is the desktop's own (ibFrame), as the designer's and the application's: the theme's title bar and menubar
+// round the window - a wxFrame stood with the system's caption and menu (2026-11-11, Max: "codeRunner - onto our frame").
+class ibFrameCodeRunner : public ibBackendDocFrame, public ibFrame {
 protected:
 
 	class ibCompileCode* m_compileCode;
@@ -64,11 +66,11 @@ protected:
 public:
 
 	virtual void SetTitle(const ibString& title) override {
-		wxFrame::SetTitle(title);
+		ibFrame::SetTitle(title);
 	}
 
 	virtual void SetStatusText(const ibString& text, int number = 0) override {
-		wxFrame::SetStatusText(text, number);
+		ibFrame::SetStatusText(text, number);
 	};
 
 	virtual void Message(const ibString& strMessage, ibStatusMessage status) override {
@@ -81,8 +83,8 @@ public:
 		m_output->SetReadOnly(true);
 	};
 
-	virtual void RaiseFrame() override { wxFrame::Raise(); }
-	virtual void RefreshFrame() override { wxFrame::Refresh(); }
+	virtual void RaiseFrame() override { ibFrame::Raise(); }
+	virtual void RefreshFrame() override { ibFrame::Refresh(); }
 
 	void AppendOutput(const wxString& str) const {
 		m_output->SetReadOnly(false);

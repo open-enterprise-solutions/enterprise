@@ -10,7 +10,9 @@
 
 #include "frmclient/win/dlgs/choiceTemplate.h"
 
-// Find/Replace dialog parents the wxFindReplaceDialog against
+#include "deskgui/univ/findReplaceDialog.h"   // ibFindReplaceDialog — Find, the theme's dialog
+
+// Find/Replace dialog parents the ibFindReplaceDialog against
 // the main frame singleton. mainFrame.h pulls in ibFrontendMainFrame
 // + AUI + objectInspector. Also the home of ibFrontendMainFrame::CreateChildFrame used below to wire
 // m_viewFrame on every view going through the template path.
@@ -214,7 +216,7 @@ ibDocTemplateVector ibFrontendDocManager::GetTemplatesVector() const
 void ibFrontendDocManager::OnFindDialog(wxCommandEvent& WXUNUSED(event))
 {
 	if (m_findDialog == nullptr) {
-		m_findDialog = new wxFindReplaceDialog(mainFrame, &m_findData, _("Find"));
+		m_findDialog = new ibFindReplaceDialog(mainFrame, &m_findData, _("Find"));
 		m_findDialog->Centre(wxCENTRE_ON_SCREEN | wxBOTH);
 
 		m_findDialog->Bind(wxEVT_FIND,       &ibFrontendDocManager::OnFind,      this);

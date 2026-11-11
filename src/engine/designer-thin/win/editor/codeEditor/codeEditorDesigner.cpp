@@ -9,7 +9,7 @@
 
 #include "deskgui/univ/menu.h"
 #include "deskgui/univ/textEntryDialog.h"   // ibTextEntryDialog - the breakpoint's condition
-#include "frmclient/artProvider/artProvider.h"   // wxART_BREAKPOINT_CONDITION
+#include "deskgui/artProvider.h"   // wxART_BREAKPOINT_CONDITION
 
 ibCodeEditorDesigner::ibCodeEditorDesigner(ibModuleEditDocument* document, wxWindow* parent, wxWindowID id,
 	const wxPoint& pos, const wxSize& size, long style)

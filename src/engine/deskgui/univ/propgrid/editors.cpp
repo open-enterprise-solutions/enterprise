@@ -34,53 +34,23 @@
 #include "deskgui/univ/ctrl/textCtrl.h"  // ibTextCtrl — the text editor
 #include "deskgui/univ/ctrl/comboBox.h"  // ibComboBox — the choice editor, drawn by the grid
 
+// SEAM vs wx: one set for every port, as private.h's - the editors are the library's controls (the values are wx's
+// MSW ones; 2026-11-11)
+
 // How many pixels between textctrl and button
-#ifdef __WXMAC__
-    #define ibPG_TEXTCTRL_AND_BUTTON_SPACING        4
-#else
-    #define ibPG_TEXTCTRL_AND_BUTTON_SPACING        2
-#endif
+#define ibPG_TEXTCTRL_AND_BUTTON_SPACING        2
 
 #define ibPG_BUTTON_SIZEDEC                         0
 
 // -----------------------------------------------------------------------
 
-#if defined(__WXMSW__)
-    // tested
-    #define ibPG_NAT_BUTTON_BORDER_Y            1
-
-    #define ibPG_TEXTCTRLYADJUST                (m_spacingy+0)
-
-#elif defined(__WXGTK__)
-    // tested
-    #define ibPG_NAT_BUTTON_BORDER_Y        1
-
-    #define ibPG_TEXTCTRLYADJUST            0
-
-#elif defined(__WXMAC__)
-    // partially tested
-    #define ibPG_NAT_BUTTON_BORDER_Y        0
-
-    #define ibPG_TEXTCTRLYADJUST            2
-
-#else
-    // defaults
-    #define ibPG_NAT_BUTTON_BORDER_Y        0
-
-    #define ibPG_TEXTCTRLYADJUST            0
-
-#endif
+#define ibPG_TEXTCTRLYADJUST                (m_spacingy+0)
 
 #define ibPG_BUTTON_BORDER_WIDTH (-ibPG_BUTTON_SIZEDEC + ibPG_NAT_BUTTON_BORDER_Y)
 
 // for odcombo
-#ifdef __WXMAC__
-#define ibPG_CHOICEXADJUST           -3 // required because wxComboCtrl reserves 3pixels for wxTextCtrl's focus ring
-#define ibPG_CHOICEYADJUST           -3
-#else
 #define ibPG_CHOICEXADJUST           0
 #define ibPG_CHOICEYADJUST           0
-#endif
 
 // Number added to image width for SetCustomPaintWidth
 #define ODCB_CUST_PAINT_MARGIN               6
@@ -933,10 +903,9 @@ wxWindow* ibPGChoiceEditor::CreateControlsBase( ibPropertyGrid* propGrid,
             labels.Add(propGrid->GetCommonValueLabel(i));
     }
 
+    // created hidden and shown when set up, on every port (SEAM vs wx: on MSW only) - so is every editor here
     ibPGComboBox* cb = new ibPGComboBox();
-#ifdef __WXMSW__
     cb->Hide();
-#endif
     cb->Create(ctrlParent,
                wxID_ANY,
                wxString(),
@@ -972,9 +941,7 @@ wxWindow* ibPGChoiceEditor::CreateControlsBase( ibPropertyGrid* propGrid,
         cb->SetSelection( -1 );
     }
 
-#ifdef __WXMSW__
     cb->Show();
-#endif
 
     return (wxWindow*) cb;
 }
@@ -1235,27 +1202,17 @@ ibPGWindowList ibPGChoiceAndButtonEditor::CreateControls( ibPropertyGrid* propGr
 
     // Position of button.
     wxPoint bt_pos(pos.x+sz.x-bt_sz.x,pos.y);
-#ifdef __WXMAC__
-    bt_pos.y -= 1;
-#else
     bt_pos.y += 1;
-#endif
 
     wxWindow* bt = propGrid->GenerateEditorButton( bt_pos, bt_sz );
 
     // Size of choice.
     wxSize ch_sz(sz.x-bt->GetSize().x,sz.y);
 
-#ifdef __WXMAC__
-    ch_sz.x -= ibPG_TEXTCTRL_AND_BUTTON_SPACING;
-#endif
-
     wxWindow* ch = ibPGChoiceEditor::CreateControls(propGrid,property,
         pos,ch_sz).GetPrimary();
 
-#ifdef __WXMSW__
     bt->Show();
-#endif
 
     return ibPGWindowList(ch, bt);
 }
@@ -1359,14 +1316,9 @@ static void DrawSimpleCheckBox(wxWindow* win, wxDC& dc, const wxRect& rect, ibSi
 
     if ( !!(state & ibSimpleCheckBoxStates::Bold) )
     {
-        // wxCONTROL_CHECKED and wxCONTROL_PRESSED flags
-        // are equivalent for wxOSX so we have to use
-        // other flag to indicate "selected state".
-#ifdef __WXOSX__
-        cbFlags |= wxCONTROL_FOCUSED;
-#else
+        // SEAM vs wx: pressed on every port - the box is the theme's, and wxOSX's native renderer, which drew checked
+        // and pressed alike (wx took focused there), draws none of it
         cbFlags |= wxCONTROL_PRESSED;
-#endif
     }
 
     // the theme's box (SEAM vs wx: the native renderer's), at its own size, centred in the cell
@@ -1667,11 +1619,7 @@ void ibPropertyGrid::CorrectEditorWidgetSizeX()
         m_wndEditor2->SetSize( r );
 
         // if primary is textctrl, then we have to add some extra space
-#ifdef __WXMAC__
-        if ( m_wndEditor )
-#else
         if ( wxDynamicCast(m_wndEditor, ibTextCtrl) )
-#endif
             secWid += ibPG_TEXTCTRL_AND_BUTTON_SPACING;
     }
 
@@ -1726,20 +1674,6 @@ void ibPropertyGrid::CorrectEditorWidgetPosY()
 
 // Fixes position of ibTextCtrl-like control (wxSpinCtrl usually
 // fits into that category as well).
-#ifndef ibPG_TEXTCTRLXADJUST
-#if defined(__WXMSW__)
-#define ibPG_TEXTCTRLXADJUST2 0
-#elif defined(__WXGTK__)
-  #if defined(__WXGTK3__)
-  #define ibPG_TEXTCTRLXADJUST2 (-2)
-  #else
-  #define ibPG_TEXTCTRLXADJUST2 0
-  #endif // wxGTK3/!wxGTK3
-#else
-#error "ibPG_TEXTCTRLXADJUST should be defined for this platform"
-#endif
-#endif // !ibPG_TEXTCTRLXADJUST
-
 void ibPropertyGrid::FixPosForTextCtrl( wxWindow* ctrl,
                                         unsigned int WXUNUSED(forColumn),
                                         const wxPoint& offset )
@@ -1755,14 +1689,10 @@ void ibPropertyGrid::FixPosForTextCtrl( wxWindow* ctrl,
     finalPos.y += y_adj;
     finalPos.height -= (y_adj+sz_dec);
 
-#ifndef ibPG_TEXTCTRLXADJUST
-    int textCtrlXAdjust = ibPG_XBEFORETEXT - 1 + ibPG_TEXTCTRLXADJUST2;
+    int textCtrlXAdjust = ibPG_XBEFORETEXT - 1;
 
     ibTextCtrl* tc = static_cast<ibTextCtrl*>(ctrl);
     tc->SetMargins(0);
-#else
-    int textCtrlXAdjust = ibPG_TEXTCTRLXADJUST;
-#endif
 
     finalPos.x += textCtrlXAdjust;
     finalPos.width -= textCtrlXAdjust;
@@ -1793,11 +1723,6 @@ wxWindow* ibPropertyGrid::GenerateEditorTextCtrl( const wxPoint& pos,
     wxPoint p(pos);
     wxSize s(sz);
 
-   // Need to reduce width of text control on Mac
-#if defined(__WXMAC__)
-    s.x -= 4;
-#endif
-
     // For label editors, trim the size to allow better splitter grabbing
     if ( forColumn != 1 )
         s.x -= 2;
@@ -1819,23 +1744,16 @@ wxWindow* ibPropertyGrid::GenerateEditorTextCtrl( const wxPoint& pos,
 
     ibTextCtrl* tc = new ibTextCtrl();
 
-#if defined(__WXMSW__)
     tc->Hide();
-#endif
     SetupTextCtrlValue(value);
     tc->Create(ctrlParent,wxID_ANY,value, p, s,tcFlags);
 
-#if defined(__WXMSW__)
-    // On Windows, we need to override read-only text ctrl's background
-    // colour to white. One problem with native 'grey' background is that
-    // tc->GetBackgroundColour() doesn't seem to return correct value
-    // for it.
+    // a read-only field on the field's ground (SEAM vs wx: on every port; wx did it on MSW, over the native grey)
     if ( tcFlags & wxTE_READONLY )
     {
         wxVisualAttributes vattrs = tc->GetDefaultAttributes();
         tc->SetBackgroundColour(vattrs.colBg);
     }
-#endif
 
     // This code is repeated from DoSelectProperty(). However, font boldness
     // must be set before margin is set up below in FixPosForTextCtrl().
@@ -1854,11 +1772,9 @@ wxWindow* ibPropertyGrid::GenerateEditorTextCtrl( const wxPoint& pos,
         tc->SetForegroundColour(m_colSelFore);
     }
 
-#ifdef __WXMSW__
     tc->Show();
     if ( secondary )
         secondary->Show();
-#endif
 
     // Set maximum length
     if ( maxLen > 0 )
@@ -1892,9 +1808,7 @@ wxWindow* ibPropertyGrid::GenerateEditorButton( const wxPoint& pos, const wxSize
     wxSize s(wxDefaultCoord, dim);
 
     ibButton* but = new ibButton();
-  #ifdef __WXMSW__
     but->Hide();
-  #endif
     but->Create(GetPanel(),wxID_ANY,label,p,s,wxWANTS_CHARS|wxBU_EXACTFIT);
     but->SetFont(GetFont().GetBaseFont().Smaller());
     // If button is narrow make it a square and move it to the correct position
@@ -1926,10 +1840,8 @@ wxWindow* ibPropertyGrid::GenerateEditorTextCtrlAndButton( const wxPoint& pos,
 
     if ( limitedEditing )
     {
-    #ifdef __WXMSW__
         // There is button Show in GenerateEditorTextCtrl as well
         but->Show();
-    #endif
         return nullptr;
     }
 

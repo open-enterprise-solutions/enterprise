@@ -45,10 +45,7 @@ wxBEGIN_EVENT_TABLE(ibSplitterWindow, ibWindow)
     EVT_DPI_CHANGED(ibSplitterWindow::OnDPIChanged)
     EVT_MOUSE_EVENTS(ibSplitterWindow::OnMouseEvent)
     EVT_MOUSE_CAPTURE_LOST(ibSplitterWindow::OnMouseCaptureLost)
-
-#if defined( __WXMSW__ ) || defined( __WXMAC__)
     EVT_SET_CURSOR(ibSplitterWindow::OnSetCursor)
-#endif // wxMSW
 wxEND_EVENT_TABLE()
 
 bool ibSplitterWindow::Create(wxWindow *parent, wxWindowID id,
@@ -307,18 +304,14 @@ void ibSplitterWindow::OnMouseEvent(wxMouseEvent& event)
             m_oldX = (m_splitMode == wxSPLIT_VERTICAL ? m_sashPositionCurrent : x);
             m_oldY = (m_splitMode != wxSPLIT_VERTICAL ? m_sashPositionCurrent : y);
 
-#ifdef __WXMSW__
             // As we captured the mouse, we may get the mouse events from outside
-            // our window - for example, negative values in x, y. This has a weird
-            // consequence under MSW where we use unsigned values sometimes and
-            // signed ones other times: the coordinates turn as big positive
-            // numbers and so the sash is drawn on the *right* side of the window
-            // instead of the left (or bottom instead of top). Correct this.
-            if ( (short)m_oldX < 0 )
+            // our window - for example, negative values in x, y: the tracker stays
+            // inside (SEAM vs wx: on every port; wx's MSW kept it from the other
+            // side, where its unsigned coordinates had put it)
+            if ( m_oldX < 0 )
                 m_oldX = 0;
-            if ( (short)m_oldY < 0 )
+            if ( m_oldY < 0 )
                 m_oldY = 0;
-#endif // __WXMSW__
 
             DrawSashTracker(m_oldX, m_oldY);
         }
@@ -1076,9 +1069,7 @@ void ibSplitterWindow::SetLastSplitPosition(const wxPoint& pos)
 }
 
 
-#if defined( __WXMSW__ ) || defined( __WXMAC__)
-
-// this is currently called (and needed) under MSW only...
+// SEAM vs wx: on every port (wx: MSW and macOS) - wx's own event, wherever the port sends it
 void ibSplitterWindow::OnSetCursor(wxSetCursorEvent& event)
 {
     // if we don't do it, the resizing cursor might be set for child window:
@@ -1092,5 +1083,3 @@ void ibSplitterWindow::OnSetCursor(wxSetCursorEvent& event)
     }
     //else: do nothing, in particular, don't call Skip()
 }
-
-#endif // wxMSW || wxMac

@@ -214,8 +214,12 @@ ibMetaData* ibGridEditor::ibPropertyGridEditorSpreadsheet::GetMetaData() const
 
 void ibGridEditor::ibPropertyGridEditorSpreadsheet::OnPropertyCreated(ibProperty* property)
 {
+	// a block the sheet no longer has is passed over: the selection is kept by the events, and the sheet takes rows away
+	// behind it - the endless sheet trims its tail on a scroll, the cursor moves off a deleted row, and the inspector
+	// asked the cell that was there (2026-11-11, a crash: a wheel up, GetValueAsCustom answered null)
 	for (const auto& coords : m_selection)
-		ibPropertyGridEditorSpreadsheet::OnPropertyCreated(property, coords);
+		if (coords.GetTopRow() < m_view->GetNumberRows() && coords.GetLeftCol() < m_view->GetNumberCols())
+			ibPropertyGridEditorSpreadsheet::OnPropertyCreated(property, coords);
 }
 
 void ibGridEditor::ibPropertyGridEditorSpreadsheet::OnPropertyRefresh()
@@ -231,8 +235,10 @@ void ibGridEditor::ibPropertyGridEditorSpreadsheet::OnPropertyRefresh()
 
 void ibGridEditor::ibPropertyGridEditorSpreadsheet::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
 {
+	// …as when it is shown (OnPropertyCreated)
 	for (const ibGridBlockCoords& coords : m_selection)
-		ibPropertyGridEditorSpreadsheet::OnPropertyChanged(property, coords);
+		if (coords.GetTopRow() < m_view->GetNumberRows() && coords.GetLeftCol() < m_view->GetNumberCols())
+			ibPropertyGridEditorSpreadsheet::OnPropertyChanged(property, coords);
 
 	m_view->ForceRefresh();
 }
@@ -248,10 +254,11 @@ void ibGridEditor::ibPropertyGridEditorSpreadsheet::OnSelectCell(ibGridEvent& ev
 		m_selection.clear();
 	}
 
-	if (m_view->IsPropertyEnabled()) {
+	// the selection is the inspector's to show; the sheet repaints what the selection moved itself - painted whole
+	// here too, the sheet flickered at every click, its heading strips erased and drawn again (2026-11-11, Max: "the
+	// sheet flickers at any click"); a property changed paints it whole (OnPropertyChanged)
+	if (m_view->IsPropertyEnabled())
 		objectInspector->SelectObject(this, true);
-		m_view->ForceRefresh();
-	}
 
 	event.Skip();
 }
@@ -267,10 +274,9 @@ void ibGridEditor::ibPropertyGridEditorSpreadsheet::OnSelectCells(ibGridRangeSel
 		m_selection.clear();
 	}
 
-	if (m_view->IsPropertyEnabled()) {
+	// …as a cell's (OnSelectCell)
+	if (m_view->IsPropertyEnabled())
 		objectInspector->SelectObject(this, true);
-		m_view->ForceRefresh();
-	}
 
 	event.Skip();
 }

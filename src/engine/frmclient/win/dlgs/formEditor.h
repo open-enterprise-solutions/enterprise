@@ -13,7 +13,7 @@
 #include <map>
 
 #include <wx/artprov.h>
-#include <wx/aui/auibar.h>
+#include "deskgui/univ/aui/auibar.h"
 
 #include "frmclient/frmclient.h"
 #include "frmclient/backend/backend_picture.h"     // …and what the desktop's form.h brought with it: the engine's pictures
@@ -234,9 +234,9 @@ private:
 
 	std::map<wxString, int> m_iconIdx;
 
-	wxAuiToolBar* m_mainToolBar;
-	wxAuiToolBarItem* m_toolUpItem;
-	wxAuiToolBarItem* m_toolDownItem;
+	ibAuiToolBar* m_mainToolBar;
+	ibAuiToolBarItem* m_toolUpItem;
+	ibAuiToolBarItem* m_toolDownItem;
 
 	wxImageList* m_iconList = nullptr;
 	ibTreeCtrl* m_treeControl;

@@ -7,9 +7,9 @@
 
 #include <wx/statbox.h>
 
-#include "frmclient/artProvider/artProvider.h"
+#include "deskgui/artProvider.h"
 #include "frmclient/docView/docView.h"   // ibMetaView — the tree's view
-#include "deskgui/univ/theme/luna_toolbarart.h"
+#include "deskgui/univ/aui/auibar.h"
 
 //**********************************************************************************
 
@@ -54,7 +54,7 @@ private:
 
 void ibMetaTreeBase::CreateToolBar(wxWindow* parent)
 {
-	m_metaTreeToolbar = new wxAuiToolBar(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_LAYOUT);
+	m_metaTreeToolbar = new ibAuiToolBar(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, ibAUI_TB_HORZ_LAYOUT);
 	m_metaTreeToolbar->AddTool(ID_METATREE_NEW, _("New"), wxArtProvider::GetBitmapBundle(wxART_ADD, wxART_FRONTEND, wxSize(16, 16)), _("New item"));
 	m_metaTreeToolbar->AddTool(ID_METATREE_EDIT, _("Edit"), wxArtProvider::GetBitmapBundle(wxART_EDIT, wxART_FRONTEND, wxSize(16, 16)), _("Edit item"));
 	m_metaTreeToolbar->AddTool(ID_METATREE_DELETE, _("Delete"), wxArtProvider::GetBitmapBundle(wxART_DELETE, wxART_FRONTEND, wxSize(16, 16)), _("Delete item"));
@@ -65,7 +65,6 @@ void ibMetaTreeBase::CreateToolBar(wxWindow* parent)
 	m_metaTreeToolbar->AddTool(ID_METATREE_SORT, _("Sort"), wxArtProvider::GetBitmapBundle(wxART_SORT, wxART_FRONTEND, wxSize(16, 16)), _("Sort item"));
 	m_metaTreeToolbar->Realize();
 
-	m_metaTreeToolbar->SetArtProvider(new wxAuiLunaToolBarArt());
 }
 
 ibMetaTreeBase::ibMetaTreeBase(wxWindow* parent, long long tab, ibProtocol::ibView::ibKind kind)
@@ -83,7 +82,6 @@ ibMetaTreeBase::ibMetaTreeBase(wxWindow* parent, long long tab, ibProtocol::ibVi
 	// …an external file's root hidden: its groups are the tree (the desktop's).
 	m_metaTreeCtrl = new ibTreeCtrl(treeParent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_NO_LINES | wxTR_TWIST_BUTTONS | (!configuration ? wxTR_HIDE_ROOT : 0));
-	m_metaTreeCtrl->SetDoubleBuffered(true);
 
 	//set image list
 	m_metaTreeCtrl->AssignImageList(

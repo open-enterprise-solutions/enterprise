@@ -23,7 +23,7 @@
   </ItemGroup>
   <!-- THE DESKTOP'S USER INTERFACE LIBRARY - what the desktop's programs draw their windows with (deskgui.h): the
        custom-drawn engine and its Luna theme, the forks of wx's generic controls and ours, the dock art, the code
-       editor's host (univ\stc), the property grid (univ\propgrid). Of the engine, the core alone; of wx, the core, the base and AUI. Scintilla and
+       editor's host (univ\stc), the property grid (univ\propgrid), the docking, tool bar and notebook (univ\aui). Of the engine, the core alone; of wx, the core and the base. Scintilla and
        Lexilla are in src\3rdparty (a release copy and a submodule), built by univ\stc\scintilla and
        univ\stc\lexilla; their headers are on the include path. -->
   <PropertyGroup Label="Globals">
@@ -108,7 +108,7 @@
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>wxmsw33ud_aui.lib;wxmsw33ud_core.lib;wxbase33ud.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>wxmsw33ud_core.lib;wxbase33ud.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -119,7 +119,7 @@
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>wxmsw33ud_aui.lib;wxmsw33ud_core.lib;wxbase33ud.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>wxmsw33ud_core.lib;wxbase33ud.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -134,7 +134,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>wxmsw33u_aui.lib;wxmsw33u_core.lib;wxbase33u.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>wxmsw33u_core.lib;wxbase33u.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -149,12 +149,13 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>wxmsw33u_aui.lib;wxmsw33u_core.lib;wxbase33u.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>wxmsw33u_core.lib;wxbase33u.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="univ\choiceDialog.cpp" />
     <ClCompile Include="univ\renderer.cpp" />
+    <ClCompile Include="univ\ctrl\activityIndicator.cpp" />
     <ClCompile Include="univ\ctrl\anyButton.cpp" />
     <ClCompile Include="univ\ctrl\bmpButton.cpp" />
     <ClCompile Include="univ\ctrl\button.cpp" />
@@ -173,6 +174,7 @@
     <ClCompile Include="univ\ctrl\notebook.cpp" />
     <ClCompile Include="univ\ctrl\radioBox.cpp" />
     <ClCompile Include="univ\ctrl\radioButton.cpp" />
+    <ClCompile Include="univ\ctrl\rearrangeCtrl.cpp" />
     <ClCompile Include="univ\ctrl\scrollArrow.cpp" />
     <ClCompile Include="univ\ctrl\scrollBar.cpp" />
     <ClCompile Include="univ\ctrl\scrollThumb.cpp" />
@@ -184,6 +186,7 @@
     <ClCompile Include="univ\ctrl\staticBox.cpp" />
     <ClCompile Include="univ\ctrl\staticLine.cpp" />
     <ClCompile Include="univ\ctrl\staticText.cpp" />
+    <ClCompile Include="univ\ctrl\statusBar.cpp" />
     <ClCompile Include="univ\ctrl\textCtrl.cpp" />
     <ClCompile Include="univ\ctrl\timePickerCtrl.cpp" />
     <ClCompile Include="univ\ctrl\toggleButton.cpp" />
@@ -199,6 +202,8 @@
     <ClCompile Include="univ\dataview\headerctrlcmn.cpp" />
     <ClCompile Include="univ\dataview\headerctrlg.cpp" />
     <ClCompile Include="univ\dialog.cpp" />
+    <ClCompile Include="univ\findReplaceDialog.cpp" />
+    <ClCompile Include="univ\frame.cpp" />
     <ClCompile Include="univ\grid\gridext.cpp" />
     <ClCompile Include="univ\grid\gridextctrl.cpp" />
     <ClCompile Include="univ\grid\gridexteditors.cpp" />
@@ -211,6 +216,11 @@
     <ClCompile Include="univ\numValidator.cpp" />
     <ClCompile Include="univ\panel.cpp" />
     <ClCompile Include="univ\propertySheetDialog.cpp" />
+    <ClCompile Include="univ\aui\auibar.cpp" />
+    <ClCompile Include="univ\aui\auibook.cpp" />
+    <ClCompile Include="univ\aui\floatpane.cpp" />
+    <ClCompile Include="univ\aui\framemanager.cpp" />
+    <ClCompile Include="univ\aui\tabmdi.cpp" />
     <ClCompile Include="univ\propgrid\advprops.cpp" />
     <ClCompile Include="univ\propgrid\editors.cpp" />
     <ClCompile Include="univ\propgrid\manager.cpp" />
@@ -220,9 +230,6 @@
     <ClCompile Include="univ\propgrid\propgridpagestate.cpp" />
     <ClCompile Include="univ\propgrid\props.cpp" />
     <ClCompile Include="univ\theme\lunaTheme.cpp" />
-    <ClCompile Include="univ\theme\luna_dockart.cpp" />
-    <ClCompile Include="univ\theme\luna_tabart.cpp" />
-    <ClCompile Include="univ\theme\luna_toolbarart.cpp" />
     <ClCompile Include="univ\theme\themeRenderer.cpp" />
     <ClCompile Include="univ\splitterWindow.cpp" />
     <ClCompile Include="univ\stc\PlatWX.cpp" />
@@ -238,11 +245,12 @@
   <ItemGroup>
     <ClInclude Include="dateconv.h" />
     <ClInclude Include="typeconv.h" />
+    <ClInclude Include="artProvider.h" />
     <ClInclude Include="univ\app.h" />
     <ClInclude Include="univ\choiceDialog.h" />
     <ClInclude Include="univ\colourScheme.h" />
+    <ClInclude Include="univ\ctrl\activityIndicator.h" />
     <ClInclude Include="univ\ctrl\anyButton.h" />
-    <ClInclude Include="univ\ctrl\auiToolBar.h" />
     <ClInclude Include="univ\ctrl\bmpButton.h" />
     <ClInclude Include="univ\ctrl\button.h" />
     <ClInclude Include="univ\ctrl\calendarCtrl.h" />
@@ -261,6 +269,7 @@
     <ClInclude Include="univ\ctrl\notebook.h" />
     <ClInclude Include="univ\ctrl\radioBox.h" />
     <ClInclude Include="univ\ctrl\radioButton.h" />
+    <ClInclude Include="univ\ctrl\rearrangeCtrl.h" />
     <ClInclude Include="univ\ctrl\scrollArrow.h" />
     <ClInclude Include="univ\ctrl\scrollBar.h" />
     <ClInclude Include="univ\ctrl\scrollThumb.h" />
@@ -290,6 +299,7 @@
     <ClInclude Include="univ\dataview\dvrenderers.h" />
     <ClInclude Include="univ\dataview\headerctrlg.h" />
     <ClInclude Include="univ\dialog.h" />
+    <ClInclude Include="univ\findReplaceDialog.h" />
     <ClInclude Include="univ\frame.h" />
     <ClInclude Include="univ\grid\gridext.h" />
     <ClInclude Include="univ\grid\gridextctrl.h" />
@@ -305,6 +315,13 @@
     <ClInclude Include="univ\numValidator.h" />
     <ClInclude Include="univ\panel.h" />
     <ClInclude Include="univ\propertySheetDialog.h" />
+    <ClInclude Include="univ\aui\aui.h" />
+    <ClInclude Include="univ\aui\auibar.h" />
+    <ClInclude Include="univ\aui\auibook.h" />
+    <ClInclude Include="univ\aui\floatpane.h" />
+    <ClInclude Include="univ\aui\framemanager.h" />
+    <ClInclude Include="univ\aui\serializer.h" />
+    <ClInclude Include="univ\aui\tabmdi.h" />
     <ClInclude Include="univ\propgrid\advprops.h" />
     <ClInclude Include="univ\propgrid\editors.h" />
     <ClInclude Include="univ\propgrid\manager.h" />
@@ -317,9 +334,7 @@
     <ClInclude Include="univ\propgrid\props.h" />
     <ClInclude Include="univ\renderer.h" />
     <ClInclude Include="univ\scrollTimer.h" />
-    <ClInclude Include="univ\theme\luna_dockart.h" />
-    <ClInclude Include="univ\theme\luna_tabart.h" />
-    <ClInclude Include="univ\theme\luna_toolbarart.h" />
+    <ClInclude Include="univ\theme\private\picturePredefined.h" />
     <ClInclude Include="univ\theme\themeRenderer.h" />
     <ClInclude Include="univ\splitterWindow.h" />
     <ClInclude Include="univ\stc\PlatWX.h" />

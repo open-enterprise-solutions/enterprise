@@ -8,8 +8,8 @@
 #include <wx/image.h>
 #include <wx/icon.h>
 #include <wx/gdicmn.h>
-#include <wx/aui/aui.h>
-#include <wx/aui/auibar.h>
+#include "deskgui/univ/aui/aui.h"
+#include "deskgui/univ/aui/auibar.h"
 #include <wx/font.h>
 #include <wx/colour.h>
 #include <wx/settings.h>
@@ -24,12 +24,12 @@
 // (frmserver/schema/designer/userList.cpp) through ibUserInfo, as it read sys_user.
 class FRMCLIENT_API ibDialogUserList : public ibDialog
 {
-	wxAuiToolBar* m_toolbarMain;
+	ibAuiToolBar* m_toolbarMain;
 
-	wxAuiToolBarItem* m_toolAdd;
-	wxAuiToolBarItem* m_toolCopy;
-	wxAuiToolBarItem* m_toolEdit;
-	wxAuiToolBarItem* m_toolDelete;
+	ibAuiToolBarItem* m_toolAdd;
+	ibAuiToolBarItem* m_toolCopy;
+	ibAuiToolBarItem* m_toolEdit;
+	ibAuiToolBarItem* m_toolDelete;
 
 	ibDataViewCtrl* m_dataEditor;
 

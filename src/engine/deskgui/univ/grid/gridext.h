@@ -40,11 +40,8 @@ extern const char DESKGUI_API ibGridNameStr[];
 // for compatibility.
 #define WXGRID_DEFAULT_NUMBER_ROWS            10
 #define WXGRID_DEFAULT_NUMBER_COLS            10
-#if defined(__WXMSW__) || defined(__WXGTK20__)
+// SEAM vs wx: one height for every port, MSW's (wx's macOS had 30)
 #define WXGRID_DEFAULT_ROW_HEIGHT             25
-#else
-#define WXGRID_DEFAULT_ROW_HEIGHT             30
-#endif  // __WXMSW__
 #define WXGRID_DEFAULT_SCROLLBAR_WIDTH        16
 
 // Various constants used in ibGrid code.

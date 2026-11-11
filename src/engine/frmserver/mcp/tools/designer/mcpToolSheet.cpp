@@ -2029,6 +2029,9 @@ public:
 			refusal = ibMcpText("The window could not be opened.");
 			return false;
 		}
+		// The client asks for its frame when it is told: this came by the assistant's channel, and nothing else tells it
+		// (the thin designer showed the tab only at the person's next click - 2026-11-11)
+		frame->RefreshFrame();
 
 		result.SetValue(ibT("shown"), title);
 		result.SetValue(ibT("note"),

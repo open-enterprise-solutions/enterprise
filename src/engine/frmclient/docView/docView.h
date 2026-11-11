@@ -62,12 +62,14 @@ class WXDLLIMPEXP_FWD_CORE wxPrintInfo;
 class WXDLLIMPEXP_FWD_CORE wxCommandProcessor;
 class WXDLLIMPEXP_FWD_BASE wxConfigBase;
 
+class ibFindReplaceDialog;
+
 class FRMCLIENT_API ibFrontendDocument;
 class FRMCLIENT_API ibFrontendView;
 class FRMCLIENT_API ibFrontendDocTemplate;
 class FRMCLIENT_API ibFrontendDocManager;
 class ibDocChildFrameAnyBase;
-class WXDLLIMPEXP_FWD_AUI wxAuiToolBar;
+class ibAuiToolBar;
 class ibMetaData;
 
 // ============================================================================
@@ -351,7 +353,7 @@ public:
 #if wxUSE_MENUS
     virtual wxMenuBar* CreateMenuBar() const { return nullptr; }
 #endif // wxUSE_MENUS
-    virtual void OnCreateToolbar(wxAuiToolBar* toolbar) {}
+    virtual void OnCreateToolbar(ibAuiToolBar* toolbar) {}
 
     ibFrontendDocManager *GetDocumentManager() const
         { return m_viewDocument->GetDocumentManager(); }
@@ -366,7 +368,7 @@ public:
     // OES-side adaptations lifted from ibMetaView (step-4 collapse).
 
     // Explicit "make this view's frame visible now" trigger. Desktop reveals
-    // m_viewFrame (the wxAuiMDIChildFrame inside the AUI MDI parent). Web
+    // m_viewFrame (the ibAuiMDIChildFrame inside the AUI MDI parent). Web
     // routes through m_webFrame which is the ibWebDocChildFrame parked in the
     // session's tab list. Body out-of-line so the web branch can call
     // ibWebWindow::Show without pulling webWindow.h into every consumer.
@@ -579,9 +581,9 @@ protected:
     wxPageSetupDialogData m_pageSetupDialogData;
 #endif
 
-    // Find / Replace dialog state (desktop only; mainFrame parent).
+    // Find / Replace dialog state (desktop only; mainFrame parent) - the theme's dialog (ibFindReplaceDialog).
     wxFindReplaceData    m_findData;
-    wxFindReplaceDialog* m_findDialog = nullptr;
+    ibFindReplaceDialog* m_findDialog = nullptr;
 
     wxDECLARE_EVENT_TABLE();
     wxDECLARE_DYNAMIC_CLASS(ibFrontendDocManager);

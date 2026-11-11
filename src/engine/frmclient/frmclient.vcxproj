@@ -103,7 +103,7 @@
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>wxmsw33ud_aui.lib;wxmsw33ud_html.lib;wxmsw33ud_core.lib;wxbase33ud_xml.lib;wxbase33ud.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>wxmsw33ud_html.lib;wxmsw33ud_core.lib;wxbase33ud_xml.lib;wxbase33ud.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -114,7 +114,7 @@
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>wxmsw33ud_aui.lib;wxmsw33ud_html.lib;wxmsw33ud_core.lib;wxbase33ud_xml.lib;wxbase33ud.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>wxmsw33ud_html.lib;wxmsw33ud_core.lib;wxbase33ud_xml.lib;wxbase33ud.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -129,7 +129,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>wxmsw33u_aui.lib;wxmsw33u_html.lib;wxmsw33u_core.lib;wxbase33u_xml.lib;wxbase33u.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>wxmsw33u_html.lib;wxmsw33u_core.lib;wxbase33u_xml.lib;wxbase33u.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -144,13 +144,12 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>wxmsw33u_aui.lib;wxmsw33u_html.lib;wxmsw33u_core.lib;wxbase33u_xml.lib;wxbase33u.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>wxmsw33u_html.lib;wxmsw33u_core.lib;wxbase33u_xml.lib;wxbase33u.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="frmclient.cpp" />
     <ClCompile Include="communicator.cpp" />
-    <ClCompile Include="artProvider\artProvider.cpp" />
     <ClCompile Include="docView\docView.cpp" />
     <ClCompile Include="docView\docManager.cpp" />
     <ClCompile Include="docView\tabDocument.cpp" />
@@ -334,8 +333,6 @@
     <ClInclude Include="frmclient.h" />
     <ClInclude Include="communicator.h" />
     <ClInclude Include="window_ptr.h" />
-    <ClInclude Include="artProvider\artProvider.h" />
-    <ClInclude Include="artProvider\private\picturePredefined.h" />
     <ClInclude Include="artProvider\splash\splashLogo.h" />
     <ClInclude Include="docView\docView.h" />
     <ClInclude Include="docView\docManager.h" />

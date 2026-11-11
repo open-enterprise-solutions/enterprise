@@ -69,8 +69,7 @@ ibDialogUserItem::ibDialogUserItem(wxWindow* parent, wxWindowID id, const wxStri
 
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
-	m_mainNotebook = new wxAuiNotebook(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_NB_TOP | wxAUI_NB_TAB_SPLIT | wxAUI_NB_TAB_MOVE | wxAUI_NB_SCROLL_BUTTONS);
-	m_mainNotebook->SetArtProvider(new wxAuiLunaTabArt());
+	m_mainNotebook = new ibAuiNotebook(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, ibAUI_NB_TOP | ibAUI_NB_TAB_SPLIT | ibAUI_NB_TAB_MOVE | ibAUI_NB_SCROLL_BUTTONS);
 	m_main = new ibPanel(m_mainNotebook, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL);
 
 	wxBoxSizer* sizerUser = new wxBoxSizer(wxVERTICAL);

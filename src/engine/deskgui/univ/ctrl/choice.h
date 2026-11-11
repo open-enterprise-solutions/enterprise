@@ -59,6 +59,12 @@ public:
                 const wxValidator& validator = wxDefaultValidator,
                 const wxString& name = wxASCII_STR(wxChoiceNameStr));
 
+protected:
+    // SEAM vs univ: as wide as its widest item, as wx's native choice (wxChoiceBase::DoGetBestSize) - not as the field
+    // (ibComboCtrl): a choice shows one of its items and nothing else, and a zoom of "100%" stood a field wide in a tool
+    // bar (Max, 2026-11-11)
+    virtual wxSize DoGetBestClientSize() const override;
+
 private:
     void OnComboBox(wxCommandEvent &event);
 

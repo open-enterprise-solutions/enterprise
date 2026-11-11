@@ -395,11 +395,6 @@ void ibPropertyGrid::Init2()
 {
     wxASSERT( !(m_iFlags & ibPG_FL_INITIALIZED ) );
 
-#ifdef __WXMAC__
-   // Smaller controls on Mac
-   SetWindowVariant(wxWINDOW_VARIANT_SMALL);
-#endif
-
     // Now create state, if one didn't exist already
     // (ibPropertyGridManager might have created it for us).
     if ( !m_pState )
@@ -2063,7 +2058,6 @@ int ibPropertyGrid::DoDrawItems( wxDC& dc,
 
         int y2 = y + lh;
 
-#ifdef __WXMSW__
         // Margin Edge
         // Modified by JACS to not draw a margin if ibPG_HIDE_MARGIN is specified, since it
         // looks better, at least under Windows when we have a themed border (the themed-window-specific
@@ -2081,7 +2075,6 @@ int ibPropertyGrid::DoDrawItems( wxDC& dc,
             dc.SetPen( linepen );
         }
         else
-#endif // __WXMSW__
         {
             dc.DrawLine(greyDepth, y, greyDepth, y2);
         }
@@ -2493,12 +2486,6 @@ void ibPropertyGrid::Refresh( bool WXUNUSED(eraseBackground),
 
     // the theme engine's: the rectangle is the client area's, moved into the window's past the border
     ibControl::Refresh(false, rect);
-
-#if ibPG_REFRESH_CONTROLS
-    // I think this really helps only GTK+1.2
-    if ( m_wndEditor ) m_wndEditor->Refresh();
-    if ( m_wndEditor2 ) m_wndEditor2->Refresh();
-#endif
 }
 
 // -----------------------------------------------------------------------
@@ -3263,13 +3250,6 @@ bool ibPropertyGrid::DoPropertyChanged( ibPGProperty* p, ibPGSelectPropertyFlags
     if ( !!(selFlags & ibPGSelectPropertyFlags::DialogVal) )
     {
         RefreshEditor();
-    }
-    else
-    {
-#if ibPG_REFRESH_CONTROLS
-        if ( m_wndEditor ) m_wndEditor->Refresh();
-        if ( m_wndEditor2 ) m_wndEditor2->Refresh();
-#endif
     }
 
     // Sanity check

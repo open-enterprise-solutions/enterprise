@@ -26,7 +26,7 @@
 #include <wx/notebook.h>
 #include <wx/sizer.h>
 #include "deskgui/univ/splitterWindow.h"
-#include <wx/toolbar.h>
+#include "deskgui/univ/aui/auibar.h"
 #include <wx/xml/xml.h>
 
 // Local ids for the pane's own toolbar — start above wxID_HIGHEST so we
@@ -65,9 +65,7 @@ ibHelpPaneView::ibHelpPaneView(wxWindow* parent, const wxString& locale)
 	// Toolbar across the top — back / forward navigation, reload of
 	// the live corpus snapshot, and a "sync from editor cursor" button
 	// that mirrors what RawCtrl+F1 does without leaving the pane.
-	m_toolbar = new wxToolBar(this, wxID_ANY, wxDefaultPosition,
-	                            wxDefaultSize,
-	                            wxTB_HORIZONTAL | wxTB_FLAT | wxTB_NODIVIDER);
+	m_toolbar = new ibAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, ibAUI_TB_HORIZONTAL);
 	const wxSize iconSize = FromDIP(wxSize(16, 16));
 	m_toolbar->SetToolBitmapSize(iconSize);
 	m_toolbar->AddTool(IDC_HelpBack,    _("Back"),

@@ -10,9 +10,9 @@
 #include <vector>
 
 #include <wx/wx.h>
-#include <wx/aui/aui.h>
+#include "deskgui/univ/aui/aui.h"
 #include <wx/splash.h>
-#include <wx/generic/statusbr.h>   // the bottom bar derives from the GENERIC one — see ibDocBottomStatusBar
+#include "deskgui/univ/ctrl/statusBar.h"   // the bottom bar derives from the theme's — see ibDocBottomStatusBar
 #include <wx/xml/xml.h>
 
 #include "frmclient/backend/backend_mainFrame.h"   // the frame an object asks for its inspector's selection
@@ -33,8 +33,8 @@ class ibObjectInspector;
 class ibTabDocument;
 
 //pane
-#define wxAUI_PANE_BOTTOM   wxT("bottomWindow")
-#define wxAUI_PANE_PROPERTY wxT("propertyWindow")
+#define ibAUI_PANE_BOTTOM   wxT("bottomWindow")
+#define ibAUI_PANE_PROPERTY wxT("propertyWindow")
 
 // THE MAIN WINDOW — the old desktop's ibFrontendMainFrame carried over to the thin client: the same
 // AUI frame, the same Luna art, the same doc manager it holds (ibDocParentFrameAnyBase) with the tabs as its documents.
@@ -48,7 +48,7 @@ class ibTabDocument;
 //
 // Each mode's window is a class of its own on top of it — the runtime's (enterprise-thin) and the designer's (designer-thin),
 // as on the desktop and as the server's ibClientFrameRuntime / ibClientFrameDesigner.
-class FRMCLIENT_API ibFrontendMainFrame : public ibBackendDocFrame, public wxAuiMDIParentFrame, public ibDocParentFrameAnyBase {
+class FRMCLIENT_API ibFrontendMainFrame : public ibBackendDocFrame, public ibAuiMDIParentFrame, public ibDocParentFrameAnyBase {
 public:
 
 	virtual ~ibFrontendMainFrame();
@@ -60,8 +60,6 @@ public:
 #if wxUSE_MENUS
 	virtual void SetMenuBar(wxMenuBar* pMenuBar) override;
 #endif // wxUSE_MENUS
-
-	virtual wxAuiMDIClientWindow* OnCreateClient() override;
 
 	// bring window to front
 	virtual void Raise() override;
@@ -104,16 +102,18 @@ public:
 	wxMenu* GetDefaultMenu(int idMenu) const;
 	// …and its toolbar: the doc manager's commands — a mode's window puts its own after them (the designer's Update
 	// database).
-	wxAuiToolBar* GetMainFrameToolbar() const { return m_mainFrameToolbar; }
+	ibAuiToolBar* GetMainFrameToolbar() const { return m_mainFrameToolbar; }
 
 	// A view activated — its own menu merged into the window's and its toolbar shown; deactivated, both disabled (the
 	// desktop's ActivateView).
 	void ActivateView(ibFrontendView* view, bool activate = true);
 
-	// The panes laid out again, once the work under way is done.
+	// The panes laid out again, once the work under way is done — the window frozen until then, so what the work
+	// changes is shown once (UpdateFrameManager thaws it).
 	void UpdateManager() {
 		if (!m_callUpdateFrameManager) {
 			m_callUpdateFrameManager = true;
+			Freeze();
 			CallAfter(&ibFrontendMainFrame::UpdateFrameManager);
 		}
 	}
@@ -192,7 +192,7 @@ protected:
 		// It is important to send the event to the base class first as wxMDIParentFrame overrides its TryBefore() to
 		// send the menu events to the currently active child and the child must get them before our own
 		// TryProcessEvent() is executed, not afterwards.
-		return wxAuiMDIParentFrame::TryBefore(event) || TryProcessEvent(event);
+		return ibAuiMDIParentFrame::TryBefore(event) || TryProcessEvent(event);
 	}
 
 	// The window's own parts. The base builds what every mode has — the toolbars, the File and Edit menus, the
@@ -256,11 +256,11 @@ protected:
 	// application's Debugging) says which pages it holds besides the common ones.
 	void ShowOptions(ibProtocol::ibSchema::ibKind schema, const ibProtocolNode& shown);
 
-	class ibFrameManager : public wxAuiManager {
+	class ibFrameManager : public ibAuiManager {
 	public:
 		ibFrameManager(wxWindow* managedWnd = nullptr,
-			unsigned int flags = wxAUI_MGR_DEFAULT) :
-			wxAuiManager(managedWnd, flags) {
+			unsigned int flags = ibAUI_MGR_DEFAULT) :
+			ibAuiManager(managedWnd, flags) {
 		}
 
 		void Refresh() { Repaint(); }
@@ -343,7 +343,7 @@ private:
 	void OnMenu(wxCommandEvent& event);
 	// Cut, Copy, Paste, Delete, Select all — the field under the focus does them.
 	void OnEditCommand(wxCommandEvent& event);
-	void OnTabChanged(wxAuiNotebookEvent& event);
+	void OnTabChanged(ibAuiNotebookEvent& event);
 
 	static ibFrontendMainFrame* s_instance;
 
@@ -354,8 +354,8 @@ private:
 	wxXmlDocument                   m_options;     // the person's options as read (LoadOptions) — their keys put over the
 	                                               // defaults each time the menu is built
 
-	wxAuiToolBar* m_mainFrameToolbar = nullptr;   // the window's: the doc manager's commands
-	wxAuiToolBar* m_docToolbar = nullptr;         // the active view's own (ibFrontendView::OnCreateToolbar)
+	ibAuiToolBar* m_mainFrameToolbar = nullptr;   // the window's: the doc manager's commands
+	ibAuiToolBar* m_docToolbar = nullptr;         // the active view's own (ibFrontendView::OnCreateToolbar)
 	wxMenu*       m_menuFile = nullptr;           // the window's File, with the files opened last
 	wxMenu*       m_menuEdit = nullptr;           // …and its Edit
 
@@ -391,20 +391,10 @@ private:
 // server's Status, and the base's assistant access by where it listens (Endpoint). The desktop's bar asked the server
 // once a second; here that is a call a second, and the frame's patch already says when it changed.
 //
-// ⭐⭐ THE INK IS OURS WHERE THE PLATFORM LETS IT BE. The generic status bar draws its field text
-// with the DC's default foreground and never consults SetForegroundColour, so the colour has to be
-// set in DrawFieldText — which exists only where wxStatusBar is the generic one. wx/statusbr.h
-// picks that per platform: generic under macOS and GTK, NATIVE under MSW, different again under
-// wxUniversal and Qt. So the override is compiled where the hook exists, and where it does not the
-// native bar draws its own text in the system colour, which is what a user of that platform
-// expects anyway. OES_STATUSBAR_CUSTOM_INK below is that condition, spelled once.
-#if !defined(__WXUNIVERSAL__) && !defined(__WXQT__) && !(defined(__WXMSW__) && wxUSE_NATIVE_STATUSBAR)
-	#define OES_STATUSBAR_CUSTOM_INK 1
-#else
-	#define OES_STATUSBAR_CUSTOM_INK 0
-#endif
-
-class FRMCLIENT_API ibDocBottomStatusBar : public wxStatusBar {
+// The bar is the theme's (ibStatusBar), the same on every port, its colours and its text the theme's: the port's own
+// was the generic bar under macOS and GTK, the native one under MSW - the lamp drawn on two of the three, the native
+// bar painted apart from the frame (2026-11-11).
+class FRMCLIENT_API ibDocBottomStatusBar : public ibStatusBar {
 public:
 
 	// The fields, left to right. Message takes what is left; Assistant is sized to its content.
@@ -414,7 +404,7 @@ public:
 		FieldCount
 	};
 
-	ibDocBottomStatusBar() : wxStatusBar() {}
+	ibDocBottomStatusBar() = default;
 	ibDocBottomStatusBar(wxWindow* parent,
 		wxWindowID id = wxID_ANY,
 		long style = wxSTB_DEFAULT_STYLE,
@@ -422,11 +412,8 @@ public:
 
 protected:
 
-#if OES_STATUSBAR_CUSTOM_INK
-	// Both halves of the fix: the colour the bar would otherwise ignore, and the lamp that only
-	// the assistant field draws — lit while it says something.
-	virtual void DrawFieldText(wxDC& dc, const wxRect& rect, int i, int textHeight) override;
-#endif
+	// The lamp that only the assistant field draws — lit while it says something.
+	virtual void DrawStatusField(wxDC& dc, const wxRect& rect, int n, int flags) override;
 };
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -12,7 +12,7 @@
 #include <wx/sizer.h>
 #include "deskgui/univ/splitterWindow.h"
 #include "deskgui/univ/ctrl/staticText.h"
-#include <wx/toolbar.h>
+#include "deskgui/univ/aui/auibar.h"
 #include <wx/treectrl.h>
 
 // COLUMN 0 IS RESERVED by the ibDataViewCtrl fork (a model column 0 paints blank and does not edit)
@@ -151,8 +151,8 @@ ibSortEditor::ibSortEditor(wxWindow* parent, ibSortDescription* sort, ibSettings
 	// delete, and the two that make an ordered list an ordered list. Two buttons at
 	// the bottom and no way to reorder was a form that could only express "these
 	// fields", never "in this order" — which is the whole content of a sort.
-	wxToolBar* toolbar = m_toolbar = new wxToolBar(rightPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-		wxTB_HORIZONTAL | wxTB_FLAT | wxTB_NODIVIDER);
+	ibAuiToolBar* toolbar = m_toolbar = new ibAuiToolBar(rightPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+		ibAUI_TB_HORIZONTAL);
 	toolbar->SetToolBitmapSize(FromDIP(wxSize(16, 16)));
 	toolbar->AddTool(wxID_ADD, _("Add"),
 		ibSettingsArt(wxASCII_STR(wxART_NEW), this), _("Add (Ins)"));

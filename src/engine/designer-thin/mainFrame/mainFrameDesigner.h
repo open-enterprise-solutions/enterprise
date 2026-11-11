@@ -17,9 +17,9 @@ class ibLocalWindow;
 
 // The syntax helper's pane — the designer's alone; its commands —
 // the base's (the code editor posts them).
-#define wxAUI_PANE_HELP     wxT("syntaxHelperWindow")
+#define ibAUI_PANE_HELP     wxT("syntaxHelperWindow")
 // …and the configuration's tree's.
-#define wxAUI_PANE_METADATA wxT("metadataWindow")
+#define ibAUI_PANE_METADATA wxT("metadataWindow")
 
 // The desktop's (designer/mainFrame/mainFrameDesigner.h), by the same numbers: a person's keys are kept by them.
 enum {
@@ -201,7 +201,7 @@ private:
 	// the runtimes; its breakpoints are kept by the server. Made when the frame logged in, gone with the frame.
 	std::unique_ptr<ibDebuggerClient> m_debugClient;
 
-	wxAuiToolBar* m_debugToolbar = nullptr;
+	ibAuiToolBar* m_debugToolbar = nullptr;
 
 	ibStackWindow* m_stackWindow = nullptr;
 	ibWatchWindow* m_watchWindow = nullptr;

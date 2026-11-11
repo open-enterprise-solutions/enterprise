@@ -17,7 +17,7 @@
 #include "deskgui/univ/ctrl/listCtrl.h"
 #include "deskgui/univ/ctrl/choice.h"
 #include <wx/panel.h>
-#include <wx/aui/auibar.h>
+#include "deskgui/univ/aui/auibar.h"
 
 #include "frmclient/backend/metaCollection/metaObjectMetadata.h"
 #include "deskgui/univ/ctrl/staticText.h"
@@ -85,7 +85,7 @@ private:
 	ibHomePageDescription m_description;   // working copy — committed on OK
 
 	wxWindow*     m_pane[eHomePageColumn_Count] = { nullptr, nullptr };
-	wxAuiToolBar* m_toolbar[eHomePageColumn_Count] = { nullptr, nullptr };
+	ibAuiToolBar* m_toolbar[eHomePageColumn_Count] = { nullptr, nullptr };
 	ibListCtrl*   m_listCtrl[eHomePageColumn_Count] = { nullptr, nullptr };
 	ibStaticText* m_paneCaption[eHomePageColumn_Count] = { nullptr, nullptr };
 

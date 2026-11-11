@@ -50,10 +50,6 @@
 #include <wx/dynarray.h>
 #include <wx/arrimpl.cpp>
 
-#ifdef __WXOSX__
-#include "wx/osx/private.h"
-#endif
-
 #include "treelistctrl.h"
 
 #include <wx/log.h>  // only required for debugging purpose
@@ -1361,10 +1357,8 @@ void ibTreeListHeaderWindow::DrawCurrent()
 	int y1 = 0;
 	ClientToScreen(&x1, &y1);
 
-	int x2 = m_currentX - 1;
-#ifdef __WXMSW__
-	++x2; // but why ????
-#endif
+	// SEAM vs wx: MSW's column, on every port (the others drew one left of it)
+	int x2 = m_currentX;
 	int y2 = 0;
 	m_owner->GetClientSize(nullptr, &y2);
 	m_owner->ClientToScreen(&x2, &y2);
@@ -4739,12 +4733,8 @@ void ibTreeListCtrl::CalculateAndSetHeaderHeight()
 	if (m_header_win) {
 
 		// we use 'g' to get the descent, too
-		int h;
-#ifdef __WXMSW__
-		h = (int)(ibThemeEngine::Get()->GetRenderer()->GetHeaderButtonHeight(m_header_win) * 0.8) + 2;
-#else
-		h = ibThemeEngine::Get()->GetRenderer()->GetHeaderButtonHeight(m_header_win);
-#endif
+		// SEAM vs wx: MSW's, on every port - the header is the theme's
+		const int h = (int)(ibThemeEngine::Get()->GetRenderer()->GetHeaderButtonHeight(m_header_win) * 0.8) + 2;
 
 		// only update if changed
 		if (h != m_headerHeight) {

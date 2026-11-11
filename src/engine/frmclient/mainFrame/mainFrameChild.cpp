@@ -5,21 +5,21 @@
 
 #include "mainFrameChild.h"
 
-wxIMPLEMENT_CLASS(ibAuiDocChildFrame, wxAuiMDIChildFrame);
+wxIMPLEMENT_CLASS(ibAuiDocChildFrame, ibAuiMDIChildFrame);
 wxIMPLEMENT_CLASS(ibDialogDocChildFrame, ibDialog);
 
 #include "mainFrame.h"
 
 ibAuiDocChildFrame::~ibAuiDocChildFrame()
 {
-	wxAuiMDIParentFrame* pParentFrame = GetMDIParentFrame();
+	ibAuiMDIParentFrame* pParentFrame = GetMDIParentFrame();
 
 	if (pParentFrame && ibFrontendMainFrame::GetFrame()) {
 		if (pParentFrame->GetActiveChild() == this) {
 			pParentFrame->SetActiveChild(nullptr);
 			pParentFrame->SetChildMenuBar(nullptr);
 		}
-		wxAuiMDIClientWindow* pClientWindow = pParentFrame->GetClientWindow();
+		ibAuiMDIClientWindow* pClientWindow = pParentFrame->GetClientWindow();
 		wxASSERT(pClientWindow);
 		int idx = pClientWindow->GetPageIndex(this);
 		if (idx != wxNOT_FOUND) {
@@ -72,7 +72,7 @@ void ibAuiDocChildFrame::SetMenuBar(wxMenuBar* menuBar)
 				if (it->IsSubMenu()) {
 					// Recurse into a fresh submenu and attach via AppendSubMenu — that's the one wx treats as a
 					// proper submenu parent across platforms.
-					wxMenu* subMenu = new wxMenu;
+					wxMenu* subMenu = new ibMenu;
 					ConstructMenu(it->GetSubMenu(), subMenu);
 					wxMenuItem* menuItem =
 						src->AppendSubMenu(subMenu, it->GetItemLabel(),
@@ -108,7 +108,7 @@ void ibAuiDocChildFrame::SetMenuBar(wxMenuBar* menuBar)
 		}
 	};
 
-	wxAuiMDIParentFrame* pParentFrame = GetMDIParentFrame();
+	ibAuiMDIParentFrame* pParentFrame = GetMDIParentFrame();
 	wxASSERT_MSG(pParentFrame, wxT("Missing MDI Parent Frame"));
 
 	if (pOldMenuBar == pParentFrame->GetMenuBar())
@@ -132,7 +132,7 @@ void ibAuiDocChildFrame::SetMenuBar(wxMenuBar* menuBar)
 			for (unsigned int idx = 0; idx < pMenuBar->GetMenuCount(); idx++) {
 
 				wxMenu* dst = pMenuBar->GetMenu(idx);
-				wxMenu* src = new wxMenu;
+				wxMenu* src = new ibMenu;
 
 				if (pos_edit != wxNOT_FOUND) {
 					if ((int)idx > pos_edit) {
@@ -177,7 +177,7 @@ wxMenuBar* ibAuiDocChildFrame::GetMenuBar() const
 void ibAuiDocChildFrame::SetLabel(const wxString& label)
 {
 	if (label != GetLabel()) {
-		wxAuiMDIChildFrame::SetLabel(label);
-		wxAuiMDIChildFrame::SetTitle(label);
+		ibAuiMDIChildFrame::SetLabel(label);
+		ibAuiMDIChildFrame::SetTitle(label);
 	}
 }

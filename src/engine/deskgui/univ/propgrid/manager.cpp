@@ -726,11 +726,6 @@ void ibPropertyGridManager::Init2( int style )
     if ( baseId < 0 )
         baseId = ibPG_MAN_ALTERNATE_BASE_ID;
 
-#ifdef __WXMAC__
-   // Smaller controls on Mac
-   SetWindowVariant(wxWINDOW_VARIANT_SMALL);
-#endif
-
    long propGridFlags = (m_windowStyle&ibPG_MAN_PASS_FLAGS_MASK)
                         |ibPG_MAN_PROPGRID_FORCED_FLAGS;
 

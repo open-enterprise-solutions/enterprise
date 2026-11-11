@@ -15,12 +15,6 @@
 #include "dataview.h"
 #include "deskgui/typeconv.h"  // ColourToWxColour — an item's colours are the model's data
 #ifndef WX_PRECOMP
-#ifdef __WXMSW__
-#include <wx/app.h>          // GetRegisteredClassName()
-#include <wx/msw/private.h>
-#include <wx/msw/wrapwin.h>
-#include <wx/msw/wrapcctl.h> // include <commctrl.h> "properly"
-#endif
 #include <wx/sizer.h>
 #include <wx/log.h>
 #include <wx/dcclient.h>
@@ -4577,10 +4571,6 @@ bool ibDataViewCtrl::Create(wxWindow* parent,
 
 	SetInitialSize(size);
 
-#if defined(__WXOSX__) && !wxCHECK_VERSION(3, 3, 0)
-	MacSetClipChildren(true);
-#endif
-
 	m_tableAreaWin = new ibDataViewMainWindow(this, ibDataViewMainWindow::ibDataViewWindowNormal);
 
 	// The busy indicator's tick. Owned by the control so it dies with it — a
@@ -4821,23 +4811,6 @@ void ibDataViewCtrl::ShowFooterWindow(bool e)
 		m_footerAreaWin->SetColumnCount(GetColumnCount());
 	}
 }
-
-#ifdef __WXMSW__
-WXLRESULT ibDataViewCtrl::MSWWindowProc(WXUINT nMsg,
-	WXWPARAM wParam,
-	WXLPARAM lParam)
-{
-	WXLRESULT rc = ibDataViewCtrlBase::MSWWindowProc(nMsg, wParam, lParam);
-
-	// we need to process arrows ourselves for scrolling
-	if (nMsg == WM_GETDLGCODE)
-	{
-		rc |= DLGC_WANTARROWS;
-	}
-
-	return rc;
-}
-#endif
 
 ibDataViewMainWindow* ibDataViewCtrl::CellToDataViewWindow(const ibDataViewItem& item, const ibDataViewColumn* column) const
 {
@@ -5902,14 +5875,8 @@ int ibDataViewCtrl::GetDefaultRowHeight() const
 {
 	const int SMALL_ICON_HEIGHT = FromDIP(16);
 
-#ifdef __WXMSW__
-	// We would like to use the same line height that Explorer uses. This is
-	// different from standard ListView control since Vista.
-	if (wxGetWinVersion() >= wxWinVersion_Vista)
-		return wxMax(SMALL_ICON_HEIGHT, GetCharHeight()) + FromDIP(6);
-	else
-#endif // __WXMSW__
-		return wxMax(SMALL_ICON_HEIGHT, GetCharHeight()) + FromDIP(1);
+	// SEAM vs wx: Explorer's line height (wx's on MSW since Vista), on every port - the list is the library's
+	return wxMax(SMALL_ICON_HEIGHT, GetCharHeight()) + FromDIP(6);
 }
 
 int ibDataViewCtrl::GetModelColumnIndex(unsigned int model_column) const

@@ -436,13 +436,6 @@ private:
     void OnScroll( wxScrollWinEvent& event );
     void OnSize( wxSizeEvent &event );
 
-    // we need to return a special WM_GETDLGCODE value to process just the
-    // arrows but let the other navigation characters through
-#if defined(__WXMSW__) && !defined(__WXUNIVERSAL__)
-    virtual WXLRESULT
-    MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lParam) override;
-#endif // __WXMSW__
-
     WX_FORWARD_TO_SCROLL_HELPER()
 
     wxDECLARE_EVENT_TABLE();

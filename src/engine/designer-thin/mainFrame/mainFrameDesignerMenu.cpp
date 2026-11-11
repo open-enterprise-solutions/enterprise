@@ -30,11 +30,11 @@ void ibFrontendMainFrameDesigner::SetDefaultHotKeys()
 //*                                Default menu                                  *
 //********************************************************************************
 
-#include "frmclient/artProvider/artProvider.h"   // the configuration's pictures — wxART_DATABASE…
+#include "deskgui/artProvider.h"   // the configuration's pictures — wxART_DATABASE…
 
 void ibFrontendMainFrameDesigner::InitializeDefaultMenu()
 {
-	m_menuDebug = new wxMenu;
+	m_menuDebug = new ibMenu;
 
 	// The debugger's commands carry the pictures their buttons carry on the debug toolbar (wxART_DEBUG) — one
 	// command, one picture, wherever it is pressed from.
@@ -44,13 +44,13 @@ void ibFrontendMainFrameDesigner::InitializeDefaultMenu()
 	};
 
 	// "Start debugging" → Thin / Web
-	wxMenu* subStart = new wxMenu;
+	wxMenu* subStart = new ibMenu;
 	debugPicture(subStart->Append(wxID_DESIGNER_DEBUG_START, _("Thin client")), wxART_DEBUG_START);
 	subStart->Append(wxID_DESIGNER_DEBUG_START_WEB, _("Web client"));
 	debugPicture(m_menuDebug->AppendSubMenu(subStart, _("Start debugging")), wxART_DEBUG_START);
 
 	// "Start without debugging" → Thin / Web
-	wxMenu* subStartNoDebug = new wxMenu;
+	wxMenu* subStartNoDebug = new ibMenu;
 	debugPicture(subStartNoDebug->Append(wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING, _("Thin client")), wxART_DEBUG_START_WITHOUT_DEBUGGING);
 	subStartNoDebug->Append(wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING_WEB, _("Web client"));
 	debugPicture(m_menuDebug->AppendSubMenu(subStartNoDebug, _("Start without debugging")), wxART_DEBUG_START_WITHOUT_DEBUGGING);
@@ -75,7 +75,7 @@ void ibFrontendMainFrameDesigner::InitializeDefaultMenu()
 	// the refusal is said; the desktop's items greyed by that right stand here. Open database configuration and the
 	// comparisons are the desktop's windows (docViewMetaFile, docViewConfigCompare): the first is MetaData's Browse,
 	// Walk/Merge go through schema ConfigCompare.
-	m_menuConfiguration = new wxMenu;
+	m_menuConfiguration = new ibMenu;
 
 	menuItem = m_menuConfiguration->Append(wxID_DESIGNER_CONFIGURATION_OPEN_DATABASE, _("Open database configuration"));
 	menuItem->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_DATABASE, wxART_FRONTEND, wxSize(16, 16)));
@@ -101,7 +101,7 @@ void ibFrontendMainFrameDesigner::InitializeDefaultMenu()
 	// "Compare configurations" submenu — three entry points (file / DB
 	// baseline / two arbitrary files) grouped together so the parent
 	// Configuration menu stays compact.
-	wxMenu* menuCompare = new wxMenu;
+	wxMenu* menuCompare = new ibMenu;
 
 	menuCompare->Append(wxID_DESIGNER_CONFIGURATION_COMPARE_FILE, _("With file..."));
 	menuCompare->Append(wxID_DESIGNER_CONFIGURATION_COMPARE_DB, _("With database configuration"));
@@ -109,7 +109,7 @@ void ibFrontendMainFrameDesigner::InitializeDefaultMenu()
 
 	m_menuConfiguration->AppendSubMenu(menuCompare, _("Compare configurations"));
 
-	m_menuHelp = new wxMenu;
+	m_menuHelp = new ibMenu;
 	// Syntax helper pane toggle. RawCtrl forces the literal Control key on
 	// every platform (wxWidgets maps "Ctrl" to Cmd on macOS).
 	m_menuHelp->Append(wxID_FRONTEND_SYNTAX_HELPER,

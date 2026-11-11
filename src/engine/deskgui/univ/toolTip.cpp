@@ -14,6 +14,7 @@
 
 #ifdef __WXMSW__
     #include <wx/msw/private.h>
+    #include "deskgui/univ/topLevel.h"   // ibMSWShowShadowed — the popup's shadow, its own
 #endif
 
 namespace {
@@ -53,8 +54,7 @@ bool ibToolTipWindow::Show(bool show)
         return false;
 
     const HWND hWnd = GetHwnd();
-    ::SetClassLongPtr(hWnd, GCL_STYLE, ::GetClassLongPtr(hWnd, GCL_STYLE) | CS_DROPSHADOW);
-    ::ShowWindow(hWnd, SW_SHOWNA);
+    ibMSWShowShadowed(this, [hWnd] { ::ShowWindow(hWnd, SW_SHOWNA); return true; });
     ::SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     return true;
 }

@@ -19,6 +19,9 @@
     <Filter Include="univ\stc">
       <UniqueIdentifier>{7c1e4a2b-9d3f-4e5a-8b6c-0d1e2f3a0006}</UniqueIdentifier>
     </Filter>
+    <Filter Include="univ\aui">
+      <UniqueIdentifier>{7c1e4a2b-9d3f-4e5a-8b6c-0d1e2f3a0008}</UniqueIdentifier>
+    </Filter>
     <Filter Include="univ\propgrid">
       <UniqueIdentifier>{7c1e4a2b-9d3f-4e5a-8b6c-0d1e2f3a0007}</UniqueIdentifier>
     </Filter>
@@ -29,6 +32,9 @@
     </ClCompile>
     <ClCompile Include="univ\renderer.cpp">
       <Filter>univ</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\activityIndicator.cpp">
+      <Filter>univ\ctrl</Filter>
     </ClCompile>
     <ClCompile Include="univ\ctrl\anyButton.cpp">
       <Filter>univ\ctrl</Filter>
@@ -84,6 +90,9 @@
     <ClCompile Include="univ\ctrl\radioButton.cpp">
       <Filter>univ\ctrl</Filter>
     </ClCompile>
+    <ClCompile Include="univ\ctrl\rearrangeCtrl.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
     <ClCompile Include="univ\ctrl\scrollArrow.cpp">
       <Filter>univ\ctrl</Filter>
     </ClCompile>
@@ -115,6 +124,9 @@
       <Filter>univ\ctrl</Filter>
     </ClCompile>
     <ClCompile Include="univ\ctrl\staticText.cpp">
+      <Filter>univ\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\ctrl\statusBar.cpp">
       <Filter>univ\ctrl</Filter>
     </ClCompile>
     <ClCompile Include="univ\ctrl\textCtrl.cpp">
@@ -162,6 +174,12 @@
     <ClCompile Include="univ\dialog.cpp">
       <Filter>univ</Filter>
     </ClCompile>
+    <ClCompile Include="univ\findReplaceDialog.cpp">
+      <Filter>univ</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\frame.cpp">
+      <Filter>univ</Filter>
+    </ClCompile>
     <ClCompile Include="univ\grid\gridext.cpp">
       <Filter>univ\grid</Filter>
     </ClCompile>
@@ -198,6 +216,21 @@
     <ClCompile Include="univ\propertySheetDialog.cpp">
       <Filter>univ</Filter>
     </ClCompile>
+    <ClCompile Include="univ\aui\auibar.cpp">
+      <Filter>univ\aui</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\aui\auibook.cpp">
+      <Filter>univ\aui</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\aui\floatpane.cpp">
+      <Filter>univ\aui</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\aui\framemanager.cpp">
+      <Filter>univ\aui</Filter>
+    </ClCompile>
+    <ClCompile Include="univ\aui\tabmdi.cpp">
+      <Filter>univ\aui</Filter>
+    </ClCompile>
     <ClCompile Include="univ\propgrid\advprops.cpp">
       <Filter>univ\propgrid</Filter>
     </ClCompile>
@@ -223,15 +256,6 @@
       <Filter>univ\propgrid</Filter>
     </ClCompile>
     <ClCompile Include="univ\theme\lunaTheme.cpp">
-      <Filter>univ\theme</Filter>
-    </ClCompile>
-    <ClCompile Include="univ\theme\luna_dockart.cpp">
-      <Filter>univ\theme</Filter>
-    </ClCompile>
-    <ClCompile Include="univ\theme\luna_tabart.cpp">
-      <Filter>univ\theme</Filter>
-    </ClCompile>
-    <ClCompile Include="univ\theme\luna_toolbarart.cpp">
       <Filter>univ\theme</Filter>
     </ClCompile>
     <ClCompile Include="univ\theme\themeRenderer.cpp">
@@ -271,6 +295,7 @@
   <ItemGroup>
     <ClInclude Include="dateconv.h" />
     <ClInclude Include="typeconv.h" />
+    <ClInclude Include="artProvider.h" />
     <ClInclude Include="univ\app.h">
       <Filter>univ</Filter>
     </ClInclude>
@@ -280,10 +305,10 @@
     <ClInclude Include="univ\colourScheme.h">
       <Filter>univ</Filter>
     </ClInclude>
-    <ClInclude Include="univ\ctrl\anyButton.h">
+    <ClInclude Include="univ\ctrl\activityIndicator.h">
       <Filter>univ\ctrl</Filter>
     </ClInclude>
-    <ClInclude Include="univ\ctrl\auiToolBar.h">
+    <ClInclude Include="univ\ctrl\anyButton.h">
       <Filter>univ\ctrl</Filter>
     </ClInclude>
     <ClInclude Include="univ\ctrl\bmpButton.h">
@@ -338,6 +363,9 @@
       <Filter>univ\ctrl</Filter>
     </ClInclude>
     <ClInclude Include="univ\ctrl\radioButton.h">
+      <Filter>univ\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\ctrl\rearrangeCtrl.h">
       <Filter>univ\ctrl</Filter>
     </ClInclude>
     <ClInclude Include="univ\ctrl\scrollArrow.h">
@@ -427,6 +455,9 @@
     <ClInclude Include="univ\dialog.h">
       <Filter>univ</Filter>
     </ClInclude>
+    <ClInclude Include="univ\findReplaceDialog.h">
+      <Filter>univ</Filter>
+    </ClInclude>
     <ClInclude Include="univ\frame.h">
       <Filter>univ</Filter>
     </ClInclude>
@@ -472,6 +503,27 @@
     <ClInclude Include="univ\propertySheetDialog.h">
       <Filter>univ</Filter>
     </ClInclude>
+    <ClInclude Include="univ\aui\aui.h">
+      <Filter>univ\aui</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\aui\auibar.h">
+      <Filter>univ\aui</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\aui\auibook.h">
+      <Filter>univ\aui</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\aui\floatpane.h">
+      <Filter>univ\aui</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\aui\framemanager.h">
+      <Filter>univ\aui</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\aui\serializer.h">
+      <Filter>univ\aui</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\aui\tabmdi.h">
+      <Filter>univ\aui</Filter>
+    </ClInclude>
     <ClInclude Include="univ\propgrid\advprops.h">
       <Filter>univ\propgrid</Filter>
     </ClInclude>
@@ -508,13 +560,7 @@
     <ClInclude Include="univ\scrollTimer.h">
       <Filter>univ</Filter>
     </ClInclude>
-    <ClInclude Include="univ\theme\luna_dockart.h">
-      <Filter>univ\theme</Filter>
-    </ClInclude>
-    <ClInclude Include="univ\theme\luna_tabart.h">
-      <Filter>univ\theme</Filter>
-    </ClInclude>
-    <ClInclude Include="univ\theme\luna_toolbarart.h">
+    <ClInclude Include="univ\theme\private\picturePredefined.h">
       <Filter>univ\theme</Filter>
     </ClInclude>
     <ClInclude Include="univ\theme\themeRenderer.h">

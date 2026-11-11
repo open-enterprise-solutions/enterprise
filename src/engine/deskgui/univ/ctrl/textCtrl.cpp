@@ -2650,10 +2650,11 @@ wxSize ibTextCtrl::DoGetBestClientSize() const
 
     // SEAM vs univ: the canon sized the field by its CURRENT text, so every
     // field came out a different size. The default is uniform, from the font:
-    // sixteen of its lines wide — the browser's field (tokens.css,
-    // --oes-field-width: 16rem; the native 100 DIP was a stub with the buttons
-    // inside it) — and one line tall
-    wxCoord w = 16 * GetLineHeight();
+    // twelve of its lines wide — as wide as the date's popup, its calendar
+    // (2026-11-11, Max; it was sixteen, the browser's --oes-field-width: 16rem,
+    // and the native 100 DIP before it a stub with the buttons inside it) — and
+    // one line tall
+    wxCoord w = 12 * GetLineHeight();
     wxCoord h = GetLineHeight();
 
     if ( !IsSingleLine() )
@@ -2943,8 +2944,13 @@ wxRect ibTextCtrl::GetRealTextArea() const
         ibTextCtrl *self = wxConstCast(this, ibTextCtrl);
         self->RecalcFontMetrics();
 
-        int hLine = GetLineHeight();
-        rectText.height = (m_rectText.height / hLine) * hLine;
+        // SEAM vs univ: at least the first line, cut by the area as a single line field's is - a field lower than one
+        // line held none and drew nothing: a template's cell editor, a row high less its paddings, showed the caret
+        // over no text until the value went into the cell (2026-11-11, Max: "the grid does not show the text at once")
+        const int hLine = GetLineHeight();
+        const int lines = m_rectText.height / hLine;
+        if ( lines > 0 )
+            rectText.height = lines * hLine;
 
         // cache the result
         self->MData().m_rectTextReal = rectText;
@@ -4614,10 +4620,8 @@ void ibTextCtrl::OnPaint(wxPaintEvent& WXUNUSED(event))
     // might be drawn outside of it (if even a small part of a charater is
     // inside, HitTest() will return its column and DrawText() can't draw only
     // the part of the character, of course)
-#ifdef __WXMSW__
-    // FIXME: is this really a bug in wxMSW?
+    // SEAM vs univ: a column short of the area on every port, as on MSW (the field is drawn the same everywhere)
     rectTextArea.width--;
-#endif // __WXMSW__
     dc.DestroyClippingRegion();
     dc.SetClippingRegion(rectTextArea);
 

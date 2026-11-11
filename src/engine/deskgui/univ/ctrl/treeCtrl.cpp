@@ -605,12 +605,8 @@ ibTreeTextCtrl::ibTreeTextCtrl(ibTreeCtrl *owner,
     // Ensure that the text field covers tree item.
     fullSize.x = wxMax(fullSize.x, textSize.x + 5);
 
-    // Correct position for better appearance.
-#ifdef __WXMSW__
+    // Correct position for better appearance (SEAM vs wx: MSW's, on every port - the field is the library's)
     rect.x -= 5;
-#else
-    rect.x -= (fullSize.x - textSize.x) / 2;
-#endif
 
     if ( fullSize.y > textSize.y )
         rect.y -= (fullSize.y - textSize.y) / 2;
@@ -886,25 +882,13 @@ ibTreeItem *ibTreeItem::HitTest(const wxPoint& point,
                 flags |= wxTREE_HITTEST_ONITEMLOWERPART;
 
             int xCross = m_x - theCtrl->FromDIP(theCtrl->GetSpacing());
-#if defined(__WXMAC__) || defined(__WXGTK__)
-            // according to the drawing code the triangles are drawn
-            // at -4/-4  from the position up to +10/+10 max, but
-            // we have to detect the clicks at -10,-10 as also the
-            // native controls react to mouse click on the full
-            // height of the entry, not just where the triangle or
-            // chevron is drawn
-            const int triangleStart = theCtrl->FromDIP(10); // -10,-10
-            const int triangleEnd = theCtrl->FromDIP(10);   // +10, +10
-            if ((point.x > xCross - triangleStart) && (point.x < xCross + triangleEnd) &&
-                (point.y > y_mid - triangleStart) && (point.y < y_mid + triangleEnd) &&
-                HasPlus() && theCtrl->HasButtons() )
-#else
-            // 5 is the size of the plus sign
+            // 5 is the size of the plus sign - the theme's, drawn the same on
+            // every port (the native triangles of GTK and the Mac, hit at
+            // ±10, are not drawn here)
             const int plusSize = 1 + theCtrl->FromDIP(5);
             if ((point.x > xCross - plusSize) && (point.x < xCross + plusSize) &&
                 (point.y > y_mid - plusSize) && (point.y < y_mid + plusSize) &&
                 HasPlus() && theCtrl->HasButtons() )
-#endif
             {
                 flags |= wxTREE_HITTEST_ONITEMBUTTON;
                 return this;
@@ -2470,17 +2454,12 @@ void ibTreeCtrl::ScrollTo(const wxTreeItemId &item)
     if (!item.IsOk())
         return;
 
-    // update the control before scrolling it
+    // update the control before scrolling it: the pending paint, then the positions the scroll is counted from
+    // (SEAM vs wx: wxOSX's, on every port - wx's MSW scrolled over the positions of before the change)
     if (m_dirty)
     {
-#if defined( __WXMSW__ )
-        Update();
-#elif defined(__WXMAC__)
         Update();
         DoDirtyProcessing();
-#else
-        DoDirtyProcessing();
-#endif
     }
 
     ibTreeItem *gitem = GetItemPtr(item);
@@ -3897,13 +3876,7 @@ void ibTreeCtrl::OnMouse( wxMouseEvent &event )
             // highlight the current drop target if any
             DrawDropEffect(m_dropTarget);
 
-#if defined(__WXMSW__) || defined(__WXMAC__) || defined(__WXGTK__)
             Update();
-#else
-            // TODO: remove this call or use wxEventLoopBase::GetActive()->YieldFor(wxEVT_CATEGORY_UI)
-            //       instead (needs to be tested!)
-            wxYieldIfNeeded();
-#endif
         }
     }
     else if ( (event.LeftUp() || event.RightUp()) && m_isDragging )
@@ -3932,13 +3905,7 @@ void ibTreeCtrl::OnMouse( wxMouseEvent &event )
 
         SetCursor(m_oldCursor);
 
-#if defined( __WXMSW__ ) || defined(__WXMAC__) || defined(__WXGTK__)
         Update();
-#else
-        // TODO: remove this call or use wxEventLoopBase::GetActive()->YieldFor(wxEVT_CATEGORY_UI)
-        //       instead (needs to be tested!)
-        wxYieldIfNeeded();
-#endif
     }
     else
     {
@@ -4352,11 +4319,7 @@ ibTreeCtrl::GetClassDefaultAttributes(wxWindowVariant WXUNUSED(variant))
     wxVisualAttributes attr;
     attr.colFg = wxSCHEME_COLOUR(ibThemeEngine::Get()->GetColourScheme(), CONTROL_TEXT); // SEAM: theme
     attr.colBg = wxSCHEME_COLOUR(ibThemeEngine::Get()->GetColourScheme(), WINDOW); // SEAM: theme
-#if defined(__WXOSX__)
-    attr.font = wxFont(wxOSX_SYSTEM_FONT_VIEWS);
-#else
     attr.font = wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT);
-#endif
     return attr;
 #endif
 }

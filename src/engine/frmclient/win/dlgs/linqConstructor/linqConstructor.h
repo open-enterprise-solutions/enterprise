@@ -49,7 +49,7 @@
 #include <vector>
 
 class ibNotebook;
-class wxToolBar;
+class ibAuiToolBar;
 class ibTabDocument;
 class ibProtocolNode;
 
@@ -138,8 +138,8 @@ private:
 	// The tabs, filled from a block read back.
 	void Open(const ibLinqBlock& block);
 
-	wxToolBar* MakeBar(wxWindow* parent);
-	void AddTool(wxToolBar* bar, const wxString& label, const wxString& artId, std::function<void()> action);
+	ibAuiToolBar* MakeBar(wxWindow* parent);
+	void AddTool(ibAuiToolBar* bar, const wxString& label, const wxString& artId, std::function<void()> action);
 
 	// Continuation lines of the block line up under where it starts.
 	wxString IndentAt(unsigned int position) const;

@@ -37,7 +37,7 @@ public:
 	ibFormEditView() : ibFrontendView(), m_visualNotebook(nullptr) {}
 
 	virtual wxPrintout* OnCreatePrintout() override;
-	virtual void OnCreateToolbar(wxAuiToolBar* toolbar) override;
+	virtual void OnCreateToolbar(ibAuiToolBar* toolbar) override;
 	virtual bool OnCreate(ibFrontendDocument* doc, long flags) override;
 	virtual void OnActivateView(bool activate, ibFrontendView* activeView, ibFrontendView* deactiveView) override;
 	virtual void OnUpdate(ibFrontendView* sender, wxObject* hint) override;

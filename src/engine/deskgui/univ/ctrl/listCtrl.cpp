@@ -49,14 +49,6 @@
 
 #include "wx/private/access.h"
 
-#ifdef __WXMAC__
-    #include "wx/osx/private.h"
-#endif
-
-#if defined(__WXMSW__) && !defined(__WXUNIVERSAL__)
-    #include "wx/msw/wrapwin.h"
-#endif
-
 #include <memory>
 
 // ----------------------------------------------------------------------------
@@ -1921,11 +1913,6 @@ ibListHeaderWindow::~ibListHeaderWindow()
     delete m_resizeCursor;
 }
 
-#ifdef __WXUNIVERSAL__
-#include "wx/univ/renderer.h"
-#include "wx/univ/theme.h"
-#endif
-
 // shift the DC origin to match the position of the main window horz
 // scrollbar: this allows us to always use logical coords
 void ibListHeaderWindow::AdjustDC(wxDC& dc)
@@ -1944,17 +1931,7 @@ void ibListHeaderWindow::AdjustDC(wxDC& dc)
     dc.GetDeviceOrigin( &org_x, &org_y );
 
     // account for the horz scrollbar offset
-#if defined(__WXGTK__) && !defined(__WXGTK3__)
-    if (GetLayoutDirection() == wxLayout_RightToLeft)
-    {
-        // Maybe we just have to check for m_signX
-        // in the DC, but I leave the #ifdef __WXGTK__
-        // for now
-        dc.SetDeviceOrigin( org_x + (view_start * xpix), org_y );
-    }
-    else
-#endif
-        dc.SetDeviceOrigin( org_x - (view_start * xpix), org_y );
+    dc.SetDeviceOrigin( org_x - (view_start * xpix), org_y );
 }
 
 void ibListHeaderWindow::OnPaint( wxPaintEvent &WXUNUSED(event) )
@@ -5998,11 +5975,6 @@ void ibListCtrl::CreateOrDestroyHeaderWindowAsNeeded()
                         wxTAB_TRAVERSAL
                       );
 
-#if defined( __WXMAC__ )
-        static wxFont font( wxOSX_SYSTEM_FONT_SMALL );
-        m_headerWin->SetFont( font );
-#endif
-
         GetSizer()->Prepend( m_headerWin, 0, wxGROW );
     }
     else
@@ -6066,23 +6038,6 @@ wxBorder ibListCtrl::GetDefaultBorder() const
 {
     return wxBORDER_THEME;
 }
-
-#if defined(__WXMSW__) && !defined(__WXUNIVERSAL__)
-WXLRESULT ibListCtrl::MSWWindowProc(WXUINT nMsg,
-                                       WXWPARAM wParam,
-                                       WXLPARAM lParam)
-{
-    WXLRESULT rc = ibListCtrlBase::MSWWindowProc(nMsg, wParam, lParam);
-
-    // we need to process arrows ourselves for scrolling
-    if ( nMsg == WM_GETDLGCODE )
-    {
-        rc |= DLGC_WANTARROWS;
-    }
-
-    return rc;
-}
-#endif // __WXMSW__
 
 wxSize ibListCtrl::GetSizeAvailableForScrollTarget(const wxSize& size)
 {

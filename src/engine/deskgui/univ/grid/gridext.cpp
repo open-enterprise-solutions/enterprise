@@ -47,6 +47,7 @@
 #include "deskgui/univ/renderer.h"
 #include "deskgui/univ/theme.h"  // the outline's button: the theme's renderer
 #include "deskgui/univ/colourScheme.h"  // the selection and the drag highlight: the theme's
+#include <wx/wupdlock.h>  // wxWindowUpdateLocker: a zoom is one change (SetGridZoom)
 #include <wx/headerctrl.h>  // wxHeaderCtrl::MoveColumnInOrderArray, the columns' order
 #include <wx/hashset.h>
 
@@ -2291,7 +2292,7 @@ wxEND_EVENT_TABLE()
 
 void ibGridRowAreaWindow::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
-	wxPaintDC dc(this);
+	ibThemePaintDC dc(this);
 
 	// the pane's edge toward the labels, on its right — see ibGridRowOutlineWindow::OnPaint
 	const wxSize size = GetClientSize();
@@ -2355,7 +2356,7 @@ wxEND_EVENT_TABLE()
 
 void ibGridRowLabelWindow::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
-	wxPaintDC dc(this);
+	ibThemePaintDC dc(this);
 
 	// NO - don't do this because it will set both the x and y origin
 	// coords to match the parent scrolled window and we just want to
@@ -2417,7 +2418,7 @@ wxEND_EVENT_TABLE()
 
 void ibGridColAreaWindow::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
-	wxPaintDC dc(this);
+	ibThemePaintDC dc(this);
 
 	// the pane's edge toward the labels, at its bottom — see ibGridRowOutlineWindow::OnPaint
 	const wxSize size = GetClientSize();
@@ -2487,7 +2488,7 @@ wxEND_EVENT_TABLE()
 
 void ibGridColLabelWindow::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
-	wxPaintDC dc(this);
+	ibThemePaintDC dc(this);
 
 	// NO - don't do this because it will set both the x and y origin
 	// coords to match the parent scrolled window and we just want to
@@ -2564,7 +2565,7 @@ wxEND_EVENT_TABLE()
 
 void ibGridRowOutlineWindow::OnPaint(wxPaintEvent&)
 {
-	wxPaintDC dc(this);
+	ibThemePaintDC dc(this);
 	// A PANE BESIDE THE LABELS RULES ITS OWN EDGE TOWARD THEM — the outline's, the area's — as a
 	// label rules its right and its bottom (ibThemeRenderer::DrawHeaderButton): the labels' left rule
 	// was only ever the frame of a grid without a border, and with the theme's border the pane and the
@@ -2620,7 +2621,7 @@ wxEND_EVENT_TABLE()
 
 void ibGridColOutlineWindow::OnPaint(wxPaintEvent&)
 {
-	wxPaintDC dc(this);
+	ibThemePaintDC dc(this);
 	// the pane's edge toward the labels, at its bottom — see ibGridRowOutlineWindow::OnPaint
 	const wxSize size = GetClientSize();
 	dc.SetPen(wxPen(wxTHEME_COLOUR(SHADOW_IN)));
@@ -2669,7 +2670,7 @@ wxEND_EVENT_TABLE()
 // the edge of the pane the strip continues — see ibGridRowOutlineWindow::OnPaint
 void ibGridCornerPaneWindow::OnPaint(wxPaintEvent&)
 {
-	wxPaintDC dc(this);
+	ibThemePaintDC dc(this);
 	const wxSize size = GetClientSize();
 	dc.SetPen(wxPen(wxTHEME_COLOUR(SHADOW_IN)));
 	if (m_orient == wxVERTICAL)
@@ -2680,7 +2681,7 @@ void ibGridCornerPaneWindow::OnPaint(wxPaintEvent&)
 
 void ibGridCornerLabelWindow::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
-	wxPaintDC dc(this);
+	ibThemePaintDC dc(this);
 
 	m_owner->DrawCornerLabel(dc);
 }
@@ -2729,10 +2730,9 @@ wxEND_EVENT_TABLE()
 
 void ibGridWindow::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
-	// ⚠ THE CELL WINDOW IS THE ONE THAT MAY BE BUFFERED — it paints its whole rectangle
-	// (DrawGridSpace fills what the cells do not cover). The strips around it do NOT: they draw
-	// their items and leave the rest to the system's erase, so buffering them without clearing
-	// first shows the previous frame underneath (2026-08-26 — duplicated row numbers, black bands).
+	// ⚠ THE CELL WINDOW PAINTS ITS WHOLE RECTANGLE ITSELF (DrawGridSpace fills what the cells do
+	// not cover), so its buffer takes no background first; the strips around it draw only their
+	// items and take theirs from the ibThemePaintDC they paint on (ibGridSubwindow)
 	wxAutoBufferedPaintDC dc(this);
 	m_owner->PrepareDCFor(dc, this);
 	wxRegion reg = GetUpdateRegion();
@@ -3053,24 +3053,19 @@ void ibGridWindow::ScrollWindow(int dx, int dy, const wxRect* rect)
 	m_owner->ScrollWindow(dx, dy, rect);
 }
 
-void ibGrid::ScrollWindow(int dx, int dy, const wxRect* rect)
+void ibGrid::ScrollWindow(int dx, int dy, const wxRect* WXUNUSED(rect))
 {
-	// We must explicitly call wxWindow version to avoid infinite recursion as
-	// ibGridWindow::ScrollWindow() calls this method back.
-	m_gridWin->wxWindow::ScrollWindow(dx, dy, rect);
+	// SEAM vs wx: NOT SCROLLED BY PARTS - the grid painted again at the position scrolled to, all its windows (Refresh).
+	// Its windows were scrolled each by its own road (the cells by the platform's, the labels by univ's - an Update and a
+	// blit through a DC) and painted each when it was: in a scroll the labels and the cells raced, the numbers flickered
+	// (2026-11-11, Max: "the problem is in the grid"). One whole paint beats the partial ones on this sheet (the wheel's
+	// freeze, ibGridWindow::OnMouseWheel, measured so). What a scroll moves besides its pixels - the cell's editor, a
+	// child of the cells' window - is moved here
+	const wxPoint offset(dx, dy);
+	for (wxWindow* const child : m_gridWin->GetChildren())
+		child->Move(child->GetPosition() + offset, wxSIZE_ALLOW_MINUS_ONE);
 
-	if (m_frozenColGridWin)
-		m_frozenColGridWin->wxWindow::ScrollWindow(0, dy, rect);
-	if (m_frozenRowGridWin)
-		m_frozenRowGridWin->wxWindow::ScrollWindow(dx, 0, rect);
-
-	m_rowAreaWin->ScrollWindow(0, dy, rect);
-	m_rowLabelWin->ScrollWindow(0, dy, rect);
-	m_colAreaWin->ScrollWindow(dx, 0, rect);
-	m_colLabelWin->ScrollWindow(dx, 0, rect);
-
-	if (m_rowOutlineWin) m_rowOutlineWin->ScrollWindow(0, dy, rect);
-	if (m_colOutlineWin) m_colOutlineWin->ScrollWindow(dx, 0, rect);
+	Refresh();
 }
 
 void ibGridWindow::OnMouseEvent(wxMouseEvent& event)
@@ -3344,12 +3339,8 @@ void ibGrid::Create()
 
 void ibGrid::InitPixelFields()
 {
-	m_defaultRowHeight = m_gridWin->GetCharHeight();
-#if defined(__WXMOTIF__) || defined(__WXGTK__) || defined(__WXQT__)  // see also text ctrl sizing in ShowCellEditControl()
-	m_defaultRowHeight += 8;
-#else
-	m_defaultRowHeight += 4;
-#endif
+	// the cell's editors are the theme's (ibTextCtrl), as tall on every port - the canon gave GTK's native one 8
+	m_defaultRowHeight = m_gridWin->GetCharHeight() + 4;
 
 	// Don't change the value when called from OnDPIChanged() later if the
 	// corresponding label window is hidden, these values should remain zeroes
@@ -7106,59 +7097,17 @@ bool ibGrid::SetCurrentCell(const ibGridCellCoords& coords)
 	{
 		DisableCellEditControl();
 
+		// the cell it leaves and the one it comes to are painted by the paint, in its order - cells, lines, the
+		// selection's outline on top; on every port, as the canon on OSX and GTK3, where a window is drawn only in
+		// its paint. MSW's road was a client DC straight away, a second road into drawing that left the outline
+		// off until it repeated the paint's order (2026-11-12, Max: the controls on wx, not on a port's #if)
 		if (IsVisible(m_currentCellCoords, false))
-		{
-#if defined(__WXOSX__) || defined(__WXGTK3__)
 			RefreshBlock(m_currentCellCoords, m_currentCellCoords);
-#else
-			ibGridWindow* prevGridWindow = CellToGridWindow(m_currentCellCoords);
-			wxRect r;
-			r = BlockToDeviceRect(m_currentCellCoords, m_currentCellCoords, prevGridWindow);
-			if (!m_gridLinesEnabled)
-			{
-				r.x--;
-				r.y--;
-				r.width++;
-				r.height++;
-			}
-
-			ibGridCellCoordsArray cells;
-			CalcCellsExposed(r, cells, prevGridWindow);
-
-			// Otherwise refresh redraws the highlight!
-			m_currentCellCoords = coords;
-
-			wxClientDC prevDc(prevGridWindow);
-			PrepareDCFor(prevDc, prevGridWindow);
-
-			// ⭐ THE SAME ORDER AS THE PAINT — cells, lines, and the selection's outline back on top.
-			// This is the OTHER road into drawing (moving the current cell repaints the one it left,
-			// straight onto a client DC) and it drew no outline at all, so every step of the cursor
-			// left the grid lying across the block's frame.
-			DrawGridCellArea(prevDc, cells);
-			DrawAllGridWindowLines(prevDc, r, prevGridWindow);
-			DrawHighlight(prevDc, cells);
-
-			if (prevGridWindow->GetType() != ibGridWindow::ibGridWindowNormal)
-				DrawFrozenBorder(prevDc, prevGridWindow);
-#endif
-		}
 	}
 
 	m_currentCellCoords = coords;
 
-#if defined(__WXOSX__) || defined(__WXGTK3__)
 	RefreshBlock(coords, coords);
-#else
-	if (ShouldRefresh())
-	{
-		ibGridCellAttrPtr attr = GetCellAttrPtr(coords);
-		ibGridWindow* currentGridWindow = CellToGridWindow(coords);
-		wxClientDC dc(currentGridWindow);
-		PrepareDCFor(dc, currentGridWindow);
-		DrawCellHighlight(dc, coords.GetRow(), coords.GetCol(), attr.get());
-	}
-#endif
 
 	return true;
 }
@@ -7929,6 +7878,11 @@ ibGrid::DoDrawGridNonClippingRegionLines(wxDC& dc,
 	int topRow, int leftCol,
 	int bottomRow, int rightCol)
 {
+	// an area's edges across the sheet, which lead to its label beside the row and column labels, in the theme's own
+	// colour - its accent, the selection's; red, they were the one colour on the sheet the theme did not choose
+	// (2026-11-11, Max: "the lines in the grid that lead to the labels - in the theme's colour")
+	const wxPen areaPen(wxTHEME_COLOUR(HIGHLIGHT));
+
 	// horizontal grid lines
 	for (int rowPos = topRow; rowPos < bottomRow; rowPos++)
 	{
@@ -7950,13 +7904,13 @@ ibGrid::DoDrawGridNonClippingRegionLines(wxDC& dc,
 			// top line
 			if (flagRowSection & 2) {
 				int rowTop = GetRowTop(i, GetGridZoom()) - 1;
-				dc.SetPen(wxPen(*wxRED, 1, wxPENSTYLE_SOLID));
+				dc.SetPen(areaPen);
 				dc.DrawLine(left, rowTop, right, rowTop);
 			}
 
 			// bottom line
 			if (flagRowSection & 4) {
-				dc.SetPen(wxPen(*wxRED, 1, wxPENSTYLE_SOLID));
+				dc.SetPen(areaPen);
 				dc.DrawLine(left, bot, right, bot);
 			}
 		}
@@ -7988,13 +7942,13 @@ ibGrid::DoDrawGridNonClippingRegionLines(wxDC& dc,
 			// left hand line
 			if (flagColSection & 2) {
 				int colLeft = GetColLeft(i, GetGridZoom()) - 1;
-				dc.SetPen(wxPen(*wxRED, 1, wxPENSTYLE_SOLID));
+				dc.SetPen(areaPen);
 				dc.DrawLine(colLeft, top, colLeft, bottom);
 			}
 
 			// right hand line
 			if (flagColSection & 4) {
-				dc.SetPen(wxPen(*wxRED, 1, wxPENSTYLE_SOLID));
+				dc.SetPen(areaPen);
 				dc.DrawLine(colRight, top, colRight, bottom);
 			}
 		}
@@ -8832,13 +8786,6 @@ bool ibGrid::DoShowCellEditControl(const ibGridActivationSource& actSource)
 	// convert to scrolled coords
 	CalcGridWindowScrolledPosition(rect.x, rect.y, &rect.x, &rect.y, gridWindow);
 
-#ifdef __WXQT__
-	// Substract 1 pixel in every dimension to fit in the cell area.
-	// If not, Qt will draw the control outside the cell.
-	// TODO: Check offsets under Qt.
-	rect.Deflate(1, 1);
-#endif
-
 	if (!editor->IsCreated())
 	{
 		editor->Create(gridWindow, wxID_ANY,
@@ -9288,14 +9235,12 @@ wxRect ibGrid::CellToRect(int row, int col) const
 		for (i = row; i < row + cell_rows; i++)
 			rect.height += GetRowHeight(i, GetGridZoom());
 
-#ifndef __WXQT__
 		// if grid lines are enabled, then the area of the cell is a bit smaller
 		if (m_gridLinesEnabled)
 		{
 			rect.width -= 1;
 			rect.height -= 1;
 		}
-#endif
 	}
 
 	return rect;
@@ -10398,6 +10343,9 @@ void ibGrid::SetGridZoom(int point)
 
 	if (zoomScale <= 2.25f && zoomScale >= 0.5f)
 	{
+		// one change, painted once as it thaws (DoThaw) - the toolbar's choice as the wheel's (OnMouseWheel)
+		wxWindowUpdateLocker freeze(this);
+
 		// By the same reasoning, the editor should be dismissed if columns are
 		// added or removed. And for consistency, it should IMHO always be
 		// removed, not only if the cell "underneath" it actually changes.
@@ -10408,7 +10356,11 @@ void ibGrid::SetGridZoom(int point)
 		m_zoomScale = zoomScale;
 
 		InvalidateBestSize();
-		CalcDimensions();
+
+		// The whole sheet drawn again at the new scale (CalcDimensions and every window refreshed), not its sizes alone:
+		// zoomed from the toolbar's choice, with no freeze round it as the wheel's, only the strips the scroll uncovered
+		// were painted, the rest stood at the old scale - labels and text in two sizes (2026-11-11)
+		ForceRefresh();
 
 		SendEvent(ibEVT_GRID_ZOOM);
 	}
@@ -11188,10 +11140,29 @@ void ibGrid::SetRowGroupCollapsed(int idx, bool collapsed)
 	if (idx < 0 || (size_t)idx >= m_rowGroupAt.size()) return;
 	ibGridCellGroup& g = m_rowGroupAt[idx];
 	if (g.m_collapsed == collapsed) return;
+
+	// one change, painted once as it thaws (DoThaw), the sheet laid out once as the batch ends - row by row, each row
+	// hidden laid the sheet out and repainted it, and the group folded on the screen one row after another
+	// (2026-11-11, Max: "the groupings collapse one by one")
+	wxWindowUpdateLocker freeze(this);
+	ibGridUpdateLocker batch(this);
+
+	// ⭐ A FOLD IS THE VIEW'S, NOT AN EDIT — a folded row keeps its height, negated, as a hidden row does
+	// (UpdateRowOrColSize), and nothing is announced. Through DoSetRowSize every row folded told of a height somebody set
+	// (ibEVT_GRID_ROW_MODIFIED) and moved the print edge: the editor wrote it into the document as a height of 0 and sent
+	// the sheet to the server; and HideRow / ShowRow left an undo command a row besides - undone row by row, the rows came
+	// back under a group still marked folded (2026-11-11)
+	if (m_rowHeights.IsEmpty())
+		InitRowHeights();
+	const auto fold = [this](int r, bool hidden) {
+		const int height = m_rowHeights[r];
+		if (hidden ? height > 0 : height < 0)
+			m_rowHeights.Set(r, -height);
+	};
 	g.m_collapsed = collapsed;
-	for (int r = g.m_start; r <= g.m_end; ++r) {
-		if (collapsed) HideRow(r); else ShowRow(r);
-	}
+	for (int r = g.m_start; r <= g.m_end; ++r)
+		fold(r, collapsed);
+	InvalidateBestSize();
 
 	// ⭐ EXPANDING AN OUTER GROUP DOES NOT EXPAND WHAT IS FOLDED INSIDE IT. The rows just shown
 	// include the ones belonging to nested groups that are still collapsed — showing those would
@@ -11204,7 +11175,7 @@ void ibGrid::SetRowGroupCollapsed(int idx, bool collapsed)
 			if (nested.m_start < g.m_start || nested.m_end > g.m_end)
 				continue;   // not inside this one
 			for (int r = nested.m_start; r <= nested.m_end; ++r)
-				HideRow(r);
+				fold(r, true);
 		}
 	}
 
@@ -11217,10 +11188,23 @@ void ibGrid::SetColGroupCollapsed(int idx, bool collapsed)
 	if (idx < 0 || (size_t)idx >= m_colGroupAt.size()) return;
 	ibGridCellGroup& g = m_colGroupAt[idx];
 	if (g.m_collapsed == collapsed) return;
+
+	// …as the rows' (SetRowGroupCollapsed)
+	wxWindowUpdateLocker freeze(this);
+	ibGridUpdateLocker batch(this);
+
+	// …the view's, as the rows' fold
+	if (m_colWidths.IsEmpty())
+		InitColWidths();
+	const auto fold = [this](int c, bool hidden) {
+		const int width = m_colWidths[c];
+		if (hidden ? width > 0 : width < 0)
+			m_colWidths.Set(c, -width);
+	};
 	g.m_collapsed = collapsed;
-	for (int c = g.m_start; c <= g.m_end; ++c) {
-		if (collapsed) HideCol(c); else ShowCol(c);
-	}
+	for (int c = g.m_start; c <= g.m_end; ++c)
+		fold(c, collapsed);
+	InvalidateBestSize();
 
 	// ⭐ EXPANDING AN OUTER GROUP DOES NOT EXPAND WHAT IS FOLDED INSIDE IT — the rows' rule, turned
 	// on its side (see SetRowGroupCollapsed). The columns just shown include the ones belonging to
@@ -11233,7 +11217,7 @@ void ibGrid::SetColGroupCollapsed(int idx, bool collapsed)
 			if (nested.m_start < g.m_start || nested.m_end > g.m_end)
 				continue;   // not inside this one
 			for (int c = nested.m_start; c <= nested.m_end; ++c)
-				HideCol(c);
+				fold(c, true);
 		}
 	}
 

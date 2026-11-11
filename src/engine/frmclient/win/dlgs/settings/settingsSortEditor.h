@@ -82,7 +82,7 @@ private:
 	ibDataViewCtrl* m_view      = nullptr;
 	ibSortLineModel* m_model    = nullptr;
 	ibTreeCtrl*     m_fieldCtrl = nullptr;
-	class wxToolBar* m_toolbar  = nullptr;   // held so view-only can reach it, as the filter editor's is
+	class ibAuiToolBar* m_toolbar  = nullptr;   // held so view-only can reach it, as the filter editor's is
 	bool            m_readOnly  = false;     // view only — see SetReadOnly
 	std::function<void()> m_onChanged;       // told on every change — see SetOnChanged
 	bool            m_reloading = false;     // filling from the buffer is not editing — see ibFilterEditor

@@ -2,18 +2,15 @@
 #include "backend/compiler/compileCode.h"
 #include "backend/compiler/procUnit.h"
 #include "core/exception.h"   // ibCoreException — what a refused compile or run throws
-#include "codeRunner/artProvider/artProvider.h"
+#include "deskgui/artProvider.h"
 #include "codeRunner/mainFrame/settings/editorsettings.h"
 #include "codeRunner/mainFrame/settings/fontcolorsettings.h"
 
-#include "deskgui/univ/theme/luna_toolbarart.h"
-
-#include <wx/aui/auibar.h>
+#include "deskgui/univ/aui/auibar.h"
+#include "deskgui/univ/messageDialog.h"   // ibMessageBox, ibMessageDialog — the theme's, in the frame's look (the launcher's too)
 #include <wx/filedlg.h>
-#include <wx/aboutdlg.h>
 #include <wx/wfstream.h>
 #include <wx/textfile.h>
-#include <wx/msgdlg.h>
 
 enum {
 	wxID_CR_ADD_COMMENTS = wxID_HIGHEST + 11000,
@@ -47,7 +44,7 @@ void ibFrameCodeRunner::OnMenuOpen(wxCommandEvent&)
 
 	wxTextFile file(dlg.GetPath());
 	if (!file.Open()) {
-		wxMessageBox(_("Cannot open file"), _("Code runner"), wxOK | wxICON_ERROR, this);
+		ibMessageBox(_("Cannot open file"), _("Code runner"), wxOK | wxICON_ERROR, this);
 		return;
 	}
 	wxString text;
@@ -71,7 +68,7 @@ void ibFrameCodeRunner::OnMenuSave(wxCommandEvent& event)
 	}
 	wxFile file(m_currentFile, wxFile::write);
 	if (!file.IsOpened()) {
-		wxMessageBox(_("Cannot save file"), _("Code runner"), wxOK | wxICON_ERROR, this);
+		ibMessageBox(_("Cannot save file"), _("Code runner"), wxOK | wxICON_ERROR, this);
 		return;
 	}
 	const wxString text = m_codeEditor->GetText();
@@ -87,7 +84,7 @@ void ibFrameCodeRunner::OnMenuSaveAs(wxCommandEvent&)
 
 	wxFile file(dlg.GetPath(), wxFile::write);
 	if (!file.IsOpened()) {
-		wxMessageBox(_("Cannot save file"), _("Code runner"), wxOK | wxICON_ERROR, this);
+		ibMessageBox(_("Cannot save file"), _("Code runner"), wxOK | wxICON_ERROR, this);
 		return;
 	}
 	file.Write(m_codeEditor->GetText());
@@ -102,12 +99,14 @@ void ibFrameCodeRunner::OnMenuExit(wxCommandEvent&)
 
 void ibFrameCodeRunner::OnMenuAbout(wxCommandEvent&)
 {
-	wxAboutDialogInfo info;
-	info.SetName(_("OES Code Runner"));
-	info.SetVersion(wxT("1.0"));
-	info.SetDescription(_("Standalone OES script runner - write and execute scripts without metadata."));
-	info.SetCopyright(wxT("(C) Open Enterprise Solutions"));
-	wxAboutBox(info, this);
+	// the theme's message dialog, as the frame is the theme's - wxAboutBox stood as the system's box over it (2026-11-11,
+	// Max: "the dialog stayed old"); the name and version its heading, the rest under it, as the system's laid them out
+	const wxString name = _("OES Code Runner");
+	ibMessageDialog dlg(this, name + wxT(" 1.0"), wxString::Format(_("About %s"), name),
+		wxOK | wxICON_INFORMATION | wxCENTRE);
+	dlg.SetExtendedMessage(_("Standalone OES script runner - write and execute scripts without metadata.")
+		+ wxT("\n\n") + wxString(wxUniChar(0x00A9)) + wxT(" Open Enterprise Solutions"));
+	dlg.ShowModal();
 }
 
 void ibFrameCodeRunner::OnMenuEdit(wxCommandEvent& event)
@@ -194,15 +193,16 @@ ibFrameCodeRunner::ibFrameCodeRunner(wxWindow* parent, wxWindowID id, const wxSt
 	// loud; the base class has no default constructor precisely so that
 	// "no session" is a statement, never an omission.
 	ibBackendDocFrame(ibSessionHolder()),
-	wxFrame(parent, id, title, pos, size, style), m_compileCode(new ibCompileCode), m_procUnit(std::make_shared<ibProcUnit>())
+	ibFrame(parent, id, title, pos, size, style), m_compileCode(new ibCompileCode), m_procUnit(std::make_shared<ibProcUnit>())
 {
 	this->SetSizeHints(wxDefaultSize, wxDefaultSize);
 
 	// Menu bar — File / Edit / Help. Standard wxID_* IDs let ibSTC
-	// pick up Edit shortcuts directly when the editor has focus.
-	wxMenuBar* menuBar = new wxMenuBar();
+	// pick up Edit shortcuts directly when the editor has focus. The theme's menubar and menus - the only kind ibFrame
+	// takes (frame.h).
+	wxMenuBar* menuBar = new ibMenuBar();
 
-	wxMenu* menuFile = new wxMenu();
+	wxMenu* menuFile = new ibMenu();
 	menuFile->Append(wxID_OPEN,    _("&Open...\tCtrl+O"));
 	menuFile->Append(wxID_SAVE,    _("&Save\tCtrl+S"));
 	menuFile->Append(wxID_SAVEAS,  _("Save &as..."));
@@ -210,7 +210,7 @@ ibFrameCodeRunner::ibFrameCodeRunner(wxWindow* parent, wxWindowID id, const wxSt
 	menuFile->Append(wxID_EXIT,    _("E&xit\tAlt+F4"));
 	menuBar->Append(menuFile, _("&File"));
 
-	wxMenu* menuEdit = new wxMenu();
+	wxMenu* menuEdit = new ibMenu();
 	menuEdit->Append(wxID_UNDO,      _("&Undo\tCtrl+Z"));
 	menuEdit->Append(wxID_REDO,      _("&Redo\tCtrl+Y"));
 	menuEdit->AppendSeparator();
@@ -221,7 +221,7 @@ ibFrameCodeRunner::ibFrameCodeRunner(wxWindow* parent, wxWindowID id, const wxSt
 	menuEdit->Append(wxID_SELECTALL, _("Select &all\tCtrl+A"));
 	menuBar->Append(menuEdit, _("&Edit"));
 
-	wxMenu* menuHelp = new wxMenu();
+	wxMenu* menuHelp = new ibMenu();
 	menuHelp->Append(wxID_ABOUT, _("&About"));
 	menuBar->Append(menuHelp, _("&Help"));
 
@@ -241,12 +241,11 @@ ibFrameCodeRunner::ibFrameCodeRunner(wxWindow* parent, wxWindowID id, const wxSt
 
 	// Top toolbar — same command set as designer's module-editor
 	// docview minus document-only items (Goto line / Procedures &
-	// functions don't apply without a backing module). The desktop's toolbar, as frmclient's are: wxAuiToolBar in the
+	// functions don't apply without a backing module). The desktop's toolbar, as frmclient's are: ibAuiToolBar in the
 	// Luna art, at the top of the window's sizer.
 	wxBoxSizer* bSizerMain = new wxBoxSizer(wxVERTICAL);
 
-	wxAuiToolBar* toolbar = new wxAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_LAYOUT);
-	toolbar->SetArtProvider(new wxAuiLunaToolBarArt());
+	ibAuiToolBar* toolbar = new ibAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, ibAUI_TB_HORZ_LAYOUT);
 	toolbar->AddTool(wxID_CR_ADD_COMMENTS,    _("Add comments"),    wxArtProvider::GetBitmapBundle(wxART_ADD_COMMENT,   wxART_DOC_MODULE), _("Add"));
 	toolbar->AddTool(wxID_CR_REMOVE_COMMENTS, _("Remove comments"), wxArtProvider::GetBitmapBundle(wxART_REMOVE_COMMENT, wxART_DOC_MODULE), _("Remove"));
 	toolbar->AddSeparator();
@@ -337,6 +336,12 @@ ibFrameCodeRunner::ibFrameCodeRunner(wxWindow* parent, wxWindowID id, const wxSt
 	this->Layout();
 	m_statusBar = this->CreateStatusBar(1, wxSTB_SIZEGRIP, wxID_ANY);
 	this->Centre(wxBOTH);
+
+	// the program's icon in the theme's title bar, as the main frame's (frmclient mainFrame.cpp) - the system's caption
+	// took it from the executable, the theme's draws the frame's own
+#ifdef __WXMSW__
+	SetIcon(wxICON(oes));
+#endif
 
 	// Register every globally-registered context object (Catalogs,
 	// Documents, EnumManager, …) so script can reference them. They

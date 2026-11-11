@@ -12,7 +12,6 @@ ibRoleEditor::ibRoleEditor(wxWindow* parent,
 	ibSplitterWindow(parent, winid, wxDefaultPosition, wxDefaultSize, wxSP_3D | wxSP_LIVE_UPDATE), m_document(document)
 {
 	m_roleCtrl = new ibTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_HAS_BUTTONS | wxTR_NO_LINES | wxTR_SINGLE | wxTR_TWIST_BUTTONS);
-	m_roleCtrl->SetDoubleBuffered(true);
 	m_roleCtrl->Bind(wxEVT_TREE_SEL_CHANGED, &ibRoleEditor::OnSelectedItem, this);
 
 	//set image list
@@ -21,7 +20,6 @@ ibRoleEditor::ibRoleEditor(wxWindow* parent,
 	);
 
 	m_checkCtrl = new ibCheckTree(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_HAS_BUTTONS | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxTR_HIDE_ROOT | wxCR_EMPTY_CHECK | wxSUNKEN_BORDER | wxTR_TWIST_BUTTONS);
-	m_checkCtrl->SetDoubleBuffered(true);
 	m_checkCtrl->Bind(wxEVT_CHECKTREE_CHOICE, &ibRoleEditor::OnCheckItem, this);
 
 	InitRole();

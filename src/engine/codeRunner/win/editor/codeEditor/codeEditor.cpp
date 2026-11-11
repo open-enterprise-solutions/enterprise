@@ -296,6 +296,7 @@ void ibCodeEditor::RefreshEditor()
 }
 
 #include <wx/fdrepdlg.h>
+#include "deskgui/univ/messageDialog.h"   // ibMessageBox — the theme's, as the frame's
 
 void ibCodeEditor::FindText(const wxString& findString, int wxflags)
 {
@@ -318,7 +319,7 @@ void ibCodeEditor::FindText(const wxString& findString, int wxflags)
 		result = ibCodeEditor::SearchPrev(sciflags, findString);
 	}
 	if (ibSTC_INVALID_POSITION == result) {
-		wxMessageBox(ibString::Format(_("\"%s\" not found!"), findString.c_str()),
+		ibMessageBox(ibString::Format(_("\"%s\" not found!"), findString.c_str()),
 			_("Not Found!"), wxICON_ERROR, (wxWindow*)this);
 	}
 	else {
@@ -815,7 +816,7 @@ void ibCodeEditor::OnMouseMove(wxMouseEvent& event)
 	event.Skip();
 }
 
-#include "codeRunner/artProvider/artProvider.h"   // wxART_SELECT_ALL — the menu's own picture
+#include "deskgui/artProvider.h"   // wxART_SELECT_ALL — the menu's own picture
 #include "deskgui/univ/menu.h"                    // ibMenu — the menu the theme draws
 
 void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)

@@ -41,7 +41,7 @@
 #include "frmclient/backend/backend_exception.h"
 #include "frmclient/backend/metaData.h"
 #include "frmclient/backend/compiler/value.h"   // ibValue::GetIconGroup — the desktop's metaData.h brings it
-#include "artProvider/artProvider.h"    // wxART_FRONTEND — the product's own pictures, asked for first
+#include "deskgui/artProvider.h"    // wxART_FRONTEND — the product's own pictures, asked for first
 
 #include <wx/sizer.h>
 #include <wx/stattext.h>
@@ -52,7 +52,7 @@
 #include <wx/panel.h>
 #include <wx/settings.h>
 #include "deskgui/univ/splitterWindow.h"   // ibSplitterWindow — the tabs' panes
-#include <wx/toolbar.h>
+#include "deskgui/univ/aui/auibar.h"   // ibAuiToolBar — a pane's verbs
 #include <wx/artprov.h>
 #include <wx/dnd.h>
 #include <wx/wupdlock.h>

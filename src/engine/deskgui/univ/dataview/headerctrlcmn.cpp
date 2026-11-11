@@ -24,7 +24,7 @@
 
 #include "deskgui/univ/menu.h"
 
-#include <wx/rearrangectrl.h>
+#include "deskgui/univ/ctrl/rearrangeCtrl.h"   // ibRearrangeDialog — the columns' order, the theme's dialog
 #include <wx/renderer.h>
 #include "deskgui/univ/renderer.h"
 #include "deskgui/univ/theme.h"  // the buttons' margin: the theme's renderer's
@@ -40,18 +40,18 @@ const unsigned int wxNO_COLUMN = static_cast<unsigned>(-1);
 const unsigned int wxID_COLUMNS_BASE = 1;
 
 // ----------------------------------------------------------------------------
-// wxHeaderColumnsRearrangeDialog: dialog for customizing our columns
+// ibHeaderColumnsRearrangeDialog: dialog for customizing our columns
 // ----------------------------------------------------------------------------
 
 #if wxUSE_REARRANGECTRL
 
-class wxHeaderColumnsRearrangeDialog : public wxRearrangeDialog
+class ibHeaderColumnsRearrangeDialog : public ibRearrangeDialog
 {
 public:
-    wxHeaderColumnsRearrangeDialog(wxWindow *parent,
+    ibHeaderColumnsRearrangeDialog(wxWindow *parent,
                                    const wxArrayInt& order,
                                    const wxArrayString& items)
-        : wxRearrangeDialog
+        : ibRearrangeDialog
           (
             parent,
             _("Please select the columns to show and define their order:"),
@@ -353,7 +353,7 @@ bool ibHeaderGenericCtrlBase::ShowCustomizeDialog()
     }
 
     // do show it
-    wxHeaderColumnsRearrangeDialog dlg(this, order, titles);
+    ibHeaderColumnsRearrangeDialog dlg(this, order, titles);
     if ( dlg.ShowModal() == wxID_OK )
     {
         // and apply the changes

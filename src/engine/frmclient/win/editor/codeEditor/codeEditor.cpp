@@ -148,7 +148,7 @@ ibCodeEditor::ibCodeEditor(ibTabDocument* document, wxWindow* parent, wxWindowID
 	Bind(wxEVT_MENU, [this](wxCommandEvent& ev) {
 		// Walk parent chain firing wxEVT_MENU at every wxWindow until
 		// one handles. ibStyledTextCtrl's PopupMenu does not always
-		// propagate through wxAUI / wxAuiDocMDIFrame parents to the
+		// propagate through wxAUI / ibAuiDocMDIFrame parents to the
 		// outermost host where the host Bind() lives.
 		wxCommandEvent up(wxEVT_MENU, wxID_FRONTEND_SYNTAX_HELPER_LOOKUP);
 		up.SetEventObject(this);
@@ -1021,7 +1021,7 @@ void ibCodeEditor::OnMouseMove(wxMouseEvent& event)
 #include "frmclient/win/dlgs/translateConstructor/translateConstructor.h"   // …and its sibling for a translated text
 #include "frmclient/win/dlgs/formatConstructor/formatConstructor.h"         // …and for a format string
 #include "frmclient/win/dlgs/linqConstructor/linqConstructor.h"             // …and a LINQ block, at the caret
-#include "frmclient/artProvider/artProvider.h"                      // wxART_QUERY_CONSTRUCTOR — the icon, registered not embedded
+#include "deskgui/artProvider.h"                                    // wxART_QUERY_CONSTRUCTOR — the icon, registered not embedded
 #include "deskgui/univ/menu.h"                                      // ibMenu — the menu the theme draws
 
 void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)

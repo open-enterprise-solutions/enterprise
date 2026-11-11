@@ -1,7 +1,7 @@
 #ifndef _FRMCLIENT_VIEW_NOTEBOOK_H__
 #define _FRMCLIENT_VIEW_NOTEBOOK_H__
 
-#include <wx/aui/auibook.h>
+#include "deskgui/univ/aui/auibook.h"
 
 #include "frmclient/visualView/ctrl/window.h"
 
@@ -24,10 +24,10 @@ private:
 	// on it after: the pages are drawn after the notebook.
 	void SelectActivePage();
 
-	void OnPageChanged(wxAuiNotebookEvent& event);
-	void OnEndDrag(wxAuiNotebookEvent& event);
+	void OnPageChanged(ibAuiNotebookEvent& event);
+	void OnEndDrag(ibAuiNotebookEvent& event);
 
-	wxAuiNotebook* m_notebook = nullptr;
+	ibAuiNotebook* m_notebook = nullptr;
 	long long      m_activePage = 0;   // the State's ActivePage, by its control id; 0 — none
 
 	friend class ibValueNotebookPage;

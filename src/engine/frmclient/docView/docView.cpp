@@ -44,6 +44,7 @@
 
 #include "deskgui/univ/choiceDialog.h"   // ibGetSingleChoiceData — a document's view, when it has several
 #include "deskgui/univ/messageDialog.h"  // ibMessageBox — save the changes?
+#include "deskgui/univ/findReplaceDialog.h"   // ibFindReplaceDialog — Find, deleted with the manager
 
 #if wxUSE_PRINTING_ARCHITECTURE
     #include "wx/prntbase.h"
@@ -844,7 +845,7 @@ void ibFrontendView::SetDocChildFrame(ibDocChildFrameAnyBase *docChildFrame)
 bool ibFrontendView::ShowFrame(bool show)
 {
     // Step-4 collapse: lifted up from ibMetaView::ShowFrame. Desktop reveals
-    // the wxAuiMDIChildFrame stashed in m_viewFrame; web reveals the
+    // the ibAuiMDIChildFrame stashed in m_viewFrame; web reveals the
     // ibWebDocChildFrame attached via SetWebFrame after CreateChildFrame.
     if (m_viewFrame != nullptr && m_viewFrame->Show(show))
         return true;

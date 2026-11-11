@@ -860,7 +860,7 @@ private:
 	// The plate over the sheet — see ShowComposeState. Created on first use, kept hidden after: its spinner turns
 	// while composing, its text says which.
 	class wxWindow*             m_composeState = nullptr;
-	class wxActivityIndicator*  m_composeSpinner = nullptr;
+	class ibActivityIndicator*  m_composeSpinner = nullptr;
 	class ibStaticText*         m_composeText = nullptr;
 
 	// The rows waiting for their automatic height (RequestAutoRowHeights) — one span, widened as rows

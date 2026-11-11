@@ -156,7 +156,6 @@ ibAttributeTree::ibVisualEditorAttributeTree(ibVisualEditor* owner, wxWindow* pa
 	// rename used by "Edit".
 	m_tcAttributes = new ibDesignerTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTR_DEFAULT_STYLE | wxTR_HIDE_ROOT | wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_FULL_ROW_HIGHLIGHT | wxTR_EDIT_LABELS);
-	m_tcAttributes->SetDoubleBuffered(true);   // no flicker on a rebuild, like the object tree
 
 	// Ctrl+C / Ctrl+X / Ctrl+V / Delete — via an accelerator table ON THE TREE (same pattern the metadata trees
 	// and the visual-editor panel use). It must sit on the tree itself: the parent editor panel already maps

@@ -26,8 +26,11 @@ class ibMenuItem;
 #include <wx/dynarray.h>
 #include <wx/menu.h>
 
+#include <vector>
+
 // fwd declarations
 class ibMenuInfo;
+class ibMenuBarWindow;
 class ibMenuGeometryInfo;
 class ibPopupMenuWindow;
 class ibRenderer;
@@ -100,9 +103,9 @@ public:
     // process the key event, return true if done
     bool ProcessKeyDown(int key);
 
-#if 0 // GUI-REVIVE: the univ accel-table API (Add/Remove/GetMenuItem) does
-      // not exist in the native wxAcceleratorTable build
-    // find the item for the given accel and generate an event if found
+#if wxUSE_ACCEL
+    // find the item for the given accel and generate an event if found - an
+    // enabled one of this menu or of its submenus (ibMenuBar::ProcessAccelEvent)
     bool ProcessAccelEvent(const wxKeyEvent& event);
 #endif // wxUSE_ACCEL
 
@@ -128,18 +131,12 @@ protected:
     // forget old menu geometry info
     void InvalidateGeometryInfo();
 
-    // return either the menubar or the invoking window, normally never null
-    ibWindow *GetRootWindow() const;
+    // return either the menubar's window or the invoking window - an ib window
+    // or the native frame (ibFrame::DoPopupMenu), normally never null
+    wxWindow *GetRootWindow() const;
 
-    // get the renderer we use for drawing: either the one of the menu bar or
-    // the one of the window if we're a popup menu
+    // get the renderer we use for drawing: the theme's, as every ib window's
     ibRenderer *GetRenderer() const;
-
-#if 0 // GUI-REVIVE: univ accel-table API not in the native build
-    // add/remove accel for the given menu item
-    void AddAccelFor(ibMenuItem *item);
-    void RemoveAccelFor(ibMenuItem *item);
-#endif // wxUSE_ACCEL
 
 private:
     // common part of all ctors
@@ -155,11 +152,6 @@ private:
     // the menu shown on screen or nullptr if not currently shown
     ibPopupMenuWindow *m_popupMenu;
 
-#if 0 // GUI-REVIVE: univ accel-table API not in the native build
-    // the accel table for this menu
-    wxAcceleratorTable m_accelTable;
-#endif // wxUSE_ACCEL
-
     // the position of the first item in the current radio group or -1
     int m_startRadioGroup;
 
@@ -172,22 +164,31 @@ private:
 // ibMenuBar
 // ----------------------------------------------------------------------------
 
-#if 0 // GUI-REVIVE: univ menubar needs the univ frame (Attach(ibFrame*),
-      // its paint, the whole top-level wiring) — cut until the frame revives
-
-class DESKGUI_API ibMenuBar : public wxMenuBarBase
+// SEAM vs univ: there wxMenuBar itself was the univ window. Here, as ibMenu
+// from the native wxMenu, we derive from the NATIVE wxMenuBar: the frame, the
+// doc manager and AUI's MDI frame keep speaking to a wxMenuBar*. Its native
+// menu is never made - no HMENU, no ::SetMenu (ibFrame::AttachMenuBar) - and
+// the native methods that would touch it are overridden; its accelerators are
+// its items', answered by it on every port (ProcessAccelEvent, asked by the
+// frame's key hook) - the native table was MSW's alone, GTK and Cocoa had none
+// (2026-11-12, Max). The native menubar has no
+// window of its own - the system draws it in the frame's caption; this one is
+// drawn by the theme in its window (ibMenuBarWindow, an ibWindow, child of the
+// frame it is attached to), whose size and place are the bar's, as the frame
+// lays them out (ibFrame), and which shows the bar's menus as a popup menu is
+// shown (ibWindow::DoPopupMenu)
+class DESKGUI_API ibMenuBar : public wxMenuBar
 {
 public:
     // ctors and dtor
-    ibMenuBar(long WXUNUSED(style) = 0);
-    ibMenuBar(size_t n, ibMenu *menus[], const wxString titles[], long style = 0);
+    ibMenuBar(long style = 0);
     virtual ~ibMenuBar();
 
-    // implement base class virtuals
-    virtual bool Append( ibMenu *menu, const wxString &title ) override;
-    virtual bool Insert(size_t pos, ibMenu *menu, const wxString& title) override;
-    virtual ibMenu *Replace(size_t pos, ibMenu *menu, const wxString& title) override;
-    virtual ibMenu *Remove(size_t pos) override;
+    // implement base class virtuals, the native menu left out
+    virtual bool Append(wxMenu *menu, const wxString& title) override;
+    virtual bool Insert(size_t pos, wxMenu *menu, const wxString& title) override;
+    virtual wxMenu *Replace(size_t pos, wxMenu *menu, const wxString& title) override;
+    virtual wxMenu *Remove(size_t pos) override;
 
     virtual void EnableTop(size_t pos, bool enable) override;
     virtual bool IsEnabledTop(size_t pos) const override;
@@ -195,8 +196,14 @@ public:
     virtual void SetMenuLabel(size_t pos, const wxString& label) override;
     virtual wxString GetMenuLabel(size_t pos) const override;
 
-    virtual void Attach(ibFrame *frame) override;
+    virtual void Attach(wxFrame *frame) override;
     virtual void Detach() override;
+
+#if wxUSE_ACCEL
+    // the item whose accelerator the key is, clicked - in an enabled menu of
+    // the bar (used by ibFrame); true if there was one
+    bool ProcessAccelEvent(const wxKeyEvent& event);
+#endif // wxUSE_ACCEL
 
     // get the next item for the givan accel letter (used by ibFrame), return
     // -1 if none
@@ -207,110 +214,37 @@ public:
                              int keycode,
                              bool *unique = nullptr) const;
 
-    // called by ibFrame to set focus to or open the given menu
-    void SelectMenu(size_t pos);
+    // called by ibFrame to open the given menu
     void PopupMenu(size_t pos);
 
-#if wxUSE_ACCEL
-    // find the item for the given accel and generate an event if found
-    bool ProcessAccelEvent(const wxKeyEvent& event);
-#endif // wxUSE_ACCEL
-
-    // called by ibMenu when it is dismissed
-    void OnDismissMenu(bool dismissMenuBar = false);
-
 protected:
-    // common part of all ctors
-    void Init();
+    // the window's (the bar has none of its own)
+    virtual void DoGetSize(int *width, int *height) const override;
+    virtual void DoSetSize(int x, int y,
+                           int width, int height,
+                           int sizeFlags = wxSIZE_AUTO) override;
+    virtual wxSize DoGetBestSize() const override;
 
-    // event handlers
-    void OnLeftDown(wxMouseEvent& event);
-    void OnLeftUp(wxMouseEvent& event);
-    void OnMouseMove(wxMouseEvent& event);
-    void OnKeyDown(wxKeyEvent& event);
-    void OnKillFocus(wxFocusEvent& event);
-    void OnCaptureLost(wxMouseCaptureLostEvent& event);
-
-    // process the mouse move event, return true if we did, false to continue
-    // processing as usual
-    //
-    // the coordinates are client coordinates of menubar, convert if necessary
-    bool ProcessMouseEvent(const wxPoint& pt);
-
-    // called when the menu bar loses mouse capture - it is not hidden unlike
-    // menus, but it doesn't have modal status any longer
-    void OnDismiss();
-
-    // draw the menubar
-    void OnPaint(wxPaintEvent& event);
-
-    // menubar geometry
-    virtual wxSize DoGetBestClientSize() const override;
-
-    // has the menubar been created already?
-    bool IsCreated() const { return m_frameLast != nullptr; }
-
-    // "fast" version of GetMenuCount()
-    size_t GetCount() const;
-
-    // get the (total) width of the specified menu
-    wxCoord GetItemWidth(size_t pos) const;
-
-    // get the rect of the item
-    wxRect GetItemRect(size_t pos) const;
-
-    // get the menu from the given point or -1 if none
-    int GetMenuFromPoint(const wxPoint& pos) const;
-
-    // refresh the given item
-    void RefreshItem(size_t pos);
-
-    // refresh all items after this one (including it)
-    void RefreshAllItemsAfter(size_t pos);
-
-    // hide the currently shown menu and show this one
-    void DoSelectMenu(size_t pos);
-
-    // popup the currently selected menu
-    void PopupCurrentMenu(bool selectFirst = true);
-
-    // hide the currently selected menu
-    void DismissMenu();
-
-    // do we show a menu currently?
-    bool IsShowingMenu() const { return m_menuShown != nullptr; }
-
-    // we don't want to have focus except while selecting from menu
-    void GiveAwayFocus();
-
-    // Release the mouse capture if we have it
-    bool ReleaseMouseCapture();
+private:
+    // the window drawing the bar - none before it is first attached
+    wxWindow *GetWindow() const;
 
     // the array containing extra menu info we need
     std::vector<ibMenuInfo> m_menuInfos;
 
-    // the current item (only used when menubar has focus)
-    int m_current;
+    // the window drawing the bar, made as it is first attached - none before
+    ibMenuBarWindow *m_window;
 
-private:
-    // the last frame to which we were attached, nullptr initially
-    ibFrame *m_frameLast;
-
-    // the currently shown menu or nullptr
-    ibMenu *m_menuShown;
-
-    // should be showing the menu? this is subtly different from m_menuShown !=
-    // nullptr as the menu which should be shown may be disabled in which case we
-    // don't show it - but will do as soon as the focus shifts to another menu
-    bool m_shouldShowMenu;
-
-    // it calls out ProcessMouseEvent()
+    // they reach the window: the menus' root (ibMenu::GetRootWindow), the
+    // mouse moved over the bar while a menu is shown
+    // (ibPopupMenuWindow::ProcessMouseMove), the frame laying out its bars
+    // (ibFrame::IsOneOfBars); and the window the menus' infos
+    friend class ibMenu;
     friend class ibPopupMenuWindow;
+    friend class ibFrame;
+    friend class ibMenuBarWindow;
 
-    wxDECLARE_EVENT_TABLE();
     wxDECLARE_DYNAMIC_CLASS(ibMenuBar);
 };
-
-#endif // GUI-REVIVE: univ menubar needs univ frame
 
 #endif // _DESKGUI_UNIV_MENU_H_

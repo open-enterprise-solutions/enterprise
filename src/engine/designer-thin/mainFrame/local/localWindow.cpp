@@ -53,7 +53,6 @@ ibLocalWindow::ibLocalWindow(wxWindow* parent, int id) :
 {
 	SetSizer(new wxBoxSizer(wxHORIZONTAL));
 	ClearAndCreate();
-	m_treeCtrl->SetDoubleBuffered(true);
 	GetSizer()->Add(m_treeCtrl, 1, wxEXPAND);
 
 	m_treeCtrl->Bind(wxEVT_LIST_ITEM_ACTIVATED, &ibLocalWindow::OnItemSelected, this);

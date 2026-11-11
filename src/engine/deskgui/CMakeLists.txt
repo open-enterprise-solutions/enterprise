@@ -4,16 +4,12 @@
 # protocol, no backend.
 # =============================================================================
 
-# CONFIGURE_DEPENDS — see the note in backend/CMakeLists.txt. Every source here is in the build but the listed units —
-# the frame layer staged for the custom-drawn shell and the canon's win32 theme, unfinished, not in the project
-# (deskgui.vcxproj) either.
+# CONFIGURE_DEPENDS — see the note in backend/CMakeLists.txt. Every source here is in the build but the listed unit —
+# the staged settings, unfinished, not in the project (deskgui.vcxproj) either.
 file(GLOB_RECURSE DESKGUI_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
 )
-list(FILTER DESKGUI_SOURCES EXCLUDE REGEX "/statusBar\\.cpp$")
 list(FILTER DESKGUI_SOURCES EXCLUDE REGEX "/settings\\.cpp$")
-list(FILTER DESKGUI_SOURCES EXCLUDE REGEX "theme/theme_win32\\.cpp$")
-list(FILTER DESKGUI_SOURCES EXCLUDE REGEX "/frame\\.cpp$")
 # the code editor's host draws through Cocoa on macOS, as wx's own (STC_OSX_COCOA in its files.cmake)
 if(APPLE)
     list(APPEND DESKGUI_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/univ/stc/PlatWXcocoa.mm")
@@ -22,7 +18,7 @@ endif()
 add_library(deskgui SHARED ${DESKGUI_SOURCES})
 
 # THE FORKS COMPILE QUIET — the wxWidgets submodule's rule (the root CMakeLists), applied per file because they live
-# inside our target: the wxUniversal engine, wx's dataview, grid and treelistctrl, wxAUI's dock art. Upstream style is
+# inside our target: the wxUniversal engine, wx's dataview, grid, treelistctrl, propgrid and AUI. Upstream style is
 # not ours to correct, and the volume hides our own: 150 of the 168 -Wreorder lines in the 2026-08-02 CI run came from
 # dataview alone. The limit, learned from a CI log: this reaches the .cpp only; a vendored header with inline
 # definitions warns inside every one of ours that includes it, and silences itself with `#pragma GCC system_header`.
@@ -37,10 +33,6 @@ target_include_directories(deskgui
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_SOURCE_DIR}/src/engine
-        # univ/theme/luna_dockart.cpp is a fork of wxAUI's dock art and reaches into wx's GTK-private headers, which
-        # include <gtk/gtk.h> outright. wx links GTK privately, so those paths never arrive through wx::core. Empty
-        # off Linux, hence unguarded.
-        ${GTK3_INCLUDE_DIRS}
 )
 
 target_compile_definitions(deskgui
@@ -58,7 +50,6 @@ target_link_libraries(deskgui
         core
     PRIVATE
         wx::core
-        wx::aui
         wx::base
 )
 

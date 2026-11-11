@@ -10,7 +10,7 @@
 #include "core/diagnostics/journal.h"
 
 #include "core/picturePredefined.h"   // g_picCommandBarCLSID — the command bar's node
-#include "frmclient/artProvider/artProvider.h"
+#include "deskgui/artProvider.h"
 #include "frmclient/backend/backend_picture.h"   // ibBackendPicture::GetPicture — an engine's picture
 #include "frmclient/mainFrame/objinspect/objinspect.h"
 #include "frmclient/win/picture.h"   // ibProtocolPicture — a class's picture, as the answer brought it
@@ -363,7 +363,6 @@ ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::ibVisualEditor
 	m_formHandler(handler)
 {
 	m_tree = new ibDesignerTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_HAS_BUTTONS | wxTR_NO_LINES | wxSIMPLE_BORDER | wxTR_TWIST_BUTTONS);
-	m_tree->SetDoubleBuffered(true);
 
 	wxBoxSizer* const sizer = new wxBoxSizer(wxVERTICAL);
 	sizer->Add(m_tree, 1, wxEXPAND);

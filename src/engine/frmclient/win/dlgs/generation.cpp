@@ -50,8 +50,6 @@ ibDialogGeneration::ibDialogGeneration(const ibProtocolNode& request) :
 	// Connect Events
 	m_listData->Connect(wxEVT_COMMAND_LIST_ITEM_SELECTED, wxListEventHandler(ibDialogGeneration::OnListItemSelected), nullptr, this);
 
-	m_listData->SetDoubleBuffered(true);
-
 	wxBoxSizer* buttonsSizer = new wxBoxSizer(wxVERTICAL);
 	m_buttonOk = new ibButton(this, wxID_OK, _("Ok"), wxDefaultPosition, wxDefaultSize, 0);
 	buttonsSizer->Add(m_buttonOk, 0, wxALL, FromDIP(5));

@@ -42,7 +42,6 @@ target_link_libraries(frmclient
         deskgui
     PRIVATE
         wx::core
-        wx::aui
         wx::html
         wx::base
         wx::xml

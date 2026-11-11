@@ -1,6 +1,5 @@
-// FORKED from the wxUniversal theme engine (wx -> ib prefixes applied mechanically).
-// Revive control by control: fix compile errors, add to the demo form (docs/private/deskgui.md,
-// the porting workflow).
+// FORKED from the wxUniversal theme engine (wx -> ib prefixes applied mechanically): the status bar, over the port's
+// own wxStatusBar (statusBar.h).
 
 /////////////////////////////////////////////////////////////////////////////
 // Name:        src/univ/statusbr.cpp
@@ -22,57 +21,54 @@
 #include <wx/wxprec.h>
 
 #include "deskgui/univ/ctrl/statusBar.h"
-#include "deskgui/univ/window.h"
-
 
 #if wxUSE_STATUSBAR
 
-#include <wx/statusbr.h>
-
 #ifndef WX_PRECOMP
-    #include <wx/settings.h>
     #include <wx/dcclient.h>
-    #include <wx/toplevel.h>
 #endif
 
+#include <wx/dcbuffer.h>
+
+#include "deskgui/univ/colourScheme.h"
 #include "deskgui/univ/renderer.h"
+#include "deskgui/univ/theme.h"
 
 // ============================================================================
 // implementation
 // ============================================================================
 
-wxBEGIN_EVENT_TABLE(ibStatusBarUniv, wxStatusBarBase)
-    EVT_PAINT(ibStatusBarUniv::OnPaint)
-    EVT_SIZE(ibStatusBarUniv::OnSize)
+wxIMPLEMENT_DYNAMIC_CLASS(ibStatusBar, wxStatusBar);
 
-    WX_EVENT_TABLE_INPUT_CONSUMER(ibStatusBarUniv)
+wxBEGIN_EVENT_TABLE(ibStatusBar, wxStatusBar)
+    EVT_PAINT(ibStatusBar::OnPaint)
 wxEND_EVENT_TABLE()
-
-WX_FORWARD_TO_INPUT_CONSUMER(ibStatusBarUniv)
 
 // ----------------------------------------------------------------------------
 // creation
 // ----------------------------------------------------------------------------
 
-void ibStatusBarUniv::Init()
+bool ibStatusBar::Create(wxWindow *parent,
+                         wxWindowID id,
+                         long style,
+                         const wxString& name)
 {
-}
+    // SEAM vs univ: the theme's renderer asked for - the bar is the port's wxStatusBar, not an ibWindow
+    m_renderer = ibThemeEngine::Get()->GetRenderer();
 
-bool ibStatusBarUniv::Create(wxWindow *parent,
-                             wxWindowID id,
-                             long style,
-                             const wxString& name)
-{
-    if ( !ibWindow::Create(parent, id,
+    // the canon's plain window, not the port's bar (wxStatusBar::Create: the native control on MSW) - painted whole as
+    // it is sized, its fields placed by its width (OnPaint). No size grip: the theme draws none, and the port's bar on
+    // GTK (wxStatusBarGeneric, whose events this window still gets there) would size the window from the corner
+    if ( !wxWindow::Create(parent, id,
                            wxDefaultPosition, wxDefaultSize,
-                           style, name) )
+                           (style & ~wxSTB_SIZEGRIP) | wxFULL_REPAINT_ON_RESIZE, name) )
     {
         return false;
     }
 
-    SetFieldsCount(1);
+    SetBackgroundStyle(wxBG_STYLE_PAINT);
 
-    CreateInputHandler(ibINP_HANDLER_STATUSBAR);
+    SetFieldsCount(1);
 
     SetSize(DoGetBestSize());
 
@@ -83,69 +79,56 @@ bool ibStatusBarUniv::Create(wxWindow *parent,
 // drawing
 // ----------------------------------------------------------------------------
 
-wxRect ibStatusBarUniv::GetTotalFieldRect(wxCoord *borderBetweenFields)
+void ibStatusBar::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
-    wxRect rect = GetClientRect();
-
-    // no, don't do this - the borders are meant to be inside this rect
-    // wxSize sizeBorders =
-    if ( borderBetweenFields )
-        *borderBetweenFields = m_renderer->GetStatusBarBorderBetweenFields();
-    //rect.Deflate(sizeBorders.x, sizeBorders.y);
-
-    // recalc the field widths if needed
-    if ( m_widthsAbs.IsEmpty() )
-    {
-        // the total width for the fields doesn't include the borders between
-        // them
-        m_widthsAbs = CalculateAbsWidths(rect.width -
-                                         *borderBetweenFields*(m_panes.GetCount() - 1));
-    }
-
-    return rect;
-}
-
-void ibStatusBarUniv::OnPaint(wxPaintEvent& WXUNUSED(event))
-{
-    ibThemePaintDC dc(this);
-
-    // get the fields rect
-    wxCoord borderBetweenFields;
-    wxRect rect = GetTotalFieldRect(&borderBetweenFields);
+    // SEAM vs univ: the canon's DoDraw over its control's background - here the background is the bar's own, in the
+    // same buffer as its fields (as an ibWindow's, ibThemePaintDC): the theme's chrome, the status bar's
+    // (docs/private/ui-palette.md, chrome-light), unless the bar is given its own
+    wxAutoBufferedPaintDC dc(this);
+    const wxRect client = GetClientRect();
+    m_renderer->DrawBackground(dc, UseBgCol() ? GetBackgroundColour() : wxTHEME_COLOUR(TITLEBAR), client, 0);
 
     // prepare the DC
     dc.SetFont(GetFont());
-    dc.SetTextForeground(GetForegroundColour());
+    dc.SetTextForeground(UseForegroundColour() ? GetForegroundColour() : wxTHEME_COLOUR(CONTROL_TEXT));
 
     // do draw the fields
-    int flags = IsEnabled() ? 0 : (int)wxCONTROL_DISABLED;
-    for ( int n = 0; n < (int)m_panes.GetCount(); n++ )
+    const int flags = IsEnabled() ? 0 : (int)wxCONTROL_DISABLED;
+    const wxArrayInt widths = GetFieldWidths();
+    wxRect rect = client;
+    for ( int n = 0; n < GetFieldsCount(); n++ )
     {
-        rect.width = m_widthsAbs[n];
+        rect.width = widths[n];
 
         if ( IsExposed(rect) )
-        {
-            ibTopLevelWindow *parentTLW = wxDynamicCast(GetParent(), ibTopLevelWindow);
+            DrawStatusField(dc, rect, n, flags);
 
-            // the size grip may be drawn only on the last field and only if we
-            // have the corresponding style and even then only if we really can
-            // resize this frame
-            if ( n == (int)m_panes.GetCount() - 1 &&
-                 HasFlag(wxSTB_SIZEGRIP) &&
-                 GetParent()->HasFlag(wxRESIZE_BORDER) &&
-                 parentTLW && !parentTLW->IsMaximized() )
-            {
-                flags |= wxCONTROL_SIZEGRIP;
-            }
-
-            m_renderer->DrawStatusField(dc, rect, GetStatusText(n), flags, m_panes[n].GetStyle());
-        }
-
-        rect.x += rect.width + borderBetweenFields;
+        rect.x += rect.width + m_renderer->GetStatusBarBorderBetweenFields();
     }
 }
 
-void ibStatusBarUniv::DoUpdateStatusText(int i)
+void ibStatusBar::DrawStatusField(wxDC& dc, const wxRect& rect, int n, int flags)
+{
+    // SEAM vs univ: the text ellipsized to what its field holds - inside the field's border, if it has one, and the
+    // theme's margins (ibRenderer::DrawStatusField) - by the bar's style, as the port's bars do (wxStatusBarGeneric::
+    // DrawFieldText, the native one on MSW); the canon clipped it
+    const int style = GetStatusStyle(n);
+    wxEllipsizeMode mode = wxELLIPSIZE_NONE;
+    if ( HasFlag(wxSTB_ELLIPSIZE_START) )
+        mode = wxELLIPSIZE_START;
+    else if ( HasFlag(wxSTB_ELLIPSIZE_MIDDLE) )
+        mode = wxELLIPSIZE_MIDDLE;
+    else if ( HasFlag(wxSTB_ELLIPSIZE_END) )
+        mode = wxELLIPSIZE_END;
+
+    const wxCoord border = style == wxSB_FLAT ? 0 : m_renderer->GetStatusBarBorders().x;
+    const wxCoord width = rect.width - 2*(border + m_renderer->GetStatusBarFieldMargins().x);
+    const wxString text = wxControl::Ellipsize(GetStatusText(n), dc, mode, width, wxELLIPSIZE_FLAGS_EXPAND_TABS);
+
+    m_renderer->DrawStatusField(dc, rect, text, flags, style);
+}
+
+void ibStatusBar::DoUpdateStatusText(int i)
 {
     wxRect rect;
     if ( GetFieldRect(i, rect) )
@@ -158,140 +141,120 @@ void ibStatusBarUniv::DoUpdateStatusText(int i)
 // fields count/widths
 // ----------------------------------------------------------------------------
 
-void ibStatusBarUniv::SetFieldsCount(int number, const int *widths)
+void ibStatusBar::SetFieldsCount(int number, const int *widths)
 {
+    // SEAM vs univ: the base's, not the port's bar's (the native one sets its parts); the fields placed anew
     wxStatusBarBase::SetFieldsCount(number, widths);
 
-    m_widthsAbs.Empty();
+    Refresh();
 }
 
-void ibStatusBarUniv::SetStatusWidths(int n, const int widths[])
+void ibStatusBar::SetStatusWidths(int n, const int widths[])
 {
     wxStatusBarBase::SetStatusWidths(n, widths);
 
-    m_widthsAbs.Empty();
+    Refresh();
+}
+
+void ibStatusBar::SetStatusStyles(int n, const int styles[])
+{
+    wxStatusBarBase::SetStatusStyles(n, styles);
+
+    Refresh();
+}
+
+wxArrayInt ibStatusBar::GetFieldWidths() const
+{
+    // the total width for the fields doesn't include the borders between them
+    return CalculateAbsWidths(GetClientSize().x -
+                              m_renderer->GetStatusBarBorderBetweenFields() * (GetFieldsCount() - 1));
 }
 
 // ----------------------------------------------------------------------------
 // geometry
 // ----------------------------------------------------------------------------
 
-void ibStatusBarUniv::OnSize(wxSizeEvent& event)
+bool ibStatusBar::GetFieldRect(int n, wxRect& rect) const
 {
-    // we don't need to refresh the fields whose width didn't change, so find
-    // the first field whose width did change and refresh starting from it
-    size_t field;
-    if ( m_bSameWidthForAllPanes )
-    {
-        // hence all fields widths have changed
-        field = 0;
-    }
-    else
-    {
-        for ( field = 0; field < m_panes.GetCount(); field++ )
-        {
-            if ( m_panes[field].GetWidth() < 0 )
-            {
-                // var width field
-                break;
-            }
-        }
-    }
-
-    if ( field < m_panes.GetCount() )
-    {
-        // call this before invalidating the old widths as we want to use them,
-        // not the new ones
-        wxRect rect = DoGetFieldRect(field);
-
-        // invalidate the widths, we'll have to recalc them
-        m_widthsAbs.Empty();
-
-        // refresh everything after the first invalid field
-        rect.y = 0;
-        rect.SetRight(event.GetSize().x);
-        rect.height = event.GetSize().y;
-        RefreshRect(rect);
-    }
-
-    event.Skip();
-}
-
-bool ibStatusBarUniv::GetFieldRect(int n, wxRect& rect) const
-{
-    wxCHECK_MSG( n >= 0 && (size_t)n < m_panes.GetCount(), false,
+    wxCHECK_MSG( n >= 0 && n < GetFieldsCount(), false,
                  wxT("invalid field index in GetFieldRect()") );
-
-    // this is a fix for a bug exhibited by the statbar sample: if
-    // GetFieldRect() is called from the derived class OnSize() handler, then
-    // our geometry info is wrong as our OnSize() didn't invalidate m_widthsAbs
-    // yet - so recalc it just in case
-    wxConstCast(this, ibStatusBarUniv)->m_widthsAbs.Empty();
 
     rect = DoGetFieldRect(n);
 
     return true;
 }
 
-wxRect ibStatusBarUniv::DoGetFieldRect(int n) const
+wxRect ibStatusBar::DoGetFieldRect(int n) const
 {
-    ibStatusBarUniv *self = wxConstCast(this, ibStatusBarUniv);
+    const wxArrayInt widths = GetFieldWidths();
 
-    wxCoord borderBetweenFields;
-    wxRect rect = self->GetTotalFieldRect(&borderBetweenFields);
-
-    // it's the caller responsibility to check this, if unsure - call
-    // GetFieldRect() instead
-    wxCHECK_MSG( !m_widthsAbs.IsEmpty(), rect,
-                 wxT("can't be called if we don't have the widths") );
-
+    wxRect rect = GetClientRect();
     for ( int i = 0; i <= n; i++ )
     {
-        rect.width = m_widthsAbs[i];
+        rect.width = widths[i];
 
         if ( i < n )
-            rect.x += rect.width + borderBetweenFields;
+            rect.x += rect.width + m_renderer->GetStatusBarBorderBetweenFields();
     }
 
     return rect;
 }
 
-wxCoord ibStatusBarUniv::GetHeight() const
+wxCoord ibStatusBar::GetHeight() const
 {
     return GetCharHeight() + 2*GetBorderY();
 }
 
-wxSize ibStatusBarUniv::DoGetBestSize() const
+wxSize ibStatusBar::DoGetBestSize() const
 {
     return wxSize(100, GetHeight());
 }
 
-void ibStatusBarUniv::DoSetSize(int x, int y,
-                                int width, int WXUNUSED(height),
-                                int sizeFlags)
+void ibStatusBar::DoSetSize(int x, int y,
+                            int width, int WXUNUSED(height),
+                            int sizeFlags)
 {
-    wxStatusBarBase::DoSetSize(x, y, width, GetHeight(), sizeFlags);
+    wxStatusBar::DoSetSize(x, y, width, GetHeight(), sizeFlags);
 }
 
 // ----------------------------------------------------------------------------
 // misc
 // ----------------------------------------------------------------------------
 
-void ibStatusBarUniv::SetMinHeight(int WXUNUSED(height))
+void ibStatusBar::SetMinHeight(int WXUNUSED(height))
 {
     // nothing to do here, we don't support it - and why would we?
 }
 
-int ibStatusBarUniv::GetBorderX() const
+int ibStatusBar::GetBorderX() const
 {
     return m_renderer->GetStatusBarBorders().x +
            m_renderer->GetStatusBarFieldMargins().x;
 }
 
-int ibStatusBarUniv::GetBorderY() const
+int ibStatusBar::GetBorderY() const
 {
     return m_renderer->GetStatusBarBorders().y +
            m_renderer->GetStatusBarFieldMargins().y;
 }
+
+#ifdef __WXMSW__
+
+WXLRESULT ibStatusBar::MSWWindowProc(WXUINT message, WXWPARAM wParam, WXLPARAM lParam)
+{
+    return wxStatusBarBase::MSWWindowProc(message, wParam, lParam);
+}
+
+WXDWORD ibStatusBar::MSWGetStyle(long flags, WXDWORD *exstyle) const
+{
+    return wxStatusBarBase::MSWGetStyle(flags, exstyle);
+}
+
+void ibStatusBar::DoMoveWindow(int x, int y, int width, int height)
+{
+    wxStatusBarBase::DoMoveWindow(x, y, width, height);
+}
+
+#endif // __WXMSW__
 
 #endif // wxUSE_STATUSBAR

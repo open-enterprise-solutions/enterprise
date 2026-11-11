@@ -5,7 +5,7 @@
 #include <memory>
 #include <set>
 
-#include <wx/aui/aui.h>
+#include "deskgui/univ/aui/aui.h"
 #include "deskgui/univ/ctrl/choice.h"
 #include "deskgui/univ/ctrl/searchCtrl.h"
 #include "deskgui/univ/ctrl/treeCtrl.h"
@@ -188,7 +188,7 @@ private:
 	// that held it inside SetFocus, and the handler answered its own move until the stack ran out.
 	bool m_switchingActivation = false;
 
-	wxAuiToolBar* m_metaTreeToolbar = nullptr;
+	ibAuiToolBar* m_metaTreeToolbar = nullptr;
 	ibTreeCtrl* m_metaTreeCtrl = nullptr;
 	ibSearchCtrl* m_searchTree = nullptr;
 

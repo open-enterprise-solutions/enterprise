@@ -7,7 +7,7 @@
 #include <wx/popupwin.h>
 #include <wx/dcbuffer.h>
 
-// Interior-design palette (see luna_dockart.cpp). Subsystem chrome
+// Interior-design palette (see deskgui/univ/theme/lunaTheme.cpp). Subsystem chrome
 // uses the same powder-blue + dusty-border tones as the rest of the
 // frontend so the home page sits in the same visual world as the
 // document panes.
@@ -20,6 +20,7 @@
 #include "deskgui/univ/ctrl/control.h"
 #include "deskgui/univ/ctrl/staticText.h"
 #include "deskgui/univ/ctrl/staticBitmap.h"
+#include "deskgui/univ/topLevel.h"   // ibMSWShowShadowed — the panel's shadow, its own
 
 // THE SECTION PANEL — the desktop's (enterprise/mainFrame/mainFrameEnterpriseInterface.cpp) on the thin client: the
 // same buttons, the same page in its popup, drawn line for line; what it shows is the server's schema Sections
@@ -224,7 +225,7 @@ class ibSubSystemWindow : public ibWindow {
 			dc.SetClippingRegion(tab_x, tab_y, clip_width, tab_height);
 
 			wxPoint border_points[6];
-			if (m_flags & wxAUI_NB_BOTTOM) {
+			if (m_flags & ibAUI_NB_BOTTOM) {
 				border_points[0] = wxPoint(tab_x, tab_y);
 				border_points[1] = wxPoint(tab_x, tab_y + tab_height - 6);
 				border_points[2] = wxPoint(tab_x + 2, tab_y + tab_height - 4);
@@ -232,7 +233,7 @@ class ibSubSystemWindow : public ibWindow {
 				border_points[4] = wxPoint(tab_x + tab_width, tab_y + tab_height - 6);
 				border_points[5] = wxPoint(tab_x + tab_width, tab_y);
 			}
-			else //if (m_flags & wxAUI_NB_TOP) {}
+			else //if (m_flags & ibAUI_NB_TOP) {}
 			{
 				border_points[0] = wxPoint(tab_x, tab_y + tab_height);
 				border_points[1] = wxPoint(tab_x, tab_y);
@@ -242,8 +243,8 @@ class ibSubSystemWindow : public ibWindow {
 				border_points[5] = wxPoint(tab_x + tab_width, tab_y + tab_height);
 
 			}
-			// TODO: else if (m_flags &wxAUI_NB_LEFT) {}
-			// TODO: else if (m_flags &wxAUI_NB_RIGHT) {}
+			// TODO: else if (m_flags &ibAUI_NB_LEFT) {}
+			// TODO: else if (m_flags &ibAUI_NB_RIGHT) {}
 
 			int drawn_tab_yoff = border_points[1].y;
 			int drawn_tab_height = border_points[0].y - border_points[1].y;
@@ -261,7 +262,7 @@ class ibSubSystemWindow : public ibWindow {
 				// this white helps fill out the gradient at the top of the tab
 				wxColor gradient = m_activeColour;
 
-				if (m_flags & wxAUI_NB_BOTTOM) {
+				if (m_flags & ibAUI_NB_BOTTOM) {
 
 					dc.SetPen(wxPen(gradient));
 					dc.SetBrush(wxBrush(gradient));
@@ -330,11 +331,11 @@ class ibSubSystemWindow : public ibWindow {
 			// this gets rid of the top one of those lines in the tab control
 			if (active) {
 
-				if (m_flags & wxAUI_NB_BOTTOM)
+				if (m_flags & ibAUI_NB_BOTTOM)
 					dc.SetPen(wxPen(m_baseColour.ChangeLightness(170)));
-				// TODO: else if (m_flags &wxAUI_NB_LEFT) {}
-				// TODO: else if (m_flags &wxAUI_NB_RIGHT) {}
-				else //for wxAUI_NB_TOP
+				// TODO: else if (m_flags &ibAUI_NB_LEFT) {}
+				// TODO: else if (m_flags &ibAUI_NB_RIGHT) {}
+				else //for ibAUI_NB_TOP
 					dc.SetPen(m_baseColourPen);
 
 				dc.DrawLine(border_points[0].x + 1,
@@ -409,13 +410,13 @@ class ibSubSystemWindow : public ibWindow {
 
 	private:
 
-		unsigned int m_flags = wxAUI_NB_TOP | wxAUI_NB_LEFT;   // the tool bar's wxAUI_TB_TEXT stood here: the same bit
+		unsigned int m_flags = ibAUI_NB_TOP | ibAUI_NB_LEFT;   // the tool bar's ibAUI_TB_TEXT stood here: the same bit
 
 		ibProtocolNode m_section;   // a tree of its own (Clone) — the panel outlives the answer it came in
 		wxPopupTransientWindow* m_popupWindow;
 		wxLongLong m_closedByPressAt = 0;
 
-		wxAuiToolBarItem item;
+		ibAuiToolBarItem item;
 
 		wxFont m_normalFont;
 		wxFont m_selectedFont;
@@ -790,6 +791,15 @@ class ibSubSystemWindow : public ibWindow {
 			Bind(wxEVT_TIMER, &ibPopupSubWindow::OnFadeTick, this, m_fadeTimerId);
 		}
 
+		// Shown with the system's shadow round it, its own (ibMSWShowShadowed), as the menu is.
+		virtual bool Show(bool show = true) override {
+#ifdef __WXMSW__
+			if (show)
+				return ibMSWShowShadowed(this, [this] { return wxPopupTransientWindow::Show(true); });
+#endif
+			return wxPopupTransientWindow::Show(show);
+		}
+
 		// Implement base class pure virtuals.
 		virtual void Popup(wxWindow* focus = nullptr) override {
 			m_dismissPending = false;
@@ -872,7 +882,7 @@ public:
 			CreateSubMenu(section);
 
 		// Interior palette — light dusty (one tier between powder chrome
-		// and the cream popup interior). Was wxAUI_DEFAULT_COLOUR
+		// and the cream popup interior). Was ibAUI_DEFAULT_COLOUR
 		// (dark navy) lightened — read as a muddy mid-grey.
 		ibWindow::SetBackgroundColour(wxColour(0xC8, 0xD6, 0xDF));  // #C8D6DF light dusty
 	}
@@ -967,7 +977,7 @@ void ibFrontendMainFrameEnterprise::CreateSubSystem()
 
 	if (hasInterface) {
 
-		wxAuiPaneInfo m_infoSection;
+		ibAuiPaneInfo m_infoSection;
 		m_infoSection.Name(wxT("section"));
 		m_infoSection.Left();
 		m_infoSection.CaptionVisible(false);

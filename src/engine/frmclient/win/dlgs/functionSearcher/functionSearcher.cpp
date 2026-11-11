@@ -5,7 +5,7 @@
 
 #include "functionSearcher.h"
 
-#include "frmclient/artProvider/artProvider.h"
+#include "deskgui/artProvider.h"
 #include "frmclient/docView/tabDocument.h"
 
 #include "frmclient/win/editor/codeEditor/codeEditor.h"

@@ -603,8 +603,7 @@ ibFilterEditor::ibFilterEditor(wxWindow* parent, ibFilterDescription* filter, ib
 	// THE COMMANDS LIVE ON A TOOLBAR, and the context menu offers the same ones.
 	// One set of verbs, one implementation — a user who learns either has learned
 	// both.
-	m_toolbar = new wxToolBar(rightPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-		wxTB_HORIZONTAL | wxTB_FLAT | wxTB_NODIVIDER);
+	m_toolbar = new ibAuiToolBar(rightPane, wxID_ANY, wxDefaultPosition, wxDefaultSize, ibAUI_TB_HORIZONTAL);
 	// 16×16 — a settings surface's toolbar sits above a grid, and the stock toolbar
 	// size (24 or 32, per theme) makes it the loudest thing on the page.
 	m_toolbar->SetToolBitmapSize(FromDIP(wxSize(16, 16)));

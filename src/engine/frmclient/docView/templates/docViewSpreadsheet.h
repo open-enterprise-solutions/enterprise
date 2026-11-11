@@ -3,8 +3,9 @@
 
 #include <functional>
 
-#include <wx/choice.h>
 #include <wx/weakref.h>   // the zoom choice — the toolbar's, gone with its tools
+
+#include "deskgui/univ/ctrl/choice.h"
 
 #include "frmclient/docView/docView.h"
 #include "frmclient/win/editor/gridEditor/gridEditor.h"
@@ -38,7 +39,7 @@ private:
 	void OnSelectAll(wxCommandEvent& WXUNUSED(event)) { m_gridEditor->SelectAll(); }
 
 	virtual wxPrintout* OnCreatePrintout() override;
-	virtual void OnCreateToolbar(wxAuiToolBar* toolbar) override;
+	virtual void OnCreateToolbar(ibAuiToolBar* toolbar) override;
 
 	void OnMenuEvent(wxCommandEvent& event);
 
@@ -53,7 +54,7 @@ protected:
 
 	ibGridEditor* m_gridEditor;
 	// The choice it put on the toolbar — the toolbar's: destroyed with its tools when another view's are put up.
-	wxWeakRef<wxChoice> m_zoomChoice;
+	wxWeakRef<ibChoice> m_zoomChoice;
 
 	wxDECLARE_EVENT_TABLE();
 	wxDECLARE_DYNAMIC_CLASS(ibSpreadsheetEditView);

@@ -24,7 +24,7 @@
 #include <wx/menu.h>
 #include "deskgui/univ/messageDialog.h"
 #include "deskgui/univ/ctrl/staticText.h"
-#include <wx/toolbar.h>
+#include "deskgui/univ/aui/auibar.h"
 #include <wx/app.h>
 #include "deskgui/univ/dialog.h"
 
@@ -415,8 +415,7 @@ wxWindow* ibListSettingsPanel::BuildGroupPage(wxWindow* parent)
 
 	// Same toolbar, same verbs — a grouping list is ordered too: "by Warehouse,
 	// then by Item" is a different report from the other way round.
-	wxToolBar* toolbar = new wxToolBar(rightPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-		wxTB_HORIZONTAL | wxTB_FLAT | wxTB_NODIVIDER);
+	ibAuiToolBar* toolbar = new ibAuiToolBar(rightPane, wxID_ANY, wxDefaultPosition, wxDefaultSize, ibAUI_TB_HORIZONTAL);
 	toolbar->SetToolBitmapSize(FromDIP(wxSize(16, 16)));
 	toolbar->AddTool(wxID_ADD, _("Add"),
 		ibSettingsArt(wxASCII_STR(wxART_NEW), this), _("Add (Ins)"));

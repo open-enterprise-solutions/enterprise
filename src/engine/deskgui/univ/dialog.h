@@ -43,7 +43,7 @@ public:
         Create(parent, id, title, pos, size, style, name);
     }
 
-    // wxDialog's, with its defaults - under the drop shadow a menu casts
+    // wxDialog's, with its defaults - under the system's shadow, as every top-level window of the theme
     bool Create(wxWindow *parent, wxWindowID id,
                 const wxString& title,
                 const wxPoint& pos = wxDefaultPosition,

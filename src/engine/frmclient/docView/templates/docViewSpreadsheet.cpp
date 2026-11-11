@@ -1,7 +1,6 @@
 ﻿#include "docViewSpreadsheet.h"
 #include "frmclient/docView/docManager.h"   // full ibFrontendDocTemplate type
 #include "frmclient/mainFrame/mainFrame.h"
-#include <wx/choice.h>
 #include <cmath>
 
 enum
@@ -98,28 +97,28 @@ bool ibSpreadsheetEditView::OnCreate(ibFrontendDocument* docBase, long flags)
 #if wxUSE_MENUS	
 wxMenuBar* ibSpreadsheetEditView::CreateMenuBar() const
 {
-	wxMenuBar* mb = new wxMenuBar;
-	wxMenu* menu = new wxMenu;
+	wxMenuBar* mb = new ibMenuBar;
+	wxMenu* menu = new ibMenu;
 
 	if (m_gridEditor != nullptr) {
 
 		wxMenuItem* menuItem = nullptr;
 
-		wxMenu* menuArea = new wxMenu;
+		wxMenu* menuArea = new ibMenu;
 		menuItem = menuArea->Append(wxID_AREA_ADD, _("Add area"));
 		menuItem->Enable(m_gridEditor->IsEditable());
 		menuItem = menuArea->Append(wxID_AREA_DELETE, _("Delete area"));
 		menuItem->Enable(m_gridEditor->IsEditable());
 		menu->AppendSubMenu(menuArea, _("Area"));
 
-		wxMenu* menuFreeze = new wxMenu;
+		wxMenu* menuFreeze = new ibMenu;
 		menuItem = menuFreeze->Append(wxID_FREEZE_ROW, _("Freeze row"));
 		menuItem->Enable(m_gridEditor->IsEditable());
 		menuItem = menuFreeze->Append(wxID_FREEZE_COL, _("Freeze column"));
 		menuItem->Enable(m_gridEditor->IsEditable());
 		menu->AppendSubMenu(menuFreeze, _("Freeze"));
 
-		wxMenu* menuPrintBrake = new wxMenu;
+		wxMenu* menuPrintBrake = new ibMenu;
 		menuItem = menuPrintBrake->Append(wxID_PRINT_BRAKE_ROW_ADD, _("Add brake row"));
 		menuItem->Enable(m_gridEditor->IsEditable());
 		menuItem = menuPrintBrake->Append(wxID_PRINT_BRAKE_COL_ADD, _("Add brake column"));
@@ -130,7 +129,7 @@ wxMenuBar* ibSpreadsheetEditView::CreateMenuBar() const
 		menuItem->Enable(m_gridEditor->IsEditable());
 		menu->AppendSubMenu(menuPrintBrake, _("Print brake"));
 
-		wxMenu* menuBorder = new wxMenu;
+		wxMenu* menuBorder = new ibMenu;
 		menuItem = menuBorder->Append(wxID_BORDER_LEFT, _("Left border"));
 		menuItem->Enable(m_gridEditor->IsEditable());
 		menuItem = menuBorder->Append(wxID_BORDER_TOP, _("Top border"));
@@ -166,7 +165,7 @@ wxMenuBar* ibSpreadsheetEditView::CreateMenuBar() const
 		menuItem->Enable(doc ? doc->IsEditable() : true);
 		menuItem->Check(m_gridEditor->IsEditable());
 
-		wxMenu* menuGroup = new wxMenu;
+		wxMenu* menuGroup = new ibMenu;
 		menuItem = menuGroup->Append(wxID_GROUP_ROW, _("Group rows"));
 		menuItem->Enable(m_gridEditor->IsEditable());
 		menuItem = menuGroup->Append(wxID_UNGROUP_ROW, _("Ungroup rows"));
@@ -205,9 +204,9 @@ wxPrintout* ibSpreadsheetEditView::OnCreatePrintout()
 	return m_gridEditor->CreatePrintout();
 }
 
-#include "frmclient/artProvider/artProvider.h"
+#include "deskgui/artProvider.h"
 
-void ibSpreadsheetEditView::OnCreateToolbar(wxAuiToolBar* toolbar)
+void ibSpreadsheetEditView::OnCreateToolbar(ibAuiToolBar* toolbar)
 {
 	toolbar->AddTool(wxID_MERGE_CELL, _("Merge cells"), wxArtProvider::GetBitmapBundle(wxART_MERGE_CELL, wxART_DOC_TEMPLATE), _("Merge cells"), wxItemKind::wxITEM_NORMAL);
 	toolbar->EnableTool(wxID_MERGE_CELL, m_gridEditor->IsEditable());
@@ -225,7 +224,7 @@ void ibSpreadsheetEditView::OnCreateToolbar(wxAuiToolBar* toolbar)
 	toolbar->EnableTool(wxID_DOCK_TABLE, m_gridEditor->IsEditable());
 	toolbar->AddSeparator();
 
-	wxChoice* zoomChoice = new wxChoice(toolbar, wxID_SHEET_ZOOM);   // the toolbar's (AddControl takes a wxControl)
+	ibChoice* zoomChoice = new ibChoice(toolbar, wxID_SHEET_ZOOM);   // the toolbar's
 	for (const wxString& label : s_zoomChoices)
 		zoomChoice->Append(label);
 	m_zoomChoice = zoomChoice;

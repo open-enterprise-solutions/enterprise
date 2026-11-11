@@ -5,7 +5,7 @@
 
 #include "outputWindow.h"
 
-#include "frmclient/artProvider/artProvider.h"
+#include "deskgui/artProvider.h"
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/mainFrame/settings/fontcolorsettings.h"
 

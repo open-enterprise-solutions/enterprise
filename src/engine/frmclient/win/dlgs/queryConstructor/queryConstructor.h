@@ -150,12 +150,12 @@ private:
 	// use (listSettings' filter tab), and the reason is not taste: a row of text buttons under a
 	// list grows with every verb until it wraps, while a 16×16 tool band stays the same height and
 	// reads as "things I can do to this list" rather than as part of the dialog's own commands.
-	class wxToolBar* MakeToolBar(wxWindow* parent);
-	void AddTool(class wxToolBar* bar, const wxString& label, const wxString& artId,
+	class ibAuiToolBar* MakeToolBar(wxWindow* parent);
+	void AddTool(class ibAuiToolBar* bar, const wxString& label, const wxString& artId,
 	             std::function<void(wxCommandEvent&)> handler);
 	// THE RIGHT-CLICK ON A PANE OFFERS WHAT ITS TOOLBAR OFFERS — replayed from the toolbar's own
 	// record of what was added to it, never from a second list. Call it after the bar is filled.
-	void AttachContextMenu(class ibWindow* target, class wxToolBar* bar);
+	void AttachContextMenu(class ibWindow* target, class ibAuiToolBar* bar);
 
 	// One tab, and whether it describes a QUERY. A statement that drops a temp table has no query,
 	// so those tabs are removed for it — a page window outlives the notebook's idea of which pages
@@ -636,7 +636,7 @@ private:
 	// in one place. The greying is the SIGN; CanEdit() is the guarantee (a double-click reaches a
 	// handler no disabled button guards).
 	std::vector<class ibButton*>  m_commandButtons;
-	std::vector<class wxToolBar*> m_commandBars;
+	std::vector<class ibAuiToolBar*> m_commandBars;
 
 	// EVERY VERB A TOOLBAR CARRIES, remembered as it is added — so the right-click can offer exactly
 	// the same ones without a second list. A menu written out beside a toolbar is a copy, and the day
@@ -647,7 +647,7 @@ private:
 		wxBitmapBundle                       m_picture;
 		std::function<void(wxCommandEvent&)> m_handler;
 	};
-	std::map<class wxToolBar*, std::vector<Verb>> m_barVerbs;
+	std::map<class ibAuiToolBar*, std::vector<Verb>> m_barVerbs;
 
 	// WHICH TREE THE DRAG STARTED IN. A drop is answered by where it came FROM as much as by where
 	// it landed: a field dropped on the Fields pane from the chosen tables is "select this field",

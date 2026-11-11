@@ -121,7 +121,7 @@ wxMenuBar* ibVisualHostView::CreateMenuBar() const
 }
 #endif
 
-void ibVisualHostView::OnCreateToolbar(wxAuiToolBar* toolbar)
+void ibVisualHostView::OnCreateToolbar(ibAuiToolBar* toolbar)
 {
 	if (ibFrontendView* view = GetActiveControlView())
 		view->OnCreateToolbar(toolbar);

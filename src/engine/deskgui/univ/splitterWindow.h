@@ -224,9 +224,7 @@ public:
 
 protected:
     // event handlers
-#if defined(__WXMSW__) || defined(__WXMAC__)
     void OnSetCursor(wxSetCursorEvent& event);
-#endif // wxMSW
 
     // common part of all ctors
     void Init();

@@ -312,7 +312,6 @@ bool ibShowTypeSelector(wxWindow* parent, ibSelectorDataType kind,
 	}
 
 	tc->ExpandAll();
-	tc->SetDoubleBuffered(true);
 
 	dlg->SetSizer(topsizer);
 	topsizer->SetSizeHints(dlg);

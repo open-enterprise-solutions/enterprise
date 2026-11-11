@@ -256,7 +256,7 @@ bool ibAutoComplete::CallEvent(wxEvent& event)
 	return false;
 }
 
-#include "codeRunner/artProvider/artProvider.h"
+#include "deskgui/artProvider.h"
 
 wxBitmap ibAutoComplete::GetImageByType(short type) const
 {

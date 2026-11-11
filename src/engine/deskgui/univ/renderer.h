@@ -278,6 +278,12 @@ public:
                                    int flags = 0,
                                    long style = 0,
                                    int tbarStyle = 0) = 0;
+
+    // draw the handle a tool bar is dragged by: rect is the handle's, orient
+    // the bar's - a horizontal bar's handle stands upright at its start
+    virtual void DrawGripper(wxDC& dc,
+                             const wxRect& rect,
+                             wxOrientation orient) = 0;
 #endif // wxUSE_TOOLBAR
 
 #if wxUSE_TEXTCTRL
@@ -302,7 +308,53 @@ public:
                          const wxBitmap& bitmap = wxNullBitmap,
                          int flags = 0,
                          int indexAccel = -1) = 0;
+
+    // an AUI book's row of tabs (ibAuiTabContainer), dir the side of the pages it stands on (wxBOTTOM - the row under
+    // them): the strip under the tabs
+    virtual void DrawTabStrip(wxDC& dc,
+                              const wxRect& rect,
+                              wxDirection dir) = 0;
+
+    // a tab of that row, clipped to it by the row: the face of the selected one (wxCONTROL_SELECTED) - its picture, its
+    // label and its button are the row's
+    virtual void DrawStripTab(wxDC& dc,
+                              const wxRect& rect,
+                              wxDirection dir,
+                              int flags = 0) = 0;
+
+    // a button of that row or of a tab in it, button its ibAuiButtonId (close, left, right, the list of the tabs): the
+    // glyph in rect; wxCONTROL_FLAT - a tab's, faint until the mouse is over it
+    virtual void DrawStripButton(wxDC& dc,
+                                 const wxRect& rect,
+                                 int button,
+                                 int flags = 0) = 0;
 #endif // wxUSE_NOTEBOOK
+
+#if wxUSE_AUI
+    // a pane's caption in the docking (ibAuiManager), drawn in pieces round its buttons: the face - the active pane's,
+    // wxCONTROL_FOCUSED - and, given them, the icon and the title, the title cut to the piece
+    virtual void DrawPaneCaption(wxDC& dc,
+                                 const wxRect& rect,
+                                 const wxString& title,
+                                 const wxBitmap& icon,
+                                 int flags = 0) = 0;
+
+    // a button of that caption, button its ibAuiButtonId (close, pin, maximize - wxCONTROL_CHECKED: restore): the glyph,
+    // on a pad while the mouse is over it or presses it
+    virtual void DrawPaneButton(wxDC& dc,
+                                const wxRect& rect,
+                                int button,
+                                int flags = 0) = 0;
+
+    // the line round a pane in the docking
+    virtual void DrawPaneBorder(wxDC& dc,
+                                const wxRect& rect) = 0;
+
+    // the bar between two docks or two panes in the docking, orient the bar's
+    virtual void DrawSash(wxDC& dc,
+                          const wxRect& rect,
+                          wxOrientation orient) = 0;
+#endif // wxUSE_AUI
 
 #if wxUSE_SLIDER
 
@@ -700,6 +752,10 @@ public:
                                    long style = 0,
                                    int tbarStyle = 0) override
         { m_renderer->DrawToolBarButton(dc, label, bitmap, rect, flags, style, tbarStyle); }
+    virtual void DrawGripper(wxDC& dc,
+                             const wxRect& rect,
+                             wxOrientation orient) override
+        { m_renderer->DrawGripper(dc, rect, orient); }
 #endif // wxUSE_TOOLBAR
 
 #if wxUSE_TEXTCTRL
@@ -723,7 +779,42 @@ public:
                          int flags = 0,
                          int accel = -1) override
         { m_renderer->DrawTab(dc, rect, dir, label, bitmap, flags, accel); }
+    virtual void DrawTabStrip(wxDC& dc,
+                              const wxRect& rect,
+                              wxDirection dir) override
+        { m_renderer->DrawTabStrip(dc, rect, dir); }
+    virtual void DrawStripTab(wxDC& dc,
+                              const wxRect& rect,
+                              wxDirection dir,
+                              int flags = 0) override
+        { m_renderer->DrawStripTab(dc, rect, dir, flags); }
+    virtual void DrawStripButton(wxDC& dc,
+                                 const wxRect& rect,
+                                 int button,
+                                 int flags = 0) override
+        { m_renderer->DrawStripButton(dc, rect, button, flags); }
 #endif // wxUSE_NOTEBOOK
+
+#if wxUSE_AUI
+    virtual void DrawPaneCaption(wxDC& dc,
+                                 const wxRect& rect,
+                                 const wxString& title,
+                                 const wxBitmap& icon,
+                                 int flags = 0) override
+        { m_renderer->DrawPaneCaption(dc, rect, title, icon, flags); }
+    virtual void DrawPaneButton(wxDC& dc,
+                                const wxRect& rect,
+                                int button,
+                                int flags = 0) override
+        { m_renderer->DrawPaneButton(dc, rect, button, flags); }
+    virtual void DrawPaneBorder(wxDC& dc,
+                                const wxRect& rect) override
+        { m_renderer->DrawPaneBorder(dc, rect); }
+    virtual void DrawSash(wxDC& dc,
+                          const wxRect& rect,
+                          wxOrientation orient) override
+        { m_renderer->DrawSash(dc, rect, orient); }
+#endif // wxUSE_AUI
 
 #if wxUSE_SLIDER
 

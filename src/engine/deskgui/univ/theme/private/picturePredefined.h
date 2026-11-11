@@ -1,8 +1,9 @@
-﻿#ifndef __FRONTEND_PICTURE_PREDEFINED_H__
-#define __FRONTEND_PICTURE_PREDEFINED_H__
+﻿#ifndef _DESKGUI_UNIV_THEME_PICTURE_PREDEFINED_H__
+#define _DESKGUI_UNIV_THEME_PICTURE_PREDEFINED_H__
 
-// The art provider's pictures, a PNG in Base64 each: a master four times the size of its drawing, scaled down by
-// artProvider.cpp to the size asked. The SVG each is drawn from is in tools/pictures/render.js, which writes these.
+// The theme's pictures, a PNG in Base64 each: a master four times the size of its drawing, scaled down by its art
+// provider (ibLunaArtProvider, lunaTheme.cpp) to the size asked. The SVG each is drawn from is in
+// tools/pictures/render.js, which writes these.
 
 // ---- the debugger's commands (the Debug menu and the debug toolbar)
 static const wxString s_attach_png = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAADqElEQVR4nOyaX0gUQRzHv7MGCSpJSKInIvgUlHdwJEVxCvUSRUQE/ZEKiiATz+sl6KGIfKk3PcP+QEGZViSBT0EvaSpUGvenoMdePI2ERBSzwp1+e16mudyudDO7y+7nwTtmfsfd97szv9/MOApcjgKX4xkAl+MZAJfjGQCX4xkAl7MODicYrC/Ben6N3u5jYJXL+zgwS3/fMZW1jr7p79f7PIPDCe6o62aMHc8exWcWvqvVsdjg5L89jp8C9NR3m4gqUvLzdur1OH4KkAOlZsJoOlTptUsxoKI5fkhVWDUHezvRXvMalqDO6bUKNaA4Eisu5EofvQ0tzjUOXzhxOxX1N8ImCM0BBaryjF5Cy9sYwzlfS6IPV7kt8o+wH1HWkgyR2D16fVR6Dvi+JZ/awQRhP4Ax7svej8O+qUQPLEaYAb9+5r0yiqESdqQiHH8ECxFmwGTnli/g/JJhIGMNiyZwSxZlQufgWDRwnXM8MQxMm5DoggUIT0JU8o6ZNyF+D5KRkoXXYMJp2SZIK0NpE4CHhoGSTZBah1Pt/lNmTaAVYyckIH0hYtYEWic0yjDBkpWYnUxYtRminVutqqBW4awEIuH4TCa8J5HBbGFpE1oSP8i0CxDACgMo+dykb2xKDwsJyxLtK6g6aCKN4iK+cHwmFQ1cQY5ZmgLlkeRBTTwko4nXTDCOY5crIsm9yDF/cwBXt8MimNnRpqpnkWNscybIYWoYmAhaG0sG0NHxKCwinQdMJB1V5XeQY5YMSHX4e+khDEIyZpLgYhxvHe8IvESOWVEFxqL+UHk4voseRkB4GUT6pHa/URnMxLWJqAAaq9YB49HAEL0MQTBU2x/QgzcWz3GL9hFC1gAalvxfICP+pFFcRvx5CES6AXYSryG1DJoVT+rvyxCvIW0E0KbmMYk/ahhI4uko7QwkIcWAtHhmP/Eawg1Yg/hu2eI1hBpAu8sbMC3efwIWIMyAssiHzbTBumgUR9m+ixY5xolREMIMULi6zTCIo4eyvWXiNYSVQZUpI9n6tWNyGvYNsBhhBky0bf2kDW+9PmrvTW2ssVy8htAkODdf2FyQP1tJibDuTxuJt9UFCaEGTN2tnp4C6ldckYladUVGHykLobGOwHPYFMdfk6MpNW0mjkH5qtfu/HuCDC+Mo/iMOr8wrNeTB4dTtqlqAOt4Eb0tpXPFDcv7Mldlh1WuNMVGBj7qfd7xV2X/F++6PFyOZwBcjmcAXI5nAFyO6w34DQAA//+K6sp8AAAABklEQVQDAC9mOQF76t64AAAAAElFTkSuQmCC";

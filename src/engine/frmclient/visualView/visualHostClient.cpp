@@ -191,13 +191,13 @@ ibVisualHostClient::ibVisualHostClient(ibFrontendMainFrame& frame, wxWindow* par
 	// ⭐ A FRAME AROUND THE WINDOW THE CONTROLS SCROLL IN, that one filling it — the desktop's facade (ibVisualHost): the
 	// command bar stands above it (Build) and stays where it is while the controls scroll; it scrolled away with them when
 	// this one was the scrolling window (2026-10-22). A panel's (wxNavigationEnabled): Tab goes through the controls in it.
-	m_contentWindow = new wxScrolledWindow(this, wxID_ANY);
+	// The theme's panel scrolled, not wx's: painted in the theme's colour where the form's controls do not cover it (a
+	// colour the form gives it it keeps, GetBackgroundWindow), on every port - wx's erased itself in the system's grey,
+	// and growing in a resize before its controls did it showed that grey round them (2026-11-11, read off the window's
+	// surface during a step; Max: "artefacts even without the spreadsheet")
+	m_contentWindow = new wxScrolled<ibPanel>(this, wxID_ANY);
 	m_contentWindow->SetDoubleBuffered(true);
 	m_contentWindow->SetScrollRate(5, 5);
-#ifdef __WXOSX__
-	m_contentWindow->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW));
-	m_contentWindow->SetBackgroundStyle(wxBG_STYLE_SYSTEM);
-#endif
 	wxBoxSizer* const sizer = new wxBoxSizer(wxVERTICAL);
 	sizer->Add(m_contentWindow, 1, wxEXPAND);
 	SetSizer(sizer);

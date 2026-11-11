@@ -50,12 +50,9 @@ public:
 
     void SizeColumns()
     {
+         // SEAM vs wx: MSW's, on every port - the list is the library's
          int w = GetSize().x;
-#ifdef __WXMSW__
          w -= GetScrollbarSize(wxVERTICAL) + 6;
-#else
-         w -= 2*GetScrollbarSize(wxVERTICAL);
-#endif
          if (w < 0) w = 0;
          SetColumnWidth(0, w);
     }

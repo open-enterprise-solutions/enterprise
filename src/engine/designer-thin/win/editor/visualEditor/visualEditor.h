@@ -2,7 +2,7 @@
 #define __VISUAL_EDITOR_H__
 
 #include <wx/wx.h>
-#include <wx/aui/aui.h>
+#include "deskgui/univ/aui/aui.h"
 
 #include "frmclient/backend/metaData.h"   // ibFormAttributeValue — its form's tab
 #include "innerFrame.h"
@@ -14,7 +14,7 @@
 #include "core/description/sourceDescription.h"   // ibSourceHop — an attribute row's path
 #include "protocol/protocolDesigner.h"                     // ibProtocol::ibSchema::ibProperties::ibSourceDataType
 
-#include <wx/aui/auibook.h>
+#include "deskgui/univ/aui/auibook.h"
 #include "deskgui/univ/splitterWindow.h"
 #include "deskgui/univ/ctrl/treeCtrl.h"
 #include "deskgui/univ/menu.h"
@@ -138,7 +138,7 @@ private:
 // ibVisualEditorNotebook
 ///////////////////////////////////////////////////////////////////////////////
 
-class ibVisualEditorNotebook : public wxAuiNotebook {
+class ibVisualEditorNotebook : public ibAuiNotebook {
 
 public: class ibVisualEditor :
 	public ibPanel {
@@ -828,7 +828,7 @@ private:
 public:
 
 	ibVisualEditorNotebook(ibModuleEditDocument* document, wxWindow* parent, wxWindowID id, long flags) :
-		wxAuiNotebook(parent, id, wxDefaultPosition, wxDefaultSize, wxAUI_NB_BOTTOM | wxAUI_NB_TAB_FIXED_WIDTH),
+		ibAuiNotebook(parent, id, wxDefaultPosition, wxDefaultSize, ibAUI_NB_BOTTOM | ibAUI_NB_TAB_FIXED_WIDTH),
 		m_visualEditor(new ibVisualEditor(document, this)), m_codeEditor(new ibCodeEditorDesigner(document, this)) {
 		CreateVisualEditor(document, parent, id, flags);
 	}
@@ -844,8 +844,8 @@ public:
 	void CreateControl(const wxString& controlName) {
 		CallAfter([this, controlName]() {
 			m_visualEditor->CreateObject(controlName);
-			if (wxAuiNotebook::GetSelection() != wxNOTEBOOK_PAGE_DESIGNER)
-				wxAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_DESIGNER);
+			if (ibAuiNotebook::GetSelection() != wxNOTEBOOK_PAGE_DESIGNER)
+				ibAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_DESIGNER);
 		});
 	}
 
@@ -857,26 +857,26 @@ public:
 	void TestForm() { m_visualEditor->TestForm(); }
 
 	void Copy() {
-		if (wxAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_DESIGNER) {
+		if (ibAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_DESIGNER) {
 			if (m_visualEditor->CanCopyObject())
 				m_visualEditor->CopyObject(m_visualEditor->GetSelectedObject());
 		}
-		else if (wxAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_CODE_EDITOR) {
+		else if (ibAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_CODE_EDITOR) {
 			m_codeEditor->Copy();
 		}
 	}
 
 	void Paste() {
-		if (wxAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_DESIGNER) {
+		if (ibAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_DESIGNER) {
 			m_visualEditor->PasteObject(m_visualEditor->GetSelectedObject());
 		}
-		else if (wxAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_CODE_EDITOR) {
+		else if (ibAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_CODE_EDITOR) {
 			m_codeEditor->Paste();
 		}
 	}
 
 	void SelectAll() {
-		if (wxAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_CODE_EDITOR) {
+		if (ibAuiNotebook::GetSelection() == wxNOTEBOOK_PAGE_CODE_EDITOR) {
 			m_codeEditor->SelectAll();
 		}
 	}
@@ -889,31 +889,31 @@ public:
 
 	void FindText(const wxString& findString, int wxflags) {
 		m_codeEditor->FindText(findString, wxflags);
-		if (wxAuiNotebook::GetSelection() != wxNOTEBOOK_PAGE_CODE_EDITOR)
-			wxAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_CODE_EDITOR);
+		if (ibAuiNotebook::GetSelection() != wxNOTEBOOK_PAGE_CODE_EDITOR)
+			ibAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_CODE_EDITOR);
 	}
 
 	void ShowGotoLine() {
 		m_codeEditor->ShowGotoLine();
-		if (wxAuiNotebook::GetSelection() != wxNOTEBOOK_PAGE_CODE_EDITOR)
-			wxAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_CODE_EDITOR);
+		if (ibAuiNotebook::GetSelection() != wxNOTEBOOK_PAGE_CODE_EDITOR)
+			ibAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_CODE_EDITOR);
 	}
 
 	void ShowMethods() {
 		m_codeEditor->ShowMethods();
-		if (wxAuiNotebook::GetSelection() != wxNOTEBOOK_PAGE_CODE_EDITOR)
-			wxAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_CODE_EDITOR);
+		if (ibAuiNotebook::GetSelection() != wxNOTEBOOK_PAGE_CODE_EDITOR)
+			ibAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_CODE_EDITOR);
 	}
 
 	void SyntaxControl() {
-		if (wxAuiNotebook::GetSelection() != wxNOTEBOOK_PAGE_CODE_EDITOR)
-			wxAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_CODE_EDITOR);
+		if (ibAuiNotebook::GetSelection() != wxNOTEBOOK_PAGE_CODE_EDITOR)
+			ibAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_CODE_EDITOR);
 		m_codeEditor->SyntaxControl();
 	}
 
 	void SetCurrentLine(int line, bool setLine = true) {
-		if (wxAuiNotebook::GetSelection() != wxNOTEBOOK_PAGE_CODE_EDITOR)
-			wxAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_CODE_EDITOR);
+		if (ibAuiNotebook::GetSelection() != wxNOTEBOOK_PAGE_CODE_EDITOR)
+			ibAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_CODE_EDITOR);
 		m_codeEditor->SetCurrentLine(line, setLine);
 	}
 
@@ -948,14 +948,14 @@ public:
 protected:
 	//A general selection function
 	virtual int DoModifySelection(size_t n, bool events) override {
-		wxAuiNotebook::Freeze();
-		const int selection = wxAuiNotebook::DoModifySelection(n, events);
-		wxAuiNotebook::Thaw();
+		ibAuiNotebook::Freeze();
+		const int selection = ibAuiNotebook::DoModifySelection(n, events);
+		ibAuiNotebook::Thaw();
 		return selection;
 	}
 private:
 
-	void OnPageChanged(wxAuiNotebookEvent& event);
+	void OnPageChanged(ibAuiNotebookEvent& event);
 
 	ibVisualEditor* m_visualEditor;
 	ibCodeEditorDesigner* m_codeEditor;

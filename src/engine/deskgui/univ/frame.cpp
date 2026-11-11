@@ -1,6 +1,5 @@
-// FORKED from the wxUniversal theme engine (wx -> ib prefixes applied mechanically).
-// Revive control by control: fix compile errors, add to the demo form (docs/private/deskgui.md,
-// the porting workflow).
+// FORKED from the wxUniversal theme engine (wx -> ib prefixes applied mechanically): the frame laying out its menubar
+// and status bar inside the decorations the theme draws (frame.h).
 
 ///////////////////////////////////////////////////////////////////////////////
 // Name:        src/univ/framuniv.cpp
@@ -23,25 +22,23 @@
 #include <wx/wxprec.h>
 
 #include "deskgui/univ/frame.h"
-
-
-#include <wx/frame.h>
+#include "deskgui/univ/ctrl/statusBar.h"
+#include "deskgui/univ/window.h"   // ibWindow::DoPopupMenu — the theme's menu, shown over the frame
 
 #ifndef WX_PRECOMP
     #include <wx/menu.h>
     #include <wx/statusbr.h>
-    #include <wx/settings.h>
-    #include <wx/toolbar.h>
 #endif // WX_PRECOMP
+
+#ifdef __WXMSW__
+    #include <wx/msw/private.h>
+#endif // __WXMSW__
 
 // ============================================================================
 // implementation
 // ============================================================================
 
-wxBEGIN_EVENT_TABLE(ibFrame, wxFrameBase)
-    EVT_SIZE(ibFrame::OnSize)
-    EVT_SYS_COLOUR_CHANGED(ibFrame::OnSysColourChanged)
-wxEND_EVENT_TABLE()
+wxIMPLEMENT_DYNAMIC_CLASS(ibFrame, wxFrame);
 
 // ----------------------------------------------------------------------------
 // ctors
@@ -55,21 +52,13 @@ bool ibFrame::Create(wxWindow *parent,
                      long style,
                      const wxString& name)
 {
-    if ( !ibTopLevelWindow::Create(parent, id, title, pos, size, style, name) )
+    if ( !ibTopLevelWindow<wxFrame>::Create(parent, id, title, pos, size, style, name) )
         return false;
 
-    SetOwnBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_APPWORKSPACE));
-
+    // SEAM vs univ: the colour is the theme's (ibTopLevelWindow::Create), not the workspace's the canon set
+    Bind(wxEVT_SIZE, &ibFrame::OnSize, this);
+    Bind(wxEVT_CHAR_HOOK, &ibFrame::OnCharHook, this);
     return true;
-}
-
-// Responds to colour changes, and passes event on to children.
-void ibFrame::OnSysColourChanged(wxSysColourChangedEvent& event)
-{
-    SetOwnBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_APPWORKSPACE));
-    Refresh();
-
-    event.Skip();
 }
 
 // ----------------------------------------------------------------------------
@@ -81,12 +70,57 @@ void ibFrame::OnSize(wxSizeEvent& event)
 #if wxUSE_MENUS
     PositionMenuBar();
 #endif // wxUSE_MENUS
+
 #if wxUSE_STATUSBAR
+    // ...and the status bar, as the canon's: the native frame places it only as a SHOWN frame is sized
+    // (wxFrame::HandleSize), and the main window is sized hidden - shown at that size, its bar stood where the frame's
+    // first size put it: mid-window in the client, under the panes in the designer until the window was first sized
+    // (2026-11-11, Max). The port's own bar got by on a size posted at its creation (wxStatusBar::Create, MSW)
     PositionStatusBar();
 #endif // wxUSE_STATUSBAR
-#if wxUSE_TOOLBAR
-    PositionToolBar();
-#endif // wxUSE_TOOLBAR
+
+    event.Skip();
+}
+
+// SEAM vs univ: THE MENU'S LETTERS ARE THE FRAME'S, before the window with the focus has the key - wx hands every key
+// to the top window first (wxEVT_CHAR_HOOK, from its keyboard hook). The canon took them as a character in each window
+// of its own (wxWindow::OnChar): a window that handles its characters kept the letter, and a character is the
+// layout's - Alt+E in the Russian layout is 'у', no title of an English menu has it. The layout's letter is matched
+// first (a Russian title, "&Файл"), the key's own then (an English title typed in any layout). Its items' accelerators
+// before them, here too: on every port (ibMenuBar::ProcessAccelEvent)
+void ibFrame::OnCharHook(wxKeyEvent& event)
+{
+#if wxUSE_MENUS
+    ibMenuBar * const menubar = wxDynamicCast(m_frameMenuBar, ibMenuBar);
+
+#if wxUSE_ACCEL
+    if ( menubar && menubar->ProcessAccelEvent(event) )
+        return;
+#endif // wxUSE_ACCEL
+
+    // AltGr is Ctrl+Alt: a character typed, not a menu asked for
+    if ( menubar && event.AltDown() && !event.ControlDown() )
+    {
+        int pos = wxNOT_FOUND;
+        if ( event.GetUnicodeKey() != WXK_NONE )
+            pos = menubar->FindNextItemForAccel(-1, event.GetUnicodeKey());
+        if ( pos == wxNOT_FOUND )
+            pos = menubar->FindNextItemForAccel(-1, event.GetKeyCode());
+
+        if ( pos != wxNOT_FOUND && menubar->IsEnabledTop(pos) )
+        {
+            // after the key, not in it: the hook that raised the event waits on its return, and the menu's loop
+            // would run inside it, every key it reads raising the hook again
+            CallAfter([this, pos]()
+            {
+                ibMenuBar * const bar = wxDynamicCast(m_frameMenuBar, ibMenuBar);
+                if ( bar && static_cast<size_t>(pos) < bar->GetMenuCount() )
+                    bar->PopupMenu(pos);
+            });
+            return;
+        }
+    }
+#endif // wxUSE_MENUS
 
     event.Skip();
 }
@@ -101,94 +135,76 @@ void ibFrame::PositionMenuBar()
         // y coord
         wxCoord heightMbar = m_frameMenuBar->GetSize().y;
 
-        wxCoord heightTbar = 0;
-
-#if wxUSE_TOOLBAR
-        if ( m_frameToolBar )
-            heightTbar = m_frameToolBar->GetSize().y;
-#endif // wxUSE_TOOLBAR
-
         m_frameMenuBar->SetSize(0,
-                                - (heightMbar + heightTbar),
+                                - heightMbar,
                                 GetClientSize().x, heightMbar);
     }
 }
 
 void ibFrame::DetachMenuBar()
 {
+    // SEAM vs univ: no layout of its own - the frame is laid out once, as the bar it takes (AttachMenuBar, which
+    // SetMenuBar always calls after this one, a null bar too). Laid out here as well, a bar swapped for another stood
+    // for a moment with none: the panes rose by its height and fell back, and on a tab switched everything jumped
+    // (2026-11-11, Max: "the menu jumps like mad")
     wxFrameBase::DetachMenuBar();
+}
+
+void ibFrame::AttachMenuBar(wxMenuBar *menubar)
+{
+    // the theme's: a native one would make its native menu, in the caption the native window has not
+    wxASSERT_MSG( !menubar || wxDynamicCast(menubar, ibMenuBar),
+                  wxT("a frame of the theme takes the theme's menubar (ibMenuBar)") );
+
+    wxFrameBase::AttachMenuBar(menubar);
     SendSizeEvent();
 }
 
-void ibFrame::AttachMenuBar(ibMenuBar *menubar)
+bool ibFrame::DoPopupMenu(wxMenu *menu, int x, int y)
 {
-    wxFrameBase::AttachMenuBar(menubar);
-    SendSizeEvent();
+    // the theme's, as an ib window shows it (ibWindow::DoPopupMenu): the native frame's was the system's menu, and of an
+    // ibMenu's items it had none - they are not in its native menu (a server's popup menu over the main window, 2026-11-11).
+    // At the mouse when no point is given (wxWindowBase::PopupMenu's wxDefaultPosition), as the native one. On GTK3/Cocoa
+    // the frame is native as well - the same road
+    if ( x == wxDefaultCoord && y == wxDefaultCoord )
+    {
+        const wxPoint mouse = ScreenToClient(wxGetMousePosition());
+        x = mouse.x;
+        y = mouse.y;
+    }
+
+    return ibWindow::DoPopupMenu(this, menu, x, y);
 }
 
 #endif // wxUSE_MENUS
 
 #if wxUSE_STATUSBAR
 
-void ibFrame::PositionStatusBar()
+wxStatusBar *ibFrame::OnCreateStatusBar(int number, long style, wxWindowID id, const wxString& name)
 {
-    if ( m_frameStatusBar )
-    {
-        wxSize size = GetClientSize();
-        m_frameStatusBar->SetSize(0, size.y, size.x, wxDefaultCoord);
-    }
-}
-
-ibStatusBar* ibFrame::CreateStatusBar(int number, long style,
-                                      wxWindowID id, const wxString& name)
-{
-    ibStatusBar *bar = wxFrameBase::CreateStatusBar(number, style, id, name);
-    SendSizeEvent();
-    return bar;
+    // the theme's, as wxFrameBase makes the port's
+    ibStatusBar * const statusBar = new ibStatusBar(this, id, style, name);
+    statusBar->SetFieldsCount(number);
+    return statusBar;
 }
 
 #endif // wxUSE_STATUSBAR
 
-#if wxUSE_TOOLBAR
-
-ibToolBar* ibFrame::CreateToolBar(long style, wxWindowID id, const wxString& name)
+bool ibFrame::IsOneOfBars(const wxWindow *win) const
 {
-    if ( wxFrameBase::CreateToolBar(style, id, name) )
-    {
-        PositionToolBar();
-    }
+#if wxUSE_MENUS
+    // the menubar's window, not the bar - it has none of its own (ibMenuBar)
+    const ibMenuBar * const menubar = wxDynamicCast(m_frameMenuBar, ibMenuBar);
+    if ( menubar && win == menubar->GetWindow() )
+        return true;
+#endif // wxUSE_MENUS
 
-    return m_frameToolBar;
+    return ibTopLevelWindow<wxFrame>::IsOneOfBars(win);
 }
-
-void ibFrame::PositionToolBar()
-{
-    if ( m_frameToolBar )
-    {
-        wxSize size = GetClientSize();
-        int tw, th, tx, ty;
-
-        tx = ty = 0;
-        m_frameToolBar->GetSize(&tw, &th);
-        if ( m_frameToolBar->GetWindowStyleFlag() & wxTB_VERTICAL )
-        {
-            tx = -tw;
-            th = size.y;
-        }
-        else
-        {
-            ty = -th;
-            tw = size.x;
-        }
-
-        m_frameToolBar->SetSize(tx, ty, tw, th);
-    }
-}
-#endif // wxUSE_TOOLBAR
 
 wxPoint ibFrame::GetClientAreaOrigin() const
 {
-    wxPoint pt = wxFrameBase::GetClientAreaOrigin();
+    wxPoint pt = ibTopLevelWindow<wxFrame>::GetClientAreaOrigin();
 
 #if wxUSE_MENUS
     if ( m_frameMenuBar )
@@ -197,22 +213,12 @@ wxPoint ibFrame::GetClientAreaOrigin() const
     }
 #endif // wxUSE_MENUS
 
-#if wxUSE_TOOLBAR
-    if ( m_frameToolBar )
-    {
-        if ( m_frameToolBar->GetWindowStyleFlag() & wxTB_VERTICAL )
-            pt.x += m_frameToolBar->GetSize().x;
-        else
-            pt.y += m_frameToolBar->GetSize().y;
-    }
-#endif // wxUSE_TOOLBAR
-
     return pt;
 }
 
 void ibFrame::DoGetClientSize(int *width, int *height) const
 {
-    wxFrameBase::DoGetClientSize(width, height);
+    ibTopLevelWindow<wxFrame>::DoGetClientSize(width, height);
 
 #if wxUSE_MENUS
     if ( m_frameMenuBar && height )
@@ -222,21 +228,13 @@ void ibFrame::DoGetClientSize(int *width, int *height) const
 #endif // wxUSE_MENUS
 
 #if wxUSE_STATUSBAR
-    if ( m_frameStatusBar && height )
+    // ...as the native frame's: a hidden status bar is not placed
+    // (wxFrame::PositionStatusBar)
+    if ( m_frameStatusBar && m_frameStatusBar->IsShown() && height )
     {
         (*height) -= m_frameStatusBar->GetSize().y;
     }
 #endif // wxUSE_STATUSBAR
-
-#if wxUSE_TOOLBAR
-    if ( m_frameToolBar )
-    {
-        if ( width && (m_frameToolBar->GetWindowStyleFlag() & wxTB_VERTICAL) )
-            (*width) -= m_frameToolBar->GetSize().x;
-        else if ( height )
-            (*height) -= m_frameToolBar->GetSize().y;
-    }
-#endif // wxUSE_TOOLBAR
 }
 
 void ibFrame::DoSetClientSize(int width, int height)
@@ -249,28 +247,18 @@ void ibFrame::DoSetClientSize(int width, int height)
 #endif // wxUSE_MENUS
 
 #if wxUSE_STATUSBAR
-    if ( m_frameStatusBar )
+    if ( m_frameStatusBar && m_frameStatusBar->IsShown() )
     {
         height += m_frameStatusBar->GetSize().y;
     }
 #endif // wxUSE_STATUSBAR
 
-#if wxUSE_TOOLBAR
-    if ( m_frameToolBar )
-    {
-        if ( m_frameToolBar->GetWindowStyleFlag() & wxTB_VERTICAL )
-            width += m_frameToolBar->GetSize().x;
-        else
-            height += m_frameToolBar->GetSize().y;
-    }
-#endif // wxUSE_TOOLBAR
-
-    wxFrameBase::DoSetClientSize(width, height);
+    ibTopLevelWindow<wxFrame>::DoSetClientSize(width, height);
 }
 
 wxSize ibFrame::GetMinSize() const
 {
-    wxSize size = wxFrameBase::GetMinSize();
+    wxSize size = ibTopLevelWindow<wxFrame>::GetMinSize();
 
 #if wxUSE_MENUS
     if ( m_frameMenuBar )
@@ -282,13 +270,6 @@ wxSize ibFrame::GetMinSize() const
     }
 #endif // wxUSE_MENUS
 
-#if wxUSE_TOOLBAR
-    if ( m_frameToolBar )
-    {
-        size.y += m_frameToolBar->GetSize().y;
-    }
-#endif // wxUSE_TOOLBAR
-
 #if wxUSE_STATUSBAR
     if ( m_frameStatusBar )
     {
@@ -299,9 +280,17 @@ wxSize ibFrame::GetMinSize() const
     return size;
 }
 
-bool ibFrame::Enable(bool enable)
+#ifdef __WXMSW__
+
+WXLRESULT ibFrame::MSWWindowProc(WXUINT message, WXWPARAM wParam, WXLPARAM lParam)
 {
-    if (!wxFrameBase::Enable(enable))
-        return false;
-    return true;
+    // the native menu's keyboard, sent by the system to a window with no native menu - Alt+letter a window let by
+    // (WM_SYSCHAR), Alt or F10 alone: answered by nothing, not by the system's bell. The letters that open a menu are
+    // taken before they get here (OnCharHook)
+    if ( message == WM_SYSCOMMAND && (wParam & 0xFFF0) == SC_KEYMENU )
+        return 0;
+
+    return ibTopLevelWindow<wxFrame>::MSWWindowProc(message, wParam, lParam);
 }
+
+#endif // __WXMSW__

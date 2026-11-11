@@ -124,8 +124,7 @@ ibDialogQueryTempTable::ibDialogQueryTempTable(wxWindow* parent, const wxString&
 	outer->Add(hint, 0, wxEXPAND | wxALL, FromDIP(6));
 
 	// ---- the verbs -------------------------------------------------------------------------
-	wxToolBar* bar = new wxToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-		wxTB_HORIZONTAL | wxTB_FLAT | wxTB_NODIVIDER);
+	ibAuiToolBar* bar = new ibAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, ibAUI_TB_HORIZONTAL);
 	bar->SetToolBitmapSize(FromDIP(wxSize(16, 16)));
 	auto tool = [this, bar](const wxString& label, const wxString& art, std::function<void()> act) {
 		const int id = wxWindow::NewControlId();

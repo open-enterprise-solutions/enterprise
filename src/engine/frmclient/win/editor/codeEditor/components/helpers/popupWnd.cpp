@@ -1,5 +1,9 @@
 #include "popupWnd.h"
 
+#ifdef __WXMSW__
+#include "deskgui/univ/topLevel.h"   // ibMSWShowShadowed — the popup's shadow, its own
+#endif
+
 //----------------------------------------------------------------------
 // ibCodeEditorPopupBase and ibCodeEditorPopupWindow
 
@@ -32,13 +36,14 @@ bool ibCodeEditorPopupBase::Show(bool show)
 		{
 			HWND hWnd = reinterpret_cast<HWND>(GetHandle());
 
-			//add drop shadow 
-			::SetClassLong(hWnd, GCL_STYLE, ::GetClassLong(hWnd, GCL_STYLE) | CS_DROPSHADOW);
-
-			if (GetName() == wxT("ibSTCCallTip"))
-				::AnimateWindow(hWnd, 25, AW_BLEND);
-			else
-				::ShowWindow(hWnd, SW_SHOWNA);
+			// the drop shadow, its own (ibMSWShowShadowed)
+			ibMSWShowShadowed(this, [this, hWnd] {
+				if (GetName() == wxT("ibSTCCallTip"))
+					::AnimateWindow(hWnd, 25, AW_BLEND);
+				else
+					::ShowWindow(hWnd, SW_SHOWNA);
+				return true;
+			});
 
 			::SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0,
 				SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);

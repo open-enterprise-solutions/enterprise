@@ -5,7 +5,7 @@
 
 #include "functionSearcher.h"
 
-#include "codeRunner/artProvider/artProvider.h"
+#include "deskgui/artProvider.h"
 
 #include "codeRunner/win/editor/codeEditor/codeEditor.h"
 #include "core/compiler/scriptParseCode.h"

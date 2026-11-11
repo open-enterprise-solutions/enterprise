@@ -92,14 +92,14 @@ wxMenuBar* ibFormEditView::CreateMenuBar() const
 {
 	if (m_visualNotebook != nullptr && m_visualNotebook->GetSelection() == wxNOTEBOOK_PAGE_DESIGNER) {
 
-		wxMenuBar* mb = new wxMenuBar;
+		wxMenuBar* mb = new ibMenuBar;
 
 		// and its menu bar
-		wxMenu* menuForm = new wxMenu;
+		wxMenu* menuForm = new ibMenu;
 		menuForm->Append(wxID_TEST_FORM, _("Test form\tCtrl+R"));
 		menuForm->AppendSeparator();
 
-		wxMenu* menuControl = new wxMenu;
+		wxMenu* menuControl = new ibMenu;
 
 		for (auto control : m_controlDataArray) {
 			wxMenuItem* menuItem = menuControl->Append(control.m_id,
@@ -151,7 +151,7 @@ bool ibFormEditView::OnClose(bool deleteWindow)
 	return false;
 }
 
-#include "frmclient/artProvider/artProvider.h"
+#include "deskgui/artProvider.h"
 
 #include "frmclient/win/editor/textEditor/textEditorPrintOut.h"
 #include "designer-thin/win/editor/visualEditor/printout/formPrintOut.h"
@@ -163,7 +163,7 @@ wxPrintout* ibFormEditView::OnCreatePrintout()
 	return new ibFormPrintout(m_visualNotebook->GetVisualHost(), m_viewDocument->GetTitle());
 }
 
-void ibFormEditView::OnCreateToolbar(wxAuiToolBar* toolbar)
+void ibFormEditView::OnCreateToolbar(ibAuiToolBar* toolbar)
 {
 	if (m_visualNotebook != nullptr && m_visualNotebook->GetSelection() == wxNOTEBOOK_PAGE_CODE_EDITOR) {
 		if (!toolbar->GetToolCount()) {

@@ -1,6 +1,6 @@
 #include "configCompareModel.h"
 
-#include "frmclient/artProvider/artProvider.h"
+#include "deskgui/artProvider.h"
 #include "frmclient/backend/backend_picture.h"   // a group's picture, as the client has it
 
 #include <wx/artprov.h>

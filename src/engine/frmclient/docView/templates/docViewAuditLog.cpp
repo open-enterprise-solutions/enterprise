@@ -6,12 +6,11 @@
 #include "protocol/protocol.h"
 
 #include "frmclient/visualView/ctrl/frame.h"
-#include "deskgui/univ/theme/luna_toolbarart.h"
 
 #include <algorithm>
 
-#include <wx/aui/auibar.h>
-#include <wx/checkbox.h>
+#include "deskgui/univ/aui/auibar.h"
+#include "deskgui/univ/ctrl/checkBox.h"
 #include "deskgui/univ/ctrl/choice.h"
 #include "deskgui/univ/ctrl/datePickerCtrl.h"
 #include <wx/datetime.h>
@@ -293,9 +292,8 @@ void ibAuditLogView::BuildLayout(wxWindow* parent)
 	main->Add(filt, 0, wxEXPAND);
 
 	// ----- AuiToolBar (Luna theme) — mirrors ibDialogUserList -----
-	m_toolbarMain = new wxAuiToolBar(parent, wxID_ANY, wxDefaultPosition,
-		wxDefaultSize, wxAUI_TB_HORZ_TEXT);
-	m_toolbarMain->SetArtProvider(new wxAuiLunaToolBarArt());
+	m_toolbarMain = new ibAuiToolBar(parent, wxID_ANY, wxDefaultPosition,
+		wxDefaultSize, ibAUI_TB_HORZ_TEXT);
 
 	m_toolbarMain->AddTool(wxID_AUDIT_TOOL_APPLY,    _("Apply"),
 		ibBackendPicture::GetPicture(g_picFilterSetCLSID));
@@ -308,12 +306,11 @@ void ibAuditLogView::BuildLayout(wxWindow* parent)
 		ibBackendPicture::GetPicture(g_picSelectCLSID));
 
 	// Live-refresh checkbox sits on the toolbar's right edge.
-	m_tailCheck = new wxCheckBox(m_toolbarMain, wxID_ANY, _("Live refresh (3 s)"));
+	m_tailCheck = new ibCheckBox(m_toolbarMain, wxID_ANY, _("Live refresh (3 s)"));
 	m_tailCheck->Bind(wxEVT_CHECKBOX, &ibAuditLogView::OnTailToggle, this);
 	m_toolbarMain->AddStretchSpacer(1);
 	m_toolbarMain->AddControl(m_tailCheck);
 
-	m_toolbarMain->SetBackgroundColour(wxDefaultStypeBGColour);
 	m_toolbarMain->Realize();
 	m_toolbarMain->Bind(wxEVT_MENU, &ibAuditLogView::OnCommandMenu, this);
 

@@ -16,7 +16,7 @@
 #include <wx/filedlg.h>
 #include <wx/filename.h>
 #include <wx/stdpaths.h>
-#include <wx/wupdlock.h>   // wxWindowUpdateLocker — the tabs held still while one is switched to
+#include <wx/wupdlock.h>   // wxWindowUpdateLocker — a tab and its view come up as one (Draw)
 #include <wx/evtloop.h>   // wxGUIEventLoop — a server's question waits for the calculator or the calendar
 
 #include "output/outputWindow.h"
@@ -34,7 +34,7 @@
 #include "frmclient/backend/mcp/mcpServer.h"   // the assistant's port, up and down with the window
 #include "frmclient/docView/docManager.h"
 #include "frmclient/docView/templates/docViewFile.h"
-#include "frmclient/artProvider/artProvider.h"
+#include "deskgui/artProvider.h"
 #include "frmclient/visualView/visualHostClient.h"
 #include "frmclient/win/picture.h"
 #include "frmclient/win/dlgs/about.h"
@@ -57,9 +57,10 @@
 #include "frmclient/backend/composition/dataComposer.h"
 #include "frmclient/win/ctrls/tableView.h"
 #include "deskgui/univ/ctrl/floatingNotebook.h"
-#include "deskgui/univ/theme/luna_tabart.h"
-#include "deskgui/univ/theme/luna_dockart.h"
+#include "deskgui/univ/aui/auibook.h"
+#include "deskgui/univ/aui/aui.h"
 #include "deskgui/univ/messageDialog.h"
+#include "deskgui/univ/menu.h"   // ibMenu — a server's popup menu, the theme's
 
 namespace {
 
@@ -72,13 +73,13 @@ constexpr int kFirstSchemaCommandMenuId = wxID_HIGHEST + 6000;
 constexpr int kSchemaCommandMenuIds     = 32;   // the ids a schema's commands take — past the most a schema has
 constexpr int kLastMenuId               = wxID_HIGHEST + 6999;
 
-// The Window menu's Close All — wxAuiMDIParentFrame's own id, which tabmdi.cpp keeps to itself (the desktop designer's
+// The Window menu's Close All — ibAuiMDIParentFrame's own id, which tabmdi.cpp keeps to itself (the desktop designer's
 // mainFrameDesignerMenu.cpp names it as well).
 constexpr int kWindowCloseAllId = 4002;
 
 // The Window menu out of a bar BY THE MENU — wx's RemoveWindowMenu looks for it by `_("&Window")` as said at that moment.
 // ⚠ THE WORD CHANGES WITH THE THREAD'S LANGUAGE: put in as "Окно" under a base's, it is looked for as "Window" at the
-// exit, stays in the bar, and goes twice — by ~wxAuiMDIParentFrame, then by the bar (a fall at every such exit, 2026-10-30).
+// exit, stays in the bar, and goes twice — by ~ibAuiMDIParentFrame, then by the bar (a fall at every such exit, 2026-10-30).
 void RemoveWindowMenuOf(wxMenuBar* bar, wxMenu* windowMenu)
 {
 	if (bar == nullptr || windowMenu == nullptr)
@@ -198,13 +199,13 @@ int MenuIdOf(const ibProtocolNode& item)
 // A MENU REQUEST'S ITEMS, put into a popup menu as the desktop built it: an item with items of its own is a submenu,
 // the others are commands — ticked, greyed as they say. The server's ids may be any number and a wx id may not, so each
 // command takes the next id of the menu's own, and `ids` keeps the server's in that order.
-void AppendMenuItems(wxMenu& menu, const std::vector<ibProtocolNode>& items, std::vector<long long>& ids)
+void AppendMenuItems(ibMenu& menu, const std::vector<ibProtocolNode>& items, std::vector<long long>& ids)
 {
 	for (const ibProtocolNode& item : items) {
 		const wxString caption = item.GetString(ibProtocol::ibRequest::ibMenu::Caption);
 		const std::vector<ibProtocolNode> subItems = item.Children();
 		if (!subItems.empty()) {
-			wxMenu* const submenu = new wxMenu;
+			ibMenu* const submenu = new ibMenu;
 			AppendMenuItems(*submenu, subItems, ids);
 			menu.AppendSubMenu(submenu, caption)->Enable(item.GetBool(ibProtocol::ibRequest::ibMenu::Enabled, true));
 			continue;
@@ -299,7 +300,7 @@ ibFrontendMainFrame::ibFrontendMainFrame(std::unique_ptr<ibCommunicator> communi
 	: ibDocParentFrameAnyBase(this),
 	m_communicator(std::move(communicator)), m_mode(mode), m_user(user), m_password(password)
 {
-	wxAuiMDIParentFrame::Create(nullptr, wxID_ANY, title, pos, size, style | wxNO_FULL_REPAINT_ON_RESIZE, name);
+	ibAuiMDIParentFrame::Create(nullptr, wxID_ANY, title, pos, size, style | wxNO_FULL_REPAINT_ON_RESIZE, name);
 
 	// Claim the process's main-window slot.
 	if (s_instance == nullptr) {
@@ -314,19 +315,16 @@ ibFrontendMainFrame::ibFrontendMainFrame(std::unique_ptr<ibCommunicator> communi
 	for (const int edit : { wxID_CUT, wxID_COPY, wxID_PASTE, wxID_DELETE, wxID_SELECTALL })
 		Bind(wxEVT_MENU, &ibFrontendMainFrame::OnEditCommand, this, edit);
 
-	SetArtProvider(new wxAuiLunaTabArt());
-
 	// A tab chosen is told the server, which draws it; a tab closed is its document's close (ibTabDocument::Close).
-	if (wxAuiMDIClientWindow* const client = GetClientWindow())
-		client->Bind(wxEVT_AUINOTEBOOK_PAGE_CHANGED, &ibFrontendMainFrame::OnTabChanged, this);
+	if (ibAuiMDIClientWindow* const client = GetClientWindow())
+		client->Bind(ibEVT_AUINOTEBOOK_PAGE_CHANGED, &ibFrontendMainFrame::OnTabChanged, this);
 
 	// notify wxAUI which valueForm to use
 	m_mgr.SetManagedWindow(this);
-	m_mgr.SetArtProvider(new wxAuiLunaDockArt());
 
-	// Disable live pane-border resize — wxAUI_MGR_LIVE_RESIZE is part of wxAUI_MGR_DEFAULT and triggers a full Layout
+	// Disable live pane-border resize — ibAUI_MGR_LIVE_RESIZE is part of ibAUI_MGR_DEFAULT and triggers a full Layout
 	// pass through every pane on every mouse-move during border drag. Ghost-rect drag + commit on mouse-up stays lag-free.
-	m_mgr.SetFlags(m_mgr.GetFlags() & ~wxAUI_MGR_LIVE_RESIZE);
+	m_mgr.SetFlags(m_mgr.GetFlags() & ~ibAUI_MGR_LIVE_RESIZE);
 
 #ifdef __WXMSW__
 	SetIcon(wxICON(oes));
@@ -348,55 +346,9 @@ ibFrontendMainFrame::~ibFrontendMainFrame()
 	// deinitialize the valueForm manager
 	m_mgr.UnInit();
 
-	// ~wxAuiMDIParentFrame deletes the Window menu itself: it leaves no bar still holding it. While a view's bar is shown,
+	// ~ibAuiMDIParentFrame deletes the Window menu itself: it leaves no bar still holding it. While a view's bar is shown,
 	// the window's own holds it (SetMenuBar).
 	RemoveWindowMenuOf(m_pMyMenuBar != nullptr ? m_pMyMenuBar : GetMenuBar(), GetWindowMenu());
-}
-
-wxAuiMDIClientWindow* ibFrontendMainFrame::OnCreateClient()
-{
-	class wxAuiMDIClientWindowImpl : public wxAuiMDIClientWindow {
-	public:
-		wxAuiMDIClientWindowImpl() : wxAuiMDIClientWindow() {}
-		wxAuiMDIClientWindowImpl(wxAuiMDIParentFrame* parent, long style = 0) : wxAuiMDIClientWindow(parent, style) {
-#ifdef __WXOSX__
-			// The system background — respects dark/light mode.
-			SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_APPWORKSPACE));
-#else
-			// Powder-blue workspace — the "walls" of the application; forms sit on it as a calm cool backdrop.
-			SetBackgroundColour(wxColour(184, 201, 212));  // #B8C9D4 powder blue
-#endif
-			Bind(wxEVT_PAINT, &wxAuiMDIClientWindowImpl::OnPaint, this);
-			Bind(wxEVT_ERASE_BACKGROUND, &wxAuiMDIClientWindowImpl::OnEraseBackground, this);
-		}
-
-	protected:
-
-		//A general selection function
-		virtual int DoModifySelection(size_t n, bool events) {
-			wxAuiNotebook::Freeze();
-			const int selection = wxAuiNotebook::DoModifySelection(n, events);
-			wxAuiNotebook::Thaw();
-			return selection;
-		}
-
-		void OnPaint(wxPaintEvent& event) {
-			wxPaintDC dc(this);
-			dc.SetBackground(wxBrush(GetBackgroundColour()));
-			dc.Clear();
-			event.Skip();
-		}
-
-		void OnEraseBackground(wxEraseEvent& event) {
-			wxDC* dc = event.GetDC();
-			if (dc) {
-				dc->SetBackground(wxBrush(GetBackgroundColour()));
-				dc->Clear();
-			}
-		}
-	};
-
-	return new wxAuiMDIClientWindowImpl(this);
 }
 
 #ifndef __WXOSX__
@@ -409,7 +361,7 @@ void ibFrontendMainFrame::Raise()
 	::keybd_event((BYTE)0, 0, KEYEVENTF_KEYUP, 0);
 #endif
 
-	wxAuiMDIParentFrame::Raise();
+	ibAuiMDIParentFrame::Raise();
 }
 #endif
 
@@ -443,13 +395,13 @@ void ibFrontendMainFrame::SetMenuBar(wxMenuBar* pMenuBar)
 
 void ibFrontendMainFrame::CreatePropertyPane()
 {
-	if (m_mgr.GetPane(wxAUI_PANE_PROPERTY).IsOk())
+	if (m_mgr.GetPane(ibAUI_PANE_PROPERTY).IsOk())
 		return;
 
 	m_objectInspector = new ibObjectInspector(this, wxID_ANY);
 
-	wxAuiPaneInfo paneInfo;
-	paneInfo.Name(wxAUI_PANE_PROPERTY);
+	ibAuiPaneInfo paneInfo;
+	paneInfo.Name(ibAUI_PANE_PROPERTY);
 	paneInfo.CloseButton(true);
 	paneInfo.MinimizeButton(false);
 	paneInfo.MaximizeButton(false);
@@ -464,11 +416,11 @@ void ibFrontendMainFrame::CreatePropertyPane()
 
 void ibFrontendMainFrame::CreateBottomPane()
 {
-	if (m_mgr.GetPane(wxAUI_PANE_BOTTOM).IsOk())
+	if (m_mgr.GetPane(ibAUI_PANE_BOTTOM).IsOk())
 		return;
 
-	wxAuiPaneInfo paneInfo;
-	paneInfo.Name(wxAUI_PANE_BOTTOM);
+	ibAuiPaneInfo paneInfo;
+	paneInfo.Name(ibAUI_PANE_BOTTOM);
 	paneInfo.Bottom();
 	paneInfo.PinButton(false);
 	paneInfo.CloseButton(false);
@@ -480,28 +432,24 @@ void ibFrontendMainFrame::CreateBottomPane()
 		wxID_ANY,
 		wxDefaultPosition,
 		wxDefaultSize,
-		wxAUI_NB_BOTTOM | wxAUI_NB_TAB_MOVE | wxAUI_NB_SCROLL_BUTTONS);
+		ibAUI_NB_BOTTOM | ibAUI_NB_TAB_MOVE | ibAUI_NB_SCROLL_BUTTONS);
 
-	auiNotebook->SetArtProvider(new wxAuiLunaTabArt());
-	{
-		wxWindowUpdateLocker freeze(auiNotebook);
-		auiNotebook->AddPage(m_outputWindow, _("Messages"), false, wxArtProvider::GetBitmapBundle(wxART_MESSAGE, wxART_SERVICE, wxSize(16, 16)));
-		auiNotebook->SetNullSelection();
-	}
+	auiNotebook->AddPage(m_outputWindow, _("Messages"), false, wxArtProvider::GetBitmapBundle(wxART_MESSAGE, wxART_SERVICE, wxSize(16, 16)));
+	auiNotebook->SetNullSelection();
 
 	m_mgr.AddPane(auiNotebook, paneInfo);
 }
 
 bool ibFrontendMainFrame::IsShownInspector()
 {
-	const wxAuiPaneInfo propertyPane = m_mgr.GetPane(wxAUI_PANE_PROPERTY);
+	const ibAuiPaneInfo propertyPane = m_mgr.GetPane(ibAUI_PANE_PROPERTY);
 	if (!propertyPane.IsOk()) return false;
 	return propertyPane.IsShown();
 }
 
 void ibFrontendMainFrame::ShowInspector()
 {
-	wxAuiPaneInfo& propertyPane = m_mgr.GetPane(wxAUI_PANE_PROPERTY);
+	ibAuiPaneInfo& propertyPane = m_mgr.GetPane(ibAUI_PANE_PROPERTY);
 	if (!propertyPane.IsOk())
 		return;
 	if (!propertyPane.IsShown()) {
@@ -537,7 +485,7 @@ void ibFrontendMainFrame::CreateGUI()
 
 	// The toolbar under the menu — the desktop's main toolbar (CreateWideGui): the doc manager's commands, enabled as it
 	// answers.
-	m_mainFrameToolbar = new wxAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_LAYOUT);
+	m_mainFrameToolbar = new ibAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, ibAUI_TB_HORZ_LAYOUT | ibAUI_TB_OVERFLOW);
 	m_mainFrameToolbar->SetToolBitmapSize(wxSize(16, 16));
 
 	m_mainFrameToolbar->AddTool(wxID_NEW, _("New"), wxArtProvider::GetBitmapBundle(wxART_NEW, wxART_FRAME_ICON, wxSize(16, 16)), _("New"), wxItemKind::wxITEM_NORMAL);
@@ -552,7 +500,7 @@ void ibFrontendMainFrame::CreateGUI()
 
 	m_mainFrameToolbar->Realize();
 
-	wxAuiPaneInfo m_infoDefault;
+	ibAuiPaneInfo m_infoDefault;
 	m_infoDefault.Name(wxT("mainTool"));
 	m_infoDefault.Caption(wxT("Default"));
 	m_infoDefault.ToolbarPane();
@@ -565,10 +513,10 @@ void ibFrontendMainFrame::CreateGUI()
 	m_mgr.AddPane(m_mainFrameToolbar, m_infoDefault);
 
 	// …and the toolbar of the active view, beside it — shown while that view has tools (ActivateView).
-	m_docToolbar = new wxAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_LAYOUT);
+	m_docToolbar = new ibAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, ibAUI_TB_HORZ_LAYOUT | ibAUI_TB_OVERFLOW);
 	m_docToolbar->SetToolBitmapSize(wxSize(16, 16));
 
-	wxAuiPaneInfo m_infoAdditional;
+	ibAuiPaneInfo m_infoAdditional;
 	m_infoAdditional.Name(wxT("additional"));
 	m_infoAdditional.Caption(wxT("Additional"));
 	m_infoAdditional.ToolbarPane();
@@ -591,10 +539,6 @@ void ibFrontendMainFrame::CreateGUI()
 
 	// The bar along the bottom — the desktop's.
 	SetStatusBar(new ibDocBottomStatusBar(this));
-
-	// The workspace — the same powder blue the tabs sit on.
-	GetNotebook()->GetAuiManager().GetArtProvider()->SetColour(
-		wxAUI_DOCKART_BACKGROUND_COLOUR, wxColour(0xB8, 0xC9, 0xD4));
 
 	SetMinSize(wxSize(400, 380));
 
@@ -654,7 +598,7 @@ void ibFrontendMainFrame::InitializeDefaultMenu()
 		return item;
 	};
 
-	m_menuFile = new wxMenu();
+	m_menuFile = new ibMenu();
 	stockPicture(m_menuFile->Append(wxID_NEW), wxART_NEW);
 	stockPicture(m_menuFile->Append(wxID_OPEN), wxART_FILE_OPEN);
 
@@ -677,7 +621,7 @@ void ibFrontendMainFrame::InitializeDefaultMenu()
 	m_docManager->FileHistoryLoad(*wxConfig::Get());
 #endif // wxUSE_CONFIG
 
-	m_menuEdit = new wxMenu();
+	m_menuEdit = new ibMenu();
 	stockPicture(m_menuEdit->Append(wxID_UNDO), wxART_UNDO);
 	stockPicture(m_menuEdit->Append(wxID_REDO), wxART_REDO);
 	m_menuEdit->AppendSeparator();
@@ -689,7 +633,7 @@ void ibFrontendMainFrame::InitializeDefaultMenu()
 	m_menuEdit->AppendSeparator();
 	stockPicture(m_menuEdit->Append(wxID_FIND), wxART_FIND);
 
-	wxMenuBar* const bar = new wxMenuBar();
+	wxMenuBar* const bar = new ibMenuBar();
 	bar->Append(m_menuFile, wxGetStockLabel(wxID_FILE));
 	bar->Append(m_menuEdit, wxGetStockLabel(wxID_EDIT));
 	if (m_menuConfiguration != nullptr)
@@ -746,7 +690,7 @@ void ibFrontendMainFrame::UpdateHotKeys()
 bool ibFrontendMainFrame::Show(bool show)
 {
 	if (!show)
-		return wxAuiMDIParentFrame::Show(false);
+		return ibAuiMDIParentFrame::Show(false);
 
 	// Already up — nothing to build, nothing to ask.
 	if (IsShown())
@@ -825,7 +769,7 @@ bool ibFrontendMainFrame::Show(bool show)
 	{
 		// …on the screen whole, the panes and the start page painted: a white window first, its parts after, otherwise
 		const ibWindowShowLocker locker(this);
-		if (!wxAuiMDIParentFrame::Show(true))
+		if (!ibAuiMDIParentFrame::Show(true))
 			return false;
 	}
 	SetFocus();
@@ -859,7 +803,7 @@ bool ibFrontendMainFrame::Destroy()
 		m_docManager->FileHistoryRemoveMenu(m_menuFile);
 	}
 
-	return wxAuiMDIParentFrame::Destroy();
+	return ibAuiMDIParentFrame::Destroy();
 }
 
 bool ibFrontendMainFrame::Call(ibProtocol::ibMethod method, const ibProtocolNode& params, ibProtocolNode& answer)
@@ -1091,10 +1035,11 @@ void ibFrontendMainFrame::Draw(const ibProtocolNode& answer)
 
 	// ⭐ A TAB AND ITS VIEW COME UP AS ONE. A view is built when its first frame is drawn, after the tab: thawed between
 	// the two, the person watched the composer's panel be born — a dot in the corner, then its pages, then its layout.
+	// The one freeze of the answer: the tabs drawn (DrawTabs) and the tab switched to (DrawView) hold none of their own.
 	{
 		wxWindowUpdateLocker freeze;
-		wxAuiMDIClientWindow* const client = GetClientWindow();
-		if (client != nullptr && (whole || patch.Has(ibProtocol::ibFrame::Tabs)))
+		ibAuiMDIClientWindow* const client = GetClientWindow();
+		if (client != nullptr && (whole || patch.Has(ibProtocol::ibFrame::Tabs) || patch.Has(ibProtocol::ibFrame::ActiveTab)))
 			freeze.Lock(client);
 
 		if (whole || patch.Has(ibProtocol::ibFrame::Tabs))
@@ -1170,7 +1115,7 @@ void ibFrontendMainFrame::DrawMenu(const ibProtocolNode& menu)
 				m_menuItems[id] = MenuItemOf(item);
 				continue;
 			}
-			wxMenu* const submenu = new wxMenu();
+			wxMenu* const submenu = new ibMenu();
 			fill(submenu, item);
 			into->AppendSubMenu(submenu, title);
 		}
@@ -1188,7 +1133,7 @@ void ibFrontendMainFrame::DrawMenu(const ibProtocolNode& menu)
 		}
 	}
 
-	wxMenuBar* const bar = new wxMenuBar();
+	wxMenuBar* const bar = new ibMenuBar();
 	bar->Append(m_menuFile, wxGetStockLabel(wxID_FILE));
 	bar->Append(m_menuEdit, wxGetStockLabel(wxID_EDIT));
 	if (m_menuConfiguration != nullptr)
@@ -1196,7 +1141,7 @@ void ibFrontendMainFrame::DrawMenu(const ibProtocolNode& menu)
 	if (m_menuDebug != nullptr)
 		bar->Append(m_menuDebug, _("Debug"));
 	for (const ibProtocolNode& top : menu.Children()) {
-		wxMenu* const submenu = new wxMenu();
+		wxMenu* const submenu = new ibMenu();
 		fill(submenu, top);
 		bar->Append(submenu, top.GetString(ibProtocol::ibFrame::ibMenu::Title));
 	}
@@ -1245,13 +1190,12 @@ void ibFrontendMainFrame::DrawTemplates(const ibProtocolNode& templates)
 
 void ibFrontendMainFrame::DrawTabs(const ibProtocolNode& tabs)
 {
-	wxAuiMDIClientWindow* const client = GetClientWindow();
+	ibAuiMDIClientWindow* const client = GetClientWindow();
 	if (client == nullptr)
 		return;
 
 	// The drawing changes pages, and wx says so as if the person had: those are not theirs to answer.
 	m_drawing = true;
-	client->Freeze();
 
 	// EACH TAB A DOCUMENT THE SERVER RAISED — made here, with no template, by the tab's Kind (ibTabDocument::Make): a form,
 	// or a view of its own; its view in a tab of the window (CreateChildFrame).
@@ -1307,7 +1251,7 @@ void ibFrontendMainFrame::DrawTabs(const ibProtocolNode& tabs)
 		if (tab.GetBool(ibProtocol::ibFrame::ibTab::Locked)) {
 			const int page = client->GetPageIndex(opened->GetDocumentWindow());
 			if (page != wxNOT_FOUND)
-				client->SetPageKind(static_cast<size_t>(page), wxAuiTabKind::Locked);
+				client->SetPageKind(static_cast<size_t>(page), ibAuiTabKind::Locked);
 		}
 	}
 
@@ -1325,13 +1269,12 @@ void ibFrontendMainFrame::DrawTabs(const ibProtocolNode& tabs)
 		}
 	}
 
-	client->Thaw();
 	m_drawing = false;
 }
 
 void ibFrontendMainFrame::DrawView(long long active, const ibProtocolNode& view, const ibProtocolNode& patch)
 {
-	wxAuiMDIClientWindow* const client = GetClientWindow();
+	ibAuiMDIClientWindow* const client = GetClientWindow();
 	ibTabDocument* const chosen = FindDocument(active);
 	ibFrontendView* const shown = chosen != nullptr ? chosen->GetFirstView() : nullptr;
 	if (client == nullptr || shown == nullptr)
@@ -1340,14 +1283,11 @@ void ibFrontendMainFrame::DrawView(long long active, const ibProtocolNode& view,
 	// The drawing changes pages, and wx says so as if the person had: those are not theirs to answer.
 	m_drawing = true;
 
-	// Switched to only when the notebook shows another: a page selected again takes the focus (wxAuiNotebook), and a tab
-	// just opened was selected as it was added — a choice form opened by a cell's "..." must leave the cell's editor its
-	// focus, as the desktop's did.
-	wxAuiMDIChildFrame* const child = dynamic_cast<wxAuiMDIChildFrame*>(shown->GetFrame());
-	if (child != nullptr && client->GetSelection() != client->GetPageIndex(child)) {
-		wxWindowUpdateLocker freeze(client);
+	// The page the notebook shows already is left as it is (ibAuiNotebook::DoModifySelection) — a tab just opened was
+	// selected as it was added, and a choice form opened by a cell's "..." leaves the cell's editor its focus, as the
+	// desktop's did.
+	if (ibAuiMDIChildFrame* const child = dynamic_cast<ibAuiMDIChildFrame*>(shown->GetFrame()))
 		child->Activate();
-	}
 
 	// …and its view the doc manager's current one when the active tab is another — the patch names ActiveTab: a tab
 	// closed picks the page after it with the notebook's events off (ibAuiDocChildFrame::Destroy), so that page's view is
@@ -1661,8 +1601,8 @@ void ibFrontendMainFrame::ShowRequest(const ibProtocolNode& request, ibProtocolN
 		break;
 	}
 	case ibProtocol::ibRequest::ibKind::Menu: {
-		// THE DESKTOP'S POPUP MENU, where the mouse is. Dismissed — answered with no Id.
-		wxMenu menu;
+		// THE DESKTOP'S POPUP MENU, where the mouse is — the theme's (ibMenu). Dismissed — answered with no Id.
+		ibMenu menu;
 		std::vector<long long> ids;
 		AppendMenuItems(menu, request.Children(), ids);
 		const int picked = GetPopupMenuSelectionFromUser(menu) - (wxID_HIGHEST + 1);
@@ -1840,7 +1780,7 @@ void ibFrontendMainFrame::CallPosted()
 
 ibTabDocument* ibFrontendMainFrame::DocumentAt(int page) const
 {
-	wxAuiMDIClientWindow* const client = GetClientWindow();
+	ibAuiMDIClientWindow* const client = GetClientWindow();
 	if (client == nullptr || page == wxNOT_FOUND)
 		return nullptr;
 
@@ -1933,10 +1873,10 @@ wxWindow* ibFrontendMainFrame::CreateChildFrame(ibFrontendView* view, const wxPo
 
 namespace {
 
-// THE TOOLBAR EMPTIED as wxToolBar::ClearTools empties one — the windows of its controls too: wxAuiToolBar::Clear lets go
+// THE TOOLBAR EMPTIED as wxToolBar::ClearTools empties one — the windows of its controls too: ibAuiToolBar::Clear lets go
 // of the items alone, and a control left behind (a sheet's Zoom) stayed on show over the next view's tools, and took
 // clicks for a view no longer shown (2026-10-20).
-void ClearTools(wxAuiToolBar& toolbar)
+void ClearTools(ibAuiToolBar& toolbar)
 {
 	for (size_t idx = 0; idx < toolbar.GetToolCount(); ++idx)
 		if (wxWindow* const window = toolbar.FindToolByIndex(static_cast<int>(idx))->GetWindow())
@@ -1951,7 +1891,11 @@ void ibFrontendMainFrame::ActivateView(ibFrontendView* view, bool activate)
 	if (m_docToolbar == nullptr)
 		return;
 
-	m_docToolbar->Freeze();
+	// ⭐ ASKED FIRST — THE WINDOW FROZEN BEFORE ITS MENU AND TOOLBAR CHANGE, the panes laid out when the work is done:
+	// the tree taking the focus from a sheet deactivates one view and activates another, and each step stood on the
+	// screen as it happened — two menus put up, the toolbar emptied and filled, then the layout (2026-11-11, Max:
+	// "changing the focus, the sheet to the tree, flickers")
+	UpdateManager();
 
 	if (activate) {
 
@@ -2002,11 +1946,6 @@ void ibFrontendMainFrame::ActivateView(ibFrontendView* view, bool activate)
 			m_docToolbar->EnableTool(m_docToolbar->FindToolByIndex(idx)->GetId(), false);
 		}
 	}
-
-	m_docToolbar->Thaw();
-
-	// update frame manager
-	UpdateManager();
 }
 
 void ibFrontendMainFrame::UpdateFrameManager()
@@ -2021,7 +1960,7 @@ void ibFrontendMainFrame::UpdateFrameManager()
 
 	if (view_count == 0) ClearTools(*m_docToolbar);
 
-	wxAuiPaneInfo& infoToolBar = m_mgr.GetPane(m_docToolbar);
+	ibAuiPaneInfo& infoToolBar = m_mgr.GetPane(m_docToolbar);
 	const bool showToolBar = m_docToolbar->GetToolCount() > 0;
 
 	// ⭐ THE TOOLBAR THAT COMES AND GOES STANDS LAST IN ITS ROW. A toolbar row keeps its panes by PIXEL offset, and every
@@ -2030,9 +1969,9 @@ void ibFrontendMainFrame::UpdateFrameManager()
 	// already in the row, its coming moves nothing and its going leaves nothing behind.
 	if (showToolBar && !infoToolBar.IsShown()) {
 		int rowEnd = 0;
-		const wxAuiPaneInfoArray& panes = m_mgr.GetAllPanes();
+		const ibAuiPaneInfoArray& panes = m_mgr.GetAllPanes();
 		for (size_t i = 0; i < panes.GetCount(); ++i) {
-			const wxAuiPaneInfo& pane = panes.Item(i);
+			const ibAuiPaneInfo& pane = panes.Item(i);
 			if (&pane == &infoToolBar || !pane.IsShown() || !pane.IsToolbar())
 				continue;
 			if (pane.dock_direction == infoToolBar.dock_direction && pane.dock_layer == infoToolBar.dock_layer
@@ -2051,6 +1990,9 @@ void ibFrontendMainFrame::UpdateFrameManager()
 
 	m_mgr.Update();
 	m_callUpdateFrameManager = false;
+
+	// ...and the window painted once, as the work left it (UpdateManager froze it)
+	Thaw();
 }
 
 //********************************************************************************
@@ -2093,7 +2035,7 @@ void ibFrontendMainFrame::OnExit(wxCommandEvent& WXUNUSED(event))
 
 void ibFrontendMainFrame::OnCloseAll(wxCommandEvent& WXUNUSED(event))
 {
-	// The server closes them, in one call — not the base's loop over the active child (wxAuiMDIParentFrame::CloseAll):
+	// The server closes them, in one call — not the base's loop over the active child (ibAuiMDIParentFrame::CloseAll):
 	// a tab's Close only posts its close, which that loop took for a refusal, and it stopped at the first.
 	ibProtocolNode params, answer;
 	params.SetValue(ibProtocol::ibFrame::Command, static_cast<long long>(ibProtocol::ibFrame::ibCommand::CloseAll));
@@ -2145,7 +2087,7 @@ void ibFrontendMainFrame::OnEditCommand(wxCommandEvent& event)
 	EditFocused(event.GetId());
 }
 
-void ibFrontendMainFrame::OnTabChanged(wxAuiNotebookEvent& event)
+void ibFrontendMainFrame::OnTabChanged(ibAuiNotebookEvent& event)
 {
 	// The MDI client keeps its active child by this event too.
 	event.Skip();
@@ -2168,10 +2110,6 @@ void ibFrontendMainFrame::OnTabChanged(wxAuiNotebookEvent& event)
 
 namespace {
 
-// The interior palette, spelled where it is used — the same values the rest of the
-// chrome carries (see luna_dockart.cpp).
-const wxColour kStatusBarGround(0xC8, 0xD6, 0xDF);   // #C8D6DF light dusty
-
 // The lamp. Muted rather than a signal green: it reports a steady state, and the
 // bar it sits in is a quiet one.
 const wxColour kAssistantLampOn(0x4F, 0x8A, 0x53);   // #4F8A53 sage
@@ -2183,12 +2121,8 @@ const int kAssistantFieldWidth = 210;
 } // namespace
 
 ibDocBottomStatusBar::ibDocBottomStatusBar(wxWindow* parent, wxWindowID id, long style, const wxString& name)
-	: wxStatusBar(parent, id, style, name)
+	: ibStatusBar(parent, id, style, name)
 {
-	// Light dusty bar — sits between the powder-blue workspace and the cream content
-	// panes; the theme's text reads cleanly against it.
-	SetBackgroundColour(kStatusBarGround);
-
 	// -1 is "share what is left"; a positive number is a fixed width. So the message
 	// grows with the window and the lamp keeps its place at the right-hand end.
 	const int widths[FieldCount] = { -1, kAssistantFieldWidth };
@@ -2201,24 +2135,17 @@ ibDocBottomStatusBar::ibDocBottomStatusBar(wxWindow* parent, wxWindowID id, long
 	SetStatusStyles(FieldCount, styles);
 }
 
-#if OES_STATUSBAR_CUSTOM_INK
-
-void ibDocBottomStatusBar::DrawFieldText(wxDC& dc, const wxRect& rect, int i, int textHeight)
+void ibDocBottomStatusBar::DrawStatusField(wxDC& dc, const wxRect& rect, int n, int flags)
 {
-	// ⭐ THE ONE LINE THE OLD wxStaticText EXISTED FOR. The generic bar never sets a text
-	// colour, so the field is drawn in the DC's default — black — whatever the window's
-	// foreground says.
-	dc.SetTextForeground(GetForegroundColour());
-
-	if (i != FieldAssistant || GetStatusText(FieldAssistant).IsEmpty()) {
-		wxStatusBar::DrawFieldText(dc, rect, i, textHeight);
+	if (n != FieldAssistant || GetStatusText(FieldAssistant).IsEmpty()) {
+		ibStatusBar::DrawStatusField(dc, rect, n, flags);
 		return;
 	}
 
 	// A lit lamp, then the text moved clear of it. The rectangle handed to the base is
-	// narrowed rather than the text indented, so ellipsizing and clipping still measure
-	// against the space the text actually has.
-	const int diameter = wxMax(6, textHeight / 2);
+	// narrowed rather than the text indented, so clipping still measures against the space
+	// the text actually has.
+	const int diameter = wxMax(6, dc.GetCharHeight() / 2);
 	const int cx = rect.x + 8 + diameter / 2;
 	const int cy = rect.y + rect.height / 2;
 
@@ -2231,7 +2158,5 @@ void ibDocBottomStatusBar::DrawFieldText(wxDC& dc, const wxRect& rect, int i, in
 	textRect.x     += taken;
 	textRect.width -= taken;
 
-	wxStatusBar::DrawFieldText(dc, textRect, i, textHeight);
+	ibStatusBar::DrawStatusField(dc, textRect, n, flags);
 }
-
-#endif // OES_STATUSBAR_CUSTOM_INK

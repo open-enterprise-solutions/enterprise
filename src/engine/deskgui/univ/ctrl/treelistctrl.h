@@ -31,13 +31,6 @@ class DESKGUI_API ibTreeListMainWindow;
 #define wxTR_COLUMN_LINES 0x1000 // put border around items
 #define wxTR_VIRTUAL      0x4000 // The application provides items text on demand.
 
-// Using this typedef removes an ambiguity when calling Remove()
-#ifdef __WXMSW__
-#if !wxCHECK_VERSION(2, 5, 0)
-typedef long wxTreeItemIdValue;
-#endif
-#endif
-
 //-----------------------------------------------------------------------------
 // wxTreeListColumnAttrs
 //-----------------------------------------------------------------------------

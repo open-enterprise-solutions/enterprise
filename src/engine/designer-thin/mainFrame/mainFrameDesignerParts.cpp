@@ -9,13 +9,13 @@
 
 void ibFrontendMainFrameDesigner::CreateMetadataPane()
 {
-	if (m_mgr.GetPane(wxAUI_PANE_METADATA).IsOk())
+	if (m_mgr.GetPane(ibAUI_PANE_METADATA).IsOk())
 		return;
 
 	m_metaWindow = new ibConfigurationTree(this);
 
-	wxAuiPaneInfo paneInfo;
-	paneInfo.Name(wxAUI_PANE_METADATA);
+	ibAuiPaneInfo paneInfo;
+	paneInfo.Name(ibAUI_PANE_METADATA);
 	paneInfo.CloseButton(false);
 	paneInfo.MinimizeButton(false);
 	paneInfo.MaximizeButton(false);
@@ -46,7 +46,7 @@ void ibFrontendMainFrameDesigner::CreateGitPane()
 			m_gitPanel->SetWorkdir(wxFileName(file).GetPath());
 	}
 
-	wxAuiPaneInfo paneInfo;
+	ibAuiPaneInfo paneInfo;
 	paneInfo.Name(wxT("gitPane"));
 	paneInfo.Caption(_("Version control"));
 	paneInfo.Right();
@@ -57,9 +57,9 @@ void ibFrontendMainFrameDesigner::CreateGitPane()
 	m_mgr.AddPane(m_gitPanel, paneInfo);
 }
 
-#include "frmclient/artProvider/artProvider.h"
+#include "deskgui/artProvider.h"
 #include "deskgui/univ/ctrl/floatingNotebook.h"
-#include "deskgui/univ/theme/luna_tabart.h"
+#include "deskgui/univ/aui/auibook.h"
 #include "frmclient/mainFrame/output/outputWindow.h"
 #include "designer-thin/mainFrame/local/localWindow.h"
 #include "designer-thin/mainFrame/stack/stackWindow.h"
@@ -67,11 +67,11 @@ void ibFrontendMainFrameDesigner::CreateGitPane()
 
 void ibFrontendMainFrameDesigner::CreateBottomPane()
 {
-	if (m_mgr.GetPane(wxAUI_PANE_BOTTOM).IsOk())
+	if (m_mgr.GetPane(ibAUI_PANE_BOTTOM).IsOk())
 		return;
 
-	wxAuiPaneInfo paneInfo;
-	paneInfo.Name(wxAUI_PANE_BOTTOM);
+	ibAuiPaneInfo paneInfo;
+	paneInfo.Name(ibAUI_PANE_BOTTOM);
 	paneInfo.Bottom();
 	paneInfo.PinButton(false);
 	paneInfo.CloseButton(false);
@@ -83,19 +83,13 @@ void ibFrontendMainFrameDesigner::CreateBottomPane()
 		wxID_ANY,
 		wxDefaultPosition,
 		wxDefaultSize,
-		wxAUI_NB_BOTTOM | wxAUI_NB_TAB_MOVE | wxAUI_NB_SCROLL_BUTTONS);
-
-	auiNotebook->SetArtProvider(new wxAuiLunaTabArt());
-	auiNotebook->Freeze();
+		ibAUI_NB_BOTTOM | ibAUI_NB_TAB_MOVE | ibAUI_NB_SCROLL_BUTTONS);
 
 	auiNotebook->AddPage(m_outputWindow, _("Messages"), false, wxArtProvider::GetBitmapBundle(wxART_MESSAGE, wxART_SERVICE, wxSize(16, 16)));
 	auiNotebook->AddPage(m_localWindow, _("Local variable"), false, wxArtProvider::GetBitmapBundle(wxART_LOCAL_VARIABLE, wxART_SERVICE, wxSize(16, 16)));
 	auiNotebook->AddPage(m_stackWindow, _("Call stack"), false, wxArtProvider::GetBitmapBundle(wxART_STACK, wxART_SERVICE, wxSize(16, 16)));
 	auiNotebook->AddPage(m_watchWindow, _("Watch"), false, wxArtProvider::GetBitmapBundle(wxART_WATCH, wxART_SERVICE, wxSize(16, 16)));
-
-	auiNotebook->Refresh();
 	auiNotebook->SetNullSelection();
-	auiNotebook->Thaw();
 
 	m_mgr.AddPane(auiNotebook, paneInfo);
 }
@@ -109,7 +103,7 @@ void ibFrontendMainFrameDesigner::CreateBottomPane()
 // client would double the row) - they stay in the menu.
 void ibFrontendMainFrameDesigner::CreateDebugToolbar()
 {
-	m_debugToolbar = new wxAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_LAYOUT);
+	m_debugToolbar = new ibAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, ibAUI_TB_HORZ_LAYOUT);
 	m_debugToolbar->SetToolBitmapSize(wxSize(16, 16));
 
 	const auto add = [this](int id, const wxArtID& art, const wxString& label) {
@@ -132,7 +126,7 @@ void ibFrontendMainFrameDesigner::CreateDebugToolbar()
 	add(wxID_DESIGNER_DEBUG_REMOVE_ALL_DEBUGPOINTS, wxART_DEBUG_REMOVE_ALL_BREAKPOINTS, _("Remove all breakpoints"));
 	m_debugToolbar->Realize();
 
-	wxAuiPaneInfo paneInfoDebugTool;
+	ibAuiPaneInfo paneInfoDebugTool;
 	paneInfoDebugTool.Name(wxT("debugTool"));
 	paneInfoDebugTool.Caption(_("Debug"));
 	paneInfoDebugTool.ToolbarPane();
@@ -153,7 +147,7 @@ void ibFrontendMainFrameDesigner::CreateDebugToolbar()
 
 void ibFrontendMainFrameDesigner::EnsureHelpPane()
 {
-	if (m_mgr.GetPane(wxAUI_PANE_HELP).IsOk()) return;
+	if (m_mgr.GetPane(ibAUI_PANE_HELP).IsOk()) return;
 
 	// The corpus speaks the application's language — the desktop's process locale, here the server's (its About).
 	ibProtocolNode params, answer;
@@ -162,8 +156,8 @@ void ibFrontendMainFrameDesigner::EnsureHelpPane()
 
 	m_helpPane = new ibHelpPaneView(this, locale);
 
-	wxAuiPaneInfo paneInfo;
-	paneInfo.Name(wxAUI_PANE_HELP);
+	ibAuiPaneInfo paneInfo;
+	paneInfo.Name(ibAUI_PANE_HELP);
 	paneInfo.Caption(_("Syntax Helper"));
 	paneInfo.Right();
 	paneInfo.Layer(1);
@@ -180,9 +174,9 @@ void ibFrontendMainFrameDesigner::EnsureHelpPane()
 
 void ibFrontendMainFrameDesigner::ToggleHelpPane()
 {
-	const bool firstCreate = !m_mgr.GetPane(wxAUI_PANE_HELP).IsOk();
+	const bool firstCreate = !m_mgr.GetPane(ibAUI_PANE_HELP).IsOk();
 	EnsureHelpPane();
-	wxAuiPaneInfo& pane = m_mgr.GetPane(wxAUI_PANE_HELP);
+	ibAuiPaneInfo& pane = m_mgr.GetPane(ibAUI_PANE_HELP);
 	if (!pane.IsOk()) return;
 	// EnsureHelpPane already adds the pane visible. On the first
 	// invocation a naive "flip" would immediately hide it; only toggle

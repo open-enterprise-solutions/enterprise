@@ -22,6 +22,7 @@
 #include <wx/wxprec.h>
 
 #include "deskgui/univ/ctrl/choice.h"
+#include "deskgui/univ/ctrl/textCtrl.h"
 
 
 #if wxUSE_CHOICE
@@ -79,6 +80,26 @@ bool ibChoice::Create(wxWindow *parent, wxWindowID id,
                                  wxCB_READONLY | style, validator, name);
 }
 
+
+wxSize ibChoice::DoGetBestClientSize() const
+{
+    // the combo's: the field, the margin, the button (the square of the field's height)
+    const wxSize best = ibComboBox::DoGetBestClientSize();
+
+    const ibTextCtrl* const text = GetTextCtrl();
+    if ( text == nullptr )
+        return best;
+
+    // the canon's: an empty list as wide as 80 DIP
+    int widest = 0;
+    for ( unsigned int n = 0; n < GetCount(); n++ )
+        widest = wxMax(widest, text->GetTextExtent(GetString(n)).x);
+    if ( widest == 0 )
+        widest = FromDIP(80);
+
+    // the combo's own, its field as wide as the widest item
+    return wxSize(best.x - text->GetBestSize().x + text->GetSizeFromTextSize(widest).x, best.y);
+}
 
 void ibChoice::OnComboBox(wxCommandEvent& event)
 {

@@ -22,7 +22,7 @@ class ibMetaData;
 class ibDataViewCtrl;
 class ibSettingsFieldTree;
 class ibConditionalAppearanceModel;
-class wxToolBar;
+class ibAuiToolBar;
 
 class ibConditionalAppearanceEditor : public ibPanel {
 public:
@@ -56,7 +56,7 @@ private:
 	bool                                m_readOnly = false;
 	ibDataViewCtrl*                     m_view = nullptr;
 	ibConditionalAppearanceModel*       m_model = nullptr;
-	wxToolBar*                          m_toolbar = nullptr;
+	ibAuiToolBar*                       m_toolbar = nullptr;
 	std::function<void()>               m_changed;
 
 	friend class ibConditionalAppearanceModel;

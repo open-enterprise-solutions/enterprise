@@ -19,6 +19,10 @@
 #include "deskgui/univ/colourScheme.h"
 #include "deskgui/univ/ctrl/textCtrl.h"
 
+// the column between the field and the button's separator - wx's COMBO_MARGIN (combocmn.cpp, "spacing right of
+// wxTextCtrl"), counted where the field is laid out (GetTextRect) and where the control is sized (DoGetBestClientSize)
+static const int g_comboMargin = 1;
+
 // ----------------------------------------------------------------------------
 // ibComboPopup
 // ----------------------------------------------------------------------------
@@ -296,7 +300,7 @@ wxRect ibComboCtrl::GetTextRect() const
     // the text child pads its own content — give it the full area left of
     // the drop button (a vertical deflate here clipped the value line)
     const wxSize size = GetClientSize();
-    return wxRect(0, 0, size.x - GetButtonRect().width - 1, size.y);
+    return wxRect(0, 0, size.x - GetButtonRect().width - g_comboMargin, size.y);
 }
 
 void ibComboCtrl::SetCustomPaintWidth(int width)
@@ -324,7 +328,9 @@ wxSize ibComboCtrl::DoGetBestClientSize() const
     const wxSize sizeText = m_text ? m_text->GetBestSize()
                                    : wxSize(100, GetCharHeight() + 8);
 
-    return wxSize(m_widthCustomPaint + sizeText.x + sizeText.y, sizeText.y);
+    // SEAM vs wx: the margin counted - left out, the field came a pixel narrower than its text, and a choice's widest
+    // item scrolled off its start (2026-11-11, Max: "nothing fits", the sheet's zoom at "150%")
+    return wxSize(m_widthCustomPaint + sizeText.x + g_comboMargin + sizeText.y, sizeText.y);
 }
 
 void ibComboCtrl::OnSize(wxSizeEvent& event)

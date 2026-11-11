@@ -27,7 +27,7 @@
 #include <functional>   // std::function — the "it changed" callback a host installs
 
 #include "deskgui/univ/panel.h"
-#include <wx/toolbar.h>
+#include "deskgui/univ/aui/auibar.h"
 #include "deskgui/univ/ctrl/treeCtrl.h"
 
 #include "frmclient/backend/backend_composition.h"   // ibFilterDescription — what is edited here; its literals, restored
@@ -154,7 +154,7 @@ private:
 
 	ibDataViewCtrl*    m_view      = nullptr;
 	ibFilterTreeModel* m_model     = nullptr;
-	wxToolBar*         m_toolbar   = nullptr;
+	ibAuiToolBar*      m_toolbar   = nullptr;
 	// HELD so a reader's window can hide it — the author's decision about what the reader sees is
 	// not a cell the reader is offered. See SetAuthoring.
 	class ibDataViewColumn* m_columnDisplayMode = nullptr;

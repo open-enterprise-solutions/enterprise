@@ -30,115 +30,25 @@
 // -----------------------------------------------------------------------
 
 //
-// Here are some platform dependent defines
-// NOTE: More in propertygrid.cpp
+// SEAM vs wx: one set for every port - the grid and its editors are the library's, drawn the same everywhere, and
+// wx's per-port sets measured the native controls (the values are wx's MSW ones, the look the grid was tuned to;
+// 2026-11-11). The left margin of a text field is set with ibTextCtrl::SetMargins(), so ibPG_TEXTCTRLXADJUST is
+// defined nowhere
 //
-// NB: Only define ibPG_TEXTCTRLXADJUST for platforms that do not
-//     (yet) support wxTextEntry::SetMargins() for the left margin.
 
-#if defined(__WXMSW__)
+// space between vertical line and value text
+#define ibPG_XBEFORETEXT                4
+// space between vertical line and value editor control
+#define ibPG_XBEFOREWIDGET              1
 
-    // space between vertical line and value text
-    #define ibPG_XBEFORETEXT            4
-    // space between vertical line and value editor control
-    #define ibPG_XBEFOREWIDGET          1
+// comment to use bitmap buttons
+#define ibPG_ICON_WIDTH                 9
+// width of optional bitmap/image in front of property
+#define ibPG_CUSTOM_IMAGE_WIDTH         20
 
-    // left margin can be set with wxTextEntry::SetMargins()
-    #undef ibPG_TEXTCTRLXADJUST
-
-    // comment to use bitmap buttons
-    #define ibPG_ICON_WIDTH             9
-    // width of optional bitmap/image in front of property
-    #define ibPG_CUSTOM_IMAGE_WIDTH     20
-
-    // 1 if splitter drag detect margin and control cannot overlap
-    #define ibPG_NO_CHILD_EVT_MOTION    0
-
-    #define ibPG_NAT_BUTTON_BORDER_ANY          1
-    #define ibPG_NAT_BUTTON_BORDER_X            1
-    #define ibPG_NAT_BUTTON_BORDER_Y            1
-
-    // If 1 then controls are refreshed explicitly in a few places
-    #define ibPG_REFRESH_CONTROLS 0
-
-#elif defined(__WXGTK__)
-
-    // space between vertical line and value text
-    #define ibPG_XBEFORETEXT            5
-    // space between vertical line and value editor control
-    #define ibPG_XBEFOREWIDGET          1
-
-    // x position adjustment for ibTextCtrl (and like)
-    // left margin can be set with wxTextEntry::SetMargins()
-    #undef ibPG_TEXTCTRLXADJUST
-
-    // comment to use bitmap buttons
-    #define ibPG_ICON_WIDTH             9
-    // width of optional bitmap/image in front of property
-    #define ibPG_CUSTOM_IMAGE_WIDTH     20
-
-    // 1 if splitter drag detect margin and control cannot overlap
-    #define ibPG_NO_CHILD_EVT_MOTION    1
-
-    #define ibPG_NAT_BUTTON_BORDER_ANY      1
-    #define ibPG_NAT_BUTTON_BORDER_X        1
-    #define ibPG_NAT_BUTTON_BORDER_Y        1
-
-    // If 1 then controls are refreshed after selected was drawn.
-    #define ibPG_REFRESH_CONTROLS 1
-
-#elif defined(__WXMAC__)
-
-    // space between vertical line and value text
-    #define ibPG_XBEFORETEXT            4
-    // space between vertical line and value editor widget
-    #define ibPG_XBEFOREWIDGET          1
-
-    // x position adjustment for ibTextCtrl (and like)
-    // left margin cannot be set with wxTextEntry::SetMargins()
-    #define ibPG_TEXTCTRLXADJUST        1
-
-    // comment to use bitmap buttons
-    #define ibPG_ICON_WIDTH             11
-    // width of optional bitmap/image in front of property
-    #define ibPG_CUSTOM_IMAGE_WIDTH     20
-
-    // 1 if splitter drag detect margin and control cannot overlap
-    #define ibPG_NO_CHILD_EVT_MOTION    0
-
-    #define ibPG_NAT_BUTTON_BORDER_ANY      0
-    #define ibPG_NAT_BUTTON_BORDER_X        0
-    #define ibPG_NAT_BUTTON_BORDER_Y        0
-
-    // If 1 then controls are refreshed after selected was drawn.
-    #define ibPG_REFRESH_CONTROLS 0
-
-#else // defaults
-
-    // space between vertical line and value text
-    #define ibPG_XBEFORETEXT            5
-    // space between vertical line and value editor widget
-    #define ibPG_XBEFOREWIDGET          1
-
-    // x position adjustment for ibTextCtrl (and like)
-    // left margin cannot be set with wxTextEntry::SetMargins()
-    #define ibPG_TEXTCTRLXADJUST        3
-
-    // comment to use bitmap buttons
-    #define ibPG_ICON_WIDTH             9
-    // width of optional bitmap/image in front of property
-    #define ibPG_CUSTOM_IMAGE_WIDTH     20
-
-    // 1 if splitter drag detect margin and control cannot overlap
-    #define ibPG_NO_CHILD_EVT_MOTION    1
-
-    #define ibPG_NAT_BUTTON_BORDER_ANY      0
-    #define ibPG_NAT_BUTTON_BORDER_X        0
-    #define ibPG_NAT_BUTTON_BORDER_Y        0
-
-    // If 1 then controls are refreshed after selected was drawn.
-    #define ibPG_REFRESH_CONTROLS 0
-#endif // platform
+#define ibPG_NAT_BUTTON_BORDER_ANY      1
+#define ibPG_NAT_BUTTON_BORDER_X        1
+#define ibPG_NAT_BUTTON_BORDER_Y        1
 
 
 #define ibPG_CONTROL_MARGIN             0 // space between splitter and control
@@ -151,13 +61,8 @@
 
 #define ibPG_DRAG_MARGIN                30
 
-#if ibPG_NO_CHILD_EVT_MOTION
-    #define ibPG_SPLITTERX_DETECTMARGIN1    3 // this much on left
-    #define ibPG_SPLITTERX_DETECTMARGIN2    2 // this much on right
-#else
-    #define ibPG_SPLITTERX_DETECTMARGIN1    3 // this much on left
-    #define ibPG_SPLITTERX_DETECTMARGIN2    2 // this much on right
-#endif
+#define ibPG_SPLITTERX_DETECTMARGIN1    3 // this much on left
+#define ibPG_SPLITTERX_DETECTMARGIN2    2 // this much on right
 
 // Use this macro to generate standard custom image height from
 #define ibPG_STD_CUST_IMAGE_HEIGHT(LINEHEIGHT)  ((LINEHEIGHT)-3)
