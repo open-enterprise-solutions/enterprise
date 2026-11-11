@@ -1007,32 +1007,17 @@ int ibWindow::GetScrollRange(int orient) const
 #endif // wxUSE_SCROLLBAR
 }
 
+// SEAM vs univ: SCROLLED BY A REPAINT, on every port. The canon moved the pixels that stay through a client DC
+// (ScrollNoRefresh) and repainted what they uncovered - a DC Cocoa and GTK3 under Wayland do not draw through, and the
+// buffered paint here met stale rows behind it on MSW too (the text control and the list box scrolled by a repaint
+// already). Not the native scroll: it moves the whole window, the border and the scrollbars with it (wxGTK ignores the
+// rectangle). The paint is buffered (ibThemePaintDC)
 void ibWindow::ScrollWindow(int dx, int dy, const wxRect *rect)
 {
-    // use native scrolling when available and do it in generic way
-    // otherwise:
-#ifdef __WXX11__
+    if ( !dx && !dy )
+        return;
 
-    wxWindow::ScrollWindow(dx, dy, rect);
-
-#else // !wxX11
-
-    // before scrolling it, ensure that we don't have any unpainted areas
-    Update();
-
-    wxRect r;
-
-    if ( dx )
-    {
-        r = ScrollNoRefresh(dx, 0, rect);
-        Refresh(true /* erase bkgnd */, &r);
-    }
-
-    if ( dy )
-    {
-        r = ScrollNoRefresh(0, dy, rect);
-        Refresh(true /* erase bkgnd */, &r);
-    }
+    Refresh(true /* erase bkgnd */, rect);
 
     // scroll children accordingly:
     wxPoint offset(dx, dy);
@@ -1079,161 +1064,6 @@ void ibWindow::ScrollWindow(int dx, int dy, const wxRect *rect)
         if ( shouldMove )
             child->Move(child->GetPosition() + offset, wxSIZE_ALLOW_MINUS_ONE);
     }
-#endif // wxX11/!wxX11
-}
-
-wxRect ibWindow::ScrollNoRefresh(int dx, int dy, const wxRect *rectTotal)
-{
-    wxASSERT_MSG( !dx || !dy, wxT("can't be used for diag scrolling") );
-
-    // the rect to refresh (which we will calculate)
-    wxRect rect;
-
-    if ( !dx && !dy )
-    {
-        // nothing to do
-        return rect;
-    }
-
-    // calculate the part of the window which we can just redraw in the new
-    // location
-    wxSize sizeTotal = rectTotal ? rectTotal->GetSize() : GetClientSize();
-
-    wxLogTrace(wxT("scroll"), wxT("rect is %dx%d, scroll by %d, %d"),
-               sizeTotal.x, sizeTotal.y, dx, dy);
-
-    // the initial and end point of the region we move in client coords
-    wxPoint ptSource, ptDest;
-    if ( rectTotal )
-    {
-        ptSource = rectTotal->GetPosition();
-        ptDest = rectTotal->GetPosition();
-    }
-
-    // the size of this region
-    wxSize size;
-    size.x = sizeTotal.x - abs(dx);
-    size.y = sizeTotal.y - abs(dy);
-    if ( size.x <= 0 || size.y <= 0 )
-    {
-        // just redraw everything as nothing of the displayed image will stay
-        wxLogTrace(wxT("scroll"), wxT("refreshing everything"));
-
-        rect = rectTotal ? *rectTotal : wxRect(0, 0, sizeTotal.x, sizeTotal.y);
-    }
-    else // move the part which doesn't change to the new location
-    {
-        // note that when we scroll the canvas in some direction we move the
-        // block which doesn't need to be refreshed in the opposite direction
-
-        if ( dx < 0 )
-        {
-            // scroll to the right, move to the left
-            ptSource.x -= dx;
-        }
-        else
-        {
-            // scroll to the left, move to the right
-            ptDest.x += dx;
-        }
-
-        if ( dy < 0 )
-        {
-            // scroll down, move up
-            ptSource.y -= dy;
-        }
-        else
-        {
-            // scroll up, move down
-            ptDest.y += dy;
-        }
-
-#if wxUSE_CARET
-        // we need to hide the caret before moving or it will erase itself at
-        // the wrong (old) location
-        wxCaret *caret = GetCaret();
-        if ( caret )
-            caret->Hide();
-#endif // wxUSE_CARET
-
-        // do move
-        wxClientDC dc(this);
-        wxBitmap bmp(size.x, size.y);
-        wxMemoryDC dcMem;
-        dcMem.SelectObject(bmp);
-
-        dcMem.Blit(wxPoint(0,0), size, &dc, ptSource
-#if defined(__WXGTK__) && !defined(wxHAS_WORKING_GTK_DC_BLIT)
-                + GetClientAreaOrigin()
-#endif // broken wxGTK wxDC::Blit
-                  );
-        dc.Blit(ptDest, size, &dcMem, wxPoint(0,0));
-
-        wxLogTrace(wxT("scroll"),
-                   wxT("Blit: (%d, %d) of size %dx%d -> (%d, %d)"),
-                   ptSource.x, ptSource.y,
-                   size.x, size.y,
-                   ptDest.x, ptDest.y);
-
-        // and now repaint the uncovered area
-
-        // FIXME: We repaint the intersection of these rectangles twice - is
-        //        it bad? I don't think so as it is rare to scroll the window
-        //        diagonally anyhow and so adding extra logic to compute
-        //        rectangle intersection is probably not worth the effort
-
-        rect.x = ptSource.x;
-        rect.y = ptSource.y;
-
-        if ( dx )
-        {
-            if ( dx < 0 )
-            {
-                // refresh the area along the right border
-                rect.x += size.x + dx;
-                rect.width = -dx;
-            }
-            else
-            {
-                // refresh the area along the left border
-                rect.width = dx;
-            }
-
-            rect.height = sizeTotal.y;
-
-            wxLogTrace(wxT("scroll"), wxT("refreshing (%d, %d)-(%d, %d)"),
-                       rect.x, rect.y,
-                       rect.GetRight() + 1, rect.GetBottom() + 1);
-        }
-
-        if ( dy )
-        {
-            if ( dy < 0 )
-            {
-                // refresh the area along the bottom border
-                rect.y += size.y + dy;
-                rect.height = -dy;
-            }
-            else
-            {
-                // refresh the area along the top border
-                rect.height = dy;
-            }
-
-            rect.width = sizeTotal.x;
-
-            wxLogTrace(wxT("scroll"), wxT("refreshing (%d, %d)-(%d, %d)"),
-                       rect.x, rect.y,
-                       rect.GetRight() + 1, rect.GetBottom() + 1);
-        }
-
-#if wxUSE_CARET
-        if ( caret )
-            caret->Show();
-#endif // wxUSE_CARET
-    }
-
-    return rect;
 }
 
 // ----------------------------------------------------------------------------
@@ -1241,10 +1071,9 @@ wxRect ibWindow::ScrollNoRefresh(int dx, int dy, const wxRect *rectTotal)
 // ----------------------------------------------------------------------------
 
 // SEAM vs univ: NO KEYS OF ITS OWN FOR THE MENUS - the canon's window looked for the accelerators and the menubar's
-// letters in every key it had (OnKeyDown, OnChar, OnKeyUp). Here the accelerators are the native frame's table
-// (wxFrame::MSWTranslateMessage, the items' ibMenu::UpdateAccel), the menubar's letters the frame's before a window
-// has the key (ibFrame::OnCharHook), Return the dialog's default button (ibDialog). Not kept: Alt or F10 alone
-// selecting the first title.
+// letters in every key it had (OnKeyDown, OnChar, OnKeyUp). Here the accelerators and the menubar's letters are the
+// frame's, before a window has the key, on every port (ibFrame::OnCharHook, ibMenuBar::ProcessAccelEvent), Return the
+// dialog's default button (ibDialog). Not kept: Alt or F10 alone selecting the first title.
 
 // ----------------------------------------------------------------------------
 // MSW-specific section

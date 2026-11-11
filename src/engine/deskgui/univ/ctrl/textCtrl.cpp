@@ -3716,23 +3716,8 @@ void ibTextCtrl::ScrollText(wxTextCoord col)
 
     if ( ofsHorz != SData().m_ofsHorz )
     {
-        // remember the last currently used pixel
-        int posLastVisible = SData().m_posLastVisible;
-        if ( posLastVisible == -1 )
-        {
-            // this may happen when we're called very early, during the
-            // controls construction
-            UpdateLastVisible();
-
-            posLastVisible = SData().m_posLastVisible;
-        }
-
-        // NB1: to scroll to the right, offset must be negative, hence the
-        //      order of operands
-        int dx = SData().m_ofsHorz - ofsHorz;
-
-        // NB2: we call Refresh() below which results in a call to
-        //      OnPaint(), so we must update SData().m_ofsHorz before calling it
+        // NB: we call Refresh() below which results in a call to
+        //     OnPaint(), so we must update SData().m_ofsHorz before calling it
         SData().m_ofsHorz = ofsHorz;
         SData().m_colStart = col;
 
@@ -3741,67 +3726,12 @@ void ibTextCtrl::ScrollText(wxTextCoord col)
         // it appear exactly at the right edge of the text area after scrolling
         UpdateLastVisible();
 
-#if 0 // do we?
-        if ( dx < 0 )
-        {
-            // we want to force the update of it after scrolling
-            SData().m_colLastVisible = -1;
-        }
-#endif
-
-        // scroll only the rectangle inside which there is the text
-        wxRect rect = m_rectText;
-        rect.width = posLastVisible;
-
-        rect = ScrollNoRefresh(dx, 0, &rect);
-
-        /*
-           we need to manually refresh the part which ScrollWindow() doesn't
-           refresh (with new API this means the part outside the rect returned
-           by ScrollNoRefresh): indeed, if we had this:
-
-                                   ********o
-
-           where '*' is text and 'o' is blank area at the end (too small to
-           hold the next char) then after scrolling by 2 positions to the left
-           we're going to have
-
-                                   ******RRo
-
-           where 'R' is the area refreshed by ScrollWindow() - but we still
-           need to refresh the 'o' at the end as it may be now big enough to
-           hold the new character shifted into view.
-
-           when we are scrolling to the right, we need to update this rect as
-           well because it might have contained something before but doesn't
-           contain anything any more
-         */
-
-        // we can combine both rectangles into one when scrolling to the left,
-        // but we need two separate Refreshes() otherwise
-        if ( dx > 0 )
-        {
-            // refresh the uncovered part on the left
-            Refresh(true, &rect);
-
-            // and now the area on the right
-            rect.x = m_rectText.x + posLastVisible;
-            rect.width = m_rectText.width - posLastVisible;
-        }
-        else // scrolling to the left
-        {
-            // just extend the rect covering the uncovered area to the edge of
-            // the text rect
-            rect.width += m_rectText.width - posLastVisible;
-        }
-
-        Refresh(true, &rect);
-
-        // I don't know exactly why is this needed here but without it we may
-        // scroll the window again (from the same method) before the previously
-        // invalidated area is repainted when typing *very* quickly - and this
-        // may lead to the display corruption
-        Update();
+        // SEAM vs univ: THE TEXT SCROLLS BY A REPAINT of its rectangle, as the
+        // many lines' (ScrollWindow): the canon moved the pixels that stay
+        // through a client DC (ScrollNoRefresh) and repainted what they
+        // uncovered - a DC Cocoa and GTK3 under Wayland do not draw through.
+        // The paint is buffered
+        Refresh(true, &m_rectText);
     }
 }
 
@@ -4374,18 +4304,6 @@ wxString ibTextCtrl::GetTextToShow(const wxString& text) const
 
 void ibTextCtrl::DoDrawTextInRect(wxDC& dc, const wxRect& rectUpdate)
 {
-    // debugging trick to see the update rect visually
-#ifdef WXDEBUG_TEXT
-    static int s_countUpdates = -1;
-    if ( s_countUpdates != -1 )
-    {
-        wxWindowDC dc(this);
-        dc.SetBrush(*(++s_countUpdates % 2 ? wxRED_BRUSH : wxGREEN_BRUSH));
-        dc.SetPen(*wxTRANSPARENT_PEN);
-        dc.DrawRectangle(rectUpdate);
-    }
-#endif // WXDEBUG_TEXT
-
     // the fixed-length password mask is independent of the real columns —
     // the canon per-column arithmetic would draw fragments of it; always
     // draw the whole mask instead (no selection: clipboard is disabled)

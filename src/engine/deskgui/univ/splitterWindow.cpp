@@ -730,8 +730,15 @@ void ibSplitterWindow::SizeWindows()
         GetWindow1()->SetSize(border, border, w1, h1);
     }
 
-    wxClientDC dc(this);
-    DrawSash(dc);
+    // SEAM vs wx: the sash at its new place is the paint's (OnPaint, DrawSash) - wx drew it straight onto a client DC,
+    // which Cocoa and GTK3 under Wayland do not draw through. Its strip alone: the panes repaint what their sizes moved
+    const wxSize size = GetClientSize();
+    if ( HasFlag(wxSP_3DBORDER) )
+        Refresh(false);
+    else
+        RefreshRect(m_splitMode == wxSPLIT_VERTICAL ? wxRect(m_sashPosition, 0, GetSashSize(), size.y)
+                                                    : wxRect(0, m_sashPosition, size.x, GetSashSize()),
+                    false);
 }
 
 // Set pane for unsplit window

@@ -171,11 +171,6 @@ public:
     // querying the current theme
     ibRenderer *GetRenderer() const { return m_renderer; }
 
-    // scrolling helper: like ScrollWindow() except that it doesn't refresh the
-    // uncovered window areas but returns the rectangle to update (don't call
-    // this with both dx and dy non zero)
-    wxRect ScrollNoRefresh(int dx, int dy, const wxRect *rect = nullptr);
-
     // after scrollbars are added or removed they must be refreshed by calling
     // this function
     void RefreshScrollbars();

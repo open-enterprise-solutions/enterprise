@@ -532,6 +532,9 @@ set(wxBUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
 # wx's property grid is not ours to link: the grid is the desktop library's own fork (deskgui/univ/propgrid), which
 # asks nothing of this switch. Off, wx builds no wxpropgrid library and no XRC handler for it.
 set(wxUSE_PROPGRID OFF CACHE BOOL "" FORCE)
+# …nor its AUI: the docking, the tool bar and the notebook are the desktop library's fork (deskgui/univ/aui, 2026-11-11),
+# drawn by the theme. Off, wx builds no wxaui library and no XRC handlers for it.
+set(wxUSE_AUI OFF CACHE BOOL "" FORCE)
 
 # wx's own copies of the libraries whose name a user's system does not promise. On Linux wx takes the system's
 # when the build machine has them, and the build machine has what GTK's development packages pull in: the
@@ -580,7 +583,7 @@ endfunction()
 
 oes_silence_directory_targets("${OES_3RDPARTY_DIR}/wxWidgets")
 
-# After add_subdirectory, wxWidgets targets (wx::core, wx::base, wx::aui, etc.)
+# After add_subdirectory, wxWidgets targets (wx::core, wx::base, wx::html, etc.)
 # are available as imported targets.
 
 # ---------------------------------------------------------------------------

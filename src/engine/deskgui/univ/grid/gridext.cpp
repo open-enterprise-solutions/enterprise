@@ -4622,33 +4622,15 @@ void ibGrid::ProcessRowColLabelMouseEvent(const ibGridOperations& oper, wxMouseE
 
 				if (markerPos != m_dragLastPos || markerColour != m_dragLastColour)
 				{
-					wxClientDC dc(headerWin);
-					oper.PrepareDCForLabels(this, dc);
-
-					int markerLength = oper.Select(headerWin->GetClientSize());
-
-					// Clean up the last indicator if position has changed
-					if (m_dragLastPos >= 0 && markerPos != m_dragLastPos)
-					{
-						wxPen pen(headerWin->GetBackgroundColour(), 2);
-						dc.SetPen(pen);
-						oper.DrawParallelLine(dc, 0, markerLength, m_dragLastPos + 1);
-						dc.SetPen(wxNullPen);
-
-						int lastLine = oper.PosToLine(this, m_dragLastPos, NULL, false);
-
-						if (lastLine != -1)
-							oper.DrawLineLabel(this, dc, lastLine);
-					}
-
-					// Draw the marker
-					wxPen pen(*markerColour, 2);
-					dc.SetPen(pen);
-					oper.DrawParallelLine(dc, 0, markerLength, markerPos + 1);
-					dc.SetPen(wxNullPen);
-
 					m_dragLastPos = markerPos;
 					m_dragLastColour = markerColour;
+
+					// SEAM vs wx: THE MARKER IS THE LABELS' PAINT'S (DrawRowLabels, DrawColLabels), the labels it
+					// leaves painted again with it: wx drew it, and the label under the old one, straight onto a
+					// client DC, which Cocoa and GTK3 under Wayland do not draw through
+					headerWin->Refresh();
+					if (labelWin != headerWin)
+						labelWin->Refresh();
 				}
 			}
 
@@ -4687,11 +4669,10 @@ void ibGrid::ProcessRowColLabelMouseEvent(const ibGridOperations& oper, wxMouseE
 				{
 					ChangeCursorMode(oper.GetCursorModeMove(), headerWin);
 
-					// Show button as pressed
+					// Show button as pressed - by the label's paint (DrawColLabel: the line being moved), not
+					// straight onto a client DC (SEAM vs wx, the marker's reason)
 					m_dragMoveRowOrCol = line;
-					wxClientDC dc(headerWin);
-					oper.PrepareDCForLabels(this, dc);
-					oper.DrawLineLabel(this, dc, line);
+					headerWin->Refresh();
 				}
 				else
 				{
@@ -7790,41 +7771,6 @@ void ibGrid::DrawAllGridWindowLines(wxDC& dc, const wxRegion& WXUNUSED(reg), ibG
 		topRow, leftCol, m_numRows, m_numCols);
 }
 
-void ibGrid::DrawAllGridLines()
-{
-	if (m_gridWin)
-	{
-		wxClientDC dc(m_gridWin);
-		PrepareDCFor(dc, m_gridWin);
-
-		DrawAllGridWindowLines(dc, wxRegion(), m_gridWin);
-	}
-
-	if (m_frozenRowGridWin)
-	{
-		wxClientDC dc(m_frozenRowGridWin);
-		PrepareDCFor(dc, m_frozenRowGridWin);
-
-		DrawAllGridWindowLines(dc, wxRegion(), m_frozenRowGridWin);
-	}
-
-	if (m_frozenColGridWin)
-	{
-		wxClientDC dc(m_frozenColGridWin);
-		PrepareDCFor(dc, m_frozenColGridWin);
-
-		DrawAllGridWindowLines(dc, wxRegion(), m_frozenColGridWin);
-	}
-
-	if (m_frozenCornerGridWin)
-	{
-		wxClientDC dc(m_frozenCornerGridWin);
-		PrepareDCFor(dc, m_frozenCornerGridWin);
-
-		DrawAllGridWindowLines(dc, wxRegion(), m_frozenCornerGridWin);
-	}
-}
-
 void
 ibGrid::DoDrawGridLines(wxDC& dc,
 	int top, int left,
@@ -8031,6 +7977,14 @@ void ibGrid::DrawRowLabels(wxDC& dc, const wxArrayInt& rows)
 	{
 		DrawRowLabel(dc, rows[i]);
 	}
+
+	// the drop marker of a row being moved, over the labels (ProcessRowColLabelMouseEvent)
+	if (m_cursorMode == WXGRID_CURSOR_MOVE_ROW && m_dragLastPos >= 0 && m_dragLastColour)
+	{
+		dc.SetPen(wxPen(*m_dragLastColour, 2));
+		ibGridRowOperations().DrawParallelLine(dc, 0, dc.GetSize().GetWidth(), m_dragLastPos + 1);
+		dc.SetPen(wxNullPen);
+	}
 }
 
 void ibGrid::DrawRowLabel(wxDC& dc, int row)
@@ -8155,6 +8109,14 @@ void ibGrid::DrawColLabels(wxDC& dc, const wxArrayInt& cols)
 	for (size_t i = 0; i < numLabels; i++)
 	{
 		DrawColLabel(dc, cols[i]);
+	}
+
+	// the drop marker of a column being moved, over the labels (ProcessRowColLabelMouseEvent)
+	if (m_cursorMode == WXGRID_CURSOR_MOVE_COL && m_dragLastPos >= 0 && m_dragLastColour)
+	{
+		dc.SetPen(wxPen(*m_dragLastColour, 2));
+		ibGridColumnOperations().DrawParallelLine(dc, 0, dc.GetSize().GetHeight(), m_dragLastPos + 1);
+		dc.SetPen(wxNullPen);
 	}
 }
 

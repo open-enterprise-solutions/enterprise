@@ -142,7 +142,6 @@ public:
 
 	virtual ~ibTreeListHeaderWindow();
 
-	void DrawCurrent();
 	void AdjustDC(wxDC& dc);
 
 	void OnPaint(wxPaintEvent& event);
@@ -1351,30 +1350,6 @@ void ibTreeListHeaderWindow::OnPaint(wxPaintEvent& WXUNUSED(event))
 	}
 }
 
-void ibTreeListHeaderWindow::DrawCurrent()
-{
-	int x1 = m_currentX;
-	int y1 = 0;
-	ClientToScreen(&x1, &y1);
-
-	// SEAM vs wx: MSW's column, on every port (the others drew one left of it)
-	int x2 = m_currentX;
-	int y2 = 0;
-	m_owner->GetClientSize(nullptr, &y2);
-	m_owner->ClientToScreen(&x2, &y2);
-
-	wxScreenDC dc;
-	dc.SetLogicalFunction(wxINVERT);
-	dc.SetPen(wxPen(*wxBLACK, 2, wxPENSTYLE_SOLID));
-	dc.SetBrush(*wxTRANSPARENT_BRUSH);
-
-	AdjustDC(dc);
-	dc.DrawLine(x1, y1, x2, y2);
-	dc.SetLogicalFunction(wxCOPY);
-	dc.SetPen(wxNullPen);
-	dc.SetBrush(wxNullBrush);
-}
-
 #if wxCHECK_VERSION_FULL(2, 7, 0, 1)
 int ibTreeListHeaderWindow::XToCol(int x)
 {
@@ -1449,29 +1424,19 @@ void ibTreeListHeaderWindow::OnMouse(wxMouseEvent& event) {
 
 		SendListEvent(wxEVT_COMMAND_LIST_COL_DRAGGING, event.GetPosition());
 
-		// we don't draw the line beyond our window, but we allow dragging it
-		// there
-		int w = 0;
-		GetClientSize(&w, nullptr);
-		m_owner->CalcUnscrolledPosition(w, 0, &w, nullptr);
-		w -= 6;
-
-		// erase the line if it was drawn
-		if (m_currentX < w) DrawCurrent();
+		// SEAM vs wx: THE COLUMN FOLLOWS THE MOUSE, as the list's and the data view's: the canon drew a line across
+		// the header and the rows straight onto the screen (wxScreenDC, wxINVERT) and gave the width at the release -
+		// a DC Cocoa and GTK3 under Wayland do not draw through
+		if (!event.ButtonUp())
+			m_currentX = wxMax(m_minX + 7, x);
+		SetColumnWidth(m_column, m_currentX - m_minX);
+		m_dirty = true;
+		Refresh();
 
 		if (event.ButtonUp()) {
 			m_isDragging = false;
 			if (HasCapture()) ReleaseMouse();
-			m_dirty = true;
-			SetColumnWidth(m_column, m_currentX - m_minX);
-			Refresh();
 			SendListEvent(wxEVT_COMMAND_LIST_COL_END_DRAG, event.GetPosition());
-		}
-		else {
-			m_currentX = wxMax(m_minX + 7, x);
-
-			// draw in the new location
-			if (m_currentX < w) DrawCurrent();
 		}
 
 	}
@@ -1511,7 +1476,6 @@ void ibTreeListHeaderWindow::OnMouse(wxMouseEvent& event) {
 				m_isDragging = true;
 				CaptureMouse();
 				m_currentX = x;
-				DrawCurrent();
 				SendListEvent(wxEVT_COMMAND_LIST_COL_BEGIN_DRAG, event.GetPosition());
 			}
 			else { // click on a column

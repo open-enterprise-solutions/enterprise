@@ -1872,7 +1872,6 @@ public:
 		ibGridCellCacheArray storage; DrawGridCellArea(dc, cells, storage);
 	}
 	void DrawGridSpace(wxDC& dc, ibGridWindow* gridWindow);
-	void DrawAllGridLines();
 	void DrawAllGridWindowLines(wxDC& dc, const wxRegion& reg, ibGridWindow* gridWindow);
 	void DrawCell(wxDC& dc, const ibGridCellCoords& coords, ibGridCellCache& param);
 	void DrawCell(wxDC& dc, const ibGridCellCoords& coords) {
@@ -3459,8 +3458,8 @@ private:
 	// redraw the grid lines, should be called after changing their attributes
 	void RedrawGridLines();
 
-	// draw all grid lines in the given cell region (unlike the public
-	// DrawAllGridLines() which just draws all of them)
+	// draw all grid lines in the given cell region (DrawAllGridWindowLines
+	// draws all of them in a window)
 	void DrawRangeGridLines(wxDC& dc, const wxRegion& reg,
 		const ibGridCellCoords& topLeft,
 		const ibGridCellCoords& bottomRight);

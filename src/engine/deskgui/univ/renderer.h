@@ -330,7 +330,8 @@ public:
                                  int flags = 0) = 0;
 #endif // wxUSE_NOTEBOOK
 
-#if wxUSE_AUI
+    // THE DOCKING'S, NOT wx's AUI: the fork is the library's own (univ/aui), built whatever wx's switch says (wxUSE_AUI
+    // is off in the CMake build - wx makes no wxaui library)
     // a pane's caption in the docking (ibAuiManager), drawn in pieces round its buttons: the face - the active pane's,
     // wxCONTROL_FOCUSED - and, given them, the icon and the title, the title cut to the piece
     virtual void DrawPaneCaption(wxDC& dc,
@@ -354,7 +355,6 @@ public:
     virtual void DrawSash(wxDC& dc,
                           const wxRect& rect,
                           wxOrientation orient) = 0;
-#endif // wxUSE_AUI
 
 #if wxUSE_SLIDER
 
@@ -795,7 +795,6 @@ public:
         { m_renderer->DrawStripButton(dc, rect, button, flags); }
 #endif // wxUSE_NOTEBOOK
 
-#if wxUSE_AUI
     virtual void DrawPaneCaption(wxDC& dc,
                                  const wxRect& rect,
                                  const wxString& title,
@@ -814,7 +813,6 @@ public:
                           const wxRect& rect,
                           wxOrientation orient) override
         { m_renderer->DrawSash(dc, rect, orient); }
-#endif // wxUSE_AUI
 
 #if wxUSE_SLIDER
 

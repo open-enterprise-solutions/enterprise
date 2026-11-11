@@ -42,14 +42,6 @@
 #include "deskgui/univ/inputHandler.h"
 #include "deskgui/univ/theme.h"
 
-#if wxDEBUG_LEVEL >= 2
-    #define WXDEBUG_SCROLLBAR
-#endif
-
-#if defined(WXDEBUG_SCROLLBAR) && defined(__WXMSW__)
-#include <wx/msw/private.h>
-#endif
-
 // ----------------------------------------------------------------------------
 // ibScrollBarTimer: this class is used to repeatedly scroll the scrollbar
 // when the mouse is help pressed on the arrow or on the bar. It generates the
@@ -625,23 +617,6 @@ void ibScrollBar::UpdateThumb()
                         rect = GetScrollbarRect(Element_Thumb, m_thumbPosOld);
 #endif // 0/1
                     }
-
-#ifdef WXDEBUG_SCROLLBAR
-        static bool s_refreshDebug = false;
-        if ( s_refreshDebug )
-        {
-            wxClientDC dc(this);
-            dc.SetBrush(*wxCYAN_BRUSH);
-            dc.SetPen(*wxTRANSPARENT_PEN);
-            dc.DrawRectangle(rect);
-
-            // under Unix we use "--sync" X option for this
-            #if defined(__WXMSW__)
-                ::GdiFlush();
-                ::Sleep(200);
-            #endif // __WXMSW__
-        }
-#endif // WXDEBUG_SCROLLBAR
 
                     Refresh(false, &rect);
                 }
