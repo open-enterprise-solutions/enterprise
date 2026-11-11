@@ -33,6 +33,10 @@ target_include_directories(deskgui
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_SOURCE_DIR}/src/engine
+        # The code editor's Scintilla host (univ/stc/ScintillaWX.cpp) speaks to GDK itself - the keymap, the input
+        # method's composition - and includes <gdk/gdk.h>. wx links GTK privately, so those paths never arrive through
+        # wx::core. Empty off Linux, hence unguarded.
+        ${GTK3_INCLUDE_DIRS}
 )
 
 target_compile_definitions(deskgui
