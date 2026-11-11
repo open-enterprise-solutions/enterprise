@@ -164,5 +164,19 @@ rm -rf "$stage/_fb/bin" "$smoke_dir"
 
 ln -s /Applications "$root/Applications"
 rm -f "$out"
-hdiutil create -volname "OES Nightly" -srcfolder "$root" -ov -format UDZO "$out"
+# ⚠ THE RUNNER'S hdiutil NOW AND THEN ANSWERS "create failed - Resource busy" — the system still holding the image
+# it begins (2026-11-11: the night's build and its four nights before were the same tree, only this failed). Tried
+# again after a pause, five times at most; a tree that still cannot be packed fails the job.
+for attempt in 1 2 3 4 5; do
+  if hdiutil create -volname "OES Nightly" -srcfolder "$root" -ov -format UDZO "$out"; then
+    break
+  fi
+  if [ "$attempt" -eq 5 ]; then
+    echo "::error::hdiutil could not create the image after $attempt attempts"
+    exit 1
+  fi
+  echo "hdiutil create failed (attempt $attempt) - trying again in 15 s"
+  rm -f "$out"
+  sleep 15
+done
 ls -la "$out"
