@@ -107,6 +107,12 @@ public:
 
     // W's, on the screen whole (ibWindowShowLocker) - a dialog's ShowModal shows it here too
     virtual bool Show(bool show = true) override;
+    // W's - the window deleted when the application is idle (wxTopLevelWindowBase::Destroy) - and the application woken
+    // for it: a person's close comes with the events that wake it, a close from the code may come with none - a signal's
+    // (ibWxApp::OnStopSignal), a timer's. On GTK3 the idle is gone while nothing happens and is put back by a widget's
+    // event: the window waited to be deleted and the process lived on (codeRunner after its SIGTERM under Xvfb, CI's look
+    // step for half an hour, 2026-11-12). On MSW and Cocoa the wake costs nothing
+    virtual bool Destroy() override;
     // W's, and the window painted at once after it, every window in it (Update is the one window's): a queue gives the
     // paint after the input, the pointer moved on before it, and the window followed the pointer unpainted - the one
     // place both roads of a size pass, the system's (MSW) and the captured mouse's (OnMouseMotion). Where the children's

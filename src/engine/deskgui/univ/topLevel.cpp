@@ -4,6 +4,7 @@
 
 #include <type_traits>
 
+#include <wx/app.h>         // wxWakeUpIdle - the window deleted when the application is idle (Destroy)
 #include <wx/display.h>     // wxDisplay - the work area a window is kept in (Create)
 
 #ifdef __WXGTK3__
@@ -13,6 +14,7 @@
 
 #ifdef __WXMSW__
     #include <wx/msw/private.h>
+    #include <wx/rawbmp.h>      // wxAlphaPixelData - the last row painted opaque, for DWM (TryBefore)
     #include <dwmapi.h>
 #endif
 
@@ -213,7 +215,8 @@ bool ibTopLevelWindow<W>::Create(wxWindow *parent,
     // …and the system's shadow round it, active or not, as round a native window: a window with no non-client area
     // casts none, and the class's drop shadow (CS_DROPSHADOW, the menu's) a window casts only while it is active - gone
     // at a click anywhere else (2026-11-11, Max). DWM's frame taken a pixel into the client area gives it back (the
-    // documented custom frame, DwmExtendFrameIntoClientArea). On GTK3/Cocoa the shadow is the window manager's
+    // documented custom frame, DwmExtendFrameIntoClientArea) - the window's last row, painted opaque (TryBefore).
+    // On GTK3/Cocoa the shadow is the window manager's
     const MARGINS shadow = { 0, 0, 0, 1 };
     ::DwmExtendFrameIntoClientArea(GetHwndOf(this), &shadow);
 #endif // __WXMSW__
@@ -266,6 +269,16 @@ bool ibTopLevelWindow<W>::Show(bool show)
 {
     const ibWindowShowLocker locker(this);
     return W::Show(show);
+}
+
+template <class W>
+bool ibTopLevelWindow<W>::Destroy()
+{
+    if ( !W::Destroy() )
+        return false;
+
+    wxWakeUpIdle();
+    return true;
 }
 
 template <class W>
@@ -541,11 +554,37 @@ bool ibTopLevelWindow<W>::TryBefore(wxEvent& event)
     box.Intersect(wxRect(size));
     if ( box.IsEmpty() )
         box = wxRect(size);
+#ifdef __WXMSW__
+    // a DIB of 32 bits - its alpha is copied with it (below)
+    wxBitmap buffer(box.GetSize(), 32);
+#else
     wxBitmap buffer(box.GetSize());
+#endif
     wxMemoryDC dc(buffer);
     dc.SetDeviceOrigin(-box.x, -box.y);
     PaintFrame(dc);
     dc.SetDeviceOrigin(0, 0);
+
+#ifdef __WXMSW__
+    // THE WINDOW'S LAST ROW IS DWM'S FRAME, taken into the client area for the shadow (Create): DWM lays what is painted
+    // there over its own frame by the pixel's alpha, and GDI leaves the alpha 0 - the border's line was the frame's
+    // white, the window with no bottom line (2026-11-12, Max: Windows Server; Windows 11 the same). The row made opaque
+    // in the buffer, and the buffer told it has no alpha after: Blit copies it as it is (BitBlt), alpha too, where a
+    // bitmap with alpha would be AlphaBlended - the rest of it, transparent, over what is behind. On GTK3/Cocoa: no such
+    // row, the shadow is the window manager's
+    if ( box.GetBottom() == size.y - 1 )
+    {
+        dc.SelectObject(wxNullBitmap);
+        {
+            wxAlphaPixelData pixels(buffer, wxPoint(0, box.height - 1), wxSize(box.width, 1));
+            wxAlphaPixelData::Iterator pixel(pixels);
+            for ( int x = 0; x < box.width; ++x, ++pixel )
+                pixel.Alpha() = wxALPHA_OPAQUE;
+        }
+        buffer.ResetAlpha();
+        dc.SelectObject(buffer);
+    }
+#endif
 
     dcPaint.Blit(box.x, box.y, box.width, box.height, &dc, 0, 0);
 #endif

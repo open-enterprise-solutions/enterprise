@@ -236,24 +236,40 @@ jobs:
       # editor and buttons — kept as an artifact (look-linux). X11 under Xvfb with no window manager: the frame's
       # decorations are the theme's anyway. Red when the program is gone before the shot: it did not start (2026-11-12,
       # Max: "how full will they look on the Mac and on GTK"). The launcher after it, one at a time, to compare a small
-      # dialog with a frame (Max, the same day).
-      - name: The desktop's look (codeRunner and launcher under Xvfb)
+      # dialog with a frame (Max, the same day). Then the designer on a file base it makes in an empty folder, and the
+      # application on the base the designer made (Max, the same day) - the Firebird kit beside them, as tests-firebird
+      # lays it out. Red too when a program is still there 15 s after its SIGTERM - a person's logout asks the same:
+      # codeRunner closed its window and lived on, the step waiting for it half an hour (2026-11-12,
+      # ibTopLevelWindow::Destroy).
+      - name: The desktop's look (codeRunner, launcher, the designer and the application under Xvfb)
         working-directory: build/linux-debug/bin/Debug
+        timeout-minutes: 10
         env:
           NO_AT_BRIDGE: 1
         run: |
           sudo apt-get install -y xvfb imagemagick
-          mkdir -p "$GITHUB_WORKSPACE/look"
+          (cd "$GITHUB_WORKSPACE" && bash .github/firebird-kit-linux.sh)
+          cp -a "$GITHUB_WORKSPACE/fbkit" _fb
+          mkdir -p "$GITHUB_WORKSPACE/look" "$RUNNER_TEMP/base"
           xvfb-run -a -s "-screen 0 1280x800x24" bash -c '
-            for program in codeRunner launcher; do
-              ./$program > "$GITHUB_WORKSPACE/look/$program-linux.log" 2>&1 &
+            # shot <seconds> <program> [arguments] - started, shot after the seconds, asked to stop
+            shot() {
+              seconds=$1 program=$2
+              shift 2
+              ./$program "$@" > "$GITHUB_WORKSPACE/look/$program-linux.log" 2>&1 &
               pid=$!
-              sleep 10
+              sleep $seconds
               kill -0 $pid || { echo "$program is gone before the shot"; exit 1; }
               import -window root "$GITHUB_WORKSPACE/look/$program-linux.png"
               kill $pid
+              for second in $(seq 15); do kill -0 $pid 2>/dev/null || break; sleep 1; done
+              if kill -0 $pid 2>/dev/null; then echo "$program did not stop on SIGTERM"; kill -9 $pid; exit 1; fi
               wait $pid 2>/dev/null || true
-            done'
+            }
+            shot 10 codeRunner
+            shot 10 launcher
+            shot 30 designer-thin --file="$RUNNER_TEMP/base"
+            shot 20 enterprise-thin --file="$RUNNER_TEMP/base"'
       - name: Keep the look
         if: always()
         uses: actions/upload-artifact@v6
@@ -944,6 +960,7 @@ jobs:
       # program is gone before the shot (2026-11-12, Max). The launcher after it - a bundle here, run from inside it.
       - name: The desktop's look (codeRunner and launcher)
         working-directory: build/macos-debug/bin/Debug
+        timeout-minutes: 5
         run: |
           mkdir -p "$GITHUB_WORKSPACE/look"
           launcher=launcher.app/Contents/MacOS/launcher
@@ -956,6 +973,8 @@ jobs:
             kill -0 $pid || { echo "$name is gone before the shot"; exit 1; }
             screencapture -x "$GITHUB_WORKSPACE/look/$name-macos.png"
             kill $pid
+            for second in $(seq 15); do kill -0 $pid 2>/dev/null || break; sleep 1; done
+            if kill -0 $pid 2>/dev/null; then echo "$name did not stop on SIGTERM"; kill -9 $pid; exit 1; fi
             wait $pid 2>/dev/null || true
           done
       - name: Keep the look
