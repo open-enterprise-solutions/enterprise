@@ -753,6 +753,38 @@ add_subdirectory("${OES_ENGINE_DIR}/launcher")
 add_subdirectory("${OES_ENGINE_DIR}/codeRunner")
 add_subdirectory("${OES_ENGINE_DIR}/simplePlugin")
 
+# ⭐ EACH OF OUR LIBRARIES ANSWERS FOR ITS OWN SYMBOLS (ELF: Linux, the BSDs). A file base loads fileserver into the
+# client (dlopen, protocol/connectionFile.cpp), backend and frmserver with it, over the client's libraries already
+# in the process - and 75 classes are exported under one name on both sides (ibMetaData, ibValueMetaObject,
+# ibApplicationInstance, ibValueForm, ...). ELF binds a reference to the FIRST definition of its name in the process:
+# backend's own calls ran the client's ibMetaData, whose factory knows no type of the engine - "Object with id ... is
+# not exist" thirty times, then a segmentation fault (designer-thin on a new file base, CI's look step, 2026-11-12).
+# A version node per library binds each reference to the library it was linked against, as a DLL's import does on
+# Windows and the two-level namespace on macOS. Written only when it changes (file(CONFIGURE)): a map rewritten at
+# every configure would relink every library.
+if(UNIX AND NOT APPLE)
+    get_property(_oes_dirs DIRECTORY "${CMAKE_SOURCE_DIR}" PROPERTY SUBDIRECTORIES)
+    foreach(_oes_dir IN LISTS _oes_dirs)
+        string(FIND "${_oes_dir}" "${OES_ENGINE_DIR}/" _oes_at)
+        if(NOT _oes_at EQUAL 0)
+            continue()
+        endif()
+        get_property(_oes_targets DIRECTORY "${_oes_dir}" PROPERTY BUILDSYSTEM_TARGETS)
+        foreach(_oes_target IN LISTS _oes_targets)
+            get_target_property(_oes_type ${_oes_target} TYPE)
+            if(NOT _oes_type STREQUAL "SHARED_LIBRARY" AND NOT _oes_type STREQUAL "MODULE_LIBRARY")
+                continue()
+            endif()
+            string(MAKE_C_IDENTIFIER "OES_${_oes_target}" _oes_node)
+            string(TOUPPER "${_oes_node}" _oes_node)
+            set(_oes_map "${CMAKE_BINARY_DIR}/symbols/${_oes_target}.map")
+            file(CONFIGURE OUTPUT "${_oes_map}" CONTENT "${_oes_node} { *; };\n" @ONLY)
+            target_link_options(${_oes_target} PRIVATE "LINKER:--version-script=${_oes_map}")
+            set_property(TARGET ${_oes_target} APPEND PROPERTY LINK_DEPENDS "${_oes_map}")
+        endforeach()
+    endforeach()
+endif()
+
 # ---------------------------------------------------------------------------
 # Unit tests (Google Test)
 # ---------------------------------------------------------------------------

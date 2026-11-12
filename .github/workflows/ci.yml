@@ -270,6 +270,30 @@ jobs:
             shot 10 launcher
             shot 30 designer-thin --file="$RUNNER_TEMP/base"
             shot 20 enterprise-thin --file="$RUNNER_TEMP/base"'
+      # ⭐ A PROGRAM THAT FELL - its stack, read here. The crash guard writes the signal's backtrace to crashdumps/ beside
+      # the program (ibCrashGuard, PosixCrashSignalHandler) as module(+offset): the Debug build's lines and functions by
+      # addr2line, kept with the look. The designer fell on a new file base with nothing but "Segmentation fault"
+      # (2026-11-12) - the step said it was gone, not where.
+      - name: The desktop's crashes
+        if: always()
+        working-directory: build/linux-debug/bin/Debug
+        run: |
+          [ -d crashdumps ] || exit 0
+          mkdir -p "$GITHUB_WORKSPACE/look"
+          cp -r crashdumps "$GITHUB_WORKSPACE/look/"
+          for dump in crashdumps/*; do
+            echo "== $dump"
+            while IFS= read -r line; do
+              echo "$line" | c++filt
+              case "$line" in
+                *"(+0x"*)
+                  module=${line%%(*}
+                  offset=${line#*(+}
+                  offset=${offset%%)*}
+                  addr2line -f -C -i -e "$module" "$offset" 2>/dev/null | sed 's/^/        /' || true ;;
+              esac
+            done < "$dump"
+          done
       - name: Keep the look
         if: always()
         uses: actions/upload-artifact@v6
