@@ -148,7 +148,7 @@ jobs:
             libgtk-3-dev libsqlite3-dev uuid-dev
 
       - name: Compiler cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: .ccache
           key: ccache-${{ github.job }}-${{ github.sha }}
@@ -196,7 +196,7 @@ jobs:
       # Only on failure, because a green run's journal is nobody's business and it is not small.
       - name: Journal on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: journal-linux-debug
           path: build/linux-debug/bin/Debug/journal/
@@ -256,7 +256,7 @@ jobs:
             done'
       - name: Keep the look
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: look-linux
           path: look/
@@ -269,7 +269,7 @@ jobs:
         run: ccache -s -v || true
       - name: Save the compiler cache
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: .ccache
           key: ccache-${{ github.job }}-${{ github.sha }}
@@ -318,7 +318,7 @@ jobs:
       # red on nothing of ours. Kept, it is fetched once per version; a miss fetches it with more patience.
       - name: The compiler cache's program
         id: ccache-program
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: ${{ runner.temp }}/ccache-program
           key: ccache-program-windows-4.14.2
@@ -352,13 +352,13 @@ jobs:
 
       - name: Keep the compiler cache's program
         if: steps.ccache-program.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: ${{ runner.temp }}/ccache-program
           key: ccache-program-windows-4.14.2
 
       - name: Compiler cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: .ccache
           key: ccache-${{ github.job }}-${{ github.sha }}
@@ -395,7 +395,7 @@ jobs:
       # See the note in the Linux job — the journal of the run that failed.
       - name: Journal on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: journal-windows-x64-debug
           path: build/windows-x64-debug/bin/Debug/journal/
@@ -413,7 +413,7 @@ jobs:
         run: ccache -s -v; exit 0
       - name: Save the compiler cache
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: .ccache
           key: ccache-${{ github.job }}-${{ github.sha }}
@@ -479,7 +479,7 @@ jobs:
             libgtk-3-dev libsqlite3-dev uuid-dev libpq-dev
 
       - name: Compiler cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: .ccache
           key: ccache-${{ github.job }}-${{ github.sha }}
@@ -506,7 +506,7 @@ jobs:
         run: ccache -s -v || true
       - name: Save the compiler cache
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: .ccache
           key: ccache-${{ github.job }}-${{ github.sha }}
@@ -552,7 +552,7 @@ jobs:
             libgtk-3-dev libsqlite3-dev uuid-dev
 
       - name: Compiler cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: .ccache
           key: ccache-${{ github.job }}-${{ github.sha }}
@@ -593,7 +593,7 @@ jobs:
 
       - name: Firebird log on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: firebird-log
           path: build/linux-debug/bin/Debug/_fb/firebird.log
@@ -605,7 +605,7 @@ jobs:
         run: ccache -s -v || true
       - name: Save the compiler cache
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: .ccache
           key: ccache-${{ github.job }}-${{ github.sha }}
@@ -649,7 +649,7 @@ jobs:
             libgtk-3-dev libsqlite3-dev uuid-dev
 
       - name: Compiler cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: .ccache
           key: ccache-${{ github.job }}-${{ github.sha }}
@@ -697,7 +697,7 @@ jobs:
 
       - name: Journal on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: journal-linux-sanitize
           path: build/linux-debug/bin/Debug/journal/
@@ -709,7 +709,7 @@ jobs:
         run: ccache -s -v || true
       - name: Save the compiler cache
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: .ccache
           key: ccache-${{ github.job }}-${{ github.sha }}
@@ -769,7 +769,7 @@ jobs:
           g++ --version
 
       - name: Compiler cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: .ccache
           key: ccache-${{ github.job }}-${{ github.sha }}
@@ -810,7 +810,7 @@ jobs:
 
       - name: Journal on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: journal-linux-tsan
           path: build/linux-debug/bin/Debug/journal/
@@ -822,7 +822,7 @@ jobs:
         run: ccache -s -v || true
       - name: Save the compiler cache
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: .ccache
           key: ccache-${{ github.job }}-${{ github.sha }}
@@ -885,7 +885,7 @@ jobs:
         run: brew install ninja ccache
 
       - name: Compiler cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: .ccache
           key: ccache-${{ github.job }}-${{ github.sha }}
@@ -915,7 +915,7 @@ jobs:
       # See the note in the Linux job — the journal of the run that failed.
       - name: Journal on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: journal-macos-debug
           path: build/macos-debug/bin/Debug/journal/
@@ -960,7 +960,7 @@ jobs:
           done
       - name: Keep the look
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: look-macos
           path: look/
@@ -972,7 +972,7 @@ jobs:
         run: ccache -s -v || true
       - name: Save the compiler cache
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: .ccache
           key: ccache-${{ github.job }}-${{ github.sha }}
@@ -1035,7 +1035,7 @@ jobs:
             libgtk-3-dev libsqlite3-dev uuid-dev
 
       - name: Compiler cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: .ccache
           key: ccache-${{ github.job }}-${{ github.sha }}
@@ -1115,7 +1115,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload benchmark output
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: benchmarks-linux-release
           path: build/linux-release/benchmarks.txt
@@ -1145,7 +1145,7 @@ jobs:
         run: ccache -s -v || true
       - name: Save the compiler cache
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: .ccache
           key: ccache-${{ github.job }}-${{ github.sha }}

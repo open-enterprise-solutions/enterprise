@@ -109,7 +109,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           ./.github/nightly/package-windows.ps1 -Bin build/windows-x64-release/bin -Out oes-nightly-windows-x64.zip
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: windows-x64
           path: oes-nightly-windows-x64.zip
@@ -172,7 +172,7 @@ jobs:
         if: matrix.arch == 'x64'
         run: bash .github/nightly/package-bases.sh examples oes-nightly-bases.tar.gz
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: linux-${{ matrix.arch }}
           path: |
@@ -234,7 +234,7 @@ jobs:
       - name: Package
         run: bash .github/nightly/package-macos.sh build/macos-release/bin oes-nightly-macos-arm64.dmg
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: macos-arm64
           path: oes-nightly-macos-arm64.dmg
@@ -253,7 +253,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           path: assets
           merge-multiple: true
