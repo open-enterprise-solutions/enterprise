@@ -443,13 +443,17 @@ void RenumberDockRows(ibAuiDockInfoPtrArray& docks)
 }
 */
 
-// SEAM vs wx: the window a top-level window's panes are laid out in (ibAuiManager::SetManagedWindow)
-class ibAuiManagedWindow : public wxWindow
+// SEAM vs wx: the window a top-level window's panes are laid out in (ibAuiManager::SetManagedWindow) - an ib window,
+// placed at the client area's origin as one is (ibWindow::Create, DoSetSize). wxGTK places a child from the native
+// window's corner, and the port's window stood there: its toolbars over the title bar, the menubar over its top, its
+// bottom short of the frame (the designer on GTK3, CI's look, 2026-11-12). On MSW and Cocoa wx places the port's
+// window there itself (AdjustForParentClientOrigin) - the same place; its paint and erase are AUI's (Bind) before ibWindow's
+class ibAuiManagedWindow : public ibWindow
 {
 public:
     explicit ibAuiManagedWindow(wxWindow* owner)
-        : wxWindow(owner, wxID_ANY, wxDefaultPosition, owner->GetClientSize(), wxBORDER_NONE | wxCLIP_CHILDREN)
     {
+        Create(owner, wxID_ANY, wxDefaultPosition, owner->GetClientSize(), wxBORDER_NONE);
     }
 };
 
