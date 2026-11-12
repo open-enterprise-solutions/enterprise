@@ -389,6 +389,10 @@ void Install(const ibString& exeName)
 	if (s_prevSehFilter == nullptr)
 		s_prevSehFilter = ::SetUnhandledExceptionFilter(&PersistentCrashDumpFilter);
 #else
+	// The handler may only open a file: the folder and its path are made here, before it can run.
+	// Without this a fault wrote nowhere - designer-thin on Linux, CI, 2026-11-12.
+	EnsureCrashDir();
+
 	struct sigaction sa;
 	std::memset(&sa, 0, sizeof(sa));
 	sa.sa_handler = &PosixCrashSignalHandler;
