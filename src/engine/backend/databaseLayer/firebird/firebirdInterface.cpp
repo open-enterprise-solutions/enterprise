@@ -3,6 +3,16 @@
 
 #include "core/fileSystem.h"   // ibFileExists
 
+// The client's own stop on a signal, refused: the program answers SIGTERM / SIGINT itself and lets its bases go in
+// order (ibWxApp::OnStopSignal, a server's loop). Accepted, Firebird shut every attachment down at once, before that
+// order began - the logout, the session's row and the registry's last statements ran on a base already gone
+// ("connection shutdown", the designer under Xvfb, 2026-11-12). Any other reason (fb_shutdown called by the program,
+// the process's exit) is let through. 1 is FB_FAILURE: a confirmation that refuses (yvalve's fb_shutdown).
+static int RefuseSignalShutdown(const int reason, const int /*mask*/, void* /*arg*/)
+{
+	return reason == fb_shutrsn_signal ? 1 : 0;
+}
+
 bool ibInterfaceFirebird::Init()
 {
 	// Locate _fb/ subfolder next to the executable + set DLL search
@@ -388,6 +398,14 @@ bool ibInterfaceFirebird::Init()
 	symbol = ibT("fb_cancel_operation");
 	if (m_FirebirdDLL.HasSymbol(symbol))
 		m_pFbCancelOperation = (fb_cancel_operationType)m_FirebirdDLL.GetSymbol(symbol);
+
+	// At every load: the chain lives in the library, so one loaded again starts without it; and the chain keeps one
+	// entry per callback and argument (yvalve's ShutChain::add), so asking again adds nothing.
+	symbol = ibT("fb_shutdown_callback");
+	if (m_FirebirdDLL.HasSymbol(symbol)) {
+		ISC_STATUS_ARRAY status;
+		((fb_shutdown_callbackType)m_FirebirdDLL.GetSymbol(symbol))(status, &RefuseSignalShutdown, fb_shut_confirmation, nullptr);
+	}
 
 	return true;
 }

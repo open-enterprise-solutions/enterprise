@@ -90,7 +90,8 @@ CORE_API void TerminateProcessFast(int exitCode);
 // leaving: one fact, whoever said it (async-signal-safe: one lock-free store). A server's serving loop reads it, and so
 // does a background thread whose failure would otherwise be a crash. The database client has a SIGTERM handler of its
 // own (Firebird's: every attachment shut down at once), so a statement may fail before the program has begun its
-// ordered stop; a failure then is the stop, not a fault.
+// ordered stop; a failure then is the stop, not a fault. Firebird's shutdown on a signal is refused since 2026-11-12
+// (firebirdInterface.cpp, RefuseSignalShutdown): its attachments live until the program lets them go.
 CORE_API void MarkStopRequested() noexcept;
 CORE_API bool IsStopRequested() noexcept;
 

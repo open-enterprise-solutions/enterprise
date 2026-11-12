@@ -240,14 +240,16 @@ jobs:
       # application on the base the designer made (Max, the same day) - the Firebird kit beside them, as tests-firebird
       # lays it out. Red too when a program is still there 15 s after its SIGTERM - a person's logout asks the same:
       # codeRunner closed its window and lived on, the step waiting for it half an hour (2026-11-12,
-      # ibTopLevelWindow::Destroy).
+      # ibTopLevelWindow::Destroy). Where such a program stands is printed before it is killed - every thread's stack,
+      # by gdb, kept with the look as <program>-linux-stop.txt: the designer let its base go and lived on, its journal
+      # silent after that (2026-11-12, f10d35fc1).
       - name: The desktop's look (codeRunner, launcher, the designer and the application under Xvfb)
         working-directory: build/linux-debug/bin/Debug
         timeout-minutes: 10
         env:
           NO_AT_BRIDGE: 1
         run: |
-          sudo apt-get install -y xvfb imagemagick
+          sudo apt-get install -y xvfb imagemagick gdb
           (cd "$GITHUB_WORKSPACE" && bash .github/firebird-kit-linux.sh)
           cp -a "$GITHUB_WORKSPACE/fbkit" _fb
           mkdir -p "$GITHUB_WORKSPACE/look" "$RUNNER_TEMP/base"
@@ -263,7 +265,12 @@ jobs:
               import -window root "$GITHUB_WORKSPACE/look/$program-linux.png"
               kill $pid
               for second in $(seq 15); do kill -0 $pid 2>/dev/null || break; sleep 1; done
-              if kill -0 $pid 2>/dev/null; then echo "$program did not stop on SIGTERM"; kill -9 $pid; exit 1; fi
+              if kill -0 $pid 2>/dev/null; then
+                echo "$program did not stop on SIGTERM - where it stands:"
+                sudo gdb -p $pid -batch -ex "thread apply all bt 40" 2>&1 | tee "$GITHUB_WORKSPACE/look/$program-linux-stop.txt" || true
+                kill -9 $pid
+                exit 1
+              fi
               wait $pid 2>/dev/null || true
             }
             shot 10 codeRunner
@@ -282,6 +289,8 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/look"
           cp -r crashdumps "$GITHUB_WORKSPACE/look/"
           for dump in crashdumps/*; do
+            # the folder is made at the start (ibCrashGuard::Install), so it is there empty when nothing fell
+            [ -f "$dump" ] || continue
             echo "== $dump"
             while IFS= read -r line; do
               echo "$line" | c++filt

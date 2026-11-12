@@ -68,6 +68,8 @@ typedef ISC_STATUS(ISC_EXPORT *isc_service_queryType)(ISC_STATUS*, isc_svc_handl
 
 // The one call Firebird takes from ANOTHER thread on a busy attachment: raise interrupts what it is running.
 typedef ISC_STATUS(ISC_EXPORT *fb_cancel_operationType)(ISC_STATUS*, isc_db_handle*, ISC_USHORT);
+// Who is asked before the client shuts itself down - its own answer to SIGTERM / SIGINT among the reasons (Init).
+typedef ISC_STATUS(ISC_EXPORT *fb_shutdown_callbackType)(ISC_STATUS*, FB_SHUTDOWN_CALLBACK, const int, void*);
 
 class ibInterfaceFirebird
 {

@@ -2532,7 +2532,8 @@ void ibSessionRegistry::Die(const ibString& why)
 	// …AND THE PROCESS'S STOP COUNTS AS THIS ONE'S. A SIGTERM reaches Firebird's client too, which shuts every
 	// attachment down at once (its own handler, beside the program's), so the statement fails before the program has
 	// come round to Stop() and set m_stop — the same ordinary exit, a moment earlier (enterprise-thin, 2026-10-29:
-	// SIGTERM, this FATAL, then SIGABRT).
+	// SIGTERM, this FATAL, then SIGABRT). Firebird is told to leave a signal to the program since 2026-11-12
+	// (RefuseSignalShutdown, firebirdInterface.cpp) — the designer's logout ran on a base already gone.
 	if (m_stop.load(std::memory_order_acquire) || ibCrashGuard::IsStopRequested()) {
 		m_submitCv.notify_all();
 		return;
