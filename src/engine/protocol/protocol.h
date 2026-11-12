@@ -1192,9 +1192,9 @@ namespace ibProtocol {
 		}
 
 		// A COMMAND BAR — the State's CommandBar of a form, a table, a spreadsheet: its entries (Id, Caption, Picture,
-		// Tooltip, Enabled, Kind; a separator; a group's commands as its children, Position each), pressed back as event
-		// Command {Id, Member}; a table's ContextMenu, its standard commands, the same (Id, Caption, Picture, Enabled),
-		// picked back as Action {Id}. Saved in its control's node's Layers (ibValueWindowComposite::WriteData).
+		// Tooltip, Enabled, Default, Kind; a separator; a group's commands as its children, Position each), pressed back
+		// as event Command {Id, Member}; a table's ContextMenu, its standard commands, the same (Id, Caption, Picture,
+		// Enabled), picked back as Action {Id}. Saved in its control's node's Layers (ibValueWindowComposite::WriteData).
 		namespace ibCommandBar {
 
 			inline constexpr const char* CommandBar = "CommandBar";
@@ -1205,6 +1205,7 @@ namespace ibProtocol {
 			inline constexpr const char* Picture    = "Picture";
 			inline constexpr const char* Tooltip    = "Tooltip";
 			inline constexpr const char* Enabled    = "Enabled";
+			inline constexpr const char* Default    = "Default";    // the bar's default command: drawn standing out
 			inline constexpr const char* Kind       = "Kind";       // ibKind
 			inline constexpr const char* Position   = "Position";   // a group's command's: its place among the group's
 

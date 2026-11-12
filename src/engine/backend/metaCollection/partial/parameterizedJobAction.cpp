@@ -25,7 +25,7 @@ ibValueRecordDataObjectParameterizedJob::ibStandardCommandSet ibValueRecordDataO
 	ibStandardCommandSet jobActions(this);
 	jobActions.AddAction(ibT("Execute"), _("Execute"), g_picExecuteJobCLSID, true, eExecute).SetModify(false);
 	jobActions.AddSeparator();
-	jobActions.AddAction(ibT("SaveAndClose"), _("Save and close"), g_picSaveCLSID, true, eDefActionAndClose);
+	jobActions.AddAction(ibT("SaveAndClose"), _("Save and close"), g_picSaveCLSID, true, eDefActionAndClose).SetDefault(true);
 	jobActions.AddAction(ibT("Save"), _("Save"), g_picSaveCLSID, true, eSave);
 	jobActions.AddSeparator();
 	jobActions.AddAction(ibT("Clone"), _("Clone"), g_picCloneCLSID, true, eCopy);

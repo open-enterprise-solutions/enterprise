@@ -21,6 +21,8 @@ set_target_properties(webserver PROPERTIES
 
 if(WIN32)
     set_target_properties(webserver PROPERTIES WIN32_EXECUTABLE FALSE)
+    # its resources and the programs' manifest, as its project has them (webserver.vcxproj)
+    target_sources(webserver PRIVATE webserver.rc ${CMAKE_SOURCE_DIR}/src/engine/core/program.manifest)
 endif()
 
 target_compile_definitions(webserver PRIVATE NOPCH)

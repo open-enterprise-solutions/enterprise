@@ -137,6 +137,16 @@ public:
 		ibCodeEditorPopupWindow::Refresh(eraseBg, rect);
 	}
 
+protected:
+
+	// gone (a menu of the frame opened): the call tip is over
+	virtual void OnDismiss() override
+	{
+		m_ct->Cancel();
+	}
+
+public:
+
 	void OnLeftDown(wxMouseEvent& event)
 	{
 		wxPoint pt = event.GetPosition();

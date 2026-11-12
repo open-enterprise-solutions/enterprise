@@ -21,12 +21,6 @@ class ibDataViewColumnGroup;
 class ibFrontendView;
 class ibViewCommandBar;
 
-// Default background for designer-created form controls, toolbars,
-// dataviews, dialogs: the cream content surface of the interior palette
-// (the text on it is the theme's). Was a light off-white grey (#EBEBF1)
-// that clashed with the powder-blue + cream + terracotta palette.
-#define wxDefaultStypeBGColour wxColour(0xFA, 0xF7, 0xF0)  // #FAF7F0 cream content
-
 class ibTabDocument;
 
 // A CONTROL THAT HOLDS A VALUE — the old desktop's ibControlFrame:what the shared value

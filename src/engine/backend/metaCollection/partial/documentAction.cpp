@@ -19,7 +19,7 @@ enum action {
 ibValueRecordDataObjectDocument::ibStandardCommandSet ibValueRecordDataObjectDocument::GetStandardCommands(const ibFormID &formType)
 {
 	ibStandardCommandSet documentActions(this);
-	documentActions.AddAction(ibT("PostAndClose"), _("Post and close"), g_picPostCLSID, true, eDefActionAndClose);
+	documentActions.AddAction(ibT("PostAndClose"), _("Post and close"), g_picPostCLSID, true, eDefActionAndClose).SetDefault(true);
 	documentActions.AddAction(ibT("Post"), _("Post"), g_picPostCLSID, true, ePost);
 	documentActions.AddAction(ibT("ClearPosting"), _("Clear posting"), g_picSaveCLSID, true, eClearPosting);
 	documentActions.AddSeparator();

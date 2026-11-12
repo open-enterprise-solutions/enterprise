@@ -1324,6 +1324,10 @@ public:
     virtual void SetScrollbars(int pixelsPerUnitX, int pixelsPerUnitY,
                                int noUnitsX, int noUnitsY,
                                int xPos, int yPos, bool noRefresh) override;
+    // the grid lives on the content colour, as its cells (RegainColours) and a list do: an editor's "..." and the gaps
+    // round it take the grid's surface, which was the inspector's cream until it stopped setting one, and the chrome
+    // after that (2026-11-12, Max). On GTK3/Cocoa the same - the grid is the engine's there too
+    virtual bool HasContentBackground() const override { return true; }
 protected:
     virtual void DoThaw() override;
 

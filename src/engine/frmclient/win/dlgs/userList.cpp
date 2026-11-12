@@ -58,8 +58,6 @@ enum {
 	wxID_USERS_TOOL_DELETE,
 };
 
-#include "frmclient/visualView/ctrl/frame.h"
-
 ibDialogUserList::ibDialogUserList(wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) : ibDialog(parent, id, title, pos, size, style)
 {
 	ibDialog::SetSizeHints(wxDefaultSize, wxDefaultSize);
@@ -91,16 +89,6 @@ ibDialogUserList::ibDialogUserList(wxWindow* parent, wxWindowID id, const wxStri
 
 	m_dataEditor->GetRootColumnGroup()->AppendColumn(columnName);
 	m_dataEditor->GetRootColumnGroup()->AppendColumn(columnFullName);
-
-	//m_dataEditor->SetBackgroundColour(wxDefaultStypeBGColour);
-
-	wxItemAttr attr(
-		wxNullColour,   // the text: the table's
-		wxDefaultStypeBGColour,
-		m_dataEditor->GetFont()
-	);
-
-	m_dataEditor->SetHeaderAttr(attr);
 
 	m_dataEditor->AssociateModel(new ibUserListModel);
 

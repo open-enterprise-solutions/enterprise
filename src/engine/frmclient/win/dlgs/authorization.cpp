@@ -21,9 +21,11 @@ ibDialogAuthentication::ibDialogAuthentication(const std::vector<ibString>& user
 	grid->AddGrowableCol(1, 1);
 
 	m_staticTextLogin = new ibStaticText(this, wxID_ANY, _("Login:"));
-	m_comboBoxLogin   = new wxBitmapComboBox(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize);
+	// the engine's combo box, as the dialog's other fields (a native wxBitmapComboBox stood here, with a user's picture
+	// at every name, until 2026-11-12); a login not on the list is typed in
+	m_comboBoxLogin   = new ibComboBox(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize);
 	for (const ibString& user : users)
-		m_comboBoxLogin->Append(user, ibBackendPicture::GetPicture(g_picUserCLSID));
+		m_comboBoxLogin->Append(user);
 
 	m_staticTextPassword = new ibStaticText(this, wxID_ANY, _("Password:"));
 	m_textCtrlPassword   = new ibTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_PASSWORD);

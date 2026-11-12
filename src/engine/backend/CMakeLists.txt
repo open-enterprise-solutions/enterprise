@@ -150,6 +150,8 @@ endif()
 # Windows DLL export macro
 if(WIN32)
     target_compile_definitions(backend PRIVATE BACKEND_EXPORTS)
+    # its resources, as its project has them (backend.vcxproj)
+    target_sources(backend PRIVATE backend.rc)
 endif()
 
 # ---------------------------------------------------------------------------

@@ -6,7 +6,7 @@
 
 #include "deskgui/univ/ctrl/calendarCtrl.h"
 #include "deskgui/univ/ctrl/timePickerCtrl.h"
-#include <wx/popupwin.h>
+#include "deskgui/univ/popupWindow.h"   // ibPopupWindow — a choice's window, the theme's popup
 #include <wx/sizer.h>
 #include <wx/settings.h>
 
@@ -82,11 +82,11 @@ namespace {
 // A WINDOW A VALUE IS CHOSEN IN, dropped under the field — the calculator, the calendar, the quick choice's list. Whoever
 // waits for the choice (a server's question) is told ONCE that it went: wx tells a popup again each time it loses the
 // activation, and by then the one waiting has gone on — the question answered, its holder gone with it (a crash, 2026-11-02).
-class wxPopupChoiceWindow : public wxPopupTransientWindow {
+class wxPopupChoiceWindow : public ibPopupWindow<wxPopupTransientWindow> {
 public:
 
 	wxPopupChoiceWindow(ibControlFrame* ownerValue, wxWindow* parent, int style) :
-		wxPopupTransientWindow(parent, style), m_ownerValue(ownerValue) {}
+		ibPopupWindow<wxPopupTransientWindow>(parent, style), m_ownerValue(ownerValue) {}
 
 protected:
 

@@ -100,6 +100,9 @@ bool ibSpinButton::Create(wxWindow *parent,
     // the spin buttons never have the border
     style &= ~wxBORDER_MASK;
 
+    // painted whole as it is sized: its two arrows split it in halves (ibWindow::OnSize paints again only the frame)
+    style |= wxFULL_REPAINT_ON_RESIZE;
+
     if ( !ibControl::Create(parent, id, pos, size, style,
                             wxDefaultValidator, name) )
         return false;

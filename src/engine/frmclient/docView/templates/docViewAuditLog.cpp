@@ -350,10 +350,6 @@ void ibAuditLogView::BuildLayout(wxWindow* parent)
 		new ibDataViewTextRenderer(wxT("string"), wxDATAVIEW_CELL_INERT),
 		ibAuditLogModel::kColRef, parent->FromDIP(80), wxALIGN_LEFT, 0));
 
-	wxItemAttr attr(wxNullColour, wxDefaultStypeBGColour,   // the text: the table's
-		m_dataEditor->GetFont());
-	m_dataEditor->SetHeaderAttr(attr);
-
 	// Initial filter pulled from the strip defaults (Audit-only, last 7d).
 	m_model->SetFilter(ReadFilter());
 	m_dataEditor->AssociateModel(m_model.get());

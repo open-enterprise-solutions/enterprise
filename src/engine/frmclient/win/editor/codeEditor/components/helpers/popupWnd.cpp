@@ -1,8 +1,6 @@
 #include "popupWnd.h"
 
-#ifdef __WXMSW__
-#include "deskgui/univ/topLevel.h"   // ibMSWShowShadowed — the popup's shadow, its own
-#endif
+#include "../autoComplete.h"
 
 //----------------------------------------------------------------------
 // ibCodeEditorPopupBase and ibCodeEditorPopupWindow
@@ -10,7 +8,7 @@
 #if wxUSE_POPUPWIN
 
 ibCodeEditorPopupBase::ibCodeEditorPopupBase(wxWindow* parent)
-	: wxPopupWindow(parent, wxPU_CONTAINS_CONTROLS)
+	: ibPopupWindow<wxPopupWindow>(parent, wxPU_CONTAINS_CONTROLS)
 {
 }
 
@@ -21,52 +19,6 @@ ibCodeEditorPopupBase::~ibCodeEditorPopupBase()
 	wxRect rect = GetRect();
 	GetParent()->ScreenToClient(&(rect.x), &(rect.y));
 	GetParent()->Refresh(false, &rect);
-}
-
-#elif defined(__WXMSW__)
-
-// Do not activate the window when it is shown.
-bool ibCodeEditorPopupBase::Show(bool show)
-{
-	if (show) {
-		// Check if the window is changing from hidden to shown.
-		bool changingVisibility = wxWindowBase::Show(true);
-
-		if (changingVisibility)
-		{
-			HWND hWnd = reinterpret_cast<HWND>(GetHandle());
-
-			// the drop shadow, its own (ibMSWShowShadowed)
-			ibMSWShowShadowed(this, [this, hWnd] {
-				if (GetName() == wxT("ibSTCCallTip"))
-					::AnimateWindow(hWnd, 25, AW_BLEND);
-				else
-					::ShowWindow(hWnd, SW_SHOWNA);
-				return true;
-			});
-
-			::SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0,
-				SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-		}
-
-		return changingVisibility;
-	}
-	else {
-		return wxPopupWindow::Show(false);
-	}
-}
-
-// Do not activate in response to mouse clicks on this window.
-bool ibCodeEditorPopupBase::MSWHandleMessage(WXLRESULT *res, WXUINT msg,
-	WXWPARAM wParam, WXLPARAM lParam)
-{
-	if (msg == WM_MOUSEACTIVATE)
-	{
-		*res = MA_NOACTIVATE;
-		return true;
-	}
-	else
-		return wxPopupWindow::MSWHandleMessage(res, msg, wParam, lParam);
 }
 
 #endif // __WXGTK__
@@ -236,8 +188,8 @@ void ibCodeEditorPopupWindow::OnFocus(wxFocusEvent& event)
 
 #endif // __WXOSX_COCOA__
 
-ibCodeEditorListBoxWin::ibCodeEditorListBoxWin(wxWindow* parent, ibListBoxVisualData *visualData, int h)
-	: ibCodeEditorPopupWindow(parent), m_visualData(visualData)
+ibCodeEditorListBoxWin::ibCodeEditorListBoxWin(wxWindow* parent, ibAutoComplete* ac, ibListBoxVisualData *visualData, int h)
+	: ibCodeEditorPopupWindow(parent), m_ac(ac), m_visualData(visualData)
 {
 	m_listBox = new ibCodeEditorListBox(this, m_visualData, h);
 
@@ -261,6 +213,11 @@ ibCodeEditorListBoxWin::ibCodeEditorListBoxWin(wxWindow* parent, ibListBoxVisual
 	SetBackgroundStyle(wxBG_STYLE_PAINT);
 
 	m_listBox->Clear();
+}
+
+void ibCodeEditorListBoxWin::OnDismiss()
+{
+	m_ac->Cancel();
 }
 
 void ibCodeEditorListBoxWin::OnPaint(wxPaintEvent& WXUNUSED(evt))

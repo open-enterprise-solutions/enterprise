@@ -47,6 +47,8 @@ target_compile_definitions(deskgui
 # DESKGUI_API resolves to dllexport only when DESKGUI_EXPORTS is defined (deskgui.h).
 if(WIN32)
     target_compile_definitions(deskgui PRIVATE DESKGUI_EXPORTS)
+    # its resources, as its project has them (deskgui.vcxproj)
+    target_sources(deskgui PRIVATE deskgui.rc)
 endif()
 
 target_link_libraries(deskgui

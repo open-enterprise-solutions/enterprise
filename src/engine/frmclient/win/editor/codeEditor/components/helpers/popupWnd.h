@@ -19,20 +19,16 @@
 // Define the base class used for ibCodeEditorPopupWindow.
 #if wxUSE_POPUPWIN
 
-#include <wx/popupwin.h>
+#include "deskgui/univ/popupWindow.h"
 #define wxOES_POPUP_IS_FRAME 0
 
-class ibCodeEditorPopupBase : public wxPopupWindow
+// the theme's popup (ibPopupWindow): shown, it does not take the activation; it goes as a menu of its frame opens
+class ibCodeEditorPopupBase : public ibPopupWindow<wxPopupWindow>
 {
 public:
 	ibCodeEditorPopupBase(wxWindow*);
 #ifdef __WXGTK__
 	virtual ~ibCodeEditorPopupBase();
-#elif defined(__WXMSW__)
-	virtual bool Show(bool show = true) override;
-	virtual bool MSWHandleMessage(WXLRESULT *result, WXUINT message,
-		WXWPARAM wParam, WXLPARAM lParam)
-		override;
 #endif
 };
 
@@ -81,6 +77,8 @@ private:
 	wxWindow* m_tlw;
 };
 
+class ibAutoComplete;
+
 // A popup window to place the ibCodeEditorListBox upon
 class ibCodeEditorListBoxWin : public ibCodeEditorPopupWindow
 {
@@ -89,17 +87,21 @@ class ibCodeEditorListBoxWin : public ibCodeEditorPopupWindow
 
 public:
 
-	ibCodeEditorListBoxWin(wxWindow*, ibListBoxVisualData *, int);
+	ibCodeEditorListBoxWin(wxWindow*, ibAutoComplete*, ibListBoxVisualData *, int);
 	ibCodeEditorListBox *GetListBox() const {
-		return m_listBox; 
+		return m_listBox;
 	}
 
 protected:
+
+	// gone (a menu of the frame opened): the completion it shows is over
+	virtual void OnDismiss() override;
 
 	void OnPaint(wxPaintEvent&);
 
 private:
 
+	ibAutoComplete*      m_ac;
 	ibListBoxVisualData* m_visualData;
 };
 

@@ -204,9 +204,9 @@
     in Release. UCRT (ucrtbase.dll + api-ms-win-crt-*.dll) is part of
     Windows 10/11 and is intentionally NOT copied.
 
-    Source path resolves dynamically via $(VCToolsRedistDir) +
-    $(PlatformShortName) (x86/x64) + $(PlatformToolsetVersion) (143 for
-    v143), so the rule survives toolset upgrades.
+    Source path resolves dynamically via $(VCToolsRedistInstallDir) +
+    $(PlatformShortName) (x86/x64/arm64) + $(PlatformToolsetVersion) (143
+    for v143), so the rule survives toolset upgrades.
   -->
   <!-- A static library has no run time of its own to stand beside, and its OutDir is the lib directory:
        without the second half of the condition the redistributable lands there, next to the .lib. -->
@@ -214,9 +214,11 @@
           AfterTargets="Build"
           Condition="$(Configuration.StartsWith('Release')) And '$(ConfigurationType)'!='StaticLibrary'">
     <PropertyGroup>
-      <!-- $(VCToolsRedistDir) is unreliable on some installations; build from
-           $(VCInstallDir) + $(VCToolsVersion) which are always populated. -->
-      <_CRTRedistPath>$(VCInstallDir)Redist\MSVC\$(VCToolsVersion)\$(PlatformShortName)\Microsoft.VC$(PlatformToolsetVersion).CRT\</_CRTRedistPath>
+      <!-- The redistributable's folder as the toolset names it (Redist\MSVC\$(VCToolsRedistVersion)\, the version from
+           Auxiliary\Build\Microsoft.VCRedistVersion.default.props) - not the compiler's version: the two differ
+           (tools 14.44.35207, redistributable 14.44.35112 on one installation) and nothing lies under the compiler's,
+           every copy failed (MSB3030). There is no $(VCToolsRedistDir), the name this rule first read. -->
+      <_CRTRedistPath>$(VCToolsRedistInstallDir)$(PlatformShortName)\Microsoft.VC$(PlatformToolsetVersion).CRT\</_CRTRedistPath>
     </PropertyGroup>
     <ItemGroup>
       <_CRTFiles Include="$(_CRTRedistPath)msvcp140.dll" />

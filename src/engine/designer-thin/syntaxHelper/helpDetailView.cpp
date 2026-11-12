@@ -54,7 +54,9 @@ void ibHelpDetailView::ApplyFontScale() {
 	    std::max(6, base + 4), std::max(6, base + 7),
 	    std::max(6, base + 12)
 	};
-	m_html->SetFonts(wxT("Helvetica"), wxT("Menlo"), sizes);
+	// the text in the system's face, as wx's own SetStandardFonts takes it (wxNORMAL_FONT) - "Helvetica" stood here
+	// until 2026-11-12, a face Windows has not and maps to Arial
+	m_html->SetFonts(wxNORMAL_FONT->GetFaceName(), wxT("Menlo"), sizes);
 }
 
 void ibHelpDetailView::SetFontSizeBoost(int boost) {
@@ -86,7 +88,7 @@ void ibHelpDetailView::ShowEntry(const ibHelpEntry* entry) {
 	m_lastEntryId = entry ? entry->id : ibString();
 	if (entry == nullptr) {
 		m_html->SetPage(
-		    wxT("<html><body bgcolor=\"#FAF7F0\">"
+		    wxT("<html><body bgcolor=\"#FFFFFF\">"
 		         "<table border=\"0\" cellpadding=\"20\" width=\"100%\"><tr><td>"
 		         "<font color=\"#888888\" size=\"3\"><i>")
 		    + wxString(_("Select an entry in the tree on the left, or "
@@ -236,10 +238,9 @@ wxString ibHelpDetailView::RenderHtml(const ibHelpEntry& entry) const {
 	html.reserve(4096);
 
 	// Outer container with consistent left-margin via cellpadding.
-	// Cream bg #FAF7F0 — matches the content tier in the interior
-	// palette (docs/private/ui-palette.md). Keeps the syntax helper inside
-	// the warm content family instead of reading as a cool island.
-	html += wxT("<html><body bgcolor=\"#FAF7F0\">"
+	// White bg — the content tier in the interior palette
+	// (docs/private/ui-palette.md), as the tree beside it.
+	html += wxT("<html><body bgcolor=\"#FFFFFF\">"
 	             "<table border=\"0\" cellpadding=\"12\" cellspacing=\"0\" "
 	             "width=\"100%\"><tr><td>");
 

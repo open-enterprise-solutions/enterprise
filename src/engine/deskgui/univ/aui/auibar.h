@@ -200,6 +200,10 @@ public:
     void SetSticky(bool b) { m_sticky = b; }
     bool IsSticky() const { return m_sticky; }
 
+    // the bar's default command (a form's «… and close»), drawn as a dialog's default button (wxCONTROL_ISDEFAULT)
+    void SetDefault(bool b) { m_default = b; }
+    bool IsDefault() const { return m_default; }
+
     void SetUserData(long l) { m_userData = l; }
     long GetUserData() const { return m_userData; }
 
@@ -233,6 +237,7 @@ private:
     bool m_active = true;               // true if the item is currently active
     bool m_dropDown = false;            // item has a dropdown button if true
     bool m_sticky = false;              // button is always active if true
+    bool m_default = false;             // the bar's default command if true
     long m_userData = 0;                // number associated with the item
     wxObject* m_clientData = nullptr;   // wxObject associated with the item
     int m_alignment = wxALIGN_CENTER;   // sizer alignment flag
@@ -269,6 +274,11 @@ public:
                 long style = ibAUI_TB_DEFAULT_STYLE);
 
     virtual void SetWindowStyleFlag(long style) override;
+
+    // SEAM vs wx: the bar's background is the theme's tool bar (DrawToolBarBackground), as the art drew it
+    // (wxAuiToolBarArt::DrawBackground) - a plain one (ibAUI_TB_PLAIN_BACKGROUND) the surface it stands on, flat. On
+    // GTK3/Cocoa the same - the bar is the engine's there too
+    virtual void EraseBackground(wxDC& dc, const wxRect& rect) override;
 
 
     ibAuiToolBarItem* AddTool(int toolId,

@@ -1431,8 +1431,8 @@ void ibPropertyGridManager::RepaintDescBoxDecorations( wxDC& dc,
                                                        int newWidth,
                                                        int newHeight )
 {
-    // Draw background
-    wxColour bgcol = GetBackgroundColour();
+    // Draw background - the theme's surface, as OnPaint's
+    wxColour bgcol = wxTHEME_BG_COLOUR(this);
     dc.SetBrush(bgcol);
     dc.SetPen(bgcol);
     int rectHeight = m_splitterHeight;
@@ -1599,11 +1599,11 @@ int ibPropertyGridManager::GetDescBoxHeight() const
 void ibPropertyGridManager::OnPaint( wxPaintEvent& WXUNUSED(event) )
 {
     // SEAM vs wx: ibWindow sets wxBG_STYLE_PAINT (no erase pass), so this OnPaint owns the background too - the native
-    // panel's erase painted the description box's inside (ibTreeCtrl::OnPaint)
-    wxAutoBufferedPaintDC dc(this);
-
-    dc.SetBackground(wxBrush(GetBackgroundColour()));
-    dc.Clear();
+    // panel's erase painted the description box's inside (ibTreeCtrl::OnPaint). It is the theme's surface, the one the
+    // description's texts stand on: GetBackgroundColour() with no colour set is the system's, and the texts stood on it
+    // as stripes once the inspector stopped setting the manager a cream of its own (2026-11-12, Max). On GTK3/Cocoa the
+    // same - the manager is the engine's there too
+    ibThemePaintDC dc(this);
 
     // Update everything inside the box
     wxRect r = GetUpdateRegion().GetBox();
@@ -2221,6 +2221,14 @@ void ibPropertyGridManager::OnMouseMove( wxMouseEvent &event )
 
                 m_extraHeight -= change;
                 InvalidateBestSize();
+
+                // SEAM vs wx: the move painted at once, whole, as a frame paints after its layout
+                // (ibTopLevelWindow::Layout). A drag's next move is taken before a paint (input outranks it), and the
+                // description, refreshed whole (UpdateDescriptionBox), is not carried by the move's bit copy: the screen
+                // kept the old pixels while the mouse moved and each window painted on its own when it paused - the
+                // caption cut by the frame, the grid's border twice (2026-11-12, Max). On GTK3/Cocoa the tree is drawn
+                // in one frame; Update() draws it now
+                Update();
             }
 
         }

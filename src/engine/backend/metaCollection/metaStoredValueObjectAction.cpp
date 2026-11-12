@@ -10,7 +10,7 @@ enum
 ibValueRecordDataObjectConstant::ibStandardCommandSet ibValueRecordDataObjectConstant::GetStandardCommands(const ibFormID& formType)
 {
 	ibStandardCommandSet catalogActions(this);
-	catalogActions.AddAction(ibT("SaveAndClose"), _("Save and close"), g_picSaveCLSID, true, eDefActionAndClose);
+	catalogActions.AddAction(ibT("SaveAndClose"), _("Save and close"), g_picSaveCLSID, true, eDefActionAndClose).SetDefault(true);
 	catalogActions.AddAction(ibT("Save"), _("Save"), g_picSaveCLSID, true, eSave);
 	return catalogActions;
 }

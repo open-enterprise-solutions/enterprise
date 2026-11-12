@@ -29,7 +29,8 @@ ibInnerFrame::ibInnerFrame(wxWindow* parent, wxWindowID id, const wxPoint& pos, 
 #else
 	: ibPanel(parent, id, pos, size, wxBORDER_RAISED | wxFULL_REPAINT_ON_RESIZE),
 #endif
-	m_titleBar(new ibPanel(this, wxID_ANY)),
+	// the caption painted whole as it is sized: its shade runs across it, its buttons stand at its right end
+	m_titleBar(new ibPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL | wxNO_BORDER | wxFULL_REPAINT_ON_RESIZE)),
 	m_content(new ibPanel(this, wxID_ANY)),
 	m_titleStyle(style),
 	m_closeButton(FrameButton(s_frameClose_png)),

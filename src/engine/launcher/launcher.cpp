@@ -168,7 +168,11 @@ ibDialogLauncher::ibDialogLauncher(wxWindow* parent, wxWindowID id, const wxStri
 	wxBoxSizer* sizerLeft = new wxBoxSizer(wxVERTICAL);
 
 	m_listIBwnd = new ibListBox(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, nullptr, wxLB_SINGLE);
-	m_listIBwnd->SetFont(wxFont(13, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
+	// the bases' names large, in the system's face: four points over its size, 13 on Windows' 9 (the default family's
+	// 13 stood here until 2026-11-12 - Arial on Windows)
+	wxFont listFont = wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT);
+	listFont.SetPointSize(listFont.GetPointSize() + 4);
+	m_listIBwnd->SetFont(listFont);
 
 	m_listIBwnd->Bind(wxEVT_LISTBOX, &ibDialogLauncher::OnSelectedList, this);
 	m_listIBwnd->Bind(wxEVT_LISTBOX_DCLICK, &ibDialogLauncher::OnSelectedDClickList, this);
@@ -176,7 +180,10 @@ ibDialogLauncher::ibDialogLauncher(wxWindow* parent, wxWindowID id, const wxStri
 	sizerLeft->Add(m_listIBwnd, 1, wxALL | wxEXPAND, 8);
 
 	m_staticDBName = new ibStaticText(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0);
-	m_staticDBName->SetFont(wxFont(12, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
+	// the chosen base's address, a point under the names in the list: the system's face, three points over its size
+	wxFont dbNameFont = wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT);
+	dbNameFont.SetPointSize(dbNameFont.GetPointSize() + 3);
+	m_staticDBName->SetFont(dbNameFont);
 	sizerLeft->Add(m_staticDBName, 0, wxALL | wxEXPAND, FromDIP(5));
 
 	mainSizer->Add(sizerLeft, 1, wxEXPAND, FromDIP(5));

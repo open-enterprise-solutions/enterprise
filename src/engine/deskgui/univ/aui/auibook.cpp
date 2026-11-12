@@ -2371,7 +2371,10 @@ void ibAuiNotebook::InitNotebook(long style)
     m_dummyWnd->Show(false);
 
     m_mgr.SetManagedWindow(this);
-    m_mgr.SetFlags(ibAUI_MGR_DEFAULT);
+    // SEAM vs wx: the sash between the book's groups moves on release, as the main window's (ibFrontendMainFrame) - a
+    // hint follows the mouse; a live drag laid the groups out on every move and left pieces behind (2026-11-12, Max).
+    // On GTK3/Cocoa the same - the docking is the engine's there too
+    m_mgr.SetFlags(ibAUI_MGR_DEFAULT & ~ibAUI_MGR_LIVE_RESIZE);
     m_mgr.SetDockSizeConstraint(1.0, 1.0); // no dock size constraint
 
     m_mgr.AddPane(m_dummyWnd,

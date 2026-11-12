@@ -5,6 +5,10 @@ set(SIMPLEPLUGIN_SOURCES
 )
 
 add_library(simplePlugin SHARED ${SIMPLEPLUGIN_SOURCES})
+if(WIN32)
+    # its resources, as its project has them (simplePlugin.vcxproj)
+    target_sources(simplePlugin PRIVATE simplePlugin.rc)
+endif()
 
 set_target_properties(simplePlugin PROPERTIES
     CXX_STANDARD 20

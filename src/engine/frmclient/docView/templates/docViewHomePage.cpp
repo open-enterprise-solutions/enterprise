@@ -105,8 +105,11 @@ void ibHomePageView::Draw(const ibProtocolNode& view, const ibProtocolNode& patc
 		freeze.Lock(m_viewFrame);
 
 		if (columns.size() > 1) {
+			// the sash moves on release, as the docking's (the main window, a book's groups): a hint follows the mouse - a
+			// live drag laid both columns out on every move (2026-11-12, Max). On GTK3/Cocoa the same - the splitter is
+			// the engine's there too
 			ibSplitterWindow* const splitter = new ibSplitterWindow(m_viewFrame, wxID_ANY,
-				wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_THIN_SASH | wxSP_NOBORDER);
+				wxDefaultPosition, wxDefaultSize, wxSP_THIN_SASH | wxSP_NOBORDER);
 			splitter->SetMinimumPaneSize(splitter->FromDIP(80));
 			wxWindow* const left = BuildColumn(splitter, columns[0].Children(), 0);
 			wxWindow* const right = BuildColumn(splitter, columns[1].Children(), 0);
@@ -164,7 +167,7 @@ wxWindow* ibHomePageView::BuildColumn(wxWindow* parent, const std::vector<ibProt
 		return OpenCell(parent, cells[from]);
 
 	ibSplitterWindow* const splitter = new ibSplitterWindow(parent, wxID_ANY,
-		wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_THIN_SASH | wxSP_NOBORDER);
+		wxDefaultPosition, wxDefaultSize, wxSP_THIN_SASH | wxSP_NOBORDER);   // moves on release, as the columns'
 	splitter->SetMinimumPaneSize(splitter->FromDIP(40));
 
 	// Both panes are built with the SPLITTER as their parent, then the split just declares which is which.

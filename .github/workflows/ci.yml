@@ -235,8 +235,9 @@ jobs:
       # every control itself (deskgui): a shot of codeRunner — no base, the sandbox; its frame, menubar, tool bar, code
       # editor and buttons — kept as an artifact (look-linux). X11 under Xvfb with no window manager: the frame's
       # decorations are the theme's anyway. Red when the program is gone before the shot: it did not start (2026-11-12,
-      # Max: "how full will they look on the Mac and on GTK").
-      - name: The desktop's look (codeRunner under Xvfb)
+      # Max: "how full will they look on the Mac and on GTK"). The launcher after it, one at a time, to compare a small
+      # dialog with a frame (Max, the same day).
+      - name: The desktop's look (codeRunner and launcher under Xvfb)
         working-directory: build/linux-debug/bin/Debug
         env:
           NO_AT_BRIDGE: 1
@@ -244,12 +245,15 @@ jobs:
           sudo apt-get install -y xvfb imagemagick
           mkdir -p "$GITHUB_WORKSPACE/look"
           xvfb-run -a -s "-screen 0 1280x800x24" bash -c '
-            ./codeRunner > "$GITHUB_WORKSPACE/look/codeRunner-linux.log" 2>&1 &
-            pid=$!
-            sleep 10
-            kill -0 $pid || { echo "codeRunner is gone before the shot"; exit 1; }
-            import -window root "$GITHUB_WORKSPACE/look/codeRunner-linux.png"
-            kill $pid'
+            for program in codeRunner launcher; do
+              ./$program > "$GITHUB_WORKSPACE/look/$program-linux.log" 2>&1 &
+              pid=$!
+              sleep 10
+              kill -0 $pid || { echo "$program is gone before the shot"; exit 1; }
+              import -window root "$GITHUB_WORKSPACE/look/$program-linux.png"
+              kill $pid
+              wait $pid 2>/dev/null || true
+            done'
       - name: Keep the look
         if: always()
         uses: actions/upload-artifact@v4
@@ -937,17 +941,23 @@ jobs:
       # ⭐ WHAT THE DESKTOP LOOKS LIKE ON THE MAC — the Linux job's step, with the system's own capture: codeRunner (no
       # base, the sandbox), its frame, menubar, tool bar, code editor and buttons all drawn by the desktop library. A
       # plain executable, not a bundle: wxOSX makes it a regular application with a window of its own. Red when the
-      # program is gone before the shot (2026-11-12, Max).
-      - name: The desktop's look (codeRunner)
+      # program is gone before the shot (2026-11-12, Max). The launcher after it - a bundle here, run from inside it.
+      - name: The desktop's look (codeRunner and launcher)
         working-directory: build/macos-debug/bin/Debug
         run: |
           mkdir -p "$GITHUB_WORKSPACE/look"
-          ./codeRunner > "$GITHUB_WORKSPACE/look/codeRunner-macos.log" 2>&1 &
-          pid=$!
-          sleep 15
-          kill -0 $pid || { echo "codeRunner is gone before the shot"; exit 1; }
-          screencapture -x "$GITHUB_WORKSPACE/look/codeRunner-macos.png"
-          kill $pid
+          launcher=launcher.app/Contents/MacOS/launcher
+          [ -x "$launcher" ] || launcher=launcher
+          for program in codeRunner "$launcher"; do
+            name=$(basename "$program")
+            "./$program" > "$GITHUB_WORKSPACE/look/$name-macos.log" 2>&1 &
+            pid=$!
+            sleep 15
+            kill -0 $pid || { echo "$name is gone before the shot"; exit 1; }
+            screencapture -x "$GITHUB_WORKSPACE/look/$name-macos.png"
+            kill $pid
+            wait $pid 2>/dev/null || true
+          done
       - name: Keep the look
         if: always()
         uses: actions/upload-artifact@v4

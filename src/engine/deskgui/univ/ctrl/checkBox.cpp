@@ -85,6 +85,11 @@ bool ibCheckBox::Create(wxWindow *parent,
                         const wxString &name)
 {
     WXValidateStyle( &style );
+
+    // painted whole as it is sized: the box and the label are centred on its height, the box at its right for
+    // wxALIGN_RIGHT (ibWindow::OnSize paints again only the frame)
+    style |= wxFULL_REPAINT_ON_RESIZE;
+
     if ( !ibControl::Create(parent, id, pos, size, style, validator, name) )
         return false;
 

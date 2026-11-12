@@ -358,6 +358,7 @@ private:
 	ibAuiToolBar* m_docToolbar = nullptr;         // the active view's own (ibFrontendView::OnCreateToolbar)
 	wxMenu*       m_menuFile = nullptr;           // the window's File, with the files opened last
 	wxMenu*       m_menuEdit = nullptr;           // …and its Edit
+	std::vector<wxMenu*> m_viewMenus;             // the active view's own, in the window's bar after Edit (ActivateView)
 
 	std::map<int, ibMenuItem>             m_menuItems;     // the server's commands and schemas, by their wx ids (MenuIdOf)
 	ibString                              m_menuShape;     // the server's menu as last built, less what is enabled

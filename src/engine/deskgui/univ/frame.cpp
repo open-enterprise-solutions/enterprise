@@ -82,18 +82,55 @@ void ibFrame::OnSize(wxSizeEvent& event)
     event.Skip();
 }
 
+#if wxUSE_MENUS && wxUSE_ACCEL
+
+namespace
+{
+
+// the window, from the one with the focus up to its top window, whose own accelerator table holds the key - asked as
+// wx's native translation asks them, before the frame's menubar: wxMSW's from the focus to the top window
+// (wxGUIEventLoop::PreProcessMessage, the frame's own table before its menubar's), wxGTK's and wxOSX's from the window
+// to its top. Taken by the menubar first, the metadata tree's Ctrl+C and Ctrl+V (its table) were the Edit menu's, whose
+// command goes to the focused window alone (2026-11-12, Max: "copy and paste in the tree do not react to the keys")
+wxWindow* FindFocusAccel(const wxKeyEvent& event)
+{
+    for ( wxWindow* win = wxWindow::FindFocus(); win; win = win->GetParent() )
+    {
+        const wxAcceleratorTable* const table = win->GetAcceleratorTable();
+        if ( table->IsOk() && table->GetEntry(event) )
+            return win;
+
+        if ( win->IsTopLevel() )
+            break;
+    }
+
+    return nullptr;
+}
+
+} // anonymous namespace
+
+#endif // wxUSE_MENUS && wxUSE_ACCEL
+
 // SEAM vs univ: THE MENU'S LETTERS ARE THE FRAME'S, before the window with the focus has the key - wx hands every key
 // to the top window first (wxEVT_CHAR_HOOK, from its keyboard hook). The canon took them as a character in each window
 // of its own (wxWindow::OnChar): a window that handles its characters kept the letter, and a character is the
 // layout's - Alt+E in the Russian layout is 'у', no title of an English menu has it. The layout's letter is matched
 // first (a Russian title, "&Файл"), the key's own then (an English title typed in any layout). Its items' accelerators
-// before them, here too: on every port (ibMenuBar::ProcessAccelEvent)
+// before them, here too: on every port (ibMenuBar::ProcessAccelEvent) - after the windows' own: a key a window from the
+// focus up takes by its accelerator table goes on to it (FindFocusAccel). On GTK3/Cocoa the same: the hook comes first
+// there too, the window's table after it
 void ibFrame::OnCharHook(wxKeyEvent& event)
 {
 #if wxUSE_MENUS
     ibMenuBar * const menubar = wxDynamicCast(m_frameMenuBar, ibMenuBar);
 
 #if wxUSE_ACCEL
+    if ( FindFocusAccel(event) )
+    {
+        event.Skip();
+        return;
+    }
+
     if ( menubar && menubar->ProcessAccelEvent(event) )
         return;
 #endif // wxUSE_ACCEL
@@ -187,6 +224,27 @@ wxStatusBar *ibFrame::OnCreateStatusBar(int number, long style, wxWindowID id, c
     statusBar->SetFieldsCount(number);
     return statusBar;
 }
+
+#ifdef __WXGTK__
+
+void ibFrame::SetStatusBar(wxStatusBar *statbar)
+{
+    wxFrameBase::SetStatusBar(statbar);
+}
+
+void ibFrame::PositionStatusBar()
+{
+    if ( !m_frameStatusBar || !m_frameStatusBar->IsShown() )
+        return;
+
+    // the client area's origin added: the bar is the port's window, not an ib one (ibWindow::DoSetSize takes it for
+    // those), and wxGTK places it from the native area's corner
+    const wxPoint origin = GetClientAreaOrigin();
+    const wxSize size = GetClientSize();
+    m_frameStatusBar->SetSize(origin.x, origin.y + size.y, size.x, wxDefaultCoord);
+}
+
+#endif // __WXGTK__
 
 #endif // wxUSE_STATUSBAR
 

@@ -105,20 +105,16 @@ public:
 
 #elif wxUSE_POPUPWIN
 
-    #include "wx/popupwin.h"
+    #include "deskgui/univ/popupWindow.h"
     #define ibSTC_POPUP_IS_FRAME 0
 
-    class ibSTCPopupBase:public wxPopupWindow
+    // SEAM vs wx: the theme's popup (ibPopupWindow) - wx's own show and activation copies taken away
+    class ibSTCPopupBase:public ibPopupWindow<wxPopupWindow>
     {
     public:
         ibSTCPopupBase(wxWindow*);
         #ifdef __WXGTK__
             virtual ~ibSTCPopupBase();
-        #elif defined(__WXMSW__)
-            virtual bool Show(bool show=true) override;
-            virtual bool MSWHandleMessage(WXLRESULT *result, WXUINT message,
-                                          WXWPARAM wParam, WXLPARAM lParam)
-                                          override;
         #endif
     };
 

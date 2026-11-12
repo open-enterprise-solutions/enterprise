@@ -128,6 +128,10 @@ bool ibButton::Create(wxWindow *parent,
     else
         ctrl_style |= wxALIGN_CENTRE_VERTICAL;
 
+    // painted whole as it is sized: its label and picture are placed by the alignment above (ibWindow::OnSize paints
+    // again only the frame)
+    ctrl_style |= wxFULL_REPAINT_ON_RESIZE;
+
     if ( !ibControl::Create(parent, id, pos, size, ctrl_style, validator, name) )
         return false;
 

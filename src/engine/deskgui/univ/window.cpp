@@ -101,7 +101,6 @@ public:
 #endif
 
 wxBEGIN_EVENT_TABLE(ibWindow, wxWindow)
-    EVT_SIZE(ibWindow::OnSize)
     EVT_PAINT(ibWindow::OnPaint)
     EVT_MOUSE_CAPTURE_LOST(ibWindow::OnMouseCaptureLost)
     EVT_ERASE_BACKGROUND(ibWindow::OnErase)
@@ -150,20 +149,30 @@ bool ibWindow::Create(wxWindow *parent,
     actualStyle &= ~wxVSCROLL;
     actualStyle &= ~wxHSCROLL;
 
-    // without this, borders (non-client areas in general) are not repainted
-    // correctly when resizing; apparently, native NC areas are fully repainted
-    // even without this style by MSW, but wxUniv implements client area
-    // itself, so it doesn't work correctly for us
-    //
-    // FIXME: this is very expensive, we need to fix the (commented-out) code
-    //        in OnSize() instead
-    //
-    // SEAM vs univ: on every port - the border is ours everywhere, and wxGTK, given no flag, repaints only what a
-    // resize uncovers as well
-    actualStyle |= wxFULL_REPAINT_ON_RESIZE;
+    // SEAM vs univ: not painted whole as it is sized - the canon's wxFULL_REPAINT_ON_RESIZE for every window, its FIXME's
+    // stopgap ("very expensive, we need to fix the code in OnSize() instead"), is gone: what the size moved of the frame
+    // is painted again (OnSize), what it uncovered the system makes dirty. With it every window of a resized window's
+    // tree was painted whole at every step - a container's native class redraws its children whole as it is sized
+    // (CS_HREDRAW | CS_VREDRAW): the configuration tree 6.5 ms of a step (2026-11-12, measured). A window whose picture
+    // follows its size asks for it itself (ibStatusBar, ibStaticBox). On GTK3 the flag decides it the same way (wxPizza,
+    // redraw on allocate); wxOSX reads no flag - a Cocoa view sized is drawn whole, the bands OnSize refreshes with it
 
+#ifdef __WXGTK__
+    // SEAM vs wxGTK: the border is ours here too - the native window made without one, as MSWGetStyle and
+    // MacGetWXBorderSize keep it off the others: wxGTK insets its native area by a sunken, raised, simple or theme border
+    // and draws the platform's frame round it (wxPizza::get_border, draw_border), ours a second one inside. And made at
+    // its client area's place in its parent (DoSetSize): wxGTK puts the widget at the place it is made with
+    const long nativeStyle = (actualStyle & ~wxBORDER_MASK) | wxBORDER_NONE;
+    wxPoint posNative(pos.x == wxDefaultCoord ? 0 : pos.x, pos.y == wxDefaultCoord ? 0 : pos.y);
+    if ( parent )
+        posNative += parent->GetClientAreaOrigin();
+
+    if ( !wxWindow::Create(parent, id, posNative, size, nativeStyle, name) )
+        return false;
+#else
     if ( !wxWindow::Create(parent, id, pos, size, actualStyle, name) )
         return false;
+#endif // __WXGTK__
 
     // Set full style again, including those we didn't want present
     // when calling the base window Create().
@@ -267,7 +276,8 @@ const wxBitmap& ibWindow::GetBackgroundBitmap(int *alignment,
 // the corner between the two scrollbars here, a control's title (ibControl::TryBefore) - before the window's own handler
 // paints its client area. wxEVT_NC_PAINT is wxMSW's alone: wxGTK raises it before the paint with a DC drawing outside
 // the paint (nothing on Wayland), wxOSX never for the window itself. The paint DC is the one DC that draws in the paint
-// on all three: it begins at the client area, and wxOSX's is clipped to it (wxPaintDCImpl) - the window is ours whole.
+// on all three: wxMSW's begins at the client area, wxOSX's is clipped to it too (wxPaintDCImpl), wxGTK's begins at the
+// native area's corner (ibThemePaintDC moves it) - the window is ours whole.
 // The canon erased the corner (OnErase); with no erase pass (wxBG_STYLE_PAINT) a window painting itself
 // (ibTreeCtrl::OnPaint) left it black. The border follows the focus (the theme's accent): the window gaining or losing
 // it is drawn anew, whatever handles the focus after.
@@ -296,6 +306,16 @@ bool ibWindow::TryBefore(wxEvent& event)
     {
         // the window whose frame shows the focus - a composite control's, for the window inside it (IsFocused)
         GetMainWindowOfCompositeControl()->Refresh();
+    }
+    else if ( type == wxEVT_SIZE && event.GetEventObject() == this )
+    {
+        // SEAM vs univ: THE NON-CLIENT PART IS LAID OUT BEFORE THE WINDOW'S OWN SIZE HANDLER, as it is painted before its
+        // paint (below): the scrollbars along the new edges - the client size a handler reads is measured from where they
+        // stand (DoGetClientSize) - and the frame the size moved painted again. The canon's size handler ran after a
+        // derived one, which read the old client size, and not at all under one that took the event: the property grid's
+        // (ibPropertyGrid::OnResize, the canon's own) left its scrollbar at the length it was made with, the down arrow
+        // cut off below the window and the frame's bottom line broken at it (2026-11-12, Max)
+        OnSize(static_cast<wxSizeEvent&>(event));
     }
     else if ( type == wxEVT_PAINT && m_renderer )
     {
@@ -339,6 +359,7 @@ bool ibWindow::TryBefore(wxEvent& event)
 #endif // wxUSE_SCROLLBAR
 
         DrawBorder(dc, rect);
+        m_paintedSize = GetSize();
     }
 
     return wxWindow::TryBefore(event);
@@ -386,6 +407,12 @@ void ibWindow::OnPaint(wxPaintEvent& event)
     // asserts wxBG_STYLE_PAINT, and a window taking the erase back (wxBG_STYLE_ERASE) with no paint of its own paints
     // here too
     wxPaintDC dcPaint(this);
+#ifdef __WXGTK__
+    // from the client area's corner and inside it, as ibThemePaintDC's - wxGTK's begins at the native area's, our frame's
+    const wxPoint origin = GetClientAreaOrigin();
+    dcPaint.SetDeviceOrigin(origin.x, origin.y);
+    dcPaint.SetClippingRegion(wxPoint(0, 0), GetClientSize());
+#endif // __WXGTK__
 #if wxALWAYS_NATIVE_DOUBLE_BUFFER
     wxDC& dc = dcPaint;
 #else
@@ -626,16 +653,60 @@ int ibWindow::GetStateFlags() const
 // size
 // ----------------------------------------------------------------------------
 
-void ibWindow::OnSize(wxSizeEvent& event)
+void ibWindow::OnSize(wxSizeEvent& WXUNUSED(event))
 {
-    event.Skip();
-
 #if wxUSE_SCROLLBAR
     if ( m_scrollbarVert || m_scrollbarHorz )
     {
         PositionScrollbars();
     }
 #endif // wxUSE_SCROLLBAR
+
+    // nothing painted yet, or nothing moved - a sizer sends the size at every layout, changed or not
+    const wxSize size = GetSize();
+    if ( !m_renderer || m_paintedSize.x <= 0 || m_paintedSize.y <= 0 || size == m_paintedSize )
+        return;
+
+    // the frame's right and bottom bands - its line, the corner between the scrollbars - where they stood at the size
+    // the window was last painted at and where they stand now; what stands beside the frame (a control's title, centred
+    // on the window's height) whole. In window coordinates: wxWindow's refresh, not ours, which keeps to the client area
+    const wxRect frame = GetBorderRect();
+    const wxRect border = m_renderer->GetBorderDimensions(GetBorder());
+    int right = border.width,
+        bottom = border.height;
+#if wxUSE_SCROLLBAR
+    if ( m_scrollbarVert )
+        right += m_scrollbarVert->GetSize().x;
+    if ( m_scrollbarHorz )
+        bottom += m_scrollbarHorz->GetSize().y;
+#endif // wxUSE_SCROLLBAR
+
+    const int frameRight = frame.GetRight() + 1,
+              frameBottom = frame.GetBottom() + 1,
+              paintedRight = frameRight - (size.x - m_paintedSize.x),
+              paintedBottom = frameBottom - (size.y - m_paintedSize.y);
+    if ( right > 0 && paintedRight != frameRight )
+    {
+        const int left = wxMin(frameRight, paintedRight) - right;
+        wxRect band(left, 0, wxMin(wxMax(frameRight, paintedRight), size.x) - left, size.y);
+        wxWindow::Refresh(false, &band);
+    }
+    if ( bottom > 0 && paintedBottom != frameBottom )
+    {
+        const int top = wxMin(frameBottom, paintedBottom) - bottom;
+        wxRect band(frame.x, top, frame.width, wxMin(wxMax(frameBottom, paintedBottom), size.y) - top);
+        wxWindow::Refresh(false, &band);
+    }
+    if ( frame.x > 0 && size.y != m_paintedSize.y )
+    {
+        wxRect beside(0, 0, frame.x, size.y);
+        wxWindow::Refresh(false, &beside);
+    }
+    if ( frameRight < size.x )
+    {
+        wxRect beside(frameRight, 0, size.x - frameRight, size.y);
+        wxWindow::Refresh(false, &beside);
+    }
 }
 
 wxSize ibWindow::GetWindowBorderSize() const
@@ -1127,3 +1198,59 @@ long ibWindow::MacGetWXBorderSize() const
 }
 
 #endif // __WXOSX__
+
+// ----------------------------------------------------------------------------
+// GTK-specific section
+// ----------------------------------------------------------------------------
+
+#ifdef __WXGTK__
+
+bool ibWindow::GTKProcessEvent(wxEvent& event) const
+{
+    wxMouseEvent * const mouse = wxDynamicCast(&event, wxMouseEvent);
+    if ( !mouse )
+        return wxWindow::GTKProcessEvent(event);
+
+    const wxPoint position = mouse->GetPosition();
+    mouse->SetPosition(position - GetClientAreaOrigin());
+
+    const bool processed = wxWindow::GTKProcessEvent(event);
+
+    mouse->SetPosition(position);
+    return processed;
+}
+
+void ibWindow::DoSetSize(int x, int y, int width, int height, int sizeFlags)
+{
+    // the place kept read as the client area's, then made the native area's - as wxMSW does (wxWindowMSW::DoSetSize)
+    if ( !IsTopLevel() )
+    {
+        if ( x == wxDefaultCoord && !(sizeFlags & wxSIZE_ALLOW_MINUS_ONE) )
+            x = GetPosition().x;
+        if ( y == wxDefaultCoord && !(sizeFlags & wxSIZE_ALLOW_MINUS_ONE) )
+            y = GetPosition().y;
+
+        AdjustForParentClientOrigin(x, y, sizeFlags);
+        sizeFlags |= wxSIZE_ALLOW_MINUS_ONE;
+    }
+
+    wxWindow::DoSetSize(x, y, width, height, sizeFlags);
+}
+
+void ibWindow::DoGetPosition(int *x, int *y) const
+{
+    wxWindow::DoGetPosition(x, y);
+
+    // ...and the native place given back as the client area's (wxWindowMSW::DoGetPosition)
+    const wxWindow * const parent = GetParent();
+    if ( parent && !IsTopLevel() )
+    {
+        const wxPoint origin = parent->GetClientAreaOrigin();
+        if ( x )
+            *x -= origin.x;
+        if ( y )
+            *y -= origin.y;
+    }
+}
+
+#endif // __WXGTK__

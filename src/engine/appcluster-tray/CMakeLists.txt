@@ -21,6 +21,8 @@ set_target_properties(appcluster-tray PROPERTIES
 
 if(WIN32)
     set_target_properties(appcluster-tray PROPERTIES WIN32_EXECUTABLE TRUE)
+    # its resources and the programs' manifest, as its project has them (appcluster-tray.vcxproj)
+    target_sources(appcluster-tray PRIVATE appcluster-tray.rc ${CMAKE_SOURCE_DIR}/src/engine/core/program.manifest)
 endif()
 
 target_compile_definitions(appcluster-tray PRIVATE NOPCH)

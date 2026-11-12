@@ -367,7 +367,7 @@ TEST_F(FileProvider, Collect_SymbolicLink_Refuses)
 
 TEST_F(FileProvider, PublishCollect_UnicodeDirectory)
 {
-	m_folder /= fs::u8path("Folder-\xc3\xa9-\xe6\x96\x87");
+	m_folder /= fs::path(u8"Folder-\xc3\xa9-\xe6\x96\x87");
 	ibDataNode root(12, 34), files, collected;
 	root.AddChild(1, 78).SetValue("Name", ibString::FromUTF8("\xd0\xa2\xd0\xbe\xd0\xb2\xd0\xb0\xd1\x80\xd1\x8b"));
 	ASSERT_TRUE(Provider().Write(root, files));

@@ -1320,9 +1320,11 @@ void ibTreeListHeaderWindow::OnPaint(wxPaintEvent& WXUNUSED(event))
 	{
 		if (!IsColumnShown(i)) continue; // do next column if not shown
 
-		// SEAM vs wx: no label colour of the system's - the title is the theme's (ibThemeRenderer::DrawHeaderButton)
+		// SEAM vs wx: no label colour of the system's - the titles in the tree's text, as the list's header draws them
+		// (ibListHeaderWindow::OnPaint)
 		wxHeaderButtonParams params;
 		params.m_labelFont = GetFont();
+		params.m_labelColour = m_owner->GetForegroundColour();
 
 		ibTreeListColumnInfo& column = GetColumn(i);
 		int wCol = column.GetWidth();
@@ -1885,6 +1887,8 @@ bool ibTreeListMainWindow::Create(ibTreeListCtrl* parent,
 
 	// SEAM: the theme's content colour, as ibTreeCtrl's - not the system's list box
 	SetBackgroundColour(wxTHEME_COLOUR(WINDOW));
+	// ...and a table's text, as the list's (ibListMainWindow) - the control's black stood beside it (2026-11-12, Max)
+	SetOwnForegroundColour(wxTHEME_COLOUR(CONTROL_TEXT_ALTERNATE));
 	// prevent any background repaint in order to reducing flicker
 	SetBackgroundStyle(wxBG_STYLE_CUSTOM);
 
@@ -4696,9 +4700,9 @@ void ibTreeListCtrl::CalculateAndSetHeaderHeight()
 {
 	if (m_header_win) {
 
-		// we use 'g' to get the descent, too
-		// SEAM vs wx: MSW's, on every port - the header is the theme's
-		const int h = (int)(ibThemeEngine::Get()->GetRenderer()->GetHeaderButtonHeight(m_header_win) * 0.8) + 2;
+		// SEAM vs wx: the theme's header, as high as the list's (ibListCtrl's header window) on every port - wxCode's
+		// four fifths of it stood lower than the list's beside it (2026-11-12, Max: Watch and Call stack)
+		const int h = ibThemeEngine::Get()->GetRenderer()->GetHeaderButtonHeight(m_header_win);
 
 		// only update if changed
 		if (h != m_headerHeight) {
@@ -5397,16 +5401,6 @@ void ibTreeListCtrl::Refresh(bool erase, const wxRect * rect)
 void ibTreeListCtrl::SetFocus()
 {
 	m_main_win->SetFocus();
-}
-
-void ibTreeListCtrl::DoSetSize(int x, int y,
-	int width, int height,
-	int sizeFlags)
-{
-	m_header_win->SetSize(x, y, width, m_headerHeight);
-	m_main_win->SetSize(x, y + m_headerHeight, width, height - m_headerHeight);
-
-	ibControl::DoSetSize(x, y, width, height, sizeFlags);
 }
 
 wxSize ibTreeListCtrl::DoGetBestClientSize() const

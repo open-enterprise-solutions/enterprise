@@ -3149,6 +3149,12 @@ void ibTreeCtrl::OnPaint( wxPaintEvent &WXUNUSED(event) )
     // OnPaint owns the background too — buffered, otherwise the scrolled-in
     // areas keep stale pixels (duplicated rows) and the repaint flickers
     wxAutoBufferedPaintDC dc(this);
+#ifdef __WXGTK__
+    // from the client area's corner and inside it, as ibThemePaintDC's - wxGTK's begins at the native area's, the frame's
+    const wxPoint origin = GetClientAreaOrigin();
+    dc.SetDeviceOrigin(origin.x, origin.y);
+    dc.SetClippingRegion(wxPoint(0, 0), GetClientSize());
+#endif // __WXGTK__
 
     dc.SetBackground(wxBrush(GetBackgroundColour()));
     dc.Clear();

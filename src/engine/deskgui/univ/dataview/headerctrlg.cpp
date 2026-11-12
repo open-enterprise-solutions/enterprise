@@ -65,8 +65,10 @@ bool ibHeaderGenericCtrl::Create(wxWindow* parent,
 	long style,
 	const wxString& name)
 {
+	// painted whole as it is sized: the blank header past the last column reaches its right end (ibWindow::OnSize
+	// paints again only the frame)
 	if (!ibHeaderGenericCtrlBase::Create(parent, id, pos, size,
-		style, wxDefaultValidator, name))
+		style | wxFULL_REPAINT_ON_RESIZE, wxDefaultValidator, name))
 		return false;
 
 	// tell the system to not paint the background at all to avoid flicker as

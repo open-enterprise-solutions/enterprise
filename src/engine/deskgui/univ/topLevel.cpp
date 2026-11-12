@@ -2,6 +2,15 @@
 
 #include "deskgui/univ/topLevel.h"
 
+#include <type_traits>
+
+#include <wx/display.h>     // wxDisplay - the work area a window is kept in (Create)
+
+#ifdef __WXGTK3__
+    #include <wx/gtk/private/wrapgtk.h>
+    #include <wx/gtk/private/backend.h>     // wxGTKImpl::IsWayland - who places the window (OnMouseMotion)
+#endif
+
 #ifdef __WXMSW__
     #include <wx/msw/private.h>
     #include <dwmapi.h>
@@ -216,6 +225,18 @@ bool ibTopLevelWindow<W>::Create(wxWindow *parent,
     if ( !this->UseBgCol() )
         this->SetOwnBackgroundColour(ibThemeEngine::Get()->GetColourScheme()->Get(ibColourScheme::FRAME));
 
+    // no larger than its display's work area, as Cocoa keeps a titled window the user may size (constrainFrameRect) -
+    // ours is made without the system's title bar: one larger than the screen had its own off it, Centre keeping the top
+    // left on the display and then giving it up for the bottom right (codeRunner's 1100x750 on the 1024x768 screen of
+    // CI look-macos, 2026-11-12). The same on every port: the native window is undecorated on all three
+    if ( this->HasFlag(wxRESIZE_BORDER) )
+    {
+        wxSize sizeFit = this->GetSize();
+        sizeFit.DecTo(wxDisplay(this).GetClientArea().GetSize());
+        if ( sizeFit != this->GetSize() )
+            this->SetSize(sizeFit);
+    }
+
     // wx's native dialog with no place given stands by its owner's corner (wxTopLevelWindowMSW::CreateDialog) - centred
     // here, at the size it is made with; one fitted afterwards centres itself again (ibMessageDialog)
     if ( pos == wxDefaultPosition )
@@ -233,7 +254,7 @@ long ibTopLevelWindow<W>::HitTest(const wxPoint& pt) const
 template <class W>
 wxPoint ibTopLevelWindow<W>::GetClientPoint(const wxMouseEvent& event) const
 {
-#ifdef __WXOSX__
+#if defined(__WXOSX__) || defined(__WXGTK__)
     return event.GetPosition() - GetClientAreaOrigin();
 #else
     return event.GetPosition();
@@ -296,9 +317,11 @@ void ibTopLevelWindow<W>::SetIcons(const wxIconBundle& icons)
     W::SetIcons(icons);
 
     // SEAM vs univ: the nearest larger, not the system's size - the frame's icon comes as one of 256x256 (the
-    // program's, wxICON), neither the title bar's 16 nor the system's 32, and the frame had none (Max, 2026-11-11)
+    // program's, wxICON), neither the title bar's 16 nor the system's 32, and the frame had none (Max, 2026-11-11).
+    // None of an empty bundle, as the canon's (wxTopLevelWindowMSW::SetIcons): GetIcon reads the data it has not - an icon
+    // not loaded makes one (wxIconBundle(const wxIcon&)), and every program of the nightly fell at its start (2026-11-12)
     const wxSize size = m_renderer->GetFrameIconSize();
-    const wxIcon& icon = icons.GetIcon(size, wxIconBundle::FALLBACK_NEAREST_LARGER);
+    const wxIcon& icon = !icons.IsEmpty() ? icons.GetIcon(size, wxIconBundle::FALLBACK_NEAREST_LARGER) : wxNullIcon;
 
     wxBitmap bmp;
     if ( !icon.IsOk() || !bmp.CopyFromIcon(icon) )
@@ -332,6 +355,16 @@ void ibTopLevelWindow<W>::SetWindowStyleFlag(long style)
 }
 
 #ifdef __WXMSW__
+
+template <class W>
+WXDWORD ibTopLevelWindow<W>::MSWGetStyle(long flags, WXDWORD *exstyle) const
+{
+    WXDWORD msflags = W::MSWGetStyle(flags, exstyle);
+    // "all dialogs are popups", the canon's
+    if constexpr ( std::is_base_of_v<wxDialog, W> )
+        msflags |= WS_POPUP;
+    return msflags;
+}
 
 template <class W>
 WXLRESULT ibTopLevelWindow<W>::MSWWindowProc(WXUINT message, WXWPARAM wParam, WXLPARAM lParam)
@@ -540,7 +573,11 @@ void ibTopLevelWindow<W>::OnSize(wxSizeEvent& event)
     if ( GetFrameRect().GetSize() == m_paintedSize )
         return;
 
-    // the right and the bottom strips where they stood - none before the first paint
+    // the corner of the client area a resizable window's grip is drawn in (ibLunaRenderer::DrawFrameBorder): the square
+    // the native grip takes, a scroll bar's corner box (SBS_SIZEGRIP)
+    const wxSize grip = m_renderer->GetScrollbarArrowSize();
+
+    // the right and the bottom strips where they stood, and the grip's corner - none before the first paint
     if ( m_paintedSize.x > 0 && m_paintedSize.y > 0 )
     {
         const wxRect client = m_renderer->GetFrameClientArea(wxRect(m_paintedSize), GetDecorationsStyle());
@@ -548,12 +585,16 @@ void ibTopLevelWindow<W>::OnSize(wxSizeEvent& event)
                           false);
         this->RefreshRect(wxRect(0, client.GetBottom() + 1, m_paintedSize.x, m_paintedSize.y - client.GetBottom() - 1),
                           false);
+        this->RefreshRect(wxRect(client.GetRight() + 1 - grip.x, client.GetBottom() + 1 - grip.y, grip.x, grip.y),
+                          false);
     }
     // ...and all of them where they stand now, painted with the window once it is laid out (Layout,
     // EndRepositioningChildren). Painted here at once, before the layout, they shortened nothing the screen showed: a
     // step of the left edge 17.4 ms with it, 17.0 without, as many frames of the old picture read off the screen
     // (2026-11-11, measured)
     RefreshTitleBar();
+    const wxRect client(GetClientAreaOrigin(), this->GetClientSize());
+    this->RefreshRect(wxRect(client.GetRight() + 1 - grip.x, client.GetBottom() + 1 - grip.y, grip.x, grip.y), false);
 }
 
 template <class W>
@@ -605,6 +646,49 @@ void ibTopLevelWindow<W>::OnMouseMotion(wxMouseEvent& event)
         }
         return;
     }
+
+#ifdef __WXGTK3__
+    // SEAM vs the grip below: under Wayland a window cannot place itself - Move, and the place SetSize is given, do
+    // nothing there. The compositor moves and sizes it, asked as GTK asks for its own title bar (GtkWindow, once the
+    // pointer held moves - a double click still maximizes) and as wx's mini frame does (gtk_window_begin_move_drag).
+    // X11 and Cocoa place it themselves, below; MSW's system does it from the hit test (ibMSWDecorationsProc)
+    if ( wxGTKImpl::IsWayland(gtk_widget_get_window(this->m_widget)) )
+    {
+        const long grip = m_grip;
+        m_grip = 0;
+        wxEndBusyCursor();
+        this->ReleaseMouse();
+
+        GdkEvent* const motion = gtk_get_current_event();
+        if ( motion == nullptr )
+            return;
+
+        gdouble x = 0, y = 0;
+        gdk_event_get_root_coords(motion, &x, &y);
+        GtkWindow* const window = GTK_WINDOW(this->m_widget);
+        if ( grip == wxHT_TOPLEVEL_TITLEBAR )
+        {
+            gtk_window_begin_move_drag(window, GDK_BUTTON_PRIMARY, int(x), int(y), gdk_event_get_time(motion));
+        }
+        else
+        {
+            GdkWindowEdge edge = GDK_WINDOW_EDGE_SOUTH_EAST;
+            switch ( grip )
+            {
+                case wxHT_TOPLEVEL_BORDER_N:  edge = GDK_WINDOW_EDGE_NORTH;      break;
+                case wxHT_TOPLEVEL_BORDER_S:  edge = GDK_WINDOW_EDGE_SOUTH;      break;
+                case wxHT_TOPLEVEL_BORDER_E:  edge = GDK_WINDOW_EDGE_EAST;       break;
+                case wxHT_TOPLEVEL_BORDER_W:  edge = GDK_WINDOW_EDGE_WEST;       break;
+                case wxHT_TOPLEVEL_BORDER_NE: edge = GDK_WINDOW_EDGE_NORTH_EAST; break;
+                case wxHT_TOPLEVEL_BORDER_NW: edge = GDK_WINDOW_EDGE_NORTH_WEST; break;
+                case wxHT_TOPLEVEL_BORDER_SW: edge = GDK_WINDOW_EDGE_SOUTH_WEST; break;
+            }
+            gtk_window_begin_resize_drag(window, edge, GDK_BUTTON_PRIMARY, int(x), int(y), gdk_event_get_time(motion));
+        }
+        gdk_event_free(motion);
+        return;
+    }
+#endif // __WXGTK3__
 
     // the window follows the pointer: held by the title bar, all of it; by the border, the edges held move and the
     // others stay - never smaller than its minimum

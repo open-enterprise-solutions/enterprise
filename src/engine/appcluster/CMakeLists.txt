@@ -24,6 +24,8 @@ set_target_properties(appcluster PROPERTIES
 
 if(WIN32)
     set_target_properties(appcluster PROPERTIES WIN32_EXECUTABLE FALSE)
+    # its resources and the programs' manifest, as its project has them (appcluster.vcxproj)
+    target_sources(appcluster PRIVATE appcluster.rc ${CMAKE_SOURCE_DIR}/src/engine/core/program.manifest)
 endif()
 
 target_compile_definitions(appcluster PRIVATE NOPCH)

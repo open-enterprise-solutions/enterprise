@@ -213,6 +213,9 @@
     <ClCompile Include="univ\panel.cpp">
       <Filter>univ</Filter>
     </ClCompile>
+    <ClCompile Include="univ\popupWindow.cpp">
+      <Filter>univ</Filter>
+    </ClCompile>
     <ClCompile Include="univ\propertySheetDialog.cpp">
       <Filter>univ</Filter>
     </ClCompile>
@@ -498,6 +501,9 @@
       <Filter>univ</Filter>
     </ClInclude>
     <ClInclude Include="univ\panel.h">
+      <Filter>univ</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\popupWindow.h">
       <Filter>univ</Filter>
     </ClInclude>
     <ClInclude Include="univ\propertySheetDialog.h">

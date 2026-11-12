@@ -5,7 +5,7 @@
 #include "textEditor.h"
 
 #include <wx/sizer.h>
-#include <wx/settings.h>
+#include <wx/font.h>   // wxFontInfo - the monospaced family
 
 ibDialogTextEditor::ibDialogTextEditor(wxWindow* parent, const wxString& caption,
 	const wxString& subject, const wxString& text)
@@ -28,10 +28,11 @@ ibDialogTextEditor::ibDialogTextEditor(wxWindow* parent, const wxString& caption
 	// borrowed from the editor is only what prose actually needs.
 	m_text->SetLexer(ibSTC_LEX_NULL);
 
-	// A monospaced face so a table or a fenced block lines up; taken from the system rather than
-	// named, since a hard-coded family is the thing that looks wrong on the one machine nobody
-	// tested on.
-	wxFont face = wxSystemSettings::GetFont(wxSYS_ANSI_FIXED_FONT);
+	// A monospaced face so a table or a fenced block lines up; the family's rather than a named
+	// one, since a hard-coded face is the thing that looks wrong on the one machine nobody
+	// tested on. Not wxSYS_ANSI_FIXED_FONT, as until 2026-11-12: on Windows that is the raster
+	// "Courier", a bitmap that does not scale with the screen.
+	wxFont face(wxFontInfo().Family(wxFONTFAMILY_TELETYPE));
 	if (face.IsOk())
 		m_text->StyleSetFont(ibSTC_STYLE_DEFAULT, face);
 	m_text->StyleClearAll();

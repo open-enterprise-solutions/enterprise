@@ -82,7 +82,7 @@ ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::ibVisualEditorHost(i
 	m_formHandler(handler)
 {
 	// The canvas the card sits on — the window the host scrolls in.
-	GetContentWindow()->SetOwnBackgroundColour(wxColour(0xD8, 0xE2, 0xEB));  // #D8E2EB palest powder — light background so form card pops
+	GetContentWindow()->SetOwnBackgroundColour(wxColour(0xE7, 0xEC, 0xF0));  // #E7ECF0 caption-inactive-top — light background so form card pops
 
 	m_back = new ibDesignerWindow(GetContentWindow(), wxID_ANY, wxPoint(10, 10));
 	m_back->GetEventHandler()->Connect(wxID_ANY, wxEVT_LEFT_DOWN, wxMouseEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnClickBackPanel), nullptr, this);
@@ -333,7 +333,7 @@ ibDesignerWindow::ibDesignerWindow(wxWindow* parent, wxWindowID id, const wxPoin
 	: ibInnerFrame(parent, id, pos, wxDefaultSize, 0)
 {
 	ShowTitleBar(false);
-	SetBackgroundColour(wxColour(0xD8, 0xE2, 0xEB));  // #D8E2EB palest powder — light background so form card pops
+	SetBackgroundColour(wxColour(0xE7, 0xEC, 0xF0));  // #E7ECF0 caption-inactive-top — light background so form card pops
 
 	Bind(wxEVT_PAINT, &ibDesignerWindow::OnPaint, this);
 }

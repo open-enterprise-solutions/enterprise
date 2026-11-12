@@ -63,6 +63,9 @@ bool ibGauge::Create(wxWindow *parent,
                      const wxValidator& validator,
                      const wxString& name)
 {
+    // painted whole as it is sized: its fill is a share of it (ibWindow::OnSize paints again only the frame)
+    style |= wxFULL_REPAINT_ON_RESIZE;
+
     if ( !ibControl::Create(parent, id, pos, size, style, validator, name) )
         return false;
 

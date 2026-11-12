@@ -16,6 +16,8 @@ set_target_properties(launcher PROPERTIES
 
 if(WIN32)
     set_target_properties(launcher PROPERTIES WIN32_EXECUTABLE TRUE)
+    # its resources - the icon wxICON(oes) loads - and the programs' manifest, as its project has them (launcher.vcxproj)
+    target_sources(launcher PRIVATE launcher.rc ${CMAKE_SOURCE_DIR}/src/engine/core/program.manifest)
 endif()
 
 # A BUNDLE OF ITS OWN, like the designer's and the enterprise's: CMake's default Info.plist leaves the bundle

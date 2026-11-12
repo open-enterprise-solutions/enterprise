@@ -16,6 +16,9 @@ struct ibCommandItem {
 	// (Save / Post / Mark-for-delete / Create / …); read-only actions (Refresh / Filter / Sort / open) set it
 	// false (SetModify) so they stay live. Only the view-only greying reads it (BuildCommands).
 	bool                 m_modifiesData   = true;
+	// The form's default command — the one its bar draws standing out (an object form's «… and close»). Read where the
+	// bar fills itself (BuildCommands, AutoFill); a bar's own item says it for itself (ibValueCommandBarItem::IsDefault).
+	bool                 m_default        = false;
 
 	ibCommandItem() {}
 	ibCommandItem(const ibActionID& actionId, const ibString& name, const ibString& caption,
@@ -27,6 +30,7 @@ struct ibCommandItem {
 	ibCommandItem& SetModify(bool modifies)      { m_modifiesData   = modifies; return *this; }
 	ibCommandItem& SetPictureAndText(bool value) { m_pictureAndText = value;    return *this; }
 	ibCommandItem& SetCreateInForm(bool value)   { m_createInForm   = value;    return *this; }
+	ibCommandItem& SetDefault(bool value)        { m_default        = value;    return *this; }
 };
 
 class ibStandardCommandSource {
@@ -148,6 +152,11 @@ protected:
 		bool IsCreateInForm(const ibActionID& lNumAction) const {
 			const ibCommandItem* act = FindByID(lNumAction);
 			return act != nullptr ? act->m_createInForm : true;
+		}
+
+		bool IsDefault(const ibActionID& lNumAction) const {
+			const ibCommandItem* act = FindByID(lNumAction);
+			return act != nullptr && act->m_default;
 		}
 
 		ibValue* GetSourceDataByID(const ibActionID& lNumAction) const {

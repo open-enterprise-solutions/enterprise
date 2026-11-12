@@ -14,7 +14,6 @@
 
 #ifdef __WXMSW__
     #include <wx/msw/private.h>
-    #include "deskgui/univ/topLevel.h"   // ibMSWShowShadowed — the popup's shadow, its own
 #endif
 
 namespace {
@@ -44,34 +43,14 @@ ibToolTipWindow::ibToolTipWindow(wxWindow *parent)
 
 #ifdef __WXMSW__
 
-bool ibToolTipWindow::Show(bool show)
-{
-    if ( !show )
-        return wxPopupWindow::Show(false);
-
-    // shown without being activated: the window's state first, then the native show that does not activate
-    if ( !wxWindowBase::Show(true) )
-        return false;
-
-    const HWND hWnd = GetHwnd();
-    ibMSWShowShadowed(this, [hWnd] { ::ShowWindow(hWnd, SW_SHOWNA); return true; });
-    ::SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-    return true;
-}
-
 bool ibToolTipWindow::MSWHandleMessage(WXLRESULT *result, WXUINT message, WXWPARAM wParam, WXLPARAM lParam)
 {
-    if ( message == WM_MOUSEACTIVATE )
-    {
-        *result = MA_NOACTIVATE;
-        return true;
-    }
     if ( message == WM_NCHITTEST )
     {
         *result = HTTRANSPARENT;
         return true;
     }
-    return wxPopupWindow::MSWHandleMessage(result, message, wParam, lParam);
+    return ibPopupWindow::MSWHandleMessage(result, message, wParam, lParam);
 }
 
 #endif // __WXMSW__

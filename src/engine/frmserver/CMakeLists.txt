@@ -27,6 +27,8 @@ target_compile_definitions(frmserver
 # FRMSERVER_API resolves to dllexport only when FRMSERVER_EXPORTS is defined (frmserver.h).
 if(WIN32)
     target_compile_definitions(frmserver PRIVATE FRMSERVER_EXPORTS)
+    # its resources, as its project has them (frmserver.vcxproj)
+    target_sources(frmserver PRIVATE frmserver.rc)
 endif()
 
 # Of wx the base only, as the backend's (backend/CMakeLists.txt): a form on the server is data, drawn by a client.

@@ -17,7 +17,7 @@ enum
 ibValueRecordDataObjectChartOfCalculationTypes::ibStandardCommandSet ibValueRecordDataObjectChartOfCalculationTypes::GetStandardCommands(const ibFormID& formType)
 {
 	ibStandardCommandSet actions(this);
-	actions.AddAction(ibT("SaveAndClose"), _("Save and close"), g_picSaveCLSID, true, eDefActionAndClose);
+	actions.AddAction(ibT("SaveAndClose"), _("Save and close"), g_picSaveCLSID, true, eDefActionAndClose).SetDefault(true);
 	actions.AddAction(ibT("Save"), _("Save"), g_picSaveCLSID, true, eSave);
 	actions.AddSeparator();
 	actions.AddAction(ibT("Generate"), _("Generate"), g_picGenerateCLSID, true, eGenerate).SetModify(false);   // creates a NEW object — doesn't modify THIS one

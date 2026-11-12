@@ -59,6 +59,10 @@ bool ibStaticBitmap::Create(wxWindow *parent,
                             long style,
                             const wxString &name)
 {
+    // painted whole as it is sized: its picture is aligned or stretched in it (ibWindow::OnSize paints again only the
+    // frame)
+    style |= wxFULL_REPAINT_ON_RESIZE;
+
     if ( !ibControl::Create(parent, id, pos, size, style, wxDefaultValidator, name) )
         return false;
 

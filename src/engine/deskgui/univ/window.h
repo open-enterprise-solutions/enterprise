@@ -242,6 +242,11 @@ protected:
     virtual wxHitTest DoHitTest(wxCoord x, wxCoord y) const override;
 
     // event handlers
+
+    // the scrollbars along the new edges, and the frame the size moved painted again - its right and bottom bands where
+    // they stood at the size the window was last painted at (m_paintedSize) and where they stand now, what stands beside
+    // it (GetBorderRect): the canon's way, its FIXME's (wxFULL_REPAINT_ON_RESIZE for every window, "very expensive") done.
+    // Before the window's own size handler (TryBefore), not among them
     void OnSize(wxSizeEvent& event);
     void OnPaint(wxPaintEvent& event);
     void OnErase(wxEraseEvent& event);
@@ -285,6 +290,24 @@ public:
     virtual long MacGetWXBorderSize() const override;
 #endif // __WXOSX__
 
+#ifdef __WXGTK__
+public:
+    // SEAM vs wxGTK: a mouse event's place is the client area's, as wxMSW gives it (wxWindowMSW::InitMouseEvent: "our
+    // client coords are not quite the same as Windows ones") - wxGTK's is the native area's, our frame's corner: a click
+    // landed the frame's width right and down of what it hit. Given back after, for what wxGTK does with it next (the
+    // context menu's place, ClientToScreen)
+    virtual bool GTKProcessEvent(wxEvent& event) const override;
+
+protected:
+    // SEAM vs wxGTK: a child stands in its parent's client area, as wxMSW and wxOSX place it (AdjustForParentClientOrigin
+    // in their DoSetSize, taken back in DoGetPosition) - wxGTK places it from the native area's corner, and ours begins
+    // inside it: the frame, a frame's title bar and menu bar are drawn there. On Linux the tool bar stood over the title
+    // bar and the menu bar, every child of the frame as much higher, the last one short of the status bar by as much
+    // (CI, look-linux, 2026-11-12)
+    virtual void DoSetSize(int x, int y, int width, int height, int sizeFlags = wxSIZE_AUTO) override;
+    virtual void DoGetPosition(int *x, int *y) const override;
+#endif // __WXGTK__
+
 private:
 
 #if wxUSE_SCROLLBAR
@@ -292,6 +315,8 @@ private:
     ibScrollBar *m_scrollbarHorz,
                 *m_scrollbarVert;
 #endif // wxUSE_SCROLLBAR
+
+    wxSize m_paintedSize;       // the window's size its frame was last painted at (TryBefore)
 
     // the current modal event loop for the popup menu we show or nullptr
     static wxEventLoop *ms_evtLoopPopup;
@@ -312,6 +337,14 @@ public:
     explicit ibThemePaintDC(ibWindow *window)
         : wxAutoBufferedPaintDC(window)
     {
+#ifdef __WXGTK__
+        // SEAM vs wxGTK: drawn from the client area's corner and kept inside it, as wxMSW's paint DC begins there
+        // (wxClientDCImpl::InitDC) and wxOSX's is clipped to it - wxGTK's begins at the native area's corner, where our
+        // frame is (the canon's univ did it in its wxClientDCImpl; on GTK3 wxAutoBufferedPaintDC is wxPaintDC itself)
+        const wxPoint origin = window->GetClientAreaOrigin();
+        SetDeviceOrigin(origin.x, origin.y);
+        SetClippingRegion(wxPoint(0, 0), window->GetClientSize());
+#endif // __WXGTK__
         window->EraseBackground(*this, wxRect(window->GetSize()));
     }
 };

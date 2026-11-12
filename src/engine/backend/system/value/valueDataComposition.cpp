@@ -941,9 +941,10 @@ const ibUniqueKey& ibValueDataComposition::GetGuid() const
 // bound to it reports itself as such, and its bar is suppressed in favour of the form's.
 void ibValueDataComposition::GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const
 {
-	// COMPOSE changes what is SHOWN, not what is stored — live even on a view-only form.
+	// COMPOSE changes what is SHOWN, not what is stored — live even on a view-only form. The report's default button,
+	// as Save and close is an object's (Max, 2026-11-12: "Compose is the main button too").
 	commands.push_back(ibCommandItem(ibSpreadsheetModelCommand_Compose, ibT("Compose"), _("Compose"),
-		ibPictureDescription(g_picComposeCLSID), true).SetModify(false));
+		ibPictureDescription(g_picComposeCLSID), true).SetModify(false).SetDefault(true));
 	commands.push_back(ibCommandItem());   // separator — "show it" is not "arrange it"
 	commands.push_back(ibCommandItem(ibSpreadsheetModelCommand_Settings, ibT("Settings"), _("Settings"),
 		ibPictureDescription(g_picComposerSettingsCLSID), false).SetModify(false));

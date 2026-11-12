@@ -34,6 +34,7 @@
 #include "deskgui/univ/theme.h"
 #include "wx/mdi.h"
 #include "wx/wupdlock.h"
+#include "wx/dcbuffer.h"
 #include "wx/renderer.h"   // wxCONTROL_* - a button's state as the theme reads it (ibAuiGetControlFlags)
 
 #include "wx/private/tlwdrag.h"
@@ -4153,7 +4154,9 @@ void ibAuiManager::ShowHint(const wxRect& rectScreen)
     const bool canDrawTransparentHint = m_overlay.IsNative();
 #endif
 
-    const auto hintCol = wxSystemSettings::GetColour(wxSYS_COLOUR_HOTLIGHT);
+    // SEAM vs wx: the hint is the theme's accent (terracotta in Luna), not the system's HOTLIGHT blue (2026-11-12, Max).
+    // On GTK3/Cocoa the same - the colour is the theme's there too
+    const auto hintCol = wxTHEME_COLOUR(HIGHLIGHT);
     const unsigned char r = hintCol.GetRed();
     const unsigned char g = hintCol.GetGreen();
     const unsigned char b = hintCol.GetBlue();
@@ -4947,16 +4950,33 @@ void ibAuiManager::OnDestroy(wxWindowDestroyEvent& event)
 
 void ibAuiManager::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
-    wxPaintDC dc(m_frame);
+    wxPaintDC dcPaint(m_frame);
 
-    // SEAM vs wx: the dock's colour under the client area alone, where the paint DC begins (wxClientDCImpl::InitDC):
-    // Clear filled the whole window, and over the decorations the theme's frame paints round it before this
-    // (ibTopLevelWindow::TryBefore) - its title bar was never seen
+    // SEAM vs wx: the dock's colour under the client area alone: Clear filled the whole window, and over the decorations
+    // the theme's frame paints round it before this (ibTopLevelWindow::TryBefore) - its title bar was never seen. From
+    // the client area's corner, as Repaint takes it: wxMSW's paint DC begins there (wxClientDCImpl::InitDC), wxGTK's
+    // at the window's
+    const wxPoint origin = m_frame->GetClientAreaOrigin();
+    dcPaint.SetDeviceOrigin(origin.x, origin.y);
+
+    // SEAM vs wx: one buffered pass, as an ib window paints (ibWindow::OnPaint) - on the screen itself the dock's colour
+    // went over the captions and the sashes before they were drawn again, and every step of a size showed it: the
+    // caption and the strip above the bottom notebook flickered (2026-11-12, Max). On GTK3/Cocoa the window is
+    // double-buffered natively, the paint DC is the buffer
+    const wxSize size = m_frame->GetClientSize();
+#if wxALWAYS_NATIVE_DOUBLE_BUFFER
+    wxDC& dc = dcPaint;
+#else
+    wxBufferedDC dc(&dcPaint, size);
+    // the window's font and colours, as wxBufferedPaintDC takes them
+    dc.GetImpl()->InheritAttributes(m_frame);
+#endif
     dc.SetBrush(wxTHEME_COLOUR(DESKTOP));
     dc.SetPen(*wxTRANSPARENT_PEN);
-    dc.DrawRectangle(wxPoint(0, 0), m_frame->GetClientSize());
+    dc.DrawRectangle(wxPoint(0, 0), size);
 
-    Repaint(&dc);
+    // not Repaint(&dc): it moves the DC's origin to the client area's corner, where the buffer begins already
+    Render(&dc);
 }
 
 void ibAuiManager::OnEraseBackground(wxEraseEvent& event)
@@ -5693,6 +5713,13 @@ void ibAuiManager::OnMotion(wxMouseEvent& event)
         // this call will create the floating pane
         // and do the reparenting
         Update();
+
+        // SEAM vs wx: the move painted at once, after the layout, as a frame paints after its own (ibTopLevelWindow::Layout).
+        // A drag's next move is taken before a paint (input outranks it): the bar stood where it was while the mouse
+        // moved and was drawn where it went only when the mouse stopped, its old place left in the dock till then
+        // (2026-11-12, Max: "a very slow response when moving"). On GTK3/Cocoa the paint follows the frame clock, input
+        // does not hold it back; Update() draws what is pending there too
+        m_frame->Update();
 
         // if the pane has been floated, change the mouse
         // action actionDragFloatingPane so that subsequent

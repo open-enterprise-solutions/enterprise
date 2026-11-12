@@ -78,6 +78,8 @@ void ibFrontendMainFrameDesigner::CreateBottomPane()
 	paneInfo.Resizable(false);
 	paneInfo.Movable(false);
 	paneInfo.MinSize(-1, 30);
+	paneInfo.CaptionVisible(false);   // no caption, as the window's (ibFrontendMainFrame::CreateBottomPane)
+	paneInfo.PaneBorder(false);       // framed by its book, as the window's
 
 	ibFloatingNotebook* auiNotebook = new ibFloatingNotebook(&m_mgr, paneInfo.name,
 		wxID_ANY,

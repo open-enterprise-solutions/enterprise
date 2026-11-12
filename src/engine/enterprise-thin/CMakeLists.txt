@@ -19,6 +19,8 @@ set_target_properties(enterprise-thin PROPERTIES
 
 if(WIN32)
     set_target_properties(enterprise-thin PROPERTIES WIN32_EXECUTABLE TRUE)
+    # its resources - the icon wxICON(oes) loads - and the programs' manifest, as its project has them (enterprise-thin.vcxproj)
+    target_sources(enterprise-thin PRIVATE enterprise-thin.rc ${CMAKE_SOURCE_DIR}/src/engine/core/program.manifest)
 endif()
 
 if(APPLE)

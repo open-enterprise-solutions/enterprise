@@ -496,7 +496,7 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 				? ibRepresentation_PictureAndText
 				: (actions.IsCreatePictureAndText(id) ? ibRepresentation_PictureAndText : ibRepresentation_Picture);
 			const bool enabled = !(viewOnly && actions.GetModifiesDataByID(id));   // greyed if it changes data
-			m_commands.emplace_back(id, actions.GetCaptionByID(id), pic, rep, enabled);
+			m_commands.emplace_back(id, actions.GetCaptionByID(id), pic, rep, enabled).isDefault = actions.IsDefault(id);
 		}
 	}
 	// A seam never reached (a set shorter than its own provider's — not a shape a form builds) still shows the groups.
@@ -536,7 +536,7 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 		ibRepresentation rep = item->GetRepresentation();
 		if (rep == ibRepresentation::ibRepresentation_Auto)
 			rep = cmdPicAndText ? ibRepresentation::ibRepresentation_PictureAndText : ibRepresentation::ibRepresentation_Picture;
-		m_commands.emplace_back(synthId++, caption, pic, rep, enabled, item);
+		m_commands.emplace_back(synthId++, caption, pic, rep, enabled, item).isDefault = item->IsDefault();
 	}
 	return m_commands;
 }
@@ -705,6 +705,7 @@ void ibValueCommandBar::Update(ibDataNode& state)
 		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Picture, c.representation == ibRepresentation_Text ? ibDataValue() : ibBackendPicture::SendPicture(c.picture, GetMetaData()));
 		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Tooltip, c.tooltip.IsEmpty() ? c.caption : c.tooltip);
 		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Enabled, c.enabled);
+		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Default, c.isDefault);
 		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Kind, static_cast<std::int32_t>(c.kind));
 
 		// An item of the bar's own — its place among them, as its node is written (WriteData): what the designer selects
@@ -769,6 +770,7 @@ bool ibValueCommandBarItem::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyTooltip->GetName(), m_propertyTooltip->GetNodeValue());
 	node.SetProperty(m_propertyEnabled->GetName(), m_propertyEnabled->GetNodeValue());
 	node.SetProperty(m_propertyVisible->GetName(), m_propertyVisible->GetNodeValue());
+	node.SetProperty(m_propertyDefault->GetName(), m_propertyDefault->GetNodeValue());
 	node.SetProperty(m_propertyFunctionalOptions->GetName(), m_propertyFunctionalOptions->GetNodeValue());
 	node.SetProperty(m_propertyCommand->GetName(), m_propertyCommand->GetNodeValue());   // command SOURCE (the hop path)
 	return true;
@@ -783,6 +785,7 @@ bool ibValueCommandBarItem::ReadData(const ibDataNode& node)
 	m_propertyTooltip->SetNodeValue(node.GetProperty(m_propertyTooltip->GetName()));
 	m_propertyEnabled->SetNodeValue(node.GetProperty(m_propertyEnabled->GetName()));
 	m_propertyVisible->SetNodeValue(node.GetProperty(m_propertyVisible->GetName()));
+	m_propertyDefault->SetNodeValue(node.GetProperty(m_propertyDefault->GetName()));
 	m_propertyFunctionalOptions->SetNodeValue(node.GetProperty(m_propertyFunctionalOptions->GetName()));
 	m_propertyCommand->SetNodeValue(node.GetProperty(m_propertyCommand->GetName()));   // command SOURCE (the hop path)
 	return true;

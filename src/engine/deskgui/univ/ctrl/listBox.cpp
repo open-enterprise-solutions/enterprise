@@ -183,6 +183,12 @@ bool ibListBox::Create(wxWindow *parent,
         style |= wxBORDER_SUNKEN;
 #endif
 
+    // painted whole as it is sized: an item spans the client's width, its selection and its focus frame (ibWindow::OnSize
+    // paints again only the frame) - widened without it, the focus frame's right edge stayed at every width the window
+    // passed (the launcher's list of bases, 2026-11-12, Max). On GTK3 the flag decides it the same way; a Cocoa view is
+    // drawn whole as it is sized
+    style |= wxFULL_REPAINT_ON_RESIZE;
+
     if ( !ibControl::Create(parent, id, pos, size, style,
                             validator, name) )
         return false;

@@ -6,7 +6,7 @@
 #include "deskgui/univ/dialog.h"
 #include <wx/sizer.h>
 #include "deskgui/univ/ctrl/button.h"
-#include <wx/bmpcbox.h>
+#include "deskgui/univ/ctrl/comboBox.h"
 #include "deskgui/univ/ctrl/textCtrl.h"
 #include "deskgui/univ/ctrl/staticText.h"
 
@@ -28,7 +28,7 @@ private:
 
 	ibStaticText* m_staticTextLogin;
 	ibStaticText* m_staticTextPassword;
-	wxBitmapComboBox* m_comboBoxLogin;
+	ibComboBox* m_comboBoxLogin;
 	ibTextCtrl* m_textCtrlPassword;
 	ibButton* m_buttonOK;
 	ibButton* m_buttonCancel;

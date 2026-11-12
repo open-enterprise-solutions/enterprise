@@ -182,6 +182,8 @@ export class CommandBar {
 		button.setAttribute('size', 's');
 		button.setAttribute('appearance', 'plain');
 		button.toggleAttribute('disabled', entry.Enabled === false);
+		// The bar's default command stands out (form.css) — a form's «… and close», or the item the author marked.
+		button.classList.toggle('default', entry.Default === true);
 		const picture = this.owner.context.picture(entry.Picture);
 		if (picture) {
 			const image = document.createElement('img');

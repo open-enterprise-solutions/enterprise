@@ -18,6 +18,7 @@
 #include "deskgui/univ/renderer.h"
 #include "deskgui/univ/colourScheme.h"
 #include "deskgui/univ/ctrl/textCtrl.h"
+#include "deskgui/univ/popupWindow.h"
 
 // the column between the field and the button's separator - wx's COMBO_MARGIN (combocmn.cpp, "spacing right of
 // wxTextCtrl"), counted where the field is laid out (GetTextRect) and where the control is sized (DoGetBestClientSize)
@@ -47,7 +48,7 @@ void ibComboPopup::OnComboDoubleClick()
 // ibComboPopupWindow: the transient window hosting the popup's control
 // ----------------------------------------------------------------------------
 
-class ibComboPopupWindow : public wxPopupTransientWindow
+class ibComboPopupWindow : public ibPopupWindow<wxPopupTransientWindow>
 {
 public:
     explicit ibComboPopupWindow(ibComboCtrl *combo)
@@ -134,6 +135,10 @@ bool ibComboCtrl::Create(wxWindow *parent,
     // the combo looks like a text field — same default border
     if ( (style & wxBORDER_MASK) == 0 )
         style |= wxBORDER_SUNKEN;
+
+    // painted whole as it is sized: the drop button stands at its right end (ibWindow::OnSize paints again only the
+    // frame)
+    style |= wxFULL_REPAINT_ON_RESIZE;
 
     if ( !ibControl::Create(parent, id, pos, size, style, validator, name) )
         return false;

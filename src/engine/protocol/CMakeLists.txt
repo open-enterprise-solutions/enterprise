@@ -28,6 +28,8 @@ target_compile_definitions(protocol
 # PROTOCOL_API resolves to dllexport only when PROTOCOL_EXPORTS is defined (protocolApi.h).
 if(WIN32)
     target_compile_definitions(protocol PRIVATE PROTOCOL_EXPORTS)
+    # its resources, as its project has them (protocol.vcxproj)
+    target_sources(protocol PRIVATE protocol.rc)
 endif()
 
 # Nothing of the server: a side speaks the wire's packets (its tree is the packet's ibDataNode, the core's), and a file base

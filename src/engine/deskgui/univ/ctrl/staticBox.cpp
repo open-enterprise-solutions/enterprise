@@ -35,7 +35,11 @@
 
 #include "deskgui/univ/renderer.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibStaticBox, ibControl);
+// SEAM vs univ: A STATIC BOX IN wx's RTTI as the canon's box is one in C++ (univ's wxStaticBox) - wx knows the children
+// of a box by it: a sizer's windows must be children of its window or of a static box in it (CheckExpectedParentIs,
+// sizer.cpp, the one cast to wxStaticBox in wx, which reads nothing through it), and each child of every
+// ibStaticBoxSizer asserted as its window's sizer was set (2026-11-12, Max: the settings, the query constructor, About)
+wxIMPLEMENT_DYNAMIC_CLASS2(ibStaticBox, ibControl, wxStaticBox);
 
 // ============================================================================
 // implementation

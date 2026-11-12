@@ -1065,7 +1065,7 @@ PRectangle Window::GetMonitorRect(Point pt) {
 #elif wxUSE_POPUPWIN
 
     ibSTCPopupBase::ibSTCPopupBase(wxWindow* parent)
-                   :wxPopupWindow(parent, wxPU_CONTAINS_CONTROLS)
+                   :ibPopupWindow<wxPopupWindow>(parent, wxPU_CONTAINS_CONTROLS)
     {
     }
 
@@ -1076,47 +1076,6 @@ PRectangle Window::GetMonitorRect(Point pt) {
             wxRect rect = GetRect();
             GetParent()->ScreenToClient(&(rect.x), &(rect.y));
             GetParent()->Refresh(false, &rect);
-        }
-
-    #elif defined(__WXMSW__)
-
-        // Do not activate the window when it is shown.
-        bool ibSTCPopupBase::Show(bool show)
-        {
-            if ( show )
-            {
-                // Check if the window is changing from hidden to shown.
-                bool changingVisibility = wxWindowBase::Show(true);
-
-                if ( changingVisibility )
-                {
-                    HWND hWnd = reinterpret_cast<HWND>(GetHandle());
-                    if ( GetName() == "ibSTCCallTip" )
-                        ::AnimateWindow(hWnd, 25, AW_BLEND);
-                    else
-                        ::ShowWindow(hWnd, SW_SHOWNA );
-
-                    ::SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0,
-                                   SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-                }
-
-                return changingVisibility;
-            }
-            else
-                return wxPopupWindow::Show(false);
-        }
-
-        // Do not activate in response to mouse clicks on this window.
-        bool ibSTCPopupBase::MSWHandleMessage(WXLRESULT *res, WXUINT msg,
-                                              WXWPARAM wParam, WXLPARAM lParam)
-        {
-            if ( msg == WM_MOUSEACTIVATE )
-            {
-                *res = MA_NOACTIVATE;
-                return true;
-            }
-            else
-                return wxPopupWindow::MSWHandleMessage(res, msg, wParam,lParam);
         }
 
     #endif // __WXGTK__

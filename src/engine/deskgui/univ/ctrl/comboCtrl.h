@@ -111,6 +111,12 @@ public:
         return GetStdInputHandler(handlerDef);
     }
 
+    // a field, as the text box it is made of: it lives on the content colour. Its read-only value is a box with no frame
+    // of its own, which takes the surface under it (ibTextCtrl::HasContentBackground) - this; a choice stood grey inside
+    // beside a white field once that box stopped being content by itself (2026-11-12, Max). On GTK3/Cocoa the same - the
+    // combo is the engine's there too
+    virtual bool HasContentBackground() const override { return true; }
+
     // the popup, set once: its control is made in the host's transient window and goes with it
     void SetPopupControl(ibComboPopup* popup);
     ibComboPopup* GetPopupControl() const { return m_popup; }

@@ -126,6 +126,11 @@ public:
     virtual void SetWindowStyleFlag(long style) override;
 
 #ifdef __WXMSW__
+    // W's, a dialog a popup still - wx makes every dialog one (wxTopLevelWindowMSW::CreateDialog), and its styles made
+    // again for the caption and the frame (Create, SetWindowStyleFlag) took it off: hidden, an overlapped window does not
+    // hand the activation to its owner, the system gave it to the window under it - another program's (2026-11-12,
+    // Max: "the last one activates anything - Explorer, the browser"). On GTK3/Cocoa the dialog is the port's own
+    virtual WXDWORD MSWGetStyle(long flags, WXDWORD *exstyle = nullptr) const override;
     // the system moves and sizes the window by its decorations (ibMSWDecorationsProc)
     virtual WXLRESULT MSWWindowProc(WXUINT message, WXWPARAM wParam, WXLPARAM lParam) override;
     // W's - the children moved where the size laid them out, all at once (wxMSW defers the moves to the end of the size,
@@ -155,7 +160,8 @@ private:
 
     // the mouse event's point in the client area, as HitTest takes it: wxMSW gives it so (wxWindowMSW::InitMouseEvent
     // takes the client area's origin off), wxOSX gives it in the native view's coordinates - the whole window's, the
-    // decorations' too (wxSetupCoordinates) - and the title bar's x was hit a title bar's height below it
+    // decorations' too (wxSetupCoordinates) - and the title bar's x was hit a title bar's height below it; wxGTK in its
+    // native area's, the whole window's as well (an ibWindow's is taken off in ibWindow::GTKProcessEvent)
     wxPoint GetClientPoint(const wxMouseEvent& event) const;
 
     // the strips round the client area painted again - not the children inside it

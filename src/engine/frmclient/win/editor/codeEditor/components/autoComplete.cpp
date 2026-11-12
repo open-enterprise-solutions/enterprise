@@ -39,7 +39,7 @@ void ibAutoComplete::Start(const wxString& currentWord,
 {
 	if (m_active) Cancel();
 
-	m_listBoxWin = new ibCodeEditorListBoxWin(m_owner, m_visualData, m_owner->TextHeight(m_owner->GetCurrentLine()));
+	m_listBoxWin = new ibCodeEditorListBoxWin(m_owner, this, m_visualData, m_owner->TextHeight(m_owner->GetCurrentLine()));
 
 	// Scale the dropdown box together with the editor's zoom so the
 	// listbox stays proportional to the font — at default zoom the box
@@ -165,7 +165,9 @@ void ibAutoComplete::Cancel()
 	if (m_listBoxWin) {
 		m_listBoxWin->GetListBox()->Clear();
 		m_listBoxWin->GetListBox()->Destroy();
-		wxDELETE(m_listBoxWin);
+		// let go of as the call tip's is (ibCallTip::Cancel): the list may be the one telling it went (OnDismiss)
+		m_listBoxWin->Destroy();
+		m_listBoxWin = nullptr;
 	}
 	wxDELETE(m_evtHandler);
 }

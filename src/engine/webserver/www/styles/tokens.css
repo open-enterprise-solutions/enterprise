@@ -28,10 +28,10 @@
 	--oes-sheet-cell-selected: rgb(59 80 160 / 0.15);
 
 	/* The section panel, as the thin client paints it: a light dusty column, the sections all but white on it, the open
-	   one white; its page's links in the forms' ink. */
-	--oes-sections-bg: #c8d6df;
-	--oes-section-bg: #eef3f6;
-	--oes-section-border: #b8c9d4;
+	   one white; its page's links in the forms' ink. Lifted toward white with the thin client's chrome (2026-11-12). */
+	--oes-sections-bg: #dde4e8;
+	--oes-section-bg: #f5f7f8;
+	--oes-section-border: #d3dbe1;
 	--oes-section-text: #343a40;
 	--oes-section-ink: #3f5c77;
 
@@ -75,6 +75,10 @@
 	/* The light a command bar is lit by, from the top down. */
 	--oes-bar-shine-top: rgb(255 255 255 / 0.5);
 	--oes-bar-shine-bottom: rgb(0 0 0 / 0.05);
+	/* A command bar's default command (its entry's Default - a form's «… and close»): the thin client's default button,
+	   the terracotta of its theme, the caption white. */
+	--oes-default-button-bg: #d97757;
+	--oes-default-button-text: #ffffff;
 	/* What a raised thing throws: a dialog, a menu, a sheet's editor. */
 	--oes-shadow: rgb(0 0 0 / 0.12);
 	--oes-shadow-strong: rgb(0 0 0 / 0.15);
@@ -130,6 +134,8 @@
 		--oes-on-colour: #16181b;
 		--oes-bar-shine-top: rgb(255 255 255 / 0.06);
 		--oes-bar-shine-bottom: rgb(0 0 0 / 0.2);
+		--oes-default-button-bg: #e58a6c;
+		--oes-default-button-text: #16181b;
 		--oes-shadow: rgb(0 0 0 / 0.45);
 		--oes-shadow-strong: rgb(0 0 0 / 0.55);
 		--oes-veil: rgb(20 22 26 / 0.9);

@@ -56,6 +56,10 @@ bool ibActivityIndicator::Create(wxWindow* parent,
     if ( !(style & wxBORDER_MASK) )
         style |= wxBORDER_NONE;
 
+    // painted whole as it is sized: its dots are centred in it, sized by it (ibWindow::OnSize paints again only the
+    // frame)
+    style |= wxFULL_REPAINT_ON_RESIZE;
+
     if ( !ibControl::Create(parent, winid, pos, size, style, wxDefaultValidator, name) )
         return false;
 

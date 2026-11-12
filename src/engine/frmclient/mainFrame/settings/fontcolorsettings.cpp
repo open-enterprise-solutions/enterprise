@@ -2,9 +2,12 @@
 #include "settingsxml.h"
 
 #include "deskgui/univ/stc/stc.h"
+#include "deskgui/univ/theme.h"          // ibThemeEngine — the paper is the theme's content colour
+#include "deskgui/univ/colourScheme.h"   // wxTHEME_COLOUR
 
-// Every kind on the one paper colour; what tells them apart is the ink.
-static const wxColour kPaper(0xFA, 0xF7, 0xF0);
+// The cream the paper was until 2026-11-12, kept in the options of everyone who saved them (the dialog saves every kind,
+// so nobody chose it) — read as the paper it is now (Load)
+static const wxColour kFormerPaper(0xFA, 0xF7, 0xF0);
 
 ibFontColorSettings::ibFontColorSettings()
 {
@@ -14,15 +17,18 @@ ibFontColorSettings::ibFontColorSettings()
 	m_font = wxFont(10, wxFONTFAMILY_MODERN, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL);
 #endif
 
-	m_colors[DisplayItem_Default] = { wxColour(0x00, 0x00, 0x00), kPaper };
-	m_colors[DisplayItem_Comment] = { wxColour(0x00, 0x80, 0x00), kPaper };
-	m_colors[DisplayItem_Preprocessor] = { wxColour(0x80, 0x00, 0x00), kPaper };
-	m_colors[DisplayItem_Keyword] = { wxColour(0x00, 0x00, 0xFF), kPaper };
-	m_colors[DisplayItem_Operator] = { wxColour(0x80, 0x80, 0x80), kPaper };
-	m_colors[DisplayItem_String] = { wxColour(0xFF, 0x80, 0x80), kPaper };
-	m_colors[DisplayItem_Number] = { wxColour(0xFF, 0x00, 0x00), kPaper };
-	m_colors[DisplayItem_Error] = { wxColour(0xFF, 0x00, 0x00), kPaper, true };
-	m_colors[DisplayItem_Warning] = { wxColour(0xFF, 0x00, 0x00), kPaper };
+	// Every kind on the one paper colour, the theme's content colour — a field's, a list's (it was a cream of its own:
+	// "the cream gives a feeling of dirt", Max, 2026-11-12); what tells them apart is the ink.
+	const wxColour paper = wxTHEME_COLOUR(WINDOW);
+	m_colors[DisplayItem_Default] = { wxColour(0x00, 0x00, 0x00), paper };
+	m_colors[DisplayItem_Comment] = { wxColour(0x00, 0x80, 0x00), paper };
+	m_colors[DisplayItem_Preprocessor] = { wxColour(0x80, 0x00, 0x00), paper };
+	m_colors[DisplayItem_Keyword] = { wxColour(0x00, 0x00, 0xFF), paper };
+	m_colors[DisplayItem_Operator] = { wxColour(0x80, 0x80, 0x80), paper };
+	m_colors[DisplayItem_String] = { wxColour(0xFF, 0x80, 0x80), paper };
+	m_colors[DisplayItem_Number] = { wxColour(0xFF, 0x00, 0x00), paper };
+	m_colors[DisplayItem_Error] = { wxColour(0xFF, 0x00, 0x00), paper, true };
+	m_colors[DisplayItem_Warning] = { wxColour(0xFF, 0x00, 0x00), paper };
 	m_colors[DisplayItem_Selection] = { wxColour(0xFF, 0xFF, 0xFF), wxColour(0xD9, 0x77, 0x57) };  // terracotta, the interior accent
 }
 
@@ -132,8 +138,11 @@ void ibFontColorSettings::Load(wxXmlNode* root)
 				field->GetNodeContent().ToUInt(&id);
 			else if (name == wxT("foreColor"))
 				colors.foreColor.Set(field->GetNodeContent());
-			else if (name == wxT("backColor"))
+			else if (name == wxT("backColor")) {
 				colors.backColor.Set(field->GetNodeContent());
+				if (colors.backColor == kFormerPaper)
+					colors.backColor = wxTHEME_COLOUR(WINDOW);
+			}
 			else if (name == wxT("bold"))
 				colors.bold = IsTrueNode(field);
 			else if (name == wxT("italic"))

@@ -74,12 +74,14 @@ ibValueModelTableBox::ibStandardCommandSet ibValueModelTableBox::GetStandardComm
 	ibStandardCommandSet actionData(this);
 
 	// 1) Select — always FIRST, only when this table is a picker (the TableBox's own affordance). View-state,
-	//    not a data change → stays live in a view-only form.
+	//    not a data change → stays live in a view-only form. The picker's default button, as Save and close is an
+	//    object's (Max, 2026-11-12: "no default button" on a choice list).
 	if (IsChoiceMode())
-		actionData.AddAction(ibT("Select"), _("Select"), g_picSelectCLSID, true, enTableSelect).SetModify(false);
+		actionData.AddAction(ibT("Select"), _("Select"), g_picSelectCLSID, true, enTableSelect).SetModify(false).SetDefault(true);
 
 	// 2) The model's OWN command set, merged in — the model is just a command STORE (GetCommandCollection), the TableBox
-	//    lays it out into the real action (name / caption / picture / separators), carrying each command's modify flag.
+	//    lays it out into the real action (name / caption / picture / separators), carrying each command's modify and
+	//    default flags.
 	std::vector<ibCommandItem> commands;
 	model->GetCommandCollection(formType, commands);
 
@@ -87,7 +89,8 @@ ibValueModelTableBox::ibStandardCommandSet ibValueModelTableBox::GetStandardComm
 		if (c.m_actionId == wxNOT_FOUND)
 			actionData.AddSeparator();
 		else
-			actionData.AddAction(c.m_name, c.m_caption, c.m_pictureDescription, c.m_pictureAndText, c.m_actionId).SetModify(c.m_modifiesData);
+			actionData.AddAction(c.m_name, c.m_caption, c.m_pictureDescription, c.m_pictureAndText, c.m_actionId)
+				.SetModify(c.m_modifiesData).SetDefault(c.m_default);
 	}
 
 	// 3) The standard view-state band — Filter / by-column / clear, ViewMode — never changes DATA, so it stays

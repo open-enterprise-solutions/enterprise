@@ -84,6 +84,10 @@ bool ibStaticText::Create(wxWindow *parent,
                           long style,
                           const wxString &name)
 {
+    // painted whole as it is sized: its label is aligned in it, wrapped at its width with wxST_WRAP (ibWindow::OnSize
+    // paints again only the frame)
+    style |= wxFULL_REPAINT_ON_RESIZE;
+
     if ( !ibControl::Create(parent, id, pos, size, style, wxDefaultValidator, name) )
         return false;
 

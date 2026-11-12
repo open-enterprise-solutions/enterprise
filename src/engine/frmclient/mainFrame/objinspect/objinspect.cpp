@@ -287,8 +287,6 @@ void ibObjectInspector::ShowInspector()
 		mainFrame->ShowInspector();
 }
 
-#include "frmclient/visualView/ctrl/frame.h"
-
 ibPropertyGridManager* ibObjectInspector::CreatePropertyGridManager(wxWindow* parent, wxWindowID id) const
 {
 	int pgStyle;
@@ -318,8 +316,6 @@ ibPropertyGridManager* ibObjectInspector::CreatePropertyGridManager(wxWindow* pa
 	pg->SetExtraStyle(ibPG_EX_NATIVE_DOUBLE_BUFFERING);
 	pg->SetDescBoxHeight(descBoxHeight);
 	pg->SendSizeEvent();
-
-	pg->SetBackgroundColour(wxDefaultStypeBGColour);
 
 	// the grid's colours (margin, captions, cells, disabled text, selection) are the theme's — the grid asks for
 	// them itself (ibPropertyGrid::RegainColours)

@@ -83,6 +83,12 @@ std::string Utf8(const std::u8string& text)
 	return std::string(text.begin(), text.end());
 }
 
+// ...and plain bytes as UTF-8 text, for a path to be made of them: `std::filesystem::u8path` is deprecated in C++20
+std::u8string Utf8(const std::string& text)
+{
+	return std::u8string(text.begin(), text.end());
+}
+
 // `token` among the comma-separated words of a header, as Connection and Upgrade list them.
 bool HasToken(const std::string& list, const std::string& token)
 {
@@ -220,7 +226,7 @@ bool Resolve(const std::filesystem::path& root, const std::string& relative, std
 		if (segment[0] == '.' || segment.back() == '.' || segment.back() == ' '
 			|| segment.find_first_of("\\:*?\"<>|") != std::string::npos || IsDeviceName(segment))
 			return false;
-		file /= std::filesystem::u8path(segment);
+		file /= std::filesystem::path(Utf8(segment));
 	}
 	return true;
 }
@@ -479,7 +485,7 @@ public:
 			found = files.find(name.empty() ? std::string("index.html") : name + "/index.html");
 		if (found == files.end())
 			return Plain(404, "Not Found");
-		return Reply(found->second.m_data, found->second.m_tag, std::filesystem::u8path(found->first), request);
+		return Reply(found->second.m_data, found->second.m_tag, std::filesystem::path(Utf8(found->first)), request);
 	}
 
 private:
@@ -1783,9 +1789,10 @@ void AddMount(std::vector<ibHttpServerState::ibMount>& mounts, ibHttpServerState
 void ibHttpServer::Mount(const std::string& prefix, const std::string& directory)
 {
 	std::error_code error;
-	const std::filesystem::path root = std::filesystem::weakly_canonical(std::filesystem::u8path(directory), error);
+	const std::filesystem::path given(Utf8(directory));
+	const std::filesystem::path root = std::filesystem::weakly_canonical(given, error);
 	AddMount(m_state->m_mounts, ibHttpServerState::ibMount{ prefix.empty() ? std::string("/") : prefix,
-		error ? std::filesystem::u8path(directory) : root, nullptr });
+		error ? given : root, nullptr });
 }
 
 void ibHttpServer::Mount(const std::string& prefix, std::map<std::string, std::string> files)

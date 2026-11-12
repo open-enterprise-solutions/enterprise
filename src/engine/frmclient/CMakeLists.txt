@@ -30,6 +30,8 @@ target_compile_definitions(frmclient
 # FRMCLIENT_API resolves to dllexport only when FRMCLIENT_EXPORTS is defined (frmclient.h).
 if(WIN32)
     target_compile_definitions(frmclient PRIVATE FRMCLIENT_EXPORTS)
+    # its resources, as its project has them (frmclient.vcxproj)
+    target_sources(frmclient PRIVATE frmclient.rc)
 endif()
 
 # Nothing of the server — not even the backend: the client talks through the protocol's library (protocol/), which

@@ -220,6 +220,20 @@ void AppendMenuItems(ibMenu& menu, const std::vector<ibProtocolNode>& items, std
 	}
 }
 
+// A VIEW'S OWN MENUS TAKEN OUT of the window's bar, as its toolbar is emptied (ClearTools): each found where it stands,
+// by itself - the bar is the window's, the view's menus come and go in it (ActivateView). Taken out before the bar is
+// deleted (the bar built anew), so none is looked for again at an address a new menu may have taken.
+void ClearMenus(wxMenuBar* bar, std::vector<wxMenu*>& menus)
+{
+	for (wxMenu* const menu : menus)
+		for (size_t pos = 0; bar != nullptr && pos < bar->GetMenuCount(); ++pos)
+			if (bar->GetMenu(pos) == menu) {
+				delete bar->Remove(pos);
+				break;
+			}
+	menus.clear();
+}
+
 // A FIELD'S VALUE FOR THE SERVER'S QUESTION — what the desktop's SimpleChoice and QuickChoice are drawn over: the value the
 // question carries, the one chosen kept, and the wait ended when the calculator, the calendar or the list goes
 // (ibProtocol::ibRequest::ibKind::SimpleChoice; a Choice asked Quick).
@@ -427,6 +441,14 @@ void ibFrontendMainFrame::CreateBottomPane()
 	paneInfo.Resizable(false);
 	paneInfo.Movable(false);
 	paneInfo.MinSize(-1, 30);
+	// no caption: it had no title and no button, and the theme drew it as an empty bar over the tabs, a splitter of
+	// nobody's (2026-11-12, Max: "the splitter here is not the theme's") - the pane is sized by its sash, the theme's,
+	// while a page is open (ibFloatingNotebook)
+	paneInfo.CaptionVisible(false);
+	// framed by its book, as the documents' pane is (ibAuiManager::SetManagedWindow, the MDI client's): the pane's border
+	// round the book's own frame was a second line beside it - three under the tabs with the status bar's (2026-11-12,
+	// Max: "some stripes at the bottom"). On GTK3/Cocoa the same - the docking is the engine's there too
+	paneInfo.PaneBorder(false);
 
 	ibFloatingNotebook* auiNotebook = new ibFloatingNotebook(&m_mgr, paneInfo.name,
 		wxID_ANY,
@@ -1132,6 +1154,8 @@ void ibFrontendMainFrame::DrawMenu(const ibProtocolNode& menu)
 			}
 		}
 	}
+	// …the active view's own taken out of it and let go of - built again into the new bar below (ActivateView)
+	ClearMenus(previous, m_viewMenus);
 
 	wxMenuBar* const bar = new ibMenuBar();
 	bar->Append(m_menuFile, wxGetStockLabel(wxID_FILE));
@@ -1840,21 +1864,12 @@ wxWindow* ibFrontendMainFrame::CreateChildFrame(ibFrontendView* view, const wxPo
 
 	if ((style & wxCREATE_SDI_FRAME) != 0) {
 
-		wxWindow* parent = wxTheApp->GetTopWindow();
-
-		// Over the INNERMOST modal — the last one opened (the list runs in the order they were made): over the first, a
-		// form chosen from a dialog opened by a modal window (a condition's, in the list's settings) stood behind it.
-		for (wxWindow* window : wxTopLevelWindows) {
-			if (window->IsKindOf(CLASSINFO(wxDialog))) {
-				if (((wxDialog*)window)->IsModal()) {
-					parent = window;
-				}
-			}
-		}
-
 		wxIcon docIcon = document->GetIcon();
 
-		ibDialogDocChildFrame* subframe = new ibDialogDocChildFrame(document, view, parent, wxID_ANY, document->GetTitle(), pos, size, style & ~wxCREATE_SDI_FRAME);
+		// Over the INNERMOST modal, a form's dialog too — the frame, disabled under them, gives its place to the window that
+		// takes the input (ibDialog::Create): over the first, a form chosen from a dialog opened by a modal window (a
+		// condition's, in the list's settings) stood behind it.
+		ibDialogDocChildFrame* subframe = new ibDialogDocChildFrame(document, view, wxTheApp->GetTopWindow(), wxID_ANY, document->GetTitle(), pos, size, style & ~wxCREATE_SDI_FRAME);
 		if (docIcon.IsOk())
 			subframe->SetIcon(docIcon);
 		subframe->SetExtraStyle(wxWS_EX_BLOCK_EVENTS);
@@ -1897,11 +1912,31 @@ void ibFrontendMainFrame::ActivateView(ibFrontendView* view, bool activate)
 	// "changing the focus, the sheet to the tree, flickers")
 	UpdateManager();
 
+	wxFrame* const viewFrame = dynamic_cast<wxFrame*>(view->GetFrame());
+
 	if (activate) {
 
-		wxFrame* viewFrame = dynamic_cast<wxFrame*>(view->GetFrame());
 #if wxUSE_MENUS
-		if (viewFrame != nullptr) viewFrame->SetMenuBar(view->CreateMenuBar());
+		// ⭐ ONE BAR, THE WINDOW'S: the view's own menus (CreateMenuBar) put in it after Edit, where a document's menus
+		// stand, the menus of the view shown before taken out. The view's frame took a bar of its own, and the window put
+		// it up in place of its own - every menu of the window copied into it item by item at each activation, four or
+		// five bars put up at a tab switched, each its window hidden or shown and the frame laid out: the menu flickered
+		// (2026-11-12, Max). On GTK3/Cocoa the same - the bar is the engine's there too
+		if (viewFrame != nullptr) {
+			wxMenuBar* const bar = GetMenuBar();
+			ClearMenus(bar, m_viewMenus);
+			const std::unique_ptr<wxMenuBar> own(view->CreateMenuBar());
+			if (bar != nullptr && own != nullptr) {
+				const int edit = bar->FindMenu(wxGetStockLabel(wxID_EDIT));
+				size_t pos = edit != wxNOT_FOUND ? edit + 1 : 0;
+				while (own->GetMenuCount() > 0) {
+					const wxString title = own->GetMenuLabel(0);
+					wxMenu* const menu = own->Remove(0);
+					bar->Insert(pos++, menu, title);
+					m_viewMenus.push_back(menu);
+				}
+			}
+		}
 #endif
 		if (viewFrame != nullptr) {
 			ClearTools(*m_docToolbar);
@@ -1912,34 +1947,16 @@ void ibFrontendMainFrame::ActivateView(ibFrontendView* view, bool activate)
 	else {
 
 #if wxUSE_MENUS
-		wxFrame* viewFrame = dynamic_cast<wxFrame*>(view->GetFrame());
-
-		if (viewFrame != nullptr) {
-
-			class ibProcSubMenu {
-
-				static void SetChildEnable(wxMenu* dst, bool enable = false) {
-
-					for (const auto it : dst->GetMenuItems()) {
-						if (!it->IsSubMenu()) it->Enable(enable);
-						if (it->IsSubMenu()) SetChildEnable(it->GetSubMenu(), enable);
+		// …deactivated, its menus stay in the bar, greyed until it is back - the active child's, whose menus they are
+		// (its frame put up a copy of its whole bar, every item disabled)
+		if (viewFrame != nullptr && GetActiveChild() == viewFrame) {
+			wxMenuBar* const bar = GetMenuBar();
+			for (wxMenu* const menu : m_viewMenus)
+				for (size_t pos = 0; bar != nullptr && pos < bar->GetMenuCount(); ++pos)
+					if (bar->GetMenu(pos) == menu) {
+						bar->EnableTop(pos, false);
+						break;
 					}
-				}
-
-			public:
-
-				static void SetMenuEnabled(wxMenuBar* menuBar, bool enable = false) {
-					for (size_t idx = 0; idx < menuBar->GetMenuCount(); idx++) {
-						ibProcSubMenu::SetChildEnable(menuBar->GetMenu(idx), enable);
-					}
-				}
-			};
-
-			wxMenuBar* menuBar = view->CreateMenuBar();
-			if (menuBar != nullptr)
-				ibProcSubMenu::SetMenuEnabled(menuBar);
-
-			viewFrame->SetMenuBar(menuBar);
 		}
 #endif
 		for (size_t idx = 0; idx < m_docToolbar->GetToolCount(); idx++) {
@@ -1958,7 +1975,11 @@ void ibFrontendMainFrame::UpdateFrameManager()
 		}
 	}
 
-	if (view_count == 0) ClearTools(*m_docToolbar);
+	// the last view gone, its toolbar and its menus go with it
+	if (view_count == 0) {
+		ClearTools(*m_docToolbar);
+		ClearMenus(GetMenuBar(), m_viewMenus);
+	}
 
 	ibAuiPaneInfo& infoToolBar = m_mgr.GetPane(m_docToolbar);
 	const bool showToolBar = m_docToolbar->GetToolCount() > 0;

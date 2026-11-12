@@ -162,6 +162,10 @@ bool ibSlider::Create(wxWindow *parent,
                       const wxValidator& validator,
                       const wxString& name)
 {
+    // painted whole as it is sized: the shaft, the ticks and the thumb are laid out on it (ibWindow::OnSize paints again
+    // only the frame)
+    style |= wxFULL_REPAINT_ON_RESIZE;
+
     if ( !ibControl::Create(parent, id, pos, size, style,
                                validator, name) )
         return false;

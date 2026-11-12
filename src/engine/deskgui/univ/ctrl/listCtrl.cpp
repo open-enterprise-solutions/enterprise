@@ -1886,7 +1886,9 @@ bool ibListHeaderWindow::Create( wxWindow *win,
                                  long style,
                                  const wxString &name )
 {
-    if ( !ibWindow::Create(win, id, pos, size, style, name) )
+    // painted whole as it is sized: the blank header past the last column reaches its right end (ibWindow::OnSize
+    // paints again only the frame)
+    if ( !ibWindow::Create(win, id, pos, size, style | wxFULL_REPAINT_ON_RESIZE, name) )
         return false;
 
     Init();

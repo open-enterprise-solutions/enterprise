@@ -269,6 +269,12 @@ public:
                                  int indexAccel = -1) = 0;
 
 #if wxUSE_TOOLBAR
+    // draw a tool bar's background: col is the surface the bar stands on
+    virtual void DrawToolBarBackground(wxDC& dc,
+                                       const wxColour& col,
+                                       const wxRect& rect,
+                                       int flags = 0) = 0;
+
     // draw a toolbar button (label may be empty, bitmap may be invalid, if
     // both conditions are true this function draws a separator)
     virtual void DrawToolBarButton(wxDC& dc,
@@ -744,6 +750,11 @@ public:
         { m_renderer->DrawRadioButton(dc, label, bitmap, rect,
                                       flags, align, indexAccel); }
 #if wxUSE_TOOLBAR
+    virtual void DrawToolBarBackground(wxDC& dc,
+                                       const wxColour& col,
+                                       const wxRect& rect,
+                                       int flags = 0) override
+        { m_renderer->DrawToolBarBackground(dc, col, rect, flags); }
     virtual void DrawToolBarButton(wxDC& dc,
                                    const wxString& label,
                                    const wxBitmap& bitmap,

@@ -291,3 +291,36 @@ int ibMessageBox(const wxString& message, const wxString& caption, long style,
 
     return wxCANCEL;
 }
+
+// ----------------------------------------------------------------------------
+// ibLogGui
+// ----------------------------------------------------------------------------
+
+void ibLogGui::DoShowSingleLogMessage(const wxString& message,
+                                      const wxString& title,
+                                      int style)
+{
+    ibMessageBox(message, title, style);
+}
+
+void ibLogGui::DoShowMultipleLogMessages(const wxArrayString& messages,
+                                         const wxArrayInt& WXUNUSED(severities),
+                                         const wxArrayLong& WXUNUSED(times),
+                                         const wxString& title,
+                                         int style)
+{
+    // the latest first, no more lines than a box holds - wxLogGui's own count without its log dialog (src/generic/logg.cpp)
+    const size_t lineWidth = 156;
+    wxString text;
+    size_t lines = 0;
+    for ( size_t n = messages.size(); n > 0; n-- )
+    {
+        lines += (messages[n - 1].length() + lineWidth - 1) / lineWidth;
+        if ( lines > 25 )
+            break;
+
+        text << messages[n - 1] << wxT("\n");
+    }
+
+    ibMessageBox(text, title, style);
+}

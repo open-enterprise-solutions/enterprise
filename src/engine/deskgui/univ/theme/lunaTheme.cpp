@@ -1,7 +1,7 @@
 // ----------------------------------------------------------------------------
 // Luna theme — the default deskgui theme, built the way every univ theme is:
 // an ibThemeRenderer subclass + an ibColourScheme carrying the interior-design
-// palette from docs/private/ui-palette.md (cool dusty-blue chrome, warm-cream
+// palette from docs/private/ui-palette.md (cool dusty-blue chrome, white
 // content, terracotta accent). Registered as the default theme "luna".
 // ----------------------------------------------------------------------------
 
@@ -31,21 +31,25 @@
 
 namespace {
 
-// palette tiers (docs/private/ui-palette.md — reuse a tier, don't invent a shade)
-const wxColour kChrome(0xB8, 0xC9, 0xD4);        // chrome        #B8C9D4
-const wxColour kChromeLight(0xC8, 0xD6, 0xDF);   // chrome-light  #C8D6DF
+// palette tiers (docs/private/ui-palette.md — reuse a tier, don't invent a shade). The chrome's tiers - chrome,
+// chrome-light, the inactive caption's two - were lifted a third of the way to white, their blue a quarter less (Max,
+// 2026-11-12: "the theme is greyish, it presses"; the variant he picked of three); the powder and the border stayed -
+// a table's header, rules and scroll bars are theirs, and the tables were liked as they were. The content is white, as a
+// table's rows: it was cream #FAF7F0 - "the cream gives a feeling of dirt" (Max, the same day)
+const wxColour kChrome(0xD3, 0xDB, 0xE1);        // chrome        #D3DBE1
+const wxColour kChromeLight(0xDD, 0xE4, 0xE8);   // chrome-light  #DDE4E8
 const wxColour kPowder(0xE6, 0xEE, 0xF5);        // powder        #E6EEF5
-const wxColour kContent(0xFA, 0xF7, 0xF0);       // content       #FAF7F0
+const wxColour kContent(0xFF, 0xFF, 0xFF);       // content       #FFFFFF
 const wxColour kBorder(0xA8, 0xBA, 0xC8);        // border        #A8BAC8
 const wxColour kDisabledText(0x94, 0xA6, 0xB4);  // disabled-text #94A6B4
 const wxColour kCaptionTop(0x5A, 0x7B, 0x95);    // caption-active-top
 const wxColour kCaptionBottom(0x3F, 0x5C, 0x77); // caption-active-bottom
-const wxColour kCaptionInactiveTop(0xD8, 0xE2, 0xEB);    // caption-inactive-top
-const wxColour kCaptionInactiveBottom(0xC5, 0xD2, 0xDC); // caption-inactive-bottom
+const wxColour kCaptionInactiveTop(0xE7, 0xEC, 0xF0);    // caption-inactive-top    #E7ECF0
+const wxColour kCaptionInactiveBottom(0xDB, 0xE2, 0xE6); // caption-inactive-bottom #DBE2E6
 const wxColour kAccent(0xD9, 0x77, 0x57);        // accent        #D97757
 const wxColour kAccentDeep(0xB8, 0x5A, 0x38);    // accent-deep   #B85A38
 
-// the shelf under an AUI book's tabs (DrawTabStrip): a neutral warm taupe between the cool strip and the cream pages - a
+// the shelf under an AUI book's tabs (DrawTabStrip): a neutral warm taupe between the cool strip and the pages - a
 // sandstone #E8D8BE read as too yellow
 const wxColour kShelf(0xE0, 0xD8, 0xCC);
 
@@ -140,8 +144,8 @@ public:
 };
 
 // the object inspector's palette for the whole theme (Max, 2026-11-10: "too greyish a theme"): a control and a
-// scroll bar are the powder its margin is, a dialog and a panel the light caption tier under them (a button stays
-// lighter than the surface it sits on, so it still reads as one); the chrome-light tier stays a caption's. The text is
+// scroll bar are the powder its margin is, a dialog and a panel the light caption tier under them (a button is white
+// on it since 2026-11-12, powder under the mouse - GetBackground); the chrome-light tier stays a caption's. The text is
 // black, the alternate text the deep dusty blue the forms' tables had - a table's values and columns, the start page
 // (Max, 2026-11-10: "by default black, an alternate display beside it") - the desktop painted it in by hand
 wxColour ibLunaColourScheme::Get(ibLunaColourScheme::StdColour col) const {
@@ -205,17 +209,18 @@ wxColour ibLunaColourScheme::GetBackground(ibWindow* win) const {
 	if (win->HasContentBackground())
 		return Get(WINDOW);
 
-	// highlightable controls (buttons and friends) take the control colour
-	// modulated by state — pressed must be UNMISTAKABLE (a toggle button
-	// stays pressed, the old chrome-8% shade was nearly invisible); one whose
-	// face is not its background (a check box: the box) takes the surface
+	// highlightable controls (buttons and friends) are white, as a field, their border holding them on the surface, and
+	// take the control colour under the mouse - the powder they were sat too close to a dialog's chrome after the palette
+	// was lifted, a plaque held by its border alone (2026-11-12, Max: "white"). Pressed must be UNMISTAKABLE (a toggle
+	// button stays pressed, the old chrome-8% shade was nearly invisible); one whose face is not its background (a check
+	// box: the box) takes the surface. On GTK3/Cocoa the same - the buttons are the engine's there too
 	if (win->CanBeHighlighted() && !win->HasTransparentBackground()) {
 		const int flags = win->GetStateFlags();
 		if (flags & wxCONTROL_PRESSED)
 			return kAccent.ChangeLightness(172);
 		if (flags & wxCONTROL_CURRENT)
-			return Get(CONTROL_CURRENT);
-		return Get(CONTROL);
+			return Get(CONTROL);
+		return Get(WINDOW);
 	}
 
 	// label-like statics and the containers they sit on take the surface under them - the colour set on the nearest
@@ -248,8 +253,11 @@ wxColour ibLunaColourScheme::GetBackground(ibWindow* win) const {
 
 class ibLunaRenderer : public ibThemeRenderer {
 public:
+	// a pane caption is written in the system's font, as a title bar is (ibThemeRenderer): the default family's 10
+	// points stood here until 2026-11-12 - Arial on Windows, beside an interface in Segoe UI. On GTK3/Cocoa it is the
+	// system's font there, the one their controls are written in
 	ibLunaRenderer(const ibColourScheme* scheme) : ibThemeRenderer(scheme),
-		m_paneCaptionFont(10, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL) {}
+		m_paneCaptionFont(wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT)) {}
 
 	virtual wxBitmap GetRadioBitmap(int flags) override;
 	virtual wxBitmap GetCheckBitmap(int flags) override;
@@ -473,6 +481,15 @@ public:
 		dc.DrawRectangle(rect);
 	}
 
+	// a bar lit from the top: lighter than the surface it stands on at the top, darker at the bottom - the Luna tool bar
+	// art's gradient, lightness 150 to 90 (wxAuiLunaToolBarArt::DrawBackground). Gone with the art, the bars melted into
+	// the dock (2026-11-12, Max: "the toolbar should stand out a little, with a gradient, as on our site" - the web
+	// client's command bar is lit the same way, form.css)
+	virtual void DrawToolBarBackground(wxDC& dc, const wxColour& col, const wxRect& rect,
+		int WXUNUSED(flags) = 0) override {
+		dc.GradientFillLinear(rect, col.ChangeLightness(150), col.ChangeLightness(90), wxSOUTH);
+	}
+
 	virtual void DrawToolBarButton(wxDC& dc, const wxString& label,
 		const wxBitmap& bitmap, const wxRect& rect, int flags = 0,
 		long style = 0, int WXUNUSED(tbarStyle) = 0) override {
@@ -493,9 +510,16 @@ public:
 			return;
 		}
 
+		// the bar's default command is a dialog's default button: the accent's face and border, the label white
+		// (DrawButtonSurface, DrawButtonBorder, DrawButtonLabel) - a form's «… and close» stands out (2026-11-12, Max);
+		// a disabled one is an ordinary disabled tool
+		if ((flags & wxCONTROL_ISDEFAULT) && !(flags & wxCONTROL_DISABLED)) {
+			DrawButtonSurface(dc, m_scheme->Get(ibColourScheme::CONTROL), rect, flags);
+			DrawButtonBorder(dc, rect, flags);
+		}
 		// a checked tool sits on a light accent pad, hover/press on a
 		// chrome pad; both get the 1px palette border
-		if (flags & (wxCONTROL_PRESSED | wxCONTROL_CURRENT | wxCONTROL_CHECKED)) {
+		else if (flags & (wxCONTROL_PRESSED | wxCONTROL_CURRENT | wxCONTROL_CHECKED)) {
 			wxColour pad;
 			if (flags & wxCONTROL_CHECKED)
 				pad = kAccent.ChangeLightness(170);
@@ -583,7 +607,7 @@ public:
 		dc.DrawRectangle(rect.x - 1, bottom ? rect.y : rect.y + rect.height - 4, rect.width + 2, 4);
 	}
 
-	// the selected tab is the pages' cream, its corners rounded off by a dot of the strip and its foot one with the shelf
+	// the selected tab is the pages' colour, its corners rounded off by a dot of the strip and its foot one with the shelf
 	// (a tab of a row under the pages: its head, a lighter line); the strip shows through the others
 	virtual void DrawStripTab(wxDC& dc, const wxRect& rect, wxDirection dir, int flags = 0) override {
 		if (!(flags & wxCONTROL_SELECTED))
@@ -682,11 +706,26 @@ public:
 		dc.DrawRoundedRectangle(rect, 3);
 	}
 
-	// the bar between docks or panes: the palette border, flat
-	virtual void DrawSash(wxDC& dc, const wxRect& rect, wxOrientation WXUNUSED(orient)) override {
+	// the bar between docks or panes: the docking's ground round the panes, their frames standing apart, and the grip
+	// along its middle - a splitter's (ibSplitterWindow::DrawSash), a row of dots in the shadow. A bar of the border's
+	// colour stood here, beside the panes' frames and their controls' of the same colour: one band of five to eight
+	// pixels (2026-11-12, Max: "these lines look most wretched", variant B). On GTK3/Cocoa the same - the docking is the
+	// engine's there too
+	virtual void DrawSash(wxDC& dc, const wxRect& rect, wxOrientation orient) override {
 		dc.SetPen(*wxTRANSPARENT_PEN);
-		dc.SetBrush(wxBrush(kBorder));
+		dc.SetBrush(wxBrush(m_scheme->Get(ibColourScheme::DESKTOP)));
 		dc.DrawRectangle(rect);
+
+		const int dot = dc.FromDIP(2), step = dc.FromDIP(4), dots = 5;
+		const wxPoint centre(rect.x + rect.width / 2, rect.y + rect.height / 2);
+		dc.SetBrush(wxBrush(m_scheme->Get(ibColourScheme::SHADOW_DARK)));
+		for (int i = 0; i < dots; ++i) {
+			const int along = (i - dots / 2) * step - dot / 2;
+			if (orient == wxVERTICAL)
+				dc.DrawRectangle(centre.x - dot / 2, centre.y + along, dot, dot);
+			else
+				dc.DrawRectangle(centre.x + along, centre.y - dot / 2, dot, dot);
+		}
 	}
 
 	// sliders: not revived yet — simple flat geometry
@@ -802,10 +841,14 @@ public:
 
 		// draw the submenu indicator
 		if (flags & wxCONTROL_ISSUBMENU) {
-			rect.x = geometryInfo.GetSize().x - MENU_SIDE_MARGIN - MENU_RIGHT_MARGIN;
-			rect.width = MENU_RIGHT_MARGIN;
+			// a small arrow in the middle of the margin, about 4 by 7 at an item 22 high: DrawArrow sizes the triangle by
+			// its box, and the margin's whole box made it a wedge as high as the text (2026-11-12, Max: "neater arrows").
+			// The box half the item's height, even - the tip and the base on whole pixels
+			const wxCoord side = rect.height / 4 * 2;
+			const wxRect box(geometryInfo.GetSize().x - MENU_SIDE_MARGIN - MENU_RIGHT_MARGIN + (MENU_RIGHT_MARGIN - side) / 2,
+				rect.y + (rect.height - side) / 2, side, side);
 
-			DrawArrow(dc, wxRIGHT, rect, flags);
+			DrawArrow(dc, wxRIGHT, box, flags);
 		}
 	}
 
@@ -1012,16 +1055,16 @@ wxBitmap ibLunaRenderer::GetFrameButtonBitmap(FrameButtonType WXUNUSED(type)) {
 	return wxNullBitmap;
 }
 
-// The corner of a resizable window's client area that sizes it - the square the native size grip takes.
-static wxRect GetFrameGripRect(const wxRect& client) {
-	const int side = 12;
-	return wxRect(client.GetRight() + 1 - side, client.GetBottom() + 1 - side, side, side);
+// The corner of a resizable window's client area that sizes it - the square the native size grip takes, a scroll bar's
+// corner box (SBS_SIZEGRIP): the window paints that corner again where it stood as it is sized (ibTopLevelWindow::OnSize)
+static wxRect GetFrameGripRect(const wxRect& client, const wxSize& side) {
+	return wxRect(client.GetRight() + 1 - side.x, client.GetBottom() + 1 - side.y, side.x, side.y);
 }
 
 int ibLunaRenderer::HitTestFrame(const wxRect& rect, const wxPoint& pt, int flags) const {
 	const int hit = ibThemeRenderer::HitTestFrame(rect, pt, flags);
 	if (hit == wxHT_TOPLEVEL_CLIENT_AREA && (flags & wxTOPLEVEL_RESIZEABLE) && !(flags & wxTOPLEVEL_MAXIMIZED)
-			&& GetFrameGripRect(GetFrameClientArea(rect, flags)).Contains(pt))
+			&& GetFrameGripRect(GetFrameClientArea(rect, flags), GetScrollbarArrowSize()).Contains(pt))
 		return wxHT_TOPLEVEL_BORDER_SE;
 	return hit;
 }
@@ -1032,7 +1075,7 @@ void ibLunaRenderer::DrawFrameBorder(wxDC& dc, const wxRect& rect, int flags) {
 
 	// the corner's mark: three strokes across it, as the native grip has
 	if ((flags & wxTOPLEVEL_RESIZEABLE) && !(flags & wxTOPLEVEL_MAXIMIZED)) {
-		const wxRect grip = GetFrameGripRect(GetFrameClientArea(rect, flags));
+		const wxRect grip = GetFrameGripRect(GetFrameClientArea(rect, flags), GetScrollbarArrowSize());
 		dc.SetPen(wxPen(kCaptionBottom));
 		for (int stroke = 1; stroke <= 3; ++stroke) {
 			const int d = 4 * stroke - 1;

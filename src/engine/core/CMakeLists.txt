@@ -69,6 +69,8 @@ endif()
 # CORE_API resolves to dllexport only when CORE_EXPORTS is defined (coreApi.h).
 if(WIN32)
     target_compile_definitions(core PRIVATE CORE_EXPORTS)
+    # its resources, as its project has them (core.vcxproj)
+    target_sources(core PRIVATE core.rc)
 endif()
 
 # wx::base PUBLIC: the core's headers hand wx types across - ibString's boundary (fstring.h), the tabular model's wxRefCounter.

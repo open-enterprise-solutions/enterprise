@@ -16,7 +16,7 @@ ibValueRecordManagerObjectInformationRegister::ibStandardCommandSet ibValueRecor
 {
 	ibStandardCommandSet registerActions(this);
 
-	registerActions.AddAction(ibT("SaveAndClose"), _("Save and close"), g_picSaveCLSID, true, eDefActionAndClose);
+	registerActions.AddAction(ibT("SaveAndClose"), _("Save and close"), g_picSaveCLSID, true, eDefActionAndClose).SetDefault(true);
 	registerActions.AddAction(ibT("Save"), _("Save"), g_picSaveCLSID, true, eSave);
 	registerActions.AddAction(ibT("Clone"), _("Clone"), g_picCloneCLSID, true, eCopy);
 

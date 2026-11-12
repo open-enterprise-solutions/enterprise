@@ -68,8 +68,8 @@ ibValueGridBox::ibStandardCommandSet ibValueGridBox::GetStandardCommands(const i
 
 	// ⭐⭐ THE BOX DECLARES NOTHING OF ITS OWN. What can be done is a fact about the MODEL — a
 	// composer offers Compose and Settings, a spreadsheet document offers nothing at all — and this
-	// control only lays the store out into real actions, carrying each one's modify flag. The same
-	// shape a tablebox uses, and the reason the same verbs appear wherever a composition is shown.
+	// control only lays the store out into real actions, carrying each one's modify and default flags.
+	// The same shape a tablebox uses, and the reason the same verbs appear wherever a composition is shown.
 	ibStandardCommandSet actionData(this);
 
 	std::vector<ibCommandItem> commands;
@@ -79,7 +79,7 @@ ibValueGridBox::ibStandardCommandSet ibValueGridBox::GetStandardCommands(const i
 			actionData.AddSeparator();
 		else
 			actionData.AddAction(c.m_name, c.m_caption, c.m_pictureDescription, c.m_pictureAndText, c.m_actionId)
-				.SetModify(c.m_modifiesData);
+				.SetModify(c.m_modifiesData).SetDefault(c.m_default);
 	}
 
 	return actionData;

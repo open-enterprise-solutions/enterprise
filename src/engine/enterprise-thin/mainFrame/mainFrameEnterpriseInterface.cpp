@@ -11,7 +11,7 @@
 // uses the same powder-blue + dusty-border tones as the rest of the
 // frontend so the home page sits in the same visual world as the
 // document panes.
-#define THEME_COLOUR_MAIN    wxColour(0xB8, 0xC9, 0xD4)  // #B8C9D4 powder blue
+#define THEME_COLOUR_MAIN    wxColour(0xD3, 0xDB, 0xE1)  // #D3DBE1 chrome (lifted toward white, 2026-11-12)
 #define THEME_COLOUR_BORDER  wxColour(0xA8, 0xBA, 0xC8)  // #A8BAC8 light dusty
 
 #include "frmclient/win/picture.h"   // the pictures, as they travel
@@ -20,7 +20,7 @@
 #include "deskgui/univ/ctrl/control.h"
 #include "deskgui/univ/ctrl/staticText.h"
 #include "deskgui/univ/ctrl/staticBitmap.h"
-#include "deskgui/univ/topLevel.h"   // ibMSWShowShadowed — the panel's shadow, its own
+#include "deskgui/univ/popupWindow.h"   // ibPopupWindow — the panel, the theme's popup
 
 // THE SECTION PANEL — the desktop's (enterprise/mainFrame/mainFrameEnterpriseInterface.cpp) on the thin client: the
 // same buttons, the same page in its popup, drawn line for line; what it shows is the server's schema Sections
@@ -100,8 +100,9 @@ class ibSubSystemWindow : public ibWindow {
 		const ibProtocolNode& GetSection() const { return m_section; }
 		ibSubSystemWindow* GetMainWindow() const { return m_mainWindow; }
 
+		// painted whole as it is sized: its tab and its shade are drawn across it
 		ibSubSystemButton(ibSubSystemWindow* mainWindow, wxWindowID id, const ibProtocolNode& section)
-			: ibControl(mainWindow, id, wxDefaultPosition, wxDefaultSize, wxNO_BORDER),
+			: ibControl(mainWindow, id, wxDefaultPosition, wxDefaultSize, wxNO_BORDER | wxFULL_REPAINT_ON_RESIZE),
 			m_section(section), m_popupWindow(nullptr),
 			m_mainWindow(mainWindow), m_bitmap(ibProtocolPicture(section, ibProtocol::ibSchema::ibSections::Picture)), m_eventType(wxEVT_BUTTON) {
 
@@ -120,7 +121,7 @@ class ibSubSystemWindow : public ibWindow {
 			// lighter than the panel under it so it still reads as a button; the OPEN one is white and bold. It was
 			// the dusty border colour darkened to 75 %, with white text — a slab of mid-grey down the window's side.
 			m_activeColour = *wxWHITE;
-			m_baseColour = wxColour(0xEE, 0xF3, 0xF6);   // #EEF3F6 all but white, a breath of blue
+			m_baseColour = wxColour(0xF5, 0xF7, 0xF8);   // #F5F7F8 all but white, a breath of blue
 
 			m_borderPen = wxPen(THEME_COLOUR_MAIN);
 			m_baseColourPen = wxPen(m_activeColour);
@@ -608,7 +609,7 @@ class ibSubSystemWindow : public ibWindow {
 		wxTimer  m_hoverTimer;
 	};
 
-	class ibPopupSubWindow : public wxPopupTransientWindow {
+	class ibPopupSubWindow : public ibPopupWindow<wxPopupTransientWindow> {
 
 		class ibScrolledSubWindow : public wxScrolled<ibWindow> {
 
@@ -755,7 +756,7 @@ class ibSubSystemWindow : public ibWindow {
 		// ctors
 		ibPopupSubWindow() : m_currentButton(nullptr) {}
 		ibPopupSubWindow(wxWindow* parent, ibSubSystemButton* btn, const wxPoint& point, const wxSize& size, int style = wxBORDER_NONE | wxPU_CONTAINS_CONTROLS)
-			: wxPopupTransientWindow(parent, style), m_currentButton(btn) {
+			: ibPopupWindow<wxPopupTransientWindow>(parent, style), m_currentButton(btn) {
 
 			wxPopupTransientWindow::SetPosition(point);
 			wxPopupTransientWindow::SetSize(size);
@@ -771,9 +772,9 @@ class ibSubSystemWindow : public ibWindow {
 			m_mainWindow = new ibScrolledSubWindow(this, wxID_ANY);
 			m_mainWindow->SetScrollRate(5, FromDIP(5));
 
-			// Cream content surface inside the popup — matches editor /
-			// tree / lists. Was system HIGHLIGHTTEXT (pure white).
-			m_mainWindow->SetBackgroundColour(wxColour(0xFA, 0xF7, 0xF0));  // #FAF7F0 cream
+			// The content surface inside the popup — the theme's content colour, as the editor / tree / lists (it was a
+			// cream of its own until 2026-11-12).
+			m_mainWindow->SetBackgroundColour(wxTHEME_COLOUR(WINDOW));
 
 			bSizer1->Add(m_mainWindow, 1, wxEXPAND | wxALL, 0);
 
@@ -789,15 +790,6 @@ class ibSubSystemWindow : public ibWindow {
 			m_fadeTimer.SetOwner(this, m_fadeTimerId);
 			SetTransparent(0);
 			Bind(wxEVT_TIMER, &ibPopupSubWindow::OnFadeTick, this, m_fadeTimerId);
-		}
-
-		// Shown with the system's shadow round it, its own (ibMSWShowShadowed), as the menu is.
-		virtual bool Show(bool show = true) override {
-#ifdef __WXMSW__
-			if (show)
-				return ibMSWShowShadowed(this, [this] { return wxPopupTransientWindow::Show(true); });
-#endif
-			return wxPopupTransientWindow::Show(show);
 		}
 
 		// Implement base class pure virtuals.
@@ -882,9 +874,9 @@ public:
 			CreateSubMenu(section);
 
 		// Interior palette — light dusty (one tier between powder chrome
-		// and the cream popup interior). Was ibAUI_DEFAULT_COLOUR
+		// and the white popup interior). Was ibAUI_DEFAULT_COLOUR
 		// (dark navy) lightened — read as a muddy mid-grey.
-		ibWindow::SetBackgroundColour(wxColour(0xC8, 0xD6, 0xDF));  // #C8D6DF light dusty
+		ibWindow::SetBackgroundColour(wxColour(0xDD, 0xE4, 0xE8));  // #DDE4E8 light dusty (chrome-light)
 	}
 
 protected:

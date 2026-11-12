@@ -13,8 +13,9 @@
 #include "frmclient/frmclient.h"
 
 // THE TAB OF A DOCUMENT'S VIEW — the frame the doc manager's view shows in (ibFrontendMainFrame::CreateChildFrame): its
-// events go to the view and the manager first, its close is the view's, and the menu bar of its view is merged with the
-// main window's. It joins the notebook when it is shown, under its icon (ibAuiMDIChildFrame::Show).
+// events go to the view and the manager first, its close is the view's, and the menus of its view stand in the main
+// window's bar, it has none of its own (ibFrontendMainFrame::ActivateView). It joins the notebook when it is shown,
+// under its icon (ibAuiMDIChildFrame::Show).
 class FRMCLIENT_API ibAuiDocChildFrame :
 	public ibDocChildFrameAny<ibAuiMDIChildFrame, ibAuiMDIParentFrame> {
 public:
@@ -55,11 +56,6 @@ public:
 			parent, id, title, pos, size, style, name
 		);
 	}
-
-#if wxUSE_MENUS
-	virtual void SetMenuBar(wxMenuBar* menuBar) override;
-	virtual wxMenuBar* GetMenuBar() const override;
-#endif // wxUSE_MENUS
 
 	virtual void SetLabel(const wxString& label) override;
 

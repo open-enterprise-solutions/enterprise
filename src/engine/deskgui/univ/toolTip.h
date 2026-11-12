@@ -2,8 +2,8 @@
 #define _DESKGUI_UNIV_TOOLTIP_H_
 
 #include "deskgui/deskgui.h"
+#include "deskgui/univ/popupWindow.h"
 
-#include <wx/popupwin.h>
 #include <wx/timer.h>
 #include <wx/weakref.h>
 
@@ -11,16 +11,16 @@ class ibWindow;
 
 // THE THEME'S TOOLTIP - one popup for the application, showing the tip of the library's window under the mouse: the
 // window keeps its tip from the system's tooltip (ibWindow::DoSetToolTip) and hands the mouse over it here
-// (ibWindow::TryBefore). Shown once the mouse rests, painted by the theme (ibRenderer::DrawToolTip), under the drop
-// shadow a menu casts (Max, 2026-11-10: "the tooltip can be taken too")
-class DESKGUI_API ibToolTipWindow : public wxPopupWindow
+// (ibWindow::TryBefore). Shown once the mouse rests, painted by the theme (ibRenderer::DrawToolTip), the theme's popup
+// as the menu is (Max, 2026-11-10: "the tooltip can be taken too")
+class DESKGUI_API ibToolTipWindow : public ibPopupWindow<wxPopupWindow>
 {
 public:
-#ifdef __WXMSW__
-    // shown as the menu is (ibPopupMenuWindow::Show): a top-level popup that does not activate, under the shadow
-    virtual bool Show(bool show = true) override;
+    // never focused: shown without being activated (ibPopupWindow::Show)
+    virtual bool AcceptsFocus() const override { return false; }
 
-    // the mouse goes through it: neither a click on it activates it nor is it a window the mouse can be over
+#ifdef __WXMSW__
+    // the mouse goes through it: it is not a window the mouse can be over
     virtual bool MSWHandleMessage(WXLRESULT *result, WXUINT message, WXWPARAM wParam, WXLPARAM lParam) override;
 #endif
 
@@ -28,8 +28,8 @@ public:
     // at once when another tip is shown - and gone when the owner has none, or the mouse is not over it
     void Track(ibWindow *owner, const wxPoint& at);
 
-    // the mouse pressed or wheeled, a key gone down, the owner left: the tip goes, the rest is waited anew
-    void Dismiss();
+    // the mouse pressed or wheeled, a key gone down, the owner left, a menu opened: the tip goes, the rest is waited anew
+    virtual void Dismiss() override;
 
     // the application's one, made over its top window; none while there is no top window
     static ibToolTipWindow *Get();

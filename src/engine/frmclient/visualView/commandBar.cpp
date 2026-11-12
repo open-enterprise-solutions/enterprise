@@ -44,6 +44,7 @@ ibString ShapeOf(const ibProtocolNode& commandBar)
 			<< entry.GetString(ibProtocol::ibForm::ibCommandBar::Caption) << wxT('|')
 			<< static_cast<unsigned long long>(PictureHash(entry))
 			<< wxT('|') << entry.GetInt(ibProtocol::ibForm::ibCommandBar::Kind) << wxT('|')
+			<< entry.GetBool(ibProtocol::ibForm::ibCommandBar::Default, false) << wxT('|')
 			<< static_cast<unsigned long long>(entry.Children().size()) << wxT(';');
 	}
 	return shape;
@@ -119,8 +120,11 @@ void ibViewCommandBar::Update(const ibProtocolNode& commandBar)
 		// caption alone.
 		const int toolId = kFirstToolId + static_cast<int>(idx);
 		const wxString caption = entry.GetString(ibProtocol::ibForm::ibCommandBar::Caption);
-		m_bar->AddTool(toolId, caption, ibProtocolPicture(entry, ibProtocol::ibForm::ibCommandBar::Picture), wxNullBitmap,
-			wxITEM_NORMAL, entry.GetString(ibProtocol::ibForm::ibCommandBar::Tooltip, caption), wxEmptyString, nullptr);
+		ibAuiToolBarItem* const tool = m_bar->AddTool(toolId, caption,
+			ibProtocolPicture(entry, ibProtocol::ibForm::ibCommandBar::Picture), wxNullBitmap, wxITEM_NORMAL,
+			entry.GetString(ibProtocol::ibForm::ibCommandBar::Tooltip, caption), wxEmptyString, nullptr);
+		// the bar's default command stands out - a form's «… and close», or the item the author marked
+		tool->SetDefault(entry.GetBool(ibProtocol::ibForm::ibCommandBar::Default, false));
 		if (entry.GetInt(ibProtocol::ibForm::ibCommandBar::Kind) == static_cast<int>(ibProtocol::ibForm::ibCommandBar::ibKind::Group))
 			m_bar->SetToolDropDown(toolId, true);
 		if (!entry.GetBool(ibProtocol::ibForm::ibCommandBar::Enabled, true))

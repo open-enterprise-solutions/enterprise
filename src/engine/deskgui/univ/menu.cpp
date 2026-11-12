@@ -52,10 +52,10 @@
 #include <memory>
 
 #include "deskgui/univ/renderer.h"
+#include "deskgui/univ/popupWindow.h"   // ibPopupWindow — the menu's window
 
 #ifdef __WXMSW__
     #include <wx/msw/private.h>
-    #include "deskgui/univ/topLevel.h"   // ibMSWShowShadowed — the popup's shadow, its own
 #endif // __WXMSW__
 
 typedef wxMenuItemList::compatibility_iterator ibMenuItemIter;
@@ -130,7 +130,9 @@ private:
 // ibPopupMenuWindow: a popup window showing a menu
 // ----------------------------------------------------------------------------
 
-class ibPopupMenuWindow : public wxPopupTransientWindow
+// SEAM vs univ: the theme's popup (ibPopupWindow) - top-level, not activated, under the system's drop shadow; a child of
+// the desktop, as wx makes a popup, casts none (Max, 2026-11-10: "the menu has no such shading at its edges")
+class ibPopupMenuWindow : public ibPopupWindow<wxPopupTransientWindow>
 {
 public:
     ibPopupMenuWindow(wxWindow *parent, ibMenu *menu);
@@ -141,17 +143,9 @@ public:
     virtual void Popup(wxWindow *focus = nullptr) override;
 
     // override the base class version to dismiss any open submenus
-    virtual void Dismiss();
+    virtual void Dismiss() override;
 
 #ifdef __WXMSW__
-    // SEAM vs univ: shown as the code editor's lists are (ibCodeEditorPopupBase) - a top-level popup that does not
-    // activate, under the system's drop shadow; a child of the desktop, as wx makes a popup, casts none (Max,
-    // 2026-11-10: "the menu has no such shading at its edges")
-    virtual bool Show(bool show = true) override;
-
-    // a click on the menu does not activate it: the frame keeps the focus and the menu its tracking
-    virtual bool MSWHandleMessage(WXLRESULT *result, WXUINT message, WXWPARAM wParam, WXLPARAM lParam) override;
-
     // nor focus it, as the code editor's lists refuse it (ibCodeEditorPopupWindow): top-level, wxPopupWindow::SetFocus
     // is live, and wx focuses a clicked window that accepts it - the window that popped the menu lost the focus, its
     // owner moved it on, and the menu shut on the press before the release chose the item (2026-11-11: the tree's
@@ -449,37 +443,6 @@ ibPopupMenuWindow::~ibPopupMenuWindow()
 
     m_menu->m_popupMenu = nullptr;
 }
-
-#ifdef __WXMSW__
-
-bool ibPopupMenuWindow::Show(bool show)
-{
-    if (!show)
-        return wxPopupTransientWindow::Show(false);
-
-    // shown without being activated: the window's state first, then the native show that does not activate
-    if (!wxWindowBase::Show(true))
-        return false;
-
-    // left topmost, as wx makes a popup (WS_EX_TOPMOST) and as the tooltip stands (ibToolTip::Show): the shadow is a
-    // window of the system's, owned by no one - put among the frame's, it stayed where it was each time the frame came
-    // up with its windows, and the frame covered it (2026-11-11, measured: the menu at z34, the frame z41, its shadow
-    // z42; Max: "the shadow works every other time"). The menu shuts when it loses the mouse (OnCaptureLost)
-    const HWND hWnd = reinterpret_cast<HWND>(GetHandle());
-    return ibMSWShowShadowed(this, [hWnd] { ::ShowWindow(hWnd, SW_SHOWNA); return true; });
-}
-
-bool ibPopupMenuWindow::MSWHandleMessage(WXLRESULT *result, WXUINT message, WXWPARAM wParam, WXLPARAM lParam)
-{
-    if (message == WM_MOUSEACTIVATE)
-    {
-        *result = MA_NOACTIVATE;
-        return true;
-    }
-    return wxPopupTransientWindow::MSWHandleMessage(result, message, wParam, lParam);
-}
-
-#endif // __WXMSW__
 
 // ----------------------------------------------------------------------------
 // ibPopupMenuWindow current item/node handling
@@ -2642,13 +2605,11 @@ void ibMenuBarWindow::PopupCurrentMenu()
         ibMenu *menu = ibSub(m_menuBar->GetMenu(m_current));
         if ( m_menuBar->IsEnabledTop(m_current) && !menu->IsEmpty() )
         {
-            // the items as they are now, as for a popup menu
-            // (ibWindow::PopupMenu) - the frame's handlers answer
-            menu->UpdateUI();
-
             // position it correctly: below the item
             const wxRect rectItem = GetItemRect(m_current);
 
+            // its items as they are now, the frame's handlers answering as the
+            // menu opens (DoPopupMenu, wxFrameBase::OnMenuOpen)
             m_menuShown = menu;
             DoPopupMenu(menu, rectItem.x, rectItem.GetBottom() + 1);
             // ...the bar taken away from its window at once, the window only scheduled to go (~ibMenuBar): still here,
@@ -2844,6 +2805,15 @@ bool ibWindow::DoPopupMenu(wxWindow *window, wxMenu *popup, int x, int y)
     // user typed; wxMSW's gives it to none
     const wxWeakRef<wxWindow> focused(FindFocus());
 
+    // SEAM vs univ: the window told that the menu opens and, after its loop, that it closed, as every native port tells
+    // it (wxMSW's WM_INITMENUPOPUP, wxGTK's "map", wxOSX's menuWillOpen) and the canon's never did: through the menu, its
+    // bar or this window, and the frame last (wxMenu::ProcessMenuEvent). The frame updates a menubar's items there
+    // (wxFrameBase::OnMenuOpen), and a window shuts the popup it keeps open over itself: the menu takes the keys, not the
+    // focus - no focus lost tells it (a code editor's completion list stood over the menu, 2026-11-12, Max)
+    const int menuId = menu->IsAttached() ? 0 : wxID_ANY;
+    wxMenuEvent open(wxEVT_MENU_OPEN, menuId, menu);
+    wxMenu::ProcessMenuEvent(menu, open, window);
+
     menu->Popup(window->ClientToScreen(wxPoint(x, y)), wxSize(0,0));
 
     // SEAM vs univ: the canon warped the mouse pointer to the menu here
@@ -2888,6 +2858,9 @@ bool ibWindow::DoPopupMenu(wxWindow *window, wxMenu *popup, int x, int y)
     // …and the focus where it was, before the command chosen runs (below)
     if ( focused && focused != FindFocus() )
         focused->SetFocus();
+
+    wxMenuEvent close(wxEVT_MENU_CLOSE, menuId, menu);
+    wxMenu::ProcessMenuEvent(menu, close, window);
 
     // a right click outside the menu dismissed it - now the modal loop is gone
     // the click is the window's under the cursor, as a native menu leaves it:

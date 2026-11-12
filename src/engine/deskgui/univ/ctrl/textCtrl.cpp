@@ -716,6 +716,10 @@ bool ibTextCtrl::Create(wxWindow *parent,
     // re-implemented in OnChar/ClickDefaultButtonIfPossible
     style |= wxWANTS_CHARS;
 
+    // painted whole as it is sized: a single line is centred on its height, wrapped lines are wrapped at its width
+    // (ibWindow::OnSize paints again only the frame)
+    style |= wxFULL_REPAINT_ON_RESIZE;
+
     if ( !ibControl::Create(parent, id, pos, size, style,
                             validator, name) )
     {
@@ -4605,6 +4609,13 @@ bool ibTextCtrl::SetFont(const wxFont& font)
 {
     if ( !ibControl::SetFont(font) )
         return false;
+
+    // SEAM vs univ: the font a parent hands down as the window is made (wxWindowBase::InheritAttributes, inside
+    // wxWindow::Create) comes before the text - Create sets the value and lays it out after it (RecalcFontMetrics,
+    // ChangeValue, SetInitialSize, CreateCaret), and the rows of lines not laid out yet asserted here (2026-11-12, Max:
+    // About). The input handler is the last thing Create makes
+    if ( !GetInputHandler() )
+        return true;
 
     // and refresh everything, of course
     InitInsertionPoint();

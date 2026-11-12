@@ -134,6 +134,10 @@ bool ibScrollBar::Create(wxWindow *parent,
     // the scrollbars never have the border
     style &= ~wxBORDER_MASK;
 
+    // painted whole as it is sized: the shaft and the thumb are shares of it (ibWindow::OnSize paints again only the
+    // frame; a window's own scrollbars it refreshes as it places them)
+    style |= wxFULL_REPAINT_ON_RESIZE;
+
     if ( !ibControl::Create(parent, id, pos, size, style, validator, name) )
         return false;
 
@@ -264,12 +268,16 @@ void ibScrollBar::SetScrollbar(int position, int thumbSize,
     // there ir a lot of existing code which just calls SetScrollbar() without
     // specifying the last parameter even though it doesn't need at all to
     // refresh the window immediately
+    // SEAM vs univ: refreshed, not painted at once (the canon's Update()) - painted by its event, as a window's paint is:
+    // a scrollbar given its page inside a size (a window's OnSize adjusts its scrollbars) was painted before the moves
+    // of that size were made (DeferWindowPos, wxMSW) - the window's frame at the new size, its scrollbars at the old
+    // places, the new places black at every step of a resize: a spreadsheet's (its grid double buffered whole,
+    // WS_EX_COMPOSITED, painted with the scrollbar) and a text document's (2026-11-12, Max: "black where the scrollbar
+    // is"; measured, 40 black frames of a resize to none). What a size leaves pending its top-level window paints once
+    // the moves are made (ibTopLevelWindow::EndRepositioningChildren). On GTK3/Cocoa it is painted with the window's
+    // next frame, the moves made before it (nothing is deferred there)
     if ( refresh && needsRefresh )
-    {
-        // and update the window
         Refresh();
-        Update();
-    }
 }
 
 // ----------------------------------------------------------------------------

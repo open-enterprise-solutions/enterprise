@@ -18,6 +18,7 @@
 
 #include <wx/msgdlg.h>      // wxMessageBoxCaptionStr - wx's default
 #include <wx/stockitem.h>
+#include <wx/log.h>         // wxLogGui - ibLogGui's base
 
 class wxSizer;
 
@@ -321,5 +322,31 @@ int DESKGUI_API ibMessageBox(const wxString& message,
                          long style = wxOK | wxCENTRE,
                          wxWindow *parent = nullptr,
                          int x = wxDefaultCoord, int y = wxDefaultCoord);
+
+// ----------------------------------------------------------------------------
+// ibLogGui: wx's log window (wxLogGui) in the theme's message box
+// ----------------------------------------------------------------------------
+
+// SEAM vs wx: wxLogGui shows one message in the native box (wxMessageBox: a TaskDialog on MSW) and several in its log
+// dialog (wxLogDialog), neither of them the theme's - a warning the journal passes on (wxLogChain) stood as the system's
+// window beside the themed program (2026-11-12, Max: "why has this window not gone onto the theme"). The target the
+// theme sets as wx starts (ibThemeModule), before the journal chains the one it finds (ibTechJournal::Open, from the
+// program's OnInit)
+class DESKGUI_API ibLogGui : public wxLogGui
+{
+private:
+    // one message: the theme's box (ibMessageBox)
+    virtual void DoShowSingleLogMessage(const wxString& message,
+                                        const wxString& title,
+                                        int style) override;
+
+    // several: one box with them all, the latest first, as wxLogGui shows them without its log dialog
+    // (wxUSE_LOG_DIALOG 0)
+    virtual void DoShowMultipleLogMessages(const wxArrayString& messages,
+                                           const wxArrayInt& severities,
+                                           const wxArrayLong& times,
+                                           const wxString& title,
+                                           int style) override;
+};
 
 #endif // _DESKGUI_UNIV_MESSAGEDIALOG_H_

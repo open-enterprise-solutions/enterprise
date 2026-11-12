@@ -15,6 +15,8 @@ set_target_properties(appserver PROPERTIES
 
 if(WIN32)
     set_target_properties(appserver PROPERTIES WIN32_EXECUTABLE FALSE)
+    # its resources and the programs' manifest, as its project has them (appserver.vcxproj)
+    target_sources(appserver PRIVATE appserver.rc ${CMAKE_SOURCE_DIR}/src/engine/core/program.manifest)
 endif()
 
 target_compile_definitions(appserver PRIVATE NOPCH)

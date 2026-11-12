@@ -26,6 +26,8 @@ set_target_properties(codeRunner PROPERTIES
 
 if(WIN32)
     set_target_properties(codeRunner PROPERTIES WIN32_EXECUTABLE TRUE)
+    # its resources - the icon wxICON(oes) loads - and the programs' manifest, as its project has them (codeRunner.vcxproj)
+    target_sources(codeRunner PRIVATE codeRunner.rc ${CMAKE_SOURCE_DIR}/src/engine/core/program.manifest)
 endif()
 
 target_compile_definitions(codeRunner PRIVATE NOPCH)

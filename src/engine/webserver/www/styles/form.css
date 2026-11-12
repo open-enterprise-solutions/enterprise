@@ -210,6 +210,24 @@ oes-button.hyperlink wa-button::part(base) {
 	padding-inline: 0.375rem;
 }
 
+/* THE BAR'S DEFAULT COMMAND (its entry's Default — a form's «… and close») stands out as the thin client draws it: a
+   dialog's default button, the accent's face, the caption white. A disabled one is an ordinary disabled tool. The face
+   is the page's rule, so the plain button's own hover fill does not reach it; it lightens instead. */
+.command-bar wa-button.default:not([disabled])::part(base) {
+	background-color: var(--oes-default-button-bg);
+	color: var(--oes-default-button-text);
+}
+
+.command-bar wa-button.default:not([disabled])::part(base):hover {
+	filter: brightness(1.06);
+}
+
+/* …and its caption bold, the main button (Max, 2026-11-12) — a disabled one as well, so the bar does not move as it is
+   enabled; the thin client measures and writes it so (ibAuiToolBar). */
+.command-bar wa-button.default::part(base) {
+	font-weight: 600;
+}
+
 /* A field: its caption beside it, its buttons inside its frame. */
 oes-textctrl {
 	display: flex;

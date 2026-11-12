@@ -77,6 +77,10 @@ bool ibToggleButton::Create(wxWindow *parent,
     else
         ctrl_style |= wxALIGN_CENTRE_VERTICAL;
 
+    // painted whole as it is sized: its label is placed by the alignment above (ibWindow::OnSize paints again only the
+    // frame)
+    ctrl_style |= wxFULL_REPAINT_ON_RESIZE;
+
     if ( !ibControl::Create(parent, id, pos, size, ctrl_style, validator, name) )
     {
         wxFAIL_MSG(wxT("ibToggleButton creation failed"));

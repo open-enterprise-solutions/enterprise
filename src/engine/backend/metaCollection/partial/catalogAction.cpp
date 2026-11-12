@@ -17,7 +17,7 @@ enum
 ibValueRecordDataObjectCatalog::ibStandardCommandSet ibValueRecordDataObjectCatalog::GetStandardCommands(const ibFormID &formType)
 {
 	ibStandardCommandSet catalogActions(this);
-	catalogActions.AddAction(ibT("SaveAndClose"), _("Save and close"), g_picSaveCLSID, true, eDefActionAndClose);
+	catalogActions.AddAction(ibT("SaveAndClose"), _("Save and close"), g_picSaveCLSID, true, eDefActionAndClose).SetDefault(true);
 	catalogActions.AddAction(ibT("Save"), _("Save"), g_picSaveCLSID, true, eSave);
 	catalogActions.AddSeparator();
 	catalogActions.AddAction(ibT("Generate"), _("Generate"), g_picGenerateCLSID, true, eGenerate).SetModify(false);   // creates a NEW object — doesn't modify THIS one

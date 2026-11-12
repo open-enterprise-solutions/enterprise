@@ -44,6 +44,9 @@ struct ibCommandEntry {
 	ibPictureDescription    picture;
 	ibRepresentation        representation;
 	bool                    enabled;
+	// The bar's default command, drawn standing out: an item's Default, or the action's own (an object form's
+	// «… and close», AutoFill).
+	bool                    isDefault;
 	ibValueCommandBarItem*  item;
 	ibCommandEntryKind      kind;
 	// …and WHICH filter line, for a quick filter: its index among the top-level nodes of the
@@ -55,10 +58,10 @@ struct ibCommandEntry {
 	std::vector<ibValueCommandBarItem*> members;
 	// The hint on the tool. Empty: the caption.
 	ibString                tooltip;
-	ibCommandEntry() : id(wxNOT_FOUND), representation(ibRepresentation_Auto), enabled(true), item(nullptr),
-		kind(ibCommandEntryKind_Command), filterLine(0) {}
+	ibCommandEntry() : id(wxNOT_FOUND), representation(ibRepresentation_Auto), enabled(true), isDefault(false),
+		item(nullptr), kind(ibCommandEntryKind_Command), filterLine(0) {}
 	ibCommandEntry(const ibActionID& i, const ibString& c, const ibPictureDescription& p, ibRepresentation r, bool en = true, ibValueCommandBarItem* it = nullptr)
-		: id(i), caption(c), picture(p), representation(r), enabled(en), item(it),
+		: id(i), caption(c), picture(p), representation(r), enabled(en), isDefault(false), item(it),
 		  kind(ibCommandEntryKind_Command), filterLine(0) {}
 };
 
@@ -86,6 +89,7 @@ public:
 	ibString GetToolTip() const { return m_propertyTooltip->GetValueAsTranslateString(); }
 	bool IsEnabled() const { return m_propertyEnabled->GetValueAsBoolean(); }
 	bool IsVisible() const { return m_propertyVisible->GetValueAsBoolean(); }
+	bool IsDefault() const { return m_propertyDefault->GetValueAsBoolean(); }
 	// Available by the functional options it names — false while all of them are off in this base. Beside
 	// Visible, never written into it.
 	bool IsAvailable() const { return m_propertyFunctionalOptions->IsAvailable(); }
@@ -154,6 +158,8 @@ private:
 		_("Whether the item can be pressed. Off: it is shown greyed out."), true);
 	ibPropertyBoolean* m_propertyVisible = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_category, ibT("Visible"), _("Visible"),
 		_("Whether the item is shown on the bar."), true);
+	ibPropertyBoolean* m_propertyDefault = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_category, ibT("Default"), _("Default button"),
+		_("Whether the item is the bar's default command: drawn standing out, in the accent's colours, as a dialog's default button."), false);
 	// The button's COMMAND-SOURCE property — the real picker (registered frontend editor ibPGCommandSourceProperty:
 	// a type glyph + a dialog of the form's command sources), the command-door twin of a control's ibPropertySource.
 	// Internal name MUST differ from the category name ("Command") — wxPropertyGrid keys categories and

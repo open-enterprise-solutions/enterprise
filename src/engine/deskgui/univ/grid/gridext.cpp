@@ -6506,6 +6506,12 @@ void ibGrid::RefreshBlock(int topRow, int leftCol,
 	int row = topRow;
 	int col = leftCol;
 
+	// ...with the selection's outline round the cells: it lies on the grid lines, half its pen outside the block
+	// (DrawCellHighlight), and the cells alone painted again left a cursor's or a selection's old outline there as
+	// they moved - its top and left edges (2026-11-12, Max: "the stripes stay"). Hidden while the grid was composited
+	// (SetDoubleBuffered, taken off the same day): the window was painted again whole
+	const int outline = wxMax(1, ibCalcGridScale(GetCellHighlightPenWidth(), GetGridZoom()));
+
 	// corner grid
 	if (GetRowPos(topRow) < m_numFrozenRows && GetColPos(leftCol) < m_numFrozenCols && m_frozenCornerGridWin)
 	{
@@ -6515,6 +6521,7 @@ void ibGrid::RefreshBlock(int topRow, int leftCol,
 		wxRect rect = BlockToDeviceRect(ibGridCellCoords(topRow, leftCol),
 			ibGridCellCoords(row, col),
 			m_frozenCornerGridWin);
+		rect.Inflate(outline);
 		m_frozenCornerGridWin->Refresh(false, &rect);
 		row++; col++;
 	}
@@ -6527,6 +6534,7 @@ void ibGrid::RefreshBlock(int topRow, int leftCol,
 		wxRect rect = BlockToDeviceRect(ibGridCellCoords(row, leftCol),
 			ibGridCellCoords(bottomRow, col),
 			m_frozenColGridWin);
+		rect.Inflate(outline);
 		m_frozenColGridWin->Refresh(false, &rect);
 		col++;
 	}
@@ -6539,6 +6547,7 @@ void ibGrid::RefreshBlock(int topRow, int leftCol,
 		wxRect rect = BlockToDeviceRect(ibGridCellCoords(topRow, col),
 			ibGridCellCoords(row, rightCol),
 			m_frozenRowGridWin);
+		rect.Inflate(outline);
 		m_frozenRowGridWin->Refresh(false, &rect);
 		row++;
 	}
@@ -6546,11 +6555,11 @@ void ibGrid::RefreshBlock(int topRow, int leftCol,
 	// main grid
 	if (GetRowPos(bottomRow) >= m_numFrozenRows && GetColPos(rightCol) >= m_numFrozenCols)
 	{
-		const wxRect rect = BlockToDeviceRect(ibGridCellCoords(row, col),
+		wxRect rect = BlockToDeviceRect(ibGridCellCoords(row, col),
 			ibGridCellCoords(bottomRow, rightCol),
 			m_gridWin);
 		if (!rect.IsEmpty())
-			m_gridWin->Refresh(false, &rect);
+			m_gridWin->Refresh(false, &rect.Inflate(outline));
 	}
 }
 
@@ -7381,7 +7390,7 @@ void ibGrid::DrawCellHighlight(wxDC& dc, int row, int col, const ibGridCellAttr*
 	// value for it can be right at two zooms at once, which is why the frame read as too heavy at one
 	// scale and too thin at another. The page-break marks are NOT scaled with it: those are the
 	// window's own annotation, not something drawn on the sheet.
-	const int framePenWidth = wxMax(1, ibCalcGridScale(2, GetGridZoom()));
+	const int framePenWidth = wxMax(1, ibCalcGridScale(GetCellHighlightPenWidth(), GetGridZoom()));
 
 	// ⚠ AND A FLAT CAP, now that the width is not fixed. A wide pen ends in a ROUND cap by default,
 	// which reaches about half its width PAST the endpoint — the ends of the four sides then stick

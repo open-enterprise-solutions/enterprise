@@ -49,6 +49,11 @@ public:
 
     virtual void Enable(bool enable = true) override;
     virtual void Check(bool check = true) override;
+    // the state is the item's own, as univ's: wxMSW's IsChecked asks the menu's HMENU, which never holds this item -
+    // GetMenuState answered -1 for it, every bit set, and every check item stood checked whatever was clicked
+    // (2026-11-12, Max: the spreadsheet's "Show cells"). On GTK3 the native one asks a GtkCheckMenuItem the item has
+    // not; Cocoa's keeps the base's state as well
+    virtual bool IsChecked() const override { return wxMenuItemBase::IsChecked(); }
 
     // we add some extra functions which are also available under MSW from
     // wxOwnerDrawn class - they will be moved to wxMenuItemBase later

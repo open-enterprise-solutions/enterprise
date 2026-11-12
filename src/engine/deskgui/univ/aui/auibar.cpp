@@ -42,6 +42,8 @@
 
 #include "deskgui/univ/menu.h"
 #include "deskgui/univ/renderer.h"
+#include "deskgui/univ/theme.h"          // ibThemeEngine - the colour the bar stands on (EraseBackground)
+#include "deskgui/univ/colourScheme.h"   // wxTHEME_BG_COLOUR
 
 wxDEFINE_EVENT( ibEVT_AUITOOLBAR_TOOL_DROPDOWN, ibAuiToolBarEvent );
 wxDEFINE_EVENT( ibEVT_AUITOOLBAR_OVERFLOW_CLICK, ibAuiToolBarEvent );
@@ -244,8 +246,8 @@ void ibAuiToolBar::SetWindowStyleFlag(long style)
 
     ibControl::SetWindowStyleFlag(style);
 
-    // SEAM vs wx: ibAUI_TB_PLAIN_BACKGROUND chose between the art's two backgrounds, remade here - the theme has one
-    // (OnPaint)
+    // SEAM vs wx: ibAUI_TB_PLAIN_BACKGROUND chooses between the bar's two backgrounds, as it chose between the art's
+    // (EraseBackground)
 }
 
 wxSize ibAuiToolBar::DoGetBestSize() const
@@ -1468,7 +1470,8 @@ wxSize ibAuiToolBar::GetToolSize(wxReadOnlyDC& dc, const ibAuiToolBarItem& item)
 
     if (HasFlag(ibAUI_TB_TEXT))
     {
-        dc.SetFont(GetFont());
+        // the bar's default command is written bold (OnPaint), and measured so
+        dc.SetFont(item.IsDefault() ? GetFont().Bold() : GetFont());
         int tx, ty;
 
         if (m_toolTextOrientation == ibAUI_TBTOOL_TEXT_BOTTOM)
@@ -1790,6 +1793,16 @@ void ibAuiToolBar::UpdateWindowUI(long flags)
     ibControl::UpdateWindowUI(flags);
 }
 
+void ibAuiToolBar::EraseBackground(wxDC& dc, const wxRect& rect)
+{
+    if ( HasFlag(ibAUI_TB_PLAIN_BACKGROUND) )
+    {
+        ibControl::EraseBackground(dc, rect);
+        return;
+    }
+    GetRenderer()->DrawToolBarBackground(dc, wxTHEME_BG_COLOUR(this), rect, GetStateFlags());
+}
+
 void ibAuiToolBar::OnPaint(wxPaintEvent& WXUNUSED(evt))
 {
     // SEAM vs wx: the theme draws the bar - its background (ibThemePaintDC), the gripper, the tools, the separators, the
@@ -1856,11 +1869,16 @@ void ibAuiToolBar::OnPaint(wxPaintEvent& WXUNUSED(evt))
         }
 
         // the tool's state as the theme reads it - a sticky tool is drawn as the one under the mouse (wx's arts), every
-        // tool of a disabled bar as a disabled one (GetCurrentBitmapFor) - and its label, where the bar shows labels
+        // tool of a disabled bar as a disabled one (GetCurrentBitmapFor), the bar's default command as the default
+        // button - and its label, where the bar shows labels
         const int state = !IsEnabled() ? ibAUI_BUTTON_STATE_DISABLED
                         : item.IsSticky() ? item.GetState() | ibAUI_BUTTON_STATE_HOVER : item.GetState();
-        const int flags = ibAuiGetControlFlags(state);
+        const int flags = ibAuiGetControlFlags(state) | (item.IsDefault() ? wxCONTROL_ISDEFAULT : 0);
         const wxString label = HasFlag(ibAUI_TB_TEXT) ? item.GetLabel() : wxString();
+        // the bar's default command written bold - the main button (2026-11-12, Max), measured so (GetToolSize), a
+        // disabled one as well, so the bar does not move as it is enabled. On GTK3/Cocoa the same - the bar is the
+        // engine's there too
+        dc.SetFont(item.IsDefault() ? GetFont().Bold() : GetFont());
 
         switch ( item.m_kind )
         {

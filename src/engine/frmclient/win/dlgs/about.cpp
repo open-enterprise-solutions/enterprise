@@ -12,8 +12,9 @@ static const wxString s_strContributors =
 
 namespace {
 
-// Compact read-only value field: no border, the theme's field colour, fills
-// the 2nd column of the info grid; the user can copy text out of it.
+// Compact read-only value field: no border - a label the user can copy text
+// out of, on the dialog's colour (ibTextCtrl::HasContentBackground); fills
+// the 2nd column of the info grid.
 ibTextCtrl* AddInfoRow(wxWindow* parent, wxFlexGridSizer* grid, const wxString& label, const wxString& value)
 {
 	ibStaticText* lbl = new ibStaticText(parent, wxID_ANY, label + wxT(":"));

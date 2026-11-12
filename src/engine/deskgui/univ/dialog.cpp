@@ -39,6 +39,19 @@ wxEND_EVENT_TABLE()
 bool ibDialog::Create(wxWindow *parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size,
                       long style, const wxString& name)
 {
+    // OVER THE WINDOW THAT TAKES THE INPUT: a parent taking none - a modal stands over it, disabling the windows under it
+    // (wxWindowDisabler) - gives its place to the one shown that takes it, the innermost modal. Over the disabled one,
+    // the dialog hidden found its owner disabled still - the modal it was opened from enabled again, not its owner - and
+    // the system activated another program's window (2026-11-12, Max: "closing the second dialog activates anything -
+    // the browser, Opera"). wx refuses a hidden parent for the same reason (wxDialogBase::CheckIfCanBeUsedAsParent). On
+    // GTK3/Cocoa the dialog closed gives the focus back to its parent (transient for it) - the disabled window, not the modal
+    if ( parent != nullptr && !wxGetTopLevelParent(parent)->IsEnabled() )
+    {
+        for ( wxWindow *window : wxTopLevelWindows )
+            if ( window->IsShown() && window->IsEnabled() )
+                parent = window;
+    }
+
     // its shadow the system's, as every top-level window's of the theme (ibTopLevelWindow::Create) - Max, 2026-11-10:
     // "the dialogs should cast a shadow too"
     return ibTopLevelWindow<wxDialog>::Create(parent, id, title, pos, size, style, name);

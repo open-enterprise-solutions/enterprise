@@ -215,6 +215,7 @@
     <ClCompile Include="univ\numberEntryDialog.cpp" />
     <ClCompile Include="univ\numValidator.cpp" />
     <ClCompile Include="univ\panel.cpp" />
+    <ClCompile Include="univ\popupWindow.cpp" />
     <ClCompile Include="univ\propertySheetDialog.cpp" />
     <ClCompile Include="univ\aui\auibar.cpp" />
     <ClCompile Include="univ\aui\auibook.cpp" />
@@ -314,6 +315,7 @@
     <ClInclude Include="univ\numberEntryDialog.h" />
     <ClInclude Include="univ\numValidator.h" />
     <ClInclude Include="univ\panel.h" />
+    <ClInclude Include="univ\popupWindow.h" />
     <ClInclude Include="univ\propertySheetDialog.h" />
     <ClInclude Include="univ\aui\aui.h" />
     <ClInclude Include="univ\aui\auibar.h" />

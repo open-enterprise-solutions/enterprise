@@ -6,6 +6,7 @@
 #include "titleFrame.h"
 
 #include <wx/sizer.h>
+#include <wx/settings.h>   // wxSystemSettings - the title's font is the system's
 #include "deskgui/univ/ctrl/staticText.h"
 
 ibPanelTitle::ibPanelTitle(wxWindow* parent, const wxString& title) : ibPanel(parent, wxID_ANY)
@@ -16,7 +17,11 @@ ibPanelTitle::ibPanelTitle(wxWindow* parent, const wxString& title) : ibPanel(pa
 
 	ibStaticText* const label = new ibStaticText(this, wxID_ANY, title);
 	label->SetForegroundColour(*wxWHITE);
-	label->SetFont(wxFontInfo(8).Family(wxFONTFAMILY_SWISS).Bold());
+	// the system's face, bold, a point under its size - 8 on Windows' 9 (the Swiss family's 8 stood here until
+	// 2026-11-12 - Arial on Windows)
+	wxFont font = wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT).Bold();
+	font.SetPointSize(font.GetPointSize() - 1);
+	label->SetFont(font);
 
 	wxBoxSizer* const sizer = new wxBoxSizer(wxVERTICAL);
 	sizer->Add(label, wxSizerFlags().Expand().Border(wxALL, 2));

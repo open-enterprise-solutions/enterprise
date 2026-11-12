@@ -536,10 +536,6 @@ public:
 	// drop over item
 	void SetDragItem(const wxTreeItemId& item = (wxTreeItemId*)nullptr);
 
-	virtual void DoSetSize(int x, int y,
-		int width, int height,
-		int sizeFlags = wxSIZE_AUTO);
-
 	virtual wxSize DoGetBestClientSize() const;
 	virtual wxSize DoGetBestSize() const;
 

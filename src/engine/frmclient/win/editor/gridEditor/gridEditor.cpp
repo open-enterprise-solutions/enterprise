@@ -116,9 +116,6 @@ ibGridEditor::ibGridEditor(ibMetaDocument* document,
 	// Create property
 	m_propertySpreadsheet = new ibPropertyGridEditorSpreadsheet(this);
 
-	// Native col 
-	ibGrid::SetDoubleBuffered(true);
-
 	// Cell Defaults
 	ibGrid::SetDefaultCellAlignment(wxAlignment::wxALIGN_LEFT, wxAlignment::wxALIGN_BOTTOM);
 	ibGrid::SetTable(new ibGridEditorStringTable, true);

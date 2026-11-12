@@ -60,6 +60,12 @@ public:
 #if wxUSE_STATUSBAR
     // the theme's status bar (ibStatusBar) - the port's own is not the theme's
     virtual wxStatusBar *OnCreateStatusBar(int number, long style, wxWindowID id, const wxString& name) override;
+#ifdef __WXGTK__
+    // SEAM vs wxGTK: the bar a child in the client area, as wxMSW and wxOSX keep it (wxFrameBase's) - wxGTK's packs it
+    // into its box under the native area, out of the decorations the theme draws round the client area: the frame's
+    // bottom line was cut off by it and a strip the line's height left above it
+    virtual void SetStatusBar(wxStatusBar *statbar) override;
+#endif // __WXGTK__
 #endif // wxUSE_STATUSBAR
 
 #ifdef __WXMSW__
@@ -84,6 +90,11 @@ protected:
     // …and a popup menu the theme's, an ibMenu (ibWindow::DoPopupMenu) - the native frame's shows the system's
     virtual bool DoPopupMenu(wxMenu *menu, int x, int y) override;
 #endif // wxUSE_MENUS
+
+#if wxUSE_STATUSBAR && defined(__WXGTK__)
+    // ...and placed under the client area, as the canon's (wxFrame::PositionStatusBar, univ) - wxGTK's frame has none
+    virtual void PositionStatusBar() override;
+#endif // wxUSE_STATUSBAR && __WXGTK__
 
 private:
     void OnSize(wxSizeEvent& event);

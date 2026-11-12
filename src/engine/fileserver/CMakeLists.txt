@@ -26,6 +26,8 @@ target_compile_definitions(fileserver
 # FILESERVER_API resolves to dllexport only when FILESERVER_EXPORTS is defined (fileserver.h).
 if(WIN32)
     target_compile_definitions(fileserver PRIVATE FILESERVER_EXPORTS)
+    # its resources, as its project has them (fileserver.vcxproj)
+    target_sources(fileserver PRIVATE fileserver.rc)
 endif()
 
 target_link_libraries(fileserver
