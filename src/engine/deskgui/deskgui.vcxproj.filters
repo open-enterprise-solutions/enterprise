@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
+    <Filter Include="docview">
+      <UniqueIdentifier>{7c1e4a2b-9d3f-4e5a-8b6c-0d1e2f3a0009}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="docview\print">
+      <UniqueIdentifier>{7c1e4a2b-9d3f-4e5a-8b6c-0d1e2f3a000a}</UniqueIdentifier>
+    </Filter>
     <Filter Include="univ">
       <UniqueIdentifier>{7c1e4a2b-9d3f-4e5a-8b6c-0d1e2f3a0001}</UniqueIdentifier>
     </Filter>
@@ -27,6 +33,15 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="docview\docManager.cpp">
+      <Filter>docview</Filter>
+    </ClCompile>
+    <ClCompile Include="docview\docView.cpp">
+      <Filter>docview</Filter>
+    </ClCompile>
+    <ClCompile Include="docview\print\printPreview.cpp">
+      <Filter>docview\print</Filter>
+    </ClCompile>
     <ClCompile Include="univ\choiceDialog.cpp">
       <Filter>univ</Filter>
     </ClCompile>
@@ -299,6 +314,18 @@
     <ClInclude Include="dateconv.h" />
     <ClInclude Include="typeconv.h" />
     <ClInclude Include="artProvider.h" />
+    <ClInclude Include="docview\choiceTemplate.h">
+      <Filter>docview</Filter>
+    </ClInclude>
+    <ClInclude Include="docview\docManager.h">
+      <Filter>docview</Filter>
+    </ClInclude>
+    <ClInclude Include="docview\docView.h">
+      <Filter>docview</Filter>
+    </ClInclude>
+    <ClInclude Include="docview\print\printPreview.h">
+      <Filter>docview\print</Filter>
+    </ClInclude>
     <ClInclude Include="univ\app.h">
       <Filter>univ</Filter>
     </ClInclude>

@@ -26,8 +26,6 @@
 // Show() and destroyed by wx — only the lookup remains.
 #define mainFrame            		 (ibFrontendMainFrame::GetFrame())
 
-#define wxCREATE_SDI_FRAME 0x16000
-
 class ibOutputWindow;
 class ibObjectInspector;
 class ibTabDocument;
@@ -51,6 +49,17 @@ class ibTabDocument;
 class FRMCLIENT_API ibFrontendMainFrame : public ibBackendDocFrame, public ibAuiMDIParentFrame, public ibDocParentFrameAnyBase {
 public:
 
+	// The process's main window.
+	static ibFrontendMainFrame* GetFrame() { return s_instance; }
+
+	// THE PROPERTIES PANE — the desktop's object inspector: what a view selects in it is shown there (a sheet's cells),
+	// hidden until it is asked for.
+	static ibObjectInspector* GetObjectInspector() {
+		if (s_instance != nullptr)
+			return s_instance->m_objectInspector;
+		return nullptr;
+	}
+
 	virtual ~ibFrontendMainFrame();
 
 	// Show does the whole opening: build the GUI, log in — the start runs there, and may say something or ask — draw
@@ -67,28 +76,40 @@ public:
 	// The client goes with the window: logged out, and its session torn down by the server.
 	virtual bool Destroy() override;
 
-	// The process's main window.
-	static ibFrontendMainFrame* GetFrame() { return s_instance; }
+	// THE TAB A VIEW SHOWS IN — the desktop's factory: a tab of the process's main window, the view's document's title
+	// and icon on it.
+	virtual wxWindow* CreateChildFrame(ibFrontendView* view, const wxPoint& pos, const wxSize& size, long style) override;
 
-	// THE PROPERTIES PANE — the desktop's object inspector: what a view selects in it is shown there (a sheet's cells),
-	// hidden until it is asked for.
-	static ibObjectInspector* GetObjectInspector() {
-		if (s_instance != nullptr)
-			return s_instance->m_objectInspector;
-		return nullptr;
-	}
+	// A view activated — its own menu merged into the window's and its toolbar shown; deactivated, both disabled (the
+	// desktop's ActivateView).
+	virtual void ActivateView(ibFrontendView* view, bool activate) override;
 
-	bool IsShownInspector();
-	void ShowInspector();
+	// A METAOBJECT OPENS ON THE SERVER — the desktop's door (ibDocManager::OpenForm), by what the client holds of the
+	// object: its id and the configuration it is in (the tab); the server opens it as the tree's Edit does (schema
+	// MetaData, Open) and its document comes with the frame. False: not sent. Its message is the designer's protocol:
+	// the designer's window sends it (ibFrontendMainFrameDesigner), the base sends nothing.
+	virtual bool OpenForm(ibMetaID WXUNUSED(id), const class ibMetaData& WXUNUSED(metaData)) { return false; }
 
 	// …and what it shows: the object selected in it (the desktop's property slot).
 	virtual ibPropertyObject* GetProperty() const override;
 	virtual bool SetProperty(ibPropertyObject* prop) override;
 
-	// THE TAB A VIEW SHOWS IN — the desktop's factory: a tab of the process's main window, the view's document's title
-	// and icon on it.
-	static wxWindow* CreateChildFrame(ibFrontendView* view, const wxPoint& pos, const wxSize& size,
-		long style = wxDEFAULT_FRAME_STYLE);
+	
+	
+	bool IsShownInspector();
+	void ShowInspector();
+
+	// The panes laid out again, once the work under way is done — the window frozen until then, so what the work
+	// changes is shown once (UpdateFrameManager thaws it).
+	void UpdateManager() {
+		if (!m_callUpdateFrameManager) {
+			m_callUpdateFrameManager = true;
+			Freeze();
+			CallAfter(&ibFrontendMainFrame::UpdateFrameManager);
+		}
+	}
+	// …and the window brought to the front, once the work under way is done — the desktop's (a stop, a failure sent over).
+	void RaiseFrame();
 
 	// What it logged in to — the thin client's process is one mode, the window's.
 	ibProtocol::ibLogin::ibMode GetMode() const { return m_mode; }
@@ -104,21 +125,6 @@ public:
 	// database).
 	ibAuiToolBar* GetMainFrameToolbar() const { return m_mainFrameToolbar; }
 
-	// A view activated — its own menu merged into the window's and its toolbar shown; deactivated, both disabled (the
-	// desktop's ActivateView).
-	void ActivateView(ibFrontendView* view, bool activate = true);
-
-	// The panes laid out again, once the work under way is done — the window frozen until then, so what the work
-	// changes is shown once (UpdateFrameManager thaws it).
-	void UpdateManager() {
-		if (!m_callUpdateFrameManager) {
-			m_callUpdateFrameManager = true;
-			Freeze();
-			CallAfter(&ibFrontendMainFrame::UpdateFrameManager);
-		}
-	}
-	// …and the window brought to the front, once the work under way is done — the desktop's (a stop, a failure sent over).
-	void RaiseFrame();
 
 	// A call of the window's, through the communicator: the frame drawn again after it, its messages shown, a
 	// question it asks put to the person until the work settles. The answer as it came — a schema's tree, a fetch's

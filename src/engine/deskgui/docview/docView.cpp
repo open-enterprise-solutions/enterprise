@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////////
-// Name:        frmclient/docView/docView.cpp
+// Name:        deskgui/docview/docView.cpp
 // Purpose:     OES Doc/View fork — copied from wx/src/common/docview.cpp,
 //              renamed wx*→ib*. Originally:
 //                Author:      Julian Smart
@@ -46,6 +46,8 @@
 #include "deskgui/univ/messageDialog.h"  // ibMessageBox — save the changes?
 #include "deskgui/univ/findReplaceDialog.h"   // ibFindReplaceDialog — Find, deleted with the manager
 
+#include "core/diagnostics/journal.h"   // ibJournalError - a file not read, not written
+
 #if wxUSE_PRINTING_ARCHITECTURE
     #include "wx/prntbase.h"
     #include "wx/printdlg.h"
@@ -87,10 +89,10 @@
 // Used by the 5 OES overrides of inherited wx handlers that remain in this
 // file (OnFileSave / OnUpdateFileSave / OnUpdateFileSaveAs / SelectDocumentPath
 // / SelectDocumentType); all are cross-platform-safe. The metadata-aware
-// "wiring" (Find/Replace, OpenForm, meta-template registry) lives in
+// "wiring" (Find/Replace, meta-template registry) lives in
 // docManager.cpp.
-#include "frmclient/docView/docManager.h"   // ibFrontendDocTemplate
-#include "frmclient/win/dlgs/choiceTemplate.h"
+#include "deskgui/docview/docManager.h"   // ibFrontendDocTemplate
+#include "deskgui/docview/choiceTemplate.h"
 
 // ----------------------------------------------------------------------------
 // wxWidgets macros
@@ -676,10 +678,7 @@ bool ibFrontendDocument::RemoveView(ibFrontendView *view)
     return true;
 }
 
-// ibFrontendDocument::OnCreate + ibFrontendDocument::DoCreateView are defined lower in this file
-// (after the frontend child-frame / visual-host includes at ~line 2426), since the
-// view-creation pipeline needs ibFrontendMainFrame / ibWebFrame / the web visual
-// host to be complete types.
+// ibFrontendDocument::OnCreate + ibFrontendDocument::DoCreateView are defined at the end of this file.
 
 // Called after a view is added or removed.
 // The default implementation deletes the document if
@@ -921,7 +920,7 @@ wxPrintout *ibFrontendView::OnCreatePrintout()
 }
 #endif // wxUSE_PRINTING_ARCHITECTURE
 
-// ibFrontendDocTemplate implementation moved to frmclient/docView/docManager.cpp
+// ibFrontendDocTemplate implementation moved to docManager.cpp
 // alongside its class declaration in docManager.h.
 
 // ----------------------------------------------------------------------------
@@ -1001,6 +1000,10 @@ ibFrontendDocManager::ibFrontendDocManager(long WXUNUSED(flags), bool initialize
 
 ibFrontendDocManager::~ibFrontendDocManager()
 {
+    // GOING, IT TELLS ITS WINDOW NOTHING: the window deletes it from its own destructor (ibFrontendMainFrame),
+    // and a view let go of below would be activated or left in a window half gone.
+    m_parentFrame = nullptr;
+
     wxDELETE(m_findDialog);
     Clear();
     delete m_fileHistory;
@@ -1223,7 +1226,7 @@ void ibFrontendDocManager::OnMRUFileNotExist(unsigned n, const wxString& filenam
 
 #if wxUSE_PRINTING_ARCHITECTURE
 
-#include "frmclient/docView/print/printPreview.h"   // ibPrintPreviewFrame — the preview with "Fit to page width"
+#include "deskgui/docview/print/printPreview.h"   // ibPrintPreviewFrame — the preview with "Fit to page width"
 
 // 🛑 SAID, not skipped: Print and Preview used to return quietly when the view had nothing to put on
 // paper, and a Print that does nothing reads as a Print that broke (2026-09-22). Through the one modal
@@ -2457,8 +2460,6 @@ bool ibTransferStreamToFile(wxInputStream& stream, const wxString& filename)
 #endif // wxUSE_STD_IOSTREAM/!wxUSE_STD_IOSTREAM
 
 
-#include "frmclient/mainFrame/mainFrame.h"
-
 #include <wx/scopedptr.h>
 #include "docManager.h"
 #include <wx/dlist.h>
@@ -2498,10 +2499,8 @@ bool ibFrontendDocument::OnCreate(const wxString& WXUNUSED(path), long flags)
 	// Where the view's frame comes from. A document COMPOSED by its parent (the home page: a
 	// pane of the splitter dividing its frame) takes the window the parent hands it and spawns
 	// no tab — one question, asked through the doc parent. Everyone else gets a child frame
-	// from the transport's factory: desktop hits ibFrontendMainFrame (ibAuiDocChildFrame
-	// inside an AUI MDI parent), web hits ibWebFrame (ibWebDocChildFrame parked in the
-	// session's m_tabs). Both sides have matching static factory signatures so only the
-	// class-qualifier differs.
+	// from the window its manager works in (ibDocParentFrameAnyBase::CreateChildFrame): the
+	// main window's tab, or a dialog over the modal open.
 	wxWindow* const composedWindow = GetComposedWindow();
 
 	if (composedWindow != nullptr) {
@@ -2520,7 +2519,7 @@ bool ibFrontendDocument::OnCreate(const wxString& WXUNUSED(path), long flags)
 		long style = wxDEFAULT_FRAME_STYLE;
 		if (createModal) style = style | wxCREATE_SDI_FRAME;
 
-		ibFrontendMainFrame::CreateChildFrame(view.get(), wxDefaultPosition, wxDefaultSize, style);
+		GetDocumentManager()->GetParentFrame()->CreateChildFrame(view.get(), wxDefaultPosition, wxDefaultSize, style);
 	}
 
 	if (!view->OnCreate(this, flags))

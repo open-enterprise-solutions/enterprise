@@ -12,8 +12,6 @@ ibFrontendMainFrameEnterprise::ibFrontendMainFrameEnterprise(std::unique_ptr<ibC
 	const wxString& title, const wxPoint& pos, const wxSize& size)
 	: ibFrontendMainFrame(std::move(communicator), ibProtocol::ibLogin::ibMode::Runtime, user, password, title, pos, size)
 {
-	// Its templates are the server's — the external data processor and report among them (DrawTemplates).
-	m_docManager = new ibFrontendDocManager;
 }
 
 void ibFrontendMainFrameEnterprise::CreateStartupPage()

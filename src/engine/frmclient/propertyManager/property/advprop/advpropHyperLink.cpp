@@ -39,7 +39,7 @@ bool ibPGHyperLinkProperty::StringToValue(ibVariant& variant,
 	return false;
 }
 
-#include "frmclient/docView/docView.h"   // docManager — the door that opens a metaobject
+#include "frmclient/mainFrame/mainFrame.h"   // mainFrame — the door that opens a metaobject
 
 bool ibPGHyperLinkProperty::OnEvent(ibPropertyGrid* WXUNUSED(propgrid), wxWindow* WXUNUSED(wnd_primary),
 	wxEvent& event)
@@ -61,7 +61,7 @@ bool ibPGHyperLinkProperty::OnEvent(ibPropertyGrid* WXUNUSED(propgrid), wxWindow
 					// OpenForm, from the object itself (Max, 2026-09-01: *"it is a very complicated
 					// mechanism otherwise — you would have to track everywhere on whose behalf it
 					// was opened"*).
-					docManager->OpenForm(id, metaData);
+					mainFrame->OpenForm(id, metaData);
 				}
 			);
 		}

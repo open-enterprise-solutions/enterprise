@@ -2,7 +2,7 @@
 #define _DOC_MANAGER_H__
 
 /////////////////////////////////////////////////////////////////////////////
-// Name:        frmclient/docView/docManager.h
+// Name:        deskgui/docview/docManager.h
 // Purpose:     OES doc-manager extension types.
 //
 //   ibFrontendDocManager itself is declared in docView.h next to the wx-fork base
@@ -14,7 +14,7 @@
 //   Implementation lives in docManager.cpp.
 /////////////////////////////////////////////////////////////////////////////
 
-#include "frmclient/docView/docView.h"
+#include "deskgui/docview/docView.h"
 
 // ----------------------------------------------------------------------------
 // ibFrontendDocTemplate — the wx-fork base template type. Implements the path/ext
@@ -23,10 +23,10 @@
 // stays focused on ibFrontendDocument / ibFrontendView / ibFrontendDocManager.
 // ----------------------------------------------------------------------------
 
-class FRMCLIENT_API ibFrontendDocTemplate: public wxObject
+class DESKGUI_API ibFrontendDocTemplate: public wxObject
 {
 
-friend class FRMCLIENT_API ibFrontendDocManager;
+friend class DESKGUI_API ibFrontendDocManager;
 
 public:
 	ibFrontendDocTemplate(ibFrontendDocManager *manager,

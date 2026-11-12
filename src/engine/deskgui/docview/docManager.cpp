@@ -3,25 +3,16 @@
 //	Description : OES doc-manager wiring — bodies that the collapsed
 //	              ibFrontendDocManager class (declared in docView.h) needs on top of
 //	              the wx-fork base in docView.cpp (Find/Replace dialog
-//	              parented on the AUI mainFrame among them).
+//	              over the top window among them).
 ////////////////////////////////////////////////////////////////////////////
 
-#include "frmclient/docView/docManager.h"  // also brings docView.h transitively
+#include "deskgui/docview/docManager.h"  // also brings docView.h transitively
 
-#include "frmclient/win/dlgs/choiceTemplate.h"
+#include "deskgui/docview/choiceTemplate.h"
 
 #include "deskgui/univ/findReplaceDialog.h"   // ibFindReplaceDialog — Find, the theme's dialog
 
-// Find/Replace dialog parents the ibFindReplaceDialog against
-// the main frame singleton. mainFrame.h pulls in ibFrontendMainFrame
-// + AUI + objectInspector. Also the home of ibFrontendMainFrame::CreateChildFrame used below to wire
-// m_viewFrame on every view going through the template path.
-#include "frmclient/mainFrame/mainFrame.h"
-
-#include "frmclient/backend/metaData.h"   // the configuration a metaobject opens in — its tab
-#include "protocol/protocol.h"
-#include "protocol/protocolDesigner.h"   // ibProtocol::ibSchema::ibMetaData
-#include "protocol/protocolNode.h"
+#include "core/diagnostics/journal.h"   // ibJournalInfo - a view activated, left
 
 #if wxUSE_DOC_VIEW_ARCHITECTURE
 
@@ -157,7 +148,7 @@ ibFrontendView *ibFrontendDocTemplate::CreateView(ibFrontendDocument *doc, long 
 	long style = wxDEFAULT_FRAME_STYLE;
 	if (createModal) style |= wxCREATE_SDI_FRAME;
 
-	ibFrontendMainFrame::CreateChildFrame(view.get(), wxDefaultPosition, wxDefaultSize, style);
+	GetDocumentManager()->GetParentFrame()->CreateChildFrame(view.get(), wxDefaultPosition, wxDefaultSize, style);
 
 	if (!view->OnCreate(doc, flags))
 		return nullptr;
@@ -216,7 +207,7 @@ ibDocTemplateVector ibFrontendDocManager::GetTemplatesVector() const
 void ibFrontendDocManager::OnFindDialog(wxCommandEvent& WXUNUSED(event))
 {
 	if (m_findDialog == nullptr) {
-		m_findDialog = new ibFindReplaceDialog(mainFrame, &m_findData, _("Find"));
+		m_findDialog = new ibFindReplaceDialog(wxTheApp->GetTopWindow(), &m_findData, _("Find"));
 		m_findDialog->Centre(wxCENTRE_ON_SCREEN | wxBOTH);
 
 		m_findDialog->Bind(wxEVT_FIND,       &ibFrontendDocManager::OnFind,      this);
@@ -250,24 +241,6 @@ void ibFrontendDocManager::OnFind(wxFindDialogEvent& event)
 	}
 }
 
-bool ibFrontendDocManager::OpenForm(ibMetaID id, const ibMetaData& metaData)
-{
-	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
-	if (frame == nullptr)
-		return false;
-
-	ibProtocolNode args;
-	args.SetValue(ibProtocol::ibSchema::ibMetaData::Id, static_cast<long long>(id));
-	if (metaData.GetTabId() != 0)
-		args.SetValue(ibProtocol::ibSchema::ibMetaData::Tab, metaData.GetTabId());
-
-	ibProtocolNode params, answer;
-	params.SetValue(ibProtocol::ibSchema::Schema, static_cast<long long>(ibProtocol::ibSchema::ibKind::MetaData));
-	params.SetValue(ibProtocol::ibSchema::Command, static_cast<long long>(ibProtocol::ibSchema::ibMetaData::ibCommand::Open));
-	params.SetValue(ibProtocol::ibSchema::Args, args);
-	return frame->Call(ibProtocol::ibMethod::Schema, params, answer);
-}
-
 ibFrontendDocTemplate* ibFrontendDocManager::FindTemplateByDocClassInfo(const wxClassInfo* classInfo) const
 {
 	for (wxList::compatibility_iterator node = m_templates.GetFirst();
@@ -280,10 +253,8 @@ ibFrontendDocTemplate* ibFrontendDocManager::FindTemplateByDocClassInfo(const wx
 	return nullptr;
 }
 
-// ibFrontendView::Activate lives here (not in docView.cpp) because it reaches the
-// desktop main frame (mainFrame / ibFrontendMainFrame), whose headers are
-// only pulled in on this side — same split as the rest of the metadata-aware
-// wiring. Lifted up from ibMetaView so the form view (a plain ibFrontendView since the
+// ibFrontendView::Activate tells the window its manager works in first
+// (ibDocParentFrameAnyBase::ActivateView). Lifted up from ibMetaView so the form view (a plain ibFrontendView since the
 // doc/view fork) also clears its activation on the main frame; otherwise the
 // reduced ibFrontendView path skipped mainFrame->ActivateView and deactivation stuck.
 void ibFrontendView::Activate(bool activate)
@@ -293,8 +264,9 @@ void ibFrontendView::Activate(bool activate)
 	ibFrontendDocManager* const mgr = m_viewDocument != nullptr ?
 		m_viewDocument->GetDocumentManager() : ibFrontendDocManager::GetDocumentManager();
 
-	if (mgr != nullptr && ibFrontendMainFrame::GetFrame()) {
-		mainFrame->ActivateView(this, activate);
+	ibDocParentFrameAnyBase* const parentFrame = mgr != nullptr ? mgr->GetParentFrame() : nullptr;
+	if (parentFrame != nullptr) {
+		parentFrame->ActivateView(this, activate);
 		OnActivateView(activate, this, mgr->GetCurrentView());
 		mgr->ActivateView(this, activate);
 	}

@@ -10,9 +10,6 @@
     <Filter Include="docView">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5004}</UniqueIdentifier>
     </Filter>
-    <Filter Include="docView\print">
-      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5005}</UniqueIdentifier>
-    </Filter>
     <Filter Include="docView\templates">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5006}</UniqueIdentifier>
     </Filter>
@@ -53,20 +50,11 @@
   <ItemGroup>
     <ClCompile Include="frmclient.cpp" />
     <ClCompile Include="communicator.cpp" />
-    <ClCompile Include="docView\docView.cpp">
-      <Filter>docView</Filter>
-    </ClCompile>
-    <ClCompile Include="docView\docManager.cpp">
-      <Filter>docView</Filter>
-    </ClCompile>
     <ClCompile Include="docView\tabDocument.cpp">
       <Filter>docView</Filter>
     </ClCompile>
     <ClCompile Include="docView\docViewAssistant.cpp">
       <Filter>docView</Filter>
-    </ClCompile>
-    <ClCompile Include="docView\print\printPreview.cpp">
-      <Filter>docView\print</Filter>
     </ClCompile>
     <ClCompile Include="docView\templates\docViewText.cpp">
       <Filter>docView\templates</Filter>
@@ -301,17 +289,11 @@
     <ClInclude Include="docView\docView.h">
       <Filter>docView</Filter>
     </ClInclude>
-    <ClInclude Include="docView\docManager.h">
-      <Filter>docView</Filter>
-    </ClInclude>
     <ClInclude Include="docView\tabDocument.h">
       <Filter>docView</Filter>
     </ClInclude>
     <ClInclude Include="docView\docViewAssistant.h">
       <Filter>docView</Filter>
-    </ClInclude>
-    <ClInclude Include="docView\print\printPreview.h">
-      <Filter>docView\print</Filter>
     </ClInclude>
     <ClInclude Include="docView\templates\docViewText.h">
       <Filter>docView\templates</Filter>
@@ -456,9 +438,6 @@
     </ClInclude>
     <ClInclude Include="win\dlgs\settings\savedSettings.h">
       <Filter>win\dlgs\settings</Filter>
-    </ClInclude>
-    <ClInclude Include="win\dlgs\choiceTemplate.h">
-      <Filter>win\dlgs</Filter>
     </ClInclude>
     <ClInclude Include="win\editor\gridEditor\gridEditor.h">
       <Filter>win\editor\gridEditor</Filter>

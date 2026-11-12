@@ -23,7 +23,8 @@
   </ItemGroup>
   <!-- THE DESKTOP'S USER INTERFACE LIBRARY - what the desktop's programs draw their windows with (deskgui.h): the
        custom-drawn engine and its Luna theme, the forks of wx's generic controls and ours, the dock art, the code
-       editor's host (univ\stc), the property grid (univ\propgrid), the docking, tool bar and notebook (univ\aui). Of the engine, the core alone; of wx, the core and the base. Scintilla and
+       editor's host (univ\stc), the property grid (univ\propgrid), the docking, tool bar and notebook (univ\aui), the
+       doc/view and its print preview (docview). Of the engine, the core alone; of wx, the core and the base. Scintilla and
        Lexilla are in src\3rdparty (a release copy and a submodule), built by univ\stc\scintilla and
        univ\stc\lexilla; their headers are on the include path. -->
   <PropertyGroup Label="Globals">
@@ -153,6 +154,9 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="docview\docManager.cpp" />
+    <ClCompile Include="docview\docView.cpp" />
+    <ClCompile Include="docview\print\printPreview.cpp" />
     <ClCompile Include="univ\choiceDialog.cpp" />
     <ClCompile Include="univ\renderer.cpp" />
     <ClCompile Include="univ\ctrl\activityIndicator.cpp" />
@@ -247,6 +251,10 @@
     <ClInclude Include="dateconv.h" />
     <ClInclude Include="typeconv.h" />
     <ClInclude Include="artProvider.h" />
+    <ClInclude Include="docview\choiceTemplate.h" />
+    <ClInclude Include="docview\docManager.h" />
+    <ClInclude Include="docview\docView.h" />
+    <ClInclude Include="docview\print\printPreview.h" />
     <ClInclude Include="univ\app.h" />
     <ClInclude Include="univ\choiceDialog.h" />
     <ClInclude Include="univ\colourScheme.h" />

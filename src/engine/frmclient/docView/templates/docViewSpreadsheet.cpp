@@ -1,5 +1,5 @@
 ﻿#include "docViewSpreadsheet.h"
-#include "frmclient/docView/docManager.h"   // full ibFrontendDocTemplate type
+#include "deskgui/docview/docManager.h"   // full ibFrontendDocTemplate type
 #include "frmclient/mainFrame/mainFrame.h"
 #include <cmath>
 

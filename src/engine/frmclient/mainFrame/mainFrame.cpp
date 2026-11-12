@@ -32,7 +32,7 @@
 #include "core/exception.h"   // ibCoreException — the engine's exception a fetch was refused with
 #include "frmclient/backend/appData.h"
 #include "frmclient/backend/mcp/mcpServer.h"   // the assistant's port, up and down with the window
-#include "frmclient/docView/docManager.h"
+#include "deskgui/docview/docManager.h"
 #include "frmclient/docView/templates/docViewFile.h"
 #include "deskgui/artProvider.h"
 #include "frmclient/visualView/visualHostClient.h"
@@ -321,6 +321,10 @@ ibFrontendMainFrame::ibFrontendMainFrame(std::unique_ptr<ibCommunicator> communi
 		s_instance = this;
 		wxTheApp->SetTopWindow(this);
 	}
+
+	// Its templates are the server's — a mode's own among them, the designer's metaobjects', the runtime's external data
+	// processor and report (DrawTemplates).
+	SetDocumentManager(new ibFrontendDocManager);
 
 	Bind(wxEVT_CLOSE_WINDOW, &ibFrontendMainFrame::OnCloseWindow, this);
 	Bind(wxEVT_MENU, &ibFrontendMainFrame::OnExit, this, wxID_EXIT);
@@ -1879,7 +1883,7 @@ wxWindow* ibFrontendMainFrame::CreateChildFrame(ibFrontendView* view, const wxPo
 
 	wxIcon docIcon = document->GetIcon();
 
-	ibAuiDocChildFrame* subframe = new ibAuiDocChildFrame(document, view, s_instance, wxID_ANY, document->GetTitle(), pos, size, style);
+	ibAuiDocChildFrame* subframe = new ibAuiDocChildFrame(document, view, this, wxID_ANY, document->GetTitle(), pos, size, style);
 	if (docIcon.IsOk())
 		subframe->SetIcon(docIcon);
 	subframe->SetExtraStyle(wxWS_EX_BLOCK_EVENTS);

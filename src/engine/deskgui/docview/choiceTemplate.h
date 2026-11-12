@@ -1,5 +1,5 @@
-#ifndef _FRMCLIENT_CHOICE_TEMPLATE_H__
-#define _FRMCLIENT_CHOICE_TEMPLATE_H__
+#ifndef _DESKGUI_CHOICE_TEMPLATE_H__
+#define _DESKGUI_CHOICE_TEMPLATE_H__
 
 // THE CHOICE OF A DOCUMENT'S TEMPLATE — File → New, the old desktop's:the templates
 // with their pictures, one picked. On the thin client the templates are the server's (the frame's Templates).
@@ -14,7 +14,7 @@
 #include "deskgui/univ/ctrl/staticLine.h"
 #include "deskgui/univ/ctrl/staticText.h"
 
-#include "frmclient/docView/docManager.h"
+#include "deskgui/docview/docManager.h"
 #include "deskgui/univ/dialog.h"
 
 struct ibChoiceTemplateItem

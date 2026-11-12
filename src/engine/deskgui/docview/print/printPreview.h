@@ -2,12 +2,12 @@
 #define __PRINT_PREVIEW_H__
 
 /////////////////////////////////////////////////////////////////////////////
-// Name:        frmclient/docView/print/printPreview.h
+// Name:        deskgui/docview/print/printPreview.h
 // Purpose:     the print preview window, forked from wxPreviewFrame for the
 //              one setting wx has no place for - fitting the page's width.
 /////////////////////////////////////////////////////////////////////////////
 
-#include "frmclient/frmclient.h"
+#include "deskgui/deskgui.h"
 
 #include <wx/print.h>
 
@@ -36,7 +36,7 @@ public:
 // ⚠ A wxPreviewFrame and nothing looser: wx reaches the page counter through the frame with a C-style
 // cast to that class (wxPrintPreviewBase::RenderPageIntoDC), so a window of any other kind would be read
 // as one anyway.
-class FRMCLIENT_API ibPrintPreviewFrame : public wxPreviewFrame {
+class DESKGUI_API ibPrintPreviewFrame : public wxPreviewFrame {
 public:
 
 	ibPrintPreviewFrame(wxPrintPreviewBase* preview, wxWindow* parent, const wxString& title);

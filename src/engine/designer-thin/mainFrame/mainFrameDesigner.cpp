@@ -11,6 +11,7 @@
 #include "designer-thin/mainFrame/stack/stackWindow.h"
 #include "designer-thin/mainFrame/watch/watchWindow.h"
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibRequest::ibApplyChange, ibProtocol::ibSchema::ibMetaData
+#include "frmclient/backend/metaData.h"   // the configuration a metaobject opens in - its tab (OpenForm)
 #include "deskgui/univ/messageDialog.h"
 
 ibFrontendMainFrameDesigner* ibFrontendMainFrameDesigner::GetFrame() {
@@ -32,8 +33,6 @@ ibFrontendMainFrameDesigner::ibFrontendMainFrameDesigner(std::unique_ptr<ibCommu
 	m_watchWindow(new ibWatchWindow(this, wxID_ANY)),
 	m_localWindow(new ibLocalWindow(this, wxID_ANY))
 {
-	// Its templates are the server's — the designer's doc manager's (DrawTemplates).
-	m_docManager = new ibFrontendDocManager;
 }
 
 ibFrontendMainFrameDesigner::~ibFrontendMainFrameDesigner()
@@ -154,6 +153,20 @@ bool ibFrontendMainFrameDesigner::Debug(const ibProtocolNode& params, ibProtocol
 	return GetCommunicator().Debug(params, result, refusal, error);
 }
 #pragma endregion
+
+bool ibFrontendMainFrameDesigner::OpenForm(ibMetaID id, const ibMetaData& metaData)
+{
+	ibProtocolNode args;
+	args.SetValue(ibProtocol::ibSchema::ibMetaData::Id, static_cast<long long>(id));
+	if (metaData.GetTabId() != 0)
+		args.SetValue(ibProtocol::ibSchema::ibMetaData::Tab, metaData.GetTabId());
+
+	ibProtocolNode params, answer;
+	params.SetValue(ibProtocol::ibSchema::Schema, static_cast<long long>(ibProtocol::ibSchema::ibKind::MetaData));
+	params.SetValue(ibProtocol::ibSchema::Command, static_cast<long long>(ibProtocol::ibSchema::ibMetaData::ibCommand::Open));
+	params.SetValue(ibProtocol::ibSchema::Args, args);
+	return Call(ibProtocol::ibMethod::Schema, params, answer);
+}
 
 bool ibFrontendMainFrameDesigner::AllowClose()
 {

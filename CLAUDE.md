@@ -130,8 +130,8 @@ enterprise/
         ├── backend/         # backend.dll  — engine, compiler, DB, metadata, debugger; links core
         ├── protocol/        # protocol.dll — the client protocol: protocol.h (names/numbers, no deps; the designer's messages in protocolDesigner.h) + the talking side
         ├── frmserver/       # frmserver.dll — server-side forms, the client host; includes protocol.h only
-        ├── deskgui/         # deskgui.dll — the desktop's user interface: the root is the API (deskgui.h, typeconv, dateconv); univ/ the
-        │                    #   custom-drawn engine and all that inherits it (ctrl, dataview, grid, theme); links core
+        ├── deskgui/         # deskgui.dll — the desktop's user interface: the root is the API (deskgui.h, typeconv, dateconv); docview/
+        │                    #   the doc/view; univ/ the custom-drawn engine and all that inherits it (ctrl, dataview, grid, theme); links core
         ├── frmclient/       # frmclient.dll — the thin client's graphics library and its communicator; links core, protocol, deskgui
         ├── fileserver/      # fileserver.dll — a file base loaded into the thin client's process
         ├── enterprise-thin/ # enterprise-thin.exe (thin client)

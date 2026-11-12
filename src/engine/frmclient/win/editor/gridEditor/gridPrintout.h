@@ -9,7 +9,7 @@
 #include <wx/textfile.h>
 
 #include "gridEditor.h"
-#include "frmclient/docView/print/printPreview.h"   // ibFitToPageWidthPrintout — what the preview's box asks of it
+#include "deskgui/docview/print/printPreview.h"   // ibFitToPageWidthPrintout — what the preview's box asks of it
 
 #define wxGP_SHOW_NONE		0x0000 //never show row or column labels
 #define wxGP_SHOW_CL		0x0001 //show column labels on first page/s

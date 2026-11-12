@@ -150,11 +150,8 @@
   <ItemGroup>
     <ClCompile Include="frmclient.cpp" />
     <ClCompile Include="communicator.cpp" />
-    <ClCompile Include="docView\docView.cpp" />
-    <ClCompile Include="docView\docManager.cpp" />
     <ClCompile Include="docView\tabDocument.cpp" />
     <ClCompile Include="docView\docViewAssistant.cpp" />
-    <ClCompile Include="docView\print\printPreview.cpp" />
     <ClCompile Include="docView\templates\docViewText.cpp" />
     <ClCompile Include="docView\templates\docViewFile.cpp" />
     <ClCompile Include="docView\templates\docViewAuditLog.cpp" />
@@ -335,10 +332,8 @@
     <ClInclude Include="window_ptr.h" />
     <ClInclude Include="artProvider\splash\splashLogo.h" />
     <ClInclude Include="docView\docView.h" />
-    <ClInclude Include="docView\docManager.h" />
     <ClInclude Include="docView\tabDocument.h" />
     <ClInclude Include="docView\docViewAssistant.h" />
-    <ClInclude Include="docView\print\printPreview.h" />
     <ClInclude Include="docView\templates\docViewText.h" />
     <ClInclude Include="docView\templates\docViewFile.h" />
     <ClInclude Include="docView\templates\docViewAuditLog.h" />
@@ -406,7 +401,6 @@
     <ClInclude Include="visualView\ctrl\tableBoxColumnRenderer.h" />
     <ClInclude Include="backend\system\value\composition\valueComposerField.h" />
     <ClInclude Include="backend\system\value\composition\valueComposerSettings.h" />
-    <ClInclude Include="win\dlgs\choiceTemplate.h" />
     <ClInclude Include="win\editor\gridEditor\gridEditor.h" />
     <ClInclude Include="win\editor\gridEditor\gridPrintout.h" />
     <ClInclude Include="win\dlgs\colHeight.h" />

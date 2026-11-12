@@ -112,6 +112,9 @@ public:
 	// started with it when they switched it on (the desktop's).
 	virtual bool Show(bool show = true) override;
 
+	// A metaobject opened on the server - the designer's schema MetaData, Open (ibFrontendMainFrame::OpenForm).
+	virtual bool OpenForm(ibMetaID id, const ibMetaData& metaData) override;
+
 	// The configuration's tree and the messages — the desktop's, where the debugger shows a stop and what was said.
 	ibConfigurationTree* GetMetaWindow() const { return m_metaWindow; }
 	ibOutputWindow* GetOutputWindow() const { return m_outputWindow; }
