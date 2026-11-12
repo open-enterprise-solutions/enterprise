@@ -4332,7 +4332,7 @@ wxEND_EVENT_TABLE()
 
 void ibDataViewCtrl::OnScrollEvent(wxScrollWinEvent& event)
 {
-	// Horizontal scrolling (column overflow) is plain wxScrollHelper
+	// Horizontal scrolling (column overflow) is plain ibScrollHelper
 	// territory — pass it straight through to the default handler.  The
 	// paged 3-state lying-scrollbar logic below is VERTICAL-only; before
 	// the orientation guard it also caught horizontal events, so a paged
@@ -4362,7 +4362,7 @@ void ibDataViewCtrl::OnScrollEvent(wxScrollWinEvent& event)
 			(evt == wxEVT_SCROLLWIN_LINEUP   || evt == wxEVT_SCROLLWIN_PAGEUP   ||
 			 evt == wxEVT_SCROLLWIN_TOP) ? -1 : 0;
 
-		// Thumb drag in lying-scrollbar mode: wxScrollHelper would map
+		// Thumb drag in lying-scrollbar mode: ibScrollHelper would map
 		// the fake-range position to the wrong buffer pixel, so we
 		// don't event.Skip() here.  Instead, on RELEASE we compare the
 		// drop position against the thumb's rest position for the
@@ -4435,7 +4435,7 @@ void ibDataViewCtrl::OnScrollEvent(wxScrollWinEvent& event)
 			PagedFetchBackward(countPerPage);
 
 		// Thumb derives from has-more flags + viewport position; topRow
-		// updates after wxScrollHelper's default handler (event.Skip()
+		// updates after ibScrollHelper's default handler (event.Skip()
 		// below).  CallAfter defers the refresh so DerivePagedThumb
 		// reads the post-scroll topRow.
 		CallAfter([this] { UpdatePagedScrollbar(); });
@@ -6640,7 +6640,7 @@ void ibDataViewCtrl::SetTopParent(const ibDataViewItem& item)
 				}
 				// PagedBootstrap rebuilds m_root but only flips
 				// m_dirty; the m_tableAreaWin virtual size still reflects
-				// the pre-drill row count, so wxScrollHelper computes a
+				// the pre-drill row count, so ibScrollHelper computes a
 				// scroll range that fits one viewport and the thumb stays
 				// pinned at top.  Force the virtual-size recompute now so
 				// the scrollbar matches the freshly-built tree.

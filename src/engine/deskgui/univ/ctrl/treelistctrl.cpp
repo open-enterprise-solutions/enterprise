@@ -35,7 +35,6 @@
 #include <wx/settings.h>
 #include <wx/dcclient.h>
 #include <wx/dcscreen.h>
-#include <wx/scrolwin.h>
 #include <wx/dcmemory.h>
 #if wxCHECK_VERSION(2, 7, 0)
 #include <wx/renderer.h>
@@ -43,6 +42,7 @@
 #include "deskgui/univ/renderer.h"
 #include "deskgui/univ/theme.h"  // the expander and the header's buttons: the theme's renderer
 #include "deskgui/univ/colourScheme.h"  // the selection and the background: the theme's colours
+#include "deskgui/univ/scrolwin.h"
 #include <wx/apptrait.h>
 #include <wx/dcbuffer.h>
 #include <wx/tooltip.h>
@@ -237,7 +237,7 @@ class ibEditTextCtrl;
 // this is the "true" control
 // SEAM vs wx: wxScrolledWindow (wxScrolled<wxPanel>) there - scrolled on the library's window here, its scrollbars
 // the theme's
-class  ibTreeListMainWindow : public wxScrolled<ibWindow>
+class  ibTreeListMainWindow : public ibScrolled<ibWindow>
 {
 	friend class ibTreeListItem;
 	friend class ibTreeListRenameTimer;
@@ -1784,7 +1784,7 @@ int ibTreeListItem::GetCurrentImage() const {
 
 IMPLEMENT_DYNAMIC_CLASS(ibTreeListMainWindow, ibWindow)
 
-wxBEGIN_EVENT_TABLE(ibTreeListMainWindow, wxScrolled<ibWindow>)
+wxBEGIN_EVENT_TABLE(ibTreeListMainWindow, ibScrolled<ibWindow>)
 EVT_PAINT(ibTreeListMainWindow::OnPaint)
 EVT_ERASE_BACKGROUND(ibTreeListMainWindow::OnEraseBackground) // to reduce flicker
 EVT_MOUSE_EVENTS(ibTreeListMainWindow::OnMouse)
@@ -1879,7 +1879,7 @@ bool ibTreeListMainWindow::Create(ibTreeListCtrl* parent,
 	if (major < 10) style |= wxTR_ROW_LINES;
 #endif
 
-	wxScrolled<ibWindow>::Create(parent, id, pos, size, style | wxHSCROLL | wxVSCROLL, name);
+	ibScrolled<ibWindow>::Create(parent, id, pos, size, style | wxHSCROLL | wxVSCROLL, name);
 
 #if wxUSE_VALIDATORS
 	SetValidator(validator);
@@ -2187,7 +2187,7 @@ void ibTreeListMainWindow::SetItemFont(const wxTreeItemId& item, int column, con
 
 
 bool ibTreeListMainWindow::SetFont(const wxFont& font) {
-	wxScrolled<ibWindow>::SetFont(font);
+	ibScrolled<ibWindow>::SetFont(font);
 	m_normalFont = font;
 	m_boldFont = wxFont(m_normalFont.GetPointSize(),
 		m_normalFont.GetFamily(),
@@ -4125,7 +4125,7 @@ void ibTreeListMainWindow::OnMouse(wxMouseEvent & event) {
 		// not over an item, use global tip
 		if (item == nullptr) {
 			m_toolTipItem = nullptr;
-			wxScrolled<ibWindow>::SetToolTip(m_toolTip);
+			ibScrolled<ibWindow>::SetToolTip(m_toolTip);
 
 			// over an item
 		}
@@ -4135,20 +4135,20 @@ void ibTreeListMainWindow::OnMouse(wxMouseEvent & event) {
 			// is there an item-specific tip ?
 			if (tip) {
 				m_toolTipItem = item;
-				wxScrolled<ibWindow>::SetToolTip(*tip);
+				ibScrolled<ibWindow>::SetToolTip(*tip);
 
 				// no item tip, but we are in item-specific mode (SetItemToolTip()
 				//  was called after SetToolTip() )
 			}
 			else if (m_isItemToolTip) {
 				m_toolTipItem = item;
-				wxScrolled<ibWindow>::SetToolTip(wxString());
+				ibScrolled<ibWindow>::SetToolTip(wxString());
 
 				// no item tip, display global tip instead; item change ignored
 			}
 			else if (m_toolTipItem != nullptr) {
 				m_toolTipItem = nullptr;
-				wxScrolled<ibWindow>::SetToolTip(m_toolTip);
+				ibScrolled<ibWindow>::SetToolTip(m_toolTip);
 			}
 		}
 	}
@@ -4363,13 +4363,13 @@ void ibTreeListMainWindow::OnScroll(wxScrollWinEvent & event) {
 	// send event to ibTreeListCtrl (for user code)
 	if (m_owner->GetEventHandler()->ProcessEvent(event)) return; // handled (and not skipped) in user code
 
-	// Skipped, the event goes on to wxScrollHelper, which scrolls — its HandleOnScroll() is private since wx 3.3.4.
+	// Skipped, the event goes on to ibScrollHelper, which scrolls — its HandleOnScroll() is private since wx 3.3.4.
 	event.Skip();
 }
 
 void ibTreeListMainWindow::ScrollWindow(int dx, int dy, const wxRect* rect) {
 
-	wxScrolled<ibWindow>::ScrollWindow(dx, dy, rect);
+	ibScrolled<ibWindow>::ScrollWindow(dx, dy, rect);
 
 	if (dx != 0) {
 		m_owner->GetHeaderWindow()->Refresh();

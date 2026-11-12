@@ -3651,7 +3651,7 @@ bool ibTextCtrl::GetLineAndRow(wxTextCoord row,
 /*
    ibTextCtrl has not one but two scrolling mechanisms: one is semi-automatic
    scrolling in both horizontal and vertical direction implemented using
-   wxScrollHelper and the second one is manual scrolling implemented using
+   ibScrollHelper and the second one is manual scrolling implemented using
    SData().m_ofsHorz and used by the single line controls without scroll bar.
 
    The first version (the standard one) always scrolls by fixed amount which is
@@ -3743,7 +3743,7 @@ void ibTextCtrl::CalcUnscrolledPosition(int x, int y, int *xx, int *yy) const
 {
     if ( IsSingleLine() )
     {
-        // we don't use wxScrollHelper
+        // we don't use ibScrollHelper
         if ( xx )
             *xx = x + SData().m_ofsHorz;
         if ( yy )
@@ -3752,7 +3752,7 @@ void ibTextCtrl::CalcUnscrolledPosition(int x, int y, int *xx, int *yy) const
     else
     {
         // let the base class do it
-        wxScrollHelper::CalcUnscrolledPosition(x, y, xx, yy);
+        ibScrollHelper::CalcUnscrolledPosition(x, y, xx, yy);
     }
 }
 
@@ -3760,7 +3760,7 @@ void ibTextCtrl::CalcScrolledPosition(int x, int y, int *xx, int *yy) const
 {
     if ( IsSingleLine() )
     {
-        // we don't use wxScrollHelper
+        // we don't use ibScrollHelper
         if ( xx )
             *xx = x - SData().m_ofsHorz;
         if ( yy )
@@ -3769,7 +3769,7 @@ void ibTextCtrl::CalcScrolledPosition(int x, int y, int *xx, int *yy) const
     else
     {
         // let the base class do it
-        wxScrollHelper::CalcScrolledPosition(x, y, xx, yy);
+        ibScrollHelper::CalcScrolledPosition(x, y, xx, yy);
     }
 }
 
@@ -3785,7 +3785,7 @@ void ibTextCtrl::DoPrepareReadOnlyDC(wxReadOnlyDC& dc)
     }
     else
     {
-        wxScrollHelper::DoPrepareReadOnlyDC(dc);
+        ibScrollHelper::DoPrepareReadOnlyDC(dc);
     }
 }
 
@@ -3953,12 +3953,6 @@ void ibTextCtrl::UpdateScrollbars()
                       scrollRangeX, scrollRangeY,
                       x, y,
                       true /* no refresh */);
-
-        // SEAM vs univ: wxScrollHelperBase::SetScrollbars calls
-        // AdjustScrollbars() for target==win ONLY under __WXUNIVERSAL__;
-        // in the native build it relies on a size event which never comes
-        // when only the CONTENT grew — push the ranges to the bars ourselves
-        AdjustScrollbars();
 
         if ( scrollRangeXOld )
         {

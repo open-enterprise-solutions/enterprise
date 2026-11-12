@@ -23,7 +23,6 @@
 #include <wx/object.h>
 #include <wx/compositewin.h>
 #include <wx/control.h>
-#include <wx/scrolwin.h>
 #include <wx/selstore.h>
 #include <wx/icon.h>
 #include <wx/vector.h>
@@ -35,6 +34,8 @@
 #if wxUSE_ACCESSIBILITY
 #include <wx/access.h>
 #endif // wxUSE_ACCESSIBILITY
+
+#include "deskgui/univ/scrolwin.h"
 
 // Column groups + the (x, band) geometry every painter / hit-test asks for.
 #include "deskgui/univ/dataview/datavlayout.h"
@@ -673,7 +674,7 @@ private:
 class DESKGUI_API ibDataViewCtrl
 	: 
 	public wxCompositeWindow<ibDataViewCtrlBase>,
-	public wxScrollHelper
+	public ibScrollHelper
 
 {
 	friend class ibDataViewMainWindow;
@@ -691,7 +692,7 @@ class DESKGUI_API ibDataViewCtrl
 	typedef wxCompositeWindow<ibDataViewCtrlBase> BaseType;
 
 public:
-	ibDataViewCtrl() : wxScrollHelper(this)
+	ibDataViewCtrl() : ibScrollHelper(this)
 	{
 		Init();
 	}
@@ -701,7 +702,7 @@ public:
 		const wxSize& size = wxDefaultSize, long style = 0,
 		const wxValidator& validator = wxDefaultValidator,
 		const wxString& name = wxASCII_STR(ibDataViewCtrlNameStr))
-		: wxScrollHelper(this)
+		: ibScrollHelper(this)
 	{
 		Create(parent, id, pos, size, style, validator, name);
 	}
@@ -974,7 +975,7 @@ private:
 	// state-machine maintenance is needed.
 	enum class ibPagedThumb { Top, Middle, Bottom };
 	// Lying scrollbar: thumb has 3 fixed positions driven by has-more
-	// flags only.  Applied at every wxScrollHelper update path so its
+	// flags only.  Applied at every ibScrollHelper update path so its
 	// real-virtual-size values cannot leak through to the widget.
 	void UpdatePagedScrollbar();
 	bool IsPagedScrollbarMode() const;
@@ -988,7 +989,7 @@ private:
 	// empty) this just returns m_root.
 	ibDataViewTreeNode* GetPagedInsertParent() const;
 
-	// wxScrollHelper / wxWindow virtual overrides for paged mode.
+	// ibScrollHelper / wxWindow virtual overrides for paged mode.
 	virtual void AdjustScrollbars() wxOVERRIDE;
 	virtual void SetScrollPos(int orient, int pos, bool refresh = true) wxOVERRIDE;
 	virtual void SetScrollbar(int orient, int pos, int thumbSize, int range,

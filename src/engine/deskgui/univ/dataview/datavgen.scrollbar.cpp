@@ -9,8 +9,8 @@
 //   DerivePagedThumb        — top/middle/bottom from has-more flags +
 //                             scroll position
 //   UpdatePagedScrollbar    — refresh widget through SetScrollbar override
-//   AdjustScrollbars        — wxScrollHelper hook + lying re-apply
-//   SetScrollPos            — wxScrollHelper override + lying re-apply
+//   AdjustScrollbars        — ibScrollHelper hook + lying re-apply
+//   SetScrollPos            — ibScrollHelper override + lying re-apply
 //   SetScrollbar            — the actual lie: substitute 3-state values
 //                             before passing to wxWindow
 //
@@ -139,8 +139,8 @@ void ibDataViewCtrl::UpdatePagedScrollbar()
 
 void ibDataViewCtrl::AdjustScrollbars()
 {
-	wxScrollHelper::AdjustScrollbars();
-	// Re-apply the lie immediately after wxScrollHelper has pushed the
+	ibScrollHelper::AdjustScrollbars();
+	// Re-apply the lie immediately after ibScrollHelper has pushed the
 	// real virtual-size-derived values to the widget.
 	UpdatePagedScrollbar();
 }
@@ -148,7 +148,7 @@ void ibDataViewCtrl::AdjustScrollbars()
 void ibDataViewCtrl::SetScrollPos(int orient, int pos, bool refresh)
 {
 	// In paged scrollbar mode the vertical thumb position is owned by
-	// UpdatePagedScrollbar — block wxScrollHelper from clobbering it on
+	// UpdatePagedScrollbar — block ibScrollHelper from clobbering it on
 	// scroll events / wheel / programmatic Scroll calls.
 	if (orient == wxVERTICAL && IsPagedScrollbarMode())
 		return;
@@ -158,7 +158,7 @@ void ibDataViewCtrl::SetScrollPos(int orient, int pos, bool refresh)
 void ibDataViewCtrl::SetScrollbar(int orient, int pos, int thumbSize, int range,
 	bool refresh)
 {
-	// Any wxScrollHelper / wxWindow path that pushes vertical scrollbar
+	// Any ibScrollHelper / wxWindow path that pushes vertical scrollbar
 	// state in paged mode is intercepted here and the parameters are
 	// substituted with the 3-state lying values derived from current
 	// has-more + viewport state.  Recursion-safe: substituted call goes

@@ -42,7 +42,7 @@ extern DESKGUI_API const char ibVListBoxNameStr[];
  */
 
 // SEAM vs wx: the canon stood on wxVScrolledCanvas - wxVScrolled<wxWindow>, the native window with the scroll helper of
-// variable rows. Here the helper rides the engine's control, as wxScrollHelper rides ibListBox and ibTreeCtrl: its
+// variable rows. Here the helper rides the engine's control, as ibScrollHelper rides ibListBox and ibTreeCtrl: its
 // scroll bars are the engine's (ibWindow::SetScrollbar), its rows scroll by a repaint (Create).
 class DESKGUI_API ibVListBox : public ibControl,
                                public wxVarVScrollHelper

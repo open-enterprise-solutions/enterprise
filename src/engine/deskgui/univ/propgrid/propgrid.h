@@ -15,11 +15,11 @@
 
 #include "wx/defs.h"
 
-#include "wx/scrolwin.h"
 #include "wx/recguard.h"
 #include "wx/time.h" // needed for wxMilliClock_t
 
 #include "deskgui/univ/ctrl/control.h"   // ibControl — the grid's window: the theme engine's
+#include "deskgui/univ/scrolwin.h"
 #include "deskgui/univ/propgrid/property.h"
 #include "deskgui/univ/propgrid/propgridiface.h"
 
@@ -419,7 +419,7 @@ enum class ibPGKeyboardAction
 
 // -----------------------------------------------------------------------
 
-// wxScrolled<ibControl>::Create's way to ibControl::Create, which takes a validator - as wx's overload for wxControl
+// ibScrolled<ibControl>::Create's way to ibControl::Create, which takes a validator - as wx's overload for wxControl
 // (scrolwin.h): the template's own calls the six-parameter Create of a window. Here beside the one scrolled control
 // of the library; the place for more of them is control.h.
 inline bool wxCreateScrolled(ibControl* self,
@@ -495,7 +495,7 @@ inline bool wxCreateScrolled(ibControl* self,
 // spreadsheet's grid is (ibGrid): its border, its scrollbars and its colours the theme engine's; the client area begins
 // inside the border, so what comes in the window's coordinates (the mouse, the update rectangle, a point on the screen)
 // is moved by GetClientAreaOrigin at its door
-class DESKGUI_API ibPropertyGrid : public wxScrolled<ibControl>,
+class DESKGUI_API ibPropertyGrid : public ibScrolled<ibControl>,
                                    public ibPropertyGridInterface
 {
     friend class ibPropertyGridEvent;

@@ -21,11 +21,11 @@
 
 #include <wx/brush.h>
 #include <wx/pen.h>
-#include <wx/scrolwin.h>
 #include <wx/treebase.h>
 #include <wx/withimages.h>
 
 #include "deskgui/univ/ctrl/control.h"
+#include "deskgui/univ/scrolwin.h"
 
 // -----------------------------------------------------------------------------
 // forward declaration
@@ -272,13 +272,13 @@ private:
 // -----------------------------------------------------------------------------
 
 class DESKGUI_API ibTreeCtrl : public ibTreeCtrlBase,
-                                public wxScrollHelper
+                                public ibScrollHelper
 {
 public:
     // creation
     // --------
 
-    ibTreeCtrl() : ibTreeCtrlBase(), wxScrollHelper(this) { Init(); }
+    ibTreeCtrl() : ibTreeCtrlBase(), ibScrollHelper(this) { Init(); }
 
     ibTreeCtrl(wxWindow *parent, wxWindowID id = wxID_ANY,
                const wxPoint& pos = wxDefaultPosition,
@@ -287,7 +287,7 @@ public:
                const wxValidator &validator = wxDefaultValidator,
                const wxString& name = wxASCII_STR(wxTreeCtrlNameStr))
         : ibTreeCtrlBase(),
-          wxScrollHelper(this)
+          ibScrollHelper(this)
     {
         Init();
         Create(parent, id, pos, size, style, validator, name);

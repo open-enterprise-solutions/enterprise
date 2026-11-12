@@ -17,8 +17,6 @@
 
 #include <wx/hashmap.h>
 
-#include <wx/scrolwin.h>
-
 #if wxUSE_STD_CONTAINERS_COMPATIBLY
 #include <iterator>
 #endif
@@ -26,6 +24,7 @@
 #include "core/variant.h"   // ibVariant — a cell's value (GetValueAsVariant)
 #include "deskgui/deskgui.h"
 #include "deskgui/univ/window.h"
+#include "deskgui/univ/scrolwin.h"
 #include "deskgui/univ/dialog.h"
 #include "deskgui/univ/ctrl/button.h"
 #include "deskgui/univ/ctrl/textCtrl.h"
@@ -1731,7 +1730,7 @@ struct ibGridSizesInfo
 
 // SEAM vs wx: wxScrolledCanvas (wxScrolled<wxWindow>) there - scrolled on the library's window here, its scrollbars
 // the theme's
-class DESKGUI_API ibGrid : public wxScrolled<ibWindow>
+class DESKGUI_API ibGrid : public ibScrolled<ibWindow>
 {
 public:
 	// possible selection modes

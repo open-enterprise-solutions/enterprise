@@ -135,7 +135,7 @@ ibListBox::ibListBox(wxWindow *parent,
                      long style,
                      const wxValidator& validator,
                      const wxString &name)
-          :wxScrollHelper(this)
+          :ibScrollHelper(this)
 {
     Init();
 
@@ -627,11 +627,6 @@ void ibListBox::UpdateScrollbars()
         SetScrollbars(charWidth, lineHeight,
                       scrollRangeX, scrollRangeY,
                       x, y);
-
-        // SEAM vs univ: as the text's (ibTextCtrl::UpdateScrollbars) - wxScrollHelperBase::SetScrollbars calls
-        // AdjustScrollbars() for target==win ONLY under __WXUNIVERSAL__; in the native build it relies on a size
-        // event, and the list's items come after its size: a popup's list showed no scrollbar over more rows than fit
-        AdjustScrollbars();
 
         m_showScrollbarX = showScrollbarX;
         m_showScrollbarY = showScrollbarY;

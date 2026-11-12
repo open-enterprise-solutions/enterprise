@@ -19,12 +19,12 @@
 #if wxUSE_LISTCTRL
 
 #include <wx/containr.h>
-#include <wx/scrolwin.h>
 #include <wx/listctrl.h>      // wxListItem, wxListEvent, wxLC_* styles, wxListCtrlNameStr
 #include <wx/withimages.h>
 
 #include "deskgui/univ/ctrl/control.h"
 #include "deskgui/univ/ctrl/textCtrl.h"
+#include "deskgui/univ/scrolwin.h"
 
 #if wxUSE_DRAG_AND_DROP
 class WXDLLIMPEXP_FWD_CORE wxDropTarget;
@@ -234,12 +234,12 @@ class ibListMainWindow;
 //-----------------------------------------------------------------------------
 
 class DESKGUI_API ibListCtrl: public wxNavigationEnabled<ibListCtrlBase>,
-                          public wxScrollHelper
+                          public ibScrollHelper
 {
     typedef wxNavigationEnabled<ibListCtrlBase> BaseType;
 
 public:
-    ibListCtrl() : wxScrollHelper(this)
+    ibListCtrl() : ibScrollHelper(this)
     {
         Init();
     }
@@ -251,7 +251,7 @@ public:
                 long style = wxLC_ICON,
                 const wxValidator& validator = wxDefaultValidator,
                 const wxString &name = wxASCII_STR(wxListCtrlNameStr))
-            : wxScrollHelper(this)
+            : ibScrollHelper(this)
     {
         Create(parent, winid, pos, size, style, validator, name);
     }

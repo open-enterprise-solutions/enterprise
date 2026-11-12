@@ -236,6 +236,7 @@
     <ClCompile Include="univ\propgrid\props.cpp" />
     <ClCompile Include="univ\theme\lunaTheme.cpp" />
     <ClCompile Include="univ\theme\themeRenderer.cpp" />
+    <ClCompile Include="univ\scrolwin.cpp" />
     <ClCompile Include="univ\splitterWindow.cpp" />
     <ClCompile Include="univ\stc\PlatWX.cpp" />
     <ClCompile Include="univ\stc\ScintillaWX.cpp" />
@@ -346,6 +347,7 @@
     <ClInclude Include="univ\scrollTimer.h" />
     <ClInclude Include="univ\theme\private\picturePredefined.h" />
     <ClInclude Include="univ\theme\themeRenderer.h" />
+    <ClInclude Include="univ\scrolwin.h" />
     <ClInclude Include="univ\splitterWindow.h" />
     <ClInclude Include="univ\stc\PlatWX.h" />
     <ClInclude Include="univ\stc\ScintillaWX.h" />

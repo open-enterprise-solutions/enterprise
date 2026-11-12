@@ -19,6 +19,7 @@
 #include "deskgui/univ/colourScheme.h"
 #include "deskgui/univ/ctrl/control.h"
 #include "deskgui/univ/ctrl/staticText.h"
+#include "deskgui/univ/scrolwin.h"
 #include "deskgui/univ/ctrl/staticBitmap.h"
 #include "deskgui/univ/popupWindow.h"   // ibPopupWindow — the panel, the theme's popup
 
@@ -611,7 +612,7 @@ class ibSubSystemWindow : public ibWindow {
 
 	class ibPopupSubWindow : public ibPopupWindow<wxPopupTransientWindow> {
 
-		class ibScrolledSubWindow : public wxScrolled<ibWindow> {
+		class ibScrolledSubWindow : public ibScrolled<ibWindow> {
 
 			// What a link opens — the schema's Item, and how (its Type: a new item in Create, the default anywhere else).
 			class ibScrolledSubWindowItemRefData : public wxClientData {
@@ -626,9 +627,9 @@ class ibSubSystemWindow : public ibWindow {
 
 		public:
 
-			ibScrolledSubWindow() : wxScrolled<ibWindow>() {}
+			ibScrolledSubWindow() : ibScrolled<ibWindow>() {}
 			ibScrolledSubWindow(ibPopupSubWindow* parent,
-				wxWindowID winid = wxID_ANY) : wxScrolled<ibWindow>(parent, winid, wxDefaultPosition, wxDefaultSize, wxBORDER_SUNKEN | wxHSCROLL | wxVSCROLL), m_popupWindow(parent)
+				wxWindowID winid = wxID_ANY) : ibScrolled<ibWindow>(parent, winid, wxDefaultPosition, wxDefaultSize, wxBORDER_SUNKEN | wxHSCROLL | wxVSCROLL), m_popupWindow(parent)
 			{
 				wxBoxSizer* sizerMain = new wxBoxSizer(wxHORIZONTAL);
 				wxBoxSizer* sizerLeft = new wxBoxSizer(wxVERTICAL);

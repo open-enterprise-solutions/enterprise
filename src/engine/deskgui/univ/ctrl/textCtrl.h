@@ -19,9 +19,8 @@
 class wxCaret;
 class ibTextCtrlCommandProcessor;
 
-#include <wx/scrolwin.h>    // for wxScrollHelper
-
 #include "deskgui/univ/inputHandler.h"
+#include "deskgui/univ/scrolwin.h"    // for ibScrollHelper
 
 // ----------------------------------------------------------------------------
 // ibTextCtrl actions
@@ -88,13 +87,13 @@ wxDECLARE_EXPORTED_EVENT(DESKGUI_API, wxEVT_CONTROL_BUTTON_CLEAR, wxCommandEvent
 // wxTextEntryBase), so the control derives from ibControl + the iface
 class DESKGUI_API ibTextCtrl : public ibControl,
                                public wxTextCtrlIface,
-                               public wxScrollHelper
+                               public ibScrollHelper
 {
 public:
     // creation
     // --------
 
-    ibTextCtrl() : wxScrollHelper(this) { Init(); }
+    ibTextCtrl() : ibScrollHelper(this) { Init(); }
 
     ibTextCtrl(wxWindow *parent,
                wxWindowID id,
@@ -104,7 +103,7 @@ public:
                long style = 0,
                const wxValidator& validator = wxDefaultValidator,
                const wxString& name = wxASCII_STR(wxTextCtrlNameStr))
-        : wxScrollHelper(this)
+        : ibScrollHelper(this)
     {
         Init();
 
@@ -315,7 +314,7 @@ public:
     // the text area of a field whose width is set, in DIP (GetMinSize)
     static constexpr int kMinimumTextWidth = 56;
 
-    // override wxScrollHelper method to prevent (auto)scrolling beyond the end
+    // override ibScrollHelper method to prevent (auto)scrolling beyond the end
     // of line
     virtual bool SendAutoScrollEvents(wxScrollWinEvent& event) const override;
 

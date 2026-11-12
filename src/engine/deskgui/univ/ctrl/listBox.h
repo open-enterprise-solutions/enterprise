@@ -16,7 +16,6 @@
 
 #include "deskgui/deskgui.h"
 
-#include <wx/scrolwin.h>    // for wxScrollHelper
 #include <wx/dynarray.h>
 #include <wx/arrstr.h>
 
@@ -54,10 +53,11 @@
 
 #include <wx/listbox.h>       // wxItemContainer, wxLB_* styles
 #include "deskgui/univ/ctrl/control.h"
+#include "deskgui/univ/scrolwin.h"    // for ibScrollHelper
 
 // SEAM vs univ: wxListBoxBase sits on the native wxControl in our build;
 // wxItemContainer carries the windowless items API
-class DESKGUI_API ibListBox : public ibControl, public wxItemContainer, public wxScrollHelper
+class DESKGUI_API ibListBox : public ibControl, public wxItemContainer, public ibScrollHelper
 {
 public:
     // wxListBoxBase shims (see the SEAM note above)
@@ -79,7 +79,7 @@ public:
     int HitTest(const wxPoint& point) const { return DoListHitTest(point); }
 
     // ctors and such
-    ibListBox() : wxScrollHelper(this) { Init(); }
+    ibListBox() : ibScrollHelper(this) { Init(); }
     ibListBox(wxWindow *parent,
               wxWindowID id,
               const wxPoint& pos = wxDefaultPosition,
@@ -88,7 +88,7 @@ public:
               long style = 0,
               const wxValidator& validator = wxDefaultValidator,
               const wxString& name = wxASCII_STR(wxListBoxNameStr) )
-        : wxScrollHelper(this)
+        : ibScrollHelper(this)
     {
         Init();
 

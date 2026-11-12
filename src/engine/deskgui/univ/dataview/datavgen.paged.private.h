@@ -94,7 +94,7 @@ struct ibPagedFetch {
 namespace {
 // RAII pair-Freeze for ibDataViewCtrl + its main table window.  Most
 // paged-mode operations need both windows frozen across a buffer
-// mutation + scroll restore (otherwise wxScrollHelper's pixel<->row
+// mutation + scroll restore (otherwise ibScrollHelper's pixel<->row
 // mapping flickers between intermediate states).  Auto-Thaws on scope
 // exit — early returns are safe.
 class ScopedPagedFreeze {

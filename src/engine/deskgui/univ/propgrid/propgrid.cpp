@@ -272,7 +272,7 @@ wxEND_EVENT_TABLE()
 // -----------------------------------------------------------------------
 
 ibPropertyGrid::ibPropertyGrid()
-    : wxScrolled<ibControl>()
+    : ibScrolled<ibControl>()
 {
     Init1();
 }
@@ -285,7 +285,7 @@ ibPropertyGrid::ibPropertyGrid( wxWindow *parent,
                                 const wxSize& size,
                                 long style,
                                 const wxString& name )
-    : wxScrolled<ibControl>()
+    : ibScrolled<ibControl>()
 {
     Init1();
     Create(parent,id,pos,size,style,name);
@@ -1240,7 +1240,7 @@ void ibPropertyGrid::SetScrollbars(int pixelsPerUnitX, int pixelsPerUnitY,
 {
     int oldX;
     CalcUnscrolledPosition(0, 0, &oldX, nullptr);
-    wxScrolled<ibControl>::SetScrollbars(pixelsPerUnitX, pixelsPerUnitY,
+    ibScrolled<ibControl>::SetScrollbars(pixelsPerUnitX, pixelsPerUnitY,
                                   noUnitsX, noUnitsY, xPos, yPos, noRefresh);
     int newX;
     CalcUnscrolledPosition(0, 0, &newX, nullptr);

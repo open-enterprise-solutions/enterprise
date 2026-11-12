@@ -279,6 +279,9 @@
     <ClCompile Include="univ\theme\themeRenderer.cpp">
       <Filter>univ\theme</Filter>
     </ClCompile>
+    <ClCompile Include="univ\scrolwin.cpp">
+      <Filter>univ</Filter>
+    </ClCompile>
     <ClCompile Include="univ\splitterWindow.cpp">
       <Filter>univ</Filter>
     </ClCompile>
@@ -598,6 +601,9 @@
     </ClInclude>
     <ClInclude Include="univ\theme\themeRenderer.h">
       <Filter>univ\theme</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\scrolwin.h">
+      <Filter>univ</Filter>
     </ClInclude>
     <ClInclude Include="univ\splitterWindow.h">
       <Filter>univ</Filter>

@@ -7,7 +7,6 @@
 #include <vector>
 
 #include <wx/wx.h>
-#include <wx/scrolwin.h>
 
 #include "frmclient/docView/docView.h"
 #include "frmclient/docView/tabDocument.h"
@@ -17,6 +16,7 @@
 #include "ctrl/frame.h"   // ibViewFetcher
 #include "ctrl/form.h"
 #include "deskgui/univ/panel.h"
+#include "deskgui/univ/scrolwin.h"
 
 class ibFrontendMainFrame;
 class ibViewCommandBar;
@@ -53,7 +53,7 @@ public:
 	// …and its command bar, drawn above its controls (the server's form's GetCommandBar).
 	ibViewCommandBar* GetCommandBar() const { return m_commandBar.get(); }
 	// The window the controls scroll in, filling this one under the command bar — the desktop's inner one.
-	wxScrolled<ibPanel>* GetContentWindow() const { return m_contentWindow; }
+	ibScrolled<ibPanel>* GetContentWindow() const { return m_contentWindow; }
 	// The tab it draws in — whose document the form's is.
 	long long GetTabId() const { return m_tabId; }
 	// The control a window drawn is — none: no control's (the desktop's GetObjectBase).
@@ -122,7 +122,7 @@ private:
 
 	wxString    m_formKey;             // the form drawn, as an event names it; empty — a view that is no form
 	std::string m_shape;               // the view as last built
-	wxScrolled<ibPanel>* m_contentWindow = nullptr;   // the controls' window, scrolling under the command bar
+	ibScrolled<ibPanel>* m_contentWindow = nullptr;   // the controls' window, scrolling under the command bar
 	wxBoxSizer*          m_content = nullptr;         // the form's controls', laid out as the form says
 
 	std::unique_ptr<ibViewCommandBar> m_commandBar;   // its window stands above the controls' (Build)

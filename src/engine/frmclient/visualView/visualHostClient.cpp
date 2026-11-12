@@ -195,7 +195,7 @@ ibVisualHostClient::ibVisualHostClient(ibFrontendMainFrame& frame, wxWindow* par
 	// colour the form gives it it keeps, GetBackgroundWindow), on every port - wx's erased itself in the system's grey,
 	// and growing in a resize before its controls did it showed that grey round them (2026-11-11, read off the window's
 	// surface during a step; Max: "artefacts even without the spreadsheet")
-	m_contentWindow = new wxScrolled<ibPanel>(this, wxID_ANY);
+	m_contentWindow = new ibScrolled<ibPanel>(this, wxID_ANY);
 	m_contentWindow->SetDoubleBuffered(true);
 	m_contentWindow->SetScrollRate(5, 5);
 	wxBoxSizer* const sizer = new wxBoxSizer(wxVERTICAL);

@@ -3159,7 +3159,7 @@ void ibGridWindow::OnFocus(wxFocusEvent& event)
 
 /////////////////////////////////////////////////////////////////////
 
-wxBEGIN_EVENT_TABLE(ibGrid, wxScrolled<ibWindow>)
+wxBEGIN_EVENT_TABLE(ibGrid, ibScrolled<ibWindow>)
 EVT_SIZE(ibGrid::OnSize)
 EVT_DPI_CHANGED(ibGrid::OnDPIChanged)
 EVT_KEY_DOWN(ibGrid::OnKeyDown)
@@ -3170,7 +3170,7 @@ bool ibGrid::Create(wxWindow* parent, wxWindowID id,
 	const wxPoint& pos, const wxSize& size,
 	long style, const wxString& name)
 {
-	if (!wxScrolled<ibWindow>::Create(parent, id, pos, size,
+	if (!ibScrolled<ibWindow>::Create(parent, id, pos, size,
 		style | wxWANTS_CHARS, name))
 		return false;
 
@@ -4407,7 +4407,7 @@ void ibGrid::CalcCellsExposed(const wxRegion& reg,
 
 void ibGrid::PrepareDCFor(wxDC& dc, ibGridWindow* gridWindow)
 {
-	wxScrolled<ibWindow>::PrepareDC(dc);
+	ibScrolled<ibWindow>::PrepareDC(dc);
 
 	wxPoint dcOrigin = dc.GetDeviceOrigin() - GetGridWindowOffset(gridWindow);
 
@@ -6345,7 +6345,7 @@ void ibGrid::Refresh(bool eraseb, const wxRect* rect)
 	if (m_created && ShouldRefresh())
 	{
 		// Refresh to get correct scrolled position:
-		wxScrolled<ibWindow>::Refresh(eraseb, rect);
+		ibScrolled<ibWindow>::Refresh(eraseb, rect);
 
 		if (rect)
 		{
@@ -8566,7 +8566,7 @@ void ibGrid::ForceRefresh()
 
 void ibGrid::DoEnable(bool enable)
 {
-	wxScrolled<ibWindow>::DoEnable(enable);
+	ibScrolled<ibWindow>::DoEnable(enable);
 
 	Refresh(false /* don't erase background */);
 }
@@ -10081,7 +10081,7 @@ void ibGrid::SetRowLabelSize(int width)
 		m_rowLabelWidth = width;
 		InvalidateBestSize();
 		CalcWindowSizes();
-		wxScrolled<ibWindow>::Refresh(true);
+		ibScrolled<ibWindow>::Refresh(true);
 	}
 }
 
@@ -10116,7 +10116,7 @@ void ibGrid::SetColLabelSize(int height)
 		m_colLabelHeight = height;
 		InvalidateBestSize();
 		CalcWindowSizes();
-		wxScrolled<ibWindow>::Refresh(true);
+		ibScrolled<ibWindow>::Refresh(true);
 	}
 }
 
