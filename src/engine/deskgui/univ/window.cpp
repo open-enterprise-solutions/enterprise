@@ -285,6 +285,36 @@ bool ibWindow::TryBefore(wxEvent& event)
 {
     const wxEventType type = event.GetEventType();
 
+#ifdef __WXOSX__
+    // SEAM vs wxOSX: a mouse event's place is the client area's, as wxMSW gives it (wxWindowMSW::InitMouseEvent) and
+    // GTKProcessEvent makes it on GTK - wxOSX's is the native view's (wxSetupCoordinates), the whole window's with our
+    // frame and a control's title in it: a click landed their width right and down of what it hit, and wxOSX has no door
+    // of a window to take it at (wxWidgetCocoaImpl::DoHandleMouseEvent calls HandleWindowEvent, not virtual). So the
+    // event ends here, and the same event goes again from the client area, as wxOSX sends it (2026-11-12, Max). Once for
+    // an occurrence of the mouse: a copy goes through as it comes - this one, and one a window sends on (ibListMainWindow
+    // to its list, ibStyledTextCtrl's wheel) carry its time and kind and a place of the client area - as does one made
+    // in code (no time). The top-level window's is its own (ibTopLevelWindow::GetClientPoint)
+    if ( wxMouseEvent* const mouse = wxDynamicCast(&event, wxMouseEvent) )
+    {
+        static long s_time = 0;
+        static wxEventType s_type = wxEVT_NULL;
+        if ( mouse->GetTimestamp() != 0 && (mouse->GetTimestamp() != s_time || type != s_type) )
+        {
+            s_time = mouse->GetTimestamp();
+            s_type = type;
+
+            const wxPoint origin = GetClientAreaOrigin();
+            if ( origin != wxPoint(0, 0) )
+            {
+                wxMouseEvent client(*mouse);
+                client.SetPosition(mouse->GetPosition() - origin);
+                event.Skip(!HandleWindowEvent(client));
+                return true;
+            }
+        }
+    }
+#endif // __WXOSX__
+
     // THE MOUSE OVER A WINDOW WITH A TIP goes to the theme's tooltip, before the window's own handler: a move tracks the
     // tip, a press, a wheel, a key or leaving the window ends it
     if ( GetToolTip() != nullptr )
