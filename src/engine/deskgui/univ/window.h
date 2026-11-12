@@ -52,14 +52,19 @@ public:
 
     ibWindow() { Init(); }
 
+    // made as Create makes one: the port's constructor went past it - on GTK3 the native window kept its border and was
+    // put at the parent's native corner (Create's GTK section), on MSW its native style was the port's (the base
+    // constructor's MSWGetStyle, not ours); six windows were made this way (the grid's, the tree list's header, ...)
     ibWindow(wxWindow *parent,
              wxWindowID id,
              const wxPoint& pos = wxDefaultPosition,
              const wxSize& size = wxDefaultSize,
              long style = 0,
              const wxString& name = wxASCII_STR(wxPanelNameStr))
-        : wxWindow(parent, id, pos, size, style | wxCLIP_CHILDREN, name)
-        { Init(); }
+    {
+        Init();
+        Create(parent, id, pos, size, style, name);
+    }
 
     bool Create(wxWindow *parent,
                 wxWindowID id,
