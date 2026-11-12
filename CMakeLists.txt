@@ -753,15 +753,19 @@ add_subdirectory("${OES_ENGINE_DIR}/launcher")
 add_subdirectory("${OES_ENGINE_DIR}/codeRunner")
 add_subdirectory("${OES_ENGINE_DIR}/simplePlugin")
 
-# ⭐ EACH OF OUR LIBRARIES ANSWERS FOR ITS OWN SYMBOLS (ELF: Linux, the BSDs). A file base loads fileserver into the
+# ⭐ EACH OF OUR LIBRARIES AND PROGRAMS ANSWERS FOR ITS OWN SYMBOLS (ELF: Linux, the BSDs). A file base loads fileserver into the
 # client (dlopen, protocol/connectionFile.cpp), backend and frmserver with it, over the client's libraries already
 # in the process - and 75 classes are exported under one name on both sides (ibMetaData, ibValueMetaObject,
 # ibApplicationInstance, ibValueForm, ...). ELF binds a reference to the FIRST definition of its name in the process:
 # backend's own calls ran the client's ibMetaData, whose factory knows no type of the engine - "Object with id ... is
 # not exist" thirty times, then a segmentation fault (designer-thin on a new file base, CI's look step, 2026-11-12).
 # A version node per library binds each reference to the library it was linked against, as a DLL's import does on
-# Windows and the two-level namespace on macOS. Written only when it changes (file(CONFIGURE)): a map rewritten at
-# every configure would relink every library.
+# Windows and the two-level namespace on macOS. The programs take one too: an executable is searched FIRST, and a
+# definition with no version answers a versioned reference - designer-thin exports the client's ibValue and
+# ibValueMetaObject (frmclient defines the same names, so ld puts the program's copies out), and backend's destructor
+# ran the client's, a segmentation fault in ibPropertyObject::RemoveAttachedObject (the same step, after the libraries
+# had theirs). Written only when it changes (file(CONFIGURE)): a map rewritten at every configure would relink every
+# library.
 if(UNIX AND NOT APPLE)
     get_property(_oes_dirs DIRECTORY "${CMAKE_SOURCE_DIR}" PROPERTY SUBDIRECTORIES)
     foreach(_oes_dir IN LISTS _oes_dirs)
@@ -772,7 +776,8 @@ if(UNIX AND NOT APPLE)
         get_property(_oes_targets DIRECTORY "${_oes_dir}" PROPERTY BUILDSYSTEM_TARGETS)
         foreach(_oes_target IN LISTS _oes_targets)
             get_target_property(_oes_type ${_oes_target} TYPE)
-            if(NOT _oes_type STREQUAL "SHARED_LIBRARY" AND NOT _oes_type STREQUAL "MODULE_LIBRARY")
+            if(NOT _oes_type STREQUAL "SHARED_LIBRARY" AND NOT _oes_type STREQUAL "MODULE_LIBRARY"
+               AND NOT _oes_type STREQUAL "EXECUTABLE")
                 continue()
             endif()
             string(MAKE_C_IDENTIFIER "OES_${_oes_target}" _oes_node)
