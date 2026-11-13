@@ -11,6 +11,11 @@
     #include "deskgui/univ/topLevel.h"   // ibMSWShowShadowed - the popup's shadow, its own
 #endif
 
+#ifdef __WXOSX__
+    // its panel becomes the key window only for a view that needs it (popupWindowCocoa.mm)
+    void ibOSXSetPopupNonActivating(wxWindow* popup);
+#endif
+
 template <class W>
 bool ibPopupWindow<W>::Show(bool show)
 {
@@ -47,6 +52,13 @@ bool ibPopupWindow<W>::Show(bool show)
 #endif // __WXMSW__
     if ( !shown )
         return false;
+
+#ifdef __WXOSX__
+    // one that does not take the focus is not made the key window by a click either - wx orders it front without
+    // making it key (wxPopupWindow::Show). On GTK3 a popup is never focused by the window manager - the same
+    if ( !this->AcceptsFocus() )
+        ibOSXSetPopupNonActivating(this);
+#endif
 
     if ( wxWindow * const frame = wxGetTopLevelParent(this->GetParent()) )
     {

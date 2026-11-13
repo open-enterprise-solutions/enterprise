@@ -146,23 +146,24 @@ public:
     // override the base class version to dismiss any open submenus
     virtual void Dismiss() override;
 
-#ifdef __WXMSW__
-    // nor focus it, as the code editor's lists refuse it (ibCodeEditorPopupWindow): top-level, wxPopupWindow::SetFocus
-    // is live, and wx focuses a clicked window that accepts it - the window that popped the menu lost the focus, its
-    // owner moved it on, and the menu shut on the press before the release chose the item (2026-11-11: the tree's
-    // Properties and Open did nothing)
+    // nor focus it, as the code editor's lists refuse it (ibCodeEditorPopupWindow): focused, the menu took the focus
+    // from the window that popped it, its owner moved it on, and the menu shut on the press before the release chose
+    // the item - on MSW wx focuses a clicked window that accepts it, top-level, wxPopupWindow::SetFocus is live
+    // (2026-11-11: the tree's Properties and Open did nothing); on Cocoa the click made the menu's panel the key window
+    // (2026-11-13: the metadata tree's Add did nothing on the Mac; ibPopupWindow::Show keeps it from that). On GTK3 a
+    // popup is never focused by the window manager - the same
     virtual bool AcceptsFocus() const override { return false; }
-#endif
 
     // called when a submenu is dismissed
     void OnSubmenuDismiss(bool dismissParent);
 
-    // the default wxMSW wxPopupTransientWindow::OnIdle disables the capture
-    // when the cursor is inside the popup, which dsables the menu tracking
-    // so override it to do nothing
-#ifdef __WXMSW__
+    // SEAM vs univ: wxPopupTransientWindow::OnIdle - wxOSX's now, wxMSW's when the canon was written, and the override
+    // was left on MSW alone - releases the capture while the cursor is inside the popup and takes it back outside,
+    // which disables the menu tracking: the last open submenu holds the capture and hands the moves up to its parent
+    // and the menu bar (ProcessMouseMove), and with a submenu open the menu the cursor was NOT in took the capture - the
+    // submenu got no moves nor clicks, and moved back over the parent, the submenu was not hidden (2026-11-13, the
+    // designer on the Mac; the program hung at a menu). So it does nothing, on every port; GTK3 has no such handler
     void OnIdle(wxIdleEvent& WXUNUSED(event)) { }
-#endif
 
     // get the currently selected item (may be null)
     ibMenuItem *GetCurrentItem() const
@@ -397,9 +398,7 @@ wxBEGIN_EVENT_TABLE(ibPopupMenuWindow, wxPopupTransientWindow)
     EVT_MOTION(ibPopupMenuWindow::OnMouseMove)
     EVT_LEAVE_WINDOW(ibPopupMenuWindow::OnMouseLeave)
     EVT_MOUSE_CAPTURE_LOST(ibPopupMenuWindow::OnCaptureLost)
-#ifdef __WXMSW__
     EVT_IDLE(ibPopupMenuWindow::OnIdle)
-#endif
 wxEND_EVENT_TABLE()
 
 wxBEGIN_EVENT_TABLE(ibMenuBarWindow, ibWindow)
@@ -1919,8 +1918,33 @@ void ibMenuItem::UpdateAccelInfo()
 {
     m_indexAccel = wxControlBase::FindAccelIndex(m_text);
 
-    // will be empty if the text contains no TABs - ok
+    // SEAM vs univ: the key the label names, written the platform's way (GetAccelString) - the canon showed the label's
+    // own words: "RawCtrl+F1" on MSW, "Ctrl+F" on the Mac (2026-11-13, a Mac's user). A tail that is no key wx knows
+    // stays as written; empty if the text contains no TABs - ok
     m_strAccel = m_text.AfterFirst(wxT('\t'));
+    wxAcceleratorEntry accel;
+    if ( !m_strAccel.empty() && accel.FromString(m_strAccel) )
+        m_strAccel = GetAccelString(accel);
+}
+
+wxString ibMenuItem::GetAccelString(const wxAcceleratorEntry& accel)
+{
+#ifdef __WXOSX__
+    // the Mac's order - Control, Option, Shift, Command - and the key, with no separator
+    const int flags = accel.GetFlags();
+    wxString text;
+    if ( flags & wxACCEL_RAW_CTRL )
+        text << wxUniChar(0x2303);
+    if ( flags & wxACCEL_ALT )
+        text << wxUniChar(0x2325);
+    if ( flags & wxACCEL_SHIFT )
+        text << wxUniChar(0x21E7);
+    if ( flags & wxACCEL_CMD )
+        text << wxUniChar(0x2318);
+    return text + wxAcceleratorEntry(wxACCEL_NORMAL, accel.GetKeyCode()).ToString();
+#else
+    return accel.ToString();
+#endif
 }
 
 void ibMenuItem::SetItemLabel(const wxString& text)

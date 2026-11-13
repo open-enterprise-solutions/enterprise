@@ -108,6 +108,11 @@ public:
         return m_height;
     }
 
+    // the key as a menu shows it right of a label, the platform's way: on the Mac the signs of Control, Option, Shift
+    // and Command before the key, as its own menus draw one; elsewhere wx's words, as wxMSW's menu writes the key it
+    // parsed (a label's RawCtrl is Ctrl there). The designer's welcome shows its keys so too
+    static wxString GetAccelString(const wxAcceleratorEntry& accel);
+
 protected:
     // notify the menu about the change in this item
     inline void NotifyMenu();

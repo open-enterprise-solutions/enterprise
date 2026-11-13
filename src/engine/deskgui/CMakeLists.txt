@@ -10,9 +10,12 @@ file(GLOB_RECURSE DESKGUI_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
 )
 list(FILTER DESKGUI_SOURCES EXCLUDE REGEX "/settings\\.cpp$")
-# the code editor's host draws through Cocoa on macOS, as wx's own (STC_OSX_COCOA in its files.cmake)
+# the code editor's host draws through Cocoa on macOS, as wx's own (STC_OSX_COCOA in its files.cmake); the popup tells
+# its panel how to take the keys (popupWindowCocoa.mm)
 if(APPLE)
-    list(APPEND DESKGUI_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/univ/stc/PlatWXcocoa.mm")
+    list(APPEND DESKGUI_SOURCES
+        "${CMAKE_CURRENT_SOURCE_DIR}/univ/stc/PlatWXcocoa.mm"
+        "${CMAKE_CURRENT_SOURCE_DIR}/univ/popupWindowCocoa.mm")
 endif()
 
 add_library(deskgui SHARED ${DESKGUI_SOURCES})
