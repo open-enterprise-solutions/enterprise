@@ -13,6 +13,10 @@ ibClientFrameRuntime::ibClientFrameRuntime(ibSessionHolder&& holder, ibClientIns
 	: ibClientFrame(std::move(holder), clientInstance)
 {
 	m_docManager = new ibDocManagerRuntime;
+}
+
+void ibClientFrameRuntime::OnCreate()
+{
 	InitializeDefaultMenu();
 }
 

@@ -37,18 +37,18 @@ ibClientSession* ibClientInstance::Session() const
 	return m_frame != nullptr ? m_frame->Session() : nullptr;
 }
 
-bool ibClientInstance::Login(const ibString& user, const ibString& password)
+bool ibClientInstance::CreateSession()
 {
 	std::lock_guard<std::recursive_mutex> lifeLock(m_lifecycleMutex);
 
 	if (m_applicationInstance == nullptr)
 		return false;
-	if (m_session.Share() != nullptr)
-		return true;   // logged in already
+	if (m_frame != nullptr)
+		return true;   // made already
 
 	// The session is made in the base as soon as it is asked for — its row in sys_session shows "logging in"
 	// until the login settles — under the instance's own id, one identifier for the client, the registry's
-	// session and the row. A wrong password just lets the holder die here, which removes the row.
+	// session and the row. A wrong password lets the frame go, and the holder with it, which removes the row.
 	// ITS KIND IS THE CLIENT'S MODE: the runtime's a thin client; the designer's a thin designer — a designer as the
 	// desktop's is (no runtime, the one designer of the base), whatever process hosts it.
 	const ibSessionKind kind = m_mode == ibProtocol::ibLogin::ibMode::Designer ? ibSessionKind::ThinDesigner : ibSessionKind::ThinClient;
@@ -58,54 +58,71 @@ bool ibClientInstance::Login(const ibString& user, const ibString& password)
 	ibSessionHolder holder = m_applicationInstance->CreateSession<ibClientSession>(kind, m_id, m_address);
 	if (!holder)
 		return false;
-	ibSession* const session = holder.Get();
 
-	// ⭐ ON THE SESSION'S OWN WORKER — the open runs the configuration's script, and everything else of this
-	// session runs there: on the caller's thread it would run BESIDE the worker serving this session's requests,
-	// two threads in one session.
-	// ⭐ THROWN ON, SAID AS IT IS — false is the name or the password, nothing else. A configuration that does not
-	// compile (ibSession::CompileRoot throws), a base held exclusively, a pool that gave no connection: caught and
-	// turned into false they reached the client as a wrong password, and its login window asked for a name nobody
-	// questioned (Max, 2026-11-13: a module that does not compile opens the login window). The caller says it and
-	// journals it (ibClientHost, "login refused"); journalled here as an error too, it came up a second time, in a box
-	// of its own.
-	ibSession::OpenResult opened = ibSession::OpenResult::Failed;
-	session->Submit([&]() {
-		opened = holder->Open(user, password);
-	}).get();
-	// …A REGISTRY THAT DID NOT ANSWER is a busy server, not a wrong name: thrown on as the registry's silence at Add
-	// is, and said as it is. Read as a wrong password, it sent people under load back to the login window to type
-	// a password nobody had questioned (2026-10-23, 300 people at once).
-	if (opened == ibSession::OpenResult::Timeout)
-		ibBackendException::Error(_("registry did not answer to Attach"));
-	if (opened != ibSession::OpenResult::Authenticated)
-		return false;
-
-	m_user = user;
+	// THE FRAME AT ONCE, of the client's mode, and published before the login runs anything: the login's compile may
+	// say a failure in the frame's error window, a start may open forms or ask the person something — the client
+	// reaches all of it through the frame. Its menus and the designer's debugger come with the start (OnCreate): they
+	// read the rights and the configuration the login brings.
 	m_session = ibSessionWatch(holder);
-	m_holder = std::move(holder);
+	m_frame = ibClientFrame::Create(m_mode, std::move(holder), this);
+	if (m_frame == nullptr) {
+		// Nobody took the holder: it goes with this call, and the session ends here.
+		ibJournalWarning(ibT("client"), ibT("client %s refused: no mode %d"), m_id, static_cast<int>(m_mode));
+		m_session.Reset();
+		return false;
+	}
 	return true;
+}
+
+ibSession::OpenResult ibClientInstance::Open(const ibString& user, const ibString& password)
+{
+	// No lifecycle lock, as the start: the login's compile may ask the person (the error window), and an exit must be
+	// able to come in meanwhile and cancel it.
+	ibClientSession* const session = Session();
+	if (session == nullptr)
+		return ibSession::OpenResult::Failed;
+
+	// ⭐ THROWN ON, SAID AS IT IS — Failed is the name or the password, nothing else. A configuration that does not
+	// compile (ibSession::CompileRoot throws), a base held exclusively, a pool that gave no connection: caught and
+	// turned into a refused password they reached the client as one, and its login window asked for a name nobody
+	// questioned (Max, 2026-11-13: a module that does not compile opens the login window). The host says them.
+	ibSession::OpenResult opened = ibSession::OpenResult::Failed;
+	try {
+		opened = session->Open(user, password);
+	}
+	catch (const ibCoreException&) {
+		// …except a failure the frame's error window has said (BackendError keeps it in the messages, whatever the
+		// person chose — a compile, a script of the session's start): read and answered, the login ends quietly, as a
+		// login the person cancelled.
+		bool said = false;
+		for (const ibClientFrame::PendingMessage& message : m_frame->DrainPendingMessages())
+			said = said || message.level == ibStatusMessage_Error;
+		m_frame.reset();   // the frame releases the holder — the session ends
+		m_session.Reset();
+		if (said)
+			return ibSession::OpenResult::Cancelled;
+		throw;
+	}
+	if (opened != ibSession::OpenResult::Authenticated) {
+		m_frame.reset();
+		m_session.Reset();
+		return opened;
+	}
+	m_user = user;
+	return opened;
 }
 
 bool ibClientInstance::Start()
 {
 	// No lifecycle lock here: the start may wait for the person (a request), and an exit must be able to come in
 	// meanwhile and cancel it. The worker orders the two: the exit's teardown runs after the start has unwound.
-	if (!m_holder)
-		return m_frame != nullptr;   // started already, or never logged in
+	if (m_frame == nullptr)
+		return false;   // never made, or the login let it go
 
-	// THE FRAME FIRST, of the client's mode, and published before the start runs: a start may open forms or make a
-	// request to the person, and the client reaches both through the frame.
-	m_frame = ibClientFrame::Create(m_mode, std::move(m_holder), this);
-	if (m_frame == nullptr) {
-		ibJournalWarning(ibT("client"), ibT("client %s refused: no mode %d"), m_id, static_cast<int>(m_mode));
-		m_holder.Reset();   // nobody took it — the session ends here
-		m_session.Reset();
-		return false;
-	}
-
-	// The mode's start — the veto point of the whole login. Then the mode's own tabs, as the desktop window opens
+	// The frame's own parts — the menus by the rights the login brought (OnCreate). Then the mode's start — the veto
+	// point of the whole login. Then the mode's own tabs, as the desktop window opens
 	// them (ibFrontendMainFrame::Show).
+	m_frame->OnCreate();
 	if (!m_frame->AllowRun()) {
 		m_frame.reset();   // the frame releases the holder — the session ends
 		m_session.Reset();

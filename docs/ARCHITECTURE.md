@@ -1036,12 +1036,14 @@ The port's I/O threads only move bytes: each command is one binary WebSocket mes
 enterprise-thin.exe / designer-thin.exe --file=… (a file base: fileserver, in the client's process)
   └─ ibApplicationInstance::CreateAppDataEnv(ibFileInstanceRequest{ server, port, user, pwd, db, locale })
        └─ ibDatabaseLayer::Open(server, port, db, ibUser, ibPwd)   # DB-level admin connection
-            └─ ibClientInstance::Login (frmserver) — on the client's login over the protocol
+            └─ ibClientInstance::CreateSession (frmserver) — on the client's login over the protocol
                  └─ appData->CreateSession<ibClientSession>(ThinClient | ThinDesigner, …)
                  # registry runs Connect(req) under the session factory:
                  #   - Submit(Add, Normal), waits state Added
                  #   - Add handler INSERTs the sys_session row
-                 └─ session->Open(user, password), on the session's own worker   # auth orchestration
+                 └─ ibClientFrame::Create — the frame at once, before the login: the session's way to the person
+            └─ ibClientHost::Run — one work on the session's own worker: Open, then Start
+                 └─ ibClientInstance::Open → session->Open(user, password)   # auth orchestration
                       └─ ticket.Attach(user, pwd) — Submit(Attach, Normal)
                            └─ ibApplicationInstance::AuthenticateUser
                                   (PBKDF2 preferred, MD5 silent-upgrade path)
@@ -1055,8 +1057,11 @@ enterprise-thin.exe / designer-thin.exe --file=… (a file base: fileserver, in 
                                           3. OnAuthenticated — session->CompileRoot()
                                                              + mm->AttachRuntime(s)
                                                                 — main ProcUnit + Execute top-level
-                                                                — StartMainModule: BeforeStart / OnStart
-                                                                — the client draws what the protocol answers
+                                                             (a failure: the frame's error window —
+                                                              BackendError, a question the Run answers)
+                 └─ ibClientInstance::Start → frame->OnCreate() — the menus by the rights
+                      └─ frame->AllowRun() — StartMainModule: BeforeStart / OnStart
+                      — the client draws what the protocol answers
 ```
 
 ### Form Open

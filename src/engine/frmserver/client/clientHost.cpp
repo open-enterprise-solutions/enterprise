@@ -1049,8 +1049,9 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 			done = ResumeByToken(params, result, refusal, error, connection);
 		}
 		else {
-		// The instance is made and logged in; the start runs as work of its own, so a start that asks the person
-		// something returns here with the request — and the client's id, without which it could not respond.
+		// The instance is made with its session and frame; the login and the start run as work of their own, so a login
+		// or a start that asks the person something returns here with the request — and the client's id, without which
+		// it could not respond.
 		std::int32_t protocol = 1;
 		params.GetValue(ibProtocol::ibLogin::Protocol, protocol);
 		auto client = std::make_shared<Client>();
@@ -1061,18 +1062,14 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 		client->connectionless = connection == nullptr;
 		client->connection.store(connection, std::memory_order_relaxed);
 		client->protocol = std::min(protocol, ibProtocol::Version);
-		// THE LOGIN — false: its user or its password; thrown: refused before any (another designer at work), said as
-		// it is. Read as a wrong password, it opened the client's login window on a question nobody asked (2026-10-20).
-		const auto logIn = [&]() {
+		// THE SESSION AND ITS FRAME — false: none was made; thrown: refused before any login (another designer at work),
+		// said as it is. Read as a wrong password, it opened the client's login window on a question nobody asked
+		// (2026-10-20).
+		const auto createSession = [&]() {
 			try {
-				if (client->instance->Login(params.GetValue<ibString>(ibProtocol::ibLogin::User), params.GetValue<ibString>(ibProtocol::ibLogin::Password)))
+				if (client->instance->CreateSession())
 					return true;
-				refuse(ibProtocol::ibRefusal::LoginRefused, _("Wrong user or password entered!"));
-			}
-			// Told to wait, the person is still asked: the client's window stays, and says these words.
-			catch (const ibBackendSessionException& err) {
-				refuse(err.GetKind() == ibBackendSessionException::Kind::LoginThrottled ? ibProtocol::ibRefusal::LoginRefused : ibProtocol::ibRefusal::NotNow,
-					err.GetErrorDescription());
+				refuse(ibProtocol::ibRefusal::Failed, ibT("the session could not be made"));
 			}
 			catch (const ibCoreException& err) {
 				refuse(ibProtocol::ibRefusal::NotNow, err.GetErrorDescription());
@@ -1082,19 +1079,58 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 		if (protocol < 1) {
 			refuse(ibProtocol::ibRefusal::BadParameter, ibString::Format(ibT("no protocol version %d"), protocol));
 		}
-		else if (!refuseIfFull(&ibApplicationHost::IsMemoryLimitNear) && logIn()) {
+		else if (!refuseIfFull(&ibApplicationHost::IsMemoryLimitNear) && createSession()) {
 			{
 				std::lock_guard<std::mutex> lock(m_mutex);
 				m_clients[id] = client;
 			}
 			std::lock_guard<std::mutex> clientLock(client->lock);
 			ibClientInstance* const instance = client->instance.get();
-			done = Run(*client, [instance](ibClientFrame*) { instance->Start(); }, 0, result, refusal, error);
+			// ⭐ THE LOGIN AND THE START, ONE WORK on the session's worker: a compile that fails says so in the frame's error
+			// window, a question to the person, answered only from work this host runs. What the login came to is kept
+			// beside the work — shared, since a work that waits for the person outlives this call.
+			struct Opened {
+				ibSession::OpenResult result = ibSession::OpenResult::Failed;
+				ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
+				ibString              error;
+			};
+			const auto opened = std::make_shared<Opened>();
+			const ibString user = params.GetValue<ibString>(ibProtocol::ibLogin::User);
+			const ibString password = params.GetValue<ibString>(ibProtocol::ibLogin::Password);
+			done = Run(*client, [instance, user, password, opened](ibClientFrame*) {
+				try {
+					opened->result = instance->Open(user, password);
+				}
+				// Told to wait, the person is still asked: the client's window stays, and says these words.
+				catch (const ibBackendSessionException& err) {
+					opened->refusal = err.GetKind() == ibBackendSessionException::Kind::LoginThrottled
+						? ibProtocol::ibRefusal::LoginRefused : ibProtocol::ibRefusal::NotNow;
+					opened->error = err.GetErrorDescription();
+				}
+				catch (const ibCoreException& err) {
+					opened->refusal = ibProtocol::ibRefusal::NotNow;
+					opened->error = err.GetErrorDescription();
+				}
+				if (opened->result == ibSession::OpenResult::Authenticated)
+					instance->Start();
+			}, 0, result, refusal, error);
 			if (client->instance->GetFrame() == nullptr && !client->unsettled.valid()) {
-				// The start refused the client — whatever the drawing after it met: a refused start ends the session,
-				// and the frame's drawing then races its teardown.
+				// The login or the start refused the client — whatever the drawing after it met: a refused login ends the
+				// session, and the frame's drawing then races its teardown.
 				done = false;
-				refuse(ibProtocol::ibRefusal::StartRefused, ibT("the start was refused"));
+				if (opened->refusal != ibProtocol::ibRefusal::None)
+					refuse(opened->refusal, opened->error);
+				else if (opened->result == ibSession::OpenResult::Failed)
+					refuse(ibProtocol::ibRefusal::LoginRefused, _("Wrong user or password entered!"));
+				// …A REGISTRY THAT DID NOT ANSWER is a busy server, not a wrong name: said as it is. Read as a wrong
+				// password, it sent people under load back to the login window to type a password nobody had questioned
+				// (2026-10-23, 300 people at once).
+				else if (opened->result == ibSession::OpenResult::Timeout)
+					refuse(ibProtocol::ibRefusal::NotNow, _("registry did not answer to Attach"));
+				// Cancelled — a failure the frame's error window said, read and answered — or a start that refused: the
+				// person has seen what there was to see.
+				else
+					refuse(ibProtocol::ibRefusal::StartRefused, ibT("the start was refused"));
 			}
 			if (!done)
 				RemoveClient(id);
@@ -1789,6 +1825,19 @@ bool ibClientHost::Run(Client& client, std::function<void(ibClientFrame*)> work,
 		return false;
 	}
 	const std::int64_t settled = NowMs();
+
+	// ⭐ THE LOGIN OR THE START REFUSED IN THE WORK, after a question it asked (a failed compile's error window,
+	// BeforeStart's own): the frame went, and the session with it. Nothing to draw — drawn on the session's worker, the
+	// drawing met a session already gone, and the person read "the frame could not be drawn", then "the client has no
+	// session" (2026-11-13). Answered as the server's Exit, an empty frame that says the client goes: it goes quietly,
+	// the person has seen what there was to see. (Not StartRefused: on any call but the login it reads as NoRight, the
+	// same code.) The login's own call reads the refusal from the login (ibMethod::Login).
+	if (client.instance->GetFrame() == nullptr) {
+		client.answering.store(false, std::memory_order_release);
+		result.SetValue(ibProtocol::ibFrame::Exit, true);
+		result.SetValue(ibProtocol::ibFrame::Frame, ++client.frame);
+		return true;
+	}
 
 	// The frame drawn on the worker — inside the waiting work when it waits for a response (it runs the session's
 	// tasks), after it otherwise; the tabs that closed go first — a choice form closed while its window waits among them.

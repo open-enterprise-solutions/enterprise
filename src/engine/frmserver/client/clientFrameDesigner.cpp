@@ -15,14 +15,6 @@ ibClientFrameDesigner::ibClientFrameDesigner(ibSessionHolder&& holder, ibClientI
 	: ibClientFrame(std::move(holder), clientInstance), m_metaTree(this)
 {
 	m_docManager = new ibDocManagerDesigner;
-	InitializeDefaultMenu();
-
-	// The designer's debugger — the engine's, which the login made with the configuration — heard over the wire.
-	ibSession* const session = GetSession();
-	if (debugClient != nullptr && session != nullptr) {
-		m_debugger = new ibClientDebugger(session->GetApplicationInstance(), clientInstance);
-		debugClient->AddBridge(m_debugger);
-	}
 }
 
 ibClientFrameDesigner::~ibClientFrameDesigner()
@@ -30,6 +22,17 @@ ibClientFrameDesigner::~ibClientFrameDesigner()
 	// RemoveBridge destroys it — the adapter owns what it holds.
 	if (m_debugger != nullptr && debugClient != nullptr)
 		debugClient->RemoveBridge(m_debugger);
+}
+
+void ibClientFrameDesigner::OnCreate()
+{
+	InitializeDefaultMenu();
+
+	ibSession* const session = GetSession();
+	if (debugClient != nullptr && session != nullptr) {
+		m_debugger = new ibClientDebugger(session->GetApplicationInstance(), GetClientInstance());
+		debugClient->AddBridge(m_debugger);
+	}
 }
 
 bool ibClientFrameDesigner::AllowRun()

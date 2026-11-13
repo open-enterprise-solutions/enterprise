@@ -15,6 +15,9 @@ public:
 	// Its debugger taken off the engine's listeners — it goes with them.
 	virtual ~ibClientFrameDesigner() override;
 
+	// The menu, and the debugger — the engine's, which the login made with the configuration, heard over the wire.
+	virtual void OnCreate() override;
+
 	// The right to edit the configuration — its administration right, asked of the person who logged in; let in, the
 	// tree is loaded with it, as the desktop's AllowRun loaded its navigator.
 	virtual bool AllowRun() override;

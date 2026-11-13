@@ -52,6 +52,11 @@ public:
 	//*           The start, as the desktop window's (ibFrontendMainFrame::Show)            *
 	//***************************************************************************************
 
+	// THE FRAME'S OWN PARTS, once the login has brought the person's rights and the configuration — the menus, the
+	// designer's debugger. The frame itself is made before the login (ibClientInstance::CreateSession): the session's
+	// way to the person from its first step, which a failed compile already speaks through. Nothing by default.
+	virtual void OnCreate() {}
+
 	// THE MODE'S VETO POINT — the runtime runs the configuration's start, the designer asks for the right to
 	// edit it. False: the client is refused, and the frame goes with its session.
 	virtual bool AllowRun() = 0;

@@ -11,6 +11,9 @@ public:
 
 	ibClientFrameRuntime(ibSessionHolder&& holder, ibClientInstance* clientInstance);
 
+	// The menu, by the person's rights.
+	virtual void OnCreate() override;
+
 	// The configuration's start — BeforeStart may refuse the client, OnStart may open forms and ask the person.
 	virtual bool AllowRun() override;
 

@@ -6,9 +6,9 @@
 // when it was last heard from, and its frame. Beside ibApplicationInstance, the instance of a base: the same
 // life — start, work, exit. Not a connection (a transport's connection comes and goes; the instance stays, by
 // its id) and not the session: the frame owns the session (ibClientFrame), and the instance's life is the
-// frame's — log in (a session in its base, opened on its own worker), start (the frame, then the
-// configuration's start), exit (the documents, the configuration's exit, the runtime — on the worker — then
-// the frame, which ends the session).
+// frame's — the session and its frame (made together, before any login), open (the login, on the session's
+// worker), start (the configuration's start), exit (the documents, the configuration's exit, the runtime — on the
+// worker — then the frame, which ends the session).
 
 #include <atomic>
 #include <chrono>
@@ -17,6 +17,7 @@
 #include <mutex>
 
 #include "core/fstring.h"            // ibString — the address the client called from, as the call carried it
+#include "backend/session/session.h"         // ibSession::OpenResult — what Open came to
 #include "backend/session/sessionHolder.h"
 #include "frmserver/frmserver.h"
 
@@ -35,16 +36,23 @@ public:
 		ibProtocol::ibLogin::ibMode mode);
 	~ibClientInstance();
 
-	// Opens a session in the base as `user`, on the session's own worker. False: refused (the reason is
-	// journalled where it happened). Throws (ibCoreException) what refuses the session before any login — another
-	// designer at work — so the person is told why, not asked to log in again.
-	bool Login(const ibString& user, const ibString& password);
+	// ⭐ THE SESSION AND ITS FRAME FIRST, before any login: the session made in the base (its row shows "logging in"),
+	// and at once the frame of the client's mode — the session's way to the person, there before anything of the login
+	// runs, so what the login's compile says reaches the frame's error window (BackendError) as a failure of the start
+	// does (Max, 2026-11-13: "it must be made at once, ready to pass messages to the other side"). False: no session,
+	// or no frame of that mode. Throws (ibCoreException) what refuses a session before any login — another designer at
+	// work — so the person is told why, not asked to log in again.
+	bool CreateSession();
 
-	// ON THE SESSION'S WORKER, after Login: the frame of the client's mode first — a start may already open forms or
-	// ask the person something, and the client reaches both through it — then the mode's start (AllowRun), which may
-	// refuse; refused, the frame goes and the session with it. Then the mode's own tabs (CreateStartupPage). A
-	// separate step because the start may wait for the person, and the client has to be told its id before it can
-	// answer.
+	// ON THE SESSION'S WORKER, inside the host's Run: the login as `user` — and with it the configuration compiled for
+	// the session (ibSession::CompileRoot, at OnAuthenticated). Run, because the error window is a question to the
+	// person, and a question is answered only from work the host runs. Not authenticated, or thrown, the frame goes and
+	// the session with it.
+	ibSession::OpenResult Open(const ibString& user, const ibString& password);
+
+	// ON THE SESSION'S WORKER, after Open: the frame's own parts (OnCreate — the menus by the rights), the mode's start
+	// (AllowRun), which may refuse — refused, the frame goes and the session with it — then the mode's own tabs
+	// (CreateStartupPage).
 	bool Start();
 
 	void OnExit();
@@ -55,7 +63,7 @@ public:
 	ibClientFrame*   GetFrame() const { return m_frame.get(); }
 	ibClientSession* Session() const;
 
-	// The session from the login on — before the frame takes it, and while the exit tears it down.
+	// The session from CreateSession on — and while the exit tears it down.
 	std::shared_ptr<class ibSession> ShareSession() const { return m_session.Share(); }
 
 	// When the client was last heard from — what an idle instance is dropped by.
@@ -85,8 +93,7 @@ private:
 
 	std::atomic<bool> m_closeRequested{ false };
 
-	// The opened session between Login and Start — the frame takes it from here and owns it from then on.
-	ibSessionHolder                m_holder;
+	// The frame owns the session from CreateSession on.
 	std::unique_ptr<ibClientFrame> m_frame;
 	// Only a watch: it lets the exit hold the session alive while it tears down.
 	ibSessionWatch                 m_session;
