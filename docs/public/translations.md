@@ -19,7 +19,8 @@ Asked on every call, in this order:
    The base answers with its dictionary (`ibApplicationInstance::GetDictionary`), a pointer read
    without a lock.
 2. **The process's language** (`SetProcessLanguage`). On the server it is what `InitLocale` settled
-   from the request or `backend.conf`, else US English — never the machine's own language. On a thin
+   from the request or `backend.conf` (the shipped one names `en`), else the machine's own language,
+   named as wxWidgets names it (`ibSystemLanguage`), and US English where even that cannot be set. On a thin
    client it is the `Locale` of the login's answer: the base's locale, else the server's language.
 3. Otherwise the text itself.
 

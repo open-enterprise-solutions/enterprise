@@ -1,12 +1,15 @@
 #include "core/localization/locale.h"
 
+#include <algorithm> // std::min
 #include <cctype>    // std::tolower - a name compared without regard to case, as wxStricmp compares it
 #include <clocale>
 #include <cstdlib>   // getenv - the system's locale, as its variables name it
+#include <cwchar>    // wcslen - a Windows list of names, one after another
 #include <string>
+#include <vector>
 
 #ifdef __IBMSW__
-#include <windows.h>   // GetUserDefaultLocaleName, GetLocaleInfoEx
+#include <windows.h>   // GetUserPreferredUILanguages, RegGetValueW, GetUserDefaultLocaleName, GetLocaleInfoEx
 #endif
 
 #include "core/localization/languageTable.h"   // kLanguages - wx's database
@@ -203,6 +206,62 @@ std::string LocaleFromEnvVar(const char* variable)
 }
 #endif
 
+#ifdef __IBMSW__
+// A list as Windows hands one out (REG_MULTI_SZ, MUI_LANGUAGE_NAME): the names one after another, an empty one ends them.
+void AppendLanguages(const wchar_t* list, std::vector<std::string>& preferred)
+{
+	for (const wchar_t* name = list; *name != L'\0'; name += std::wcslen(name) + 1)
+		preferred.push_back(ibString(name).ToUtf8());
+}
+#endif
+
+// wxUILocaleImpl::GetPreferredUILanguages: the languages the user wants an interface in, in the order wanted.
+std::vector<std::string> PreferredUILanguages()
+{
+	std::vector<std::string> preferred;
+#ifdef __IBMSW__
+	// As the user's settings list them (wx's GetUserPreferredLanguagesFromRegistry), then as the system answers them.
+	const wchar_t* const profile = L"Control Panel\\International\\User Profile";
+	DWORD bytes = 0;
+	if (::RegGetValueW(HKEY_CURRENT_USER, profile, L"Languages", RRF_RT_REG_MULTI_SZ, nullptr, nullptr, &bytes) == ERROR_SUCCESS) {
+		std::wstring languages(bytes / sizeof(wchar_t) + 2, L'\0');
+		bytes = static_cast<DWORD>(languages.size() * sizeof(wchar_t));
+		if (::RegGetValueW(HKEY_CURRENT_USER, profile, L"Languages", RRF_RT_REG_MULTI_SZ, nullptr, languages.data(), &bytes) == ERROR_SUCCESS)
+			AppendLanguages(languages.c_str(), preferred);
+	}
+	ULONG count = 0;
+	ULONG chars = 0;
+	if (::GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &count, nullptr, &chars)) {
+		std::wstring languages(chars + 1, L'\0');
+		if (::GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &count, languages.data(), &chars))
+			AppendLanguages(languages.c_str(), preferred);
+	}
+#else
+	// LC_ALL, else LC_MESSAGES - the translations' language - else LANG; then LANGUAGE, gettext's list of them, colon by
+	// colon; the names the database knows. None - nothing named, or "C" and "POSIX", which name none - is English.
+	std::string tag = LocaleFromEnvVar("LC_ALL");
+	if (tag.empty())
+		tag = LocaleFromEnvVar("LC_MESSAGES");
+	if (tag.empty())
+		tag = LocaleFromEnvVar("LANG");
+	if (!tag.empty())
+		preferred.push_back(tag);
+	if (const char* const list = std::getenv("LANGUAGE")) {
+		const std::string languages(list);
+		for (size_t start = 0; start < languages.size();) {
+			const size_t end = std::min(languages.find(':', start), languages.size());
+			if (end > start)
+				preferred.push_back(languages.substr(start, end - start));
+			start = end + 1;
+		}
+	}
+	std::erase_if(preferred, [](const std::string& name) { return ibFindLanguageInfo(ibString::FromUTF8(name)) == nullptr; });
+	if (preferred.empty())
+		preferred.push_back("en_US");
+#endif
+	return preferred;
+}
+
 } // namespace
 
 const ibLanguageInfo* ibFindLanguageInfo(const ibString& name)
@@ -216,24 +275,27 @@ const ibLanguageInfo* ibFindLanguageInfo(const ibString& name)
 
 ibString ibSystemLanguage()
 {
+	// wxUILocale::GetSystemLanguage: the first language the user wants that the database knows - its own entry, else its
+	// language's.
+	for (const std::string& name : PreferredUILanguages()) {
+		if (const ibLanguageInfo* const info = ibFindLanguageInfo(ibString::FromUTF8(name)))
+			return ibString::FromUTF8(info->m_canonical);
+	}
 #ifdef __IBMSW__
+	// …none of them: wxUILocale::GetSystemLocale - the entry that IS the user's default locale, not a language's found by
+	// falling back on it. (Elsewhere there is always one: English.)
 	wchar_t name[LOCALE_NAME_MAX_LENGTH] = {};
 	if (::GetUserDefaultLocaleName(name, LOCALE_NAME_MAX_LENGTH) <= 0)
 		return ibString();
 	const std::string tag = ibString(name).ToUtf8();
-#else
-	std::string tag = LocaleFromEnvVar("LC_ALL");
-	if (tag.empty())
-		tag = LocaleFromEnvVar("LANG");
-	if (tag.empty())
-		return ibString();
-#endif
-	// wxUILocale::GetSystemLocale: the entry that IS this locale - not a language's, found by falling back on it.
 	const ibLanguageInfo* const info = ibFindLanguageInfo(ibString::FromUTF8(tag));
 	if (info == nullptr)
 		return ibString();
 	const bool exact = tag.find('-') != std::string::npos ? SameNoCase(tag, info->m_tag) : SameNoCase(tag, info->m_canonical);
 	return exact ? ibString::FromUTF8(info->m_canonical) : ibString();
+#else
+	return ibString();
+#endif
 }
 
 ibString ibSetLocale(const ibString& language)

@@ -446,20 +446,20 @@ bool ibApplicationHost::InitLocale(const ibString& locale)
 	if (!m_locale.IsEmpty())
 		return true;
 
-	// The base's word, else backend.conf's — when this machine can set it. NOTHING NAMED, OR A WISH THIS MACHINE CANNOT
-	// GRANT, IS ENGLISH — the language the engine's words are written in — never the machine's own: a process that
-	// speaks whatever the system does answers differently on every machine it runs on (a test reading an English
-	// sentence failed on a desktop whose Windows speaks Russian, 2026-10-28). A wish not granted is not a refusal to
-	// open the base (a base names its locale on one machine and is opened on every other); the journal says which.
-	// US English: a plain "en" is en_GB in wx's database (core/localization/locale.h), a locale a machine may not have
-	// made; en_US is the one it nearly always has.
+	// The base's word, else backend.conf's (it names one as shipped) — when this machine can set it. NOTHING NAMED, OR A
+	// WISH THIS MACHINE CANNOT GRANT, IS THE MACHINE'S OWN — the system's default, named as wx names it (ibSystemLanguage)
+	// — and English only where even that cannot be set (Max, 2026-11-13; from 2026-10-28 it was English, never the
+	// machine's: a test that reads an English sentence names English in the backend.conf it writes). A wish not granted
+	// is not a refusal to open the base (a base names its locale on one machine and is opened on every other); the
+	// journal says which. US English: a plain "en" is en_GB in wx's database (core/localization/locale.h), a locale a
+	// machine may not have made; en_US is the one it nearly always has.
 	const ibString& wanted = !locale.IsEmpty() ? locale : m_configLocale;
 	const ibLanguageInfo* const wish = ibFindLanguageInfo(wanted);
 	ibString set = wish != nullptr ? ibSetLocale(wanted) : ibString();
 	if (set.IsEmpty())
-		set = ibSetLocale(ibT("en_US"));
+		set = ibSetLocale(ibString());   // the machine's own
 	if (set.IsEmpty())
-		set = ibSetLocale(ibString());   // a machine with no English locale made (a bare Linux): what it has
+		set = ibSetLocale(ibT("en_US"));
 	if (set.IsEmpty()) {
 		ibBackendCoreException::Error(_("The locale %s cannot be set on this machine; the base was not opened."),
 			!wanted.IsEmpty() ? wanted : ibString(ibT("(default)")));

@@ -46,7 +46,8 @@ namespace {
 
 // Left out, Resume is 120, which is too long for a test. 0 is off. The host reads backend.conf once, before any base
 // is opened, and the working directory's wins over the one beside the program, where the build puts its template.
-// So the process works in a folder of this test's own with that one line in it; both go when the process does.
+// So the process works in a folder of this test's own with that line in it, and the locale the shipped one names; both
+// go when the process does.
 struct ResumeFile {
 	std::filesystem::path previous;
 	std::filesystem::path folder;
@@ -57,7 +58,7 @@ struct ResumeFile {
 		folder = std::filesystem::temp_directory_path(error) /
 			("oes-failover-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
 		std::filesystem::create_directories(folder, error);
-		std::ofstream(folder / "backend.conf") << "Resume=2\n";
+		std::ofstream(folder / "backend.conf") << "Locale=en\nResume=2\n";   // English as shipped: a test reads its sentences
 		std::filesystem::current_path(folder, error);
 	}
 	~ResumeFile()

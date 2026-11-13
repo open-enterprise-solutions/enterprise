@@ -27,9 +27,10 @@ struct ibLanguageInfo {
 // entry for a language comes before its regions'); null for a name the database does not know.
 CORE_API const ibLanguageInfo* ibFindLanguageInfo(const ibString& name);
 
-// The language the user's locale is in, by its canonical name ("ru_RU") - wxLocale::GetSystemLanguage: the user's
-// default locale on Windows, LC_ALL or else LANG elsewhere. Empty when the system names none, or one the database
-// does not know.
+// The language the user wants an interface in, by its canonical name ("ru_RU") - wxUILocale::GetSystemLanguage: the
+// first of the languages the user prefers that the database knows (on Windows the settings' list, then the system's
+// interface languages; elsewhere LC_ALL, else LC_MESSAGES, else LANG, then LANGUAGE's list, and en_US when none of them
+// names one - "C" and "POSIX" name none); on Windows, none known - the user's default locale. Empty when that is unknown too.
 CORE_API ibString ibSystemLanguage();
 
 // The C library's locale for the process set to a language found as ibFindLanguageInfo finds it - what wxLocale::Init
@@ -37,7 +38,7 @@ CORE_API ibString ibSystemLanguage();
 // Windows, and elsewhere as wxSetlocaleTryAll tries it - the UTF-8 forms first, then as named, then without the region,
 // then glibc's old ISO 639 codes. Answers the name it was set by ("en_GB" for "en"); empty when the database does not
 // know the language or the machine has none of its forms, and the locale is then as it was. An empty language is the
-// machine's own (setlocale ""), answered as ibSystemLanguage names it, "C" when it names none.
+// machine's own (setlocale ""), answered as ibSystemLanguage names it, "C" when the database does not know it.
 CORE_API ibString ibSetLocale(const ibString& language);
 
 #endif // __CORE_LOCALE_H__
