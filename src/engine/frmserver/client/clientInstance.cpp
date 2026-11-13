@@ -4,7 +4,6 @@
 #include "backend/backend_exception.h"
 #include "backend/moduleManager/moduleManager.h"
 #include "backend/session/session.h"
-#include "backend/session/sessionException.h"
 #include "backend/session/sessionRegistry.h"
 
 #include "frmserver/docView/docView.h"
@@ -64,25 +63,16 @@ bool ibClientInstance::Login(const ibString& user, const ibString& password)
 	// ⭐ ON THE SESSION'S OWN WORKER — the open runs the configuration's script, and everything else of this
 	// session runs there: on the caller's thread it would run BESIDE the worker serving this session's requests,
 	// two threads in one session.
+	// ⭐ THROWN ON, SAID AS IT IS — false is the name or the password, nothing else. A configuration that does not
+	// compile (ibSession::CompileRoot throws), a base held exclusively, a pool that gave no connection: caught and
+	// turned into false they reached the client as a wrong password, and its login window asked for a name nobody
+	// questioned (Max, 2026-11-13: a module that does not compile opens the login window). The caller says it and
+	// journals it (ibClientHost, "login refused"); journalled here as an error too, it came up a second time, in a box
+	// of its own.
 	ibSession::OpenResult opened = ibSession::OpenResult::Failed;
-	try {
-		session->Submit([&]() {
-			opened = holder->Open(user, password);
-		}).get();
-	}
-	catch (const ibBackendSessionException& err) {
-		// "try again in 2 s" is the person's to read: read as "refused", it calls a right password wrong.
-		if (err.GetKind() == ibBackendSessionException::Kind::LoginThrottled)
-			throw;
-		ibJournalError(ibT("client"), ibT("login of '%s' refused: %s"), user, err.GetErrorDescription());
-		return false;
-	}
-	catch (const ibCoreException& err) {
-		// A configuration that does not start refuses the login too (ibSession::CompileRoot throws). The client can
-		// be told only "refused"; the reason goes where an administrator reads it.
-		ibJournalError(ibT("client"), ibT("login of '%s' refused: %s"), user, err.GetErrorDescription());
-		return false;
-	}
+	session->Submit([&]() {
+		opened = holder->Open(user, password);
+	}).get();
 	// …A REGISTRY THAT DID NOT ANSWER is a busy server, not a wrong name: thrown on as the registry's silence at Add
 	// is, and said as it is. Read as a wrong password, it sent people under load back to the login window to type
 	// a password nobody had questioned (2026-10-23, 300 people at once).
