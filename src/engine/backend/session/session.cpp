@@ -1360,7 +1360,7 @@ ibProcUnitState* ibSession::PUStateOf(ibSession* session)
 	if (session != nullptr)
 		return &session->m_procUnitState;
 
-	// Sessionless fallback — codeRunner.exe, the test binary, and any other host
+	// Sessionless fallback — coderunner.exe, the test binary, and any other host
 	// that runs ad-hoc scripts without a session needs a real ibProcUnitState to
 	// back m_currentRunModule / the run-context stack / error_place during Compile
 	// + Execute. thread_local so concurrent sessionless callers each get their own
@@ -1382,7 +1382,7 @@ ibCompileState* ibSession::CompileStateOf(ibSession* session)
 	if (session != nullptr)
 		return &session->m_compileState;
 
-	// Sessionless fallback — codeRunner, the tests: each thread its own, here and not in GetCompileState for
+	// Sessionless fallback — coderunner, the tests: each thread its own, here and not in GetCompileState for
 	// the reason PUStateOf gives.
 	static thread_local ibCompileState ts_fallbackCompileState;
 	return &ts_fallbackCompileState;
@@ -1393,7 +1393,7 @@ ibTranslateState* ibSession::TranslateStateOf(ibSession* session)
 	if (session != nullptr)
 		return &session->m_translateState;
 
-	// Sessionless fallback — codeRunner, the tests: each thread its own, here and not in GetTranslateState for
+	// Sessionless fallback — coderunner, the tests: each thread its own, here and not in GetTranslateState for
 	// the reason PUStateOf gives.
 	static thread_local ibTranslateState ts_fallbackTranslateState;
 	return &ts_fallbackTranslateState;
@@ -1605,32 +1605,8 @@ ibSession::OpenResult ibSession::Open(const ibString& user, const ibString& pass
 	// was never the question.
 	if (res == ibAuthState::Anonymous)
 		return OpenResult::Timeout;
-
-	// Interactive fallback — GUI override shows login dialog (shared for
-	// designer + enterprise via ibGUISession::OnShowAuthenticate). Pin
-	// `this` as Current() for the dialog's lifetime so the OK handler's
-	// appData->Login → InstallUser writes m_userInfo / m_sessionRawPassword
-	// onto THIS session (Current() resolves to it). Without the scope,
-	// InstallUser would target whatever the calling thread last bound —
-	// often nullptr in pre-auth flows — and m_userInfo would stay empty,
-	// making submitAttach below fire with blank creds (= "invalid user
-	// or password" on the second pass through ProcessAttach).
-	bool dlgOk;
-	{
-		ibSessionScope scope(this);
-		dlgOk = OnShowAuthenticate(user, password);
-	}
-	// Dialog returning false == user clicked Cancel. Distinguish from
-	// "creds rejected by server" so the GUI app's no-session branch
-	// stays silent on cancel and only messages on a real auth failure.
-	if (!dlgOk) return OpenResult::Cancelled;
-
-	res = submitAttach(m_userInfo.m_strUserName, m_sessionRawPassword);
-	if (res == ibAuthState::Authenticated) {
-		reg.NotifyAuthenticated(this);
-		return OpenResult::Authenticated;
-	}
-	return res == ibAuthState::Anonymous ? OpenResult::Timeout : OpenResult::Failed;
+	// …and an answer that refused is the name or the password: the client's login window asks again.
+	return OpenResult::Failed;
 }
 
 // --- ibSessionThreadBinding --------------------------------------------

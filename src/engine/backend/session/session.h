@@ -229,39 +229,24 @@ public:
 	// answers from wherever its window already is — the desktop pair from
 	// its main-window singleton, a web client from its tab — so nothing
 	// is stored here and there is no registration step to get wrong.
-	// Default null: appserver, codeRunner, the wes technical row have no UI.
+	// Default null: appserver, coderunner, the wes technical row have no UI.
 	virtual ibBackendDocFrame* GetFrame() const { return nullptr; }
 
-	// Session-owned auth orchestration. Submits Attach to the registry
-	// directly (via shared_from_this so no ticket is required in the call
-	// path). If CLI creds already work, returns true silently — no prompt
-	// event. On Attach failure raises OnShowAuthenticate — GUI override
-	// shows the login dialog, writes singleton userInfo / rawPassword,
-	// returns true — then re-submits Attach with the stored session creds.
-	// Returns true iff the auth axis transitioned to Authenticated.
-	// Non-GUI sessions inherit the default OnShowAuthenticate (false) so
-	// the fallback no-ops and Authenticate reports the original failure;
-	// GUI app OnInit terminates the process in that case.
-	//
-	// Tri-state result. Callers used to treat `bool == false` as "show
-	// error", which surfaced "Authentication failed" even when the user
-	// just clicked Cancel on the login dialog. Distinguishing the two
-	// lets the GUI app exit silently on cancel and only message on a
-	// real auth failure.
+	// Session-owned auth. Submits Attach to the registry directly (via
+	// shared_from_this so no ticket is required in the call path) and
+	// waits for its answer. Nothing is asked of a person here: a wrong
+	// name or password is Failed, and the client's own login window asks
+	// again. (The thick programs' login dialog, OnShowAuthenticate, went
+	// with them; left behind, its "no dialog" answered a wrong password
+	// as Cancelled, which the client host read as a refused start - 403
+	// for 401, 2026-11-13.)
 	enum class OpenResult {
-		Authenticated,   // creds accepted (silent or via dialog)
-		Failed,          // creds rejected — show "Authentication failed"
-		Cancelled,       // user cancelled the interactive dialog — silent exit
+		Authenticated,   // creds accepted
+		Failed,          // creds rejected — the name or the password
+		Cancelled,       // not the session's answer: its client's - a failure the frame's error window said (ibClientInstance::Open)
 		Timeout,         // the registry did not answer in time — a busy server, not the creds (ibConnectResult::Timeout)
 	};
 	OpenResult Open(const ibString& user, const ibString& password);
-
-	// Interactive prompt event — fires only when silent Attach fails.
-	// Overridden by ibGUISession (shared for designer + enterprise; shows
-	// the wx login dialog) and future ibWebClientSession (HTTP login
-	// form). Base no-op returns false so non-GUI sessions fail hard on
-	// wrong creds without hanging on a non-existent prompt.
-	virtual bool OnShowAuthenticate(const ibString& /*user*/, const ibString& /*password*/) { return false; }
 
 	// Legacy id (string representation of m_guid or external cookie).
 	// New code should prefer m_identity.m_guid directly.
@@ -401,7 +386,7 @@ public:
 	// session that hosts it. Set by the holder right after the client is
 	// registered in the registry (e.g. wes's WebClient session points to
 	// wes's WebServer system session). Empty for standalone sessions
-	// (desktop main, wes system itself, codeRunner) — Server() returns
+	// (desktop main, wes system itself, coderunner) — Server() returns
 	// nullptr.
 	//
 	// Used by:
@@ -710,7 +695,7 @@ public:
 
 	// Per-session COMPILER state — the twin of the interpreter's above (ibCompileState): what every compile of
 	// this session shares, the code style first. The current session's; a thread without one gets its own, as
-	// with GetPUState — codeRunner compiles that way.
+	// with GetPUState — coderunner compiles that way.
 	static ibCompileState* GetCompileState() { return CompileStateOf(Current()); }
 
 	// The same answer, when the caller already holds the session — as PUStateOf.
@@ -781,7 +766,7 @@ public:
 	// main UI window. Equivalent to:
 	//   ibSession* s = Current(); return s ? s->GetFrame() : nullptr;
 	// Null when no scope is active or when the scoped session is
-	// frameless (web-server, headless, codeRunner).
+	// frameless (web-server, headless, coderunner).
 	static ibBackendDocFrame* CurrentFrame();
 
 	// Convenience: whether the currently-scoped session has been
