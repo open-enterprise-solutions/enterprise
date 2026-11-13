@@ -17029,3 +17029,21 @@ msgstr ""
 #, c-format
 msgid "The connection to the server at %s:%d did not open: %s."
 msgstr ""
+
+#: src/engine/deskgui/univ/propgrid/props.cpp:1725
+#: src/engine/deskgui/univ/propgrid/props.cpp:1917
+#: src/engine/deskgui/univ/propgrid/advprops.cpp:1827
+#: src/engine/frmclient/propertyManager/property/advprop/advpropPicture.cpp:324
+#: src/engine/frmclient/propertyManager/property/advprop/advpropPicture.cpp:400
+msgid "All files (*.*)|*.*"
+msgstr ""
+
+#: src/engine/deskgui/univ/propgrid/advprops.cpp:1823
+#: src/engine/frmclient/propertyManager/property/advprop/advpropPicture.cpp:312
+#, c-format
+msgid "%s files (%s)|%s"
+msgstr ""
+
+#: src/engine/frmclient/propertyManager/property/advprop/advpropPicture.cpp:322
+msgid "All image files"
+msgstr ""

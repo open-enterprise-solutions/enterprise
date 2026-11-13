@@ -1820,15 +1820,11 @@ const wxString& ibPGGetDefaultImageWildcard()
             wxString ext_lo = handler->GetExtension();
             wxString ext_up = ext_lo.Upper();
 
-            str.append( ext_up );
-            str.append( wxS(" files (*.") );
-            str.append( ext_up );
-            str.append( wxS(")|*.") );
-            str.append( ext_lo );
+            str.append( wxString::Format(_("%s files (%s)|%s"), ext_up, wxS("*.") + ext_up, wxS("*.") + ext_lo) );
             str.append( wxS("|") );
         }
 
-        str.append ( wxS("All files (*.*)|*.*") );
+        str.append ( _("All files (*.*)|*.*") );
 
         ibPGGlobalVars->m_pDefaultImageWildcard = str;
     }

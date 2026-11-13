@@ -17130,6 +17130,24 @@ msgstr "З'єднання з сервером %s:%d не підготовлен�
 msgid "The connection to the server at %s:%d did not open: %s."
 msgstr "З'єднання з сервером %s:%d не відкрилося: %s."
 
+#: src/engine/deskgui/univ/propgrid/props.cpp:1725
+#: src/engine/deskgui/univ/propgrid/props.cpp:1917
+#: src/engine/deskgui/univ/propgrid/advprops.cpp:1827
+#: src/engine/frmclient/propertyManager/property/advprop/advpropPicture.cpp:324
+#: src/engine/frmclient/propertyManager/property/advprop/advpropPicture.cpp:400
+msgid "All files (*.*)|*.*"
+msgstr "Усі файли (*.*)|*.*"
+
+#: src/engine/deskgui/univ/propgrid/advprops.cpp:1823
+#: src/engine/frmclient/propertyManager/property/advprop/advpropPicture.cpp:312
+#, c-format
+msgid "%s files (%s)|%s"
+msgstr "Файли %s (%s)|%s"
+
+#: src/engine/frmclient/propertyManager/property/advprop/advpropPicture.cpp:322
+msgid "All image files"
+msgstr "Усі файли зображень"
+
 #~ msgid "Client (GUI)"
 #~ msgstr "Клієнт (GUI)"
 

@@ -309,11 +309,7 @@ const wxString& ibPGGetDefaultImageWildcard(int& indFilter)
 			wxString ext_lo = handler->GetExtension();
 			wxString ext_up = ext_lo.Upper();
 
-			str.append(ext_up);
-			str.append(wxS(" files (*."));
-			str.append(ext_up);
-			str.append(wxS(")|*."));
-			str.append(ext_lo);
+			str.append(wxString::Format(_("%s files (%s)|%s"), ext_up, wxS("*.") + ext_up, wxS("*.") + ext_lo));
 			str.append(wxS("|"));
 
 			if (!ext.empty())
@@ -323,8 +319,9 @@ const wxString& ibPGGetDefaultImageWildcard(int& indFilter)
 			s_indFilter++;
 		}
 
-		str.append(wxS("All image files|") + ext + "|");
-		str.append(wxS("All files (*.*)|*.*"));
+		str.append(_("All image files"));
+		str.append(wxS("|") + ext + wxS("|"));
+		str.append(_("All files (*.*)|*.*"));
 
 		ibPGGlobalVars->m_pDefaultImageWildcard = str;
 	}
@@ -400,7 +397,7 @@ bool ibPGExternalImageProperty::DisplayEditorDialog(ibPropertyGrid* pg, ibVarian
 		m_dlgTitle.empty() ? wxString(_("Choose a picture")) : m_dlgTitle,
 		m_initialPath.empty() ? path : m_initialPath,
 		file,
-		m_wildcard.empty() ? wxString(_(wxALL_FILES)) : m_wildcard,
+		m_wildcard.empty() ? wxString(_("All files (*.*)|*.*")) : m_wildcard,
 		m_dlgStyle,
 		wxDefaultPosition);
 

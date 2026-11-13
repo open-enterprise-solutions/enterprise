@@ -1722,7 +1722,7 @@ ibFileProperty::ibFileProperty( const wxString& label, const wxString& name,
     m_flags |= ibPGPropertyFlags_ShowFullFileName;
     m_flags &= ~ibPGPropertyFlags_ActiveButton; // Property button enabled only in not read-only mode.
     m_indFilter = -1;
-    m_wildcard = wxALL_FILES;
+    m_wildcard = _("All files (*.*)|*.*");
 
     SetValue(value);
 }
@@ -1914,7 +1914,7 @@ bool ibFileProperty::DisplayEditorDialog(ibPropertyGrid* pg, ibVariant& value)
         m_dlgTitle.empty() ? _("Choose a file") : m_dlgTitle,
         m_initialPath.empty() ? path : m_initialPath,
         file,
-        m_wildcard.empty() ? ibGetTranslation(wxString(wxALL_FILES)).ToWxString() : m_wildcard,
+        m_wildcard.empty() ? wxString(_("All files (*.*)|*.*")) : m_wildcard,
         m_dlgStyle,
         wxDefaultPosition);
 
