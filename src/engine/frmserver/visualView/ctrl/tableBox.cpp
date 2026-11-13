@@ -858,11 +858,12 @@ std::int32_t ibValueModelTableBox::HandRow(const ibDataViewItem& item, std::int3
 		return known->second;
 	}
 
-	// …and one handed out before a read anew, read again as the same object, the handle it had (Fetch).
+	// …and one handed out before a read anew and read again - as the same object, or as a new one that is the same row
+	// (Fetch) - the handle it had, while no other row has taken it.
 	std::int32_t handle = 0;
 	if (handedBefore != nullptr) {
 		const auto before = handedBefore->find(item.GetID());
-		if (before != handedBefore->end())
+		if (before != handedBefore->end() && !m_fetchedRows.contains(before->second))
 			handle = before->second;
 	}
 	if (handle == 0)
@@ -1108,6 +1109,30 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 		const ibFormatString* format = column->GetCellFormat();
 		formats.push_back(format != nullptr ? std::optional<ibFormatString>(*format) : std::nullopt);
 		columnEditable.push_back(!column->IsReadOnly());
+	}
+
+	// …AND THE SAME ROW READ AGAIN AS A NEW OBJECT KEEPS ITS HANDLE TOO. A list read from a base hands out new objects at
+	// every read, while the client holds its rows by the handles it was given - its top row is the anchor of the read it
+	// asks next. A read anew it did not ask for (a later Version's Rows) forgot them: its read found no anchor and was read
+	// around the table's current row, and a list refreshed by its form came back with the current row at the top
+	// (2026-11-13). Found by identity, as FindRowHandle finds a row, walked in step with the page - a row read again mostly
+	// follows the one before it, as it was handed out - so a refresh costs a comparison a row. A table in memory hands out
+	// its own rows: the same objects, found by them.
+	if (!rowsBefore.empty() && m_tableModel->HasKeyedRows()) {
+		auto next = rowsBefore.begin();
+		for (size_t idx = 0; idx < items.GetCount(); idx++) {
+			const ibDataViewItem& item = items[idx];
+			if (!item.IsOk() || handlesBefore.contains(item.GetID()))
+				continue;
+			auto found = next;
+			if (found == rowsBefore.end() || !(found->second.m_item == item))
+				found = std::find_if(rowsBefore.begin(), rowsBefore.end(),
+					[&item](const auto& row) { return row.second.m_item == item; });
+			if (found == rowsBefore.end())
+				continue;
+			handlesBefore[item.GetID()] = found->first;
+			next = std::next(found);
+		}
 	}
 
 	const ibDataViewItem current = m_tableCurrentLine != nullptr
