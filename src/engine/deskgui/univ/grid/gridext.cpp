@@ -10999,19 +10999,23 @@ void ibGrid::DeleteColArea(size_t index)
 int ibGrid::AddRowGroup(int first, int last, int level, bool collapsed)
 {
 	ibGridCellGroup g; g.m_start = first; g.m_end = last;
-	g.m_level = wxMax(1, level); g.m_collapsed = collapsed;
+	g.m_level = wxMax(1, level);
 	m_rowGroupAt.push_back(g);
-	if (collapsed) for (int r = first; r <= last; ++r) HideRow(r);
-	return (int)m_rowGroupAt.size() - 1;
+	// folded as the marker folds it - the view's, nothing announced (SetRowGroupCollapsed); HideRow told of a height
+	const int idx = (int)m_rowGroupAt.size() - 1;
+	SetRowGroupCollapsed(idx, collapsed);
+	return idx;
 }
 
 int ibGrid::AddColGroup(int first, int last, int level, bool collapsed, int head)
 {
 	ibGridCellGroup g; g.m_start = first; g.m_end = last;
-	g.m_level = wxMax(1, level); g.m_collapsed = collapsed; g.m_head = head;
+	g.m_level = wxMax(1, level); g.m_head = head;
 	m_colGroupAt.push_back(g);
-	if (collapsed) for (int c = first; c <= last; ++c) HideCol(c);
-	return (int)m_colGroupAt.size() - 1;
+	// …as the rows'
+	const int idx = (int)m_colGroupAt.size() - 1;
+	SetColGroupCollapsed(idx, collapsed);
+	return idx;
 }
 
 // See the header. A row that heads nothing is not a group; a row that heads something folds the run
@@ -11023,6 +11027,7 @@ void ibGrid::NormalizeRowGroups()
 		return;
 
 	std::vector<ibGridCellGroup> shaped;
+	std::vector<int> folded;   // the shaped groups whose heading came collapsed
 	shaped.reserve(m_rowGroupAt.size());
 
 	for (size_t i = 0; i < m_rowGroupAt.size(); ++i) {
@@ -11040,13 +11045,21 @@ void ibGrid::NormalizeRowGroups()
 		g.m_start     = head.m_end + 1;   // the heading stays visible; its children are what collapse
 		g.m_end       = end;
 		g.m_level     = head.m_level;
-		g.m_collapsed = head.m_collapsed;
 		g.m_head      = head.m_start;     // the heading's FIRST row — the same rule as the columns'
+		if (head.m_collapsed)
+			folded.push_back((int)shaped.size());
 		shaped.push_back(g);
 	}
 
+	// ⭐ THE FOLD FOLLOWS THE SHAPE. A heading that came collapsed folded its own rows as it arrived (AddRowGroup) — the
+	// heading, which stays in sight; what it folds is the run after it, and that run was left open: a collapsed group
+	// opened expanded, its heading gone (Max, 2026-11-13). So the arrivals' folds are opened and the shaped groups'
+	// made, the marker's way.
+	for (size_t i = 0; i < m_rowGroupAt.size(); ++i)
+		SetRowGroupCollapsed((int)i, false);
 	m_rowGroupAt.swap(shaped);
-
+	for (const int idx : folded)
+		SetRowGroupCollapsed(idx, true);
 }
 
 // The twin of the above, across instead of down — same rule, same reason, and the columns of a
@@ -11065,6 +11078,7 @@ void ibGrid::NormalizeColGroups()
 			return;
 
 	std::vector<ibGridCellGroup> shaped;
+	std::vector<int> folded;   // …as the rows'
 	shaped.reserve(m_colGroupAt.size());
 
 	for (size_t i = 0; i < m_colGroupAt.size(); ++i) {
@@ -11082,12 +11096,18 @@ void ibGrid::NormalizeColGroups()
 		g.m_start     = head.m_end + 1;   // the heading stays visible; its children are what collapse
 		g.m_end       = end;
 		g.m_level     = head.m_level;
-		g.m_collapsed = head.m_collapsed;
 		g.m_head      = head.m_start;     // …and the marker goes at the heading's FIRST column
+		if (head.m_collapsed)
+			folded.push_back((int)shaped.size());
 		shaped.push_back(g);
 	}
 
+	// …the fold follows the shape, as the rows' (NormalizeRowGroups)
+	for (size_t i = 0; i < m_colGroupAt.size(); ++i)
+		SetColGroupCollapsed((int)i, false);
 	m_colGroupAt.swap(shaped);
+	for (const int idx : folded)
+		SetColGroupCollapsed(idx, true);
 }
 
 void ibGrid::DeleteRowGroup(int idx)
@@ -12695,6 +12715,20 @@ void ibGrid::DoSetRowSize(int row, int height)
 	// ⚠ THROUGH THE SETTER, not a reference into the array: the sizes and their prefix sums are one
 	// object now, and a reference handed out would let a size change behind the sums' back.
 	int rowHeight = m_rowHeights[row];
+
+	// ⭐ A FOLDED ROW STAYS FOLDED. A size given to a row inside a collapsed group — the document's own, a fit to its
+	// text (ibGridEditor::FitAutoRowHeights) — is the height it opens to, not a reason to show it: in wx's canon any
+	// size shows a hidden row, and a collapsed group loaded open (Max, 2026-11-13). A row hidden otherwise is shown
+	// by a size as the canon has it — an undone HideRow is. Every port alike: the sizes are the grid's own.
+	if (height > 0 && rowHeight < 0) {
+		for (const ibGridCellGroup& g : m_rowGroupAt) {
+			if (g.m_collapsed && row >= g.m_start && row <= g.m_end) {
+				m_rowHeights.Set(row, -height);
+				return;
+			}
+		}
+	}
+
 	const int diff = UpdateRowOrColSize(rowHeight, height);
 	m_rowHeights.Set(row, rowHeight);
 
@@ -12916,6 +12950,17 @@ void ibGrid::DoSetColSize(int col, int width)
 
 	// …and the same for a column — see SetRowSize.
 	int colWidth = m_colWidths[col];
+
+	// …and a folded column stays folded, as a row does (DoSetRowSize)
+	if (width > 0 && colWidth < 0) {
+		for (const ibGridCellGroup& g : m_colGroupAt) {
+			if (g.m_collapsed && col >= g.m_start && col <= g.m_end) {
+				m_colWidths.Set(col, -width);
+				return;
+			}
+		}
+	}
+
 	const int diff = UpdateRowOrColSize(colWidth, width);
 	m_colWidths.Set(col, colWidth);
 
