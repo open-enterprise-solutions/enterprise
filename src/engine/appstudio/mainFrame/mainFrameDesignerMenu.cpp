@@ -43,16 +43,17 @@ void ibFrontendMainFrameDesigner::InitializeDefaultMenu()
 		return item;
 	};
 
-	// "Start debugging" → Thin / Web
+	// "Start debugging" → the workspace, on the desktop or in the browser - the launcher's words for the same two
+	// (2026-11-13, Max: "Thin client" says nothing - everything is thin)
 	ibMenu* subStart = new ibMenu;
-	debugPicture(subStart->Append(wxID_DESIGNER_DEBUG_START, _("Thin client")), wxART_DEBUG_START);
-	subStart->Append(wxID_DESIGNER_DEBUG_START_WEB, _("Web client"));
+	debugPicture(subStart->Append(wxID_DESIGNER_DEBUG_START, _("Workspace (GUI)")), wxART_DEBUG_START);
+	subStart->Append(wxID_DESIGNER_DEBUG_START_WEB, _("Workspace (Web)"));
 	debugPicture(m_menuDebug->AppendSubMenu(subStart, _("Start debugging")), wxART_DEBUG_START);
 
-	// "Start without debugging" → Thin / Web
+	// "Start without debugging" → the same two
 	ibMenu* subStartNoDebug = new ibMenu;
-	debugPicture(subStartNoDebug->Append(wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING, _("Thin client")), wxART_DEBUG_START_WITHOUT_DEBUGGING);
-	subStartNoDebug->Append(wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING_WEB, _("Web client"));
+	debugPicture(subStartNoDebug->Append(wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING, _("Workspace (GUI)")), wxART_DEBUG_START_WITHOUT_DEBUGGING);
+	subStartNoDebug->Append(wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING_WEB, _("Workspace (Web)"));
 	debugPicture(m_menuDebug->AppendSubMenu(subStartNoDebug, _("Start without debugging")), wxART_DEBUG_START_WITHOUT_DEBUGGING);
 
 	debugPicture(m_menuDebug->Append(wxID_DESIGNER_DEBUG_ATTACH_FOR_DEBUGGING, _("Attach for debugging...")), wxART_DEBUG_ATTACH);

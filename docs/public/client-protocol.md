@@ -518,8 +518,8 @@ for its `Commands` — the person's right for a schema.
 ## Sessions
 
 A client's session is a thin client in the runtime and a designer in the designer, whatever process hosts it.
-Active users shows both columns: the application (Runtime, Designer, Application server, …) and the kind (Thin client,
-Client, Server, Job). A thin client whose socket has dropped stays in the list for the resume window, and its
+Active users shows both columns: the application (Application Workspace, Application Studio, Application server, …) and
+the kind (Client, Server, Job). A thin client whose socket has dropped stays in the list for the resume window, and its
 activity says `detached until HH:MM:SS` — the moment the window ends — so an administrator can end it.
 
 ## A dropped connection

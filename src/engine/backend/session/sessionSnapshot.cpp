@@ -81,7 +81,8 @@ ibString ibSessionSnapshot::GetSessionKindDescr(unsigned int idx) const
 	// Jobs are neither: nobody is sitting at them. Saying "Client" here would
 	// claim a person is connected, which is the one thing an administrator reads
 	// this column to find out.
-	// A server's own session is the server, not somebody at it; a client of the protocol is a thin client.
+	// A server's own session is the server, not somebody at it; a client of the protocol is a client, as every other -
+	// the syntax helper's words, client and server (it said "Thin client" until 2026-11-13, Max: everything is thin).
 	switch (row.m_kind) {
 	case static_cast<int>(ibSessionKind::BackgroundJob):
 	case static_cast<int>(ibSessionKind::ScheduledJob):
@@ -90,9 +91,6 @@ ibString ibSessionSnapshot::GetSessionKindDescr(unsigned int idx) const
 	case static_cast<int>(ibSessionKind::Service):
 	case static_cast<int>(ibSessionKind::WebServer):
 		return _("Server");
-	case static_cast<int>(ibSessionKind::ThinClient):
-	case static_cast<int>(ibSessionKind::ThinDesigner):
-		return _("Thin client");
 	default: break;
 	}
 	return _("Client");
