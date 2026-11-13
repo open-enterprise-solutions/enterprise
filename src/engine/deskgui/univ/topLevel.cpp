@@ -422,10 +422,14 @@ void ibTopLevelWindow<W>::DoSetClientSize(int width, int height)
     // under the system's menu bar, Centre giving the top up for the bottom right (2026-11-13). The same on every port
     if ( this->HasFlag(wxRESIZE_BORDER) )
         size.DecTo(wxDisplay(this).GetClientArea().GetSize());
-    // the native window's, as the canon's (wxTopLevelWindow::DoSetClientSize, univ) - not W's: wxFrame's, on every port,
-    // took the size for its client area again and added its bars to it - the status bar and the client area's origin
-    // (the title bar, the menu) counted twice, ibFrame and the renderer had (2026-11-11)
-    this->wxTopLevelWindowNative::DoSetClientSize(size.x, size.y);
+    // the native window that size, what of it is not its client area added (GetFrameRect: wxMSW's own edge; none
+    // elsewhere, the window undecorated). Not W's DoSetClientSize: wxFrame's, on every port, took the size for its client
+    // area again and added its bars to it (2026-11-11). Nor the native window's: GTK's and Cocoa's (wxWindowGTK,
+    // wxWindowMac) measure what to add by the virtual GetClientSize - this one's, the decorations and the bars taken
+    // off already - and added them a second time, the main frame some 80 pixels taller than asked and the clamp above
+    // undone (CI look-macos 2026-11-13: the designer 760 high on the 768 screen, its title bar and menu under the
+    // system's menu bar); wxMSW's measured the native client area itself, the same as here
+    this->SetSize(size + (this->GetSize() - GetFrameRect().GetSize()));
 }
 
 template <class W>
