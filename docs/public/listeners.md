@@ -60,7 +60,7 @@ clear does not cross a network.
 - **The cluster** ends TLS at its port: the servers it starts for each base listen on `127.0.0.1` in the
   clear, and are reached through the cluster alone. Its tray speaks TLS to it too, on `127.0.0.1`, without
   checking the certificate's name - it is let in by the folder's token.
-- **The client** - `enterprise-thin`, `designer-thin`, the web server's publication of a server's base -
+- **The client** - `appworkspace`, `appstudio`, the web server's publication of a server's base -
   checks the server's certificate: its chain against the system's store, or against the authorities of a
   PEM file it is given (`--trusted=<file>`; web.conf's `Trusted=`), and its name against the address's
   host. A self-signed certificate is trusted by naming itself. Refused, the client says which of the two.

@@ -199,13 +199,13 @@ bin\
       frmserver.dll
       frmclient.dll
       fileserver.dll
-      enterprise-thin.exe
-      designer-thin.exe
+      appworkspace.exe
+      appstudio.exe
       launcher.exe
       appserver.exe
       appcluster.exe
       appcluster-tray.exe
-      codeRunner.exe
+      coderunner.exe
       webserver.exe
   Win64\            (Platform=x64)
     ...
@@ -220,13 +220,13 @@ product, copyright, and the version, which is the platform's (`OES_VERSION_MAJOR
 Every program also merges `core/program.manifest` into the manifest
 the linker makes: Windows 10 and later, long paths. The linker adds asInvoker, wx the common controls 6 (its
 `defs.h`); per-monitor DPI awareness is not declared — wx's default. The vcxproj compiles them; CMake does not.
-`webserver.exe` is the web server: the site and the client protocol for browsers. `protocol.dll`, `frmserver.dll`, `frmclient.dll`, `fileserver.dll`, `enterprise-thin.exe` and
-`designer-thin.exe` are the thin client and its server side ([thin-client.md](public/thin-client.md)). `simplePlugin.dll` is the plugin example; it builds into
+`webserver.exe` is the web server: the site and the client protocol for browsers. `protocol.dll`, `frmserver.dll`, `frmclient.dll`, `fileserver.dll`, `appworkspace.exe` and
+`appstudio.exe` are the thin client and its server side ([thin-client.md](public/thin-client.md)). `simple-plugin.dll` is the plugin example; it builds into
 `bin\<Platform>\<Configuration>\plugins\` — the directory the plugin manager scans at
 startup.
 
 > **Build ORDER is declared in the solution, and every project declares it** (fixed 2026-08-20).
-> `simplePlugin` used to fail a parallel `msbuild /t:Rebuild /m` with
+> `simple-plugin` used to fail a parallel `msbuild /t:Rebuild /m` with
 > `LNK1104: cannot open backend.lib` — it links `backend.lib` but was the one project with **no
 > `ProjectSection(ProjectDependencies)`**, so nothing ordered it after `backend`. An incremental
 > build hid it (the .lib was already there from last time), which is why it read for a while as "a
@@ -339,11 +339,11 @@ The root `CMakeLists.txt` adds fifteen engine subdirectories, each with its own
 | appcluster | executable (console, or a service) — one or more servers per base of the folder; links `core` alone |
 | appcluster-tray | executable (GUI) — the cluster's tray; links `core` alone |
 | webserver | executable (console) — the web server |
-| enterprise-thin | executable (GUI) — the thin client |
-| designer-thin | executable (GUI) — the thin designer |
+| appworkspace | executable (GUI) — the thin client |
+| appstudio | executable (GUI) — the thin designer |
 | launcher | executable (GUI) |
-| codeRunner | executable (GUI) — links `backend` and wx, as `launcher` does |
-| simplePlugin | shared lib (plugin example) |
+| coderunner | executable (GUI) — links `backend` and wx, as `launcher` does |
+| simple-plugin | shared lib (plugin example) |
 
 ### macOS-specific Notes
 
@@ -351,11 +351,11 @@ The root `CMakeLists.txt` adds fifteen engine subdirectories, each with its own
 - Core, protocol, backend, frmserver and fileserver link no wx and have no wx include path — a wx type there is a
   compile error; every socket is the core's (`core/net`)
 - Firebird embedded is not available via Homebrew; use SQLite for local development
-- App bundles (`designer-thin.app`, `enterprise-thin.app`, `launcher.app`) are created automatically
+- App bundles (`appstudio.app`, `appworkspace.app`, `launcher.app`) are created automatically
   by CMake, and this path is **exercised, not merely declared**: the desktop front's bundles were
   built on a real Mac, with the icon placed into `Resources` and `Info.plist` filled in
   (`CFBundleIdentifier`, `CFBundleExecutable`, icon name). Treat the `if(APPLE)` branches in the
-  designer-thin / enterprise-thin / launcher CMake files as working code, not scaffolding
+  appstudio / appworkspace / launcher CMake files as working code, not scaffolding
 - **Inside a bundle, the program folder is the one that holds the `.app`** (`core/fileSystem.h`).
   A program running from `X.app/Contents/MacOS/` looks beside the bundle for everything a Windows
   or Linux build keeps beside its executable: `backend.conf`, `lang/`, `help/`, `plugins/`, `_fb/`,
@@ -476,7 +476,7 @@ Paths use the `oesPlatform` macro (`Win32` for `x86`, `Win64` for `x64`):
 
 The three general jobs (Linux, Windows, macOS) each also run a **Build the applications** step.
 Until 2026-08-03 CI built only test
-targets, so `enterprise` / `designer` / `daemon` / `launcher` / `codeRunner` / `simplePlugin`
+targets, so `enterprise` / `designer` / `daemon` / `launcher` / `coderunner` / `simple-plugin`
 were never compiled by it at all — a break in an executable's own sources reached a developer
 before it reached the pipeline. The step is cheap: the libraries are already built by the steps
 above it.
@@ -499,7 +499,7 @@ hiding — are in [portability.md § 3](portability.md).
 
 **The macOS job is not a first compile.** A colleague has been building the tree on a Mac locally
 — which is why [portability.md § 3](portability.md) listed macOS as "not in CI" rather than as
-unbuilt — and the `APPLE` branches in the launcher / enterprise-thin / designer-thin CMake files
+unbuilt — and the `APPLE` branches in the launcher / appworkspace / appstudio CMake files
 are worked out, not placeholders. What the job adds is not the first build but the *standing* one:
 the platform stops depending on a single machine and on someone remembering to try it before a
 release. Anything it does surface belongs in [portability.md](portability.md) as a rule.
@@ -572,8 +572,8 @@ reads a row back** — Firebird's own `isql` put into the kit for that minute �
 are not a working engine: the engine plugin, the character sets and ICU are loaded at run time.
 
 It is a separate workflow from `ci.yml`: no tests (CI runs them on every push), Release built from
-scratch, only the programs' own targets (`enterprise-thin fileserver designer-thin launcher codeRunner appserver
-appcluster appcluster-tray webserver simplePlugin`; fileserver is named because the thin client loads it
+scratch, only the programs' own targets (`appworkspace fileserver appstudio launcher coderunner appserver
+appcluster appcluster-tray webserver simple-plugin`; fileserver is named because the thin client loads it
 and nothing links it).
 The release is published only when **all three** packed, so it never offers one platform from tonight
 beside another from last week. Each packing script under `.github/nightly/` **refuses** a tree that
@@ -670,5 +670,5 @@ git submodule update --init --recursive
 
 **Symptom:** `LNK1168: cannot open <name>.exe for writing` during link.
 
-**Fix:** Close any running OES processes (`enterprise-thin.exe`, `designer-thin.exe`,
+**Fix:** Close any running OES processes (`appworkspace.exe`, `appstudio.exe`,
 `launcher.exe`, `appserver.exe`) before linking — they hold the output file open.

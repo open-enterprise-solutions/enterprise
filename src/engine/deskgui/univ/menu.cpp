@@ -2646,7 +2646,7 @@ void ibMenuBarWindow::PopupCurrentMenu()
             DoPopupMenu(menu, rectItem.x, rectItem.GetBottom() + 1);
             // ...the bar taken away from its window at once, the window only scheduled to go (~ibMenuBar): still here,
             // it has no bar - its item refreshed then read the menus through none (2026-11-11, a command chosen in the
-            // menu that changed the view, designer-thin_24996_t29884_20261111T172053_0.dmp)
+            // menu that changed the view, appstudio_24996_t29884_20261111T172053_0.dmp)
             if ( !self || !m_menuBar )
                 return;
             m_menuShown = nullptr;

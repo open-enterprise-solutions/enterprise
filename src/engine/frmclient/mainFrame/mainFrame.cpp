@@ -585,20 +585,31 @@ void ibFrontendMainFrame::LoadOptions()
 	wxLogNull logNo;
 
 	// The person's directory, where the desktop designer keeps its options.xml — this mode's file beside it, written by
-	// SaveOptions.
-	wxXmlDocument document;
-	if (!document.Load(GetOptionsFile(m_mode).GetFullPath()) || document.GetRoot()->GetName() != wxT("options"))
+	// SaveOptions. A file that is not well-formed is as none.
+	const wxString path = GetOptionsFile(m_mode).GetFullPath();
+	wxFile file;
+	wxString text;
+	if (!file.Open(path) || !file.ReadAll(&text, wxConvUTF8))
 		return;
 
-	for (wxXmlNode* node = document.GetRoot()->GetChildren(); node != nullptr; node = node->GetNext()) {
+	// …kept as read: the keys go over the defaults each time the menu is built (UpdateHotKeys).
+	try {
+		m_options.Load(text, path);
+	}
+	catch (const ibCoreException&) {
+		return;
+	}
+
+	const ibXmlNode* const root = m_options.GetRoot();
+	if (root == nullptr || root->GetName() != wxT("options"))
+		return;
+
+	for (const ibXmlNode* node = root->GetChildren(); node != nullptr; node = node->GetNext()) {
 		if (node->GetName() == wxT("editor"))
 			m_editorSettings.Load(node);
 		else if (node->GetName() == wxT("fontcolor"))
 			m_fontColorSettings.Load(node);
 	}
-
-	// …and the keys kept as read: they go over the defaults each time the menu is built (UpdateHotKeys).
-	m_options = document;
 }
 
 void ibFrontendMainFrame::SaveOptions()
@@ -606,21 +617,26 @@ void ibFrontendMainFrame::SaveOptions()
 	// Disable logging since it's ok if the options file saving isn't successful.
 	wxLogNull logNo;
 
-	wxXmlDocument document;
-	wxXmlNode* const root = new wxXmlNode(wxXML_ELEMENT_NODE, wxT("options"));
-	document.SetRoot(root);
-
-	root->AddChild(m_fontColorSettings.Save(wxT("fontcolor")));
-	root->AddChild(m_editorSettings.Save(wxT("editor")));
-	root->AddChild(m_keyBinder.Save(wxT("shortcuts")));
+	ibXmlWriter writer(ibT("options.xml"), ibCodePage::Of(ibCodePage::kUtf8));
+	writer.SetIndent(true);
+	writer.WriteXmlDeclaration(ibT("UTF-8"));
+	writer.WriteStartElement(wxT("options"), ibString());
+	m_fontColorSettings.Save(writer, wxT("fontcolor"));
+	m_editorSettings.Save(writer, wxT("editor"));
+	m_keyBinder.Save(writer, wxT("shortcuts"));
+	writer.WriteEndElement();
+	writer.Finish();
+	const ibString text = writer.Take();
 
 	// Make sure the directory exists.
 	const wxFileName fileName = GetOptionsFile(m_mode);
 	fileName.Mkdir(wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
-	document.Save(fileName.GetFullPath());
+	wxFile file(fileName.GetFullPath(), wxFile::write);
+	if (file.IsOpened())
+		file.Write(text, wxConvUTF8);
 
 	// Kept as written: the keys go over the defaults each time the menu is built (UpdateHotKeys).
-	m_options = document;
+	m_options.Load(text);
 }
 
 void ibFrontendMainFrame::InitializeDefaultMenu()
@@ -711,8 +727,8 @@ void ibFrontendMainFrame::UpdateHotKeys()
 			m_keyBinder.SetShortcut(item.first, item.second.shortcut);
 	}
 
-	wxXmlNode* const root = m_options.GetRoot();
-	wxXmlNode* const shortcuts = root != nullptr ? FindChildNode(root, wxT("shortcuts")) : nullptr;
+	const ibXmlNode* const root = m_options.GetRoot();
+	const ibXmlNode* const shortcuts = root != nullptr ? FindChildNode(root, wxT("shortcuts")) : nullptr;
 	if (shortcuts != nullptr)
 		m_keyBinder.Load(shortcuts);
 

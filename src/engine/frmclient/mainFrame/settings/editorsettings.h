@@ -10,7 +10,8 @@
 #include "frmclient/frmclient.h"
 
 class ibStyledTextCtrl;
-class wxXmlNode;
+class ibXmlNode;
+class ibXmlWriter;
 class wxString;
 
 class FRMCLIENT_API ibEditorSettings
@@ -45,10 +46,10 @@ public:
 	// Sets a text control's indent, its tabs and whether it shows white space.
 	void Apply(ibStyledTextCtrl& text) const;
 
-	// The settings as a node named by the tag; Load reads one back, keeping
-	// the default for whatever the node does not name.
-	wxXmlNode* Save(const wxString& tag) const;
-	void Load(wxXmlNode* root);
+	// The settings written as an element named by the tag; Load reads one back,
+	// keeping the default for whatever the node does not name.
+	void Save(ibXmlWriter& writer, const wxString& tag) const;
+	void Load(const ibXmlNode* root);
 
 private:
 

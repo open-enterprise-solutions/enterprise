@@ -9,7 +9,7 @@
 //                             platform-native message-box. Linkable
 //                             from any binary regardless of frontend.
 //   - deskgui/app.h:          header-only ibWxApp base. wxApp +
-//                             wxDebugReport + wxMessageBox pre-wired
+//                             wxMessageBox + wxLog pre-wired
 //                             pipeline on top of this guard. Inherited
 //                             by the desktop's programs.
 //   - console (daemon-class): this guard alone — no wx UI, just dumps
@@ -25,9 +25,8 @@
 //   - Headless WrapStartup: try/catch + log + native message.
 //
 // What this module DOES NOT do (delegated to wx-aware layer):
-//   - wxDebugReportPreviewStd dialogs.
 //   - wxMessageBox.
-//   - wxApp::OnExceptionInMainLoop / OnFatalException / OnUnhandled.
+//   - wxApp::OnExceptionInMainLoop / OnUnhandled.
 //   - wxTheApp->CallAfter marshalling.
 
 #include "core/core.h"

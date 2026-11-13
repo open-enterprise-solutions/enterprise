@@ -22,7 +22,7 @@ namespace {
 
 // THE PROCESS'S PART OF THE BACKEND, taken down with the last base — as the desktop's OnExit takes it down
 // (appDataDestroy). This library is never unloaded, so what is left here would otherwise go at the process's end, after
-// the statics it leans on (the codeRunner exit crash, 2026-10-07): a base that failed to open had made it all the same,
+// the statics it leans on (the coderunner exit crash, 2026-10-07): a base that failed to open had made it all the same,
 // its plugins loaded, and the client that went on its refusal fell at the exit (2026-10-08).
 void ReleaseProcess()
 {
@@ -60,7 +60,7 @@ ibFileBase* ibFileBaseOpen(const ibString& request, ibString& error)
 	opening.m_password  = where.GetValue<ibString>(ibProtocol::ibFileBase::Password);
 	opening.m_database  = where.GetValue<ibString>(ibProtocol::ibFileBase::Database);
 	opening.m_create    = where.GetValue<bool>(ibProtocol::ibFileBase::Create);
-	// THE DEBUG SERVER — as enterprise-thin.exe's `--debug`: it comes up with the base's configuration
+	// THE DEBUG SERVER — as appworkspace.exe's `--debug`: it comes up with the base's configuration
 	// (ibMetaDataConfiguration::OnInitialize) and listens from the start. Without it the client turns it on
 	// later; a session stops for it either way (ibSession::Debug — made with the session).
 	if (where.GetValue<bool>(ibProtocol::ibFileBase::Debug))

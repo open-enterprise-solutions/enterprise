@@ -1,8 +1,8 @@
 # The thin client
 
 **What.** The desktop client that runs nothing of the configuration: a window, its document/view skeleton and its
-editors, talking to a base through the [client protocol](client-protocol.md). The runtime's is `enterprise-thin`, the
-designer's `designer-thin`.
+editors, talking to a base through the [client protocol](client-protocol.md). The runtime's is `appworkspace`, the
+designer's `appstudio`.
 
 **Why.** The configuration's code runs on the server only, so one platform serves many clients. The client keeps the
 routine the desktop window always kept — menus, toolbars, what may be pressed, file dialogs, recent files, print
@@ -27,10 +27,10 @@ protocol between them; neither half is called a frontend.
 | `deskgui` | the desktop's user interface library: the custom-drawn controls and dialogs, one theme (Luna), wx below only as the host. It links `core` |
 | `frmclient` | the client's graphics library: the communicator that keeps the frame it was answered, the main window, the document/view skeleton, the form's controls, the editors — drawn with `deskgui`. It links `core`, `protocol` and `deskgui` |
 | `fileserver` | a file base in the client's process — the engine loaded beside the window |
-| `enterprise-thin` | the runtime's window and its document manager |
-| `designer-thin` | the designer's window and its document manager |
+| `appworkspace` | the runtime's window and its document manager |
+| `appstudio` | the designer's window and its document manager |
 
-Chain: core → backend → frmserver ⇄ protocol ⇄ frmclient → enterprise-thin; `fileserver` = backend + frmserver in the
+Chain: core → backend → frmserver ⇄ protocol ⇄ frmclient → appworkspace; `fileserver` = backend + frmserver in the
 client's process. `protocol` does not link `core` — `protocol.h` stays dependency-free.
 
 The web server links `protocol` as `frmclient` does; [the browser client](browser-client.md) draws the same frame

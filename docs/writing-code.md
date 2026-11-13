@@ -97,7 +97,7 @@ in one class.
 names (`m_caretPos`, not a second `m_currentPos`).
 
 **Rename across the wire.** A name on one side of the client/server protocol usually has a twin
-with the same root on the other: grep `frmclient`, `frmserver` and `designer-thin`, and rename both.
+with the same root on the other: grep `frmclient`, `frmserver` and `appstudio`, and rename both.
 
 **The thin client speaks in protocol verbs: `Send`, `Receive`, `Confirm`.** It declares no
 properties, so `ReadProperty` on a property object is a tautology. The act happens at one door

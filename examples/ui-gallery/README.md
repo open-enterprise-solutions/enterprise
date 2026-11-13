@@ -172,8 +172,8 @@ Still open:
 
 ## Opening it
 
-- Desktop: `designer-thin.exe --file=examples/ui-gallery` /
-  `enterprise-thin.exe --file=examples/ui-gallery`, then Operations → Data processors
+- Desktop: `appstudio.exe --file=examples/ui-gallery` /
+  `appworkspace.exe --file=examples/ui-gallery`, then Operations → Data processors
   → UI Component Gallery.
 - Web: `webserver --file=examples/ui-gallery`, then the publication's address it
   prints (`http://127.0.0.1:8080/ui-gallery/`). Per the section above, expect what

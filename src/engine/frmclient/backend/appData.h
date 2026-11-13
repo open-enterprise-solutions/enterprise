@@ -28,7 +28,7 @@ public:
 private:
 
 	// THE BASE THIS CLIENT OPENED — the engine's appData's fields: what the application read from its command line or
-	// had the person pick (designer-thin/mainApp.cpp, the one that fills them).
+	// had the person pick (appstudio/mainApp.cpp, the one that fills them).
 	friend class ibAppDesigner;
 
 	// APPLICATION SERVER ENTRY — oes://server[:port]/<base>, or oess:// over TLS; the authorities it trusts, a PEM file

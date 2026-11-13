@@ -13,7 +13,7 @@
 #include "deskgui/univ/aui/aui.h"
 #include <wx/splash.h>
 #include "deskgui/univ/ctrl/statusBar.h"   // the bottom bar derives from the theme's — see ibDocBottomStatusBar
-#include <wx/xml/xml.h>
+#include "core/xml/xmlDocument.h"         // ibXmlDocument — the person's options as read
 
 #include "frmclient/backend/backend_mainFrame.h"   // the frame an object asks for its inspector's selection
 #include "frmclient/communicator.h"
@@ -46,7 +46,7 @@ class ibWelcomeWindow;
 // toolbars and what may be pressed, as the desktop's did, and asks the server nothing for that; what is done to a
 // document is a call (ibTabDocument, frmclient/docView/tabDocument.h).
 //
-// Each mode's window is a class of its own on top of it — the runtime's (enterprise-thin) and the designer's (designer-thin),
+// Each mode's window is a class of its own on top of it — the runtime's (appworkspace) and the designer's (appstudio),
 // as on the desktop and as the server's ibClientFrameRuntime / ibClientFrameDesigner.
 class FRMCLIENT_API ibFrontendMainFrame : public ibBackendDocFrame, public ibAuiMDIParentFrame, public ibDocParentFrameAnyBase {
 public:
@@ -363,7 +363,7 @@ private:
 	const ibProtocol::ibLogin::ibMode            m_mode;
 	wxString                        m_user;       // the login's — the one the login window was told, when refused
 	wxString                        m_password;   // until the login — cleared by it
-	wxXmlDocument                   m_options;     // the person's options as read (LoadOptions) — their keys put over the
+	ibXmlDocument                   m_options;     // the person's options as read (LoadOptions) — their keys put over the
 	                                               // defaults each time the menu is built
 
 	ibAuiToolBar* m_mainFrameToolbar = nullptr;   // the window's: the doc manager's commands

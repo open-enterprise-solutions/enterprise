@@ -155,7 +155,7 @@ ibPGEditorDialogAdapter* ibPGCommandSourceProperty::GetEditorDialog() const
 			const ibDataNode* const tree = dlgProp->GetCommandTree();
 			if (!tree) {
 				// An older server's row: the command sources are gathered over its form, and it did not send them.
-				ibMessageBox(_("Choosing a command is not available in the thin designer yet."),
+				ibMessageBox(_("Choosing a command is not available in Application Studio yet."),
 					_("Choice command"), wxOK | wxICON_INFORMATION, pg);
 				return false;
 			}

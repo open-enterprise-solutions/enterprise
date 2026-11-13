@@ -390,7 +390,7 @@ void ibSessionRegistry::Stop()
 	// SELECT already waiting in the database reads nothing until it returns, and it need not return: rows held by
 	// a peer process that was KILLED stay locked until the server notices the owner is gone. The wait below then
 	// detached the thread, the connections were torn down under it, and it woke into freed memory — a close that
-	// crashed (enterprise-thin 2104, 2026-10-28: the designer beside it killed for a rebuild a second before;
+	// crashed (appworkspace 2104, 2026-10-28: the designer beside it killed for a rebuild a second before;
 	// "Error retrieving Next record: invalid statement handle", then an access violation on 0xdddddddd).
 	// Cancelled, the statement throws, the throw leaves the loop as a deliberate stop (Die returns quietly once
 	// `m_stop` is set), and the join below is an ordinary one. Nothing running — nothing is cancelled.
@@ -1035,7 +1035,7 @@ void ibSessionRegistry::ProcessAdd(ibRegistryRequest& req)
 	// the process's server; subsequent non-server sessions get Server()
 	// pinned to it so keep-alive / topology queries see the tree without
 	// the caller threading the pointer through. Single-session apps
-	// (desktop GUI, appserver, codeRunner) never add a WebServer-kind
+	// (desktop GUI, appserver, coderunner) never add a WebServer-kind
 	// session, so m_currentServer stays nullptr and Server() does too.
 	if (s.GetKind() == ibSessionKind::WebServer) {
 		std::unique_lock<std::shared_mutex> lk(m_serverMutex);
@@ -2497,7 +2497,7 @@ void ibSessionRegistry::Die(const ibString& why)
 	//
 	// …AND THE PROCESS'S STOP COUNTS AS THIS ONE'S. A SIGTERM reaches Firebird's client too, which shuts every
 	// attachment down at once (its own handler, beside the program's), so the statement fails before the program has
-	// come round to Stop() and set m_stop — the same ordinary exit, a moment earlier (enterprise-thin, 2026-10-29:
+	// come round to Stop() and set m_stop — the same ordinary exit, a moment earlier (appworkspace, 2026-10-29:
 	// SIGTERM, this FATAL, then SIGABRT). Firebird is told to leave a signal to the program since 2026-11-12
 	// (RefuseSignalShutdown, firebirdInterface.cpp) — the designer's logout ran on a base already gone.
 	if (m_stop.load(std::memory_order_acquire) || ibCrashGuard::IsStopRequested()) {

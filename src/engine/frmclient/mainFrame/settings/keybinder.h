@@ -24,7 +24,8 @@
 class wxWindow;
 class wxMenu;
 class wxMenuBar;
-class wxXmlNode;
+class ibXmlNode;
+class ibXmlWriter;
 
 class FRMCLIENT_API ibKeyBinder
 {
@@ -73,11 +74,11 @@ public:
 	// The first key of each command after its label, in every menu of the bar.
 	void UpdateMenuBar(wxMenuBar* menuBar);
 
-	// The commands whose keys differ from their defaults, as a node named by
-	// the tag; Load puts them back over the defaults (a command named with no
-	// key has had its keys removed).
-	wxXmlNode* Save(const wxString& tag) const;
-	void Load(wxXmlNode* root);
+	// The commands whose keys differ from their defaults, written as an element
+	// named by the tag; Load puts them back over the defaults (a command named
+	// with no key has had its keys removed).
+	void Save(ibXmlWriter& writer, const wxString& tag) const;
+	void Load(const ibXmlNode* root);
 
 	// The key as a person reads and the options file keeps it ("Ctrl+Shift+F5"), and back.
 	static wxString GetKeyBindingAsText(const Key& key);

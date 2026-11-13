@@ -16,7 +16,7 @@
 #include "frmclient/backend/metaCollection/metaObject.h"
 
 // THE ENGINE'S HIERARCHICAL REFERENCE OBJECT (backend/metaCollection/partial/commonObject.h) as far as the predefined
-// values editor asks it (designer-thin/win/dlg/predefinedEditor.h): a catalog's, a chart's — the object of that id in
+// values editor asks it (appstudio/win/dlg/predefinedEditor.h): a catalog's, a chart's — the object of that id in
 // the configuration it was opened from, its predefined items the server's (ibProtocol::ibSchema::ibKind::Predefined), read when the
 // editor opens and after each of its edits.
 class FRMCLIENT_API ibValueMetaObjectRecordDataHierarchyMutableRef : public ibValueMetaObject {

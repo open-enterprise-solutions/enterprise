@@ -155,7 +155,7 @@ ibPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 			ibPGDataSourceProperty* const cell = wxDynamicCast(prop, ibPGDataSourceProperty);
 			// No form holds the control (no picker set) — said, as before.
 			if (cell == nullptr || !SourcePicker()) {
-				ibMessageBox(_("Choosing a data source is not available in the thin designer yet."),
+				ibMessageBox(_("Choosing a data source is not available in Application Studio yet."),
 					_("Choice source"), wxOK | wxICON_INFORMATION, pg);
 				return false;
 			}

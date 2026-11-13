@@ -153,7 +153,7 @@ public:
 
 	// hook the document manager into event handling chain here
 	// ⚠ Out of line, unlike the desktop's: frmclient hides every symbol it does not export, and an editor derived outside
-	// it (designer-thin's ibCodeEditorDesigner) emitted this body and could not reach ibAutoComplete / ibCallTip (CI's
+	// it (appstudio's ibCodeEditorDesigner) emitted this body and could not reach ibAutoComplete / ibCallTip (CI's
 	// macOS link, 2026-10-15).
 	virtual bool TryBefore(wxEvent& event) override;
 
@@ -248,7 +248,7 @@ protected:
 	// ---- Debugger integration hooks ----
 	// Frontend's ibCodeEditor doesn't know about backend's debugClient;
 	// designer's ibCodeDesigner subclass overrides these to forward to
-	// debugClient. codeRunner / other sessionless hosts get the default
+	// debugClient. coderunner / other sessionless hosts get the default
 	// no-op behaviour so the editor still works without any debug
 	// infrastructure attached.
 

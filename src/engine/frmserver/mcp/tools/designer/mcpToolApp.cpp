@@ -54,7 +54,7 @@ const ibArg& ArgApplication()
 {
 	static const ibArg s_a(ibT("application"), ibArg::Kind::Text,
 		ibMcpText("Which one. Default is the thin client."),
-			/*required*/ false, { ibT("enterprise-thin"), ibT("webserver") });
+			/*required*/ false, { ibT("appworkspace"), ibT("webserver") });
 	return s_a;
 }
 
@@ -164,7 +164,7 @@ public:
 		// Any of the argument's words — one it does not take was refused before Call (ibMcpArgument's list).
 		ibString application = ArgApplication().Text(params);
 		if (application.IsEmpty())
-			application = ibT("enterprise-thin");
+			application = ibT("appworkspace");
 
 		// DEFAULTS TO TRUE, and asked of the field rather than of the value: `debug: false` has
 		// to be distinguishable from "not said", or the default silently wins over an explicit no.

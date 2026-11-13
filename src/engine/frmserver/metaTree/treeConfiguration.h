@@ -4,7 +4,7 @@
 // THE DESIGNER'S TREES, AS THE SERVER HOLDS THEM — the desktop's ibMetaTreeBase and its heirs (designer/mainFrame/
 // metaTree), their fill and their watch, copied with their names. The fill writes ROWS instead of wxTreeItems: the
 // configuration's into the designer's frame (ibClientFrameDesigner::OnDraw), an external file's into its tab's view;
-// they travel as a form's controls do — the first frame whole, then a patch. The client's trees (designer-thin) show
+// they travel as a form's controls do — the first frame whole, then a patch. The client's trees (appstudio) show
 // them; what a person does in them comes back as the doors of the tree's schema (ibSchemaMetaData), and the rows follow
 // from the metadata, as on the desktop the row followed the stage and never the click.
 //

@@ -88,33 +88,33 @@ void ibKeyBinder::UpdateMenu(wxMenu* menu)
 	}
 }
 
-wxXmlNode* ibKeyBinder::Save(const wxString& tag) const
+void ibKeyBinder::Save(ibXmlWriter& writer, const wxString& tag) const
 {
-	wxXmlNode* const root = new wxXmlNode(wxXML_ELEMENT_NODE, tag);
+	writer.WriteStartElement(tag, ibString());
 	for (const Command& command : m_commands) {
 		if (command.keys == command.defaultKeys)
 			continue;
 
 		// Written with no key at all too, when the default was taken away: "removed" is a choice.
-		wxXmlNode* const node = new wxXmlNode(wxXML_ELEMENT_NODE, wxT("command"));
-		AddTextNode(node, wxT("id"), wxString::Format(wxT("%d"), command.id));
+		writer.WriteStartElement(wxT("command"), ibString());
+		AddTextNode(writer, wxT("id"), wxString::Format(wxT("%d"), command.id));
 		for (const Key& key : command.keys)
-			AddTextNode(node, wxT("key"), GetKeyBindingAsText(key));
-		root->AddChild(node);
+			AddTextNode(writer, wxT("key"), GetKeyBindingAsText(key));
+		writer.WriteEndElement();
 	}
-	return root;
+	writer.WriteEndElement();
 }
 
-void ibKeyBinder::Load(wxXmlNode* root)
+void ibKeyBinder::Load(const ibXmlNode* root)
 {
-	for (wxXmlNode* node = root->GetChildren(); node != nullptr; node = node->GetNext()) {
+	for (const ibXmlNode* node = root->GetChildren(); node != nullptr; node = node->GetNext()) {
 		if (node->GetName() != wxT("command"))
 			continue;
 
 		long id = 0;
 		bool hasId = false;
 		std::vector<Key> keys;
-		for (wxXmlNode* field = node->GetChildren(); field != nullptr; field = field->GetNext()) {
+		for (const ibXmlNode* field = node->GetChildren(); field != nullptr; field = field->GetNext()) {
 			if (field->GetName() == wxT("id"))
 				hasId = field->GetNodeContent().ToLong(&id);
 			else if (field->GetName() == wxT("key")) {

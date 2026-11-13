@@ -20,7 +20,7 @@
       "parameters": "function — значение HashFunction: MD5, SHA1, SHA256, SHA384 или SHA512.\nkey — строка или BinaryData; если задан, объект считает с ним HMAC. Опущен — простой хеш.",
       "return_descr": "DataHashing.",
       "example": "// вебхук: HMAC-SHA256 тела, сравнение в hex\nCheck = New DataHashing(HashFunction.SHA256, Secret);\nCheck.Append(Body);\nif (Lower(HexString(Check.HashSum)) <> Signature) { Raise(\"подпись не совпала\"); }",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.DataHashing.Append",
         "cls.DataHashing.AppendFile",
@@ -47,7 +47,7 @@
       "parameters": "data — строка (её байты в UTF-8) или BinaryData.",
       "return_descr": "",
       "example": "Hashing = New DataHashing(HashFunction.SHA1);\nHashing.Append(Login + \":\" + Stamp);\nHashing.Append(New BinaryData(Note, TextEncoding.ANSI));",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.DataHashing",
         "cls.DataHashing.AppendFile",
@@ -71,7 +71,7 @@
       "parameters": "path — читаемый файл.",
       "return_descr": "",
       "example": "Hashing = New DataHashing(HashFunction.MD5);\nHashing.AppendFile(\"C:\\in\\price.zip\");\nMessage(Lower(HexString(Hashing.HashSum)));",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.DataHashing",
         "cls.DataHashing.Append",
@@ -95,7 +95,7 @@
       "parameters": "",
       "return_descr": "BinaryData.",
       "example": "Hashing = New DataHashing(HashFunction.SHA1);\nHashing.Append(\"abc\");\nMessage(HexString(Hashing.HashSum));   // A9993E36...\nMessage(String(Hashing.HashSum));      // qZk+NkcGgWq6PiVxeFDCbJzQ2J0=",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.DataHashing",
         "fn.HexString",
@@ -119,7 +119,7 @@
       "parameters": "",
       "return_descr": "HashFunction.",
       "example": "if (Hashing.HashFunction = HashFunction.MD5) { Message(\"MD5 - for a checksum only\"); }",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.DataHashing",
         "enum.HashFunction"
@@ -143,7 +143,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "Hashing = New DataHashing(HashFunction.SHA1);\nHashing.Append(\"abc\");\nMessage(Hashing.HashFunction);",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "enum.HashFunction.MD5",
         "enum.HashFunction.SHA1",
@@ -170,7 +170,7 @@
       "parameters": "",
       "return_descr": "HashFunction.",
       "example": "Hashing = New DataHashing(HashFunction.MD5);\nHashing.Append(\"abc\");\nMessage(Hashing.HashSum.Size());   // 16",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "enum.HashFunction",
         "cls.DataHashing"
@@ -193,7 +193,7 @@
       "parameters": "",
       "return_descr": "HashFunction.",
       "example": "Hashing = New DataHashing(HashFunction.SHA1);\nHashing.Append(\"abc\");\nMessage(Hashing.HashSum.Size());   // 20",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "enum.HashFunction",
         "cls.DataHashing"
@@ -216,7 +216,7 @@
       "parameters": "",
       "return_descr": "HashFunction.",
       "example": "Hashing = New DataHashing(HashFunction.SHA256);\nHashing.Append(\"abc\");\nMessage(Hashing.HashSum.Size());   // 32",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "enum.HashFunction",
         "cls.DataHashing"
@@ -239,7 +239,7 @@
       "parameters": "",
       "return_descr": "HashFunction.",
       "example": "Hashing = New DataHashing(HashFunction.SHA384);\nHashing.Append(\"abc\");\nMessage(Hashing.HashSum.Size());   // 48",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "enum.HashFunction",
         "cls.DataHashing"
@@ -262,7 +262,7 @@
       "parameters": "",
       "return_descr": "HashFunction.",
       "example": "Hashing = New DataHashing(HashFunction.SHA512);\nHashing.Append(\"abc\");\nMessage(Hashing.HashSum.Size());   // 64",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "enum.HashFunction",
         "cls.DataHashing"

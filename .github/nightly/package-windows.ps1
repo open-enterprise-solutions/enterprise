@@ -35,13 +35,13 @@ foreach ($dll in 'msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll') {
 }
 
 $required = @(
-    'enterprise-thin.exe', 'designer-thin.exe', 'launcher.exe', 'codeRunner.exe', 'appserver.exe',
+    'appworkspace.exe', 'appstudio.exe', 'launcher.exe', 'coderunner.exe', 'appserver.exe',
     'appcluster.exe', 'appcluster-tray.exe', 'webserver.exe', 'web\www.wpk',
     'core.dll', 'backend.dll', 'protocol.dll', 'deskgui.dll', 'frmclient.dll', 'frmserver.dll', 'fileserver.dll',
     'backend.conf',
     '_fb\fbclient.dll', '_fb\firebird.msg', '_fb\firebird.conf', '_fb\plugins\engine13.dll', '_fb\intl\fbintl.dll',
     'libpq.dll', 'libssl-3-x64.dll', 'libcrypto-3-x64.dll',
-    'help\en.hlk', 'lang\ru\open_es.mo', 'plugins\simplePlugin.dll',
+    'help\en.hlk', 'lang\ru\open_es.mo', 'plugins\simple-plugin.dll',
     'msvcp140.dll', 'vcruntime140.dll'
 )
 $missing = $required | Where-Object { -not (Test-Path (Join-Path $stage $_)) }

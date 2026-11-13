@@ -4,7 +4,7 @@
 // THE DESIGNER'S CONFIGURATION COMPARE — the desktop's ibConfigCompareDocument walk and merge, as the thin client asks
 // them: Build walks two configurations (active vs an uploaded file, vs the database baseline, or two uploaded files) and
 // answers with Records; Merge applies selected Add/Delete/Replace ops through CopyMetaObject / RemoveMetaObject /
-// PasteMetaObject on the server. The client's tab (designer-thin/docManager/templates/docViewConfigCompare) draws the
+// PasteMetaObject on the server. The client's tab (appstudio/docManager/templates/docViewConfigCompare) draws the
 // records and sends the ops.
 
 #include "frmserver/schema/clientSchema.h"

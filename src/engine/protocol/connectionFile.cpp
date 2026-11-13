@@ -9,11 +9,11 @@ namespace {
 
 // fileserver beside the program — loaded once and never unloaded: what the server registers in the backend as it loads
 // (frmserver's forms and controls) must outlive every base, and an unloading at the process's end would run after the
-// statics it unregisters from (the 2026-10-07 exit crash, codeRunner) — so the library is never deleted. Null when it
+// statics it unregisters from (the 2026-10-07 exit crash, coderunner) — so the library is never deleted. Null when it
 // could not be loaded; `path` — where it was looked for.
 const ibDynamicLibrary* Library(ibString& path)
 {
-	// Beside the program. Inside enterprise-thin.app that is next to the bundle, where
+	// Beside the program. Inside appworkspace.app that is next to the bundle, where
 	// libfileserver.dylib is shipped — not Contents/MacOS/, which is only the binary.
 	path = ibProgramFolder() + ibFILE_SEP_PATH
 		+ ibDynamicLibrary::CanonicalizeName(ibT("fileserver"));

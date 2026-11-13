@@ -12,7 +12,8 @@
 #include "frmclient/frmclient.h"
 
 class ibStyledTextCtrl;
-class wxXmlNode;
+class ibXmlNode;
+class ibXmlWriter;
 
 class FRMCLIENT_API ibFontColorSettings
 {
@@ -63,10 +64,10 @@ public:
 	// selection, the line numbers, and a caret that shows on the paper.
 	void Apply(ibStyledTextCtrl& text) const;
 
-	// The settings as a node named by the tag; Load reads one back, keeping
-	// the default for a kind the node does not name.
-	wxXmlNode* Save(const wxString& tag) const;
-	void Load(wxXmlNode* root);
+	// The settings written as an element named by the tag; Load reads one back,
+	// keeping the default for a kind the node does not name.
+	void Save(ibXmlWriter& writer, const wxString& tag) const;
+	void Load(const ibXmlNode* root);
 
 private:
 

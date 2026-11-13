@@ -30,7 +30,7 @@ extern "C" {
 
 // `request` — a JSON object saying where the base lives, as ibFileInstanceRequest does: Directory (a Firebird base's
 // folder), or Server, Port, User, Password, Database (PostgreSQL); Name, Locale; Create (true — made there when there
-// is none yet, as the designer makes it); Debug (true — the engine's debug server comes up, as enterprise-thin.exe's
+// is none yet, as the designer makes it); Debug (true — the engine's debug server comes up, as appworkspace.exe's
 // `--debug`). Null when it did not open, and why in `error`.
 FILESERVER_API ibFileBase* ibFileBaseOpen(const ibString& request, ibString& error);
 

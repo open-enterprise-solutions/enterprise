@@ -21,7 +21,7 @@
       "parameters": "progId - the name the class is registered under. One that is not registered is refused, and the message names it.",
       "return_descr": "COMObject.",
       "example": "var Dictionary = New COMObject(\"Scripting.Dictionary\");\nDictionary.Add(\"a\", 1);\nDictionary.Add(\"b\", 2);\nforeach (Key In Dictionary) {         // the object's own enumerator\n    Message(Key + \" = \" + Dictionary.Item(Key));\n}\nKeys = Dictionary.Keys().Unload();    // an array comes back as a COMSafeArray",
-      "availability": "Thin client, Server (Windows)",
+      "availability": "Client, Server (Windows)",
       "see_also": [
         "cls.ComObject.AddEventHandler",
         "cls.ComObject.RemoveEventHandler",
@@ -45,7 +45,7 @@
       "parameters": "eventName - the event's name, as the object declares it.\nhandler - a function: `Function(arg1, arg2) { ... }`; or the name of a procedure of the module that subscribes (`New Event(\"Name\")` is taken too), called through that module. An unknown name is refused at once.",
       "return_descr": "",
       "example": "var Terminal = New COMObject(\"Acquiring.Terminal\");\nTerminal.AddEventHandler(\"StatusChanged\", Function(Code, Text) {\n    Message(\"Terminal: \" + Text);\n});\nTerminal.Pay(Amount);",
-      "availability": "Thin client, Server (Windows)",
+      "availability": "Client, Server (Windows)",
       "see_also": [
         "cls.ComObject",
         "cls.ComObject.RemoveEventHandler"
@@ -68,7 +68,7 @@
       "parameters": "eventName - the event's name.",
       "return_descr": "",
       "example": "Terminal.RemoveEventHandler(\"StatusChanged\");",
-      "availability": "Thin client, Server (Windows)",
+      "availability": "Client, Server (Windows)",
       "see_also": [
         "cls.ComObject",
         "cls.ComObject.AddEventHandler"
@@ -92,7 +92,7 @@
       "parameters": "elementType - automation's name of the element type: \"VT_I1\", \"VT_I2\", \"VT_I4\", \"VT_I8\", \"VT_UI1\", \"VT_UI2\", \"VT_UI4\", \"VT_UI8\", \"VT_INT\", \"VT_UINT\", \"VT_R4\", \"VT_R8\", \"VT_CY\", \"VT_DECIMAL\", \"VT_DATE\", \"VT_BSTR\", \"VT_BOOL\", \"VT_ERROR\", \"VT_VARIANT\", \"VT_DISPATCH\", \"VT_UNKNOWN\". Another name is refused.\nsize1, ..., sizeN - the number of elements of each dimension, the first first; or one Array of them. Every dimension starts at 0, and every element is its type's empty one.\nvalues - an Array of the elements: arrays in arrays, as deep as there are dimensions. Without sizes it is taken in its own shape - rows of one length make one more dimension; with them it must have exactly that shape.\nsource - a COMSafeArray to copy.",
       "return_descr": "COMSafeArray.",
       "example": "var Numbers = New COMSafeArray(\"VT_I4\", 2);\nNumbers.SetValue(0, 23);\nNumbers.SetValue(1, 13.5);            // stored as 14: a VT_I4\nDriver.ProcessArray(Numbers);\n\nvar Data = Sheet.UsedRange.Value;     // a COMSafeArray, counted from 1\nMessage(Data.GetValue(1, 1));\nvar Rows = Data.Unload();             // an Array of rows",
-      "availability": "Thin client, Server (Windows)",
+      "availability": "Client, Server (Windows)",
       "see_also": [
         "cls.ComObject",
         "cls.ComSafeArray.GetValue",
@@ -116,7 +116,7 @@
       "parameters": "",
       "return_descr": "Number.",
       "example": "Message(Data.GetDimensions());        // 2 for a spreadsheet's range",
-      "availability": "Thin client, Server (Windows)",
+      "availability": "Client, Server (Windows)",
       "see_also": [
         "cls.ComSafeArray",
         "cls.ComSafeArray.GetLength"
@@ -139,7 +139,7 @@
       "parameters": "dimension - from 0, the first dimension first. One the array does not have is refused.",
       "return_descr": "Number.",
       "example": "Rows = Data.GetLength(0);\nColumns = Data.GetLength(1);",
-      "availability": "Thin client, Server (Windows)",
+      "availability": "Client, Server (Windows)",
       "see_also": [
         "cls.ComSafeArray.GetLowerBound",
         "cls.ComSafeArray.GetUpperBound"
@@ -162,7 +162,7 @@
       "parameters": "dimension - from 0, the first dimension first. One the array does not have is refused.",
       "return_descr": "Number.",
       "example": "Message(Data.GetLowerBound(0));       // 1",
-      "availability": "Thin client, Server (Windows)",
+      "availability": "Client, Server (Windows)",
       "see_also": [
         "cls.ComSafeArray.GetUpperBound",
         "cls.ComSafeArray.GetLength"
@@ -185,7 +185,7 @@
       "parameters": "dimension - from 0, the first dimension first. One the array does not have is refused.",
       "return_descr": "Number.",
       "example": "LastRow = Data.GetUpperBound(0);",
-      "availability": "Thin client, Server (Windows)",
+      "availability": "Client, Server (Windows)",
       "see_also": [
         "cls.ComSafeArray.GetLowerBound",
         "cls.ComSafeArray.GetLength"
@@ -208,7 +208,7 @@
       "parameters": "",
       "return_descr": "String.",
       "example": "Message(Data.GetType());              // VT_VARIANT for a spreadsheet's range",
-      "availability": "Thin client, Server (Windows)",
+      "availability": "Client, Server (Windows)",
       "see_also": [
         "cls.ComSafeArray"
       ],
@@ -230,7 +230,7 @@
       "parameters": "index1, ..., indexN - the element's index in each dimension.",
       "return_descr": "The element's value.",
       "example": "Value = Data.GetValue(1, 2);          // row 1, column 2 of a range",
-      "availability": "Thin client, Server (Windows)",
+      "availability": "Client, Server (Windows)",
       "see_also": [
         "cls.ComSafeArray.SetValue",
         "cls.ComSafeArray.Unload"
@@ -253,7 +253,7 @@
       "parameters": "index1, ..., indexN - the element's index in each dimension, as in GetValue.\nvalue - what to put there.",
       "return_descr": "",
       "example": "Table.SetValue(0, 0, \"Name\");\nTable.SetValue(0, 1, 100);",
-      "availability": "Thin client, Server (Windows)",
+      "availability": "Client, Server (Windows)",
       "see_also": [
         "cls.ComSafeArray.GetValue"
       ],
@@ -275,7 +275,7 @@
       "parameters": "",
       "return_descr": "Boolean.",
       "example": "Message(Numbers.IsResizable());        // True",
-      "availability": "Thin client, Server (Windows)",
+      "availability": "Client, Server (Windows)",
       "see_also": [
         "cls.ComSafeArray.Resize"
       ],
@@ -297,7 +297,7 @@
       "parameters": "size - the new number of elements of the last dimension, 0 or more.",
       "return_descr": "",
       "example": "var Table = New COMSafeArray(\"VT_VARIANT\", 2, 3);\nTable.Resize(5);                      // 2 rows of 5",
-      "availability": "Thin client, Server (Windows)",
+      "availability": "Client, Server (Windows)",
       "see_also": [
         "cls.ComSafeArray.IsResizable",
         "cls.ComSafeArray.GetLength"
@@ -320,7 +320,7 @@
       "parameters": "",
       "return_descr": "Array.",
       "example": "Rows = Sheet.UsedRange.Value.Unload();\nMessage(Rows[0][1]);                  // row 1, column 2",
-      "availability": "Thin client, Server (Windows)",
+      "availability": "Client, Server (Windows)",
       "see_also": [
         "cls.ComSafeArray.GetValue"
       ],

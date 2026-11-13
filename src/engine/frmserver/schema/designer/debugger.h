@@ -3,7 +3,7 @@
 
 // THE DESIGNER'S DEBUGGER'S STORE — the breakpoints of the designer's session's ibDebuggerClient, in the base the
 // configuration is in, by the verbs that client writes them with (ibProtocol::ibSchema::ibDebugger::ibCommand): the
-// committed lines — the editor's edits since are the client's to count (designer-thin/backend/debugger). The debugger
+// committed lines — the editor's edits since are the client's to count (appstudio/backend/debugger). The debugger
 // itself — the runtimes, the stops, the watches — is that same engine's client, heard over its own connection
 // (ibClientDebugger, ibProtocol::ibDebug).
 

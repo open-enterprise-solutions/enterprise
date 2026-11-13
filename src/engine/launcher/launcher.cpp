@@ -9,7 +9,11 @@
 #include "deskgui/univ/messageDialog.h"   // ibMessageBox — a start that failed is said
 #include <wx/stdpaths.h>
 #include <wx/utils.h>   // wxLaunchDefaultBrowser, wxYieldIfNeeded
-#include <wx/xml/xml.h>
+#include <wx/file.h>    // the list's file, read and written whole
+
+#include "core/exception.h"         // ibCoreException — a list that is not well-formed
+#include "core/xml/xmlDocument.h"   // ibXmlDocument — the list as read
+#include "core/xml/xmlText.h"       // ibXmlWriter — the list as written
 
 namespace {
 
@@ -61,10 +65,19 @@ void ibDialogLauncher::LoadListIB() {
 	// Make sure the directory exists.
 	wxFileName strFileName(directory, "ib_list.xml");
 
-	wxXmlDocument document;
-	if (document.Load(strFileName.GetFullPath())) {
-		wxXmlNode* root = document.GetRoot();
-		wxXmlNode* node = root->GetChildren();
+	ibXmlDocument document;
+	try {
+		wxFile file;
+		wxString text;
+		if (file.Open(strFileName.GetFullPath()) && file.ReadAll(&text, wxConvUTF8))
+			document.Load(text, strFileName.GetFullPath());
+	}
+	catch (const ibCoreException&) {
+		// A list that is not well-formed is as none.
+	}
+	if (document.GetRoot() != nullptr) {
+		const ibXmlNode* root = document.GetRoot();
+		const ibXmlNode* node = root->GetChildren();
 		while (node != nullptr) {
 			if (node->GetName() == "item") {
 				ibListInfo listInfo; wxString strNameIB;
@@ -72,7 +85,7 @@ void ibDialogLauncher::LoadListIB() {
 				// which comes back as the cluster's base of the same name on the same host (its port, the DBMS's, is not read).
 				wxString strFileMode;
 				bool hasConnection = false;
-				wxXmlNode* nodeItem = node->GetChildren();
+				const ibXmlNode* nodeItem = node->GetChildren();
 				while (nodeItem != nullptr) {
 					if (nodeItem->GetName() == "name" && nodeItem->GetChildren()) {
 						strNameIB = nodeItem->GetChildren()->GetContent();
@@ -114,39 +127,36 @@ void ibDialogLauncher::LoadListIB() {
 
 void ibDialogLauncher::SaveListIB() {
 
-	wxXmlDocument document;
-	wxXmlNode* root = new wxXmlNode(wxXML_ELEMENT_NODE, "ib");
-	document.SetRoot(root);
+	ibXmlWriter writer(ibT("ib_list.xml"), ibCodePage::Of(ibCodePage::kUtf8));
+	writer.SetIndent(true);
+	writer.WriteXmlDeclaration(ibT("UTF-8"));
+	writer.WriteStartElement(ibT("ib"), ibString());
+
+	// <tag>text</tag>, inside the item.
+	const auto writeText = [&writer](const ibString& tag, const ibString& text) {
+		writer.WriteStartElement(tag, ibString());
+		writer.WriteText(text);
+		writer.WriteEndElement();
+	};
 
 	for (auto& list : m_listInfoBase) {
-		wxXmlNode* xmlItem = new wxXmlNode(wxXML_ELEMENT_NODE, "item");
-
-		wxXmlNode* xmlNode_name = new wxXmlNode(wxXML_ELEMENT_NODE, "name");
-		xmlNode_name->AddChild(new wxXmlNode(wxXML_TEXT_NODE, wxEmptyString, list.first));
-		xmlItem->AddChild(xmlNode_name);
+		writer.WriteStartElement(ibT("item"), ibString());
+		writeText(ibT("name"), list.first);
 
 		const ibLauncherConnection connection = list.second.m_connection;
-		wxXmlNode* xmlNode_connection = new wxXmlNode(wxXML_ELEMENT_NODE, "connection");
-		xmlNode_connection->AddChild(new wxXmlNode(wxXML_TEXT_NODE, wxEmptyString,
-			connection == ibLauncherConnection::Server ? "server" : connection == ibLauncherConnection::Web ? "web" : "file"));
-		xmlItem->AddChild(xmlNode_connection);
+		writeText(ibT("connection"),
+			connection == ibLauncherConnection::Server ? ibT("server") : connection == ibLauncherConnection::Web ? ibT("web") : ibT("file"));
 
-		wxXmlNode* xmlNode_filepath = new wxXmlNode(wxXML_ELEMENT_NODE, "filepath");
-		xmlNode_filepath->AddChild(new wxXmlNode(wxXML_TEXT_NODE, wxEmptyString, list.second.m_strFilePath));
-		xmlItem->AddChild(xmlNode_filepath);
+		writeText(ibT("filepath"), list.second.m_strFilePath);
+		writeText(ibT("server"), list.second.m_strServer);
+		writeText(ibT("database"), list.second.m_strDatabase);
+		writeText(ibT("address"), list.second.m_strAddress);
 
-		wxXmlNode* xmlNode_server = new wxXmlNode(wxXML_ELEMENT_NODE, "server");
-		xmlNode_server->AddChild(new wxXmlNode(wxXML_TEXT_NODE, wxEmptyString, list.second.m_strServer));
-		xmlItem->AddChild(xmlNode_server);
-		wxXmlNode* xmlNode_db = new wxXmlNode(wxXML_ELEMENT_NODE, "database");
-		xmlNode_db->AddChild(new wxXmlNode(wxXML_TEXT_NODE, wxEmptyString, list.second.m_strDatabase));
-		xmlItem->AddChild(xmlNode_db);
-		wxXmlNode* xmlNode_address = new wxXmlNode(wxXML_ELEMENT_NODE, "address");
-		xmlNode_address->AddChild(new wxXmlNode(wxXML_TEXT_NODE, wxEmptyString, list.second.m_strAddress));
-		xmlItem->AddChild(xmlNode_address);
-
-		root->AddChild(xmlItem);
+		writer.WriteEndElement();
 	}
+
+	writer.WriteEndElement();
+	writer.Finish();
 
 	wxString directory =
 		wxStandardPaths::Get().GetUserDir(wxStandardPaths::Dir::Dir_Cache) + wxFileName::GetPathSeparator() + wxT("OES");
@@ -155,7 +165,9 @@ void ibDialogLauncher::SaveListIB() {
 	wxFileName strFileName(directory, "ib_list.xml");
 	strFileName.Mkdir(0777, wxPATH_MKDIR_FULL);
 
-	document.Save(strFileName.GetFullPath());
+	wxFile file(strFileName.GetFullPath(), wxFile::write);
+	if (file.IsOpened())
+		file.Write(writer.Take(), wxConvUTF8);
 }
 
 ibDialogLauncher::ibDialogLauncher(wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) : ibDialog(parent, id, title, pos, size, style)
@@ -167,12 +179,12 @@ ibDialogLauncher::ibDialogLauncher(wxWindow* parent, wxWindowID id, const wxStri
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxHORIZONTAL);
 	wxBoxSizer* sizerLeft = new wxBoxSizer(wxVERTICAL);
 
+	// the bases' names a point over the window's font: the row is the theme's half the text's height again over it, so
+	// each point is a taller row (four over until 2026-11-13, then two - "too tall", then none - "the text is small";
+	// Max each time); on GTK3/Cocoa the same
 	m_listIBwnd = new ibListBox(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, nullptr, wxLB_SINGLE);
-	// the bases' names a little larger, in the system's face: two points over its size, 11 on Windows' 9 (the default
-	// family's 13 stood here until 2026-11-12 - Arial on Windows; four points over until 2026-11-13, Max: "too big" -
-	// the row is the theme's half the text's height again over it, 33 pixels)
-	wxFont listFont = wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT);
-	listFont.SetPointSize(listFont.GetPointSize() + 2);
+	wxFont listFont = GetFont();
+	listFont.SetPointSize(listFont.GetPointSize() + 1);
 	m_listIBwnd->SetFont(listFont);
 
 	m_listIBwnd->Bind(wxEVT_LISTBOX, &ibDialogLauncher::OnSelectedList, this);
@@ -180,34 +192,33 @@ ibDialogLauncher::ibDialogLauncher(wxWindow* parent, wxWindowID id, const wxStri
 
 	sizerLeft->Add(m_listIBwnd, 1, wxALL | wxEXPAND, 8);
 
+	// the chosen base's address under the list, in the window's own font
 	m_staticDBName = new ibStaticText(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0);
-	// the chosen base's address, a point under the names in the list: the system's face, three points over its size
-	wxFont dbNameFont = wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT);
-	dbNameFont.SetPointSize(dbNameFont.GetPointSize() + 3);
-	m_staticDBName->SetFont(dbNameFont);
 	sizerLeft->Add(m_staticDBName, 0, wxALL | wxEXPAND, FromDIP(5));
 
 	mainSizer->Add(sizerLeft, 1, wxEXPAND, FromDIP(5));
 
 	wxBoxSizer* sizerRight = new wxBoxSizer(wxVERTICAL);
 
-	m_buttonEnterprise = new ibButton(this, wxID_ANY, _("Enterprise"), wxDefaultPosition, wxDefaultSize, 0);
+	// The workspace twice - its window and the browser - then, apart, the studio.
+	m_buttonEnterprise = new ibButton(this, wxID_ANY, _("Workspace (GUI)"), wxDefaultPosition, wxDefaultSize, 0);
 	m_buttonEnterprise->SetBitmap(ibGetLauncherPicture(ibLauncherPicture::Enterprise));
 	m_buttonEnterprise->Bind(wxEVT_BUTTON, &ibDialogLauncher::OnButtonEnterprise, this);
 
 	sizerRight->Add(m_buttonEnterprise, 0, wxALL | wxEXPAND, FromDIP(5));
 
-	m_buttonDesigner = new ibButton(this, wxID_ANY, _("Designer"), wxDefaultPosition, wxDefaultSize, 0);
-	m_buttonDesigner->SetBitmap(ibGetLauncherPicture(ibLauncherPicture::Designer));
-	m_buttonDesigner->Bind(wxEVT_BUTTON, &ibDialogLauncher::OnButtonDesigner, this);
-
-	sizerRight->Add(m_buttonDesigner, 0, wxALL | wxEXPAND, FromDIP(5));
-
-	m_buttonWeb = new ibButton(this, wxID_ANY, _("Web"), wxDefaultPosition, wxDefaultSize, 0);
+	m_buttonWeb = new ibButton(this, wxID_ANY, _("Workspace (Web)"), wxDefaultPosition, wxDefaultSize, 0);
 	m_buttonWeb->SetBitmap(ibGetLauncherPicture(ibLauncherPicture::Web));
 	m_buttonWeb->Bind(wxEVT_BUTTON, &ibDialogLauncher::OnButtonWeb, this);
 
 	sizerRight->Add(m_buttonWeb, 0, wxALL | wxEXPAND, FromDIP(5));
+	sizerRight->AddSpacer(FromDIP(10));
+
+	m_buttonDesigner = new ibButton(this, wxID_ANY, _("Studio (GUI)"), wxDefaultPosition, wxDefaultSize, 0);
+	m_buttonDesigner->SetBitmap(ibGetLauncherPicture(ibLauncherPicture::Designer));
+	m_buttonDesigner->Bind(wxEVT_BUTTON, &ibDialogLauncher::OnButtonDesigner, this);
+
+	sizerRight->Add(m_buttonDesigner, 0, wxALL | wxEXPAND, FromDIP(5));
 	sizerRight->Add(0, 0, 1, wxEXPAND, FromDIP(5));
 
 	m_buttonAdd = new ibButton(this, wxID_ANY, _("Add"), wxDefaultPosition, wxDefaultSize, 0);
@@ -288,15 +299,15 @@ void ibDialogLauncher::StartApplication(const wxString& appName) {
 }
 
 void ibDialogLauncher::OnSelectedDClickList(wxCommandEvent& event) {
-	StartApplication(wxT("enterprise-thin"));
+	StartApplication(wxT("appworkspace"));
 }
 
 void ibDialogLauncher::OnButtonEnterprise(wxCommandEvent& event) {
-	StartApplication(wxT("enterprise-thin"));
+	StartApplication(wxT("appworkspace"));
 }
 
 void ibDialogLauncher::OnButtonDesigner(wxCommandEvent& event) {
-	StartApplication(wxT("designer-thin"));
+	StartApplication(wxT("appstudio"));
 }
 
 void ibDialogLauncher::OnButtonWeb(wxCommandEvent& event) {

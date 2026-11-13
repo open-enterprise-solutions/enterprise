@@ -419,7 +419,7 @@ still-missing half is a GUI job — on any platform since the desktop front's ha
 
 The engine — backend, compiler, interpreter, query engine, all four drivers — is cross-platform
 as of 2026-08-02, and as of 2026-08-03 so are the **applications**: `enterprise`, `designer`,
-`appserver` (named `daemon` until 2026-10-01), `launcher`, `codeRunner` and `simplePlugin` link on Linux and
+`appserver` (named `daemon` until 2026-10-01), `launcher`, `coderunner` and `simple-plugin` link on Linux and
 Windows in CI. Three
 toolchains, three standard libraries, two 64-bit models, two CPU architectures, one result.
 
@@ -427,7 +427,7 @@ What that claim does **not** cover, so nobody reads more into the table than it 
 
 - ~~**The applications are never linked in CI.**~~ **Closed 2026-08-03**: every job now ends
   with a `Build the applications` step (the default target), so `enterprise`, `designer`,
-  `daemon`, `launcher`, `codeRunner` and `simplePlugin` link on all three platforms. It was as
+  `daemon`, `launcher`, `coderunner` and `simple-plugin` link on all three platforms. It was as
   cheap as predicted — backend and frontend are already built by the steps before it, leaving
   only the executables' own translation units.
 - **In the general jobs, only SQLite actually executes.** Firebird is compiled but loads
@@ -617,7 +617,7 @@ Three things came out of it, in the order they matter:
   skipped-suite check. It became `wait "$runner" || status=$?`. A diagnostic that only runs on
   failure has to survive the failure.
 - **The warnings had a source worth removing**: six wxInclude-generated PNGs in
-  `win/editor/codeEditor/res/bitmaps_res.h` (then frontend's; frmclient's and codeRunner's now) carried a Photoshop `iCCP` chunk libpng
+  `win/editor/codeEditor/res/bitmaps_res.h` (then frontend's; frmclient's and coderunner's now) carried a Photoshop `iCCP` chunk libpng
   rejects. The chunk is ancillary and carries its own CRC, so dropping it needs no re-encode —
   verified pixel-identical on all six, and the header went from 128 KB to 29 KB. A sweep over the
   other embedded images (71 base64 PNGs, 5 `.png`, 23 `.ico`) found no second carrier.

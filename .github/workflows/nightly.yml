@@ -101,7 +101,7 @@ jobs:
       # which the default target also builds and nothing here loads. fileserver is named: the thin client
       # loads it when a file base is opened, so nothing links it and no other target builds it.
       - name: Build
-        run: cmake --build --preset windows-x64-release --target enterprise-thin fileserver designer-thin launcher codeRunner appserver appcluster appcluster-tray webserver simplePlugin
+        run: cmake --build --preset windows-x64-release --target appworkspace fileserver appstudio launcher coderunner appserver appcluster appcluster-tray webserver simple-plugin
 
       - name: Package
         shell: pwsh
@@ -154,7 +154,7 @@ jobs:
         run: cmake --preset linux-release -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON
 
       - name: Build
-        run: cmake --build --preset linux-release --target enterprise-thin fileserver designer-thin launcher codeRunner appserver appcluster appcluster-tray webserver simplePlugin
+        run: cmake --build --preset linux-release --target appworkspace fileserver appstudio launcher coderunner appserver appcluster appcluster-tray webserver simple-plugin
 
       # ⭐ FIREBIRD 5 GOES INTO THE PACKAGE, as the Windows kit does: a file base is an embedded Firebird, and
       # no Linux distribution ships version 5 (Ubuntu 22.04 and Debian 12 have 3, which cannot open these
@@ -208,7 +208,7 @@ jobs:
         run: cmake --preset macos-release -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON
 
       - name: Build
-        run: cmake --build --preset macos-release --target enterprise-thin fileserver designer-thin launcher codeRunner appserver appcluster appcluster-tray webserver simplePlugin
+        run: cmake --build --preset macos-release --target appworkspace fileserver appstudio launcher coderunner appserver appcluster appcluster-tray webserver simple-plugin
 
       # ⭐ FIREBIRD 5 GOES INTO THE PACKAGE — the official macOS build, PINNED, unpacked without installing
       # anything (.github/firebird-kit-macos.sh — the CI's look of the desktop lays out the same kit). Its
@@ -258,8 +258,8 @@ jobs:
 
           | Platform | File | How to run |
           |---|---|---|
-          | Windows 10/11 x64 | \`oes-nightly-windows-x64.zip\` | Unpack, run \`designer-thin.exe\` or \`enterprise-thin.exe\` from the \`oes\` folder. Firebird and the PostgreSQL client are inside. |
-          | Linux x64 (Ubuntu 22.04 / Debian 12 or newer) | \`oes-nightly-linux-x64.tar.gz\` | \`tar xzf\`, run \`./designer-thin\` or \`./enterprise-thin\` in \`oes/\`. Firebird 5 is inside (\`_fb\`). Needs GTK 3 (\`libgtk-3-0\`); a PostgreSQL base needs \`libpq\`. |
+          | Windows 10/11 x64 | \`oes-nightly-windows-x64.zip\` | Unpack, run \`appstudio.exe\` or \`appworkspace.exe\` from the \`oes\` folder. Firebird and the PostgreSQL client are inside. |
+          | Linux x64 (Ubuntu 22.04 / Debian 12 or newer) | \`oes-nightly-linux-x64.tar.gz\` | \`tar xzf\`, run \`./appstudio\` or \`./appworkspace\` in \`oes/\`. Firebird 5 is inside (\`_fb\`). Needs GTK 3 (\`libgtk-3-0\`); a PostgreSQL base needs \`libpq\`. |
           | Linux arm64 (the same systems) | \`oes-nightly-linux-arm64.tar.gz\` | As Linux x64: the same programs and Firebird 5, built on an arm64 machine. |
           | macOS 14+ on Apple Silicon | \`oes-nightly-macos-arm64.dmg\` | Drag the \`OES\` folder to Applications — the applications in it need each other, so move the folder, not one app. Firebird 5 is inside (\`_fb\`). The build is signed ad hoc, not with a Developer ID, so macOS quarantines every file that came with it: once, after dragging, run \`find /Applications/OES -exec xattr -d com.apple.quarantine {} \; 2>/dev/null\` in Terminal. Right-click → Open lets one app through while the launcher starts the others, and macOS 15 no longer offers it. |
           | The example bases | \`oes-nightly-bases.tar.gz\` | The bases of \`examples/\` at the same commit, as \`bases/<name>/\`. The demo server publishes them (\`tools/demo-server\`); a base opens in the designer or the client of this nightly. |

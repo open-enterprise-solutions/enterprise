@@ -21,7 +21,7 @@
       "parameters": "Нет - читатель создаётся пустым, а источник ему дают `OpenFile` или `SetString`.",
       "return_descr": "XMLReader - без открытого источника.",
       "example": "var Reader = New XMLReader();\nReader.OpenFile(\"C:\\in\\J0100117.xml\");\nvar Tin = \"\";\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.StartElement) {\n        if (Reader.Name = \"TIN\") {\n            Reader.Read();                 // текст внутри <TIN>\n            Tin = Reader.Value;\n        }\n    }\n}\nReader.Close();\nMessage(Tin);",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.Read",
         "cls.XMLReader.NodeType",
@@ -48,7 +48,7 @@
       "parameters": "",
       "return_descr": "XMLNodeType.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<a>t<!--c--></a>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.Comment) {\n        Message(\"комментарий: \" + Reader.Value);   // c\n    }\n}",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "enum.XMLNodeType",
         "cls.XMLReader.Read",
@@ -72,7 +72,7 @@
       "parameters": "",
       "return_descr": "String.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<p:a xmlns:p=\"\"urn:p\"\"/>\");\nReader.Read();\nMessage(Reader.Name);                      // p:a\nMessage(Reader.LocalName);                 // a",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.LocalName",
         "cls.XMLReader.Prefix",
@@ -97,7 +97,7 @@
       "parameters": "",
       "return_descr": "String.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<d:Item xmlns:d=\"\"urn:d\"\"/>\");\nReader.Read();\nif (Reader.LocalName = \"Item\" And Reader.NamespaceURI = \"urn:d\") {\n    Message(\"товар, какой бы ни был префикс\");\n}",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.Name",
         "cls.XMLReader.NamespaceURI",
@@ -121,7 +121,7 @@
       "parameters": "",
       "return_descr": "String.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<p:a xmlns:p=\"\"urn:p\"\"/>\");\nReader.Read();\nMessage(Reader.Prefix);                    // p",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.Name",
         "cls.XMLReader.LocalName",
@@ -145,7 +145,7 @@
       "parameters": "",
       "return_descr": "String.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns=\"\"urn:x\"\" a=\"\"1\"\"/>\");\nReader.Read();\nMessage(Reader.NamespaceURI);              // urn:x\nReader.ReadAttribute();                    // xmlns\nReader.ReadAttribute();                    // a\nMessage(Reader.NamespaceURI = \"\");        // True: пространства имён нет",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.LocalName",
         "cls.XMLReader.NamespaceContext",
@@ -169,7 +169,7 @@
       "parameters": "",
       "return_descr": "String.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<HNAME>A &amp; B</HNAME>\");\nReader.Read();                             // <HNAME>\nReader.Read();                             // текст\nMessage(Reader.Value);                      // A & B",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.HasValue",
         "cls.XMLReader.Read",
@@ -193,7 +193,7 @@
       "parameters": "",
       "return_descr": "Boolean.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<a>t</a>\");\nReader.Read();\nMessage(Reader.HasValue);                   // False: элемент\nReader.Read();\nMessage(Reader.HasValue);                   // True: текст",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.Value",
         "cls.XMLReader.HasName"
@@ -216,7 +216,7 @@
       "parameters": "",
       "return_descr": "Boolean.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<a><!--c--></a>\");\nwhile (Reader.Read()) {\n    Message(Reader.HasName);               // True, False, True\n}",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.Name",
         "cls.XMLReader.HasValue"
@@ -239,7 +239,7 @@
       "parameters": "",
       "return_descr": "Boolean.",
       "example": "var Reader = New XMLReader();\nReader.IgnoreWhitespace = False;\nReader.SetString(\"<a> <b/></a>\");\nReader.Read();\nReader.Read();\nMessage(Reader.IsWhitespace);               // True",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.IgnoreWhitespace",
         "cls.XMLReader.IsCharacters"
@@ -262,7 +262,7 @@
       "parameters": "",
       "return_descr": "Boolean.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<a>x<![CDATA[<y>]]></a>\");\nvar Text = \"\";\nwhile (Reader.Read()) {\n    if (Reader.IsCharacters) {\n        Text = Text + Reader.Value;\n    }\n}\nMessage(Text);                              // x<y>",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.IsWhitespace",
         "cls.XMLReader.Value"
@@ -285,7 +285,7 @@
       "parameters": "",
       "return_descr": "String - \"\", когда у документа нет объявления.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<?xml version=\"\"1.0\"\" encoding=\"\"UTF-8\"\"?><a/>\");\nReader.Read();\nMessage(Reader.XMLVersion);                // 1.0",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.XMLEncoding",
         "cls.XMLReader.Standalone"
@@ -308,7 +308,7 @@
       "parameters": "",
       "return_descr": "String.",
       "example": "var Reader = New XMLReader();\nReader.OpenFile(\"C:\\in\\J0100117.xml\");\nReader.Read();\nMessage(Reader.XMLEncoding);               // windows-1251",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.InputEncoding",
         "cls.XMLReader.OpenFile",
@@ -332,7 +332,7 @@
       "parameters": "",
       "return_descr": "String.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<?xml version=\"\"1.0\"\" encoding=\"\"UTF-8\"\"?><a/>\");\nReader.Read();\nMessage(Reader.InputEncoding);             // UTF-8",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.XMLEncoding"
       ],
@@ -354,7 +354,7 @@
       "parameters": "",
       "return_descr": "Boolean.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<?xml version=\"\"1.0\"\" standalone=\"\"yes\"\"?><a/>\");\nReader.Read();\nMessage(Reader.Standalone);                // True",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.XMLVersion",
         "cls.XMLReader.XMLEncoding"
@@ -377,7 +377,7 @@
       "parameters": "",
       "return_descr": "Boolean.",
       "example": "var Reader = New XMLReader();\nReader.IgnoreWhitespace = False;\nReader.SetString(\"<a>\" + Chars.LF + \"  <b/>\" + Chars.LF + \"</a>\");\nvar Count = 0;\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.Whitespace) {\n        Count = Count + 1;\n    }\n}\nMessage(Count);                             // 2: перевод строки перед <b/> и тот, что после него",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.IsWhitespace",
         "enum.XMLNodeType.Whitespace"
@@ -400,7 +400,7 @@
       "parameters": "",
       "return_descr": "Boolean.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<r><a/><b></b></r>\");\nReader.Read();                             // r\nReader.Read();                             // a\nMessage(Reader.IsEmptyElement);             // True\nReader.Read();                             // </a> - тот же тег\nMessage(Reader.IsEmptyElement);             // True\nReader.Read();                             // b\nMessage(Reader.IsEmptyElement);             // False",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.Read",
         "enum.XMLNodeType.StartElement",
@@ -424,7 +424,7 @@
       "parameters": "",
       "return_descr": "Number.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<r><a>t</a></r>\");\nwhile (Reader.Read()) {\n    Message(Reader.Depth);                 // 0, 1, 2, 1, 0\n}",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.NamespaceContext",
         "cls.XMLNamespaceContext.Depth",
@@ -448,7 +448,7 @@
       "parameters": "",
       "return_descr": "Number.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<a>\" + Chars.LF + \"<b/></a>\");\nReader.Read();\nReader.Read();\nMessage(Reader.LineNumber);                // 2\nMessage(Reader.LinePosition);              // 1",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.LinePosition"
       ],
@@ -470,7 +470,7 @@
       "parameters": "",
       "return_descr": "Number.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<a><c></c></a>\");\nReader.Read();\nReader.Read();                             // <c>\nMessage(Reader.LinePosition);              // 4\nReader.Read();                             // </c>\nMessage(Reader.LinePosition);              // 7",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.LineNumber"
       ],
@@ -492,7 +492,7 @@
       "parameters": "",
       "return_descr": "XMLNamespaceContext - или Undefined, когда ничего не открыто.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns:p=\"\"urn:p\"\"><p:x/></r>\");\nReader.Read();\nReader.Read();                             // p:x\nvar Context = Reader.NamespaceContext;\nMessage(Context.LookupNamespaceURI(\"p\"));  // urn:p",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLNamespaceContext",
         "cls.XMLReader.NamespaceURI",
@@ -516,7 +516,7 @@
       "parameters": "",
       "return_descr": "String.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<doc xml:lang=\"\"de\"\"><p>Hallo</p><p xml:lang=\"\"en\"\">Hello</p></doc>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.Text) {\n        Message(Reader.Language + \": \" + Reader.Value);   // de: Hallo, затем en: Hello\n    }\n}",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.Space",
         "cls.XMLReader.NamespaceContext"
@@ -539,7 +539,7 @@
       "parameters": "",
       "return_descr": "XMLSpace.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<a><pre xml:space=\"\"preserve\"\">  </pre></a>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.Whitespace) {\n        Message(Reader.Space = XMLSpace.Preserve);   // True: сохранены, хотя IgnoreWhitespace равно True\n    }\n}",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "enum.XMLSpace",
         "cls.XMLReader.IgnoreWhitespace",
@@ -563,7 +563,7 @@
       "parameters": "",
       "return_descr": "Boolean.",
       "example": "var Reader = New XMLReader();\nReader.IgnoreXMLDeclaration = False;\nReader.SetString(\"<?xml version=\"\"1.0\"\" standalone=\"\"yes\"\"?><a/>\");\nReader.Read();\nMessage(Reader.NodeType = XMLNodeType.XMLDeclaration);   // True\nMessage(Reader.GetAttribute(\"standalone\"));             // yes",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "enum.XMLNodeType.XMLDeclaration",
         "cls.XMLReader.XMLVersion",
@@ -587,7 +587,7 @@
       "parameters": "",
       "return_descr": "Boolean.",
       "example": "var Reader = New XMLReader();\nReader.IgnoreDocumentType = False;\nReader.SetString(\"<!DOCTYPE a [<!ENTITY e \"\"x\"\">]><a>&e;</a>\");\nReader.Read();\nMessage(Reader.Name);    // a\nMessage(Reader.Value);   // <!ENTITY e \"x\">",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "enum.XMLNodeType.DocumentTypeDefinition",
         "cls.XMLWriter.WriteDocumentType"
@@ -610,7 +610,7 @@
       "parameters": "",
       "return_descr": "Boolean.",
       "example": "var Reader = New XMLReader();\nReader.IgnoreComments = True;\nReader.SetString(\"<a><!-- note -->t</a>\");\nReader.Read();\nReader.Read();\nMessage(Reader.Value);   // t",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.IgnoreProcessingInstructions",
         "enum.XMLNodeType.Comment"
@@ -633,7 +633,7 @@
       "parameters": "",
       "return_descr": "Boolean.",
       "example": "var Reader = New XMLReader();\nReader.IgnoreProcessingInstructions = True;\nReader.SetString(\"<a><?app data?>t</a>\");\nReader.Read();\nReader.Read();\nMessage(Reader.Value);   // t",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.IgnoreComments",
         "enum.XMLNodeType.ProcessingInstruction"
@@ -656,7 +656,7 @@
       "parameters": "",
       "return_descr": "Boolean.",
       "example": "var Reader = New XMLReader();\nReader.CDATASectionAsText = True;\nReader.SetString(\"<a>x<![CDATA[<y>]]>z</a>\");\nReader.Read();\nReader.Read();\nMessage(Reader.Value);   // x<y>z",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "enum.XMLNodeType.CDATASection",
         "cls.XMLReader.IgnoreWhitespace"
@@ -679,7 +679,7 @@
       "parameters": "path - файл для чтения.",
       "return_descr": "",
       "example": "var Reader = New XMLReader();\nReader.OpenFile(\"C:\\in\\statement.xml\");\nwhile (Reader.Read()) {\n    // ...\n}\nReader.Close();",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader",
         "cls.XMLReader.SetString",
@@ -704,7 +704,7 @@
       "parameters": "text - документ XML целиком.",
       "return_descr": "",
       "example": "var Reader = New XMLReader();\nReader.SetString(Response.GetBodyAsString());\nwhile (Reader.Read()) {\n    // ...\n}",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader",
         "cls.XMLReader.OpenFile",
@@ -728,7 +728,7 @@
       "parameters": "Нет.",
       "return_descr": "",
       "example": "var Reader = New XMLReader();\nReader.OpenFile(Path);\nwhile (Reader.Read()) {\n    // ...\n}\nReader.Close();      // здесь файл отпускается",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.OpenFile",
         "cls.XMLReader.SetString",
@@ -752,7 +752,7 @@
       "parameters": "Нет.",
       "return_descr": "Boolean - False, когда ничего не осталось.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<a>\" + Chars.LF + \"<b></a>\");\ntry {\n    while (Reader.Read()) {\n        Message(Reader.Name);              // a, b\n    }\n} except {\n    Message(ErrorDescription());           // ... at line 2, column 6\n}",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.NodeType",
         "cls.XMLReader.Skip",
@@ -777,7 +777,7 @@
       "parameters": "Нет.",
       "return_descr": "",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<r><meta><x/><y/></meta><TIN>1</TIN></r>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.StartElement) {\n        if (Reader.Name = \"meta\") {\n            Reader.Skip();                 // стоит на </meta>\n        } else {\n            Message(Reader.Name);          // r, TIN\n        }\n    }\n}",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.Read",
         "cls.XMLReader.Depth",
@@ -801,7 +801,7 @@
       "parameters": "Нет.",
       "return_descr": "XMLNodeType - тип узла, на котором он остановился.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<?xml version=\"\"1.0\"\"?><!--generated--><DECLAR/>\");\nif (Reader.MoveToContent() = XMLNodeType.StartElement) {\n    Message(Reader.Name);                  // DECLAR\n}",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.Read",
         "cls.XMLReader.Skip",
@@ -825,7 +825,7 @@
       "parameters": "Нет.",
       "return_descr": "Number.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<r a=\"\"1\"\" b=\"\"2\"\"/>\");\nReader.Read();\nfor (i = 0 To Reader.AttributeCount() - 1) {\n    Message(Reader.AttributeName(i) + \" = \" + Reader.AttributeValue(i));\n}",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.AttributeName",
         "cls.XMLReader.AttributeValue",
@@ -849,7 +849,7 @@
       "parameters": "index - номер атрибута, с 0.",
       "return_descr": "String - \"\", когда атрибута с таким номером нет.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns:d=\"\"urn:d\"\" a=\"\"1\"\" d:b=\"\"2\"\"/>\");\nReader.Read();\nMessage(Reader.AttributeName(0));          // xmlns:d\nMessage(Reader.AttributeName(2));          // d:b\nMessage(Reader.AttributeName(9) = \"\");     // True",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.AttributeLocalName",
         "cls.XMLReader.AttributeCount",
@@ -873,7 +873,7 @@
       "parameters": "index - номер атрибута, с 0.",
       "return_descr": "String - \"\", когда атрибута с таким номером нет.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns:d=\"\"urn:d\"\" d:b=\"\"2\"\"/>\");\nReader.Read();\nMessage(Reader.AttributeLocalName(1));     // b",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.AttributeName",
         "cls.XMLReader.AttributeNamespaceURI"
@@ -896,7 +896,7 @@
       "parameters": "index - номер атрибута, с 0.",
       "return_descr": "String - \"\", когда атрибута с таким номером нет.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns:d=\"\"urn:d\"\" a=\"\"1\"\" d:b=\"\"2\"\"/>\");\nReader.Read();\nMessage(Reader.AttributeNamespaceURI(1) = \"\"); // True: у a нет префикса\nMessage(Reader.AttributeNamespaceURI(2));  // urn:d",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.AttributeName",
         "cls.XMLReader.AttributeValue"
@@ -919,7 +919,7 @@
       "parameters": "index - номер атрибута, с 0.",
       "return_descr": "String - \"\", когда атрибута с таким номером нет.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns:d=\"\"urn:d\"\" d:b=\"\"2\"\"/>\");\nReader.Read();\nMessage(Reader.AttributePrefix(0));        // xmlns\nMessage(Reader.AttributePrefix(1));        // d",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.AttributeName",
         "cls.XMLReader.AttributeLocalName"
@@ -942,7 +942,7 @@
       "parameters": "indexOrName - номер атрибута с 0 или его имя.\nnamespaceURI - необязательный: с ним имя - локальное имя в этом пространстве имён.",
       "return_descr": "String - или Undefined, когда такого атрибута нет.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<r a=\"\"1\"\" e=\"\"\"\"/>\");\nReader.Read();\nMessage(Reader.AttributeValue(\"a\"));                 // 1\nMessage(Reader.AttributeValue(\"e\") = \"\");          // True: есть, и пустой\nMessage(Reader.AttributeValue(\"missing\") = Undefined); // True: нет",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.GetAttribute",
         "cls.XMLReader.AttributeName",
@@ -966,7 +966,7 @@
       "parameters": "indexOrName - номер атрибута с 0 или его имя.\nnamespaceURI - необязательный: с ним имя - локальное имя в этом пространстве имён.",
       "return_descr": "String - или Undefined, когда такого атрибута нет.",
       "example": "var Xsi = \"http://www.w3.org/2001/XMLSchema-instance\";\nvar Reader = New XMLReader();\nReader.SetString(\"<DECLAR xmlns:xsi=\"\"\" + Xsi + \"\"\" xsi:noNamespaceSchemaLocation=\"\"J0100117.xsd\"\"/>\");\nReader.Read();\nMessage(Reader.GetAttribute(\"xsi:noNamespaceSchemaLocation\"));   // J0100117.xsd\nMessage(Reader.GetAttribute(\"noNamespaceSchemaLocation\", Xsi));  // J0100117.xsd\nif (Reader.GetAttribute(\"version\") = Undefined) {\n    Message(\"версия не указана\");\n}",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.AttributeValue",
         "cls.XMLReader.ReadAttribute"
@@ -989,7 +989,7 @@
       "parameters": "Нет.",
       "return_descr": "Boolean - False, когда атрибута нет.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<b x=\"\"1\"\" y=\"\"2\"\"/>\");\nReader.Read();\nif (Reader.FirstAttribute()) {\n    Message(Reader.Name + \" = \" + Reader.Value);   // x = 1\n}",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.NextAttribute",
         "cls.XMLReader.ReadAttribute",
@@ -1013,7 +1013,7 @@
       "parameters": "Нет.",
       "return_descr": "Boolean - False, когда следующего атрибута нет.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<b x=\"\"1\"\" y=\"\"2\"\"/>\");\nReader.Read();\nwhile (Reader.NextAttribute()) {\n    Message(Reader.Name + \" = \" + Reader.Value);   // x = 1, y = 2\n}",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.ReadAttribute",
         "cls.XMLReader.FirstAttribute",
@@ -1037,7 +1037,7 @@
       "parameters": "Нет.",
       "return_descr": "Boolean - False, когда следующего атрибута нет.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<r a=\"\"1\"\" p:b=\"\"2\"\" xmlns:p=\"\"urn:p\"\"><c/></r>\");\nReader.Read();\nwhile (Reader.ReadAttribute()) {\n    Message(Reader.Name + \" = \" + Reader.Value);   // xmlns:p = urn:p, a = 1, p:b = 2\n}\nReader.Read();\nMessage(Reader.Name);                                // c",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.NextAttribute",
         "cls.XMLReader.FirstAttribute",
@@ -1062,7 +1062,7 @@
       "parameters": "Нет.",
       "return_descr": "Boolean - True, когда он стоял на атрибуте.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<b x=\"\"1\"\"/>\");\nReader.Read();\nReader.ReadAttribute();\nMessage(Reader.NodeType = XMLNodeType.Attribute);   // True\nReader.MoveToElement();\nMessage(Reader.Name);                      // b",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.ReadAttribute",
         "cls.XMLReader.FirstAttribute",
@@ -1088,7 +1088,7 @@
       "parameters": "Нет - писатель создаётся без открытой цели, а цель ему дают `OpenFile` или `SetString`.",
       "return_descr": "XMLWriter - без открытой цели.",
       "example": "var Xsi = \"http://www.w3.org/2001/XMLSchema-instance\";\nvar Writer = New XMLWriter();\nWriter.SetString();\nWriter.Indent = False;\nWriter.WriteXMLDeclaration();\nWriter.WriteStartElement(\"DECLAR\");\nWriter.WriteNamespaceMapping(\"xsi\", Xsi);\nWriter.WriteAttribute(\"xsi:noNamespaceSchemaLocation\", \"J0100117.xsd\");\nWriter.WriteStartElement(\"HNAME\");\nWriter.WriteText(\"Бумага & Ко\");\nWriter.WriteEndElement();\nWriter.WriteStartElement(\"EMPTY\");\nWriter.WriteEndElement();\nWriter.WriteEndElement();\nMessage(Writer.Close());\n// <?xml version=\"1.0\" encoding=\"UTF-8\"?><DECLAR xmlns:xsi=\"...\" xsi:noNamespaceSchemaLocation=\"J0100117.xsd\"><HNAME>Бумага &amp; Ко</HNAME><EMPTY/></DECLAR>",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLWriter.OpenFile",
         "cls.XMLWriter.SetString",
@@ -1114,7 +1114,7 @@
       "parameters": "",
       "return_descr": "Boolean.",
       "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteStartElement(\"a\");\nWriter.WriteStartElement(\"b\");\nWriter.WriteText(\"t\");\nWriter.WriteEndElement();\nWriter.WriteEndElement();\nMessage(Writer.Close());\n// <a>\n// \t<b>t</b>\n// </a>",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLWriter",
         "cls.XMLWriter.WriteText"
@@ -1137,7 +1137,7 @@
       "parameters": "",
       "return_descr": "XMLNamespaceContext - или Undefined, когда ничего не открыто.",
       "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteStartElement(\"a\", \"urn:x\");\nWriter.WriteNamespaceMapping(\"p\", \"urn:p\");\nvar Context = Writer.NamespaceContext;\nMessage(Context.DefaultNamespace);          // urn:x\nMessage(Context.LookupNamespaceURI(\"p\"));  // urn:p",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLNamespaceContext",
         "cls.XMLWriter.LookupPrefix",
@@ -1161,7 +1161,7 @@
       "parameters": "",
       "return_descr": "Boolean.",
       "example": "var Writer = New XMLWriter();\nWriter.IndentAttributes = True;\nWriter.SetString();\nWriter.WriteStartElement(\"item\");\nWriter.WriteAttribute(\"code\", \"42\");\nWriter.WriteAttribute(\"name\", \"Tea\");\nWriter.WriteEndElement();\nMessage(Writer.Close());\n// <item\n// \tcode=\"42\"\n// \tname=\"Tea\"/>",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLWriter.Indent",
         "cls.XMLWriter.IndentString"
@@ -1184,7 +1184,7 @@
       "parameters": "",
       "return_descr": "String.",
       "example": "var Writer = New XMLWriter();\nWriter.IndentString = \"  \";\nWriter.SetString();\nWriter.WriteStartElement(\"a\");\nWriter.WriteStartElement(\"b\");\nWriter.WriteEndElement();\nWriter.WriteEndElement();\nMessage(Writer.Close());\n// <a>\n//   <b/>\n// </a>",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLWriter.Indent",
         "cls.XMLWriter.IndentAttributes"
@@ -1207,7 +1207,7 @@
       "parameters": "path - файл для записи.\nencoding - необязательный: UTF-8 (по умолчанию), UTF-16, windows-1251, cp866.\nwriteBOM - необязательный, по умолчанию True: начинается ли файл UTF-8 с метки порядка байтов.",
       "return_descr": "",
       "example": "var Writer = New XMLWriter();\nWriter.OpenFile(\"C:\\out\\J0100117.xml\", \"windows-1251\");\nWriter.WriteXMLDeclaration();   // encoding=\"windows-1251\"\nWriter.WriteStartElement(\"DECLAR\");\nWriter.WriteEndElement();\nWriter.Close();",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLWriter.SetString",
         "cls.XMLWriter.Close",
@@ -1231,7 +1231,7 @@
       "parameters": "encoding - необязательный, по умолчанию UTF-8: слово, которое назовёт объявление.",
       "return_descr": "",
       "example": "var Writer = New XMLWriter();\nWriter.SetString(\"windows-1251\");\nWriter.WriteXMLDeclaration();\nWriter.WriteStartElement(\"a\");\nWriter.WriteEndElement();\nMessage(Writer.Close());\n// <?xml version=\"1.0\" encoding=\"windows-1251\"?>\n// <a/>",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLWriter.OpenFile",
         "cls.XMLWriter.Close"
@@ -1254,7 +1254,7 @@
       "parameters": "Нет.",
       "return_descr": "String - текст для строки; \"\" для файла.",
       "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteStartElement(\"a\");\ntry {\n    Writer.Close();\n} except {\n    Message(ErrorDescription());           // ... the element 'a' is still open ...\n}\nWriter.WriteEndElement();\nMessage(Writer.Close());                   // <a/>",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLWriter.OpenFile",
         "cls.XMLWriter.SetString",
@@ -1278,7 +1278,7 @@
       "parameters": "Нет.",
       "return_descr": "",
       "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.Indent = False;\nWriter.WriteXMLDeclaration();\nWriter.WriteStartElement(\"a\");\nWriter.WriteEndElement();\nMessage(Writer.Close());                   // <?xml version=\"1.0\" encoding=\"UTF-8\"?><a/>",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLWriter.OpenFile",
         "cls.XMLWriter.SetString"
@@ -1301,7 +1301,7 @@
       "parameters": "name - имя корневого элемента.\npublicId - необязательный: публичный идентификатор; требует системного.\nsystemId - необязательный: системный идентификатор.\ninternalSubset - необязательный: объявления между `[` и `]`, как есть.",
       "return_descr": "",
       "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteXMLDeclaration();\nWriter.WriteDocumentType(\"note\", \"\", \"\", \"<!ENTITY org \"\"OES\"\">\");\nWriter.WriteStartElement(\"note\");\nWriter.WriteRaw(\"&org;\");\nWriter.WriteEndElement();\nMessage(Writer.Close());\n// <?xml version=\"1.0\" encoding=\"UTF-8\"?>\n// <!DOCTYPE note [<!ENTITY org \"OES\">]>\n// <note>&org;</note>",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.IgnoreDocumentType",
         "cls.XMLWriter.WriteXMLDeclaration",
@@ -1325,7 +1325,7 @@
       "parameters": "name - имя элемента, `local` или `prefix:local`.\nnamespaceURI - необязательный: пространство имён, в котором он находится.",
       "return_descr": "",
       "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.Indent = False;\nWriter.WriteStartElement(\"a\", \"urn:d\");\nWriter.WriteNamespaceMapping(\"p\", \"urn:p\");\nWriter.WriteStartElement(\"b\", \"urn:p\");     // URI принадлежит p\nWriter.WriteEndElement();\nWriter.WriteEndElement();\nMessage(Writer.Close());   // <a xmlns=\"urn:d\" xmlns:p=\"urn:p\"><p:b/></a>",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLWriter.WriteEndElement",
         "cls.XMLWriter.WriteAttribute",
@@ -1349,7 +1349,7 @@
       "parameters": "Нет.",
       "return_descr": "",
       "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteStartElement(\"EMPTY\");\nWriter.WriteEndElement();\nMessage(Writer.Close());   // <EMPTY/>",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLWriter.WriteStartElement",
         "cls.XMLWriter.Close"
@@ -1372,7 +1372,7 @@
       "parameters": "name - имя атрибута.\nnamespaceURI - в форме с тремя аргументами: пространство имён, в котором он находится.\nvalue - значение, строка.",
       "return_descr": "",
       "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteStartElement(\"r\");\nWriter.WriteAttribute(\"a\", \"1 < 2\");\nWriter.WriteAttribute(\"q\", \"urn:q\", \"x\");\nWriter.WriteEndElement();\nMessage(Writer.Close());\n// <r a=\"1 &lt; 2\" xmlns:d1p1=\"urn:q\" d1p1:q=\"x\"/>",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLWriter.WriteStartAttribute",
         "cls.XMLWriter.WriteStartElement",
@@ -1396,7 +1396,7 @@
       "parameters": "name - имя атрибута.\nnamespaceURI - необязательный: пространство имён, в котором он находится.",
       "return_descr": "",
       "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteStartElement(\"r\");\nWriter.WriteStartAttribute(\"period\");\nWriter.WriteText(\"2026\");\nWriter.WriteText(\"-10\");\nWriter.WriteEndAttribute();\nWriter.WriteEndElement();\nMessage(Writer.Close());   // <r period=\"2026-10\"/>",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLWriter.WriteEndAttribute",
         "cls.XMLWriter.WriteAttribute"
@@ -1419,7 +1419,7 @@
       "parameters": "Нет.",
       "return_descr": "",
       "example": "Writer.WriteStartAttribute(\"code\");\nWriter.WriteText(Code);\nWriter.WriteEndAttribute();",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLWriter.WriteStartAttribute"
       ],
@@ -1441,7 +1441,7 @@
       "parameters": "text - текст, строка.",
       "return_descr": "",
       "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteStartElement(\"c\");\nWriter.WriteText(\"1 < 2 & 3\");\nWriter.WriteEndElement();\nMessage(Writer.Close());   // <c>1 &lt; 2 &amp; 3</c>",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLWriter.WriteCDATASection",
         "cls.XMLWriter.WriteRaw",
@@ -1465,7 +1465,7 @@
       "parameters": "text - текст, строка.",
       "return_descr": "",
       "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.Indent = False;\nWriter.WriteStartElement(\"a\");\nWriter.WriteCDATASection(\"<b>bold</b>\");\nWriter.WriteEndElement();\nMessage(Writer.Close());   // <a><![CDATA[<b>bold</b>]]></a>",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLWriter.WriteText",
         "enum.XMLNodeType.CDATASection"
@@ -1488,7 +1488,7 @@
       "parameters": "text - текст комментария.",
       "return_descr": "",
       "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.Indent = False;\nWriter.WriteStartElement(\"a\");\nWriter.WriteComment(\" сформировано \");\nWriter.WriteEndElement();\nMessage(Writer.Close());   // <a><!-- сформировано --></a>",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLWriter.WriteProcessingInstruction",
         "enum.XMLNodeType.Comment"
@@ -1511,7 +1511,7 @@
       "parameters": "name - цель инструкции.\ntext - необязательный: то, что следует за ней.",
       "return_descr": "",
       "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.Indent = False;\nWriter.WriteProcessingInstruction(\"xml-stylesheet\", \"href=\"\"form.xsl\"\"\");\nWriter.WriteStartElement(\"a\");\nWriter.WriteEndElement();\nMessage(Writer.Close());   // <?xml-stylesheet href=\"form.xsl\"?><a/>",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLWriter.WriteComment",
         "enum.XMLNodeType.ProcessingInstruction"
@@ -1534,7 +1534,7 @@
       "parameters": "prefix - префикс; \"\" для пространства имён по умолчанию.\nnamespaceURI - пространство имён.",
       "return_descr": "",
       "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteStartElement(\"a\", \"urn:x\");\nWriter.WriteNamespaceMapping(\"p\", \"urn:p\");\nWriter.WriteEndElement();\nMessage(Writer.Close());   // <a xmlns=\"urn:x\" xmlns:p=\"urn:p\"/>",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLWriter.WriteStartElement",
         "cls.XMLWriter.LookupPrefix",
@@ -1558,7 +1558,7 @@
       "parameters": "text - текст, записываемый как есть.",
       "return_descr": "",
       "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteStartElement(\"a\");\nWriter.WriteRaw(\"<b>сделано в другом месте</b>\");\nWriter.WriteEndElement();\nMessage(Writer.Close());   // <a><b>сделано в другом месте</b></a>",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLWriter.WriteText",
         "cls.XMLWriter.WriteCDATASection"
@@ -1581,7 +1581,7 @@
       "parameters": "reader - XMLReader, текущий узел которого записывается.",
       "return_descr": "",
       "example": "var Reader = New XMLReader();\nReader.IgnoreWhitespace = False;\nReader.SetString(Source);\nvar Writer = New XMLWriter();\nWriter.SetString();\nWriter.Indent = False;\nwhile (Reader.Read()) {\n    if (Reader.NodeType <> XMLNodeType.Comment) {\n        Writer.WriteCurrent(Reader);       // документ без его комментариев\n    }\n}\nMessage(Writer.Close());",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader",
         "cls.XMLReader.Read",
@@ -1605,7 +1605,7 @@
       "parameters": "namespaceURI - пространство имён.",
       "return_descr": "String - или Undefined, когда с ним не связан ни один префикс.",
       "example": "var Writer = New XMLWriter();\nWriter.SetString();\nWriter.WriteStartElement(\"a\");\nWriter.WriteNamespaceMapping(\"p\", \"urn:p\");\nMessage(Writer.LookupPrefix(\"urn:p\"));                // p\nMessage(Writer.LookupPrefix(\"urn:none\") = Undefined); // True",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLWriter.WriteNamespaceMapping",
         "cls.XMLWriter.NamespaceContext",
@@ -1630,7 +1630,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns=\"\"urn:a\"\" xmlns:p=\"\"urn:p\"\"><p:x/></r>\");\nReader.Read();\nReader.Read();                             // p:x\nvar Context = Reader.NamespaceContext;\nMessage(Context.DefaultNamespace);          // urn:a\nMessage(Context.LookupNamespaceURI(\"p\"));  // urn:p\nMessage(Context.LookupPrefix(\"urn:p\"));     // p",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.NamespaceContext",
         "cls.XMLWriter.NamespaceContext",
@@ -1654,7 +1654,7 @@
       "parameters": "",
       "return_descr": "String.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns=\"\"urn:a\"\"><c xmlns=\"\"\"\"/></r>\");\nReader.Read();\nMessage(Reader.NamespaceContext.DefaultNamespace);          // urn:a\nReader.Read();\nMessage(Reader.NamespaceContext.DefaultNamespace = \"\");     // True: отменено",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLNamespaceContext",
         "cls.XMLNamespaceContext.LookupNamespaceURI"
@@ -1677,7 +1677,7 @@
       "parameters": "",
       "return_descr": "Number.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<r>t</r>\");\nwhile (Reader.Read()) {\n    Message(\"\" + Reader.Depth + \" / \" + Reader.NamespaceContext.Depth);   // 0 / 1, 1 / 2, 0 / 0\n}",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLNamespaceContext",
         "cls.XMLReader.Depth",
@@ -1701,7 +1701,7 @@
       "parameters": "prefix - префикс; \"\" для пространства имён по умолчанию.",
       "return_descr": "String - или Undefined, когда префикс не связан.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns:d=\"\"urn:d\"\" xmlns:xsi=\"\"http://www.w3.org/2001/XMLSchema-instance\"\"><i xsi:type=\"\"d:Item\"\"/></r>\");\nReader.Read();\nReader.Read();\nvar Type = Reader.GetAttribute(\"xsi:type\");                     // d:Item - префикс в значении\nvar Uri = Reader.NamespaceContext.LookupNamespaceURI(Left(Type, Find(Type, \":\") - 1));\nMessage(Uri);                                                    // urn:d",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLNamespaceContext.LookupPrefix",
         "cls.XMLNamespaceContext.DefaultNamespace"
@@ -1724,7 +1724,7 @@
       "parameters": "namespaceURI - пространство имён.",
       "return_descr": "String - или Undefined, когда с ним не связан ни один префикс.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns:p=\"\"urn:p\"\"/>\");\nReader.Read();\nvar Context = Reader.NamespaceContext;\nMessage(Context.LookupPrefix(\"urn:p\"));                // p\nMessage(Context.LookupPrefix(\"urn:none\") = Undefined); // True",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLNamespaceContext.LookupNamespaceURI",
         "cls.XMLNamespaceContext.Prefixes",
@@ -1748,7 +1748,7 @@
       "parameters": "Нет.",
       "return_descr": "Array строк.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns=\"\"urn:a\"\" xmlns:p=\"\"urn:p\"\"/>\");\nReader.Read();\nforeach (Uri In Reader.NamespaceContext.NamespaceURIs()) {\n    Message(Uri);          // urn:a, urn:p и пространство имён XML\n}",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLNamespaceContext.Prefixes",
         "cls.XMLNamespaceContext.NamespaceMappings"
@@ -1771,7 +1771,7 @@
       "parameters": "namespaceURI - пространство имён.",
       "return_descr": "Array строк.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns:p=\"\"urn:p\"\" xmlns:q=\"\"urn:p\"\"/>\");\nReader.Read();\nMessage(Reader.NamespaceContext.Prefixes(\"urn:p\").Count());   // 2",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLNamespaceContext.LookupPrefix",
         "cls.XMLNamespaceContext.NamespaceURIs"
@@ -1794,7 +1794,7 @@
       "parameters": "Нет.",
       "return_descr": "Map - префикс → URI пространства имён.",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<r xmlns=\"\"urn:a\"\" xmlns:p=\"\"urn:p\"\"/>\");\nReader.Read();\nforeach (Pair In Reader.NamespaceContext.NamespaceMappings()) {\n    Message(\"'\" + Pair.Key + \"' = \" + Pair.Value);   // '' = urn:a, 'p' = urn:p, 'xml' = ...\n}",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLNamespaceContext.NamespaceURIs",
         "cls.XMLNamespaceContext.LookupNamespaceURI"
@@ -1819,7 +1819,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<a>t</a>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.Text) {\n        Message(Reader.Value);             // t\n    }\n}",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.NodeType",
         "cls.XMLReader.MoveToContent",
@@ -1843,7 +1843,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<a/>\");\nMessage(Reader.NodeType = XMLNodeType.None);   // True: ещё ничего не прочитано\nwhile (Reader.Read()) {\n}\nMessage(Reader.NodeType = XMLNodeType.None);   // True: за концом",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "enum.XMLNodeType",
         "cls.XMLReader.NodeType"
@@ -1866,7 +1866,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Reader = New XMLReader();\nReader.IgnoreWhitespace = False;\nReader.SetString(\"<a> <b>t</b><![CDATA[c]]><!--m--><?p v?></a>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.StartElement) {\n        Message(\"StartElement: \" + Reader.Name + \" \" + Reader.Value);\n    }\n}",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "enum.XMLNodeType",
         "cls.XMLReader.NodeType"
@@ -1889,7 +1889,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Reader = New XMLReader();\nReader.IgnoreWhitespace = False;\nReader.SetString(\"<a> <b>t</b><![CDATA[c]]><!--m--><?p v?></a>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.EndElement) {\n        Message(\"EndElement: \" + Reader.Name + \" \" + Reader.Value);\n    }\n}",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "enum.XMLNodeType",
         "cls.XMLReader.NodeType"
@@ -1912,7 +1912,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Reader = New XMLReader();\nReader.IgnoreWhitespace = False;\nReader.SetString(\"<a> <b>t</b><![CDATA[c]]><!--m--><?p v?></a>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.Text) {\n        Message(\"Text: \" + Reader.Name + \" \" + Reader.Value);\n    }\n}",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "enum.XMLNodeType",
         "cls.XMLReader.NodeType"
@@ -1935,7 +1935,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Reader = New XMLReader();\nReader.IgnoreWhitespace = False;\nReader.SetString(\"<a> <b>t</b><![CDATA[c]]><!--m--><?p v?></a>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.Whitespace) {\n        Message(\"Whitespace: \" + Reader.Name + \" \" + Reader.Value);\n    }\n}",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "enum.XMLNodeType",
         "cls.XMLReader.NodeType"
@@ -1958,7 +1958,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Reader = New XMLReader();\nReader.IgnoreWhitespace = False;\nReader.SetString(\"<a> <b>t</b><![CDATA[c]]><!--m--><?p v?></a>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.CDATASection) {\n        Message(\"CDATASection: \" + Reader.Name + \" \" + Reader.Value);\n    }\n}",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "enum.XMLNodeType",
         "cls.XMLReader.NodeType"
@@ -1981,7 +1981,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Reader = New XMLReader();\nReader.IgnoreWhitespace = False;\nReader.SetString(\"<a> <b>t</b><![CDATA[c]]><!--m--><?p v?></a>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.Comment) {\n        Message(\"Comment: \" + Reader.Name + \" \" + Reader.Value);\n    }\n}",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "enum.XMLNodeType",
         "cls.XMLReader.NodeType"
@@ -2004,7 +2004,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Reader = New XMLReader();\nReader.IgnoreWhitespace = False;\nReader.SetString(\"<a> <b>t</b><![CDATA[c]]><!--m--><?p v?></a>\");\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.ProcessingInstruction) {\n        Message(\"ProcessingInstruction: \" + Reader.Name + \" \" + Reader.Value);\n    }\n}",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "enum.XMLNodeType",
         "cls.XMLReader.NodeType"
@@ -2027,7 +2027,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Reader = New XMLReader();\nReader.IgnoreXMLDeclaration = False;\nReader.SetString(\"<?xml version=\"\"1.0\"\"?><a/>\");\nReader.Read();\nMessage(Reader.NodeType = XMLNodeType.XMLDeclaration);   // True\nMessage(Reader.GetAttribute(\"version\"));                // 1.0",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "enum.XMLNodeType",
         "cls.XMLReader.NodeType"
@@ -2050,7 +2050,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Reader = New XMLReader();\nReader.IgnoreDocumentType = False;\nReader.SetString(\"<!DOCTYPE a [<!ENTITY e \"\"x\"\">]><a>&e;</a>\");\nReader.Read();\nMessage(Reader.NodeType = XMLNodeType.DocumentTypeDefinition);   // True\nMessage(Reader.Value);                                           // <!ENTITY e \"x\">",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "enum.XMLNodeType",
         "cls.XMLReader.NodeType"
@@ -2073,7 +2073,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<r a=\"\"1\"\"/>\");\nReader.Read();\nReader.ReadAttribute();\nMessage(Reader.NodeType = XMLNodeType.Attribute);   // True\nMessage(Reader.Name + \" = \" + Reader.Value);       // a = 1",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "enum.XMLNodeType",
         "cls.XMLReader.NodeType"
@@ -2096,7 +2096,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<?xml version=\"\"1.0\"\"?><!DOCTYPE a><a>&amp;</a>\");\nvar Met = False;\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.EntityReference) {\n        Met = True;\n    }\n}\nMessage(Met);                               // False - здесь не встречается",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "enum.XMLNodeType",
         "cls.XMLReader.NodeType"
@@ -2119,7 +2119,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<?xml version=\"\"1.0\"\"?><!DOCTYPE a><a>&amp;</a>\");\nvar Met = False;\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.Entity) {\n        Met = True;\n    }\n}\nMessage(Met);                               // False - здесь не встречается",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "enum.XMLNodeType",
         "cls.XMLReader.NodeType"
@@ -2142,7 +2142,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<?xml version=\"\"1.0\"\"?><!DOCTYPE a><a>&amp;</a>\");\nvar Met = False;\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.EndEntity) {\n        Met = True;\n    }\n}\nMessage(Met);                               // False - здесь не встречается",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "enum.XMLNodeType",
         "cls.XMLReader.NodeType"
@@ -2165,7 +2165,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<?xml version=\"\"1.0\"\"?><!DOCTYPE a><a>&amp;</a>\");\nvar Met = False;\nwhile (Reader.Read()) {\n    if (Reader.NodeType = XMLNodeType.Notation) {\n        Met = True;\n    }\n}\nMessage(Met);                               // False - здесь не встречается",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "enum.XMLNodeType",
         "cls.XMLReader.NodeType"
@@ -2189,7 +2189,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<a xml:space=\"\"preserve\"\"/>\");\nReader.Read();\nMessage(Reader.Space = XMLSpace.Preserve);   // True",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "cls.XMLReader.Space",
         "cls.XMLReader.IgnoreWhitespace"
@@ -2212,7 +2212,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<a/>\");\nReader.Read();\nMessage(Reader.Space = XMLSpace.Default);   // True: ничего не сказано",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "enum.XMLSpace",
         "cls.XMLReader.Space"
@@ -2235,7 +2235,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var Reader = New XMLReader();\nReader.SetString(\"<a xml:space=\"\"preserve\"\"> </a>\");\nReader.Read();\nReader.Read();\nMessage(Reader.NodeType = XMLNodeType.Whitespace);   // True",
-      "availability": "Тонкий клиент, Сервер",
+      "availability": "Клиент, Сервер",
       "see_also": [
         "enum.XMLSpace",
         "cls.XMLReader.Space"

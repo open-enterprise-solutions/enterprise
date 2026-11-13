@@ -1,7 +1,6 @@
 #include "connectionDB.h"
 
 #include <wx/dirdlg.h>   // wxDirSelector — the base's folder, chosen in the system's dialog
-#include <wx/xml/xml.h>
 
 #include "core/net/ports.h"                 // ibPort::Clients — the port a cluster's address leaves out
 #include "protocol/connectionServer.h"      // the socket a client opens on a cluster's base or a publication

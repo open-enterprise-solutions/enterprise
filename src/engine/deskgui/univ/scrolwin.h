@@ -7,7 +7,7 @@
 //
 // On GTK3 the port's helper read a scrolled window's policy off the bare wxPizza (Gtk-CRITICAL, an uninitialised policy
 // back), gave the engine's bars no range - nothing scrolled - and asked GTK for a window of the VIRTUAL size
-// (designer-thin under Xvfb, CI, 2026-11-12). On MSW and Cocoa wx took the generic helper already: the same code.
+// (appstudio under Xvfb, CI, 2026-11-12). On MSW and Cocoa wx took the generic helper already: the same code.
 
 /////////////////////////////////////////////////////////////////////////////
 // Name:        wx/scrolwin.h, wx/generic/scrolwin.h

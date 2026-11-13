@@ -535,6 +535,15 @@ set(wxUSE_PROPGRID OFF CACHE BOOL "" FORCE)
 # …nor its AUI: the docking, the tool bar and the notebook are the desktop library's fork (deskgui/univ/aui, 2026-11-11),
 # drawn by the theme. Off, wx builds no wxaui library and no XRC handlers for it.
 set(wxUSE_AUI OFF CACHE BOOL "" FORCE)
+# …nor its debug report: a crash is the core's guard's (core/diagnostics/crashGuard.h - the minidump and the log), and
+# no program shows wx's report (2026-11-13). Off, wx builds no wxqa library.
+set(wxUSE_DEBUGREPORT OFF CACHE BOOL "" FORCE)
+# …nor its XML: what a program reads and writes as XML is the core's (core/xml - ibXmlDocument, ibXmlWriter), and with it
+# what wx builds on its XML - the XRC resources and the rich text control, which no program places (2026-11-13). Off, wx
+# builds no wxxml, wxxrc or wxrichtext library.
+set(wxUSE_XML      OFF CACHE BOOL "" FORCE)
+set(wxUSE_XRC      OFF CACHE BOOL "" FORCE)
+set(wxUSE_RICHTEXT OFF CACHE BOOL "" FORCE)
 
 # wx's own copies of the libraries whose name a user's system does not promise. On Linux wx takes the system's
 # when the build machine has them, and the build machine has what GTK's development packages pull in: the
@@ -734,11 +743,11 @@ endif()
 #   appcluster    — executable      (console subsystem, or a service; a server per base of the folder — links core alone)
 #   appcluster-tray — executable    (GUI subsystem; the cluster's tray — links core alone)
 #   webserver     — executable      (console subsystem; the bases' transport for browsers — links protocol alone)
-#   enterprise-thin   — executable      (GUI subsystem; the thin runtime — links frmclient alone)
-#   designer-thin — executable      (GUI subsystem; the thin designer — links frmclient alone)
+#   appworkspace   — executable      (GUI subsystem; the thin runtime — links frmclient alone)
+#   appstudio — executable      (GUI subsystem; the thin designer — links frmclient alone)
 #   launcher      — executable      (GUI subsystem)
-#   codeRunner    — executable      (GUI subsystem)
-#   simplePlugin  — SHARED library  (plugin example)
+#   coderunner    — executable      (GUI subsystem)
+#   simple-plugin  — SHARED library  (plugin example)
 # ---------------------------------------------------------------------------
 
 # A REFERENCE TO A TEMPORARY IS AN ERROR, not a warning, in our code (here, so the third-party trees above keep
@@ -763,21 +772,21 @@ add_subdirectory("${OES_ENGINE_DIR}/appserver")
 add_subdirectory("${OES_ENGINE_DIR}/appcluster")
 add_subdirectory("${OES_ENGINE_DIR}/appcluster-tray")
 add_subdirectory("${OES_ENGINE_DIR}/webserver")
-add_subdirectory("${OES_ENGINE_DIR}/enterprise-thin")
-add_subdirectory("${OES_ENGINE_DIR}/designer-thin")
+add_subdirectory("${OES_ENGINE_DIR}/appworkspace")
+add_subdirectory("${OES_ENGINE_DIR}/appstudio")
 add_subdirectory("${OES_ENGINE_DIR}/launcher")
-add_subdirectory("${OES_ENGINE_DIR}/codeRunner")
-add_subdirectory("${OES_ENGINE_DIR}/simplePlugin")
+add_subdirectory("${OES_ENGINE_DIR}/coderunner")
+add_subdirectory("${OES_ENGINE_DIR}/simple-plugin")
 
 # ⭐ EACH OF OUR LIBRARIES AND PROGRAMS ANSWERS FOR ITS OWN SYMBOLS (ELF: Linux, the BSDs). A file base loads fileserver into the
 # client (dlopen, protocol/connectionFile.cpp), backend and frmserver with it, over the client's libraries already
 # in the process - and 75 classes are exported under one name on both sides (ibMetaData, ibValueMetaObject,
 # ibApplicationInstance, ibValueForm, ...). ELF binds a reference to the FIRST definition of its name in the process:
 # backend's own calls ran the client's ibMetaData, whose factory knows no type of the engine - "Object with id ... is
-# not exist" thirty times, then a segmentation fault (designer-thin on a new file base, CI's look step, 2026-11-12).
+# not exist" thirty times, then a segmentation fault (appstudio on a new file base, CI's look step, 2026-11-12).
 # A version node per library binds each reference to the library it was linked against, as a DLL's import does on
 # Windows and the two-level namespace on macOS. The programs take one too: an executable is searched FIRST, and a
-# definition with no version answers a versioned reference - designer-thin exports the client's ibValue and
+# definition with no version answers a versioned reference - appstudio exports the client's ibValue and
 # ibValueMetaObject (frmclient defines the same names, so ld puts the program's copies out), and backend's destructor
 # ran the client's, a segmentation fault in ibPropertyObject::RemoveAttachedObject (the same step, after the libraries
 # had theirs). Written only when it changes (file(CONFIGURE)): a map rewritten at every configure would relink every
@@ -786,7 +795,7 @@ add_subdirectory("${OES_ENGINE_DIR}/simplePlugin")
 # function, a vtable with no key function, a template's code), which dyld makes one across the process: a definition
 # that is not weak wins, else the first loaded. backend's inline ibPropertyStringBase::GetValueAsString ran the client's
 # (frmclient defines the name out of line), which asked backend's WriteNodeValue again - the stack overflowed
-# (designer-thin on a new file base, CI's look step, 2026-11-13). There every target of ours hides its inline member
+# (appstudio on a new file base, CI's look step, 2026-11-13). There every target of ours hides its inline member
 # functions, as Xcode does by default (GCC_INLINES_ARE_PRIVATE_EXTERN): each library calls its own, and a static local
 # of one stays one (clang keeps it visible).
 if(UNIX)

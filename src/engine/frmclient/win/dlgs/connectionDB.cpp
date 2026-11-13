@@ -1,7 +1,5 @@
 #include "connectionDB.h"
 
-#include <wx/xml/xml.h>
-
 ibDialogConnection::ibDialogConnection(wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) :
 	ibDialog(parent, id, title, pos, size, style)
 {

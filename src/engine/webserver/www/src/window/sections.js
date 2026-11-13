@@ -1,4 +1,4 @@
-// THE SECTION PANEL (schema 3) — the thin client's (enterprise-thin/mainFrame/mainFrameEnterpriseInterface.cpp) in
+// THE SECTION PANEL (schema 3) — the thin client's (appworkspace/mainFrame/mainFrameEnterpriseInterface.cpp) in
 // the browser: a column of section buttons down the window's left side, and a section's page opened beside them, over
 // the rest of the window. The page lays the section's blocks in two columns, as the server orders them
 // (frmserver/schema/runtime/sections.cpp, PageOf): on the left the section's own items under no heading, the navigation

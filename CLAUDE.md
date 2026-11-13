@@ -12,8 +12,8 @@ This file gives an AI assistant (Claude Code or similar) the context needed to w
 language and its compiler, the bytecode interpreter, the query engine, the database layer and the
 form layer — builds from one code base and runs an **identical suite** under three toolchains on
 two architectures: MSVC on Windows x64, GCC on Linux x64, and Apple Clang on macOS 15 **arm64**.
-Every application (`enterprise-thin`, `designer-thin`, `appserver`, `webserver`, `appcluster`, `launcher`,
-`codeRunner`, `simplePlugin`) links on every platform.
+Every application (`appworkspace`, `appstudio`, `appserver`, `webserver`, `appcluster`, `launcher`,
+`coderunner`, `simple-plugin`) links on every platform.
 
 The suite GROWS, so the number here is a reading and not a property: **919** on 2026-08-03 when
 the three jobs first agreed, **1166** on 2026-08-07 (1197 `TEST` cases live in `tests/`; CI's
@@ -134,15 +134,15 @@ enterprise/
         │                    #   the doc/view; univ/ the custom-drawn engine and all that inherits it (ctrl, dataview, grid, theme); links core
         ├── frmclient/       # frmclient.dll — the thin client's graphics library and its communicator; links core, protocol, deskgui
         ├── fileserver/      # fileserver.dll — a file base loaded into the thin client's process
-        ├── enterprise-thin/ # enterprise-thin.exe (thin client)
+        ├── appworkspace/    # appworkspace.exe (thin client)
         ├── webserver/       # webserver.exe (the bases' transport for browsers: the site + the client protocol)
-        ├── designer-thin/   # designer-thin.exe (thin designer)
+        ├── appstudio/       # appstudio.exe (thin designer)
         ├── launcher/        # launcher.exe  (connection chooser)
         ├── appserver/       # appserver.exe (the application server)
         ├── appcluster/      # appcluster.exe (servers per base, the port and routing, restarts; console or a service)
         ├── appcluster-tray/ # appcluster-tray.exe (the cluster's tray: its servers, its verbs, starting it)
-        ├── codeRunner/      # codeRunner.exe
-        └── simplePlugin/    # simplePlugin.dll (example)
+        ├── coderunner/      # coderunner.exe
+        └── simple-plugin/   # simple-plugin.dll (example)
 ```
 
 ---
@@ -182,11 +182,11 @@ The compiler is a single-pass recursive descent parser with a deferred-call-reso
 
 ### 4. Two-DLL Architecture
 
-`backend.dll` has zero UI code. The wxWidgets GUI is the clients': `frmclient.dll` under `enterprise-thin` and `designer-thin`, `launcher` and `codeRunner` on `deskgui.dll` (the desktop's user interface library, which frmclient places too; codeRunner's window is its frame, `ibFrame`). The forms are `frmserver.dll`'s, which reaches the engine through abstract C++ interfaces exported by `backend.dll` and a client through the protocol. This allows the backend to run headless (daemon, codeRunner, service mode).
+`backend.dll` has zero UI code. The wxWidgets GUI is the clients': `frmclient.dll` under `appworkspace` and `appstudio`, `launcher` and `coderunner` on `deskgui.dll` (the desktop's user interface library, which frmclient places too; coderunner's window is its frame, `ibFrame`). The forms are `frmserver.dll`'s, which reaches the engine through abstract C++ interfaces exported by `backend.dll` and a client through the protocol. This allows the backend to run headless (daemon, coderunner, service mode).
 
 Under both sits **`core.dll`** (`src/engine/core/`, `CORE_API` / `CORE_EXPORTS` and the platform `__IBMSW__` / `__IBOSX__` / `__IBGTK__` in `coreApi.h`; its text is `ibString` throughout — UTF-16, `ibChar` = `char16_t` on every OS, `wc_str()` its one wide boundary — and of wx it includes nothing: `ibString`'s and `ibVariant`'s conversion to and from `wxString` is templates over a declared `wxString`, made only in a program that includes wx (`fstring.h`), and the programs' wx side is the desktop library's, header-only (`deskgui/app.h`, `deskgui/console.h` — a server includes the second and links no deskgui); its encodings are `ibCodePage` (`core/codePage.h`), its zip `ibZipReader` / `ibZipWriter` (`core/zip/zip.h` — a format, beside `json/` and `xml/`), its `.conf` files `ibFileConfig`, its zlib wx's bundled build on Windows and the system's elsewhere): what the engine and its clients mean by the same words — ids and `ibValueTypes` (`core/types.h`), `ibVariant` (`core/variant.h`, the one value type: a primitive or a counted reference, its lifecycle, serialization and compare, no base, no factory — the engine's `ibValue` adds the runtime and the factory, the thin client's a small factory; `ibVariantPtr<T>` in `core/variant_ptr.h`), `clsid.h`, `ibString` (+ pool), `ibNumber`, `ibDateTime`, `ibGuid`, `ibFormatString`, `fileSystem/` (`ibReader`/`ibWriter`, lz), `serialize/` (`ibDataNode`, the binary provider; `provider/` — JSON, XML, files), `json/` and `xml/` (the formats' text), `ibCoreException`, `localization/` (`ibLocalization`, `ibDictionary` — the engine's `_()`, the process locale `locale.h`), `system.h` (the machine: host, user, system, environment, command line), `diagnostics/` (the technology journal — one per process, wx chained in by the program — and the crash guard), `description/` (the schemas both sides share — source path, command path, calc schedule, choice link, home page; ids and nodes, never a value), `query/` (the query language's words: keywords, scalar calls, unfold, balance role), `graphics/` (`ibPicture`, `ibFont`, `ibColour`, `ibPoint`/`ibSize`/`ibRect` — data; the conversion to wx is each side's), `ibProgramFolder` (`fileSystem.h` — where `backend.conf`, `lang/`, `plugins/`, `_fb/` and the other programs are looked for: the executable's folder, or on macOS the one that holds the `.app`, never `Contents/MacOS`) and `ibDiagnosticFolder` (where the journal, the dumps and `oes-debug.log` go: the same folder, except `~/Library/Logs/OES` for a program running from a macOS bundle), `GetBuildId`/`GetBuildStamp`. It reads no base, runs no script, draws no window.
 
-- Chain: core → backend → frmserver ⇄ protocol ⇄ frmclient → enterprise-thin; fileserver = backend + frmserver inside the client process.
+- Chain: core → backend → frmserver ⇄ protocol ⇄ frmclient → appworkspace; fileserver = backend + frmserver inside the client process.
 - backend links core PUBLIC; every project that links `backend.lib` also links `core.lib`; protocol links core; deskgui links core; frmclient links core + protocol + deskgui. `protocol.h` itself stays dependency-free.
 - The code of backend, frmserver, protocol and fileserver names no wx — no type, macro or header (a comment may still
   name the wx call a line replaced), and they link no wx: `ibString` ⇄ `wxString` is templates in `core/fstring.h`,
@@ -374,8 +374,8 @@ also written into the technology journal with the accepted list beside it.
 ### Start a client on a folder base
 
 ```cmd
-bin\Win32\Debug\designer-thin.exe   --file=F:\projects\oes-bin\examples\fb_test301
-bin\Win32\Debug\enterprise-thin.exe --file=F:\projects\oes-bin\examples\fb_test301
+bin\Win32\Debug\appstudio.exe   --file=F:\projects\oes-bin\examples\fb_test301
+bin\Win32\Debug\appworkspace.exe --file=F:\projects\oes-bin\examples\fb_test301
 ```
 
 `--file=` is the **folder**, not a `.fdb`. Started with no `--file`, no `--srv` and no `--address`, the
@@ -405,7 +405,7 @@ window that would otherwise stay silent while their configuration is read and ch
 text says exactly this, so the rule teaches itself.
 
 Then the ones worth knowing before starting: `platform_state` (what is open, which dialect),
-`metadata_tree` (the map), `app_run` (start the application — `enterprise-thin` by default, or `webserver`; **`restart: true`** after changing a
+`metadata_tree` (the map), `app_run` (start the application — `appworkspace` by default, or `webserver`; **`restart: true`** after changing a
 module — a running client keeps the bytecode it came up with), `debug_sandbox` (run statements
 inside a stopped runtime, always rolled back; answers with `microseconds`), and the two journals —
 `journal_read` for what the INSTALLATION did (logins, writes, postings: the accountant's record)
@@ -633,7 +633,7 @@ See `docs/private/eval-scope-refactor.md` for the full architecture.
 
 - **Worker pool** — `ibWorkerPool` (`src/engine/backend/session/workerPool.h`) + headless implementation (`workerPoolHeadless.{h,cpp}`). Each session has a queue + an atomic "leased" flag (`workerPoolHeadless.h`); sessionless callers fall back to a `thread_local ibProcUnitState ts_fallbackPUState` in `session.cpp` (`ibSession::GetPUState`).
 - **AOT bytecode cache** — `byteCodeAOT.cpp` serialises a compiled `ibByteCode` to a memory stream; deserialisation reverses the compile step without re-running the parser. Persisted in `sys_bytecode_cache`, looked up by **`(descriptor_id, config_md5)`**, where `config_md5` holds `ibByteCodeCache::CacheKey` — an MD5 of three things: `kAOTFormatVersion` (`compiler/byteCodeFormat.h`), `kEngineFingerprint` (a SHA-256 of every file under `backend/compiler/`, `backend/system/` and `core/compiler/` — the compiler, the interpreter, the built-in registry, the translator — written at build time into a generated `engineFingerprintBuild.h` — by `compiler/engineFingerprint.cmake` under CMake, by the `EngineFingerprint` task of `backend.vcxproj` under MSBuild, one rule and one hash), and the configuration's own digest (`ibMetaData::GetConfigMD5()`). So a configuration save, a compiler change or a new built-in each make every older row unreachable, and `Invalidate()` is hygiene rather than correctness. The build stamp is no longer part of the key (2026-10-10): `core` is not rebuilt when the compiler changes, so a stale blob kept its key. Written by the RUNTIME lazily on first call to a descriptor; the Designer never writes it. See [docs/private/compiler-pipeline.md](docs/private/compiler-pipeline.md) §4a.
-- **Per-session runtime image** — each `ibSession` owns `m_root : ibValuePtr<ibValueModuleManagerRuntimeConfiguration>` (built in `CreateRoot`; `GetManagerModule()`) and `m_lambdaRuntime : std::unique_ptr<ibProcUnit>` (wired to `m_root`'s procUnit on first `GetLambdaRuntime()`). Designer / codeRunner edit-time managers come from `GetEditModuleManager(metaData)` / `EditModuleManagerFor(metaData)`, kept separate from the per-session runtime root.
+- **Per-session runtime image** — each `ibSession` owns `m_root : ibValuePtr<ibValueModuleManagerRuntimeConfiguration>` (built in `CreateRoot`; `GetManagerModule()`) and `m_lambdaRuntime : std::unique_ptr<ibProcUnit>` (wired to `m_root`'s procUnit on first `GetLambdaRuntime()`). Designer / coderunner edit-time managers come from `GetEditModuleManager(metaData)` / `EditModuleManagerFor(metaData)`, kept separate from the per-session runtime root.
 
 ---
 

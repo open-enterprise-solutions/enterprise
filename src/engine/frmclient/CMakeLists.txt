@@ -46,7 +46,6 @@ target_link_libraries(frmclient
         wx::core
         wx::html
         wx::base
-        wx::xml
 )
 
 find_package(Threads REQUIRED)

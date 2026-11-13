@@ -1,0 +1,159 @@
+////////////////////////////////////////////////////////////////////////////
+//	Author		: Maxim Kornienko
+//	Description : the thin runtime's application
+////////////////////////////////////////////////////////////////////////////
+
+#include "mainApp.h"
+
+#include <memory>
+
+#include <wx/cmdline.h>
+#include "core/launchTicket.h"
+#include <wx/image.h>
+#include "deskgui/univ/messageDialog.h"
+
+#include "frmclient/artProvider/splash/splashLogo.h"   // the splash's picture, the desktop's
+#include "frmclient/backend/backend_picture.h"         // ibBackendPicture::GetImageFromBase64 — the splash, a master in the source
+#include "protocol/connectionFile.h"
+#include "protocol/connectionServer.h"
+
+#include "mainFrame/mainFrameEnterprise.h"
+
+wxIMPLEMENT_APP(ibAppEnterprise);
+
+#if wxUSE_CMDLINE_PARSER
+
+void ibAppEnterprise::OnInitCmdLine(wxCmdLineParser& parser)
+{
+	parser.AddOption(wxT("address"), wxT("address"), "Application server: oes://server[:port]/<base>, oess:// over TLS; or a web server's publication: http(s)://server[:port]/<base>/", wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
+	parser.AddOption(wxT("trusted"), wxT("trusted"), "oess://: the authorities trusted, a PEM file (default: the system's store)", wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
+	parser.AddOption(wxT("file"),   wxT("file"),     "Database file path",      wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
+	parser.AddOption(wxT("srv"),    wxT("server"),   "Database server address", wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
+	parser.AddOption(wxT("p"),      wxT("dbport"),   "Database server port",    wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
+	parser.AddOption(wxT("db"),     wxT("db"),       "Database name",           wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
+	parser.AddOption(wxT("usr"),    wxT("user"),     "Database user",           wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
+	parser.AddOption(wxT("pwd"),    wxT("password"), "Database password",       wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
+	parser.AddOption(wxT("ib_usr"), wxT("ibuser"),   "IB user",                 wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
+	parser.AddOption(wxT("ib_pwd"), wxT("ibpwd"),    "IB password",             wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
+	parser.AddOption(wxT("lc"),     wxT("locale"),   "UI locale",               wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
+	parser.AddSwitch(wxT("debug"),  wxT("debug"),    "Enable debug attach.",    wxCMD_LINE_VAL_NONE);
+
+	wxApp::OnInitCmdLine(parser);
+}
+
+bool ibAppEnterprise::OnCmdLineParsed(wxCmdLineParser& parser)
+{
+	parser.Found(wxT("address"), &m_strAddress);
+	parser.Found(wxT("trusted"), &m_strTrusted);
+
+	parser.Found(wxT("file"), &m_strFile);
+
+	parser.Found(wxT("srv"), &m_strServer);
+	parser.Found(wxT("p"), &m_strPort);
+	parser.Found(wxT("db"), &m_strDatabase);
+	parser.Found(wxT("usr"), &m_strUser);
+	parser.Found(wxT("pwd"), &m_strPassword);
+
+	parser.Found(wxT("ib_usr"), &m_strIBUser);
+	parser.Found(wxT("ib_pwd"), &m_strIBPassword);
+
+	ibLaunchSecrets line;
+	line.m_dbUser = m_strUser;
+	line.m_dbPassword = m_strPassword;
+	line.m_ibUser = m_strIBUser;
+	line.m_ibPassword = m_strIBPassword;
+	ibApplyLaunchSecrets(line, parser.Found(wxT("pwd")), parser.Found(wxT("ib_pwd")));
+	m_strUser = line.m_dbUser;
+	m_strPassword = line.m_dbPassword;
+	m_strIBUser = line.m_ibUser;
+	m_strIBPassword = line.m_ibPassword;
+
+	parser.Found(wxT("lc"), &m_strLocale);
+
+	m_debugEnable = parser.FoundSwitch(wxT("debug")) == wxCMD_SWITCH_ON;
+
+	return wxApp::OnCmdLineParsed(parser);
+}
+
+#endif
+
+bool ibAppEnterprise::DoOnInit()
+{
+	// The journal, the dumps and the light appearance are the base's (ibWxApp::OnInit, deskgui/app.h), set
+	// before this runs — as every application of the platform has them.
+
+	// THE COMMAND LINE FIRST, then the connection: wx calls OnExit only after an OnInit that succeeded, so nothing is
+	// opened before a refusal here could leave it behind (the coderunner exit crash, 2026-10-07).
+	if (!wxApp::OnInit())
+		return false;
+
+	wxInitAllImageHandlers();
+
+	// THE SPLASH — the desktop's (enterprise/mainApp.cpp): up while the base opens and the client logs in, gone with the
+	// main window shown — or before a refusal is said, which it would stand over.
+	const auto splashDestroy = [](wxSplashScreen* shown) { shown->Destroy(); };
+	std::unique_ptr<wxSplashScreen, decltype(splashDestroy)> splash(new ibProcessSplashScreen(wxBitmap(ibBackendPicture::GetImageFromBase64(s_splashLogo_png)),
+		wxSPLASH_CENTRE_ON_SCREEN, -1, nullptr, -1, wxDefaultPosition, wxDefaultSize, wxBORDER_SIMPLE), splashDestroy);
+
+	std::unique_ptr<ibProtocolConnection> connection;
+	ibString error;
+
+	if (!m_strAddress.IsEmpty()) {
+		// An application server — over its port.
+		auto server = std::make_unique<ibProtocolConnectionServer>();
+		if (!server->Open(m_strAddress, m_strTrusted, error)) {
+			splash.reset();
+			ibMessageBox(error, _("OES Application Workspace - startup error"), wxOK | wxICON_ERROR);
+			return false;
+		}
+		connection = std::move(server);
+	}
+	else if (!m_strFile.IsEmpty() || (!m_strServer.IsEmpty() && !m_strDatabase.IsEmpty())) {
+		// A file base — opened in this process, by the library that brings the server in.
+		ibProtocolNode request;
+		request.SetValue(ibProtocol::ibFileBase::Locale, m_strLocale)
+			.SetValue(ibProtocol::ibFileBase::Debug, m_debugEnable);
+		if (!m_strFile.IsEmpty()) {
+			request.SetValue(ibProtocol::ibFileBase::Directory, m_strFile);
+		}
+		else {
+			request.SetValue(ibProtocol::ibFileBase::Server, m_strServer)
+				.SetValue(ibProtocol::ibFileBase::Port, m_strPort)
+				.SetValue(ibProtocol::ibFileBase::User, m_strUser)
+				.SetValue(ibProtocol::ibFileBase::Password, m_strPassword)
+				.SetValue(ibProtocol::ibFileBase::Database, m_strDatabase);
+		}
+		auto file = std::make_unique<ibProtocolConnectionFile>();
+		if (!file->Open(request.Write(), error)) {
+			splash.reset();
+			ibMessageBox(error + wxT("\n\n") + (m_strFile.IsEmpty() ? m_strServer + wxT(" / ") + m_strDatabase : m_strFile),
+				_("OES Application Workspace - startup error"), wxOK | wxICON_ERROR);
+			return false;
+		}
+		connection = std::move(file);
+	}
+	else {
+		splash.reset();
+		ibMessageBox(
+			_("Cannot start appworkspace.exe - no infobase specified.\n\n"
+			  "Provide one of:\n"
+			  "  --address=oes://<server>[:port]/<base>   (an application server; oess:// over TLS)\n"
+			  "  --address=http(s)://<server>[:port]/<base>/   (a web server's publication, its link)\n"
+			  "  --file=<path>          (Firebird embedded / SQLite file)\n"
+			  "  --server=<host> --db=<name> [--dbport=...] [--user=...]"),
+			_("OES Application Workspace"),
+			wxOK | wxICON_ERROR
+		);
+		return false;
+	}
+
+	// The window holds the client from here: it logs in as it is shown, and a refused start takes it down again —
+	// the communicator with it, and a file base's connection closes the base.
+	auto* frame = new ibFrontendMainFrameEnterprise(
+		std::make_unique<ibCommunicator>(std::move(connection)), m_strIBUser, m_strIBPassword);
+	if (!frame->Show()) {
+		frame->Destroy();
+		return false;
+	}
+	return true;
+}

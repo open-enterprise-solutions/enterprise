@@ -1,0 +1,31 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="mainApp.cpp" />
+    <ClCompile Include="outputMessage.cpp" />
+    <ClCompile Include="coderunner.cpp">
+      <Filter>windows</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="mainApp.h" />
+    <ClInclude Include="outputMessage.h" />
+    <ClInclude Include="coderunner.h">
+      <Filter>windows</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="windows">
+      <UniqueIdentifier>{45cd0a1c-c859-460c-98e8-28f5f2c95147}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="coderunner.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="coderunner.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="..\core\program.manifest" />
+  </ItemGroup>
+</Project>

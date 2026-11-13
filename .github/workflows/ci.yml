@@ -204,7 +204,7 @@ jobs:
           retention-days: 7
 
       # The APPLICATIONS, which no test target pulls in: the thin runtime and designer, appserver /
-      # webserver / appcluster / launcher / codeRunner / simplePlugin. Without this step nothing in CI
+      # webserver / appcluster / launcher / coderunner / simple-plugin. Without this step nothing in CI
       # ever compiled them, so a break in an .exe's own sources reached a developer's machine first.
       # It is cheap here — the libraries are already built by the steps above, so this only adds
       # the executables' own translation units and their link.
@@ -232,18 +232,18 @@ jobs:
           done
 
       # ⭐ WHAT THE DESKTOP LOOKS LIKE ON THIS PORT. Nobody here runs it on Linux or the Mac, and the desktop library draws
-      # every control itself (deskgui): a shot of codeRunner — no base, the sandbox; its frame, menubar, tool bar, code
+      # every control itself (deskgui): a shot of coderunner — no base, the sandbox; its frame, menubar, tool bar, code
       # editor and buttons — kept as an artifact (look-linux). X11 under Xvfb with no window manager: the frame's
       # decorations are the theme's anyway. Red when the program is gone before the shot: it did not start (2026-11-12,
       # Max: "how full will they look on the Mac and on GTK"). The launcher after it, one at a time, to compare a small
       # dialog with a frame (Max, the same day). Then the designer on a file base it makes in an empty folder, and the
       # application on the base the designer made (Max, the same day) - the Firebird kit beside them, as tests-firebird
       # lays it out. Red too when a program is still there 15 s after its SIGTERM - a person's logout asks the same:
-      # codeRunner closed its window and lived on, the step waiting for it half an hour (2026-11-12,
+      # coderunner closed its window and lived on, the step waiting for it half an hour (2026-11-12,
       # ibTopLevelWindow::Destroy). Where such a program stands is printed before it is killed - every thread's stack,
       # by gdb, kept with the look as <program>-linux-stop.txt: the designer let its base go and lived on, its journal
       # silent after that (2026-11-12, f10d35fc1).
-      - name: The desktop's look (codeRunner, launcher, the designer and the application under Xvfb)
+      - name: The desktop's look (coderunner, launcher, the designer and the application under Xvfb)
         working-directory: build/linux-debug/bin/Debug
         timeout-minutes: 10
         env:
@@ -273,10 +273,10 @@ jobs:
               fi
               wait $pid 2>/dev/null || true
             }
-            shot 10 codeRunner
+            shot 10 coderunner
             shot 10 launcher
-            shot 30 designer-thin --file="$RUNNER_TEMP/base"
-            shot 20 enterprise-thin --file="$RUNNER_TEMP/base"'
+            shot 30 appstudio --file="$RUNNER_TEMP/base"
+            shot 20 appworkspace --file="$RUNNER_TEMP/base"'
       # ⭐ A PROGRAM THAT FELL - its stack, read here. The crash guard writes the signal's backtrace to crashdumps/ beside
       # the program (ibCrashGuard, PosixCrashSignalHandler) as module(+offset): the Debug build's lines and functions by
       # addr2line, kept with the look. The designer fell on a new file base with nothing but "Segmentation fault"
@@ -987,7 +987,7 @@ jobs:
             lldb -b -o run -k "bt 40" -k quit -- ./bin/Debug/oes_tests --gtest_filter=$t || true
           done
 
-      # ⭐ WHAT THE DESKTOP LOOKS LIKE ON THE MAC — the Linux job's step, with the system's own capture: codeRunner (no
+      # ⭐ WHAT THE DESKTOP LOOKS LIKE ON THE MAC — the Linux job's step, with the system's own capture: coderunner (no
       # base, the sandbox), its frame, menubar, tool bar, code editor and buttons all drawn by the desktop library. A
       # plain executable, not a bundle: wxOSX makes it a regular application with a window of its own. Red when the
       # program is gone before the shot (2026-11-12, Max). The launcher after it - a bundle here, run from inside it.
@@ -996,7 +996,7 @@ jobs:
       # package carries, laid out as `_fb` beside the bundles (.github/firebird-kit-macos.sh), found through the rpaths
       # the package gives (CMakeLists.txt). Red too when a program is still there 15 s after its SIGTERM; where it
       # stands is printed first - every thread's stack, by the system's `sample`, kept as <program>-macos-stop.txt.
-      - name: The desktop's look (codeRunner, launcher, the designer and the application)
+      - name: The desktop's look (coderunner, launcher, the designer and the application)
         working-directory: build/macos-debug/bin/Debug
         timeout-minutes: 10
         run: |
@@ -1025,19 +1025,19 @@ jobs:
             fi
             wait $pid 2>/dev/null || true
           }
-          shot 15 codeRunner
+          shot 15 coderunner
           shot 15 launcher
-          shot 30 designer-thin --file="$RUNNER_TEMP/base"
-          shot 20 enterprise-thin --file="$RUNNER_TEMP/base"
+          shot 30 appstudio --file="$RUNNER_TEMP/base"
+          shot 20 appworkspace --file="$RUNNER_TEMP/base"
       # A PROGRAM THAT FELL - the Linux job's step, by the Mac's own means: the system's crash report with every
       # thread's stack (~/Library/Logs/DiagnosticReports), and the crash guard's dumps with the journal of the run - a
-      # bundle's in ~/Library/Logs/OES, codeRunner's beside it (ibDiagnosticFolder) - kept with the look.
+      # bundle's in ~/Library/Logs/OES, coderunner's beside it (ibDiagnosticFolder) - kept with the look.
       - name: The desktop's crashes
         if: always()
         run: |
           mkdir -p look/crashes
-          find ~/Library/Logs/DiagnosticReports -maxdepth 1 \( -name 'codeRunner*' -o -name 'launcher*' \
-               -o -name 'designer-thin*' -o -name 'enterprise-thin*' \) -exec cp {} look/crashes/ \; 2>/dev/null || true
+          find ~/Library/Logs/DiagnosticReports -maxdepth 1 \( -name 'coderunner*' -o -name 'launcher*' \
+               -o -name 'appstudio*' -o -name 'appworkspace*' \) -exec cp {} look/crashes/ \; 2>/dev/null || true
           [ ! -d ~/Library/Logs/OES ] || cp -r ~/Library/Logs/OES look/crashes/
           [ ! -d build/macos-debug/bin/Debug/crashdumps ] || cp -r build/macos-debug/bin/Debug/crashdumps look/crashes/
           rmdir look/crashes 2>/dev/null || true

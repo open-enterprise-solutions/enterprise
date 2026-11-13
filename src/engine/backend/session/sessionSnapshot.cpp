@@ -45,9 +45,9 @@ ibString ibSessionSnapshot::GetApplication(unsigned int idx) const {
 	case static_cast<int>(ibSessionKind::BackgroundJob): return _("Background job");
 	case static_cast<int>(ibSessionKind::ScheduledJob):  return _("Scheduled job");
 	case static_cast<int>(ibSessionKind::SystemJob):     return _("System job");
-	case static_cast<int>(ibSessionKind::ThinClient):    return _("Runtime");
+	case static_cast<int>(ibSessionKind::ThinClient):    return _("Application Workspace");
 	case static_cast<int>(ibSessionKind::Designer):
-	case static_cast<int>(ibSessionKind::ThinDesigner):  return _("Designer");
+	case static_cast<int>(ibSessionKind::ThinDesigner):  return _("Application Studio");
 	case static_cast<int>(ibSessionKind::Enterprise):    return _("Thick client (GUI)");
 	case static_cast<int>(ibSessionKind::Service):       return _("Application server");
 	case static_cast<int>(ibSessionKind::WebServer):     return _("Web server");

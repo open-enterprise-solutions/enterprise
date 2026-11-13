@@ -21,7 +21,7 @@
       "parameters": "",
       "return_descr": "ButtonView.",
       "example": "Controls.Button1.View = ButtonView.Hyperlink;",
-      "availability": "Thin client, Server",
+      "availability": "Client, Server",
       "see_also": [
         "enum.ButtonView.Button",
         "enum.ButtonView.Hyperlink",
@@ -45,7 +45,7 @@
       "parameters": "",
       "return_descr": "ButtonView.",
       "example": "Controls.Button1.View = ButtonView.Button;",
-      "availability": "Thin client, Server",
+      "availability": "Client, Server",
       "see_also": [
         "enum.ButtonView"
       ],
@@ -67,7 +67,7 @@
       "parameters": "",
       "return_descr": "ButtonView.",
       "example": "Controls.Button1.View = ButtonView.Hyperlink;",
-      "availability": "Thin client, Server",
+      "availability": "Client, Server",
       "see_also": [
         "enum.ButtonView"
       ],
@@ -91,7 +91,7 @@
       "parameters": "",
       "return_descr": "PictureLocation.",
       "example": "Controls.Button1.PictureLocation = PictureLocation.Tile;\nControls.Button1.Note = \"12\";",
-      "availability": "Thin client, Server",
+      "availability": "Client, Server",
       "see_also": [
         "enum.PictureLocation.Auto",
         "enum.PictureLocation.Left",
@@ -116,7 +116,7 @@
       "parameters": "",
       "return_descr": "PictureLocation.",
       "example": "Controls.Button1.PictureLocation = PictureLocation.Auto;",
-      "availability": "Thin client, Server",
+      "availability": "Client, Server",
       "see_also": [
         "enum.PictureLocation"
       ],
@@ -138,7 +138,7 @@
       "parameters": "",
       "return_descr": "PictureLocation.",
       "example": "Controls.Button1.PictureLocation = PictureLocation.Left;",
-      "availability": "Thin client, Server",
+      "availability": "Client, Server",
       "see_also": [
         "enum.PictureLocation"
       ],
@@ -160,7 +160,7 @@
       "parameters": "",
       "return_descr": "PictureLocation.",
       "example": "Controls.Button1.PictureLocation = PictureLocation.Right;",
-      "availability": "Thin client, Server",
+      "availability": "Client, Server",
       "see_also": [
         "enum.PictureLocation"
       ],
@@ -182,7 +182,7 @@
       "parameters": "",
       "return_descr": "PictureLocation.",
       "example": "Controls.Button1.PictureLocation = PictureLocation.Tile;",
-      "availability": "Thin client, Server",
+      "availability": "Client, Server",
       "see_also": [
         "enum.PictureLocation"
       ],

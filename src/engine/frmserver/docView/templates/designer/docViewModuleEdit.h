@@ -5,7 +5,7 @@
 // (designer/docManager/templates/docViewModuleEditor.h) over a module metaobject: its text in a tab, edited where it is
 // kept — the metaobject — so what is modified and saved is the configuration. The text is fetched by the tab, not
 // drawn: a frame that carried it would send the whole module back in every patch after a keystroke's Change.
-// Not the desktop's names: the client's tab copies them (designer-thin), and frmserver is loaded into the client for a
+// Not the desktop's names: the client's tab copies them (appstudio), and frmserver is loaded into the client for a
 // file base — one wx class info per name.
 
 #include "frmserver/docView/docView.h"

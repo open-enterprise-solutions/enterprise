@@ -46,7 +46,7 @@ embedded by default; PostgreSQL also supported for production, ODBC as the MSSQL
                        merges to develop
             │
             ▼
-   End user — runs enterprise-thin.exe / web client
+   End user — runs appworkspace.exe / web client
 ```
 
 Your job is to translate the analyst's intent into **valid OES
@@ -61,10 +61,10 @@ business behaviour. The architect validates by running.
 |---|---|
 | Metadata definitions (object types, bindings) | C++ source under `src/engine/**` |
 | OES script modules inside metadata | `*.vcxproj`, `CMakeLists.txt`, `Common.props` |
-| Form layouts (visual designer) | Plugin DLLs (`simplePlugin.dll` pattern) |
+| Form layouts (visual designer) | Plugin DLLs (`simple-plugin.dll` pattern) |
 | Spreadsheet templates (`SpreadsheetDocument`) | `enterprise.sln` solution structure |
-| Test configurations exercised by codeRunner scripts | Build outputs, locale `.mo` / `.po` files |
-| Tests against generated configs (codeRunner scripts) | DB driver code under `databaseLayer/` |
+| Test configurations exercised by coderunner scripts | Build outputs, locale `.mo` / `.po` files |
+| Tests against generated configs (coderunner scripts) | DB driver code under `databaseLayer/` |
 
 **Reason:** OES enforces invariants in C++ (RAII, prepared statements,
 TX scopes, throw-by-value). When AI writes C++, those invariants
@@ -526,7 +526,7 @@ Mapping common ERP / business-application concepts to their OES form:
 | Document date | `document.Date` | `ibDateTime` type |
 | Data-composition / pivot system | L5 data composer | Declarative filter/sort/grouping rendered into a query; see `docs/private/data-composer.md` |
 | Form model | Form / VisualHost | Single form layer, on the server (`frmserver.dll`); the same form is drawn by the thin client and the browser |
-| Client tier | Thin client / browser client | `frmclient.dll` under `enterprise-thin` / `designer-thin`; the browser client served by `webserver` — both over the client protocol |
+| Client tier | Thin client / browser client | `frmclient.dll` under `appworkspace` / `appstudio`; the browser client served by `webserver` — both over the client protocol |
 
 ---
 
@@ -580,20 +580,20 @@ organisation (an empty folder for everyone else — [README.md](README.md)).
 Before declaring "done", verify your generated configuration:
 
 ```
-1. Load the config (designer-thin.exe / enterprise-thin.exe)
+1. Load the config (appstudio.exe / appworkspace.exe)
      — metadata consistency: bindings resolve, no orphan refs,
        attribute types valid, predefined-attribute subclass lists
        are additive.
 
-2. codeRunner.exe
+2. coderunner.exe
      — standalone GUI script runner (NO metadata, NO CLI flags):
        write a script in the editor and run it to smoke-test pure
        computations / language constructs. It cannot reference your
        config's metaobjects.
 
-3. designer-thin.exe --file=<config-path>
+3. appstudio.exe --file=<config-path>
      — open in Designer for visual review and live debugging.
-       Press F5 to start the thin client (enterprise-thin.exe) against the same DB; run
+       Press F5 to start the thin client (appworkspace.exe) against the same DB; run
        postings / reports there against test data.
 
 4. (If accounting touched) — verify Balance / Turnovers in
@@ -650,5 +650,5 @@ When the architect reviews your generated PR, they look for:
 
 > **You are extending a low-code ERP through metadata and script.
 > Generate metadata and OES scripts in CES (preferred) or VES; never
-> touch C++; verify with codeRunner; surface anything that needs a C++
+> touch C++; verify with coderunner; surface anything that needs a C++
 > change or schema migration to the architect.**

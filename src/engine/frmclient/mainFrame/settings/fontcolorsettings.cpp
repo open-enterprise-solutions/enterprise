@@ -102,26 +102,26 @@ void ibFontColorSettings::Apply(ibStyledTextCtrl& text) const
 	text.SetCaretForeground(wxColour(255 - paper.Red(), 255 - paper.Green(), 255 - paper.Blue()));
 }
 
-wxXmlNode* ibFontColorSettings::Save(const wxString& tag) const
+void ibFontColorSettings::Save(ibXmlWriter& writer, const wxString& tag) const
 {
-	wxXmlNode* const root = new wxXmlNode(wxXML_ELEMENT_NODE, tag);
-	AddTextNode(root, wxT("font"), m_font.GetNativeFontInfoDesc());
+	writer.WriteStartElement(tag, ibString());
+	AddTextNode(writer, wxT("font"), m_font.GetNativeFontInfoDesc());
 
 	for (unsigned int i = 0; i < DisplayItem_Last; ++i) {
-		wxXmlNode* const item = new wxXmlNode(wxXML_ELEMENT_NODE, wxT("displayitem"));
-		AddTextNode(item, wxT("id"), wxString::Format(wxT("%u"), i));
-		AddTextNode(item, wxT("foreColor"), m_colors[i].foreColor.GetAsString(wxC2S_HTML_SYNTAX).Lower());
-		AddTextNode(item, wxT("backColor"), m_colors[i].backColor.GetAsString(wxC2S_HTML_SYNTAX).Lower());
-		AddTextNode(item, wxT("bold"), m_colors[i].bold);
-		AddTextNode(item, wxT("italic"), m_colors[i].italic);
-		root->AddChild(item);
+		writer.WriteStartElement(wxT("displayitem"), ibString());
+		AddTextNode(writer, wxT("id"), wxString::Format(wxT("%u"), i));
+		AddTextNode(writer, wxT("foreColor"), m_colors[i].foreColor.GetAsString(wxC2S_HTML_SYNTAX).Lower());
+		AddTextNode(writer, wxT("backColor"), m_colors[i].backColor.GetAsString(wxC2S_HTML_SYNTAX).Lower());
+		AddTextNode(writer, wxT("bold"), m_colors[i].bold);
+		AddTextNode(writer, wxT("italic"), m_colors[i].italic);
+		writer.WriteEndElement();
 	}
-	return root;
+	writer.WriteEndElement();
 }
 
-void ibFontColorSettings::Load(wxXmlNode* root)
+void ibFontColorSettings::Load(const ibXmlNode* root)
 {
-	for (wxXmlNode* node = root->GetChildren(); node != nullptr; node = node->GetNext()) {
+	for (const ibXmlNode* node = root->GetChildren(); node != nullptr; node = node->GetNext()) {
 		if (node->GetName() == wxT("font")) {
 			m_font.SetNativeFontInfo(node->GetNodeContent());
 			continue;
@@ -132,8 +132,8 @@ void ibFontColorSettings::Load(wxXmlNode* root)
 		// A kind is read whole or not at all: without its number there is no knowing whose colours these are.
 		unsigned int id = DisplayItem_Last;
 		Colors colors;
-		for (wxXmlNode* field = node->GetChildren(); field != nullptr; field = field->GetNext()) {
-			const wxString& name = field->GetName();
+		for (const ibXmlNode* field = node->GetChildren(); field != nullptr; field = field->GetNext()) {
+			const ibString& name = field->GetName();
 			if (name == wxT("id"))
 				field->GetNodeContent().ToUInt(&id);
 			else if (name == wxT("foreColor"))

@@ -96,11 +96,11 @@ tree, forms, the language, queries and reports, and the pitfalls.
   it and is started again; the other bases do not notice. A console program or a service of the system
   (`appcluster --install` on Windows, a systemd unit on Linux). `appcluster-tray` shows each base's
   server and starts, stops and restarts it — and starts the cluster itself when none runs.
-- **Thin client** — `enterprise-thin` runs no code of the configuration: the server holds the session,
+- **Thin client** — `appworkspace` runs no code of the configuration: the server holds the session,
   its forms and documents, the client draws what it is answered and sends what the person did. One
   [client protocol](docs/public/client-protocol.md) — binary OES-RPC packets over WebSocket, or JSON-RPC
   over HTTP, to an application server; a file base is the same protocol in the client's own process. The
-  designer, `designer-thin`, works on the same protocol. See [thin-client.md](docs/public/thin-client.md).
+  designer, `appstudio`, works on the same protocol. See [thin-client.md](docs/public/thin-client.md).
 - **Databases** — Firebird (embedded, shipped with the distribution) and PostgreSQL for production;
   ODBC; SQLite for tests and logging.
 - **Localisation** — the whole interface in English, Russian and Ukrainian; every caption of a
@@ -138,7 +138,7 @@ On a copy of a 40 000-employee payroll base (Release, x86): a month's payroll re
 4. Select configuration `Debug|Win32` or `Release|x64`.
 5. Build the solution (`Ctrl+Shift+B`). Binaries are placed in `bin\<Platform>\<Configuration>\`
    (`Win32` or `Win64`).
-6. Run `designer-thin.exe` to build a configuration, `enterprise-thin.exe` to work in it — or
+6. Run `appstudio.exe` to build a configuration, `appworkspace.exe` to work in it — or
    `launcher.exe` to pick a base first (it starts the same two programs). `appcluster.exe` serves the bases of a server folder with no
    window, an `appserver.exe` process per base (`appcluster-tray.exe` shows and steers it); both
    clients work in a base it serves, or in a file base.
@@ -257,15 +257,15 @@ enterprise/
         ├── deskgui/          # The desktop's user interface library: the custom-drawn controls and dialogs, the Luna theme
         ├── frmclient/        # The thin client's window, document/view and controls
         ├── fileserver/       # A file base in the thin client's process
-        ├── enterprise-thin/  # The thin client runtime executable
-        ├── designer-thin/    # The thin designer executable
+        ├── appworkspace/     # The thin client runtime executable
+        ├── appstudio/        # The thin designer executable
         ├── webserver/        # The bases' transport for browsers and the browser client (www/); links protocol + core
         ├── launcher/         # Launcher (connection chooser)
         ├── appserver/        # The application server
         ├── appcluster/       # The application cluster: a server process per base, the port, restarts; a service
         ├── appcluster-tray/  # The cluster's tray: its servers and their verbs, starting the cluster
-        ├── codeRunner/       # Script runner (its own code editor, no document behind it)
-        └── simplePlugin/     # Example plugin
+        ├── coderunner/       # Script runner (its own code editor, no document behind it)
+        └── simple-plugin/    # Example plugin
 ```
 
 ---

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: OES Enterprise\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-13 18:47+0200\n"
+"POT-Creation-Date: 2026-11-13 21:13+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -134,8 +134,1625 @@ msgstr ""
 
 #: src/engine/appcluster-tray/clusterTray.cpp:118
 #: src/engine/frmserver/docView/docManager.cpp:341
-#: src/engine/launcher/launcher.cpp:235
+#: src/engine/launcher/launcher.cpp:249
 msgid "Exit"
+msgstr ""
+
+#: src/engine/appstudio/backend/debugger/debugClient.cpp:47
+#, c-format
+msgid "The debugger did not take the command: %s"
+msgstr ""
+
+#: src/engine/appstudio/backend/debugger/debugClient.cpp:115
+#, c-format
+msgid "The debugger is not available: %s"
+msgstr ""
+
+#: src/engine/appstudio/backend/debugger/debugClient.cpp:331
+#: src/engine/backend/debugger/debugClient.cpp:392
+msgid "The breakpoints could not be cleared: the store they are kept in did not accept the change. They are still set, and the running application still has them."
+msgstr ""
+
+#: src/engine/appstudio/backend/debugger/debugClientBridge.cpp:21
+#: src/engine/backend/debugger/debugClientBridge.cpp:20
+msgid "SetDebuggerClientBridge: bridge is null"
+msgstr ""
+
+#: src/engine/appstudio/backend/debugger/debugClientBridge.cpp:23
+msgid "SetDebuggerClientBridge: debugClient is null (call after the frame logged in)"
+msgstr ""
+
+#: src/engine/appstudio/backend/metaCollection/metaDiff.h:169
+#: src/engine/backend/metaCollection/metaDiff.cpp:78
+#: src/engine/backend/metaCollection/metaObject.h:1015
+#: src/engine/frmserver/metaTree/treeConfiguration.cpp:28
+msgid "Common"
+msgstr ""
+
+#: src/engine/appstudio/backend/metaCollection/metaDiff.h:170
+#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:930
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorAttributeTree.cpp:482
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorCmdProc.cpp:1216
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorCommandTree.cpp:361
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorObjectTree.cpp:623
+#: src/engine/backend/metaCollection/metaDiff.cpp:79
+#: src/engine/deskgui/univ/stockItem.cpp:96
+#: src/engine/frmclient/mainFrame/mainFrame.cpp:429
+#: src/engine/frmclient/win/editor/gridEditor/gridEditor.cpp:409
+msgid "Properties"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:41
+#, c-format
+msgid "Compare: %s <-> %s"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:83
+msgid "Select all differences"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:84
+msgid "Mark every non-Same row for merge"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:85
+#: src/engine/deskgui/univ/stockItem.cpp:59
+#: src/engine/frmclient/docView/templates/docViewAuditLog.cpp:300
+#: src/engine/frmclient/mainFrame/output/outputWindow.cpp:146
+#: src/engine/frmclient/win/dlgs/choiceParameters/choiceParameters.cpp:22
+msgid "Clear"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:86
+msgid "Unmark every row"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:88
+msgid "Expand all"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:89
+msgid "Expand every tree node"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:90
+msgid "Collapse all"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:91
+msgid "Collapse every tree node"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:117
+#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:348
+#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:438
+#: src/engine/frmserver/schema/designer/configCompare.cpp:363
+msgid "Merge"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:126
+msgid "Object"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:138
+msgid "Status"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:180
+msgid "Show:"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:184
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:972
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:978
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:1053
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:1059
+msgid "All"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:185
+msgid "Only differences"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:186
+msgid "Only unchanged"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:193
+msgid "Direction:"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:204
+msgid "Apply merge"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:229
+#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:234
+#, c-format
+msgid "%s -> %s"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:346
+msgid "Push direction has no save target - open the other configuration from a writable source first."
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:419
+msgid "Merge failed."
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:419
+msgid "The server refused the merge."
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:427
+msgid "The other-side file has been saved."
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:427
+#: src/engine/frmserver/schema/designer/configCompare.cpp:358
+msgid "Warning: failed to save the other-side file."
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewConfigCompare.cpp:433
+#, c-format
+msgid "%d reorder-only change(s) skipped (not supported in V1)."
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewFormEditor.cpp:99
+msgid "Test form\tCtrl+R"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewFormEditor.cpp:111
+msgid "Controls"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewFormEditor.cpp:113
+#: src/engine/appstudio/win/dlg/homePageEditor.cpp:97
+#: src/engine/backend/metaCollection/metaFormObject.h:239
+#: src/engine/backend/metaCollection/metaFormObject.h:241
+#: src/engine/backend/metaCollection/metaFormObject.h:324
+#: src/engine/backend/propertyManager/property/variant/variantForm.cpp:5
+#: src/engine/frmserver/visualView/layers/commandBar.cpp:164
+msgid "Form"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewFormEditor.cpp:170
+#: src/engine/appstudio/docManager/templates/docViewModuleEditor.cpp:107
+#: src/engine/coderunner/coderunner.cpp:249
+msgid "Add comments"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewFormEditor.cpp:170
+#: src/engine/appstudio/docManager/templates/docViewModuleEditor.cpp:107
+#: src/engine/appstudio/win/dlg/homePageEditor.cpp:68
+#: src/engine/appstudio/win/dlg/predefinedEditor.cpp:457
+#: src/engine/appstudio/win/dlg/predefinedEditor.cpp:689
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorAttributeTree.cpp:471
+#: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:154
+#: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:318
+#: src/engine/backend/metaCollection/partial/tabularSection/tabularSection.h:253
+#: src/engine/backend/system/value/valueList.cpp:151
+#: src/engine/backend/system/value/valueTable.h:393
+#: src/engine/coderunner/coderunner.cpp:249
+#: src/engine/deskgui/univ/stockItem.cpp:52
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryCaseDialog.cpp:87
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:1371
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructorEdit.cpp:1480
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryTempTableDialog.cpp:135
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2345
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:3405
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:3518
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:4417
+#: src/engine/frmclient/win/dlgs/settings/list/listSettings.cpp:420
+#: src/engine/frmclient/win/dlgs/settings/list/listSettings.cpp:564
+#: src/engine/frmclient/win/dlgs/settings/settingsConditionalAppearanceEditor.cpp:99
+#: src/engine/frmclient/win/dlgs/settings/settingsConditionalAppearanceEditor.cpp:205
+#: src/engine/frmclient/win/dlgs/settings/settingsSortEditor.cpp:157
+#: src/engine/frmclient/win/dlgs/settings/settingsSortEditor.cpp:357
+#: src/engine/frmclient/win/dlgs/userList.cpp:69
+#: src/engine/launcher/launcher.cpp:227
+msgid "Add"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewFormEditor.cpp:172
+#: src/engine/appstudio/docManager/templates/docViewModuleEditor.cpp:109
+#: src/engine/coderunner/coderunner.cpp:250
+msgid "Remove comments"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewFormEditor.cpp:172
+#: src/engine/appstudio/docManager/templates/docViewModuleEditor.cpp:109
+#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:919
+#: src/engine/coderunner/coderunner.cpp:250
+#: src/engine/deskgui/univ/stockItem.cpp:99
+msgid "Remove"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewFormEditor.cpp:175
+#: src/engine/appstudio/docManager/templates/docViewModuleEditor.cpp:112
+#: src/engine/coderunner/coderunner.cpp:297
+msgid "Syntax control"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewFormEditor.cpp:175
+#: src/engine/appstudio/docManager/templates/docViewModuleEditor.cpp:112
+#: src/engine/appstudio/syntaxHelper/helpDetailView.cpp:295
+#: src/engine/backend/metaCollection/metaObjectMetadata.h:205
+msgid "Syntax"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewFormEditor.cpp:178
+#: src/engine/appstudio/docManager/templates/docViewModuleEditor.cpp:115
+#: src/engine/coderunner/coderunner.cpp:256
+msgid "Goto line"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewFormEditor.cpp:178
+#: src/engine/appstudio/docManager/templates/docViewModuleEditor.cpp:115
+#: src/engine/coderunner/coderunner.cpp:256
+msgid "Goto"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewFormEditor.cpp:179
+#: src/engine/appstudio/docManager/templates/docViewModuleEditor.cpp:116
+#: src/engine/coderunner/coderunner.cpp:257
+#: src/engine/coderunner/win/dlgs/functionSearcher/functionSearcher.cpp:16
+#: src/engine/coderunner/win/dlgs/functionSearcher/functionSearcher.cpp:32
+#: src/engine/frmclient/win/dlgs/functionSearcher/functionSearcher.cpp:18
+#: src/engine/frmclient/win/dlgs/functionSearcher/functionSearcher.cpp:34
+msgid "Procedures and functions"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewFormEditor.cpp:181
+#: src/engine/appstudio/docManager/templates/docViewModuleEditor.cpp:118
+#: src/engine/coderunner/coderunner.cpp:252
+msgid "Format selection"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewFormEditor.cpp:181
+#: src/engine/appstudio/docManager/templates/docViewModuleEditor.cpp:118
+#: src/engine/backend/metaCollection/attribute/metaAttributeObject.h:314
+#: src/engine/coderunner/coderunner.cpp:252
+#: src/engine/core/description/compositionDescription.cpp:975
+#: src/engine/frmserver/visualView/ctrl/tableBox.h:830
+#: src/engine/frmserver/visualView/ctrl/widgets.h:359
+msgid "Format"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewFormEditor.cpp:183
+#: src/engine/appstudio/docManager/templates/docViewModuleEditor.cpp:120
+#: src/engine/coderunner/coderunner.cpp:253
+msgid "Increase indent"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewFormEditor.cpp:183
+#: src/engine/appstudio/docManager/templates/docViewModuleEditor.cpp:120
+#: src/engine/coderunner/coderunner.cpp:253
+#: src/engine/deskgui/univ/stockItem.cpp:77
+#: src/engine/frmclient/mainFrame/settings/editorsettingspanel.cpp:10
+msgid "Indent"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewFormEditor.cpp:185
+#: src/engine/appstudio/docManager/templates/docViewModuleEditor.cpp:122
+#: src/engine/coderunner/coderunner.cpp:254
+msgid "Decrease indent"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewFormEditor.cpp:185
+#: src/engine/appstudio/docManager/templates/docViewModuleEditor.cpp:122
+#: src/engine/coderunner/coderunner.cpp:254
+#: src/engine/deskgui/univ/stockItem.cpp:116
+msgid "Unindent"
+msgstr ""
+
+#: src/engine/appstudio/mainApp.cpp:91
+msgid "Select configuration database folder"
+msgstr ""
+
+#: src/engine/appstudio/mainApp.cpp:113 src/engine/appstudio/mainApp.cpp:139
+msgid "OES Application Studio - startup error"
+msgstr ""
+
+#: src/engine/appstudio/mainApp.cpp:147
+msgid ""
+"Cannot start appstudio.exe - no infobase specified.\n"
+"\n"
+"Provide one of:\n"
+"  --address=oes://<server>[:port]/<base>   (an application server; oess:// over TLS)\n"
+"  --address=http(s)://<server>[:port]/<base>/   (a web server's publication, its link)\n"
+"  --file=<path>          (Firebird embedded / SQLite file)\n"
+"  --server=<host> --db=<name> [--dbport=...] [--user=...] [--password=...]"
+msgstr ""
+
+#: src/engine/appstudio/mainApp.cpp:153
+#: src/engine/appstudio/mainFrame/mainFrameDesigner.h:106
+msgid "OES Application Studio"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:187
+msgid "Same"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:188
+msgid "Reordered"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:189
+msgid "Changed"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:190
+msgid "Only in current"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:191
+msgid "Only in other"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:203
+#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:295
+#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:308
+msgid "Missing"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:207
+#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:293
+#: src/engine/appstudio/mainFrame/configCompare/configCompareModel.cpp:306
+msgid "(unnamed)"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/local/localWindow.cpp:132
+#: src/engine/appstudio/mainFrame/metaTree/treeDataProcessor.cpp:18
+#: src/engine/appstudio/mainFrame/metaTree/treeDataReport.cpp:18
+#: src/engine/appstudio/mainFrame/watch/watchWindow.cpp:50
+#: src/engine/appstudio/win/dlg/predefinedEditor.cpp:277
+#: src/engine/appstudio/win/dlg/predefinedEditor.cpp:704
+#: src/engine/backend/metaCollection/metaObject.h:1016
+#: src/engine/backend/system/value/valueTable.h:159
+#: src/engine/frmclient/win/dlgs/choiceParameters/choiceParameters.cpp:260
+#: src/engine/frmclient/win/dlgs/kindSelector/kindSelector.cpp:48
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:2406
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:2544
+#: src/engine/frmclient/win/dlgs/userList.cpp:79
+#: src/engine/frmclient/win/editor/gridEditor/gridEditor.h:601
+#: src/engine/frmserver/visualView/ctrl/control.h:102
+#: src/engine/frmserver/visualView/ctrl/formAttribute.h:143
+#: src/engine/frmserver/visualView/ctrl/formCommand.h:94
+#: src/engine/frmserver/visualView/layers/commandBar.h:144
+msgid "Name"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/local/localWindow.cpp:133
+#: src/engine/appstudio/mainFrame/watch/watchWindow.cpp:51
+#: src/engine/backend/metaCollection/metaFunctionalOptionObject.h:82
+#: src/engine/backend/metaCollection/partial/constant.h:38
+#: src/engine/backend/system/value/valueList.cpp:17
+#: src/engine/deskgui/univ/propgrid/manager.cpp:399
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:3587
+#: src/engine/frmclient/win/dlgs/settings/settingsAppearanceEditor.cpp:162
+#: src/engine/frmclient/win/dlgs/settings/settingsOutputParametersEditor.cpp:177
+#: src/engine/frmserver/visualView/ctrl/widgets.h:589
+#: src/engine/frmserver/visualView/ctrl/widgets.h:612
+msgid "Value"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/local/localWindow.cpp:134
+#: src/engine/appstudio/mainFrame/watch/watchWindow.cpp:52
+#: src/engine/backend/metaCollection/attribute/metaAttributeObject.h:308
+#: src/engine/backend/metaCollection/metaFormObject.h:242
+#: src/engine/backend/metaCollection/partial/chartOfCharacteristicTypes.h:241
+#: src/engine/backend/metaCollection/partial/constant.h:39
+#: src/engine/backend/system/value/valueTable.h:161
+#: src/engine/frmclient/propertyManager/property/advprop/advpropSource.cpp:111
+#: src/engine/frmclient/win/dlgs/activeUser.cpp:48
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryTempTableDialog.cpp:184
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:3235
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:3608
+#: src/engine/frmserver/visualView/ctrl/formAttribute.h:145
+msgid "Type"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesigner.cpp:51
+msgid "Update database"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesigner.cpp:120
+#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:22
+#: src/engine/appstudio/win/editor/commonAttributeEditor/commonAttributeEditor.cpp:89
+#: src/engine/appstudio/win/editor/functionalOptionEditor/functionalOptionEditor.cpp:102
+#: src/engine/appstudio/win/editor/interfaceEditor/interfaceEditor.cpp:86
+#: src/engine/appstudio/win/editor/roleEditor/roleEditor.cpp:140
+#: src/engine/backend/metaCollection/metaObjectMetadata.h:14
+#: src/engine/frmclient/mainFrame/mainFrame.cpp:689
+#: src/engine/frmclient/mainFrame/mainFrame.cpp:1217
+#: src/engine/frmclient/propertyManager/property/advprop/advpropPicture.cpp:174
+#: src/engine/frmserver/docView/docManagerDesigner.cpp:37
+#: src/engine/frmserver/docView/templates/designer/docViewCommonAttributeEdit.cpp:92
+#: src/engine/frmserver/docView/templates/designer/docViewFunctionalOptionEdit.cpp:100
+msgid "Configuration"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesigner.cpp:178
+#, c-format
+msgid "Configuration '%s' has been changed. Save?"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:37
+#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:254
+#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:283
+#, c-format
+msgid ""
+"Configuration '%s' has been changed.\n"
+"Do you want to save?"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:52
+#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:91
+msgid "Debugger is already running!"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:80
+msgid "Failed to start webserver"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:150
+msgid ""
+"To update the database configuration you need stop debugging.\n"
+"Do you want to continue?"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:243
+msgid "Open configuration file"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:263
+msgid "Save configuration file"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:269
+#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:301
+msgid "Successfully unloaded to: "
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:276
+msgid "Choose the directory the configuration was saved to"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:295
+msgid "Choose a directory of its own for the configuration's files"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:309
+msgid "Choose configuration file to compare with"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:319
+msgid "Failed to upload configuration file."
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:325
+msgid "Failed to compare with the configuration file."
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:329
+#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:344
+msgid "Current"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:339
+msgid "Database configuration is not available."
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:344
+#: src/engine/frmclient/win/dlgs/about.cpp:81
+msgid "Database"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:350
+msgid "Choose left configuration file"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:355
+msgid "Choose right configuration file"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:366
+msgid "Failed to upload one of the configuration files."
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerEvent.cpp:373
+msgid "Failed to load one of the configuration files."
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:48
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:54
+#: src/engine/backend/session/sessionSnapshot.cpp:95
+msgid "Thin client"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:49
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:55
+#: src/engine/backend/session/sessionSnapshot.cpp:54
+msgid "Web client"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:50
+#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:122
+#: src/engine/appstudio/mainFrame/welcome/welcomeWindowDesigner.cpp:19
+msgid "Start debugging"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:56
+#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:123
+#: src/engine/appstudio/mainFrame/welcome/welcomeWindowDesigner.cpp:20
+msgid "Start without debugging"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:58
+#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:124
+msgid "Attach for debugging..."
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:61
+#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:126
+msgid "Continue"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:62
+#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:127
+msgid "Pause"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:63
+#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:128
+msgid "Step into"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:64
+#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:129
+msgid "Step over"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:65
+#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:130
+msgid "Step out"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:66
+#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:131
+msgid "Stop debugging"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:67
+#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:132
+msgid "Stop debugging program"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:67
+msgid "Stop program"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:70
+#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:134
+msgid "Remove all breakpoints"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:80
+msgid "Open database configuration"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:82
+msgid "Rollback to database configuration"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:85
+#: src/engine/backend/metaCollection/metaObjectMetadata.h:210
+msgid "Update database configuration"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:90
+msgid "Load configuration"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:91
+msgid "Save configuration"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:96
+msgid "Load configuration from files..."
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:97
+msgid "Save configuration to files..."
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:106
+msgid "With file..."
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:107
+msgid "With database configuration"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:108
+msgid "Two files..."
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:110
+msgid "Compare configurations"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:116
+msgid "Syntax Helper\tRawCtrl+Alt+F1"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:118
+#: src/engine/deskgui/univ/stockItem.cpp:51
+#: src/engine/frmserver/client/clientFrameRuntime.cpp:59
+msgid "About"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:51
+msgid "Version control"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:91
+#: src/engine/frmclient/mainFrame/mainFrame.cpp:465
+msgid "Messages"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:92
+msgid "Local variable"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:93
+msgid "Call stack"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:94
+msgid "Watch"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:139
+#: src/engine/frmclient/mainFrame/mainFrame.cpp:691
+#: src/engine/frmclient/mainFrame/mainFrame.cpp:1219
+msgid "Debug"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerParts.cpp:169
+#: src/engine/appstudio/mainFrame/welcome/welcomeWindowDesigner.cpp:22
+msgid "Syntax Helper"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:58
+#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:914
+#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:937
+#: src/engine/deskgui/univ/stockItem.cpp:88
+#: src/engine/frmclient/mainFrame/mainFrame.cpp:524
+msgid "New"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:58
+#: src/engine/deskgui/univ/ctrl/editableListBox.cpp:137
+#: src/engine/frmclient/win/dlgs/settings/settingsFilterEditor.cpp:610
+#: src/engine/frmclient/win/dlgs/settings/settingsFilterEditor.cpp:1176
+msgid "New item"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:59
+#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:917
+#: src/engine/appstudio/win/dlg/predefinedEditor.cpp:691
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorAttributeTree.cpp:474
+#: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:156
+#: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:320
+#: src/engine/backend/metaCollection/partial/tabularSection/tabularSection.h:255
+#: src/engine/backend/system/value/valueTable.h:395
+#: src/engine/deskgui/univ/stockItem.cpp:66
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:814
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:1372
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:1675
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:2180
+#: src/engine/frmclient/win/dlgs/userList.cpp:71
+#: src/engine/launcher/launcher.cpp:233
+msgid "Edit"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:59
+#: src/engine/deskgui/univ/ctrl/editableListBox.cpp:129
+msgid "Edit item"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:60
+#: src/engine/appstudio/win/dlg/homePageEditor.cpp:70
+#: src/engine/appstudio/win/dlg/predefinedEditor.cpp:458
+#: src/engine/appstudio/win/dlg/predefinedEditor.cpp:692
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorAttributeTree.cpp:475
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorCommandTree.cpp:359
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorNotebook.cpp:109
+#: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:157
+#: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:321
+#: src/engine/backend/metaCollection/partial/tabularSection/tabularSection.h:256
+#: src/engine/backend/system/value/valueList.cpp:152
+#: src/engine/backend/system/value/valueTable.h:396
+#: src/engine/deskgui/univ/stockItem.cpp:64
+#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:240
+#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:257
+#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:299
+#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:327
+#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:364
+#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:417
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryCaseDialog.cpp:88
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:650
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:758
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:819
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:950
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:1039
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:1373
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:1676
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:2181
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:2392
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:2432
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructorEdit.cpp:1481
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryTempTableDialog.cpp:136
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:1377
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2349
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2408
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2409
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2581
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2708
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:3411
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:3520
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:4372
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:4419
+#: src/engine/frmclient/win/dlgs/settings/list/listSettings.cpp:422
+#: src/engine/frmclient/win/dlgs/settings/list/listSettings.cpp:565
+#: src/engine/frmclient/win/dlgs/settings/savedSettings.cpp:81
+#: src/engine/frmclient/win/dlgs/settings/settingsConditionalAppearanceEditor.cpp:100
+#: src/engine/frmclient/win/dlgs/settings/settingsConditionalAppearanceEditor.cpp:206
+#: src/engine/frmclient/win/dlgs/settings/settingsFilterEditor.cpp:616
+#: src/engine/frmclient/win/dlgs/settings/settingsFilterEditor.cpp:1183
+#: src/engine/frmclient/win/dlgs/settings/settingsSortEditor.cpp:159
+#: src/engine/frmclient/win/dlgs/settings/settingsSortEditor.cpp:358
+#: src/engine/frmclient/win/dlgs/userList.cpp:72
+#: src/engine/frmclient/win/editor/gridEditor/gridEditor.cpp:382
+#: src/engine/frmserver/docView/docManager.cpp:345
+#: src/engine/launcher/launcher.cpp:240
+msgid "Delete"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:60
+#: src/engine/deskgui/univ/ctrl/editableListBox.cpp:145
+msgid "Delete item"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:62
+#: src/engine/appstudio/win/dlg/homePageEditor.cpp:72
+#: src/engine/deskgui/univ/findReplaceDialog.cpp:131
+#: src/engine/deskgui/univ/stockItem.cpp:117
+msgid "Up"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:62
+msgid "Up item"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:63
+#: src/engine/appstudio/win/dlg/homePageEditor.cpp:73
+#: src/engine/deskgui/univ/findReplaceDialog.cpp:131
+#: src/engine/deskgui/univ/stockItem.cpp:65
+msgid "Down"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:63
+msgid "Down item"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:65
+#: src/engine/coderunner/win/dlgs/functionSearcher/functionSearcher.cpp:26
+#: src/engine/frmclient/win/dlgs/functionSearcher/functionSearcher.cpp:28
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:3159
+#: src/engine/frmclient/win/dlgs/settings/list/listSettings.cpp:150
+msgid "Sort"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration.cpp:65
+msgid "Sort item"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/metaTree/treeConfigurationEvent.cpp:176
+msgid "Help information"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/metaTree/treeConfigurationEvent.cpp:176
+msgid "Technical information"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:344
+#: src/engine/appstudio/mainFrame/metaTree/treeDataProcessor.cpp:59
+#: src/engine/appstudio/mainFrame/metaTree/treeDataReport.cpp:65
+#: src/engine/appstudio/mainFrame/metaTree/treeDataReport.cpp:73
+#: src/engine/backend/propertyManager/property/variant/variantSource.cpp:110
+#: src/engine/frmclient/propertyManager/property/advprop/advpropSource.cpp:124
+msgid "<not selected>"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:758
+msgid "Open data processor file"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:758
+msgid "Open report file"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:784
+msgid "Save data processor file"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:784
+msgid "Save report file"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:927
+msgid "Help information..."
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/metaTree/treeConfiguration_impl.cpp:928
+msgid "Technical information..."
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/metaTree/treeDataProcessor.cpp:23
+#: src/engine/appstudio/mainFrame/metaTree/treeDataReport.cpp:23
+#: src/engine/backend/metaCollection/metaObject.h:1017
+#: src/engine/frmclient/win/dlgs/kindSelector/kindSelector.cpp:53
+msgid "Synonym"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/metaTree/treeDataProcessor.cpp:28
+#: src/engine/appstudio/mainFrame/metaTree/treeDataReport.cpp:28
+#: src/engine/backend/metaCollection/metaObject.h:1018
+#: src/engine/backend/system/systemManagerEnum.h:165
+#: src/engine/coderunner/mainFrame/settings/fontcolorsettings.cpp:35
+#: src/engine/frmclient/mainFrame/settings/fontcolorsettings.cpp:39
+#: src/engine/frmclient/win/dlgs/kindSelector/kindSelector.cpp:58
+msgid "Comment"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/metaTree/treeDataProcessor.cpp:33
+#: src/engine/appstudio/mainFrame/metaTree/treeDataReport.cpp:33
+msgid "Default form:"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/metaTree/treeDataProcessor.cpp:67
+#: src/engine/appstudio/mainFrame/metaTree/treeDataReport.cpp:81
+#: src/engine/backend/metaCollection/metaModuleObjectMenu.cpp:11
+msgid "Open module"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/metaTree/treeDataReport.cpp:39
+msgid "Default composer:"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/stack/stackWindow.cpp:133
+msgid "Line"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/stack/stackWindow.cpp:134
+#: src/engine/backend/metaCollection/metaModuleObject.h:229
+#: src/engine/backend/metaCollection/metaModuleObject.h:304
+#: src/engine/backend/propertyManager/property/variant/variantModule.cpp:5
+msgid "Module"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/vcs/gitPanel.cpp:37
+msgid "Branch:"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/vcs/gitPanel.cpp:40
+#: src/engine/frmclient/win/dlgs/settings/savedSettings.cpp:67
+msgid "New..."
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/vcs/gitPanel.cpp:46
+#: src/engine/deskgui/univ/stockItem.cpp:98
+#: src/engine/frmclient/docView/templates/docViewAuditLog.cpp:302
+msgid "Refresh"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/vcs/gitPanel.cpp:47
+msgid "Commit..."
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/vcs/gitPanel.cpp:48
+#: src/engine/appstudio/mainFrame/vcs/gitPanel.cpp:178
+msgid "Push"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/vcs/gitPanel.cpp:49
+#: src/engine/appstudio/mainFrame/vcs/gitPanel.cpp:184
+msgid "Pull"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/vcs/gitPanel.cpp:57
+msgid "Changes (double-click for diff):"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/vcs/gitPanel.cpp:60
+#: src/engine/frmclient/win/dlgs/activeUser.cpp:52
+msgid "State"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/vcs/gitPanel.cpp:61
+msgid "Path"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/vcs/gitPanel.cpp:65
+msgid "History:"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/vcs/gitPanel.cpp:68
+msgid "Hash"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/vcs/gitPanel.cpp:69
+#: src/engine/backend/metaCollection/partial/commonObject.h:1300
+#: src/engine/backend/system/value/valueType.cpp:458
+#: src/engine/frmclient/propertyManager/property/advprop/advpropType.cpp:84
+#: src/engine/frmclient/win/dlgs/formatConstructor/formatConstructor.cpp:25
+#: src/engine/frmclient/win/dlgs/formatConstructor/formatConstructor.cpp:284
+#: src/engine/frmclient/win/dlgs/typeSelector.cpp:232
+msgid "Date"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/vcs/gitPanel.cpp:70
+msgid "Subject"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/vcs/gitPanel.cpp:95
+msgid "(no repository)"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/vcs/gitPanel.cpp:132
+msgid "(not a git repository)"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/vcs/gitPanel.cpp:144
+#, c-format
+msgid "%zu change(s)"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/vcs/gitPanel.cpp:150
+msgid ": done"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/vcs/gitPanel.cpp:154
+msgid ": failed"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/vcs/gitPanel.cpp:155
+msgid " failed"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/vcs/gitPanel.cpp:164
+msgid "Commit message:"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/vcs/gitPanel.cpp:164
+#: src/engine/appstudio/mainFrame/vcs/gitPanel.cpp:168
+#: src/engine/appstudio/mainFrame/vcs/gitPanel.cpp:171
+msgid "Commit"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/vcs/gitPanel.cpp:168
+msgid "Empty commit message."
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/vcs/gitPanel.cpp:194
+#, c-format
+msgid "Checkout %s"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/vcs/gitPanel.cpp:201
+msgid "New branch name:"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/vcs/gitPanel.cpp:201
+msgid "New branch"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/vcs/gitPanel.cpp:205
+#, c-format
+msgid "Create %s"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/vcs/gitPanel.cpp:218
+#, c-format
+msgid "Diff: %s"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/vcs/gitPanel.cpp:221
+msgid "(no diff - untracked, binary, or staged)"
+msgstr ""
+
+#: src/engine/appstudio/mainFrame/welcome/welcomeWindowDesigner.cpp:21
+#: src/engine/deskgui/docview/docManager.cpp:210
+#: src/engine/frmclient/mainFrame/mainFrame.cpp:529
+msgid "Find"
+msgstr ""
+
+#: src/engine/appstudio/syntaxHelper/helpChooserDialog.cpp:40
+msgid "Select topic"
+msgstr ""
+
+#: src/engine/appstudio/syntaxHelper/helpChooserDialog.cpp:45
+msgid "Select a topic from the list:"
+msgstr ""
+
+#: src/engine/appstudio/syntaxHelper/helpChooserDialog.cpp:59
+#: src/engine/core/description/compositionDescription.cpp:1018
+msgid "Show"
+msgstr ""
+
+#: src/engine/appstudio/syntaxHelper/helpChooserDialog.cpp:60
+#: src/engine/backend/system/systemManagerEnum.h:42
+#: src/engine/coderunner/win/dlgs/functionSearcher/functionSearcher.cpp:23
+#: src/engine/coderunner/win/dlgs/lineInput/lineInput.cpp:30
+#: src/engine/deskgui/univ/stockItem.cpp:57
+#: src/engine/frmclient/win/dlgs/applyChange.cpp:55
+#: src/engine/frmclient/win/dlgs/functionSearcher/functionSearcher.cpp:25
+#: src/engine/frmclient/win/dlgs/generation.cpp:56
+#: src/engine/frmclient/win/dlgs/kindSelector/kindSelector.cpp:86
+#: src/engine/frmclient/win/dlgs/lineInput/lineInput.cpp:30
+#: src/engine/frmclient/win/dlgs/selectData.cpp:63
+msgid "Cancel"
+msgstr ""
+
+#: src/engine/appstudio/syntaxHelper/helpChooserDialog.cpp:61
+#: src/engine/deskgui/univ/stockItem.cpp:75
+#: src/engine/frmserver/client/clientFrameRuntime.cpp:60
+#: src/engine/frmserver/visualView/ctrl/formAction.cpp:70
+#: src/engine/frmserver/visualView/ctrl/formObject.cpp:672
+msgid "Help"
+msgstr ""
+
+#: src/engine/appstudio/syntaxHelper/helpDetailView.cpp:94
+msgid "Select an entry in the tree on the left, or press Ctrl+F1 on an identifier in the editor."
+msgstr ""
+
+#: src/engine/appstudio/syntaxHelper/helpDetailView.cpp:284
+msgid "Description"
+msgstr ""
+
+#: src/engine/appstudio/syntaxHelper/helpDetailView.cpp:297
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:1753
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:3068
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:3930
+msgid "Parameters"
+msgstr ""
+
+#: src/engine/appstudio/syntaxHelper/helpDetailView.cpp:298
+msgid "Returns"
+msgstr ""
+
+#: src/engine/appstudio/syntaxHelper/helpDetailView.cpp:304
+msgid "Example"
+msgstr ""
+
+#: src/engine/appstudio/syntaxHelper/helpDetailView.cpp:306
+msgid "Availability"
+msgstr ""
+
+#: src/engine/appstudio/syntaxHelper/helpDetailView.cpp:317
+msgid "See also"
+msgstr ""
+
+#: src/engine/appstudio/syntaxHelper/helpDetailView.cpp:346
+msgid "Draft - this entry awaits editorial review."
+msgstr ""
+
+#: src/engine/appstudio/syntaxHelper/helpDetailView.cpp:364
+#: src/engine/appstudio/win/dlg/predefinedEditor.cpp:690
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorAttributeTree.cpp:478
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorCommandTree.cpp:356
+#: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:155
+#: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:319
+#: src/engine/backend/metaCollection/partial/tabularSection/tabularSection.h:254
+#: src/engine/backend/system/value/valueTable.h:394
+#: src/engine/coderunner/win/editor/codeEditor/codeEditor.cpp:836
+#: src/engine/deskgui/univ/stockItem.cpp:62
+#: src/engine/frmclient/mainFrame/output/outputWindow.cpp:144
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2347
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2709
+#: src/engine/frmclient/win/dlgs/settings/settingsFilterEditor.cpp:614
+#: src/engine/frmclient/win/dlgs/settings/settingsFilterEditor.cpp:1181
+#: src/engine/frmclient/win/dlgs/userList.cpp:70
+#: src/engine/frmclient/win/editor/codeEditor/codeEditor.cpp:1146
+#: src/engine/frmclient/win/editor/gridEditor/gridEditor.cpp:374
+#: src/engine/frmserver/docView/docManager.cpp:343
+msgid "Copy"
+msgstr ""
+
+#: src/engine/appstudio/syntaxHelper/helpDetailView.cpp:365
+#: src/engine/deskgui/univ/stockItem.cpp:104
+msgid "Select All"
+msgstr ""
+
+#: src/engine/appstudio/syntaxHelper/helpPaneView.cpp:70
+#: src/engine/deskgui/univ/stockItem.cpp:54
+msgid "Back"
+msgstr ""
+
+#: src/engine/appstudio/syntaxHelper/helpPaneView.cpp:72
+msgid "Back (Alt+Left)"
+msgstr ""
+
+#: src/engine/appstudio/syntaxHelper/helpPaneView.cpp:73
+#: src/engine/deskgui/univ/stockItem.cpp:73
+msgid "Forward"
+msgstr ""
+
+#: src/engine/appstudio/syntaxHelper/helpPaneView.cpp:75
+msgid "Forward (Alt+Right)"
+msgstr ""
+
+#: src/engine/appstudio/syntaxHelper/helpPaneView.cpp:77
+msgid "Sync from editor"
+msgstr ""
+
+#: src/engine/appstudio/syntaxHelper/helpPaneView.cpp:79
+msgid "Look up identifier under the editor caret"
+msgstr ""
+
+#: src/engine/appstudio/syntaxHelper/helpPaneView.cpp:80
+msgid "Reload"
+msgstr ""
+
+#: src/engine/appstudio/syntaxHelper/helpPaneView.cpp:82
+msgid "Reload the help corpus from disk"
+msgstr ""
+
+#: src/engine/appstudio/syntaxHelper/helpPaneView.cpp:84
+msgid "Larger text"
+msgstr ""
+
+#: src/engine/appstudio/syntaxHelper/helpPaneView.cpp:86
+msgid "Increase the help text size"
+msgstr ""
+
+#: src/engine/appstudio/syntaxHelper/helpPaneView.cpp:87
+msgid "Smaller text"
+msgstr ""
+
+#: src/engine/appstudio/syntaxHelper/helpPaneView.cpp:89
+msgid "Decrease the help text size"
+msgstr ""
+
+#: src/engine/appstudio/syntaxHelper/helpPaneView.cpp:113
+msgid "Contents"
+msgstr ""
+
+#: src/engine/appstudio/syntaxHelper/helpPaneView.cpp:114
+#: src/engine/backend/metaCollection/attribute/metaAttributeObjectEnum.h:46
+#: src/engine/deskgui/univ/stockItem.cpp:78
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:516
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructorInternal.h:109
+msgid "Index"
+msgstr ""
+
+#: src/engine/appstudio/syntaxHelper/helpPaneView.cpp:115
+#: src/engine/deskgui/univ/ctrl/searchCtrl.cpp:53
+msgid "Search"
+msgstr ""
+
+#: src/engine/appstudio/syntaxHelper/helpSearchView.cpp:46
+msgid "Found: 0 (enter a query)"
+msgstr ""
+
+#: src/engine/appstudio/syntaxHelper/helpSearchView.cpp:58
+#, c-format
+msgid "Found: %zu"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/debugItem/debugItem.cpp:11
+#: src/engine/appstudio/win/dlg/debugItem/debugItem.cpp:16
+#: src/engine/frmclient/docView/templates/docViewAuditLog.cpp:337
+#: src/engine/frmclient/win/dlgs/about.cpp:84
+#: src/engine/frmclient/win/dlgs/activeUser.cpp:46
+#: src/engine/frmclient/win/dlgs/activeUser.cpp:105
+#: src/engine/frmclient/win/dlgs/userItem.cpp:112
+#: src/engine/frmclient/win/dlgs/userItem.h:59
+msgid "User"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/debugItem/debugItem.cpp:12
+#: src/engine/appstudio/win/dlg/debugItem/debugItem.cpp:17
+#: src/engine/frmclient/win/dlgs/activeUser.cpp:50
+msgid "Computer"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/debugItem/debugItem.cpp:13
+#: src/engine/appstudio/win/dlg/debugItem/debugItem.cpp:18
+msgid "Port"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/debugItem/debugItem.cpp:70
+msgid "Available debug items:"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/debugItem/debugItem.cpp:77
+msgid "Attached debug items:"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/debugItem/debugItem.h:23
+msgid "Debug items"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/homePageEditor.cpp:44
+#: src/engine/appstudio/win/dlg/homePageEditor.cpp:271
+msgid "Home page workspace"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/homePageEditor.cpp:69
+#: src/engine/appstudio/win/dlg/homePageEditor.cpp:98
+#: src/engine/appstudio/win/dlg/homePageEditor.cpp:271
+#: src/engine/frmclient/propertyManager/property/advprop/advpropSize.cpp:49
+msgid "Height"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/homePageEditor.cpp:78
+msgid "Move to right column"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/homePageEditor.cpp:78
+msgid "Move to left column"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/homePageEditor.cpp:119
+#: src/engine/appstudio/win/dlg/homePageEditor.cpp:340
+msgid "Left column:"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/homePageEditor.cpp:120
+msgid "Right column:"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/homePageEditor.cpp:124
+msgid "Home page template:"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/homePageEditor.cpp:129
+msgid "One column"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/homePageEditor.cpp:130
+msgid "Two columns of equal width"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/homePageEditor.cpp:131
+msgid "Two columns, wide left (2:1)"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/homePageEditor.cpp:132
+msgid "Two columns, wide right (1:2)"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/homePageEditor.cpp:212
+#: src/engine/frmserver/docView/templates/docViewHomePage.cpp:214
+msgid "<not found>"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/homePageEditor.cpp:215
+msgid "same"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/homePageEditor.cpp:270
+msgid "Height share of the column (0 - same as the others)"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/homePageEditor.cpp:340
+msgid "Forms:"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/homePageEditor.cpp:377
+msgid "Select form"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/homePageEditor.cpp:459
+#: src/engine/backend/metaCollection/metaGroups.cpp:23
+msgid "Common forms"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/predefinedEditor.cpp:35
+msgid "Predefined items"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/predefinedEditor.cpp:230
+#, c-format
+msgid "\"%s\" must be filled in"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/predefinedEditor.cpp:238
+msgid "Predefined value"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/predefinedEditor.cpp:252
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:1415
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2623
+#: src/engine/frmclient/win/dlgs/settings/list/listSettings.cpp:391
+msgid "Kind"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/predefinedEditor.cpp:253
+msgid "Folder (group)"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/predefinedEditor.cpp:260
+#: src/engine/backend/metaCollection/partial/commonObject.h:1604
+msgid "Parent"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/predefinedEditor.cpp:262
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryUnionModel.cpp:252
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryUnionModel.cpp:278
+msgid "<none>"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/predefinedEditor.cpp:284
+#: src/engine/appstudio/win/dlg/predefinedEditor.cpp:707
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorNotebook.cpp:16
+#: src/engine/backend/metaCollection/metaLanguageObject.h:39
+#: src/engine/backend/metaCollection/partial/commonObject.h:1602
+#: src/engine/backend/metaCollection/partial/commonObjectEnum.h:58
+msgid "Code"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/predefinedEditor.cpp:290
+#: src/engine/appstudio/win/dlg/predefinedEditor.cpp:710
+#: src/engine/backend/metaCollection/partial/commonObject.h:1603
+#: src/engine/backend/metaCollection/partial/commonObjectEnum.h:57
+msgctxt "item name"
+msgid "Description"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/predefinedEditor.cpp:414
+msgid "Declared by the configuration"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/predefinedEditor.cpp:462
+#: src/engine/backend/metaCollection/partial/tabularSection/tabularSection.h:258
+#: src/engine/backend/system/value/valueList.cpp:154
+#: src/engine/backend/system/value/valueTable.h:398
+#: src/engine/deskgui/univ/ctrl/editableListBox.cpp:153
+#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:258
+#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:328
+#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:418
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryCaseDialog.cpp:90
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:652
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:821
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:1560
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:1678
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:2396
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:2434
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryTempTableDialog.cpp:138
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:1379
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2411
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2583
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2712
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:4375
+#: src/engine/frmclient/win/dlgs/settings/list/listSettings.cpp:425
+#: src/engine/frmclient/win/dlgs/settings/list/listSettings.cpp:426
+#: src/engine/frmclient/win/dlgs/settings/list/listSettings.cpp:567
+#: src/engine/frmclient/win/dlgs/settings/settingsConditionalAppearanceEditor.cpp:208
+#: src/engine/frmclient/win/dlgs/settings/settingsFilterEditor.cpp:619
+#: src/engine/frmclient/win/dlgs/settings/settingsFilterEditor.cpp:1186
+#: src/engine/frmclient/win/dlgs/settings/settingsSortEditor.cpp:162
+#: src/engine/frmclient/win/dlgs/settings/settingsSortEditor.cpp:163
+#: src/engine/frmclient/win/dlgs/settings/settingsSortEditor.cpp:360
+msgid "Move up"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/predefinedEditor.cpp:463
+#: src/engine/backend/metaCollection/partial/tabularSection/tabularSection.h:259
+#: src/engine/backend/system/value/valueList.cpp:155
+#: src/engine/backend/system/value/valueTable.h:399
+#: src/engine/deskgui/univ/ctrl/editableListBox.cpp:158
+#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:259
+#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:329
+#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:419
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryCaseDialog.cpp:95
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:653
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:822
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:1561
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:1679
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:2397
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:2435
+#: src/engine/frmclient/win/dlgs/queryConstructor/queryTempTableDialog.cpp:139
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:1380
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2412
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2584
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2713
+#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:4377
+#: src/engine/frmclient/win/dlgs/settings/list/listSettings.cpp:427
+#: src/engine/frmclient/win/dlgs/settings/list/listSettings.cpp:428
+#: src/engine/frmclient/win/dlgs/settings/list/listSettings.cpp:568
+#: src/engine/frmclient/win/dlgs/settings/settingsConditionalAppearanceEditor.cpp:209
+#: src/engine/frmclient/win/dlgs/settings/settingsFilterEditor.cpp:621
+#: src/engine/frmclient/win/dlgs/settings/settingsFilterEditor.cpp:1188
+#: src/engine/frmclient/win/dlgs/settings/settingsSortEditor.cpp:164
+#: src/engine/frmclient/win/dlgs/settings/settingsSortEditor.cpp:165
+#: src/engine/frmclient/win/dlgs/settings/settingsSortEditor.cpp:361
+msgid "Move down"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/predefinedEditor.cpp:599
+#, c-format
+msgid "%s, row %u"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/predefinedEditor.cpp:642
+msgid "All key fields are not filled in!"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/predefinedEditor.cpp:647
+msgid "The \"name\" field is filled in incorrectly!"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/predefinedEditor.cpp:653
+msgid "The \"name\" field has not unique!"
+msgstr ""
+
+#: src/engine/appstudio/win/dlg/predefinedEditor.h:223
+msgid "Predefined values editor"
+msgstr ""
+
+#: src/engine/appstudio/win/editor/codeEditor/codeEditorDesigner.cpp:64
+#, c-format
+msgid "Breakpoint condition: %s"
+msgstr ""
+
+#: src/engine/appstudio/win/editor/codeEditor/codeEditorDesigner.cpp:75
+msgid "Breakpoint condition..."
+msgstr ""
+
+#: src/engine/appstudio/win/editor/codeEditor/codeEditorDesigner.cpp:84
+msgid "Stop on this line only when the condition is true, for example: i > 500. Leave it empty to stop every time."
+msgstr ""
+
+#: src/engine/appstudio/win/editor/codeEditor/codeEditorDesigner.cpp:85
+msgid "Breakpoint condition"
+msgstr ""
+
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorAttributeTree.cpp:477
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorCommandTree.cpp:355
+#: src/engine/coderunner/win/editor/codeEditor/codeEditor.cpp:835
+#: src/engine/deskgui/univ/stockItem.cpp:63
+#: src/engine/frmclient/win/editor/codeEditor/codeEditor.cpp:1145
+#: src/engine/frmserver/docView/docManager.cpp:342
+msgid "Cut"
+msgstr ""
+
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorAttributeTree.cpp:479
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorCommandTree.cpp:357
+#: src/engine/coderunner/win/editor/codeEditor/codeEditor.cpp:837
+#: src/engine/deskgui/univ/stockItem.cpp:92
+#: src/engine/frmclient/win/editor/codeEditor/codeEditor.cpp:1147
+#: src/engine/frmclient/win/editor/gridEditor/gridEditor.cpp:376
+#: src/engine/frmserver/docView/docManager.cpp:344
+msgid "Paste"
+msgstr ""
+
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorAttributeTree.cpp:481
+msgid "Unset main"
+msgstr ""
+
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorAttributeTree.cpp:481
+msgid "Set as main"
+msgstr ""
+
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorAttributeTree.cpp:562
+#: src/engine/frmclient/propertyManager/property/advprop/advpropSource.cpp:159
+msgid "Choice source"
+msgstr ""
+
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorCmdProc.cpp:1141
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorCommandTree.cpp:353
+msgid "Add command"
+msgstr ""
+
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorCmdProc.cpp:1143
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorCmdProc.cpp:1208
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorObjectTree.cpp:612
+msgid "Paste\tCtrl+V"
+msgstr ""
+
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorCmdProc.cpp:1206
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorObjectTree.cpp:608
+msgid "Cut\tCtrl+X"
+msgstr ""
+
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorCmdProc.cpp:1207
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorObjectTree.cpp:610
+msgid "Copy\tCtrl+C"
+msgstr ""
+
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorCmdProc.cpp:1211
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorObjectTree.cpp:615
+msgid "Delete\tCtrl+D"
+msgstr ""
+
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorCmdProc.cpp:1213
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorObjectTree.cpp:618
+msgid "Move Up\tAlt+Up"
+msgstr ""
+
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorCmdProc.cpp:1214
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorObjectTree.cpp:620
+msgid "Move Down\tAlt+Down"
+msgstr ""
+
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorNotebook.cpp:15
+msgid "Designer"
+msgstr ""
+
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorNotebook.cpp:95
+msgid "Do you rename an existing procedure?"
+msgstr ""
+
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorNotebook.cpp:95
+msgid "Rename"
+msgstr ""
+
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorNotebook.cpp:109
+msgid "Do you delete an existing procedure?"
+msgstr ""
+
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorObjectTree.cpp:177
+msgid "Command interface"
+msgstr ""
+
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorPanel.cpp:83
+#: src/engine/backend/metaCollection/metaGroups.cpp:60
+#: src/engine/frmserver/metaTree/treeConfiguration.cpp:34
+#: src/engine/frmserver/metaTree/treeDataProcessor.cpp:63
+#: src/engine/frmserver/metaTree/treeDataReport.cpp:62
+msgid "Attributes"
+msgstr ""
+
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorPanel.cpp:84
+#: src/engine/backend/metaCollection/metaGroups.cpp:79
+#: src/engine/frmserver/metaTree/treeConfiguration.cpp:35
+#: src/engine/frmserver/metaTree/treeDataProcessor.cpp:92
+#: src/engine/frmserver/metaTree/treeDataReport.cpp:91
+msgid "Commands"
+msgstr ""
+
+#: src/engine/appstudio/win/editor/visualEditor/visualEditorPanel.cpp:87
+msgid "Tree elements"
+msgstr ""
+
+#: src/engine/appworkspace/mainApp.cpp:106
+#: src/engine/appworkspace/mainApp.cpp:130
+msgid "OES Application Workspace - startup error"
+msgstr ""
+
+#: src/engine/appworkspace/mainApp.cpp:138
+msgid ""
+"Cannot start appworkspace.exe - no infobase specified.\n"
+"\n"
+"Provide one of:\n"
+"  --address=oes://<server>[:port]/<base>   (an application server; oess:// over TLS)\n"
+"  --address=http(s)://<server>[:port]/<base>/   (a web server's publication, its link)\n"
+"  --file=<path>          (Firebird embedded / SQLite file)\n"
+"  --server=<host> --db=<name> [--dbport=...] [--user=...]"
+msgstr ""
+
+#: src/engine/appworkspace/mainApp.cpp:144
+#: src/engine/appworkspace/mainFrame/mainFrameEnterprise.h:16
+msgid "OES Application Workspace"
+msgstr ""
+
+#: src/engine/appworkspace/win/dlg/functionAll.h:21
+msgid "All operations"
 msgstr ""
 
 #: src/engine/backend/appData.cpp:214
@@ -1297,16 +2914,6 @@ msgstr ""
 msgid "The running application does not have this line: the module has been edited and not applied, so its copy is a different text. Apply the configuration, or set the breakpoint on a line both copies share."
 msgstr ""
 
-#: src/engine/backend/debugger/debugClient.cpp:392
-#: src/engine/designer-thin/backend/debugger/debugClient.cpp:331
-msgid "The breakpoints could not be cleared: the store they are kept in did not accept the change. They are still set, and the running application still has them."
-msgstr ""
-
-#: src/engine/backend/debugger/debugClientBridge.cpp:20
-#: src/engine/designer-thin/backend/debugger/debugClientBridge.cpp:21
-msgid "SetDebuggerClientBridge: bridge is null"
-msgstr ""
-
 #: src/engine/backend/debugger/debugClientBridge.cpp:22
 msgid "SetDebuggerClientBridge: debugClient is null (call after metadataCreate)"
 msgstr ""
@@ -1624,22 +3231,6 @@ msgid "Data"
 msgstr ""
 
 #: src/engine/backend/metaCollection/attribute/metaAttributeObject.h:308
-#: src/engine/backend/metaCollection/metaFormObject.h:242
-#: src/engine/backend/metaCollection/partial/chartOfCharacteristicTypes.h:241
-#: src/engine/backend/metaCollection/partial/constant.h:39
-#: src/engine/backend/system/value/valueTable.h:161
-#: src/engine/designer-thin/mainFrame/local/localWindow.cpp:134
-#: src/engine/designer-thin/mainFrame/watch/watchWindow.cpp:52
-#: src/engine/frmclient/propertyManager/property/advprop/advpropSource.cpp:111
-#: src/engine/frmclient/win/dlgs/activeUser.cpp:48
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryTempTableDialog.cpp:184
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:3235
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:3608
-#: src/engine/frmserver/visualView/ctrl/formAttribute.h:145
-msgid "Type"
-msgstr ""
-
-#: src/engine/backend/metaCollection/attribute/metaAttributeObject.h:308
 msgid "What the field may hold: one or several types - primitives (string with a length, number with precision and scale, date, boolean) and references. It decides the database columns: a composite type is stored as a type tag plus one column per kind, so adding a type changes the table."
 msgstr ""
 
@@ -1681,16 +3272,6 @@ msgstr ""
 
 #: src/engine/backend/metaCollection/attribute/metaAttributeObject.h:313
 msgid "For a field referring to a hierarchical catalog: what may be chosen into it - items only (the default), folders only, or both."
-msgstr ""
-
-#: src/engine/backend/metaCollection/attribute/metaAttributeObject.h:314
-#: src/engine/codeRunner/codeRunner.cpp:252
-#: src/engine/core/description/compositionDescription.cpp:975
-#: src/engine/designer-thin/docManager/templates/docViewFormEditor.cpp:181
-#: src/engine/designer-thin/docManager/templates/docViewModuleEditor.cpp:118
-#: src/engine/frmserver/visualView/ctrl/tableBox.h:830
-#: src/engine/frmserver/visualView/ctrl/widgets.h:359
-msgid "Format"
 msgstr ""
 
 #: src/engine/backend/metaCollection/attribute/metaAttributeObject.h:314
@@ -1762,14 +3343,6 @@ msgstr ""
 
 #: src/engine/backend/metaCollection/attribute/metaAttributeObjectEnum.h:45
 msgid "Don't index"
-msgstr ""
-
-#: src/engine/backend/metaCollection/attribute/metaAttributeObjectEnum.h:46
-#: src/engine/designer-thin/syntaxHelper/helpPaneView.cpp:115
-#: src/engine/deskgui/univ/stockItem.cpp:78
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:516
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructorInternal.h:109
-msgid "Index"
 msgstr ""
 
 #: src/engine/backend/metaCollection/attribute/metaAttributeObjectEnum.h:47
@@ -1947,26 +3520,6 @@ msgstr ""
 msgid "Go to common attribute"
 msgstr ""
 
-#: src/engine/backend/metaCollection/metaDiff.cpp:78
-#: src/engine/backend/metaCollection/metaObject.h:1015
-#: src/engine/designer-thin/backend/metaCollection/metaDiff.h:169
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:28
-msgid "Common"
-msgstr ""
-
-#: src/engine/backend/metaCollection/metaDiff.cpp:79
-#: src/engine/designer-thin/backend/metaCollection/metaDiff.h:170
-#: src/engine/designer-thin/mainFrame/metaTree/treeConfiguration_impl.cpp:930
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorAttributeTree.cpp:482
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorCmdProc.cpp:1216
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorCommandTree.cpp:361
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorObjectTree.cpp:623
-#: src/engine/deskgui/univ/stockItem.cpp:96
-#: src/engine/frmclient/mainFrame/mainFrame.cpp:429
-#: src/engine/frmclient/win/editor/gridEditor/gridEditor.cpp:409
-msgid "Properties"
-msgstr ""
-
 #: src/engine/backend/metaCollection/metaEventHandlerObject.h:117
 msgid "Event handler"
 msgstr ""
@@ -2023,16 +3576,6 @@ msgstr ""
 msgid "opening form '%s'"
 msgstr ""
 
-#: src/engine/backend/metaCollection/metaFormObject.h:239
-#: src/engine/backend/metaCollection/metaFormObject.h:241
-#: src/engine/backend/metaCollection/metaFormObject.h:324
-#: src/engine/backend/propertyManager/property/variant/variantForm.cpp:5
-#: src/engine/designer-thin/docManager/templates/docViewFormEditor.cpp:113
-#: src/engine/designer-thin/win/dlg/homePageEditor.cpp:97
-#: src/engine/frmserver/visualView/layers/commandBar.cpp:164
-msgid "Form"
-msgstr ""
-
 #: src/engine/backend/metaCollection/metaFormObject.h:240
 msgid "The form itself: its layout (controls, attributes, commands) and its module code, kept together in one cell. Edited in the form designer; the code runs on the client with the form open."
 msgstr ""
@@ -2047,20 +3590,6 @@ msgstr ""
 
 #: src/engine/backend/metaCollection/metaFormObjectMenu.cpp:11
 msgid "Open form"
-msgstr ""
-
-#: src/engine/backend/metaCollection/metaFunctionalOptionObject.h:82
-#: src/engine/backend/metaCollection/partial/constant.h:38
-#: src/engine/backend/system/value/valueList.cpp:17
-#: src/engine/designer-thin/mainFrame/local/localWindow.cpp:133
-#: src/engine/designer-thin/mainFrame/watch/watchWindow.cpp:51
-#: src/engine/deskgui/univ/propgrid/manager.cpp:399
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:3587
-#: src/engine/frmclient/win/dlgs/settings/settingsAppearanceEditor.cpp:162
-#: src/engine/frmclient/win/dlgs/settings/settingsOutputParametersEditor.cpp:177
-#: src/engine/frmserver/visualView/ctrl/widgets.h:589
-#: src/engine/frmserver/visualView/ctrl/widgets.h:612
-msgid "Value"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaFunctionalOptionObject.h:84
@@ -2085,11 +3614,6 @@ msgstr ""
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:22
 msgid "Common modules"
-msgstr ""
-
-#: src/engine/backend/metaCollection/metaGroups.cpp:23
-#: src/engine/designer-thin/win/dlg/homePageEditor.cpp:459
-msgid "Common forms"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaGroups.cpp:24
@@ -2213,14 +3737,6 @@ msgstr ""
 msgid "Sequences"
 msgstr ""
 
-#: src/engine/backend/metaCollection/metaGroups.cpp:60
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorPanel.cpp:83
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:34
-#: src/engine/frmserver/metaTree/treeDataProcessor.cpp:63
-#: src/engine/frmserver/metaTree/treeDataReport.cpp:62
-msgid "Attributes"
-msgstr ""
-
 #: src/engine/backend/metaCollection/metaGroups.cpp:65
 #: src/engine/frmserver/metaTree/treeConfiguration.cpp:38
 msgid "Dimensions"
@@ -2276,14 +3792,6 @@ msgstr ""
 msgid "Forms"
 msgstr ""
 
-#: src/engine/backend/metaCollection/metaGroups.cpp:79
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorPanel.cpp:84
-#: src/engine/frmserver/metaTree/treeConfiguration.cpp:35
-#: src/engine/frmserver/metaTree/treeDataProcessor.cpp:92
-#: src/engine/frmserver/metaTree/treeDataReport.cpp:91
-msgid "Commands"
-msgstr ""
-
 #: src/engine/backend/metaCollection/metaGroups.cpp:80
 #: src/engine/frmserver/metaTree/treeConfiguration.cpp:33
 #: src/engine/frmserver/metaTree/treeDataProcessor.cpp:97
@@ -2299,24 +3807,8 @@ msgstr ""
 msgid "Manager modules"
 msgstr ""
 
-#: src/engine/backend/metaCollection/metaLanguageObject.h:39
-#: src/engine/backend/metaCollection/partial/commonObject.h:1602
-#: src/engine/backend/metaCollection/partial/commonObjectEnum.h:58
-#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:284
-#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:707
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorNotebook.cpp:16
-msgid "Code"
-msgstr ""
-
 #: src/engine/backend/metaCollection/metaLanguageObject.h:40
 msgid "The language's code (en, ru, uk and so on): the key its texts are stored under in multi-language strings (synonyms, captions, spreadsheet cells) and the code the session's interface language is set by when this language is the configuration's default. Unique among the configuration's languages - a pasted duplicate gets a number appended."
-msgstr ""
-
-#: src/engine/backend/metaCollection/metaModuleObject.h:229
-#: src/engine/backend/metaCollection/metaModuleObject.h:304
-#: src/engine/backend/propertyManager/property/variant/variantModule.cpp:5
-#: src/engine/designer-thin/mainFrame/stack/stackWindow.cpp:134
-msgid "Module"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaModuleObject.h:230
@@ -2347,12 +3839,6 @@ msgstr ""
 msgid "Whether a call into the module runs with no access checks - neither the rights on objects nor the record-level restrictions - for everything the call runs. For code that has to see past the user's rights, such as checking them. A module is global or privileged, not both: switching one on switches the other off."
 msgstr ""
 
-#: src/engine/backend/metaCollection/metaModuleObjectMenu.cpp:11
-#: src/engine/designer-thin/mainFrame/metaTree/treeDataProcessor.cpp:67
-#: src/engine/designer-thin/mainFrame/metaTree/treeDataReport.cpp:81
-msgid "Open module"
-msgstr ""
-
 #: src/engine/backend/metaCollection/metaObject.cpp:399
 msgid "Another session holds exclusive mode."
 msgstr ""
@@ -2375,49 +3861,11 @@ msgid "Structure (DDL) changes require exclusive mode. %s Code-only changes (mod
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaObject.h:1016
-#: src/engine/backend/system/value/valueTable.h:159
-#: src/engine/designer-thin/mainFrame/local/localWindow.cpp:132
-#: src/engine/designer-thin/mainFrame/metaTree/treeDataProcessor.cpp:18
-#: src/engine/designer-thin/mainFrame/metaTree/treeDataReport.cpp:18
-#: src/engine/designer-thin/mainFrame/watch/watchWindow.cpp:50
-#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:277
-#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:704
-#: src/engine/frmclient/win/dlgs/choiceParameters/choiceParameters.cpp:260
-#: src/engine/frmclient/win/dlgs/kindSelector/kindSelector.cpp:48
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:2406
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:2544
-#: src/engine/frmclient/win/dlgs/userList.cpp:79
-#: src/engine/frmclient/win/editor/gridEditor/gridEditor.h:601
-#: src/engine/frmserver/visualView/ctrl/control.h:102
-#: src/engine/frmserver/visualView/ctrl/formAttribute.h:143
-#: src/engine/frmserver/visualView/ctrl/formCommand.h:94
-#: src/engine/frmserver/visualView/layers/commandBar.h:144
-msgid "Name"
-msgstr ""
-
-#: src/engine/backend/metaCollection/metaObject.h:1016
 msgid "The name code and queries refer to the object by - Catalogs.<Name> in a script, Catalog.<Name> in a query. Letters, digits and underscores, starting with a letter; unique among the objects beside it. Renaming changes what code must call it."
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaObject.h:1017
-#: src/engine/designer-thin/mainFrame/metaTree/treeDataProcessor.cpp:23
-#: src/engine/designer-thin/mainFrame/metaTree/treeDataReport.cpp:23
-#: src/engine/frmclient/win/dlgs/kindSelector/kindSelector.cpp:53
-msgid "Synonym"
-msgstr ""
-
-#: src/engine/backend/metaCollection/metaObject.h:1017
 msgid "The caption people see - in the interface, form and list titles, report columns - one text per declared language. Empty: the name is shown."
-msgstr ""
-
-#: src/engine/backend/metaCollection/metaObject.h:1018
-#: src/engine/backend/system/systemManagerEnum.h:165
-#: src/engine/codeRunner/mainFrame/settings/fontcolorsettings.cpp:36
-#: src/engine/designer-thin/mainFrame/metaTree/treeDataProcessor.cpp:28
-#: src/engine/designer-thin/mainFrame/metaTree/treeDataReport.cpp:28
-#: src/engine/frmclient/mainFrame/settings/fontcolorsettings.cpp:39
-#: src/engine/frmclient/win/dlgs/kindSelector/kindSelector.cpp:58
-msgid "Comment"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaObject.h:1018
@@ -2430,22 +3878,6 @@ msgstr ""
 
 #: src/engine/backend/metaCollection/metaObjectMetadata.cpp:131
 msgid "! Doesn't have default language "
-msgstr ""
-
-#: src/engine/backend/metaCollection/metaObjectMetadata.h:14
-#: src/engine/designer-thin/mainFrame/mainFrameDesigner.cpp:120
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerParts.cpp:22
-#: src/engine/designer-thin/win/editor/commonAttributeEditor/commonAttributeEditor.cpp:89
-#: src/engine/designer-thin/win/editor/functionalOptionEditor/functionalOptionEditor.cpp:102
-#: src/engine/designer-thin/win/editor/interfaceEditor/interfaceEditor.cpp:86
-#: src/engine/designer-thin/win/editor/roleEditor/roleEditor.cpp:140
-#: src/engine/frmclient/mainFrame/mainFrame.cpp:673
-#: src/engine/frmclient/mainFrame/mainFrame.cpp:1201
-#: src/engine/frmclient/propertyManager/property/advprop/advpropPicture.cpp:174
-#: src/engine/frmserver/docView/docManagerDesigner.cpp:37
-#: src/engine/frmserver/docView/templates/designer/docViewCommonAttributeEdit.cpp:92
-#: src/engine/frmserver/docView/templates/designer/docViewFunctionalOptionEdit.cpp:100
-msgid "Configuration"
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaObjectMetadata.h:174
@@ -2510,19 +3942,12 @@ msgid "The compatibility version: which platform behaviour the configuration ask
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaObjectMetadata.h:205
-#: src/engine/designer-thin/docManager/templates/docViewFormEditor.cpp:175
-#: src/engine/designer-thin/docManager/templates/docViewModuleEditor.cpp:112
-#: src/engine/designer-thin/syntaxHelper/helpDetailView.cpp:295
-msgid "Syntax"
-msgstr ""
-
-#: src/engine/backend/metaCollection/metaObjectMetadata.h:205
 msgid "The dialect the configuration's modules are written in. CES (the default for new configurations): braces and semicolons. VES: the legacy word-based dialect, kept for migrated configurations."
 msgstr ""
 
 #: src/engine/backend/metaCollection/metaObjectMetadata.h:208
-#: src/engine/frmserver/client/clientFrameDesigner.cpp:75
-#: src/engine/frmserver/client/clientFrameRuntime.cpp:46
+#: src/engine/frmserver/client/clientFrameDesigner.cpp:78
+#: src/engine/frmserver/client/clientFrameRuntime.cpp:50
 msgid "Administration"
 msgstr ""
 
@@ -2530,15 +3955,10 @@ msgstr ""
 msgid "Data administration"
 msgstr ""
 
-#: src/engine/backend/metaCollection/metaObjectMetadata.h:210
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:85
-msgid "Update database configuration"
-msgstr ""
-
 #: src/engine/backend/metaCollection/metaObjectMetadata.h:211
 #: src/engine/frmclient/win/dlgs/activeUser.h:37
-#: src/engine/frmserver/client/clientFrameDesigner.cpp:63
-#: src/engine/frmserver/client/clientFrameRuntime.cpp:35
+#: src/engine/frmserver/client/clientFrameDesigner.cpp:66
+#: src/engine/frmserver/client/clientFrameRuntime.cpp:39
 msgid "Active users"
 msgstr ""
 
@@ -4383,16 +5803,6 @@ msgid "The document's number - what a person finds it by. Indexed; shown with th
 msgstr ""
 
 #: src/engine/backend/metaCollection/partial/commonObject.h:1300
-#: src/engine/backend/system/value/valueType.cpp:458
-#: src/engine/designer-thin/mainFrame/vcs/gitPanel.cpp:69
-#: src/engine/frmclient/propertyManager/property/advprop/advpropType.cpp:84
-#: src/engine/frmclient/win/dlgs/formatConstructor/formatConstructor.cpp:25
-#: src/engine/frmclient/win/dlgs/formatConstructor/formatConstructor.cpp:284
-#: src/engine/frmclient/win/dlgs/typeSelector.cpp:232
-msgid "Date"
-msgstr ""
-
-#: src/engine/backend/metaCollection/partial/commonObject.h:1300
 msgid "The document's date and time - when the fact happened. Documents are ordered by it, and it is the moment its movements stand at in the registers: a balance as of a moment counts the documents up to it."
 msgstr ""
 
@@ -4439,20 +5849,7 @@ msgid "The item's code - a short identifier a person types or searches by. Index
 msgstr ""
 
 #: src/engine/backend/metaCollection/partial/commonObject.h:1603
-#: src/engine/backend/metaCollection/partial/commonObjectEnum.h:57
-#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:290
-#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:710
-msgctxt "item name"
-msgid "Description"
-msgstr ""
-
-#: src/engine/backend/metaCollection/partial/commonObject.h:1603
 msgid "The item's name - what it is shown as wherever a reference to it appears: in fields, lists, reports and printed forms. Indexed, and searched by in quick choice."
-msgstr ""
-
-#: src/engine/backend/metaCollection/partial/commonObject.h:1604
-#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:260
-msgid "Parent"
 msgstr ""
 
 #: src/engine/backend/metaCollection/partial/commonObject.h:1604
@@ -4500,136 +5897,6 @@ msgstr ""
 #: src/engine/backend/metaCollection/partial/commonObject.h:2628
 #: src/engine/backend/metaCollection/partial/commonObject.h:3330
 msgid "Creating"
-msgstr ""
-
-#: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:154
-#: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:318
-#: src/engine/backend/metaCollection/partial/tabularSection/tabularSection.h:253
-#: src/engine/backend/system/value/valueList.cpp:151
-#: src/engine/backend/system/value/valueTable.h:393
-#: src/engine/codeRunner/codeRunner.cpp:249
-#: src/engine/designer-thin/docManager/templates/docViewFormEditor.cpp:170
-#: src/engine/designer-thin/docManager/templates/docViewModuleEditor.cpp:107
-#: src/engine/designer-thin/win/dlg/homePageEditor.cpp:68
-#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:457
-#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:689
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorAttributeTree.cpp:471
-#: src/engine/deskgui/univ/stockItem.cpp:52
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryCaseDialog.cpp:87
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:1371
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructorEdit.cpp:1480
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryTempTableDialog.cpp:135
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2345
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:3405
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:3518
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:4417
-#: src/engine/frmclient/win/dlgs/settings/list/listSettings.cpp:420
-#: src/engine/frmclient/win/dlgs/settings/list/listSettings.cpp:564
-#: src/engine/frmclient/win/dlgs/settings/settingsConditionalAppearanceEditor.cpp:99
-#: src/engine/frmclient/win/dlgs/settings/settingsConditionalAppearanceEditor.cpp:205
-#: src/engine/frmclient/win/dlgs/settings/settingsSortEditor.cpp:157
-#: src/engine/frmclient/win/dlgs/settings/settingsSortEditor.cpp:357
-#: src/engine/frmclient/win/dlgs/userList.cpp:69
-#: src/engine/launcher/launcher.cpp:213
-msgid "Add"
-msgstr ""
-
-#: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:155
-#: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:319
-#: src/engine/backend/metaCollection/partial/tabularSection/tabularSection.h:254
-#: src/engine/backend/system/value/valueTable.h:394
-#: src/engine/codeRunner/win/editor/codeEditor/codeEditor.cpp:836
-#: src/engine/designer-thin/syntaxHelper/helpDetailView.cpp:364
-#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:690
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorAttributeTree.cpp:478
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorCommandTree.cpp:356
-#: src/engine/deskgui/univ/stockItem.cpp:62
-#: src/engine/frmclient/mainFrame/output/outputWindow.cpp:144
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2347
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2709
-#: src/engine/frmclient/win/dlgs/settings/settingsFilterEditor.cpp:614
-#: src/engine/frmclient/win/dlgs/settings/settingsFilterEditor.cpp:1181
-#: src/engine/frmclient/win/dlgs/userList.cpp:70
-#: src/engine/frmclient/win/editor/codeEditor/codeEditor.cpp:1146
-#: src/engine/frmclient/win/editor/gridEditor/gridEditor.cpp:374
-#: src/engine/frmserver/docView/docManager.cpp:343
-msgid "Copy"
-msgstr ""
-
-#: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:156
-#: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:320
-#: src/engine/backend/metaCollection/partial/tabularSection/tabularSection.h:255
-#: src/engine/backend/system/value/valueTable.h:395
-#: src/engine/designer-thin/mainFrame/metaTree/treeConfiguration.cpp:59
-#: src/engine/designer-thin/mainFrame/metaTree/treeConfiguration_impl.cpp:917
-#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:691
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorAttributeTree.cpp:474
-#: src/engine/deskgui/univ/stockItem.cpp:66
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:814
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:1372
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:1675
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:2180
-#: src/engine/frmclient/win/dlgs/userList.cpp:71
-#: src/engine/launcher/launcher.cpp:219
-msgid "Edit"
-msgstr ""
-
-#: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:157
-#: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:321
-#: src/engine/backend/metaCollection/partial/tabularSection/tabularSection.h:256
-#: src/engine/backend/system/value/valueList.cpp:152
-#: src/engine/backend/system/value/valueTable.h:396
-#: src/engine/designer-thin/mainFrame/metaTree/treeConfiguration.cpp:60
-#: src/engine/designer-thin/win/dlg/homePageEditor.cpp:70
-#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:458
-#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:692
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorAttributeTree.cpp:475
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorCommandTree.cpp:359
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorNotebook.cpp:109
-#: src/engine/deskgui/univ/stockItem.cpp:64
-#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:240
-#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:257
-#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:299
-#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:327
-#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:364
-#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:417
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryCaseDialog.cpp:88
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:650
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:758
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:819
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:950
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:1039
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:1373
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:1676
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:2181
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:2392
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:2432
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructorEdit.cpp:1481
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryTempTableDialog.cpp:136
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:1377
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2349
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2408
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2409
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2581
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2708
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:3411
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:3520
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:4372
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:4419
-#: src/engine/frmclient/win/dlgs/settings/list/listSettings.cpp:422
-#: src/engine/frmclient/win/dlgs/settings/list/listSettings.cpp:565
-#: src/engine/frmclient/win/dlgs/settings/savedSettings.cpp:81
-#: src/engine/frmclient/win/dlgs/settings/settingsConditionalAppearanceEditor.cpp:100
-#: src/engine/frmclient/win/dlgs/settings/settingsConditionalAppearanceEditor.cpp:206
-#: src/engine/frmclient/win/dlgs/settings/settingsFilterEditor.cpp:616
-#: src/engine/frmclient/win/dlgs/settings/settingsFilterEditor.cpp:1183
-#: src/engine/frmclient/win/dlgs/settings/settingsSortEditor.cpp:159
-#: src/engine/frmclient/win/dlgs/settings/settingsSortEditor.cpp:358
-#: src/engine/frmclient/win/dlgs/userList.cpp:72
-#: src/engine/frmclient/win/editor/gridEditor/gridEditor.cpp:382
-#: src/engine/frmserver/docView/docManager.cpp:345
-#: src/engine/launcher/launcher.cpp:226
-msgid "Delete"
 msgstr ""
 
 #: src/engine/backend/metaCollection/partial/commonObjectAction.cpp:158
@@ -5272,72 +6539,6 @@ msgstr ""
 msgid "<deleted metaobject>"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/tabularSection/tabularSection.h:258
-#: src/engine/backend/system/value/valueList.cpp:154
-#: src/engine/backend/system/value/valueTable.h:398
-#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:462
-#: src/engine/deskgui/univ/ctrl/editableListBox.cpp:153
-#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:258
-#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:328
-#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:418
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryCaseDialog.cpp:90
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:652
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:821
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:1560
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:1678
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:2396
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:2434
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryTempTableDialog.cpp:138
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:1379
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2411
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2583
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2712
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:4375
-#: src/engine/frmclient/win/dlgs/settings/list/listSettings.cpp:425
-#: src/engine/frmclient/win/dlgs/settings/list/listSettings.cpp:426
-#: src/engine/frmclient/win/dlgs/settings/list/listSettings.cpp:567
-#: src/engine/frmclient/win/dlgs/settings/settingsConditionalAppearanceEditor.cpp:208
-#: src/engine/frmclient/win/dlgs/settings/settingsFilterEditor.cpp:619
-#: src/engine/frmclient/win/dlgs/settings/settingsFilterEditor.cpp:1186
-#: src/engine/frmclient/win/dlgs/settings/settingsSortEditor.cpp:162
-#: src/engine/frmclient/win/dlgs/settings/settingsSortEditor.cpp:163
-#: src/engine/frmclient/win/dlgs/settings/settingsSortEditor.cpp:360
-msgid "Move up"
-msgstr ""
-
-#: src/engine/backend/metaCollection/partial/tabularSection/tabularSection.h:259
-#: src/engine/backend/system/value/valueList.cpp:155
-#: src/engine/backend/system/value/valueTable.h:399
-#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:463
-#: src/engine/deskgui/univ/ctrl/editableListBox.cpp:158
-#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:259
-#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:329
-#: src/engine/frmclient/win/dlgs/linqConstructor/linqConstructor.cpp:419
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryCaseDialog.cpp:95
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:653
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:822
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:1561
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:1679
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:2397
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:2435
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryTempTableDialog.cpp:139
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:1380
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2412
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2584
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2713
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:4377
-#: src/engine/frmclient/win/dlgs/settings/list/listSettings.cpp:427
-#: src/engine/frmclient/win/dlgs/settings/list/listSettings.cpp:428
-#: src/engine/frmclient/win/dlgs/settings/list/listSettings.cpp:568
-#: src/engine/frmclient/win/dlgs/settings/settingsConditionalAppearanceEditor.cpp:209
-#: src/engine/frmclient/win/dlgs/settings/settingsFilterEditor.cpp:621
-#: src/engine/frmclient/win/dlgs/settings/settingsFilterEditor.cpp:1188
-#: src/engine/frmclient/win/dlgs/settings/settingsSortEditor.cpp:164
-#: src/engine/frmclient/win/dlgs/settings/settingsSortEditor.cpp:165
-#: src/engine/frmclient/win/dlgs/settings/settingsSortEditor.cpp:361
-msgid "Move down"
-msgstr ""
-
 #: src/engine/backend/metaCollection/partial/tabularSection/tabularSection.h:264
 #: src/engine/backend/system/value/valueList.cpp:157
 #: src/engine/backend/system/value/valueTable.h:405
@@ -5527,15 +6728,6 @@ msgstr ""
 #: src/engine/backend/propertyManager/property/variant/variantPicture.cpp:30
 #: src/engine/frmclient/propertyManager/property/advprop/advpropPicture.cpp:37
 msgid "External picture"
-msgstr ""
-
-#: src/engine/backend/propertyManager/property/variant/variantSource.cpp:110
-#: src/engine/designer-thin/mainFrame/metaTree/treeConfiguration_impl.cpp:344
-#: src/engine/designer-thin/mainFrame/metaTree/treeDataProcessor.cpp:59
-#: src/engine/designer-thin/mainFrame/metaTree/treeDataReport.cpp:65
-#: src/engine/designer-thin/mainFrame/metaTree/treeDataReport.cpp:73
-#: src/engine/frmclient/propertyManager/property/advprop/advpropSource.cpp:124
-msgid "<not selected>"
 msgstr ""
 
 #: src/engine/backend/propertyManager/property/variant/variantTemplate.cpp:7
@@ -6471,7 +7663,7 @@ msgid "unexpected session state after Add"
 msgstr ""
 
 #: src/engine/backend/session/sessionRegistry.cpp:542
-#: src/engine/frmserver/client/clientInstance.cpp:90
+#: src/engine/frmserver/client/clientHost.cpp:1129
 msgid "registry did not answer to Attach"
 msgstr ""
 
@@ -6511,14 +7703,11 @@ msgid "System job"
 msgstr ""
 
 #: src/engine/backend/session/sessionSnapshot.cpp:48
-msgid "Runtime"
+msgid "Application Workspace"
 msgstr ""
 
 #: src/engine/backend/session/sessionSnapshot.cpp:50
-#: src/engine/designer-thin/mainFrame/mainFrameDesigner.h:106
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorNotebook.cpp:15
-#: src/engine/launcher/launcher.cpp:200
-msgid "Designer"
+msgid "Application Studio"
 msgstr ""
 
 #: src/engine/backend/session/sessionSnapshot.cpp:51
@@ -6526,24 +7715,12 @@ msgid "Thick client (GUI)"
 msgstr ""
 
 #: src/engine/backend/session/sessionSnapshot.cpp:53
-#: src/engine/launcher/connectionDB.cpp:79
+#: src/engine/launcher/connectionDB.cpp:78
 msgid "Web server"
-msgstr ""
-
-#: src/engine/backend/session/sessionSnapshot.cpp:54
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:49
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:55
-msgid "Web client"
 msgstr ""
 
 #: src/engine/backend/session/sessionSnapshot.cpp:92
 msgid "Server"
-msgstr ""
-
-#: src/engine/backend/session/sessionSnapshot.cpp:95
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:48
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:54
-msgid "Thin client"
 msgstr ""
 
 #: src/engine/backend/session/sessionSnapshot.cpp:98
@@ -6585,13 +7762,13 @@ msgstr ""
 
 #: src/engine/backend/system/systemManagerEnum.h:15
 #: src/engine/backend/system/systemManagerFunc.cpp:620
-#: src/engine/codeRunner/mainFrame/settings/fontcolorsettings.cpp:43
+#: src/engine/coderunner/mainFrame/settings/fontcolorsettings.cpp:42
 #: src/engine/frmclient/mainFrame/settings/fontcolorsettings.cpp:46
 msgid "Warning"
 msgstr ""
 
 #: src/engine/backend/system/systemManagerEnum.h:16
-#: src/engine/codeRunner/mainFrame/settings/fontcolorsettings.cpp:42
+#: src/engine/coderunner/mainFrame/settings/fontcolorsettings.cpp:41
 #: src/engine/frmclient/mainFrame/settings/fontcolorsettings.cpp:45
 #: src/engine/frmclient/visualView/ctrl/typeControl.cpp:323
 #: src/engine/frmserver/schema/designer/database.cpp:97
@@ -6628,20 +7805,6 @@ msgstr ""
 #: src/engine/backend/system/systemManagerEnum.h:40
 #: src/engine/deskgui/univ/stockItem.cpp:89
 msgid "No"
-msgstr ""
-
-#: src/engine/backend/system/systemManagerEnum.h:42
-#: src/engine/codeRunner/win/dlgs/functionSearcher/functionSearcher.cpp:23
-#: src/engine/codeRunner/win/dlgs/lineInput/lineInput.cpp:30
-#: src/engine/designer-thin/syntaxHelper/helpChooserDialog.cpp:60
-#: src/engine/deskgui/univ/stockItem.cpp:57
-#: src/engine/frmclient/win/dlgs/applyChange.cpp:55
-#: src/engine/frmclient/win/dlgs/functionSearcher/functionSearcher.cpp:25
-#: src/engine/frmclient/win/dlgs/generation.cpp:56
-#: src/engine/frmclient/win/dlgs/kindSelector/kindSelector.cpp:86
-#: src/engine/frmclient/win/dlgs/lineInput/lineInput.cpp:30
-#: src/engine/frmclient/win/dlgs/selectData.cpp:63
-msgid "Cancel"
 msgstr ""
 
 #: src/engine/backend/system/systemManagerEnum.h:52
@@ -6690,14 +7853,14 @@ msgid "Boolean"
 msgstr ""
 
 #: src/engine/backend/system/systemManagerEnum.h:134
-#: src/engine/codeRunner/mainFrame/settings/fontcolorsettings.cpp:41
+#: src/engine/coderunner/mainFrame/settings/fontcolorsettings.cpp:40
 #: src/engine/frmclient/mainFrame/settings/fontcolorsettings.cpp:44
 #: src/engine/frmclient/win/dlgs/formatConstructor/formatConstructor.cpp:215
 msgid "Number"
 msgstr ""
 
 #: src/engine/backend/system/systemManagerEnum.h:135
-#: src/engine/codeRunner/mainFrame/settings/fontcolorsettings.cpp:40
+#: src/engine/coderunner/mainFrame/settings/fontcolorsettings.cpp:39
 #: src/engine/frmclient/mainFrame/settings/fontcolorsettings.cpp:43
 msgid "String"
 msgstr ""
@@ -6785,7 +7948,7 @@ msgid "Notation"
 msgstr ""
 
 #: src/engine/backend/system/systemManagerEnum.h:182
-#: src/engine/codeRunner/mainFrame/settings/fontcolorsettings.cpp:35
+#: src/engine/coderunner/mainFrame/settings/fontcolorsettings.cpp:34
 #: src/engine/frmclient/mainFrame/settings/fontcolorsettings.cpp:38
 #: src/engine/frmclient/win/dlgs/formEditor.cpp:245
 msgid "Default"
@@ -8213,260 +9376,171 @@ msgstr ""
 msgid "A value of type '%s' is not a '%s'"
 msgstr ""
 
-#: src/engine/codeRunner/codeRunner.cpp:40
+#: src/engine/coderunner/coderunner.cpp:40
 msgid "Open script"
 msgstr ""
 
-#: src/engine/codeRunner/codeRunner.cpp:41
-#: src/engine/codeRunner/codeRunner.cpp:81
+#: src/engine/coderunner/coderunner.cpp:41
+#: src/engine/coderunner/coderunner.cpp:81
 msgid "Text files (*.txt)|*.txt|All files (*.*)|*.*"
 msgstr ""
 
-#: src/engine/codeRunner/codeRunner.cpp:47
+#: src/engine/coderunner/coderunner.cpp:47
 msgid "Cannot open file"
 msgstr ""
 
-#: src/engine/codeRunner/codeRunner.cpp:47
-#: src/engine/codeRunner/codeRunner.cpp:60
-#: src/engine/codeRunner/codeRunner.cpp:71
-#: src/engine/codeRunner/codeRunner.cpp:87
-#: src/engine/codeRunner/codeRunner.cpp:92
-#: src/engine/codeRunner/codeRunner.h:96
+#: src/engine/coderunner/coderunner.cpp:47
+#: src/engine/coderunner/coderunner.cpp:60
+#: src/engine/coderunner/coderunner.cpp:71
+#: src/engine/coderunner/coderunner.cpp:87
+#: src/engine/coderunner/coderunner.cpp:92
+#: src/engine/coderunner/coderunner.h:96
 msgid "Code runner"
 msgstr ""
 
-#: src/engine/codeRunner/codeRunner.cpp:71
-#: src/engine/codeRunner/codeRunner.cpp:87
+#: src/engine/coderunner/coderunner.cpp:71
+#: src/engine/coderunner/coderunner.cpp:87
 msgid "Cannot save file"
 msgstr ""
 
-#: src/engine/codeRunner/codeRunner.cpp:80
+#: src/engine/coderunner/coderunner.cpp:80
 msgid "Save script as"
 msgstr ""
 
-#: src/engine/codeRunner/codeRunner.cpp:104
+#: src/engine/coderunner/coderunner.cpp:104
 msgid "OES Code Runner"
 msgstr ""
 
-#: src/engine/codeRunner/codeRunner.cpp:105
+#: src/engine/coderunner/coderunner.cpp:105
 #, c-format
 msgid "About %s"
 msgstr ""
 
-#: src/engine/codeRunner/codeRunner.cpp:107
+#: src/engine/coderunner/coderunner.cpp:107
 msgid "Standalone OES script runner - write and execute scripts without metadata."
 msgstr ""
 
-#: src/engine/codeRunner/codeRunner.cpp:135
+#: src/engine/coderunner/coderunner.cpp:135
 #: src/engine/frmserver/docView/templates/designer/docViewModuleEdit.cpp:711
 msgid "No syntax errors detected!"
 msgstr ""
 
-#: src/engine/codeRunner/codeRunner.cpp:206
+#: src/engine/coderunner/coderunner.cpp:206
 msgid "&Open...\tCtrl+O"
 msgstr ""
 
-#: src/engine/codeRunner/codeRunner.cpp:207
+#: src/engine/coderunner/coderunner.cpp:207
 msgid "&Save\tCtrl+S"
 msgstr ""
 
-#: src/engine/codeRunner/codeRunner.cpp:208
+#: src/engine/coderunner/coderunner.cpp:208
 msgid "Save &as..."
 msgstr ""
 
-#: src/engine/codeRunner/codeRunner.cpp:210
+#: src/engine/coderunner/coderunner.cpp:210
 msgid "E&xit\tAlt+F4"
 msgstr ""
 
-#: src/engine/codeRunner/codeRunner.cpp:211
+#: src/engine/coderunner/coderunner.cpp:211
 #: src/engine/deskgui/univ/stockItem.cpp:69
 msgid "&File"
 msgstr ""
 
-#: src/engine/codeRunner/codeRunner.cpp:214
+#: src/engine/coderunner/coderunner.cpp:214
 msgid "&Undo\tCtrl+Z"
 msgstr ""
 
-#: src/engine/codeRunner/codeRunner.cpp:215
+#: src/engine/coderunner/coderunner.cpp:215
 msgid "&Redo\tCtrl+Y"
 msgstr ""
 
-#: src/engine/codeRunner/codeRunner.cpp:217
+#: src/engine/coderunner/coderunner.cpp:217
 msgid "Cu&t\tCtrl+X"
 msgstr ""
 
-#: src/engine/codeRunner/codeRunner.cpp:218
+#: src/engine/coderunner/coderunner.cpp:218
 msgid "&Copy\tCtrl+C"
 msgstr ""
 
-#: src/engine/codeRunner/codeRunner.cpp:219
+#: src/engine/coderunner/coderunner.cpp:219
 msgid "&Paste\tCtrl+V"
 msgstr ""
 
-#: src/engine/codeRunner/codeRunner.cpp:221
+#: src/engine/coderunner/coderunner.cpp:221
 msgid "Select &all\tCtrl+A"
 msgstr ""
 
-#: src/engine/codeRunner/codeRunner.cpp:222
+#: src/engine/coderunner/coderunner.cpp:222
 #: src/engine/deskgui/univ/stockItem.cpp:66
 msgid "&Edit"
 msgstr ""
 
-#: src/engine/codeRunner/codeRunner.cpp:225
+#: src/engine/coderunner/coderunner.cpp:225
 #: src/engine/deskgui/univ/stockItem.cpp:51
 msgid "&About"
 msgstr ""
 
-#: src/engine/codeRunner/codeRunner.cpp:226
+#: src/engine/coderunner/coderunner.cpp:226
 #: src/engine/deskgui/univ/stockItem.cpp:75
 msgid "&Help"
 msgstr ""
 
-#: src/engine/codeRunner/codeRunner.cpp:249
-#: src/engine/designer-thin/docManager/templates/docViewFormEditor.cpp:170
-#: src/engine/designer-thin/docManager/templates/docViewModuleEditor.cpp:107
-msgid "Add comments"
-msgstr ""
-
-#: src/engine/codeRunner/codeRunner.cpp:250
-#: src/engine/designer-thin/docManager/templates/docViewFormEditor.cpp:172
-#: src/engine/designer-thin/docManager/templates/docViewModuleEditor.cpp:109
-msgid "Remove comments"
-msgstr ""
-
-#: src/engine/codeRunner/codeRunner.cpp:250
-#: src/engine/designer-thin/docManager/templates/docViewFormEditor.cpp:172
-#: src/engine/designer-thin/docManager/templates/docViewModuleEditor.cpp:109
-#: src/engine/designer-thin/mainFrame/metaTree/treeConfiguration_impl.cpp:919
-#: src/engine/deskgui/univ/stockItem.cpp:99
-msgid "Remove"
-msgstr ""
-
-#: src/engine/codeRunner/codeRunner.cpp:252
-#: src/engine/designer-thin/docManager/templates/docViewFormEditor.cpp:181
-#: src/engine/designer-thin/docManager/templates/docViewModuleEditor.cpp:118
-msgid "Format selection"
-msgstr ""
-
-#: src/engine/codeRunner/codeRunner.cpp:253
-#: src/engine/designer-thin/docManager/templates/docViewFormEditor.cpp:183
-#: src/engine/designer-thin/docManager/templates/docViewModuleEditor.cpp:120
-msgid "Increase indent"
-msgstr ""
-
-#: src/engine/codeRunner/codeRunner.cpp:253
-#: src/engine/designer-thin/docManager/templates/docViewFormEditor.cpp:183
-#: src/engine/designer-thin/docManager/templates/docViewModuleEditor.cpp:120
-#: src/engine/deskgui/univ/stockItem.cpp:77
-#: src/engine/frmclient/mainFrame/settings/editorsettingspanel.cpp:10
-msgid "Indent"
-msgstr ""
-
-#: src/engine/codeRunner/codeRunner.cpp:254
-#: src/engine/designer-thin/docManager/templates/docViewFormEditor.cpp:185
-#: src/engine/designer-thin/docManager/templates/docViewModuleEditor.cpp:122
-msgid "Decrease indent"
-msgstr ""
-
-#: src/engine/codeRunner/codeRunner.cpp:254
-#: src/engine/designer-thin/docManager/templates/docViewFormEditor.cpp:185
-#: src/engine/designer-thin/docManager/templates/docViewModuleEditor.cpp:122
-#: src/engine/deskgui/univ/stockItem.cpp:116
-msgid "Unindent"
-msgstr ""
-
-#: src/engine/codeRunner/codeRunner.cpp:256
-#: src/engine/designer-thin/docManager/templates/docViewFormEditor.cpp:178
-#: src/engine/designer-thin/docManager/templates/docViewModuleEditor.cpp:115
-msgid "Goto line"
-msgstr ""
-
-#: src/engine/codeRunner/codeRunner.cpp:256
-#: src/engine/designer-thin/docManager/templates/docViewFormEditor.cpp:178
-#: src/engine/designer-thin/docManager/templates/docViewModuleEditor.cpp:115
-msgid "Goto"
-msgstr ""
-
-#: src/engine/codeRunner/codeRunner.cpp:257
-#: src/engine/codeRunner/win/dlgs/functionSearcher/functionSearcher.cpp:16
-#: src/engine/codeRunner/win/dlgs/functionSearcher/functionSearcher.cpp:32
-#: src/engine/designer-thin/docManager/templates/docViewFormEditor.cpp:179
-#: src/engine/designer-thin/docManager/templates/docViewModuleEditor.cpp:116
-#: src/engine/frmclient/win/dlgs/functionSearcher/functionSearcher.cpp:18
-#: src/engine/frmclient/win/dlgs/functionSearcher/functionSearcher.cpp:34
-msgid "Procedures and functions"
-msgstr ""
-
-#: src/engine/codeRunner/codeRunner.cpp:294
+#: src/engine/coderunner/coderunner.cpp:294
 msgid "Script syntax mode"
 msgstr ""
 
-#: src/engine/codeRunner/codeRunner.cpp:297
-#: src/engine/designer-thin/docManager/templates/docViewFormEditor.cpp:175
-#: src/engine/designer-thin/docManager/templates/docViewModuleEditor.cpp:112
-msgid "Syntax control"
-msgstr ""
-
-#: src/engine/codeRunner/codeRunner.cpp:301
+#: src/engine/coderunner/coderunner.cpp:301
 msgid "Run code"
 msgstr ""
 
-#: src/engine/codeRunner/codeRunner.cpp:305
+#: src/engine/coderunner/coderunner.cpp:305
 msgid "Clear output"
 msgstr ""
 
-#: src/engine/codeRunner/mainFrame/settings/fontcolorsettings.cpp:37
+#: src/engine/coderunner/mainFrame/settings/fontcolorsettings.cpp:36
 #: src/engine/frmclient/mainFrame/settings/fontcolorsettings.cpp:40
 msgid "Preprocessor"
 msgstr ""
 
-#: src/engine/codeRunner/mainFrame/settings/fontcolorsettings.cpp:38
+#: src/engine/coderunner/mainFrame/settings/fontcolorsettings.cpp:37
 #: src/engine/frmclient/mainFrame/settings/fontcolorsettings.cpp:41
 msgid "Keyword"
 msgstr ""
 
-#: src/engine/codeRunner/mainFrame/settings/fontcolorsettings.cpp:39
+#: src/engine/coderunner/mainFrame/settings/fontcolorsettings.cpp:38
 #: src/engine/frmclient/mainFrame/settings/fontcolorsettings.cpp:42
 msgid "Operator"
 msgstr ""
 
-#: src/engine/codeRunner/mainFrame/settings/fontcolorsettings.cpp:44
+#: src/engine/coderunner/mainFrame/settings/fontcolorsettings.cpp:43
 #: src/engine/frmclient/mainFrame/settings/fontcolorsettings.cpp:47
 #: src/engine/frmserver/visualView/ctrl/tableBox.h:446
 msgid "Selection"
 msgstr ""
 
-#: src/engine/codeRunner/win/dlgs/functionSearcher/functionSearcher.cpp:21
+#: src/engine/coderunner/win/dlgs/functionSearcher/functionSearcher.cpp:21
 #: src/engine/deskgui/univ/stockItem.cpp:90
 #: src/engine/frmclient/win/dlgs/functionSearcher/functionSearcher.cpp:23
 #: src/engine/frmclient/win/dlgs/kindSelector/kindSelector.cpp:81
 msgid "OK"
 msgstr ""
 
-#: src/engine/codeRunner/win/dlgs/functionSearcher/functionSearcher.cpp:26
-#: src/engine/designer-thin/mainFrame/metaTree/treeConfiguration.cpp:65
-#: src/engine/frmclient/win/dlgs/functionSearcher/functionSearcher.cpp:28
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:3159
-#: src/engine/frmclient/win/dlgs/settings/list/listSettings.cpp:150
-msgid "Sort"
-msgstr ""
-
-#: src/engine/codeRunner/win/dlgs/lineInput/lineInput.cpp:15
+#: src/engine/coderunner/win/dlgs/lineInput/lineInput.cpp:15
 #: src/engine/frmclient/win/dlgs/lineInput/lineInput.cpp:15
 msgid "Enter line number:"
 msgstr ""
 
-#: src/engine/codeRunner/win/dlgs/lineInput/lineInput.cpp:27
+#: src/engine/coderunner/win/dlgs/lineInput/lineInput.cpp:27
 #: src/engine/frmclient/win/dlgs/lineInput/lineInput.cpp:27
 msgid "Go to"
 msgstr ""
 
-#: src/engine/codeRunner/win/dlgs/lineInput/lineInput.h:30
+#: src/engine/coderunner/win/dlgs/lineInput/lineInput.h:30
 #: src/engine/frmclient/win/dlgs/lineInput/lineInput.h:30
 msgid "Go to line"
 msgstr ""
 
-#: src/engine/codeRunner/win/editor/codeEditor/codeEditor.cpp:322
+#: src/engine/coderunner/win/editor/codeEditor/codeEditor.cpp:322
 #: src/engine/frmclient/docView/templates/docViewHelp.cpp:90
 #: src/engine/frmclient/docView/templates/docViewText.cpp:91
 #: src/engine/frmclient/win/editor/codeEditor/codeEditor.cpp:505
@@ -8474,33 +9548,14 @@ msgstr ""
 msgid "\"%s\" not found!"
 msgstr ""
 
-#: src/engine/codeRunner/win/editor/codeEditor/codeEditor.cpp:323
+#: src/engine/coderunner/win/editor/codeEditor/codeEditor.cpp:323
 #: src/engine/frmclient/docView/templates/docViewHelp.cpp:90
 #: src/engine/frmclient/docView/templates/docViewText.cpp:91
 #: src/engine/frmclient/win/editor/codeEditor/codeEditor.cpp:506
 msgid "Not Found!"
 msgstr ""
 
-#: src/engine/codeRunner/win/editor/codeEditor/codeEditor.cpp:835
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorAttributeTree.cpp:477
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorCommandTree.cpp:355
-#: src/engine/deskgui/univ/stockItem.cpp:63
-#: src/engine/frmclient/win/editor/codeEditor/codeEditor.cpp:1145
-#: src/engine/frmserver/docView/docManager.cpp:342
-msgid "Cut"
-msgstr ""
-
-#: src/engine/codeRunner/win/editor/codeEditor/codeEditor.cpp:837
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorAttributeTree.cpp:479
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorCommandTree.cpp:357
-#: src/engine/deskgui/univ/stockItem.cpp:92
-#: src/engine/frmclient/win/editor/codeEditor/codeEditor.cpp:1147
-#: src/engine/frmclient/win/editor/gridEditor/gridEditor.cpp:376
-#: src/engine/frmserver/docView/docManager.cpp:344
-msgid "Paste"
-msgstr ""
-
-#: src/engine/codeRunner/win/editor/codeEditor/codeEditor.cpp:838
+#: src/engine/coderunner/win/editor/codeEditor/codeEditor.cpp:838
 #: src/engine/frmclient/win/editor/codeEditor/codeEditor.cpp:1148
 #: src/engine/frmserver/docView/docManager.cpp:346
 msgid "Select all"
@@ -8677,7 +9732,7 @@ msgid "Horizontal alignment"
 msgstr ""
 
 #: src/engine/core/description/compositionDescription.cpp:1005
-#: src/engine/frmclient/mainFrame/mainFrame.cpp:974
+#: src/engine/frmclient/mainFrame/mainFrame.cpp:990
 msgid "Theme"
 msgstr ""
 
@@ -8716,11 +9771,6 @@ msgstr ""
 #: src/engine/frmserver/visualView/controlEnum.h:176
 #: src/engine/frmserver/visualView/controlEnum.h:188
 msgid "Auto"
-msgstr ""
-
-#: src/engine/core/description/compositionDescription.cpp:1018
-#: src/engine/designer-thin/syntaxHelper/helpChooserDialog.cpp:59
-msgid "Show"
 msgstr ""
 
 #: src/engine/core/description/compositionDescription.cpp:1019
@@ -10007,1030 +11057,6 @@ msgstr ""
 msgid "%s: the element '%s' is still open - WriteEndElement for every WriteStartElement"
 msgstr ""
 
-#: src/engine/designer-thin/backend/debugger/debugClient.cpp:47
-#, c-format
-msgid "The debugger did not take the command: %s"
-msgstr ""
-
-#: src/engine/designer-thin/backend/debugger/debugClient.cpp:115
-#, c-format
-msgid "The debugger is not available: %s"
-msgstr ""
-
-#: src/engine/designer-thin/backend/debugger/debugClientBridge.cpp:23
-msgid "SetDebuggerClientBridge: debugClient is null (call after the frame logged in)"
-msgstr ""
-
-#: src/engine/designer-thin/docManager/templates/docViewConfigCompare.cpp:41
-#, c-format
-msgid "Compare: %s <-> %s"
-msgstr ""
-
-#: src/engine/designer-thin/docManager/templates/docViewConfigCompare.cpp:83
-msgid "Select all differences"
-msgstr ""
-
-#: src/engine/designer-thin/docManager/templates/docViewConfigCompare.cpp:84
-msgid "Mark every non-Same row for merge"
-msgstr ""
-
-#: src/engine/designer-thin/docManager/templates/docViewConfigCompare.cpp:85
-#: src/engine/deskgui/univ/stockItem.cpp:59
-#: src/engine/frmclient/docView/templates/docViewAuditLog.cpp:300
-#: src/engine/frmclient/mainFrame/output/outputWindow.cpp:146
-#: src/engine/frmclient/win/dlgs/choiceParameters/choiceParameters.cpp:22
-msgid "Clear"
-msgstr ""
-
-#: src/engine/designer-thin/docManager/templates/docViewConfigCompare.cpp:86
-msgid "Unmark every row"
-msgstr ""
-
-#: src/engine/designer-thin/docManager/templates/docViewConfigCompare.cpp:88
-msgid "Expand all"
-msgstr ""
-
-#: src/engine/designer-thin/docManager/templates/docViewConfigCompare.cpp:89
-msgid "Expand every tree node"
-msgstr ""
-
-#: src/engine/designer-thin/docManager/templates/docViewConfigCompare.cpp:90
-msgid "Collapse all"
-msgstr ""
-
-#: src/engine/designer-thin/docManager/templates/docViewConfigCompare.cpp:91
-msgid "Collapse every tree node"
-msgstr ""
-
-#: src/engine/designer-thin/docManager/templates/docViewConfigCompare.cpp:117
-#: src/engine/designer-thin/docManager/templates/docViewConfigCompare.cpp:348
-#: src/engine/designer-thin/docManager/templates/docViewConfigCompare.cpp:438
-#: src/engine/frmserver/schema/designer/configCompare.cpp:363
-msgid "Merge"
-msgstr ""
-
-#: src/engine/designer-thin/docManager/templates/docViewConfigCompare.cpp:126
-msgid "Object"
-msgstr ""
-
-#: src/engine/designer-thin/docManager/templates/docViewConfigCompare.cpp:138
-msgid "Status"
-msgstr ""
-
-#: src/engine/designer-thin/docManager/templates/docViewConfigCompare.cpp:180
-msgid "Show:"
-msgstr ""
-
-#: src/engine/designer-thin/docManager/templates/docViewConfigCompare.cpp:184
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:972
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:978
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:1053
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryConstructor.cpp:1059
-msgid "All"
-msgstr ""
-
-#: src/engine/designer-thin/docManager/templates/docViewConfigCompare.cpp:185
-msgid "Only differences"
-msgstr ""
-
-#: src/engine/designer-thin/docManager/templates/docViewConfigCompare.cpp:186
-msgid "Only unchanged"
-msgstr ""
-
-#: src/engine/designer-thin/docManager/templates/docViewConfigCompare.cpp:193
-msgid "Direction:"
-msgstr ""
-
-#: src/engine/designer-thin/docManager/templates/docViewConfigCompare.cpp:204
-msgid "Apply merge"
-msgstr ""
-
-#: src/engine/designer-thin/docManager/templates/docViewConfigCompare.cpp:229
-#: src/engine/designer-thin/docManager/templates/docViewConfigCompare.cpp:234
-#, c-format
-msgid "%s -> %s"
-msgstr ""
-
-#: src/engine/designer-thin/docManager/templates/docViewConfigCompare.cpp:346
-msgid "Push direction has no save target - open the other configuration from a writable source first."
-msgstr ""
-
-#: src/engine/designer-thin/docManager/templates/docViewConfigCompare.cpp:419
-msgid "Merge failed."
-msgstr ""
-
-#: src/engine/designer-thin/docManager/templates/docViewConfigCompare.cpp:419
-msgid "The server refused the merge."
-msgstr ""
-
-#: src/engine/designer-thin/docManager/templates/docViewConfigCompare.cpp:427
-msgid "The other-side file has been saved."
-msgstr ""
-
-#: src/engine/designer-thin/docManager/templates/docViewConfigCompare.cpp:427
-#: src/engine/frmserver/schema/designer/configCompare.cpp:358
-msgid "Warning: failed to save the other-side file."
-msgstr ""
-
-#: src/engine/designer-thin/docManager/templates/docViewConfigCompare.cpp:433
-#, c-format
-msgid "%d reorder-only change(s) skipped (not supported in V1)."
-msgstr ""
-
-#: src/engine/designer-thin/docManager/templates/docViewFormEditor.cpp:99
-msgid "Test form\tCtrl+R"
-msgstr ""
-
-#: src/engine/designer-thin/docManager/templates/docViewFormEditor.cpp:111
-msgid "Controls"
-msgstr ""
-
-#: src/engine/designer-thin/mainApp.cpp:91
-msgid "Select configuration database folder"
-msgstr ""
-
-#: src/engine/designer-thin/mainApp.cpp:113
-#: src/engine/designer-thin/mainApp.cpp:139
-msgid "OES Designer - startup error"
-msgstr ""
-
-#: src/engine/designer-thin/mainApp.cpp:147
-msgid ""
-"Cannot start designer-thin.exe - no infobase specified.\n"
-"\n"
-"Provide one of:\n"
-"  --address=oes://<server>[:port]/<base>   (an application server; oess:// over TLS)\n"
-"  --address=http(s)://<server>[:port]/<base>/   (a web server's publication, its link)\n"
-"  --file=<path>          (Firebird embedded / SQLite file)\n"
-"  --server=<host> --db=<name> [--dbport=...] [--user=...] [--password=...]"
-msgstr ""
-
-#: src/engine/designer-thin/mainApp.cpp:153
-msgid "OES Designer"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/configCompare/configCompareModel.cpp:187
-msgid "Same"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/configCompare/configCompareModel.cpp:188
-msgid "Reordered"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/configCompare/configCompareModel.cpp:189
-msgid "Changed"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/configCompare/configCompareModel.cpp:190
-msgid "Only in current"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/configCompare/configCompareModel.cpp:191
-msgid "Only in other"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/configCompare/configCompareModel.cpp:203
-#: src/engine/designer-thin/mainFrame/configCompare/configCompareModel.cpp:295
-#: src/engine/designer-thin/mainFrame/configCompare/configCompareModel.cpp:308
-msgid "Missing"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/configCompare/configCompareModel.cpp:207
-#: src/engine/designer-thin/mainFrame/configCompare/configCompareModel.cpp:293
-#: src/engine/designer-thin/mainFrame/configCompare/configCompareModel.cpp:306
-msgid "(unnamed)"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesigner.cpp:51
-msgid "Update database"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesigner.cpp:178
-#, c-format
-msgid "Configuration '%s' has been changed. Save?"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerEvent.cpp:37
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerEvent.cpp:254
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerEvent.cpp:283
-#, c-format
-msgid ""
-"Configuration '%s' has been changed.\n"
-"Do you want to save?"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerEvent.cpp:52
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerEvent.cpp:91
-msgid "Debugger is already running!"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerEvent.cpp:80
-msgid "Failed to start webserver"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerEvent.cpp:150
-msgid ""
-"To update the database configuration you need stop debugging.\n"
-"Do you want to continue?"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerEvent.cpp:243
-msgid "Open configuration file"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerEvent.cpp:263
-msgid "Save configuration file"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerEvent.cpp:269
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerEvent.cpp:301
-msgid "Successfully unloaded to: "
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerEvent.cpp:276
-msgid "Choose the directory the configuration was saved to"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerEvent.cpp:295
-msgid "Choose a directory of its own for the configuration's files"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerEvent.cpp:309
-msgid "Choose configuration file to compare with"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerEvent.cpp:319
-msgid "Failed to upload configuration file."
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerEvent.cpp:325
-msgid "Failed to compare with the configuration file."
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerEvent.cpp:329
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerEvent.cpp:344
-msgid "Current"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerEvent.cpp:339
-msgid "Database configuration is not available."
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerEvent.cpp:344
-#: src/engine/frmclient/win/dlgs/about.cpp:81
-msgid "Database"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerEvent.cpp:350
-msgid "Choose left configuration file"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerEvent.cpp:355
-msgid "Choose right configuration file"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerEvent.cpp:366
-msgid "Failed to upload one of the configuration files."
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerEvent.cpp:373
-msgid "Failed to load one of the configuration files."
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:50
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerParts.cpp:122
-#: src/engine/designer-thin/mainFrame/welcome/welcomeWindowDesigner.cpp:19
-msgid "Start debugging"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:56
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerParts.cpp:123
-#: src/engine/designer-thin/mainFrame/welcome/welcomeWindowDesigner.cpp:20
-msgid "Start without debugging"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:58
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerParts.cpp:124
-msgid "Attach for debugging..."
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:61
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerParts.cpp:126
-msgid "Continue"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:62
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerParts.cpp:127
-msgid "Pause"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:63
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerParts.cpp:128
-msgid "Step into"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:64
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerParts.cpp:129
-msgid "Step over"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:65
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerParts.cpp:130
-msgid "Step out"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:66
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerParts.cpp:131
-msgid "Stop debugging"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:67
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerParts.cpp:132
-msgid "Stop debugging program"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:67
-msgid "Stop program"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:70
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerParts.cpp:134
-msgid "Remove all breakpoints"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:80
-msgid "Open database configuration"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:82
-msgid "Rollback to database configuration"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:90
-msgid "Load configuration"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:91
-msgid "Save configuration"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:96
-msgid "Load configuration from files..."
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:97
-msgid "Save configuration to files..."
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:106
-msgid "With file..."
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:107
-msgid "With database configuration"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:108
-msgid "Two files..."
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:110
-msgid "Compare configurations"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:116
-msgid "Syntax Helper\tRawCtrl+Alt+F1"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerMenu.cpp:118
-#: src/engine/deskgui/univ/stockItem.cpp:51
-#: src/engine/frmserver/client/clientFrameRuntime.cpp:55
-msgid "About"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerParts.cpp:51
-msgid "Version control"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerParts.cpp:91
-#: src/engine/frmclient/mainFrame/mainFrame.cpp:465
-msgid "Messages"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerParts.cpp:92
-msgid "Local variable"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerParts.cpp:93
-msgid "Call stack"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerParts.cpp:94
-msgid "Watch"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerParts.cpp:139
-#: src/engine/frmclient/mainFrame/mainFrame.cpp:675
-#: src/engine/frmclient/mainFrame/mainFrame.cpp:1203
-msgid "Debug"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/mainFrameDesignerParts.cpp:169
-#: src/engine/designer-thin/mainFrame/welcome/welcomeWindowDesigner.cpp:22
-msgid "Syntax Helper"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/metaTree/treeConfiguration.cpp:58
-#: src/engine/designer-thin/mainFrame/metaTree/treeConfiguration_impl.cpp:914
-#: src/engine/designer-thin/mainFrame/metaTree/treeConfiguration_impl.cpp:937
-#: src/engine/deskgui/univ/stockItem.cpp:88
-#: src/engine/frmclient/mainFrame/mainFrame.cpp:524
-msgid "New"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/metaTree/treeConfiguration.cpp:58
-#: src/engine/deskgui/univ/ctrl/editableListBox.cpp:137
-#: src/engine/frmclient/win/dlgs/settings/settingsFilterEditor.cpp:610
-#: src/engine/frmclient/win/dlgs/settings/settingsFilterEditor.cpp:1176
-msgid "New item"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/metaTree/treeConfiguration.cpp:59
-#: src/engine/deskgui/univ/ctrl/editableListBox.cpp:129
-msgid "Edit item"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/metaTree/treeConfiguration.cpp:60
-#: src/engine/deskgui/univ/ctrl/editableListBox.cpp:145
-msgid "Delete item"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/metaTree/treeConfiguration.cpp:62
-#: src/engine/designer-thin/win/dlg/homePageEditor.cpp:72
-#: src/engine/deskgui/univ/findReplaceDialog.cpp:131
-#: src/engine/deskgui/univ/stockItem.cpp:117
-msgid "Up"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/metaTree/treeConfiguration.cpp:62
-msgid "Up item"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/metaTree/treeConfiguration.cpp:63
-#: src/engine/designer-thin/win/dlg/homePageEditor.cpp:73
-#: src/engine/deskgui/univ/findReplaceDialog.cpp:131
-#: src/engine/deskgui/univ/stockItem.cpp:65
-msgid "Down"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/metaTree/treeConfiguration.cpp:63
-msgid "Down item"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/metaTree/treeConfiguration.cpp:65
-msgid "Sort item"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/metaTree/treeConfigurationEvent.cpp:176
-msgid "Help information"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/metaTree/treeConfigurationEvent.cpp:176
-msgid "Technical information"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/metaTree/treeConfiguration_impl.cpp:758
-msgid "Open data processor file"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/metaTree/treeConfiguration_impl.cpp:758
-msgid "Open report file"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/metaTree/treeConfiguration_impl.cpp:784
-msgid "Save data processor file"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/metaTree/treeConfiguration_impl.cpp:784
-msgid "Save report file"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/metaTree/treeConfiguration_impl.cpp:927
-msgid "Help information..."
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/metaTree/treeConfiguration_impl.cpp:928
-msgid "Technical information..."
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/metaTree/treeDataProcessor.cpp:33
-#: src/engine/designer-thin/mainFrame/metaTree/treeDataReport.cpp:33
-msgid "Default form:"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/metaTree/treeDataReport.cpp:39
-msgid "Default composer:"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/stack/stackWindow.cpp:133
-msgid "Line"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/vcs/gitPanel.cpp:37
-msgid "Branch:"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/vcs/gitPanel.cpp:40
-#: src/engine/frmclient/win/dlgs/settings/savedSettings.cpp:67
-msgid "New..."
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/vcs/gitPanel.cpp:46
-#: src/engine/deskgui/univ/stockItem.cpp:98
-#: src/engine/frmclient/docView/templates/docViewAuditLog.cpp:302
-msgid "Refresh"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/vcs/gitPanel.cpp:47
-msgid "Commit..."
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/vcs/gitPanel.cpp:48
-#: src/engine/designer-thin/mainFrame/vcs/gitPanel.cpp:178
-msgid "Push"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/vcs/gitPanel.cpp:49
-#: src/engine/designer-thin/mainFrame/vcs/gitPanel.cpp:184
-msgid "Pull"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/vcs/gitPanel.cpp:57
-msgid "Changes (double-click for diff):"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/vcs/gitPanel.cpp:60
-#: src/engine/frmclient/win/dlgs/activeUser.cpp:52
-msgid "State"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/vcs/gitPanel.cpp:61
-msgid "Path"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/vcs/gitPanel.cpp:65
-msgid "History:"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/vcs/gitPanel.cpp:68
-msgid "Hash"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/vcs/gitPanel.cpp:70
-msgid "Subject"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/vcs/gitPanel.cpp:95
-msgid "(no repository)"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/vcs/gitPanel.cpp:132
-msgid "(not a git repository)"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/vcs/gitPanel.cpp:144
-#, c-format
-msgid "%zu change(s)"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/vcs/gitPanel.cpp:150
-msgid ": done"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/vcs/gitPanel.cpp:154
-msgid ": failed"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/vcs/gitPanel.cpp:155
-msgid " failed"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/vcs/gitPanel.cpp:164
-msgid "Commit message:"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/vcs/gitPanel.cpp:164
-#: src/engine/designer-thin/mainFrame/vcs/gitPanel.cpp:168
-#: src/engine/designer-thin/mainFrame/vcs/gitPanel.cpp:171
-msgid "Commit"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/vcs/gitPanel.cpp:168
-msgid "Empty commit message."
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/vcs/gitPanel.cpp:194
-#, c-format
-msgid "Checkout %s"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/vcs/gitPanel.cpp:201
-msgid "New branch name:"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/vcs/gitPanel.cpp:201
-msgid "New branch"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/vcs/gitPanel.cpp:205
-#, c-format
-msgid "Create %s"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/vcs/gitPanel.cpp:218
-#, c-format
-msgid "Diff: %s"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/vcs/gitPanel.cpp:221
-msgid "(no diff - untracked, binary, or staged)"
-msgstr ""
-
-#: src/engine/designer-thin/mainFrame/welcome/welcomeWindowDesigner.cpp:21
-#: src/engine/deskgui/docview/docManager.cpp:210
-#: src/engine/frmclient/mainFrame/mainFrame.cpp:529
-msgid "Find"
-msgstr ""
-
-#: src/engine/designer-thin/syntaxHelper/helpChooserDialog.cpp:40
-msgid "Select topic"
-msgstr ""
-
-#: src/engine/designer-thin/syntaxHelper/helpChooserDialog.cpp:45
-msgid "Select a topic from the list:"
-msgstr ""
-
-#: src/engine/designer-thin/syntaxHelper/helpChooserDialog.cpp:61
-#: src/engine/deskgui/univ/stockItem.cpp:75
-#: src/engine/frmserver/client/clientFrameRuntime.cpp:56
-#: src/engine/frmserver/visualView/ctrl/formAction.cpp:70
-#: src/engine/frmserver/visualView/ctrl/formObject.cpp:672
-msgid "Help"
-msgstr ""
-
-#: src/engine/designer-thin/syntaxHelper/helpDetailView.cpp:94
-msgid "Select an entry in the tree on the left, or press Ctrl+F1 on an identifier in the editor."
-msgstr ""
-
-#: src/engine/designer-thin/syntaxHelper/helpDetailView.cpp:284
-msgid "Description"
-msgstr ""
-
-#: src/engine/designer-thin/syntaxHelper/helpDetailView.cpp:297
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:1753
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:3068
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:3930
-msgid "Parameters"
-msgstr ""
-
-#: src/engine/designer-thin/syntaxHelper/helpDetailView.cpp:298
-msgid "Returns"
-msgstr ""
-
-#: src/engine/designer-thin/syntaxHelper/helpDetailView.cpp:304
-msgid "Example"
-msgstr ""
-
-#: src/engine/designer-thin/syntaxHelper/helpDetailView.cpp:306
-msgid "Availability"
-msgstr ""
-
-#: src/engine/designer-thin/syntaxHelper/helpDetailView.cpp:317
-msgid "See also"
-msgstr ""
-
-#: src/engine/designer-thin/syntaxHelper/helpDetailView.cpp:346
-msgid "Draft - this entry awaits editorial review."
-msgstr ""
-
-#: src/engine/designer-thin/syntaxHelper/helpDetailView.cpp:365
-#: src/engine/deskgui/univ/stockItem.cpp:104
-msgid "Select All"
-msgstr ""
-
-#: src/engine/designer-thin/syntaxHelper/helpPaneView.cpp:71
-#: src/engine/deskgui/univ/stockItem.cpp:54
-msgid "Back"
-msgstr ""
-
-#: src/engine/designer-thin/syntaxHelper/helpPaneView.cpp:73
-msgid "Back (Alt+Left)"
-msgstr ""
-
-#: src/engine/designer-thin/syntaxHelper/helpPaneView.cpp:74
-#: src/engine/deskgui/univ/stockItem.cpp:73
-msgid "Forward"
-msgstr ""
-
-#: src/engine/designer-thin/syntaxHelper/helpPaneView.cpp:76
-msgid "Forward (Alt+Right)"
-msgstr ""
-
-#: src/engine/designer-thin/syntaxHelper/helpPaneView.cpp:78
-msgid "Sync from editor"
-msgstr ""
-
-#: src/engine/designer-thin/syntaxHelper/helpPaneView.cpp:80
-msgid "Look up identifier under the editor caret"
-msgstr ""
-
-#: src/engine/designer-thin/syntaxHelper/helpPaneView.cpp:81
-msgid "Reload"
-msgstr ""
-
-#: src/engine/designer-thin/syntaxHelper/helpPaneView.cpp:83
-msgid "Reload the help corpus from disk"
-msgstr ""
-
-#: src/engine/designer-thin/syntaxHelper/helpPaneView.cpp:85
-msgid "Larger text"
-msgstr ""
-
-#: src/engine/designer-thin/syntaxHelper/helpPaneView.cpp:87
-msgid "Increase the help text size"
-msgstr ""
-
-#: src/engine/designer-thin/syntaxHelper/helpPaneView.cpp:88
-msgid "Smaller text"
-msgstr ""
-
-#: src/engine/designer-thin/syntaxHelper/helpPaneView.cpp:90
-msgid "Decrease the help text size"
-msgstr ""
-
-#: src/engine/designer-thin/syntaxHelper/helpPaneView.cpp:114
-msgid "Contents"
-msgstr ""
-
-#: src/engine/designer-thin/syntaxHelper/helpPaneView.cpp:116
-#: src/engine/deskgui/univ/ctrl/searchCtrl.cpp:53
-msgid "Search"
-msgstr ""
-
-#: src/engine/designer-thin/syntaxHelper/helpSearchView.cpp:46
-msgid "Found: 0 (enter a query)"
-msgstr ""
-
-#: src/engine/designer-thin/syntaxHelper/helpSearchView.cpp:58
-#, c-format
-msgid "Found: %zu"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/debugItem/debugItem.cpp:11
-#: src/engine/designer-thin/win/dlg/debugItem/debugItem.cpp:16
-#: src/engine/frmclient/docView/templates/docViewAuditLog.cpp:337
-#: src/engine/frmclient/win/dlgs/about.cpp:84
-#: src/engine/frmclient/win/dlgs/activeUser.cpp:46
-#: src/engine/frmclient/win/dlgs/activeUser.cpp:105
-#: src/engine/frmclient/win/dlgs/userItem.cpp:112
-#: src/engine/frmclient/win/dlgs/userItem.h:59
-msgid "User"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/debugItem/debugItem.cpp:12
-#: src/engine/designer-thin/win/dlg/debugItem/debugItem.cpp:17
-#: src/engine/frmclient/win/dlgs/activeUser.cpp:50
-msgid "Computer"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/debugItem/debugItem.cpp:13
-#: src/engine/designer-thin/win/dlg/debugItem/debugItem.cpp:18
-msgid "Port"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/debugItem/debugItem.cpp:70
-msgid "Available debug items:"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/debugItem/debugItem.cpp:77
-msgid "Attached debug items:"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/debugItem/debugItem.h:23
-msgid "Debug items"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/homePageEditor.cpp:44
-#: src/engine/designer-thin/win/dlg/homePageEditor.cpp:271
-msgid "Home page workspace"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/homePageEditor.cpp:69
-#: src/engine/designer-thin/win/dlg/homePageEditor.cpp:98
-#: src/engine/designer-thin/win/dlg/homePageEditor.cpp:271
-#: src/engine/frmclient/propertyManager/property/advprop/advpropSize.cpp:49
-msgid "Height"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/homePageEditor.cpp:78
-msgid "Move to right column"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/homePageEditor.cpp:78
-msgid "Move to left column"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/homePageEditor.cpp:119
-#: src/engine/designer-thin/win/dlg/homePageEditor.cpp:340
-msgid "Left column:"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/homePageEditor.cpp:120
-msgid "Right column:"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/homePageEditor.cpp:124
-msgid "Home page template:"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/homePageEditor.cpp:129
-msgid "One column"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/homePageEditor.cpp:130
-msgid "Two columns of equal width"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/homePageEditor.cpp:131
-msgid "Two columns, wide left (2:1)"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/homePageEditor.cpp:132
-msgid "Two columns, wide right (1:2)"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/homePageEditor.cpp:212
-#: src/engine/frmserver/docView/templates/docViewHomePage.cpp:214
-msgid "<not found>"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/homePageEditor.cpp:215
-msgid "same"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/homePageEditor.cpp:270
-msgid "Height share of the column (0 - same as the others)"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/homePageEditor.cpp:340
-msgid "Forms:"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/homePageEditor.cpp:377
-msgid "Select form"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:35
-msgid "Predefined items"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:230
-#, c-format
-msgid "\"%s\" must be filled in"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:238
-msgid "Predefined value"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:252
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:1415
-#: src/engine/frmclient/win/dlgs/settings/composer/composerSettings.cpp:2623
-#: src/engine/frmclient/win/dlgs/settings/list/listSettings.cpp:391
-msgid "Kind"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:253
-msgid "Folder (group)"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:262
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryUnionModel.cpp:252
-#: src/engine/frmclient/win/dlgs/queryConstructor/queryUnionModel.cpp:278
-msgid "<none>"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:414
-msgid "Declared by the configuration"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:599
-#, c-format
-msgid "%s, row %u"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:642
-msgid "All key fields are not filled in!"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:647
-msgid "The \"name\" field is filled in incorrectly!"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/predefinedEditor.cpp:653
-msgid "The \"name\" field has not unique!"
-msgstr ""
-
-#: src/engine/designer-thin/win/dlg/predefinedEditor.h:223
-msgid "Predefined values editor"
-msgstr ""
-
-#: src/engine/designer-thin/win/editor/codeEditor/codeEditorDesigner.cpp:64
-#, c-format
-msgid "Breakpoint condition: %s"
-msgstr ""
-
-#: src/engine/designer-thin/win/editor/codeEditor/codeEditorDesigner.cpp:75
-msgid "Breakpoint condition..."
-msgstr ""
-
-#: src/engine/designer-thin/win/editor/codeEditor/codeEditorDesigner.cpp:84
-msgid "Stop on this line only when the condition is true, for example: i > 500. Leave it empty to stop every time."
-msgstr ""
-
-#: src/engine/designer-thin/win/editor/codeEditor/codeEditorDesigner.cpp:85
-msgid "Breakpoint condition"
-msgstr ""
-
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorAttributeTree.cpp:481
-msgid "Unset main"
-msgstr ""
-
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorAttributeTree.cpp:481
-msgid "Set as main"
-msgstr ""
-
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorAttributeTree.cpp:562
-#: src/engine/frmclient/propertyManager/property/advprop/advpropSource.cpp:159
-msgid "Choice source"
-msgstr ""
-
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorCmdProc.cpp:1141
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorCommandTree.cpp:353
-msgid "Add command"
-msgstr ""
-
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorCmdProc.cpp:1143
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorCmdProc.cpp:1208
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorObjectTree.cpp:612
-msgid "Paste\tCtrl+V"
-msgstr ""
-
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorCmdProc.cpp:1206
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorObjectTree.cpp:608
-msgid "Cut\tCtrl+X"
-msgstr ""
-
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorCmdProc.cpp:1207
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorObjectTree.cpp:610
-msgid "Copy\tCtrl+C"
-msgstr ""
-
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorCmdProc.cpp:1211
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorObjectTree.cpp:615
-msgid "Delete\tCtrl+D"
-msgstr ""
-
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorCmdProc.cpp:1213
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorObjectTree.cpp:618
-msgid "Move Up\tAlt+Up"
-msgstr ""
-
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorCmdProc.cpp:1214
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorObjectTree.cpp:620
-msgid "Move Down\tAlt+Down"
-msgstr ""
-
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorNotebook.cpp:95
-msgid "Do you rename an existing procedure?"
-msgstr ""
-
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorNotebook.cpp:95
-msgid "Rename"
-msgstr ""
-
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorNotebook.cpp:109
-msgid "Do you delete an existing procedure?"
-msgstr ""
-
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorObjectTree.cpp:177
-msgid "Command interface"
-msgstr ""
-
-#: src/engine/designer-thin/win/editor/visualEditor/visualEditorPanel.cpp:87
-msgid "Tree elements"
-msgstr ""
-
 #: src/engine/deskgui/docview/choiceTemplate.h:56
 msgid "Select document type"
 msgstr ""
@@ -12262,41 +12288,12 @@ msgstr ""
 msgid "'%s' contains invalid character(s)"
 msgstr ""
 
-#: src/engine/deskgui/univ/theme.cpp:116
+#: src/engine/deskgui/univ/theme.cpp:115
 msgid "Failed to initialize GUI: no built-in themes found."
 msgstr ""
 
 #: src/engine/deskgui/univ/theme/lunaTheme.cpp:1536
 msgid "OES Luna theme"
-msgstr ""
-
-#: src/engine/enterprise-thin/mainApp.cpp:106
-#: src/engine/enterprise-thin/mainApp.cpp:130
-msgid "OES Enterprise - startup error"
-msgstr ""
-
-#: src/engine/enterprise-thin/mainApp.cpp:138
-msgid ""
-"Cannot start enterprise-thin.exe - no infobase specified.\n"
-"\n"
-"Provide one of:\n"
-"  --address=oes://<server>[:port]/<base>   (an application server; oess:// over TLS)\n"
-"  --address=http(s)://<server>[:port]/<base>/   (a web server's publication, its link)\n"
-"  --file=<path>          (Firebird embedded / SQLite file)\n"
-"  --server=<host> --db=<name> [--dbport=...] [--user=...]"
-msgstr ""
-
-#: src/engine/enterprise-thin/mainApp.cpp:144
-msgid "OES Enterprise"
-msgstr ""
-
-#: src/engine/enterprise-thin/mainFrame/mainFrameEnterprise.h:16
-#: src/engine/launcher/launcher.cpp:194
-msgid "Enterprise"
-msgstr ""
-
-#: src/engine/enterprise-thin/win/dlg/functionAll.h:21
-msgid "All operations"
 msgstr ""
 
 #: src/engine/fileserver/fileBase.cpp:88
@@ -12378,7 +12375,7 @@ msgid "any"
 msgstr ""
 
 #: src/engine/frmclient/docView/templates/docViewAuditLog.cpp:280
-#: src/engine/frmclient/win/dlgs/connectionDB.cpp:29
+#: src/engine/frmclient/win/dlgs/connectionDB.cpp:27
 msgid "User:"
 msgstr ""
 
@@ -12568,35 +12565,35 @@ msgstr ""
 msgid "Save as"
 msgstr ""
 
-#: src/engine/frmclient/mainFrame/mainFrame.cpp:641
+#: src/engine/frmclient/mainFrame/mainFrame.cpp:657
 msgid "Re&vert..."
 msgstr ""
 
-#: src/engine/frmclient/mainFrame/mainFrame.cpp:645
+#: src/engine/frmclient/mainFrame/mainFrame.cpp:661
 msgid "Print &Setup..."
 msgstr ""
 
-#: src/engine/frmclient/mainFrame/mainFrame.cpp:771
+#: src/engine/frmclient/mainFrame/mainFrame.cpp:787
 msgid "The start was refused."
 msgstr ""
 
-#: src/engine/frmclient/mainFrame/mainFrame.cpp:973
+#: src/engine/frmclient/mainFrame/mainFrame.cpp:989
 msgid "As the system is set"
 msgstr ""
 
-#: src/engine/frmclient/mainFrame/mainFrame.cpp:973
+#: src/engine/frmclient/mainFrame/mainFrame.cpp:989
 msgid "Light"
 msgstr ""
 
-#: src/engine/frmclient/mainFrame/mainFrame.cpp:973
+#: src/engine/frmclient/mainFrame/mainFrame.cpp:989
 msgid "Dark"
 msgstr ""
 
-#: src/engine/frmclient/mainFrame/mainFrame.cpp:974
+#: src/engine/frmclient/mainFrame/mainFrame.cpp:990
 msgid "The theme the interface is painted in:"
 msgstr ""
 
-#: src/engine/frmclient/mainFrame/mainFrame.cpp:1794
+#: src/engine/frmclient/mainFrame/mainFrame.cpp:1810
 msgid "The server refused it."
 msgstr ""
 
@@ -12699,12 +12696,12 @@ msgid "A connected assistant works as you, with your rights: it can do here what
 msgstr ""
 
 #: src/engine/frmclient/mainFrame/settings/mcpsettingspanel.cpp:42
-#: src/engine/launcher/connectionDB.cpp:126
+#: src/engine/launcher/connectionDB.cpp:125
 msgid "Address:"
 msgstr ""
 
 #: src/engine/frmclient/mainFrame/settings/mcpsettingspanel.cpp:46
-#: src/engine/frmclient/win/dlgs/connectionDB.cpp:28
+#: src/engine/frmclient/win/dlgs/connectionDB.cpp:26
 msgid "Port:"
 msgstr ""
 
@@ -12836,7 +12833,7 @@ msgid "The field of the register that answers for the schedule's dimension '%s'.
 msgstr ""
 
 #: src/engine/frmclient/propertyManager/property/advprop/advpropChoiceLink.cpp:106
-msgid "Editing the choice parameters is not available in the thin designer yet."
+msgid "Editing the choice parameters is not available in Application Studio yet."
 msgstr ""
 
 #: src/engine/frmclient/propertyManager/property/advprop/advpropChoiceLink.cpp:107
@@ -12846,7 +12843,7 @@ msgid "Choice parameter links"
 msgstr ""
 
 #: src/engine/frmclient/propertyManager/property/advprop/advpropCommandSource.cpp:158
-msgid "Choosing a command is not available in the thin designer yet."
+msgid "Choosing a command is not available in Application Studio yet."
 msgstr ""
 
 #: src/engine/frmclient/propertyManager/property/advprop/advpropCommandSource.cpp:159
@@ -12936,7 +12933,7 @@ msgid "Width"
 msgstr ""
 
 #: src/engine/frmclient/propertyManager/property/advprop/advpropSource.cpp:158
-msgid "Choosing a data source is not available in the thin designer yet."
+msgid "Choosing a data source is not available in Application Studio yet."
 msgstr ""
 
 #: src/engine/frmclient/propertyManager/property/advprop/advpropString.cpp:94
@@ -13054,7 +13051,7 @@ msgid "LockGuid"
 msgstr ""
 
 #: src/engine/frmclient/win/dlgs/activeUser.cpp:138
-#: src/engine/frmserver/client/clientFrameDesigner.cpp:62
+#: src/engine/frmserver/client/clientFrameDesigner.cpp:65
 msgid "Users"
 msgstr ""
 
@@ -13109,7 +13106,7 @@ msgid "Login:"
 msgstr ""
 
 #: src/engine/frmclient/win/dlgs/authorization.cpp:30
-#: src/engine/frmclient/win/dlgs/connectionDB.cpp:30
+#: src/engine/frmclient/win/dlgs/connectionDB.cpp:28
 #: src/engine/frmclient/win/dlgs/userItem.cpp:101
 msgid "Password:"
 msgstr ""
@@ -13200,27 +13197,27 @@ msgstr ""
 msgid "Column width"
 msgstr ""
 
-#: src/engine/frmclient/win/dlgs/connectionDB.cpp:27
-#: src/engine/launcher/connectionDB.cpp:105
+#: src/engine/frmclient/win/dlgs/connectionDB.cpp:25
+#: src/engine/launcher/connectionDB.cpp:104
 msgid "Server:"
 msgstr ""
 
-#: src/engine/frmclient/win/dlgs/connectionDB.cpp:31
+#: src/engine/frmclient/win/dlgs/connectionDB.cpp:29
 msgid "Database:"
 msgstr ""
 
-#: src/engine/frmclient/win/dlgs/connectionDB.cpp:36
-#: src/engine/frmclient/win/dlgs/connectionDB.cpp:128
-#: src/engine/launcher/connectionDB.cpp:138
+#: src/engine/frmclient/win/dlgs/connectionDB.cpp:34
+#: src/engine/frmclient/win/dlgs/connectionDB.cpp:126
+#: src/engine/launcher/connectionDB.cpp:137
 msgid "Test connection"
 msgstr ""
 
-#: src/engine/frmclient/win/dlgs/connectionDB.cpp:37
-#: src/engine/launcher/connectionDB.cpp:142
+#: src/engine/frmclient/win/dlgs/connectionDB.cpp:35
+#: src/engine/launcher/connectionDB.cpp:141
 msgid "Save connection"
 msgstr ""
 
-#: src/engine/frmclient/win/dlgs/connectionDB.cpp:128
+#: src/engine/frmclient/win/dlgs/connectionDB.cpp:126
 msgid "Testing a connection is not in the thin client yet."
 msgstr ""
 
@@ -13233,7 +13230,7 @@ msgid "Close window"
 msgstr ""
 
 #: src/engine/frmclient/win/dlgs/errorDialog.cpp:53
-msgid "Go to designer"
+msgid "Go to Application Studio"
 msgstr ""
 
 #: src/engine/frmclient/win/dlgs/errorDialog.cpp:56
@@ -15296,50 +15293,50 @@ msgstr ""
 msgid "Nothing here opens '%s'."
 msgstr ""
 
-#: src/engine/frmserver/client/clientFrameDesigner.cpp:65
-#: src/engine/frmserver/client/clientFrameRuntime.cpp:37
+#: src/engine/frmserver/client/clientFrameDesigner.cpp:68
+#: src/engine/frmserver/client/clientFrameRuntime.cpp:41
 #: src/engine/frmserver/docView/docManager.cpp:299
 #: src/engine/frmserver/schema/auditLog.cpp:33
 msgid "Registration journal"
 msgstr ""
 
-#: src/engine/frmserver/client/clientFrameDesigner.cpp:67
+#: src/engine/frmserver/client/clientFrameDesigner.cpp:70
 msgid "Restore database"
 msgstr ""
 
-#: src/engine/frmserver/client/clientFrameDesigner.cpp:68
+#: src/engine/frmserver/client/clientFrameDesigner.cpp:71
 msgid "Dump database"
 msgstr ""
 
-#: src/engine/frmserver/client/clientFrameDesigner.cpp:70
+#: src/engine/frmserver/client/clientFrameDesigner.cpp:73
 msgid "Clear database"
 msgstr ""
 
-#: src/engine/frmserver/client/clientFrameDesigner.cpp:73
-#: src/engine/frmserver/client/clientFrameRuntime.cpp:43
+#: src/engine/frmserver/client/clientFrameDesigner.cpp:76
+#: src/engine/frmserver/client/clientFrameRuntime.cpp:47
 msgid "Assistant window"
 msgstr ""
 
-#: src/engine/frmserver/client/clientFrameDesigner.cpp:78
-#: src/engine/frmserver/client/clientFrameRuntime.cpp:50
+#: src/engine/frmserver/client/clientFrameDesigner.cpp:81
+#: src/engine/frmserver/client/clientFrameRuntime.cpp:54
 msgid "Options..."
 msgstr ""
 
-#: src/engine/frmserver/client/clientFrameDesigner.cpp:79
-#: src/engine/frmserver/client/clientFrameRuntime.cpp:51
+#: src/engine/frmserver/client/clientFrameDesigner.cpp:82
+#: src/engine/frmserver/client/clientFrameRuntime.cpp:55
 msgid "Theme..."
 msgstr ""
 
-#: src/engine/frmserver/client/clientFrameDesigner.cpp:80
-#: src/engine/frmserver/client/clientFrameRuntime.cpp:52
+#: src/engine/frmserver/client/clientFrameDesigner.cpp:83
+#: src/engine/frmserver/client/clientFrameRuntime.cpp:56
 msgid "Tools"
 msgstr ""
 
-#: src/engine/frmserver/client/clientFrameRuntime.cpp:24
+#: src/engine/frmserver/client/clientFrameRuntime.cpp:28
 msgid "All operations..."
 msgstr ""
 
-#: src/engine/frmserver/client/clientFrameRuntime.cpp:25
+#: src/engine/frmserver/client/clientFrameRuntime.cpp:29
 msgid "Operations"
 msgstr ""
 
@@ -15348,7 +15345,7 @@ msgstr ""
 msgid "detached until %s"
 msgstr ""
 
-#: src/engine/frmserver/client/clientHost.cpp:1070
+#: src/engine/frmserver/client/clientHost.cpp:1124
 msgid "Wrong user or password entered!"
 msgstr ""
 
@@ -16940,48 +16937,56 @@ msgstr ""
 msgid "Whether the bar fills itself with its owner's standard commands (the form's or the table's: Add, Copy, Delete, Write and so on) and the commands of the owner's object. On by default. Off: the bar holds only the items added to it by hand."
 msgstr ""
 
-#: src/engine/launcher/connectionDB.cpp:69
+#: src/engine/launcher/connectionDB.cpp:68
 msgid "Name IB:"
 msgstr ""
 
-#: src/engine/launcher/connectionDB.cpp:77
+#: src/engine/launcher/connectionDB.cpp:76
 msgid "File (local database)"
 msgstr ""
 
-#: src/engine/launcher/connectionDB.cpp:78
+#: src/engine/launcher/connectionDB.cpp:77
 msgid "Server cluster"
 msgstr ""
 
-#: src/engine/launcher/connectionDB.cpp:93
+#: src/engine/launcher/connectionDB.cpp:92
 msgid "Database folder:"
 msgstr ""
 
-#: src/engine/launcher/connectionDB.cpp:114
+#: src/engine/launcher/connectionDB.cpp:113
 msgid "Base:"
 msgstr ""
 
-#: src/engine/launcher/connectionDB.cpp:169
+#: src/engine/launcher/connectionDB.cpp:168
 msgid "Select database folder"
 msgstr ""
 
-#: src/engine/launcher/connectionDB.cpp:182
+#: src/engine/launcher/connectionDB.cpp:181
 msgid "Connected to DB!"
 msgstr ""
 
-#: src/engine/launcher/connectionDB.cpp:182
+#: src/engine/launcher/connectionDB.cpp:181
 #: src/engine/launcher/connectionDB.h:58
 msgid "Configure connect"
 msgstr ""
 
-#: src/engine/launcher/connectionDB.cpp:184
+#: src/engine/launcher/connectionDB.cpp:183
 msgid "Failed to connect to DB!"
 msgstr ""
 
-#: src/engine/launcher/launcher.cpp:206
-msgid "Web"
+#: src/engine/launcher/launcher.cpp:207
+msgid "Workspace (GUI)"
 msgstr ""
 
-#: src/engine/launcher/launcher.cpp:283 src/engine/launcher/launcher.cpp:331
+#: src/engine/launcher/launcher.cpp:213
+msgid "Workspace (Web)"
+msgstr ""
+
+#: src/engine/launcher/launcher.cpp:220
+msgid "Studio (GUI)"
+msgstr ""
+
+#: src/engine/launcher/launcher.cpp:297 src/engine/launcher/launcher.cpp:345
 #, c-format
 msgid ""
 "Could not start %s.\n"
@@ -16989,7 +16994,7 @@ msgid ""
 "%s"
 msgstr ""
 
-#: src/engine/launcher/launcher.cpp:284 src/engine/launcher/launcher.cpp:332
+#: src/engine/launcher/launcher.cpp:298 src/engine/launcher/launcher.cpp:346
 #: src/engine/launcher/launcher.h:67
 msgid "Launch OES"
 msgstr ""

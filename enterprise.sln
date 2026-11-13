@@ -12,7 +12,7 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "launcher", "src\engine\laun
 		{A1B2C3D4-0011-4E5F-8A9B-C0D1E2F30011} = {A1B2C3D4-0011-4E5F-8A9B-C0D1E2F30011}
 	EndProjectSection
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") ="codeRunner", "src\engine\codeRunner\codeRunner.vcxproj.vcxproj", "{F4F765A7-427F-4C5E-AE19-9D290BB40A78}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") ="coderunner", "src\engine\coderunner\coderunner.vcxproj", "{F4F765A7-427F-4C5E-AE19-9D290BB40A78}"
 	ProjectSection(ProjectDependencies) = postProject
 		{35245A06-A72D-40B9-92FE-8EF2CCCC9D00} = {35245A06-A72D-40B9-92FE-8EF2CCCC9D00}
 		{A1B2C3D4-0011-4E5F-8A9B-C0D1E2F30011} = {A1B2C3D4-0011-4E5F-8A9B-C0D1E2F30011}
@@ -65,12 +65,12 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "frmclient", "src\engine\frm
 		{A1B2C3D4-0009-4E5F-8A9B-C0D1E2F30009} = {A1B2C3D4-0009-4E5F-8A9B-C0D1E2F30009}
 	EndProjectSection
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "enterprise-thin", "src\engine\enterprise-thin\enterprise-thin.vcxproj", "{A1B2C3D4-0007-4E5F-8A9B-C0D1E2F30007}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "appworkspace", "src\engine\appworkspace\appworkspace.vcxproj", "{A1B2C3D4-0007-4E5F-8A9B-C0D1E2F30007}"
 	ProjectSection(ProjectDependencies) = postProject
 		{A1B2C3D4-0005-4E5F-8A9B-C0D1E2F30005} = {A1B2C3D4-0005-4E5F-8A9B-C0D1E2F30005}
 	EndProjectSection
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "designer-thin", "src\engine\designer-thin\designer-thin.vcxproj", "{A1B2C3D4-000A-4E5F-8A9B-C0D1E2F3000A}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "appstudio", "src\engine\appstudio\appstudio.vcxproj", "{A1B2C3D4-000A-4E5F-8A9B-C0D1E2F3000A}"
 	ProjectSection(ProjectDependencies) = postProject
 		{A1B2C3D4-0005-4E5F-8A9B-C0D1E2F30005} = {A1B2C3D4-0005-4E5F-8A9B-C0D1E2F30005}
 	EndProjectSection
@@ -81,7 +81,7 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "fileserver", "src\engine\fi
 		{A1B2C3D4-0004-4E5F-8A9B-C0D1E2F30004} = {A1B2C3D4-0004-4E5F-8A9B-C0D1E2F30004}
 	EndProjectSection
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "simplePlugin", "src\engine\simplePlugin\simplePlugin.vcxproj.vcxproj", "{78ED6C1A-49D6-46B9-A6DD-5D3FD876D9E1}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "simple-plugin", "src\engine\simple-plugin\simple-plugin.vcxproj", "{78ED6C1A-49D6-46B9-A6DD-5D3FD876D9E1}"
 	ProjectSection(ProjectDependencies) = postProject
 		{35245A06-A72D-40B9-92FE-8EF2CCCC9D00} = {35245A06-A72D-40B9-92FE-8EF2CCCC9D00}
 	EndProjectSection

@@ -44,7 +44,7 @@ while IFS= read -r -d '' f; do
   fi
 done < <(find "$stage" -type f -print0)
 
-required=(enterprise-thin designer-thin launcher codeRunner appserver
+required=(appworkspace appstudio launcher coderunner appserver
           appcluster appcluster-tray webserver web/www.wpk
           libcore.so libbackend.so libprotocol.so libdeskgui.so libfrmclient.so libfrmserver.so libfileserver.so
           backend.conf help/en.hlk lang/ru/open_es.mo
@@ -55,7 +55,7 @@ done
 
 # Resolve, from a clean environment, what our own files need.
 unresolved=0
-for f in "$stage"/enterprise-thin "$stage"/designer-thin "$stage"/launcher "$stage"/codeRunner "$stage"/appserver \
+for f in "$stage"/appworkspace "$stage"/appstudio "$stage"/launcher "$stage"/coderunner "$stage"/appserver \
          "$stage"/appcluster "$stage"/appcluster-tray "$stage"/webserver \
          "$stage"/libcore.so "$stage"/libbackend.so "$stage"/libprotocol.so "$stage"/libdeskgui.so "$stage"/libfrmclient.so \
          "$stage"/libfrmserver.so "$stage"/libfileserver.so "$stage"/_fb/lib/libfbclient.so.2 "$stage"/_fb/plugins/libEngine13.so "$stage"/_fb/intl/fbintl; do
@@ -137,7 +137,7 @@ fi
 {
   echo '### Linux: libraries the package takes from the system'
   echo '```'
-  for f in "$stage"/designer-thin "$stage"/enterprise-thin "$stage"/libbackend.so "$stage"/libfrmclient.so; do
+  for f in "$stage"/appstudio "$stage"/appworkspace "$stage"/libbackend.so "$stage"/libfrmclient.so; do
     ldd "$f"
   done | awk '$3 ~ /^\// && $3 !~ /\/oes\// {print $1}' | sort -u
   echo '```'

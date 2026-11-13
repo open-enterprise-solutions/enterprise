@@ -630,7 +630,7 @@ void ibApplicationInstance::Close()
 // ---------------------------------------------------------------------------
 // User-identity accessors — route through the current thread's ibSession
 // (per-cookie on web, main user session on desktop). Without an active
-// ibSessionScope (pre-auth bootstrap, standalone codeRunner) we return a
+// ibSessionScope (pre-auth bootstrap, standalone coderunner) we return a
 // shared empty sentinel — readers see an unauthenticated state, callers
 // that depend on a real user must arrange a session scope first.
 // ---------------------------------------------------------------------------
@@ -1000,7 +1000,7 @@ bool ibApplicationInstance::DestroyAppDataEnv()
 		//
 		// EVERY base, newest first, and the process with them. This used to
 		// delete the instance only when its pool had been initialised, so a
-		// base opened without a database (launcher, codeRunner) was never
+		// base opened without a database (launcher, coderunner) was never
 		// destroyed at all — the next Create simply replaced the pointer.
 		// Pool shutdown is driven by ibApplicationInstance::Close — see it
 		// for the ordering rationale.
@@ -1037,7 +1037,7 @@ bool ibApplicationInstance::DestroyAppDataEnv()
 // runtime start is NOT here — it's driven from the session owned by the
 // app's main frame (the window is built around the holder). Connect() stays
 // as a convenience wrapper for callers without inter-phase hooks
-// (codeRunner, appserver, tests).
+// (coderunner, appserver, tests).
 // ---------------------------------------------------------------------------
 
 
@@ -1056,7 +1056,7 @@ long ibApplicationInstance::RunApplication(const ibString& strAppName, bool sear
 	//
 	// Creds come from the calling thread's ibSession (ibSessionScope set
 	// by the host app's mainApp once session->Open succeeds). If no
-	// session is scoped — codeRunner or pre-auth tools that have no
+	// session is scoped — coderunner or pre-auth tools that have no
 	// business spawning interactive children — we still call through with
 	// empty strings; the child will fall back to its own login flow.
 	ibString userName, rawPassword;
@@ -1077,7 +1077,7 @@ long ibApplicationInstance::RunApplication(const ibString& strAppName, const ibS
 {
 	// All OES binaries spawn with unified `--flag=value` syntax: one long-name
 	// set (server/dbport/db/user/file/ibuser/locale/debug). Passwords go on
-	// the child's stdin. enterprise-thin.exe / designer-thin.exe declare these as the
+	// the child's stdin. appworkspace.exe / appstudio.exe declare these as the
 	// long name of their legacy short options, so one builder feeds every
 	// parser - webserver aside, below.
 

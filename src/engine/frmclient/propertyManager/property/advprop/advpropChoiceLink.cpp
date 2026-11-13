@@ -103,7 +103,7 @@ bool ibPGChoiceParametersProperty::OnEvent(ibPropertyGrid* propgrid, wxWindow* W
 	// property's answers — the fields of what this one refers to, the fields beside it, what each could fill — written
 	// on the row (its Targets and Sources). Opened without them it would tell the author the field refers to nothing.
 	if (!ibChoiceHasLists(m_property)) {
-		ibMessageBox(_("Editing the choice parameters is not available in the thin designer yet."),
+		ibMessageBox(_("Editing the choice parameters is not available in Application Studio yet."),
 			_("Choice parameter links"), wxOK | wxICON_INFORMATION, propgrid);
 		return false;
 	}

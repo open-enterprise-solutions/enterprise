@@ -21,23 +21,23 @@ void ibEditorSettings::Apply(ibStyledTextCtrl& text) const
 	text.SetViewWhiteSpace(m_showWhiteSpace ? ibSTC_WS_VISIBLEALWAYS : ibSTC_WS_INVISIBLE);
 }
 
-wxXmlNode* ibEditorSettings::Save(const wxString& tag) const
+void ibEditorSettings::Save(ibXmlWriter& writer, const wxString& tag) const
 {
-	wxXmlNode* const root = new wxXmlNode(wxXML_ELEMENT_NODE, tag);
-	AddTextNode(root, wxT("indentsize"), wxString::Format(wxT("%u"), m_indentSize));
-	AddTextNode(root, wxT("usetabs"), m_useTabs);
-	AddTextNode(root, wxT("removetabsonload"), m_removeTabsOnLoad);
-	AddTextNode(root, wxT("showlinenumbers"), m_showLineNumbers);
-	AddTextNode(root, wxT("mostrecentlyusedtabswitching"), m_mostRecentlyUsedTabSwitching);
-	AddTextNode(root, wxT("enableautocomplete"), m_enableAutoComplete);
-	AddTextNode(root, wxT("showwhitespace"), m_showWhiteSpace);
-	return root;
+	writer.WriteStartElement(tag, ibString());
+	AddTextNode(writer, wxT("indentsize"), wxString::Format(wxT("%u"), m_indentSize));
+	AddTextNode(writer, wxT("usetabs"), m_useTabs);
+	AddTextNode(writer, wxT("removetabsonload"), m_removeTabsOnLoad);
+	AddTextNode(writer, wxT("showlinenumbers"), m_showLineNumbers);
+	AddTextNode(writer, wxT("mostrecentlyusedtabswitching"), m_mostRecentlyUsedTabSwitching);
+	AddTextNode(writer, wxT("enableautocomplete"), m_enableAutoComplete);
+	AddTextNode(writer, wxT("showwhitespace"), m_showWhiteSpace);
+	writer.WriteEndElement();
 }
 
-void ibEditorSettings::Load(wxXmlNode* root)
+void ibEditorSettings::Load(const ibXmlNode* root)
 {
-	for (wxXmlNode* node = root->GetChildren(); node != nullptr; node = node->GetNext()) {
-		const wxString& name = node->GetName();
+	for (const ibXmlNode* node = root->GetChildren(); node != nullptr; node = node->GetNext()) {
+		const ibString& name = node->GetName();
 		if (name == wxT("indentsize")) {
 			unsigned int indentSize = 0;
 			if (node->GetNodeContent().ToUInt(&indentSize))

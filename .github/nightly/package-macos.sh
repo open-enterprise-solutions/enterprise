@@ -4,8 +4,8 @@
 # Usage: package-macos.sh <build>/bin <out.dmg>
 #
 # The image holds ONE folder, `OES`, and a link to /Applications: the folder is dragged as a whole. The
-# applications do not carry their libraries inside the bundles — enterprise-thin.app, designer-thin.app
-# and launcher.app stand beside libbackend / libfrmclient / the wxWidgets dylibs, codeRunner and appserver, and the
+# applications do not carry their libraries inside the bundles — appworkspace.app, appstudio.app
+# and launcher.app stand beside libbackend / libfrmclient / the wxWidgets dylibs, coderunner and appserver, and the
 # launcher finds the others as siblings — so the folder is what installs, not an .app alone.
 #
 # ⚠ THE LIBRARIES ARE FOUND BESIDE THE PROGRAM, NOT WHERE THEY WERE BUILT. Every dylib is named
@@ -91,7 +91,7 @@ for app in "$stage"/*.app; do
   codesign --force --deep --sign - "$app"
 done
 
-required=(enterprise-thin.app designer-thin.app launcher.app codeRunner appserver
+required=(appworkspace.app appstudio.app launcher.app coderunner appserver
           appcluster appcluster-tray webserver web/www.wpk
           libcore.dylib libbackend.dylib libprotocol.dylib libdeskgui.dylib libfrmclient.dylib libfrmserver.dylib libfileserver.dylib
           backend.conf help/en.hlk lang/ru/open_es.mo
@@ -108,7 +108,7 @@ while IFS= read -r -d '' f; do
   dir="$(dirname "$f")"
   rel="${f#$stage/}"
   # A library's OWN install name is listed by `otool -L` as if it were a dependency (right under the header
-  # line). It is not one: a plugin one directory down is `@rpath/libsimplePlugin.dylib` to itself, and its
+  # line). It is not one: a plugin one directory down is `@rpath/libsimple-plugin.dylib` to itself, and its
   # rpath (`@loader_path/..`) rightly does not lead back to it — the first nightly refused the package for it.
   self="$(otool -D "$f" | awk 'NR > 1 {print $1}')"
   while IFS= read -r dep; do

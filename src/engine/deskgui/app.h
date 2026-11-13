@@ -4,10 +4,10 @@
 // ibWxApp — wxApp subclass with crash plumbing pre-wired.
 //
 // The desktop program's base, so in the desktop's library (2026-11-13, Max: it was the core's, beside the guard it
-// wires; every program that derives from it - launcher, codeRunner, designer-thin, enterprise-thin - is a desktop one
+// wires; every program that derives from it - launcher, coderunner, appstudio, appworkspace - is a desktop one
 // and places deskgui). What it catches is the core's refusal (ibCoreException — the engine's among them), so it knows
-// nothing above the core. It is wx-aware (wxApp / wxDebugReport / wxMessageBox / wxLog) and header-only: every method
-// body is inline, made in the program that derives from it.
+// nothing above the core. It is wx-aware (wxApp / wxMessageBox / wxLog) and header-only: every method body is inline,
+// made in the program that derives from it.
 //
 // What the base wires for you:
 //   OnInit              → ibCrashGuard::Install(GetExeName()), the journal's wx side
@@ -16,13 +16,11 @@
 //   OnRun               → headless WrapStartup around DoOnRun()
 //   OnExceptionInMainLoop → ibCoreException = show + continue;
 //                            anything else = unwind into OnUnhandled
-//   OnUnhandledException  → log + wxDebugReport
-//   OnFatalException      → wxDebugReport (main thread) /
-//                            native MessageBox + TerminateProcess (bg)
+//   OnUnhandledException  → log + journal, said in the log window
 //   OnAssertFailure       → journal + stderr, once per site, NO dialog
 //
 // Subclass contract:
-//   - GetExeName() — pure virtual, e.g. "launcher" / "codeRunner".
+//   - GetExeName() — pure virtual, e.g. "launcher" / "coderunner".
 //   - DoOnInit()   — replaces OnInit body. Default returns true.
 //   - DoOnRun()    — replaces OnRun body. Default delegates to
 //                    wxApp::OnRun() (plain main event loop).
@@ -37,7 +35,6 @@
 
 #include <wx/app.h>
 #include <wx/cmdline.h>   // the usage text an unparsed command line is answered with
-#include <wx/debugrpt.h>
 #include <wx/log.h>
 #include <wx/msgdlg.h>
 #include <wx/string.h>
@@ -111,13 +108,13 @@ protected:
 class ibWxApp : public wxApp {
 public:
 
-	// "enterprise" / "designer" / "codeRunner" / "launcher" — used as
+	// "enterprise" / "designer" / "coderunner" / "launcher" — used as
 	// dump-file prefix and dialog caption. Override on the concrete app.
 	virtual wxString GetExeName() const = 0;
 
 	// Subclass entry points. The default is `wxApp::OnInit()` (the wx
 	// side of init: cmd-line parse, image handler registration). Override
-	// only if the exe needs extra steps (codeRunner / launcher construct
+	// only if the exe needs extra steps (coderunner / launcher construct
 	// a frame here; enterprise / designer keep the default).
 	virtual bool DoOnInit() { return wxApp::OnInit(); }
 
@@ -225,7 +222,7 @@ public:
 		// ⭐ SIGTERM AND SIGINT ARE A REQUEST TO QUIT, and the application answers it. Unanswered, the only answer was
 		// the database client's: Firebird's own handler shuts every attachment down and the process lives on — the
 		// window open over a base that is gone, its session registry failing once a second ("invalid database handle")
-		// until somebody killed it, or until a failure took the terminate path (enterprise-thin, 2026-10-29).
+		// until somebody killed it, or until a failure took the terminate path (appworkspace, 2026-10-29).
 		//
 		// Installed BEFORE DoOnInit opens a base (ibCrashGuard::InstallStopSignals says why). The main loop is woken by
 		// wx's own handler: SetSignalHandler puts it in place and calls OnStopSignal from the loop, and it is read back
@@ -308,9 +305,9 @@ public:
 	void OnUnhandledException() override
 	{
 		// Reached when a C++ exception escapes the event loop. Identify
-		// the in-flight type before wxDebugReport — the throw site is
-		// already unwound, so the type-aware diagnostic is the last
-		// chance to see what actually went wrong.
+		// the in-flight type — the throw site is already unwound, so the
+		// type-aware diagnostic is the last chance to see what actually
+		// went wrong.
 		wxString diag = wxT("Unhandled exception: <unknown>");
 		try {
 			auto p = std::current_exception();
@@ -327,11 +324,8 @@ public:
 
 		ibCrashGuard::LogUnhandledException(GetExeName(), diag);
 		ibJournalError(wxT("app"), "%s", diag);
-
-		wxDebugReportCompress report;
-		report.AddAll(wxDebugReport::Context_Current);
-		wxDebugReportPreviewStd preview;
-		if (preview.Show(report)) report.Process();
+		// The journal's line is echoed into wx's log: said now, in the log window, before the program goes.
+		wxLog::FlushActive();
 	}
 #endif // wxUSE_EXCEPTIONS
 
@@ -368,39 +362,6 @@ public:
 			msg != nullptr ? ibString(msg) : ibString());
 	}
 #endif // wxDEBUG_LEVEL
-
-#if wxUSE_ON_FATAL_EXCEPTION && wxUSE_STACKWALKER
-	void OnFatalException() override
-	{
-		// wxDebugReport / wxDebugReportPreviewStd are main-thread-only
-		// — they assert wxIsMainThread() inside. A
-		// background-thread fault going through the wx path double-faults.
-		// Surface a platform-native message + TerminateProcess.
-		if (!wxIsMainThread()) {
-			const wxString exe = GetExeName();
-			const wxString caption = wxT("OES ") + exe + wxT(" - fatal error");
-			const wxString msg = wxString::Format(
-				wxT("A fatal error occurred on a background thread (tid=%lu).\n\n")
-				wxT("A crash dump has been saved to:\n%s\n\n")
-				wxT("The application will now close."),
-				ibCrashGuard::CurrentTidPortable(),
-				ibCrashGuard::GetCrashDir());
-			ibCrashGuard::PlatformNativeMessage(caption, msg);
-			ibCrashGuard::TerminateProcessFast(EXIT_FAILURE);
-			return;
-		}
-
-		// Main thread — full wx debug-report flow. AddAll(Context_Exception)
-		// captures register/stack state at the fault site.
-		wxDebugReportCompress report;
-		report.AddAll(wxDebugReport::Context_Exception);
-		wxDebugReportPreviewStd preview;
-		if (preview.Show(report)) report.Process();
-		// The persistent minidump is already on disk via the core's
-		// SEH filter (it runs before wx's chained handler). A second
-		// fault during OnExit cleanup is OK — the dump survives.
-	}
-#endif // wxUSE_ON_FATAL_EXCEPTION
 
 protected:
 

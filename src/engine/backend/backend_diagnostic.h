@@ -48,7 +48,7 @@ enum class ibDiagnosticKind {
 // hands a std::vector<ibDiagnostic> BACK to a plugin BY VALUE: exporting the
 // type would make the copy and the destructor the plugin performs resolve
 // through __imp_, so the first plugin to call Check would fail to link exactly
-// the way simplePlugin did on 2026-08-05. Only the registry below is exported —
+// the way simple-plugin did on 2026-08-05. Only the registry below is exported —
 // it has real out-of-line statics, and it is the one thing a plugin reaches
 // through a capability instead of directly.
 struct ibDiagnostic {
@@ -106,7 +106,7 @@ struct ibDiagnostic {
 // library (that is the whole point of the capability boundary in
 // plugin/pluginHost.h — it reaches the host through a vtable it was handed,
 // not through symbols), so the export attribute broke exactly the one caller
-// the comment above promises: simplePlugin failed to link with two unresolved
+// the comment above promises: simple-plugin failed to link with two unresolved
 // externals. Same rule as docs/portability.md § 1.3, seen from the other side:
 // an interface implemented OUTSIDE the DLL must not be exported.
 class ibDiagnosticSink {
