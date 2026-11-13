@@ -1146,8 +1146,11 @@ bool ibAuiManager::AddPane(wxWindow* window, const ibAuiPaneInfo& paneInfo)
         return false;
 
     // SEAM vs wx: the pane is a child of the window managed - made a child of the top-level window, it is moved into
-    // the window laid out inside it (SetManagedWindow)
-    if (window->GetParent() != m_frame)
+    // the window laid out inside it (SetManagedWindow). A window with no parent is not made - a book's tab frame, which
+    // only places its row of tabs - and stays as wx leaves it: wxOSX's Reparent embeds the window's view, and there is
+    // none (the designer fell making its bottom pane, CI's look step, 2026-11-13); on MSW and GTK3 there was no native
+    // window to move either
+    if (window->GetParent() != nullptr && window->GetParent() != m_frame)
         window->Reparent(m_frame);
 
     // check if the pane name already exists, this could reveal a
