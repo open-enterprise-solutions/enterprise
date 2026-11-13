@@ -4,8 +4,9 @@
 # `pkgutil --expand-full` unpacks it without installing anything, and the framework's Resources are the
 # whole tree. A program finds it as `_fb/` beside itself and loads `_fb/lib/libfbclient.dylib` by path
 # (firebirdInterface.cpp); the kit's libraries name each other `@rpath/lib/…` and carry no rpath of their
-# own, so the one that loads them answers: libcore's `@loader_path/_fb` (CMakeLists.txt), and in the
-# package the programs' too (package-macos.sh).
+# own, so the images that load them answer: libcore's `@loader_path/_fb` for fbclient, the program's own
+# rpath for the engine plugin fbclient loads - in the build tree both from CMakeLists.txt, in the package
+# from package-macos.sh.
 #
 # ONE KIT FOR TWO USERS, as on Linux (firebird-kit-linux.sh): the nightly package ships it (nightly.yml),
 # and the CI job that shoots the desktop lays it out beside the programs (ci.yml, tests-macos-arm), so the

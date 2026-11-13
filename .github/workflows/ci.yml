@@ -993,8 +993,8 @@ jobs:
       # program is gone before the shot (2026-11-12, Max). The launcher after it - a bundle here, run from inside it.
       # Then, as on Linux, the designer on a file base it makes in an empty folder and the application on the base the
       # designer made - the step shot two programs of the four (2026-11-13, Max). Their base is Firebird's: the kit the
-      # package carries, laid out as `_fb` beside the bundles (.github/firebird-kit-macos.sh), found through libcore's
-      # `@loader_path/_fb` (CMakeLists.txt). Red too when a program is still there 15 s after its SIGTERM; where it
+      # package carries, laid out as `_fb` beside the bundles (.github/firebird-kit-macos.sh), found through the rpaths
+      # the package gives (CMakeLists.txt). Red too when a program is still there 15 s after its SIGTERM; where it
       # stands is printed first - every thread's stack, by the system's `sample`, kept as <program>-macos-stop.txt.
       - name: The desktop's look (codeRunner, launcher, the designer and the application)
         working-directory: build/macos-debug/bin/Debug

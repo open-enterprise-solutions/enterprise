@@ -334,14 +334,24 @@ private:
 // ibThemePaintDC: the DC a control paints itself with in its OnPaint, as a wx control does with wxPaintDC - buffered,
 // the window's background (EraseBackground: the theme's, or the parent's under a transparent window) already in it;
 // its frame is drawn before the handler (ibWindow::TryBefore)
+//
+// SEAM vs wx: on what wxAutoBufferedPaintDC stands on (wxPaintDC where the port buffers itself, wxBufferedPaintDC on
+// MSW), without its assert of wxBG_STYLE_PAINT. A window's background is the paint's (ibWindow::Init), but wxOSX's
+// Create makes a window with a transparent background (HasTransparentBackground: a check box, a radio button, a static
+// bitmap) a transparent view, for good - wxBG_STYLE_TRANSPARENT cannot be unset - and every paint of one asserted
+// (2026-11-13, CI look-macos: a message box's icon). The surface under it is ours either way: EraseBackground paints the
+// parent's. On MSW and GTK3 the style stays the paint's
 // ----------------------------------------------------------------------------
 
-class ibThemePaintDC : public wxAutoBufferedPaintDC
+class ibThemePaintDC : public wxAutoBufferedPaintDCBase
 {
 public:
     explicit ibThemePaintDC(ibWindow *window)
-        : wxAutoBufferedPaintDC(window)
+        : wxAutoBufferedPaintDCBase(window)
     {
+        wxASSERT_MSG(window->GetBackgroundStyle() == wxBG_STYLE_PAINT
+                     || window->GetBackgroundStyle() == wxBG_STYLE_TRANSPARENT,
+                     "a window painted with the theme draws its whole background itself (ibWindow::Init)");
 #ifdef __WXGTK__
         // SEAM vs wxGTK: drawn from the client area's corner and kept inside it, as wxMSW's paint DC begins there
         // (wxClientDCImpl::InitDC) and wxOSX's is clipped to it - wxGTK's begins at the native area's corner, where our

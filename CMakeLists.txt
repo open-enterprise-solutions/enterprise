@@ -638,16 +638,24 @@ if(OES_USE_FIREBIRD)
         #                   successfully through the hard-coded framework path.
         #
         # And FIRST, the kit beside the programs — `_fb/`, Firebird's own tree, which firebirdInterface.cpp
-        # loads by path before it tries the framework: `@loader_path/_fb` from libcore (the image that
-        # loads it) is the program folder's `_fb`, the bundles standing beside libcore. Its libraries are
-        # `@rpath/lib/…` like the framework's; found here, a build tree opens a file base on the kit as the
-        # package does (package-macos.sh adds the same entry, and the bundles' own) — the CI's look of the
+        # loads by path before it tries the framework. Its libraries are `@rpath/lib/…` like the framework's,
+        # and two images answer for them, as in the package (package-macos.sh gives the same entries):
+        #   @loader_path/_fb                — libcore, which loads fbclient: the program folder's `_fb`, the
+        #                                     bundles standing beside libcore (and a plain program's own);
+        #   @executable_path/../../../_fb   — the PROGRAM, whose rpath dyld reads for the engine plugin
+        #                                     fbclient loads (`plugins/libEngine13.dylib` needs
+        #                                     `@rpath/lib/libfbclient.dylib`): a bundle's is three folders
+        #                                     down, X.app/Contents/MacOS — `@loader_path/_fb` there named
+        #                                     Contents/MacOS/_fb (2026-11-13, CI look-macos: "Error loading
+        #                                     plugin Engine13"). A plain program's names nothing and is skipped.
+        # Found here, a build tree opens a file base on the kit as the package does — the CI's look of the
         # desktop runs the designer and the application so (ci.yml, .github/firebird-kit-macos.sh).
         #
         # Set before the engine's add_subdirectory() calls so every target below inherits it;
         # wxWidgets is added earlier and is deliberately untouched.
         foreach(_fb_rpath
                 "@loader_path/_fb"
+                "@executable_path/../../../_fb"
                 "/Library/Frameworks/Firebird.framework/Versions/A/Resources/lib"
                 "/Library/Frameworks/Firebird.framework/Versions/A/Resources")
             list(APPEND CMAKE_BUILD_RPATH   "${_fb_rpath}")
