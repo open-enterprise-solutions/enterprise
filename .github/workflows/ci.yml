@@ -991,25 +991,56 @@ jobs:
       # base, the sandbox), its frame, menubar, tool bar, code editor and buttons all drawn by the desktop library. A
       # plain executable, not a bundle: wxOSX makes it a regular application with a window of its own. Red when the
       # program is gone before the shot (2026-11-12, Max). The launcher after it - a bundle here, run from inside it.
-      - name: The desktop's look (codeRunner and launcher)
+      # Then, as on Linux, the designer on a file base it makes in an empty folder and the application on the base the
+      # designer made - the step shot two programs of the four (2026-11-13, Max). Their base is Firebird's: the kit the
+      # package carries, laid out as `_fb` beside the bundles (.github/firebird-kit-macos.sh), found through libcore's
+      # `@loader_path/_fb` (CMakeLists.txt). Red too when a program is still there 15 s after its SIGTERM; where it
+      # stands is printed first - every thread's stack, by the system's `sample`, kept as <program>-macos-stop.txt.
+      - name: The desktop's look (codeRunner, launcher, the designer and the application)
         working-directory: build/macos-debug/bin/Debug
-        timeout-minutes: 5
+        timeout-minutes: 10
         run: |
-          mkdir -p "$GITHUB_WORKSPACE/look"
-          launcher=launcher.app/Contents/MacOS/launcher
-          [ -x "$launcher" ] || launcher=launcher
-          for program in codeRunner "$launcher"; do
-            name=$(basename "$program")
-            "./$program" > "$GITHUB_WORKSPACE/look/$name-macos.log" 2>&1 &
+          (cd "$GITHUB_WORKSPACE" && bash .github/firebird-kit-macos.sh)
+          cp -a "$GITHUB_WORKSPACE/fbkit" _fb
+          mkdir -p "$GITHUB_WORKSPACE/look" "$RUNNER_TEMP/base"
+          # shot <seconds> <program> [arguments] - started (a bundle's from inside it), shot after the seconds, asked to stop
+          shot() {
+            seconds=$1 name=$2
+            shift 2
+            program=$name.app/Contents/MacOS/$name
+            [ -x "$program" ] || program=$name
+            "./$program" "$@" > "$GITHUB_WORKSPACE/look/$name-macos.log" 2>&1 &
             pid=$!
-            sleep 15
+            sleep $seconds
             kill -0 $pid || { echo "$name is gone before the shot"; exit 1; }
             screencapture -x "$GITHUB_WORKSPACE/look/$name-macos.png"
             kill $pid
             for second in $(seq 15); do kill -0 $pid 2>/dev/null || break; sleep 1; done
-            if kill -0 $pid 2>/dev/null; then echo "$name did not stop on SIGTERM"; kill -9 $pid; exit 1; fi
+            if kill -0 $pid 2>/dev/null; then
+              echo "$name did not stop on SIGTERM - where it stands:"
+              sample $pid 2 -file "$GITHUB_WORKSPACE/look/$name-macos-stop.txt" || true
+              cat "$GITHUB_WORKSPACE/look/$name-macos-stop.txt" || true
+              kill -9 $pid
+              exit 1
+            fi
             wait $pid 2>/dev/null || true
-          done
+          }
+          shot 15 codeRunner
+          shot 15 launcher
+          shot 30 designer-thin --file="$RUNNER_TEMP/base"
+          shot 20 enterprise-thin --file="$RUNNER_TEMP/base"
+      # A PROGRAM THAT FELL - the Linux job's step, by the Mac's own means: the system's crash report with every
+      # thread's stack (~/Library/Logs/DiagnosticReports), and the crash guard's dumps with the journal of the run - a
+      # bundle's in ~/Library/Logs/OES, codeRunner's beside it (ibDiagnosticFolder) - kept with the look.
+      - name: The desktop's crashes
+        if: always()
+        run: |
+          mkdir -p look/crashes
+          find ~/Library/Logs/DiagnosticReports -maxdepth 1 \( -name 'codeRunner*' -o -name 'launcher*' \
+               -o -name 'designer-thin*' -o -name 'enterprise-thin*' \) -exec cp {} look/crashes/ \; 2>/dev/null || true
+          [ ! -d ~/Library/Logs/OES ] || cp -r ~/Library/Logs/OES look/crashes/
+          [ ! -d build/macos-debug/bin/Debug/crashdumps ] || cp -r build/macos-debug/bin/Debug/crashdumps look/crashes/
+          rmdir look/crashes 2>/dev/null || true
       - name: Keep the look
         if: always()
         uses: actions/upload-artifact@v6

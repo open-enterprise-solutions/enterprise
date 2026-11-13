@@ -592,7 +592,7 @@ oes_silence_directory_targets("${OES_3RDPARTY_DIR}/wxWidgets")
 
 if(OES_USE_FIREBIRD)
     # fbclient is loaded dynamically at runtime (firebirdInterface.cpp ->
-    # wxDynamicLibrary::Load("fbclient")) and the driver compiles against the
+    # ibDynamicLibrary::Load, core/dynamicLibrary.cpp) and the driver compiles against the
     # in-tree headers under databaseLayer/firebird/engine. A system fbclient is
     # therefore NOT required to build or link — locate it only opportunistically
     # so packagers that prefer an explicit dependency can still find it.
@@ -615,7 +615,7 @@ if(OES_USE_FIREBIRD)
         # `Firebird.framework/Versions/A/Resources/lib/libfbclient.dylib` linked against
         # `@rpath/lib/libtommath.dylib` while carrying NO LC_RPATH of its own. `@rpath` is
         # resolved against the load commands of the image that INITIATES the load — here
-        # backend's `wxDynamicLibrary::Load` (firebirdInterface.cpp) — so with nothing to
+        # the core's `ibDynamicLibrary::Load`, asked by firebirdInterface.cpp — so with nothing to
         # substitute, dyld gives up:
         #
         #   Library not loaded: @rpath/lib/libtommath.dylib
@@ -637,9 +637,17 @@ if(OES_USE_FIREBIRD)
         #                   shown an alert about a library that the very next line loads
         #                   successfully through the hard-coded framework path.
         #
+        # And FIRST, the kit beside the programs — `_fb/`, Firebird's own tree, which firebirdInterface.cpp
+        # loads by path before it tries the framework: `@loader_path/_fb` from libcore (the image that
+        # loads it) is the program folder's `_fb`, the bundles standing beside libcore. Its libraries are
+        # `@rpath/lib/…` like the framework's; found here, a build tree opens a file base on the kit as the
+        # package does (package-macos.sh adds the same entry, and the bundles' own) — the CI's look of the
+        # desktop runs the designer and the application so (ci.yml, .github/firebird-kit-macos.sh).
+        #
         # Set before the engine's add_subdirectory() calls so every target below inherits it;
         # wxWidgets is added earlier and is deliberately untouched.
         foreach(_fb_rpath
+                "@loader_path/_fb"
                 "/Library/Frameworks/Firebird.framework/Versions/A/Resources/lib"
                 "/Library/Frameworks/Firebird.framework/Versions/A/Resources")
             list(APPEND CMAKE_BUILD_RPATH   "${_fb_rpath}")

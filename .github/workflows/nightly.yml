@@ -210,26 +210,12 @@ jobs:
       - name: Build
         run: cmake --build --preset macos-release --target enterprise-thin fileserver designer-thin launcher codeRunner appserver appcluster appcluster-tray webserver simplePlugin
 
-      # ⭐ FIREBIRD 5 GOES INTO THE PACKAGE — the official macOS build, PINNED. It ships as an installer
-      # package; `pkgutil --expand-full` unpacks it without installing anything, and the framework's
-      # Resources are a complete tree (lib/ with ICU and tommath, plugins/, intl/). Its libraries find each
-      # other as `@rpath/lib/…`, which the programs' rpath to `_fb` answers (package-macos.sh). Left out and
-      # configured as on Windows — see the Linux job.
+      # ⭐ FIREBIRD 5 GOES INTO THE PACKAGE — the official macOS build, PINNED, unpacked without installing
+      # anything (.github/firebird-kit-macos.sh — the CI's look of the desktop lays out the same kit). Its
+      # libraries find each other as `@rpath/lib/…`, which the programs' rpath to `_fb` answers
+      # (package-macos.sh). Left out and configured as on Windows — see the Linux job.
       - name: Firebird 5 kit
-        run: |
-          set -euo pipefail
-          curl -fsSL -o fb5.pkg "https://github.com/FirebirdSQL/firebird/releases/download/v5.0.4/Firebird-5.0.4.1812-0-macos-arm64.pkg"
-          pkgutil --expand-full fb5.pkg fb5pkg
-          res=fb5pkg/Firebird.pkg/Payload/Versions/A/Resources
-          mkdir -p fbkit
-          for item in lib plugins intl tzdata firebird.msg security5.fdb plugins.conf; do
-            if [ -e "$res/$item" ]; then cp -a "$res/$item" fbkit/; fi
-          done
-          rm -rf fbkit/plugins/udr fbkit/plugins/libDefault_Profiler.dylib fbkit/plugins/libfbtrace.dylib \
-                 fbkit/plugins/libudr_engine.dylib fbkit/plugins/udr_engine.conf \
-                 fbkit/plugins/libfbSample* fbkit/plugins/fbSample*
-          cp src/engine/backend/databaseLayer/firebird/engine/dll/firebird.conf fbkit/
-          ls -la fbkit fbkit/lib fbkit/plugins
+        run: bash .github/firebird-kit-macos.sh
 
       - name: Package
         run: bash .github/nightly/package-macos.sh build/macos-release/bin oes-nightly-macos-arm64.dmg
