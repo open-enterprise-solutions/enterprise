@@ -664,7 +664,7 @@ void ScintillaWX::AddToPopUp(const char *label, int cmd, bool enabled) {
     if (!label[0])
         ((ibMenu*)popup.GetID())->AppendSeparator();
     else
-        ((ibMenu*)popup.GetID())->Append(cmd, wxGetTranslation(wxString::FromUTF8(label)));
+        ((ibMenu*)popup.GetID())->Append(cmd, ibGetTranslation(wxString::FromUTF8(label)));
 
     if (!enabled)
         ((ibMenu*)popup.GetID())->Enable(cmd, enabled);

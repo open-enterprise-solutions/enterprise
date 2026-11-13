@@ -36,7 +36,7 @@
     #include "wx/settings.h"
 #endif //WX_PRECOMP
 
-#include "wx/stockitem.h"
+#include "deskgui/univ/stockItem.h"   // ibGetStockLabel — the Help menu, in the base's language
 #include "wx/wupdlock.h"
 #include "deskgui/univ/colourScheme.h"
 #include "deskgui/univ/theme.h"
@@ -333,7 +333,7 @@ void ibAuiMDIParentFrame::AddWindowMenu(wxMenuBar *pMenuBar)
 {
     if (pMenuBar && m_pWindowMenu)
     {
-        int pos = pMenuBar->FindMenu(wxGetStockLabel(wxID_HELP,wxSTOCK_NOFLAGS));
+        int pos = pMenuBar->FindMenu(ibGetStockLabel(wxID_HELP,wxSTOCK_NOFLAGS));
         if (pos == wxNOT_FOUND)
             pMenuBar->Append(m_pWindowMenu, _("&Window"));
         else

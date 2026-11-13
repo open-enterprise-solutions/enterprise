@@ -44,13 +44,13 @@ void ibFrontendMainFrameDesigner::InitializeDefaultMenu()
 	};
 
 	// "Start debugging" → Thin / Web
-	wxMenu* subStart = new ibMenu;
+	ibMenu* subStart = new ibMenu;
 	debugPicture(subStart->Append(wxID_DESIGNER_DEBUG_START, _("Thin client")), wxART_DEBUG_START);
 	subStart->Append(wxID_DESIGNER_DEBUG_START_WEB, _("Web client"));
 	debugPicture(m_menuDebug->AppendSubMenu(subStart, _("Start debugging")), wxART_DEBUG_START);
 
 	// "Start without debugging" → Thin / Web
-	wxMenu* subStartNoDebug = new ibMenu;
+	ibMenu* subStartNoDebug = new ibMenu;
 	debugPicture(subStartNoDebug->Append(wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING, _("Thin client")), wxART_DEBUG_START_WITHOUT_DEBUGGING);
 	subStartNoDebug->Append(wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING_WEB, _("Web client"));
 	debugPicture(m_menuDebug->AppendSubMenu(subStartNoDebug, _("Start without debugging")), wxART_DEBUG_START_WITHOUT_DEBUGGING);
@@ -101,7 +101,7 @@ void ibFrontendMainFrameDesigner::InitializeDefaultMenu()
 	// "Compare configurations" submenu — three entry points (file / DB
 	// baseline / two arbitrary files) grouped together so the parent
 	// Configuration menu stays compact.
-	wxMenu* menuCompare = new ibMenu;
+	ibMenu* menuCompare = new ibMenu;
 
 	menuCompare->Append(wxID_DESIGNER_CONFIGURATION_COMPARE_FILE, _("With file..."));
 	menuCompare->Append(wxID_DESIGNER_CONFIGURATION_COMPARE_DB, _("With database configuration"));

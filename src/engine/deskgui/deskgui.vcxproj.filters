@@ -219,6 +219,9 @@
     <ClCompile Include="univ\messageDialog.cpp">
       <Filter>univ</Filter>
     </ClCompile>
+    <ClCompile Include="univ\stockItem.cpp">
+      <Filter>univ</Filter>
+    </ClCompile>
     <ClCompile Include="univ\numberEntryDialog.cpp">
       <Filter>univ</Filter>
     </ClCompile>
@@ -594,6 +597,9 @@
       <Filter>univ</Filter>
     </ClInclude>
     <ClInclude Include="univ\scrollTimer.h">
+      <Filter>univ</Filter>
+    </ClInclude>
+    <ClInclude Include="univ\stockItem.h">
       <Filter>univ</Filter>
     </ClInclude>
     <ClInclude Include="univ\theme\private\picturePredefined.h">

@@ -53,6 +53,7 @@
 
 #include "deskgui/univ/renderer.h"
 #include "deskgui/univ/popupWindow.h"   // ibPopupWindow — the menu's window
+#include "deskgui/univ/stockItem.h"     // ibGetStockLabel — a stock item's words, in the base's language
 
 #ifdef __WXMSW__
     #include <wx/msw/private.h>
@@ -1865,7 +1866,13 @@ ibMenuItem::ibMenuItem(ibMenu *parentMenu,
                        const wxString& help,
                        wxItemKind kind,
                        ibMenu *subMenu)
-          : wxMenuItem(parentMenu, id, text, help, kind, subMenu)
+          // a stock item's label and help are the dictionary's (ibGetStockLabel) - the base would take wx's own, which
+          // nobody translates any more
+          : wxMenuItem(parentMenu, id,
+                       text.empty() && wxIsStockID(id)
+                           ? ibGetStockLabel(id, wxSTOCK_WITH_ACCELERATOR | wxSTOCK_WITH_MNEMONIC) : text,
+                       help.empty() && wxIsStockID(id) ? ibGetStockHelpString(id) : help,
+                       kind, subMenu)
 {
     m_posY =
     m_height = wxDefaultCoord;
@@ -1922,7 +1929,9 @@ void ibMenuItem::SetItemLabel(const wxString& text)
     {
         // first call the base class version to change m_text
         // (and also check if we don't have a stock menu item)
-        wxMenuItemBase::SetItemLabel(text);
+        // …a stock one's label the dictionary's, as in the ctor
+        wxMenuItemBase::SetItemLabel(text.empty() && wxIsStockID(GetId())
+            ? ibGetStockLabel(GetId(), wxSTOCK_WITH_ACCELERATOR | wxSTOCK_WITH_MNEMONIC) : text);
 
         UpdateAccelInfo();
 

@@ -37,7 +37,7 @@
 
 #include <wx/arrstr.h>   // wxSplit, wxArrayString - a tile's label in lines
 #include <wx/control.h>  // wxControl::Ellipsize - a tile's last line that does not fit
-#include <wx/stockitem.h>
+#include "deskgui/univ/stockItem.h"   // ibGetStockLabel — a stock button's label, in the base's language
 
 #include "deskgui/univ/renderer.h"
 #include "deskgui/univ/theme.h"
@@ -109,7 +109,7 @@ bool ibButton::Create(wxWindow *parent,
 {
     wxString label(lbl);
     if (label.empty() && wxIsStockID(id))
-        label = wxGetStockLabel(id);
+        label = ibGetStockLabel(id);
 
     long ctrl_style = style & ~wxBU_ALIGN_MASK;
     ctrl_style = ctrl_style & ~wxALIGN_MASK;

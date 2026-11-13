@@ -1036,7 +1036,7 @@ ibEnumProperty::ibEnumProperty( const wxString& label, const wxString& name,
         for ( int i = 0; *untranslatedLabels; untranslatedLabels++ )
         {
             const long val = values ? *values++ : i++;
-            m_choices.Add(wxGetTranslation(*untranslatedLabels), val);
+            m_choices.Add(ibGetTranslation(wxString(*untranslatedLabels)), val);
         }
 
         if ( GetItemCount() )
@@ -1339,7 +1339,7 @@ void ibFlagsProperty::Init(long value)
 #if wxUSE_INTL
             if ( ibPGGlobalVars->m_autoGetTranslation )
             {
-                label = ::wxGetTranslation(label);
+                label = ibGetTranslation(label);
             }
 #endif
 
@@ -1914,7 +1914,7 @@ bool ibFileProperty::DisplayEditorDialog(ibPropertyGrid* pg, ibVariant& value)
         m_dlgTitle.empty() ? _("Choose a file") : m_dlgTitle,
         m_initialPath.empty() ? path : m_initialPath,
         file,
-        m_wildcard.empty() ? wxGetTranslation(wxString(wxALL_FILES)) : m_wildcard,
+        m_wildcard.empty() ? ibGetTranslation(wxString(wxALL_FILES)).ToWxString() : m_wildcard,
         m_dlgStyle,
         wxDefaultPosition);
 

@@ -216,6 +216,7 @@
     <ClCompile Include="univ\inputHandler.cpp" />
     <ClCompile Include="univ\menu.cpp" />
     <ClCompile Include="univ\messageDialog.cpp" />
+    <ClCompile Include="univ\stockItem.cpp" />
     <ClCompile Include="univ\numberEntryDialog.cpp" />
     <ClCompile Include="univ\numValidator.cpp" />
     <ClCompile Include="univ\panel.cpp" />
@@ -347,6 +348,7 @@
     <ClInclude Include="univ\propgrid\props.h" />
     <ClInclude Include="univ\renderer.h" />
     <ClInclude Include="univ\scrollTimer.h" />
+    <ClInclude Include="univ\stockItem.h" />
     <ClInclude Include="univ\theme\private\picturePredefined.h" />
     <ClInclude Include="univ\theme\themeRenderer.h" />
     <ClInclude Include="univ\scrolwin.h" />

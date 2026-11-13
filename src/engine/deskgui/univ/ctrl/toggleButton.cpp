@@ -24,7 +24,7 @@
 #include "deskgui/univ/colourScheme.h"
 #include "deskgui/univ/theme.h"
 
-#include <wx/stockitem.h>
+#include "deskgui/univ/stockItem.h"   // ibGetStockLabel — as the button's
 
 // wxEVT_TOGGLEBUTTON is already defined by the native wx core
 
@@ -58,7 +58,7 @@ bool ibToggleButton::Create(wxWindow *parent,
 {
     wxString label(lbl);
     if (label.empty() && wxIsStockID(id))
-        label = wxGetStockLabel(id);
+        label = ibGetStockLabel(id);
 
     long ctrl_style = style & ~wxBU_ALIGN_MASK;
     ctrl_style = ctrl_style & ~wxALIGN_MASK;

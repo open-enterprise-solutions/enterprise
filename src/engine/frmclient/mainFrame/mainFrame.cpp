@@ -62,6 +62,7 @@
 #include "deskgui/univ/aui/aui.h"
 #include "deskgui/univ/messageDialog.h"
 #include "deskgui/univ/menu.h"   // ibMenu — a server's popup menu, the theme's
+#include "deskgui/univ/stockItem.h"   // ibGetStockLabel — File, Edit and Help, in the base's language
 
 namespace {
 
@@ -666,14 +667,14 @@ void ibFrontendMainFrame::InitializeDefaultMenu()
 	stockPicture(m_menuEdit->Append(wxID_FIND), wxART_FIND);
 
 	wxMenuBar* const bar = new ibMenuBar();
-	bar->Append(m_menuFile, wxGetStockLabel(wxID_FILE));
-	bar->Append(m_menuEdit, wxGetStockLabel(wxID_EDIT));
+	bar->Append(m_menuFile, ibGetStockLabel(wxID_FILE));
+	bar->Append(m_menuEdit, ibGetStockLabel(wxID_EDIT));
 	if (m_menuConfiguration != nullptr)
 		bar->Append(m_menuConfiguration, _("Configuration"));
 	if (m_menuDebug != nullptr)
 		bar->Append(m_menuDebug, _("Debug"));
 	if (m_menuHelp != nullptr)
-		bar->Append(m_menuHelp, wxGetStockLabel(wxID_HELP, wxSTOCK_NOFLAGS));
+		bar->Append(m_menuHelp, ibGetStockLabel(wxID_HELP, wxSTOCK_NOFLAGS));
 	SetMenuBar(bar);
 	UpdateHotKeys();
 }
@@ -1194,8 +1195,8 @@ void ibFrontendMainFrame::DrawMenu(const ibProtocolNode& menu)
 	ClearMenus(previous, m_viewMenus);
 
 	wxMenuBar* const bar = new ibMenuBar();
-	bar->Append(m_menuFile, wxGetStockLabel(wxID_FILE));
-	bar->Append(m_menuEdit, wxGetStockLabel(wxID_EDIT));
+	bar->Append(m_menuFile, ibGetStockLabel(wxID_FILE));
+	bar->Append(m_menuEdit, ibGetStockLabel(wxID_EDIT));
 	if (m_menuConfiguration != nullptr)
 		bar->Append(m_menuConfiguration, _("Configuration"));
 	if (m_menuDebug != nullptr)
@@ -1206,7 +1207,7 @@ void ibFrontendMainFrame::DrawMenu(const ibProtocolNode& menu)
 		bar->Append(submenu, top.GetString(ibProtocol::ibFrame::ibMenu::Title));
 	}
 	if (m_menuHelp != nullptr)
-		bar->Append(m_menuHelp, wxGetStockLabel(wxID_HELP, wxSTOCK_NOFLAGS));
+		bar->Append(m_menuHelp, ibGetStockLabel(wxID_HELP, wxSTOCK_NOFLAGS));
 	SetMenuBar(bar);
 	delete previous;
 	UpdateHotKeys();
@@ -1963,7 +1964,7 @@ void ibFrontendMainFrame::ActivateView(ibFrontendView* view, bool activate)
 			ClearMenus(bar, m_viewMenus);
 			const std::unique_ptr<wxMenuBar> own(view->CreateMenuBar());
 			if (bar != nullptr && own != nullptr) {
-				const int edit = bar->FindMenu(wxGetStockLabel(wxID_EDIT));
+				const int edit = bar->FindMenu(ibGetStockLabel(wxID_EDIT));
 				size_t pos = edit != wxNOT_FOUND ? edit + 1 : 0;
 				while (own->GetMenuCount() > 0) {
 					const wxString title = own->GetMenuLabel(0);

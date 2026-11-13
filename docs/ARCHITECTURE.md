@@ -1134,9 +1134,10 @@ msgfmt --check-format --output-file=lang/ru/open_es.mo lang/ru/open_es.po
 msgfmt --check-format --output-file=lang/uk/open_es.mo lang/uk/open_es.po
 ```
 
-wx's own words (stock labels, its dialogs) are its catalog `wxstd`: `lang/<code>/wxstd.po` is wx's
-`locale/<code>.po`, compiled the same way to `lang/<code>/wxstd.mo` (nothing loads it now; who loads it is open -
-[translations.md](public/translations.md)).
+wx's own words in the forked code (stock labels, cursor names) are in the same `open_es` - there is one catalog. Their
+translations came from wx's `locale/<code>.po` once, as a compendium: `msgmerge --no-wrap --update --backup=none
+--no-fuzzy-matching --compendium=<wx>/locale/ru.po lang/ru/open_es.po lang/open_es.pot`
+([translations.md](public/translations.md)).
 
 The Poedit GUI (`File → Open` on the .po) does Step 1 + the editing UI in one shot. CLI route is faster for batch updates from CI.
 

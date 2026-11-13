@@ -26,6 +26,7 @@
 // Show() and destroyed by wx — only the lookup remains.
 #define mainFrame            		 (ibFrontendMainFrame::GetFrame())
 
+class ibMenu;
 class ibOutputWindow;
 class ibObjectInspector;
 class ibTabDocument;
@@ -281,9 +282,9 @@ protected:
 	ibOutputWindow*     m_outputWindow = nullptr;
 	ibObjectInspector*  m_objectInspector = nullptr;
 
-	wxMenu*             m_menuConfiguration = nullptr;   // a mode's own (the designer's): after Edit, before the server's
-	wxMenu*             m_menuDebug = nullptr;
-	wxMenu*             m_menuHelp = nullptr;   // a mode's own Help (the designer's): last on the bar, after the server's
+	ibMenu*             m_menuConfiguration = nullptr;   // a mode's own (the designer's): after Edit, before the server's
+	ibMenu*             m_menuDebug = nullptr;
+	ibMenu*             m_menuHelp = nullptr;   // a mode's own Help (the designer's): last on the bar, after the server's
 	ibKeyBinder         m_keyBinder;            // the keys of the bar's commands (UpdateHotKeys)
 	ibFontColorSettings m_fontColorSettings;    // the person's options (LoadOptions, SaveOptions)
 	ibEditorSettings    m_editorSettings;
@@ -368,8 +369,10 @@ private:
 	ibAuiToolBar* m_mainFrameToolbar = nullptr;   // the window's: the doc manager's commands
 	ibAuiToolBar* m_docToolbar = nullptr;         // the active view's own (ibFrontendView::OnCreateToolbar)
 	ibWelcomeWindow* m_welcome = nullptr;         // in the client window, shown while it holds no tab (DrawTabs)
-	wxMenu*       m_menuFile = nullptr;           // the window's File, with the files opened last
-	wxMenu*       m_menuEdit = nullptr;           // …and its Edit
+	// the theme's menus, held as such: an item appended by its stock id alone goes ibMenu::Append and takes the
+	// dictionary's words - held as wxMenu* it went wx's own factory and kept wx's English (2026-11-13)
+	ibMenu*       m_menuFile = nullptr;           // the window's File, with the files opened last
+	ibMenu*       m_menuEdit = nullptr;           // …and its Edit
 	std::vector<wxMenu*> m_viewMenus;             // the active view's own, in the window's bar after Edit (ActivateView)
 
 	std::map<int, ibMenuItem>             m_menuItems;     // the server's commands and schemas, by their wx ids (MenuIdOf)

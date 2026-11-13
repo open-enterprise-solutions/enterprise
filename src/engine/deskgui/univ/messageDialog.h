@@ -17,7 +17,7 @@
 #include "deskgui/univ/dialog.h"
 
 #include <wx/msgdlg.h>      // wxMessageBoxCaptionStr - wx's default
-#include <wx/stockitem.h>
+#include "deskgui/univ/stockItem.h"   // ibGetStockLabel — a stock button's label, in the base's language
 #include <wx/log.h>         // wxLogGui - ibLogGui's base
 
 class wxSizer;
@@ -75,7 +75,7 @@ public:
         {
             return m_stockId == wxID_NONE
                     ? m_label
-                    : wxGetStockLabel(m_stockId, wxSTOCK_FOR_BUTTON);
+                    : ibGetStockLabel(m_stockId, wxSTOCK_FOR_BUTTON);
         }
 
         // return the stock id or wxID_NONE if this is not a stock label
@@ -285,11 +285,12 @@ protected:
 private:
     // these functions may be overridden to provide different defaults for the
     // default button labels (this is used by wxGTK)
-    virtual wxString GetDefaultYesLabel() const { return wxGetTranslation("Yes"); }
-    virtual wxString GetDefaultNoLabel() const { return wxGetTranslation("No"); }
-    virtual wxString GetDefaultOKLabel() const { return wxGetTranslation("OK"); }
-    virtual wxString GetDefaultCancelLabel() const { return wxGetTranslation("Cancel"); }
-    virtual wxString GetDefaultHelpLabel() const { return wxGetTranslation("Help"); }
+    // (the dictionary's, as every word of ours — ibGetTranslation)
+    virtual wxString GetDefaultYesLabel() const { return ibGetTranslation(ibT("Yes")); }
+    virtual wxString GetDefaultNoLabel() const { return ibGetTranslation(ibT("No")); }
+    virtual wxString GetDefaultOKLabel() const { return ibGetTranslation(ibT("OK")); }
+    virtual wxString GetDefaultCancelLabel() const { return ibGetTranslation(ibT("Cancel")); }
+    virtual wxString GetDefaultHelpLabel() const { return ibGetTranslation(ibT("Help")); }
 
     // Creates and returns a standard button sizer using the style of this
     // dialog and the custom labels, if any.
