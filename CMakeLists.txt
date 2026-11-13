@@ -782,7 +782,14 @@ add_subdirectory("${OES_ENGINE_DIR}/simplePlugin")
 # ran the client's, a segmentation fault in ibPropertyObject::RemoveAttachedObject (the same step, after the libraries
 # had theirs). Written only when it changes (file(CONFIGURE)): a map rewritten at every configure would relink every
 # library.
-if(UNIX AND NOT APPLE)
+# ⭐ AND ON macOS ITS WEAK ONES. macOS binds a reference to its library - except a WEAK definition (an inline member
+# function, a vtable with no key function, a template's code), which dyld makes one across the process: a definition
+# that is not weak wins, else the first loaded. backend's inline ibPropertyStringBase::GetValueAsString ran the client's
+# (frmclient defines the name out of line), which asked backend's WriteNodeValue again - the stack overflowed
+# (designer-thin on a new file base, CI's look step, 2026-11-13). There every target of ours hides its inline member
+# functions, as Xcode does by default (GCC_INLINES_ARE_PRIVATE_EXTERN): each library calls its own, and a static local
+# of one stays one (clang keeps it visible).
+if(UNIX)
     get_property(_oes_dirs DIRECTORY "${CMAKE_SOURCE_DIR}" PROPERTY SUBDIRECTORIES)
     foreach(_oes_dir IN LISTS _oes_dirs)
         string(FIND "${_oes_dir}" "${OES_ENGINE_DIR}/" _oes_at)
@@ -792,6 +799,12 @@ if(UNIX AND NOT APPLE)
         get_property(_oes_targets DIRECTORY "${_oes_dir}" PROPERTY BUILDSYSTEM_TARGETS)
         foreach(_oes_target IN LISTS _oes_targets)
             get_target_property(_oes_type ${_oes_target} TYPE)
+            if(APPLE)
+                if(NOT _oes_type STREQUAL "INTERFACE_LIBRARY" AND NOT _oes_type STREQUAL "UTILITY")
+                    set_property(TARGET ${_oes_target} PROPERTY VISIBILITY_INLINES_HIDDEN ON)
+                endif()
+                continue()
+            endif()
             if(NOT _oes_type STREQUAL "SHARED_LIBRARY" AND NOT _oes_type STREQUAL "MODULE_LIBRARY"
                AND NOT _oes_type STREQUAL "EXECUTABLE")
                 continue()
