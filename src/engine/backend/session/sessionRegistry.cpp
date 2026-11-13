@@ -396,67 +396,37 @@ void ibSessionRegistry::Stop()
 	// `m_stop` is set), and the join below is an ordinary one. Nothing running — nothing is cancelled.
 	m_writeHolder.Cancel();
 
-	// Timed join with detach backstop. ThreadBody may be mid-ProcessRemove
-	// when m_stop fires; if its NotifyDisconnect → DetachRuntime path
-	// blocks on a mutex that main holds further up the stack (classic
-	// case: main crashed inside BeforeStart's lock_guard<m_runtimeMutex>,
-	// SEH dispatch unrolled to OnFatalException → ~ibApplicationInstance →
-	// Stop without releasing C++ frames — the lock is still held), a
-	// blind join() hangs forever. m_threadAlive is set by ThreadBody
-	// at entry and cleared on exit (incl. exception path via the noexcept
-	// guarantee + the explicit clear at function tail / Die()). Poll it
-	// with a deadline; on timeout, detach and let the OS reap the thread
-	// on process exit.
+	// ⭐⭐ AN ORDINARY JOIN — NO DEADLINE, NO DETACH. It waits as long as the database takes to deliver the cancel:
+	// a lock held by a peer that was KILLED is let go only when the server notices, ~10 s on 2026-11-13. A timed
+	// wait of two seconds then DETACHED the thread, the close went on freeing the registry, its connection and the
+	// Firebird client, and the thread woke into them — the designer closed right after app_stop, an access
+	// violation on 0xdddddddd. A detached thread outlives everything it uses: the process is not gone yet. (The
+	// backstop was for a fatal exception unwinding main while it held a lock the thread waits on; wx ends such a
+	// process with ExitProcess, which ends every other thread before any destructor runs — no join waits there.)
 	using clock = std::chrono::steady_clock;
-	const auto deadline = clock::now() + std::chrono::seconds(2);
-	while (m_threadAlive.load(std::memory_order_acquire)
-		&& clock::now() < deadline)
-	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(20));
-	}
-	const bool detached = m_threadAlive.load(std::memory_order_acquire);
-	if (detached) {
-		// ⚠ INFO, NOT WARNING. A warning is echoed through wxLog, and in a GUI application that opens
-		// a MODAL — so this sentence, which is addressed to whoever maintains the registry, stopped
-		// the application ON ITS WAY OUT and waited for somebody to click OK (seen 2026-09-04). It
-		// says nothing a user can act on and names an internal callback chain; the file is its
-		// reader. Same correction as metaData.cpp's paste path and the module-compile failure.
-		ibJournalInfo(ibT("session"),ibT("registry: m_thread join timed out - detaching ")
-			ibT("(deadlock against an in-flight ProcessRemove -> DetachRuntime / ")
-			ibT("listener callback chain). Process will exit anyway."));
-		m_thread.detach();
-	}
-	else {
-		m_thread.join();
-	}
+	const auto joinFrom = clock::now();
+	m_thread.join();
+	const long long waited = std::chrono::duration_cast<std::chrono::milliseconds>(clock::now() - joinFrom).count();
+	if (waited >= 2000)
+		ibJournalInfo(ibT("session"), ibT("registry: the thread came back %lld ms after the stop"), waited);
 
 	// Inline Remove drain — DELETE sys_session row + fire OnDisconnect
 	// listeners for every still-owned session. Per-Remove try/catch keeps
 	// one bad row from poisoning the rest (e.g. fbclient already
 	// disconnected → DeleteSessionRow throws ibBackendException).
-	//
-	// Skipped on the detached path: ProcessRemove → NotifyDisconnect →
-	// DetachRuntime would acquire m_runtimeMutex, the same lock the
-	// in-flight ThreadBody is stuck on (and which main itself may still
-	// hold via BeforeStart's lock_guard if we're unwinding from a crash).
-	// The detached ThreadBody picks up the queued Removes if it ever
-	// resumes; otherwise the rows are reaped on the next process's
-	// startup sweep.
-	if (!detached) {
-		std::vector<std::shared_ptr<ibSession>> owned;
-		{
-			std::shared_lock<std::shared_mutex> lk(m_ownMutex);
-			owned.reserve(m_own.size());
-			for (auto& kv : m_own) {
-				if (auto s = kv.second.Share()) owned.push_back(std::move(s));
-			}
+	std::vector<std::shared_ptr<ibSession>> owned;
+	{
+		std::shared_lock<std::shared_mutex> lk(m_ownMutex);
+		owned.reserve(m_own.size());
+		for (auto& kv : m_own) {
+			if (auto s = kv.second.Share()) owned.push_back(std::move(s));
 		}
-		for (auto& s : owned) {
-			ibRegistryRequest req;
-			req.kind    = ibRegistryRequestKind::Remove;
-			req.session = s;
-			try { ProcessRemove(req); } catch (...) { /* swallowed: registry-Stop fan-out, keep going so every owned row gets a Remove attempt even if one fails */ }
-		}
+	}
+	for (auto& s : owned) {
+		ibRegistryRequest req;
+		req.kind    = ibRegistryRequestKind::Remove;
+		req.session = s;
+		try { ProcessRemove(req); } catch (...) { /* swallowed: registry-Stop fan-out, keep going so every owned row gets a Remove attempt even if one fails */ }
 	}
 
 	// Drop the pool checkout. shared_ptr custom deleter on pool connections
@@ -2396,9 +2366,9 @@ void ibSessionRegistry::ThreadBody() noexcept
 			// ⭐⭐ AND AGAIN BEFORE EVERY PHASE THAT TOUCHES THE DATABASE. `m_stop` was read once, at
 			// the top of the tick, so a Stop() arriving one instruction later still bought the whole
 			// remainder: the queue drain, the heartbeat, the snapshot and the sweep — every one of
-			// them a round trip. Stop() waits two seconds and then DETACHES the thread ("process
-			// will exit anyway"), and the detached thread goes on working while the registry deletes
-			// sessions underneath it and the pool shuts down.
+			// them a round trip. Stop() then waited two seconds and DETACHED the thread ("process
+			// will exit anyway" — it joins now, 2026-11-13), and the detached thread went on working
+			// while the registry deleted sessions underneath it and the pool shut down.
 			//
 			// Measured 2026-09-08, on an ORDINARY close of the designer — the last two lines of the
 			// journal, 14 ms apart:
