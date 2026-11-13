@@ -209,6 +209,9 @@ public:
         return wxWindow::IsClientAreaChild(child);
     }
 
+    // the scrollbars and their corner are forgotten as they go - they are children, a DestroyChildren takes them too
+    virtual void RemoveChild(wxWindowBase *child) override;
+
     virtual wxSize GetWindowBorderSize() const override;
 
 protected:

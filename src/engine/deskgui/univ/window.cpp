@@ -243,6 +243,24 @@ ibWindow::~ibWindow()
     DestroyChildren();
 }
 
+void ibWindow::RemoveChild(wxWindowBase *child)
+{
+    // SEAM vs univ: THE SCROLLBARS AND THEIR CORNER ARE FORGOTTEN AS THEY GO, as wxFrameBase forgets its status bar. They
+    // are children, and a DestroyChildren of the window's own - a form drawn anew empties its panel
+    // (ibVisualHostClient::Clear) - took them with the rest, the pointers staying: the next layout hid a corner already
+    // freed (2026-11-13, the dump). On GTK3/Cocoa the same: the port's RemoveChild is called below
+#if wxUSE_SCROLLBAR
+    if ( child == m_scrollbarVert )
+        m_scrollbarVert = nullptr;
+    else if ( child == m_scrollbarHorz )
+        m_scrollbarHorz = nullptr;
+    else if ( child == m_scrollbarCorner )
+        m_scrollbarCorner = nullptr;
+#endif // wxUSE_SCROLLBAR
+
+    wxWindow::RemoveChild(child);
+}
+
 // ----------------------------------------------------------------------------
 // background pixmap
 // ----------------------------------------------------------------------------
