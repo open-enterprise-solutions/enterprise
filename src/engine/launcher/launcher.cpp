@@ -179,12 +179,13 @@ ibDialogLauncher::ibDialogLauncher(wxWindow* parent, wxWindowID id, const wxStri
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxHORIZONTAL);
 	wxBoxSizer* sizerLeft = new wxBoxSizer(wxVERTICAL);
 
-	// the bases' names a point over the window's font: the row is the theme's half the text's height again over it, so
-	// each point is a taller row (four over until 2026-11-13, then two - "too tall", then none - "the text is small";
-	// Max each time); on GTK3/Cocoa the same
+	// the bases' names two points over the window's font, the row the theme's for that text (GetListboxItemHeight) - as
+	// every list's (four over until 2026-11-13, then two - "too tall", then none - "the text is small", then one - "the
+	// row is right, the font is crooked": 13 pixels of Segoe UI; then two, chosen from four sizes drawn; Max each time);
+	// on GTK3/Cocoa the same
 	m_listIBwnd = new ibListBox(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, nullptr, wxLB_SINGLE);
 	wxFont listFont = GetFont();
-	listFont.SetPointSize(listFont.GetPointSize() + 1);
+	listFont.SetPointSize(listFont.GetPointSize() + 2);
 	m_listIBwnd->SetFont(listFont);
 
 	m_listIBwnd->Bind(wxEVT_LISTBOX, &ibDialogLauncher::OnSelectedList, this);

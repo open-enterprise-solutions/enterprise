@@ -290,6 +290,10 @@ protected:
     // fill the rectangle with a brush of given colour (must be valid)
     void DrawSolidRect(wxDC& dc, const wxColour& col, const wxRect& rect);
 
+    // the place of a title bar's button (a wxTOPLEVEL_BUTTON_*) in a window of the rect and the decorations given,
+    // empty for one they do not show: HitTestFrame finds it there, DrawFrameTitleBar draws it there
+    wxRect GetFrameButtonRect(const wxRect& rect, int flags, int button) const;
+
 
     // all the functions in this section adjust the rect parameter to
     // correspond to the interiour of the drawn area

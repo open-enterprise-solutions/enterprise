@@ -48,6 +48,35 @@
 // the margin between listbox item text and its rectangle
 static const int ITEM_MARGIN = 1;
 
+// where a title bar's buttons stand: on the left on the Mac, on the right elsewhere - defined as 1, Windows shows the
+// Mac's side (2026-11-13, Max: "on the Mac by default, by a define")
+#ifndef ibTHEME_FRAME_BUTTONS_LEFT
+    #ifdef __WXOSX__
+        #define ibTHEME_FRAME_BUTTONS_LEFT 1
+    #else
+        #define ibTHEME_FRAME_BUTTONS_LEFT 0
+    #endif
+#endif
+
+// the title bar's buttons from the edge they stand at: the close one outermost, then the Mac's order on the left -
+// minimize, zoom - and Windows' on the right - maximize, minimize (variant A of the mock, Max 2026-11-13)
+static constexpr int FRAME_BUTTONS[] =
+{
+#if ibTHEME_FRAME_BUTTONS_LEFT
+    wxTOPLEVEL_BUTTON_CLOSE, wxTOPLEVEL_BUTTON_ICONIZE, wxTOPLEVEL_BUTTON_MAXIMIZE, wxTOPLEVEL_BUTTON_RESTORE,
+#else
+    wxTOPLEVEL_BUTTON_CLOSE, wxTOPLEVEL_BUTTON_MAXIMIZE, wxTOPLEVEL_BUTTON_RESTORE, wxTOPLEVEL_BUTTON_ICONIZE,
+#endif
+    wxTOPLEVEL_BUTTON_HELP
+};
+
+// the icon a title bar shows: none with the buttons on the left, where it stood - the Mac's title bar has none
+#if ibTHEME_FRAME_BUTTONS_LEFT
+static constexpr int FRAME_ICON = 0;
+#else
+static constexpr int FRAME_ICON = wxTOPLEVEL_ICON;
+#endif
+
 // ============================================================================
 // ibThemeRenderer implementation
 // ============================================================================
@@ -932,8 +961,8 @@ void ibThemeRenderer::DrawItem(wxDC& dc,
     }
 
     // horizontal adjustment is arbitrary; vertically the text stands in the middle of its row - a theme's row may be
-    // taller than the text (Luna's is half its height again, GetListboxItemHeight), and drawn from the top all that air
-    // fell under it (2026-11-13, Max: "the selection is too tall"). On GTK3/Cocoa the same
+    // taller than the text (Luna's has the standard text's air, GetListboxItemHeight), and drawn from the top all that
+    // air fell under it (2026-11-13, Max: "the selection is too tall"). On GTK3/Cocoa the same
     wxRect rectText = rect;
     rectText.Deflate(2, ITEM_MARGIN);
     dc.DrawLabel(label, wxNullBitmap, rectText, wxALIGN_LEFT | wxALIGN_CENTRE_VERTICAL);
@@ -1248,6 +1277,30 @@ void ibThemeRenderer::DrawToolTip(wxDC& dc, const wxRect& rect, const wxString& 
 // top level windows
 // ----------------------------------------------------------------------------
 
+wxRect ibThemeRenderer::GetFrameButtonRect(const wxRect& rect, int flags, int button) const
+{
+    if ( !(flags & wxTOPLEVEL_TITLEBAR) || !(flags & button) )
+        return wxRect();
+
+    // past the buttons nearer the edge, the close one with a gap after it
+    wxCoord offset = 2;
+    for ( const int nearer : FRAME_BUTTONS )
+    {
+        if ( nearer == button )
+            break;
+        if ( flags & nearer )
+            offset += nearer == wxTOPLEVEL_BUTTON_CLOSE ? FRAME_BUTTON_WIDTH + 2 : FRAME_BUTTON_WIDTH;
+    }
+
+    const wxRect client = GetFrameClientArea(rect, flags & ~wxTOPLEVEL_TITLEBAR);
+    const wxCoord y = client.GetTop() + (FRAME_TITLEBAR_HEIGHT - FRAME_BUTTON_HEIGHT) / 2;
+#if ibTHEME_FRAME_BUTTONS_LEFT
+    return wxRect(client.GetLeft() + offset, y, FRAME_BUTTON_WIDTH, FRAME_BUTTON_HEIGHT);
+#else
+    return wxRect(client.GetRight() - offset - FRAME_BUTTON_WIDTH, y, FRAME_BUTTON_WIDTH, FRAME_BUTTON_HEIGHT);
+#endif
+}
+
 int ibThemeRenderer::HitTestFrame(const wxRect& rect, const wxPoint& pt, int flags) const
 {
     wxRect client = GetFrameClientArea(rect, flags);
@@ -1259,45 +1312,17 @@ int ibThemeRenderer::HitTestFrame(const wxRect& rect, const wxPoint& pt, int fla
     {
         wxRect client = GetFrameClientArea(rect, flags & ~wxTOPLEVEL_TITLEBAR);
 
-        if ( flags & wxTOPLEVEL_ICON )
+        if ( flags & FRAME_ICON )
         {
             if ( wxRect(client.GetPosition(), GetFrameIconSize()).Contains(pt) )
                 return wxHT_TOPLEVEL_ICON;
         }
 
-        wxRect btnRect(client.GetRight() - 2 - FRAME_BUTTON_WIDTH,
-                       client.GetTop() + (FRAME_TITLEBAR_HEIGHT-FRAME_BUTTON_HEIGHT)/2,
-                       FRAME_BUTTON_WIDTH, FRAME_BUTTON_HEIGHT);
-
-        if ( flags & wxTOPLEVEL_BUTTON_CLOSE )
+        // a button's hit code is its flag (renderer.h)
+        for ( const int button : FRAME_BUTTONS )
         {
-            if ( btnRect.Contains(pt) )
-                return wxHT_TOPLEVEL_BUTTON_CLOSE;
-            btnRect.x -= FRAME_BUTTON_WIDTH + 2;
-        }
-        if ( flags & wxTOPLEVEL_BUTTON_MAXIMIZE )
-        {
-            if ( btnRect.Contains(pt) )
-                return wxHT_TOPLEVEL_BUTTON_MAXIMIZE;
-            btnRect.x -= FRAME_BUTTON_WIDTH;
-        }
-        if ( flags & wxTOPLEVEL_BUTTON_RESTORE )
-        {
-            if ( btnRect.Contains(pt) )
-                return wxHT_TOPLEVEL_BUTTON_RESTORE;
-            btnRect.x -= FRAME_BUTTON_WIDTH;
-        }
-        if ( flags & wxTOPLEVEL_BUTTON_ICONIZE )
-        {
-            if ( btnRect.Contains(pt) )
-                return wxHT_TOPLEVEL_BUTTON_ICONIZE;
-            btnRect.x -= FRAME_BUTTON_WIDTH;
-        }
-        if ( flags & wxTOPLEVEL_BUTTON_HELP )
-        {
-            if ( btnRect.Contains(pt) )
-                return wxHT_TOPLEVEL_BUTTON_HELP;
-            btnRect.x -= FRAME_BUTTON_WIDTH;
+            if ( GetFrameButtonRect(rect, flags, button).Contains(pt) )
+                return button;
         }
 
         if ( pt.y >= client.y && pt.y < client.y + FRAME_TITLEBAR_HEIGHT )
@@ -1339,48 +1364,16 @@ void ibThemeRenderer::DrawFrameTitleBar(wxDC& dc,
     if ( flags & wxTOPLEVEL_TITLEBAR )
     {
         DrawFrameBackground(dc, rect, flags);
-        if ( flags & wxTOPLEVEL_ICON )
+        if ( flags & FRAME_ICON )
             DrawFrameIcon(dc, rect, icon, flags);
         DrawFrameTitle(dc, rect, title, flags);
 
-        wxRect client = GetFrameClientArea(rect, flags & ~wxTOPLEVEL_TITLEBAR);
-        wxCoord x,y;
-        x = client.GetRight() - 2 - FRAME_BUTTON_WIDTH;
-        y = client.GetTop() + (FRAME_TITLEBAR_HEIGHT-FRAME_BUTTON_HEIGHT)/2;
-
-        if ( flags & wxTOPLEVEL_BUTTON_CLOSE )
+        for ( const int button : FRAME_BUTTONS )
         {
-            DrawFrameButton(dc, x, y, wxTOPLEVEL_BUTTON_CLOSE,
-                            (specialButton == wxTOPLEVEL_BUTTON_CLOSE) ?
-                            specialButtonFlags : 0);
-            x -= FRAME_BUTTON_WIDTH + 2;
-        }
-        if ( flags & wxTOPLEVEL_BUTTON_MAXIMIZE )
-        {
-            DrawFrameButton(dc, x, y, wxTOPLEVEL_BUTTON_MAXIMIZE,
-                            (specialButton == wxTOPLEVEL_BUTTON_MAXIMIZE) ?
-                            specialButtonFlags : 0);
-            x -= FRAME_BUTTON_WIDTH;
-        }
-        if ( flags & wxTOPLEVEL_BUTTON_RESTORE )
-        {
-            DrawFrameButton(dc, x, y, wxTOPLEVEL_BUTTON_RESTORE,
-                            (specialButton == wxTOPLEVEL_BUTTON_RESTORE) ?
-                            specialButtonFlags : 0);
-            x -= FRAME_BUTTON_WIDTH;
-        }
-        if ( flags & wxTOPLEVEL_BUTTON_ICONIZE )
-        {
-            DrawFrameButton(dc, x, y, wxTOPLEVEL_BUTTON_ICONIZE,
-                            (specialButton == wxTOPLEVEL_BUTTON_ICONIZE) ?
-                            specialButtonFlags : 0);
-            x -= FRAME_BUTTON_WIDTH;
-        }
-        if ( flags & wxTOPLEVEL_BUTTON_HELP )
-        {
-            DrawFrameButton(dc, x, y, wxTOPLEVEL_BUTTON_HELP,
-                            (specialButton == wxTOPLEVEL_BUTTON_HELP) ?
-                            specialButtonFlags : 0);
+            const wxRect place = GetFrameButtonRect(rect, flags, button);
+            if ( !place.IsEmpty() )
+                DrawFrameButton(dc, place.x, place.y, button,
+                                specialButton == button ? specialButtonFlags : 0);
         }
     }
 }
@@ -1425,7 +1418,7 @@ void ibThemeRenderer::DrawFrameTitle(wxDC& dc,
 
     wxRect r = GetFrameClientArea(rect, flags & ~wxTOPLEVEL_TITLEBAR);
     r.height = FRAME_TITLEBAR_HEIGHT;
-    if ( flags & wxTOPLEVEL_ICON )
+    if ( flags & FRAME_ICON )
     {
         r.x += FRAME_TITLEBAR_HEIGHT;
         r.width -= FRAME_TITLEBAR_HEIGHT + 2;
@@ -1436,16 +1429,27 @@ void ibThemeRenderer::DrawFrameTitle(wxDC& dc,
         r.width -= 3;
     }
 
+    wxCoord buttons = 0;
     if ( flags & wxTOPLEVEL_BUTTON_CLOSE )
-        r.width -= FRAME_BUTTON_WIDTH + 2;
+        buttons += FRAME_BUTTON_WIDTH + 2;
     if ( flags & wxTOPLEVEL_BUTTON_MAXIMIZE )
-        r.width -= FRAME_BUTTON_WIDTH;
+        buttons += FRAME_BUTTON_WIDTH;
     if ( flags & wxTOPLEVEL_BUTTON_RESTORE )
-        r.width -= FRAME_BUTTON_WIDTH;
+        buttons += FRAME_BUTTON_WIDTH;
     if ( flags & wxTOPLEVEL_BUTTON_ICONIZE )
-        r.width -= FRAME_BUTTON_WIDTH;
+        buttons += FRAME_BUTTON_WIDTH;
     if ( flags & wxTOPLEVEL_BUTTON_HELP )
-        r.width -= FRAME_BUTTON_WIDTH;
+        buttons += FRAME_BUTTON_WIDTH;
+
+    // with the buttons on the left the title stands in the middle of the bar, as the Mac's: as much room is kept on
+    // the right as they take on the left
+#if ibTHEME_FRAME_BUTTONS_LEFT
+    r.Deflate(buttons, 0);
+    const int alignment = wxALIGN_CENTRE_HORIZONTAL | wxALIGN_CENTRE_VERTICAL;
+#else
+    r.width -= buttons;
+    const int alignment = wxALIGN_LEFT | wxALIGN_CENTRE_VERTICAL;
+#endif
 
     dc.SetFont(m_titlebarFont);
 
@@ -1481,7 +1485,7 @@ void ibThemeRenderer::DrawFrameTitle(wxDC& dc,
         s = title;
     }
 
-    dc.DrawLabel(s, wxNullBitmap, r, wxALIGN_LEFT | wxALIGN_CENTRE_VERTICAL);
+    dc.DrawLabel(s, wxNullBitmap, r, alignment);
 }
 
 void ibThemeRenderer::DrawFrameIcon(wxDC& dc,
@@ -1592,7 +1596,7 @@ wxSize ibThemeRenderer::GetFrameMinSize(int flags) const
     {
         s.y += FRAME_TITLEBAR_HEIGHT;
 
-        if ( flags & wxTOPLEVEL_ICON )
+        if ( flags & FRAME_ICON )
             s.x += FRAME_TITLEBAR_HEIGHT + 2;
         if ( flags & wxTOPLEVEL_BUTTON_CLOSE )
             s.x += FRAME_BUTTON_WIDTH + 2;

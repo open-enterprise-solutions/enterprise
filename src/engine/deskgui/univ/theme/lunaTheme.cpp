@@ -8,6 +8,7 @@
 #include <wx/dc.h>
 #include <wx/dcmemory.h>
 #include <wx/dcgraph.h>
+#include <wx/dcscreen.h>   // wxScreenDC - the standard text measured for a row's air (GetListboxItemHeight)
 #include <wx/settings.h>
 #include <wx/window.h>
 #include <wx/control.h>   // wxControl::Ellipsize - a pane caption's title cut to its room (DrawPaneCaption)
@@ -48,6 +49,11 @@ const wxColour kCaptionInactiveTop(0xE7, 0xEC, 0xF0);    // caption-inactive-top
 const wxColour kCaptionInactiveBottom(0xDB, 0xE2, 0xE6); // caption-inactive-bottom #DBE2E6
 const wxColour kAccent(0xD9, 0x77, 0x57);        // accent        #D97757
 const wxColour kAccentDeep(0xB8, 0x5A, 0x38);    // accent-deep   #B85A38
+
+// a title bar's buttons, the Mac's colours (DrawFrameButton): close, minimize, maximize or restore
+const wxColour kFrameClose(0xFF, 0x5F, 0x57);    // #FF5F57
+const wxColour kFrameIconize(0xFE, 0xBC, 0x2E);  // #FEBC2E
+const wxColour kFrameMaximize(0x28, 0xC8, 0x40); // #28C840
 
 // the shelf under an AUI book's tabs (DrawTabStrip): a neutral warm taupe between the cool strip and the pages - a
 // sandstone #E8D8BE read as too yellow
@@ -1023,12 +1029,16 @@ public:
 			: wxSize(rect.width, rect.width / 2);
 	}
 
-	// a row of a list, a tree or the property grid: half its text's height again, the air above and below the text
-	// (2026-11-13, Max: variant C of four on his screenshot - the same font, rows of 24 pixels for 19; "on the Mac it
-	// looks fine", where the system's font is larger and the rows freer). The text's height carries the font and the
-	// screen's DPI with it; on GTK3/Cocoa the same
+	// a row of a list, a tree or the property grid: its text and the standard text's air, half the height of the
+	// window's own font - one rule for every list, so a list in a larger font is no freer than one in the window's
+	// (2026-11-13, Max chose "the text + the air": the launcher's list two points over would have had rows of 30
+	// pixels). Until then half the row's own text again, variant C of four on his screenshot - 22 pixels for the
+	// window's font, as now. The standard text is measured on the screen: its height carries the platform's font and
+	// the screen's DPI with it; on GTK3/Cocoa the same
 	virtual wxCoord GetListboxItemHeight(wxCoord fontHeight) override {
-		return fontHeight * 3 / 2;
+		wxScreenDC dc;
+		dc.SetFont(wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT));
+		return fontHeight + dc.GetCharHeight() / 2;
 	}
 
 	virtual wxSize GetProgressBarStep() const override { return wxSize(8, 8); }
@@ -1226,19 +1236,46 @@ void ibLunaRenderer::DrawFrameBackground(wxDC& dc, const wxRect& rect, int flags
 }
 
 void ibLunaRenderer::DrawFrameButton(wxDC& dc, wxCoord x, wxCoord y, int button, int flags) {
-	// a face only while pressed
 	const wxRect face(x, y, FRAME_BUTTON_WIDTH, FRAME_BUTTON_HEIGHT);
-	if (flags & wxCONTROL_PRESSED) {
-		dc.SetPen(*wxTRANSPARENT_PEN);
-		dc.SetBrush(wxBrush(kBorder));
-		dc.DrawRectangle(face);
+
+	// the help button: a face only while pressed, its glyph in the title's colour - DrawFrameTitle sets it just before
+	// the buttons: white on the active caption, blue on the inactive one
+	if (button == wxTOPLEVEL_BUTTON_HELP) {
+		if (flags & wxCONTROL_PRESSED) {
+			dc.SetPen(*wxTRANSPARENT_PEN);
+			dc.SetBrush(wxBrush(kBorder));
+			dc.DrawRectangle(face);
+		}
+		dc.DrawLabel(wxT("?"), face, wxALIGN_CENTRE);
+		return;
 	}
 
-	// the glyph in a square of 8 pixels in the middle, in the title's colour - DrawFrameTitle sets it just before the
-	// buttons: white on the active caption, blue on the inactive one
-	const int side = 8;
+	// the others the Mac's, on every platform: a disc of 12 pixels - red, yellow, green - darker while pressed, its glyph
+	// a deep shade of it (2026-11-13, Max: "the Mac's colours, only with our theme"; the side is the base's,
+	// ibTHEME_FRAME_BUTTONS_LEFT)
+	wxColour colour = button == wxTOPLEVEL_BUTTON_CLOSE ? kFrameClose
+		: button == wxTOPLEVEL_BUTTON_ICONIZE ? kFrameIconize : kFrameMaximize;
+	if (flags & wxCONTROL_PRESSED)
+		colour = colour.ChangeLightness(80);
+	const int diameter = 12;
+	const wxRect disc(face.x + (face.width - diameter) / 2, face.y + (face.height - diameter) / 2, diameter, diameter);
+	wxGraphicsContext* gc = wxGraphicsContext::CreateFromUnknownDC(dc);
+	if (gc != nullptr) {
+		gc->SetPen(*wxTRANSPARENT_PEN);
+		gc->SetBrush(wxBrush(colour));
+		gc->DrawEllipse(disc.x, disc.y, disc.width, disc.height);
+		delete gc;
+	}
+	else {
+		dc.SetPen(*wxTRANSPARENT_PEN);
+		dc.SetBrush(wxBrush(colour));
+		dc.DrawEllipse(disc);
+	}
+
+	// the glyph in a square of 6 pixels in the middle
+	const int side = 6;
 	const wxRect glyph(face.x + (face.width - side) / 2, face.y + (face.height - side) / 2, side, side);
-	dc.SetPen(wxPen(dc.GetTextForeground()));
+	dc.SetPen(wxPen(colour.ChangeLightness(40)));
 	dc.SetBrush(*wxTRANSPARENT_BRUSH);
 	switch (button) {
 	case wxTOPLEVEL_BUTTON_CLOSE:
@@ -1255,10 +1292,8 @@ void ibLunaRenderer::DrawFrameButton(wxDC& dc, wxCoord x, wxCoord y, int button,
 		dc.DrawLine(glyph.GetRight(), glyph.y, glyph.GetRight(), glyph.y + side - 2);
 		break;
 	case wxTOPLEVEL_BUTTON_ICONIZE:
-		dc.DrawLine(glyph.GetLeft(), glyph.GetBottom(), glyph.GetRight() + 1, glyph.GetBottom());
-		break;
-	case wxTOPLEVEL_BUTTON_HELP:
-		dc.DrawLabel(wxT("?"), face, wxALIGN_CENTRE);
+		// across the middle, as the Mac's
+		dc.DrawLine(glyph.GetLeft(), glyph.y + side / 2, glyph.GetRight() + 1, glyph.y + side / 2);
 		break;
 	}
 }
