@@ -416,7 +416,12 @@ void ibTopLevelWindow<W>::DoGetClientSize(int *width, int *height) const
 template <class W>
 void ibTopLevelWindow<W>::DoSetClientSize(int width, int height)
 {
-    const wxSize size = m_renderer->GetFrameTotalSize(wxSize(width, height), GetDecorationsStyle());
+    wxSize size = m_renderer->GetFrameTotalSize(wxSize(width, height), GetDecorationsStyle());
+    // no larger than its display's work area, as at its making (Create): the main frame asks for its client area after it
+    // (ibFrontendMainFrame, 800x600), and grown past the 1024x768 screen of CI look-macos it had its title bar and menu
+    // under the system's menu bar, Centre giving the top up for the bottom right (2026-11-13). The same on every port
+    if ( this->HasFlag(wxRESIZE_BORDER) )
+        size.DecTo(wxDisplay(this).GetClientArea().GetSize());
     // the native window's, as the canon's (wxTopLevelWindow::DoSetClientSize, univ) - not W's: wxFrame's, on every port,
     // took the size for its client area again and added its bars to it - the status bar and the client area's origin
     // (the title bar, the menu) counted twice, ibFrame and the renderer had (2026-11-11)
