@@ -33,6 +33,7 @@
 #include "core/diagnostics/crashGuard.h"
 #include "core/diagnostics/journal.h"   // ibJournalError — what the loop says of a refusal
 #include "core/exception.h"             // ibCoreException — the refusal it says and goes on
+#include "deskgui/univ/messageDialog.h"   // ibLogGui — wx's log window in the theme's box
 
 #include <wx/app.h>
 #include <wx/cmdline.h>   // the usage text an unparsed command line is answered with
@@ -170,6 +171,12 @@ public:
 		// faults during wxApp::OnInit / image-handler registry / locale
 		// init also land in a dump.
 		ibCrashGuard::Install(GetExeName());
+
+		// ⭐ THE THEME'S LOG WINDOW (ibLogGui), set here and not in a module: wx deletes the target the modules leave as
+		// it finishes starting (wxEntryStart, "the temporary sink ... for the initialization messages"), and the one it
+		// then made on demand was its own - a journal's error stood as the system's box over the theme's (2026-11-13,
+		// a login refused). The journal chains this one. Every port alike: wxEntryStart is wx's common code.
+		delete wxLog::SetActiveTarget(new ibLogGui);
 
 		// ⭐ wx's LOG INTO THE JOURNAL — CHAINED, NOT REPLACED, and only as a SAFETY NET. Our own code writes through
 		// ibJournal and reaches the file directly; this catches what we do not own: wx's own diagnostics, and the

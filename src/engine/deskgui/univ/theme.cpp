@@ -34,7 +34,6 @@
 #include "deskgui/univ/renderer.h"
 #include "deskgui/univ/inputHandler.h"
 #include "deskgui/univ/theme.h"
-#include "deskgui/univ/messageDialog.h"   // ibLogGui - the theme's log window
 
 // ============================================================================
 // implementation
@@ -147,14 +146,13 @@ ibThemeInfo::ibThemeInfo(Constructor c,
 
 // SEAM vs univ: THE DEFAULT THEME SET AS wx STARTS, where the canon's wxApp::OnInitGui set it - not by the first window
 // that asks for it (Get): its pictures (GetArtProvider) are asked for before any window of ours is made, as a menu or a
-// toolbar is built. Its log window too (ibLogGui): the modules start before the program's OnInit, where the journal
-// chains the target it finds (ibWxApp::OnInit) - wx's own, made on demand, was the native box
+// toolbar is built. Not its log window (ibLogGui): wx deletes the target the modules leave as it finishes starting
+// (wxEntryStart) - it is set in ibWxApp::OnInit
 class ibThemeModule : public wxModule
 {
 public:
     virtual bool OnInit() override
     {
-        delete wxLog::SetActiveTarget(new ibLogGui);
         return ibThemeEngine::CreateDefault();
     }
     virtual void OnExit() override {}

@@ -331,8 +331,8 @@ int DESKGUI_API ibMessageBox(const wxString& message,
 // SEAM vs wx: wxLogGui shows one message in the native box (wxMessageBox: a TaskDialog on MSW) and several in its log
 // dialog (wxLogDialog), neither of them the theme's - a warning the journal passes on (wxLogChain) stood as the system's
 // window beside the themed program (2026-11-12, Max: "why has this window not gone onto the theme"). The target the
-// theme sets as wx starts (ibThemeModule), before the journal chains the one it finds (ibWxApp::OnInit, after the crash
-// guard is in)
+// program sets first in its OnInit (ibWxApp), before the journal chains it - not as wx starts: wx deletes the target
+// the modules leave (wxEntryStart), and the box stayed the system's (2026-11-13)
 class DESKGUI_API ibLogGui : public wxLogGui
 {
 private:
