@@ -2963,6 +2963,42 @@ wxRect ibTextCtrl::GetRealTextArea() const
     return rectText;
 }
 
+// SEAM vs wx: THE SCROLL HELPER IS ANSWERED IN THE LINES' TERMS. What it scrolls is the text area (UpdateTextRect's
+// target rect), inside the paddings and in whole lines, and wx's base answered it with the window: a window of `size`
+// "had room" for its height, and the lines' size was never less than the window's client area. Four lines in a field
+// with room for three fitted the window's 64 pixels - three shown, no scrollbar (2026-11-13, About's thanks, Max: "the
+// scrollbar does not want to appear"); and a tall field with nothing to scroll had lines "as tall as the window", taller
+// than the area, and kept a scrollbar (2026-11-14, the same, measured). On GTK3/Cocoa the same - the helper is the
+// library's there too
+wxSize ibTextCtrl::GetSizeAvailableForScrollTarget(const wxSize& size)
+{
+    const wxRect target = GetTargetRect();
+    if ( IsSingleLine() || target.width == 0 )
+        return size;
+
+    // the area with what the scrollbars' going gives the client area - its height in whole lines, as GetRealTextArea
+    // counts them
+    const wxSize gained = size - GetClientSize();
+    const int hLine = GetLineHeight();
+    const int height = m_rectText.height + gained.y;
+    return wxSize(target.width + gained.x, hLine > 0 && height >= hLine ? height - height % hLine : height);
+}
+
+wxSize ibTextCtrl::DoGetVirtualSize() const
+{
+    const wxRect target = GetTargetRect();
+    if ( IsSingleLine() || target.width == 0 )
+        return ibControl::DoGetVirtualSize();
+
+    // ...as wxWindowBase's, the area in place of the client area
+    wxSize size = target.GetSize();
+    if ( m_virtualSize.x > size.x )
+        size.x = m_virtualSize.x;
+    if ( m_virtualSize.y >= size.y )
+        size.y = m_virtualSize.y;
+    return size;
+}
+
 wxTextCoord ibTextCtrl::GetRowInLine(wxTextCoord line,
                                      wxTextCoord col,
                                      wxTextCoord *colRowStart) const
@@ -4059,58 +4095,28 @@ void ibTextCtrl::RefreshTextRange(wxTextPos start, wxTextPos end)
     if ( start == end )
         return;
 
-    wxTextPos colStart, lineStart;
-    if ( !PositionToXY(start, &colStart, &lineStart) )
+    wxTextCoord lineStart;
+    if ( !PositionToXY(start, nullptr, &lineStart) )
     {
         // the range is entirely beyond the end of the text, nothing to do
         return;
     }
 
-    wxTextCoord colEnd, lineEnd;
-    if ( !PositionToXY(end, &colEnd, &lineEnd) )
+    wxTextCoord lineEnd;
+    if ( !PositionToXY(end, nullptr, &lineEnd) )
     {
         // the range spans beyond the end of text, refresh to the end
-        colEnd = -1;
         lineEnd = GetNumberOfLines() - 1;
     }
 
-    // refresh all lines one by one
+    // SEAM vs univ: THE LINES THE RANGE TOUCHES ARE REPAINTED WHOLE, every row of each (RefreshPixelRange's width 0), not
+    // the pixels of the columns in it. Those were measured on the line - the width of the text before the range, then of
+    // the range - while a row draws its text in pieces, the selection at the width of the pieces before it, and with
+    // kerning the sums part by a pixel: a selection taken back left its edge on the screen, a stripe of the highlight a
+    // pixel wide (2026-11-14, About's thanks clicked, Max: "yellow artefacts"). A selection is all that asks this. On
+    // GTK3/Cocoa the same
     for ( wxTextCoord line = lineStart; line <= lineEnd; line++ )
-    {
-        // refresh the first line from the start of the range to the end, the
-        // intermediate ones entirely and the last one from the beginning to
-        // the end of the range
-        wxTextPos posStart = line == lineStart ? colStart : 0;
-        size_t posCount;
-        if ( (line != lineEnd) || (colEnd == -1) )
-        {
-            // intermediate line or the last one but we need to refresh it
-            // until the end anyhow - do it
-            posCount = wxString::npos;
-        }
-        else // last line
-        {
-            // refresh just the positions in between the start and the end one
-            posCount = colEnd - posStart;
-        }
-
-        if ( posCount )
-            RefreshColRange(line, posStart, posCount);
-    }
-}
-
-void ibTextCtrl::RefreshColRange(wxTextCoord line,
-                                 wxTextPos start,
-                                 size_t count)
-{
-    wxString text = GetLineText(line);
-
-    wxASSERT_MSG( (size_t)start <= text.length() && count,
-                  wxT("invalid RefreshColRange() parameter") );
-
-    RefreshPixelRange(line,
-                      GetTextWidth(text.Left((size_t)start)),
-                      GetTextWidth(text.Mid((size_t)start, (size_t)count)));
+        RefreshPixelRange(line, 0, 0);
 }
 
 // this method accepts "logical" coords in the sense that they are coordinates

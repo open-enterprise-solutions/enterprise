@@ -320,6 +320,10 @@ public:
     // of line
     virtual bool SendAutoScrollEvents(wxScrollWinEvent& event) const override;
 
+    // SEAM vs wx: the room the lines get for a window of that size - the scroll helper scrolls the text area
+    // (SetTargetRect), not the window, and asks it whether the scrollbars can go (as the grid, the data view and the list)
+    virtual wxSize GetSizeAvailableForScrollTarget(const wxSize& size) override;
+
     // idle processing
     virtual void OnInternalIdle() override;
 
@@ -333,6 +337,8 @@ protected:
     // calc the size from the text extent
     virtual wxSize DoGetBestClientSize() const override;
     virtual wxSize DoGetSizeFromTextSize(int xlen, int ylen = -1) const override;
+    // SEAM vs wx: the lines' size is at least the text area they are scrolled in, not the window's client area
+    virtual wxSize DoGetVirtualSize() const override;
 
     // SEAM vs univ: the margins of wxMSW's field - the horizontal one stands on both sides of the text in place of the
     // theme's padding (a grid's editor sets none: its text where the cell drew it), a vertical one it has not
@@ -411,13 +417,10 @@ protected:
     // width is 0, refresh to the end of line
     void RefreshPixelRange(wxTextCoord line, wxCoord start, wxCoord width);
 
-    // refresh the text in the given range (in text coords) in this line
-    void RefreshColRange(wxTextCoord line, wxTextPos start, size_t count);
-
     // refresh the text from in the given line range (inclusive)
     void RefreshLineRange(wxTextCoord lineFirst, wxTextCoord lineLast);
 
-    // refresh the text in the given range which can span multiple lines
+    // refresh the text in the given range which can span multiple lines - the whole lines it touches
     // (this method accepts arguments in any order)
     void RefreshTextRange(wxTextPos start, wxTextPos end);
 
