@@ -8212,6 +8212,10 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			b.GroupBy(leaf);
 			ibQueryOutputColumn oc; oc.m_name = leaf->GetName(); oc.m_col = leaf;
 			oc.m_role = ibQueryLowering::ibColumnRole::Dimension;   // a server-paged grouping level IS a dimension
+			// …AND THE FIRST ONE, numbered as the fold numbers it (below: the first TOTALS BY level is 0). Left at -1, a
+			// list found no key on its headings — they read with no text and opened onto the same level again — whenever
+			// the sort was the grouping field itself, the one case that takes this branch (2026-11-13).
+			oc.m_level = 0;
 			oc.m_available = leaf->IsAvailable();
 			outSchema.clear(); outSchema.push_back(oc);
 

@@ -123,6 +123,13 @@ public:
         return wxCreateScrolled((T*)this, parent, winid, pos, size, style, name);
     }
 
+    // SEAM vs wx: THE CHILDREN ARE PLACED AT ONCE, not deferred to the end of the size (wxMSW, DeferWindowPos). One size
+    // both scrolls them - the engine's ScrollWindow moves each (ibWindow) - and lays them out, twice: a field stood in one
+    // batch five times, and the system moves a deferred window's OWN children by every one of its entries, each from
+    // where it stood before the batch - a form widened after a scroll put each field's buttons outside it, by the sum of
+    // the steps (2026-11-13, measured: a field moved (5,5), its buttons (35,25)). On GTK3/Cocoa nothing is deferred
+    virtual bool BeginRepositioningChildren() override { return false; }
+
 #ifdef __WXMSW__
     // we need to return a special WM_GETDLGCODE value to process just the
     // arrows but let the other navigation characters through

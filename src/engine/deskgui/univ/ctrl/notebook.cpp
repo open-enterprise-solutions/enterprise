@@ -318,6 +318,15 @@ bool ibNotebook::InsertPage(size_t nPage,
     // modify the data
     m_pages.insert(m_pages.begin() + nPage, pPage);
 
+    // SEAM vs wx: a page put in before the selected one moves the selection's index with it, as wxMSW's
+    // InsertPage does. wxUniv's kept the number: inserted at the selected place, SetSelection(nPage) below found
+    // the page "already selected" and did nothing - the new page stood unsized at the corner, a 20-pixel square
+    // over the first tab, and the old one stayed shown under it at the size it had (2026-11-13, the composer's
+    // settings putting Parameters or Grouping in front: Max, "a small square in the corner", and "it lags on a
+    // resize"). On GTK3/Cocoa the same
+    if ( m_selection != wxNOT_FOUND && (int)nPage <= m_selection )
+        m_selection++;
+
     wxString label;
     m_accels.Insert(wxControlBase::FindAccelIndex(strText, &label), nPage);
     m_titles.Insert(label, nPage);

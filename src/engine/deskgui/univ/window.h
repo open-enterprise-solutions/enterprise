@@ -202,7 +202,8 @@ public:
     {
 #if wxUSE_SCROLLBAR
         if ( child == (wxWindow*)m_scrollbarHorz ||
-             child == (wxWindow*)m_scrollbarVert )
+             child == (wxWindow*)m_scrollbarVert ||
+             child == (wxWindow*)m_scrollbarCorner )
             return false;
 #endif
         return wxWindow::IsClientAreaChild(child);
@@ -319,6 +320,8 @@ private:
     // the window scrollbars
     ibScrollBar *m_scrollbarHorz,
                 *m_scrollbarVert;
+    // ...and the square between them, a window beside them (PositionScrollbars)
+    ibWindow *m_scrollbarCorner;
 #endif // wxUSE_SCROLLBAR
 
     wxSize m_paintedSize;       // the window's size its frame was last painted at (TryBefore)

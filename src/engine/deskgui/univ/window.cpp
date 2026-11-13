@@ -115,6 +115,7 @@ void ibWindow::Init()
 #if wxUSE_SCROLLBAR
     m_scrollbarVert =
     m_scrollbarHorz = nullptr;
+    m_scrollbarCorner = nullptr;
 #endif // wxUSE_SCROLLBAR
 
     m_isCurrent = false;
@@ -231,6 +232,7 @@ ibWindow::~ibWindow()
     // any code using the scrollbars would be called in the process or from
     // ~wxWindowBase, the app would crash:
     m_scrollbarVert = m_scrollbarHorz = nullptr;
+    m_scrollbarCorner = nullptr;
 #endif
 
     // we have to destroy our children before we're destroyed because our
@@ -358,22 +360,6 @@ bool ibWindow::TryBefore(wxEvent& event)
         wxRect rect = GetBorderRect();
 
 #if wxUSE_SCROLLBAR
-        // the square between the scrollbars, inside the frame's line: the frame's rect, not the window's - a title
-        // beside the frame is not under the scrollbars; the canon measured it from 0 and over the line
-        if ( m_scrollbarVert && m_scrollbarHorz )
-        {
-            wxRect rectClient = GetClientRect(),
-                   rectBorder = m_renderer->GetBorderDimensions(GetBorder());
-
-            wxRect rectCorner;
-            rectCorner.x = rectClient.GetRight() + 1;
-            rectCorner.y = rectClient.GetBottom() + 1;
-            rectCorner.SetRight(rect.GetRight() - rectBorder.width);
-            rectCorner.SetBottom(rect.GetBottom() - rectBorder.height);
-
-            m_renderer->DrawScrollCorner(dc, rectCorner);
-        }
-
         // if the scrollbars are outside the border, we must adjust the rect to
         // exclude them
         if ( !m_renderer->AreScrollbarsInsideBorder() )
@@ -954,6 +940,33 @@ void ibWindow::PositionScrollbars()
         m_scrollbarHorz->SetSize(rectBar, wxSIZE_NO_ADJUSTMENTS);
     }
 
+    // SEAM vs univ: THE SQUARE BETWEEN THE SCROLLBARS IS A WINDOW BESIDE THEM, over the children as they are
+    // (SetScrollbar) - painted on this window's surface, as the canon painted it, a child reaching under it covered it: a
+    // form narrower than its fields showed a field's corner there (2026-11-13, Max: "the corner"). Made the first time
+    // both are, hidden while one is missing; on GTK3/Cocoa a child stands over its parent's surface the same way
+    if ( m_scrollbarVert && m_scrollbarHorz )
+    {
+        if ( !m_scrollbarCorner )
+        {
+            ibWindow * const corner = new ibWindow(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
+            corner->DisableFocusFromKeyboard();
+            corner->Bind(wxEVT_PAINT, [corner](wxPaintEvent&)
+            {
+                ibThemePaintDC dc(corner);
+                corner->GetRenderer()->DrawScrollCorner(dc, wxRect(corner->GetClientSize()));
+            });
+            m_scrollbarCorner = corner;
+        }
+
+        wxRect rectCorner(rectFrame.x + size.x - width, rectFrame.y + size.y - height, width, height);
+        if ( inside )
+            rectCorner.Offset(-rectBorder.width, -rectBorder.height);
+        m_scrollbarCorner->SetSize(rectCorner, wxSIZE_NO_ADJUSTMENTS);
+        m_scrollbarCorner->Show();
+    }
+    else if ( m_scrollbarCorner )
+        m_scrollbarCorner->Hide();
+
     if ( (m_scrollbarVert && m_scrollbarVert->GetRect() != placedVert) ||
          (m_scrollbarHorz && m_scrollbarHorz->GetRect() != placedHorz) )
         RefreshScrollbars();
@@ -1004,6 +1017,17 @@ void ibWindow::SetScrollbar(int orient,
         }
 
         scrollbar->SetScrollbar(pos, pageSize, range, pageSize, refresh);
+
+        // SEAM vs univ: the scrollbar stands over the window's other children - it is one of them, in the same window,
+        // and a child reaching past the client area covered it: a form narrower than its fields showed them cut at its
+        // edge, the scrollbars under them and the horizontal one not at all (2026-11-13, Max: "when an element does not
+        // fit"). On MSW a window made later goes under the ones before it, and this scrollbar is made when the content
+        // outgrows the window - after the fields; on GTK3/Cocoa a later one goes over, a field added after the
+        // scrollbar. Asked at every layout of the scrolled content, which is where both happen - the corner between the
+        // scrollbars with it (PositionScrollbars)
+        scrollbar->Raise();
+        if ( m_scrollbarCorner )
+            m_scrollbarCorner->Raise();
     }
     else // no range means no scrollbar
     {
@@ -1136,7 +1160,7 @@ void ibWindow::ScrollWindow(int dx, int dy, const wxRect *rect)
     {
         wxWindow *child = node->GetData();
 #if wxUSE_SCROLLBAR
-        if ( child == m_scrollbarVert || child == m_scrollbarHorz )
+        if ( child == m_scrollbarVert || child == m_scrollbarHorz || child == m_scrollbarCorner )
             continue;
 #endif // wxUSE_SCROLLBAR
 
@@ -1218,7 +1242,13 @@ WXLRESULT ibWindow::MSWWindowProc(WXUINT message, WXWPARAM wParam, WXLPARAM lPar
 WXDWORD ibWindow::MSWGetStyle(long flags, WXDWORD *exstyle) const
 {
     flags &= ~(wxBORDER_MASK | wxVSCROLL | wxHSCROLL);
-    return wxWindow::MSWGetStyle(flags | wxBORDER_NONE, exstyle);
+    WXDWORD style = wxWindow::MSWGetStyle(flags | wxBORDER_NONE, exstyle);
+    // ...and a window inside one that scrolls by scrollbars of its own is clipped by them: they are its siblings
+    // standing over it (SetScrollbar), and without WS_CLIPSIBLINGS - which wxMSW never sets, overlapping children not
+    // being supported - a window paints over a sibling above it all the same
+    if ( GetParent() != nullptr && GetParent()->HasFlag(wxVSCROLL | wxHSCROLL) )
+        style |= WS_CLIPSIBLINGS;
+    return style;
 }
 
 #endif // __WXMSW__

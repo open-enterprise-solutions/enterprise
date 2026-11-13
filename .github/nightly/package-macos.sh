@@ -61,7 +61,11 @@ fix_rpath() {
     esac
   done < <(rpaths_of "$f")
   for want in "$@"; do
-    if ! rpaths_of "$f" | grep -qxF "$want"; then
+    # The list is read whole, then searched — never piped into `grep -q`: it stops at the first match, the awk
+    # still writing behind it fails on the closed pipe, and under pipefail the rpath that IS there read as
+    # missing and was added twice, which install_name_tool refuses (the nightly of 2026-11-13, once a second
+    # `_fb` entry stood after the first). The same below for isql.
+    if ! grep -qxF "$want" <<< "$(rpaths_of "$f")"; then
       install_name_tool -add_rpath "$want" "$f"
     fi
   done
@@ -139,7 +143,7 @@ done < <(find "$stage" -type f -print0)
 smoke_dir="$(mktemp -d)"
 mkdir -p "$stage/_fb/bin"
 cp -a fb5pkg/Firebird.pkg/Payload/Versions/A/Resources/bin/isql "$stage/_fb/bin/isql"
-if ! otool -l "$stage/_fb/bin/isql" | grep -q "@executable_path/.."; then
+if ! grep -q "@executable_path/.." <<< "$(otool -l "$stage/_fb/bin/isql")"; then
   install_name_tool -add_rpath '@executable_path/..' "$stage/_fb/bin/isql" 2>/dev/null || true
   codesign --force --sign - "$stage/_fb/bin/isql"
 fi

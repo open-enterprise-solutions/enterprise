@@ -59,7 +59,9 @@ for f in "$stage"/enterprise-thin "$stage"/designer-thin "$stage"/launcher "$sta
          "$stage"/appcluster "$stage"/appcluster-tray "$stage"/webserver \
          "$stage"/libcore.so "$stage"/libbackend.so "$stage"/libprotocol.so "$stage"/libdeskgui.so "$stage"/libfrmclient.so \
          "$stage"/libfrmserver.so "$stage"/libfileserver.so "$stage"/_fb/lib/libfbclient.so.2 "$stage"/_fb/plugins/libEngine13.so "$stage"/_fb/intl/fbintl; do
-  if env -u LD_LIBRARY_PATH ldd "$f" | grep -q 'not found'; then
+  # Read whole, then searched: piped into `grep -q`, which stops at the first match, ldd still writing behind
+  # it fails on the closed pipe, and under pipefail a library NOT found read as found (package-macos.sh, 2026-11-13)
+  if grep -q 'not found' <<< "$(env -u LD_LIBRARY_PATH ldd "$f")"; then
     echo "::error::$(basename "$f") has unresolved libraries:"
     env -u LD_LIBRARY_PATH ldd "$f" | grep 'not found'
     unresolved=1
