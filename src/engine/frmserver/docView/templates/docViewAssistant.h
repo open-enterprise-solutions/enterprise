@@ -39,7 +39,6 @@ private:
 
 	ibAssistantTranscriptDocument(const ibAssistantTranscriptDocument&) = delete;
 	ibAssistantTranscriptDocument& operator=(const ibAssistantTranscriptDocument&) = delete;
-	wxDECLARE_DYNAMIC_CLASS(ibAssistantTranscriptDocument);
 };
 
 // ⭐ THE VIEW IS THE NOTIFIER. The desktop's kept a small one apart, for its widgets, which a call in flight could find
@@ -76,8 +75,6 @@ private:
 	std::vector<ibString> m_transcript;
 	// ⭐ WAITING IS A STATE — from Send until an answer lands; the answer is what ends it, never a timeout.
 	bool m_waiting = false;
-
-	wxDECLARE_DYNAMIC_CLASS(ibAssistantTranscriptView);
 };
 
 #endif

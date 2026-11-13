@@ -10,6 +10,7 @@
 // =============================================================================
 
 #include <gtest/gtest.h>
+#include <wx/string.h>   // wxT, wxNOT_FOUND — the core includes no wx
 #include "core/compiler/blockSyntaxLINQ.h"
 #include "core/compiler/codeDef.h"
 

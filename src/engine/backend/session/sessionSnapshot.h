@@ -18,8 +18,6 @@
 #include <vector>
 #include <string>
 
-#include <wx/string.h>
-
 // Forward-declared so the header stays independent of session.h —
 // frontend / admin-UI code reads the snapshot without pulling the full
 // session-registry API. Underlying type pinned to `int` to match the
@@ -56,7 +54,7 @@ class BACKEND_API ibSessionSnapshot {
 
 public:
 
-	ibSessionSnapshot() : m_sessionArrayHash(wxNewUniqueGuid) {}
+	ibSessionSnapshot() : m_sessionArrayHash(ibNewUniqueGuid) {}
 
 	void AppendSession(ibRunMode runMode, int kind, const ibDateTime& startedTime,
 		const ibString& strUserName, const ibString& strComputerName, const ibString& strSession) {
@@ -74,7 +72,7 @@ public:
 	ibString GetActivity    (unsigned int idx) const;
 
 	void ClearSession() {
-		m_sessionArrayHash = wxNewUniqueGuid;
+		m_sessionArrayHash = ibNewUniqueGuid;
 		m_listSession.clear();
 	}
 

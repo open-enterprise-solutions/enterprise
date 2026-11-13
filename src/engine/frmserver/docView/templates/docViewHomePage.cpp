@@ -17,9 +17,6 @@
 #include "backend/backend_exception.h"                     // ibBackendException — a cell that fails must not take the page down
 #include "backend/backend_picture.h"                       // ibBackendPicture::SendPicture — the page's icon, by its id
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibHomePageDocument, ibDocument);
-wxIMPLEMENT_DYNAMIC_CLASS(ibHomePageView, ibView);
-
 //********************************************************************************************
 //*                                       Document                                           *
 //********************************************************************************************
@@ -260,7 +257,7 @@ ibValuePtr<ibValueForm> ibHomePageView::CreateFormValue(const ibValueMetaObjectF
 	// the menu would merely activate the page's copy — a cell, so nothing would appear. It is also what lets the
 	// same form sit on the page twice. Nothing outside the page is affected: an object still finds ITS form by
 	// source (ibValueRecordDataObject::GetForm).
-	ibFormRequest request(ibString(), wxNewUniqueGuid);
+	ibFormRequest request(ibString(), ibNewUniqueGuid);
 
 	// ⭐ A REPORT ON THE PAGE IS READ ALREADY BUILT: nobody opened it to set its parameters first, and a page of
 	// empty reports with a Compose button each is a page that shows nothing.
@@ -282,7 +279,7 @@ ibValuePtr<ibValueForm> ibHomePageView::CreateFormValue(const ibValueMetaObjectF
 	return ibValuePtr<ibValueForm>(backendForm);
 }
 
-void ibHomePageView::OnUpdate(ibView* /*sender*/, wxObject* /*hint*/)
+void ibHomePageView::OnUpdate(ibView* /*sender*/)
 {
 	for (std::vector<ibHomePageCell>& column : m_columns) {
 		for (ibHomePageCell& cell : column) {

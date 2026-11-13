@@ -15,11 +15,11 @@
 #include "backend/appHost.h"
 #include "backend/rpc/rpcMessage.h"
 #include "clientListener.h"
+#include "core/fileConfig.h"
 #include "core/serialize/dataBuilder.h"
 #include "frmserver/client/clientHost.h"
 
 #include <wx/file.h>
-#include <wx/fileconf.h>
 #include <wx/filefn.h>
 #include <wx/filename.h>
 #include <wx/init.h>
@@ -220,7 +220,7 @@ struct RestoreHost {
 
 TEST(ClientConnections, AbsentOrZeroMeansOneThousand) {
 	WxReady();
-	wxFileConfig empty(wxT(""), wxT(""), wxT(""), wxT(""));
+	const ibFileConfig empty{ ibString() };
 	EXPECT_EQ(ibApplicationHost::ReadCount(empty, wxT("backend.conf"), wxT("ClientConnections"), 1, 1000),
 		static_cast<std::size_t>(1000));
 
@@ -231,7 +231,7 @@ TEST(ClientConnections, AbsentOrZeroMeansOneThousand) {
 		ASSERT_TRUE(file.Create(path, true));
 		ASSERT_TRUE(file.Write(ibString(wxT("ClientConnections=40\n"))));
 	}
-	wxFileConfig forty(wxT(""), wxT(""), wxT(""), path);
+	const ibFileConfig forty(path);
 	EXPECT_EQ(ibApplicationHost::ReadCount(forty, wxT("backend.conf"), wxT("ClientConnections"), 1, 1000),
 		static_cast<std::size_t>(40));
 	wxRemoveFile(path);
@@ -241,7 +241,7 @@ TEST(ClientConnections, AbsentOrZeroMeansOneThousand) {
 		ASSERT_TRUE(file.Create(path, true));
 		ASSERT_TRUE(file.Write(ibString(wxT("ClientConnections=0\n"))));
 	}
-	wxFileConfig zero(wxT(""), wxT(""), wxT(""), path);
+	const ibFileConfig zero(path);
 	EXPECT_EQ(ibApplicationHost::ReadCount(zero, wxT("backend.conf"), wxT("ClientConnections"), 1, 1000),
 		static_cast<std::size_t>(1000));
 	wxRemoveFile(path);

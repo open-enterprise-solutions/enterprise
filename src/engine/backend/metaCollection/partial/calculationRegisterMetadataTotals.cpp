@@ -755,7 +755,7 @@ const ibValueMetaObjectCalculationRegister* ibCalcBaseRegisterOf(const ibValueMe
 	const ibString& path, ibString& field)
 {
 	const int dot = path.Find(ibT('.'));
-	if (dot == wxNOT_FOUND)
+	if (dot == ibNOT_FOUND)
 		ibBackendCoreException::Error(_("GetBase: '%s' is not written as 'Register.Field'"), path);
 	const ibString name = path.Left(dot);
 	field = path.Mid(dot + 1);

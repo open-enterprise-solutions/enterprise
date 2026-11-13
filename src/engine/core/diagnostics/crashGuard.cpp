@@ -16,6 +16,9 @@
 #include <cstring>
 #include <exception>
 #include <mutex>
+#include <set>          // ibAssertFailure - the places already said
+#include <string>
+#include <utility>
 
 #ifdef __IBMSW__
 #include <windows.h>
@@ -422,6 +425,17 @@ void LogUnhandledException(const ibString& exeName, const ibString& diag)
 		ibDateTime::Now().Format(ibT("%Y-%m-%dT%H:%M:%S")) + ibT("  ") + diag + ibT("\n"));
 }
 
+namespace {
+
+std::atomic<ibAssertHandler> s_assertHandler{ nullptr };
+
+} // namespace
+
+ibAssertHandler SetAssertHandler(ibAssertHandler handler)
+{
+	return s_assertHandler.exchange(handler);
+}
+
 void PlatformNativeMessage(const ibString& caption, const ibString& message)
 {
 #ifdef __IBMSW__
@@ -545,3 +559,31 @@ ibString GetCrashDir()
 }
 
 } // namespace ibCrashGuard
+
+void ibAssertFailure(const char* file, int line, const char* func, const char* cond, const ibString& msg)
+{
+	// once per place: the hundredth copy of a line carries nothing the first did not
+	static std::mutex s_mutex;
+	static std::set<std::pair<std::string, int>> s_seen;
+	{
+		std::lock_guard<std::mutex> lock(s_mutex);
+		if (!s_seen.emplace(file != nullptr ? file : "?", line).second)
+			return;
+	}
+
+	ibString where = ibString::Format(ibT("%s:%d"), ibString(file != nullptr ? file : "?"), line);
+	if (func != nullptr && *func != '\0')
+		where += ibT(" [in ") + ibString(func) + ibT("]");
+	const ibString condition = cond != nullptr ? ibString(cond) : ibString(ibT("(no condition)"));
+
+	if (const ibCrashGuard::ibAssertHandler handler = ibCrashGuard::s_assertHandler.load()) {
+		handler(where, condition, msg);
+		return;
+	}
+
+	// the place things are said - at Info, which reaches the file and not the screen; and stderr, for one that fails
+	// before the journal is open
+	const ibString what = msg.IsEmpty() ? condition : condition + ibT(" -- ") + msg;
+	ibJournalInfo(ibT("assert"), ibT("%s: %s"), where, what);
+	std::fprintf(stderr, "OES assert %s: %s\n", where.ToUTF8().c_str(), what.ToUTF8().c_str());
+}

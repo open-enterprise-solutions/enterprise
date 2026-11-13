@@ -42,7 +42,7 @@ ibProtocol::ibSchema::ibStyle::ibTheme ibSchemaStyle::ReadTheme(const ibSession&
 	ibProtocol::ibSchema::ibStyle::ibTheme theme = ibProtocol::ibSchema::ibStyle::ibTheme::System;
 	const ibSettingsStorage* const storage = ibApplicationInstance::GetSettingsStorage(session.GetApplicationInstance());
 	ibDataNode row;
-	if (storage == nullptr || !storage->Restore(ibUserSettingsKey(ibSettingsCategory::Style, StyleObject(), wxNullGuid,
+	if (storage == nullptr || !storage->Restore(ibUserSettingsKey(ibSettingsCategory::Style, StyleObject(), ibNullGuid,
 		&session.GetUserInfo()), row))
 		return theme;
 	// A row whose value is no theme - a number a later build wrote, or no number at all - is read as the system's, not
@@ -83,7 +83,7 @@ std::function<void()> ibSchemaStyle::Command(const ibSession& session, std::int3
 	// not a frame answered as if it had. Nothing is left for the work to do but to answer the frame.
 	ibDataNode row;
 	row.SetValue(ibProtocol::ibSchema::ibStyle::Theme, static_cast<std::int32_t>(theme));
-	if (!storage->Save(ibUserSettingsKey(ibSettingsCategory::Style, StyleObject(), wxNullGuid, &session.GetUserInfo()), row)) {
+	if (!storage->Save(ibUserSettingsKey(ibSettingsCategory::Style, StyleObject(), ibNullGuid, &session.GetUserInfo()), row)) {
 		refusal = ibProtocol::ibRefusal::Exception;
 		error = _("The theme could not be kept");
 		return nullptr;

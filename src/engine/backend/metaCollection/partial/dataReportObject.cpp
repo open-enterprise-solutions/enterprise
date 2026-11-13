@@ -87,7 +87,7 @@ ibValueDataComposition* ibValueRecordDataObjectReport::GetDefaultComposition() c
 		return nullptr;
 
 	const ibMetaID defaultId = metaObject->GetDefComposer();
-	return defaultId != wxNOT_FOUND ? GetComposition(defaultId) : nullptr;
+	return defaultId != ibNOT_FOUND ? GetComposition(defaultId) : nullptr;
 }
 
 //*********************************************************************************************

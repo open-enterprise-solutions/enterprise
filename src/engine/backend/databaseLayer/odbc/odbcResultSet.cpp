@@ -8,6 +8,8 @@
 #include "backend/databaseLayer/databaseLayerException.h"
 #include "backend/databaseLayer/databaseErrorCodes.h"
 
+#include <cstring>
+
 #define ODBC_FIELD_NAME_LEN 71
 
 // ctor

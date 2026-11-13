@@ -28,7 +28,7 @@ public:
 	{
 		ibValueMetaObject* parent =
 			static_cast<ibValueMetaObject*>(m_owner);
-		wxASSERT(parent);
+		ibASSERT(parent);
 		m_metaObject = parent->CreateMetaObjectAndSetParent<T>(args...);
 		m_propHelp = m_metaObject->GetComment();   // a third argument is the module's comment, and the property's help
 	}

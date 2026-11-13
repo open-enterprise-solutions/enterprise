@@ -1,11 +1,10 @@
 #include "backend_picture.h"
 
+#include <fstream>
 #include <map>
 #include <mutex>
 
-#include <wx/file.h>
-#include <wx/filename.h>
-
+#include "core/fileSystem.h"                // ibFileExists, ibPathOf - a picture's file
 #include "core/serialize/dataBuilder.h"     // ibDataValue — a picture as an answer names it
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,23 +33,25 @@ bool ibBackendPictureDescriptionMemory::ReadNode(const ibDataValue& value, ibPic
 
 bool ibBackendPicture::LoadFromFile(const ibString& strFileName, ibExternalPictureDescription& pictureDesc)
 {
-	const wxFileName filename(strFileName);
-	if (!filename.FileExists())
+	if (!ibFileExists(strFileName))
 		return false;
 
-	wxFile file(filename.GetFullPath());
-	const wxFileOffset length = file.IsOpened() ? file.Length() : wxInvalidOffset;
+	std::filesystem::path path = ibPathOf(strFileName);
+	std::ifstream file(path, std::ios::binary);
+	file.seekg(0, std::ios::end);
+	const std::streamoff length = file ? static_cast<std::streamoff>(file.tellg()) : -1;
 	if (length <= 0)
 		return false;
+	file.seekg(0, std::ios::beg);
 	std::string bytes(static_cast<size_t>(length), '\0');
-	if (file.Read(bytes.data(), bytes.size()) != static_cast<ssize_t>(bytes.size()))
+	if (!file.read(bytes.data(), static_cast<std::streamsize>(bytes.size())))
 		return false;
 
 	const ibSize size = ibPicture(ibMemoryBuffer(bytes.data(), bytes.size())).GetSize();
 	if (size.m_width <= 0 || size.m_height <= 0)
 		return false;
 
-	pictureDesc.m_img_name = filename.GetFullPath();
+	pictureDesc.m_img_name = ibString(path.make_preferred().wstring()).ToUtf8();   // the separators this system writes, as wxFileName did
 	pictureDesc.m_img_buffer = std::move(bytes);
 	pictureDesc.m_width = size.m_width;
 	pictureDesc.m_height = size.m_height;

@@ -118,7 +118,7 @@ ibFormAttributeValue* ibValueForm::AddAttribute(const ibString& name, const ibCl
 
 ibFormAttributeValue* ibValueForm::AddAttribute(const ibString& name, const ibTypeDescription& typeDesc)
 {
-	if (name.IsEmpty() || stringUtils::CheckCorrectName(name) != wxNOT_FOUND || (name[0] >= ibT('0') && name[0] <= ibT('9'))) {
+	if (name.IsEmpty() || stringUtils::CheckCorrectName(name) != ibNOT_FOUND || (name[0] >= ibT('0') && name[0] <= ibT('9'))) {
 		ibBackendCoreException::Error(_("'%s' cannot be the name of a form attribute: it takes letters, digits and "
 			"the symbol \"_\", and does not start with a digit"), name);
 		return nullptr;
@@ -148,7 +148,7 @@ ibMetaID ibValueForm::AddAutoAttribute(const ibString& name, const ibTypeDescrip
 	for (unsigned int index = 0; GetAttribute(uniqueName) != nullptr; )
 		uniqueName = ibString::Format(ibT("%s%u"), name, ++index);
 	ibFormAttributeValue* entry = AddAttribute(uniqueName, typeDesc.GetFirstClsid(), ibValue());
-	return entry != nullptr ? entry->GetId() : ibMetaID(wxNOT_FOUND);
+	return entry != nullptr ? entry->GetId() : ibMetaID(ibNOT_FOUND);
 }
 
 ibValuePtr<ibFormAttributeValue> ibValueForm::MakeAttribute(const ibString& name, const ibClassID& type, const ibValue& value)
@@ -195,7 +195,7 @@ ibValuePtr<ibFormAttributeValue> ibValueForm::DetachAttribute(ibFormAttributeVal
 
 ibFormAttributeValue* ibValueForm::AddMainAttribute(const ibString& name, const ibClassID& type, ibSourceDataObject* value)
 {
-	wxASSERT(GetMainAttribute() == nullptr);   // only ONE main per form
+	ibASSERT(GetMainAttribute() == nullptr);   // only ONE main per form
 
 	// Order matters: id + name + MAIN flag + register + SEAT THE SOURCE, and only THEN set the Type.
 	// A form with no creator (auto-built list form) resolves its metadata THROUGH the source object;

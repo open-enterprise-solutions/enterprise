@@ -58,7 +58,7 @@ struct ibUserRoleEntry {
 
 	bool IsUnion() const { return m_mode == ibRoleCompositionMode_Union; }
 
-	ibRoleID m_id = wxNOT_FOUND;
+	ibRoleID m_id = ibNOT_FOUND;
 	ibRoleCompositionMode m_mode = ibRoleCompositionMode_Union;
 };
 

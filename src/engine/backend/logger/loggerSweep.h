@@ -3,8 +3,6 @@
 
 #include "backend/backend.h"
 
-#include <wx/string.h>
-
 // Retention sweep — deletes .olg files in `dir` whose month bucket
 // ends before (now - retentionDays). Idempotent; safe to call
 // concurrently with the live writer (the writer holds the current

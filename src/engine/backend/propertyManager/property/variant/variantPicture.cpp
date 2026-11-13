@@ -1,14 +1,13 @@
 #include "variantPicture.h"
 
-#include <wx/filename.h>
+#include "core/fileSystem.h"   // ibPathOf - the file's name without its folder
 
 ibString ibVariantExternalPicture::GetString() const
 {
 	if (IsEmptyPicture())
 		return ibEmptyString;
 
-	wxFileName fn(m_pictureExternalFile.m_img_name);
-	return fn.GetFullName();
+	return ibString(ibPathOf(GetPictureFileName()).filename().wstring());
 }
 
 ibString ibVariantExternalPicture::GetPictureFileName() const

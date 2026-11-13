@@ -126,11 +126,11 @@ enterprise/
     └── engine/
         ├── core/            # core.dll     — shared meanings under backend and frmclient: ids, ibString/ibNumber/
         │                    #   ibDateTime/ibGuid, fileSystem, serialize (dataBuilder, JSON), ibCoreException,
-        │                    #   ibLocalization, build stamp; wx base only
+        │                    #   ibLocalization, build stamp; no wx
         ├── backend/         # backend.dll  — engine, compiler, DB, metadata, debugger; links core
         ├── protocol/        # protocol.dll — the client protocol: protocol.h (names/numbers, no deps; the designer's messages in protocolDesigner.h) + the talking side
         ├── frmserver/       # frmserver.dll — server-side forms, the client host; includes protocol.h only
-        ├── deskgui/         # deskgui.dll — the desktop's user interface: the root is the API (deskgui.h, typeconv, dateconv); docview/
+        ├── deskgui/         # deskgui.dll — the desktop's user interface: the root is the API (deskgui.h, app — the desktop program's base `ibWxApp`, console — the servers' boot, header-only, typeconv, dateconv, strvararg — an ibString in wx's varargs); docview/
         │                    #   the doc/view; univ/ the custom-drawn engine and all that inherits it (ctrl, dataview, grid, theme); links core
         ├── frmclient/       # frmclient.dll — the thin client's graphics library and its communicator; links core, protocol, deskgui
         ├── fileserver/      # fileserver.dll — a file base loaded into the thin client's process
@@ -169,7 +169,7 @@ The payload is ONE union word: `bool` / date / reference / `ibString m_sData` / 
 - Heap tier: `BigImpl { std::vector<uint32_t> limbs; bool negative; int32_t exp; }` — exact decimal, magnitude grows by demand. Supports 200+ fractional digits (high-precision decimal). It lives in a counted `SharedBig` block: copies share it, and a write goes in place only when the number holds it alone.
 - Self-contained: no ttmath dependency. Schoolbook Add/Sub/Mul + base-2 long-division Div live in `fnumber.cpp`. MSVC x86/x64 use `_addcarry_u32`/`_subborrow_u32` intrinsics; portable fallback elsewhere.
 - **Immediate fast paths.** `*` / `/` and `Compare` short-circuit two immediate-INTEGER operands (`exp10 == 0`) through a single `int64` op — no `BigImpl`, no `10^30` inflate, no long division — via the private `TryImmInts` gate. `+` / `-` (`+=` / `-=`) go further, through `TryImmAligned`: two immediate operands are aligned to the smaller exponent (integers are the case where it is 0) and added as `int64`, so money arithmetic — `SUM(Amount)` over a register, `1518500.00 + 17000.00` — no longer drops to `BigImpl` either (2026-09-12). Every fast path fires only when the result fits immediate (and, for `/`, the division is exact), so the value is exactly the one the `BigImpl` path computes; exactness is preserved. Common arithmetic / comparison is a few ns; non-exact decimal division still pays the full exact long-division cost (inherent, not a regression). ⚠ Build a zero with the default constructor, not `0.00`: `ibNumber(double)` prints the double and parses the text back to be exact about it, which on a per-cell path is the whole cost of the read (the Firebird `GetResultNumber` did exactly that until 2026-09-12).
-- Buffer / wire: `wxMemoryBuffer GetBuffer()` plus `bool GetBuffer(ibWriterMemory&)` / `bool SetBuffer(const ibReaderMemory&)` — chunk-encapsulated I/O with internal `kIbNumberChunk` ID. Compact-zero encoding: zero produces 0-byte buffer, no allocation.
+- Buffer / wire: `ibMemoryBuffer GetBuffer()` plus `bool GetBuffer(ibWriterMemory&)` / `bool SetBuffer(const ibReaderMemory&)` — chunk-encapsulated I/O with internal `kIbNumberChunk` ID. Compact-zero encoding: zero produces 0-byte buffer, no allocation.
 - 128-bit raw: `To128Bytes(uint8_t[16])` / `From128Bytes` for Firebird SQL_INT128 columns.
 - Tests: `enterprise/tests/test_number.cpp` (gtest). Micro-benchmarks (DISABLED by default) live in `enterprise/tests/bench_runtime.cpp` — `RuntimeBench` (interpreter) / `NumberBench` (ibNumber) / `ParserBench` (compile), each printed next to a native-C++ baseline. Build Release and run:
   `oes_tests --gtest_also_run_disabled_tests --gtest_filter=*Bench*`.
@@ -184,10 +184,19 @@ The compiler is a single-pass recursive descent parser with a deferred-call-reso
 
 `backend.dll` has zero UI code. The wxWidgets GUI is the clients': `frmclient.dll` under `enterprise-thin` and `designer-thin`, `launcher` and `codeRunner` on `deskgui.dll` (the desktop's user interface library, which frmclient places too; codeRunner's window is its frame, `ibFrame`). The forms are `frmserver.dll`'s, which reaches the engine through abstract C++ interfaces exported by `backend.dll` and a client through the protocol. This allows the backend to run headless (daemon, codeRunner, service mode).
 
-Under both sits **`core.dll`** (`src/engine/core/`, `CORE_API` / `CORE_EXPORTS` and the platform `__IBMSW__` / `__IBOSX__` / `__IBGTK__` in `coreApi.h`; its text is `ibString` throughout — UTF-16, `ibChar` = `char16_t` on every OS, `wc_str()` its one wide boundary — and of wx it keeps the base for `ibString`'s conversion, `_()`, `wxFileConfig`, zip and zlib): what the engine and its clients mean by the same words — ids and `ibValueTypes` (`core/types.h`), `ibVariant` (`core/variant.h`, the one value type: a primitive or a counted reference, its lifecycle, serialization and compare, no base, no factory — the engine's `ibValue` adds the runtime and the factory, the thin client's a small factory; `ibVariantPtr<T>` in `core/variant_ptr.h`), `clsid.h`, `ibString` (+ pool), `ibNumber`, `ibDateTime`, `ibGuid`, `ibFormatString`, `fileSystem/` (`ibReader`/`ibWriter`, lz), `serialize/` (`ibDataNode`, the binary provider; `provider/` — JSON, XML, files), `json/` and `xml/` (the formats' text), `ibCoreException`, `ibLocalization`, `diagnostics/` (the technology journal — one per process — and the crash guard), `description/` (the schemas both sides share — source path, command path, calc schedule, choice link, home page; ids and nodes, never a value), `query/` (the query language's words: keywords, scalar calls, unfold, balance role), `graphics/` (`ibPicture`, `ibFont`, `ibColour`, `ibPoint`/`ibSize`/`ibRect` — data; the conversion to wx is each side's), `ibProgramFolder` (`fileSystem.h` — where `backend.conf`, `lang/`, `plugins/`, `_fb/` and the other programs are looked for: the executable's folder, or on macOS the one that holds the `.app`, never `Contents/MacOS`) and `ibDiagnosticFolder` (where the journal, the dumps and `oes-debug.log` go: the same folder, except `~/Library/Logs/OES` for a program running from a macOS bundle), `GetBuildId`/`GetBuildStamp`. It reads no base, runs no script, draws no window.
+Under both sits **`core.dll`** (`src/engine/core/`, `CORE_API` / `CORE_EXPORTS` and the platform `__IBMSW__` / `__IBOSX__` / `__IBGTK__` in `coreApi.h`; its text is `ibString` throughout — UTF-16, `ibChar` = `char16_t` on every OS, `wc_str()` its one wide boundary — and of wx it includes nothing: `ibString`'s and `ibVariant`'s conversion to and from `wxString` is templates over a declared `wxString`, made only in a program that includes wx (`fstring.h`), and the programs' wx side is the desktop library's, header-only (`deskgui/app.h`, `deskgui/console.h` — a server includes the second and links no deskgui); its encodings are `ibCodePage` (`core/codePage.h`), its zip `ibZipReader` / `ibZipWriter` (`core/zip/zip.h` — a format, beside `json/` and `xml/`), its `.conf` files `ibFileConfig`, its zlib wx's bundled build on Windows and the system's elsewhere): what the engine and its clients mean by the same words — ids and `ibValueTypes` (`core/types.h`), `ibVariant` (`core/variant.h`, the one value type: a primitive or a counted reference, its lifecycle, serialization and compare, no base, no factory — the engine's `ibValue` adds the runtime and the factory, the thin client's a small factory; `ibVariantPtr<T>` in `core/variant_ptr.h`), `clsid.h`, `ibString` (+ pool), `ibNumber`, `ibDateTime`, `ibGuid`, `ibFormatString`, `fileSystem/` (`ibReader`/`ibWriter`, lz), `serialize/` (`ibDataNode`, the binary provider; `provider/` — JSON, XML, files), `json/` and `xml/` (the formats' text), `ibCoreException`, `localization/` (`ibLocalization`, `ibDictionary` — the engine's `_()`, the process locale `locale.h`), `system.h` (the machine: host, user, system, environment, command line), `diagnostics/` (the technology journal — one per process, wx chained in by the program — and the crash guard), `description/` (the schemas both sides share — source path, command path, calc schedule, choice link, home page; ids and nodes, never a value), `query/` (the query language's words: keywords, scalar calls, unfold, balance role), `graphics/` (`ibPicture`, `ibFont`, `ibColour`, `ibPoint`/`ibSize`/`ibRect` — data; the conversion to wx is each side's), `ibProgramFolder` (`fileSystem.h` — where `backend.conf`, `lang/`, `plugins/`, `_fb/` and the other programs are looked for: the executable's folder, or on macOS the one that holds the `.app`, never `Contents/MacOS`) and `ibDiagnosticFolder` (where the journal, the dumps and `oes-debug.log` go: the same folder, except `~/Library/Logs/OES` for a program running from a macOS bundle), `GetBuildId`/`GetBuildStamp`. It reads no base, runs no script, draws no window.
 
 - Chain: core → backend → frmserver ⇄ protocol ⇄ frmclient → enterprise-thin; fileserver = backend + frmserver inside the client process.
 - backend links core PUBLIC; every project that links `backend.lib` also links `core.lib`; protocol links core; deskgui links core; frmclient links core + protocol + deskgui. `protocol.h` itself stays dependency-free.
+- The code of backend, frmserver, protocol and fileserver names no wx — no type, macro or header (a comment may still
+  name the wx call a line replaced), and they link no wx: `ibString` ⇄ `wxString` is templates in `core/fstring.h`,
+  made only where a program includes wx; called on the server it is a compile error. What they took from wx is the core's: `ibNOT_FOUND`, `ibASSERT` / `ibFAIL_MSG`
+  (`coreApi.h`), `ibRegEx` (`core/regEx.h`, over `std::wregex`), `ibON_BLOCK_EXIT_SET` / `ibON_BLOCK_EXIT_NULL`
+  (`core/scopeGuard.h`), a sizer's `ibAlignment` / `ibOrientation` / `ibStretch` / `ibDirection`
+  (`core/graphics/geometry.h`, wx's numbers); a message box's buttons and icon are `ibProtocol::ibRequest::ibMessage::ibStyle`.
+  frmserver's doc/view (`frmserver/docView/`) has no wx RTTI: a template holds its document class's `std::type_index`
+  and two functions that make the document and its view (`ibDocManager::AddDocTemplate<TDoc, TView>`,
+  `FindTemplate(const std::type_index&)`).
 - Not in core: `typeconv` (fonts/colours — `deskgui/typeconv.h`), frmclient's `dataProtocol` seam, a value's storage.
 - Same class names as before the move; `backend/backend_core.h` includes the core headers (it is the remnant of the engine's original "core"). frmclient's `backend/backend_core.h` / `backend.h` / `backend_exception.h` are facades that include core.
 
@@ -210,7 +219,7 @@ wrong catches `ibCoreException`; the script runtime's `Try` meets a core refusal
 `ibBackendCoreException` (same `ProcessError` path).
 
 Since it derives, **handler order is required, not preferred**: derived before base
-(`ibBackendException` before `ibCoreException` before `std::exception`), always. And the description is DATA — `wxLogError(wxT("%s"), …)`,
+(`ibBackendException` before `ibCoreException` before `std::exception`), always. And the description is DATA — `ibJournalError(source, ibT("%s"), …)`,
 never as the format string. Full rules: [docs/private/exceptions.md](docs/private/exceptions.md).
 
 ```cpp
@@ -220,7 +229,7 @@ throw ibBackendInterruptException();
 
 // catch (generic)
 catch (const ibBackendException& err) {
-    wxLogMessage(err.GetErrorDescription());
+    ibJournalInfo(ibT("source"), ibT("%s"), err.GetErrorDescription());
     // rethrow (same in-flight object, preserves m_errorHandled):
     throw;
 }
@@ -236,7 +245,7 @@ propagate the same exception object.
 
 ### 6. Metadata CLSID System
 
-Every class in the metadata and value system is identified by an `ibClassID` (`unsigned wxLongLong_t`, 64-bit). It is **KIND-TYPED**: the high byte is a class KIND (`ibClassKind` enum in `clsid.h`), the low 56 bits are the body. This lets stateless helpers — `IsReference(clsid)` / `IsObject` / `IsManager` / `IsEnum` / `IsControl` / `IsMetadata` / … — read a class's kind straight from the id, with **no `ibMetaData` lookup** (used heavily by L3 to classify columns by bit instead of pulling the metadata).
+Every class in the metadata and value system is identified by an `ibClassID` (`uint64_t`). It is **KIND-TYPED**: the high byte is a class KIND (`ibClassKind` enum in `clsid.h`), the low 56 bits are the body. This lets stateless helpers — `IsReference(clsid)` / `IsObject` / `IsManager` / `IsEnum` / `IsControl` / `IsMetadata` / … — read a class's kind straight from the id, with **no `ibMetaData` lookup** (used heavily by L3 to classify columns by bit instead of pulling the metadata).
 
 - **Static types**: body = `ib_clsid_hash(name)` (FNV-1a 64) masked to 56 bits; kind = the **registrar** (the `*_TYPE_REGISTER` macro family — `metadata_to_clsid` / `value_to_clsid` / `control_to_clsid` / `system_to_clsid` / `enum_to_clsid` / `context_to_clsid` / `primitive_to_clsid` / `picture_to_clsid`). The kind comes from WHERE a type is registered, **never** from the string prefix (a `"VL_TVROW"` registered via `SYSTEM_TYPE_REGISTER` is System-kinded). The legacy `"XX_YYY"` string is kept only as an opaque unique KEY for the body; PascalCase names (`"Catalog"`, `"Number"`, `"Button"`) feed the 2-arg macro form (clsid = `<kind>_to_clsid(hash(name))`).
 - **Dynamic metaobject values**: body = the **metaID itself** (constructive, no hash → `(kind, metaID)` unique BY CONSTRUCTION); kind = the metatype (`reference_to_clsid(metaID)` / `object_to_clsid` / `manager_to_clsid` / `list_to_clsid` / … / `externalObject_to_clsid`, mirroring `ibCtorObjectMetaType`). The old `"R_42"` name-hash grammar is gone.
@@ -630,10 +639,11 @@ See `docs/private/eval-scope-refactor.md` for the full architecture.
 
 ## What Not To Do
 
-- Do not add `#include` for wxWidgets GUI headers in `core.dll` / `protocol.dll` / `backend.dll` / `frmserver.dll`
-  source files — they are compiled with `wxUSE_GUI=0` and link wx base only; a picture, a colour, a font there is the
-  core's data (`core/graphics`)
-- Do not give `core.dll` anything beyond wx base: no wx core/GUI, no base, no script, no metadata — it sits under frmclient as well as backend
+- Do not add any wxWidgets `#include` to `core.dll` / `protocol.dll` / `backend.dll` / `frmserver.dll` /
+  `fileserver.dll` source files — they have no wx include path and link no wx; a picture, a colour, a font there is
+  the core's data (`core/graphics`)
+- Do not give `core.dll` any wx (its zlib on Windows is wx's bundled build, nothing else), no base, no script, no
+  metadata — it sits under frmclient as well as backend
 - **Do not raise a MODAL from the engine.** `backend.dll` has no modal boxes of its own (verified
   2026-09-02; the last two were leftovers from when the designer and the engine were one binary —
   a `wxMessageBox` about a breakpoint, and a `ShowModalMessage` that showed a person a C++ function
@@ -641,7 +651,7 @@ See `docs/private/eval-scope-refactor.md` for the full architecture.
   an assistant over MCP, a background job, the web server — is simply frozen, while the sentence
   that would explain it stands on somebody else's screen. Instead: state it with
   `ibValueSystemFunction::Message` (it asks the SESSION for its frame, so desktop shows and web
-  queues), and where a caller can act on the reason, hand it back — `bool Verb(…, wxString* refusal)`.
+  queues), and where a caller can act on the reason, hand it back — `bool Verb(…, ibString* refusal)`.
   The only modals left in the backend are `Alert` / `Question`, which exist because a SCRIPT asked
   for one.
 - Do not use raw `RunQueryWithResults(ibT("...%s..."), userInput)` for user-supplied values — use `ibPreparedStatement`

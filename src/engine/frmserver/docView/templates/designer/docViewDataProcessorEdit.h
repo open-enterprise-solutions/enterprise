@@ -28,8 +28,6 @@ public:
 private:
 
 	std::unique_ptr<ibDataProcessorTree> m_metaTree;
-
-	wxDECLARE_DYNAMIC_CLASS(ibDataProcessorTreeView);
 };
 
 class FRMSERVER_API ibDataProcessorEditDocument : public ibMetaDataDocument {
@@ -62,7 +60,6 @@ protected:
 
 	ibDataProcessorEditDocument(const ibDataProcessorEditDocument&) = delete;
 	ibDataProcessorEditDocument& operator=(const ibDataProcessorEditDocument&) = delete;
-	wxDECLARE_DYNAMIC_CLASS(ibDataProcessorEditDocument);
 };
 
 #endif

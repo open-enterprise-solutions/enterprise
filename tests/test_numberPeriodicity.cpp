@@ -4,8 +4,7 @@
 // again when that period of the document's date changes.
 
 #include <gtest/gtest.h>
-
-#include <wx/init.h>
+#include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
 #include "backend/appData.h"
 #include "backend/compiler/value.h"
@@ -17,6 +16,10 @@
 #include "backend/metaCollection/partial/document.h"
 #include "backend/query/columnLayout.h"
 #include "core/serialize/dataBuilder.h"
+
+// After the engine's headers: on Windows wx/init.h brings windows.h, whose GetForm macro would rename
+// ibValueRecordDataObject::GetForm in them (GetFormW, unresolved at link).
+#include <wx/init.h>
 
 namespace {
 

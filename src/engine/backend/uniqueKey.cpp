@@ -75,12 +75,12 @@ bool ibUniqueKey::EqualsImpl(const ibUniqueKey& other) const
 
 // A register key: a fresh per-instance guid (the stable form-instance identity) + the composite dimensions.
 // The data + accessors are the base's; the ctors only seed them.
-ibUniqueKeyPair::ibUniqueKeyPair() : ibUniqueKey(wxNewUniqueGuid)
+ibUniqueKeyPair::ibUniqueKeyPair() : ibUniqueKey(ibNewUniqueGuid)
 {
 }
 
 ibUniqueKeyPair::ibUniqueKeyPair(const ibRowMetaValues& keyValues)
-	: ibUniqueKey(wxNewUniqueGuid)
+	: ibUniqueKey(ibNewUniqueGuid)
 {
 	SetKeyValues(keyValues);
 }

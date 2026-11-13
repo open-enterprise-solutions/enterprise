@@ -214,7 +214,7 @@ class ibDbTempTableQueryable : public ibBackendQueryable
 {
 public:
 	ibDbTempTableQueryable(ibString tableName, std::vector<ibTempColumn> columns, const ibMetaData* metaData = nullptr)
-		: m_tableName(std::move(tableName)), m_tableGuid(wxNewUniqueGuid), m_columns(std::move(columns)), m_metaData(metaData) {}
+		: m_tableName(std::move(tableName)), m_tableGuid(ibNewUniqueGuid), m_columns(std::move(columns)), m_metaData(metaData) {}
 
 	ibString          GetQueryTableName() const override { return m_tableName; }
 	const ibUniqueKey& GetQueryTableGuid() const override { return m_tableGuid; }
@@ -276,7 +276,7 @@ public:
 	                       std::vector<const ibBackendQueryColumn*> columns,
 	                       const ibMetaData* metaData = nullptr,
 	                       std::vector<const ibBackendQueryColumn*> keyColumns = {})
-		: m_tableName(std::move(tableName)), m_tableGuid(wxNewUniqueGuid), m_tableId(tableId)
+		: m_tableName(std::move(tableName)), m_tableGuid(ibNewUniqueGuid), m_tableId(tableId)
 		, m_columns(std::move(columns)), m_metaData(metaData), m_keyColumns(std::move(keyColumns)) {}
 
 	std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override { return m_keyColumns; }
@@ -382,7 +382,7 @@ public:
 	// POSITIVE ids, indistinguishable from the metaIDs of declared attributes.
 	ibCteQueryable(ibString name, const std::vector<Field>& fields, ibMetaID firstOrdinal,
 	               const ibMetaData* metaData = nullptr)
-		: m_name(std::move(name)), m_guid(wxNewUniqueGuid), m_metaData(metaData)
+		: m_name(std::move(name)), m_guid(ibNewUniqueGuid), m_metaData(metaData)
 	{
 		ibMetaID ordinal = firstOrdinal;
 		for (const Field& field : fields) {

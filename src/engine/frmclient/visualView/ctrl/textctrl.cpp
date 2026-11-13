@@ -6,6 +6,8 @@
 #include "widgets.h"
 
 #include "deskgui/univ/ctrl/textCtrl.h"
+#include "deskgui/typeconv.h"    // typeConv::ColourToWxColour
+#include "core/style/style.h"    // ibStyle - a field's platform background
 
 void ibValueTextCtrl::Create(wxWindow* parent, const ibProtocolNode& node)
 {
@@ -46,12 +48,17 @@ void ibValueTextCtrl::Update(const ibProtocolNode& node)
 	m_textCtrl->ShowOpenButton(node.GetBool(ibProtocol::ibForm::ibProperty::ButtonOpen));
 	m_textCtrl->ShowClearButton(node.GetBool(ibProtocol::ibForm::ibProperty::ButtonClear));
 
-	UpdateWindow(m_textCtrl, node);
+	UpdateWindow(m_textCtrl, node, GetPlatformBackground());
 }
 
 wxWindow* ibValueTextCtrl::GetWindow() const
 {
 	return m_textCtrl;
+}
+
+wxColour ibValueTextCtrl::GetPlatformBackground() const
+{
+	return typeConv::ColourToWxColour(std::get<ibColour>(ibStyle::Platform().Get(ibStyleItem::FieldBackground, false)));
 }
 
 bool ibValueTextCtrl::SaveEdit(ibViewEdit& edit) const

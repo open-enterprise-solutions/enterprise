@@ -198,14 +198,15 @@ const ibStyle& ibStyle::Platform()
 		ibStyle* const made = new ibStyle();   // never torn down: a client may ask it while the process ends
 		ibStyle& style = *made;
 		// Each colour item: its light value and its dark one. The light look keeps what the platform painted with - the
-		// forms' ink on cream (frmserver's default style), the Luna theme's chrome, border, accent and button colours
+		// forms' ink on a ground a step below white, the fields white on it (frmserver's default style; cream until
+		// 2026-11-13, white for a day - the fields could not be told from it), the Luna theme's chrome, border, accent and button colours
 		// (deskgui/univ/theme/lunaTheme.cpp); the items it had no colour for, and the whole dark look, are new.
 		const struct { ibStyleItem item; unsigned int light; unsigned int dark; } colours[] = {
-			{ ibStyleItem::FormBackground,        0xFAF7F0, 0x22262B },
+			{ ibStyleItem::FormBackground,        0xEEF2F6, 0x22262B },
 			{ ibStyleItem::FormText,              0x3F5C77, 0xC9D6E2 },
 			{ ibStyleItem::ButtonBackground,      0xC8D6DF, 0x2C3036 },
 			{ ibStyleItem::ButtonText,            0x000000, 0xE4E6EA },
-			{ ibStyleItem::FieldBackground,       0xFAF7F0, 0x1B1D21 },
+			{ ibStyleItem::FieldBackground,       0xFFFFFF, 0x1B1D21 },
 			{ ibStyleItem::FieldText,             0x000000, 0xE4E6EA },
 			{ ibStyleItem::Selection,             0xD97757, 0xB85A38 },
 			{ ibStyleItem::SelectionText,         0xFFFFFF, 0xFFFFFF },

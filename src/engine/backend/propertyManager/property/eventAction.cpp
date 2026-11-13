@@ -21,7 +21,7 @@ ibActionID ibEventAction::GetValueAsInteger() const {
 			}
 		}
 	}
-	return wxNOT_FOUND;
+	return ibNOT_FOUND;
 }
 
 ibString ibEventAction::GetValueAsString() const

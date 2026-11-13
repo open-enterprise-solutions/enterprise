@@ -350,7 +350,7 @@ const ibSourceDataObject::ibSourceExplorer* ibValueValueList::GetSourceExplorer(
 	// A TABLE, so an attribute of this type drops on a form as a table box and its columns as the box's columns.
 	// Only the value is shown: it is what the list is about. The presentation, the check and the picture are there
 	// to add, and nobody gets them without asking.
-	m_sourceExplorer.Reset(GetClassName(), GetClassName(), wxNOT_FOUND, g_valueListCLSID, /*tableSection*/true);
+	m_sourceExplorer.Reset(GetClassName(), GetClassName(), ibNOT_FOUND, g_valueListCLSID, /*tableSection*/true);
 	for (unsigned int i = 0; i < m_columns->GetColumnCount(); ++i) {
 		const ibValueValueListColumnCollection::ibValueValueListColumnInfo* const col =
 			static_cast<const ibValueValueListColumnCollection::ibValueValueListColumnInfo*>(m_columns->GetColumnInfo(i));

@@ -433,11 +433,11 @@ public:
 		wxAlignment align = wxALIGN_NOT,
 		int flags = wxDATAVIEW_COL_RESIZABLE);
 	ibDataViewColumn* AppendToggleColumn(const wxString& label, unsigned int model_column,
-		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = wxDVC_TOGGLE_DEFAULT_WIDTH,
+		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = ibDVC_TOGGLE_DEFAULT_WIDTH,
 		wxAlignment align = wxALIGN_CENTER,
 		int flags = wxDATAVIEW_COL_RESIZABLE);
 	ibDataViewColumn* AppendProgressColumn(const wxString& label, unsigned int model_column,
-		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = wxDVC_DEFAULT_WIDTH,
+		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = ibDVC_DEFAULT_WIDTH,
 		wxAlignment align = wxALIGN_CENTER,
 		int flags = wxDATAVIEW_COL_RESIZABLE);
 	ibDataViewColumn* AppendDateColumn(const wxString& label, unsigned int model_column,
@@ -457,11 +457,11 @@ public:
 		wxAlignment align = wxALIGN_NOT,
 		int flags = wxDATAVIEW_COL_RESIZABLE);
 	ibDataViewColumn* AppendToggleColumn(const wxBitmap& label, unsigned int model_column,
-		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = wxDVC_TOGGLE_DEFAULT_WIDTH,
+		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = ibDVC_TOGGLE_DEFAULT_WIDTH,
 		wxAlignment align = wxALIGN_CENTER,
 		int flags = wxDATAVIEW_COL_RESIZABLE);
 	ibDataViewColumn* AppendProgressColumn(const wxBitmap& label, unsigned int model_column,
-		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = wxDVC_DEFAULT_WIDTH,
+		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = ibDVC_DEFAULT_WIDTH,
 		wxAlignment align = wxALIGN_CENTER,
 		int flags = wxDATAVIEW_COL_RESIZABLE);
 	ibDataViewColumn* AppendDateColumn(const wxBitmap& label, unsigned int model_column,
@@ -482,11 +482,11 @@ public:
 		wxAlignment align = wxALIGN_NOT,
 		int flags = wxDATAVIEW_COL_RESIZABLE);
 	ibDataViewColumn* PrependToggleColumn(const wxString& label, unsigned int model_column,
-		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = wxDVC_TOGGLE_DEFAULT_WIDTH,
+		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = ibDVC_TOGGLE_DEFAULT_WIDTH,
 		wxAlignment align = wxALIGN_CENTER,
 		int flags = wxDATAVIEW_COL_RESIZABLE);
 	ibDataViewColumn* PrependProgressColumn(const wxString& label, unsigned int model_column,
-		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = wxDVC_DEFAULT_WIDTH,
+		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = ibDVC_DEFAULT_WIDTH,
 		wxAlignment align = wxALIGN_CENTER,
 		int flags = wxDATAVIEW_COL_RESIZABLE);
 	ibDataViewColumn* PrependDateColumn(const wxString& label, unsigned int model_column,
@@ -506,11 +506,11 @@ public:
 		wxAlignment align = wxALIGN_NOT,
 		int flags = wxDATAVIEW_COL_RESIZABLE);
 	ibDataViewColumn* PrependToggleColumn(const wxBitmap& label, unsigned int model_column,
-		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = wxDVC_TOGGLE_DEFAULT_WIDTH,
+		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = ibDVC_TOGGLE_DEFAULT_WIDTH,
 		wxAlignment align = wxALIGN_CENTER,
 		int flags = wxDATAVIEW_COL_RESIZABLE);
 	ibDataViewColumn* PrependProgressColumn(const wxBitmap& label, unsigned int model_column,
-		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = wxDVC_DEFAULT_WIDTH,
+		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = ibDVC_DEFAULT_WIDTH,
 		wxAlignment align = wxALIGN_CENTER,
 		int flags = wxDATAVIEW_COL_RESIZABLE);
 	ibDataViewColumn* PrependDateColumn(const wxBitmap& label, unsigned int model_column,

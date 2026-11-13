@@ -31,7 +31,6 @@
 #include "queryable.h"                 // ibQueryPredicatePtr — a condition the source consumes itself
 #include "core/query/querySourceParameter.h"   // ibQuerySourceParameter — what DescribeParameters declares
 
-#include <wx/string.h>
 #include <algorithm>   // std::max — SameConditions
 #include <map>
 #include <vector>

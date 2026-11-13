@@ -25,7 +25,7 @@ m_version(version_oes_last)
 
 	if (m_commonObject->OnCreateMetaObject(this, newObjectFlag)) {
 		if (!m_commonObject->OnLoadMetaObject(this)) {
-			wxASSERT_MSG(false, "m_commonObject->OnLoadMetaObject() == false");
+			ibASSERT_MSG(false, "m_commonObject->OnLoadMetaObject() == false");
 		}
 	}
 
@@ -63,7 +63,7 @@ ibMetaDataReport::~ibMetaDataReport()
 
 		//clear data
 		if (!ClearDatabase()) {
-			wxASSERT_MSG(false, "ClearDatabase() == false");
+			ibASSERT_MSG(false, "ClearDatabase() == false");
 		}
 
 		// m_commonObject (ibValuePtr) releases the root after this body.
@@ -198,7 +198,7 @@ bool ibMetaDataReport::CloseDatabase(const ibRuntimeRequest& request)
 	// it still come out — in the designer while debugging I want to know; in the runtime it does not
 	// matter"). Debug tells the developer, Release closes silently, and neither traps the user:
 	// nothing to close IS a successful close — the rule the destructors in this tree already follow.
-	wxASSERT(IsConfigOpen());
+	ibASSERT(IsConfigOpen());
 	if (!IsConfigOpen())
 		return true;
 
@@ -257,7 +257,7 @@ ibValueMetaObjectReport* ibMetaDataReport::BuildFreshRoot()
 		return nullptr;
 	}
 	if (!root->OnLoadMetaObject(this)) {
-		wxASSERT_MSG(false, "BuildFreshRoot: OnLoadMetaObject() == false");
+		ibASSERT_MSG(false, "BuildFreshRoot: OnLoadMetaObject() == false");
 	}
 	root->InvalidateNames();
 	return root;

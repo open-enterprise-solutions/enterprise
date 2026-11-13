@@ -64,7 +64,7 @@ void WriteFields(ibDataNode& response, const std::vector<ibQueryConstructorField
 	ibDataNode& written = response.Child(qc::Fields);
 	std::vector<ibTypeDescription> types;
 	for (const ibQueryConstructorField& field : fields) {
-		ibWriteSettingsField(written, field.m_name, field.m_caption, static_cast<ibMetaID>(wxNOT_FOUND), field.m_type,
+		ibWriteSettingsField(written, field.m_name, field.m_caption, static_cast<ibMetaID>(ibNOT_FOUND), field.m_type,
 			field.m_available, field.m_picture, metaData);
 		types.push_back(field.m_type);
 	}

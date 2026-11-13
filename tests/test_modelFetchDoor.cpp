@@ -34,15 +34,15 @@ namespace {
 // pure virtuals are the entire price of becoming concrete.
 class ibStubFetchModel : public ibDataViewModel {
 public:
-	void GetValue(ibVariant& WXUNUSED(variant),
-	              const ibDataViewItem& WXUNUSED(item),
-	              unsigned int WXUNUSED(col)) const override {}
+	void GetValue(ibVariant& /*variant*/,
+	              const ibDataViewItem& /*item*/,
+	              unsigned int /*col*/) const override {}
 
-	bool SetValue(const ibVariant& WXUNUSED(variant),
-	              const ibDataViewItem& WXUNUSED(item),
-	              unsigned int WXUNUSED(col)) override { return false; }
+	bool SetValue(const ibVariant& /*variant*/,
+	              const ibDataViewItem& /*item*/,
+	              unsigned int /*col*/) override { return false; }
 
-	ibDataViewItem GetParent(const ibDataViewItem& WXUNUSED(item)) const override {
+	ibDataViewItem GetParent(const ibDataViewItem& /*item*/) const override {
 		return ibDataViewItem();
 	}
 };

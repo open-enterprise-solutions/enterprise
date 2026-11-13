@@ -23,8 +23,6 @@ public:
 protected:
 
 	bool m_readOnly = false;
-
-	wxDECLARE_DYNAMIC_CLASS(ibTextEditView);
 };
 
 // ----------------------------------------------------------------------------
@@ -61,7 +59,6 @@ protected:
 
 	ibTextDocument(const ibTextDocument&) = delete;
 	ibTextDocument& operator=(const ibTextDocument&) = delete;
-	wxDECLARE_ABSTRACT_CLASS(ibTextDocument);
 };
 
 // ----------------------------------------------------------------------------
@@ -106,7 +103,6 @@ protected:
 
 	ibTextFileDocument(const ibTextFileDocument&) = delete;
 	ibTextFileDocument& operator=(const ibTextFileDocument&) = delete;
-	wxDECLARE_DYNAMIC_CLASS(ibTextFileDocument);
 };
 
 #endif

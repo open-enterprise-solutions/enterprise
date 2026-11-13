@@ -337,7 +337,7 @@ const ibPredefinedDescription& ibValueMetaObjectRecordDataHierarchyMutableRef::G
 ibGuid ibValueMetaObjectRecordDataHierarchyMutableRef::AppendPredefinedValue(const ibPredefinedItemDescription& given)
 {
 	ibPredefinedItemDescription item = given;
-	item.m_guid = wxNewUniqueGuid;
+	item.m_guid = ibNewUniqueGuid;
 	CheckPlace(*this, item);
 
 	// ⭐ …DECLARING WHAT IT MUST: a required attribute it was given nothing for, its default, the one the form offers —

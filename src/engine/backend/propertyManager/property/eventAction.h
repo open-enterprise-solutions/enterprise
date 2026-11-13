@@ -32,7 +32,7 @@ private:
 		struct ibEventOptionItem {
 
 			ibEventOptionItem() :
-				m_isOk(true), m_strName(), m_strLabel(), m_id(wxNOT_FOUND), m_value()
+				m_isOk(true), m_strName(), m_strLabel(), m_id(ibNOT_FOUND), m_value()
 			{
 			}
 
@@ -170,7 +170,7 @@ public:
 
 	virtual ~ibEventAction() {}
 
-	virtual bool IsEmptyProperty() const { return GetValueAsInteger() == wxNOT_FOUND; }
+	virtual bool IsEmptyProperty() const { return GetValueAsInteger() == ibNOT_FOUND; }
 
 	// An action event does NOT dispatch through CallAsEvent — it runs via its own functor (Invoke). No procedure /
 	// lambda dispatcher, so the CallAsEvent path is a no-op for it (nullptr).

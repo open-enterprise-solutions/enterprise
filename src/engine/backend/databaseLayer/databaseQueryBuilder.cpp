@@ -89,7 +89,7 @@ static void ibBindPlan(ibPreparedStatement* stmt,
 		if (p.m_external) {
 			const bool inRange = p.m_externalIndex >= 0
 			                  && p.m_externalIndex < static_cast<int>(external.size());
-			ibBindParam(stmt, pos, inRange ? external[p.m_externalIndex] : wxEmptyValue);
+			ibBindParam(stmt, pos, inRange ? external[p.m_externalIndex] : ibEmptyValue);
 		} else if (p.m_isBlob) {
 			// Opaque bytes (a reference / binary key encoded by the metadata
 			// layer). L2-1 binds them without interpreting — stays metadata-blind.

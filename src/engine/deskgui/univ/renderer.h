@@ -362,6 +362,11 @@ public:
                           const wxRect& rect,
                           wxOrientation orient) = 0;
 
+    // the free part of a row of tool bars in the docking - round its bars and past the last one: rect is the whole row,
+    // the docking clips it to the piece it paints, so a gradient runs on across the pieces
+    virtual void DrawToolBarDockBackground(wxDC& dc,
+                                           const wxRect& rect) = 0;
+
 #if wxUSE_SLIDER
 
     // draw the slider shaft
@@ -824,6 +829,9 @@ public:
                           const wxRect& rect,
                           wxOrientation orient) override
         { m_renderer->DrawSash(dc, rect, orient); }
+    virtual void DrawToolBarDockBackground(wxDC& dc,
+                                           const wxRect& rect) override
+        { m_renderer->DrawToolBarDockBackground(dc, rect); }
 
 #if wxUSE_SLIDER
 

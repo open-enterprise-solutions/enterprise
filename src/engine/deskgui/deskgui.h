@@ -4,6 +4,7 @@
 #include <wx/wx.h>
 
 #include "core/core.h"   // IB_EXPORT / IB_IMPORT
+#include "deskgui/strvararg.h"   // an ibString in wx's varargs is a `%s`
 
 // THE DESKTOP'S USER INTERFACE LIBRARY — what the desktop's programs draw their windows with: the custom-drawn engine
 // (the wxUniversal theme engine forked with ib prefixes, and our Luna theme), the forks of wx's generic controls (the

@@ -2,6 +2,8 @@
 
 #include "backend/backend_exception.h"
 
+#include <cstring>
+
 ibDatabaseParameterFirebirdCollection::ibDatabaseParameterFirebirdCollection(ibInterfaceFirebird* pInterface, XSQLDA* pParameters)
 {
 	m_pInterface = pInterface;

@@ -56,7 +56,7 @@ public:
 			ibString          m_srcSynonym;
 			// THE GROUP THIS COLUMN BELONGS WITH, by name — see GetSourceGroup.
 			ibString          m_srcGroup;
-			ibMetaID          m_mid = wxNOT_FOUND;
+			ibMetaID          m_mid = ibNOT_FOUND;
 			ibTypeDescription m_typeDesc;        // what the field IS — the declaration, shown as it was written
 			ibTypeDescription m_typeValueDesc;   // what a VALUE here may be — the declaration expanded (see below)
 			int               m_flags = eSrcEnabled | eSrcVisible | eSrcSelect;   // packed; default: enabled+visible+select

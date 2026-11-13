@@ -1174,7 +1174,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::EntryClient()
 void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, unsigned int length)
 {
 	ibReaderMemory commandReader(pointer, length);
-	wxASSERT(ms_debugServer != nullptr);
+	ibASSERT(ms_debugServer != nullptr);
 	std::uint16_t commandFromClient = commandReader.r_u16();
 
 	// 🔎 WHAT ARRIVED, IN ORDER. A command id this end does not know is the fingerprint of a frame
@@ -1369,7 +1369,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 				for (long i = 0; i < vResult.GetNProps(); i++) {
 					if (vResult.IsPropScoped(i)) continue;
 					const ibString& strPropName = vResult.GetPropName(i); const long lPropNum = vResult.FindProp(strPropName);
-					if (lPropNum != wxNOT_FOUND) {
+					if (lPropNum != ibNOT_FOUND) {
 
 						ibString strPropValue;
 						ibString strPropType;

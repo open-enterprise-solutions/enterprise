@@ -1,20 +1,17 @@
 #ifndef __FIREBIRD_COMMON_H__
 #define __FIREBIRD_COMMON_H__
 
-// Shared internal helpers for the FB driver sub-system. Header-only,
-// inline — used by firebirdLease / firebirdLeaderMode /
+// Shared internal helpers for the FB driver sub-system. Inline but for
+// LogThreadSafe (firebirdCommon.cpp) — used by firebirdLease / firebirdLeaderMode /
 // firebirdMaintenanceScheduler / firebirdHlc which all need the
 // same wall-clock millisecond reading. Centralising avoids the
 // three identical copies that drifted independently before.
 
 
+#include "core/fstring.h"   // ibString
+
 #include <chrono>
 #include <cstdint>
-#include <cstdio>
-
-#ifdef __IBMSW__
-#include <windows.h>
-#endif
 
 namespace ibFb {
 
@@ -44,16 +41,9 @@ inline uint64_t NowUnixMs() {
 // Win32: OutputDebugStringW — async, lock-free, captured by
 // debugger / DebugView.
 // POSIX: fputs to stderr — atomic per-line on most libc's.
-inline void LogThreadSafe(const ibString& msg) {
-#ifdef __IBMSW__
-	const ibString line = msg + wxT("\n");
-	::OutputDebugStringW(line.wc_str());
-#else
-	const auto utf8 = msg.utf8_str();
-	std::fputs(utf8.data(), stderr);
-	std::fputc('\n', stderr);
-#endif
-}
+// Defined in firebirdCommon.cpp: windows.h stays out of the headers, where its macros (GetUserName,
+// GetClassName) and its old winsock.h would reach every file that includes this one.
+void LogThreadSafe(const ibString& msg);
 
 } // namespace ibFb
 

@@ -3,7 +3,7 @@
 # The protocol: its contract (protocol.h — the names and numbers, depending on nothing), which the server's forms
 # include, and the library of the sides that talk it — a node of the wire, the connections to a base's clients (a file
 # base opened in process, an application server over its port) and the protocol's journal — which the GUI client
-# (frmclient) and the web server link. Of wx — the base only.
+# (frmclient) and the web server link. No wx.
 # =============================================================================
 
 # CONFIGURE_DEPENDS — see the note in backend/CMakeLists.txt. Every source here is in the build: the project
@@ -22,7 +22,6 @@ target_include_directories(protocol
 target_compile_definitions(protocol
     PRIVATE
         NOPCH
-        wxUSE_GUI=0   # of wx the base only — a GUI type here is a compile error
 )
 
 # PROTOCOL_API resolves to dllexport only when PROTOCOL_EXPORTS is defined (protocolApi.h).
@@ -39,8 +38,6 @@ target_link_libraries(protocol
     PUBLIC
         # The core's journal — one per process, the client's and the protocol's lines alike (core/diagnostics).
         core
-    PRIVATE
-        wx::base
 )
 
 find_package(Threads REQUIRED)

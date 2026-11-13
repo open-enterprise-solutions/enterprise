@@ -111,7 +111,7 @@ inline ibString ibModuleCallForm(const ibModuleElement& element)
 
 class CORE_API ibParseCode : public ibTranslateCode
 {
-	int                          m_cursor = wxNOT_FOUND;  // current position in the lexem array
+	int                          m_cursor = ibNOT_FOUND;  // current position in the lexem array
 	std::vector<ibModuleElement> m_content;
 
 protected:

@@ -182,7 +182,7 @@ void ibValidateFilterNodes(const std::vector<ibFilterNodeDescription>& nodes)
 		const ibDataNode& right = item.m_right.m_value;
 		const ibTypeDescription& expected = item.m_left.m_type;
 		if (!item.m_right.IsField() && !right.Fields().empty() && expected.GetClsidCount() > 0) {
-			// Each type of the field as a range (clsid_admits): a family - a subconto of "any reference" -
+			// Each type of the field as a range (clsid_admits): a family - an account dimension of "any reference" -
 			// takes its members, and a single type is a range of one. Looked up as it stood, a value the
 			// family admits was refused.
 			const std::vector<ibClassID>& allowed = expected.GetClsidList();

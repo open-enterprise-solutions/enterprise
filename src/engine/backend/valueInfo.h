@@ -20,7 +20,7 @@ struct ibReference {
 class BACKEND_API ibValueDataObject {
 public:
 
-	ibValueDataObject(const ibGuid& objGuid = wxNullGuid, bool newObject = true) : m_newObject(newObject), m_objGuid(objGuid) {}
+	ibValueDataObject(const ibGuid& objGuid = ibNullGuid, bool newObject = true) : m_newObject(newObject), m_objGuid(objGuid) {}
 
 	// The class is polymorphic (GetMetaObject below is pure virtual) and three classes derive
 	// it, so the destructor has to be virtual: deleting a derived object through this type

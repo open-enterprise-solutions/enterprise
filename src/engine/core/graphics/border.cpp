@@ -3,7 +3,7 @@
 bool ibBorder::FromString(const ibString& text)
 {
 	const int comma = text.Find(ibT(','));
-	if (comma == wxNOT_FOUND)
+	if (comma == ibNOT_FOUND)
 		return false;
 	int kind = 0, width = 0;
 	if (!text.Left(comma).Strip(ibString::both).ToInt(&kind) || !text.Mid(comma + 1).Strip(ibString::both).ToInt(&width))

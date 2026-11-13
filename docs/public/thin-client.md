@@ -75,8 +75,8 @@ will write it.
 ## The document/view skeleton
 
 The desktop's document/view, without its metadata part. Four classes take other names — `ibFrontendDocument`,
-`ibFrontendView`, `ibFrontendDocManager`, `ibFrontendDocTemplate` — because a file base puts the server's own in the
-same process, and wx keeps one class table.
+`ibFrontendView`, `ibFrontendDocManager`, `ibFrontendDocTemplate` — because a file base puts the server's own
+(`ibDocument`, `ibView`, `ibDocManager`, `ibDocTemplate`) in the same process.
 
 - **A server's tab is a bridge document.** One is made for each tab the frame has, with no template. It holds the
   tab's id and nothing of the document: its title, and whether it may be saved, undone or closed now, are read from the

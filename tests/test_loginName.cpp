@@ -3,6 +3,7 @@
 // thin client's login window asks the names first (users), as the desktop's lists them.
 
 #include <gtest/gtest.h>
+#include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
 #include <chrono>
 
@@ -57,7 +58,7 @@ struct LoginNameFix : ::testing::Test {
 		}));
 
 		ibUserInfo keeper;
-		keeper.m_strUserGuid = wxNewUniqueGuid;
+		keeper.m_strUserGuid = ibNewUniqueGuid;
 		keeper.m_strUserName = wxT("keeper");
 		keeper.m_strUserFullName = wxT("Keeper");
 		keeper.m_strUserPassword = ibPasswordHash::Hash(password);

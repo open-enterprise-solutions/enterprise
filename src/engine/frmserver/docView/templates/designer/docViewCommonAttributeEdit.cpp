@@ -15,8 +15,6 @@
 // ibCommonAttributeCompositionView implementation
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibCommonAttributeCompositionView, ibMetaView);
-
 void ibCommonAttributeCompositionView::OnDraw(ibDataNode& frame)
 {
 	const ibValueMetaObjectCommonAttribute* const metaCommonAttribute =
@@ -87,7 +85,7 @@ void ibCommonAttributeCompositionView::FillData(ibDataNode& root)
 	if (metaData == nullptr)
 		return;
 	const ibValueMetaObject* commonObject = metaData->GetCommonMetaObject();
-	wxASSERT(commonObject);
+	ibASSERT(commonObject);
 
 	// The root wears the CONFIGURATION's icon, as the section editor's; the desktop's kept the word "Configuration" on it.
 	root.SetMetaId(commonObject->GetMetaID());
@@ -131,5 +129,4 @@ void ibCommonAttributeCompositionView::FillData(ibDataNode& root)
 // ----------------------------------------------------------------------------
 // ibCommonAttributeCompositionDocument implementation
 // ----------------------------------------------------------------------------
-
-wxIMPLEMENT_DYNAMIC_CLASS(ibCommonAttributeCompositionDocument, ibMetaDocument);
+

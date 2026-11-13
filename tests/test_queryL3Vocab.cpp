@@ -6,6 +6,7 @@
 // builds have the right SHAPE (the provider's L2 lowering of them is integration scope — a real DB).
 
 #include <gtest/gtest.h>
+#include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
 #include "backend/query/queryable.h"
 #include "backend/query/queryColumn.h"

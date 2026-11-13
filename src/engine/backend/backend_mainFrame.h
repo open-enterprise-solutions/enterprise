@@ -61,7 +61,7 @@ public:
 
 	virtual ibUniqueKey CreateFormUniqueKey(const ibBackendControlFrame* ownerControl,
 		const ibSourceDataObject* sourceObject, const ibUniqueKey& formGuid) {
-		return wxNullUniqueKey;
+		return ibNullUniqueKey;
 	}
 
 	virtual class ibBackendValueForm* FindFormByUniqueKey(const ibBackendControlFrame* ownerControl,
@@ -135,8 +135,8 @@ public:
 	// wxMessageBox call through here so the GUI-only dependency stays on
 	// the frontend side — the client's frame (frmserver/client/clientFrame.h)
 	// asks its client to show it.
-	// `style` is the wx bitmask (wxOK / wxYES_NO / wxICON_WARNING …); the
-	// returned int is the wx pressed-button code.
+	// `style` is the protocol's flags (ibProtocol::ibRequest::ibMessage::ibStyle - OK, YesNo, IconWarning …); the
+	// returned int is the button pressed, one of them; 0 - none.
 	//
 	// Not named `MessageBox` — the Win32 header defines that as a macro
 	// mapping to MessageBoxW, which renames the function and breaks the

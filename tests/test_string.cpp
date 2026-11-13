@@ -11,12 +11,12 @@
 // =============================================================================
 
 #include <gtest/gtest.h>
+#include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 #include <atomic>
 #include <iostream>
 #include <string>
 #include <thread>
 #include <vector>
-#include <wx/debug.h>   // wxSetAssertHandler — the Format refusal test
 #if defined(_MSC_VER) && defined(_DEBUG)
 #include <crtdbg.h>     // _CrtMemCheckpoint — what a decoded string keeps, counted on the debug heap
 #endif
@@ -309,10 +309,9 @@ TEST(IbString, FormatGrowsPastItsFirstGuess) {
 }
 
 TEST(IbString, FormatRefusesArgumentsTheFormatDoesNotAnswer) {
-    const wxAssertHandler_t previous = wxSetAssertHandler(nullptr);   // the refusal asserts; the answer is what is tested
+    // the refusal asserts (ibFAIL_MSG: said, and the code goes on); the answer is what is tested
     EXPECT_TRUE(ibString::Format(wxT("%d"), ibString(wxT("x"))).ToWxString() == wxT("%d"));
     EXPECT_TRUE(ibString::Format(wxT("%s %s"), ibString(wxT("x"))).ToWxString() == wxT("%s %s"));
-    wxSetAssertHandler(previous);
 }
 
 // ---------------------------------------------------------------------------

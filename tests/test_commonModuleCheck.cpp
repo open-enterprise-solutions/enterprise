@@ -7,6 +7,7 @@
 // is the one that session builds. Nothing here substitutes its own.
 
 #include <gtest/gtest.h>
+#include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
 #include <memory>
 

@@ -22,8 +22,6 @@ public:
 	// The sheet the person edited on the client, handed over (Change {Sheet}) — the document's sheet from then on; a cell
 	// clicked (Cell {Row, Col}) — the value it is bound to, opened.
 	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) override;
-
-	wxDECLARE_DYNAMIC_CLASS(ibSheetView);
 };
 
 // ----------------------------------------------------------------------------
@@ -49,7 +47,6 @@ public:
 private:
 	ibSheetDocument(const ibSheetDocument&) = delete;
 	ibSheetDocument& operator=(const ibSheetDocument&) = delete;
-	wxDECLARE_ABSTRACT_CLASS(ibSheetDocument);
 };
 
 // ----------------------------------------------------------------------------
@@ -101,7 +98,6 @@ private:
 
 	ibSheetFileDocument(const ibSheetFileDocument&) = delete;
 	ibSheetFileDocument& operator=(const ibSheetFileDocument&) = delete;
-	wxDECLARE_DYNAMIC_CLASS(ibSheetFileDocument);
 };
 
 // ----------------------------------------------------------------------------
@@ -126,7 +122,6 @@ private:
 
 	ibSheetGridBoxDocument(const ibSheetGridBoxDocument&) = delete;
 	ibSheetGridBoxDocument& operator=(const ibSheetGridBoxDocument&) = delete;
-	wxDECLARE_DYNAMIC_CLASS(ibSheetGridBoxDocument);
 };
 
 // Its view, for as long as the box lives. Its frame is the box's, not one of its own, so there is no title to mark.
@@ -136,9 +131,6 @@ public:
 	ibSheetGridBoxView() : ibSheetView() {}
 
 	virtual void OnChangeFilename() override {}
-
-private:
-	wxDECLARE_DYNAMIC_CLASS(ibSheetGridBoxView);
 };
 
 #endif

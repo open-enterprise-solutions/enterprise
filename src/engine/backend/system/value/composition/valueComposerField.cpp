@@ -57,7 +57,7 @@ bool ibValueCompositionField::SetPropVal(const long lPropNum, const ibValue& var
 		// job (SetTypeInfo), and pretending otherwise would leave a field
 		// carrying the previous field's type.
 		m_path = varPropVal.GetString();
-		m_leafId = wxNOT_FOUND;
+		m_leafId = ibNOT_FOUND;
 		m_typeDescription = ibTypeDescription();
 		return true;
 	case enPresentation:

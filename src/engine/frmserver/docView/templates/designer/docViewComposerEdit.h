@@ -37,8 +37,6 @@ public:
 private:
 
 	ibListSettingsChoice* m_choosing = nullptr;   // the cell a value is being chosen for (Select), counted
-
-	wxDECLARE_DYNAMIC_CLASS(ibComposerCompositionView);
 };
 
 // WHAT A COMPOSITION'S PANEL ASKS OF THE CONFIGURATION, on whichever designer tab it is — a composer's own, or a form's

@@ -67,7 +67,7 @@ bool ibPropertyAccountingKind::SetDataValue(const ibValue& varPropVal) { return 
 bool ibPropertyAccountingKind::GetDataValue(ibValue& pvarPropVal) const
 {
 	const ibVariantOwner* owner = get_cell_variant<ibVariantOwner>();
-	wxASSERT(owner);
+	ibASSERT(owner);
 	pvarPropVal = owner->GetDataValue();
 	return true;
 }

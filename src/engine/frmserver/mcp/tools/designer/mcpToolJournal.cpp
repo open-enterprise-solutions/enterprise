@@ -45,12 +45,13 @@
 #include "core/fileSystem.h"          // the journal lives in the diagnostic folder
 #include "core/serialize/dataBuilder.h"   // ibDataNode + ibBinaryProvider - the details payload
 
-#include <wx/ffile.h>
-#include <wx/filename.h>
 #include "core/stringTokenizer.h"
 
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <map>
 #include <vector>
 
@@ -147,11 +148,11 @@ ibString TraceDirectory()
 {
 	const ibString own = ibTechJournal::Path();
 	if (!own.IsEmpty())
-		return wxFileName(own).GetPath();
+		return ibString(ibPathOf(own).parent_path().wstring());
 
 	// The journal's own rule (journal.cpp): beside the dumps, in the diagnostic folder - which, for a
 	// program inside a macOS bundle, is ~/Library/Logs/OES and not the folder that holds the .app.
-	return ibDiagnosticFolder() + wxFILE_SEP_PATH + ibT("journal");
+	return ibDiagnosticFolder() + ibFILE_SEP_PATH + ibT("journal");
 }
 
 // `<app>_<yyyymmddThhmmss>_<pid>.log` — the app is the head, the start time is the middle.
@@ -160,10 +161,10 @@ ibString TraceAppOfFile(const ibString& fileName) { return fileName.BeforeFirst(
 // ⭐ THE FILE'S NAME CARRIES THE DATE THE LINES DO NOT. A line is stamped `03:01:57.450` and no
 // further — time of day is what a person compares — so the day comes from the start stamp, and a
 // run that crosses midnight is caught by the clock going BACKWARDS between two lines.
-ibDateTime TraceStartOfFile(const wxFileName& file)
+ibDateTime TraceStartOfFile(const ibString& file)
 {
 	// `yyyymmddThhmmss`: the fourteen digits without the T are one of the date's own forms.
-	const ibString middle = file.GetName().AfterFirst(ibT('_')).BeforeLast(ibT('_'));
+	const ibString middle = ibString(ibPathOf(file).stem().wstring()).AfterFirst(ibT('_')).BeforeLast(ibT('_'));
 
 	ibDateTime stamp;
 	if (middle.length() == 15 && middle[8] == ibT('T') && stamp.FromString(middle.Left(8) + middle.Mid(9)))
@@ -171,15 +172,15 @@ ibDateTime TraceStartOfFile(const wxFileName& file)
 
 	// A name that does not follow the convention still has a file behind it, and its last write is
 	// a better day than no day at all.
-	const ibDateTime written = ibFileModificationTime(file.GetFullPath());
+	const ibDateTime written = ibFileModificationTime(file);
 	return written.IsEmpty() ? ibDateTime::Now() : written;
 }
 
-// The newest file of each application. ⚠ ONE ibDir DRIVES ONE TRAVERSAL - nothing here may open a
-// second walk inside this loop.
-std::map<ibString, wxFileName> TraceNewestPerApp(const ibString& directory)
+// The newest file of each application, by its full path. ⚠ ONE ibDir DRIVES ONE TRAVERSAL - nothing here may
+// open a second walk inside this loop.
+std::map<ibString, ibString> TraceNewestPerApp(const ibString& directory)
 {
-	std::map<ibString, wxFileName> newest;
+	std::map<ibString, ibString> newest;
 	std::map<ibString, ibDateTime> newestTime;
 
 	ibDir dir(directory);
@@ -190,11 +191,11 @@ std::map<ibString, wxFileName> TraceNewestPerApp(const ibString& directory)
 	bool walking = dir.GetFirst(&name, ibT("*.log"), ibDIR_FILES);
 	while (walking) {
 
-		const wxFileName file(directory, name);
-		if (file.FileExists()) {
+		const ibString file = directory + ibFILE_SEP_PATH + name;
+		if (ibFileExists(file)) {
 
 			const ibString app = TraceAppOfFile(name);
-			const ibDateTime when = ibFileModificationTime(file.GetFullPath());
+			const ibDateTime when = ibFileModificationTime(file);
 
 			const auto it = newestTime.find(app);
 			if (it == newestTime.end() || when > it->second) {
@@ -213,13 +214,13 @@ std::map<ibString, wxFileName> TraceNewestPerApp(const ibString& directory)
 // crash guard writes its dump BESIDE the journal (`crashdumps/` next to `journal/`, one decision,
 // see crashGuard.cpp), and both file names carry the pid. So the two halves of one incident are
 // joined by the thing they already agree on, and nothing new has to be recorded to say "it died".
-ibString TracePidOfLog(const wxFileName& file) { return file.GetName().AfterLast(ibT('_')); }
+ibString TracePidOfLog(const ibString& file) { return ibString(ibPathOf(file).stem().wstring()).AfterLast(ibT('_')); }
 
 // `<exe>_[<kind>]<pid>_t<tid>_<stamp>_<seq>.dmp` — the pid is the digits ending the token before
 // the thread's, which is where an optional kind suffix ("_error") leaves it.
 ibString TracePidOfDump(const ibString& fileName)
 {
-	std::vector<ibString> parts = ibStringTokenize(wxFileName(fileName).GetName(), ibT("_"));
+	std::vector<ibString> parts = ibStringTokenize(ibString(ibPathOf(fileName).stem().wstring()), ibT("_"));
 
 	for (size_t i = 1; i < parts.size(); ++i) {
 
@@ -241,8 +242,8 @@ std::map<ibString, ibString> TraceDumpsByPid(const ibString& journalDirectory)
 {
 	std::map<ibString, ibString> dumps;
 
-	const ibString directory = wxFileName(journalDirectory).GetPath()
-		+ wxFILE_SEP_PATH + ibT("crashdumps");
+	const ibString directory = ibString(ibPathOf(journalDirectory).parent_path().wstring())
+		+ ibFILE_SEP_PATH + ibT("crashdumps");
 
 	ibDir dir(directory);
 	if (!dir.IsOpened())
@@ -264,35 +265,39 @@ std::map<ibString, ibString> TraceDumpsByPid(const ibString& journalDirectory)
 // The tail of a file, as text. A journal grows without bound while a process runs, and the answer
 // is always about the END of it - so a very large file is read from its last megabytes rather than
 // refused or, worse, loaded whole.
-ibString TraceReadTail(const wxFileName& file, wxFileOffset maxBytes)
+ibString TraceReadTail(const ibString& file, std::uintmax_t maxBytes)
 {
-	wxFFile handle(file.GetFullPath(), wxT("rb"));
-	if (!handle.IsOpened())
+	std::ifstream handle(ibPathOf(file), std::ios::binary);
+	if (!handle)
 		return ibEmptyString;
 
-	const wxFileOffset length = handle.Length();
-	const wxFileOffset from   = (length > maxBytes) ? (length - maxBytes) : 0;
-	if (from > 0 && !handle.Seek(from))
+	std::error_code error;
+	const std::uintmax_t length = std::filesystem::file_size(ibPathOf(file), error);
+	if (error)
+		return ibEmptyString;
+	const std::uintmax_t from = (length > maxBytes) ? (length - maxBytes) : 0;
+	if (from > 0 && !handle.seekg(static_cast<std::streamoff>(from)))
 		return ibEmptyString;
 
 	const size_t want = static_cast<size_t>(length - from);
 	std::vector<char> bytes(want + 1, '\0');
 
-	const size_t got = handle.Read(bytes.data(), want);
+	handle.read(bytes.data(), static_cast<std::streamsize>(want));
+	const size_t got = static_cast<size_t>(handle.gcount());
 	ibString text = ibString::FromUTF8(bytes.data(), got);
 
 	// A tail cuts a line in half. That half would parse as a continuation and glue itself onto
 	// nothing, so it goes.
 	if (from > 0) {
 		const int firstBreak = text.Find(ibT('\n'));
-		text = (firstBreak == wxNOT_FOUND) ? ibString() : text.Mid(firstBreak + 1);
+		text = (firstBreak == ibNOT_FOUND) ? ibString() : text.Mid(firstBreak + 1);
 	}
 	return text;
 }
 
 // `[info]    03:01:57.450  t11724  query.sql       SELECT ...` — and anything NOT starting a
 // bracket belongs to the line above it, which is how a call stack stays one entry.
-void TraceParseInto(const wxFileName& file, const ibString& app, std::vector<ibTraceRow>& rows)
+void TraceParseInto(const ibString& file, const ibString& app, std::vector<ibTraceRow>& rows)
 {
 	const ibString text = TraceReadTail(file, 16 * 1024 * 1024);
 	if (text.IsEmpty())
@@ -316,7 +321,7 @@ void TraceParseInto(const wxFileName& file, const ibString& app, std::vector<ibT
 		}
 
 		const int close = line.Find(ibT(']'));
-		if (close == wxNOT_FOUND)
+		if (close == ibNOT_FOUND)
 			continue;
 
 		ibTraceRow row;
@@ -586,7 +591,7 @@ public:
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
 		const ibString directory = TraceDirectory();
-		std::map<ibString, wxFileName> files = TraceNewestPerApp(directory);
+		std::map<ibString, ibString> files = TraceNewestPerApp(directory);
 
 		if (files.empty()) {
 			// ⭐ THE TWO EMPTIES ARE DIFFERENT ANSWERS, and only one of them means "ask again
@@ -654,7 +659,7 @@ public:
 
 			// A file untouched since before the window cannot hold a line inside it, and reading it
 			// is the difference between an answer and a wait when a dozen runs are on disk.
-			if (!from.IsEmpty() && ibFileModificationTime(entry.second.GetFullPath()) < from)
+			if (!from.IsEmpty() && ibFileModificationTime(entry.second) < from)
 				continue;
 
 			const size_t before = rows.size();
@@ -662,12 +667,12 @@ public:
 
 			std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
 			node->SetValue(ibT("app"), entry.first);
-			node->SetValue(ibT("file"), ibString(entry.second.GetFullName()));
+			node->SetValue(ibT("file"), ibString(ibPathOf(entry.second).filename().wstring()));
 			node->AddField(ibT("lines"), ibDataValue::Int((std::int64_t)(rows.size() - before)));
 
 			// Which of these is the process answering right now. Everything else is another run,
 			// and that distinction is the point of reading both.
-			if (!ownFile.IsEmpty() && entry.second.GetFullPath().IsSameAs(ownFile, false))
+			if (!ownFile.IsEmpty() && entry.second.IsSameAs(ownFile, false))
 				node->SetValue(ibT("note"), ibMcpText("this process"));
 
 			// …and whether it ENDED, rather than merely stopping saying anything.

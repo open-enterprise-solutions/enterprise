@@ -11,7 +11,6 @@ public:
 	ibDocManagerDesigner();
 
 protected:
-	wxDECLARE_DYNAMIC_CLASS(ibDocManagerDesigner);
 	ibDocManagerDesigner(const ibDocManagerDesigner&) = delete;
 	ibDocManagerDesigner& operator=(const ibDocManagerDesigner&) = delete;
 };

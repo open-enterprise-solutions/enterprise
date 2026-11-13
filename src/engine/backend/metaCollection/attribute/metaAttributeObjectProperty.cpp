@@ -79,7 +79,7 @@ void ibValueMetaObjectAttribute::OnPropertyChanged(ibProperty* property, const i
 	}
 
 	ibValueMetaObject* metaObject = GetParent();
-	wxASSERT(metaObject);
+	ibASSERT(metaObject);
 
 	if (metaObject->OnReloadMetaObject()) {
 		ibValueMetaObject::OnPropertyChanged(property, oldValue, newValue);

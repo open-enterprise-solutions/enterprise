@@ -1,7 +1,7 @@
 #ifndef __COMMAND_DESCRIPTION_H__
 #define __COMMAND_DESCRIPTION_H__
 
-#include "core/core.h"    // CORE_API, wxNOT_FOUND, ibMetaID
+#include "core/core.h"    // CORE_API, ibNOT_FOUND, ibMetaID
 #include <vector>
 
 // An object item's command TYPE — which standard command it stands for (open the list / create).
@@ -25,7 +25,7 @@ enum ibInterfaceCommandType {
 
 // One hop of a command path — just an ID (the command-door parallel of ibSourceHop, id-only).
 struct ibCommandHop {
-	ibMetaID m_id = wxNOT_FOUND;
+	ibMetaID m_id = ibNOT_FOUND;
 	bool operator==(const ibCommandHop& o) const { return m_id == o.m_id; }
 };
 
@@ -62,9 +62,9 @@ public:
 	void ClearCommand() { m_listCommand.clear(); }
 
 	// The first hop is the entry point (form / source id); the leaf is the command actually run.
-	ibMetaID GetFirst() const { return m_listCommand.empty() ? wxNOT_FOUND : m_listCommand.front().m_id; }
-	ibMetaID GetLeaf()  const { return m_listCommand.empty() ? wxNOT_FOUND : m_listCommand.back().m_id; }
-	ibMetaID GetByIdx(unsigned int idx) const { return idx < m_listCommand.size() ? m_listCommand[idx].m_id : wxNOT_FOUND; }
+	ibMetaID GetFirst() const { return m_listCommand.empty() ? ibNOT_FOUND : m_listCommand.front().m_id; }
+	ibMetaID GetLeaf()  const { return m_listCommand.empty() ? ibNOT_FOUND : m_listCommand.back().m_id; }
+	ibMetaID GetByIdx(unsigned int idx) const { return idx < m_listCommand.size() ? m_listCommand[idx].m_id : ibNOT_FOUND; }
 
 	// Number of hops (0 = empty, 1 = bind straight, >1 = steps through a source).
 	size_t GetHopCount() const { return m_listCommand.size(); }

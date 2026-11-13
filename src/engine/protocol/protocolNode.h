@@ -7,8 +7,6 @@
 #include <utility>
 #include <vector>
 
-#include <wx/string.h>
-
 #include "core/fstring.h"                 // ibString — every text of the node, and the text it is read from and written to
 #include "core/memory/memoryBuffer.h"     // ibMemoryBuffer — the packet it is read from and written to
 #include "core/serialize/dataBuilder.h"   // ibDataNode — what it is

@@ -251,7 +251,7 @@ bool ibChoiceLinkResolver::Adjust(const ibChoiceHolder& holder, const ibChoiceTy
 		return false;
 
 	// ⭐⭐ THE GOVERNING VALUE BRINGS THE VALUE, AND THAT IS THE WHOLE ANSWER — ibValue::AdjustValue, the
-	// same verb the accounting register's dimension uses for a subconto. Nothing here reads a type off
+	// same verb the accounting register's dimension uses for an account dimension. Nothing here reads a type off
 	// anything: what stands in the governing field decides what it takes (a type description by what it
 	// describes, a reference through the metaobject that governs it, anything else by its own class), and
 	// what comes back is a value of that type, admitted or empty.

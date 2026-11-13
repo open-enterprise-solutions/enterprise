@@ -194,10 +194,10 @@ class BACKEND_API ibDebuggerClient {
 
 		bool ResetConnectionCounter() {
 
-			if (m_number_connection_attempts != wxNOT_FOUND)
+			if (m_number_connection_attempts != ibNOT_FOUND)
 				m_number_connection_attempts = 0;
 
-			return m_number_connection_attempts != wxNOT_FOUND;
+			return m_number_connection_attempts != ibNOT_FOUND;
 		}
 
 		// The thread's own body — a thread of its own, detached: the connection goes with it — and the loop it runs.

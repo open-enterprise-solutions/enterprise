@@ -541,7 +541,7 @@ bool ibPropertyObject::CopyProperty(ibDataNode& node) const
 {
 	for (unsigned int idx = 0; idx < GetPropertyCount(); idx++) {
 		ibProperty* prop = GetProperty(idx);
-		wxASSERT(prop);
+		ibASSERT(prop);
 		ibDataValue value;
 		if (!prop->CopyNodeValue(value))
 			return false;
@@ -549,7 +549,7 @@ bool ibPropertyObject::CopyProperty(ibDataNode& node) const
 	}
 	for (unsigned int idx = 0; idx < GetEventCount(); idx++) {
 		ibEvent* event = GetEvent(idx);
-		wxASSERT(event);
+		ibASSERT(event);
 		ibDataValue value;
 		if (!event->CopyNodeValue(value))
 			return false;
@@ -568,7 +568,7 @@ bool ibPropertyObject::PasteProperty(const ibDataNode& node)
 	// copying the properties the two do share. "Nothing arrived" is not "an empty value arrived".
 	for (unsigned int idx = 0; idx < GetPropertyCount(); idx++) {
 		ibProperty* prop = GetProperty(idx);
-		wxASSERT(prop);
+		ibASSERT(prop);
 		auto incoming = node.FindProperty(prop->GetName());
 		if (!incoming)
 			continue;
@@ -577,7 +577,7 @@ bool ibPropertyObject::PasteProperty(const ibDataNode& node)
 	}
 	for (unsigned int idx = 0; idx < GetEventCount(); idx++) {
 		ibEvent* event = GetEvent(idx);
-		wxASSERT(event);
+		ibASSERT(event);
 		auto incoming = node.FindProperty(event->GetName());
 		if (!incoming)
 			continue;

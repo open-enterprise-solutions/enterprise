@@ -16,7 +16,7 @@ bool ibValueModelTableBoxColumn::TextProcessing(const ibString& strData)
 		return false;
 
 	const ibMetaData* metaData = GetMetaData();
-	wxASSERT(metaData);
+	ibASSERT(metaData);
 	if (metaData == nullptr)
 		return false;
 	ibValue selValue; GetControlValue(selValue);
@@ -127,7 +127,7 @@ void ibValueModelTableBoxColumn::OnSelectButtonPressed()
 	// GetDataType, while the sequence itself is no longer a third copy of it.
 	const ibMetaID& formId = m_propertyChoiceForm->GetValueAsInteger();
 	const ibMetaData* metaData = GetMetaData();
-	const ibValueMetaObject* choiceForm = (formId != wxNOT_FOUND && metaData != nullptr)
+	const ibValueMetaObject* choiceForm = (formId != ibNOT_FOUND && metaData != nullptr)
 		? metaData->FindAnyObjectByFilter(formId) : nullptr;
 	ibTypeControlFactory::ChooseValue(this, choiceForm);
 }

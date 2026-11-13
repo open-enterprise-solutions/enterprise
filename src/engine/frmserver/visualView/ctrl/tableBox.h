@@ -1,7 +1,7 @@
 #ifndef __TABLE_BOX_H__
 #define __TABLE_BOX_H__
 
-#include "backend/tabularModel.h"   // ibValueModel, and through it ibDataViewItem and wxDVC_DEFAULT_WIDTH
+#include "backend/tabularModel.h"   // ibValueModel, and through it ibDataViewItem and ibDVC_DEFAULT_WIDTH
 #include "backend/compiler/enumUnit.h"   // ibValueEnumeration template + AddEnumeration
 
 #include "frmserver/visualView/ctrl/window.h"
@@ -594,7 +594,7 @@ private:
 
 	ibPropertyCategory* m_categoryStyle = ibPropertyObject::CreatePropertyCategory(ibT("Style"), _("Style"));
 	ibPropertyEnum<ibValueEnumHorizontalAlignment>* m_propertyHeaderAlign = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumHorizontalAlignment>>(m_categoryStyle, ibT("HeaderAlign"), _("Header align"),
-		_("How the group's title is aligned in its header cell: left, center (the default) or right."), wxALIGN_CENTER);
+		_("How the group's title is aligned in its header cell: left, center (the default) or right."), ibAlignment_Center);
 	ibPropertyBoolean* m_propertyVisible = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryStyle, ibT("Visible"), _("Visible"),
 		_("Whether the group and all its columns are shown. Hidden columns keep their data and can be shown again from code."), true);
 };
@@ -611,8 +611,8 @@ public:
 	////////////////////////////////////////////////////////////////////////////////////////
 
 	ibFormID GetModelColumn() const {
-		const ibFormID& id = m_model_id != wxNOT_FOUND ? m_model_id : GetSource();
-		return id != wxNOT_FOUND ? id : m_controlId;
+		const ibFormID& id = m_model_id != ibNOT_FOUND ? m_model_id : GetSource();
+		return id != ibNOT_FOUND ? id : m_controlId;
 	}
 	void SetModelColumn(const ibFormID& id) { m_model_id = id; }
 
@@ -864,11 +864,11 @@ private:
 
 	ibPropertyCategory* m_categoryStyle = ibPropertyObject::CreatePropertyCategory(ibT("Style"), _("Style"));
 	ibPropertyUInteger* m_propertyWidth = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categoryStyle, ibT("Width"), _("Width"),
-		_("The column's starting width, in pixels. The user can change it when the column is resizable."), wxDVC_DEFAULT_WIDTH);
+		_("The column's starting width, in pixels. The user can change it when the column is resizable."), ibDVC_DEFAULT_WIDTH);
 	ibPropertyEnum<ibValueEnumHorizontalAlignment>* m_propertyHeaderAlign = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumHorizontalAlignment>>(m_categoryStyle, ibT("HeaderAlign"), _("Header align"),
-		_("How the header text is aligned: left (the default), center or right."), wxALIGN_LEFT);
+		_("How the header text is aligned: left (the default), center or right."), ibAlignment_Left);
 	ibPropertyEnum<ibValueEnumHorizontalAlignment>* m_propertyFooterAlign = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumHorizontalAlignment>>(m_categoryStyle, ibT("FooterAlign"), _("Footer align"),
-		_("How the footer text is aligned: left (the default), center or right. Right suits a total under a numeric column."), wxALIGN_LEFT);
+		_("How the footer text is aligned: left (the default), center or right. Right suits a total under a numeric column."), ibAlignment_Left);
 	ibPropertyEnum<ibValueEnumRepresentation>* m_propertyRepresentation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumRepresentation>>(m_categoryStyle, ibT("Representation"), _("Representation"),
 		_("What the header and footer cells show: text, picture, or both. Auto: the title and the picture, whichever are set."),
 		ibRepresentation::ibRepresentation_Auto);

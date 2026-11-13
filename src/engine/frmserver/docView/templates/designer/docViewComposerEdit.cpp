@@ -27,7 +27,7 @@ void WriteQueryFields(ibDataNode& into, const ibString& text, const ibMetaData* 
 	ibDataNode& fields = into.Child(ibProtocol::ibView::ibComposer::Fields);
 	std::vector<ibTypeDescription> types;
 	for (const ibQueryConstructorField& field : ibQueryFieldsOfText(text, metaData, &error)) {
-		ibWriteSettingsField(fields, field.m_name, field.m_caption, wxNOT_FOUND, field.m_type, field.m_available,
+		ibWriteSettingsField(fields, field.m_name, field.m_caption, ibNOT_FOUND, field.m_type, field.m_available,
 			ibPictureDescription(), metaData);
 		types.push_back(field.m_type);
 	}
@@ -55,7 +55,7 @@ void WriteListSourceFields(ibDataNode& into, ibMetaID mainTable, const ibString&
 	std::vector<ibString> names;
 
 	ibQueryableFactory* const factory = metaData != nullptr ? metaData->GetSourceFactory() : nullptr;
-	if (const ibQueryableSourceDescriptor* const descriptor = (factory != nullptr && mainTable != wxNOT_FOUND)
+	if (const ibQueryableSourceDescriptor* const descriptor = (factory != nullptr && mainTable != ibNOT_FOUND)
 		? factory->ResolveDescriptorById(mainTable) : nullptr) {
 		ibSourceDataObject::ibSourceExplorer explorer;
 		descriptor->FillSourceExplorer(explorer);
@@ -79,7 +79,7 @@ void WriteListSourceFields(ibDataNode& into, ibMetaID mainTable, const ibString&
 				already = already || name.IsSameAs(field.m_name, false);
 			if (already)
 				continue;
-			ibWriteSettingsField(fields, field.m_name, field.m_caption, wxNOT_FOUND, field.m_type, field.m_available,
+			ibWriteSettingsField(fields, field.m_name, field.m_caption, ibNOT_FOUND, field.m_type, field.m_available,
 				ibPictureDescription(), metaData);
 			types.push_back(field.m_type);
 		}
@@ -94,8 +94,6 @@ void WriteListSourceFields(ibDataNode& into, ibMetaID mainTable, const ibString&
 // ----------------------------------------------------------------------------
 // ibComposerCompositionView implementation
 // ----------------------------------------------------------------------------
-
-wxIMPLEMENT_DYNAMIC_CLASS(ibComposerCompositionView, ibMetaView);
 
 ibComposerCompositionView::~ibComposerCompositionView()
 {
@@ -191,7 +189,7 @@ bool ibFetchComposerRequest(const ibDataNode& request, ibDataNode& response, con
 	}
 	case ibProtocol::ibView::ibComposer::ibRequest::Source:
 		WriteListSourceFields(response, request.Has(ibProtocol::ibView::ibComposer::Id)
-			? static_cast<ibMetaID>(request.GetValue<std::int32_t>(ibProtocol::ibView::ibComposer::Id)) : static_cast<ibMetaID>(wxNOT_FOUND),
+			? static_cast<ibMetaID>(request.GetValue<std::int32_t>(ibProtocol::ibView::ibComposer::Id)) : static_cast<ibMetaID>(ibNOT_FOUND),
 			request.GetValue<ibString>(ibProtocol::ibView::ibComposer::Text), metaData);
 		return true;
 	case ibProtocol::ibView::ibComposer::ibRequest::Types: {

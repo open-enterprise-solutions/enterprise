@@ -582,7 +582,7 @@ public:
 	virtual long FindProp(const ibString& name) const override {
 		if (stringUtils::IsSameAs(name, ibT("Key")))    return 0;
 		if (stringUtils::IsSameAs(name, ibT("Values"))) return 1;
-		return wxNOT_FOUND;
+		return ibNOT_FOUND;
 	}
 
 	virtual bool     IsEmpty()   const override { return false; }
@@ -618,7 +618,7 @@ public:
 		ibString rest = names;
 		while (!rest.IsEmpty()) {
 			const int at = rest.Find(ibT('\n'));
-			if (at == wxNOT_FOUND) { m_fields.push_back(rest); break; }
+			if (at == ibNOT_FOUND) { m_fields.push_back(rest); break; }
 			m_fields.push_back(rest.Left(at));
 			rest = rest.Mid(at + 1);
 		}
@@ -639,7 +639,7 @@ public:
 		for (size_t i = 0; i < m_fields.size(); ++i)
 			if (stringUtils::IsSameAs(m_fields[i], name))
 				return (long)i;
-		return wxNOT_FOUND;
+		return ibNOT_FOUND;
 	}
 
 private:
@@ -718,7 +718,7 @@ public:
 	// nothing to build, nothing to cache and nothing to invalidate.
 	virtual long     GetNProps() const override { return (long)m_count; }
 	virtual long     FindProp(const ibString& name) const override {
-		return m_shape != nullptr ? m_shape->Ordinal(name) : wxNOT_FOUND;
+		return m_shape != nullptr ? m_shape->Ordinal(name) : ibNOT_FOUND;
 	}
 	virtual const ibString& GetPropName(const long lPropNum) const override {
 		// Both arms the same lvalue type, so the conditional lends a reference and is not ambiguous

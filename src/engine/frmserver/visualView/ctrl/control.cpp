@@ -69,7 +69,7 @@ const ibMetaData* ibValueControl::GetMetaData() const
 ibFormID ibValueControl::GetTypeForm() const
 {
 	if (m_formOwner == nullptr) {
-		wxASSERT(m_formOwner);
+		ibASSERT(m_formOwner);
 		return 0;
 	}
 
@@ -103,7 +103,7 @@ void ibValueControl::AutoBindNewSource(ibTypeControlFactory* factory)
 		? declared.GetFirstClsid()
 		: ibBackendTypeConfigFactory::GetDefaultTypeByFilter(factory->GetFilterDataType()));
 	const ibMetaID id = m_formOwner->AddAutoAttribute(GetControlName(), typeDesc);
-	if (id != wxNOT_FOUND)
+	if (id != ibNOT_FOUND)
 		factory->SetDefaultSourceType(id);   // one-hop bind, over the mutable GetSourceDesc (twin of SetDefaultMetaType over GetTypeDesc)
 }
 

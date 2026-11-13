@@ -89,7 +89,7 @@ bool ibProtocolConnectionServer::ParseAddress(const ibString& address, ibString&
 			return false;
 	}
 	const int slash = rest.Find(ibT('/'));
-	if (slash == wxNOT_FOUND)
+	if (slash == ibNOT_FOUND)
 		return false;
 	ibString authority = rest.Left(slash);
 	base = rest.Mid(slash + 1);
@@ -105,7 +105,7 @@ bool ibProtocolConnectionServer::ParseAddress(const ibString& address, ibString&
 
 	port = page ? (secure ? 443 : 80) : ibPort::Clients.m_first;
 	const int colon = authority.Find(ibT(':'), true);
-	if (colon != wxNOT_FOUND && !authority.EndsWith(ibT("]"))) {
+	if (colon != ibNOT_FOUND && !authority.EndsWith(ibT("]"))) {
 		long number = 0;
 		if (!authority.Mid(colon + 1).ToLong(&number) || number <= 0 || number > 65535)
 			return false;
@@ -113,7 +113,7 @@ bool ibProtocolConnectionServer::ParseAddress(const ibString& address, ibString&
 		authority = authority.Left(colon);
 	}
 	host = authority;
-	return !host.IsEmpty() && !base.IsEmpty() && base.Find(ibT('/')) == wxNOT_FOUND;
+	return !host.IsEmpty() && !base.IsEmpty() && base.Find(ibT('/')) == ibNOT_FOUND;
 }
 
 std::string ibProtocolConnectionServer::ClientPath(const ibString& base)

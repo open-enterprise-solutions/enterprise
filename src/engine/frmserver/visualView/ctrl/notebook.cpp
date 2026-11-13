@@ -20,7 +20,7 @@ ibValueNotebook::ibValueNotebook() : ibValueWindow(), m_activePage(nullptr)
 
 void ibValueNotebook::AddNotebookPage(ibVisualHost* host)
 {
-	wxASSERT(m_formOwner);
+	ibASSERT(m_formOwner);
 
 	// Named, numbered and put on the notebook by the form (NewObject), then built as the designer's add builds one.
 	ibValueFrame* newNotebookPage = m_formOwner->NewObject(g_controlNotebookPageCLSID, this);

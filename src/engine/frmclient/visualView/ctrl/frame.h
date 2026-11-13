@@ -142,6 +142,10 @@ public:
 	virtual ibFrontendView* GetControlView() const { return nullptr; }
 	// The command bar it holds — a table's, a grid box's (the server's GetCommandBar); none — no bar of its own.
 	virtual ibViewCommandBar* GetCommandBar() const { return nullptr; }
+	// The background the platform gives its kind when its author picks none (the web client's platformBackground): a
+	// form sends it as any colour, and the desktop leaves it to the theme, as the control's state has it (ApplyLook).
+	// None — the colour sent is applied as it is: a form's ground is the style's colour itself.
+	virtual wxColour GetPlatformBackground() const { return wxNullColour; }
 
 	// An edit under way, carried over a rebuild into the control built anew for the same node: a frame that changes
 	// the form under the person's hands loses nothing of what is typed, and commits nothing of it.
@@ -169,9 +173,10 @@ protected:
 	ibViewFetcher MakeFetcher() const;
 
 	// The desktop's UpdateWindow: the sizes and the look the form saved; enabled, shown and the tooltip as State says.
-	static void UpdateWindow(wxWindow* window, const ibProtocolNode& node);
-	// The desktop's ApplyLook: the font and the colours, where the form set them.
-	static void ApplyLook(wxWindow* window, const ibProtocolNode& node);
+	static void UpdateWindow(wxWindow* window, const ibProtocolNode& node, const wxColour& platformBackground = wxNullColour);
+	// The desktop's ApplyLook: the font and the colours, where the form set them - a background that is the kind's own
+	// (GetPlatformBackground) left to the theme.
+	static void ApplyLook(wxWindow* window, const ibProtocolNode& node, const wxColour& platformBackground = wxNullColour);
 
 private:
 
@@ -192,7 +197,7 @@ private:
 // A node's type and the control made for it — at the bottom of the control's source, as a tab's document is registered
 // (TAB_DOCUMENT_REGISTER).
 #define CONTROL_REGISTER(class_info, type)\
-	[[maybe_unused]] static const bool wxMAKE_UNIQUE_NAME(s_control_reg_) = (ibValueFrame::Register(type,\
+	[[maybe_unused]] static const bool ibMAKE_UNIQUE_NAME(s_control_reg_) = (ibValueFrame::Register(type,\
 		[](ibVisualHostClient& host, long long controlId) -> ibValueFrame* { return new class_info(host, controlId); }), true);
 
 #endif

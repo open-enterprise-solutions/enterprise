@@ -7,6 +7,7 @@
 
 #ifdef __IBMSW__
 #include <oaidl.h>      // SAFEARRAY, VARIANT
+#undef GetClassName     // winuser.h's macro would rename ibValue::GetClassName
 
 class ibValueArray;
 #endif

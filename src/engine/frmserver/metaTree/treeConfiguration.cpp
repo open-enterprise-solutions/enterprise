@@ -21,7 +21,7 @@
 #include <functional>   // std::function — a group fills its nested groups first
 #include <vector>
 
-#include <wx/scopeguard.h>   // wxON_BLOCK_EXIT_NULL — the form asked is shown again, however the asking ends
+#include "core/scopeGuard.h"   // ibON_BLOCK_EXIT_NULL - the form asked is shown again, however the asking ends
 
 // The COMMON row is not a metatype's group — it is the band itself, so its label stays here, and the client draws it
 // with its folder.
@@ -261,7 +261,7 @@ bool ibMetaTreeBase::AskFormKind(ibValueMetaObject* object)
 		return true;
 
 	ibValueMetaObjectForm* form = dynamic_cast<ibValueMetaObjectForm*>(object);
-	if (form == nullptr || form->GetTypeForm() != wxNOT_FOUND)
+	if (form == nullptr || form->GetTypeForm() != ibNOT_FOUND)
 		return true;
 
 	ibValueMetaObjectGenericData* owner =
@@ -279,7 +279,7 @@ bool ibMetaTreeBase::AskFormKind(ibValueMetaObject* object)
 	int chosen = defaultFormType;
 	{
 		m_askedObject = form;
-		wxON_BLOCK_EXIT_NULL(m_askedObject);
+		ibON_BLOCK_EXIT_NULL(m_askedObject);
 		if (!dlg.ShowModal(chosen)) {
 			GetMetaData()->RemoveMetaObject(form);
 			return false;
@@ -324,9 +324,9 @@ bool ibMetaTreeBase::AskTemplateKind(ibValueMetaObject* object)
 		for (unsigned int idx = 0; idx < kinds.GetCount(); idx++)
 			dlg.AppendKind(object->GetName(), kinds.GetLabel(idx), kinds.GetId(idx));
 
-		int answer = wxNOT_FOUND;
+		int answer = ibNOT_FOUND;
 		m_askedObject = object;
-		wxON_BLOCK_EXIT_NULL(m_askedObject);
+		ibON_BLOCK_EXIT_NULL(m_askedObject);
 		if (!dlg.ShowModal(answer)) {
 			GetMetaData()->RemoveMetaObject(object);
 			return false;
@@ -354,7 +354,7 @@ bool ibMetaTreeBase::AskTemplateKind(ibValueMetaObject* object)
 void ibMetaTreeBase::NotifyDocuments() const
 {
 	for (auto& doc : m_frame->GetDocumentManager()->GetDocumentsVector()) {
-		ibMetaDocument* metaDoc = wxDynamicCast(doc, ibMetaDocument);
+		ibMetaDocument* metaDoc = dynamic_cast<ibMetaDocument*>(doc);
 		if (metaDoc != nullptr) metaDoc->UpdateAllViews();
 	}
 }
@@ -366,7 +366,7 @@ void ibMetaTreeBase::CloseDocuments()
 	if (GetMetaData() == nullptr)
 		return;
 	for (auto& doc : m_frame->GetDocumentManager()->GetDocumentsVector()) {
-		const ibMetaDocument* metaDoc = wxDynamicCast(doc, ibMetaDocument);
+		const ibMetaDocument* metaDoc = dynamic_cast<const ibMetaDocument*>(doc);
 		if (metaDoc == nullptr) continue;
 		const ibValueMetaObject* metaObject = metaDoc->GetMetaObject();
 		if (metaObject != nullptr && metaObject->GetMetaData() == GetMetaData()) {
@@ -381,7 +381,7 @@ void ibMetaTreeBase::CloseDocuments()
 void ibMetaTreeBase::EraseItem(const ibValueMetaObject* object)
 {
 	for (auto& doc : m_frame->GetDocumentManager()->GetDocumentsVector()) {
-		ibMetaDocument* metaDoc = wxDynamicCast(doc, ibMetaDocument);
+		ibMetaDocument* metaDoc = dynamic_cast<ibMetaDocument*>(doc);
 		if (metaDoc == nullptr)
 			continue;
 		for (const ibValueMetaObject* shown = metaDoc->GetMetaObject(); shown != nullptr; shown = shown->GetParent()) {
@@ -469,7 +469,7 @@ void ibMetaTreeBase::AppendMenu(ibDataNode& item, ibValueMetaObject* metaObject)
 			row.SetValue(ibProtocol::ibSchema::ibMetaData::Picture, ibBackendPicture::SendPicture(entry.m_metaObject->GetClassType()));
 		else if (entry.m_picture != 0)
 			row.SetValue(ibProtocol::ibSchema::ibMetaData::Picture, ibBackendPicture::SendPicture(entry.m_picture));
-		if (entry.m_id != wxNOT_FOUND)
+		if (entry.m_id != ibNOT_FOUND)
 			row.SetValue(ibProtocol::ibSchema::ibMetaData::Command, static_cast<std::int32_t>(entry.m_id));
 	}
 
@@ -564,7 +564,7 @@ void ibConfigurationTree::AppendCommandGroup(ibDataNode& parent, const ibString&
 void ibConfigurationTree::AddInterfaceItem(ibValueMetaObject* metaObject, ibDataNode& hParentID)
 {
 	ibValueMetaObjectSection* metaObjectValue = metaObject->ConvertToType<ibValueMetaObjectSection>();
-	wxASSERT(metaObjectValue);
+	ibASSERT(metaObjectValue);
 
 	// SECTIONS NEST.
 	for (auto commonInterface : metaObjectValue->GetInterfaceArrayObject()) {
@@ -583,7 +583,7 @@ void ibConfigurationTree::AddInterfaceItem(ibValueMetaObject* metaObject, ibData
 void ibConfigurationTree::AddCatalogItem(ibValueMetaObject* metaObject, ibDataNode& hParentID)
 {
 	ibValueMetaObjectRecordDataRef* metaObjectValue = metaObject->ConvertToType<ibValueMetaObjectRecordDataRef>();
-	wxASSERT(metaObjectValue);
+	ibASSERT(metaObjectValue);
 
 	AppendObjectGroup(hParentID, g_metaAttributeCLSID, objectAttributesName,
 		metaObjectValue->GetAttributeArrayObject());
@@ -602,7 +602,7 @@ void ibConfigurationTree::AddCatalogItem(ibValueMetaObject* metaObject, ibDataNo
 void ibConfigurationTree::AddChartOfAccountsItem(ibValueMetaObject* metaObject, ibDataNode& hParentID)
 {
 	ibValueMetaObjectChartOfAccounts* chart = metaObject->ConvertToType<ibValueMetaObjectChartOfAccounts>();
-	wxASSERT(chart);
+	ibASSERT(chart);
 
 	AppendObjectGroup(hParentID, g_metaAttributeCLSID, objectAttributesName,
 		chart->GetAttributeArrayObject());
@@ -629,7 +629,7 @@ void ibConfigurationTree::AddDocumentItem(ibValueMetaObject* metaObject, ibDataN
 void ibConfigurationTree::AddEnumerationItem(ibValueMetaObject* metaObject, ibDataNode& hParentID)
 {
 	ibValueMetaObjectRecordDataEnumRef* metaObjectValue = metaObject->ConvertToType<ibValueMetaObjectRecordDataEnumRef>();
-	wxASSERT(metaObjectValue);
+	ibASSERT(metaObjectValue);
 
 	AppendObjectGroup(hParentID, g_metaEnumCLSID, objectEnumerationsName,
 		metaObjectValue->GetEnumObjectArray());
@@ -644,7 +644,7 @@ void ibConfigurationTree::AddEnumerationItem(ibValueMetaObject* metaObject, ibDa
 void ibConfigurationTree::AddDataProcessorItem(ibValueMetaObject* metaObject, ibDataNode& hParentID)
 {
 	ibValueMetaObjectRecordData* metaObjectValue = metaObject->ConvertToType<ibValueMetaObjectRecordData>();
-	wxASSERT(metaObjectValue);
+	ibASSERT(metaObjectValue);
 
 	AppendObjectGroup(hParentID, g_metaAttributeCLSID, objectAttributesName,
 		metaObjectValue->GetAttributeArrayObject());
@@ -661,7 +661,7 @@ void ibConfigurationTree::AddDataProcessorItem(ibValueMetaObject* metaObject, ib
 void ibConfigurationTree::AddInformationRegisterItem(ibValueMetaObject* metaObject, ibDataNode& hParentID)
 {
 	ibValueMetaObjectRegisterData* metaObjectValue = metaObject->ConvertToType<ibValueMetaObjectRegisterData>();
-	wxASSERT(metaObjectValue);
+	ibASSERT(metaObjectValue);
 
 	AppendObjectGroup(hParentID, g_metaDimensionCLSID, objectDimensionsName,
 		metaObjectValue->GetDimensionArrayObject());
@@ -685,7 +685,7 @@ void ibConfigurationTree::AddAccumulationRegisterItem(ibValueMetaObject* metaObj
 void ibConfigurationTree::AddSequenceItem(ibValueMetaObject* metaObject, ibDataNode& hParentID)
 {
 	ibValueMetaObjectRegisterData* metaObjectValue = metaObject->ConvertToType<ibValueMetaObjectRegisterData>();
-	wxASSERT(metaObjectValue);
+	ibASSERT(metaObjectValue);
 
 	AppendObjectGroup(hParentID, g_metaDimensionCLSID, objectDimensionsName,
 		metaObjectValue->GetDimensionArrayObject());
@@ -761,7 +761,7 @@ bool ibConfigurationTree::TableColumns(ibValueMetaObject* table, ibClassID& colu
 	const ibClassID clsid = table->GetClassType();
 	if (clsid == g_metaTableCLSID || clsid == g_metaTableRefCLSID) {
 		ibValueMetaObjectTableData* metaTable = table->ConvertToType<ibValueMetaObjectTableData>();
-		wxASSERT(metaTable);
+		ibASSERT(metaTable);
 		columnClsid = g_metaAttributeCLSID;
 		if (metaTable != nullptr)
 			for (auto attribute : metaTable->GetAttributeArrayObject())
@@ -781,7 +781,7 @@ bool ibConfigurationTree::TableColumns(ibValueMetaObject* table, ibClassID& colu
 void ibConfigurationTree::FillData(ibDataNode& root)
 {
 	ibValueMetaObject* commonMetadata = m_metaData->GetCommonMetaObject();
-	wxASSERT(commonMetadata);
+	ibASSERT(commonMetadata);
 
 	root.SetMetaId(commonMetadata->GetMetaID());
 	root.SetValue(ibProtocol::ibSchema::ibMetaData::Title, m_metaData->GetConfigName());

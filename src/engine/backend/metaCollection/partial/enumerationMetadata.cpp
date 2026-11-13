@@ -33,10 +33,10 @@ ibValueMetaObjectEnumeration::~ibValueMetaObjectEnumeration()
 
 ibValueMetaObjectFormBase* ibValueMetaObjectEnumeration::GetDefaultFormByID(const ibFormID& id) const
 {
-	if (id == eFormList && m_propertyDefFormList->GetValueAsInteger() != wxNOT_FOUND) {
+	if (id == eFormList && m_propertyDefFormList->GetValueAsInteger() != ibNOT_FOUND) {
 		return FindFormObjectByFilter(m_propertyDefFormList->GetValueAsInteger());
 	}
-	else if (id == eFormSelect && m_propertyDefFormSelect->GetValueAsInteger() != wxNOT_FOUND) {
+	else if (id == eFormSelect && m_propertyDefFormSelect->GetValueAsInteger() != ibNOT_FOUND) {
 		return FindFormObjectByFilter(m_propertyDefFormSelect->GetValueAsInteger());
 	}
 
@@ -195,12 +195,12 @@ bool ibValueMetaObjectEnumeration::OnAfterCloseMetaObject()
 void ibValueMetaObjectEnumeration::OnCreateFormObject(ibValueMetaObjectFormBase* metaForm)
 {
 	if (metaForm->GetTypeForm() == ibValueMetaObjectEnumeration::eFormList
-		&& m_propertyDefFormList->GetValueAsInteger() == wxNOT_FOUND)
+		&& m_propertyDefFormList->GetValueAsInteger() == ibNOT_FOUND)
 	{
 		m_propertyDefFormList->SetValue(metaForm->GetMetaID());
 	}
 	else if (metaForm->GetTypeForm() == ibValueMetaObjectEnumeration::eFormSelect
-		&& m_propertyDefFormSelect->GetValueAsInteger() == wxNOT_FOUND)
+		&& m_propertyDefFormSelect->GetValueAsInteger() == ibNOT_FOUND)
 	{
 		m_propertyDefFormSelect->SetValue(metaForm->GetMetaID());
 	}
@@ -211,12 +211,12 @@ void ibValueMetaObjectEnumeration::OnRemoveMetaForm(ibValueMetaObjectFormBase* m
 	if (metaForm->GetTypeForm() == ibValueMetaObjectEnumeration::eFormList
 		&& m_propertyDefFormList->GetValueAsInteger() == metaForm->GetMetaID())
 	{
-		m_propertyDefFormList->SetValue(wxNOT_FOUND);
+		m_propertyDefFormList->SetValue(ibNOT_FOUND);
 	}
 	else if (metaForm->GetTypeForm() == ibValueMetaObjectEnumeration::eFormSelect
 		&& m_propertyDefFormSelect->GetValueAsInteger() == metaForm->GetMetaID())
 	{
-		m_propertyDefFormSelect->SetValue(wxNOT_FOUND);
+		m_propertyDefFormSelect->SetValue(ibNOT_FOUND);
 	}
 }
 

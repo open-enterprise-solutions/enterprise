@@ -13,7 +13,7 @@
 
 #include <functional>
 
-#include <wx/string.h>
+#include "core/fstring.h"   // ibString
 
 #include <cstdint>   // std::int32_t
 

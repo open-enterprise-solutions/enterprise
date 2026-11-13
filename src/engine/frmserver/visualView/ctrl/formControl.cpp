@@ -155,7 +155,7 @@ void ibValueForm::ibValueFormCollectionControl::FillMembers(ibMemberTable& helpe
 
 bool ibValueForm::ibValueFormCollectionControl::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	wxASSERT(m_formOwner);
+	ibASSERT(m_formOwner);
 	pvarPropVal = m_formOwner->FindControlByID(
 		m_members.GetPropData(lPropNum)
 	);

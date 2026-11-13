@@ -40,7 +40,7 @@ void ibValueManagerDataObjectEnumeration::FillManagerMethods(ibMemberTable& help
 			object->GetName(),
 			true, false,
 			object->GetMetaID(),
-			wxNOT_FOUND
+			ibNOT_FOUND
 		);
 	}
 }

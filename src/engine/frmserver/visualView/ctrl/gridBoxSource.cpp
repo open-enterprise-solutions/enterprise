@@ -170,11 +170,11 @@ ibGuid ibValueGridBox::SettingsObjectKey() const
 {
 	const ibMetaData* metaData = GetMetaData();
 	if (metaData == nullptr || m_propertySource->IsEmptyProperty())
-		return wxNullGuid;
+		return ibNullGuid;
 
 	const ibSourceId leaf = m_propertySource->GetValueAsSourceDesc().GetLeaf();
-	if (leaf == wxNOT_FOUND)
-		return wxNullGuid;
+	if (leaf == ibNOT_FOUND)
+		return ibNullGuid;
 
 	return metaData->GuidByMetaId(leaf);
 }

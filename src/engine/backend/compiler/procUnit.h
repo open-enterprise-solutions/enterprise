@@ -130,11 +130,11 @@ public:
 
 	ibProcUnit* GetParent(unsigned int iLevel = 0) const {
 		if (iLevel >= m_procParent.size()) {
-			wxASSERT(iLevel == 0);
+			ibASSERT(iLevel == 0);
 			return nullptr;
 		}
 		else {
-			wxASSERT(iLevel == m_procParent.size() - 1 || m_procParent[iLevel]);
+			ibASSERT(iLevel == m_procParent.size() - 1 || m_procParent[iLevel]);
 			return m_procParent[iLevel];
 		}
 	}

@@ -353,7 +353,7 @@ ibParamUnit ibCompileContext::GetVariable(const ibString& strVarName, bool bFind
 		return AddVariable(strVarName, 0, contextVar, contextVar, tempVar);
 	}
 
-	wxASSERT(currentVariable);
+	ibASSERT(currentVariable);
 
 	ibParamUnit variable;
 
@@ -568,7 +568,7 @@ bool ibCompileContext::FindFunction(const ibString& strFuncName, std::shared_ptr
  */
 void ibCompileContext::CreateLabels()
 {
-	wxASSERT(m_compileModule != nullptr);
+	ibASSERT(m_compileModule != nullptr);
 	for (unsigned int i = 0; i < m_listLabel.size(); i++) {
 
 		const ibString& strName = m_listLabel[i]->m_strName;

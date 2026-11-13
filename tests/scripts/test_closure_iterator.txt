@@ -1,10 +1,9 @@
 // Typed-enum dispatch smoke — verify TYPE_ITERATOR migration
 // didn't break OPER_FOREACH / OPER_NEXT_ITER paths.
 //
-// Plain iteration через arr — under the hood OPER_FOREACH calls
+// Plain iteration over arr — under the hood OPER_FOREACH calls
 // AsIterator() instead of ConvertToType<ibValueIterator>(). Single
-// int compare on m_typeClass + static_cast, без RTTI walk через
-// wxClassInfo.
+// int compare on m_typeClass + static_cast, no RTTI walk.
 
 var arr = New Array
 arr.Add(10)

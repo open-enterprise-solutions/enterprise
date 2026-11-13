@@ -91,7 +91,7 @@ ibValue& ResolveWriteOuter(int slot, int idx, ibRunContext** ppArrayContext, boo
 	// Costs nothing on the hot path: the opcode index is already maintained per
 	// instruction (`m_lCurLine`), and this is read only while raising.
 	if (slot == DEF_VAR_CONST) {
-		long lAtOpcode = wxNOT_FOUND;
+		long lAtOpcode = ibNOT_FOUND;
 		if (auto* state = ibSession::GetPUState())
 			if (const ibRunContext* rc = state->GetCurrentRunContext())
 				lAtOpcode = rc->m_lCurLine;
@@ -395,7 +395,7 @@ void ibProcUnit::BuildScopeChain(ibRunContext* localScope)
 
 void ibProcUnit::BorrowScopeFrom(ibProcUnit* donor)
 {
-	wxASSERT(donor != nullptr);
+	ibASSERT(donor != nullptr);
 	if (donor == nullptr)
 		return;
 
@@ -474,9 +474,9 @@ IB_NOINLINE void RaiseWithCallStack(ibProcUnitState* state, const ibString& reas
 
 	for (unsigned int i = 0; i < state->GetCountRunContext(); i++) {
 		const ibRunContext* stackContext = state->GetRunContext(i);
-		wxASSERT(stackContext);
+		ibASSERT(stackContext);
 		const ibByteCode* stackByteCode = stackContext->GetByteCode();
-		wxASSERT(stackByteCode);
+		ibASSERT(stackByteCode);
 
 		// Same rule as the diagnostic's stack walk: a position outside its own bytecode prints as
 		// line 0 — the message about a runaway must not itself read past the array.
@@ -533,7 +533,7 @@ struct ibProcStackGuard {
 		// Active state is required — ibProcUnit::Execute is reached only
 		// through a bound session (ibSessionScope / ibSessionThreadBinding).
 		m_state = state;
-		wxASSERT(state != nullptr);
+		ibASSERT(state != nullptr);
 		// The count is the limit a script sees (MAX_REC_COUNT). The stack
 		// probe lives in Execute, ahead of this frame: a check here runs
 		// only after the prologue has committed it, which is the overflow
@@ -1148,7 +1148,7 @@ IB_NOINLINE void ibProcUnit::ExecuteBody(ibRunContext* pContext, ibValue* pvarRe
 	// at info->lo + 1 and runs until OPER_ENDLFUNC — same termination
 	// path as named functions.
 	long lFinish = (long)m_pByteCode->m_listCode.size();
-	long lPrevLine = wxNOT_FOUND;
+	long lPrevLine = ibNOT_FOUND;
 
 	std::vector<ibTryLabel> tryList;
 
@@ -1625,13 +1625,13 @@ start_label:
 				// every method call, whatever its arity, which is what made the
 				// frame work land nowhere on this path (docs/private/runtime-perf.md §5.6).
 				// The method's own arity is the honest bound, and it is already
-				// being fetched for the check. wxNOT_FOUND means "arity unknown",
+				// being fetched for the check. ibNOT_FOUND means "arity unknown",
 				// and there a blanket width is the only safe answer — a width chosen
 				// for THIS question (procContext.h, kSlotsWhenArityUnknown) rather than
 				// MAX_STATIC_VAR, which answered a different one and answered it by
 				// the size of a pointer.
 				const long paramCount = pVariable2->GetNParams(lMethodNum);
-				ibRunContextSmall cRunContext(paramCount == wxNOT_FOUND
+				ibRunContextSmall cRunContext(paramCount == ibNOT_FOUND
 					? std::max((long)array3, kSlotsWhenArityUnknown)
 					: std::max((long)array3, paramCount), ibRunLifetime::PerCall);
 				cRunContext.m_lParamCount = array3;
@@ -1678,15 +1678,15 @@ start_label:
 				// too many parameters — per-class methods have a meaningful
 				// compile-time GetNParams.
 				{
-					// wxNOT_FOUND = "as many as it is given" (a negative declared
+					// ibNOT_FOUND = "as many as it is given" (a negative declared
 					// arity), and the frame above is already sized for it. It must
 					// be excluded from the upper bound FIRST — `-1 < anything` is
 					// true, so the bound rejected every call to such a method and
 					// the clause below it, which is the one written for this case,
 					// could never be reached.
-					if (paramCount != wxNOT_FOUND && paramCount < cRunContext.m_lParamCount)
+					if (paramCount != ibNOT_FOUND && paramCount < cRunContext.m_lParamCount)
 						Raise(ibScriptError_ManyParams, funcName);
-					else if (paramCount == wxNOT_FOUND && cRunContext.m_lParamCount == 0)
+					else if (paramCount == ibNOT_FOUND && cRunContext.m_lParamCount == 0)
 						Raise(ibScriptError_ManyParams, funcName);
 				}
 
@@ -2020,7 +2020,7 @@ start_label:
 				// `Cached` — the other half of the pair opened at OPER_FUNC.
 				// Reached only by a body that RETURNED: a raise unwinds past
 				// here, so a failed call is never answered from the store.
-				if (pContext->m_cachedEntry != wxNOT_FOUND && pvarRetValue != nullptr) {
+				if (pContext->m_cachedEntry != ibNOT_FOUND && pvarRetValue != nullptr) {
 					// The store is MADE HERE, at the first result worth keeping —
 					// which is the only moment this unit is known to need one.
 					if (!m_cachedResults)
@@ -2030,7 +2030,7 @@ start_label:
 					// kept this very tuple already, and the first result stands.
 					(*m_cachedResults)[pContext->m_cachedEntry].emplace(
 						std::move(pContext->m_cachedKey), *pvarRetValue);
-					pContext->m_cachedEntry = wxNOT_FOUND;
+					pContext->m_cachedEntry = ibNOT_FOUND;
 				}
 				lCodeLine = lFinish;
 				break; //exit
@@ -2580,7 +2580,7 @@ void ibProcUnit::Execute(const ibByteCode& cByteCode, ibByteBinder& br, ibValue*
 		ibBackendCoreException::Error(_("Module: %s not compiled!"), cByteCode.m_strModuleName);
 
 	auto* state = ibSession::GetPUState();
-	wxASSERT(state != nullptr);
+	ibASSERT(state != nullptr);
 	if (state != nullptr) state->m_recCount = 0;
 
 	m_pByteCode = &cByteCode;
@@ -2748,7 +2748,7 @@ long ibProcUnit::FindMethod(const ibString& strMethodName, bool bError, int bExp
 			return nCodeSize + lCodeLine;
 		}
 	}
-	return wxNOT_FOUND;
+	return ibNOT_FOUND;
 }
 
 long ibProcUnit::FindFunction(const ibString& strMethodName, bool bError, int bExportOnly) const
@@ -2776,7 +2776,7 @@ long ibProcUnit::FindFunction(const ibString& strMethodName, bool bError, int bE
 			return nCodeSize + lCodeLine;
 		}
 	}
-	return wxNOT_FOUND;
+	return ibNOT_FOUND;
 }
 
 long ibProcUnit::FindProcedure(const ibString& strMethodName, bool bError, int bExportOnly) const
@@ -2804,7 +2804,7 @@ long ibProcUnit::FindProcedure(const ibString& strMethodName, bool bError, int b
 			return nCodeSize + lCodeLine;
 		}
 	}
-	return wxNOT_FOUND;
+	return ibNOT_FOUND;
 }
 
 //Calling a procedure by name
@@ -2813,7 +2813,7 @@ bool ibProcUnit::CallAsProc(const ibString& funcName, ibValue** ppParams, const 
 {
 	if (m_pByteCode != nullptr) {
 		const long lCodeLine = m_pByteCode->FindMethod(funcName);
-		if (lCodeLine != wxNOT_FOUND) {
+		if (lCodeLine != ibNOT_FOUND) {
 			CallAsProc(lCodeLine, ppParams, lSizeArray);
 			return true;
 		}
@@ -2827,7 +2827,7 @@ bool ibProcUnit::CallAsFunc(const ibString& funcName, ibValue& pvarRetValue, ibV
 {
 	if (m_pByteCode != nullptr) {
 		const long lCodeLine = m_pByteCode->FindMethod(funcName);
-		if (lCodeLine != wxNOT_FOUND) {
+		if (lCodeLine != ibNOT_FOUND) {
 			CallAsFunc(lCodeLine, pvarRetValue, ppParams, lSizeArray);
 			return true;
 		}
@@ -2933,7 +2933,7 @@ long ibProcUnit::FindProp(const ibString& strPropName) const
 		});
 	if (iterator != m_pByteCode->m_listVar.end())
 		return (long)*iterator;
-	return wxNOT_FOUND;
+	return ibNOT_FOUND;
 }
 
 bool ibProcUnit::SetPropVal(const long lPropNum, const ibValue& varPropVal)//setting attribute
@@ -2945,7 +2945,7 @@ bool ibProcUnit::SetPropVal(const long lPropNum, const ibValue& varPropVal)//set
 bool ibProcUnit::SetPropVal(const ibString& strPropName, const ibValue& varPropVal)//setting attribute
 {
 	long lPropNum = FindProp(strPropName);
-	if (lPropNum != wxNOT_FOUND) {
+	if (lPropNum != ibNOT_FOUND) {
 		*m_cCurContext.m_pRefLocVars[lPropNum] = varPropVal;
 	}
 	else {
@@ -2974,7 +2974,7 @@ bool ibProcUnit::GetPropVal(const long lPropNum, ibValue& pvarPropVal) //attribu
 bool ibProcUnit::GetPropVal(const ibString& strPropName, ibValue& pvarPropVal) //setting attribute
 {
 	const long lPropNum = FindProp(strPropName);
-	if (lPropNum != wxNOT_FOUND) {
+	if (lPropNum != ibNOT_FOUND) {
 		pvarPropVal = *m_cCurContext.m_pRefLocVars[lPropNum]; // value copy, not a REFFER to the array slot (see lPropNum overload)
 		return true;
 	}
@@ -3144,7 +3144,7 @@ bool ibProcUnit::Evaluate(const ibString& strExpression, ibRunContext* pRunConte
 	const ibByteCode* const evalBc = runEvaluate->GetByteCode();
 	ibRunContext blockFrame(compileBlock
 		? (evalBc != nullptr ? (int)evalBc->m_lVarCount : (int)runEvaluate->m_cCurContext.GetLocalCount())
-		: wxNOT_FOUND, ibRunLifetime::PerCall);
+		: ibNOT_FOUND, ibRunLifetime::PerCall);
 	ibRunContext* pEvalFrame = &runEvaluate->m_cCurContext;
 	if (compileBlock) {
 		blockFrame.m_procUnit         = runEvaluate.get();

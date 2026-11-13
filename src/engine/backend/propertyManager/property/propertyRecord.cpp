@@ -84,7 +84,7 @@ bool ibPropertyRecord::SetDataValue(const ibValue& varPropVal)
 bool ibPropertyRecord::GetDataValue(ibValue& pvarPropVal) const
 {
 	const ibVariantRecord* gen = get_cell_variant<ibVariantRecord>();
-	wxASSERT(gen);
+	ibASSERT(gen);
 	pvarPropVal = gen->GetDataValue();
 	return true;
 }

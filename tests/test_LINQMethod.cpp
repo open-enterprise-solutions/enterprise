@@ -9,6 +9,7 @@
 // =============================================================================
 
 #include <gtest/gtest.h>
+#include <wx/string.h>   // wxT, wxEmptyString — the engine's headers include no wx
 #include "backend/compiler/value.h"   // ibValue::FindLinqMethodByName / GetLinqMethodTable / ibLinqMethod
 
 TEST(LinqMethod, ResolvesKnownNames) {

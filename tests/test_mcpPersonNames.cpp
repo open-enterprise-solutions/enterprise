@@ -6,6 +6,7 @@
 // and chat_say reaches its server through a client host, which this test does not have.
 
 #include <gtest/gtest.h>
+#include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
 #include <memory>
 #include <optional>

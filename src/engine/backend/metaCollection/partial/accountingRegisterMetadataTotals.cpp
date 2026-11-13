@@ -1452,7 +1452,7 @@ ibAcctSummaryMap KindsByAccount(const ibValueMetaObjectChartOfAccounts* chart, b
 }
 
 // …and the same reading NARROWED BY ANY FLAG COLUMN of the kinds table — "turnovers only", or a tick of a
-// breakdown's accounting kind ("the quantity is kept by this subconto"). No flag: every kind of every account.
+// breakdown's accounting kind ("the quantity is kept by this breakdown"). No flag: every kind of every account.
 // A flag left empty on a row reads as unticked, which is what an older row without the column means.
 ibAcctSummaryMap KindsByAccount(const ibValueMetaObjectChartOfAccounts* chart, const ibValueMetaObjectAttributeBase* flag)
 {
@@ -1635,7 +1635,7 @@ bool AnyFigureKeptByKind(const ibValueMetaObjectAccountingRegister* reg)
 	return false;
 }
 
-// The BREAKDOWN's accounting kind a resource is kept by ("the quantity is kept by each subconto that says
+// The BREAKDOWN's accounting kind a resource is kept by ("the quantity is kept by each breakdown that says
 // so") — the tick column of the account's kinds table it names; null when it names none.
 const ibValueMetaObjectAttributeBase* BreakdownKindOf(const ibValueMetaObjectAccountingRegister* reg,
                                                      const ibValueMetaObjectResource* resource)
@@ -1759,12 +1759,12 @@ std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> SlotKindsOf(const i
 	return out;
 }
 
-// ⭐⭐ KEPT BY A SUBCONTO, SAID TO THE SERVER — the rule ReportFiguresAsKept applies in RAM, so a reading keeps its
+// ⭐⭐ KEPT BY A BREAKDOWN, SAID TO THE SERVER — the rule ReportFiguresAsKept applies in RAM, so a reading keeps its
 // road whatever the ticks are. Each slot of a row is joined to its ACCOUNT's kinds-table row for the kind standing
-// in it: none found — the slot is empty, or no subconto of that account — and it cuts nothing; found — its tick
-// says whether a figure is kept by it (KeptBySubcontoOnServer). One LEFT join per slot, against a table of a few
+// in it: none found — the slot is empty, or no breakdown of that account — and it cuts nothing; found — its tick
+// says whether a figure is kept by it (KeptByBreakdownOnServer). One LEFT join per slot, against a table of a few
 // rows per account: the cost does not grow with the movements. `kindAliases` names the joins.
-ibQueryRelPtr JoinSubcontoKinds(const ibValueMetaObjectAccountingRegister* reg, ibQueryRelPtr rel,
+ibQueryRelPtr JoinBreakdownKinds(const ibValueMetaObjectAccountingRegister* reg, ibQueryRelPtr rel,
 	const ibBackendQueryColumn* accountCol, const ibString& rowAlias,
 	const std::vector<std::pair<const ibBackendQueryColumn*, ibValue>>& slotKinds,
 	const ibString& prefix, std::vector<ibString>& kindAliases)
@@ -1790,9 +1790,9 @@ ibQueryRelPtr JoinSubcontoKinds(const ibValueMetaObjectAccountingRegister* reg, 
 	return rel;
 }
 
-// Kept by every subconto its row stands on: each joined kinds row either absent or ticked for the resource's
+// Kept by every breakdown its row stands on: each joined kinds row either absent or ticked for the resource's
 // breakdown kind. Null where the resource names no such kind — nothing to judge.
-ibQueryExprPtr KeptBySubcontoOnServer(const ibValueMetaObjectAccountingRegister* reg, const ibValueMetaObjectResource* resource,
+ibQueryExprPtr KeptByBreakdownOnServer(const ibValueMetaObjectAccountingRegister* reg, const ibValueMetaObjectResource* resource,
 	const std::vector<ibString>& kindAliases)
 {
 	const ibValueMetaObjectAttributeBase* flag = BreakdownKindOf(reg, resource);
@@ -1815,12 +1815,12 @@ ibQueryExprPtr KeptBySubcontoOnServer(const ibValueMetaObjectAccountingRegister*
 	return kept;
 }
 
-// Both judgements of a figure — the account's kind and the subconto's — as one condition; either may be absent.
-ibQueryExprPtr BothKept(const ibQueryExprPtr& byAccount, const ibQueryExprPtr& bySubconto)
+// Both judgements of a figure — the account's kind and the breakdown's — as one condition; either may be absent.
+ibQueryExprPtr BothKept(const ibQueryExprPtr& byAccount, const ibQueryExprPtr& byBreakdown)
 {
-	if (!byAccount) return bySubconto;
-	if (!bySubconto) return byAccount;
-	return ibBinOp(ibQueryBinOp::And, byAccount, bySubconto);
+	if (!byAccount) return byBreakdown;
+	if (!byBreakdown) return byAccount;
+	return ibBinOp(ibQueryBinOp::And, byAccount, byBreakdown);
 }
 
 } // namespace
@@ -3116,8 +3116,8 @@ ibQueryRelPtr ibValueMetaObjectAccountingRegister::BuildDrCrTurnoverRelation(
 	// chart is joined twice.
 	const ibValueMetaObjectChartOfAccounts* chart = GetChartOfAccounts();
 	const bool byAccount  = AnyFigureKeptByKind(this);
-	const bool bySubconto = AnyFigureKeptByBreakdown(this);
-	if ((!byAccount && !bySubconto) || chart == nullptr || chart->GetDataReference() == nullptr || chart->GetQueryable() == nullptr)
+	const bool byBreakdown = AnyFigureKeptByBreakdown(this);
+	if ((!byAccount && !byBreakdown) || chart == nullptr || chart->GetDataReference() == nullptr || chart->GetQueryable() == nullptr)
 		return summed;
 
 	const ibString pairs = ibT("drcr_k"), debitChart = ibT("drcr_ad"), creditChart = ibT("drcr_ac");
@@ -3131,12 +3131,12 @@ ibQueryRelPtr ibValueMetaObjectAccountingRegister::BuildDrCrTurnoverRelation(
 			ibScan(chartTable, creditChart),
 			ibRegSameValueIR(GetRegisterAccountCr()->GetQueryColumn(), pairs, chartRef, creditChart), ibQueryJoinType::Left);
 	// …and each side's breakdown slots to ITS account's kinds rows: the debit slots belong to the debit account.
-	std::vector<ibString> subcontosDr, subcontosCr;
-	if (bySubconto) {
-		withCharts = JoinSubcontoKinds(this, withCharts, GetRegisterAccount()->GetQueryColumn(), pairs,
-			SlotKindsOf(this, published, ibAcctShape::DrCrTurnovers, /*creditSide*/ false, kindsDr), ibT("drcr_sd"), subcontosDr);
-		withCharts = JoinSubcontoKinds(this, withCharts, GetRegisterAccountCr()->GetQueryColumn(), pairs,
-			SlotKindsOf(this, published, ibAcctShape::DrCrTurnovers, /*creditSide*/ true, kindsCr), ibT("drcr_sc"), subcontosCr);
+	std::vector<ibString> breakdownsDr, breakdownsCr;
+	if (byBreakdown) {
+		withCharts = JoinBreakdownKinds(this, withCharts, GetRegisterAccount()->GetQueryColumn(), pairs,
+			SlotKindsOf(this, published, ibAcctShape::DrCrTurnovers, /*creditSide*/ false, kindsDr), ibT("drcr_sd"), breakdownsDr);
+		withCharts = JoinBreakdownKinds(this, withCharts, GetRegisterAccountCr()->GetQueryColumn(), pairs,
+			SlotKindsOf(this, published, ibAcctShape::DrCrTurnovers, /*creditSide*/ true, kindsCr), ibT("drcr_sc"), breakdownsCr);
 	}
 
 	std::vector<ibQueryProjItem> judged;
@@ -3149,9 +3149,9 @@ ibQueryRelPtr ibValueMetaObjectAccountingRegister::BuildDrCrTurnoverRelation(
 				continue;
 			}
 			const ibQueryExprPtr byDebit  = BothKept(byAccount ? KindKeptOnServer(this, figure->second.m_resource, debitChart) : nullptr,
-				KeptBySubcontoOnServer(this, figure->second.m_resource, subcontosDr));
+				KeptByBreakdownOnServer(this, figure->second.m_resource, breakdownsDr));
 			const ibQueryExprPtr byCredit = BothKept(byAccount ? KindKeptOnServer(this, figure->second.m_resource, creditChart) : nullptr,
-				KeptBySubcontoOnServer(this, figure->second.m_resource, subcontosCr));
+				KeptByBreakdownOnServer(this, figure->second.m_resource, breakdownsCr));
 			const ibQueryExprPtr kept = figure->second.m_side == 1 ? byDebit
 				: figure->second.m_side == 2 ? byCredit
 				: (byDebit && byCredit ? ibBinOp(ibQueryBinOp::Or, byDebit, byCredit) : nullptr);
@@ -3444,11 +3444,11 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 	// it, and it is the reason this is the one place the periods are filled now.
 	// Only between two ends: with no upper one there is no last period to stop at, and the loop below would
 	// walk the calendar for ever — the server road does not invent periods there either.
-	// ⭐⭐ THE BALANCE OF A TURNOVERS-ONLY BREAKDOWN STILL MOVES. Its turnovers are reported by the subconto and its
+	// ⭐⭐ THE BALANCE OF A TURNOVERS-ONLY BREAKDOWN STILL MOVES. Its turnovers are reported by the breakdown and its
 	// balance without it — and the balance row CLOSES ON THOSE TURNOVERS, or the reading says the account ended
 	// where it began: 36 kept by counterparty "turnovers only" read 29 580 at the end of September while its balance
 	// was 44 880 (measured 2026-09-17). So each such row lends its turnovers to the balance row of its key with the
-	// subconto left out — built here if nothing else made it — for the closing (and the roll through the periods)
+	// breakdown left out — built here if nothing else made it — for the closing (and the roll through the periods)
 	// to count; they are taken back after the roll, and the balance row reports turnovers of its own only (Max: the
 	// report would count them twice otherwise).
 	const auto summaryFolded = [&](const ibQueryRamTable& table, long row, const std::vector<ibString>& names) {
@@ -3819,10 +3819,10 @@ void ibValueMetaObjectAccountingRegister::ReportFiguresAsKept(ibQueryRamTable& t
 		return kind == 0 || IsAccountingKindKept(account, kind, memory[kind]);
 	};
 
-	// ⭐⭐ KEPT BY A SUBCONTO — the second half of a kind of accounting. The account says it keeps quantity; each
-	// row of its kinds table says whether the quantity is kept BY that subconto. A row of this reading broken
-	// down by a subconto of the account that is not ticked has no quantity to report — it is EMPTY, however many
-	// pieces its movements carry — while the same figure by the ticked subconto alone, or by the account whole,
+	// ⭐⭐ KEPT BY A BREAKDOWN — the second half of a kind of accounting. The account says it keeps quantity; each
+	// row of its kinds table says whether the quantity is kept BY that breakdown. A row of this reading broken
+	// down by a breakdown of the account that is not ticked has no quantity to report — it is EMPTY, however many
+	// pieces its movements carry — while the same figure by the ticked breakdown alone, or by the account whole,
 	// is there. A kind the account does not keep at all breaks nothing down on its row and is not asked about.
 	// Which kinds a row is broken down by: the call's list, or the kind each slot stands in on that row.
 	struct ibBreakdownCell { ibMetaID m_kindId; ibValue m_requested; };
@@ -3850,7 +3850,7 @@ void ibValueMetaObjectAccountingRegister::ReportFiguresAsKept(ibQueryRamTable& t
 			return true;
 		const auto all = kindsOfAccount.find(account);
 		if (all == kindsOfAccount.end())
-			return true;   // the account keeps no analytics — nothing on its row is a subconto of it
+			return true;   // the account keeps no analytics — nothing on its row is a breakdown of it
 		const ibAcctSummaryMap& ticked = tickedBy[flag];
 		const auto mine = ticked.find(account);
 		for (const ibBreakdownCell& slot : breakdown) {
@@ -3903,8 +3903,8 @@ void ibValueMetaObjectAccountingRegister::ReportFiguresAsKept(ibQueryRamTable& t
 			// Not cut by the correspondent, the row has none — the figure is every correspondent's, and kept.
 			case ibAcctJudgedBy::CorrAccount:   kept = corrAccount.IsEmpty() || keeps(corrAccount, cell.m_kind); break;
 			}
-			// …and by the subconto the row is broken down by — asked even of a figure that moved: pieces summed
-			// across a subconto the quantity is not kept by are not a quantity of that subconto.
+			// …and by the breakdown the row is broken down by — asked even of a figure that moved: pieces summed
+			// across a breakdown the quantity is not kept by are not a quantity of that breakdown.
 			if (kept && cell.m_byBreakdown != nullptr) switch (cell.m_by) {
 			case ibAcctJudgedBy::Account:       kept = keptByBreakdown(row, account, breakdownDr, cell.m_byBreakdown); break;
 			case ibAcctJudgedBy::CreditAccount: kept = keptByBreakdown(row, accountCr, breakdownCr, cell.m_byBreakdown); break;
@@ -4437,12 +4437,12 @@ ibQueryRelPtr ServerRead(const ibValueMetaObjectAccountingRegister* reg, const i
 }
 
 // ⭐⭐ THE CALL'S BREAKDOWN, RE-KEYED OVER A READ OF THE SLOTS AS THEY STAND — a breakdown BY KIND and a
-// TURNOVERS-ONLY subconto, answered by the server. The stored surface is keyed by the slots (their kinds beside
+// TURNOVERS-ONLY breakdown, answered by the server. The stored surface is keyed by the slots (their kinds beside
 // them), and so is its read; over it each row is re-keyed the way the RAM road keys it, and summed again:
 //
 //   by kind        a column per asked kind: the value of the slot that kind stands in, a CASE over the slots —
 //                  ProjectDimensionByKind, applied to what the surface already grouped
-//   turnovers-only a BALANCE is not kept along such a subconto: the slot leaves the key, value and kind
+//   turnovers-only a BALANCE is not kept along such a breakdown: the slot leaves the key, value and kind
 //                  (FoldOutSummaryOnly). Which slot that is, is DATA — the flag on the row of the account's kinds
 //                  table for the kind standing in it — so it is asked per row, once per slot, and carried up as a
 //                  0/1 column the levels above test
@@ -4452,7 +4452,7 @@ enum class ibAcctTake
 {
 	AsRead,                 // the figure as the read holds it
 	Zero,                   // a typed zero — the half a UNION arm does not report
-	UnlessTurnoversOnly,    // zero on a row standing on a turnovers-only subconto: a balance row's own turnovers
+	UnlessTurnoversOnly,    // zero on a row standing on a turnovers-only breakdown: a balance row's own turnovers
 };
 
 struct ibAcctTakeFigure
@@ -4488,7 +4488,7 @@ std::vector<ibString> TakenFrom(const std::vector<ibAcctTakeFigure>& figures)
 	return out;
 }
 
-// The column a balance-and-turnovers row says it stands on a turnovers-only subconto by (BalanceAndTurnoverArms).
+// The column a balance-and-turnovers row says it stands on a turnovers-only breakdown by (BalanceAndTurnoverArms).
 const ibString& StandsOnTurnoversOnlyName()
 {
 	static const ibString s_name(ibT("StandsOnTurnoversOnly"));
@@ -4520,7 +4520,7 @@ ibQueryRelPtr RegroupServerRead(const ibValueMetaObjectAccountingRegister* reg, 
 					slotFields.insert(field);
 	}
 
-	// --- the flags: is slot i a turnovers-only subconto of the row's account ---------------------------------------
+	// --- the flags: is slot i a turnovers-only breakdown of the row's account ---------------------------------------
 	bool asksTurnoversOnly = how.m_foldTurnoversOnly || how.m_onlyTurnoversOnly;
 	for (const ibAcctTakeFigure& figure : figures)
 		asksTurnoversOnly = asksTurnoversOnly || figure.m_take == ibAcctTake::UnlessTurnoversOnly;
@@ -4550,7 +4550,7 @@ ibQueryRelPtr RegroupServerRead(const ibValueMetaObjectAccountingRegister* reg, 
 	}
 	const auto turnoversOnly = [&](size_t i) { return ibAcctIsOne(ibCol(below, TurnoversOnlyFlagName(i))); };
 
-	// A row stands on a turnovers-only subconto the call REPORTS: any such slot as they stand, only an asked kind's.
+	// A row stands on a turnovers-only breakdown the call REPORTS: any such slot as they stand, only an asked kind's.
 	ibQueryExprPtr stands;
 	for (size_t i = 0; i < stand.size(); ++i) {
 		if (!flagged[i])
@@ -4651,12 +4651,12 @@ ibQueryRelPtr RegroupServerRead(const ibValueMetaObjectAccountingRegister* reg, 
 	return ibAggregate(ibSubquery(ibProject(source, std::move(level)), g), std::move(projection), std::move(groupKeys));
 }
 
-// ⭐ A BALANCE-AND-TURNOVERS READ WITH TURNOVERS-ONLY SUBCONTOS — two arms, one answer (the RAM road's lending):
+// ⭐ A BALANCE-AND-TURNOVERS READ WITH TURNOVERS-ONLY BREAKDOWNS — two arms, one answer (the RAM road's lending):
 //
-//   balances   keyed WITHOUT the turnovers-only subconto: the opening and the closing of every row of that key —
-//              the turnovers along the subconto included, so the balance closes on them — and turnovers of the
+//   balances   keyed WITHOUT the turnovers-only breakdown: the opening and the closing of every row of that key —
+//              the turnovers along the breakdown included, so the balance closes on them — and turnovers of the
 //              key's own rows only
-//   turnovers  the rows standing ON such a subconto, keyed by it: their turnovers, and no balance (a marker the
+//   turnovers  the rows standing ON such a breakdown, keyed by it: their turnovers, and no balance (a marker the
 //              projection above reads, so the balances there are empty rather than zero)
 //
 // `marker` names the 0/1 column that says which arm a row came from.
@@ -4731,9 +4731,9 @@ bool AccountArgumentsReadOnServer(const ibQueryPredicatePtr& accountDr, const ib
 // so a correspondence register runs one running sum per side of the KEY, not per surface — which is what
 // kept its periodised reading off the server before.
 //
-// BY KIND and WITH TURNOVERS-ONLY SUBCONTOS the reads are re-keyed (RegroupServerRead): the opening and the grid by
-// the balance key, the running closing on every turnover of that key — the ones along a turnovers-only subconto
-// lent to it — and the rows standing on such a subconto laid under the grid with their turnovers and no balance.
+// BY KIND and WITH TURNOVERS-ONLY BREAKDOWNS the reads are re-keyed (RegroupServerRead): the opening and the grid by
+// the balance key, the running closing on every turnover of that key — the ones along a turnovers-only breakdown
+// lent to it — and the rows standing on such a breakdown laid under the grid with their turnovers and no balance.
 ibQueryRelPtr PeriodisedOnServer(const ibValueMetaObjectAccountingRegister* reg, const ibBackendQueryable* published,
                                  ibAcctShape shape, const ibRegBound& begin, const ibRegBound& end, const ibRegFold& fold,
                                  const ibQueryPredicatePtr& filter, const ibQueryPredicatePtr& accountDr,
@@ -4802,7 +4802,7 @@ ibQueryRelPtr PeriodisedOnServer(const ibValueMetaObjectAccountingRegister* reg,
 		return nullptr;
 
 	// --- the grid and its running balances, one per side of each resource (registerQueryLowering.h) ----------
-	// With turnovers-only subcontos a balance runs on every turnover of its key and reports its own rows' only: the
+	// With turnovers-only breakdowns a balance runs on every turnover of its key and reports its own rows' only: the
 	// running sum reads the turnovers `…WithLent`, the period reports the plain ones.
 	std::vector<ibString> passThrough;
 	std::vector<ibRegRunningFigure> running;
@@ -4859,7 +4859,7 @@ ibQueryRelPtr PeriodisedOnServer(const ibValueMetaObjectAccountingRegister* reg,
 	if (grid == nullptr)
 		return nullptr;
 
-	// …and the rows standing on a turnovers-only subconto under it, in its column order, marked (BalanceAndTurnoverArms).
+	// …and the rows standing on a turnovers-only breakdown under it, in its column order, marked (BalanceAndTurnoverArms).
 	const bool marked = standing != nullptr;
 	if (marked) {
 		const auto arm = [&](const ibQueryRelPtr& rel, bool standsOn, const ibString& a) {
@@ -4884,10 +4884,10 @@ ibQueryRelPtr PeriodisedOnServer(const ibValueMetaObjectAccountingRegister* reg,
 	// --- folded by the account's type, as the unperiodised reading folds --------------------------------------
 	ibQueryRelPtr joined = ibJoin(rows, ibScan(chart->GetQueryable()->GetQueryTableName(), aA),
 		ibRegSameValueIR(account->GetQueryColumn(), aR, chart->GetDataReference()->GetQueryColumn(), aA), ibQueryJoinType::Left);
-	std::vector<ibString> subcontos;   // …and the breakdown slots to their kinds rows (JoinSubcontoKinds)
+	std::vector<ibString> breakdowns;   // …and the breakdown slots to their kinds rows (JoinBreakdownKinds)
 	if (AnyFigureKeptByBreakdown(reg))
-		joined = JoinSubcontoKinds(reg, joined, account->GetQueryColumn(), aR,
-			SlotKindsOf(reg, published, shape, /*creditSide*/ false, kinds), alias + ibT("_s"), subcontos);
+		joined = JoinBreakdownKinds(reg, joined, account->GetQueryColumn(), aR,
+			SlotKindsOf(reg, published, shape, /*creditSide*/ false, kinds), alias + ibT("_s"), breakdowns);
 	const ibQueryExprPtr accountType = ibCol(aA, ibRegValueField(chart->GetAccountType()));
 	const ibQueryExprPtr apFolds = FullAnalyticsOnServer(reg, kinds, aR, account->GetQueryColumn(), alias + ibT("_fa"));
 	const ibQueryExprPtr keepsBalance = marked
@@ -4907,7 +4907,7 @@ ibQueryRelPtr PeriodisedOnServer(const ibValueMetaObjectAccountingRegister* reg,
 	for (const auto resource : reg->GetResourceArrayObject()) {
 		if (resource == nullptr)
 			continue;
-		const ibQueryExprPtr kept = BothKept(KindKeptOnServer(reg, resource, aA), KeptBySubcontoOnServer(reg, resource, subcontos));
+		const ibQueryExprPtr kept = BothKept(KindKeptOnServer(reg, resource, aA), KeptByBreakdownOnServer(reg, resource, breakdowns));
 		const ibQueryExprPtr turnDr = ibCol(aR, FigureField(resource, ibAcctFigure::TurnoverDr));
 		const ibQueryExprPtr turnCr = ibCol(aR, FigureField(resource, ibAcctFigure::TurnoverCr));
 		projection.push_back({ FigureWhereKept(kept, turnDr), FigureField(resource, ibAcctFigure::TurnoverDr) });
@@ -5036,7 +5036,7 @@ ibQueryRelPtr ibAcctTurnoverQueryable::GetSourceRelation(const ibString& alias) 
 	const ibString innerAlias = alias + ibT("_t");
 	std::vector<ibString> keyNames;
 	// By kind: read as the slots stand, and re-keyed by the kinds asked (RegroupServerRead). A turnover keeps its
-	// turnovers-only subcontos — only a balance leaves them out.
+	// turnovers-only breakdowns — only a balance leaves them out.
 	const ibBackendQueryable* readShape = m_kindsDr.empty() ? this : m_reg->GetShapeQueryable(m_shape, {}, {}, Fold());
 	if (readShape == nullptr)
 		return nullptr;
@@ -5069,11 +5069,11 @@ ibQueryRelPtr ibAcctTurnoverQueryable::GetSourceRelation(const ibString& alias) 
 		source = ibJoin(source, ibScan(chart->GetQueryable()->GetQueryTableName(), chartAlias),
 			ibRegSameValueIR(account->GetQueryColumn(), innerAlias, chart->GetDataReference()->GetQueryColumn(), chartAlias),
 			ibQueryJoinType::Left);
-	// …and the breakdown slots to their kinds rows, for a figure kept by subconto (JoinSubcontoKinds).
-	std::vector<ibString> subcontos;
+	// …and the breakdown slots to their kinds rows, for a figure kept by breakdown (JoinBreakdownKinds).
+	std::vector<ibString> breakdowns;
 	if (AnyFigureKeptByBreakdown(m_reg))
-		source = JoinSubcontoKinds(m_reg, source, account->GetQueryColumn(), innerAlias,
-			SlotKindsOf(m_reg, this, m_shape, /*creditSide*/ false, m_kindsDr), alias, subcontos);
+		source = JoinBreakdownKinds(m_reg, source, account->GetQueryColumn(), innerAlias,
+			SlotKindsOf(m_reg, this, m_shape, /*creditSide*/ false, m_kindsDr), alias, breakdowns);
 
 	std::vector<ibQueryProjItem> projection;
 	for (const ibString& name : keyNames)
@@ -5082,7 +5082,7 @@ ibQueryRelPtr ibAcctTurnoverQueryable::GetSourceRelation(const ibString& alias) 
 		if (resource == nullptr)
 			continue;
 		const ibQueryExprPtr kept = BothKept(judged ? KindKeptOnServer(m_reg, resource, chartAlias) : nullptr,
-			KeptBySubcontoOnServer(m_reg, resource, subcontos));
+			KeptByBreakdownOnServer(m_reg, resource, breakdowns));
 		const ibQueryExprPtr turnDr = ibCol(innerAlias, FigureField(resource, ibAcctFigure::TurnoverDr));
 		const ibQueryExprPtr turnCr = ibCol(innerAlias, FigureField(resource, ibAcctFigure::TurnoverCr));
 		projection.push_back({ FigureWhereKept(kept, turnDr), FigureField(resource, ibAcctFigure::TurnoverDr) });
@@ -5171,7 +5171,7 @@ bool ibAcctBalanceQueryable::CanReadOnServer() const
 	if (!AccountArgumentsReadOnServer(m_accountDr, m_accountCr))
 		return false;
 
-	// A BREAKDOWN ASKED FOR BY KIND, and a TURNOVERS-ONLY subconto leaving the key, are the read re-keyed
+	// A BREAKDOWN ASKED FOR BY KIND, and a TURNOVERS-ONLY breakdown leaving the key, are the read re-keyed
 	// (RegroupServerRead). The credit kinds belong to a paired row only, which this reading does not publish.
 	if (!m_kindsCr.empty())
 		return false;
@@ -5236,7 +5236,7 @@ ibQueryRelPtr ibAcctBalanceQueryable::GetSourceRelation(const ibString& alias) c
 	const ibString chartAlias = alias + ibT("_a");
 
 	std::vector<ibString> keyNames;
-	// By kind, or with a turnovers-only subconto leaving the balance key: read as the slots stand and re-keyed
+	// By kind, or with a turnovers-only breakdown leaving the balance key: read as the slots stand and re-keyed
 	// (RegroupServerRead).
 	const bool turnoversOnly = AnyTurnoverOnlyKind(chart);
 	const bool rekeys = !m_kindsDr.empty() || turnoversOnly;
@@ -5279,11 +5279,11 @@ ibQueryRelPtr ibAcctBalanceQueryable::GetSourceRelation(const ibString& alias) c
 	ibQueryRelPtr joined = ibJoin(ibSubquery(read, innerAlias),
 		ibScan(chartRows->GetQueryTableName(), chartAlias), on, ibQueryJoinType::Left);
 
-	// …and each breakdown slot to its account's kinds row, for a figure kept by subconto (JoinSubcontoKinds).
-	std::vector<ibString> subcontos;
+	// …and each breakdown slot to its account's kinds row, for a figure kept by breakdown (JoinBreakdownKinds).
+	std::vector<ibString> breakdowns;
 	if (AnyFigureKeptByBreakdown(m_reg))
-		joined = JoinSubcontoKinds(m_reg, joined, account->GetQueryColumn(), innerAlias,
-			SlotKindsOf(m_reg, this, m_shape, /*creditSide*/ false, m_kindsDr), alias, subcontos);
+		joined = JoinBreakdownKinds(m_reg, joined, account->GetQueryColumn(), innerAlias,
+			SlotKindsOf(m_reg, this, m_shape, /*creditSide*/ false, m_kindsDr), alias, breakdowns);
 
 	// ⭐⭐ THE FOLD, AS A CASE OVER WHAT THE ACCOUNT DECLARES — the same rule the RAM reading applies
 	// row by row (FoldSideByAccountType), said once to the server (FoldedPairOnServer):
@@ -5307,10 +5307,10 @@ ibQueryRelPtr ibAcctBalanceQueryable::GetSourceRelation(const ibString& alias) c
 			continue;
 		const ibQueryExprPtr grossDr = ibCol(innerAlias, FigureField(resource, ibAcctFigure::BalanceDr));
 		const ibQueryExprPtr grossCr = ibCol(innerAlias, FigureField(resource, ibAcctFigure::BalanceCr));
-		// …and each of them EMPTY where the account keeps no such accounting, or not by a subconto of the row
+		// …and each of them EMPTY where the account keeps no such accounting, or not by a breakdown of the row
 		// (ReportFiguresAsKept).
 		const ibQueryExprPtr kept = BothKept(KindKeptOnServer(m_reg, resource, chartAlias),
-			KeptBySubcontoOnServer(m_reg, resource, subcontos));
+			KeptByBreakdownOnServer(m_reg, resource, breakdowns));
 
 		// ⭐ THE GROSS PAIR IS WHAT THE INNER READ ALREADY HOLDS — the sums of each side, before this
 		// projection folds them. Published beside the folded pair, so a reader can check a balance
@@ -5387,7 +5387,7 @@ bool ibAcctBalanceAndTurnoverQueryable::CanReadOnServer() const
 	// RECORDER / LINE: no fold discards them now — each movement opens where the one before it closed, a window along
 	// the movements (ibRegRunningMovements, read by PeriodisedOnServer as a calendar is, #646).
 	if (m_fold.FromMovements()) {
-		// The rows standing on a turnovers-only subconto are laid under the run with the period and no recorder, so
+		// The rows standing on a turnovers-only breakdown are laid under the run with the period and no recorder, so
 		// such a chart keeps the live path here.
 		if (AnyTurnoverOnlyKind(m_reg->GetChartOfAccounts()))
 			return false;
@@ -5517,8 +5517,8 @@ ibQueryRelPtr ibAcctBalanceAndTurnoverQueryable::GetSourceRelation(const ibStrin
 	// is among the key's names when the read is cut into periods (the read groups by it, and the answer
 	// has to say WHICH period).
 	std::vector<ibString> keyNames;
-	// By kind, or with turnovers-only subcontos, read as the slots stand and re-keyed (RegroupServerRead) — the
-	// latter as two arms, the balances by their key and the turnovers along such a subconto by it
+	// By kind, or with turnovers-only breakdowns, read as the slots stand and re-keyed (RegroupServerRead) — the
+	// latter as two arms, the balances by their key and the turnovers along such a breakdown by it
 	// (BalanceAndTurnoverArms).
 	const bool turnoversOnly = AnyTurnoverOnlyKind(chart);
 	const bool rekeys = !m_kindsDr.empty() || turnoversOnly;
@@ -5555,10 +5555,10 @@ ibQueryRelPtr ibAcctBalanceAndTurnoverQueryable::GetSourceRelation(const ibStrin
 
 	ibQueryRelPtr joined = ibJoin(ibSubquery(read, innerAlias),
 		ibScan(chartRows->GetQueryTableName(), chartAlias), on, ibQueryJoinType::Left);
-	std::vector<ibString> subcontos;   // …and the breakdown slots to their kinds rows — the balance reading's
+	std::vector<ibString> breakdowns;   // …and the breakdown slots to their kinds rows — the balance reading's
 	if (AnyFigureKeptByBreakdown(m_reg))
-		joined = JoinSubcontoKinds(m_reg, joined, account->GetQueryColumn(), innerAlias,
-			SlotKindsOf(m_reg, this, m_shape, /*creditSide*/ false, m_kindsDr), alias, subcontos);
+		joined = JoinBreakdownKinds(m_reg, joined, account->GetQueryColumn(), innerAlias,
+			SlotKindsOf(m_reg, this, m_shape, /*creditSide*/ false, m_kindsDr), alias, breakdowns);
 
 	std::vector<ibQueryProjItem> projection;
 	for (const ibString& name : keyNames)
@@ -5569,9 +5569,9 @@ ibQueryRelPtr ibAcctBalanceAndTurnoverQueryable::GetSourceRelation(const ibStrin
 	for (const auto resource : m_reg->GetResourceArrayObject()) {
 		if (resource == nullptr)
 			continue;
-		// …each of them EMPTY where the account keeps no such accounting, or not by a subconto of the row.
+		// …each of them EMPTY where the account keeps no such accounting, or not by a breakdown of the row.
 		const ibQueryExprPtr kept = BothKept(KindKeptOnServer(m_reg, resource, chartAlias),
-			KeptBySubcontoOnServer(m_reg, resource, subcontos));
+			KeptByBreakdownOnServer(m_reg, resource, breakdowns));
 		const ibQueryExprPtr turnDr = ibCol(innerAlias, FigureField(resource, ibAcctFigure::TurnoverDr));
 		const ibQueryExprPtr turnCr = ibCol(innerAlias, FigureField(resource, ibAcctFigure::TurnoverCr));
 		projection.push_back({ FigureWhereKept(kept, turnDr), FigureField(resource, ibAcctFigure::TurnoverDr) });
@@ -5599,9 +5599,9 @@ ibQueryRelPtr ibAcctBalanceAndTurnoverQueryable::GetSourceRelation(const ibStrin
 	for (const auto resource : m_reg->GetResourceArrayObject()) {
 		if (resource == nullptr)
 			continue;
-		// …and none on a row standing on a turnovers-only subconto: empty, not zero.
+		// …and none on a row standing on a turnovers-only breakdown: empty, not zero.
 		const ibQueryExprPtr kept = BothKept(BothKept(KindKeptOnServer(m_reg, resource, chartAlias),
-			KeptBySubcontoOnServer(m_reg, resource, subcontos)), keepsBalance);
+			KeptByBreakdownOnServer(m_reg, resource, breakdowns)), keepsBalance);
 		foldPair(kept, FigureField(resource, ibAcctFigure::OpeningBalanceDr), FigureField(resource, ibAcctFigure::OpeningBalanceCr),
 			FigureField(resource, ibAcctFigure::OpeningGrossBalanceDr), FigureField(resource, ibAcctFigure::OpeningGrossBalanceCr),
 			FigureField(resource, ibRegFigure::OpeningBalance));

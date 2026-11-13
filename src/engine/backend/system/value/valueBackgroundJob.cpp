@@ -57,13 +57,13 @@ void ibValueBackgroundJob_BindNames(ibValue::ibMemberTable& helper, const ibValu
 	helper.AppendFunc(ibT("Activity"), ibT("Activity()"));
 	helper.AppendProc(ibT("Cancel"), ibT("Cancel()"));
 
-	helper.AppendProp(ibT("State"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("Begin"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("End"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("Key"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("Description"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("MethodName"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("UUID"), true, false, wxNOT_FOUND);
+	helper.AppendProp(ibT("State"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("Begin"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("End"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("Key"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("Description"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("MethodName"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("UUID"), true, false, ibNOT_FOUND);
 }
 
 ibValueBackgroundJob::ibValueBackgroundJob()
@@ -209,7 +209,7 @@ ibGuid UUIDOf(const ibValue& value, const ibString& verb)
 // property is refused with its name: a filter that quietly ignored a misspelt field would answer with every
 // job there is.
 struct ibRunFilterField {
-	long    m_prop = wxNOT_FOUND;
+	long    m_prop = ibNOT_FOUND;
 	ibValue m_wanted;
 };
 
@@ -263,7 +263,7 @@ bool ibValueBackgroundJobsManager::CallAsFunc(const long lMethodNum, ibValue& pv
 			for (const ibMapEntry& entry : filter->Values()) {
 				const ibString name = entry.key.GetString();
 				const long prop = probe->FindProp(name);
-				if (prop == wxNOT_FOUND)
+				if (prop == ibNOT_FOUND)
 					ibBackendCoreException::Error(_("GetBackgroundJobs: a background job has no property '%s' to filter by"), name);
 				if (prop == enUUID)
 					UUIDOf(entry.value, ibT("GetBackgroundJobs"));   // refused here, whether or not any job is held

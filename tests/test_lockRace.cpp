@@ -315,7 +315,7 @@ protected:
 					GiveUp(raw);
 					return false;
 				}
-				const ibGuid owner = wxNewUniqueGuid;
+				const ibGuid owner = ibNewUniqueGuid;
 				ins->SetParamString(1, owner.str());
 				ins->SetParamString(2, owner.str());
 				ins->SetParamString(3, item.namespaceName);

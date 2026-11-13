@@ -51,7 +51,7 @@ bool ibPropertyFunctionalOptions::SetDataValue(const ibValue& varPropVal) { retu
 bool ibPropertyFunctionalOptions::GetDataValue(ibValue& pvarPropVal) const
 {
 	const ibVariantOwner* owner = get_cell_variant<ibVariantOwner>();
-	wxASSERT(owner);
+	ibASSERT(owner);
 	pvarPropVal = owner->GetDataValue();
 	return true;
 }

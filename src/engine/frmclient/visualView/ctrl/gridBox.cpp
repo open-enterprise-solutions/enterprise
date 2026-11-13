@@ -40,7 +40,8 @@ ibFrontendView* ibValueGridBox::GetControlView() const
 
 void ibValueGridBox::Create(wxWindow* parent, const ibProtocolNode& /*node*/)
 {
-	m_panel = new ibPanel(parent, wxID_ANY);
+	// The sheet's frame is the box's, round its command bar too - as a table's (ibValueModelTableBox::Create).
+	m_panel = new ibPanel(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL | wxBORDER_SIMPLE);
 	wxBoxSizer* const sizer = new wxBoxSizer(wxVERTICAL);
 
 	// The chrome: its command bar above it.

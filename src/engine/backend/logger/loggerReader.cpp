@@ -6,11 +6,22 @@
 #include "backend/databaseLayer/databaseResultSet.h"
 #include "core/fileSystem.h"
 
-#include <wx/datetime.h>
-
 #include <algorithm>
+#include <ctime>   // mktime — a month's first instant on the machine's clock
 
 namespace {
+
+// The first instant of a month on this machine's clock, in milliseconds since 1970 UTC - what wxDateTime(1, month, year)
+// held. A 13th month is January of the next year (mktime carries it).
+long long MonthStartMillis(int year, int month)
+{
+    std::tm parts{};
+    parts.tm_year = year - 1900;
+    parts.tm_mon = month - 1;
+    parts.tm_mday = 1;
+    parts.tm_isdst = -1;   // the zone says whether summer time is on
+    return static_cast<long long>(std::mktime(&parts)) * 1000;
+}
 
 bool ParseLogFileName(const ibString& name, int& year, int& month)
 {
@@ -32,12 +43,8 @@ bool MonthInRange(int year, int month,
     if (from_ms == 0 && to_ms == 0) return true;
 
     // Convert (year, month) bucket to ms range [start, nextMonthStart).
-    wxDateTime start(1, static_cast<wxDateTime::Month>(month - 1), year, 0, 0, 0);
-    wxDateTime nextMonth = start;
-    nextMonth.Add(wxDateSpan::Month());
-
-    const long long bucketStart = start.GetValue().GetValue();
-    const long long bucketEnd   = nextMonth.GetValue().GetValue();
+    const long long bucketStart = MonthStartMillis(year, month);
+    const long long bucketEnd   = MonthStartMillis(year, month + 1);
 
     if (from_ms != 0 && bucketEnd   <= from_ms) return false;
     if (to_ms   != 0 && bucketStart >= to_ms)   return false;

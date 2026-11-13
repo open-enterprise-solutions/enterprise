@@ -177,7 +177,7 @@ ibString Unfenced(const ibString& value)
 	if ((quote != L'\'' && quote != L'"') || value[length - 1] != quote)
 		return value;
 	const ibString inner = value.Mid(1, length - 2);
-	return inner.Find(quote) == wxNOT_FOUND ? inner : value;
+	return inner.Find(quote) == ibNOT_FOUND ? inner : value;
 }
 
 void PadWholePart(ibString& text, int width)
@@ -334,7 +334,7 @@ ibDatePreset ibFormatString::PresetOf(const ibString& pattern)
 
 bool ibFormatString::IsWritable(const ibString& text)
 {
-	return text.Find(ibT(';')) == wxNOT_FOUND && text.Find(ibT('=')) == wxNOT_FOUND;
+	return text.Find(ibT(';')) == ibNOT_FOUND && text.Find(ibT('=')) == ibNOT_FOUND;
 }
 
 ibFormatString ibFormatString::Parse(const ibString& fmt)

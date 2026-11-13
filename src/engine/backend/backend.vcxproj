@@ -500,6 +500,7 @@
     <ClCompile Include="databaseLayer\firebird\firebirdBlobCompression.cpp" />
     <ClCompile Include="databaseLayer\firebird\firebirdBootstrap.cpp" />
     <ClCompile Include="databaseLayer\firebird\firebirdDatabaseLayer.cpp" />
+    <ClCompile Include="databaseLayer\firebird\firebirdCommon.cpp" />
     <ClCompile Include="databaseLayer\firebird\firebirdHlc.cpp" />
     <ClCompile Include="databaseLayer\firebird\firebirdInterface.cpp" />
     <ClCompile Include="databaseLayer\firebird\firebirdLeaderMode.cpp" />
@@ -1420,10 +1421,10 @@
     <ClCompile>
       <WarningLevel>Level4</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;wxUSE_GUI=0;_CONSOLE;%(PreprocessorDefinitions);BACKEND_EXPORTS;OES_FB_LOCALSERVER</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;_UNICODE;_CONSOLE;%(PreprocessorDefinitions);BACKEND_EXPORTS;OES_FB_LOCALSERVER</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;$(oesEngine);$(oesSrcDir)include;.;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(oesEngine);$(oesSrcDir)include;.;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -1432,8 +1433,8 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>core.lib;bcrypt.lib;wxbase33ud.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>core.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -1441,10 +1442,10 @@
       <WarningLevel>Level4</WarningLevel>
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;wxUSE_GUI=0;_CONSOLE;%(PreprocessorDefinitions);BACKEND_EXPORTS;OES_FB_LOCALSERVER</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;_UNICODE;_CONSOLE;%(PreprocessorDefinitions);BACKEND_EXPORTS;OES_FB_LOCALSERVER</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)/core;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(oesEngine);.;$(oesEngine)/core;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <AdditionalOptions>/Gw /bigobj %(AdditionalOptions)</AdditionalOptions>
@@ -1452,8 +1453,8 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>core.lib;bcrypt.lib;wxbase33ud.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>core.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <Profile>true</Profile>
     </Link>
   </ItemDefinitionGroup>
@@ -1464,10 +1465,10 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;NDEBUG;_UNICODE;WXUSINGDLL;wxUSE_GUI=0;_CONSOLE;%(PreprocessorDefinitions);BACKEND_EXPORTS;OES_FB_LOCALSERVER</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;NDEBUG;_UNICODE;_CONSOLE;%(PreprocessorDefinitions);BACKEND_EXPORTS;OES_FB_LOCALSERVER</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)core;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(oesEngine);.;$(oesEngine)core;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
@@ -1480,8 +1481,8 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>DebugFastLink</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>core.lib;bcrypt.lib;wxbase33u.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>core.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -1491,10 +1492,10 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;NDEBUG;_UNICODE;WXUSINGDLL;wxUSE_GUI=0;_CONSOLE;%(PreprocessorDefinitions);BACKEND_EXPORTS;OES_FB_LOCALSERVER</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;NDEBUG;_UNICODE;_CONSOLE;%(PreprocessorDefinitions);BACKEND_EXPORTS;OES_FB_LOCALSERVER</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;$(oesEngine);.;$(oesEngine)/core;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(oesEngine);.;$(oesEngine)/core;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
@@ -1508,8 +1509,8 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>DebugFastLink</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>core.lib;bcrypt.lib;wxbase33u.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>core.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>

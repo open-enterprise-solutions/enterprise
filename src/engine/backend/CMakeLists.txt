@@ -2,8 +2,8 @@
 # OES Enterprise — backend shared library
 #
 # The backend is the core engine: compiler, metadata, database layer, debugger.
-# It has NO GUI code. It links against wxBase (wxString, wxDateTime, wxFile,
-# wxThread, etc.) but never against wxCore or any GUI toolkit.
+# It has NO GUI code and no wx at all: its text, dates, files and threads are
+# the core's and the standard library's.
 ################################################################################
 
 cmake_minimum_required(VERSION 3.20)
@@ -155,16 +155,14 @@ if(WIN32)
 endif()
 
 # ---------------------------------------------------------------------------
-# wxWidgets — of wx the base only: no window, no image, no font (wxUSE_GUI=0 makes a GUI type a compile error
-# here). A picture, a colour, a font are the core's data (core/graphics); a window's side draws them.
+# No wx: no window, no image, no font. A picture, a colour, a font are the core's data (core/graphics); a window's
+# side draws them.
 # ---------------------------------------------------------------------------
-target_compile_definitions(backend PRIVATE wxUSE_GUI=0)
 target_link_libraries(backend
     PUBLIC
         # The shared meanings the engine is written in (ids, texts, numbers, dates, guids) — PUBLIC: every consumer of
         # the engine's headers speaks them too.
         core
-        wx::base
         # No Mbed TLS: a cipher, a random byte, TLS are the core's (core/crypto, core/net).
 )
 

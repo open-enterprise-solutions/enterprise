@@ -29,7 +29,7 @@ ibValue ibValueMetaObjectFunctionalOption::CreateValue() const
 ibMetaID ibValueMetaObjectFunctionalOption::GetRequired() const
 {
 	const ibMetaDescription& required = m_propertyRequires->GetValueAsMetaDesc();
-	return required.GetTypeCount() > 0 ? required.GetByIdx(0) : wxNOT_FOUND;
+	return required.GetTypeCount() > 0 ? required.GetByIdx(0) : ibNOT_FOUND;
 }
 
 bool ibValueMetaObjectFunctionalOption::ReadData(const ibDataNode& node)

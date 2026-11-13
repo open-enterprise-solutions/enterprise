@@ -103,7 +103,7 @@ void SplitRoute(const ibString& token, ibString& hex, unsigned& route)
 	route = 0;
 	const int dot = token.Find(ibT('.'), true);
 	unsigned long number = 0;
-	if (dot == wxNOT_FOUND || !token.Mid(dot + 1).ToULong(&number) || number == 0 || number > 0xFFFF) {
+	if (dot == ibNOT_FOUND || !token.Mid(dot + 1).ToULong(&number) || number == 0 || number > 0xFFFF) {
 		hex = token;
 		return;
 	}

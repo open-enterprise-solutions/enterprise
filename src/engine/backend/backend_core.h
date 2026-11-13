@@ -1,8 +1,6 @@
 #ifndef _CORE_OES_H__
 #define _CORE_OES_H__
 
-#include <wx/wx.h>
-
 #include <map>
 
 #include "backend/backend.h"

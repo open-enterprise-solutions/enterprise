@@ -32,6 +32,7 @@ template <class T> class ibValuePtr;
 #include "core/propertyChoiceMode.h"               // ibPropertyChoiceMode — how many of the choices are held
 #include "backend/backend_exception.h"   // ibBackendCoreException — a cell that is not what it is asked for raises
 
+#include <cassert>
 #include <concepts>   // std::derived_from — what CreateProperty and CreateEvent make
 #include <initializer_list>   // CreateProperty — a list in braces, taken as it is
 
@@ -604,8 +605,8 @@ public:
 	/// null GUIDs. Reach the const overload through a const pointer unless you truly own a
 	/// mutable metaData. Guard so the trap surfaces in debug instead of corrupting data.
 	virtual ibMetaData* GetMetaData() {
-		wxFAIL_MSG(wxT("ibPropertyObject::GetMetaData(): non-const overload not overridden - ")
-			wxT("call the const one (through a const pointer); this returns null."));
+		ibFAIL_MSG(ibT("ibPropertyObject::GetMetaData(): non-const overload not overridden - ")
+			ibT("call the const one (through a const pointer); this returns null."));
 		return nullptr;
 	}
 

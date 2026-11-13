@@ -21,6 +21,7 @@
 #include <iostream>
 #include <iomanip>
 
+#include <wx/string.h>   // the baseline it is measured against — the core includes no wx
 #include "core/fstring.h"
 
 namespace {

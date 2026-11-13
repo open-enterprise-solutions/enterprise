@@ -833,11 +833,14 @@ void ibDataComposer::BuildPrintLevels(bool tree, const ibBackendQueryable* sourc
 		identityNamed = identityNamed || (!identity.IsEmpty() && line.m_path == identity);
 	}
 
-	// ⭐ THE TREE IS A LEVEL OVER THE ROW'S OWN REFERENCE, and it stands BESIDE a grouping rather
-	// than instead of one: the groupings a person set fold first, the source's own tree inside each.
-	// …only where there IS a tree, and only if that field is not already the deepest level — a level
+	// ⭐ THE TREE IS A LEVEL OVER THE ROW'S OWN REFERENCE — the source's own, offered where a person set no
+	// grouping. Under a grouping it is theirs to name (the row's reference, Hierarchy), and a tree rung under a
+	// heading stays SAYABLE that way (2026-08-29). Offered under every heading unasked, a list grouped by a
+	// name opened each heading onto the catalog's ROOTS of that name — empty for an element in a folder —
+	// while the sheet walked its folders to it (2026-11-13, Max: "grouped by name: a group and the value
+	// inside"). …only where there IS a tree, and only if that field is not already a level — a level
 	// repeated is a fold repeated.
-	if (hasTree && !identityNamed && !identity.IsEmpty())
+	if (hasTree && !identityNamed && !identity.IsEmpty() && LevelChain().empty())
 		AppendLevel(identity, ibQueryDimUnfold::Hierarchy);
 
 	if (LevelChain().empty())
@@ -1296,7 +1299,7 @@ ibString ibDataDBComposer::RenderTextFor(const std::vector<const Output*>& outpu
 		std::vector<ibString> walked;
 		for (const Output* out : outputs)
 			for (const ibString& path : ibComposerRuleFieldsOf(*out, GetCurrentConditionalAppearanceDesc())) {
-				if (path.Find(ibT('.')) == wxNOT_FOUND)
+				if (path.Find(ibT('.')) == ibNOT_FOUND)
 					continue;
 				const ibQueryAstExprPtr column = ibQueryColumnFromPath(path);
 				if (column && !column->m_path.empty() && !WalkPath(column->m_path).m_name.IsEmpty())

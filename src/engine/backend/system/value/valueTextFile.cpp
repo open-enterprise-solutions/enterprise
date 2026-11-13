@@ -8,188 +8,25 @@
 #include "backend/backend_exception.h"
 #include "backend/compiler/enumUnit.h"   // ConvertToEnumValue<> is declared in value.h and DEFINED here
 
-#include "core/xml/xmlText.h"            // ibXmlCodePage - the pages a script names, one table on every machine
+#include "core/fileSystem.h"             // ibPathOf - the writer's file as the system names it
 
-#include <cstring>   // std::strlen
-#include <cwchar>    // std::wcslen
-
-#include <wx/ffile.h>
-#include <wx/strconv.h>
-#include <wx/fontenc.h>
-#include <wx/log.h>
-
-#ifdef __WXMSW__
-#include <wx/msw/wrapwin.h>
-#endif
+#include <fstream>
 
 //////////////////////////////////////////////////////////////////////
-// The encoding, as the converter that spells it
+// The encoding
 //////////////////////////////////////////////////////////////////////
 
-#ifdef __WXMSW__
-namespace {
-
-// A code page BY ITS NUMBER, converted by the system that owns it. The library's converter is reached by
-// NAME, and knows the names of some pages and not of others (737, 775, 857-869, 65001 as an ANSI page): asked
-// for one it does not know it falls back to Latin-1 without a word, and the file reads as garbage that
-// looks like text. The number is what GetACP / GetOEMCP answer with, so nothing is spelled and nothing is
-// guessed. Bytes the page has no character for are a FAILURE, as are characters the page has no bytes for.
-class ibCodePageConv : public wxMBConv {
-public:
-	explicit ibCodePageConv(unsigned codePage) : m_codePage(codePage) {}
-
-	virtual size_t ToWChar(wchar_t* dst, size_t dstLen, const char* src, size_t srcLen = wxNO_LEN) const override {
-		const int got = ::MultiByteToWideChar(m_codePage, MB_ERR_INVALID_CHARS,
-			src, srcLen == wxNO_LEN ? -1 : static_cast<int>(srcLen), dst, dst != nullptr ? static_cast<int>(dstLen) : 0);
-		return got > 0 ? static_cast<size_t>(got) : wxCONV_FAILED;
-	}
-
-	virtual size_t FromWChar(char* dst, size_t dstLen, const wchar_t* src, size_t srcLen = wxNO_LEN) const override {
-		// UTF-8 and UTF-7 have bytes for everything and refuse to be asked whether a default was used.
-		const bool lossy = m_codePage != CP_UTF8 && m_codePage != CP_UTF7;
-		BOOL usedDefault = FALSE;
-		const int got = ::WideCharToMultiByte(m_codePage, lossy ? WC_NO_BEST_FIT_CHARS : 0,
-			src, srcLen == wxNO_LEN ? -1 : static_cast<int>(srcLen), dst, dst != nullptr ? static_cast<int>(dstLen) : 0,
-			nullptr, lossy ? &usedDefault : nullptr);
-		return got > 0 && !usedDefault ? static_cast<size_t>(got) : wxCONV_FAILED;
-	}
-
-	virtual wxMBConv* Clone() const override { return new ibCodePageConv(m_codePage); }
-
-private:
-	unsigned m_codePage;
-};
-
-} // namespace
-#endif
-
-namespace {
-
-// A page a script NAMED, by the table XML reads it by - the same bytes on every machine, which a page asked of the
-// system is not. A byte the table has no character for is a FAILURE, as is a character it has no byte for.
-class ibXmlCodePageConv : public wxMBConv {
-public:
-	explicit ibXmlCodePageConv(const ibXmlCodePage& page) : m_page(page) {}
-
-	virtual size_t ToWChar(wchar_t* dst, size_t dstLen, const char* src, size_t srcLen = wxNO_LEN) const override {
-		const size_t length = srcLen == wxNO_LEN ? std::strlen(src) + 1 : srcLen;   // wxNO_LEN: the NUL goes too
-		if (dst != nullptr && dstLen < length)
-			return wxCONV_FAILED;
-		for (size_t i = 0; i < length; i++) {
-			const char16_t ch = m_page.ToChar(static_cast<unsigned char>(src[i]));
-			if (ch == 0xFFFF)
-				return wxCONV_FAILED;
-			if (dst != nullptr)
-				dst[i] = static_cast<wchar_t>(ch);
-		}
-		return length;
-	}
-
-	virtual size_t FromWChar(char* dst, size_t dstLen, const wchar_t* src, size_t srcLen = wxNO_LEN) const override {
-		const size_t length = srcLen == wxNO_LEN ? std::wcslen(src) + 1 : srcLen;
-		if (dst != nullptr && dstLen < length)
-			return wxCONV_FAILED;
-		for (size_t i = 0; i < length; i++) {
-			unsigned char byte = 0;
-			if (!m_page.ToByte(static_cast<char32_t>(src[i]), byte))
-				return wxCONV_FAILED;
-			if (dst != nullptr)
-				dst[i] = static_cast<char>(byte);
-		}
-		return length;
-	}
-
-	virtual wxMBConv* Clone() const override { return new ibXmlCodePageConv(m_page); }
-
-private:
-	ibXmlCodePage m_page;
-};
-
-} // namespace
-
-// ANSI and OEM are asked of the SYSTEM, not assumed: a base moved from one machine to another reads the
-// files of the machine it runs on. Elsewhere than Windows there is one such encoding - the locale's.
-bool ibTextFromBytes(const void* data, size_t size, ibTextEncoding encoding, ibString& text)
-{
-	const unsigned char* const bytes = static_cast<const unsigned char*>(data);
-	size_t skip = 0;
-
-	// ⚠ A BYTE-ORDER MARK IS A MARK, NOT TEXT. Handed over, it becomes an invisible first character of the
-	// first line - and the first column of a CSV never equals the name it is compared with.
-	std::unique_ptr<wxMBConv> conv;
-	if (encoding == ibTextEncoding_UTF8 && size >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF) {
-		skip = 3;
-	}
-	else if (encoding == ibTextEncoding_UTF16 && size >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE) {
-		skip = 2;
-	}
-	else if (encoding == ibTextEncoding_UTF16 && size >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF) {
-		skip = 2;
-		conv = std::make_unique<wxMBConvUTF16BE>();   // the mark says which end comes first
-	}
-	if (!conv)
-		conv = ibCreateTextConv(encoding);
-
-	text.clear();
-	if (size <= skip)
-		return true;                                          // nothing, or a mark and nothing: an empty text
-	text = wxString(static_cast<const char*>(data) + skip, *conv, size - skip);
-	return !text.empty();
-}
-
-bool ibTextToBytes(const ibString& text, ibTextEncoding encoding, std::string& bytes)
-{
-	bytes.clear();
-	if (text.empty())
-		return true;
-	if (encoding == ibTextEncoding_UTF8) {
-		bytes = text.ToUtf8();
-		return true;
-	}
-	// ⚠ THE CONVERTER'S OWN BUFFER, not a wxString's mb_str(): that one points into the string it came from, and
-	// over a temporary `wxString(text)` it was gone before it was read — "ab" in UTF-16 came back as two other
-	// letters (2026-10-27).
-	const std::unique_ptr<wxMBConv> conv = ibCreateTextConv(encoding);
-	size_t length = 0;
-	const wxCharBuffer converted = conv->cWC2MB(text.wc_str(), wxNO_LEN, &length);
-	if (length == 0 || length == wxCONV_FAILED)
-		return false;
-	bytes.assign(converted.data(), length);
-	return true;
-}
-
-std::unique_ptr<wxMBConv> ibCreateTextConv(ibTextEncoding encoding)
+ibCodePage ibCodePageOf(ibTextEncoding encoding)
 {
 	switch (encoding) {
-	case ibTextEncoding_UTF16:
-		return std::make_unique<wxMBConvUTF16LE>();
+	case ibTextEncoding_UTF16:       return ibCodePage::Of(ibCodePage::kUtf16);
 	case ibTextEncoding_ANSI:
-#ifdef __WXMSW__
-		return std::make_unique<ibCodePageConv>(::GetACP());
-#else
-		return std::make_unique<wxCSConv>(wxFONTENCODING_SYSTEM);
-#endif
-	case ibTextEncoding_OEM:
-#ifdef __WXMSW__
-		return std::make_unique<ibCodePageConv>(::GetOEMCP());
-#else
-		return std::make_unique<wxCSConv>(wxFONTENCODING_SYSTEM);
-#endif
-	case ibTextEncoding_System:
-#ifdef __WXMSW__
-		// On Windows the system's encoding IS its ANSI page - by the same road, for the same reason.
-		return std::make_unique<ibCodePageConv>(::GetACP());
-#else
-		return std::make_unique<wxCSConv>(wxFONTENCODING_SYSTEM);
-#endif
-	case ibTextEncoding_Windows1251:
-		return std::make_unique<ibXmlCodePageConv>(ibXmlCodePage::Find(ibT("windows-1251")));
-	case ibTextEncoding_Cp866:
-		return std::make_unique<ibXmlCodePageConv>(ibXmlCodePage::Find(ibT("cp866")));
+	case ibTextEncoding_System:      return ibCodePage::Of(ibCodePage::kAnsi);   // on Windows the system's encoding IS its ANSI page
+	case ibTextEncoding_OEM:         return ibCodePage::Of(ibCodePage::kOem);
+	case ibTextEncoding_Windows1251: return ibCodePage::Of(ibCodePage::kWindows1251);
+	case ibTextEncoding_Cp866:       return ibCodePage::Of(ibCodePage::kCp866);
 	case ibTextEncoding_UTF8:
-	default:
-		// STRICT: bytes that are not UTF-8 are a refusal, not a text with holes in it.
-		return std::make_unique<wxMBConvStrictUTF8>();
+	default:                         return ibCodePage::Of(ibCodePage::kUtf8);
 	}
 }
 
@@ -202,14 +39,14 @@ ibTextEncoding ibTextEncodingAt(ibValue** paParams, const long lSizeArray, const
 
 	// A page by its NAME, as XML names it - one table, so a name means the same bytes on every machine.
 	const ibString name = paParams[at]->GetString();
-	switch (ibXmlCodePage::Find(name).Kind()) {
-	case ibXmlCodePage::kUtf8:        return ibTextEncoding_UTF8;
-	case ibXmlCodePage::kUtf16:       return ibTextEncoding_UTF16;
-	case ibXmlCodePage::kWindows1251: return ibTextEncoding_Windows1251;
-	case ibXmlCodePage::kCp866:       return ibTextEncoding_Cp866;
-	case ibXmlCodePage::kUnknown:
+	switch (ibCodePage::Find(name).Kind()) {
+	case ibCodePage::kUtf8:        return ibTextEncoding_UTF8;
+	case ibCodePage::kUtf16:       return ibTextEncoding_UTF16;
+	case ibCodePage::kWindows1251: return ibTextEncoding_Windows1251;
+	case ibCodePage::kCp866:       return ibTextEncoding_Cp866;
+	case ibCodePage::kUnknown:
 	default:
-		ibBackendCoreException::Error(_("The encoding '%s' is not supported; supported: %s"), name, ibXmlCodePage::Supported());
+		ibBackendCoreException::Error(_("The encoding '%s' is not supported; supported: %s"), name, ibCodePage::Supported());
 	}
 }
 
@@ -253,7 +90,7 @@ void ibValueTextReader::Open(const ibString& fileName, ibTextEncoding encoding)
 
 	// Bytes that do not spell text in this encoding decode to NOTHING - and an empty text out of a file that
 	// is not empty would read as "the file has no lines", which is a different thing.
-	if (!ibTextFromBytes(bytes.GetData(), bytes.GetDataLen(), encoding, m_text))
+	if (!ibCodePageOf(encoding).Decode(bytes, m_text))
 		ibBackendCoreException::Error(_("TextReader: the file '%s' cannot be read in the encoding given"), fileName);
 
 	// Where every line begins, found ONCE: ReadLine walks this index and GetLine jumps into it, so the two
@@ -392,7 +229,7 @@ ibValueTextWriter::~ibValueTextWriter()
 
 bool ibValueTextWriter::IsOpen() const
 {
-	return m_file != nullptr && m_file->IsOpened();
+	return m_file != nullptr && m_file->is_open();
 }
 
 bool ibValueTextWriter::Init(ibValue** paParams, const long lSizeArray)
@@ -408,23 +245,21 @@ void ibValueTextWriter::Open(const ibString& fileName, ibTextEncoding encoding, 
 {
 	Close();
 
-	auto file = std::make_unique<wxFFile>();
-	{
-		wxLogNull quiet;
-		file->Open(fileName, append ? wxT("ab") : wxT("wb"));
-	}
-	if (!file->IsOpened())
+	const std::filesystem::path path = ibPathOf(fileName);
+	auto file = std::make_unique<std::ofstream>(path, std::ios::binary | (append ? std::ios::app : std::ios::trunc));
+	if (!file->is_open())
 		ibBackendCoreException::Error(_("TextWriter: cannot open the file '%s' for writing"), fileName);
 
 	m_file = std::move(file);
-	m_conv = ibCreateTextConv(encoding);
+	m_page = ibCodePageOf(encoding);
 	m_fileName = fileName;
 
 	// UTF-16 carries its mark, or nothing that reads the file can tell which end comes first. UTF-8 does
 	// not: the mark is what breaks the first field for every reader that does not expect one.
-	if (encoding == ibTextEncoding_UTF16 && (!append || m_file->Length() == 0)) {
-		const unsigned char mark[2] = { 0xFF, 0xFE };
-		if (m_file->Write(mark, sizeof(mark)) != sizeof(mark))
+	std::error_code error;
+	if (m_page.Kind() == ibCodePage::kUtf16 && (!append || std::filesystem::file_size(path, error) == 0)) {
+		const char mark[2] = { '\xFF', '\xFE' };
+		if (!m_file->write(mark, sizeof(mark)))
 			ibBackendCoreException::Error(_("TextWriter: writing to the file '%s' failed"), m_fileName);
 	}
 }
@@ -436,37 +271,30 @@ void ibValueTextWriter::Write(const ibString& text)
 	if (text.empty())
 		return;
 
-	size_t length = 0;
-	const wxCharBuffer bytes = m_conv->cWC2MB(text.wc_str(), wxNO_LEN, &length);
-	if (length == 0 || length == wxCONV_FAILED)
+	ibMemoryBuffer bytes;
+	if (!m_page.Encode(text, bytes))
 		ibBackendCoreException::Error(_("TextWriter: the text cannot be written to '%s' in the encoding given"), m_fileName);
-	if (m_file->Write(bytes.data(), length) != length)
+	if (!m_file->write(static_cast<const char*>(bytes.GetData()), static_cast<std::streamsize>(bytes.GetDataLen())))
 		ibBackendCoreException::Error(_("TextWriter: writing to the file '%s' failed"), m_fileName);
 }
 
 // ⚠ THE TEXT IS ON DISK WHEN THE FILE CLOSED, NOT WHEN Write ANSWERED. The stream is buffered: a full disk, a
 // share that dropped - Write says yes to the buffer and the CLOSE is what reports it. A close taken on trust
-// lets a script delete its source believing the export whole. After a close that failed the stream is gone
-// all the same, so the handle is let go of rather than closed a second time by the destructor.
+// lets a script delete its source believing the export whole. (A Write that failed has said so already; the
+// close answers for itself.)
 void ibValueTextWriter::Close()
 {
 	if (m_file == nullptr)
 		return;
 
-	const std::unique_ptr<wxFFile> file = std::move(m_file);
-	m_conv.reset();
-	if (!file->IsOpened())
+	const std::unique_ptr<std::ofstream> file = std::move(m_file);
+	if (!file->is_open())
 		return;
 
-	bool closed = false;
-	{
-		wxLogNull quiet;
-		closed = file->Close();
-	}
-	if (!closed) {
-		file->Detach();
+	file->clear();
+	file->close();
+	if (file->fail())
 		ibBackendCoreException::Error(_("TextWriter: the file '%s' could not be written to the end"), m_fileName);
-	}
 }
 
 bool ibValueTextWriter::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)

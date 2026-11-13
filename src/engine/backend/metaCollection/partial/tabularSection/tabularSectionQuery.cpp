@@ -160,7 +160,7 @@ bool ibValueTabularSectionDataObjectRef::SaveData()
 	bool fillCheck = true; long currLine = 1;
 	for (long row = 0; row < GetRowCount(); row++) {
 		const ibComposerNode* node = GetViewData<ibComposerNode>(GetItem(row));   // the line, once
-		wxASSERT(node);
+		ibASSERT(node);
 		for (const auto object : attributes) {
 			if (object->FillCheck()) {
 				if (node->IsEmptyValue(object->GetMetaID())) {
@@ -202,7 +202,7 @@ bool ibValueTabularSectionDataObjectRef::SaveData()
 		// staged row must name the same list in the same order.
 		q.SetValue(ibOwnerRefColumn(), owner);
 		const ibComposerNode* node = GetViewData<ibComposerNode>(GetItem(row));   // the line, once
-		wxASSERT(node);
+		ibASSERT(node);
 		for (const auto object : attributes) {
 			if (!m_metaTable->IsNumberLine(object->GetMetaID())) {
 				q.SetValue(object->GetQueryColumn(), node->GetTableValue(object->GetMetaID()));

@@ -3,6 +3,7 @@
 // the desktop model's own for that case: an empty catalogue, no fields, no parameters — never a failure.
 
 #include <gtest/gtest.h>
+#include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
 #include "core/serialize/dataBuilder.h"
 #include "core/query/queryParser.h"

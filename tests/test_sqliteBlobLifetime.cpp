@@ -2,6 +2,7 @@
 // pointer, so a result set still stepping read freed memory.
 
 #include <gtest/gtest.h>
+#include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
 #include <algorithm>
 #include <cstring>

@@ -20,7 +20,7 @@
 
 #include "core/graphics/colour.h"   // ibCompositionAttr — what a cell is drawn with, as data
 #include "core/graphics/font.h"
-#include <wx/string.h>
+#include "core/graphics/geometry.h"   // ibAlignment
 #include <map>        // ibCompositionRowAttr — a kept row's, by column id
 #include <memory>     // ibCompositionAttr::m_format — one parsed Format, shared by every cell it is laid on
 #include <optional>
@@ -250,13 +250,13 @@ struct ibCompositionFont {
 // own words and nobody else's (Max, 2026-09-30: "the drivers work with a structure of their own, and the list simply
 // moves it"). EACH DRIVER TAKES IT IN ITS OWN TERMS — a list into its own row, a report onto its sheet's cells — and
 // what a driver makes of it is that driver's business, not the contract's. A report cell may come to want more — a
-// border, an indent — and that is added HERE, where every driver reads it. Unset — not IsOk, wxALIGN_INVALID, no
+// border, an indent — and that is added HERE, where every driver reads it. Unset — not IsOk, ibAlignment_Default, no
 // text, no format — is the driver's own.
 struct BACKEND_API ibCompositionAttr {
 	ibColour m_backgroundColour;
 	ibColour m_textColour;
 	ibCompositionFont m_font;                          // said part by part, over the cell's own (Over)
-	int      m_horizontalAlignment = wxALIGN_INVALID;   // wxALIGN_LEFT / wxALIGN_CENTER_HORIZONTAL / wxALIGN_RIGHT
+	int      m_horizontalAlignment = ibAlignment_Default;   // ibAlignment_Left / _CenterHorizontal / _Right
 	std::optional<ibString> m_text;                    // what the cell says in place of its value — an empty one too
 	// …else the Format its value is written in, instead of its column's — parsed once, when the rule was made ready
 	// (ibCompositionRulesOf), and shared by every cell it is laid on; the text a driver writes with it anyway.
@@ -264,7 +264,7 @@ struct BACKEND_API ibCompositionAttr {
 
 	bool IsDefault() const {
 		return !m_backgroundColour.IsOk() && !m_textColour.IsOk() && !m_font.IsSaid()
-			&& m_horizontalAlignment == wxALIGN_INVALID && !m_text && !m_format;
+			&& m_horizontalAlignment == ibAlignment_Default && !m_text && !m_format;
 	}
 
 	// …AND EVERYTHING ANOTHER SAYS, said over this — each thing `other` sets replaces this one's, the rest stands: how
@@ -275,7 +275,7 @@ struct BACKEND_API ibCompositionAttr {
 		if (other.m_textColour.IsOk())
 			m_textColour = other.m_textColour;
 		m_font.Say(other.m_font);
-		if (other.m_horizontalAlignment != wxALIGN_INVALID)
+		if (other.m_horizontalAlignment != ibAlignment_Default)
 			m_horizontalAlignment = other.m_horizontalAlignment;
 		if (other.m_text)
 			m_text = other.m_text;

@@ -197,7 +197,7 @@ public:
 
 // 4-arg (legacy): explicit clsid.
 #define PRIMITIVE_TYPE_REGISTER_4(class_info, class_name, class_type, clsid)\
-GENERATE_REGISTER(class_name, wxMAKE_UNIQUE_NAME(s_cs_reg_s_), new ibCtorPrimitiveType<class_info>(ibString(class_name), class_type, clsid))
+GENERATE_REGISTER(class_name, ibMAKE_UNIQUE_NAME(s_cs_reg_s_), new ibCtorPrimitiveType<class_info>(ibString(class_name), class_type, clsid))
 // 3-arg (new): clsid = ib_clsid_hash(class_name).
 #define PRIMITIVE_TYPE_REGISTER_3(class_info, class_name, class_type)\
 PRIMITIVE_TYPE_REGISTER_4(class_info, class_name, class_type, primitive_to_clsid(class_name))
@@ -231,7 +231,7 @@ public:
 
 // 3-arg (legacy): explicit clsid.
 #define VALUE_TYPE_REGISTER_3(class_info, class_name, clsid)\
-GENERATE_REGISTER(ibT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_val_), new ibCtorValueType<class_info>(ibT(class_name), clsid))
+GENERATE_REGISTER(ibT(class_name), ibMAKE_UNIQUE_NAME(s_cs_reg_val_), new ibCtorValueType<class_info>(ibT(class_name), clsid))
 // 2-arg (new): clsid = ib_clsid_hash(class_name).
 #define VALUE_TYPE_REGISTER_2(class_info, class_name)\
 VALUE_TYPE_REGISTER_3(class_info, class_name, value_to_clsid(class_name))
@@ -281,13 +281,13 @@ public:
 		if constexpr (std::is_default_constructible_v<T>)
 			return new T();
 		else
-			return wxEmptyValue;
+			return ibEmptyValue;
 	}
 };
 
 // 3-arg (legacy): explicit clsid.
 #define SYSTEM_TYPE_REGISTER_3(class_info, class_name, clsid)\
-GENERATE_REGISTER(ibT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_so_), new ibCtorSystemType<class_info>(ibT(class_name), clsid))
+GENERATE_REGISTER(ibT(class_name), ibMAKE_UNIQUE_NAME(s_cs_reg_so_), new ibCtorSystemType<class_info>(ibT(class_name), clsid))
 // 2-arg (new): clsid = ib_clsid_hash(class_name).
 #define SYSTEM_TYPE_REGISTER_2(class_info, class_name)\
 SYSTEM_TYPE_REGISTER_3(class_info, class_name, system_to_clsid(class_name))
@@ -321,7 +321,7 @@ public:
 
 // 3-arg (legacy): explicit clsid.
 #define ENUM_TYPE_REGISTER_3(class_info, class_name, clsid)\
-GENERATE_REGISTER(ibT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_e_), new ibCtorEnumType<class_info>(ibT(class_name), clsid))
+GENERATE_REGISTER(ibT(class_name), ibMAKE_UNIQUE_NAME(s_cs_reg_e_), new ibCtorEnumType<class_info>(ibT(class_name), clsid))
 // 2-arg (new): clsid = ib_clsid_hash(class_name).
 #define ENUM_TYPE_REGISTER_2(class_info, class_name)\
 ENUM_TYPE_REGISTER_3(class_info, class_name, enum_to_clsid(class_name))
@@ -357,7 +357,7 @@ public:
 
 // 3-arg (legacy): explicit clsid.
 #define CONTEXT_TYPE_REGISTER_3(class_info, class_name, clsid)\
-GENERATE_REGISTER(ibT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_ctx_), new ibCtorContextType<class_info>(ibT(class_name), clsid))
+GENERATE_REGISTER(ibT(class_name), ibMAKE_UNIQUE_NAME(s_cs_reg_ctx_), new ibCtorContextType<class_info>(ibT(class_name), clsid))
 // 2-arg (new): clsid = ib_clsid_hash(class_name).
 #define CONTEXT_TYPE_REGISTER_2(class_info, class_name)\
 CONTEXT_TYPE_REGISTER_3(class_info, class_name, context_to_clsid(class_name))

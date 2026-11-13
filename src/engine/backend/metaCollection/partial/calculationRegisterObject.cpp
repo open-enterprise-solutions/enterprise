@@ -59,7 +59,7 @@ void ibValueRecordSetObjectCalculationRegister::DescribeReturnLine(ibMemberTable
 {
 	ibValueRecordSetObject::DescribeReturnLine(helper);
 	helper.AppendFunc(ibT("GetBase"), 3, ibT("GetBase(Resources, Dimensions, Sections)"),
-		ibValueCalculationLine::eMethodGetBase, wxNOT_FOUND);
+		ibValueCalculationLine::eMethodGetBase, ibNOT_FOUND);
 }
 
 // The line asks as it stands in the set — its type, its base period (or its registration), its values of the paired dimensions — so a
@@ -165,7 +165,7 @@ bool ibValueRecordSetObjectCalculationRegister::GetPropVal(const long lPropNum, 
 bool ibValueRecordSetObjectCalculationRegister::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
 	const ibMetaData* metaData = m_metaObject->GetMetaData();
-	wxASSERT(metaData);
+	ibASSERT(metaData);
 
 	switch (lMethodNum)
 	{

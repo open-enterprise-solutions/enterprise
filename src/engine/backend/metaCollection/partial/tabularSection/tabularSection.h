@@ -158,7 +158,7 @@ public:
 	};
 
 	const ibValueMetaObjectTableData* GetMetaObject() const { return m_metaTable; }
-	ibMetaID GetMetaID() const { return m_metaTable ? m_metaTable->GetMetaID() : wxNOT_FOUND; }
+	ibMetaID GetMetaID() const { return m_metaTable ? m_metaTable->GetMetaID() : ibNOT_FOUND; }
 
 #pragma region _source_data_
 

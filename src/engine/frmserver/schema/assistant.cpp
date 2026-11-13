@@ -48,7 +48,7 @@ std::function<void()> ibSchemaAssistant::Command(const ibSession& session, std::
 		// ⭐ ONE ASSISTANT WINDOW — there is one server and one conversation, so a second tab would show the same
 		// exchange in two places. The document brings ITSELF forward (the desktop's OnMcpAssistant).
 		for (ibDocument* open : documentManager->GetDocumentsVector()) {
-			if (ibAssistantTranscriptDocument* already = wxDynamicCast(open, ibAssistantTranscriptDocument)) {
+			if (ibAssistantTranscriptDocument* already = dynamic_cast<ibAssistantTranscriptDocument*>(open)) {
 				already->Activate();
 				return;
 			}

@@ -25,6 +25,7 @@
 // =============================================================================
 
 #include <gtest/gtest.h>
+#include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
 #include "backend/propertyManager/propertyManager.h"          // ibPropertyObject
 #include "backend/propertyManager/property/propertyBoolean.h"

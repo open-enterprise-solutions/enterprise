@@ -4,9 +4,6 @@
 #include "backend/backend.h"
 #include "backend/logger/loggerSink.h"
 
-#include <wx/string.h>
-#include <wx/datetime.h>
-
 #include <memory>
 
 class ibDatabaseLayerSQLite;

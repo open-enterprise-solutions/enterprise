@@ -30,8 +30,6 @@ private:
 	ibDataNode& AppendItem(ibDataNode& parent, ibValueMetaObject* metaObject);
 
 	void FillData(ibDataNode& root);
-
-	wxDECLARE_DYNAMIC_CLASS(ibCommonAttributeCompositionView);
 };
 
 // Its document — the common attribute metaobject's (ibMetaDocument::GetMetaObject); the composition lives in the
@@ -44,7 +42,6 @@ public:
 
 	ibCommonAttributeCompositionDocument(const ibCommonAttributeCompositionDocument&) = delete;
 	ibCommonAttributeCompositionDocument& operator=(const ibCommonAttributeCompositionDocument&) = delete;
-	wxDECLARE_DYNAMIC_CLASS(ibCommonAttributeCompositionDocument);
 };
 
 #endif

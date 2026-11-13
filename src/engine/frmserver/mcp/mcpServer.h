@@ -40,8 +40,6 @@
 #include <set>
 #include <vector>
 
-#include <wx/string.h>
-
 #include "core/fstring.h"           // ibString — a call's text and its answer, as the transport holds them
 
 class ibSession;

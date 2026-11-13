@@ -3,6 +3,7 @@
 // not be. These run on a fiber and require the refusal, not a dead process.
 
 #include <gtest/gtest.h>
+#include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
 #include "backend/backend_exception.h"
 #include "backend/compiler/compileCode.h"

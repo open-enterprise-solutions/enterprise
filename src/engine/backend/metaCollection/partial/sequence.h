@@ -256,7 +256,7 @@ public:
 	virtual ibValuePtr<ibValueManagerDataObject> CreateManagerDataObjectValue() const override;
 	// …and the registrations of ONE recorder, as a set: what the document's posting handler fills.
 	virtual ibValuePtr<ibValueRecordSetObject> CreateRecordSetObjectRegValue(
-		const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) const override;
+		const ibUniqueKeyPair& uniqueKey = ibNullUniqueKeyPair) const override;
 
 	// ⭐⭐ WHAT A REGISTRATION IS MADE OF, said to everything that asks: this list becomes the table's
 	// columns, the queryable's columns and the set's members. The base leaves it empty on purpose —
@@ -349,7 +349,7 @@ private:
 // record to write on its own.
 class ibValueRecordSetObjectSequence : public ibValueRecordSetObject {
 public:
-	ibValueRecordSetObjectSequence(const ibValueMetaObjectSequence* metaObject, const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) :
+	ibValueRecordSetObjectSequence(const ibValueMetaObjectSequence* metaObject, const ibUniqueKeyPair& uniqueKey = ibNullUniqueKeyPair) :
 		ibValueRecordSetObject(metaObject, uniqueKey) {
 		m_members.Bind(this, &ibValueRecordSetObjectSequence::FillMembers);
 	}

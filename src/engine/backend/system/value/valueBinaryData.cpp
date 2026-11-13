@@ -4,17 +4,16 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "valueBinaryData.h"
-#include "valueTextFile.h"   // ibTextToBytes / ibTextFromBytes - a text in an encoding, and back
+#include "valueTextFile.h"   // ibCodePageOf - a text in an encoding, and back
 
 #include "backend/backend_exception.h"
 
 #include "core/utils/base64.h"   // ibBase64 — the value as text, and back
 #include "core/serialize/dataBuilder.h"   // ibDataNode — the packed form
-
-#include <wx/ffile.h>
-#include <wx/log.h>
+#include "core/fileSystem.h"              // ibPathOf - a file's name as the system reads it
 
 #include <cstring>
+#include <fstream>
 #include <new>       // std::bad_alloc — a file the heap has no room for
 #include <string>
 
@@ -84,18 +83,17 @@ bool ibValueBinaryData::Init(ibValue** paParams, const long lSizeArray)
 	if (lSizeArray > 1) {
 		if (paParams[0]->GetType() != ibValueTypes::TYPE_STRING)
 			ibBackendCoreException::Error(_("BinaryData: the text is a string"));
-		const ibTextEncoding encoding = ibTextEncodingAt(paParams, lSizeArray, 1);
-		std::string bytes;
-		if (!ibTextToBytes(paParams[0]->GetString(), encoding, bytes))
-			ibBackendCoreException::Error(_("BinaryData: the text cannot be written in the encoding given"));
+		const ibCodePage page = ibCodePageOf(ibTextEncodingAt(paParams, lSizeArray, 1));
+		ibMemoryBuffer bytes;
 		if (lSizeArray > 2 && paParams[2]->GetBoolean()) {
-			if (encoding == ibTextEncoding_UTF8)
-				bytes.insert(0, "\xEF\xBB\xBF", 3);
-			else if (encoding == ibTextEncoding_UTF16)
-				bytes.insert(0, "\xFF\xFE", 2);
+			if (page.Kind() == ibCodePage::kUtf8)
+				bytes.AppendData("\xEF\xBB\xBF", 3);
+			else if (page.Kind() == ibCodePage::kUtf16)
+				bytes.AppendData("\xFF\xFE", 2);
 		}
-		m_data.Clear();
-		m_data.AppendData(bytes.data(), bytes.size());
+		if (!page.Encode(paParams[0]->GetString(), bytes))
+			ibBackendCoreException::Error(_("BinaryData: the text cannot be written in the encoding given"));
+		m_data = std::move(bytes);
 		return true;
 	}
 
@@ -115,15 +113,13 @@ bool ibValueBinaryData::Init(ibValue** paParams, const long lSizeArray)
 
 void ibValueBinaryData::ReadWholeFile(const ibString& fileName, const ibString& who, ibMemoryBuffer& bytes)
 {
-	wxFFile file;
-	{
-		wxLogNull quiet;   // a missing file is said in the platform's words, not in the library's log
-		file.Open(fileName, wxT("rb"));
-	}
-	if (!file.IsOpened())
+	std::ifstream file(ibPathOf(fileName), std::ios::binary);
+	if (!file)
 		ibBackendCoreException::Error(_("%s: cannot open the file '%s' for reading"), who, fileName);
 
-	const wxFileOffset length = file.Length();
+	file.seekg(0, std::ios::end);
+	const std::streamoff length = file.tellg();
+	file.seekg(0, std::ios::beg);
 	if (length <= 0) {
 		bytes = ibMemoryBuffer(0);
 		return;
@@ -133,7 +129,7 @@ void ibValueBinaryData::ReadWholeFile(const ibString& fileName, const ibString& 
 	// over 4 GB in a 32-bit build) would wrap, and the head of the file be handed over as the whole of it; and
 	// room the heap does not have is std::bad_alloc from the buffer, said here in the platform's words.
 	const size_t size = static_cast<size_t>(length);
-	if (static_cast<wxFileOffset>(size) != length)
+	if (static_cast<std::streamoff>(size) != length)
 		ibBackendCoreException::Error(_("%s: the file '%s' is too large to be read whole"), who, fileName);
 
 	ibMemoryBuffer whole;
@@ -145,7 +141,7 @@ void ibValueBinaryData::ReadWholeFile(const ibString& fileName, const ibString& 
 		ibBackendCoreException::Error(_("%s: the file '%s' is too large to be read whole"), who, fileName);
 	}
 
-	if (file.Read(place, size) != size)
+	if (!file.read(static_cast<char*>(place), static_cast<std::streamsize>(size)))
 		ibBackendCoreException::Error(_("%s: reading the file '%s' failed"), who, fileName);
 	whole.UngetWriteBuf(size);
 	bytes = whole;
@@ -160,29 +156,18 @@ void ibValueBinaryData::ReadFile(const ibString& fileName)
 
 void ibValueBinaryData::WriteFile(const ibString& fileName) const
 {
-	wxFFile file;
-	{
-		wxLogNull quiet;
-		file.Open(fileName, wxT("wb"));
-	}
-	if (!file.IsOpened())
+	std::ofstream file(ibPathOf(fileName), std::ios::binary | std::ios::trunc);
+	if (!file)
 		ibBackendCoreException::Error(_("BinaryData: cannot open the file '%s' for writing"), fileName);
 	const size_t length = m_data.GetDataLen();
-	if (length > 0 && file.Write(m_data.GetData(), length) != length)
+	if (length > 0 && !file.write(static_cast<const char*>(m_data.GetData()), static_cast<std::streamsize>(length)))
 		ibBackendCoreException::Error(_("BinaryData: writing to the file '%s' failed"), fileName);
 
-	// The bytes are on disk when the file CLOSED, not when Write answered: the stream is buffered, and a full
-	// disk or a share that dropped is reported by the close. After a close that failed the stream is gone all
-	// the same, so the handle is let go of rather than closed a second time by the destructor.
-	bool closed = false;
-	{
-		wxLogNull quiet;
-		closed = file.Close();
-	}
-	if (!closed) {
-		file.Detach();
+	// The bytes are on disk when the file CLOSED, not when write answered: the stream is buffered, and a full
+	// disk or a share that dropped is reported by the close.
+	file.close();
+	if (!file)
 		ibBackendCoreException::Error(_("BinaryData: writing to the file '%s' failed"), fileName);
-	}
 }
 
 bool ibValueBinaryData::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
@@ -205,7 +190,7 @@ bool ibValueBinaryData::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 		if (lSizeArray < 1)
 			return false;
 		ibString text;
-		if (!ibTextFromBytes(m_data.GetData(), m_data.GetDataLen(), ibTextEncodingAt(paParams, lSizeArray, 0), text))
+		if (!ibCodePageOf(ibTextEncodingAt(paParams, lSizeArray, 0)).Decode(m_data, text))
 			ibBackendCoreException::Error(_("BinaryData: the bytes are not text in the encoding given"));
 		pvarRetValue = text;
 		return true;

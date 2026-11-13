@@ -931,10 +931,12 @@ void ibThemeRenderer::DrawItem(wxDC& dc,
         dc.DrawRectangle(rect);
     }
 
-    // horizontal adjustment is arbitrary
+    // horizontal adjustment is arbitrary; vertically the text stands in the middle of its row - a theme's row may be
+    // taller than the text (Luna's is half its height again, GetListboxItemHeight), and drawn from the top all that air
+    // fell under it (2026-11-13, Max: "the selection is too tall"). On GTK3/Cocoa the same
     wxRect rectText = rect;
     rectText.Deflate(2, ITEM_MARGIN);
-    dc.DrawLabel(label, wxNullBitmap, rectText);
+    dc.DrawLabel(label, wxNullBitmap, rectText, wxALIGN_LEFT | wxALIGN_CENTRE_VERTICAL);
 
     if ( flags & wxCONTROL_FOCUSED )
     {

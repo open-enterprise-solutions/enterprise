@@ -41,8 +41,6 @@
 #include <functional>
 #include <vector>
 
-#include <wx/string.h>
-
 class ibMetaData;
 class ibValueMetaObject;
 

@@ -21,6 +21,7 @@
 
 #include "output/outputWindow.h"
 #include "objinspect/objinspect.h"
+#include "welcome/welcomeWindow.h"
 #include "settings/settingsxml.h"
 #include "settings/settingsdialog.h"
 #include "settings/keybinderpanel.h"
@@ -466,6 +467,11 @@ void ibFrontendMainFrame::CreateBottomPane()
 	m_mgr.AddPane(auiNotebook, paneInfo);
 }
 
+ibWelcomeWindow* ibFrontendMainFrame::OnCreateWelcome(wxWindow* parent)
+{
+	return new ibWelcomeWindow(parent, m_fullName);
+}
+
 bool ibFrontendMainFrame::IsShownInspector()
 {
 	const ibAuiPaneInfo propertyPane = m_mgr.GetPane(ibAUI_PANE_PROPERTY);
@@ -763,6 +769,22 @@ bool ibFrontendMainFrame::Show(bool show)
 		if (!cancelled && refusal != ibProtocol::ibRefusal::StartRefused)
 			ibMessageBox(!error.IsEmpty() ? error : ibString(_("The start was refused.")), GetTitle(), wxOK | wxICON_ERROR);
 		return false;
+	}
+
+	// THE WORKSPACE WHILE NO TAB IS OPEN — greeting the person the login named, in the client window, kept to its size less
+	// a margin of the docking's ground round it; shown while the window holds no tab (Draw).
+	m_fullName = answer.GetString(ibProtocol::ibLogin::FullName);
+	if (ibAuiMDIClientWindow* const client = GetClientWindow()) {
+		m_welcome = OnCreateWelcome(client);
+		const auto place = [this, client]() {
+			m_welcome->SetSize(wxRect(client->GetClientSize()).Deflate(client->FromDIP(2)));
+		};
+		place();
+		client->Bind(wxEVT_SIZE, [place](wxSizeEvent& event) {
+			event.Skip();
+			place();
+		});
+		m_welcome->Show(client->GetPageCount() == 0);
 	}
 
 	// WHAT THE SERVER SAYS UNASKED — the frame changed by itself (a report composed, a question asked by work nobody
@@ -1072,6 +1094,16 @@ void ibFrontendMainFrame::Draw(const ibProtocolNode& answer)
 			DrawTabs(frame.FindChild(ibProtocol::ibFrame::Tabs));
 		DrawFrame(frame, patch);
 		DrawView(frame.GetInt(ibProtocol::ibFrame::ActiveTab), frame.FindChild(ibProtocol::ibFrame::View), patch);
+
+		// …and the workspace's welcome while no tab stands in it — once more after the events now queued: a tab joins the
+		// notebook when its window is shown (ibAuiMDIChildFrame::Show), which may come after the tabs are drawn.
+		const auto welcome = [this]() {
+			ibAuiMDIClientWindow* const shownIn = GetClientWindow();
+			if (m_welcome != nullptr && shownIn != nullptr)
+				m_welcome->Show(shownIn->GetPageCount() == 0);
+		};
+		welcome();
+		CallAfter(welcome);
 	}
 
 	// THE EVENTS — what happened since the last answer: read from the answer, never kept in the frame. Exit done: the
@@ -2031,7 +2063,10 @@ void ibFrontendMainFrame::OnCloseWindow(wxCloseEvent& event)
 
 	// ⭐ ONE CLOSE AT A TIME. The asking pass puts questions up ("save the changes?"), and a question runs a message
 	// loop — in which a SECOND close can arrive; the close that is asking decides (the desktop's own lesson, 2026-09-16).
-	if (m_closingWindow && !force) {
+	// …and not under a window asking: it runs a message loop over the frame, its window on the stack of the call that
+	// asks (ShowRequest) - a close let through destroyed the frame under it, and with it the window, a stack object
+	// deleted (an Output list's column choice; a close from the taskbar, 2026-11-13). The window asking decides first.
+	if ((m_closingWindow || !m_asking.empty()) && !force) {
 		event.Veto();
 		return;
 	}

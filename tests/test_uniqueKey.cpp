@@ -75,7 +75,7 @@ TEST(UniqueKey, OrderingIsAntisymmetric) {
 TEST(UniqueKeyPair, EmptyIsNotOkButHasGuid) {
     ibUniqueKeyPair p;                    // no composite keys yet
     EXPECT_FALSE(p.IsOk());               // IsOk requires populated composite key
-    EXPECT_TRUE(p.isValid());             // ...but m_objGuid is a fresh wxNewUniqueGuid
+    EXPECT_TRUE(p.isValid());             // ...but m_objGuid is a fresh ibNewUniqueGuid
 }
 
 TEST(UniqueKeyPair, EachInstanceHasDistinctGuid) {

@@ -20,6 +20,7 @@
 // =============================================================================
 
 #include <gtest/gtest.h>
+#include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
 #include "backend/metaCollection/partial/accumulationRegister.h"
 #include "backend/metaCollection/partial/accountingRegister.h"     // ibAcctArgs — the layout a call is read by

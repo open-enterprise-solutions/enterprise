@@ -5,12 +5,6 @@
 #include <mbedtls/base64.h>
 #include <mbedtls/sha1.h>
 
-#include <wx/mstream.h>
-#include <wx/zstream.h>
-
-#include "core/fstring.h"   // ibString — the text a deflated message is
-#include "core/memory/memoryBuffer.h"   // ibMemoryBuffer — …and the packet one is
-
 namespace {
 
 // Where a frame's head ends and what it says, read off its first bytes.
@@ -200,92 +194,5 @@ std::string ibWebSocketKey()
 	return Base64(nonce, sizeof(nonce));
 }
 
-bool ibIsUtf8(const std::string& text)
-{
-	const unsigned char* at = reinterpret_cast<const unsigned char*>(text.data());
-	const unsigned char* const end = at + text.size();
-	while (at < end) {
-		const unsigned char lead = *at;
-		if (lead < 0x80) {
-			++at;
-			continue;
-		}
-		std::size_t follow = 0;
-		std::uint32_t point = 0;
-		std::uint32_t least = 0;
-		if ((lead & 0xE0) == 0xC0) {
-			follow = 1; point = lead & 0x1F; least = 0x80;
-		}
-		else if ((lead & 0xF0) == 0xE0) {
-			follow = 2; point = lead & 0x0F; least = 0x800;
-		}
-		else if ((lead & 0xF8) == 0xF0) {
-			follow = 3; point = lead & 0x07; least = 0x10000;
-		}
-		else {
-			return false;
-		}
-		if (static_cast<std::size_t>(end - at) <= follow)
-			return false;
-		for (std::size_t i = 1; i <= follow; ++i) {
-			if ((at[i] & 0xC0) != 0x80)
-				return false;
-			point = (point << 6) | (at[i] & 0x3F);
-		}
-		// An overlong form, a surrogate, past the last code point — none is UTF-8.
-		if (point < least || (point >= 0xD800 && point <= 0xDFFF) || point > 0x10FFFF)
-			return false;
-		at += follow + 1;
-	}
-	return true;
-}
-
-bool ibDeflate(const std::string& bytes, std::string& packed)
-{
-	wxMemoryOutputStream out;
-	{
-		wxZlibOutputStream zip(out, wxZ_DEFAULT_COMPRESSION, wxZLIB_NO_HEADER);
-		zip.Write(bytes.data(), bytes.size());
-		if (!zip.Close())
-			return false;
-	}
-	const wxStreamBuffer* const buffer = out.GetOutputStreamBuffer();
-	packed.assign(static_cast<const char*>(buffer->GetBufferStart()), static_cast<std::size_t>(out.GetLength()));
-	return true;
-}
-
-namespace {
-
-// The bytes a deflated message holds, appended to `to` a chunk at a time — false when they do not inflate.
-template<class Bytes, class Append>
-bool Inflate(const std::string& packed, Bytes& to, Append append)
-{
-	wxMemoryInputStream in(packed.data(), packed.size());
-	wxZlibInputStream unzip(in, wxZLIB_NO_HEADER);
-	char chunk[16384];
-	for (;;) {
-		unzip.Read(chunk, sizeof(chunk));
-		const std::size_t got = unzip.LastRead();
-		if (got == 0)
-			break;
-		append(to, chunk, got);
-	}
-	return unzip.GetLastError() == wxSTREAM_NO_ERROR || unzip.GetLastError() == wxSTREAM_EOF;
-}
-
-} // namespace
-
-bool ibInflate(const std::string& packed, ibString& text)
-{
-	std::string bytes;
-	if (!Inflate(packed, bytes, [](std::string& to, const char* chunk, std::size_t got) { to.append(chunk, got); }))
-		return false;
-	text.SetUtf8(bytes.data(), bytes.size());
-	return true;
-}
-
-bool ibInflate(const std::string& packed, ibMemoryBuffer& bytes)
-{
-	bytes.SetDataLen(0);
-	return Inflate(packed, bytes, [](ibMemoryBuffer& to, const char* chunk, std::size_t got) { to.AppendData(chunk, got); });
-}
+// (ibIsUtf8 is the text's own, core/fstring.h; ibDeflate / ibInflate are made in memory/compression.cpp, by the pair
+// a stored blob is packed with.)

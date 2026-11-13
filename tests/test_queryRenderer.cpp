@@ -6,6 +6,7 @@
 // that there are no per-DBMS forks in the renderer.
 
 #include <gtest/gtest.h>
+#include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2: IR + DDL + DML + renderer (merged)
 #include "backend/databaseLayer/postgres/postgresDatabaseLayer.h"

@@ -34,13 +34,13 @@ std::map<ibMetaID, bool> ibFunctionalOptionGate::EffectiveValues(const std::map<
 		std::set<ibMetaID> seen;
 		// Up the chain of requirements, each one ANDed in, until it ends, leaves the configuration, or
 		// comes back to an option already walked.
-		for (ibMetaID step = option.first; step != wxNOT_FOUND && seen.insert(step).second; ) {
+		for (ibMetaID step = option.first; step != ibNOT_FOUND && seen.insert(step).second; ) {
 			const auto value = own.find(step);
 			if (value == own.end())
 				break;
 			on = on && value->second;
 			const auto next = required.find(step);
-			step = next != required.end() ? next->second : wxNOT_FOUND;
+			step = next != required.end() ? next->second : ibNOT_FOUND;
 		}
 		effective[option.first] = on;
 	}
@@ -103,7 +103,7 @@ const ibFunctionalOptionValues& ValuesOf(const ibMetaData* metaData)
 			metaData->GetAnyArrayObject<ibValueMetaObjectFunctionalOption>(g_metaFunctionalOptionCLSID)) {
 		own[option->GetMetaID()] = option->IsOn();
 		const ibMetaID parent = option->GetRequired();
-		if (parent != wxNOT_FOUND)
+		if (parent != ibNOT_FOUND)
 			required[option->GetMetaID()] = parent;
 	}
 

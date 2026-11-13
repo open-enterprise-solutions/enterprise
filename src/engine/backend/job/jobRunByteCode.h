@@ -30,8 +30,6 @@
 
 #include "backend/backend.h"
 
-#include <wx/string.h>
-
 #include <memory>
 #include <vector>
 

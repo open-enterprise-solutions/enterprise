@@ -7,7 +7,7 @@
     <key>CFBundleDisplayName</key>
     <string>OES Enterprise</string>
     <key>CFBundleIdentifier</key>
-    <string>com.tetracode.oes.enterprise-thin</string>
+    <string>io.github.open-enterprise-solutions.enterprise-thin</string>
     <key>CFBundleVersion</key>
     <string>1.0.0</string>
     <key>CFBundleShortVersionString</key>

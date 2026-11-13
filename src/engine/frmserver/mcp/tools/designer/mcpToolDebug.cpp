@@ -428,7 +428,7 @@ public:
 
 				if (activeMetaData != nullptr && activeMetaData->IsConfigOpen()) {
 					const ibMetaID id = activeMetaData->MetaIdByGuid(ibGuid(module.first));
-					if (id != wxNOT_FOUND) {
+					if (id != ibNOT_FOUND) {
 						if (ibValueMetaObject* object = ibFindMetaObjectById(activeMetaData, id)) {
 
 							// ⭐ THE WHOLE PATH, not the module's own name. Every document has an

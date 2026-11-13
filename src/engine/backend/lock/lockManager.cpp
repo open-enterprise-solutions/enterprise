@@ -257,7 +257,7 @@ ibLockHandle ibLockManager::Acquire(const std::vector<ibLockItem>& items,
 					continue;
 				}
 
-				const ibGuid newGuid = wxNewUniqueGuid;
+				const ibGuid newGuid = ibNewUniqueGuid;
 				if (q.Execute(ibInsert(lock_table, {
 						{ ibT("lockGuid"),    ibConst(ibValue(newGuid.str())) },
 						{ ibT("sessionGuid"), ibConst(ibValue(ownerGuidStr)) },

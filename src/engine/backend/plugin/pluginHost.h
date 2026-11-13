@@ -29,8 +29,6 @@
 
 #include <vector>
 
-#include <wx/string.h>
-
 // THE HOST ITSELF — one per process, carrying no state, only the capability
 // lookup. Declared here rather than in pluginManager.h so the definition in
 // pluginHost.cpp sees this declaration: without it the function is compiled

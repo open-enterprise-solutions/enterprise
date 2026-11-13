@@ -158,7 +158,7 @@ class ibViewTableColumnObject : public ibDataViewColumn {
 public:
 
 	ibViewTableColumnObject(const ibValueModelTableBoxColumn& column, unsigned int modelColumn)
-		: ibDataViewColumn(wxEmptyString, new ibViewCellRenderer(column), modelColumn, wxDVC_DEFAULT_WIDTH,
+		: ibDataViewColumn(wxEmptyString, new ibViewCellRenderer(column), modelColumn, ibDVC_DEFAULT_WIDTH,
 			wxALIGN_CENTER, wxDATAVIEW_COL_REORDERABLE), m_column(column) {}
 
 	virtual void SyncSortArrowFromModel() override
@@ -185,7 +185,9 @@ ibValueModelTableBox::~ibValueModelTableBox() = default;
 
 void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& node)
 {
-	m_panel = new ibPanel(parent, wxID_ANY);
+	// The table's frame is the box's, round its command bar too: the bar is the table's, one box with it - framed round
+	// the rows alone, the bar stood over them with no line round it (2026-11-13, Max: "the table is all lines").
+	m_panel = new ibPanel(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL | wxBORDER_SIMPLE);
 	wxBoxSizer* const sizer = new wxBoxSizer(wxVERTICAL);
 
 	// The chrome: its command bar above it.
@@ -195,7 +197,7 @@ void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& node)
 	sizer->Add(m_commandBar->GetWindow(), 0, wxEXPAND);
 
 	m_dataView = new ibTableViewCtrl(m_panel,
-		wxDV_SINGLE | wxDV_HORIZ_RULES | wxDV_VERT_RULES | wxDV_ROW_LINES | wxDV_VARIABLE_LINE_HEIGHT | wxBORDER_SIMPLE);
+		wxDV_SINGLE | wxDV_HORIZ_RULES | wxDV_VERT_RULES | wxDV_ROW_LINES | wxDV_VARIABLE_LINE_HEIGHT | wxBORDER_NONE);
 	m_dataView->SetBackgroundColour(*wxWHITE);
 	sizer->Add(m_dataView, 1, wxEXPAND);
 	m_panel->SetSizer(sizer);

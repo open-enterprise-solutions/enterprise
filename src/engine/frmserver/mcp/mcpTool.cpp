@@ -25,8 +25,7 @@
 #include "backend/metaCollection/metaTemplateObject.h"         // ibValueMetaObjectTemplate — the composer behind an id
 
 #include "core/stringTokenizer.h"   // a query is words, and the finder counts how many of them landed
-#include <wx/regex.h>     // …unless it is written as a pattern, which is also a way to ask
-#include <wx/log.h>       // a query that does not compile is not the person's error to read
+#include "core/regEx.h"   // …unless it is written as a pattern, which is also a way to ask
 
 #include "core/stringUtils.h"   // names compare case-insensitively here, as everywhere else
 
@@ -35,7 +34,7 @@
 #include <memory>
 #include <set>      // one link per id — the same object named twice is one fact; a property met once
 #include <atomic>   // which application app_run started — read from any thread
-#include <wx/process.h>   // wxProcess::Exists — is the application app_run started still there
+#include "core/startProcess.h"   // ibProcessExists - is the application app_run started still there
 
 #include "backend/restructureInfo.h"              // the ledger an object complains into
 #include "backend/session/session.h"              // who is asking — which tools are there for them
@@ -323,7 +322,7 @@ void ibRegisterMcpTool(const ibMcpTool* tool, ibMcpToolMode mode)
 	const ibString name = tool->GetName();
 	for (const ibMcpTool* registered : Store()) {
 		if (registered->GetName() == name) {
-			wxASSERT_MSG(false, wxT("an MCP tool is registered twice under one name"));
+			ibASSERT_MSG(false, ibT("an MCP tool is registered twice under one name"));
 			return;
 		}
 	}
@@ -353,7 +352,7 @@ long ibMcpStartedApplication()
 ibString ibMcpNoAnswer(const ibString& usual)
 {
 	const long pid = ibMcpStartedApplication();
-	if (pid == 0 || wxProcess::Exists((int)pid))
+	if (pid == 0 || ibProcessExists(pid))
 		return usual;
 	return ibString::Format(
 		ibMcpText("The application is GONE - its process (%ld, started by app_run) is no longer running, "
@@ -442,7 +441,7 @@ namespace {
 // every topic, every tool description — so compiling it per text is the entire cost of searching.
 // Compiled once when the query changes, and the failure is remembered too: a query that is not a
 // valid pattern must not be re-attempted three hundred times.
-const wxRegEx* CompiledQuery(const ibString& query)
+const ibRegEx* CompiledQuery(const ibString& query)
 {
 	// ⚠ PER THREAD. Tools run on the session's worker or on the connection's thread depending on what
 	// they need, and a shared cache here would be two searches writing one pointer. A regular
@@ -453,7 +452,7 @@ const wxRegEx* CompiledQuery(const ibString& query)
 	// alarm that never goes away — measured the first time these ran (2026-09-02: 32 bytes,
 	// dumped after the last test passed).
 	static thread_local ibString s_source;
-	static thread_local wxRegEx s_regex;
+	static thread_local ibRegEx s_regex;
 	static thread_local bool s_tried = false;
 	static thread_local bool s_valid = false;
 
@@ -463,10 +462,8 @@ const wxRegEx* CompiledQuery(const ibString& query)
 		s_tried = true;
 
 		// A pattern that does not compile is an ordinary outcome here — the caller wrote words
-		// that happen to hold a bracket — so it must not reach the log the person is reading.
-		wxLogNull quiet;
-
-		s_valid = s_regex.Compile(query, wxRE_ADVANCED | wxRE_ICASE);
+		// that happen to hold a bracket — so it is an answer, not a line in the log (ibRegEx says none).
+		s_valid = s_regex.Compile(query, ibRE_ICASE);
 	}
 
 	return s_valid ? &s_regex : nullptr;
@@ -485,7 +482,7 @@ bool ibMcpIsRegex(const ibString& query)
 
 	bool looks = false;
 	for (const ibChar* mark : s_marks)
-		looks = looks || query.Find(mark) != wxNOT_FOUND;
+		looks = looks || query.Find(mark) != ibNOT_FOUND;
 
 	return looks && CompiledQuery(query) != nullptr;
 }
@@ -514,7 +511,7 @@ void ibMcpWordsPresent(const ibString& haystack, const ibString& query, std::vec
 	// mean what it says instead. Matched whole: a pattern either hit or it did not, so it counts
 	// as the single thing that was asked and ranks beside the exact word matches.
 	if (ibMcpIsRegex(query)) {
-		const wxRegEx* compiled = CompiledQuery(query);
+		const ibRegEx* compiled = CompiledQuery(query);
 		met.push_back(compiled != nullptr && compiled->Matches(haystack));
 		return;
 	}
@@ -546,10 +543,10 @@ void ibMcpWordsPresent(const ibString& haystack, const ibString& query, std::vec
 		const size_t keep = std::max<size_t>(4, (word.length() * 2 + 2) / 3);
 
 		for (size_t length = word.length(); length >= keep && !present; --length)
-			present = text.Find(word.Left(length)) != wxNOT_FOUND;
+			present = text.Find(word.Left(length)) != ibNOT_FOUND;
 
 		if (!present && word.length() < 4)
-			present = text.Find(word) != wxNOT_FOUND;
+			present = text.Find(word) != ibNOT_FOUND;
 
 		met.push_back(present);
 	}
@@ -895,8 +892,8 @@ int ibMcpSayObjectLinks(const ibString& text, ibMetaData* metaData,
 			// well-written note as broken. A single word with no space in it, though, IS somebody
 			// writing the object's name, and then a disagreement is a disagreement.
 			const bool namedRatherThanDescribed =
-				!label.IsEmpty() && label.Find(ibT(' ')) == wxNOT_FOUND
-				&& label.Find(ibT('\t')) == wxNOT_FOUND;
+				!label.IsEmpty() && label.Find(ibT(' ')) == ibNOT_FOUND
+				&& label.Find(ibT('\t')) == ibNOT_FOUND;
 
 			if (namedRatherThanDescribed && !stringUtils::IsSameAs(label, target->GetName())) {
 				entry->AddField(ibT("agrees"), ibDataValue::Bool(false));

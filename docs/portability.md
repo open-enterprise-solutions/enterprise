@@ -94,8 +94,8 @@ every platform and drops its branch without a word. Before any include, the comp
 The platform's LIBRARY is linked by the target that compiles the call. `core/guid.cpp` picks its
 generator three ways — Windows `CoCreateGuid`, macOS CFUUID, else libuuid's `uuid_generate` — so
 libuuid (non-Apple UNIX) and `-framework CoreFoundation` (Apple) are linked in
-`core/CMakeLists.txt` (moved from `backend/CMakeLists.txt` with `guid` on 2026-10-08). `core` is
-wx base only; its `fstring.cpp` carries the Apple `uselocale` formatting of § 1.5a′.
+`core/CMakeLists.txt` (moved from `backend/CMakeLists.txt` with `guid` on 2026-10-08). `core` has
+no wx; its `fstring.cpp` carries the Apple `uselocale` formatting of § 1.5a′.
 
 ### 1.5 A nested class cannot carry a default argument built from its own initializers
 
@@ -226,6 +226,7 @@ only CMake builds them.
 | `wxLongLong_t(0)` — a functional cast | off MSVC the alias is **two words** (`long long`), and only a single-word type name can be spelled `T(x)`; use `static_cast<T>(x)` |
 | `ofstream::open(wstring)` | an MSVC extension — POSIX takes UTF-8 bytes |
 | a local called `small` (or `near`, `far`) | the OTHER way round — it compiles off Windows and fails ON it: the Windows headers `#define small char` (`rpcndr.h`), so `wchar_t small[256]` reads as `wchar_t char[256]` (2026-09-12, the database string converter) |
+| `windows.h` in a header, or in a file whose class has a `GetUserName` / `GetClassName` | also ON Windows: its macros rename the method (`GetUserNameW`), and in the server's code no wx undoes them any more (`wx/msw/winundef.h`, 2026-11-13). Keep `windows.h` in the `.cpp` that calls the API, prefer the CRT (`_getpid`), and `#undef` the name after a COM header that must stay. Where it must come, it comes after the engine's headers — and so does `<wx/init.h>`, which brings it (`GetForm` → `GetFormW`, unresolved at link: a test, 2026-11-13) |
 
 ### 1.7 A GUI object may not be a file-scope static
 

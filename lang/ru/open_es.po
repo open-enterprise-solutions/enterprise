@@ -14114,3 +14114,34 @@ msgstr "Balance: '%s' не является измерением регистр�
 #, c-format
 msgid "Balance: '%s' is not a resource of the register"
 msgstr "Balance: '%s' не является ресурсом регистра"
+
+#: src/engine/frmclient/mainFrame/welcome/welcomeWindow.cpp
+msgid "Good morning"
+msgstr "Доброе утро"
+
+#: src/engine/frmclient/mainFrame/welcome/welcomeWindow.cpp
+msgid "Good afternoon"
+msgstr "Добрый день"
+
+#: src/engine/frmclient/mainFrame/welcome/welcomeWindow.cpp
+msgid "Good evening"
+msgstr "Добрый вечер"
+
+#: src/engine/frmclient/mainFrame/welcome/welcomeWindow.cpp
+#, c-format
+msgid "Good morning, %s"
+msgstr "Доброе утро, %s"
+
+#: src/engine/frmclient/mainFrame/welcome/welcomeWindow.cpp
+#, c-format
+msgid "Good afternoon, %s"
+msgstr "Добрый день, %s"
+
+#: src/engine/frmclient/mainFrame/welcome/welcomeWindow.cpp
+#, c-format
+msgid "Good evening, %s"
+msgstr "Добрый вечер, %s"
+
+#: src/engine/frmclient/mainFrame/welcome/welcomeWindow.cpp
+msgid "Where shall we start?"
+msgstr "С чего начнём?"

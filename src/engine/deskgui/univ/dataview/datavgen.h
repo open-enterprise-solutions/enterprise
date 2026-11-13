@@ -123,7 +123,7 @@ public:
 	ibDataViewColumn(const wxString& title,
 		ibDataViewRenderer* renderer,
 		unsigned int model_column,
-		int width = wxDVC_DEFAULT_WIDTH,
+		int width = ibDVC_DEFAULT_WIDTH,
 		wxAlignment align = wxALIGN_CENTER,
 		int flags = wxDATAVIEW_COL_RESIZABLE)
 		: ibDataViewColumnBase(renderer, model_column),
@@ -135,7 +135,7 @@ public:
 	ibDataViewColumn(const wxBitmapBundle& bitmap,
 		ibDataViewRenderer* renderer,
 		unsigned int model_column,
-		int width = wxDVC_DEFAULT_WIDTH,
+		int width = ibDVC_DEFAULT_WIDTH,
 		wxAlignment align = wxALIGN_CENTER,
 		int flags = wxDATAVIEW_COL_RESIZABLE)
 		: ibDataViewColumnBase(bitmap, renderer, model_column), m_footer_column(this)

@@ -13776,3 +13776,34 @@ msgstr ""
 #, c-format
 msgid "Balance: '%s' is not a resource of the register"
 msgstr ""
+
+#: src/engine/frmclient/mainFrame/welcome/welcomeWindow.cpp
+msgid "Good morning"
+msgstr ""
+
+#: src/engine/frmclient/mainFrame/welcome/welcomeWindow.cpp
+msgid "Good afternoon"
+msgstr ""
+
+#: src/engine/frmclient/mainFrame/welcome/welcomeWindow.cpp
+msgid "Good evening"
+msgstr ""
+
+#: src/engine/frmclient/mainFrame/welcome/welcomeWindow.cpp
+#, c-format
+msgid "Good morning, %s"
+msgstr ""
+
+#: src/engine/frmclient/mainFrame/welcome/welcomeWindow.cpp
+#, c-format
+msgid "Good afternoon, %s"
+msgstr ""
+
+#: src/engine/frmclient/mainFrame/welcome/welcomeWindow.cpp
+#, c-format
+msgid "Good evening, %s"
+msgstr ""
+
+#: src/engine/frmclient/mainFrame/welcome/welcomeWindow.cpp
+msgid "Where shall we start?"
+msgstr ""

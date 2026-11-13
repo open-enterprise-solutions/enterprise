@@ -1,8 +1,6 @@
 #ifndef _DEBUG_CLIENT_BRIDGE_H__
 #define _DEBUG_CLIENT_BRIDGE_H__
 
-#include <wx/wx.h>
-
 #include "backend/backend_core.h"
 #include "debugDefs.h"
 

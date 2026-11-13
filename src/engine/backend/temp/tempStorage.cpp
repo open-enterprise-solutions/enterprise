@@ -6,10 +6,11 @@
 #include "core/fdatetime.h"                            // ibDateTime — when a part was written
 #include "backend/session/session.h"                      // ibTempFile — the session working
 
+#include "core/fileSystem.h"                             // ibPathOf - a file's name without its folder
+#include "core/codePage.h"                               // ibCodePage - the text's own bytes, UTF-8
+
 #include <algorithm>
 #include <set>
-
-#include <wx/filename.h>
 
 ///////////////////////////////////////////////////////////////////////////////
 //								ibTempStorage
@@ -47,7 +48,7 @@ ibString ibTempStorage::Create(const ibGuid& session, const ibString& name)
 {
 	std::lock_guard<std::recursive_mutex> serialised(m_mtx);
 
-	const ibString fileName = wxFileNameFromPath(name);
+	const ibString fileName(ibPathOf(name).filename().wstring());
 	if (fileName.IsEmpty() || !session.isValid())
 		return ibString();
 
@@ -285,7 +286,7 @@ bool ibTempFile::ReadPart(int index, ibMemoryBuffer& data) const
 	return m_storage != nullptr && m_storage->ReadPart(m_session, m_id, index, data);
 }
 
-bool ibTempFile::ReadAll(ibString* str, const wxMBConv& conv)
+bool ibTempFile::ReadAll(ibString* str)
 {
 	if (m_storage == nullptr || str == nullptr)
 		return false;
@@ -293,21 +294,14 @@ bool ibTempFile::ReadAll(ibString* str, const wxMBConv& conv)
 	ibMemoryBuffer content, part;
 	for (int index = 0; ReadPart(index, part); ++index)
 		content.AppendData(part.GetData(), part.GetDataLen());
-
-	*str = wxString(static_cast<const char*>(content.GetData()), conv, content.GetDataLen());
-	// A conversion that failed comes back empty — the file was not text in `conv`.
-	return content.GetDataLen() == 0 || !str->IsEmpty();
+	return ibCodePage::Of(ibCodePage::kUtf8).Decode(content, *str);
 }
 
-bool ibTempFile::Write(const ibString& str, const wxMBConv& conv)
+bool ibTempFile::Write(const ibString& str)
 {
-	// The converter's own buffer: a wxString's mb_str() points into that string, here a temporary (valueHttp.cpp,
-	// ibHttpEncode, says what it cost).
-	size_t length = 0;
-	const wxCharBuffer bytes = conv.cWC2MB(str.wc_str(), wxNO_LEN, &length);
-	if (length == wxCONV_FAILED || (!str.IsEmpty() && length == 0))
-		return false;   // `str` cannot be said in `conv`
-	return Write(bytes.data(), length);
+	ibMemoryBuffer bytes;
+	ibCodePage::Of(ibCodePage::kUtf8).Encode(str, bytes);
+	return Write(bytes.GetData(), bytes.GetDataLen());
 }
 
 bool ibTempFile::Write(const void* data, std::size_t size)

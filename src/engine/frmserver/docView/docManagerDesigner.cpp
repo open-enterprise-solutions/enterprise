@@ -27,34 +27,32 @@
 
 #include "core/fileKind.h"   // extensions live in one table, not at each call site
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibDocManagerDesigner, ibDocManager);
-
 ibDocManagerDesigner::ibDocManagerDesigner()
 	: ibDocManager()
 {
 	// The external data processor and report, as the desktop's designer edited them — made anew or opened from a client's
 	// file (the session's temporary storage), kept open, their trees drawn for the client and saved back to a file.
-	AddDocTemplate(g_metaExternalDataProcessorCLSID, _("External data processor"), ibFileMask(ibFileKind::Tool), ibFileExtension(ibFileKind::Tool), _("Data processor Doc"), _("Data processor View"), CLASSINFO(ibDataProcessorEditDocument), CLASSINFO(ibDataProcessorTreeView), ibTEMPLATE_VISIBLE);
-	AddDocTemplate(g_metaExternalReportCLSID, _("External report"), ibFileMask(ibFileKind::Report), ibFileExtension(ibFileKind::Report), _("Report Doc"), _("Report View"), CLASSINFO(ibReportEditDocument), CLASSINFO(ibReportTreeView), ibTEMPLATE_VISIBLE);
-	AddDocTemplate(g_metaCommonMetadataCLSID, _("Configuration"), ibFileMask(ibFileKind::Application), ibFileExtension(ibFileKind::Application), _("Configuration Doc"), _("Configuration View"), CLASSINFO(ibMetadataFileDocument), CLASSINFO(ibMetadataTreeView), ibTEMPLATE_VISIBLE | ibTEMPLATE_ONLY_OPEN);
+	AddDocTemplate<ibDataProcessorEditDocument, ibDataProcessorTreeView>(g_metaExternalDataProcessorCLSID, _("External data processor"), ibFileMask(ibFileKind::Tool), ibFileExtension(ibFileKind::Tool), _("Data processor Doc"), _("Data processor View"), ibTEMPLATE_VISIBLE);
+	AddDocTemplate<ibReportEditDocument, ibReportTreeView>(g_metaExternalReportCLSID, _("External report"), ibFileMask(ibFileKind::Report), ibFileExtension(ibFileKind::Report), _("Report Doc"), _("Report View"), ibTEMPLATE_VISIBLE);
+	AddDocTemplate<ibMetadataFileDocument, ibMetadataTreeView>(g_metaCommonMetadataCLSID, _("Configuration"), ibFileMask(ibFileKind::Application), ibFileExtension(ibFileKind::Application), _("Configuration Doc"), _("Configuration View"), ibTEMPLATE_VISIBLE | ibTEMPLATE_ONLY_OPEN);
 
 	// A module's text — a common module, an object's and a manager's, as the desktop's designer registered them.
-	AddDocTemplate(g_metaCommonModuleCLSID, CLASSINFO(ibModuleTextDocument), CLASSINFO(ibModuleTextView));
-	AddDocTemplate(g_metaModuleCLSID, CLASSINFO(ibModuleTextDocument), CLASSINFO(ibModuleTextView));
-	AddDocTemplate(g_metaManagerCLSID, CLASSINFO(ibModuleTextDocument), CLASSINFO(ibModuleTextView));
+	AddDocTemplate<ibModuleTextDocument, ibModuleTextView>(g_metaCommonModuleCLSID);
+	AddDocTemplate<ibModuleTextDocument, ibModuleTextView>(g_metaModuleCLSID);
+	AddDocTemplate<ibModuleTextDocument, ibModuleTextView>(g_metaManagerCLSID);
 	// …and a form — a common form and an object's: its module's text and the form itself, edited by the client.
-	AddDocTemplate(g_metaCommonFormCLSID, CLASSINFO(ibFormDesignDocument), CLASSINFO(ibFormDesignView));
-	AddDocTemplate(g_metaFormCLSID, CLASSINFO(ibFormDesignDocument), CLASSINFO(ibFormDesignView));
+	AddDocTemplate<ibFormDesignDocument, ibFormDesignView>(g_metaCommonFormCLSID);
+	AddDocTemplate<ibFormDesignDocument, ibFormDesignView>(g_metaFormCLSID);
 	// …and a template — a common template and an object's: its sheet, or a report's composer's composition panel over its
 	// description, as the desktop's designer opened it (ibTemplateDocument makes its kind's view).
-	AddDocTemplate(g_metaCommonTemplateCLSID, CLASSINFO(ibTemplateDocument), CLASSINFO(ibSpreadsheetTemplateView));
-	AddDocTemplate(g_metaTemplateCLSID, CLASSINFO(ibTemplateDocument), CLASSINFO(ibSpreadsheetTemplateView));
+	AddDocTemplate<ibTemplateDocument, ibSpreadsheetTemplateView>(g_metaCommonTemplateCLSID);
+	AddDocTemplate<ibTemplateDocument, ibSpreadsheetTemplateView>(g_metaTemplateCLSID);
 	// …and the checkable trees over a metaobject — a section's objects; a common attribute opens on its composition and
 	// a functional option on its members, the same gesture; a role on its rights.
-	AddDocTemplate(g_metaSectionCLSID, CLASSINFO(ibInterfaceCompositionDocument), CLASSINFO(ibInterfaceCompositionView));
-	AddDocTemplate(g_metaCommonAttributeCLSID, CLASSINFO(ibCommonAttributeCompositionDocument), CLASSINFO(ibCommonAttributeCompositionView));
-	AddDocTemplate(g_metaFunctionalOptionCLSID, CLASSINFO(ibFunctionalOptionMembersDocument), CLASSINFO(ibFunctionalOptionMembersView));
-	AddDocTemplate(g_metaRoleCLSID, CLASSINFO(ibRoleRightsDocument), CLASSINFO(ibRoleRightsView));
+	AddDocTemplate<ibInterfaceCompositionDocument, ibInterfaceCompositionView>(g_metaSectionCLSID);
+	AddDocTemplate<ibCommonAttributeCompositionDocument, ibCommonAttributeCompositionView>(g_metaCommonAttributeCLSID);
+	AddDocTemplate<ibFunctionalOptionMembersDocument, ibFunctionalOptionMembersView>(g_metaFunctionalOptionCLSID);
+	AddDocTemplate<ibRoleRightsDocument, ibRoleRightsView>(g_metaRoleCLSID);
 
 	// The configuration tree — its doors; the rows are the frame's (ibClientFrameDesigner).
 	RegisterSchema(ibProtocol::ibSchema::ibKind::MetaData, std::make_unique<ibSchemaMetaData>());

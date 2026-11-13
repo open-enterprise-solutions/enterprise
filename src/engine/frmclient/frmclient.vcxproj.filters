@@ -19,6 +19,9 @@
     <Filter Include="mainFrame\output">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5008}</UniqueIdentifier>
     </Filter>
+    <Filter Include="mainFrame\welcome">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f505e}</UniqueIdentifier>
+    </Filter>
     <Filter Include="mainFrame\settings">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5009}</UniqueIdentifier>
     </Filter>
@@ -79,6 +82,9 @@
     </ClCompile>
     <ClCompile Include="mainFrame\output\outputWindow.cpp">
       <Filter>mainFrame\output</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\welcome\welcomeWindow.cpp">
+      <Filter>mainFrame\welcome</Filter>
     </ClCompile>
     <ClCompile Include="mainFrame\settings\editorsettings.cpp">
       <Filter>mainFrame\settings</Filter>
@@ -357,6 +363,9 @@
     </ClInclude>
     <ClInclude Include="mainFrame\output\outputWindow.h">
       <Filter>mainFrame\output</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\welcome\welcomeWindow.h">
+      <Filter>mainFrame\welcome</Filter>
     </ClInclude>
     <ClInclude Include="mainFrame\settings\fontcolorsettings.h">
       <Filter>mainFrame\settings</Filter>

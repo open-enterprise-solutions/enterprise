@@ -10,6 +10,7 @@
 // =============================================================================
 
 #include <gtest/gtest.h>
+#include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 #include "backend/databaseLayer/databaseLayer.h"               // ibDialectDictionary
 #include "backend/databaseLayer/databaseQueryBuilder.h"        // the capability accessors + the DDL builders
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h" // ibDatabaseLayerSQLite::GetDialect

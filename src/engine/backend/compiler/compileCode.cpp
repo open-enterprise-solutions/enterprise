@@ -214,7 +214,7 @@ void ibCompileCode::PrepareModuleData()
 	for (auto& pair : m_binds.m_listContextValue) {
 
 		ibValue* contextValue = pair.second.m_value;
-		wxASSERT(contextValue);
+		ibASSERT(contextValue);
 
 		// adding variables from context
 		for (unsigned int i = 0; i < contextValue->GetNProps(); i++) {
@@ -1544,7 +1544,7 @@ bool ibCompileCode::ParseFunctionSignature(ibCompileContext* context,
 	// glance "synthetic — never look this up by name".
 	ibString strFuncRealName;
 	if (IsNextDelimiter('(')) {
-		strFuncRealName = ibT("__lambda_") + wxNewUniqueGuid.str();
+		strFuncRealName = ibT("__lambda_") + ibNewUniqueGuid.str();
 	}
 	else {
 		strFuncRealName = ExpectIdentifier(true);
@@ -3086,7 +3086,7 @@ bool ibCompileCode::CompileIf(ibCompileContext* context)
 		// the engine answered "a variable is not an aggregate object" about a name that
 		// is a common module. Where the first instruction's second operand happened not
 		// to matter, the corruption did nothing at all and waited.
-		nLastIFLine = wxNOT_FOUND;
+		nLastIFLine = ibNOT_FOUND;
 
 		ExpectKeyword(KEY_ELSE);
 
@@ -3104,7 +3104,7 @@ bool ibCompileCode::CompileIf(ibCompileContext* context)
 	//for the last condition, set the jump address if the condition does not match
 	// — unless an `else` closed the last one already, in which case there is nothing
 	// to point anywhere and the marker says so.
-	if (nLastIFLine != wxNOT_FOUND)
+	if (nLastIFLine != ibNOT_FOUND)
 		m_cByteCode.m_listCode[nLastIFLine].m_param2.m_numIndex = numCurCompile;
 
 	//Set the parameter for the GOTO operator - exit from all local conditions
@@ -3259,10 +3259,10 @@ bool ibCompileCode::CompileFor(ibCompileContext* context)
 int ibCompileCode::FindForeachHeaderEnd(int at) const
 {
 	// ⚠ A NEGATIVE CURSOR IS THE ORDINARY "BEFORE THE FIRST TOKEN" (m_numCurrentCompile starts at
-	// wxNOT_FOUND), and `(size_t)(-1) + 1` is 0 — a valid index. So the scan would silently start at
+	// ibNOT_FOUND), and `(size_t)(-1) + 1` is 0 — a valid index. So the scan would silently start at
 	// the top of the module instead of refusing. One comparison closes that whole question.
 	if (at < 0)
-		return wxNOT_FOUND;
+		return ibNOT_FOUND;
 
 	const auto isDelim = [&](size_t i, ibChar c) {
 		return i < m_translateCode.GetLexCount() && m_translateCode.GetLexAt(i).m_lexType == DELIMITER
@@ -3279,7 +3279,7 @@ int ibCompileCode::FindForeachHeaderEnd(int at) const
 		if (isDelim(i, ibT(')')) || isDelim(i, ibT(']'))) {
 			// The header's own closer is the first one the source did not open.
 			if (depth == 0)
-				return GetCodeStyle() == CODE_CES ? (int)i : wxNOT_FOUND;
+				return GetCodeStyle() == CODE_CES ? (int)i : ibNOT_FOUND;
 			--depth;
 			continue;
 		}
@@ -3287,7 +3287,7 @@ int ibCompileCode::FindForeachHeaderEnd(int at) const
 			&& m_translateCode.GetLexAt(i).m_lexType == KEYWORD && m_translateCode.GetLexAt(i).m_numData == KEY_DO)
 			return (int)i;
 	}
-	return wxNOT_FOUND;
+	return ibNOT_FOUND;
 }
 
 bool ibCompileCode::CompileForeach(ibCompileContext* context)

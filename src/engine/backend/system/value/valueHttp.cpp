@@ -4,17 +4,17 @@
 #include "backend/compiler/enumUnit.h"            // ConvertToEnumValue<> is declared in value.h and DEFINED here
 #include "backend/system/systemManagerEnum.h"
 #include "backend/system/value/valueBinaryData.h"
-#include "backend/system/value/valueTextFile.h"   // ibTextToBytes / ibTextFromBytes - the doors between a TextEncoding and bytes
+#include "backend/system/value/valueTextFile.h"   // ibCodePageOf - a TextEncoding as the rules it is spelled by
 
 #include "core/net/httpClient.h"                   // the transport - the core's, with its TLS
 #include "core/utils/base64.h"                     // ibBase64 - the user and password of Basic, in bytes
 
-#include <wx/ffile.h>
-#include <wx/log.h>
+#include "core/fileSystem.h"                       // ibPathOf - a certificate file's name as the system reads it
 
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <fstream>
 #include <memory>
 #include <string>
 #include <utility>
@@ -58,10 +58,10 @@ std::string ibHttpUtf8(const ibString& text)
 // other end. The same door New BinaryData(text, encoding) spells a text through.
 std::string ibHttpEncode(const ibString& text, ibTextEncoding encoding)
 {
-	std::string bytes;
-	if (!ibTextToBytes(text, encoding, bytes))
+	ibMemoryBuffer bytes;
+	if (!ibCodePageOf(encoding).Encode(text, bytes))
 		ibBackendCoreException::Error(_("HTTPRequest: the text cannot be written in this encoding"));
-	return bytes;
+	return std::string(static_cast<const char*>(bytes.GetData()), bytes.GetDataLen());
 }
 
 // bytes -> text, or a refusal: bytes that are not text in this encoding are not handed over as something else.
@@ -69,7 +69,7 @@ std::string ibHttpEncode(const ibString& text, ibTextEncoding encoding)
 ibString ibHttpDecode(const std::string& body, ibTextEncoding encoding, const ibChar* who)
 {
 	ibString text;
-	if (!ibTextFromBytes(body.data(), body.size(), encoding, text))
+	if (!ibCodePageOf(encoding).Decode(ibMemoryBuffer(body.data(), body.size()), text))
 		ibBackendCoreException::Error(_("%s: the body is not text in this encoding - take it with GetBodyAsBinaryData()"), ibString(who));
 	return text;
 }
@@ -173,15 +173,15 @@ const char* ibHttpMethodName(ibHttpMethod method)
 // when it cannot be read.
 bool ibHttpReadPem(const ibString& path, std::string& text)
 {
-	// wxFFile says a file it cannot open through wxLog, which in the designer is a pane that pops up; the refusal
-	// is the caller's sentence.
-	wxLogNull quiet;
-	wxFFile in(path, wxT("rb"));
-	const wxFileOffset length = in.IsOpened() ? in.Length() : wxInvalidOffset;
+	// The refusal is the caller's sentence.
+	std::ifstream in(ibPathOf(path), std::ios::binary);
+	in.seekg(0, std::ios::end);
+	const std::streamoff length = in ? static_cast<std::streamoff>(in.tellg()) : -1;
 	if (length < 0 || static_cast<unsigned long long>(length) > kMostPemBytes)
 		return false;
+	in.seekg(0, std::ios::beg);
 	text.resize(static_cast<size_t>(length));
-	return length == 0 || in.Read(&text[0], text.size()) == text.size();
+	return length == 0 || in.read(&text[0], static_cast<std::streamsize>(text.size()));
 }
 
 } // namespace
@@ -197,8 +197,8 @@ void ibValueHttpRequest_BindNames(ibValue::ibMemberTable& helper, const ibValue*
 	helper.AppendConstructor(1, ibT("HTTPRequest(resourceAddress : string)"));
 	helper.AppendConstructor(2, ibT("HTTPRequest(resourceAddress : string, headers : structure)"));
 
-	helper.AppendProp(ibT("ResourceAddress"), true, true, wxNOT_FOUND);
-	helper.AppendProp(ibT("Headers"), true, true, wxNOT_FOUND);
+	helper.AppendProp(ibT("ResourceAddress"), true, true, ibNOT_FOUND);
+	helper.AppendProp(ibT("Headers"), true, true, ibNOT_FOUND);
 
 	helper.AppendFunc(ibT("SetBodyFromString"), 2, ibT("SetBodyFromString(text : string, encoding : TextEncoding | string = UTF8)"));
 	helper.AppendFunc(ibT("SetBodyFromBinaryData"), 1, ibT("SetBodyFromBinaryData(data : binaryData)"));
@@ -316,8 +316,8 @@ bool ibValueHttpRequest::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue
 
 void ibValueHttpResponse_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendProp(ibT("StatusCode"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("Headers"), true, false, wxNOT_FOUND);
+	helper.AppendProp(ibT("StatusCode"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("Headers"), true, false, ibNOT_FOUND);
 
 	helper.AppendFunc(ibT("GetBodyAsString"), 1, ibT("GetBodyAsString(encoding : TextEncoding | string = UTF8)"));
 	helper.AppendFunc(ibT("GetBodyAsBinaryData"), ibT("GetBodyAsBinaryData()"));
@@ -379,10 +379,10 @@ void ibValueHttpConnection_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	helper.AppendConstructor(4, ibT("HTTPConnection(host : string, port : number, user : string, password : string)"));
 	helper.AppendConstructor(5, ibT("HTTPConnection(host : string, port : number, user : string, password : string, timeout : number)"));
 
-	helper.AppendProp(ibT("Host"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("Port"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("Timeout"), true, true, wxNOT_FOUND);
-	helper.AppendProp(ibT("SecureConnection"), true, true, wxNOT_FOUND);
+	helper.AppendProp(ibT("Host"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("Port"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("Timeout"), true, true, ibNOT_FOUND);
+	helper.AppendProp(ibT("SecureConnection"), true, true, ibNOT_FOUND);
 
 	helper.AppendFunc(ibT("Get"), 1, ibT("Get(request : HTTPRequest)"));
 	helper.AppendFunc(ibT("Post"), 1, ibT("Post(request : HTTPRequest)"));
@@ -634,8 +634,8 @@ ibValue ibValueHttpConnection::Send(ibHttpMethod method, const ibValueHttpReques
 	for (const auto& field : result.m_headers) {
 		const ibString key = ibString::FromUTF8(field.first.data(), field.first.size());
 		ibString value = ibString::FromUTF8(field.second.data(), field.second.size());
-		if (value.empty() && !field.second.empty())
-			value = wxString::From8BitData(field.second.data(), field.second.size());
+		if (value.empty() && !field.second.empty())   // not UTF-8: a byte is a character (RFC 9110, 5.5 - obs-text)
+			ibCodePage::Of(ibCodePage::kLatin1).Decode(ibMemoryBuffer(field.second.data(), field.second.size()), value);
 		const long held = headers->FindProp(key);
 		if (held >= 0 && !key.IsSameAs(ibT("Set-Cookie"), false))
 			value = headers->Values()[static_cast<size_t>(held)].value.GetString() + ibT(", ") + value;

@@ -46,7 +46,6 @@
 // tier in, and a header that only NAMES the key needs the name (the walk itself is in the .cpp).
 struct ibSelectorSort;
 
-#include <wx/string.h>
 #include <algorithm>    // CollapseEmptyLevels drops the levels that lost their fields
 #include <functional>   // PruneUnresolvedSettings asks the HOST whether a path still resolves
 #include <map>

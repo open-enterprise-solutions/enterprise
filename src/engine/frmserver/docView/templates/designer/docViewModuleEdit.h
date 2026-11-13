@@ -31,8 +31,6 @@ private:
 
 	// Whether the text rode a frame already (OnDraw) — once, in the frame that opens the tab.
 	bool m_textDrawn = false;
-
-	wxDECLARE_DYNAMIC_CLASS(ibModuleTextView);
 };
 
 // Its document — the module metaobject's (ibMetaDocument::GetMetaObject); nothing of its own to hold. Saved and closed
@@ -62,7 +60,6 @@ private:
 
 	ibModuleTextDocument(const ibModuleTextDocument&) = delete;
 	ibModuleTextDocument& operator=(const ibModuleTextDocument&) = delete;
-	wxDECLARE_DYNAMIC_CLASS(ibModuleTextDocument);
 };
 
 #endif

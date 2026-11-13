@@ -52,28 +52,28 @@ const char16_t kPython866Upper[128] = {
 }
 
 TEST(XmlCodePage, NamesAreFoundWhateverTheirCase) {
-	EXPECT_EQ(ibXmlCodePage::Find(ibT("windows-1251")).Kind(), ibXmlCodePage::kWindows1251);
-	EXPECT_EQ(ibXmlCodePage::Find(ibT("CP1251")).Kind(), ibXmlCodePage::kWindows1251);
-	EXPECT_EQ(ibXmlCodePage::Find(ibT("WINDOWS-1251")).Kind(), ibXmlCodePage::kWindows1251);
-	EXPECT_EQ(ibXmlCodePage::Find(ibT("ibm866")).Kind(), ibXmlCodePage::kCp866);
-	EXPECT_EQ(ibXmlCodePage::Find(ibT("CP866")).Kind(), ibXmlCodePage::kCp866);
-	EXPECT_EQ(ibXmlCodePage::Find(ibT("UTF-8")).Kind(), ibXmlCodePage::kUtf8);
-	EXPECT_EQ(ibXmlCodePage::Find(ibT("utf8")).Kind(), ibXmlCodePage::kUtf8);
-	EXPECT_EQ(ibXmlCodePage::Find(ibT("UTF-16")).Kind(), ibXmlCodePage::kUtf16);
-	EXPECT_EQ(ibXmlCodePage::Find(ibT("koi8-u")).Kind(), ibXmlCodePage::kUnknown);
+	EXPECT_EQ(ibCodePage::Find(ibT("windows-1251")).Kind(), ibCodePage::kWindows1251);
+	EXPECT_EQ(ibCodePage::Find(ibT("CP1251")).Kind(), ibCodePage::kWindows1251);
+	EXPECT_EQ(ibCodePage::Find(ibT("WINDOWS-1251")).Kind(), ibCodePage::kWindows1251);
+	EXPECT_EQ(ibCodePage::Find(ibT("ibm866")).Kind(), ibCodePage::kCp866);
+	EXPECT_EQ(ibCodePage::Find(ibT("CP866")).Kind(), ibCodePage::kCp866);
+	EXPECT_EQ(ibCodePage::Find(ibT("UTF-8")).Kind(), ibCodePage::kUtf8);
+	EXPECT_EQ(ibCodePage::Find(ibT("utf8")).Kind(), ibCodePage::kUtf8);
+	EXPECT_EQ(ibCodePage::Find(ibT("UTF-16")).Kind(), ibCodePage::kUtf16);
+	EXPECT_EQ(ibCodePage::Find(ibT("koi8-u")).Kind(), ibCodePage::kUnknown);
 }
 
 TEST(XmlCodePage, EveryByteOfBothPagesIsTheReferenceCharacter) {
 	for (int b = 0; b < 256; ++b) {
 		const char16_t want1251 = b < 0x80 ? static_cast<char16_t>(b) : kPython1251Upper[b - 0x80];
 		const char16_t want866  = b < 0x80 ? static_cast<char16_t>(b) : kPython866Upper[b - 0x80];
-		EXPECT_EQ(ibXmlCodePage::Find(ibT("windows-1251")).ToChar(static_cast<unsigned char>(b)), want1251) << "byte " << b;
-		EXPECT_EQ(ibXmlCodePage::Find(ibT("cp866")).ToChar(static_cast<unsigned char>(b)), want866) << "byte " << b;
+		EXPECT_EQ(ibCodePage::Find(ibT("windows-1251")).ToChar(static_cast<unsigned char>(b)), want1251) << "byte " << b;
+		EXPECT_EQ(ibCodePage::Find(ibT("cp866")).ToChar(static_cast<unsigned char>(b)), want866) << "byte " << b;
 	}
 }
 
 TEST(XmlCodePage, ACharacterGoesBackToItsByteOrSaysItHasNone) {
-	const ibXmlCodePage page = ibXmlCodePage::Find(ibT("windows-1251"));
+	const ibCodePage page = ibCodePage::Find(ibT("windows-1251"));
 	unsigned char byte = 0;
 	ASSERT_TRUE(page.ToByte(0x0404, byte)); EXPECT_EQ(byte, 0xAA);   // U+0404
 	ASSERT_TRUE(page.ToByte(0x20AC, byte)); EXPECT_EQ(byte, 0x88);   // €
@@ -84,7 +84,7 @@ TEST(XmlCodePage, ACharacterGoesBackToItsByteOrSaysItHasNone) {
 TEST(XmlCodePage, AsciiIsTheSameByteAndCharacterOnEveryPage) {
 	for (int b = 0; b < 0x80; ++b) {
 		for (const ibString& name : { ibT("UTF-8"), ibT("UTF-16"), ibT("windows-1251"), ibT("cp866") }) {
-			const ibXmlCodePage page = ibXmlCodePage::Find(name);
+			const ibCodePage page = ibCodePage::Find(name);
 			EXPECT_EQ(page.ToChar(static_cast<unsigned char>(b)), static_cast<char16_t>(b));
 			unsigned char byte = 0xFF;
 			ASSERT_TRUE(page.ToByte(static_cast<char32_t>(b), byte));
@@ -94,27 +94,27 @@ TEST(XmlCodePage, AsciiIsTheSameByteAndCharacterOnEveryPage) {
 }
 
 TEST(XmlCodePage, OnlyTheTablePagesAreSingleByte) {
-	EXPECT_TRUE(ibXmlCodePage::Find(ibT("windows-1251")).IsSingleByte());
-	EXPECT_TRUE(ibXmlCodePage::Find(ibT("cp866")).IsSingleByte());
-	EXPECT_FALSE(ibXmlCodePage::Find(ibT("UTF-8")).IsSingleByte());
-	EXPECT_FALSE(ibXmlCodePage::Find(ibT("UTF-16")).IsSingleByte());
-	EXPECT_FALSE(ibXmlCodePage::Find(ibT("koi8-u")).IsSingleByte());
+	EXPECT_TRUE(ibCodePage::Find(ibT("windows-1251")).IsSingleByte());
+	EXPECT_TRUE(ibCodePage::Find(ibT("cp866")).IsSingleByte());
+	EXPECT_FALSE(ibCodePage::Find(ibT("UTF-8")).IsSingleByte());
+	EXPECT_FALSE(ibCodePage::Find(ibT("UTF-16")).IsSingleByte());
+	EXPECT_FALSE(ibCodePage::Find(ibT("koi8-u")).IsSingleByte());
 }
 
 TEST(XmlCodePage, NameIsWhatTheDeclarationWrites) {
-	EXPECT_EQ(ibXmlCodePage::Find(ibT("utf8")).Name(), ibT("UTF-8"));
-	EXPECT_EQ(ibXmlCodePage::Find(ibT("utf-16")).Name(), ibT("UTF-16"));
-	EXPECT_EQ(ibXmlCodePage::Find(ibT("cp1251")).Name(), ibT("windows-1251"));
-	EXPECT_EQ(ibXmlCodePage::Find(ibT("ibm866")).Name(), ibT("cp866"));
+	EXPECT_EQ(ibCodePage::Find(ibT("utf8")).Name(), ibT("UTF-8"));
+	EXPECT_EQ(ibCodePage::Find(ibT("utf-16")).Name(), ibT("UTF-16"));
+	EXPECT_EQ(ibCodePage::Find(ibT("cp1251")).Name(), ibT("windows-1251"));
+	EXPECT_EQ(ibCodePage::Find(ibT("ibm866")).Name(), ibT("cp866"));
 }
 
 TEST(XmlCodePage, SupportedListsAllFourByTheirCanonicalName) {
-	EXPECT_EQ(ibXmlCodePage::Supported(), ibT("UTF-8, UTF-16, windows-1251, cp866"));
+	EXPECT_EQ(ibCodePage::Supported(), ibT("UTF-8, UTF-16, windows-1251, cp866"));
 }
 
 TEST(XmlCodePage, EveryCharacterOfAPageGoesBackToTheByteItCameFrom) {
 	for (const ibString& name : { ibString(ibT("windows-1251")), ibString(ibT("cp866")) }) {
-		const ibXmlCodePage page = ibXmlCodePage::Find(name);
+		const ibCodePage page = ibCodePage::Find(name);
 		for (int b = 0; b < 256; ++b) {
 			const char16_t ch = page.ToChar(static_cast<unsigned char>(b));
 			if (ch == 0xFFFF) {
@@ -128,5 +128,5 @@ TEST(XmlCodePage, EveryCharacterOfAPageGoesBackToTheByteItCameFrom) {
 		EXPECT_FALSE(page.ToByte(0xFFFF, byte)) << name;   // the sentinel is never a character
 	}
 	unsigned char byte = 0;
-	EXPECT_FALSE(ibXmlCodePage::Find(ibT("UTF-8")).ToByte(0x0410, byte));
+	EXPECT_FALSE(ibCodePage::Find(ibT("UTF-8")).ToByte(0x0410, byte));
 }

@@ -8,8 +8,6 @@
 #include "core/utils/base64.h"
 #include "core/utils/md5.hpp"
 
-#include <wx/string.h>
-
 #include <cstdint>
 #include <cstring>
 #include <random>
@@ -20,7 +18,7 @@
 // <sys/random.h> too, but it declares getentropy / arc4random, never getrandom —
 // so this did not compile there at all. A platform API needs a branch per platform
 // that actually has it (portability.md § 1.4).
-#if defined(__WXMSW__)
+#if defined(__IBMSW__)
   #include <windows.h>
   #include <bcrypt.h>
   #pragma comment(lib, "bcrypt.lib")
@@ -47,7 +45,7 @@ const char* kPrefix = "$pbkdf2-sha256$";
 
 void FillRandom(uint8_t* buf, size_t len)
 {
-#if defined(__WXMSW__)
+#if defined(__IBMSW__)
 	if (BCryptGenRandom(nullptr, buf, (ULONG)len, BCRYPT_USE_SYSTEM_PREFERRED_RNG) == 0)
 		return;
 #elif defined(__APPLE__)
@@ -168,7 +166,7 @@ bool ibPasswordHash::NeedsRehash(const ibString& storedHash)
 	// own and we'd rather not overwrite something we don't understand.
 	const ibString rest = storedHash.Mid(ibString(kPrefix).length());
 	const int p1 = rest.Find('$');
-	if (p1 == wxNOT_FOUND) return false;
+	if (p1 == ibNOT_FOUND) return false;
 	unsigned long iterations = 0;
 	if (!rest.Left(p1).ToULong(&iterations)) return false;
 	return iterations < kIterations;
@@ -219,11 +217,11 @@ bool ibPasswordHash::Verify(const ibString& password, const ibString& storedHash
 	// Parse $pbkdf2-sha256$<iter>$<saltB64>$<hashB64>
 	const ibString rest = storedHash.Mid(ibString(kPrefix).length());
 	const int p1 = rest.Find('$');
-	if (p1 == wxNOT_FOUND) return false;
+	if (p1 == ibNOT_FOUND) return false;
 	const ibString iterStr = rest.Left(p1);
 	const ibString afterIter = rest.Mid(p1 + 1);
 	const int p2 = afterIter.Find('$');
-	if (p2 == wxNOT_FOUND) return false;
+	if (p2 == ibNOT_FOUND) return false;
 	const ibString saltB64 = afterIter.Left(p2);
 	const ibString hashB64 = afterIter.Mid(p2 + 1);
 

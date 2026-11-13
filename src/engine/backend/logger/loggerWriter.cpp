@@ -2,8 +2,6 @@
 #include "backend/logger/loggerQueue.h"
 #include "backend/logger/loggerSink.h"
 
-#include <wx/log.h>
-
 ibLoggerWriter::ibLoggerWriter(std::shared_ptr<ibLoggerQueue> queue,
                                std::shared_ptr<ibLoggerSink>  sink,
                                std::size_t maxBatch,

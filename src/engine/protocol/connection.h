@@ -5,7 +5,7 @@
 #include <memory>
 #include <string>
 
-#include <wx/string.h>
+#include "core/fstring.h"   // ibString
 
 #include "core/memory/memoryBuffer.h"   // ibMemoryBuffer — the packets a connection carries
 

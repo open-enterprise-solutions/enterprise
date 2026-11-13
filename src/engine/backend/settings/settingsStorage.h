@@ -72,7 +72,7 @@ struct BACKEND_API ibSettingsKey {
 
 	ibSettingsKey() = default;
 	ibSettingsKey(ibSettingsCategory category, const ibGuid& objectKey,
-	              const ibGuid& settingKey = wxNullGuid, const ibGuid& userKey = wxNullGuid)
+	              const ibGuid& settingKey = ibNullGuid, const ibGuid& userKey = ibNullGuid)
 		: m_category(category), m_objectKey(objectKey), m_settingKey(settingKey), m_userKey(userKey) {}
 
 	// AN ADDRESS WITHOUT AN OBJECT IS NOT AN ADDRESS. The other three parts are

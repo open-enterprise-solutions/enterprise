@@ -34,8 +34,6 @@ private:
 	void AppendChildren(ibDataNode& parent, ibValueMetaObject* metaObject);
 
 	void FillData(ibDataNode& root);
-
-	wxDECLARE_DYNAMIC_CLASS(ibFunctionalOptionMembersView);
 };
 
 // Its document — the functional option metaobject's (ibMetaDocument::GetMetaObject); the membership lives in the
@@ -48,7 +46,6 @@ public:
 
 	ibFunctionalOptionMembersDocument(const ibFunctionalOptionMembersDocument&) = delete;
 	ibFunctionalOptionMembersDocument& operator=(const ibFunctionalOptionMembersDocument&) = delete;
-	wxDECLARE_DYNAMIC_CLASS(ibFunctionalOptionMembersDocument);
 };
 
 #endif

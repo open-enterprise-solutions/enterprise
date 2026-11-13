@@ -3,6 +3,8 @@
 #include "odbcResultSetMetaData.h"
 #include "odbcDatabaseLayer.h"
 
+#include <cstring>
+
 // ctor
 ibDatabaseResultSetMetaDataODBC::ibDatabaseResultSetMetaDataODBC(ibInterfaceODBC* pInterface, SQLHSTMT sqlODBCStatement)
 {

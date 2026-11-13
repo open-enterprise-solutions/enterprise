@@ -158,6 +158,15 @@ ibKeyBinder::Key ibKeyBinder::GetTextAsKeyBinding(const wxString& text)
 	return key;
 }
 
+const ibKeyBinder::Command* ibKeyBinder::GetCommandForId(int id) const
+{
+	for (const Command& command : m_commands) {
+		if (command.id == id)
+			return &command;
+	}
+	return nullptr;
+}
+
 ibKeyBinder::Command* ibKeyBinder::GetCommandForId(int id)
 {
 	for (Command& command : m_commands) {

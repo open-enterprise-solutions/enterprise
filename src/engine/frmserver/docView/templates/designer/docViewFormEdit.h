@@ -114,8 +114,6 @@ private:
 
 	// Whether what the tab is opened with rode a frame already (OnDraw, State Opening) — once.
 	bool m_openingDrawn = false;
-
-	wxDECLARE_DYNAMIC_CLASS(ibFormDesignView);
 };
 
 // Its document — the form metaobject's, a module document: saved and closed past the module's check, the form written
@@ -131,7 +129,6 @@ public:
 
 	ibFormDesignDocument(const ibFormDesignDocument&) = delete;
 	ibFormDesignDocument& operator=(const ibFormDesignDocument&) = delete;
-	wxDECLARE_DYNAMIC_CLASS(ibFormDesignDocument);
 };
 
 #endif

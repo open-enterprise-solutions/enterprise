@@ -138,7 +138,7 @@ private:
 	ibPropertyCategory* m_categorySizer = ibPropertyObject::CreatePropertyCategory(ibT("Sizer"), _("Sizer"));
 	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categorySizer, ibT("Orient"), _("Orient"),
 		_("How the page lays out the controls placed on it: vertically (the default, one under another) or horizontally (side by side)."),
-		wxVERTICAL);
+		ibOrientation_Vertical);
 
 	friend class ibValueNotebook;
 };

@@ -42,7 +42,7 @@ ibValueModuleManager::ibValueModuleUnit::~ibValueModuleUnit()
 //common module
 bool ibValueModuleRuntimeManager::ibValueRuntimeModuleUnit::CreateCommonModule()
 {
-	wxASSERT(m_moduleManager != nullptr);
+	ibASSERT(m_moduleManager != nullptr);
 
 	// Parent already wired in ctor (SetParent(moduleManager)). Bind the
 	// module-scope "Manager" singleton that scripts reach via Manager.<method>()
@@ -67,7 +67,7 @@ bool ibValueModuleRuntimeManager::ibValueRuntimeModuleUnit::CreateCommonModule()
 
 bool ibValueModuleRuntimeManager::ibValueRuntimeModuleUnit::DestroyCommonModule()
 {
-	wxASSERT(m_moduleManager != nullptr);
+	ibASSERT(m_moduleManager != nullptr);
 
 	UnbindVariable(objectManager);
 	ResetByteCode();

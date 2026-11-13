@@ -83,8 +83,8 @@ public:
 class CORE_API ibSpreadsheetObject {
 public:
 
-	ibSpreadsheetObject() : m_docGuid(wxNewUniqueGuid), m_editable(true) {}
-	ibSpreadsheetObject(const ibSpreadsheetDescription& spreadsheetDesc) : m_docGuid(wxNewUniqueGuid), m_editable(true), m_spreadsheetDesc(spreadsheetDesc) {}
+	ibSpreadsheetObject() : m_docGuid(ibNewUniqueGuid), m_editable(true) {}
+	ibSpreadsheetObject(const ibSpreadsheetDescription& spreadsheetDesc) : m_docGuid(ibNewUniqueGuid), m_editable(true), m_spreadsheetDesc(spreadsheetDesc) {}
 
 	ibSpreadsheetDescription& GetSpreadsheetDesc() { return m_spreadsheetDesc; }
 	const ibSpreadsheetDescription& GetSpreadsheetDesc() const { return m_spreadsheetDesc; }

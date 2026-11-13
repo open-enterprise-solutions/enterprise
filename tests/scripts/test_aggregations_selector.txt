@@ -1,6 +1,6 @@
 // Lambda-selector aggregations smoke.
 // Previously deferred-until-closure: Sum(λ)/Min(λ)/Max(λ)/Average(λ).
-// Closure capture landed Phase A/B/C/D 2026-05-11 — теперь работает.
+// Closure capture landed Phase A/B/C/D 2026-05-11 — now works.
 
 // 1) Numeric array with projection
 var nums = New Array

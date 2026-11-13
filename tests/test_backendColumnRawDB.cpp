@@ -9,6 +9,7 @@
 
 #include <gtest/gtest.h>
 #include <vector>
+#include <wx/string.h>   // wxT — the engine's headers include no wx
 #include "backend/query/queryColumn.h"    // ibBackendColumnRawDB
 #include "backend/query/columnLayout.h"   // DescribeColumnLayout / ColumnFieldNames / ibColumnRole / ibColumnSlot
 

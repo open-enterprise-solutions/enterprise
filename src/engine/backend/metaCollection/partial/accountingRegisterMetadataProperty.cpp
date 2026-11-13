@@ -20,7 +20,7 @@ void ibValueMetaObjectAccountingRegister::OnPropertyChanged(ibProperty* property
 			const ibValueMetaObject* chartOfAccounts = m_metaData->FindAnyObjectByFilter(metaDesc.GetByIdx(idx));
 			if (chartOfAccounts != nullptr) {
 				const ibCtorMetaValueType* so = m_metaData->GetTypeCtor(chartOfAccounts, ibCtorObjectMetaType::ibCtorObjectMetaType_Reference);
-				wxASSERT(so);
+				ibASSERT(so);
 				typeDesc.AppendMetaType(so->GetClassType());
 			}
 		}

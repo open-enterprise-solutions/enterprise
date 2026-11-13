@@ -18,7 +18,7 @@ ibValue ibValueManagerDataObjectDocument::FindByNumber(const ibValue& vNumber, c
 
 	ibValueMetaObjectAttributePredefined* attributeNumber = m_metaObject->GetDocumentNumber();
 	ibValueMetaObjectAttributePredefined* attributeDate   = m_metaObject->GetDocumentDate();
-	wxASSERT(attributeNumber && attributeDate);
+	ibASSERT(attributeNumber && attributeDate);
 
 	// Find by number (by equality — the number's index answers it; a LIKE with a bound pattern reached no index and
 	// read every document, see FindByCode in commonObjectManagerQuery.cpp), optionally constrained to documents

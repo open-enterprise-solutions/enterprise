@@ -11,6 +11,7 @@
 // =============================================================================
 
 #include <gtest/gtest.h>
+#include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 #include "core/memory/memoryStream.h"   // ibWriterMemory / ibReaderMemory
 #include "core/exception.h"       // a read past the block is a refusal, in every build
 

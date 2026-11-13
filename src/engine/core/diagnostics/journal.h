@@ -23,9 +23,10 @@
 //   - ALWAYS ON in a Debug build, absent in Release. A developer running Debug has already
 //     consented; a Release story needs decisions about disk, privacy and support that have not
 //     been made yet. The API exists in both — a callsite compiles either way.
-//   - wx LOGGING IS CHAINED INTO IT. wxLogDebug / Message / Warning / Error keep reaching the
-//     debugger exactly as before AND land here with a timestamp. Doubled, never diverted: what is
-//     watched live is what can be mailed back afterwards.
+//   - wx LOGGING IS CHAINED INTO IT — by the program, which has wx (deskgui/app.h); the core has none. wxLogDebug /
+//     Message / Warning / Error keep reaching the debugger exactly as before AND land here with a timestamp.
+//     Doubled, never diverted: what is watched live is what can be mailed back afterwards. The journal's own
+//     lines go the other way through the program's echo (SetEcho).
 //   - EVERY LINE IS TIMED to the millisecond and carries its thread. Ordering two events and
 //     measuring the gap between them is most of what this file is for.
 //
@@ -79,9 +80,9 @@ public:
 	// with the process, deliberately: a line written during teardown still lands.
 	static ibTechJournal& Instance();
 
-	// Open the run's file and start doubling wx logging into it. Called once, from
-	// ibCrashGuard::Install, before any other subsystem starts — so the journal is alive from the
-	// process's first line and needs no database, no session and no configuration.
+	// Open the run's file. Called once, from ibCrashGuard::Install, before any other subsystem starts —
+	// so the journal is alive from the process's first line and needs no database, no session and no
+	// configuration.
 	//
 	// Failures are silent by design: a machine with no writable directory beside the binary must
 	// still run. IsOpen() then answers false and every write is a no-op — but for the console's echo
@@ -105,6 +106,14 @@ public:
 	// to the journal.
 	using ContextFn = ibString (*)();
 	static void SetContext(ContextFn context);
+
+	// …AND WHO HEARS A LINE THE FILE KEPT, beyond the file: the program that has an ear for it installs it and
+	// removes it (null) before that ear is gone — a window program's echo is wx's (deskgui/app.h: an error in front of the
+	// person, the rest to the debugger). `line` is the line as the file has it, `message` what the writer said. Not
+	// asked in a program that narrates in its console (EchoToStderr): the console is its ear. Called outside the
+	// journal's lock, on the writer's thread.
+	using EchoFn = void (*)(ibJournalMark mark, const ibString& line, const ibString& message);
+	static void SetEcho(EchoFn echo);
 
 	// Is anything listening? One atomic read, and the gate every write tests BEFORE formatting, so
 	// a callsite on a hot path costs a load and a branch when the journal is off.

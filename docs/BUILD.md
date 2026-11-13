@@ -211,7 +211,7 @@ bin\
     ...
 ```
 
-`core.dll` is the shared layer under `backend.dll` and `frmclient.dll` (wx base only); every
+`core.dll` is the shared layer under `backend.dll` and `frmclient.dll` (no wx); every
 project that links `backend.lib` also links `core.lib`.
 
 **Resources (Windows).** Every program and library has a `<name>.rc` that names itself — description, file name,
@@ -329,7 +329,7 @@ The root `CMakeLists.txt` adds fifteen engine subdirectories, each with its own
 
 | Target | Type |
 |---|---|
-| core | shared lib (`CORE_EXPORTS`; of wx, `wx::base` only; plus libuuid / CoreFoundation for `guid.cpp`) |
+| core | shared lib (`CORE_EXPORTS`; no wx — of its tree only `wxzlib` where the system has no zlib; plus libuuid / CoreFoundation for `guid.cpp`) |
 | backend | shared lib (`BACKEND_EXPORTS`, links `core` PUBLIC) |
 | protocol | shared lib (`PROTOCOL_EXPORTS`, links `core` PUBLIC — the journal is one per process) |
 | frmserver | shared lib (`FRMSERVER_EXPORTS`) |
@@ -348,8 +348,8 @@ The root `CMakeLists.txt` adds fifteen engine subdirectories, each with its own
 ### macOS-specific Notes
 
 - wxWidgets is built from the submodule via `add_subdirectory()` — no system wxWidgets needed
-- Core, protocol, backend and frmserver link against `wx::base` only, compiled with `wxUSE_GUI=0` — a GUI type
-  there is a compile error; not `wx::net` either: every socket is the core's (`core/net`)
+- Core, protocol, backend, frmserver and fileserver link no wx and have no wx include path — a wx type there is a
+  compile error; every socket is the core's (`core/net`)
 - Firebird embedded is not available via Homebrew; use SQLite for local development
 - App bundles (`designer-thin.app`, `enterprise-thin.app`, `launcher.app`) are created automatically
   by CMake, and this path is **exercised, not merely declared**: the desktop front's bundles were

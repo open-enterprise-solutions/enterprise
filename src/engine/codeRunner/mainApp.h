@@ -3,7 +3,7 @@
 
 #include <wx/app.h>
 #include "codeRunner.h"
-#include "core/diagnostics/oesApp.h"
+#include "deskgui/app.h"
 
 class ibAppCodeRunner :
 	public ibWxApp {

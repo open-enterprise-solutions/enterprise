@@ -1123,6 +1123,15 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 			// The language the client's own words are said in: the base's, as the server says its own to it.
 			if (done)
 				result.SetValue(ibProtocol::ibLogin::Locale, m_applicationInstance->GetLocale());
+			// …and the person the session is, as the client greets them: the user's full name, else their name - none in a
+			// base with no users.
+			if (done) {
+				if (const std::shared_ptr<ibSession> session = client->instance->ShareSession()) {
+					const ibUserInfo& user = session->GetUserInfo();
+					result.SetValue(ibProtocol::ibLogin::FullName,
+						!user.m_strUserFullName.IsEmpty() ? user.m_strUserFullName : user.m_strUserName);
+				}
+			}
 		}
 		}
 	}

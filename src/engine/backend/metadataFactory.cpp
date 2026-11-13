@@ -91,7 +91,7 @@ void ibMetaData::RegisterCtor(ibCtorMetaValueType* typeCtor)
 	if (typeCtor == nullptr)   // checked BEFORE the assert below dereferences it
 		return;
 
-	wxASSERT(typeCtor->GetClassType() > 0);
+	ibASSERT(typeCtor->GetClassType() > 0);
 
 	{
 		if (ibMetaData::IsRegisterCtor(typeCtor->GetClassType())) {
@@ -110,7 +110,7 @@ void ibMetaData::RegisterCtor(ibCtorMetaValueType* typeCtor)
 			ibJournalInfo(ibT("metadata"), ibT("register %s -> %s"),
 				typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()));
 
-		wxASSERT(m_image);                 // registration happens only while open (image live)
+		ibASSERT(m_image);                 // registration happens only while open (image live)
 		m_image->RegisterCtor(typeCtor);   // facade: CallEvent(Register) + register
 		m_factoryCtorCountChanges++;       // factory changed → advance the invalidation version
 	}
@@ -131,7 +131,7 @@ void ibMetaData::UnRegisterCtor(ibCtorMetaValueType*& typeCtor)
 		// Facade: CallEvent(UnRegister) + unregister. The registry owns the ctor via
 		// shared_ptr, so this FREES it — null the caller's (by-ref) pointer so nobody
 		// dereferences the now-dangling ctor (replaces the old wxDELETE that nulled it).
-		wxASSERT(m_image);                 // unregistration happens only while open
+		ibASSERT(m_image);                 // unregistration happens only while open
 		m_image->UnregisterCtor(typeCtor);
 		m_factoryCtorCountChanges++;       // factory changed → advance the invalidation version
 		typeCtor = nullptr;
@@ -237,7 +237,7 @@ ibClassID ibMetaData::GetIDObjectFromMetaID(const ibMetaID& metaID, ibCtorObject
 	if (m_image) m_image->ForEachCtor([&](const ibCtorMetaValueType* typeCtor) {
 		if (result != 0) return;
 		const ibValueMetaObject* metaValue = typeCtor->GetMetaObject();
-		wxASSERT(metaValue);
+		ibASSERT(metaValue);
 		if (refType == typeCtor->GetMetaTypeCtor() && metaID == metaValue->GetMetaID())
 			result = typeCtor->GetClassType();
 	});

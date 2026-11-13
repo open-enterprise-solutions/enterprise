@@ -14,8 +14,6 @@
 // ibFunctionalOptionMembersView implementation
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibFunctionalOptionMembersView, ibMetaView);
-
 void ibFunctionalOptionMembersView::OnDraw(ibDataNode& frame)
 {
 	const ibValueMetaObject* const metaOption = GetDocument()->GetMetaObject();
@@ -94,7 +92,7 @@ void ibFunctionalOptionMembersView::FillData(ibDataNode& root)
 	if (metaData == nullptr)
 		return;
 	const ibValueMetaObject* commonObject = metaData->GetCommonMetaObject();
-	wxASSERT(commonObject);
+	ibASSERT(commonObject);
 
 	// The root wears the CONFIGURATION's icon, as the section and common attribute editors'; the desktop's kept the
 	// word "Configuration" on it.
@@ -137,5 +135,4 @@ void ibFunctionalOptionMembersView::FillData(ibDataNode& root)
 // ----------------------------------------------------------------------------
 // ibFunctionalOptionMembersDocument implementation
 // ----------------------------------------------------------------------------
-
-wxIMPLEMENT_DYNAMIC_CLASS(ibFunctionalOptionMembersDocument, ibMetaDocument);
+

@@ -4,14 +4,13 @@
 #include "backend/compiler/value.h"
 #include "backend/system/systemEnum.h"
 
+#include "core/codePage.h"   // ibCodePage - the rules a text is read and written by
 #include "core/memory/memoryBuffer.h"
 
+#include <iosfwd>   // std::ofstream - the writer's file
 #include <memory>
 #include <string>
 #include <vector>
-
-class wxFFile;
-class wxMBConv;
 
 // ⭐⭐ THE TEXT OF A FILE, READ AND WRITTEN BY A SCRIPT — two types, as the reference system has them:
 // a reader and a writer, each holding ONE open file.
@@ -32,20 +31,12 @@ class wxMBConv;
 // A byte-order mark at the head of a UTF-8 or UTF-16 file is read as what it is — a mark — and never handed over
 // as text.
 
-BACKEND_API std::unique_ptr<wxMBConv> ibCreateTextConv(ibTextEncoding encoding);
-
-// Bytes -> the text they spell in the encoding, the byte-order mark (UTF-8, UTF-16 either way round) read as
-// a mark and never handed over. False when bytes that are not empty spell nothing: what that means - a file
-// that cannot be read, an answer that is not text - is the caller's sentence. The one door for a file's
-// content and for a body that came over the wire.
-BACKEND_API bool ibTextFromBytes(const void* data, size_t size, ibTextEncoding encoding, ibString& text);
-
-// …and the other way: the text spelled in bytes, with no byte-order mark. False when a character has no bytes in
-// the encoding - a text is not written with a question mark where a letter should stand.
-BACKEND_API bool ibTextToBytes(const ibString& text, ibTextEncoding encoding, std::string& bytes);
+// The page a TextEncoding means (System is the ANSI page, as Windows has it). The one step from the script's word to
+// the engine's rules: what a text becomes in bytes, and bytes in a text, is ibCodePage's to say.
+BACKEND_API ibCodePage ibCodePageOf(ibTextEncoding encoding);
 
 // The optional TextEncoding argument at `at`: UTF-8 when it is left out, a member, or a string naming a page of
-// ibXmlCodePage (UTF-8, UTF-16, windows-1251, cp866 and their aliases, any case). Any other string, and a member of
+// ibCodePage (UTF-8, UTF-16, windows-1251, cp866 and their aliases, any case). Any other string, and a member of
 // another enumeration, is refused. The one door for a script saying an encoding.
 BACKEND_API ibTextEncoding ibTextEncodingAt(ibValue** paParams, const long lSizeArray, const long at);
 
@@ -125,9 +116,9 @@ public:
 	bool IsOpen() const;
 
 private:
-	std::unique_ptr<wxFFile>  m_file;
-	std::unique_ptr<wxMBConv> m_conv;
-	ibString                  m_fileName;
+	std::unique_ptr<std::ofstream> m_file;
+	ibCodePage                     m_page;
+	ibString                       m_fileName;
 };
 
 #endif // !__VALUE_TEXT_FILE_H__

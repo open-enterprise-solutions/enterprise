@@ -16,7 +16,6 @@
 
 #include <vector>
 
-#include <wx/string.h>
 #include "core/memory/memoryBuffer.h"
 
 class ibGuid;
@@ -28,7 +27,7 @@ struct BACKEND_API ibUserInfo {
 	struct ibUserRole {
 		ibString m_strRoleGuid;
 		ibString m_strRoleName;
-		ibRoleID m_miRoleId = wxNOT_FOUND;
+		ibRoleID m_miRoleId = ibNOT_FOUND;
 		// HOW this role combines with the user's others (ibRoleCompositionMode) — it travels WITH the
 		// membership, in the same chunk as the id, so a reader gets the identifier and how to compare
 		// it in one read and resolves nothing. A row written before this field ends after the id and

@@ -73,13 +73,13 @@ private:
 	ibValueReferenceDataObject() : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true) {
 		m_members.Bind(this, &ibValueReferenceDataObject::FillMembers);
 	}
-	ibValueReferenceDataObject(const ibValueMetaObjectRecordDataRef* metaObject, const ibGuid& objGuid = wxNullGuid);
+	ibValueReferenceDataObject(const ibValueMetaObjectRecordDataRef* metaObject, const ibGuid& objGuid = ibNullGuid);
 public:
 
 	// A NEW reference value's key is a PLAIN unique guid — no encoding, no type baked in. The type is carried
 	// separately (the _RTRef column / this reference's metaObject), so the key is pure identity: an all-zero
 	// guid is an unset reference, a full random guid is a real one. (Minted in commonObject.cpp's new-object
-	// branch via wxNewUniqueGuid — see ibValueRecordDataObjectRef.)
+	// branch via ibNewUniqueGuid — see ibValueRecordDataObjectRef.)
 
 	ibReference* GetReferenceData() const {
 		return m_reference_impl.get();
@@ -111,11 +111,11 @@ public:
 	// callers that must not read yet (the value-ctor path, which would recurse) and for the ones that
 	// only ever wanted the key.
 	static ibValueReferenceDataObject* Create(const ibValueMetaObjectRecordDataRef* metaObject,
-	                                          const ibGuid& objGuid = wxNullGuid,
+	                                          const ibGuid& objGuid = ibNullGuid,
 	                                          ibReferenceLoad load = ibReferenceLoad::OnDemand);
 
 	static ibValueReferenceDataObject* Create(const ibMetaData* metaData, const ibMetaID& id,
-	                                          const ibGuid& objGuid = wxNullGuid,
+	                                          const ibGuid& objGuid = ibNullGuid,
 	                                          ibReferenceLoad load = ibReferenceLoad::OnDemand);
 
 	// Reconstruct from a stored row: `refClsid` is the _RTRef target type, `ptr` the pure _RRRef guid blob.

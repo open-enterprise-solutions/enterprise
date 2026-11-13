@@ -358,9 +358,10 @@ std::function<void()> ibSchemaConfigCompare::Command(const ibSession& session, s
 			message += ibT("\n\n") + _("Warning: failed to save the other-side file.");
 		else if (pull)
 			message += ibT("\n\n") + _("Use Configuration > Save configuration to persist the changes.");
+		namespace style = ibProtocol::ibRequest::ibMessage::ibStyle;
 		if (ibBackendDocFrame* const frame = ibSession::CurrentFrame())
 			frame->ShowModalMessage(message, _("Merge"),
-				wxOK | wxCENTRE | (failures.IsEmpty() && savedRight ? wxICON_INFORMATION : wxICON_WARNING));
+				style::OK | style::Centre | (failures.IsEmpty() && savedRight ? style::IconInformation : style::IconWarning));
 
 		(void)leftFile;
 		(void)rightFile;

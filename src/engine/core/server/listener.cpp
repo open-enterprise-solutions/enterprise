@@ -5,10 +5,8 @@
 #include "core/server/listener.h"
 
 #include "core/exception.h"   // a listener refused is an exception with the reason
+#include "core/fileConfig.h"  // ibFileConfig - backend.conf
 #include "core/fileSystem.h"  // ibFileExists
-
-#include <wx/confbase.h>
-#include <wx/fileconf.h>
 
 #include <cstddef>
 #include <filesystem>
@@ -23,7 +21,7 @@ constexpr std::size_t kMostPemBytes = 1u << 20;
 
 ibString Resolved(const ibString& value, const ibString& folder)
 {
-	// wxFileConfig hands a value back with its blanks: "server.pem " is not a file.
+	// ibFileConfig hands a value back with its blanks, as wxFileConfig did: "server.pem " is not a file.
 	const ibString path = ibString(value).Trim(true).Trim(false);
 	if (path.IsEmpty())
 		return path;
@@ -51,13 +49,13 @@ void ReadWhole(const ibString& file, std::string& bytes)
 
 } // namespace
 
-ibTlsFiles ibTlsFiles::FromConf(const wxConfigBase& conf, const ibString& folder)
+ibTlsFiles ibTlsFiles::FromConf(const ibFileConfig& conf, const ibString& folder)
 {
 	ibTlsFiles files;
-	wxString value;   // wxConfigBase's own string: the value is written into it
-	if (conf.Read(wxT("Certificate"), &value))
+	ibString value;
+	if (conf.Read(ibT("Certificate"), &value))
 		files.m_certificate = Resolved(value, folder);
-	if (conf.Read(wxT("PrivateKey"), &value))
+	if (conf.Read(ibT("PrivateKey"), &value))
 		files.m_privateKey = Resolved(value, folder);
 	return files;
 }
@@ -67,8 +65,7 @@ ibTlsFiles ibTlsFiles::FromConf(const ibString& path)
 	if (path.IsEmpty() || !ibFileExists(path))
 		return ibTlsFiles();
 	// Read as the host reads it (ibApplicationHost::ReadBackendConf).
-	const wxFileConfig conf(wxT(""), wxT(""), path, wxT(""), wxCONFIG_USE_LOCAL_FILE | wxCONFIG_USE_NO_ESCAPE_CHARACTERS);
-	return FromConf(conf, ibString(ibPathOf(path).parent_path().wstring()));
+	return FromConf(ibFileConfig(path), ibString(ibPathOf(path).parent_path().wstring()));
 }
 
 ibHttpServerOptions ibListenerOptions(const ibString& address, std::uint16_t port, const ibTlsFiles& tls)

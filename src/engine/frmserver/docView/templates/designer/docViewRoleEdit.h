@@ -35,8 +35,6 @@ private:
 	void AddInterfaceItem(ibValueMetaObject* metaObject, ibDataNode& parent);
 
 	void FillData(ibDataNode& root);
-
-	wxDECLARE_DYNAMIC_CLASS(ibRoleRightsView);
 };
 
 // Its document — the role metaobject's (ibMetaDocument::GetMetaObject); the rights live in the objects, saved with the
@@ -48,7 +46,6 @@ public:
 
 	ibRoleRightsDocument(const ibRoleRightsDocument&) = delete;
 	ibRoleRightsDocument& operator=(const ibRoleRightsDocument&) = delete;
-	wxDECLARE_DYNAMIC_CLASS(ibRoleRightsDocument);
 };
 
 #endif

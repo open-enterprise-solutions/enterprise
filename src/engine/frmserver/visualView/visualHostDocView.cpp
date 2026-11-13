@@ -203,7 +203,7 @@ ibUniqueKey ibFormVisualDocument::CreateFormUniqueKey(const ibBackendControlFram
 		return ownerControl->GetControlGuid();   // 2. the owner control's
 	if (sourceObject != nullptr)
 		return sourceObject->GetGuid();          // 3. the object's
-	return wxNewUniqueGuid;                      // 4. a new one
+	return ibNewUniqueGuid;                      // 4. a new one
 }
 
 ibValueForm* ibFormVisualDocument::FindFormByUniqueKey(const ibBackendControlFrame* ownerControl, const ibSourceDataObject* sourceObject, const ibUniqueKey& formKey)
@@ -361,7 +361,7 @@ void ibFormVisualEditView::SetCaption(const ibString& strCaption)
 	}
 }
 
-void ibFormVisualEditView::OnUpdate(ibView* /*sender*/, wxObject* /*hint*/)
+void ibFormVisualEditView::OnUpdate(ibView* /*sender*/)
 {
 	// The next frame drawn reads the form as it is; there is nothing kept to refresh.
 }

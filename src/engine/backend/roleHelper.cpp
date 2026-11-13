@@ -2,6 +2,8 @@
 
 #include "backend/session/session.h"   // whether this session has a user at all
 
+#include <cassert>
+
 #define roleBlock 0x200000
 
 ////////////////////////////////////////////////////////////////////////

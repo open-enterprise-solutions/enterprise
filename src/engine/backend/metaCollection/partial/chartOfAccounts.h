@@ -242,7 +242,7 @@ protected:
 	virtual ibValuePtr<ibValueManagerDataObject> CreateManagerDataObjectValue() const;
 
 	//create empty object
-	virtual ibValuePtr<ibValueRecordDataObjectHierarchyRef> CreateObjectRefValue(ibObjectMode mode, const ibGuid& guid = wxNullGuid) const;
+	virtual ibValuePtr<ibValueRecordDataObjectHierarchyRef> CreateObjectRefValue(ibObjectMode mode, const ibGuid& guid = ibNullGuid) const;
 
 	//create object data with meta form
 	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const;
@@ -389,7 +389,7 @@ private:
 
 class ibValueRecordDataObjectChartOfAccounts : public ibValueRecordDataObjectHierarchyRef {
 	public:
-	ibValueRecordDataObjectChartOfAccounts(const ibValueMetaObjectChartOfAccounts* metaObject, const ibGuid& objGuid = wxNullGuid, ibObjectMode objMode = ibObjectMode::OBJECT_ITEM);
+	ibValueRecordDataObjectChartOfAccounts(const ibValueMetaObjectChartOfAccounts* metaObject, const ibGuid& objGuid = ibNullGuid, ibObjectMode objMode = ibObjectMode::OBJECT_ITEM);
 	ibValueRecordDataObjectChartOfAccounts(const ibValueRecordDataObjectChartOfAccounts& source);
 public:
 

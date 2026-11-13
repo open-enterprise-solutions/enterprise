@@ -87,7 +87,7 @@ public:
 	bool IsOk() const override;
 };
 
-#define wxNullUniqueKey     ibUniqueKey()
-#define wxNullUniquePairKey ibUniqueKeyPair()
+#define ibNullUniqueKey     ibUniqueKey()
+#define ibNullUniqueKeyPair ibUniqueKeyPair()
 
 #endif // !_UNIQUE_KEY_H__

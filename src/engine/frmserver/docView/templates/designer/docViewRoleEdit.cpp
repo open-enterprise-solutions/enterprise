@@ -15,8 +15,6 @@
 // ibRoleRightsView implementation
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibRoleRightsView, ibMetaView);
-
 void ibRoleRightsView::OnDraw(ibDataNode& frame)
 {
 	const ibValueMetaObject* const metaRole = GetDocument()->GetMetaObject();
@@ -84,7 +82,7 @@ void ibRoleRightsView::AppendRoles(ibDataNode& item, const ibValueMetaObject* me
 	ibDataNode& roles = item.Child(ibProtocol::ibView::ibCheckTree::Roles);
 	for (unsigned int idx = 0; idx < metaObject->GetRoleCount(); idx++) {
 		const ibRole* role = metaObject->GetRole(idx);
-		wxASSERT(role);
+		ibASSERT(role);
 		ibDataNode& right = roles.AddChild(0, 0);
 		right.SetValue(ibProtocol::ibView::ibCheckTree::Name, role->GetName());
 		right.SetValue(ibProtocol::ibView::ibCheckTree::Title, role->GetLabel());
@@ -96,7 +94,7 @@ void ibRoleRightsView::AppendRoles(ibDataNode& item, const ibValueMetaObject* me
 void ibRoleRightsView::AddInterfaceItem(ibValueMetaObject* metaObject, ibDataNode& parent)
 {
 	const ibValueMetaObjectSection* metaObjectValue = metaObject->ConvertToType<ibValueMetaObjectSection>();
-	wxASSERT(metaObjectValue);
+	ibASSERT(metaObjectValue);
 
 	// Each sub-section written whole — its own sub-sections with it — before the next is added beside it.
 	for (auto commonInterface : metaObjectValue->GetInterfaceArrayObject()) {
@@ -112,9 +110,9 @@ void ibRoleRightsView::AddInterfaceItem(ibValueMetaObject* metaObject, ibDataNod
 void ibRoleRightsView::FillData(ibDataNode& root)
 {
 	const ibMetaData* metaData = GetDocument()->GetMetaObject()->GetMetaData();
-	wxASSERT(metaData);
+	ibASSERT(metaData);
 	const ibValueMetaObject* commonObject = metaData->GetCommonMetaObject();
-	wxASSERT(commonObject);
+	ibASSERT(commonObject);
 
 	// The configuration's row is its common object's — its rights are the configuration's own.
 	root.SetMetaId(commonObject->GetMetaID());
@@ -166,5 +164,4 @@ void ibRoleRightsView::FillData(ibDataNode& root)
 // ----------------------------------------------------------------------------
 // ibRoleRightsDocument implementation
 // ----------------------------------------------------------------------------
-
-wxIMPLEMENT_DYNAMIC_CLASS(ibRoleRightsDocument, ibMetaDocument);
+

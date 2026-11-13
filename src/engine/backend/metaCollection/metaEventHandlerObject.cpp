@@ -27,7 +27,7 @@ ibValueMetaObjectEventHandler::ibValueMetaObjectEventHandler(const ibString& nam
 
 long ibValueMetaObjectEventHandler::EventId(const ibString& eventName)
 {
-	// A long is what a list property keeps; the hash is 64 bits and the id a non-negative 31 — wxNOT_FOUND
+	// A long is what a list property keeps; the hash is 64 bits and the id a non-negative 31 — ibNOT_FOUND
 	// stays free for "none". Over the name's UTF-8, the bytes ib_clsid_hash has always read: the ids already
 	// kept in configurations do not move.
 	return static_cast<long>(ib_clsid_hash(eventName.ToUtf8().c_str()) & 0x7FFFFFFF);
@@ -102,7 +102,7 @@ void ibValueMetaObjectEventHandler::PrepareModule()
 	module->ClearDefaultProcedures();
 
 	// The chosen one among the events the source raises, by the number the property keeps: none chosen
-	// (wxNOT_FOUND) or one the source no longer raises finds nothing, and the module stays empty.
+	// (ibNOT_FOUND) or one the source no longer raises finds nothing, and the module stays empty.
 	const long id = m_propertyEvent->GetValueAsInteger();
 	for (const auto& event : GetSourceEvents()) {
 		if (EventId(event.first) != id)

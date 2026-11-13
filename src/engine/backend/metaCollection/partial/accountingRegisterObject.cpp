@@ -153,11 +153,11 @@ bool ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::SetAt(
 			varKeyValue.GetString());
 
 	const std::vector<std::pair<ibString, ibValue>> kinds = DeclaredKinds();
-	long target = wxNOT_FOUND;
+	long target = ibNOT_FOUND;
 	for (size_t idx = 0; idx < kinds.size(); idx++)
 		if (kinds[idx].second == varKeyValue) { target = static_cast<long>(idx); break; }
 
-	if (target == wxNOT_FOUND)
+	if (target == ibNOT_FOUND)
 		ibBackendCoreException::Error(_("account %s keeps no analytics by \"%s\" - its kinds table does not list it"),
 			account.GetString(), varKeyValue.GetString());
 
@@ -446,7 +446,7 @@ long ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::FindPro
 	for (size_t idx = 0; idx < kinds.size(); idx++)
 		if (stringUtils::IsSameAs(kinds[idx].first, strPropName))
 			return static_cast<long>(idx);
-	return wxNOT_FOUND;
+	return ibNOT_FOUND;
 }
 
 long ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::GetNProps() const

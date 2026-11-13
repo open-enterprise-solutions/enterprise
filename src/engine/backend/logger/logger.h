@@ -4,8 +4,6 @@
 #include "backend/backend.h"
 #include "backend/logger/loggerEntry.h"
 
-#include <wx/string.h>
-
 #include <atomic>
 #include <condition_variable>
 #include <memory>

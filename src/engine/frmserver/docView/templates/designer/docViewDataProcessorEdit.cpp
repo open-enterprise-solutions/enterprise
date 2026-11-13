@@ -4,8 +4,6 @@
 
 #include "backend/backend_picture.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibDataProcessorTreeView, ibMetaView);
-
 bool ibDataProcessorTreeView::OnCreate(ibDocument* doc, long flags)
 {
 	// Drawn for the client whose tab it is.
@@ -20,8 +18,6 @@ void ibDataProcessorTreeView::OnDraw(ibDataNode& frame)
 	m_metaTree->OnDraw(frame.Child(ibProtocol::ibView::MetaData));
 }
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibDataProcessorEditDocument, ibMetaDataDocument);
-
 // A new one named as the desktop named it — its class and a number.
 static int s_defaultDataProcessorNameCounter = 1;
 
@@ -29,7 +25,7 @@ ibPictureDescription ibDataProcessorEditDocument::GetIcon() const
 {
 	if (m_metaData != nullptr) {
 		ibValueMetaObject* metaObject = m_metaData->GetCommonMetaObject();
-		wxASSERT(metaObject);
+		ibASSERT(metaObject);
 		return ibPictureDescription(metaObject->GetClassType());
 	}
 	return ibMetaDataDocument::GetIcon();
@@ -46,7 +42,7 @@ bool ibDataProcessorEditDocument::OnCreate(const ibString& path, long flags)
 bool ibDataProcessorEditDocument::OnNewDocument()
 {
 	ibValueMetaObject* commonObject = m_metaData->GetCommonMetaObject();
-	wxASSERT(commonObject);
+	ibASSERT(commonObject);
 
 	// notice that there is no need to neither reset nor even check the
 	// modified flag here as the document itself is a new object (this is only
@@ -124,7 +120,7 @@ void ibDataProcessorEditDocument::Modify(bool modified)
 ibDataProcessorTree* ibDataProcessorEditDocument::GetMetaTree() const
 {
 	// GUARD THE CAST, not the pointer that went into it: a first view of another kind makes
-	// wxDynamicCast yield null, and the arrow was applied to it regardless.
-	ibDataProcessorTreeView* view = wxDynamicCast(GetFirstView(), ibDataProcessorTreeView);
+	// dynamic_cast yield null, and the arrow was applied to it regardless.
+	ibDataProcessorTreeView* view = dynamic_cast<ibDataProcessorTreeView*>(GetFirstView());
 	return view != nullptr ? view->GetMetaTree() : nullptr;
 }

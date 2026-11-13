@@ -1468,7 +1468,7 @@ inline bool ibRegisterFoldOffersColumn(const TReg* reg,
 inline constexpr unsigned int ibRegColumnsPerOwner = 32;
 inline ibMetaID ibRegDerivedColumnId(ibMetaID owner, unsigned int no = 0)
 {
-	wxASSERT(no < ibRegColumnsPerOwner);
+	ibASSERT(no < ibRegColumnsPerOwner);
 	return ibBackendQueryColumn::SyntheticId(ibBackendQueryColumn::SyntheticKind::Derived,
 		owner * static_cast<ibMetaID>(ibRegColumnsPerOwner) + static_cast<ibMetaID>(no));
 }

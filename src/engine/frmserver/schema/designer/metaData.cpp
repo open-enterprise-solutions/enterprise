@@ -116,6 +116,7 @@ void ibSchemaMetaData::Build(const ibSession& /*session*/, const ibDataNode& /*a
 std::function<void()> ibSchemaMetaData::Command(const ibSession& session, std::int32_t command,
 	const ibDataNode& args, ibProtocol::ibRefusal& refusal, ibString& error) const
 {
+	namespace style = ibProtocol::ibRequest::ibMessage::ibStyle;
 	ibMetaData* const metaData = FindMetaData(session, args, refusal, error);
 	if (metaData == nullptr)
 		return nullptr;
@@ -263,7 +264,7 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, std::i
 		return [database]() {
 			ibValueMetaObject* const root = database->GetCommonMetaObject();
 			for (ibDocument* const doc : docManager->GetDocumentsVector()) {
-				ibMetadataBrowserDocument* const browser = wxDynamicCast(doc, ibMetadataBrowserDocument);
+				ibMetadataBrowserDocument* const browser = dynamic_cast<ibMetadataBrowserDocument*>(doc);
 				if (browser != nullptr && browser->GetMetaObject() == root) {
 					browser->Activate();
 					return;
@@ -290,9 +291,9 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, std::i
 			if (frame == nullptr)
 				return;
 			if (rolledBack)
-				frame->ShowModalMessage(_("Successfully rolled back to database configuration!"), ibString(), wxOK | wxCENTRE);
+				frame->ShowModalMessage(_("Successfully rolled back to database configuration!"), ibString(), style::OK | style::Centre);
 			else if (!refusal.IsEmpty())
-				frame->ShowModalMessage(refusal, ibString(), wxOK | wxCENTRE | wxICON_WARNING);
+				frame->ShowModalMessage(refusal, ibString(), style::OK | style::Centre | style::IconWarning);
 		};
 	}
 	case ibProtocol::ibSchema::ibMetaData::ibCommand::Apply: {
@@ -307,7 +308,7 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, std::i
 				[](const ibRestructureInfo& info) { return ibDialogApplyChange::ShowApplyChange(info); });
 			ibBackendDocFrame* const frame = ibSession::CurrentFrame();
 			if (!applied && !refusal.IsEmpty() && frame != nullptr)
-				frame->ShowModalMessage(BackendErrorChain(refusal), _("Error"), wxOK | wxCENTRE | wxICON_ERROR);
+				frame->ShowModalMessage(BackendErrorChain(refusal), _("Error"), style::OK | style::Centre | style::IconError);
 		};
 	}
 	case ibProtocol::ibSchema::ibMetaData::ibCommand::Load:
@@ -347,7 +348,7 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, std::i
 				if (read == nullptr) {
 					if (ibBackendDocFrame* const frame = ibSession::CurrentFrame())
 						frame->ShowModalMessage(BackendErrorChain(_("The data processor or report could not be read from the file.")),
-							ibString(), wxOK | wxCENTRE | wxICON_ERROR);
+							ibString(), style::OK | style::Centre | style::IconError);
 					return;
 				}
 				if (replaced == nullptr)
@@ -385,7 +386,7 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, std::i
 				return;
 			if (ibBackendDocFrame* const frame = ibSession::CurrentFrame())
 				frame->ShowModalMessage(BackendErrorChain(_("The configuration could not be read from the file.")),
-					ibString(), wxOK | wxCENTRE | wxICON_ERROR);
+					ibString(), style::OK | style::Centre | style::IconError);
 		};
 	}
 	case ibProtocol::ibSchema::ibMetaData::ibCommand::Unload:

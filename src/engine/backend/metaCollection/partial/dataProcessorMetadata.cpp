@@ -26,7 +26,7 @@ ibValueMetaObjectDataProcessor::~ibValueMetaObjectDataProcessor()
 
 ibValueMetaObjectFormBase* ibValueMetaObjectDataProcessor::GetDefaultFormByID(const ibFormID& id) const
 {
-	if (id == eFormDataProcessor && m_propertyDefFormObject->GetValueAsInteger() != wxNOT_FOUND) {
+	if (id == eFormDataProcessor && m_propertyDefFormObject->GetValueAsInteger() != ibNOT_FOUND) {
 		return FindFormObjectByFilter(m_propertyDefFormObject->GetValueAsInteger());
 	}
 
@@ -259,7 +259,7 @@ bool ibValueMetaObjectDataProcessor::OnAfterCloseMetaObject()
 void ibValueMetaObjectDataProcessor::OnCreateFormObject(ibValueMetaObjectFormBase* metaForm)
 {
 	if (metaForm->GetTypeForm() == ibValueMetaObjectDataProcessor::eFormDataProcessor
-		&& m_propertyDefFormObject->GetValueAsInteger() == wxNOT_FOUND)
+		&& m_propertyDefFormObject->GetValueAsInteger() == ibNOT_FOUND)
 	{
 		m_propertyDefFormObject->SetValue(metaForm->GetMetaID());
 	}
@@ -270,7 +270,7 @@ void ibValueMetaObjectDataProcessor::OnRemoveMetaForm(ibValueMetaObjectFormBase*
 	if (metaForm->GetTypeForm() == ibValueMetaObjectDataProcessor::eFormDataProcessor
 		&& m_propertyDefFormObject->GetValueAsInteger() == metaForm->GetMetaID())
 	{
-		m_propertyDefFormObject->SetValue(wxNOT_FOUND);
+		m_propertyDefFormObject->SetValue(ibNOT_FOUND);
 	}
 }
 

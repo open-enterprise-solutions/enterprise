@@ -9,7 +9,7 @@
 // the property's index, read back through GetPropertyByIndex. The one loop a control, a metaobject, a form attribute
 // and a form command list their properties with.
 inline void ibAppendPropertyMembers(ibValue::ibMemberTable& helper, const ibPropertyObject& object, bool writable,
-	const long alias = wxNOT_FOUND)
+	const long alias = ibNOT_FOUND)
 {
 	for (unsigned int idx = 0; idx < object.GetPropertyCount(); idx++) {
 		if (const ibProperty* property = object.GetPropertyByIndex(idx))

@@ -25,6 +25,9 @@
     <Filter Include="mainFrame\watch">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a0a}</UniqueIdentifier>
     </Filter>
+    <Filter Include="mainFrame\welcome">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a1f}</UniqueIdentifier>
+    </Filter>
     <Filter Include="win">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a0b}</UniqueIdentifier>
     </Filter>
@@ -200,6 +203,9 @@
     <ClCompile Include="mainFrame\watch\watchWindow.cpp">
       <Filter>mainFrame\watch</Filter>
     </ClCompile>
+    <ClCompile Include="mainFrame\welcome\welcomeWindowDesigner.cpp">
+      <Filter>mainFrame\welcome</Filter>
+    </ClCompile>
     <ClCompile Include="docManager\templates\docViewDataProcessorFile.cpp">
       <Filter>docManager\templates</Filter>
     </ClCompile>
@@ -352,6 +358,9 @@
     </ClInclude>
     <ClInclude Include="mainFrame\watch\watchWindow.h">
       <Filter>mainFrame\watch</Filter>
+    </ClInclude>
+    <ClInclude Include="mainFrame\welcome\welcomeWindowDesigner.h">
+      <Filter>mainFrame\welcome</Filter>
     </ClInclude>
     <ClInclude Include="docManager\templates\docViewDataProcessorFile.h">
       <Filter>docManager\templates</Filter>

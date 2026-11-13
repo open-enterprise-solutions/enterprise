@@ -59,8 +59,6 @@
 #include <thread>
 #include <vector>
 
-#include <wx/string.h>
-
 class ibSession;
 
 // What a job actually does, and how it reports back.

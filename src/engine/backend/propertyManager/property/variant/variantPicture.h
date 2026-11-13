@@ -22,11 +22,11 @@ public:
 
 	void SetFromExternalFile(const ibExternalPictureDescription& container) {
 		m_pictureExternalFile = container;
-		m_version = wxNewUniqueGuid;
+		m_version = ibNewUniqueGuid;
 	}
 
 	ibVariantExternalPicture(const ibExternalPictureDescription& container = ibExternalPictureDescription())
-		: ibVariant(ibValueTypes::TYPE_VALUE), m_pictureExternalFile(container), m_version(wxNewUniqueGuid)
+		: ibVariant(ibValueTypes::TYPE_VALUE), m_pictureExternalFile(container), m_version(ibNewUniqueGuid)
 	{
 	}
 

@@ -58,27 +58,28 @@ enum ibChoiceFoldersAndItems {
 };
 
 #include "frmserver/frmserver.h"
+#include "core/graphics/geometry.h"   // ibOrientation, ibStretch, ibAlignment - in wx's numbers, which the client draws by
 
 #pragma region enumeration
 #include "backend/compiler/enumUnit.h"
 class FRMSERVER_API ibValueEnumOrient :
-	public ibValueEnumeration<wxOrientation> {
+	public ibValueEnumeration<ibOrientation> {
 	public:
 	ibValueEnumOrient() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(wxHORIZONTAL, ibT("Horizontal"), _("Horizontal"));
-		AddEnumeration(wxVERTICAL, ibT("Vertical"), _("Vertical"));
+		AddEnumeration(ibOrientation_Horizontal, ibT("Horizontal"), _("Horizontal"));
+		AddEnumeration(ibOrientation_Vertical, ibT("Vertical"), _("Vertical"));
 	}
 private:
 };
 
 class FRMSERVER_API ibValueEnumStretch :
-	public ibValueEnumeration<wxStretch> {
+	public ibValueEnumeration<ibStretch> {
 	public:
 	ibValueEnumStretch() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(wxStretch::wxSHRINK, ibT("Shrink"), ibGETTEXT_IN_CONTEXT("sizer flag", "Shrink"));
-		AddEnumeration(wxStretch::wxEXPAND, ibT("Expand"), ibGETTEXT_IN_CONTEXT("sizer flag", "Expand"));
+		AddEnumeration(ibStretch_Shrink, ibT("Shrink"), ibGETTEXT_IN_CONTEXT("sizer flag", "Shrink"));
+		AddEnumeration(ibStretch_Expand, ibT("Expand"), ibGETTEXT_IN_CONTEXT("sizer flag", "Expand"));
 	}
 private:
 };
@@ -96,25 +97,25 @@ private:
 };
 
 class FRMSERVER_API ibValueEnumHorizontalAlignment :
-	public ibValueEnumeration<wxAlignment> {
+	public ibValueEnumeration<ibAlignment> {
 	public:
 	ibValueEnumHorizontalAlignment() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(wxAlignment::wxALIGN_LEFT, ibT("Left"), _("Left"));
-		AddEnumeration(wxAlignment::wxALIGN_CENTER, ibT("Center"), _("Center"));
-		AddEnumeration(wxAlignment::wxALIGN_RIGHT, ibT("Right"), _("Right"));
+		AddEnumeration(ibAlignment_Left, ibT("Left"), _("Left"));
+		AddEnumeration(ibAlignment_Center, ibT("Center"), _("Center"));
+		AddEnumeration(ibAlignment_Right, ibT("Right"), _("Right"));
 	}
 private:
 };
 
 class FRMSERVER_API ibValueEnumVerticalAlignment :
-	public ibValueEnumeration<wxAlignment> {
+	public ibValueEnumeration<ibAlignment> {
 	public:
 	ibValueEnumVerticalAlignment() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(wxAlignment::wxALIGN_TOP, ibT("Top"), _("Top"));
-		AddEnumeration(wxAlignment::wxALIGN_CENTER, ibT("Center"), _("Center"));
-		AddEnumeration(wxAlignment::wxALIGN_BOTTOM, ibT("Bottom"), _("Bottom"));
+		AddEnumeration(ibAlignment_Top, ibT("Top"), _("Top"));
+		AddEnumeration(ibAlignment_Center, ibT("Center"), _("Center"));
+		AddEnumeration(ibAlignment_Bottom, ibT("Bottom"), _("Bottom"));
 	}
 private:
 };

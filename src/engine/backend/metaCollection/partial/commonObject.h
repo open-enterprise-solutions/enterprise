@@ -639,7 +639,7 @@ public:
 
 	//create single object
 	virtual ibValuePtr<ibValueRecordDataObject> CreateRecordDataObjectValue() const {
-		wxASSERT_MSG(false, "ibValueMetaObjectRecordDataRef::CreateRecordDataObjectValue");
+		ibASSERT_MSG(false, "ibValueMetaObjectRecordDataRef::CreateRecordDataObjectValue");
 		return nullptr;
 	}
 
@@ -1066,7 +1066,7 @@ protected:
 	virtual bool WriteData(ibDataNode& node) const override;
 
 	//create empty object
-	virtual ibValuePtr<ibValueRecordDataObjectRef> CreateObjectRefValue(const ibGuid& objGuid = wxNullGuid) const = 0; //create object and read by guid — born owned
+	virtual ibValuePtr<ibValueRecordDataObjectRef> CreateObjectRefValue(const ibGuid& objGuid = ibNullGuid) const = 0; //create object and read by guid — born owned
 
 protected:
 
@@ -1532,8 +1532,8 @@ protected:
 	virtual bool WriteData(ibDataNode& node) const override;
 
 	//create empty object
-	virtual ibValuePtr<ibValueRecordDataObjectHierarchyRef> CreateObjectRefValue(ibObjectMode mode, const ibGuid& objGuid = wxNullGuid) const = 0; //create object and read by guid — born owned
-	virtual ibValuePtr<ibValueRecordDataObjectRef> CreateObjectRefValue(const ibGuid& objGuid = wxNullGuid) const final;
+	virtual ibValuePtr<ibValueRecordDataObjectHierarchyRef> CreateObjectRefValue(ibObjectMode mode, const ibGuid& objGuid = ibNullGuid) const = 0; //create object and read by guid — born owned
+	virtual ibValuePtr<ibValueRecordDataObjectRef> CreateObjectRefValue(const ibGuid& objGuid = ibNullGuid) const final;
 
 protected:
 
@@ -1941,8 +1941,8 @@ protected:
 	///////////////////////////////////////////////////////////////////
 
 	// born owned, as their creators are
-	virtual ibValuePtr<ibValueRecordSetObject> CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) const = 0;
-	virtual ibValuePtr<ibValueRecordManagerObject> CreateRecordManagerObjectRegValue(const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) const { return nullptr; }
+	virtual ibValuePtr<ibValueRecordSetObject> CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey = ibNullUniqueKeyPair) const = 0;
+	virtual ibValuePtr<ibValueRecordManagerObject> CreateRecordManagerObjectRegValue(const ibUniqueKeyPair& uniqueKey = ibNullUniqueKeyPair) const { return nullptr; }
 
 	// Declare the register table (dimension / resource columns + the lookup index).
 	virtual void ContributeTables(ibSchemaSnapshot& out) const override;
@@ -2054,7 +2054,7 @@ protected:
 	//
 	// The table already carries what is needed and nothing read it: every entry records WHO
 	// contributed it (alias) and ITS OWN number (data). This translates a table index into the
-	// subclass's own ordinal, and answers wxNOT_FOUND when the entry belongs to the module.
+	// subclass's own ordinal, and answers ibNOT_FOUND when the entry belongs to the module.
 	// The same shape ibValueTabularSectionDataObjectBase::CallAsFunc has always used.
 	//
 	// Counted rather than subtracted deliberately: an offset would encode WHICH BLOCK COMES
@@ -2370,7 +2370,7 @@ public:
 
 	virtual ~ibValueRecordDataObjectRef();
 
-	virtual bool InitializeObject(const ibGuid& copyGuid = wxNullGuid);
+	virtual bool InitializeObject(const ibGuid& copyGuid = ibNullGuid);
 	virtual bool InitializeObject(ibValueRecordDataObjectRef* source, bool generate = false);
 
 	virtual bool WriteObject() = 0;
@@ -2767,7 +2767,7 @@ public:
 	// Recorder init — binds RegisterRecords (exported) before the base compiles,
 	// then delegates to the base (ThisObject bind + compile). Shared by all
 	// recorder / document-like objects; both creation paths need the bind.
-	virtual bool InitializeObject(const ibGuid& copyGuid = wxNullGuid) override;
+	virtual bool InitializeObject(const ibGuid& copyGuid = ibNullGuid) override;
 	virtual bool InitializeObject(ibValueRecordDataObjectRef* source, bool generate = false) override;
 
 	// Public helpers for register access from form scripts / Document
@@ -2776,7 +2776,7 @@ public:
 	// beside it — resolve in the module after the document's lists are edited. Driving only the
 	// first left the second answering "not found" in the designer's syntax check until the whole
 	// configuration was reloaded.
-	void ClearRecordSet()  { wxASSERT(m_registerRecords && m_sequenceRecords); m_registerRecords->ClearRecordSet(); m_sequenceRecords->ClearRecordSet(); }
+	void ClearRecordSet()  { ibASSERT(m_registerRecords && m_sequenceRecords); m_registerRecords->ClearRecordSet(); m_sequenceRecords->ClearRecordSet(); }
 	void UpdateRecordSet() { ClearRecordSet(); m_registerRecords->CreateRecordSet(); m_sequenceRecords->CreateRecordSet(); }
 
 	// Write/Delete scaffold. The 2-arg WriteObject is the canonical
@@ -3039,7 +3039,7 @@ class BACKEND_API ibValueRecordSetObject : public ibValueModelStorage, public ib
 		class ibValueRecordSetObjectRegisterKeyDescriptionValue : public ibValueDynamicMembers {
 	public:
 
-			ibValueRecordSetObjectRegisterKeyDescriptionValue(ibValueRecordSetObject* recordSet = nullptr, const ibMetaID& id = wxNOT_FOUND);
+			ibValueRecordSetObjectRegisterKeyDescriptionValue(ibValueRecordSetObject* recordSet = nullptr, const ibMetaID& id = ibNOT_FOUND);
 			virtual ~ibValueRecordSetObjectRegisterKeyDescriptionValue();
 
 			virtual bool IsEmpty() const { return false; }

@@ -203,7 +203,7 @@ private:
 	}
 
 public:
-	// The value, when it is among the choices; wxNOT_FOUND otherwise. Reads — never fills a list that was filled.
+	// The value, when it is among the choices; ibNOT_FOUND otherwise. Reads — never fills a list that was filled.
 	int GetValueAsInteger() const {
 		const long sel = m_propValue.GetNumber().ToInt();
 		EnsureList();
@@ -214,7 +214,7 @@ public:
 					return sel;
 			}
 		}
-		return wxNOT_FOUND;
+		return ibNOT_FOUND;
 	}
 
 	// The choices read afresh from the owner: by a configuration as it loads (every list of every object, once), and
@@ -232,28 +232,28 @@ public:
 
 	template <typename optClass>
 	ibPropertyList(ibPropertyCategory* cat, const ibString& name,
-		bool (optClass::* funcHandler)(ibPropertyList* prop), const long& value = wxNOT_FOUND) : ibProperty(cat, name, ibVariant(ibNumber(value)))
+		bool (optClass::* funcHandler)(ibPropertyList* prop), const long& value = ibNOT_FOUND) : ibProperty(cat, name, ibVariant(ibNumber(value)))
 	{
 		m_functor = std::make_unique<ibPropertyValueFunctor<optClass>>(funcHandler, (optClass*)cat->GetPropertyObject());
 	}
 
 	template <typename optClass>
 	ibPropertyList(ibPropertyCategory* cat, const ibString& name, const ibString& label,
-		bool (optClass::* funcHandler)(ibPropertyList* prop), const long& value = wxNOT_FOUND) : ibProperty(cat, name, label, ibVariant(ibNumber(value)))
+		bool (optClass::* funcHandler)(ibPropertyList* prop), const long& value = ibNOT_FOUND) : ibProperty(cat, name, label, ibVariant(ibNumber(value)))
 	{
 		m_functor = std::make_unique<ibPropertyValueFunctor<optClass>>(funcHandler, (optClass*)cat->GetPropertyObject());
 	}
 
 	template <typename optClass>
 	ibPropertyList(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString,
-		bool (optClass::* funcHandler)(ibPropertyList* prop), const long& value = wxNOT_FOUND) : ibProperty(cat, name, label, helpString, ibVariant(ibNumber(value)))
+		bool (optClass::* funcHandler)(ibPropertyList* prop), const long& value = ibNOT_FOUND) : ibProperty(cat, name, label, helpString, ibVariant(ibNumber(value)))
 	{
 		m_functor = std::make_unique<ibPropertyValueFunctor<optClass>>(funcHandler, (optClass*)cat->GetPropertyObject());
 	}
 
 	virtual ~ibPropertyList() {}
 
-	virtual bool IsEmptyProperty() const { return GetValueAsInteger() == wxNOT_FOUND; }
+	virtual bool IsEmptyProperty() const { return GetValueAsInteger() == ibNOT_FOUND; }
 
 	// Set/Get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);

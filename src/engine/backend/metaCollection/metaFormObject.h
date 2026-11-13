@@ -8,7 +8,7 @@
 
 #include <functional>
 
-#define defaultFormType wxNOT_FOUND
+#define defaultFormType ibNOT_FOUND
 #define formDefaultName ibT("Form")
 
 // -----------------------------------------------------------------------

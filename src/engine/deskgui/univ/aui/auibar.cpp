@@ -154,8 +154,11 @@ bool ibAuiToolBar::Create(wxWindow* parent,
     m_windowStyle = style;
 
     // Tool packing and padding are in DIPs, i.e. do not use FromDIP() here.
+    // SEAM vs wx: a tool with air round its picture, 4 (wx's 3 pressed the bar round its tools, the look of an older
+    // desktop; 2026-11-13, Max: "modernise the interface", 5 "a little smaller"). On GTK3/Cocoa the same - the bar is
+    // the engine's there too
     m_toolPacking = 2;
-    m_toolBorderPadding = 3;
+    m_toolBorderPadding = 4;
 
     m_gripperVisible  = (style & ibAUI_TB_GRIPPER) ? true : false;
     m_overflowVisible = (style & ibAUI_TB_OVERFLOW) ? true : false;

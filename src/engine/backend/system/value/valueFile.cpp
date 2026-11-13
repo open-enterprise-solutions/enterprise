@@ -1,6 +1,21 @@
 #include "valueFile.h"
 
-#include <wx/filename.h>
+#include "core/fileSystem.h"   // ibPathOf, ibFileModificationTime
+
+#include <system_error>
+
+namespace {
+
+// Readable by its owner, as the system keeps the bits (wxIsReadable asked access()); false when nothing is there.
+bool IsReadable(const std::filesystem::path& path)
+{
+	std::error_code error;
+	const std::filesystem::file_status status = std::filesystem::status(path, error);
+	return !error && std::filesystem::exists(status)
+		&& (status.permissions() & std::filesystem::perms::owner_read) != std::filesystem::perms::none;
+}
+
+} // namespace
 
 //////////////////////////////////////////////////////////////////////
 // Construction/Destruction
@@ -34,7 +49,10 @@ void ibValueFile_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*
 
 bool ibValueFile::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
-	wxFileName strFileName(m_fileName);
+	const std::filesystem::path path = ibPathOf(m_fileName);
+	// A name with nothing after its last separator is a folder's, as wxFileName read it - whether one is there or not.
+	const bool folder = !path.has_filename();
+	std::error_code error;
 
 	switch (lMethodNum)
 	{
@@ -44,30 +62,26 @@ bool ibValueFile::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibVal
 		// read as "(named AND file exists) OR directory exists" — the second arm answering
 		// true for an EMPTY name.
 		pvarRetValue = m_fileName.Length() > 0 &&
-			((!strFileName.IsDir() && strFileName.Exists()) || (strFileName.IsDir() && strFileName.DirExists()));
+			(folder ? std::filesystem::is_directory(path, error) : std::filesystem::exists(path, error));
 		return true;
 		//case enGetHidden: break;
-	case enGetModificationTime: {
+	case enGetModificationTime:
 		// The file system's instant, by its local parts; none (no such file) - the empty date.
-		const wxDateTime modified = strFileName.GetModificationTime();
-		pvarRetValue = modified.IsValid() ? ibDateTime::OfInstant(modified.GetValue().GetValue()) : ibDateTime();
+		pvarRetValue = ibFileModificationTime(m_fileName);
 		return true;
-	}
-	case enGetReadOnly: pvarRetValue = m_fileName.Length() > 0 &&
-		((!strFileName.IsDir() && strFileName.IsFileReadable()) || (strFileName.IsDir() && strFileName.IsDirReadable()));
+	case enGetReadOnly: pvarRetValue = m_fileName.Length() > 0 && IsReadable(path);
 		return true;
-	case enIsDirectory: pvarRetValue = strFileName.IsDir();
+	case enIsDirectory: pvarRetValue = folder;
 		return true;
-	case enIsFile: pvarRetValue = !strFileName.IsDir();
+	case enIsFile: pvarRetValue = !folder;
 		return true;
 		//case enSetHidden: break;
 		//case enSetModificationTime: break;
 		//case enSetReadOnly: break;
-	case enSize: {
-		const wxULongLong& size = strFileName.GetSize();
-		pvarRetValue = ibNumber(size.GetValue());
+	case enSize:
+		// No file to ask - the largest count, as wxInvalidSize was.
+		pvarRetValue = ibNumber(std::filesystem::file_size(path, error));
 		return true;
-	}
 	}
 
 	return false;
@@ -80,24 +94,27 @@ bool ibValueFile::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 
 bool ibValueFile::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	wxFileName strFileName(m_fileName);
+	std::filesystem::path path = ibPathOf(m_fileName);
 
 	switch (lPropNum)
 	{
 	case enBaseName:
-		pvarPropVal = ibString(strFileName.GetName());
+		pvarPropVal = ibString(path.stem().wstring());
 		return true;
-	case enExtension:
-		pvarPropVal = ibString(strFileName.GetExt());
+	case enExtension: {
+		// without its dot, as wxFileName::GetExt gave it
+		const std::wstring extension = path.extension().wstring();
+		pvarPropVal = ibString(extension.empty() ? extension : extension.substr(1));
 		return true;
+	}
 	case enFullName:
-		pvarPropVal = ibString(strFileName.GetFullPath());
+		pvarPropVal = ibString(path.make_preferred().wstring());   // the separators this system writes, as wxFileName did
 		return true;
 	case enName:
-		pvarPropVal = ibString(strFileName.GetFullName());
+		pvarPropVal = ibString(path.filename().wstring());
 		return true;
 	case enPath:
-		pvarPropVal = ibString(strFileName.GetPath());
+		pvarPropVal = ibString(path.parent_path().wstring());
 		return true;
 	}
 

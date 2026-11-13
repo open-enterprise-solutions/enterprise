@@ -96,17 +96,17 @@ ibValue ibBackendTypeFactory::CreateValue() const
 				}
 				catch (...) {
 				}
-				return wxEmptyValue;
+				return ibEmptyValue;
 			}
 			try {
 				return ibValue::CreateObject(so->GetClassType());
 			}
 			catch (...) {
-				return wxEmptyValue;
+				return ibEmptyValue;
 			}
 		}
 	}
-	return wxEmptyValue;
+	return ibEmptyValue;
 }
 
 #include "backend/system/value/valueType.h"
@@ -141,7 +141,7 @@ ibValue ibBackendTypeFactory::AdjustValue(const ibValue& varValue, const ibTypeD
 ibValue ibBackendTypeConfigFactory::CreateValue() const
 {
 	ibMetaData const* metaData = GetMetaData();
-	wxASSERT(metaData);
+	ibASSERT(metaData);
 	const ibTypeDescription& typeDesc = GetTypeDesc();
 	if (typeDesc.GetClsidCount() == 1) {
 		const ibCtorMetaValueType* so = metaData->GetTypeCtor(typeDesc.GetFirstClsid());
@@ -150,7 +150,7 @@ ibValue ibBackendTypeConfigFactory::CreateValue() const
 				return metaData->CreateObject(so->GetClassType());
 			}
 			catch (...) {
-				return wxEmptyValue;
+				return ibEmptyValue;
 			}
 		}
 	}

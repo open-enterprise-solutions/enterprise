@@ -1052,7 +1052,7 @@ public:
 
 		if (params.Has(ArgVertical().Name()))
 			cell->m_textOrient = ArgVertical().Flag(params)
-				? wxVERTICAL : wxHORIZONTAL;
+				? ibOrient_Vertical : ibOrient_Horizontal;
 
 		// ⚠ AN UNSET COLOUR IS UNSET — the cell says so deliberately, and the
 		// getters resolve it where there IS a screen to ask. So a colour is only

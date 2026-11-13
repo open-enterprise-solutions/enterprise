@@ -38,7 +38,7 @@ ibValueMetaObjectAccountingRegister::~ibValueMetaObjectAccountingRegister()
 
 ibValueMetaObjectFormBase* ibValueMetaObjectAccountingRegister::GetDefaultFormByID(const ibFormID& id) const
 {
-	if (id == eFormList && m_propertyDefFormList->GetValueAsInteger() != wxNOT_FOUND)
+	if (id == eFormList && m_propertyDefFormList->GetValueAsInteger() != ibNOT_FOUND)
 		return FindFormObjectByFilter(m_propertyDefFormList->GetValueAsInteger());
 	return nullptr;
 }
@@ -882,7 +882,7 @@ bool ibValueMetaObjectAccountingRegister::OnAfterRunMetaObject(int flags)
 		const ibValueMetaObject* chartOfAccounts = m_metaData->FindAnyObjectByFilter(metaDesc.GetByIdx(idx));
 		if (chartOfAccounts != nullptr) {
 			const ibCtorMetaValueType* so = m_metaData->GetTypeCtor(chartOfAccounts, ibCtorObjectMetaType::ibCtorObjectMetaType_Reference);
-			wxASSERT(so);
+			ibASSERT(so);
 			typeDesc.AppendMetaType(so->GetClassType());
 		}
 	}
@@ -964,14 +964,14 @@ bool ibValueMetaObjectAccountingRegister::OnAfterCloseMetaObject()
 
 void ibValueMetaObjectAccountingRegister::OnCreateFormObject(ibValueMetaObjectFormBase* metaForm)
 {
-	if (metaForm->GetTypeForm() == eFormList && m_propertyDefFormList->GetValueAsInteger() == wxNOT_FOUND)
+	if (metaForm->GetTypeForm() == eFormList && m_propertyDefFormList->GetValueAsInteger() == ibNOT_FOUND)
 		m_propertyDefFormList->SetValue(metaForm->GetMetaID());
 }
 
 void ibValueMetaObjectAccountingRegister::OnRemoveMetaForm(ibValueMetaObjectFormBase* metaForm)
 {
 	if (metaForm->GetTypeForm() == eFormList && m_propertyDefFormList->GetValueAsInteger() == metaForm->GetMetaID())
-		m_propertyDefFormList->SetValue(wxNOT_FOUND);
+		m_propertyDefFormList->SetValue(ibNOT_FOUND);
 }
 
 #include "accountingRegisterManager.h"

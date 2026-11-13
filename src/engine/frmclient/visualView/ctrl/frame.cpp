@@ -124,7 +124,7 @@ ibViewFetcher ibValueFrame::MakeFetcher() const
 	return m_host.MakeFetcher(m_controlId);
 }
 
-void ibValueFrame::UpdateWindow(wxWindow* window, const ibProtocolNode& node)
+void ibValueFrame::UpdateWindow(wxWindow* window, const ibProtocolNode& node, const wxColour& platformBackground)
 {
 	if (window == nullptr)
 		return;
@@ -138,7 +138,7 @@ void ibValueFrame::UpdateWindow(wxWindow* window, const ibProtocolNode& node)
 	if (maxSize != wxDefaultSize)
 		window->SetMaxSize(maxSize);
 
-	ApplyLook(window, node);
+	ApplyLook(window, node, platformBackground);
 
 	// The server has decided both: enabled with its form, shown where it is available and bound.
 	window->Enable(state.GetBool(ibProtocol::ibForm::ibState::Enabled, true));
@@ -149,7 +149,7 @@ void ibValueFrame::UpdateWindow(wxWindow* window, const ibProtocolNode& node)
 		window->Layout();
 }
 
-void ibValueFrame::ApplyLook(wxWindow* window, const ibProtocolNode& node)
+void ibValueFrame::ApplyLook(wxWindow* window, const ibProtocolNode& node, const wxColour& platformBackground)
 {
 	if (window == nullptr)
 		return;
@@ -162,7 +162,13 @@ void ibValueFrame::ApplyLook(wxWindow* window, const ibProtocolNode& node)
 	const wxString foreground = node.GetString(ibProtocol::ibForm::ibProperty::ForegroundColour);
 	if (!foreground.IsEmpty())
 		window->SetForegroundColour(typeConv::StringToColour(foreground));
+	// The kind's own background (GetPlatformBackground) is no choice of its author's: none set, the theme's, as the
+	// control's state has it - a field that cannot be typed into has no well of its own (ibTextCtrl::HasContentBackground,
+	// 2026-11-13, Max: "the disabled field cannot be told from the one typed into"). The web client reads it so too
+	// (control.js, platformBackground).
 	const wxString background = node.GetString(ibProtocol::ibForm::ibProperty::BackgroundColour);
-	if (!background.IsEmpty())
-		window->SetBackgroundColour(typeConv::StringToColour(background));
+	if (!background.IsEmpty()) {
+		const wxColour colour = typeConv::StringToColour(background);
+		window->SetBackgroundColour(colour == platformBackground ? wxNullColour : colour);
+	}
 }

@@ -15,8 +15,6 @@
 //   ibAuditLogDocument
 // ============================================================
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibAuditLogDocument, ibDocument);
-
 ibAuditLogDocument::ibAuditLogDocument(const ibMetaData* metaData) : ibDocument(), m_metaData(metaData)
 {
 	// ibDocument default ctor already leaves m_documentParent null, so
@@ -31,8 +29,6 @@ ibAuditLogDocument::ibAuditLogDocument(const ibMetaData* metaData) : ibDocument(
 // ============================================================
 //   ibAuditLogView
 // ============================================================
-
-wxIMPLEMENT_DYNAMIC_CLASS(ibAuditLogView, ibView);
 
 // The client this view's tab is drawn for.
 static ibClientFrame* ClientOf(const ibView* view)

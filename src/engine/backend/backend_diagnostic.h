@@ -34,8 +34,6 @@
 
 #include <vector>
 
-#include <wx/string.h>
-
 // WHAT KIND OF FAILURE. Not cosmetic: a compile error means the text was never
 // run, a runtime error means it was — and a caller checking a module before
 // saving it cares about exactly the first kind.
@@ -83,9 +81,9 @@ struct ibDiagnostic {
 	unsigned int m_position = 0;
 
 	// The engine's error code (ibBackendException::GetErrorDesc), or
-	// wxNOT_FOUND when the failure carries only a description. Machine-readable
+	// ibNOT_FOUND when the failure carries only a description. Machine-readable
 	// identity of the failure: a translated message changes, this does not.
-	int          m_code = wxNOT_FOUND;
+	int          m_code = ibNOT_FOUND;
 
 	// The failure itself, WITHOUT the "{Module(42)}: " decoration — that is
 	// assembled for display and would be noise for anyone else.

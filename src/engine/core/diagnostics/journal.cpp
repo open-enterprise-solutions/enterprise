@@ -7,13 +7,11 @@
 
 #include "core/exception.h"                // ibErrorText — the system's words for a code
 #include "core/fdatetime.h"                // ibDateTime — the run's stamp and each line's time
-
-// THE wx SIDE, the one left: wx's own log chained into the file, and wx's words for the machine in the opening lines.
-#include <wx/intl.h>
-#include <wx/log.h>
-#include <wx/utils.h>
+#include "core/localization/locale.h"      // ibSystemLanguage — the machine's language, in the opening lines
+#include "core/system.h"                   // ibHostName, ibUserName, ibOsDescription — the machine, in the opening lines
 
 #include <atomic>
+#include <cstdio>   // fputs - the console's echo
 #include <fstream>
 #include <mutex>
 
@@ -30,7 +28,7 @@ namespace {
 // during teardown — after wx has torn its own logging down — still lands.
 //
 // ⚠ THE LOCK IS RECURSIVE: a write the file refuses is said by wx (wxLogSysError), and on the main thread wx's
-// line comes back here at once through the chain (ibJournalLogTarget) — under the lock this thread holds.
+// line comes back here at once through the program's chain (deskgui/app.h) — under the lock this thread holds.
 std::ofstream      s_file;
 std::recursive_mutex s_lock;
 ibString           s_path;
@@ -46,65 +44,15 @@ std::atomic<bool>  s_echoToStderr{ false };
 // The first error's dump is taken — by this run, or by the one before it (SkipErrorDump).
 std::atomic<bool>  s_errorDumped{ false };
 
-// The chain Open makes — kept, so a program whose console the journal writes can take the previous target off it
-// (EchoToStderr).
-wxLogChain*        s_chain = nullptr;
-
 // Who installed the question "which base is this line about" (SetContext); null when nobody did.
 std::atomic<ibTechJournal::ContextFn> s_context{ nullptr };
 
-// The mark a line the journal echoes through wx carries IN ITS RECORD (wxLogRecordInfo). Our own wx target
-// lets a marked line pass: the file already has it, and taking it again is how a message becomes a loop.
-// ⚠ IN THE RECORD, NOT IN THE THREAD. It was a thread_local flag, and wx does not deliver a line on the thread
-// that logged it: a line from any thread but the main one is BUFFERED and handed over later on the main
-// thread, where the flag was never set — every line of a registry thread came back as `wx.debug` (an
-// application server's journal, 2026-10-01: 260 of its 876 lines, all at exit). A record keeps its values when
-// wx buffers it.
-const char* const kEchoKey = "oes.journal.echo";
+// Who hears a kept line beyond the file (SetEcho) — a window program's wx; null when nobody does.
+std::atomic<ibTechJournal::EchoFn> s_echo{ nullptr };
 
 // (The build number is NOT computed here. `GetBuildId()` in backend_core already derives it from
 // __DATE__, and the About box prints that one — a journal with a second, independently correct
 // number would be two truths about one binary, which is the failure this file exists to prevent.)
-
-// The wx side. It only TAKES — the chain keeps the previous target alive, so the debugger's output
-// window still shows every line it showed before.
-class ibJournalLogTarget : public wxLog
-{
-protected:
-	void DoLogRecord(wxLogLevel level, const wxString& msg, const wxLogRecordInfo& info) override
-	{
-		wxUIntPtr echoed = 0;
-		if (info.GetNumValue(kEchoKey, &echoed))
-			return;                   // the journal's own line, on its way to the debugger
-
-		const ibChar* kind =
-			  level == wxLOG_FatalError ? ibT("wx.fatal")
-			: level == wxLOG_Error      ? ibT("wx.error")
-			: level == wxLOG_Warning    ? ibT("wx.warn")
-			: level == wxLOG_Message    ? ibT("wx.message")
-			: level == wxLOG_Status     ? ibT("wx.status")
-			: level == wxLOG_Debug      ? ibT("wx.debug")
-			: level == wxLOG_Trace      ? ibT("wx.trace")
-			                            : ibT("wx");
-
-		// wx's severity becomes OUR mark, so a line that came through the chain is scanned the same
-		// way as one written here. A wx ERROR does NOT take a dump with it, though: this target sees
-		// every wxLogError in the process, including ones a caller is about to handle, and a
-		// snapshot per handled error is exactly the loop the once-per-run rule exists to avoid.
-		const ibJournalMark mark =
-			  level == wxLOG_FatalError || level == wxLOG_Error || level == wxLOG_Warning
-			    ? ibJournalMark::Warning
-			    : ibJournalMark::Info;
-
-		// The SITE, when wx knows it — a line is worth much more with the file and line that
-		// produced it, and this is the one place that has them.
-		if (info.filename != nullptr && info.line > 0)
-			ibTechJournal::Write(mark, kind, ibString::Format(ibT("%s   [%s:%d]"),
-				msg, ibString(std::filesystem::path(info.filename).filename().wstring()), info.line));
-		else
-			ibTechJournal::Write(mark, kind, msg);
-	}
-};
 
 } // namespace
 
@@ -112,7 +60,7 @@ ibTechJournal& ibTechJournal::Instance()
 {
 	// A function-local static: constructed on first use, destroyed after main, and thread-safe to
 	// initialise by the language's own rule. The state it stands for is the file-scope block above —
-	// kept there because the wx log target and the vararg door reach it without going through the
+	// kept there because the program's wx target and the vararg door reach it without going through the
 	// object, and because a handle that outlives every subsystem must not depend on member layout.
 	static ibTechJournal s_instance;
 	return s_instance;
@@ -187,31 +135,16 @@ void ibTechJournal::Open(const ibString& exeName)
 		ibT("unknown-arch"),
 #endif
 		ibString(__DATE__), ibString(__TIME__)));
-	Write(ibJournalMark::Info, ibT("start"), ibString::Format(ibT("%s, wxWidgets %d.%d.%d"),
-		wxGetOsDescription(), wxMAJOR_VERSION, wxMINOR_VERSION, wxRELEASE_NUMBER));
+	Write(ibJournalMark::Info, ibT("start"), ibOsDescription());
 	Write(ibJournalMark::Info, ibT("start"), ibString::Format(ibT("pid %u, started %s, locale %s"),
 		ibCrashGuard::CurrentPidPortable(),
 		ibDateTime::Now().Format(ibT("%Y-%m-%d %H:%M:%S")),
-		wxLocale::GetLanguageCanonicalName(wxLocale::GetSystemLanguage())));
+		ibSystemLanguage()));
 	Write(ibJournalMark::Info, ibT("start"), ibString::Format(ibT("user %s@%s, %s"),
-		wxGetUserId(), wxGetHostName(), ibGetCwd()));
+		ibUserName(), ibHostName(), ibGetCwd()));
 	Write(ibJournalMark::Info, ibT("start"), ibString::Format(ibT("binary: %s"), ibExecutablePath()));
 	Write(ibJournalMark::Info, ibT("start"), ibString::Format(ibT("journal: %s"), s_path));
-
-	// ⭐ CHAINED, NOT REPLACED — and only as a SAFETY NET. Our own code writes through ibJournal and
-	// reaches the file directly; this catches what we do not own: wx's own diagnostics, and the
-	// callsites not migrated yet. Replacing the target instead of chaining would take the
-	// developer's live view away in exchange for the file, which is a trade nobody asked for.
-	//
-	// ⚠ THE GLOBAL LOG LEVEL IS LEFT EXACTLY AS IT WAS. Raising it would change what the PREVIOUS
-	// target shows too — new lines appearing in the debugger that never appeared before — and the
-	// promise is the opposite one: the same output as always, plus a file.
-	//
-	// Deliberately never deleted: it must outlive every other subsystem's last log line, and a
-	// process-lifetime object is what that means.
-	s_chain = new wxLogChain(new ibJournalLogTarget());
-	if (s_echoToStderr.load(std::memory_order_relaxed))
-		s_chain->PassMessages(false);   // the console is the journal's already (EchoToStderr)
+	// (Which wx a window program runs on is said by that program, as it chains wx's log in — deskgui/app.h.)
 }
 
 void ibTechJournal::Close()
@@ -226,19 +159,21 @@ void ibTechJournal::Close()
 
 void ibTechJournal::EchoToStderr()
 {
+	// (THE CONSOLE HAS ONE WRITER. The journal chained wx's log in here, and a console program's previous wx target IS
+	// standard error, so every line was printed twice — the application server's console, 2026-10-06 — until this took
+	// the previous target off the chain. A console program chains nothing now: wx's own lines reach its console once,
+	// through wx's own target, and the journal's through the echo below.)
 	s_echoToStderr.store(true, std::memory_order_relaxed);
-
-	// ⭐ AND THE CONSOLE HAS ONE WRITER. A console program's previous wx target IS standard error, so the chain
-	// passed every line there a second time — the journal's own echo and wx's own lines alike, each printed
-	// twice (the application server's console, 2026-10-06). The program that asks for this narrates in its
-	// console: the journal is that console now, and the previous target comes off the chain.
-	if (s_chain != nullptr)
-		s_chain->PassMessages(false);
 }
 
 void ibTechJournal::SetContext(ContextFn context)
 {
 	s_context.store(context, std::memory_order_release);
+}
+
+void ibTechJournal::SetEcho(EchoFn echo)
+{
+	s_echo.store(echo, std::memory_order_release);
 }
 
 void ibTechJournal::SysError(const ibString& source, long code, const ibString& message)
@@ -356,66 +291,18 @@ void ibTechJournal::Write(ibJournalMark mark, const ibString& source, const ibSt
 		}
 	}
 
-	// ⭐ AND THE SAME LINE INTO THE DEBUGGER, so the two views never disagree: what is watched live
-	// is what is read afterwards, in the same words and the same order.
+	// ⭐ AND THE SAME LINE TO THE PROGRAM'S EAR (SetEcho), so the two views never disagree: what is watched live is
+	// what is read afterwards, in the same words and the same order. A window program's ear is wx — deskgui/app.h says what
+	// an error puts in front of the person, and why a warning does not. Called OUTSIDE the lock — the ear may take locks
+	// of its own, and holding two in one order here and the other order there is how a deadlock is built.
 	//
-	// ⚠ THE LOOP IS BROKEN BY A MARK, not by bypassing wx. The line would otherwise come straight
-	// back through the chain into this function; instead the echo carries kEchoKey in its record and
-	// the wx target lets a line marked this way pass — on whichever thread wx delivers it. Written
-	// OUTSIDE the lock — wx may take locks of its own, and holding two in one order here and the other
-	// order there is how a deadlock is built.
-	//
-	// ⚠ NOT IN A PROGRAM THAT NARRATES IN ITS CONSOLE (EchoToStderr). There the previous target is off the chain, so
-	// the echo reaches only our own target, which lets it pass — nobody. And from any thread but the main one wx does
-	// not deliver it: it keeps the record in a buffer, under a lock of its own, until the main thread flushes — which
-	// an application server's never does, so every line of every session was held in memory until exit (2026-10-06).
+	// ⚠ NOT IN A PROGRAM THAT NARRATES IN ITS CONSOLE (EchoToStderr): the console is its ear. Through wx, from any thread
+	// but the main one, a line is not delivered: wx keeps the record in a buffer, under a lock of its own, until the main
+	// thread flushes — which an application server's never does, so every line of every session was held in memory
+	// until exit (2026-10-06).
 	if (kept && !s_echoToStderr.load(std::memory_order_relaxed)) {
-		// ⭐⭐ THE ECHO SPEAKS IN THE SEVERITY IT WAS GIVEN — and this is what makes migrating a
-		// `wxLogError` callsite to `ibJournalError` safe. wx's verbs are not interchangeable: in a
-		// GUI application wxLogError puts a dialog in front of the user, wxLogMessage shows a
-		// message, and wxLogDebug is invisible. Routing everything through wxLogDebug would have
-		// journalled the errors and SILENTLY TAKEN THEM OFF THE SCREEN — the callsite would keep
-		// compiling and the user would stop being told.
-		//
-		// So the layer calls both: the file gets the line, and wx gets the same words at the same
-		// severity it would have got from the original call.
-		//
-		// ⚠ THE USER SEES THE MESSAGE, NOT THE JOURNAL LINE. A timestamp and a thread id belong in a
-		// file, not in a dialog; the debug echo keeps the full line because there the timestamp is
-		// the point.
-		// ⚠ INFO DOES NOT SHOUT. `*` marks a line worth FINDING in the file; it does not mean the
-		// user must be interrupted. Routed through wxLogMessage it was exactly that: in a GUI
-		// application wxLogMessage opens a modal dialog, so the startup banner — four lines nobody
-		// asked to be told — became four dialogs before the launcher even appeared (seen live,
-		// 2026-08-22). The mark is about the FILE; the echo is about the PERSON, and they are not
-		// the same decision.
-		//
-		// 🛑⭐ AND NEITHER DOES A WARNING (Max, 2026-09-23: "when it is a warning, no window — take
-		// the sending to the widgets away"). It kept wxLogWarning on the argument that those
-		// callsites had been wxLogWarning before the migration and their dialog must not be removed
-		// silently. Reading the 56 of them settles it the other way: an fsync that failed on a
-		// Firebird lease, a bytecode cache that could not be read, a replication peer on another
-		// version, a sweep backlog that would not answer — every one is engine plumbing addressed to
-		// whoever opens the file, and none is a sentence to stop a person mid-keystroke with. The
-		// first diagnostic written on the choice road proved it by putting a modal in front of
-		// somebody who was testing something else entirely.
-		//
-		// ⚠ AN ERROR STILL DOES. That one says the thing the person asked for did not happen, which
-		// they have to be told whether or not anybody ever opens the journal.
-		//
-		// (wxLogError / wxLogDebug spelled out — the same logger the two macros make, with the mark stored.)
-		switch (mark) {
-		case ibJournalMark::Error:
-			if (wxLOG_IS_ENABLED(Error))
-				wxMAKE_LOGGER(Error).Store(kEchoKey, wxUIntPtr(1)).Log(wxT("%s"), message);
-			break;
-		default:
-#if wxUSE_LOG_DEBUG
-			if (wxLOG_IS_ENABLED(Debug))
-				wxMAKE_LOGGER(Debug).Store(kEchoKey, wxUIntPtr(1)).Log(wxT("%s"), line.Left(line.Len() - 1));
-#endif
-			break;
-		}
+		if (const EchoFn echo = s_echo.load(std::memory_order_acquire))
+			echo(mark, line.Left(line.Len() - 1), message);   // the line without its end
 	}
 
 	// ⭐⭐ AN ERROR TAKES A DUMP WITH IT. By the time anyone reads the line, the state that produced

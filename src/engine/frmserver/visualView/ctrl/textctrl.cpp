@@ -71,8 +71,9 @@ ibValueTextCtrl::ibValueTextCtrl() :
 	ibValueWindow(), ibTypeControlFactory()
 {
 	m_members.Bind(this, &ibValueTextCtrl::FillControlMembers);
-	//set default params
-	m_propertyBG->SetValue(ibColour(255, 255, 255));
+	// set default params: a field's background the platform style's (the client leaves it to the theme, by the field's
+	// state - ibValueTextCtrl::GetPlatformBackground there)
+	m_propertyBG->SetValue(std::get<ibColour>(ibStyle::Platform().Get(ibStyleItem::FieldBackground, false)));
 }
 
 const ibMetaData* ibValueTextCtrl::GetMetaData() const

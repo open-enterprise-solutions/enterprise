@@ -509,7 +509,7 @@ public:
 	                                          const ibValue& condition = ibValue()) const;
 	// A figure of a finished reading as the row's account keeps it: EMPTY where the account keeps no such
 	// accounting (a quantity off a quantitative account), ZERO where it does and nothing is there — and
-	// EMPTY on a row broken down by a subconto the account does not keep that figure BY. `kindsDr` /
+	// EMPTY on a row broken down by an account dimension the account does not keep that figure BY. `kindsDr` /
 	// `kindsCr` are the call's breakdown, empty when the slots were read as they stand.
 	void ReportFiguresAsKept(ibQueryRamTable& table, ibAcctShape shape,
 	                         const std::vector<ibValue>& kindsDr, const std::vector<ibValue>& kindsCr) const;
@@ -730,7 +730,7 @@ public:
 
 	ibString GetRegisterTableNameDB() const {
 		ibString className = GetClassName();
-		wxASSERT(m_metaId != 0);
+		ibASSERT(m_metaId != 0);
 		return ibString::Format("%s%i_T", className, GetMetaID());
 	}
 
@@ -772,9 +772,9 @@ public:
 	// (A second grain — the same tables per account alone — stood here from 2026-09-16 and was removed the
 	// same day: no reading stood on it, and a total per account is the breakdown grain summed.)
 	ibString GetTotalsTableNameDB(bool creditSide) const {
-		wxASSERT(m_metaId != 0);
+		ibASSERT(m_metaId != 0);
 		const ibValueMetaObjectRegisterTotals* totals = GetTotalsObject(creditSide);
-		wxASSERT(totals != nullptr);   // a side without its totals object is refused before this (schema)
+		ibASSERT(totals != nullptr);   // a side without its totals object is refused before this (schema)
 		return ibString::Format(ibT("%s%i_%s"), GetClassName(), GetMetaID(),
 			totals != nullptr ? totals->GetName() : ibString(creditSide ? ibT("CreditTotals") : ibT("DebitTotals")));
 	}
@@ -952,7 +952,7 @@ protected:
 	virtual ibValuePtr<ibValueManagerDataObject> CreateManagerDataObjectValue() const;
 
 	//create record set
-	virtual ibValuePtr<ibValueRecordSetObject> CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) const;
+	virtual ibValuePtr<ibValueRecordSetObject> CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey = ibNullUniqueKeyPair) const;
 
 	//create object data with meta form
 	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const;
@@ -1380,7 +1380,7 @@ private:
 
 class ibValueRecordSetObjectAccountingRegister : public ibValueRecordSetObject {
 	public:
-	ibValueRecordSetObjectAccountingRegister(const ibValueMetaObjectAccountingRegister* metaObject, const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) :
+	ibValueRecordSetObjectAccountingRegister(const ibValueMetaObjectAccountingRegister* metaObject, const ibUniqueKeyPair& uniqueKey = ibNullUniqueKeyPair) :
 		ibValueRecordSetObject(metaObject, uniqueKey) { m_members.Bind(this, &ibValueRecordSetObjectAccountingRegister::FillMembers); }
 
 	ibValueRecordSetObjectAccountingRegister(const ibValueRecordSetObjectAccountingRegister& source) :

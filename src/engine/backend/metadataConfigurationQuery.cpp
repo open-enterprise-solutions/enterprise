@@ -64,7 +64,7 @@ bool ibMetaDataConfiguration::LoadDatabase(int flags)
 
 		//clear data
 		if (!ClearDatabase()) {
-			wxASSERT_MSG(false, "ClearDatabase() == false");
+			ibASSERT_MSG(false, "ClearDatabase() == false");
 			return false;
 		}
 
@@ -553,14 +553,14 @@ bool ibMetaDataConfigurationStorage::RollbackDatabase()
 	//close data 
 	if (ibMetaDataConfiguration::IsConfigOpen()) {
 		if (!CloseDatabase(ibRuntimeRequest(forceCloseFlag))) {
-			wxASSERT_MSG(false, "CloseDatabase() == false");
+			ibASSERT_MSG(false, "CloseDatabase() == false");
 			return false;
 		}
 	}
 
 	//clear data 
 	if (!ClearDatabase()) {
-		wxASSERT_MSG(false, "ClearDatabase() == false");
+		ibASSERT_MSG(false, "ClearDatabase() == false");
 		return false;
 	}
 

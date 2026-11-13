@@ -224,8 +224,8 @@ struct ibMetaMenuItem {
 	ibString           m_caption;                // "Open object module"
 
 	// The remainder — see ProcessCommand. An item with an id and no metaobject stands for one of the
-	// two modal editors that have no metaobject to name. wxNOT_FOUND otherwise.
-	int                m_id = wxNOT_FOUND;
+	// two modal editors that have no metaobject to name. ibNOT_FOUND otherwise.
+	int                m_id = ibNOT_FOUND;
 
 	ibValueMetaObject* m_metaObject = nullptr;   // what "open" means here
 
@@ -243,7 +243,7 @@ struct ibMetaMenuItem {
 	// out of the list — a toolbar button with a single meaning — because matching the name would
 	// be matching a string.
 	ibMetaMenuItem(ibMetaMenuKind kind, const ibString& name, const ibString& caption,
-		ibValueMetaObject* metaObject, const ibClassID& picture = 0, int id = wxNOT_FOUND)
+		ibValueMetaObject* metaObject, const ibClassID& picture = 0, int id = ibNOT_FOUND)
 		: m_kind(kind), m_name(name), m_caption(caption), m_id(id), m_metaObject(metaObject), m_picture(picture) {}
 	ibMetaMenuItem(const ibString& name, const ibString& caption, int id, const ibClassID& picture = 0)
 		: m_kind(ibMetaMenuKind::Editor), m_name(name), m_caption(caption), m_id(id), m_picture(picture) {}
@@ -365,7 +365,7 @@ public:
 	}
 
 	void GenerateGuid() {
-		wxASSERT(!m_metaGuid.isValid());
+		ibASSERT(!m_metaGuid.isValid());
 		if (!m_metaGuid.isValid()) {
 			ResetGuid();
 		}
@@ -495,7 +495,7 @@ public:
 	// Resolve a child's clsid against THIS owner: returns the canonical clsid the owner hosts
 	// (possibly remapped) or 0 if it does not host this child. ibClassID is UNSIGNED, so 0 — not
 	// -1 — is the "not allowed" sentinel (a real clsid is always > 0, see CreateMetaObject's
-	// wxASSERT(clsid != 0)). This is the single "may I host this child, and as what" gate — it
+	// ibASSERT(clsid != 0)). This is the single "may I host this child, and as what" gate — it
 	// replaces the old bool FilterChild + a separate remap. A tabular section comes in two clsids
 	// of the same kind: RAM (MD_TBL, processors/reports) and DB-backed reference (MD_TBLR,
 	// catalogs/documents); each owner maps either input to ITS variant, so a tabular section
@@ -716,7 +716,7 @@ public:
 	template<std::derived_from<ibValueMetaObject> T, typename... Args>
 	T* CreateMetaObjectAndSetParent(Args&&... args) {
 		const ibValuePtr<T> createdObject = ibValue::CreateObjectValue<T>(args...);
-		wxASSERT(createdObject);
+		ibASSERT(createdObject);
 		//set child/parent - predefined child, pinned to this parent for life
 		createdObject->SetParent(this);
 		createdObject->SetFlag(metaPredefinedFlag);

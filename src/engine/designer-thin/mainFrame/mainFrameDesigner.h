@@ -140,6 +140,8 @@ protected:
 	virtual void CreateGUI() override;
 	// …and the notebook along the bottom — the messages, then the debugger's three (the desktop's).
 	virtual void CreateBottomPane() override;
+	// …and the workspace while no tab is open: the greeting, and the keys of the commands a configuration is worked on with.
+	virtual ibWelcomeWindow* OnCreateWelcome(wxWindow* parent) override;
 
 	// THE CONFIGURATION'S TREE — the frame's MetaData, drawn when the patch changed it; its state on the pane's caption.
 	virtual void DrawFrame(const ibProtocolNode& frame, const ibProtocolNode& patch) override;

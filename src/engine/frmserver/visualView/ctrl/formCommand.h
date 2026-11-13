@@ -88,7 +88,7 @@ public:
 private:
 
 	ibValueForm* m_ownerForm;
-	ibMetaID     m_commandId = wxNOT_FOUND;
+	ibMetaID     m_commandId = ibNOT_FOUND;
 
 	ibPropertyCategory* m_categoryCommon = ibPropertyObject::CreatePropertyCategory(ibT("Common"), _("General"));
 	ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_categoryCommon, ibT("Name"), _("Name"), _("The command's name: how buttons and command bars on the form refer to it. Unique among the form's commands."), ibT(""));

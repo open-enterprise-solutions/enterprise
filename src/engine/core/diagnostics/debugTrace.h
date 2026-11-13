@@ -32,7 +32,7 @@ inline bool ibDebugTraceEnabled(const char* envVar)
 // folder beside the .app is often /Applications and a normal user cannot write there. Everywhere
 // else it is the program folder.
 //
-// Deliberately NOT wxLogError / wxLogMessage / wxFAIL_MSG / OutputDebugString: the applications
+// Deliberately NOT wxLogError / wxLogMessage / ibFAIL_MSG / OutputDebugString: the applications
 // are normally run WITHOUT a debugger attached, so anything sent to the logger or to the debug
 // output is invisible to the person watching the screen — and in a GUI build wxLog even queues
 // the message and shows it later, by which time an assert further up the stack has already fired

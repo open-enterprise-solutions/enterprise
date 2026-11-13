@@ -48,12 +48,6 @@ ibVariant::ibVariant(const std::wstring& cParam)
 	m_sData = ibString(cParam.c_str());
 }
 
-ibVariant::ibVariant(const wxString& cParam)
-	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_refCount(0), m_dData()
-{
-	m_sData = ibString(cParam);
-}
-
 // The write-denied refusal, OUT OF LINE. Built inside Reset, its message — a translation lookup and three
 // wxStrings — gave Reset a 288-byte frame and a stack-cookie check, and Reset runs on every slot of every
 // frame a script call releases: the price of a sentence that is almost never said, paid on each of them
@@ -263,13 +257,6 @@ void ibVariant::operator = (const ibString& cParam)
 	Reset();
 	m_typeClass = ibValueTypes::TYPE_STRING;
 	m_sData = cParam;
-}
-
-void ibVariant::operator = (const wxString& cParam)
-{
-	Reset();
-	m_typeClass = ibValueTypes::TYPE_STRING;
-	m_sData = ibString(cParam);
 }
 
 // Character POINTERS assign as strings — without these `value = "text"` picked operator=(bool) (pointer-to-bool is a

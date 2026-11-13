@@ -16,6 +16,7 @@
 // luck. Join waits the destructor out.
 
 #include <gtest/gtest.h>
+#include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
 #include "backend/session/session.h"
 #include "backend/session/workerPoolHeadless.h"

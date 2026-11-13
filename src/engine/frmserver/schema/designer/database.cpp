@@ -10,6 +10,10 @@
 #include "core/exception.h"   // ibCoreException — a restore refused on the way
 #include "core/fileKind.h"
 #include "core/serialize/dataBuilder.h"
+#include "protocol/protocol.h"   // ibStyle - a message's buttons and picture, and the one pressed
+
+#include <istream>
+#include <ostream>
 
 namespace {
 
@@ -52,6 +56,7 @@ void ibSchemaDatabase::Build(const ibSession& /*session*/, const ibDataNode& /*a
 std::function<void()> ibSchemaDatabase::Command(const ibSession& session, std::int32_t command,
 	const ibDataNode& /*args*/, ibProtocol::ibRefusal& refusal, ibString& error) const
 {
+	namespace style = ibProtocol::ibRequest::ibMessage::ibStyle;
 	ibApplicationInstance* const applicationInstance = session.GetApplicationInstance();
 	if (applicationInstance == nullptr) {
 		refusal = ibProtocol::ibRefusal::NoSession;
@@ -71,10 +76,11 @@ std::function<void()> ibSchemaDatabase::Command(const ibSession& session, std::i
 			ibString failure;
 			try {
 				const ibTempFile file(id);
-				ibTempFileInputStream stream(file);
+				ibTempFileReader reader(file);
+				std::istream stream(&reader);
 				if (file.IsOpened() && applicationInstance->LoadDatabase(stream)) {
 					frame->ShowModalMessage(_("Loading of tasks completed successful. Restart the program!"),
-						ibString(), wxOK | wxCENTRE);
+						ibString(), style::OK | style::Centre);
 					if (ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry(applicationInstance))
 						registry->CloseAll(true);
 					return;
@@ -88,7 +94,7 @@ std::function<void()> ibSchemaDatabase::Command(const ibSession& session, std::i
 				failure = _("Loading the database failed with an internal error.") + ibT("\n\n")
 					+ BackendErrorChain(ibString::FromUTF8(e.what()));
 			}
-			frame->ShowModalMessage(failure, _("Error"), wxOK | wxCENTRE | wxICON_ERROR);
+			frame->ShowModalMessage(failure, _("Error"), style::OK | style::Centre | style::IconError);
 		};
 	case ibProtocol::ibSchema::ibCommand::Save: {
 		// THE DUMP IS WRITTEN FIRST, into a file of the session's, and then taken down: the server cannot write where
@@ -107,23 +113,24 @@ std::function<void()> ibSchemaDatabase::Command(const ibSession& session, std::i
 				return;
 			ibTempFile file;
 			if (file.Create(id, true)) {
-				ibTempFileOutputStream stream(file);
-				if (applicationInstance->SaveDatabase(stream) && stream.Close()) {
+				ibTempFileWriter writer(file);
+				std::ostream stream(&writer);
+				if (applicationInstance->SaveDatabase(stream) && writer.Finish()) {
 					ibString taken = id;
 					if (RequestFile(frame, _("Save database file"), taken))
-						frame->ShowModalMessage(_("Data upload completed successfully!"), ibString(), wxOK | wxCENTRE);
+						frame->ShowModalMessage(_("Data upload completed successfully!"), ibString(), style::OK | style::Centre);
 					return;
 				}
 			}
 			frame->ShowModalMessage(_("Error when trying to upload data to a file!") + ibT("\n\n") + BackendErrorChain(),
-				_("Error"), wxOK | wxCENTRE | wxICON_ERROR);
+				_("Error"), style::OK | style::Centre | style::IconError);
 		};
 	}
 	case ibProtocol::ibSchema::ibCommand::Clear:
 		return [applicationInstance]() {
 			ibBackendDocFrame* const frame = ibSession::CurrentFrame();
 			if (frame == nullptr || frame->ShowModalMessage(_("Are you sure you want to clear the database?"),
-				ibString(), wxYES_NO | wxCENTRE | wxICON_QUESTION) != wxYES)
+				ibString(), style::YesNo | style::Centre | style::IconQuestion) != style::Yes)
 				return;
 			// …the open tabs closed first, as the desktop's Clear closed its windows: the frame's Close All, each tab by the
 			// road its cross takes (a modified one asks) — one kept, nothing cleared.
@@ -131,10 +138,10 @@ std::function<void()> ibSchemaDatabase::Command(const ibSession& session, std::i
 			if (client != nullptr && !client->CloseAll())
 				return;
 			if (applicationInstance->ClearDatabase())
-				frame->ShowModalMessage(_("Database cleared successfully!"), ibString(), wxOK | wxCENTRE);
+				frame->ShowModalMessage(_("Database cleared successfully!"), ibString(), style::OK | style::Centre);
 			else
 				frame->ShowModalMessage(_("Error when trying to clear database!") + ibT("\n\n") + BackendErrorChain(),
-					_("Error"), wxOK | wxCENTRE | wxICON_ERROR);
+					_("Error"), style::OK | style::Centre | style::IconError);
 		};
 	default:
 		break;

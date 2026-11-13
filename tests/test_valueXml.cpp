@@ -358,7 +358,7 @@ TEST(XmlReader, AnUnknownEncodingIsRefusedWithTheListOfKnownOnes) {
 	reader->OpenFile(f.path);
 	const ibString refusal = RefusalOf([&] { reader->Read(); });
 	EXPECT_NE(refusal.Find(ibT("koi8-u")), wxNOT_FOUND) << refusal;
-	EXPECT_NE(refusal.Find(ibXmlCodePage::Supported()), wxNOT_FOUND) << refusal;
+	EXPECT_NE(refusal.Find(ibCodePage::Supported()), wxNOT_FOUND) << refusal;
 }
 
 // The encoding's other names are the engine's (xmlEncoding.h), not expat's: in a declaration only the name expat

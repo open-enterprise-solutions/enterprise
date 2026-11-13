@@ -63,7 +63,7 @@ public:
 
 // 4-arg (legacy): explicit clsid.
 #define CONTROL_TYPE_REGISTER_4(class_info, class_name, class_type, clsid)\
-GENERATE_REGISTER(ibT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_c_), new ibCtorControlType<class_info>(ibT(class_name), ibT(class_type), clsid))
+GENERATE_REGISTER(ibT(class_name), ibMAKE_UNIQUE_NAME(s_cs_reg_c_), new ibCtorControlType<class_info>(ibT(class_name), ibT(class_type), clsid))
 // 3-arg (new): clsid = ib_clsid_hash(class_name).
 #define CONTROL_TYPE_REGISTER_3(class_info, class_name, class_type)\
 CONTROL_TYPE_REGISTER_4(class_info, class_name, class_type, control_to_clsid(class_name))
@@ -71,7 +71,7 @@ CONTROL_TYPE_REGISTER_4(class_info, class_name, class_type, control_to_clsid(cla
 
 // 4-arg (legacy): explicit clsid.
 #define S_CONTROL_TYPE_REGISTER_4(class_info, class_name, class_type, clsid)\
-GENERATE_REGISTER(ibT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_sc_), new ibCtorSystemControlType<class_info>(ibT(class_name), ibT(class_type), clsid))
+GENERATE_REGISTER(ibT(class_name), ibMAKE_UNIQUE_NAME(s_cs_reg_sc_), new ibCtorSystemControlType<class_info>(ibT(class_name), ibT(class_type), clsid))
 // 3-arg (new): clsid = ib_clsid_hash(class_name).
 #define S_CONTROL_TYPE_REGISTER_3(class_info, class_name, class_type)\
 S_CONTROL_TYPE_REGISTER_4(class_info, class_name, class_type, control_to_clsid(class_name))

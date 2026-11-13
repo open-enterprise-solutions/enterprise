@@ -635,7 +635,7 @@ ibNumber::ibNumber(double v)
 
 	// `%g` PRINTS THE DECIMAL SEPARATOR OF THE PROCESS LOCALE, and the parser
 	// below reads only the dot. A host sets a locale on startup
-	// (ibApplicationInstance -> wxLocale::Init -> setlocale), so under any language
+	// (ibApplicationHost::InitLocale -> ibSetLocale -> setlocale), so under any language
 	// that separates with a comma — Russian, Ukrainian, German, French — this
 	// produced "0,25", the parse failed, and the value stayed silently ZERO.
 	//
@@ -1459,7 +1459,7 @@ ibNumber ibNumber::Ln() const
 	if (!std::isfinite(seed)) {
 		const ibString s = Abs().ToString();
 		const int dot = s.Find(ibT('.'));
-		const int intDigits = (dot == wxNOT_FOUND) ? static_cast<int>(s.length()) : dot;
+		const int intDigits = (dot == ibNOT_FOUND) ? static_cast<int>(s.length()) : dot;
 		seed = (intDigits - 1) * 2.302585092994046;   // (digits - 1) * ln(10)
 	}
 	ibNumber y(seed);
@@ -2077,7 +2077,7 @@ bool ibNumber::SetBuffer(const void* data, size_t len)
 	// kMaxDecodedExp10. Out of range, this is not a number and never was; saying so HERE keeps the
 	// fault at the cell that produced it instead of at whoever later asks for its text.
 	if (b.exp > kMaxDecodedExp10 || b.exp < -kMaxDecodedExp10) {
-		wxASSERT_MSG(false, wxT("ibNumber::SetBuffer - exponent out of range (corrupt blob)"));
+		ibASSERT_MSG(false, ibT("ibNumber::SetBuffer - exponent out of range (corrupt blob)"));
 		return false;
 	}
 

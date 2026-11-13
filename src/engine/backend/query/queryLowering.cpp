@@ -1517,9 +1517,9 @@ ibValue EvalValue(const ibQueryAstExpr& e, const std::map<ibString, ibValue>& pa
 			bool made = false;
 			try { enumeration = ibValue::CreateObject(e.m_path[0]); made = true; }
 			catch (...) { enumeration = ibValue(); }
-			const long member = made ? enumeration.FindProp(e.m_path[1]) : wxNOT_FOUND;
+			const long member = made ? enumeration.FindProp(e.m_path[1]) : ibNOT_FOUND;
 			ibValue out;
-			if (member == wxNOT_FOUND || !enumeration.GetPropVal(member, out))
+			if (member == ibNOT_FOUND || !enumeration.GetPropVal(member, out))
 				ThrowQueryException(e.m_line, e.m_col, ibString::Format(
 					_("value(%s.%s): '%s' is not a member of a system enumeration '%s'"),
 					e.m_path[0], e.m_path[1], e.m_path[1], e.m_path[0]));

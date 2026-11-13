@@ -26,8 +26,6 @@
 #include "backend/backend.h"
 #include "session.h"
 
-#include <wx/string.h>
-
 class BACKEND_API ibSessionPolicy {
 public:
 	virtual ~ibSessionPolicy() = default;

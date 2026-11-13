@@ -3140,7 +3140,10 @@ void ibTreeListMainWindow::SetDragItem(const wxTreeItemId & item) {
 void ibTreeListMainWindow::CalculateLineHeight() {
 	wxClientDC dc(this);
 	dc.SetFont(m_normalFont);
-	m_lineHeight = (int)(dc.GetCharHeight() + m_linespacing);
+	// SEAM vs the original: the row is the theme's for the text (GetListboxItemHeight) - the lists', the trees' and the
+	// property grid's as well; a picture taller than that, with the line spacing, makes it taller still. It was the
+	// text's height, the line spacing and two pixels more (a tenth more from 30)
+	m_lineHeight = GetRenderer()->GetListboxItemHeight(dc.GetCharHeight());
 
 	if (m_imageListNormal) {
 		// Calculate a m_lineHeight value from the normal Image sizes.
@@ -3164,13 +3167,6 @@ void ibTreeListMainWindow::CalculateLineHeight() {
 			m_imageListButtons->GetSize(i, width, height);
 			if (height > m_lineHeight) m_lineHeight = height + m_linespacing;
 		}
-	}
-
-	if (m_lineHeight < 30) { // add 10% space if greater than 30 pixels
-		m_lineHeight += 2; // minimal 2 pixel space
-	}
-	else {
-		m_lineHeight += m_lineHeight / 10; // otherwise 10% space
 	}
 }
 

@@ -1,7 +1,7 @@
 #include "firebirdBootstrap.h"
 
 #include "core/fileSystem.h"
-#include "core/startProcess.h"   // ibSetEnv
+#include "core/system.h"   // ibSetEnv
 
 #ifdef __IBMSW__
 #include <windows.h>

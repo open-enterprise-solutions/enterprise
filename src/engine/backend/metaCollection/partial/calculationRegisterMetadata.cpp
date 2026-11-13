@@ -20,7 +20,7 @@
 // attributes — survived, because it asks `GetTypeCtor(chart, Reference)` for the type.
 void ibValueMetaObjectCalculationRegister::SetChartOfCalculationTypes(const ibMetaID& chartMetaID)
 {
-	if (chartMetaID == wxNOT_FOUND || m_metaData == nullptr)
+	if (chartMetaID == ibNOT_FOUND || m_metaData == nullptr)
 		return;
 	const ibValueMetaObject* chart = m_metaData->FindAnyObjectByFilter(chartMetaID);
 	if (chart == nullptr)
@@ -90,7 +90,7 @@ ibValueMetaObjectCalculationRegister::~ibValueMetaObjectCalculationRegister()
 
 ibValueMetaObjectFormBase* ibValueMetaObjectCalculationRegister::GetDefaultFormByID(const ibFormID& id) const
 {
-	if (id == eFormList && m_propertyDefFormList->GetValueAsInteger() != wxNOT_FOUND)
+	if (id == eFormList && m_propertyDefFormList->GetValueAsInteger() != ibNOT_FOUND)
 		return FindFormObjectByFilter(m_propertyDefFormList->GetValueAsInteger());
 
 	return nullptr;
@@ -472,7 +472,7 @@ bool ibValueMetaObjectCalculationRegister::OnAfterCloseMetaObject()
 void ibValueMetaObjectCalculationRegister::OnCreateFormObject(ibValueMetaObjectFormBase* metaForm)
 {
 	if (metaForm->GetTypeForm() == ibValueMetaObjectCalculationRegister::eFormList
-		&& m_propertyDefFormList->GetValueAsInteger() == wxNOT_FOUND)
+		&& m_propertyDefFormList->GetValueAsInteger() == ibNOT_FOUND)
 	{
 		m_propertyDefFormList->SetValue(metaForm->GetMetaID());
 	}
@@ -483,7 +483,7 @@ void ibValueMetaObjectCalculationRegister::OnRemoveMetaForm(ibValueMetaObjectFor
 	if (metaForm->GetTypeForm() == ibValueMetaObjectCalculationRegister::eFormList
 		&& m_propertyDefFormList->GetValueAsInteger() == metaForm->GetMetaID())
 	{
-		m_propertyDefFormList->SetValue(wxNOT_FOUND);
+		m_propertyDefFormList->SetValue(ibNOT_FOUND);
 	}
 }
 

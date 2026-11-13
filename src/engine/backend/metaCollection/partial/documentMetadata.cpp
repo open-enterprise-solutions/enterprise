@@ -47,13 +47,13 @@ ibValueMetaObjectDocument::~ibValueMetaObjectDocument()
 
 ibValueMetaObjectFormBase* ibValueMetaObjectDocument::GetDefaultFormByID(const ibFormID& id) const
 {
-	if (id == eFormObject && m_propertyDefFormObject->GetValueAsInteger() != wxNOT_FOUND) {
+	if (id == eFormObject && m_propertyDefFormObject->GetValueAsInteger() != ibNOT_FOUND) {
 		return FindFormObjectByFilter(m_propertyDefFormObject->GetValueAsInteger());
 	}
-	else if (id == eFormList && m_propertyDefFormList->GetValueAsInteger() != wxNOT_FOUND) {
+	else if (id == eFormList && m_propertyDefFormList->GetValueAsInteger() != ibNOT_FOUND) {
 		return FindFormObjectByFilter(m_propertyDefFormList->GetValueAsInteger());
 	}
-	else if (id == eFormSelect && m_propertyDefFormSelect->GetValueAsInteger() != wxNOT_FOUND) {
+	else if (id == eFormSelect && m_propertyDefFormSelect->GetValueAsInteger() != ibNOT_FOUND) {
 		return FindFormObjectByFilter(m_propertyDefFormSelect->GetValueAsInteger());
 	}
 
@@ -332,17 +332,17 @@ bool ibValueMetaObjectDocument::OnAfterCloseMetaObject()
 void ibValueMetaObjectDocument::OnCreateFormObject(ibValueMetaObjectFormBase* metaForm)
 {
 	if (metaForm->GetTypeForm() == ibValueMetaObjectDocument::eFormObject
-		&& m_propertyDefFormObject->GetValueAsInteger() == wxNOT_FOUND)
+		&& m_propertyDefFormObject->GetValueAsInteger() == ibNOT_FOUND)
 	{
 		m_propertyDefFormObject->SetValue(metaForm->GetMetaID());
 	}
 	else if (metaForm->GetTypeForm() == ibValueMetaObjectDocument::eFormList
-		&& m_propertyDefFormList->GetValueAsInteger() == wxNOT_FOUND)
+		&& m_propertyDefFormList->GetValueAsInteger() == ibNOT_FOUND)
 	{
 		m_propertyDefFormList->SetValue(metaForm->GetMetaID());
 	}
 	else if (metaForm->GetTypeForm() == ibValueMetaObjectDocument::eFormSelect
-		&& m_propertyDefFormSelect->GetValueAsInteger() == wxNOT_FOUND)
+		&& m_propertyDefFormSelect->GetValueAsInteger() == ibNOT_FOUND)
 	{
 		m_propertyDefFormSelect->SetValue(metaForm->GetMetaID());
 	}
@@ -353,17 +353,17 @@ void ibValueMetaObjectDocument::OnRemoveMetaForm(ibValueMetaObjectFormBase* meta
 	if (metaForm->GetTypeForm() == ibValueMetaObjectDocument::eFormObject
 		&& m_propertyDefFormObject->GetValueAsInteger() == metaForm->GetMetaID())
 	{
-		m_propertyDefFormObject->SetValue(wxNOT_FOUND);
+		m_propertyDefFormObject->SetValue(ibNOT_FOUND);
 	}
 	else if (metaForm->GetTypeForm() == ibValueMetaObjectDocument::eFormList
 		&& m_propertyDefFormList->GetValueAsInteger() == metaForm->GetMetaID())
 	{
-		m_propertyDefFormList->SetValue(wxNOT_FOUND);
+		m_propertyDefFormList->SetValue(ibNOT_FOUND);
 	}
 	else if (metaForm->GetTypeForm() == ibValueMetaObjectDocument::eFormSelect
 		&& m_propertyDefFormSelect->GetValueAsInteger() == metaForm->GetMetaID())
 	{
-		m_propertyDefFormSelect->SetValue(wxNOT_FOUND);
+		m_propertyDefFormSelect->SetValue(ibNOT_FOUND);
 	}
 }
 

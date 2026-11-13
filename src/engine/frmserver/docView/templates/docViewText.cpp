@@ -7,8 +7,6 @@
 // ibTextEditView implementation
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibTextEditView, ibView);
-
 bool ibTextEditView::OnCreate(ibDocument* doc, long flags)
 {
 	m_readOnly = flags == ibDOC_READONLY;
@@ -45,13 +43,9 @@ bool ibTextEditView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDa
 // ibTextDocument: ibDocument and its text married
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_CLASS(ibTextDocument, ibDocument);
-
 // ----------------------------------------------------------------------------
 // ibTextFileDocument implementation
 // ----------------------------------------------------------------------------
-
-wxIMPLEMENT_DYNAMIC_CLASS(ibTextFileDocument, ibTextDocument);
 
 bool ibTextFileDocument::OnCreate(const ibString& path, long flags)
 {
@@ -66,7 +60,7 @@ bool ibTextFileDocument::OnCreate(const ibString& path, long flags)
 bool ibTextFileDocument::DoSaveDocument(const ibString& filename)
 {
 	ibTempFile file;
-	if (!file.Create(filename, true) || !file.Write(m_text, wxConvUTF8))
+	if (!file.Create(filename, true) || !file.Write(m_text))
 		return false;
 
 	return true;
@@ -75,7 +69,7 @@ bool ibTextFileDocument::DoSaveDocument(const ibString& filename)
 bool ibTextFileDocument::DoOpenDocument(const ibString& filename)
 {
 	ibTempFile file(filename);
-	if (!file.IsOpened() || !file.ReadAll(&m_text, wxConvUTF8))
+	if (!file.IsOpened() || !file.ReadAll(&m_text))
 		return false;
 
 	Modify(false);

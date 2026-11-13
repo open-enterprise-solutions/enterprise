@@ -137,7 +137,7 @@ ibPGPictureProperty::ibPGPictureProperty(const wxString& label,
 	// …and the configuration's — a server's property always has an owner, the object its row is of.
 	{
 		ibPGChoiceEntry& entry = configurationChoices.AddAsSorted(wxEmptyString, system_config++);
-		m_confChoices.insert_or_assign(entry.GetValue(), wxNullGuid);
+		m_confChoices.insert_or_assign(entry.GetValue(), ibNullGuid);
 
 		// The configuration's pictures — the picture metaobjects of the owner's configuration, or of the one it extends:
 		// the server's, brought by the row by name and guid.

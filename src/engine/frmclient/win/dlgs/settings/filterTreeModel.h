@@ -4,6 +4,8 @@
 #include "core/tabular/tabularModelView.h"
 #include "frmclient/backend/backend_composition.h"   // ibFilterDescription — the filter IS this; its literal, restored
 
+#include <wx/object.h>   // wxObjectDataPtr — the nodes held
+
 #include <map>
 #include <vector>
 

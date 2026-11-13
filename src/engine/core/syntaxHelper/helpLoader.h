@@ -56,7 +56,7 @@ constexpr int kIbHelpSchemaVersion = 1;
 //
 // `localeCode` — canonical OES locale string ("ru-RU", "uk-UA", "en-US").
 // The loader is responsible for normalising any platform-locale string
-// (wxLocale returns "en" or "en_US") to one of the canonical forms via
+// (ibSetLocale returns "en_GB" or "ru_RU") to one of the canonical forms via
 // helpers in the loader implementation.
 //
 // `className` — the side's registry of classes, an article's class_id checked by it (ibHelpClassName); none — taken

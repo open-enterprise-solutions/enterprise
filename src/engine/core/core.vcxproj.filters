@@ -76,9 +76,13 @@
     <Filter Include="xml">
       <UniqueIdentifier>{b5d2e8f1-4c63-4e9a-8f17-2a9c6e3b0d48}</UniqueIdentifier>
     </Filter>
+    <Filter Include="zip">
+      <UniqueIdentifier>{7c3e9a51-2d84-4f6b-9e07-a1b5c8d2f364}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="build.cpp" />
+    <ClCompile Include="codePage.cpp" />
     <ClCompile Include="compiler\blockSyntaxLINQ.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
@@ -167,6 +171,7 @@
     </ClCompile>
     <ClCompile Include="fileKind.cpp" />
     <ClCompile Include="dynamicLibrary.cpp" />
+    <ClCompile Include="fileConfig.cpp" />
     <ClCompile Include="fileSystem.cpp" />
     <ClCompile Include="fnumber.cpp" />
     <ClCompile Include="formatString.cpp" />
@@ -190,8 +195,13 @@
     <ClCompile Include="job\jobScheduleRules.cpp">
       <Filter>job</Filter>
     </ClCompile>
-    <ClCompile Include="localization.cpp" />
     <ClCompile Include="localization\dictionary.cpp">
+      <Filter>localization</Filter>
+    </ClCompile>
+    <ClCompile Include="localization\locale.cpp">
+      <Filter>localization</Filter>
+    </ClCompile>
+    <ClCompile Include="localization\localization.cpp">
       <Filter>localization</Filter>
     </ClCompile>
     <ClCompile Include="memory\lz\lzhuf.cpp">
@@ -234,6 +244,8 @@
     <ClCompile Include="pictureRegistry.cpp" />
     <ClCompile Include="launchTicket.cpp" />
     <ClCompile Include="startProcess.cpp" />
+    <ClCompile Include="regEx.cpp" />
+    <ClCompile Include="system.cpp" />
     <ClCompile Include="style\style.cpp">
       <Filter>style</Filter>
     </ClCompile>
@@ -289,6 +301,9 @@
     <ClCompile Include="xml\xmlText.cpp">
       <Filter>xml</Filter>
     </ClCompile>
+    <ClCompile Include="zip\zip.cpp">
+      <Filter>zip</Filter>
+    </ClCompile>
     <ClCompile Include="server\listener.cpp">
       <Filter>server</Filter>
     </ClCompile>
@@ -326,6 +341,7 @@
   <ItemGroup>
     <ClInclude Include="build.h" />
     <ClInclude Include="clsid.h" />
+    <ClInclude Include="codePage.h" />
     <ClInclude Include="compiler\blockSyntaxLINQ.h">
       <Filter>compiler</Filter>
     </ClInclude>
@@ -400,12 +416,6 @@
     <ClInclude Include="diagnostics\crashGuard.h">
       <Filter>diagnostics</Filter>
     </ClInclude>
-    <ClInclude Include="diagnostics\oesApp.h">
-      <Filter>diagnostics</Filter>
-    </ClInclude>
-    <ClInclude Include="diagnostics\oesConsole.h">
-      <Filter>diagnostics</Filter>
-    </ClInclude>
     <ClInclude Include="diagnostics\debugTrace.h">
       <Filter>diagnostics</Filter>
     </ClInclude>
@@ -445,12 +455,21 @@
     <ClInclude Include="guid.h" />
     <ClInclude Include="fileKind.h" />
     <ClInclude Include="dynamicLibrary.h" />
+    <ClInclude Include="fileConfig.h" />
     <ClInclude Include="fileSystem.h" />
     <ClInclude Include="job\jobSchedule.h">
       <Filter>job</Filter>
     </ClInclude>
-    <ClInclude Include="localization.h" />
     <ClInclude Include="localization\dictionary.h">
+      <Filter>localization</Filter>
+    </ClInclude>
+    <ClInclude Include="localization\languageTable.h">
+      <Filter>localization</Filter>
+    </ClInclude>
+    <ClInclude Include="localization\locale.h">
+      <Filter>localization</Filter>
+    </ClInclude>
+    <ClInclude Include="localization\localization.h">
       <Filter>localization</Filter>
     </ClInclude>
     <ClInclude Include="logger\loggerQuery.h">
@@ -499,9 +518,13 @@
     <ClInclude Include="pictureRegistry.h" />
     <ClInclude Include="launchTicket.h" />
     <ClInclude Include="propertyChoiceMode.h" />
+    <ClInclude Include="refCounter.h" />
+    <ClInclude Include="regEx.h" />
     <ClInclude Include="roleCompositionMode.h" />
+    <ClInclude Include="scopeGuard.h" />
     <ClInclude Include="selectorDataType.h" />
     <ClInclude Include="startProcess.h" />
+    <ClInclude Include="system.h" />
     <ClInclude Include="timeZone.h" />
     <ClInclude Include="typeName.h" />
     <ClInclude Include="variant.h" />
@@ -577,6 +600,9 @@
     </ClInclude>
     <ClInclude Include="xml\expat\expat_config.h">
       <Filter>xml</Filter>
+    </ClInclude>
+    <ClInclude Include="zip\zip.h">
+      <Filter>zip</Filter>
     </ClInclude>
     <ClInclude Include="server\clusterControl.h">
       <Filter>server</Filter>

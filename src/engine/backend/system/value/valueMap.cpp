@@ -108,13 +108,13 @@ long ibValueMap::FindWithHash(const ibValue& key, const size_t hash) const
 		for (auto it = range.first; it != range.second; ++it)
 			if (KeyMatches(m_listValue[it->second].key, key))
 				return (long)it->second;
-		return wxNOT_FOUND;
+		return ibNOT_FOUND;
 	}
 	// Walked: the stored hashes decide almost every entry, and a key's text is read only where two agree.
 	for (size_t at = 0; at < m_listValue.size(); ++at)
 		if (m_listValue[at].hash == hash && KeyMatches(m_listValue[at].key, key))
 			return (long)at;
-	return wxNOT_FOUND;
+	return ibNOT_FOUND;
 }
 
 // A container with no index (fewer than kIndexMin entries) is walked: the same rule of equality, no hash.
@@ -123,7 +123,7 @@ long ibValueMap::FindByWalk(const ibValue& key) const
 	for (size_t at = 0; at < m_listValue.size(); ++at)
 		if (KeyMatches(m_listValue[at].key, key))
 			return (long)at;
-	return wxNOT_FOUND;
+	return ibNOT_FOUND;
 }
 
 long ibValueMap::IndexOf(const ibValue& key) const

@@ -37,7 +37,7 @@ ibValueMetaObjectAccumulationRegister::~ibValueMetaObjectAccumulationRegister()
 
 ibValueMetaObjectFormBase* ibValueMetaObjectAccumulationRegister::GetDefaultFormByID(const ibFormID& id) const 
 {
-	if (id == eFormList && m_propertyDefFormList->GetValueAsInteger() != wxNOT_FOUND) {
+	if (id == eFormList && m_propertyDefFormList->GetValueAsInteger() != ibNOT_FOUND) {
 		return FindFormObjectByFilter(m_propertyDefFormList->GetValueAsInteger());
 	}
 
@@ -336,7 +336,7 @@ bool ibValueMetaObjectAccumulationRegister::OnAfterCloseMetaObject()
 void ibValueMetaObjectAccumulationRegister::OnCreateFormObject(ibValueMetaObjectFormBase* metaForm)
 {
 	if (metaForm->GetTypeForm() == ibValueMetaObjectAccumulationRegister::eFormList
-		&& m_propertyDefFormList->GetValueAsInteger() == wxNOT_FOUND)
+		&& m_propertyDefFormList->GetValueAsInteger() == ibNOT_FOUND)
 	{
 		m_propertyDefFormList->SetValue(metaForm->GetMetaID());
 	}
@@ -347,7 +347,7 @@ void ibValueMetaObjectAccumulationRegister::OnRemoveMetaForm(ibValueMetaObjectFo
 	if (metaForm->GetTypeForm() == ibValueMetaObjectAccumulationRegister::eFormList
 		&& m_propertyDefFormList->GetValueAsInteger() == metaForm->GetMetaID())
 	{
-		m_propertyDefFormList->SetValue(wxNOT_FOUND);
+		m_propertyDefFormList->SetValue(ibNOT_FOUND);
 	}
 }
 #include "accumulationRegisterManager.h"

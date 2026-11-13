@@ -31,7 +31,7 @@
 ibString ibValueMetaObjectRecordDataRef::GetPhysicalTableName() const
 {
 	const ibString& className = GetClassName();
-	wxASSERT(m_metaId != 0);
+	ibASSERT(m_metaId != 0);
 	return ibString::Format(ibT("%s%i"),
 		className, GetMetaID());
 }
@@ -116,7 +116,7 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::ResolveQueryConstant(const 
 ibString ibValueMetaObjectRegisterData::GetPhysicalTableName() const
 {
 	const ibString& className = GetClassName();
-	wxASSERT(m_metaId != 0);
+	ibASSERT(m_metaId != 0);
 	return ibString::Format(ibT("%s%i"),
 		className, GetMetaID());
 }

@@ -2628,14 +2628,18 @@ wxCoord ibListMainWindow::GetLineHeight() const
         wxCoord y;
         dc.GetTextExtent(wxT("H"), nullptr, &y);
 
+        // SEAM vs wx: the row is the theme's for the text (GetListboxItemHeight) - the trees' and the property grid's
+        // as well; a picture taller than that, with the extra height, makes it taller still. wx made it the taller of
+        // the two and the extra height
+        y = self->GetRenderer()->GetListboxItemHeight(y);
+
         if ( m_small_images && m_small_images->GetImageCount() )
         {
             int iw = 0, ih = 0;
             m_small_images->GetImageLogicalSize(this, iw, ih);
-            y = wxMax(y, ih);
+            y = wxMax(y, ih + EXTRA_HEIGHT);
         }
 
-        y += EXTRA_HEIGHT;
         self->m_lineHeight = y + LINE_SPACING;
     }
 

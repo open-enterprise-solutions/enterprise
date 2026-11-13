@@ -49,6 +49,8 @@ bool ibValueWindow::ReadData(const ibDataNode& node)
 	m_propertyFont->SetNodeValue(node.GetProperty(m_propertyFont->GetName()));
 	m_propertyFG->SetNodeValue(node.GetProperty(m_propertyFG->GetName()));
 	m_propertyBG->SetNodeValue(node.GetProperty(m_propertyBG->GetName()));
+	if (m_propertyBG->GetValueAsColour() == ibFormerStyleBGColour)
+		m_propertyBG->SetValue(ibDefaultStyleBGColour);
 	m_propertyTooltip->SetNodeValue(node.GetProperty(m_propertyTooltip->GetName()));
 	m_propertyEnabled->SetNodeValue(node.GetProperty(m_propertyEnabled->GetName()));
 	m_propertyVisible->SetNodeValue(node.GetProperty(m_propertyVisible->GetName()));

@@ -962,12 +962,12 @@ long ibValueCOM::FindProp(const ibString& strPropName) const
 {
 #ifdef __IBMSW__
 	if (m_dispatch == nullptr)
-		return wxNOT_FOUND;
+		return ibNOT_FOUND;
 	LPOLESTR name = const_cast<LPOLESTR>(strPropName.wc_str());
 	DISPID dispid = DISPID_UNKNOWN;
 	const HRESULT hr = m_dispatch->GetIDsOfNames(IID_NULL, &name, 1, LOCALE_USER_DEFAULT, &dispid);
 	if (hr == DISP_E_UNKNOWNNAME || hr == DISP_E_MEMBERNOTFOUND)
-		return wxNOT_FOUND;
+		return ibNOT_FOUND;
 	// Any other failure is the server's answer, not "no such member": one that rejected the call — busy, a dialog of its
 	// own open — is named with its reason (2026-11-03: an Excel behind its activation wizard read as "field not found").
 	if (FAILED(hr))
@@ -975,7 +975,7 @@ long ibValueCOM::FindProp(const ibString& strPropName) const
 	m_memberNames[dispid] = strPropName;
 	return dispid;
 #else
-	return wxNOT_FOUND;
+	return ibNOT_FOUND;
 #endif
 }
 

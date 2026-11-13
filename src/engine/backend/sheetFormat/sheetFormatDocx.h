@@ -32,8 +32,8 @@ public:
 	// See above — this one only goes out.
 	virtual bool CanRead() const override { return false; }
 
-	virtual bool Read(wxInputStream& input, ibSpreadsheetDescription& sheet) const override;
-	virtual bool Write(wxOutputStream& output, const ibSpreadsheetDescription& sheet) const override;
+	virtual bool Read(std::istream& input, ibSpreadsheetDescription& sheet) const override;
+	virtual bool Write(std::ostream& output, const ibSpreadsheetDescription& sheet) const override;
 };
 
 #endif // !__SHEET_FORMAT_DOCX_H__

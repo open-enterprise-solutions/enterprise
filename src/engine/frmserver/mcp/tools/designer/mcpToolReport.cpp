@@ -660,7 +660,7 @@ bool ValueForPath(const ibCompositionDescription& composition, const ibString& p
 	// kind, object, then the predefined item's name (or `EmptyRef` for the empty reference). Three
 	// parts, because a name alone cannot say which catalogue it belongs to, and the caller already
 	// knows all three from the tree.
-	if (text.Find(ibT('.')) != wxNOT_FOUND) {
+	if (text.Find(ibT('.')) != ibNOT_FOUND) {
 
 		const ibString kind = text.BeforeFirst(ibT('.'));
 		const ibString rest = text.AfterFirst(ibT('.'));

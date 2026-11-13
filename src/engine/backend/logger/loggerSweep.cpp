@@ -1,8 +1,7 @@
 #include "backend/logger/loggerSweep.h"
 
 #include "core/fileSystem.h"   // ibDir, ibRemoveFile
-
-#include <wx/datetime.h>
+#include "core/fdatetime.h"    // ibDateTime — the cutoff and a file's month, on the machine's clock
 
 namespace {
 
@@ -28,8 +27,7 @@ int ibLoggerSweep::RunOnce(const ibString& dir, int retentionDays)
     // Cutoff = first instant we still want to keep. A file's month
     // bucket must END strictly after cutoff to survive — i.e. any
     // file whose bucket's last day is before cutoff goes away.
-    const wxDateTime cutoff = wxDateTime::Now()
-        .Subtract(wxDateSpan::Days(retentionDays));
+    const ibDateTime cutoff = ibDateTime::Now().AddDays(-retentionDays);
 
     ibDir d(dir);
     if (!d.IsOpened()) return 0;
@@ -42,9 +40,7 @@ int ibLoggerSweep::RunOnce(const ibString& dir, int retentionDays)
         if (ParseLogFileMonth(name, y, m)) {
             // Bucket end = first day of (year, month+1). If that's <= cutoff
             // the whole bucket is older than retention → delete.
-            wxDateTime bucketStart(1, static_cast<wxDateTime::Month>(m - 1), y, 0, 0, 0);
-            wxDateTime bucketEnd = bucketStart;
-            bucketEnd.Add(wxDateSpan::Month());
+            const ibDateTime bucketEnd = m == 12 ? ibDateTime(y + 1, 1, 1) : ibDateTime(y, m + 1, 1);
             if (bucketEnd <= cutoff) {
                 const ibString path = dir + ibFILE_SEP_PATH + name;
                 if (ibRemoveFile(path)) ++removed;

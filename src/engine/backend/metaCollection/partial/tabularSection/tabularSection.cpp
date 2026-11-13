@@ -94,11 +94,11 @@ bool ibValueTabularSectionDataObjectBase::GetAt(const ibValue& varKeyValue, ibVa
 ibClassID ibValueTabularSectionDataObjectBase::GetClassType() const
 {
 	const ibMetaData* metaData = m_metaTable->GetMetaData();
-	wxASSERT(metaData);
+	ibASSERT(metaData);
 	if (m_metaTable->IsAllowed()) {
 		const ibCtorMetaValueType* clsFactory =
 			metaData->GetTypeCtor(m_metaTable, ibCtorObjectMetaType::ibCtorObjectMetaType_TabularSection);
-		wxASSERT(clsFactory);
+		ibASSERT(clsFactory);
 		return clsFactory->GetClassType();
 	}
 	return 0;
@@ -107,11 +107,11 @@ ibClassID ibValueTabularSectionDataObjectBase::GetClassType() const
 ibString ibValueTabularSectionDataObjectBase::GetClassName() const
 {
 	const ibMetaData* metaData = m_metaTable->GetMetaData();
-	wxASSERT(metaData);
+	ibASSERT(metaData);
 	if (m_metaTable->IsAllowed()) {
 		const ibCtorMetaValueType* clsFactory =
 			metaData->GetTypeCtor(m_metaTable, ibCtorObjectMetaType::ibCtorObjectMetaType_TabularSection);
-		wxASSERT(clsFactory);
+		ibASSERT(clsFactory);
 		return clsFactory->GetClassName();
 	}
 	return _("<deleted metaobject>");
@@ -121,10 +121,10 @@ ibString ibValueTabularSectionDataObjectBase::GetString() const
 {
 	if (m_metaTable->IsAllowed()) {
 		const ibMetaData* metaData = m_metaTable->GetMetaData();
-		wxASSERT(metaData);
+		ibASSERT(metaData);
 		const ibCtorMetaValueType* clsFactory =
 			metaData->GetTypeCtor(m_metaTable, ibCtorObjectMetaType::ibCtorObjectMetaType_TabularSection);
-		wxASSERT(clsFactory);
+		ibASSERT(clsFactory);
 		return clsFactory->GetClassName();
 	}
 	return _("<deleted metaobject>");
@@ -140,7 +140,7 @@ bool ibValueTabularSectionDataObjectBase::SetValueByMetaID(const ibDataViewItem&
 		
 		if (node != nullptr) {
 			const ibValueMetaObjectAttributeBase* attribute = ibSectionColumnById(m_metaTable, id);
-			wxASSERT(attribute);
+			ibASSERT(attribute);
 			if (attribute == nullptr) return false;
 			// …narrowed by the column's link, with THIS ROW as the holder — a value column typed by the
 			// kind column beside it takes the kind of its OWN row (choiceLinkResolver.h).
@@ -308,7 +308,7 @@ bool ibValueTabularSectionDataObjectBase::LoadDataFromTable(ibValueModel* srcTab
 	std::vector<ibString> columnName;
 	for (unsigned int idx = 0; idx < colData->GetColumnCount(); idx++) {
 		ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo = colData->GetColumnInfo(idx);
-		wxASSERT(colInfo);
+		ibASSERT(colInfo);
 		if (m_recordColumnCollection->GetColumnByName(colInfo->GetColumnName()) != nullptr) {
 			columnName.push_back(colInfo->GetColumnName());
 		}
@@ -322,7 +322,7 @@ bool ibValueTabularSectionDataObjectBase::LoadDataFromTable(ibValueModel* srcTab
 			ibValue cRetValue;
 			if (srcTable->GetValueByMetaID(srcItem, srcTable->GetColumnIDByName(colName), cRetValue)) {
 				const ibMetaID& id = GetColumnIDByName(colName);
-				if (id != wxNOT_FOUND) SetValueByMetaID(dstItem, id, cRetValue);
+				if (id != ibNOT_FOUND) SetValueByMetaID(dstItem, id, cRetValue);
 			}
 		}
 	}
@@ -336,7 +336,7 @@ ibValuePtr<ibValueModel> ibValueTabularSectionDataObjectBase::SaveDataToTable() 
 	ibValueModelColumnCollection* colData = valueTable->GetColumnCollection();
 	for (unsigned int idx = 0; idx < m_recordColumnCollection->GetColumnCount() - 1; idx++) {
 		ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo = m_recordColumnCollection->GetColumnInfo(idx);
-		wxASSERT(colInfo);
+		ibASSERT(colInfo);
 		ibValueModelColumnCollection::ibValueModelColumnInfo* newColInfo = colData->AddColumn(
 			colInfo->GetColumnName(), colInfo->GetColumnType(), colInfo->GetColumnCaption(), colInfo->GetColumnWidth()
 		);
@@ -348,13 +348,13 @@ ibValuePtr<ibValueModel> ibValueTabularSectionDataObjectBase::SaveDataToTable() 
 		const ibDataViewItem& dstItem = valueTable->GetItem(valueTable->AppendRow());
 		for (unsigned int col = 0; col < colData->GetColumnCount(); col++) {
 			ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo = colData->GetColumnInfo(col);
-			wxASSERT(colInfo);
+			ibASSERT(colInfo);
 			if (m_metaTable->IsNumberLine(colInfo->GetColumnID()))
 				continue;
 			ibValue cRetValue;
 			if (GetValueByMetaID(srcItem, colInfo->GetColumnID(), cRetValue)) {
 				const ibMetaID& id = GetColumnIDByName(colInfo->GetColumnName());
-				if (id != wxNOT_FOUND) valueTable->SetValueByMetaID(dstItem, id, cRetValue);
+				if (id != ibNOT_FOUND) valueTable->SetValueByMetaID(dstItem, id, cRetValue);
 			}
 		}
 	}
@@ -439,10 +439,10 @@ ibClassID ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectRe
 {
 	const ibValueMetaObject* metaTable = m_ownerTable->GetMetaObject();
 	const ibMetaData* metaData = metaTable->GetMetaData();
-	wxASSERT(metaData);
+	ibASSERT(metaData);
 	const ibCtorMetaValueType* clsFactory =
 		metaData->GetTypeCtor(metaTable, ibCtorObjectMetaType::ibCtorObjectMetaType_TabularSection_String);
-	wxASSERT(clsFactory);
+	ibASSERT(clsFactory);
 	return clsFactory->GetClassType();
 }
 
@@ -450,10 +450,10 @@ ibString ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectRet
 {
 	const ibValueMetaObject* metaTable = m_ownerTable->GetMetaObject();
 	const ibMetaData* metaData = metaTable->GetMetaData();
-	wxASSERT(metaData);
+	ibASSERT(metaData);
 	const ibCtorMetaValueType* clsFactory =
 		metaData->GetTypeCtor(metaTable, ibCtorObjectMetaType::ibCtorObjectMetaType_TabularSection_String);
-	wxASSERT(clsFactory);
+	ibASSERT(clsFactory);
 	return clsFactory->GetClassName();
 }
 
@@ -461,10 +461,10 @@ ibString ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectRet
 {
 	const ibValueMetaObject* metaTable = m_ownerTable->GetMetaObject();
 	const ibMetaData* metaData = metaTable->GetMetaData();
-	wxASSERT(metaData);
+	ibASSERT(metaData);
 	const ibCtorMetaValueType* clsFactory =
 		metaData->GetTypeCtor(metaTable, ibCtorObjectMetaType::ibCtorObjectMetaType_TabularSection_String);
-	wxASSERT(clsFactory);
+	ibASSERT(clsFactory);
 	return clsFactory->GetClassName();
 }
 
@@ -484,7 +484,7 @@ ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollec
 	m_ownerTable(ownerTable)
 {
 	const ibValueMetaObjectTableData* metaTable = m_ownerTable->GetMetaObject();
-	wxASSERT(metaTable);
+	ibASSERT(metaTable);
 	for (const auto object : metaTable->GetGenericAttributeArrayObject()) {
 		if (metaTable->IsNumberLine(object->GetMetaID()))
 			continue;
@@ -556,7 +556,7 @@ void ibCollectFilterDefaults(const std::vector<ibFilterNodeDescription>& nodes, 
 		}
 		if (node.m_comparison != ibComparisonKind_Equal) continue;
 		if (!node.m_left.IsField() || node.m_right.IsField()) continue;
-		if (node.m_left.m_path.Find(ibT('.')) != wxNOT_FOUND) continue;
+		if (node.m_left.m_path.Find(ibT('.')) != ibNOT_FOUND) continue;
 		out.emplace_back(node.m_left.m_path, ibStoredValue(node.m_right.m_value, metaData));
 	}
 }
@@ -585,7 +585,7 @@ long ibValueTabularSectionDataObjectBase::AppendRow(unsigned int before, const i
 			ibString field; ibQueryDimUnfold kind = ibQueryDimUnfold::Elements;
 			if (!GetModelComposer().GetGroupAt(i, field, kind) || field.IsEmpty()) continue;
 			const ibMetaID col = GetColumnIDByName(field);
-			if (col != wxNOT_FOUND)
+			if (col != ibNOT_FOUND)
 				rowData->AppendTableValue(col, ctx->GetTableValue(col));
 		}
 	}
@@ -599,7 +599,7 @@ long ibValueTabularSectionDataObjectBase::AppendRow(unsigned int before, const i
 	ibCollectFilterDefaults(GetModelComposer().GetCurrentFilterDesc().m_nodes, GetModelComposer().GetMetaData(), defaults);
 	for (const std::pair<ibString, ibValue>& one : defaults) {
 		const ibMetaID col = GetColumnIDByName(one.first);
-		if (col != wxNOT_FOUND)
+		if (col != ibNOT_FOUND)
 			rowData->AppendTableValue(col, one.second);
 	}
 

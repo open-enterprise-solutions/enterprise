@@ -7,8 +7,6 @@
 // ibHelpEditView implementation
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibHelpEditView, ibView);
-
 bool ibHelpEditView::OnCreate(ibDocument* doc, long flags)
 {
 	m_readOnly = flags == ibDOC_READONLY;
@@ -35,13 +33,9 @@ void ibHelpEditView::OnDraw(ibDataNode& frame)
 // ibHelpDocument: ibDocument and its text married
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_CLASS(ibHelpDocument, ibDocument);
-
 // ----------------------------------------------------------------------------
 // ibHelpFileDocument implementation
 // ----------------------------------------------------------------------------
-
-wxIMPLEMENT_DYNAMIC_CLASS(ibHelpFileDocument, ibHelpDocument);
 
 bool ibHelpFileDocument::OnCreate(const ibString& path, long flags)
 {
@@ -56,7 +50,7 @@ bool ibHelpFileDocument::OnCreate(const ibString& path, long flags)
 bool ibHelpFileDocument::DoSaveDocument(const ibString& filename)
 {
 	ibTempFile file;
-	if (!file.Create(filename, true) || !file.Write(m_text, wxConvUTF8))
+	if (!file.Create(filename, true) || !file.Write(m_text))
 		return false;
 
 	return true;
@@ -65,7 +59,7 @@ bool ibHelpFileDocument::DoSaveDocument(const ibString& filename)
 bool ibHelpFileDocument::DoOpenDocument(const ibString& filename)
 {
 	ibTempFile file(filename);
-	if (!file.IsOpened() || !file.ReadAll(&m_text, wxConvUTF8))
+	if (!file.IsOpened() || !file.ReadAll(&m_text))
 		return false;
 
 	Modify(false);

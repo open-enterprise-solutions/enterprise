@@ -3,7 +3,6 @@
 
 #include "backend/backend.h"
 
-#include <wx/string.h>
 #include "core/memory/memoryBuffer.h"
 
 // Log severity. Audit = business events (login / document save / DDL apply

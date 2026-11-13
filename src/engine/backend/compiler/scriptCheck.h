@@ -25,7 +25,6 @@
 #include "backend/backend_diagnostic.h"
 
 #include <vector>
-#include <wx/string.h>
 
 // TEXT ON ITS OWN. `moduleName` is what the messages are written against — pass
 // the name of the module being edited so a report reads the way the designer's

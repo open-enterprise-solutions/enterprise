@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <functional>   // the tree's two walks, each asking the other (BuildCategoryTree)
 #include <set>        // one posting per token per entry — see the token index
 #include <utility>
 
@@ -273,33 +274,109 @@ void ibHelpCorpus::BuildIndexes() {
 }
 
 // === BuildCategoryTree ======================================================
+//
+// A section holds its articles, and an article the ones that are its (2026-11-13, Max: "the forms, a button, and then
+// what is inside the button"). Every member had its class's categories, so the members of every class of a section were
+// one list ("com": ComObject's and ComSafeArray's methods in a row), an enum's values beside its type. An article stands
+// under its OWNER: the one it names (`ownerId` - a button's enum under the button), else the article whose id is its own
+// one segment shorter (`cls.Button.Title` under `cls.Button`, `enum.ButtonView.Hyperlink` under `enum.ButtonView`),
+// else none - and then in the categories it names. An article that has articles under it is a node of its own, keyed by
+// its id (`article`); one that has none is a leaf. An owner nobody wrote, or owners naming each other, leave the article
+// in its categories, and it is said.
 
 void ibHelpCorpus::BuildCategoryTree() {
-	for (const ibHelpEntry& e : m_entries) {
-		ibHelpCategory* cur = m_root.get();
-		for (const ibString& key : e.categoryKeys) {
-			// Find or create the child node for this key. Keep children
-			// sorted by key so the tree view shows a deterministic order.
-			auto it = std::lower_bound(
-			    cur->children.begin(), cur->children.end(), key,
-			    [](const std::unique_ptr<ibHelpCategory>& node,
-			       const ibString&                       k) {
-				    return node->key < k;
-			    });
-			if (it == cur->children.end() || (*it)->key != key) {
-				auto node = std::make_unique<ibHelpCategory>();
-				node->key = key;
-				// The localised name, when the dictionary has one. A key with no
-				// entry keeps an empty display name and the tree view falls back
-				// to the key — visibly untranslated rather than absent.
-				const auto named = m_categoryNames.find(key);
-				if (named != m_categoryNames.end())
-					node->displayName = named->second;
-				it        = cur->children.insert(it, std::move(node));
-			}
-			cur = it->get();
+	// The child of a node by its key, made where it is missing. Children are kept sorted by key so the tree view shows a
+	// deterministic order; a section takes the localised name the dictionary has for its key - a key with none keeps an
+	// empty display name and the tree view falls back to the key, visibly untranslated rather than absent.
+	const auto childOf = [this](ibHelpCategory* parent, const ibString& key, const ibHelpEntry* article) {
+		auto it = std::lower_bound(parent->children.begin(), parent->children.end(), key,
+			[](const std::unique_ptr<ibHelpCategory>& node, const ibString& k) { return node->key < k; });
+		if (it == parent->children.end() || (*it)->key != key) {
+			auto node = std::make_unique<ibHelpCategory>();
+			node->key = key;
+			node->article = article;
+			const auto named = article == nullptr ? m_categoryNames.find(key) : m_categoryNames.end();
+			if (named != m_categoryNames.end())
+				node->displayName = named->second;
+			it = parent->children.insert(it, std::move(node));
 		}
-		cur->entries.push_back(&e);
+		return it->get();
+	};
+	// A merged corpus carries its sources' words and then builds its own tree, so a word is said once.
+	const auto said = [this](const ibString& message) {
+		const bool already = std::any_of(m_loadErrors.begin(), m_loadErrors.end(),
+			[&message](const ibHelpLoadError& err) { return err.message == message; });
+		if (already)
+			return;
+		ibHelpLoadError warn;
+		warn.severity = ibHelpLoadSeverity::kWarning;
+		warn.message  = message;
+		m_loadErrors.push_back(std::move(warn));
+	};
+
+	// The owner of every article, by slot.
+	const size_t count = m_entries.size();
+	std::vector<const ibHelpEntry*> owner(count, nullptr);
+	for (size_t i = 0; i < count; ++i) {
+		const ibHelpEntry& e = m_entries[i];
+		if (!e.ownerId.IsEmpty()) {
+			owner[i] = FindById(e.ownerId);
+			if (owner[i] == nullptr)
+				said(ibString::Format(ibT("%s: owner_id %s names no article, so it stands in its categories."),
+					e.id, e.ownerId));
+		}
+		else {
+			const ibString shorter = e.id.BeforeLast(ibT('.'));
+			if (!shorter.IsEmpty())
+				owner[i] = FindById(shorter);
+		}
+	}
+	// Owners that lead back to the article are no tree: every article of such a ring - one naming itself too - stands
+	// in its categories.
+	std::vector<bool> ring(count, false);
+	for (size_t i = 0; i < count; ++i) {
+		const ibHelpEntry* up = owner[i];
+		for (size_t step = 0; up != nullptr && step < count; ++step) {
+			if (up == &m_entries[i]) {
+				ring[i] = true;
+				break;
+			}
+			up = owner[static_cast<size_t>(up - m_entries.data())];
+		}
+	}
+	std::vector<bool> owns(count, false);
+	for (size_t i = 0; i < count; ++i) {
+		if (ring[i]) {
+			said(ibString::Format(ibT("%s: its owner %s leads back to it, so it stands in its categories."),
+				m_entries[i].id, owner[i]->id));
+			owner[i] = nullptr;
+		}
+		else if (owner[i] != nullptr)
+			owns[static_cast<size_t>(owner[i] - m_entries.data())] = true;
+	}
+
+	// Where an article stands, and the node an article that owns others is - each asks the other up the owners.
+	std::vector<ibHelpCategory*> nodes(count, nullptr);
+	std::function<ibHelpCategory*(size_t)> nodeOf;
+	const auto placeOf = [&](size_t i) -> ibHelpCategory* {
+		if (owner[i] != nullptr)
+			return nodeOf(static_cast<size_t>(owner[i] - m_entries.data()));
+		ibHelpCategory* cur = m_root.get();
+		for (const ibString& key : m_entries[i].categoryKeys)
+			cur = childOf(cur, key, nullptr);
+		return cur;
+	};
+	nodeOf = [&](size_t i) -> ibHelpCategory* {
+		if (nodes[i] == nullptr)
+			nodes[i] = childOf(placeOf(i), m_entries[i].id, &m_entries[i]);
+		return nodes[i];
+	};
+
+	for (size_t i = 0; i < count; ++i) {
+		if (owns[i])
+			nodeOf(i);
+		else
+			placeOf(i)->entries.push_back(&m_entries[i]);
 	}
 }
 

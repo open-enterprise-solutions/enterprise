@@ -14,8 +14,6 @@
 #include "backend/query/derivedStateBuilder.h"   // ibDerivedState::MaintainTotals
 #include "backend/logger/logger.h"               // ibLog->Warn — a disagreement is said where people read
 
-#include <wx/log.h>
-
 namespace {
 
 // ---------------------------------------------------------------------------

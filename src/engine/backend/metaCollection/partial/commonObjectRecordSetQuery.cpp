@@ -290,7 +290,7 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 	ibString fillErrors;
 	for (long row = 0; row < GetRowCount(); row++) {
 		const ibComposerNode* node = GetViewData<ibComposerNode>(GetItem(row));
-		wxASSERT(node);
+		ibASSERT(node);
 		for (const auto object : attributes) {
 			if (object->FillCheck()) {
 				if (node->IsEmptyValue(object->GetMetaID())) {
@@ -338,7 +338,7 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 	// value. No fields, no positions — the door / provider owns those.
 	auto stageRow = [&](ibDataQueryBuilder& q, long row) {
 		ibComposerNode* node = GetViewData<ibComposerNode>(GetItem(row));   // the line, once — not once an attribute
-		wxASSERT(node);
+		ibASSERT(node);
 		for (const auto object : attributes) {
 			// ⭐ A KEY THAT IS IN THE FILTER IS USED — whatever it holds. The filter's `Use` IS its
 			// presence here (setting Use = True inserts the key, False erases it), so an entry with an

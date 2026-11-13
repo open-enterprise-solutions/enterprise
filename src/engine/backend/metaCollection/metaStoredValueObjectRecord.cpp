@@ -65,7 +65,7 @@ ibValuePtr<ibValueRecordDataObjectConstant> ibValueMetaObjectStoredValue::Create
 bool ibValueRecordDataObjectConstant::InitializeObject(const ibValueRecordDataObjectConstant* source)
 {
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(m_metaObject->GetMetaData());
-	wxASSERT(moduleManager);
+	ibASSERT(moduleManager);
 
 	// Descriptor parent first — subsequent BindVariable /
 	// InitializeRuntime picks up the parent on lazy creation, no
@@ -138,30 +138,30 @@ void ibValueRecordDataObjectConstant::Modify(bool mod)
 ibClassID ibValueRecordDataObjectConstant::GetClassType() const
 {
 	const ibMetaData* metaData = m_metaObject->GetMetaData();
-	wxASSERT(metaData);
+	ibASSERT(metaData);
 	const ibCtorMetaValueType* clsFactory =
 		metaData->GetTypeCtor(m_metaObject, ibCtorObjectMetaType::ibCtorObjectMetaType_Object);
-	wxASSERT(clsFactory);
+	ibASSERT(clsFactory);
 	return clsFactory->GetClassType();
 }
 
 ibString ibValueRecordDataObjectConstant::GetClassName() const
 {
 	const ibMetaData* metaData = m_metaObject->GetMetaData();
-	wxASSERT(metaData);
+	ibASSERT(metaData);
 	const ibCtorMetaValueType* clsFactory =
 		metaData->GetTypeCtor(m_metaObject, ibCtorObjectMetaType::ibCtorObjectMetaType_Object);
-	wxASSERT(clsFactory);
+	ibASSERT(clsFactory);
 	return clsFactory->GetClassName();
 }
 
 ibString ibValueRecordDataObjectConstant::GetString() const
 {
 	const ibMetaData* metaData = m_metaObject->GetMetaData();
-	wxASSERT(metaData);
+	ibASSERT(metaData);
 	const ibCtorMetaValueType* clsFactory =
 		metaData->GetTypeCtor(m_metaObject, ibCtorObjectMetaType::ibCtorObjectMetaType_Object);
-	wxASSERT(clsFactory);
+	ibASSERT(clsFactory);
 	return clsFactory->GetClassName();
 }
 

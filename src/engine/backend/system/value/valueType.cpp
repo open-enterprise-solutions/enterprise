@@ -89,7 +89,7 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 	const ibMetaData* metaData)
 {
 	if (!typeDescription.IsOk())
-		return wxEmptyValue;
+		return ibEmptyValue;
 
 	if (typeDescription.GetClsidCount() == 1) {
 
@@ -121,7 +121,7 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 		return (owner != nullptr) ? owner->CreateObject(clsid) : ibValue::CreateObject(clsid);
 	}
 
-	return wxEmptyValue;
+	return ibEmptyValue;
 }
 
 // A description that says nothing hands the value back untouched (below), so a value its caller is done
@@ -205,7 +205,7 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 				: ibValue::CreateObject(typeDescription.GetFirstClsid());
 		}
 	}
-	return wxEmptyValue;
+	return ibEmptyValue;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -307,7 +307,7 @@ bool ibValueTypeDescription::Init(ibValue** paParams, const long lSizeArray)
 		for (unsigned int i = 0; i < valArray->Count(); i++) {
 			ibValue retValue; valArray->GetAt(i, retValue);
 			ibValueType* valType = CastValue<ibValueType>(retValue);
-			wxASSERT(valType);
+			ibASSERT(valType);
 			m_typeDesc.AppendMetaType(valType->GetOwnerTypeClass(), qualifiers);
 		}
 		/*std::sort(m_listTypeClass.begin(), m_listTypeClass.end(), [](const ibClassID& a, const ibClassID& b) {
@@ -351,7 +351,7 @@ bool ibValueTypeDescription::AdjustOutValue(const ibValue& varValue, ibValue& ou
 bool ibValueTypeDescription::ContainType(const ibValue& cType) const
 {
 	ibValueType* valueType = CastValue<ibValueType>(cType);
-	wxASSERT(valueType);
+	ibASSERT(valueType);
 	// The range ended at begin(), so the search was over NOTHING: find always answered begin(), and
 	// comparing that with end() made the result "yes" for every type whenever the list was not empty.
 	return m_typeDesc.ContainType(valueType->GetOwnerTypeClass());

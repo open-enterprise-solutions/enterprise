@@ -27,7 +27,7 @@ void ibVariantAttribute::DoSetDefaultMetaType() {
 
 void ibVariantAttribute::DoSetFromMetaId(const ibMetaID& id)
 {
-	if (m_ownerProperty != nullptr && id != wxNOT_FOUND) {
+	if (m_ownerProperty != nullptr && id != ibNOT_FOUND) {
 
 		// An attribute is found in a configuration; an owner that has none (see DoRefreshTypeDesc) finds none.
 		const ibMetaData* metaData = m_ownerProperty->GetMetaData();

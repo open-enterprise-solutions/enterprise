@@ -4,7 +4,7 @@
 #include "firebirdLease.h"
 #include "core/diagnostics/journal.h"   // ibJournal — this TU does not pull in backend_core.h
 #include "firebirdLocalServer.h"
-#include "core/startProcess.h"   // ibHostName
+#include "core/system.h"   // ibHostName
 
 #include <atomic>
 #include <chrono>

@@ -1,5 +1,8 @@
 #include "backend/sheetFormat/sheetFormat.h"
-#include "backend/temp/tempStorage.h"   // ibTempFile and its wx streams — the formats over the session's temporary storage
+#include "backend/temp/tempStorage.h"   // ibTempFile and its streams — the formats over the session's temporary storage
+
+#include <istream>
+#include <ostream>
 
 bool ibSheetFormatReadTempFile(const ibString& id, ibSpreadsheetDescription& sheet)
 {
@@ -8,7 +11,8 @@ bool ibSheetFormatReadTempFile(const ibString& id, ibSpreadsheetDescription& she
 	if (format == nullptr || !format->CanRead())
 		return false;
 
-	ibTempFileInputStream input(file);
+	ibTempFileReader reader(file);
+	std::istream input(&reader);
 	return format->Read(input, sheet);
 }
 
@@ -21,6 +25,7 @@ bool ibSheetFormatWriteTempFile(const ibString& id, const ibSpreadsheetDescripti
 	if (format == nullptr || !format->CanWrite())
 		return false;
 
-	ibTempFileOutputStream output(file);
-	return format->Write(output, sheet) && output.Close();
+	ibTempFileWriter writer(file);
+	std::ostream output(&writer);
+	return format->Write(output, sheet) && writer.Finish();
 }

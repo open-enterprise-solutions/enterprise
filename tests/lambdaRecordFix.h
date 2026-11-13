@@ -27,6 +27,7 @@
 #define _IB_TEST_LAMBDA_RECORD_FIX_H_
 
 #include "backend/backend_exception.h"
+#include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 #include "backend/compiler/compileCode.h"
 #include "backend/compiler/compileContext.h"   // CODE_CES
 #include "backend/compiler/lambdaQueryAST.h"

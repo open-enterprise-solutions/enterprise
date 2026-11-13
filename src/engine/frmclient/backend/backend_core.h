@@ -13,6 +13,7 @@
 #include "core/fnumber.h"
 #include "core/fdatetime.h"
 #include "core/fstring.h"
+#include "deskgui/strvararg.h"   // an ibString in wx's varargs is a `%s`
 #include "deskgui/typeconv.h"
 #include "core/stringUtils.h"
 #include "core/diagnostics/journal.h"

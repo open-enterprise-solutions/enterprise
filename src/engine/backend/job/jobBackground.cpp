@@ -14,8 +14,6 @@
 #include "backend/backend_exception.h"
 #include "backend/system/systemManager.h"          // WriteJournalEvent - the run's own record
 
-#include <wx/log.h>
-
 #include <algorithm>
 
 namespace {
@@ -268,7 +266,7 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(const ibBackgroun
 				ibBackendCoreException::Error(_("Background job: the session has no runtime"));
 
 			const int dot = procedureName.Find('.', /*fromEnd*/ true);
-			if (dot == wxNOT_FOUND) {
+			if (dot == ibNOT_FOUND) {
 				ibBackendCoreException::Error(
 					_("Background job: '%s' must name the module - ModuleName.MethodName"),
 					procedureName);
@@ -307,7 +305,7 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(const ibBackgroun
 			// Public modifier). So this lookup enforces the visibility rule
 			// without a second check: a Private method is simply not there.
 			const long methodNum = moduleValue.FindMethod(methodName);
-			if (methodNum == wxNOT_FOUND) {
+			if (methodNum == ibNOT_FOUND) {
 				ibBackendCoreException::Error(
 					_("Background job: '%s' has no public method '%s'"), moduleName, methodName);
 			}
@@ -448,7 +446,7 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::Launch(ibBackgroundBody body, con
 		// connection of its own (taken just below), and a teardown that gives the
 		// connection back (~ibSession) without troubling the registry (Teardown
 		// reads m_listed).
-		auto minted = std::make_shared<ibSession>(ibString(wxNewUniqueGuid),
+		auto minted = std::make_shared<ibSession>(ibString(ibNewUniqueGuid),
 		                                          ibSessionKind::BackgroundJob);
 		// It reads in its parent's configuration — the one the parent works in, not the base's newest: a read for
 		// a session is read the way that session reads.

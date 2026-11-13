@@ -236,6 +236,7 @@ add_executable(oes_tests
 target_link_libraries(oes_tests
     PRIVATE
         backend
+        wx::base   # the tests write wx's text (wxT, wxString); the engine's libraries bring no wx
         frmserver
         GTest::gtest
         GTest::gtest_main
@@ -362,6 +363,7 @@ add_executable(oes_string_tests
     bench_string.cpp
     "${CMAKE_SOURCE_DIR}/src/engine/core/fstring.cpp"
     "${CMAKE_SOURCE_DIR}/src/engine/core/memory/memoryPool.cpp"
+    assertFailureStub.cpp   # ibAssertFailure - its home, the crash guard, is more than this target links
 )
 target_compile_definitions(oes_string_tests PRIVATE CORE_EXPORTS)
 
@@ -386,7 +388,7 @@ set_target_properties(oes_string_tests PROPERTIES
 oes_discover_tests(oes_string_tests)
 
 # ---------------------------------------------------------------------------
-# Standalone ИТОГИ-tree test — backend + gtest only, no other test TUs (so it
+# Standalone TOTALS-tree test — backend + gtest only, no other test TUs (so it
 # links even when an optional driver, e.g. ODBC, is OFF and a sibling test TU
 # references it). Pure RAM fold, no DB:
 #   cmake --build build --target oes_query_totals_test --config Debug
@@ -397,6 +399,7 @@ add_executable(oes_query_totals_test test_queryTotals.cpp)
 target_link_libraries(oes_query_totals_test
     PRIVATE
         backend
+        wx::base
         GTest::gtest
         GTest::gtest_main
 )
@@ -420,7 +423,7 @@ oes_discover_tests(oes_query_totals_test)
 
 # ---------------------------------------------------------------------------
 # Standalone DB/RAM parity test — backend + gtest only (isolated, like the
-# ИТОГИ-tree target above). Real in-memory SQLite vs the RAM filter core:
+# TOTALS-tree target above). Real in-memory SQLite vs the RAM filter core:
 #   cmake --build build --target oes_query_parity_test --config Debug
 #   ./bin/oes_query_parity_test
 #   ./bin/oes_query_parity_test --gtest_also_run_disabled_tests   # show the gap
@@ -430,6 +433,7 @@ add_executable(oes_query_parity_test test_queryParity.cpp)
 target_link_libraries(oes_query_parity_test
     PRIVATE
         backend
+        wx::base
         GTest::gtest
         GTest::gtest_main
 )
@@ -462,6 +466,7 @@ add_executable(oes_query_join_parity_test test_queryJoinParity.cpp)
 target_link_libraries(oes_query_join_parity_test
     PRIVATE
         backend
+        wx::base
         GTest::gtest
         GTest::gtest_main
 )
@@ -497,6 +502,7 @@ add_executable(oes_temp_db_sqlite_test test_tempDbSqlite.cpp)
 target_link_libraries(oes_temp_db_sqlite_test
     PRIVATE
         backend
+        wx::base
         GTest::gtest
         GTest::gtest_main
 )
@@ -534,6 +540,7 @@ add_executable(oes_job_tenancy_test test_jobTenancy.cpp)
 target_link_libraries(oes_job_tenancy_test
     PRIVATE
         backend
+        wx::base
         GTest::gtest
         GTest::gtest_main
 )
@@ -566,6 +573,7 @@ add_executable(oes_job_runtime_test test_jobRuntime.cpp)
 target_link_libraries(oes_job_runtime_test
     PRIVATE
         backend
+        wx::base
         GTest::gtest
         GTest::gtest_main
 )
@@ -602,6 +610,7 @@ add_executable(oes_multi_base_test test_multiBase.cpp)
 target_link_libraries(oes_multi_base_test
     PRIVATE
         backend
+        wx::base
         GTest::gtest
         GTest::gtest_main
 )
@@ -724,6 +733,7 @@ if(OES_USE_POSTGRESQL)
     target_link_libraries(oes_pg_dialect_test
         PRIVATE
             backend
+            wx::base
             GTest::gtest
             GTest::gtest_main
     )

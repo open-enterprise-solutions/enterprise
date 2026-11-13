@@ -23,7 +23,7 @@ long ibValueMetaObjectCollection::FindProp(const ibString& strPropName) const
 	for (size_t at = 0; at < m_listValue.size(); ++at)
 		if (stringUtils::IsSameAs(m_listValue[at]->GetName(), strPropName))
 			return (long)at;
-	return wxNOT_FOUND;
+	return ibNOT_FOUND;
 }
 
 const ibString& ibValueMetaObjectCollection::GetPropName(const long lPropNum) const
@@ -51,7 +51,7 @@ bool ibValueMetaObjectCollection::GetAt(const ibValue& varKeyValue, ibValue& pva
 	if (varKeyValue.GetType() != ibValueTypes::TYPE_STRING)
 		return ibValueCollection::GetAt(varKeyValue, pvarValue);
 	const long at = FindProp(varKeyValue.GetString());
-	if (at == wxNOT_FOUND)
+	if (at == ibNOT_FOUND)
 		ibBackendCoreException::Error(_("Key '%s' not found!"), varKeyValue.GetString());
 	pvarValue = ElementValue(m_listValue[at]);
 	return true;

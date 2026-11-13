@@ -12,6 +12,7 @@
 // EXECUTION + the temp round-trip are integration scope — a real SQLite/PG connection.)
 
 #include <gtest/gtest.h>
+#include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
 #include <memory>
 #include <vector>

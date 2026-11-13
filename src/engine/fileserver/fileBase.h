@@ -4,8 +4,6 @@
 #include <functional>
 #include <string>
 
-#include <wx/string.h>
-
 #include "core/fstring.h"                 // ibString — where the base lives, and why it did not open
 #include "core/memory/memoryBuffer.h"     // ibMemoryBuffer — the packets the doors pass
 

@@ -6,7 +6,7 @@
 // value IS one here) and the type description (the parameter's declared type IS one, and it is a
 // description of the same family). Nothing from the composer, nothing from the model, no runtime value:
 // what a side runs is restored from this by the side (backend_composition.h, Max, 2026-10-12).
-#include "core/core.h"                // CORE_API, ibMetaID, wxNOT_FOUND, ibClassID
+#include "core/core.h"                // CORE_API, ibMetaID, ibNOT_FOUND, ibClassID
 #include "core/serialize/dataBuilder.h"   // ibDataNode — a stored value is a BLOB, never a runtime value
 #include "core/description/typeDescription.h"  // ibTypeDescription — the sibling description a parameter declares
 // ⭐ THE UNFOLD IS THE LANGUAGE'S OWN WORD, and this header exists so every tier can name it without
@@ -43,10 +43,10 @@ class ibDataValue;
 // filter / sort / grouping, only building them a little differently. Not a
 // different breed — the same description with the rest left empty.
 //
-// ⚠ AND THE MAIN TABLE IS A NUMBER, deliberately. `wxNOT_FOUND` means "nothing
+// ⚠ AND THE MAIN TABLE IS A NUMBER, deliberately. `ibNOT_FOUND` means "nothing
 // picked" — a state a description must be able to HOLD, because today the id is
 // a by-product of a successful resolve (`SetQueryable(factory->ResolveById(id))`,
-// and `SetQueryable(nullptr)` writes wxNOT_FOUND back), so a composition read
+// and `SetQueryable(nullptr)` writes ibNOT_FOUND back), so a composition read
 // before its metatype registered does not merely fail to describe its query — it
 // FORGETS WHICH TABLE IT WAS.
 // ---------------------------------------------------------------------------
@@ -151,7 +151,7 @@ struct ibFilterOperandDescription {
 	ibString          m_path;                    // non-empty = a field; empty = the value below
 	ibDataNode        m_value;                   // the literal, PACKED, when this side is not a field — a blob like a
 	                                             // parameter's (below); the side restores it (ibStoredValue)
-	ibMetaID          m_leafId = wxNOT_FOUND;    // what the path resolved to, when it did
+	ibMetaID          m_leafId = ibNOT_FOUND;    // what the path resolved to, when it did
 	ibTypeDescription m_type;                    // …and its type — what makes the OTHER side editable
 	ibString          m_presentation;            // what the picker showed; empty = derive from the path
 
@@ -1108,7 +1108,7 @@ struct ibCompositionDescription {
 	//
 	// A report leaves it alone — its sources are however many its queries name, and how many is none
 	// of its business.
-	ibMetaID m_mainTable = wxNOT_FOUND;
+	ibMetaID m_mainTable = ibNOT_FOUND;
 
 	// THE COMPOSER HALF, shared by both. A LIST fills the query and the settings and leaves the rest
 	// empty; a REPORT uses all of it. One format, one reader, one writer — the difference is which
@@ -1235,10 +1235,10 @@ struct ibCompositionDescription {
 	void SetMainTable(const ibMetaID& id) { m_mainTable = id; }
 
 	bool HasQuery() const { return !m_query.IsEmpty(); }
-	bool HasMainTable() const { return m_mainTable != wxNOT_FOUND; }
+	bool HasMainTable() const { return m_mainTable != ibNOT_FOUND; }
 
 	void ClearQuery() { m_query.Clear(); }
-	void ClearMainTable() { m_mainTable = wxNOT_FOUND; }
+	void ClearMainTable() { m_mainTable = ibNOT_FOUND; }
 
 	// ⭐ EQUALITY IS WHAT IT DESCRIBES — the family's own rule (ibSourceDescription compares its id
 	// path, ibTypeDescription its clsid list). A property asks this to tell "changed" from "the

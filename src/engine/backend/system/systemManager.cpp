@@ -583,19 +583,6 @@ bool ibValueSystemFunction::CallAsProc(const long lMethodNum, ibValue** paParams
 
 ibDateTime ibValueSystemFunction::ms_workDate = ibDateTime::Now();
 
-class wxOESRandModule : public wxModule
-{
-public:
-	wxOESRandModule() : wxModule() {}
-	virtual bool OnInit() {
-		srand((unsigned)time(nullptr));
-		return true;
-	}
-	virtual void OnExit() {}
-private:
-};
-
-
 //**********************************************************************
 //*                       Runtime register                             *
 //**********************************************************************

@@ -139,6 +139,114 @@ TEST(HelpCorpus, EveryLevelOfThePathIsNamed) {
 	EXPECT_EQ(inner->displayName, wxT("LINQ — запросы к коллекциям"));
 }
 
+// A section holds its classes, and a class its members (2026-11-13, Max: "the forms, a button, and then what is inside
+// the button"): an article whose id, one segment shorter, is another article's stands under that one. Every member had
+// its class's categories, so the members of ComObject and ComSafeArray were one list under "com", an enum's values lay
+// beside its type, and Table's Columns' own members beside Table's. A class's node is the class's article as well.
+TEST(HelpCorpus, AMemberStandsUnderItsClassNotBesideIt) {
+	const std::vector<ibString> com = { wxT("value_types"), wxT("runtime"), wxT("com") };
+	std::vector<ibHelpEntry> entries;
+	entries.push_back(MakeEntry(wxT("cls.ComObject"), com));
+	entries.push_back(MakeEntry(wxT("cls.ComObject.AddEventHandler"), com));
+	entries.push_back(MakeEntry(wxT("cls.ComSafeArray"), com));
+	entries.push_back(MakeEntry(wxT("cls.ComSafeArray.GetLength"), com));
+	entries.push_back(MakeEntry(wxT("cls.Table"), com));
+	entries.push_back(MakeEntry(wxT("cls.Table.Columns"), com));
+	entries.push_back(MakeEntry(wxT("cls.Table.Columns.Add"), com));
+	entries.push_back(MakeEntry(wxT("enum.PictureLocation"), com));
+	entries.push_back(MakeEntry(wxT("enum.PictureLocation.Tile"), com));
+	entries.push_back(MakeEntry(wxT("fn.Message"), com));   // "fn" is no article: it stays in the section
+
+	ibHelpCorpus corpus(wxT("en"), ibHelpCorpus::Source::kPlatform, std::move(entries), {}, {});
+
+	const ibHelpCategory* section =
+		ChildByKey(ChildByKey(ChildByKey(corpus.GetRoot(), wxT("value_types")), wxT("runtime")), wxT("com"));
+	ASSERT_NE(section, nullptr);
+	ASSERT_EQ(section->entries.size(), 1u) << "a member was left beside its class";
+	EXPECT_EQ(section->entries.front()->id, wxT("fn.Message"));
+
+	const ibHelpCategory* comObject = ChildByKey(section, wxT("cls.ComObject"));
+	ASSERT_NE(comObject, nullptr);
+	ASSERT_NE(comObject->article, nullptr) << "a class's node is its article";
+	EXPECT_EQ(comObject->article->id, wxT("cls.ComObject"));
+	ASSERT_EQ(comObject->entries.size(), 1u);
+	EXPECT_EQ(comObject->entries.front()->id, wxT("cls.ComObject.AddEventHandler"));
+
+	const ibHelpCategory* safeArray = ChildByKey(section, wxT("cls.ComSafeArray"));
+	ASSERT_NE(safeArray, nullptr);
+	ASSERT_EQ(safeArray->entries.size(), 1u) << "the two classes' members are one list again";
+	EXPECT_EQ(safeArray->entries.front()->id, wxT("cls.ComSafeArray.GetLength"));
+
+	const ibHelpCategory* table = ChildByKey(section, wxT("cls.Table"));
+	ASSERT_NE(table, nullptr);
+	EXPECT_TRUE(table->entries.empty());
+	const ibHelpCategory* columns = ChildByKey(table, wxT("cls.Table.Columns"));
+	ASSERT_NE(columns, nullptr) << "a member that has members of its own is a node under its class";
+	ASSERT_EQ(columns->entries.size(), 1u);
+	EXPECT_EQ(columns->entries.front()->id, wxT("cls.Table.Columns.Add"));
+
+	const ibHelpCategory* location = ChildByKey(section, wxT("enum.PictureLocation"));
+	ASSERT_NE(location, nullptr) << "an enum's values stand under its type";
+	ASSERT_EQ(location->entries.size(), 1u);
+	EXPECT_EQ(location->entries.front()->id, wxT("enum.PictureLocation.Tile"));
+
+	EXPECT_EQ(section->article, nullptr) << "a section is no article";
+}
+
+// What the id does not say, the article does (Max, the same day: "an enum of the button's goes into the button's
+// section"): `owner_id` names the article this one stands under - ButtonView under Button, beside its members, and its
+// own values under it by their ids. An owner nobody wrote, or owners that name each other, leave the article in its
+// categories, and the corpus says so.
+TEST(HelpCorpus, AnArticleStandsUnderTheOwnerItNames) {
+	const std::vector<ibString> forms = { wxT("value_types"), wxT("runtime"), wxT("forms") };
+	auto owned = [&forms](const wxChar* id, const wxChar* owner) {
+		ibHelpEntry e = MakeEntry(id, forms);
+		e.ownerId = owner;
+		return e;
+	};
+	std::vector<ibHelpEntry> entries;
+	entries.push_back(MakeEntry(wxT("cls.Button"), forms));
+	entries.push_back(MakeEntry(wxT("cls.Button.Title"), forms));
+	entries.push_back(owned(wxT("enum.ButtonView"), wxT("cls.Button")));
+	entries.push_back(MakeEntry(wxT("enum.ButtonView.Hyperlink"), forms));
+	entries.push_back(owned(wxT("enum.Lost"), wxT("cls.Nothing")));
+	entries.push_back(owned(wxT("enum.Ping"), wxT("enum.Pong")));
+	entries.push_back(owned(wxT("enum.Pong"), wxT("enum.Ping")));
+
+	ibHelpCorpus corpus(wxT("en"), ibHelpCorpus::Source::kPlatform, std::move(entries), {}, {});
+
+	const ibHelpCategory* section =
+		ChildByKey(ChildByKey(ChildByKey(corpus.GetRoot(), wxT("value_types")), wxT("runtime")), wxT("forms"));
+	ASSERT_NE(section, nullptr);
+
+	const ibHelpCategory* button = ChildByKey(section, wxT("cls.Button"));
+	ASSERT_NE(button, nullptr);
+	ASSERT_EQ(button->entries.size(), 1u);
+	EXPECT_EQ(button->entries.front()->id, wxT("cls.Button.Title"));
+	const ibHelpCategory* view = ChildByKey(button, wxT("enum.ButtonView"));
+	ASSERT_NE(view, nullptr) << "the button's enum stands inside the button";
+	ASSERT_EQ(view->entries.size(), 1u);
+	EXPECT_EQ(view->entries.front()->id, wxT("enum.ButtonView.Hyperlink"));
+	EXPECT_EQ(ChildByKey(section, wxT("enum.ButtonView")), nullptr) << "and not beside it as well";
+
+	const auto inSection = [section](const wxChar* id) {
+		return std::any_of(section->entries.begin(), section->entries.end(),
+			[id](const ibHelpEntry* e) { return e->id == id; });
+	};
+	EXPECT_TRUE(inSection(wxT("enum.Lost"))) << "an owner nobody wrote leaves the article in its categories";
+	EXPECT_TRUE(inSection(wxT("enum.Ping")) && inSection(wxT("enum.Pong"))) << "owners naming each other are no tree";
+
+	const std::vector<ibHelpLoadError>& said = corpus.LoadErrors();
+	const auto saysOf = [&said](const wxChar* id) {
+		return std::any_of(said.begin(), said.end(), [id](const ibHelpLoadError& e) {
+			return e.severity == ibHelpLoadSeverity::kWarning && e.message.Contains(id);
+		});
+	};
+	EXPECT_TRUE(saysOf(wxT("enum.Lost")));
+	EXPECT_TRUE(saysOf(wxT("enum.Ping")));
+	EXPECT_FALSE(saysOf(wxT("enum.ButtonView")));
+}
+
 // The merge carries the dictionary too. A per-configuration corpus may rename a
 // section for its own corpus, the same overlay rule its entries follow.
 TEST(HelpCorpus, MergingKeepsPlatformNamesAndLetsAConfigurationOverlayThem) {
@@ -249,6 +357,28 @@ TEST(HelpLoader, AClassIdIsCheckedAgainstTheRegistry)
 	const ibHelpEntry* plain = loaded.corpus->FindById(wxT("kw.Plain"));
 	ASSERT_NE(plain, nullptr);
 	EXPECT_EQ(plain->classId, 0u) << "an article about no class carries none";
+}
+
+// The owner an article names arrives from its bucket (`owner_id`, beside `class_id` and `see_also`).
+TEST(HelpLoader, AnOwnerIdIsRead)
+{
+	const ibString root = WriteHelpBucket(
+		R"({ "format": "OES-HELP-1.0", "schema_version": 1, "locale": "en", "entries": [)"
+		R"({ "id": "cls.Button",      "name_local": "Button",     "name_en": "Button",     "kind": "collection" },)"
+		R"({ "id": "enum.ButtonView", "name_local": "ButtonView", "name_en": "ButtonView", "kind": "enum_type", "owner_id": "cls.Button" })"
+		R"(] })");
+
+	const ibHelpLoadResult loaded = LoadHelpCorpus(wxT("en"), root);
+	wxFileName::Rmdir(root, wxPATH_RMDIR_RECURSIVE);
+	ASSERT_TRUE(loaded.ok());
+	ASSERT_NE(loaded.corpus, nullptr);
+
+	const ibHelpEntry* view = loaded.corpus->FindById(wxT("enum.ButtonView"));
+	ASSERT_NE(view, nullptr);
+	EXPECT_EQ(view->ownerId, wxT("cls.Button"));
+	const ibHelpEntry* button = loaded.corpus->FindById(wxT("cls.Button"));
+	ASSERT_NE(button, nullptr);
+	EXPECT_TRUE(button->ownerId.IsEmpty());
 }
 
 // THE VOCABULARY, PINNED FROM THE CORPUS'S SIDE. The shipped corpus writes kind words the loader did

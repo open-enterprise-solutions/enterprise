@@ -128,7 +128,7 @@ public:
 		for (const ibQueryConstructorSource& source : model.GetSources()) {
 
 			const ibString path = source.Text();
-			if (!contains.IsEmpty() && path.Lower().Find(contains.Lower()) == wxNOT_FOUND)
+			if (!contains.IsEmpty() && path.Lower().Find(contains.Lower()) == ibNOT_FOUND)
 				continue;
 
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();

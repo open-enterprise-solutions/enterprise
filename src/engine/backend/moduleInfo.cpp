@@ -221,12 +221,12 @@ static void ibExportNamesFromText(const ibValueMetaObjectModuleBase* moduleObjec
 			const ibString signature = ibModuleCallForm(element);
 
 			if (element.m_eType == eExportFunction)
-				helper->AppendFunc(element.m_name, element.ParamCount(), signature, wxNOT_FOUND, alias);
+				helper->AppendFunc(element.m_name, element.ParamCount(), signature, ibNOT_FOUND, alias);
 			else if (element.m_eType == eExportProcedure)
-				helper->AppendProc(element.m_name, element.ParamCount(), signature, wxNOT_FOUND, alias);
+				helper->AppendProc(element.m_name, element.ParamCount(), signature, ibNOT_FOUND, alias);
 		}
 		else if (element.m_eType == eExportVariable) {
-			helper->AppendProp(element.m_name, wxNOT_FOUND, alias);
+			helper->AppendProp(element.m_name, ibNOT_FOUND, alias);
 		}
 	}
 }
@@ -306,7 +306,7 @@ void ibRuntimeModuleDataObject::FillHelperFromBinds(ibValue::ibMemberTable* help
 {
 	if (helper == nullptr) return;
 	for (const auto& kv : m_binds->m_listExternValue)
-		helper->AppendProp(kv.first, wxNOT_FOUND, alias);
+		helper->AppendProp(kv.first, ibNOT_FOUND, alias);
 }
 
 ibValue* ibRuntimeModuleDataObject::GetBoundValue(const ibString& name) const

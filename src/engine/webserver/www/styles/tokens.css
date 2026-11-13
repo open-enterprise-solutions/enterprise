@@ -62,9 +62,10 @@
 	/* A table's scrollbar over the window of rows it holds. */
 	--oes-pager: 12px;
 
-	/* A control's own look when its author picks none - the platform's (frmserver's default style): ink on cream. */
+	/* A control's own look when its author picks none - the platform's (frmserver's default style, the platform style's
+	   form text and background): ink on a ground a step below white, cream until 2026-11-13. */
 	--oes-form-text: #3f5c77;
-	--oes-form-bg: #faf7f0;
+	--oes-form-bg: #eef2f6;
 
 	/* What stands on a coloured fill - a message's mark, the offline strip. */
 	--oes-on-colour: #ffffff;
@@ -72,8 +73,9 @@
 	   whatever the theme: the author chose it against that one (control.js, sheet.js, rows.js). */
 	--oes-paper: #ffffff;
 	--oes-paper-text: #222222;
-	/* The light a command bar is lit by, from the top down. */
-	--oes-bar-shine-top: rgb(255 255 255 / 0.5);
+	/* The light a command bar is lit by, from the top down - the thin client's: half the light it was lit by, its
+	   flat form bar and its lit one met halfway (2026-11-13). */
+	--oes-bar-shine-top: rgb(255 255 255 / 0.25);
 	--oes-bar-shine-bottom: rgb(0 0 0 / 0.05);
 	/* A command bar's default command (its entry's Default - a form's «… and close»): the thin client's default button,
 	   the terracotta of its theme, the caption white. */
@@ -132,7 +134,7 @@
 		--oes-form-bg: #22262b;
 
 		--oes-on-colour: #16181b;
-		--oes-bar-shine-top: rgb(255 255 255 / 0.06);
+		--oes-bar-shine-top: rgb(255 255 255 / 0.03);
 		--oes-bar-shine-bottom: rgb(0 0 0 / 0.2);
 		--oes-default-button-bg: #e58a6c;
 		--oes-default-button-text: #16181b;

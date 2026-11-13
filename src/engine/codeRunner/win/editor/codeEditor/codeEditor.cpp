@@ -387,7 +387,7 @@ void ibCodeEditor::HighlightSyntaxAndCalculateFoldLevel(const int fromPos, const
 			// A keyword right after a member-access `.` is a MEMBER NAME, not a keyword
 			// (`q.Execute().Select()` — `Select` is the method): style it as a plain identifier.
 			if (keyWord != wxNOT_FOUND && !prevWasDot) {
-				if (word.Left(1) == '#') {
+				if (word.StartsWith(ibT("#"))) {
 					appendStyle(ibSTC_C_PREPROCESSOR);
 				}
 				else {

@@ -168,10 +168,11 @@ ibDialogLauncher::ibDialogLauncher(wxWindow* parent, wxWindowID id, const wxStri
 	wxBoxSizer* sizerLeft = new wxBoxSizer(wxVERTICAL);
 
 	m_listIBwnd = new ibListBox(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, nullptr, wxLB_SINGLE);
-	// the bases' names large, in the system's face: four points over its size, 13 on Windows' 9 (the default family's
-	// 13 stood here until 2026-11-12 - Arial on Windows)
+	// the bases' names a little larger, in the system's face: two points over its size, 11 on Windows' 9 (the default
+	// family's 13 stood here until 2026-11-12 - Arial on Windows; four points over until 2026-11-13, Max: "too big" -
+	// the row is the theme's half the text's height again over it, 33 pixels)
 	wxFont listFont = wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT);
-	listFont.SetPointSize(listFont.GetPointSize() + 4);
+	listFont.SetPointSize(listFont.GetPointSize() + 2);
 	m_listIBwnd->SetFont(listFont);
 
 	m_listIBwnd->Bind(wxEVT_LISTBOX, &ibDialogLauncher::OnSelectedList, this);

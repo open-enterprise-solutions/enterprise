@@ -27,8 +27,7 @@
 #include "core/core.h"
 #include "core/description/spreadsheetDescription.h"
 
-#include <wx/stream.h>
-
+#include <iosfwd>   // std::istream / std::ostream - the bytes a format reads and writes
 #include <vector>
 
 // WHAT A FOREIGN TABLE CAN CARRY ACROSS. Stated here rather than discovered per
@@ -72,8 +71,8 @@ public:
 	//
 	// ⭐ A STREAM, NOT A PATH: the bytes come from a file on disk or from the session's temporary storage by its id,
 	// and the format does not care which — the server works with ids, not with files.
-	virtual bool Read(wxInputStream& input, ibSpreadsheetDescription& sheet) const = 0;
-	virtual bool Write(wxOutputStream& output, const ibSpreadsheetDescription& sheet) const = 0;
+	virtual bool Read(std::istream& input, ibSpreadsheetDescription& sheet) const = 0;
+	virtual bool Write(std::ostream& output, const ibSpreadsheetDescription& sheet) const = 0;
 
 	// …and the same over a file on disk — false also when it cannot be opened, or (writing) closed whole.
 	bool ReadFile(const ibString& fileName, ibSpreadsheetDescription& sheet) const;

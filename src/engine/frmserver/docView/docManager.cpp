@@ -33,15 +33,10 @@
 // through the template path its tab.
 #include "frmserver/client/clientFrame.h"
 
-#if wxUSE_DOC_VIEW_ARCHITECTURE
-
 #include "core/fileSystem.h"        // ibPathOf — a template's extension
 #include "core/stringTokenizer.h"
-#include <wx/filename.h>
-#include <wx/scopeguard.h>
+#include <algorithm>
 #include <memory>
-
-wxIMPLEMENT_ABSTRACT_CLASS(ibDocTemplate, wxObject);
 
 namespace
 {
@@ -73,8 +68,9 @@ ibDocTemplate::ibDocTemplate(ibDocManager *manager,
                              const ibString& ext,
                              const ibString& docTypeName,
                              const ibString& viewTypeName,
-                             wxClassInfo *docClassInfo,
-                             wxClassInfo *viewClassInfo,
+                             const std::type_index& docType,
+                             ibDocument* (*createDocument)(),
+                             ibView* (*createView)(),
                              long flags)
 	: m_fileFilter(filter)
 	, m_directory(dir)
@@ -82,13 +78,13 @@ ibDocTemplate::ibDocTemplate(ibDocManager *manager,
 	, m_defaultExt(ext)
 	, m_docTypeName(docTypeName)
 	, m_viewTypeName(viewTypeName)
+	, m_docType(docType)
+	, m_createDocument(createDocument)
+	, m_createView(createView)
 {
 	m_documentManager = manager;
 	m_flags = flags;
 	m_documentManager->AssociateTemplate(this);
-
-	m_docClassInfo = docClassInfo;
-	m_viewClassInfo = viewClassInfo;
 }
 
 ibDocTemplate::~ibDocTemplate()
@@ -114,29 +110,36 @@ ibDocument *ibDocTemplate::CreateDocument(const ibString& path, long flags)
 bool
 ibDocTemplate::InitDocument(ibDocument* doc, const ibString& path, long flags)
 {
-	wxScopeGuard guard = wxMakeGuard([&, this]()
-	{
-		// The document may be already destroyed, this happens if its view
-		// creation fails as then the view being created is destroyed
-		// triggering the destruction of the document as this first view is
-		// also the last one. However if OnCreate() fails for any reason other
-		// than view creation failure, the document is still alive and we need
-		// to clean it up ourselves to avoid having a zombie document.
-		if (GetDocumentManager()->GetDocuments().Member(doc))
+	// The document may be already destroyed, this happens if its view
+	// creation fails as then the view being created is destroyed
+	// triggering the destruction of the document as this first view is
+	// also the last one. However if OnCreate() fails for any reason other
+	// than view creation failure, the document is still alive and we need
+	// to clean it up ourselves to avoid having a zombie document.
+	const auto dropIfAlive = [this, doc]() {
+		std::list<ibDocument*>& docs = GetDocumentManager()->GetDocuments();
+		if (std::ranges::find(docs, doc) != docs.end())
 			doc->DeleteAllViews();
-	});
+	};
 
-	doc->SetFilename(path);
-	doc->SetDocumentTemplate(this);
-	GetDocumentManager()->AddDocument(doc);
-	doc->SetCommandProcessor(doc->OnCreateCommandProcessor());
+	try
+	{
+		doc->SetFilename(path);
+		doc->SetDocumentTemplate(this);
+		GetDocumentManager()->AddDocument(doc);
+		doc->SetCommandProcessor(doc->OnCreateCommandProcessor());
 
-	if (!doc->OnCreate(path, flags))
-		return false;
+		if (doc->OnCreate(path, flags))
+			return true;
+	}
+	catch (...)
+	{
+		dropIfAlive();
+		throw;
+	}
 
-	guard.Dismiss();
-
-	return true;
+	dropIfAlive();
+	return false;
 }
 
 ibView *ibDocTemplate::CreateView(ibDocument *doc, long flags)
@@ -184,28 +187,21 @@ bool ibDocTemplate::FileMatchesTemplate(const ibString& path)
 
 ibDocument *ibDocTemplate::DoCreateDocument()
 {
-	if (!m_docClassInfo)
-		return nullptr;
-
-	return static_cast<ibDocument *>(m_docClassInfo->CreateObject());
+	return m_createDocument != nullptr ? m_createDocument() : nullptr;
 }
 
 ibView *ibDocTemplate::DoCreateView()
 {
-	if (!m_viewClassInfo)
-		return nullptr;
-
-	return static_cast<ibView *>(m_viewClassInfo->CreateObject());
+	return m_createView != nullptr ? m_createView() : nullptr;
 }
 
 ibDocTemplateVector ibDocManager::GetTemplatesVector() const
 {
-	return m_templates.AsVector<ibDocTemplate*>();
+	return ibDocTemplateVector(m_templates.begin(), m_templates.end());
 }
 
 // ----------------------------------------------------------------------------
-// ibMetaDocTemplate — plain C++ class, no wxRTTI registration (templates are
-// constructed directly through AddDocTemplate, never via dynamic factory).
+// ibMetaDocTemplate — constructed directly through AddDocTemplate.
 // ----------------------------------------------------------------------------
 
 ibMetaDocTemplate::ibMetaDocTemplate(ibDocManager* manager,
@@ -215,13 +211,14 @@ ibMetaDocTemplate::ibMetaDocTemplate(ibDocManager* manager,
                                      const ibString& ext,
                                      const ibString& docTypeName,
                                      const ibString& viewTypeName,
-                                     wxClassInfo* docClassInfo,
-                                     wxClassInfo* viewClassInfo,
+                                     const std::type_index& docType,
+                                     ibDocument* (*createDocument)(),
+                                     ibView* (*createView)(),
                                      long flags)
 	: ibDocTemplate(manager, descr, filter, dir, ext,
 	                docTypeName, viewTypeName,
-	                docClassInfo, viewClassInfo, flags)
-	, m_guidTemplate(wxNewUniqueGuid)
+	                docType, createDocument, createView, flags)
+	, m_guidTemplate(ibNewUniqueGuid)
 {
 	// m_clsid stays default-constructed; SetClassID populates it for
 	// metadata-keyed templates registered through AddDocTemplate(ibClassID,...).
@@ -229,7 +226,7 @@ ibMetaDocTemplate::ibMetaDocTemplate(ibDocManager* manager,
 
 bool ibMetaDocTemplate::InitDocument(ibDocument* doc, const ibString& path, long flags)
 {
-	wxTRY
+	try
 	{
 		doc->SetFilename(path);
 		doc->SetDocumentTemplate(this);
@@ -244,16 +241,19 @@ bool ibMetaDocTemplate::InitDocument(ibDocument* doc, const ibString& path, long
 		// view-creation failure (its first view's death takes the document
 		// with it). If it survived, tear down its views explicitly so a
 		// zombie document doesn't linger in m_docs.
-		if (GetDocumentManager()->GetDocuments().Member(doc))
+		std::list<ibDocument*>& docs = GetDocumentManager()->GetDocuments();
+		if (std::ranges::find(docs, doc) != docs.end())
 			doc->DeleteAllViews();
 
 		return false;
 	}
-	wxCATCH_ALL(
-		if (GetDocumentManager()->GetDocuments().Member(doc))
+	catch (...)
+	{
+		std::list<ibDocument*>& docs = GetDocumentManager()->GetDocuments();
+		if (std::ranges::find(docs, doc) != docs.end())
 			doc->DeleteAllViews();
 		throw;
-	)
+	}
 }
 
 // ----------------------------------------------------------------------------
@@ -277,47 +277,41 @@ ibDocManager::ibDocManager(long /*flags*/, bool initialize)
 
 	// Text / Spreadsheet / Help — file templates, keyed by no CLSID; the id each is given is its picture's, sent with
 	// the template to a client choosing what to create.
-	AddDocTemplate(g_metaModuleCLSID,
+	AddDocTemplate<ibTextFileDocument, ibTextEditView>(g_metaModuleCLSID,
 		_("Text document"), ibTextFileDocument::FileMask(), ibTextFileDocument::FileExtensions(),
 		_("Text Doc"), _("Text View"),
-		CLASSINFO(ibTextFileDocument), CLASSINFO(ibTextEditView),
 		ibTEMPLATE_VISIBLE);
 
 	// EVERY TABLE FORMAT, OURS INCLUDED — asked of the registry (core/spreadsheet/sheetFormat.h), not assembled here.
-	AddDocTemplate(g_metaTemplateCLSID,
+	AddDocTemplate<ibSheetFileDocument, ibSheetView>(g_metaTemplateCLSID,
 		_("Spreadsheet document"), ibSheetFormatMask(), ibSheetFormatExtensions(),
 		_("Spreadsheet Doc"), _("Spreadsheet View"),
-		CLASSINFO(ibSheetFileDocument), CLASSINFO(ibSheetView),
 		ibTEMPLATE_VISIBLE);
 
-	AddDocTemplate(g_metaSectionCLSID,
+	AddDocTemplate<ibHelpFileDocument, ibHelpEditView>(g_metaSectionCLSID,
 		_("Help document"), ibT("*.hle"), ibT("hle"),
 		_("Help Doc"), _("Help View"),
-		CLASSINFO(ibHelpFileDocument), CLASSINFO(ibHelpEditView),
 		ibTEMPLATE_INVISIBLE);
 
 	// Registration journal — no metaobject. Invisible to File→New; reached through
-	// CreateDocument<ibAuditLogDocument>(), which resolves via FindTemplateByDocClassInfo over m_templates.
-	AddDocTemplate(g_picUserActiveCLSID,
+	// CreateDocument<ibAuditLogDocument>(), which resolves via FindTemplate over m_templates.
+	AddDocTemplate<ibAuditLogDocument, ibAuditLogView>(g_picUserActiveCLSID,
 		_("Registration journal"), ibEmptyString, ibEmptyString,
 		_("Audit Log Doc"), _("Audit Log View"),
-		CLASSINFO(ibAuditLogDocument), CLASSINFO(ibAuditLogView),
 		ibTEMPLATE_INVISIBLE);
 
 	// Home page — the composite tab (N runtime forms in one tab). Same registration shape as the journal: an
 	// invisible template reached through CreateDocument<ibHomePageDocument>() from ibHomePageDocument::ShowHomePage,
 	// which the client's start calls after the start-up script runs.
-	AddDocTemplate(g_picHomePageCLSID,
+	AddDocTemplate<ibHomePageDocument, ibHomePageView>(g_picHomePageCLSID,
 		_("Home page"), ibEmptyString, ibEmptyString,
 		_("Home Page Doc"), _("Home Page View"),
-		CLASSINFO(ibHomePageDocument), CLASSINFO(ibHomePageView),
 		ibTEMPLATE_INVISIBLE);
 
 	// The assistant window — no metaobject, the registration journal's shape: an invisible template its schema's Open makes.
-	AddDocTemplate(g_picAssistantCLSID,
+	AddDocTemplate<ibAssistantTranscriptDocument, ibAssistantTranscriptView>(g_picAssistantCLSID,
 		_("Assistant"), ibEmptyString, ibEmptyString,
 		_("Assistant Doc"), _("Assistant View"),
-		CLASSINFO(ibAssistantTranscriptDocument), CLASSINFO(ibAssistantTranscriptView),
 		ibTEMPLATE_INVISIBLE);
 
 	// The person's assistant access — both applications': in the application as their roles say (AccessRight).
@@ -386,53 +380,34 @@ std::vector<ibProtocol::ibSchema::ibKind> ibDocManager::GetSchemaKinds() const
 void ibDocManager::AddDocTemplate(const ibPictureID& id,
                                   const ibString& descr,
                                   const ibString& filter,
-                                  const ibString& dir,
                                   const ibString& ext,
                                   const ibString& docTypeName,
                                   const ibString& viewTypeName,
-                                  wxClassInfo* docClassInfo,
-                                  wxClassInfo* viewClassInfo,
+                                  const std::type_index& docType,
+                                  ibDocument* (*createDocument)(),
+                                  ibView* (*createView)(),
                                   long flags)
 {
 	auto* docTemplate = new ibMetaDocTemplate(
-		this, descr, filter, dir, ext, docTypeName, viewTypeName,
-		docClassInfo, viewClassInfo, flags);
+		this, descr, filter, ibEmptyString, ext, docTypeName, viewTypeName,
+		docType, createDocument, createView, flags);
 
 	docTemplate->SetPictureID(id);
 
 	AssociateTemplate(docTemplate);
 }
 
-void ibDocManager::AddDocTemplate(const ibPictureID& id,
-                                  const ibString& descr,
-                                  const ibString& filter,
-                                  const ibString& ext,
-                                  const ibString& docTypeName,
-                                  const ibString& viewTypeName,
-                                  wxClassInfo* docClassInfo,
-                                  wxClassInfo* viewClassInfo,
-                                  long flags)
-{
-	AddDocTemplate(id, descr, filter, ibEmptyString, ext,
-	               docTypeName, viewTypeName,
-	               docClassInfo, viewClassInfo, flags);
-}
-
 void ibDocManager::AddDocTemplate(const ibClassID& clsid,
-                                  const ibString& descr,
-                                  const ibString& filter,
-                                  const ibString& ext,
-                                  wxClassInfo* docClassInfo,
-                                  wxClassInfo* viewClassInfo)
+                                  const std::type_index& docType,
+                                  ibDocument* (*createDocument)(),
+                                  ibView* (*createView)())
 {
-	// Tools / advanced-object templates: never offered for a new document
-	// (always INVISIBLE); SAVE_AS_FILE only when the template can produce
-	// a stand-alone file.
+	// A metaobject's editor: never offered for a new document, and no file of its own.
 	auto* docTemplate = new ibMetaDocTemplate(
-		this, descr, filter, ibEmptyString, ext,
+		this, ibEmptyString, ibEmptyString, ibEmptyString, ibEmptyString,
 		ibEmptyString, ibEmptyString,
-		docClassInfo, viewClassInfo,
-		ibTEMPLATE_INVISIBLE | (!ext.IsEmpty() ? ibTEMPLATE_SAVE_AS_FILE : 0));
+		docType, createDocument, createView,
+		ibTEMPLATE_INVISIBLE);
 
 	docTemplate->SetClassID(clsid);
 	docTemplate->SetPictureID(clsid);   // a class's picture is registered under its clsid
@@ -440,22 +415,11 @@ void ibDocManager::AddDocTemplate(const ibClassID& clsid,
 	AssociateTemplate(docTemplate);
 }
 
-void ibDocManager::AddDocTemplate(const ibClassID& clsid,
-                                  wxClassInfo* docClassInfo,
-                                  wxClassInfo* viewClassInfo)
-{
-	AddDocTemplate(clsid,
-	               ibEmptyString, ibEmptyString, ibEmptyString,
-	               docClassInfo, viewClassInfo);
-}
-
 ibMetaDocTemplate* ibDocManager::FindMetaTemplate(const ibClassID& clsid) const
 {
-	for (wxList::compatibility_iterator node = m_templates.GetFirst();
-	     node != nullptr; node = node->GetNext())
+	for (ibDocTemplate* t : m_templates)
 	{
-		auto* mt = dynamic_cast<ibMetaDocTemplate*>(
-			static_cast<ibDocTemplate*>(node->GetData()));
+		auto* mt = dynamic_cast<ibMetaDocTemplate*>(t);
 		if (mt != nullptr && mt->GetClassID() == clsid)
 			return mt;
 	}
@@ -465,27 +429,13 @@ ibMetaDocTemplate* ibDocManager::FindMetaTemplate(const ibClassID& clsid) const
 std::vector<ibClassID> ibDocManager::GetMetaTemplateClasses() const
 {
 	std::vector<ibClassID> classes;
-	for (wxList::compatibility_iterator node = m_templates.GetFirst();
-	     node != nullptr; node = node->GetNext())
+	for (ibDocTemplate* t : m_templates)
 	{
-		auto* mt = dynamic_cast<ibMetaDocTemplate*>(
-			static_cast<ibDocTemplate*>(node->GetData()));
+		auto* mt = dynamic_cast<ibMetaDocTemplate*>(t);
 		if (mt != nullptr)
 			classes.push_back(mt->GetClassID());
 	}
 	return classes;
-}
-
-ibDocTemplate* ibDocManager::FindTemplateByDocClassInfo(const wxClassInfo* classInfo) const
-{
-	for (wxList::compatibility_iterator node = m_templates.GetFirst();
-	     node != nullptr; node = node->GetNext())
-	{
-		auto* t = static_cast<ibDocTemplate*>(node->GetData());
-		if (t != nullptr && t->GetDocClassInfo() == classInfo)
-			return t;
-	}
-	return nullptr;
 }
 
 // ----------------------------------------------------------------------------
@@ -518,11 +468,13 @@ ibMetaDocument* ibDocManager::OpenForm(ibValueMetaObject* metaObject, long flags
 	if (docTemplate == nullptr)
 		return nullptr;
 
-	wxClassInfo* docClassInfo = docTemplate->GetDocClassInfo();
-	wxASSERT(docClassInfo);
-
-	auto* newDocument = wxDynamicCast(docClassInfo->CreateObject(), ibMetaDocument);
-	wxASSERT(newDocument);
+	ibDocument* const made = docTemplate->DoCreateDocument();
+	auto* newDocument = dynamic_cast<ibMetaDocument*>(made);
+	if (newDocument == nullptr) {
+		ibFAIL_MSG(ibT("a metaobject's template makes no metadata document"));
+		delete made;
+		return nullptr;
+	}
 
 	if (docParent != nullptr)
 		newDocument->SetDocParent(docParent);
@@ -550,10 +502,8 @@ ibMetaDocument* ibDocManager::OpenForm(ibValueMetaObject* metaObject, long flags
 	}
 	catch (...) {
 		ibJournalError(ibT("docview"), ibT("OpenForm: failed to create document view"));
-		if (GetDocuments().Member(newDocument))
+		if (std::ranges::find(m_docs, newDocument) != m_docs.end())
 			newDocument->DeleteAllViews();
 	}
 	return nullptr;
 }
-
-#endif // wxUSE_DOC_VIEW_ARCHITECTURE

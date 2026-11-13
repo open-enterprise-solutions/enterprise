@@ -16,8 +16,6 @@
 #include <memory>
 #include <mutex>
 
-#include <wx/string.h>
-
 #include "core/fstring.h"            // ibString — the address the client called from, as the call carried it
 #include "backend/session/sessionHolder.h"
 #include "frmserver/frmserver.h"

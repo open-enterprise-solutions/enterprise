@@ -19,11 +19,9 @@
 #include <utility>
 
 #include <wx/ffile.h>
-#include <wx/fileconf.h>
 #include <wx/filefn.h>
 #include <wx/filename.h>
 #include <wx/init.h>
-#include <wx/sstream.h>
 #include <wx/utils.h>
 
 // As in mcp/mcpServer.cpp, which says why: wx and cpp-httplib both alias ssize_t, and MSVC refuses the second.
@@ -34,6 +32,7 @@
 #include <cpp-httplib/httplib.h>
 
 #include "core/exception.h"
+#include "core/fileConfig.h"
 #include "core/net/httpClient.h"
 #include "core/net/httpServer.h"
 #include "core/net/ioThreads.h"
@@ -70,6 +69,17 @@ ibString Refusal(const ibString& address, const ibTlsFiles& files)
 	}
 	return ibString();
 }
+
+// A conf file holding `text`, gone with the object - on every way out, a fatal assertion's too.
+struct ibConfFile {
+	ibString m_path;
+	explicit ibConfFile(const ibString& text) : m_path(wxFileName::CreateTempFileName(wxT("oes-listener-")))
+	{
+		wxFFile out(m_path, wxT("w"));
+		out.Write(text);
+	}
+	~ibConfFile() { if (!m_path.IsEmpty()) wxRemoveFile(m_path); }
+};
 
 // A WebSocket that answers each message with itself.
 class Echo : public ibWebSocketHandler {
@@ -312,22 +322,19 @@ TEST(Listener, TheConfNamesTheFilesRelativeToItsFolder)
 {
 	wxInitializer init;
 	const ibString folder = wxFileName(CertPath(wxT("server.pem"))).GetPath();
-	// A wxFileConfig fed from a stream unescapes while it parses, before a style can be set on it, so the
-	// absolute name is spelled with forward slashes here (a Windows path comes back native from the door);
-	// the file the process reads, backslashes and all, is the next test.
+	// The absolute name with forward slashes: a Windows path comes back native from the door.
 	ibString absolute = CertPath(wxT("server.key"));
 	absolute.Replace(wxT("\\"), wxT("/"));
-	// Blanks after a value stay in what wxFileConfig hands back; the door takes them off.
-	wxStringInputStream text(wxT("Certificate = server.pem   \nPrivateKey = ") + absolute + wxT("\n"));
-	wxFileConfig conf(text);
-	const ibTlsFiles files = ibTlsFiles::FromConf(conf, folder);
+	// Blanks after a value stay in what ibFileConfig hands back; the door takes them off.
+	const ibConfFile text(wxT("Certificate = server.pem   \nPrivateKey = ") + absolute + wxT("\n"));
+	ASSERT_FALSE(text.m_path.IsEmpty());
+	const ibTlsFiles files = ibTlsFiles::FromConf(ibFileConfig(text.m_path), folder);
 	EXPECT_TRUE(files.IsNamed());
 	EXPECT_EQ(CertPath(wxT("server.pem")), files.m_certificate);
 	EXPECT_EQ(CertPath(wxT("server.key")), files.m_privateKey);
 
-	wxStringInputStream nothing(wxT("Locale = en\n"));
-	wxFileConfig bare(nothing);
-	EXPECT_FALSE(ibTlsFiles::FromConf(bare, folder).IsNamed());
+	const ibConfFile nothing(wxT("Locale = en\n"));
+	EXPECT_FALSE(ibTlsFiles::FromConf(ibFileConfig(nothing.m_path), folder).IsNamed());
 }
 
 // A backend.conf file read as the host reads it (ibApplicationHost::ReadBackendConf: no escape characters), with
@@ -335,21 +342,9 @@ TEST(Listener, TheConfNamesTheFilesRelativeToItsFolder)
 TEST(Listener, TheConfFileIsReadAsWritten)
 {
 	wxInitializer init;
-	// The file gone on every way out - a fatal assertion's too.
-	struct ibTempFile {
-		ibString m_path;
-		~ibTempFile() { if (!m_path.IsEmpty()) wxRemoveFile(m_path); }
-	} conf;
-	conf.m_path = wxFileName::CreateTempFileName(wxT("oes-listener-"));
+	const ibConfFile conf(wxT("Locale = en\nCertificate = ") + CertPath(wxT("server.pem")) + wxT("\nPrivateKey = ") + CertPath(wxT("server.key")) + wxT("\n"));
 	ASSERT_FALSE(conf.m_path.IsEmpty());
-	{
-		wxFFile out(conf.m_path, wxT("w"));
-		ASSERT_TRUE(out.IsOpened());
-		out.Write(wxT("Locale = en\nCertificate = ") + CertPath(wxT("server.pem")) + wxT("\nPrivateKey = ") + CertPath(wxT("server.key")) + wxT("\n"));
-	}
-	wxFileConfig read(wxT(""), wxT(""), wxT(""), conf.m_path,
-		wxCONFIG_USE_LOCAL_FILE | wxCONFIG_USE_GLOBAL_FILE | wxCONFIG_USE_NO_ESCAPE_CHARACTERS);
-	const ibTlsFiles files = ibTlsFiles::FromConf(read, wxFileName(conf.m_path).GetPath());
+	const ibTlsFiles files = ibTlsFiles::FromConf(ibFileConfig(conf.m_path), wxFileName(conf.m_path).GetPath());
 	EXPECT_EQ(CertPath(wxT("server.pem")), files.m_certificate);
 	EXPECT_EQ(CertPath(wxT("server.key")), files.m_privateKey);
 

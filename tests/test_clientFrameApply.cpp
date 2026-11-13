@@ -8,6 +8,7 @@
 // make the second from the first and the patch, all three as the wire carries them.
 
 #include <gtest/gtest.h>
+#include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
 #include "core/serialize/dataBuilder.h"         // ibBinaryProvider — the port's packet
 

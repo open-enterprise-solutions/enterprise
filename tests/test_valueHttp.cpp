@@ -8,6 +8,7 @@
 // No network and nothing installed is needed: the server is the library's own, on a port the system picks.
 
 #include <gtest/gtest.h>
+#include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
 #include <chrono>
 #include <csignal>

@@ -92,7 +92,7 @@ bool ibDebuggerClient::ToggleBreakpointInDB(const ibString& strModuleName, unsig
 			{ ibT("lineCondition"), ibConst(ibValue(condition)) },
 		}, { ibT("moduleName"), ibT("moduleLine") }));
 	}
-	catch (...) { wxASSERT_MSG(false, "error in ToggleBreakpointInDB"); return false; }
+	catch (...) { ibASSERT_MSG(false, "error in ToggleBreakpointInDB"); return false; }
 	return true;
 }
 
@@ -105,7 +105,7 @@ bool ibDebuggerClient::RemoveBreakpointInDB(const ibString& strModuleName, unsig
 				ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("moduleName")), ibConst(ibValue(strModuleName))),
 				ibBinOp(ibQueryBinOp::Eq, ibCol(ibT("moduleLine")), ibConst(ibValue(line))))));
 	}
-	catch (...) { wxASSERT_MSG(false, "error in RemoveBreakpointInDB"); return false; }
+	catch (...) { ibASSERT_MSG(false, "error in RemoveBreakpointInDB"); return false; }
 	return true;
 }
 

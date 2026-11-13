@@ -39,7 +39,7 @@ bool ibValueRecordDataObjectRef::ReadData(const ibGuid& srcGuid)
 {
 	if (m_newObject && !srcGuid.isValid())
 		return false;
-	wxASSERT(m_metaObject);
+	ibASSERT(m_metaObject);
 
 	// (half-)L3 read: load the row by its OWN key through the universal door.
 	// The dialect FIRST/LIMIT fork is closed by L2; the default door pulls the
@@ -314,7 +314,7 @@ bool ibValueRecordDataObjectRef::SaveData()
 	//an empty value into m_listObjectValue.
 	bool fillCheck = true;
 	ibString unfilled;   // the fields that refused, by name — carried up, not only whispered
-	wxASSERT(m_metaObject);
+	ibASSERT(m_metaObject);
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 		if (!object->FillCheck()) continue;
 		// A REQUIREMENT ONLY BINDS WHERE THE FIELD APPLIES. An attribute declared for items alone
@@ -497,7 +497,7 @@ bool ibValueRecordDataObjectHierarchyRef::ReadData()
 {
 	if (ibValueRecordDataObjectRef::ReadData()) {
 		const ibValueMetaObjectRecordDataHierarchyMutableRef* metaFolder = GetMetaObject();
-		wxASSERT(metaFolder);
+		ibASSERT(metaFolder);
 		// Without folders there is no IsFolder to read (FillArrayObjectByPredefinedAttribute), and every record is an item.
 		ibValue isFolder;
 		if (metaFolder->HasFolders())
@@ -516,7 +516,7 @@ bool ibValueRecordDataObjectHierarchyRef::ReadData(const ibGuid& srcGuid)
 {
 	if (ibValueRecordDataObjectRef::ReadData(srcGuid)) {
 		const ibValueMetaObjectRecordDataHierarchyMutableRef* metaFolder = GetMetaObject();
-		wxASSERT(metaFolder);
+		ibASSERT(metaFolder);
 		ibValue isFolder;   // …the same question as above
 		if (metaFolder->HasFolders())
 			ibValueRecordDataObjectHierarchyRef::GetValueByMetaID(*metaFolder->GetDataIsFolder(), isFolder);
@@ -539,7 +539,7 @@ void ibValueRecordDataObjectRef::SetDeletionMark(bool deletionMark)
 
 	if (m_metaObject != nullptr) {
 		ibValueMetaObjectAttributePredefined* attributeDeletionMark = m_metaObject->GetDataDeletionMark();
-		wxASSERT(attributeDeletionMark);
+		ibASSERT(attributeDeletionMark);
 		ibValueRecordDataObjectRef::SetValueByMetaID(*attributeDeletionMark, deletionMark);
 	}
 
@@ -553,7 +553,7 @@ void ibValueRecordDataObjectRef::SetDeletionMark(bool deletionMark)
 
 ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttributeBase* attribute, const ibString& strPrefix)
 {
-	wxASSERT(attribute);
+	ibASSERT(attribute);
 
 	// Connection comes from the active session (instance method = guaranteed
 	// session context); the increment shares its TX with the outer document

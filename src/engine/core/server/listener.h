@@ -27,9 +27,9 @@ struct CORE_API ibTlsFiles {
 	bool IsNamed() const { return !m_certificate.IsEmpty() || !m_privateKey.IsEmpty(); }
 
 	// backend.conf's word: Certificate and PrivateKey, each resolved against `folder` when relative. `conf` is
-	// read as written (wxCONFIG_USE_NO_ESCAPE_CHARACTERS, the caller's to set): a Windows path keeps its backslashes.
+	// read as written (ibFileConfig reads no escapes): a Windows path keeps its backslashes.
 	// Read once for the process, with the rest of the file (ibApplicationHost::GetTlsFiles).
-	static ibTlsFiles FromConf(const class wxConfigBase& conf, const ibString& folder);
+	static ibTlsFiles FromConf(const class ibFileConfig& conf, const ibString& folder);
 	// …the file at `path` read so, for a process that reads nothing else of it (the cluster, its tray): empty or not
 	// there - nothing named.
 	static ibTlsFiles FromConf(const ibString& path);

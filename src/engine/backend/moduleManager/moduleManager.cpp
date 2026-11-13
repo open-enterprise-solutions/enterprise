@@ -162,7 +162,7 @@ ibValueModuleManager::ibValueModuleUnit* ibValueModuleRuntimeManager::FindCommon
 bool ibValueModuleRuntimeManager::RuntimeRenameCommonModule(ibValueMetaObjectCommonModule* commonModule, const ibString& newName)
 {
 	ibValue* moduleValue = FindCommonModule(commonModule);
-	wxASSERT(moduleValue);
+	ibASSERT(moduleValue);
 
 	if (!commonModule->IsGlobalModule()) {
 		try {
@@ -186,7 +186,7 @@ bool ibValueModuleRuntimeManager::RuntimeRenameCommonModule(ibValueMetaObjectCom
 bool ibValueModuleRuntimeManager::RuntimeUnregisterCommonModule(ibValueMetaObjectCommonModule* commonModule)
 {
 	ibValuePtr<ibValueModuleManager::ibValueModuleUnit> moduleValue(FindCommonModule(commonModule));
-	wxASSERT(moduleValue);
+	ibASSERT(moduleValue);
 
 	auto iterator = std::find(m_listCommonModuleManager.begin(), m_listCommonModuleManager.end(), moduleValue);
 

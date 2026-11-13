@@ -127,6 +127,12 @@ struct CORE_API ibHelpEntry {
 	// unnoticed. JSON `class_id`: the id as the registry holds it, a number. 0 = none.
 	ibClassID classId = 0;
 
+	// THE ARTICLE THIS ONE STANDS UNDER in the tree, by its id, where its own id does not say it (2026-11-13, Max: "an
+	// enum of the button's goes into the button's section") - `enum.ButtonView` under `cls.Button`. Empty: the article
+	// one segment shorter, when there is one (a class's member under its class), else the categories
+	// (ibHelpCorpus::BuildCategoryTree). JSON `owner_id`.
+	ibString ownerId;
+
 	ibHelpKind kind = ibHelpKind::kKeyword;
 
 	// Locale-stable category keys (NOT display strings). The detail pane

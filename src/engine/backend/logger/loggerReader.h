@@ -5,8 +5,6 @@
 #include "backend/logger/loggerEntry.h"
 #include "core/logger/loggerQuery.h"   // ibLogRow / ibLogFilter — what this reader is asked and answers with
 
-#include <wx/string.h>
-
 #include <cstddef>
 #include <vector>
 

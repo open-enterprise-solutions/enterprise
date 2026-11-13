@@ -20,8 +20,6 @@ public:
 	virtual bool Fetch(const ibDataNode& request, ibDataNode& response) override;
 	// The sheet the person edited on the client, handed over (Change {Sheet}) — the template's from then on.
 	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) override;
-
-	wxDECLARE_DYNAMIC_CLASS(ibSpreadsheetTemplateView);
 };
 
 // Its document — the template metaobject's (ibMetaDocument::GetMetaObject); nothing of its own to hold. Its view is
@@ -37,8 +35,6 @@ public:
 protected:
 
 	virtual ibView* DoCreateView() override;
-
-	wxDECLARE_DYNAMIC_CLASS(ibTemplateDocument);
 };
 
 #endif

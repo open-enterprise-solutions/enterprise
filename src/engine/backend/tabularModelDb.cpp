@@ -266,7 +266,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 		for (size_t i = 0; i < m_composer.SortCount(); ++i) {
 			ibString f; bool a;
 			if (!m_composer.GetSortAt(i, f, a)) continue;
-			if (GetColumnIDByName(f) == wxNOT_FOUND
+			if (GetColumnIDByName(f) == ibNOT_FOUND
 			 || q->GetProvider().ResolveReferenceSortColumn(q, q->ResolveColumnByName(f)) != nullptr) {
 				dotWalkSort = true;
 				break;
@@ -341,7 +341,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 			ibString field; bool asc;
 			if (!m_composer.GetSortAt(i, field, asc)) continue;
 			const ibMetaID col = GetColumnIDByName(field);
-			if (col == wxNOT_FOUND) continue;
+			if (col == ibNOT_FOUND) continue;
 			page.m_anchorSortValues.push_back(anchorValue(col));
 		}
 		// ... PLUS the row's PRIMARY KEY as the cursor tail (matches EffectiveSort). Pull each key column's value
@@ -457,7 +457,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// queryable's references — and a path that cannot be walked so (through a composite recorder) has no column
 	// to be drawn under, and the heading still carries its key and its caption.
 	// Resolve a possibly-dotted dimension field NAME to its leaf column id by walking the queryable's references;
-	// wxNOT_FOUND when it is not a resolvable dot-walk path. (A plain field is resolved by GetColumnIDByName.)
+	// ibNOT_FOUND when it is not a resolvable dot-walk path. (A plain field is resolved by GetColumnIDByName.)
 	auto resolveDotWalkLeaf = [&](const ibString& field) -> ibMetaID {
 		const ibBackendQueryable* walk = q;
 		ibString rest = field;
@@ -468,13 +468,13 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 			if (leaf == nullptr) break;
 			if (!rest.IsEmpty()) walk = walk->GetProvider().ResolveReferenceTarget(walk, leaf);   // hop into the reference target
 		}
-		return (leaf != nullptr && rest.IsEmpty()) ? leaf->GetColumnId() : ibMetaID(wxNOT_FOUND);
+		return (leaf != nullptr && rest.IsEmpty()) ? leaf->GetColumnId() : ibMetaID(ibNOT_FOUND);
 	};
 
-	ibMetaID groupDimCol = ibMetaID(wxNOT_FOUND);
+	ibMetaID groupDimCol = ibMetaID(ibNOT_FOUND);
 	if (groupLevel) {
 		groupDimCol = GetColumnIDByName(dims[depth]);
-		if (groupDimCol == wxNOT_FOUND)
+		if (groupDimCol == ibNOT_FOUND)
 			groupDimCol = resolveDotWalkLeaf(dims[depth]);
 	}
 
@@ -575,7 +575,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 			}
 			// …and the key stands under the column that draws it, so a cell showing that field on the heading
 			// reads it (a dot-walk dimension arrives under an output column of its own, not the leaf's).
-			if (groupDimCol != wxNOT_FOUND)
+			if (groupDimCol != ibNOT_FOUND)
 				values[groupDimCol] = dimValue;
 			// ANCESTOR-dimension SCOPE on the group header (nested grouping). The per-level drill FILTERS each
 			// already-drilled ancestor dimension to its browsed value (parentPath[k]) but does NOT project it, so
@@ -589,9 +589,9 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 			// ancestor dimension keys by its leaf id. emplace keeps r.m_values authoritative (never overwrites).
 			for (size_t k = 0; k < depth && k < dims.size() && k < parentPath.size(); ++k) {
 				ibMetaID ancId = GetColumnIDByName(dims[k]);
-				if (ancId == ibMetaID(wxNOT_FOUND))
+				if (ancId == ibMetaID(ibNOT_FOUND))
 					ancId = resolveDotWalkLeaf(dims[k]);
-				if (ancId != ibMetaID(wxNOT_FOUND))
+				if (ancId != ibMetaID(ibNOT_FOUND))
 					values.emplace(ancId, parentPath[k]);
 			}
 			std::vector<ibValue> groupPath = parentPath;
@@ -770,7 +770,7 @@ void ibValueModelCursor::BuildAncestorBreadcrumb(const ibDataViewItem& fromRow, 
 	// THE ROW'S OWN IDENTITY COLUMN, needed by BOTH shapes below — the folder walk keys its point
 	// lookups by it, and the grouped shape has to be able to RECOGNISE it (see there).
 	const ibMetaID rowKeyCol = (!keyCols.empty() && keyCols.front() != nullptr)
-		? keyCols.front()->GetColumnId() : wxNOT_FOUND;
+		? keyCols.front()->GetColumnId() : ibNOT_FOUND;
 
 	// GROUPED (grouping is on): the ancestors are the GROUP levels, NOT folders — the folder tree is replaced. Build
 	// one group crumb per dimension, each carrying the group PATH root→this (the row's value for dims[0..i]); deepest
@@ -795,7 +795,7 @@ void ibValueModelCursor::BuildAncestorBreadcrumb(const ibDataViewItem& fromRow, 
 			ibString field; ibQueryDimUnfold kind = ibQueryDimUnfold::Elements;
 			if (!m_composer.GetGroupAt(i, field, kind) || field.IsEmpty()) continue;
 			const ibMetaID dimCol = GetColumnIDByName(field);
-			if (dimCol == wxNOT_FOUND) continue;
+			if (dimCol == ibNOT_FOUND) continue;
 
 			// ⭐⭐ A FOLD ON THE ROW'S OWN KEY IS THE HIERARCHY, NOT A GROUPING. `GroupCount()` answers
 			// from the composition's LEVEL CHAIN when no user grouping is set, and a hierarchical list's
@@ -805,7 +805,7 @@ void ibValueModelCursor::BuildAncestorBreadcrumb(const ibDataViewItem& fromRow, 
 			// are its FOLDERS, and the walk below is what answers that — so this contributes nothing and
 			// lets it. (Skipped rather than refused: a list may genuinely group by other dimensions too,
 			// and those crumbs stay valid.)
-			if (rowKeyCol != wxNOT_FOUND && dimCol == rowKeyCol) continue;
+			if (rowKeyCol != ibNOT_FOUND && dimCol == rowKeyCol) continue;
 
 			ibValue dimVal;
 			node->GetValue(dimCol, dimVal);
@@ -834,7 +834,7 @@ void ibValueModelCursor::BuildAncestorBreadcrumb(const ibDataViewItem& fromRow, 
 	const ibBackendQueryColumn* hierCol = q->GetHierarchyColumn();
 	if (hierCol == nullptr)
 		return;   // not a hierarchical source — no ancestors to walk
-	if (rowKeyCol == wxNOT_FOUND)
+	if (rowKeyCol == ibNOT_FOUND)
 		return;
 	const ibMetaID hCol = hierCol->GetColumnId();
 

@@ -58,7 +58,7 @@ struct ibCommandEntry {
 	std::vector<ibValueCommandBarItem*> members;
 	// The hint on the tool. Empty: the caption.
 	ibString                tooltip;
-	ibCommandEntry() : id(wxNOT_FOUND), representation(ibRepresentation_Auto), enabled(true), isDefault(false),
+	ibCommandEntry() : id(ibNOT_FOUND), representation(ibRepresentation_Auto), enabled(true), isDefault(false),
 		item(nullptr), kind(ibCommandEntryKind_Command), filterLine(0) {}
 	ibCommandEntry(const ibActionID& i, const ibString& c, const ibPictureDescription& p, ibRepresentation r, bool en = true, ibValueCommandBarItem* it = nullptr)
 		: id(i), caption(c), picture(p), representation(r), enabled(en), isDefault(false), item(it),
@@ -111,7 +111,7 @@ public:
 	// command source as a 1-hop [metaId] path.
 	ibMetaID GetCommandMetaId() const {
 		const ibCommandDescription d = m_propertyCommand->GetValueAsCommandDesc();
-		return d.IsOk() ? d.GetLeaf() : wxNOT_FOUND;
+		return d.IsOk() ? d.GetLeaf() : ibNOT_FOUND;
 	}
 	void SetCommandMetaId(const ibMetaID& id) { m_propertyCommand->SetValue(ibCommandDescription(id)); }
 

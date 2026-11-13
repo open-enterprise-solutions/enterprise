@@ -58,7 +58,7 @@ public:
 
 	inline T& operator*() const {
 		T* const ptr = Ptr();
-		wxASSERT(ptr != nullptr);
+		ibASSERT(ptr != nullptr);
 		return *(ptr);
 	}
 

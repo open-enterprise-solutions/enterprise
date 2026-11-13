@@ -13,7 +13,7 @@ ibValue ibCtorMetaValueTypeReference::CreateObject() const
 {
 	// OnDemand is REQUIRED here, not preferred: reading the row would materialise attribute values,
 	// one of which is itself a reference, re-entering this very function -> stack overflow.
-	return ibValueReferenceDataObject::Create(m_metaObject, wxNullGuid, ibReferenceLoad::OnDemand);
+	return ibValueReferenceDataObject::Create(m_metaObject, ibNullGuid, ibReferenceLoad::OnDemand);
 }
 
 //object class

@@ -1,8 +1,6 @@
 #ifndef _FRMSERVER_OES_H__
 #define _FRMSERVER_OES_H__
 
-#include <wx/wx.h>
-
 #include "core/core.h"   // IB_EXPORT / IB_IMPORT
 
 // THE SERVER'S FRONTEND — the forms, their documents and the protocol a client renders them over. It holds no

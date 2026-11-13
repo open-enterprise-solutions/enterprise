@@ -6,14 +6,13 @@
 #include "backend/backend_exception.h" // ibBackendException
 #include "core/diagnostics/journal.h"
 
-#include <wx/log.h>
-
 #include <chrono>
 #include <new>
 #include <stdexcept>
 
 #ifdef __IBMSW__
 #include <objbase.h>   // CoInitializeEx — a worker's COM apartment
+#include <deque>
 #endif
 
 namespace {

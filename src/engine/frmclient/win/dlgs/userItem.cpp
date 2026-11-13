@@ -222,7 +222,7 @@ ibDialogUserItem::ibDialogUserItem(wxWindow* parent, wxWindowID id, const wxStri
 				return;
 
 			if (!m_userGuid.isValid())
-				m_userGuid = wxNewUniqueGuid;
+				m_userGuid = ibNewUniqueGuid;
 
 			ibUserInfo userInfo;
 

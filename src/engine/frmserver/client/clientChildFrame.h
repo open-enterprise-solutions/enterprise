@@ -9,7 +9,7 @@
 // It does not own the document: the document goes with its last view (ibDocument::DeleteAllViews), and
 // the tab goes after it — the frame erases it once the view is gone.
 
-#include <wx/string.h>
+#include "core/fstring.h"   // ibString
 
 #include "frmserver/docView/docView.h"
 

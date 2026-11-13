@@ -31,12 +31,10 @@ if(WIN32)
     target_sources(frmserver PRIVATE frmserver.rc)
 endif()
 
-# Of wx the base only, as the backend's (backend/CMakeLists.txt): a form on the server is data, drawn by a client.
-target_compile_definitions(frmserver PRIVATE wxUSE_GUI=0)
+# No wx, as the backend has none (backend/CMakeLists.txt): a form on the server is data, drawn by a client.
 target_link_libraries(frmserver
     PRIVATE
         backend
-        wx::base
 )
 
 set_target_properties(frmserver PROPERTIES

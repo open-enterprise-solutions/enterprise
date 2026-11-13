@@ -240,7 +240,7 @@ class BACKEND_API ibValueMetaObjectTableDataRef : public ibValueMetaObjectTableD
 	//physical DB table — only the DB variant has one.
 	virtual ibString GetPhysicalTableName() const {
 		ibValueMetaObject* parentMeta = GetParent();
-		wxASSERT(parentMeta);
+		ibASSERT(parentMeta);
 		return ibString::Format(ibT("%s%i_VT%i"),
 			parentMeta->GetClassName(),
 			parentMeta->GetMetaID(),

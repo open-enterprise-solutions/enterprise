@@ -14,8 +14,6 @@
 // ibInterfaceCompositionView implementation
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibInterfaceCompositionView, ibMetaView);
-
 void ibInterfaceCompositionView::OnDraw(ibDataNode& frame)
 {
 	const ibValueMetaObject* const metaInterface = GetDocument()->GetMetaObject();
@@ -81,9 +79,9 @@ ibDataNode& ibInterfaceCompositionView::AppendItem(ibDataNode& parent, ibValueMe
 void ibInterfaceCompositionView::FillData(ibDataNode& root)
 {
 	const ibMetaData* metaData = GetDocument()->GetMetaObject()->GetMetaData();
-	wxASSERT(metaData);
+	ibASSERT(metaData);
 	const ibValueMetaObject* commonObject = metaData->GetCommonMetaObject();
-	wxASSERT(commonObject);
+	ibASSERT(commonObject);
 
 	root.SetMetaId(commonObject->GetMetaID());
 	root.SetValue(ibProtocol::ibView::ibCheckTree::Title, commonObject->GetName());
@@ -128,5 +126,4 @@ void ibInterfaceCompositionView::FillData(ibDataNode& root)
 // ----------------------------------------------------------------------------
 // ibInterfaceCompositionDocument implementation
 // ----------------------------------------------------------------------------
-
-wxIMPLEMENT_DYNAMIC_CLASS(ibInterfaceCompositionDocument, ibMetaDocument);
+

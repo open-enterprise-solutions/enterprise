@@ -101,7 +101,7 @@ public:
 	// and a legitimate thing to store — saying otherwise made it skipped on the way to the store, and
 	// the cell came back blank (journal, 2026-08-29: `store: '…EmptyRef' empty=1 packed=0`). Empty
 	// here means only "this declaration names nothing at all".
-	virtual bool IsEmpty() const override { return m_metaId == wxNOT_FOUND && m_written.IsEmpty(); }
+	virtual bool IsEmpty() const override { return m_metaId == ibNOT_FOUND && m_written.IsEmpty(); }
 
 	ibMetaID GetMetaId() const { return m_metaId; }
 	const ibGuid& GetGuid() const { return m_guid; }
@@ -111,7 +111,7 @@ protected:
 	virtual bool DoDeserialize(const class ibDataNode& node) override;
 
 private:
-	ibMetaID m_metaId = wxNOT_FOUND;   // the metaobject the value belongs to
+	ibMetaID m_metaId = ibNOT_FOUND;   // the metaobject the value belongs to
 	ibGuid   m_guid;                   // which of its declared values — empty = the empty reference
 	ibString m_written;                // how it reads: `CatalogRef.Goods.Chair`
 };
@@ -176,7 +176,7 @@ protected:
 private:
 	ibString          m_path;            // dot-path in the source's technical names
 	ibString          m_presentation;    // what a user sees; empty when built from script
-	ibMetaID          m_leafId = wxNOT_FOUND;   // the queryable column id, against ONE source
+	ibMetaID          m_leafId = ibNOT_FOUND;   // the queryable column id, against ONE source
 	ibTypeDescription m_typeDescription;        // the field's type — for AdjustValue / choice
 };
 

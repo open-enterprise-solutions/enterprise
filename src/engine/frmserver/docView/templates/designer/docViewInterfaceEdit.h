@@ -29,8 +29,6 @@ private:
 	ibDataNode& AppendItem(ibDataNode& parent, ibValueMetaObject* metaObject);
 
 	void FillData(ibDataNode& root);
-
-	wxDECLARE_DYNAMIC_CLASS(ibInterfaceCompositionView);
 };
 
 // Its document — the section metaobject's (ibMetaDocument::GetMetaObject); the composition lives in the objects, saved
@@ -43,7 +41,6 @@ public:
 
 	ibInterfaceCompositionDocument(const ibInterfaceCompositionDocument&) = delete;
 	ibInterfaceCompositionDocument& operator=(const ibInterfaceCompositionDocument&) = delete;
-	wxDECLARE_DYNAMIC_CLASS(ibInterfaceCompositionDocument);
 };
 
 #endif

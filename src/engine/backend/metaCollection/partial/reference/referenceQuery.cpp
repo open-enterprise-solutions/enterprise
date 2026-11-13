@@ -397,7 +397,7 @@ bool ibValueReferenceDataObject::FindValue(const ibString& input, const ibChoice
 			// read is looking at the wrong column, which is a defect here and not a property of the row.
 			// Skipping rows quietly would hide it and hand back a short list that looks complete.
 			if (rowReference == nullptr) {
-				wxASSERT_MSG(false, wxT("FindValue: the identity column did not answer with a reference"));
+				ibASSERT_MSG(false, ibT("FindValue: the identity column did not answer with a reference"));
 				return false;
 			}
 			if (everything || ibValueDataObjectComparator(m_metaObject, rowReference->GetGuid().GetGuid(), selection).Matches(input))

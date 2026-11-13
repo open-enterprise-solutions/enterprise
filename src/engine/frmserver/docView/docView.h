@@ -22,30 +22,20 @@
 // into a single pair to keep both layers reviewable side-by-side.
 /////////////////////////////////////////////////////////////////////////////
 
-#include "wx/defs.h"
-
-#if wxUSE_DOC_VIEW_ARCHITECTURE
-
-#include "wx/string.h"
-#include "wx/vector.h"
-#include "wx/dlist.h"
+#include "core/fstring.h"   // ibString
 
 #include "frmserver/docView/commandProcessor.h"   // a document's commands, and their undo
 #include "frmserver/docView/docCommand.h"         // the commands a manager offers
 #include "backend/backend_picture.h"
 #include "core/description/pictureDescription.h"  // ibPictureDescription — a document's icon, sent by its id
 
-#if wxUSE_STD_IOSTREAM
-  #include "wx/iosfwrap.h"
-#else
-  #include "wx/stream.h"
-#endif
-
+#include <iosfwd>     // a document's file, read and written as a std stream (LoadObject / SaveObject)
 #include <concepts>   // std::derived_from — what CreateDocument makes
 #include <list>
 #include <vector>
 #include <map>
 #include <memory>
+#include <typeindex>  // std::type_index - the document class a template makes (wx's CLASSINFO)
 
 #include "frmserver/frmserver.h"          // FRMSERVER_API
 #include "frmserver/schema/clientSchema.h"  // the schemas a manager offers
@@ -109,7 +99,7 @@ typedef std::vector<ibDocTemplate*> ibDocTemplateVector;
 
 // Not an event handler, as wx's are: nothing here is a window, and nothing routes commands through the
 // documents — a client's events come in through the form's door (ibValueForm::DispatchEvent).
-class FRMSERVER_API ibDocument : public wxObject
+class FRMSERVER_API ibDocument
 {
 public:
     ibDocument(ibDocument *parent = nullptr);
@@ -161,13 +151,8 @@ public:
     // file is its owner's (ibClientFrame::GetSaveAsDocument). None: it may.
     virtual bool CanSave() const { return true; }
 
-#if wxUSE_STD_IOSTREAM
     virtual std::ostream& SaveObject(std::ostream& stream);
     virtual std::istream& LoadObject(std::istream& stream);
-#else
-    virtual wxOutputStream& SaveObject(wxOutputStream& stream);
-    virtual wxInputStream& LoadObject(wxInputStream& stream);
-#endif
 
     virtual bool OnSaveDocument(const ibString& filename);
     virtual bool OnOpenDocument(const ibString& filename);
@@ -200,12 +185,12 @@ public:
 
     ibViewVector GetViewsVector() const;
 
-    wxList& GetViews() { return m_documentViews; }
-    const wxList& GetViews() const { return m_documentViews; }
+    std::list<ibView*>& GetViews() { return m_documentViews; }
+    const std::list<ibView*>& GetViews() const { return m_documentViews; }
 
     ibView *GetFirstView() const;
 
-    virtual void UpdateAllViews(ibView *sender = nullptr, wxObject *hint = nullptr);
+    virtual void UpdateAllViews(ibView *sender = nullptr);
     virtual void NotifyClosing();
     virtual bool DeleteAllViews();
 
@@ -288,7 +273,7 @@ public:
     const std::list<ibDocument*>& GetChildDocuments() const { return m_childDocuments; }
 
 protected:
-    wxList                m_documentViews;
+    std::list<ibView*>    m_documentViews;
     ibString              m_documentFile;
     ibString              m_documentTitle;
     ibString              m_documentTypeName;
@@ -316,12 +301,11 @@ protected:
     std::list<ibDocument*> m_childDocuments;
 
 private:
-    wxDECLARE_ABSTRACT_CLASS(ibDocument);
     ibDocument(const ibDocument&) = delete;
     ibDocument& operator=(const ibDocument&) = delete;
 };
 
-class FRMSERVER_API ibView: public wxObject
+class FRMSERVER_API ibView
 {
 public:
     ibView();
@@ -356,7 +340,7 @@ public:
     // WHAT THE PERSON DID IN THE VIEW ITSELF, not in a control of a form — a text typed into a text document's view
     // (Change {Text}). False: this view takes no such event.
     virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind /*event*/, const ibDataNode& /*args*/) { return false; }
-    virtual void OnUpdate(ibView *sender, wxObject *hint = nullptr);
+    virtual void OnUpdate(ibView *sender);
     virtual void OnClosingDocument() {}
     virtual void OnChangeFilename();
 
@@ -389,7 +373,6 @@ protected:
     ibDocChildFrameAnyBase *m_docChildFrame;
 
 private:
-    wxDECLARE_ABSTRACT_CLASS(ibView);
     ibView(const ibView&) = delete;
     ibView& operator=(const ibView&) = delete;
 };
@@ -405,7 +388,7 @@ private:
 // ONE MANAGER PER CLIENT SESSION, not per process: the session's main frame
 // holds its own (ibDocParentFrameAnyBase::m_docManager).
 
-class FRMSERVER_API ibDocManager: public wxObject
+class FRMSERVER_API ibDocManager
 {
 public:
     // NB: flags are unused, don't pass ibDOC_XXX to this ctor
@@ -440,7 +423,8 @@ public:
     void AssociateTemplate(ibDocTemplate *temp);
     void DisassociateTemplate(ibDocTemplate *temp);
 
-    ibDocTemplate* FindTemplate(const wxClassInfo* documentClassInfo);
+    // The template whose documents are of this class - what CreateDocument<T> makes its document by.
+    ibDocTemplate* FindTemplate(const std::type_index& documentType) const;
 
     ibDocument* FindDocumentByPath(const ibString& path) const;
 
@@ -478,8 +462,8 @@ public:
     ibDocVector GetDocumentsVector() const;
     ibDocTemplateVector GetTemplatesVector() const;
 
-    wxList& GetDocuments() { return m_docs; }
-    wxList& GetTemplates() { return m_templates; }
+    std::list<ibDocument*>& GetDocuments() { return m_docs; }
+    std::list<ibDocTemplate*>& GetTemplates() { return m_templates; }
 
     virtual ibString MakeNewDocumentName();
 
@@ -490,46 +474,35 @@ public:
     // ------------------------------------------------------------------
     // OES meta-template API — see ibMetaDocTemplate in docManager.h.
     //
-    // AddDocTemplate(ibPictureID/ibClassID,...) overloads create an
-    // ibMetaDocTemplate, populate its CLSID + picture id, and associate it
-    // with the same m_templates list as plain file templates. Lookups
-    // by CLSID iterate m_templates and dynamic_cast.
+    // AddDocTemplate<TDoc, TView>(ibPictureID/ibClassID,...) creates an
+    // ibMetaDocTemplate that makes a TDoc and its TView (wx's CLASSINFO
+    // pair), populates its CLSID + picture id, and associates it with the
+    // same m_templates list as plain file templates. Lookups by CLSID
+    // iterate m_templates and dynamic_cast.
     //
     // OpenForm is the entry point for "open this metaobject" — distinct
     // from CreateDocument (file/path-based).
     // ------------------------------------------------------------------
 
-    void AddDocTemplate(const ibPictureID& id,
-                        const ibString& descr,
-                        const ibString& filter,
-                        const ibString& dir,
-                        const ibString& ext,
-                        const ibString& docTypeName,
-                        const ibString& viewTypeName,
-                        wxClassInfo* docClassInfo,
-                        wxClassInfo* viewClassInfo,
-                        long flags = ibTEMPLATE_VISIBLE);
-
+    template <std::derived_from<ibDocument> TDoc, std::derived_from<ibView> TView>
     void AddDocTemplate(const ibPictureID& id,
                         const ibString& descr,
                         const ibString& filter,
                         const ibString& ext,
                         const ibString& docTypeName,
                         const ibString& viewTypeName,
-                        wxClassInfo* docClassInfo,
-                        wxClassInfo* viewClassInfo,
-                        long flags = ibTEMPLATE_VISIBLE);
+                        long flags = ibTEMPLATE_VISIBLE)
+    {
+        AddDocTemplate(id, descr, filter, ext, docTypeName, viewTypeName, typeid(TDoc),
+            []() -> ibDocument* { return new TDoc; }, []() -> ibView* { return new TView; }, flags);
+    }
 
-    void AddDocTemplate(const ibClassID& clsid,
-                        const ibString& descr,
-                        const ibString& filter,
-                        const ibString& ext,
-                        wxClassInfo* docClassInfo,
-                        wxClassInfo* viewClassInfo);
-
-    void AddDocTemplate(const ibClassID& clsid,
-                        wxClassInfo* docClassInfo,
-                        wxClassInfo* viewClassInfo);
+    template <std::derived_from<ibDocument> TDoc, std::derived_from<ibView> TView>
+    void AddDocTemplate(const ibClassID& clsid)
+    {
+        AddDocTemplate(clsid, typeid(TDoc),
+            []() -> ibDocument* { return new TDoc; }, []() -> ibView* { return new TView; });
+    }
 
     // ⭐⭐ A METAOBJECT OPENS BY ITS CLSID, THROUGH THE TEMPLATE REGISTERED FOR IT — the same
     // mechanism an external data processor opens by, and a module, and a form: AddDocTemplate above
@@ -546,7 +519,6 @@ public:
     ibMetaDocTemplate* FindMetaTemplate(const ibClassID& clsid) const;
     // The classes a metaobject's editor is registered for — what OpenForm opens; any other's opens nothing.
     std::vector<ibClassID> GetMetaTemplateClasses() const;
-    ibDocTemplate*     FindTemplateByDocClassInfo(const wxClassInfo* classInfo) const;
 
     // Helper: ibDocument* GetCurrentDocument() is the wx-style base accessor;
     // callers that need the metadata-aware downcast use this directly.
@@ -555,7 +527,7 @@ public:
     template <std::derived_from<ibDocument> T, typename... Args>
     T* CreateDocument(Args&&... args) const
     {
-        ibDocTemplate* docTemplate = FindTemplateByDocClassInfo(CLASSINFO(T));
+        ibDocTemplate* docTemplate = FindTemplate(typeid(T));
         if (docTemplate != nullptr) {
             T* doc = new T(std::forward<Args>(args)...);
             doc->SetDocumentTemplate(docTemplate);
@@ -583,6 +555,24 @@ public:
     const std::map<ibDocCommand, ibDocCommandInfo>& GetCommands() const { return m_commands; }
 
 protected:
+    // What AddDocTemplate<TDoc, TView> registers: the document's class and the two functions that make the document
+    // and its view.
+    void AddDocTemplate(const ibPictureID& id,
+                        const ibString& descr,
+                        const ibString& filter,
+                        const ibString& ext,
+                        const ibString& docTypeName,
+                        const ibString& viewTypeName,
+                        const std::type_index& docType,
+                        ibDocument* (*createDocument)(),
+                        ibView* (*createView)(),
+                        long flags);
+
+    void AddDocTemplate(const ibClassID& clsid,
+                        const std::type_index& docType,
+                        ibDocument* (*createDocument)(),
+                        ibView* (*createView)());
+
     void RegisterSchema(ibProtocol::ibSchema::ibKind kind, std::unique_ptr<ibClientSchema> schema);
     void RegisterCommand(ibDocCommand command, const ibString& title, const ibString& shortcut,
         ibClientStockPicture picture);
@@ -604,13 +594,12 @@ protected:
     // the manager's top level instead of under its tree, and every later "is it open?" then looks in the wrong place.
     class ibMetaDataDocument* FindMetaDataDocument(const class ibMetaData* metaData) const;
 
-    int               m_defaultDocumentNameCounter;
-    int               m_maxDocsOpen;
-    wxList            m_docs;
-    wxList            m_templates;
-    ibView*           m_currentView;
+    int                       m_defaultDocumentNameCounter;
+    int                       m_maxDocsOpen;
+    std::list<ibDocument*>    m_docs;
+    std::list<ibDocTemplate*> m_templates;
+    ibView*                   m_currentView;
 
-    wxDECLARE_DYNAMIC_CLASS(ibDocManager);
     ibDocManager(const ibDocManager&) = delete;
     ibDocManager& operator=(const ibDocManager&) = delete;
 };
@@ -706,33 +695,17 @@ protected:
     ibDocParentFrameAnyBase& operator=(const ibDocParentFrameAnyBase&) = delete;
 };
 
-// File-to-stream helpers (preserved for back-compat with existing formats).
-
-#if wxUSE_STD_IOSTREAM
-bool FRMSERVER_API
-ibTransferFileToStream(const ibString& filename, std::ostream& stream);
-bool FRMSERVER_API
-ibTransferStreamToFile(std::istream& stream, const ibString& filename);
-#else
-bool FRMSERVER_API
-ibTransferFileToStream(const ibString& filename, wxOutputStream& stream);
-bool FRMSERVER_API
-ibTransferStreamToFile(wxInputStream& stream, const ibString& filename);
-#endif // wxUSE_STD_IOSTREAM
-
 inline ibViewVector ibDocument::GetViewsVector() const
 {
-    return m_documentViews.AsVector<ibView*>();
+    return ibViewVector(m_documentViews.begin(), m_documentViews.end());
 }
 
 inline ibDocVector ibDocManager::GetDocumentsVector() const
 {
-    return m_docs.AsVector<ibDocument*>();
+    return ibDocVector(m_docs.begin(), m_docs.end());
 }
 
-// ibDocManager::GetTemplatesVector() is out-of-line in docManager.cpp:
-// wxObjectList::AsVector<T*> needs the complete ibDocTemplate type for the
-// internal static_cast, and ibDocTemplate is forward-declared in this header.
+// ibDocManager::GetTemplatesVector() is out-of-line in docManager.cpp.
 
 // ============================================================================
 //                       PART 2 — OES METADATA ADAPTER
@@ -748,7 +721,6 @@ inline ibDocVector ibDocManager::GetDocumentsVector() const
 // kludge), so we use them directly with a typed wrapper for back-compat.
 
 class FRMSERVER_API ibMetaDocument : public ibBackendMetaDocument, public ibDocument {
-	wxDECLARE_ABSTRACT_CLASS(ibMetaDocument);
 public:
 
 	virtual void SetMetaObject(ibValueMetaObject* metaObject) { m_metaObject = metaObject; }
@@ -809,13 +781,12 @@ public:
 	// IsChildDocument().
 	virtual bool IsChildDocument() const override { return m_childDoc; }
 
-	// Typed view over base's m_childDocuments. Back-compat wrapper for
-	// pre-collapse callers that expected wxDList<ibMetaDocument>; new code
-	// should prefer iterating base's m_childDocuments with a static_cast.
-	wxDList<ibMetaDocument> GetChild() const {
-		wxDList<ibMetaDocument> result;
+	// Typed view over base's m_childDocuments; new code should prefer
+	// iterating base's m_childDocuments with a static_cast.
+	std::vector<ibMetaDocument*> GetChild() const {
+		std::vector<ibMetaDocument*> result;
 		for (ibDocument* d : m_childDocuments)
-			result.Append(static_cast<ibMetaDocument*>(d));
+			result.push_back(static_cast<ibMetaDocument*>(d));
 		return result;
 	}
 
@@ -833,7 +804,6 @@ protected:
 };
 
 class FRMSERVER_API ibMetaDataDocument : public ibMetaDocument {
-	wxDECLARE_ABSTRACT_CLASS(ibMetaDataDocument);
 public:
 	virtual class ibMetaData* GetMetaData() const = 0;
 };
@@ -842,7 +812,6 @@ public:
 // OnClose-forwarding overrides dropped — they duplicated the base.
 
 class FRMSERVER_API ibMetaView : public ibView {
-	wxDECLARE_ABSTRACT_CLASS(ibMetaView);
 public:
 
 	ibMetaDocument* GetDocument() const {
@@ -856,7 +825,5 @@ public:
 
 	virtual void OnDraw(ibDataNode& frame) override {}
 };
-
-#endif // wxUSE_DOC_VIEW_ARCHITECTURE
 
 #endif // __OBJ_INFO_H__

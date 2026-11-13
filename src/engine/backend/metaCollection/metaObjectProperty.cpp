@@ -38,7 +38,7 @@ void ibValueMetaObject::OnPropertyChanged(ibProperty* property, const ibVariant&
 			m_metaData->InvalidateCtorNames();
 		m_propertySynonym->SetValue(stringUtils::GenerateSynonym(newValue.GetString()));
 	}
-	wxASSERT(m_metaData);
+	ibASSERT(m_metaData);
 
 	// ⭐ THE EDIT IS STATED, NOT DRAWN. This used to ask the metadata for its tree — purely to learn
 	// "am I in a designer?" — and then reach through a session for the main window and repaint it.

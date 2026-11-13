@@ -4,6 +4,7 @@
 #include "backend/databaseLayer/databaseLayerException.h"
 
 #include <bit>   // std::bit_cast — an unsigned BIGINT written with its bits as they are
+#include <cstring>
 
 void ibDatabaseParameterFirebird::RequireParameterBuffer() const
 {

@@ -21,14 +21,14 @@ class BACKEND_API ibValueType : public ibValue {
 
 	virtual bool CompareValueEQ(const ibVariant& cParam) const {
 		const ibValueType* rValue = CastValue<ibValueType>(cParam);
-		wxASSERT(rValue);
+		ibASSERT(rValue);
 		return m_clsid == rValue->m_clsid;
 	}
 
 	//operator '!='
 	virtual bool CompareValueNE(const ibVariant& cParam) const {
 		const ibValueType* rValue = CastValue<ibValueType>(cParam);
-		wxASSERT(rValue);
+		ibASSERT(rValue);
 		return m_clsid != rValue->m_clsid;
 	}
 

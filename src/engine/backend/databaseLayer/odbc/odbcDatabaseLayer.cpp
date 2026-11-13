@@ -5,6 +5,8 @@
 
 #include "backend/databaseLayer/databaseErrorCodes.h"
 
+#include <cstring>
+
 // ctor()
 ibDatabaseLayerODBC::ibDatabaseLayerODBC()
 	: ibDatabaseLayer()

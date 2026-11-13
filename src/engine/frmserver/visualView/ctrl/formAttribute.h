@@ -137,7 +137,7 @@ class FRMSERVER_API ibFormAttributeValue :
 		ibValueForm* m_ownerForm;
 		bool         m_isMain = false;
 		bool         m_isAddedByModule = false;
-		ibMetaID     m_attributeId = wxNOT_FOUND;
+		ibMetaID     m_attributeId = ibNOT_FOUND;
 
 		ibPropertyCategory* m_categoryCommon = ibPropertyObject::CreatePropertyCategory(ibT("Common"), _("General"));
 		ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_categoryCommon, ibT("Name"), _("Name"), _("The attribute's name: how the form module reads and writes it (by bare name) and how a control's data path names it. Unique on the form."), ibT(""));

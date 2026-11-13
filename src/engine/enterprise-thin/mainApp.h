@@ -1,7 +1,7 @@
 #ifndef _MAIN_ENTERPRISE_APP_H__
 #define _MAIN_ENTERPRISE_APP_H__
 
-#include "core/diagnostics/oesApp.h"   // ibWxApp — the journal and the dumps, the light appearance, the refusals said
+#include "deskgui/app.h"               // ibWxApp — the journal and the dumps, the light appearance, the refusals said
 
 // THE THIN RUNTIME — the runtime as a thin client: it opens a connection — to an
 // application server by its address, or to a file base it opens in its own process (fileserver, loaded for it) — and

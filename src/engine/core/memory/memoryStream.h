@@ -108,7 +108,7 @@ public:
 	inline int			elapsed()	const { return m_size - m_pos; }
 	inline int			tell()	const { return m_pos; }
 	// The end itself (ptr == m_size) is a legal place to sit: that is eof().
-	// Past it, or before the start, is a refusal in every build — a wxASSERT
+	// Past it, or before the start, is a refusal in every build — a ibASSERT
 	// is compiled out of Release, and the next read is then already off the block.
 	inline void			seek(int ptr) const {
 		if (ptr < 0 || ptr > m_size)
@@ -168,7 +168,7 @@ public:
 		m_last_pos = tell();
 		std::uint64_t	dwSize = find_chunk(ID);
 		if (dwSize != 0) {
-			wxASSERT(dwSize == dest_size);
+			ibASSERT(dwSize == dest_size);
 			r(dest, dwSize);
 			return true;
 		}
@@ -179,7 +179,7 @@ public:
 		m_last_pos = tell();
 		std::uint64_t	dwSize = find_chunk(ID);
 		if (dwSize != 0) {
-			wxASSERT(dwSize == dest_size);
+			ibASSERT(dwSize == dest_size);
 			r(dest.GetAppendBuf(dwSize), dwSize);
 			dest.UngetAppendBuf(dwSize);
 			return true;

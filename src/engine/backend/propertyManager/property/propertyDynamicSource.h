@@ -73,7 +73,7 @@ public:
 	// ⭐ EMPTY MEANS NOBODY PICKED ONE — not "it does not resolve just now". Asked of the ID, because
 	// a source that is registered later is a source that WAS picked, and answering "empty" for it is
 	// what made a load drop it (see ReadNodeValue).
-	virtual bool IsEmptyProperty() const override { return GetTableId() == wxNOT_FOUND; }
+	virtual bool IsEmptyProperty() const override { return GetTableId() == ibNOT_FOUND; }
 
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
 	virtual bool WriteNodeValue(ibDataValue& value) const override;

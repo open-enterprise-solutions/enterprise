@@ -18,7 +18,6 @@
 #include "core/description/compositionDescription.h"   // the filter and the rules read here
 #include "backend/composition/drivers/compositionDriver.h"   // ibCompositionAttr — what a rule draws a cell with
 
-#include <wx/string.h>
 #include <functional>   // what the caller knows of the row
 #include <vector>
 

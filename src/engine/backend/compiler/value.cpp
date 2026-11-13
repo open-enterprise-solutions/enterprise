@@ -20,7 +20,6 @@
 #include <iostream>
 #include <sstream>
 #include <thread>
-#include <wx/log.h>
 #include "core/diagnostics/debugTrace.h"
 
 // Atomic counter — Create/Delete can race across the HTTP and worker
@@ -71,7 +70,7 @@ void ibValue::DebugValueDelete() noexcept
 #endif
 
 //**********************************************************************
-BACKEND_API const ibValue wxEmptyValue;
+BACKEND_API const ibValue ibEmptyValue;
 //**********************************************************************
 
 // THE LIFECYCLE IS THE VARIANT'S, and the constructors, the destructor and the assignments that pass it on are in
@@ -183,7 +182,7 @@ bool ibValue::SetAt(const ibValue& varKeyValue, const ibValue& varValue)
 	if (m_pRef && m_typeClass == ibValueTypes::TYPE_REFFER)
 		return GetRef()->SetAt(varKeyValue, varValue);
 	const long lPropNum = FindProp(varKeyValue.GetString());
-	if (lPropNum != wxNOT_FOUND)
+	if (lPropNum != ibNOT_FOUND)
 		return SetPropVal(lPropNum, varValue);
 	return false;
 }
@@ -193,7 +192,7 @@ bool ibValue::GetAt(const ibValue& varKeyValue, ibValue& pvarValue)
 	if (m_pRef && IsReference())
 		return GetRef()->GetAt(varKeyValue, pvarValue);
 	const long lPropNum = FindProp(varKeyValue.GetString());
-	if (lPropNum != wxNOT_FOUND)
+	if (lPropNum != ibNOT_FOUND)
 		return GetPropVal(lPropNum, pvarValue);
 	return false;
 }
@@ -359,7 +358,7 @@ long ibValue::FindProp(const ibString& strPropName) const
 	ibMemberTable* const methodHelper = GetPMethods();
 	if (methodHelper != nullptr)
 		return methodHelper->FindProp(strPropName);
-	return wxNOT_FOUND;
+	return ibNOT_FOUND;
 }
 
 const ibString& ibValue::GetPropName(const long lPropNum) const
@@ -386,7 +385,7 @@ bool ibValue::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 	// A plain (owned) reference still delegates — it may be a transparent
 	// read-only wrapper over a mutable object. The assert catches a future
 	// caller loudly in Debug; the Error keeps Release graceful.
-	wxASSERT_MSG(!IsConstReference(), wxT("SetPropVal on a const reference (TYPE_CONST_REFFER)"));
+	ibASSERT_MSG(!IsConstReference(), ibT("SetPropVal on a const reference (TYPE_CONST_REFFER)"));
 	if (m_typeClass == ibValueTypes::TYPE_CONST_REFFER)
 		ibBackendCoreException::Error(_("Attempt to write to a field of a read-only (const) object"));
 	if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
@@ -455,7 +454,7 @@ long ibValue::FindMethod(const ibString& strMethodName) const
 		const long n = methodHelper->FindMethod(strMethodName);
 		if (n >= 0) return n;
 	}
-	return wxNOT_FOUND;
+	return ibNOT_FOUND;
 }
 
 const ibString& ibValue::GetMethodName(const long lMethodNum) const

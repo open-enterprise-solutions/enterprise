@@ -71,7 +71,7 @@ private:
 // `xml:space` say at the node.
 //
 // THE ENCODING of a file is its byte-order mark or its declaration - UTF-8 without either; windows-1251 and cp866
-// are read through the engine's own tables (ibXmlCodePage). A text given with SetString is characters already: an
+// are read through the engine's own tables (ibCodePage). A text given with SetString is characters already: an
 // `encoding=` in ITS declaration names what the text once was, and is not applied again.
 //
 // THE ATTRIBUTES are the current element's: by number (from 0) or by name, and by a cursor - after FirstAttribute /
@@ -307,10 +307,10 @@ private:
 
 	std::unique_ptr<ibXmlWriter> m_writer;
 	std::unique_ptr<std::ofstream> m_file;        // null: a string
-	ibXmlCodePage                m_page;
+	ibCodePage                   m_page;
 	ibString                     m_encoding;      // as the declaration names it
 	ibString                     m_fileName;
-	std::string                  m_bytes;         // encoded, not in the file yet
+	ibMemoryBuffer               m_bytes;         // encoded, not in the file yet
 	bool                         m_indent = true;
 	bool                         m_indentAttributes = false;
 	ibString                     m_indentString = ibString(ibT("\t"));

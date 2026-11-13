@@ -27,12 +27,12 @@ ibGuid ibSaveComposerSettings(ibSettingsCategory WXUNUSED(category), const ibGui
                               const ibGuid& id, const ibString& name, const ibDataComposer& WXUNUSED(composer))
 {
 	if (!ActOnShelf(ibProtocol::ibRequest::ibSavedSettings::ibAct::Save, id, name))
-		return wxNullGuid;
+		return ibNullGuid;
 	// The entry saved into: the one named, or — a new one — the newest, which the shelf lists first.
 	if (id.isValid())
 		return id;
-	const std::vector<ibComposerSettingsEntry> entries = ibListComposerSettings(ibSettingsCategory::Custom, wxNullGuid);
-	return !entries.empty() ? entries.front().m_id : wxNullGuid;
+	const std::vector<ibComposerSettingsEntry> entries = ibListComposerSettings(ibSettingsCategory::Custom, ibNullGuid);
+	return !entries.empty() ? entries.front().m_id : ibNullGuid;
 }
 
 bool ibRestoreComposerSettings(ibSettingsCategory WXUNUSED(category), const ibGuid& WXUNUSED(objectKey),
@@ -73,5 +73,5 @@ bool ibSetDefaultComposerSettings(const ibGuid& WXUNUSED(objectKey), const ibGui
 ibGuid ibGetDefaultComposerSettings(const ibGuid& WXUNUSED(objectKey))
 {
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
-	return frame != nullptr ? ibGuid(frame->GetRequest().GetString(ibProtocol::ibRequest::ibSavedSettings::Default)) : wxNullGuid;
+	return frame != nullptr ? ibGuid(frame->GetRequest().GetString(ibProtocol::ibRequest::ibSavedSettings::Default)) : ibNullGuid;
 }

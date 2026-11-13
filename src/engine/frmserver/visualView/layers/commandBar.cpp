@@ -156,7 +156,7 @@ std::vector<ibCommandSourceEntry> GatherFormCommands(ibValueForm* form)
 		auto actions = form->GetStandardCommands(form->GetTypeForm());
 		for (unsigned int i = 0; i < actions.GetCount(); i++) {
 			const ibActionID id = actions.GetID(i);
-			if (id != wxNOT_FOUND) {
+			if (id != ibNOT_FOUND) {
 				const ibString caption = actions.GetCaptionByID(id);   // tree label — the readable action text
 				const ibString name    = actions.GetNameByID(id);
 				// cell PATH = "Form.<action>" — by NAME (the configurator addresses by name), but a standard action
@@ -184,7 +184,7 @@ std::vector<ibCommandSourceEntry> GatherFormCommands(ibValueForm* form)
 		const ibString tableName = table->GetControlName();
 		for (unsigned int i = 0; i < actions.GetCount(); i++) {
 			const ibActionID id = actions.GetID(i);
-			if (id == wxNOT_FOUND)
+			if (id == ibNOT_FOUND)
 				continue;
 			ibCommandDescription desc;
 			desc.AppendCommand(srcPath.front().m_id);   // hop 1: the table's source
@@ -485,7 +485,7 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 			if (i == dataVerbs)
 				placeGroups();
 			const ibActionID id = actions.GetID(i);
-			if (id == wxNOT_FOUND) {
+			if (id == ibNOT_FOUND) {
 				m_commands.emplace_back();   // separator
 				continue;
 			}
@@ -695,7 +695,7 @@ void ibValueCommandBar::Update(ibDataNode& state)
 	for (const ibCommandEntry& c : BuildCommands()) {
 		ibDataNode& entry = state.AddChild(0, 0);
 		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Id, c.id);
-		if (c.id == wxNOT_FOUND) {
+		if (c.id == ibNOT_FOUND) {
 			entry.SetValue(ibProtocol::ibForm::ibCommandBar::Separator, true);
 			continue;
 		}

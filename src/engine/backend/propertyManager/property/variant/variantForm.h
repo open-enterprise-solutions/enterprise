@@ -3,6 +3,8 @@
 
 #include "variantModule.h"
 
+#include <cstring>
+
 class BACKEND_API ibVariantForm : public ibVariantModule {
 public:
 

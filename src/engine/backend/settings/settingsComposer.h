@@ -58,7 +58,7 @@ class ibMetaData;
 // A base with no users at all yields an invalid guid, which the storage reads as
 // "shared by everybody" — right for one person.
 BACKEND_API ibSettingsKey ibUserSettingsKey(ibSettingsCategory category, const ibGuid& objectKey,
-                                            const ibGuid& id = wxNullGuid, const ibUserInfo* user = nullptr);
+                                            const ibGuid& id = ibNullGuid, const ibUserInfo* user = nullptr);
 
 // SAVE what the composer is composing on. `id` empty = a NEW entry and a new
 // identity is minted; a given id REWRITES that entry, which is what both "save

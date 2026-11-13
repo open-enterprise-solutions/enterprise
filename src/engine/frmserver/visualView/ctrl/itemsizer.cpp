@@ -21,7 +21,7 @@ const ibMetaData* ibValueSizerItem::GetMetaData() const
 			nullptr;
 		if (srcValue != nullptr) {
 			const ibValueMetaObjectGenericData* metaValue = srcValue->GetSourceMetaObject();
-			wxASSERT(metaValue);
+			ibASSERT(metaValue);
 			return metaValue->GetMetaData();
 		}
 	}
@@ -36,13 +36,13 @@ const ibMetaData* ibValueSizerItem::GetMetaData() const
 ibFormID ibValueSizerItem::GetTypeForm() const
 {
 	if (!m_formOwner) {
-		wxASSERT(m_formOwner);
+		ibASSERT(m_formOwner);
 		return 0;
 	}
 
 	const ibValueMetaObjectFormBase* metaFormObj =
 		m_formOwner->GetFormMetaObject();
-	wxASSERT(metaFormObj);
+	ibASSERT(metaFormObj);
 
 	return metaFormObj->GetTypeForm();
 }

@@ -28,6 +28,7 @@
 // printable. The generator is the same LCG with the same finalizer, and every failure names its seed and its text.
 
 #include <gtest/gtest.h>
+#include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
 #include <chrono>
 #include <cstddef>

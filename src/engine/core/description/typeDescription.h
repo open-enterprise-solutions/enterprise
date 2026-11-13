@@ -1,7 +1,7 @@
 #ifndef __TYPE_DESCRIPTION_H__
 #define __TYPE_DESCRIPTION_H__
 
-#include "core/core.h"    // CORE_API, wxNOT_FOUND; ibValueTypes, ibDateFractions — what a type is made of; GetIDByVT
+#include "core/core.h"    // CORE_API, ibNOT_FOUND; ibValueTypes, ibDateFractions — what a type is made of; GetIDByVT
 
 #include <algorithm>
 #include <vector>
@@ -388,7 +388,7 @@ struct ibTypeDescription {
 
 	ibClassID GetByIdx(unsigned int idx) const {
 		if (idx > m_listTypeClass.size())
-			return wxNOT_FOUND;
+			return ibNOT_FOUND;
 		return m_listTypeClass[idx];
 	}
 
@@ -554,7 +554,7 @@ public:
 
 	ibMetaID GetByIdx(unsigned int idx) const {
 		if (idx > m_listMetaClass.size())
-			return wxNOT_FOUND;
+			return ibNOT_FOUND;
 		return m_listMetaClass[idx];
 	}
 

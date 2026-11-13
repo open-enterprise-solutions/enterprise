@@ -3,7 +3,8 @@
 #include "core/fileKind.h"           // the one table that names our files
 #include "core/memory/memoryStream.h"      // ibReaderMemory / ibWriterMemory
 
-#include <wx/mstream.h>
+#include <istream>
+#include <ostream>
 
 ibString ibSheetFormatNative::GetName() const
 {
@@ -18,15 +19,16 @@ ibString ibSheetFormatNative::GetExtension() const
 	return ibFileExtension(ibFileKind::Table);
 }
 
-bool ibSheetFormatNative::Read(wxInputStream& input, ibSpreadsheetDescription& sheet) const
+bool ibSheetFormatNative::Read(std::istream& input, ibSpreadsheetDescription& sheet) const
 {
 	// Whole, to its end — a stream from the temporary storage has no length to ask for up front.
-	wxMemoryOutputStream whole;
-	input.Read(whole);
-
-	ibMemoryBuffer buffer(whole.GetLength());
-	whole.CopyTo(buffer.GetWriteBuf(whole.GetLength()), whole.GetLength());
-	buffer.UngetWriteBuf(whole.GetLength());
+	constexpr std::size_t kPiece = 64 * 1024;
+	ibMemoryBuffer buffer;
+	for (std::size_t got = kPiece; got == kPiece; ) {
+		input.read(static_cast<char*>(buffer.GetAppendBuf(kPiece)), static_cast<std::streamsize>(kPiece));
+		got = static_cast<std::size_t>(input.gcount());
+		buffer.UngetAppendBuf(got);
+	}
 
 	if (buffer.GetDataLen() == 0)
 		return false;
@@ -40,14 +42,14 @@ bool ibSheetFormatNative::Read(wxInputStream& input, ibSpreadsheetDescription& s
 	return ibSpreadsheetDescriptionMemory::LoadData(reader, sheet);
 }
 
-bool ibSheetFormatNative::Write(wxOutputStream& output, const ibSpreadsheetDescription& sheet) const
+bool ibSheetFormatNative::Write(std::ostream& output, const ibSpreadsheetDescription& sheet) const
 {
 	ibWriterMemory writer;
 	if (!ibSpreadsheetDescriptionMemory::SaveData(writer, sheet))
 		return false;
 
-	output.Write(writer.pointer(), writer.size());
-	return output.IsOk();
+	output.write(reinterpret_cast<const char*>(writer.pointer()), static_cast<std::streamsize>(writer.size()));
+	return output.good();
 }
 
 ///////////////////////////////////////////////////////////////////////////////

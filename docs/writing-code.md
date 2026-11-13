@@ -203,7 +203,7 @@ cast to learn something about a value is not: ask the value. No `dynamic_cast` o
 
 development.md §4, *a new value is born owned*, is the base rule. In addition:
 
-**A creator returns `ibValuePtr<T>`, and its empty answer is `wxEmptyValue`.** A getter of
+**A creator returns `ibValuePtr<T>`, and its empty answer is `ibEmptyValue`.** A getter of
 something that already exists returns `const ibValue&`. Bridge holders (`ibSourcePtr<T>`,
 `ibFormPtr<T>`) are for pure interfaces; anything that is an `ibValue` is held by `ibValuePtr<T>`.
 After changing a creator, grep the calls whose result does not land in a holder.
@@ -511,9 +511,9 @@ server I/O thread.
 with no lock, and per-call state is reset on entry. A lock that guards shared state stays, as
 `std::mutex`.
 
-**In the backend, threads, mutexes and atomics are `std`.** New code starts on `std`. `wxString`,
-`wxDateTime`, `_()` and the serialisation streams stay as they are: changing them changes the
-format on disk and on the wire.
+**In the backend, threads, mutexes and atomics are `std`.** New code starts on `std`. The backend's
+code names no wx: its text is `ibString`, its date `ibDateTime`, its `_()` the core's dictionary
+(`core/localization/dictionary.h`).
 
 **Before removing a global, list every thread that reaches it** (`std::thread`, `wxThread`, pools,
 the HTTP server, timers) and decide for each who binds its session.

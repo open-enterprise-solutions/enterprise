@@ -109,7 +109,7 @@ void ibDialogSavedSettings::Reload()
 	// a lie about what they are about to press.
 	const int was = Selected();
 	const ibGuid keepId = was != wxNOT_FOUND && static_cast<size_t>(was) < m_entries.size()
-		? m_entries[was].m_id : wxNullGuid;
+		? m_entries[was].m_id : ibNullGuid;
 
 	m_entries   = ibListComposerSettings(m_category, m_objectKey);
 	m_defaultId = ibGetDefaultComposerSettings(m_objectKey);
@@ -224,7 +224,7 @@ void ibDialogSavedSettings::OnNew(wxCommandEvent& WXUNUSED(event))
 			return;
 		}
 
-	if (SaveInto(wxNullGuid, name))
+	if (SaveInto(ibNullGuid, name))
 		EndModal(wxID_OK);
 }
 
@@ -237,7 +237,7 @@ void ibDialogSavedSettings::OnDefault(wxCommandEvent& WXUNUSED(event))
 	// ⭐ THE SAME GESTURE UNDOES ITSELF: pressing it on the entry that already carries the mark
 	// clears it, so "open it the way the author left it" needs no button of its own.
 	const bool already = m_entries[at].m_id == m_defaultId;
-	if (!ibSetDefaultComposerSettings(m_objectKey, already ? wxNullGuid : m_entries[at].m_id)) {
+	if (!ibSetDefaultComposerSettings(m_objectKey, already ? ibNullGuid : m_entries[at].m_id)) {
 		ibMessageBox(_("The default settings could not be changed."), _("Saved settings"), wxOK | wxICON_ERROR, this);
 		return;
 	}

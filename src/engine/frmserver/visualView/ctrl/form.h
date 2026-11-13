@@ -94,7 +94,7 @@ public:
 
 	bool IsFormEnabled() const { return m_propertyEnabled->GetValueAsBoolean(); }
 
-	wxOrientation GetOrient() const { return m_propertyOrient->GetValueAsEnum(); }
+	ibOrientation GetOrient() const { return m_propertyOrient->GetValueAsEnum(); }
 
 	ibValueFrame* NewObject(const ibClassID& clsid, ibValueFrame* parentControl = nullptr, const ibValue& generateId = true);
 	ibValueFrame* NewObject(const ibString& classControl, ibValueFrame* controlParent, const ibValue& generateId = true) {
@@ -374,7 +374,7 @@ public:
 	// did not exist to stand on — moves the user.
 	ibValue ConsumeCreatedValue() {
 		ibValue v = m_createdValue;
-		m_createdValue = wxEmptyValue;
+		m_createdValue = ibEmptyValue;
 		return v;
 	}
 
@@ -494,6 +494,13 @@ public:
 public:
 
 	ibValueFrame* CreateControl(const ibString& classControl, ibValueFrame* control = nullptr);
+
+	// …as the class it was asked by — the cast once here, as NewObject<retType> does it.
+	template <typename retType>
+	inline retType* CreateControl(const ibString& classControl, ibValueFrame* control = nullptr) {
+		return dynamic_cast<retType*>(CreateControl(classControl, control));
+	}
+
 	void RemoveControl(ibValueFrame* control);
 
 	// All controls owned by this form, derived by walking the control hierarchy
@@ -679,7 +686,7 @@ private:
 	ibPropertyCategory* m_categorySizer = ibPropertyObject::CreatePropertyCategory(ibT("Sizer"), _("Sizer"));
 	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categorySizer, ibT("Orient"), _("Orient"),
 		_("How the form lays out its top-level controls: vertically (the default, one under another) or horizontally (side by side). Groups inside the form have their own orientation."),
-		wxVERTICAL);
+		ibOrientation_Vertical);
 
 	// Soft-lock badge - user name of the session that holds the lock.
 	// Empty when the form is editable; set on form-open conflict.

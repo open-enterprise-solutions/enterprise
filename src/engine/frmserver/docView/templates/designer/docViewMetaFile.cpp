@@ -11,10 +11,6 @@
 #include "frmserver/client/clientChildFrame.h"
 #include "protocol/protocol.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibMetadataTreeView, ibMetaView);
-wxIMPLEMENT_DYNAMIC_CLASS(ibMetadataBrowserDocument, ibMetaDataDocument);
-wxIMPLEMENT_DYNAMIC_CLASS(ibMetadataFileDocument, ibMetadataBrowserDocument);
-
 bool ibMetadataTreeView::OnCreate(ibDocument* doc, long flags)
 {
 	ibClientFrame* const frame = GetDocChildFrame() != nullptr ? GetDocChildFrame()->GetFrame() : nullptr;
@@ -54,7 +50,7 @@ ibView* ibMetadataBrowserDocument::DoCreateView()
 ibConfigurationTree* ibMetadataBrowserDocument::GetMetaTree() const
 {
 	// GUARD THE CAST, not the pointer that went into it — see the twin in docViewDataProcessorEdit.cpp.
-	ibMetadataTreeView* view = wxDynamicCast(GetFirstView(), ibMetadataTreeView);
+	ibMetadataTreeView* view = dynamic_cast<ibMetadataTreeView*>(GetFirstView());
 	return view != nullptr ? view->GetMetaTree() : nullptr;
 }
 

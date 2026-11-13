@@ -34,8 +34,6 @@ public:
 private:
 
 	std::unique_ptr<ibConfigurationTree> m_metaTree;
-
-	wxDECLARE_DYNAMIC_CLASS(ibMetadataTreeView);
 };
 
 // A file's configuration, or the database's copy held for browsing — both are ConfigurationFile-shaped.
@@ -62,7 +60,6 @@ protected:
 
 	ibMetadataBrowserDocument(const ibMetadataBrowserDocument&) = delete;
 	ibMetadataBrowserDocument& operator=(const ibMetadataBrowserDocument&) = delete;
-	wxDECLARE_DYNAMIC_CLASS(ibMetadataBrowserDocument);
 };
 
 class FRMSERVER_API ibMetadataFileDocument : public ibMetadataBrowserDocument {
@@ -82,7 +79,6 @@ protected:
 
 	ibMetadataFileDocument(const ibMetadataFileDocument&) = delete;
 	ibMetadataFileDocument& operator=(const ibMetadataFileDocument&) = delete;
-	wxDECLARE_DYNAMIC_CLASS(ibMetadataFileDocument);
 };
 
 #endif

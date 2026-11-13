@@ -979,7 +979,7 @@ static ibString ibMcpArgumentsOnOffer(const ibMcpTool* tool, const ibString& giv
 		const ibString candidate = declared.first.Lower();
 
 		if (closest.IsEmpty() && wanted.length() >= 3
-			&& (candidate.Find(wanted) != wxNOT_FOUND || wanted.Find(candidate) != wxNOT_FOUND))
+			&& (candidate.Find(wanted) != ibNOT_FOUND || wanted.Find(candidate) != ibNOT_FOUND))
 			closest = declared.first;
 	}
 
@@ -2569,7 +2569,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 
 						ibString says = argument.Description();
 						const int stop = says.Find(ibT(". "));
-						if (stop != wxNOT_FOUND)
+						if (stop != ibNOT_FOUND)
 							says = says.Left(stop + 1);
 
 						if (!says.IsEmpty())

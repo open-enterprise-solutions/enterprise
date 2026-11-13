@@ -160,10 +160,10 @@ int ibDataViewColumn::DoGetEffectiveWidth(int width) const
 	switch (width)
 	{
 	case wxCOL_WIDTH_DEFAULT:
-		return wxWindow::FromDIP(wxDVC_DEFAULT_WIDTH, GetOwner());
+		return wxWindow::FromDIP(ibDVC_DEFAULT_WIDTH, GetOwner());
 
 	case wxCOL_WIDTH_AUTOSIZE:
-		wxCHECK_MSG(GetOwner(), wxDVC_DEFAULT_WIDTH, "no owner control");
+		wxCHECK_MSG(GetOwner(), ibDVC_DEFAULT_WIDTH, "no owner control");
 		return GetOwner()->GetBestColumnWidth(const_cast<ibDataViewColumn*>(this));
 
 	default:
@@ -1085,7 +1085,10 @@ ibDataViewRenderer::ibDataViewRenderer(const wxString& varianttype,
 {
 	m_align = align;
 	m_mode = mode;
-	m_ellipsizeMode = wxELLIPSIZE_MIDDLE;
+	// SEAM vs univ: a cell too narrow for its text is cut at its end, as a list's on every system - its start is what
+	// reads it, a name or a date. The canon's middle cut left "02.01....:00:00" of a register's dates, a goods' name its
+	// first and last letters (2026-11-13, Max). On GTK3/Cocoa the same - the data view is the engine's there too
+	m_ellipsizeMode = wxELLIPSIZE_END;
 	m_dc = NULL;
 	m_state = 0;
 }
@@ -1279,8 +1282,8 @@ wxSize ibDataViewTextRenderer::GetSize() const
 		return GetTextExtent(m_text);
 	}
 	else
-		return GetView()->FromDIP(wxSize(wxDVC_DEFAULT_RENDERER_SIZE,
-			wxDVC_DEFAULT_RENDERER_SIZE));
+		return GetView()->FromDIP(wxSize(ibDVC_DEFAULT_RENDERER_SIZE,
+			ibDVC_DEFAULT_RENDERER_SIZE));
 }
 
 // ---------------------------------------------------------
@@ -1332,8 +1335,8 @@ wxSize ibDataViewBitmapRenderer::GetSize() const
 	if (m_bitmapBundle.IsOk())
 		return m_bitmapBundle.GetPreferredBitmapSizeFor(GetView());
 
-	return GetView()->FromDIP(wxSize(wxDVC_DEFAULT_RENDERER_SIZE,
-		wxDVC_DEFAULT_RENDERER_SIZE));
+	return GetView()->FromDIP(wxSize(ibDVC_DEFAULT_RENDERER_SIZE,
+		ibDVC_DEFAULT_RENDERER_SIZE));
 }
 
 // ---------------------------------------------------------
@@ -5875,8 +5878,10 @@ int ibDataViewCtrl::GetDefaultRowHeight() const
 {
 	const int SMALL_ICON_HEIGHT = FromDIP(16);
 
-	// SEAM vs wx: Explorer's line height (wx's on MSW since Vista), on every port - the list is the library's
-	return wxMax(SMALL_ICON_HEIGHT, GetCharHeight()) + FromDIP(6);
+	// SEAM vs wx: the row is the theme's for the text or the picture, the taller (GetListboxItemHeight) - the lists',
+	// the trees' and the property grid's; it was Explorer's (wx's on MSW since Vista), 6 more than the text, a road of
+	// its own (2026-11-13, Max: "modernise the interface"). On every port - the list is the library's
+	return ibThemeEngine::Get()->GetRenderer()->GetListboxItemHeight(wxMax(SMALL_ICON_HEIGHT, GetCharHeight()));
 }
 
 int ibDataViewCtrl::GetModelColumnIndex(unsigned int model_column) const
@@ -7472,7 +7477,7 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 				// expander-column cell fell back to LEFT, so the tabular-section line number stopped
 				// indenting right in Tree/Hierarchical view ("the flag does not get through").
 				int expAlign = cell->GetAlignment();
-				if (expAlign == wxDVR_DEFAULT_ALIGNMENT)
+				if (expAlign == ibDVR_DEFAULT_ALIGNMENT)
 					expAlign = wxALIGN_LEFT;
 				cell->SetAlignment((expAlign & (wxALIGN_RIGHT | wxALIGN_CENTER_HORIZONTAL)) | wxALIGN_CENTER_VERTICAL);
 

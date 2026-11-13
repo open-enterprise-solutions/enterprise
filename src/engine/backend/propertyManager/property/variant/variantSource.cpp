@@ -15,7 +15,7 @@ void ibVariantAttributeSource::DoSetFromMetaId(const ibMetaID& id)
 	// field lookup. A whole-attribute binding's leaf id equals the attribute id (a form-local id). A deeper
 	// leaf falls through to the base as a SEED; the source-type getter (GetSourceTypeDesc -> RefreshTypeFromSource)
 	// re-resolves the leaf type through the explorer, so the seed is corrected on read.
-	if (m_ownerSrcProperty != nullptr && id != wxNOT_FOUND) {
+	if (m_ownerSrcProperty != nullptr && id != ibNOT_FOUND) {
 		ibBackendFormAttributeValue* holder = m_ownerSrcProperty->FindSourceHolder(id);
 		if (holder != nullptr) {
 			m_typeDesc = holder->GetTypeDesc();
@@ -31,7 +31,7 @@ void ibVariantAttributeSource::DoRefreshTypeDesc()
 	if (m_ownerSrcProperty != nullptr) {
 
 		const ibMetaData* metaData = m_ownerSrcProperty->GetMetaData();
-		wxASSERT(metaData);
+		ibASSERT(metaData);
 
 		// Validate tabular-section types against the binding's GATE metaobject: the START attribute's
 		// type (from the control's own source path) walked to the table — NOT a single runtime source
@@ -114,18 +114,18 @@ ibString ibVariantSource::GetString() const
 
 ibMetaID ibVariantSource::GetIdByGuid(const ibGuid& guid) const
 {
-	if (!guid.isValid()) return wxNOT_FOUND;
+	if (!guid.isValid()) return ibNOT_FOUND;
 	const ibValueMetaObject* metaObject = ResolveMetaWide(m_ownerProperty, guid);
-	return metaObject != nullptr && metaObject->IsAllowed() ? metaObject->GetMetaID() : wxNOT_FOUND;
+	return metaObject != nullptr && metaObject->IsAllowed() ? metaObject->GetMetaID() : ibNOT_FOUND;
 }
 
 ibGuid ibVariantSource::GetGuidByID(const ibMetaID& id) const
 {
-	if (id == wxNOT_FOUND) return wxNullGuid;
+	if (id == ibNOT_FOUND) return ibNullGuid;
 	const ibValueMetaObject* metaObject = ResolveMetaWide(m_ownerProperty, id);
 	// GetCommonGuid auto-selects the right guid: the copy-guid while the metaobject is in copy mode, its plain guid
 	// otherwise — so a hop keyed on it round-trips on a normal reopen and re-homes to the copy after a paste.
-	return metaObject != nullptr && metaObject->IsAllowed() ? metaObject->GetCommonGuid() : wxNullGuid;
+	return metaObject != nullptr && metaObject->IsAllowed() ? metaObject->GetCommonGuid() : ibNullGuid;
 }
 
 ////////////////////////////////////////////////////////////////////////////
@@ -173,7 +173,7 @@ void ibVariantSource::RefreshTypeFromSource() const
 void ibVariantSource::SetSource(const ibMetaID& id, bool fillTypeDesc)
 {
 	// Selecting a direct source resets the path to a single leaf.
-	if (id != wxNOT_FOUND)
+	if (id != ibNOT_FOUND)
 		m_sourceDesc.SetDefaultSource(id);
 	else
 		m_sourceDesc.ClearSource();
@@ -213,7 +213,7 @@ ibTypeDescription& ibVariantSource::GetSourceTypeDesc(bool fillTypeDesc) const
 
 void ibVariantSource::ResetSource()
 {
-	m_attributeSource->SetFromMetaDesc(wxNOT_FOUND);
+	m_attributeSource->SetFromMetaDesc(ibNOT_FOUND);
 	m_sourceDesc.ClearSource();
 }
 

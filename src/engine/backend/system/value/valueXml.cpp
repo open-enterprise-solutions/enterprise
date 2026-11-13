@@ -42,8 +42,8 @@ long ibAttributeIndex(const ibNumber& number, size_t count)
 
 void ibValueXmlNamespaceContext_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
-	helper.AppendProp(ibT("DefaultNamespace"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("Depth"), true, false, wxNOT_FOUND);
+	helper.AppendProp(ibT("DefaultNamespace"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("Depth"), true, false, ibNOT_FOUND);
 
 	helper.AppendFunc(ibT("LookupNamespaceURI"), 1, ibT("LookupNamespaceURI(prefix : string)"));
 	helper.AppendFunc(ibT("LookupPrefix"), 1, ibT("LookupPrefix(namespaceURI : string)"));
@@ -157,33 +157,33 @@ void ibValueXmlReader_BindNames(ibValue::ibMemberTable& helper, const ibValue* /
 {
 	helper.AppendConstructor(0, ibT("XMLReader()"));
 
-	helper.AppendProp(ibT("NodeType"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("Name"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("LocalName"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("Prefix"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("NamespaceURI"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("Value"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("HasValue"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("HasName"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("IsWhitespace"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("IsCharacters"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("XMLVersion"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("XMLEncoding"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("InputEncoding"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("Standalone"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("IgnoreWhitespace"), true, true, wxNOT_FOUND);
-	helper.AppendProp(ibT("IsEmptyElement"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("Depth"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("LineNumber"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("LinePosition"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("NamespaceContext"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("Language"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("Space"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("IgnoreXMLDeclaration"), true, true, wxNOT_FOUND);
-	helper.AppendProp(ibT("IgnoreDocumentType"), true, true, wxNOT_FOUND);
-	helper.AppendProp(ibT("IgnoreComments"), true, true, wxNOT_FOUND);
-	helper.AppendProp(ibT("IgnoreProcessingInstructions"), true, true, wxNOT_FOUND);
-	helper.AppendProp(ibT("CDATASectionAsText"), true, true, wxNOT_FOUND);
+	helper.AppendProp(ibT("NodeType"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("Name"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("LocalName"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("Prefix"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("NamespaceURI"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("Value"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("HasValue"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("HasName"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("IsWhitespace"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("IsCharacters"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("XMLVersion"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("XMLEncoding"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("InputEncoding"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("Standalone"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("IgnoreWhitespace"), true, true, ibNOT_FOUND);
+	helper.AppendProp(ibT("IsEmptyElement"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("Depth"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("LineNumber"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("LinePosition"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("NamespaceContext"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("Language"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("Space"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("IgnoreXMLDeclaration"), true, true, ibNOT_FOUND);
+	helper.AppendProp(ibT("IgnoreDocumentType"), true, true, ibNOT_FOUND);
+	helper.AppendProp(ibT("IgnoreComments"), true, true, ibNOT_FOUND);
+	helper.AppendProp(ibT("IgnoreProcessingInstructions"), true, true, ibNOT_FOUND);
+	helper.AppendProp(ibT("CDATASectionAsText"), true, true, ibNOT_FOUND);
 
 	helper.AppendFunc(ibT("OpenFile"), 1, ibT("OpenFile(path : string)"));
 	helper.AppendFunc(ibT("SetString"), 1, ibT("SetString(text : string)"));
@@ -681,10 +681,10 @@ void ibValueXmlWriter_BindNames(ibValue::ibMemberTable& helper, const ibValue* /
 {
 	helper.AppendConstructor(0, ibT("XMLWriter()"));
 
-	helper.AppendProp(ibT("Indent"), true, true, wxNOT_FOUND);
-	helper.AppendProp(ibT("NamespaceContext"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("IndentAttributes"), true, true, wxNOT_FOUND);
-	helper.AppendProp(ibT("IndentString"), true, true, wxNOT_FOUND);
+	helper.AppendProp(ibT("Indent"), true, true, ibNOT_FOUND);
+	helper.AppendProp(ibT("NamespaceContext"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("IndentAttributes"), true, true, ibNOT_FOUND);
+	helper.AppendProp(ibT("IndentString"), true, true, ibNOT_FOUND);
 
 	helper.AppendFunc(ibT("OpenFile"), 3, ibT("OpenFile(path : string, encoding : string, writeBOM : boolean)"));
 	helper.AppendFunc(ibT("SetString"), 1, ibT("SetString(encoding : string)"));
@@ -729,12 +729,12 @@ ibXmlWriter& ibValueXmlWriter::Target()
 
 namespace {
 
-ibXmlCodePage ibXmlPageNamed(const ibString& encoding)
+ibCodePage ibXmlPageNamed(const ibString& encoding)
 {
-	const ibXmlCodePage page = ibXmlCodePage::Find(encoding.IsEmpty() ? ibString(ibT("UTF-8")) : encoding);
-	if (page.Kind() == ibXmlCodePage::kUnknown)
+	const ibCodePage page = ibCodePage::Find(encoding.IsEmpty() ? ibString(ibT("UTF-8")) : encoding);
+	if (page.Kind() == ibCodePage::kUnknown)
 		ibBackendCoreException::Error(_("XMLWriter: the encoding '%s' is not supported; supported: %s"),
-			encoding, ibXmlCodePage::Supported());
+			encoding, ibCodePage::Supported());
 	return page;
 }
 
@@ -745,7 +745,7 @@ ibXmlCodePage ibXmlPageNamed(const ibString& encoding)
 // old file failing to write is raised, and leaves the writer with no target.
 void ibValueXmlWriter::OpenFile(const ibString& path, const ibString& encoding, bool writeBom)
 {
-	const ibXmlCodePage page = ibXmlPageNamed(encoding);
+	const ibCodePage page = ibXmlPageNamed(encoding);
 	// The same file again: released first, or two handles would write one file over each other.
 	std::error_code differs;
 	if (m_file != nullptr && std::filesystem::equivalent(ibPathOf(m_fileName), ibPathOf(path), differs))
@@ -760,10 +760,10 @@ void ibValueXmlWriter::OpenFile(const ibString& path, const ibString& encoding, 
 	m_encoding = page.Name();
 	m_fileName = path;
 	// UTF-16 cannot be read without its mark; UTF-8 has one unless a script says not; a single-byte page has none.
-	if (page.Kind() == ibXmlCodePage::kUtf16)
-		m_bytes = "\xFF\xFE";
-	else if (page.Kind() == ibXmlCodePage::kUtf8 && writeBom)
-		m_bytes = "\xEF\xBB\xBF";
+	if (page.Kind() == ibCodePage::kUtf16)
+		m_bytes.AppendData("\xFF\xFE", 2);
+	else if (page.Kind() == ibCodePage::kUtf8 && writeBom)
+		m_bytes.AppendData("\xEF\xBB\xBF", 3);
 	m_file = std::move(file);
 	m_writer = std::make_unique<ibXmlWriter>(ibT("XMLWriter"), page);
 	m_writer->SetIndent(m_indent);
@@ -775,9 +775,9 @@ void ibValueXmlWriter::SetText(const ibString& encoding)
 {
 	// Only the word the declaration says - the name of the page it means, as OpenFile writes it, so that a reader
 	// of the text saved to a file is not handed an alias it refuses. A word nothing could read is refused here too.
-	const ibXmlCodePage named = ibXmlPageNamed(encoding);
+	const ibCodePage named = ibXmlPageNamed(encoding);
 	Release();
-	m_page = ibXmlCodePage::Find(ibT("UTF-8"));   // a string holds every character: none becomes a reference
+	m_page = ibCodePage::Find(ibT("UTF-8"));   // a string holds every character: none becomes a reference
 	m_encoding = named.Name();
 	m_writer = std::make_unique<ibXmlWriter>(ibT("XMLWriter"), m_page);
 	m_writer->SetIndent(m_indent);
@@ -790,11 +790,11 @@ void ibValueXmlWriter::Flush()
 	if (m_file == nullptr)
 		return;
 	m_page.Encode(m_writer->Take(), ibT("XMLWriter"), m_bytes);
-	if (m_bytes.size() < ibXmlParser::kChunk)
+	if (m_bytes.GetDataLen() < ibXmlParser::kChunk)
 		return;
-	if (!m_file->write(m_bytes.data(), static_cast<std::streamsize>(m_bytes.size())))
+	if (!m_file->write(static_cast<const char*>(m_bytes.GetData()), static_cast<std::streamsize>(m_bytes.GetDataLen())))
 		ibBackendCoreException::Error(_("XMLWriter: writing to the file '%s' failed"), m_fileName);
-	m_bytes.clear();
+	m_bytes.SetDataLen(0);
 }
 
 // What is written reaches the file and the file is closed - by Close, by a writer opened again, by one destroyed: a
@@ -805,15 +805,16 @@ void ibValueXmlWriter::Release()
 {
 	const std::unique_ptr<std::ofstream> file = std::move(m_file);
 	const std::unique_ptr<ibXmlWriter> writer = std::move(m_writer);
-	std::string bytes = std::move(m_bytes);
+	ibMemoryBuffer bytes = std::move(m_bytes);
 	const ibString fileName = m_fileName;
-	m_bytes.clear();
+	m_bytes.Clear();
 	m_fileName.clear();
 	if (file == nullptr || writer == nullptr)
 		return;
 	m_page.Encode(writer->Take(), ibT("XMLWriter"), bytes);
 	// ⚠ ON DISK WHEN THE FILE CLOSED, not when the last Write answered: a full disk says so at the close.
-	const bool written = static_cast<bool>(file->write(bytes.data(), static_cast<std::streamsize>(bytes.size())));
+	const bool written = static_cast<bool>(file->write(static_cast<const char*>(bytes.GetData()),
+		static_cast<std::streamsize>(bytes.GetDataLen())));
 	file->close();
 	if (file->fail() || !written)
 		ibBackendCoreException::Error(_("XMLWriter: writing to the file '%s' failed"), fileName);

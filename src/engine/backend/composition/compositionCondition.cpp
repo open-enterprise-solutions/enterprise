@@ -240,11 +240,11 @@ ibCompositionAttr AttrOfAppearance(const ibAppearanceDescription& appearance, co
 		case ibAppearanceParameter::HorizontalAlignment: {
 			if (stored.IsEmpty())
 				break;
-			// The sheet's word for it, as wx's HORIZONTAL flag — both drivers speak it: a grid's renderer, and a
+			// The sheet's word for it, as a HORIZONTAL ibAlignment — both drivers speak it: a grid's renderer, and a
 			// sheet whose centre also centres vertically, which a cell takes from its column.
 			const ibSpreadsheetAlignmentHorz horizontal = stored.ConvertToEnumValue<ibSpreadsheetAlignmentHorz>();
-			attr.m_horizontalAlignment = horizontal == ibAlignmentHorz_Right ? wxALIGN_RIGHT
-				: horizontal == ibAlignmentHorz_Center ? wxALIGN_CENTER_HORIZONTAL : wxALIGN_LEFT;
+			attr.m_horizontalAlignment = horizontal == ibAlignmentHorz_Right ? ibAlignment_Right
+				: horizontal == ibAlignmentHorz_Center ? ibAlignment_CenterHorizontal : ibAlignment_Left;
 			break;
 		}
 		default:

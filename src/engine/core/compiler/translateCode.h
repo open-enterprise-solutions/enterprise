@@ -560,7 +560,7 @@ protected:
 		else if (code <= 0x10FFFF)
 			return 4;
 
-		wxFAIL_MSG(wxT("trying to encode undefined Unicode character"));
+		ibFAIL_MSG(ibT("trying to encode undefined Unicode character"));
 		return 0;
 	}
 

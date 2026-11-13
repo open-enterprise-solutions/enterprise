@@ -10,6 +10,8 @@
 
 #include "core/localization/dictionary.h"   // _() — the refusals' words
 
+#include <iterator>   // std::size — the keyword table's length
+
 //////////////////////////////////////////////////////////////////////
 //                           Constants
 //////////////////////////////////////////////////////////////////////
@@ -111,7 +113,7 @@ struct ibKeyWords s_listKeyWord[] =
 // person to keep them in step is not a guard: adding an enumerator without its
 // string shifts every name after it by one, so `Mod` starts spelling `Procedure`
 // and the failure surfaces as a mis-parsed module, nowhere near the edit.
-static_assert(WXSIZEOF(s_listKeyWord) == LastKeyWord,
+static_assert(std::size(s_listKeyWord) == LastKeyWord,
 	"s_listKeyWord and the KEY_* enum (codeDef.h) must stay in lock-step: "
 	"one entry per enumerator, in the same order.");
 
@@ -1032,7 +1034,7 @@ int ibTranslateCode::IsKeyWord(const ibString& strKeyWord) const
 	// in its one caller, needs no accessor to reach it.
 	static const std::map<ibString, int, ibCaseFoldLess> s_keyWordNumber = [] {
 		std::map<ibString, int, ibCaseFoldLess> listNumber;
-		for (int i = 0; i < static_cast<int>(WXSIZEOF(s_listKeyWord)); i++)
+		for (int i = 0; i < static_cast<int>(std::size(s_listKeyWord)); i++)
 			listNumber[s_listKeyWord[i].m_strKeyWord] = i;
 		return listNumber;
 	}();
@@ -1046,11 +1048,11 @@ int ibTranslateCode::IsKeyWord(const ibString& strKeyWord) const
 		// highlighter, the CES parser (which then rejects them as
 		// unknown identifiers).
 		if (!IsAllowedKey(idx))
-			return wxNOT_FOUND;
+			return ibNOT_FOUND;
 		return idx;
 	}
 
-	return wxNOT_FOUND;
+	return ibNOT_FOUND;
 }
 
 // In CES, block-fence keywords (Then / Do / EndIf / EndDo / EndFunction /
@@ -1080,7 +1082,7 @@ ibString ibTranslateCode::GetKeyWord(int k)
 	// language does (PascalCase), where the map used to be keyed upper-cased and
 	// this returned "ENDPROCEDURE"; compileCode.cpp already reads the array
 	// directly for the same reason when it names a keyword in an error.
-	if (k < 0 || k >= static_cast<int>(WXSIZEOF(s_listKeyWord)))
+	if (k < 0 || k >= static_cast<int>(std::size(s_listKeyWord)))
 		return ibEmptyString;
 
 	return s_listKeyWord[k].m_strKeyWord;

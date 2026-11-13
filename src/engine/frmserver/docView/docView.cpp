@@ -20,40 +20,15 @@
 // headers
 // ----------------------------------------------------------------------------
 
-// For compilers that support precompilation, includes "wx.h".
-#include "wx/wxprec.h"
-
-
-#if wxUSE_DOC_VIEW_ARCHITECTURE
-
 #include "docView.h"
 
-#ifndef WX_PRECOMP
-    #include "wx/list.h"
-    #include "wx/string.h"
-    #include "wx/utils.h"
-    #include "wx/intl.h"
-    #include "wx/log.h"
-#endif
-
-#include "wx/filename.h"
-#include "wx/file.h"
-#include "wx/ffile.h"
 #include "core/fileSystem.h"   // ibPathOf — the file's name
-#include "wx/vector.h"
-#include "wx/scopeguard.h"
 
-#if wxUSE_STD_IOSTREAM
-    #include "wx/beforestd.h"
-    #include <fstream>
-    #include <iostream>
-    #include "wx/afterstd.h"
-#else
-    #include "wx/wfstream.h"
-#endif
-
+#include <istream>
+#include <ostream>
 #include <memory>
 #include <algorithm>
+#include <iterator>   // std::next - a list walked while what it holds closes
 
 // OES — a question to the person goes through the session's frame
 // (ibBackendDocFrame::ShowModalMessage): it hands the question to its client
@@ -61,6 +36,7 @@
 // Revert.
 #include "backend/session/session.h"
 #include "backend/backend_mainFrame.h"
+#include "protocol/protocol.h"   // ibStyle - the question's buttons, and the one pressed
 
 // A document's file is the session's temporary file (DoOpenDocument / DoSaveDocument).
 #include "backend/temp/tempStorage.h"
@@ -70,16 +46,6 @@
 // registry) lives in docManager.cpp.
 #include "frmserver/docView/docManager.h"   // ibDocTemplate / ibMetaDocTemplate
 #include "backend/metadataConfiguration.h"
-
-// ----------------------------------------------------------------------------
-// wxWidgets macros
-// ----------------------------------------------------------------------------
-
-wxIMPLEMENT_ABSTRACT_CLASS(ibDocument, wxObject);
-wxIMPLEMENT_ABSTRACT_CLASS(ibView, wxObject);
-// ibDocTemplate's wxIMPLEMENT_ABSTRACT_CLASS lives in docManager.cpp alongside
-// the class implementation moved out of this file.
-wxIMPLEMENT_DYNAMIC_CLASS(ibDocManager, wxObject);
 
 // ============================================================================
 // implementation
@@ -171,7 +137,7 @@ bool ibDocument::Close()
             // to be saved by the CanClose() check above.
             if ( !childDoc->Close() )
             {
-                wxFAIL_MSG( "Closing the child document unexpectedly failed "
+                ibFAIL_MSG( "Closing the child document unexpectedly failed "
                             "after its OnSaveModified() returned true" );
             }
 
@@ -234,10 +200,8 @@ bool ibDocument::DeleteAllViews()
     ibDocManager* manager = GetDocumentManager();
 
     // first check if all views agree to be closed
-    const wxList::iterator end = m_documentViews.end();
-    for ( wxList::iterator i = m_documentViews.begin(); i != end; ++i )
+    for ( ibView *view : m_documentViews )
     {
-        ibView *view = (ibView *)*i;
         if ( !view->Close(false) )
             return false;
 
@@ -252,7 +216,7 @@ bool ibDocument::DeleteAllViews()
     {
         // normally the document would be implicitly deleted when the last view
         // is, but if don't have any views, do it here instead
-        if ( manager && manager->GetDocuments().Member(this) )
+        if ( manager && std::ranges::find(manager->GetDocuments(), this) != manager->GetDocuments().end() )
             delete this;
     }
     else // have views
@@ -261,7 +225,7 @@ bool ibDocument::DeleteAllViews()
         // begin to end" loop
         for ( ;; )
         {
-            ibView *view = (ibView *)*m_documentViews.begin();
+            ibView *view = m_documentViews.front();
 
             bool isLastOne = m_documentViews.size() == 1;
 
@@ -283,7 +247,7 @@ ibView *ibDocument::GetFirstView() const
     if ( m_documentViews.empty() )
         return nullptr;
 
-    return static_cast<ibView *>(m_documentViews.GetFirst()->GetData());
+    return m_documentViews.front();
 }
 
 void ibDocument::Modify(bool mod)
@@ -391,20 +355,12 @@ bool ibDocument::OnOpenDocument(const ibString& file)
     return true;
 }
 
-#if wxUSE_STD_IOSTREAM
 std::istream& ibDocument::LoadObject(std::istream& stream)
-#else
-wxInputStream& ibDocument::LoadObject(wxInputStream& stream)
-#endif
 {
     return stream;
 }
 
-#if wxUSE_STD_IOSTREAM
 std::ostream& ibDocument::SaveObject(std::ostream& stream)
-#else
-wxOutputStream& ibDocument::SaveObject(wxOutputStream& stream)
-#endif
 {
     return stream;
 }
@@ -415,11 +371,12 @@ bool ibDocument::Revert()
     // to ask → proceed.
     if ( ibBackendDocFrame* const frame = ibSession::CurrentFrame() )
     {
+        namespace style = ibProtocol::ibRequest::ibMessage::ibStyle;
         const int rc = frame->ShowModalMessage(
             _("Discard changes and reload the last saved version?"),
             ibString(),   // the client's own caption
-            wxYES_NO | wxCANCEL | wxICON_QUESTION);
-        if ( rc != wxYES )
+            style::YesNo | style::Cancel | style::IconQuestion);
+        if ( rc != style::Yes )
             return false;
     }
 
@@ -479,21 +436,22 @@ bool ibDocument::OnSaveModified()
     if ( IsModified() )
     {
         // Asked through the session's frame: ShowModalMessage hands the
-        // question to its client and returns the wx button code.
+        // question to its client and returns the button pressed (ibStyle).
         ibBackendDocFrame* const frame = ibSession::CurrentFrame();
         if ( !frame )
             return true;   // no frame → no prompt → treat as "ok to close"
 
+        namespace style = ibProtocol::ibRequest::ibMessage::ibStyle;
         const int rc = frame->ShowModalMessage(
             ibString::Format(_("Do you want to save changes to %s?"),
                              GetUserReadableName()),
             ibString(),   // the client's own caption
-            wxYES_NO | wxCANCEL | wxICON_QUESTION | wxCENTRE);
+            style::YesNo | style::Cancel | style::IconQuestion | style::Centre);
         switch ( rc )
         {
-            case wxYES:    return Save();
-            case wxNO:     Modify(false); break;
-            case wxCANCEL: return false;
+            case style::Yes:    return Save();
+            case style::No:     Modify(false); break;
+            case style::Cancel: return false;
         }
     }
 
@@ -510,13 +468,14 @@ void ibDocument::OnSaveBeforeForceClose()
     ibBackendDocFrame* const frame = ibSession::CurrentFrame();
     if ( frame )
     {
+        namespace style = ibProtocol::ibRequest::ibMessage::ibStyle;
         const int rc = frame->ShowModalMessage(
             ibString::Format(
                 _("Do you want to save changes to %s before closing it?"),
                 GetUserReadableName()),
             ibString(),   // the client's own caption
-            wxYES_NO | wxICON_QUESTION | wxCENTRE);
-        if ( rc == wxYES )
+            style::YesNo | style::IconQuestion | style::Centre);
+        if ( rc == style::Yes )
         {
             while ( !Save() )
             {
@@ -525,8 +484,8 @@ void ibDocument::OnSaveBeforeForceClose()
                         _("Saving %s failed, would you like to retry?"),
                         GetUserReadableName()),
                     ibString(),   // the client's own caption
-                    wxYES_NO | wxICON_ERROR | wxCENTRE);
-                if ( retry != wxYES )
+                    style::YesNo | style::IconError | style::Centre);
+                if ( retry != style::Yes )
                     break;
             }
         }
@@ -537,9 +496,9 @@ void ibDocument::OnSaveBeforeForceClose()
 
 bool ibDocument::AddView(ibView *view)
 {
-    if ( !m_documentViews.Member(view) )
+    if ( std::ranges::find(m_documentViews, view) == m_documentViews.end() )
     {
-        m_documentViews.Append(view);
+        m_documentViews.push_back(view);
         OnChangedViewList();
     }
     return true;
@@ -547,9 +506,11 @@ bool ibDocument::AddView(ibView *view)
 
 bool ibDocument::RemoveView(ibView *view)
 {
-    if ( !m_documentViews.DeleteObject(view) )
+    const auto it = std::ranges::find(m_documentViews, view);
+    if ( it == m_documentViews.end() )
         return false;
 
+    m_documentViews.erase(it);
     OnChangedViewList();
     return true;
 }
@@ -567,33 +528,25 @@ void ibDocument::OnChangedViewList()
         delete this;
 }
 
-void ibDocument::UpdateAllViews(ibView *sender, wxObject *hint)
+void ibDocument::UpdateAllViews(ibView *sender)
 {
-    wxList::compatibility_iterator node = m_documentViews.GetFirst();
-    while (node)
+    for (ibView *view : m_documentViews)
     {
-        ibView *view = (ibView *)node->GetData();
         if (view != sender)
-            view->OnUpdate(sender, hint);
-        node = node->GetNext();
+            view->OnUpdate(sender);
     }
 
     // Step-4 collapse: cascade lifted up from ibMetaDocument. Children get
     // the same update; sender stays propagated so the originating view
     // remains the de-duplication anchor across the whole subtree.
     for (ibDocument* childDoc : m_childDocuments)
-        childDoc->UpdateAllViews(sender, hint);
+        childDoc->UpdateAllViews(sender);
 }
 
 void ibDocument::NotifyClosing()
 {
-    wxList::compatibility_iterator node = m_documentViews.GetFirst();
-    while (node)
-    {
-        ibView *view = (ibView *)node->GetData();
+    for (ibView *view : m_documentViews)
         view->OnClosingDocument();
-        node = node->GetNext();
-    }
 }
 
 void ibDocument::SetFilename(const ibString& filename, bool notifyViews)
@@ -607,22 +560,14 @@ void ibDocument::OnChangeFilename(bool notifyViews)
     if ( notifyViews )
     {
         // Notify the views that the filename has changed
-        wxList::compatibility_iterator node = m_documentViews.GetFirst();
-        while (node)
-        {
-            ibView *view = (ibView *)node->GetData();
+        for (ibView *view : m_documentViews)
             view->OnChangeFilename();
-            node = node->GetNext();
-        }
     }
 }
 
 // ⭐ A DOCUMENT'S FILE IS THE SESSION'S TEMPORARY FILE — given by its id in the temporary storage
 // (ibTempFile), where the desktop gave a path on disk. The client put it there, or takes it from there once
 // the document has saved; LoadObject / SaveObject see a stream over it, one part in memory at a time.
-#if !wxUSE_STD_IOSTREAM
-    #error "a document's file is read and written as a std stream over the temporary storage"
-#endif
 
 bool ibDocument::DoSaveDocument(const ibString& file)
 {
@@ -727,7 +672,7 @@ void ibView::OnActivateView(bool /*activate*/,
 {
 }
 
-void ibView::OnUpdate(ibView */*sender*/, wxObject */*hint*/)
+void ibView::OnUpdate(ibView */*sender*/)
 {
 }
 
@@ -811,18 +756,17 @@ bool ibDocManager::CloseDocument(ibDocument* doc, bool force)
     if ( !doc->DeleteAllViews() )
         return false;
 
-    wxASSERT(!m_docs.Member(doc));
+    ibASSERT(std::ranges::find(m_docs, doc) == m_docs.end());
 
     return true;
 }
 
 bool ibDocManager::CloseDocuments(bool force)
 {
-    wxList::compatibility_iterator node = m_docs.GetFirst();
-    while (node)
+    for (auto node = m_docs.begin(); node != m_docs.end(); )
     {
-        ibDocument *doc = (ibDocument *)node->GetData();
-        wxList::compatibility_iterator next = node->GetNext();
+        ibDocument *doc = *node;
+        const auto next = std::next(node);
 
         if (!CloseDocument(doc, force))
             return false;
@@ -842,11 +786,10 @@ bool ibDocManager::Clear(bool force)
 
     m_currentView = nullptr;
 
-    wxList::compatibility_iterator node = m_templates.GetFirst();
-    while (node)
+    for (auto node = m_templates.begin(); node != m_templates.end(); )
     {
-        ibDocTemplate *templ = (ibDocTemplate*) node->GetData();
-        wxList::compatibility_iterator next = node->GetNext();
+        ibDocTemplate *templ = *node;
+        const auto next = std::next(node);
         delete templ;
         node = next;
     }
@@ -870,12 +813,8 @@ ibView *ibDocManager::GetAnyUsableView() const
         // VZ: I'm not exactly sure why is this needed but this is how this
         //     code used to behave before the bug #9518 was fixed and it seems
         //     safer to preserve the old logic
-        wxList::compatibility_iterator node = m_docs.GetFirst();
-        if ( !node->GetNext() )
-        {
-            ibDocument *doc = static_cast<ibDocument *>(node->GetData());
-            view = doc->GetFirstView();
-        }
+        if ( m_docs.size() == 1 )
+            view = m_docs.front()->GetFirstView();
         //else: we have more than one document
     }
 
@@ -886,24 +825,16 @@ namespace
 {
 
 // helper function: return only the visible templates
-ibDocTemplateVector GetVisibleTemplates(const wxList& allTemplates)
+ibDocTemplateVector GetVisibleTemplates(const std::list<ibDocTemplate*>& allTemplates)
 {
     // select only the visible templates
-    const size_t totalNumTemplates = allTemplates.GetCount();
     ibDocTemplateVector templates;
-    if ( totalNumTemplates )
-    {
-        templates.reserve(totalNumTemplates);
+    templates.reserve(allTemplates.size());
 
-        for ( wxList::const_iterator i = allTemplates.begin(),
-                                   end = allTemplates.end();
-              i != end;
-              ++i )
-        {
-            ibDocTemplate * const temp = (ibDocTemplate *)*i;
-            if ( temp->IsVisible() )
-                templates.push_back(temp);
-        }
+    for ( ibDocTemplate * const temp : allTemplates )
+    {
+        if ( temp->IsVisible() )
+            templates.push_back(temp);
     }
 
     return templates;
@@ -926,12 +857,10 @@ void ibDocument::Activate()
 
 ibDocument* ibDocManager::FindDocumentByPath(const ibString& path) const
 {
-    const wxFileName fileName(path);
-    for ( wxList::const_iterator i = m_docs.begin(); i != m_docs.end(); ++i )
+    const std::filesystem::path fileName = ibPathOf(path).lexically_normal();
+    for ( ibDocument * const doc : m_docs )
     {
-        ibDocument * const doc = wxStaticCast(*i, ibDocument);
-
-        if ( fileName == wxFileName(doc->GetFilename()) )
+        if ( fileName == ibPathOf(doc->GetFilename()).lexically_normal() )
             return doc;
     }
     return nullptr;
@@ -1051,9 +980,9 @@ ibDocument *ibDocManager::CreateDocument(const ibString& path, long flags)
 
 
     // if we've reached the max number of docs, close the first one.
-    if ( (int)GetDocuments().GetCount() >= m_maxDocsOpen )
+    if ( (int)m_docs.size() >= m_maxDocsOpen )
     {
-        if ( !CloseDocument((ibDocument *)GetDocuments().GetFirst()->GetData()) )
+        if ( !CloseDocument(m_docs.front()) )
         {
             // can't open the new document if closing the old one failed
             return nullptr;
@@ -1068,17 +997,25 @@ ibDocument *ibDocManager::CreateDocument(const ibString& path, long flags)
 
     docNew->SetDocumentName(temp->GetDocumentName());
 
-    wxScopeGuard guard = wxMakeObjGuard(*docNew, &ibDocument::DeleteAllViews);
-
     // call the appropriate function depending on whether we're creating a
-    // new file or opening an existing one
-    if ( !(flags & ibDOC_NEW ? docNew->OnNewDocument()
-                             : docNew->OnOpenDocument(path)) )
+    // new file or opening an existing one; a document that fails either way,
+    // or raises, goes with its views (wx's scope guard did this)
+    bool created = false;
+    try
     {
+        created = flags & ibDOC_NEW ? docNew->OnNewDocument()
+                                    : docNew->OnOpenDocument(path);
+    }
+    catch ( ... )
+    {
+        docNew->DeleteAllViews();
+        throw;
+    }
+    if ( !created )
+    {
+        docNew->DeleteAllViews();
         return nullptr;
     }
-
-    guard.Dismiss();
 
     // make the new document the current one and bring its tab to the front
     docNew->Activate();
@@ -1152,9 +1089,8 @@ ibDocTemplate *ibDocManager::FindTemplateForPath(const ibString& path)
     const ibString name = ibTempFile(path).GetName();
 
     // Find the template which this extension corresponds to
-    for (size_t i = 0; i < m_templates.GetCount(); i++)
+    for (ibDocTemplate *temp : m_templates)
     {
-        ibDocTemplate *temp = (ibDocTemplate *)m_templates.Item(i)->GetData();
         if ( temp->FileMatchesTemplate(name) )
         {
             theTemplate = temp;
@@ -1215,23 +1151,20 @@ ibDocTemplate *ibDocManager::SelectViewType(ibDocTemplate **templates,
 
 void ibDocManager::AssociateTemplate(ibDocTemplate *temp)
 {
-    if (!m_templates.Member(temp))
-        m_templates.Append(temp);
+    if (std::ranges::find(m_templates, temp) == m_templates.end())
+        m_templates.push_back(temp);
 }
 
 void ibDocManager::DisassociateTemplate(ibDocTemplate *temp)
 {
-    m_templates.DeleteObject(temp);
+    m_templates.remove(temp);
 }
 
-ibDocTemplate* ibDocManager::FindTemplate(const wxClassInfo* classinfo)
+ibDocTemplate* ibDocManager::FindTemplate(const std::type_index& documentType) const
 {
-   for ( wxList::compatibility_iterator node = m_templates.GetFirst();
-         node;
-         node = node->GetNext() )
+   for ( ibDocTemplate* t : m_templates )
    {
-      ibDocTemplate* t = wxStaticCast(node->GetData(), ibDocTemplate);
-      if ( t->GetDocClassInfo() == classinfo )
+      if ( t->m_docType == documentType )
          return t;
    }
 
@@ -1241,13 +1174,13 @@ ibDocTemplate* ibDocManager::FindTemplate(const wxClassInfo* classinfo)
 // Add and remove a document from the manager's list
 void ibDocManager::AddDocument(ibDocument *doc)
 {
-    if (!m_docs.Member(doc))
-        m_docs.Append(doc);
+    if (std::ranges::find(m_docs, doc) == m_docs.end())
+        m_docs.push_back(doc);
 }
 
 void ibDocManager::RemoveDocument(ibDocument *doc)
 {
-    m_docs.DeleteObject(doc);
+    m_docs.remove(doc);
 }
 
 // Views should inform the document manager
@@ -1268,128 +1201,6 @@ void ibDocManager::ActivateView(ibView *view, bool activate)
     }
 }
 
-// ----------------------------------------------------------------------------
-// Permits compatibility with existing file formats and functions that
-// manipulate files directly
-// ----------------------------------------------------------------------------
-
-#if wxUSE_STD_IOSTREAM
-
-bool ibTransferFileToStream(const ibString& filename, std::ostream& stream)
-{
-#if wxUSE_FFILE
-    wxFFile file(filename, wxT("rb"));
-#elif wxUSE_FILE
-    wxFile file(filename, wxFile::read);
-#endif
-    if ( !file.IsOpened() )
-        return false;
-
-    do
-    {
-        char buf[4096];
-        size_t nRead;
-        nRead = file.Read(buf, WXSIZEOF(buf));
-        if ( file.Error() )
-            return false;
-
-        stream.write(buf, nRead);
-        if ( !stream )
-            return false;
-    }
-    while ( !file.Eof() );
-
-    return true;
-}
-
-bool ibTransferStreamToFile(std::istream& stream, const ibString& filename)
-{
-#if wxUSE_FFILE
-    wxFFile file(filename, wxT("wb"));
-#elif wxUSE_FILE
-    wxFile file(filename, wxFile::write);
-#endif
-    if ( !file.IsOpened() )
-        return false;
-
-    char buf[4096];
-    do
-    {
-        stream.read(buf, WXSIZEOF(buf));
-        if ( !stream.bad() ) // fail may be set on EOF, don't use operator!()
-        {
-            if ( !file.Write(buf, stream.gcount()) )
-                return false;
-        }
-    }
-    while ( !stream.eof() );
-
-    return true;
-}
-
-#else // !wxUSE_STD_IOSTREAM
-
-bool ibTransferFileToStream(const ibString& filename, wxOutputStream& stream)
-{
-#if wxUSE_FFILE
-    wxFFile file(filename, wxT("rb"));
-#elif wxUSE_FILE
-    wxFile file(filename, wxFile::read);
-#endif
-    if ( !file.IsOpened() )
-        return false;
-
-    char buf[4096];
-
-    size_t nRead;
-    do
-    {
-        nRead = file.Read(buf, WXSIZEOF(buf));
-        if ( file.Error() )
-            return false;
-
-        stream.Write(buf, nRead);
-        if ( !stream )
-            return false;
-    }
-    while ( !file.Eof() );
-
-    return true;
-}
-
-bool ibTransferStreamToFile(wxInputStream& stream, const ibString& filename)
-{
-#if wxUSE_FFILE
-    wxFFile file(filename, wxT("wb"));
-#elif wxUSE_FILE
-    wxFile file(filename, wxFile::write);
-#endif
-    if ( !file.IsOpened() )
-        return false;
-
-    char buf[4096];
-    for ( ;; )
-    {
-        stream.Read(buf, WXSIZEOF(buf));
-
-        const size_t nRead = stream.LastRead();
-        if ( !nRead )
-        {
-            if ( stream.Eof() )
-                break;
-
-            return false;
-        }
-
-        if ( !file.Write(buf, nRead) )
-            return false;
-    }
-
-    return true;
-}
-
-#endif // wxUSE_STD_IOSTREAM/!wxUSE_STD_IOSTREAM
-
 
 // ============================================================================
 //   OES adapter — additional includes needed by ibMetaDocument / ibMetaView
@@ -1401,16 +1212,8 @@ bool ibTransferStreamToFile(wxInputStream& stream, const ibString& filename)
 
 #include "frmserver/client/clientFrame.h"   // ibClientFrame::CreateChildFrame
 
-#include <wx/scopedptr.h>
 #include "docManager.h"
 #include "backend/metadataConfiguration.h"
-#include <wx/dlist.h>
-
-
-wxIMPLEMENT_CLASS(ibMetaDocument, ibDocument);
-wxIMPLEMENT_CLASS(ibMetaDataDocument, ibMetaDocument);
-
-wxIMPLEMENT_CLASS(ibMetaView, ibView);
 
 // ShowFrame() lifted to ibView in step-4 collapse.
 
@@ -1425,10 +1228,7 @@ ibView* ibDocument::DoCreateView()
 	ibDocTemplate* docTemplate = GetDocumentTemplate();
 	if (docTemplate == nullptr)
 		return nullptr;
-	wxClassInfo* viewClassInfo = docTemplate->GetViewClassInfo();
-	if (viewClassInfo == nullptr)
-		return nullptr;
-	return static_cast<ibView*>(viewClassInfo->CreateObject());
+	return docTemplate->DoCreateView();
 }
 
 ibString ibMetaDocument::GetModuleName() const
@@ -1636,5 +1436,3 @@ bool ibMetaDocument::Close()
 	return OnCloseDocument();
 }
 #endif   // historical adapter impl
-
-#endif // wxUSE_DOC_VIEW_ARCHITECTURE

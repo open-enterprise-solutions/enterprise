@@ -12,30 +12,30 @@
 ibClassID ibValueManagerDataObjectConstant::GetClassType() const
 {
 	const ibMetaData* metaData = m_metaObject->GetMetaData();
-	wxASSERT(metaData);
+	ibASSERT(metaData);
 	const ibCtorMetaValueType* clsFactory =
 		metaData->GetTypeCtor(m_metaObject, ibCtorObjectMetaType::ibCtorObjectMetaType_Manager);
-	wxASSERT(clsFactory);
+	ibASSERT(clsFactory);
 	return clsFactory->GetClassType();
 }
 
 ibString ibValueManagerDataObjectConstant::GetClassName() const
 {
 	const ibMetaData* metaData = m_metaObject->GetMetaData();
-	wxASSERT(metaData);
+	ibASSERT(metaData);
 	const ibCtorMetaValueType* clsFactory =
 		metaData->GetTypeCtor(m_metaObject, ibCtorObjectMetaType::ibCtorObjectMetaType_Manager);
-	wxASSERT(clsFactory);
+	ibASSERT(clsFactory);
 	return clsFactory->GetClassName();
 }
 
 ibString ibValueManagerDataObjectConstant::GetString() const
 {
 	const ibMetaData* metaData = m_metaObject->GetMetaData();
-	wxASSERT(metaData);
+	ibASSERT(metaData);
 	const ibCtorMetaValueType* clsFactory =
 		metaData->GetTypeCtor(m_metaObject, ibCtorObjectMetaType::ibCtorObjectMetaType_Manager);
-	wxASSERT(clsFactory);
+	ibASSERT(clsFactory);
 	return clsFactory->GetClassName();
 }
 

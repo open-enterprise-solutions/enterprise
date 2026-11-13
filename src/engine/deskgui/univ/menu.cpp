@@ -664,6 +664,13 @@ ibPopupMenuWindow::GetMenuItemFromPoint(const wxPoint& pt) const
 // ibPopupMenuWindow drawing
 // ----------------------------------------------------------------------------
 
+// SEAM vs univ: THE LETTERS ARE UNDERLINED FOR THE KEYS ONLY - a menu of the bar asked for by its letter
+// (ibMenuBar::PopupMenu) shows them in every title of the bar, in it, its submenus and the menus the arrows move to,
+// until the bar's menus are gone; a menu the mouse opened shows none, as Windows' own and GTK's hide them till the keys
+// are used (keyboard cues, gtk-auto-mnemonics). The canon underlined them always (2026-11-13, Max: "the menu wants
+// combing"). On GTK3/Cocoa the same - the menus are the engine's there too
+static bool s_keyboardCues = false;
+
 void ibPopupMenuWindow::RefreshItem(ibMenuItem *item)
 {
     wxCHECK_RET( item, wxT("can't refresh null item") );
@@ -750,6 +757,13 @@ void ibPopupMenuWindow::DrawItems(wxDC& dc, ibRenderer *rend)
                 // "checked" bitmap because this is the default one - this
                 // explains this strange boolean expression
                 bmp = item->GetBitmap(!item->IsCheckable() || item->IsChecked());
+
+                // SEAM vs univ: a disabled item with no disabled bitmap of its own greys the one it has, as a button's
+                // and a tool's do (ibButton, ibToolBar) - it stood in its colours beside the grey label (2026-11-13,
+                // Max: Cut, Delete, Move Up in a form editor's menu). On GTK3/Cocoa the same - the menus are the
+                // engine's there too
+                if ( !item->IsEnabled() && bmp.IsOk() )
+                    bmp = bmp.ConvertToDisabled();
             }
 
             rend->DrawMenuItem
@@ -761,7 +775,7 @@ void ibPopupMenuWindow::DrawItems(wxDC& dc, ibRenderer *rend)
                      item->GetAccelString(),
                      bmp,
                      flags,
-                     item->GetAccelIndex()
+                     s_keyboardCues ? item->GetAccelIndex() : -1
                   );
         }
     }
@@ -2260,7 +2274,16 @@ void ibMenuBar::PopupMenu(size_t pos)
 {
     wxCHECK_RET( m_window, wxT("can't show a menu of a menubar never attached") );
 
+    // asked for by its letter (ibFrame::OnCharHook): the letters underlined until the bar's menus are gone
+    // (s_keyboardCues), every title of the bar with them. A command chosen may take the bar away, this with it, its
+    // window only scheduled to go (ibMenuBarWindow::PopupCurrentMenu) - refreshed after through a weak reference
+    const wxWeakRef<wxWindow> window(m_window);
+    s_keyboardCues = true;
+    m_window->Refresh();
     m_window->PopupMenu(pos);
+    s_keyboardCues = false;
+    if ( window )
+        window->Refresh();
 }
 
 // ----------------------------------------------------------------------------
@@ -2489,7 +2512,7 @@ void ibMenuBarWindow::OnPaint(wxPaintEvent& WXUNUSED(event))
                             rect,
                             m_menuBar->m_menuInfos[n].GetLabel(),
                             flags,
-                            m_menuBar->m_menuInfos[n].GetAccelIndex()
+                            s_keyboardCues ? m_menuBar->m_menuInfos[n].GetAccelIndex() : -1
                        );
     }
 }

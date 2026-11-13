@@ -72,7 +72,7 @@ bool ibValueTabularSectionDataObjectBase::SetValueByRow(const ibVariant& variant
 
 	if (!m_metaTable->IsNumberLine(col)) {
 		const ibMetaData* metaData = m_metaTable->GetMetaData();
-		wxASSERT(metaData);
+		ibASSERT(metaData);
 		const bool hasCol = node->HasColumnValue(col);
 		
 		if (hasCol) {
@@ -155,7 +155,7 @@ void ibValueTabularSectionDataObjectBase::CopyValue(const ibDataViewItem& row)
 	// position; the new row lands at currentLine+1 and ItemInserted
 	// pushes focus onto it via Select.
 	long currentLine = StorageIndexOf(currentItem);
-	if (currentLine != wxNOT_FOUND) {
+	if (currentLine != ibNOT_FOUND) {
 		ibValueModelStorage::Insert(rowData, currentLine + 1, !ibBackendException::IsEvalMode());
 	}
 	else {

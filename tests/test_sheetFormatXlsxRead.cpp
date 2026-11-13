@@ -8,6 +8,7 @@
 #include <wx/mstream.h>
 #include <wx/zipstrm.h>
 
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -30,11 +31,14 @@ void Zip(const std::vector<std::pair<const char*, std::string>>& parts, wxMemory
 	}
 }
 
+// Zipped by wx's writer, read by the engine's reader - the two zips are not one code.
 bool Read(const std::vector<std::pair<const char*, std::string>>& parts, ibSpreadsheetDescription& sheet)
 {
 	wxMemoryOutputStream zipped;
 	Zip(parts, zipped);
-	wxMemoryInputStream in(zipped);
+	std::string bytes(zipped.GetLength(), '\0');
+	zipped.CopyTo(bytes.data(), bytes.size());
+	std::istringstream in(bytes, std::ios::binary);
 	return ibSheetFormatXlsx().Read(in, sheet);
 }
 

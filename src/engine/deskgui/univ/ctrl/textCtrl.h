@@ -283,11 +283,13 @@ public:
     virtual wxSize GetMinSize() const override;
     virtual wxSize GetMaxSize() const override;
 
-    // a field lives on the content colour, not on the chrome - one neither edited nor framed is a label its text can be
-    // copied from, on the surface under it, as a read-only EDIT is on wxMSW (WM_CTLCOLORSTATIC, the dialog's colour):
-    // About's values took a field's cream once the dialog stopped setting them its own colour (2026-11-12, Max). On
-    // GTK3/Cocoa the same - the field is the engine's there too
-    virtual bool HasContentBackground() const override { return m_isEditable || GetBorder() != wxBORDER_NONE; }
+    // a field that can be typed into lives on the content colour, not on the chrome - its white well tells it; one that
+    // cannot, read-only or disabled, framed or not, stands on the surface under it, its frame paler
+    // (ibLunaRenderer::DrawTextBorder), as a read-only EDIT is on wxMSW (WM_CTLCOLORSTATIC, the dialog's colour). A
+    // framed one kept the well until 2026-11-13 and could not be told from one typed into (Max, variant E3); About's
+    // values took a field's cream once the dialog stopped setting them its own colour (2026-11-12). On GTK3/Cocoa the
+    // same - the field is the engine's there too
+    virtual bool HasContentBackground() const override { return m_isEditable && IsEnabled(); }
 
     // more readable flag testing methods
     bool IsPassword() const { return HasFlag(wxTE_PASSWORD); }

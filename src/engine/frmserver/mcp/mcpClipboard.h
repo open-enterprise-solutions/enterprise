@@ -34,7 +34,7 @@
 
 #include <vector>
 
-#include <wx/string.h>
+#include "core/fstring.h"   // ibString
 
 // WHAT KIND OF THING IS IN THE SLOT. A paste asks this before it reads a byte:
 // the payloads are all chunked memory and would half-parse into each other.

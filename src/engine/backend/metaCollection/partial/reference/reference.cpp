@@ -408,7 +408,7 @@ namespace {
 
 void ibValueReferenceDataObject::PrepareRef(bool createData)
 {
-	wxASSERT(m_metaObject != nullptr);
+	ibASSERT(m_metaObject != nullptr);
 
 	if (m_state == ibReferenceState::Full)
 		return;
@@ -580,7 +580,7 @@ int ibValueReferenceDataObject::CompareValueLS(const ibVariant& cParam) const
 	// …and there is nothing to test at run time: a Reference-kinded value HAS its object. Said as an
 	// assertion because it is an invariant, not a case — a branch here would be dead code pretending to
 	// handle something that cannot happen, and the day it did happen it would hide it instead.
-	wxASSERT(rhs != nullptr);
+	ibASSERT(rhs != nullptr);
 
 	// 2. TWO METATYPES HAVE NO COMMON ORDER — they are told apart by the TYPE, and that question belongs
 	// to nobody's metaobject. (`m_metaObject` is complete in this TU, so `GetMetaID()` resolves.)
@@ -736,7 +736,7 @@ bool ibValueReferenceDataObject::GetValueByMetaID(const ibMetaID& id, ibValue& p
 	const_cast<ibValueReferenceDataObject*>(this)->PrepareRef();
 
 	auto it = m_listObjectValue.find(id);
-	//wxASSERT(it != m_listObjectValue.end());
+	//ibASSERT(it != m_listObjectValue.end());
 	if (it != m_listObjectValue.end()) {
 		pvarMetaVal = it->second;
 		return true;
@@ -920,7 +920,7 @@ ibString ibValueReferenceDataObject::GetString() const
 	else if (!m_foundedRef)   // deleted, or refused by access policy — the same answer on purpose
 		return ibString::Format(ibT("%s <%i:%s>"), _("Not found"), m_metaObject->GetMetaID(), m_objGuid.GetGuid().str());
 
-	wxASSERT(m_metaObject);
+	ibASSERT(m_metaObject);
 	ibString desc;
 	return m_metaObject->GenerateDataDesc(this, desc) ? std::move(desc) : ibString();
 }
@@ -929,7 +929,7 @@ ibString ibValueReferenceDataObject::GetClassName() const
 {
 	const ibCtorMetaValueType* clsFactory =
 		m_metaObject->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_Reference);
-	wxASSERT(clsFactory);
+	ibASSERT(clsFactory);
 	return clsFactory->GetClassName();
 }
 
@@ -941,7 +941,7 @@ ibString ibValueReferenceDataObject::GetClassName() const
 // 🛑 AND WHATEVER COMES BACK IS THE ANSWER — there is no second try here. The governor's `false` means
 // "the value did not fit", and it arrives WITH the narrowed value in `out`; reading it as "not mine" and
 // asking somebody else overwrote a correct empty goods reference with an undefined value, which is a
-// subconto quietly losing its type (measured 2026-09-24 on the ledger base). A metaobject that declares
+// account dimension quietly losing its type (measured 2026-09-24 on the ledger base). A metaobject that declares
 // no limit answers by its own class in its own place (genericData.h), so every road is already covered
 // before the question reaches here.
 bool ibValueReferenceDataObject::AdjustOutValue(const ibValue& varValue, ibValue& out) const

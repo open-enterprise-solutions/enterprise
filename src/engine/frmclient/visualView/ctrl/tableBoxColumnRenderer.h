@@ -80,8 +80,8 @@ public:
 			return GetTextExtent(m_valueText);
 		}
 		else {
-			return GetView()->FromDIP(wxSize(wxDVC_DEFAULT_RENDERER_SIZE,
-				wxDVC_DEFAULT_RENDERER_SIZE));
+			return GetView()->FromDIP(wxSize(ibDVC_DEFAULT_RENDERER_SIZE,
+				ibDVC_DEFAULT_RENDERER_SIZE));
 		}
 	}
 

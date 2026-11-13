@@ -27,12 +27,15 @@
 // stays focused on ibDocument / ibView / ibDocManager.
 // ----------------------------------------------------------------------------
 
-class FRMSERVER_API ibDocTemplate: public wxObject
+class FRMSERVER_API ibDocTemplate
 {
 
 friend class FRMSERVER_API ibDocManager;
+friend class FRMSERVER_API ibDocument;   // DoCreateView - a document's default view
 
 public:
+	// What it makes is a class and two functions (wx's CLASSINFO pair): the document's class, which CreateDocument<T>
+	// finds the template by, and the functions that make the document and its view - null makes none.
 	ibDocTemplate(ibDocManager *manager,
 	              const ibString& descr,
 	              const ibString& filter,
@@ -40,8 +43,9 @@ public:
 	              const ibString& ext,
 	              const ibString& docTypeName,
 	              const ibString& viewTypeName,
-	              wxClassInfo *docClassInfo = nullptr,
-	              wxClassInfo *viewClassInfo = nullptr,
+	              const std::type_index& docType,
+	              ibDocument* (*createDocument)(),
+	              ibView* (*createView)(),
 	              long flags = ibDEFAULT_TEMPLATE_FLAGS);
 
 	virtual ~ibDocTemplate();
@@ -72,9 +76,6 @@ public:
 
 	bool IsVisible() const { return (m_flags & ibTEMPLATE_VISIBLE) != 0; }
 
-	wxClassInfo* GetDocClassInfo() const { return m_docClassInfo; }
-	wxClassInfo* GetViewClassInfo() const { return m_viewClassInfo; }
-
 	// THE PICTURE BY ITS ID — what a client creating a document is sent with each template it may choose from (Max,
 	// 2026-10-06), the picture itself asked for by that id (ibBackendPicture::GetServerPicture). An id, not a wxIcon:
 	// a wxIcon was made for every template of every session's manager — a wx object on a worker thread — where the
@@ -94,8 +95,9 @@ protected:
 	ibString          m_viewTypeName;
 	ibDocManager*     m_documentManager;
 
-	wxClassInfo*      m_docClassInfo;
-	wxClassInfo*      m_viewClassInfo;
+	std::type_index   m_docType;
+	ibDocument*       (*m_createDocument)();
+	ibView*           (*m_createView)();
 
 	ibPictureID       m_pictureID = 0;
 
@@ -103,7 +105,6 @@ protected:
 	virtual ibView *DoCreateView();
 
 private:
-	wxDECLARE_CLASS(ibDocTemplate);
 	ibDocTemplate(const ibDocTemplate&) = delete;
 	ibDocTemplate& operator=(const ibDocTemplate&) = delete;
 };
@@ -113,8 +114,8 @@ private:
 //
 // Holds the OES-side keying that the wx-style file template doesn't have:
 // the metaobject CLSID and a per-template GUID.
-// Registered through the ibDocManager::AddDocTemplate
-// overloads that take ibClassID / ibPictureID instead of a plain wxClassInfo.
+// Registered through the ibDocManager::AddDocTemplate<TDoc, TView>
+// overloads that take ibClassID / ibPictureID.
 // Lives in the same m_templates list as plain ibDocTemplate; lookups by CLSID
 // iterate that list and dynamic_cast to ibMetaDocTemplate*.
 // ----------------------------------------------------------------------------
@@ -129,8 +130,9 @@ public:
 	                  const ibString& ext,
 	                  const ibString& docTypeName,
 	                  const ibString& viewTypeName,
-	                  wxClassInfo* docClassInfo = nullptr,
-	                  wxClassInfo* viewClassInfo = nullptr,
+	                  const std::type_index& docType,
+	                  ibDocument* (*createDocument)(),
+	                  ibView* (*createView)(),
 	                  long flags = ibDEFAULT_TEMPLATE_FLAGS);
 
 	virtual bool InitDocument(ibDocument* doc,

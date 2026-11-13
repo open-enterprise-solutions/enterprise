@@ -27,7 +27,8 @@
   </ItemGroup>
   <!-- THE CORE — the shared meanings under the engine (backend) and its clients (frmclient): the class ids and the ids
        of the configuration, the kinds of a value, a text, a number, a date, a guid, a block of bytes read and written,
-       the core's refusal, the build's number. Of wx — the base only. -->
+       the core's refusal, the build's number. No wx: ibString's boundary to wxString is templates, made in a program
+       that includes wx (fstring.h); of wx's tree only its zlib, on Windows. -->
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
     <ProjectGuid>{A1B2C3D4-0009-4E5F-8A9B-C0D1E2F30009}</ProjectGuid>
@@ -88,12 +89,12 @@
   <ItemDefinitionGroup>
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
-      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;wxUSE_GUI=0;_USRDLL;CORE_EXPORTS;_WIN32_WINNT=0x0A00;ASIO_STANDALONE;ASIO_SEPARATE_COMPILATION;ASIO_NO_DEPRECATED;XML_STATIC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;_UNICODE;_USRDLL;CORE_EXPORTS;_WIN32_WINNT=0x0A00;ASIO_STANDALONE;ASIO_SEPARATE_COMPILATION;ASIO_NO_DEPRECATED;XML_STATIC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <AdditionalIncludeDirectories>$(oesEngine);$(oes3rdParty)asio\asio\include;$(oes3rdParty)llhttp\include;$(oes3rdParty)lodepng;$(oes3rdParty)expat\expat\lib;$(oes3rdParty)mbedtls\include;$(oesEngine)core\tls;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(oesEngine);$(oes3rdParty)asio\asio\include;$(oes3rdParty)llhttp\include;$(oes3rdParty)lodepng;$(oes3rdParty)expat\expat\lib;$(oes3rdParty)mbedtls\include;$(oesEngine)core\tls;$(oes3rdParty)wxWidgets\src\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <!-- Asio's templates (net\) make more sections than an object file holds by default. -->
       <AdditionalOptions>/bigobj %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
@@ -108,22 +109,20 @@
     <ClCompile>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>wxbase33ud.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>wxzlibd.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswud;$(oes3rdParty)wxWidgets\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>wxbase33ud.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>wxzlibd.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -132,13 +131,12 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>wxbase33u.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>wxzlib.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -147,17 +145,17 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll\mswu;$(oes3rdParty)wxWidgets\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>wxbase33u.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>wxzlib.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="build.cpp" />
+    <ClCompile Include="codePage.cpp" />
     <ClCompile Include="compiler\blockSyntaxLINQ.cpp" />
     <ClCompile Include="compiler\scriptFoldCode.cpp" />
     <ClCompile Include="compiler\scriptParseCode.cpp" />
@@ -192,6 +190,7 @@
     <ClCompile Include="fiber\fiberLocals.cpp" />
     <ClCompile Include="fileKind.cpp" />
     <ClCompile Include="dynamicLibrary.cpp" />
+    <ClCompile Include="fileConfig.cpp" />
     <ClCompile Include="fileSystem.cpp" />
     <ClCompile Include="fnumber.cpp" />
     <ClCompile Include="formatString.cpp" />
@@ -204,8 +203,9 @@
     <ClCompile Include="picturePredefined.cpp" />
     <ClCompile Include="guid.cpp" />
     <ClCompile Include="job\jobScheduleRules.cpp" />
-    <ClCompile Include="localization.cpp" />
     <ClCompile Include="localization\dictionary.cpp" />
+    <ClCompile Include="localization\locale.cpp" />
+    <ClCompile Include="localization\localization.cpp" />
     <ClCompile Include="memory\lz\lzhuf.cpp" />
     <ClCompile Include="memory\compression.cpp" />
     <ClCompile Include="memory\memoryBuffer.cpp" />
@@ -242,6 +242,7 @@
     <ClCompile Include="query\queryRewrite.cpp" />
     <ClCompile Include="query\anyQueryConstructorModel.cpp" />
     <ClCompile Include="query\queryRefusal.cpp" />
+    <ClCompile Include="regEx.cpp" />
     <ClCompile Include="serialize\dataBuilder.cpp" />
     <ClCompile Include="serialize\provider\fileProvider.cpp" />
     <ClCompile Include="serialize\provider\jsonProvider.cpp" />
@@ -258,6 +259,7 @@
     <ClCompile Include="syntaxHelper\helpLoader.cpp" />
     <ClCompile Include="syntaxHelper\helpResolver.cpp" />
     <ClCompile Include="syntaxHelper\helpService.cpp" />
+    <ClCompile Include="system.cpp" />
     <ClCompile Include="tabular\tabularModelView.cpp" />
     <ClCompile Include="timeZone.cpp" />
     <ClCompile Include="typeName.cpp" />
@@ -267,10 +269,12 @@
     <ClCompile Include="json\jsonText.cpp" />
     <ClCompile Include="xml\xmlDocument.cpp" />
     <ClCompile Include="xml\xmlText.cpp" />
+    <ClCompile Include="zip\zip.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="build.h" />
     <ClInclude Include="clsid.h" />
+    <ClInclude Include="codePage.h" />
     <ClInclude Include="compiler\blockSyntaxLINQ.h" />
     <ClInclude Include="compiler\codeDef.h" />
     <ClInclude Include="compiler\scriptFoldCode.h" />
@@ -299,8 +303,6 @@
     <ClInclude Include="diagnostics\crashGuard.h" />
     <ClInclude Include="diagnostics\debugTrace.h" />
     <ClInclude Include="diagnostics\journal.h" />
-    <ClInclude Include="diagnostics\oesConsole.h" />
-    <ClInclude Include="diagnostics\oesApp.h" />
     <ClInclude Include="diagnostics\leakTracker.h" />
     <ClInclude Include="exception.h" />
     <ClInclude Include="fboolean.h" />
@@ -309,6 +311,7 @@
     <ClInclude Include="fiber\fiberLocals.h" />
     <ClInclude Include="fileKind.h" />
     <ClInclude Include="dynamicLibrary.h" />
+    <ClInclude Include="fileConfig.h" />
     <ClInclude Include="fileSystem.h" />
     <ClInclude Include="fnumber.h" />
     <ClInclude Include="formatString.h" />
@@ -321,8 +324,10 @@
     <ClInclude Include="picturePredefined.h" />
     <ClInclude Include="guid.h" />
     <ClInclude Include="job\jobSchedule.h" />
-    <ClInclude Include="localization.h" />
     <ClInclude Include="localization\dictionary.h" />
+    <ClInclude Include="localization\languageTable.h" />
+    <ClInclude Include="localization\locale.h" />
+    <ClInclude Include="localization\localization.h" />
     <ClInclude Include="logger\loggerQuery.h" />
     <ClInclude Include="memory\lz\lzhuf.h" />
     <ClInclude Include="memory\compression.h" />
@@ -355,7 +360,10 @@
     <ClInclude Include="query\queryRewrite.h" />
     <ClInclude Include="query\queryRefusal.h" />
     <ClInclude Include="query\queryUnfold.h" />
+    <ClInclude Include="refCounter.h" />
+    <ClInclude Include="regEx.h" />
     <ClInclude Include="roleCompositionMode.h" />
+    <ClInclude Include="scopeGuard.h" />
     <ClInclude Include="selectorDataType.h" />
     <ClInclude Include="serialize\dataBuilder.h" />
     <ClInclude Include="serialize\provider\fileProvider.h" />
@@ -379,6 +387,7 @@
     <ClInclude Include="syntaxHelper\helpLoadError.h" />
     <ClInclude Include="syntaxHelper\helpResolver.h" />
     <ClInclude Include="syntaxHelper\helpService.h" />
+    <ClInclude Include="system.h" />
     <ClInclude Include="tabular\tabularModelView.h" />
     <ClInclude Include="timeZone.h" />
     <ClInclude Include="typeName.h" />
@@ -391,6 +400,7 @@
     <ClInclude Include="xml\xmlDocument.h" />
     <ClInclude Include="xml\xmlText.h" />
     <ClInclude Include="xml\expat\expat_config.h" />
+    <ClInclude Include="zip\zip.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

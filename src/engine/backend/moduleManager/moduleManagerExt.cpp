@@ -17,28 +17,28 @@
 const ibByteCode* ibValueModuleRuntimeManagerExternalDataProcessor::GetByteCode() const
 {
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
-	wxASSERT(moduleManager);
+	ibASSERT(moduleManager);
 	return moduleManager ? moduleManager->GetByteCode() : nullptr;
 }
 
 std::unique_ptr<ibCompileModule> ibValueModuleRuntimeManagerExternalDataProcessor::CreateCompiler() const
 {
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
-	wxASSERT(moduleManager);
+	ibASSERT(moduleManager);
 	return moduleManager ? moduleManager->CreateCompiler() : nullptr;
 }
 
 std::shared_ptr<ibProcUnit> ibValueModuleRuntimeManagerExternalDataProcessor::GetProcUnit() const
 {
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
-	wxASSERT(moduleManager);
+	ibASSERT(moduleManager);
 	return moduleManager ? moduleManager->GetProcUnit() : nullptr;
 }
 
 std::map<ibString, ibContextVar>& ibValueModuleRuntimeManagerExternalDataProcessor::GetContextVariables()
 {
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
-	wxASSERT(moduleManager);
+	ibASSERT(moduleManager);
 	// Returns a reference — no null fallback possible from the manager, so guard
 	// with a process-static empty map rather than dereferencing null in release
 	// (the sibling GetByteCode/GetProcUnit return pointers and null-fold).
@@ -55,7 +55,7 @@ std::map<ibString, ibValue*>& ibValueModuleRuntimeManagerExternalDataProcessor::
 	// must see the configuration root's globals (Metadata + common modules
 	// surfaced as names), not its own extern map.
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
-	wxASSERT(moduleManager);
+	ibASSERT(moduleManager);
 	if (moduleManager == nullptr) {
 		static std::map<ibString, ibValue*> s_empty;
 		return s_empty;
@@ -108,7 +108,7 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::CreateMainModule()
 		return true;
 
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
-	wxASSERT(moduleManager);
+	ibASSERT(moduleManager);
 
 	// ⭐⭐ incrRef - for control delete — TAKEN BEFORE THE MODULE'S FIRST LINE, let go at the end of
 	// StartMainModule, where it always was: the form takes the object there, or nobody does and it unloads,
@@ -217,7 +217,7 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::StartMainModule(const ibR
 	bool taken = false;
 
 	const ibValueMetaObjectRecordData* commonObject = m_objectValue->GetMetaObject();
-	wxASSERT(commonObject);
+	ibASSERT(commonObject);
 	ibValueMetaObjectFormBase* defFormObject = commonObject->GetDefaultFormByID
 	(
 		ibValueMetaObjectDataProcessor::eFormDataProcessor
@@ -294,28 +294,28 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::ExitMainModule(const ibRu
 const ibByteCode* ibValueModuleRuntimeManagerExternalReport::GetByteCode() const
 {
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
-	wxASSERT(moduleManager);
+	ibASSERT(moduleManager);
 	return moduleManager ? moduleManager->GetByteCode() : nullptr;
 }
 
 std::unique_ptr<ibCompileModule> ibValueModuleRuntimeManagerExternalReport::CreateCompiler() const
 {
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
-	wxASSERT(moduleManager);
+	ibASSERT(moduleManager);
 	return moduleManager ? moduleManager->CreateCompiler() : nullptr;
 }
 
 std::shared_ptr<ibProcUnit> ibValueModuleRuntimeManagerExternalReport::GetProcUnit() const
 {
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
-	wxASSERT(moduleManager);
+	ibASSERT(moduleManager);
 	return moduleManager ? moduleManager->GetProcUnit() : nullptr;
 }
 
 std::map<ibString, ibContextVar>& ibValueModuleRuntimeManagerExternalReport::GetContextVariables()
 {
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
-	wxASSERT(moduleManager);
+	ibASSERT(moduleManager);
 	// Returns a reference — no null fallback possible from the manager, so guard
 	// with a process-static empty map rather than dereferencing null in release
 	// (the sibling GetByteCode/GetProcUnit return pointers and null-fold).
@@ -330,7 +330,7 @@ std::map<ibString, ibValue*>& ibValueModuleRuntimeManagerExternalReport::GetGlob
 {
 	// Delegate to the configuration root — see DataProcessor::GetGlobalVariables.
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
-	wxASSERT(moduleManager);
+	ibASSERT(moduleManager);
 	if (moduleManager == nullptr) {
 		static std::map<ibString, ibValue*> s_empty;
 		return s_empty;
@@ -383,7 +383,7 @@ bool ibValueModuleRuntimeManagerExternalReport::CreateMainModule()
 		return true;
 
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(appEnv::ActiveMetaData());
-	wxASSERT(moduleManager);
+	ibASSERT(moduleManager);
 
 	// incrRef - for control delete — before the module's first line, as the data processor's twin says.
 	m_objectValue->IncrRef();
@@ -473,7 +473,7 @@ bool ibValueModuleRuntimeManagerExternalReport::StartMainModule(const ibRuntimeR
 	// THE METAOBJECT IS A REPORT'S, and it says so — so both questions below are asked of it
 	// directly: which form is the default one, and which composer is.
 	const ibValueMetaObjectReport* commonObject = m_objectValue->GetMetaObject();
-	wxASSERT(commonObject);
+	ibASSERT(commonObject);
 	ibValueMetaObjectFormBase* defFormObject = commonObject->GetDefaultFormByID
 	(
 		ibValueMetaObjectReport::eFormReport
@@ -507,7 +507,7 @@ bool ibValueModuleRuntimeManagerExternalReport::StartMainModule(const ibRuntimeR
 	// Gated on the composer, not offered unconditionally: with neither a form NOR a composer there
 	// is nothing to show, and an empty window would be a worse answer than none. Without this the
 	// module started and quietly died, which is the same outcome with no explanation.
-	else if (commonObject->GetDefComposer() != wxNOT_FOUND) {
+	else if (commonObject->GetDefComposer() != ibNOT_FOUND) {
 		// No key in the request — the form is generated, so it takes a fresh key of its own.
 		const ibFormPtr<ibBackendValueForm> valueForm =
 			ibBackendValueForm::CreateNewForm(formRequest, nullptr, nullptr, m_objectValue);
@@ -558,7 +558,7 @@ void ibValueModuleRuntimeManagerExternalDataProcessor::FillMembers(ibMemberTable
 	// these (the helper's tail, autobound by the ibRuntimeModuleDataObject ctor).
 	if (m_objectValue != nullptr) {
 		ibMemberTable* methodHelper = m_objectValue->GetPMethods();
-		wxASSERT(methodHelper);
+		ibASSERT(methodHelper);
 		for (long idx = 0; idx < methodHelper->GetNMethods(); idx++) {
 			helper.CopyMethod(methodHelper, idx);
 		}
@@ -571,7 +571,7 @@ void ibValueModuleRuntimeManagerExternalDataProcessor::FillMembers(ibMemberTable
 bool ibValueModuleRuntimeManagerExternalDataProcessor::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
 	if (m_objectValue &&
-		m_objectValue->FindMethod(GetMethodName(lMethodNum)) != wxNOT_FOUND) {
+		m_objectValue->FindMethod(GetMethodName(lMethodNum)) != ibNOT_FOUND) {
 		return m_objectValue->CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
 	}
 
@@ -583,7 +583,7 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::CallAsFunc(const long lMe
 bool ibValueModuleRuntimeManagerExternalDataProcessor::GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const
 {
 	if (m_objectValue &&
-		m_objectValue->FindMethod(GetMethodName(lMethodNum)) != wxNOT_FOUND) {
+		m_objectValue->FindMethod(GetMethodName(lMethodNum)) != ibNOT_FOUND) {
 		return m_objectValue->GetParamDefValue(lMethodNum, lParamNum, pvarParamDefValue);
 	}
 
@@ -595,7 +595,7 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::GetParamDefValue(const lo
 bool ibValueModuleRuntimeManagerExternalDataProcessor::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
 	if (m_objectValue &&
-		m_objectValue->FindProp(GetPropName(lPropNum)) != wxNOT_FOUND) {
+		m_objectValue->FindProp(GetPropName(lPropNum)) != ibNOT_FOUND) {
 		return m_objectValue->SetPropVal(lPropNum, varPropVal);
 	}
 
@@ -609,7 +609,7 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::SetPropVal(const long lPr
 bool ibValueModuleRuntimeManagerExternalDataProcessor::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
 	if (m_objectValue &&
-		m_objectValue->FindProp(GetPropName(lPropNum)) != wxNOT_FOUND) {
+		m_objectValue->FindProp(GetPropName(lPropNum)) != ibNOT_FOUND) {
 		return m_objectValue->GetPropVal(lPropNum, pvarPropVal);
 	}
 
@@ -623,7 +623,7 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::GetPropVal(const long lPr
 long ibValueModuleRuntimeManagerExternalDataProcessor::FindProp(const ibString& strName) const
 {
 	if (m_objectValue &&
-		m_objectValue->FindProp(strName) != wxNOT_FOUND) {
+		m_objectValue->FindProp(strName) != ibNOT_FOUND) {
 		return m_objectValue->FindProp(strName);
 	}
 
@@ -644,7 +644,7 @@ void ibValueModuleRuntimeManagerExternalReport::FillMembers(ibMemberTable& helpe
 	// these (the helper's tail, autobound by the ibRuntimeModuleDataObject ctor).
 	if (m_objectValue != nullptr) {
 		ibMemberTable* methodHelper = m_objectValue->GetPMethods();
-		wxASSERT(methodHelper);
+		ibASSERT(methodHelper);
 		for (long idx = 0; idx < methodHelper->GetNMethods(); idx++) {
 			helper.CopyMethod(methodHelper, idx);
 		}
@@ -657,7 +657,7 @@ void ibValueModuleRuntimeManagerExternalReport::FillMembers(ibMemberTable& helpe
 bool ibValueModuleRuntimeManagerExternalReport::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
 	if (m_objectValue &&
-		m_objectValue->FindMethod(GetMethodName(lMethodNum)) != wxNOT_FOUND) {
+		m_objectValue->FindMethod(GetMethodName(lMethodNum)) != ibNOT_FOUND) {
 		return m_objectValue->CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);
 	}
 
@@ -669,7 +669,7 @@ bool ibValueModuleRuntimeManagerExternalReport::CallAsFunc(const long lMethodNum
 bool ibValueModuleRuntimeManagerExternalReport::GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const
 {
 	if (m_objectValue &&
-		m_objectValue->FindMethod(GetMethodName(lMethodNum)) != wxNOT_FOUND) {
+		m_objectValue->FindMethod(GetMethodName(lMethodNum)) != ibNOT_FOUND) {
 		return m_objectValue->GetParamDefValue(lMethodNum, lParamNum, pvarParamDefValue);
 	}
 
@@ -681,7 +681,7 @@ bool ibValueModuleRuntimeManagerExternalReport::GetParamDefValue(const long lMet
 bool ibValueModuleRuntimeManagerExternalReport::SetPropVal(const long lPropNum, const ibValue& varPropVal)        //setting attribute
 {
 	if (m_objectValue &&
-		m_objectValue->FindProp(GetPropName(lPropNum)) != wxNOT_FOUND) {
+		m_objectValue->FindProp(GetPropName(lPropNum)) != ibNOT_FOUND) {
 		return m_objectValue->SetPropVal(lPropNum, varPropVal);
 	}
 
@@ -695,7 +695,7 @@ bool ibValueModuleRuntimeManagerExternalReport::SetPropVal(const long lPropNum, 
 bool ibValueModuleRuntimeManagerExternalReport::GetPropVal(const long lPropNum, ibValue& pvarPropVal)                   //attribute value
 {
 	if (m_objectValue &&
-		m_objectValue->FindProp(GetPropName(lPropNum)) != wxNOT_FOUND) {
+		m_objectValue->FindProp(GetPropName(lPropNum)) != ibNOT_FOUND) {
 		return m_objectValue->GetPropVal(lPropNum, pvarPropVal);
 	}
 
@@ -709,7 +709,7 @@ bool ibValueModuleRuntimeManagerExternalReport::GetPropVal(const long lPropNum, 
 long ibValueModuleRuntimeManagerExternalReport::FindProp(const ibString& strName) const
 {
 	if (m_objectValue &&
-		m_objectValue->FindProp(strName) != wxNOT_FOUND) {
+		m_objectValue->FindProp(strName) != ibNOT_FOUND) {
 		return m_objectValue->FindProp(strName);
 	}
 

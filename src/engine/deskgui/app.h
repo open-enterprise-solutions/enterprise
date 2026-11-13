@@ -1,17 +1,18 @@
-#ifndef __OES_APP_H__
-#define __OES_APP_H__
+#ifndef _DESKGUI_APP_H_
+#define _DESKGUI_APP_H_
 
 // ibWxApp — wxApp subclass with crash plumbing pre-wired.
 //
-// Header-only, in the core beside the guard it wires: what it catches is
-// the core's refusal (ibCoreException — the engine's among them), so it
-// knows nothing above the core. It is wx-aware (wxApp / wxDebugReport /
-// wxMessageBox / wxLog), but every method body is inline: the core never
-// includes it, so the core does not link wx's GUI for it — the program
-// that derives from it does (launcher, codeRunner).
+// The desktop program's base, so in the desktop's library (2026-11-13, Max: it was the core's, beside the guard it
+// wires; every program that derives from it - launcher, codeRunner, designer-thin, enterprise-thin - is a desktop one
+// and places deskgui). What it catches is the core's refusal (ibCoreException — the engine's among them), so it knows
+// nothing above the core. It is wx-aware (wxApp / wxDebugReport / wxMessageBox / wxLog) and header-only: every method
+// body is inline, made in the program that derives from it.
 //
 // What the base wires for you:
-//   OnInit              → ibCrashGuard::Install(GetExeName()) + DoOnInit()
+//   OnInit              → ibCrashGuard::Install(GetExeName()), the journal's wx side
+//                          (wx's log chained in, the journal's lines echoed into wx) + DoOnInit()
+//   CleanUp             → the echo taken away before wx's log goes
 //   OnRun               → headless WrapStartup around DoOnRun()
 //   OnExceptionInMainLoop → ibCoreException = show + continue;
 //                            anything else = unwind into OnUnhandled
@@ -48,10 +49,63 @@
 #include <cstdio>    // stderr, for an assertion raised before the journal is open
 #include <cstdlib>   // EXIT_FAILURE
 #include <exception>
+#include <filesystem>   // the file a wx line came from, by its name alone
 #include <functional>
 #include <mutex>
 #include <set>
 #include <utility>
+
+// THE JOURNAL'S wx SIDE — the core has no wx (core/diagnostics/journal.h). wx's own log is chained into the journal
+// here, and the journal's lines go back into wx through the echo the application installs (ibTechJournal::SetEcho).
+
+// The mark a line the journal echoes through wx carries IN ITS RECORD (wxLogRecordInfo). The journal's own wx target
+// lets a marked line pass: the file already has it, and taking it again is how a message becomes a loop.
+// ⚠ IN THE RECORD, NOT IN THE THREAD. It was a thread_local flag, and wx does not deliver a line on the thread
+// that logged it: a line from any thread but the main one is BUFFERED and handed over later on the main
+// thread, where the flag was never set — every line of a registry thread came back as `wx.debug` (an
+// application server's journal, 2026-10-01: 260 of its 876 lines, all at exit). A record keeps its values when
+// wx buffers it.
+inline const char* const kJournalEchoKey = "oes.journal.echo";
+
+// wx's log, into the journal. It only TAKES — the chain keeps the previous target alive, so the debugger's output
+// window still shows every line it showed before.
+class ibJournalLogTarget : public wxLog
+{
+protected:
+	void DoLogRecord(wxLogLevel level, const wxString& msg, const wxLogRecordInfo& info) override
+	{
+		wxUIntPtr echoed = 0;
+		if (info.GetNumValue(kJournalEchoKey, &echoed))
+			return;                   // the journal's own line, on its way to the debugger
+
+		const ibChar* kind =
+			  level == wxLOG_FatalError ? ibT("wx.fatal")
+			: level == wxLOG_Error      ? ibT("wx.error")
+			: level == wxLOG_Warning    ? ibT("wx.warn")
+			: level == wxLOG_Message    ? ibT("wx.message")
+			: level == wxLOG_Status     ? ibT("wx.status")
+			: level == wxLOG_Debug      ? ibT("wx.debug")
+			: level == wxLOG_Trace      ? ibT("wx.trace")
+			                            : ibT("wx");
+
+		// wx's severity becomes OUR mark, so a line that came through the chain is scanned the same
+		// way as one written here. A wx ERROR does NOT take a dump with it, though: this target sees
+		// every wxLogError in the process, including ones a caller is about to handle, and a
+		// snapshot per handled error is exactly the loop the once-per-run rule exists to avoid.
+		const ibJournalMark mark =
+			  level == wxLOG_FatalError || level == wxLOG_Error || level == wxLOG_Warning
+			    ? ibJournalMark::Warning
+			    : ibJournalMark::Info;
+
+		// The SITE, when wx knows it — a line is worth much more with the file and line that
+		// produced it, and this is the one place that has them.
+		if (info.filename != nullptr && info.line > 0)
+			ibTechJournal::Write(mark, kind, ibString::Format(ibT("%s   [%s:%d]"),
+				msg, ibString(std::filesystem::path(info.filename).filename().wstring()), info.line));
+		else
+			ibTechJournal::Write(mark, kind, msg);
+	}
+};
 
 class ibWxApp : public wxApp {
 public:
@@ -116,6 +170,23 @@ public:
 		// faults during wxApp::OnInit / image-handler registry / locale
 		// init also land in a dump.
 		ibCrashGuard::Install(GetExeName());
+
+		// ⭐ wx's LOG INTO THE JOURNAL — CHAINED, NOT REPLACED, and only as a SAFETY NET. Our own code writes through
+		// ibJournal and reaches the file directly; this catches what we do not own: wx's own diagnostics, and the
+		// callsites not migrated yet. Replacing the target instead of chaining would take the developer's live view
+		// away in exchange for the file, which is a trade nobody asked for.
+		//
+		// ⚠ THE GLOBAL LOG LEVEL IS LEFT EXACTLY AS IT WAS. Raising it would change what the PREVIOUS target shows
+		// too — new lines appearing in the debugger that never appeared before — and the promise is the opposite one:
+		// the same output as always, plus a file.
+		//
+		// Never deleted by us: it must outlive every other subsystem's last log line; wx's CleanUp lets go of it.
+		// …and the journal's lines back into wx (EchoIntoWx), and which wx this is, in the opening lines.
+		if (ibTechJournal::IsOpen()) {
+			new wxLogChain(new ibJournalLogTarget());
+			ibJournalInfo(ibT("start"), ibT("wxWidgets %d.%d.%d"), wxMAJOR_VERSION, wxMINOR_VERSION, wxRELEASE_NUMBER);
+		}
+		ibTechJournal::SetEcho(&ibWxApp::EchoIntoWx);
 
 		// ⭐ THE APPLICATION IS LIGHT, AND NOW IT SAYS SO — because the half that answers to the
 		// system was contradicting the half that does not.
@@ -185,6 +256,15 @@ public:
 				wxT("Unknown exception during startup (non-std, non-ibCore)"));
 			return 1;
 		}
+	}
+
+	// THE ECHO GOES BEFORE wx's LOG DOES. A line written after it — a static's destructor, a registry's last word —
+	// would ask wx for a log target, and wx would make one on demand that nobody deletes. Here and not in OnExit: the
+	// programs answer OnExit themselves, and wx calls CleanUp whether OnInit succeeded or not.
+	void CleanUp() override
+	{
+		ibTechJournal::SetEcho(nullptr);
+		wxApp::CleanUp();
 	}
 
 #if wxUSE_EXCEPTIONS
@@ -269,29 +349,16 @@ public:
 	// ONCE PER SITE. An assertion in a paint handler fires on every paint; the
 	// hundredth copy of a line carries nothing the first did not, and the flood
 	// is what would make the journal unreadable at the moment it matters.
+	//
+	// The core's road, the engine's own assertions take (ibAssertFailure): once per site there, said by a program's
+	// handler or the journal.
 	void OnAssertFailure(const wxChar* file, int line, const wxChar* func,
 		const wxChar* cond, const wxChar* msg) override
 	{
-		static std::mutex          s_mutex;
-		static std::set<std::pair<wxString, int>> s_seen;
-		{
-			std::lock_guard<std::mutex> lock(s_mutex);
-			if (!s_seen.emplace(wxString(file != nullptr ? file : wxT("?")), line).second)
-				return;
-		}
-
-		const wxString where = wxString::Format(wxT("%s:%d"),
-			file != nullptr ? file : wxT("?"), line);
-		wxString what = cond != nullptr ? wxString(cond) : wxString(wxT("(no condition)"));
-		if (msg != nullptr && *msg != wxT('\0'))
-			what += wxT(" -- ") + wxString(msg);
-		if (func != nullptr && *func != wxT('\0'))
-			what += wxT(" [in ") + wxString(func) + wxT("]");
-
-		ibJournalInfo(wxT("assert"), wxT("%s: %s"), where, what);
-		std::fprintf(stderr, "OES assert %s: %s\n",
-			static_cast<const char*>(where.utf8_str()),
-			static_cast<const char*>(what.utf8_str()));
+		ibAssertFailure(file != nullptr ? wxString(file).utf8_str().data() : nullptr, line,
+			func != nullptr ? wxString(func).utf8_str().data() : nullptr,
+			cond != nullptr ? wxString(cond).utf8_str().data() : nullptr,
+			msg != nullptr ? ibString(msg) : ibString());
 	}
 #endif // wxDEBUG_LEVEL
 
@@ -364,6 +431,52 @@ protected:
 			ibCrashGuard::PlatformNativeMessage(caption, message);
 #endif
 	}
+
+private:
+
+	// THE JOURNAL'S LINE, INTO wx (ibTechJournal::SetEcho) — so the debugger shows what the file keeps, and an error
+	// reaches the person.
+	//
+	// ⭐⭐ THE ECHO SPEAKS IN THE SEVERITY IT WAS GIVEN — and this is what makes migrating a `wxLogError` callsite to
+	// `ibJournalError` safe. wx's verbs are not interchangeable: in a GUI application wxLogError puts a dialog in front
+	// of the user, wxLogMessage shows a message, and wxLogDebug is invisible. Routing everything through wxLogDebug
+	// would have journalled the errors and SILENTLY TAKEN THEM OFF THE SCREEN — the callsite would keep compiling and
+	// the user would stop being told.
+	//
+	// ⚠ THE USER SEES THE MESSAGE, NOT THE JOURNAL LINE. A timestamp and a thread id belong in a file, not in a
+	// dialog; the debug echo keeps the full line because there the timestamp is the point.
+	// ⚠ INFO DOES NOT SHOUT. `*` marks a line worth FINDING in the file; it does not mean the user must be
+	// interrupted. Routed through wxLogMessage it was exactly that: in a GUI application wxLogMessage opens a modal
+	// dialog, so the startup banner — four lines nobody asked to be told — became four dialogs before the launcher
+	// even appeared (seen live, 2026-08-22). The mark is about the FILE; the echo is about the PERSON, and they are
+	// not the same decision.
+	//
+	// 🛑⭐ AND NEITHER DOES A WARNING (Max, 2026-09-23: "when it is a warning, no window — take the sending to the
+	// widgets away"). Reading the 56 wxLogWarning callsites settled it: an fsync that failed on a Firebird lease, a
+	// bytecode cache that could not be read, a replication peer on another version, a sweep backlog that would not
+	// answer — every one is engine plumbing addressed to whoever opens the file, and none is a sentence to stop a
+	// person mid-keystroke with.
+	//
+	// ⚠ AN ERROR STILL DOES. That one says the thing the person asked for did not happen, which they have to be told
+	// whether or not anybody ever opens the journal.
+	//
+	// (wxLogError / wxLogDebug spelled out — the same logger the two macros make, with the mark stored: the line
+	// comes back through the chain, and ibJournalLogTarget lets it pass.)
+	static void EchoIntoWx(ibJournalMark mark, [[maybe_unused]] const ibString& line, const ibString& message)
+	{
+		switch (mark) {
+		case ibJournalMark::Error:
+			if (wxLOG_IS_ENABLED(Error))
+				wxMAKE_LOGGER(Error).Store(kJournalEchoKey, wxUIntPtr(1)).Log(wxT("%s"), message);
+			break;
+		default:
+#if wxUSE_LOG_DEBUG
+			if (wxLOG_IS_ENABLED(Debug))
+				wxMAKE_LOGGER(Debug).Store(kJournalEchoKey, wxUIntPtr(1)).Log(wxT("%s"), line);
+#endif
+			break;
+		}
+	}
 };
 
-#endif // __OES_APP_H__
+#endif // _DESKGUI_APP_H_

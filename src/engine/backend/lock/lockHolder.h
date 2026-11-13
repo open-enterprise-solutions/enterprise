@@ -50,7 +50,7 @@ public:
 
 	// Machine hint surfaced in admin UI alongside DisplayName. For
 	// session holders = the session's computer field; for custom
-	// holders = caller-chosen (typically wxGetHostName()).
+	// holders = caller-chosen (typically ibHostName()).
 	virtual ibString Computer() const = 0;
 };
 
@@ -61,7 +61,7 @@ public:
 class BACKEND_API ibSingleLockHolder : public ibLockHolder {
 public:
 	// displayName surfaces in conflict messages / admin UI. computer
-	// defaults to wxGetHostName() when empty so callers don't have to
+	// defaults to ibHostName() when empty so callers don't have to
 	// figure out the right hostname themselves.
 	explicit ibSingleLockHolder(const ibString& displayName,
 	                             const ibString& computer = ibEmptyString);

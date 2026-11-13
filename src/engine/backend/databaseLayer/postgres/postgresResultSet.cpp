@@ -7,6 +7,8 @@
 
 #include "engine/libpq/libpq-fs.h"
 
+#include <cstring>
+
 ibDatabaseResultSetPostgres::ibDatabaseResultSetPostgres(ibInterfacePostgres* pInterface)
 	: ibDatabaseResultSet()
 {

@@ -124,7 +124,7 @@ protected:
 	virtual ibValuePtr<ibValueManagerDataObject> CreateManagerDataObjectValue() const;
 
 	//create empty object
-	virtual ibValuePtr<ibValueRecordDataObjectRef> CreateObjectRefValue(const ibGuid& objGuid = wxNullGuid) const;
+	virtual ibValuePtr<ibValueRecordDataObjectRef> CreateObjectRefValue(const ibGuid& objGuid = ibNullGuid) const;
 
 	//create object data with meta form
 	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const;
@@ -204,7 +204,7 @@ private:
 
 class BACKEND_API ibValueRecordDataObjectDocument : public ibValueRecordDataObjectRecorderRef {
 	public:
-	ibValueRecordDataObjectDocument(const ibValueMetaObjectDocument* metaObject = nullptr, const ibGuid& guid = wxNullGuid);
+	ibValueRecordDataObjectDocument(const ibValueMetaObjectDocument* metaObject = nullptr, const ibGuid& guid = ibNullGuid);
 	ibValueRecordDataObjectDocument(const ibValueRecordDataObjectDocument& source);
 	virtual ~ibValueRecordDataObjectDocument();
 

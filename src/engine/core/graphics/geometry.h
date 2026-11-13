@@ -69,4 +69,38 @@ struct ibRect {
 	}
 };
 
+// An alignment, in wx's numbers (wxAlignment: a horizontal flag and a vertical one combine), so a side hands it to wx
+// as it is. Default (wxALIGN_INVALID) is "not said here": the column's own, the driver's own.
+enum ibAlignment : int {
+	ibAlignment_Default = -1,                // wxALIGN_INVALID
+	ibAlignment_Left = 0x0000,               // wxALIGN_LEFT
+	ibAlignment_CenterHorizontal = 0x0100,   // wxALIGN_CENTER_HORIZONTAL
+	ibAlignment_Right = 0x0200,              // wxALIGN_RIGHT
+	ibAlignment_Top = 0x0000,                // wxALIGN_TOP
+	ibAlignment_Bottom = 0x0400,             // wxALIGN_BOTTOM
+	ibAlignment_CenterVertical = 0x0800,     // wxALIGN_CENTER_VERTICAL
+	ibAlignment_Center = 0x0900              // wxALIGN_CENTER - both
+};
+
+// The direction a sizer lays its controls in, in wx's numbers (wxOrientation).
+enum ibOrientation : int {
+	ibOrientation_Horizontal = 0x0004,   // wxHORIZONTAL
+	ibOrientation_Vertical = 0x0008      // wxVERTICAL
+};
+
+// A control's size across its sizer's direction, in wx's numbers (wxStretch).
+enum ibStretch : int {
+	ibStretch_Shrink = 0x1000,   // wxSHRINK
+	ibStretch_Expand = 0x2000    // wxEXPAND
+};
+
+// The sides a margin is kept on, in wx's numbers (wxDirection) - flags that combine.
+enum ibDirection : int {
+	ibDirection_Left = 0x0010,    // wxLEFT
+	ibDirection_Right = 0x0020,   // wxRIGHT
+	ibDirection_Up = 0x0040,      // wxUP
+	ibDirection_Down = 0x0080,    // wxDOWN
+	ibDirection_All = 0x00f0      // wxALL
+};
+
 #endif

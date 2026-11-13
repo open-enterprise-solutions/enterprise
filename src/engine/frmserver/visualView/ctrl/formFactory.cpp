@@ -21,7 +21,7 @@ inline ibString GetClassType(const ibString& className)
 {
 	const ibCtorControlTypeBase* objectSingle =
 		dynamic_cast<const ibCtorControlTypeBase*>(ibValue::GetAvailableCtor(className));
-	wxASSERT(objectSingle);
+	ibASSERT(objectSingle);
 	return objectSingle != nullptr ? objectSingle->GetTypeControlName() : ibString(ibEmptyString);
 }
 
@@ -32,38 +32,38 @@ inline void SetDefaultLayoutProperties(ibValueSizerItem* sizerItem)
 
 	if (obj_type == ibT("Sizer")) {
 		sizerItem->SetBorder(0);
-		sizerItem->SetFlagBorder(wxALL);
-		sizerItem->SetFlagState(wxEXPAND);
+		sizerItem->SetFlagBorder(ibDirection_All);
+		sizerItem->SetFlagState(ibStretch_Expand);
 	}
 	else if (child->GetClassName() == ibT("Splitter") ||
 		child->GetClassName() == ibT("Spacer")) {
 		sizerItem->SetProportion(1);
-		sizerItem->SetFlagState(wxEXPAND);
+		sizerItem->SetFlagState(ibStretch_Expand);
 	}
 	else if (child->GetClassName() == ibT("Staticline")) {
-		sizerItem->SetFlagBorder(wxALL);
-		sizerItem->SetFlagState(wxEXPAND);
+		sizerItem->SetFlagBorder(ibDirection_All);
+		sizerItem->SetFlagState(ibStretch_Expand);
 	}
 	else if (child->GetClassName() == ibT("Toolbar")) {
 		sizerItem->SetBorder(0);
-		sizerItem->SetFlagBorder(wxALL);
-		sizerItem->SetFlagState(wxEXPAND);
+		sizerItem->SetFlagBorder(ibDirection_All);
+		sizerItem->SetFlagState(ibStretch_Expand);
 	}
 	else if (child->GetClassName() == ibT("Notebook")) {
 		sizerItem->SetProportion(1);
-		sizerItem->SetFlagBorder(wxALL);
-		sizerItem->SetFlagState(wxEXPAND);
+		sizerItem->SetFlagBorder(ibDirection_All);
+		sizerItem->SetFlagState(ibStretch_Expand);
 	}
 	else if (obj_type == ibT("Widget") ||
 		obj_type == ibT("Statusbar")) {
 		sizerItem->SetProportion(0);
-		sizerItem->SetFlagBorder(wxALL);
-		sizerItem->SetFlagState(wxSHRINK);
+		sizerItem->SetFlagBorder(ibDirection_All);
+		sizerItem->SetFlagState(ibStretch_Shrink);
 	}
 	else if (obj_type == ibT("Container")) {
 		sizerItem->SetProportion(1);
-		sizerItem->SetFlagBorder(wxALL);
-		sizerItem->SetFlagState(wxEXPAND);
+		sizerItem->SetFlagBorder(ibDirection_All);
+		sizerItem->SetFlagState(ibStretch_Expand);
 	}
 }
 
@@ -71,7 +71,8 @@ ibValueFrame* ibValueForm::NewObject(const ibClassID& clsid, ibValueFrame* contr
 {
 	if (ibValue::IsRegisterCtor(clsid)) {
 		ibValuePtr<ibValueFrame> newControl;
-		ibValue* ppParams[] = { this, controlParent, const_cast<ibValue*>(&generateId) };
+		ibValue id(generateId);   // CreateObject's arguments are slots, as a script's call hands them
+		ibValue* ppParams[] = { this, controlParent, &id };
 		try {
 			newControl = ibValue::CreateObject(clsid, ppParams, 3);
 			if (newControl == nullptr) {
@@ -200,7 +201,7 @@ ibValueFrame* ibValueForm::CreateObject(const ibString& className, ibValueFrame*
 
 		if (controlParent->GetObjectTypeName() == ibT("Toolbar"))
 		{
-			if (classType == ibT("Tool") /*|| classType == wxT("widget")*/)
+			if (classType == ibT("Tool") /*|| classType == ibT("widget")*/)
 			{
 				object = NewObject(className, controlParent);
 				//set enabled item

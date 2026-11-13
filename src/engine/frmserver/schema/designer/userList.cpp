@@ -106,7 +106,7 @@ std::function<void()> ibSchemaUserList::Command(const ibSession& session, std::i
 				password.has_value(), password.has_value() ? password->AsString() : ibString());
 
 			const ibValueMetaObjectConfiguration* commonObject = metaData->GetCommonMetaObject();
-			wxASSERT(commonObject);
+			ibASSERT(commonObject);
 
 			// The language and the roles the item offered — the configuration's, found by the guids it sent.
 			const ibString languageGuid = args.GetValue<ibString>(ibProtocol::ibSchema::ibUserList::Language);

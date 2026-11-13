@@ -14,8 +14,6 @@
 
 #include <algorithm>
 
-#include <wx/log.h>
-
 namespace {
 
 // The claim's owner identity is the JOB'S SESSION, not the process.

@@ -56,15 +56,15 @@ void ibMetaData::Dispose(ibMetaData* metaData)
 ibGuid ibMetaData::GuidByMetaId(const ibMetaID& id) const
 {
 	const ibValueMetaObject* meta = FindAnyObjectByFilter(id, true);
-	return meta != nullptr && meta->IsAllowed() ? meta->GetCommonGuid() : wxNullGuid;
+	return meta != nullptr && meta->IsAllowed() ? meta->GetCommonGuid() : ibNullGuid;
 }
 
 ibMetaID ibMetaData::MetaIdByGuid(const ibGuid& guid) const
 {
 	if (!guid.isValid())
-		return wxNOT_FOUND;
+		return ibNOT_FOUND;
 	const ibValueMetaObject* meta = FindAnyObjectByFilter(guid, true);
-	return meta != nullptr && meta->IsAllowed() ? meta->GetMetaID() : wxNOT_FOUND;
+	return meta != nullptr && meta->IsAllowed() ? meta->GetMetaID() : ibNOT_FOUND;
 }
 
 // The whole structure this configuration declares — see the header. The walk
@@ -260,14 +260,14 @@ ibValue* ibCompileValueCache::FindCompileModuleRef(const ibValueMetaObject* modu
 //**************************************************************************************************
 
 //ID's 
-ibMetaID ibMetaData::GenerateNewID() const
+ibMetaID ibMetaData::GenerateNewID()
 {
 	// SEED ONCE, THEN COUNT. The walk still decides where the numbering starts — a configuration
 	// just loaded must continue past its highest existing id — but it runs once per open image
 	// instead of once per new object, and what it produces is a floor, not an answer.
 	if (m_nextMetaId == 0) {
 		const ibValueMetaObject* commonObject = GetCommonMetaObject();
-		wxASSERT(commonObject);
+		ibASSERT(commonObject);
 		ibMetaID id = commonObject->GetMetaID() + 1;
 		DoGenerateNewID(id, commonObject);
 		m_nextMetaId = id;
@@ -286,7 +286,7 @@ void ibMetaData::DoGenerateNewID(ibMetaID& id, const ibValueMetaObject* top) con
 {
 	for (unsigned int idx = 0; idx < top->GetChildCount(); idx++) {
 		ibValueMetaObject* child = top->GetChild(idx);
-		wxASSERT(child);
+		ibASSERT(child);
 		ibMetaID newID = child->GetMetaID() + 1;
 		if (newID > id) {
 			id = newID;
@@ -471,13 +471,13 @@ bool ibMetaData::CopyMetaObject(const ibValueMetaObject* object, ibWriterMemory&
 		static void Generate(const ibValueMetaObject* copyObject) {
 			for (unsigned int idx = 0; idx < copyObject->GetChildCount(); idx++)
 				Generate(copyObject->GetChild(idx));
-			copyObject->m_metaCopyGuid = wxNewUniqueGuid;
+			copyObject->m_metaCopyGuid = ibNewUniqueGuid;
 		}
 
 		static void Erase(const ibValueMetaObject* copyObject) {
 			for (unsigned int idx = 0; idx < copyObject->GetChildCount(); idx++)
 				Erase(copyObject->GetChild(idx));
-			copyObject->m_metaCopyGuid = wxNullGuid;
+			copyObject->m_metaCopyGuid = ibNullGuid;
 		}
 
 	public:
@@ -493,7 +493,7 @@ bool ibMetaData::CopyMetaObject(const ibValueMetaObject* object, ibWriterMemory&
 
 #pragma endregion
 
-	wxASSERT(object->m_metaCopyGuid.isValid());
+	ibASSERT(object->m_metaCopyGuid.isValid());
 
 #pragma region _copy_fill_h_
 
@@ -663,7 +663,7 @@ ibValueMetaObject* ibMetaData::PasteMetaObject(const ibClassID& clsid,
 		static void ErasePasteGuid(const ibValueMetaObject* pasteObject) {
 			for (unsigned int idx = 0; idx < pasteObject->GetChildCount(); idx++)
 				ErasePasteGuid(pasteObject->GetChild(idx));
-			pasteObject->m_metaPasteGuid = wxNullGuid;
+			pasteObject->m_metaPasteGuid = ibNullGuid;
 		}
 
 		static bool PasteAndRunObject(ibValueMetaObject* pasteObject, ibReaderMemory& reader)

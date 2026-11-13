@@ -101,7 +101,7 @@ ibValue ibValue::CreateObject(const ibClassID& clsid, ibValue** paParams, const 
 		ibBackendCoreException::Error(_("Error creating object '%llu'"), clsid);
 	}
 
-	return wxEmptyValue;
+	return ibEmptyValue;
 }
 
 void ibValue::RegisterCtor(ibCtorAbstractType* typeCtor)
@@ -116,7 +116,7 @@ void ibValue::RegisterCtor(ibCtorAbstractType* typeCtor)
 		}
 
 #ifdef DEBUG
-		if (TraceTypes() && wxTheApp != NULL)
+		if (TraceTypes())
 			ibJournalInfo(ibT("compiler"),ibT("* Register class '%s' with clsid '%s:%llu' "), typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()), typeCtor->GetClassType());
 #endif
 
@@ -135,10 +135,9 @@ void ibValue::UnRegisterCtor(ibCtorAbstractType*& typeCtor)
 		typeCtor->CallEvent(ibCtorObjectTypeEvent::ibCtorObjectTypeEvent_UnRegister);
 
 #ifdef DEBUG
-		// The wxTheApp guard is NOT about noise: this also runs from static teardown, where a log
-		// call would ask wx to build a log target nobody can then delete (see OnExit's
-		// wxLog::DontCreateOnDemand note).
-		if (TraceTypes() && wxTheApp != NULL)
+		// This also runs from static teardown: the line reaches the file and no window - the echo into wx is
+		// taken away before wx's log is (ibWxApp::CleanUp), so no log target is made on demand that nobody deletes.
+		if (TraceTypes())
 			ibJournalInfo(ibT("compiler"),ibT("* Unregister class '%s' with clsid '%s:%llu' "), typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()), typeCtor->GetClassType());
 #endif
 		// Registry owns the ctor via shared_ptr — Unregister FREES it; null the caller's
@@ -197,7 +196,7 @@ bool ibValue::IsRegisterCtor(const ibClassID& clsid)
 ibClassID ibValue::GetTypeIDByRef(const std::type_info& typeInfo)
 {
 	const ibCtorAbstractType* typeCtor = GetAvailableCtor(typeInfo);
-	wxASSERT(typeCtor);
+	ibASSERT(typeCtor);
 	return typeCtor != nullptr ?
 		typeCtor->GetClassType() : 0;
 }
@@ -223,8 +222,8 @@ ibClassID ibValue::GetTypeIDByRef(const ibValue* objectRef)
 	case ibValueTypes::TYPE_ITERATOR:
 		return GetTypeIDByRef(typeid(*objectRef));
 	default:
-		wxFAIL_MSG(ibString::Format(
-			wxT("GetTypeIDByRef: unhandled object tag %d - add it to the typeid switch"),
+		ibFAIL_MSG(ibString::Format(
+			ibT("GetTypeIDByRef: unhandled object tag %d - add it to the typeid switch"),
 			static_cast<int>(objectRef->m_typeClass)));
 		return 0;
 	}

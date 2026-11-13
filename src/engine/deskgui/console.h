@@ -1,11 +1,11 @@
-#ifndef __OES_CONSOLE_H__
-#define __OES_CONSOLE_H__
+#ifndef _DESKGUI_CONSOLE_H_
+#define _DESKGUI_CONSOLE_H_
 
 // ibOesConsoleBoot — RAII boot helper for OES console-class binaries.
 //
-// wes (wenterprise-server) and appserver don't have a wxApp — they're
+// webserver and appserver don't have a wxApp — they're
 // plain `int main(argc, argv)` that uses wx primitives (wxString,
-// wxLocale, wx file ops) via wxInitializer. The boot sequence is
+// wx file ops) via wxInitializer. The boot sequence is
 // identical in every such binary:
 //
 //   wxInitializer init(argc, argv);
@@ -14,8 +14,10 @@
 //
 // Wrapped here so future console exes (next health-check daemon,
 // stress-test driver, etc.) wire in two lines instead of duplicating
-// the three. Header-only, in the core beside the guard it installs — wx
-// primitives that the binary already links anyway, and nothing above the core.
+// the three. The programs' wx side, beside the window programs' base (app.h), in the desktop's library
+// (2026-11-13, Max) - and header-only, so a server that includes it links no deskgui: only the wx base it
+// links already, and the core's guard. A stay: once the servers take nothing of wx (the command line,
+// wxString, wxFileName), what is left of it is ibCrashGuard::Install, said in their main.
 //
 // Usage:
 //   int main(int argc, char** argv) {
@@ -54,4 +56,4 @@ private:
 	wxInitializer m_wxInit;
 };
 
-#endif // __OES_CONSOLE_H__
+#endif // _DESKGUI_CONSOLE_H_

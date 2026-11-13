@@ -90,7 +90,7 @@ void ibValueRecordDataObjectDocument::SetPosted(bool posted)
 	if (!m_metaObject->ConvertToValue(dataRef))
 		return;
 	ibValueMetaObjectAttributePredefined* metaPosted = dataRef->GetDocumentPosted();
-	wxASSERT(metaPosted);
+	ibASSERT(metaPosted);
 	m_listObjectValue.insert_or_assign(metaPosted->GetMetaID(), posted);
 }
 

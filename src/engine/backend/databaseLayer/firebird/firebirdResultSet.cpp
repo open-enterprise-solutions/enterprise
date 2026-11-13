@@ -7,6 +7,7 @@
 
 #include <charconv>   // std::to_chars — a floating value's digits, with a point whatever the locale
 #include <limits>     // std::numeric_limits<float>::digits10 — the decimal digits a float carries through itself
+#include <cstring>
 
 ibDatabaseResultSetFirebird::ibDatabaseResultSetFirebird(ibInterfaceFirebird* pInterface)
 	: ibDatabaseResultSet()

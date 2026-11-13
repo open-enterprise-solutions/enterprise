@@ -2,6 +2,7 @@
 #define __XML_TEXT_H__
 
 #include "core/core.h"
+#include "core/codePage.h"  // ibCodePage - the encoding a document is read and written in
 #include "core/fstring.h"   // ibString - names, values, refusals
 #include "core/xml/xmlNodeType.h"
 
@@ -19,38 +20,8 @@
 // is backend/system/value/valueXml.h, and the node tree as XML is core/serialize/provider/xmlProvider.h; this is the
 // half that knows no value of the language.
 
-// ⭐ THE ENCODINGS AN XML FILE IS WRITTEN AND READ IN, named the way a declaration names them. windows-1251 is what a
-// tax return's format demands on every machine - which is why this is a fixed table, not the machine's code page
-// (TextEncoding.ANSI is UTF-8 on Linux) and not a converter that falls back to Latin-1 without a word on a name it
-// does not know.
-class CORE_API ibXmlCodePage {
-public:
-	enum ibKind { kUnknown, kUtf8, kUtf16, kWindows1251, kCp866 };
-
-	static ibXmlCodePage Find(const ibString& name);   // case-insensitive; aliases cp1251, IBM866, utf8, utf16
-	// What the writer can produce and the reader accepts; the reader also takes ISO-8859-1 and US-ASCII, which
-	// expat decodes by itself.
-	static ibString Supported();
-
-	ibKind   Kind() const { return m_kind; }
-	ibString Name() const;                             // what a declaration writes
-
-	// Meaningful only when IsSingleByte() - a UTF kind answers the ASCII half only.
-	bool     IsSingleByte() const { return m_table != nullptr; }
-	char16_t ToChar(unsigned char byte) const;         // 0xFFFF where the page defines no character
-	// False: the page has no byte for this code point - the writer then falls back to a `&#N;` reference.
-	bool     ToByte(char32_t ch, unsigned char& byte) const;
-	bool     Holds(char32_t ch) const;                 // a UTF kind holds every character
-
-	// The text as this page's bytes, appended to `bytes` - UTF-16 little-endian, without a byte-order mark. A
-	// character the page has no byte for is refused, `who` beginning the sentence: the writer has made every such
-	// character a reference already, so only what a script wrote raw can be one.
-	void     Encode(const ibString& text, const ibString& who, std::string& bytes) const;
-
-private:
-	ibKind          m_kind = kUnknown;
-	const char16_t* m_table = nullptr;   // every character either page holds is in the basic plane
-};
+// (The encodings an XML file is written and read in are the engine's code pages, by the names a declaration gives
+// them - ibCodePage::Find, core/codePage.h.)
 
 // ⭐ expat PUSHES, A CALLER PULLS: input goes in a chunk at a time (Feed) and what the parser made of it waits in
 // Queue() - until kQueuePause nodes wait, when the parser PAUSES until they are taken (Resume). A chunk is not a
@@ -169,7 +140,7 @@ private:
 // open and only once, an end only for an element that was started, nothing left open at Finish - and it escapes
 // what it is given
 // (`&`, `<`, `>`; in an attribute also `"`, a tab and the line breaks, which a reader would otherwise turn into
-// spaces). The text it makes is characters; ibXmlCodePage::Encode makes them bytes.
+// spaces). The text it makes is characters; ibCodePage::Encode makes them bytes.
 //
 // A character the target page has no byte for becomes a `&#N;` reference in text and in an attribute's value - that
 // is legal XML and reads back as the character; in a name, a comment, an instruction or a CDATA section there is no
@@ -184,7 +155,7 @@ private:
 class CORE_API ibXmlWriter {
 public:
 	// `who` begins every refusal; `page` is what the text will be encoded in - a writer into a string is UTF-8's.
-	ibXmlWriter(const ibString& who, ibXmlCodePage page);
+	ibXmlWriter(const ibString& who, ibCodePage page);
 
 	// One level of tabs per element and a line before each: not inside an element that holds text, where the
 	// line and the tabs would become part of that text.
@@ -272,7 +243,7 @@ private:
 	void AppendVerbatim(const ibString& text, const ibString& what);
 
 	ibString               m_who;
-	ibXmlCodePage          m_page;
+	ibCodePage             m_page;
 	ibString               m_text;
 	std::vector<ibFrame>   m_frameArray;
 	std::vector<std::pair<ibString, ibString>> m_pendingArray;   // decided by PrefixFor, not written yet

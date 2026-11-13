@@ -36,7 +36,7 @@
 #include <set>          // one object link per id, across the three texts an object carries
 #include <vector>
 
-#include <wx/string.h>
+#include "core/fstring.h"   // ibString
 
 class ibApplicationInstance;   // the base a description is about (ibMcpDescribePlatform)
 

@@ -344,7 +344,7 @@ ibBackendValueForm* ibClientFrame::CreateNewForm(
 	// (ibValueMetaObjectFormBase::CreateAndBuildForm reaches here through ibBackendValueForm::CreateNewForm —
 	// building it from here as well would recurse).
 	ibControlFrame* ownerControl = dynamic_cast<ibControlFrame*>(backendControl);
-	wxASSERT(!(backendControl == nullptr && ownerControl != nullptr));
+	ibASSERT(!(backendControl == nullptr && ownerControl != nullptr));
 	return new ibValueForm(request, creator, ownerControl, srcObject);
 }
 
@@ -384,22 +384,14 @@ bool ibClientFrame::UpdateFormUniqueKey(const ibUniqueKeyPair& guid)
 
 bool ibClientFrame::ShowSpreadsheetDocument(const ibString& strTitle, std::shared_ptr<ibSpreadsheetObject>& spreadSheetDocument)
 {
-	class ibSpreadsheetMemoryDocument :
-		public ibSheetFileDocument {
-	public:
-
-		ibSpreadsheetMemoryDocument(const ibString& strTitle, const std::shared_ptr<ibSpreadsheetObject>& spreadSheetDocument) :
-			ibSheetFileDocument(spreadSheetDocument)
-		{
-			ibSheetFileDocument::SetTitle(strTitle);
-			ibSheetFileDocument::SetFilename(strTitle);
-		}
-	};
-
-	ibSpreadsheetMemoryDocument* createdDoc =
-		m_docManager->CreateDocument<ibSpreadsheetMemoryDocument>(strTitle, spreadSheetDocument);
+	// The sheet's own document, by the class its template is registered for (CreateDocument<T> finds it by that class
+	// alone): a class of its own here, deriving it to set the title, found no template once the class was the type's
+	// own and not wx's inherited CLASSINFO - an Output list, a script's Show(), came to nothing (2026-11-13)
+	ibSheetFileDocument* createdDoc = m_docManager->CreateDocument<ibSheetFileDocument>(spreadSheetDocument);
 	if (createdDoc == nullptr)
 		return false;
+	createdDoc->SetTitle(strTitle);
+	createdDoc->SetFilename(strTitle);
 
 	if (createdDoc->OnCreate(ibEmptyString, 0)) {
 		createdDoc->SetCommandProcessor(createdDoc->OnCreateCommandProcessor());
@@ -778,7 +770,8 @@ bool ibClientFrame::OpenChosenFile()
 	const ibTempFile file(id);
 	const ibDocTemplate* const temp = file.IsOpened() ? m_docManager->FindTemplateForPath(id) : nullptr;
 	if (temp == nullptr || !temp->IsVisible()) {
-		ShowModalMessage(ibString::Format(_("Nothing here opens '%s'."), file.GetName()), _("Open"), wxOK | wxICON_ERROR);
+		namespace style = ibProtocol::ibRequest::ibMessage::ibStyle;
+		ShowModalMessage(ibString::Format(_("Nothing here opens '%s'."), file.GetName()), _("Open"), style::OK | style::IconError);
 		return false;
 	}
 	return m_docManager->CreateDocument(id) != nullptr;

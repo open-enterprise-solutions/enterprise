@@ -30,8 +30,6 @@
 // ibModuleTextView implementation
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibModuleTextView, ibMetaView);
-
 void ibModuleTextView::OnDraw(ibDataNode& frame)
 {
 	const ibValueMetaObjectModuleBase* const creator =
@@ -56,7 +54,7 @@ void ibModuleTextView::OnDraw(ibDataNode& frame)
 	state.SetValue(ibProtocol::ibView::ibModule::Module, creator->GetDocPath());
 	// ⭐ THE TEXT RIDES THE FRAME THAT OPENS THE TAB — once: the client draws the module without asking for it (fetch).
 	// Only a module's own tab: a form's editor reads its Code page's text when the page is shown.
-	if (!m_textDrawn && GetClassInfo() == CLASSINFO(ibModuleTextView)) {
+	if (!m_textDrawn && typeid(*this) == typeid(ibModuleTextView)) {
 		state.SetValue(ibProtocol::ibView::ibModule::Text, creator->GetModuleText());
 		m_textDrawn = true;
 	}
@@ -178,7 +176,7 @@ bool LoadFromKeyWord(ibDataNode& response, const ibString& keyword, const ibValu
 			AppendName(response, ibContentType::eVariable, class_obj->GetClassName(), ibEmptyString);
 
 		const ibMetaData* metaData = moduleObject->GetMetaData();
-		wxASSERT(metaData);
+		ibASSERT(metaData);
 
 		for (auto class_obj : metaData->GetListCtorsByType(ibCtorObjectMetaType::ibCtorObjectMetaType_Object))
 			AppendName(response, ibContentType::eVariable, class_obj->GetClassName(), ibEmptyString);
@@ -193,7 +191,7 @@ bool LoadFromKeyWord(ibDataNode& response, const ibString& keyword, const ibValu
 		|| stringUtils::IsSameAs(keyword, ibT("getCommonForm")))
 	{
 		const ibMetaData* metaData = moduleObject->GetMetaData();
-		wxASSERT(metaData);
+		ibASSERT(metaData);
 
 		for (const auto object : metaData->GetAnyArrayObject(g_metaCommonFormCLSID))
 			AppendName(response, ibContentType::eVariable, object->GetName(), ibEmptyString);
@@ -329,7 +327,7 @@ namespace linq = ibProtocol::ibView::ibModule::ibLinq;
 ibString LinqProbeHead(const ibString& text, unsigned int anchor)
 {
 	const int lineStart = text.Left(anchor).Find(ibT('\n'), /*fromEnd*/ true);
-	return lineStart == wxNOT_FOUND ? ibString() : text.Left(lineStart + 1);
+	return lineStart == ibNOT_FOUND ? ibString() : text.Left(lineStart + 1);
 }
 
 // The desktop's ibDialogLinqConstructor::Ask — AS A COMPLETION, like the dropdown: answering compiles the text and walks
@@ -669,8 +667,6 @@ bool ibModuleTextView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ib
 // ibModuleTextDocument implementation
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibModuleTextDocument, ibMetaDocument);
-
 bool ibModuleTextDocument::OnSaveModified()
 {
 	// THE GATE OF A CLOSE (ibDocument::CanClose), asked by the tab's door in the close's work (ibClientChildFrame::Close).
@@ -703,7 +699,7 @@ bool ibModuleTextDocument::Save()
 bool ibModuleTextDocument::SyntaxControl(bool throwMessage) const
 {
 	const ibValueMetaObject* metaObject = GetMetaObject();
-	wxASSERT(metaObject);
+	ibASSERT(metaObject);
 
 	// ⭐ THE CHECK'S OWN ROAD (scriptCheck.h), the one module_write and config_check answer by: the button and an
 	// assistant are told the same things - what the compile refused, and a method call it let through (#646).
@@ -729,10 +725,11 @@ bool ibModuleTextDocument::SyntaxControl(bool throwMessage) const
 
 	// Asked through the session's frame, as the desktop asked in a message box.
 	if (!throwMessage) {
+		namespace style = ibProtocol::ibRequest::ibMessage::ibStyle;
 		const int answer = frame->ShowModalMessage(
 			_("Errors were found while checking module. Do you want to continue ?"), metaObject->GetFullName(),
-			wxYES_NO | wxCENTRE);
-		if (answer == wxNO)
+			style::YesNo | style::Centre);
+		if (answer == style::No)
 			return false;
 	}
 

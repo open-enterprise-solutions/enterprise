@@ -7,6 +7,8 @@
 // =============================================================================
 
 #include <gtest/gtest.h>
+#include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
+#include <wx/datetime.h>   // wxDateTime - the engine's headers include no wx
 #include "backend/compiler/value.h"
 #include "deskgui/dateconv.h"   // DateTimeToWxDateTime / WxDateTimeToDateTime — a date across to wx and back
 #include "backend/compiler/procUnitLambda.h"   // CopyValue — the LET road a script's `r = …` takes

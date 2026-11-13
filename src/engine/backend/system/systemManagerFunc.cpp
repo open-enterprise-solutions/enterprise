@@ -26,8 +26,10 @@
 #include "backend/debugger/debugServer.h"            // …and up to whoever is debugging this run
 #include "backend/logger/logger.h"                   // the registration journal — the durable channel
 #include "backend/job/jobManager.h"                  // ibBackgroundRun — keeps what a windowless run says
+#include "protocol/protocol.h"                       // ibStyle — a message's buttons and picture, and the one pressed
 
 #include <algorithm>                                  // FillPropertyValues — whether a name is left out
+#include <random>                                     // Rand
 
 //--- Basic:
 bool ibValueSystemFunction::Boolean(const ibValue& cValue)
@@ -444,9 +446,9 @@ int ibValueSystemFunction::GetQuartOfYear(const ibValue& cData)  { return static
 
 //--- File operations: 
 
-#include <wx/filename.h>
+#include <fstream>             // GetTempFileName — the file it makes
 
-#include "core/fileSystem.h"   // ibCopyFile, ibRemoveFile
+#include "core/fileSystem.h"   // ibCopyFile, ibRemoveFile, ibPathOf
 
 bool ibValueSystemFunction::CopyFile(const ibString& src, const ibString& dst)
 {
@@ -460,14 +462,30 @@ bool ibValueSystemFunction::DeleteFile(const ibString& file)
 
 ibString ibValueSystemFunction::GetTempDir()
 {
-	return wxFileName::GetTempDir();
+	// The system's folder for them, without a separator at its end - as wxFileName::GetTempDir gave it.
+	std::error_code error;
+	std::filesystem::path folder = std::filesystem::temp_directory_path(error);
+	if (!folder.has_filename() && folder.has_relative_path())
+		folder = folder.parent_path();
+	return ibString(folder.wstring());
 }
 
 ibString ibValueSystemFunction::GetTempFileName()
 {
-	return wxFileName::CreateTempFileName(
-		ibEmptyString
-	);
+	// A NEW EMPTY FILE in that folder, under a name no file there has - what wxFileName::CreateTempFileName made;
+	// empty when none could be made.
+	static thread_local std::mt19937 engine{ std::random_device{}() };
+	const std::filesystem::path folder = ibPathOf(GetTempDir());
+	for (int attempt = 0; attempt < 100; ++attempt) {
+		const std::filesystem::path name = folder
+			/ ibPathOf(ibString::Format(ibT("oes%08x.tmp"), static_cast<unsigned>(engine())));
+		std::error_code error;
+		if (std::filesystem::exists(name, error) || error)
+			continue;
+		if (std::ofstream(name, std::ios::binary).is_open())
+			return ibString(name.wstring());
+	}
+	return ibString();
 }
 
 //--- Window operations:
@@ -599,7 +617,8 @@ void ibValueSystemFunction::Alert(const ibString& strMessage) //Alert
 	// waits in the session's pool (ibWorkerPool::Await) until the client
 	// replies, running the session's work meanwhile.
 	if (auto* frame = ibSession::CurrentFrame())
-		frame->ShowModalMessage(strMessage, _("Warning"), wxICON_WARNING | wxOK);
+		frame->ShowModalMessage(strMessage, _("Warning"),
+			ibProtocol::ibRequest::ibMessage::ibStyle::IconWarning | ibProtocol::ibRequest::ibMessage::ibStyle::OK);
 }
 
 ibValue ibValueSystemFunction::Question(const ibString& strMessage, ibQuestionMode mode)//Question
@@ -616,16 +635,17 @@ ibValue ibValueSystemFunction::Question(const ibString& strMessage, ibQuestionMo
 		return ibValue::CreateObject<ibValueEnumQuestionReturnCode>();
 	}
 
+	namespace style = ibProtocol::ibRequest::ibMessage::ibStyle;
 	int wndStyle = 0;
 
 	if (mode == ibQuestionMode::ibQuestionMode_OK)
-		wndStyle = wxOK;
+		wndStyle = style::OK;
 	else if (mode == ibQuestionMode::ibQuestionMode_OKCancel)
-		wndStyle = wxOK | wxCANCEL;
+		wndStyle = style::OK | style::Cancel;
 	else if (mode == ibQuestionMode::ibQuestionMode_YesNo)
-		wndStyle = wxYES | wxNO;
+		wndStyle = style::Yes | style::No;
 	else if (mode == ibQuestionMode::ibQuestionMode_YesNoCancel)
-		wndStyle = wxYES | wxNO | wxCANCEL;
+		wndStyle = style::Yes | style::No | style::Cancel;
 
 	// Route through the frame's MessageBox virtual so backend stays
 	// wx-free here. No frame = script is running in a context without
@@ -633,21 +653,21 @@ ibValue ibValueSystemFunction::Question(const ibString& strMessage, ibQuestionMo
 	// assume success conservative.
 	auto* frame = ibSession::CurrentFrame();
 	int retCode = frame != nullptr
-		? frame->ShowModalMessage(strMessage, _("Question"), wndStyle | wxICON_QUESTION)
-		: wxCANCEL;
+		? frame->ShowModalMessage(strMessage, _("Question"), wndStyle | style::IconQuestion)
+		: style::Cancel;
 
 	ibQuestionReturnCode code = ibQuestionReturnCode::ibQuestionReturnCode_Yes;
 	switch (retCode) {
-	case wxOK:
+	case style::OK:
 		code = ibQuestionReturnCode::ibQuestionReturnCode_OK;
 		break;
-	case wxCANCEL:
+	case style::Cancel:
 		code = ibQuestionReturnCode::ibQuestionReturnCode_Cancel;
 		break;
-	case wxYES:
+	case style::Yes:
 		code = ibQuestionReturnCode::ibQuestionReturnCode_Yes;
 		break;
-	case wxNO:
+	case style::No:
 		code = ibQuestionReturnCode::ibQuestionReturnCode_No;
 		break;
 	}
@@ -969,38 +989,32 @@ ibValue ibValueSystemFunction::TypeOf(const ibValue& cData)
 
 int ibValueSystemFunction::Rand()
 {
-	return rand();
+	// Seeded per thread: rand() was never seeded (the wxModule meant to do it was never registered), so every
+	// process drew the same numbers, and its one state was shared by every session. The range stays rand()'s.
+	static thread_local std::mt19937 engine{ std::random_device{}() };
+	return std::uniform_int_distribution<int>(0, RAND_MAX)(engine);
 }
+
+#include "core/startProcess.h"   // ibStartProcess - a script on the server runs on a fiber, where wxExecute asserts
+#include "core/system.h"         // the command line, the computer's name
 
 int ibValueSystemFunction::ArgCount()//ArgCount
 {
-#ifdef __WXMSW__
-	return __argc;
-#else
-	return wxTheApp ? wxTheApp->argc : 0;
-#endif
+	return static_cast<int>(ibCommandLineArguments().size());
 }
 
 ibString ibValueSystemFunction::ArgValue(int n)//ArgValue
 {
-	int count = ArgCount();
-	if (n < 0 || n > count)
+	const std::vector<ibString> args = ibCommandLineArguments();
+	if (n < 0 || n >= static_cast<int>(args.size()))
 		ibBackendCoreException::Error(_("Invalid argument index"));
-#ifdef __WXMSW__
-	return __wargv[n];
-#else
-	if (wxTheApp)
-		return ibString(wxTheApp->argv[n]);
-	return ibString();
-#endif
+	return args[n];
 }
 
 ibString ibValueSystemFunction::ComputerName()//ComputerName
 {
-	return wxGetHostName();
+	return ibHostName();
 }
-
-#include "core/startProcess.h"   // a script on the server runs on a fiber, where wxExecute asserts
 
 void ibValueSystemFunction::RunApp(const ibString& sCommand)//RunApp
 {
@@ -1103,7 +1117,7 @@ ibValue ibValueSystemFunction::GetCommonForm(const ibFormRequest& request, ibBac
 	}
 
 	ibBackendCoreException::Error(_("Common form not found '%s'"), request.m_formName);
-	return wxEmptyValue;
+	return ibEmptyValue;
 }
 
 void ibValueSystemFunction::ShowCommonForm(const ibFormRequest& request, ibBackendControlFrame* ownerControl, ibValueGuid* unique)
@@ -1144,7 +1158,7 @@ ibValue ibValueSystemFunction::GetCommonTemplate(const ibString& strTemplateName
 		return new ibValueSpreadsheetDocument();
 
 	ibBackendCoreException::Error(_("Common template not found '%s'"), strTemplateName);
-	return wxEmptyValue;
+	return ibEmptyValue;
 }
 
 void ibValueSystemFunction::BeginTransaction()
@@ -1212,7 +1226,7 @@ ibValue ibValueSystemFunction::RunBackground(const ibString& strProcedureName, i
 	// Starting work from a watch expression would be a side effect of LOOKING at
 	// something — the same reason the transaction verbs guard on this.
 	if (ibBackendException::IsEvalMode())
-		return wxEmptyValue;
+		return ibEmptyValue;
 
 	ibJobManager* const manager = ibApplicationInstance::GetJobManager();
 	if (manager == nullptr)

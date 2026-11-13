@@ -29,6 +29,7 @@
 class ibOutputWindow;
 class ibObjectInspector;
 class ibTabDocument;
+class ibWelcomeWindow;
 
 //pane
 #define ibAUI_PANE_BOTTOM   wxT("bottomWindow")
@@ -209,6 +210,9 @@ protected:
 	// …and the notebook along the bottom, the messages' (the desktop's CreateBottomPane); the designer's adds the
 	// debugger's panes beside them.
 	virtual void CreateBottomPane();
+	// …and the workspace while no tab is open, in the client window `parent` (wx's OnCreateClient for the client): made
+	// once the login has said who the person is (m_fullName). Default: the greeting alone; the designer's adds its keys.
+	virtual ibWelcomeWindow* OnCreateWelcome(wxWindow* parent);
 
 	// WHAT A MODE'S FRAME CARRIES BESIDE THE BASE'S — drawn by what the patch changed in it (not IsNode: the frame sent
 	// whole). Default: nothing; the designer draws its configuration's tree (MetaData).
@@ -283,6 +287,7 @@ protected:
 	ibKeyBinder         m_keyBinder;            // the keys of the bar's commands (UpdateHotKeys)
 	ibFontColorSettings m_fontColorSettings;    // the person's options (LoadOptions, SaveOptions)
 	ibEditorSettings    m_editorSettings;
+	wxString            m_fullName;             // the person the session is — the login's answer (FullName)
 
 private:
 
@@ -362,6 +367,7 @@ private:
 
 	ibAuiToolBar* m_mainFrameToolbar = nullptr;   // the window's: the doc manager's commands
 	ibAuiToolBar* m_docToolbar = nullptr;         // the active view's own (ibFrontendView::OnCreateToolbar)
+	ibWelcomeWindow* m_welcome = nullptr;         // in the client window, shown while it holds no tab (DrawTabs)
 	wxMenu*       m_menuFile = nullptr;           // the window's File, with the files opened last
 	wxMenu*       m_menuEdit = nullptr;           // …and its Edit
 	std::vector<wxMenu*> m_viewMenus;             // the active view's own, in the window's bar after Edit (ActivateView)

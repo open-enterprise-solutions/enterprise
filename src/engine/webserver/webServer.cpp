@@ -10,8 +10,9 @@
 #include <wx/filename.h>
 #include "core/stringTokenizer.h"
 #include <wx/utils.h>   // wxGetFullHostName — the server named in an address
-#include <wx/wfstream.h>
-#include <wx/zipstrm.h>
+
+#include <fstream>
+#include "core/zip/zip.h"      // ibZipReader - the site packed
 
 #ifdef __WXMSW__
 #include <windows.h>   // SetConsoleCtrlHandler — the console window closing
@@ -85,29 +86,26 @@ bool ReadPem(const ibString& path, std::string& text, ibString& error)
 // by its path in the site, as an address names it; false with why.
 bool ReadPack(const ibString& path, std::map<std::string, std::string>& files, ibString& error)
 {
-	wxFileInputStream input(path);
-	wxZipInputStream zip(input, wxConvUTF8);
-	if (!input.IsOk() || !zip.IsOk()) {
+	std::ifstream input(ibPathOf(path), std::ios::binary);
+	if (!input.is_open()) {
 		error = ibString::Format(ibT("%s could not be read"), path);
 		return false;
 	}
-	for (std::unique_ptr<wxZipEntry> entry(zip.GetNextEntry()); entry; entry.reset(zip.GetNextEntry())) {
-		if (entry->IsDir())
-			continue;
+	ibZipReader zip(input);
+	for (ibString entry; zip.GetNextEntry(entry); ) {
 		// As the address has it, whoever packed it: a backslash of Windows' archiver, a leading ./ of CMake's.
-		std::string name = Utf8(entry->GetInternalName());
+		std::string name = Utf8(entry);
 		std::replace(name.begin(), name.end(), '\\', '/');
 		if (name.compare(0, 2, "./") == 0)
 			name.erase(0, 2);
-		std::string data;
-		char buffer[16 * 1024];
-		while (zip.CanRead()) {
-			zip.Read(buffer, sizeof(buffer));
-			if (zip.LastRead() == 0)
-				break;
-			data.append(buffer, zip.LastRead());
+		if (name.empty() || name.back() == '/')
+			continue;   // a folder
+		ibMemoryBuffer data;
+		if (!zip.ReadEntry(data)) {
+			error = ibString::Format(ibT("%s could not be read"), path);
+			return false;
 		}
-		files[name] = std::move(data);
+		files[name] = std::string(static_cast<const char*>(data.GetData()), data.GetDataLen());
 	}
 	if (files.empty()) {
 		error = ibString::Format(ibT("%s holds no file"), path);

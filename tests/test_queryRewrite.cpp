@@ -11,6 +11,7 @@
 // stands (through a walk, or folded / filtered / sorted over a join) is computed over them.
 
 #include <gtest/gtest.h>
+#include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
 #include "core/query/queryParser.h"
 #include "core/query/queryRewrite.h"

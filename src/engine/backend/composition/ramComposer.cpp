@@ -81,7 +81,7 @@ std::vector<long> ibDataRamComposer::ComputeOrder() const
 	std::vector<ibString> filterPaths;
 	for (const ibFilterNodeDescription& node : filter.m_nodes)
 		AppendFilterFields(filterPaths, node);
-	struct RamField { ibMetaID m_col = wxNOT_FOUND; std::vector<ibString> m_tail; bool m_resolved = false; };
+	struct RamField { ibMetaID m_col = ibNOT_FOUND; std::vector<ibString> m_tail; bool m_resolved = false; };
 	std::vector<RamField> filterFields(filterPaths.size());
 	for (size_t i = 0; i < filterPaths.size(); ++i)
 		filterFields[i].m_resolved = m_storage->SplitField(filterPaths[i], filterFields[i].m_col, filterFields[i].m_tail);
@@ -276,7 +276,7 @@ bool ibDataRamComposer::Run(ibCompositionDriver& driver)
 	std::vector<RamField> resolved;
 	resolved.reserve(fields.size());
 	for (const ibString& field : fields) {
-		ibMetaID col = wxNOT_FOUND; std::vector<ibString> tail;
+		ibMetaID col = ibNOT_FOUND; std::vector<ibString> tail;
 		const bool ok = m_storage->SplitField(field, col, tail);
 		resolved.push_back({ col, std::move(tail), ok });
 	}
@@ -293,7 +293,7 @@ bool ibDataRamComposer::Run(ibCompositionDriver& driver)
 	std::vector<RamField> keys;
 	keys.reserve(groupPaths.size());
 	for (const ibString& path : groupPaths) {
-		ibMetaID col = wxNOT_FOUND; std::vector<ibString> tail;
+		ibMetaID col = ibNOT_FOUND; std::vector<ibString> tail;
 		const bool ok = m_storage->SplitField(path, col, tail);
 		keys.push_back({ col, std::move(tail), ok });
 	}

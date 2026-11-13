@@ -3,6 +3,7 @@
 #include "core/diagnostics/journal.h"   // ibJournal — this TU does not pull in backend_core.h
 #include "core/diagnostics/crashGuard.h"   // ibCrashGuard::CurrentPidPortable
 
+#include <algorithm>
 #include <cstring>
 
 #ifdef __IBMSW__

@@ -101,7 +101,7 @@ ibFormPtr<ibBackendValueForm> ibValueMetaObjectFormBase::CreateAndBuildForm(cons
 
 	if (creator != nullptr) {
 		const ibMetaData* metaData = creator->GetMetaData();
-		wxASSERT(metaData);
+		ibASSERT(metaData);
 		auto* cc = metaData->GetCompileCache();
 		ibBackendValueForm* cached = nullptr;
 		if (cc && cc->FindCompileModule(creator, cached)) {
@@ -321,7 +321,7 @@ bool ibValueMetaObjectForm::OnSaveMetaObject(int flags)
 bool ibValueMetaObjectForm::OnDeleteMetaObject()
 {
 	ibValueMetaObjectGenericData* metaObject = dynamic_cast<ibValueMetaObjectGenericData*>(m_parent);
-	wxASSERT(metaObject);
+	ibASSERT(metaObject);
 	metaObject->OnRemoveMetaForm(this);
 
 	return ibValueMetaObjectFormBase::OnDeleteMetaObject();
@@ -348,7 +348,7 @@ bool ibValueMetaObjectForm::OnAfterRunMetaObject(int flags)
 	if (auto* cc = m_metaData->GetCompileCache()) {
 
 		ibValueMetaObjectGenericData* metaObject = dynamic_cast<ibValueMetaObjectGenericData*>(m_parent);
-		wxASSERT(metaObject);
+		ibASSERT(metaObject);
 
 		// Defer the actual form build — passing an eager CreateObjectForm
 		// result here would need session->m_root compiled, but CompileRoot

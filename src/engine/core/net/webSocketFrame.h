@@ -68,9 +68,7 @@ std::string ibWebSocketAccept(const std::string& key);
 // A fresh Sec-WebSocket-Key — sixteen random bytes, base64.
 std::string ibWebSocketKey();
 
-// True when `text` is well-formed UTF-8 — what a text message must be (RFC 6455 § 8.1), and a JSON-RPC body (the MCP
-// server's POST).
-CORE_API bool ibIsUtf8(const std::string& text);
+// (Whether a text message is well-formed UTF-8, as RFC 6455 8.1 asks - ibIsUtf8, core/fstring.h.)
 
 // ⭐ THE ENGINE'S TEXT AS A DEFLATED MESSAGE — what a peer that asked for it as it connected (?compress=deflate) is sent
 // for a text of some size (ibWebSocket::Send): its bytes deflated, raw (RFC 1951 — what DecompressionStream

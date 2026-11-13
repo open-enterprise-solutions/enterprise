@@ -79,7 +79,7 @@ bool ibAppEnterprise::OnCmdLineParsed(wxCmdLineParser& parser)
 
 bool ibAppEnterprise::DoOnInit()
 {
-	// The journal, the dumps and the light appearance are the base's (ibWxApp::OnInit, core/diagnostics/oesApp.h), set
+	// The journal, the dumps and the light appearance are the base's (ibWxApp::OnInit, deskgui/app.h), set
 	// before this runs — as every application of the platform has them.
 
 	// THE COMMAND LINE FIRST, then the connection: wx calls OnExit only after an OnInit that succeeded, so nothing is

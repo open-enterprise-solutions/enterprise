@@ -39,7 +39,7 @@ bool ibPropertyChartOfCalculationTypes::SetDataValue(const ibValue& varPropVal) 
 bool ibPropertyChartOfCalculationTypes::GetDataValue(ibValue& pvarPropVal) const
 {
 	const ibVariantOwner* owner = get_cell_variant<ibVariantOwner>();
-	wxASSERT(owner);
+	ibASSERT(owner);
 	pvarPropVal = owner->GetDataValue();
 	return true;
 }

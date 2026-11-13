@@ -203,9 +203,9 @@ public:
 
 	//form
 	template <typename _T1>
-	ibValueMetaObjectFormBase* FindFormObjectByFilter(const _T1& id, const ibFormID& form_id = wxNOT_FOUND) const {
+	ibValueMetaObjectFormBase* FindFormObjectByFilter(const _T1& id, const ibFormID& form_id = ibNOT_FOUND) const {
 		ibValueMetaObjectFormBase* founded = FindObjectByFilter<ibValueMetaObjectFormBase>(id, { g_metaCommonFormCLSID, g_metaFormCLSID });
-		if ((founded != nullptr && form_id == founded->GetTypeForm()) || form_id == wxNOT_FOUND)
+		if ((founded != nullptr && form_id == founded->GetTypeForm()) || form_id == ibNOT_FOUND)
 			return founded;
 		return nullptr;
 	}

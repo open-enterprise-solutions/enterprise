@@ -230,8 +230,8 @@ void ibValueSafeArray_BindNames(ibValue::ibMemberTable& helper, const ibValue* /
 	helper.AppendFunc(ibT("GetLowerBound"), 1, ibT("GetLowerBound(dimension : number)"));
 	helper.AppendFunc(ibT("GetUpperBound"), 1, ibT("GetUpperBound(dimension : number)"));
 	helper.AppendFunc(ibT("GetType"), ibT("GetType()"));
-	helper.AppendFunc(ibT("GetValue"), wxNOT_FOUND, ibT("GetValue(index1 : number, ..., indexN : number)"));
-	helper.AppendProc(ibT("SetValue"), wxNOT_FOUND, ibT("SetValue(index1 : number, ..., indexN : number, value : any)"));
+	helper.AppendFunc(ibT("GetValue"), ibNOT_FOUND, ibT("GetValue(index1 : number, ..., indexN : number)"));
+	helper.AppendProc(ibT("SetValue"), ibNOT_FOUND, ibT("SetValue(index1 : number, ..., indexN : number, value : any)"));
 	helper.AppendFunc(ibT("IsResizable"), ibT("IsResizable()"));
 	helper.AppendProc(ibT("Resize"), 1, ibT("Resize(size : number)"));
 	helper.AppendFunc(ibT("Unload"), ibT("Unload()"));

@@ -8,7 +8,7 @@
 
 #include "core/exception.h"           // ibCoreException — the listener's refusal
 #include "core/net/httpServer.h"       // the port
-#include "core/net/webSocketFrame.h"   // ibIsUtf8 — a body that is not UTF-8 is refused before it is sent
+#include "core/fstring.h"   // ibIsUtf8 - a body that is not UTF-8 is refused before it is sent
 #include "core/server/listener.h"      // the options: plain on this machine's own addresses only
 #include "core/crypto/sessionToken.h"  // TextEqual - the token compared in constant time; Generate - the token made
 #include "core/net/ports.h"            // the port each mode starts on

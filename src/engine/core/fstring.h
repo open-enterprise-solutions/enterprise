@@ -19,9 +19,14 @@
 // from the wx sources where relevant — and works directly on the char16_t buffer,
 // constructing no wxString.
 //
+// ⭐ THE BOUNDARY IS TEMPLATES OVER wxString, AND wx IS NOT INCLUDED (Max, 2026-11-13). wxString is only named
+// here (declared, below); a template is made where it is called, and only a program that includes wx itself can
+// call it — the core, the engine and the server never include wx, and a call there is a compile error (an
+// incomplete type), never a link to wx.
+//
 // operator wxString is IMPLICIT on purpose: ibString is the value-storage type
 // and wxString is the boundary, so an ibString flows transparently into the
-// wxString-shaped call sites (serialization, metadata lookups, wx APIs) without
+// wxString-shaped call sites (wx APIs on a client) without
 // scattering .ToWxString() everywhere. The reverse (wxString -> ibString) is the
 // implicit ctor. All other ops stay native.
 //
@@ -47,9 +52,15 @@
 #include <tuple>         // std::apply — ibString::Format holds its arguments for the call
 #include <type_traits>
 #include <utility>       // std::declval — what Format holds a text as
-#include <wx/string.h>   // ONLY for the boundary conversion (operator wxString / ctor)
 
 #include "core/coreApi.h"   // CORE_API, ibChar, ibT
+
+// wx's string and what a Format argument of it can be — named, not included: the boundary's templates are made only
+// where a program includes wx itself.
+class wxString;
+class wxCStrData;
+class wxUniChar;
+class wxUniCharRef;
 
 // --- a character: its class and its case ------------------------------------
 // The C library's wide answers — what wxIsdigit, wxTolower and the rest gave, without wx — for a character of
@@ -117,12 +128,21 @@ public:
 	}
 	~ibString() { Release(m_impl); }
 
-	// --- the wx boundary (the only place wxString is touched) ---
+	// --- the wx boundary (the only place wxString is touched): templates, made where wx is included ---
 	// Both directions implicit: ibString IS the value type, wxString the
 	// boundary — call sites that expect a wxString get one transparently.
-	CORE_API ibString(const wxString& s);
-	CORE_API wxString ToWxString() const;
-	operator wxString() const { return ToWxString(); }
+	template <std::same_as<wxString> S>
+	ibString(const S& s) : ibString(s.ToStdWstring()) {}
+	template <std::same_as<wxString> S = wxString>
+	S ToWxString() const {
+#if WCHAR_MAX <= 0xFFFF
+		return S(wc_str(), Len());
+#else
+		return S(wc_str());
+#endif
+	}
+	template <std::same_as<wxString> S>
+	operator S() const { return ToWxString<S>(); }
 
 	// --- the wide boundary: the OS's wide calls, the C library's, wx's ---
 	// Where wchar_t is two bytes (Windows) it is UTF-16 as ours is, and the characters are read where they lie;
@@ -202,7 +222,7 @@ public:
 	CORE_API ibString Right(size_t count) const;
 	// Characters from..to INCLUSIVE, as wx has it.
 	ibString SubString(size_t from, size_t to) const { return Mid(from, to - from + 1); }
-	// wx's Find: an int, wxNOT_FOUND (-1) when absent, and a CHARACTER may be sought from the end.
+	// wx's Find: an int, ibNOT_FOUND (-1) when absent, and a CHARACTER may be sought from the end.
 	// A search from a position is `find` above — std's name for std's meaning.
 	int    Find(const ibString& sub) const { return AsFound(View().find(sub.View())); }
 	int    Find(ibChar c, bool fromEnd = false) const { return AsFound(fromEnd ? View().rfind(c) : View().find(c)); }
@@ -294,16 +314,20 @@ public:
 
 	// …and wx's own string where it still meets ours — a translation `_("…")`, a wx call's answer. Exact,
 	// so the mix is not ambiguous (the two convert into each other), and what comes out is OURS.
-	CORE_API ibString& operator+=(const wxString& s);
-	friend ibString operator+(ibString a, const wxString& b) { a += b; return a; }
-	friend ibString operator+(const wxString& a, const ibString& b) { ibString r(a); r += b; return r; }
+	template <std::same_as<wxString> S>
+	ibString& operator+=(const S& s) { return *this += ibString(s); }
+	template <std::same_as<wxString> S>
+	friend ibString operator+(ibString a, const S& b) { a += b; return a; }
+	template <std::same_as<wxString> S>
+	friend ibString operator+(const S& a, const ibString& b) { ibString r(a); r += b; return r; }
 
 	// wx's stream-style append. Numbers are written as wxString writes them; a character of either width is a
 	// character, not the number `int` would take it for.
 	ibString& operator<<(const ibString& s) { return *this += s; }
 	ibString& operator<<(const ibChar* s) { return *this += s; }
 	ibString& operator<<(const wchar_t* s)  { return *this += s; }
-	ibString& operator<<(const wxString& s) { return *this += s; }
+	template <std::same_as<wxString> S>
+	ibString& operator<<(const S& s) { return *this += s; }
 	ibString& operator<<(ibChar c)        { return *this += c; }
 	ibString& operator<<(wchar_t c)         { return *this += static_cast<ibChar>(c); }
 	ibString& operator<<(int n)                { return *this += Format(ibT("%d"), n); }
@@ -328,7 +352,8 @@ public:
 	// …and against a literal, exact — see operator+ above for why.
 	bool operator==(const ibChar* s) const noexcept { return View().compare(s != nullptr ? s : ibT("")) == 0; }
 	CORE_API bool operator==(const wchar_t* s) const;
-	CORE_API bool operator==(const wxString& s) const;
+	template <std::same_as<wxString> S>
+	bool operator==(const S& s) const { return *this == ibString(s); }
 	// …and against UTF-8 — a protocol's word, a narrow literal: the bytes decoded as they are compared, no text made of
 	// them (either string would make one, and the two of them made the comparison ambiguous).
 	CORE_API bool operator==(const char* utf8) const noexcept;
@@ -337,7 +362,8 @@ public:
 	// the ones operator== has, and for the same reason.
 	CORE_API bool IsSameAs(const ibChar* s, bool caseSensitive = true) const;
 	CORE_API bool IsSameAs(const wchar_t* s, bool caseSensitive = true) const;
-	CORE_API bool IsSameAs(const wxString& s, bool caseSensitive = true) const;
+	template <std::same_as<wxString> S>
+	bool IsSameAs(const S& s, bool caseSensitive = true) const { return IsSameAs(ibString(s), caseSensitive); }
 	CORE_API bool IsSameAs(ibChar c, bool caseSensitive = true) const;
 	int  Cmp(const ibString& o) const noexcept {
 		if (m_impl == o.m_impl) return 0;
@@ -415,12 +441,21 @@ inline const ibString ibEmptyString;
 // Written to a std stream (a test's message among them) as wxString writes itself: in UTF-8.
 CORE_API std::ostream& operator<<(std::ostream& out, const ibString& s);
 
+// TRUE WHEN THE BYTES ARE WELL-FORMED UTF-8 - no overlong form, no surrogate, nothing past the last code point. FromUTF8
+// does not ask (a bad byte reads as U+FFFD); a reader that must refuse asks first: a WebSocket text message (RFC 6455,
+// 8.1), a JSON-RPC body (the MCP server's POST), a file read as UTF-8 (TextReader).
+CORE_API bool ibIsUtf8(const char* data, size_t size);
+inline bool ibIsUtf8(const std::string& text) { return ibIsUtf8(text.data(), text.size()); }
+
 // --- wx's own string beside our literal (a name built as `GetName() + ibRegFigure::Balance`) --------
 // What the mix makes is OURS, and the match is exact. Out here, not as friends: neither operand is an
 // ibString, so a friend of it is found only by MSVC's own lookup and the same line fails on GCC / Clang.
-inline ibString operator+(const wxString& a, const ibChar* b) { ibString r(a); r += b; return r; }
-inline ibString operator+(const ibChar* a, const wxString& b) { ibString r(a); r += b; return r; }
-CORE_API bool operator==(const wxString& a, const ibChar* b);
+template <std::same_as<wxString> S>
+inline ibString operator+(const S& a, const ibChar* b) { ibString r(a); r += b; return r; }
+template <std::same_as<wxString> S>
+inline ibString operator+(const ibChar* a, const S& b) { ibString r(a); r += b; return r; }
+template <std::same_as<wxString> S>
+inline bool operator==(const S& a, const ibChar* b) { return ibString(a) == b; }
 
 // A key of an unordered container, as wxString is one — by its characters.
 namespace std {
@@ -455,13 +490,16 @@ inline auto Hold(ibChar* s) { return Hold(static_cast<const ibChar*>(s)); }
 inline const wchar_t* Hold(const wchar_t* s) noexcept { return s != nullptr ? s : L""; }
 inline const wchar_t* Hold(wchar_t* s) noexcept { return s != nullptr ? s : L""; }
 inline const wchar_t* Hold(const std::wstring& s) noexcept { return s.c_str(); }
-inline const wchar_t* Hold(const wxString& s) noexcept { return s.wc_str(); }
-inline const wchar_t* Hold(const wxCStrData& s) noexcept { return s.AsWChar(); }
+template <std::same_as<wxString> S>
+inline const wchar_t* Hold(const S& s) noexcept { return s.wc_str(); }
+template <std::same_as<wxCStrData> S>
+inline const wchar_t* Hold(const S& s) noexcept { return s.AsWChar(); }
 inline std::wstring Hold(const char* s) { return ibString(s).wc_str(); }
 inline std::wstring Hold(char* s) { return ibString(static_cast<const char*>(s)).wc_str(); }
 inline std::wstring Hold(const std::string& s) { ibString text; text.SetUtf8(s.data(), s.size()); return text.wc_str(); }
-inline int Hold(const wxUniChar& c) noexcept { return static_cast<int>(c.GetValue()); }
-inline int Hold(const wxUniCharRef& c) noexcept { return static_cast<int>(wxUniChar(c).GetValue()); }
+template <class C>
+	requires (std::same_as<C, wxUniChar> || std::same_as<C, wxUniCharRef>)
+inline int Hold(const C& c) noexcept { return static_cast<int>(c.GetValue()); }
 
 template <class T>
 	requires (std::is_arithmetic_v<T> || std::is_enum_v<T> || std::is_pointer_v<T>)
@@ -505,91 +543,7 @@ constexpr size_t kFormatMaxLength = size_t(1) << 24;
 // multibyte locale, so it is called under a UTF-8 one there.
 CORE_API bool Print(std::wstring& out, const wchar_t* spec, ...);
 
-// The text held for one of wx's calls, as Format holds it — a base of the normalizer below, so it is made
-// before the normalizer reads it.
-struct Held {
-	explicit Held(const ibString& s) : m_text(Hold(s)) {}
-	explicit Held(const ibChar* s) : m_text(Hold(s)) {}
-	decltype(Hold(std::declval<const ibString&>())) m_text;
-};
-
 } // namespace ibFStringFormat
-
-// --- wx's own varargs (wxString::Format, wxLogXxx, the exception doors): an ibString is a `%s`,
-// held as Format holds it (wx/strvararg.h). --------------------------------------------------------
-//
-// …and so is the engine's character pointer (an ibT literal, a table's `const ibChar*`): without its own
-// normalizer wx takes it for a POINTER — it compiles, and a `%s` given one asserts in a Debug build and
-// prints whatever the wide reader makes of the bytes elsewhere.
-
-// Written out: wx #undefs wxFORMAT_STRING_SPECIFIER and WX_ARG_NORMALIZER_FORWARD at the end of
-// strvararg.h, so a header of ours cannot use them.
-template<> struct wxFormatStringSpecifier<ibString> { enum { value = wxFormatString::Arg_String }; };
-template<> struct wxFormatStringSpecifier<const ibChar*> { enum { value = wxFormatString::Arg_String }; };
-template<> struct wxFormatStringSpecifier<ibChar*> { enum { value = wxFormatString::Arg_String }; };
-
-// …and one character of it is a `%c`, as wx's own wchar_t is — handed over as one (the same for both of wx's builds).
-template<> struct wxFormatStringSpecifier<ibChar> { enum { value = wxFormatString::Arg_Char | wxFormatString::Arg_Int }; };
-template<>
-struct wxArgNormalizer<ibChar> : public wxArgNormalizer<wchar_t>
-{
-	wxArgNormalizer(ibChar c, const wxFormatString* fmt, unsigned index)
-		: wxArgNormalizer<wchar_t>(static_cast<wchar_t>(c), fmt, index) {}
-};
-
-#if !wxUSE_UTF8_LOCALE_ONLY
-template<>
-struct wxArgNormalizerWchar<const ibString&> : private ibFStringFormat::Held, public wxArgNormalizerWchar<const wchar_t*>
-{
-	wxArgNormalizerWchar(const ibString& s, const wxFormatString* fmt, unsigned index)
-		: ibFStringFormat::Held(s), wxArgNormalizerWchar<const wchar_t*>(ibFStringFormat::Pass(m_text), fmt, index) {}
-};
-template<>
-struct wxArgNormalizerWchar<ibString> : public wxArgNormalizerWchar<const ibString&>
-{
-	wxArgNormalizerWchar(const ibString& s, const wxFormatString* fmt, unsigned index)
-		: wxArgNormalizerWchar<const ibString&>(s, fmt, index) {}
-};
-template<>
-struct wxArgNormalizerWchar<const ibChar*> : private ibFStringFormat::Held, public wxArgNormalizerWchar<const wchar_t*>
-{
-	wxArgNormalizerWchar(const ibChar* s, const wxFormatString* fmt, unsigned index)
-		: ibFStringFormat::Held(s), wxArgNormalizerWchar<const wchar_t*>(ibFStringFormat::Pass(m_text), fmt, index) {}
-};
-template<>
-struct wxArgNormalizerWchar<ibChar*> : public wxArgNormalizerWchar<const ibChar*>
-{
-	wxArgNormalizerWchar(const ibChar* s, const wxFormatString* fmt, unsigned index)
-		: wxArgNormalizerWchar<const ibChar*>(s, fmt, index) {}
-};
-#endif // !wxUSE_UTF8_LOCALE_ONLY
-
-#if wxUSE_UNICODE_UTF8
-template<>
-struct wxArgNormalizerUtf8<const ibString&> : private ibFStringFormat::Held, public wxArgNormalizerUtf8<const wchar_t*>
-{
-	wxArgNormalizerUtf8(const ibString& s, const wxFormatString* fmt, unsigned index)
-		: ibFStringFormat::Held(s), wxArgNormalizerUtf8<const wchar_t*>(ibFStringFormat::Pass(m_text), fmt, index) {}
-};
-template<>
-struct wxArgNormalizerUtf8<ibString> : public wxArgNormalizerUtf8<const ibString&>
-{
-	wxArgNormalizerUtf8(const ibString& s, const wxFormatString* fmt, unsigned index)
-		: wxArgNormalizerUtf8<const ibString&>(s, fmt, index) {}
-};
-template<>
-struct wxArgNormalizerUtf8<const ibChar*> : private ibFStringFormat::Held, public wxArgNormalizerUtf8<const wchar_t*>
-{
-	wxArgNormalizerUtf8(const ibChar* s, const wxFormatString* fmt, unsigned index)
-		: ibFStringFormat::Held(s), wxArgNormalizerUtf8<const wchar_t*>(ibFStringFormat::Pass(m_text), fmt, index) {}
-};
-template<>
-struct wxArgNormalizerUtf8<ibChar*> : public wxArgNormalizerUtf8<const ibChar*>
-{
-	wxArgNormalizerUtf8(const ibChar* s, const wxFormatString* fmt, unsigned index)
-		: wxArgNormalizerUtf8<const ibChar*>(s, fmt, index) {}
-};
-#endif // wxUSE_UNICODE_UTF8
 
 // Every name spelled with its namespace, and no `using namespace`: this body is instantiated inside
 // whatever file calls Format, and a KindOf / Hold / Pass of that file's own would meet ours (measured:
@@ -608,7 +562,7 @@ inline ibString ibString::Format(const ibString& format, const Args&... args)
 			ibFStringFormat::KindOf<decltype(ibFStringFormat::Pass(ibFStringFormat::Hold(args)))>()... };
 		std::wstring spec;
 		if (!ibFStringFormat::Prepare(format, given, sizeof...(Args), spec)) {
-			wxFAIL_MSG(wxT("ibString::Format: the arguments do not answer the format"));
+			ibFAIL_MSG(ibT("ibString::Format: the arguments do not answer the format"));
 			return format;
 		}
 		std::wstring out;
@@ -617,7 +571,7 @@ inline ibString ibString::Format(const ibString& format, const Args&... args)
 		}, held);
 		if (fits)
 			return ibString(out.c_str(), out.size());
-		wxFAIL_MSG(wxT("ibString::Format: the result does not fit"));
+		ibFAIL_MSG(ibT("ibString::Format: the result does not fit"));
 		return format;
 	}
 }

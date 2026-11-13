@@ -11,8 +11,6 @@
 // ibSpreadsheetTemplateView implementation
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibSpreadsheetTemplateView, ibMetaView);
-
 void ibSpreadsheetTemplateView::OnDraw(ibDataNode& frame)
 {
 	// A GRIDBOX'S NODE, as the file document's view draws it — its grid lines shown, and its areas: the desktop's
@@ -69,8 +67,6 @@ bool ibSpreadsheetTemplateView::OnClientEvent(ibProtocol::ibEvent::ibKind event,
 // ----------------------------------------------------------------------------
 // ibTemplateDocument implementation
 // ----------------------------------------------------------------------------
-
-wxIMPLEMENT_DYNAMIC_CLASS(ibTemplateDocument, ibMetaDocument);
 
 ibView* ibTemplateDocument::DoCreateView()
 {

@@ -290,7 +290,7 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 	// reference / name / code / description / isFolder / parent / DeletionMark). The builder diffs by uuid +
 	// cells and writes generically. DeletionMark = false here, so a re-added value reactivates on the next
 	// apply. A reference cell MUST be a reference-typed value — the column codec extracts the reference
-	// binary FROM a reference value (a plain guid string would write NULL); wxNullGuid = a null reference.
+	// binary FROM a reference value (a plain guid string would write NULL); ibNullGuid = a null reference.
 	// IsFolder and Parent are set for every kind: where the arrangement has none, its column is switched off
 	// (ApplyHierarchyType) and Set passes over a column that is not allowed — the gate the columns are built by.
 	//
@@ -417,7 +417,7 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 			const std::vector<ibValueMetaObjectAttributeBase*> listed = table->GetGenericAttributeArrayObject();
 			int number = 1;
 			for (const auto& line : declared.second) {
-				ibSchemaSeedRow& lineRow = lines.AddRow(wxNullGuid,
+				ibSchemaSeedRow& lineRow = lines.AddRow(ibNullGuid,
 					ibString::Format(ibT("%s.%s %i"), object.m_name, table->GetName(), number));
 				lineRow.Set(lines.m_seedKey.front(), ibValuePtr<ibValueGuid>(new ibValueGuid(object.m_guid)))
 					.Set(table->GetNumberLine()->GetQueryColumn(), ibValue(number));

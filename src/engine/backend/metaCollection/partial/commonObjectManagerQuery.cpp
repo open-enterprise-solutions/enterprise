@@ -190,7 +190,7 @@ bool ibValueRecordManagerObject::SaveData(bool replace)
 	}
 
 	m_recordSet->m_keyValues.clear();
-	wxASSERT(m_recordLine);
+	ibASSERT(m_recordLine);
 	for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 		ibValue retValue; m_recordLine->GetValueByMetaID(object->GetMetaID(), retValue);
 		m_recordSet->m_keyValues.insert_or_assign(

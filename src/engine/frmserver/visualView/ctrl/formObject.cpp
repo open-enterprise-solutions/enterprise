@@ -58,7 +58,7 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 		if (isTableSource) {
 
 			mainTableBox =
-				dynamic_cast<ibValueModelTableBox*>(ibValueForm::CreateControl(ibT("Tablebox")));
+				ibValueForm::CreateControl<ibValueModelTableBox>(ibT("Tablebox"));
 
 			mainTableBox->SetControlName(sourceExplorer.GetSourceName());
 			
@@ -89,11 +89,11 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 			const auto* report = dynamic_cast<const ibValueRecordDataObjectReport*>(sourceObject);
 			const ibValueMetaObjectReport* metaReport =
 				report != nullptr ? dynamic_cast<const ibValueMetaObjectReport*>(report->GetMetaObject()) : nullptr;
-			const ibMetaID defaultComposer = metaReport != nullptr ? metaReport->GetDefComposer() : wxNOT_FOUND;
+			const ibMetaID defaultComposer = metaReport != nullptr ? metaReport->GetDefComposer() : ibNOT_FOUND;
 
-			if (defaultComposer != wxNOT_FOUND) {
+			if (defaultComposer != ibNOT_FOUND) {
 				ibValueGridBox* gridBox =
-					dynamic_cast<ibValueGridBox*>(ibValueForm::CreateControl(ibT("Gridbox")));
+					ibValueForm::CreateControl<ibValueGridBox>(ibT("Gridbox"));
 				if (gridBox != nullptr) {
 					gridBox->SetControlName(sourceExplorer.GetSourceName());
 					gridBox->SetSource({ mainAttrId, defaultComposer });
@@ -115,7 +115,7 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 				ibValueFrame* holder = mainTableBox->GetColumnGroupHolder(nextSourceExplorer.GetSourceGroup());
 
 				ibValueModelTableBoxColumn* tableBoxColumn =
-					dynamic_cast<ibValueModelTableBoxColumn*>(ibValueForm::CreateControl(ibT("TableboxColumn"), holder));
+					ibValueForm::CreateControl<ibValueModelTableBoxColumn>(ibT("TableboxColumn"), holder);
 				tableBoxColumn->SetControlName(mainTableBox->GetControlName() + nextSourceExplorer.GetSourceName());
 				tableBoxColumn->SetVisibleColumn(nextSourceExplorer.IsVisible() || sourceExplorer.GetHelperCount() == 1);
 				// Column = [mainAttr, field] → "List.Field". The row-type hop (the catalog/document)
@@ -127,7 +127,7 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 				if (nextSourceExplorer.IsTableSection()) {
 
 					ibValueModelTableBox* tableBox =
-						dynamic_cast<ibValueModelTableBox*>(ibValueForm::CreateControl(ibT("Tablebox")));
+						ibValueForm::CreateControl<ibValueModelTableBox>(ibT("Tablebox"));
 
 					tableBox->SetControlName(nextSourceExplorer.GetSourceName());
 					tableBox->SetSource({ mainAttrId, nextSourceExplorer.GetSourceId() });
@@ -141,7 +141,7 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 						ibValueFrame* holder = tableBox->GetColumnGroupHolder(colSourceExplorer.GetSourceGroup());
 
 						ibValueModelTableBoxColumn* tableBoxColumn =
-							dynamic_cast<ibValueModelTableBoxColumn*>(ibValueForm::CreateControl(ibT("TableboxColumn"), holder));
+							ibValueForm::CreateControl<ibValueModelTableBoxColumn>(ibT("TableboxColumn"), holder);
 						tableBoxColumn->SetControlName(tableBox->GetControlName() + colSourceExplorer.GetSourceName());
 						//tableBoxColumn->SetCaption(colSourceExplorer.GetSourceSynonym());
 						tableBoxColumn->SetVisibleColumn(colSourceExplorer.IsVisible()
@@ -153,7 +153,7 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 					if (nextSourceExplorer.ContainType(ibValueTypes::TYPE_BOOLEAN)
 						&& nextSourceExplorer.GetClsidList().size() == 1) {
 						ibValueCheckbox* checkbox =
-							dynamic_cast<ibValueCheckbox*>(ibValueForm::CreateControl(ibT("Checkbox")));
+							ibValueForm::CreateControl<ibValueCheckbox>(ibT("Checkbox"));
 						checkbox->SetControlName(nextSourceExplorer.GetSourceName());
 						//checkbox->SetCaption(nextSourceExplorer.GetSourceSynonym());
 						checkbox->EnableWindow(nextSourceExplorer.IsEnabled());
@@ -181,7 +181,7 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 					else if (nextSourceExplorer.GetClsidList().size() == 1
 						&& nextSourceExplorer.ContainType(g_valueScheduleCLSID)) {
 						ibValueStaticText* staticText =
-							dynamic_cast<ibValueStaticText*>(ibValueForm::CreateControl(ibT("Statictext")));
+							ibValueForm::CreateControl<ibValueStaticText>(ibT("Statictext"));
 						staticText->SetControlName(nextSourceExplorer.GetSourceName());
 						// The caption comes from the METADATA — "Schedule", not the widget's own
 						// "Static text" placeholder. That placeholder exists for a decoration
@@ -203,7 +203,7 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 							selButton = true;
 
 						ibValueTextCtrl* textCtrl =
-							dynamic_cast<ibValueTextCtrl*>(ibValueForm::CreateControl(ibT("Textctrl")));
+							ibValueForm::CreateControl<ibValueTextCtrl>(ibT("Textctrl"));
 						textCtrl->SetControlName(nextSourceExplorer.GetSourceName());
 						//textCtrl->SetCaption(nextSourceExplorer.GetSourceSynonym());
 						textCtrl->EnableWindow(nextSourceExplorer.IsEnabled());
@@ -394,7 +394,7 @@ void ibValueForm::NotifyChange(const ibValue& vChanged)
 		// A CHANGE ONLY MEANS "RE-READ". No position anchor travels with it any more (see tableBox's OnUpdated):
 		// the row already exists and the list re-locates its own current row by row-key. Clearing a PENDING
 		// create anchor stays — a save that follows a create must not re-fire the create's positioning.
-		ownerForm->m_createdValue = wxEmptyValue;
+		ownerForm->m_createdValue = ibEmptyValue;
 
 		ownerForm->UpdateForm();
 	}
@@ -410,7 +410,7 @@ void ibValueForm::NotifyDelete(const ibValue& vChanged)
 
 	if (ownerForm != nullptr) {
 
-		ownerForm->m_createdValue = wxEmptyValue;
+		ownerForm->m_createdValue = ibEmptyValue;
 
 		ownerForm->UpdateForm();
 	}
@@ -468,7 +468,7 @@ void ibValueForm::RemoveControl(const ibValue& vControl)
 	ibValueControl* currentControl =
 		CastValue<ibValueControl>(vControl);
 
-	wxASSERT(currentControl);
+	ibASSERT(currentControl);
 	RemoveControl(currentControl);
 }
 
@@ -621,6 +621,7 @@ bool ibValueForm::CloseForm(bool force)
 #include "frmserver/win/dlgs/generation.h"        // ibDialogGeneration — the object to base a new one on
 #include "frmserver/docView/docManager.h"            // ibDocManager::CreateDocument<T> — the help's tab
 #include "frmserver/docView/templates/docViewHelp.h"  // ibHelpFileDocument
+#include "protocol/protocol.h"                        // ibStyle - a message's buttons and picture
 
 void ibValueForm::HelpForm()
 {
@@ -640,8 +641,9 @@ void ibValueForm::HelpForm()
 	// NOTHING WRITTEN IS AN ANSWER, and a better one than an empty tab: an empty tab leaves a
 	// person wondering whether the help failed to load.
 	if (help.IsEmpty()) {
+		namespace style = ibProtocol::ibRequest::ibMessage::ibStyle;
 		frame->ShowModalMessage(_("Nothing has been written about this yet."),
-			GetControlTitle(), wxOK | wxICON_INFORMATION);
+			GetControlTitle(), style::OK | style::IconInformation);
 		return;
 	}
 
@@ -697,9 +699,9 @@ void ibValueForm::ChangeForm()
 bool ibValueForm::GenerateForm(ibValueRecordDataObjectRef* obj) const
 {
 	const ibValueMetaObjectRecordDataMutableRef* metaObject = obj->GetMetaObject();
-	wxASSERT(metaObject);
+	ibASSERT(metaObject);
 	const ibMetaData* metaData = metaObject->GetMetaData();
-	wxASSERT(metaData);
+	ibASSERT(metaData);
 
 	ibDialogGeneration selectDataType(metaData, metaObject->GetGenerationDescription());
 
@@ -733,7 +735,7 @@ ibValueFrame* ibValueForm::CreateControl(const ibString& clsControl, ibValueFram
 
 	// furthermore, the object is inserted right after the selected object
 	ibValueFrame* newControl = ibValueForm::CreateObject(clsControl, parentControl);
-	wxASSERT(newControl);
+	ibASSERT(newControl);
 	// Live-tree insertion: on an open form the new control is created by the host that holds the others.
 	if (!ibBackendException::IsEvalMode()) {
 		ibFormVisualDocument* const ownerDocForm = GetVisualDocument();
@@ -757,7 +759,7 @@ void ibValueForm::RemoveControl(ibValueFrame* control)
 {
 	//get parent obj
 	ibValueFrame* currentControl = control;
-	wxASSERT(currentControl);
+	ibASSERT(currentControl);
 	// Symmetric to CreateControl — on an open form the host cleans the control up first.
 	if (!ibBackendException::IsEvalMode()) {
 		ibFormVisualDocument* const ownerDocForm = GetVisualDocument();

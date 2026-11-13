@@ -2,7 +2,8 @@
 # OES Enterprise — core shared library
 # The shared meanings under the engine (backend) and its clients (frmclient): the class ids and the ids of the
 # configuration, the kinds of a value, a text, a number, a date, a guid, a block of bytes read and written, the core's
-# refusal, the build's number. Of wx — the base only.
+# refusal, the build's number. No wx: ibString's boundary to wxString is templates, made in a program that includes wx
+# (fstring.h); of wx's tree only its zlib, where the system has none.
 # =============================================================================
 
 # CONFIGURE_DEPENDS — see the note in backend/CMakeLists.txt. Every source here is in the build: the project
@@ -35,7 +36,6 @@ target_include_directories(core
 target_compile_definitions(core
     PRIVATE
         NOPCH
-        wxUSE_GUI=0   # of wx the base only — a GUI type here is a compile error
     # wx's _() stays off for every target that links core: the engine's _() is core/localization/dictionary.h,
     # and a unit that reaches for _() without it fails to compile rather than translating through wx unseen.
     PUBLIC
@@ -73,11 +73,15 @@ if(WIN32)
     target_sources(core PRIVATE core.rc)
 endif()
 
-# wx::base PUBLIC: the core's headers hand wx types across - ibString's boundary (fstring.h), the tabular model's wxRefCounter.
-target_link_libraries(core
-    PUBLIC
-        wx::base
-)
+# zlib, which the core speaks directly (memory/compression.cpp): the one wx was built with - the system's on Linux and
+# macOS, else wx's own copy.
+if(TARGET wxzlib)
+    target_link_libraries(core PRIVATE wxzlib)
+    target_include_directories(core PRIVATE "${OES_3RDPARTY_DIR}/wxWidgets/src/zlib")
+else()
+    find_package(ZLIB REQUIRED)
+    target_link_libraries(core PRIVATE ZLIB::ZLIB)
+endif()
 
 # pthread_getattr_np (fiber.cpp, the thread-stack bound). On Windows this is empty.
 find_package(Threads REQUIRED)

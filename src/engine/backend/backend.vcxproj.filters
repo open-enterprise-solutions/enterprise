@@ -1080,6 +1080,9 @@
     <ClCompile Include="databaseLayer\firebird\firebirdDatabaseLayer.cpp">
       <Filter>databaseLayer\firebird</Filter>
     </ClCompile>
+    <ClCompile Include="databaseLayer\firebird\firebirdCommon.cpp">
+      <Filter>databaseLayer\firebird</Filter>
+    </ClCompile>
     <ClCompile Include="databaseLayer\firebird\firebirdHlc.cpp">
       <Filter>databaseLayer\firebird</Filter>
     </ClCompile>

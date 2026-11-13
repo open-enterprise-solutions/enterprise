@@ -4,8 +4,6 @@
 // ibTextEditView implementation
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibDataProcessorEditView, ibMetaView);
-
 bool ibDataProcessorEditView::OnCreate(ibDocument *doc, long flags)
 {
 	return ibView::OnCreate(doc, flags);
@@ -26,7 +24,6 @@ bool ibDataProcessorEditView::OnClose(bool deleteWindow)
 // ibTextDocument: ibDataProcessorFileDocument and wxTextCtrl married
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibDataProcessorFileDocument, ibMetaDocument);
 \
 bool ibDataProcessorFileDocument::OnCreate(const ibString& path, long flags)
 {

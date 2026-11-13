@@ -6,7 +6,7 @@
 bool ibPropertyList::SetDataValue(const ibValue& varPropVal)
 {
 	// Matched against the choices as the owner offers them now…
-	long id = wxNOT_FOUND;
+	long id = ibNOT_FOUND;
 	bool found = false;
 	{
 		std::unique_lock<std::shared_mutex> lock(m_listMutex);
@@ -14,7 +14,7 @@ bool ibPropertyList::SetDataValue(const ibValue& varPropVal)
 			return false;
 		for (unsigned int idx = 0; idx < m_listPropValue.GetItemCount() && !found; idx++) {
 			const ibValue* selValue = m_listPropValue.GetItemValue(idx);
-			if ((selValue != nullptr && *selValue == varPropVal) || (selValue == nullptr && varPropVal == wxEmptyValue)) {
+			if ((selValue != nullptr && *selValue == varPropVal) || (selValue == nullptr && varPropVal == ibEmptyValue)) {
 				id = m_listPropValue.GetItemId(idx);
 				found = true;
 			}

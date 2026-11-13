@@ -395,7 +395,7 @@ protected:
 	virtual ibValuePtr<ibValueManagerDataObject> CreateManagerDataObjectValue() const;
 
 	//create record set — and no record manager (the base answers null): see the form list above
-	virtual ibValuePtr<ibValueRecordSetObject> CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) const;
+	virtual ibValuePtr<ibValueRecordSetObject> CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey = ibNullUniqueKeyPair) const;
 
 	//create object data with meta form
 	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const;
@@ -841,7 +841,7 @@ private:
 
 class ibValueRecordSetObjectCalculationRegister : public ibValueRecordSetObject {
 	public:
-	ibValueRecordSetObjectCalculationRegister(const ibValueMetaObjectCalculationRegister* metaObject, const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) :
+	ibValueRecordSetObjectCalculationRegister(const ibValueMetaObjectCalculationRegister* metaObject, const ibUniqueKeyPair& uniqueKey = ibNullUniqueKeyPair) :
 		ibValueRecordSetObject(metaObject, uniqueKey) {
 		m_members.Bind(this, &ibValueRecordSetObjectCalculationRegister::FillMembers);
 	}

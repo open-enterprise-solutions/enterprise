@@ -471,7 +471,7 @@ void ibDataMover::BinaryFromResult(const ibBackendQueryColumn* col, const ibMeta
 		break;
 	case ibFieldTypes_Enum:
 		writer.w_s32(td.ContainType(ibValueTypes::TYPE_ENUM)
-		             ? result.GetResultInt(f + ibFieldSuffix(ibColumnRole::Enum)) : wxNOT_FOUND);
+		             ? result.GetResultInt(f + ibFieldSuffix(ibColumnRole::Enum)) : ibNOT_FOUND);
 		break;
 	case ibFieldTypes_Schedule: {
 		ibMemoryBuffer scheduleBuffer;

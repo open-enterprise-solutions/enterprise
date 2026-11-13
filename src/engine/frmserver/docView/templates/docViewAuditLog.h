@@ -38,7 +38,6 @@ private:
 
 	ibAuditLogDocument(const ibAuditLogDocument&) = delete;
 	ibAuditLogDocument& operator=(const ibAuditLogDocument&) = delete;
-	wxDECLARE_DYNAMIC_CLASS(ibAuditLogDocument);
 };
 
 // THE JOURNAL AS A CLIENT DRAWS IT — with a view of its own (the tab's Kind), the desktop's filter strip, toolbar and
@@ -57,9 +56,6 @@ public:
 
 	// Open {Ref, RefMeta} — the row's object, opened as the desktop's journal opened it.
 	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) override;
-
-private:
-	wxDECLARE_DYNAMIC_CLASS(ibAuditLogView);
 };
 
 #endif

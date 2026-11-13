@@ -9,6 +9,7 @@
 #include "backend/settings/settingsComposer.h"            // ibSettingsCategory — which shelf a report's settings sit on
 #include "backend/backend_exception.h"                    // ibBackendInterruptException — a read stopped, not failed
 #include "backend/backend_mainFrame.h"                    // ibBackendDocFrame::ShowModalMessage — a refusal, said to the person
+#include "protocol/protocol.h"                            // ibStyle - its buttons and picture
 #include "backend/backend_composition.h"                  // ibVariantCaption — what the picker shows of a variant
 #include "backend/session/session.h"                      // ibSession — whose queue a compose is delivered on
 #include "frmserver/visualView/choiceRequest.h"           // ibRequestMenu — a variant, picked from the popup menu
@@ -75,7 +76,7 @@ ibValueGridBox::ibStandardCommandSet ibValueGridBox::GetStandardCommands(const i
 	std::vector<ibCommandItem> commands;
 	model->GetCommandCollection(formType, commands);
 	for (const ibCommandItem& c : commands) {
-		if (c.m_actionId == wxNOT_FOUND)
+		if (c.m_actionId == ibNOT_FOUND)
 			actionData.AddSeparator();
 		else
 			actionData.AddAction(c.m_name, c.m_caption, c.m_pictureDescription, c.m_pictureAndText, c.m_actionId)
@@ -159,8 +160,9 @@ void ibValueGridBox::CallAsAction(const ibActionID& lNumAction, ibBackendValueFo
 					// may not be open, and a report that simply never appears reads as "the button
 					// does nothing" (Max, 2026-08-20). The description is DATA, never a format
 					// string (docs/private/exceptions.md).
+					namespace style = ibProtocol::ibRequest::ibMessage::ibStyle;
 					if (ibBackendDocFrame* const frame = ibSession::CurrentFrame())
-						frame->ShowModalMessage(failure, _("Compose"), wxOK | wxICON_ERROR);
+						frame->ShowModalMessage(failure, _("Compose"), style::OK | style::IconError);
 					return;
 				}
 

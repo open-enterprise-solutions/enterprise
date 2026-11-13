@@ -998,7 +998,7 @@ void ibQueryParser::ParseTotals(ibQuerySelect& sel)
 	// says it.
 	// ⚠ AN INDEX, NOT A POINTER: opening the next node grows the vector, and a pointer taken into it
 	// before that would be left dangling by the reallocation.
-	int    nodeAt = wxNOT_FOUND;                   // wxNOT_FOUND = the hidden node
+	int    nodeAt = ibNOT_FOUND;                   // ibNOT_FOUND = the hidden node
 	bool   more = false;                           // …a comma continues the ladder, SPLIT opens a node
 
 	// ⭐⭐ `SPLIT <name> BY <levels>` — the node is NAMED WHERE IT IS OPENED, and then its groupings
@@ -1050,7 +1050,7 @@ void ibQueryParser::ParseTotals(ibQuerySelect& sel)
 			d.m_alias = Next().m_text;
 		}
 		// ONTO THE NODE IN HAND — the visible one if a SPLIT opened it, the hidden one otherwise.
-		if (nodeAt != wxNOT_FOUND) sel.m_totalsSplits[nodeAt].m_levels.push_back(std::move(d));
+		if (nodeAt != ibNOT_FOUND) sel.m_totalsSplits[nodeAt].m_levels.push_back(std::move(d));
 		else                       sel.m_totalsBy.push_back(std::move(d));
 
 		// A COMMA CONTINUES THIS NODE'S LADDER; `SPLIT` OPENS THE NEXT NODE. Two ways to go on, and

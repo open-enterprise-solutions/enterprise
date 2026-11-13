@@ -161,7 +161,7 @@ bool ibValueMetaObjectAttributeBase::OnDeleteMetaObject()
 bool ibValueMetaObjectAttributeBase::OnReloadMetaObject()
 {
 	ibValueMetaObject* metaObject = GetParent();
-	wxASSERT(metaObject);
+	ibASSERT(metaObject);
 	if (metaObject->OnReloadMetaObject())
 		return ibValueMetaObject::OnReloadMetaObject();
 	return false;

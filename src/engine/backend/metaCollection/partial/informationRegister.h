@@ -201,8 +201,8 @@ protected:
 	virtual ibValuePtr<ibValueManagerDataObject> CreateManagerDataObjectValue() const;
 
 	//create record set
-	virtual ibValuePtr<ibValueRecordSetObject> CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) const;
-	virtual ibValuePtr<ibValueRecordManagerObject> CreateRecordManagerObjectRegValue(const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) const;
+	virtual ibValuePtr<ibValueRecordSetObject> CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey = ibNullUniqueKeyPair) const;
+	virtual ibValuePtr<ibValueRecordManagerObject> CreateRecordManagerObjectRegValue(const ibUniqueKeyPair& uniqueKey = ibNullUniqueKeyPair) const;
 
 	//create object data with meta form
 	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const;
@@ -461,7 +461,7 @@ void ibInfoRegisterSliceDescriptor<TSlice>::DescribeParameters(std::vector<ibQue
 
 class ibValueRecordSetObjectInformationRegister : public ibValueRecordSetObject {
 	public:
-	ibValueRecordSetObjectInformationRegister(const ibValueMetaObjectInformationRegister* metaObject, const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) :
+	ibValueRecordSetObjectInformationRegister(const ibValueMetaObjectInformationRegister* metaObject, const ibUniqueKeyPair& uniqueKey = ibNullUniqueKeyPair) :
 		ibValueRecordSetObject(metaObject, uniqueKey) {
 		m_members.Bind(this, &ibValueRecordSetObjectInformationRegister::FillMembers);
 	}
@@ -503,7 +503,7 @@ protected:
 
 class ibValueRecordManagerObjectInformationRegister : public ibValueRecordManagerObject {
 	public:
-	ibValueRecordManagerObjectInformationRegister(const ibValueMetaObjectInformationRegister* metaObject, const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) :
+	ibValueRecordManagerObjectInformationRegister(const ibValueMetaObjectInformationRegister* metaObject, const ibUniqueKeyPair& uniqueKey = ibNullUniqueKeyPair) :
 		ibValueRecordManagerObject(metaObject, uniqueKey)
 	{
 		m_members.Bind(this, &ibValueRecordManagerObjectInformationRegister::FillMembers);

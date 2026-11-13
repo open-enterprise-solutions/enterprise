@@ -44,7 +44,7 @@ void ibDataProcessorTree::OnDraw(ibDataNode& root)
 void ibDataProcessorTree::FillData(ibDataNode& root)
 {
 	ibValueMetaObjectDataProcessor* commonMetadata = m_metaData->GetDataProcessor();
-	wxASSERT(commonMetadata);
+	ibASSERT(commonMetadata);
 
 	root.SetMetaId(commonMetadata->GetMetaID());
 	root.SetValue(ibProtocol::ibSchema::ibMetaData::Title, commonMetadata->GetName());

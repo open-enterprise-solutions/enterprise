@@ -27,17 +27,12 @@
 #include "backend/databaseLayer/connectionHolder.h"
 #include "core/guid.h"
 
-#include <algorithm>
 #include <cstddef>
-#include <cstring>
 #include <mutex>
 #include <streambuf>
 #include <vector>
 
 #include "core/memory/memoryBuffer.h"
-#include <wx/convauto.h>
-#include <wx/stream.h>
-#include <wx/string.h>
 
 class BACKEND_API ibTempStorage {
 public:
@@ -100,13 +95,13 @@ public:
 	// The name it was made under.
 	ibString GetName() const;
 
-	// The whole content, through `conv` — for a document that holds its text whole anyway.
-	bool ReadAll(ibString* str, const wxMBConv& conv = wxConvAuto());
+	// The whole content as UTF-8 text — for a document that holds its text whole anyway. False: the bytes are not UTF-8.
+	bool ReadAll(ibString* str);
 	// The content part `index`, from 0. False past the last.
 	bool ReadPart(int index, ibMemoryBuffer& data) const;
 
-	// `str` through `conv`, as the next content parts.
-	bool Write(const ibString& str, const wxMBConv& conv = wxConvAuto());
+	// `str` in UTF-8, as the next content parts.
+	bool Write(const ibString& str);
 	// Bytes as the next content parts, at most kPartSize each.
 	bool Write(const void* data, std::size_t size);
 
@@ -181,79 +176,6 @@ private:
 	ibTempFile&       m_file;
 	std::vector<char> m_buffer;
 	bool              m_ok = true;
-};
-
-// A TEMPORARY FILE READ AS A wx STREAM — one part in memory at a time, the next fetched when this one is read (the
-// wx twin of ibTempFileReader).
-class ibTempFileInputStream : public wxInputStream {
-public:
-
-	explicit ibTempFileInputStream(const ibTempFile& file) : m_file(file) {}
-
-protected:
-
-	virtual size_t OnSysRead(void* buffer, size_t size) override {
-		// An empty part is a part, so it is passed over, not taken for the end.
-		while (m_offset == m_part.GetDataLen()) {
-			if (!m_file.ReadPart(m_index, m_part)) {
-				m_lasterror = wxSTREAM_EOF;
-				return 0;
-			}
-			++m_index;
-			m_offset = 0;
-		}
-		const size_t count = std::min(size, m_part.GetDataLen() - m_offset);
-		std::memcpy(buffer, static_cast<const char*>(m_part.GetData()) + m_offset, count);
-		m_offset += count;
-		return count;
-	}
-
-private:
-
-	const ibTempFile& m_file;
-	int               m_index = 0;
-	ibMemoryBuffer    m_part;
-	size_t            m_offset = 0;
-};
-
-// A TEMPORARY FILE WRITTEN AS A wx STREAM — a part goes down every kPartSize bytes, and Close() writes the rest (the wx
-// twin of ibTempFileWriter).
-class ibTempFileOutputStream : public wxOutputStream {
-public:
-
-	explicit ibTempFileOutputStream(ibTempFile& file) : m_file(file) {}
-
-	virtual bool Close() override { return WritePart() && wxOutputStream::Close(); }
-
-protected:
-
-	virtual size_t OnSysWrite(const void* buffer, size_t size) override {
-		const char* from = static_cast<const char*>(buffer);
-		for (size_t left = size; left > 0;) {
-			const size_t count = std::min(left, ibTempStorage::kPartSize - m_part.GetDataLen());
-			m_part.AppendData(from, count);
-			from += count;
-			left -= count;
-			if (m_part.GetDataLen() == ibTempStorage::kPartSize && !WritePart()) {
-				m_lasterror = wxSTREAM_WRITE_ERROR;
-				return size - left;
-			}
-		}
-		return size;
-	}
-
-private:
-
-	bool WritePart() {
-		if (m_part.GetDataLen() == 0)
-			return true;
-		const bool written = m_file.Write(m_part.GetData(), m_part.GetDataLen());
-		m_part.SetDataLen(0);
-		return written;
-	}
-
-	ibTempFile&    m_file;
-	ibMemoryBuffer m_part;
 };
 
 #endif

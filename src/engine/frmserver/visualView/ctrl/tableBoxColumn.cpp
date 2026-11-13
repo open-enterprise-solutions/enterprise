@@ -54,7 +54,7 @@ bool ibValueModelTableBoxColumn::GetChoiceForm(ibPropertyList* property)
 //***********************************************************************************
 
 ibValueModelTableBoxColumn::ibValueModelTableBoxColumn() :
-	ibValueControl(), ibTypeControlFactory(), m_model_id(wxNOT_FOUND)
+	ibValueControl(), ibTypeControlFactory(), m_model_id(ibNOT_FOUND)
 {
 }
 
@@ -115,7 +115,7 @@ bool ibValueModelTableBoxColumn::IsColumnShown() const
 	// (m_model_id). It appears once the user binds a source (a field, or a dotted path), mirroring the
 	// unbound-source-control visibility gate. It stays selectable via the object tree while hidden, so its
 	// Source picker is reachable. (GetModelColumn can't gate this — it falls back to the control id.)
-	const bool sourceMissing = m_propertySource->IsEmptyProperty() && m_model_id == wxNOT_FOUND;
+	const bool sourceMissing = m_propertySource->IsEmptyProperty() && m_model_id == ibNOT_FOUND;
 	// …nor is a column the functional options of this base make unavailable (its field, or the options it names).
 	if (!m_propertyVisible->GetValueAsBoolean() || sourceMissing || !IsAvailable())
 		return false;
@@ -174,7 +174,7 @@ void ibValueModelTableBoxColumn::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	}
 
 	// Its own Visible, a binding, the functional options — the group above says its own (its Visible).
-	const bool sourceMissing = m_propertySource->IsEmptyProperty() && m_model_id == wxNOT_FOUND;
+	const bool sourceMissing = m_propertySource->IsEmptyProperty() && m_model_id == ibNOT_FOUND;
 	state.SetValue(ibProtocol::ibForm::ibState::Visible, m_propertyVisible->GetValueAsBoolean() && !sourceMissing && IsAvailable());
 	state.SetValue(ibProtocol::ibForm::ibTable::ReadOnly, IsReadOnly());
 
@@ -250,8 +250,8 @@ void ibValueModelTableBoxColumn::UpdateCell(const ibDataViewItem& item, ibDataNo
 			cell.SetValue(ibProtocol::ibForm::ibTable::Face, attr.GetFaceName());
 		if (attr.HasAlignment()) {
 			const int align = attr.GetAlignment();
-			cell.SetValue(ibProtocol::ibForm::ibTable::Align, ibString((align & wxALIGN_RIGHT) ? ibProtocol::ibForm::ibTable::ibAlign::Right
-				: (align & wxALIGN_CENTER_HORIZONTAL) ? ibProtocol::ibForm::ibTable::ibAlign::Center : ibProtocol::ibForm::ibTable::ibAlign::Left));
+			cell.SetValue(ibProtocol::ibForm::ibTable::Align, ibString((align & ibAlignment_Right) ? ibProtocol::ibForm::ibTable::ibAlign::Right
+				: (align & ibAlignment_CenterHorizontal) ? ibProtocol::ibForm::ibTable::ibAlign::Center : ibProtocol::ibForm::ibTable::ibAlign::Left));
 		}
 	}
 

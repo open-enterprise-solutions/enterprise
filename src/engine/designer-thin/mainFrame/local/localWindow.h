@@ -30,7 +30,6 @@ protected:
 	void FitColumns();
 
 	//events
-	//void OnDebugEvent(wxDebugEvent& event);
 	void OnItemSelected(wxListEvent& event);
 
 	/**

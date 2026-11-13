@@ -181,7 +181,7 @@ namespace stringUtils
 				return i;
 			}
 		}
-		return wxNOT_FOUND;
+		return ibNOT_FOUND;
 	}
 }
 

@@ -1,11 +1,11 @@
 #include "backend/lock/lockHolder.h"
 
-#include <wx/utils.h>   // wxGetHostName
+#include "core/system.h"   // ibHostName
 
 ibSingleLockHolder::ibSingleLockHolder(const ibString& displayName,
                                         const ibString& computer)
-	: m_identity(wxNewUniqueGuid)
+	: m_identity(ibNewUniqueGuid)
 	, m_displayName(displayName)
-	, m_computer(computer.IsEmpty() ? ibString(wxGetHostName()) : computer)
+	, m_computer(computer.IsEmpty() ? ibHostName() : computer)
 {
 }

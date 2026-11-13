@@ -118,6 +118,8 @@ bool ibValueForm::ReadData(const ibDataNode& node)
 	m_propertyOrient->SetNodeValue(node.GetProperty(m_propertyOrient->GetName()));
 	m_propertyFG->SetNodeValue(node.GetProperty(m_propertyFG->GetName()));
 	m_propertyBG->SetNodeValue(node.GetProperty(m_propertyBG->GetName()));
+	if (m_propertyBG->GetValueAsColour() == ibFormerStyleBGColour)
+		m_propertyBG->SetValue(ibDefaultStyleBGColour);
 	m_propertyEnabled->SetNodeValue(node.GetProperty(m_propertyEnabled->GetName()));
 
 	if (!ReadAttributes(node))

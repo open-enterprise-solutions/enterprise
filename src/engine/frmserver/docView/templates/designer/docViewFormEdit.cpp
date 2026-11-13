@@ -21,8 +21,6 @@
 // ibFormDesignView implementation
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibFormDesignView, ibModuleTextView);
-
 bool ibFormDesignView::OnCreate(ibDocument* doc, long flags)
 {
 	if (!ibModuleTextView::OnCreate(doc, flags))
@@ -250,7 +248,7 @@ bool ibFormDesignView::LoadForm()
 		return false;
 
 	const ibMetaData* metaData = creator->GetMetaData();
-	wxASSERT(metaData);
+	ibASSERT(metaData);
 
 	ibValueForm* compiledForm = nullptr;
 	auto* cc = metaData->GetCompileCache();
@@ -474,8 +472,6 @@ bool ibFormDesignView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ib
 // ----------------------------------------------------------------------------
 // ibFormDesignDocument implementation
 // ----------------------------------------------------------------------------
-
-wxIMPLEMENT_DYNAMIC_CLASS(ibFormDesignDocument, ibModuleTextDocument);
 
 bool ibFormDesignDocument::Save()
 {

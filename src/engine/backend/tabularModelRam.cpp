@@ -14,22 +14,22 @@
 #include "backend/srcDataObject.h"               // ibSourceDataObject / ibSourceExplorer — ResolveField dot-walk over reference cells
 
 // ibRamValueStorage::ColumnIdByName — resolve a field name → column id via the model's column collection
-// (re-pointed each fetch by RunComposerPage). wxNOT_FOUND for an unknown / dot-walk path (the composer skips it).
+// (re-pointed each fetch by RunComposerPage). ibNOT_FOUND for an unknown / dot-walk path (the composer skips it).
 ibMetaID ibRamValueStorage::ColumnIdByName(const ibString& name) const
 {
-	if (m_columns == nullptr) return wxNOT_FOUND;
+	if (m_columns == nullptr) return ibNOT_FOUND;
 	const ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* info = m_columns->GetColumnByName(name);
-	return info != nullptr ? static_cast<ibMetaID>(info->GetColumnID()) : ibMetaID(wxNOT_FOUND);
+	return info != nullptr ? static_cast<ibMetaID>(info->GetColumnID()) : ibMetaID(ibNOT_FOUND);
 }
 
 // ibRamValueStorage::SplitField — cut a field path on '.' → HEAD storage column id + the dotted TAIL (reference
-// hops). wxNOT_FOUND head (the first segment is not a storage column) → false, the caller drops this spec.
+// hops). ibNOT_FOUND head (the first segment is not a storage column) → false, the caller drops this spec.
 // Shared by the RAM composer's ComputeOrder (filter/sort) AND the model's grouping (RunComposerPage dims).
 bool ibRamValueStorage::SplitField(const ibString& path, ibMetaID& headCol, std::vector<ibString>& tail) const
 {
 	const ibString head = path.BeforeFirst(ibT('.'));
 	headCol = ColumnIdByName(head.IsEmpty() ? path : head);
-	if (headCol == wxNOT_FOUND) return false;
+	if (headCol == ibNOT_FOUND) return false;
 	tail.clear();
 	ibString remaining = path.AfterFirst(ibT('.'));
 	while (!remaining.IsEmpty()) {
@@ -60,9 +60,9 @@ ibValue ibRamValueStorage::ResolveField(long row, ibMetaID headCol, const std::v
 		// case rule is the model layer's one rule (this loop used to compare exactly, and a segment
 		// written in another case silently ended the walk instead of resolving).
 		const ibSourceDataObject::ibSourceExplorer* child = explorer->FindByName(seg);
-		const ibMetaID segId = child != nullptr ? child->GetSourceId() : wxNOT_FOUND;
+		const ibMetaID segId = child != nullptr ? child->GetSourceId() : ibNOT_FOUND;
 		ibValue next;
-		if (segId == wxNOT_FOUND || !source->GetValueBySourceHop(ibSourceHop{ segId }, next))
+		if (segId == ibNOT_FOUND || !source->GetValueBySourceHop(ibSourceHop{ segId }, next))
 			return ibValue();
 		current = next;
 	}
@@ -117,7 +117,7 @@ unsigned int ibValueModel::RunStoragePage(ibRamValueStorage& storage, ibDataRamC
 	// Elements grouping; a dot-tail dim groups by the walked value.
 	const bool flatView = (parent == s_constIgnoreParent);
 	struct RamDim {
-		ibMetaID              m_col = ibMetaID(wxNOT_FOUND);
+		ibMetaID              m_col = ibMetaID(ibNOT_FOUND);
 		std::vector<ibString> m_tail;
 	};
 	std::vector<RamDim> dims;

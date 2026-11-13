@@ -581,7 +581,7 @@ public:
 		if (ibValueCommandBar* bar = form->GetCommandBar()) {
 			std::vector<ibDataValue> entries;
 			for (const ibCommandEntry& entry : bar->BuildCommands()) {
-				if (entry.id == wxNOT_FOUND)
+				if (entry.id == ibNOT_FOUND)
 					continue;   // a separator
 
 				std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();

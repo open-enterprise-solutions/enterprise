@@ -313,7 +313,7 @@ const ibSourceDataObject::ibSourceExplorer* ibValueModelTable::GetSourceExplorer
 	// Root flagged a TABLE SECTION so the metadata-free IsTableSource() (GetSourceExplorer()->IsTableSection())
 	// reports true — a value-table attribute is then draggable AS a tablebox and its columns resolve as table
 	// columns, not standalone textboxes.
-	m_sourceExplorer.Reset(GetObjectTypeName(), GetObjectTypeName(), wxNOT_FOUND, g_valueTableCLSID, /*tableSection*/true);
+	m_sourceExplorer.Reset(GetObjectTypeName(), GetObjectTypeName(), ibNOT_FOUND, g_valueTableCLSID, /*tableSection*/true);
 	for (auto& col : m_tableColumnCollection->m_listColumnInfo) {
 		if (col == nullptr)
 			continue;
@@ -393,7 +393,7 @@ bool ibValueModelTable::ReadProperty(const ibDataNode& node)
 	// rows exist yet, so AddColumn's per-row cell-fill is a no-op).
 	m_tableColumnCollection->m_listColumnInfo.clear();
 	for (const ibDataNode& colNode : node.Children()) {
-		if (m_tableColumnCollection->AddColumn(ibEmptyString, ibTypeDescription(), ibEmptyString, wxDVC_DEFAULT_WIDTH) != nullptr)
+		if (m_tableColumnCollection->AddColumn(ibEmptyString, ibTypeDescription(), ibEmptyString, ibDVC_DEFAULT_WIDTH) != nullptr)
 			m_tableColumnCollection->m_listColumnInfo.back()->ReadProperty(colNode);
 	}
 	// The columns were emptied and each read its name and type AFTER it was added — so the rows' names and the
@@ -467,7 +467,7 @@ bool ibValueModelTable::ibValueModelTableColumnCollection::CallAsFunc(const long
 		}
 		const ibString name = paParams[0]->GetString();
 		const ibString caption = lSizeArray > 2 ? ibString(paParams[2]->GetString()) : name;
-		const int width = lSizeArray > 3 ? paParams[3]->GetInteger() : wxDVC_DEFAULT_WIDTH;
+		const int width = lSizeArray > 3 ? paParams[3]->GetInteger() : ibDVC_DEFAULT_WIDTH;
 		pvarRetValue = AddColumn(name, type, caption, width);
 		return true;
 	}
@@ -609,7 +609,7 @@ void ibCollectFilterDefaults(const std::vector<ibFilterNodeDescription>& nodes, 
 		}
 		if (node.m_comparison != ibComparisonKind_Equal) continue;
 		if (!node.m_left.IsField() || node.m_right.IsField()) continue;
-		if (node.m_left.m_path.Find(ibT('.')) != wxNOT_FOUND) continue;
+		if (node.m_left.m_path.Find(ibT('.')) != ibNOT_FOUND) continue;
 		out.emplace_back(node.m_left.m_path, ibStoredValue(node.m_right.m_value, metaData));
 	}
 }
@@ -629,7 +629,7 @@ long ibValueModelTable::AppendRow(unsigned int before, const ibDataViewItem& con
 			ibString field; ibQueryDimUnfold kind = ibQueryDimUnfold::Elements;
 			if (!GetModelComposer().GetGroupAt(i, field, kind) || field.IsEmpty()) continue;
 			const ibMetaID col = GetColumnIDByName(field);
-			if (col != wxNOT_FOUND)
+			if (col != ibNOT_FOUND)
 				rowData->AppendTableValue(col, ctx->GetTableValue(col));
 		}
 	}
@@ -642,7 +642,7 @@ long ibValueModelTable::AppendRow(unsigned int before, const ibDataViewItem& con
 	ibCollectFilterDefaults(GetModelComposer().GetCurrentFilterDesc().m_nodes, GetModelComposer().GetMetaData(), defaults);
 	for (const std::pair<ibString, ibValue>& one : defaults) {
 		const ibMetaID col = GetColumnIDByName(one.first);
-		if (col != wxNOT_FOUND)
+		if (col != ibNOT_FOUND)
 			rowData->AppendTableValue(col,
 				ibValueTypeDescription::AdjustValue(m_tableColumnCollection->GetColumnTypeDesc(col), one.second));
 	}
@@ -832,7 +832,7 @@ void ibValueModelTable::CopyRow(const ibDataViewItem& row)
 	// Copy goes AFTER the source row so the original keeps its position; the new row lands at currentLine + 1 and
 	// the ItemInserted handler moves focus onto it via Select. (Mirrors the tabular section.)
 	const long currentLine = StorageIndexOf(currentItem);
-	if (currentLine != wxNOT_FOUND) {
+	if (currentLine != ibNOT_FOUND) {
 		ibValueModelStorage::Insert(rowData, currentLine + 1, !ibBackendException::IsEvalMode());
 	}
 	else {

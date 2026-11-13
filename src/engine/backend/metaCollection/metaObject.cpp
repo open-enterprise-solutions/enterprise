@@ -12,8 +12,6 @@
 #include "core/diagnostics/debugTrace.h"   // ibDebugTraceEnabled — per-object id tracing is opt-in
 #include "backend/databaseLayer/databaseErrorCodes.h"
 
-#include <wx/log.h>
-
 // Restructure-ledger facade — one call onto the active config's ledger (the static accessor).
 void ibValueMetaObject::RestructureInfo   (const ibString& message) { ibMetaDataConfigurationBase::GetRestructureInfo().AppendInfo(message);    }
 void ibValueMetaObject::RestructureWarning(const ibString& message) { ibMetaDataConfigurationBase::GetRestructureInfo().AppendWarning(message); }
@@ -25,7 +23,7 @@ void ibValueMetaObject::RestructureError  (const ibString& message) { ibMetaData
 
 void ibValueMetaObject::ResetGuid()
 {
-	m_metaGuid = wxNewUniqueGuid;
+	m_metaGuid = ibNewUniqueGuid;
 }
 
 void ibValueMetaObject::ResetId()
@@ -78,7 +76,7 @@ ibValueMetaObject::~ibValueMetaObject()
 bool ibValueMetaObject::OnCreateMetaObject(ibMetaData* metaData, int flags)
 {
 	GenerateGuid();
-	wxASSERT(metaData);
+	ibASSERT(metaData);
 	m_metaId = metaData->GenerateNewID();
 	m_metaData = metaData;
 
@@ -223,7 +221,7 @@ bool ibValueMetaObject::CompareObject(const ibValueMetaObject* compareObject) co
 			for (unsigned int idx = 0; idx < compareObject1->GetPropertyCount(); idx++) {
 
 				const ibProperty* propDst = compareObject1->GetProperty(idx);
-				wxASSERT(propDst);
+				ibASSERT(propDst);
 
 				const ibProperty* propSrc = compareObject2->GetProperty(propDst->GetName());
 
@@ -299,7 +297,7 @@ bool ibValueMetaObject::ChangeChildPosition(ibValueMetaObject* object, unsigned 
 ibString ibValueMetaObject::GetModuleName() const
 {
 	ibValueMetaObject* parent = GetParent();
-	//wxASSERT(parent);
+	//ibASSERT(parent);
 	if (parent != nullptr) {
 		return parent->GetName() + ibT(": ") + GetName();
 	}

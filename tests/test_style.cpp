@@ -69,12 +69,13 @@ TEST(Style, ThePlatformsHasEveryItemInBothLooks) {
 			}
 		}
 	}
-	// What the light look keeps: the forms' ink on cream (frmserver's default style) and the Luna theme's colours
-	// (deskgui/univ/theme/lunaTheme.cpp), each where the platform painted it.
+	// What the light look keeps: the forms' ink on a ground a step below white, the fields white (frmserver's default
+	// style, taken from here; cream until 2026-11-13) and the Luna theme's colours (deskgui/univ/theme/lunaTheme.cpp),
+	// each where the platform painted it.
 	const std::vector<std::pair<ibStyleItem, ibColour>> kept = {
 		{ ibStyleItem::FormText, ibColour(0x3F, 0x5C, 0x77) },
-		{ ibStyleItem::FormBackground, ibColour(0xFA, 0xF7, 0xF0) },
-		{ ibStyleItem::FieldBackground, ibColour(0xFA, 0xF7, 0xF0) },
+		{ ibStyleItem::FormBackground, ibColour(0xEE, 0xF2, 0xF6) },
+		{ ibStyleItem::FieldBackground, ibColour(0xFF, 0xFF, 0xFF) },
 		{ ibStyleItem::ButtonBackground, ibColour(0xC8, 0xD6, 0xDF) },
 		{ ibStyleItem::ButtonText, ibColour(0, 0, 0) },
 		{ ibStyleItem::Selection, ibColour(0xD9, 0x77, 0x57) },
@@ -87,7 +88,7 @@ TEST(Style, ThePlatformsHasEveryItemInBothLooks) {
 	};
 	for (const auto& [item, colour] : kept)
 		EXPECT_EQ(std::get<ibColour>(platform.Get(item, false)), colour) << ibStyleItemInfo::Of(item)->m_name;
-	EXPECT_NE(std::get<ibColour>(platform.Get(ibStyleItem::FormBackground, true)), ibColour(0xFA, 0xF7, 0xF0));
+	EXPECT_NE(std::get<ibColour>(platform.Get(ibStyleItem::FormBackground, true)), ibColour(0xEE, 0xF2, 0xF6));
 	EXPECT_EQ(std::get<std::vector<ibColour>>(platform.Get(ibStyleItem::ReportGroup, false)).size(), 3u);
 }
 

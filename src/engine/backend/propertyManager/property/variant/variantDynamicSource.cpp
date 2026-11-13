@@ -7,7 +7,7 @@
 #include "backend/propertyManager/propertyObject.h"   // ibPropertyObject::GetMetaData
 
 ibVariantDynamicSource::ibVariantDynamicSource(const ibBackendQueryable* queryable, const ibPropertyObject* owner)
-	: ibVariant(ibValueTypes::TYPE_VALUE), m_tableId(queryable != nullptr ? (ibMetaID)queryable->GetQueryTableId() : wxNOT_FOUND),
+	: ibVariant(ibValueTypes::TYPE_VALUE), m_tableId(queryable != nullptr ? (ibMetaID)queryable->GetQueryTableId() : ibNOT_FOUND),
 	// Resolve the owner's SPECIFIC config ONCE, here, and keep the metadata — NOT the owner pointer (which, for a
 	// form-attribute's transient dynamic list, dangles once the list is re-materialised). (CONST owner: the non-const
 	// GetMetaData wxFAILs.)
@@ -28,7 +28,7 @@ const ibBackendQueryable* ibVariantDynamicSource::GetQueryable() const
 {
 	// Re-resolve LIVE every time — never a cached pointer. Goes THROUGH the owner's metadata factory (per-config →
 	// global), which hands back the descriptor's own `&m_queryable`, or null if the source was deleted.
-	if (m_tableId == wxNOT_FOUND)
+	if (m_tableId == ibNOT_FOUND)
 		return nullptr;
 	ibQueryableFactory* factory = ibVariantSourceFactory(m_metaData);
 	return factory != nullptr ? factory->ResolveById(m_tableId) : nullptr;
@@ -38,7 +38,7 @@ const ibQueryableSourceDescriptor* ibVariantDynamicSource::GetDescriptor() const
 {
 	// Re-resolve LIVE, same id as GetQueryable, THROUGH the owner's metadata factory — the descriptor (its command +
 	// column surface, FillSourceExplorer) is the copy's OWN, so the columns are the copy's. Null when deleted.
-	if (m_tableId == wxNOT_FOUND)
+	if (m_tableId == ibNOT_FOUND)
 		return nullptr;
 	ibQueryableFactory* factory = ibVariantSourceFactory(m_metaData);
 	return factory != nullptr ? factory->ResolveDescriptorById(m_tableId) : nullptr;
@@ -46,7 +46,7 @@ const ibQueryableSourceDescriptor* ibVariantDynamicSource::GetDescriptor() const
 
 void ibVariantDynamicSource::SetQueryable(const ibBackendQueryable* queryable)
 {
-	m_tableId = queryable != nullptr ? (ibMetaID)queryable->GetQueryTableId() : wxNOT_FOUND;
+	m_tableId = queryable != nullptr ? (ibMetaID)queryable->GetQueryTableId() : ibNOT_FOUND;
 }
 
 ibString ibVariantDynamicSource::GetString() const

@@ -59,7 +59,7 @@ bool ibPropertyGeneration::SetDataValue(const ibValue& varPropVal)
 bool ibPropertyGeneration::GetDataValue(ibValue& pvarPropVal) const
 {
 	const ibVariantGeneration* gen = get_cell_variant<ibVariantGeneration>();
-	wxASSERT(gen);
+	ibASSERT(gen);
 	pvarPropVal = gen->GetDataValue();
 	return true;
 }

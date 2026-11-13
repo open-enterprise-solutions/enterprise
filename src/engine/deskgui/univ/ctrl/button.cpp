@@ -167,11 +167,13 @@ wxSize ibButton::GetDefaultSize(wxWindow* WXUNUSED(win))
         s_sizeBtn.x = dc.GetCharWidth()*10 + 2;
 
         // SEAM vs univ: the canon used charHeight*11/10 + 2, which came out
-        // SMALLER than a text field of the same font (line + 2*(border+pad)
-        // = line + 6) — buttons and fields on one form row must be equally
-        // tall, so the row height is the maximum of the two formulas
+        // SMALLER than a text field of the same font — buttons and fields on
+        // one form row must be equally tall, so the row height is the maximum
+        // of the two: the field's the theme's (GetTextTotalArea), not a second
+        // copy of its padding here (2026-11-13, Max: "you hard-coded three places")
         const wxCoord hChar = dc.GetCharHeight();
-        s_sizeBtn.y = wxMax(hChar*11/10 + 2, hChar + 6);
+        s_sizeBtn.y = wxMax(hChar*11/10 + 2,
+                            ibThemeEngine::Get()->GetRenderer()->GetTextTotalArea(wxRect(0, 0, 0, hChar)).height);
     }
 
     return s_sizeBtn;

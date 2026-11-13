@@ -27,8 +27,6 @@ public:
 private:
 
 	std::unique_ptr<ibDataReportTree> m_metaTree;
-
-	wxDECLARE_DYNAMIC_CLASS(ibReportTreeView);
 };
 
 class FRMSERVER_API ibReportEditDocument : public ibMetaDataDocument {
@@ -61,7 +59,6 @@ protected:
 
 	ibReportEditDocument(const ibReportEditDocument&) = delete;
 	ibReportEditDocument& operator=(const ibReportEditDocument&) = delete;
-	wxDECLARE_DYNAMIC_CLASS(ibReportEditDocument);
 };
 
 #endif

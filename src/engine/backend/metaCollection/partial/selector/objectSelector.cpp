@@ -25,7 +25,7 @@ ibClassID ibValueSelectorDataObject::GetClassType() const
 {
 	const ibCtorMetaValueType* clsFactory =
 		GetMetaObject()->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_Selection);
-	wxASSERT(clsFactory);
+	ibASSERT(clsFactory);
 	return clsFactory->GetClassType();
 }
 
@@ -33,7 +33,7 @@ ibString ibValueSelectorDataObject::GetClassName() const
 {
 	const ibCtorMetaValueType* clsFactory =
 		GetMetaObject()->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_Selection);
-	wxASSERT(clsFactory);
+	ibASSERT(clsFactory);
 	return clsFactory->GetClassName();
 }
 
@@ -41,7 +41,7 @@ ibString ibValueSelectorDataObject::GetString() const
 {
 	const ibCtorMetaValueType* clsFactory =
 		GetMetaObject()->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_Selection);
-	wxASSERT(clsFactory);
+	ibASSERT(clsFactory);
 	return clsFactory->GetClassName();
 }
 

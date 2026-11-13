@@ -2,13 +2,11 @@
 
 #include <memory>
 
-#include <wx/filename.h>
-#include <wx/stdpaths.h>
-
 #include "backend/appData.h"            // ibFileInstanceRequest, CreateAppDataEnv
 #include "backend/appHost.h"            // ibApplicationInstanceScope
 #include "backend/backend_exception.h"
 #include "core/diagnostics/crashGuard.h"   // ibCrashGuard::Install — the journal and the dumps of the process
+#include "core/fileSystem.h"               // ibExecutablePath — the process's name
 #include "core/serialize/provider/jsonProvider.h"   // the request read, as the port's are
 
 #include "protocol/protocol.h"          // ibProtocol::ibFileBase — the request's words
@@ -38,7 +36,7 @@ ibFileBase* ibFileBaseOpen(const ibString& request, ibString& error)
 {
 	// THE PROCESS'S JOURNAL, AND ITS CRASH GUARD — the engine runs in this process now, and every application of the
 	// tree installs both as its first act; a client that loads a file base is one too. Named by the process, as theirs.
-	ibCrashGuard::Install(wxFileName(wxStandardPaths::Get().GetExecutablePath()).GetName());
+	ibCrashGuard::Install(ibString(ibPathOf(ibExecutablePath()).stem().wstring()));
 
 	// Read as the port's requests are read — the text where it lies.
 	ibDataNode where;

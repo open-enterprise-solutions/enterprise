@@ -7,6 +7,7 @@
 // =============================================================================
 
 #include <gtest/gtest.h>
+#include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 #include <cwctype>   // towupper — the non-ASCII folding probe below
 #include <map>
 #include "backend/system/value/valueMap.h"

@@ -117,7 +117,7 @@ struct BACKEND_API ibConnectRequest {
 	// of minting a fresh one — lets the client tab's sessionStorage id
 	// (tabSid) serve as sys_session.session, cookie value, SessionManager
 	// map key, and sys_session row PK all at once. Empty / invalid →
-	// fall back to wxNewUniqueGuid.
+	// fall back to ibNewUniqueGuid.
 	ibString  m_presetGuid;
 
 	ibString  m_userName;          // empty = anonymous (technical / pre-auth)

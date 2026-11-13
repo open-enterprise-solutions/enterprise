@@ -6,7 +6,7 @@
 // A process holds one base — every host of today: the desktop client, the designer, codeRunner, the web
 // host, the tests — or several: the application server. Each base is an ibApplicationInstance. What belongs to the process
 // rather than to any base lives here, once: the plugins (DLLs loaded into the process, each initialised
-// once), the platform locale (wxLocale is process state) and the syntax-helper corpus that follows it.
+// once), the platform locale (the C library's is process state) and the syntax-helper corpus that follows it.
 // See docs/private/multi-base-process.md.
 //
 // There is NO global current base. `appData`, `activeMetaData`, `db_query` and the static accessors of
@@ -20,8 +20,6 @@
 #include <memory>
 #include <mutex>
 #include <vector>
-
-#include <wx/intl.h>
 
 class ibPluginManager;
 class ibWorkerPool;
@@ -90,17 +88,16 @@ public:
 	const ibTlsFiles& GetTlsFiles() const     { return m_configTls; }
 
 	ibHelpService*   GetHelpService() const   { return m_helpService.get(); }
-	ibString         GetLocale() const        { return m_locale.GetCanonicalName(); }
-	ibString         GetLocaleName() const    { return m_locale.GetName(); }
+	ibString         GetLocale() const        { return m_locale; }
 
 	// The platform locale, set once for the process: the first base to ask settles it, and a later base's
-	// wish is not a second locale — wxLocale is process state. False when no catalog could be set at all.
+	// wish is not a second locale — the C library's locale is process state. A refusal when none could be set.
 	bool InitLocale(const ibString& locale);
 
 	// A count from a settings file — backend.conf, a base's infobase.conf: left out or 0 means the default, and
 	// one below `least` is said in the journal and the default is used. `most` of 0 is no ceiling; a number
 	// above `most` is said and `most` is used.
-	static std::size_t ReadCount(const class wxConfigBase& conf, const ibString& file, const ibString& key, long least,
+	static std::size_t ReadCount(const class ibFileConfig& conf, const ibString& file, const ibString& key, long least,
 		std::size_t byDefault, std::size_t most = 0);
 
 private:
@@ -160,8 +157,7 @@ private:
 	std::size_t m_configResume             = 120;
 	ibTlsFiles  m_configTls;
 
-	wxLocale m_locale;
-	int      m_localeLang;
+	ibString m_locale;   // the language the process's locale was set by ("ru_RU"); empty until a base settles it
 
 	std::unique_ptr<ibPluginManager> m_pluginManager;
 	std::unique_ptr<ibHelpService>   m_helpService;

@@ -202,7 +202,7 @@ bool ibFormDesignView::FetchCommandControl(const ibDataNode& request, ibDataNode
 
 ibValueFrame* ibFormDesignView::CreateBoundControl(ibValueFrame* parentHint, const ibSourceDescription& desc)
 {
-	wxASSERT(m_valueForm);
+	ibASSERT(m_valueForm);
 
 	// A drop onto a TABLEBOX means "add a column", not "create a control". Climb from the hit-tested target
 	// to the nearest tablebox (type by clsid). A field UNDER the table's own bound source (its path a strict
@@ -330,7 +330,7 @@ ibValueFrame* ibFormDesignView::CreateControlOfClass(ibValueFrame* parentHint, c
 
 ibValueFrame* ibFormDesignView::PasteObject(ibValueFrame* dstObject, const ibDataNode& copied)
 {
-	wxASSERT(m_valueForm);
+	ibASSERT(m_valueForm);
 
 	// Put by the form (ibValueForm::PasteObject); built here, where it landed — right after what it was pasted on.
 	ibValueFrame* const pasted = m_valueForm->PasteObject(dstObject, copied);
@@ -359,5 +359,5 @@ int ibFormDesignView::CalcPositionOfInsertion(ibValueFrame* selected, ibValueFra
 		if (object->GetParent() == parent)
 			return parent->GetChildPosition(object) + 1;
 	}
-	return wxNOT_FOUND;
+	return ibNOT_FOUND;
 }

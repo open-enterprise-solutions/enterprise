@@ -234,7 +234,7 @@ public:
 	// 🛑 THIS IS WHAT WAS MISSING (Max, 2026-08-20 — the assert on a dropped composer). A composition is
 	// a FIELD of the report object, created in PrepareEmptyObject beside the attributes; a composer
 	// declared AFTER the object was prepared therefore had no field, and the first walk into it met
-	// `wxASSERT(it != m_listObjectValue.end())`. In a configuration it was masked — a config object is
+	// `ibASSERT(it != m_listObjectValue.end())`. In a configuration it was masked — a config object is
 	// re-initialised on every CreateObjectValue — and showed itself on an EXTERNAL report, whose object
 	// is prepared ONCE when the container is opened.
 	virtual bool OnAfterRunMetaObject(ibValueMetaObjectTemplate* metaTemplate, int flags) const override {
@@ -245,7 +245,7 @@ public:
 
 	virtual bool OnReloadMetaObject(ibValueMetaObjectTemplate* metaTemplate) const override {
 		ibValueMetaObject* metaObject = metaTemplate->GetParent();
-		wxASSERT(metaObject);
+		ibASSERT(metaObject);
 		return metaObject->OnReloadMetaObject();
 	}
 

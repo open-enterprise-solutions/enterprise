@@ -11,10 +11,8 @@
 #include "core/syntaxHelper/helpCorpus.h"
 #include "core/syntaxHelper/helpEntry.h"
 #include "core/fileSystem.h"
+#include "core/zip/zip.h"      // ibZipReader — a locale's help packed in one file
 #include "core/stringUtils.h"
-
-#include <wx/wfstream.h>
-#include <wx/zipstrm.h>
 
 #include <nlohmann/json.hpp>
 
@@ -121,7 +119,7 @@ std::string ReadFile(const ibString& path, bool* ok) {
 }   // namespace (close anonymous so CanonicaliseLocale gets external linkage)
 
 // Canonicalise platform-locale strings to the corpus's directory naming
-// convention. wxLocale::GetCanonicalName() returns ISO 639 + ISO 3166
+// convention. A locale's canonical name (ibSetLocale) is ISO 639 + ISO 3166
 // in xx or xx_YY form ("en", "en_US", "en-GB", "ru_RU", …); the first
 // two chars are always the language code, which is what we use as
 // directory name.
@@ -134,8 +132,8 @@ std::string ReadFile(const ibString& path, bool* ok) {
 // its branch-free invariant.
 //
 // Empty / 1-char input → "en" as a defensive minimum so the loader
-// has *something* to look for (early-boot edge cases where wxLocale
-// hasn't initialised yet).
+// has *something* to look for (early-boot edge cases where the locale
+// isn't set yet).
 ibString CanonicaliseLocale(const ibString& raw) {
 	if (raw.length() < 2) return ibT("en");
 	return raw.Left(2).Lower();
@@ -310,6 +308,7 @@ void ParseBucket(const std::string&            raw,
 			}
 			e.categoryKeys   = SafeStrArray(obj, "category_keys");
 			e.seeAlso        = SafeStrArray(obj, "see_also");
+			e.ownerId        = Utf8(SafeStr(obj, "owner_id"));
 			e.reviewed       = SafeBool(obj, "reviewed", false);
 
 			// The hidden class id (helpEntry.h), checked against the side's registry HERE (className): an
@@ -449,37 +448,24 @@ private:
 class ZipSource final : public HelpBucketSource {
 public:
 	explicit ZipSource(const ibString& zipPath) : m_path(zipPath) {
-		wxFileInputStream fis(zipPath);
-		if (!fis.IsOk()) return;
-		// Pin entry-name decoding to UTF-8 explicitly — Windows tar.exe
-		// (bsdtar) writes zip filenames as UTF-8 with the General Purpose
-		// flag bit 11 unset for ASCII-only paths, so wxConvLocal (cp1251)
-		// would mis-decode non-ASCII names and trip a wx DEBUG assert in
-		// the string iterator. UTF-8 is the safe superset.
-		wxZipInputStream zis(fis, wxConvUTF8);
-		std::unique_ptr<wxZipEntry> e;
-		while (true) {
-			e.reset(zis.GetNextEntry());
-			if (!e) break;
-			if (e->IsDir()) continue;
-			ibString name = e->GetName();
+		std::ifstream file(ibPathOf(zipPath), std::ios::binary);
+		if (!file.is_open()) return;
+		// Entry names are read as UTF-8 (ibZipReader) — Windows tar.exe
+		// (bsdtar) writes them so, with the General Purpose flag bit 11
+		// unset for ASCII-only paths.
+		ibZipReader zip(file);
+		for (ibString name; zip.GetNextEntry(name); ) {
+			if (name.EndsWith(ibT("/"))) continue;   // a folder
 			// Strip "./" prefix that `tar -C dir .` adds — otherwise
 			// "./_categories.json" would not match the leading-_ filter
 			// in ListBucketNames and would be loaded as a normal bucket.
 			if (name.StartsWith(ibT("./")) || name.StartsWith(ibT(".\\")))
 				name = name.Mid(2);
-			// Defensive: skip zero-length names (e.g. the bare "./" dir
-			// marker after strip) — wx would assert on empty iterator.
+			// Skip zero-length names (e.g. the bare "./" dir marker after strip).
 			if (name.IsEmpty()) continue;
-			if (!zis.OpenEntry(*e)) continue;
-			const size_t sz = static_cast<size_t>(e->GetSize());
-			std::string buf;
-			buf.resize(sz);
-			if (sz > 0) zis.Read(&buf[0], sz);
-			// wxZipInputStream's Read may short-read on the last
-			// chunk; LastRead() gives actual byte count.
-			buf.resize(static_cast<size_t>(zis.LastRead()));
-			m_entries.emplace(name, std::move(buf));
+			ibMemoryBuffer bytes;
+			if (!zip.ReadEntry(bytes)) continue;
+			m_entries.emplace(name, std::string(static_cast<const char*>(bytes.GetData()), bytes.GetDataLen()));
 		}
 		m_ok = true;
 	}

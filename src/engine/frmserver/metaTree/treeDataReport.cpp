@@ -43,7 +43,7 @@ void ibDataReportTree::OnDraw(ibDataNode& root)
 void ibDataReportTree::FillData(ibDataNode& root)
 {
 	ibValueMetaObjectReport* commonMetadata = m_metaData->GetReport();
-	wxASSERT(commonMetadata);
+	ibASSERT(commonMetadata);
 
 	root.SetMetaId(commonMetadata->GetMetaID());
 	root.SetValue(ibProtocol::ibSchema::ibMetaData::Title, commonMetadata->GetName());

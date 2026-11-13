@@ -45,6 +45,11 @@ struct ibHelpCategory {
 	// entry storage — pointers stable for the snapshot's lifetime.
 	std::vector<const ibHelpEntry*> entries;
 
+	// The article this node IS, when it is one: an article that has articles under it (a class and its members, an
+	// enum type and its values) is a node of its own, keyed by its id, the ones under it its entries and children.
+	// Null for a section of the categories. Borrowed like the entries.
+	const ibHelpEntry* article = nullptr;
+
 	ibHelpCategory()                                  = default;
 	~ibHelpCategory()                                 = default;
 	ibHelpCategory(const ibHelpCategory&)             = delete;

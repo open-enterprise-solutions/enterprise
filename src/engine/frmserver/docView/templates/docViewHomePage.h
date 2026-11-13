@@ -102,7 +102,6 @@ private:
 
 	ibHomePageDocument(const ibHomePageDocument&) = delete;
 	ibHomePageDocument& operator=(const ibHomePageDocument&) = delete;
-	wxDECLARE_DYNAMIC_CLASS(ibHomePageDocument);
 };
 
 class FRMSERVER_API ibHomePageView : public ibView {
@@ -111,7 +110,7 @@ public:
 	ibHomePageView() : ibView() {}
 
 	virtual bool OnCreate(ibDocument* doc, long flags) override;
-	virtual void OnUpdate(ibView* sender, wxObject* hint = nullptr) override;
+	virtual void OnUpdate(ibView* sender) override;
 
 	// The start page is NOT a tab the person closes: it is the client's own surface, opened at the start and taken
 	// down with the client. The refusal is the document's (ibHomePageDocument::OnSaveModified).
@@ -156,8 +155,6 @@ private:
 
 	// The left column's share of the width, when there are two.
 	double m_columnGravity = 0.5;
-
-	wxDECLARE_DYNAMIC_CLASS(ibHomePageView);
 };
 
 #endif

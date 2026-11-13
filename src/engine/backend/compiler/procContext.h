@@ -61,7 +61,7 @@ enum class ibRunLifetime {
 };
 
 // WHEN THE METHOD'S ARITY IS UNKNOWN, this many slots. `GetNParams` answers
-// wxNOT_FOUND for a handful of built-ins, and the frame still has to cover whatever
+// ibNOT_FOUND for a handful of built-ins, and the frame still has to cover whatever
 // the implementation may reach, because method implementations index paParams[] by
 // their own declared arity without consulting the count they were handed.
 //
@@ -76,7 +76,7 @@ static const long kSlotsWhenArityUnknown = 8;
 // makes a frame an interpreter frame — the slots themselves.
 struct ibRunContextSmall {
 
-	ibRunContextSmall(int varCount = wxNOT_FOUND, ibRunLifetime lifetime = ibRunLifetime::Retained)
+	ibRunContextSmall(int varCount = ibNOT_FOUND, ibRunLifetime lifetime = ibRunLifetime::Retained)
 		: m_lStart(0), m_lParamCount(0), m_lifetime(lifetime) {
 		if (varCount >= 0) SetLocalCount(varCount);
 	}
@@ -127,8 +127,8 @@ protected:
 // and says so through GetLifetime().
 struct ibRunContext : ibRunContextSmall {
 
-	ibRunContext(int varCount = wxNOT_FOUND, ibRunLifetime lifetime = ibRunLifetime::Retained) :
-		ibRunContextSmall(wxNOT_FOUND, lifetime), m_lCurLine(0) {
+	ibRunContext(int varCount = ibNOT_FOUND, ibRunLifetime lifetime = ibRunLifetime::Retained) :
+		ibRunContextSmall(ibNOT_FOUND, lifetime), m_lCurLine(0) {
 		if (varCount >= 0) SetLocalCount(varCount);
 	}
 
@@ -224,7 +224,7 @@ struct ibRunContext : ibRunContextSmall {
 	// function that calls itself cannot overwrite the key of the call above it.
 	// An empty vector costs no allocation, so a frame that is not cached pays
 	// for a pointer-sized triple and nothing else.
-	long                 m_cachedEntry = wxNOT_FOUND;
+	long                 m_cachedEntry = ibNOT_FOUND;
 	std::vector<ibValue> m_cachedKey;
 
 	// A VECTOR, AND EMPTY IT COSTS NOTHING. This was a std::map, which on MSVC

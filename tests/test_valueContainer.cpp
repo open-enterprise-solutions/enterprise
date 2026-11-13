@@ -8,6 +8,7 @@
 // =============================================================================
 
 #include <gtest/gtest.h>
+#include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 #include <map>
 #include "backend/system/value/valueMap.h"
 #include "backend/backend_exception.h"   // a door that refuses does it by raising

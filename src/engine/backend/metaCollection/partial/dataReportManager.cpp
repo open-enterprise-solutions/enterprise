@@ -31,7 +31,7 @@ void ibValueManagerDataObjectReport::FillManagerMethods(ibMemberTable& helper) c
 bool ibValueManagerDataObjectReport::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
 	const ibMetaData* metaData = m_metaObject->GetMetaData();
-	wxASSERT(metaData);
+	ibASSERT(metaData);
 
 	// Our own ordinal, not the table index — ibValueManagerDataObject::BuiltinMethodNum says why.
 	switch (BuiltinMethodNum(lMethodNum))

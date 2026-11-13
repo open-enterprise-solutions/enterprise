@@ -11,7 +11,7 @@
 // and what is the client's it asks of the client (ibClientFrame::DoCommand) — the field under the focus edited, a
 // file of the person's chosen.
 
-#include <wx/string.h>
+#include "core/fstring.h"   // ibString
 
 #include <cstdint>   // std::int32_t
 

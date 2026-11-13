@@ -53,7 +53,7 @@ void ibFillOneTypeBranch(ibDataNode& branch, std::vector<ibDesignerRefItem>& val
 	// ⭐ EVERY REFERENCE TYPE HAS THIS ONE, not only the kinds that declare predefined values: a
 	// DOCUMENT declares none and its empty reference is still a legitimate thing to say (Max,
 	// 2026-08-28: "documents open too — a document just has only the reference").
-	ibAppendValue(branch, values, recordRef, wxNullGuid, ibT("EmptyRef"));
+	ibAppendValue(branch, values, recordRef, ibNullGuid, ibT("EmptyRef"));
 
 	// ⭐ AN ENUMERATION IS A REFERENCE LIKE ANY OTHER — "all references — enumerations, documents,
 	// catalogs — go through this form" (Max, 2026-08-28). Its members are DECLARED, which is exactly

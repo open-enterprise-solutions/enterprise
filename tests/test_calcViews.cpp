@@ -23,6 +23,7 @@
 #include <tuple>
 #include <vector>
 
+#include <wx/datetime.h>   // wxDateTime, wxDateSpan — the core includes no wx
 #include <wx/init.h>
 
 #include "backend/appData.h"

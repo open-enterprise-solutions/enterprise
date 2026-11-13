@@ -12,6 +12,7 @@
 // =============================================================================
 
 #include <gtest/gtest.h>
+#include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
 #include "backend/job/jobManager.h"
 #include "backend/compiler/procUnitLambda.h"   // ibValueIterator — a session-bound value
@@ -374,7 +375,7 @@ TEST(JobManager, ApplySettingsStatesTheOwnersOpinion) {
     // job forgot it ever ran".
     ibJobManager manager(ib::AppDataCtorToken{});
 
-    const ibGuid key = wxNewUniqueGuid;
+    const ibGuid key = ibNewUniqueGuid;
     ibJobDescription desc;
     desc.m_name     = wxT("owned-by-its-row");
     desc.m_key      = key;
@@ -392,7 +393,7 @@ TEST(JobManager, ApplySettingsStatesTheOwnersOpinion) {
 
     // A key nobody declared is not an error to raise — it is a "no" to act on: the caller then
     // registers instead, which is exactly what RegisterRow does.
-    EXPECT_FALSE(manager.ApplySettings(wxNewUniqueGuid, true, ibJobScheduleDescription::EverySeconds(60)));
+    EXPECT_FALSE(manager.ApplySettings(ibNewUniqueGuid, true, ibJobScheduleDescription::EverySeconds(60)));
 }
 
 TEST(JobManager, JobsAreFoundByKeyNotByName) {
@@ -400,7 +401,7 @@ TEST(JobManager, JobsAreFoundByKeyNotByName) {
     // its clock or its claim — so every lookup that matters goes through the guid.
     ibJobManager manager(ib::AppDataCtorToken{});
 
-    const ibGuid key = wxNewUniqueGuid;
+    const ibGuid key = ibNewUniqueGuid;
     ibJobDescription desc;
     desc.m_name = wxT("ScheduledJob1.a-row");
     desc.m_key  = key;
@@ -408,7 +409,7 @@ TEST(JobManager, JobsAreFoundByKeyNotByName) {
     ASSERT_TRUE(manager.Register(desc));
 
     EXPECT_EQ(wxT("ScheduledJob1.a-row"), manager.FindNameByKey(key));
-    EXPECT_TRUE(manager.FindNameByKey(wxNewUniqueGuid).IsEmpty());
+    EXPECT_TRUE(manager.FindNameByKey(ibNewUniqueGuid).IsEmpty());
 
     const auto snapshot = manager.Snapshot();
     ASSERT_EQ(1u, snapshot.size());
@@ -427,7 +428,7 @@ TEST(JobManager, UnregisterByPrefixWithdrawsEveryRowOfOneMetaobject) {
     for (int i = 0; i < 3; ++i) {
         ibJobDescription row;
         row.m_name = ibString::Format(wxT("Exchange.%d"), i);
-        row.m_key  = wxNewUniqueGuid;
+        row.m_key  = ibNewUniqueGuid;
         row.m_body = [](ibSession*) { return false; };
         ASSERT_TRUE(manager.Register(row));
     }

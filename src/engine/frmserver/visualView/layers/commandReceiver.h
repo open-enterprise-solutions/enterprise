@@ -5,7 +5,7 @@
 #include "backend/backend_command.h"      // ibBackendCommandReceiver — the door EXTENDS the backend receiver (one chain)
 #include "core/description/commandDescription.h"   //ibCommandDescription / ibCommandHop
 #include "core/description/pictureDescription.h"   // ibPictureDescription (ResolveValueByPath out-picture)
-#include <wx/string.h>                     // wxString (ResolveValueByPath out-caption)
+#include "core/fstring.h"   // ibString
 #include <vector>                          // std::vector (ResolveSubCommands out-list)
 
 // The FRONTEND command receiver — the full DOOR. It EXTENDS the backend receiver (ibBackendCommandReceiver), so the

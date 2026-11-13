@@ -34,8 +34,8 @@
 // AddCatalogLookupPathPrefix adds, first, then the working folder's `lang`, the program folder's `lang`, and
 // the first `lang` found walking up from the executable (a run from the build tree).
 //
-// What wx keeps: wxLocale and its wxTranslations stay the GUI's, for wx's own windows and the C locale; a
-// catalog the host adds to wxLocale is for them. The engine's _() never reaches them.
+// The C library's locale is the process's, set by locale.h (ibSetLocale). wx's own catalogs are loaded by no one:
+// wx's own windows speak English.
 class ibMsgCatalog;
 
 // The engine's own gettext domain - lang/<language>/open_es.mo. Every language loads it, with no one declaring it.

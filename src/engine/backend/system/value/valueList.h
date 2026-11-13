@@ -128,7 +128,7 @@ private:
 	ibComposerNode* RowOf(const ibValue& item) const;
 
 	ibValuePtr<ibValueValueListColumnCollection> m_columns;
-	ibUniqueKey m_guid = wxNewUniqueGuid;
+	ibUniqueKey m_guid = ibNewUniqueGuid;
 };
 
 #endif

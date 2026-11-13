@@ -643,7 +643,7 @@ public:
 		// has, taken from this tool's own example). So it is refused here, before anything is told of it,
 		// with the words its owner offers.
 		if (ibValueMetaObjectForm* form = created->ConvertToType<ibValueMetaObjectForm>()) {
-			if (form->GetTypeForm() == wxNOT_FOUND) {
+			if (form->GetTypeForm() == ibNOT_FOUND) {
 				// ⚠ IN THE PROPERTY'S OWN WORDS — its ids and the labels it matches, in the designer's language. The
 				// owner's names for the kinds were offered here, and the property refused them: `FormList` (2026-10-28).
 				ibString words;
@@ -651,7 +651,7 @@ public:
 				if (ibProperty* property = form->GetProperty(ibT("FormType")))
 					property->GetValueList(kinds);
 				for (unsigned int idx = 0; idx < kinds.GetCount(); idx++) {
-					if (kinds.GetId(idx) == wxNOT_FOUND)
+					if (kinds.GetId(idx) == ibNOT_FOUND)
 						continue;   // the kindless form, the one refused here
 					words += (words.IsEmpty() ? ibString() : ibString(ibT(", "))) +
 						ibString::Format(ibT("%li (%s)"), kinds.GetId(idx), kinds.GetLabel(idx));
@@ -2329,9 +2329,9 @@ class ibMcpToolChoicePreview : public ibMcpTool {
 	// No class is named to reach it: every table that takes rows answers to that word.
 	static bool AddLine(ibValueModel* table, ibPreviewRecord& into)
 	{
-		const long add = table != nullptr ? table->FindMethod(ibT("Add")) : wxNOT_FOUND;
+		const long add = table != nullptr ? table->FindMethod(ibT("Add")) : ibNOT_FOUND;
 		ibValue added;
-		if (add == wxNOT_FOUND || !table->CallAsFunc(add, added, nullptr, 0))
+		if (add == ibNOT_FOUND || !table->CallAsFunc(add, added, nullptr, 0))
 			return false;
 		const ibValuePtr<ibValueModel::ibValueModelReturnLine> line(added);
 		if (!line)

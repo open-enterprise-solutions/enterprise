@@ -36,7 +36,7 @@ void ibValueCertificateFile_BindNames(ibValue::ibMemberTable& helper, const ibVa
 	helper.AppendConstructor(1, ibT("CertificateFile(path : string)"));
 	helper.AppendConstructor(2, ibT("CertificateFile(path : string, password : string)"));
 
-	helper.AppendProp(ibT("Path"), true, false, wxNOT_FOUND);
+	helper.AppendProp(ibT("Path"), true, false, ibNOT_FOUND);
 }
 
 ibValueCertificateFile::ibValueCertificateFile()
@@ -82,9 +82,9 @@ void ibValueSecureConnection_BindNames(ibValue::ibMemberTable& helper, const ibV
 	helper.AppendConstructor(1, ibT("SecureConnection(clientCertificate : CertificateFile)"));
 	helper.AppendConstructor(2, ibT("SecureConnection(clientCertificate : CertificateFile, trustedCertificates : CertificateFile)"));
 
-	helper.AppendProp(ibT("ClientCertificate"), true, true, wxNOT_FOUND);
-	helper.AppendProp(ibT("TrustedCertificates"), true, true, wxNOT_FOUND);
-	helper.AppendProp(ibT("VerifyServerCertificate"), true, true, wxNOT_FOUND);
+	helper.AppendProp(ibT("ClientCertificate"), true, true, ibNOT_FOUND);
+	helper.AppendProp(ibT("TrustedCertificates"), true, true, ibNOT_FOUND);
+	helper.AppendProp(ibT("VerifyServerCertificate"), true, true, ibNOT_FOUND);
 }
 
 ibValueSecureConnection::ibValueSecureConnection()

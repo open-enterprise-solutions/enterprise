@@ -8,6 +8,7 @@
 // =============================================================================
 
 #include <gtest/gtest.h>
+#include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 #include "backend/compiler/value.h"
 #include "core/description/typeDescription.h"
 #include "backend/query/queryColumn.h"   // ibBackendQueryColumn

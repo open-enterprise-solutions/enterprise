@@ -260,7 +260,7 @@ void ibColumnCodec::WriteValue(const ibBackendQueryColumn* col, const ibMetaData
 	const void* refBlob  = nullptr;
 	if (tag == ibFieldTypes_Reference) {
 		const ibClassID& clsid = cValue.GetClassType();
-		wxASSERT(clsid > 0);
+		ibASSERT(clsid > 0);
 		// Kind read straight from the clsid — no metadata lookup on this per-value hot path.
 		ibValueReferenceDataObject* refData = nullptr;
 		if (IsReference(clsid) && cValue.ConvertToValue(refData)) {
@@ -406,7 +406,7 @@ bool ReadFieldOf(ibCellFields& cell, ibColumnRole valueRole, int fieldType,
 	}
 	case ibFieldTypes_Enum:
 	{
-		wxASSERT(metaData);
+		ibASSERT(metaData);
 		// The enum ctor is keyed by the ENUM clsid — taken from the column's type descriptor. The
 		// error fallback yields an empty value (an unreadable enum degrades to empty).
 		const ibClassID enumClsid = col->GetTypeDesc().GetFirstClsid();
@@ -435,7 +435,7 @@ bool ReadFieldOf(ibCellFields& cell, ibColumnRole valueRole, int fieldType,
 	}
 	case ibFieldTypes_Reference:
 	{
-		wxASSERT(metaData);
+		ibASSERT(metaData);
 		if (metaData == nullptr)
 			return false;
 		const ibClassID refType = static_cast<ibClassID>(result.GetResultLong(cell.Field(ibColumnRole::ReferenceType)));
@@ -463,7 +463,7 @@ bool ReadFieldOf(ibCellFields& cell, ibColumnRole valueRole, int fieldType,
 			if (typeCtor != nullptr) {
 
 				const ibValueMetaObject* metaObject = typeCtor->GetMetaObject();
-				wxASSERT(metaObject);
+				ibASSERT(metaObject);
 
 				ibValuePtr<ibValueReferenceDataObject> created_reference(
 					ibValueReferenceDataObject::Create(metaData, metaObject->GetMetaID()));

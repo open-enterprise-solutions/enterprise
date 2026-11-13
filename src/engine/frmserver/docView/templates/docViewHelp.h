@@ -21,8 +21,6 @@ public:
 private:
 
 	bool m_readOnly = false;
-
-	wxDECLARE_DYNAMIC_CLASS(ibHelpEditView);
 };
 
 // ----------------------------------------------------------------------------
@@ -59,7 +57,6 @@ protected:
 
 	ibHelpDocument(const ibHelpDocument&) = delete;
 	ibHelpDocument& operator=(const ibHelpDocument&) = delete;
-	wxDECLARE_ABSTRACT_CLASS(ibHelpDocument);
 };
 
 // ----------------------------------------------------------------------------
@@ -100,7 +97,6 @@ protected:
 
 	ibHelpFileDocument(const ibHelpFileDocument&) = delete;
 	ibHelpFileDocument& operator=(const ibHelpFileDocument&) = delete;
-	wxDECLARE_DYNAMIC_CLASS(ibHelpFileDocument);
 };
 
 #endif

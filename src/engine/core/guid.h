@@ -123,10 +123,10 @@ private:
 	friend CORE_API std::ostream& operator<<(std::ostream& s, const ibGuid& guid);
 };
 
-#define wxNullGuid	ibGuid()
-// Wrapped so wxNewUniqueGuid is an ibGuid (newGuid returns ibGuidImpl): several call sites do
-// `ibUniqueKey k = wxNewUniqueGuid`, and ibUniqueKey <- ibGuidImpl would need TWO user conversions
+#define ibNullGuid	ibGuid()
+// Wrapped so ibNewUniqueGuid is an ibGuid (newGuid returns ibGuidImpl): several call sites do
+// `ibUniqueKey k = ibNewUniqueGuid`, and ibUniqueKey <- ibGuidImpl would need TWO user conversions
 // (ibGuidImpl -> ibGuid -> ibUniqueKey), which copy-init forbids. Invisible at the call site.
-#define wxNewUniqueGuid	ibGuid(ibGuid::newGuid(GUID_RANDOM))
+#define ibNewUniqueGuid	ibGuid(ibGuid::newGuid(GUID_RANDOM))
 
 #endif

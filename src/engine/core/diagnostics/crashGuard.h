@@ -8,10 +8,10 @@
 //                             writer / std::set_terminate / log files /
 //                             platform-native message-box. Linkable
 //                             from any binary regardless of frontend.
-//   - backend/oesApp.h:       header-only ibWxApp base. wxApp +
+//   - deskgui/app.h:          header-only ibWxApp base. wxApp +
 //                             wxDebugReport + wxMessageBox pre-wired
 //                             pipeline on top of this guard. Inherited
-//                             by codeRunner and launcher.
+//                             by the desktop's programs.
 //   - console (daemon-class): this guard alone — no wx UI, just dumps
 //                             and log files.
 //
@@ -68,6 +68,14 @@ CORE_API void LogStartupError(const ibString& exeName,
 // Append `diag` to `<exeName>_unhandled.log`. No UI.
 CORE_API void LogUnhandledException(const ibString& exeName,
                                         const ibString& diag);
+
+// AN ASSERTION THAT FAILED (ibASSERT, coreApi.h - and wx's own in a window's program, ibWxApp::OnAssertFailure) is said
+// by the handler set here, on the thread it failed on; none set: the journal at Info and stderr, never a window - the
+// caller may be no person. Once per place either way: one in a paint handler fails at every paint. `where` is the file
+// and line, and the function when known. A program that shows it (a dialog) sets one and takes it to its window itself.
+// The handler set before is returned.
+using ibAssertHandler = void (*)(const ibString& where, const ibString& condition, const ibString& message);
+CORE_API ibAssertHandler SetAssertHandler(ibAssertHandler handler);
 
 // Platform-native message box that does NOT depend on wx state. Safe
 // from any thread; safe before wxApp construction and after wxApp

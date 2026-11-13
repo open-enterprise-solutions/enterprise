@@ -10,7 +10,7 @@
 
 #include <vector>
 
-#include <wx/string.h>
+#include "core/fstring.h"   // ibString
 
 #include "frmserver/frmserver.h"
 #include "core/core.h"    // ibMetaID

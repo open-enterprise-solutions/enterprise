@@ -147,7 +147,7 @@ long ibValueModelStorage::IndexOf(const ibValue& row) const
 {
 	// A row of another model, or of no model any more, is not among these rows: GetRow answers -1 for it.
 	ibValueModelReturnLine* line = nullptr;
-	return row.ConvertToValue(line) ? GetRow(line->GetLineItem()) : wxNOT_FOUND;
+	return row.ConvertToValue(line) ? GetRow(line->GetLineItem()) : ibNOT_FOUND;
 }
 
 ibValue ibValueModelStorage::TotalOf(const ibString& column) const
@@ -466,7 +466,7 @@ bool ibValueModel::GetCompositionAttrByRow(const ibDataViewItem& row, unsigned i
 	const ibCompositionValueOf valueOf = [this, node, &read](const ibString& path) -> const ibValue* {
 		const ibMetaID id = GetColumnIDByName(path);
 		ibValue value;
-		if (id == wxNOT_FOUND || !node->GetValue(id, value))
+		if (id == ibNOT_FOUND || !node->GetValue(id, value))
 			return nullptr;
 		return &read.emplace_back(value);
 	};
@@ -507,7 +507,7 @@ ibDataViewItemAttr ibWidgetAttrOf(const ibCompositionAttr& drawn)
 		attr.SetPointSize(font.m_pointSize);
 	if (!font.m_face.IsEmpty())
 		attr.SetFaceName(font.m_face);
-	if (drawn.m_horizontalAlignment != wxALIGN_INVALID)
+	if (drawn.m_horizontalAlignment != ibAlignment_Default)
 		attr.SetAlignment(drawn.m_horizontalAlignment);
 	return attr;
 }
@@ -708,7 +708,7 @@ ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* ibValueModel
 {
 	for (unsigned int idx = 0; idx < GetColumnCount(); idx++) {
 		ibValueModelColumnInfo* columnInfo = GetColumnInfo(idx);
-		wxASSERT(columnInfo);
+		ibASSERT(columnInfo);
 		if (col == columnInfo->GetColumnID())
 			return columnInfo;
 	}
@@ -720,7 +720,7 @@ ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* ibValueModel
 {
 	for (unsigned int idx = 0; idx < GetColumnCount(); idx++) {
 		ibValueModelColumnInfo* columnInfo = GetColumnInfo(idx);
-		wxASSERT(columnInfo);
+		ibASSERT(columnInfo);
 		if (stringUtils::IsSameAs(colName, columnInfo->GetColumnName()))
 			return columnInfo;
 	}

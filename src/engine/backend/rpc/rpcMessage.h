@@ -33,8 +33,6 @@
 
 #include <functional>
 
-#include <wx/string.h>
-
 struct BACKEND_API ibRpcRequest {
 
 	ibString    m_method;

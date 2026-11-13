@@ -6,6 +6,7 @@
 #include <atomic>
 #include <concepts>   // std::derived_from — the session class CreateSession builds
 #include <functional>
+#include <iosfwd>     // std::istream / std::ostream - a backup read and written
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -420,9 +421,9 @@ public:
 	bool SaveDatabase(const ibString& strFullPath);
 
 	// The same, over a stream — a file of the session's temporary storage, which a client uploaded or takes down
-	// (ibTempFileInputStream / ibTempFileOutputStream). The stream is the caller's to close.
-	bool LoadDatabase(class wxInputStream& stream);
-	bool SaveDatabase(class wxOutputStream& stream);
+	// (ibTempFileReader / ibTempFileWriter). The stream is the caller's to close.
+	bool LoadDatabase(std::istream& stream);
+	bool SaveDatabase(std::ostream& stream);
 
 	bool ClearDatabase();
 

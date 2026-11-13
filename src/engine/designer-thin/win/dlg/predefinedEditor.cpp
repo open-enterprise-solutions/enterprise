@@ -771,7 +771,7 @@ void ibDialogPredefinedEditor::OnCommandMenu(wxCommandEvent& event)
 			ibPredefinedItem* predefined =
 				static_cast<ibPredefinedItem*>(selection.GetID());
 
-			ibDialogPredefinedItem dlg(this, wxNewUniqueGuid, predefined);
+			ibDialogPredefinedItem dlg(this, ibNewUniqueGuid, predefined);
 			dlg.SetReadOnly(!m_tableModelStore->IsEnabled(selection, model_name));
 			result = dlg.ShowModal();
 		}

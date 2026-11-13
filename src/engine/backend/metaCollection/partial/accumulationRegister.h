@@ -156,7 +156,7 @@ public:
 	//
 	// ⚠ One-time rename for existing bases, not a migration — an old base must be re-created.
 	ibString GetRegisterTableNameDB(ibRegisterType rType) const {
-		wxASSERT(m_metaId != 0);
+		ibASSERT(m_metaId != 0);
 		const ibValueMetaObjectTotals* totals = GetTotalsObject(rType);
 		return ibString::Format(ibT("%s%i_%s"), GetClassName(), GetMetaID(),
 			totals != nullptr ? totals->GetName()
@@ -411,7 +411,7 @@ protected:
 	virtual ibValuePtr<ibValueManagerDataObject> CreateManagerDataObjectValue() const;
 
 	//create record set
-	virtual ibValuePtr<ibValueRecordSetObject> CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) const;
+	virtual ibValuePtr<ibValueRecordSetObject> CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey = ibNullUniqueKeyPair) const;
 
 	//create object data with meta form
 	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const;
@@ -1151,7 +1151,7 @@ inline std::vector<const ibBackendQueryColumn*> ibAccumRegisterBalanceAndTurnove
 
 class ibValueRecordSetObjectAccumulationRegister : public ibValueRecordSetObject {
 	public:
-	ibValueRecordSetObjectAccumulationRegister(const ibValueMetaObjectAccumulationRegister* metaObject, const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) :
+	ibValueRecordSetObjectAccumulationRegister(const ibValueMetaObjectAccumulationRegister* metaObject, const ibUniqueKeyPair& uniqueKey = ibNullUniqueKeyPair) :
 		ibValueRecordSetObject(metaObject, uniqueKey)
 	{
 		m_members.Bind(this, &ibValueRecordSetObjectAccumulationRegister::FillMembers);

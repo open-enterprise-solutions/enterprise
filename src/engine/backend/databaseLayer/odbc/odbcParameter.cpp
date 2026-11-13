@@ -3,6 +3,7 @@
 #include "backend/backend_exception.h"
 
 #include <sqlext.h>
+#include <cstring>
 
 // ctor
 ibDatabaseParameterODBC::ibDatabaseParameterODBC() : m_nParameterType(ibDatabaseParameterODBC::PARAM_NULL)

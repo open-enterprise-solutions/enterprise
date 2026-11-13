@@ -43,12 +43,12 @@ ibGuid ibSaveComposerSettings(ibSettingsCategory category, const ibGuid& objectK
 {
 	ibSettingsStorage* storage = ibApplicationInstance::GetSettingsStorage();
 	if (storage == nullptr || !objectKey.isValid())
-		return wxNullGuid;
+		return ibNullGuid;
 
 	// ⭐ THE IDENTITY IS MINTED ONCE AND IS ALSO THE ADDRESS. Saving over an entry keeps its id, so
 	// the default pointer and anything else naming it go on naming the same thing — including
 	// through a rename, which is this call with the same id and a different caption.
-	const ibGuid entryId = id.isValid() ? id : ibGuid(wxNewUniqueGuid);
+	const ibGuid entryId = id.isValid() ? id : ibGuid(ibNewUniqueGuid);
 
 	ibDataNode node;
 	node.SetValue(kFieldId,   entryId);
@@ -57,10 +57,10 @@ ibGuid ibSaveComposerSettings(ibSettingsCategory category, const ibGuid& objectK
 	// WHAT COMPOSES, written by the settings' own pair into a child of its own. Nothing here knows
 	// what a setting consists of, and nothing has to be told when it grows a part.
 	if (!ibSettingsDescriptionMemory::WriteNode(node.Child(kChildSettings), composer.GetCurrentSettingsDesc()))
-		return wxNullGuid;
+		return ibNullGuid;
 
 	if (!storage->Save(ibUserSettingsKey(category, objectKey, entryId, user), node))
-		return wxNullGuid;
+		return ibNullGuid;
 
 	return entryId;
 }
@@ -98,7 +98,7 @@ std::vector<ibComposerSettingsEntry> ibListComposerSettings(ibSettingsCategory c
 	if (storage == nullptr || !objectKey.isValid())
 		return entries;
 
-	const ibSettingsKey address = ibUserSettingsKey(category, objectKey, wxNullGuid, user);
+	const ibSettingsKey address = ibUserSettingsKey(category, objectKey, ibNullGuid, user);
 	for (const ibSettingsEntry& row : storage->List(category, objectKey, address.m_userKey)) {
 		ibComposerSettingsEntry entry;
 		entry.m_id      = row.m_settingKey;
@@ -157,7 +157,7 @@ bool ibRemoveComposerSettings(ibSettingsCategory category, const ibGuid& objectK
 	// ⚠ THE POINTER GOES WITH IT when it pointed here. A default naming an entry that no longer
 	// exists restores nothing on open — silently, which reads as "the mark stopped working".
 	if (ibGetDefaultComposerSettings(objectKey, user) == id)
-		ibSetDefaultComposerSettings(objectKey, wxNullGuid, user);
+		ibSetDefaultComposerSettings(objectKey, ibNullGuid, user);
 
 	return storage->Remove(ibUserSettingsKey(category, objectKey, id, user));
 }
@@ -178,7 +178,7 @@ bool ibSetDefaultComposerSettings(const ibGuid& objectKey, const ibGuid& id, con
 	// ⚠ THE POINTER IS ADDRESSED BY THE OBJECT, with NO setting name — that is what makes it one per
 	// object per person. The category it lives in is the pointer's own, so a setting and a pointer
 	// can never collide however they are named.
-	const ibSettingsKey key = ibUserSettingsKey(ibSettingsCategory::Default, objectKey, wxNullGuid, user);
+	const ibSettingsKey key = ibUserSettingsKey(ibSettingsCategory::Default, objectKey, ibNullGuid, user);
 
 	// EMPTY = "open it the way the author left it". Dropping the row rather than writing an empty
 	// one keeps "nothing is marked" as the ABSENCE of a statement instead of a statement of nothing.
@@ -194,11 +194,11 @@ ibGuid ibGetDefaultComposerSettings(const ibGuid& objectKey, const ibUserInfo* u
 {
 	ibSettingsStorage* storage = ibApplicationInstance::GetSettingsStorage();
 	if (storage == nullptr || !objectKey.isValid())
-		return wxNullGuid;
+		return ibNullGuid;
 
 	ibDataNode node;
-	if (!storage->Restore(ibUserSettingsKey(ibSettingsCategory::Default, objectKey, wxNullGuid, user), node))
-		return wxNullGuid;
+	if (!storage->Restore(ibUserSettingsKey(ibSettingsCategory::Default, objectKey, ibNullGuid, user), node))
+		return ibNullGuid;
 
 	return node.GetValue<ibGuid>(kFieldId);
 }

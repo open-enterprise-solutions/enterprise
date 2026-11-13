@@ -78,12 +78,12 @@ writes the string: to change a picture, change its SVG there and run the script;
 a line in its `TARGETS` and a placeholder string. One act has one drawing everywhere it appears, and the
 manner is the one that file describes. XPM renders poorly at any size but its own, and no new one goes in.
 
-**The backend stays GUI-free and never shows a modal window.** core, protocol, backend and frmserver are compiled
-with `wxUSE_GUI=0` and link wx base only, so a window, an image or a font there does not compile; a picture, a
+**The backend stays GUI-free and never shows a modal window.** core, protocol, backend, frmserver and fileserver
+include and link no wx, so a window, an image or a font there does not compile; a picture, a
 colour and a font are the core's data (`core/graphics`). Its callers include the application server,
 the web server, background jobs and an assistant over MCP, and none of them can click a box.
 Say it with `ibValueSystemFunction::Message`, or hand the reason back to the caller
-(`bool Verb(…, wxString* refusal)`).
+(`bool Verb(…, ibString* refusal)`).
 
 **Database access goes through `ibPreparedStatement`.** Never concatenate a value into SQL.
 
@@ -279,7 +279,7 @@ copying it copies a reference, not the characters. A name that reaches the runti
 `const ibString&` — `ibProcUnit::CallAsProc` / `CallAsFunc`, `ibRuntimeModuleDataObject::ExecAsProc` /
 `ExecAsFunc` / `ExecAsEvent` / `ExecAsManagerEvent`. `wxString` stays only at the boundary with wx (a
 control, a wx out-parameter, `wxConfigBase`). Both conversions are implicit, and each one makes a new
-text, so convert at the boundary, once. `ib_clsid_hash(const wxString&)` converts to UTF-8 and allocates
+text, so convert at the boundary, once. `ib_clsid_hash(const ibString&)` converts to UTF-8 and allocates
 on every call, so hash once per event, not once per handler.
 
 - **A getter of an `ibString` member returns `const ibString&`** — not even the reference count is

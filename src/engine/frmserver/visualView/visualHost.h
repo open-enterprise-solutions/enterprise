@@ -87,7 +87,7 @@ public:
 	explicit ibFormVisualEditView(class ibFormVisualDocument* document) : m_document(document) {}
 
 	virtual bool OnCreate(ibDocument* doc, long flags) override;
-	virtual void OnUpdate(ibView* sender, wxObject* hint = nullptr) override;
+	virtual void OnUpdate(ibView* sender) override;
 	virtual bool OnClose(bool deleteWindow = true) override;
 	virtual void OnClosingDocument() override;
 

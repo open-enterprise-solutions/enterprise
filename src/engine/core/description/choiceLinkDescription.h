@@ -20,7 +20,7 @@
 //
 // ⭐ AND THE FIELD A LINK NAMES IS `source.GetLeaf()` — the path type's own word for its last hop, which
 // it has always had. A helper of mine stood here saying the same thing with a different empty answer (0
-// against the path's wxNOT_FOUND), so the two roads did not even agree about "nothing" (audit, 2026-09-23).
+// against the path's ibNOT_FOUND), so the two roads did not even agree about "nothing" (audit, 2026-09-23).
 // Whether a link is set at all is `source.IsOk()`, asked of the path rather than deduced from the id.
 
 // ⭐ THE LINK BY TYPE, AS A DESCRIPTION — the same shape as ibTypeDescription and ibCalcScheduleDescription:

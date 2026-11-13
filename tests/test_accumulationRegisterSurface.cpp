@@ -17,6 +17,8 @@
 #include <algorithm>
 #include <regex>
 
+#include <wx/string.h>   // wxT — the engine's headers include no wx
+
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/partial/accumulationRegister.h"

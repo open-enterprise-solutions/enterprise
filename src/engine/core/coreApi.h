@@ -63,4 +63,30 @@
 #  define IB_NOINLINE
 #endif
 
+// A name no other in the translation unit has, from a prefix: ibMAKE_UNIQUE_NAME(s_reg_) -> s_reg_17. What wx calls
+// wxMAKE_UNIQUE_NAME. The counter, not the line, on every compiler: unique within the unit even when two
+// registrations come from one line of a macro, and MSVC's Edit and Continue (/ZI) breaks __LINE__ inside a macro.
+#define ibCONCAT_HELPER(x1, x2) x1 ## x2
+#define ibCONCAT(x1, x2) ibCONCAT_HELPER(x1, x2)
+#define ibMAKE_UNIQUE_NAME(text) ibCONCAT(text, __COUNTER__)
+
+// "Not found" for an index or a position: what wx calls wxNOT_FOUND, the same -1.
+constexpr int ibNOT_FOUND = -1;
+
+// AN ASSERTION - what wx calls wxASSERT / wxASSERT_MSG / wxFAIL_MSG: a condition the code holds true, checked in a
+// Debug build. NDEBUG leaves it unread (sizeof: what it names is still used, so a variable only an assertion reads draws
+// no warning), as wx's are not checked in a release build. A failure is said and the code goes on - once per place, by
+// the handler a program sets (ibCrashGuard::SetAssertHandler), the journal and stderr when it set none.
+class ibString;
+CORE_API void ibAssertFailure(const char* file, int line, const char* func, const char* cond, const ibString& msg);
+
+#ifdef NDEBUG
+#  define ibASSERT_MSG(cond, msg) ((void)sizeof(!(cond)))
+#  define ibFAIL_MSG(msg)         ((void)0)
+#else
+#  define ibASSERT_MSG(cond, msg) ((cond) ? (void)0 : ibAssertFailure(__FILE__, __LINE__, __func__, #cond, msg))
+#  define ibFAIL_MSG(msg)         ibAssertFailure(__FILE__, __LINE__, __func__, "Assert failure", msg)
+#endif
+#define ibASSERT(cond) ibASSERT_MSG(cond, ibString())
+
 #endif

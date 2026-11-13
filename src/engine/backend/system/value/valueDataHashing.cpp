@@ -53,8 +53,8 @@ void ibValueDataHashing_BindNames(ibValue::ibMemberTable& helper, const ibValue*
 	helper.AppendConstructor(1, ibT("DataHashing(function : HashFunction)"));
 	helper.AppendConstructor(2, ibT("DataHashing(function : HashFunction, key : string | BinaryData)"));
 
-	helper.AppendProp(ibT("HashFunction"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("HashSum"), true, false, wxNOT_FOUND);
+	helper.AppendProp(ibT("HashFunction"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("HashSum"), true, false, ibNOT_FOUND);
 
 	helper.AppendProc(ibT("Append"), 1, ibT("Append(data : string | BinaryData)"));
 	helper.AppendProc(ibT("AppendFile"), 1, ibT("AppendFile(path : string)"));

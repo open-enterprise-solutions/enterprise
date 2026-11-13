@@ -23,6 +23,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include <gtest/gtest.h>
+#include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
 #include "backend/composition/drivers/spreadsheetComposeDriver.h"
 #include "backend/system/value/valueSpreadsheetDetails.h"   // what a composed cell is bound to

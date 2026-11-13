@@ -41,7 +41,7 @@ bool ibPropertyChartOfCharacteristicTypes::SetDataValue(const ibValue& varPropVa
 bool ibPropertyChartOfCharacteristicTypes::GetDataValue(ibValue& pvarPropVal) const
 {
 	const ibVariantOwner* owner = get_cell_variant<ibVariantOwner>();
-	wxASSERT(owner);
+	ibASSERT(owner);
 	pvarPropVal = owner->GetDataValue();
 	return true;
 }

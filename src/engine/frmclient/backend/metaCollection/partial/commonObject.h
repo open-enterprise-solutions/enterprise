@@ -5,6 +5,8 @@
 #include <map>
 #include <vector>
 
+#include <wx/object.h>   // wxObjectDataPtr — the predefined values held
+
 #include "core/guid.h"
 #include "core/description/predefinedDescription.h"   // ibPredefinedDescription — what an item of the kind is entered with
 #include "core/tabular/tabularModelView.h"   // ibDataViewObject — a predefined value is a row of the predefined editor

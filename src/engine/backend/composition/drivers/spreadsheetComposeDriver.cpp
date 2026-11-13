@@ -73,11 +73,11 @@ void BoxCell(ibSpreadsheetObject& area, int row, int col, bool top, bool bottom,
 //  pure white between the tinted group rows, and pure white is the loudest thing on a page of soft colour.
 //  Max, 2026-08-19: "the last row stands out all white; give it something very neutral".)
 
-// wx's horizontal flag, in the sheet's word for it — the sheet's centre is wxALIGN_CENTER.
+// The horizontal ibAlignment, in the sheet's word for it — the sheet's centre is ibAlignmentHorz_Center.
 int SheetAlignmentOf(const ibCompositionAttr& attr)
 {
-	return attr.m_horizontalAlignment == wxALIGN_RIGHT ? wxALIGN_RIGHT
-		: attr.m_horizontalAlignment == wxALIGN_CENTER_HORIZONTAL ? wxALIGN_CENTER : wxALIGN_LEFT;
+	return attr.m_horizontalAlignment == ibAlignment_Right ? ibAlignmentHorz_Right
+		: attr.m_horizontalAlignment == ibAlignment_CenterHorizontal ? ibAlignmentHorz_Center : ibAlignmentHorz_Left;
 }
 
 // ⭐ WHAT A COMPOSITION DRAWS A CELL WITH, laid onto the sheet's cell — the walk's conditional appearance
@@ -92,8 +92,8 @@ void ApplyAttr(ibSpreadsheetObject& area, int row, int col, const ibCompositionA
 		area.SetCellTextColour(row, col, attr.m_textColour);
 	if (attr.m_font.IsSaid())
 		area.SetCellFont(row, col, attr.m_font.Over(area.GetCellFont(row, col)));   // over the theme's, not instead of it
-	if (attr.m_horizontalAlignment != wxALIGN_INVALID)
-		area.SetCellAlignment(row, col, SheetAlignmentOf(attr), wxALIGN_CENTER);
+	if (attr.m_horizontalAlignment != ibAlignment_Default)
+		area.SetCellAlignment(row, col, SheetAlignmentOf(attr), ibAlignmentVert_Center);
 }
 
 // …and over a cell's description, for the table written a whole cell at a time (SetCell).
@@ -105,9 +105,9 @@ void ApplyAttr(ibSpreadsheetCellDescription& cell, const ibCompositionAttr& attr
 		cell.m_textColour = attr.m_textColour;
 	if (attr.m_font.IsSaid())
 		cell.m_font = attr.m_font.Over(cell.m_font.IsOk() ? cell.m_font : ibDefaultSpreadsheetFont());
-	if (attr.m_horizontalAlignment != wxALIGN_INVALID) {
+	if (attr.m_horizontalAlignment != ibAlignment_Default) {
 		cell.m_alignHorz = SheetAlignmentOf(attr);
-		cell.m_alignVert = wxALIGN_CENTER;
+		cell.m_alignVert = ibAlignmentVert_Center;
 	}
 }
 
@@ -552,7 +552,7 @@ void ibSpreadsheetComposeDriver::TakeSchema(const std::vector<ibQueryLowering::i
 
 		if (alone) {
 			header->SetCellSize(row, col, headerRows, 1);
-			header->SetCellAlignment(row, col, wxALIGN_LEFT, wxALIGN_CENTER);
+			header->SetCellAlignment(row, col, ibAlignmentHorz_Left, ibAlignmentVert_Center);
 			merged[static_cast<size_t>(col)] = true;
 		}
 	}
@@ -852,7 +852,7 @@ void ibSpreadsheetComposeDriver::PrintRow(const ibCompositionLine& line, const s
 		// A NUMBER READS DOWN ITS RIGHT EDGE. Measures are what the eye scans and compares, and
 		// left-aligned figures cannot be compared without reading each one.
 		if (value.GetType() == ibValueTypes::TYPE_NUMBER)
-			row->SetCellAlignment(0, col, wxALIGN_RIGHT, wxALIGN_CENTER);
+			row->SetCellAlignment(0, col, ibAlignmentHorz_Right, ibAlignmentVert_Center);
 
 		if (static_cast<size_t>(col) < m_widest.size())
 			m_widest[static_cast<size_t>(col)] = std::max(m_widest[static_cast<size_t>(col)], text.length());
@@ -952,7 +952,7 @@ void ibSpreadsheetComposeDriver::WriteTotalLine(int level, const std::vector<ibV
 			row->SetCellDetailsParameter(0, col, name);
 		}
 		if (value.GetType() == ibValueTypes::TYPE_NUMBER)
-			row->SetCellAlignment(0, col, wxALIGN_RIGHT, wxALIGN_CENTER);
+			row->SetCellAlignment(0, col, ibAlignmentHorz_Right, ibAlignmentVert_Center);
 		if (static_cast<size_t>(col) < m_widest.size())
 			m_widest[static_cast<size_t>(col)] = std::max(m_widest[static_cast<size_t>(col)], text.length());
 	}
@@ -1388,7 +1388,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 			header->SetCellValue(0, named.first, named.second);
 			if (headerRows > 1) {
 				mergeAt(0, named.first, headerRows, 1);
-				header->SetCellAlignment(0, named.first, wxALIGN_LEFT, wxALIGN_CENTER);
+				header->SetCellAlignment(0, named.first, ibAlignmentHorz_Left, ibAlignmentVert_Center);
 			}
 			if (static_cast<size_t>(named.first) < m_widest.size())
 				m_widest[static_cast<size_t>(named.first)] =
@@ -1525,7 +1525,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 			mergeAt(0, first, static_cast<int>(m_colLevels), measures);   // the measure names go underneath
 		else if (headerRows > 1) {
 			mergeAt(0, first, headerRows, 1);   // nothing goes underneath, so the word takes the height
-			header->SetCellAlignment(0, first, wxALIGN_LEFT, wxALIGN_CENTER);
+			header->SetCellAlignment(0, first, ibAlignmentHorz_Left, ibAlignmentVert_Center);
 		}
 		if (static_cast<size_t>(first) < m_widest.size())
 			m_widest[static_cast<size_t>(first)] = std::max<size_t>(m_widest[static_cast<size_t>(first)], 5);
@@ -1737,8 +1737,8 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 				cell.m_value = std::move(cellText[c]);   // the line's texts are written afresh for the next
 			else
 				cell.m_value.clear();
-			cell.m_alignHorz = cellRight[c] ? wxALIGN_RIGHT : plainHorz;
-			cell.m_alignVert = cellRight[c] ? wxALIGN_CENTER : plainVert;
+			cell.m_alignHorz = cellRight[c] ? ibAlignmentHorz_Right : plainHorz;
+			cell.m_alignVert = cellRight[c] ? ibAlignmentVert_Center : plainVert;
 			cell.m_detailsParameter = std::move(cellLink[c]);   // …and its links cleared at its top
 			if (c >= cellAttr.size() || cellAttr[c] == nullptr) {
 				m_document->SetCell(at, col, cell);
@@ -1789,7 +1789,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 				const ibString text = ColumnText(column, figures[m], drawn);
 				totals->SetCellValue(0, col, text);
 				if (figures[m].GetType() == ibValueTypes::TYPE_NUMBER)
-					totals->SetCellAlignment(0, col, wxALIGN_RIGHT, wxALIGN_CENTER);
+					totals->SetCellAlignment(0, col, ibAlignmentHorz_Right, ibAlignmentVert_Center);
 				// ⭐ THE BOTTOM LINE IS FOLLOWABLE TOO, and under its COLUMN only: a column total is
 				// that column over every row, so it breaks down by the column heading and by nothing
 				// on the row axis. (The corner figure is under neither — it is everything.)

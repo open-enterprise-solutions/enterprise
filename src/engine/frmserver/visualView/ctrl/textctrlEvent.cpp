@@ -15,7 +15,7 @@ bool ibValueTextCtrl::TextProcessing(const ibString& strData)
 		return false;
 
 	const ibMetaData* metaData = GetMetaData();
-	wxASSERT(metaData);
+	ibASSERT(metaData);
 	if (metaData == nullptr)
 		return false;
 	ibValue selValue; GetControlValue(selValue);
@@ -150,7 +150,7 @@ void ibValueTextCtrl::OnSelectButtonPressed()
 	// The form the author picked in the property grid (null = the metaobject's own).
 	const ibMetaID& formId = m_propertyChoiceForm->GetValueAsInteger();
 	const ibMetaData* metaData = GetMetaData();
-	const ibValueMetaObject* choiceForm = (formId != wxNOT_FOUND && metaData != nullptr)
+	const ibValueMetaObject* choiceForm = (formId != ibNOT_FOUND && metaData != nullptr)
 		? metaData->FindAnyObjectByFilter(formId) : nullptr;
 	ibTypeControlFactory::ChooseValue(this, choiceForm);
 }

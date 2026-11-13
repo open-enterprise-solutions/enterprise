@@ -6,8 +6,6 @@
 // different languages. A session holds one (ibSession::GetTranslateState); a thread without a session —
 // codeRunner, a test — gets its own.
 
-#include <wx/string.h>
-
 struct ibTranslateState {
 	ibString m_languageCode;            // the script's override (SetLanguageCode); empty — none
 	ibString m_userLanguageCode;        // the user's, set at the login (SetUserInfo)

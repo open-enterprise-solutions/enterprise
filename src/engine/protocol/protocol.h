@@ -193,6 +193,9 @@ namespace ibProtocol {
 		inline constexpr const char* Users         = "Users";     // users' answer: the names the login window offers
 		inline constexpr const char* Locale        = "Locale";    // the login's answer: the language the client's own
 		                                                          // words are said in - the base's (core/localization/dictionary.h)
+		inline constexpr const char* FullName      = "FullName";  // …and the person the session is, as the client greets
+		                                                          // them: the user's full name, else their name; empty in a
+		                                                          // base with no users
 		// …and every call after it: {Client[, Since][, Pending]}.
 		inline constexpr const char* Since         = "Since";
 		inline constexpr const char* Pending       = "Pending";   // (protocol 3) the state events held since the last call,
@@ -509,13 +512,31 @@ namespace ibProtocol {
 			PredefinedSelector = 19, // ibPredefinedSelector
 		};
 
-		// Text, Caption, Style (wx's button flags) → Button (wx's code: 2 Yes, 8 No, 4 OK, 16 Cancel).
+		// Text, Caption, Style (ibStyle's flags) → Button (the ibStyle button pressed: Yes, No, OK, Cancel).
 		namespace ibMessage {
 
 			inline constexpr const char* Text    = "Text";
 			inline constexpr const char* Caption = "Caption";
 			inline constexpr const char* Style   = "Style";
 			inline constexpr const char* Button  = "Button";
+
+			// The buttons, the picture and the place - flags, and the button pressed as one of them. The numbers are
+			// wx's (wxOK, wxYES … wx/defs.h): the desktop draws by them as they come, and the wire carried them before
+			// they were named here.
+			namespace ibStyle {
+
+				inline constexpr int Centre          = 0x0001;
+				inline constexpr int Yes             = 0x0002;
+				inline constexpr int OK              = 0x0004;
+				inline constexpr int No              = 0x0008;
+				inline constexpr int Cancel          = 0x0010;
+				inline constexpr int YesNo           = Yes | No;
+				inline constexpr int IconWarning     = 0x0100;
+				inline constexpr int IconError       = 0x0200;
+				inline constexpr int IconQuestion    = 0x0400;
+				inline constexpr int IconInformation = 0x0800;
+
+			}
 
 		}
 

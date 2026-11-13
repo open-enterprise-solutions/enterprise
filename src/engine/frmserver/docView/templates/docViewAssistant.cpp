@@ -4,12 +4,9 @@
 #include "core/serialize/dataBuilder.h"
 #include "frmserver/client/clientFrame.h"   // the client told its frame changed (RefreshFrame)
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibAssistantTranscriptDocument, ibDocument);
-wxIMPLEMENT_DYNAMIC_CLASS(ibAssistantTranscriptView, ibView);
-
 ibMcpServer* ibAssistantTranscriptView::GetMcpServer() const
 {
-	const ibAssistantTranscriptDocument* const document = wxDynamicCast(GetDocument(), ibAssistantTranscriptDocument);
+	const ibAssistantTranscriptDocument* const document = dynamic_cast<const ibAssistantTranscriptDocument*>(GetDocument());
 	return document != nullptr ? document->GetMcpServer() : nullptr;
 }
 

@@ -64,6 +64,7 @@ void ibFrontendMainFrameDesigner::CreateGitPane()
 #include "designer-thin/mainFrame/local/localWindow.h"
 #include "designer-thin/mainFrame/stack/stackWindow.h"
 #include "designer-thin/mainFrame/watch/watchWindow.h"
+#include "designer-thin/mainFrame/welcome/welcomeWindowDesigner.h"
 
 void ibFrontendMainFrameDesigner::CreateBottomPane()
 {
@@ -94,6 +95,11 @@ void ibFrontendMainFrameDesigner::CreateBottomPane()
 	auiNotebook->SetNullSelection();
 
 	m_mgr.AddPane(auiNotebook, paneInfo);
+}
+
+ibWelcomeWindow* ibFrontendMainFrameDesigner::OnCreateWelcome(wxWindow* parent)
+{
+	return new ibDesignerWelcomeWindow(parent, m_fullName, m_keyBinder);
 }
 
 // ⭐ THE BUTTONS ARE THE MENU'S COMMANDS, NOT COPIES OF THEM. Each carries the id of its Debug-menu item, so the

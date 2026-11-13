@@ -17,6 +17,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include <gtest/gtest.h>
+#include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
 #include "core/spreadsheet/spreadsheetObject.h"
 #include "backend/compiler/value.h"   // ibValue — what a test puts into a parameter and reads back

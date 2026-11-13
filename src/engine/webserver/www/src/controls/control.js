@@ -43,7 +43,9 @@ export class Control extends HTMLElement {
 	// THE BACKGROUND ITS KIND IS GIVEN WHEN ITS AUTHOR PICKS NONE, as the server saves it (frmserver's
 	// ibDefaultStyleBGColour; a kind of its own says its own), and the theme's for it — what a control naming it is painted.
 	/** @type {[string, string]} */
-	static platformBackground = ['rgb(250,247,240)', 'var(--oes-form-bg)'];
+	// The style's form background (core/style/style.cpp), a step below white since 2026-11-13 - a form saved with the
+	// cream before is read as it by the server.
+	static platformBackground = ['rgb(238,242,246)', 'var(--oes-form-bg)'];
 
 	constructor() {
 		super();

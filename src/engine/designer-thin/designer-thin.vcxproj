@@ -239,6 +239,7 @@
     <ClCompile Include="mainFrame\stack\stackWindow.cpp" />
     <ClCompile Include="mainFrame\vcs\gitPanel.cpp" />
     <ClCompile Include="mainFrame\watch\watchWindow.cpp" />
+    <ClCompile Include="mainFrame\welcome\welcomeWindowDesigner.cpp" />
     <ClCompile Include="syntaxHelper\helpChooserDialog.cpp" />
     <ClCompile Include="syntaxHelper\helpDetailView.cpp" />
     <ClCompile Include="syntaxHelper\helpDragSource.cpp" />
@@ -292,6 +293,7 @@
     <ClInclude Include="mainFrame\stack\stackWindow.h" />
     <ClInclude Include="mainFrame\vcs\gitPanel.h" />
     <ClInclude Include="mainFrame\watch\watchWindow.h" />
+    <ClInclude Include="mainFrame\welcome\welcomeWindowDesigner.h" />
     <ClInclude Include="syntaxHelper\helpChooserDialog.h" />
     <ClInclude Include="syntaxHelper\helpDetailView.h" />
     <ClInclude Include="syntaxHelper\helpDragSource.h" />

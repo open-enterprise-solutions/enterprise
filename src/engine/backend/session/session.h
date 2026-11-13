@@ -38,9 +38,6 @@
 #include <utility>
 #include <vector>
 
-#include <wx/datetime.h>
-#include <wx/string.h>
-
 class ibValueModuleManager;
 class ibValueModuleManagerRuntimeConfiguration;
 class ibRuntimeModuleDataObject;
@@ -580,7 +577,7 @@ public:
 
 	// Configuration-language code for this session — selects which
 	// metadata synonym / form-label translation is shown. Distinct from
-	// the platform's wxLocale (UI gettext, process-wide via --locale=).
+	// the process's locale (ibSetLocale, process-wide via --locale=).
 	// Lives in the session's translate state (GetTranslateState): the
 	// script's override (CurrentLanguage), else the user's preferred
 	// language, else the configuration's — each session its own.

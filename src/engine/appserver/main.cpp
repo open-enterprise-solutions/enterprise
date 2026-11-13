@@ -18,7 +18,7 @@
 #include <string>
 
 #include "appServer.h"
-#include "core/diagnostics/oesConsole.h"
+#include "deskgui/console.h"
 
 static const wxCmdLineEntryDesc s_cmdLineDesc[] = {
 	{ wxCMD_LINE_OPTION, "d",  "dir",          "Server folder: server.conf, server.key and a folder per base (default: server beside the executable)", wxCMD_LINE_VAL_STRING, 0 },

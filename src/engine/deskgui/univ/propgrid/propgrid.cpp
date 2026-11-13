@@ -1275,13 +1275,11 @@ void ibPropertyGrid::CalculateFontAndBitmapStuff( int vspacing )
 
     m_subgroup_extramargin = m_iconWidth + m_gutterWidth;
 
-    int vdiv = 6;
-    if ( vspacing <= 1 ) vdiv = 12;
-    else if ( vspacing >= 3 ) vdiv = 3;
-
-    m_spacingy = m_fontHeight / vdiv;
-    if ( m_spacingy < ibPG_YSPACING_MIN )
-        m_spacingy = ibPG_YSPACING_MIN;
+    // SEAM vs wx: the row is the theme's for the text (GetListboxItemHeight) - the lists' and the trees' as well - and
+    // the text is centred in it; wx spaced it by a share of the text's height the vertical spacing chose (a twelfth to
+    // a third), which the theme's height answers now
+    m_lineHeight = GetRenderer()->GetListboxItemHeight(m_fontHeight);
+    m_spacingy = wxMax((m_lineHeight - m_fontHeight - 1) / 2, ibPG_YSPACING_MIN);
 
     m_marginWidth = 0;
     if ( !(m_windowStyle & ibPG_HIDE_MARGIN) )
@@ -1289,8 +1287,6 @@ void ibPropertyGrid::CalculateFontAndBitmapStuff( int vspacing )
 
     m_captionFont.SetWeight(wxFONTWEIGHT_BOLD);
     GetTextExtent(wxS("jG"), &x, &y, nullptr, nullptr, &m_captionFont);
-
-    m_lineHeight = m_fontHeight+(2*m_spacingy)+1;
 
     // button spacing
     m_buttonSpacingY = (m_lineHeight - m_iconHeight) / 2;

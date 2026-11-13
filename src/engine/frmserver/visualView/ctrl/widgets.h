@@ -365,7 +365,7 @@ private:
 		ibValueTypes::TYPE_STRING);
 	ibPropertyList* m_propertyChoiceForm = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryData, ibT("ChoiceForm"), _("Choice form"),
 		_("Which form opens when the user presses Select: one of the forms of the value's type. Empty: the type's default choice form."),
-		&ibValueTextCtrl::GetChoiceForm, wxNOT_FOUND);
+		&ibValueTextCtrl::GetChoiceForm, ibNOT_FOUND);
 	ibPropertyEnum<ibValueEnumQuickChoiceMode>* m_propertyQuickChoice = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumQuickChoiceMode>>(m_categoryData, ibT("QuickChoice"), _("Quick choice"),
 		_("How a reference is picked into the field when Select is pressed. Auto: as its type says (the catalog's or the document's own Quick choice). Use: a drop-down of the matching items. Don't use: the list form."),
 		ibQuickChoiceMode::ibQuickChoiceMode_Auto);
@@ -564,7 +564,7 @@ private:
 	ibPropertyCategory* m_categoryStaticLine = ibPropertyObject::CreatePropertyCategory(ibT("StaticLine"), _("Static line"));
 	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categoryStaticLine, ibT("Orient"), _("Orient"),
 		_("The line's direction: horizontal (the default), separating stacked parts of a form, or vertical, separating side-by-side ones. Set Stretch to Expand for the line to run the full width or height."),
-		wxHORIZONTAL);
+		ibOrientation_Horizontal);
 };
 
 class ibValueSlider : public ibValueWindow {
@@ -589,7 +589,7 @@ private:
 	ibPropertyInteger* m_propertyValue = ibPropertyObject::CreateProperty<ibPropertyInteger>(m_categorySlider, ibT("Value"), _("Value"),
 		_("Where the slider's thumb starts, between the min and max values. Default 50."), 50);
 	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categorySlider, ibT("Orient"), _("Orient"),
-		_("The slider's direction: horizontal (the default) or vertical."), wxHORIZONTAL);
+		_("The slider's direction: horizontal (the default) or vertical."), ibOrientation_Horizontal);
 };
 
 class ibValueGauge : public ibValueWindow {
@@ -612,7 +612,7 @@ private:
 	ibPropertyInteger* m_propertyValue = ibPropertyObject::CreateProperty<ibPropertyInteger>(m_categoryGauge, ibT("Value"), _("Value"),
 		_("How far the progress bar is filled, from 0 to the range. Default 30."), 30);
 	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categoryGauge, ibT("Orient"), _("Orient"),
-		_("The progress bar's direction: horizontal (the default, filling left to right) or vertical."), wxHORIZONTAL);
+		_("The progress bar's direction: horizontal (the default, filling left to right) or vertical."), ibOrientation_Horizontal);
 };
 
 #endif

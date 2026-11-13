@@ -422,9 +422,9 @@ class BACKEND_API ibMetaData : public std::enable_shared_from_this<ibMetaData> {
 
 	// The next id to hand out — see GenerateNewID. 0 = not seeded yet (the first call walks the tree
 	// once); reset to 0 whenever a new image is built, because a different configuration numbers
-	// from its own tree. `mutable` for the same reason GenerateNewID is const: minting an id changes
-	// no metadata, only the bookkeeping that keeps it unique.
-	mutable ibMetaID m_nextMetaId = 0;
+	// from its own tree. Minting one is a write, so GenerateNewID is not const: every caller holds the
+	// metadata it adds an object to.
+	ibMetaID m_nextMetaId = 0;
 public:
 
 	ibMetaData() :
@@ -590,8 +590,8 @@ public:
 		T* const created = new T(args...);
 		const ibValue owner(created);
 		if (!IsRegisterCtor(created->GetClassType())) {
-			wxASSERT_MSG(false, "CreateObjectValue: the type is not registered");
-			return wxEmptyValue;
+			ibASSERT_MSG(false, "CreateObjectValue: the type is not registered");
+			return ibEmptyValue;
 		}
 		return owner;
 	}
@@ -867,7 +867,7 @@ public:
 	// source- and meta-description memory serialisers (was a file-local duplicate). GetCommonGuid
 	// yields the COPY-guid mid-copy, so a binding inside a copied object points at the copy.
 	ibGuid  GuidByMetaId(const ibMetaID& id)  const;   // metaId -> stable guid (null if absent / not allowed)
-	ibMetaID MetaIdByGuid(const ibGuid& guid) const;   // guid -> live metaId (wxNOT_FOUND if unresolved)
+	ibMetaID MetaIdByGuid(const ibGuid& guid) const;   // guid -> live metaId (ibNOT_FOUND if unresolved)
 
 	// ⭐ A METAID IS HANDED OUT ONCE PER OPEN CONFIGURATION, AND NEVER AGAIN.
 	//
@@ -890,7 +890,7 @@ public:
 	// Seeded lazily from the tree the first time it is asked (so a configuration just loaded
 	// continues after its highest id) and reset when a new image is built — a different
 	// configuration is a different numbering.
-	ibMetaID GenerateNewID() const;
+	ibMetaID GenerateNewID();
 
 	//generate new name
 	ibString GetNewName(ibValueMetaObject* parent, const ibNameRequest& request);
@@ -1040,7 +1040,7 @@ protected:
 		bool        m_committed = false;
 	public:
 		explicit LoadGuard(ibMetaData* meta) : m_meta(meta) {
-			wxASSERT(m_meta->m_image == nullptr);   // must be closed first — else a run-without-close
+			ibASSERT(m_meta->m_image == nullptr);   // must be closed first — else a run-without-close
 			// A NEW TREE NUMBERS ITSELF. The id counter is seeded from whatever this load brings in,
 			// so it must forget the previous configuration's high-water mark — otherwise a base
 			// opened after a larger one would start issuing ids from the OTHER one's ceiling.

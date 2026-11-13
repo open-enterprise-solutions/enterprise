@@ -69,7 +69,7 @@ void	ibWriterMemory::open_chunk(std::uint64_t type)
 
 void	ibWriterMemory::close_chunk()
 {
-	wxASSERT(!m_chunk_pos.empty());
+	ibASSERT(!m_chunk_pos.empty());
 
 	int pos = tell();
 	seek(m_chunk_pos.top());
@@ -120,7 +120,7 @@ void ibWriterMemory::w_chunk(std::uint64_t type, const ibMemoryBuffer& data)
 
 void	ibReaderMemory::r(void* p, int cnt) const
 {
-	// 🛑 REFUSES INSTEAD OF SAYING SO AND READING ANYWAY. This was a wxASSERT followed by the copy:
+	// 🛑 REFUSES INSTEAD OF SAYING SO AND READING ANYWAY. This was a ibASSERT followed by the copy:
 	// the assert is a line in the journal and nothing else, so an over-read was ANNOUNCED and then
 	// performed, leaving m_pos past m_size for whoever read next. That is how the designer died on
 	// 2026-09-23 while it was debugging - two asserts from one worker thread at 01:36:38 (this line
@@ -337,7 +337,7 @@ void	ibReaderMemory::r_string(char* dest, std::uint32_t tgt_sz) const
 {
 	char* src = (char*)m_data + m_pos;
 	std::uint32_t sz = advance_term_string();
-	wxASSERT(sz < (tgt_sz - 1));
+	ibASSERT(sz < (tgt_sz - 1));
 #ifdef __IBMSW__
 	strncpy_s(dest, tgt_sz, src, sz);
 #else

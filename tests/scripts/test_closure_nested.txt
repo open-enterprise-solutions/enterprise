@@ -2,7 +2,7 @@
 //
 // outer fn → middle lambda → inner lambda. Inner captures BOTH
 // outer's `a` AND middle's `b`. Verifies m_capturedFrames walk
-// через два function boundaries.
+// across two function boundaries.
 //
 // outer(10) returns middle (captures a=10).
 // middle(20) returns inner (captures a=10, b=20).

@@ -26,7 +26,7 @@ m_version(version_oes_last)
 
 	if (m_commonObject->OnCreateMetaObject(this, newObjectFlag)) {
 		if (!m_commonObject->OnLoadMetaObject(this)) {
-			wxASSERT_MSG(false, "m_commonObject->OnLoadMetaObject() == false");
+			ibASSERT_MSG(false, "m_commonObject->OnLoadMetaObject() == false");
 		}
 	}
 
@@ -64,7 +64,7 @@ ibMetaDataDataProcessor::~ibMetaDataDataProcessor()
 
 		//clear data
 		if (!ClearDatabase()) {
-			wxASSERT_MSG(false, "ClearDatabase() == false");
+			ibASSERT_MSG(false, "ClearDatabase() == false");
 		}
 
 		// m_commonObject (ibValuePtr) releases the root after this body.
@@ -193,7 +193,7 @@ bool ibMetaDataDataProcessor::CloseDatabase(const ibRuntimeRequest& request)
 	// The assert warns (Debug), the close happens anyway — see the report's twin
 	// (metadataReport.cpp): a refused open is rolled back through this very road, and a bad file
 	// must not leave an application that cannot be shut down.
-	wxASSERT(IsConfigOpen());
+	ibASSERT(IsConfigOpen());
 	if (!IsConfigOpen())
 		return true;
 
@@ -251,7 +251,7 @@ ibValueMetaObjectDataProcessor* ibMetaDataDataProcessor::BuildFreshRoot()
 		return nullptr;
 	}
 	if (!root->OnLoadMetaObject(this)) {
-		wxASSERT_MSG(false, "BuildFreshRoot: OnLoadMetaObject() == false");
+		ibASSERT_MSG(false, "BuildFreshRoot: OnLoadMetaObject() == false");
 	}
 	root->InvalidateNames();
 	return root;

@@ -14,10 +14,6 @@ public:
 	virtual bool OnCreate(ibDocument* doc, long flags) override;
 	virtual void OnDraw(ibDataNode& frame) override;
 	virtual bool OnClose(bool deleteWindow = true) override;
-
-protected:
-
-	wxDECLARE_DYNAMIC_CLASS(ibReportEditView);
 };
 
 class ibReportFileDocument : public ibMetaDocument {
@@ -49,7 +45,7 @@ public:
 		SetFilename(name, true);
 
 		ibValueMetaObject* commonObject = m_metaData->GetCommonMetaObject();
-		wxASSERT(commonObject);
+		ibASSERT(commonObject);
 		commonObject->SetName(name);
 
 		if (!m_metaData->RunDatabase())
@@ -70,7 +66,6 @@ protected:
 
 	ibReportFileDocument(const ibReportFileDocument&) = delete;
 	ibReportFileDocument& operator=(const ibReportFileDocument&) = delete;
-	wxDECLARE_DYNAMIC_CLASS(ibReportFileDocument);
 };
 
 #endif 

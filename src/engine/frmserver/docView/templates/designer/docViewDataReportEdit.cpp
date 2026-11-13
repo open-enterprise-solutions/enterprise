@@ -4,8 +4,6 @@
 
 #include "backend/backend_picture.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibReportTreeView, ibMetaView);
-
 bool ibReportTreeView::OnCreate(ibDocument* doc, long flags)
 {
 	// Drawn for the client whose tab it is.
@@ -20,8 +18,6 @@ void ibReportTreeView::OnDraw(ibDataNode& frame)
 	m_metaTree->OnDraw(frame.Child(ibProtocol::ibView::MetaData));
 }
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibReportEditDocument, ibMetaDataDocument);
-
 // A new one named as the desktop named it — its class and a number.
 static int s_defaultReportNameCounter = 1;
 
@@ -29,7 +25,7 @@ ibPictureDescription ibReportEditDocument::GetIcon() const
 {
 	if (m_metaData != nullptr) {
 		ibValueMetaObject* metaObject = m_metaData->GetCommonMetaObject();
-		wxASSERT(metaObject);
+		ibASSERT(metaObject);
 		return ibPictureDescription(metaObject->GetClassType());
 	}
 	return ibMetaDataDocument::GetIcon();
@@ -46,7 +42,7 @@ bool ibReportEditDocument::OnCreate(const ibString& path, long flags)
 bool ibReportEditDocument::OnNewDocument()
 {
 	ibValueMetaObject* commonObject = m_metaData->GetCommonMetaObject();
-	wxASSERT(commonObject);
+	ibASSERT(commonObject);
 
 	// notice that there is no need to neither reset nor even check the
 	// modified flag here as the document itself is a new object (this is only
@@ -123,6 +119,6 @@ void ibReportEditDocument::Modify(bool modified)
 ibDataReportTree* ibReportEditDocument::GetMetaTree() const
 {
 	// GUARD THE CAST, not the pointer that went into it — see the twin in docViewDataProcessorEdit.cpp.
-	ibReportTreeView* view = wxDynamicCast(GetFirstView(), ibReportTreeView);
+	ibReportTreeView* view = dynamic_cast<ibReportTreeView*>(GetFirstView());
 	return view != nullptr ? view->GetMetaTree() : nullptr;
 }

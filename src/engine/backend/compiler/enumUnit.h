@@ -217,7 +217,7 @@ protected:
 private:
 
 	inline void CreateEnumeration(const valT& v) {
-		wxASSERT(m_listEnumData.contains(v));
+		ibASSERT(m_listEnumData.contains(v));
 		if (m_value != nullptr) {
 			m_value->CreateEnumeration(
 				GetEnumName(v),
@@ -232,7 +232,7 @@ public:
 	using valEnumType = valT;
 
 	inline void AddEnumeration(const valT& v, const ibString& name, const ibString& descr = ibEmptyString) {
-		wxASSERT(!m_listEnumData.contains(v));
+		ibASSERT(!m_listEnumData.contains(v));
 		m_listEnumData.insert_or_assign(v, name);
 		m_listEnumDesc.insert_or_assign(v, descr.IsEmpty() ? name : descr);
 
@@ -437,7 +437,7 @@ public:
 
 	// ⭐ NO MEMBER CHOSEN IS EMPTY. This answered NO unconditionally, while the two methods right
 	// below already tell the truth about the same state — GetString returns "" and GetNumber returns
-	// wxNOT_FOUND when m_value is null. Fill-check asks exactly this question (SaveData), so a
+	// ibNOT_FOUND when m_value is null. Fill-check asks exactly this question (SaveData), so a
 	// required enumeration left unset was saved as if it had been filled in, and the refusal the
 	// attribute's flag promised never came. The VARIANT stays non-empty: a chosen member is a value.
 	virtual bool IsEmpty() const override { return m_value == nullptr; }

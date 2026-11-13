@@ -52,7 +52,7 @@ public:
 	virtual bool IsDataType(const ibMetaID& id) const { return id == (*m_propertyAttributeType)->GetMetaID(); }
 
 	// ⭐⭐ A KIND OF THIS CHART LIMITS WHAT ITS VALUE MAY BE, and here that is said to the runtime. The
-	// element is read for its own `Type` — the same reading a posting makes for a subconto
+	// element is read for its own `Type` — the same reading a posting makes for an account dimension
 	// (accountingRegisterObject.cpp) — and that value does the limiting itself.
 	//
 	// ⭐ SO THERE IS NO CAST AND NO SCHEMA IN SIGHT. What sits in `Type` is an ibValueTypeDescription,
@@ -152,7 +152,7 @@ protected:
 	virtual ibValuePtr<ibValueManagerDataObject> CreateManagerDataObjectValue() const;
 
 	//create empty object
-	virtual ibValuePtr<ibValueRecordDataObjectHierarchyRef> CreateObjectRefValue(ibObjectMode mode, const ibGuid& guid = wxNullGuid) const;
+	virtual ibValuePtr<ibValueRecordDataObjectHierarchyRef> CreateObjectRefValue(ibObjectMode mode, const ibGuid& guid = ibNullGuid) const;
 
 	//create object data with meta form
 	virtual ibSourcePtr<ibSourceDataObject> CreateSourceObject(const ibCreateRequest& request, const ibFormID& form_id) const;
@@ -250,7 +250,7 @@ private:
 
 class ibValueRecordDataObjectChartOfCharacteristicTypes : public ibValueRecordDataObjectHierarchyRef {
 	public:
-	ibValueRecordDataObjectChartOfCharacteristicTypes(const ibValueMetaObjectChartOfCharacteristicTypes* metaObject, const ibGuid& objGuid = wxNullGuid, ibObjectMode objMode = ibObjectMode::OBJECT_ITEM);
+	ibValueRecordDataObjectChartOfCharacteristicTypes(const ibValueMetaObjectChartOfCharacteristicTypes* metaObject, const ibGuid& objGuid = ibNullGuid, ibObjectMode objMode = ibObjectMode::OBJECT_ITEM);
 	ibValueRecordDataObjectChartOfCharacteristicTypes(const ibValueRecordDataObjectChartOfCharacteristicTypes& source);
 public:
 

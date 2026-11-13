@@ -106,7 +106,7 @@ bool ibValueManagerDataObjectInformationRegister::CallAsFunc(const long lMethodN
 	{
 		ibValueRecordKeyObject* keyVal = lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueRecordKeyObject>() : nullptr;
 		pvarRetValue = m_metaObject->GetRecordForm(
-			ibFormRequest(paParams[0]->GetString(), keyVal ? keyVal->GetUniqueKey() : wxNullUniquePairKey),
+			ibFormRequest(paParams[0]->GetString(), keyVal ? keyVal->GetUniqueKey() : ibNullUniqueKeyPair),
 			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr);
 		return true;
 	}

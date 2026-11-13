@@ -4265,7 +4265,12 @@ void ibTextCtrl::RefreshLineWrapMarks(wxTextCoord rowFirst,
 
 void ibTextCtrl::DrawBorder(wxDC& dc, const wxRect& rect)
 {
-    m_renderer->DrawTextBorder(dc, GetBorder(), rect, GetStateFlags());
+    // a read-only field's frame is told as a disabled one's: neither can be typed into, and the frame says so
+    // (ibLunaRenderer::DrawTextBorder; HasContentBackground)
+    int flags = GetStateFlags();
+    if ( !IsEditable() )
+        flags |= wxCONTROL_DISABLED;
+    m_renderer->DrawTextBorder(dc, GetBorder(), rect, flags);
 }
 
 // ----------------------------------------------------------------------------

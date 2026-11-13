@@ -41,8 +41,6 @@
 #include "backend/backend_core.h"
 #include "core/clsid.h"
 
-#include <wx/string.h>
-
 // WHERE A GROUP BELONGS — the third fact about it, beside its caption and its place.
 //
 //   Common    — the configuration's own things: its modules, its pictures, its roles. The

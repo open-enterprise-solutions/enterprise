@@ -88,7 +88,7 @@ public:
 	virtual bool PeekSample(ibValue& /*current*/) const { return false; }
 };
 
-extern BACKEND_API const ibValue wxEmptyValue;
+extern BACKEND_API const ibValue ibEmptyValue;
 
 // (The packed node's two field names — kValueFieldClsid, kValueFieldData — are the core's: core/core.h.)
 
@@ -156,7 +156,7 @@ public:
 		//List of keywords that cannot be variable and function names
 		struct ibMemberTableConstructor {
 
-			ibMemberTableConstructor(const ibString& strHelper, const long paramCount, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
+			ibMemberTableConstructor(const ibString& strHelper, const long paramCount, const long lPropAlias = ibNOT_FOUND, const long lData = ibNOT_FOUND)
 				: m_strHelper(strHelper), m_paramCount(paramCount), m_lAlias(lPropAlias), m_lData(lData)
 			{
 			}
@@ -190,7 +190,7 @@ public:
 			// Flag-based ctor — primary entry point. Use for new
 			// callsites and any prop that needs eProp_Scoped or other
 			// non-readable/writable bits.
-			ibMemberTableProperty(const ibString& strPropName, unsigned int flags, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
+			ibMemberTableProperty(const ibString& strPropName, unsigned int flags, const long lPropAlias = ibNOT_FOUND, const long lData = ibNOT_FOUND)
 				: m_fieldName(strPropName), m_lData(lData), m_lAlias((int16_t)lPropAlias), m_flags((uint8_t)flags)
 			{
 			}
@@ -199,7 +199,7 @@ public:
 			// into the flags word so existing AppendProp(bool, bool,
 			// ...) overloads keep working without touching every
 			// callsite. Old props default to non-scoped.
-			ibMemberTableProperty(const ibString& strPropName, bool readable, bool writable, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
+			ibMemberTableProperty(const ibString& strPropName, bool readable, bool writable, const long lPropAlias = ibNOT_FOUND, const long lData = ibNOT_FOUND)
 				: m_fieldName(strPropName),
 				  m_lData(lData), m_lAlias((int16_t)lPropAlias),
 				  m_flags((uint8_t)((readable ? eProp_Readable : 0u) | (writable ? eProp_Writable : 0u)))
@@ -209,7 +209,7 @@ public:
 			// 3-bool ctor — same as legacy plus an explicit `scoped`
 			// argument. Readable for callsites that prefer bool args
 			// over OR'd flag literals (ThisObject / ThisForm / etc).
-			ibMemberTableProperty(const ibString& strPropName, bool readable, bool writable, bool scoped, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
+			ibMemberTableProperty(const ibString& strPropName, bool readable, bool writable, bool scoped, const long lPropAlias = ibNOT_FOUND, const long lData = ibNOT_FOUND)
 				: m_fieldName(strPropName),
 				  m_lData(lData), m_lAlias((int16_t)lPropAlias),
 				  m_flags((uint8_t)((readable ? eProp_Readable : 0u) | (writable ? eProp_Writable : 0u) | (scoped ? eProp_Scoped : 0u)))
@@ -248,13 +248,13 @@ public:
 
 		struct ibMemberTableMethod {
 
-			ibMemberTableMethod(const ibString& strMethodName, const ibString& strHelper, const long paramCount, unsigned int flags, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
+			ibMemberTableMethod(const ibString& strMethodName, const ibString& strHelper, const long paramCount, unsigned int flags, const long lPropAlias = ibNOT_FOUND, const long lData = ibNOT_FOUND)
 				: m_fieldName(strMethodName), m_strHelper(strHelper), m_lData(lData), m_lAlias((int16_t)lPropAlias), m_paramCount((int8_t)paramCount), m_flags((uint8_t)flags)
 			{
 			}
 
 			// Legacy ctor — convert hasRet bool into the flags word.
-			ibMemberTableMethod(const ibString& strMethodName, const ibString& strHelper, const long paramCount, bool hasRet, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
+			ibMemberTableMethod(const ibString& strMethodName, const ibString& strHelper, const long paramCount, bool hasRet, const long lPropAlias = ibNOT_FOUND, const long lData = ibNOT_FOUND)
 				: m_fieldName(strMethodName), m_strHelper(strHelper), m_lData(lData),
 				  m_lAlias((int16_t)lPropAlias), m_paramCount((int8_t)paramCount),
 				  m_flags((uint8_t)(hasRet ? eMethod_HasReturn : 0u))
@@ -272,8 +272,8 @@ public:
 			// record used to be 32.
 			ibString m_fieldName;
 			ibString m_strHelper;
-			long     m_lData  = wxNOT_FOUND;
-			int16_t  m_lAlias = wxNOT_FOUND;
+			long     m_lData  = ibNOT_FOUND;
+			int16_t  m_lAlias = ibNOT_FOUND;
 			int8_t   m_paramCount = 0;
 			uint8_t  m_flags = 0;
 		};
@@ -533,12 +533,12 @@ public:
 		// ibValue-holding base (ibValueDynamicMembers / ibValueStaticMembers, or
 		// ibValueFrame which carries them) FIRST in the base list. ibValueForm hit this
 		// exactly (ibBackendValueForm was first) and was reordered ibValueFrame-first.
-		// The wxASSERT below catches any future violator on its first bind.
+		// The ibASSERT below catches any future violator on its first bind.
 		template<class C, class M>
 			requires std::derived_from<C, M> && std::derived_from<M, ibValue>
 		void Bind(const C* obj, void (M::*fn)(ibMemberTable&) const) {
-			wxASSERT_MSG(static_cast<const void*>(static_cast<const ibValue*>(obj)) == static_cast<const void*>(obj),
-				wxT("ibValue must be the FIRST base (offset 0) of a member-binding class - see PROJECT INVARIANT above; make the ibValue-holding base first"));
+			ibASSERT_MSG(static_cast<const void*>(static_cast<const ibValue*>(obj)) == static_cast<const void*>(obj),
+				ibT("ibValue must be the FIRST base (offset 0) of a member-binding class - see PROJECT INVARIANT above; make the ibValue-holding base first"));
 			AddBinder(ibBoundNames{ static_cast<const ibValue*>(obj), nullptr, static_cast<ibNameFiller>(fn) });
 		}
 		template<class C, class M>
@@ -656,10 +656,10 @@ public:
 			return &h;
 		}
 
-		inline long AppendConstructor(const ibString& strHelper) { return AppendConstructor(0, strHelper, wxNOT_FOUND, wxNOT_FOUND); }
-		inline long AppendConstructor(const ibString& strHelper, const long lCtorNum) { return AppendConstructor(0, strHelper, wxNOT_FOUND, lCtorNum); }
-		inline long AppendConstructor(const long paramCount, const ibString& strHelper, const long lCtorNum) { return AppendConstructor(paramCount, strHelper, wxNOT_FOUND, lCtorNum); }
-		inline long AppendConstructor(const long paramCount, const ibString& strHelper) { return AppendConstructor(paramCount, strHelper, wxNOT_FOUND, wxNOT_FOUND); }
+		inline long AppendConstructor(const ibString& strHelper) { return AppendConstructor(0, strHelper, ibNOT_FOUND, ibNOT_FOUND); }
+		inline long AppendConstructor(const ibString& strHelper, const long lCtorNum) { return AppendConstructor(0, strHelper, ibNOT_FOUND, lCtorNum); }
+		inline long AppendConstructor(const long paramCount, const ibString& strHelper, const long lCtorNum) { return AppendConstructor(paramCount, strHelper, ibNOT_FOUND, lCtorNum); }
+		inline long AppendConstructor(const long paramCount, const ibString& strHelper) { return AppendConstructor(paramCount, strHelper, ibNOT_FOUND, ibNOT_FOUND); }
 
 		inline long AppendConstructor(const long paramCount, const ibString& strHelper, const long lCtorNum, const long lCtorAlias) {
 			if (!m_ctors) m_ctors = std::make_unique<std::vector<ibMemberTableConstructor>>();
@@ -683,13 +683,13 @@ public:
 
 		long GetConstructorAlias(const long lCtorNum) const {
 			if (lCtorNum < 0 || lCtorNum >= GetNConstructors())
-				return wxNOT_FOUND;
+				return ibNOT_FOUND;
 			return (*m_ctors)[lCtorNum].m_lAlias;
 		}
 
 		long GetConstructorData(const long lCtorNum) const {
 			if (lCtorNum < 0 || lCtorNum >= GetNConstructors())
-				return wxNOT_FOUND;
+				return ibNOT_FOUND;
 			return (*m_ctors)[lCtorNum].m_lData;
 		}
 
@@ -699,11 +699,11 @@ public:
 
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-		inline long AppendProp(const ibString& strPropName) { return AppendProp(strPropName, true, true, wxNOT_FOUND, wxNOT_FOUND); }
-		inline long AppendProp(const ibString& strPropName, const long lPropNum) { return AppendProp(strPropName, true, true, lPropNum, wxNOT_FOUND); }
+		inline long AppendProp(const ibString& strPropName) { return AppendProp(strPropName, true, true, ibNOT_FOUND, ibNOT_FOUND); }
+		inline long AppendProp(const ibString& strPropName, const long lPropNum) { return AppendProp(strPropName, true, true, lPropNum, ibNOT_FOUND); }
 		inline long AppendProp(const ibString& strPropName, const long lPropNum, const long lPropAlias) { return AppendProp(strPropName, true, true, lPropNum, lPropAlias); }
 		inline long AppendProp(const ibString& strPropName, bool readable, const long lPropNum, const long lPropAlias) { return AppendProp(strPropName, readable, true, lPropNum, lPropAlias); }
-		inline long AppendProp(const ibString& strPropName, bool readable, bool writable, const long lPropNum) { return AppendProp(strPropName, readable, writable, lPropNum, wxNOT_FOUND); }
+		inline long AppendProp(const ibString& strPropName, bool readable, bool writable, const long lPropNum) { return AppendProp(strPropName, readable, writable, lPropNum, ibNOT_FOUND); }
 
 		inline long AppendProp(const ibString& strPropName, bool readable, bool writable, const long lPropNum, const long lPropAlias) {
 			const unsigned int flags = (readable ? eProp_Readable : 0u) | (writable ? eProp_Writable : 0u);
@@ -749,14 +749,14 @@ public:
 				const auto snapshot = EnsureFindIndex();
 				const auto& idx = snapshot->prop;
 				const auto it = idx.find(strPropName);
-				return it != idx.end() ? it->second : wxNOT_FOUND;
+				return it != idx.end() ? it->second : ibNOT_FOUND;
 			}
 			auto iterator = std::find_if(m_props.begin(), m_props.end(),
 				[&strPropName](const auto& f) { return stringUtils::IsSameAs(f.m_fieldName, strPropName); }
 			);
 			if (iterator != m_props.end())
 				return (long)std::distance(m_props.begin(), iterator);
-			return wxNOT_FOUND;
+			return ibNOT_FOUND;
 		}
 
 		// The name WHERE IT LIES — by reference, so asking for a member's name copies nothing.
@@ -769,13 +769,13 @@ public:
 
 		long GetPropAlias(const long lPropNum) const {
 			if (lPropNum < 0 || lPropNum >= GetNProps())
-				return wxNOT_FOUND;
+				return ibNOT_FOUND;
 			return m_props[lPropNum].m_lAlias;
 		}
 
 		long GetPropData(const long lPropNum) const {
 			if (lPropNum < 0 || lPropNum >= GetNProps())
-				return wxNOT_FOUND;
+				return ibNOT_FOUND;
 			return m_props[lPropNum].m_lData;
 		}
 
@@ -804,20 +804,20 @@ public:
 
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-		inline long AppendProc(const ibString& strMethodName) { return AppendMethod(strMethodName, ibEmptyString, 0, false, wxNOT_FOUND, wxNOT_FOUND); }
-		inline long AppendProc(const ibString& strMethodName, const ibString& strHelper) { return AppendMethod(strMethodName, strHelper, 0, false, wxNOT_FOUND, wxNOT_FOUND); }
+		inline long AppendProc(const ibString& strMethodName) { return AppendMethod(strMethodName, ibEmptyString, 0, false, ibNOT_FOUND, ibNOT_FOUND); }
+		inline long AppendProc(const ibString& strMethodName, const ibString& strHelper) { return AppendMethod(strMethodName, strHelper, 0, false, ibNOT_FOUND, ibNOT_FOUND); }
 		inline long AppendProc(const ibString& strMethodName, const ibString& strHelper, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, 0, false, lMethodNum, lMethodAlias); }
 		inline long AppendProc(const ibString& strMethodName, const ibString& strHelper, const long paramCount, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, false, lMethodNum, lMethodAlias); }
-		inline long AppendProc(const ibString& strMethodName, const long paramCount, const ibString& strHelper) { return AppendMethod(strMethodName, strHelper, paramCount, false, wxNOT_FOUND, wxNOT_FOUND); }
-		inline long AppendProc(const ibString& strMethodName, const long paramCount, const ibString& strHelper, const long lMethodNum) { return AppendMethod(strMethodName, strHelper, paramCount, false, lMethodNum, wxNOT_FOUND); }
+		inline long AppendProc(const ibString& strMethodName, const long paramCount, const ibString& strHelper) { return AppendMethod(strMethodName, strHelper, paramCount, false, ibNOT_FOUND, ibNOT_FOUND); }
+		inline long AppendProc(const ibString& strMethodName, const long paramCount, const ibString& strHelper, const long lMethodNum) { return AppendMethod(strMethodName, strHelper, paramCount, false, lMethodNum, ibNOT_FOUND); }
 		inline long AppendProc(const ibString& strMethodName, const long paramCount, const ibString& strHelper, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, false, lMethodNum, lMethodAlias); }
 
-		inline long AppendFunc(const ibString& strMethodName) { return AppendMethod(strMethodName, ibEmptyString, 0, true, wxNOT_FOUND, wxNOT_FOUND); }
-		inline long AppendFunc(const ibString& strMethodName, const ibString& strHelper) { return AppendMethod(strMethodName, strHelper, 0, true, wxNOT_FOUND, wxNOT_FOUND); }
-		inline long AppendFunc(const ibString& strMethodName, const long paramCount, const ibString& strHelper) { return AppendMethod(strMethodName, strHelper, paramCount, true, wxNOT_FOUND, wxNOT_FOUND); }
+		inline long AppendFunc(const ibString& strMethodName) { return AppendMethod(strMethodName, ibEmptyString, 0, true, ibNOT_FOUND, ibNOT_FOUND); }
+		inline long AppendFunc(const ibString& strMethodName, const ibString& strHelper) { return AppendMethod(strMethodName, strHelper, 0, true, ibNOT_FOUND, ibNOT_FOUND); }
+		inline long AppendFunc(const ibString& strMethodName, const long paramCount, const ibString& strHelper) { return AppendMethod(strMethodName, strHelper, paramCount, true, ibNOT_FOUND, ibNOT_FOUND); }
 		inline long AppendFunc(const ibString& strMethodName, const ibString& strHelper, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, 0, true, lMethodNum, lMethodAlias); }
 		inline long AppendFunc(const ibString& strMethodName, const ibString& strHelper, const long paramCount, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, true, lMethodNum, lMethodAlias); }
-		inline long AppendFunc(const ibString& strMethodName, const long paramCount, const ibString& strHelper, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, true, wxNOT_FOUND, lMethodAlias); }
+		inline long AppendFunc(const ibString& strMethodName, const long paramCount, const ibString& strHelper, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, true, ibNOT_FOUND, lMethodAlias); }
 		inline long AppendFunc(const ibString& strMethodName, const long paramCount, const ibString& strHelper, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, strHelper, paramCount, true, lMethodNum, lMethodAlias); }
 
 		inline long AppendMethod(const ibString& strMethodName, const long paramCount, bool hasRet, const long lMethodNum, const long lMethodAlias) { return AppendMethod(strMethodName, ibEmptyString, paramCount, hasRet, lMethodNum, lMethodAlias); }
@@ -852,14 +852,14 @@ public:
 				const auto snapshot = EnsureFindIndex();
 				const auto& idx = snapshot->method;
 				const auto it = idx.find(strMethodName);
-				return it != idx.end() ? it->second : wxNOT_FOUND;
+				return it != idx.end() ? it->second : ibNOT_FOUND;
 			}
 			auto iterator = std::find_if(m_methods.begin(), m_methods.end(), [&strMethodName](const auto& f) {
 				return stringUtils::IsSameAs(f.m_fieldName, strMethodName); });
 
 			if (iterator != m_methods.end())
 				return (long)std::distance(m_methods.begin(), iterator);
-			return wxNOT_FOUND;
+			return ibNOT_FOUND;
 		}
 
 		// The name WHERE IT LIES — by reference, like GetPropName.
@@ -879,13 +879,13 @@ public:
 
 		long GetMethodAlias(const long lMethodNum) const {
 			if (lMethodNum < 0 || lMethodNum >= GetNMethods())
-				return wxNOT_FOUND;
+				return ibNOT_FOUND;
 			return m_methods[lMethodNum].m_lAlias;
 		}
 
 		long GetMethodData(const long lMethodNum) const {
 			if (lMethodNum < 0 || lMethodNum >= GetNMethods())
-				return wxNOT_FOUND;
+				return ibNOT_FOUND;
 			return m_methods[lMethodNum].m_lData;
 		}
 
@@ -905,7 +905,7 @@ public:
 
 		long GetNParams(const long lMethodNum) const {
 			if (lMethodNum < 0 || lMethodNum >= GetNMethods())
-				return wxNOT_FOUND;
+				return ibNOT_FOUND;
 			return m_methods[lMethodNum].m_paramCount;
 		}
 
@@ -1103,8 +1103,8 @@ public:
 		const ibClassID& clsid = ibValue::GetTypeIDByRef(typeid(T));
 		if (ibValue::IsRegisterCtor(clsid))
 			return new T(args...);
-		wxASSERT_MSG(false, "CreateObjectValue: the type is not registered");
-		return wxEmptyValue;
+		ibASSERT_MSG(false, "CreateObjectValue: the type is not registered");
+		return ibEmptyValue;
 	}
 
 	template<typename T, typename valT>
@@ -1614,7 +1614,7 @@ public:
 
 	// ⭐⭐ BRING THAT VALUE TO WHAT THIS ONE ALLOWS, AND SAY WHETHER YOU COULD — the whole of a link by
 	// type beyond "where to read it from", and a VERB rather than a question. Nobody has to learn what
-	// this value is: it takes the incoming value, brings it, and reports; which is how a subconto has
+	// this value is: it takes the incoming value, brings it, and reports; which is how an account dimension has
 	// always been written (accountingRegisterObject.cpp: the kind's own Type, then an adjustment).
 	//
 	// ⭐ THE SAME VERB THE TREE ALREADY USES FOR THIS OPERATION, with the `Out` in the middle for the shape
@@ -1816,7 +1816,7 @@ protected:
 template<typename T, typename valT>
 ibValue ibValue::CreateEnumObject(const valT& v) {
 	const ibValuePtr<ibValueEnumeration<valT>> createdEnum(ibValue::CreateObject<T>());
-	wxASSERT(createdEnum != nullptr);
+	ibASSERT(createdEnum != nullptr);
 	return createdEnum->CreateEnumVariantValue(v);
 }
 

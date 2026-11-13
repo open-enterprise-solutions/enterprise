@@ -9931,7 +9931,7 @@ bool LooksLikeHeading(const ibString& line)
 		// "Overview" (caught by running the split over the corpus before it ever shipped).
 		bool shouts = true;
 		for (size_t index = start; shouts && index < at; index++)
-			shouts = wxIsupper(line[index]) != 0;
+			shouts = ibIsUpper(line[index]);
 
 		if (!shouts)
 			break;
@@ -10021,7 +10021,7 @@ ibString TopicLabel(const ibString& title)
 	// Cut at the first full stop or dash: the heading states its subject and then explains it.
 	for (const ibChar* stop : { ibT(". "), ibT(" - "), ibT(", ") }) {
 		const int at = label.Find(stop);
-		if (at != wxNOT_FOUND && at > 12) {
+		if (at != ibNOT_FOUND && at > 12) {
 			label = label.Left(at);
 			break;
 		}
@@ -10347,8 +10347,8 @@ public:
 			std::vector<ibDataValue> parts;
 
 			for (const ibMcpTopic& topic : topics) {
-				if (topic.m_title.Lower().Find(wanted.Lower()) == wxNOT_FOUND
-					&& TopicLabel(topic.m_title).Lower().Find(wanted.Lower()) == wxNOT_FOUND)
+				if (topic.m_title.Lower().Find(wanted.Lower()) == ibNOT_FOUND
+					&& TopicLabel(topic.m_title).Lower().Find(wanted.Lower()) == ibNOT_FOUND)
 					continue;
 
 				std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();

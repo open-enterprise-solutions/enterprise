@@ -37,6 +37,7 @@
 //      setting is the same on both sides of it.
 
 #include <gtest/gtest.h>
+#include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
 #include "backend/composition/dataComposer.h"     // ibDataDBComposer — the two sections live on the base
 #include "core/composition/compositionTheme.h"    // ibCompositionThemes — the palettes a setting names

@@ -69,7 +69,7 @@ public:
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	void SetSourceAttribute(ibVariantAttributeSource* data) {
-		m_attributeSource->SetFromMetaDesc(wxNOT_FOUND);
+		m_attributeSource->SetFromMetaDesc(ibNOT_FOUND);
 		m_attributeSource->SetFromTypeDesc(data->GetTypeDesc());
 	}
 
@@ -139,16 +139,16 @@ public:
 
 		m_attributeSource = new ibVariantAttributeSource(prop, id);
 		m_attributeSource->IncrRef();   // this value's own hold on it
-		if (id != wxNOT_FOUND) m_sourceDesc.SetDefaultSource(id);
+		if (id != ibNOT_FOUND) m_sourceDesc.SetDefaultSource(id);
 	}
 
 	ibVariantSource(const ibBackendTypeSourceFactory* prop, const ibGuid& id, bool fillTypeDesc = true) : ibVariant(ibValueTypes::TYPE_VALUE),
 		m_ownerProperty(prop), m_attributeSource(nullptr) {
 
 		const ibMetaID mid = GetIdByGuid(id);
-		m_attributeSource = new ibVariantAttributeSource(prop, fillTypeDesc ? mid : wxNOT_FOUND);
+		m_attributeSource = new ibVariantAttributeSource(prop, fillTypeDesc ? mid : ibNOT_FOUND);
 		m_attributeSource->IncrRef();   // this value's own hold on it
-		if (mid != wxNOT_FOUND) m_sourceDesc.SetDefaultSource(mid);
+		if (mid != ibNOT_FOUND) m_sourceDesc.SetDefaultSource(mid);
 	}
 
 	ibVariantSource(const ibBackendTypeSourceFactory* prop, const ibTypeDescription& typeDesc) : ibVariant(ibValueTypes::TYPE_VALUE),
@@ -161,7 +161,7 @@ public:
 	ibVariantSource(const ibBackendTypeSourceFactory* prop, const ibSourceDescription& desc) : ibVariant(ibValueTypes::TYPE_VALUE),
 		m_sourceDesc(desc), m_ownerProperty(prop), m_attributeSource(nullptr) {
 
-		m_attributeSource = new ibVariantAttributeSource(prop, wxNOT_FOUND);
+		m_attributeSource = new ibVariantAttributeSource(prop, ibNOT_FOUND);
 		m_attributeSource->IncrRef();   // this value's own hold on it
 		RefreshTypeFromSource();   // resolve the leaf type from the explorer (not the metadata-seeded leaf id)
 	}
@@ -181,7 +181,7 @@ public:
 		const ibVariantSource* srcData = dynamic_cast<const ibVariantSource*>(data.GetRef());
 		if (srcData != nullptr) {
 			ibVariantAttribute* srcAttr = srcData->m_attributeSource;
-			wxASSERT(srcAttr);
+			ibASSERT(srcAttr);
 			return m_sourceDesc.GetPath() == srcData->m_sourceDesc.GetPath() && srcAttr->CompareValueEQ(*m_attributeSource);
 		}
 		return false;

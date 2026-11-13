@@ -112,8 +112,10 @@ public:
 	ibVariant(ibString&& sParam) noexcept //string — native move
 		: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_refCount(0), m_dData() { m_sData = std::move(sParam); }
 	// …and a wx text, the one a window hands in: without it `ibVariant(wxs)` is ambiguous on GCC and Clang — wxString
-	// reaches ibString, `const wchar_t*` and bool alike, each one user conversion away.
-	CORE_API ibVariant(const wxString& sParam); //string
+	// reaches ibString, `const wchar_t*` and bool alike, each one user conversion away. A template, as ibString's
+	// boundary is (fstring.h): made only where a program includes wx.
+	template <std::same_as<wxString> S>
+	ibVariant(const S& sParam) : ibVariant(ibString(sParam)) {} //string
 
 	// ANY OTHER POINTER IS A MISTAKE, the runtime's rule: pointer-to-bool is a standard conversion, and an unrelated
 	// pointer would arrive as TRUE. Only an object (derived from this class) and a text are taken.
@@ -153,7 +155,8 @@ public:
 	CORE_API void operator = (const ibNumber& cParam);
 	CORE_API void operator = (const ibDateTime& cParam);
 	CORE_API void operator = (const ibString& cParam);
-	CORE_API void operator = (const wxString& cParam);
+	template <std::same_as<wxString> S>
+	void operator = (const S& cParam) { *this = ibString(cParam); }
 	CORE_API void operator = (const char* cParam);
 	CORE_API void operator = (const ibChar* cParam);
 	CORE_API void operator = (ibString&& cParam);

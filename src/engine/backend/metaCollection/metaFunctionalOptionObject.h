@@ -54,7 +54,7 @@ public:
 	virtual ibValue CreateValue() const override;
 
 	// The option this one works under: while that one is off, this one counts as off too, whatever its own
-	// value. wxNOT_FOUND when it requires none. Resolved along the chain by the gate (EffectiveValues).
+	// value. ibNOT_FOUND when it requires none. Resolved along the chain by the gate (EffectiveValues).
 	ibMetaID GetRequired() const;
 
 	// The write door said the value changed — what the gate answered from the old one is dropped.

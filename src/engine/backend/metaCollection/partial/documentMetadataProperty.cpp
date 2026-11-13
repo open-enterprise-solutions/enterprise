@@ -35,7 +35,7 @@ void ibValueMetaObjectDocument::OnPropertyChanged(ibProperty* property, const ib
 		const ibMetaDescription& sequences = GetRecordDescription(ibRecorderWrites::Sequences);
 		for (ibValueMetaObjectRegisterData* registerData : m_metaData->GetAnyArrayObject<ibValueMetaObjectRegisterData>()) {
 			ibValueMetaObjectAttributePredefined* infoRecorder = registerData->GetRegisterRecorder();
-			wxASSERT(infoRecorder);
+			ibASSERT(infoRecorder);
 			if (movements.ContainMetaType(registerData->GetMetaID()) || sequences.ContainMetaType(registerData->GetMetaID()))
 				infoRecorder->GetTypeDesc().AppendMetaType((*m_propertyAttributeReference)->GetTypeDesc());
 			else

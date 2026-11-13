@@ -1,7 +1,7 @@
 #ifndef __SOURCE_DESCRIPTION_H__
 #define __SOURCE_DESCRIPTION_H__
 
-#include "core/core.h"    // CORE_API, wxNOT_FOUND, ibMetaID, ibClassID (via clsid.h)
+#include "core/core.h"    // CORE_API, ibNOT_FOUND, ibMetaID, ibClassID (via clsid.h)
 #include <vector>
 #include <algorithm>
 
@@ -16,7 +16,7 @@
 // clsid where a COMPOSITE reference was pinned to one branch in the picker. The walk's gate compares it to
 // the live type, so a metadata drift (a reference retyped) reads as a broken binding, not a silent mis-hop.
 struct ibSourceHop {
-	ibSourceId m_id   = wxNOT_FOUND;
+	ibSourceId m_id   = ibNOT_FOUND;
 	ibClassID  m_type = g_valueUndefinedCLSID;
 	bool operator==(const ibSourceHop& o) const { return m_id == o.m_id && m_type == o.m_type; }
 };
@@ -47,10 +47,10 @@ public:
 	void ClearSource() { m_listSource.clear(); }
 
 	// The first hop is the entry point from the source; the leaf is the final value.
-	ibSourceId GetFirst() const { return m_listSource.empty() ? wxNOT_FOUND : m_listSource.front().m_id; }
-	ibSourceId GetLeaf() const { return m_listSource.empty() ? wxNOT_FOUND : m_listSource.back().m_id; }
+	ibSourceId GetFirst() const { return m_listSource.empty() ? ibNOT_FOUND : m_listSource.front().m_id; }
+	ibSourceId GetLeaf() const { return m_listSource.empty() ? ibNOT_FOUND : m_listSource.back().m_id; }
 
-	ibSourceId GetByIdx(unsigned int idx) const { return idx < m_listSource.size() ? m_listSource[idx].m_id : wxNOT_FOUND; }
+	ibSourceId GetByIdx(unsigned int idx) const { return idx < m_listSource.size() ? m_listSource[idx].m_id : ibNOT_FOUND; }
 
 	// Number of hops in the path (0 = empty, 1 = plain column, >1 = dot-walk). Callers windowing a path — the
 	// tablebox prefix, a walk bound — read this instead of GetPath().size().

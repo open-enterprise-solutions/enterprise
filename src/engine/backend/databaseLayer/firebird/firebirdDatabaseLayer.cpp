@@ -36,7 +36,7 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 		// the aliases of every table around it, joined — and that string has a length of one byte: past ~210 characters
 		// the request is refused as "invalid request BLR … expected record selection expression clause", the offending
 		// byte a letter of an alias. Measured 2026-09-17 on the vendored 5.0.5: a balance re-keyed by turnovers-only
-		// subcontos nested seven derived tables under 31-character aliases (214 characters) and failed; the same
+		// account dimensions nested seven derived tables under 31-character aliases (214 characters) and failed; the same
 		// statement with its outer alias 20 characters long ran, and 26 failed. (The note on the field read the
 		// 2026-09-16 failure as aliases sharing their first 31 characters; the 31 fixed it by shortening the path.)
 		// Twelve — three of the head and the hash — keeps ten levels near 130.

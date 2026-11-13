@@ -72,7 +72,7 @@ bool ibPropertyDynamicSource::WriteNodeValue(ibDataValue& value) const
 	// loss as the read half, from the other side. The id is what is stored; whether it resolves
 	// today is not a fact about the file.
 	const ibMetaID tableId = GetTableId();
-	if (tableId == wxNOT_FOUND)
+	if (tableId == ibNOT_FOUND)
 		return true;   // no source picked → nothing to write
 	value = ibDataValue::Int((int)tableId);
 	return true;
@@ -92,7 +92,7 @@ bool ibPropertyDynamicSource::GetProtocolValue(ibDataNode& row, ibReader reader)
 			continue;
 		const ibBackendQueryable* const queryable = factory->Resolve(descriptor->GetNamespace(), descriptor->GetName());
 		const ibMetaID tableId = queryable != nullptr ? queryable->GetQueryTableId() : 0;
-		if (tableId == 0 || tableId == wxNOT_FOUND)
+		if (tableId == 0 || tableId == ibNOT_FOUND)
 			continue;   // a source with no table id (temp, computed) cannot be stored
 		ibDataNode& choice = row.AddChild(0, static_cast<ibMetaID>(row.Children().size() + 1));
 		choice.SetValue(ibProtocol::ibSchema::ibProperties::Id, static_cast<std::int32_t>(tableId));

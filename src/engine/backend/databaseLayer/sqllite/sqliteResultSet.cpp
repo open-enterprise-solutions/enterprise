@@ -6,6 +6,8 @@
 #include "backend/databaseLayer/databaseLayerException.h"
 #include "backend/databaseLayer/databaseErrorCodes.h"
 
+#include <cstring>
+
 // ctor
 ibDatabaseResultSetSQLite::ibDatabaseResultSetSQLite()
 	: ibDatabaseResultSet()

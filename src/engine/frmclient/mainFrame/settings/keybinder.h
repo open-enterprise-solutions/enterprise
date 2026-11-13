@@ -64,6 +64,8 @@ public:
 
 	unsigned int GetNumCommands() const { return static_cast<unsigned int>(m_commands.size()); }
 	const Command& GetCommand(unsigned int i) const { return m_commands[i]; }
+	// …and by its id: none — no such command on the bar.
+	const Command* GetCommandForId(int id) const;
 
 	// The keys as the window's accelerators.
 	void UpdateWindow(wxWindow* window);

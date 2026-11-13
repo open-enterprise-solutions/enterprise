@@ -39,19 +39,20 @@ ibDialogFormEditor::ibDialogFormEditor(ibValueForm* valueForm) : m_owner(valueFo
 
 int ibDialogFormEditor::ShowModal()
 {
+	namespace style = ibProtocol::ibRequest::ibMessage::ibStyle;   // the answer is the button the window closed with
 	ibBackendDocFrame* const frame = ibSession::CurrentFrame();
 	if (frame == nullptr || m_owner == nullptr)
-		return wxID_CANCEL;
+		return style::Cancel;
 
 	// THE WINDOW STAYS OPEN THROUGH EVERY ACT BUT THE LAST, as the desktop's does: each act is an answer, done here, and
 	// the window asked again — how a save or a reset went (Result) said with it.
-	long long result = wxNOT_FOUND;
+	long long result = ibNOT_FOUND;
 	for (;;) {
 		ibDataNode request;
 		request.SetValue(ibProtocol::ibRequest::Kind, static_cast<std::int32_t>(ibProtocol::ibRequest::ibKind::FormEditor));
 		request.SetValue(ibProtocol::ibRequest::ibFormEditor::Picture, ibBackendPicture::SendPicture(g_picChangeFormCLSID));
 		request.SetValue(ibProtocol::ibRequest::ibFormEditor::HasSetting, ibHasFormSettings(m_owner));
-		if (result != wxNOT_FOUND)
+		if (result != ibNOT_FOUND)
 			request.SetValue(ibProtocol::ibRequest::ibFormEditor::Result, static_cast<std::int32_t>(result));
 
 		// The controls' classes and their pictures — what the desktop's editor lists its tree's icons from.
@@ -66,14 +67,14 @@ int ibDialogFormEditor::ShowModal()
 
 		ibDataNode response;
 		if (!frame->Request(request, response) || !response.FindField(ibProtocol::ibRequest::ibFormEditor::Act))
-			return wxID_OK;   // closed
+			return style::OK;   // closed
 
 		switch (static_cast<ibProtocol::ibRequest::ibFormEditor::ibAct>(response.GetValue<std::int32_t>(ibProtocol::ibRequest::ibFormEditor::Act))) {
 		case ibProtocol::ibRequest::ibFormEditor::ibAct::Apply:
 			if (const auto controls = response.FindChild(ibProtocol::ibRequest::ibFormEditor::Controls))
 				ibApplyFormSettings(m_owner, *controls);
 			m_owner->UpdateForm();
-			result = wxNOT_FOUND;
+			result = ibNOT_FOUND;
 			break;
 		case ibProtocol::ibRequest::ibFormEditor::ibAct::Save:
 			result = static_cast<long long>(ibSaveFormSettings(m_owner));
@@ -82,7 +83,7 @@ int ibDialogFormEditor::ShowModal()
 			result = static_cast<long long>(ibResetFormSettings(m_owner));
 			break;
 		default:
-			return wxID_OK;   // an act this server does not know — taken for closed
+			return style::OK;   // an act this server does not know — taken for closed
 		}
 	}
 }

@@ -4,6 +4,8 @@
 
 #include "backend/databaseLayer/databaseErrorCodes.h"
 
+#include <cstring>
+
 // ctor
 ibPreparedStatementODBC::ibPreparedStatementODBC(ibInterfaceODBC* pInterface, SQLHENV sqlEnvHandle, SQLHDBC sqlHDBC, std::atomic<void*>* pExecuting)
 	: ibPreparedStatement()

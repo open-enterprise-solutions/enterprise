@@ -94,7 +94,7 @@ public:
 	explicit ibValueDynamicListColumnCollection(const std::vector<ibQueryLowering::ibQueryOutputColumn>& schema) {
 		std::vector<ibMetaID> taken;
 		for (const ibQueryLowering::ibQueryOutputColumn& oc : schema) {
-			ibMetaID id = wxNOT_FOUND;
+			ibMetaID id = ibNOT_FOUND;
 			if (oc.m_col != nullptr && !ibBackendQueryColumn::IsSyntheticId(oc.m_col->GetColumnId())
 			    && oc.m_col->GetName().IsSameAs(oc.m_name, false))
 				id = oc.m_col->GetColumnId();
@@ -640,7 +640,7 @@ const ibSourceExplorer* ibValueDynamicList::GetSourceExplorer() const
 	// Root flagged a TABLE SECTION — a dynamic list IS a table, so IsTableSource() reports true and the
 	// attribute drags as a tablebox (metadata-free, same as the value-table / object lists).
 	if (!m_sourceExplorer.Reset(GetSourceMetaData()->GetFactoryCountChanges(),
-		GetObjectTypeName(), GetObjectTypeName(), wxNOT_FOUND, g_valueDynamicListCLSID, /*tableSection*/true))
+		GetObjectTypeName(), GetObjectTypeName(), ibNOT_FOUND, g_valueDynamicListCLSID, /*tableSection*/true))
 		return &m_sourceExplorer;   // built at this version of the metadata, of this source and query — read as it is
 	// The list is a MIRROR: it resets the explorer and hands it to the source descriptor (the single bridge), which
 	// forwards the fill to the metaobject — the same one that lists/runs commands and resolves select.
@@ -827,7 +827,7 @@ bool ibValueDynamicList::ReadProperty(const ibDataNode& node)
 	// description (see WriteProperty); the Source property is its view, and it is filled here — as an
 	// ID, without resolving. Nothing is registered yet at load time, and resolving now is exactly
 	// what used to throw the value away (ibPropertyDynamicSource::ReadNodeValue).
-	if (given != wxNOT_FOUND)
+	if (given != ibNOT_FOUND)
 		GetCompositionDesc().m_mainTable = given;
 	else
 		m_propertySource->SetTableId(GetCompositionDesc().m_mainTable);

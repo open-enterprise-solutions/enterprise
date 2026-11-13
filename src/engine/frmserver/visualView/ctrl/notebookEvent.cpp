@@ -17,7 +17,7 @@ void ibValueNotebook::OnPageChanged(const ibFormID& pageId)
 	ibValueNotebookPage* activePage = nullptr;
 	for (unsigned int i = 0; i < GetChildCount(); i++) {
 		ibValueNotebookPage* child = dynamic_cast<ibValueNotebookPage*>(GetChild(i));
-		wxASSERT(child);
+		ibASSERT(child);
 		if (child != nullptr && child->GetControlID() == pageId)
 			activePage = child;
 	}

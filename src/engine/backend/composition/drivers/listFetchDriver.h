@@ -159,7 +159,7 @@ private:
 			ibMetaID id = col->GetColumnId();
 			if (m_idOf) {
 				const ibMetaID own = m_idOf(m_schema[i].m_name);
-				if (own != wxNOT_FOUND)
+				if (own != ibNOT_FOUND)
 					id = own;
 				// ⚠ …AND A COLUMN ONLY THE QUERY HAS STAYS IN THE QUERY. Its id is synthetic — negative, the
 				// query took the minus for them and says "none" with 0 — while the reader's "none" is -1, and

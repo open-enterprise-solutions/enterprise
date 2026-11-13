@@ -11,7 +11,7 @@ ibValueFrame* ibValueFrame::DoFindControlByName(const ibString& controlName, ibV
 {
 	for (unsigned int idx = 0; idx < top->GetChildCount(); idx++) {
 		ibValueFrame* child = top->GetChild(idx);
-		wxASSERT(child);
+		ibASSERT(child);
 		ibValueFrame* foundedMeta = DoFindControlByName(controlName, child);
 		if (foundedMeta) {
 			return foundedMeta;
@@ -34,7 +34,7 @@ void ibValueFrame::DoGenerateNewID(ibFormID& id, ibValueFrame* top) const
 {
 	for (unsigned int idx = 0; idx < top->GetChildCount(); idx++) {
 		ibValueFrame* child = top->GetChild(idx);
-		wxASSERT(child);
+		ibASSERT(child);
 		ibFormID newID = child->GetControlID() + 1;
 		if (newID > id) {
 			id = newID;
@@ -45,9 +45,9 @@ void ibValueFrame::DoGenerateNewID(ibFormID& id, ibValueFrame* top) const
 
 ibFormID ibValueFrame::GenerateNewID()
 {
-	wxASSERT(m_controlId == 0);
+	ibASSERT(m_controlId == 0);
 	ibValueForm* ownerForm = GetOwnerForm();
-	wxASSERT(ownerForm);
+	ibASSERT(ownerForm);
 
 	// SEED ONCE, THEN COUNT — the twin of ibMetaData::GenerateNewID, and for the same two reasons
 	// (see the note on m_nextControlId). The walk still decides where a LOADED form's numbering
@@ -67,7 +67,7 @@ ibValueFrame* ibValueFrame::DoFindControlByID(const ibFormID& id, ibValueFrame* 
 {
 	for (unsigned int idx = 0; idx < top->GetChildCount(); idx++) {
 		ibValueFrame* child = top->GetChild(idx);
-		wxASSERT(child);
+		ibASSERT(child);
 		ibValueFrame* foundedMeta = DoFindControlByID(id, child);
 		if (foundedMeta) {
 			return foundedMeta;

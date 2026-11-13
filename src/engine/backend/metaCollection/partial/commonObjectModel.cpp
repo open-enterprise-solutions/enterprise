@@ -29,7 +29,7 @@ bool ibValueRecordSetObject::SetValueByRow(const ibVariant& variant,
 		return false;
 
 	const ibValueMetaObjectRegisterData* metaObject = GetMetaObject();
-	wxASSERT(metaObject);
+	ibASSERT(metaObject);
 	ibValueMetaObjectAttributeBase* metaObjectAttribute = metaObject->FindAnyAttributeObjectByFilter(col);
 	if (metaObjectAttribute == nullptr)
 		return false;   // not a field of the line, or one its register has switched off

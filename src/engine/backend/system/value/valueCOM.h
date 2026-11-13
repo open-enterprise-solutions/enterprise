@@ -9,6 +9,7 @@
 
 #ifdef __IBMSW__
 #include <wrl/client.h>     // Microsoft::WRL::ComPtr — an interface pointer that releases itself
+#undef GetClassName         // winuser.h's macro would rename ibValue::GetClassName (wx's winundef.h undid it while the engine included wx)
 
 class ibComEventSink;
 

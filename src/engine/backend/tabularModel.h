@@ -301,7 +301,7 @@ public:
 			// attribute answers with the attribute's, the one written on it first.
 			virtual const ibFormatString& GetColumnFormat() const;
 
-			virtual int GetColumnWidth() const { return wxDVC_DEFAULT_WIDTH; }
+			virtual int GetColumnWidth() const { return ibDVC_DEFAULT_WIDTH; }
 
 			virtual void SetColumnWidth(int width) {};
 
@@ -329,7 +329,7 @@ public:
 		virtual ibValueModelColumnInfo* AddColumn(const ibString& colName,
 			const ibTypeDescription& typeData,
 			const ibString& caption,
-			int width = wxDVC_DEFAULT_WIDTH) {
+			int width = ibDVC_DEFAULT_WIDTH) {
 			return nullptr;
 		};
 
@@ -408,12 +408,12 @@ public:
 		ibDataViewItem GetLineItem() const { return m_lineItem; };
 
 		ibValueModelReturnLine(const ibDataViewItem& lineItem) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true), m_lineItem(lineItem) {
-			wxRefCounter* refCounter = static_cast<wxRefCounter*>(m_lineItem.GetID());
+			ibRefCounter* refCounter = m_lineItem.GetID();
 			if (refCounter != nullptr)
 				refCounter->IncRef();
 		}
 		virtual ~ibValueModelReturnLine() {
-			wxRefCounter* refCounter = static_cast<wxRefCounter*>(m_lineItem.GetID());
+			ibRefCounter* refCounter = m_lineItem.GetID();
 			if (refCounter != nullptr)
 				refCounter->DecRef();
 			if (m_heldOwner != nullptr)
@@ -812,10 +812,10 @@ public:
 	virtual ibMetaID GetColumnIDByName(const ibString colName) const {
 		ibValueModelColumnCollection* colCollection = GetColumnCollection();
 		if (colCollection == nullptr)
-			return wxNOT_FOUND;
+			return ibNOT_FOUND;
 		ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo = colCollection->GetColumnByName(colName);
 		if (colInfo == nullptr)
-			return wxNOT_FOUND;
+			return ibNOT_FOUND;
 		return colInfo->GetColumnID();
 	};
 
@@ -1466,15 +1466,16 @@ public:
 	virtual int Compare(const ibDataViewItem& item1, const ibDataViewItem& item2,
 		unsigned int col, bool ascending) const {
 
-		wxASSERT(item1.IsOk() && item2.IsOk());
+		ibASSERT(item1.IsOk() && item2.IsOk());
 
 		// Sorting is L5 — the composer applies the ORDER BY in the fetch, and HasDefaultCompare() is false so
 		// wxDVC never drives sorting through here. This override stays only to give a STABLE total order to a
 		// direct caller; the per-field value compare (the old ibSortModel / GetSortModels loop) is gone with
 		// the model-side sort store.
-		wxUIntPtr id1 = wxPtrToUInt(item1.GetID()),
-			id2 = wxPtrToUInt(item2.GetID());
-		return ascending ? id1 - id2 : id2 - id1;
+		const std::uintptr_t id1 = reinterpret_cast<std::uintptr_t>(item1.GetID()),
+			id2 = reinterpret_cast<std::uintptr_t>(item2.GetID());
+		const int order = (id1 > id2) - (id1 < id2);   // the sign: on 64 bits the difference does not fit an int
+		return ascending ? order : -order;
 	}
 
 	// (HasDefaultCompare() — declared once up in this class: false, so wxDVC leaves ordering to the composer
@@ -1522,7 +1523,7 @@ public:
 	// A DB model reads dynamically from the cursor and has NO stored rows, so these return empty; ibValueModelStorage
 	// OVERRIDES them to read its ibRamValueStorage. (Kept virtual on the base so IsEmpty / the display resolve
 	// polymorphically.) GetRowCount / GetItem are the table's own, ibTabularDataObject's — a row walk asks any table.
-	virtual long GetRow(const ibDataViewItem& /*item*/) const { return wxNOT_FOUND; }
+	virtual long GetRow(const ibDataViewItem& /*item*/) const { return ibNOT_FOUND; }
 
 	// THE ROW'S STATE PICTURE — asked by the control once per row, drawn at the start of its first column
 	// (ibDataViewModel::GetRowPicture; the provider forwards here). The model that knows what its rows are
@@ -1573,7 +1574,7 @@ public:
 	long  IndexOf(const Row* node) const {
 		const std::vector<Row*>& kids = m_root.m_children;
 		for (long i = 0; i < RowCount(); ++i) if (kids[static_cast<size_t>(i)] == node) return i;
-		return wxNOT_FOUND;
+		return ibNOT_FOUND;
 	}
 	// A node's cell (friend of the node → reads its value map directly).
 	ibValue GetCell(long i, ibMetaID col) const {
@@ -1602,11 +1603,11 @@ public:
 	// The model is CONST: notify=false just bumps the mutable view generation (BumpViewGeneration is const), so a
 	// whole-list RAM SNAPSHOT (ibValueModelCursor, DynamicRead off) fills these from its CONST fetch — no const_cast.
 	long AddValue(const ibValueModel* model, Row* node, bool notify = true) {
-		wxASSERT(node); node->m_valueTable = model; m_root.m_children.emplace_back(node);
+		ibASSERT(node); node->m_valueTable = model; m_root.m_children.emplace_back(node);
 		model->NotifyRowAppended(node, notify); return RowCount() - 1;
 	}
 	long InsertValue(const ibValueModel* model, Row* node, unsigned int row, bool notify = true) {
-		wxASSERT(node); node->m_valueTable = model;
+		ibASSERT(node); node->m_valueTable = model;
 		m_root.m_children.insert(m_root.m_children.begin() + row, node);
 		model->NotifyRowInserted(node, notify); return row + 1;
 	}
@@ -1643,7 +1644,7 @@ public:
 	bool MoveValue(const ibValueModel* model, Row* node, int delta, bool notify = true) {
 		std::vector<Row*>& kids = m_root.m_children;
 		const long from = IndexOf(node);
-		if (from == wxNOT_FOUND || delta == 0)
+		if (from == ibNOT_FOUND || delta == 0)
 			return false;
 		long to = from + delta;
 		if (to < 0) to = 0;
@@ -1784,7 +1785,7 @@ public:
 	long GetRowCount() const override { return m_storage.RowCount(); }
 	long GetRow(const ibDataViewItem& item) const override {
 		ibComposerNode* n = GetViewData<ibComposerNode>(item);
-		return n != nullptr ? m_storage.IndexOf(n) : wxNOT_FOUND;
+		return n != nullptr ? m_storage.IndexOf(n) : ibNOT_FOUND;
 	}
 	ibDataViewItem GetItem(long row) const override { return m_storage.GetItem(row); }
 
@@ -1927,7 +1928,7 @@ public:
 	// The name door — what the script's Sort("Column") says. A plain column of this table, no hop: it must
 	// be one of ours, and then it resolves to the one road above.
 	bool SortRows(const ibString& colName, bool ascending) {
-		if (GetColumnIDByName(colName) == wxNOT_FOUND)
+		if (GetColumnIDByName(colName) == ibNOT_FOUND)
 			return false;
 		ibDataViewColumnItem column;
 		column.m_name = colName;

@@ -7,13 +7,11 @@
 #include <mutex>
 #include <vector>
 
-#include <wx/object.h>      // wxRefCounter — an item's count and the model's
-#include <wx/dynarray.h>
-#include <wx/itemid.h>
-
 #include "core/core.h"              // CORE_API, ibPictureID
+#include "core/refCounter.h"        // ibRefCounter — an item's count and the model's
 #include "core/variant.h"            // ibVariant — a cell's value, the same on either side
 #include "core/graphics/colour.h"   // ibColour — an item's colours as data; each side converts them to its own
+#include "core/graphics/geometry.h" // ibAlignment — an item's horizontal alignment
 
 // ⭐ ONE MODEL VIEW FOR BOTH SIDES — the server's tables and the thin client's draw over the same one. The two
 // copies it was (backend/ and frmclient/) differed in nothing but the export macro and where a read runs, and on
@@ -46,20 +44,20 @@ enum class ibFetchDirection : int8_t {
 // ----------------------------------------------------------------------------
 
 // size of a ibDataViewRenderer without contents:
-#define wxDVC_DEFAULT_RENDERER_SIZE     20
+#define ibDVC_DEFAULT_RENDERER_SIZE     20
 
 // the default width of new (text) columns:
-#define wxDVC_DEFAULT_WIDTH             80
+#define ibDVC_DEFAULT_WIDTH             80
 
 // the default width of new toggle columns:
-#define wxDVC_TOGGLE_DEFAULT_WIDTH      30
+#define ibDVC_TOGGLE_DEFAULT_WIDTH      30
 
 // the default minimal width of the columns:
-#define wxDVC_DEFAULT_MINWIDTH          30
+#define ibDVC_DEFAULT_MINWIDTH          30
 
 // The default alignment of ibDataViewRenderers is to take
 // the alignment from the column it owns.
-#define wxDVR_DEFAULT_ALIGNMENT         -1
+#define ibDVR_DEFAULT_ALIGNMENT         -1
 
 // ---------------------------------------------------------
 // ibDataViewItem
@@ -68,14 +66,14 @@ enum class ibFetchDirection : int8_t {
 // Make it a class and not a typedef to allow forward declaring it.
 //
 // Refcount-aware: rows in OES (ibValueTreeNode, ibComposerNode, ...)
-// inherit from wxRefCounter.  Storing the underlying pointer with
+// inherit from ibRefCounter.  Storing the underlying pointer with
 // auto-IncRef/DecRef means a row stays alive as long as any
 // ibDataViewItem references it — solves selection-holds-evicted-row,
 // frozen breadcrumb survival across model rebuilds, and dangling
 // pointers after Clear().
 //
 // Constructor still accepts void* for ABI back-compat with existing
-// callsites — they pass the row pointer (which IS a wxRefCounter
+// callsites — they pass the row pointer (which IS an ibRefCounter
 // subclass in all real usages), we cast internally.  GetID() returns
 // void* for legacy code.
 class CORE_API ibDataViewItem;
@@ -86,7 +84,7 @@ class CORE_API ibDataViewItem;
 // operator==) instead of routing every check through the model.  The
 // model's job shrinks to: produce items via Get*Fetch, accept writes,
 // trigger UI refresh.
-class CORE_API ibDataViewObject : public wxRefCounter
+class CORE_API ibDataViewObject : public ibRefCounter
 {
 public:
 	// Logical equality.  Default: pointer match.  Row classes compare
@@ -129,7 +127,7 @@ public:
 	// pointer-sized field but the SEMANTICS of that field depends on
 	// which ctor populated it:
 	//   Empty       — no item (m_id == nullptr).
-	//   Refcounted  — m_id is a real ibDataViewObject* (wxRefCounter
+	//   Refcounted  — m_id is a real ibDataViewObject* (ibRefCounter
 	//                 subclass); copy/dtor IncRef/DecRef.  This is
 	//                 OES paged-fetch rows, tree nodes, etc.
 	//   RawId       — m_id is opaque: either a non-refcounted node
@@ -157,7 +155,7 @@ public:
 
 	// Raw-id ctor — escape hatch for two non-refcounted holder shapes:
 	//   * ibDataViewTreeStoreNode (delete-owned by parent, NOT a
-	//     wxRefCounter).
+	//     ibRefCounter).
 	//   * Virtual-list row encoding — `wxUIntToPtr(rowIndex + 1)`
 	//     is a fake pointer (e.g. 0x00000001), never dereferenceable.
 	// Stored as Mode::RawId so dtor / copy-helpers skip refcount.
@@ -273,7 +271,34 @@ inline ibDataViewItem ibDataViewItem::GetParentItem() const {
 // hierarchy is an inherent queryable property now, so the FRONTEND view mode is what signals flat-vs-tree.)
 CORE_API extern const ibDataViewItem s_constIgnoreParent;
 
-WX_DEFINE_USER_EXPORTED_ARRAY(ibDataViewItem, ibDataViewItemArray, CORE_API);
+// THE ITEMS A MODEL HANDS OVER — a std::vector under the names of the wx array it was (WX_DEFINE_USER_EXPORTED_ARRAY):
+// the models that fill it and the controls that read it call it by those.
+class ibDataViewItemArray : public std::vector<ibDataViewItem>
+{
+public:
+	void Add(const ibDataViewItem& item)               { push_back(item); }
+	void Insert(const ibDataViewItem& item, size_t at) { insert(begin() + static_cast<difference_type>(at), item); }
+	void RemoveAt(size_t at, size_t count = 1) {
+		erase(begin() + static_cast<difference_type>(at), begin() + static_cast<difference_type>(at + count));
+	}
+	void Alloc(size_t count)                           { reserve(count); }
+	void Clear()                                       { clear(); }
+	void Empty()                                       { clear(); }
+
+	// The place of the first item equal to this one (ibDataViewItem's operator==), ibNOT_FOUND for none.
+	int Index(const ibDataViewItem& item) const {
+		const const_iterator found = std::find(begin(), end(), item);
+		return found != end() ? static_cast<int>(found - begin()) : ibNOT_FOUND;
+	}
+
+	ibDataViewItem&       Item(size_t at)       { return (*this)[at]; }
+	const ibDataViewItem& Item(size_t at) const { return (*this)[at]; }
+	ibDataViewItem&       Last()                { return back(); }
+	const ibDataViewItem& Last() const          { return back(); }
+	size_t GetCount() const { return size(); }
+	size_t Count() const    { return size(); }
+	bool   IsEmpty() const  { return empty(); }
+};
 
 
 // ---------------------------------------------------------
@@ -345,7 +370,7 @@ public:
 	// ⭐ …AND THE REST OF A FONT, PART BY PART, and a horizontal alignment — what a conditional appearance says of a
 	// cell (Max, 2026-09-30: "this is what has to be extended for conditional appearance"). Each is laid over the
 	// view's font like the three flags above, never in its place: a bold row made italic stays bold. The alignment is
-	// wxALIGN_LEFT, wxALIGN_CENTER_HORIZONTAL or wxALIGN_RIGHT and replaces the column's horizontal one.
+	// an ibAlignment (wx's numbers) and replaces the column's horizontal one.
 	void SetUnderlined(bool set) { m_underlined = set; }
 	void SetPointSize(int size) { m_pointSize = size; }
 	void SetFaceName(const ibString& face) { m_face = face; }
@@ -368,7 +393,7 @@ public:
 	bool HasBackgroundColour() const { return m_bgColour.IsOk(); }
 	const ibColour& GetBackgroundColour() const { return m_bgColour; }
 
-	bool HasAlignment() const { return m_alignment != wxALIGN_INVALID; }
+	bool HasAlignment() const { return m_alignment != ibAlignment_Default; }
 	int GetAlignment() const { return m_alignment; }
 
 	bool IsDefault() const { return !(HasColour() || HasFont() || HasBackgroundColour() || HasAlignment()); }
@@ -384,7 +409,7 @@ private:
 	bool     m_underlined = false;
 	int      m_pointSize = 0;                 // 0 = the view's own
 	ibString m_face;                          // empty = the view's own
-	int      m_alignment = wxALIGN_INVALID;   // wxALIGN_INVALID = the column's own
+	int      m_alignment = ibAlignment_Default;   // the column's own
 };
 
 // ---------------------------------------------------------
@@ -393,7 +418,7 @@ private:
 
 typedef std::vector<ibDataViewModelNotifier*> ibDataViewModelNotifiers;
 
-class CORE_API ibDataViewModel : public wxRefCounter
+class CORE_API ibDataViewModel : public ibRefCounter
 {
 public:
 	ibDataViewModel();

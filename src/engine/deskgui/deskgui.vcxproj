@@ -249,14 +249,16 @@
     <ClCompile Include="univ\window.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="app.h" />
+    <ClInclude Include="console.h" />
     <ClInclude Include="dateconv.h" />
+    <ClInclude Include="strvararg.h" />
     <ClInclude Include="typeconv.h" />
     <ClInclude Include="artProvider.h" />
     <ClInclude Include="docview\choiceTemplate.h" />
     <ClInclude Include="docview\docManager.h" />
     <ClInclude Include="docview\docView.h" />
     <ClInclude Include="docview\print\printPreview.h" />
-    <ClInclude Include="univ\app.h" />
     <ClInclude Include="univ\choiceDialog.h" />
     <ClInclude Include="univ\colourScheme.h" />
     <ClInclude Include="univ\ctrl\activityIndicator.h" />

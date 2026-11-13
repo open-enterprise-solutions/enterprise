@@ -11,8 +11,7 @@
 #include "backend/session/session.h"
 #include "backend/userInfo.h"
 
-#include <wx/datetime.h>
-#include <wx/utils.h>
+#include "core/system.h"   // ibHostName
 
 #include <chrono>
 
@@ -85,7 +84,9 @@ void ibLogger::SweepLoop()
 
 long long ibLogger::NowMillis()
 {
-    return wxDateTime::UNow().GetValue().GetValue();
+    // milliseconds since 1970 UTC, as wxDateTime::UNow held them
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
 }
 
 ibString ibLogger::HostName()
@@ -94,7 +95,7 @@ ibString ibLogger::HostName()
     // defines a macro `s_host` that expands to `S_un.S_un_b.s_b2`, which
     // makes any local with that name unparseable. Hit on first compile,
     // bug class is the same as wxWidgets' WX_NO_WIN_LEAN_AND_MEAN trap.
-    static const ibString s_hostName = wxGetHostName();
+    static const ibString s_hostName = ibHostName();
     return s_hostName;
 }
 

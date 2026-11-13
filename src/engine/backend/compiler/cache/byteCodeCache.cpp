@@ -262,7 +262,7 @@ bool ibByteCodeCache::Load(ibByteCode& outBc, const ibGuid& descId, const ibStri
 {
 	if (db_query == nullptr) return false;
 
-	wxASSERT(descId.isValid());
+	ibASSERT(descId.isValid());
 
 	// The same key the row was written under — the platform AND the configuration (see CacheKey).
 	const ibString configMd5 = CacheKey(configDigest);
@@ -361,7 +361,7 @@ void ibByteCodeCache::Invalidate(const ibGuid& descId)
 	}
 
 
-	wxASSERT(descId.isValid());
+	ibASSERT(descId.isValid());
 
 	try {
 		ibDatabaseQueryBuilder q;

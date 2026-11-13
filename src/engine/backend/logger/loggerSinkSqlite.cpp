@@ -3,15 +3,18 @@
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/databaseLayer/preparedStatement.h"
+#include "core/fdatetime.h"
 #include "core/fileSystem.h"
 
-#include <wx/filename.h>
+#include <system_error>
 
 ibLoggerSinkSqlite::ibLoggerSinkSqlite(const ibString& dir)
     : m_dir(dir)
 {
-    if (!m_dir.IsEmpty() && !ibDirExists(m_dir))
-        wxFileName::Mkdir(m_dir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+    if (!m_dir.IsEmpty() && !ibDirExists(m_dir)) {
+        std::error_code error;   // a folder that cannot be made is said by the first file that cannot be opened in it
+        std::filesystem::create_directories(ibPathOf(m_dir), error);
+    }
 }
 
 ibLoggerSinkSqlite::~ibLoggerSinkSqlite()
@@ -95,10 +98,9 @@ void ibLoggerSinkSqlite::WriteBatch(const std::vector<ibLogEntry>& batch)
     // Pick rotation bucket from the first entry's timestamp. Within one
     // drain batches are tiny enough that month rollover mid-batch is
     // not worth handling — those few entries land in the prior month.
-    wxDateTime ts((time_t)(batch.front().ts_ms / 1000));
-    const int year  = ts.GetYear();
-    const int month = static_cast<int>(ts.GetMonth()) + 1;   // 0-based enum
-    if (!EnsureOpenForMonth(year, month)) return;
+    ibDateTimeParts ts;
+    ibDateTime::OfInstant(batch.front().ts_ms).ToParts(ts);
+    if (!EnsureOpenForMonth(ts.m_year, static_cast<int>(ts.m_month))) return;
 
     // Use raw BEGIN/COMMIT/ROLLBACK instead of the ibDatabaseLayer
     // BeginTransaction() wrapper — the wrapper calls SetActiveTxConnection

@@ -38,7 +38,7 @@ public:
 	// 🛑 GOING THROUGH SetQueryable LOSES IT. Reading used to be
 	// `SetQueryable(factory->ResolveById(id))`, and a source that cannot be resolved AT THAT MOMENT
 	// — the metatypes are not registered yet, which is ordinary during a load — resolves to null,
-	// and null means `wxNOT_FOUND`. So the right id, just read out of the file, was thrown away and
+	// and null means `ibNOT_FOUND`. So the right id, just read out of the file, was thrown away and
 	// the list came back with no source at all: "I set the main table and it is not saved"
 	// (Max, 2026-08-24).
 	//
@@ -62,7 +62,7 @@ public:
 	virtual ibString GetString() const override;
 
 private:
-	ibMetaID m_tableId = wxNOT_FOUND;   // the chosen source's stable table id (queryable re-resolved on demand)
+	ibMetaID m_tableId = ibNOT_FOUND;   // the chosen source's stable table id (queryable re-resolved on demand)
 	const ibMetaData* m_metaData = nullptr;   // the SPECIFIC config this source lives in — resolved once from the owner
 };
 

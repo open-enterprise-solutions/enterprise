@@ -187,7 +187,7 @@ public:
 	// uninitialised that walk started from heap garbage, so the first ExpectLexem
 	// read past the end of the token array and every watch expression, `4`
 	// included, came back as "Module code expected".
-	int				m_numCurrentCompile = wxNOT_FOUND;	// current position in the token array
+	int				m_numCurrentCompile = ibNOT_FOUND;	// current position in the token array
 	bool			m_changedCode;
 
 	// Compile-mode predicate. Default false (regular module compile).
@@ -597,7 +597,7 @@ private:
 
 	// The token that closes a `foreach` header, scanned from `at` (the `In` keyword) with brackets
 	// balanced: the first `)` at depth zero in the braces dialect, the first `Do` at depth zero in
-	// the other. wxNOT_FOUND when there is none — a malformed header, which simply means no chain is
+	// the other. ibNOT_FOUND when there is none — a malformed header, which simply means no chain is
 	// folded and the ordinary parser reports what is wrong with it.
 	int FindForeachHeaderEnd(int at) const;
 

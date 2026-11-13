@@ -2,7 +2,7 @@
 #define __BACKEND_LOCALIZATION_H__
 
 #include "backend_core.h"
-#include "core/localization.h"   // ibLocalization — the translation engine; a language is always given to it
+#include "core/localization/localization.h"   // ibLocalization — the translation engine; a language is always given to it
 
 // WHICH LANGUAGE IS IN FORCE HERE — the engine's half of translation; the translating itself is the core's
 // (ibLocalization), asked with this language.

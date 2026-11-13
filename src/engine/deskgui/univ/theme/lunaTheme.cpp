@@ -143,8 +143,8 @@ public:
 	virtual wxColour GetBackground(ibWindow* win) const override;
 };
 
-// the object inspector's palette for the whole theme (Max, 2026-11-10: "too greyish a theme"): a control and a
-// scroll bar are the powder its margin is, a dialog and a panel the light caption tier under them (a button is white
+// the object inspector's palette for the whole theme (Max, 2026-11-10: "too greyish a theme"): a control is the
+// powder its margin is and a scroll bar's track a lighter one (2026-11-13), a dialog and a panel the light caption tier under them (a button is white
 // on it since 2026-11-12, powder under the mouse - GetBackground); the chrome-light tier stays a caption's. The text is
 // black, the alternate text the deep dusty blue the forms' tables had - a table's values and columns, the start page
 // (Max, 2026-11-10: "by default black, an alternate display beside it") - the desktop painted it in by hand
@@ -158,7 +158,7 @@ wxColour ibLunaColourScheme::Get(ibLunaColourScheme::StdColour col) const {
 		case CONTROL_TEXT_DISABLED:       return kDisabledText;
 		case CONTROL_TEXT_DISABLED_SHADOW:return kChromeLight;
 		case CONTROL_TEXT_ALTERNATE:      return kCaptionBottom;
-		case SCROLLBAR:                   return kPowder;
+		case SCROLLBAR:                   return kPowder.ChangeLightness(150);
 		case SCROLLBAR_PRESSED:           return kBorder;
 		case HIGHLIGHT:                   return kAccent;
 		case HIGHLIGHT_TEXT:              return *wxWHITE;
@@ -331,16 +331,20 @@ public:
 	// text field padding: the canon reserved just the 1px border around the
 	// text line, visually clipping font descenders — give the line breathing
 	// room (Total and Client MUST stay exact inverses: best-size goes through
-	// the former, layout through the latter)
+	// the former, layout through the latter). Two above and below, one until
+	// then: a field pressed round its line was the look of an older desktop
+	// (2026-11-13, Max: "modernise the interface", four "a little smaller");
+	// a button is as tall (ibButton::GetDefaultSize). On GTK3/Cocoa the same -
+	// the fields are the engine's there too
 	virtual wxRect GetTextTotalArea(const wxRect& rect) const override {
 		wxRect total = rect;
-		total.Inflate(GetTextBorderWidth() + 3, GetTextBorderWidth() + 1);
+		total.Inflate(GetTextBorderWidth() + 3, GetTextBorderWidth() + 2);
 		return total;
 	}
 
 	virtual wxRect GetTextClientArea(const wxRect& rect, wxCoord* extraSpaceBeyond) const override {
 		wxRect client = rect;
-		client.Deflate(GetTextBorderWidth() + 3, GetTextBorderWidth() + 1);
+		client.Deflate(GetTextBorderWidth() + 3, GetTextBorderWidth() + 2);
 
 		if (extraSpaceBeyond != nullptr)
 			*extraSpaceBeyond = 0;
@@ -364,6 +368,23 @@ public:
 			return;
 		}
 		ibThemeRenderer::DrawBorder(dc, border, rectTotal, flags, rectIn);
+	}
+
+	// a field's frame: the palette border, the accent's focused (DrawBorder); one that cannot be typed into - disabled, or
+	// read-only (ibTextCtrl::DrawBorder) - has no well, the surface under it shows (ibTextCtrl::HasContentBackground), and
+	// its frame is paler: the border most of the way to white (2026-11-13, Max: variant E3 - a field shut to typing could
+	// not be told from one open to it). On GTK3/Cocoa the same - the field is the engine's there too
+	virtual void DrawTextBorder(wxDC& dc, wxBorder border, const wxRect& rectTotal,
+		int flags = 0, wxRect* rectIn = nullptr) override {
+		if (border != wxBORDER_NONE && border != wxBORDER_DEFAULT
+				&& (flags & wxCONTROL_DISABLED) && !(flags & wxCONTROL_FOCUSED)) {
+			wxRect rect = rectTotal;
+			DrawRect(dc, &rect, wxPen(kBorder.ChangeLightness(140)));
+			if (rectIn != nullptr)
+				*rectIn = rect;
+			return;
+		}
+		DrawBorder(dc, border, rectTotal, flags, rectIn);
 	}
 
 	// flat borders: the ibThemeRenderer base shades every border the Win95
@@ -459,16 +480,85 @@ public:
 		dc.DrawPolygon(3, pi);
 	}
 
-	virtual void DrawScrollbarThumb(wxDC& dc, wxOrientation WXUNUSED(orient),
+	// the scroll bar is variant D of the four drawn on Max's screenshot (2026-11-13): a near-white track, grey chevrons
+	// for the arrows, a rounded thumb without a border, narrower than the bar - the black triangles on white buttons
+	// and the bordered thumb were the darkest thing in a pane. The arrows stay: a line at a time by the mouse. The same
+	// on every port: the bar is ibScrollBar's, drawn by the theme
+	virtual void DrawScrollbarArrow(wxDC& dc, wxDirection dir, const wxRect& rect,
+		int flags = 0) override {
+		DrawSolidRect(dc, m_scheme->Get(ibColourScheme::SCROLLBAR), rect);
+		const wxColour col = (flags & wxCONTROL_DISABLED) ? kBorder : kBorder.ChangeLightness(75);
+
+		// a chevron: 0.22 of the button each way across, half of that each way along, the stroke a tenth of it
+		const double size = wxMin(rect.width, rect.height);
+		const double cx = rect.x + rect.width / 2.0, cy = rect.y + rect.height / 2.0;
+		const double across = size * 0.22, along = across / 2;
+		wxPoint2DDouble p[3];
+		switch (dir) {
+			case wxUP:
+				p[0] = wxPoint2DDouble(cx - across, cy + along);
+				p[1] = wxPoint2DDouble(cx, cy - along);
+				p[2] = wxPoint2DDouble(cx + across, cy + along);
+				break;
+			case wxDOWN:
+				p[0] = wxPoint2DDouble(cx - across, cy - along);
+				p[1] = wxPoint2DDouble(cx, cy + along);
+				p[2] = wxPoint2DDouble(cx + across, cy - along);
+				break;
+			case wxLEFT:
+				p[0] = wxPoint2DDouble(cx + along, cy - across);
+				p[1] = wxPoint2DDouble(cx - along, cy);
+				p[2] = wxPoint2DDouble(cx + along, cy + across);
+				break;
+			default: // wxRIGHT
+				p[0] = wxPoint2DDouble(cx - along, cy - across);
+				p[1] = wxPoint2DDouble(cx + along, cy);
+				p[2] = wxPoint2DDouble(cx - along, cy + across);
+				break;
+		}
+
+		wxGraphicsContext* gc = wxGraphicsContext::CreateFromUnknownDC(dc);
+		if (gc != nullptr) {
+			gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(col).Width(size / 10)));
+			gc->StrokeLines(3, p);
+			delete gc;
+			return;
+		}
+
+		// fallback: a plain integer polyline
+		wxPoint pi[3];
+		for (int i = 0; i < 3; i++)
+			pi[i] = wxPoint(wxRound(p[i].m_x), wxRound(p[i].m_y));
+		dc.SetPen(wxPen(col));
+		dc.DrawLines(3, pi);
+	}
+
+	// the thumb on the track: inset 3 of the bar's 16 across and 2 along, the ends round; darker under the mouse, the
+	// border's colour while dragged
+	virtual void DrawScrollbarThumb(wxDC& dc, wxOrientation orient,
 		const wxRect& rect, int flags = 0) override {
-		wxColour face = m_scheme->Get(ibColourScheme::CONTROL);
+		wxColour face = kBorder.ChangeLightness(130);
 		if (flags & wxCONTROL_PRESSED)
 			face = m_scheme->Get(ibColourScheme::SCROLLBAR_PRESSED);
 		else if (flags & wxCONTROL_CURRENT)
-			face = face.ChangeLightness(106);
-		dc.SetPen(wxPen(m_scheme->Get(ibColourScheme::SHADOW_IN)));
+			face = kBorder.ChangeLightness(115);
+		DrawSolidRect(dc, m_scheme->Get(ibColourScheme::SCROLLBAR), rect);
+
+		const wxCoord across = (orient == wxVERTICAL ? rect.width : rect.height) * 3 / 16, along = across * 2 / 3;
+		const wxRect thumb = (orient == wxVERTICAL) ? rect.Deflate(across, along) : rect.Deflate(along, across);
+		const double radius = wxMin(thumb.width, thumb.height) / 2.0;
+		wxGraphicsContext* gc = wxGraphicsContext::CreateFromUnknownDC(dc);
+		if (gc != nullptr) {
+			gc->SetPen(*wxTRANSPARENT_PEN);
+			gc->SetBrush(wxBrush(face));
+			gc->DrawRoundedRectangle(thumb.x, thumb.y, thumb.width, thumb.height, radius);
+			delete gc;
+			return;
+		}
+
+		dc.SetPen(*wxTRANSPARENT_PEN);
 		dc.SetBrush(wxBrush(face));
-		dc.DrawRectangle(rect);
+		dc.DrawRoundedRectangle(thumb, radius);
 	}
 
 	virtual void DrawScrollbarShaft(wxDC& dc, wxOrientation WXUNUSED(orient),
@@ -481,13 +571,26 @@ public:
 		dc.DrawRectangle(rect);
 	}
 
-	// a bar lit from the top: lighter than the surface it stands on at the top, darker at the bottom - the Luna tool bar
-	// art's gradient, lightness 150 to 90 (wxAuiLunaToolBarArt::DrawBackground). Gone with the art, the bars melted into
-	// the dock (2026-11-12, Max: "the toolbar should stand out a little, with a gradient, as on our site" - the web
-	// client's command bar is lit the same way, form.css)
-	virtual void DrawToolBarBackground(wxDC& dc, const wxColour& col, const wxRect& rect,
+	// the corner between a window's two bars is their track
+	virtual void DrawScrollCorner(wxDC& dc, const wxRect& rect) override {
+		DrawSolidRect(dc, m_scheme->Get(ibColourScheme::SCROLLBAR), rect);
+	}
+
+	// a bar lit from the top: lighter than the surface it stands on at the top, darker at the bottom, a pale palette
+	// border under it. Gone with the Luna tool bar art (wxAuiLunaToolBarArt::DrawBackground, lightness 150 to 90), the
+	// bars melted into the dock (2026-11-12, Max: "the toolbar should stand out a little, with a gradient, as on our
+	// site" - the web client's command bar is lit the same way, form.css); on a form's ground, a step below white, the
+	// art's gradient melted too, and a form's bar went flat - the control colour, the border under it. Two bars, one
+	// unlike the usual: met halfway, every bar - 125 to 95, the border at 125 (2026-11-13, Max: "meet in the middle,
+	// subtler", variant B). Lit from the chrome, not from the surface under it: from the surface every bar came out its
+	// own - the one under the menu the chrome's, a form's cream, a table's white (2026-11-13, Max: "one for all"). On
+	// GTK3/Cocoa the same - the bars are the engine's there too
+	virtual void DrawToolBarBackground(wxDC& dc, const wxColour& WXUNUSED(col), const wxRect& rect,
 		int WXUNUSED(flags) = 0) override {
-		dc.GradientFillLinear(rect, col.ChangeLightness(150), col.ChangeLightness(90), wxSOUTH);
+		const wxColour chrome = m_scheme->Get(ibColourScheme::FRAME);
+		dc.GradientFillLinear(rect, chrome.ChangeLightness(125), chrome.ChangeLightness(95), wxSOUTH);
+		dc.SetPen(wxPen(kBorder.ChangeLightness(125)));
+		dc.DrawLine(rect.GetLeft(), rect.GetBottom(), rect.GetRight() + 1, rect.GetBottom());
 	}
 
 	virtual void DrawToolBarButton(wxDC& dc, const wxString& label,
@@ -728,6 +831,15 @@ public:
 		}
 	}
 
+	// the free part of a row of tool bars: the palette's inactive caption pair, the menu's colour going a shade darker
+	// down the row, both a little darker still. The docking's ground stood there, and the row melted into the ground under
+	// it (2026-11-13, Max: "the toolbar's free part, colour it on its own", "closer to the menu", variant M2, then "a bit
+	// darker"). On GTK3/Cocoa the same - the docking is the engine's there too
+	virtual void DrawToolBarDockBackground(wxDC& dc, const wxRect& rect) override {
+		dc.GradientFillLinear(rect, kCaptionInactiveTop.ChangeLightness(95), kCaptionInactiveBottom.ChangeLightness(95),
+			wxSOUTH);
+	}
+
 	// sliders: not revived yet — simple flat geometry
 	virtual void DrawSliderShaft(wxDC& dc, const wxRect& rect, int lenThumb,
 		wxOrientation orient, int flags = 0, long style = 0,
@@ -771,21 +883,20 @@ public:
 
 	// menus (FORKED from the wxWin32Renderer menu block, Luna colours; the
 	// check mark comes from our terracotta GetCheckBitmap instead of the
-	// win32-private GetIndicator)
+	// win32-private GetIndicator). A title of the bar under the mouse or open sits on the pad a tool under the mouse has
+	// (DrawToolBarButton): the chrome's light face and the palette border, its corners rounded, the text as it is; an
+	// item of the menu on a rounded pad of the accent, the text white - a selection, as a tree's and the inspector's
+	// (2026-11-13, Max: "the menu wants combing", then "terracotta inside, when selecting" - the light pad there too
+	// for one build; the accent's square bar stood before). On GTK3/Cocoa the same - the menus are the engine's there too
 	virtual void DrawMenuBarItem(wxDC& dc, const wxRect& rectOrig,
 		const wxString& label, int flags = 0, int indexAccel = -1) override {
 		wxRect rect = rectOrig;
 		rect.height--;
 
-		wxDCTextColourChanger colChanger(dc);
-
 		if (flags & wxCONTROL_SELECTED) {
-			colChanger.Set(m_scheme->Get(ibColourScheme::HIGHLIGHT_TEXT));
-
-			const wxColour colBg = m_scheme->Get(ibColourScheme::HIGHLIGHT);
-			dc.SetBrush(colBg);
-			dc.SetPen(colBg);
-			dc.DrawRectangle(rect);
+			dc.SetPen(wxPen(kBorder));
+			dc.SetBrush(wxBrush(m_scheme->Get(ibColourScheme::CONTROL_CURRENT)));
+			dc.DrawRoundedRectangle(wxRect(rect).Deflate(0, dc.FromDIP(2)), dc.FromDIP(3));
 		}
 
 		// don't draw the focus rect around menu bar items
@@ -808,10 +919,10 @@ public:
 		if (flags & wxCONTROL_SELECTED) {
 			colChanger.Set(m_scheme->Get(ibColourScheme::HIGHLIGHT_TEXT));
 
-			const wxColour colBg = m_scheme->Get(ibColourScheme::HIGHLIGHT);
-			dc.SetBrush(colBg);
-			dc.SetPen(colBg);
-			dc.DrawRectangle(rect);
+			const wxColour accent = m_scheme->Get(ibColourScheme::HIGHLIGHT);
+			dc.SetPen(wxPen(accent));
+			dc.SetBrush(wxBrush(accent));
+			dc.DrawRoundedRectangle(rect, dc.FromDIP(3));
 		}
 
 		// draw the bitmap: use the bitmap provided or the standard checkmark
@@ -836,7 +947,11 @@ public:
 		rect.x = geometryInfo.GetAccelOffset();
 		rect.SetRight(geometryInfo.GetSize().x - MENU_SIDE_MARGIN);
 
-		// NB: no accel index here
+		// NB: no accel index here. Quieter than the label, as the welcome's keys are (ibWelcomeWindow): the alternate
+		// text lightened - it stood in the label's black; on the selection white, as the label
+		wxDCTextColourChanger accelColour(dc);
+		if (!(flags & wxCONTROL_SELECTED))
+			accelColour.Set(m_scheme->Get(ibColourScheme::CONTROL_TEXT_ALTERNATE).ChangeLightness(115));
 		DrawLabel(dc, accel, rect, flags, wxALIGN_CENTRE_VERTICAL);
 
 		// draw the submenu indicator
@@ -906,6 +1021,14 @@ public:
 		return orient == wxHORIZONTAL
 			? wxSize(rect.height / 2, rect.height)
 			: wxSize(rect.width, rect.width / 2);
+	}
+
+	// a row of a list, a tree or the property grid: half its text's height again, the air above and below the text
+	// (2026-11-13, Max: variant C of four on his screenshot - the same font, rows of 24 pixels for 19; "on the Mac it
+	// looks fine", where the system's font is larger and the rows freer). The text's height carries the font and the
+	// screen's DPI with it; on GTK3/Cocoa the same
+	virtual wxCoord GetListboxItemHeight(wxCoord fontHeight) override {
+		return fontHeight * 3 / 2;
 	}
 
 	virtual wxSize GetProgressBarStep() const override { return wxSize(8, 8); }

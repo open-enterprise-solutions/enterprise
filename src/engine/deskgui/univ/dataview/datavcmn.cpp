@@ -586,7 +586,7 @@ ibDataViewRendererBase::PrepareForItem(const ibDataViewModel* model,
 int ibDataViewRendererBase::GetEffectiveAlignment() const
 {
 	int alignment = GetEffectiveAlignmentIfKnown();
-	wxASSERT(alignment != wxDVR_DEFAULT_ALIGNMENT);
+	wxASSERT(alignment != ibDVR_DEFAULT_ALIGNMENT);
 	return alignment;
 }
 
@@ -595,7 +595,7 @@ int ibDataViewRendererBase::GetEffectiveAlignmentIfKnown() const
 {
 	int alignment = GetAlignment();
 
-	if (alignment == wxDVR_DEFAULT_ALIGNMENT)
+	if (alignment == ibDVR_DEFAULT_ALIGNMENT)
 	{
 		if (GetOwner() != NULL)
 		{
@@ -1082,7 +1082,7 @@ namespace
 			wxAlignment align,
 			int flags)
 	{
-		// For compatibility reason, handle wxALIGN_NOT as wxDVR_DEFAULT_ALIGNMENT
+		// For compatibility reason, handle wxALIGN_NOT as ibDVR_DEFAULT_ALIGNMENT
 		// when creating the renderer here because a lot of existing code,
 		// including our own dataview sample, uses wxALIGN_NOT just because it's
 		// the default value of the alignment argument in AppendXXXColumn()

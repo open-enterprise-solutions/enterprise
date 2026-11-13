@@ -115,7 +115,7 @@ bool ibPropertyCommandSource::PasteNodeValue(const ibDataValue& value)
 			break;
 		if (reader.r_u8() == kHopGuid) {
 			const ibGuid guid(reader.r_stringZ());
-			desc.AppendCommand(metaData != nullptr ? metaData->MetaIdByGuid(guid) : ibMetaID(wxNOT_FOUND));   // the pasted command's
+			desc.AppendCommand(metaData != nullptr ? metaData->MetaIdByGuid(guid) : ibMetaID(ibNOT_FOUND));   // the pasted command's
 		}
 		else {
 			desc.AppendCommand((ibMetaID)reader.r_u32());

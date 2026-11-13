@@ -1,8 +1,6 @@
 #ifndef _FILESERVER_OES_H__
 #define _FILESERVER_OES_H__
 
-#include <wx/wx.h>
-
 #include "core/core.h"   // IB_EXPORT / IB_IMPORT
 
 // A FILE BASE FOR THE THIN CLIENT — a small library the thin client (frmclient) LOADS, never links, and only when the

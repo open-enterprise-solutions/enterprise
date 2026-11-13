@@ -120,8 +120,9 @@ oes-clientform [disabled] {
 }
 
 /* A command bar: a strip of buttons on one line, what does not fit under its » — a strip of its own, as the thin
-   client's (its toolbar art, wxAuiLunaToolBarArt): its background lighter at the top and darker at the bottom than
-   whatever it stands on, edged above and below, so it does not melt into the form. */
+   client's (its theme's tool bar, ibLunaRenderer::DrawToolBarBackground): the window's colour whatever it stands on —
+   one bar on a form, a table, a dialog — a little lighter at the top and darker at the bottom, edged below, so it does
+   not melt into the form. */
 .command-bar {
 	display: flex;
 	flex-wrap: nowrap;
@@ -129,8 +130,9 @@ oes-clientform [disabled] {
 	align-items: center;
 	gap: 2px;
 	padding: 0.125rem 0.25rem;
+	background-color: var(--oes-window-bg);
 	background-image: linear-gradient(to bottom, var(--oes-bar-shine-top), var(--oes-bar-shine-bottom));
-	border-block: 1px solid var(--oes-border);
+	border-bottom: 1px solid var(--oes-border);
 }
 
 /* A button keeps its width — squeezed, its caption ran over the next one — and one past the end is hidden, a

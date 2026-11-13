@@ -31,7 +31,7 @@ ibValueMetaObjectReport::~ibValueMetaObjectReport()
 
 ibValueMetaObjectFormBase* ibValueMetaObjectReport::GetDefaultFormByID(const ibFormID& id) const
 {
-	if (id == eFormReport && m_propertyDefFormObject->GetValueAsInteger() != wxNOT_FOUND) {
+	if (id == eFormReport && m_propertyDefFormObject->GetValueAsInteger() != ibNOT_FOUND) {
 		return FindFormObjectByFilter(m_propertyDefFormObject->GetValueAsInteger());
 	}
 
@@ -273,7 +273,7 @@ bool ibValueMetaObjectReport::OnAfterCloseMetaObject()
 void ibValueMetaObjectReport::OnCreateFormObject(ibValueMetaObjectFormBase* metaForm)
 {
 	if (metaForm->GetTypeForm() == ibValueMetaObjectReport::eFormReport
-		&& m_propertyDefFormObject->GetValueAsInteger() == wxNOT_FOUND)
+		&& m_propertyDefFormObject->GetValueAsInteger() == ibNOT_FOUND)
 	{
 		m_propertyDefFormObject->SetValue(metaForm->GetMetaID());
 	}
@@ -284,14 +284,14 @@ void ibValueMetaObjectReport::OnCreateFormObject(ibValueMetaObjectFormBase* meta
 // whose answer is already obvious. The same pair of hooks the default FORM has, for the same reason.
 void ibValueMetaObjectReport::OnCreateComposerObject(ibValueMetaObjectTemplate* metaComposer)
 {
-	if (metaComposer != nullptr && m_propertyDefComposer->GetValueAsInteger() == wxNOT_FOUND)
+	if (metaComposer != nullptr && m_propertyDefComposer->GetValueAsInteger() == ibNOT_FOUND)
 		m_propertyDefComposer->SetValue(metaComposer->GetMetaID());
 }
 
 void ibValueMetaObjectReport::OnRemoveComposerObject(ibValueMetaObjectTemplate* metaComposer)
 {
 	if (metaComposer != nullptr && m_propertyDefComposer->GetValueAsInteger() == metaComposer->GetMetaID())
-		m_propertyDefComposer->SetValue(wxNOT_FOUND);
+		m_propertyDefComposer->SetValue(ibNOT_FOUND);
 }
 
 void ibValueMetaObjectReport::OnRemoveMetaForm(ibValueMetaObjectFormBase* metaForm)
@@ -299,7 +299,7 @@ void ibValueMetaObjectReport::OnRemoveMetaForm(ibValueMetaObjectFormBase* metaFo
 	if (metaForm->GetTypeForm() == ibValueMetaObjectReport::eFormReport
 		&& m_propertyDefFormObject->GetValueAsInteger() == metaForm->GetMetaID())
 	{
-		m_propertyDefFormObject->SetValue(wxNOT_FOUND);
+		m_propertyDefFormObject->SetValue(ibNOT_FOUND);
 	}
 }
 

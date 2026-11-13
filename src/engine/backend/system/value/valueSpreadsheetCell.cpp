@@ -62,7 +62,7 @@ bool ibValueSpreadsheetDocumentArea::SetPropVal(const long lPropNum, const ibVal
 	}
 	case eTextOrient:
 	{
-		m_spreadsheetDoc->SetCellTextOrient(m_row, m_col, varPropVal.ConvertToEnumType<wxOrientation>());
+		m_spreadsheetDoc->SetCellTextOrient(m_row, m_col, varPropVal.ConvertToEnumType<ibSpreadsheetOrientation>());
 		return true;
 	}
 	case eFont:

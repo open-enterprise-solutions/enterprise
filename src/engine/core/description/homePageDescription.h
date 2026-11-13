@@ -1,7 +1,7 @@
 #ifndef __HOME_PAGE_DESCRIPTION_H__
 #define __HOME_PAGE_DESCRIPTION_H__
 
-#include "core/core.h"    // CORE_API, wxNOT_FOUND, ibMetaID
+#include "core/core.h"    // CORE_API, ibNOT_FOUND, ibMetaID
 #include <vector>
 
 // Home-page workspace description — WHAT the start page shows and HOW it is split.
@@ -36,7 +36,7 @@ enum ibHomePageColumn {
 // m_height is a PROPORTION (a weight), not pixels — 0 means "share the column equally with
 // the other zero-weight items", which is what the designer's "same height" checkbox writes.
 struct ibHomePageItem {
-	ibMetaID m_formId = wxNOT_FOUND;
+	ibMetaID m_formId = ibNOT_FOUND;
 	unsigned int m_height = 0;
 	bool m_visible = true;
 
@@ -44,7 +44,7 @@ struct ibHomePageItem {
 	ibHomePageItem(const ibMetaID& formId, unsigned int height = 0, bool visible = true)
 		: m_formId(formId), m_height(height), m_visible(visible) {}
 
-	bool IsOk() const { return m_formId != wxNOT_FOUND; }
+	bool IsOk() const { return m_formId != ibNOT_FOUND; }
 
 	bool operator==(const ibHomePageItem& o) const {
 		return m_formId == o.m_formId && m_height == o.m_height && m_visible == o.m_visible;

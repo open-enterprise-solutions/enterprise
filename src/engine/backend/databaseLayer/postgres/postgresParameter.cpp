@@ -2,6 +2,8 @@
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/backend_exception.h"
 
+#include <cstring>
+
 // ctor
 ibDatabaseParameterPostgres::ibDatabaseParameterPostgres() : m_nParameterType(ibDatabaseParameterPostgres::PARAM_NULL)
 {

@@ -1,6 +1,6 @@
 #include "core/spreadsheet/spreadsheetObject.h"
 #include "core/spreadsheet/sheetFormat.h"   // a table that came from somewhere else (Excel today)
-#include "core/localization.h"              // ibLocalization — a caption, a template, a value in the language asked for
+#include "core/localization/localization.h"   // ibLocalization — a caption, a template, a value in the language asked for
 
 #define spreadsheetNotify \
 	for (auto notify : m_spreadsheetNotifiers) notify

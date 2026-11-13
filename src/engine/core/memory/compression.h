@@ -8,7 +8,8 @@
 class ibMemoryBuffer;
 
 // BYTES PACKED IN ZLIB'S FORM (RFC 1950: a header, the deflated bytes, a checksum) — what a stored blob is kept in.
-// A WebSocket message's raw deflate is another form, and another pair (ibDeflate / ibInflate, net/webSocketFrame.h).
+// A WebSocket message's raw deflate is another form, and another pair (ibDeflate / ibInflate, net/webSocketFrame.h) -
+// made in this file's .cpp, by the same two loops over zlib.
 //
 // Each APPENDS to what it is given, so a caller writes its own header first. Inflate is false for bytes that are not
 // a whole zlib stream — corrupt, cut short — and then what it appended is not a value.

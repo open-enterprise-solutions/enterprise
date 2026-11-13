@@ -23,7 +23,7 @@ void ibValueMetaObjectForm::OnPropertyChanged(ibProperty* property, const ibVari
 	if (property == m_properyFormType) {
 		if (auto* cc = m_metaData->GetCompileCache()) {
 			ibValueMetaObjectGenericData* metaObjectValue = dynamic_cast<ibValueMetaObjectGenericData*>(m_parent);
-			wxASSERT(metaObjectValue);
+			ibASSERT(metaObjectValue);
 			// ⭐ THE FORM THAT WAS IS GONE, AND A NEW ONE STANDS IN ITS PLACE — which is exactly the
 			// pair of stages the two lines below perform on the compile cache. Said as those stages,
 			// this needs no verb of its own: a watcher shuts the editor showing the old form on

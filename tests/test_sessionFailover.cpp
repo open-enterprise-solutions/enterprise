@@ -337,7 +337,7 @@ TEST_F(SessionFailover, APersonWhoseRolesDoNotGiveTheAssistantHasNoChannel)
 
 	// A user with no role, gone again with the test: the other cases log into a base with no users.
 	struct OneUser {
-		ibGuid guid = wxNewUniqueGuid;
+		ibGuid guid = ibNewUniqueGuid;
 		~OneUser()
 		{
 			ibApplicationInstanceScope working(g_base->app);

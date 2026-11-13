@@ -485,10 +485,10 @@ ibValue ibValueMetaObjectRecordDataRef::GenerateIdentifier(const ibNumber& count
 		return (prefLen < totLen ? prefix : ibString()) + counter.ToString(fmt);
 	}
 
-	wxASSERT_MSG(false, "m_metaAttribute->GetClsidList() != ibValueTypes::TYPE_NUMBER"
+	ibASSERT_MSG(false, "m_metaAttribute->GetClsidList() != ibValueTypes::TYPE_NUMBER"
 		"|| m_metaAttribute->GetClsidList() != ibValueTypes::TYPE_STRING");
 
-	return wxEmptyValue;
+	return ibEmptyValue;
 }
 
 //***********************************************************************
@@ -909,7 +909,7 @@ bool ibValueMetaObjectRecordDataRecorderRef::OnAfterRunMetaObject(int flags)
 		const ibValueMetaObjectRegisterData* registerData = m_metaData->FindAnyObjectByFilter<ibValueMetaObjectRegisterData>(movements.GetByIdx(idx));
 		if (registerData != nullptr) {
 			ibValueMetaObjectAttributePredefined* infoRecorder = registerData->GetRegisterRecorder();
-			wxASSERT(infoRecorder);
+			ibASSERT(infoRecorder);
 			infoRecorder->GetTypeDesc().AppendMetaType((*m_propertyAttributeReference)->GetTypeDesc());
 		}
 	}
@@ -919,7 +919,7 @@ bool ibValueMetaObjectRecordDataRecorderRef::OnAfterRunMetaObject(int flags)
 		const ibValueMetaObjectRegisterData* registerData = m_metaData->FindAnyObjectByFilter<ibValueMetaObjectRegisterData>(sequences.GetByIdx(idx));
 		if (registerData != nullptr) {
 			ibValueMetaObjectAttributePredefined* infoRecorder = registerData->GetRegisterRecorder();
-			wxASSERT(infoRecorder);
+			ibASSERT(infoRecorder);
 			infoRecorder->GetTypeDesc().AppendMetaType((*m_propertyAttributeReference)->GetTypeDesc());
 		}
 	}
@@ -945,7 +945,7 @@ bool ibValueMetaObjectRecordDataRecorderRef::OnBeforeCloseMetaObject()
 		const ibValueMetaObjectRegisterData* registerData = m_metaData->FindAnyObjectByFilter<ibValueMetaObjectRegisterData>(movements.GetByIdx(idx));
 		if (registerData != nullptr) {
 			ibValueMetaObjectAttributePredefined* infoRecorder = registerData->GetRegisterRecorder();
-			wxASSERT(infoRecorder);
+			ibASSERT(infoRecorder);
 			infoRecorder->GetTypeDesc().ClearMetaType((*m_propertyAttributeReference)->GetTypeDesc());
 		}
 	}
@@ -955,7 +955,7 @@ bool ibValueMetaObjectRecordDataRecorderRef::OnBeforeCloseMetaObject()
 		const ibValueMetaObjectRegisterData* registerData = m_metaData->FindAnyObjectByFilter<ibValueMetaObjectRegisterData>(sequences.GetByIdx(idx));
 		if (registerData != nullptr) {
 			ibValueMetaObjectAttributePredefined* infoRecorder = registerData->GetRegisterRecorder();
-			wxASSERT(infoRecorder);
+			ibASSERT(infoRecorder);
 			infoRecorder->GetTypeDesc().ClearMetaType((*m_propertyAttributeReference)->GetTypeDesc());
 		}
 	}
@@ -1642,10 +1642,10 @@ ibValuePtr<ibValueRecordManagerObject> ibValueMetaObjectRegisterData::CopyRecord
 void ibValueManagerDataObject::FillMembers(ibMemberTable& helper) const
 {
 	const ibValueMetaObjectGenericData* valueMetaObject = GetMetaObject();
-	wxASSERT(valueMetaObject);
+	ibASSERT(valueMetaObject);
 
 	const ibMetaData* metaData = valueMetaObject->GetMetaData();
-	wxASSERT(metaData);
+	ibASSERT(metaData);
 
 	// Manager module's compiled unit — designer mm in the Designer, session root
 	// mm at runtime. FindCommonModule returns the typed descriptor (ibValueModuleUnit).
@@ -1671,7 +1671,7 @@ void ibValueManagerDataObject::FillMembers(ibMemberTable& helper) const
 static long ibModuleMethodNum(const ibValue& unit, const ibString& methodName)
 {
 	const long found = unit.FindMethod(methodName);
-	if (found == wxNOT_FOUND)
+	if (found == ibNOT_FOUND)
 		ibBackendCoreException::Error(_("The manager module has no Public method '%s'"), methodName);
 	return found;
 }
@@ -1679,10 +1679,10 @@ static long ibModuleMethodNum(const ibValue& unit, const ibString& methodName)
 bool ibValueManagerDataObject::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
 {
 	const ibValueMetaObjectGenericData* valueMetaObject = GetMetaObject();
-	wxASSERT(valueMetaObject);
+	ibASSERT(valueMetaObject);
 
 	const ibMetaData* metaData = valueMetaObject->GetMetaData();
-	wxASSERT(metaData);
+	ibASSERT(metaData);
 
 	if (m_members.GetMethodAlias(lMethodNum) != g_aliasExport)
 		return false;
@@ -1699,10 +1699,10 @@ bool ibValueManagerDataObject::CallAsProc(const long lMethodNum, ibValue** paPar
 bool ibValueManagerDataObject::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
 	const ibValueMetaObjectGenericData* valueMetaObject = GetMetaObject();
-	wxASSERT(valueMetaObject);
+	ibASSERT(valueMetaObject);
 
 	const ibMetaData* metaData = valueMetaObject->GetMetaData();
-	wxASSERT(metaData);
+	ibASSERT(metaData);
 
 	if (m_members.GetMethodAlias(lMethodNum) != g_aliasExport)
 		return false;
@@ -1719,10 +1719,10 @@ bool ibValueManagerDataObject::CallAsFunc(const long lMethodNum, ibValue& pvarRe
 bool ibValueManagerDataObject::GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const
 {
 	const ibValueMetaObjectGenericData* valueMetaObject = GetMetaObject();
-	wxASSERT(valueMetaObject);
+	ibASSERT(valueMetaObject);
 
 	const ibMetaData* metaData = valueMetaObject->GetMetaData();
-	wxASSERT(metaData);
+	ibASSERT(metaData);
 
 	if (m_members.GetMethodAlias(lMethodNum) != g_aliasExport)
 		return false;
@@ -1739,33 +1739,33 @@ bool ibValueManagerDataObject::GetParamDefValue(const long lMethodNum, const lon
 ibClassID ibValueManagerDataObject::GetClassType() const
 {
 	const ibValueMetaObjectGenericData* valueMetaObject = GetMetaObject();
-	wxASSERT(valueMetaObject);
+	ibASSERT(valueMetaObject);
 
 	const ibCtorMetaValueType* clsFactory =
 		valueMetaObject->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_Manager);
-	wxASSERT(clsFactory);
+	ibASSERT(clsFactory);
 	return clsFactory->GetClassType();
 }
 
 ibString ibValueManagerDataObject::GetClassName() const
 {
 	const ibValueMetaObjectGenericData* valueMetaObject = GetMetaObject();
-	wxASSERT(valueMetaObject);
+	ibASSERT(valueMetaObject);
 
 	const ibCtorMetaValueType* clsFactory =
 		valueMetaObject->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_Manager);
-	wxASSERT(clsFactory);
+	ibASSERT(clsFactory);
 	return clsFactory->GetClassName();
 }
 
 ibString ibValueManagerDataObject::GetString() const
 {
 	const ibValueMetaObjectGenericData* valueMetaObject = GetMetaObject();
-	wxASSERT(valueMetaObject);
+	ibASSERT(valueMetaObject);
 
 	const ibCtorMetaValueType* clsFactory =
 		valueMetaObject->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_Manager);
-	wxASSERT(clsFactory);
+	ibASSERT(clsFactory);
 	return clsFactory->GetClassName();
 }
 
@@ -1774,10 +1774,10 @@ ibString ibValueManagerDataObject::GetString() const
 long ibValueManagerDataObject::BuiltinMethodNum(const long lMethodNum) const
 {
 	if (lMethodNum < 0 || lMethodNum >= m_members.GetNMethods())
-		return wxNOT_FOUND;
+		return ibNOT_FOUND;
 
 	if (m_members.GetMethodAlias(lMethodNum) == g_aliasExport)
-		return wxNOT_FOUND;
+		return ibNOT_FOUND;
 
 	long ordinal = 0;
 	for (long i = 0; i < lMethodNum; ++i) {
@@ -1797,7 +1797,7 @@ long ibValueManagerDataObject::BuiltinMethodNum(const long lMethodNum) const
 void ibValueManagerDataObjectPredefined::FillPredefined(ibMemberTable& helper) const
 {
 	const ibValueMetaObjectRecordDataHierarchyMutableRef* valueMetaObject = GetMetaObject();
-	wxASSERT(valueMetaObject);
+	ibASSERT(valueMetaObject);
 
 	//fill custom values
 	for (const ibPredefinedItemDescription& object : valueMetaObject->GetPredefinedValueArray()) {
@@ -1813,7 +1813,7 @@ bool ibValueManagerDataObjectPredefined::SetPropVal(const long lPropNum, const i
 bool ibValueManagerDataObjectPredefined::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
 	const ibValueMetaObjectRecordDataHierarchyMutableRef* valueMetaObject = GetMetaObject();
-	wxASSERT(valueMetaObject);
+	ibASSERT(valueMetaObject);
 
 	const ibPredefinedItemDescription* const predefinedValue =
 		valueMetaObject->FindPredefinedValue(m_members.GetPropName(lPropNum));
@@ -1838,7 +1838,7 @@ ibValueRecordDataObject::ibValueRecordDataObject(const ibGuid& objGuid, bool new
 }
 
 ibValueRecordDataObject::ibValueRecordDataObject(const ibValueRecordDataObject& source) :
-	ibValueDynamicMembers(ibValueTypes::TYPE_VALUE), ibValueDataObject(wxNewUniqueGuid, true),
+	ibValueDynamicMembers(ibValueTypes::TYPE_VALUE), ibValueDataObject(ibNewUniqueGuid, true),
 	ibRuntimeModuleDataObject(m_members, this)
 {
 	m_members.Bind(this, &ibValueRecordDataObject::FillDataMembers);
@@ -1916,30 +1916,30 @@ ibFormPtr<ibBackendValueForm> ibValueRecordDataObject::GetFormValue(const ibForm
 ibClassID ibValueRecordDataObject::GetClassType() const
 {
 	const ibValueMetaObjectRecordData* metaObject = GetMetaObject();
-	wxASSERT(metaObject);
+	ibASSERT(metaObject);
 	const ibCtorMetaValueType* clsFactory =
 		metaObject->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_Object);
-	wxASSERT(clsFactory);
+	ibASSERT(clsFactory);
 	return clsFactory->GetClassType();
 }
 
 ibString ibValueRecordDataObject::GetClassName() const
 {
 	const ibValueMetaObjectRecordData* metaObject = GetMetaObject();
-	wxASSERT(metaObject);
+	ibASSERT(metaObject);
 	const ibCtorMetaValueType* clsFactory =
 		metaObject->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_Object);
-	wxASSERT(clsFactory);
+	ibASSERT(clsFactory);
 	return clsFactory->GetClassName();
 }
 
 ibString ibValueRecordDataObject::GetString() const
 {
 	const ibValueMetaObjectRecordData* metaObject = GetMetaObject();
-	wxASSERT(metaObject);
+	ibASSERT(metaObject);
 	const ibCtorMetaValueType* clsFactory =
 		metaObject->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_Object);
-	wxASSERT(clsFactory);
+	ibASSERT(clsFactory);
 	return clsFactory->GetClassName();
 }
 
@@ -1968,11 +1968,11 @@ const ibSourceExplorer* ibValueRecordDataObject::GetSourceExplorer() const
 bool ibValueRecordDataObject::SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal)
 {
 	auto it = m_listObjectValue.find(id);
-	wxASSERT(it != m_listObjectValue.end());
+	ibASSERT(it != m_listObjectValue.end());
 	if (it != m_listObjectValue.end()) {
 
 		const ibValueMetaObjectRecordData* metaObjectValue = GetMetaObject();
-		wxASSERT(metaObjectValue);
+		ibASSERT(metaObjectValue);
 
 		// Not found is an answer, not an assertion: the object carries a value for every attribute its
 		// metatype declares, and one its owner has switched OFF is not found (FindObjectByFilter asks
@@ -2025,7 +2025,7 @@ bool ibValueRecordDataObject::SetValueByMetaID(const ibMetaID& id, const ibValue
 bool ibValueRecordDataObject::GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const
 {
 	auto it = m_listObjectValue.find(id);
-	wxASSERT(it != m_listObjectValue.end());
+	ibASSERT(it != m_listObjectValue.end());
 	if (it != m_listObjectValue.end()) {
 		pvarMetaVal = it->second;
 		return true;
@@ -2107,7 +2107,7 @@ ibValueModel* ibValueRecordDataObject::GetTableByMetaID(const ibMetaID& id) cons
 void ibValueRecordDataObject::PrepareEmptyObject()
 {
 	const ibValueMetaObjectRecordData* metaObject = GetMetaObject();
-	wxASSERT(metaObject);
+	ibASSERT(metaObject);
 
 	m_listObjectValue.clear();
 
@@ -2145,7 +2145,7 @@ void ibValueRecordDataObject::FillBaseMethods(ibMemberTable& helper) const
 void ibValueRecordDataObject::FillDataMembers(ibMemberTable& helper) const
 {
 	const ibValueMetaObjectRecordData* metaObject = GetMetaObject();
-	wxASSERT(metaObject);
+	ibASSERT(metaObject);
 	if (metaObject == nullptr)
 		return;
 
@@ -2277,7 +2277,7 @@ bool ibValueRecordDataObject::GetParamDefValue(const long lMethodNum, const long
 
 
 ibValueRecordDataObjectExt::ibValueRecordDataObjectExt(const ibValueMetaObjectRecordDataExt* metaObject) :
-	ibValueRecordDataObject(wxNewUniqueGuid, true), m_metaObject(metaObject)
+	ibValueRecordDataObject(ibNewUniqueGuid, true), m_metaObject(metaObject)
 {
 	// External data objects (DataProcessor / Report) expose only the fixed methods;
 	// the data members come from the base FillDataMembers.
@@ -2304,7 +2304,7 @@ bool ibValueRecordDataObjectExt::InitializeObject()
 		}
 
 		ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(m_metaObject->GetMetaData());
-		wxASSERT(moduleManager);
+		ibASSERT(moduleManager);
 
 		// Imperative: parent first, then compile + runtime slot
 		// pick up parent automatically.
@@ -2342,7 +2342,7 @@ bool ibValueRecordDataObjectExt::InitializeObject(ibValueRecordDataObjectExt* so
 {
 	if (!m_metaObject->IsExternalCreate()) {
 		ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(m_metaObject->GetMetaData());
-		wxASSERT(moduleManager);
+		ibASSERT(moduleManager);
 
 		ibRuntimeModuleDataObject::SetParent(moduleManager);
 		BindContextVariable(thisObject, this);
@@ -2416,7 +2416,7 @@ bool ibValueRecordDataObjectRef::InitializeObject(const ibGuid& copyGuid)
 	// Parent the object's module to the module manager whose context it
 	// should see — designer manager in the Designer, session root mm at runtime.
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(m_metaObject->GetMetaData());
-	wxASSERT(moduleManager);
+	ibASSERT(moduleManager);
 
 	ibRuntimeModuleDataObject::SetParent(moduleManager);
 	BindContextVariable(thisObject, this);
@@ -2438,7 +2438,7 @@ bool ibValueRecordDataObjectRef::InitializeObject(const ibGuid& copyGuid)
 			succes = ReadData(copyGuid);
 			if (succes) {
 				ibValueMetaObjectAttributeBase* codeAttribute = m_metaObject->GetAttributeForCode();
-				wxASSERT(codeAttribute);
+				ibASSERT(codeAttribute);
 				m_listObjectValue[codeAttribute->GetMetaID()] = codeAttribute->CreateValue();
 			}
 			m_objModified = true;
@@ -2452,7 +2452,7 @@ bool ibValueRecordDataObjectRef::InitializeObject(const ibGuid& copyGuid)
 		PrepareEmptyObject();
 	}
 	if (!appData->DesignerMode()) {
-		wxASSERT(m_procUnit == nullptr);
+		ibASSERT(m_procUnit == nullptr);
 		InitializeRuntime();
 		m_procUnit->SetParent(moduleManager->GetProcUnit().get());
 		Execute();
@@ -2471,7 +2471,7 @@ bool ibValueRecordDataObjectRef::InitializeObject(const ibGuid& copyGuid)
 bool ibValueRecordDataObjectRef::InitializeObject(ibValueRecordDataObjectRef* source, bool generate)
 {
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(m_metaObject->GetMetaData());
-	wxASSERT(moduleManager);
+	ibASSERT(moduleManager);
 
 	ibRuntimeModuleDataObject::SetParent(moduleManager);
 	BindContextVariable(thisObject, this);
@@ -2492,7 +2492,7 @@ bool ibValueRecordDataObjectRef::InitializeObject(ibValueRecordDataObjectRef* so
 
 	bool succes = true;
 	if (!appData->DesignerMode()) {
-		wxASSERT(m_procUnit == nullptr);
+		ibASSERT(m_procUnit == nullptr);
 		InitializeRuntime();
 		// Re-apply descriptor SetParent so cascade picks up the now-
 		// existent procUnit and wires its parent too.
@@ -2662,7 +2662,7 @@ void ibValueRecordDataObjectRef::PrepareEmptyObject(const ibValueRecordDataObjec
 	m_listObjectValue.clear();
 
 	ibValueMetaObjectAttributeBase* codeAttribute = m_metaObject->GetAttributeForCode();
-	wxASSERT(codeAttribute);
+	ibASSERT(codeAttribute);
 
 	//attributes can refValue 
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
@@ -2749,7 +2749,7 @@ bool ibValueRecordDataObjectHierarchyRef::SetValueByMetaID(const ibMetaID& id, c
 		return false;
 
 	const ibValueMetaObjectRecordDataHierarchyMutableRef* valueMetaObject = GetMetaObject();
-	wxASSERT(valueMetaObject);
+	ibASSERT(valueMetaObject);
 
 	if (valueMetaObject->IsDataParent(id) && varMetaVal == GetReference() && !varMetaVal.IsEmpty()) {
 		ibBackendCoreException::Error(_("You can't change your parent to yourself!"));
@@ -2797,7 +2797,7 @@ void ibValueRecordDataObjectHierarchyRef::PrepareEmptyObject()
 		}
 	}
 	const ibValueMetaObjectRecordDataHierarchyMutableRef* metaFolder = GetMetaObject();
-	wxASSERT(metaFolder);
+	ibASSERT(metaFolder);
 	// IsFolder only where the arrangement lists it (FillArrayObjectByPredefinedAttribute)
 	if (metaFolder->HasFolders()) {
 		if (m_objMode == ibObjectMode::OBJECT_ITEM) {
@@ -2838,7 +2838,7 @@ void ibValueRecordDataObjectHierarchyRef::PrepareEmptyObject(const ibValueRecord
 {
 	m_listObjectValue.clear();
 	ibValueMetaObjectAttributeBase* codeAttribute = m_metaObject->GetAttributeForCode();
-	wxASSERT(codeAttribute);
+	ibASSERT(codeAttribute);
 	m_listObjectValue[codeAttribute->GetMetaID()] = codeAttribute->CreateValue();
 	//attributes can refValue 
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
@@ -2849,7 +2849,7 @@ void ibValueRecordDataObjectHierarchyRef::PrepareEmptyObject(const ibValueRecord
 		}
 	}
 	const ibValueMetaObjectRecordDataHierarchyMutableRef* metaFolder = GetMetaObject();
-	wxASSERT(metaFolder);
+	ibASSERT(metaFolder);
 	// IsFolder only where the arrangement lists it (FillArrayObjectByPredefinedAttribute)
 	if (metaFolder->HasFolders()) {
 		if (m_objMode == ibObjectMode::OBJECT_ITEM) {
@@ -2979,7 +2979,7 @@ bool ibValueRecordDataObjectHierarchyRef::DeleteObject()
 	// lookup itself doesn't run during metadata editing.
 	if (!appData->DesignerMode()) {
 		const ibValueMetaObjectRecordDataHierarchyMutableRef* valueMetaObject = GetMetaObject();
-		wxASSERT(valueMetaObject);
+		ibASSERT(valueMetaObject);
 		const ibGuid& objGuid = GetGuid();
 		if (valueMetaObject->FindPredefinedValue(objGuid) != nullptr) {
 			ibBackendCoreException::Error(_("%s cannot be deleted: it is a predefined element"),
@@ -3045,7 +3045,7 @@ void ibValueRecordDataObjectRecorderRef::ibRecorderRegister::CreateRecordSet()
 	const ibMetaDescription* metaDesc = m_recorder->GetRecordDescription(m_writes);
 	if (metaDesc == nullptr) return;   // recorder without static description — no cascade
 	const ibMetaData* metaData = m_recorder->GetMetaObject()->GetMetaData();
-	wxASSERT(metaData);
+	ibASSERT(metaData);
 
 	ibRecorderRegister::ClearRecordSet();
 
@@ -3054,7 +3054,7 @@ void ibValueRecordDataObjectRecorderRef::ibRecorderRegister::CreateRecordSet()
 		if (metaObject == nullptr || !metaObject->IsAllowed())
 			continue;
 		ibValueMetaObjectAttributePredefined* registerRecord = metaObject->GetRegisterRecorder();
-		wxASSERT(registerRecord);
+		ibASSERT(registerRecord);
 		ibValuePtr<ibValueRecordSetObject> recordSet(metaObject->CreateRecordSetObjectValue());
 		recordSet->SetKeyValue(registerRecord->GetMetaID(), m_recorder->GetReference());
 		m_records.insert_or_assign(metaObject->GetMetaID(), recordSet);
@@ -3067,7 +3067,7 @@ bool ibValueRecordDataObjectRecorderRef::ibRecorderRegister::WriteRecordSet()
 {
 	for (auto& pair : m_records) {
 		ibValueRecordSetObject* record = pair.second;
-		wxASSERT(record);
+		ibASSERT(record);
 
 		// 🛑 A SET THE HANDLER ALREADY WROTE MUST NOT BE WRITTEN AGAIN — because this write REPLACES:
 		// it deletes everything under the recorder and inserts what the set holds. A handler that
@@ -3100,7 +3100,7 @@ bool ibValueRecordDataObjectRecorderRef::ibRecorderRegister::DeleteRecordSet()
 	// A deleted document asks nothing (Max, 2026-09-15): no document, no movements of it.
 	for (auto& pair : m_records) {
 		ibValueRecordSetObject* record = pair.second;
-		wxASSERT(record);
+		ibASSERT(record);
 		// Same as WriteRecordSet — the register speaks for itself; this only names the one that
 		// returned a plain false without saying anything.
 		if (!record->DeleteRecordSet())
@@ -3121,7 +3121,7 @@ bool ibValueRecordDataObjectRecorderRef::ibRecorderRegister::DeleteRecordSet(ibD
 		return true;
 	for (auto& pair : m_records) {
 		ibValueRecordSetObject* record = pair.second;
-		wxASSERT(record);
+		ibASSERT(record);
 		// The mirror of WriteRecordSet's rule: a set that says it is modified holds rows somebody put there,
 		// and it replaces what is stored when it is written — the delete would only take its flag away.
 		if (record->IsModified())
@@ -3142,9 +3142,9 @@ void ibValueRecordDataObjectRecorderRef::ibRecorderRegister::RefreshRecordSet()
 {
 	for (auto& pair : m_records) {
 		ibValueRecordSetObject* record = pair.second;
-		wxASSERT(record);
+		ibASSERT(record);
 		const ibValueMetaObjectRegisterData* object = record->GetMetaObject();
-		wxASSERT(object);
+		ibASSERT(object);
 		// Refreshing an open register list after a document wrote its movements — pure notification,
 		// and there is nothing to refresh in a process with no windows (ibFormToNotify,
 		// backend_form.h). MEASURED 2026-09-06: this is what stopped a document write on a server
@@ -3174,9 +3174,9 @@ void ibValueRecordDataObjectRecorderRef::ibRecorderRegister::FillMembers(ibMembe
 	helper.AppendFunc(ibT("Write"), ibT("Write()"));
 	for (auto& pair : m_records) {
 		ibValueRecordSetObject* record = pair.second;
-		wxASSERT(record);
+		ibASSERT(record);
 		const ibValueMetaObjectRegisterData* metaObject = record->GetMetaObject();
-		wxASSERT(metaObject);
+		ibASSERT(metaObject);
 		helper.AppendProp(metaObject->GetName(), true, false, pair.first);
 	}
 }
@@ -3232,7 +3232,7 @@ ibValueRecordDataObjectRecorderRef::~ibValueRecordDataObjectRecorderRef() = defa
 
 void ibValueRecordDataObjectRecorderRef::InitRegisterRecords()
 {
-	wxASSERT(m_registerRecords == nullptr);
+	ibASSERT(m_registerRecords == nullptr);
 	m_registerRecords = new ibRecorderRegister(this);
 	// …and the other list, where a kind has one: the sets of registrations a document writes.
 	m_sequenceRecords = new ibRecorderRegister(this, ibRecorderWrites::Sequences);
@@ -3557,7 +3557,7 @@ ibClassID ibValueRecordKeyObject::GetClassType() const
 {
 	const ibCtorMetaValueType* clsFactory =
 		m_metaObject->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_RecordKey);
-	wxASSERT(clsFactory);
+	ibASSERT(clsFactory);
 	return clsFactory->GetClassType();
 }
 
@@ -3565,7 +3565,7 @@ ibString ibValueRecordKeyObject::GetClassName() const
 {
 	const ibCtorMetaValueType* clsFactory =
 		m_metaObject->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_RecordKey);
-	wxASSERT(clsFactory);
+	ibASSERT(clsFactory);
 	return clsFactory->GetClassName();
 }
 
@@ -3573,7 +3573,7 @@ ibString ibValueRecordKeyObject::GetString() const
 {
 	const ibCtorMetaValueType* clsFactory =
 		m_metaObject->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_RecordKey);
-	wxASSERT(clsFactory);
+	ibASSERT(clsFactory);
 	return clsFactory->GetClassName();
 }
 
@@ -3762,7 +3762,7 @@ ibClassID ibValueRecordManagerObject::GetClassType() const
 {
 	const ibCtorMetaValueType* clsFactory =
 		m_metaObject->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_RecordManager);
-	wxASSERT(clsFactory);
+	ibASSERT(clsFactory);
 	return clsFactory->GetClassType();
 }
 
@@ -3770,7 +3770,7 @@ ibString ibValueRecordManagerObject::GetClassName() const
 {
 	const ibCtorMetaValueType* clsFactory =
 		m_metaObject->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_RecordManager);
-	wxASSERT(clsFactory);
+	ibASSERT(clsFactory);
 	return clsFactory->GetClassName();
 }
 
@@ -3778,7 +3778,7 @@ ibString ibValueRecordManagerObject::GetString() const
 {
 	const ibCtorMetaValueType* clsFactory =
 		m_metaObject->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_RecordManager);
-	wxASSERT(clsFactory);
+	ibASSERT(clsFactory);
 	return clsFactory->GetClassName();
 }
 
@@ -3848,7 +3848,7 @@ bool ibValueRecordSetObject::InitializeObject(const ibValueRecordSetObject* sour
 	}
 
 	ibValueModuleManager* moduleManager = ibSession::EditModuleManagerFor(m_metaObject->GetMetaData());
-	wxASSERT(moduleManager);
+	ibASSERT(moduleManager);
 
 	ibRuntimeModuleDataObject::SetParent(moduleManager);
 	BindContextVariable(thisObject, this);                   // contextual
@@ -3866,7 +3866,7 @@ bool ibValueRecordSetObject::InitializeObject(const ibValueRecordSetObject* sour
 	if (source != nullptr) {
 		for (long row = 0; row < source->GetRowCount(); row++) {
 			ibComposerNode* node = source->GetViewData<ibComposerNode>(source->GetItem(row));
-			wxASSERT(node);
+			ibASSERT(node);
 			ibValueModelStorage::Append(new ibComposerNode(*node), false);
 		}
 	}
@@ -3876,7 +3876,7 @@ bool ibValueRecordSetObject::InitializeObject(const ibValueRecordSetObject* sour
 	}
 
 	if (!appData->DesignerMode()) {
-		wxASSERT(m_procUnit == nullptr);
+		ibASSERT(m_procUnit == nullptr);
 		InitializeRuntime();
 		// Descriptor parent cascades both compile and procUnit parents.
 		ibRuntimeModuleDataObject::SetParent(moduleManager);
@@ -3930,7 +3930,7 @@ m_recordColumnCollection(new ibValueRecordSetObjectRegisterColumnCollection(this
 	GetModelComposer().SetMetaData(m_metaObject != nullptr ? m_metaObject->GetMetaData() : nullptr);
 	for (long row = 0; row < source.GetRowCount(); row++) {
 		ibComposerNode* node = source.GetViewData<ibComposerNode>(source.GetItem(row));
-		wxASSERT(node);
+		ibASSERT(node);
 		ibValueModelStorage::Append(new ibComposerNode(*node), false);
 	}
 }
@@ -4044,7 +4044,7 @@ ibClassID ibValueRecordSetObject::GetClassType() const
 {
 	const ibCtorMetaValueType* clsFactory =
 		m_metaObject->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_RecordSet);
-	wxASSERT(clsFactory);
+	ibASSERT(clsFactory);
 	return clsFactory->GetClassType();
 }
 
@@ -4052,7 +4052,7 @@ ibString ibValueRecordSetObject::GetClassName() const
 {
 	const ibCtorMetaValueType* clsFactory =
 		m_metaObject->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_RecordSet);
-	wxASSERT(clsFactory);
+	ibASSERT(clsFactory);
 	return clsFactory->GetClassName();
 }
 
@@ -4060,7 +4060,7 @@ ibString ibValueRecordSetObject::GetString() const
 {
 	const ibCtorMetaValueType* clsFactory =
 		m_metaObject->GetTypeCtor(ibCtorObjectMetaType::ibCtorObjectMetaType_RecordSet);
-	wxASSERT(clsFactory);
+	ibASSERT(clsFactory);
 	return clsFactory->GetClassName();
 }
 
@@ -4075,7 +4075,7 @@ bool ibValueRecordSetObject::LoadDataFromTable(ibValueModel* srcTable)
 	std::vector<ibString> columnName;
 	for (unsigned int idx = 0; idx < colData->GetColumnCount() - 1; idx++) {
 		ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo = colData->GetColumnInfo(idx);
-		wxASSERT(colInfo);
+		ibASSERT(colInfo);
 		if (m_recordColumnCollection->GetColumnByName(colInfo->GetColumnName()) != nullptr) {
 			columnName.push_back(colInfo->GetColumnName());
 		}
@@ -4088,7 +4088,7 @@ bool ibValueRecordSetObject::LoadDataFromTable(ibValueModel* srcTable)
 			ibValue cRetValue;
 			if (srcTable->GetValueByMetaID(srcItem, srcTable->GetColumnIDByName(colName), cRetValue)) {
 				const ibMetaID& id = GetColumnIDByName(colName);
-				if (id != wxNOT_FOUND) SetValueByMetaID(dstItem, id, cRetValue);
+				if (id != ibNOT_FOUND) SetValueByMetaID(dstItem, id, cRetValue);
 			}
 		}
 	}
@@ -4103,7 +4103,7 @@ ibValuePtr<ibValueModel> ibValueRecordSetObject::SaveDataToTable() const
 	ibValueModelColumnCollection* colData = valueTable->GetColumnCollection();
 	for (unsigned int idx = 0; idx < m_recordColumnCollection->GetColumnCount() - 1; idx++) {
 		ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo = m_recordColumnCollection->GetColumnInfo(idx);
-		wxASSERT(colInfo);
+		ibASSERT(colInfo);
 		ibValueModelColumnCollection::ibValueModelColumnInfo* newColInfo = colData->AddColumn(
 			colInfo->GetColumnName(), colInfo->GetColumnType(), colInfo->GetColumnCaption(), colInfo->GetColumnWidth()
 		);
@@ -4116,10 +4116,10 @@ ibValuePtr<ibValueModel> ibValueRecordSetObject::SaveDataToTable() const
 		for (unsigned int col = 0; col < colData->GetColumnCount(); col++) {
 			ibValue cRetValue;
 			ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo = colData->GetColumnInfo(col);
-			wxASSERT(colInfo);
+			ibASSERT(colInfo);
 			if (GetValueByMetaID(srcItem, colInfo->GetColumnID(), cRetValue)) {
 				const ibMetaID& id = GetColumnIDByName(colInfo->GetColumnName());
-				if (id != wxNOT_FOUND) valueTable->SetValueByMetaID(dstItem, id, cRetValue);
+				if (id != ibNOT_FOUND) valueTable->SetValueByMetaID(dstItem, id, cRetValue);
 			}
 		}
 	}
@@ -4239,7 +4239,7 @@ ibValueRecordSetObject::ibValueRecordSetObjectRegisterColumnCollection::ibValueR
 	m_ownerTable(ownerTable)
 {
 	const ibValueMetaObjectGenericData* metaObject = m_ownerTable->GetMetaObject();
-	wxASSERT(metaObject);
+	ibASSERT(metaObject);
 
 	for (const auto object : metaObject->GetGenericAttributeArrayObject()) {
 		m_listColumnInfo.insert_or_assign(object->GetMetaID(),
@@ -4435,7 +4435,7 @@ bool ibValueRecordKeyObject::GetPropVal(const long lPropNum, ibValue& pvarPropVa
 bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
 	const ibMetaID& id = m_ownerTable->m_methodHelperReturnLine.GetPropData(lPropNum);
-	if (id != wxNOT_FOUND)
+	if (id != ibNOT_FOUND)
 		return SetValueByMetaID(id, varPropVal);
 	return false;
 }
@@ -4443,7 +4443,7 @@ bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine::SetPropVa
 bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
 	const ibMetaID& id = m_ownerTable->m_methodHelperReturnLine.GetPropData(lPropNum);
-	if (id != wxNOT_FOUND) {
+	if (id != ibNOT_FOUND) {
 		return GetValueByMetaID(id, pvarPropVal);
 	}
 	return false;
@@ -4455,10 +4455,10 @@ ibClassID ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine::GetC
 {
 	const ibValueMetaObject* metaTable = m_ownerTable->GetMetaObject();
 	const ibMetaData* metaData = metaTable->GetMetaData();
-	wxASSERT(metaData);
+	ibASSERT(metaData);
 	const ibCtorMetaValueType* clsFactory =
 		metaData->GetTypeCtor(metaTable, ibCtorObjectMetaType::ibCtorObjectMetaType_RecordSet_String);
-	wxASSERT(clsFactory);
+	ibASSERT(clsFactory);
 	return clsFactory->GetClassType();
 }
 
@@ -4466,10 +4466,10 @@ ibString ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine::GetCl
 {
 	const ibValueMetaObject* metaTable = m_ownerTable->GetMetaObject();
 	const ibMetaData* metaData = metaTable->GetMetaData();
-	wxASSERT(metaData);
+	ibASSERT(metaData);
 	const ibCtorMetaValueType* clsFactory =
 		metaData->GetTypeCtor(metaTable, ibCtorObjectMetaType::ibCtorObjectMetaType_RecordSet_String);
-	wxASSERT(clsFactory);
+	ibASSERT(clsFactory);
 	return clsFactory->GetClassName();
 }
 
@@ -4477,10 +4477,10 @@ ibString ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine::GetSt
 {
 	const ibValueMetaObject* metaTable = m_ownerTable->GetMetaObject();
 	const ibMetaData* metaData = metaTable->GetMetaData();
-	wxASSERT(metaData);
+	ibASSERT(metaData);
 	const ibCtorMetaValueType* clsFactory =
 		metaData->GetTypeCtor(metaTable, ibCtorObjectMetaType::ibCtorObjectMetaType_RecordSet_String);
-	wxASSERT(clsFactory);
+	ibASSERT(clsFactory);
 	return clsFactory->GetClassName();
 }
 
@@ -4494,7 +4494,7 @@ bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::SetPropVal(
 bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
 	const ibMetaID& id = m_members.GetPropData(lPropNum);
-	if (id != wxNOT_FOUND) {
+	if (id != ibNOT_FOUND) {
 		pvarPropVal = new ibValueRecordSetObjectRegisterKeyDescriptionValue(m_recordSet, id);
 		return true;
 	}
@@ -4564,7 +4564,7 @@ enum Prop
 bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::ibValueRecordSetObjectRegisterKeyDescriptionValue::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
 	const ibValueMetaObjectRegisterData* metaObject = m_recordSet->GetMetaObject();
-	wxASSERT(metaObject);
+	ibASSERT(metaObject);
 
 	// A key the register has switched OFF (an independent register's Recorder) is not found, and a filter
 	// cannot be set on it.
@@ -4590,7 +4590,7 @@ bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::ibValueReco
 bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::ibValueRecordSetObjectRegisterKeyDescriptionValue::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
 	const ibValueMetaObjectRegisterData* metaObject = m_recordSet->GetMetaObject();
-	wxASSERT(metaObject);
+	ibASSERT(metaObject);
 
 	const ibValueMetaObjectAttributeBase* attribute = metaObject->FindAnyAttributeObjectByFilter(m_metaId);
 	if (attribute == nullptr)

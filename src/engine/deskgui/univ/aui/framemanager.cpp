@@ -4835,7 +4835,15 @@ void ibAuiManager::OnRender(ibAuiManagerEvent& evt)
                 renderer->DrawSash(*dc, part.rect, part.orientation == wxVERTICAL ? wxVERTICAL : wxHORIZONTAL);
                 break;
             case ibAuiDockUIPart::typeBackground:
-                renderer->DrawBackground(*dc, wxTHEME_COLOUR(DESKTOP), part.rect, 0);
+                // a row of tool bars has a colour of its own, the theme's (DrawToolBarDockBackground): the row's whole
+                // painted into the piece, so a gradient runs on across the pieces
+                if ( part.dock != nullptr && part.dock->toolbar )
+                {
+                    wxDCClipper clip(*dc, part.rect);
+                    renderer->DrawToolBarDockBackground(*dc, part.dock->rect);
+                }
+                else
+                    renderer->DrawBackground(*dc, wxTHEME_COLOUR(DESKTOP), part.rect, 0);
                 break;
             case ibAuiDockUIPart::typeCaption:
             {
@@ -4867,10 +4875,29 @@ void ibAuiManager::OnRender(ibAuiManagerEvent& evt)
                 renderer->DrawGripper(*dc, part.rect, part.pane->HasGripperTop() ? wxVERTICAL : wxHORIZONTAL);
                 break;
             case ibAuiDockUIPart::typePaneBorder:
-                // a tool bar's is the colour round it, nothing to draw; a book's pages' square, the other panes' the
-                // theme's
+                // a tool bar's is the colour round it: in a row of tool bars the row's, painted in the bands round the bar
+                // and not under it - the bar is a window of its own; a book's pages' square, the other panes' the theme's
                 if ( part.pane->IsToolbar() )
+                {
+                    if ( part.dock != nullptr && part.dock->toolbar )
+                    {
+                        const wxRect& all = part.rect;
+                        const wxRect bar = part.sizer_item->GetRect();
+                        const wxRect bands[] = {
+                            wxRect(all.x, all.y, all.width, bar.y - all.y),
+                            wxRect(all.x, bar.GetBottom() + 1, all.width, all.GetBottom() - bar.GetBottom()),
+                            wxRect(all.x, bar.y, bar.x - all.x, bar.height),
+                            wxRect(bar.GetRight() + 1, bar.y, all.GetRight() - bar.GetRight(), bar.height) };
+                        for ( const wxRect& band : bands )
+                        {
+                            if ( band.IsEmpty() )
+                                continue;
+                            wxDCClipper clip(*dc, band);
+                            renderer->DrawToolBarDockBackground(*dc, part.dock->rect);
+                        }
+                    }
                     break;
+                }
                 if ( wxDynamicCast(m_frame, ibAuiNotebook) != nullptr )
                     renderer->DrawBorder(*dc, wxBORDER_SIMPLE, part.rect);
                 else

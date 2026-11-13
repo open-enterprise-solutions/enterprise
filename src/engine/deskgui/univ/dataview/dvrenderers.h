@@ -147,7 +147,7 @@ class DESKGUI_API ibDataViewRendererBase : public wxObject
 public:
 	ibDataViewRendererBase(const wxString& varianttype,
 		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT,
-		int alignment = wxDVR_DEFAULT_ALIGNMENT);
+		int alignment = ibDVR_DEFAULT_ALIGNMENT);
 	virtual ~ibDataViewRendererBase();
 
 	virtual bool Validate(ibVariant& WXUNUSED(value))
@@ -241,15 +241,15 @@ public:
 	// Implementation only from now on.
 
 	// Return the alignment of this renderer if it's specified (i.e. has value
-	// different from the default wxDVR_DEFAULT_ALIGNMENT) or the alignment of
+	// different from the default ibDVR_DEFAULT_ALIGNMENT) or the alignment of
 	// the column it is used for otherwise.
 	//
 	// Unlike GetAlignment(), this always returns a valid combination of
 	// wxALIGN_XXX flags (although possibly wxALIGN_NOT) and never returns
-	// wxDVR_DEFAULT_ALIGNMENT.
+	// ibDVR_DEFAULT_ALIGNMENT.
 	int GetEffectiveAlignment() const;
 
-	// Like GetEffectiveAlignment(), but returns wxDVR_DEFAULT_ALIGNMENT if
+	// Like GetEffectiveAlignment(), but returns ibDVR_DEFAULT_ALIGNMENT if
 	// the owner isn't set and GetAlignment() is default.
 	int GetEffectiveAlignmentIfKnown() const;
 
@@ -339,7 +339,7 @@ public:
 	// pass to the base class
 	ibDataViewCustomRendererBase(const wxString& varianttype = wxASCII_STR("string"),
 		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT,
-		int align = wxDVR_DEFAULT_ALIGNMENT)
+		int align = ibDVR_DEFAULT_ALIGNMENT)
 		: ibDataViewCustomRendererRealBase(varianttype, mode, align)
 	{
 	}
@@ -443,7 +443,7 @@ class DESKGUI_API ibDataViewRenderer : public ibDataViewCustomRendererBase
 public:
 	ibDataViewRenderer(const wxString& varianttype,
 		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT,
-		int align = wxDVR_DEFAULT_ALIGNMENT);
+		int align = ibDVR_DEFAULT_ALIGNMENT);
 	virtual ~ibDataViewRenderer();
 
 	virtual wxDC* GetDC() wxOVERRIDE;
@@ -517,7 +517,7 @@ public:
 
 	ibDataViewCustomRenderer(const wxString& varianttype = GetDefaultType(),
 		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT,
-		int align = wxDVR_DEFAULT_ALIGNMENT);
+		int align = ibDVR_DEFAULT_ALIGNMENT);
 
 
 	// see the explanation of the following WXOnXXX() methods in wx/generic/dvrenderer.h
@@ -551,7 +551,7 @@ public:
 
 	ibDataViewTextRenderer(const wxString& varianttype = GetDefaultType(),
 		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT,
-		int align = wxDVR_DEFAULT_ALIGNMENT);
+		int align = ibDVR_DEFAULT_ALIGNMENT);
 	virtual ~ibDataViewTextRenderer();
 
 #if wxUSE_MARKUP
@@ -595,7 +595,7 @@ public:
 
 	ibDataViewBitmapRenderer(const wxString& varianttype = GetDefaultType(),
 		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT,
-		int align = wxDVR_DEFAULT_ALIGNMENT);
+		int align = ibDVR_DEFAULT_ALIGNMENT);
 
 	virtual bool SetValue(const ibVariant& value) wxOVERRIDE;
 	virtual bool GetValue(ibVariant& value) const wxOVERRIDE;
@@ -625,7 +625,7 @@ public:
 
 	ibDataViewToggleRenderer(const wxString& varianttype = GetDefaultType(),
 		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT,
-		int align = wxDVR_DEFAULT_ALIGNMENT);
+		int align = ibDVR_DEFAULT_ALIGNMENT);
 
 	void ShowAsRadio() { m_radio = true; }
 
@@ -664,7 +664,7 @@ public:
 	ibDataViewProgressRenderer(const wxString& label = wxEmptyString,
 		const wxString& varianttype = GetDefaultType(),
 		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT,
-		int align = wxDVR_DEFAULT_ALIGNMENT);
+		int align = ibDVR_DEFAULT_ALIGNMENT);
 
 	virtual bool SetValue(const ibVariant& value) wxOVERRIDE;
 	virtual bool GetValue(ibVariant& value) const wxOVERRIDE;
@@ -694,7 +694,7 @@ public:
 
 	ibDataViewIconTextRenderer(const wxString& varianttype = GetDefaultType(),
 		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT,
-		int align = wxDVR_DEFAULT_ALIGNMENT);
+		int align = ibDVR_DEFAULT_ALIGNMENT);
 
 	virtual bool SetValue(const ibVariant& value) wxOVERRIDE;
 	virtual bool GetValue(ibVariant& value) const wxOVERRIDE;
@@ -728,7 +728,7 @@ class DESKGUI_API ibDataViewSpinRenderer : public ibDataViewCustomRenderer
 public:
 	ibDataViewSpinRenderer(int min, int max,
 		ibDataViewCellMode mode = wxDATAVIEW_CELL_EDITABLE,
-		int alignment = wxDVR_DEFAULT_ALIGNMENT);
+		int alignment = ibDVR_DEFAULT_ALIGNMENT);
 	virtual bool HasEditorCtrl() const wxOVERRIDE { return true; }
 	virtual wxWindow* CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const ibVariant& value) wxOVERRIDE;
 	virtual bool GetValueFromEditorCtrl(wxWindow* editor, ibVariant& value) wxOVERRIDE;
@@ -756,7 +756,7 @@ class DESKGUI_API ibDataViewChoiceRenderer : public ibDataViewCustomRenderer
 public:
 	ibDataViewChoiceRenderer(const wxArrayString& choices,
 		ibDataViewCellMode mode = wxDATAVIEW_CELL_EDITABLE,
-		int alignment = wxDVR_DEFAULT_ALIGNMENT);
+		int alignment = ibDVR_DEFAULT_ALIGNMENT);
 	virtual bool HasEditorCtrl() const wxOVERRIDE { return true; }
 	virtual wxWindow* CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const ibVariant& value) wxOVERRIDE;
 	virtual bool GetValueFromEditorCtrl(wxWindow* editor, ibVariant& value) wxOVERRIDE;
@@ -785,7 +785,7 @@ class DESKGUI_API ibDataViewChoiceByIndexRenderer : public ibDataViewChoiceRende
 public:
 	ibDataViewChoiceByIndexRenderer(const wxArrayString& choices,
 		ibDataViewCellMode mode = wxDATAVIEW_CELL_EDITABLE,
-		int alignment = wxDVR_DEFAULT_ALIGNMENT);
+		int alignment = ibDVR_DEFAULT_ALIGNMENT);
 
 	virtual wxWindow* CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const ibVariant& value) wxOVERRIDE;
 	virtual bool GetValueFromEditorCtrl(wxWindow* editor, ibVariant& value) wxOVERRIDE;
@@ -809,7 +809,7 @@ public:
 
 	ibDataViewDateRenderer(const wxString& varianttype = GetDefaultType(),
 		ibDataViewCellMode mode = wxDATAVIEW_CELL_EDITABLE,
-		int align = wxDVR_DEFAULT_ALIGNMENT);
+		int align = ibDVR_DEFAULT_ALIGNMENT);
 
 	virtual bool HasEditorCtrl() const wxOVERRIDE { return true; }
 	virtual wxWindow* CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const ibVariant& value) wxOVERRIDE;
@@ -844,7 +844,7 @@ public:
 	explicit ibDataViewCheckIconTextRenderer
 	(
 		ibDataViewCellMode mode = wxDATAVIEW_CELL_ACTIVATABLE,
-		int align = wxDVR_DEFAULT_ALIGNMENT
+		int align = ibDVR_DEFAULT_ALIGNMENT
 	);
 
 	// This renderer can always display the 3rd ("indeterminate") checkbox

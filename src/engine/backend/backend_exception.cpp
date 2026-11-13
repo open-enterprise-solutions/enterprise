@@ -309,7 +309,7 @@ void ibBackendException::ProcessError(const ibBackendException& err, const ibByt
 			ibBackendException::ProcessExceptionError(strFileName,
 				strModuleName, strDocPath,
 				error.m_numString, isEvalMode ? error.m_numLine : error.m_numLine + 1,
-				strCodeError, wxNOT_FOUND, err.GetErrorDescription(),
+				strCodeError, ibNOT_FOUND, err.GetErrorDescription(),
 				ibDiagnosticKind::Runtime   // reached from procUnit's catch — the code ran
 			);
 
@@ -335,7 +335,7 @@ void ibBackendException::ProcessError(const ibBackendException& err, const ibByt
 			ibBackendException::ProcessExceptionError(strFileName,
 				strModuleName, strDocPath,
 				error.m_numString, error.m_numLine + 1,
-				ibEmptyString, wxNOT_FOUND, err.GetErrorDescription(),
+				ibEmptyString, ibNOT_FOUND, err.GetErrorDescription(),
 				ibDiagnosticKind::Runtime
 			);
 		}
@@ -413,9 +413,9 @@ ibString ibBackendException::ProcessExceptionError(const ibString& strFileName,
 		const unsigned int frameCount = puState ? puState->GetCountRunContext() : 0;
 		for (unsigned int i = 0; i < frameCount; i++) {
 			const ibRunContext* stackContext = puState->GetRunContext(i);
-			wxASSERT(stackContext);
+			ibASSERT(stackContext);
 			const ibByteCode* stackByteCode = stackContext->GetByteCode();
-			wxASSERT(stackByteCode);
+			ibASSERT(stackByteCode);
 			ibDiagnostic::Frame frame;
 			frame.m_module = stackByteCode->m_strModuleName;
 			// The report of one failure must not become a second one: a frame whose position is

@@ -19,7 +19,7 @@
 #include "backend/sheetFormat/sheetFormatXlsx.h"
 #include "backend/backend_localization.h"   // a caption goes out in one language
 
-#include <wx/zipstrm.h>
+#include "core/zip/zip.h"                    // ibZipWriter - the package
 
 #include <algorithm>
 #include <map>
@@ -200,7 +200,7 @@ CellStyle StyleOf(const ibSpreadsheetCellDescription& cell)
 
 	// TEXT ORIENTATION — ours is a direction, Excel's is an ANGLE, and the direction we
 	// have is the angle it calls 90.
-	if (cell.m_textOrient == wxVERTICAL)
+	if (cell.m_textOrient == ibOrient_Vertical)
 		style.m_rotation = 90;
 
 	// ⚠ FIT MODE IS CARRIED AS THE NEAREST TRUE THING, and it is not the same thing.
@@ -231,11 +231,12 @@ CellStyle StyleOf(const ibSpreadsheetCellDescription& cell)
 
 // --- the parts ------------------------------------------------------------
 
-void AddPart(wxZipOutputStream& zip, const ibString& name, const ibString& body)
+// A part that did not go out fails the writer, and its Close says so.
+void AddPart(ibZipWriter& zip, const ibString& name, const ibString& body)
 {
-	zip.PutNextEntry(name);
 	const std::string utf8 = body.ToUTF8();
-	zip.Write(utf8.data(), utf8.length());
+	if (zip.PutNextEntry(name))
+		zip.Write(utf8.data(), utf8.length());
 }
 
 ibString ContentTypes()
@@ -409,7 +410,7 @@ ibString Styles(const std::vector<CellStyle>& styles)
 
 } // namespace
 
-bool ibSheetFormatXlsx::Write(wxOutputStream& output, const ibSpreadsheetDescription& sheet) const
+bool ibSheetFormatXlsx::Write(std::ostream& output, const ibSpreadsheetDescription& sheet) const
 {
 	// --- the styles the cells actually use, gathered before anything is written --
 	std::map<CellStyle, size_t> styleAt;
@@ -674,10 +675,7 @@ bool ibSheetFormatXlsx::Write(wxOutputStream& output, const ibSpreadsheetDescrip
 	body += ibT("</worksheet>");
 
 	// --- write the package -------------------------------------------------------
-	wxZipOutputStream zip(output);
-	if (!zip.IsOk())
-		return false;
-
+	ibZipWriter zip(output);
 	AddPart(zip, ibT("[Content_Types].xml"),        ContentTypes());
 	AddPart(zip, ibT("_rels/.rels"),                RootRels());
 	AddPart(zip, ibT("xl/workbook.xml"),            Workbook());

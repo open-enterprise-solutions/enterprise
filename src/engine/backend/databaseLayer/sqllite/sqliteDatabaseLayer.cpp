@@ -9,6 +9,8 @@
 #include "backend/databaseLayer/databaseLayerException.h"
 #include "core/fileSystem.h"
 
+#include <cstring>
+
 // SQLite SQL dialect — owned by the driver (static definition + virtual access).
 const ibDialectDictionary& ibDatabaseLayerSQLite::Dialect()
 {

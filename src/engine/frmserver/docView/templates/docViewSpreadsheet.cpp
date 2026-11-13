@@ -7,8 +7,6 @@
 // ibSheetView implementation
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibSheetView, ibMetaView);
-
 void ibSheetView::OnDraw(ibDataNode& frame)
 {
 	const ibSheetDocument* const document = dynamic_cast<const ibSheetDocument*>(GetDocument());
@@ -69,10 +67,6 @@ bool ibSheetView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataN
 // ibSheetDocument: ibDocument and its sheet married
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_ABSTRACT_CLASS(ibSheetDocument, ibMetaDocument);
-
-wxIMPLEMENT_DYNAMIC_CLASS(ibSheetFileDocument, ibSheetDocument);
-
 // ----------------------------------------------------------------------------
 // ibSheetFileDocument: ibDocument and its sheet married
 // ----------------------------------------------------------------------------
@@ -97,9 +91,6 @@ bool ibSheetFileDocument::DoSaveDocument(const ibString& filename)
 // ----------------------------------------------------------------------------
 // ibSheetGridBoxDocument / View: the document a form's grid box holds, and its view
 // ----------------------------------------------------------------------------
-
-wxIMPLEMENT_DYNAMIC_CLASS(ibSheetGridBoxDocument, ibSheetFileDocument);
-wxIMPLEMENT_DYNAMIC_CLASS(ibSheetGridBoxView, ibSheetView);
 
 ibSheetGridBoxDocument::ibSheetGridBoxDocument() : ibSheetFileDocument()
 {

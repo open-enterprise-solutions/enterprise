@@ -36,7 +36,7 @@ struct KeyFrame : ibBackendDocFrame {
 	{
 		if (formGuid.isValid())
 			return formGuid;
-		ibUniqueKey made = wxNewUniqueGuid;
+		ibUniqueKey made = ibNewUniqueGuid;
 		return made;
 	}
 };

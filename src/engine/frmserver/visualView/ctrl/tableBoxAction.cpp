@@ -86,7 +86,7 @@ ibValueModelTableBox::ibStandardCommandSet ibValueModelTableBox::GetStandardComm
 	model->GetCommandCollection(formType, commands);
 
 	for (const ibCommandItem& c : commands) {
-		if (c.m_actionId == wxNOT_FOUND)
+		if (c.m_actionId == ibNOT_FOUND)
 			actionData.AddSeparator();
 		else
 			actionData.AddAction(c.m_name, c.m_caption, c.m_pictureDescription, c.m_pictureAndText, c.m_actionId)

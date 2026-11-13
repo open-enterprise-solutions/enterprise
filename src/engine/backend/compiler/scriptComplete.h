@@ -45,8 +45,6 @@
 #include "backend/compiler/value.h"   // a branch HOLDS its value, and holding it is owning it
 #include "backend/backend_diagnostic.h"   // ibDiagnostic - what ibCheckMethodCalls answers with
 
-#include <wx/string.h>
-
 #include <vector>
 
 class ibValueMetaObject;

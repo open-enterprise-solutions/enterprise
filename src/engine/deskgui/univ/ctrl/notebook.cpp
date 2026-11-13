@@ -139,6 +139,11 @@ bool ibNotebook::Create(wxWindow *parent,
     if ( (style & wxBK_ALIGN_MASK) == wxBK_DEFAULT )
         style |= wxBK_TOP;
 
+    // painted whole as it is sized: the page's frame and the tab row's line run to its edges (ibWindow::OnSize paints
+    // again only the frame) - sized without it, the lines stayed where the old edges were (the query constructor,
+    // 2026-11-13, Max)
+    style |= wxFULL_REPAINT_ON_RESIZE;
+
     if ( !ibControl::Create(parent, id, pos, size, style,
                             wxDefaultValidator, name) )
         return false;

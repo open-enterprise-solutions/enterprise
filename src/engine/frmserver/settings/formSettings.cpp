@@ -63,7 +63,7 @@ bool SettingsKey(const ibValueForm* form, ibSettingsKey& key)
 	// whichever record it happens to be showing — a person arranges the FORM, not one document.
 	if (const ibValueMetaObjectFormBase* creator = form->GetFormMetaObject()) {
 		key = ibUserSettingsKey(ibSettingsCategory::Form, creator->GetGuid(),
-			wxNullGuid, &appData->GetUserInfo());
+			ibNullGuid, &appData->GetUserInfo());
 		return key.IsOk();
 	}
 
@@ -171,7 +171,7 @@ void ibApplyFormSettings(ibValueForm* form, const ibDataNode& root)
 		// removed the very controls this one was pushed past.
 		const int position = stored.GetValue<std::int32_t>(s_fieldPosition);
 		ibValueFrame* parent = control->GetParent();
-		if (position != wxNOT_FOUND && parent != nullptr && parent->GetChildCount() > 0) {
+		if (position != ibNOT_FOUND && parent != nullptr && parent->GetChildCount() > 0) {
 			const int last = (int)parent->GetChildCount() - 1;
 			parent->ChangeChildPosition(control, (unsigned int)std::max(0, std::min(position, last)));
 		}
@@ -225,7 +225,7 @@ ibFormSettingsResult ibSaveFormSettings(const ibValueForm* form)
 
 		ibValueFrame* parent = control->GetParent();
 		child.SetValue(s_fieldPosition,
-			parent != nullptr ? (std::int32_t)parent->GetChildPosition(control) : (std::int32_t)wxNOT_FOUND);
+			parent != nullptr ? (std::int32_t)parent->GetChildPosition(control) : (std::int32_t)ibNOT_FOUND);
 	});
 
 	const bool saved = storage->Save(key, root);

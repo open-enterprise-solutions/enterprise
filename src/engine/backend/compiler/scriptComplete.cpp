@@ -940,12 +940,12 @@ private:
 			return false;
 
 		const long numProp = parent.FindProp(name);
-		if (numProp != wxNOT_FOUND) {
+		if (numProp != ibNOT_FOUND) {
 			try { return parent.GetPropVal(numProp, out); }
 			catch (...) { return false; }
 		}
 
-		if (parent.FindMethod(name) != wxNOT_FOUND) {
+		if (parent.FindMethod(name) != ibNOT_FOUND) {
 			out = parent;
 			return true;
 		}
@@ -1172,13 +1172,13 @@ private:
 		// a wrong answer can take. Asking for the method sorts both cases at once: no receiver, and
 		// the wrong one.
 		long lMethodNum = receiver.FindMethod(method);
-		if (lMethodNum == wxNOT_FOUND) {
+		if (lMethodNum == ibNOT_FOUND) {
 			if (!ReceiverOfContextMethod(method, receiver))
 				return false;
 			lMethodNum = receiver.FindMethod(method);
 		}
 
-		if (lMethodNum == wxNOT_FOUND || !receiver.HasRetVal(lMethodNum))
+		if (lMethodNum == ibNOT_FOUND || !receiver.HasRetVal(lMethodNum))
 			return false;
 
 		// THE ARGUMENTS THE COMPILER ALREADY WROTE DOWN — see LoadArguments. The frame is sized by
@@ -1300,7 +1300,7 @@ private:
 				continue;
 
 			const long method = target.FindMethod(ConstName(code.m_param3.m_numIndex));
-			if (method == wxNOT_FOUND)
+			if (method == ibNOT_FOUND)
 				continue;
 
 			const long passed   = (long)code.m_param3.m_numArray;
@@ -1331,19 +1331,19 @@ private:
 		if (depth > kMaxChain)
 			return false;
 
-		long frameIdx = wxNOT_FOUND;
+		long frameIdx = ibNOT_FOUND;
 		for (size_t i = 0; i < m_byteCode.m_listFunc.size(); i++)
 			if (&m_byteCode.m_listFunc[i] == m_frame) { frameIdx = (long)i; break; }
-		if (frameIdx == wxNOT_FOUND)
+		if (frameIdx == ibNOT_FOUND)
 			return false;
 
-		long lfuncIp = wxNOT_FOUND;
+		long lfuncIp = ibNOT_FOUND;
 		for (size_t ip = 0; ip < m_byteCode.m_listCode.size(); ip++) {
 			const ibByteUnit& unit = m_byteCode.m_listCode[ip];
 			if ((unit.m_numOper % TYPE_DELTA1) == OPER_LFUNC
 				&& (long)unit.m_param3.m_numIndex == frameIdx) { lfuncIp = (long)ip; break; }
 		}
-		if (lfuncIp == wxNOT_FOUND)
+		if (lfuncIp == ibNOT_FOUND)
 			return false;
 
 		const ibParamRunUnit lambdaSlot = m_byteCode.m_listCode[(size_t)lfuncIp].m_param1;
@@ -1690,7 +1690,7 @@ ibString SignatureOf(const ibByteCode::ibByteFunction& fn, const ibCompileChain&
 		// `const wxChar*`, both arms of the conditional convert to each other, and the expression is
 		// AMBIGUOUS — green here, a build failure on macOS and Linux (portability.md §1.10). The tree
 		// writes it this way in every other place; this one was the exception, and CI said so.
-		return numMethod != wxNOT_FOUND
+		return numMethod != ibNOT_FOUND
 			? value.GetMethodHelper(numMethod) : ibString();
 	}
 
@@ -2491,7 +2491,7 @@ std::vector<ibDiagnostic> ibCheckMethodCalls(const ibString& text, const ibValue
 		for (const ibCaretValue& receiver : receivers) {
 			const ibClassID clsid = receiver.m_value.GetClassType();
 			if ((!IsManager(clsid) && !IsObject(clsid) && !IsReference(clsid))
-				|| receiver.m_value.FindMethod(method) != wxNOT_FOUND) {
+				|| receiver.m_value.FindMethod(method) != ibNOT_FOUND) {
 				judged = false;
 				break;
 			}

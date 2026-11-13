@@ -3,18 +3,17 @@
 ////////////////////////////////////////////////////////////////////////////
 #include "gitService.h"
 
-#include <wx/utils.h>      // wxExecute
-#include <wx/filename.h>
+#include "core/startProcess.h"   // ibRunProcess
 #include "core/stringTokenizer.h"
 
 // ---------------------------------------------------------------------------
-// arg quoting — we build the command string ourselves (the portable wxExecute
-// overload that captures output takes a string, not an argv), so every arg is
+// arg quoting — we build the command string ourselves (ibRunProcess, which
+// captures the output, takes a string, not an argv), so every arg is
 // wrapped to survive spaces and to block shell injection from UI-supplied
 // branch names / commit messages.
 // ---------------------------------------------------------------------------
 static ibString QuoteArg(const ibString& a) {
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	// cmd.exe: wrap in double quotes, escape embedded quotes by doubling.
 	ibString s = a; s.Replace(ibT("\""), ibT("\"\""));
 	return ibT("\"") + s + ibT("\"");
@@ -29,9 +28,8 @@ ibGitService::ibGitService(const ibString& workdir)
 	: m_workdir(workdir) {}
 
 bool ibGitService::IsGitAvailable() {
-	wxArrayString out, err;   // wxExecute's own: it writes the lines into them
-	const long rc = wxExecute(wxT("git --version"), out, err, wxEXEC_SYNC | wxEXEC_NODISABLE);
-	return rc == 0;
+	ibString out, err;
+	return ibRunProcess(ibT("git --version"), out, err) == 0;
 }
 
 ibGitResult ibGitService::Run(const std::vector<ibString>& args) const {
@@ -40,14 +38,9 @@ ibGitResult ibGitService::Run(const std::vector<ibString>& args) const {
 	for (size_t i = 0; i < args.size(); ++i)
 		cmd += ibT(" ") + QuoteArg(args[i]);
 
-	wxArrayString out, err;
-	const long rc = wxExecute(cmd, out, err, wxEXEC_SYNC | wxEXEC_NODISABLE);
-
 	ibGitResult r;
-	r.exitCode = rc;
-	r.ok = (rc == 0);
-	r.output = wxJoin(out, '\n');
-	r.error = wxJoin(err, '\n');
+	r.exitCode = ibRunProcess(cmd, r.output, r.error);
+	r.ok = (r.exitCode == 0);
 	return r;
 }
 
@@ -66,11 +59,10 @@ ibGitResult ibGitService::Init() {
 
 ibGitResult ibGitService::Clone(const ibString& url) {
 	// clone needs the parent dir; run git from there with explicit target.
-	wxArrayString out, err;
 	const ibString cmd = ibT("git clone ") + QuoteArg(url) + ibT(" ") + QuoteArg(m_workdir);
-	const long rc = wxExecute(cmd, out, err, wxEXEC_SYNC | wxEXEC_NODISABLE);
-	ibGitResult r; r.exitCode = rc; r.ok = (rc == 0);
-	r.output = wxJoin(out, '\n'); r.error = wxJoin(err, '\n');
+	ibGitResult r;
+	r.exitCode = ibRunProcess(cmd, r.output, r.error);
+	r.ok = (r.exitCode == 0);
 	return r;
 }
 
@@ -91,7 +83,7 @@ std::vector<ibGitStatusEntry> ibGitService::Status() const {
 		e.path = line.substr(3);
 		// rename form "old -> new" — keep the new path
 		const int arrow = e.path.Find(ibT(" -> "));
-		if (arrow != wxNOT_FOUND) e.path = e.path.substr(arrow + 4);
+		if (arrow != ibNOT_FOUND) e.path = e.path.substr(arrow + 4);
 		e.untracked = (e.xy == ibT("??"));
 		e.staged = !e.untracked && e.xy[0] != ibT(' ');
 		result.push_back(e);

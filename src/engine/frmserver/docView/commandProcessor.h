@@ -9,7 +9,7 @@
 #include <list>
 #include <memory>
 
-#include <wx/string.h>
+#include "core/fstring.h"   // ibString
 
 #include "frmserver/frmserver.h"
 

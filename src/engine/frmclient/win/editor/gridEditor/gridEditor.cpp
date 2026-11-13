@@ -82,7 +82,7 @@ m_document(nullptr), m_propertySpreadsheet(nullptr), m_spreadsheetObject(nullptr
 ibGridEditor::ibGridEditor(ibMetaDocument* document,
 	wxWindow* parent,
 	wxWindowID id, const wxPoint& pos,
-	const wxSize& size) : ibGrid(parent, id, pos, size),
+	const wxSize& size) : ibGrid(parent, id, pos, size, wxWANTS_CHARS | wxBORDER_NONE),   // framed by what holds it - a box, round its command bar too (ibValueGridBox)
 	m_document(document), m_propertySpreadsheet(nullptr), m_spreadsheetObject(nullptr), m_enableProperty(true)
 {
 	m_rowLabelWidth = s_rowLabelWidth;

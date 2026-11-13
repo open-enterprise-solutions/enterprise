@@ -30,21 +30,17 @@
 #include <utility>
 
 #if defined(_WIN32)
-#	define WIN32_LEAN_AND_MEAN
-#	include <windows.h>
-#	include <process.h>
+#	include <process.h>   // _getpid — not windows.h, whose GetUserName macro renames the snapshot's method
 #else
 #	include <unistd.h>
 #endif
-
-#include <wx/log.h>
 
 namespace {
 
 int CurrentPid()
 {
 #if defined(_WIN32)
-	return static_cast<int>(GetCurrentProcessId());
+	return ::_getpid();
 #else
 	return static_cast<int>(::getpid());
 #endif
@@ -509,10 +505,10 @@ ibConnectResult ibSessionRegistry::Connect(const ibConnectRequest& req,
 	ibSessionIdentity identity;
 	if (!req.m_presetGuid.IsEmpty()) {
 		ibGuid candidate(req.m_presetGuid);
-		identity.m_guid = candidate.isValid() ? candidate : wxNewUniqueGuid;
+		identity.m_guid = candidate.isValid() ? candidate : ibNewUniqueGuid;
 	}
 	else {
-		identity.m_guid = wxNewUniqueGuid;
+		identity.m_guid = ibNewUniqueGuid;
 	}
 	identity.m_userName          = req.m_userName;
 	identity.m_userGuid.clear();  // filled by Attach
@@ -2498,11 +2494,11 @@ void ibSessionRegistry::Die(const ibString& why)
 	// Log first — survives both the soft-fail and the std::terminate paths.
 	//
 	// TO A FILE as well as to stderr: a GUI build has no console, so the stderr line reaches
-	// nobody, and the wxLog flush cannot outrun the std::terminate below. This is the last thing
-	// the process says about why it is stopping — it has to land somewhere readable afterwards.
+	// nobody. This is the last thing the process says about why it is stopping — it has to land
+	// somewhere readable afterwards. (wx's log was flushed here too; that flush could not outrun
+	// the std::terminate below.)
 	ibTraceToFile(ibT("[session] FATAL: ") + why);
 	std::cerr << "[session] FATAL: " << why.ToUTF8().data() << std::endl;
-	wxLog::FlushActive();
 
 	// Soft-fail path: ThreadBody never completed its first main-loop
 	// iteration. The thread had no committed sys_session writes (other

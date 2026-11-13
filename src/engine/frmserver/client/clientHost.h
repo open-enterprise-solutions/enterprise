@@ -27,7 +27,7 @@
 #include <optional>
 #include <thread>
 
-#include <wx/string.h>
+#include "core/fstring.h"   // ibString
 
 #include "core/serialize/dataBuilder.h"   // ibDataNode — the frame a client was last answered, kept
 

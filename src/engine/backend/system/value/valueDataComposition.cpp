@@ -1008,7 +1008,7 @@ const ibSourceExplorer* ibValueDataComposition::GetSourceExplorer() const
 	//
 	// Unflagged, it is an attribute like any other value: the box that shows it is the gridbox, and
 	// what appears there is the DOCUMENT the composition composed.
-	m_sourceExplorer.Reset(GetObjectTypeName(), GetObjectTypeName(), wxNOT_FOUND, g_valueDataCompositionCLSID, /*tableSection*/false);
+	m_sourceExplorer.Reset(GetObjectTypeName(), GetObjectTypeName(), ibNOT_FOUND, g_valueDataCompositionCLSID, /*tableSection*/false);
 	if (const ibQueryableSourceDescriptor* holder = GetSourceDescriptor())
 		holder->FillSourceExplorer(m_sourceExplorer);
 
@@ -1024,7 +1024,7 @@ const ibSourceExplorer* ibValueDataComposition::GetSourceExplorer() const
 		// BY NAME AND TYPE — an output the source's own fields above do not already hold is the query's (a walk,
 		// a rename, a figure): it has no field of the source behind it, and the source does not meet the query.
 		m_sourceExplorer.AppendColumn(column.m_name,
-			column.m_col != nullptr ? column.m_col->GetColumnId() : wxNOT_FOUND,
+			column.m_col != nullptr ? column.m_col->GetColumnId() : ibNOT_FOUND,
 			column.GetTypeDesc());
 	}
 	return &m_sourceExplorer;
@@ -1129,7 +1129,7 @@ bool ibValueDataComposition::ReadProperty(const ibDataNode& node)
 {
 	// ⚠ THE SOURCE IS NOT READ HERE ANY MORE, and that is the point of the id being in the
 	// description. ibPropertyDynamicSource reads by RESOLVING (`SetQueryable(factory->ResolveById(id))`)
-	// and `SetQueryable(nullptr)` writes wxNOT_FOUND back — so a composition read before its metatype
+	// and `SetQueryable(nullptr)` writes ibNOT_FOUND back — so a composition read before its metatype
 	// registered did not merely fail to describe its query, it FORGOT WHICH TABLE IT WAS. The
 	// description keeps the number whatever the world knows at the moment of reading; the property is
 	// filled from it later, by Apply(), when resolving can succeed.

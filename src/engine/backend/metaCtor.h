@@ -64,7 +64,7 @@ public:
 	virtual ibPicture GetClassIcon() const override { return m_metaClassCtor != nullptr ? m_metaClassCtor->GetClassIcon() : ibPicture(); }
 
 	virtual ibCtorObjectType GetObjectTypeCtor() const { return ibCtorObjectType::ibCtorObjectType_object_system; }
-	virtual ibValue CreateObject() const { return wxEmptyValue; }
+	virtual ibValue CreateObject() const { return ibEmptyValue; }
 
 	// EMPTY PASSES (class id 0), as everywhere: a declaration says what a value
 	// IS when there is one, not that there is one.
@@ -143,7 +143,7 @@ private:
 
 // 3-arg (legacy): explicit clsid.
 #define METADATA_TYPE_REGISTER_3(class_info, class_name, clsid)\
-GENERATE_REGISTER(ibT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_m_), new ibCtorMetaClass<class_info>(ibT(class_name), clsid))
+GENERATE_REGISTER(ibT(class_name), ibMAKE_UNIQUE_NAME(s_cs_reg_m_), new ibCtorMetaClass<class_info>(ibT(class_name), clsid))
 // 2-arg (new): clsid = ib_clsid_hash(class_name).
 #define METADATA_TYPE_REGISTER_2(class_info, class_name)\
 METADATA_TYPE_REGISTER_3(class_info, class_name, metadata_to_clsid(class_name))

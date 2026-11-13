@@ -61,7 +61,7 @@ bool ibDialogSelectKind::ShowModal(int& chosen)
 	// …and the texts put on the object, as the desktop's OK put them — a name the window would not have let through
 	// (OnTextEnter cut it) is the kind's.
 	ibString name = response.GetValue<ibString>(ibProtocol::ibRequest::ibObjectKind::Name);
-	if (name.IsEmpty() || stringUtils::CheckCorrectName(name) != wxNOT_FOUND) {
+	if (name.IsEmpty() || stringUtils::CheckCorrectName(name) != ibNOT_FOUND) {
 		nameRequest.m_prefix = offered->m_name;
 		name = m_metaObject->GetMetaData()->GetNewName(m_metaObject->GetParent(), nameRequest);
 	}

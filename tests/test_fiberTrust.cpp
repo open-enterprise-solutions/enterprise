@@ -9,6 +9,7 @@
 // Both are put back when the person answers.
 
 #include <gtest/gtest.h>
+#include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
 #include <wx/init.h>
 

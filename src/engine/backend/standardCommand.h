@@ -5,7 +5,7 @@
 #include "backend_picture.h"
 
 struct ibCommandItem {
-	ibActionID           m_actionId = wxNOT_FOUND;   // the action's id (wxNOT_FOUND = a separator)
+	ibActionID           m_actionId = ibNOT_FOUND;   // the action's id (ibNOT_FOUND = a separator)
 	ibString             m_name;
 	ibString             m_caption;
 	ibPictureDescription m_pictureDescription;
@@ -57,7 +57,7 @@ protected:
 		// and it returns the placed item BY REF so a caller can chain a fluent setter right after.
 		ibCommandItem& EmplaceAction(int index, const ibActionID& lNumAction, const ibString& name, const ibString& caption,
 			const ibPictureDescription& pictureDescription, bool pictureAndText, bool createInForm, ibValue* srcData) {
-			wxASSERT(!ExistsAction(lNumAction));
+			ibASSERT(!ExistsAction(lNumAction));
 			ibValue* src = srcData ? srcData : m_srcData;
 			if (index < 0) {
 				return m_vecAction.emplace_back(lNumAction, name, caption, pictureDescription, pictureAndText, createInForm, src);
@@ -173,7 +173,7 @@ protected:
 
 		ibActionID GetID(unsigned int idx) const {
 			if (idx >= GetCount())
-				return wxNOT_FOUND;
+				return ibNOT_FOUND;
 			return m_vecAction[idx].m_actionId;
 		}
 
@@ -196,7 +196,7 @@ public:
 
 // A simplified, STANDALONE action-analog that lives ON THE MODEL — the model has NO ibStandardCommandSource of its
 // own; it is just a command STORE. Two jobs: (1) hand out its command set (the SAME ibCommandItem the action
-// collection uses — one unified record; a default item, m_actionId == wxNOT_FOUND, is a separator), (2) execute a
+// collection uses — one unified record; a default item, m_actionId == ibNOT_FOUND, is a separator), (2) execute a
 // command by id against the CURRENT ROW + form. The FRONT (TableBox) merges the set into the real action it
 // gives the command bar and routes the execute here with the front-owned row — the model never pulls the widget.
 // A command's id may carry eStartEditingFlag (core/core.h): after the model runs it, the front opens the row's

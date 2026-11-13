@@ -160,6 +160,7 @@
     <ClCompile Include="mainFrame\mainFrame.cpp" />
     <ClCompile Include="mainFrame\mainFrameChild.cpp" />
     <ClCompile Include="mainFrame\output\outputWindow.cpp" />
+    <ClCompile Include="mainFrame\welcome\welcomeWindow.cpp" />
     <ClCompile Include="mainFrame\settings\editorsettings.cpp" />
     <ClCompile Include="mainFrame\settings\fontcolorsettings.cpp" />
     <ClCompile Include="mainFrame\settings\keybinder.cpp" />
@@ -355,6 +356,7 @@
     <ClInclude Include="mainFrame\mainFrame.h" />
     <ClInclude Include="mainFrame\mainFrameChild.h" />
     <ClInclude Include="mainFrame\output\outputWindow.h" />
+    <ClInclude Include="mainFrame\welcome\welcomeWindow.h" />
     <ClInclude Include="mainFrame\settings\fontcolorsettings.h" />
     <ClInclude Include="mainFrame\settings\keybinder.h" />
     <ClInclude Include="mainFrame\settings\editorsettingspanel.h" />

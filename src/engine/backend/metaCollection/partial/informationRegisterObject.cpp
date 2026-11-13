@@ -343,7 +343,7 @@ bool ibValueRecordSetObjectInformationRegister::GetPropVal(const long lPropNum, 
 bool ibValueRecordSetObjectInformationRegister::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {
 	const ibMetaData* metaData = m_metaObject->GetMetaData();
-	wxASSERT(metaData);
+	ibASSERT(metaData);
 
 	switch (lMethodNum)
 	{

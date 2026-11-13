@@ -10,15 +10,15 @@
 #include <thread>
 #include <chrono>
 #include <algorithm>
+#include <cstdlib>   // getenv — the person's own folder
+#include <fstream>   // infobase.conf — written for a new base
 #include <sstream>
 #include <utility>   // std::exchange — the active configuration handed over
 
-#include <wx/ffile.h>      // infobase.conf — written for a new base
-#include <wx/fileconf.h>   // infobase.conf — a base's own settings
-#include <wx/stdpaths.h>
-
+#include "core/fileConfig.h"              // infobase.conf — a base's own settings
 #include "core/fileSystem.h"
 #include "core/memory/memoryPool.h"   // Drain — the pool's free list handed back at teardown
+#include "core/system.h"              // ibHostName — the computer a session is on
 
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
@@ -67,6 +67,27 @@ std::shared_ptr<ibDatabaseLayer> ibApplicationInstance::GetDatabaseLayer()
 	return ibConnectionPool::GetDatabaseLayer();
 }
 
+// This person's own folder for this program, where wxStandardPaths::GetUserLocalDataDir put it: %LOCALAPPDATA%\<program>
+// on Windows, ~/Library/Application Support/<program> on macOS, ~/.<program> elsewhere — the program being the binary's
+// name without its extension, as wxApp named itself. Empty when the system has no such folder to say.
+static ibString UserLocalDataFolder()
+{
+	const ibString program(ibPathOf(ibExecutablePath()).stem().wstring());
+#ifdef __IBMSW__
+	const wchar_t* const root = _wgetenv(L"LOCALAPPDATA");
+	return root != nullptr ? ibString(root) + ibFILE_SEP_PATH + program : ibString();
+#else
+	const char* const home = std::getenv("HOME");
+	if (home == nullptr)
+		return ibString();
+#	ifdef __IBOSX__
+	return ibString::FromUTF8(home) + ibT("/Library/Application Support/") + program;
+#	else
+	return ibString::FromUTF8(home) + ibT("/.") + program;
+#	endif
+#endif
+}
+
 ibString ibApplicationInstance::ResolveLogDir() const
 {
 	const ibString sep(ibFILE_SEP_PATH);
@@ -101,7 +122,7 @@ ibString ibApplicationInstance::ResolveLogDir() const
 			? sanitised(m_strServer + ibT("_") + m_strDatabase)
 			: sanitised(legacy);
 
-		const ibString root = wxStandardPaths::Get().GetUserLocalDataDir() + sep + ibT("OES") + sep;
+		const ibString root = UserLocalDataFolder() + sep + ibT("OES") + sep;
 		// …and a journal kept under the name alone is MOVED to the new key once, so its history stays
 		// readable instead of starting over beside it. A move that fails (the folder in use) costs only that.
 		const ibString old = root + sanitised(legacy);
@@ -188,7 +209,7 @@ ibApplicationInstance* ibApplicationInstance::Get(bool required)
 	// how a line of one base would land in another.
 	if (!required || ibApplicationHost::IsEmpty())
 		return nullptr;
-	std::ostringstream thread;
+	std::wostringstream thread;
 	thread << std::this_thread::get_id();
 	ibBackendCoreException::Error(_("Thread %s works for no base: it has no session and no base bound to it."),
 		ibString(thread.str()));
@@ -246,11 +267,12 @@ static void WriteInfobaseConf(const ibString& folder)
 	const ibString path = folder + ibFILE_SEP_PATH + ibT("infobase.conf");
 	if (folder.IsEmpty() || ibFileExists(path))
 		return;
-	wxFFile file(path, wxT("w"));
-	if (!file.IsOpened() || !file.Write(
-			wxT("; This base's own settings - read when the base is opened.\n")
-			wxT("; Connections - connections to its DBMS at most; 0 - the default (backend.conf, else 32).\n")
-			wxT("Connections = 0\n"))) {
+	std::ofstream file(ibPathOf(path));
+	file << "; This base's own settings - read when the base is opened.\n"
+		"; Connections - connections to its DBMS at most; 0 - the default (backend.conf, else 32).\n"
+		"Connections = 0\n";
+	file.close();
+	if (!file) {
 		ibTechJournal::Print(ibJournalMark::Warning, ibT("appdata"),
 			ibT("%s cannot be written - the base runs on the defaults"), path);
 	}
@@ -266,8 +288,7 @@ static std::size_t ReadInfobaseConnections(const ibString& folder, std::size_t b
 	if (folder.IsEmpty() || !ibFileExists(path))
 		return byDefault;
 
-	const wxFileConfig conf(wxT(""), wxT(""), path, wxT(""), wxCONFIG_USE_LOCAL_FILE | wxCONFIG_USE_NO_ESCAPE_CHARACTERS);
-	return ibApplicationHost::ReadCount(conf, path, ibT("Connections"), 2, byDefault);
+	return ibApplicationHost::ReadCount(ibFileConfig(path), path, ibT("Connections"), 2, byDefault);
 }
 
 // ⭐ ASKED OF THE SESSION DOING THE WORK. A person's session says what it works in, whatever process hosts it — a
@@ -313,7 +334,7 @@ bool ibApplicationInstance::ServiceMode() const
 ibApplicationInstance::ibApplicationInstance(ibApplicationHost* host, ibRunMode runMode) :
 	m_host(host),
 	m_runMode(runMode),
-	m_strComputer(wxGetHostName()),
+	m_strComputer(ibHostName()),
 	// `unique_ptr(new X(...))` rather than `make_unique` — every
 	// subsystem ctor takes an `ib::AppDataCtorToken` and `make_unique`
 	// isn't a friend of the token. Direct `new X(...)` works because
@@ -1297,35 +1318,10 @@ bool ibApplicationInstance::Login(const ibString& strUserName,
 
 ///////////////////////////////////////////////////////////////////////////////
 
-#include <wx/zipstrm.h>
-#include <wx/wfstream.h>
-#include <wx/mstream.h>
-
 #include "core/memory/memoryStream.h"   // ibReaderMemory — a user/data member is walked before the base is touched
+#include "core/zip/zip.h"               // ibZipReader / ibZipWriter — a backup is a zip of three members
 
 namespace {
-
-bool ReadZipEntry(wxZipInputStream& zis, wxZipEntry& entry, ibMemoryBuffer& out)
-{
-	if (!zis.OpenEntry(entry))
-		return false;
-
-	wxMemoryOutputStream fos;
-	if (!fos.IsOk())
-		return false;
-
-	zis.Read(fos);
-	const wxStreamError err = zis.GetLastError();
-	if (err != wxSTREAM_NO_ERROR && err != wxSTREAM_EOF)
-		return false;
-
-	const size_t n = fos.GetSize();
-	out.SetDataLen(0);
-	if (n > 0)
-		fos.CopyTo(out.GetAppendBuf(n), n);
-	out.SetDataLen(n);
-	return true;
-}
 
 // The same walk LoadUserInfoFromBuffer uses. A member whose chunk header does
 // not fit is a truncated backup: false, and the caller has not cleared anything.
@@ -1360,25 +1356,21 @@ bool BufferWalks(const ibMemoryBuffer& buffer)
 
 bool ibApplicationInstance::LoadDatabase(const ibString& strFullPath)
 {
-	wxFileInputStream fis(strFullPath);
-	if (!fis.IsOk()) {
+	std::ifstream file(ibPathOf(strFullPath), std::ios::binary);
+	if (!file.is_open()) {
 		ibJournalError(ibT("appdata"),"Couldn't open the file '%s'.", strFullPath);
 		return false;
 	}
 
-	return LoadDatabase(fis);
+	return LoadDatabase(file);
 }
 
-bool ibApplicationInstance::LoadDatabase(wxInputStream& stream)
+bool ibApplicationInstance::LoadDatabase(std::istream& stream)
 {
 	// The archive is read to the end, and refused, before either clear. An empty
 	// zip, a file that is not a zip, or a backup this build cannot read used to
 	// drop the configuration tables and every user, then return success.
-	wxZipInputStream zis(stream);
-	if (!zis.IsOk()) {
-		ibJournalError(ibT("appdata"), "The file is not a readable archive. Nothing was cleared.");
-		return false;
-	}
+	ibZipReader zip(stream);
 
 	ibMemoryBuffer config;
 	ibMemoryBuffer user;
@@ -1389,12 +1381,7 @@ bool ibApplicationInstance::LoadDatabase(wxInputStream& stream)
 	bool duplicate = false;
 	bool dataBeforeConfig = false;
 
-	std::unique_ptr<wxZipEntry> entry;
-	while (entry.reset(zis.GetNextEntry()), entry) {
-		if (entry->IsDir())
-			continue;
-
-		const ibString name = entry->GetName();
+	for (ibString name; zip.GetNextEntry(name); ) {
 		const bool isConfig = name == ibT("config");
 		const bool isUser = name == ibT("user");
 		const bool isData = name == ibT("data");
@@ -1402,7 +1389,7 @@ bool ibApplicationInstance::LoadDatabase(wxInputStream& stream)
 			continue;
 
 		ibMemoryBuffer buffer;
-		if (!ReadZipEntry(zis, *entry, buffer)) {
+		if (!zip.ReadEntry(buffer)) {
 			ibJournalError(ibT("appdata"), "The archive entry '%s' could not be read. Nothing was cleared.", name);
 			return false;
 		}
@@ -1501,56 +1488,45 @@ bool ibApplicationInstance::LoadDatabase(wxInputStream& stream)
 
 bool ibApplicationInstance::SaveDatabase(const ibString& strFullPath)
 {
-	// 1. Create the physical file output stream
-	wxFFileOutputStream out(strFullPath);
-	if (!out.IsOk())
+	std::ofstream file(ibPathOf(strFullPath), std::ios::binary | std::ios::trunc);
+	if (!file.is_open())
 	{
 		ibJournalError(ibT("appdata"),"Cannot create output file %s", strFullPath);
 		return false;
 	}
 
-	return SaveDatabase(out);
+	if (!SaveDatabase(file))
+		return false;
+	// ⚠ ON DISK WHEN THE FILE CLOSED: a full disk says so at the close, not at the last write.
+	file.close();
+	return !file.fail();
 }
 
-bool ibApplicationInstance::SaveDatabase(wxOutputStream& out)
+bool ibApplicationInstance::SaveDatabase(std::ostream& out)
 {
-	// 2. Wrap it in a wxZipOutputStream for compression
-	wxZipOutputStream zip(out);
+	// Three members, config first: a restore writes rows only into the structure the configuration made. A member that
+	// cannot be made is not written, and a backup without one restores nothing - so none is written then.
+	ibZipWriter zip(out);
 
-	// PutNextEntry sets up the new entry in the archive
-	if (zip.PutNextEntry(wxT("config"))) {
-		//save configuration — a backup without it restores nothing, so it is not written
-		ibMemoryBuffer bufferConfig;
-		if (!activeMetaData->SaveConfigToBuffer(bufferConfig))
-			return false;
-		// Wrap the content in an input stream to write it easily
-		wxMemoryInputStream contentStream(bufferConfig.GetData(), bufferConfig.GetDataLen());
-		zip.Write(contentStream); // Write the data from the content stream
-	}
+	ibMemoryBuffer bufferConfig;
+	if (!activeMetaData->SaveConfigToBuffer(bufferConfig))
+		return false;
+	if (!zip.PutNextEntry(ibT("config")) || !zip.Write(bufferConfig.GetData(), bufferConfig.GetDataLen()))
+		return false;
 
-	if (zip.PutNextEntry(wxT("user"))) {
-		//save users 
-		ibMemoryBuffer bufferUser;
-		if (!SaveUserInfoToBuffer(bufferUser))
-			return false;
-		// Wrap the content in an input stream to write it easily
-		wxMemoryInputStream contentStream(bufferUser.GetData(), bufferUser.GetDataLen());
-		zip.Write(contentStream); // Write the data from the content stream
-	}
+	ibMemoryBuffer bufferUser;
+	if (!SaveUserInfoToBuffer(bufferUser))
+		return false;
+	if (!zip.PutNextEntry(ibT("user")) || !zip.Write(bufferUser.GetData(), bufferUser.GetDataLen()))
+		return false;
 
-	if (zip.PutNextEntry(wxT("data"))) {
-		//save data
-		ibMemoryBuffer bufferData;
-		if (!activeMetaData->DumpDataToBuffer(bufferData))
-			return false;
-		// Wrap the content in an input stream to write it easily
-		wxMemoryInputStream contentStream(bufferData.GetData(), bufferData.GetDataLen());
-		zip.Write(contentStream); // Write the data from the content stream
-	}
+	ibMemoryBuffer bufferData;
+	if (!activeMetaData->DumpDataToBuffer(bufferData))
+		return false;
+	if (!zip.PutNextEntry(ibT("data")) || !zip.Write(bufferData.GetData(), bufferData.GetDataLen()))
+		return false;
 
-	// 3. Close the zip stream (this is essential to finalize the archive)
-	// The underlying file stream 'out' will be closed automatically when 'zip' goes out of scope,
-	// or when explicitly calling zip.Close().
+	// The central directory: an archive without it is a file that exists and is not a zip.
 	return zip.Close();
 }
 

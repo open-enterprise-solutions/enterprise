@@ -66,7 +66,7 @@ inline ibFieldTypes TagForValue(const ibValue& value)
 }
 
 // Bind a primitive slot's PLACEHOLDER — the value it carries when it is NOT the active type
-// (false / 0 / the empty date / "" / wxNOT_FOUND). Keyed by role, one place for the constants the old
+// (false / 0 / the empty date / "" / ibNOT_FOUND). Keyed by role, one place for the constants the old
 // hand-rolled spreads repeated per branch.
 inline void BindAbsentPrimitive(ibQueryStatement* st, ibColumnRole role, int& pos)
 {

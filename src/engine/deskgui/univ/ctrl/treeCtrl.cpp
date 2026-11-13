@@ -2516,13 +2516,16 @@ void ibTreeCtrl::SortChildren(const wxTreeItemId& itemId)
 
 void ibTreeCtrl::CalculateLineHeight()
 {
+    // SEAM vs wx: the row is the theme's for the text (GetListboxItemHeight) - the lists' and the property grid's as
+    // well; a picture taller than that, with the interline space, makes it taller still. wx made it the text's height
+    // and four pixels, or the picture's, and two more
     wxInfoDC dc(this);
-    m_lineHeight = dc.GetCharHeight() + FromDIP(4);
+    int pictures = 0;
 
     if ( HasImages() )
     {
         // Calculate a m_lineHeight value from the normal Image sizes.
-        m_lineHeight = GetImageLogicalSize(this).y;
+        pictures = GetImageLogicalSize(this).y;
     }
 
     if ( m_imagesState.HasImages() )
@@ -2530,9 +2533,7 @@ void ibTreeCtrl::CalculateLineHeight()
         // Calculate a m_lineHeight value from the state Image sizes.
         // May be toggle off. Then ibTreeCtrl will spread when
         // necessary (which might look ugly).
-        const int height = m_imagesState.GetImageLogicalSize(this).y;
-        if (height > m_lineHeight)
-            m_lineHeight = height;
+        pictures = wxMax(pictures, m_imagesState.GetImageLogicalSize(this).y);
     }
 
     if ( m_imagesButtons.HasImages() )
@@ -2540,12 +2541,11 @@ void ibTreeCtrl::CalculateLineHeight()
         // Calculate a m_lineHeight value from the Button image sizes.
         // May be toggle off. Then ibTreeCtrl will spread when
         // necessary (which might look ugly).
-        const int height = m_imagesButtons.GetImageLogicalSize(this).y;
-        if (height > m_lineHeight)
-            m_lineHeight = height;
+        pictures = wxMax(pictures, m_imagesButtons.GetImageLogicalSize(this).y);
     }
 
-    m_lineHeight += FromDIP(2); // Add some extra interline space.
+    m_lineHeight = wxMax(GetRenderer()->GetListboxItemHeight(dc.GetCharHeight()),
+                         pictures + FromDIP(2)); // Add some extra interline space.
 }
 
 void ibTreeCtrl::OnImagesChanged()

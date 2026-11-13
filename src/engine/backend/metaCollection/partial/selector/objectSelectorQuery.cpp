@@ -145,7 +145,7 @@ void ibValueSelectorRegisterDataObject::MaterialiseRow(const ibDataQueryResult& 
 	if (m_metaObject->HasRecorder()) {
 		ibValueMetaObjectAttributePredefined* attrRecorder = m_metaObject->GetRegisterRecorder();
 		ibValueMetaObjectAttributePredefined* attrLine     = m_metaObject->GetRegisterLineNumber();
-		wxASSERT(attrRecorder && attrLine);
+		ibASSERT(attrRecorder && attrLine);
 		m_keyValues[attrRecorder->GetMetaID()] = selection.GetValue(attrRecorder->GetQueryColumn());
 		m_keyValues[attrLine->GetMetaID()]     = selection.GetValue(attrLine->GetQueryColumn());
 	}

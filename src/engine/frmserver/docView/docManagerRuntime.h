@@ -11,7 +11,6 @@ public:
 	ibDocManagerRuntime();
 
 protected:
-	wxDECLARE_DYNAMIC_CLASS(ibDocManagerRuntime);
 	ibDocManagerRuntime(const ibDocManagerRuntime&) = delete;
 	ibDocManagerRuntime& operator=(const ibDocManagerRuntime&) = delete;
 };

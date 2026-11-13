@@ -326,15 +326,17 @@ void ibDataViewModel::RemoveNotifier(ibDataViewModelNotifier* notifier)
 		}
 	}
 
-	wxFAIL_MSG(wxS("Removing non-registered notifier"));
+	ibFAIL_MSG(ibT("Removing non-registered notifier"));
 }
 
 int ibDataViewModel::Compare(const ibDataViewItem& item1, const ibDataViewItem& item2,
 	unsigned int /*column*/, bool ascending) const
 {
 	// items must be different
-	wxUIntPtr id1 = wxPtrToUInt(item1.GetID()),
-		id2 = wxPtrToUInt(item2.GetID());
+	const std::uintptr_t id1 = reinterpret_cast<std::uintptr_t>(item1.GetID()),
+		id2 = reinterpret_cast<std::uintptr_t>(item2.GetID());
 
-	return ascending ? id1 - id2 : id2 - id1;
+	// the sign of the difference, not the difference: on 64 bits it does not fit an int
+	const int order = (id1 > id2) - (id1 < id2);
+	return ascending ? order : -order;
 }

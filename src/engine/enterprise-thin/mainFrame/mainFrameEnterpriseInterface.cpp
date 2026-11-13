@@ -382,30 +382,8 @@ class ibSubSystemWindow : public ibWindow {
 				text_offset,
 				drawn_tab_yoff + (drawn_tab_height) / 2 - (texty / 2) - 1);
 
-			// draw focus rectangle
-			if (active) {
-
-				wxRect focusRectText(text_offset, (drawn_tab_yoff + (drawn_tab_height) / 2 - (texty / 2) - 1),
-					selected_textx, selected_texty);
-
-				wxRect focusRect;
-				wxRect focusRectBitmap;
-
-				if (m_bitmap.IsOk()) {
-					focusRectBitmap = wxRect(bitmap_offset, drawn_tab_yoff + (drawn_tab_height / 2) - (m_bitmap.GetLogicalHeight() / 2),
-						m_bitmap.GetLogicalWidth(), m_bitmap.GetLogicalHeight());
-				}
-
-				if (m_bitmap.IsOk() && draw_text.IsEmpty())
-					focusRect = focusRectBitmap;
-				else if (!m_bitmap.IsOk() && !draw_text.IsEmpty())
-					focusRect = focusRectText;
-				else if (m_bitmap.IsOk() && !draw_text.IsEmpty())
-					focusRect = focusRectText.Union(focusRectBitmap);
-
-				focusRect.Inflate(2, 2);
-				wxRendererNative::Get().DrawFocusRect(this, dc, focusRect, 0);
-			}
+			// The open section is told by its white and its bold: the dotted focus rectangle the tab art drew round its
+			// caption is gone (2026-11-13, Max's look at the application)
 
 			dc.DestroyClippingRegion();
 		}
@@ -646,18 +624,11 @@ class ibSubSystemWindow : public ibWindow {
 							block.GetString(ibProtocol::ibSchema::ibSections::Tooltip)), 0, wxEXPAND, FromDIP(5));
 						continue;
 					}
-					if (title.IsEmpty()) {
-						wxBoxSizer* sizerSubCommonSpacer = new wxBoxSizer(wxHORIZONTAL);
-						sizerSubCommonSpacer->Add(20, 0, 0, wxEXPAND, FromDIP(5));
-						wxBoxSizer* sizerSubCommonItem = new wxBoxSizer(wxVERTICAL);
-
-						AppendLinks(sizerSubCommonItem, block);
-
-						sizerSubCommonSpacer->Add(sizerSubCommonItem, 1, wxEXPAND, FromDIP(5));
-						sizerLeft->Add(sizerSubCommonSpacer, 0, wxEXPAND, FromDIP(5));
-						continue;
-					}
-					sizerLeft->Add(CreateCaptionedBlock(title, block, ibProtocolPicture(block, ibProtocol::ibSchema::ibSections::Picture),
+					// The section's own items stand under its name, as the actions stand under theirs: the page has its head,
+					// and the two columns' first items are level - under no heading they started where the actions' heading
+					// stood (2026-11-13)
+					sizerLeft->Add(CreateCaptionedBlock(title.IsEmpty() ? wxString(m_popupWindow->GetSection().GetString(ibProtocol::ibSchema::ibSections::Title)) : title,
+						block, ibProtocolPicture(block, ibProtocol::ibSchema::ibSections::Picture),
 						block.GetString(ibProtocol::ibSchema::ibSections::Tooltip)), 0, wxEXPAND, FromDIP(5));
 				}
 
@@ -665,7 +636,10 @@ class ibSubSystemWindow : public ibWindow {
 				sizerMain->Add(50, 0, 0, wxEXPAND, FromDIP(5));
 				sizerMain->Add(sizerRight, 0, 0, FromDIP(5));
 
-				SetSizer(sizerMain);
+				// …and a margin round the page: the first heading stood 5 px off its corner
+				wxBoxSizer* sizerPage = new wxBoxSizer(wxVERTICAL);
+				sizerPage->Add(sizerMain, 1, wxALL, FromDIP(10));
+				SetSizer(sizerPage);
 				Layout();
 
 				SetBackgroundColour(*wxWHITE);
@@ -698,7 +672,8 @@ class ibSubSystemWindow : public ibWindow {
 
 				st->SetForegroundColour(wxTHEME_COLOUR(CONTROL_TEXT_ALTERNATE));
 				st->Wrap(-1);
-				st->SetFont([]{ wxFont f = wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT); f.SetPointSize(f.GetPointSize() + 3); f.MakeBold(); return f; }());
+				// the size of the items under it, bold: a point smaller than they were, a heading read below its items
+				st->SetFont([]{ wxFont f = *wxNORMAL_FONT; f.SetPointSize(f.GetPointSize() + 4); f.MakeBold(); return f; }());
 				if (!tooltip.IsEmpty())
 					st->SetToolTip(tooltip);
 

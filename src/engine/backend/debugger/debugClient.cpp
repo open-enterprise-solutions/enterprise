@@ -876,7 +876,7 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, unsigned int length)
 {
 	ibReaderMemory commandReader(pointer, length);
-	wxASSERT(ms_debugClient != nullptr);
+	ibASSERT(ms_debugClient != nullptr);
 	std::uint16_t commandFromServer = commandReader.r_u16();
 
 	// 🔎 WHAT ARRIVED, IN ORDER — the last frames before a detach are the ones worth seeing, and the

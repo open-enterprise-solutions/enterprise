@@ -102,7 +102,7 @@ private:
 // A kind of tab and the document made for it — at the bottom of the document's source, as a value type is registered
 // (VALUE_TYPE_REGISTER).
 #define TAB_DOCUMENT_REGISTER(class_info, kind)\
-	[[maybe_unused]] static const bool wxMAKE_UNIQUE_NAME(s_tab_document_reg_) = (ibTabDocument::Register(kind,\
+	[[maybe_unused]] static const bool ibMAKE_UNIQUE_NAME(s_tab_document_reg_) = (ibTabDocument::Register(kind,\
 		[](long long tabId) -> ibTabDocument* { return new class_info(tabId); }), true);
 
 #endif

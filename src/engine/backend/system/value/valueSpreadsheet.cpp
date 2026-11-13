@@ -235,7 +235,7 @@ public:
 						continue;
 					const ibString& strPropName = methodHelper ->GetPropName(lPropPos);
 					long lPropNum = methodHelper->FindProp(strPropName);
-					if (lPropNum == wxNOT_FOUND)
+					if (lPropNum == ibNOT_FOUND)
 						continue;
 					ibValue pvarRetValue;
 					paParams[0]->GetPropVal(lPropNum, pvarRetValue);

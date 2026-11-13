@@ -21,7 +21,7 @@
 #include <algorithm>
 #include <optional>
 
-#include <wx/scopeguard.h>   // wxON_BLOCK_EXIT_SET — a fetch's reads are its own, however it ends
+#include "core/scopeGuard.h"   // ibON_BLOCK_EXIT_SET - a fetch's reads are its own, however it ends
 
 // HOW MANY ROWS ONE FETCH MAY ASK FOR, and how many the table keeps handed out at once. Past the
 // second, the rows furthest from where the client reads are forgotten (TrimRows).
@@ -174,10 +174,9 @@ ibValueFrame* ibValueModelTableBox::GetColumnGroupHolder(const ibString& group, 
 			return child;
 	}
 
-	wxASSERT(m_formOwner);
+	ibASSERT(m_formOwner);
 	ibValueModelTableBoxColumnGroup* newGroup =
-		dynamic_cast<ibValueModelTableBoxColumnGroup*>(
-			m_formOwner->CreateControl(ibT("TableboxColumnGroup"), this));
+		m_formOwner->CreateControl<ibValueModelTableBoxColumnGroup>(ibT("TableboxColumnGroup"), this);
 	if (newGroup == nullptr)
 		return this;
 
@@ -192,7 +191,7 @@ ibValueFrame* ibValueModelTableBox::GetColumnGroupHolder(const ibString& group, 
 
 void ibValueModelTableBox::AddColumn()
 {
-	wxASSERT(m_formOwner);
+	ibASSERT(m_formOwner);
 
 	// A BARE view column — NO source, and NO storage column injected into the bound value-table.
 	// A tablebox column on the form is a VIEW that BINDS (through its Source, which may be a dotted path to
@@ -206,7 +205,7 @@ void ibValueModelTableBox::AddColumn()
 
 void ibValueModelTableBox::AddColumnGroup()
 {
-	wxASSERT(m_formOwner);
+	ibASSERT(m_formOwner);
 
 	m_formOwner->NewObject(g_controlTableBoxColumnGroupCLSID, this);
 }
@@ -249,8 +248,8 @@ void ibValueModelTableBox::CreateColumnCollection()
 
 		for (const ColumnSnap& snap : snaps) {
 			// COLUMNS THAT NAME THE SAME FAMILY COME OUT IN ONE GROUP (GetColumnGroupHolder).
-			ibValueModelTableBoxColumn* column = dynamic_cast<ibValueModelTableBoxColumn*>(
-				m_formOwner->CreateControl(ibT("TableboxColumn"), GetColumnGroupHolder(snap.group)));
+			ibValueModelTableBoxColumn* column = m_formOwner->CreateControl<ibValueModelTableBoxColumn>(
+				ibT("TableboxColumn"), GetColumnGroupHolder(snap.group));
 			if (column == nullptr)
 				continue;
 			column->SetControlName(GetControlName() + snap.name);
@@ -278,7 +277,7 @@ void ibValueModelTableBox::CreateColumnCollection()
 		if (columnInfo == nullptr)
 			continue;
 		ibValueModelTableBoxColumn* column =
-			dynamic_cast<ibValueModelTableBoxColumn*>(m_formOwner->CreateControl(ibT("TableboxColumn"), this));
+			m_formOwner->CreateControl<ibValueModelTableBoxColumn>(ibT("TableboxColumn"), this);
 		if (column == nullptr)
 			continue;
 		const ibTypeDescription& columnType = columnInfo->GetColumnType();
@@ -328,16 +327,16 @@ void ibValueModelTableBox::CreateTable(bool recreateModel) {
 ibGuid ibValueModelTableBox::SettingsObjectKey() const
 {
 	if (m_formOwner == nullptr || m_propertySource->IsEmptyProperty())
-		return wxNullGuid;
+		return ibNullGuid;
 
 	// The HEAD of the binding is the form's attribute — the deeper hops are how it walked from there.
 	const ibFormAttributeValue* attribute = m_formOwner->FindAttributeById(GetSourceDesc().GetFirst());
 	if (attribute == nullptr)
-		return wxNullGuid;
+		return ibNullGuid;
 
 	const ibSourceDataObject* source = attribute->GetSourceValue();
 	if (source == nullptr)
-		return wxNullGuid;   // an attribute holding no source shows nothing to configure
+		return ibNullGuid;   // an attribute holding no source shows nothing to configure
 
 	// THE SOURCE'S OWN IDENTITY — for anything that reads a table it IS the metaobject's guid, which
 	// is what the queryable answers with (ibBackendQueryable::GetQueryTableGuid).
@@ -436,14 +435,14 @@ bool ibValueModelTableBox::IsAvailable() const
 
 const ibValueMetaObjectCompositeData* ibValueModelTableBox::GetSourceMetaObject() const
 {
-	wxASSERT(m_tableModel);
+	ibASSERT(m_tableModel);
 	if (m_tableModel == nullptr) return nullptr;
 	return m_tableModel->GetSourceMetaObject();
 }
 
 ibClassID ibValueModelTableBox::GetSourceClassType() const
 {
-	wxASSERT(m_tableModel);
+	ibASSERT(m_tableModel);
 	if (m_tableModel == nullptr) return 0;
 	return m_tableModel->GetSourceClassType();
 }
@@ -834,7 +833,7 @@ void ibValueModelTableBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 		ibDataNode& menu = state.Child(ibProtocol::ibForm::ibTable::ContextMenu);
 		for (unsigned int idx = 0; idx < actions.GetCount(); idx++) {
 			const ibActionID id = actions.GetID(idx);
-			if (id == wxNOT_FOUND)
+			if (id == ibNOT_FOUND)
 				continue;
 			ibDataNode& entry = menu.AddChild(0, 0);
 			entry.SetValue(ibProtocol::ibForm::ibCommandBar::Id, static_cast<std::int32_t>(id));
@@ -975,7 +974,7 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 
 	// What the model says while this reads is this read's — not a change the client must read again for.
 	m_fetching = true;
-	wxON_BLOCK_EXIT_SET(m_fetching, false);
+	ibON_BLOCK_EXIT_SET(m_fetching, false);
 
 	const std::int32_t direction = request.GetValue<std::int32_t>(ibProtocol::ibForm::ibTable::Direction);
 	const std::int32_t anchorHandle = request.GetValue<std::int32_t>(ibProtocol::ibForm::ibTable::Anchor);

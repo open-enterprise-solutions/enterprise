@@ -150,10 +150,10 @@ bool ibPropertySource::CopyNodeValue(ibDataValue& value) const
 	writer.w_u32((unsigned int)path.size());
 	size_t idx = 0;
 	for (const ibSourceHop& hop : path) {
-		const ibGuid guid = (idx > 0) ? variant->GetGuidByID((ibMetaID)hop.m_id) : wxNullGuid;   // head is form-local -> raw
+		const ibGuid guid = (idx > 0) ? variant->GetGuidByID((ibMetaID)hop.m_id) : ibNullGuid;   // head is form-local -> raw
 		if (guid.isValid()) { writer.w_u8(kHopGuid); writer.w_stringZ(guid.str()); }
 		else                { writer.w_u8(kHopRaw);  writer.w_u32((unsigned int)hop.m_id); }
-		const ibGuid typeGuid = IsMetaValue(hop.m_type) ? variant->GetGuidByID((ibMetaID)clsid_metaID(hop.m_type)) : wxNullGuid;
+		const ibGuid typeGuid = IsMetaValue(hop.m_type) ? variant->GetGuidByID((ibMetaID)clsid_metaID(hop.m_type)) : ibNullGuid;
 		if (typeGuid.isValid()) {
 			writer.w_u8(kTypeMeta);
 			writer.w_u64((unsigned long long)clsid_any_of(hop.m_type));   // its kind and metaclass: the type less its metaID
@@ -185,7 +185,7 @@ bool ibPropertySource::PasteNodeValue(const ibDataValue& value)
 		// the same rule as sourceDescription.cpp, where reading past the end was found first.
 		if (reader.eof())
 			break;
-		ibSourceId id = wxNOT_FOUND;
+		ibSourceId id = ibNOT_FOUND;
 		if (reader.r_u8() == kHopGuid) {
 			const ibGuid guid(reader.r_stringZ());
 			id = (ibSourceId)variant->GetIdByGuid(guid);   // guid -> live id (the pasted object's)
@@ -399,7 +399,7 @@ bool ibPropertySource::GetProtocolValue(ibDataNode& row, ibReader reader)
 		const ibBackendTypeSourceFactory* const parent =
 			dynamic_cast<const ibBackendTypeSourceFactory*>(factory->GetSourceObject());
 		const std::vector<ibSourceHop> parentPath = parent != nullptr ? parent->GetSourceDesc().GetPath() : std::vector<ibSourceHop>{};
-		const ibSourceId boundHead = parent != nullptr ? parent->GetSourceDesc().GetFirst() : wxNOT_FOUND;
+		const ibSourceId boundHead = parent != nullptr ? parent->GetSourceDesc().GetFirst() : ibNOT_FOUND;
 
 		// The bound table may be a nested table section — not a form attribute: walked down from its head.
 		if (parentPath.size() >= 2) {
@@ -427,7 +427,7 @@ bool ibPropertySource::GetProtocolValue(ibDataNode& row, ibReader reader)
 				continue;
 			if (IsTableType(metaData, holder->GetTypeDesc())) {
 				// The bound table; any other — not this column's.
-				if (boundHead != wxNOT_FOUND && holder->GetId() != boundHead)
+				if (boundHead != ibNOT_FOUND && holder->GetId() != boundHead)
 					continue;
 				AppendExplorerColumns(AppendSource(sources, holder->GetName(), {}, {}, true), *explorer, parentPath, metaData);
 			}

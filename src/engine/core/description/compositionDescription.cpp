@@ -606,9 +606,9 @@ bool ibSettingsDescriptionMemory::WriteNode(ibDataNode& node, const ibSettingsDe
 bool ibCompositionDescriptionMemory::ReadNode(const ibDataNode& node, ibCompositionDescription& composition)
 {
 	// THE MAIN TABLE IS A NUMBER, and its absence is a number too: a record written by a report (or
-	// by a list before one was picked) simply has no such property, and wxNOT_FOUND is what "nothing
+	// by a list before one was picked) simply has no such property, and ibNOT_FOUND is what "nothing
 	// picked" IS. Nothing is resolved here — that is the whole reason the id is stored at all.
-	composition.m_mainTable = wxNOT_FOUND;
+	composition.m_mainTable = ibNOT_FOUND;
 	node.GetValue<std::int32_t>(kMainTableName, composition.m_mainTable);   // …left as it is when the name is absent
 	composition.m_query     = node.GetValue<ibString>(kQueryName);
 
@@ -888,7 +888,7 @@ bool ibParameterDescriptionMemory::WriteNode(ibDataNode& node,
 // what makes this safe to apply everywhere rather than only where it was noticed to help.
 ibString ibTitleFromName(const ibString& name)
 {
-	if (name.IsEmpty() || name.Find(ibT(' ')) != wxNOT_FOUND)
+	if (name.IsEmpty() || name.Find(ibT(' ')) != ibNOT_FOUND)
 		return name;
 
 	ibString title;
@@ -909,13 +909,13 @@ ibString ibTitleFromName(const ibString& name)
 ibString ibNameFromPath(const ibString& path)
 {
 	const int dot = path.Find(ibT('.'), /*fromEnd*/true);
-	return dot == wxNOT_FOUND ? path : path.Mid(dot + 1);
+	return dot == ibNOT_FOUND ? path : path.Mid(dot + 1);
 }
 
 const ibSelectDescription* ibSelectOfPath(const std::vector<ibSelectDescription>& selects, const ibString& path)
 {
 	const int dot = path.Find(ibT('.'), /*fromEnd*/true);
-	if (dot != wxNOT_FOUND) {
+	if (dot != ibNOT_FOUND) {
 		// THE QUALIFIER — matched by IDENTITY first and by name second (ibSelectDescription::Matches).
 		// Today every stored path carries a name, because a path is the text that goes into the
 		// query; asked this way, the day a path carries an id instead, nothing here changes.

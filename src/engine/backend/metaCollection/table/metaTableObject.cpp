@@ -65,7 +65,7 @@ void ibValueMetaObjectTableData::FillSourceExplorer(ibSourceDataObject::ibSource
 ibTypeDescription ibValueMetaObjectTableData::GetTypeDesc() const
 {
 	const ibCtorMetaValueType* typeCtor = m_metaData->GetTypeCtor(this, ibCtorObjectMetaType::ibCtorObjectMetaType_TabularSection);
-	wxASSERT(typeCtor);
+	ibASSERT(typeCtor);
 	if (typeCtor != nullptr) return ibTypeDescription(typeCtor->GetClassType());
 	return ibTypeDescription();
 }
@@ -143,7 +143,7 @@ bool ibValueMetaObjectTableData::OnDeleteMetaObject()
 bool ibValueMetaObjectTableData::OnReloadMetaObject()
 {
 	ibValueMetaObject* metaObject = GetParent();
-	wxASSERT(metaObject);
+	ibASSERT(metaObject);
 	if (metaObject->OnReloadMetaObject())
 		return ibValueMetaObject::OnReloadMetaObject();
 	return false;
@@ -175,7 +175,7 @@ bool ibValueMetaObjectTableData::OnAfterCloseMetaObject()
 	if (!(*m_propertyNumberLine)->OnAfterCloseMetaObject())
 		return false;
 	ibValueMetaObjectRecordData* metaObject = dynamic_cast<ibValueMetaObjectRecordData*>(GetParent());
-	wxASSERT(metaObject);
+	ibASSERT(metaObject);
 	if (metaObject != nullptr) {
 		unregisterTabularSection();
 		unregisterTabularSection_String();

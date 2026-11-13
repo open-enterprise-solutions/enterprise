@@ -4,6 +4,8 @@
 #include "backend/databaseLayer/databaseLayerException.h"
 #include "firebirdResultSet.h"
 
+#include <cstring>
+
 ibPreparedStatementFirebirdWrapper::ibPreparedStatementFirebirdWrapper(ibInterfaceFirebird* pInterface, isc_db_handle pDatabase, isc_tr_handle pTransaction, const ibString& strSQL)
 	: ibDatabaseErrorReporter(), m_strSQL(strSQL)
 {

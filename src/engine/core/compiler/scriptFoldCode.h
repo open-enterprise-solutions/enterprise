@@ -39,7 +39,7 @@ public:
 	ibFoldCode();
 
 	// The text changed — the folds are recomputed on the next UpdateFoldLevel (cheap, lazy).
-	void RecalcFoldLevel() const { m_update_fold = true; }
+	void RecalcFoldLevel() { m_update_fold = true; }
 
 	// Recompute when RecalcFoldLevel asked for it: the levels of lines [1, lineCount] are written into `levels`
 	// (index = line; index 0 is not written). False — nothing was pending, `levels` is untouched.
@@ -87,7 +87,7 @@ private:
 
 	// Recalc-pending flag. Set by RecalcFoldLevel (cheap, lazy);
 	// consumed by UpdateFoldLevel on the next paint.
-	mutable bool m_update_fold;
+	bool m_update_fold;
 
 	// Per-kind open-fold counters — protect against unbalanced
 	// close-tokens emitting spurious -1 deltas.

@@ -31,9 +31,9 @@ enum ibRoundMode
 };
 
 // How the TEXT of a file is spelled in bytes - what a TextReader decodes by and a TextWriter encodes by.
-// ANSI and OEM are the two code pages Windows keeps per system; elsewhere both mean the locale's own.
+// ANSI and OEM are the two code pages Windows keeps per system; elsewhere a system has one encoding, UTF-8.
 // Windows1251 and Cp866 are pages a script NAMES ("windows-1251", "cp866") and the enumeration TextEncoding
-// does not list: read by the fixed table of ibXmlCodePage (core/xml/xmlText.h), the same on every machine.
+// does not list: read by the fixed table of ibCodePage (core/codePage.h), the same on every machine.
 enum ibTextEncoding
 {
 	ibTextEncoding_UTF8 = 1,

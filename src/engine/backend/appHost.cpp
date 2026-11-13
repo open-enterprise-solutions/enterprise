@@ -4,25 +4,13 @@
 
 #include "backend/appHost.h"
 #include "core/diagnostics/journal.h"   // a locale this machine cannot grant is said, not refused
+#include "core/localization/locale.h"   // ibSetLocale - the process's locale, set by the first base
 
 #include <algorithm>
 #include <cstdint>
 #include <limits>
 
-#if defined(__IBMSW__)
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#include <psapi.h>     // K32GetProcessMemoryInfo — what the process holds, against MemoryLimit
-#elif defined(__linux__)
-#include <fstream>
-#include <unistd.h>    // sysconf — the page /proc/self/statm counts in
-#endif
-
-#include <wx/fileconf.h>
-#include <wx/filename.h>
-#include <wx/stdpaths.h>
+#include "core/fileConfig.h"   // backend.conf
 
 #include "backend/backend_exception.h"   // a process with no room for another base refuses it
 #include "backend/backend_localization.h"
@@ -35,7 +23,19 @@
 #include "backend/compiler/value.h"   // ibValue::IsRegisterCtor / GetNameObjectFromID — the registry the help corpus checks by
 #include "core/syntaxHelper/helpService.h"
 
-std::unique_ptr<ibApplicationHost>                  ibApplicationHost::s_applicationHost;
+// After the engine's headers: windows.h's GetClassName macro would otherwise rename ibValue's method in them.
+#if defined(__IBMSW__)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <psapi.h>     // K32GetProcessMemoryInfo — what the process holds, against MemoryLimit
+#elif defined(__linux__)
+#include <fstream>
+#include <unistd.h>    // sysconf — the page /proc/self/statm counts in
+#endif
+
+std::unique_ptr<ibApplicationHost>                 ibApplicationHost::s_applicationHost;
 std::mutex                                          ibApplicationHost::s_mutex;
 std::vector<std::unique_ptr<ibApplicationInstance>> ibApplicationHost::s_instances;
 std::atomic<std::size_t>                            ibApplicationHost::s_instanceCount{ 0 };
@@ -294,7 +294,6 @@ void ibApplicationHost::CloseAll()
 ///////////////////////////////////////////////////////////////////////////////
 
 ibApplicationHost::ibApplicationHost(ibRunMode runMode) :
-	m_localeLang(wxLanguage::wxLANGUAGE_UNKNOWN),
 	m_pluginManager(std::unique_ptr<ibPluginManager>(new ibPluginManager(ib::AppDataCtorToken{})))
 {
 	ReadBackendConf();
@@ -331,7 +330,7 @@ ibApplicationHost::~ibApplicationHost()
 
 #define BACKEND_CONF ibT("backend.conf")
 
-std::size_t ibApplicationHost::ReadCount(const wxConfigBase& conf, const ibString& file, const ibString& key, long least,
+std::size_t ibApplicationHost::ReadCount(const ibFileConfig& conf, const ibString& file, const ibString& key, long least,
 	std::size_t byDefault, std::size_t most)
 {
 	long configured = 0;
@@ -380,9 +379,8 @@ void ibApplicationHost::ReadBackendConf()
 	const ibString strConfigFile = ibBackendConfPath();
 
 	// Read as written, as infobase.conf is: a Windows path keeps its backslashes (the \t of C:\tls\server.key is not a tab).
-	wxFileConfig fc(wxT(""), wxT(""), wxT(""), strConfigFile,
-		wxCONFIG_USE_LOCAL_FILE | wxCONFIG_USE_GLOBAL_FILE | wxCONFIG_USE_NO_ESCAPE_CHARACTERS);
-	m_configLocale = fc.Read(wxT("Locale"), m_configLocale);   // what was there, when the file says nothing
+	const ibFileConfig fc(strConfigFile);
+	m_configLocale = fc.Read(ibT("Locale"), m_configLocale);   // what was there, when the file says nothing
 
 	// HOW MUCH THE PROCESS MAY CONSUME — said by whoever runs it, not compiled in. Workers, Bases and MemoryLimit are the
 	// most there may be: left out, or 0, no limit.
@@ -399,10 +397,10 @@ void ibApplicationHost::ReadBackendConf()
 	m_configConnections = ReadCount(fc, BACKEND_CONF, ibT("Connections"), 2, 0);
 	// Resume is not ReadCount: there 0 means the default, and here 0 means the window is off.
 	long resume = 0;
-	const bool resumePresent = fc.Read(wxT("Resume"), &resume);
+	const bool resumePresent = fc.Read(ibT("Resume"), &resume);
 	m_configResume = ResumeSeconds(resumePresent, resume);
 	// The certificate the listeners speak TLS over, named relative to this file's folder (core/server/listener.h).
-	m_configTls = ibTlsFiles::FromConf(fc, wxFileName(strConfigFile).GetPath());
+	m_configTls = ibTlsFiles::FromConf(fc, ibString(ibPathOf(strConfigFile).parent_path().wstring()));
 
 	// (THE ASSISTANT ACCESS'S SETTINGS ARE NOT HERE: the port is on the person's own machine, and so
 	//  are they. See ibMcpServer::GetSettings in frmclient/backend/mcp/mcpServer.h.)
@@ -445,98 +443,45 @@ bool ibApplicationHost::InitLocale(const ibString& locale)
 	// SETTLED ALREADY — by the first base. That is success, not a refusal: a later base asks for the locale
 	// the process speaks, and it has one. (This used to answer false on a second call, which on a base of its
 	// own never came; on a process of several it would fail every base after the first.)
-	if (m_localeLang != wxLanguage::wxLANGUAGE_UNKNOWN)
+	if (!m_locale.IsEmpty())
 		return true;
-
-#ifdef DEBUG_TRANSLATE
-	wxLog::AddTraceMask(wxS("i18n"));
-#endif // WXDEBUG
 
 	// The base's word, else backend.conf's — when this machine can set it. NOTHING NAMED, OR A WISH THIS MACHINE CANNOT
 	// GRANT, IS ENGLISH — the language the engine's words are written in — never the machine's own: a process that
 	// speaks whatever the system does answers differently on every machine it runs on (a test reading an English
 	// sentence failed on a desktop whose Windows speaks Russian, 2026-10-28). A wish not granted is not a refusal to
 	// open the base (a base names its locale on one machine and is opened on every other); the journal says which.
-	// US English: wx's plain ENGLISH is en_GB, a locale a machine may not have made; en_US is the one it nearly always has.
-	m_localeLang = wxLanguage::wxLANGUAGE_ENGLISH_US;
+	// US English: a plain "en" is en_GB in wx's database (core/localization/locale.h), a locale a machine may not have
+	// made; en_US is the one it nearly always has.
 	const ibString& wanted = !locale.IsEmpty() ? locale : m_configLocale;
-	const wxLanguageInfo* const wish = !wanted.IsEmpty() ? wxLocale::FindLanguageInfo(wanted) : nullptr;
-	if (wish != nullptr && wxLocale::IsAvailable(wish->Language))
-		m_localeLang = wish->Language;
-	else if (!wxLocale::IsAvailable(m_localeLang))
-		m_localeLang = wxLanguage::wxLANGUAGE_DEFAULT;   // a machine with no English locale made (a bare Linux): what it has
-
-	// Independently of whether we succeeded to set the locale or not, try
-	// to load the translations (for the language settled above) here.
-
-	const ibString& workingDir = ibGetCwd();
-
-	// normally this wouldn't be necessary as the catalog files would be found
-	// in the default locations, but when the program is not installed the
-	// catalogs are in the build directory where we wouldn't find them by
-	// default
-
-	wxFileName fn(wxStandardPaths::Get().GetExecutablePath());
-
-	wxLocale::AddCatalogLookupPathPrefix(workingDir + wxFILE_SEP_PATH + ibT("lang"));
-	wxLocale::AddCatalogLookupPathPrefix(ibProgramFolder() + wxFILE_SEP_PATH + ibT("lang"));
-
-	// …AND, FOR A RUN FROM THE BUILD TREE, THE SOURCE'S OWN `lang` ABOVE THE EXECUTABLE — the walk-up the
-	// syntax helper makes for its corpus (helpService.cpp; bin/Win32/Debug is three levels under it). The
-	// build does not copy the catalogs beside the binaries (the nightly packages do), so a process started
-	// anywhere but the source root found none and spoke English engine words between the configuration's
-	// own: a document read "… 00000000003 from 06.07.2026" in a Russian session (2026-09-28).
-	{
-		wxFileName walk(fn.GetPath(), ibEmptyString);
-		for (int level = 0; level < 6; ++level) {
-			const ibString candidate = walk.GetPath() + wxFILE_SEP_PATH + ibT("lang");
-			if (ibDirExists(candidate)) {
-				wxLocale::AddCatalogLookupPathPrefix(candidate);
-				break;
-			}
-			if (walk.GetDirCount() == 0)
-				break;
-			walk.RemoveLastDir();
-		}
-	}
-
-	// Init once — a second call on the object asserts and leaves wx's locale pointer dangling — so the language is
-	// settled above; a refusal says why instead of a bare false.
-	if (!m_locale.Init(m_localeLang)) {
-		const wxLanguageInfo* const info = wxLocale::GetLanguageInfo(m_localeLang);
+	const ibLanguageInfo* const wish = ibFindLanguageInfo(wanted);
+	ibString set = wish != nullptr ? ibSetLocale(wanted) : ibString();
+	if (set.IsEmpty())
+		set = ibSetLocale(ibT("en_US"));
+	if (set.IsEmpty())
+		set = ibSetLocale(ibString());   // a machine with no English locale made (a bare Linux): what it has
+	if (set.IsEmpty()) {
 		ibBackendCoreException::Error(_("The locale %s cannot be set on this machine; the base was not opened."),
-			info != nullptr ? ibString(info->GetCanonicalWithRegion()) : ibString(ibT("(default)")));
+			!wanted.IsEmpty() ? wanted : ibString(ibT("(default)")));
 	}
-	if (wish != nullptr && wish->Language != m_localeLang)
+	if (!wanted.IsEmpty() && (wish == nullptr || set != wish->CanonicalWithRegion()))
 		ibJournalWarning(ibT("session.locale"), ibT("the locale %s is not supported on this machine; the process speaks %s"),
-			wish->GetCanonicalWithRegion(), m_locale.GetCanonicalName());
+			wanted, set);
+	m_locale = set;
 
-	// Initialize the catalogs we'll be using.
-	m_locale.AddCatalog(ibString(kEngineDomain));
-	// THE ENGINE'S OWN WORDS come through its own catalogs (core/localization/dictionary.h): one set per
-	// language, chosen per thread by the base it works for; the process's language is this one. wxLocale keeps its copy of the catalog above for wx's own
-	// windows.
-	ibDictionary::SetProcessLanguage(m_locale.GetCanonicalName());
-
-	// ⭐ NO CATALOG OF OURS FOR THE LANGUAGE — NOTHING TO ASK. The engine's strings stay as they are written (English
-	// has no catalog: it is what they are written in), and a translations object with nothing of ours misses on every
-	// one of them — and wx TRACES a miss (wxLogTrace in GetTranslatedString), taking a process-wide lock for it
-	// (wxLog::GetComponentLevel). Every control and every property made says a dozen words: sixty logins at once kept
-	// about two thirds of the application server's busy threads waiting on that one lock (2026-10-06, Debug, cdb).
-	// Without the object, `_()` hands the string back at once.
-	if (wxTranslations* const translations = wxTranslations::Get())
-		if (!translations->IsLoaded(ibString(kEngineDomain)))
-			wxTranslations::Set(nullptr);
+	// THE ENGINE'S OWN WORDS come through its own catalogs (core/localization/dictionary.h — they find `lang/` beside
+	// the program, or walking up from it in a build tree): one set per language, chosen per thread by the base it works
+	// for; the process's language is this one. (wxLocale loaded them a second time for wx's own windows, and its
+	// translations object took a process-wide lock on every miss — sixty logins at once kept two thirds of an
+	// application server's busy threads waiting on it, 2026-10-06. Neither is here any more.)
+	ibDictionary::SetProcessLanguage(m_locale);
 
 	// Initialize localization engine
-	ibBackendLocalization::SetUserLanguage(m_locale.GetName());
-
-	//Set default time
-	wxDateTime::SetCountry(wxDateTime::Country::Country_Default);
+	ibBackendLocalization::SetUserLanguage(m_locale);
 
 	// Syntax-helper corpus comes up here — locale is settled. An article's class_id is checked by the backend's
 	// registry of classes.
-	m_helpService.reset(new ibHelpService(m_locale.GetCanonicalName(), [](ibClassID id) {
+	m_helpService.reset(new ibHelpService(m_locale, [](ibClassID id) {
 		return ibValue::IsRegisterCtor(id) ? ibValue::GetNameObjectFromID(id) : ibString();
 	}));
 

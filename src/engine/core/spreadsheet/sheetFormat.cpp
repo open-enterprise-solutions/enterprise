@@ -2,7 +2,7 @@
 
 #include "core/fileSystem.h"   // ibPathOf — std::filesystem reads the extension
 
-#include <wx/wfstream.h>
+#include <fstream>
 
 // ⭐⭐ THE REGISTRY — filled by the formats themselves, never edited here.
 //
@@ -96,17 +96,18 @@ ibString ibSheetFormatSaveFilter()
 
 bool ibSheetFormat::ReadFile(const ibString& fileName, ibSpreadsheetDescription& sheet) const
 {
-	wxFileInputStream file(fileName);
-	return file.IsOk() && Read(file, sheet);
+	std::ifstream file(ibPathOf(fileName), std::ios::binary);
+	return file.is_open() && Read(file, sheet);
 }
 
 bool ibSheetFormat::WriteFile(const ibString& fileName, const ibSpreadsheetDescription& sheet) const
 {
-	wxFileOutputStream file(fileName);
-	if (!file.IsOk() || !Write(file, sheet))
+	std::ofstream file(ibPathOf(fileName), std::ios::binary | std::ios::trunc);
+	if (!file.is_open() || !Write(file, sheet))
 		return false;
 
 	// ⚠ CLOSED EXPLICITLY and its answer read: a stream that is merely destructed can leave a file that exists, has a
 	// size, and is missing its last block.
-	return file.Close();
+	file.close();
+	return !file.fail();
 }

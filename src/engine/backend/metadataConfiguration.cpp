@@ -187,7 +187,7 @@ m_commonObject(nullptr)
 
 	if (m_commonObject->OnCreateMetaObject(this, newObjectFlag)) {
 		if (!m_commonObject->OnLoadMetaObject(this)) {
-			wxASSERT_MSG(false, "m_commonObject->OnLoadMetaObject() == false");
+			ibASSERT_MSG(false, "m_commonObject->OnLoadMetaObject() == false");
 		}
 	}
 
@@ -202,7 +202,7 @@ m_commonObject(nullptr)
 		if (commonLanguage->OnCreateMetaObject(this, newObjectFlag)) {
 
 			if (!commonLanguage->OnLoadMetaObject(this)) {
-				wxASSERT_MSG(false, "commonLanguage->OnLoadMetaObject() == false");
+				ibASSERT_MSG(false, "commonLanguage->OnLoadMetaObject() == false");
 			}
 
 			commonLanguage->SetName(ibT("English"));
@@ -219,7 +219,7 @@ ibMetaDataConfigurationFile::~ibMetaDataConfigurationFile()
 {
 	//clear data
 	if (!ClearDatabase()) {
-		wxASSERT_MSG(false, "ClearDatabase() == false");
+		ibASSERT_MSG(false, "ClearDatabase() == false");
 	}
 
 	// m_commonObject (ibValuePtr) releases the root automatically on destruction
@@ -265,7 +265,7 @@ bool ibMetaDataConfigurationFile::IsFullAccess() const
 bool ibMetaDataConfigurationFile::RunDatabase(const ibRuntimeRequest& request)
 {
 
-	wxASSERT(!IsConfigOpen());
+	ibASSERT(!IsConfigOpen());
 
 	if ((request.m_flags & loadConfigFlag) == 0)
 		ibCompileCode::SetCodeStyle(m_commonObject->GetCompileSyntax());
@@ -336,7 +336,7 @@ bool ibMetaDataConfigurationFile::CloseDatabase(const ibRuntimeRequest& request)
 	// The assert warns (Debug), the close happens anyway — see the report's twin
 	// (metadataReport.cpp). A configuration whose open failed is torn down through this same road,
 	// and it must not leave a session that cannot be shut down over a file it already refused.
-	wxASSERT(IsConfigOpen());
+	ibASSERT(IsConfigOpen());
 	if (!IsConfigOpen())
 		return true;
 
@@ -397,7 +397,7 @@ bool ibMetaDataConfigurationFile::LoadConfigFromBuffer(const ibMemoryBuffer& buf
 	// in place (all-or-nothing) instead of wiping it up front.
 	if (IsConfigOpen()) {
 		if (!CloseDatabase(ibRuntimeRequest(forceCloseFlag))) {
-			wxASSERT_MSG(false, "CloseDatabase() == false");
+			ibASSERT_MSG(false, "CloseDatabase() == false");
 			return false;
 		}
 	}
@@ -421,7 +421,7 @@ ibValueMetaObjectConfiguration* ibMetaDataConfigurationFile::BuildFreshRoot()
 	auto* root = new ibValueMetaObjectConfiguration();
 	if (root->OnCreateMetaObject(this, newObjectFlag)) {
 		if (!root->OnLoadMetaObject(this)) {
-			wxASSERT_MSG(false, "BuildFreshRoot: OnLoadMetaObject() == false");
+			ibASSERT_MSG(false, "BuildFreshRoot: OnLoadMetaObject() == false");
 		}
 	}
 	root->InvalidateNames();

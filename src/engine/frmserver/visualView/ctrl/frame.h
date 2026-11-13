@@ -1,8 +1,6 @@
 ﻿#ifndef _BASE__FRAME__H__
 #define _BASE__FRAME__H__
 
-#include <wx/wx.h>
-
 #include "frmserver/frmserver.h"
 
 #include "backend/compiler/value.h"
@@ -32,13 +30,20 @@ class FRMSERVER_API ibVisualHost;   // visualHost.h — who holds the form; ever
 #include "backend/moduleInfo.h"
 #include "frmserver/visualView/layers/commandBar.h"   // ibValueCommandBar (command STORE the frame owns)
 
+#include "core/style/style.h"   // ibStyle - the defaults below are the platform style's
+
 // Default foreground / background for designer-created form controls,
-// toolbars, dataviews, dialogs. Aligned with interior palette: deep
-// dusty blue text on cream content surface. Was Windows-blue accent
-// (#0078D7) + light off-white grey (#EBEBF1) - both clashed with the
-// powder-blue + cream + terracotta palette. The core's colour: the server draws nothing.
-#define ibDefaultStyleFGColour ibColour(0x3F, 0x5C, 0x77)  // #3F5C77 deep dusty blue
-#define ibDefaultStyleBGColour ibColour(0xFA, 0xF7, 0xF0)  // #FAF7F0 cream content
+// toolbars, dataviews, dialogs: THE PLATFORM STYLE'S form text and form
+// background, its light look (core/style/style.cpp) - colours of their own
+// here until 2026-11-13 (Max: "the form takes its default from the style"),
+// the background the cream the palette had dropped a day before. Was
+// Windows-blue accent (#0078D7) + light off-white grey (#EBEBF1) before
+// that. The core's colour: the server draws nothing.
+#define ibDefaultStyleFGColour std::get<ibColour>(ibStyle::Platform().Get(ibStyleItem::FormText, false))
+#define ibDefaultStyleBGColour std::get<ibColour>(ibStyle::Platform().Get(ibStyleItem::FormBackground, false))
+// ...and the cream the background was: kept in every form saved till then, as a background is written whatever it is -
+// nobody chose it, so it is read as the default it is now (ibValueForm, ibValueWindow, ibValueStaticBoxSizer ReadData)
+#define ibFormerStyleBGColour ibColour(0xFA, 0xF7, 0xF0)   // #FAF7F0 cream
 
 #include "core/memory/memoryStream.h"
 
@@ -145,7 +150,7 @@ public:
 		if (id > 0) {
 			ibValueFrame* foundedControl =
 				FindControlByID(id);
-			wxASSERT(foundedControl == nullptr);
+			ibASSERT(foundedControl == nullptr);
 			if (foundedControl == nullptr) {
 				m_controlId = id;
 				return true;

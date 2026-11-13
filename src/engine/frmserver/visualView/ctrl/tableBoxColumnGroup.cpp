@@ -20,14 +20,14 @@ ibValueModelTableBoxColumnGroup::ibValueModelTableBoxColumnGroup()
 
 void ibValueModelTableBoxColumnGroup::AddColumn()
 {
-	wxASSERT(m_formOwner);
+	ibASSERT(m_formOwner);
 
 	m_formOwner->NewObject(g_controlTableBoxColumnCLSID, this);
 }
 
 void ibValueModelTableBoxColumnGroup::AddColumnGroup()
 {
-	wxASSERT(m_formOwner);
+	ibASSERT(m_formOwner);
 
 	m_formOwner->NewObject(g_controlTableBoxColumnGroupCLSID, this);
 }

@@ -17,8 +17,6 @@
 #include <utility>
 #include <vector>
 
-#include <wx/defs.h>   // wxNOT_FOUND
-
 #include <memory>
 
 #include "value.h"     // ibValue — m_cacheProbe holds them by value, m_runStack by block
@@ -48,15 +46,15 @@ inline bool ibRunCancelled(const std::atomic<ibRunState>* run) noexcept {
 // definition is published here so the worker boundary save/restore can
 // move the value between session and TLS.
 struct ibErrorPlace {
-	long              m_errorLine    = wxNOT_FOUND;
+	long              m_errorLine    = ibNOT_FOUND;
 	const ibByteCode* m_byteCode     = nullptr;
 	const ibByteCode* m_skipByteCode = nullptr;
 
-	bool IsEmpty() const { return m_errorLine == wxNOT_FOUND; }
+	bool IsEmpty() const { return m_errorLine == ibNOT_FOUND; }
 	void Reset() {
 		m_byteCode     = nullptr;
 		m_skipByteCode = nullptr;
-		m_errorLine    = wxNOT_FOUND;
+		m_errorLine    = ibNOT_FOUND;
 	}
 };
 

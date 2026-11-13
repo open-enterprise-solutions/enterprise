@@ -19,7 +19,7 @@
 #include <cstdio>
 
 #include "webServer.h"
-#include "core/diagnostics/oesConsole.h"
+#include "deskgui/console.h"
 #include "protocol/connectionServer.h"   // the base an address names — the publication's name left out
 
 static const wxCmdLineEntryDesc s_cmdLineDesc[] = {

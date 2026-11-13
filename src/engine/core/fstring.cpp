@@ -315,19 +315,8 @@ ibString::ibString(const wchar_t* ws, size_t n)
 }
 ibString::ibString(const std::wstring& ws) : ibString(ws.data(), ws.size()) {}
 ibString::ibString(const char* utf8) { if (utf8) SetUtf8(utf8, std::char_traits<char>::length(utf8)); }
-// wx's own wide storage, by reference where the build keeps one.
-ibString::ibString(const wxString& s) : ibString(s.ToStdWstring()) {}
 
 // --- conversions -----------------------------------------------------------------
-
-wxString ibString::ToWxString() const
-{
-#if WCHAR_MAX <= 0xFFFF
-	return wxString(wc_str(), Len());
-#else
-	return wxString(wc_str());
-#endif
-}
 
 #if WCHAR_MAX > 0xFFFF
 ibWideBuffer ibString::wc_str() const
@@ -408,6 +397,46 @@ ibString ibString::FromUTF8(const char* s, size_t n)
 	ibString r;
 	if (s != nullptr) r.SetUtf8(s, n == npos ? std::char_traits<char>::length(s) : n);
 	return r;
+}
+
+bool ibIsUtf8(const char* data, size_t size)
+{
+	const unsigned char* at = reinterpret_cast<const unsigned char*>(data);
+	const unsigned char* const end = at + size;
+	while (at < end) {
+		const unsigned char lead = *at;
+		if (lead < 0x80) {
+			++at;
+			continue;
+		}
+		std::size_t follow = 0;
+		std::uint32_t point = 0;
+		std::uint32_t least = 0;
+		if ((lead & 0xE0) == 0xC0) {
+			follow = 1; point = lead & 0x1F; least = 0x80;
+		}
+		else if ((lead & 0xF0) == 0xE0) {
+			follow = 2; point = lead & 0x0F; least = 0x800;
+		}
+		else if ((lead & 0xF8) == 0xF0) {
+			follow = 3; point = lead & 0x07; least = 0x10000;
+		}
+		else {
+			return false;
+		}
+		if (static_cast<std::size_t>(end - at) <= follow)
+			return false;
+		for (std::size_t i = 1; i <= follow; ++i) {
+			if ((at[i] & 0xC0) != 0x80)
+				return false;
+			point = (point << 6) | (at[i] & 0x3F);
+		}
+		// An overlong form, a surrogate, past the last code point - none is UTF-8.
+		if (point < least || (point >= 0xD800 && point <= 0xDFFF) || point > 0x10FFFF)
+			return false;
+		at += follow + 1;
+	}
+	return true;
 }
 
 void ibString::AppendCodepoint(uint32_t cp)
@@ -742,13 +771,6 @@ ibString& ibString::operator+=(const wchar_t* s)
 	return *this;
 }
 ibString& ibString::operator+=(ibChar c) { push_back(c); return *this; }
-ibString& ibString::operator+=(const wxString& s)
-{
-	if (s.empty()) return *this;
-	const auto& wide = s.ToStdWstring();   // wx's own wide storage, by reference where the build keeps one
-	const auto units = Utf16(wide.data(), wide.size());
-	return append(units.data(), units.size());
-}
 
 ibString& ibString::Append(ibChar c, size_t count)
 {
@@ -790,20 +812,6 @@ bool ibString::operator==(const wchar_t* s) const
 	if (s == nullptr) s = L"";
 	const auto units = Utf16(s, TerminatedLength(s));
 	return View() == std::u16string_view(units);
-}
-
-bool ibString::operator==(const wxString& s) const
-{
-	const auto& wide = s.ToStdWstring();
-	const auto units = Utf16(wide.data(), wide.size());
-	return View() == std::u16string_view(units);
-}
-
-bool operator==(const wxString& a, const ibChar* b)
-{
-	const auto& wide = a.ToStdWstring();   // wx's own wide storage, by reference where the build keeps one
-	const auto units = Utf16(wide.data(), wide.size());
-	return std::u16string_view(units) == std::u16string_view(b != nullptr ? b : ibT(""));
 }
 
 // Decoded as SetUtf8 decodes — the text the bytes would make — and compared a character at a time; an ASCII word, every
@@ -856,13 +864,6 @@ bool ibString::IsSameAs(const wchar_t* s, bool caseSensitive) const
 {
 	if (s == nullptr) s = L"";
 	const auto units = Utf16(s, TerminatedLength(s));
-	return SameText(c_str(), Len(), units.data(), units.size(), caseSensitive);
-}
-
-bool ibString::IsSameAs(const wxString& s, bool caseSensitive) const
-{
-	const auto& wide = s.ToStdWstring();   // wx's own wide storage, by reference where the build keeps one
-	const auto units = Utf16(wide.data(), wide.size());
 	return SameText(c_str(), Len(), units.data(), units.size(), caseSensitive);
 }
 

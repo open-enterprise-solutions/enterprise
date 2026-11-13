@@ -11,8 +11,6 @@
 #ifndef _OES_GIT_SERVICE_H_
 #define _OES_GIT_SERVICE_H_
 
-#include <wx/string.h>
-#include <wx/arrstr.h>
 #include <vector>
 
 #include "backend/backend_core.h"          // BACKEND_API — the Designer links this across the DLL

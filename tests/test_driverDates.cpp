@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include <gtest/gtest.h>
+#include <wx/datetime.h>   // wxDateTime - the engine's headers include no wx
 
 #include <wx/init.h>
 

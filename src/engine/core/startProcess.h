@@ -23,6 +23,12 @@
 // its passwords by (launchTicket.h), so they are never on a command line. Without it the child's stdin is left alone.
 CORE_API long ibStartProcess(const ibString& command, const std::vector<unsigned char>& input = {});
 
+// Runs a program and WAITS for it: its exit code, or -1 when it could not start (the reason goes to the technology
+// journal). The command is split as ibStartProcess splits it; what the program wrote on stdout and stderr comes back as
+// text, as wxExecute gave it line by line and joined: UTF-8, "\r\n" made "\n", the last line's end dropped. Its stdin
+// is empty, and no window is shown for it. Callable from any thread, as ibStartProcess is.
+CORE_API long ibRunProcess(const ibString& command, ibString& output, ibString& error);
+
 // Starts the web server (webserver) and waits, up to five seconds, for the address it serves at: `command` is the
 // binary and what it publishes; `--port=0 --manifest=<file>` are added here, and the server writes `url=` there once
 // its port is open. The process's id, or 0; `url` stays empty when the server never said one. `waiting` is called
@@ -43,10 +49,6 @@ CORE_API bool ibProcessExists(long pid);
 CORE_API void ibOnStopProcess(void (*stop)());
 CORE_API bool ibStopProcess();
 
-// This process's environment, as a library it loads reads it (fbclient finds its folder by FIREBIRD).
-CORE_API bool ibSetEnv(const ibString& name, const ibString& value);
-
-// This computer's name, as the system calls it.
-CORE_API ibString ibHostName();
+// (The machine's name, the user, the system in words, this process's environment and command line: core/system.h.)
 
 #endif // __CORE_START_PROCESS_H__

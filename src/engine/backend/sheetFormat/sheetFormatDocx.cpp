@@ -18,7 +18,7 @@
 #include "backend/sheetFormat/sheetFormatDocx.h"
 #include "backend/backend_localization.h"   // a caption goes out in one language
 
-#include <wx/zipstrm.h>
+#include "core/zip/zip.h"                    // ibZipWriter - the package
 
 #include <set>
 
@@ -52,11 +52,12 @@ ibString HexOf(const ibColour& colour)
 	return ibString::Format(ibT("%02X%02X%02X"), colour.m_red, colour.m_green, colour.m_blue);
 }
 
-void AddPart(wxZipOutputStream& zip, const ibString& name, const ibString& body)
+// A part that did not go out fails the writer, and its Close says so.
+void AddPart(ibZipWriter& zip, const ibString& name, const ibString& body)
 {
-	zip.PutNextEntry(name);
 	const std::string utf8 = body.ToUTF8();
-	zip.Write(utf8.data(), utf8.length());
+	if (zip.PutNextEntry(name))
+		zip.Write(utf8.data(), utf8.length());
 }
 
 ibString ContentTypes()
@@ -276,14 +277,14 @@ bool ContinuesMerge(const ibSpreadsheetDescription& sheet, int row, int numCols)
 
 } // namespace
 
-bool ibSheetFormatDocx::Read(wxInputStream& /*input*/, ibSpreadsheetDescription& /*sheet*/) const
+bool ibSheetFormatDocx::Read(std::istream& /*input*/, ibSpreadsheetDescription& /*sheet*/) const
 {
 	// See the header: a Word file is a flow, not a sheet. Refused plainly rather
 	// than half-guessed.
 	return false;
 }
 
-bool ibSheetFormatDocx::Write(wxOutputStream& output, const ibSpreadsheetDescription& sheet) const
+bool ibSheetFormatDocx::Write(std::ostream& output, const ibSpreadsheetDescription& sheet) const
 {
 	const int numRows = sheet.GetNumberRows();
 	const int numCols = sheet.GetNumberCols();
@@ -384,7 +385,7 @@ bool ibSheetFormatDocx::Write(wxOutputStream& output, const ibSpreadsheetDescrip
 			if (cell != nullptr) {
 				// TEXT ORIENTATION — a direction here, a text FLOW there. Bottom-to-top is the one
 				// a sheet means by «vertical», the same rotation the workbook writes as 90°.
-				if (cell->m_textOrient == wxVERTICAL)
+				if (cell->m_textOrient == ibOrient_Vertical)
 					properties += ibT("<w:textDirection w:val=\"btLr\"/>");
 
 				switch (cell->m_alignVert) {
@@ -485,10 +486,7 @@ bool ibSheetFormatDocx::Write(wxOutputStream& output, const ibSpreadsheetDescrip
 	body += ibT("<w:p/>");
 	body += ibT("</w:body></w:document>");
 
-	wxZipOutputStream zip(output);
-	if (!zip.IsOk())
-		return false;
-
+	ibZipWriter zip(output);
 	AddPart(zip, ibT("[Content_Types].xml"),          ContentTypes());
 	AddPart(zip, ibT("_rels/.rels"),                  RootRels());
 	AddPart(zip, ibT("word/_rels/document.xml.rels"), DocumentRels());

@@ -174,7 +174,7 @@ long ibByteCode::FindMethod(const ibString& strMethodName) const
 		[&](const auto& fn) { return strMethodName.IsSameAs(fn.m_strRealName, false); });
 	if (iterator != m_listFunc.end())
 		return (long)*iterator;
-	return wxNOT_FOUND;
+	return ibNOT_FOUND;
 }
 
 long ibByteCode::FindExportMethod(const ibString& strMethodName) const
@@ -186,7 +186,7 @@ long ibByteCode::FindExportMethod(const ibString& strMethodName) const
 		});
 	if (iterator != m_listFunc.end())
 		return (long)*iterator;
-	return wxNOT_FOUND;
+	return ibNOT_FOUND;
 }
 
 long ibByteCode::FindFunction(const ibString& funcName) const
@@ -195,7 +195,7 @@ long ibByteCode::FindFunction(const ibString& funcName) const
 		[&](const auto& fn) { return fn.m_bCodeRet && funcName.IsSameAs(fn.m_strRealName, false); });
 	if (iterator != m_listFunc.end())
 		return (long)*iterator;
-	return wxNOT_FOUND;
+	return ibNOT_FOUND;
 }
 
 long ibByteCode::FindExportFunction(const ibString& funcName) const
@@ -207,7 +207,7 @@ long ibByteCode::FindExportFunction(const ibString& funcName) const
 		});
 	if (iterator != m_listFunc.end())
 		return (long)*iterator;
-	return wxNOT_FOUND;
+	return ibNOT_FOUND;
 }
 
 long ibByteCode::FindProcedure(const ibString& procName) const
@@ -216,7 +216,7 @@ long ibByteCode::FindProcedure(const ibString& procName) const
 		[&](const auto& fn) { return !fn.m_bCodeRet && procName.IsSameAs(fn.m_strRealName, false); });
 	if (iterator != m_listFunc.end())
 		return (long)*iterator;
-	return wxNOT_FOUND;
+	return ibNOT_FOUND;
 }
 
 long ibByteCode::FindExportProcedure(const ibString& procName) const
@@ -228,7 +228,7 @@ long ibByteCode::FindExportProcedure(const ibString& procName) const
 		});
 	if (iterator != m_listFunc.end())
 		return (long)*iterator;
-	return wxNOT_FOUND;
+	return ibNOT_FOUND;
 }
 
 bool ibByteCode::GetParamDefValue(const long lCodeLine, const long lParamNum, ibValue& pvarParamDefValue) const

@@ -114,7 +114,7 @@ class ibDialogPredefinedEditor : public ibDialog {
 		// The items an item may sit under — the item dialog's "Parent" list: the folders, where the kind keeps folders
 		// apart, every item otherwise; `excludeGuid` — the item edited, which cannot sit under itself.
 		std::vector<wxObjectDataPtr<ibPredefinedItem>>
-			GetParentCandidates(const ibGuid& excludeGuid = wxNullGuid) const {
+			GetParentCandidates(const ibGuid& excludeGuid = ibNullGuid) const {
 			std::vector<wxObjectDataPtr<ibPredefinedItem>> out;
 			for (const auto& object : m_valueMetaObjectHierarchy->GetPredefinedValueArray()) {
 				if (GetPredefinedDesc().m_folders && !object->IsPredefinedFolder())
@@ -147,7 +147,7 @@ class ibDialogPredefinedEditor : public ibDialog {
 
 		// `itemGuid` — the item it writes (none: a new one); `source` — the item it starts from (none: an empty one): the
 		// item itself to edit it, another to copy that.
-		ibDialogPredefinedItem(ibDialogPredefinedEditor* owner, const ibGuid& itemGuid = wxNullGuid,
+		ibDialogPredefinedItem(ibDialogPredefinedEditor* owner, const ibGuid& itemGuid = ibNullGuid,
 			const ibPredefinedItem* source = nullptr);
 
 		void SetReadOnly(bool r = true);
@@ -224,7 +224,7 @@ public:
 			wxDefaultPosition, wxSize(500, 300), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
 		m_tableModelStore(nullptr)
 	{
-		// wxRefCounter starts at 1, so `new` IS our reference — there is nothing to add. An IncRef
+		// ibRefCounter starts at 1, so `new` IS our reference — there is nothing to add. An IncRef
 		// on top of it is a second reference nobody holds and nobody drops: AssociateModel takes
 		// its own (released by ~wxDataViewCtrl), our dtor releases this one, and the count stopped
 		// at 1. The model and its rows then outlived the dialog.
@@ -261,7 +261,7 @@ public:
 
 	// Parent picker helper — forwards to the tree store.
 	std::vector<wxObjectDataPtr<ibPredefinedItem>>
-		GetParentCandidates(const ibGuid& excludeGuid = wxNullGuid) const {
+		GetParentCandidates(const ibGuid& excludeGuid = ibNullGuid) const {
 		return m_tableModelStore->GetParentCandidates(excludeGuid);
 	}
 

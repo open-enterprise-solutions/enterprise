@@ -8,10 +8,6 @@
 #include <string>
 #include <thread>
 
-#ifdef __WXMSW__
-#include <windows.h>   // SetConsoleCtrlHandler — the console window closing
-#endif
-
 #include "backend/appHost.h"
 #include "backend/appData.h"
 #include "backend/backend_exception.h"
@@ -20,6 +16,11 @@
 #include "core/diagnostics/crashGuard.h"   // the stop, one fact: who asks, the serving loop that reads it
 
 #include "frmserver/client/clientHost.h"
+
+// After the engine's headers: windows.h's GetClassName macro would otherwise rename ibValue's method in them.
+#ifdef __WXMSW__
+#include <windows.h>   // SetConsoleCtrlHandler — the console window closing
+#endif
 
 namespace {
 

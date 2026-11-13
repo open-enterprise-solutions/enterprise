@@ -33,26 +33,26 @@ class FRMSERVER_API ibValueSizerItem : public ibValueFrame {
 	}
 
 	void SetFlagBorder(long flag_border) const {
-		m_propertyFlagBorderLeft->SetValue((flag_border & (wxLEFT)) != 0);
-		m_propertyFlagBorderRight->SetValue((flag_border & (wxRIGHT)) != 0);
-		m_propertyFlagBorderTop->SetValue((flag_border & (wxUP)) != 0);
-		m_propertyFlagBorderBottom->SetValue((flag_border & (wxDOWN)) != 0);
+		m_propertyFlagBorderLeft->SetValue((flag_border & ibDirection_Left) != 0);
+		m_propertyFlagBorderRight->SetValue((flag_border & ibDirection_Right) != 0);
+		m_propertyFlagBorderTop->SetValue((flag_border & ibDirection_Up) != 0);
+		m_propertyFlagBorderBottom->SetValue((flag_border & ibDirection_Down) != 0);
 	}
 
 	long GetFlagBorder() const {
 		long flag = 0;
-		if (m_propertyFlagBorderLeft->GetValueAsBoolean()) flag |= wxLEFT;
-		if (m_propertyFlagBorderRight->GetValueAsBoolean()) flag |= wxRIGHT;
-		if (m_propertyFlagBorderTop->GetValueAsBoolean()) flag |= wxUP;
-		if (m_propertyFlagBorderBottom->GetValueAsBoolean()) flag |= wxDOWN;
+		if (m_propertyFlagBorderLeft->GetValueAsBoolean()) flag |= ibDirection_Left;
+		if (m_propertyFlagBorderRight->GetValueAsBoolean()) flag |= ibDirection_Right;
+		if (m_propertyFlagBorderTop->GetValueAsBoolean()) flag |= ibDirection_Up;
+		if (m_propertyFlagBorderBottom->GetValueAsBoolean()) flag |= ibDirection_Down;
 		return flag;
 	}
 
-	void SetFlagState(const wxStretch& s) const {
+	void SetFlagState(const ibStretch& s) const {
 		m_propertyFlagState->SetValue(s);
 	}
 
-	wxStretch GetFlagState() const {
+	ibStretch GetFlagState() const {
 		return m_propertyFlagState->GetValueAsEnum();
 	}
 
@@ -115,7 +115,7 @@ private:
 		_("Whether the margin (Size) is kept below the control."), true);
 	ibPropertyEnum<ibValueEnumStretch>* m_propertyFlagState = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumStretch>>(m_categorySizerItem, ibT("Stretch"), _("Stretch"),
 		_("The control's size across its sizer's direction. Shrink (the default): its natural size. Expand: the full width of a vertical sizer, or the full height of a horizontal one."),
-		wxStretch::wxSHRINK);
+		ibStretch_Shrink);
 };
 
 //////////////////////////////////////////////////////////////////////////////
@@ -136,7 +136,7 @@ class ibValueBoxSizer : public ibValueSizer {
 private:
 	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categorySizer, ibT("Orient"), _("Orient"),
 		_("How the sizer lays out its controls: vertically (the default, one under another) or horizontally (side by side)."),
-		wxVERTICAL);
+		ibOrientation_Vertical);
 };
 
 class ibValueWrapSizer : public ibValueSizer {
@@ -155,7 +155,7 @@ class ibValueWrapSizer : public ibValueSizer {
 private:
 	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categorySizer, ibT("Orient"), _("Orient"),
 		_("The direction controls are laid out in. When a row (or column) has no room for the next control, it wraps to a new one. Horizontal by default."),
-		wxHORIZONTAL);
+		ibOrientation_Horizontal);
 };
 
 class ibValueStaticBoxSizer : public ibValueSizer {
@@ -181,7 +181,7 @@ class ibValueStaticBoxSizer : public ibValueSizer {
 private:
 	ibPropertyEnum<ibValueEnumOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrient>>(m_categorySizer, ibT("Orient"), _("Orient"),
 		_("How the framed group lays out its controls: horizontally (the default, side by side) or vertically (one under another)."),
-		wxHORIZONTAL);
+		ibOrientation_Horizontal);
 	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categorySizer, ibT("Title"), _("Title"),
 		_("The caption drawn on the group's frame. Empty: a frame with no caption. Can be written per language."), ibT(""));
 	ibPropertyFont* m_propertyFont = ibPropertyObject::CreateProperty<ibPropertyFont>(m_categorySizer, ibT("Font"), _("Font"), _("The font of the frame's caption. Unset: the form's font."));

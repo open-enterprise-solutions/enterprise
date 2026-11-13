@@ -193,7 +193,7 @@ void ibRunContext::Capture(const std::vector<ibParamRunUnit>& captured)
 //*************************************************************************************************
 
 ibRunCaptureContext::ibRunCaptureContext(ibRunContext& outer, const std::vector<ibParamRunUnit>& captured, const long long depth)
-	: ibRunContext(wxNOT_FOUND, ibRunLifetime::Captured)
+	: ibRunContext(ibNOT_FOUND, ibRunLifetime::Captured)
 {
 	// The names come along for whoever reads them — the debugger's closure view, the query fold.
 	m_procUnit = outer.m_procUnit;
@@ -230,7 +230,7 @@ void ibRunCaptureContext::DecrRef()
 	if (m_destroying)
 		return;
 
-	wxASSERT_MSG(m_refCount.load(std::memory_order_relaxed) > 0, "invalid frame reference count");
+	ibASSERT_MSG(m_refCount.load(std::memory_order_relaxed) > 0, "invalid frame reference count");
 	if (m_refCount.fetch_sub(1, std::memory_order_acq_rel) == 1)
 		delete this;
 }

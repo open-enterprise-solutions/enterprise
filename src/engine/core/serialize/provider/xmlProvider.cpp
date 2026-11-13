@@ -1,6 +1,6 @@
 #include "core/serialize/provider/xmlProvider.h"
 #include "core/core.h"                       // kValueFieldClsid / kValueFieldData, the primitives' class ids
-#include "core/xml/xmlText.h"                // ibXmlWriter / ibXmlCodePage — the engine's XML, written
+#include "core/xml/xmlText.h"                // ibXmlWriter / ibCodePage — the engine's XML, written
 #include "core/xml/xmlDocument.h"            // ibXmlDocument — …and read, whole
 #include "core/utils/base64.h"               // ibBase64 — a binary's text and a string XML cannot hold
 #include "core/exception.h"                  // ibCoreException — the refusals
@@ -715,7 +715,7 @@ private:
 
 bool ibXmlProvider::Write(const ibDataNode& root, ibString& text) const
 {
-	ibXmlWriter writer(kWho, ibXmlCodePage::Find(ibT("UTF-8")));
+	ibXmlWriter writer(kWho, ibCodePage::Find(ibT("UTF-8")));
 	writer.WriteXmlDeclaration(ibT("UTF-8"));
 	ibXmlTreeWriting(writer, m_resolveType, m_lookupType).WriteNode(root, 1);
 	writer.Finish();
@@ -728,9 +728,9 @@ bool ibXmlProvider::Write(const ibDataNode& root, ibWriterMemory& writer) const
 {
 	ibString text;
 	Write(root, text);
-	std::string bytes;
-	ibXmlCodePage::Find(ibT("UTF-8")).Encode(text, kWho, bytes);
-	writer.w(bytes.data(), static_cast<std::uint32_t>(bytes.size()));
+	ibMemoryBuffer bytes;
+	ibCodePage::Of(ibCodePage::kUtf8).Encode(text, kWho, bytes);
+	writer.w(bytes.GetData(), static_cast<std::uint32_t>(bytes.GetDataLen()));
 	return true;
 }
 

@@ -55,6 +55,7 @@ set(DESIGNER_THIN_SOURCES
     mainFrame/stack/stackWindow.cpp
     mainFrame/vcs/gitPanel.cpp
     mainFrame/watch/watchWindow.cpp
+    mainFrame/welcome/welcomeWindowDesigner.cpp
     syntaxHelper/helpChooserDialog.cpp
     syntaxHelper/helpDetailView.cpp
     syntaxHelper/helpDragSource.cpp

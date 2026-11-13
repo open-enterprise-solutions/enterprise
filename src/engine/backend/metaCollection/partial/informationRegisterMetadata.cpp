@@ -41,10 +41,10 @@ ibTotalsPeriod ibValueMetaObjectInformationRegister::GetPeriodicityUnit() const
 
 ibValueMetaObjectFormBase* ibValueMetaObjectInformationRegister::GetDefaultFormByID(const ibFormID& id) const
 {
-	if (id == eFormRecord && m_propertyDefFormRecord->GetValueAsInteger() != wxNOT_FOUND) {
+	if (id == eFormRecord && m_propertyDefFormRecord->GetValueAsInteger() != ibNOT_FOUND) {
 		return FindFormObjectByFilter(m_propertyDefFormRecord->GetValueAsInteger());
 	}
-	else if (id == eFormList && m_propertyDefFormList->GetValueAsInteger() != wxNOT_FOUND) {
+	else if (id == eFormList && m_propertyDefFormList->GetValueAsInteger() != ibNOT_FOUND) {
 		return FindFormObjectByFilter(m_propertyDefFormList->GetValueAsInteger());
 	}
 
@@ -296,12 +296,12 @@ bool ibValueMetaObjectInformationRegister::OnAfterCloseMetaObject()
 void ibValueMetaObjectInformationRegister::OnCreateFormObject(ibValueMetaObjectFormBase* metaForm)
 {
 	if (metaForm->GetTypeForm() == ibValueMetaObjectInformationRegister::eFormRecord
-		&& m_propertyDefFormRecord->GetValueAsInteger() == wxNOT_FOUND)
+		&& m_propertyDefFormRecord->GetValueAsInteger() == ibNOT_FOUND)
 	{
 		m_propertyDefFormRecord->SetValue(metaForm->GetMetaID());
 	}
 	else if (metaForm->GetTypeForm() == ibValueMetaObjectInformationRegister::eFormList
-		&& m_propertyDefFormList->GetValueAsInteger() == wxNOT_FOUND)
+		&& m_propertyDefFormList->GetValueAsInteger() == ibNOT_FOUND)
 	{
 		m_propertyDefFormList->SetValue(metaForm->GetMetaID());
 	}
@@ -312,12 +312,12 @@ void ibValueMetaObjectInformationRegister::OnRemoveMetaForm(ibValueMetaObjectFor
 	if (metaForm->GetTypeForm() == ibValueMetaObjectInformationRegister::eFormRecord
 		&& m_propertyDefFormRecord->GetValueAsInteger() == metaForm->GetMetaID())
 	{
-		m_propertyDefFormRecord->SetValue(wxNOT_FOUND);
+		m_propertyDefFormRecord->SetValue(ibNOT_FOUND);
 	}
 	else if (metaForm->GetTypeForm() == ibValueMetaObjectInformationRegister::eFormList
 		&& m_propertyDefFormList->GetValueAsInteger() == metaForm->GetMetaID())
 	{
-		m_propertyDefFormList->SetValue(wxNOT_FOUND);
+		m_propertyDefFormList->SetValue(ibNOT_FOUND);
 	}
 }
 

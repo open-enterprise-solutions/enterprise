@@ -20,8 +20,6 @@
 #include <string>
 #include <utility>     // std::move, std::pair
 
-#include <wx/strconv.h>   // wxMBConvUTF8 - the script's text to UTF-8, as wxString::utf8_str() does
-
 namespace {
 
 // How deep a value may nest before it is refused. The parser walks any depth without a stack of its own; what
@@ -163,8 +161,8 @@ void ibValueJsonReader_BindNames(ibValue::ibMemberTable& helper, const ibValue* 
 	helper.AppendConstructor(0, ibT("JSONReader()"));
 	helper.AppendConstructor(1, ibT("JSONReader(text : string)"));
 
-	helper.AppendProp(ibT("CurrentValueType"), true, false, wxNOT_FOUND);
-	helper.AppendProp(ibT("CurrentValue"), true, false, wxNOT_FOUND);
+	helper.AppendProp(ibT("CurrentValueType"), true, false, ibNOT_FOUND);
+	helper.AppendProp(ibT("CurrentValue"), true, false, ibNOT_FOUND);
 
 	helper.AppendFunc(ibT("SetString"), 1, ibT("SetString(text : string)"));
 	helper.AppendFunc(ibT("Read"), ibT("Read()"));
@@ -190,13 +188,11 @@ void ibValueJsonReader::SetText(const ibString& text)
 	Close();
 
 	// The script's string turned into UTF-8 once, from where it lies - through a wxString it was copied whole
-	// before it was even encoded, which on a message of tens of megabytes is tens of megabytes more. The
-	// converter is the one wxString::utf8_str() uses, so a text reads as it did; it is also faster in a Debug
-	// build than ibString::ToUtf8, which appends a character at a time. A text it cannot convert is an empty
-	// buffer, as before - and an empty text is not JSON.
-	size_t length = 0;
-	const wxCharBuffer converted = wxMBConvUTF8().cWC2MB(text.wc_str(), wxNO_LEN, &length);
-	const char* const utf8 = converted.data() != nullptr ? converted.data() : "";
+	// before it was even encoded, which on a message of tens of megabytes is tens of megabytes more. ToUtf8
+	// counts the bytes first and writes them into one block. An empty text is not JSON.
+	const std::string converted = text.ToUtf8();
+	const char* const utf8 = converted.data();
+	const size_t length = converted.size();
 
 	std::vector<ibToken> tokens;
 	ibJsonTokenSink sink(tokens);

@@ -7,7 +7,7 @@
 
 #include "frmserver/frmserver.h"
 
-#include <wx/string.h>
+#include "core/fstring.h"   // ibString
 
 class ibDataNode;
 class ibMetaData;

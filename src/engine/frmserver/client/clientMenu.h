@@ -11,7 +11,7 @@
 
 #include <vector>
 
-#include <wx/string.h>
+#include "core/fstring.h"   // ibString
 
 #include "core/core.h"   // ibPictureID
 #include "frmserver/docView/docCommand.h"

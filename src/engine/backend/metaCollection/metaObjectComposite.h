@@ -21,7 +21,7 @@ public:
 	{
 		ibValueMetaObject* parent =
 			static_cast<ibValueMetaObject*>(m_owner);
-		wxASSERT(parent);
+		ibASSERT(parent);
 		m_metaObject = parent->CreateMetaObjectAndSetParent<T>(args...);
 		m_propHelp = m_metaObject->GetComment();   // a third argument is the attribute's comment, and the property's help
 	}
@@ -143,14 +143,14 @@ class BACKEND_API ibValueMetaObjectCompositeData
 		ibValueMetaObject* metaObject = FindAnyObjectByFilter(guid);
 		if (metaObject != nullptr)
 			return metaObject->GetMetaID();
-		return wxNOT_FOUND;
+		return ibNOT_FOUND;
 	}
 
 	ibGuid GetGuidByID(const ibMetaID& id) const {
 		ibValueMetaObject* metaObject = FindAnyObjectByFilter(id);
 		if (metaObject != nullptr)
 			return metaObject->GetGuid();
-		return wxNullGuid;
+		return ibNullGuid;
 	}
 
 	//runtime support:

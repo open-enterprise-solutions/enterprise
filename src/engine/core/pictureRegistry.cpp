@@ -58,6 +58,6 @@ bool RegisterPicture(const ibString name, const ibPictureID& id, const ibString&
 	if (ibBase64::Read(base64, png) && ibPictureRegistry::RegisterPicture(name, id, ibPicture(png)))
 		return true;
 
-	wxASSERT_MSG(false, "Picture is register");
+	ibASSERT_MSG(false, "Picture is register");
 	return false;
 }
