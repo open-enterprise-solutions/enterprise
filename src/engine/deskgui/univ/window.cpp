@@ -533,6 +533,14 @@ void ibWindow::EraseBackground(wxDC& dc, const wxRect& rect)
 
 void ibWindow::Refresh(bool eraseBackground, const wxRect *rect)
 {
+    // SEAM vs univ: a window not made yet has nothing on the screen, and the geometry below asks the native one -
+    // wxOSX's SetFont refreshes a window the font is inherited into before it is made (ibPropertyGridManager hands its
+    // font to its grid while the manager itself is being made), and the designer fell in DoGetSize with no peer (CI's
+    // look step, 2026-11-13). The ports' Refresh says the same (wxOSX: no peer, no refresh); on MSW and GTK3 no SetFont
+    // refreshes, and the test is a pointer's
+    if ( !GetHandle() )
+        return;
+
     wxRect rectClient; // the same rectangle in client coordinates
     wxPoint origin = GetClientAreaOrigin();
 
