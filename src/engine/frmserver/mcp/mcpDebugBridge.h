@@ -3,11 +3,12 @@
 
 #include "frmserver/frmserver.h"
 #include "backend/debugger/debugClientBridge.h"
-#include "backend/debugger/debugDefs.h"
+#include "core/debugger/debugDefs.h"
 #include "core/serialize/dataBuilder.h"   // a composition travels as a node, both ways
 #include "backend/job/jobRunByteCode.h"      // …and a job request/state travels as itself
 
 #include <condition_variable>
+#include <memory>
 #include <mutex>
 #include <vector>
 
@@ -139,6 +140,16 @@ public:
 	bool Compose(const ibDataNode& request, ibDataNode& result, bool& answered, ibString& refusal,
 		int timeoutMs = 120000);
 
+	// ⭐ THE PERSON'S MEASUREMENT of every session over there (ibRuntimeProfiler) — the one the designer's Debug menu
+	// starts, so either side may begin it and either may end it. Starting answers false only when no runtime is
+	// attached. Stopping waits for what it measured — `measured` false when none was running. A false RETURN is nothing
+	// arrived in time.
+	bool StartProfile();
+	bool StopProfile(ibProfileData& profile, bool& measured, int timeoutMs = 15000);
+	// …and the measurement last heard, read again in detail (profile_read): the last stop's, whoever made it, or a
+	// measured run's (code_run {profile}) last asked after — none: nothing heard yet.
+	std::shared_ptr<const ibProfileData> GetProfile() const;
+
 	// ⭐⭐ ASK THE RUNNING APPLICATION FOR A PICTURE OF ITS WINDOW, and wait for the answer. `reason`
 	// is shown to the PERSON at that window, who decides — this is the one verb here whose outcome
 	// belongs to somebody else, and `allowed` comes back false when they say no.
@@ -170,6 +181,7 @@ public:
 	void OnSandboxResult(bool ran, const ibString& answer, const ibString& json, long long microseconds) override;
 	void OnJobState(unsigned int which, const struct ibJobRunByteCodeState& state) override;
 	void OnComposed(bool answered, const ibString& refusal, const ibMemoryBuffer& result) override;
+	void OnProfile(bool measured, const ibProfileData& profile) override;
 
 private:
 
@@ -205,7 +217,7 @@ private:
 	// meaningfully answer anyway. Two kinds because the runtime answers them
 	// through two different events, and mixing them would let a tooltip satisfy
 	// a request for structure.
-	enum class Pending { None, Value, Members, Sandbox, Picture, Fill, Composition };
+	enum class Pending { None, Value, Members, Sandbox, Picture, Fill, Composition, Profile };
 
 	std::condition_variable m_answered;
 	Pending                 m_pending = Pending::None;
@@ -228,6 +240,10 @@ private:
 	ibMemoryBuffer          m_composed;
 	bool                    m_composeAnswered = false;
 	ibString                m_composeRefusal;
+
+	// The measurement last heard (GetProfile), and whether the stop asked for was of one running.
+	std::shared_ptr<const ibProfileData> m_profile;
+	bool                    m_profiled = false;
 
 	// The picture asked for, and whether its owner allowed it at all — empty bytes with allowed
 	// true would be a broken transfer, which is a different answer from "they said no".

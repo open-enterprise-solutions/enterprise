@@ -4,6 +4,7 @@
 #include "backend/session/sessionException.h"   // NoConnection is the SESSION refusing, not the query tier   // ibBackendQueryException — L3-L5 varieties (not the DB tier)
 
 #include "backend/databaseLayer/databaseLayerException.h"   // the driver's own refusal — re-raised carrying the statement
+#include "backend/databaseLayer/databaseProfiler.h"         // a statement run here is told to a database measurement
 #include "backend/databaseLayer/preparedStatement.h"
 #include "backend/databaseLayer/databaseResultSet.h"
 #include "backend/databaseLayer/resultSetMetaData.h"
@@ -78,6 +79,50 @@ static ibQueryParam ibParamOfConst(const ibQueryExpr& expr)
 	return text + ibT("]");
 }
 
+// A value as SQL writes it, the way ibBindParam binds it — a date to the second, a text quoted, an empty as NULL.
+static ibString ibSqlOfValue(const ibValue& v)
+{
+	switch (v.GetType()) {
+	case TYPE_BOOLEAN: return v.GetBoolean() ? ibT("TRUE") : ibT("FALSE");
+	case TYPE_NUMBER:  return v.GetNumber().ToString();
+	case TYPE_DATE:    return ibT("'") + v.GetDate().Format(ibT("%Y-%m-%d %H:%M:%S")) + ibT("'");
+	case TYPE_STRING: {
+		ibString text = v.GetString();
+		text.Replace(ibT("'"), ibT("''"));
+		return ibT("'") + text + ibT("'");
+	}
+	default:           return ibT("NULL");
+	}
+}
+
+// What a plan binds, in placeholder order, each as SQL writes it (a blob as x'…') — asked by a database measurement of
+// a run slower than every one before it (ibDatabaseProfiler::ibValues), while the run is still in hand: the plan and the
+// caller's values are read where they lie.
+static ibDatabaseProfiler::ibValues ibValuesOfPlan(const std::vector<ibQueryParam>& plan,
+                                                   const std::vector<ibValue>& external)
+{
+	return [&plan, &external]() {
+		std::vector<ibString> values;
+		values.reserve(plan.size());
+		for (const ibQueryParam& p : plan) {
+			if (p.m_external) {
+				const bool inRange = p.m_externalIndex >= 0 && p.m_externalIndex < static_cast<int>(external.size());
+				values.push_back(inRange ? ibSqlOfValue(external[p.m_externalIndex]) : ibString(ibT("NULL")));
+			}
+			else if (p.m_isBlob) {
+				ibString text = ibT("x'");
+				const unsigned char* bytes = static_cast<const unsigned char*>(p.m_blob.GetData());
+				for (size_t b = 0; b < p.m_blob.GetDataLen(); ++b)
+					text << ibString::Format(ibT("%02X"), bytes[b]);
+				values.push_back(text + ibT("'"));
+			}
+			else
+				values.push_back(ibSqlOfValue(p.m_value));
+		}
+		return values;
+	};
+}
+
 // Bind a whole render plan in placeholder order (1-based). Inline Const values
 // bind directly; Param entries pull from the caller-supplied vector.
 static void ibBindPlan(ibPreparedStatement* stmt,
@@ -121,6 +166,42 @@ static const std::atomic<ibRunState>* ibCancelOfReader(const ibConnectionScope& 
 		? session->RunState() : nullptr;
 }
 
+// A STATEMENT PREPARED AND RUN HERE IS TOLD TO A DATABASE MEASUREMENT (databaseProfiler.h) while one runs, timed from its
+// preparing: preparing is the database's work as much as the run.
+namespace {
+struct ibStatementClock {
+	const bool                                    m_measured = ibDatabaseProfiler::IsRunning();
+	const ibDatabaseProfiler::ibClock::time_point m_begun =
+		m_measured ? ibDatabaseProfiler::ibClock::now() : ibDatabaseProfiler::ibClock::time_point();
+
+	ibDatabaseProfiler::ibClock::duration Spent() const { return ibDatabaseProfiler::ibClock::now() - m_begun; }
+};
+} // namespace
+
+// …a read: answered with the number its rows are told by — none while nothing measures, or when no rows came back.
+static std::uint64_t ibMeasuredRead(const ibStatementClock& clock, const ibDatabaseLayer* conn, const ibString& sql,
+                                    ibPreparedStatement* stmt, const ibDatabaseResultSet* rs,
+                                    const ibDatabaseProfiler::ibValues& values)
+{
+	if (!clock.m_measured)
+		return 0;
+	const ibDatabaseProfiler::ibPlan plan = [stmt] { return stmt->GetPlan(); };
+	if (rs == nullptr) {
+		ibDatabaseProfiler::Sql(conn, sql, clock.Spent(), 0, plan, values);
+		return 0;
+	}
+	return ibDatabaseProfiler::SqlWithResults(conn, sql, clock.Spent(), plan, values);
+}
+
+// …a write: the rows it changed.
+static void ibMeasuredWrite(const ibStatementClock& clock, const ibDatabaseLayer* conn, const ibString& sql,
+                            ibPreparedStatement* stmt, int changed, const ibDatabaseProfiler::ibValues& values)
+{
+	if (clock.m_measured)
+		ibDatabaseProfiler::Sql(conn, sql, clock.Spent(), changed > 0 ? static_cast<std::uint64_t>(changed) : 0,
+			[stmt] { return stmt->GetPlan(); }, values);
+}
+
 // Run a rendered SELECT and wrap the cursor. Shared by Execute() and ExecuteIR() — and by the runs of one
 // statement, which ride along in `runs`.
 static ibQueryResult ibRunRendered(const std::shared_ptr<ibDatabaseLayer>& conn,
@@ -135,6 +216,7 @@ static ibQueryResult ibRunRendered(const std::shared_ptr<ibDatabaseLayer>& conn,
 		// saw them — dates compared as garbage on one platform, a `%s` read a pointer that was never passed on
 		// another (2026-09-15, the calculation register's tests: marks on every month, a segfault in the fact).
 		// Every statement this file prepares goes as the one argument of "%s".
+		const ibStatementClock clock;
 		ibPreparedStatement* stmt = conn->PrepareStatement(ibT("%s"), rendered.m_sql);
 		if (stmt == nullptr)
 			ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
@@ -143,7 +225,8 @@ static ibQueryResult ibRunRendered(const std::shared_ptr<ibDatabaseLayer>& conn,
 		ibBindPlan(stmt, rendered.m_params, externalParams);
 
 		ibDatabaseResultSet* rs = stmt->RunQueryWithResults();
-		return ibQueryResult(conn, stmt, rs, std::move(runs), cancel);
+		return ibQueryResult(conn, stmt, rs, std::move(runs), cancel,
+			ibMeasuredRead(clock, conn.get(), rendered.m_sql, stmt, rs, ibValuesOfPlan(rendered.m_params, externalParams)));
 	}
 	// ⭐⭐ THE STATEMENT RIDES WITH THE REFUSAL. A database's complaint is about a text the engine
 	// wrote and the caller has never seen: "Column unknown FLD1043_D. At line 1, column 57" — a
@@ -461,6 +544,7 @@ static int ibRunInsertPerRow(const std::shared_ptr<ibDatabaseLayer>& conn, const
 	int total = 0;
 	for (size_t row = 0; row <= dml.m_extraRows.size(); ++row) {
 		const std::vector<ibQueryExprPtr>* values = row > 0 ? &dml.m_extraRows[row - 1] : nullptr;
+		const ibStatementClock clock;
 		const bool asPrepared = values != nullptr && !constShape.IsEmpty() && prepared == constShape
 			&& values->size() == firstValues.size() && ibConstPlanOf(*values, plan);
 		if (!asPrepared) {
@@ -482,6 +566,7 @@ static int ibRunInsertPerRow(const std::shared_ptr<ibDatabaseLayer>& conn, const
 		}
 		ibBindPlan(guard.get(), plan, externalParams);
 		const int n = guard->RunQuery();
+		ibMeasuredWrite(clock, conn.get(), prepared, guard.get(), n, ibValuesOfPlan(plan, externalParams));
 		if (n < 0)
 			return n;   // a refused row stops the batch — the caller's transaction decides the rest
 		total += n;
@@ -505,6 +590,7 @@ int ibDatabaseQueryBuilder::Execute(const ibDmlStatement& dml, const std::vector
 	ibQueryRenderer renderer(dialect);
 	const ibRenderedQuery rendered = renderer.RenderDML(dml);
 
+	const ibStatementClock clock;
 	ibPreparedStatement* stmt = conn->PrepareStatement(ibT("%s"), rendered.m_sql);   // data, not a format (ibRunRendered)
 	if (stmt == nullptr)
 		ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
@@ -512,7 +598,9 @@ int ibDatabaseQueryBuilder::Execute(const ibDmlStatement& dml, const std::vector
 
 	ibStatementGuard guard(conn, stmt);   // RAII close — no result set to wrap
 	ibBindPlan(stmt, rendered.m_params, externalParams);
-	return stmt->RunQuery();
+	const int changed = stmt->RunQuery();
+	ibMeasuredWrite(clock, conn.get(), rendered.m_sql, stmt, changed, ibValuesOfPlan(rendered.m_params, externalParams));
+	return changed;
 }
 
 ibQueryResult ibDatabaseQueryBuilder::ExecuteReturning(const ibDmlStatement& dml,
@@ -550,8 +638,9 @@ ibQueryResult::ibQueryResult(std::shared_ptr<ibDatabaseLayer> conn,
                              ibPreparedStatement* stmt,
                              ibDatabaseResultSet* rs,
                              std::unique_ptr<ibQueryRuns> runs,
-                             const std::atomic<ibRunState>* cancel)
-	: m_conn(std::move(conn)), m_stmt(stmt), m_rs(rs), m_runs(std::move(runs)), m_cancel(cancel)
+                             const std::atomic<ibRunState>* cancel,
+                             std::uint64_t statement)
+	: m_conn(std::move(conn)), m_stmt(stmt), m_rs(rs), m_runs(std::move(runs)), m_cancel(cancel), m_statement(statement)
 {
 }
 
@@ -571,6 +660,9 @@ ibQueryResult::ibQueryResult(ibQueryResult&& other) noexcept
 	, m_columnsByNameBuilt(other.m_columnsByNameBuilt)
 	, m_runs(std::move(other.m_runs))
 	, m_cancel(other.m_cancel)
+	, m_statement(other.m_statement)
+	, m_fetch(other.m_fetch)
+	, m_rows(other.m_rows)
 {
 	other.m_stmt = nullptr;
 	other.m_rs   = nullptr;
@@ -579,6 +671,7 @@ ibQueryResult::ibQueryResult(ibQueryResult&& other) noexcept
 	other.m_lastFields = 0;
 	other.m_columnsByName.clear();
 	other.m_columnsByNameBuilt = false;
+	other.m_statement = 0;
 }
 
 ibQueryResult& ibQueryResult::operator=(ibQueryResult&& other) noexcept
@@ -595,6 +688,9 @@ ibQueryResult& ibQueryResult::operator=(ibQueryResult&& other) noexcept
 		m_columnsByNameBuilt = other.m_columnsByNameBuilt;
 		m_runs               = std::move(other.m_runs);
 		m_cancel             = other.m_cancel;
+		m_statement          = other.m_statement;
+		m_fetch              = other.m_fetch;
+		m_rows               = other.m_rows;
 		other.m_stmt = nullptr;
 		other.m_rs   = nullptr;
 		other.m_meta = nullptr;
@@ -602,12 +698,15 @@ ibQueryResult& ibQueryResult::operator=(ibQueryResult&& other) noexcept
 		other.m_lastFields = 0;
 		other.m_columnsByName.clear();
 		other.m_columnsByNameBuilt = false;
+		other.m_statement = 0;
 	}
 	return *this;
 }
 
 void ibQueryResult::Release()
 {
+	Fetched();
+
 	// Order: result set first (it may reference the statement), then the
 	// statement. Both through the owning connection.
 	if (m_rs != nullptr && m_conn) {
@@ -627,6 +726,16 @@ void ibQueryResult::Release()
 	m_runs.reset();
 }
 
+void ibQueryResult::Fetched()
+{
+	if (m_statement == 0)
+		return;
+	ibDatabaseProfiler::Fetched(m_statement, m_fetch, m_rows);
+	m_statement = 0;
+	m_fetch     = {};
+	m_rows      = 0;
+}
+
 ibResultSetMetaData* ibQueryResult::Meta()
 {
 	if (m_meta == nullptr && m_rs != nullptr)
@@ -641,8 +750,20 @@ bool ibQueryResult::Next()
 	if (ibRunCancelled(m_cancel))
 		ibBackendInterruptException::Error();
 	while (m_rs != nullptr) {
-		if (m_rs->Next())
+		// A measured statement's rows are counted, and the time the driver took handing each over.
+		const ibDatabaseProfiler::ibClock::time_point begun =
+			m_statement != 0 ? ibDatabaseProfiler::ibClock::now() : ibDatabaseProfiler::ibClock::time_point();
+		const bool next = m_rs->Next();
+		if (m_statement != 0) {
+			m_fetch += ibDatabaseProfiler::ibClock::now() - begun;
+			if (next)
+				m_rows++;
+		}
+		if (next)
 			return true;
+		// Read to its end: told now, not when it is let go — a measurement may be taken while its holder still lives
+		// (a script's cursor, at the end of a code_run).
+		Fetched();
 		if (m_runs == nullptr || m_runs->m_next >= m_runs->m_rendered.size())
 			return false;
 		// …THE NEXT RUN OF THE SAME STATEMENT, the rows before it read to their end: its cursor closed, the
@@ -654,6 +775,7 @@ bool ibQueryResult::Next()
 		m_conn->CloseResultSet(m_rs);
 		m_rs   = nullptr;
 		m_meta = nullptr;   // owned by the result set just closed
+		const ibStatementClock clock;
 		if (!m_runs->m_again || run.m_sql != m_runs->m_prepared) {
 			m_conn->CloseStatement(m_stmt);
 			m_stmt = nullptr;
@@ -665,6 +787,7 @@ bool ibQueryResult::Next()
 		}
 		ibBindPlan(m_stmt, run.m_params, m_runs->m_external);
 		m_rs = m_stmt->RunQueryWithResults();
+		m_statement = ibMeasuredRead(clock, m_conn.get(), run.m_sql, m_stmt, m_rs, ibValuesOfPlan(run.m_params, m_runs->m_external));
 	}
 	return false;
 }
@@ -2015,6 +2138,7 @@ ibBatchInsert::ibBatchInsert(const ibString& table, std::vector<ibString> column
 		if (!*m_prepared)
 			ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
 				ibString::Format(_("Query layer failed to prepare statement: %s"), rendered.m_sql));
+		m_preparedSql = rendered.m_sql;
 		m_bound.assign(m_columns.size(), false);
 	}
 	else
@@ -2081,7 +2205,11 @@ int ibBatchInsert::RunQuery()
 			if (!m_bound[i])
 				(*m_prepared)->SetParamNull(static_cast<int>(i) + 1);
 		m_bound.assign(m_bound.size(), false);
-		return (*m_prepared)->RunQuery();
+		const ibStatementClock clock;
+		const int changed = (*m_prepared)->RunQuery();
+		// Its values were bound one by one, past any plan: the run is told without them.
+		ibMeasuredWrite(clock, clock.m_measured ? m_scope.shared().get() : nullptr, m_preparedSql, m_prepared->get(), changed, {});
+		return changed;
 	}
 
 	// The row as values, in column order; a field left unbound writes NULL, as the statement template does.

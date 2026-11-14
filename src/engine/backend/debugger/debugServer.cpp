@@ -26,6 +26,7 @@
 #include "backend/job/jobRunByteCode.h"       // sent code is a background job, and it lives with them
 #include "backend/compiler/byteCode.h"        // ...and what arrives for it to run is compiled code
 #include "backend/composition/composeRunSchema.h"  // …and a report is run here, where the data is
+#include "runtimeProfiler.h"                  // …and the person's measurement is held here
 #if _USE_NET_COMPRESSOR == 1
 #include "utils/fs/lz/lzhuf.h"
 #endif
@@ -36,6 +37,7 @@
 
 ///////////////////////////////////////////////////////////////////////
 ibDebuggerServer* ibDebuggerServer::ms_debugServer = nullptr;
+ibDebuggerServer::ibProfileMaker ibDebuggerServer::ms_profileMaker = nullptr;
 ///////////////////////////////////////////////////////////////////////
 
 namespace {
@@ -495,7 +497,8 @@ static bool IsSteppableOpcode(short oper)
 	}
 }
 
-void ibDebuggerServer::EnterDebugger(ibRunContext* runContext, const ibByteUnit& byteCode, long& numPrevLine)
+void ibDebuggerServer::EnterDebugger(const ibProcUnitState* state, ibRunContext* runContext, const ibByteUnit& byteCode,
+	long& numPrevLine)
 {
 	if (!m_bUseDebug)
 		return;
@@ -503,6 +506,9 @@ void ibDebuggerServer::EnterDebugger(ibRunContext* runContext, const ibByteUnit&
 	if (IsSteppableOpcode(byteCode.m_numOper)) {
 
 		if (byteCode.m_numLine != numPrevLine) {
+
+			if (ibRuntimeProfiler::IsRunning())
+				ibRuntimeProfiler::Line(state, runContext, byteCode);
 
 			// ⭐ A LOCAL, and it always was one. It lived on the server as an atomic member, and
 			// five command handlers wrote it — every one of those writes landed on a value this
@@ -2027,6 +2033,27 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 
 		SendCommand(commandChannel.pointer(), commandChannel.size());
 	}
+	// THE PERSON'S MEASUREMENT, of every session: one at a time — a second start finds it running and leaves it be.
+	else if (commandFromClient == CommandId_ProfileStart) {
+		if (ms_debugServer->m_profile == nullptr)
+			ms_debugServer->m_profile = ms_profileMaker != nullptr ? ms_profileMaker() : std::make_unique<ibRuntimeProfiler>();
+	}
+	else if (commandFromClient == CommandId_ProfileStop) {
+
+		const bool measured = ms_debugServer->m_profile != nullptr;
+		ibProfileData profile;
+		if (measured) {
+			profile = ms_debugServer->m_profile->GetProfile();
+			ms_debugServer->m_profile.reset();
+		}
+
+		ibWriterMemory commandChannel;
+		commandChannel.w_u16(CommandId_ProfileStop);
+		commandChannel.w_u8(measured ? 1 : 0);
+		profile.Write(commandChannel);
+
+		SendCommand(commandChannel.pointer(), commandChannel.size());
+	}
 	else if (commandFromClient == CommandId_Pause) {
 		ibString sid; commandReader.r_stringZ(sid);
 		// Soft pause: m_bDebugStopLine fires DoDebugLoop at the next
@@ -2055,6 +2082,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 	else if (commandFromClient == CommandId_Detach) {
 
 		ms_debugServer->m_bUseDebug = false;
+		ms_debugServer->m_profile.reset();   // nobody is left to take it
 		ms_debugServer->WakeAllDebugSessions();
 
 		ibDebuggerServerConnection::Disconnect();

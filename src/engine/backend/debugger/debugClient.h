@@ -125,6 +125,9 @@ class BACKEND_API ibDebuggerClient {
 		// are none. Left as bytes because only the asker knows what to do with them.
 		void OnComposed(bool answered, const ibString& refusal, const ibMemoryBuffer& result);
 
+		// What a measurement measured (runtimeProfiler.h); `measured` false — none was running.
+		void OnProfile(bool measured, const ibProfileData& profile);
+
 	private:
 		std::vector<std::unique_ptr<ibDebuggerClientBridge> > m_debugBridges;
 		// 🛑 THE LIST UNDER A LOCK — a listener is put in and taken out on its own thread (the assistant's, a thin
@@ -407,6 +410,11 @@ public:
 	// that exists nowhere. And, like the fill, it needs no breakpoint: what happens over there is a
 	// rented read on a connection of its own.
 	void RequestCompose(const ibMemoryBuffer& request);
+
+	// THE PERSON'S MEASUREMENT of every session over there (runtimeProfiler.h): begun, and ended — what it measured
+	// arrives as OnProfile, to every listener.
+	void StartProfile();
+	void StopProfile();
 
 	//support calc strExpression in debugloop
 	void EvaluateAutocomplete(const ibString& strFileName, const ibString& strModuleName, const ibString& strExpression, const ibString& keyWord, int currline);

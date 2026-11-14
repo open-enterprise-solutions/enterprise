@@ -203,6 +203,11 @@ void ibDebuggerClient::ibDebuggerClientAdapter::OnComposed(bool answered, const 
 	IB_DEBUG_FANOUT(OnComposed(answered, refusal, result));
 }
 
+void ibDebuggerClient::ibDebuggerClientAdapter::OnProfile(bool measured, const ibProfileData& profile)
+{
+	IB_DEBUG_FANOUT(OnProfile(measured, profile));
+}
+
 void ibDebuggerClient::ibDebuggerClientAdapter::OnSetLocalVariable(const ibLocalWindowData& data)
 {
 	IB_DEBUG_FANOUT(OnSetLocalVariable(data));

@@ -100,6 +100,9 @@
     <ClCompile Include="client\clientSession.cpp">
       <Filter>client</Filter>
     </ClCompile>
+    <ClCompile Include="client\protocolProfiler.cpp">
+      <Filter>client</Filter>
+    </ClCompile>
     <ClCompile Include="docView\commandProcessor.cpp">
       <Filter>docView</Filter>
     </ClCompile>
@@ -167,6 +170,9 @@
       <Filter>docView\templates\designer</Filter>
     </ClCompile>
     <ClCompile Include="docView\templates\designer\docViewInterfaceEdit.cpp">
+      <Filter>docView\templates\designer</Filter>
+    </ClCompile>
+    <ClCompile Include="docView\templates\designer\docViewProfile.cpp">
       <Filter>docView\templates\designer</Filter>
     </ClCompile>
     <ClCompile Include="docView\templates\designer\docViewRoleEdit.cpp">
@@ -715,6 +721,9 @@
     <ClInclude Include="client\clientSession.h">
       <Filter>client</Filter>
     </ClInclude>
+    <ClInclude Include="client\protocolProfiler.h">
+      <Filter>client</Filter>
+    </ClInclude>
     <ClInclude Include="docView\commandProcessor.h">
       <Filter>docView</Filter>
     </ClInclude>
@@ -776,6 +785,9 @@
       <Filter>docView\templates\designer</Filter>
     </ClInclude>
     <ClInclude Include="docView\templates\designer\docViewInterfaceEdit.h">
+      <Filter>docView\templates\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\designer\docViewProfile.h">
       <Filter>docView\templates\designer</Filter>
     </ClInclude>
     <ClInclude Include="docView\templates\designer\docViewRoleEdit.h">

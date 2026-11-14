@@ -19,6 +19,9 @@
 #include "core/stringUtils.h"            // IsSameAs - how this tree compares a NAME
 #include "core/memory/memoryStream.h"          // ibWriterMemory / ibReaderMemory - the wire format below
 #include "core/diagnostics/crashGuard.h"       // ibCrashGuard::CurrentPidPortable - the process doing the run
+#include "backend/debugger/runtimeProfiler.h"  // ...measured when asked
+
+#include <optional>
 
 namespace {
 
@@ -75,6 +78,8 @@ void Describe(const ibBackgroundRun& run, const ibString& session, ibJobRunByteC
 		state.m_error = run.Error();
 		if (state.m_error.IsEmpty())
 			state.m_result = run.Result().GetString();
+		if (const std::shared_ptr<const ibProfileData> profile = run.Profile())
+			state.m_profile = *profile;
 	}
 }
 
@@ -92,6 +97,7 @@ void ibJobRunRequest::Write(ibWriterMemory& to) const
 	to.w_stringZ(m_said);
 	to.w_stringZ(m_understood);
 	to.w_u8(m_commit ? 1 : 0);
+	to.w_u8(m_profile ? 1 : 0);
 }
 
 void ibJobRunRequest::Read(const ibReaderMemory& from)
@@ -99,7 +105,8 @@ void ibJobRunRequest::Read(const ibReaderMemory& from)
 	from.r_stringZ(m_text);
 	from.r_stringZ(m_said);
 	from.r_stringZ(m_understood);
-	m_commit = from.r_u8() != 0;
+	m_commit  = from.r_u8() != 0;
+	m_profile = from.r_u8() != 0;
 }
 
 void ibJobRunByteCodeState::Write(ibWriterMemory& to) const
@@ -119,6 +126,9 @@ void ibJobRunByteCodeState::Write(ibWriterMemory& to) const
 		to.w_stringZ(line.m_text);
 		to.w_u8((std::uint8_t)line.m_status);
 	}
+	to.w_u8(m_profile ? 1 : 0);
+	if (m_profile)
+		m_profile->Write(to);
 }
 
 void ibJobRunByteCodeState::Read(const ibReaderMemory& from)
@@ -138,6 +148,9 @@ void ibJobRunByteCodeState::Read(const ibReaderMemory& from)
 		from.r_stringZ(line.m_text);
 		line.m_status = from.r_u8();
 	}
+	m_profile.reset();
+	if (from.r_u8() != 0)
+		m_profile.emplace().Read(from);
 }
 
 bool ibJobRunByteCode::Start(const ibJobRunRequest& request, ibJobRunByteCodeState& state)
@@ -177,8 +190,9 @@ bool ibJobRunByteCode::Start(const ibJobRunRequest& request, ibJobRunByteCodeSta
 	// definition — Start answers as soon as the run is accepted, and the run is still going.
 	const ibString text = request.m_text;
 	const bool     commit = request.m_commit;
+	const bool     profile = request.m_profile;
 
-	auto body = [text, commit](ibSession* session) -> ibValue
+	auto body = [text, commit, profile](ibSession* session) -> ibValue
 	{
 		std::shared_ptr<ibDatabaseLayer> layer = session != nullptr ? session->EnsureConnection() : nullptr;
 		if (!layer)
@@ -255,7 +269,25 @@ bool ibJobRunByteCode::Start(const ibJobRunRequest& request, ibJobRunByteCodeSta
 			// ⚠ delta TRUE — the module BODY is what runs. A common module's top level is only
 			// declarations and is registered without running; this is the opposite kind of code, a
 			// body written to be executed once.
-			runner->Execute(compiler.m_cByteCode, answer, /*delta*/ true);
+			// ⭐ MEASURED WHEN ASKED (code_run {profile}): the run's own session, for as long as its code runs. What
+			// was measured is kept on the run as it ends, finished or failed — where it failed is part of the time.
+			std::optional<ibRuntimeProfiler> measured;
+			if (profile)
+				measured.emplace(ibSession::PUStateOf(session));
+			const auto keep = [&measured]() {
+				if (!measured)
+					return;
+				if (ibBackgroundRun* const run = ibBackgroundRun::Current())
+					run->Profile(std::make_shared<const ibProfileData>(measured->GetProfile()));
+			};
+			try {
+				runner->Execute(compiler.m_cByteCode, answer, /*delta*/ true);
+			}
+			catch (...) {
+				keep();
+				throw;
+			}
+			keep();
 
 			// ⭐⭐ AND WHAT IT CAME OUT WITH — the variable called `Result`, which is the word the
 			// sandbox already uses for exactly this ("the last value, or `Result`, comes back as the

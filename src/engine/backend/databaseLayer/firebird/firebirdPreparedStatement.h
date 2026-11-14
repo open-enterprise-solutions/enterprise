@@ -37,6 +37,9 @@ public:
 	virtual void SetParamBool(int nPosition, bool bValue);
 	virtual int GetParameterCount();
 
+	// The plan of its last statement — the one that hands the rows back — as Firebird writes it.
+	virtual ibString GetPlan();
+
 	virtual int RunQuery();
 	virtual ibDatabaseResultSet* RunQueryWithResults();
 

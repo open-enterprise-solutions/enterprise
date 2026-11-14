@@ -219,6 +219,7 @@
     <ClCompile Include="docManager\templates\docViewComposer.cpp" />
     <ClCompile Include="docManager\templates\docViewInterface.cpp" />
     <ClCompile Include="docManager\templates\docViewRole.cpp" />
+    <ClCompile Include="docManager\templates\docViewProfile.cpp" />
     <ClCompile Include="docManager\templates\docViewConfigCompare.cpp" />
     <ClCompile Include="docManager\templates\docViewMetaFile.cpp" />
     <ClCompile Include="mainFrame\configCompare\configCompareModel.cpp" />
@@ -256,7 +257,6 @@
     <ClInclude Include="mainApp.h" />
     <ClInclude Include="backend\debugger\debugClient.h" />
     <ClInclude Include="backend\debugger\debugClientBridge.h" />
-    <ClInclude Include="backend\debugger\debugDefs.h" />
     <ClInclude Include="backend\metaCollection\metaDiff.h" />
     <ClInclude Include="backend\vcs\gitService.h" />
     <ClInclude Include="mainFrame\debugger\debugClientImpl.h" />
@@ -281,6 +281,7 @@
     <ClInclude Include="docManager\templates\docViewComposer.h" />
     <ClInclude Include="docManager\templates\docViewInterface.h" />
     <ClInclude Include="docManager\templates\docViewRole.h" />
+    <ClInclude Include="docManager\templates\docViewProfile.h" />
     <ClInclude Include="docManager\templates\docViewConfigCompare.h" />
     <ClInclude Include="docManager\templates\docViewMetaFile.h" />
     <ClInclude Include="mainFrame\configCompare\configCompareModel.h" />

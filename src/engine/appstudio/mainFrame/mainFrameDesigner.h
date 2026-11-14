@@ -61,6 +61,9 @@ enum {
 	wxID_DESIGNER_CONFIGURATION_LOAD_FROM_FILES,
 	wxID_DESIGNER_CONFIGURATION_SAVE_TO_FILES,
 
+	// …and the measurement of the attached runtime, begun and ended by one checked item (ibDebuggerClient::StartProfile).
+	wxID_DESIGNER_DEBUG_PROFILE,
+
 	wxID_DESIGNER_END
 };
 

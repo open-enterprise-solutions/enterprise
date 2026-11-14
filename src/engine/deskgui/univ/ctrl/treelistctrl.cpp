@@ -90,7 +90,7 @@ static const int DRAG_TIMER_TICKS = 250; // minimum drag wait time in ms
 static const int FIND_TIMER_TICKS = 500; // minimum find wait time in ms
 static const int RENAME_TIMER_TICKS = 250; // minimum rename wait time in ms
 
-const wxChar* wxTreeListCtrlNameStr = _T("treelistctrl");
+const wxChar* ibTreeListCtrlNameStr = _T("treelistctrl");
 
 static ibTreeListColumnInfo wxInvalidTreeListColumnInfo;
 

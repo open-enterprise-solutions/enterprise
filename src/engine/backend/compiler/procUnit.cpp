@@ -8,6 +8,7 @@
 #include "core/fiber/fiber.h"          // StackLow — the depth count is not the only way the stack runs out
 
 #include "debugger/debugServer.h"
+#include "debugger/runtimeProfiler.h"   // a measurement is told each frame entered and left
 #include "system/systemManager.h"
 #include "system/value/valueQueryable.h"   // OPER_LINQ_NARROW offers the loop's predicate to a SOURCE
 
@@ -563,10 +564,15 @@ struct ibProcStackGuard {
 			m_raised = state->m_runState.compare_exchange_strong(idle, ibRunState::Running);
 		}
 		BeginByteCode(state, runContext);
+
+		if (ibRuntimeProfiler::IsRunning())
+			ibRuntimeProfiler::Enter(state, runContext);
 	}
 
 	~ibProcStackGuard() {
 		if (ibProcUnitState* const state = m_state) {
+			if (ibRuntimeProfiler::IsRunning())
+				ibRuntimeProfiler::Leave(state, m_currentContext);
 			state->m_recCount--;
 			state->SetCurrentRunModule(m_prevRunModule);
 
@@ -1273,7 +1279,7 @@ start_label:
 			// server exists whenever a configuration is loaded (metadataConfiguration.cpp), attached or
 			// not, so every instruction of every run made an out-of-line call only to hear "no" (2026-09-28).
 			if (ibDebuggerServer* const dbg = debugServer; dbg != nullptr && !evalMode && dbg->IsDebugging())
-				dbg->EnterDebugger(pContext, curCode, lPrevLine);
+				dbg->EnterDebugger(state, pContext, curCode, lPrevLine);
 
 			switch (curCode.m_numOper)
 			{

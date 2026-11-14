@@ -580,6 +580,20 @@ void ibDebuggerClient::RequestCompose(const ibMemoryBuffer& request)
 	SendCommand(commandChannel.pointer(), commandChannel.size());
 }
 
+void ibDebuggerClient::StartProfile()
+{
+	ibWriterMemory commandChannel;
+	commandChannel.w_u16(CommandId_ProfileStart);
+	SendCommand(commandChannel.pointer(), commandChannel.size());
+}
+
+void ibDebuggerClient::StopProfile()
+{
+	ibWriterMemory commandChannel;
+	commandChannel.w_u16(CommandId_ProfileStop);
+	SendCommand(commandChannel.pointer(), commandChannel.size());
+}
+
 void ibDebuggerClient::EvaluateAutocomplete(const ibString& strFileName, const ibString& strModuleName, const ibString& strExpression, const ibString& keyWord, int currline)
 {
 	if (ibDebuggerClient::IsEnterLoop()) {
@@ -1115,6 +1129,14 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 		ms_debugClient->CallAfter(
 			&ibDebuggerClient::ibDebuggerClientAdapter::OnComposed, answered, refusal, answer
 		);
+	}
+	else if (commandFromServer == CommandId_ProfileStop) {
+
+		const bool measured = commandReader.r_u8() != 0;
+		ibProfileData profile;
+		profile.Read(commandReader);
+
+		ms_debugClient->CallAfter(&ibDebuggerClient::ibDebuggerClientAdapter::OnProfile, measured, profile);
 	}
 	else if (commandFromServer == CommandId_EvalAutocomplete) {
 

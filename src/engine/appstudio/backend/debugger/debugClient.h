@@ -204,6 +204,13 @@ public:
 	void Pause();
 	void Stop(bool kill);
 
+	// THE MEASUREMENT of every session of the attached runtime (Debug → Performance measurement): begun, and ended — what
+	// it measured opens as a tab the server raises (Kind Profile), and the news says it ended. Whether this client began
+	// one it has not ended yet: what the menu shows — one the assistant began is ended from here too.
+	void StartProfile();
+	void StopProfile();
+	bool IsProfiling() const { return m_profiling; }
+
 	// The line is the editor's, as the margin has it. A CONDITION is an expression of the language, evaluated in the
 	// frame that reaches the line, and the run stops only when it is true; an empty one stops every time.
 	// `refusal`, when given, comes back carrying WHY it was refused — the engine states the reason
@@ -253,6 +260,8 @@ private:
 	// (EnterLoop, LeaveLoop).
 	bool	m_hasConnections = false;
 	bool	m_enterLoop = false;
+	// …and a measurement this client began, until it is ended (StopProfile, Profile) or its runtime goes.
+	bool	m_profiling = false;
 };
 
 #endif

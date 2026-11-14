@@ -64,6 +64,8 @@ namespace ibProtocol {
 			ExpandExpression = 15,   // {Expression, Item, Asker} → news Expanded
 			RemoveExpression = 16,   // {Item}
 			Stack            = 17,   // {Level}
+			ProfileStart     = 18,   // a measurement of every session begins (ibRuntimeProfiler)
+			ProfileStop      = 19,   // …and ends → news Profile, and the tab of what it measured (ibView::ibProfile)
 		};
 
 		// …and what it tells — the listener's own words (ibDebuggerClientBridge).
@@ -78,6 +80,7 @@ namespace ibProtocol {
 			Locals       = 8,    // Rows {Name, Value, Type, Attributes}
 			Variable     = 9,    // {Item, Asker}, Rows {Item, Name, Value, Type, Attributes}
 			Expanded     = 10,   // the same
+			Profile      = 11,   // a measurement ended — what it measured is the tab the server opened (ibView::ibProfile)
 		};
 
 	}
@@ -515,6 +518,48 @@ namespace ibProtocol {
 				inline constexpr const char* Columns  = "Columns";
 
 			}
+
+		}
+
+		// WHAT A MEASUREMENT MEASURED — the tab the server opens as it ends (ibDebug::ibCommand::ProfileStop, the assistant's
+		// profile_stop {show}), fetched whole (fetch {Tab}): {Duration}, Calls {Method, Count, Total, RequestBytes,
+		// AnswerBytes, Rows}, Rows — a line each {Module, Name, Procedure, Line, Count, Self, Total, Queries {Source, Count,
+		// Total, Database, Statements}, Statements {Text, Plan, Dbms, Count, RowCount, Run, Fetch}}, by Self descending; a
+		// row of no Module is the platform's own. The clients' calls by their Total descending, each with the lines it ran;
+		// Rows beside them — the lines of no call. Times are microseconds.
+		namespace ibProfile {
+
+			// How long it ran, and a client's call by its method, the bytes its requests came in and its answers went out in.
+			inline constexpr const char* Duration     = "Duration";
+			inline constexpr const char* Calls        = "Calls";
+			inline constexpr const char* Method       = "Method";
+			inline constexpr const char* RequestBytes = "RequestBytes";
+			inline constexpr const char* AnswerBytes  = "AnswerBytes";
+			// …and of a line the procedure it is in, how often it began, its time without the calls it made and with them.
+			inline constexpr const char* Rows         = "Rows";
+			inline constexpr const char* Module       = "Module";
+			inline constexpr const char* Name         = "Name";
+			inline constexpr const char* Procedure    = "Procedure";
+			inline constexpr const char* Line         = "Line";
+			inline constexpr const char* Count        = "Count";
+			inline constexpr const char* Self         = "Self";
+			inline constexpr const char* Total        = "Total";
+			// …and under a line its queries (ibQueryDebugData): what each reads from, of its time the database's, the
+			// statements it sent — their text, the plan, which database, the rows read or changed, the run and the reading.
+			inline constexpr const char* Queries      = "Queries";
+			inline constexpr const char* Statements   = "Statements";
+			inline constexpr const char* Source       = "Source";
+			inline constexpr const char* Database     = "Database";
+			inline constexpr const char* Text         = "Text";
+			inline constexpr const char* Plan         = "Plan";
+			inline constexpr const char* Dbms         = "Dbms";
+			inline constexpr const char* RowCount     = "RowCount";
+			inline constexpr const char* Run          = "Run";
+			inline constexpr const char* Fetch        = "Fetch";
+			// …and a statement's slowest run, with the values it was sent with — a row each, its Text the value as SQL
+			// writes it.
+			inline constexpr const char* Slowest      = "Slowest";
+			inline constexpr const char* Values       = "Values";
 
 		}
 

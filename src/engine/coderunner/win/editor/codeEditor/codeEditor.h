@@ -20,7 +20,7 @@
 #include "coderunner/mainFrame/settings/fontcolorsettings.h"
 
 #include "backend/compiler/compileCode.h"   // CODE_VES / CODE_CES + GetCodeStyle for fold-mode dispatch
-#include "backend/debugger/debugDefs.h"
+#include "core/debugger/debugDefs.h"
 
 #include "coderunner/win/editor/codeEditor/components/autoComplete.h"
 #include "coderunner/win/editor/codeEditor/components/callTip.h"

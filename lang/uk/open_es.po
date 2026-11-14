@@ -17684,3 +17684,85 @@ msgstr "Усі файли зображень"
 
 #~ msgid "No settings have been saved here yet."
 #~ msgstr "Тут ще не збережено жодного налаштування."
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:71
+msgid "Performance measurement"
+msgstr "Замір продуктивності"
+
+#: src/engine/frmserver/docView/templates/designer/docViewProfile.cpp:23
+#, c-format
+msgid "Performance measurement: %s s, script %s s"
+msgstr "Замір продуктивності: %s с, код %s с"
+
+#: src/engine/frmserver/docView/docManagerDesigner.cpp:62
+msgid "Profile Doc"
+msgstr "Документ заміру"
+
+#: src/engine/frmserver/docView/docManagerDesigner.cpp:62
+msgid "Profile View"
+msgstr "Перегляд заміру"
+
+#: src/engine/appstudio/docManager/templates/docViewProfile.cpp:228
+msgid "Procedure"
+msgstr "Процедура"
+
+#: src/engine/appstudio/docManager/templates/docViewProfile.cpp:230
+msgid "Count"
+msgstr "Кількість"
+
+#: src/engine/appstudio/docManager/templates/docViewProfile.cpp:231
+msgid "Own, ms"
+msgstr "Власне, мс"
+
+#: src/engine/appstudio/docManager/templates/docViewProfile.cpp:233
+msgid "Total, ms"
+msgstr "Усього, мс"
+
+#: src/engine/appstudio/docManager/templates/docViewProfile.cpp:234
+msgid "Database, ms"
+msgstr "База даних, мс"
+
+#: src/engine/appstudio/docManager/templates/docViewProfile.cpp:235
+msgid "In memory, ms"
+msgstr "У пам'яті, мс"
+
+#: src/engine/appstudio/docManager/templates/docViewProfile.cpp:237
+msgid "Request, bytes"
+msgstr "Запит, байт"
+
+#: src/engine/appstudio/docManager/templates/docViewProfile.cpp:238
+msgid "Answer, bytes"
+msgstr "Відповідь, байт"
+
+#: src/engine/appstudio/docManager/templates/docViewProfile.cpp:308
+msgid "Platform"
+msgstr "Платформа"
+
+#: src/engine/appstudio/docManager/templates/docViewProfile.cpp:199
+#, c-format
+msgid "Values: %s"
+msgstr "Значення: %s"
+
+#: src/engine/appstudio/docManager/templates/docViewProfile.cpp:350
+msgid "Calls"
+msgstr "Виклики"
+
+#: src/engine/appstudio/docManager/templates/docViewProfile.cpp:350
+msgid "Lines"
+msgstr "Рядки"
+
+#: src/engine/appstudio/docManager/templates/docViewProfile.cpp:350
+msgid "Queries"
+msgstr "Запити"
+
+#: src/engine/appstudio/docManager/templates/docViewProfile.cpp:350
+msgid "SQL"
+msgstr "SQL"
+
+#: src/engine/appstudio/docManager/templates/docViewProfile.cpp:350
+msgid "Plans"
+msgstr "Плани"
+
+#: src/engine/appstudio/docManager/templates/docViewProfile.cpp:350
+msgid "Values"
+msgstr "Значення"

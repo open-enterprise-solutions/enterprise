@@ -889,20 +889,20 @@ public:
 	//   * a period-truncation expression is `strftime('%Y-%m-%d', …)` — a '%' that printf would
 	//     eat before the server ever saw it.
 	// Anything whose text is already final belongs here, not there.
-	int RunStatement(const ibString& sql) { return DoRunQuery(sql, /*bParseQueries*/ false); }
+	int RunStatement(const ibString& sql) { return Run(sql, /*bParseQueries*/ false); }
 
 	// Define formatted run query — the text is `format` with `args` put in, as ibString::Format puts them
 
 	/// Run an insert, update, or delete query on the database
 	template <class... Args>
 	int RunQuery(const ibString& format, const Args&... args) {
-		return DoRunQuery(ibString::Format(format, args...), true);
+		return Run(ibString::Format(format, args...), true);
 	}
 
 	///  Run a select query on the database
 	template <class... Args>
 	ibDatabaseResultSet* RunQueryWithResults(const ibString& format, const Args&... args) {
-		return DoRunQueryWithResults(ibString::Format(format, args...));
+		return RunWithResults(ibString::Format(format, args...));
 	}
 
 	/// ibPreparedStatement support
@@ -1143,6 +1143,11 @@ protected:
 	// the argument for doing it properly rather than patching around it.
 
 private:
+
+	// THE ONE ROAD of the run doors above to the driver, the text final — measured while a database measurement runs
+	// (databaseProfiler.h). A statement prepared here is measured where it is run (L2).
+	int                  Run(const ibString& strQuery, bool bParseQueries);
+	ibDatabaseResultSet* RunWithResults(const ibString& strQuery);
 
 	DatabaseResultSetHashSet m_ResultSets;
 	DatabaseStatementHashSet m_Statements;

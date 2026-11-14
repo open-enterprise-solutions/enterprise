@@ -22,6 +22,7 @@
 #include "frmserver/docView/templates/designer/docViewFunctionalOptionEdit.h"
 #include "frmserver/docView/templates/designer/docViewInterfaceEdit.h"
 #include "frmserver/docView/templates/designer/docViewModuleEdit.h"
+#include "frmserver/docView/templates/designer/docViewProfile.h"
 #include "frmserver/docView/templates/designer/docViewRoleEdit.h"
 #include "frmserver/docView/templates/designer/docViewSpreadsheetEdit.h"
 
@@ -53,6 +54,13 @@ ibDocManagerDesigner::ibDocManagerDesigner()
 	AddDocTemplate<ibCommonAttributeCompositionDocument, ibCommonAttributeCompositionView>(g_metaCommonAttributeCLSID);
 	AddDocTemplate<ibFunctionalOptionMembersDocument, ibFunctionalOptionMembersView>(g_metaFunctionalOptionCLSID);
 	AddDocTemplate<ibRoleRightsDocument, ibRoleRightsView>(g_metaRoleCLSID);
+
+	// What a measurement measured — no metaobject, the registration journal's shape: an invisible template its end makes
+	// (ibClientDebugger::OnProfile).
+	AddDocTemplate<ibProfileDocument, ibProfileView>(g_metaModuleCLSID,
+		_("Performance measurement"), ibEmptyString, ibEmptyString,
+		_("Profile Doc"), _("Profile View"),
+		ibTEMPLATE_INVISIBLE);
 
 	// The configuration tree — its doors; the rows are the frame's (ibClientFrameDesigner).
 	RegisterSchema(ibProtocol::ibSchema::ibKind::MetaData, std::make_unique<ibSchemaMetaData>());

@@ -83,10 +83,6 @@ typedef ibRowValues<ibMetaID, class ibValue> ibRowMetaValues;
 #define _USE_SAVE_METADATA_IN_TRANSACTION 1
 // full parser is very slowly ...
 #define _USE_OLD_TEXT_PARSER_IN_CODE_EDITOR 0
-//debugger
-#define _USE_64_BIT_POINT_IN_DEBUGGER 1
-//have bugs....
-#define _USE_NET_COMPRESSOR 0
 //use dynamic linking 
 #define _USE_DYNAMIC_DATABASE_LAYER_LINKING 1
 

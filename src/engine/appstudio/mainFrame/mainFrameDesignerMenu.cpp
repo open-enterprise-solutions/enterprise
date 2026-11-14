@@ -68,6 +68,9 @@ void ibFrontendMainFrameDesigner::InitializeDefaultMenu()
 	debugPicture(m_menuDebug->Append(wxID_DESIGNER_DEBUG_STOP_PROGRAM, _("Stop debugging program"), _("Stop program")), wxART_DEBUG_STOP_PROGRAM)->Enable(false);
 
 	m_menuDebug->AppendSeparator();
+	m_menuDebug->AppendCheckItem(wxID_DESIGNER_DEBUG_PROFILE, _("Performance measurement"))->Enable(false);
+
+	m_menuDebug->AppendSeparator();
 	debugPicture(m_menuDebug->Append(wxID_DESIGNER_DEBUG_REMOVE_ALL_DEBUGPOINTS, _("Remove all breakpoints")), wxART_DEBUG_REMOVE_ALL_BREAKPOINTS);
 
 	wxMenuItem* menuItem = nullptr;
@@ -136,6 +139,8 @@ void ibFrontendMainFrameDesigner::InitializeDefaultMenu()
 
 	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnRunDebugCommand, this, wxID_DESIGNER_DEBUG_EDIT_POINT, wxID_DESIGNER_DEBUG_REMOVE_ALL_DEBUGPOINTS);
 	Bind(wxEVT_UPDATE_UI, &ibFrontendMainFrameDesigner::OnUpdateDebugCommand, this, wxID_DESIGNER_DEBUG_STEP_OVER, wxID_DESIGNER_DEBUG_NEXT_POINT);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnRunDebugCommand, this, wxID_DESIGNER_DEBUG_PROFILE);
+	Bind(wxEVT_UPDATE_UI, &ibFrontendMainFrameDesigner::OnUpdateDebugCommand, this, wxID_DESIGNER_DEBUG_PROFILE);
 	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnConnection, this, wxID_APPLICATION_CONNECTION);
 
 	// Syntax helper — lambda bindings, no member fn to lose to the

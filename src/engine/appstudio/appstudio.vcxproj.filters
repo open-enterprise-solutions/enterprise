@@ -233,6 +233,9 @@
     <ClCompile Include="docManager\templates\docViewRole.cpp">
       <Filter>docManager\templates</Filter>
     </ClCompile>
+    <ClCompile Include="docManager\templates\docViewProfile.cpp">
+      <Filter>docManager\templates</Filter>
+    </ClCompile>
     <ClCompile Include="docManager\templates\docViewConfigCompare.cpp">
       <Filter>docManager\templates</Filter>
     </ClCompile>
@@ -279,9 +282,6 @@
       <Filter>backend\debugger</Filter>
     </ClInclude>
     <ClInclude Include="backend\debugger\debugClientBridge.h">
-      <Filter>backend\debugger</Filter>
-    </ClInclude>
-    <ClInclude Include="backend\debugger\debugDefs.h">
       <Filter>backend\debugger</Filter>
     </ClInclude>
     <ClInclude Include="backend\metaCollection\metaDiff.h">
@@ -387,6 +387,9 @@
       <Filter>docManager\templates</Filter>
     </ClInclude>
     <ClInclude Include="docManager\templates\docViewRole.h">
+      <Filter>docManager\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docManager\templates\docViewProfile.h">
       <Filter>docManager\templates</Filter>
     </ClInclude>
     <ClInclude Include="docManager\templates\docViewConfigCompare.h">

@@ -416,6 +416,12 @@ void ibFrontendMainFrameDesigner::OnRunDebugCommand(wxCommandEvent& event)
 	case wxID_DESIGNER_DEBUG_REMOVE_ALL_DEBUGPOINTS:
 		debugClient->RemoveAllBreakpoint();
 		break;
+	case wxID_DESIGNER_DEBUG_PROFILE:              // its end opens what it measured, a tab the server raises
+		if (debugClient->IsProfiling())
+			debugClient->StopProfile();
+		else
+			debugClient->StartProfile();
+		break;
 	}
 }
 
@@ -435,6 +441,10 @@ void ibFrontendMainFrameDesigner::OnUpdateDebugCommand(wxUpdateUIEvent& event)
 		break;
 	case wxID_DESIGNER_DEBUG_PAUSE:                // pause - a runtime that is going
 		event.Enable(attached && !stopped);
+		break;
+	case wxID_DESIGNER_DEBUG_PROFILE:              // the measurement - of a runtime attached, checked while it runs
+		event.Enable(attached);
+		event.Check(attached && debugClient->IsProfiling());
 		break;
 	default:                                       // the steps and both stops - whenever something is attached
 		event.Enable(attached);

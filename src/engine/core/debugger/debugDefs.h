@@ -1,15 +1,19 @@
 #ifndef _DEBUGGER_DEFS_H__
 #define _DEBUGGER_DEFS_H__
 
-// THE DEBUGGER'S WORDS — the engine's (backend/debugger/debugDefs.h) whole: what the thin designer's listeners are told
-// (debugClientBridge.h) is in the engine's shapes, though the runtime is the server's debugger's to talk to now, and the
-// facade hears it over the protocol (debugClient.h). What backend_core.h set for it is set here.
+// ⭐ THE DEBUGGER'S WORDS, ONE FOR BOTH ENDS (Max, 2026-11-14: *"the whole of debugDefs lives in the core"*) — the
+// commands, the structures a runtime answers with and the designer shows, the wire's constants. The engine's debugger
+// and the thin designer read the same file; text is the core's ibString, a watch row is a number — what a side does
+// with them (a wxString, a tree item) is that side's.
 
+#include <string>
 #include <vector>
 
-#include <wx/string.h>
+#include "core/fstring.h"   // ibString
 
+// The debugger's switches.
 #define _USE_64_BIT_POINT_IN_DEBUGGER 1
+//have bugs....
 #define _USE_NET_COMPRESSOR 0
 
 // ⭐ HOW LOUD A REPORTED LINE WAS SAID — the PROTOCOL's own word for it, which is why this file
@@ -62,7 +66,7 @@ enum CommandId
 	CommandId_RemoveBreakpoint = 8,    // Remove a breakpoint on a line on and off.
 	CommandId_Pause = 9,    // Instructs the debugger to break on the next line of script code.
 	CommandId_Detach = 10,    // Soft stop: disconnect debug client + reset debug state, listener stays so the debugger can reattach.
-	CommandId_Destroy = 11,    // Hard stop: same as Detach plus a forced close of the stopped session (a thin client is told to go). The process's other sessions stay.
+	CommandId_Destroy = 11,    // Hard stop: same as Detach plus a forced close of the stopped session (a thin client is told to go). The process's other sessions stay, unless the process lives for the debugger (ibStopProcess: a web server a designer started; so does Detach there).
 
 	// 12–14 — the editor's patches (insert, delete, complete), which no runtime read: the edits are the editor's to count.
 
@@ -179,6 +183,11 @@ enum CommandId
 	CommandId_Compose = 36,
 
 	CommandId_StepOut = 37,   // Runs to the first line of the frame that called this one; from the outermost frame, as Continue.
+
+	// THE PERSON'S MEASUREMENT (runtimeProfiler.h), of every session of the runtime: Start begins it, Stop ends it and is
+	// answered with the same id — u8 whether one was running, then what it measured (ibProfileData).
+	CommandId_ProfileStart = 38,
+	CommandId_ProfileStop  = 39,
 };
 
 enum ConnectionType {
@@ -197,9 +206,9 @@ struct ibDebugData {
 	// came from / should be routed to. Empty on protocol-level packets
 	// (verify, set-connection-type) — only event/command packets that
 	// touch a specific runtime carry it.
-	wxString m_sessionGuid;
-	wxString m_fileName;
-	wxString m_moduleName;
+	ibString m_sessionGuid;
+	ibString m_fileName;
+	ibString m_moduleName;
 };
 
 struct ibDebugLineData : public ibDebugData {
@@ -207,20 +216,20 @@ struct ibDebugLineData : public ibDebugData {
 };
 
 struct ibDebugExpressionData : public ibDebugData {
-	wxString m_expression;
+	ibString m_expression;
 };
 
 struct ibDebugAutoCompleteData : public ibDebugExpressionData {
 
 	struct ibDebugVariableData {
-		wxString m_variableName;
+		ibString m_variableName;
 	};
 
 	std::vector<ibDebugVariableData> m_arrVar;
 
 	struct ibDebugMethodData {
-		wxString m_methodName;
-		wxString m_methodHelper;
+		ibString m_methodName;
+		ibString m_methodHelper;
 		bool m_methodRet;
 	};
 
@@ -228,7 +237,7 @@ struct ibDebugAutoCompleteData : public ibDebugExpressionData {
 
 public:
 
-	wxString m_keyword;
+	ibString m_keyword;
 	int      m_currentPos;
 };
 
@@ -237,11 +246,11 @@ public:
 struct ibStackData {
 
 	struct ibStackRow {
-		wxString m_moduleName;      // the module's address, as ibDebugData's — what its line is counted in
-		wxString m_fullName;        // the call as the runtime names it: the module, the procedure, its parameters
+		ibString m_moduleName;      // the module's address, as ibDebugData's — what its line is counted in
+		ibString m_fullName;        // the call as the runtime names it: the module, the procedure, its parameters
 		unsigned int m_moduleLine;
 	public:
-		ibStackRow(const wxString& strModuleName, const wxString& strFullName, unsigned int moduleLine) :
+		ibStackRow(const ibString& strModuleName, const ibString& strFullName, unsigned int moduleLine) :
 			m_moduleName(strModuleName), m_fullName(strFullName), m_moduleLine(moduleLine) {
 		}
 	};
@@ -250,7 +259,7 @@ struct ibStackData {
 
 public:
 
-	void AppendStack(const wxString& strModuleName, const wxString& strFullName, unsigned int moduleLine) {
+	void AppendStack(const ibString& strModuleName, const ibString& strFullName, unsigned int moduleLine) {
 		m_stackData.emplace_back(
 			strModuleName, strFullName, moduleLine
 		);
@@ -260,31 +269,126 @@ public:
 		return m_stackData.size();
 	}
 
-	wxString GetFullName(unsigned int idx) const {
-		if (idx >= m_stackData.size()) return wxEmptyString;
+	ibString GetFullName(unsigned int idx) const {
+		if (idx >= m_stackData.size()) return ibEmptyString;
 		return m_stackData[idx].m_fullName;
 	}
 
-	wxString GetModuleLine(unsigned int idx) const {
-		if (idx >= m_stackData.size()) return wxEmptyString;
-		return std::to_string(m_stackData[idx].m_moduleLine);
+	ibString GetModuleLine(unsigned int idx) const {
+		if (idx >= m_stackData.size()) return ibEmptyString;
+		return ibString(std::to_wstring(m_stackData[idx].m_moduleLine));
 	}
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 
-#include <wx/treectrl.h>
+#include <cstdint>                       // std::int64_t — microseconds
+#include "core/memory/memoryStream.h"    // ibWriterMemory / ibReaderMemory — the wire format below
+#include "core/query/queryDebug.h"       // ibQueryDebugData — a line's queries
+
+// WHAT A MEASUREMENT MEASURED (runtimeProfiler.h, protocolProfiler.h) — how long it ran, the clients' calls with the lines
+// each ran under it, and the lines of no call, a line a row by its own time descending; under a line, the queries it ran
+// and the statements it sent. Times are microseconds.
+struct ibProfileData {
+
+	struct ibProfileRow {
+		ibString         m_moduleName;   // the module's address, as ibStackRow's — what its line is counted in; empty —
+		                                 // the platform's own work, outside any module (a form's list read)
+		ibString         m_name;         // the module as a person reads it
+		ibString         m_procedure;    // empty — the module's body
+		unsigned int     m_line = 0;     // from 1
+		std::uint64_t    m_count = 0;    // how often the line began
+		std::int64_t     m_self = 0;     // its time without the calls it made
+		std::int64_t     m_total = 0;    // …and with them
+		ibQueryDebugData m_queries;      // the queries it ran, and the statements it sent past them
+	};
+
+	// A client's call (the client protocol: ibClientHost::Call) — by its method, how often it came, the server's time
+	// answering it, the bytes its requests came in and its answers went out in; and the lines its answering ran, by their
+	// own time descending.
+	struct ibProfileCall {
+		ibString                  m_method;
+		std::uint64_t             m_count = 0;
+		std::int64_t              m_total = 0;
+		std::uint64_t             m_requestBytes = 0;
+		std::uint64_t             m_answerBytes = 0;
+		std::vector<ibProfileRow> m_rows;
+	};
+
+	std::int64_t               m_duration = 0;   // from its start to its end
+	std::vector<ibProfileCall> m_calls;          // by their time descending
+	std::vector<ibProfileRow>  m_rows;           // …and the lines no call ran: a job's, an assistant's code_run
+
+	// The wire format lives with the struct, the writer above its reader.
+	void Write(ibWriterMemory& to) const {
+		const auto writeRows = [&to](const std::vector<ibProfileRow>& rows) {
+			to.w_u32(static_cast<std::uint32_t>(rows.size()));
+			for (const ibProfileRow& row : rows) {
+				to.w_stringZ(row.m_moduleName);
+				to.w_stringZ(row.m_name);
+				to.w_stringZ(row.m_procedure);
+				to.w_u32(row.m_line);
+				to.w_u64(row.m_count);
+				to.w_s64(row.m_self);
+				to.w_s64(row.m_total);
+				row.m_queries.Write(to);
+			}
+		};
+		to.w_s64(m_duration);
+		to.w_u32(static_cast<std::uint32_t>(m_calls.size()));
+		for (const ibProfileCall& call : m_calls) {
+			to.w_stringZ(call.m_method);
+			to.w_u64(call.m_count);
+			to.w_s64(call.m_total);
+			to.w_u64(call.m_requestBytes);
+			to.w_u64(call.m_answerBytes);
+			writeRows(call.m_rows);
+		}
+		writeRows(m_rows);
+	}
+
+	void Read(const ibReaderMemory& from) {
+		const auto readRows = [&from](std::vector<ibProfileRow>& rows) {
+			rows.resize(from.r_u32());
+			for (ibProfileRow& row : rows) {
+				from.r_stringZ(row.m_moduleName);
+				from.r_stringZ(row.m_name);
+				from.r_stringZ(row.m_procedure);
+				row.m_line  = from.r_u32();
+				row.m_count = from.r_u64();
+				row.m_self  = from.r_s64();
+				row.m_total = from.r_s64();
+				row.m_queries.Read(from);
+			}
+		};
+		m_duration = from.r_s64();
+		m_calls.resize(from.r_u32());
+		for (ibProfileCall& call : m_calls) {
+			from.r_stringZ(call.m_method);
+			call.m_count        = from.r_u64();
+			call.m_total        = from.r_s64();
+			call.m_requestBytes = from.r_u64();
+			call.m_answerBytes  = from.r_u64();
+			readRows(call.m_rows);
+		}
+		readRows(m_rows);
+	}
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////////
+
+#include <cstdint>   // std::uint64_t — a watch's row, the number the wire carries
 
 struct ibLocalWindowData {
 
 	struct ibLocalWindowItem {
 
-		wxString	 m_name;
-		wxString	 m_value;
-		wxString	 m_type;
+		ibString	 m_name;
+		ibString	 m_value;
+		ibString	 m_type;
 		bool		 m_hasAttributes;
 
-		ibLocalWindowItem(const wxString& n, const wxString& v, const wxString& t, bool a) :
+		ibLocalWindowItem(const ibString& n, const ibString& v, const ibString& t, bool a) :
 			m_name(n), m_value(v), m_type(t), m_hasAttributes(a) {
 		}
 	};
@@ -295,18 +399,18 @@ public:
 
 	ibLocalWindowData() {}
 
-	void AddLocalVar(const wxString& name, const wxString& value, const wxString& type, bool hasAttributes) {
+	void AddLocalVar(const ibString& name, const ibString& value, const ibString& type, bool hasAttributes) {
 		m_listExpression.emplace_back(name, value, type, hasAttributes);
 	}
 
-	wxString GetName(unsigned int idx) const {
+	ibString GetName(unsigned int idx) const {
 		return m_listExpression[idx].m_name;
 	}
 
-	wxString GetValue(unsigned int idx) const {
+	ibString GetValue(unsigned int idx) const {
 		return m_listExpression[idx].m_value;
 	}
-	wxString GetType(unsigned int idx) const {
+	ibString GetType(unsigned int idx) const {
 		return m_listExpression[idx].m_type;
 	}
 
@@ -321,17 +425,19 @@ public:
 
 struct ibWatchWindowData {
 
-	wxTreeItemId m_item;
+	// The row asked about, numbered by the asker (a pointer of its tree) and said back by the runtime — a number
+	// nothing on this side takes apart.
+	std::uint64_t m_item;
 
 	struct ibWatchWindowItem {
 
-		wxTreeItemId m_item;
-		wxString	 m_name;
-		wxString	 m_value;
-		wxString	 m_type;
+		std::uint64_t m_item;
+		ibString	 m_name;
+		ibString	 m_value;
+		ibString	 m_type;
 		bool		 m_hasAttributes;
 
-		ibWatchWindowItem(const wxString& n, const wxString& v, const wxString& t, bool a, const wxTreeItemId& i) :
+		ibWatchWindowItem(const ibString& n, const ibString& v, const ibString& t, bool a, std::uint64_t i) :
 			m_item(i), m_name(n), m_value(v), m_type(t), m_hasAttributes(a) {
 		}
 	};
@@ -346,39 +452,39 @@ struct ibWatchWindowData {
 	// everywhere the debugger is; it carries what goes over the wire, and over the wire this is
 	// text. Naming the type here would drag the guid header behind it into every one of them for a
 	// value nothing on this side takes apart.
-	wxString m_bridgeId;
+	ibString m_bridgeId;
 
 public:
 
-	ibWatchWindowData(const wxTreeItemId& item = nullptr) : m_item(item) {}
+	ibWatchWindowData(std::uint64_t item = 0) : m_item(item) {}
 
-	const wxString& GetBridgeId() const { return m_bridgeId; }
-	void SetBridgeId(const wxString& id) { m_bridgeId = id; }
+	const ibString& GetBridgeId() const { return m_bridgeId; }
+	void SetBridgeId(const ibString& id) { m_bridgeId = id; }
 
-	wxTreeItemId GetItem() const {
+	std::uint64_t GetItem() const {
 		return m_item;
 	}
 
-	void AddWatch(const wxString& name, const wxString& value, const wxString& type, bool hasAttributes) {
+	void AddWatch(const ibString& name, const ibString& value, const ibString& type, bool hasAttributes) {
 		m_listExpression.emplace_back(name, value, type, hasAttributes, m_item);
 	}
 
-	void AddWatch(const wxString& name, const wxString& value, const wxString& type, bool hasAttributes, const wxTreeItemId& item) {
+	void AddWatch(const ibString& name, const ibString& value, const ibString& type, bool hasAttributes, std::uint64_t item) {
 		m_listExpression.emplace_back(name, value, type, hasAttributes, item);
 	}
 
-	wxTreeItemId GetItem(unsigned int idx) const {
+	std::uint64_t GetItem(unsigned int idx) const {
 		return m_listExpression[idx].m_item;
 	}
 
-	wxString GetName(unsigned int idx) const {
+	ibString GetName(unsigned int idx) const {
 		return m_listExpression[idx].m_name;
 	}
 
-	wxString GetValue(unsigned int idx) const {
+	ibString GetValue(unsigned int idx) const {
 		return m_listExpression[idx].m_value;
 	}
-	wxString GetType(unsigned int idx) const {
+	ibString GetType(unsigned int idx) const {
 		return m_listExpression[idx].m_type;
 	}
 
@@ -404,13 +510,15 @@ public:
 // rather than parse rubbish — "the debugger detaches by itself", deterministically, on the first step
 // with anything in the watch window (2026-09-25).
 struct ibWatchedExpression {
-	wxString m_asker;        // the bridge that asked — empty means nobody is listening for it
-	wxString m_expression;
+	ibString m_asker;        // the bridge that asked — empty means nobody is listening for it
+	ibString m_expression;
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 
-#define defaultHost wxT("localhost")
+// The ports — ibPort::Debugger: a debug server listens on the first free one, the designer looks in all of them.
+#include "core/net/ports.h"
+#define defaultHost ibT("localhost")
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 #define numberOfConnectionAttempts 1

@@ -12,6 +12,7 @@
 #include "dataQueryBuilder.h"
 #include "queryProvider.h"                                           // ibBackendQueryProvider abstraction (NO L2 — the door runs through it)
 #include "queryRamTable.h"                                           // ibQueryRamTable — the empty selection an ALLOWED read yields on a refusal
+#include "queryProfiler.h"                                           // ibQueryProfiler — what goes through the door is told to a measurement
 #include "backend/session/session.h"                                 // ibSession::Current()->Holder()
 #include "backend/backend_exception.h"                               // ibBackendAccessException
 
@@ -864,8 +865,53 @@ ibDataQueryResult ibMakeEmptyQueryResult(const ibBackendQueryable* queryable)
 	return ibDataQueryResult(ibQueryRamTable{}, queryable);
 }
 
+namespace {
+
+// ⭐ THE DOOR TELLS A QUERY MEASUREMENT (queryProfiler.h) WHAT WENT THROUGH IT, while one runs. Every read and every write
+// of every front-end — the language, LINQ, the composers, an object's write, a policy's own reads — comes down through
+// these terminals, so a measurement held here sees them all, whether they went to the database or stayed in memory.
+// Told by what was done and to what: the verb and the sources' names. A terminal entered inside another — a policy's
+// own read, the guarded copy going through again — is part of the outer one.
+class ibProfiledQuery {
+public:
+	ibProfiledQuery(const ibDataQueryBuilder& query, const ibChar* verb) : m_told(ibQueryProfiler::IsRunning()) {
+		if (m_told)
+			ibQueryProfiler::Enter(SourceOf(query, verb));
+	}
+	~ibProfiledQuery() {
+		if (m_told)
+			ibQueryProfiler::Leave();
+	}
+
+	ibProfiledQuery(const ibProfiledQuery&) = delete;
+	ibProfiledQuery& operator=(const ibProfiledQuery&) = delete;
+
+private:
+	static ibString SourceOf(const ibDataQueryBuilder& query, const ibChar* verb) {
+		std::vector<const ibBackendQueryable*> sources;
+		if (!query.GetSources(sources) && query.GetPrimarySource() != nullptr)
+			sources.push_back(query.GetPrimarySource());
+
+		ibString text(verb);
+		bool first = true;
+		for (const ibBackendQueryable* source : sources) {
+			if (source == nullptr)
+				continue;
+			text += first ? ibT(" ") : ibT(", ");
+			text += source->GetQueryName();
+			first = false;
+		}
+		return text;
+	}
+
+	const bool m_told;
+};
+
+} // namespace
+
 ibDataQueryResult ibDataQueryBuilder::Execute(const ibReadPageRequest& req) const
 {
+	const ibProfiledQuery profiled(*this, ibT("Select"));
 	if (m_policy != nullptr) {
 		ibDataQueryBuilder guarded(*this);
 		guarded.m_policy = nullptr;                   // the restricted query carries no policy (no re-entrancy)
@@ -919,6 +965,7 @@ ibDataQueryResult ibDataQueryBuilder::Execute(const ibReadPageRequest& req,
                                              ibRenderedPageCache& cache,
                                              const ibPageSignature& signature) const
 {
+	const ibProfiledQuery profiled(*this, ibT("Select"));
 	if (m_policy != nullptr) {
 		ibDataQueryBuilder guarded(*this);
 		guarded.m_policy = nullptr;
@@ -966,6 +1013,7 @@ static ibDataQueryResult MakeZeroAggregateResult(const std::vector<ibAggregateIt
 // that caller happens to see, and wrong totals do not look like an error.
 ibDataQueryResult ibDataQueryBuilder::SelectAggregate() const
 {
+	const ibProfiledQuery profiled(*this, ibT("Aggregate"));
 	if (m_policy != nullptr) {
 		ibDataQueryBuilder guarded(*this);
 		guarded.m_policy = nullptr;
@@ -986,6 +1034,7 @@ ibDataQueryResult ibDataQueryBuilder::SelectAggregate() const
 // the unpaged all-groups aggregate. The single-scalar-dim TOTALS drill uses this instead of the detail fold.
 ibDataQueryResult ibDataQueryBuilder::SelectAggregatePage(const ibReadPageRequest& page) const
 {
+	const ibProfiledQuery profiled(*this, ibT("Aggregate"));
 	if (m_policy != nullptr) {
 		ibDataQueryBuilder guarded(*this);
 		guarded.m_policy = nullptr;
@@ -1013,6 +1062,7 @@ ibDataQueryResult ibDataQueryBuilder::SelectAggregatePage(const ibReadPageReques
 // produce the same tree, so which one ran is a question of cost, never of the number.
 bool ibDataQueryBuilder::TryTotalsPushdown(ibDataQueryResult& out) const
 {
+	const ibProfiledQuery profiled(*this, ibT("Totals"));
 	if (m_policy != nullptr) {
 		// ⭐⭐ A POLICY DECIDES WHAT MAY BE READ, NEVER WHICH ROAD READS IT.
 		//
@@ -1055,6 +1105,7 @@ bool ibDataQueryBuilder::TryTotalsPushdown(ibDataQueryResult& out) const
 
 ibSelectorTree ibDataQueryBuilder::SelectTotals() const
 {
+	const ibProfiledQuery profiled(*this, ibT("Totals"));
 	if (m_policy != nullptr) {
 		ibDataQueryBuilder guarded(*this);
 		guarded.m_policy = nullptr;
@@ -1073,6 +1124,7 @@ ibSelectorTree ibDataQueryBuilder::SelectTotals() const
 
 bool ibDataQueryBuilder::Insert() const
 {
+	const ibProfiledQuery profiled(*this, ibT("Insert"));
 	// CREATE. The policy is asked before (the right, plus any check it folds onto the row being
 	// made) and again after, with what the statement actually did.
 	if (m_policy != nullptr) {
@@ -1090,6 +1142,7 @@ bool ibDataQueryBuilder::Insert() const
 
 bool ibDataQueryBuilder::Upsert() const
 {
+	const ibProfiledQuery profiled(*this, ibT("Upsert"));
 	// UPSERT — a "don't know if it exists" write, kept only for callers that do not (yet) emit an explicit
 	// create-vs-rewrite event (constants). Row-restricted objects / documents / registers use Insert
 	// (create) or Update (rewrite), so this path never carries an RLS predicate to enforce. One native
@@ -1157,6 +1210,7 @@ void ibDataQueryBuilder::RaiseIfKeyedRewriteMissed(long affected) const
 
 bool ibDataQueryBuilder::Update() const
 {
+	const ibProfiledQuery profiled(*this, ibT("Update"));
 	// REWRITE of an existing row — ONE guarded UPDATE: SET the columns, WHERE the key AND the folded RLS
 	// predicate. Under a policy 0 rows affected = the row is not one this role may write (the row filter
 	// excluded it) -> ACCESS DENIED (fail-closed, mirrors Delete). This is what makes a write Restrict BITE
@@ -1183,6 +1237,7 @@ bool ibDataQueryBuilder::Update() const
 
 bool ibDataQueryBuilder::Delete() const
 {
+	const ibProfiledQuery profiled(*this, ibT("Delete"));
 	if (m_policy != nullptr) {
 		ibDataQueryBuilder guarded(*this);
 		guarded.m_policy = nullptr;

@@ -2,7 +2,7 @@
 #define _DEBUG_CLIENT_BRIDGE_H__
 
 #include "backend/backend_core.h"
-#include "debugDefs.h"
+#include "core/debugger/debugDefs.h"
 
 class BACKEND_API ibDebuggerClientBridge {
 public:
@@ -90,6 +90,10 @@ public:
 	// reason in `refusal`. One or the other, and never silence — a read that produced nothing
 	// because a parameter was not set is a sentence, not an empty table.
 	virtual void OnComposed(bool answered, const ibString& refusal, const ibMemoryBuffer& result) {}
+
+	// What a measurement measured (runtimeProfiler.h); `measured` false — none was running. Whoever stopped it, every
+	// listener hears it.
+	virtual void OnProfile(bool measured, const ibProfileData& profile) {}
 
 private:
 	// Its own, from birth — see the constructor. Nothing hands it in, so two bridges cannot be given

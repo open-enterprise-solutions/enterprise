@@ -27,7 +27,7 @@
     <ClInclude Include="debugger\debugClientBridge.h">
       <Filter>debugger</Filter>
     </ClInclude>
-    <ClInclude Include="debugger\debugDefs.h">
+    <ClInclude Include="debugger\runtimeProfiler.h">
       <Filter>debugger</Filter>
     </ClInclude>
     <ClInclude Include="debugger\debugServer.h">
@@ -89,6 +89,9 @@
       <Filter>databaseLayer</Filter>
     </ClInclude>
     <ClInclude Include="databaseLayer\databaseLayer.h">
+      <Filter>databaseLayer</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\databaseProfiler.h">
       <Filter>databaseLayer</Filter>
     </ClInclude>
     <ClInclude Include="databaseLayer\databaseLayerDef.h">
@@ -954,6 +957,9 @@
     <ClCompile Include="debugger\debugClientQuery.cpp">
       <Filter>debugger</Filter>
     </ClCompile>
+    <ClCompile Include="debugger\runtimeProfiler.cpp">
+      <Filter>debugger</Filter>
+    </ClCompile>
     <ClCompile Include="debugger\debugServer.cpp">
       <Filter>debugger</Filter>
     </ClCompile>
@@ -1009,6 +1015,9 @@
       <Filter>databaseLayer</Filter>
     </ClCompile>
     <ClCompile Include="databaseLayer\databaseLayer.cpp">
+      <Filter>databaseLayer</Filter>
+    </ClCompile>
+    <ClCompile Include="databaseLayer\databaseProfiler.cpp">
       <Filter>databaseLayer</Filter>
     </ClCompile>
     <ClCompile Include="databaseLayer\databaseLayerException.cpp">
@@ -2505,6 +2514,9 @@
     <ClCompile Include="query\queryLowering.cpp">
       <Filter>query</Filter>
     </ClCompile>
+    <ClCompile Include="query\queryProfiler.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
     <ClCompile Include="query\queryException.cpp">
       <Filter>query</Filter>
     </ClCompile>
@@ -2659,6 +2671,9 @@
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\queryLowering.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryProfiler.h">
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\queryException.h">

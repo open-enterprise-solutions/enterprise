@@ -971,6 +971,7 @@ namespace ibProtocol {
 			Composer         = 14,   // ibComposer
 			Configuration    = 15,   // a configuration file (or the database's copy) browsed read-only: MetaData
 			HomePage         = 16,   // ibHomePage: the start page — the forms the configuration places on it
+			Profile          = 17,   // ibProfile: what a measurement measured — the tab its end opens
 		};
 
 		// Text, ReadOnly; what was typed handed back as event {Tab, Event: Change, Args: {Text}}.

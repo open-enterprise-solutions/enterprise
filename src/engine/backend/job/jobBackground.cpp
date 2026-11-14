@@ -199,6 +199,18 @@ std::vector<ibBackgroundRun::ibSaid> ibBackgroundRun::Said() const
 	return std::vector<ibSaid>(m_said.begin(), m_said.end());
 }
 
+std::shared_ptr<const ibProfileData> ibBackgroundRun::Profile() const
+{
+	std::lock_guard<std::mutex> lk(m_mtx);
+	return m_profile;
+}
+
+void ibBackgroundRun::Profile(std::shared_ptr<const ibProfileData> profile)
+{
+	std::lock_guard<std::mutex> lk(m_mtx);
+	m_profile = std::move(profile);
+}
+
 ibString ibBackgroundRun::SessionGuid() const
 {
 	std::lock_guard<std::mutex> lk(m_mtx);

@@ -5,6 +5,8 @@
 #include "firebirdResultSet.h"
 
 #include <cstring>
+#include <string>
+#include <vector>
 
 ibPreparedStatementFirebirdWrapper::ibPreparedStatementFirebirdWrapper(ibInterfaceFirebird* pInterface, isc_db_handle pDatabase, isc_tr_handle pTransaction, const ibString& strSQL)
 	: ibDatabaseErrorReporter(), m_strSQL(strSQL)
@@ -221,6 +223,28 @@ int ibPreparedStatementFirebirdWrapper::DoRunQuery()
 		}
 	}
 	return (int)nRows;
+}
+
+// Its own status array: a plan not given is not the statement's error.
+ibString ibPreparedStatementFirebirdWrapper::GetPlan()
+{
+	static char requestedInfoTypes[] = { isc_info_sql_get_plan };
+	std::vector<char> resultBuffer(32000, 0);
+	ISC_STATUS_ARRAY status;
+	if (m_pInterface->GetIscDsqlSqlInfo()(status, &m_pStatement, sizeof(requestedInfoTypes), requestedInfoTypes,
+		static_cast<short>(resultBuffer.size()), resultBuffer.data()) != 0)
+		return ibString();
+
+	// isc_info_sql_get_plan, two bytes of length, the plan — a truncated answer starts otherwise
+	if (resultBuffer[0] != isc_info_sql_get_plan)
+		return ibString();
+	const long length = m_pInterface->GetIscVaxInteger()(resultBuffer.data() + 1, 2);
+	if (length <= 0 || length > static_cast<long>(resultBuffer.size()) - 3)
+		return ibString();
+
+	std::string plan(resultBuffer.data() + 3, static_cast<std::size_t>(length));
+	plan.erase(0, plan.find_first_not_of("\r\n "));   // Firebird opens it with a line break
+	return ConvertFromUnicodeStream(plan.c_str());
 }
 
 ibDatabaseResultSet* ibPreparedStatementFirebirdWrapper::DoRunQueryWithResults()

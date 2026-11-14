@@ -38,6 +38,21 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   configuration, and its Save hands the file back to the assistant, as Save hands it to you. In the
   application it runs one under your roles, with the *Data assistant* right. The file stays where the
   assistant keeps it: the base never reads or writes that disk.
+- **Performance measurement.** *Debug → Performance measurement* times every client call and every line of script
+  the attached application runs, in every session, until the item is unchecked. A tab then opens with the calls by
+  kind — how often, how long, how much of it was not script, the bytes both ways — each with the lines it ran, then
+  the lines no call ran, slowest first: the module, the procedure, the line, how often it ran, its own time and its
+  share, and its time with what it called. Under each line are the queries it ran — reads, writes and deletes — with how much of their time went to
+  the database and how much stayed in memory, and under a query the statements the database got, with their plan
+  (Firebird) and the values of the slowest run, so that run can be repeated. Opening a database connection and
+  waiting for a free one are rows of their own. What the platform did for no line of yours, such as the register writes of posting, is a row of its
+  own. A column's header sorts by it; a double click opens the line. Checks above the tree choose what is drawn —
+  calls, lines, queries, SQL, plans, values: a level unchecked hands its rows to the one above, the same statement
+  met twice becoming one row, so SQL alone lists every statement of the measurement, the heaviest first. An
+  assistant starts and stops the same
+  measurement (`profile_start`, `profile_stop`), reads the last one again narrowed to a call, a module, a
+  procedure or a query (`profile_read`), and opens it in your window only when it means to show it to you;
+  `code_run` with `profile` answers with the measurement of the code it ran.
 - **`Execute` and `Evaluate` now do what they say.** They ran as a watch, so what their code wrote was
   silently not written; code that failed said nothing from `Execute` and came back from `Evaluate` as
   the string `<error: …>`. They write now, and a failure raises an error. A module that relied on any

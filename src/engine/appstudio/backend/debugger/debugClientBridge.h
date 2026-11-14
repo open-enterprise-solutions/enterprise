@@ -5,7 +5,7 @@
 
 #include "core/memory/memoryBuffer.h"   // OnScreenshot / OnComposed — the bytes the engine sent
 
-#include "debugDefs.h"
+#include "core/debugger/debugDefs.h"
 
 // THE ENGINE'S (backend/debugger/debugClientBridge.h) whole — a listener of the thin designer's debugger (debugClient.h).
 class ibDebuggerClientBridge {

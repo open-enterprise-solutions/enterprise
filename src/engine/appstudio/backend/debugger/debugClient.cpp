@@ -52,10 +52,11 @@ static bool Send(ibProtocol::ibDebug::ibCommand command, ibProtocolNode params =
 	return true;
 }
 
-// A watched row's number — a pointer of the watch window's tree, said back by the server as the number it was sent.
-static wxTreeItemId ItemOf(const ibProtocolNode& node)
+// A watched row's number — a pointer of the watch window's tree, said back by the server as the number it was sent;
+// the window makes it a row again (ibWatchWindow).
+static std::uint64_t ItemOf(const ibProtocolNode& node)
 {
-	return wxTreeItemId(reinterpret_cast<void*>(static_cast<std::uintptr_t>(node.GetInt(ibProtocol::ibDebug::Item))));
+	return static_cast<std::uint64_t>(static_cast<std::uintptr_t>(node.GetInt(ibProtocol::ibDebug::Item)));
 }
 
 // A watch's answer, as the server's debugger read it from the runtime — the row asked about, who asked, its values.
@@ -135,8 +136,10 @@ void ibDebuggerClient::Receive(const ibProtocolNode& news)
 		break;
 	case ibProtocol::ibDebug::ibEvent::SessionEnd:
 		m_hasConnections = news.GetBool(ibProtocol::ibDebug::Connected);
-		if (!m_hasConnections)
+		if (!m_hasConnections) {
 			m_enterLoop = false;
+			m_profiling = false;
+		}
 		m_adapter->OnSessionEnd();
 		break;
 	case ibProtocol::ibDebug::ibEvent::EnterLoop:
@@ -177,6 +180,10 @@ void ibDebuggerClient::Receive(const ibProtocolNode& news)
 		m_adapter->OnSetLocalVariable(locData);
 		break;
 	}
+	case ibProtocol::ibDebug::ibEvent::Profile:
+		// What it measured is the tab the server raised with it (Kind Profile).
+		m_profiling = false;
+		break;
 	case ibProtocol::ibDebug::ibEvent::Variable:
 		m_adapter->OnSetVariable(WatchOf(news));
 		break;
@@ -253,6 +260,18 @@ void ibDebuggerClient::StepOut()
 void ibDebuggerClient::Pause()
 {
 	Send(ibProtocol::ibDebug::ibCommand::Pause);
+}
+
+void ibDebuggerClient::StartProfile()
+{
+	Send(ibProtocol::ibDebug::ibCommand::ProfileStart);
+	m_profiling = true;
+}
+
+void ibDebuggerClient::StopProfile()
+{
+	Send(ibProtocol::ibDebug::ibCommand::ProfileStop);
+	m_profiling = false;
 }
 
 void ibDebuggerClient::Stop(bool kill)

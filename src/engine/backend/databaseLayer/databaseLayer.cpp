@@ -4,6 +4,8 @@
 
 #include "connectionPool.h"
 
+#include "databaseProfiler.h"   // the doors below tell a database measurement
+
 // ctor()
 ibDatabaseLayer::ibDatabaseLayer()
 	: ibDatabaseErrorReporter()
@@ -17,8 +19,53 @@ ibDatabaseLayer::~ibDatabaseLayer()
 	CloseStatements();
 }
 
+// A run that failed is not measured: what was asked of the database is in the refusal.
+int ibDatabaseLayer::Run(const ibString& strQuery, bool bParseQueries)
+{
+	if (!ibDatabaseProfiler::IsRunning())
+		return DoRunQuery(strQuery, bParseQueries);
+
+	const ibDatabaseProfiler::ibClock::time_point begun = ibDatabaseProfiler::ibClock::now();
+	const int changed = DoRunQuery(strQuery, bParseQueries);
+	ibDatabaseProfiler::Sql(this, strQuery, ibDatabaseProfiler::ibClock::now() - begun,
+		changed > 0 ? static_cast<std::uint64_t>(changed) : 0, {}, {});
+	return changed;
+}
+
+// The rows of a result run here are read by whoever holds it, past this layer: the run alone is measured.
+ibDatabaseResultSet* ibDatabaseLayer::RunWithResults(const ibString& strQuery)
+{
+	if (!ibDatabaseProfiler::IsRunning())
+		return DoRunQueryWithResults(strQuery);
+
+	const ibDatabaseProfiler::ibClock::time_point begun = ibDatabaseProfiler::ibClock::now();
+	ibDatabaseResultSet* const results = DoRunQueryWithResults(strQuery);
+	ibDatabaseProfiler::Sql(this, strQuery, ibDatabaseProfiler::ibClock::now() - begun, 0, {}, {});
+	return results;
+}
+
 // GetDialect() is pure virtual — each concrete driver owns its dialect
 // (see <driver>/<driver>DatabaseLayer.cpp::Dialect; ODBC returns the ANSI default).
+
+namespace {
+
+// A transaction's step at the driver, told to a database measurement as the statement it is (Max, 2026-11-14: *"a
+// document written, the transaction taken off, something done again"* — how many, and what committing cost). Only the
+// outermost level reaches the driver, so only it is told; a step that failed is not, as a run that failed is not.
+template <typename Step>
+void MeasuredStep(const ibDatabaseLayer* db, const ibChar* text, Step step)
+{
+	if (!ibDatabaseProfiler::IsRunning()) {
+		step();
+		return;
+	}
+
+	const ibDatabaseProfiler::ibClock::time_point begun = ibDatabaseProfiler::ibClock::now();
+	step();
+	ibDatabaseProfiler::Sql(db, text, ibDatabaseProfiler::ibClock::now() - begun, 0, {}, {});
+}
+
+} // namespace
 
 // --- Transaction wrappers (Option A: nested-safe counter layer) ------------
 //
@@ -28,7 +75,7 @@ ibDatabaseLayer::~ibDatabaseLayer()
 void ibDatabaseLayer::BeginTransaction(const ibTxOptions& opts)
 {
 	if (m_txDepth == 0) {
-		DoBeginTransaction(opts);   // may throw — depth stays 0, state clean
+		MeasuredStep(this, ibT("START TRANSACTION"), [&] { DoBeginTransaction(opts); });   // may throw — depth stays 0, state clean
 		m_txAborted = false;
 		// Pin this conn for the whole TX, in its own pool (m_pool — the
 		// base the TX runs in): to the calling thread's db_query channel
@@ -76,7 +123,7 @@ void ibDatabaseLayer::Commit()
 	// back here on the owner's behalf, because with the depth at zero the owner could not. Now the
 	// depth is kept, so the owner can. Firebird compiles views and triggers AT COMMIT, so a refusal
 	// here is not exotic — it is the normal way a bad bundle reports itself.
-	DoCommit();
+	MeasuredStep(this, ibT("COMMIT"), [this] { DoCommit(); });
 
 	m_txDepth = 0;
 	m_txAborted = false;
@@ -105,7 +152,7 @@ void ibDatabaseLayer::RollBack()
 	m_txDepth = 0;
 	m_txAborted = false;
 	ibConnectionPool::ClearActiveTxConnection(this);
-	DoRollBack();
+	MeasuredStep(this, ibT("ROLLBACK"), [this] { DoRollBack(); });
 }
 
 void ibDatabaseLayer::CloseResultSets()

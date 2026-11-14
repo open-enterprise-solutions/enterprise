@@ -106,6 +106,11 @@ std::vector<std::thread> TakeThreads(std::vector<Worker>& workers, Wanted wanted
 
 } // namespace
 
+const ibSession* ibWorkerPoolHeadless::CurrentLease() noexcept
+{
+	return tl_currentLease;
+}
+
 std::vector<std::thread> ibWorkerPoolHeadless::TakeExitedLocked()
 {
 	return TakeThreads(m_workers, [](const ibWorker& worker) {

@@ -33,6 +33,7 @@
 
 #include <algorithm>       // ibQueryStatement::ClearCaptured
 #include <atomic>          // ibQueryResult — the cancel it hears
+#include <chrono>          // ibQueryResult — the time its rows took reading, while a measurement runs
 #include <cstdint>
 #include <deque>           // ibQueryResult — its fields, found once per result
 #include <memory>
@@ -1228,12 +1229,14 @@ public:
 	              const std::atomic<ibRunState>* cancel = nullptr);
 	// …and the same statement run again for each of `runs` once the rows before are read (ExecuteIR over
 	// several) — one cursor over them all. Opaque here; the runs are made where they are defined. Null runs
-	// is a single run.
+	// is a single run. `statement` — the number a database measurement knows the statement by (databaseProfiler.h),
+	// which the rows read are told by; 0 — none measures it.
 	ibQueryResult(std::shared_ptr<ibDatabaseLayer> conn,
 	              ibPreparedStatement* stmt,
 	              ibDatabaseResultSet* rs,
 	              std::unique_ptr<struct ibQueryRuns> runs,
-	              const std::atomic<ibRunState>* cancel);
+	              const std::atomic<ibRunState>* cancel,
+	              std::uint64_t statement = 0);
 	~ibQueryResult();
 
 	ibQueryResult(ibQueryResult&& other) noexcept;
@@ -1308,6 +1311,9 @@ public:
 private:
 	void                 Release();
 	ibResultSetMetaData* Meta();
+	// The rows its statement's run gave, and the time reading them took, told to the measurement that knows it — once,
+	// as that run's reading ends.
+	void                 Fetched();
 
 	std::shared_ptr<ibDatabaseLayer> m_conn;   // keeps the connection pinned while the cursor lives
 	ibPreparedStatement* m_stmt = nullptr;
@@ -1332,6 +1338,11 @@ private:
 	// happens to be running at that moment. A read on a connection taken for anyone else — a service thread's
 	// own holder — hears nobody's: the session a thread falls back to is not the one reading there.
 	const std::atomic<ibRunState>* m_cancel = nullptr;
+	// The statement's number in a database measurement (0 — none measures it), and of its run so far the rows read and
+	// the time reading them took — see Fetched.
+	std::uint64_t                       m_statement = 0;
+	std::chrono::steady_clock::duration m_fetch{};
+	std::uint64_t                       m_rows = 0;
 };
 
 // ==========================================================================
@@ -1593,6 +1604,7 @@ private:
 
 	ibConnectionScope                 m_scope;
 	std::unique_ptr<ibStatementGuard> m_prepared;   // the one-row INSERT, where the engine runs it again
+	ibString                          m_preparedSql;   // …and its text — what a measurement names its rows by
 	std::vector<bool>                 m_bound;      // …and which of its positions this row has bound
 	ibDmlStatement                    m_held;       // elsewhere: the rows held for the next statement
 };

@@ -39,6 +39,9 @@ public:
 	int DoRunQuery();
 	ibDatabaseResultSet* DoRunQueryWithResults();
 
+	// The plan Firebird chose for it (isc_info_sql_get_plan); empty when it does not say.
+	ibString GetPlan();
+
 	void SetTransaction(isc_tr_handle pTransaction) { m_pTransaction = pTransaction; }
 	bool IsSelectQuery();
 

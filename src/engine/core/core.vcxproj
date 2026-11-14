@@ -348,6 +348,8 @@
     <ClInclude Include="query\queryAggregates.h" />
     <ClInclude Include="query\queryAstExpr.h" />
     <ClInclude Include="query\queryBalanceRole.h" />
+    <ClInclude Include="query\queryDebug.h" />
+    <ClInclude Include="debugger\debugDefs.h" />
     <ClInclude Include="query\queryConstructorField.h" />
     <ClInclude Include="query\anyQueryConstructorModel.h" />
     <ClInclude Include="query\querySourceParameter.h" />

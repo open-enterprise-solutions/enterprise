@@ -247,6 +247,11 @@ int ibPreparedStatementFirebird::GetParameterCount()
 	return nParameters;
 }
 
+ibString ibPreparedStatementFirebird::GetPlan()
+{
+	return m_Statements.empty() ? ibString() : m_Statements.back()->GetPlan();
+}
+
 int ibPreparedStatementFirebird::RunQuery()
 {
 

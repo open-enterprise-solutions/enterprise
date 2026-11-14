@@ -29,8 +29,10 @@
 // its activity line, and appears in Active Users where they can stop it.
 
 #include "backend/backend.h"
+#include "core/debugger/debugDefs.h"   // ibProfileData — what a measured run measured
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 // ⭐ WHAT IS BEING ASKED FOR — a shape rather than four arguments, because it crosses four layers
@@ -41,6 +43,7 @@ struct BACKEND_API ibJobRunRequest {
 	ibString m_said;        // one line for the activity row the person reads
 	ibString m_understood;  // the caller's own account of what committing will change
 	bool     m_commit = false;
+	bool     m_profile = false;   // the code is measured — its lines' times come back with it (ibRuntimeProfiler)
 
 	void Write(class ibWriterMemory& to) const;
 	void Read(const class ibReaderMemory& from);
@@ -81,6 +84,9 @@ struct BACKEND_API ibJobRunByteCodeState {
 		int      m_status = 0;
 	};
 	std::vector<ibLine> m_output;
+
+	// What the code's measurement measured, once it has finished; none when none was asked for (ibJobRunRequest::m_profile).
+	std::optional<ibProfileData> m_profile;
 
 	// ⭐ THE WIRE FORMAT LIVES WITH THE STRUCT — writer and reader as each other's mirror, three
 	// lines apart, instead of two matching sequences in two files two thousand lines apart.

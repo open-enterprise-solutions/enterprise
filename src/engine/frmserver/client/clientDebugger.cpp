@@ -1,11 +1,15 @@
 #include "clientDebugger.h"
 
 #include <cstdint>
+#include <memory>
 
 #include "backend/debugger/debugClient.h"
+#include "backend/session/session.h"   // ibSession::Submit — a measurement's tab, opened on the client's worker
 #include "core/serialize/dataBuilder.h"
 
-#include "clientHost.h"   // NotifyDebug — the client told what the engine said
+#include "clientHost.h"       // NotifyDebug — the client told what the engine said
+#include "clientInstance.h"   // ShareSession — whose worker the tab is opened on
+#include "frmserver/docView/templates/designer/docViewProfile.h"   // ShowProfile — what it measured, as a tab
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibDebug
 
 namespace {
@@ -48,7 +52,7 @@ ibClientDebugger::ibClientDebugger(const ibApplicationInstance* applicationInsta
 }
 
 bool ibClientDebugger::Command(ibProtocol::ibDebug::ibCommand command, const ibDataNode& params, ibDataNode& result,
-	ibProtocol::ibRefusal& refusal, ibString& error) const
+	ibProtocol::ibRefusal& refusal, ibString& error)
 {
 	if (debugClient == nullptr) {
 		refusal = ibProtocol::ibRefusal::NotFound;
@@ -123,6 +127,13 @@ bool ibClientDebugger::Command(ibProtocol::ibDebug::ibCommand command, const ibD
 		return true;
 	case ibProtocol::ibDebug::ibCommand::Stack:
 		debugClient->SetLevelStack(static_cast<unsigned int>(params.GetValue<std::int32_t>(ibProtocol::ibDebug::Level)));
+		return true;
+	case ibProtocol::ibDebug::ibCommand::ProfileStart:
+		debugClient->StartProfile();
+		return true;
+	case ibProtocol::ibDebug::ibCommand::ProfileStop:
+		m_profileStopped = true;
+		debugClient->StopProfile();
 		return true;
 	default:
 		break;
@@ -221,6 +232,23 @@ void ibClientDebugger::OnSetExpanded(const ibWatchWindowData& watchData)
 	ibDataNode event;
 	WriteWatch(watchData, event);
 	Notify(ibProtocol::ibDebug::ibEvent::Expanded, event);
+}
+
+// Ended by this client — the person's menu — what it measured opens as its tab (ShowProfile); ended by the assistant, it
+// opens where the assistant asks (profile_stop {show}). The news says only that it ended. None was running — nothing to
+// show.
+//
+// ⚠ ON THE CLIENT'S OWN WORKER: the engine's client is the process's, and tells its news on the session that made it —
+// not always this client's; a tab is its session's work.
+void ibClientDebugger::OnProfile(bool measured, const ibProfileData& profile)
+{
+	const bool stopped = m_profileStopped.exchange(false);
+	const std::shared_ptr<ibSession> session = measured && stopped ? m_clientInstance->ShareSession() : nullptr;
+	if (session != nullptr)
+		(void)session->Submit([profile]() { ibProfileDocument::ShowProfile(profile); });
+
+	ibDataNode event;
+	Notify(ibProtocol::ibDebug::ibEvent::Profile, event);
 }
 
 void ibClientDebugger::Notify(ibProtocol::ibDebug::ibEvent kind, ibDataNode& event) const

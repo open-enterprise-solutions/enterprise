@@ -25,7 +25,7 @@ class ibWebSocket;
 #define debugServer           (ibDebuggerServer::Get())
 
 #include "backend/backend_core.h"
-#include "debugDefs.h"
+#include "core/debugger/debugDefs.h"
 
 class BACKEND_API ibDebuggerServer {
 
@@ -125,6 +125,11 @@ public:
 	// single inline indirect read; identical to pre-refactor cost.
 	static ibDebuggerServer* Get() { return ms_debugServer; }
 
+	// THE PERSON'S MEASUREMENT AS THIS PROCESS MAKES IT — one that answers clients measures their calls over the lines
+	// (frmserver's ibProtocolProfiler, said once as its library loads); one that does not, the lines alone.
+	using ibProfileMaker = std::unique_ptr<class ibRuntimeProfiler> (*)();
+	static void SetProfileMaker(ibProfileMaker make) { ms_profileMaker = make; }
+
 	bool EnableDebugging() const { return m_socketConnectionThread != nullptr; }
 
 	bool AllowDebugging() const {
@@ -139,8 +144,10 @@ public:
 	// at call time — the debug server is a process-level singleton
 	// shared across concurrent sessions; they enter sequentially and
 	// each knows its session through the run context already held by
-	// the dispatch loop.
-	void EnterDebugger(ibRunContext* runContext, const struct ibByteUnit& byteCode, long& numPrevLine);
+	// the dispatch loop. `state` is that session's interpreter, which the loop holds too: a measurement is told
+	// a new line by it (ibRuntimeProfiler).
+	void EnterDebugger(const struct ibProcUnitState* state, ibRunContext* runContext, const struct ibByteUnit& byteCode,
+		long& numPrevLine);
 	// ⭐⭐ THE PERSON'S ROAD, AND IT CARRIES FAILURES. It lands in the DESIGNER'S OUTPUT PANE, where
 	// somebody is working: a fault in a module belongs there, with its file, its module and its line,
 	// because it is theirs to fix. What a run merely SAYS does not — it goes to whoever asked for the
@@ -220,6 +227,7 @@ protected:
 private:
 
 	static ibDebuggerServer* ms_debugServer;
+	static ibProfileMaker    ms_profileMaker;
 
 	class ibMetaDataConfigurationBase* const m_metaData;
 
@@ -251,6 +259,10 @@ private:
 #endif
 
 	std::unique_ptr<ibDebuggerServerConnection> m_socketConnectionThread;
+
+	// The person's measurement of every session, between ProfileStart and ProfileStop — the debug thread's alone, made
+	// as the process makes it (SetProfileMaker).
+	std::unique_ptr<class ibRuntimeProfiler> m_profile;
 
 	friend class ibBackendException;
 };

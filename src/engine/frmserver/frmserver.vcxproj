@@ -148,6 +148,7 @@
     <ClCompile Include="client\clientMenu.cpp" />
     <ClCompile Include="client\clientPatch.cpp" />
     <ClCompile Include="client\clientSession.cpp" />
+    <ClCompile Include="client\protocolProfiler.cpp" />
     <ClCompile Include="docView\commandProcessor.cpp" />
     <ClCompile Include="docView\docManager.cpp" />
     <ClCompile Include="docView\docManagerDesigner.cpp" />
@@ -170,6 +171,7 @@
     <ClCompile Include="docView\templates\designer\queryConstructorRequest.cpp" />
     <ClCompile Include="docView\templates\designer\docViewInterfaceEdit.cpp" />
     <ClCompile Include="docView\templates\designer\docViewModuleEdit.cpp" />
+    <ClCompile Include="docView\templates\designer\docViewProfile.cpp" />
     <ClCompile Include="docView\templates\designer\docViewRoleEdit.cpp" />
     <ClCompile Include="docView\templates\designer\docViewSpreadsheetEdit.cpp" />
     <ClCompile Include="docView\templates\docViewHelp.cpp" />
@@ -355,6 +357,7 @@
     <ClInclude Include="client\clientMenu.h" />
     <ClInclude Include="client\clientPatch.h" />
     <ClInclude Include="client\clientSession.h" />
+    <ClInclude Include="client\protocolProfiler.h" />
     <ClInclude Include="docView\commandProcessor.h" />
     <ClInclude Include="docView\docCommand.h" />
     <ClInclude Include="docView\docManager.h" />
@@ -375,6 +378,7 @@
     <ClInclude Include="docView\templates\designer\queryConstructorRequest.h" />
     <ClInclude Include="docView\templates\designer\docViewInterfaceEdit.h" />
     <ClInclude Include="docView\templates\designer\docViewModuleEdit.h" />
+    <ClInclude Include="docView\templates\designer\docViewProfile.h" />
     <ClInclude Include="docView\templates\designer\docViewRoleEdit.h" />
     <ClInclude Include="docView\templates\designer\docViewSpreadsheetEdit.h" />
     <ClInclude Include="docView\templates\docViewHelp.h" />

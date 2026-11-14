@@ -41,6 +41,7 @@
 #include "protocol/protocol.h"
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibDebug
 #include "clientPatch.h"
+#include "protocolProfiler.h"   // a client's call told to a measurement
 
 namespace {
 
@@ -56,6 +57,42 @@ std::int64_t NowMs()
 	using namespace std::chrono;
 	return duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 }
+
+// A CLIENT'S CALL TOLD TO A MEASUREMENT of the clients' calls while one runs (protocolProfiler.h): begun as it is made,
+// answered as it goes. A call of no session (a login) is not told, nor its debugger's and its assistant's: they come
+// beside the client's calls, not as one of them.
+//
+// ⭐ ITS BYTES ARE ITS NODES' (Max, 2026-11-15): its parameters and its result — or its refusal — each as the binary
+// node it is, whichever road it came by: a JSON call's text is no measure of what the protocol carries.
+class ibProfiledCall {
+public:
+	ibProfiledCall(const ibSession* session, ibProtocol::ibMethod method, const ibDataNode& params)
+		: m_session(ibProtocolProfiler::IsRunning() && method != ibProtocol::ibMethod::Debug && method != ibProtocol::ibMethod::Mcp
+			? session : nullptr), m_requestBytes(m_session != nullptr ? params.Weight() : 0) {
+		if (m_session != nullptr)
+			ibProtocolProfiler::EnterCall(m_session, ibString::FromUTF8(ibProtocol::MethodName(method)));
+	}
+	~ibProfiledCall() {
+		if (m_session != nullptr)
+			ibProtocolProfiler::LeaveCall(m_session, m_requestBytes, m_answerBytes);
+	}
+
+	ibProfiledCall(const ibProfiledCall&) = delete;
+	ibProfiledCall& operator=(const ibProfiledCall&) = delete;
+
+	void Answered(const ibDataNode& answer) {
+		if (m_session == nullptr)
+			return;
+		const std::optional<ibDataNode> said = answer.FindChild(ibProtocol::ibRpc::Result);
+		const std::optional<ibDataNode> refused = said ? std::nullopt : answer.FindChild(ibProtocol::ibRpc::Error);
+		m_answerBytes = said ? said->Weight() : refused ? refused->Weight() : 0;
+	}
+
+private:
+	const ibSession* const m_session;
+	const std::size_t      m_requestBytes;
+	std::size_t            m_answerBytes = 0;
+};
 
 // backend.conf Resume, as milliseconds. The host is the process; a caller with no base still has a number.
 std::int64_t ResumeWindowMs()
@@ -879,10 +916,10 @@ std::optional<ibDataNode> ibClientHost::Call(const ibRpcRequest& given, const vo
 	// (activeMetaData) threw "works for no base" at every such call. So the words a request kept are looked up in the
 	// configuration of that client's session (ibRpcLookupTypes) — a request that kept none is not written again.
 	ibRpcRequest request = given;
-	if (const std::shared_ptr<Client> caller = FindClient(request.m_params.GetValue<ibString>(ibProtocol::ibLogin::Client))) {
-		if (const std::shared_ptr<ibSession> session = caller->instance->ShareSession())
-			ibRpcLookupTypes(request.m_params, session->GetMetaData());
-	}
+	const std::shared_ptr<Client> caller = FindClient(request.m_params.GetValue<ibString>(ibProtocol::ibLogin::Client));
+	const std::shared_ptr<ibSession> session = caller != nullptr ? caller->instance->ShareSession() : nullptr;
+	if (session != nullptr)
+		ibRpcLookupTypes(request.m_params, session->GetMetaData());
 
 	const ibProtocol::ibMethod method = ibProtocol::MethodFromName(request.m_method.ToUtf8().c_str());
 	if (method == ibProtocol::ibMethod::Unknown) {
@@ -965,6 +1002,8 @@ std::optional<ibDataNode> ibClientHost::Call(const ibRpcRequest& given, const vo
 	ibDataNode& result = answer.Child(ibProtocol::ibRpc::Result);
 	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
 	ibString error;
+	// …told to a measurement of the clients' calls.
+	ibProfiledCall profiled(session.get(), method, request.m_params);
 	ibJournalStopwatch took;
 	took.Resume();
 	// ⚠ A CALL IS ANSWERED, WHATEVER CAME OUT OF IT. What a method does not refuse itself — its session's worker
@@ -1008,6 +1047,7 @@ std::optional<ibDataNode> ibClientHost::Call(const ibRpcRequest& given, const vo
 		refused.SetValue(ibProtocol::ibRpc::Message, error);
 	}
 	ibJournalInfo(ibT("client"), ibT("  answer written %lld ms, %zu bytes"), NowMs() - writing, answer.Weight());
+	profiled.Answered(answer);
 	// A detached NoSession was not accepted, so it is not the call's answer. Anything else, including a refusal, is.
 	// Only the call that owns the slot writes it: a lookup that returned the saved answer never did.
 	if (slot.owner && slot.client && (done || refusal != ibProtocol::ibRefusal::NoSession)) {

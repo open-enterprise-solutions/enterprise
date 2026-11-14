@@ -7,6 +7,7 @@
 #include "connectionHolder.h"
 #include "connectionScope.h"
 #include "databaseLayer.h"
+#include "databaseProfiler.h"   // what a checkout cost the database, told to a measurement
 
 namespace {
 
@@ -24,6 +25,28 @@ struct ibRegisterHolderLocal {
 			[](void* p) { t_activeHolder = static_cast<ibDatabaseConnectionHolder*>(p); });
 	}
 } s_registerHolderLocal;
+
+// WHAT A CHECKOUT COST THE DATABASE, told to a database measurement while one runs (databaseProfiler.h) as the steps of
+// a transaction are — as statements of their own (Max, 2026-11-15): a connection opened (CONNECT) and the wait while
+// every one was busy (WAIT FOR A FREE CONNECTION), under the query or the line that asked. Told as the checkout
+// returns or refuses, once the pool's lock is let go: declared before the lock, it is gone after it.
+struct ibCheckoutClock {
+	const bool                             m_measured = ibDatabaseProfiler::IsRunning();
+	std::shared_ptr<const ibDatabaseLayer> m_db;   // the pool's source, held — a shutdown meanwhile drops only the pool's
+	ibDatabaseProfiler::ibClock::duration  m_connect{};
+	ibDatabaseProfiler::ibClock::duration  m_wait{};
+
+	~ibCheckoutClock()
+	{
+		try {
+			if (m_connect > ibDatabaseProfiler::ibClock::duration::zero())
+				ibDatabaseProfiler::Sql(m_db.get(), ibT("CONNECT"), m_connect, 0, {}, {});
+			if (m_wait > ibDatabaseProfiler::ibClock::duration::zero())
+				ibDatabaseProfiler::Sql(m_db.get(), ibT("WAIT FOR A FREE CONNECTION"), m_wait, 0, {}, {});
+		}
+		catch (...) {}
+	}
+};
 
 } // namespace
 
@@ -459,6 +482,7 @@ void ibConnectionPool::Shutdown()
 
 std::shared_ptr<ibDatabaseLayer> ibConnectionPool::Checkout(std::chrono::milliseconds wait)
 {
+	ibCheckoutClock measured;
 	std::unique_lock<std::mutex> lock(m_mutex);
 	const auto deadline = std::chrono::steady_clock::now() + wait;
 	while (true) {
@@ -499,7 +523,12 @@ std::shared_ptr<ibDatabaseLayer> ibConnectionPool::Checkout(std::chrono::millise
 		}
 
 		if (m_entries.size() < m_maxSize) {
+			const auto connecting = measured.m_measured ? ibDatabaseProfiler::ibClock::now() : ibDatabaseProfiler::ibClock::time_point();
 			ibDatabaseLayer* raw = m_source->Clone();
+			if (measured.m_measured) {
+				measured.m_db       = m_source;
+				measured.m_connect += ibDatabaseProfiler::ibClock::now() - connecting;
+			}
 			if (raw == nullptr)
 				return nullptr;
 			raw->m_pool = this;
@@ -526,7 +555,12 @@ std::shared_ptr<ibDatabaseLayer> ibConnectionPool::Checkout(std::chrono::millise
 				_("Database connection pool exhausted: all %d connections are busy and none became free within %d ms. Try again later or raise the pool size."),
 				(int)m_maxSize, (int)wait.count());
 		}
+		const auto waiting = measured.m_measured ? ibDatabaseProfiler::ibClock::now() : ibDatabaseProfiler::ibClock::time_point();
 		m_cv.wait_until(lock, deadline);
+		if (measured.m_measured) {
+			measured.m_db    = m_source;
+			measured.m_wait += ibDatabaseProfiler::ibClock::now() - waiting;
+		}
 	}
 }
 

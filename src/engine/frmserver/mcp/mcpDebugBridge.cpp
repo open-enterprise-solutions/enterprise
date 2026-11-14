@@ -331,6 +331,9 @@ void ibMcpDebugBridge::OnJobState(unsigned int which, const ibJobRunByteCodeStat
 			return;
 
 		m_job = state;
+		// …and what a measured run measured, read again in detail (GetProfile).
+		if (state.m_profile)
+			m_profile = std::make_shared<const ibProfileData>(*state.m_profile);
 
 		m_pending = Pending::None;
 	}
@@ -383,6 +386,66 @@ bool ibMcpDebugBridge::Compose(const ibDataNode& request, ibDataNode& result, bo
 
 	m_pending = Pending::None;
 	return arrived;
+}
+
+bool ibMcpDebugBridge::StartProfile()
+{
+	if (debugClient == nullptr || !GetStop().m_connected)
+		return false;
+	debugClient->StartProfile();
+	return true;
+}
+
+bool ibMcpDebugBridge::StopProfile(ibProfileData& profile, bool& measured, int timeoutMs)
+{
+	const std::lock_guard<std::mutex> one(s_oneQuestion);
+	measured = false;
+
+	if (debugClient == nullptr || !GetStop().m_connected)
+		return false;
+
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		m_pending  = Pending::Profile;
+		m_profiled = false;
+	}
+
+	debugClient->StopProfile();
+
+	std::unique_lock<std::mutex> lock(m_mutex);
+	const bool arrived = m_answered.wait_for(lock,
+		std::chrono::milliseconds(timeoutMs),
+		[this]() { return m_pending == Pending::None; });
+
+	if (arrived && m_profiled) {
+		measured = true;
+		profile  = *m_profile;
+	}
+
+	m_pending = Pending::None;
+	return arrived;
+}
+
+std::shared_ptr<const ibProfileData> ibMcpDebugBridge::GetProfile() const
+{
+	std::lock_guard<std::mutex> lock(m_mutex);
+	return m_profile;
+}
+
+// Kept whoever stopped it — the person's own stop too, read again by profile_read.
+void ibMcpDebugBridge::OnProfile(bool measured, const ibProfileData& profile)
+{
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		if (measured)
+			m_profile = std::make_shared<const ibProfileData>(profile);
+		if (m_pending != Pending::Profile)
+			return;             // nobody here asked — the person's stop, or a late answer
+
+		m_profiled = measured;
+		m_pending  = Pending::None;
+	}
+	m_answered.notify_all();
 }
 
 void ibMcpDebugBridge::OnComposed(bool answered, const ibString& refusal, const ibMemoryBuffer& result)

@@ -95,6 +95,10 @@
 #include "backend/metadataConfiguration.h"    // activeMetaData - whose configuration it checks against
 #include "backend/system/systemEnum.h"        // ibStatusMessage - the level of what the code said
 #include "backend/job/jobManager.h"           // ibJobManager::kKeptBackgroundJobs - how many ended runs are answered for
+#include "frmserver/docView/templates/designer/docViewProfile.h"   // ShowProfile - a measurement, as a tab of the person's
+
+#include <algorithm>
+#include <map>
 
 namespace {
 
@@ -187,6 +191,80 @@ const ibArg& ArgUnderstood()
 	return s_a;
 }
 
+// ⭐ THE CODE MEASURED, instead of timings written into it (Max, 2026-11-14: *"you just run the procedure, say you
+// need a measurement, and right after it finishes you get the detailed analytics of what ran how long"*).
+const ibArg& ArgProfile()
+{
+	static const ibArg s_a(ibT("profile"), ibArg::Kind::Flag,
+		ibMcpText("Measure the code while it runs. Once it has finished, code_status answers with `profile` beside "
+			  "`result`: which lines of which modules - the code's own and everything it called - took how long, "
+			  "the slowest first, and the same added up by procedure; each with its own time (`self_ms`), its time "
+			  "with what it called (`total_ms`) and its `percent` of the time script ran. Under a line are the "
+			  "queries it ran (`queries`: `source`, `count`, `total_ms`, `database_ms`, `memory_ms`, `statements`) "
+			  "and what it sent the database outside a query (`statements`: the `text` as sent, its `plan`, the "
+			  "`dbms`, `count`, `rows`, `run_ms`, `fetch_ms`, and its slowest run - `slowest_ms` and the `values` it "
+			  "was sent with, as SQL writes them, in the order of its placeholders); a connection the pool opened is "
+			  "a statement `CONNECT`, a wait while every one was busy `WAIT FOR A FREE CONNECTION`; the platform's own "
+			  "work, done for no line, is a line marked `platform`. Use it instead of writing timings into the code. A "
+			  "debugged application runs slower than a free one, evenly: read the shares rather than the absolute "
+			  "figures."));
+	return s_a;
+}
+
+const ibArg& ArgLimit()
+{
+	static const ibArg s_a(ibT("limit"), ibArg::Kind::Whole,
+		ibMcpText("How many of each list at most - calls, lines (each call's too), procedures, queries, statements - "
+			  "the slowest first. Default 50."));
+	return s_a;
+}
+
+// ⭐ SHOWN WHEN ASKED (Max, 2026-11-14: *"a parameter that does not oblige - you may use the profiler for yourself, or to
+// show me"*): a measurement read for the assistant's own work stays in the answer.
+const ibArg& ArgShow()
+{
+	static const ibArg s_a(ibT("show"), ibArg::Kind::Flag,
+		ibMcpText("Also open what was measured as a tab in the person's window - the same tree their own Debug > "
+			  "Performance measurement opens. Leave it out when the measurement is for your own reading."));
+	return s_a;
+}
+
+const ibArg& ArgCall()
+{
+	static const ibArg s_a(ibT("call"), ibArg::Kind::Text,
+		ibMcpText("Only the lines one client call ran, by its method as `calls` names it (`event`, `fetch`...)."));
+	return s_a;
+}
+
+const ibArg& ArgModule()
+{
+	static const ibArg s_a(ibT("module"), ibArg::Kind::Text,
+		ibMcpText("Only the lines of modules whose name has this in it, any case."));
+	return s_a;
+}
+
+const ibArg& ArgProcedure()
+{
+	static const ibArg s_a(ibT("procedure"), ibArg::Kind::Text,
+		ibMcpText("Only the lines of this procedure, any case."));
+	return s_a;
+}
+
+const ibArg& ArgQuery()
+{
+	static const ibArg s_a(ibT("query"), ibArg::Kind::Text,
+		ibMcpText("Only the lines that ran a query whose source, or sent a statement whose text, has this in it, any "
+			  "case - and of each line only those queries and statements."));
+	return s_a;
+}
+
+// What it measured, as a tab of the person's window — on the session's worker, where its frame is.
+void ShowProfile(const ibProfileData& profile)
+{
+	if (ibSession* const session = ibSession::Current())
+		(void)session->Submit([profile]() { ibProfileDocument::ShowProfile(profile); });
+}
+
 const ibArg& ArgSession()
 {
 	static const ibArg s_a(ibT("session"), ibArg::Kind::Text,
@@ -248,6 +326,18 @@ ibMcpDebugBridge* JobBridge(ibString& refusal)
 		return nullptr;
 	}
 
+	return bridge;
+}
+
+// The bridge a measurement is asked over, or why there is none: it measures an application attached to the debugger.
+ibMcpDebugBridge* ProfileBridge(ibString& refusal)
+{
+	ibMcpDebugBridge* const bridge = debugClient != nullptr ? ibMcpDebug() : nullptr;
+	if (bridge == nullptr || !bridge->GetStop().m_connected) {
+		refusal = ibMcpText("No application is attached to the debugger, so there is nothing to measure. app_run "
+			"starts one with the debugger attached - its default.");
+		return nullptr;
+	}
 	return bridge;
 }
 
@@ -319,6 +409,213 @@ bool CheckCode(const ibString& text, ibString& refusal)
 	return false;
 }
 
+// ⭐ A MEASUREMENT AS AN ASSISTANT READS IT (ibProfileData): the clients' calls by method — how often, how long, what of
+// it their lines did not take, the bytes both ways — each with the lines it ran; the lines of no call; and the
+// procedures the time went to, every line's added. The slowest first and the first `limit` of each, every line with its
+// share of the time script ran — the sum of every line's own. Under a line are the queries it ran — how long, how much
+// of it in the database and how much in memory — and the statements the database got, with their plans; the platform's
+// own work, done for no line, is a line of no module (`platform`).
+void DescribeProfile(const ibProfileData& measured, std::size_t limit, ibDataNode& into)
+{
+	using ibRow = ibProfileData::ibProfileRow;
+
+	std::vector<const ibRow*> every;   // of a call or of none
+	for (const ibProfileData::ibProfileCall& call : measured.m_calls) {
+		for (const ibRow& line : call.m_rows)
+			every.push_back(&line);
+	}
+	for (const ibRow& line : measured.m_rows)
+		every.push_back(&line);
+
+	std::int64_t spent = 0;
+	for (const ibRow* line : every)
+		spent += line->m_self;
+
+	std::map<std::pair<ibString, ibString>, ibRow> byProcedure;
+	for (const ibRow* line : every) {
+		ibRow& procedure = byProcedure[std::make_pair(line->m_name, line->m_procedure)];
+		procedure.m_name      = line->m_name;
+		procedure.m_procedure = line->m_procedure;
+		procedure.m_self  += line->m_self;
+		procedure.m_total += line->m_total;
+	}
+	std::vector<ibRow> procedures;
+	for (const auto& [key, procedure] : byProcedure)
+		procedures.push_back(procedure);
+	std::stable_sort(procedures.begin(), procedures.end(),
+		[](const ibRow& a, const ibRow& b) { return a.m_self > b.m_self; });
+
+	const auto milliseconds = [](std::int64_t microseconds) {
+		return ibDataValue::Number(ibNumber(static_cast<long long>(microseconds)) / ibNumber(1000));
+	};
+	const auto percent = [spent](std::int64_t microseconds) {
+		return ibDataValue::Number(spent > 0
+			? (ibNumber(static_cast<long long>(microseconds)) * ibNumber(100) / ibNumber(static_cast<long long>(spent))).Round(1)
+			: ibNumber());
+	};
+	const auto statementsOf = [&](const std::vector<ibQueryDebugData::ibStatement>& statements) {
+		std::vector<ibDataValue> written;
+		for (std::size_t i = 0; i < statements.size() && i < limit; i++) {
+			const ibQueryDebugData::ibStatement& statement = statements[i];
+			std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
+			node->SetValue(ibT("text"), statement.m_text);
+			if (!statement.m_plan.IsEmpty())
+				node->SetValue(ibT("plan"), statement.m_plan);
+			node->SetValue(ibT("dbms"), statement.m_dbms);
+			node->AddField(ibT("count"), ibDataValue::UInt(statement.m_count));
+			node->AddField(ibT("rows"), ibDataValue::UInt(statement.m_rows));
+			node->AddField(ibT("run_ms"), milliseconds(statement.m_run));
+			node->AddField(ibT("fetch_ms"), milliseconds(statement.m_fetch));
+			node->AddField(ibT("slowest_ms"), milliseconds(statement.m_slowest));
+			if (!statement.m_values.empty()) {
+				std::vector<ibDataValue> values;
+				for (const ibString& value : statement.m_values)
+					values.push_back(ibDataValue::String(value));
+				node->AddField(ibT("values"), ibDataValue::Array(values));
+			}
+			written.push_back(ibDataValue::Child(node));
+		}
+		return written;
+	};
+	const auto queriesOf = [&](const ibQueryDebugData& queries, ibDataNode& node) {
+		std::vector<ibDataValue> written;
+		for (std::size_t i = 0; i < queries.m_queries.size() && i < limit; i++) {
+			const ibQueryDebugData::ibQuery& query = queries.m_queries[i];
+			std::shared_ptr<ibDataNode> one = std::make_shared<ibDataNode>();
+			one->SetValue(ibT("source"), query.m_source);
+			one->AddField(ibT("count"), ibDataValue::UInt(query.m_count));
+			one->AddField(ibT("total_ms"), milliseconds(query.m_total));
+			one->AddField(ibT("database_ms"), milliseconds(query.m_database));
+			one->AddField(ibT("memory_ms"), milliseconds(std::max<std::int64_t>(query.m_total - query.m_database, 0)));
+			if (!query.m_statements.empty())
+				one->AddField(ibT("statements"), ibDataValue::Array(statementsOf(query.m_statements)));
+			written.push_back(ibDataValue::Child(one));
+		}
+		if (!written.empty())
+			node.AddField(ibT("queries"), ibDataValue::Array(written));
+		if (!queries.m_statements.empty())
+			node.AddField(ibT("statements"), ibDataValue::Array(statementsOf(queries.m_statements)));
+	};
+	const auto said = [&](const std::vector<ibRow>& rows, bool asLines) {
+		std::vector<ibDataValue> written;
+		for (std::size_t i = 0; i < rows.size() && i < limit; i++) {
+			const ibRow& one = rows[i];
+			std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
+			if (one.m_name.IsEmpty())
+				node->SetValue(ibT("platform"), true);
+			else
+				node->SetValue(ibT("module"), one.m_name);
+			if (!one.m_procedure.IsEmpty())
+				node->SetValue(ibT("procedure"), one.m_procedure);
+			if (asLines) {
+				node->AddField(ibT("line"), ibDataValue::UInt(one.m_line));
+				node->AddField(ibT("count"), ibDataValue::UInt(one.m_count));
+			}
+			node->AddField(ibT("self_ms"), milliseconds(one.m_self));
+			node->AddField(ibT("total_ms"), milliseconds(one.m_total));
+			node->AddField(ibT("percent"), percent(one.m_self));
+			if (asLines)
+				queriesOf(one.m_queries, *node);
+			written.push_back(ibDataValue::Child(node));
+		}
+		return written;
+	};
+
+	bool cut = measured.m_calls.size() > limit || measured.m_rows.size() > limit || procedures.size() > limit;
+	std::vector<ibDataValue> calls;
+	for (std::size_t i = 0; i < measured.m_calls.size() && i < limit; i++) {
+		const ibProfileData::ibProfileCall& call = measured.m_calls[i];
+		std::int64_t lines = 0;
+		for (const ibRow& line : call.m_rows)
+			lines += line.m_self;
+		cut = cut || call.m_rows.size() > limit;
+
+		std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
+		node->SetValue(ibT("method"), call.m_method);
+		node->AddField(ibT("count"), ibDataValue::UInt(call.m_count));
+		node->AddField(ibT("total_ms"), milliseconds(call.m_total));
+		node->AddField(ibT("self_ms"), milliseconds(std::max<std::int64_t>(call.m_total - lines, 0)));
+		node->AddField(ibT("request_bytes"), ibDataValue::UInt(call.m_requestBytes));
+		node->AddField(ibT("answer_bytes"), ibDataValue::UInt(call.m_answerBytes));
+		if (!call.m_rows.empty())
+			node->AddField(ibT("lines"), ibDataValue::Array(said(call.m_rows, true)));
+		calls.push_back(ibDataValue::Child(node));
+	}
+
+	into.AddField(ibT("duration_ms"), milliseconds(measured.m_duration));
+	into.AddField(ibT("measured_ms"), milliseconds(spent));
+	if (!calls.empty())
+		into.AddField(ibT("calls"), ibDataValue::Array(calls));
+	into.AddField(ibT("lines"), ibDataValue::Array(said(measured.m_rows, true)));
+	into.AddField(ibT("procedures"), ibDataValue::Array(said(procedures, false)));
+	if (cut)
+		into.SetValue(ibT("note"), ibString::Format(ibMcpText("The slowest %zu of each list, of %zu lines measured; "
+			"profile_read narrows the measurement to a call, a module, a procedure or a query."), limit, every.size()));
+}
+
+// What profile_read narrows a measurement to: the lines of one call, of one module, of one procedure, and those that ran
+// a query — each keeping only its queries and statements that have it. A call none of whose lines is left goes too.
+ibProfileData Narrowed(const ibProfileData& profile, const ibString& call, const ibString& module, const ibString& procedure,
+	const ibString& query)
+{
+	using ibRow = ibProfileData::ibProfileRow;
+
+	const ibString moduleText = module.Lower();
+	const ibString queryText  = query.Lower();
+	const auto has = [&queryText](const ibString& text) { return text.Lower().Contains(queryText); };
+
+	const auto narrowed = [&](const std::vector<ibRow>& rows) {
+		std::vector<ibRow> kept;
+		for (const ibRow& row : rows) {
+			if (!moduleText.IsEmpty() && !row.m_name.Lower().Contains(moduleText))
+				continue;
+			if (!procedure.IsEmpty() && !row.m_procedure.IsSameAs(procedure, false))
+				continue;
+			ibRow line = row;
+			if (!queryText.IsEmpty()) {
+				line.m_queries = ibQueryDebugData();
+				for (const ibQueryDebugData::ibQuery& one : row.m_queries.m_queries) {
+					ibQueryDebugData::ibQuery found = one;
+					if (!has(one.m_source)) {
+						found.m_statements.clear();
+						for (const ibQueryDebugData::ibStatement& statement : one.m_statements) {
+							if (has(statement.m_text))
+								found.m_statements.push_back(statement);
+						}
+						if (found.m_statements.empty())
+							continue;
+					}
+					line.m_queries.m_queries.push_back(found);
+				}
+				for (const ibQueryDebugData::ibStatement& statement : row.m_queries.m_statements) {
+					if (has(statement.m_text))
+						line.m_queries.m_statements.push_back(statement);
+				}
+				if (line.m_queries.IsEmpty())
+					continue;
+			}
+			kept.push_back(line);
+		}
+		return kept;
+	};
+	const bool linesNarrowed = !moduleText.IsEmpty() || !procedure.IsEmpty() || !queryText.IsEmpty();
+
+	ibProfileData result;
+	result.m_duration = profile.m_duration;
+	for (const ibProfileData::ibProfileCall& one : profile.m_calls) {
+		if (!call.IsEmpty() && !one.m_method.IsSameAs(call, false))
+			continue;
+		ibProfileData::ibProfileCall kept = one;
+		kept.m_rows = narrowed(one.m_rows);
+		if (linesNarrowed && kept.m_rows.empty())
+			continue;
+		result.m_calls.push_back(kept);
+	}
+	if (call.IsEmpty())
+		result.m_rows = narrowed(profile.m_rows);
+	return result;
+}
+
 // ⭐ WHAT A RUN SAYS ABOUT ITSELF, in one shape, so all three verbs answer alike. It is the far
 // end's own words throughout: this side adds nothing and interprets nothing.
 void DescribeRun(const ibJobRunByteCodeState& state, ibDataNode& into)
@@ -361,6 +658,13 @@ void DescribeRun(const ibJobRunByteCodeState& state, ibDataNode& into)
 	}
 	if (!said.empty())
 		into.AddField(ibT("output"), ibDataValue::Array(said));
+
+	// …AND WHAT IT MEASURED, when asked to (code_run {profile}) and finished.
+	if (state.m_profile) {
+		std::shared_ptr<ibDataNode> profile = std::make_shared<ibDataNode>();
+		DescribeProfile(*state.m_profile, 50, *profile);
+		into.AddField(ibT("profile"), ibDataValue::Child(profile));
+	}
 }
 
 // ⚠ THREE OUTCOMES, AND A BOOL CANNOT CARRY THEM. `sent` false means no answer came back before the
@@ -536,7 +840,7 @@ public:
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
 		static const std::vector<ibMcpArgument> s_arguments = {
-			ArgText(), ArgSaid(), ArgCommit(), ArgUnderstood() };
+			ArgText(), ArgSaid(), ArgCommit(), ArgUnderstood(), ArgProfile() };
 		return s_arguments;
 	}
 
@@ -626,6 +930,7 @@ public:
 		request.m_said       = ArgSaid().Text(params);
 		request.m_understood = ArgUnderstood().Text(params);
 		request.m_commit     = commit;
+		request.m_profile    = ArgProfile().Flag(params);
 
 		ibJobRunByteCodeState state;
 		const bool sent = bridge->StartJob(request, state);
@@ -846,5 +1151,173 @@ public:
 };
 
 MCP_TOOL_REGISTER_DESIGNER(ibMcpToolRunCodeCancel);
+
+//---------------------------------------------------------------------------
+// profile_start / profile_stop / profile_read
+//---------------------------------------------------------------------------
+// ⭐ THE PERSON'S MEASUREMENT, from here — the one the designer's Debug → Performance measurement starts: either side
+// begins it, either ends it. Ended by the person, it opens in their window; ended here, there only when asked (show) —
+// and the last one heard is read again in detail (profile_read).
+class ibMcpToolProfileStart : public ibMcpTool {
+public:
+
+	ibString GetName() const override { return ibT("profile_start"); }
+
+	ibString GetActivity(const ibDataNode& /*params*/) const override
+	{
+		return ibMcpText("starting a performance measurement of the application");
+	}
+
+	ibString GetDescription() const override
+	{
+		return ibMcpText("Begin a PERFORMANCE MEASUREMENT of the running application - every session of it, the "
+			"person's clicks and background jobs alike - the same one the designer's Debug > Performance "
+			"measurement starts. Every client call and every line of script that runs is timed until profile_stop, "
+			"which answers with the calls, lines and procedures that took the time.\n"
+			"To measure ONE PIECE OF CODE, code_run with `profile` is the shorter road: it measures that run "
+			"alone and answers with it when it finishes.\n"
+			"The application has to be running with the debugger attached (app_run, debug true - its default). "
+			"A started measurement runs until it is stopped; starting one while one runs leaves that one going.");
+	}
+
+	const std::vector<ibMcpArgument>& Arguments() const override
+	{
+		static const std::vector<ibMcpArgument> s_arguments;
+		return s_arguments;
+	}
+
+	bool Call(const ibDataNode& /*params*/, ibDataNode& result, ibString& refusal) const override
+	{
+		ibMcpDebugBridge* const bridge = ProfileBridge(refusal);
+		if (bridge == nullptr)
+			return false;
+
+		bridge->StartProfile();
+		result.SetValue(ibT("started"), true);
+		return true;
+	}
+};
+
+MCP_TOOL_REGISTER_DESIGNER(ibMcpToolProfileStart);
+
+class ibMcpToolProfileStop : public ibMcpTool {
+public:
+
+	ibString GetName() const override { return ibT("profile_stop"); }
+
+	// 🛑 It waits on the wire like code_status — same reason, same answer.
+	bool IsSessionTask() const override { return false; }
+
+	ibString GetActivity(const ibDataNode& /*params*/) const override
+	{
+		return ibMcpText("ending the performance measurement");
+	}
+
+	ibString GetDescription() const override
+	{
+		return ibMcpText("End the measurement profile_start - or the person's Debug > Performance measurement - "
+			"began, and answer with what it measured: `duration_ms` from its start to now, `measured_ms` - the "
+			"time script actually ran - then `calls`, `lines` and `procedures`, the slowest first.\n"
+			"`calls` are the clients' calls by method (`event`, `fetch`, `execute`...): how often (`count`), how "
+			"long (`total_ms`), how much of it their lines did not take (`self_ms` - the request read, the answer "
+			"written, the forms' own work), the bytes both ways (`request_bytes`, `answer_bytes`), and the `lines` "
+			"the call ran. `lines` beside them are the lines of no call - a background job's, code_run's.\n"
+			"A line or a procedure has `self_ms` (its own time), `total_ms` (with what it called) and `percent` of "
+			"the measured time; a line also says how often it ran (`count`), the queries it ran (`queries`: "
+			"`source`, `count`, `total_ms`, `database_ms` - spent in the database, `memory_ms` - in memory, and "
+			"their `statements`) and what it sent the database outside a query (`statements`: the `text` as sent, "
+			"its `plan`, the `dbms`, `count`, `rows`, `run_ms`, `fetch_ms`, and its slowest run - `slowest_ms` and "
+			"the `values` it was sent with, as SQL writes them, in the order of its placeholders: that run can be "
+			"sent again). A connection the pool opened is a statement `CONNECT`, a wait while every connection was "
+			"busy `WAIT FOR A FREE CONNECTION`, under the line or query that asked. The platform's own work, done "
+			"for no line - posting's writes, say - is a line marked `platform`. profile_read reads the same "
+			"measurement again, narrowed.\n"
+			"The clock is the wall's: a line the application stood on - at a breakpoint, or waiting for the "
+			"person to answer a question - is given the wait. A debugged application runs slower than a free one, "
+			"evenly: read the shares rather than the absolute figures.");
+	}
+
+	const std::vector<ibMcpArgument>& Arguments() const override
+	{
+		static const std::vector<ibMcpArgument> s_arguments = { ArgLimit(), ArgShow() };
+		return s_arguments;
+	}
+
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
+	{
+		ibMcpDebugBridge* const bridge = ProfileBridge(refusal);
+		if (bridge == nullptr)
+			return false;
+
+		ibProfileData measured;
+		bool          running = false;
+		if (!bridge->StopProfile(measured, running)) {
+			refusal = ibMcpNoAnswer(ibMcpText("The application did not answer in time; the measurement may still "
+				"be running. profile_stop again asks again."));
+			return false;
+		}
+		if (!running) {
+			refusal = ibMcpText("No measurement was running - profile_start begins one.");
+			return false;
+		}
+
+		const std::int64_t limit = ArgLimit().Whole(params);
+		DescribeProfile(measured, limit > 0 ? (std::size_t)limit : 50, result);
+		if (ArgShow().Flag(params))
+			ShowProfile(measured);
+		return true;
+	}
+};
+
+MCP_TOOL_REGISTER_DESIGNER(ibMcpToolProfileStop);
+
+class ibMcpToolProfileRead : public ibMcpTool {
+public:
+
+	ibString GetName() const override { return ibT("profile_read"); }
+
+	ibString GetActivity(const ibDataNode& /*params*/) const override
+	{
+		return ibMcpText("reading the last performance measurement");
+	}
+
+	ibString GetDescription() const override
+	{
+		return ibMcpText("Read the last measurement again, in the shape profile_stop answers with, narrowed to what "
+			"is being looked into: the lines one client call ran (`call`), of one module (`module`), of one "
+			"procedure (`procedure`), the lines that ran a query or sent a statement with a given text (`query`) - "
+			"any together. The last measurement is the last profile_stop's, the person's own stop's, or the last "
+			"code_run {profile} code_status answered with - whichever came last. Nothing is measured again: the "
+			"figures are the ones taken then.");
+	}
+
+	const std::vector<ibMcpArgument>& Arguments() const override
+	{
+		static const std::vector<ibMcpArgument> s_arguments = {
+			ArgCall(), ArgModule(), ArgProcedure(), ArgQuery(), ArgLimit(), ArgShow() };
+		return s_arguments;
+	}
+
+	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
+	{
+		ibMcpDebugBridge* const bridge = debugClient != nullptr ? ibMcpDebug() : nullptr;
+		const std::shared_ptr<const ibProfileData> last = bridge != nullptr ? bridge->GetProfile() : nullptr;
+		if (last == nullptr) {
+			refusal = ibMcpText("No measurement has been heard here yet - profile_start and profile_stop take one, or "
+				"code_run with `profile` and code_status after it.");
+			return false;
+		}
+
+		const ibProfileData narrowed = Narrowed(*last, ArgCall().Text(params), ArgModule().Text(params),
+			ArgProcedure().Text(params), ArgQuery().Text(params));
+		const std::int64_t limit = ArgLimit().Whole(params);
+		DescribeProfile(narrowed, limit > 0 ? (std::size_t)limit : 50, result);
+		if (ArgShow().Flag(params))
+			ShowProfile(narrowed);
+		return true;
+	}
+};
+
+MCP_TOOL_REGISTER_DESIGNER(ibMcpToolProfileRead);
 
 } // namespace

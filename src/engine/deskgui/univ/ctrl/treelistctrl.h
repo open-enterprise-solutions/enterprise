@@ -121,7 +121,7 @@ const int wxTL_MODE_FIND_NOCASE = 0x0020;
 
 // additional flag for HitTest
 const int wxTREE_HITTEST_ONITEMCOLUMN = 0x2000;
-extern const wxChar* ibTreeListCtrlNameStr;
+extern DESKGUI_API const wxChar* ibTreeListCtrlNameStr;
 
 // SEAM vs wx: wxControl there - the library's control here
 class DESKGUI_API ibTreeListCtrl : public ibControl

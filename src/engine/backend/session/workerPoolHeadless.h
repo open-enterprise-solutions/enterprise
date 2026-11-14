@@ -59,6 +59,10 @@ public:
 	std::size_t AliveWorkers() const { return m_aliveWorkers.load(std::memory_order_acquire); }
 	std::size_t IdleWorkers()  const { return m_idleWorkers.load(std::memory_order_acquire); }
 
+	// The session the calling fiber is leasing — none: no task of a session runs here. Read without a lock, so it never
+	// waits: for a measurement, asked under its own lock, which session's work it is told (ibProtocolProfiler).
+	static const ibSession* CurrentLease() noexcept;
+
 private:
 	struct ibSessionTask {
 		Task                                task;

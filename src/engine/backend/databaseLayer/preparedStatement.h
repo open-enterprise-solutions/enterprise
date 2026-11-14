@@ -74,6 +74,10 @@ public:
 
 	virtual int GetParameterCount() = 0;
 
+	// The plan the database chose for it, as the database writes it; empty — this driver does not tell it, or could not
+	// now. Never a refusal: it is asked by a database measurement (databaseProfiler.h), about a statement that ran.
+	virtual ibString GetPlan() { return ibString(); }
+
 	/// Run an insert, update, or delete query on the database
 	virtual int RunQuery() = 0;
 

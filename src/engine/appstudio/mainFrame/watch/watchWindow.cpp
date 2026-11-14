@@ -21,6 +21,8 @@ static unsigned long long GetWatchId(const wxTreeItemId& item) { return reinterp
 #else
 static unsigned int GetWatchId(const wxTreeItemId& item) { return reinterpret_cast<unsigned int>(item.GetID()); }
 #endif
+// …and the row a number said back is.
+static wxTreeItemId GetWatchItem(std::uint64_t id) { return wxTreeItemId(reinterpret_cast<void*>(static_cast<std::uintptr_t>(id))); }
 
 // Text dropped on the pane — a selection dragged from the code — becomes a watched expression.
 class ibWatchDropTarget : public wxTextDropTarget
@@ -44,8 +46,7 @@ ibWatchWindow::ibWatchWindow(wxWindow* parent, wxWindowID id)
 	: ibTreeListCtrl(parent, id, wxDefaultPosition, wxDefaultSize,
 		// no lines between the nodes, as every other tree of the designer (treeConfiguration): a row of grey dots stood
 		// before the empty slot (2026-11-13, Max) - on Cocoa the control drops them itself
-		wxTR_HIDE_ROOT | wxTR_FULL_ROW_HIGHLIGHT | wxTR_ROW_LINES | wxTR_HAS_BUTTONS | wxTR_NO_LINES,
-		wxDefaultValidator, wxT("watch"))   // the name given: the control's default one is not exported from its library
+		wxTR_HIDE_ROOT | wxTR_FULL_ROW_HIGHLIGHT | wxTR_ROW_LINES | wxTR_HAS_BUTTONS | wxTR_NO_LINES)
 {
 	AddColumn(_("Name"), 0, wxALIGN_LEFT);
 	AddColumn(_("Value"), 0, wxALIGN_LEFT);
@@ -87,7 +88,7 @@ void ibWatchWindow::SetVariable(const ibWatchWindowData& watchData)
 	for (unsigned int i = 0; i < watchData.GetWatchCount(); ++i) {
 		// The id is a row of THIS tree: the bridge lets through only the answers to its own
 		// questions (ibDebuggerClientBridgeDesigner::OnSetVariable).
-		const wxTreeItemId& item = watchData.GetItem(i);
+		const wxTreeItemId item = GetWatchItem(watchData.GetItem(i));
 		if (!item.IsOk())
 			continue;
 
@@ -106,7 +107,7 @@ void ibWatchWindow::SetVariable(const ibWatchWindowData& watchData)
 
 void ibWatchWindow::SetExpanded(const ibWatchWindowData& watchData)
 {
-	const wxTreeItemId& item = watchData.GetItem();
+	const wxTreeItemId item = GetWatchItem(watchData.GetItem());
 	if (!item.IsOk())
 		return;
 

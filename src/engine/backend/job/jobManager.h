@@ -60,6 +60,7 @@
 #include <vector>
 
 class ibSession;
+struct ibProfileData;   // what a run's code measured of itself (debugger/debugDefs.h)
 
 // What a job actually does, and how it reports back.
 //
@@ -342,6 +343,11 @@ public:
 	void                Say(const ibString& text, ibStatusMessage status);
 	std::vector<ibSaid> Said() const;
 
+	// What its code measured of itself, when it was asked to (code_run {profile}), kept for whoever asks about the run;
+	// null otherwise.
+	std::shared_ptr<const ibProfileData> Profile() const;
+	void                                 Profile(std::shared_ptr<const ibProfileData> profile);
+
 private:
 	friend class ibJobManager;
 
@@ -354,6 +360,7 @@ private:
 	ibString                 m_error;
 	ibString                 m_activity;
 	std::deque<ibSaid>       m_said;
+	std::shared_ptr<const ibProfileData> m_profile;
 	std::atomic<bool>        m_done { false };
 	// Set by the run's own interrupt arm — the run stopped because somebody asked, not because it broke.
 	std::atomic<bool>        m_cancelled { false };

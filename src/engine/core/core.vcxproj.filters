@@ -43,6 +43,9 @@
     <Filter Include="query">
       <UniqueIdentifier>{a4a3bd23-8265-4eae-9b38-c123e23b3d1c}</UniqueIdentifier>
     </Filter>
+    <Filter Include="debugger">
+      <UniqueIdentifier>{5b9e1c47-2d8a-4f36-b1e0-7c3a9d4e6f21}</UniqueIdentifier>
+    </Filter>
     <Filter Include="serialize">
       <UniqueIdentifier>{8708f6ac-1c30-4368-8d4f-7555b0b5d7bf}</UniqueIdentifier>
     </Filter>
@@ -537,6 +540,12 @@
     </ClInclude>
     <ClInclude Include="query\queryBalanceRole.h">
       <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryDebug.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="debugger\debugDefs.h">
+      <Filter>debugger</Filter>
     </ClInclude>
     <ClInclude Include="query\queryConstructorField.h">
       <Filter>query</Filter>

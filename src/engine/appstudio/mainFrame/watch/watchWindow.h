@@ -10,7 +10,7 @@
 /////////////////////////////////////////////////////////////////////////////
 
 #include "deskgui/univ/ctrl/treelistctrl.h"
-#include "appstudio/backend/debugger/debugDefs.h"
+#include "core/debugger/debugDefs.h"
 
 #define watchWindow	ibWatchWindow::GetWatchWindow()
 

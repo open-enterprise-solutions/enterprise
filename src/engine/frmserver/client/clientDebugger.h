@@ -8,6 +8,8 @@
 // caller's thread, as the assistant's tools do it (Command). Made with the designer's frame and gone with it
 // (ibClientFrameDesigner) — the engine's adapter owns it meanwhile.
 
+#include <atomic>
+
 #include "backend/debugger/debugClientBridge.h"
 
 #include "frmserver/frmserver.h"
@@ -27,7 +29,7 @@ public:
 	// THE CLIENT'S COMMAND (ibProtocol::ibDebug::ibCommand; Channel and Listen are the host's) — `params` its fields, done
 	// and answered into `result` at once; false with why. What the runtime answers comes later, as news.
 	bool Command(ibProtocol::ibDebug::ibCommand command, const ibDataNode& params, ibDataNode& result,
-		ibProtocol::ibRefusal& refusal, ibString& error) const;
+		ibProtocol::ibRefusal& refusal, ibString& error);
 
 	// The engine's news, each an event of its own (ibProtocol::ibDebug::ibEvent). SessionStart and SessionEnd say whether
 	// a runtime is still attached (Connected) — the engine's HasConnections, asked once it holds.
@@ -50,6 +52,8 @@ public:
 	virtual void OnSetVariable(const ibWatchWindowData& watchData) override;
 	virtual void OnSetExpanded(const ibWatchWindowData& watchData) override;
 
+	virtual void OnProfile(bool measured, const ibProfileData& profile) override;
+
 private:
 
 	// `event`, its fields written, sent as the news of that kind.
@@ -57,6 +61,10 @@ private:
 
 	const ibApplicationInstance* const m_applicationInstance;
 	const ibClientInstance* const      m_clientInstance;
+
+	// This client stopped the measurement (ProfileStop): what it measured opens as its tab. Another's stop — the
+	// assistant's — opens none here; the assistant shows it when it asks to (profile_stop {show}).
+	std::atomic<bool>                  m_profileStopped{ false };
 };
 
 #endif

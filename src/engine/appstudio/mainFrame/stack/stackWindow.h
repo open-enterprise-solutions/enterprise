@@ -6,7 +6,7 @@
 #include <wx/sizer.h>
 
 #include "frmclient/frmclient.h"
-#include "appstudio/backend/debugger/debugDefs.h"
+#include "core/debugger/debugDefs.h"
 
 #define stackWindow ibStackWindow::GetStackWindow()
 

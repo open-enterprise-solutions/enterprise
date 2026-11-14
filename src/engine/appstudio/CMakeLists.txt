@@ -35,6 +35,7 @@ set(DESIGNER_THIN_SOURCES
     docManager/templates/docViewComposer.cpp
     docManager/templates/docViewInterface.cpp
     docManager/templates/docViewRole.cpp
+    docManager/templates/docViewProfile.cpp
     docManager/templates/docViewConfigCompare.cpp
     docManager/templates/docViewMetaFile.cpp
     mainFrame/configCompare/configCompareModel.cpp

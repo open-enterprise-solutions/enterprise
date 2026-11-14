@@ -17102,3 +17102,85 @@ msgstr ""
 #: src/engine/frmclient/propertyManager/property/advprop/advpropPicture.cpp:322
 msgid "All image files"
 msgstr ""
+
+#: src/engine/appstudio/mainFrame/mainFrameDesignerMenu.cpp:71
+msgid "Performance measurement"
+msgstr ""
+
+#: src/engine/frmserver/docView/templates/designer/docViewProfile.cpp:23
+#, c-format
+msgid "Performance measurement: %s s, script %s s"
+msgstr ""
+
+#: src/engine/frmserver/docView/docManagerDesigner.cpp:62
+msgid "Profile Doc"
+msgstr ""
+
+#: src/engine/frmserver/docView/docManagerDesigner.cpp:62
+msgid "Profile View"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewProfile.cpp:228
+msgid "Procedure"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewProfile.cpp:230
+msgid "Count"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewProfile.cpp:231
+msgid "Own, ms"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewProfile.cpp:233
+msgid "Total, ms"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewProfile.cpp:234
+msgid "Database, ms"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewProfile.cpp:235
+msgid "In memory, ms"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewProfile.cpp:237
+msgid "Request, bytes"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewProfile.cpp:238
+msgid "Answer, bytes"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewProfile.cpp:308
+msgid "Platform"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewProfile.cpp:199
+#, c-format
+msgid "Values: %s"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewProfile.cpp:350
+msgid "Calls"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewProfile.cpp:350
+msgid "Lines"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewProfile.cpp:350
+msgid "Queries"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewProfile.cpp:350
+msgid "SQL"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewProfile.cpp:350
+msgid "Plans"
+msgstr ""
+
+#: src/engine/appstudio/docManager/templates/docViewProfile.cpp:350
+msgid "Values"
+msgstr ""
