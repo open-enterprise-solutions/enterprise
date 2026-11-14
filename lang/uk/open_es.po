@@ -16987,6 +16987,27 @@ msgstr "Прапорець натиснуто"
 msgid "Radio button"
 msgstr "Перемикач"
 
+#: src/engine/frmserver/visualView/controlEnum.h:145
+msgctxt "field kind"
+msgid "Input field"
+msgstr "Поле введення"
+
+#: src/engine/frmserver/visualView/controlEnum.h:146
+msgid "Radio buttons"
+msgstr "Перемикач"
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h:479
+msgid "Choice list"
+msgstr "Список вибору"
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h:477
+msgid "How the field shows its value. Input field: a text to type, with the Select, Open and Clear buttons. Radio buttons: a button for each choice, the one its value holds selected; a click writes that choice in and raises Change."
+msgstr "Як поле показує своє значення. Поле введення: текст, який набирають, з кнопками «Вибрати», «Відкрити» й «Очистити». Перемикач: по кнопці на кожен варіант, вибрана та, що в значенні; клацання записує цей варіант і викликає ПриЗміні."
+
+#: src/engine/frmserver/visualView/ctrl/widgets.h:480
+msgid "The choices the field offers, one a line, each a value of the field's type (a number for a number, a text for a string). Empty: the type's own - True and False for a boolean, the members of an enumeration."
+msgstr "Варіанти, які пропонує поле, по одному в рядку, кожен — значення типу поля (число для числа, текст для рядка). Порожньо: варіанти самого типу — Істина й Хибність для булевого, значення переліку."
+
 #: src/engine/frmserver/visualView/ctrl/widgets.h:545
 msgid "The radio button's caption. Can be written per language."
 msgstr "Заголовок перемикача. Можна задати для кожної мови."

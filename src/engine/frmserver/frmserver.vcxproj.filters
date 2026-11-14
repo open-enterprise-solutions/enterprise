@@ -487,6 +487,12 @@
     <ClCompile Include="visualView\ctrl\checkbox_res.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
+    <ClCompile Include="visualView\ctrl\field.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="visualView\ctrl\field_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
     <ClCompile Include="visualView\ctrl\control.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>

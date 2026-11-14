@@ -471,13 +471,14 @@ namespace ibProtocol {
 		inline constexpr const char* Column   = "Column";     // a table's column, by its control id
 		inline constexpr const char* Col      = "Col";        // a spreadsheet's column, from 1
 		inline constexpr const char* Width    = "Width";      // Resize: the width it asks for
+		inline constexpr const char* Choice   = "Choice";     // Change: a field's choice, by its place among its State's Choices
 
 		enum class ibKind : int {
 			Focus   = 1,    // the control became the active one
 			Command = 2,    // an entry of its command bar pressed (Id; Member — one command of a group)
 			Press   = 3,    // a button pressed (Member — one command of its group, by its place among the group's commands)
 			Input   = 4,    // typing started in a field: nothing committed, the object is modified; in a cell — its editor opened
-			Change  = 5,    // a field's text committed (Text) — a cell's, and its edit is over
+			Change  = 5,    // a field's text committed (Text) — a cell's, and its edit is over; a field's choice picked (Choice)
 			Select  = 6,    // a field's Select button
 			Open    = 7,    // the value opened: a field's Open button, a caption's link; a table's row (Row, no Column) —
 			                // double-click / Enter
@@ -1194,6 +1195,7 @@ namespace ibProtocol {
 			inline constexpr const char* Gauge               = "Gauge";
 			inline constexpr const char* Htmlbox             = "Htmlbox";
 			inline constexpr const char* Chartbox            = "Chartbox";
+			inline constexpr const char* Field               = "Field";
 
 		}
 
@@ -1219,6 +1221,7 @@ namespace ibProtocol {
 			inline constexpr const char* Rows             = "Rows";            // a grid sizer's
 			inline constexpr const char* Cols             = "Cols";
 			inline constexpr const char* TitleLocation    = "TitleLocation";   // ibTitleLocation
+			inline constexpr const char* Kind             = "Kind";            // ibFieldKind: a field's
 			inline constexpr const char* PictureLocation  = "PictureLocation"; // ibPictureLocation: a button's
 			inline constexpr const char* View             = "View";            // ibButtonView: a button's
 			inline constexpr const char* PasswordMode     = "PasswordMode";
@@ -1230,6 +1233,12 @@ namespace ibProtocol {
 			inline constexpr const char* MinValue         = "MinValue";        // a slider's: its ends
 			inline constexpr const char* MaxValue         = "MaxValue";
 			inline constexpr const char* Value            = "Value";           // a gauge's, a slider's
+
+			// How a field shows its value (the server's ibFieldKind) — what it is built as: a new kind builds it anew.
+			enum class ibFieldKind : int {
+				Input        = 0,   // a text field — what a Textctrl is
+				RadioButtons = 1,   // a button per choice of its State's Choices (ibField), one of them Selected
+			};
 
 			// Where a field's title stands (the server's ibTitleLocation).
 			enum class ibTitleLocation : int {
@@ -1337,6 +1346,16 @@ namespace ibProtocol {
 			inline constexpr const char* Member  = "Member";
 			inline constexpr const char* Caption = "Caption";
 			inline constexpr const char* Picture = "Picture";
+
+		}
+
+		// A field's choices — its State's Choices, each a Caption, the one standing in its source Selected (its place among
+		// them; absent: none), picked back as event Change {Choice}.
+		namespace ibField {
+
+			inline constexpr const char* Choices  = "Choices";
+			inline constexpr const char* Caption  = "Caption";
+			inline constexpr const char* Selected = "Selected";
 
 		}
 

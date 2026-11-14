@@ -250,6 +250,8 @@ class ibValueTextCtrl : public ibValueWindow,
 	// reference, a view-only form, a read-only source). One flag for the whole field: it stops typing,
 	// Select and Clear alike; Open only reads, and stays.
 	virtual bool IsReadOnly() const override;
+	// …the binding alone: a value may be written into it, whatever TextEditMode says.
+	bool IsBindingWritable() const;
 
 	//get form owner
 	virtual ibValueForm* GetOwnerForm() const { return m_formOwner; }
@@ -339,6 +341,8 @@ protected:
 	bool TextProcessing(const ibString& strData);
 	// …and a value the client sent with its type (ibValue::Serialize — a date from its calendar): the same commit.
 	bool ValueProcessing(const class ibDataNode& node);
+	// A value the person gave the field, written into its source, and Change raised — the end of every commit.
+	void CommitValue(const ibValue& value);
 
 	// The format written on the attribute the field is bound to — what it shows its value with when it has
 	// none of its own. Empty when the source is no attribute.
@@ -398,6 +402,83 @@ private:
 	ibEventControl* m_eventChoiceProcessing = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, ibT("ChoiceProcessing"), _("Choice processing"), std::vector<ibString>{ ibT("Control"), ibT("ValueSelected"), ibT("StandardProcessing") });
 
 	friend class ibValueForm;
+};
+
+constexpr ibClassID g_controlFieldCLSID = control_to_clsid("CT_FIELD");
+
+class ibValueField;
+
+// WHAT A KIND OF FIELD DOES — said once, by the kind: what the field shows of its value, and what a person's act on it
+// means. The field asks its kind and never asks which kind it is (ibFieldKindRole::Of).
+class ibFieldKindRole {
+public:
+	virtual ~ibFieldKindRole() = default;
+
+	// The State the field is drawn from.
+	virtual void OnUpdate(ibValueField& field, ibDataNode& state, ibVisualHost* host) const = 0;
+	// What the person did with it.
+	virtual bool OnClientEvent(ibValueField& field, ibProtocol::ibEvent::ibKind event, const ibDataNode& args) const = 0;
+
+	// The kind's role — one object a kind, made once.
+	static const ibFieldKindRole& Of(ibFieldKind kind);
+};
+
+// A FIELD — one value of a source, and how it is shown: as a text to type (Input), or as a button per choice
+// (RadioButtons). It is bound as a text box is, and it IS one — its source, its title, its type, its choice and its
+// events are the text box's; the kind decides only what is drawn and what a click means.
+//
+// A switch is ONE field: its choices belong to it — the ones written on it (ChoiceList), or else what its type has,
+// True / False for a boolean and the members of an enumeration. Picking one writes it into the source.
+class ibValueField : public ibValueTextCtrl {
+public:
+
+	// One of the field's choices: the value it writes, and what it is called.
+	struct ibChoice {
+		ibValue  value;
+		ibString caption;
+	};
+
+	ibValueField();
+
+	ibFieldKind GetKind() const { return m_propertyKind->GetValueAsEnum(); }
+	void SetKind(ibFieldKind kind) { m_propertyKind->SetValue(kind); }
+	void SetChoiceList(const ibString& list) { m_propertyChoiceList->SetValue(list); }
+
+	// What the field offers to pick from: its own list, each line a value of its type; with none, its type's —
+	// True / False, an enumeration's members; else nothing.
+	std::vector<ibChoice> GetChoices() const;
+	// The choice its source holds now — its place among GetChoices(); ibNOT_FOUND: none of them.
+	int GetSelectedChoice(const std::vector<ibChoice>& choices) const;
+	// One of them picked: written into the source, and Change raised. A read-only field, or a place that names no
+	// choice, takes nothing.
+	bool Choose(int index);
+
+	// The kind draws it…
+	virtual void OnUpdate(ibDataNode& state, ibVisualHost* host) override;
+	// …and says what a person's act means.
+	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) override;
+
+	// The text box's own answers — the Input kind is one.
+	void UpdateAsText(ibDataNode& state, ibVisualHost* host) { ibValueTextCtrl::OnUpdate(state, host); }
+	bool ClientEventAsText(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) { return ibValueTextCtrl::OnClientEvent(event, args); }
+
+	//support icons
+	virtual ibPicture GetIcon() const override;
+	static ibPicture GetIconGroup();
+
+	//load & save object in control
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
+
+private:
+
+	ibPropertyCategory* m_categoryField = ibPropertyObject::CreatePropertyCategory(ibT("Field"), _("Field"));
+	ibPropertyEnum<ibValueEnumFieldKind>* m_propertyKind = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumFieldKind>>(m_categoryField, ibT("Kind"), _("Kind"),
+		_("How the field shows its value. Input field: a text to type, with the Select, Open and Clear buttons. Radio buttons: a button for each choice, the one its value holds selected; a click writes that choice in and raises Change."),
+		ibFieldKind::ibFieldKind_Input);
+	ibPropertyMString* m_propertyChoiceList = ibPropertyObject::CreateProperty<ibPropertyMString>(m_categoryField, ibT("ChoiceList"), _("Choice list"),
+		_("The choices the field offers, one a line, each a value of the field's type (a number for a number, a text for a string). Empty: the type's own - True and False for a boolean, the members of an enumeration."),
+		ibT(""));
 };
 
 constexpr ibClassID g_controlCheckboxCLSID = control_to_clsid("CT_CHKB");

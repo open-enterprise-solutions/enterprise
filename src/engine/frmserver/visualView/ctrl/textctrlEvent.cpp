@@ -59,9 +59,14 @@ bool ibValueTextCtrl::ValueProcessing(const ibDataNode& node)
 	if (!GetTypeValueDesc().ContainType(newValue.GetClassType()))
 		return false;
 
-	SetControlValue(newValue);
-	ibValueControl::CallAsEvent(m_eventOnChange, GetValue());
+	CommitValue(newValue);
 	return true;
+}
+
+void ibValueTextCtrl::CommitValue(const ibValue& value)
+{
+	SetControlValue(value);
+	ibValueControl::CallAsEvent(m_eventOnChange, GetValue());
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////

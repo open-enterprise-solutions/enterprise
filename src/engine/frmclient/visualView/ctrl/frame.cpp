@@ -25,12 +25,20 @@ std::map<wxString, ibValueFrame* (*)(ibVisualHostClient&, long long)>& Types()
 	return types;
 }
 
+// …and one drawn by its kind's own control (CONTROL_KIND_REGISTER): its type and its kind.
+wxString KindKey(const wxString& type, long long kind)
+{
+	return type + wxT('#') + wxString::Format(wxT("%lld"), kind);
+}
+
 } // namespace
 
-ibValueFrame* ibValueFrame::Make(const wxString& type, ibVisualHostClient& host, long long controlId)
+ibValueFrame* ibValueFrame::Make(const wxString& type, long long kind, ibVisualHostClient& host, long long controlId)
 {
 	const auto& types = Types();
-	const auto registered = types.find(type);
+	auto registered = types.find(KindKey(type, kind));
+	if (registered == types.end())
+		registered = types.find(type);
 	ibValueFrame* const made = registered != types.end() ? registered->second(host, controlId)
 		: new ibViewPlaceholder(host, controlId);
 	made->m_className = type;
@@ -40,6 +48,11 @@ ibValueFrame* ibValueFrame::Make(const wxString& type, ibVisualHostClient& host,
 void ibValueFrame::Register(const wxString& type, ibValueFrame* (*make)(ibVisualHostClient& host, long long controlId))
 {
 	Types()[type] = make;
+}
+
+void ibValueFrame::Register(const wxString& type, long long kind, ibValueFrame* (*make)(ibVisualHostClient& host, long long controlId))
+{
+	Types()[KindKey(type, kind)] = make;
 }
 
 bool ibValueFrame::ChangeChildPosition(ibValueFrame* obj, unsigned int pos)

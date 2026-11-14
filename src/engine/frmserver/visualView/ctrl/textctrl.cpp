@@ -129,11 +129,15 @@ bool ibValueTextCtrl::IsReadOnly() const
 {
 	if (!m_propertyTexteditMode->GetValueAsBoolean())
 		return true;
-	// A dotted reference path (Source.Ref.Field), a view-only form or a read-only source cannot be
-	// written, whatever TextEditMode says. Unbound = editable.
-	const bool writableBinding = m_propertySource->IsEmptyProperty()
+	return !IsBindingWritable();
+}
+
+// A dotted reference path (Source.Ref.Field), a view-only form or a read-only source cannot be written, whatever
+// TextEditMode says. Unbound = writable.
+bool ibValueTextCtrl::IsBindingWritable() const
+{
+	return m_propertySource->IsEmptyProperty()
 		|| (m_formOwner != nullptr && m_formOwner->IsWritableBinding(m_propertySource->GetValueAsSourceDesc()));
-	return !writableBinding;
 }
 
 #include "backend/appData.h"

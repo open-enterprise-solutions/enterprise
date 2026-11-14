@@ -71,11 +71,14 @@ class FRMCLIENT_API ibValueFrame : public ibValue,
 	public ibPropertyObjectHelper<ibValueFrame> {
 public:
 
-	// The control drawn for a node of that type — a placeholder in its place for a type this client does not draw yet
+	// The control drawn for a node of that type — of that type and kind where one is registered for the kind (a field's:
+	// its Kind picks what draws it); a placeholder in its place for a type this client does not draw yet
 	// (IsPlaceholder); held once it is added to its parent.
-	static ibValueFrame* Make(const wxString& type, ibVisualHostClient& host, long long controlId);
-	// …and how a control of a type is made, registered as its source is loaded (CONTROL_REGISTER).
+	static ibValueFrame* Make(const wxString& type, long long kind, ibVisualHostClient& host, long long controlId);
+	// …and how a control of a type is made, registered as its source is loaded (CONTROL_REGISTER)…
 	static void Register(const wxString& type, ibValueFrame* (*make)(ibVisualHostClient& host, long long controlId));
+	// …and of a type and a kind (CONTROL_KIND_REGISTER).
+	static void Register(const wxString& type, long long kind, ibValueFrame* (*make)(ibVisualHostClient& host, long long controlId));
 
 	virtual ~ibValueFrame() = default;
 
@@ -198,6 +201,10 @@ private:
 // (TAB_DOCUMENT_REGISTER).
 #define CONTROL_REGISTER(class_info, type)\
 	[[maybe_unused]] static const bool ibMAKE_UNIQUE_NAME(s_control_reg_) = (ibValueFrame::Register(type,\
+		[](ibVisualHostClient& host, long long controlId) -> ibValueFrame* { return new class_info(host, controlId); }), true);
+// …a node's type and kind, and the control made for it.
+#define CONTROL_KIND_REGISTER(class_info, type, kind)\
+	[[maybe_unused]] static const bool ibMAKE_UNIQUE_NAME(s_control_kind_reg_) = (ibValueFrame::Register(type, static_cast<long long>(kind),\
 		[](ibVisualHostClient& host, long long controlId) -> ibValueFrame* { return new class_info(host, controlId); }), true);
 
 #endif
