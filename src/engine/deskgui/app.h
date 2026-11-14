@@ -363,6 +363,22 @@ public:
 	}
 #endif // wxDEBUG_LEVEL
 
+#ifdef __WXOSX__
+	// THE DOCK'S ICON CLICKED: the application's window its close button hid is shown again, as the Mac's application
+	// that stayed when its window was closed (ibTopLevelWindow::ClickTitleBarButton, 2026-11-15). wx's own brings back a
+	// miniaturized window only - a hidden one is, to it, a dialog closed or a panel kept for later
+	void MacReopenApp() override
+	{
+		wxWindow* const top = GetTopWindow();
+		if (top == nullptr || top->IsShown()) {
+			wxApp::MacReopenApp();
+			return;
+		}
+		top->Show();
+		top->Raise();
+	}
+#endif // __WXOSX__
+
 protected:
 
 #ifndef __WXMSW__

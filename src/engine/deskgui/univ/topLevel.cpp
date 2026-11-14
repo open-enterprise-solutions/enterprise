@@ -18,6 +18,13 @@
     #include <dwmapi.h>
 #endif
 
+#ifdef __WXOSX__
+    #include <wx/utils.h>       // wxGetKeyState - Option held on the green button (ClickTitleBarButton)
+
+    // the system's title bar given back unseen, for the Mac's buttons to work (topLevelCocoa.mm)
+    void ibOSXSetTitleBarHidden(wxWindow* window);
+#endif
+
 ibWindowShowLocker::ibWindowShowLocker(wxTopLevelWindow *window)
     : m_window(nullptr)
 {
@@ -220,6 +227,13 @@ bool ibTopLevelWindow<W>::Create(wxWindow *parent,
     const MARGINS shadow = { 0, 0, 0, 1 };
     ::DwmExtendFrameIntoClientArea(GetHwndOf(this), &shadow);
 #endif // __WXMSW__
+#ifdef __WXOSX__
+    // …and on the Mac the system's title bar given back, unseen, for the window to be what the Mac's buttons ask -
+    // miniaturized, zoomed, full screen (ClickTitleBarButton); full screen offered as the Mac offers it, to a window
+    // that may be maximized
+    ibOSXSetTitleBarHidden(this);
+    this->EnableFullScreenView(this->HasFlag(wxMAXIMIZE_BOX));
+#endif // __WXOSX__
 
     // the theme's surface, not the platform's: a native window's default is the system's colour (BTNFACE on MSW, the
     // appearance's on macOS - black there, under Luna's black text), the palette's for a dialog is chrome (FRAME,
@@ -229,9 +243,10 @@ bool ibTopLevelWindow<W>::Create(wxWindow *parent,
         this->SetOwnBackgroundColour(ibThemeEngine::Get()->GetColourScheme()->Get(ibColourScheme::FRAME));
 
     // no larger than its display's work area, as Cocoa keeps a titled window the user may size (constrainFrameRect) -
-    // ours is made without the system's title bar: one larger than the screen had its own off it, Centre keeping the top
-    // left on the display and then giving it up for the bottom right (codeRunner's 1100x750 on the 1024x768 screen of
-    // CI look-macos, 2026-11-12). The same on every port: the native window is undecorated on all three
+    // ours is made without the system's title bar (the Mac's given back only after, unseen - above): one larger than
+    // the screen had its own off it, Centre keeping the top left on the display and then giving it up for the bottom
+    // right (coderunner's 1100x750 on the 1024x768 screen of CI look-macos, 2026-11-12). The same on every port: the
+    // native window is made undecorated on all three
     if ( this->HasFlag(wxRESIZE_BORDER) )
     {
         wxSize sizeFit = this->GetSize();
@@ -358,6 +373,10 @@ void ibTopLevelWindow<W>::SetWindowStyleFlag(long style)
 #ifdef __WXMSW__
     this->MSWUpdateStyle(nativeStyle, this->GetExtraStyle());
 #endif // __WXMSW__
+#ifdef __WXOSX__
+    ibOSXSetTitleBarHidden(this);
+    this->EnableFullScreenView(this->HasFlag(wxMAXIMIZE_BOX));
+#endif // __WXOSX__
 
     // other decorations, another client area
     if ( (style & s_decorations) != decorationsOld )
@@ -505,6 +524,16 @@ void ibTopLevelWindow<W>::ClickTitleBarButton(long button)
     switch ( button )
     {
         case wxTOPLEVEL_BUTTON_CLOSE:
+#ifdef __WXOSX__
+            // the Mac's: the application's window closed is hidden, the application staying in the Dock - its icon
+            // shows the window again (ibWxApp::MacReopenApp), Cmd+Q closes it (2026-11-15, Max: "the application does
+            // not close, it goes to the tray")
+            if ( wxTheApp->GetTopWindow() == this )
+            {
+                this->Hide();
+                break;
+            }
+#endif // __WXOSX__
             this->Close();
             break;
 
@@ -512,6 +541,16 @@ void ibTopLevelWindow<W>::ClickTitleBarButton(long button)
             this->Iconize();
             break;
 
+#ifdef __WXOSX__
+        case wxTOPLEVEL_BUTTON_MAXIMIZE:
+        case wxTOPLEVEL_BUTTON_RESTORE:
+            // the Mac's green: full screen and back; with Option the window zoomed to its screen and back
+            if ( wxGetKeyState(WXK_ALT) && !this->IsFullScreen() )
+                this->Maximize(!this->IsMaximized());
+            else
+                this->ShowFullScreen(!this->IsFullScreen());
+            break;
+#else
         case wxTOPLEVEL_BUTTON_MAXIMIZE:
             this->Maximize();
             break;
@@ -519,6 +558,7 @@ void ibTopLevelWindow<W>::ClickTitleBarButton(long button)
         case wxTOPLEVEL_BUTTON_RESTORE:
             this->Restore();
             break;
+#endif // __WXOSX__
 
         case wxTOPLEVEL_BUTTON_HELP:
 #if wxUSE_HELP

@@ -5,6 +5,8 @@
 // content, terracotta accent). Registered as the default theme "luna".
 // ----------------------------------------------------------------------------
 
+#include <memory>   // std::unique_ptr - a frame button's smoothed DC (DrawFrameButton)
+
 #include <wx/dc.h>
 #include <wx/dcmemory.h>
 #include <wx/dcgraph.h>
@@ -1259,41 +1261,51 @@ void ibLunaRenderer::DrawFrameButton(wxDC& dc, wxCoord x, wxCoord y, int button,
 		colour = colour.ChangeLightness(80);
 	const int diameter = 12;
 	const wxRect disc(face.x + (face.width - diameter) / 2, face.y + (face.height - diameter) / 2, diameter, diameter);
-	wxGraphicsContext* gc = wxGraphicsContext::CreateFromUnknownDC(dc);
-	if (gc != nullptr) {
-		gc->SetPen(*wxTRANSPARENT_PEN);
-		gc->SetBrush(wxBrush(colour));
-		gc->DrawEllipse(disc.x, disc.y, disc.width, disc.height);
-		delete gc;
-	}
-	else {
-		dc.SetPen(*wxTRANSPARENT_PEN);
-		dc.SetBrush(wxBrush(colour));
-		dc.DrawEllipse(disc);
-	}
 
-	// the glyph in a square of 6 pixels in the middle
+	// the disc and its glyph smoothed, through one graphics context (wxGCDC - the same calls as the DC's): on MSW
+	// Direct2D's - GDI+, the default there, left the 12 pixels' edge in steps, and the glyph's lines were GDI's, not
+	// smoothed at all (2026-11-15, Max: "the circles with antialiasing"); Cocoa's and Cairo's elsewhere. The DC clipped
+	// to the button meanwhile: Direct2D takes the DC's clip box for its surface (BindDC), the whole buffer of the title
+	// bar otherwise, three times a paint
+	const wxDCClipper clip(dc, face);
+	wxGraphicsRenderer* renderer = nullptr;
+#if defined(wxUSE_GRAPHICS_DIRECT2D) && wxUSE_GRAPHICS_DIRECT2D
+	renderer = wxGraphicsRenderer::GetDirect2DRenderer();
+#endif
+	if (renderer == nullptr)
+		renderer = wxGraphicsRenderer::GetDefaultRenderer();
+	wxGraphicsContext* const gc = renderer->CreateContextFromUnknownDC(dc);
+	std::unique_ptr<wxGCDC> smooth(gc != nullptr ? new wxGCDC(gc) : nullptr);
+	wxDC& paint = smooth ? static_cast<wxDC&>(*smooth) : dc;
+
+	paint.SetPen(*wxTRANSPARENT_PEN);
+	paint.SetBrush(wxBrush(colour));
+	paint.DrawEllipse(disc);
+
+	// the glyph in a square of 6 pixels in the middle, a line from its first pixel to its last: a graphics context's
+	// line takes its last one, the DC's stopped short of it - the "+1" it was given put the cross and the minus half a
+	// pixel off the disc's centre once smoothed (2026-11-15, Max: "as if not in the centre")
 	const int side = 6;
 	const wxRect glyph(face.x + (face.width - side) / 2, face.y + (face.height - side) / 2, side, side);
-	dc.SetPen(wxPen(colour.ChangeLightness(40)));
-	dc.SetBrush(*wxTRANSPARENT_BRUSH);
+	paint.SetPen(wxPen(colour.ChangeLightness(40)));
+	paint.SetBrush(*wxTRANSPARENT_BRUSH);
 	switch (button) {
 	case wxTOPLEVEL_BUTTON_CLOSE:
-		dc.DrawLine(glyph.GetLeft(), glyph.GetTop(), glyph.GetRight() + 1, glyph.GetBottom() + 1);
-		dc.DrawLine(glyph.GetRight(), glyph.GetTop(), glyph.GetLeft() - 1, glyph.GetBottom() + 1);
+		paint.DrawLine(glyph.GetLeft(), glyph.GetTop(), glyph.GetRight(), glyph.GetBottom());
+		paint.DrawLine(glyph.GetRight(), glyph.GetTop(), glyph.GetLeft(), glyph.GetBottom());
 		break;
 	case wxTOPLEVEL_BUTTON_MAXIMIZE:
-		dc.DrawRectangle(glyph);
+		paint.DrawRectangle(glyph);
 		break;
 	case wxTOPLEVEL_BUTTON_RESTORE:
 		// the window in front, the corner of the one behind it
-		dc.DrawRectangle(glyph.x, glyph.y + 2, side - 2, side - 2);
-		dc.DrawLine(glyph.x + 2, glyph.y, glyph.GetRight() + 1, glyph.y);
-		dc.DrawLine(glyph.GetRight(), glyph.y, glyph.GetRight(), glyph.y + side - 2);
+		paint.DrawRectangle(glyph.x, glyph.y + 2, side - 2, side - 2);
+		paint.DrawLine(glyph.x + 2, glyph.y, glyph.GetRight(), glyph.y);
+		paint.DrawLine(glyph.GetRight(), glyph.y, glyph.GetRight(), glyph.y + side - 3);
 		break;
 	case wxTOPLEVEL_BUTTON_ICONIZE:
 		// across the middle, as the Mac's
-		dc.DrawLine(glyph.GetLeft(), glyph.y + side / 2, glyph.GetRight() + 1, glyph.y + side / 2);
+		paint.DrawLine(glyph.GetLeft(), glyph.y + side / 2, glyph.GetRight(), glyph.y + side / 2);
 		break;
 	}
 }

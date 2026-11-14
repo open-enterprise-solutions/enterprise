@@ -601,6 +601,10 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 - **On macOS a window and a dialog of the desktop programs have their title bar and frame.** The launcher's window
   and its connection dialog showed neither, and the dialog merged with the window behind it — it could only be
   left by saving the connection. The title bar's buttons now work there too.
+- **On macOS the window's buttons do what a Mac's do.** The red one on the program's window puts it away and
+  the program stays in the Dock — its icon brings the window back, Cmd+Q quits; the yellow one sends the window
+  to the Dock; the green one takes it full screen and back, with Option it fits the window to the screen. On
+  every system the three buttons are drawn smooth.
 - **On macOS closing a dialog no longer crashes the program** when the focus is in an empty field with a hint.
 - **On macOS menu icons stand level with their items' text.** On a Retina screen each icon sat half a line above
   its label, and the first one was cut by the menu's edge.
