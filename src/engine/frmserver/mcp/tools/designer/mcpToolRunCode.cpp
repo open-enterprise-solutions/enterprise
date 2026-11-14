@@ -330,6 +330,11 @@ void DescribeRun(const ibJobRunByteCodeState& state, ibDataNode& into)
 	if (!state.m_session.IsEmpty())
 		into.SetValue(ibT("session"), state.m_session);
 	into.SetValue(ibT("complete"), state.m_complete);
+	// …WHERE AND HOW LONG: the process doing it (app_run's `pid`) and its own clock, start to end — or to now.
+	if (state.m_pid != 0) {
+		into.AddField(ibT("pid"), ibDataValue::Int(static_cast<std::int64_t>(state.m_pid)));
+		into.AddField(ibT("milliseconds"), ibDataValue::Int(state.m_milliseconds));
+	}
 	// ⭐ THE SAME LINE THE PERSON READS. A run says where it has got to in ONE place - its activity,
 	// which is also written to sys_session.currentActivity and shows in Active Users. So what comes
 	// back here and what is on their screen are the same sentence, and neither can drift from the

@@ -460,6 +460,8 @@ TEST(QueryRewrite, WhatTheRowRoadComputesItself_StaysWhereItWasWritten)
 		wxT("SELECT SUM(1) AS N FROM AccumulationRegister.Stock AS B LEFT JOIN Catalog.Goods AS G ON G.Ref = B.Item"),
 		wxT("SELECT B.Item AS Item, SUM(G.Price) AS P FROM AccumulationRegister.Stock AS B ")
 		wxT("LEFT JOIN Catalog.Goods AS G ON G.Ref = B.Item GROUP BY B.Item"),                          // a field folded over a join
+		wxT("SELECT T.Qty FROM Document.Sale.Goods AS T ")
+		wxT("WHERE (T.Item, T.Qty * 2) IN (SELECT G.Item, G.Qty FROM Document.Sale.Goods AS G)"),       // a row: refused where it stands
 	};
 	for (const wxChar* text : standing) {
 		auto sel = ParseAndRewrite(text);

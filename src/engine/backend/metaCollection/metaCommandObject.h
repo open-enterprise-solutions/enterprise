@@ -15,11 +15,11 @@ class ibValueEnumInterfaceCommandSection : public ibValueEnumeration<ibInterface
 public:
 	ibValueEnumInterfaceCommandSection() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibInterfaceCommandSection_Important, ibT("Important"), _("Important"));
-		AddEnumeration(ibInterfaceCommandSection_Default,   ibT("Normal"),    _("Normal"));
-		AddEnumeration(ibInterfaceCommandSection_Create,    ibT("Create"),    _("Create"));
-		AddEnumeration(ibInterfaceCommandSection_Report,    ibT("Reports"),   _("Reports"));
-		AddEnumeration(ibInterfaceCommandSection_Service,   ibT("Service"),   _("Service"));
+		AddEnumeration(ibInterfaceCommandSection_Important, ibT("Important"), ibTRANSLATE("Important"));
+		AddEnumeration(ibInterfaceCommandSection_Default,   ibT("Normal"),    ibTRANSLATE("Normal"));
+		AddEnumeration(ibInterfaceCommandSection_Create,    ibT("Create"),    ibTRANSLATE("Create"));
+		AddEnumeration(ibInterfaceCommandSection_Report,    ibT("Reports"),   ibTRANSLATE("Reports"));
+		AddEnumeration(ibInterfaceCommandSection_Service,   ibT("Service"),   ibTRANSLATE("Service"));
 	}
 };
 

@@ -16,8 +16,8 @@ public:
 	ibValueEnumRoleCompositionMode() : ibValueEnumeration() {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibRoleCompositionMode_Union, ibT("Union"), _("Permitting"));
-		AddEnumeration(ibRoleCompositionMode_Intersection, ibT("Intersection"), _("Restricting"));
+		AddEnumeration(ibRoleCompositionMode_Union, ibT("Union"), ibTRANSLATE("Permitting"));
+		AddEnumeration(ibRoleCompositionMode_Intersection, ibT("Intersection"), ibTRANSLATE("Restricting"));
 	}
 };
 #pragma endregion

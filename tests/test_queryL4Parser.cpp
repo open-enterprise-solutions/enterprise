@@ -500,6 +500,39 @@ TEST(QueryL4Parser, InSubquery)
 	EXPECT_EQ(sel->m_where->m_subquery->m_from.m_name[1], wxT("Y"));
 }
 
+// A ROW BEFORE IN: `(a, b) [NOT] IN (SELECT x, y …)` — the row's fields in m_args, compared with the select's in
+// their order (2026-11-14).
+TEST(QueryL4Parser, RowInSubquery)
+{
+	auto sel = Parse(wxT("SELECT * FROM Catalog.X WHERE (Owner, Code) NOT IN (SELECT Owner, Code FROM Catalog.Y)"));
+	ASSERT_TRUE(sel->m_where != nullptr);
+	ASSERT_EQ(sel->m_where->m_kind, ibQueryAstExprKind::In);
+	EXPECT_TRUE(sel->m_where->m_negated);
+	ASSERT_TRUE(sel->m_where->m_lhs != nullptr);
+	ASSERT_EQ(sel->m_where->m_lhs->m_kind, ibQueryAstExprKind::Row);
+	ASSERT_EQ(sel->m_where->m_lhs->m_args.size(), 2u);
+	EXPECT_EQ(sel->m_where->m_lhs->m_args[1]->m_kind, ibQueryAstExprKind::Column);
+	ASSERT_TRUE(sel->m_where->m_subquery != nullptr);
+	EXPECT_EQ(sel->m_where->m_subquery->m_projections.size(), 2u);
+	// Its fields are OPERANDS — the walk the query constructor renames, drops and checks names by.
+	size_t operands = 0;
+	ibQueryForEachOperand(*sel->m_where->m_lhs, [&operands](const ibQueryAstExprPtr& field) { operands += field ? 1 : 0; });
+	EXPECT_EQ(operands, 2u);
+}
+
+// …AND NOWHERE ELSE: a row is several values, and only IN (SELECT …) compares several at once.
+TEST(QueryL4Parser, RowElsewhereIsRefused)
+{
+	EXPECT_THROW(Parse(wxT("SELECT * FROM Catalog.X WHERE (Owner, Code) = (1, 2)")), ibQueryRefusal);
+	EXPECT_THROW(Parse(wxT("SELECT * FROM Catalog.X WHERE (Owner, Code) IN (1, 2)")), ibQueryRefusal);
+	EXPECT_THROW(Parse(wxT("SELECT * FROM Catalog.X WHERE (Owner, Code) IN HIERARCHY (&P)")), ibQueryRefusal);
+	EXPECT_THROW(Parse(wxT("SELECT (Owner, Code) FROM Catalog.X")), ibQueryRefusal);
+	// A parenthesised condition stays one: no comma, no row.
+	auto sel = Parse(wxT("SELECT * FROM Catalog.X WHERE (Code = 1)"));
+	ASSERT_TRUE(sel->m_where != nullptr);
+	EXPECT_EQ(sel->m_where->m_kind, ibQueryAstExprKind::Compare);
+}
+
 TEST(QueryL4Parser, SourceCallArgs)
 {
 	auto sel = Parse(wxT("SELECT * FROM AccumulationRegister.Goods.Balance(&Period, &Filter) AS b"));
@@ -674,6 +707,7 @@ TEST(QueryRender, GroupHavingOrderRoundTrip) {
 
 TEST(QueryRender, SubqueryAndUnionRoundTrip) {
 	ExpectRoundTrip(wxT("SELECT Ref FROM Catalog.Products WHERE Owner IN (SELECT Ref FROM Catalog.Owners)"));
+	ExpectRoundTrip(wxT("SELECT Ref FROM Catalog.Products WHERE (Owner, Code) NOT IN (SELECT Owner, Code FROM Catalog.Archive)"));
 	ExpectRoundTrip(wxT("SELECT Ref FROM Catalog.Products UNION ALL SELECT Ref FROM Catalog.Archive"));
 }
 

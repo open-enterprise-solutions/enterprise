@@ -538,9 +538,9 @@ LoadSource(const ibString&               localeCode,
 	// Surface missing-locale-source as a kFatal so operators see
 	// "we shipped without the corpus" rather than the silent
 	// empty-corpus state. The error MUST land inside the constructed
-	// corpus (corpus->LoadErrors()) — appData reads errors only from
-	// the corpus snapshot; the `errorsOut` parameter is legacy
-	// plumbing that LoadHelpCorpus no longer consults.
+	// corpus (corpus->LoadErrors()) — the help service reads errors
+	// only from the corpus snapshot, into the journal; the `errorsOut`
+	// parameter is legacy plumbing that LoadHelpCorpus no longer consults.
 	if (!source || !source->Exists()) {
 		ibHelpLoadError err;
 		err.bucketPath = PathIn(sourceRoot, localeCode);
@@ -693,7 +693,7 @@ ibHelpLoadResult LoadHelpCorpus(const ibString& localeCode,
 	// dir path and the outer catch above can leave `corpus` null. When
 	// we fall back to empty here, fold any outer-catch errors into the
 	// corpus's internal LoadErrors so callers see them through the same
-	// surface (appData reads errors only from corpus->LoadErrors()).
+	// surface (the help service reads errors only from corpus->LoadErrors()).
 	if (!result.corpus) {
 		try {
 			result.corpus = std::make_shared<ibHelpCorpus>(

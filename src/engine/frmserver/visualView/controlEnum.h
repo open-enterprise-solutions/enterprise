@@ -67,8 +67,8 @@ class FRMSERVER_API ibValueEnumOrient :
 	public:
 	ibValueEnumOrient() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibOrientation_Horizontal, ibT("Horizontal"), _("Horizontal"));
-		AddEnumeration(ibOrientation_Vertical, ibT("Vertical"), _("Vertical"));
+		AddEnumeration(ibOrientation_Horizontal, ibT("Horizontal"), ibTRANSLATE("Horizontal"));
+		AddEnumeration(ibOrientation_Vertical, ibT("Vertical"), ibTRANSLATE("Vertical"));
 	}
 private:
 };
@@ -78,8 +78,8 @@ class FRMSERVER_API ibValueEnumStretch :
 	public:
 	ibValueEnumStretch() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibStretch_Shrink, ibT("Shrink"), ibGETTEXT_IN_CONTEXT("sizer flag", "Shrink"));
-		AddEnumeration(ibStretch_Expand, ibT("Expand"), ibGETTEXT_IN_CONTEXT("sizer flag", "Expand"));
+		AddEnumeration(ibStretch_Shrink, ibT("Shrink"), ibTRANSLATE_IN_CONTEXT("sizer flag", "Shrink"), ibT("sizer flag"));
+		AddEnumeration(ibStretch_Expand, ibT("Expand"), ibTRANSLATE_IN_CONTEXT("sizer flag", "Expand"), ibT("sizer flag"));
 	}
 private:
 };
@@ -89,9 +89,9 @@ class FRMSERVER_API ibValueEnumOrientNotebookPage :
 	public:
 	ibValueEnumOrientNotebookPage() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibTabLocation::ibTabLocation_Top, ibT("Top"), _("Top"));
-		AddEnumeration(ibTabLocation::ibTabLocation_Bottom, ibT("Bottom"), _("Bottom"));
-		AddEnumeration(ibTabLocation::ibTabLocation_None, ibT("None"), _("None"));
+		AddEnumeration(ibTabLocation::ibTabLocation_Top, ibT("Top"), ibTRANSLATE("Top"));
+		AddEnumeration(ibTabLocation::ibTabLocation_Bottom, ibT("Bottom"), ibTRANSLATE("Bottom"));
+		AddEnumeration(ibTabLocation::ibTabLocation_None, ibT("None"), ibTRANSLATE("None"));
 	}
 private:
 };
@@ -101,9 +101,9 @@ class FRMSERVER_API ibValueEnumHorizontalAlignment :
 	public:
 	ibValueEnumHorizontalAlignment() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibAlignment_Left, ibT("Left"), _("Left"));
-		AddEnumeration(ibAlignment_Center, ibT("Center"), _("Center"));
-		AddEnumeration(ibAlignment_Right, ibT("Right"), _("Right"));
+		AddEnumeration(ibAlignment_Left, ibT("Left"), ibTRANSLATE("Left"));
+		AddEnumeration(ibAlignment_Center, ibT("Center"), ibTRANSLATE("Center"));
+		AddEnumeration(ibAlignment_Right, ibT("Right"), ibTRANSLATE("Right"));
 	}
 private:
 };
@@ -113,9 +113,9 @@ class FRMSERVER_API ibValueEnumVerticalAlignment :
 	public:
 	ibValueEnumVerticalAlignment() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibAlignment_Top, ibT("Top"), _("Top"));
-		AddEnumeration(ibAlignment_Center, ibT("Center"), _("Center"));
-		AddEnumeration(ibAlignment_Bottom, ibT("Bottom"), _("Bottom"));
+		AddEnumeration(ibAlignment_Top, ibT("Top"), ibTRANSLATE("Top"));
+		AddEnumeration(ibAlignment_Center, ibT("Center"), ibTRANSLATE("Center"));
+		AddEnumeration(ibAlignment_Bottom, ibT("Bottom"), ibTRANSLATE("Bottom"));
 	}
 private:
 };
@@ -125,8 +125,8 @@ class FRMSERVER_API ibValueEnumTitleLocation :
 	public:
 	ibValueEnumTitleLocation() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibTitleLocation::eLeft, ibT("Left"), _("Left"));
-		AddEnumeration(ibTitleLocation::eRight, ibT("Right"), _("Right"));
+		AddEnumeration(ibTitleLocation::eLeft, ibT("Left"), ibTRANSLATE("Left"));
+		AddEnumeration(ibTitleLocation::eRight, ibT("Right"), ibTRANSLATE("Right"));
 	}
 private:
 };
@@ -136,10 +136,10 @@ class FRMSERVER_API ibValueEnumPictureLocation :
 	public:
 	ibValueEnumPictureLocation() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibPictureLocation::ibPictureLocation_Auto, ibT("Auto"), _("Auto"));
-		AddEnumeration(ibPictureLocation::ibPictureLocation_Left, ibT("Left"), _("Left"));
-		AddEnumeration(ibPictureLocation::ibPictureLocation_Right, ibT("Right"), _("Right"));
-		AddEnumeration(ibPictureLocation::ibPictureLocation_Tile, ibT("Tile"), _("Tile"));
+		AddEnumeration(ibPictureLocation::ibPictureLocation_Auto, ibT("Auto"), ibTRANSLATE("Auto"));
+		AddEnumeration(ibPictureLocation::ibPictureLocation_Left, ibT("Left"), ibTRANSLATE("Left"));
+		AddEnumeration(ibPictureLocation::ibPictureLocation_Right, ibT("Right"), ibTRANSLATE("Right"));
+		AddEnumeration(ibPictureLocation::ibPictureLocation_Tile, ibT("Tile"), ibTRANSLATE("Tile"));
 	}
 private:
 };
@@ -149,8 +149,8 @@ class FRMSERVER_API ibValueEnumButtonView :
 	public:
 	ibValueEnumButtonView() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibButtonView::ibButtonView_Button, ibT("Button"), ibGETTEXT_IN_CONTEXT("button view", "Button"));
-		AddEnumeration(ibButtonView::ibButtonView_Hyperlink, ibT("Hyperlink"), _("Hyperlink"));
+		AddEnumeration(ibButtonView::ibButtonView_Button, ibT("Button"), ibTRANSLATE_IN_CONTEXT("button view", "Button"), ibT("button view"));
+		AddEnumeration(ibButtonView::ibButtonView_Hyperlink, ibT("Hyperlink"), ibTRANSLATE("Hyperlink"));
 	}
 private:
 };
@@ -160,10 +160,10 @@ class FRMSERVER_API ibValueEnumRepresentation :
 	public:
 	ibValueEnumRepresentation() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibRepresentation::ibRepresentation_Auto, ibT("Auto"), _("Auto"));
-		AddEnumeration(ibRepresentation::ibRepresentation_Text, ibT("Text"), _("Text"));
-		AddEnumeration(ibRepresentation::ibRepresentation_Picture, ibT("Picture"), _("Picture"));
-		AddEnumeration(ibRepresentation::ibRepresentation_PictureAndText, ibT("PictureAndText"), _("Picture and text"));
+		AddEnumeration(ibRepresentation::ibRepresentation_Auto, ibT("Auto"), ibTRANSLATE("Auto"));
+		AddEnumeration(ibRepresentation::ibRepresentation_Text, ibT("Text"), ibTRANSLATE("Text"));
+		AddEnumeration(ibRepresentation::ibRepresentation_Picture, ibT("Picture"), ibTRANSLATE("Picture"));
+		AddEnumeration(ibRepresentation::ibRepresentation_PictureAndText, ibT("PictureAndText"), ibTRANSLATE("Picture and text"));
 	}
 private:
 };
@@ -173,9 +173,9 @@ class FRMSERVER_API ibValueEnumQuickChoiceMode :
 	public:
 	ibValueEnumQuickChoiceMode() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibQuickChoiceMode::ibQuickChoiceMode_Auto, ibT("Auto"), _("Auto"));
-		AddEnumeration(ibQuickChoiceMode::ibQuickChoiceMode_Use, ibT("Use"), _("Use"));
-		AddEnumeration(ibQuickChoiceMode::ibQuickChoiceMode_DontUse, ibT("DontUse"), _("Don't use"));
+		AddEnumeration(ibQuickChoiceMode::ibQuickChoiceMode_Auto, ibT("Auto"), ibTRANSLATE("Auto"));
+		AddEnumeration(ibQuickChoiceMode::ibQuickChoiceMode_Use, ibT("Use"), ibTRANSLATE("Use"));
+		AddEnumeration(ibQuickChoiceMode::ibQuickChoiceMode_DontUse, ibT("DontUse"), ibTRANSLATE("Don't use"));
 	}
 private:
 };
@@ -185,10 +185,10 @@ class FRMSERVER_API ibValueEnumChoiceFoldersAndItems :
 	public:
 	ibValueEnumChoiceFoldersAndItems() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_Auto, ibT("Auto"), _("Auto"));
-		AddEnumeration(ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_Items, ibT("Items"), _("Items"));
-		AddEnumeration(ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_Folders, ibT("Folders"), _("Folders"));
-		AddEnumeration(ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_FoldersAndItems, ibT("FoldersAndItems"), _("Folders and items"));
+		AddEnumeration(ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_Auto, ibT("Auto"), ibTRANSLATE("Auto"));
+		AddEnumeration(ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_Items, ibT("Items"), ibTRANSLATE("Items"));
+		AddEnumeration(ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_Folders, ibT("Folders"), ibTRANSLATE("Folders"));
+		AddEnumeration(ibChoiceFoldersAndItems::ibChoiceFoldersAndItems_FoldersAndItems, ibT("FoldersAndItems"), ibTRANSLATE("Folders and items"));
 	}
 private:
 };

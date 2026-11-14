@@ -526,6 +526,34 @@ ibQueryExprPtr DecomposeEquality(const ibBackendQueryColumn* col, const ibMetaDa
 	return pred;
 }
 
+// ⭐ "EMPTY" AS ONE VALUE — the compared field of a key (FirstSqlFieldOfColumn) with its empty spellings read as one:
+// a reference's key is NULL or the zero guid (DecomposeEquality's two), a primitive's value is NULL (a row older than
+// the field) or the empty value the codec writes into it, which is also what an untagged row holds there.
+// COALESCE(field, <that value>) is that one value, so `a = b OR (a empty AND b empty)` is said as ONE equality - and
+// an equality is what the server can turn into a hash semi-join, where the OR made it read the inner table once per
+// outer row (2026-11-14). Null where the empty value has no field value of its own: the caller keeps the OR.
+static ibQueryExprPtr EmptyFoldedField(const ibBackendQueryColumn* col, const ibMetaData* metaData, const ibString& qual)
+{
+	const ibString field = FirstSqlFieldOfColumn(col);
+	if (IsReferenceValued(col)) {
+		const ibReference emptyKey{ ibGuidImpl{} };
+		return ibFunc(ibT("COALESCE"), { ibColQ(qual, field), ibConstBlob(&emptyKey, sizeof(ibReference)) });
+	}
+	const std::vector<ibString> fields = ColumnFieldNames(col);
+	ibQueryStatement capture(ibQueryStatement::Kind::Delete, ibString(), fields);
+	int position = 1;
+	BindWriteValue(capture, col, metaData, ibValueTypeDescription::AdjustValue(col->GetTypeValueDesc(), metaData), position);
+	const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
+	const size_t at = std::find(fields.begin(), fields.end(), field) - fields.begin();
+	if (at >= consts.size() || !consts[at] || consts[at]->m_kind != ibQueryExprKind::Const)
+		return nullptr;
+	const ibQueryExpr& empty = *consts[at];
+	if (empty.m_blob.GetDataLen() == 0
+	    && (empty.m_const.GetType() == ibValueTypes::TYPE_EMPTY || empty.m_const.GetType() == ibValueTypes::TYPE_NULL))
+		return nullptr;   // the codec writes NULL there: nothing to fold to
+	return ibFunc(ibT("COALESCE"), { ibColQ(qual, field), consts[at] });
+}
+
 // ⭐ A SET OF VALUES OF ONE COLUMN — one IN wherever it can be. A column of a single primitive type is two fields,
 // its type tag and its value; values of one kind all spell the tag alike, so it is said once and the values go into
 // the engine's own IN, which Firebird evaluates by a sorted lookup. The OR of pairs it evaluated a branch at a time:
@@ -963,8 +991,10 @@ public:
 	// An RLS `restrict … join …` SEMI-JOIN -> a CORRELATED EXISTS over the inner permission source: the outer
 	// row passes iff a permitting row exists. `EXISTS(SELECT * FROM <inner> sj WHERE <inner Where over sj>
 	// AND sj.<innerKey> <op> outer.<outerKey>)`. The inner's own conditions (incl. inner dot-walk -> nested
-	// EXISTS via pathAsExists) ride along; `outerQual` qualifies the main-source correlation column.
-	static ibQueryExprPtr BuildSemiJoinExists(const ibSemiJoinExists& sj, const ibString& outerQual);
+	// EXISTS via pathAsExists) ride along; `outerQual` qualifies the main-source correlation column, and `queryable`
+	// is that source — a NOT IN on a server with no anti-join reads its keys (ibSqlFeatures::m_antiJoin).
+	static ibQueryExprPtr BuildSemiJoinExists(const ibBackendQueryable* queryable, const ibSemiJoinExists& sj,
+	                                          const ibString& outerQual);
 	// A COMPUTED-COLUMN expression (arithmetic / CASE) -> L2-1 expr (ibBinOp / ibCase; columns qualified
 	// by mainQual, WHEN predicates via BuildPredicateExpr). For a projected computed column.
 	static ibQueryExprPtr BuildColumnExpr(const ibBackendQueryable* queryable,
@@ -1536,7 +1566,7 @@ ibQueryExprPtr BuildColocatedPredicate(const ibQueryPredicatePtr& p, const Coloc
 			// RLS semi-join — a correlated EXISTS; the outer correlation column lives on the MAIN (protected)
 			// leaf, so qualify by whichever co-located leaf owns m_outerKey.
 			const ibBackendQueryable* outerOwner = ColocatedOwner(leaves, p->m_leaf.m_semiJoin->m_outerKey);
-			return ibMetaIRBuilder::BuildSemiJoinExists(*p->m_leaf.m_semiJoin,
+			return ibMetaIRBuilder::BuildSemiJoinExists(outerOwner, *p->m_leaf.m_semiJoin,
 				ColocatedQualOf(outerOwner));
 		}
 		const ibBackendQueryColumn* col = p->m_leaf.m_col;
@@ -1658,7 +1688,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildConditionExpr(const ibBackendQueryable* que
 	// the single-table write path — would bind ambiguously INSIDE the EXISTS subquery), so fall back to the
 	// source's own table name, exactly as BuildDotWalkExists does for writes.
 	if (c.m_semiJoin)
-		return BuildSemiJoinExists(*c.m_semiJoin,
+		return BuildSemiJoinExists(queryable, *c.m_semiJoin,
 			!mainQual.IsEmpty() ? mainQual : (queryable != nullptr ? queryable->GetQueryTableName() : ibString()));
 
 	// SEMI-JOIN dot-walk: a condition through a reference path (s.Ref.Field) rides as a CORRELATED EXISTS
@@ -2032,7 +2062,8 @@ ibQueryExprPtr ibMetaIRBuilder::BuildPathExists(const ibBackendQueryable* querya
 	return walked;
 }
 
-ibQueryExprPtr ibMetaIRBuilder::BuildSemiJoinExists(const ibSemiJoinExists& sj, const ibString& outerQual)
+ibQueryExprPtr ibMetaIRBuilder::BuildSemiJoinExists(const ibBackendQueryable* queryable, const ibSemiJoinExists& sj,
+                                                    const ibString& outerQual)
 {
 	if (sj.m_inner == nullptr || sj.m_outerKey == nullptr || sj.m_innerKey == nullptr)
 		return nullptr;
@@ -2046,20 +2077,97 @@ ibQueryExprPtr ibMetaIRBuilder::BuildSemiJoinExists(const ibSemiJoinExists& sj, 
 
 	// Correlation: sj.<innerKey> <op> outer.<outerKey>. A reference key compares on its _RRRef field
 	// (byte-identical), a scalar on its physical field — FirstSqlFieldOfColumn picks the single field either way.
-	ibQueryExprPtr correlation = ibBinOp(FilterOpToBinOp(sj.m_op),
-		ibColQ(sjAlias,  FirstSqlFieldOfColumn(sj.m_innerKey)),
-		ibColQ(outerQual, FirstSqlFieldOfColumn(sj.m_outerKey)));
 	// …and EMPTY MATCHES EMPTY where both keys may be empty (`x IN (SELECT k …)` over two attributes). A value not
 	// filled has several spellings — a NULL or zero key, an untagged row, the type's own empty value — and the
 	// equality above does not read them as one value: an empty row of the outer would miss the empties of
 	// the set — IN would lose it and NOT IN keep it, where the set road finds it. So "empty" is asked here in the
 	// set road's own words: its equality with the column's empty value (DecomposeEquality), on each side.
-	if (sj.m_emptyMatchesEmpty) {
-		const ibMetaData* const metaData = sj.m_inner->GetMetaData();
+	const ibMetaData* const metaData = sj.m_inner->GetMetaData();
+	const auto correlate = [&](const ibBackendQueryColumn* outerKey, const ibBackendQueryColumn* innerKey, ibQueryFilterOp op,
+		bool emptyMatchesEmpty) -> ibQueryExprPtr {
+		ibQueryExprPtr equal = ibBinOp(FilterOpToBinOp(op),
+			ibColQ(sjAlias,  FirstSqlFieldOfColumn(innerKey)),
+			ibColQ(outerQual, FirstSqlFieldOfColumn(outerKey)));
+		if (!emptyMatchesEmpty)
+			return equal;
+		// One equality where both empties fold to one value (EmptyFoldedField) - the same rows, and a hashable join.
+		if (op == ibQueryFilterOp::Equal)
+			if (ibQueryExprPtr inner = EmptyFoldedField(innerKey, metaData, sjAlias))
+				if (ibQueryExprPtr outer = EmptyFoldedField(outerKey, metaData, outerQual))
+					return ibBinOp(ibQueryBinOp::Eq, inner, outer);
 		const auto isEmpty = [metaData](const ibBackendQueryColumn* col, const ibString& qual) {
 			return DecomposeEquality(col, metaData, ibValueTypeDescription::AdjustValue(col->GetTypeValueDesc(), metaData), qual);
 		};
-		correlation = OrFold(correlation, AndFold(isEmpty(sj.m_innerKey, sjAlias), isEmpty(sj.m_outerKey, outerQual)));
+		return OrFold(equal, AndFold(isEmpty(innerKey, sjAlias), isEmpty(outerKey, outerQual)));
+	};
+	ibQueryExprPtr correlation = correlate(sj.m_outerKey, sj.m_innerKey, sj.m_op, sj.m_emptyMatchesEmpty);
+	// …and the rest of a row, `(a, b) IN (SELECT x, y …)`: each pair one more equality, ANDed in.
+	for (const ibSemiJoinExists::ibSemiJoinKeyPart& part : sj.m_alsoKeys) {
+		if (part.m_outerKey == nullptr || part.m_innerKey == nullptr)
+			return nullptr;
+		correlation = AndFold(correlation, correlate(part.m_outerKey, part.m_innerKey, ibQueryFilterOp::Equal, part.m_emptyMatchesEmpty));
+	}
+
+	// ⭐⭐ NOT IN WHERE THE SERVER HAS NO ANTI-JOIN — the row's key among the outer's keys MINUS the select's, a POSITIVE
+	// EXISTS. IN is the keys of both sides intersected and NOT IN their difference; Firebird hashes the first and probes
+	// the inner per outer row for NOT EXISTS (minutes on 45 389 rows against 5, 2026-11-14). The difference is one fold —
+	// both key sets laid under each other, tagged by side, the keys no select row joined kept (`HAVING MAX(side) = 0`;
+	// Firebird has no EXCEPT) — and an EXISTS over it is a hash semi-join again: 1.6 s. The outer's keys are its whole
+	// table's, a superset of the rows asked: a key is in the difference iff no select row has it, whoever else has it.
+	// ⚠ A KEY HERE IS NEVER NULL — a NULL would group with the select's NULLs and drop a row NOT EXISTS keeps. So a pair
+	// is folded to its one empty value (EmptyFoldedField) where both may be empty, plain where the outer key is the
+	// row's own (never NULL); any other pair, another comparison, a source that is not a plain table — NOT EXISTS.
+	if (sj.m_negated && sj.m_op == ibQueryFilterOp::Equal && queryable != nullptr && !queryable->IsComputedInRam()
+	    && queryable->GetSourceRelation(ibString()) == nullptr && !queryable->GetQueryTableName().IsEmpty()) {
+		bool antiJoin = true;   // no connection to ask: the form that is right everywhere
+		{
+			ibConnectionScope scope;
+			antiJoin = !scope || scope.get()->GetDialect().m_features.m_antiJoin;
+		}
+		const ibString outerAlias = sjAlias + ibT("_o"), unionAlias = sjAlias + ibT("_u"), keysAlias = sjAlias + ibT("_k");
+		const std::vector<const ibBackendQueryColumn*> rowKeys = queryable->GetPrimaryKeyColumns();
+		const ibBackendQueryColumn* const outerRowKey = rowKeys.size() == 1 ? rowKeys.front() : nullptr;
+		std::vector<ibQueryExprPtr> outerSide, innerSide, rowSide;   // per pair: the key among the outer's, the select's, the row's
+		bool sayable = !antiJoin;
+		const auto take = [&](const ibBackendQueryColumn* outerKey, const ibBackendQueryColumn* innerKey, bool emptyMatchesEmpty) {
+			if (!sayable || (!emptyMatchesEmpty && outerKey != outerRowKey)) {
+				sayable = false;
+				return;
+			}
+			const auto key = [&](const ibBackendQueryColumn* col, const ibString& qual) {
+				return emptyMatchesEmpty ? EmptyFoldedField(col, metaData, qual) : ibColQ(qual, FirstSqlFieldOfColumn(col));
+			};
+			outerSide.push_back(key(outerKey, outerAlias));
+			innerSide.push_back(key(innerKey, sjAlias));
+			rowSide.push_back(key(outerKey, outerQual));
+			sayable = outerSide.back() && innerSide.back() && rowSide.back();
+		};
+		take(sj.m_outerKey, sj.m_innerKey, sj.m_emptyMatchesEmpty);
+		for (const ibSemiJoinExists::ibSemiJoinKeyPart& part : sj.m_alsoKeys)
+			take(part.m_outerKey, part.m_innerKey, part.m_emptyMatchesEmpty);
+		if (sayable) {
+			const auto side = [](int which) { return ibCast(ibConst(ibValue(which)), ibTypeNumber(1, 0)); };   // typed: a bare one is -804
+			std::vector<ibQueryProjItem> outerKeys, innerKeys, keys;
+			std::vector<ibQueryExprPtr> byKey;
+			ibQueryExprPtr matched;
+			for (size_t i = 0; i < rowSide.size(); ++i) {
+				const ibString name = ibString::Format(ibT("k%u"), static_cast<unsigned>(i));
+				outerKeys.push_back({ outerSide[i], name });
+				innerKeys.push_back({ innerSide[i], name });
+				keys.push_back({ ibColQ(unionAlias, name), name });
+				byKey.push_back(ibColQ(unionAlias, name));
+				matched = AndFold(matched, ibBinOp(ibQueryBinOp::Eq, ibColQ(keysAlias, name), rowSide[i]));
+			}
+			outerKeys.push_back({ side(0), ibT("s") });
+			innerKeys.push_back({ side(1), ibT("s") });
+			const ibQueryRelPtr innerRows = ibScan(sj.m_inner->GetQueryTableName(), sjAlias);
+			const ibQueryRelPtr both = ibUnionAll(
+				ibDistinct(ibProject(ibScan(queryable->GetQueryTableName(), outerAlias), std::move(outerKeys))),
+				ibDistinct(ibProject(innerWhere ? ibFilter(innerRows, innerWhere) : innerRows, std::move(innerKeys))));
+			const ibQueryRelPtr missing = ibAggregate(ibSubquery(both, unionAlias), std::move(keys), std::move(byKey),
+				ibBinOp(ibQueryBinOp::Eq, ibFunc(ibT("MAX"), { ibColQ(unionAlias, ibT("s")) }), ibConst(ibValue(0))));
+			return ibExists(ibFilter(ibSubquery(missing, keysAlias), matched));
+		}
 	}
 
 	// SELECT * (a bare ibFilter → SELECT *); inner Where AND the correlation as the subquery WHERE.
@@ -3881,7 +3989,12 @@ static bool UnionPredicateColocatable(const ibQueryPredicatePtr& p,
 	};
 	switch (p->m_kind) {
 	case ibQueryPredicateKind::Leaf:
-		if (p->m_leaf.m_semiJoin) return resolvesEveryBranch(p->m_leaf.m_semiJoin->m_outerKey);
+		if (p->m_leaf.m_semiJoin) {
+			const ibSemiJoinExists& sj = *p->m_leaf.m_semiJoin;
+			return resolvesEveryBranch(sj.m_outerKey)
+				&& std::all_of(sj.m_alsoKeys.begin(), sj.m_alsoKeys.end(),
+				       [&](const ibSemiJoinExists::ibSemiJoinKeyPart& part) { return resolvesEveryBranch(part.m_outerKey); });
+		}
 		if (!p->m_leaf.m_path.empty() || p->m_leaf.m_expr) return false;   // dot-walk / computed -> RAM
 		return resolvesEveryBranch(p->m_leaf.m_col);
 	case ibQueryPredicateKind::IsNull:
@@ -3913,7 +4026,9 @@ static ibQueryExprPtr BuildBranchPredicate(const ibQueryPredicatePtr& p, const i
 		if (p->m_leaf.m_semiJoin) {
 			ibSemiJoinExists sj = *p->m_leaf.m_semiJoin;
 			sj.m_outerKey = q->ResolveColumnByName(sj.m_outerKey->GetName());   // correlate to THIS branch's key
-			return ibMetaIRBuilder::BuildSemiJoinExists(sj, qual);
+			for (ibSemiJoinExists::ibSemiJoinKeyPart& part : sj.m_alsoKeys)       // …every one of a row's
+				part.m_outerKey = q->ResolveColumnByName(part.m_outerKey->GetName());
+			return ibMetaIRBuilder::BuildSemiJoinExists(q, sj, qual);
 		}
 		ibQueryCondition c = p->m_leaf;
 		c.m_col = q->ResolveColumnByName(p->m_leaf.m_col->GetName());

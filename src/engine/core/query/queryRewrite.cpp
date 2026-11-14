@@ -560,6 +560,11 @@ bool NeedsTheRows(const ibQueryAstExprPtr& term)
 		}
 		return MentionsTheValueAsked(term->m_lhs) || MentionsTheValueAsked(term->m_rhs);
 	case ibQueryAstExprKind::In:
+		// ⭐ A ROW is the WHERE road's own: each field compared with the select's field at its place, on the server
+		// (2026-11-14). A row of anything else has no road a level down either — it stays, and is refused in its words.
+		if (term->m_lhs && term->m_lhs->m_kind == ibQueryAstExprKind::Row)
+			return false;
+		[[fallthrough]];
 	case ibQueryAstExprKind::Like:
 	case ibQueryAstExprKind::Between:
 	case ibQueryAstExprKind::IsNull:

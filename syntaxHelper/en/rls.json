@@ -58,8 +58,9 @@
     {
       "id": "cls.QueryDecorator",
       "name_local": "QueryDecorator (the handler's Source)",
-      "name_en": "QueryDecorator (the handler's Source)",
+      "name_en": "QueryDecorator",
       "kind": "collection",
+      "class_id": 356122549939784089,
       "category_keys": ["rls", "global_context"],
       "signature": "Source.Where(predicate) | Source.Join(inner, leftKey, rightKey [, op])",
       "description": "What arrives in an access handler as `Source`. It is **not** a plain queryable: the decorator holds a pointer to the query being executed and can **only** narrow it — `Where` and `Join`, nothing else. Both fold **straight into that same query**: one builder, no separate template, no subquery wrap — so the query still **pages** and still **pushes down** to the server.\n\n**`Where(predicate)`** — folds a boolean predicate into the query. Reference **dot-walk** paths are supported (`x.Contract.Company = v`): the read side auto-joins the reference path.\n\n**`Join(inner, leftKey, rightKey [, op])`** — attaches a source as a **SEMI-JOIN**: the row passes iff a permitting row **exists** in the inner set. It is **not** a projection join and does **not** multiply rows — the platform folds a correlated `EXISTS` into the condition. The inner may be a full source (`Data.Registers.X`, optionally carrying its own `.Where(…)`) or a computed value table.\n\nComparing `Source` to a source's full name (`Source = \"Catalog.Product\"`) is the standard way to branch by source.\n\nThe decorator is constructed only by an access policy — it is unreachable anywhere else.\n\n**Limitations:**\n- only the query's **primary** source (`From`) is restricted; tables joined in the *user's own* query are not yet;\n- `Join` takes **single-column** keys; for a multi-hop condition use a dot-walk `Where` (`x.Ref.Field = v`);\n- on Firebird (no temp tables) a computed value-table inner falls back to a plain join — read-only, and it may duplicate rows; on SQLite and PostgreSQL such a set materialises into a temp table and semi-joins server-side.",

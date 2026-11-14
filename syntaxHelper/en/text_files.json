@@ -435,6 +435,289 @@
       "reviewed": false
     },
     {
+      "id": "cls.File",
+      "name_local": "File",
+      "name_en": "File",
+      "kind": "collection",
+      "class_id": 163523992624603222,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "New File(path : string)",
+      "description": "A file's NAME, taken apart — and a few questions to the file system about what is there under it. Making a File opens nothing and creates nothing: `New File(path)` keeps the path as it is given, the file need not exist, and each question is asked when it is asked.\n\nName, BaseName, Extension and Path are parts of the path, read from its text alone; FullName is the path in this system's separators. Exist, Size, GetModificationTime and GetReadOnly ask the file system. IsFile and IsDirectory read the NAME: a path that ends with a separator is a folder's, any other a file's, whatever is on the disk.\n\nThe properties are read-only — writing one changes nothing and raises nothing. The path is read on the machine the script runs on, the server for server code. A File made without an argument is refused (\"Error initializing object 'File'\").\n\nA file's contents are read and written by TextReader, TextWriter and BinaryData; a file is deleted and copied by FileDelete and FileCopy.",
+      "syntax_block": "F = New File(path);\nName = F.Name;\nThere = F.Exist();",
+      "parameters": "path - the file's or the folder's path; a folder's ends with a separator (\"C:\\Data\\\").",
+      "return_descr": "File.",
+      "example": "F = New File(\"C:\\in\\sales.csv\");\nMessage(F.Exist());                          // True when it is there\nMessage(F.BaseName + \" / \" + F.Extension);   // sales / csv",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.File.Exist",
+        "cls.File.Name",
+        "cls.File.Size",
+        "cls.TextReader",
+        "cls.BinaryData",
+        "fn.FileDelete",
+        "fn.FileCopy"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.File.BaseName",
+      "name_local": "BaseName",
+      "name_en": "BaseName",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "File.BaseName",
+      "description": "The file's name without its extension: what follows the last separator, up to the LAST dot — \"report.final\" for \"C:\\Data\\report.final.txt\". Read-only.",
+      "syntax_block": "String = File.BaseName;",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "F = New File(\"C:\\Data\\report.final.txt\");\nMessage(F.BaseName);   // report.final",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.File.Name",
+        "cls.File.Extension"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.File.Extension",
+      "name_local": "Extension",
+      "name_en": "Extension",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "File.Extension",
+      "description": "The extension without its dot — the part after the last dot of the name: \"txt\" for \"report.final.txt\", \"\" for a name with no dot. Read-only.",
+      "syntax_block": "String = File.Extension;",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "F = New File(\"C:\\in\\sales.csv\");\nMessage(F.Extension);   // csv",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.File.BaseName",
+        "cls.File.Name"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.File.FullName",
+      "name_local": "FullName",
+      "name_en": "FullName",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "File.FullName",
+      "description": "The whole path, its separators turned into this system's — \"C:/Data/a.txt\" reads \"C:\\Data\\a.txt\" on Windows. It is NOT made absolute: a relative path stays relative. Read-only.",
+      "syntax_block": "String = File.FullName;",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "F = New File(\"C:/Data/report.txt\");\nMessage(F.FullName);   // C:\\Data\\report.txt on Windows",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.File.Path",
+        "cls.File.Name"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.File.Name",
+      "name_local": "Name",
+      "name_en": "Name",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "File.Name",
+      "description": "The name with its extension — what follows the last separator: \"report.final.txt\". A path that ends with a separator, a folder's, has an empty Name. Read-only.",
+      "syntax_block": "String = File.Name;",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "F = New File(\"C:\\Data\\report.final.txt\");\nMessage(F.Name);   // report.final.txt",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.File.BaseName",
+        "cls.File.Extension",
+        "cls.File.Path"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.File.Path",
+      "name_local": "Path",
+      "name_en": "Path",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "File.Path",
+      "description": "The folder part — everything before the last separator, without that separator: \"C:/Data\" for \"C:/Data/report.txt\", and for the folder's own name \"C:/Data/\" as well. The separators are kept as written; FullName is the one that turns them. Read-only.",
+      "syntax_block": "String = File.Path;",
+      "parameters": "",
+      "return_descr": "String.",
+      "example": "F = New File(\"C:/Data/report.txt\");\nMessage(F.Path);   // C:/Data",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.File.Name",
+        "cls.File.FullName"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.File.Exist",
+      "name_local": "Exist",
+      "name_en": "Exist",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Exist() : Boolean",
+      "description": "Whether something is there under the path: for a file's name, a file or a folder of that name; for a folder's name (ending with a separator), a folder. An empty path answers False.",
+      "syntax_block": "Boolean = File.Exist();",
+      "parameters": "None.",
+      "return_descr": "Boolean.",
+      "example": "F = New File(\"C:\\in\\sales.csv\");\nThere = F.Exist();",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.File",
+        "cls.File.IsFile",
+        "cls.File.Size"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.File.GetModificationTime",
+      "name_local": "GetModificationTime",
+      "name_en": "GetModificationTime",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "GetModificationTime() : Date",
+      "description": "When the file was last written, in the machine's local time. A file that is not there answers the empty date (01.01.0001 00:00:00), not an error.",
+      "syntax_block": "Date = File.GetModificationTime();",
+      "parameters": "None.",
+      "return_descr": "Date.",
+      "example": "F = New File(\"C:\\in\\sales.csv\");\nMessage(F.GetModificationTime());",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.File.Exist",
+        "cls.File.Size"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.File.GetReadOnly",
+      "name_local": "GetReadOnly",
+      "name_en": "GetReadOnly",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "GetReadOnly() : Boolean",
+      "description": "⚠ Despite its name, it answers whether the file can be READ by its owner: True for an ordinary file — a writable one included — and False when nothing is there. It does not tell a read-only file from a writable one.",
+      "syntax_block": "Boolean = File.GetReadOnly();",
+      "parameters": "None.",
+      "return_descr": "Boolean.",
+      "example": "F = New File(\"C:\\in\\sales.csv\");\nReadable = F.GetReadOnly();   // True for a file that is there",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.File.Exist"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.File.IsDirectory",
+      "name_local": "IsDirectory",
+      "name_en": "IsDirectory",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "IsDirectory() : Boolean",
+      "description": "Whether the NAME is a folder's: True when the path ends with a separator. The disk is not asked — `New File(\"C:\\Temp\")` answers False even where C:\\Temp is a folder, `New File(\"C:\\Temp\\\")` answers True even where it is not there.",
+      "syntax_block": "Boolean = File.IsDirectory();",
+      "parameters": "None.",
+      "return_descr": "Boolean.",
+      "example": "Message(New File(\"C:\\Data\\\").IsDirectory());   // True",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.File.IsFile",
+        "cls.File.Exist"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.File.IsFile",
+      "name_local": "IsFile",
+      "name_en": "IsFile",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "IsFile() : Boolean",
+      "description": "Whether the NAME is a file's: True when the path does not end with a separator. The disk is not asked — a folder's path written without its trailing separator answers True; Exist() is the question about the disk.",
+      "syntax_block": "Boolean = File.IsFile();",
+      "parameters": "None.",
+      "return_descr": "Boolean.",
+      "example": "Message(New File(\"C:\\Data\\report.txt\").IsFile());   // True",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.File.IsDirectory",
+        "cls.File.Exist"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.File.Size",
+      "name_local": "Size",
+      "name_en": "Size",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Size() : Number",
+      "description": "The file's size in bytes. ⚠ A file that is not there does NOT answer 0: it answers 18446744073709551615, the largest count, and so does a folder — ask Exist() first.",
+      "syntax_block": "Number = File.Size();",
+      "parameters": "None.",
+      "return_descr": "Number.",
+      "example": "F = New File(\"C:\\in\\sales.csv\");\nBytes = ?(F.Exist(), F.Size(), 0);",
+      "availability": "Client, Server",
+      "see_also": [
+        "cls.File.Exist",
+        "cls.BinaryData.Size"
+      ],
+      "reviewed": false
+    },
+    {
       "id": "enum.TextEncoding",
       "name_local": "TextEncoding",
       "name_en": "TextEncoding",

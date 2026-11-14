@@ -2695,6 +2695,11 @@ msgstr ""
 msgid "Failed to read the contents of a value of type '%s'"
 msgstr ""
 
+#: src/engine/backend/compiler/enumUnit.h:313
+#, c-format
+msgid "'%s' has no member numbered %d"
+msgstr ""
+
 #: src/engine/backend/composition/composeEvaluate.cpp:61
 msgid "there is no runtime in this process to evaluate against"
 msgstr ""
@@ -4485,16 +4490,6 @@ msgstr ""
 #: src/engine/backend/metaCollection/partial/accountingRegisterMetadata.cpp:657
 #, c-format
 msgid "Account dimension %s%u kind"
-msgstr ""
-
-#: src/engine/backend/metaCollection/partial/accountingRegisterMetadata.cpp:144
-#, c-format
-msgid "Account dimension Cr%u"
-msgstr ""
-
-#: src/engine/backend/metaCollection/partial/accountingRegisterMetadata.cpp:152
-#, c-format
-msgid "Account dimension Cr%u kind"
 msgstr ""
 
 #: src/engine/backend/metaCollection/partial/accountingRegisterMetadata.cpp:379
@@ -7478,6 +7473,14 @@ msgstr ""
 msgid "a TOTALS query's field is read from the statement one level down, as a plain field"
 msgstr ""
 
+#: src/engine/backend/query/queryLowering.cpp:2088
+msgid "each element of a row (a, b) is one field of the source - not an expression, not a walk through a reference"
+msgstr ""
+
+#: src/engine/backend/query/queryLowering.cpp:2094
+msgid "(a, b) IN (SELECT ...) is answered on the server as one EXISTS: a WHERE over one table, and a select from one table with as many fields as the row, each of the kind of its pair - no join, grouping, TOP or union"
+msgstr ""
+
 #: src/engine/backend/query/queryProvider.cpp:579
 msgid "IN HIERARCHY reached a filter over rows held in memory, which cannot walk the subtree"
 msgstr ""
@@ -8476,6 +8479,10 @@ msgstr ""
 
 #: src/engine/backend/system/value/valueDatabasePrepareStatement.cpp:68
 msgid "Index goes beyond statement"
+msgstr ""
+
+#: src/engine/backend/system/value/valueDatabaseResultSet.cpp:49
+msgid "the result set stands on no row: read a field after Next() answers True"
 msgstr ""
 
 #: src/engine/backend/system/value/valueDynamicList.h:347
@@ -10555,6 +10562,10 @@ msgstr ""
 
 #: src/engine/core/query/queryParser.cpp:1784
 msgid "only a primitive type is qualified: Number(15, 2), String(50), Date(Date)"
+msgstr ""
+
+#: src/engine/core/query/queryParser.cpp:1143
+msgid "a row (a, b) stands only before [NOT] IN (SELECT ...), compared with the select's fields in their order"
 msgstr ""
 
 #: src/engine/core/query/queryRender.cpp:771
@@ -16664,7 +16675,7 @@ msgid "How the button is drawn: a button, or a hyperlink - no face and no frame,
 msgstr ""
 
 #: src/engine/frmserver/visualView/ctrl/widgets.h:70
-msgid "The text on the button. Can be written per language and changed from code while the form is open."
+msgid "The text on the button. Empty: the bound command's own caption. Can be written per language and changed from code while the form is open."
 msgstr ""
 
 #: src/engine/frmserver/visualView/ctrl/widgets.h:72

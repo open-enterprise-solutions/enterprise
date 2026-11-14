@@ -289,13 +289,12 @@ ibValueFrame* ibFormDesignView::CreateCommandButton(ibValueFrame* target, const 
 
 	// A drop ALWAYS ADDS a new command button — even onto an existing button — never overwrites the target's
 	// binding. The new button lands next to the target, through the SAME create flow any dropped control uses
-	// (CreateControlOfClass). The bind leaves the Title UNSET so the command supplies the DEFAULT caption + icon
+	// (CreateControlOfClass). A new button's Title is empty, so the command supplies the DEFAULT caption + icon
 	// (button->Update resolves them live via the command door).
 	return CreateControlOfClass(target, ibProtocol::ibForm::ibType::Button, [&desc, &caption](ibValueFrame* control) {
 		if (control != nullptr && control->GetClassType() == g_controlButtonCLSID) {   // type by clsid, not dynamic_cast
 			ibValueButton* button = static_cast<ibValueButton*>(control);
 			button->SetCommandDesc(desc, caption);
-			button->SetCaption(ibEmptyString);
 		}
 	});
 }

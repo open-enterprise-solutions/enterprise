@@ -20,9 +20,9 @@ class ibValueEnumCommandGroupCategory : public ibValueEnumeration<ibCommandGroup
 public:
 	ibValueEnumCommandGroupCategory() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibCommandGroupCategory_Navigation,     ibT("NavigationPanel"), _("Navigation panel"));
-		AddEnumeration(ibCommandGroupCategory_Actions,        ibT("ActionsPanel"),    _("Actions panel"));
-		AddEnumeration(ibCommandGroupCategory_FormCommandBar, ibT("FormCommandBar"),  _("Form command bar"));
+		AddEnumeration(ibCommandGroupCategory_Navigation,     ibT("NavigationPanel"), ibTRANSLATE("Navigation panel"));
+		AddEnumeration(ibCommandGroupCategory_Actions,        ibT("ActionsPanel"),    ibTRANSLATE("Actions panel"));
+		AddEnumeration(ibCommandGroupCategory_FormCommandBar, ibT("FormCommandBar"),  ibTRANSLATE("Form command bar"));
 	}
 };
 

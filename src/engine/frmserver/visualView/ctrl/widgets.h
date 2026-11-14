@@ -67,7 +67,7 @@ private:
 		_("How the button is drawn: a button, or a hyperlink - no face and no frame, its caption underlined. Pressed the same way, and its picture, its representation and its command are the same."),
 		ibButtonView::ibButtonView_Button);
 	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryButton, ibT("Title"), _("Title"),
-		_("The text on the button. Can be written per language and changed from code while the form is open."), ibT("Button"));
+		_("The text on the button. Empty: the bound command's own caption. Can be written per language and changed from code while the form is open."), ibT(""));
 	ibPropertyEnum<ibValueEnumRepresentation>* m_propertyRepresentation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumRepresentation>>(m_categoryButton, ibT("Representation"), _("Representation"),
 		_("What the button shows: text, picture, or both. Auto: what the bound command prefers (Close is a picture alone, Add a picture with text); picture and text when no command is bound."),
 		ibRepresentation::ibRepresentation_Auto);

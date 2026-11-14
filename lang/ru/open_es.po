@@ -2738,6 +2738,11 @@ msgstr "Не удалось создать значение типа '%s'"
 msgid "Failed to read the contents of a value of type '%s'"
 msgstr "Не удалось прочитать содержимое значения типа '%s'"
 
+#: src/engine/backend/compiler/enumUnit.h:313
+#, c-format
+msgid "'%s' has no member numbered %d"
+msgstr "'%s' не имеет значения с номером %d"
+
 #: src/engine/backend/composition/composeEvaluate.cpp:61
 msgid "there is no runtime in this process to evaluate against"
 msgstr "в этом процессе нет среды выполнения, в которой можно вычислить выражение"
@@ -4531,16 +4536,6 @@ msgstr "Аналитика %s%u"
 #, c-format
 msgid "Account dimension %s%u kind"
 msgstr "Вид аналитики %s%u"
-
-#: src/engine/backend/metaCollection/partial/accountingRegisterMetadata.cpp:144
-#, c-format
-msgid "Account dimension Cr%u"
-msgstr "Аналитика Cr%u"
-
-#: src/engine/backend/metaCollection/partial/accountingRegisterMetadata.cpp:152
-#, c-format
-msgid "Account dimension Cr%u kind"
-msgstr "Вид аналитики Cr%u"
 
 #: src/engine/backend/metaCollection/partial/accountingRegisterMetadata.cpp:379
 #, c-format
@@ -7523,6 +7518,14 @@ msgstr "TOTALS называет ресурс \"%s\", а уровень груп�
 msgid "a TOTALS query's field is read from the statement one level down, as a plain field"
 msgstr "поле запроса с TOTALS читается из оператора уровнем ниже, как простое поле"
 
+#: src/engine/backend/query/queryLowering.cpp:2088
+msgid "each element of a row (a, b) is one field of the source - not an expression, not a walk through a reference"
+msgstr "каждый элемент строки (a, b) - одно поле источника, не выражение и не переход по ссылке"
+
+#: src/engine/backend/query/queryLowering.cpp:2094
+msgid "(a, b) IN (SELECT ...) is answered on the server as one EXISTS: a WHERE over one table, and a select from one table with as many fields as the row, each of the kind of its pair - no join, grouping, TOP or union"
+msgstr "(a, b) IN (SELECT ...) выполняется на сервере одним EXISTS: WHERE по одной таблице и выборка из одной таблицы с тем же числом полей, что в строке, каждое того же вида, что его пара - без соединений, группировки, TOP и объединения"
+
 #: src/engine/backend/query/queryProvider.cpp:579
 msgid "IN HIERARCHY reached a filter over rows held in memory, which cannot walk the subtree"
 msgstr "IN HIERARCHY попал в отбор по строкам в памяти, который не может обойти поддерево"
@@ -8526,6 +8529,10 @@ msgstr "DatabaseLayer выполняет SQL напрямую в обход по
 #: src/engine/backend/system/value/valueDatabasePrepareStatement.cpp:68
 msgid "Index goes beyond statement"
 msgstr "Индекс выходит за пределы оператора"
+
+#: src/engine/backend/system/value/valueDatabaseResultSet.cpp:49
+msgid "the result set stands on no row: read a field after Next() answers True"
+msgstr "набор результатов не стоит на строке: читайте поле после того, как Next() ответил True"
 
 #: src/engine/backend/system/value/valueDynamicList.h:347
 msgid "Dynamic list"
@@ -10605,6 +10612,10 @@ msgstr "ожидается число или слово, уточняющее т
 #: src/engine/core/query/queryParser.cpp:1784
 msgid "only a primitive type is qualified: Number(15, 2), String(50), Date(Date)"
 msgstr "уточняется только примитивный тип: Number(15, 2), String(50), Date(Date)"
+
+#: src/engine/core/query/queryParser.cpp:1143
+msgid "a row (a, b) stands only before [NOT] IN (SELECT ...), compared with the select's fields in their order"
+msgstr "строка (a, b) допустима только перед [NOT] IN (SELECT ...) - она сравнивается с полями выборки по порядку"
 
 #: src/engine/core/query/queryRender.cpp:771
 msgid "(nested table)"
@@ -16764,8 +16775,8 @@ msgid "How the button is drawn: a button, or a hyperlink - no face and no frame,
 msgstr "Как рисуется кнопка: обычной кнопкой или гиперссылкой - без фона и рамки, с подчёркнутой надписью. Нажимается так же, картинка, представление и команда те же."
 
 #: src/engine/frmserver/visualView/ctrl/widgets.h:70
-msgid "The text on the button. Can be written per language and changed from code while the form is open."
-msgstr "Текст на кнопке. Можно задать для каждого языка и менять из кода, пока форма открыта."
+msgid "The text on the button. Empty: the bound command's own caption. Can be written per language and changed from code while the form is open."
+msgstr "Текст на кнопке. Если пусто, используется заголовок привязанной команды. Можно задать для каждого языка и менять из кода, пока форма открыта."
 
 #: src/engine/frmserver/visualView/ctrl/widgets.h:72
 msgid "What the button shows: text, picture, or both. Auto: what the bound command prefers (Close is a picture alone, Add a picture with text); picture and text when no command is bound."

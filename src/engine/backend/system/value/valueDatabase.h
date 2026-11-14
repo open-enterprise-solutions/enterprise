@@ -49,6 +49,7 @@ class BACKEND_API ibValueResultSet : public ibValueDynamicMembers {
 
 private:
 	class ibDatabaseResultSet* m_resultSet;
+	bool m_onRow = false;   // the last Next() answered True — a field is read only then
 };
 
 #endif

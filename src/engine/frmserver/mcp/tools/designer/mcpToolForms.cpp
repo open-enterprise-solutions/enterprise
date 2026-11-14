@@ -41,11 +41,9 @@
 #include "backend/backend_exception.h"   // a path the binding refuses — said back as the refusal
 #include "core/description/sourceDescription.h"
 #include "backend/backend_localization.h"   // a caption is an array by language
-#include "backend/propertyManager/property/propertyString.h"   // ibPropertyTString
 #include "backend/propertyManager/property/propertyDataComposition.h"   // a composition, wherever it is held: the report's own
 #include "backend/propertyManager/property/propertyDynamicList.h"       // …and the list's, judged by list rules
 #include "core/description/compositionDescription.h"
-#include "core/stringUtils.h"   // GenerateSynonym — the caption the platform makes from a name
 
 #include "frmserver/visualView/ctrl/form.h"
 #include "frmserver/visualView/ctrl/formAttribute.h"   // the main attribute — the head of every binding
@@ -814,40 +812,12 @@ public:
 			return false;
 		}
 
+		// ⚠ THE NAME ONLY — NO TITLE. An empty Title is what a bound control shows its binding's caption by (a field's
+		// synonym, a command's caption), and the designer writes none; a title made here from the name hid them —
+		// "Tmp button" on a command button, "Col client" over a bound column (2026-11-14).
 		const ibString name = ArgName().Text(params);
-		if (!name.IsEmpty()) {
-
+		if (!name.IsEmpty())
 			created->SetControlName(name);
-
-			// ⭐ THE CAPTION IS GENERATED, NOT TYPED. A metaobject does this for
-			// itself when it is renamed — the name splits at its capitals and
-			// becomes a sentence — and a control should not be the one place where
-			// a person (or a tool) invents the same words by hand and gets them
-			// slightly different. `WarehouseCode` becomes "Warehouse code" from the
-			// platform's own generator, and a caller that wants something else says
-			// so with form_set.
-			// ⚠ ASKED OF THE PROPERTY, NOT OF ITS STORAGE. A caption is a
-			// translatable string, and an EMPTY one is stored as `en = '';` — the
-			// loc array with nothing in it. Testing the stored text for emptiness
-			// therefore always answered "not empty", and the generated title was
-			// never written once. `IsEmptyProperty` exists for exactly this
-			// question and answers it in the property's own terms.
-			// ⚠ ASKED OF THE PROPERTY, NOT OF ITS STORAGE. A caption is a
-			// translatable string, and an EMPTY one is stored as `en = '';` — the
-			// loc array with nothing in it. Testing the stored text for emptiness
-			// always answered "not empty", so the generated title was never written
-			// once. `IsEmptyProperty` asks the question in the property's own terms.
-			ibPropertyTString* title =
-				dynamic_cast<ibPropertyTString*>(created->GetProperty(ibT("Title")));
-
-			if (title != nullptr && title->IsEmptyProperty()) {
-
-				// …and written INTO the language cell rather than over the whole
-				// value: the title HOLDS its translations, so the one in force is
-				// filled in and no other language moves.
-				title->GetValueAsTranslate().SetTranslate(stringUtils::GenerateSynonym(name));
-			}
-		}
 
 		// ⚠ SAVED, OR IT NEVER HAPPENED. The value form is ours for the length of
 		// this call; the configuration keeps the LAYOUT, and nothing reaches it

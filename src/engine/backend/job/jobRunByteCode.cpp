@@ -18,6 +18,7 @@
 #include "backend/moduleInfo.h"             // GetByteCode - which is how the root is asked for
 #include "core/stringUtils.h"            // IsSameAs - how this tree compares a NAME
 #include "core/memory/memoryStream.h"          // ibWriterMemory / ibReaderMemory - the wire format below
+#include "core/diagnostics/crashGuard.h"       // ibCrashGuard::CurrentPidPortable - the process doing the run
 
 namespace {
 
@@ -62,6 +63,8 @@ void Describe(const ibBackgroundRun& run, const ibString& session, ibJobRunByteC
 	state.m_session  = session;
 	state.m_known    = true;
 	state.m_complete = run.IsComplete();
+	state.m_pid      = ibCrashGuard::CurrentPidPortable();
+	state.m_milliseconds = (state.m_complete ? run.End() : ibDateTime::Now()) - run.Begin();
 	// ⭐ THE SAME LINE THE PERSON READS. A run says where it has got to in ONE place - its activity,
 	// which is also written to sys_session.currentActivity and shows in Active Users. So what a
 	// caller reads and what they see cannot drift apart, because there is nothing to drift from.
@@ -109,6 +112,8 @@ void ibJobRunByteCodeState::Write(ibWriterMemory& to) const
 	to.w_stringZ(m_result);
 	to.w_u8(m_complete ? 1 : 0);
 	to.w_u8(m_known ? 1 : 0);
+	to.w_u32(m_pid);
+	to.w_s64(m_milliseconds);
 	to.w_u32((std::uint32_t)m_output.size());
 	for (const ibLine& line : m_output) {
 		to.w_stringZ(line.m_text);
@@ -126,6 +131,8 @@ void ibJobRunByteCodeState::Read(const ibReaderMemory& from)
 	from.r_stringZ(m_result);
 	m_complete = from.r_u8() != 0;
 	m_known    = from.r_u8() != 0;
+	m_pid      = from.r_u32();
+	m_milliseconds = from.r_s64();
 	m_output.resize(from.r_u32());
 	for (ibLine& line : m_output) {
 		from.r_stringZ(line.m_text);

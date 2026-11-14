@@ -33,9 +33,9 @@ class ibValueEnumHierarchyType : public ibValueEnumeration<ibHierarchyType> {
 		// explainer in one label makes the others look like they are missing theirs.
 		// (ParentOnly — a parent recorded, nothing built on it — is no longer offered; a stored one reads back
 		//  as it was. backend_core.h.)
-		AddEnumeration(ibHierarchyType::eNone, ibT("None"), _("No hierarchy"));
-		AddEnumeration(ibHierarchyType::eItems, ibT("Items"), _("Items"));
-		AddEnumeration(ibHierarchyType::eFolders, ibT("Folders"), _("Folders"));
+		AddEnumeration(ibHierarchyType::eNone, ibT("None"), ibTRANSLATE("No hierarchy"));
+		AddEnumeration(ibHierarchyType::eItems, ibT("Items"), ibTRANSLATE("Items"));
+		AddEnumeration(ibHierarchyType::eFolders, ibT("Folders"), ibTRANSLATE("Folders"));
 	}
 };
 constexpr ibClassID g_enumHierarchyTypeCLSID = enum_to_clsid("EN_HRTP");
@@ -54,8 +54,8 @@ class ibValueEnumDataPresentation : public ibValueEnumeration<ibDataPresentation
 	ibValueEnumDataPresentation() : ibValueEnumeration() {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibDataPresentation_Description, ibT("Description"), ibGETTEXT_IN_CONTEXT("item name", "Description"));
-		AddEnumeration(ibDataPresentation_Code, ibT("Code"), _("Code"));
+		AddEnumeration(ibDataPresentation_Description, ibT("Description"), ibTRANSLATE_IN_CONTEXT("item name", "Description"), ibT("item name"));
+		AddEnumeration(ibDataPresentation_Code, ibT("Code"), ibTRANSLATE("Code"));
 	}
 };
 #pragma endregion

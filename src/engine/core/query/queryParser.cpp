@@ -1127,7 +1127,21 @@ ibQueryAstExprPtr ibQueryParser::ParseNot()
 
 ibQueryAstExprPtr ibQueryParser::ParseComparison()
 {
+	const ibQueryToken start = Cur();
 	ibQueryAstExprPtr lhs = ParseAddSub();
+
+	// ⭐ A ROW STANDS ONLY BEFORE [NOT] IN (SELECT …), its fields compared with the select's in their order (2026-11-14).
+	// Anywhere else it would have to be one value, and it is several: `(a, b) = …`, a list or IN HIERARCHY after it
+	// are refused here, where the row meets what follows it.
+	if (lhs && lhs->m_kind == ibQueryAstExprKind::Row) {
+		const auto ahead = [this](size_t offset) -> const ibQueryToken& {
+			return m_toks[m_pos + offset < m_toks.size() ? m_pos + offset : m_toks.size() - 1];
+		};
+		const size_t in = Cur().IsKeyword(ibQueryKeyword::Not) ? 1 : 0;
+		if (!ahead(in).IsKeyword(ibQueryKeyword::In) || !ahead(in + 1).IsPunct(ibT('('))
+		    || !ahead(in + 2).IsKeyword(ibQueryKeyword::Select))
+			ThrowQueryException(start, _("a row (a, b) stands only before [NOT] IN (SELECT ...), compared with the select's fields in their order"));
+	}
 
 	// binary comparison operator
 	if (Cur().m_kind == ibQueryTokenKind::Op) {
@@ -1410,10 +1424,20 @@ ibQueryAstExprPtr ibQueryParser::ParsePrimary()
 	if (tk.IsKeyword(ibQueryKeyword::IsNull))
 		return ParseIsNullCall();
 
-	// parenthesized sub-predicate / arithmetic
+	// parenthesized sub-predicate / arithmetic — or a ROW, `(a, b)`, when a comma follows the first
 	if (tk.IsPunct(ibT('('))) {
 		++m_pos;
 		ibQueryAstExprPtr e = ParsePredicate();
+		if (Cur().IsPunct(ibT(','))) {
+			// ⭐ A ROW is compared with a select's fields in their order, and with nothing else — ParseComparison
+			// says so where the row meets what follows it.
+			auto row = ibQueryAstExpr::Make(ibQueryAstExprKind::Row);
+			row->m_line = tk.m_line; row->m_col = tk.m_col;
+			row->m_args.push_back(e);
+			while (AcceptPunct(ibT(',')))
+				row->m_args.push_back(ParsePredicate());
+			e = row;
+		}
 		ExpectPunct(ibT(')'), ibT("')'"));
 		return e;
 	}

@@ -11,7 +11,7 @@
 // through the L3 door.
 //
 // Unlike the pure parity tests, this one DOES bring up the global appData env
-// (the way codeRunner does — ibApplicationInstance::CreateAppDataEnv) plus a
+// (the way coderunner does — ibApplicationInstance::CreateAppDataEnv) plus a
 // SQLite-only pool, because the temp manager pins a HOLDER's connection and
 // every later statement (fill / read / drop) must land on it. maxSize=1 so the
 // pool always hands out the SINGLE master connection (a :memory: clone would be
@@ -45,7 +45,7 @@
 
 namespace {
 
-// Brings up appData (like codeRunner) + a SQLite-only pool on the master
+// Brings up appData (like coderunner) + a SQLite-only pool on the master
 // connection. Skips (not fails) if the headless env / SQLite cannot come up.
 struct TempDbSqliteFix : ::testing::Test {
 	wxInitializer                          m_wxInit;   // wxBase up before appData (constructed pre-SetUp)
@@ -444,13 +444,15 @@ struct KeyTable {
 // `SELECT * FROM outer WHERE [NOT] EXISTS(perm correlated on k)` — the semi-join is the ONLY
 // restriction. Returns the surviving outer keys (dups in the result would prove multiplication).
 std::vector<int> SemiJoinSurvivors(ibDatabaseConnectionHolder* holder,
-                                   const KeyTable& outer, const KeyTable& perm, bool negated = false) {
+                                   const KeyTable& outer, const KeyTable& perm, bool negated = false,
+                                   bool emptyMatchesEmpty = false) {
 	ibSemiJoinExists sj;
 	sj.m_inner    = perm.temp;    // the permission source — EXISTS scans it
 	sj.m_outerKey = outer.k;      // s.k
 	sj.m_innerKey = perm.k;       // a.k
 	sj.m_op       = ibQueryFilterOp::Equal;
 	sj.m_negated  = negated;      // NOT EXISTS — the anti-join / deny-if-present rule
+	sj.m_emptyMatchesEmpty = emptyMatchesEmpty;   // as `x NOT IN (SELECT k …)` sets it
 
 	ibDataQueryBuilder q(holder);
 	q.From(outer.temp);
@@ -514,6 +516,22 @@ TEST_F(TempDbSqliteFix, RlsSemiJoin_NegatedIsAntiJoin)
 	std::vector<int> got = SemiJoinSurvivors(holder, sales, perm, /*negated*/ true);
 	std::sort(got.begin(), got.end());
 	EXPECT_EQ(got, (std::vector<int>{1, 3})) << "NOT EXISTS: only the rows with NO permitting row (anti-join)";
+}
+
+// `x NOT IN (SELECT k …)` on a server with no anti-join (SQLite here, Firebird in production, m_antiJoin false) is
+// asked as the row's key among the outer's keys MINUS the select's — and must keep exactly the rows NOT EXISTS keeps:
+// the empty key (0) matches the select's empty one, a key the select repeats is dropped once, nothing multiplies.
+TEST_F(TempDbSqliteFix, NotInSemiJoin_KeysMinusTheSelects)
+{
+	if (!ready) GTEST_SKIP();
+	ibDatabaseConnectionHolder* holder = ibConnectionPool::ThreadHolder();
+	KeyTable sales, perm;
+	ASSERT_TRUE(sales.Build(holder, 651, {0, 1, 2, 3, 3, 4}));
+	ASSERT_TRUE(perm .Build(holder, 652, {0, 2, 2, 4}));
+
+	std::vector<int> got = SemiJoinSurvivors(holder, sales, perm, /*negated*/ true, /*emptyMatchesEmpty*/ true);
+	std::sort(got.begin(), got.end());
+	EXPECT_EQ(got, (std::vector<int>{1, 3, 3})) << "the rows whose key the select lacks, each once per row";
 }
 
 // The WRITE half: an RLS semi-join rides m_predicate, and the DELETE path lowers m_predicate

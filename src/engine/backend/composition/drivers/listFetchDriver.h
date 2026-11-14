@@ -25,6 +25,7 @@
 #include "backend/composition/drivers/compositionDriver.h"   // a DRIVER needs the contract, not the composer
 #include "backend/query/dataQueryBuilder.h"   // ibReadPageRequest — held by value
 
+#include <algorithm>    // the columns put in id order once (OnOutputBegin)
 #include <functional>
 #include <memory>   // a row's conditional appearance, null where there is none — see Row::m_attr
 
@@ -122,6 +123,34 @@ public:
 	void OnOutputBegin(const ibCompositionOutputInfo& info) override {
 		m_schema = info.m_schema;
 		m_rows.clear();
+		// ⭐ …AND WHERE EACH COLUMN IS FILED, ASKED ONCE — the schema is the output's, not a row's. Asked by name per
+		// row and per cell (`idOf` is a search over the model's columns), it was a tenth of a sort by a reference over
+		// 100 000 rows, and the cells went into the row one search and one shift each — another seventh (2026-11-14).
+		// Kept in id order, so a row is laid down whole (swap_sorted); an id filed twice keeps its first column, as
+		// the insert did.
+		m_filedUnder.clear();
+		for (size_t i = 0; i < m_schema.size(); ++i) {
+			const ibBackendQueryColumn* col = m_schema[i].m_col;
+			if (col == nullptr)
+				continue;
+			ibMetaID id = col->GetColumnId();
+			if (m_idOf) {
+				const ibMetaID own = m_idOf(m_schema[i].m_name);
+				if (own != ibNOT_FOUND)
+					id = own;
+				// ⚠ …AND A COLUMN ONLY THE QUERY HAS STAYS IN THE QUERY. Its id is synthetic — negative, the
+				// query took the minus for them and says "none" with 0 — while the reader's "none" is -1, and
+				// the query's first synthetic output IS -1 (`dim0`). Filed here, a lookup that found nothing
+				// read that column's value. A heading's key travels as m_key; nothing else of it is the reader's.
+				else if (ibBackendQueryColumn::IsSyntheticId(id))
+					continue;
+			}
+			m_filedUnder.emplace_back(id, i);
+		}
+		std::stable_sort(m_filedUnder.begin(), m_filedUnder.end(),
+			[](const auto& a, const auto& b) { return a.first < b.first; });
+		m_filedUnder.erase(std::unique(m_filedUnder.begin(), m_filedUnder.end(),
+			[](const auto& a, const auto& b) { return a.first == b.first; }), m_filedUnder.end());
 	}
 
 	// ⭐ A LIST TAKES THE SECOND ANSWER — `showsWhatIsUnder`, never `hasChildren`. What it does with
@@ -151,30 +180,20 @@ private:
 			row.m_attr = std::make_unique<ibCompositionRowAttr>();
 			row.m_attr->m_line = std::move(attr->m_line);
 		}
-		row.m_values.reserve(m_schema.size());
-		for (size_t i = 0; i < m_schema.size() && i < values.size(); ++i) {
-			// A heading's key — the first dimension column of its level (a column counts levels from 0, a line from 1).
-			if (heading && !row.m_keyed && m_schema[i].m_role == ibQueryLowering::ibColumnRole::Dimension
-			    && m_schema[i].m_level + 1 == level) {
-				row.m_key   = values[i];
-				row.m_keyed = true;
-			}
-			const ibBackendQueryColumn* col = m_schema[i].m_col;
-			if (col == nullptr)
+		// A heading's key — the first dimension column of its level (a column counts levels from 0, a line from 1).
+		if (heading)
+			for (size_t i = 0; i < m_schema.size() && i < values.size(); ++i)
+				if (m_schema[i].m_role == ibQueryLowering::ibColumnRole::Dimension && m_schema[i].m_level + 1 == level) {
+					row.m_key   = values[i];
+					row.m_keyed = true;
+					break;
+				}
+		ibRowMetaValues::container_type cells;
+		cells.reserve(m_filedUnder.size());
+		for (const auto& [id, i] : m_filedUnder) {
+			if (i >= values.size())
 				continue;
-			ibMetaID id = col->GetColumnId();
-			if (m_idOf) {
-				const ibMetaID own = m_idOf(m_schema[i].m_name);
-				if (own != ibNOT_FOUND)
-					id = own;
-				// ⚠ …AND A COLUMN ONLY THE QUERY HAS STAYS IN THE QUERY. Its id is synthetic — negative, the
-				// query took the minus for them and says "none" with 0 — while the reader's "none" is -1, and
-				// the query's first synthetic output IS -1 (`dim0`). Filed here, a lookup that found nothing
-				// read that column's value. A heading's key travels as m_key; nothing else of it is the reader's.
-				else if (ibBackendQueryColumn::IsSyntheticId(id))
-					continue;
-			}
-			row.m_values.insert({ id, values[i] });
+			cells.emplace_back(id, values[i]);
 			if (attr != nullptr)
 				for (std::pair<size_t, ibCompositionAttr>& cell : attr->m_cells)   // a column's own, where it has one
 					if (cell.first == i) {
@@ -182,6 +201,7 @@ private:
 						break;
 					}
 		}
+		row.m_values.swap_sorted(cells);
 		m_rows.push_back(std::move(row));
 	}
 
@@ -195,6 +215,7 @@ private:
 	ColumnIdOf        m_idOf;   // the reader's column id by output name — empty: the output column's own
 
 	std::vector<ibQueryLowering::ibQueryOutputColumn> m_schema;
+	std::vector<std::pair<ibMetaID, size_t>>   m_filedUnder;   // (the id a row files it under, its schema column), in id order
 	std::vector<Row>                           m_rows;
 };
 

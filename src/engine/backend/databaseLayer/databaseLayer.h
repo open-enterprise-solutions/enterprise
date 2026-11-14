@@ -78,6 +78,12 @@ struct ibSqlFeatures
 	bool m_recursiveCte      = false;
 	bool m_recursiveCteUnion = false;
 	bool m_fullOuterJoin = false;
+	// NOT EXISTS (…) runs as an ANTI-JOIN — one pass over each side — and not as a probe of the inner per outer row.
+	// Firebird 5 has none: SubQueryConversion makes IN / EXISTS a hash semi-join and leaves NOT EXISTS per row, and a
+	// LEFT JOIN … IS NULL is not hashed either (MEASURED 2026-11-14, 45 389 rows against 5: neither answered in minutes).
+	// Where false, `x NOT IN (SELECT …)` is asked as a positive EXISTS over the outer's keys MINUS the select's
+	// (BuildSemiJoinExists) — 1.6 s on the same rows.
+	bool m_antiJoin      = false;
 	bool m_iLike         = false;   // case-insensitive LIKE
 	bool m_rollup        = false;   // GROUP BY ROLLUP(...) — hierarchical subtotals server-side
 	// ⭐ AND `GROUPING(expr)` SEPARATELY, because the two do not arrive together: Firebird 5 PARSES

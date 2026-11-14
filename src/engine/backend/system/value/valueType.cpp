@@ -459,9 +459,9 @@ class ibValueEnumDateFractions : public ibValueEnumeration<ibDateFractions> {
 public:
 	ibValueEnumDateFractions() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() override {
-		AddEnumeration(ibDateFractions::ibDateFractions_Date,     ibT("Date"),     _("Date"));
-		AddEnumeration(ibDateFractions::ibDateFractions_Time,     ibT("Time"),     _("Time"));
-		AddEnumeration(ibDateFractions::ibDateFractions_DateTime, ibT("DateTime"), _("Date and time"));
+		AddEnumeration(ibDateFractions::ibDateFractions_Date,     ibT("Date"),     ibTRANSLATE("Date"));
+		AddEnumeration(ibDateFractions::ibDateFractions_Time,     ibT("Time"),     ibTRANSLATE("Time"));
+		AddEnumeration(ibDateFractions::ibDateFractions_DateTime, ibT("DateTime"), ibTRANSLATE("Date and time"));
 	}
 };
 
@@ -469,8 +469,8 @@ class ibValueEnumAllowedLength : public ibValueEnumeration<ibAllowedLength> {
 public:
 	ibValueEnumAllowedLength() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() override {
-		AddEnumeration(ibAllowedLength::ibAllowedLength_Variable, ibT("Variable"), _("Variable"));
-		AddEnumeration(ibAllowedLength::ibAllowedLength_Fixed,    ibT("Fixed"),    _("Fixed"));
+		AddEnumeration(ibAllowedLength::ibAllowedLength_Variable, ibT("Variable"), ibTRANSLATE("Variable"));
+		AddEnumeration(ibAllowedLength::ibAllowedLength_Fixed,    ibT("Fixed"),    ibTRANSLATE("Fixed"));
 	}
 };
 

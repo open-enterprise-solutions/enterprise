@@ -48,9 +48,9 @@ public:
 	ibValueEnumQuerySelectKind() : ibValueEnumeration() {}
 
 	virtual void CreateEnumeration() override {
-		AddEnumeration(ibSelectKind::ibSelectKind_Direct,            ibT("Direct"),            _("Direct"));
-		AddEnumeration(ibSelectKind::ibSelectKind_ByGroups,          ibT("ByGroups"),          _("ByGroups"));
-		AddEnumeration(ibSelectKind::ibSelectKind_ByGroupsHierarchy, ibT("ByGroupsHierarchy"), _("ByGroupsHierarchy"));
+		AddEnumeration(ibSelectKind::ibSelectKind_Direct,            ibT("Direct"),            ibTRANSLATE("Direct"));
+		AddEnumeration(ibSelectKind::ibSelectKind_ByGroups,          ibT("ByGroups"),          ibTRANSLATE("ByGroups"));
+		AddEnumeration(ibSelectKind::ibSelectKind_ByGroupsHierarchy, ibT("ByGroupsHierarchy"), ibTRANSLATE("ByGroupsHierarchy"));
 	}
 };
 

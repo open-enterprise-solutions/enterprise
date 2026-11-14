@@ -2130,7 +2130,13 @@ void ibClientHost::RoundBody()
 			// they think; a dropped socket already went through Disconnect (a window or removal).
 			const bool idle = deadline == 0 && entry.second->connectionless
 				&& now - instance->LastActiveMs() > std::chrono::duration_cast<std::chrono::milliseconds>(kIdleLimit).count();
-			if (instance->IsCloseRequested() || idle) {
+			// …and a connectionless client TOLD TO GO (an administrator's kick, a debugger's Stop — ExitClient) goes now:
+			// its Exit waits in the frame for a call, and nothing calls an in-memory client but the one who made it, so
+			// its logout never came and the kicked session held the base until the idle limit (2026-11-14, five of an
+			// assistant's clients). Its next call is refused as a client that has gone.
+			ibClientFrame* const frame = entry.second->connectionless ? instance->GetFrame() : nullptr;
+			const bool exited = frame != nullptr && frame->TakeExitPending();
+			if (instance->IsCloseRequested() || idle || exited) {
 				RemoveClient(entry.first);
 				continue;
 			}

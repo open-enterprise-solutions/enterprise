@@ -55,9 +55,9 @@ public:
 	ibValueEnumSpreadsheetFieldKind() : ibValueEnumeration() {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibQueryLowering::ibColumnRole::Detail, ibT("Field"), _("Field"));
-		AddEnumeration(ibQueryLowering::ibColumnRole::Dimension, ibT("Dimension"), _("Dimension"));
-		AddEnumeration(ibQueryLowering::ibColumnRole::Measure, ibT("Resource"), _("Resource"));
+		AddEnumeration(ibQueryLowering::ibColumnRole::Detail, ibT("Field"), ibTRANSLATE("Field"));
+		AddEnumeration(ibQueryLowering::ibColumnRole::Dimension, ibT("Dimension"), ibTRANSLATE("Dimension"));
+		AddEnumeration(ibQueryLowering::ibColumnRole::Measure, ibT("Resource"), ibTRANSLATE("Resource"));
 	}
 };
 

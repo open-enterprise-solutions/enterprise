@@ -361,12 +361,20 @@ struct ibSemiJoinExists
 	const ibBackendQueryColumn* m_outerKey = nullptr;   // s.k — correlation column on the OUTER (main) source
 	const ibBackendQueryColumn* m_innerKey = nullptr;   // a.k — correlation column on the INNER
 	ibQueryFilterOp             m_op = ibQueryFilterOp::Equal;   // correlation comparison (Equal default; FilterOpToBinOp at render)
-	bool                        m_negated  = false;      // NOT EXISTS — a deny-if-present rule (future)
+	bool                        m_negated  = false;      // NOT EXISTS — `x NOT IN (SELECT k …)`; its form is the server's (ibSqlFeatures::m_antiJoin)
 	// An EMPTY key matches an empty one, in whichever spelling either side holds it (a NULL or zero key, an
 	// untagged row, the type's empty value), as an equality of values says (DecomposeEquality). Set by
 	// `x IN (SELECT k …)` when neither key is a row's own (and so both may be empty); a policy's restriction
 	// keeps the plain correlation.
 	bool                        m_emptyMatchesEmpty = false;
+	// ⭐ …AND THE REST OF A ROW — `(a, b) IN (SELECT x, y …)`: each further pair is one more equality of the
+	// correlation, held as the first pair is, the way a join holds its further key parts (ibJoinOn::m_alsoOn).
+	struct ibSemiJoinKeyPart {
+		const ibBackendQueryColumn* m_outerKey = nullptr;
+		const ibBackendQueryColumn* m_innerKey = nullptr;
+		bool                        m_emptyMatchesEmpty = false;
+	};
+	std::vector<ibSemiJoinKeyPart> m_alsoKeys;
 };
 
 // ==========================================================================

@@ -26,6 +26,7 @@ const ibDialectDictionary& ibDatabaseLayerPostgres::Dialect()
 		d.m_features.m_recursiveCte      = true;
 		d.m_features.m_recursiveCteUnion = true;   // UNION in the recursive part — a loop in a parent chain ends
 		d.m_features.m_fullOuterJoin = true;
+		d.m_features.m_antiJoin      = true;   // NOT EXISTS is planned as an anti-join (since 8.4)
 		d.m_features.m_iLike         = true;
 		d.m_features.m_rollup        = true;   // GROUP BY ROLLUP(...) — standard spelling
 		d.m_features.m_grouping      = true;   // …and GROUPING(expr) with it: PG has had both since 9.5

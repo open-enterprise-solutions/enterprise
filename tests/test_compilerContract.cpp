@@ -339,7 +339,7 @@ TEST(CompilerContract, UnaryAndNot) {
 		wxT("a = -5;\n")
 		wxT("b = 2 * -a;\n")
 		wxT("b = Not (a > b);\n"),
-		26355683664696183ULL);   // 2026-11-03: an expression's temporary renders (-4,n) — #644
+		18186983856954313321ULL);   // 2026-11-14: a class id is a constant, SET_TYPE names it by its index (format 38)
 }
 
 TEST(CompilerContract, ComparisonAndLogical) {
@@ -441,7 +441,7 @@ TEST(CompilerContract, ForeachLoop) {
 		wxT("Foreach it In arr Do\n")
 		wxT("  s = s + 1;\n")
 		wxT("EndDo;\n"),
-		10645253739609398733ULL);   // 2026-11-03: an expression's temporary renders (-4,n) — #644
+		7752580856549664954ULL);   // 2026-11-14: a class id is a constant, NEW names it by its index (format 38)
 }
 
 TEST(CompilerContract, TryExcept) {
@@ -481,7 +481,7 @@ TEST(CompilerContract, TypedParametersAndLocals) {
 		wxT("  label = \"x\";\n")
 		wxT("  If cancel Then depth = depth + 1; EndIf;\n")
 		wxT("EndProcedure\n"),
-		13116129363301937994ULL);   // 2026-11-03: an expression's temporary renders (-4,n) — #644
+		5064943815309501592ULL);   // 2026-11-14: a class id is a constant, SET_TYPE names it by its index (format 38)
 }
 
 TEST(CompilerContract, MethodCallChain) {
@@ -491,7 +491,8 @@ TEST(CompilerContract, MethodCallChain) {
 		wxT("  arr.Add(1); arr.Add(2);\n")
 		wxT("  Return arr.Count();\n")
 		wxT("EndFunction\n"),
-		1361021572925664730ULL);   // 2026-11-03: an expression's temporary renders (-4,n) — #644
+		14777271491083034477ULL);   // 2026-11-14: a class id is a constant, NEW names it by its index; a method of a
+		                            // receiver unknown at compile time is unstamped (p4 0,0) and asked by name (format 38)
 }
 
 // ===========================================================================

@@ -435,6 +435,289 @@
       "reviewed": false
     },
     {
+      "id": "cls.File",
+      "name_local": "File",
+      "name_en": "File",
+      "kind": "collection",
+      "class_id": 163523992624603222,
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "New File(path : string)",
+      "description": "ИМЯ файла, разобранное на части, — и несколько вопросов файловой системе о том, что под этим именем лежит. Создание File ничего не открывает и не создаёт: `New File(path)` хранит путь как передан, файла может и не быть, а каждый вопрос задаётся тогда, когда его задают.\n\nName, BaseName, Extension и Path — части пути, прочитанные из его текста; FullName — путь с разделителями этой системы. Exist, Size, GetModificationTime и GetReadOnly спрашивают файловую систему. IsFile и IsDirectory читают ИМЯ: путь, который оканчивается разделителем, — имя папки, любой другой — имя файла, что бы ни лежало на диске.\n\nСвойства только для чтения — запись в них ничего не меняет и ошибки не вызывает. Путь читается на той машине, где выполняется скрипт, — для серверного кода на сервере. File без аргумента — отказ (\"Error initializing object 'File'\").\n\nСодержимое файла читают и пишут TextReader, TextWriter и BinaryData; удаляют и копируют файл FileDelete и FileCopy.",
+      "syntax_block": "F = New File(path);\nName = F.Name;\nThere = F.Exist();",
+      "parameters": "path — путь файла или папки; путь папки оканчивается разделителем (\"C:\\Data\\\").",
+      "return_descr": "File.",
+      "example": "F = New File(\"C:\\in\\sales.csv\");\nMessage(F.Exist());                          // True, если файл есть\nMessage(F.BaseName + \" / \" + F.Extension);   // sales / csv",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.File.Exist",
+        "cls.File.Name",
+        "cls.File.Size",
+        "cls.TextReader",
+        "cls.BinaryData",
+        "fn.FileDelete",
+        "fn.FileCopy"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.File.BaseName",
+      "name_local": "BaseName",
+      "name_en": "BaseName",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "File.BaseName",
+      "description": "Имя файла без расширения: то, что после последнего разделителя, до ПОСЛЕДНЕЙ точки, — \"report.final\" для \"C:\\Data\\report.final.txt\". Только для чтения.",
+      "syntax_block": "String = File.BaseName;",
+      "parameters": "",
+      "return_descr": "Строка.",
+      "example": "F = New File(\"C:\\Data\\report.final.txt\");\nMessage(F.BaseName);   // report.final",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.File.Name",
+        "cls.File.Extension"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.File.Extension",
+      "name_local": "Extension",
+      "name_en": "Extension",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "File.Extension",
+      "description": "Расширение без точки — часть имени после последней точки: \"txt\" для \"report.final.txt\", \"\" для имени без точки. Только для чтения.",
+      "syntax_block": "String = File.Extension;",
+      "parameters": "",
+      "return_descr": "Строка.",
+      "example": "F = New File(\"C:\\in\\sales.csv\");\nMessage(F.Extension);   // csv",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.File.BaseName",
+        "cls.File.Name"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.File.FullName",
+      "name_local": "FullName",
+      "name_en": "FullName",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "File.FullName",
+      "description": "Весь путь с разделителями этой системы — \"C:/Data/a.txt\" читается как \"C:\\Data\\a.txt\" в Windows. Абсолютным он НЕ становится: относительный путь остаётся относительным. Только для чтения.",
+      "syntax_block": "String = File.FullName;",
+      "parameters": "",
+      "return_descr": "Строка.",
+      "example": "F = New File(\"C:/Data/report.txt\");\nMessage(F.FullName);   // C:\\Data\\report.txt в Windows",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.File.Path",
+        "cls.File.Name"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.File.Name",
+      "name_local": "Name",
+      "name_en": "Name",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "File.Name",
+      "description": "Имя с расширением — то, что после последнего разделителя: \"report.final.txt\". У пути, который оканчивается разделителем, — у пути папки — Name пустое. Только для чтения.",
+      "syntax_block": "String = File.Name;",
+      "parameters": "",
+      "return_descr": "Строка.",
+      "example": "F = New File(\"C:\\Data\\report.final.txt\");\nMessage(F.Name);   // report.final.txt",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.File.BaseName",
+        "cls.File.Extension",
+        "cls.File.Path"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.File.Path",
+      "name_local": "Path",
+      "name_en": "Path",
+      "kind": "property",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "File.Path",
+      "description": "Часть-папка — всё до последнего разделителя, без него: \"C:/Data\" для \"C:/Data/report.txt\" и для имени самой папки \"C:/Data/\" тоже. Разделители остаются как написаны; меняет их FullName. Только для чтения.",
+      "syntax_block": "String = File.Path;",
+      "parameters": "",
+      "return_descr": "Строка.",
+      "example": "F = New File(\"C:/Data/report.txt\");\nMessage(F.Path);   // C:/Data",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.File.Name",
+        "cls.File.FullName"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.File.Exist",
+      "name_local": "Exist",
+      "name_en": "Exist",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Exist() : Boolean",
+      "description": "Есть ли что-то по этому пути: для имени файла — файл или папка с таким именем; для имени папки (с разделителем в конце) — папка. Пустой путь отвечает False.",
+      "syntax_block": "Boolean = File.Exist();",
+      "parameters": "Нет.",
+      "return_descr": "Булево.",
+      "example": "F = New File(\"C:\\in\\sales.csv\");\nThere = F.Exist();",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.File",
+        "cls.File.IsFile",
+        "cls.File.Size"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.File.GetModificationTime",
+      "name_local": "GetModificationTime",
+      "name_en": "GetModificationTime",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "GetModificationTime() : Date",
+      "description": "Когда файл записывали в последний раз, по местному времени машины. Файл, которого нет, отвечает пустой датой (01.01.0001 00:00:00), а не ошибкой.",
+      "syntax_block": "Date = File.GetModificationTime();",
+      "parameters": "Нет.",
+      "return_descr": "Дата.",
+      "example": "F = New File(\"C:\\in\\sales.csv\");\nMessage(F.GetModificationTime());",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.File.Exist",
+        "cls.File.Size"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.File.GetReadOnly",
+      "name_local": "GetReadOnly",
+      "name_en": "GetReadOnly",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "GetReadOnly() : Boolean",
+      "description": "⚠ Вопреки имени, отвечает, может ли владелец файла его ЧИТАТЬ: True для обычного файла — в том числе доступного для записи — и False, когда файла нет. Файл только для чтения от доступного для записи он не отличает.",
+      "syntax_block": "Boolean = File.GetReadOnly();",
+      "parameters": "Нет.",
+      "return_descr": "Булево.",
+      "example": "F = New File(\"C:\\in\\sales.csv\");\nReadable = F.GetReadOnly();   // True для существующего файла",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.File.Exist"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.File.IsDirectory",
+      "name_local": "IsDirectory",
+      "name_en": "IsDirectory",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "IsDirectory() : Boolean",
+      "description": "Является ли ИМЯ именем папки: True, когда путь оканчивается разделителем. Диск не спрашивается — `New File(\"C:\\Temp\")` отвечает False, даже если C:\\Temp — папка, а `New File(\"C:\\Temp\\\")` отвечает True, даже если её нет.",
+      "syntax_block": "Boolean = File.IsDirectory();",
+      "parameters": "Нет.",
+      "return_descr": "Булево.",
+      "example": "Message(New File(\"C:\\Data\\\").IsDirectory());   // True",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.File.IsFile",
+        "cls.File.Exist"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.File.IsFile",
+      "name_local": "IsFile",
+      "name_en": "IsFile",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "IsFile() : Boolean",
+      "description": "Является ли ИМЯ именем файла: True, когда путь не оканчивается разделителем. Диск не спрашивается — путь папки, записанный без разделителя в конце, отвечает True; вопрос к диску — Exist().",
+      "syntax_block": "Boolean = File.IsFile();",
+      "parameters": "Нет.",
+      "return_descr": "Булево.",
+      "example": "Message(New File(\"C:\\Data\\report.txt\").IsFile());   // True",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.File.IsDirectory",
+        "cls.File.Exist"
+      ],
+      "reviewed": false
+    },
+    {
+      "id": "cls.File.Size",
+      "name_local": "Size",
+      "name_en": "Size",
+      "kind": "method",
+      "category_keys": [
+        "value_types",
+        "runtime",
+        "text_files"
+      ],
+      "signature": "Size() : Number",
+      "description": "Размер файла в байтах. ⚠ Файл, которого нет, отвечает НЕ 0, а 18446744073709551615 — наибольшим возможным размером; так же отвечает папка. Сначала спросите Exist().",
+      "syntax_block": "Number = File.Size();",
+      "parameters": "Нет.",
+      "return_descr": "Число.",
+      "example": "F = New File(\"C:\\in\\sales.csv\");\nBytes = ?(F.Exist(), F.Size(), 0);",
+      "availability": "Клиент, Сервер",
+      "see_also": [
+        "cls.File.Exist",
+        "cls.BinaryData.Size"
+      ],
+      "reviewed": false
+    },
+    {
       "id": "enum.TextEncoding",
       "name_local": "TextEncoding",
       "name_en": "TextEncoding",

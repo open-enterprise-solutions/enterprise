@@ -279,6 +279,14 @@ ibString RenderExpr(const ibQueryAstExpr& expr)
 		return out + ibT(")");
 	}
 
+	case ibQueryAstExprKind::Row: {
+		std::vector<ibString> items;
+		items.reserve(expr.m_args.size());
+		for (const auto& item : expr.m_args)
+			if (item) items.push_back(RenderExpr(*item));
+		return ibT("(") + Join(items, ibT(", ")) + ibT(")");
+	}
+
 	case ibQueryAstExprKind::IsNull:
 		return RenderChild(expr.m_lhs) + ibT(" ") + Kw(ibQueryKeyword::Is)
 			+ (expr.m_negated ? ibT(" ") + Kw(ibQueryKeyword::Not) : ibString())

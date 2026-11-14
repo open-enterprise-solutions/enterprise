@@ -413,19 +413,21 @@ struct ibTypeDescription {
 			// each class of the type, a reference's included, on every value a column writes (the largest share
 			// of a register line's write, stack samples 2026-09-14, Debug). The kind byte alone: only the registry
 			// makes a clsid of that kind, and the registry is the side's, not the core's.
-			for (auto clsid : m_listTypeClass) {
-				if (IsEnum(clsid))
+			for (size_t i = 0; i < m_listTypeClass.size(); ++i)
+				if (IsEnum(m_listTypeClass[i]))
 					return true;
-			}
 			return false;
 		}
-		auto iterator = std::find(m_listTypeClass.begin(), m_listTypeClass.end(), GetIDByVT(valType));
-		return iterator != m_listTypeClass.end();
+		return ContainType(GetIDByVT(valType));
 	}
 
+	// BY POSITION, not by iterator: asked for every value a column takes, and a checked build registers each iterator
+	// under one global lock — std::find here was 4.6 % of a posting (Debug, 2026-11-14).
 	bool ContainType(const ibClassID& clsid) const {
-		auto iterator = std::find(m_listTypeClass.begin(), m_listTypeClass.end(), clsid);
-		return iterator != m_listTypeClass.end();
+		for (size_t i = 0; i < m_listTypeClass.size(); ++i)
+			if (m_listTypeClass[i] == clsid)
+				return true;
+		return false;
 	}
 
 	bool EqualType(const ibClassID& clsid, const ibTypeDescription& rhs) const {

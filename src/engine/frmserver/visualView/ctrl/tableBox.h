@@ -50,8 +50,8 @@ class ibValueEnumTableBoxSelectionMode :
 	public:
 	ibValueEnumTableBoxSelectionMode() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibDataViewSelectionMode::ibDataViewSelectCell, ibT("SelectCell"), _("Select cell"));
-		AddEnumeration(ibDataViewSelectionMode::ibDataViewSelectRow, ibT("SelectRow"), _("Select row"));
+		AddEnumeration(ibDataViewSelectionMode::ibDataViewSelectCell, ibT("SelectCell"), ibTRANSLATE("Select cell"));
+		AddEnumeration(ibDataViewSelectionMode::ibDataViewSelectRow, ibT("SelectRow"), ibTRANSLATE("Select row"));
 	}
 private:
 };
@@ -61,9 +61,9 @@ class ibValueEnumTableBoxViewMode :
 	public:
 	ibValueEnumTableBoxViewMode() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibDataViewViewMode::ibDataViewHierarchical, ibT("Hierarchical"), _("Hierarchical"));
-		AddEnumeration(ibDataViewViewMode::ibDataViewTree, ibT("Tree"), _("Tree"));
-		AddEnumeration(ibDataViewViewMode::ibDataViewList, ibT("List"), _("List"));
+		AddEnumeration(ibDataViewViewMode::ibDataViewHierarchical, ibT("Hierarchical"), ibTRANSLATE("Hierarchical"));
+		AddEnumeration(ibDataViewViewMode::ibDataViewTree, ibT("Tree"), ibTRANSLATE("Tree"));
+		AddEnumeration(ibDataViewViewMode::ibDataViewList, ibT("List"), ibTRANSLATE("List"));
 	}
 private:
 };
@@ -511,9 +511,9 @@ class ibValueEnumTableBoxColumnGrouping :
 	public:
 	ibValueEnumTableBoxColumnGrouping() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibColumnGroupHorizontal, ibT("Horizontal"), _("Horizontal"));
-		AddEnumeration(ibColumnGroupVertical, ibT("Vertical"), _("Vertical"));
-		AddEnumeration(ibColumnGroupInCell, ibT("InCell"), _("In cell"));
+		AddEnumeration(ibColumnGroupHorizontal, ibT("Horizontal"), ibTRANSLATE("Horizontal"));
+		AddEnumeration(ibColumnGroupVertical, ibT("Vertical"), ibTRANSLATE("Vertical"));
+		AddEnumeration(ibColumnGroupInCell, ibT("InCell"), ibTRANSLATE("In cell"));
 	}
 private:
 };

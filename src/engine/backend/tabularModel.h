@@ -402,12 +402,12 @@ public:
 		void FillColumnMembers(ibMemberTable& helper) const;   // bound in ctor
 	};
 
-	class BACKEND_API ibValueModelReturnLine : public ibValueDynamicMembers {
+	class BACKEND_API ibValueModelReturnLine : public ibValue {
 	public:
 
 		ibDataViewItem GetLineItem() const { return m_lineItem; };
 
-		ibValueModelReturnLine(const ibDataViewItem& lineItem) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true), m_lineItem(lineItem) {
+		ibValueModelReturnLine(const ibDataViewItem& lineItem) : ibValue(ibValueTypes::TYPE_VALUE, true), m_lineItem(lineItem) {
 			ibRefCounter* refCounter = m_lineItem.GetID();
 			if (refCounter != nullptr)
 				refCounter->IncRef();
@@ -518,7 +518,8 @@ public:
 	protected:
 		ibDataViewItem m_lineItem;
 
-		// A row's names are its model's (m_methodHelperReturnLine): the model fills the table, the row uses it.
+		// A row's names are its model's (m_methodHelperReturnLine): the model fills the table, the row uses it — so a row
+		// is an ibValue, not an ibValueDynamicMembers, whose table of its own was built and torn down per row unused.
 		virtual ibMemberTable* DoGetPMethods() const override;
 
 	private:

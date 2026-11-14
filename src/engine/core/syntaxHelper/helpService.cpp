@@ -8,6 +8,7 @@
 #include "core/syntaxHelper/helpCorpus.h"
 
 #include "core/fileSystem.h"
+#include "core/diagnostics/journal.h"   // the load's errors are written there
 
 namespace {
 
@@ -109,6 +110,12 @@ void ibHelpService::Rebuild()
 	const ibString platformDir = ResolvePlatformDir(m_locale);
 	ibHelpLoadResult result =
 	    LoadHelpCorpus(m_locale, platformDir, ibEmptyString, m_className);
+
+	// What the load refused or doubted — a file not read, an article skipped, a class_id that names no class — is
+	// the JOURNAL's. The corpus keeps the list (LoadErrors) and nobody read it, so a wrong id stayed silent
+	// (2026-11-14, the corpus review). A warning, not an error: the help is not what the person asked for.
+	for (const ibHelpLoadError& err : result.corpus->LoadErrors())
+		ibJournalWarning(ibT("help"), ibT("%s: %s"), err.bucketPath, err.message);
 
 	// Errors live inside the corpus snapshot — readers reach them via
 	// GetCorpus()->LoadErrors(). No parallel error vector on the

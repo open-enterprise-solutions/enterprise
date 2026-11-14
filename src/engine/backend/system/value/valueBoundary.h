@@ -21,8 +21,8 @@ public:
 	ibValueEnumBoundaryKind() : ibValueEnumeration() {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibBoundaryKind_Including, ibT("Including"), _("Including"));
-		AddEnumeration(ibBoundaryKind_Excluding, ibT("Excluding"), _("Excluding"));
+		AddEnumeration(ibBoundaryKind_Including, ibT("Including"), ibTRANSLATE("Including"));
+		AddEnumeration(ibBoundaryKind_Excluding, ibT("Excluding"), ibTRANSLATE("Excluding"));
 	}
 };
 #pragma endregion

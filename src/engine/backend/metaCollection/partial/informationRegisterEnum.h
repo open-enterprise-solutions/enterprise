@@ -25,12 +25,12 @@ class ibValueEnumPeriodicity : public ibValueEnumeration<ibPeriodicity> {
 	//ibValueEnumPeriodicity(ibPeriodicity periodicity) : ibValueEnumeration(periodicity) {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibPeriodicity::eNonPeriodic, ibT("NonPeriodic"), _("Non periodic"));
-		AddEnumeration(ibPeriodicity::eWithinSecond, ibT("WithinSecond"), _("Within second"));
-		AddEnumeration(ibPeriodicity::eWithinDay, ibT("WithinDay"), _("Within day"));
-		AddEnumeration(ibPeriodicity::eWithinMonth, ibT("WithinMonth"), _("Within month"));
-		AddEnumeration(ibPeriodicity::eWithinQuarter, ibT("WithinQuarter"), _("Within quarter"));
-		AddEnumeration(ibPeriodicity::eWithinYear, ibT("WithinYear"), _("Within year"));
+		AddEnumeration(ibPeriodicity::eNonPeriodic, ibT("NonPeriodic"), ibTRANSLATE("Non periodic"));
+		AddEnumeration(ibPeriodicity::eWithinSecond, ibT("WithinSecond"), ibTRANSLATE("Within second"));
+		AddEnumeration(ibPeriodicity::eWithinDay, ibT("WithinDay"), ibTRANSLATE("Within day"));
+		AddEnumeration(ibPeriodicity::eWithinMonth, ibT("WithinMonth"), ibTRANSLATE("Within month"));
+		AddEnumeration(ibPeriodicity::eWithinQuarter, ibT("WithinQuarter"), ibTRANSLATE("Within quarter"));
+		AddEnumeration(ibPeriodicity::eWithinYear, ibT("WithinYear"), ibTRANSLATE("Within year"));
 	}
 };
 class ibValueEnumWriteRegisterMode : public ibValueEnumeration<ibWriteRegisterMode> {
@@ -39,8 +39,8 @@ class ibValueEnumWriteRegisterMode : public ibValueEnumeration<ibWriteRegisterMo
 	//ibValueEnumWriteRegisterMode(ibWriteRegisterMode mode) : ibValueEnumeration(mode) {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibWriteRegisterMode::eIndependent, ibT("Independent"), _("Independent"));
-		AddEnumeration(ibWriteRegisterMode::eSubordinateRecorder, ibT("SubordinateRecorder"), _("Subordinate recorder"));
+		AddEnumeration(ibWriteRegisterMode::eIndependent, ibT("Independent"), ibTRANSLATE("Independent"));
+		AddEnumeration(ibWriteRegisterMode::eSubordinateRecorder, ibT("SubordinateRecorder"), ibTRANSLATE("Subordinate recorder"));
 	}
 };
 #pragma endregion 

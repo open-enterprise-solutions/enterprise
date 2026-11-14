@@ -36,6 +36,7 @@
    "name_local": "Query",
    "name_en": "Query",
    "kind": "collection",
+   "class_id": 153105425690624171,
    "category_keys": [
     "query",
     "global_context"
@@ -59,6 +60,7 @@
    "name_local": "QueryResult",
    "name_en": "QueryResult",
    "kind": "collection",
+   "class_id": 336395113138860947,
    "category_keys": [
     "query"
    ],
@@ -82,6 +84,7 @@
    "name_local": "QuerySelect",
    "name_en": "QuerySelect",
    "kind": "collection",
+   "class_id": 312423560523991225,
    "category_keys": [
     "query"
    ],
@@ -175,11 +178,11 @@
     "query"
    ],
    "signature": "WHERE <condition> { AND | OR <condition> }",
-   "description": "Row filter, applied before grouping.\n\n**Comparisons:** `= <> < <= > >=`. The left side is a field, a dereference (`Producer.Region = &R`) or an **expression** (`Price * Quantity > 1000`, `CASE ... END = ...`; expressions need a single physical source). The right side is a literal or a parameter.\n\n**Operators:**\n- `[NOT] LIKE \"pattern\"` — `%` any substring, `_` one character;\n- `[NOT] IN (value, ...)` or `[NOT] IN (SELECT oneColumn FROM ...)`;\n- `[NOT] BETWEEN a AND b` — inclusive;\n- `IS [NOT] NULL` — note that an EMPTY reference is a typed empty, not NULL (see \"Reference dereference\");\n- boolean logic `AND / OR / NOT` with parentheses; a bare boolean field is a truth test (`WHERE Posted`).\n\nThe optimizer normalizes NOT (`NOT (a = 1)` -> `a <> 1`, De Morgan) — write whichever reads better.\n\nLiterals: numbers `100`, quoted strings, `TRUE / FALSE`, `NULL`; pass dates as parameters.",
+   "description": "Row filter, applied before grouping.\n\n**Comparisons:** `= <> < <= > >=`. The left side is a field, a dereference (`Producer.Region = &R`) or an **expression** (`Price * Quantity > 1000`, `CASE ... END = ...`; expressions need a single physical source). The right side is a literal or a parameter.\n\n**Operators:**\n- `[NOT] LIKE \"pattern\"` — `%` any substring, `_` one character;\n- `[NOT] IN (value, ...)` or `[NOT] IN (SELECT oneColumn FROM ...)`;\n- `[NOT] BETWEEN a AND b` — inclusive;\n- `IS [NOT] NULL` — note that an EMPTY reference is a typed empty, not NULL (see \"Reference dereference\");\n- boolean logic `AND / OR / NOT` with parentheses; a bare boolean field is a truth test (`WHERE Posted`).\n\n**A row before IN:** `(a, b) [NOT] IN (SELECT x, y FROM ...)` compares the row's fields with the select's fields in their order, all pairs at once. Each element of the row is one field of the source — not an expression, not a walk through a reference. A row is allowed only before `[NOT] IN (SELECT ...)`: not with `=`, not with a value list, not with `IN HIERARCHY`. The server answers it as one EXISTS, so the select reads one table, with as many fields as the row, each of the same kind as its pair — no join, grouping, TOP or union.\n\nThe optimizer normalizes NOT (`NOT (a = 1)` -> `a <> 1`, De Morgan) — write whichever reads better.\n\nLiterals: numbers `100`, quoted strings, `TRUE / FALSE`, `NULL`; pass dates as parameters.",
    "syntax_block": "WHERE (Price > &Min OR Producer.Region = &Reg)\n  AND Description LIKE \"A%\"\n  AND Posted = TRUE",
    "parameters": "",
    "return_descr": "",
-   "example": "// IN with a subquery\nSELECT * FROM Document.Expense\nWHERE Partner IN (SELECT Ref FROM Catalog.Partners WHERE Region = &R)",
+   "example": "// IN with a subquery\nSELECT * FROM Document.Expense\nWHERE Partner IN (SELECT Ref FROM Catalog.Partners WHERE Region = &R)\n\n// a row before NOT IN: the pairs (Item, Warehouse) that have no lot over the limit\nSELECT COUNT(*) AS N FROM AccumulationRegister.Stock AS S\nWHERE (S.Item, S.Warehouse) NOT IN (SELECT L.Item, L.Warehouse FROM AccumulationRegister.Lots AS L WHERE L.Quantity > &Limit)",
    "availability": "Client, Server",
    "see_also": [
     "q.Params",

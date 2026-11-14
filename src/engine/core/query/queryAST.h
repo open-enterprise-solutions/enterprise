@@ -77,6 +77,9 @@ enum class ibQueryAstExprKind
 	Between,   // lhs [NOT] BETWEEN low AND high
 	Logical,   // lhs (AND|OR) rhs   (m_isOr)
 	Not,       // NOT lhs
+	// ⭐ A ROW — `(a, b)`, its elements in m_args. It stands only before [NOT] IN (SELECT …), compared with the
+	// select's fields in their order (the parser refuses it anywhere else), and goes to the server as one EXISTS.
+	Row,
 };
 
 // Comparison operator of a Compare node.

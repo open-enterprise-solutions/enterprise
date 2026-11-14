@@ -2,22 +2,33 @@
 #define __ENUM_UNIT_H__
 
 #include "value.h"
+#include "core/exception.h"               // ibCoreException - a number no member has is refused in words
 #include "core/serialize/dataBuilder.h"   // ibDataNode - the enum writes its member into one
 
-class BACKEND_API ibValueEnumerationWrapper : public ibValueDynamicMembers {
+#include <memory>
+
+// ⭐⭐ WHAT THE MEMBERS ARE BELONGS TO THE TYPE, NOT TO EACH VALUE (2026-11-14). Every value built its own: the names,
+// two maps and the names as properties, all of them again — for each cell of an enum column read, for each
+// `ComparisonKind.Equal` written — translating every description on the way, in whatever language the thread had.
+// The type's list is built once (ibCtorEnumType::CreateObject) and every value, and every member it hands out,
+// holds it.
+class BACKEND_API ibValueEnumerationWrapper : public ibValue {
 public:
+
+	// The type's part that does not depend on the members' number type: their names in the order they are declared
+	// (the property number counts in that order, see GetPropVal) and the same names as properties.
+	class ibEnumerationList {
+	public:
+		std::vector<ibString> m_listEnumStr;
+		ibMemberTable         m_members;
+	};
 
 	ibValueEnumerationWrapper(bool createInstance = false);
 	virtual ~ibValueEnumerationWrapper();
 
-	void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
-
 	virtual ibValue* GetEnumVariantValue() const = 0;
 	virtual ibString GetClassName() const = 0;
 	virtual ibString GetString() const = 0;
-
-protected:
-	std::vector<ibString> m_listEnumStr;
 };
 
 //***************************************************************************************************
@@ -80,42 +91,46 @@ class ibValueEnumerationBase : public ibValueEnumerationWrapper {
 //default base class for all enumerations
 template <typename valT>
 class ibValueEnumeration : public ibValueEnumerationBase<valT> {
+public:
+
+	// …and what depends on it: each member's name and description by its number. The description is kept as the
+	// catalog keeps it — a msgid, with its context where it has one — and translated where it is read, in the
+	// reader's language: one list serves every session.
+	class ibEnumerationList : public ibValueEnumerationWrapper::ibEnumerationList {
 	public:
-	std::map<valT, ibString> m_listEnumData, m_listEnumDesc;
+		// What a person reads for a member: its description, translated; its name where it was declared without
+		// one; nothing for a number no member has (a member read back as "none" holds one).
+		ibString GetEnumDescription(const valT& v) const {
+			const auto name = m_listEnumData.find(v);
+			if (name == m_listEnumData.end())
+				return ibString();
+			const ibString& description = m_listEnumDesc.at(v);
+			if (description.IsEmpty())
+				return name->second;
+			const auto context = m_listEnumContext.find(v);
+			return ibGetTranslation(description, context != m_listEnumContext.end() ? context->second : ibString());
+		}
+
+		std::map<valT, ibString> m_listEnumData, m_listEnumDesc, m_listEnumContext;
+	};
+
 protected:
 
 	template <typename valType>
 	class ibValueEnumerationVariant : public ibValueEnumerationVariantBase<valType> {
 	public:
 
-		ibValueEnumerationVariant(const valType& v, const ibClassID& clsid) : ibValueEnumerationVariantBase<valType>(), m_clsid(clsid), m_value(v) {}
-
-		void CreateEnumeration(
-			const ibString& name, const ibString& descr,
-			const valType& v) {
-			m_name = name;
-			m_description = descr;
-			m_value = v;
-		}
+		ibValueEnumerationVariant(const valType& v, const ibClassID& clsid, const std::shared_ptr<ibEnumerationList>& list) :
+			ibValueEnumerationVariantBase<valType>(), m_clsid(clsid), m_value(v), m_list(list) {}
 
 		virtual valT GetEnumValue() const override { return m_value; }
 		virtual void SetEnumValue(const valT& v) override { m_value = v; }
 
 		// A member of a built-in enumeration has no fields for a condition to narrow by.
 		virtual bool FindValue(const ibString& input, const ibChoiceCondition& /*condition*/, std::vector<ibValue>& out) const override {
-			const ibValuePtr<ibValueEnumeration<valType>> enumOwner(ibValue::CreateObject(m_clsid));
-			for (auto& e : enumOwner->m_listEnumData) {
-				if (e.second.Contains(input)) {
-					ibValueEnumerationVariant<valType>* enumValue = new ibValueEnumerationVariant<valType>(e.first, m_clsid);
-					if (enumValue != nullptr) {
-						enumValue->CreateEnumeration(
-							enumOwner->GetEnumName(e.first),
-							enumOwner->GetEnumDescription(e.first),
-							e.first
-						);
-						out.push_back(enumValue);
-					}
-				}
+			for (const auto& e : m_list->m_listEnumData) {
+				if (e.second.Contains(input))
+					out.push_back(new ibValueEnumerationVariant<valType>(e.first, m_clsid, m_list));
 			}
 			std::sort(out.begin(), out.end(), [](const ibValue& a, const ibValue& b) { return a.GetString() < b.GetString(); });
 			return out.size() > 0;
@@ -189,10 +204,8 @@ protected:
 		// speak in identifiers. Falls back to the name when a member was declared
 		// without a description, so nothing is ever blank.
 		virtual ibString GetString() const override {
-			return m_description.IsEmpty() ? m_name : m_description;
+			return m_list->GetEnumDescription(m_value);
 		}
-		// The identifier, for whoever needs it as such.
-		const ibString& GetEnumMemberName() const { return m_name; }
 		// ⚠ CAST, NOT AN IMPLICIT CONVERSION — the same one IsEmpty above already writes. A member
 		// number is a number, but only an UNSCOPED enum says so on its own: a scoped one
 		// (`enum class`) converts to nothing implicitly, so this line was what refused to register a
@@ -201,45 +214,35 @@ protected:
 		virtual ibNumber GetNumber() const override { return static_cast<long>(m_value); }
 
 	private:
-		ibString m_name;
-		ibString m_description;
 		// ⭐ THE DEFAULT STATE IS "NO MEMBER", SPELLED — not whatever the memory happened to hold.
 		// Every member number is valid, so an uninitialised field is indistinguishable from a
 		// choice, and the one thing it can never be is caught. Starting at emptyEnum means the
 		// only way to hold a member is to have been given one.
 		ibClassID m_clsid = 0;
 		valType m_value = static_cast<valType>(emptyEnum);
+		std::shared_ptr<ibEnumerationList> m_list;   // the type's: what the member number is called and reads as
 	};
-
-	virtual ibString GetEnumName(const valT& v) const { return m_listEnumData.at(v); }
-	virtual ibString GetEnumDescription(const valT& v) const { return m_listEnumDesc.at(v); }
-
-private:
-
-	inline void CreateEnumeration(const valT& v) {
-		ibASSERT(m_listEnumData.contains(v));
-		if (m_value != nullptr) {
-			m_value->CreateEnumeration(
-				GetEnumName(v),
-				GetEnumDescription(v),
-				v
-			);
-		}
-	}
 
 public:
 
 	using valEnumType = valT;
 
-	inline void AddEnumeration(const valT& v, const ibString& name, const ibString& descr = ibEmptyString) {
-		ibASSERT(!m_listEnumData.contains(v));
-		m_listEnumData.insert_or_assign(v, name);
-		m_listEnumDesc.insert_or_assign(v, descr.IsEmpty() ? name : descr);
+	// A member, declared — by the type's CreateEnumeration, into the type's list. The description is a msgid
+	// (ibTRANSLATE), and `context` its catalog context where it has one (ibTRANSLATE_IN_CONTEXT).
+	inline void AddEnumeration(const valT& v, const ibString& name, const ibString& descr = ibEmptyString, const ibString& context = ibEmptyString) {
+		if (m_list == nullptr)
+			m_list = std::make_shared<ibEnumerationList>();
+		ibASSERT(!m_list->m_listEnumData.contains(v));
+		m_list->m_listEnumData.insert_or_assign(v, name);
+		m_list->m_listEnumDesc.insert_or_assign(v, descr);
+		if (!context.IsEmpty())
+			m_list->m_listEnumContext.insert_or_assign(v, context);
 
-		this->m_listEnumStr.push_back(name);
+		m_list->m_listEnumStr.push_back(name);
+		m_list->m_members.AppendProp(name);
 	}
 
-	ibValueEnumeration() : ibValueEnumerationBase<valT>(true), m_value(nullptr) { InitializeEnumeration(); }
+	ibValueEnumeration() : ibValueEnumerationBase<valT>(true) {}
 	virtual ~ibValueEnumeration() {}
 
 	virtual bool Init() override { return true; }
@@ -250,14 +253,6 @@ public:
 		ibValueEnumeration::InitializeEnumeration(defValue);
 		return true;
 	}
-
-	virtual valT GetDefaultEnumValue() const {
-		auto itEnums = m_listEnumData.begin();
-		std::advance(itEnums, 1);
-		if (itEnums != m_listEnumData.end())
-			return itEnums->first;
-		return valT();
-	};
 
 	virtual valT GetEnumValue() const override {
 		if (m_value != nullptr) {
@@ -274,16 +269,11 @@ public:
 	// from AdjustValue, from a cleared field — so the assignment it was meant to protect was the one
 	// that mattered, and it did nothing at all, silently. The field stayed blank and the write
 	// carried nothing.
+	// …AND ON ONE THAT HAS A MEMBER IT IS MADE ANEW, by the same door: a member is the type's list and a number, so a
+	// new one costs what changing the old one did, the door refuses a number no member has, and a member handed out
+	// before keeps the one it had.
 	virtual void SetEnumValue(const valT& v) override {
-		if (m_value == nullptr) {
-			InitializeEnumeration(v);
-			return;
-		}
-		m_value->CreateEnumeration(
-			GetEnumName(v),
-			GetEnumDescription(v),
-			v
-		);
+		InitializeEnumeration(v);
 	}
 
 	// ⭐⭐ AN ENUMERATION WITH NO MEMBER STILL HAS A PACKED FORM — "no member".
@@ -313,58 +303,49 @@ public:
 		return true;
 	}
 
-	//create enumeration 
+	//create enumeration — the type's members, once (ibCtorEnumType::CreateObject)
 	virtual void CreateEnumeration() = 0;
 
+	// ⚠ A NUMBER NO MEMBER HAS IS REFUSED — it always was, by the lookup of its name (std::map::at); now in words.
+	// A reader that may hold one ("none", read from a column) answers empty in its catch, not with a member of nothing.
 	ibValueEnumerationVariant<valT>* CreateEnumVariantValue(const valT& v) const {
-
-		ibValueEnumerationVariant<valT>* enumValue = new ibValueEnumerationVariant<valT>(v, ibValue::GetClassType());
-		if (enumValue != nullptr) {
-			enumValue->CreateEnumeration(
-				GetEnumName(v),
-				GetEnumDescription(v),
-				v
-			);
-			return enumValue;
-		}
-
-		return nullptr;
+		if (!m_list->m_listEnumData.contains(v))
+			ibCoreException::Error(_("'%s' has no member numbered %d"), ibValue::GetClassName(), static_cast<int>(v));
+		return new ibValueEnumerationVariant<valT>(v, ibValue::GetClassType(), m_list);
 	}
 
-	//initialize enumeration
-	void InitializeEnumeration() {
-		// Names surface lazily from FillMembers (Build on first GetPMethods);
-		// m_listEnumStr is already populated by AddEnumeration above.
-		this->m_members.Invalidate();
+	// The type's list taken by a value — the type built it once (ibCtorEnumType::CreateObject).
+	void InitializeEnumeration(const ibValueEnumeration& type) {
+		m_list = type.m_list;
 	}
 
 	void InitializeEnumeration(const valT& v) {
 		m_value = CreateEnumVariantValue(v);
-		CreateEnumeration(v);
 	}
 
 	virtual ibValue* GetEnumVariantValue() const override { return m_value; }
 
+	// ⚠ `>=`, NOT `>`: a position equal to the count is past the last member, and stepping the map there is undefined.
 	ibString GetEnumName(unsigned int idx) const {
-		if (idx > m_listEnumData.size())
+		if (idx >= m_list->m_listEnumData.size())
 			return ibEmptyString;
-		auto it = m_listEnumData.begin();
+		auto it = m_list->m_listEnumData.begin();
 		std::advance(it, idx);
 		return it->second;
 	}
 
 	ibString GetEnumDesc(unsigned int idx) const {
-		if (idx > m_listEnumDesc.size())
+		if (idx >= m_list->m_listEnumData.size())
 			return ibEmptyString;
-		auto it = m_listEnumDesc.begin();
+		auto it = m_list->m_listEnumData.begin();
 		std::advance(it, idx);
-		return it->second;
+		return m_list->GetEnumDescription(it->first);
 	}
 
 	valT GetEnumValue(unsigned int idx) const {
-		if (idx > m_listEnumData.size())
+		if (idx >= m_list->m_listEnumData.size())
 			return (valT)0;
-		auto it = m_listEnumData.begin();
+		auto it = m_list->m_listEnumData.begin();
 		std::advance(it, idx);
 		return it->first;
 	}
@@ -373,25 +354,25 @@ public:
 	// number no member has is no value of an enumeration without a fixed type, and the cast is undefined (UBSan stopped
 	// on version 99 read as ibProgramVersion).
 	bool HasEnumValue(long v) const {
-		for (const auto& e : m_listEnumData) {
+		for (const auto& e : m_list->m_listEnumData) {
 			if (static_cast<long>(e.first) == v)
 				return true;
 		}
 		return false;
 	}
 
-	unsigned int GetEnumCount() const { return m_listEnumData.size(); }
+	unsigned int GetEnumCount() const { return m_list->m_listEnumData.size(); }
 
-	// ⚠ THE PROPERTY NUMBER COUNTS IN DECLARATION ORDER (FillMembers lists m_listEnumStr), and the
+	// ⚠ THE PROPERTY NUMBER COUNTS IN DECLARATION ORDER (the names as listed, m_listEnumStr), and the
 	// member table is a map ordered by VALUE. Stepping through the map by that number agreed only while
 	// an enumeration happened to be declared in ascending order: `Chars` is not (CR = 13 first, Tab = 9
 	// fifth), so `Chars.LF` came back as VTab (measured 2026-09-10). The name at that position is the
 	// one fact both orders share.
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override { //attribute value
-		if (lPropNum < 0 || static_cast<size_t>(lPropNum) >= this->m_listEnumStr.size())
+		if (lPropNum < 0 || static_cast<size_t>(lPropNum) >= m_list->m_listEnumStr.size())
 			return false;
-		const ibString& name = this->m_listEnumStr[lPropNum];
-		for (const auto& e : m_listEnumData) {
+		const ibString& name = m_list->m_listEnumStr[lPropNum];
+		for (const auto& e : m_list->m_listEnumData) {
 			if (e.second != name)
 				continue;
 			pvarPropVal = CreateEnumVariantValue(e.first);
@@ -402,18 +383,9 @@ public:
 
 	// A member of a built-in enumeration has no fields for a condition to narrow by.
 	virtual bool FindValue(const ibString& input, const ibChoiceCondition& /*condition*/, std::vector<ibValue>& out) const override {
-		for (auto& e : m_listEnumData) {
-			if (e.second.Contains(input)) {
-				ibValueEnumerationVariant<valT>* enumValue = new ibValueEnumerationVariant<valT>(e.first, ibValue::GetClassType());
-				if (enumValue != nullptr) {
-					enumValue->CreateEnumeration(
-						GetEnumName(e.first),
-						GetEnumDescription(e.first),
-						e.first
-					);
-					out.push_back(enumValue);
-				}
-			}
+		for (const auto& e : m_list->m_listEnumData) {
+			if (e.second.Contains(input))
+				out.push_back(new ibValueEnumerationVariant<valT>(e.first, ibValue::GetClassType(), m_list));
 		}
 		std::sort(out.begin(), out.end(), [](const ibValue& a, const ibValue& b) { return a.GetString() < b.GetString(); });
 		return out.size() > 0;
@@ -461,7 +433,12 @@ public:
 
 protected:
 
+	// The members' names as properties are the type's — its list's. The type's own value, while its CreateEnumeration
+	// has not filled the list yet, has none.
+	virtual ibValue::ibMemberTable* DoGetPMethods() const override { return m_list != nullptr ? &m_list->m_members : nullptr; }
+
 	ibValuePtr<ibValueEnumerationVariant<valT>> m_value; //current enum value
+	std::shared_ptr<ibEnumerationList> m_list;            // the type's members — built once, held by every value
 };
 
 #endif

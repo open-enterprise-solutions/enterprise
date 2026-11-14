@@ -66,8 +66,8 @@ class BACKEND_API ibValueEnumSpreadsheetOrient :
 	ibValueEnumSpreadsheetOrient() : ibValueEnumeration() {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibSpreadsheetOrientation::ibOrient_Horizontal, ibT("Horizontal"), _("Horizontal"));
-		AddEnumeration(ibSpreadsheetOrientation::ibOrient_Vertical, ibT("Vertical"), _("Vertical"));
+		AddEnumeration(ibSpreadsheetOrientation::ibOrient_Horizontal, ibT("Horizontal"), ibTRANSLATE("Horizontal"));
+		AddEnumeration(ibSpreadsheetOrientation::ibOrient_Vertical, ibT("Vertical"), ibTRANSLATE("Vertical"));
 	}
 
 private:
@@ -80,9 +80,9 @@ class BACKEND_API ibValueEnumSpreadsheetHorizontalAlignment :
 	ibValueEnumSpreadsheetHorizontalAlignment() : ibValueEnumeration() {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibSpreadsheetAlignmentHorz::ibAlignmentHorz_Left, ibT("Left"), _("Left"));
-		AddEnumeration(ibSpreadsheetAlignmentHorz::ibAlignmentHorz_Center, ibT("Center"), _("Center"));
-		AddEnumeration(ibSpreadsheetAlignmentHorz::ibAlignmentHorz_Right, ibT("Right"), _("Right"));
+		AddEnumeration(ibSpreadsheetAlignmentHorz::ibAlignmentHorz_Left, ibT("Left"), ibTRANSLATE("Left"));
+		AddEnumeration(ibSpreadsheetAlignmentHorz::ibAlignmentHorz_Center, ibT("Center"), ibTRANSLATE("Center"));
+		AddEnumeration(ibSpreadsheetAlignmentHorz::ibAlignmentHorz_Right, ibT("Right"), ibTRANSLATE("Right"));
 	}
 
 private:
@@ -95,9 +95,9 @@ class BACKEND_API ibValueEnumSpreadsheetVerticalAlignment :
 	ibValueEnumSpreadsheetVerticalAlignment() : ibValueEnumeration() {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibSpreadsheetAlignmentVert::ibAlignmentVert_Top, ibT("Top"), _("Top"));
-		AddEnumeration(ibSpreadsheetAlignmentVert::ibAlignmentVert_Center, ibT("Center"), _("Center"));
-		AddEnumeration(ibSpreadsheetAlignmentVert::ibAlignmentVert_Bottom, ibT("Bottom"), _("Bottom"));
+		AddEnumeration(ibSpreadsheetAlignmentVert::ibAlignmentVert_Top, ibT("Top"), ibTRANSLATE("Top"));
+		AddEnumeration(ibSpreadsheetAlignmentVert::ibAlignmentVert_Center, ibT("Center"), ibTRANSLATE("Center"));
+		AddEnumeration(ibSpreadsheetAlignmentVert::ibAlignmentVert_Bottom, ibT("Bottom"), ibTRANSLATE("Bottom"));
 	}
 
 private:
@@ -110,9 +110,9 @@ class BACKEND_API ibValueEnumSpreadsheetFitMode :
 	ibValueEnumSpreadsheetFitMode() : ibValueEnumeration() {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibSpreadsheetFitMode::ibFitMode_Overflow, ibT("Overflow"), _("Overflow"));
-		AddEnumeration(ibSpreadsheetFitMode::ibFitMode_Clip, ibT("Clip"), _("Clip"));
-		AddEnumeration(ibSpreadsheetFitMode::ibFitMode_Wrap, ibT("Wrap"), _("Wrap"));
+		AddEnumeration(ibSpreadsheetFitMode::ibFitMode_Overflow, ibT("Overflow"), ibTRANSLATE("Overflow"));
+		AddEnumeration(ibSpreadsheetFitMode::ibFitMode_Clip, ibT("Clip"), ibTRANSLATE("Clip"));
+		AddEnumeration(ibSpreadsheetFitMode::ibFitMode_Wrap, ibT("Wrap"), ibTRANSLATE("Wrap"));
 	}
 
 private:
@@ -125,12 +125,12 @@ class BACKEND_API ibValueEnumSpreadsheetBorder :
 	ibValueEnumSpreadsheetBorder() : ibValueEnumeration() {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibSpreadsheetPenStyle::ibPenStyle_Transparent, ibT("None"), _("None"));
-		AddEnumeration(ibSpreadsheetPenStyle::ibPenStyle_Solid, ibT("Solid"), _("Solid"));
-		AddEnumeration(ibSpreadsheetPenStyle::ibPenStyle_Dot, ibT("Dotted"), _("Dotted"));
-		AddEnumeration(ibSpreadsheetPenStyle::ibPenStyle_ShortDash, ibT("ThinDashed"), _("Thin dashed"));
-		AddEnumeration(ibSpreadsheetPenStyle::ibPenStyle_DotDash, ibT("ThickDashed"), _("Thick dashed"));
-		AddEnumeration(ibSpreadsheetPenStyle::ibPenStyle_LongDash, ibT("LargeDashed"), _("Large dashed"));
+		AddEnumeration(ibSpreadsheetPenStyle::ibPenStyle_Transparent, ibT("None"), ibTRANSLATE("None"));
+		AddEnumeration(ibSpreadsheetPenStyle::ibPenStyle_Solid, ibT("Solid"), ibTRANSLATE("Solid"));
+		AddEnumeration(ibSpreadsheetPenStyle::ibPenStyle_Dot, ibT("Dotted"), ibTRANSLATE("Dotted"));
+		AddEnumeration(ibSpreadsheetPenStyle::ibPenStyle_ShortDash, ibT("ThinDashed"), ibTRANSLATE("Thin dashed"));
+		AddEnumeration(ibSpreadsheetPenStyle::ibPenStyle_DotDash, ibT("ThickDashed"), ibTRANSLATE("Thick dashed"));
+		AddEnumeration(ibSpreadsheetPenStyle::ibPenStyle_LongDash, ibT("LargeDashed"), ibTRANSLATE("Large dashed"));
 	}
 
 private:
@@ -144,9 +144,9 @@ class BACKEND_API ibValueEnumSpreadsheetFillType :
 	ibValueEnumSpreadsheetFillType() : ibValueEnumeration() {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibSpreadsheetFillType::ibSpreadsheetFillType_StrText, ibT("Text"), _("Text"));
-		AddEnumeration(ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter, ibT("Parameter"), _("Parameter"));
-		AddEnumeration(ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate, ibT("Template"), _("Template"));
+		AddEnumeration(ibSpreadsheetFillType::ibSpreadsheetFillType_StrText, ibT("Text"), ibTRANSLATE("Text"));
+		AddEnumeration(ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter, ibT("Parameter"), ibTRANSLATE("Parameter"));
+		AddEnumeration(ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate, ibT("Template"), ibTRANSLATE("Template"));
 	}
 
 private:

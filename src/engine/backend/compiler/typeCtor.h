@@ -312,9 +312,17 @@ public:
 			T::OnUnRegisterObject(GetClassName());
 	}
 
+	// ⭐ THE TYPE'S MEMBERS ARE BUILT ONCE — here, on the first value asked for, and every value takes the type's list
+	// rather than building its own (enumUnit.h). Function-local, so it is built thread-safely and on demand, after the
+	// registration that runs in static initialisation; and in the one module this type is registered in.
 	virtual ibValue CreateObject() const {
-		const ibValuePtr<T> created(new T());   // owned before CreateEnumeration runs — see the base
-		created->CreateEnumeration();
+		static const ibValuePtr<T> s_type = [] {
+			const ibValuePtr<T> type(new T());   // owned before CreateEnumeration runs — see the base
+			type->CreateEnumeration();
+			return type;
+		}();
+		const ibValuePtr<T> created(new T());
+		created->InitializeEnumeration(*s_type);
 		return created;
 	}
 };

@@ -1837,6 +1837,10 @@ static bool MentionsSemiJoin(const ibQueryPredicatePtr& p)
 // inner's own WHERE (CheckSelect, as Execute does) — an EXISTS over the bare table would see the rows the user may
 // not, and the outer rows would tell which. A refusal, a restriction through a join, a semi-join of the policy's own
 // go back to the rows road, which says or applies them in its own words.
+//
+// ⭐ `cols` ARE THE FIELDS COMPARED, one column each, paired with the select's fields in their order: one for
+// `x IN (SELECT k …)`, a row's for `(a, b) IN (SELECT x, y …)` (2026-11-14). Every pair obeys the rule above; the
+// first is the correlation's own, the rest ride as m_alsoKeys.
 static ibQueryPredicatePtr InSubqueryAsSemiJoin(const std::vector<ibSourceBinding>& sources,
 	const std::vector<const ibBackendQueryColumn*>& cols, const ibQuerySelect& sel,
 	const std::map<ibString, ibValue>& params, bool negated)
@@ -1867,16 +1871,17 @@ static ibQueryPredicatePtr InSubqueryAsSemiJoin(const std::vector<ibSourceBindin
 		return ibColumnRole::Raw;
 	};
 
-	if (sources.size() != 1 || !plainTable(sources.front().m_q) || cols.size() != 1)
+	if (sources.size() != 1 || !plainTable(sources.front().m_q) || cols.empty())
 		return nullptr;
 	const ibBackendQueryColumn* const outerRowKey = rowKeyOf(sources.front().m_q);
-	const ibColumnRole outerKind = comparedKind(cols.front(), outerRowKey);
-	if (outerKind == ibColumnRole::Raw)
-		return nullptr;
-	if (sel.m_selectAll || sel.m_projections.size() != 1 || !sel.m_joins.empty() || !sel.m_groupBy.empty()
+	for (const ibBackendQueryColumn* col : cols)
+		if (comparedKind(col, outerRowKey) == ibColumnRole::Raw)
+			return nullptr;
+	if (sel.m_selectAll || sel.m_projections.size() != cols.size() || !sel.m_joins.empty() || !sel.m_groupBy.empty()
 	    || sel.m_having || sel.m_top > 0 || sel.m_hasTotals || !sel.m_unions.empty() || !sel.m_intoTemp.IsEmpty()
 	    || sel.m_forUpdate || sel.m_from.m_subquery || !sel.m_from.m_args.empty()
-	    || ibQueryMentionsAggregate(sel.m_projections.front().m_expr))
+	    || std::any_of(sel.m_projections.begin(), sel.m_projections.end(),
+	           [](const auto& projection) { return ibQueryMentionsAggregate(projection.m_expr); }))
 		return nullptr;
 
 	try {
@@ -1885,11 +1890,15 @@ static ibQueryPredicatePtr InSubqueryAsSemiJoin(const std::vector<ibSourceBindin
 		if (!plainTable(inner) || !own.empty())
 			return nullptr;
 		const std::vector<ibSourceBinding> innerSources{ { ibQuerySourceName(sel.m_from), inner } };
-		const std::vector<const ibBackendQueryColumn*> key =
-			ResolveFieldOperand(innerSources, *sel.m_projections.front().m_expr, /*allowDotWalk*/ false);
 		const ibBackendQueryColumn* const innerRowKey = rowKeyOf(inner);
-		if (key.size() != 1 || comparedKind(key.front(), innerRowKey) != outerKind)
-			return nullptr;   // nothing one field can compare, or two kinds — the set road says what that means
+		std::vector<const ibBackendQueryColumn*> keys;   // the select's field paired with each of `cols`, in order
+		for (size_t i = 0; i < cols.size(); ++i) {
+			const std::vector<const ibBackendQueryColumn*> key =
+				ResolveFieldOperand(innerSources, *sel.m_projections[i].m_expr, /*allowDotWalk*/ false);
+			if (key.size() != 1 || comparedKind(key.front(), innerRowKey) != comparedKind(cols[i], outerRowKey))
+				return nullptr;   // nothing one field can compare, or two kinds — the set road says what that means
+			keys.push_back(key.front());
+		}
 
 		ibDataQueryBuilder scope;   // the session's connection and policy, as the inner read would have had
 		scope.From(inner);
@@ -1910,16 +1919,18 @@ static ibQueryPredicatePtr InSubqueryAsSemiJoin(const std::vector<ibSourceBindin
 		ibSemiJoinExists semi;
 		semi.m_inner    = inner;
 		semi.m_outerKey = cols.front();
-		semi.m_innerKey = key.front();
+		semi.m_innerKey = keys.front();
 		semi.m_where    = scope.GetWherePredicate();
-		semi.m_emptyMatchesEmpty = cols.front() != outerRowKey && key.front() != innerRowKey;   // two values that may both be empty
+		semi.m_negated  = negated;   // NOT IN is said by the leaf: the provider picks the anti-join's form for its server
+		semi.m_emptyMatchesEmpty = cols.front() != outerRowKey && keys.front() != innerRowKey;   // two values that may both be empty
+		for (size_t i = 1; i < cols.size(); ++i)
+			semi.m_alsoKeys.push_back({ cols[i], keys[i], cols[i] != outerRowKey && keys[i] != innerRowKey });
 		if (MentionsSemiJoin(semi.m_where))
 			return nullptr;   // a nested EXISTS would read its own alias (`sj`) for this one's
 
 		ibQueryCondition exists;
 		exists.m_semiJoin = std::make_shared<ibSemiJoinExists>(semi);
-		const ibQueryPredicatePtr leaf = ibQueryPredicate::Leaf(exists);
-		return negated ? ibQueryPredicate::Not(leaf) : leaf;
+		return ibQueryPredicate::Leaf(exists);
 	}
 	catch (const ibCoreException&) {
 		return nullptr;   // the rows road resolves the same select and says what is wrong with it
@@ -2062,6 +2073,27 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
 	}
 
 	case ibQueryAstExprKind::In: {
+		// ⭐ A ROW BEFORE IN — `(a, b) IN (SELECT x, y …)`: each field compared with the select's field at its place,
+		// all pairs at once (2026-11-14). Said to the server as one EXISTS, or refused: a set of pairs has no list of
+		// values to be read into, which is what every other road below holds. (The parser admits a row only here.)
+		if (e.m_lhs->m_kind == ibQueryAstExprKind::Row) {
+			std::vector<const ibBackendQueryColumn*> fields;
+			for (const ibQueryAstExprPtr& element : e.m_lhs->m_args) {
+				// One field of the source: an expression has no column to compare, a walk has a chain of them.
+				const bool named = element->m_kind == ibQueryAstExprKind::Column;
+				const std::vector<const ibBackendQueryColumn*> field = named ? ResolvePath(sources, *element) : std::vector<const ibBackendQueryColumn*>();
+				if (named && field.empty())
+					ThrowQueryException(element->m_line, element->m_col, _("could not resolve the column"));
+				if (field.size() != 1)
+					ThrowQueryException(element->m_line, element->m_col, _("each element of a row (a, b) is one field of the source - not an expression, not a walk through a reference"));
+				fields.push_back(field.front());
+			}
+			if (answer == ibHierarchyAnswer::Door && e.m_subquery)
+				if (ibQueryPredicatePtr semi = InSubqueryAsSemiJoin(sources, fields, *e.m_subquery, params, e.m_negated))
+					return semi;
+			ThrowQueryException(e.m_line, e.m_col, _("(a, b) IN (SELECT ...) is answered on the server as one EXISTS: a WHERE over one table, and a select from one table with as many fields as the row, each of the kind of its pair - no join, grouping, TOP or union"));
+		}
+
 		// col IN (a, b, …)  ->  Or(col=a, col=b, …); NOT IN -> Not of that. Empty list = a vacuous
 		// FALSE (Or of nothing); the door tree treats a null child as no-constraint, so guard it.
 		// The leaf may be a reference dot-walk (every Eq shares the path -> one join, prefix deduped).
@@ -2108,7 +2140,8 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
 		}
 		else if (e.m_subquery) {
 			// Said to the server where it can be (InSubqueryAsSemiJoin) — then the set is never read here.
-			if (answer == ibHierarchyAnswer::Door)
+			// (One FIELD — a walked path is several columns, and the semi-join would read them as a row.)
+			if (answer == ibHierarchyAnswer::Door && cols.size() == 1)
 				if (ibQueryPredicatePtr semi = InSubqueryAsSemiJoin(sources, cols, *e.m_subquery, params, e.m_negated))
 					return semi;
 			ibSubqueryOwner localOwner;   // the inner queryable lives only for this materialisation

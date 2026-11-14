@@ -30,9 +30,9 @@ public:
 	ibValueEnumBaseDependence() : ibValueEnumeration() {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibBaseDependence::eBaseNone, ibT("None"), _("No base"));
-		AddEnumeration(ibBaseDependence::eBaseByActionPeriod, ibT("ByActionPeriod"), _("By action period"));
-		AddEnumeration(ibBaseDependence::eBaseByRegistrationPeriod, ibT("ByRegistrationPeriod"), _("By registration period"));
+		AddEnumeration(ibBaseDependence::eBaseNone, ibT("None"), ibTRANSLATE("No base"));
+		AddEnumeration(ibBaseDependence::eBaseByActionPeriod, ibT("ByActionPeriod"), ibTRANSLATE("By action period"));
+		AddEnumeration(ibBaseDependence::eBaseByRegistrationPeriod, ibT("ByRegistrationPeriod"), ibTRANSLATE("By registration period"));
 	}
 };
 class ibValueEnumCalcPeriodicity : public ibValueEnumeration<ibCalcPeriodicity> {
@@ -40,10 +40,10 @@ public:
 	ibValueEnumCalcPeriodicity() : ibValueEnumeration() {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibCalcPeriodicity::eCalcPeriodDay, ibT("Day"), _("Day"));
-		AddEnumeration(ibCalcPeriodicity::eCalcPeriodMonth, ibT("Month"), _("Month"));
-		AddEnumeration(ibCalcPeriodicity::eCalcPeriodQuarter, ibT("Quarter"), _("Quarter"));
-		AddEnumeration(ibCalcPeriodicity::eCalcPeriodYear, ibT("Year"), _("Year"));
+		AddEnumeration(ibCalcPeriodicity::eCalcPeriodDay, ibT("Day"), ibTRANSLATE("Day"));
+		AddEnumeration(ibCalcPeriodicity::eCalcPeriodMonth, ibT("Month"), ibTRANSLATE("Month"));
+		AddEnumeration(ibCalcPeriodicity::eCalcPeriodQuarter, ibT("Quarter"), ibTRANSLATE("Quarter"));
+		AddEnumeration(ibCalcPeriodicity::eCalcPeriodYear, ibT("Year"), ibTRANSLATE("Year"));
 	}
 };
 #pragma endregion

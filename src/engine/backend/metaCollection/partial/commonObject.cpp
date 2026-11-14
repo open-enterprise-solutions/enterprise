@@ -2571,7 +2571,7 @@ void ibValueRecordDataObjectRef::Modify(bool mod)
 	// that is right; what is wrong is that MARKING AN OBJECT MODIFIED went looking for one at all.
 	// This runs on EVERY field assignment, so `usd.Code = "840"` came through here before any write
 	// did — MEASURED 2026-09-06 on the first line of a hundred-payment fill, which refused at
-	// JobCode line 2 and left a background job, an appserver and codeRunner unable to assign a field.
+	// JobCode line 2 and left a background job, an appserver and coderunner unable to assign a field.
 	//
 	// So the refusal is caught HERE, where the question was asked wrongly, rather than softened
 	// THERE, where it is answered correctly (Max, 2026-09-06: *"the problem is not in getting the
@@ -3041,6 +3041,8 @@ bool ibValueRecordDataObjectHierarchyRef::DeleteObject()
 
 void ibValueRecordDataObjectRecorderRef::ibRecorderRegister::CreateRecordSet()
 {
+	if (m_recorder == nullptr)
+		return;   // the registry's empty form (type_members): no recorder, no registers - `Write` alone (2026-11-14)
 	// The list this holder is made of — the recorder answers by it.
 	const ibMetaDescription* metaDesc = m_recorder->GetRecordDescription(m_writes);
 	if (metaDesc == nullptr) return;   // recorder without static description — no cascade
@@ -4529,7 +4531,9 @@ void ibValueRecordKeyObject::FillMembers(ibMemberTable& helper) const
 
 void ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::FillMembers(ibMemberTable& helper) const
 {
-	const ibValueMetaObjectRegisterData* metaObject = m_recordSet->GetMetaObject();
+	// A key built with no record set — the registry's empty form, which type_members reads its members off — has
+	// no register to offer dimensions of (2026-11-14: read through the null, it took the designer down).
+	const ibValueMetaObjectRegisterData* metaObject = m_recordSet != nullptr ? m_recordSet->GetMetaObject() : nullptr;
 	if (metaObject != nullptr) {
 		ibString objectName;
 		for (const auto object : metaObject->GetGenericDimensionArrayObject()) {
@@ -4563,6 +4567,8 @@ enum Prop
 
 bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::ibValueRecordSetObjectRegisterKeyDescriptionValue::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
+	if (m_recordSet == nullptr)
+		return false;   // the registry's empty form: no record set to filter
 	const ibValueMetaObjectRegisterData* metaObject = m_recordSet->GetMetaObject();
 	ibASSERT(metaObject);
 
@@ -4589,6 +4595,8 @@ bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::ibValueReco
 
 bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::ibValueRecordSetObjectRegisterKeyDescriptionValue::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
+	if (m_recordSet == nullptr)
+		return false;   // the registry's empty form — see SetPropVal
 	const ibValueMetaObjectRegisterData* metaObject = m_recordSet->GetMetaObject();
 	ibASSERT(metaObject);
 
@@ -4647,7 +4655,7 @@ bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::ibValueReco
 		// first time anything read that entry back (2026-09-05, the first call ever made from outside
 		// the set's own module — the property was unreachable until then, which is why nothing had
 		// tripped over it).
-		if (lSizeArray > 0 && paParams[0] != nullptr)
+		if (m_recordSet != nullptr && lSizeArray > 0 && paParams[0] != nullptr)
 			m_recordSet->SetKeyValue(m_metaId, *paParams[0]);
 		return true;
 	}

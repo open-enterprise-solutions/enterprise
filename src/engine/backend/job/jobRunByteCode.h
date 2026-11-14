@@ -68,6 +68,11 @@ struct BACKEND_API ibJobRunByteCodeState {
 	ibString m_result;     // what the code came out with, once it has finished
 	bool     m_complete = false;
 	bool     m_known    = false;   // …because a token that names nothing is not a finished run
+	// ⭐ WHERE AND HOW LONG — the process doing it (the number app_run answers; a profiler is pointed at it, and with two
+	// applications up it was guessed), and the milliseconds from its start to its end, or to now while it runs: the
+	// run's own wall clock (ibBackgroundRun Begin / End), so a caller does not time it by its own polling.
+	std::uint32_t m_pid = 0;
+	std::int64_t  m_milliseconds = 0;
 
 	// ⭐ WHAT THE CODE SAID — its `Message` lines, which reach no window from a background session; the run
 	// keeps the last of them (ibBackgroundRun::Said). The level is the platform's ibStatusMessage, as a number.

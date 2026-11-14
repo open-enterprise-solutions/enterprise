@@ -2,6 +2,7 @@
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/appData.h"
 #include "backend/session/session.h"
+#include "backend/backend_exception.h"
 
 
 enum
@@ -41,6 +42,12 @@ bool ibValueResultSet::SetPropVal(const long lPropNum, const ibValue& varPropVal
 
 bool ibValueResultSet::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
+	// ⚠ A FIELD IS READ ON A ROW. Before the first Next(), or after the one that answered False, the driver's row
+	// buffer holds what the allocation left there — a text field's length read from it wrote past the buffer, and
+	// a script that read `rs.A` before `rs.Next()` took the whole application down (2026-11-14).
+	if (m_resultSet == nullptr || !m_onRow)
+		ibBackendCoreException::Error(_("the result set stands on no row: read a field after Next() answers True"));
+
 	ibResultSetMetaData* resultSetMetaData = m_resultSet->GetMetaData();
 	if (resultSetMetaData != nullptr) {
 
@@ -67,7 +74,9 @@ bool ibValueResultSet::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 bool ibValueResultSet::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) //function call
 {
 	if (m_resultSet != nullptr && lMethodNum == eNext) {
-		pvarRetValue = m_resultSet->Next();
+		m_onRow = false;   // a fetch that throws leaves no row either
+		m_onRow = m_resultSet->Next();
+		pvarRetValue = m_onRow;
 		return true;
 	}
 

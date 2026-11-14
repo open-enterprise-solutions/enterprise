@@ -27,6 +27,16 @@
     "jobs": "Scheduled and background jobs",
     "runtime": "Runtime",
     "guide": "Guide",
-    "sequences": "Sequences"
+    "sequences": "Sequences",
+    "array": "Array",
+    "type_description": "Types and type descriptions",
+    "graphics": "Colours, fonts and pictures",
+    "database": "Direct database access (SQL)",
+    "composer": "Data composer",
+    "system_enums": "System enumerations",
+    "metadata_enums": "Configuration object enumerations",
+    "form_controls": "Form controls",
+    "language_runtime": "Language runtime objects",
+    "configuration_runtime": "Configuration objects at run time"
   }
 }

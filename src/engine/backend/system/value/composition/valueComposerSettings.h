@@ -55,9 +55,9 @@ public:
 	virtual void CreateEnumeration() override {
 		// Captions are the OPERATOR alone — the choice opens on a group's operator cell, and it
 		// must offer what it sets.
-		AddEnumeration(ibFilterGroupKind_And, ibT("And"), _("And"));
-		AddEnumeration(ibFilterGroupKind_Or,  ibT("Or"),  _("Or"));
-		AddEnumeration(ibFilterGroupKind_Not, ibT("Not"), _("Not"));
+		AddEnumeration(ibFilterGroupKind_And, ibT("And"), ibTRANSLATE("And"));
+		AddEnumeration(ibFilterGroupKind_Or,  ibT("Or"),  ibTRANSLATE("Or"));
+		AddEnumeration(ibFilterGroupKind_Not, ibT("Not"), ibTRANSLATE("Not"));
 	}
 };
 
@@ -65,9 +65,9 @@ class BACKEND_API ibValueEnumFilterDisplayMode : public ibValueEnumeration<ibFil
 public:
 	ibValueEnumFilterDisplayMode() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() override {
-		AddEnumeration(ibFilterDisplayMode_Normal,       ibT("Normal"),       _("Normal"));
-		AddEnumeration(ibFilterDisplayMode_QuickAccess,  ibT("QuickAccess"),  _("Quick access"));
-		AddEnumeration(ibFilterDisplayMode_Inaccessible, ibT("Inaccessible"), _("Inaccessible"));
+		AddEnumeration(ibFilterDisplayMode_Normal,       ibT("Normal"),       ibTRANSLATE("Normal"));
+		AddEnumeration(ibFilterDisplayMode_QuickAccess,  ibT("QuickAccess"),  ibTRANSLATE("Quick access"));
+		AddEnumeration(ibFilterDisplayMode_Inaccessible, ibT("Inaccessible"), ibTRANSLATE("Inaccessible"));
 	}
 };
 
@@ -77,9 +77,9 @@ class BACKEND_API ibValueEnumGroupKind : public ibValueEnumeration<ibQueryDimUnf
 public:
 	ibValueEnumGroupKind() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() override {
-		AddEnumeration(ibQueryDimUnfold::Elements,      ibT("Elements"),      _("Elements"));
-		AddEnumeration(ibQueryDimUnfold::Hierarchy,     ibT("Hierarchy"),     _("Elements and hierarchy"));
-		AddEnumeration(ibQueryDimUnfold::HierarchyOnly, ibT("HierarchyOnly"), _("Hierarchy only"));
+		AddEnumeration(ibQueryDimUnfold::Elements,      ibT("Elements"),      ibTRANSLATE("Elements"));
+		AddEnumeration(ibQueryDimUnfold::Hierarchy,     ibT("Hierarchy"),     ibTRANSLATE("Elements and hierarchy"));
+		AddEnumeration(ibQueryDimUnfold::HierarchyOnly, ibT("HierarchyOnly"), ibTRANSLATE("Hierarchy only"));
 	}
 };
 
@@ -87,19 +87,19 @@ class BACKEND_API ibValueEnumComparisonKind : public ibValueEnumeration<ibCompar
 public:
 	ibValueEnumComparisonKind() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() override {
-		AddEnumeration(ibComparisonKind_Equal,        ibT("Equal"),        _("Equal"));
-		AddEnumeration(ibComparisonKind_NotEqual,     ibT("NotEqual"),     _("Not equal"));
-		AddEnumeration(ibComparisonKind_Greater,      ibT("Greater"),      _("Greater"));
-		AddEnumeration(ibComparisonKind_Less,         ibT("Less"),         _("Less"));
-		AddEnumeration(ibComparisonKind_GreaterEqual, ibT("GreaterEqual"), _("Greater or equal"));
-		AddEnumeration(ibComparisonKind_LessEqual,    ibT("LessEqual"),    _("Less or equal"));
-		AddEnumeration(ibComparisonKind_Contains,     ibT("Contains"),     _("Contains"));
+		AddEnumeration(ibComparisonKind_Equal,        ibT("Equal"),        ibTRANSLATE("Equal"));
+		AddEnumeration(ibComparisonKind_NotEqual,     ibT("NotEqual"),     ibTRANSLATE("Not equal"));
+		AddEnumeration(ibComparisonKind_Greater,      ibT("Greater"),      ibTRANSLATE("Greater"));
+		AddEnumeration(ibComparisonKind_Less,         ibT("Less"),         ibTRANSLATE("Less"));
+		AddEnumeration(ibComparisonKind_GreaterEqual, ibT("GreaterEqual"), ibTRANSLATE("Greater or equal"));
+		AddEnumeration(ibComparisonKind_LessEqual,    ibT("LessEqual"),    ibTRANSLATE("Less or equal"));
+		AddEnumeration(ibComparisonKind_Contains,     ibT("Contains"),     ibTRANSLATE("Contains"));
 		// Naming a comparison here is what makes it offerable — the language could say both of
 		// these long before a filter could.
-		AddEnumeration(ibComparisonKind_In,           ibT("In"),           _("In"));
-		AddEnumeration(ibComparisonKind_InHierarchy,  ibT("InHierarchy"),  _("In hierarchy"));
-		AddEnumeration(ibComparisonKind_Filled,       ibT("Filled"),       _("Filled"));
-		AddEnumeration(ibComparisonKind_NotFilled,    ibT("NotFilled"),    _("Not filled"));
+		AddEnumeration(ibComparisonKind_In,           ibT("In"),           ibTRANSLATE("In"));
+		AddEnumeration(ibComparisonKind_InHierarchy,  ibT("InHierarchy"),  ibTRANSLATE("In hierarchy"));
+		AddEnumeration(ibComparisonKind_Filled,       ibT("Filled"),       ibTRANSLATE("Filled"));
+		AddEnumeration(ibComparisonKind_NotFilled,    ibT("NotFilled"),    ibTRANSLATE("Not filled"));
 	}
 };
 
@@ -107,8 +107,8 @@ class BACKEND_API ibValueEnumSortDirection : public ibValueEnumeration<ibSortDir
 public:
 	ibValueEnumSortDirection() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() override {
-		AddEnumeration(ibSortDirection_Ascending,  ibT("Ascending"),  _("Ascending"));
-		AddEnumeration(ibSortDirection_Descending, ibT("Descending"), _("Descending"));
+		AddEnumeration(ibSortDirection_Ascending,  ibT("Ascending"),  ibTRANSLATE("Ascending"));
+		AddEnumeration(ibSortDirection_Descending, ibT("Descending"), ibTRANSLATE("Descending"));
 	}
 };
 

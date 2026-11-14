@@ -18,9 +18,9 @@ class ibValueEnumAccountType : public ibValueEnumeration<ibAccountType> {
 	ibValueEnumAccountType() : ibValueEnumeration() {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibAccountType::eActive, ibT("Active"), _("Active"));
-		AddEnumeration(ibAccountType::ePassive, ibT("Passive"), _("Passive"));
-		AddEnumeration(ibAccountType::eActivePassive, ibT("ActivePassive"), _("Active/Passive"));
+		AddEnumeration(ibAccountType::eActive, ibT("Active"), ibTRANSLATE("Active"));
+		AddEnumeration(ibAccountType::ePassive, ibT("Passive"), ibTRANSLATE("Passive"));
+		AddEnumeration(ibAccountType::eActivePassive, ibT("ActivePassive"), ibTRANSLATE("Active/Passive"));
 	}
 };
 constexpr ibClassID g_enumAccountTypeCLSID = enum_to_clsid("EN_ACTP");

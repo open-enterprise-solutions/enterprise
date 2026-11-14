@@ -81,7 +81,8 @@ protected:
 	virtual ibPropertyChoiceList GetEnumList() const {
 		ibPropertyChoiceList list;
 		for (unsigned int idx = 0; idx < m_enumCreator->GetEnumCount(); idx++) {
-			list.Add(m_enumCreator->GetEnumDesc(idx), m_enumCreator->GetEnumValue(idx));
+			const long id = static_cast<long>(m_enumCreator->GetEnumValue(idx));
+			list.Add(id, m_enumCreator->GetEnumName(idx), m_enumCreator->GetEnumDesc(idx), ibVariant(id));   // the name, and the description beside it - as the engine's list
 		}
 		return list;
 	}
