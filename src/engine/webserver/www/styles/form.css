@@ -297,6 +297,32 @@ oes-tablebox .side-button:hover {
 }
 
 /* A caption breaks its lines where its text does, as the desktop's does. */
+/* A field drawn as radio buttons: its caption beside them as a field's is, a button a line. */
+oes-fieldradiobuttons {
+	display: flex;
+	align-items: flex-start;
+	gap: 0.5rem;
+	min-width: 0;
+}
+
+oes-fieldradiobuttons .caption {
+	flex: 0 0 auto;
+	min-width: var(--oes-caption-width, 0);
+	color: var(--oes-muted);
+}
+
+oes-fieldradiobuttons .choices {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+}
+
+oes-fieldradiobuttons .choices label {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+}
+
 oes-statictext {
 	white-space: pre-line;
 }

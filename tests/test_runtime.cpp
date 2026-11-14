@@ -37,6 +37,7 @@
 #include "protocol/protocolDesigner.h"   // ibProtocol::ibView::ibFormDesigner
 #include "backend/backend_mainFrame.h"               // a frame so the form can be born
 #include "framedSession.h"                            // KeyFrame, FramedSession — the frame a form is born against
+#include "backend/propertyManager/property/propertySource.h"   // a field bound to an attribute, by its Source
 #include "backend/metaCollection/metaModuleObject.h" // a form module, so the bind has somewhere to live
 #include "backend/metadataApplication.h"             // the module's file name is asked of its metadata
 #include "backend/metaCollection/metaFormObject.h"  // a shared form: what a tile's form is created by
@@ -4966,3 +4967,129 @@ TEST(RuntimeTest, ValueListIsATableSourceWithTheKindsColumns) {
 	EXPECT_EQ(g_valuePictureCLSID, picture.GetClassType());
 	EXPECT_TRUE(picture.IsEmpty());
 }
+
+// A FIELD — one value of a source, shown as its Kind says. Made as a form makes it (NewObject) and read as a client reads
+// it (the State OnUpdate writes): the class is frmserver's own, so nothing here names it — its properties by name, its
+// state by the protocol's words.
+struct FieldForm : TileForm {
+	// A field of a kind and with a choice list given the way a saved form gives them — through its node — and then bound
+	// to one of the form's attributes.
+	ibValueFrame* Field(ibFormAttributeValue* attribute, int kind, const ibString& choiceList = ibString()) {
+		ibValueFrame* const field = m_form->NewObject(ibString(ibT("Field")), static_cast<ibValueForm*>(m_form));
+		EXPECT_NE(field, nullptr);
+		if (field == nullptr)
+			return nullptr;
+		ibDataNode saved;
+		EXPECT_TRUE(field->WriteData(saved));
+		saved.SetField(ibT("Kind"), ibDataValue::Int(kind));
+		saved.SetField(ibT("ChoiceList"), ibDataValue::String(choiceList));
+		EXPECT_TRUE(field->ReadData(saved));
+		Bind(*field, attribute);
+		return field;
+	}
+
+	static void Bind(ibValueFrame& field, ibFormAttributeValue* attribute) {
+		ibPropertySource* const source = dynamic_cast<ibPropertySource*>(field.GetProperty(ibT("Source")));
+		EXPECT_NE(source, nullptr);
+		if (source != nullptr)
+			source->SetValue(ibSourceDescription(std::vector<ibSourceId>{ attribute->GetId() }));
+	}
+
+	static std::vector<ibString> Choices(const ibDataNode& state) {
+		std::vector<ibString> captions;
+		if (const auto choices = state.FindChild(ibProtocol::ibForm::ibField::Choices)) {
+			for (const ibDataNode& choice : choices->Children())
+				captions.push_back(Text(choice, ibProtocol::ibForm::ibField::Caption));
+		}
+		return captions;
+	}
+
+	static bool Choose(ibValueFrame& field, int index) {
+		ibDataNode args;
+		args.SetValue(ibProtocol::ibEvent::Choice, static_cast<std::int32_t>(index));
+		return field.OnClientEvent(ibProtocol::ibEvent::ibKind::Change, args);
+	}
+
+	ibValue Held(ibFormAttributeValue* attribute) {
+		ibValue held;
+		EXPECT_TRUE(m_form->GetValueByAttributePath(ibSourceDescription(attribute->GetId()), held));
+		return held;
+	}
+};
+
+constexpr int kFieldInput = static_cast<int>(ibProtocol::ibForm::ibProperty::ibFieldKind::Input);
+constexpr int kFieldRadioButtons = static_cast<int>(ibProtocol::ibForm::ibProperty::ibFieldKind::RadioButtons);
+
+// A SWITCH OVER A BOOLEAN IS ONE FIELD: its choices are True and False, the one the attribute holds is selected, and a
+// click on the other writes it in.
+TEST_F(FieldForm, RadioButtonsOverABooleanOfferTrueAndFalse) {
+	ibFormAttributeValue* const flag = m_form->AddAttribute(ibT("Flag"), g_valueBooleanCLSID, ibValue(false));
+	ASSERT_NE(flag, nullptr);
+	ibValueFrame* const field = Field(flag, kFieldRadioButtons);
+	ASSERT_NE(field, nullptr);
+
+	ibDataNode state = State(*field);
+	ASSERT_EQ(Choices(state).size(), 2u);
+	EXPECT_EQ(Number(state, ibProtocol::ibForm::ibField::Selected), 1);
+	EXPECT_FALSE(state.GetValue<bool>(ibProtocol::ibForm::ibState::ReadOnly));
+
+	EXPECT_TRUE(Choose(*field, 0));
+	EXPECT_TRUE(Held(flag).GetBoolean());
+	EXPECT_EQ(Number(State(*field), ibProtocol::ibForm::ibField::Selected), 0);
+}
+
+// THE FIELD'S OWN LIST — each line a value of its type: a number field takes numbers, and the one it holds is selected.
+// A place that names no choice writes nothing.
+TEST_F(FieldForm, RadioButtonsOfferTheFieldsOwnListAsValuesOfItsType) {
+	ibFormAttributeValue* const level = m_form->AddAttribute(ibT("Level"), g_valueNumberCLSID, ibValue(2));
+	ASSERT_NE(level, nullptr);
+	ibValueFrame* const field = Field(level, kFieldRadioButtons, ibT("1\n2\n 3 \n"));
+	ASSERT_NE(field, nullptr);
+
+	ibDataNode state = State(*field);
+	const std::vector<ibString> captions = Choices(state);
+	ASSERT_EQ(captions.size(), 3u);
+	EXPECT_EQ(captions[2], ibString(ibT("3")));
+	EXPECT_EQ(Number(state, ibProtocol::ibForm::ibField::Selected), 1);
+
+	EXPECT_TRUE(Choose(*field, 2));
+	EXPECT_EQ(Held(level).GetClassType(), g_valueNumberCLSID);
+	EXPECT_EQ(Held(level).GetInteger(), 3);
+
+	Choose(*field, 7);
+	EXPECT_EQ(Held(level).GetInteger(), 3);
+
+	// A value that is none of the choices: none is selected.
+	level->SetHeldValue(ibValue(9));
+	EXPECT_FALSE(State(*field).FindField(ibProtocol::ibForm::ibField::Selected).has_value());
+}
+
+// AN INPUT FIELD IS THE TEXT FIELD: its value as text, no choices.
+TEST_F(FieldForm, InputFieldShowsItsValueAsText) {
+	ibFormAttributeValue* const name = m_form->AddAttribute(ibT("Name"), g_valueStringCLSID, ibValue(ibString(ibT("Ann"))));
+	ASSERT_NE(name, nullptr);
+	ibValueFrame* const field = Field(name, kFieldInput);
+	ASSERT_NE(field, nullptr);
+
+	const ibDataNode state = State(*field);
+	EXPECT_EQ(Text(state, ibProtocol::ibForm::ibState::Text), ibString(ibT("Ann")));
+	EXPECT_FALSE(state.FindChild(ibProtocol::ibForm::ibField::Choices).has_value());
+}
+
+// THE KIND AND THE LIST ARE SAVED WITH THE FORM and read back by the control's own write and read.
+TEST_F(FieldForm, KindAndChoiceListSurviveASave) {
+	ibFormAttributeValue* const level = m_form->AddAttribute(ibT("Level"), g_valueNumberCLSID, ibValue(1));
+	ASSERT_NE(level, nullptr);
+	ibValueFrame* const field = Field(level, kFieldRadioButtons, ibT("1\n2"));
+	ASSERT_NE(field, nullptr);
+
+	ibDataNode saved;
+	ASSERT_TRUE(field->WriteData(saved));
+	ibValueFrame* const copy = m_form->NewObject(ibString(ibT("Field")), static_cast<ibValueForm*>(m_form));
+	ASSERT_NE(copy, nullptr);
+	ASSERT_TRUE(copy->ReadData(saved));
+	Bind(*copy, level);
+	EXPECT_EQ(Choices(State(*copy)).size(), 2u);
+	EXPECT_EQ(Number(State(*copy), ibProtocol::ibForm::ibField::Selected), 0);
+}
+

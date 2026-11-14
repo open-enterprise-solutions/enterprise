@@ -319,6 +319,7 @@
     <ClCompile Include="visualView\ctrl\notebook.cpp" />
     <ClCompile Include="visualView\ctrl\placeholder.cpp" />
     <ClCompile Include="visualView\ctrl\radiobutton.cpp" />
+    <ClCompile Include="visualView\ctrl\radioButtons.cpp" />
     <ClCompile Include="visualView\ctrl\sizer.cpp" />
     <ClCompile Include="visualView\ctrl\slider.cpp" />
     <ClCompile Include="visualView\ctrl\staticline.cpp" />

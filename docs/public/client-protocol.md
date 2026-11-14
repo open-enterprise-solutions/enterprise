@@ -260,7 +260,10 @@ table. The client moves the column in its own copy of the form at once; the serv
 A notebook's tabs stand where `OrientPage` says; its `State` names the page selected, `ActivePage` (a page's control
 id). A page picked is event `Page {Page}`, a page's tab dragged `Move {Position}`. A page shown in the notebook carries
 its `Title` and `Picture`; a hidden one is out of it. A slider's ends are `MinValue` and `MaxValue`, a gauge's full
-mark `Range`; an HTML box's `State` has the `Page` it shows, a radio button's `Caption` and `Selected`. A chart box is
+mark `Range`; an HTML box's `State` has the `Page` it shows, a radio button's `Caption` and `Selected`. A field (`Field`)
+is drawn as its `Kind` says, and the client builds it anew when that changes: `0` Input is the text field, its State
+and events the same; `1` Radio buttons has the `Caption`, the `Choices` (each its `Caption`), the `Selected` one's place
+among them when the value holds one, and `ReadOnly`; a click is `Change {Choice}`, that place. A chart box is
 drawn empty.
 
 | Field | Holds |

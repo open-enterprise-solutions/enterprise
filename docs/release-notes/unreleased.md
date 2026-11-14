@@ -271,6 +271,11 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Forms
 
+- **A field, its kind chosen.** The new *Field* control is bound like a text field, and its `Kind` says how it shows
+  the value: `Input` is the text field, `RadioButtons` a button for each choice, the one the value holds selected. The
+  choices are the field's: `True` and `False` for a boolean, the members of an enumeration, or its own `ChoiceList`, one
+  value of its type a line. A click writes that choice into the field and raises `OnChange`; a field bound read-only
+  keeps its selection. The same in the thin client and the browser. The radio button is unchanged and binds nothing.
 - **Where a button's picture stands, a button as a tile, a button as a hyperlink.** A button's new `PictureLocation`
   puts its picture on the left (`Auto`, `Left`) or the right of its caption, or makes it a tile (`Tile`): the picture
   large over the caption and the new `Note` under them - a price, a count, a state - the button filling what its

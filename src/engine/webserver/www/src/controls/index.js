@@ -7,6 +7,7 @@ import './textctrl.js';
 import './button.js';
 import './checkbox.js';
 import './radiobutton.js';
+import './field.js';
 import './staticline.js';
 import './notebook.js';
 import './slider.js';
