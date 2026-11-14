@@ -268,11 +268,26 @@ ibParamUnit ibCompileCode::CompileLinqExpression(ibCompileContext* context)
 		m_cByteCode.m_listCode.emplace_back(std::move(c));
 	}
 
+	// ⭐⭐ …AND WHEN THE ROWS ARE THE ROWS THEMSELVES, THE ANSWER IS WHAT ToTable MAKES OF THEM — by
+	// that very call, so `from r in t select r` and `t.ToTable()` cannot answer differently (Max,
+	// 2026-11-14, L3). The leaf said so with one column and no name; the columns are then the rows' own
+	// and not the compiler's to list, so its record of them is emptied once the call is on the tape.
+	ibParamUnit resultSlot = data.m_resultArray;   // captured before the scope ends
+	if (data.m_columns.size() == 1 && data.m_columns.front().IsEmpty()) {
+		ibByteUnit c; StampSource(c);
+		c.m_numOper = OPER_CALL_LINQ;
+		c.m_param1 = resultSlot = context->CreateVariable();
+		c.m_param2 = data.m_resultArray;
+		c.m_param3.m_numIndex = (long)ibValue::ibLinqMethod::ToTable;
+		c.m_param3.m_numArray = 0;                     // no arguments
+		m_cByteCode.m_listCode.emplace_back(std::move(c));
+		data.m_columns.clear();
+	}
+
 	// …and where it ends: the pair brackets the text the compiler actually read, which is what a
 	// caller writing a query gets handed back beside its structure.
 	data.m_textTo = FindQueryTextEnd();
 
-	const ibParamUnit resultSlot = data.m_resultArray;   // capture before scope ends
 	return resultSlot;
 }
 
@@ -2989,7 +3004,8 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 		//   select { Total = …, Name = … }   the author's names
 		//   select o.Ref.Code                a WALK, glued — `RefCode`
 		//   select <anything else>           `Field1`, `Field2`, … — it has no natural name
-		//   <omitted>                        the row itself, one column, same rule
+		//   select o  /  <omitted>           the ROW ITSELF — not projected: the answer is the table
+		//                                    ToTable makes of the rows (see below)
 		//
 		// The rule is not invented here: it is the query engine's own (queryRewrite.h,
 		// ibQueryProposedName / ibQueryEnsureUniqueName), down to the leading source name never
@@ -3033,6 +3049,25 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 				columnNames.push_back(UniqueColumnName(columnNames, proposed));
 			};
 
+			// ⭐⭐ THE ROW ITSELF IS NOT A PROJECTION. `select o` — a range variable read as it is, nothing
+			// emitted for it — and a query with no `select` answer with the ROWS, so no one-column row is
+			// made around each: the answer is the table ToTable makes of them, by the same call (the end of
+			// CompileLinqExpression) — a row with properties gives them as its columns, a plain value is one
+			// `Value` column. Max, 2026-11-14 (L3): `from r in t orderby r.Revenue select r` and then
+			// `e.Revenue` was "field not found" — a column named Field1 held the row — while
+			// `t.OrderBy(…).ToTable()` read it: two roads, two answers.
+			const auto isRangeVariable = [&data](const ibParamUnit& value) {
+				for (const ibLinqBinding& bound : data.m_bindings)
+					if ((bound.origin == ibLinqBinding::FromSource || bound.origin == ibLinqBinding::FromJoin
+						|| bound.origin == ibLinqBinding::FromGroup)
+						&& bound.valueSlot.m_numArray == value.m_numArray
+						&& bound.valueSlot.m_numIndex == value.m_numIndex)
+						return true;
+				return false;   // a `let` is a value computed per row, not the row
+			};
+			bool rowItself = false;
+			ibParamUnit itself = b.valueSlot;
+
 			if (IsNextKeyword(KEY_SELECT)) {
 				ExpectKeyword(KEY_SELECT);
 
@@ -3074,31 +3109,45 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 					// expression emitted — noted before it runs, read after.
 					const int emitFrom = (int)m_cByteCode.m_listCode.size();
 					const ibParamUnit value = GetExpression(context);
-					keepColumn(ColumnNameOfProjection(m_cByteCode, emitFrom,
-						(int)m_cByteCode.m_listCode.size(), b.valueSlot, value), value);
+					if ((int)m_cByteCode.m_listCode.size() == emitFrom && isRangeVariable(value)) {
+						rowItself = true;
+						itself = value;
+					}
+					else
+						keepColumn(ColumnNameOfProjection(m_cByteCode, emitFrom,
+							(int)m_cByteCode.m_listCode.size(), b.valueSlot, value), value);
 				}
 			}
+			else
+				rowItself = true;   // no `select` written: the row itself
+
+			if (rowItself) {
+				// The row made for a projection is taken back — it is the last instruction, nothing was
+				// emitted after it — and the row goes into the answer as it is. ONE column with NO name
+				// says so to the end of CompileLinqExpression: no author can write a column without one.
+				ibASSERT(rowIp == (int)m_cByteCode.m_listCode.size() - 1);
+				m_cByteCode.m_listCode.pop_back();
+				data.m_columns = { ibEmptyString };
+				addValue = itself;
+			}
 			else {
-				// No `select` written: the row itself is the one column, and it has no natural name.
-				keepColumn(ibEmptyString, b.valueSlot);
+				// The shape, as ONE constant: the column names in the order they were written, which
+				// is the order that made them ordinals.
+				ibString shapeNames;
+				for (size_t i = 0; i < columnNames.size(); ++i) {
+					if (i != 0) shapeNames << ibT('\n');
+					shapeNames << columnNames[i];
+				}
+				m_cByteCode.m_listCode[rowIp].m_param3.m_numIndex = GetConstString(shapeNames);
+				m_cByteCode.m_listCode[rowIp].m_param3.m_numArray = (long)columnNames.size();
+
+				// …and the same names go into the QUERY, which is the compiler's own record of what it
+				// understood. The instructions carry them for the runtime; this carries them for the
+				// readers on this side (byteCodeLINQ.h).
+				data.m_columns = columnNames;
+
+				addValue = rowSlot;
 			}
-
-			// The shape, as ONE constant: the column names in the order they were written, which is
-			// the order that made them ordinals.
-			ibString shapeNames;
-			for (size_t i = 0; i < columnNames.size(); ++i) {
-				if (i != 0) shapeNames << ibT('\n');
-				shapeNames << columnNames[i];
-			}
-			m_cByteCode.m_listCode[rowIp].m_param3.m_numIndex = GetConstString(shapeNames);
-			m_cByteCode.m_listCode[rowIp].m_param3.m_numArray = (long)columnNames.size();
-
-			// …and the same names go into the QUERY, which is the compiler's own record of what it
-			// understood. The instructions carry them for the runtime; this carries them for the
-			// readers on this side (byteCodeLINQ.h).
-			data.m_columns = columnNames;
-
-			addValue = rowSlot;
 		}
 
 		// DISTINCT modifier — `distinct` after select, which drops a row the query has already

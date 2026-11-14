@@ -1404,10 +1404,10 @@ TEST(RuntimeTest, LinqBlockSkip_NoJoin) {
 		wxT("  outer = New Array; outer.Add(1); outer.Add(2); outer.Add(3);\n")
 		wxT("  q = from a in outer skip 1 select a;\n")
 		wxT("  If q.Count() <> 2 Then Return -1; EndIf;\n")
-		// `select a` projects the row itself: one column, and having no natural name it is `Field1`
-		// (the query engine's own rule, queryRewrite.h). See KeptPayload above for why this is a
-		// table rather than the array it used to be.
-		wxT("  Return q[0].Field1 * 10 + q[1].Field1;\n")
+		// `select a` answers with the rows themselves, as ToTable makes them: a number is no row, so it
+		// is the one column, `Value` (2026-11-14, L3 — it was a projected column named `Field1`). See
+		// KeptPayload above for why this is a table rather than the array it used to be.
+		wxT("  Return q[0].Value * 10 + q[1].Value;\n")
 		wxT("EndFunction\n");
 	ASSERT_TRUE(TryCompile(cc, src));
 
@@ -1453,7 +1453,7 @@ TEST(RuntimeTest, LinqBlockJoin_SkipCountsJoinedRows) {
 		wxT("  inner = New Array; inner.Add(1); inner.Add(1); inner.Add(2);\n")
 		wxT("  q = from a in outer join b in inner on a equals b skip 1 select a;\n")
 		wxT("  If q.Count() <> 2 Then Return -1; EndIf;\n")
-		wxT("  Return q[0].Field1 * 10 + q[1].Field1;\n")
+		wxT("  Return q[0].Value * 10 + q[1].Value;\n")
 		wxT("EndFunction\n");
 	ASSERT_TRUE(TryCompile(cc, src));
 
@@ -2458,7 +2458,7 @@ TEST_F(BuiltInRuntime, ABuiltInGlobalTakesFewerArgumentsThanItDeclares) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 
 	// The host binds the global API as a transparent scope, exactly as
-	// codeRunner and the corpus do. It must outlive the ProcUnit.
+	// coderunner and the corpus do. It must outlive the ProcUnit.
 	ibValuePtr<ibValueSystemFunction> valueSystem(new ibValueSystemFunction());
 	cc.AddContextVariable(wxT("System"), valueSystem, true);
 

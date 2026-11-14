@@ -782,7 +782,9 @@ private:
 			// row: does this row NAME its columns? A projection does and a group does, and then the
 			// answer is a TABLE carrying those names — the one exit every query has (docs/private/linq.md
 			// §0.2h-quater). A plain value does not, and then the answer is an Array, which is what
-			// `ToArray` over such rows means.
+			// `ToArray` over such rows means — and the Array HOLDS the sample row: a query that answers
+			// with the rows themselves (`select r`) hands this Array on to ToTable (compileCodeLINQ.cpp),
+			// and that step, read through LinqStep, asks the very row for its columns.
 			//
 			// 🛑 IT IS THE EXPORTED RULE (`ibLinqNamedColumns`, procUnit.h) and not a second copy of
 			// it here. Two readings of "does it have columns" would eventually disagree, and the one
@@ -795,8 +797,12 @@ private:
 						columns->AddColumn(name, ibTypeDescription(), name);
 				out = table;
 			}
-			else
-				out = new ibValueArray();
+			else {
+				ibValueArray* const array = new ibValueArray();
+				if (haveRow)
+					array->Add(row);
+				out = array;
+			}
 
 			if (outOrigin != nullptr) *outOrigin = ibNameOrigin::Declared;
 			return ibStep::Value;

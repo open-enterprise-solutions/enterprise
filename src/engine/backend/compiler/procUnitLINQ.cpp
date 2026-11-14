@@ -2060,6 +2060,7 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 			// Values, an object row lends its own properties, and a plain value is itself the single
 			// column — the same question a query's own answer is built from (ColumnsOf /
 			// ColumnsOfRowItself / TableOfRows above), asked here of a collection instead of a loop.
+			// A query that answers with the rows themselves (`select r`) ends in this very call.
 			//
 			// A data source never reaches this: `ibValueQueryable` overrides the dispatch and builds
 			// the table from the SCHEMA, typed and read server-side, which is the better answer and
@@ -2346,7 +2347,8 @@ void ibLinqResult(ibValue& out, ibValue& scratch, int ordering, bool wantFirst)
 	// (compileCode.cpp), a `group` is Key and Values, and one exit for every query is the point.
 	//
 	// The Array below is for rows that are plain values with nothing to call a column — a chain
-	// asked to end in `ToArray`, which says in its own name what it wants back.
+	// asked to end in `ToArray`, which says in its own name what it wants back — and for the rows a
+	// query kept as they are (`select r`), which the compiler hands straight on to ToTable.
 	const std::vector<ibString> columns = ColumnsOf(kept);
 	if (!columns.empty()) {
 		out = TableOfRows(kept, columns);
