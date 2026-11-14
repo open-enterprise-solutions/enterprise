@@ -1,0 +1,24 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "uk",
+  "entries": [
+    {
+      "id": "cls.PictureLib",
+      "name_local": "PictureLib",
+      "name_en": "PictureLib",
+      "kind": "collection",
+      "category_keys": [
+        "global_context"
+      ],
+      "signature": "PictureLib.<name>",
+      "description": "Картинки, які модуль може назвати: власні об'єкти Picture конфігурації та картинки рушія — той самий набір, що пропонує вибір картинки у властивості. Властивість відповідає цією картинкою. Картинка конфігурації з іменем, як у картинки рушія, — картинка конфігурації.",
+      "parameters": "Немає. Ім'я властивості — ім'я картинки, наприклад Logo або Error.",
+      "return_descr": "StoragePicture.",
+      "example": "Pic = PictureLib.Logo;",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": [],
+      "reviewed": false
+    }
+  ]
+}

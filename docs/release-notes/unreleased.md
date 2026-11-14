@@ -185,6 +185,9 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   over the levels' fields now returns the bottom groups, and the groups above and the grand total add up from them,
   in the order the rows put them in. A sum, a count, a minimum or a maximum; an average, a distinct count or a
   `HAVING` over several levels still folds in memory.
+- **`PictureLib.<Name>` is a picture a module can name** (`Pic = PictureLib.Logo;`): the configuration's
+  own pictures and the engine's, the set the picture property's picker offers. A configuration picture
+  named like an engine one is the configuration's.
 
 ## Forms
 
