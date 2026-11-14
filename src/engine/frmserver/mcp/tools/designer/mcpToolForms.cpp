@@ -128,7 +128,7 @@ const ibArg& ArgType()
 {
 	static const ibArg s_a(ibT("type"), ibArg::Kind::Text,
 		ibMcpText("The attribute's type in words, as metadata_set_type takes one: DynamicList, DataComposition, "
-			  "ValueTable, String, Number, Date, Boolean, CatalogRef.Goods, DocumentObject.Sale. Omitted: String."));
+			  "Table (a value table), String, Number, Date, Boolean, CatalogRef.Goods, DocumentObject.Sale. Omitted: String."));
 	return s_a;
 }
 
@@ -886,9 +886,15 @@ private:
 			ibDataNode typed;
 			typed.AddField(ibT("value"), ibDataValue::String(ArgType().Text(params)));
 			ibDataNode said;
-			if (!ibMcpSetProperty(entry->GetProperty(ibT("Type")), typed, said, refusal)) {
-				form->DetachAttribute(entry);   // refused whole: an attribute of another type than asked is not added
-				return false;
+			try {
+				if (!ibMcpSetProperty(entry->GetProperty(ibT("Type")), typed, said, refusal)) {
+					form->DetachAttribute(entry);   // refused whole: an attribute of another type than asked is not added
+					return false;
+				}
+			}
+			catch (...) {
+				form->DetachAttribute(entry);   // …and a type that THREW is refused the same way: attached here, taken off here
+				throw;
 			}
 		}
 

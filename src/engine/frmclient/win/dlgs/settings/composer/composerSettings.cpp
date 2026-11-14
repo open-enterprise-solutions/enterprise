@@ -966,7 +966,7 @@ public:
 				if (m_fields != nullptr && !m_fields->IsAvailable(field.m_path))
 					continue;
 				if (!fields.IsEmpty()) fields += wxT(", ");
-				fields += field.m_path;
+				fields += m_fields != nullptr ? m_fields->GetFieldText(field.m_path) : field.m_path.ToWxString();
 			}
 			variant = fields;
 			return;
@@ -1227,7 +1227,10 @@ void ibSelectedListModel::GetValue(ibVariant& variant, const ibDataViewItem& ite
 	// ⭐ THE `Auto` ROW READS AS WHAT IT IS. It names no field — it says "everything the storey above
 	// chose, here" — so it is drawn as the word rather than as a blank line, which is what an empty
 	// path would look like and is a different thing entirely.
-	variant = (*list)[row].IsAuto() ? ibString(_("<Auto>")) : (*list)[row].m_path;
+	if ((*list)[row].IsAuto())
+		variant = ibString(_("<Auto>"));
+	else
+		variant = m_fields != nullptr ? m_fields->GetFieldText((*list)[row].m_path) : (*list)[row].m_path.ToWxString();
 }
 
 unsigned int ibSelectedListModel::GetFirstFetch(const ibDataViewItem& parent, const ibDataViewItem&,
@@ -1292,7 +1295,8 @@ public:
 		if (level == nullptr || row == wxNOT_FOUND || (size_t)row >= level->m_settings.m_group.m_lines.size())
 			return;   // BOUNDS FIRST — a queued paint can outlive the level it was queued for
 		if (col == kColField)
-			variant = level->m_settings.m_group.m_lines[row].m_path;
+			variant = m_fields != nullptr ? m_fields->GetFieldText(level->m_settings.m_group.m_lines[row].m_path)
+				: level->m_settings.m_group.m_lines[row].m_path.ToWxString();
 		else if (col == kColKind)
 			variant = ibValue::CreateEnumObject<ibValueEnumGroupKind>(level->m_settings.m_group.m_lines[row].m_kind).GetString();
 	}

@@ -30,16 +30,15 @@
 // collapsed into the universal row (Max: "collapse …"); these out-of-line members are non-trivial, so they
 // live here rather than in the header.
 
-// DETAIL row (a DB-list fetch copy): copy the L5 driver row's values + keep the primary-key row-key as the
-// re-fetch selection identity. NO write-back source / backing index any more — a DB grid is READ-ONLY (editing
+// DETAIL row (a DB-list fetch copy): the L5 driver row's values, taken as they are, + the primary-key row-key as
+// the re-fetch selection identity. NO write-back source / backing index any more — a DB grid is READ-ONLY (editing
 // is via the object form), and a RAM list edits its LIVE storage rows directly (it never makes these copies).
-ibValueModel::ibComposerNode::ibComposerNode(const std::map<ibMetaID, ibValue>& values,
+ibValueModel::ibComposerNode::ibComposerNode(ibRowMetaValues values,
 	bool container, std::vector<ibValue> rowKey, std::vector<ibValue> scope)
 	: m_valueTable(nullptr), m_groupPath(std::move(scope)), m_rowKey(std::move(rowKey)),
 	  m_container(container), m_selfContained(true)
 {
-	for (const auto& kv : values)
-		AppendTableValue(kv.first, kv.second);
+	m_nodeValues = std::move(values);
 }
 
 // STUB row (FindRowValue selection-restore): only the row-key the caller navigates to.
@@ -49,13 +48,12 @@ ibValueModel::ibComposerNode::ibComposerNode(std::vector<ibValue> rowKey)
 }
 
 // GROUP-drill row: the dimension-value path root->this + the drillable container flag.
-ibValueModel::ibComposerNode::ibComposerNode(const std::map<ibMetaID, ibValue>& values,
+ibValueModel::ibComposerNode::ibComposerNode(ibRowMetaValues values,
 	const std::vector<ibValue>& groupPath, bool container, std::vector<ibValue> subPath)
 	: m_valueTable(nullptr), m_groupPath(groupPath), m_subPath(std::move(subPath)), m_heading(true),
 	  m_container(container), m_selfContained(true)
 {
-	for (const auto& kv : values)
-		AppendTableValue(kv.first, kv.second);
+	m_nodeValues = std::move(values);
 }
 
 // THE node mirrors an edited cell into its own value map and notifies the owning model. A RAM list edits its

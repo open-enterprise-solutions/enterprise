@@ -104,10 +104,15 @@ public:
 	};
 
 protected:
+	// A member's NAME and its DESCRIPTION, each where the list keeps it: the name is what code and a caller write, the
+	// description what a person reads - and the only one translated. Given as the name alone, the description took its
+	// place: a register's type was "Залишки" to the assistant in a Ukrainian designer, and `Balances` was refused
+	// (2026-11-14, a configuration built by script, measured)
 	virtual ibPropertyChoiceList GetEnumList() const {
 		ibPropertyChoiceList list;
 		for (unsigned int idx = 0; idx < m_enumCreator->GetEnumCount(); idx++) {
-			list.Add(m_enumCreator->GetEnumDesc(idx), m_enumCreator->GetEnumValue(idx));
+			const long id = static_cast<long>(m_enumCreator->GetEnumValue(idx));
+			list.Add(id, m_enumCreator->GetEnumName(idx), m_enumCreator->GetEnumDesc(idx), ibVariant(static_cast<int>(id)));
 		}
 		return list;
 	}

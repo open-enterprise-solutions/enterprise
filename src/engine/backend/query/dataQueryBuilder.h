@@ -549,9 +549,9 @@ inline ibJoinCompareOp ibMirrorJoinOp(ibJoinCompareOp op)
 
 // A JOIN's ON condition — grouped (was six scattered fields on ibQueryNode) so the mutually-exclusive ways to
 // express it live in one cohesive place. By convention: m_cross = cartesian (ON TRUE); else m_exprL/m_exprR
-// set = a COMPUTED theta join (a.x+1 <op> b.y), always RAM nested-loop — no column key to qualify against a
-// leaf's table; else m_colL/m_colR = explicit key columns (Eq -> hash, other m_op -> theta), co-locatable
-// either way.
+// set = a COMPUTED join (a.x+1 <op> b.y), always RAM — no column key to qualify against a leaf's table (Eq ->
+// hash on the computed values, other m_op -> nested loop); else m_colL/m_colR = explicit key columns (Eq ->
+// hash, other m_op -> theta), co-locatable either way.
 //
 // ⚠ THERE IS NO FOURTH CASE ANY MORE. "All null and not cross" used to mean an auto-join by
 // reference, worked out from the metadata — which made one query text mean different things as the
@@ -582,14 +582,20 @@ struct ibJoinOn {
 	// The EQUALITIES still form the hash key (that is what makes the join O(n+m)); the rest are
 	// checked per candidate pair inside the matching bucket. So the common case pays nothing and the
 	// mixed case is a bucket scan rather than a full product.
+	// ⭐⭐ …AND A PART MAY BE COMPUTED, as the first pair may. "This month against the month before" is
+	// `B.Item = A.Item AND B.Period = DATEADD(A.Period, MONTH, -1)`: the second part compares the two
+	// sides as surely as the first, and an equality of computed sides is as good a key as one of
+	// columns. Held as the first pair holds it — `m_exprL` / `m_exprR` in place of the columns.
 	struct ibJoinKeyPart {
 		const ibBackendQueryColumn* m_colL = nullptr;
 		const ibBackendQueryColumn* m_colR = nullptr;
 		ibJoinCompareOp             m_op   = ibJoinCompareOp::Eq;
+		ibQueryColumnExprPtr        m_exprL;                       // computed LEFT side (instead of m_colL)
+		ibQueryColumnExprPtr        m_exprR;                       // computed RIGHT side (instead of m_colR)
 	};
 	std::vector<ibJoinKeyPart> m_alsoOn;
 	ibJoinCompareOp              m_op    = ibJoinCompareOp::Eq;   // the FIRST pair's comparison: Eq -> hash; non-Eq -> theta
-	ibQueryColumnExprPtr         m_exprL;                         // computed ON: LEFT-side expr (presence -> theta)
+	ibQueryColumnExprPtr         m_exprL;                         // computed ON: LEFT-side expr (RAM; Eq hashes too)
 	ibQueryColumnExprPtr         m_exprR;                         // computed ON: RIGHT-side expr
 	bool                         m_cross = false;                 // CROSS / ON TRUE — keyless cartesian (RAM only)
 };
@@ -765,7 +771,8 @@ public:
 	                         const ibQueryColumnExprPtr& onExprL, const ibQueryColumnExprPtr& onExprR,
 	                         ibJoinCompareOp onOp,
 	                         ibQueryJoinKind kind = ibQueryJoinKind::Inner,
-	                         const ibString& alias = ibEmptyString);                            // computed ON (a.x+1 <op> b.y) — always RAM theta
+	                         const ibString& alias = ibEmptyString,
+	                         const std::vector<ibJoinOn::ibJoinKeyPart>& alsoOn = {});   // computed ON (a.x+1 <op> b.y) — always RAM
 	ibDataQueryBuilder& CrossJoin(const ibBackendQueryable* queryable,
 	                              ibQueryJoinKind kind = ibQueryJoinKind::Inner,
 	                              const ibString& alias = ibEmptyString);                        // CROSS / ON TRUE — cartesian
@@ -792,8 +799,9 @@ public:
 	                         const ibQueryColumnExprPtr& onExprL, const ibQueryColumnExprPtr& onExprR,
 	                         ibJoinCompareOp onOp,
 	                         ibQueryJoinKind kind = ibQueryJoinKind::Inner,
-	                         const ibString& alias = ibEmptyString) {
-		return Join(AdoptOwnedSource(std::move(queryable)), onExprL, onExprR, onOp, kind, alias);
+	                         const ibString& alias = ibEmptyString,
+	                         const std::vector<ibJoinOn::ibJoinKeyPart>& alsoOn = {}) {
+		return Join(AdoptOwnedSource(std::move(queryable)), onExprL, onExprR, onOp, kind, alias, alsoOn);
 	}
 	ibDataQueryBuilder& CrossJoin(std::shared_ptr<const ibBackendQueryable> queryable,
 	                              ibQueryJoinKind kind = ibQueryJoinKind::Inner,

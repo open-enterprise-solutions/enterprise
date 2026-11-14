@@ -9,6 +9,7 @@
 #include "backend/query/queryConstructorModel.h"  // ibQueryTextOfSource — the seed query, written out
 #include "backend/backend_exception.h"               // the engine's verdict on a query that will not resolve
 #include "backend/srcDataObject.h"                      // ibSourceExplorer
+#include "backend/metaCollection/metaGroups.h"         // ibMetaTypeCaption — the caption names the source's kind
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject — GetItemKey row guid
 #include "core/serialize/dataBuilder.h"            // ibDataNode (object-level save/load)
 #include "backend/backend_composition.h"             // ibBackendCompositionDescriptionMemory — read against its configuration
@@ -682,7 +683,7 @@ ibString ibValueDynamicList::GetSourceCaption() const
 	// the queryable (the same path the front reads the icon), so caption + icon stay consistent.
 	if (const ibBackendQueryable* q = GetSourceQueryable())
 		return GetSourceMetaObject() ?
-			stringUtils::GenerateSynonym(GetSourceMetaObject()->GetClassName()) + ibT(": ") + GetSourceMetaObject()->GetSynonym() : q->GetQueryName();
+			ibMetaTypeCaption(GetSourceMetaObject()->GetClassType()) + ibT(": ") + GetSourceMetaObject()->GetSynonym() : q->GetQueryName();
 
 	return GetClassName();
 }

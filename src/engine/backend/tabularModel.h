@@ -3,7 +3,7 @@
 
 #include <algorithm>
 #include <functional>
-#include <map>      // ibComposerNode holds the driver row's std::map<ibMetaID, ibValue>
+#include <map>
 #include <memory>   // std::shared_ptr (CreateIterator)
 #include <utility>  // std::forward — the two handovers below; transitive on MSVC, not on GCC/Clang
 
@@ -668,7 +668,7 @@ public:
 	// from the source and return its value map, so RunComposerPage can fill the anchor's sort tuple and the
 	// keyset predicate positions the page AT the row. Source-agnostic (same composer/driver path). Empty on miss.
 	// This is where the old per-list FindRowValue sort-value pre-reading moved — into L5, keyed by the row-key.
-	std::map<ibMetaID, ibValue> ResolveAnchorByKey(const std::vector<ibValue>& rowKey) const;
+	ibRowMetaValues ResolveAnchorByKey(const std::vector<ibValue>& rowKey) const;
 
 #pragma region _data_model_h_
 	ibDataViewModelProviderImpl* GetDataViewModel() const { return m_modelProvider; }
@@ -977,6 +977,15 @@ public:
 			}
 			return m_nodeValues == o->m_nodeValues;
 		}
+		// …and the number two equal rows share, read off what IsEqualTo compares: a row in memory is its pointer, a
+		// heading its paths, a base row its KEY alone — a restore stub knows no more and must land on the row.
+		virtual size_t GetIdentityHash() const override {
+			if (!m_selfContained)
+				return ibDataViewObject::GetIdentityHash();
+			if (m_heading)
+				return static_cast<size_t>(ibHashCombine(ibValueSeqHash()(m_groupPath), ibValueSeqHash()(m_subPath)));
+			return m_rowKey.empty() ? 0 : ibValueSeqHash()(m_rowKey);
+		}
 
 		// Detached state — a model-linked storage row is attached while `m_valueTable` is set (base Clear /
 		// Remove null it on a row that may outlive the model via refcount-pinning by an ibDataViewItem held
@@ -999,13 +1008,13 @@ public:
 		}
 
 		// --- composer-fetch ctors (out-of-line: they need ibBackendQueryable's full type / are non-trivial) ---
-		// DETAIL row (a DB-list fetch copy): copy the L5 driver row's metaID->value pairs into m_nodeValues;
+		// DETAIL row (a DB-list fetch copy): the L5 driver row's metaID->value pairs become m_nodeValues as they are;
 		// `container` = the driver row's hasChildren (a drillable folder in a parent-ref tree — the SAME node
 		// serves a flat list AND a hierarchy); `rowKey` = the source's primary-key values (DB-list identity /
 		// FindRowValue match key). Self-contained copy (IsAttached -> true; the fetch is const, no const_cast).
 		// ⭐ `scope` = the rungs it stands under, and it is what makes a folder inside a grouping possible: the
 		// node carries where it is without claiming to be a heading. Empty for an ungrouped list.
-		explicit ibComposerNode(const std::map<ibMetaID, ibValue>& values,
+		explicit ibComposerNode(ibRowMetaValues values,
 			bool container = false, std::vector<ibValue> rowKey = {},
 			std::vector<ibValue> scope = {});
 		// STUB row (FindRowValue selection-restore): carries ONLY the row-key the caller navigates to, so the
@@ -1014,7 +1023,7 @@ public:
 		// GROUP-drill row (RunComposerPage grouping branch): the dimension-value path root->this (so children
 		// re-fetch scoped, dim==value per drilled level) + a container flag so the view renders it drillable.
 		// `subPath` = the folder chain inside a hierarchy rung; empty for an ordinary grouping heading.
-		ibComposerNode(const std::map<ibMetaID, ibValue>& values, const std::vector<ibValue>& groupPath, bool container,
+		ibComposerNode(ibRowMetaValues values, const std::vector<ibValue>& groupPath, bool container,
 			std::vector<ibValue> subPath = {});
 		// …AND WHAT ITS CONDITIONAL APPEARANCE DRAWS IT WITH, taken from the fetch's row as it is — the pointer moves,
 		// nothing is converted or copied (see m_compositionAttr). Null where no rule held — and that is the answer

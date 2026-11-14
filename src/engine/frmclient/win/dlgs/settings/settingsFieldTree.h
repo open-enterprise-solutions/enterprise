@@ -55,6 +55,13 @@ struct ibSettingsPlainField {
 // before any is drawn, in one call.
 std::vector<ibSettingsPlainField> ibReadSettingsFields(const class ibProtocolNode& fields);
 
+// ⭐⭐ WHAT A FIELD READS AS — one rule for every settings surface (the tree, its picker, the lists beside it, a filter's
+// side): THE DESIGNER WORKS WITH NAMES, THE ENTERPRISE SHOWS A PERSON THE SYNONYM (Max, 2026-11-14). `path` is what the
+// field stores, `presentation` its readable spelling — shown where it names every hop the path does: one that lost a
+// prefix on the way would hide that the value is reached through the dot (Max, 2026-09-25), so the path answers.
+// What is SHOWN only — a presentation a pick stores (a filter's side) stays what it is.
+wxString ibSettingsFieldText(const wxString& path, const wxString& presentation);
+
 class ibSettingsFieldTree {
 public:
 
@@ -97,6 +104,11 @@ public:
 	// are one answer. Every hop answers. A line on an unavailable field is not listed, stays in the
 	// settings and keeps working.
 	bool IsAvailable(const wxString& path) const;
+
+	// ⭐ WHAT A LINE ON A PATH READS AS — the words the tree itself shows (ibSettingsFieldText), so a list on the right
+	// and the tree on the left name a field the same way. A sort, a grouping and a selection keep only the path, and
+	// the enterprise drew it ("Counterparty", "Quantity" under a tree reading "Покупатель", "Количество" — Max, 2026-11-14).
+	wxString GetFieldText(const wxString& path) const;
 
 	// WIRE the two behaviours every field tree has: unfold a reference lazily, and
 	// drag a field out (dropping on the right-hand pane adds it — the dropped field

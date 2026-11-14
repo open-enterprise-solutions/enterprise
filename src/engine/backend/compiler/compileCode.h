@@ -549,6 +549,7 @@ protected:
 
 	ibParamUnit GetCallFunction(ibCompileContext* context, const ibString& strName, const int& nIsSet);
 	ibParamUnit GetCurrentIdentifier(ibCompileContext* context, int& nIsSet);
+	ibParamUnit GetMemberChain(ibCompileContext* context, ibParamUnit variable, int nPrevSet, int& nIsSet);
 
 	ibParamUnit FindConst(const ibValue& constData);
 

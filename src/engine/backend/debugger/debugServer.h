@@ -9,6 +9,7 @@
 #include <condition_variable>
 #include <shared_mutex>
 #include <thread>
+#include <vector>
 
 struct ibRunContext;
 class ibSession;
@@ -227,13 +228,17 @@ private:
 
 	unsigned int m_numCurrentNumberStopContext;
 
-	// module -> (line -> condition). An empty condition stops always; any other stops only where it is true
-	// in the frame that reaches the line (EnterDebugger).
+	// line -> (module, condition) of each breakpoint at it, whatever the module. An empty condition stops always; any
+	// other stops only where it is true in the frame that reaches the line (EnterDebugger).
+	//
+	// ⭐ BY THE LINE, because the line is what a debugged script asks on every one it runs: a line no breakpoint stands
+	// at is answered by its number, and a module's path is compared only where one does. Keyed by the path, it was a
+	// string search per line — 43 % of a loop of built-in calls under app_run (stack samples 2026-11-14).
 	//
 	// 🛑 UNDER ITS LOCK, every touch: read shared by each script thread on every line it runs while debugged
 	// (EnterDebugger), changed exclusively by the debug thread's commands and by a reset, which a script's thread
 	// reaches too (ResetDebugger).
-	std::map<ibString, std::map<unsigned int, ibString>> m_listBreakpoint;
+	std::vector<std::vector<std::pair<ibString, ibString>>> m_listBreakpoint;
 	std::shared_mutex m_breakpointsMutex;
 
 	// WHAT IS WATCHED HERE, AND FOR WHOM — refreshed at every stop by SendExpressions, which answers each

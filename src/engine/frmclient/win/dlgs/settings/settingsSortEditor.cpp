@@ -53,7 +53,7 @@ public:
 		// EVERY COLUMN READS AS WHAT IT IS — the field by its path, the direction by
 		// its enumeration caption. No indices, no parallel lists.
 		if (col == eOrderField)
-			variant = line.m_path;
+			variant = m_editor->m_fieldSource != nullptr ? m_editor->m_fieldSource->GetFieldText(line.m_path) : line.m_path.ToWxString();
 		else if (col == eOrderDir)
 			variant = ibValue::CreateEnumObject<ibValueEnumSortDirection>(
 				line.m_ascending ? ibSortDirection_Ascending : ibSortDirection_Descending).GetString();

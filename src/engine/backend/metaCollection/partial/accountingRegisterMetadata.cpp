@@ -18,6 +18,28 @@
 #include "backend/metadataConfiguration.h"
 #include "backend/moduleManager/moduleManager.h"
 
+namespace {
+
+// A breakdown slot's caption on side `sidePrefix` — the side SAID, as every reading of the register says it
+// (ibRegSideCaption: "Дт" / "Кт"), and nothing where the register has one side. The prefix went in as it is
+// SPELLED, so a Ukrainian tree read "Аналітика Dr1", and the credit side carried "Cr" inside its own msgid
+// (Max, 2026-11-14).
+ibString SideCaption(const ibString& sidePrefix)
+{
+	return sidePrefix.IsEmpty() ? ibString() : ibRegSideCaption(sidePrefix == ibT("Cr"));
+}
+
+ibString AccountDimensionSynonym(const ibString& sidePrefix, unsigned int no)
+{
+	return ibString::Format(_("Account dimension %s%u"), SideCaption(sidePrefix), no);
+}
+
+ibString AccountDimensionKindSynonym(const ibString& sidePrefix, unsigned int no)
+{
+	return ibString::Format(_("Account dimension %s%u kind"), SideCaption(sidePrefix), no);
+}
+
+} // namespace
 
 ibValueMetaObjectAccountingRegister::ibValueMetaObjectAccountingRegister() : ibValueMetaObjectRegisterData()
 {
@@ -108,7 +130,7 @@ bool ibValueMetaObjectAccountingRegister::ReadData(const ibDataNode& node)
 		const ibString debitPrefix = slotName.StartsWith(ibT("AccountDimensionDr")) ? ibT("Dr") : ibEmptyString;
 
 		ibValueMetaObjectAttributePredefined* slot = CreateEmptyType(
-			slotName, ibString::Format(_("Account dimension %s%u"), debitPrefix, no),
+			slotName, AccountDimensionSynonym(debitPrefix, no),
 			ibEmptyString, false, ibItemMode::ibItemMode_Item);
 
 		const auto child = saved->AsChild();
@@ -119,7 +141,7 @@ bool ibValueMetaObjectAccountingRegister::ReadData(const ibDataNode& node)
 		// from the slot's own name, so the two halves cannot end up under different spellings.
 		const ibString kindName = slotName + ibT("Kind");
 		ibValueMetaObjectAttributePredefined* kind = CreateEmptyType(
-			kindName, ibString::Format(_("Account dimension %s%u kind"), debitPrefix, no),
+			kindName, AccountDimensionKindSynonym(debitPrefix, no),
 			ibEmptyString, false, ibItemMode::ibItemMode_Item);
 
 		if (auto savedKind = node.FindProperty(kindName)) {
@@ -141,7 +163,7 @@ bool ibValueMetaObjectAccountingRegister::ReadData(const ibDataNode& node)
 			break;
 
 		ibValueMetaObjectAttributePredefined* value = CreateEmptyType(
-			valueName, ibString::Format(_("Account dimension Cr%u"), no),
+			valueName, AccountDimensionSynonym(ibT("Cr"), no),
 			ibEmptyString, false, ibItemMode::ibItemMode_Item);
 		const auto valueChild = savedValue->AsChild();
 		if (valueChild)
@@ -149,7 +171,7 @@ bool ibValueMetaObjectAccountingRegister::ReadData(const ibDataNode& node)
 
 		const ibString kindName = ibString::Format(ibT("AccountDimensionCr%uKind"), no);
 		ibValueMetaObjectAttributePredefined* kind = CreateEmptyType(
-			kindName, ibString::Format(_("Account dimension Cr%u kind"), no),
+			kindName, AccountDimensionKindSynonym(ibT("Cr"), no),
 			ibEmptyString, false, ibItemMode::ibItemMode_Item);
 		if (auto savedKind = node.FindProperty(kindName)) {
 			const auto kindChild = savedKind->AsChild();
@@ -595,12 +617,12 @@ void ibValueMetaObjectAccountingRegister::SyncAccountDimensionSlots()
 		// stored next to it — which is why a slot is created as a PAIR.
 		ibValueMetaObjectAttributePredefined* kind = CreateEmptyType(
 			AccountDimensionKindColumnName(prefix, no),
-			ibString::Format(_("Account dimension %s%u kind"), prefix, no),
+			AccountDimensionKindSynonym(prefix, no),
 			ibEmptyString, false, ibItemMode::ibItemMode_Item);
 
 		ibValueMetaObjectAttributePredefined* value = CreateEmptyType(
 			AccountDimensionColumnName(prefix, no),
-			ibString::Format(_("Account dimension %s%u"), prefix, no),
+			AccountDimensionSynonym(prefix, no),
 			ibEmptyString, false, ibItemMode::ibItemMode_Item);
 
 		// The id is what makes each of them a column, and it is handed out by the create event — a
@@ -651,10 +673,10 @@ void ibValueMetaObjectAccountingRegister::SyncAccountDimensionSlots()
 	for (size_t idx = 0; idx < m_accountDimensionSlots.size(); idx++) {
 		const unsigned int no = static_cast<unsigned int>(idx) + 1;
 		applySideName(m_accountDimensionSlots[idx], AccountDimensionColumnName(debitPrefix, no),
-			ibString::Format(_("Account dimension %s%u"), debitPrefix, no));
+			AccountDimensionSynonym(debitPrefix, no));
 		if (idx < m_accountDimensionKinds.size())
 			applySideName(m_accountDimensionKinds[idx], AccountDimensionKindColumnName(debitPrefix, no),
-				ibString::Format(_("Account dimension %s%u kind"), debitPrefix, no));
+				AccountDimensionKindSynonym(debitPrefix, no));
 	}
 
 	// THE CREDIT ACCOUNT. In correspondence mode the line names both sides, so the inherited

@@ -3728,6 +3728,50 @@ msgstr "Константы"
 msgid "Catalogs"
 msgstr "Справочники"
 
+#: src/engine/backend/metaCollection/metaGroups.cpp:37
+msgid "Functional option"
+msgstr "Функциональная опция"
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:45
+msgid "Constant"
+msgstr "Константа"
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:46
+msgid "Catalog"
+msgstr "Справочник"
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:47
+msgid "Document"
+msgstr "Документ"
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:48
+msgid "Enumeration"
+msgstr "Перечисление"
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:49
+msgid "Data processor"
+msgstr "Обработка"
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:55
+msgid "Information register"
+msgstr "Регистр сведений"
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:56
+msgid "Accumulation register"
+msgstr "Регистр накопления"
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:57
+msgid "Accounting register"
+msgstr "Регистр бухгалтерии"
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:58
+msgid "Calculation register"
+msgstr "Регистр расчёта"
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:61
+msgid "Sequence"
+msgstr "Последовательность"
+
 #: src/engine/backend/metaCollection/metaGroups.cpp:43
 #: src/engine/frmserver/schema/runtime/allFunctions.cpp:29
 msgid "Documents"
@@ -17339,9 +17383,6 @@ msgstr "Все файлы изображений"
 
 #~ msgid "Failed to load configuration file."
 #~ msgstr "Не удалось загрузить файл конфигурации."
-
-#~ msgid "Data processor"
-#~ msgstr "Обработка"
 
 #~ msgid "Save metadata"
 #~ msgstr "Сохранить метаданные"

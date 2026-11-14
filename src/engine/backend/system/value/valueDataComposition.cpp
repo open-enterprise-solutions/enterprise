@@ -16,6 +16,7 @@
 #include "backend/query/queryConstructorModel.h"      // ibQueryConstructorModel — the fields a window offers; ibQueryTextOfSource — the seed
 #include "backend/backend_exception.h"               // the engine's verdict on a query that will not resolve
 #include "backend/srcDataObject.h"                   // ibSourceExplorer
+#include "backend/metaCollection/metaGroups.h"       // ibMetaTypeCaption — the caption names the source's kind
 #include "core/serialize/dataBuilder.h"           // ibDataNode (object-level save/load)
 #include "backend/metadataConfiguration.h"           // ibMetaDataConfigurationBase (GetSourceMetaData)
 #include "backend/composition/drivers/spreadsheetComposeDriver.h"   // the OUTPUT — composition → document
@@ -1034,7 +1035,7 @@ ibString ibValueDataComposition::GetSourceCaption() const
 {
 	if (const ibBackendQueryable* q = GetSourceQueryable())
 		return GetSourceMetaObject() ?
-			stringUtils::GenerateSynonym(GetSourceMetaObject()->GetClassName()) + ibT(": ") + GetSourceMetaObject()->GetSynonym() : q->GetQueryName();
+			ibMetaTypeCaption(GetSourceMetaObject()->GetClassType()) + ibT(": ") + GetSourceMetaObject()->GetSynonym() : q->GetQueryName();
 
 	// ⭐ A COMPOSITION OVER A QUERY HAS NO OBJECT TO BE NAMED AFTER — a person knows it by its report,
 	// and the name the report carries for them is its variant's, in their language. It answered with

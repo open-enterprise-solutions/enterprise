@@ -1819,6 +1819,22 @@ void CollectJoinKeys(const ibQueryNode* node, std::vector<const ibBackendQueryCo
 	if (node == nullptr || node->m_kind != ibQueryNode::Kind::Join) return;
 	const ibBackendQueryColumn* onL = nullptr; const ibBackendQueryColumn* onR = nullptr;
 	if (ResolveJoinKeys(node, onL, onR)) { if (onL) out.push_back(onL); if (onR) out.push_back(onR); }
+	// ⭐ …AND EVERY FURTHER PART OF A COMPOSITE KEY: JoinRamTables reads each of them off its side's rows
+	// (keyOf, extraPartsHold), so a side has to carry them. Collected as the first pair only, a side was
+	// materialised without them, every further part read EMPTY, and the key was NULL on every row: two
+	// temporary tables joined `ON S.Item = L.Item AND S.Warehouse = L.Warehouse` matched nothing - an INNER
+	// join gave no rows, a LEFT one left every row unmatched (2026-11-14, lots against stock).
+	// …and every column a COMPUTED side reads, for the same reason: `DATEADD(A.Period, MONTH, -1)` is
+	// evaluated over A's rows, and a Period nobody else asked for was not in them.
+	const auto add = [&out](const ibBackendQueryColumn* col) { if (col) out.push_back(col); };
+	GatherColumnExprColumns(node->m_on.m_exprL.get(), add);
+	GatherColumnExprColumns(node->m_on.m_exprR.get(), add);
+	for (const ibJoinOn::ibJoinKeyPart& part : node->m_on.m_alsoOn) {
+		add(part.m_colL);
+		add(part.m_colR);
+		GatherColumnExprColumns(part.m_exprL.get(), add);
+		GatherColumnExprColumns(part.m_exprR.get(), add);
+	}
 	CollectJoinKeys(node->m_left.get(),  out);
 	CollectJoinKeys(node->m_right.get(), out);
 }
@@ -1977,12 +1993,22 @@ bool PredicateIsRamFilterable(const ibQueryPredicate* p)
 	return false;
 }
 
+// Every column ONE CONDITION reads: its field, and the sides it computes — two fields of one row (`S.Qty <> L.Qty`),
+// an expression on either side. Asked for the field alone, a comparison of two columns rode into a composed join
+// with neither of them, and was answered over two empty cells (2026-11-14, lots against stock).
+void GatherConditionColumns(const ibQueryCondition& c, const std::function<void(const ibBackendQueryColumn*)>& add)
+{
+	add(c.m_col);
+	GatherColumnExprColumns(c.m_expr.get(), add);
+	GatherColumnExprColumns(c.m_valueExpr.get(), add);
+}
+
 void GatherPredicateColumns(const ibQueryPredicate* p, const std::function<void(const ibBackendQueryColumn*)>& add)
 {
 	if (p == nullptr) return;
 	switch (p->m_kind) {
-		case ibQueryPredicateKind::Leaf:   add(p->m_leaf.m_col); break;
-		case ibQueryPredicateKind::IsNull: add(p->m_col);        break;
+		case ibQueryPredicateKind::Leaf:   GatherConditionColumns(p->m_leaf, add); break;
+		case ibQueryPredicateKind::IsNull: add(p->m_col); GatherColumnExprColumns(p->m_expr.get(), add); break;
 		case ibQueryPredicateKind::RefType: add(p->m_col);       break;
 		case ibQueryPredicateKind::And:
 		case ibQueryPredicateKind::Or:     for (const auto& c : p->m_children) GatherPredicateColumns(c.get(), add); break;
@@ -2410,7 +2436,7 @@ std::vector<const ibBackendQueryColumn*> ReferencedColumns(const ibDataQuerySpec
 	};
 	for (const auto& s : *spec.m_selectCols)             add(s.first);
 	for (const ibQuerySortItem& s : *spec.m_sorts)       add(s.m_col);   // ORDER BY cols ride too (sorted post-compose)
-	for (const ibQueryCondition& c : *spec.m_conditions) add(c.m_col);
+	for (const ibQueryCondition& c : *spec.m_conditions) GatherConditionColumns(c, add);
 	GatherPredicateColumns(spec.m_predicate.get(), add);   // a boolean WHERE-tree leaf rides too (RAM post-filter)
 	if (spec.m_selectExprs != nullptr)
 		for (const ibQueryColumnSelect& sc : *spec.m_selectExprs) GatherColumnExprColumns(sc.m_expr.get(), add);   // computed cols ride too
@@ -2749,13 +2775,17 @@ ibQueryRamTable MaterialiseNode(const ibQueryNode* node, const std::vector<const
 	// A join with no key column is a CARTESIAN product by construction (JoinRamTables says so), and
 	// from the outside that is indistinguishable from a key that simply matched everything. Said
 	// here, the journal shows which of the two happened before anyone has to guess.
+	// …and a computed side is named as one, and the further parts of a composite key are counted: a key
+	// of two parts that reads as one is the same doubt over again.
 	ibJournalIf {
-		ibJournalInfo(ibT("query.stitch"), ibT("join %s: on [%s] x [%s]%s"),
+		const ibString noKey = node->m_on.m_exprL ? ibString(ibT("(computed)")) : ibString(ibT("(no key)"));
+		ibJournalInfo(ibT("query.stitch"), ibT("join %s: on [%s] x [%s]%s%s"),
 			node->m_joinKind == ibQueryJoinKind::Inner ? ibT("inner") :
 			node->m_joinKind == ibQueryJoinKind::Left  ? ibT("left")  :
 			node->m_joinKind == ibQueryJoinKind::Right ? ibT("right") : ibT("full"),
-			onL != nullptr ? onL->GetName() : ibString(ibT("(no key)")),
-			onR != nullptr ? onR->GetName() : ibString(ibT("(no key)")),
+			onL != nullptr ? onL->GetName() : noKey,
+			onR != nullptr ? onR->GetName() : noKey,
+			node->m_on.m_alsoOn.empty() ? ibString() : ibString::Format(ibT(" and %d more"), static_cast<int>(node->m_on.m_alsoOn.size())),
 			node->m_on.m_cross ? ibT("  CROSS - every row against every row") : ibT(""));
 	}
 
@@ -2945,21 +2975,34 @@ ibDataQueryResult ProjectToAliases(ibQueryRamTable&& TC, const ibDataQuerySpec& 
 			return ibDataQueryResult(std::move(TO), spec.m_queryable);
 		}
 	}
+	// ⭐ …AND WHERE SOMETHING IS COMPUTED OR FOLDED AWAY, A ROW IS LAID DOWN WHOLE — its ids put in order and each
+	// value moved once to where it stays (ibQueryRamTable::AppendRow over one buffer). Set cell by cell, a computed
+	// column's id (a stitch slot, below every carried one) went in through the front of every row and moved each cell
+	// after it; with a fresh vector a row and a copy a cell that was 57 % of a join's execute over 1.49 million rows
+	// (2026-11-14). A carried cell is TAKEN from the composed table, which dies here, wherever each of its columns is
+	// carried once — after the computed ones have read the row.
+	std::vector<ibMetaID> rowIds(outIds);
+	rowIds.insert(rowIds.end(), exprIds.begin(), exprIds.end());
+	bool takeCells = true;
+	for (size_t k = 0; k < outCols.size() && takeCells; ++k) {
+		takeCells = outCols[k] != nullptr;
+		for (size_t j = 0; j < k && takeCells; ++j)
+			takeCells = outCols[j]->GetColumnId() != outCols[k]->GetColumnId();
+	}
+	// Every carried column, in the order `outIds` names them — the SELECT list first, then the totals' own columns
+	// appended above — and the computed ones after them.
+	std::vector<ibValue> outCells(rowIds.size());
 	// The output cells ARE the row identity — they are already a vector of values,
 	// so the fold below inserts them directly instead of rendering them to text.
 	std::unordered_set<std::vector<ibValue>, ibValueSeqHash, ibValueSeqEqual> seenDistinct;
 	long emitted = 0;
 	for (long oi = 0; oi < rows && emitted < limit; ++oi) {
 		const long i = order[static_cast<size_t>(oi)];
-		// Every carried column, in the order `outIds` names them — the SELECT list first, then the
-		// totals' own columns appended above.
-		std::vector<ibValue> outCells;
-		outCells.reserve(outCols.size() + exprs.size());
-		for (const ibBackendQueryColumn* c : outCols)
-			outCells.push_back(RamCell(TC, i, c));
 		windows.m_row = i;   // which composed row the folded windows are being read for
-		for (const ibQueryColumnSelect& sc : exprs)
-			outCells.push_back(EvalColumnExprRow(sc.m_expr.get(), TC, i, &windows));
+		for (size_t k = 0; k < exprs.size(); ++k)
+			outCells[outCols.size() + k] = EvalColumnExprRow(exprs[k].m_expr.get(), TC, i, &windows);
+		for (size_t k = 0; k < outCols.size(); ++k)
+			outCells[k] = takeCells ? TC.TakeCell(i, outCols[k]->GetColumnId()) : RamCell(TC, i, outCols[k]);
 
 		// ⚠ DISTINCT IS OVER WHAT THE QUERY SELECTED, not over what the fold needs. The totals'
 		// columns ride along invisibly; letting them into the row identity would make two rows
@@ -2974,9 +3017,7 @@ ibDataQueryResult ProjectToAliases(ibQueryRamTable&& TC, const ibDataQuerySpec& 
 			if (!seenDistinct.insert(identity).second)
 				continue;   // duplicate output row -> drop
 		}
-		const long r = TO.AppendRow();
-		for (size_t k = 0; k < outIds.size();  ++k) TO.SetCell(r, outIds[k],  std::move(outCells[k]));
-		for (size_t k = 0; k < exprIds.size(); ++k) TO.SetCell(r, exprIds[k], std::move(outCells[outCols.size() + k]));
+		TO.AppendRow(rowIds, outCells);
 		++emitted;
 	}
 	return ibDataQueryResult(std::move(TO), spec.m_queryable);
@@ -3039,12 +3080,35 @@ bool AllJoinsHaveKeys(const ibQueryNode* node)
 
 // Build the GetColumnId-keyed combined table for a multi-source tree carrying `refCols`.
 // JOIN -> recursive materialise; UNION -> branch concatenation. ONE entry for read AND
-// aggregate (they differ only by which columns they ask to carry).
+// aggregate (they differ only by which columns they ask to carry) — and for the WHERE TREE over
+// them: the rows answered are the ones it admits, whichever road asked. The aggregate and totals
+// roads composed without it and folded the rows a `WHERE S.Qty IS NULL` over a LEFT JOIN had to
+// drop (2026-11-14).
 ibQueryRamTable Compose(const ibDataQuerySpec& spec, const std::vector<const ibBackendQueryColumn*>& refCols)
 {
-	if (spec.m_root->m_kind == ibQueryNode::Kind::Union)
-		return RamUnion(spec, spec.m_root, refCols);
-	return MaterialiseNode(spec.m_root, refCols, spec);   // Join (single-source handled earlier)
+	// A boolean WHERE TREE (OR / NOT / IS NULL across leaves) cannot be pushed per leaf (each leaf
+	// materialises with its OWN flat conditions), so it is evaluated as a POST-COMPOSE RAM filter over
+	// the joined rows (its leaf columns ride into the composed table with `refCols`). Only a dot-walk
+	// leaf inside such a tree still errors — it needs a join the composed table doesn't carry.
+	if (spec.m_predicate && !PredicateIsRamFilterable(spec.m_predicate.get()))
+		throw std::logic_error("ibQueryComposer: a DOT-WALK leaf inside a boolean WHERE (OR/NOT/IN/IS NULL) "
+		                       "across a non-co-located JOIN is not yet supported (keep the dot-walk filter "
+		                       "to an AND-of-comparisons, or use a co-locatable join)");
+
+	ibQueryRamTable composed = spec.m_root->m_kind == ibQueryNode::Kind::Union
+		? RamUnion(spec, spec.m_root, refCols)
+		: MaterialiseNode(spec.m_root, refCols, spec);   // Join (single-source handled earlier)
+	if (spec.m_predicate) {
+		// The tree is answered over the stitched rows, so a hierarchy named in it is resolved through the
+		// leaves those rows came from — database tables included: none of them sees this filter.
+		std::vector<const ibQueryNode*> leaves;
+		CollectLeaves(spec.m_root, leaves);
+		std::vector<const ibBackendQueryable*> sources;
+		for (const ibQueryNode* leaf : leaves)
+			sources.push_back(leaf->m_queryable);
+		composed = RamFilter(composed, SubtreeResolved(spec.m_predicate, sources).get());
+	}
+	return composed;
 }
 
 // Columns an aggregate needs in the combined table: group keys + aggregate inputs +
@@ -3066,6 +3130,9 @@ std::vector<const ibBackendQueryColumn*> AggregateRefCols(const ibDataQuerySpec&
 			if (e) GatherColumnExprColumns(e.get(), add);
 	for (const auto& a : *spec.m_aggregates) {
 		add(a.m_col);
+		// …and a fold of an EXPRESSION reads what the expression reads — `SUM(CASE WHEN S.Qty <> L.Qty THEN 1
+		// END)` over a join folded empty cells into every row's answer without them (2026-11-14).
+		GatherColumnExprColumns(a.m_expr.get(), add);
 		// A balance reads its moment and its keys off every row — carried like the figure itself.
 		if (a.m_balance != ibBalanceRole::None) {
 			for (const ibBackendQueryColumn* period : a.m_balanceMoments)
@@ -3074,7 +3141,10 @@ std::vector<const ibBackendQueryColumn*> AggregateRefCols(const ibDataQuerySpec&
 				add(key);
 		}
 	}
-	for (const ibQueryCondition& c : *spec.m_conditions)         add(c.m_col);
+	for (const ibQueryCondition& c : *spec.m_conditions)         GatherConditionColumns(c, add);
+	// …and the boolean WHERE tree, as the read road carries it (ReferencedColumns): over a LEFT join `WHERE S.Qty IS
+	// NULL` is answered after the stitch, and a column it reads that rode in with nobody was NULL on every row.
+	GatherPredicateColumns(spec.m_predicate.get(), add);
 	CollectJoinKeys(spec.m_root, cols);
 	return cols;
 }
@@ -4066,32 +4136,12 @@ ibDataQueryResult ComposeMultiSource(const ibDataQuerySpec& spec, const ibReadPa
 	if (!ok)
 		RamCompositionNotYet();
 
-	// A boolean WHERE TREE (OR / NOT / IS NULL across leaves) cannot be pushed per leaf (each leaf
-	// materialises with its OWN flat conditions), so it is evaluated as a POST-COMPOSE RAM filter over
-	// the joined rows (its leaf columns ride into the composed table via ReferencedColumns). Only a
-	// dot-walk leaf inside such a tree still errors — it needs a join the composed table doesn't carry.
-	if (spec.m_predicate && !PredicateIsRamFilterable(spec.m_predicate.get()))
-		throw std::logic_error("ibQueryComposer: a DOT-WALK leaf inside a boolean WHERE (OR/NOT/IN/IS NULL) "
-		                       "across a non-co-located JOIN is not yet supported (keep the dot-walk filter "
-		                       "to an AND-of-comparisons, or use a co-locatable join)");
-
 	// Every server-side shape above was refused: the leaves are read whole and stitched here. The
 	// per-leaf lines below say how much that cost (MaterialiseLeafToRam); this one says the road.
 	ibJournalInfo(ibT("query.road"), ibT("RAM: %s stitched in memory"),
 	              root->m_kind == ibQueryNode::Kind::Union ? ibT("union") : ibT("join"));
 
-	ibQueryRamTable composed = Compose(spec, ReferencedColumns(spec));
-	if (spec.m_predicate) {
-		// The tree is answered over the stitched rows, so a hierarchy named in it is resolved through the
-		// leaves those rows came from — database tables included: none of them sees this filter.
-		std::vector<const ibQueryNode*> leaves;
-		CollectLeaves(root, leaves);
-		std::vector<const ibBackendQueryable*> sources;
-		for (const ibQueryNode* leaf : leaves)
-			sources.push_back(leaf->m_queryable);
-		composed = RamFilter(composed, SubtreeResolved(spec.m_predicate, sources).get());
-	}
-	return ProjectToAliases(std::move(composed), spec, page);   // the composed rows are handed on, not copied
+	return ProjectToAliases(Compose(spec, ReferencedColumns(spec)), spec, page);   // the composed rows are handed on, not copied
 }
 
 // Promote a SINGLE computed source (register slice / balance / subquery) to SERVER-SIDE: materialise its
@@ -6417,12 +6467,28 @@ ibQueryRamTable ibQueryComposer::JoinRamTables(const ibQueryRamTable& left, cons
 	// `CASE WHEN M.Quantity IS NULL THEN 0 ELSE …` (measured 2026-09-05). Every LEFT JOIN obliges a
 	// null guard — that is the corpus's own rule — and the guard could not fire.
 	const ibValue nullCell = RamNullValue();   // …and it is the SAME null a strict scalar answers with
+	// ⭐ EACH OUTPUT COLUMN IS ASKED ONCE where it comes from — its id and its side — and the cells are written in
+	// the order of their ids, so each lands at the END of its row. Asked per cell, `fromLeft[k]` made a checked
+	// iterator of a std::vector<bool> under the global lock every time, and a cell written under an id smaller than
+	// one already there moved every cell above it: the two were a third of a join that put out 1.5 million rows
+	// (2026-11-14, Debug). The cell is read where it lies (FindCell) and copied once, into the row.
+	std::vector<std::pair<ibMetaID, bool>> cellsById;   // (id, from the left side)
+	cellsById.reserve(outCols.size());
+	for (size_t k = 0; k < outCols.size(); ++k)
+		cellsById.emplace_back(outCols[k]->GetColumnId(), fromLeft[k]);
+	std::stable_sort(cellsById.begin(), cellsById.end(),
+		[](const std::pair<ibMetaID, bool>& a, const std::pair<ibMetaID, bool>& b) { return a.first < b.first; });
 	auto emit = [&](long li, long rj) {
 		const long r = out.AppendRow();
-		for (size_t k = 0; k < outCols.size(); ++k) {
-			const long srcRow = fromLeft[k] ? li : rj;
-			const ibQueryRamTable& src = fromLeft[k] ? left : right;
-			out.SetCell(r, outCols[k]->GetColumnId(), srcRow >= 0 ? src.GetCell(srcRow, outCols[k]->GetColumnId()) : nullCell);
+		for (size_t k = 0; k < cellsById.size(); ++k) {
+			const ibMetaID id = cellsById[k].first;
+			const long srcRow = cellsById[k].second ? li : rj;
+			if (srcRow < 0) {
+				out.SetCell(r, id, nullCell);
+				continue;
+			}
+			const ibValue* cell = (cellsById[k].second ? left : right).FindCell(srcRow, id);
+			out.SetCell(r, id, cell != nullptr ? *cell : ibValue());
 		}
 	};
 
@@ -6448,16 +6514,50 @@ ibQueryRamTable ibQueryComposer::JoinRamTables(const ibQueryRamTable& left, cons
 	// equalities included: on the hash road those are already in the bucket key, so re-testing them
 	// is one comparison that always holds — the price of not having a second, subtly different
 	// predicate for each road, which is how the two came to disagree in the first place.
-	auto extraPartsHold = [&on](const ibQueryRamTable& l, long i, const ibQueryRamTable& r, long j) {
-		for (const auto& part : on.m_alsoOn) {
-			if (part.m_colL == nullptr || part.m_colR == nullptr)
-				return false;
-			const ibValue a = l.GetCell(i, part.m_colL->GetColumnId());
-			const ibValue b = r.GetCell(j, part.m_colR->GetColumnId());
+	// A SIDE is a column or a computed expression (ibJoinOn::ibJoinKeyPart) — read here, once, for both.
+	auto sideValue = [](const ibQueryRamTable& t, long row, const ibBackendQueryColumn* col, const ibQueryColumnExprPtr& expr) -> ibValue {
+		if (expr)
+			return EvalColumnExprRow(expr.get(), t, row);
+		return col != nullptr ? t.GetCell(row, col->GetColumnId()) : ibValue();
+	};
+	// ⭐ …AND EACH SIDE OF A PART IS READ ONCE PER ROW, not once per pair. A computed side is an evaluation, and
+	// asked per candidate pair the DATEADD of `ON B.Item = A.Item AND B.Period = DATEADD(A.Period, MONTH, -1)`
+	// was worked out again for every row of the bucket: a sixth of a 1.5-million-row join (2026-11-14, Debug).
+	// The right side's are kept per row; a left row's are read as it is probed (partsOf).
+	const size_t partCount = on.m_alsoOn.size();
+	bool partsHaveSides = true;   // a part missing a side matches nothing
+	for (size_t p = 0; p < partCount; ++p) {
+		const ibJoinOn::ibJoinKeyPart& part = on.m_alsoOn[p];
+		partsHaveSides = partsHaveSides && (part.m_colL != nullptr || part.m_exprL) && (part.m_colR != nullptr || part.m_exprR);
+	}
+	auto partsOf = [&on, &sideValue, partCount](const ibQueryRamTable& t, long row, bool leftSide) {
+		std::vector<ibValue> values;
+		values.reserve(partCount);
+		for (size_t p = 0; p < partCount; ++p) {
+			const ibJoinOn::ibJoinKeyPart& part = on.m_alsoOn[p];
+			values.push_back(leftSide ? sideValue(t, row, part.m_colL, part.m_exprL) : sideValue(t, row, part.m_colR, part.m_exprR));
+		}
+		return values;
+	};
+	std::vector<std::vector<ibValue>> rightParts;
+	if (partCount > 0) {
+		rightParts.resize(static_cast<size_t>(right.RowCount()));
+		for (long j = 0; j < right.RowCount(); ++j)
+			rightParts[static_cast<size_t>(j)] = partsOf(right, j, /*leftSide*/false);
+	}
+	auto extraPartsHold = [&on, &rightParts, partCount, partsHaveSides](const std::vector<ibValue>& leftParts, long j) {
+		if (partCount == 0)
+			return true;
+		if (!partsHaveSides)
+			return false;
+		const std::vector<ibValue>& rightOf = rightParts[static_cast<size_t>(j)];
+		for (size_t p = 0; p < partCount; ++p) {
+			const ibValue& a = leftParts[p];
+			const ibValue& b = rightOf[p];
 			if (RamIsNullValue(a) || RamIsNullValue(b))
 				return false;   // a NULL operand is UNKNOWN — never a match, as everywhere else here
 			bool held = false;
-			switch (part.m_op) {
+			switch (on.m_alsoOn[p].m_op) {
 				case ibJoinCompareOp::Ne: held = !a.CompareValueEQ(b); break;
 				case ibJoinCompareOp::Lt: held = a.CompareValueLS(b) < 0; break;
 				case ibJoinCompareOp::Le: held = a.CompareValueLE(b); break;
@@ -6473,11 +6573,13 @@ ibQueryRamTable ibQueryComposer::JoinRamTables(const ibQueryRamTable& left, cons
 
 	// THETA join — a nested loop over every (left, right) pair, the ON comparison evaluated per pair with SQL
 	// three-valued logic (a NULL operand is UNKNOWN -> never matches). O(n*m); the hash index below is equi-only.
-	// Taken for a non-equi comparison on key columns OR a COMPUTED ON (a.x+1 <op> b.y): each side is then an
-	// expression evaluated against ITS OWN table per row (lhs over left, rhs over right). A keyless CROSS and a
-	// plain-equi key join stay on the hash route.
+	// Taken for a non-equi comparison, of key columns or of a COMPUTED ON (a.x+1 <op> b.y): each side is then
+	// an expression evaluated against ITS OWN table per row (lhs over left, rhs over right). A keyless CROSS
+	// and an equality — of columns OR of computed sides — stay on the hash route.
+	// 🛑 A computed EQUALITY took this loop too: `ON B.Period = DATEADD(A.Period, MONTH, -1)` over two
+	// readings of a 36-thousand-row table is 1.3 billion evaluations for what a hash answers in two passes.
 	const bool computedOn = (on.m_exprL != nullptr && on.m_exprR != nullptr);
-	if (computedOn || (on.m_op != ibJoinCompareOp::Eq && onLeft != nullptr && onRight != nullptr)) {
+	if (on.m_op != ibJoinCompareOp::Eq && (computedOn || (onLeft != nullptr && onRight != nullptr))) {
 		auto thetaMatch = [](const ibValue& a, const ibValue& b, ibJoinCompareOp op) -> bool {
 			switch (op) {
 				case ibJoinCompareOp::Ne: return !a.CompareValueEQ(b);
@@ -6491,12 +6593,13 @@ ibQueryRamTable ibQueryComposer::JoinRamTables(const ibQueryRamTable& left, cons
 		std::vector<char> rMatched(static_cast<size_t>(right.RowCount()), 0);
 		for (long i = 0; i < left.RowCount(); ++i) {
 			const ibValue keyL = on.m_exprL ? EvalColumnExprRow(on.m_exprL.get(), left, i) : left.GetCell(i, onLeft->GetColumnId());
+			const std::vector<ibValue> leftParts = partsOf(left, i, /*leftSide*/true);
 			bool matched = false;
 			if (!RamIsNullValue(keyL))
 				for (long j = 0; j < right.RowCount(); ++j) {
 					const ibValue keyR = on.m_exprR ? EvalColumnExprRow(on.m_exprR.get(), right, j) : right.GetCell(j, onRight->GetColumnId());
 					if (RamIsNullValue(keyR)) continue;        // NULL operand -> UNKNOWN -> no match
-					if (!extraPartsHold(left, i, right, j)) continue;   // …and the REST of the ON — see above
+					if (!extraPartsHold(leftParts, j)) continue;   // …and the REST of the ON — see above
 					if (thetaMatch(keyL, keyR, on.m_op)) { emit(i, j); rMatched[static_cast<size_t>(j)] = 1; matched = true; }
 				}
 			if (!matched && keepLeft) emit(i, -1);             // unmatched left (LEFT / FULL)
@@ -6528,16 +6631,16 @@ ibQueryRamTable ibQueryComposer::JoinRamTables(const ibQueryRamTable& left, cons
 	// equalities form the tuple that indexes the right side, and the remaining parts are checked per
 	// candidate INSIDE the bucket the tuple found — the common all-equality join pays nothing, and a
 	// mixed key costs a bucket scan instead of a full product.
-	auto keyOf = [&on](const ibQueryRamTable& table, long row, const ibBackendQueryColumn* first, bool leftSide)
+	auto keyOf = [&on, &sideValue](const ibQueryRamTable& table, long row, const ibBackendQueryColumn* first, bool leftSide)
 		-> std::vector<ibValue> {
 		std::vector<ibValue> key;
 		key.reserve(1 + on.m_alsoOn.size());
-		key.push_back(first != nullptr ? table.GetCell(row, first->GetColumnId()) : ibValue());
+		key.push_back(sideValue(table, row, first, leftSide ? on.m_exprL : on.m_exprR));
 		for (const auto& part : on.m_alsoOn) {
 			if (part.m_op != ibJoinCompareOp::Eq)
 				continue;   // not part of the identity — see the note above
-			const ibBackendQueryColumn* col = leftSide ? part.m_colL : part.m_colR;
-			key.push_back(col != nullptr ? table.GetCell(row, col->GetColumnId()) : ibValue());
+			key.push_back(leftSide ? sideValue(table, row, part.m_colL, part.m_exprL)
+			                       : sideValue(table, row, part.m_colR, part.m_exprR));
 		}
 		return key;
 	};
@@ -6554,7 +6657,7 @@ ibQueryRamTable ibQueryComposer::JoinRamTables(const ibQueryRamTable& left, cons
 
 	std::unordered_map<std::vector<ibValue>, std::vector<long>, ibValueSeqHash, ibValueSeqEqual> rightByKey;
 	for (long j = 0; j < right.RowCount(); ++j) {
-		if (onRight != nullptr) {
+		if (onRight != nullptr || on.m_exprR) {   // a key column, or a computed side (an equality, see above)
 			const std::vector<ibValue> keyR = keyOf(right, j, onRight, /*leftSide*/false);
 			if (keyIsNull(keyR)) continue;   // NULL key: unmatchable (RIGHT/FULL emit it below as unmatched)
 			rightByKey[keyR].push_back(j);
@@ -6564,7 +6667,7 @@ ibQueryRamTable ibQueryComposer::JoinRamTables(const ibQueryRamTable& left, cons
 	std::vector<char> rightMatched(static_cast<size_t>(right.RowCount()), 0);
 	for (long i = 0; i < left.RowCount(); ++i) {
 		auto it = rightByKey.cend();
-		if (onLeft != nullptr) {
+		if (onLeft != nullptr || on.m_exprL) {
 			const std::vector<ibValue> keyL = keyOf(left, i, onLeft, /*leftSide*/true);
 			if (!keyIsNull(keyL)) it = rightByKey.find(keyL);   // NULL key -> stays end() -> no match
 		}
@@ -6574,8 +6677,9 @@ ibQueryRamTable ibQueryComposer::JoinRamTables(const ibQueryRamTable& left, cons
 			continue;
 		}
 		bool matchedAny = false;
+		const std::vector<ibValue> leftParts = partsOf(left, i, /*leftSide*/true);
 		for (const long j : it->second) {
-			if (!extraPartsHold(left, i, right, j))
+			if (!extraPartsHold(leftParts, j))
 				continue;
 			emit(i, j); rightMatched[static_cast<size_t>(j)] = 1; matchedAny = true;
 		}

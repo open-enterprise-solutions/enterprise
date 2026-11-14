@@ -135,10 +135,14 @@ ibDataQueryBuilder& ibDataQueryBuilder::Join(const ibBackendQueryable* queryable
 
 ibDataQueryBuilder& ibDataQueryBuilder::Join(const ibBackendQueryable* queryable,
 	const ibQueryColumnExprPtr& onExprL, const ibQueryColumnExprPtr& onExprR,
-	ibJoinCompareOp onOp, ibQueryJoinKind kind, const ibString& alias)
+	ibJoinCompareOp onOp, ibQueryJoinKind kind, const ibString& alias,
+	const std::vector<ibJoinOn::ibJoinKeyPart>& alsoOn)
 {
-	// Computed ON (a.x+1 <op> b.y): no key columns -- both sides are exprs evaluated per pair (RAM theta).
+	// Computed ON (a.x+1 <op> b.y): no key columns -- both sides are exprs evaluated per row (RAM).
+	// ⚠ A computed side is not turned round here: which source an expression reads is known to the
+	// lowering, which writes `onExprL` over the sources joined so far and `onExprR` over this one.
 	ibJoinOn on; on.m_exprL = onExprL; on.m_exprR = onExprR; on.m_op = onOp;
+	on.m_alsoOn = alsoOn;                                                  // the rest of a composite key
 	return JoinNode(queryable, kind, alias, on);
 }
 

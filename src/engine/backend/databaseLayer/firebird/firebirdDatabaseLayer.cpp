@@ -931,8 +931,12 @@ bool ibDatabaseLayerFirebird::RunBackupRestoreNow(const std::function<bool()>& c
 	conn.username = m_strUser;
 	conn.password = m_strPassword;
 
-	return ibFirebirdMaintenance::RunBackupRestoreCycle(m_pInterface.get(), m_strDatabase, conn, cancelled)
-	    == ibFirebirdMaintenance::Status::Ok;
+	// The cycle's answer is said, not only returned: the caller keeps a yes or no, and why it was a no is
+	// written nowhere else (2026-11-14 — a night's backup held the base half an hour and left no line).
+	const ibFirebirdMaintenance::Status result =
+		ibFirebirdMaintenance::RunBackupRestoreCycle(m_pInterface.get(), m_strDatabase, conn, cancelled);
+	ibJournalInfo(ibT("firebird.backup"), ibT("backup + restore: %s"), ibFirebirdMaintenance::StatusToString(result));
+	return result == ibFirebirdMaintenance::Status::Ok;
 }
 // ⭐⭐ THE CANCEL — see ibDatabaseLayer::Cancel. fb_cancel_operation is the one call Firebird takes on an
 // attachment another thread is using: the statement running there returns isc_cancelled to its own caller,

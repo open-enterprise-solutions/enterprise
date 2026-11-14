@@ -1674,16 +1674,32 @@ public:
 			if (auto types = copy->FindField(ibT("Types")); types && types->Kind() == ibDataKind::Array) {
 				std::vector<ibDataValue> entries;
 				for (const ibDataValue& item : types->AsArray()) {
+					// …and AN OBJECT WITHOUT ITS ID is named by its TypeDesc, the name metadata_get writes beside the id.
+					// The reader takes the id alone and passed such an entry over without a word: a chart's
+					// TypesOfCharacteristics given {"TypeDesc": "CatalogRef.Counterparties"} came back String, the call
+					// answered as done, and the apply then refused every characteristic for a type the chart could not
+					// hold (2026-11-14, a configuration built by script, measured)
+					ibDataValue said = item;
 					if (item.Kind() == ibDataKind::Child) {
-						entries.push_back(item);
-						continue;
+						const std::optional<ibDataNode> object = item.AsChild();
+						if (object && object->FindField(ibT("TypeId"))) {
+							entries.push_back(item);
+							continue;
+						}
+						const std::optional<ibDataValue> named = object ? object->FindField(ibT("TypeDesc")) : std::nullopt;
+						if (!named) {
+							refusal = ibMcpText("An entry of Types names its type - by TypeId, or by TypeDesc as metadata_get "
+								"writes it.");
+							return false;
+						}
+						said = *named;
 					}
-					if (item.Kind() != ibDataKind::String) {
+					if (said.Kind() != ibDataKind::String) {
 						refusal = ibMcpText("Each entry of Types is a type's name (\"Number\", \"CatalogRef.Goods\") or the object "
 							"metadata_get gives for one.");
 						return false;
 					}
-					const ibString name = item.AsString();
+					const ibString name = said.AsString();
 					const ibCtorAbstractType* const ctor = metaData->GetAvailableCtor(name);
 					const ibClassID named = ctor != nullptr ? ctor->GetClassType() : 0;
 					if (named == 0) {

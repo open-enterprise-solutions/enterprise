@@ -135,14 +135,27 @@ unsigned int ibValueModel::RunStoragePage(ibRamValueStorage& storage, ibDataRamC
 	const std::vector<long> ord = composer.ComputeOrder();   // filtered + sorted storage indices, display order
 	const int want = (count > 0 ? count : defaultCountPerPage);
 
+	// WHERE THE ANCHOR STANDS among the rows of the window — the node itself, or else the row it IS. A list read whole
+	// from a base (the snapshot) makes new nodes at every re-read, and the row the client stood on comes back as
+	// another node with its key: asked by the pointer alone, the page went to the top after every refresh. A row in
+	// memory is its object (IsEqualTo), so for it the two questions are one.
+	const auto placeOf = [&](const std::vector<long>& rows) -> long {
+		if (!anchor.IsOk())
+			return -1;
+		const ibComposerNode* a = GetViewData<ibComposerNode>(anchor);
+		const long aidx = storage.IndexOf(a);
+		for (size_t k = 0; k < rows.size(); ++k)
+			if (rows[k] == aidx) return static_cast<long>(k);
+		if (a != nullptr)
+			for (size_t k = 0; k < rows.size(); ++k)
+				if (const ibComposerNode* node = storage.GetNode(rows[k]); node != nullptr && node->IsEqualTo(*a))
+					return static_cast<long>(k);
+		return -1;
+	};
+
 	// ---- FLAT: no grouping — window the live storage nodes by the anchor and return them ----
 	if (dims.empty()) {
-		long p = -1;
-		if (anchor.IsOk()) {
-			const long aidx = storage.IndexOf(GetViewData<ibComposerNode>(anchor));
-			for (size_t k = 0; k < ord.size(); ++k)
-				if (ord[k] == aidx) { p = static_cast<long>(k); break; }
-		}
+		const long p = placeOf(ord);
 		const std::vector<long> win = ibComputePageWindow(static_cast<long>(ord.size()), p, dir, want);
 		out.Alloc(win.size());
 		unsigned int fetched = 0;
@@ -177,12 +190,7 @@ unsigned int ibValueModel::RunStoragePage(ibRamValueStorage& storage, ibDataRamC
 
 	// ---- DETAIL level (drilled through every dim): return the LIVE scoped rows, windowed by the anchor node ----
 	if (depth >= dims.size()) {
-		long p = -1;
-		if (anchor.IsOk()) {
-			const long aidx = storage.IndexOf(GetViewData<ibComposerNode>(anchor));
-			for (size_t k = 0; k < scoped.size(); ++k)
-				if (scoped[k] == aidx) { p = static_cast<long>(k); break; }
-		}
+		const long p = placeOf(scoped);
 		const std::vector<long> win = ibComputePageWindow(static_cast<long>(scoped.size()), p, dir, want);
 		out.Alloc(win.size());
 		unsigned int fetched = 0;
@@ -223,7 +231,7 @@ unsigned int ibValueModel::RunStoragePage(ibRamValueStorage& storage, ibDataRamC
 	unsigned int fetched = 0;
 	for (const long pos : win) {
 		const ibValue& gv = groupValues[pos];
-		std::map<ibMetaID, ibValue> vals;
+		ibRowMetaValues vals;
 		// Inherit the ANCESTOR grouping fields (Max): a subgroup carries the dim values from the levels above, so
 		// a column grouped higher (Attribute1) still renders in this subgroup's rows (Attribute2's level) — the
 		// parent path holds each ancestor value keyed positionally, dims[k] is its column. (Mirrors the DB
@@ -233,7 +241,7 @@ unsigned int ibValueModel::RunStoragePage(ibRamValueStorage& storage, ibDataRamC
 		vals[dimCol] = gv;                                  // stamp the group's own dim value (the group label cell)
 		std::vector<ibValue> groupPath = parentPath;
 		groupPath.push_back(gv);
-		ibComposerNode* node = new ibComposerNode(vals, groupPath, /*container*/true);
+		ibComposerNode* node = new ibComposerNode(std::move(vals), groupPath, /*container*/true);
 		out.Add(ibDataViewItem(node));                      // ctor IncRefs to 2
 		node->DecRef();                                     // → out owns exactly one reference
 		++fetched;
@@ -305,9 +313,9 @@ void ibValueModelStorage::BuildAncestorBreadcrumb(const ibDataViewItem& fromRow,
 		if (!m_storage.SplitField(field, head, tail)) continue;
 		const ibValue v = m_storage.ResolveField(idx, head, tail);
 		groupPath.push_back(v);
-		std::map<ibMetaID, ibValue> vals;
+		ibRowMetaValues vals;
 		vals[head] = v;                                        // the group's own label cell
-		crumbs.push_back(new ibComposerNode(vals, groupPath, /*container*/true));   // groupPath copied
+		crumbs.push_back(new ibComposerNode(std::move(vals), groupPath, /*container*/true));   // groupPath copied
 	}
 	for (size_t i = crumbs.size(); i > 0; --i) {              // deepest → shallowest into out
 		out.Add(ibDataViewItem(crumbs[i - 1]));

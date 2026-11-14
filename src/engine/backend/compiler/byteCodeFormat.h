@@ -17,6 +17,7 @@
 // this number is what a person sets when the meaning changes.
 //
 // 37: OPER_CALL_CLOSURE left the opcode list (a lambda takes cells, not frames).
-constexpr std::uint16_t kAOTFormatVersion = 37;
+// 38: an operand is two int32, a class id a constant, an instruction's source a number in the blob's table of them.
+constexpr std::uint16_t kAOTFormatVersion = 38;
 
 #endif // __BYTE_CODE_FORMAT_H__

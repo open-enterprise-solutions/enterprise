@@ -12,11 +12,13 @@
 #include "frmclient/backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject — what a reference points at
 #include "frmclient/backend/metaCollection/resource/metaResourceObject.h"   // the RESOURCE metatype — its own class icon
 #include "frmclient/backend/metaData.h"                                      // a tab's configuration — its tab
+#include "frmclient/backend/appData.h"                                       // DesignerMode — names, or a person's synonyms
 #include "frmclient/mainFrame/mainFrame.h"                                  // ibFrontendMainFrame::Respond — a target's fields asked
 #include "frmclient/win/picture.h"                                          // ibProtocolPicture — a field's picture, as it names it
 #include "protocol/protocol.h"
 
 #include "deskgui/univ/dialog.h"
+#include <algorithm>   // std::count — how many hops a field's text names (ibSettingsFieldText)
 #include <wx/dnd.h>
 #include <wx/imaglist.h>
 #include <wx/sizer.h>
@@ -140,7 +142,7 @@ static void ExpandSourceFieldNode(ibTreeCtrl* tree, const wxTreeItemId& item, co
 		child->m_refTypes = ibValueReferenceDataObject::ConvertToMetaIds(col.m_type.GetClsidList(), metaData);
 		const bool resource = isResource && isResource(child->m_path);
 		const int icon = resource ? ibSettingsResourceIcon(tree) : ibSettingsFieldIcon(tree, col.m_picture);
-		const wxTreeItemId added = tree->AppendItem(item, label, icon, icon, child);
+		const wxTreeItemId added = tree->AppendItem(item, ibSettingsFieldText(col.m_name, label), icon, icon, child);
 		if (!child->m_refTypes.empty())
 			tree->AppendItem(added, wxEmptyString);   // dummy -> [+] (a reference expands into its target's fields)
 	}
@@ -235,7 +237,7 @@ void ibSettingsFieldTree::Populate(ibTreeCtrl* tree) const
 		// the path is built from and what a pick stores.
 		const wxString label = field.m_presentation.IsEmpty() ? field.m_name : field.m_presentation;
 		data->m_presentation = label;
-		const wxTreeItemId item = tree->AppendItem(root, label, icon, icon, data);
+		const wxTreeItemId item = tree->AppendItem(root, ibSettingsFieldText(field.m_name, label), icon, icon, data);
 		if (!data->m_refTypes.empty())
 			tree->AppendItem(item, wxEmptyString);   // dummy -> [+]
 	}
@@ -293,6 +295,28 @@ bool ibSettingsFieldTree::IsAvailable(const wxString& path) const
 			return plain.m_available;
 	}
 	return true;
+}
+
+wxString ibSettingsFieldTree::GetFieldText(const wxString& path) const
+{
+	// The start is one of the fields this tree was given, with its presentation (Populate's label). A hop after it is
+	// said by the server only when its reference is unfolded, so it keeps its name here — every hop is still named. A
+	// start nobody here knows reads as the path.
+	const wxString start = path.BeforeFirst(wxT('.'));
+	for (const ibSettingsPlainField& plain : m_plain) {
+		if (plain.m_name.IsSameAs(start, false))
+			return ibSettingsFieldText(path, plain.m_presentation.IsEmpty() ? wxString() : plain.m_presentation + path.Mid(start.length()));
+	}
+	return path;
+}
+
+wxString ibSettingsFieldText(const wxString& path, const wxString& presentation)
+{
+	if (presentation.IsEmpty() || appData->DesignerMode())
+		return path;
+	const size_t inPath = std::count(path.begin(), path.end(), wxT('.'));
+	const size_t inText = std::count(presentation.begin(), presentation.end(), wxT('.'));
+	return inText >= inPath ? presentation : path;
 }
 
 void ibSettingsFieldTree::SelectByPath(ibTreeCtrl* tree, const wxString& path) const

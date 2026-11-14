@@ -3683,6 +3683,50 @@ msgstr ""
 msgid "Catalogs"
 msgstr ""
 
+#: src/engine/backend/metaCollection/metaGroups.cpp:37
+msgid "Functional option"
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:45
+msgid "Constant"
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:46
+msgid "Catalog"
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:47
+msgid "Document"
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:48
+msgid "Enumeration"
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:49
+msgid "Data processor"
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:55
+msgid "Information register"
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:56
+msgid "Accumulation register"
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:57
+msgid "Accounting register"
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:58
+msgid "Calculation register"
+msgstr ""
+
+#: src/engine/backend/metaCollection/metaGroups.cpp:61
+msgid "Sequence"
+msgstr ""
+
 #: src/engine/backend/metaCollection/metaGroups.cpp:43
 #: src/engine/frmserver/schema/runtime/allFunctions.cpp:29
 msgid "Documents"

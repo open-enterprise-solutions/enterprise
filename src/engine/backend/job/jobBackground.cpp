@@ -451,6 +451,10 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::Launch(ibBackgroundBody body, con
 		// It reads in its parent's configuration — the one the parent works in, not the base's newest: a read for
 		// a session is read the way that session reads.
 		minted->m_metaData = launch->m_parent->m_metaData;
+		// …and in its parent's LANGUAGE, for the same reason. Nothing else gives a tenant one — it installs no
+		// identity and compiles no root — so it answered the empty state's "en": a report composed on a Russian
+		// configuration under a Ukrainian user titled itself "Sales by day" (Max, 2026-11-14).
+		minted->m_translateState = launch->m_parent->m_translateState;
 		// …for its parent in this manager's base: the base's registry is its owner, and the base's pool gives its
 		// connection — and takes it back on whatever thread the session dies.
 		holder = registry->MintUnlisted(std::move(minted));

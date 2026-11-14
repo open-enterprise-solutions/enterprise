@@ -116,12 +116,32 @@ bool WaitForServiceCompletion(ibInterfaceFirebird* iface,
 		(char)isc_info_svc_timeout, 4, 0,
 		1, 0, 0, 0
 	};
-	// 256 KB — large enough for ordinary gbak verbose output between
-	// 200 ms poll ticks. Truncation handled by the retry loop below.
-	std::vector<char> resp(256 * 1024);
+	// The most the call takes: isc_service_query is handed the length as an UNSIGNED SHORT. This was 256 KB, and
+	// (unsigned short)262144 is 0 — every answer came back as an empty buffer, the running flag was never seen,
+	// and every backup and sweep waited out its whole half hour, the backup then deleting the file it had
+	// written (the journal line below showed the answer: twelve zero bytes, 2026-11-14). Truncation is handled
+	// by the retry loop below.
+	std::vector<char> resp(0xFFFF);
+
+	// ⭐ WHAT THE SERVICE ANSWERS, said when it first answers and whenever that changes — and why the wait
+	// ended when it did not end clean. A night's backup sat out its whole half hour with its file long written
+	// and closed, holding the base out of exclusive mode, and the journal said nothing at all (2026-11-14).
+	int heard = -1;   // -1 nothing yet · 0 no running flag in the answer · 1 running · 2 not running
+	const auto say = [&heard, &resp](const int now) {
+		if (now == heard) return;
+		heard = now;
+		ibString bytes;   // the answer's head, as it came: a flag the parse below misses shows up here
+		for (size_t i = 0; i < 12 && i < resp.size(); ++i)
+			bytes << ibString::Format(ibT("%02x "), (unsigned)(unsigned char)resp[i]);
+		ibJournalInfo(ibT("db.firebird"), ibT("service answers: %s [%s]"),
+			ibString(now == 0 ? ibT("no running flag") : now == 1 ? ibT("running") : ibT("finished")), bytes);
+	};
 
 	while (steady_clock::now() < deadline) {
-		if (canceled()) return false;
+		if (canceled()) {
+			ibJournalInfo(ibT("db.firebird"), ibT("service wait cancelled"));
+			return false;
+		}
 
 		bool truncated = true;
 		bool sawRunningTag = false;
@@ -135,14 +155,19 @@ bool WaitForServiceCompletion(ibInterfaceFirebird* iface,
 		// of KB per tick and the drain loop would otherwise sit
 		// there for a non-trivial slice ignoring shutdown.
 		for (int drain = 0; drain < 16 && truncated; ++drain) {
-			if (canceled()) return false;
+			if (canceled()) {
+				ibJournalInfo(ibT("db.firebird"), ibT("service wait cancelled"));
+				return false;
+			}
 			const ISC_STATUS rc = iface->GetIscServiceQuery()(
 				status, &svc, nullptr,
 				sizeof(sendItems), sendItems,
 				sizeof(req), req,
 				(unsigned short)resp.size(), resp.data());
-			if (rc != 0)
+			if (rc != 0) {
+				ibJournalWarning(ibT("db.firebird"), ibT("service query failed: status %ld"), (long)status[1]);
 				return false;
+			}
 
 			truncated = false;
 
@@ -194,10 +219,12 @@ bool WaitForServiceCompletion(ibInterfaceFirebird* iface,
 			}
 		}
 
+		say(!sawRunningTag ? 0 : stillRunning ? 1 : 2);
 		if (sawRunningTag && !stillRunning)
 			return true;
 		std::this_thread::sleep_for(milliseconds(200));
 	}
+	ibJournalWarning(ibT("db.firebird"), ibT("service still not finished after %d s - the wait gives up"), timeoutSeconds);
 	return false;
 }
 
@@ -303,7 +330,6 @@ ibFirebirdMaintenance::Status ibFirebirdMaintenance::RunBackupRestoreCycle(
 
 	const ibString backupPath  = databasePath + ibT(".tmp.fbk");
 	const ibString restorePath = databasePath + ibT(".tmp.new.fdb");
-	const ibString rollbackPath = databasePath + ibT(".bak");
 
 	// Clean up any leftovers from a prior aborted cycle.
 	TryRemoveTempFile(backupPath);
@@ -343,9 +369,14 @@ ibFirebirdMaintenance::Status ibFirebirdMaintenance::RunBackupRestoreCycle(
 
 		// Backup on a 100 GB DB: ~5-15 minutes on modern SSD. Give
 		// it 30.
+		ibJournalInfo(ibT("firebird.backup"), ibT("backup of %s started"), databasePath);
+		const auto started = std::chrono::steady_clock::now();
 		const bool ok = WaitForServiceCompletion(
 			iface, svc, status, 1800, cancelled);
 		iface->GetIscServiceDetach()(status, &svc);
+		ibJournalInfo(ibT("firebird.backup"), ibT("backup %s in %lld s"),
+			ibString(ok ? ibT("done") : ibT("did not finish")),
+			static_cast<long long>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - started).count()));
 
 		if (!ok) {
 			TryRemoveTempFile(backupPath);
@@ -384,9 +415,13 @@ ibFirebirdMaintenance::Status ibFirebirdMaintenance::RunBackupRestoreCycle(
 			return Status::StartFailed;
 		}
 
+		const auto started = std::chrono::steady_clock::now();
 		const bool ok = WaitForServiceCompletion(
 			iface, svc, status, 1800, cancelled);
 		iface->GetIscServiceDetach()(status, &svc);
+		ibJournalInfo(ibT("firebird.backup"), ibT("restore into %s %s in %lld s"), restorePath,
+			ibString(ok ? ibT("done") : ibT("did not finish")),
+			static_cast<long long>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - started).count()));
 
 		if (!ok) {
 			TryRemoveTempFile(backupPath);
@@ -395,28 +430,22 @@ ibFirebirdMaintenance::Status ibFirebirdMaintenance::RunBackupRestoreCycle(
 		}
 	}
 
-	// === SWAP ===
-	// Rename original → .bak, restored → original. Atomic on a
-	// single filesystem; cross-volume falls back to copy + delete
-	// which is not crash-safe — caller responsibility to keep the
-	// .fdb on a local disk for this operation.
-	TryRemoveTempFile(rollbackPath);
-	if (!ibRenameFile(databasePath, rollbackPath)) {
+	// === NO SWAP OF A LIVE BASE ===
+	// 🛑 The swap (original → .bak, restored → original) ran from a job — a SESSION with an attachment of its own, in
+	// a process whose other sessions hold theirs. The rename does NOT fail on Windows as the header assumed: it
+	// succeeded, the original was deleted under every open attachment, and what they wrote after the backup went
+	// into a file nobody would open again (2026-11-14 — the first night the cycle ever reached this step: its wait
+	// had never seen the service end). A swap needs the base EXCLUSIVE, which a job cannot have; until that is
+	// built the cycle stops at a VERIFIED backup — the restore proved the .fbk restorable, the restored copy is
+	// dropped, and the backup is kept as `<base>.fbk`.
+	TryRemoveTempFile(restorePath);
+	const ibString keptPath = databasePath + ibT(".fbk");
+	TryRemoveTempFile(keptPath);
+	if (!ibRenameFile(backupPath, keptPath)) {
 		TryRemoveTempFile(backupPath);
-		TryRemoveTempFile(restorePath);
 		return Status::IOError;
 	}
-	if (!ibRenameFile(restorePath, databasePath)) {
-		// Rollback: original is still under .bak. Restore it.
-		ibRenameFile(rollbackPath, databasePath);
-		TryRemoveTempFile(backupPath);
-		TryRemoveTempFile(restorePath);
-		return Status::IOError;
-	}
-
-	// Success — drop the .bak and the intermediate .fbk.
-	TryRemoveTempFile(rollbackPath);
-	TryRemoveTempFile(backupPath);
+	ibJournalInfo(ibT("firebird.backup"), ibT("verified backup kept as %s - the open base is not swapped"), keptPath);
 	return Status::Ok;
 }
 

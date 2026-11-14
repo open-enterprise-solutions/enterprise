@@ -17,6 +17,14 @@
 // NULL condition as "does not decide" when an `and` sets this on m_param4.
 constexpr long kAndUnknownMark = 1;
 
+// A CLASS ID AS A CONSTANT — how OPER_NEW and OPER_SET_TYPE carry one: an operand is an int and an id 64 bits, so the
+// id is a number in the const pool and the operand its index (byteCode.h, ibParamRunUnit). The interpreter reads it
+// back with ClassIdOf (procUnit.cpp).
+static ibValue ClassIdConst(const ibClassID clsid)
+{
+	return ibValue(ibNumber(static_cast<unsigned long long>(clsid)));
+}
+
 #pragma warning(push)
 #pragma warning(disable : 4018)
 
@@ -128,7 +136,7 @@ ibCompileCode::~ibCompileCode()
 }
 
 // THE CODE STYLE IS THE COMPILE STATE'S (ibCompileState) — the current session's, which holds its
-// configuration's; a thread without a session its own: codeRunner's syntax choice, a test. It used to be one
+// configuration's; a thread without a session its own: coderunner's syntax choice, a test. It used to be one
 // static for the process, and a process may hold bases written in different syntaxes.
 // CES is the default — modern brace/paren syntax with `;` terminators.
 // VES (Visual Basic-style ES, a legacy business-scripting dialect) remains supported for legacy ES
@@ -1196,9 +1204,12 @@ bool ibCompileCode::CompileModule()
 	// templated ctor based on m_strContext non-empty). Own user-defined
 	// functions are already mirrored per-function by CompileFunction;
 	// this loop completes the table with the binding methods (e.g.
-	// GetForm of Manager). lAddress = -1 marks "no own IP" — runtime
-	// dispatches via OPER_CALL_METHOD on the parent binding instead of
-	// OPER_CALL.
+	// GetForm of Manager). They have no own IP — runtime dispatches via
+	// OPER_CALL_METHOD on the parent binding instead of OPER_CALL — so the
+	// address holds what ibFunction::m_nStart holds for them: the method's
+	// number on its binding. A module compiled against this bytecode then
+	// stamps its calls with it as one compiled here does (PushCallFunction);
+	// mirrored as -1, the number was lost there.
 	//
 	// "User funcs win" — skip the push if a function with the same
 	// name already exists in m_listFunc (was achieved by try_emplace
@@ -1210,7 +1221,7 @@ bool ibCompileCode::CompileModule()
 		auto existing = std::find_if(m_cByteCode.m_listFunc.begin(), m_cByteCode.m_listFunc.end(),
 			[&](const auto& fn) { return stringUtils::IsSameAs(nameKey, fn.m_strRealName); });
 		if (existing != m_cByteCode.m_listFunc.end()) continue;
-		m_cByteCode.m_listFunc.emplace_back(/*lAddress=*/-1, *fnPtr);
+		m_cByteCode.m_listFunc.emplace_back(static_cast<long>(fnPtr->m_nStart), *fnPtr);
 	}
 
 	// Second pass: resolve m_parentRef on ContextMethod entries —
@@ -1361,6 +1372,13 @@ bool ibCompileCode::PushCallFunction(const std::shared_ptr<ibCallFunction>& call
 		// a spelling nobody typed. Resolution stays case-blind at run time (FindMethod).
 		code.m_param3.m_numIndex = GetConstString(callFunction->m_strRealName);	// number of the called method from the list of encountered methods
 		code.m_param3.m_numArray = numDefCount;	// number of parameters
+		// ⭐ THE METHOD'S NUMBER AS THE COMPILER FOUND IT, plus one — a 0 reads "not stamped" — and ITS NAME AS A
+		// NUMBER (ibMemberTable::NameHash). The runtime takes the number when the receiver's method there has that
+		// hash, two integers compared, and asks by name otherwise (procUnit.cpp, OPER_CALL_METHOD); measured
+		// 2026-11-14, the lookup by name was a quarter of a loop of built-in calls, and comparing the names instead
+		// still two hundredths of it.
+		code.m_param4.m_numIndex = foundedFunc->m_nStart + 1;
+		code.m_param4.m_numArray = static_cast<int>(ibValue::ibMemberTable::NameHash(foundedFunc->m_strRealName));
 	}
 	else {
 		// ONE CALL OPCODE, whatever the callee's body holds. A lambda made in it takes the variables it
@@ -2002,7 +2020,7 @@ void ibCompileCode::AddTypeSet(const ibParamUnit& variable)
 		StampSource(code);
 		code.m_numOper = OPER_SET_TYPE;
 		code.m_param1 = variable;
-		code.m_param2.m_numArray = variable.m_clsid;
+		code.m_param2 = FindConst(ClassIdConst(variable.m_clsid));   // the class id, as a constant (byteCode.h, ibParamRunUnit)
 		m_cByteCode.m_listCode.emplace_back(std::move(code));
 	}
 }
@@ -2639,7 +2657,8 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 		// handing back a name would only mean resolving it again, later, somewhere else."*
 		//
 		// The name stays in the const pool: a refusal has to be able to say which class it was.
-		code.m_param3.m_numIndex = ibValue::GetIDObjectFromString(strRealName);
+		// …and the id goes there too, the operand being its number: an operand is an int, an id is 64 bits.
+		code.m_param3.m_numIndex = FindConst(ClassIdConst(ibValue::GetIDObjectFromString(strRealName))).m_numIndex;
 
 		variable = context->CreateVariable(DEF_VAR_TEMP_MOVE);
 		code.m_param1 = variable;// variable into which the value is returned
@@ -2698,6 +2717,8 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 			code.m_param2 = context->GetVariable(foundedFunc->m_strContext, true, false, true);
 			code.m_param3.m_numIndex = numConst;//number of the called method from the list of encountered methods
 			code.m_param3.m_numArray = listParam.size();// number of parameters
+			code.m_param4.m_numIndex = foundedFunc->m_nStart + 1;   // the method's number, plus one, and its name's hash (PushCallFunction)
+			code.m_param4.m_numArray = static_cast<int>(ibValue::ibMemberTable::NameHash(foundedFunc->m_strRealName));
 			variable = context->CreateVariable(DEF_VAR_TEMP_MOVE);
 			code.m_param1 = variable;// variable into which the value is returned
 			m_cByteCode.m_listCode.emplace_back(std::move(code));
@@ -2786,6 +2807,14 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 		}
 	}
 
+	return GetMemberChain(context, variable, numPrevSet, numIsSet);
+}
+
+// WHAT IS WRITTEN AFTER A VALUE — `[key]`, `.Name`, `.Method(…)`, as many as there are — whatever the value
+// was: a name, `New Class(…)`, or a parenthesised expression (`(from v in a select v).Count()`, which GetExpression
+// hands here). An assignment closes the chain only where the caller allows one (numPrevSet == 1).
+ibParamUnit ibCompileCode::GetMemberChain(ibCompileContext* context, ibParamUnit variable, int numPrevSet, int& numIsSet)
+{
 loopLabel:
 
 	if (IsNextDelimiter('[')) { // this is an array
@@ -3687,6 +3716,9 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 	else if (lex.m_lexType == DELIMITER && lex.m_numData == '(') {
 		variable = GetExpression(context);
 		ExpectDelimiter(')');
+		// …and read on as after a name: `(from v in a select v).Count()`, `(a + b).Format()`.
+		int numSet = 0;
+		variable = GetMemberChain(context, variable, 0, numSet);
 	}
 	else if (lex.m_lexType == DELIMITER && lex.m_numData == '?') {
 		// ?(cond, whenTrue, whenFalse) — an If that answers with a value.

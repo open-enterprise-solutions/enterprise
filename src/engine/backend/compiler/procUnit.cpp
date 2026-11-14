@@ -276,7 +276,7 @@ IB_FORCEINLINE const ibValue& ResolveRead(int slot, int idx,
 //
 // Reaching the running module as `m_ppArrayCode[0]->m_pByteCode` bypasses it and
 // reads whatever the lambda runtime last swapped in — the exact hazard the
-// snapshot exists to prevent, and it broke `Message("…")` in codeRunner and the
+// snapshot exists to prevent, and it broke `Message("…")` in coderunner and the
 // designer while every test stayed green, because the corpus harness substitutes
 // its own Message and never exercises the real one.
 #define LOAD_ARG_CONST(slot)                                                    \
@@ -306,7 +306,7 @@ ibProcUnit* ibProcUnitState::GetLambdaRuntime()
 	if (auto* sess = ibSession::Current())
 		if (ibProcUnit* rt = sess->GetLambdaRuntime())
 			return rt;
-	// Fallback: no session bound (codeRunner sandbox path). Dispatch
+	// Fallback: no session bound (coderunner sandbox path). Dispatch
 	// on whoever is currently executing.
 	return m_currentRunModule;
 }
@@ -735,6 +735,15 @@ static inline void MakeBooleanValue(ibValue& dest, bool flag)
 		dest.m_typeClass = ibValueTypes::TYPE_BOOLEAN;
 	}
 	dest.m_bData = flag;
+}
+
+// The class id an OPER_NEW or an OPER_SET_TYPE names — a number in the const pool, the operand its index: an operand
+// is an int, an id 64 bits (compileCode.cpp, ClassIdConst).
+static inline ibClassID ClassIdOf(const ibValue& constant)
+{
+	unsigned long long clsid = 0;
+	constant.m_fData.ToInt(clsid);
+	return static_cast<ibClassID>(clsid);
 }
 
 // ⭐ TWO NUMBERS ARE TAKEN WHERE THEY LIE — the commonest case of every arithmetic and comparison
@@ -1490,7 +1499,7 @@ start_label:
 				// whose `New` had arguments; `New Array` with none was fine, which is what made it
 				// look like a type problem rather than a cursor one). The name this replaces was
 				// read here for exactly the same reason.
-				const ibClassID classId = (ibClassID)index3;
+				const ibClassID classId = ClassIdOf(m_pByteCode->m_listConst[index3]);
 
 				//load parameters
 				for (long i = 0; i < cRunContext.m_lParamCount; i++) {
@@ -1602,14 +1611,18 @@ start_label:
 				const bool receiverMoves = array2 == DEF_VAR_TEMP_MOVE;
 
 				const ibString& funcName = m_pByteCode->m_listConst[index3].m_sData;
-				// Resolve method number on every call. Bytecode is a const
-				// template at runtime — no opcode-level cache patching.
-				// (The previous "cache" path stored resolved method # /
-				// object ref into m_param4 on first call; never actually
-				// improved warm-path performance and complicated AOT.)
-				// LINQ pipeline ops (Where / Select / ...) are NOT handled
-				// here — compile-side emits OPER_CALL_LINQ for them.
-				long lMethodNum = pVariable2->FindMethod(funcName);
+				// THE NUMBER THE COMPILER FOUND (index4, plus one; 0 = not stamped) when the receiver's
+				// method there carries the name's hash the compiler stamped beside it (array4) — two
+				// integers, a context method's, whose table the compiler read — and by name otherwise. The
+				// bytecode stays a const template: nothing is written back into it (the runtime cache that
+				// once patched m_param4 was removed for that). LINQ pipeline ops (Where / Select / ...) are
+				// NOT here — the compiler emits OPER_CALL_LINQ.
+				long lMethodNum = static_cast<long>(index4) - 1;
+				uint32_t hash = 0;	// 0 = no answer: not stamped, or no such method there
+				if (lMethodNum >= 0)
+					pVariable2->GetMethodName(lMethodNum, &hash);
+				if (hash == 0 || hash != static_cast<uint32_t>(array4))
+					lMethodNum = pVariable2->FindMethod(funcName);
 
 				if (lMethodNum < 0)
 					RaiseMethodNotFound(variable2, funcName);
@@ -2350,10 +2363,11 @@ start_label:
 				// a plugin's type admitting whatever it likes — all answer the same
 				// question, so a family that grows later needs no edit in the
 				// interpreter. This used to be a chain of special cases; it is one call.
-				const ibCtorAbstractType* typeCtor = ibValue::GetAvailableCtor(array2);
+				const ibClassID typeId = ClassIdOf(m_pByteCode->m_listConst[index2]);
+				const ibCtorAbstractType* typeCtor = ibValue::GetAvailableCtor(typeId);
 				if (typeCtor == nullptr || !typeCtor->AllowValue(variable1.GetClassType()))
 					RuntimeError("Type mismatch: a value of type '%s' does not fit the declared type '%s'",
-						variable1.GetClassName(), ibValue::GetNameObjectFromID(array2));
+						variable1.GetClassName(), ibValue::GetNameObjectFromID(typeId));
 				break;
 			}
 				//Operators for working with typed data
@@ -2697,7 +2711,7 @@ void ibProcUnit::Execute(const ibByteCode& cByteCode, ibByteBinder& br, ibValue*
 		if (byte.m_numOper == OPER_ENDLFUNC) { if (lambdaDepth > 0) --lambdaDepth; continue; }
 		if (lambdaDepth == 0 && byte.m_numOper == OPER_SET_TYPE) {
 			ResolveWrite(byte.m_param1.m_numArray, byte.m_param1.m_numIndex, pRefLocVars, m_ppArrayContext, bDelta)
-				.SetType(ibValue::GetVTByID(byte.m_param2.m_numArray));
+				.SetType(ibValue::GetVTByID(ClassIdOf(m_pByteCode->m_listConst[byte.m_param2.m_numIndex])));
 		}
 	}
 

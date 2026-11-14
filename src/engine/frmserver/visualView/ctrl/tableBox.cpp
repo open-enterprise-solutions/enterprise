@@ -20,6 +20,7 @@
 
 #include <algorithm>
 #include <optional>
+#include <unordered_map>   // the rows handed out, filed by the number their identity hashes to — a re-read's carry-over
 
 #include "core/scopeGuard.h"   // ibON_BLOCK_EXIT_SET - a fetch's reads are its own, however it ends
 
@@ -1119,15 +1120,29 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 	// follows the one before it, as it was handed out - so a refresh costs a comparison a row. A table in memory hands out
 	// its own rows: the same objects, found by them.
 	if (!rowsBefore.empty() && m_tableModel->HasKeyedRows()) {
+		// …and one not found in step is found by the number its identity hashes to (GetIdentityHash), the rows handed
+		// out filed by it at the first such miss: a re-read in a new order misses at nearly every row, and each miss
+		// asked every row handed out before — a sort after a scroll of 2000 rows, +280 ms (2026-11-14). Of the rows
+		// that are the item, the first handed out, as the walk over them found it.
+		std::unordered_multimap<size_t, std::map<std::int32_t, ibFetchedRow>::iterator> byIdentity;
 		auto next = rowsBefore.begin();
 		for (size_t idx = 0; idx < items.GetCount(); idx++) {
 			const ibDataViewItem& item = items[idx];
 			if (!item.IsOk() || handlesBefore.contains(item.GetID()))
 				continue;
 			auto found = next;
-			if (found == rowsBefore.end() || !(found->second.m_item == item))
-				found = std::find_if(rowsBefore.begin(), rowsBefore.end(),
-					[&item](const auto& row) { return row.second.m_item == item; });
+			if (found == rowsBefore.end() || !(found->second.m_item == item)) {
+				if (byIdentity.empty()) {
+					byIdentity.reserve(rowsBefore.size());
+					for (auto row = rowsBefore.begin(); row != rowsBefore.end(); ++row)
+						byIdentity.emplace(row->second.m_item.GetIdentityHash(), row);
+				}
+				found = rowsBefore.end();
+				const auto [first, last] = byIdentity.equal_range(item.GetIdentityHash());
+				for (auto at = first; at != last; ++at)
+					if (at->second->second.m_item == item && (found == rowsBefore.end() || at->second->first < found->first))
+						found = at->second;
+			}
 			if (found == rowsBefore.end())
 				continue;
 			handlesBefore[item.GetID()] = found->first;

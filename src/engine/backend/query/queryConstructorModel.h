@@ -105,6 +105,13 @@ private:
 BACKEND_API std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const ibString& text,
 	const ibMetaData* metaData, ibString* error = nullptr);
 
+// …AND WHAT FIELDS THESE COLUMNS OFFER — a source that is not a text: a table a composition is bound to, a source it
+// names. The same field the constructor offers for a column (its name, type, synonym, balance role, availability), so
+// a list's composition titles its columns as a report's does. It built its own with no synonym, and a list output to
+// a sheet was headed by the field names (Max, 2026-11-14).
+BACKEND_API std::vector<ibQueryConstructorField> ibQueryFieldsOfColumns(
+	const std::vector<const ibBackendQueryColumn*>& columns, const ibMetaData* metaData);
+
 // …AND THE OTHER WAY ROUND: THE QUERY A SOURCE WOULD WRITE FOR ITSELF — every field it lists spelled
 // out, `SELECT Products.Code, … FROM Catalog.Products AS Products`: what a list or a composition starts
 // from when its own query is switched on. Not a template with a hole in it — a real query over the real

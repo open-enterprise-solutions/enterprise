@@ -62,8 +62,12 @@ enum { //instruction types
 	OPER_SET_A,
 	OPER_GET_A,
 	OPER_ENTER_A,
-	OPER_CALL_METHOD,
-	OPER_CALL_LINQ,       // universal pipeline method on an iterable receiver
+	OPER_CALL_METHOD,     // m_param3.m_numIndex = the name in the const pool,
+	                      // m_param3.m_numArray = caller arg count,
+	                      // m_param4.m_numIndex = the method's number + 1 as
+	                      // the compiler found it (0 = not stamped; taken
+	                      // only where the receiver holds the name there)
+	OPER_CALL_LINQ,      // universal pipeline method on an iterable receiver
 	                      // (Where / Select / OrderBy / GroupBy / Join /
 	                      // Skip / Take / Aggregate / ...). Compile detects
 	                      // LINQ method names at emit time and chooses this

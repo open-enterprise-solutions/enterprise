@@ -32,12 +32,13 @@ public:
 		std::unique_lock<std::shared_mutex> lock(m_listMutex);
 		if (!FillListLocked())
 			return ibPropertyChoiceMode::None;
+		// The NAME and the LABEL each where the list keeps it, as an enumeration gives them (ibPropertyEnum::GetEnumList):
+		// given as the label alone, the translated label took the name's place — a form's kind was "Форма об'єкта" to
+		// the assistant in a Ukrainian designer, and the word it writes was nowhere (2026-11-14).
 		for (unsigned int idx = 0; idx < m_listPropValue.GetItemCount(); idx++) {
-			list.Add(
-				m_listPropValue.GetItemLabel(idx),
-				m_listPropValue.GetItemId(idx),
-				m_listPropValue.GetItemPicture(idx)
-			);
+			const long id = m_listPropValue.GetItemId(idx);
+			list.Add(id, m_listPropValue.GetItemName(idx), m_listPropValue.GetItemLabel(idx),
+				ibVariant(static_cast<int>(id)), m_listPropValue.GetItemPicture(idx));
 		}
 		return ibPropertyChoiceMode::Single;
 	}

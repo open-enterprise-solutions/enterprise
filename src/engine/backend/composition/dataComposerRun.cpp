@@ -368,8 +368,14 @@ bool ibDataDBComposer::RunOutputPass(const Output& output, ibCompositionDriver& 
 			switch (schema[i].m_role) {
 			case ibQueryLowering::ibColumnRole::Measure:
 				if (measure < m_resources.size()) {
-					info.m_paths[i] = m_resources[measure].m_path;
-					info.m_titles[i] = TitleForPath(info.m_paths[i]);
+					const ibResourceDescription& resource = m_resources[measure];
+					info.m_paths[i] = resource.m_path;
+					// ⭐ …EXCEPT A RESOURCE WITH NO FUNCTION, whose path is an EXPRESSION (RenderText):
+					// `100 * SUM(Margin) / SUM(Revenue) AS MarginPct` reads no one field, and asked by its
+					// path it was headed by the formula itself. The field it IS is the one it is published
+					// as — its name — and that field's title is the one a person gave it (2026-11-14).
+					info.m_titles[i] = TitleForPath(resource.m_func.IsEmpty() && !resource.m_alias.IsEmpty()
+						? resource.m_alias : resource.m_path);
 				}
 				++measure;
 				break;

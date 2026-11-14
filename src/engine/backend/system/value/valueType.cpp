@@ -187,8 +187,12 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 				// handed back an Undefined as it came, where its siblings handed back a number and a date: a
 				// characteristic whose kind says "string" was cleared to Undefined instead of "", and the cell threw
 				// away whatever was typed into it, having nothing to read it by (2026-09-23)
+				// ⭐ …AND AN EMPTY TEXT IS NO FIGURE, so it reads as the empty number. Read as a figure it is refused
+				// since #646 (a text that is not wholly a number), and a form attribute changed from String to Number
+				// threw half-way through and stayed in the form (2026-11-14). A text that IS something and is not a
+				// number is still refused, as everywhere a figure is read.
 				if (vt == ibValueTypes::TYPE_NUMBER)
-					return ibValue(typeDescription.Adjust(varValue.GetNumber()));
+					return ibValue(typeDescription.Adjust(varValue.IsEmpty() ? ibNumber() : varValue.GetNumber()));
 				else if (vt == ibValueTypes::TYPE_DATE)
 					return ibValue(typeDescription.Adjust(varValue.GetDate()));
 				else if (vt == ibValueTypes::TYPE_STRING)

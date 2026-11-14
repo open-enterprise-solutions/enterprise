@@ -26,7 +26,6 @@
 #include "backend/query/dataQueryBuilder.h"   // ibReadPageRequest — held by value
 
 #include <functional>
-#include <map>
 #include <memory>   // a row's conditional appearance, null where there is none — see Row::m_attr
 
 class BACKEND_API ibListFetchDriver : public ibCompositionDriver
@@ -48,7 +47,11 @@ public:
 		// heading standing over rows this output does not print HAS children and must not offer an
 		// expander. The consumers ask it to decide `isContainer`, so the name is now the question.
 		bool m_expandable = false;
-		std::map<ibMetaID, ibValue> m_values;   // by the attribute metaID
+		// By the attribute metaID — in the node's own container, so the node built from the row takes it as it is
+		// (ibComposerNode), and a row moves without a copy when the page's vector grows. As a std::map it was copied
+		// into the node entry by entry and copied whole on every growth: two fifths of a sort by a reference column
+		// over 100 000 rows (stack samples 2026-11-14).
+		ibRowMetaValues m_values;
 		// ⭐⭐ A HEADING'S OWN KEY — the value of the field its level groups by, as the OUTPUT says which column
 		// that is (the dimension column of this heading's level). Asked of the output, not walked out of the
 		// grouping's path by the reader: the list walked `Recorder.Counterparty` through the references itself,
@@ -64,8 +67,10 @@ public:
 		std::unique_ptr<ibCompositionRowAttr> m_attr;
 
 		Row() = default;
-		Row(Row&&) = default;
-		Row& operator=(Row&&) = default;
+		// noexcept, said: the page's vector moves its rows when it grows only if a move cannot throw — else it copies
+		// every one of them.
+		Row(Row&&) noexcept = default;
+		Row& operator=(Row&&) noexcept = default;
 		// …AND A COPY, ITS APPEARANCE WITH IT — a list serves a folded level again to the page next to it
 		// (ibValueModelCursor::m_foldedLevel), and every node built from a row takes the appearance as its own.
 		Row(const Row& other)
@@ -78,8 +83,8 @@ public:
 		}
 
 		ibValue GetValue(const ibMetaID& id) const {
-			const auto it = m_values.find(id);
-			return it != m_values.end() ? it->second : ibValue();
+			const ibValue* value = m_values.find_value(id);
+			return value != nullptr ? *value : ibValue();
 		}
 	};
 
@@ -146,6 +151,7 @@ private:
 			row.m_attr = std::make_unique<ibCompositionRowAttr>();
 			row.m_attr->m_line = std::move(attr->m_line);
 		}
+		row.m_values.reserve(m_schema.size());
 		for (size_t i = 0; i < m_schema.size() && i < values.size(); ++i) {
 			// A heading's key — the first dimension column of its level (a column counts levels from 0, a line from 1).
 			if (heading && !row.m_keyed && m_schema[i].m_role == ibQueryLowering::ibColumnRole::Dimension
@@ -168,7 +174,7 @@ private:
 				else if (ibBackendQueryColumn::IsSyntheticId(id))
 					continue;
 			}
-			row.m_values.emplace(id, values[i]);
+			row.m_values.insert({ id, values[i] });
 			if (attr != nullptr)
 				for (std::pair<size_t, ibCompositionAttr>& cell : attr->m_cells)   // a column's own, where it has one
 					if (cell.first == i) {

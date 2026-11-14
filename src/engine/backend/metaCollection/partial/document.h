@@ -219,6 +219,12 @@ class BACKEND_API ibValueRecordDataObjectDocument : public ibValueRecordDataObje
 	virtual void SetPosted(bool posted) override;
 	virtual const ibMetaDescription* GetRecordDescription(ibRecorderWrites of) const override;
 
+	// A written document is said by its presentation, which already names its kind ("Shipment 0001 of 02.01.2020"):
+	// the family's "Synonym: presentation" read "Shipment: Shipment 0001 of …" on every document's tab.
+	virtual ibString GetSourceCaption() const override {
+		return IsNewObject() ? ibValueRecordDataObjectRecorderRef::GetSourceCaption() : GetString();
+	}
+
 	//****************************************************************************
 	//*                              Support methods                             *
 	//****************************************************************************

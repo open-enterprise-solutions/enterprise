@@ -356,6 +356,12 @@ std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const ibString& text,
 	return fields;
 }
 
+std::vector<ibQueryConstructorField> ibQueryFieldsOfColumns(const std::vector<const ibBackendQueryColumn*>& columns,
+	const ibMetaData* metaData)
+{
+	return FieldsOfColumns(ibQueryConstructorModel(metaData), columns);
+}
+
 // ------------------------------------------------------------------------------------------------
 // THE QUERY A SOURCE WOULD WRITE FOR ITSELF — see the header.
 // ------------------------------------------------------------------------------------------------

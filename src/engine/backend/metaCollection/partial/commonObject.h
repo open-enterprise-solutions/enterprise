@@ -22,6 +22,8 @@
 
 #include "backend/query/queryableFactory.h"   // ibMetaCommandDescriptor (the L4 source descriptor field + its command surface)
 
+#include "backend/metaCollection/metaGroups.h"   // ibMetaTypeCaption — a source's caption names its kind
+
 //special object
 #include "backend/metaCollection/metaModuleObject.h"
 #include "backend/metaCollection/metaFormObject.h"
@@ -2186,7 +2188,7 @@ public:
 
 	//Get presentation 
 	virtual ibString GetSourceCaption() const override {
-		return GetMetaObject() ? stringUtils::GenerateSynonym(GetMetaObject()->GetClassName()) + ibT(": ") + GetMetaObject()->GetSynonym() : GetString();
+		return GetMetaObject() ? ibMetaTypeCaption(GetMetaObject()->GetClassType()) + ibT(": ") + GetMetaObject()->GetSynonym() : GetString();
 	}
 
 	//support source data
@@ -3327,7 +3329,9 @@ public:
 
 	//Get presentation
 	virtual ibString GetSourceCaption() const override {
-		return m_metaObject->GetSynonym() + ibT(": ") + (IsNewObject() ? ibString(_("Creating")) : m_metaObject->GetSynonym());
+		// A record has no presentation of its own (GetString is its class), so a written one is its register's synonym
+		// alone — it read "X: X" with the synonym said twice.
+		return IsNewObject() ? m_metaObject->GetSynonym() + ibT(": ") + ibString(_("Creating")) : m_metaObject->GetSynonym();
 	}
 
 	//copy new object — born owned

@@ -13,12 +13,11 @@ public:
 	virtual ibPropertyChoiceMode GetValueList(ibPropertyChoiceList& list) override {
 		if (!m_functor->Invoke(this))
 			return ibPropertyChoiceMode::None;
+		// The name and the label each where the list keeps it — as ibPropertyList::GetValueList gives them.
 		for (unsigned int idx = 0; idx < m_listPropValue.GetItemCount(); idx++) {
-			list.Add(
-				m_listPropValue.GetItemLabel(idx),
-				m_listPropValue.GetItemId(idx),
-				m_listPropValue.GetItemPicture(idx)
-			);
+			const long id = m_listPropValue.GetItemId(idx);
+			list.Add(id, m_listPropValue.GetItemName(idx), m_listPropValue.GetItemLabel(idx),
+				ibVariant(static_cast<int>(id)), m_listPropValue.GetItemPicture(idx));
 		}
 		return ibPropertyChoiceMode::Single;
 	}
@@ -91,7 +90,7 @@ private:
 
 		void AppendItem(const ibString& name, const ibActionID& l, const ibPictureDescription& p, const ibValue& v) { (void)m_listValue.emplace_back(name, l, p, v); }
 		void AppendItem(const ibString& name, const ibString& label, const ibActionID& l, const ibPictureDescription& p, const ibValue& v) { (void)m_listValue.emplace_back(name, label, l, p, v); }
-		void AppendItem(const ibString& name, const ibString& label, const ibString& help, const ibActionID& l, const ibPictureDescription& p, const ibValue& v) { (void)m_listValue.emplace_back(label, help, l, p, v); }
+		void AppendItem(const ibString& name, const ibString& label, const ibString& help, const ibActionID& l, const ibPictureDescription& p, const ibValue& v) { (void)m_listValue.emplace_back(name, label, help, l, p, v); }
 
 		ibString GetItemName(const unsigned int idx) const { return GetItemAt(idx).m_strName; }
 		ibString GetItemLabel(const unsigned int idx) const { return GetItemAt(idx).m_strLabel; }

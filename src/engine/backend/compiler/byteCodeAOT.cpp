@@ -22,7 +22,8 @@
 //   std::int32_t  m_lVarCount
 //   std::uint8_t   m_bExpressionOnly
 //   zstr m_strModuleName
-//   <m_listCode>
+//   <sources>          — (module, document, file) zstr triples, each once
+//   <m_listCode>       — operands std::int32_t, then the number of the instruction's source
 //   <m_listConst>
 //   <m_listVar>
 //   <m_listCaptured>
@@ -252,6 +253,12 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 //    m_listCaptured (depth, slot) where it carried the m_needsHeapFrame byte, an eval block's bytecode carries
 //    its own, and OPER_CALL_CLOSURE left the opcode list — which moves every opcode after OPER_CALL_METHOD and
 //    TYPE_DELTA with them.
+// 🛑 37 -> 38 (2026-11-14): AN OPERAND IS TWO int32 (it was two int64), and a class id is a CONSTANT: OPER_NEW's
+//    m_param3.m_numIndex and OPER_SET_TYPE's m_param2 name its number in the const pool, where a v37 blob holds the
+//    id itself. An instruction's source is a number in a table of sources written before the instructions, where a
+//    v37 blob writes the three strings into every one. A context method mirrored into m_listFunc carries its number
+//    on its binding as its address, where a v37 blob holds -1; an OPER_CALL_METHOD carries the method's name hash
+//    (ibMemberTable::NameHash) in m_param4.m_numArray beside its number. The layout moved.
 // The constant itself is kAOTFormatVersion in byteCodeFormat.h. It moved out of this
 // file so the cache key can name the same number the blob header writes.
 [[maybe_unused]] constexpr uint16_t kAOTFlagPortable = 0x0001;   // reserved — host-endian today, no reader yet
@@ -276,17 +283,37 @@ bool ReadGuid(const ibReaderMemory& r, ibGuid& out) {
 }
 
 bool WriteParamRun(ibWriterMemory& w, const ibParamRunUnit& p) {
-	w.w_s64(p.m_numArray);
-	w.w_s64(p.m_numIndex);
+	w.w_s32(p.m_numArray);
+	w.w_s32(p.m_numIndex);
 	return true;
 }
 
 void ReadParamRun(const ibReaderMemory& r, ibParamRunUnit& p) {
-	p.m_numArray = r.r_s64();
-	p.m_numIndex = r.r_s64();
+	p.m_numArray = r.r_s32();
+	p.m_numIndex = r.r_s32();
 }
 
-bool WriteByteUnit(ibWriterMemory& w, const ibByteUnit& u) {
+// ⭐ AN INSTRUCTION'S SOURCE IS A NUMBER IN THE BYTECODE'S TABLE OF SOURCES — (module, document, file), each once,
+// written before the instructions (SerializeAOT). Written into every instruction whole, the three strings came back as
+// three allocations per instruction, of the same few texts; read from the table, an instruction holds its strings,
+// shared. The first instruction of each source stands for it, here and on reading.
+bool IsSameSource(const ibByteUnit& a, const ibByteUnit& b) {
+	return a.m_strModuleName == b.m_strModuleName && a.m_strDocPath == b.m_strDocPath && a.m_strFileName == b.m_strFileName;
+}
+
+void WriteSource(ibWriterMemory& w, const ibByteUnit& source) {
+	w.w_stringZ(source.m_strModuleName);
+	w.w_stringZ(source.m_strDocPath);
+	w.w_stringZ(source.m_strFileName);
+}
+
+void ReadSource(const ibReaderMemory& r, ibByteUnit& source) {
+	r.r_stringZ(source.m_strModuleName);
+	r.r_stringZ(source.m_strDocPath);
+	r.r_stringZ(source.m_strFileName);
+}
+
+bool WriteByteUnit(ibWriterMemory& w, const ibByteUnit& u, uint32_t source) {
 	w.w_s16(u.m_numOper);
 	w.w_u32(u.m_numString);
 	w.w_u32(u.m_numLine);
@@ -294,13 +321,11 @@ bool WriteByteUnit(ibWriterMemory& w, const ibByteUnit& u) {
 	WriteParamRun(w, u.m_param2);
 	WriteParamRun(w, u.m_param3);
 	WriteParamRun(w, u.m_param4);
-	w.w_stringZ(u.m_strModuleName);
-	w.w_stringZ(u.m_strDocPath);
-	w.w_stringZ(u.m_strFileName);
+	w.w_u32(source);
 	return true;
 }
 
-void ReadByteUnit(const ibReaderMemory& r, ibByteUnit& u) {
+bool ReadByteUnit(const ibReaderMemory& r, ibByteUnit& u, const std::vector<ibByteUnit>& sources) {
 	u.m_numOper   = r.r_s16();
 	u.m_numString = r.r_u32();
 	u.m_numLine   = r.r_u32();
@@ -308,9 +333,13 @@ void ReadByteUnit(const ibReaderMemory& r, ibByteUnit& u) {
 	ReadParamRun(r, u.m_param2);
 	ReadParamRun(r, u.m_param3);
 	ReadParamRun(r, u.m_param4);
-	r.r_stringZ(u.m_strModuleName);
-	r.r_stringZ(u.m_strDocPath);
-	r.r_stringZ(u.m_strFileName);
+	const uint32_t source = r.r_u32();
+	if (source >= sources.size())
+		return false;
+	u.m_strModuleName = sources[source].m_strModuleName;
+	u.m_strDocPath    = sources[source].m_strDocPath;
+	u.m_strFileName   = sources[source].m_strFileName;
+	return true;
 }
 
 // ibValue payload — only primitives appear in m_listConst at compile
@@ -538,10 +567,25 @@ bool ibByteCode::SerializeAOT(ibWriterMemory& w) const
 	w.w_u8(m_bExpressionOnly ? 1 : 0);
 	w.w_stringZ(m_strModuleName);
 
-	// m_listCode.
-	w.w_u32((uint32_t)m_listCode.size());
+	// The sources (IsSameSource), then m_listCode, each instruction with its source's number.
+	std::vector<const ibByteUnit*> sources;
+	std::vector<uint32_t> sourceOf;
+	sourceOf.reserve(m_listCode.size());
 	for (const auto& u : m_listCode) {
-		if (!WriteByteUnit(w, u)) return false;
+		uint32_t source = 0;
+		while (source < sources.size() && !IsSameSource(*sources[source], u))
+			++source;
+		if (source == sources.size())
+			sources.push_back(&u);
+		sourceOf.push_back(source);
+	}
+	w.w_u32((uint32_t)sources.size());
+	for (const ibByteUnit* source : sources)
+		WriteSource(w, *source);
+
+	w.w_u32((uint32_t)m_listCode.size());
+	for (size_t i = 0; i < m_listCode.size(); ++i) {
+		if (!WriteByteUnit(w, m_listCode[i], sourceOf[i])) return false;
 	}
 
 	// m_listConst.
@@ -611,12 +655,19 @@ bool ibByteCode::DeserializeAOT(const ibReaderMemory& r)
 	m_bExpressionOnly = (r.r_u8() != 0);
 	r.r_stringZ(m_strModuleName);
 
-	// m_listCode.
+	// The sources, then m_listCode.
+	uint32_t sourceCount = r.r_u32();
+	if (sourceCount > kAOTSanityMax) return false;
+	std::vector<ibByteUnit> sources(sourceCount);
+	for (uint32_t i = 0; i < sourceCount; ++i)
+		ReadSource(r, sources[i]);
+
 	uint32_t codeCount = r.r_u32();
 	if (codeCount > kAOTSanityMax) return false;
 	m_listCode.resize(codeCount);
-	for (uint32_t i = 0; i < codeCount; ++i)
-		ReadByteUnit(r, m_listCode[i]);
+	for (uint32_t i = 0; i < codeCount; ++i) {
+		if (!ReadByteUnit(r, m_listCode[i], sources)) return false;
+	}
 
 	// m_listConst.
 	uint32_t constCount = r.r_u32();

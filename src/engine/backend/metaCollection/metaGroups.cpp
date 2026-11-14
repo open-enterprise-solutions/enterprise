@@ -1,6 +1,7 @@
 #include "backend/metaCollection/metaGroups.h"
 
 #include "backend/metaCollection/metaObject.h"   // the g_meta*CLSID constants
+#include "core/stringUtils.h"                    // stringUtils::GenerateSynonym — a kind the table does not caption
 
 namespace {
 
@@ -14,6 +15,9 @@ struct ibMetaGroupRow {
 	// the point of use is what lets one table answer in whatever language the session runs in.
 	const char*     m_caption;
 	ibMetaGroupBand m_band;
+	// What ONE metaobject of the kind is called ("Catalog" beside "Catalogs") — the kind a form's or a list's
+	// caption names before the synonym. Marked the same way; empty where nothing is captioned by its kind.
+	const char*     m_one = nullptr;
 };
 
 const ibMetaGroupRow s_groups[] = {
@@ -30,7 +34,7 @@ const ibMetaGroupRow s_groups[] = {
 	{ g_metaScheduledJobCLSID,     ibTRANSLATE("Predefined jobs"),    ibMetaGroupBand::Common },
 	{ g_metaEventHandlerCLSID,     ibTRANSLATE("Event handlers"),     ibMetaGroupBand::Common },
 	{ g_metaSessionParameterCLSID, ibTRANSLATE("Session parameters"), ibMetaGroupBand::Common },
-	{ g_metaFunctionalOptionCLSID, ibTRANSLATE("Functional options"), ibMetaGroupBand::Common },
+	{ g_metaFunctionalOptionCLSID, ibTRANSLATE("Functional options"), ibMetaGroupBand::Common, ibTRANSLATE("Functional option") },
 	{ g_metaCommonAttributeCLSID,  ibTRANSLATE("Common attributes"),  ibMetaGroupBand::Common },
 	{ g_metaPictureCLSID,          ibTRANSLATE("Pictures"),           ibMetaGroupBand::Common },
 	{ g_metaSectionCLSID,          ibTRANSLATE("Sections"),           ibMetaGroupBand::Common },
@@ -38,23 +42,23 @@ const ibMetaGroupRow s_groups[] = {
 	{ g_metaLanguageCLSID,         ibTRANSLATE("Languages"),          ibMetaGroupBand::Common },
 
 	// ——— the business objects a configuration is made of ———
-	{ g_metaConstantCLSID,                   ibTRANSLATE("Constants"),       ibMetaGroupBand::Metadata },
-	{ g_metaCatalogCLSID,                    ibTRANSLATE("Catalogs"),        ibMetaGroupBand::Metadata },
-	{ g_metaDocumentCLSID,                   ibTRANSLATE("Documents"),       ibMetaGroupBand::Metadata },
-	{ g_metaEnumerationCLSID,                ibTRANSLATE("Enumerations"),    ibMetaGroupBand::Metadata },
-	{ g_metaDataProcessorCLSID,              ibTRANSLATE("Data processors"), ibMetaGroupBand::Metadata },
-	{ g_metaReportCLSID,                     ibTRANSLATE("Reports"),         ibMetaGroupBand::Metadata },
+	{ g_metaConstantCLSID,                   ibTRANSLATE("Constants"),       ibMetaGroupBand::Metadata, ibTRANSLATE("Constant") },
+	{ g_metaCatalogCLSID,                    ibTRANSLATE("Catalogs"),        ibMetaGroupBand::Metadata, ibTRANSLATE("Catalog") },
+	{ g_metaDocumentCLSID,                   ibTRANSLATE("Documents"),       ibMetaGroupBand::Metadata, ibTRANSLATE("Document") },
+	{ g_metaEnumerationCLSID,                ibTRANSLATE("Enumerations"),    ibMetaGroupBand::Metadata, ibTRANSLATE("Enumeration") },
+	{ g_metaDataProcessorCLSID,              ibTRANSLATE("Data processors"), ibMetaGroupBand::Metadata, ibTRANSLATE("Data processor") },
+	{ g_metaReportCLSID,                     ibTRANSLATE("Reports"),         ibMetaGroupBand::Metadata, ibTRANSLATE("Report") },
 	// ⭐ THE CHARTS BEFORE THE REGISTERS, AND THE REGISTERS LAST — see the header.
-	{ g_metaChartOfCharacteristicTypesCLSID, ibTRANSLATE("Charts of characteristic types"), ibMetaGroupBand::Metadata },
-	{ g_metaChartOfAccountsCLSID,            ibTRANSLATE("Charts of accounts"),             ibMetaGroupBand::Metadata },
-	{ g_metaChartOfCalculationTypesCLSID,    ibTRANSLATE("Charts of calculation types"),    ibMetaGroupBand::Metadata },
-	{ g_metaInformationRegisterCLSID,        ibTRANSLATE("Information registers"),          ibMetaGroupBand::Metadata },
-	{ g_metaAccumulationRegisterCLSID,       ibTRANSLATE("Accumulation registers"),         ibMetaGroupBand::Metadata },
-	{ g_metaAccountingRegisterCLSID,         ibTRANSLATE("Accounting registers"),           ibMetaGroupBand::Metadata },
-	{ g_metaCalculationRegisterCLSID,        ibTRANSLATE("Calculation registers"),          ibMetaGroupBand::Metadata },
+	{ g_metaChartOfCharacteristicTypesCLSID, ibTRANSLATE("Charts of characteristic types"), ibMetaGroupBand::Metadata, ibTRANSLATE("Chart of characteristic types") },
+	{ g_metaChartOfAccountsCLSID,            ibTRANSLATE("Charts of accounts"),             ibMetaGroupBand::Metadata, ibTRANSLATE("Chart of accounts") },
+	{ g_metaChartOfCalculationTypesCLSID,    ibTRANSLATE("Charts of calculation types"),    ibMetaGroupBand::Metadata, ibTRANSLATE("Chart of calculation types") },
+	{ g_metaInformationRegisterCLSID,        ibTRANSLATE("Information registers"),          ibMetaGroupBand::Metadata, ibTRANSLATE("Information register") },
+	{ g_metaAccumulationRegisterCLSID,       ibTRANSLATE("Accumulation registers"),         ibMetaGroupBand::Metadata, ibTRANSLATE("Accumulation register") },
+	{ g_metaAccountingRegisterCLSID,         ibTRANSLATE("Accounting registers"),           ibMetaGroupBand::Metadata, ibTRANSLATE("Accounting register") },
+	{ g_metaCalculationRegisterCLSID,        ibTRANSLATE("Calculation registers"),          ibMetaGroupBand::Metadata, ibTRANSLATE("Calculation register") },
 	// …and the sequences last of all: a sequence is about the order the DOCUMENTS above were posted
 	// in, so it is read after everything it is about (sequence-arc.md).
-	{ g_metaSequenceCLSID,                   ibTRANSLATE("Sequences"),                      ibMetaGroupBand::Metadata },
+	{ g_metaSequenceCLSID,                   ibTRANSLATE("Sequences"),                      ibMetaGroupBand::Metadata, ibTRANSLATE("Sequence") },
 
 	// ——— the groups INSIDE an object: what it IS, then what is done with it ———
 	{ g_metaAttributeCLSID,                      ibTRANSLATE("Attributes"),  ibMetaGroupBand::Inner },
@@ -97,6 +101,15 @@ ibString ibMetaGroupCaption(const ibClassID& clsid)
 {
 	const ibMetaGroupRow* row = RowFor(clsid);
 	return row != nullptr ? ibGetTranslation(ibString::FromUTF8(row->m_caption)) : ibString();
+}
+
+ibString ibMetaTypeCaption(const ibClassID& clsid)
+{
+	// A kind this table does not caption — an external data processor, a plugin's — is called by the name it
+	// registered, spelled as words and translated where the catalog has it ("External report").
+	const ibMetaGroupRow* row = RowFor(clsid);
+	return ibGetTranslation(row != nullptr && row->m_one != nullptr ? ibString::FromUTF8(row->m_one)
+		: stringUtils::GenerateSynonym(ibValue::GetNameObjectFromID(clsid)));
 }
 
 int ibMetaGroupOrder(const ibClassID& clsid)

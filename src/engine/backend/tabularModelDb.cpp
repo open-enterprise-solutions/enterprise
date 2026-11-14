@@ -20,19 +20,22 @@
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject — drilled folder guid
 #include "backend/uniqueKey.h"                      // ibUniqueKey — GetItemKey builds the row's reference key
 
-// A group level as it was folded — the rung, where the reader stood on it, and the rows that came back — served again
-// to a scroll of the same level (ibValueModelCursor::m_foldedLevel, RunComposerPage).
+// A level read whole as it came back — a group level's fold, or a level sorted by what no keyset follows — with the
+// rung, where the reader stood on it, and the rows, served again to a scroll of the same level
+// (ibValueModelCursor::m_foldedLevel, RunComposerPage).
 struct ibValueModelCursor::FoldedLevel {
 	uint32_t                            m_generation = 0;   // the view generation it was folded at
 	std::vector<ibString>               m_dims;
 	std::vector<ibQueryDimUnfold>       m_kinds;
 	std::vector<ibValue>                m_path;
 	std::vector<ibValue>                m_sub;
+	ibValue                             m_hierarchyKey;     // the row a tree level is the children of (empty: the top)
 	std::vector<ibListFetchDriver::Row> m_rows;
 
 	bool Serves(uint32_t generation, const std::vector<ibString>& dims, const std::vector<ibQueryDimUnfold>& kinds,
-	            const std::vector<ibValue>& path, const std::vector<ibValue>& sub) const {
-		return m_generation == generation && m_dims == dims && m_kinds == kinds && m_path == path && m_sub == sub;
+	            const std::vector<ibValue>& path, const std::vector<ibValue>& sub, const ibValue& hierarchyKey) const {
+		return m_generation == generation && m_dims == dims && m_kinds == kinds && m_path == path && m_sub == sub
+		    && m_hierarchyKey == hierarchyKey;
 	}
 };
 
@@ -97,7 +100,7 @@ void ibValueModelCursor::EnsureSnapshot() const
 			const bool isContainer = isFolderRow
 			                      || q->GetHierarchyType() == ibHierarchyType::eItems
 			                      || r.m_expandable;
-			ibComposerNode* node = new ibComposerNode(r.m_values, isContainer, std::move(rowKey));
+			ibComposerNode* node = new ibComposerNode(std::move(r.m_values), isContainer, std::move(rowKey));
 			node->TakeCompositionAttr(std::move(r.m_attr));         // …and what its conditional appearance draws it with, as it is
 			m_snapshot.AddValue(this, node, false);       // adopt (silent) — const-model op, no const_cast
 		}
@@ -115,9 +118,10 @@ void ibValueModelCursor::EnsureSnapshot() const
 unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, const ibDataViewItem& anchor,
 	int count, ibFetchDirection dir, ibDataViewItemArray& out) const
 {
-	// DynamicRead OFF (the safety fallback): serve the WHOLE list from the RAM snapshot — materialise it once, then
-	// page + group it IN MEMORY (RunStoragePage), bypassing the keyset cursor entirely.
-	if (!IsDynamicRead()) {
+	// THE WHOLE LIST FROM THE RAM SNAPSHOT — materialised once, then paged + grouped IN MEMORY (RunStoragePage),
+	// bypassing the keyset cursor entirely: what DynamicRead OFF (the safety fallback) asks for, and what a sort no
+	// keyset can follow needs (below).
+	const auto fromSnapshot = [&]() {
 		// A RESET IS A RE-READ, and the snapshot must obey it. Its cheap re-check keys off the VIEW GENERATION,
 		// which only a filter / sort / explicit RefetchAll bumps — a save does not touch it. So the one path that
 		// matters most, "an object form wrote a row and the list re-pulls" (UpdateForm -> SchedulePagedRefresh ->
@@ -129,7 +133,9 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 			m_snapshotValid = false;
 		EnsureSnapshot();
 		return RunStoragePage(m_snapshot, m_snapshotComposer, parent, anchor, count, dir, out);
-	}
+	};
+	if (!IsDynamicRead())
+		return fromSnapshot();
 
 	const ibBackendQueryable* q = GetSourceQueryable();
 	if (q == nullptr)
@@ -254,9 +260,8 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// "Reference.DataVersion" — the ORDER BY rides the JOINED column, but the keyset predicate rides the main-
 	// table PK (BuildAnchorPredicate deliberately skips a joined column, dbTableProvider.cpp) → the two diverge,
 	// so `PK > anchorPk` returns rows already shown under the ORDER BY → the page windows OVERLAP (duplicate
-	// rows). A joined column can't be a keyset key, so we fetch the WHOLE ordered result in ONE shot: unbounded
-	// on the initial (unanchored) read, nothing on any keyset continuation. (Detail-level only — a grouped read
-	// runs the TOTALS path.) The trade: a dot-walk sort loads all rows up front (user-chosen, so acceptable).
+	// rows). A joined column can't be a keyset key, so the level is read WHOLE, in its order, and handed out a
+	// window at a time (below). (Detail-level only — a grouped read runs the TOTALS path.)
 	//
 	// ⚠ A REFERENCE COLUMN IS SUCH A SORT TOO, though it is found by name: the engine sorts it by its kind's
 	// order (ResolveReferenceSortColumn) — through a join to the target, or by the row's own fields that the
@@ -273,8 +278,25 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 			}
 		}
 	}
-	if (dotWalkSort && anchor.IsOk())
-		return 0;   // the one-shot initial read already served the whole ordered result
+	// ⭐ …AND A FLAT LIST SO SORTED IS SERVED AS THE SNAPSHOT IS: read whole once, handed out a page at a time. Read
+	// whole and handed out WHOLE, it was one page of every row — 100 thousand register lines sorted by their product
+	// went to the client in one frame: over a minute, 130 MB, and the connection dropped (2026-11-14). The read is
+	// the same one; what the client is given is a page, and the next one a window over rows already in memory. The
+	// snapshot flattens a tree, so a tree and a grouped read take the other road a level read whole already has: the
+	// group level's (`wholeLevel`, below).
+	if (dotWalkSort && !grouping && !hierarchy)
+		return fromSnapshot();
+	// …and once the sort is one a keyset follows again, the rows held for it go with the next re-read.
+	if (m_snapshotValid && dir == ibFetchDirection::Reset) {
+		m_snapshot.Clear(this, false);
+		m_snapshotValid = false;
+	}
+	// ⭐ A LEVEL READ WHOLE IS HANDED OUT A WINDOW AT A TIME — a group level (TOTALS fold it whole) and a level sorted
+	// by what no keyset follows alike: kept once read, served again to a scroll of it, windowed by the anchor. A tree
+	// level so sorted was one page of every row it held — and a catalog with no folders holds its whole content at the
+	// top: 1587 elements in one frame, and the level's last row lost to the probe trim of a page that had none
+	// (2026-11-14).
+	const bool wholeLevel = groupLevel || dotWalkSort;
 
 	// Build the page envelope from (anchor, count, direction) — same shape the
 	// dynamic list builds. +1 probe row -> the buffer learns there is more.
@@ -302,7 +324,9 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 		if (hierHasParent)
 			page.m_hierarchyKey = hierParentKey;
 	}
-	if (anchor.IsOk()) {
+	// (A level sorted by what no keyset follows takes no anchor into the read: it is read whole, and its anchor is the
+	// window's — below.)
+	if (anchor.IsOk() && !dotWalkSort) {
 		page.m_hasAnchor = true;
 		ibValueModel::ibComposerNode* a = GetViewData<ibValueModel::ibComposerNode>(anchor);
 		// A GROUP-LEVEL keyset page is ordered by the level's DIM alone -> the single anchor value is the anchor
@@ -324,7 +348,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 		// its row-key (the PK) — resolve the rest with ONE point lookup keyed by that PK so the keyset predicate
 		// positions the page AT the row. (This is where the old per-list FindRowValue sort pre-reading moved —
 		// into L5, source-agnostic, keyed.) Empty resolve → degrades to a top-of-list fetch, never a crash.
-		std::map<ibMetaID, ibValue> resolved;
+		ibRowMetaValues resolved;
 		if (a != nullptr && a->IsKeyOnlyAnchor())
 			resolved = ResolveAnchorByKey(a->GetRowKey());
 		const auto anchorValue = [&](const ibMetaID col) -> ibValue {
@@ -401,16 +425,14 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// second time to cut a different window out of the same answer (2026-10-05). The snapshot's rule (above): a Reset
 	// re-reads, and so does a view generation that moved; Forward / Backward over the same rung and scope do not.
 	const uint32_t generation = GetViewGeneration();
-	const bool     reuseLevel = groupLevel && dir != ibFetchDirection::Reset && m_foldedLevel != nullptr
-		&& m_foldedLevel->Serves(generation, dims, dimKinds, parentPath, parentSub);
+	const bool     reuseLevel = wholeLevel && dir != ibFetchDirection::Reset && m_foldedLevel != nullptr
+		&& m_foldedLevel->Serves(generation, dims, dimKinds, parentPath, parentSub, hierParentKey);
 
 	// Run the composer onto the generic list-fetch sink — the driver carries the page
 	// envelope in and accumulates rows out, keyed by this model's own columns (asked by name).
 	ibListFetchDriver driver(page, [this](const ibString& name) { return GetColumnIDByName(name); });
 	try {
-		if (reuseLevel)
-			driver.Rows() = m_foldedLevel->m_rows;   // a copy — every node below takes its row's appearance
-		else
+		if (!reuseLevel)
 			composer.Run(driver);
 	}
 	catch (const ibCoreException&) {
@@ -423,16 +445,21 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	composer.PutGroups(savedGroups);
 	composer.RestoreScope(scope);
 
-	if (groupLevel && !reuseLevel) {
+	if (wholeLevel && !reuseLevel) {
 		auto folded = std::make_shared<FoldedLevel>();
-		folded->m_generation = generation;
-		folded->m_dims       = dims;
-		folded->m_kinds      = dimKinds;
-		folded->m_path       = parentPath;
-		folded->m_sub        = parentSub;
-		folded->m_rows       = driver.Rows();
+		folded->m_generation   = generation;
+		folded->m_dims         = dims;
+		folded->m_kinds        = dimKinds;
+		folded->m_path         = parentPath;
+		folded->m_sub          = parentSub;
+		folded->m_hierarchyKey = hierParentKey;
+		folded->m_rows         = std::move(driver.Rows());
 		m_foldedLevel = std::move(folded);
 	}
+	// …and a level read whole is served from what was kept: a group level whole, its pre-order read through below; a
+	// detail level as the window the anchor asks for, cut once the key columns are known (below).
+	if (groupLevel)
+		driver.Rows() = m_foldedLevel->m_rows;   // a copy — every node below takes its row's appearance
 
 	// Wrap each driver row in a generic composer node, honouring count + direction exactly as RunPage does. A
 	// DETAIL / flat level was keyset-sized by the SQL page — trim the +1 probe, flip a Backward page to display
@@ -443,7 +470,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// reversed page to flip; doing either would drop a real row off the level. (That the whole result is
 	// read to serve one level is the honest cost of this step, and the next one — the fold taking a
 	// count — is what pays it back.)
-	if (!groupLevel) {
+	if (!wholeLevel) {
 		if (static_cast<int>(rows.size()) > count && count > 0)
 			rows.pop_back();                       // drop the +1 probe
 		if (dir == ibFetchDirection::Backward)
@@ -482,6 +509,36 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// survives re-fetch selection AND a guid-keyed FindRowValue stub matches a fetched row by it. (RAM never
 	// reaches here — its short-circuit above returns the LIVE storage rows, identified by their stable pointer.)
 	const std::vector<const ibBackendQueryColumn*> keyCols = q->GetPrimaryKeyColumns();
+
+	// A DETAIL level read whole is cut to the window the anchor asks for by the rule a group level is windowed by
+	// (below) — but BEFORE a node is built, its anchor found by the row's key: the level may be a whole catalog, and a
+	// node per row of it on every page is the cost the window is there to save.
+	if (wholeLevel && !groupLevel) {
+		const std::vector<ibListFetchDriver::Row>& level = m_foldedLevel->m_rows;
+		std::vector<long> detail;                          // a detail read emits every row at level 0
+		detail.reserve(level.size());
+		for (size_t k = 0; k < level.size(); ++k)
+			if (level[k].m_level == 0)
+				detail.push_back(static_cast<long>(k));
+		const auto keyedBy = [&](const ibListFetchDriver::Row& r, const std::vector<ibValue>& key) {
+			size_t i = 0;
+			for (const ibBackendQueryColumn* kc : keyCols)
+				if (kc != nullptr && (i >= key.size() || !(r.GetValue(kc->GetColumnId()) == key[i++])))
+					return false;
+			return i == key.size();
+		};
+		long p = -1;
+		if (anchor.IsOk())
+			if (const ibComposerNode* anode = GetViewData<ibComposerNode>(anchor); anode != nullptr && !anode->GetRowKey().empty())
+				for (size_t k = 0; k < detail.size(); ++k)
+					if (keyedBy(level[detail[k]], anode->GetRowKey())) { p = static_cast<long>(k); break; }
+		const std::vector<long> win = ibComputePageWindow(static_cast<long>(detail.size()), p, dir,
+			count > 0 ? count : defaultCountPerPage);
+		rows.clear();
+		rows.reserve(win.size());
+		for (const long pos : win)
+			rows.push_back(level[detail[pos]]);
+	}
 
 	// FOLDER-flag container-marking: a folder row renders as a DRILLABLE container even when EMPTY (the folder
 	// convention). The DB level-fetch reports hasChildren=false for every row (dataComposer's flat path emits
@@ -561,7 +618,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 			// drills one dimension deeper (or into the detail rows). DRILLABLE container only when the dimension
 			// value was stamped into the path (else a drill re-enters at depth 0 → groupLevel fires again →
 			// infinite re-grouping).
-			std::map<ibMetaID, ibValue> values = r.m_values;
+			ibRowMetaValues values = r.m_values;
 			const ibValue& dimValue = r.m_key;
 			// WHAT A HEADING ARRIVED WITH — once a fetch: the field it groups by, whether the output gave it a key,
 			// the column the list draws that key under, and which columns the heading carries.
@@ -586,13 +643,13 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 			// under its column id (the SAME id the current level's dimension already sits under), so the front walks
 			// the ancestor reference exactly as on a detail row — the scope the SELECTOR's group fold inherits down
 			// (FoldDimLevel: child->m_values = node->m_values). parentPath[k] aligns with dims[k]; a dot-walk
-			// ancestor dimension keys by its leaf id. emplace keeps r.m_values authoritative (never overwrites).
+			// ancestor dimension keys by its leaf id. insert keeps r.m_values authoritative (never overwrites).
 			for (size_t k = 0; k < depth && k < dims.size() && k < parentPath.size(); ++k) {
 				ibMetaID ancId = GetColumnIDByName(dims[k]);
 				if (ancId == ibMetaID(ibNOT_FOUND))
 					ancId = resolveDotWalkLeaf(dims[k]);
 				if (ancId != ibMetaID(ibNOT_FOUND))
-					values.emplace(ancId, parentPath[k]);
+					values.insert({ ancId, parentPath[k] });
 			}
 			std::vector<ibValue> groupPath = parentPath;
 			std::vector<ibValue> subPath;
@@ -607,7 +664,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 				// under this rung: the next grouping, or the records.
 				groupPath.push_back(dimValue);
 			}
-			ibComposerNode* heading = new ibComposerNode(values, groupPath, /*container*/ r.m_keyed, subPath);
+			ibComposerNode* heading = new ibComposerNode(std::move(values), groupPath, /*container*/ r.m_keyed, subPath);
 			heading->TakeCompositionAttr(std::move(r.m_attr));      // …and what its conditional appearance draws it with, as it is
 			groupNodes.push_back(heading);
 			continue;   // collected — the client window (below) transfers the on-page groups into `out`
@@ -641,7 +698,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 			// ⭐ AND IT CARRIES WHERE IT STANDS. A row fetched inside a group belongs to that group, and
 			// drilling it must re-enter at the rung it was found on — not at the top. Without the scope the
 			// drill came back with an empty path, depth 0, and the whole grouping tree re-grew under the folder.
-			node = new ibComposerNode(r.m_values, isContainer, std::move(rowKey), parentPath);
+			node = new ibComposerNode(std::move(r.m_values), isContainer, std::move(rowKey), parentPath);
 			node->TakeCompositionAttr(std::move(r.m_attr));         // …and what its conditional appearance draws it with, as it is
 		}
 		out.Add(ibDataViewItem(node));   // ctor IncRefs to 2
@@ -704,9 +761,9 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 // AT the row. Same composer/driver path as the page fetch, run SEQUENTIALLY before it (its own MarkScope /
 // RestoreScope), so there is no reentrancy on the persistent store. This is where the old per-list FindRowValue
 // sort-value pre-reading lives now — ONCE, source-agnostic, keyed by the row-key.
-std::map<ibMetaID, ibValue> ibValueModel::ResolveAnchorByKey(const std::vector<ibValue>& rowKey) const
+ibRowMetaValues ibValueModel::ResolveAnchorByKey(const std::vector<ibValue>& rowKey) const
 {
-	std::map<ibMetaID, ibValue> out;
+	ibRowMetaValues out;
 	const ibBackendQueryable* q = GetSourceQueryable();
 	if (q == nullptr || rowKey.empty())
 		return out;
@@ -733,9 +790,9 @@ std::map<ibMetaID, ibValue> ibValueModel::ResolveAnchorByKey(const std::vector<i
 	composer.PutGroups(savedGroups);
 	composer.RestoreScope(scope);
 
-	const std::vector<ibListFetchDriver::Row>& rows = driver.Rows();
+	std::vector<ibListFetchDriver::Row>& rows = driver.Rows();
 	if (!rows.empty())
-		out = rows.front().m_values;
+		out = std::move(rows.front().m_values);
 	return out;
 }
 
@@ -785,7 +842,7 @@ void ibValueModelCursor::BuildAncestorBreadcrumb(const ibDataViewItem& fromRow, 
 		// here, and every dimension below reads from a row that can answer. (2026-09-01: adding an
 		// element at the root of a hierarchical catalog — the one moment a list positions on a
 		// key-only node.)
-		std::map<ibMetaID, ibValue> resolved;
+		ibRowMetaValues resolved;
 		if (node->IsKeyOnlyAnchor() && !node->GetRowKey().empty())
 			resolved = ResolveAnchorByKey(node->GetRowKey());
 
@@ -815,9 +872,9 @@ void ibValueModelCursor::BuildAncestorBreadcrumb(const ibDataViewItem& fromRow, 
 			}
 
 			groupPath.push_back(dimVal);
-			std::map<ibMetaID, ibValue> vals;
+			ibRowMetaValues vals;
 			vals[dimCol] = dimVal;                                       // the group's own label cell
-			crumbs.push_back(new ibComposerNode(vals, groupPath, /*container*/true));   // groupPath copied
+			crumbs.push_back(new ibComposerNode(std::move(vals), groupPath, /*container*/true));   // groupPath copied
 		}
 		if (!crumbs.empty()) {
 			for (size_t i = crumbs.size(); i > 0; --i) {                // deepest → shallowest into out
@@ -843,14 +900,14 @@ void ibValueModelCursor::BuildAncestorBreadcrumb(const ibDataViewItem& fromRow, 
 	ibValue parentRef;
 	node->GetValue(hCol, parentRef);
 	if (parentRef.IsEmpty() && !node->GetRowKey().empty()) {
-		const std::map<ibMetaID, ibValue> vals = ResolveAnchorByKey(node->GetRowKey());
+		const ibRowMetaValues vals = ResolveAnchorByKey(node->GetRowKey());
 		const auto it = vals.find(hCol);
 		if (it != vals.end()) parentRef = it->second;
 	}
 
 	int guard = 0;
 	while (!parentRef.IsEmpty() && guard++ < 256) {
-		std::map<ibMetaID, ibValue> vals = ResolveAnchorByKey(std::vector<ibValue>{ parentRef });
+		ibRowMetaValues vals = ResolveAnchorByKey(std::vector<ibValue>{ parentRef });
 		if (vals.empty())
 			break;   // the ref points nowhere (root passed / broken) — stop
 		ibComposerNode* crumb = new ibComposerNode(vals, /*container*/true, std::vector<ibValue>{ parentRef });

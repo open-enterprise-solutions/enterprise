@@ -249,7 +249,8 @@ public:
 		struct ibMemberTableMethod {
 
 			ibMemberTableMethod(const ibString& strMethodName, const ibString& strHelper, const long paramCount, unsigned int flags, const long lPropAlias = ibNOT_FOUND, const long lData = ibNOT_FOUND)
-				: m_fieldName(strMethodName), m_strHelper(strHelper), m_lData(lData), m_lAlias((int16_t)lPropAlias), m_paramCount((int8_t)paramCount), m_flags((uint8_t)flags)
+				: m_fieldName(strMethodName), m_strHelper(strHelper), m_lData(lData), m_lAlias((int16_t)lPropAlias), m_paramCount((int8_t)paramCount), m_flags((uint8_t)flags),
+				  m_nameHash(NameHash(strMethodName))
 			{
 			}
 
@@ -257,7 +258,8 @@ public:
 			ibMemberTableMethod(const ibString& strMethodName, const ibString& strHelper, const long paramCount, bool hasRet, const long lPropAlias = ibNOT_FOUND, const long lData = ibNOT_FOUND)
 				: m_fieldName(strMethodName), m_strHelper(strHelper), m_lData(lData),
 				  m_lAlias((int16_t)lPropAlias), m_paramCount((int8_t)paramCount),
-				  m_flags((uint8_t)(hasRet ? eMethod_HasReturn : 0u))
+				  m_flags((uint8_t)(hasRet ? eMethod_HasReturn : 0u)),
+				  m_nameHash(NameHash(strMethodName))
 			{
 			}
 
@@ -269,13 +271,16 @@ public:
 			// tops out at FOUR, so a byte is not tight — it is three orders of
 			// magnitude of headroom. Wide to narrow: 8 + 8 + 4 + 2 + 1 + 1 = 24,
 			// exactly two pointers plus a full 8-byte tail, no padding — where the
-			// record used to be 32.
+			// record used to be 32. The name's hash below makes it 32 again on x64.
 			ibString m_fieldName;
 			ibString m_strHelper;
 			long     m_lData  = ibNOT_FOUND;
 			int16_t  m_lAlias = ibNOT_FOUND;
 			int8_t   m_paramCount = 0;
 			uint8_t  m_flags = 0;
+			// ⭐ THE NAME AS A NUMBER (NameHash) — what a call the compiler stamped with this method's number asks,
+			// so that an interpreted call compares two integers and not two names (OPER_CALL_METHOD).
+			uint32_t m_nameHash = 0;
 		};
 
 		// props & methods (the built surface). Constructors (a value may surface
@@ -614,6 +619,19 @@ public:
 		}
 		bool IsBuilt() const { return m_buildState.load(std::memory_order_acquire) == kBuilt; }
 
+		// ⭐ A MEMBER'S NAME AS A NUMBER, CASE-BLIND — FNV-1a over the characters folded as CmpNoCase folds them
+		// (ibToLower), so the names FindMethod calls one are one number; no string is made. The compiler stamps a
+		// call with it beside the method's number, and the interpreter compares it instead of the name. A fold
+		// that differs (another locale) only makes the numbers differ, and the name is asked then.
+		static uint32_t NameHash(const ibString& name) {
+			uint32_t hash = 2166136261u;
+			for (const ibChar c : name) {
+				hash ^= static_cast<uint32_t>(ibToLower(c));
+				hash *= 16777619u;
+			}
+			return hash;
+		}
+
 		// Reusable SHARED helper for a TYPE-INVARIANT name surface: one helper
 		// per distinct contributor, built once and thread-safely (function-local
 		// static init) — no per-class static member / magic-static boilerplate.
@@ -862,11 +880,15 @@ public:
 			return ibNOT_FOUND;
 		}
 
-		// The name WHERE IT LIES — by reference, like GetPropName.
-		const ibString& GetMethodName(const long lMethodNum) const {
+		// The name WHERE IT LIES — by reference, like GetPropName; `hash`, when asked, gets the name
+		// as a number (NameHash), 0 where there is no such method.
+		const ibString& GetMethodName(const long lMethodNum, uint32_t* hash = nullptr) const {
 			static const ibString s_absent;
-			if (lMethodNum < 0 || lMethodNum >= GetNMethods())
+			if (lMethodNum < 0 || lMethodNum >= GetNMethods()) {
+				if (hash != nullptr) *hash = 0;
 				return s_absent;
+			}
+			if (hash != nullptr) *hash = m_methods[lMethodNum].m_nameHash;
 			return m_methods[lMethodNum].m_fieldName;
 		}
 
@@ -1417,9 +1439,10 @@ public:
 	/// Returns method name
 	/**
 	 *  @param lMethodNum - method index(starting with 0)
+	 *  @param hash - when asked, the name as a number (ibMemberTable::NameHash), 0 if method is not found
 	 *  @return method name or 0 if method is not found
 	 */
-	BACKEND_API virtual const ibString& GetMethodName(const long lMethodNum) const;
+	BACKEND_API virtual const ibString& GetMethodName(const long lMethodNum, uint32_t* hash = nullptr) const;
 
 	/// Returns method helper
 	/**

@@ -184,6 +184,11 @@ true per-configuration** — so `/MP` is active in all four configurations for t
 largest project. Add `/v:m` for minimal verbosity or `/v:d`
 for detailed output.
 
+Just My Code is off in every configuration (`<SupportJustMyCode>false</SupportJustMyCode>`,
+`ConfigurationDefs.props`, 2026-11-14), as it is in the CMake tree: `/JMC` puts a call in every
+function's prologue — 14.5 % of a Debug posting, 42 % of a loop of built-in calls. Visual Studio's
+"Just My Code" stepping follows it.
+
 ### Build Output (Windows)
 
 After a successful build (the `Platform` value `x86`/`x64` maps to the output

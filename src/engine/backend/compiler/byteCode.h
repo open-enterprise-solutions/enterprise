@@ -89,9 +89,12 @@ class BACKEND_API ibByteBinder;
 class ibWriterMemory; // core/memory/memoryStream.h
 class ibReaderMemory; // core/memory/memoryStream.h
 
+// ⭐ AN OPERAND IS TWO int — a slot and its frame, a constant's number, a jump, a count, a DEF_VAR_* mark. They were
+// two long long from the days an operand held a reference, and nothing 64-bit is left in one: a class id (OPER_NEW,
+// OPER_SET_TYPE) is a CONSTANT, and the operand is its number in the pool (Max, 2026-11-14).
 struct ibParamRunUnit {
-	long long m_numArray = 0;
-	long long m_numIndex = 0;
+	int m_numArray = 0;
+	int m_numIndex = 0;
 };
 
 struct ibParamUnit : ibParamRunUnit {

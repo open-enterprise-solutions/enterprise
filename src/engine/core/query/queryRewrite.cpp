@@ -593,8 +593,35 @@ bool IsWalk(const ibQuerySelect& s, const ibQueryAstExpr& e)
 
 // Computed where it stands — arithmetic, a CASE's values, a scalar call — with a WALK among its operands. A walk
 // standing alone is a field the engine joins, one folded alone (`SUM(Producer.Weight)`) is too, one handed to a
-// question put to the value is answered over the finished row, and a condition's fields are the WHERE road's: none of
-// them is this.
+// question put to the value is answered over the finished row, and the fields of a condition that FILTERS are the
+// WHERE road's: none of them is this.
+bool ComputesThroughAWalk(const ibQuerySelect& s, const ibQueryAstExprPtr& e);
+
+// ⭐ …BUT A CONDITION STANDING AS A VALUE IS COMPUTED WHERE IT STANDS — a CASE's WHEN, a comparison projected as a
+// column: the lowering builds it with no walk allowed (BuildColumnExprFromAst), so a walk anywhere inside it reads
+// its rows one level down as arithmetic does. Left out, `SUM(CASE WHEN A.Employee.Position = "Manager" THEN A.Result
+// END)` over one register was refused - «a reference dot-walk here needs a single, non-aggregate source» - while
+// the same walk in its WHERE, folded alone, or reached by a JOIN, answered (2026-11-14, a payroll on volume).
+bool ConditionReadsAWalk(const ibQuerySelect& s, const ibQueryAstExprPtr& e)
+{
+	if (!e)
+		return false;
+	switch (e->m_kind) {
+	case ibQueryAstExprKind::Compare: case ibQueryAstExprKind::Logical: case ibQueryAstExprKind::Not:
+	case ibQueryAstExprKind::Like:    case ibQueryAstExprKind::In:      case ibQueryAstExprKind::Between:
+	case ibQueryAstExprKind::IsNull:  case ibQueryAstExprKind::Refs:
+		break;
+	default:
+		return false;
+	}
+	bool found = false;
+	ibQueryForEachOperand(*e, [&s, &found](const ibQueryAstExprPtr& operand) {
+		if (!found && operand)
+			found = IsWalk(s, *operand) || ComputesThroughAWalk(s, operand) || ConditionReadsAWalk(s, operand);
+	});
+	return found;
+}
+
 bool ComputesThroughAWalk(const ibQuerySelect& s, const ibQueryAstExprPtr& e)
 {
 	if (!e)
@@ -616,7 +643,7 @@ bool ComputesThroughAWalk(const ibQuerySelect& s, const ibQueryAstExprPtr& e)
 	bool found = false;
 	ibQueryForEachOperand(*e, [&s, &found](const ibQueryAstExprPtr& operand) {
 		if (!found && operand)
-			found = IsWalk(s, *operand) || ComputesThroughAWalk(s, operand);
+			found = IsWalk(s, *operand) || ComputesThroughAWalk(s, operand) || ConditionReadsAWalk(s, operand);
 	});
 	return found;
 }
@@ -697,7 +724,7 @@ bool ComputesOverItsRows(const ibQuerySelect& s)
 {
 	const bool joined = !s.m_joins.empty();
 	for (const ibQueryProjection& p : s.m_projections)
-		if (ComputesThroughAWalk(s, p.m_expr) || (joined && FoldsAnExpression(p.m_expr)))
+		if (ComputesThroughAWalk(s, p.m_expr) || ConditionReadsAWalk(s, p.m_expr) || (joined && FoldsAnExpression(p.m_expr)))
 			return true;
 	for (const ibQueryAstExprPtr& g : s.m_groupBy)
 		if (ComputesThroughAWalk(s, g))

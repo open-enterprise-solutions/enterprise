@@ -429,7 +429,9 @@ ibValue ibValueQuerySelect::ToTable()
 		for (size_t i = 0; i < m_schema.size(); ++i)
 			rows.SetCell(at, static_cast<ibMetaID>(i + 1), ReadColumn(m_schema[i]));
 	}
-	return rows.ToValueTable();
+	// …and handed over, not copied: the table dies here, and read as an lvalue it copied every cell into the value
+	// table (the && overload moves them).
+	return std::move(rows).ToValueTable();
 }
 
 void ibValueQuerySelect::FillMembers(ibMemberTable& helper) const

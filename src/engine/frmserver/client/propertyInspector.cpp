@@ -33,7 +33,7 @@ void ibPropertyInspector::AppendProperty(ibDataNode& parent, ibBackendProperty* 
 	for (unsigned int index = 0; index < choices.GetCount(); ++index) {
 		ibDataNode& choice = row.AddChild(0, static_cast<ibMetaID>(row.Children().size() + 1));
 		choice.SetValue(ibProtocol::ibSchema::ibProperties::Id, static_cast<std::int32_t>(choices.GetId(index)));
-		choice.SetValue(ibProtocol::ibSchema::ibProperties::Title, choices.GetName(index));
+		choice.SetValue(ibProtocol::ibSchema::ibProperties::Title, choices.GetLabel(index));   // what a person reads; the answer is the Id
 		const ibPictureDescription& picture = choices.GetPicture(index);
 		if (!picture.IsEmptyPicture())
 			choice.SetValue(ibProtocol::ibSchema::ibProperties::Picture, ibBackendPicture::SendPicture(picture, metaData));

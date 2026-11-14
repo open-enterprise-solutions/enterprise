@@ -72,23 +72,17 @@ public:
 		const std::function<bool()>& cancelled = {});
 
 	// Backup + Restore cycle. Runs gbak -B to a temp `.fbk` file,
-	// then gbak -R into a temp `.fdb` file, then atomic-renames the
-	// new file over the original. The original is renamed to `.bak`
-	// for one-cycle rollback insurance, then deleted on success.
+	// then gbak -R into a temp `.fdb` file — which proves the backup
+	// restorable — then drops the restored copy and keeps the backup
+	// as `<base>.fbk`.
 	//
-	// **Caller responsibility — STRICT**: no other process (including
-	// our own spawned firebird.exe leader) may have the database
-	// open during the SWAP step. Windows rename fails with sharing
-	// violation; POSIX rename silently re-points the inode and
-	// leaves other holders working on the old file (state divergence
-	// + data loss). Safe scenarios:
-	//   - Single-process embedded mode (Standalone), no other
-	//     OES process attached.
-	//   - Operator-driven maintenance window where the OES cluster
-	//     is fully shut down.
-	// NOT safe in leader-mode while followers are connected — the
-	// leader's spawned firebird.exe holds the .fdb open. The
-	// scheduler must gate BR-cycle to Standalone-only.
+	// 🛑 IT DOES NOT SWAP THE RESTORED FILE IN (2026-11-14). The swap
+	// assumed that a rename of an open database fails on Windows: it
+	// SUCCEEDS, and the original is deleted under every open
+	// attachment — the job's own included — so what they write after
+	// the backup is lost (on POSIX the same, by re-pointing the
+	// inode). Shrinking the file this way needs the base EXCLUSIVE:
+	// every attachment closed, the swap, then attached again.
 	//
 	// Synchronous. Typical duration: ~1 s per GB on modern SSD,
 	// dominated by gbak's sequential scan + reconstruct passes.

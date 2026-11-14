@@ -24,6 +24,13 @@
          says it on core, PUBLIC), and a unit that reaches for _() without it fails to compile. -->
     <OesIntlDefines>WXINTL_NO_GETTEXT_MACRO;</OesIntlDefines>
   </PropertyGroup>
+  <!-- No /JMC, as in the CMake tree: Debug turns it on by default, and its call in every function's prologue
+       (__CheckForDebuggerJustMyCode) was 14.5 % of a posting's own time, measured 2026-11-14. -->
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <SupportJustMyCode>false</SupportJustMyCode>
+    </ClCompile>
+  </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
     <ClCompile>
       <PreprocessorDefinitions>DEBUG;$(OesDriverDefines)$(OesHttpDefines)$(OesTlsDefines)$(OesIntlDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>

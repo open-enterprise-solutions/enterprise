@@ -251,6 +251,24 @@ void ibDebuggerServer::ClearCollectionBreakpoint()
 	m_listBreakpoint.clear();
 }
 
+namespace {
+
+	// Line `line` of the module stops, on the condition — one breakpoint per line of a module, the last one sent.
+	void SetBreakpoint(std::vector<std::vector<std::pair<ibString, ibString>>>& listBreakpoint,
+		const ibString& strModuleName, unsigned int line, const ibString& condition)
+	{
+		if (line >= listBreakpoint.size())
+			listBreakpoint.resize(line + 1);
+		for (auto& breakpoint : listBreakpoint[line]) {
+			if (breakpoint.first == strModuleName) {
+				breakpoint.second = condition;
+				return;
+			}
+		}
+		listBreakpoint[line].emplace_back(strModuleName, condition);
+	}
+}
+
 void ibDebuggerServer::WakeDebugSession(const ibString& sessionGuid)
 {
 	// Empty guid -> wake everyone (legacy / pre-multi-session designer
@@ -514,17 +532,15 @@ void ibDebuggerServer::EnterDebugger(ibRunContext* runContext, const ibByteUnit&
 				// script's code, which may come back here
 				bool atBreakpoint = false;
 				ibString condition;
-				if (byteCode.m_numLine >= 0) {
+				{
 					std::shared_lock<std::shared_mutex> lock(m_breakpointsMutex);
-					auto list_breakpoint_iterator = m_listBreakpoint.find(byteCode.m_strDocPath);
-					if (list_breakpoint_iterator != m_listBreakpoint.end()) {
-
-						const auto& list_current_breakpoint = list_breakpoint_iterator->second;
-						auto list_current_breakpoint_iterator = list_current_breakpoint.find(byteCode.m_numLine);
-
-						if (list_current_breakpoint_iterator != list_current_breakpoint.end()) {
-							atBreakpoint = true;
-							condition = list_current_breakpoint_iterator->second;
+					if (byteCode.m_numLine < m_listBreakpoint.size()) {
+						for (const auto& breakpoint : m_listBreakpoint[byteCode.m_numLine]) {
+							if (breakpoint.first == byteCode.m_strDocPath) {
+								atBreakpoint = true;
+								condition = breakpoint.second;
+								break;
+							}
 						}
 					}
 				}
@@ -1218,17 +1234,16 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 	else if (commandFromClient == CommandId_SetArrayBreakpoint) {
 		// full-replace semantics: the stale breakpoints go, so a reconnect cannot accumulate duplicates — read whole
 		// first, and put in place of the old under the lock at once
-		std::map<ibString, std::map<unsigned int, ibString>> listBreakpoint;
+		std::vector<std::vector<std::pair<ibString, ibString>>> listBreakpoint;
 		unsigned int countBreakpoints = commandReader.r_u32();
 		//parse breakpoints
 		for (unsigned int i = 0; i < countBreakpoints; i++) {
 			unsigned int countBreakPoints = commandReader.r_u32();
 			ibString strModuleName; commandReader.r_stringZ(strModuleName);
-			auto& module_breakpoints = listBreakpoint[strModuleName];
 			for (unsigned int j = 0; j < countBreakPoints; j++) {
 				const unsigned int line = commandReader.r_u32();
 				ibString condition; commandReader.r_stringZ(condition);
-				module_breakpoints[line] = condition;
+				SetBreakpoint(listBreakpoint, strModuleName, line, condition);
 			}
 		}
 		{
@@ -1244,18 +1259,16 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 		commandReader.r_s32();   // the offset the designer's edits have moved it by - the runtime counts committed lines
 		ibString condition; commandReader.r_stringZ(condition);
 		std::unique_lock<std::shared_mutex> lock(ms_debugServer->m_breakpointsMutex);
-		ms_debugServer->m_listBreakpoint[strModuleName][line] = condition;
+		SetBreakpoint(ms_debugServer->m_listBreakpoint, strModuleName, line, condition);
 	}
 	else if (commandFromClient == CommandId_RemoveBreakpoint) {
 
 		ibString strModuleName; commandReader.r_stringZ(strModuleName);
 		unsigned int line = commandReader.r_u32();
 		std::unique_lock<std::shared_mutex> lock(ms_debugServer->m_breakpointsMutex);
-		auto it = ms_debugServer->m_listBreakpoint.find(strModuleName);
-		if (it != ms_debugServer->m_listBreakpoint.end()) {
-			it->second.erase(line);
-			if (it->second.empty())
-				ms_debugServer->m_listBreakpoint.erase(it);
+		if (line < ms_debugServer->m_listBreakpoint.size()) {
+			auto& breakpoints = ms_debugServer->m_listBreakpoint[line];
+			std::erase_if(breakpoints, [&strModuleName](const auto& breakpoint) { return breakpoint.first == strModuleName; });
 		}
 	}
 	else if (commandFromClient == CommandId_AddExpression) {

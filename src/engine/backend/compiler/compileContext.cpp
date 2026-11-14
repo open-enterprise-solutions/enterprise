@@ -125,7 +125,7 @@ ibParamUnit ibCompileContext::GetVariable(const ibString& strVarName, bool bFind
 			crossedLambdas.emplace_back(m_functionContext, 0);
 
 		// Sorted by (depth, slot), each entry once — the frame's own entries come first (ibRunContext::Capture).
-		const auto capture = [](std::vector<ibParamRunUnit>& captured, const long long depth, const long long slot) {
+		const auto capture = [](std::vector<ibParamRunUnit>& captured, const int depth, const int slot) {
 			auto at = captured.begin();
 			while (at != captured.end() && (at->m_numArray < depth || (at->m_numArray == depth && at->m_numIndex < slot)))
 				++at;
@@ -186,7 +186,7 @@ ibParamUnit ibCompileContext::GetVariable(const ibString& strVarName, bool bFind
 			if (!(m_numReturn == RETURN_BLOCK || numCanUseLocalInParent > 0 || crossedLambda
 			      || !cur->IsLocal()))
 				return false;
-			out.m_numArray = blockReturn ? (long long)DEF_VAR_TEMP_COPY : (long long)depth;
+			out.m_numArray = blockReturn ? static_cast<int>(DEF_VAR_TEMP_COPY) : depth;
 			out.m_numIndex = cur->m_numVariable;
 			out.m_clsid = cur->m_clsid;
 			return true;
@@ -282,7 +282,7 @@ ibParamUnit ibCompileContext::GetVariable(const ibString& strVarName, bool bFind
 			//    inherits its host's chain) — foreign bcs never appear,
 			//    so scoped bindings (ThisForm / ThisObject) are
 			//    reachable iff they live on a real ancestor.
-			// Walk start: lambda case includes OWN bc (codeRunner-style
+			// Walk start: lambda case includes OWN bc (coderunner-style
 			// flat compile where own bc IS the root with no parent
 			// chain to walk). Non-lambda case starts at m_parent — own
 			// scope was already covered by FindVariable on `this` at
@@ -314,11 +314,11 @@ ibParamUnit ibCompileContext::GetVariable(const ibString& strVarName, bool bFind
 			}
 			// Lambda final fallback: m_rootContext for Context bindings
 			// (Catalogs / Documents / Manager / system functions / host-
-			// injected like codeRunner's ValueOutput). They land in
+			// injected like coderunner's ValueOutput). They land in
 			// m_rootContext->m_listVariable via AddContextVariable —
 			// CompileContext layer, not bc layer — so the bc walk above
 			// can't see them. Filter to m_bContext == true so user
-			// module-level vars in rootCtx (codeRunner sandbox case
+			// module-level vars in rootCtx (coderunner sandbox case
 			// where module-level declarations land directly in root)
 			// stay invisible. Depth 1 matches the runtime shim's
 			// m_pppArrayList[1] — root frame.

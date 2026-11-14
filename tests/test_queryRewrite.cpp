@@ -366,6 +366,28 @@ TEST(QueryRewrite, AWalkInsideAnExpression_ReadsTheRowsOneLevelDown)
 	EXPECT_EQ(amount->m_rhs->m_path.front(), wxT("q_rows"));
 }
 
+TEST(QueryRewrite, AWalkInACaseCondition_ReadsTheRowsOneLevelDown)
+{
+	// A CASE's WHEN is computed where it stands, not filtered on the WHERE road: its walk is a field of the rows below.
+	auto sel = ParseAndRewrite(
+		wxT("SELECT A.Kind AS Kind, SUM(CASE WHEN A.Employee.Position = \"Manager\" THEN A.Result ELSE 0 END) AS M ")
+		wxT("FROM CalculationRegister.Accrual AS A GROUP BY A.Kind"));
+
+	ASSERT_TRUE(sel->m_from.m_subquery != nullptr);
+	EXPECT_TRUE(Carries(*sel, wxT("A.Employee.Position")));
+	EXPECT_TRUE(Carries(*sel, wxT("A.Result")));
+	ASSERT_EQ(sel->m_groupBy.size(), 1u);
+	EXPECT_EQ(sel->m_groupBy[0]->m_path.front(), wxT("q_rows"));       // the grouping stays up, over the rows
+}
+
+TEST(QueryRewrite, AWalkInAConditionProjectedAsAValue_ReadsTheRowsOneLevelDown)
+{
+	auto sel = ParseAndRewrite(wxT("SELECT T.Item.Price > 10 AS Dear FROM Document.Sale.Goods AS T"));
+
+	ASSERT_TRUE(sel->m_from.m_subquery != nullptr);
+	EXPECT_TRUE(Carries(*sel, wxT("T.Item.Price")));
+}
+
 TEST(QueryRewrite, AFoldOfAnExpressionOverAJoin_ReadsTheRowsOneLevelDown)
 {
 	// The stitched rows of a join carry columns, not expressions: one level up the join is ONE source.

@@ -457,14 +457,15 @@ long ibValue::FindMethod(const ibString& strMethodName) const
 	return ibNOT_FOUND;
 }
 
-const ibString& ibValue::GetMethodName(const long lMethodNum) const
+const ibString& ibValue::GetMethodName(const long lMethodNum, uint32_t* hash) const
 {
 	static const ibString s_absent;
 	if (m_pRef != nullptr && IsReference())
-		return GetRef()->GetMethodName(lMethodNum);
+		return GetRef()->GetMethodName(lMethodNum, hash);
 	ibMemberTable* const methodHelper = GetPMethods();
 	if (methodHelper != nullptr)
-		return methodHelper->GetMethodName(lMethodNum);
+		return methodHelper->GetMethodName(lMethodNum, hash);
+	if (hash != nullptr) *hash = 0;
 	return s_absent;
 }
 

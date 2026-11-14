@@ -17,11 +17,15 @@ ibNumber ibQualifierNumber::Adjust(const ibNumber& value) const
 		number = number.Round(m_scale);
 		// (a description written before the scale was kept within the precision is read back as written)
 		const int digits = std::max(0, static_cast<int>(m_precision) - static_cast<int>(m_scale));
-		const ibNumber most = ibNumber(10).Pow(digits) - ibNumber(1) / ibNumber(10).Pow(static_cast<int>(m_scale));
-		if (number > most)
-			number = most;
-		else if (number < -most)
-			number = -most;
+		// ⭐ Rounded to `scale` digits, a number is past the largest the qualifier holds (10^digits - 10^-scale)
+		// exactly when it reaches 10^digits — so that largest one, which takes a long division to build, is built
+		// only for a number that has to be cut to it. Built for every number, it was ~50 µs per read of a value
+		// table's number cell, which retypes on read (Debug, 2026-11-14: a FIFO walk over 2 766 lots).
+		const ibNumber limit = ibNumber(10).Pow(digits);
+		if ((number.IsSign() ? -number : number) >= limit) {
+			const ibNumber most = limit - ibNumber(1) / ibNumber(10).Pow(static_cast<int>(m_scale));
+			number = number.IsSign() ? -most : most;
+		}
 	}
 	if (m_nonNegative && number.IsSign())
 		number = ibNumber(0);

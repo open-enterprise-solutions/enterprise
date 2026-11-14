@@ -1191,6 +1191,36 @@ ibNumber ibNumber::Trunc() const
 ibNumber ibNumber::Round(int n) const
 {
 	if (n < 0) n = 0;
+	// ⭐ AN IMMEDIATE NUMBER IS ROUNDED IN ITS WORD, as the road below rounds it: nothing past the n-th digit is
+	// itself; otherwise its magnitude is divided by 10^k, half away from zero, and kept at the exponent -n — the
+	// pair StoreBig would store. Through the road below every call built a BigImpl, an allocation and a free even
+	// when there was nothing to cut, and a qualifier rounds every number a value table's cell hands back
+	// (ibQualifierNumber::Adjust; Debug, 2026-11-14).
+	if (IsImmediate()) {
+		const int e = ImmExp();
+		if (e >= -n)
+			return *this;
+		const int k = -n - e;   // > 0 digits to remove
+		const int64_t m = ImmMantissa();
+		const uint64_t mag = m < 0 ? static_cast<uint64_t>(-m) : static_cast<uint64_t>(m);   // < 2^46
+		uint64_t q = 0;
+		if (k <= 18) {   // 10^18 fits; past it the magnitude is below half of the divisor and rounds to zero
+			uint64_t divisor = 1;
+			for (int i = 0; i < k; ++i)
+				divisor *= 10;
+			q = mag / divisor;
+			if (2 * (mag % divisor) >= divisor)
+				++q;
+		}
+		if (q == 0)
+			return ibNumber();
+		const int64_t r = m < 0 ? -static_cast<int64_t>(q) : static_cast<int64_t>(q);
+		if (CanBeImmediate(r, -n)) {
+			ibNumber out;
+			out.StoreImmediate(r, -n);
+			return out;
+		}
+	}
 	BigImpl b;
 	LoadBig(b);
 	if (b.exp >= -n) return *this;
@@ -1264,6 +1294,15 @@ int ibNumber::ToUnsigned64(uint64_t& out) const
 		const int64_t v = ImmMantissa();
 		if (v < 0) return 1;   // negative — overflow for unsigned, as below
 		out = static_cast<uint64_t>(v);
+		return 0;
+	}
+
+	// An integer too wide for the immediate tier is read where it lies: a class id in a bytecode's const pool is one
+	// (procUnit.cpp, ClassIdOf), read on every `New` and every typed assignment — the copy below is an allocation.
+	if (const BigImpl* held = IsImmediate() ? nullptr : HeapPtr(); held != nullptr && held->exp == 0) {
+		if (held->negative || held->limbs.size() > 2) return 1;
+		out = held->limbs.empty() ? 0 : held->limbs[0];
+		if (held->limbs.size() == 2) out |= static_cast<uint64_t>(held->limbs[1]) << 32;
 		return 0;
 	}
 

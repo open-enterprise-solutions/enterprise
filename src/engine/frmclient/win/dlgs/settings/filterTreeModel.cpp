@@ -1,7 +1,5 @@
 #include "filterTreeModel.h"
-#include "frmclient/win/dlgs/settings/settingsFieldTree.h"   // ibSettingsFieldTree::IsAvailable — which lines are listed
-
-#include <algorithm>   // std::count — how many segments a field's text names (ibFieldText)
+#include "frmclient/win/dlgs/settings/settingsFieldTree.h"   // IsAvailable — which lines are listed; ibSettingsFieldText — what a field reads as
 
 #include "frmclient/backend/system/value/valueType.h"   // ibValueTypeDescription::AdjustValue — typed text lands as its type
 #include "frmclient/backend/system/value/composition/valueComposerSettings.h"   // the pickers a cell offers
@@ -195,15 +193,11 @@ bool ibFilterTreeModel::HasValue(const ibDataViewItem& item, unsigned col) const
 // ⭐⭐ A FIELD READS AS ITS WHOLE PATH, dots included. `Recorder.Ref` is a value reached THROUGH a
 // reference, and a cell that says only `Ref` hides exactly the thing worth seeing — which of the two
 // it is (Max, 2026-09-25: "it must show the full path, so we see plainly that the value is obtained
-// through the dot"). The presentation is the readable spelling, in synonyms, and it is what is shown
-// whenever it names as many segments as the path does; a presentation that lost its prefix somewhere
-// on the way here would say less than the truth, so the PATH answers instead. The path is always
-// whole — it is what the query is built from.
+// through the dot"). The rule, with the designer's names beside the enterprise's synonyms, is
+// ibSettingsFieldText's — every settings surface reads a field by it.
 static wxString ibFieldText(const ibFilterOperandDescription& side)
 {
-	const size_t inPath = std::count(side.m_path.begin(), side.m_path.end(), wxT('.'));
-	const size_t inText = std::count(side.m_presentation.begin(), side.m_presentation.end(), wxT('.'));
-	return (!side.m_presentation.IsEmpty() && inText >= inPath) ? side.m_presentation : side.m_path;
+	return ibSettingsFieldText(side.m_path, side.m_presentation);
 }
 
 wxString ibFilterValueText(const ibValue& value, const ibFilterOperandDescription& field)

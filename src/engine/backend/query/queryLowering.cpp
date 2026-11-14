@@ -114,7 +114,7 @@ const ibMetaData* ibSourceMetaDataScope::Get()
 }
 
 // WHOSE sources this query sees: the config in scope, else the global base factory (common / plugin
-// sources only — launcher, codeRunner before it opens anything). Nothing process-wide is consulted in
+// sources only — launcher, coderunner before it opens anything). Nothing process-wide is consulted in
 // between ON PURPOSE: "which configuration" is a question the CALLER can always answer, and every
 // caller now does — the composer and the dynamic list from their own metadata, the constructor from
 // the open one, a script query from the session it runs in. One place asks, so a new caller that
@@ -5876,16 +5876,39 @@ void BuildSourceTree(const ibQuerySelect& ast, const std::map<ibString, ibValue>
 			// second on an outer join left that question unanswerable — a query language with no
 			// windows and no scalar subquery has only the join to say it with.
 			//
-			// What still cannot ride is a term that filters ONE SIDE (a constant, a computed side):
-			// on an outer join that is not a key at all, and moving it to WHERE changes the answer.
+			// What still cannot ride is a term that filters ONE SIDE (a constant, a comparison within
+			// one side): on an outer join that is not a key at all, and moving it to WHERE changes the answer.
+			// ⭐⭐ …NOR THAT ITS SIDES ARE BARE COLUMNS. `B.Period = DATEADD(A.Period, MONTH, -1)` compares
+			// the two sides as surely as `B.Item = A.Item` does: each operand reads one side, and they read
+			// different ones. Asked of the columns an operand names, a computed operand answers as a bare one.
+			//
+			// 🛑 Asked of the operand's KIND ("both are Column"), a computed comparison was no key — and on
+			// an INNER join a term that was no key was DROPPED: the rest of an ON was called "filters" and
+			// nothing ever applied them. `ON B.Item = A.Item AND B.Period = DATEADD(A.Period, MONTH, -1)`
+			// joined on the item alone, every month against every month of it: 36 thousand rows of a
+			// turnover table took the x86 process past 3.4 GB and killed it (2026-11-14). An outer join
+			// refused the same text as "a term that filters ONE side", which it is not.
+			enum : int { kReadsJoined = 1, kReadsNew = 2 };   // which side an operand reads, as a mask; 0 = a constant
+			const auto sidesRead = [&](const ibQueryAstExprPtr& operand) {
+				std::vector<const ibQueryAstExpr*> columns;
+				CollectColumns(operand, columns);
+				int read = 0;
+				for (const ibQueryAstExpr* column : columns) {
+					const ibBackendQueryColumn* col = ResolveColumnSingle(sources, *column);
+					read |= (col != nullptr && qi->ContainColumn(col)) ? kReadsNew : kReadsJoined;
+				}
+				return read;
+			};
+			const auto comparesBothSides = [&](const ibQueryAstExprPtr& term) {
+				if (!term || term->m_kind != ibQueryAstExprKind::Compare || !term->m_lhs || !term->m_rhs)
+					return false;
+				const int lhs = sidesRead(term->m_lhs);
+				const int rhs = sidesRead(term->m_rhs);
+				return (lhs == kReadsJoined && rhs == kReadsNew) || (lhs == kReadsNew && rhs == kReadsJoined);
+			};
 			std::vector<ibQueryAstExprPtr> keyTerms, otherTerms;
-			for (const ibQueryAstExprPtr& term : onTerms) {
-				const bool comparesBothSides = term && term->m_kind == ibQueryAstExprKind::Compare
-					&& term->m_lhs && term->m_rhs
-					&& term->m_lhs->m_kind == ibQueryAstExprKind::Column
-					&& term->m_rhs->m_kind == ibQueryAstExprKind::Column;
-				(comparesBothSides ? keyTerms : otherTerms).push_back(term);
-			}
+			for (const ibQueryAstExprPtr& term : onTerms)
+				(comparesBothSides(term) ? keyTerms : otherTerms).push_back(term);
 			if (!otherTerms.empty() && (keyTerms.size() + otherTerms.size()) > 1 && kind != ibQueryJoinKind::Inner)
 				ThrowQueryException(j.m_on->m_line, j.m_on->m_col,
 					// 🛑 THE SAME CORRECTION AS THE CONSTANT-ON REFUSAL BELOW: this used to end
@@ -5900,11 +5923,38 @@ void BuildSourceTree(const ibQuerySelect& ast, const std::map<ibString, ibValue>
 					  "parameters), or make the join inner if that is what was meant"));
 
 			// The key terms lead, so the first of them becomes the join key proper and the rest ride
-			// with it; a non-key term keeps the old road (an INNER join's extra filter).
-			if (keyTerms.size() > 1) {
-				onTerms = keyTerms;
-				onTerms.insert(onTerms.end(), otherTerms.begin(), otherTerms.end());
+			// with it. ⭐ AN EQUALITY LEADS, and a pair of columns before a computed pair: the first pair
+			// decides the road (an equality hashes, anything else is a nested loop over every pair), and
+			// only a pair of columns can be written to the server. The written order decides nothing — an
+			// ON is one condition, its parts ANDed.
+			const auto leadRank = [](const ibQueryAstExprPtr& term) {
+				return (term->m_cmp == ibQueryCompareOp::Eq ? 0 : 2)
+				     + (IsComputedExprAst(*term->m_lhs) || IsComputedExprAst(*term->m_rhs) ? 1 : 0);
+			};
+			std::stable_sort(keyTerms.begin(), keyTerms.end(),
+				[&leadRank](const ibQueryAstExprPtr& x, const ibQueryAstExprPtr& y) { return leadRank(x) < leadRank(y); });
+			onTerms = keyTerms;
+			onTerms.insert(onTerms.end(), otherTerms.begin(), otherTerms.end());
+
+			// ⭐⭐ …AND WHAT IS NOT THE KEY IS A CONDITION, and goes where conditions go: to the WHERE, by the
+			// road a condition written there takes (the source conditions, read with it). On an INNER join
+			// the two say the same — a pair the ON rejects is gone, and so is a row the WHERE rejects.
+			// ⚠ Unless a later RIGHT or FULL join pads this side with nulls: the ON keeps those rows, the
+			// WHERE would drop them. That case is refused rather than answered differently.
+			const size_t joinAt = static_cast<size_t>(&j - ast.m_joins.data());
+			bool paddedLater = false;
+			for (size_t later = joinAt + 1; later < ast.m_joins.size(); ++later) {
+				const ibQueryJoinKind laterKind = MapJoinKind(ast.m_joins[later].m_kind);
+				paddedLater = paddedLater || laterKind == ibQueryJoinKind::Right || laterKind == ibQueryJoinKind::Full;
 			}
+			const auto asCondition = [&](const ibQueryAstExprPtr& term) {
+				if (paddedLater)
+					ThrowQueryException(term->m_line, term->m_col,
+						_("a JOIN ON term that does not compare the two sides cannot be carried when a later RIGHT "
+						  "or FULL join pads this side with nulls: as a WHERE it would drop the padded rows. Put it "
+						  "inside the joined source instead (a subquery)"));
+				sourceConditions->push_back(term);
+			};
 
 			const ibQueryAstExprPtr on = onTerms.front();
 			if (on->m_kind != ibQueryAstExprKind::Compare)
@@ -5957,36 +6007,56 @@ void BuildSourceTree(const ibQuerySelect& ast, const std::map<ibString, ibValue>
 				const ibBackendQueryColumn* col = ResolveColumnSingle(sources, colE);
 				b.CrossJoin(qi, kind, alias);
 				b.Where(col, fop, EvalValue(valE, params));
+				for (size_t k = 1; k < onTerms.size(); ++k)
+					asCondition(onTerms[k]);
 			}
-			else if (IsComputedExprAst(*on->m_lhs) || IsComputedExprAst(*on->m_rhs)) {
-				// Computed ON (a.x+1 <op> b.y) — both sides become column exprs, evaluated per pair in the RAM
-				// theta loop (lhs over left, rhs over right). No dot-walk inside the expression.
-				b.Join(qi, BuildColumnExprFromAst(sources, *on->m_lhs, params),
-				           BuildColumnExprFromAst(sources, *on->m_rhs, params),
-				           MapJoinOp(on->m_cmp), kind, alias);
+			else if (keyTerms.empty()) {
+				// A comparison, but not of the two sides (`A.x = A.y`, `A.x + B.y > 10`): there is no key,
+				// and what the ON says is a product narrowed by conditions — which an outer join cannot say.
+				if (kind != ibQueryJoinKind::Inner)
+					ThrowQueryException(on->m_line, on->m_col, _("a JOIN ON clause must compare two sides (a.x <op> b.y), or be TRUE for a cross join"));
+				b.CrossJoin(qi, kind, alias);
+				for (const ibQueryAstExprPtr& term : onTerms)
+					asCondition(term);
 			}
 			else {
-				const ibBackendQueryColumn* lc = ResolveColumnSingle(sources, *on->m_lhs);
-				const ibBackendQueryColumn* rc = ResolveColumnSingle(sources, *on->m_rhs);
+				// Each key term as a pair of sides, the sources joined so far on the LEFT — turned round,
+				// its comparison mirrored, where the author named the joined source first. JoinNode turns
+				// a pair of columns itself; which source an EXPRESSION reads it cannot see, so a computed
+				// pair is turned here (read over the wrong table, every side was empty).
+				const auto keyPart = [&](const ibQueryAstExprPtr& term) {
+					const bool turned = sidesRead(term->m_lhs) == kReadsNew;
+					const ibQueryAstExpr& left  = turned ? *term->m_rhs : *term->m_lhs;
+					const ibQueryAstExpr& right = turned ? *term->m_lhs : *term->m_rhs;
+					ibJoinOn::ibJoinKeyPart part;
+					part.m_op = turned ? ibMirrorJoinOp(MapJoinOp(term->m_cmp)) : MapJoinOp(term->m_cmp);
+					if (IsComputedExprAst(left) || IsComputedExprAst(right)) {
+						// No dot-walk inside the expression — BuildColumnExprFromAst refuses one.
+						part.m_exprL = BuildColumnExprFromAst(sources, left, params);
+						part.m_exprR = BuildColumnExprFromAst(sources, right, params);
+					}
+					else {
+						part.m_colL = ResolveColumnSingle(sources, left);
+						part.m_colR = ResolveColumnSingle(sources, right);
+					}
+					return part;
+				};
 
-				// …AND THE REST OF THE KEY, where the author wrote a composite one. Only plain
-				// equalities join it (the split above put them first); an INNER join's remaining
-				// terms stay filters, exactly as before.
 				// …AND THE REST OF THE KEY, each part with the comparison the author wrote. The parts are
 				// no longer required to be equalities: the door hashes the equal ones and checks the
 				// rest per candidate pair, which is what lets one ON hold both halves of "the next
 				// record of the same series".
 				std::vector<ibJoinOn::ibJoinKeyPart> alsoOn;
-				for (size_t k = 1; k < keyTerms.size(); ++k) {
-					const ibQueryAstExprPtr& term = keyTerms[k];
-					ibJoinOn::ibJoinKeyPart part;
-					part.m_colL = ResolveColumnSingle(sources, *term->m_lhs);
-					part.m_colR = ResolveColumnSingle(sources, *term->m_rhs);
-					part.m_op   = MapJoinOp(term->m_cmp);
-					alsoOn.push_back(part);
-				}
+				for (size_t k = 1; k < keyTerms.size(); ++k)
+					alsoOn.push_back(keyPart(keyTerms[k]));
 
-				b.Join(qi, lc, rc, MapJoinOp(on->m_cmp), kind, alias, alsoOn);   // = -> hash; <,<=,>,>=,<> -> theta (server-side when co-located)
+				const ibJoinOn::ibJoinKeyPart first = keyPart(keyTerms.front());
+				if (first.m_exprL)
+					b.Join(qi, first.m_exprL, first.m_exprR, first.m_op, kind, alias, alsoOn);   // computed -> RAM (= hashes)
+				else
+					b.Join(qi, first.m_colL, first.m_colR, first.m_op, kind, alias, alsoOn);     // = -> hash; <,<=,>,>=,<> -> theta (server-side when co-located)
+				for (const ibQueryAstExprPtr& term : otherTerms)
+					asCondition(term);   // an INNER join's — an outer one with such a term was refused above
 			}
 		}
 		else {

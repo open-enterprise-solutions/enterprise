@@ -91,6 +91,9 @@ public:
 	// by data so the same business row matches across re-fetches
 	// behind a fresh pointer.
 	virtual bool IsEqualTo(const ibDataViewObject& other) const { return this == &other; }
+	// …and a number two equal objects share, read off what IsEqualTo compares — so a row is found among many by it
+	// instead of by asking each. Default: the pointer, as the default equality.
+	virtual size_t GetIdentityHash() const { return std::hash<const void*>()(this); }
 
 	// True if the item can have children (a folder, a tree node with
 	// expander).  Default: leaf.
@@ -229,6 +232,11 @@ public:
 		if (!m_id || !o.m_id) return false;
 		if (m_mode != Mode::Refcounted || o.m_mode != Mode::Refcounted) return false;
 		return m_id->IsEqualTo(*o.m_id);
+	}
+	// …and the number two equal items share (ibDataViewObject::GetIdentityHash); an item that is not an object is its
+	// pointer, as it is to operator==.
+	size_t GetIdentityHash() const {
+		return m_mode == Mode::Refcounted && m_id != nullptr ? m_id->GetIdentityHash() : std::hash<const void*>()(m_id);
 	}
 
 	// Row-side queries — delegate to the held ibDataViewObject so the

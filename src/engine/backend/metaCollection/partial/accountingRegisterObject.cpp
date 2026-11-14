@@ -7,6 +7,7 @@
 #include "chartOfAccounts.h"                   // the account's own OffBalance — the balance separator
 #include "chartOfCharacteristicTypes.h"        // the kind's own Type — what a value is adjusted to
 #include "reference/reference.h"               // ibValueReferenceDataObject::GetValueByMetaID — reading the kind
+#include "backend/query/dataQueryBuilder.h"   // the account's kinds read as data (KindsOfAccount)
 #include "backend/metaCollection/resource/metaResourceObject.h"   // IsBalanceResource — which figure balances
 #include "backend/system/value/valueMap.h"      // ibValueMap — a breakdown handed over as a whole map
 #include "backend/system/value/valueType.h"    // ibValueTypeDescription::AdjustValue
@@ -362,19 +363,39 @@ std::vector<std::pair<ibString, ibValue>> KindsOfAccount(const ibValue& account)
 	if (table == nullptr || table->GetAccountDimensionKind() == nullptr)
 		return kinds;
 
-	// Held in an ibValue so the loaded object is released with it — GetObject CREATES one.
-	ibValue holder = reference->GetObject();
-	ibValueRecordDataObjectRef* object = nullptr;
-	if (!holder.ConvertToValue(object) || object == nullptr)
-		return kinds;
-
-	ibValueModel* rows = object->GetTableByMetaID(table->GetMetaID());
+	// ⭐ THE KINDS ARE DATA, SO THEY ARE READ AS DATA - the account's rows of its kinds table, in the table's order,
+	// as the totals read the same table (KindsByAccount, accountingRegisterMetadataTotals.cpp). This opened the
+	// account's CARD - GetObject: a runtime object with its module loaded from the bytecode cache, its row, its
+	// whole table - for each account a record set met: four accounts a sale, four statements each, in every
+	// document posted (2026-11-14, 4000 sales into a ledger, the journal counted). Not filtered by rights, as the
+	// totals' reading is not: which analytics an account keeps is the chart's, not the writer's.
+	const ibBackendQueryable* const rows = table->GetQueryable();
 	if (rows == nullptr)
 		return kinds;
+	const auto columnOf = [rows](const ibValueMetaObjectAttributeBase* attribute) -> const ibBackendQueryColumn* {
+		if (attribute == nullptr)
+			return nullptr;
+		const ibBackendQueryColumn* const named = rows->ResolveColumnByName(attribute->GetName());
+		return named != nullptr ? named : attribute->GetQueryColumn();
+	};
+	const ibBackendQueryColumn* const ownerCol = chart->GetDataReference() != nullptr
+		? rows->ResolveColumnByName(chart->GetDataReference()->GetName()) : nullptr;
+	const ibBackendQueryColumn* const kindCol = columnOf(table->GetAccountDimensionKind());
+	const ibBackendQueryColumn* const lineCol = columnOf(table->GetNumberLine());
+	if (ownerCol == nullptr || kindCol == nullptr)
+		return kinds;
 
-	for (long row = 0; row < rows->GetRowCount(); row++) {
-		ibValue kind;
-		rows->GetValueByMetaID(rows->GetItem(row), table->GetAccountDimensionKind()->GetMetaID(), kind);
+	ibDataQueryBuilder b;
+	b.From(rows);
+	b.WithAccessPolicy(nullptr);
+	b.Select(kindCol, kindCol->GetName());
+	b.Where(ownerCol, account);
+	if (lineCol != nullptr)
+		b.OrderBy(lineCol, true);
+	ibDataQueryResult sel = b.Execute(ibReadPageRequest{});
+
+	while (sel.Next()) {
+		const ibValue kind = sel.GetValue(kindCol);
 		if (kind.IsEmpty())
 			continue;
 

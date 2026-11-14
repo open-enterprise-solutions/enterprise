@@ -375,6 +375,57 @@ TEST(QueryComposerCore, JoinRamTables_ThetaOuterKeepsUnmatched)
 }
 
 // ===========================================================================
+// A COMPUTED PART OF A KEY — "this period against the one before, of the same item":
+// `ON A.Item = B.Item AND B.Period = A.Period - 1`. The second part is as much a key as the
+// first; dropped, every period of an item paired with every other (2026-11-14). A computed
+// EQUALITY as the FIRST pair hashes as a pair of columns does, and answers the same.
+// ===========================================================================
+
+TEST(QueryComposerCore, JoinRamTables_ComputedKeyPartNarrowsTheMatch)
+{
+	const ibMetaID AI = 1, AP = 2, BI = 3, BP = 4;
+	TestCol ai(wxT("ai"), AI), ap(wxT("ap"), AP), bi(wxT("bi"), BI), bp(wxT("bp"), BP);
+
+	ibQueryRamTable left;  left.AddColumn(AI, wxT("ai"), kNoType);  left.AddColumn(AP, wxT("ap"), kNoType);
+	ibQueryRamTable right; right.AddColumn(BI, wxT("bi"), kNoType); right.AddColumn(BP, wxT("bp"), kNoType);
+	const long itemPeriods[][2] = { { 1, 1 }, { 1, 2 }, { 1, 3 }, { 2, 1 }, { 2, 2 } };   // the same rows on both sides
+	for (const auto& ip : itemPeriods) {
+		const long l = left.AppendRow();  left.SetCell(l, AI, ibValue(ibNumber(ip[0])));  left.SetCell(l, AP, ibValue(ibNumber(ip[1])));
+		const long r = right.AppendRow(); right.SetCell(r, BI, ibValue(ibNumber(ip[0]))); right.SetCell(r, BP, ibValue(ibNumber(ip[1])));
+	}
+	const ibQueryColumnExprPtr periodBefore = ibQueryColumnExpr::Arith(ibQueryColumnArithOp::Sub,
+		ibQueryColumnExpr::Col(&ap), ibQueryColumnExpr::Const(ibValue(ibNumber(1))));
+
+	const std::vector<const ibBackendQueryColumn*> outc = { &ap, &bp };
+	const std::vector<bool> side = { true, false };
+	using JK = ibQueryJoinKind;
+
+	// The item is the key; the period before rides as a computed part.
+	ibJoinOn itemKey;
+	ibJoinOn::ibJoinKeyPart before;
+	before.m_exprL = periodBefore;
+	before.m_exprR = ibQueryColumnExpr::Col(&bp);
+	itemKey.m_alsoOn.push_back(before);
+	const ibQueryRamTable inner = ibQueryComposer::JoinRamTables(left, right, &ai, &bi, outc, side, JK::Inner, itemKey);
+	ASSERT_EQ(inner.RowCount(), 3);   // (1,2)-(1,1) (1,3)-(1,2) (2,2)-(2,1); 13 with the part dropped
+	for (long r = 0; r < inner.RowCount(); ++r)
+		EXPECT_EQ(std::stol(inner.GetCell(r, AP).GetString().ToStdString()),
+		          std::stol(inner.GetCell(r, BP).GetString().ToStdString()) + 1);
+	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, &ai, &bi, outc, side, JK::Left, itemKey).RowCount(), 5);   // + (1,1) (2,1)
+
+	// The same ON with the computed pair first: no key column, and still a hash, not a product.
+	ibJoinOn periodKey;
+	periodKey.m_exprL = periodBefore;
+	periodKey.m_exprR = ibQueryColumnExpr::Col(&bp);
+	ibJoinOn::ibJoinKeyPart item;
+	item.m_colL = &ai;
+	item.m_colR = &bi;
+	periodKey.m_alsoOn.push_back(item);
+	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, nullptr, nullptr, outc, side, JK::Inner, periodKey).RowCount(), 3);
+	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, nullptr, nullptr, outc, side, JK::Full,  periodKey).RowCount(), 7);   // + (1,1) (2,1) left, (1,3) (2,2) right
+}
+
+// ===========================================================================
 // RAM DISTINCT — DedupeRows folds duplicate output rows by cell identity
 // (first occurrence wins, order preserved). The #6 SELECT DISTINCT core.
 // ===========================================================================

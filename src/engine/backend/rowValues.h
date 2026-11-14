@@ -53,6 +53,11 @@ public:
 	using size_type      = typename container_type::size_type;
 
 	ibRowValues() = default;
+	ibRowValues(const ibRowValues&) = default;
+	ibRowValues& operator=(const ibRowValues&) = default;
+	// noexcept, said: a vector of rows moves them when it grows only if a move cannot throw — else it copies each.
+	ibRowValues(ibRowValues&&) noexcept = default;
+	ibRowValues& operator=(ibRowValues&&) noexcept = default;
 
 	// --- iteration (sorted by key, like std::map) ---
 	iterator       begin()        noexcept { return m_data.begin(); }

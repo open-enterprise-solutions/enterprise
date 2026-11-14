@@ -898,6 +898,13 @@ ibString ibValueReferenceDataObject::GetString() const
 		return m_metaObject->GenerateDataDesc(this, declared) ? std::move(declared) : ibString();
 	}
 
+	// ⭐ …ASKED WHILE RAW, IT IS TOLD WITH EVERY RAW ONE OF ITS SESSION, a table at a time (ReadBatch): what a read
+	// made a moment ago is asked next, cell after cell, and each going back for its own row made a list page of 100
+	// lines 100 statements (2026-11-14). Here, at the one door every showing passes, and not at the end of every read:
+	// told at a cursor's end, a posting paid 8.6 batches a document for references nobody asked what they say (+7 %).
+	if (m_state == ibReferenceState::Raw && !ibValueReferenceDataObject::IsEmpty())
+		ReadBatch();
+
 	// ⭐ …UNLESS ReadBatch ALREADY TOLD IT WHAT IT SAYS — the fields its kind is said by are in its values,
 	// and the kind says them by its own rule; the object behind it stays unread: a printed list needs
 	// names, not objects.

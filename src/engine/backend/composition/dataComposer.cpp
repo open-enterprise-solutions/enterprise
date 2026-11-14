@@ -92,18 +92,6 @@ ibDataDBComposer& ibDataDBComposer::FromText(const ibString& text)
 	return *this;
 }
 
-// A source's field as a walk takes it — its name, what it may hold, and whether the options leave it (asked of the
-// column by the caller: a query's own, or the one a node was built from; a field no column stands behind is not
-// theirs to take).
-static ibQueryConstructorField ibWalkFieldOf(const ibString& name, const ibTypeDescription& type, bool available)
-{
-	ibQueryConstructorField field;
-	field.m_name      = name;
-	field.m_type      = type;
-	field.m_available = available;
-	return field;
-}
-
 // ⭐ THE SOURCE'S FIELDS — see the header. Asked of what the source IS, the way the settings pickers ask it: the
 // author's query through the constructor model (a computed output for everything it reads, a temp table's field
 // for the select that made it), a bound queryable through its own columns, a named source through its
@@ -127,12 +115,14 @@ void ibDataDBComposer::RefreshSourceFields()
 		fields = ibQueryFieldsOfText(m_sourceText, m_metaData);
 	}
 	else {
+		// …THE SAME FIELDS THE CONSTRUCTOR OFFERS for these columns (ibQueryFieldsOfColumns), the synonym among them.
+		// Built here by hand they carried none, and a list output to a sheet was headed by the field names.
+		std::vector<const ibBackendQueryColumn*> columns;
 		for (const auto& direct : m_directSources) {
 			if (direct.second == nullptr)
 				continue;
 			for (const ibBackendQueryColumn* column : direct.second->GetQueryColumns())
-				if (column != nullptr)
-					fields.push_back(ibWalkFieldOf(column->GetName(), column->GetTypeValueDesc(), column->IsAvailable()));
+				columns.push_back(column);
 		}
 
 		const ibQueryableFactory* const factory = m_metaData != nullptr
@@ -143,9 +133,9 @@ void ibDataDBComposer::RefreshSourceFields()
 			if (descriptor == nullptr)
 				continue;   // a direct source (above), or a name nothing answers to
 			for (const ibBackendQueryColumn* column : descriptor->GetQueryColumns({}))
-				if (column != nullptr)
-					fields.push_back(ibWalkFieldOf(column->GetName(), column->GetTypeValueDesc(), column->IsAvailable()));
+				columns.push_back(column);
 		}
+		fields = ibQueryFieldsOfColumns(columns, m_metaData);
 	}
 	m_sourceFields = std::make_shared<const std::vector<ibQueryConstructorField>>(std::move(fields));
 }

@@ -240,11 +240,11 @@ private:
 	ibValueFunction                       m_predicate;
 };
 
-// Distinct node — filters duplicates via linear seen-list. Each
-// emitted value goes into m_seen; subsequent matches are skipped.
-// O(N²) per full iteration — acceptable for Phase 1; Phase 2 may
-// swap to a hash-set if profiling demands. Lifetime: shared_ptr
-// owns the state, m_seen vector destroys with the state.
+// Distinct node — a value passes the first time it is seen. SEEN is the ORDER's question, asked of an
+// ordered set: the relation and the set the compiled road's `distinct` asks (ibValueLinqRows::FirstTime),
+// and Intersect / Except below — so a chain does not answer differently by the road it compiled to. It
+// was a linear list compared by `==`: O(N²), and type-strict where the compiled road is not (2026-11-14).
+// Lifetime: shared_ptr owns the state, m_seen destroys with it.
 class ibValueDistinctState : public ibValueIteratorState {
 public:
 	explicit ibValueDistinctState(std::shared_ptr<ibValueIteratorState> upstream)
@@ -257,14 +257,8 @@ public:
 			return false;
 		}
 		while (m_upstream->MoveNext(current)) {
-			bool found = false;
-			for (const auto& v : m_seen) {
-				if (current == v) { found = true; break; }
-			}
-			if (!found) {
-				m_seen.push_back(current);
+			if (m_seen.insert(current).second)
 				return true;
-			}
 		}
 		return false;
 	}
@@ -280,7 +274,7 @@ public:
 
 private:
 	std::shared_ptr<ibValueIteratorState> m_upstream;
-	std::vector<ibValue>                   m_seen;
+	std::set<ibValue, ibValueLess>         m_seen;
 };
 
 // Select node — projects each upstream row through a lambda.
@@ -714,6 +708,47 @@ public:
 		return text;
 	}
 
+	// ⭐⭐ A ROW IS ITS VALUES — ordered, compared and hashed by them, field after field, as a map is by
+	// its entries (valueMap.cpp). The base answers an object it knows nothing else about by its TEXT, and
+	// a row's text is "C=<the reference's presentation>": `select r.C distinct` took two counterparties
+	// of one name for one row and 1 and "1" for one value, and built a reference's description for every
+	// comparison — half of a distinct over 36 000 rows (2026-11-14). The names are asked only of rows of
+	// two different queries; the hash leaves them out, which makes it coarser and therefore safe.
+	virtual int CompareValueLS(const ibVariant& cParam) const override {
+		const ibValueLinqRecord* const other = AsRecord(cParam);
+		if (other == nullptr)
+			return ibValue::CompareValueLS(cParam);   // not a row — the base places it by KIND
+		for (size_t i = 0, common = std::min(m_count, other->m_count); i < common; ++i) {
+			if (m_shape != other->m_shape) {
+				const int byName = GetPropName((long)i).CmpNoCase(other->GetPropName((long)i));
+				if (byName != 0)
+					return byName < 0 ? -1 : 1;
+			}
+			const int byValue = Values()[i].CompareValueLS(other->Values()[i]);
+			if (byValue != 0)
+				return byValue;
+		}
+		return (m_count > other->m_count) - (m_count < other->m_count);
+	}
+	virtual bool CompareValueEQ(const ibVariant& cParam) const override {
+		const ibValueLinqRecord* const other = AsRecord(cParam);
+		if (other == nullptr || other->m_count != m_count)
+			return false;
+		for (size_t i = 0; i < m_count; ++i) {
+			if (m_shape != other->m_shape && GetPropName((long)i).CmpNoCase(other->GetPropName((long)i)) != 0)
+				return false;
+			if (!Values()[i].CompareValueEQ(other->Values()[i]))
+				return false;
+		}
+		return true;
+	}
+	virtual size_t GetValueHash() const override {
+		std::uint64_t h = ibHashCombine(kIbHashBasis, m_count);
+		for (size_t i = 0; i < m_count; ++i)
+			h = ibHashCombine(h, Values()[i].GetValueHash());
+		return (size_t)h;
+	}
+
 	// ⭐ ITS OWN ANSWERS. Four overrides and no member table: the surface IS the shape, so there is
 	// nothing to build, nothing to cache and nothing to invalidate.
 	virtual long     GetNProps() const override { return (long)m_count; }
@@ -774,6 +809,12 @@ private:
 	// The values, in field order — the order they were written in — right behind the object.
 	ibValue*       Values()       { return reinterpret_cast<ibValue*>(this + 1); }
 	const ibValue* Values() const { return reinterpret_cast<const ibValue*>(this + 1); }
+
+	// The row `cParam` holds, or null for any other value (the map's AsMap, by class id).
+	static const ibValueLinqRecord* AsRecord(const ibVariant& cParam) {
+		const ibVariant* const held = cParam.GetRef();
+		return held->GetClassType() == g_valueLinqRecord ? static_cast<const ibValueLinqRecord*>(held) : nullptr;
+	}
 
 	ibValueLinqShape* m_shape = nullptr;   // shared by every row of the query; refcounted
 	size_t            m_count = 0;         // how many values lie behind the object

@@ -1204,6 +1204,8 @@ bool ColocatableJoinTree(const ibDataQuerySpec& spec, ColocatedLeaves& leaves)
 	std::function<bool(const ibQueryNode*)> allColumnKeyed = [&](const ibQueryNode* n) -> bool {
 		if (n == nullptr || n->m_kind != ibQueryNode::Kind::Join) return true;
 		if (n->m_on.m_exprL != nullptr) return false;   // computed ON -> RAM (no column key to qualify)
+		for (const auto& part : n->m_on.m_alsoOn)
+			if (part.m_exprL != nullptr) return false;   // …and so does a computed part of a composite key
 		return allColumnKeyed(n->m_left.get()) && allColumnKeyed(n->m_right.get());
 	};
 	if (!allColumnKeyed(root))                 return false;
