@@ -12,20 +12,6 @@ namespace ibMcpMetadata {
 
 using ibArg = ibMcpTool::ibMcpArgument;
 
-// Every tool here needs the same first sentence, and the same refusal when
-// there is nothing open to answer about.
-inline ibMetaData* OpenConfiguration(ibString& refusal)
-{
-	ibMetaData* metaData = activeMetaData;
-
-	if (metaData == nullptr || !metaData->IsConfigOpen()) {
-		refusal = ibMcpText("No configuration is open.");
-		return nullptr;
-	}
-
-	return metaData;
-}
-
 // The arguments this file's tools take — declared once, and read through the same
 // objects in Call, so the name a caller is told cannot drift from the name looked for.
 inline const ibArg& ArgKind()

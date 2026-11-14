@@ -250,6 +250,9 @@
     <ClCompile Include="mcp\tools\designer\mcpToolDebug.cpp">
       <Filter>mcp\tools\designer</Filter>
     </ClCompile>
+    <ClCompile Include="mcp\tools\designer\mcpToolExternal.cpp">
+      <Filter>mcp\tools\designer</Filter>
+    </ClCompile>
     <ClCompile Include="mcp\tools\designer\mcpToolForms.cpp">
       <Filter>mcp\tools\designer</Filter>
     </ClCompile>

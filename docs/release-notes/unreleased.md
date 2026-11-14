@@ -33,6 +33,11 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   external report in a tab; open a list or a document and put the cursor on a row; add or correct a
   value. All of it under your roles, with the *Data assistant* right. What it writes is really
   written. Nothing is added to the configuration.
+- **An assistant opens external data processors and reports.** In the designer, one it makes or one you
+  open opens in a tab you see. Its tree, modules and forms are changed with the same tools as the
+  configuration, and its Save hands the file back to the assistant, as Save hands it to you. In the
+  application it runs one under your roles, with the *Data assistant* right. The file stays where the
+  assistant keeps it: the base never reads or writes that disk.
 - **`Execute` and `Evaluate` now do what they say.** They ran as a watch, so what their code wrote was
   silently not written; code that failed said nothing from `Execute` and came back from `Evaluate` as
   the string `<error: …>`. They write now, and a failure raises an error. A module that relied on any
@@ -349,6 +354,8 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Fixes
 
+- **A tab shows `*` as soon as an assistant changes what it holds**, and drops it when the assistant saves. The
+  mark came only with the next thing you did in the designer, so a saved external report could still show `*`.
 - **A sequence with no dimensions moves its border.** Posting a document registered in it was refused: "an upsert
   into '…_Borders' names no key columns". Its one border is one row, replaced as the documents are posted.
 - **Deleting a register no longer leaves its tables behind in the list of sources.** An accounting register with

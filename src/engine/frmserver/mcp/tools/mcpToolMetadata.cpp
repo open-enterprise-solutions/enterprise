@@ -161,13 +161,13 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgDepth(), ArgDeleted() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgDepth(), ArgDeleted(), ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibMetaData* metaData = OpenConfiguration(refusal);
+		ibMetaData* metaData = ibMcpMetaDataNamed(params, refusal);
 		if (metaData == nullptr)
 			return false;
 
@@ -318,13 +318,13 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgKind() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgKind(), ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibMetaData* metaData = OpenConfiguration(refusal);
+		ibMetaData* metaData = ibMcpMetaDataNamed(params, refusal);
 		if (metaData == nullptr)
 			return false;
 
@@ -433,13 +433,13 @@ public:
 		// ⚠ NEITHER OF THE FINDERS IS REQUIRED, because either road is enough — see
 		// ArgKindOptional. Call() says which two shapes it accepts when it gets neither.
 		static const std::vector<ibMcpArgument> s_arguments = {
-			ArgId(), ArgKindOptional(), ArgName(), ArgOnlyProperty(), ArgStored() };
+			ArgId(), ArgKindOptional(), ArgName(), ArgOnlyProperty(), ArgStored(), ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibMetaData* metaData = OpenConfiguration(refusal);
+		ibMetaData* metaData = ibMcpMetaDataNamed(params, refusal);
 		if (metaData == nullptr)
 			return false;
 
@@ -550,7 +550,7 @@ public:
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
 		static const std::vector<ibMcpArgument> s_arguments = {
-			ibMcpIdArgument(), ArgOnlyProperty(), ArgEditableOnly() };
+			ibMcpIdArgument(), ArgOnlyProperty(), ArgEditableOnly(), ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
@@ -635,7 +635,7 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibMetaData* metaData = OpenConfiguration(refusal);
+		ibMetaData* metaData = ibMcpMetaDataNamed(params, refusal);
 		if (metaData == nullptr)
 			return false;
 

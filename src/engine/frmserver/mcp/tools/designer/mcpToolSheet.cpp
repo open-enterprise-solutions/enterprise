@@ -552,7 +552,7 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgArea() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgArea(), ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
@@ -827,7 +827,7 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgCells(), ArgRow(), ArgCol(), ArgValue(), ArgParameter(), ArgDetails(), ArgFill(), ArgAlign(), ArgUnderline(), ArgColSpan(), ArgRowSpan(), ArgItalic(), ArgBold(), ArgFontSize(), ArgValign(), ArgVertical(), ArgBackground(), ArgColour(), ArgBorder(), ArgBorderWidth(), ArgFit(), ArgReadOnly() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgCells(), ArgRow(), ArgCol(), ArgValue(), ArgParameter(), ArgDetails(), ArgFill(), ArgAlign(), ArgUnderline(), ArgColSpan(), ArgRowSpan(), ArgItalic(), ArgBold(), ArgFontSize(), ArgValign(), ArgVertical(), ArgBackground(), ArgColour(), ArgBorder(), ArgBorderWidth(), ArgFit(), ArgReadOnly(), ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
@@ -1131,7 +1131,7 @@ public:
 			cell->m_isReadOnly = ArgReadOnly().Flag(params);
 
 		sheet->SetTemplateDesc(desc);
-		activeMetaData->Modify(true);
+		sheet->GetMetaData()->Modify(true);
 
 		result.AddField(ibT("row"), ibDataValue::Int(LineOut(row)));
 		result.AddField(ibT("col"), ibDataValue::Int(LineOut(col)));
@@ -1208,7 +1208,8 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgName(), ArgStart(), ArgEnd(), ArgColumns(), ArgRemove() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgName(), ArgStart(), ArgEnd(), ArgColumns(), ArgRemove(),
+			ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
@@ -1275,7 +1276,7 @@ public:
 			else         desc.DeleteRowArea(name);
 
 			sheet->SetTemplateDesc(desc);
-			activeMetaData->Modify(true);
+			sheet->GetMetaData()->Modify(true);
 
 			result.AddField(ibT("removed"), ibDataValue::Bool(true));
 			result.SetValue(ibT("name"), name);
@@ -1296,7 +1297,7 @@ public:
 		}
 
 		sheet->SetTemplateDesc(desc);
-		activeMetaData->Modify(true);
+		sheet->GetMetaData()->Modify(true);
 
 		result.AddField(exists ? ibT("moved") : ibT("added"), ibDataValue::Bool(true));
 		result.SetValue(ibT("name"), name);
@@ -1349,7 +1350,7 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgFile() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgFile(), ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
@@ -1392,7 +1393,7 @@ public:
 		}
 
 		sheet->SetTemplateDesc(desc);
-		activeMetaData->Modify(true);
+		sheet->GetMetaData()->Modify(true);
 
 		result.AddField(ibT("imported"), ibDataValue::Bool(true));
 		result.SetValue(ibT("format"), format->GetName());
@@ -1450,7 +1451,7 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgRow(), ArgCol(), ArgSize(), ArgHide() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgRow(), ArgCol(), ArgSize(), ArgHide(), ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
@@ -1503,7 +1504,7 @@ public:
 		}
 
 		sheet->SetTemplateDesc(desc);
-		activeMetaData->Modify(true);
+		sheet->GetMetaData()->Modify(true);
 
 		result.SetValue(ibT("band"), ibString(rowSaid > 0 ? ibT("row") : ibT("column")));
 		result.AddField(ibT("at"), ibDataValue::Int((std::int64_t)(rowSaid > 0 ? rowSaid : colSaid)));
@@ -1572,7 +1573,8 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgWhat(), ArgColumns(), ArgAt(), ArgStart(), ArgEnd(), ArgLevel(), ArgCollapsed(), ArgRemove() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgWhat(), ArgColumns(), ArgAt(), ArgStart(), ArgEnd(), ArgLevel(), ArgCollapsed(), ArgRemove(),
+			ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
@@ -1695,7 +1697,7 @@ public:
 		}
 
 		sheet->SetTemplateDesc(desc);
-		activeMetaData->Modify(true);
+		sheet->GetMetaData()->Modify(true);
 
 		result.SetValue(ibT("band"), ibString(columns ? ibT("columns") : ibT("rows")));
 		return true;
@@ -1745,7 +1747,8 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgTop(), ArgLeft(), ArgBottom(), ArgRight(), ArgSlot() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgTop(), ArgLeft(), ArgBottom(), ArgRight(), ArgSlot(),
+			ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
@@ -1844,7 +1847,7 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgRow(), ArgCol(), ArgTimes(), ArgSlot() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgRow(), ArgCol(), ArgTimes(), ArgSlot(), ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
@@ -1941,7 +1944,7 @@ public:
 		}
 
 		sheet->SetTemplateDesc(desc);
-		activeMetaData->Modify(true);
+		sheet->GetMetaData()->Modify(true);
 
 		result.SetValue(ibT("row"), row);
 		result.SetValue(ibT("col"), col);
@@ -1996,7 +1999,7 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgId() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
@@ -2078,7 +2081,7 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgFile() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgFile(), ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 

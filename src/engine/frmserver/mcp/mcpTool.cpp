@@ -38,6 +38,7 @@
 
 #include "backend/restructureInfo.h"              // the ledger an object complains into
 #include "backend/session/session.h"              // who is asking — which tools are there for them
+#include "frmserver/docView/docView.h"            // ibMetaDataDocument — an external open in the designer, in its tab
 
 namespace {
 
@@ -232,6 +233,15 @@ const ibMcpTool::ibMcpArgument& ibMcpLanguageArgument()
 	return s_language;
 }
 
+const ibMcpTool::ibMcpArgument& ibMcpMetaDataArgument()
+{
+	static const ibMcpTool::ibMcpArgument s_metaData(ibT("metadata"), ibMcpTool::ibMcpArgument::Kind::Text,
+		ibMcpText("Which metadata to work on: the file name of an external data processor or report open in the "
+		  "designer - the `file` external_processor_open / external_report_open answered with. Its NodeIds are its "
+		  "own - take them from metadata_tree with the same `metadata`. Omitted, the configuration."));
+	return s_metaData;
+}
+
 // A tool that has not been converted declares nothing here and writes its own DescribeInput; the
 // empty list is what says so.
 const std::vector<ibMcpTool::ibMcpArgument>& ibMcpTool::Arguments() const
@@ -281,6 +291,16 @@ bool ibIsMcpInApplication()
 {
 	const ibSession* const session = ibSession::Current();
 	return session != nullptr && !IsDesignerSessionKind(session->GetKind());
+}
+
+ibFailureToCaller::ibFailureToCaller(ibSession* session) : m_session(session)
+{
+	m_session->SetProcessingBackendError(true);
+}
+
+ibFailureToCaller::~ibFailureToCaller()
+{
+	m_session->SetProcessingBackendError(false);
 }
 
 std::vector<ibString> ibMcpRoleNames(const ibUserInfo& who)
@@ -427,8 +447,9 @@ ibString ibMcpNameOf(const ibDataNode& params, const ibString& field)
 	if (id <= 0)
 		return ibEmptyString;
 
-	if (activeMetaData != nullptr && activeMetaData->IsConfigOpen()) {
-		if (ibValueMetaObject* object = ibFindMetaObjectById(activeMetaData, (ibMetaID)id))
+	ibString refusal;
+	if (ibMetaData* const metaData = ibMcpMetaDataNamed(params, refusal)) {
+		if (ibValueMetaObject* object = ibFindMetaObjectById(metaData, (ibMetaID)id))
 			return object->GetName();
 	}
 
@@ -1563,10 +1584,9 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 ibValueMetaObject* ibMcpObjectNamed(const ibDataNode& params, ibString& refusal,
 	const ibString& field)
 {
-	if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
-		refusal = ibMcpText("No configuration is open.");
+	ibMetaData* const metaData = ibMcpMetaDataNamed(params, refusal);
+	if (metaData == nullptr)
 		return nullptr;
-	}
 
 	// ⚠ ASKED WHETHER IT WAS GIVEN, not just what it is. GetValue answers 0 for an argument that
 	// was never sent, and 0 is a perfectly good number to go looking for — which is how "you
@@ -1588,11 +1608,14 @@ ibValueMetaObject* ibMcpObjectNamed(const ibDataNode& params, ibString& refusal,
 		return nullptr;
 	}
 
-	ibValueMetaObject* object = ibFindMetaObjectById(activeMetaData, (ibMetaID)id);
+	ibValueMetaObject* object = ibFindMetaObjectById(metaData, (ibMetaID)id);
 
 	if (object == nullptr) {
-		refusal = ibString::Format(
-			ibMcpText("Nothing in this configuration has id %i."), (int)id);
+		const ibString external = params.GetValue<ibString>(ibMcpMetaDataArgument().Name());
+		refusal = external.IsEmpty()
+			? ibString::Format(ibMcpText("Nothing in this configuration has id %i."), (int)id)
+			: ibString::Format(ibMcpText("Nothing in '%s' has id %i - metadata_tree with the same `metadata` lists "
+				  "its own."), external, (int)id);
 		return nullptr;
 	}
 
@@ -1615,6 +1638,43 @@ ibValueMetaObjectTemplate* ibMcpComposerNamed(const ibDataNode& params, ibString
 	}
 
 	return composer;
+}
+
+ibMetaData* ibMcpMetaDataNamed(const ibDataNode& params, ibString& refusal)
+{
+	const ibString external = params.GetValue<ibString>(ibMcpMetaDataArgument().Name());
+	if (external.IsEmpty()) {
+		if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
+			refusal = ibMcpText("No configuration is open.");
+			return nullptr;
+		}
+		return activeMetaData;
+	}
+
+	// ⭐ ONLY WHAT IS OPEN IN THE DESIGNER, where the person sees it — a file is never read behind its tab. Closed, it is
+	// gone with what was not saved, and that is said rather than the file read again as it was.
+	ibMetaDataDocument* const document = ibMcpExternalNamed(external);
+	if (document == nullptr || document->GetMetaData() == nullptr) {
+		refusal = ibString::Format(ibMcpText("'%s' is not open in the designer - external_processor_open or "
+			"external_report_open opens it. A tab closed takes with it what was not saved."), external);
+		return nullptr;
+	}
+	return document->GetMetaData();
+}
+
+ibMetaDataDocument* ibMcpExternalNamed(const ibString& file)
+{
+	ibDocManager* const manager = docManager;
+	if (manager == nullptr || file.IsEmpty())
+		return nullptr;
+
+	for (ibDocument* const document : manager->GetDocumentsVector()) {
+		ibMetaDataDocument* const external = dynamic_cast<ibMetaDataDocument*>(document);
+		const ibMetaData* const metaData = external != nullptr ? external->GetMetaData() : nullptr;
+		if (metaData != nullptr && metaData->GetFileName() == file)
+			return external;
+	}
+	return nullptr;
 }
 
 // ⭐ WHAT THE CALL CARRIED, WHEN THE TOOL HAS NOTHING BETTER TO SHOW.

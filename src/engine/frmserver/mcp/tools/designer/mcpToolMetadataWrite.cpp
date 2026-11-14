@@ -463,13 +463,14 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgKind(), ArgParentId(), ArgNameRequired(), ArgNote(), ArgHelp(), ArgProperties() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgKind(), ArgParentId(), ArgNameRequired(), ArgNote(), ArgHelp(), ArgProperties(),
+			ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibMetaData* metaData = OpenConfiguration(refusal);
+		ibMetaData* metaData = ibMcpMetaDataNamed(params, refusal);
 		if (metaData == nullptr)
 			return false;
 
@@ -894,13 +895,13 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgAcceptsId(), ArgAcceptsKind(), ArgParentId() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgAcceptsId(), ArgAcceptsKind(), ArgParentId(), ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibMetaData* metaData = OpenConfiguration(refusal);
+		ibMetaData* metaData = ibMcpMetaDataNamed(params, refusal);
 		if (metaData == nullptr)
 			return false;
 
@@ -1145,13 +1146,13 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgId() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibMetaData* metaData = OpenConfiguration(refusal);
+		ibMetaData* metaData = ibMcpMetaDataNamed(params, refusal);
 		if (metaData == nullptr)
 			return false;
 
@@ -1217,13 +1218,13 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgPosition() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgPosition(), ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibMetaData* metaData = OpenConfiguration(refusal);
+		ibMetaData* metaData = ibMcpMetaDataNamed(params, refusal);
 		if (metaData == nullptr)
 			return false;
 
@@ -1354,13 +1355,13 @@ public:
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
 		static const std::vector<ibMcpArgument> s_arguments = {
-			ibMcpIdArgument(), ArgProperty(), ibMcpValueArgument(), ibMcpLanguageArgument() };
+			ibMcpIdArgument(), ArgProperty(), ibMcpValueArgument(), ibMcpLanguageArgument(), ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibMetaData* metaData = OpenConfiguration(refusal);
+		ibMetaData* metaData = ibMcpMetaDataNamed(params, refusal);
 		if (metaData == nullptr)
 			return false;
 
@@ -1521,13 +1522,13 @@ public:
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
 		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgType(), ArgTypeShape(), ArgLength(), ArgPrecision(), ArgScale(),
-			ArgAllowedLength(), ArgNonNegative(), ArgDateFraction(), ArgTypeId() };
+			ArgAllowedLength(), ArgNonNegative(), ArgDateFraction(), ArgTypeId(), ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibMetaData* metaData = OpenConfiguration(refusal);
+		ibMetaData* metaData = ibMcpMetaDataNamed(params, refusal);
 		if (metaData == nullptr)
 			return false;
 
@@ -1975,7 +1976,7 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibMetaData* metaData = OpenConfiguration(refusal);
+		ibMetaData* metaData = ibMcpMetaDataNamed(params, refusal);
 		if (metaData == nullptr)
 			return false;
 
@@ -2178,7 +2179,7 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibMetaData* metaData = OpenConfiguration(refusal);
+		ibMetaData* metaData = ibMcpMetaDataNamed(params, refusal);
 		if (metaData == nullptr)
 			return false;
 
@@ -2484,7 +2485,7 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, ibString& refusal) const override
 	{
-		ibMetaData* metaData = OpenConfiguration(refusal);
+		ibMetaData* metaData = ibMcpMetaDataNamed(params, refusal);
 		if (metaData == nullptr)
 			return false;
 

@@ -51,7 +51,7 @@ bool ibMcpWriteModule(ibValueMetaObjectModuleBase* module, const ibString& text,
 	}
 
 	module->SetModuleText(text);
-	activeMetaData->Modify(true);
+	module->GetMetaData()->Modify(true);
 
 	// CHECKED WHERE IT LIVES, not as a loose string: the module sees its owner's attributes and
 	// every exported name in the configuration, so this is the same verdict the designer's Syntax
@@ -106,8 +106,10 @@ bool ibMcpWriteModule(ibValueMetaObjectModuleBase* module, const ibString& text,
 	// base holds and keeps the bytecode it came up with, so a module written here runs nowhere yet — and a
 	// restart alone brought the OLD text up with nothing said (measured 2026-09-11). The path is two calls.
 	result.SetValue(ibT("toRun"),
-		ibMcpText("Written into the configuration here, not into the base: the application runs it after "
-		  "config_apply (a module's text needs no exclusive mode) and a restart - app_run restart: true."));
+		ibMcpText("Written here, not where it runs. A configuration's module: the application runs it after "
+		  "config_apply (a module's text needs no exclusive mode) and a restart - app_run restart: true. An "
+		  "external's: the bytes external_processor_save / external_report_save hands back are what the "
+		  "application runs (external_processor_open / external_report_open there)."));
 	return true;
 }
 
@@ -194,7 +196,7 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgFind(), ArgReplace() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgFind(), ArgReplace(), ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
@@ -297,7 +299,7 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgId() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
@@ -437,7 +439,7 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgText(), ArgClear() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgId(), ArgText(), ArgClear(), ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 

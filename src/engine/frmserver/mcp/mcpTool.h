@@ -428,6 +428,10 @@ FRMSERVER_API bool ibMcpIsRegex(const ibString& query);
 FRMSERVER_API const ibMcpTool::ibMcpArgument& ibMcpIdArgument();
 FRMSERVER_API const ibMcpTool::ibMcpArgument& ibMcpValueArgument();
 FRMSERVER_API const ibMcpTool::ibMcpArgument& ibMcpLanguageArgument();
+// `metadata` — which metadata a call works on: the name of an external data processor or report's file, open in the
+// designer (external_processor_open / external_report_open, or the person's File → Open); omitted, the configuration.
+// A tool that edits an external takes it; its doors read it (ibMcpMetaDataNamed, below).
+FRMSERVER_API const ibMcpTool::ibMcpArgument& ibMcpMetaDataArgument();
 
 FRMSERVER_API void ibMcpSayObject(const class ibValueMetaObject* object, ibDataNode& node,
 	bool withText = false);
@@ -548,6 +552,16 @@ FRMSERVER_API class ibValueMetaObject* ibMcpObjectNamed(const ibDataNode& params
 // places asked it by hand, two of them in another file, each with its own words for the refusal.
 FRMSERVER_API class ibValueMetaObjectTemplate* ibMcpComposerNamed(const ibDataNode& params,
 	ibString& refusal, const ibString& field = ibT("id"));
+
+// …and the metadata the call works on, which the two above look in: the external data processor or report its
+// `metadata` names, open in this designer — or the configuration, when it names none. nullptr, said in `refusal`,
+// when what it names is not open.
+FRMSERVER_API class ibMetaData* ibMcpMetaDataNamed(const ibDataNode& params, ibString& refusal);
+
+// The external data processor or report open in this designer under the file's name `file` — its document, as the
+// person's File → Open made it (a tab, its tree); nullptr when none is. The server knows no folder of the client's,
+// only the name the file was handed over under. Closing the tab closes it, and what was not saved goes with it.
+FRMSERVER_API class ibMetaDataDocument* ibMcpExternalNamed(const ibString& file);
 
 FRMSERVER_API std::vector<ibString> ibMcpComplaints(class ibValueMetaObject* object);
 
@@ -683,6 +697,18 @@ FRMSERVER_API ibMcpToolMode ibGetMcpToolMode(const ibMcpTool* tool);
 FRMSERVER_API bool ibIsMcpToolOffered(const ibMcpTool* tool);
 // In an application's session — its person's roles answer, and what is the designer's alone is refused.
 FRMSERVER_API bool ibIsMcpInApplication();
+
+// While it is held, a failure of the session's code comes back to the call: without it each one is a Critical failure
+// window in front of the person, for the assistant's mistake, and the call waits until somebody closes it.
+class FRMSERVER_API ibFailureToCaller {
+public:
+	explicit ibFailureToCaller(class ibSession* session);
+	~ibFailureToCaller();
+	ibFailureToCaller(const ibFailureToCaller&) = delete;
+	ibFailureToCaller& operator=(const ibFailureToCaller&) = delete;
+private:
+	ibSession* const m_session;
+};
 // What an account's roles and language are called, asked of the session's configuration: the account's record keeps their
 // ids and no names. A restricting role says so: its name alone reads as "may do this" when it only subtracts.
 FRMSERVER_API std::vector<ibString> ibMcpRoleNames(const struct ibUserInfo& who);

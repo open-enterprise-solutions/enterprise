@@ -193,10 +193,9 @@ const ibArg& ArgSlot()
 ibValueForm* OpenForm(const ibDataNode& params, ibString& refusal,
 	bool* generated = nullptr, ibValueMetaObjectFormBase** creatorOut = nullptr)
 {
-	if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen()) {
-		refusal = ibMcpText("No configuration is open.");
+	ibMetaData* const metaData = ibMcpMetaDataNamed(params, refusal);
+	if (metaData == nullptr)
 		return nullptr;
-	}
 
 	const std::int32_t id = (std::int32_t)ArgForm().Whole(params);
 	if (id <= 0) {
@@ -204,7 +203,7 @@ ibValueForm* OpenForm(const ibDataNode& params, ibString& refusal,
 		return nullptr;
 	}
 
-	ibValueMetaObject* object = ibFindMetaObjectById(activeMetaData, (ibMetaID)id);
+	ibValueMetaObject* object = ibFindMetaObjectById(metaData, (ibMetaID)id);
 	if (object == nullptr) {
 		refusal = ibString::Format(ibMcpText("Nothing in this configuration has id %i."), (int)id);
 		return nullptr;
@@ -272,11 +271,13 @@ ibValueForm* OpenForm(const ibDataNode& params, ibString& refusal,
 // Answers nullptr with NO refusal when the id is not such an object — OpenForm then answers for it.
 ibValueForm* OpenObjectForm(const ibDataNode& params, ibString& refusal, bool& generated)
 {
-	if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen())
+	ibString unopened;   // OpenForm says it, when this hands the id on
+	ibMetaData* const metaData = ibMcpMetaDataNamed(params, unopened);
+	if (metaData == nullptr)
 		return nullptr;
 
 	const std::int32_t id = (std::int32_t)ArgFormOrObject().Whole(params);
-	ibValueMetaObject* object = id > 0 ? ibFindMetaObjectById(activeMetaData, (ibMetaID)id) : nullptr;
+	ibValueMetaObject* object = id > 0 ? ibFindMetaObjectById(metaData, (ibMetaID)id) : nullptr;
 	const ibValueMetaObjectRecordData* record =
 		object != nullptr ? object->ConvertToType<ibValueMetaObjectRecordData>() : nullptr;
 	if (record == nullptr)
@@ -487,7 +488,7 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgFormOrObject() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgFormOrObject(), ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
@@ -646,7 +647,8 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgForm(), ArgControl(), ArgAttribute(), ArgCommand() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgForm(), ArgControl(), ArgAttribute(), ArgCommand(),
+			ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
@@ -754,7 +756,7 @@ public:
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
 		static const std::vector<ibMcpArgument> s_arguments = { ArgForm(), ArgClassToAdd(), ArgParent(), ArgName(),
-			ArgAttribute(), ArgType(), ArgCommand() };
+			ArgAttribute(), ArgType(), ArgCommand(), ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
@@ -775,7 +777,7 @@ public:
 			if (added && !StoreForm(creator, form, result, refusal, ibMcpText("It was added")))
 				added = false;
 			if (added)
-				activeMetaData->Modify(true);
+				creator->GetMetaData()->Modify(true);
 
 			form->DecrRef();
 			return added;
@@ -827,7 +829,7 @@ public:
 			return false;
 		}
 
-		activeMetaData->Modify(true);
+		creator->GetMetaData()->Modify(true);
 
 		result.AddField(ibT("added"), ibDataValue::Bool(true));
 		SayControl(created, result);
@@ -932,7 +934,7 @@ public:
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
 		static const std::vector<ibMcpArgument> s_arguments = { ArgForm(), ArgControl(), ArgAttribute(), ArgCommand(),
-			ArgProperty(), ArgValue() };
+			ArgProperty(), ArgValue(), ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
@@ -1047,7 +1049,7 @@ public:
 			return false;
 		}
 
-		activeMetaData->Modify(true);
+		creator->GetMetaData()->Modify(true);
 		form->DecrRef();
 		return true;
 	}
@@ -1079,7 +1081,8 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgForm(), ArgControl(), ArgAttribute(), ArgCommand() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgForm(), ArgControl(), ArgAttribute(), ArgCommand(),
+			ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
@@ -1132,7 +1135,7 @@ public:
 			return false;
 		}
 
-		activeMetaData->Modify(true);
+		creator->GetMetaData()->Modify(true);
 
 		result.AddField(ibT("removed"), ibDataValue::Bool(true));
 		result.SetValue(ibT("name"), name);
@@ -1181,7 +1184,7 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgForm(), ArgControl(), ArgPosition() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgForm(), ArgControl(), ArgPosition(), ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
@@ -1295,7 +1298,7 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgForm(), ArgAttribute(), ArgMain() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgForm(), ArgAttribute(), ArgMain(), ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
@@ -1321,7 +1324,7 @@ public:
 			return false;
 		}
 
-		activeMetaData->Modify(true);
+		creator->GetMetaData()->Modify(true);
 
 		// ⭐ ANSWERED WITH WHAT THE FORM HOLDS NOW, read back rather than echoed: a caller learns
 		// what IS, and a form left with no main says so by naming nothing.
@@ -1382,7 +1385,7 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgForm(), ArgPath() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgForm(), ArgPath(), ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
@@ -1570,7 +1573,8 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgForm(), ArgControl(), ArgPath(), ArgPropertyToBind() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgForm(), ArgControl(), ArgPath(), ArgPropertyToBind(),
+			ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
@@ -1666,7 +1670,7 @@ public:
 				return false;
 			}
 
-			activeMetaData->Modify(true);
+			creator->GetMetaData()->Modify(true);
 
 			result.AddField(ibT("bound"), ibDataValue::Bool(true));
 			SayControl(control, result);
@@ -1724,7 +1728,7 @@ public:
 			return false;
 		}
 
-		activeMetaData->Modify(true);
+		creator->GetMetaData()->Modify(true);
 
 		result.AddField(ibT("bound"), ibDataValue::Bool(!binding->IsEmptyProperty()));
 		SayControl(control, result);
@@ -1792,7 +1796,7 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgForm(), ArgControl(), ArgSlot() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgForm(), ArgControl(), ArgSlot(), ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
@@ -1872,7 +1876,7 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgForm(), ArgParent(), ArgName(), ArgSlot() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgForm(), ArgParent(), ArgName(), ArgSlot(), ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 
@@ -1936,7 +1940,7 @@ public:
 			return false;
 		}
 
-		activeMetaData->Modify(true);
+		creator->GetMetaData()->Modify(true);
 
 		result.AddField(ibT("controlId"), ibDataValue::Int((std::int64_t)created->GetControlID()));
 		result.SetValue(ibT("class"), created->GetClassName());
@@ -1985,7 +1989,7 @@ public:
 
 	const std::vector<ibMcpArgument>& Arguments() const override
 	{
-		static const std::vector<ibMcpArgument> s_arguments = { ArgForm(), ArgClass(), ArgParent() };
+		static const std::vector<ibMcpArgument> s_arguments = { ArgForm(), ArgClass(), ArgParent(), ibMcpMetaDataArgument() };
 		return s_arguments;
 	}
 

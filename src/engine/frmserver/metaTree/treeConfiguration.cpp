@@ -184,21 +184,22 @@ void ibMetaTreeBase::WatchMetaData(ibMetaData* metaData)
 // ============================================================================
 
 // THE CHROME — the asterisk of a modified configuration: its state rides the root row, read with every frame, so it
-// is drawn as the rows are (see MetaObjectChanged) — on its own session the call is answered with the frame; on another
-// the client is told to ask for it.
+// is drawn as the rows are. The client is told to ask for its frame, and its host knows when it need not be: a call of
+// the client's being answered carries the frame (ibClientHost::NotifyChanged). The session is no sign of that call —
+// an assistant's tool runs on this same session and answers nobody's client.
 void ibMetaTreeBase::MetaDataChanged()
 {
-	if (ibClientFrame::GetFrame() != m_frame)
+	if (m_frame != nullptr)
 		m_frame->RefreshFrame();
 }
 
 // ⭐ NO STAGE DRAWS A ROW. The rows are read from the metadata with every frame, so what a stage leaves the tree is the
 // rest of what the desktop's answer did: the editors (this client's documents) and a question to the person.
 //
-// ⚠ AND ONLY ON THE FRAME'S OWN SESSION. A change made on another — the assistant's, over MCP — arrives on its thread,
-// where this client's documents are not to be touched and there is nobody of this client's to ask: the client is only
-// told to ask for its frame, which carries the rows as they now are. A change made on its own session needs no telling:
-// whatever made it is a call of this client's, and a call is answered with the frame.
+// ⚠ AND ONLY ON THE FRAME'S OWN SESSION. A change made on another arrives on its thread, where this client's documents
+// are not to be touched and there is nobody of this client's to ask: the client is only told to ask for its frame,
+// which carries the rows as they now are. On its own session the telling is MetaDataChanged's — every change ends in
+// the metadata's Modify.
 void ibMetaTreeBase::MetaObjectChanged(ibMetaDataNotifier::ibMetaStage stage, ibValueMetaObject* object)
 {
 	if (ibClientFrame::GetFrame() != m_frame) {

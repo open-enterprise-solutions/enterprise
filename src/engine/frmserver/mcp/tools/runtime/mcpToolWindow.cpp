@@ -44,18 +44,6 @@ const ibArg& ArgSaid()
 	return s_a;
 }
 
-// While the code runs its failures come back to the call: without this each one is a Critical failure window in front
-// of the person, for the assistant's mistake, and the call waits until somebody closes it.
-class ibFailureToCaller {
-public:
-	explicit ibFailureToCaller(ibSession* session) : m_session(session) { m_session->SetProcessingBackendError(true); }
-	~ibFailureToCaller() { m_session->SetProcessingBackendError(false); }
-	ibFailureToCaller(const ibFailureToCaller&) = delete;
-	ibFailureToCaller& operator=(const ibFailureToCaller&) = delete;
-private:
-	ibSession* const m_session;
-};
-
 //---------------------------------------------------------------------------
 // window_run
 //---------------------------------------------------------------------------

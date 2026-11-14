@@ -198,6 +198,7 @@
     <ClCompile Include="mcp\tools\designer\mcpToolComposition.cpp" />
     <ClCompile Include="mcp\tools\designer\mcpToolDatabase.cpp" />
     <ClCompile Include="mcp\tools\designer\mcpToolDebug.cpp" />
+    <ClCompile Include="mcp\tools\designer\mcpToolExternal.cpp" />
     <ClCompile Include="mcp\tools\designer\mcpToolForms.cpp" />
     <ClCompile Include="mcp\tools\designer\mcpToolFunctionalOption.cpp" />
     <ClCompile Include="mcp\tools\designer\mcpToolJournal.cpp" />
