@@ -22,7 +22,7 @@ ibValueCompositionField::ibValueCompositionField(const ibString& path, const ibS
 // …and the presentation in the READER's language. It is kept in every language it was written in — a field's
 // title is — and a filter line printed it that way, `en = 'Period'; ru = …; uk = …;`, in the settings window.
 ibString ibValueCompositionField::GetString() const {
-	return m_presentation.IsEmpty() ? m_path : ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), m_presentation);
+	return m_presentation.IsEmpty() ? m_path : ibBackendLocalization::GetTranslateGetRawLocText(m_presentation);
 }
 
 void ibValueCompositionField::FillMembers(ibMemberTable& helper) const {

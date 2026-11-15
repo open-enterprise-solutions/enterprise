@@ -203,7 +203,7 @@
       "kind": "property",
       "category_keys": ["value_types", "spreadsheet"],
       "signature": "LanguageCode",
-      "description": "Which language the TEMPLATE is read in. Set it on the template once, before any area is taken, and every translated caption inside it switches; only the strings the routine builds itself have to be handled separately. A blank for a foreign counterparty is this one assignment, not a second template.",
+      "description": "Which language the TEMPLATE is read in. Set it on the template once, before any area is taken: every area taken afterwards carries it, and every translated caption inside it switches; only the strings the routine builds itself have to be handled separately. A blank for a foreign counterparty is this one assignment, not a second template. Set on the document being filled, it wins over the template's; set on neither, the captions are read in the user's language.",
       "syntax_block": "Template.LanguageCode = code;",
       "parameters": "None.",
       "return_descr": "String — a configuration language code.",

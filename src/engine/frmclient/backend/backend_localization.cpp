@@ -21,6 +21,16 @@ const ibString& ibBackendLocalization::GetUserLanguage()
 	return ms_strUserLanguage;
 }
 
+ibString ibBackendLocalization::GetTranslateGetRawLocText(const ibString& strRawLocale)
+{
+	return GetTranslateGetRawLocText(GetUserLanguage(), strRawLocale);
+}
+
+ibString ibBackendLocalization::GetTranslateGetRawLocText(const ibString& strLangCode, const ibString& strRawLocale)
+{
+	return ibLocalization::GetTranslateGetRawLocText(strLangCode, strRawLocale);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////
 

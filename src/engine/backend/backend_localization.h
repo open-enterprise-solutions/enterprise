@@ -30,6 +30,12 @@ public:
 	// stay at (const wxString&) return + cached session-side value +
 	// no logic per call.
 	static const ibString& GetUserLanguage();
+
+	// ⭐ THE READING OF A STORED TEXT — in the language above (the configuration's when the user has none of their
+	// own: the translate state answers which), else the first written (ibLocalization::GetTranslateGetRawLocText);
+	// with a language named, Tstr's, in that one. Every reader on this side comes through here and says only the text.
+	static ibString GetTranslateGetRawLocText(const ibString& strRawLocale);
+	static ibString GetTranslateGetRawLocText(const ibString& strLangCode, const ibString& strRawLocale);
 };
 
 // ⭐ THE TRANSLATED TEXT ITSELF — what is passed, held and compared, the way ibNumber is what a

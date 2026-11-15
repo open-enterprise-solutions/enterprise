@@ -32,7 +32,7 @@ namespace {
 // answers with the text; this helper reads a text written in every language the
 // one way the platform reads it, for the tests about that form itself.
 ibString Translated(const ibString& raw) {
-	return ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), raw);
+	return ibBackendLocalization::GetTranslateGetRawLocText(raw);
 }
 
 std::shared_ptr<ibSpreadsheetObject> MakeDocument() {
@@ -609,6 +609,34 @@ TEST(SpreadsheetDocument, PutArea_ACaptionLandsAsTextInTheDocumentsLanguage)
 	EXPECT_EQ(wxT("Rakhunok"), doc->GetCellValue(0, 0));
 	EXPECT_EQ(wxT("Rakhunok"), doc->GetCellValue(0, 1));
 	EXPECT_EQ(ibSpreadsheetFillType::ibSpreadsheetFillType_StrText, doc->GetCellFillType(0, 0));
+}
+
+// …AND A DOCUMENT THAT NAMES NO LANGUAGE READS IT IN ITS READER'S, the language the caller says — the
+// session's (#680). It read in none, and every user got the language written first.
+TEST(SpreadsheetDocument, PutArea_WithoutTheDocumentsLanguage_ReadsInTheReaders)
+{
+	auto doc = MakeDocument();
+
+	auto area = MakeDocument();
+	area->SetCellValue(0, 0, wxT("en = 'Invoice'; uk = 'Rakhunok';"));
+
+	doc->PutArea(area, 0, wxT("uk"));
+	doc->JoinArea(area, 0, wxT("uk"));
+
+	EXPECT_EQ(wxT("Rakhunok"), doc->GetCellValue(0, 0));
+	EXPECT_EQ(wxT("Rakhunok"), doc->GetCellValue(0, 1));
+
+	// the document's own, named, still comes first…
+	auto named = MakeDocument();
+	named->SetLangCode(wxT("en"));
+	named->PutArea(area, 0, wxT("uk"));
+	EXPECT_EQ(wxT("Invoice"), named->GetCellValue(0, 0));
+
+	// …and then the area's own (Area.LanguageCode), before the reader's
+	auto unnamed = MakeDocument();
+	area->SetLangCode(wxT("en"));
+	unnamed->PutArea(area, 0, wxT("uk"));
+	EXPECT_EQ(wxT("Invoice"), unnamed->GetCellValue(0, 0));
 }
 
 // The same area put TWICE keeps both copies' drill-down, because the parameter name

@@ -369,6 +369,11 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Fixes
 
+- **A template put into a document that names no language reads in your language.** `Put` and `Join` laid a
+  template's captions down in the language written first for every user unless a script had set the document's
+  `LanguageCode`; a document without one now takes the session's (#680). And an area taken from a template carries
+  the template's `LanguageCode`, as the help always said: it was left behind, and setting it on the template changed
+  nothing.
 - **A tab shows `*` as soon as an assistant changes what it holds**, and drops it when the assistant saves. The
   mark came only with the next thing you did in the designer, so a saved external report could still show `*`.
 - **A sequence with no dimensions moves its border.** Posting a document registered in it was refused: "an upsert

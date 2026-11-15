@@ -241,7 +241,7 @@ std::vector<ibString> ibValueGridBox::AppendDetailByMenu(std::vector<ibMenuItem>
 
 		// …in the reader's language: a title is kept in every language it was written in, and a sheet reads
 		// it as a cell lands (PutArea) — a menu is not a sheet, and printed it every language at once.
-		ibString title = ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), desc.TitleForPath(field.m_name));
+		ibString title = ibBackendLocalization::GetTranslateGetRawLocText(desc.TitleForPath(field.m_name));
 		if (title.IsEmpty())
 			title = ibTitleFromName(field.m_name);
 		byMenu.items.push_back(ibMenuItem{ firstId + static_cast<std::int32_t>(paths.size()), title });

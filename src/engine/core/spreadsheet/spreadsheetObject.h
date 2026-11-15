@@ -113,8 +113,12 @@ public:
 	ibSpreadsheetDescription GetArea(int rowLeft, int rowRight, int colTop = -1, int colBottom = -1);
 	ibSpreadsheetDescription GetAreaByName(const ibString& strAreaLeftName, const ibString& strAreaTopName = ibString());
 
-	void PutArea(const std::shared_ptr<ibSpreadsheetObject>& doc, unsigned int groupLevel = 0);
-	void JoinArea(const std::shared_ptr<ibSpreadsheetObject>& doc, unsigned int groupLevel = 0);
+	// What lands is read in this document's language (LanguageCode), else in the area's own; where neither names
+	// one, in its reader's — the session's, which the core cannot know and the caller says (#680).
+	void PutArea(const std::shared_ptr<ibSpreadsheetObject>& doc, unsigned int groupLevel = 0,
+		const ibString& strReaderLangCode = ibString());
+	void JoinArea(const std::shared_ptr<ibSpreadsheetObject>& doc, unsigned int groupLevel = 0,
+		const ibString& strReaderLangCode = ibString());
 
 	// Block-style outline grouping. Nest freely: BeginRowGroup(); Put(doc, 1);
 	// BeginRowGroup(); Put(doc, 2); EndRowGroup(); EndRowGroup();
@@ -244,8 +248,8 @@ public:
 
 	// ⭐⭐ THE TEXT A CELL SHOWS — the one door the grid, the printout, the script and the landing of an
 	// area (PutArea / JoinArea) all go through: a caption or a template in the language asked for, a
-	// parameter by its value. Without a language, the document's own (and without that, the one in force);
-	// an area landing in another document is read in THAT one's.
+	// parameter by its value. Without a language, the document's own (and without that, the first written);
+	// an area landing in another document is read in THAT one's, or, naming none, in its reader's (PutArea).
 	ibString ComputeStringValueFromParameters(const ibString& strValue,
 		ibSpreadsheetFillType type = ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter,
 		const ibString& strLangCode = ibString()) const;
