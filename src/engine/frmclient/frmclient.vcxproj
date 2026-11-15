@@ -285,6 +285,7 @@
     <ClCompile Include="win\dlgs\colHeight.cpp" />
     <ClCompile Include="win\dlgs\connectionDB.cpp" />
     <ClCompile Include="win\dlgs\rowHeight.cpp" />
+    <ClCompile Include="win\dlgs\search.cpp" />
     <ClCompile Include="docView\templates\docViewSpreadsheet.cpp" />
     <ClCompile Include="win\ctrls\checktree.cpp" />
     <ClCompile Include="win\ctrls\tableView.cpp" />
@@ -408,6 +409,7 @@
     <ClInclude Include="win\dlgs\colHeight.h" />
     <ClInclude Include="win\dlgs\connectionDB.h" />
     <ClInclude Include="win\dlgs\rowHeight.h" />
+    <ClInclude Include="win\dlgs\search.h" />
     <ClInclude Include="docView\templates\docViewSpreadsheet.h" />
     <ClInclude Include="mainFrame\objinspect\objinspect.h" />
     <ClInclude Include="backend\propertyManager\propertyObject.h" />

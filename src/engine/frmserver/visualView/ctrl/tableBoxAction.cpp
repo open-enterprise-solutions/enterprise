@@ -6,7 +6,6 @@
 #include "backend/backend_mainFrame.h"          // ibBackendDocFrame — ShowSpreadsheetDocument lives on it
 #include "backend/composition/ramComposer.h"    // ibDataRamComposer — the composer a table of values prints through
 #include <algorithm>
-#include <functional>
 #include <memory>
 #include "backend/metaCollection/partial/commonObject.h"
 #include "core/picturePredefined.h"          // g_pic*CLSID — the TableBox composes the standard command band
@@ -17,6 +16,8 @@
 #include "frmserver/visualView/choiceRequest.h" // ibRequestChoice — the columns printed
 #include "frmserver/win/dlgs/settings/savedSettings.h"   // ibDialogSavedSettings — the reader's shelf
 #include "frmserver/win/dlgs/settings/list/listSettings.h"   // ibDialogListSettings — the reader's settings window
+#include "frmserver/win/dlgs/settings/settingsRequest.h"   // Advanced search asked as a settings window: its fields, a value chosen
+#include "backend/metadataSerialization.h"   // ibDeserializeValue — the value Advanced search is answered with
 #include "protocol/protocol.h"     // ibProtocol::ibRequest::ibKind::ViewMode — the client's window of the view mode
 #include "core/serialize/dataBuilder.h"      // ibDataNode — a request and its answer
 #include "form.h"
@@ -37,16 +38,20 @@
 //****************************************************************************
 
 // The TableBox composes its command interface the way a form does (formAction.cpp): it MERGES the bound model's
-// OWN narrow command set and DECORATES it with the standard, table-generic band — Select (choice), Filter /
-// FilterByColumn / FilterClear, ViewMode. The ids are the TableBox's own (high base, like the form's enClose)
-// so they never collide with a model's object-command ids; unknown ids are OBJECT commands and go to the model.
+// OWN narrow command set and DECORATES it with the standard, table-generic band — Select (choice), the search (Find,
+// FindAdvanced, FindCancel), ViewMode, Filter (Configure list). The ids are the TableBox's own (high base, like
+// the form's enClose) so they never collide with a model's object-command ids; unknown ids are OBJECT commands and go
+// to the model.
 enum
 {
 	enTableSelect = 20000,
 	enTableFilter,
-	enTableFilterByColumn,
-	enTableFilterClear,
-	enTableViewMode,
+	// «Find: <column> - <value>» took the place of «Filter by column» — and its number, so a bar item bound to the old
+	// verb runs the one that replaced it.
+	enTableFind,
+	// the number after Find was Filter clear's, taken off (Max, 2026-11-15: the search's submenu does not need it, and
+	// Configure list clears a filter): kept unused, so the verbs after it keep theirs
+	enTableViewMode = enTableFind + 2,
 	// ⭐ THE READER'S OWN SETTINGS — a LIST HAS THEM TOO (Max, 2026-08-26). Not the variants question,
 	// which a list legitimately has none of: a variant is something the AUTHOR named in the
 	// configuration, while these are what THIS person arranged and chose to keep. They live under
@@ -57,6 +62,8 @@ enum
 	// list and every table of values has it for nothing (Max, 2026-08-29). It READS: the same rows, the
 	// same filter, the same sort and the same groupings, printed the way a report is.
 	enTableOutputList,
+	enTableFindAdvanced,
+	enTableFindCancel,
 };
 
 ibValueModelTableBox::ibStandardCommandSet ibValueModelTableBox::GetStandardCommands(const ibFormID& formType)
@@ -93,18 +100,22 @@ ibValueModelTableBox::ibStandardCommandSet ibValueModelTableBox::GetStandardComm
 				.SetModify(c.m_modifiesData).SetDefault(c.m_default);
 	}
 
-	// 3) The standard view-state band — Filter / by-column / clear, ViewMode — never changes DATA, so it stays
-	//    live in a view-only form (only the model's Add / Delete / Copy row greys out).
+	// 3) The standard view-state band — the search, the shelf, Output list, ViewMode, Configure list — never changes
+	//    DATA, so it stays live in a view-only form (only the model's Add / Delete / Copy row greys out). The search
+	//    comes first, Configure list last (Max, 2026-11-15): a person narrows a list by looking for something far more
+	//    often than by setting it up.
+	//
+	// ⭐ THE SEARCH, ONE SUBMENU (Max, 2026-11-15): by the current cell, in a window, and taken off — the field at the
+	// bar's end being the fourth way in. What it narrows to is the search's, not the reader's setting: nothing is saved,
+	// and Cancel search gives back what was there. Cancel is greyed while there is nothing to cancel.
 	actionData.AddSeparator();
-	actionData.AddAction(ibT("Filter"), _("Filter"), g_picFilterCLSID, false, enTableFilter).SetModify(false);
-	// (⚠ NO VARIANTS HERE, and it is a fact about the ENTITY rather than a gap in this band. A
-	//  variant is a setting the AUTHOR named and put in the configuration, and there is nowhere to
-	//  name one for a list: the variants are edited in the composition's own window, which is the
-	//  report's. A list's setting is what the reader themselves narrowed to, and there is one of it.
-	//  Max, 2026-08-26, arriving at it while the button was being built: "for a report it is needed,
-	//  truly" — so the verb lives on the composition and not on every control that shows rows.)
-	actionData.AddAction(ibT("FilterByColumn"), _("Filter by column"), g_picFilterSetCLSID, false, enTableFilterByColumn).SetModify(false);
-	actionData.AddAction(ibT("FilterClear"), _("Filter clear"), g_picFilterClearCLSID, false, enTableFilterClear).SetModify(false);
+	const ibString search = _("Search");
+	actionData.AddAction(ibT("Find"), _("Find"), g_picFindCLSID, false, enTableFind).SetModify(false)
+		.SetGroup(search).SetShortcut(ibT("Ctrl+Alt+F"));
+	actionData.AddAction(ibT("FindAdvanced"), _("Advanced search"), g_picFindCLSID, false, enTableFindAdvanced).SetModify(false)
+		.SetGroup(search).SetShortcut(ibT("Alt+F"));
+	actionData.AddAction(ibT("FindCancel"), _("Cancel search"), g_picFindCancelCLSID, false, enTableFindCancel).SetModify(false)
+		.SetGroup(search).SetShortcut(ibT("Ctrl+Q")).SetEnabled(IsSearched());
 
 	// …and the shelf: what this person kept, and where to put what they have now. Two verbs, because
 	// they are opposite acts and a person reaches for one of them knowing which. View-state, like
@@ -123,6 +134,17 @@ ibValueModelTableBox::ibStandardCommandSet ibValueModelTableBox::GetStandardComm
 	actionData.AddSeparator();
 	actionData.AddAction(ibT("ViewMode"), _("View mode"), g_picHierarchyCLSID, false, enTableViewMode).SetModify(false);
 
+	// …and, last, Configure list — named for what it does: the reader's whole setting, filter, order, grouping,
+	// appearance, not one tab of it (Max, 2026-11-15). Its name stays Filter, what a script calls it by.
+	// (⚠ NO VARIANTS HERE, and it is a fact about the ENTITY rather than a gap in this band. A
+	//  variant is a setting the AUTHOR named and put in the configuration, and there is nowhere to
+	//  name one for a list: the variants are edited in the composition's own window, which is the
+	//  report's. A list's setting is what the reader themselves narrowed to, and there is one of it.
+	//  Max, 2026-08-26, arriving at it while the button was being built: "for a report it is needed,
+	//  truly" — so the verb lives on the composition and not on every control that shows rows.)
+	actionData.AddSeparator();
+	actionData.AddAction(ibT("Filter"), _("Configure list"), g_picComposerSettingsCLSID, false, enTableFilter).SetModify(false);
+
 	return actionData;
 }
 
@@ -138,7 +160,7 @@ void ibValueModelTableBox::CallAsAction(const ibActionID& lNumAction, ibBackendV
 	ctx.m_selection = m_tableCurrentLine != nullptr ? m_tableCurrentLine->GetLineItem() : ibDataViewItem();
 	ctx.m_anchor = GetCreateAnchor();
 
-	// …and the COLUMN the cursor stands on, the one the by-column FILTER reads (Command_FilterByCurrentColumn).
+	// …and the COLUMN the cursor stands on, the one the model's commands read.
 	// It travels as the column itself — name, synonym and the source description — never as a number: a
 	// column bound to a HOP ("Product.Vendor") is a whole path, and its name is the dotted field a sort is
 	// written against.
@@ -151,8 +173,9 @@ void ibValueModelTableBox::CallAsAction(const ibActionID& lNumAction, ibBackendV
 	switch (lNumAction)
 	{
 	case enTableSelect:         Command_Choose(srcForm);             break;   // returns the current ReturnLine
-	case enTableFilterByColumn: Command_FilterByCurrentColumn();     break;   // direct → table + L5
-	case enTableFilterClear:    Command_ClearFilter();               break;   // direct → L5
+	case enTableFind:           Command_Find();                      break;   // the current cell → the search
+	case enTableFindAdvanced:   Command_FindAdvanced();              break;   // the client's window → the search
+	case enTableFindCancel:     Command_FindCancel();                break;
 	case enTableOutputList:     Command_OutputList();                break;   // → a spreadsheet document
 	case enTableViewMode:       Command_ShowViewMode();              break;   // direct → control
 	case enTableSettingsRestore: Command_ShowSavedSettings(/*restore*/true);  break;
@@ -182,7 +205,7 @@ void ibValueModelTableBox::CallAsAction(const ibActionID& lNumAction, ibBackendV
 //   Tree         → the folder the person stands in: the current row if it IS a folder, else its parent folder.
 ibDataViewItem ibValueModelTableBox::GetCreateAnchor() const
 {
-	switch (m_propertyViewMode->GetValueAsEnum()) {
+	switch (GetViewMode()) {
 	case ibDataViewHierarchical:
 		return m_drillItem;
 	case ibDataViewTree: {
@@ -250,7 +273,10 @@ void ibValueModelTableBox::Command_ShowSavedSettings(bool restore)
 		ibSettingsCategory::List, SettingsObjectKey(), GetMetaData());
 }
 
-void ibValueModelTableBox::Command_FilterByCurrentColumn()
+// ⭐ «FIND: <COLUMN> - <VALUE>» — the rows whose field holds what the current cell does, by equality: a reference is
+// the same object, a text the same text. A condition of the SEARCH, not of the reader's setting (it took the place of
+// «Filter by column», which wrote the setting): nothing is saved, and Cancel search takes it off with the rest.
+void ibValueModelTableBox::Command_Find()
 {
 	if (m_tableModel == nullptr)
 		return;
@@ -258,48 +284,185 @@ void ibValueModelTableBox::Command_FilterByCurrentColumn()
 	// Current row + current column are the table's own — the model never pulls them.
 	const ibDataViewItem sel = m_tableCurrentLine != nullptr
 		? m_tableCurrentLine->GetLineItem() : ibDataViewItem();
-	const ibValueModelTableBoxColumn* col = FindColumn(m_currentColumn);
-	if (!sel.IsOk() || col == nullptr)
+	const ibValueModelTableBoxColumn* const column = FindColumn(m_currentColumn);
+	const ibString field = column != nullptr ? column->GetSourceFieldName() : ibString();
+	if (!sel.IsOk() || field.IsEmpty())
 		return;
 
-	const unsigned int colId = static_cast<unsigned int>(col->GetModelColumn());
 	ibValue value;
-	m_tableModel->GetValueByMetaID(sel, colId, value);      // reading a cell value is a plain data op
-	const ibString name = m_tableModel->GetColumnNameByID(colId);
-	if (!name.empty()) {
-		// ⭐ THROUGH THE SETTINGS, NEVER THROUGH THE COMPOSER'S OWN VERBS. This control says WHAT to
-		// show; the model turns that into a read. So: take a COPY OF WHAT IS IN FORCE — the reader's
-		// where they set one, the author's where they did not (starting from the user's section alone
-		// would silently drop the author's filter the moment somebody narrowed by a column) — add the
-		// condition, and hand the whole of it back as the user's. The list's own description, what the
-		// configuration saved, is untouched.
-		ibSettingsDescription settings = m_tableModel->GetModelComposer().GetCurrentSettingsDesc();
-		settings.m_filter.Append(name, ibComparisonKind_Equal, ibStoreValue(value));
-		m_tableModel->GetModelComposer().SetUserSettingsDesc(settings);
-		m_tableModel->RefetchAll();   // the row whose value this filter is stays current — and in view
-	}
+	m_tableModel->GetValueByMetaID(sel, static_cast<unsigned int>(column->GetModelColumn()), value);
+	ibFilterNodeDescription condition;
+	condition.m_left.m_path = field;
+	condition.m_comparison = ibComparisonKind_Equal;
+	condition.m_right.m_value = ibStoreValue(value);
+	m_searchConditions[column->GetControlID()] = condition;
+	Search(GetSearchText());
 }
 
-void ibValueModelTableBox::Command_ClearFilter()
+// ⭐ ADVANCED SEARCH — a settings window over one condition (ibRequest::ibSearch), asked as a list's settings are: the
+// columns shown are its fields, where to look begins at the one the cursor stands on and what for at its cell's value; a
+// value of the server's choosing is chosen on the way (Act Choose — the window asked again with it, Chosen). Answered with
+// the condition: By value — the field equal to the value chosen; the text — «contains» over the fields of it that hold
+// text (GetTextFields), its pattern saying how: from the start is `text%` (a value holding a `%` is the LIKE pattern as
+// written — ibComposerContainsPattern), the whole field — equality. Nothing given, the column's condition is taken off.
+void ibValueModelTableBox::Command_FindAdvanced()
 {
-	if (m_tableModel == nullptr)
+	ibBackendDocFrame* const frame = ibSession::CurrentFrame();
+	const ibMetaData* const metaData = GetMetaData();
+	if (m_tableModel == nullptr || frame == nullptr)
 		return;
-	// ⭐ CLEARING THE FILTER CLEARS THE FILTER. It used to assign an EMPTY SETTING, which wipes all
-	// three sections — so a person who had set a sort and then pressed "Filter clear" lost the sort
-	// too, under a command that says nothing about sorting (Max, 2026-08-24).
-	//
-	// An empty filter, not "no user setting": whatever else the reader chose is theirs and stays.
-	// ⚠ And an empty filter is an ANSWER — the author's does NOT come back under it (2026-08-29: a
-	// setting that exists answers every part). "Clear the filter" means no filter, which is what the
-	// person pressing it asked for; going back to the developer's is `ClearUserSettings`, a different
-	// verb that drops the setting whole.
-	// The row being read outlives the clearing — it stays the current line, and the client's next reset
-	// reads around it; without that the list comes back at the old top row with every previously hidden
-	// row now standing between the two, and the value is off screen.
-	ibSettingsDescription settings = m_tableModel->GetModelComposer().GetCurrentSettingsDesc();
-	settings.m_filter.Clear();
-	m_tableModel->GetModelComposer().SetUserSettingsDesc(settings);
-	m_tableModel->RefetchAll();
+
+	ibDataNode request;
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<std::int32_t>(ibProtocol::ibRequest::ibKind::Search));
+	request.SetValue(ibProtocol::ibRequest::ibSearch::Picture, ibBackendPicture::SendPicture(g_picFindCLSID));
+	std::vector<ibValueModelTableBoxColumn*> columns;
+	CollectColumns(this, columns);
+	std::vector<ibTypeDescription> types;
+	ibDataNode& fields = request.Child(ibProtocol::ibRequest::ibSearch::Fields);
+	const ibDataViewItem sel = m_tableCurrentLine != nullptr ? m_tableCurrentLine->GetLineItem() : ibDataViewItem();
+	for (const ibValueModelTableBoxColumn* column : columns) {
+		const ibString field = column->GetSourceFieldName();
+		if (!column->IsColumnShown() || field.IsEmpty())
+			continue;
+		// …a field each, named for what its header says, numbered by the column — and what the current row holds in it,
+		// and how it reads: the window takes it as the column is picked, the cursor's first
+		ibDataNode& written = ibWriteSettingsField(fields, field, column->GetControlTitle(),
+			static_cast<ibMetaID>(column->GetControlID()), column->GetTypeDesc(), true, ibPictureDescription(), metaData);
+		types.push_back(column->GetTypeDesc());
+		if (!sel.IsOk())
+			continue;
+		ibValue value;
+		m_tableModel->GetValueByMetaID(sel, static_cast<unsigned int>(column->GetModelColumn()), value);
+		ibDataNode& held = written.Child(ibProtocol::ibRequest::ibSearch::Value);
+		value.Serialize(held);
+		held.SetValue(ibProtocol::ibRequest::ibListSettings::Presentation, ibString(value.GetString()));
+	}
+	if (types.empty())
+		return;
+	ibWriteSettingsReferences(request.Child(ibProtocol::ibRequest::ibSearch::References), types, metaData);
+
+	// Where the cursor stands: its column, and how a column of that type is looked in first — a text by a part of it,
+	// anything else by its value.
+	request.SetValue(ibProtocol::ibRequest::ibSearch::Column, static_cast<std::int32_t>(m_currentColumn));
+	const ibValueModelTableBoxColumn* const current = FindColumn(m_currentColumn);
+	const bool text = current == nullptr || current->GetTypeDesc().GetClsidCount() == 0
+		|| current->GetTypeDesc().ContainType(ibValueTypes::TYPE_STRING);
+	request.SetValue(ibProtocol::ibRequest::ibSearch::How, static_cast<std::int32_t>(text
+		? ibProtocol::ibRequest::ibSearch::ibHow::Contains : ibProtocol::ibRequest::ibSearch::ibHow::Value));
+
+	// The value being chosen — held while the window is up, let go with it.
+	ibListSettingsChoosing choosing;
+
+	ibDataNode response;
+	for (;;) {
+		response = ibDataNode();
+		if (!frame->Request(request, response))
+			return;
+		if (!response.Has(ibProtocol::ibRequest::ibListSettings::Act))
+			break;
+		// ON THE WAY — a value of the column's type to choose: chosen, and the window asked again, with it when the choice
+		// was made at once.
+		if (static_cast<ibProtocol::ibRequest::ibListSettings::ibAct>(response.GetValue<std::int32_t>(ibProtocol::ibRequest::ibListSettings::Act))
+			== ibProtocol::ibRequest::ibListSettings::ibAct::Choose) {
+			ibChooseSettingsValue(response, metaData, choosing.m_choice);
+			if (choosing.m_choice != nullptr)
+				choosing.m_choice->WriteChosen(request);
+		}
+	}
+	if (!response.FindField(ibProtocol::ibRequest::ibSearch::Column))
+		return;   // closed
+
+	const ibValueModelTableBoxColumn* const column = FindColumn(response.GetValue<std::int32_t>(ibProtocol::ibRequest::ibSearch::Column));
+	const ibString field = column != nullptr ? column->GetSourceFieldName() : ibString();
+	if (field.IsEmpty())
+		return;
+	const auto how = static_cast<ibProtocol::ibRequest::ibSearch::ibHow>(response.GetValue<std::int32_t>(ibProtocol::ibRequest::ibSearch::How));
+
+	// Nothing given — the column's condition is taken off.
+	ibFilterNodeDescription condition;
+	bool given = false;
+	if (how == ibProtocol::ibRequest::ibSearch::ibHow::Value) {
+		// BY VALUE — the field equal to it; an empty reference too (the rows that have none), Undefined — nothing chosen.
+		ibValue value;
+		if (const auto written = response.FindChild(ibProtocol::ibRequest::ibSearch::Value)) {
+			try {
+				value = ibDeserializeValue(*written, metaData);
+			}
+			catch (const ibCoreException&) {
+			}
+		}
+		given = value.GetType() != ibValueTypes::TYPE_EMPTY;
+		condition.m_left.m_path = field;
+		condition.m_comparison = ibComparisonKind_Equal;
+		condition.m_right.m_value = ibStoreValue(value);
+	}
+	else {
+		const ibString text = response.GetValue<ibString>(ibProtocol::ibRequest::ibSearch::Value);
+		const bool exact = how == ibProtocol::ibRequest::ibSearch::ibHow::Exact;
+		const ibString pattern = how == ibProtocol::ibRequest::ibSearch::ibHow::Begins ? text + ibT("%") : text;
+		condition.m_kind = ibFilterNodeKind_Group;
+		condition.m_groupKind = ibFilterGroupKind_Or;
+		for (const ibString& one : GetTextFields(column))
+			ibFilterDescription::Append(condition.m_children, one, exact ? ibComparisonKind_Equal : ibComparisonKind_Contains,
+				ibStoreValue(ibValue(exact ? text : pattern)));
+		given = !condition.m_children.empty() && (exact || !text.IsEmpty());
+	}
+	if (given)
+		m_searchConditions[column->GetControlID()] = condition;
+	else
+		m_searchConditions.erase(column->GetControlID());
+	Search(GetSearchText());
+}
+
+// ⭐ CANCEL SEARCH — the text typed and every condition Find and Advanced search put: the rows read anew as they were,
+// and the field emptied with the next state.
+void ibValueModelTableBox::Command_FindCancel()
+{
+	if (!IsSearched())
+		return;
+	m_searchConditions.clear();
+	SetSearchText(ibString());
+}
+
+// ⭐ THE CONTEXT MENU — the desktop's OnContextMenu: the table's standard commands, picked back as Action {Id}; a group's
+// gathered under one entry where the first of them stands, a submenu; a view-only form greys the ones that modify data
+// here too, as its toolbar does. Find says it is about the cell the cursor is on, and the client adds that cell to its
+// caption: where the cursor stands is the client's to know at the moment the menu opens.
+void ibValueModelTableBox::UpdateContextMenu(ibDataNode& state)
+{
+	if (m_formOwner == nullptr)
+		return;
+	const ibStandardCommandSet actions = GetStandardCommands(m_formOwner->GetTypeForm());
+	const bool viewOnly = m_formOwner->IsViewOnly();
+	ibDataNode& menu = state.Child(ibProtocol::ibForm::ibTable::ContextMenu);
+	std::map<ibString, ibDataNode*> groups;
+	for (unsigned int idx = 0; idx < actions.GetCount(); idx++) {
+		const ibActionID id = actions.GetID(idx);
+		if (id == ibNOT_FOUND)
+			continue;
+		ibDataNode* under = &menu;
+		const ibString group = actions.GetGroupByID(id);
+		if (!group.IsEmpty()) {
+			auto found = groups.find(group);
+			if (found == groups.end()) {
+				ibDataNode& entry = menu.AddChild(0, 0);
+				entry.SetValue(ibProtocol::ibForm::ibCommandBar::Caption, group);
+				entry.SetValue(ibProtocol::ibForm::ibCommandBar::Picture, ibBackendPicture::SendPicture(actions.GetPictureByID(id), GetMetaData()));
+				entry.SetValue(ibProtocol::ibForm::ibCommandBar::Kind, static_cast<std::int32_t>(ibProtocol::ibForm::ibCommandBar::ibKind::Group));
+				found = groups.emplace(group, &entry).first;
+			}
+			under = found->second;
+		}
+		ibDataNode& entry = under->AddChild(0, 0);
+		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Id, static_cast<std::int32_t>(id));
+		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Caption, actions.GetCaptionByID(id));
+		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Picture, ibBackendPicture::SendPicture(actions.GetPictureByID(id), GetMetaData()));
+		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Enabled, actions.IsEnabled(id) && !(viewOnly && actions.GetModifiesDataByID(id)));
+		if (const ibString shortcut = actions.GetShortcutByID(id); !shortcut.IsEmpty())
+			entry.SetValue(ibProtocol::ibForm::ibCommandBar::Shortcut, shortcut);
+		if (id == enTableFind)
+			entry.SetValue(ibProtocol::ibForm::ibCommandBar::CurrentCell, true);
+	}
 }
 
 // ⭐⭐ WHAT IS ON THE SCREEN, AS A DOCUMENT — «Output list».
@@ -326,20 +489,7 @@ void ibValueModelTableBox::Command_OutputList()
 	// The columns this box shows, in the order it shows them — the layout the sheet repeats. Walked, not
 	// looped: a column may sit inside a column GROUP, and groups nest (the same walk CreateTable makes).
 	std::vector<ibValueModelTableBoxColumn*> columns;
-	std::function<void(const ibValueFrame*)> walk = [&](const ibValueFrame* parent) {
-		if (parent == nullptr)
-			return;
-		for (unsigned int idx = 0; idx < parent->GetChildCount(); idx++) {
-			ibValueFrame* child = parent->GetChild(idx);
-			if (child == nullptr)
-				continue;
-			if (ibValueModelTableBoxColumn* column = dynamic_cast<ibValueModelTableBoxColumn*>(child))
-				columns.push_back(column);
-			else if (dynamic_cast<ibValueModelTableBoxColumnGroup*>(child) != nullptr)
-				walk(child);
-		}
-	};
-	walk(this);
+	CollectColumns(this, columns);
 
 	std::vector<ibChoiceItem> names;
 	std::vector<ibValueModelTableBoxColumn*> offered;
@@ -389,6 +539,10 @@ void ibValueModelTableBox::Command_OutputList()
 	for (ibDataComposer::Output& output : own->Outputs())
 		output.m_driver = nullptr;
 	own->ClearScope();
+	// …and what the person searched for IS what they are looking at: the scope of the copy's read, which is the whole
+	// print — as the list's is each of its fetches (Fetch).
+	if (const ibFilterNodeDescription searched = GetSearchCondition(); !searched.m_children.empty())
+		own->ScopeTo(searched);
 
 	// ⭐⭐ …AND THE GROUPING BECOMES A LADDER OF LEVELS. A LIST does not need one: it draws its own tree and
 	// reads a level at a time as somebody drills, so its grouping lives in the SETTING and the ladder stays
@@ -407,7 +561,7 @@ void ibValueModelTableBox::Command_OutputList()
 	// ⭐ ASKED OF THE PROPERTY. The `ViewMode` PROPERTY is what the runtime sets, and a person's switch on the
 	// client is written back onto it (OnViewModeChanged) — the same one the next fetch reads, so it is what
 	// the person is actually looking at.
-	const bool flatView = (m_propertyViewMode->GetValueAsEnum() == ibDataViewList);
+	const bool flatView = (GetViewMode() == ibDataViewList);
 
 	// ⭐⭐ …AND THE FOLDER SOMEBODY IS STANDING IN IS THE DELIMITER. Drilled into a group and pressed
 	// «output list» means that group — not the whole catalog (Max, 2026-08-29). It goes in as a FILTER LINE

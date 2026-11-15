@@ -453,7 +453,8 @@ ibAuiToolBarItem* ibAuiToolBar::FindToolByPosition(wxCoord x, wxCoord y) const
     {
         ibAuiToolBarItem& item = m_items.Item(i);
 
-        if (!item.m_sizerItem)
+        // a hidden item stands nowhere - its rect is the one it had last shown (KeepOverflowLast)
+        if (!item.m_sizerItem || !item.m_sizerItem->IsShown())
             continue;
 
         wxRect rect = item.m_sizerItem->GetRect();
@@ -477,7 +478,7 @@ ibAuiToolBarItem* ibAuiToolBar::FindToolByPositionWithPacking(wxCoord x, wxCoord
     {
         ibAuiToolBarItem& item = m_items.Item(i);
 
-        if (!item.m_sizerItem)
+        if (!item.m_sizerItem || !item.m_sizerItem->IsShown())
             continue;
 
         wxRect rect = item.m_sizerItem->GetRect();
@@ -1069,6 +1070,10 @@ bool ibAuiToolBar::GetToolFitsByIndex(int tool_idx) const
     if (!m_items[tool_idx].m_sizerItem)
         return false;
 
+    // given up for an item the overflow takes last (KeepOverflowLast)
+    if (!m_items[tool_idx].m_sizerItem->IsShown() && m_items[tool_idx].m_proportion == 0)
+        return false;
+
     int cli_w, cli_h;
     GetClientSize(&cli_w, &cli_h);
 
@@ -1166,6 +1171,7 @@ bool ibAuiToolBar::Realize()
     }
     else // Don't change the size but let the sizer know about available size.
     {
+        KeepOverflowLast(curSize);
         m_sizer->SetDimension(0, 0, curSize.x, curSize.y);
     }
 
@@ -1374,6 +1380,44 @@ wxSize ibAuiToolBar::RealizeHelper(wxReadOnlyDC& dc, wxOrientation orientation)
     }
 
     return m_sizer->GetMinSize();
+}
+
+// ⭐ THE ITEMS THE OVERFLOW TAKES LAST — a bar too narrow for all its items gives up the others first, from its end, so
+// the kept one stays where it is read (a command bar's search field, Max 2026-11-15: "it lives in the toolbar itself,
+// and folds away last"); wx gives up the items from the end whatever they are. An item given up is hidden in the sizer:
+// not drawn (OnPaint), not found under the mouse, and listed under ▾ (GetToolFitsByIndex). The flexible items stay: on
+// a bar with none kept they are OnSize's, shown and hidden there by the bar's absolute minimum.
+void ibAuiToolBar::KeepOverflowLast(const wxSize& size)
+{
+    bool kept = false;
+    for (const ibAuiToolBarItem& item : m_items)
+        kept = kept || item.m_overflowLast;
+    if (!kept || !m_sizer)
+        return;
+
+    // Everything shown again, the flexible items too: OnSize hides those at a length under the bar's minimum, and a bar
+    // that keeps an item gives up its tools instead — the stretch before the kept one holds it at the end while the
+    // bar narrows, rather than letting it step back by a tool's width each time one goes under ▾ (Max, 2026-11-15).
+    for (ibAuiToolBarItem& item : m_items)
+    {
+        if (!item.m_sizerItem || item.m_overflowLast || item.m_sizerItem->IsShown())
+            continue;
+        item.m_sizerItem->Show(true);
+        if (item.m_proportion > 0)
+            item.m_sizerItem->SetProportion(item.m_proportion);
+    }
+
+    const bool horizontal = m_orientation != wxVERTICAL;
+    const int length = horizontal ? size.x : size.y;
+    for (size_t i = m_items.GetCount(); i-- > 0; )
+    {
+        const wxSize min = m_sizer->GetMinSize();   // what is shown now
+        if ((horizontal ? min.x : min.y) <= length)
+            break;
+        ibAuiToolBarItem& item = m_items.Item(i);
+        if (item.m_sizerItem && item.m_proportion == 0 && !item.m_overflowLast)
+            item.m_sizerItem->Show(false);
+    }
 }
 
 bool ibAuiToolBar::RealizeHelper(wxClientDC& dc, bool horizontal)
@@ -1667,6 +1711,7 @@ void ibAuiToolBar::OnSize(wxSizeEvent& WXUNUSED(evt))
         }
     }
 
+    KeepOverflowLast(wxSize(x, y));
     const bool sized = m_sizer->GetSize() != wxSize(x, y);
     m_sizer->SetDimension(0, 0, x, y);
 
@@ -1859,7 +1904,9 @@ void ibAuiToolBar::OnPaint(wxPaintEvent& WXUNUSED(evt))
     {
         ibAuiToolBarItem& item = m_items.Item(i);
 
-        if (!item.m_sizerItem)
+        // a hidden item's rect is the one it had last shown - an item given up for the one the overflow takes last
+        // (KeepOverflowLast) is drawn by none of it, and the items after it still are
+        if (!item.m_sizerItem || !item.m_sizerItem->IsShown())
             continue;
 
         wxRect item_rect = item.m_sizerItem->GetRect();

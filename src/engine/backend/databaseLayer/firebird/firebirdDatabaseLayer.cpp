@@ -42,6 +42,7 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 		// Twelve — three of the head and the hash — keeps ten levels near 130.
 		d.m_maxAliasLength = 12;
 		d.m_maxParameters = 32767;                    // measured on the vendored 5.0.5 (2026-10-05): 30 000 ran, 50 000 refused
+		d.m_maxNumberPrecision = 38;                  // NUMERIC past 18 digits is a 128-bit integer (Firebird 4+)
 		d.m_groupByPosition = true;                   // GROUP BY 2 — a key that binds a value is named by its position
 		// A `?` in a SELECT list is untyped here (-804), and the batched INSERT is spelled as
 		// SELECTs — so each one names the column it is going into and lets FB look the type up.

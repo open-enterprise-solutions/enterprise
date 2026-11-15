@@ -125,6 +125,13 @@ public:
 	// drilling into a folder cannot cost the reader their filter, and it is never shown, saved or
 	// edited anywhere: nobody chose it.
 	ibDataComposer& ScopeTo(const ibString& path, const ibString& op, const ibValue& value);
+	// …and a scope that is a TREE — a group of conditions, as a filter's node is: what a table's search field narrows
+	// its own read to (a row holding the text in any of its columns — an OR group). Pushed and popped the same way, so
+	// a read nobody scoped — a script walking the same rows — never meets it.
+	ibDataComposer& ScopeTo(const ibFilterNodeDescription& node);
+	// ⭐ THE FILTER A READ APPLIES — the one in force (GetCurrentFilterDesc) with the tree scopes ANDed under it. What
+	// every read builds its condition from: the rendered query, the RAM order, the shared read of a report.
+	ibFilterDescription GetScopedFilterDesc() const;
 
 	// A FILTER DESCRIPTION, TURNED INTO THE CONDITION IT MEANS — the composer's own job: the lines
 	// mention VALUES, and a value reaches a query as a named &parameter, which is this object's
@@ -386,7 +393,7 @@ public:
 	// 🛑 IT USED TO BE CALLED THE COMPOSITION'S FILTERS, and the settings road ran through it too —
 	// `Filter()` wrote here, so a filter a script or a metaobject declared sat in a store the
 	// settings window could neither see nor edit.
-	void   ClearScope() { m_scopeConditions.clear(); }
+	void   ClearScope() { m_scopeConditions.clear(); m_scopeNodes.clear(); }
 	size_t ScopeCount() const { return m_scopeConditions.size(); }
 	// The reading of one — path, operator, value. A scope condition has no tree: it is one comparison
 	// the engine made up for this read, and a caller that wants the reader's FILTER reads the filter
@@ -540,13 +547,14 @@ public:
 	// ⚠ THERE IS NO SORT SLOT. Nothing has ever pushed a transient ORDER BY — a drill fetches a
 	// level's children and a point query fetches one row, and neither reorders anything. The slot
 	// was here for symmetry with a flat sort store that no longer exists.
-	struct SettingsScope { size_t sel = 0, cnd = 0, res = 0, tby = 0; };
+	struct SettingsScope { size_t sel = 0, cnd = 0, nod = 0, res = 0, tby = 0; };
 	SettingsScope MarkScope() const {
-		return { m_commonSelected.size(), m_scopeConditions.size(), m_resources.size(), LevelChain().size() };
+		return { m_commonSelected.size(), m_scopeConditions.size(), m_scopeNodes.size(), m_resources.size(), LevelChain().size() };
 	}
 	void RestoreScope(const SettingsScope& s) {
 		if (m_commonSelected.size() > s.sel) m_commonSelected.resize(s.sel);
 		if (m_scopeConditions.size() > s.cnd) m_scopeConditions.resize(s.cnd);
+		if (m_scopeNodes.size() > s.nod) m_scopeNodes.resize(s.nod);
 		if (m_resources.size() > s.res) m_resources.resize(s.res);
 		TrimLevels(s.tby);   // the ladder is a chain of outputs — trimming it cuts the chain
 	}
@@ -1226,6 +1234,9 @@ protected:
 	// always the same. What actually invalidates the cache is the two sections, which the render
 	// already compares.
 	std::vector<FilterItem>  m_scopeConditions;
+	// …and the scopes that are a tree (ScopeTo(node)) — kept as the description's nodes, since a group has no one
+	// comparison to write into the text: they join the filter's condition where it is built (GetScopedFilterDesc).
+	std::vector<ibFilterNodeDescription> m_scopeNodes;
 
 	// THE USER'S SECTION — see SetUserSettingsDesc. Empty while nobody has set one, and then
 	// everything above runs on what the developer declared.
@@ -1623,6 +1634,11 @@ private:
 		ibQuerySelectPtr    m_ast;
 		ibQueryPackage      m_package;
 		std::map<ibString, const ibQuerySelect*> m_named;
+		// The parameters the condition bound when it was built (BuildFilterAst — `__f<n>`, new at every build): this
+		// render's, and dropped with it. Left in m_params they outlived the condition, and a page's signature — the text
+		// and the parameters — answered for a condition that was gone: a list whose search was cleared went on showing
+		// the rows found (2026-11-15).
+		std::vector<ibString> m_filterParams;
 	};
 	mutable RenderedQuery m_rendered;
 

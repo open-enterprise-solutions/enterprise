@@ -4,6 +4,7 @@
 #include <functional>
 
 #include <wx/weakref.h>   // the zoom choice — the toolbar's, gone with its tools
+#include <wx/fdrepdlg.h>   // wxFindDialogEvent — Find, handed to the editor
 
 #include "deskgui/univ/ctrl/choice.h"
 
@@ -42,6 +43,9 @@ private:
 	virtual void OnCreateToolbar(ibAuiToolBar* toolbar) override;
 
 	void OnMenuEvent(wxCommandEvent& event);
+	// Find, as the doc manager hands it to the view (ibFrontendDocManager::OnFind) — a form's grid box's through its
+	// form's (ibVisualHostView): the editor looks (ibGridEditor::FindText).
+	void OnFind(wxFindDialogEvent& event) { m_gridEditor->FindText(event.GetFindString(), event.GetFlags()); }
 
 	// The toolbar's own zoom percentage choice, and the grid's own zoom (Ctrl+wheel) keep each other
 	// in sync — #484: a preview had no visible way to change scale, so the grid's existing zoom

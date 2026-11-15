@@ -42,6 +42,7 @@ const ibDialectDictionary& ibDatabaseLayerPostgres::Dialect()
 		d.m_rowIdColumn    = ibT("ctid");         // physical row id for the pre-UNIQUE dedup (keep one row per key)
 		d.m_maxIndexSegments = 32;                // INDEX_MAX_KEYS — a build-time constant, 32 in every stock build
 		d.m_maxParameters    = 65535;             // the protocol counts them in 16 bits (libpq-fe.h PQ_QUERY_PARAM_MAX_LIMIT)
+		d.m_maxNumberPrecision = 1000;            // numeric's declared precision at most
 		d.m_returningClause = ibT("RETURNING");   // PostgreSQL has had it since 8.2
 		// Period truncation. date_trunc names seven of the ten units directly; the other three are
 		// offsets from the start of the enclosing unit:

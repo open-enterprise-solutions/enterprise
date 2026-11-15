@@ -143,7 +143,10 @@ void ibGridEditor::Copy()
 
 		custom_object->SetData(dataWritter.size(), dataWritter.pointer()); // the +1 is used to force copy of the \0 character		
 
+		// The text, as the cells read — the selection's; none selected, the cursor's cell, as the chunk above holds it.
 		wxString copy_data;
+		if (!hasBlocks && ibGrid::GetGridCursorRow() >= 0 && ibGrid::GetGridCursorCol() >= 0)
+			copy_data = GetCellValue(ibGrid::GetGridCursorRow(), ibGrid::GetGridCursorCol());
 		bool something_in_this_line;
 
 		for (int i = 0; i < m_numRows; i++) {

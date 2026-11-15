@@ -212,6 +212,14 @@ oes-button.hyperlink wa-button::part(base) {
 	background: var(--oes-border);
 }
 
+/* THE SEARCH FIELD STANDS AT THE BAR'S END, whatever is left of the bar between it and the commands (the thin client's
+   stretch spacer); it gives way before the commands do. */
+.command-bar wa-input.search {
+	margin-inline-start: auto;
+	flex: 0 1 14rem;
+	min-width: 8rem;
+}
+
 /* A tool's own padding, not the page button's: the thin client's bar is a strip of tools close together. */
 .command-bar wa-button::part(base) {
 	height: var(--oes-touch);

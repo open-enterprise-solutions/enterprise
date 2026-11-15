@@ -271,6 +271,8 @@ std::vector<ibCommandSourceEntry> GatherFormCommands(ibValueForm* form)
 // the click can tell what it is looking at without a lookup.
 static const ibActionID g_quickFilterIdFirst = 30000;
 static const ibActionID g_quickFilterIdLast  = 30499;
+// …and the groups of standard actions (ibCommandItem::m_group), above them.
+static const ibActionID g_actionGroupIdFirst = 30500;
 
 // THE MODEL BEHIND THIS BAR — a tablebox has one; a form's own bar and a report's do not.
 ibValueModel* ibValueCommandBar::QuickFilterModel() const
@@ -481,6 +483,26 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 			groupEntries.clear();
 		};
 
+		// ⭐ A GROUP OF STANDARD ACTIONS IS ONE BUTTON TOO (a table's Search: Find, Advanced search, Cancel search),
+		// standing where the first of them would: each a transient item bound to its action as a hand-made item is —
+		// [id] on the form, [source, id] on a table (GatherFormCommands) — so pressing one and drawing it go the road a
+		// group of commands goes (ExecuteCommand(id, member), Update). A table bound to nothing has no path to bind
+		// by: its group's actions stand by themselves.
+		const ibTypeControlFactory* const ownerSource = dynamic_cast<const ibTypeControlFactory*>(m_owner);
+		const auto actionDesc = [&](const ibActionID& id, ibCommandDescription& desc) {
+			if (dynamic_cast<ibValueForm*>(m_owner) != nullptr) {
+				desc = ibCommandDescription(id);
+				return true;
+			}
+			if (ownerSource == nullptr || ownerSource->GetSourceDesc().GetPath().empty())
+				return false;
+			desc.AppendCommand(ownerSource->GetSourceDesc().GetPath().front().m_id);
+			desc.AppendCommand(id);
+			return true;
+		};
+		std::map<ibString, size_t> actionGroups;   // a group's caption → its entry
+		ibActionID groupId = g_actionGroupIdFirst;
+
 		for (unsigned int i = 0; i < actions.GetCount(); i++) {
 			if (i == dataVerbs)
 				placeGroups();
@@ -495,7 +517,25 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 			const ibRepresentation rep = pic.IsEmptyPicture()
 				? ibRepresentation_PictureAndText
 				: (actions.IsCreatePictureAndText(id) ? ibRepresentation_PictureAndText : ibRepresentation_Picture);
-			const bool enabled = !(viewOnly && actions.GetModifiesDataByID(id));   // greyed if it changes data
+			const bool enabled = actions.IsEnabled(id) && !(viewOnly && actions.GetModifiesDataByID(id));   // greyed if it changes data
+			const ibString group = actions.GetGroupByID(id);
+			ibCommandDescription desc;
+			if (!group.IsEmpty() && actionDesc(id, desc)) {
+				auto found = actionGroups.find(group);
+				if (found == actionGroups.end()) {
+					ibCommandEntry& entry = m_commands.emplace_back(groupId++, group, pic, rep);
+					entry.kind = ibCommandEntryKind_Group;
+					found = actionGroups.emplace(group, m_commands.size() - 1).first;
+				}
+				ibValueCommandBarItem* item = new ibValueCommandBarItem();
+				item->SetBar(this);
+				item->SetName(actions.GetNameByID(id));
+				item->SetCommandDesc(desc);
+				item->SetEnabled(actions.IsEnabled(id));
+				m_autoItems.emplace_back(item);   // owns it for the lifetime of m_commands (raw ref below)
+				m_commands[found->second].members.push_back(item);
+				continue;
+			}
 			m_commands.emplace_back(id, actions.GetCaptionByID(id), pic, rep, enabled).isDefault = actions.IsDefault(id);
 		}
 	}
@@ -687,6 +727,16 @@ void ibValueCommandBar::ExecuteCommand(const ibActionID& id, size_t member)
 		ExecuteValueByPath(desc);
 }
 
+void ibValueCommandBar::Search(const ibString& text)
+{
+	if (!IsShowSearch() || m_owner == nullptr || !m_owner->HasSearch())
+		return;
+	// The same text again is nothing new — a client that sent it twice (the × on a field already empty) reads nothing
+	// anew.
+	if (m_owner->GetSearchText() != text)
+		m_owner->SetSearchText(text);
+}
+
 void ibValueCommandBar::Update(ibDataNode& state)
 {
 	ibValueForm* form = m_owner != nullptr ? m_owner->GetOwnerForm() : nullptr;
@@ -731,9 +781,13 @@ void ibValueCommandBar::Update(ibDataNode& state)
 			member.SetValue(ibProtocol::ibForm::ibCommandBar::Picture, ibBackendPicture::SendPicture(picture, GetMetaData()));
 			// A member gone since the bar was built is listed, disabled, so the places stay the places
 			// ExecuteCommand(id, member) counts.
-			member.SetValue(ibProtocol::ibForm::ibCommandBar::Enabled, resolved && !(viewOnly && modifies));
+			member.SetValue(ibProtocol::ibForm::ibCommandBar::Enabled, resolved && item->IsEnabled() && !(viewOnly && modifies));
 		}
 	}
+
+	// …and the search field at its end, holding what is looked for.
+	if (IsShowSearch() && m_owner != nullptr && m_owner->HasSearch())
+		state.SetValue(ibProtocol::ibForm::ibCommandBar::Search, m_owner->GetSearchText());
 }
 
 //***********************************************************************
@@ -794,6 +848,7 @@ bool ibValueCommandBarItem::ReadData(const ibDataNode& node)
 bool ibValueCommandBar::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyAutoFill->GetName(), m_propertyAutoFill->GetNodeValue());
+	node.SetProperty(m_propertyShowSearch->GetName(), m_propertyShowSearch->GetNodeValue());
 	// One child sub-node per command, in order. clsid 0 + index — the read side iterates
 	// Children() positionally, so only the order matters, not the node type/identity.
 	ibMetaID idx = 0;
@@ -807,6 +862,8 @@ bool ibValueCommandBar::WriteData(ibDataNode& node) const
 bool ibValueCommandBar::ReadData(const ibDataNode& node)
 {
 	m_propertyAutoFill->SetNodeValue(node.GetProperty(m_propertyAutoFill->GetName()));
+	// A bar written before the flag was has none, and keeps the default — on.
+	m_propertyShowSearch->SetNodeValue(node.GetProperty(m_propertyShowSearch->GetName()));
 	m_items.clear();
 	for (const ibDataNode& child : node.Children()) {
 		ibValueCommandBarItem* item = AddCommandItem();   // creates + SetBar; ReadData overwrites the name

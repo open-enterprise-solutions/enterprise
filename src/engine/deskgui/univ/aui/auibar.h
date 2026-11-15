@@ -204,6 +204,11 @@ public:
     void SetDefault(bool b) { m_default = b; }
     bool IsDefault() const { return m_default; }
 
+    // the item the overflow takes last (a command bar's search field): a bar too narrow for all of it gives up its other
+    // items first, from its end (ibAuiToolBar::OnSize)
+    void SetOverflowLast(bool b) { m_overflowLast = b; }
+    bool IsOverflowLast() const { return m_overflowLast; }
+
     void SetUserData(long l) { m_userData = l; }
     long GetUserData() const { return m_userData; }
 
@@ -238,6 +243,7 @@ private:
     bool m_dropDown = false;            // item has a dropdown button if true
     bool m_sticky = false;              // button is always active if true
     bool m_default = false;             // the bar's default command if true
+    bool m_overflowLast = false;        // the overflow takes it after every other item if true
     long m_userData = 0;                // number associated with the item
     wxObject* m_clientData = nullptr;   // wxObject associated with the item
     int m_alignment = wxALIGN_CENTER;   // sizer alignment flag
@@ -518,6 +524,9 @@ private:
     void DoRightOrMiddleUp(wxMouseEvent& evt, wxEventType eventType);
 
     wxSize RealizeHelper(wxReadOnlyDC& dc, wxOrientation orientation);
+    // The items a bar of this size gives up for the overflow-last ones (ibAuiToolBarItem::SetOverflowLast) hidden, from
+    // its end; the rest shown. Nothing on a bar with none.
+    void KeepOverflowLast(const wxSize& size);
 
     // the sizes the art had (Luna's), in DIPs
     int m_separatorSize = 7;

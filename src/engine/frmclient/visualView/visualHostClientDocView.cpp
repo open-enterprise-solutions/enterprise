@@ -2,6 +2,8 @@
 
 #include <functional>
 
+#include <wx/fdrepdlg.h>   // wxEVT_FIND — Find, handed on to the active control
+
 #include "frmclient/mainFrame/mainFrame.h"
 
 // ----------------------------------------------------------------------------
@@ -41,6 +43,9 @@ bool ibVisualHostView::OnCreate(ibFrontendDocument* doc, long flags)
 	Bind(wxEVT_MENU, &ibVisualHostView::OnActiveControlCommand, this);
 	// …and so does a choice on its toolbar (a sheet's Zoom): the toolbar's controls send wxEVT_CHOICE, not wxEVT_MENU.
 	Bind(wxEVT_CHOICE, &ibVisualHostView::OnActiveControlCommand, this);
+	// …and Find, as the doc manager hands it to the form's view (ibFrontendDocManager::OnFind).
+	Bind(wxEVT_FIND, &ibVisualHostView::OnActiveControlCommand, this);
+	Bind(wxEVT_FIND_NEXT, &ibVisualHostView::OnActiveControlCommand, this);
 
 	return ibFrontendView::OnCreate(doc, flags);
 }
@@ -189,11 +194,18 @@ void ibVisualHostView::OnChildFocus(wxChildFocusEvent& event)
 // Save and Save as are asked of the document behind the control, as the desktop asks them — and here that document is
 // a copy of the server's, which saves itself where it is kept: handed to the server. Then they go on to the form's
 // document, which saves the server's (ibFormVisualDocument::Save) — after it, on the same road.
+//
+// Find, over a control with no view of its own (a table), is asked of its window: the control looks there itself.
 void ibVisualHostView::OnActiveControlCommand(wxCommandEvent& event)
 {
 	ibFrontendView* const view = GetActiveControlView();
 	if (view == nullptr) {
-		event.Skip();
+		const ibValueForm* const form = m_visualHost != nullptr ? m_visualHost->GetValueForm() : nullptr;
+		const ibValueFrame* const control = form != nullptr ? form->GetActiveControl() : nullptr;
+		wxWindow* const window = control != nullptr ? control->GetWindow() : nullptr;
+		const bool find = event.GetEventType() == wxEVT_FIND || event.GetEventType() == wxEVT_FIND_NEXT;
+		if (!find || window == nullptr || !window->GetEventHandler()->ProcessEventLocally(event))
+			event.Skip();
 		return;
 	}
 

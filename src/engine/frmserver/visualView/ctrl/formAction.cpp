@@ -25,14 +25,17 @@ enum
 // binding IS the main attribute). Asks the BASE virtual ibValueFrame::IsMainSourceBound (false by default; a view
 // bound single-hop to the main attribute overrides it) — no per-type cast. "Search by source": move the main
 // attribute from table-1 to table-2 and the very next walk finds table-2, because IsMainSourceBound re-reads the
-// holder's Main flag live. Never cached — nothing to go stale in the designer. null on an object form.
-static ibValueFrame* FindMainCommandView(ibValueFrame* top)
+// holder's Main flag live. Never cached — nothing to go stale in the designer. null on an object form. Among the controls
+// under `top`, not `top` itself — a form is never its own command view — so a const form finds it too.
+static ibValueFrame* FindMainCommandView(const ibValueFrame* top)
 {
-	if (top->IsMainSourceBound())
-		return top;
-	for (unsigned int idx = 0; idx < top->GetChildCount(); idx++)
-		if (ibValueFrame* found = FindMainCommandView(top->GetChild(idx)))
+	for (unsigned int idx = 0; idx < top->GetChildCount(); idx++) {
+		ibValueFrame* const child = top->GetChild(idx);
+		if (child->IsMainSourceBound())
+			return child;
+		if (ibValueFrame* const found = FindMainCommandView(child))
 			return found;
+	}
 	return nullptr;
 }
 
@@ -103,4 +106,23 @@ void ibValueForm::CallAsAction(const ibActionID& lNumAction, ibBackendValueForm*
 			provider->CallAsAction(lNumAction, srcForm);
 		break;
 	}
+}
+
+// The search field of the form's bar is its command view's, passed on as its commands are — an object form has none.
+bool ibValueForm::HasSearch() const
+{
+	const ibValueFrame* const view = FindMainCommandView(this);
+	return view != nullptr && view->HasSearch();
+}
+
+const ibString& ibValueForm::GetSearchText() const
+{
+	const ibValueFrame* const view = FindMainCommandView(this);
+	return view != nullptr ? view->GetSearchText() : ibEmptyString;
+}
+
+void ibValueForm::SetSearchText(const ibString& text)
+{
+	if (ibValueFrame* const view = FindMainCommandView(this))
+		view->SetSearchText(text);
 }

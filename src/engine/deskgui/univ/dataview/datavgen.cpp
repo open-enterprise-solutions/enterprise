@@ -41,6 +41,7 @@
 #include <wx/listimpl.cpp>
 #include <wx/imaglist.h>
 #include <wx/dnd.h>
+#include <wx/clipbrd.h>   // Copy: a cell's text
 #include <wx/stopwatch.h>
 #include <wx/weakref.h>
 
@@ -4322,6 +4323,7 @@ wxBEGIN_EVENT_TABLE(ibDataViewCtrl, ibDataViewCtrlBase)
 EVT_SIZE(ibDataViewCtrl::OnSize)
 EVT_DPI_CHANGED(ibDataViewCtrl::OnDPIChanged)
 EVT_SCROLLWIN(ibDataViewCtrl::OnScrollEvent)
+EVT_MENU(wxID_COPY, ibDataViewCtrl::OnCopy)
 // Idle path collapsed onto OnInternalIdle (single entry point: col-
 // widths/dirty + paged bootstrap/fill/thaw + external hook).  EVT_IDLE
 // on this control is no longer used.
@@ -6250,6 +6252,43 @@ ibDataViewColumn* ibDataViewCtrl::GetCurrentColumn() const
 	return m_currentCol;
 }
 
+void ibDataViewCtrl::SetCurrentColumn(ibDataViewColumn* column)
+{
+	if (column == m_currentCol)
+		return;
+	m_currentCol = column;
+	m_currentColSetByKeyboard = column != nullptr;
+	if (!HasCurrentRow())
+		return;
+	if (column != nullptr)
+		EnsureVisibleRowCol(m_currentRow, GetColumnIndex(column));
+	RefreshRow(m_currentRow);
+}
+
+void ibDataViewCtrl::Copy()
+{
+	if (!HasCurrentRow() || GetModel() == nullptr)
+		return;
+	const ibDataViewColumn* column = m_currentCol;
+	for (unsigned int col = 0; column == nullptr && col < GetColumnCount(); col++) {
+		if (!GetColumn(col)->IsHidden())
+			column = GetColumn(col);
+	}
+	if (column == nullptr)
+		return;
+	ibVariant value;
+	GetModel()->GetValue(value, GetItemByRow(m_currentRow), column->GetModelColumn());
+	wxClipboardLocker clipboard;
+	if (!clipboard)
+		return;
+	wxTheClipboard->SetData(new wxTextDataObject(value.GetString().ToWxString()));
+}
+
+void ibDataViewCtrl::OnCopy(wxCommandEvent& WXUNUSED(event))
+{
+	Copy();
+}
+
 int ibDataViewCtrl::GetSelectedItemsCount() const
 {
 	return GetSelections().GetSelectedCount();
@@ -7800,6 +7839,10 @@ void ibDataViewCtrl::ProcessTableCharEvent(wxKeyEvent& event, ibDataViewMainWind
 
 	case WXK_PAGEDOWN:
 		GoToRelativeRow(event, +(GetCountPerPage() - 1));
+		break;
+
+	case WXK_CONTROL_C:
+		Copy();
 		break;
 
 	default:

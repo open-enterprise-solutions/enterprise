@@ -12,6 +12,8 @@
 #include "deskgui/univ/menu.h"
 
 #include <wx/wupdlock.h>   // wxWindowUpdateLocker — the Freeze/Thaw pair taken as a guard
+#include <wx/fdrepdlg.h>   // wxFindDialogEvent, wxFR_* — Find, as the doc manager's dialog asks it
+#include "deskgui/univ/messageDialog.h"   // ibMessageBox — Find's "not found"
 
 enum
 {
@@ -54,6 +56,8 @@ EVT_SIZE(ibGridEditor::OnSize)
 EVT_MENU(wxID_COPY, ibGridEditor::OnCopy)
 EVT_MENU(wxID_PASTE, ibGridEditor::OnPaste)
 EVT_MENU(wxID_DELETE, ibGridEditor::OnDelete)
+EVT_FIND(wxID_ANY, ibGridEditor::OnFind)
+EVT_FIND_NEXT(wxID_ANY, ibGridEditor::OnFind)
 EVT_MENU(wxID_ROW_HEIGHT, ibGridEditor::OnRowHeight)
 EVT_MENU(wxID_COL_WIDTH, ibGridEditor::OnColWidth)
 EVT_MENU(wxID_FIT_COL_WIDTH, ibGridEditor::OnFitColWidth)
@@ -1183,6 +1187,45 @@ void ibGridEditor::OnCopy(wxCommandEvent& event)
 void ibGridEditor::OnPaste(wxCommandEvent& event)
 {
 	Paste();
+}
+
+void ibGridEditor::OnFind(wxFindDialogEvent& event)
+{
+	FindText(event.GetFindString(), event.GetFlags());
+}
+
+void ibGridEditor::FindText(const wxString& findString, int wxflags)
+{
+	// As the dialog asks: down or back up, the case as written or aside, a whole word or any part of a cell.
+	const bool down = (wxflags & wxFR_DOWN) != 0, matchCase = (wxflags & wxFR_MATCHCASE) != 0,
+		wholeWord = (wxflags & wxFR_WHOLEWORD) != 0;
+	const wxString looked = matchCase ? findString : findString.Lower();
+	if (looked.IsEmpty())
+		return;
+	const auto holds = [&](const wxString& cell) {
+		const wxString text = matchCase ? cell : cell.Lower();
+		const auto inWord = [&](size_t at) { return at < text.length() && (wxIsalnum(text[at]) || text[at] == wxT('_')); };
+		for (size_t at = text.find(looked); at != wxString::npos; at = text.find(looked, at + 1)) {
+			if (!wholeWord || ((at == 0 || !inWord(at - 1)) && !inWord(at + looked.length())))
+				return true;
+		}
+		return false;
+	};
+
+	// Row by row from the cell after the cursor's (before it, up), on past the sheet's end from its other end — the cursor's
+	// own cell last; from the first cell when there is no cursor, down (the last, up).
+	const int cols = GetNumberCols();
+	const int cells = GetNumberRows() * cols;
+	const int row = GetGridCursorRow(), col = GetGridCursorCol();
+	const int from = row < 0 || col < 0 ? (down ? cells - 1 : 0) : row * cols + col;
+	for (int step = 1; step <= cells; step++) {
+		const int at = ((from + (down ? step : -step)) % cells + cells) % cells;
+		if (holds(GetCellValue(at / cols, at % cols))) {
+			GoToCell(at / cols, at % cols);
+			return;
+		}
+	}
+	ibMessageBox(ibString::Format(_("\"%s\" not found!"), findString.c_str()), _("Not Found!"), wxICON_ERROR, this);
 }
 
 void ibGridEditor::OnDelete(wxCommandEvent& event)

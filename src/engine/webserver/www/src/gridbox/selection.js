@@ -187,13 +187,55 @@ export class CellSelection {
 			this.focus = this.anchor;
 		}
 		this.paint();
-		// Brought into view clear of the labels and the frozen rows, which stand over the top of the frame, and of the
-		// outline and the row labels at its left, as far as the corner's right edge.
+		this.bringIntoView(stretch ? this.focus : this.anchor);
+	}
+
+	/**
+	 * Find over the sheet (the thin client's ibSpreadsheetEditView::OnFind): the next cell holding the text, row by row
+	 * from the current one — down, or back up, on past the sheet's end from its other end, the current one last; from the
+	 * first when there is none (the last, up) — becomes the current one, brought into view. A cell spanning several
+	 * places is looked in once; a row or a column folded away is passed by, as a step passes it. The cells read so far
+	 * are looked in.
+	 * @param {import('../window/find.js').Asked} asked
+	 * @returns {boolean} found
+	 */
+	find({ pattern, down }) {
+		const cols = this.lastCol() + 1;
+		const places = this.rows.length * cols;
+		const folded = this.foldedCols();
+		const start = this.anchor !== null ? this.cells.get(key(this.anchor)) : undefined;
+		const from = this.anchor !== null ? this.anchor.row * cols + this.anchor.col : (down ? places - 1 : 0);
+		/** @type {Set<HTMLTableCellElement>} */
+		const looked = new Set();
+		for (let step = 1; step <= places; step++) {
+			const at = ((from + (down ? step : -step)) % places + places) % places;
+			const row = Math.floor(at / cols), col = at % cols;
+			const cell = this.cells.get(`${row}:${col}`);
+			if (cell === undefined || (cell === start && step < places) || looked.has(cell) || this.rows[row].hidden
+				|| folded.has(col))
+				continue;
+			looked.add(cell);
+			if ((cell.textContent ?? '').search(pattern) < 0)
+				continue;
+			const place = placeOf(cell);
+			this.take(place, place);
+			this.bringIntoView(place);
+			return true;
+		}
+		return false;
+	}
+
+	/**
+	 * A cell brought into view clear of the labels and the frozen rows, which stand over the top of the frame, and of the
+	 * outline and the row labels at its left, as far as the corner's right edge.
+	 * @param {Place} place
+	 */
+	bringIntoView(place) {
 		const head = this.table?.tHead;
 		const corner = /** @type {HTMLElement | null | undefined} */ (head?.rows[0]?.querySelector('th.label:not([data-col])'));
 		this.host.style.scrollPaddingTop = `${head?.offsetHeight ?? 0}px`;
 		this.host.style.scrollPaddingLeft = `${corner ? corner.offsetLeft + corner.offsetWidth : 0}px`;
-		this.cells.get(key(stretch ? this.focus : this.anchor))?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+		this.cells.get(key(place))?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 	}
 
 	/**

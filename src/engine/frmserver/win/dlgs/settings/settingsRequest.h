@@ -25,9 +25,11 @@ struct ibSettingsDescription;
 
 // ONE FIELD, DESCRIBED — what the window's field tree puts up: its name, how it reads, its column, its type, whether the
 // options leave it, and its picture — the column's (GetSourcePicture) where the desktop's tree walks a source's explorer;
-// none on a flat list, which the tree draws with the attribute picture.
-FRMSERVER_API void ibWriteSettingsField(ibDataNode& fields, const ibString& name, const ibString& presentation, ibMetaID id,
-	const ibTypeDescription& type, bool available, const ibPictureDescription& picture, const ibMetaData* metaData);
+// none on a flat list, which the tree draws with the attribute picture. The field written is handed back, for what its
+// caller adds to it (a search's: what the current row holds in it).
+FRMSERVER_API ibDataNode& ibWriteSettingsField(ibDataNode& fields, const ibString& name, const ibString& presentation,
+	ibMetaID id, const ibTypeDescription& type, bool available, const ibPictureDescription& picture,
+	const ibMetaData* metaData);
 
 // WHICH OF THESE TYPES ARE REFERENCES, AND TO WHAT — the answer the desktop's field tree asks the configuration for
 // (ibValueReferenceDataObject::ConvertToMetaIds) before it gives a field its [+]; the client has no configuration to ask.
@@ -101,6 +103,23 @@ private:
 // window's to hold (`choosing`, the one before let go), counted. For a door that asks no window too (a composer's tab,
 // event Select), which holds the cell the same way.
 FRMSERVER_API void ibChooseSettingsValue(const ibDataNode& act, const ibMetaData* metaData, ibListSettingsChoice*& choosing);
+
+// THE CELL BEING CHOSEN FOR, HELD — while what asked for the choice is up (a settings window, a table's advanced search,
+// a composer's tab), and let go with it: a choice form may still hold the cell, and what it chooses then is nobody's.
+// ibChooseSettingsValue puts the cell into m_choice, the one before let go there.
+struct ibListSettingsChoosing {
+	ibListSettingsChoosing() = default;
+	ibListSettingsChoosing(const ibListSettingsChoosing&) = delete;
+	ibListSettingsChoosing& operator=(const ibListSettingsChoosing&) = delete;
+	~ibListSettingsChoosing() {
+		if (m_choice != nullptr) {
+			m_choice->Detach();
+			m_choice->ControlDecrRef();
+		}
+	}
+
+	ibListSettingsChoice* m_choice = nullptr;
+};
 
 // The window, asked with `question` (its Kind, and what the door tells it) and `edited` — the setting it edits. True: OK,
 // with `edited` the setting given back, read and taken by the schema. False: cancelled, or nobody to ask — `edited` as

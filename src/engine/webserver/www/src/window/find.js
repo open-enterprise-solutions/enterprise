@@ -1,12 +1,22 @@
 // FIND — the thin client's Find (ibFindReplaceDialog, which its doc manager opens over the document on show and keeps
 // while it is up): what to search for, Whole word, Match case, the search direction; Find takes the next one in the text
 // on show from its selection — down from its end or up from its start, not round, as the thin client's text view
-// (SearchNext, SearchPrev) — and selects it; none, a box says so. Not modal, as the thin client's: the text stays to be
+// (SearchNext, SearchPrev) — and selects it; none, a box says so. A table or a sheet the person was in looks by itself
+// (Finder): the table's server puts its cursor on the next row holding the text, the sheet its current cell. Not modal, as the thin client's: the text stays to be
 // read, and typed in. Down at first — the thin client's opens on Up only because wx's search data starts with no flags.
 
 import { _, format, labelText } from '../localization.js';
 
 /** @typedef {import('./questions.js').Questions} Questions */
+/**
+ * What Find asks of what it looks in: the text sought as written, a whole word, the case — and the three as a pattern;
+ * down from the current one, or up.
+ * @typedef {{sought: string, wholeWord: boolean, matchCase: boolean, pattern: RegExp, down: boolean}} Asked
+ */
+/**
+ * What looks by itself — a table (its server finds the row, and says when there is none), a sheet: false — not found.
+ * @typedef {{find: (asked: Asked) => boolean}} Finder
+ */
 
 /** @type {HTMLDialogElement | null} the one up — one, as the thin client's doc manager keeps one */
 let panel = null;
@@ -15,12 +25,12 @@ let unmark = null;
 
 /**
  * Find opened, or the one up given the focus.
- * @param {() => HTMLTextAreaElement | null} textOnShow the text searched, asked as Find is pressed: the tab on show
- *   may change while it is up
+ * @param {() => HTMLTextAreaElement | Finder | null} onShow what is searched, asked as Find is pressed: the tab on show
+ *   may change while it is up — a text, or what looks by itself
  * @param {Questions} questions what a text not found is said through
  */
-export function showFind(textOnShow, questions) {
-	panel ??= build(textOnShow, questions);
+export function showFind(onShow, questions) {
+	panel ??= build(onShow, questions);
 	if (!panel.isConnected)
 		document.body.append(panel);
 	panel.show();
@@ -28,11 +38,11 @@ export function showFind(textOnShow, questions) {
 }
 
 /**
- * @param {() => HTMLTextAreaElement | null} textOnShow
+ * @param {() => HTMLTextAreaElement | Finder | null} onShow
  * @param {Questions} questions
  * @returns {HTMLDialogElement}
  */
-function build(textOnShow, questions) {
+function build(onShow, questions) {
 	const dialog = document.createElement('dialog');
 	dialog.className = 'find-dialog';
 	const close = () => dialog.close();
@@ -105,8 +115,20 @@ function build(textOnShow, questions) {
 	const findNext = () => {
 		if (sought.value === '')
 			return;
-		const text = textOnShow();
-		if (text === null || !findIn(text, sought.value, wholeWord.box.checked, matchCase.box.checked, down.checked)) {
+		const literal = sought.value.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+		/** @type {Asked} */
+		const asked = {
+			sought: sought.value,
+			wholeWord: wholeWord.box.checked,
+			matchCase: matchCase.box.checked,
+			pattern: new RegExp(wholeWord.box.checked ? `(?<![\\p{L}\\p{N}_])${literal}(?![\\p{L}\\p{N}_])` : literal,
+				matchCase.box.checked ? 'gu' : 'giu'),
+			down: down.checked,
+		};
+		const searched = onShow();
+		const found = searched === null ? false
+			: searched instanceof HTMLTextAreaElement ? findIn(searched, asked) : searched.find(asked);
+		if (!found) {
 			questions.dialog(_('Not Found!'), format(_('"%s" not found!'), sought.value),
 				[{ caption: labelText('&OK'), answer: {}, preferred: true }], null);
 		}
@@ -129,15 +151,9 @@ function build(textOnShow, questions) {
  * The next one in a text from its selection, selected, marked and brought into view; false — none. The focus stays in
  * Find, as the thin client's: Enter finds the next one, and types nothing over the one found.
  * @param {HTMLTextAreaElement} text
- * @param {string} sought
- * @param {boolean} wholeWord not part of a longer word: no letter, digit or _ either side
- * @param {boolean} matchCase
- * @param {boolean} down
+ * @param {Asked} asked a whole word — not part of a longer word: no letter, digit or _ either side
  */
-function findIn(text, sought, wholeWord, matchCase, down) {
-	const literal = sought.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
-	const pattern = new RegExp(wholeWord ? `(?<![\\p{L}\\p{N}_])${literal}(?![\\p{L}\\p{N}_])` : literal,
-		matchCase ? 'gu' : 'giu');
+function findIn(text, { pattern, down }) {
 	/** @type {RegExpExecArray | null} */
 	let found = null;
 	if (down) {

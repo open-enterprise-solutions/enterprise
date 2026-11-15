@@ -1,6 +1,5 @@
 #include "docViewHelp.h"
 #include "frmclient/mainFrame/mainFrame.h"
-#include "deskgui/univ/messageDialog.h"
 
 // ----------------------------------------------------------------------------
 // ibFrontendHelpEditView implementation
@@ -12,6 +11,9 @@ wxBEGIN_EVENT_TABLE(ibFrontendHelpEditView, ibFrontendView)
 EVT_MENU(wxID_COPY, ibFrontendHelpEditView::OnCopy)
 EVT_MENU(wxID_PASTE, ibFrontendHelpEditView::OnPaste)
 EVT_MENU(wxID_SELECTALL, ibFrontendHelpEditView::OnSelectAll)
+// Find, as the doc manager hands it to the current document's view (ibFrontendDocManager::OnFind)
+EVT_FIND(wxID_ANY, ibFrontendHelpEditView::OnFind)
+EVT_FIND_NEXT(wxID_ANY, ibFrontendHelpEditView::OnFind)
 wxEND_EVENT_TABLE()
 
 bool ibFrontendHelpEditView::OnCreate(ibFrontendDocument* doc, long flags)
@@ -58,41 +60,6 @@ bool ibFrontendHelpEditView::OnClose(bool deleteWindow)
 wxPrintout* ibFrontendHelpEditView::OnCreatePrintout()
 {
 	return new ibTextEditorPrintout(m_textEditor, m_viewDocument->GetTitle());
-}
-
-void ibFrontendHelpEditView::OnFind(wxFindDialogEvent& event)
-{
-	int wxflags = event.GetFlags();
-	int sciflags = 0;
-	if ((wxflags & wxFR_WHOLEWORD) != 0)
-	{
-		sciflags |= ibSTC_FIND_WHOLEWORD;
-	}
-	if ((wxflags & wxFR_MATCHCASE) != 0)
-	{
-		sciflags |= ibSTC_FIND_MATCHCASE;
-	}
-	int result;
-	if ((wxflags & wxFR_DOWN) != 0)
-	{
-		m_textEditor->SetSelectionStart(m_textEditor->GetSelectionEnd());
-		m_textEditor->SearchAnchor();
-		result = m_textEditor->SearchNext(sciflags, event.GetFindString());
-	}
-	else
-	{
-		m_textEditor->SetSelectionEnd(m_textEditor->GetSelectionStart());
-		m_textEditor->SearchAnchor();
-		result = m_textEditor->SearchPrev(sciflags, event.GetFindString());
-	}
-	if (ibSTC_INVALID_POSITION == result)
-	{
-		ibMessageBox(ibString::Format(_("\"%s\" not found!"), event.GetFindString().c_str()), _("Not Found!"), wxICON_ERROR, (wxWindow*)event.GetClientData());
-	}
-	else
-	{
-		m_textEditor->EnsureCaretVisible();
-	}
 }
 
 // ----------------------------------------------------------------------------

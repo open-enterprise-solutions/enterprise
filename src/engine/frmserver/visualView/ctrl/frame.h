@@ -269,8 +269,9 @@ public:
 	virtual void OnUpdated(ibDataNode& state, ibVisualHost* host) {}
 
 	// ⭐ AN EVENT FROM THE CLIENT, on this control: `event` is what happened to it (ibProtocol::ibEvent::ibKind), `args` the rest
-	// of it. Each control answers the events it has and maps them onto its own model methods; the base answers
-	// Command — an entry of the control's command bar pressed. False — not an event this control has. Reached
+	// of it. Each control answers the events it has and maps them onto its own model methods; the base answers its
+	// command bar's — Command, an entry pressed, and Search, its search field typed into. False — not an event this
+	// control has. Reached
 	// only through the form's door (ibValueForm::DispatchEvent), which has already refused a control that is not
 	// enabled or not shown.
 	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args);
@@ -339,6 +340,12 @@ public:
 	// own bar (e.g. a table that IS the form's main source — the form toolbar covers it).
 	virtual bool HasCommandBar() const { return m_commandBar != nullptr; }
 	ibValueCommandBar* GetCommandBar() const { return m_commandBar; }
+
+	// THE SEARCH FIELD at the end of its command bar: whether it looks for text — a table; a form, when its command view
+	// does — what it holds, and the text typed into it, looked for.
+	virtual bool HasSearch() const { return false; }
+	virtual const ibString& GetSearchText() const { return ibEmptyString; }
+	virtual void SetSearchText(const ibString& text) {}
 
 	// Does THIS control's binding reference the form's MAIN attribute (i.e. it IS the form's main data view)?
 	// Base: no. A view bound single-hop to the main attribute overrides (ibValueModelTableBox::IsMainSourceBound);

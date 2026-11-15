@@ -70,6 +70,9 @@ const oneUnderAnother = 1;
 // A command that edits (eStartEditingFlag): the current row's editor is opened before it goes.
 const startEditing = 0x1000;
 
+// A context menu's entry that is a group (ibCommandBar::ibKind): its commands a submenu.
+const group = 2;
+
 // How a table shows its rows (ibTable::ibViewMode).
 const treeView = 0;
 const hierarchicalView = 1;
@@ -234,6 +237,17 @@ class Tablebox extends Control {
 	}
 
 	/**
+	 * Edit → Find over the table (window.js, findOnShow; the thin client's OnFind): to the server with what the dialog
+	 * says, which puts the cursor on the next row holding the text — the cursor's Row, held, goes before it — and says
+	 * when none does.
+	 * @param {import('../window/find.js').Asked} asked
+	 */
+	find({ sought, wholeWord, matchCase, down }) {
+		this.send(EventKind.Find, { Text: sought, Down: down, MatchCase: matchCase, WholeWord: wholeWord });
+		return true;
+	}
+
+	/**
 	 * The columns are a header, and the rows follow the State's Version.
 	 * @param {ProtocolNode} node
 	 */
@@ -366,8 +380,16 @@ class Tablebox extends Control {
 		table.on('columnMoved', (column, columns) => this.sendMove(column, columns));
 		table.on('rowContext', (event, row) => {
 			const cell = row.getCells().find((one) => one.getElement().contains(/** @type {Node} */ (event.target)));
-			if (cell !== undefined && row.getData().crumb !== true)
+			if (cell !== undefined && row.getData().crumb !== true) {
 				this.sendCursor(cell);
+				// The part pressed, of a group's cell: its own caption and text, not the group's whole.
+				const part = partOf(cell, this.pressedColumn);
+				const drawn = part === undefined ? cell.getElement()
+					: cell.getElement().querySelector(`[data-column="${part.id}"]`) ?? cell.getElement();
+				const title = part?.title ?? cell.getColumn().getDefinition().title ?? '';
+				this.offerContextMenu(event, `${title} - ${/** @type {HTMLElement} */ (drawn).innerText.trim()}`);
+				return;
+			}
 			this.offerContextMenu(event);
 		});
 		// …and past the last row: the data view offers them wherever among the rows it is pressed, on a row or not.
@@ -612,8 +634,16 @@ class Tablebox extends Control {
 	listenKeys() {
 		this.host.tabIndex = 0;
 		this.host.addEventListener('keydown', (event) => {
-			if (this.table === null || event.ctrlKey || event.altKey || event.metaKey
-				|| (event.target instanceof Element && event.target.closest('.cell-editor') !== null))
+			if (this.table === null || (event.target instanceof Element && event.target.closest('.cell-editor') !== null))
+				return;
+			// A command of the context menu whose key it is — on the cell the cursor is on, which the server was told.
+			const command = shortcutCommand(this.contextMenu?.NodeChildren ?? [], event);
+			if (command !== null) {
+				event.preventDefault();
+				this.send(EventKind.Action, { Id: command });
+				return;
+			}
+			if (event.ctrlKey || event.altKey || event.metaKey)
 				return;
 			if (this.pressKey(event.key, event.shiftKey))
 				event.preventDefault();
@@ -966,13 +996,14 @@ class Tablebox extends Control {
 	 * The desktop's OnContextMenu: the table's standard commands, as the server offers them, in the browser's menu's
 	 * place; with none offered the browser's stays.
 	 * @param {MouseEvent} event
+	 * @param {string} [cell] the cell it was asked on — «column - its text» — for the command about it (CurrentCell)
 	 */
-	offerContextMenu(event) {
+	offerContextMenu(event, cell = '') {
 		const entries = this.contextMenu?.NodeChildren ?? [];
 		if (entries.length === 0)
 			return;
 		event.preventDefault();
-		const show = () => this.showContextMenu(entries, event.clientX, event.clientY);
+		const show = () => this.showContextMenu(entries, event.clientX, event.clientY, cell);
 		// Linux and macOS ask for the menu as the button goes down, Windows as it comes up: it opens once the button is up,
 		// the release being what closes a menu opened under it.
 		if (event.buttons === 0)
@@ -982,34 +1013,56 @@ class Tablebox extends Control {
 	}
 
 	/**
-	 * The table's context menu where the person pressed, kept inside the window: an entry's picture and caption, one
-	 * greyed there greyed here; the one picked goes back as Action {Id}.
+	 * The table's context menu where the person pressed, kept inside the window: an entry's picture and caption, its key
+	 * beside it, one greyed there greyed here, a group's commands a submenu opened in place (as a menu the server asks
+	 * opens one); the command about the cell says it after its caption. The one picked goes back as Action {Id}.
 	 * @param {ProtocolNode[]} entries
 	 * @param {number} x
 	 * @param {number} y
+	 * @param {string} cell
 	 */
-	showContextMenu(entries, x, y) {
+	showContextMenu(entries, x, y, cell) {
 		const menu = document.createElement('div');
 		menu.className = 'popup-menu';
 		menu.popover = 'auto';
-		for (const entry of entries) {
-			const item = document.createElement('button');
-			item.type = 'button';
-			item.disabled = entry.Enabled === false;
+		/** @param {any} entry @param {HTMLElement} into */
+		const pictured = (entry, into) => {
 			const picture = this.context.picture(entry.Picture);
 			if (picture) {
 				const image = document.createElement('img');
 				image.src = picture;
 				image.alt = '';
-				item.append(image);
+				into.append(image);
 			}
-			item.append(entry.Caption ?? '');
+		};
+		/** @param {ProtocolNode[]} items @returns {HTMLElement[]} */
+		const build = (items) => items.map((entry) => {
+			if (entry.Kind === group) {
+				const submenu = document.createElement('details');
+				const summary = document.createElement('summary');
+				pictured(entry, summary);
+				summary.append(entry.Caption ?? '');
+				submenu.append(summary, ...build(entry.NodeChildren ?? []));
+				return submenu;
+			}
+			const item = document.createElement('button');
+			item.type = 'button';
+			item.disabled = entry.Enabled === false;
+			pictured(entry, item);
+			item.append(entry.CurrentCell === true && cell !== '' ? `${entry.Caption ?? ''}: ${cell}` : entry.Caption ?? '');
+			if (entry.Shortcut) {
+				const key = document.createElement('span');
+				key.className = 'shortcut';
+				key.textContent = entry.Shortcut;
+				item.append(key);
+			}
 			item.addEventListener('click', () => {
 				menu.hidePopover();
 				this.send(EventKind.Action, { Id: entry.Id });
 			});
-			menu.append(item);
-		}
+			return item;
+		});
+		menu.append(...build(entries));
 		menu.addEventListener('toggle', (/** @type {any} */ event) => {
 			if (event.newState === 'closed')
 				menu.remove();
@@ -1557,6 +1610,33 @@ function partOf(cell, column) {
 function mayEdit(cell, column) {
 	const part = partOf(cell, column);
 	return part !== undefined && cell.getRow().getData()[`e${part.id}`] === true;
+}
+
+/**
+ * The context menu's command whose key a press is — enabled, a group's too — as a menu writes a key ("Ctrl+Alt+F"); null
+ * when none has it. A letter is matched by the key it stands on, so Alt does not turn it into another character.
+ * @param {ProtocolNode[]} entries
+ * @param {KeyboardEvent} event
+ * @returns {number | null}
+ */
+function shortcutCommand(entries, event) {
+	for (const entry of entries) {
+		const inner = shortcutCommand(entry.NodeChildren ?? [], event);
+		if (inner !== null)
+			return inner;
+		if (!entry.Shortcut || entry.Enabled === false)
+			continue;
+		const parts = String(entry.Shortcut).split('+');
+		const key = parts.pop() ?? '';
+		const wants = (/** @type {string} */ name) => parts.includes(name);
+		if (wants('Ctrl') !== event.ctrlKey || wants('Alt') !== event.altKey || wants('Shift') !== event.shiftKey
+			|| event.metaKey)
+			continue;
+		const pressed = /^[A-Z]$/.test(key) ? event.code === `Key${key}` : event.key === key;
+		if (pressed)
+			return entry.Id;
+	}
+	return null;
 }
 
 /**

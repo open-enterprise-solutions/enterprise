@@ -18,6 +18,8 @@ static const wxString s_strTypeParameter = wxT("stringParameter");
 #include "deskgui/univ/grid/gridextctrl.h"
 #include "deskgui/univ/grid/gridexteditors.h"
 
+class wxFindDialogEvent;
+
 // ⭐⭐ THE ONE PLACE THE TWO FIT MODES MEET. The description's mode is what a template is SAVED with;
 // the grid's is what the control draws by. Translating between them was written out inline as
 // `mode == Mode_Overflow ? Overflow() : Clip()` in EIGHT places — the document builder three times,
@@ -702,6 +704,10 @@ public:
 
 	void Copy();
 	void Paste();
+	// The next cell holding the text, as the Find dialog's flags say (wxFR_*): row by row from the cursor's, on past the
+	// sheet's end from its other end, the cursor's own last — the cursor put on it; none — a box says so. The text
+	// editor's (ibTextEditor::FindText).
+	void FindText(const wxString& findString, int wxflags);
 
 	bool AssociateDocument(const std::shared_ptr<ibSpreadsheetObject>& doc);
 	bool GetActiveDocument(std::shared_ptr<ibSpreadsheetObject>& doc) const;
@@ -799,6 +805,8 @@ protected:
 	void OnCopy(wxCommandEvent& event);
 	void OnPaste(wxCommandEvent& event);
 	void OnDelete(wxCommandEvent& event);
+	// Find handed to the editor itself — a form's sheet is asked through its window (ibVisualHostView).
+	void OnFind(wxFindDialogEvent& event);
 
 	void OnRowHeight(wxCommandEvent& event);
 	void OnColWidth(wxCommandEvent& event);

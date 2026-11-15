@@ -1170,6 +1170,13 @@ public:     // utility functions not part of the API
 		const std::function<void(ibDataViewColumn*)>& apply);
 
 	virtual ibDataViewColumn* GetCurrentColumn() const wxOVERRIDE;
+	// …and the column put there by its owner — the cell a search found: focused as the keyboard focuses one
+	// (TryAdvanceCurrentColumn), brought into view on the current row.
+	void SetCurrentColumn(ibDataViewColumn* column);
+	// Edit, Copy — a text field's: the text of the cell the cursor stands on to the clipboard, as its value reads — in
+	// either selection mode, a row selected keeping the column it was clicked on (its row's first shown column's when it
+	// stands on none yet). The menu's command (wxID_COPY) and Ctrl+C do it.
+	void Copy();
 
 	virtual void OnInternalIdle() wxOVERRIDE;
 
@@ -1819,6 +1826,9 @@ private:
 private:
 
 	void OnSize(wxSizeEvent& event);
+	// Edit, Copy — as a frame's menu hands it to the window in focus: the control itself, its rows area answering for
+	// it (GetMainWindowOfCompositeControl), as a text field answers it.
+	void OnCopy(wxCommandEvent& event);
 	virtual wxSize GetSizeAvailableForScrollTarget(const wxSize& size) wxOVERRIDE;
 
 	WX_FORWARD_TO_SCROLL_HELPER()

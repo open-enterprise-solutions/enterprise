@@ -12,6 +12,7 @@
 #include "frmclient/win/picture.h"
 #include "deskgui/univ/aui/auibar.h"
 #include "deskgui/univ/menu.h"
+#include "deskgui/univ/ctrl/searchCtrl.h"   // ibSearchCtrl — the bar's search field
 #include "frmclient/visualView/visualHostClient.h"   // ibVisualHostClient::IsDesignerHost — the bar's real width in the editor
 
 namespace {
@@ -47,6 +48,9 @@ ibString ShapeOf(const ibProtocolNode& commandBar)
 			<< entry.GetBool(ibProtocol::ibForm::ibCommandBar::Default, false) << wxT('|')
 			<< static_cast<unsigned long long>(entry.Children().size()) << wxT(';');
 	}
+	// …and whether it ends with a search field — the field's text is set, not built.
+	if (commandBar.Has(ibProtocol::ibForm::ibCommandBar::Search))
+		shape << wxT("search;");
 	return shape;
 }
 
@@ -56,8 +60,8 @@ ibString ShapeOf(const ibProtocolNode& commandBar)
 //*                                  commandBar                                     *
 //***********************************************************************************
 
-ibViewCommandBar::ibViewCommandBar(wxWindow* parent, const ibVisualHostClient& host, ibSendCommand sendCommand)
-	: m_sendCommand(std::move(sendCommand))
+ibViewCommandBar::ibViewCommandBar(wxWindow* parent, const ibVisualHostClient& host, ibSendEvent sendEvent)
+	: m_sendEvent(std::move(sendEvent))
 {
 	m_bar = new ibAuiToolBar(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		ibAUI_TB_NO_AUTORESIZE | ibAUI_TB_HORZ_TEXT | ibAUI_TB_OVERFLOW);
@@ -87,13 +91,18 @@ void ibViewCommandBar::Update(const ibProtocolNode& commandBar)
 {
 	const std::vector<ibProtocolNode> entries = commandBar.Children();
 
-	// One of the same shape — only what may be pressed is set.
+	const bool searched = commandBar.Has(ibProtocol::ibForm::ibCommandBar::Search);
+	const wxString searchText = searched ? wxString(commandBar.GetString(ibProtocol::ibForm::ibCommandBar::Search)) : wxString();
+
+	// One of the same shape — only what may be pressed is set, and what the search field holds.
 	const ibString shape = ShapeOf(commandBar);
 	if (shape == m_shape) {
 		for (std::size_t idx = 0; idx < entries.size(); ++idx) {
 			if (entries[idx].GetInt(ibProtocol::ibForm::ibCommandBar::Id) != kSeparatorId)
 				m_bar->EnableTool(kFirstToolId + static_cast<int>(idx), entries[idx].GetBool(ibProtocol::ibForm::ibCommandBar::Enabled, true));
 		}
+		if (searched)
+			UpdateSearch(searchText);
 		m_entries = commandBar.IsNode() ? commandBar.Clone() : ibProtocolNode();
 		m_bar->Refresh();
 		return;
@@ -131,13 +140,42 @@ void ibViewCommandBar::Update(const ibProtocolNode& commandBar)
 			m_bar->EnableTool(toolId, false);
 		anyTool = true;
 	}
+
+	// THE SEARCH FIELD AT THE END — one of the bar's items, pushed to its end, and the last it gives up to its ▾: a bar
+	// too narrow takes the tools under ▾ first (SetOverflowLast; Max, 2026-11-15). The tools are cleared above and the
+	// field is not destroyed with them: it is the same window, added again, so what is being typed into it stays.
+	if (searched) {
+		UpdateSearch(searchText);
+		m_bar->AddStretchSpacer();
+		m_bar->AddControl(m_search)->SetOverflowLast(true);
+	}
+	if (m_search != nullptr)
+		m_search->Show(searched);
 	m_bar->Realize();
 
-	if (m_bar->IsShown() != anyTool) {
-		m_bar->Show(anyTool);
+	const bool shown = anyTool || searched;
+	if (m_bar->IsShown() != shown) {
+		m_bar->Show(shown);
 		if (wxWindow* const parent = m_bar->GetParent())
 			parent->Layout();
 	}
+}
+
+void ibViewCommandBar::UpdateSearch(const wxString& text)
+{
+	if (m_search == nullptr) {
+		m_search = new ibSearchCtrl(m_bar, wxID_ANY, wxEmptyString, wxDefaultPosition, m_bar->FromDIP(wxSize(220, -1)));
+		m_search->ShowCancelButton(true);
+		m_search->SetDescriptiveText(_("Search"));
+		// as the designer's tree looks for what is typed (ibMetaTreeBase::OnStartSearch): at every change, the "×" too
+		m_search->Bind(wxEVT_TEXT, &ibViewCommandBar::OnSearch, this);
+	}
+	// the bar's font, as its tools are written in — the owner gives it to the bar (ApplyLook), and a window's font is not
+	// its children's
+	if (m_search->GetFont() != m_bar->GetFont())
+		m_search->SetFont(m_bar->GetFont());
+	if (!m_search->HasFocus() && m_search->GetValue() != text)
+		m_search->ChangeValue(text);
 }
 
 bool ibViewCommandBar::PopupGroup(int toolId)
@@ -169,7 +207,7 @@ bool ibViewCommandBar::PopupGroup(int toolId)
 	ibProtocolNode args;
 	args.SetValue(ibProtocol::ibEvent::Id, group.GetInt(ibProtocol::ibForm::ibCommandBar::Id))
 		.SetValue(ibProtocol::ibEvent::Member, static_cast<long long>(chosen - kFirstMemberId));
-	m_sendCommand(args);
+	m_sendEvent(ibProtocol::ibEvent::ibKind::Command, args);
 	return true;
 }
 
@@ -193,7 +231,7 @@ void ibViewCommandBar::OnTool(wxCommandEvent& event)
 
 	ibProtocolNode args;
 	args.SetValue(ibProtocol::ibEvent::Id, entries[idx].GetInt(ibProtocol::ibForm::ibCommandBar::Id));
-	m_sendCommand(args);
+	m_sendEvent(ibProtocol::ibEvent::ibKind::Command, args);
 }
 
 void ibViewCommandBar::OnToolDropDown(ibAuiToolBarEvent& event)
@@ -206,4 +244,11 @@ void ibViewCommandBar::OnToolDropDown(ibAuiToolBarEvent& event)
 	m_bar->SetFocus();
 	if (!PopupGroup(event.GetId()))
 		event.Skip();
+}
+
+void ibViewCommandBar::OnSearch(wxCommandEvent& WXUNUSED(event))
+{
+	ibProtocolNode args;
+	args.SetValue(ibProtocol::ibEvent::Text, ibString(m_search->GetValue()));
+	m_sendEvent(ibProtocol::ibEvent::ibKind::Search, args);
 }

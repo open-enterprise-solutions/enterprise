@@ -241,6 +241,17 @@ bool ibValueReferenceDataObject::FindValue(const ibString& input, const ibChoice
 			return m_metaObject->GenerateDataDesc(this, desc) && desc.Lower().Contains(wanted);
 		}
 
+		// What the row holds, as the presentation asks for it (GenerateDataDesc — a document's number and date). The base
+		// answers nothing, and a document was never recognised by its presentation (2026-11-15).
+		virtual bool GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const override
+		{
+			const ibValue* const held = m_listObjectValue.find_value(id);
+			if (held == nullptr)
+				return false;
+			pvarMetaVal = *held;
+			return true;
+		}
+
 		//get metaData from object
 		virtual const ibValueMetaObjectRecordData* GetMetaObject() const {
 			return m_metaObject;
@@ -289,7 +300,7 @@ bool ibValueReferenceDataObject::FindValue(const ibString& input, const ibChoice
 		// "the search looks by name - it should be by code or by name"). Where every attribute the kind
 		// is searched by holds text (a catalog's and a chart's Code and Description), each is asked to
 		// CONTAIN it, joined by OR, and the ceiling below then counts matches, not rows. A kind searched
-		// by something else too (a document by its date) keeps the scan: text cannot be asked of a date.
+		// by something else too (a document by its date) is narrowed by the text's words instead (below).
 		// ⭐ A NUMBER CODE IS ASKED TO BEGIN WITH THE DIGITS TYPED (#646, after open-enterprise-solutions/enterprise#626): a
 		// code whose type is a number left the kind out of this road, and the scan found an item only among the first hundred
 		// rows. `12` is 12, 120..129, 1200..1299 … up to the code's length, one range per digit it may still have - no cast
@@ -341,6 +352,46 @@ bool ibValueReferenceDataObject::FindValue(const ibString& input, const ibChoice
 			}
 			if (any)
 				q.Where(any);
+		}
+		// ⭐ A KIND SEARCHED BY A DATE TOO (a document: its number, its date) IS NARROWED BY THE WORDS OF THE TEXT — a field
+		// of it holding text that holds one of them, AND its date in the day one of them names — and the rows read are then
+		// judged by their presentation whole (Matches below): a document's presentation as its cell reads and Copy gives it
+		// ("Receipt 00000000006 of 01.01.2025 08:00:00") finds that document wherever it is in the table; the first hundred
+		// rows read with no condition held it only by chance (2026-11-15). A word of the kind's own name is said by every
+		// row and narrows nothing; none left, the scan stays as it was.
+		else if (!everything) {
+			const ibString synonym = m_metaObject->GetSynonym().Lower();
+			ibQueryPredicatePtr texts, dates;
+			for (size_t from = 0; from < input.length();) {
+				size_t to = input.find(ibT(' '), from);
+				if (to == ibString::npos)
+					to = input.length();
+				const ibString word = input.Mid(from, to - from);
+				from = to + 1;
+				if (word.IsEmpty() || synonym.Contains(word.Lower()))
+					continue;
+				ibDateTime day;
+				const bool isDay = day.FromString(word) && day == day.GetDayStart() && day.Format(ibT("%d.%m.%Y")) == word;
+				for (const ibValueMetaObjectAttributeBase* attribute : searched) {
+					if (attribute == nullptr)
+						continue;
+					if (isDay && attribute->ContainType(ibValueTypes::TYPE_DATE)) {
+						const ibQueryPredicatePtr within = ibQueryPredicate::Compose(ibQueryPredicateKind::And,
+							ibQueryPredicate::Leaf(ibQueryCondition{ attribute->GetQueryColumn(), ibQueryFilterOp::GreaterEqual, ibValue(day) }),
+							ibQueryPredicate::Leaf(ibQueryCondition{ attribute->GetQueryColumn(), ibQueryFilterOp::Less, ibValue(day.AddDays(1)) }));
+						dates = dates ? ibQueryPredicate::Compose(ibQueryPredicateKind::Or, dates, within) : within;
+					}
+					else if (!isDay && attribute->ContainType(ibValueTypes::TYPE_STRING)) {
+						const ibQueryPredicatePtr holds = ibQueryPredicate::Leaf(
+							ibQueryCondition{ attribute->GetQueryColumn(), ibQueryFilterOp::Like, ibValue(ibT("%") + word + ibT("%")) });
+						texts = texts ? ibQueryPredicate::Compose(ibQueryPredicateKind::Or, texts, holds) : holds;
+					}
+				}
+			}
+			if (texts && dates)
+				q.Where(ibQueryPredicate::Compose(ibQueryPredicateKind::And, texts, dates));
+			else if (texts || dates)
+				q.Where(texts ? texts : dates);
 		}
 
 		ibReadPageRequest page;

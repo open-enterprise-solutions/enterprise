@@ -366,6 +366,7 @@ while the number stays: clicking an object again, or walking back to it, before 
 | 17 ApplyChange | the restructure's ledger: `Picture` and items `Level`, `Text` | `Done` — applied; none — cancelled, rolled back |
 | 18 ObjectKind | a form or a template just made: `Caption` (the window's), `Name`, `Synonym`, `Comment` and items `Id`, `Caption`, `Name` — the kinds it is offered | `Id`, `Name`, `Synonym`, `Comment` — the kind chosen; none — cancelled, the object taken away |
 | 19 PredefinedSelector | the designer's declared values of a reference, its type asked before it as a Choice: `Types` — a branch per admitted reference (`Title`), its values as children (`Name`, `Id`), each with what is declared under it | `Id` — the value chosen; none — closed |
+| 20 Search | a table's advanced search, a settings window over one condition: `Picture`, `Fields` and `References` as ListSettings has them — the columns it may look in (`Id` — the column), `Column` — the cursor's, `Value` — its cell's value with its `Presentation`, `How` | `Column`, `How`: 1 from the start, 2 anywhere, 3 the whole field, 4 by value; `Value` — the text looked for, or by value the value (none — nothing); none — closed. A value of the server's choosing is chosen on the way as a ListSettings window's (`Act` 2 Choose) |
 
 A SavedSettings window stays open through its acts: each act is a `respond`, done by the server, which asks again with
 the shelf as it now stands and `Done` — how the act went — until the window answers with no `Act`. A FormEditor window

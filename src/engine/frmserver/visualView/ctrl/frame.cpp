@@ -167,13 +167,17 @@ bool ibValueFrame::SaveNode(ibDataNode& node) const
 
 bool ibValueFrame::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args)
 {
-	if (event != ibProtocol::ibEvent::ibKind::Command || !HasCommandBar())
+	if ((event != ibProtocol::ibEvent::ibKind::Command && event != ibProtocol::ibEvent::ibKind::Search) || !HasCommandBar())
 		return false;
 	// The designer's test form previews the form, it does not run it — a command pressed there is not executed (the
 	// desktop's ibValueToolbar::OnTool, and its command bar's tool in the designer).
 	const ibFormVisualDocument* const visualDoc = GetVisualDocument();
 	if (visualDoc != nullptr && visualDoc->IsVisualDemonstrationDoc())
 		return true;
+	if (event == ibProtocol::ibEvent::ibKind::Search) {
+		GetCommandBar()->Search(args.GetValue<ibString>(ibProtocol::ibEvent::Text));
+		return true;
+	}
 	const ibActionID id = args.GetValue<std::int32_t>(ibProtocol::ibEvent::Id);
 	if (args.Has(ibProtocol::ibEvent::Member))
 		GetCommandBar()->ExecuteCommand(id, static_cast<size_t>(args.GetValue<std::int32_t>(ibProtocol::ibEvent::Member)));

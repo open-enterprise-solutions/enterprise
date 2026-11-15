@@ -207,12 +207,13 @@ TEST(QueryL2_Expr, Arithmetic)
 
 TEST(QueryL2_Bind, ParamsInTextOrder)
 {
-	// WHERE (a = const) AND (b = param0): two binds, the Const first, the external Param second.
+	// WHERE (a = const) AND (b = param0): two binds, the Const first, the external Param second — the text compared
+	// cast to its own length (ibPinnedConst).
 	ibQueryExprPtr pred = ibBinOp(ibQueryBinOp::And,
 		ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("a")), ibConst(ibValue(ibString(wxT("X"))))),
 		ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("b")), ibParam(0)));
 	const ibRenderedQuery out = ibQueryRenderer(SqliteDialect()).Render(ibQueryIR(ibFilter(ibScan(wxT("T")), pred)));
-	EXPECT_EQ(Sql(out), "SELECT * FROM T WHERE ((a = ?) AND (b = ?))");
+	EXPECT_EQ(Sql(out), "SELECT * FROM T WHERE ((a = CAST(? AS VARCHAR(1))) AND (b = ?))");
 	ASSERT_EQ(out.m_params.size(), 2u);
 	EXPECT_FALSE(out.m_params[0].m_external);
 	EXPECT_EQ(out.m_params[0].m_value.GetString().ToStdString(), "X");

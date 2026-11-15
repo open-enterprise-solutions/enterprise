@@ -15,6 +15,7 @@ class ibTableViewCtrl;
 class ibDataViewColumnGroup;
 class ibDataViewEvent;
 class ibHeaderGenericCtrlEvent;
+class wxFindDialogEvent;
 
 // A TABLE OF A VIEW — the old desktop's, a composite: its command bar above the data
 // view (the desktop's chrome, ibValueWindowComposite). Its columns and their groups are built by the host under it, as
@@ -48,6 +49,8 @@ private:
 
 	// The cursor, to the server — the row and the column it stands on, when either is another than it was told.
 	void SendCursor();
+	// …and a cell named, the same way: the one a context menu was opened on — the cell the command reads goes before it.
+	void SendCursor(const ibDataViewItem& item, const ibDataViewColumn* column);
 
 	// The cell whose editor the server opened (State's Edit) — opened here, once the activation asked for it.
 	void OpenEditor(const ibProtocolNode& edit);
@@ -71,8 +74,14 @@ private:
 	void OnColumnClick(ibDataViewEvent& event);
 	void OnColumnReordered(ibDataViewEvent& event);
 	void OnContextMenu(ibDataViewEvent& event);
+	// A key on the rows: the context menu's command it is the key of (Shortcut), run on the cell the cursor is on; any
+	// other — the data view's.
+	void OnKeyDown(wxKeyEvent& event);
 	void OnHeaderEndResize(ibHeaderGenericCtrlEvent& event);
 	void OnMainWindowClick(wxMouseEvent& event);
+	// Find, handed to the table by its form's view (ibVisualHostView): to the server with what the dialog says, which puts
+	// the cursor on the next cell holding the text — the cursor told first, so it looks from where the person sees it.
+	void OnFind(wxFindDialogEvent& event);
 
 	ibPanel*                         m_panel = nullptr;
 	ibTableViewCtrl*                  m_dataView = nullptr;

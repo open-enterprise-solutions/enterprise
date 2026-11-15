@@ -1,8 +1,9 @@
 // WHAT THE SERVER ASKS THE PERSON — the frame's Request, by its Kind (docs/public/client-protocol.md, Questions to the
 // person), answered with respond {Id, Response}. The server's code waits where it asked, so a question is never left
 // standing: one this page cannot ask yet is answered as cancelled — the Response empty — and the person is told why.
-// Four windows outlive their answers — Change form's (formEditor.js), the saved settings' shelf (savedSettings.js), a
-// list's and a report's settings (listSettings.js, composerSettings.js): each act is one, and the window is asked again.
+// Five windows outlive their answers — Change form's (formEditor.js), the saved settings' shelf (savedSettings.js), a
+// list's and a report's settings (listSettings.js, composerSettings.js), a table's advanced search (searchWindow.js): each
+// act is one, and the window is asked again.
 
 import { drawSheet } from '../gridbox/sheet.js';
 import { _, format, labelText } from '../localization.js';
@@ -13,6 +14,7 @@ import { FormEditor } from './formEditor.js';
 import { isValid, scheduleEditor } from './jobSchedule.js';
 import { ListSettings } from './listSettings.js';
 import { SavedSettings } from './savedSettings.js';
+import { SearchWindow } from './searchWindow.js';
 import { calculator, calendar } from './simpleChoice.js';
 
 /** @typedef {import('../protocol/session.js').Session} Session */
@@ -25,7 +27,7 @@ import { calculator, calendar } from './simpleChoice.js';
 // these, and the application is never asked them.
 const Kind = Object.freeze({
 	Message: 1, Choice: 2, Edit: 4, File: 5, Generation: 6, ViewMode: 7, SavedSettings: 8, Menu: 9, FormEditor: 10,
-	ListSettings: 11, SimpleChoice: 12, ComposerSettings: 13, Error: 14, Print: 15, Schedule: 16,
+	ListSettings: 11, SimpleChoice: 12, ComposerSettings: 13, Error: 14, Print: 15, Schedule: 16, Search: 20,
 });
 
 // A message's buttons — wx's flags in its Style, wx's codes in the answer (ibMessage); said as they are asked for, in
@@ -150,6 +152,9 @@ export class Questions {
 		case Kind.Schedule:
 			this.schedule(request);
 			break;
+		case Kind.Search:
+			this.search(request);
+			break;
 		default:
 			this.dialog(_('Not in the browser yet'),
 				format(_('This question (%d) cannot be asked here yet; it is answered as cancelled.'), request.Kind),
@@ -250,6 +255,16 @@ export class Questions {
 			{ caption: _('Cancel'), answer: {} },
 		], request);
 		dialog.querySelector('.text')?.replaceWith(list);
+	}
+
+	/**
+	 * A table's advanced search — a settings window over one condition (the thin client's ibDialogSearch): open through
+	 * its acts, a value of the server's choosing chosen on the way, answered and the window asked again.
+	 * @param {ProtocolNode} request
+	 */
+	search(request) {
+		this.lasting = { kind: Kind.Search, window: new SearchWindow(this, request) };
+		this.shown = this.lasting.window.dialog;
 	}
 
 	/**

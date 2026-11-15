@@ -659,20 +659,31 @@ ibDataQuerySpec WithSubtreesResolved(const ibDataQuerySpec& spec, const std::vec
 	return out;
 }
 
+// SQL LIKE on a string cell — case-insensitive, '%' = any run, '_' = one char (no escape handling). The one reading
+// of a LIKE over rows in memory, and the database's own (ibQueryRenderer asks it with the case aside too).
+bool RamLike(const ibString& s, const ibString& pat)
+{
+	const ibString S = s.Lower(), P = pat.Lower();
+	std::function<bool(size_t, size_t)> m = [&](size_t si, size_t pi) -> bool {
+		if (pi == P.size()) return si == S.size();
+		if (P[pi] == '%')   return m(si, pi + 1) || (si < S.size() && m(si + 1, pi));
+		if (si < S.size() && (P[pi] == '_' || P[pi] == S[si])) return m(si + 1, pi + 1);
+		return false;
+	};
+	return m(0, 0);
+}
+
 // One pushed-down outer condition against a materialised RAM cell — the aggregate
 // subquery's post-filter (the condition references POST-aggregation output, HAVING
-// semantics, so it cannot ride the inner WHERE). LIKE translates % / _ to wx wildcards.
+// semantics, so it cannot ride the inner WHERE).
 bool MatchRamCondition(const ibValue& cell, const ibQueryCondition& c)
 {
 	switch (c.m_op) {   // ONE op now (m_comparison + m_explicitOp collapsed into m_op)
 	case ibQueryFilterOp::Equal:    return  (cell == c.m_value);
 	case ibQueryFilterOp::NotEqual: return !(cell == c.m_value);
-	case ibQueryFilterOp::Like: {
-		ibString p = c.m_value.GetString();
-		p.Replace(ibT("%"), ibT("*"));
-		p.Replace(ibT("_"), ibT("?"));
-		return cell.GetString().Matches(p);
-	}
+	// …and a LIKE read as every other LIKE over rows in memory is: the case aside. It translated % / _ into wx's
+	// wildcards and matched with the case, so a post-filter disagreed with the WHERE beside it.
+	case ibQueryFilterOp::Like:     return RamLike(cell.GetString(), c.m_value.GetString());
 	case ibQueryFilterOp::Less:         return cell < c.m_value;
 	case ibQueryFilterOp::LessEqual:    return cell < c.m_value || cell == c.m_value;
 	case ibQueryFilterOp::Greater:      return !(cell < c.m_value) && !(cell == c.m_value);
@@ -1843,19 +1854,6 @@ void CollectJoinKeys(const ibQueryNode* node, std::vector<const ibBackendQueryCo
 // leaves cannot be pushed, so it is evaluated against the materialised joined row here. Only PLAIN
 // (non-dot-walk) leaves filter in RAM — a dot-walk leaf would need a further join not in the composed
 // table. Each leaf column rides into the composed table via ReferencedColumns below.
-
-// SQL LIKE on a string cell — case-insensitive, '%' = any run, '_' = one char (no escape handling).
-bool RamLike(const ibString& s, const ibString& pat)
-{
-	const ibString S = s.Lower(), P = pat.Lower();
-	std::function<bool(size_t, size_t)> m = [&](size_t si, size_t pi) -> bool {
-		if (pi == P.size()) return si == S.size();
-		if (P[pi] == '%')   return m(si, pi + 1) || (si < S.size() && m(si + 1, pi));
-		if (si < S.size() && (P[pi] == '_' || P[pi] == S[si])) return m(si + 1, pi + 1);
-		return false;
-	};
-	return m(0, 0);
-}
 
 // SQL three-valued (Kleene) logic: a comparison with a NULL operand is UNKNOWN, and a
 // WHERE keeps a row ONLY on a definite TRUE. This is what makes the RAM filter agree with

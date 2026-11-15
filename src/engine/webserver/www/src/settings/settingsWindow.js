@@ -1,6 +1,7 @@
 // A SETTINGS WINDOW — a list's (ListSettings) or a report's (ComposerSettings): the server's question carries the
 // setting in force, its fields described, the references they hold; the window edits a COPY and hands it back on OK,
-// whole (Settings); Cancel, Escape and × hand nothing back. A setting the server refuses is asked again with why
+// whole (Settings); Cancel, Escape and × hand nothing back. A table's advanced search (SearchWindow) is one over a single
+// condition, answered with it. A setting the server refuses is asked again with why
 // (Error), said before the window opens on it — as the thin client's new window does.
 //
 // ON THE WAY it asks the server twice, each an answer to its question, which the server asks again (the thin client's
@@ -69,16 +70,25 @@ export class SettingsWindow {
 	}
 
 	/**
+	 * What OK answers — the setting as it goes back (Settings).
+	 * @returns {object}
+	 */
+	response() {
+		return { Settings: this.written() };
+	}
+
+	/**
 	 * The window built, put up and drawn — once the window's own parts stand; a refusal said over it.
 	 * @param {string} caption
 	 * @param {string} className
+	 * @param {[string, string]} [captions] OK's and Cancel's
 	 */
-	open(caption, className) {
+	open(caption, className, captions = [labelText('&OK'), _('Cancel')]) {
 		const dialog = /** @type {any} */ (document.createElement('wa-dialog'));
 		dialog.className = `settings-window ${className}`;
 		dialog.label = caption;
-		this.ok = button(labelText('&OK'), () => this.questions.answer(dialog, this.request, { Settings: this.written() }), 'brand');
-		const cancel = button(_('Cancel'), () => this.close());
+		this.ok = button(captions[0], () => this.questions.answer(dialog, this.request, this.response()), 'brand');
+		const cancel = button(captions[1], () => this.close());
 		for (const button of [this.ok, cancel])
 			button.slot = 'footer';
 		dialog.append(this.content(), this.ok, cancel);

@@ -411,7 +411,10 @@ namespace ibProtocol {
 		// …the Args a control's event carries:
 		inline constexpr const char* Id       = "Id";         // Command, Action: the command's
 		inline constexpr const char* Member   = "Member";     // Command, Press: one command of a group, by its place in it
-		inline constexpr const char* Text     = "Text";       // Change
+		inline constexpr const char* Text     = "Text";       // Change, Search, Find
+		inline constexpr const char* Down     = "Down";       // Find: looked for below the current row (false — above it)
+		inline constexpr const char* MatchCase = "MatchCase"; // Find: the case as written (false — aside)
+		inline constexpr const char* WholeWord = "WholeWord"; // Find: the text a word of its own, not part of a longer one
 		inline constexpr const char* Value    = "Value";      // Change: the value with its type, when the field holds one
 		inline constexpr const char* Checked  = "Checked";    // Toggle
 		inline constexpr const char* Page     = "Page";       // Page: the page picked, by its control id
@@ -442,6 +445,10 @@ namespace ibProtocol {
 			Resize  = 15,   // a table column's edge dragged (Column, Width: the width it asks for)
 			Action  = 16,   // one of the control's own commands, picked in its context menu (Id: the command's — a table's
 			                // standard commands, its State's ContextMenu)
+			Search  = 17,   // the search field of its command bar typed into (Text: what it holds now — empty, nothing is
+			                // looked for)
+			Find    = 18,   // Find pressed over it (Text, Down, MatchCase, WholeWord): a table's next cell holding the text becomes
+			                // the current one — nothing narrowed, the cursor put on it (CurrentRow, CurrentColumn)
 		};
 
 		// ⭐ AN EVENT THAT SAYS WHERE THE PERSON IS — the control in focus, the table's cursor, typing begun, a column's place
@@ -491,6 +498,7 @@ namespace ibProtocol {
 			ApplyChange      = 17,   // ibApplyChange
 			ObjectKind       = 18,   // ibObjectKind
 			PredefinedSelector = 19, // ibPredefinedSelector
+			Search           = 20,   // ibSearch
 		};
 
 		// Text, Caption, Style (ibStyle's flags) → Button (the ibStyle button pressed: Yes, No, OK, Cancel).
@@ -739,6 +747,32 @@ namespace ibProtocol {
 		namespace ibSchedule {
 
 			inline constexpr const char* Schedule = "Schedule";
+
+		}
+
+		// A table's advanced search — a settings window over one condition, asked as one (IsSettingsRequest): Picture (the
+		// window's), Fields — the columns it may look in, as a settings window's fields (ibListSettings: Name — its field,
+		// Presentation — its header, Id — the column, Type; Value — what the current row holds in it, {t, v}, its
+		// Presentation beside), References — which of their types are references, Column — the one the cursor stands on,
+		// How → Column, How, Value — the
+		// text looked for (Begins, Contains, Exact), or the value ({t, v}: Value); none — closed. A value of the server's
+		// choosing is chosen on the way as a settings window's (ibListSettings::ibAct::Choose → Chosen).
+		namespace ibSearch {
+
+			inline constexpr const char* Picture    = "Picture";
+			inline constexpr const char* Fields     = "Fields";
+			inline constexpr const char* References = "References";
+			inline constexpr const char* Column     = "Column";
+			inline constexpr const char* Value      = "Value";
+			inline constexpr const char* How        = "How";   // ibHow
+
+			// How it is looked for.
+			enum class ibHow : int {
+				Begins   = 1,   // the text at the start of the field
+				Contains = 2,   // the text anywhere in it
+				Exact    = 3,   // the text the whole field
+				Value    = 4,   // the value itself, of the column's type
+			};
 
 		}
 
@@ -1197,11 +1231,16 @@ namespace ibProtocol {
 		// A COMMAND BAR — the State's CommandBar of a form, a table, a spreadsheet: its entries (Id, Caption, Picture,
 		// Tooltip, Enabled, Default, Kind; a separator; a group's commands as its children, Position each), pressed back
 		// as event Command {Id, Member}; a table's ContextMenu, its standard commands, the same (Id, Caption, Picture,
-		// Enabled), picked back as Action {Id}. Saved in its control's node's Layers (ibValueWindowComposite::WriteData).
+		// Enabled, Shortcut, CurrentCell; a group — Kind, its commands as its children, a submenu), picked back as Action
+		// {Id} after the cell it was opened on (Row {Row, Column}). Saved in its control's node's Layers
+		// (ibValueWindowComposite::WriteData).
+		// Search — a search field at the bar's end, holding that text; typed into, it goes back as event Search {Text}.
+		// Absent: the bar has none.
 		namespace ibCommandBar {
 
 			inline constexpr const char* CommandBar = "CommandBar";
 			inline constexpr const char* Layers     = "Layers";
+			inline constexpr const char* Search     = "Search";
 			inline constexpr const char* Id         = "Id";
 			inline constexpr const char* Separator  = "Separator";
 			inline constexpr const char* Caption    = "Caption";
@@ -1211,6 +1250,11 @@ namespace ibProtocol {
 			inline constexpr const char* Default    = "Default";    // the bar's default command: drawn standing out
 			inline constexpr const char* Kind       = "Kind";       // ibKind
 			inline constexpr const char* Position   = "Position";   // a group's command's: its place among the group's
+			inline constexpr const char* Shortcut   = "Shortcut";   // a table's menu command's key, as a menu writes it
+			                                                        // ("Ctrl+Alt+F"): pressed on the table, it is chosen
+			inline constexpr const char* CurrentCell = "CurrentCell";   // a table's menu command about the cell the cursor
+			                                                            // is on: the client adds the cell to its caption —
+			                                                            // ": <column> - <the cell's text>"
 
 			// What an entry is.
 			enum class ibKind : int {

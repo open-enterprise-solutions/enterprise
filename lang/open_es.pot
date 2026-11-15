@@ -16651,14 +16651,6 @@ msgstr ""
 msgid "Choice processing"
 msgstr ""
 
-#: src/engine/frmserver/visualView/ctrl/tableBoxAction.cpp:106
-msgid "Filter by column"
-msgstr ""
-
-#: src/engine/frmserver/visualView/ctrl/tableBoxAction.cpp:107
-msgid "Filter clear"
-msgstr ""
-
 #: src/engine/frmserver/visualView/ctrl/tableBoxAction.cpp:121
 msgid "Output list"
 msgstr ""
@@ -16998,6 +16990,14 @@ msgstr ""
 msgid "Whether the bar fills itself with its owner's standard commands (the form's or the table's: Add, Copy, Delete, Write and so on) and the commands of the owner's object. On by default. Off: the bar holds only the items added to it by hand."
 msgstr ""
 
+#: src/engine/frmserver/visualView/layers/commandBar.h:315
+msgid "Show search"
+msgstr ""
+
+#: src/engine/frmserver/visualView/layers/commandBar.h:316
+msgid "Whether the bar ends with a search field when what it serves looks for text: a table, or the table whose commands a list form's bar carries. Typing into it narrows the rows to those holding the text. On by default."
+msgstr ""
+
 #: src/engine/launcher/connectionDB.cpp:68
 msgid "Name IB:"
 msgstr ""
@@ -17272,4 +17272,44 @@ msgstr ""
 #: src/engine/webserver/www/src/gridbox/selection.js:316
 #, c-format
 msgid "Sum: %s"
+msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/tableBoxAction.cpp:146
+msgid "Configure list"
+msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/tableBoxAction.cpp:120 src/engine/frmclient/win/dlgs/search.cpp:16 src/engine/webserver/www/src/window/questions.js:306
+msgid "Advanced search"
+msgstr ""
+
+#: src/engine/frmserver/visualView/ctrl/tableBoxAction.cpp:122
+msgid "Cancel search"
+msgstr ""
+
+#: src/engine/frmclient/win/dlgs/search.cpp:41 src/engine/webserver/www/src/window/questions.js:299
+msgid "Where to look:"
+msgstr ""
+
+#: src/engine/frmclient/win/dlgs/search.cpp:43 src/engine/webserver/www/src/window/questions.js:299
+msgid "What to look for:"
+msgstr ""
+
+#: src/engine/frmclient/win/dlgs/search.cpp:48 src/engine/webserver/www/src/window/questions.js:285
+msgid "How to look"
+msgstr ""
+
+#: src/engine/frmclient/win/dlgs/search.cpp:47 src/engine/webserver/www/src/window/questions.js:287
+msgid "From the start of the line"
+msgstr ""
+
+#: src/engine/frmclient/win/dlgs/search.cpp:47 src/engine/webserver/www/src/window/questions.js:287
+msgid "Anywhere in the line"
+msgstr ""
+
+#: src/engine/frmclient/win/dlgs/search.cpp:47 src/engine/webserver/www/src/window/questions.js:288
+msgid "Exact match"
+msgstr ""
+
+#: src/engine/frmclient/win/dlgs/search.cpp:83 src/engine/webserver/www/src/window/searchWindow.js:52
+msgid "By value"
 msgstr ""

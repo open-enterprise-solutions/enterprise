@@ -18,7 +18,66 @@
 #include "deskgui/univ/dataview/headerctrlg.h"
 #include "deskgui/univ/menu.h"
 
+#include <wx/accel.h>      // wxAcceleratorEntry — a command's key, read as a menu writes it
+#include <wx/fdrepdlg.h>   // wxFindDialogEvent — Find, as the doc manager's dialog asks it
+
 namespace {
+
+// The ids a context menu's commands take — their places among its commands, a group's included, after the first.
+constexpr int kFirstEntryId = wxID_HIGHEST + 1;
+
+// THE CONTEXT MENU'S ENTRIES into `menu` — a group's as its submenu; each command's id kept in `ids` by its place, its
+// key written after its caption (as a menu writes it, past a tab), and a command about the current cell (CurrentCell)
+// saying that cell after its caption — «Find: Customer - Store 2».
+void AppendContextEntries(wxMenu& menu, const std::vector<ibProtocolNode>& entries, const wxString& cell,
+	std::vector<long long>& ids)
+{
+	for (const ibProtocolNode& entry : entries) {
+		wxString caption = entry.GetString(ibProtocol::ibForm::ibCommandBar::Caption);
+		wxMenuItem* item = nullptr;
+		if (entry.GetInt(ibProtocol::ibForm::ibCommandBar::Kind) == static_cast<int>(ibProtocol::ibForm::ibCommandBar::ibKind::Group)) {
+			ibMenu* const submenu = new ibMenu;
+			AppendContextEntries(*submenu, entry.Children(), cell, ids);
+			item = menu.AppendSubMenu(submenu, caption);
+		}
+		else {
+			if (entry.GetBool(ibProtocol::ibForm::ibCommandBar::CurrentCell, false) && !cell.empty()) {
+				wxString shown = cell;
+				shown.Replace(wxT("&"), wxT("&&"));   // the cell's text, not a mnemonic
+				caption << wxT(": ") << shown;
+			}
+			const wxString shortcut = entry.GetString(ibProtocol::ibForm::ibCommandBar::Shortcut);
+			if (!shortcut.empty())
+				caption << wxT('\t') << shortcut;
+			item = menu.Append(kFirstEntryId + static_cast<int>(ids.size()), caption);
+			ids.push_back(entry.GetInt(ibProtocol::ibForm::ibCommandBar::Id));
+			item->Enable(entry.GetBool(ibProtocol::ibForm::ibCommandBar::Enabled, true));
+		}
+		const wxBitmap picture = ibProtocolPicture(entry, ibProtocol::ibForm::ibCommandBar::Picture);
+		if (picture.IsOk())
+			item->SetBitmap(picture);
+	}
+}
+
+// The context menu's command whose key `key` is — enabled, a group's too: its id in `id`. False when none has it.
+bool FindShortcut(const std::vector<ibProtocolNode>& entries, const wxKeyEvent& key, long long& id)
+{
+	const int flags = (key.ControlDown() ? wxACCEL_CTRL : 0) | (key.AltDown() ? wxACCEL_ALT : 0)
+		| (key.ShiftDown() ? wxACCEL_SHIFT : 0);
+	for (const ibProtocolNode& entry : entries) {
+		if (FindShortcut(entry.Children(), key, id))
+			return true;
+		const wxString shortcut = entry.GetString(ibProtocol::ibForm::ibCommandBar::Shortcut);
+		wxAcceleratorEntry accel;
+		if (shortcut.empty() || !entry.GetBool(ibProtocol::ibForm::ibCommandBar::Enabled, true) || !accel.FromString(shortcut))
+			continue;
+		if (accel.GetKeyCode() == key.GetKeyCode() && accel.GetFlags() == flags) {
+			id = entry.GetInt(ibProtocol::ibForm::ibCommandBar::Id);
+			return true;
+		}
+	}
+	return false;
+}
 
 // A CELL DRAWN — the desktop's ibDataViewValueRenderer: what it draws is asked of the value — a boolean a tick where
 // the text would start (a mark, not a box: a list cell is not ticked by a click), anything else its text; where it
@@ -191,8 +250,11 @@ void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& node)
 	wxBoxSizer* const sizer = new wxBoxSizer(wxVERTICAL);
 
 	// The chrome: its command bar above it.
-	m_commandBar = std::make_unique<ibViewCommandBar>(m_panel, GetVisualHost(), [this](const ibProtocolNode& args) {
-		CallAsAction(ibProtocol::ibEvent::ibKind::Command, args);
+	m_commandBar = std::make_unique<ibViewCommandBar>(m_panel, GetVisualHost(), [this](ibProtocol::ibEvent::ibKind event, const ibProtocolNode& args) {
+		if (event == ibProtocol::ibEvent::ibKind::Command)
+			CallAsAction(event, args);
+		else
+			Send(event, args);   // its search field's
 	});
 	sizer->Add(m_commandBar->GetWindow(), 0, wxEXPAND);
 
@@ -295,6 +357,7 @@ void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& node)
 	m_dataView->Bind(ibEVT_DATAVIEW_SELECTION_CHANGED, &ibValueModelTableBox::OnSelectionChanged, this);
 	m_dataView->GetMainWindow()->Bind(wxEVT_LEFT_UP, &ibValueModelTableBox::OnCellCursor, this);
 	m_dataView->GetMainWindow()->Bind(wxEVT_KEY_UP, &ibValueModelTableBox::OnCellCursor, this);
+	m_dataView->GetMainWindow()->Bind(wxEVT_KEY_DOWN, &ibValueModelTableBox::OnKeyDown, this);
 	m_dataView->GetMainWindow()->Bind(wxEVT_LEFT_DOWN, &ibValueModelTableBox::OnMainWindowClick, this);
 	m_dataView->Bind(ibEVT_DATAVIEW_ITEM_ACTIVATED, &ibValueModelTableBox::OnItemActivated, this);
 	m_dataView->Bind(ibEVT_DATAVIEW_ITEM_START_EDITING, &ibValueModelTableBox::OnItemStartEditing, this);
@@ -308,6 +371,9 @@ void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& node)
 	m_dataView->Bind(ibEVT_DATAVIEW_COLUMN_REORDERED, &ibValueModelTableBox::OnColumnReordered, this);
 	m_dataView->Bind(ibEVT_DATAVIEW_ITEM_CONTEXT_MENU, &ibValueModelTableBox::OnContextMenu, this);
 	m_dataView->GenericGetHeader()->Bind(ibEVT_HEADER_END_RESIZE, &ibValueModelTableBox::OnHeaderEndResize, this);
+	// Find — handed to the table's window (GetWindow) by its form's view.
+	m_panel->Bind(wxEVT_FIND, &ibValueModelTableBox::OnFind, this);
+	m_panel->Bind(wxEVT_FIND_NEXT, &ibValueModelTableBox::OnFind, this);
 }
 
 void ibValueModelTableBox::Update(const ibProtocolNode& node)
@@ -397,6 +463,18 @@ void ibValueModelTableBox::UpdateState(const ibProtocolNode& state, const ibProt
 		const long long currentRow = state.GetInt(ibProtocol::ibForm::ibTable::CurrentRow);
 		if (currentRow != 0)
 			SelectRow(currentRow);
+	}
+	// …and the column — the cell Find found; it too is said only when the server moved it.
+	if (whole || changed->Has(ibProtocol::ibForm::ibTable::CurrentColumn)) {
+		const long long currentColumn = state.GetInt(ibProtocol::ibForm::ibTable::CurrentColumn);
+		for (unsigned int idx = 0; currentColumn != 0 && idx < m_dataView->GetColumnCount(); ++idx) {
+			ibDataViewColumn* const column = m_dataView->GetColumn(idx);
+			if (static_cast<long long>(column->GetModelColumn()) == currentColumn) {
+				m_currentColumn = currentColumn;
+				m_dataView->SetCurrentColumn(column);
+				break;
+			}
+		}
 	}
 
 	// A row activated: the server opens a cell's editor (an editable row) — the answer that says so opens it here.
@@ -552,11 +630,15 @@ void ibValueModelTableBox::OnCellCursor(wxEvent& event)
 
 void ibValueModelTableBox::SendCursor()
 {
+	SendCursor(m_dataView->GetSelection(), m_dataView->GetCurrentColumn());
+}
+
+void ibValueModelTableBox::SendCursor(const ibDataViewItem& item, const ibDataViewColumn* column)
+{
 	if (m_selecting)
 		return;
 
-	const long long handle = ibViewTableModel::HandleOf(m_dataView->GetSelection());
-	const ibDataViewColumn* const column = m_dataView->GetCurrentColumn();
+	const long long handle = ibViewTableModel::HandleOf(item);
 	const long long columnId = column != nullptr ? static_cast<long long>(column->GetModelColumn()) : 0;
 	if (handle == 0 || (handle == m_currentRow && columnId == m_currentColumn))
 		return;
@@ -742,31 +824,50 @@ void ibValueModelTableBox::OnColumnReordered(ibDataViewEvent& event)
 
 void ibValueModelTableBox::OnContextMenu(ibDataViewEvent& event)
 {
-	// The desktop's OnContextMenu: the table's standard commands, as the server offers them (State's ContextMenu) — the
-	// one picked goes back as Action {Id}; a command greyed there is not offered here either.
+	// The desktop's OnContextMenu: the table's standard commands, as the server offers them (State's ContextMenu) — a
+	// group's under its submenu, a command's key beside its caption, a greyed one greyed. Find says the cell the menu is
+	// opened on — where the cursor stands is the client's to know now: the server was told it last at the last call.
 	const std::vector<ibProtocolNode> entries = m_contextMenu.Children();
 	if (entries.empty())
 		return;
 
-	constexpr int kFirstEntryId = wxID_HIGHEST + 1;
-	ibMenu menu;
-	for (std::size_t idx = 0; idx < entries.size(); ++idx) {
-		wxMenuItem* const item = menu.Append(kFirstEntryId + static_cast<int>(idx), entries[idx].GetString(ibProtocol::ibForm::ibCommandBar::Caption));
-		const wxBitmap picture = ibProtocolPicture(entries[idx], ibProtocol::ibForm::ibCommandBar::Picture);
-		if (picture.IsOk())
-			item->SetBitmap(picture);
-		item->Enable(entries[idx].GetBool(ibProtocol::ibForm::ibCommandBar::Enabled, true));
+	const ibDataViewItem item = event.GetItem().IsOk() ? event.GetItem() : m_dataView->GetSelection();
+	const ibDataViewColumn* const column = event.GetDataViewColumn() != nullptr ? event.GetDataViewColumn()
+		: m_dataView->GetCurrentColumn();
+	wxString cell;
+	if (item.IsOk() && column != nullptr) {
+		ibVariant value;
+		m_dataView->GetModel()->GetValue(value, item, column->GetModelColumn());
+		cell = column->GetTitle() + wxT(" - ") + value.GetString().ToWxString();
 	}
 
+	ibMenu menu;
+	std::vector<long long> ids;
+	AppendContextEntries(menu, entries, cell, ids);
 	const int chosen = m_dataView->GetPopupMenuSelectionFromUser(menu, event.GetPosition());
 	if (chosen == wxID_NONE)
 		return;
 	const std::size_t idx = static_cast<std::size_t>(chosen - kFirstEntryId);
-	if (idx >= entries.size())
+	if (idx >= ids.size())
 		return;
 
+	// The cell it was opened on first — the one the command reads, as an activation says it (OnItemActivated).
+	SendCursor(item, column);
 	ibProtocolNode args;
-	args.SetValue(ibProtocol::ibEvent::Id, entries[idx].GetInt(ibProtocol::ibForm::ibCommandBar::Id));
+	args.SetValue(ibProtocol::ibEvent::Id, ids[idx]);
+	CallAsAction(ibProtocol::ibEvent::ibKind::Action, args);
+}
+
+void ibValueModelTableBox::OnKeyDown(wxKeyEvent& event)
+{
+	long long id = 0;
+	if (!FindShortcut(m_contextMenu.Children(), event, id)) {
+		event.Skip();
+		return;
+	}
+	SendCursor();
+	ibProtocolNode args;
+	args.SetValue(ibProtocol::ibEvent::Id, id);
 	CallAsAction(ibProtocol::ibEvent::ibKind::Action, args);
 }
 
@@ -805,6 +906,17 @@ void ibValueModelTableBox::OnMainWindowClick(wxMouseEvent& event)
 	if (GetVisualHost().IsDesignerHost())
 		GetVisualHost().SelectControl(this);
 	event.Skip();
+}
+
+void ibValueModelTableBox::OnFind(wxFindDialogEvent& event)
+{
+	SendCursor();
+	ibProtocolNode args;
+	args.SetValue(ibProtocol::ibEvent::Text, ibString(event.GetFindString()));
+	args.SetValue(ibProtocol::ibEvent::Down, (event.GetFlags() & wxFR_DOWN) != 0);
+	args.SetValue(ibProtocol::ibEvent::MatchCase, (event.GetFlags() & wxFR_MATCHCASE) != 0);
+	args.SetValue(ibProtocol::ibEvent::WholeWord, (event.GetFlags() & wxFR_WHOLEWORD) != 0);
+	Send(ibProtocol::ibEvent::ibKind::Find, args);
 }
 
 //***********************************************************************************

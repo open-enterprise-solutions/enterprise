@@ -45,6 +45,48 @@ static ibQueryParam ibParamOfConst(const ibQueryExpr& expr)
 	return p;
 }
 
+// ⭐ A STRING COMPARED IS A STRING OF ITS OWN LENGTH, not of the column's. Firebird types a bare `?` by the column it
+// faces, so a text longer than the column was refused before any row was compared — "string right truncation", SQL
+// -303: `%` + text + `%` in a LIKE against a code of 8 (typing a name into an account field, 2026-09-16), a name looked
+// for whole against the same code (a table's search, Exact match, 2026-11-15). Clamped to the column instead, its first
+// characters would be compared and a row found that is not it. Every comparison is rendered by RenderExpr — the
+// provider's conditions, a keyset's, the prefix search that builds its IR by hand — so it is pinned there, once; any
+// other operand is handed back as it is.
+//
+// ⭐ …AND A FRACTION COMPARED IS A NUMBER OF ITS OWN SCALE, for the same reason: bound by the column, 40.014 was 40
+// against a line number and 40.01 against a sum of two places, and a search typed into a list found rows that are not it
+// (2026-11-15). Its scale is read off its text, the zeros it ends with dropped (40.000 is 40), its precision the widest
+// the engine declares (m_maxNumberPrecision): Firebird compares two exact numbers at the finer scale, and in 64 bits a sum
+// of 24000.00 brought to 15 places overflowed — past 18 digits it is a 128-bit number, and so is the comparison; an
+// engine that names no widest takes the number's own digits. A whole number is exact against any column of numbers and is
+// handed back bare — an integer key keeps its index; so is one of more digits than the engine declares.
+static ibQueryExprPtr ibPinnedConst(const ibQueryExprPtr& operand, const ibDialectDictionary& dialect)
+{
+	if (!operand || operand->m_kind != ibQueryExprKind::Const)
+		return operand;
+	if (operand->m_const.GetType() == TYPE_STRING) {
+		const int length = static_cast<int>(operand->m_const.GetString().length());
+		return ibCast(operand, ibTypeString(length > 0 ? length : 1));
+	}
+	if (operand->m_const.GetType() != TYPE_NUMBER)
+		return operand;
+	const ibString text = operand->m_const.GetNumber().ToString();
+	const size_t point = text.find(ibT('.'));
+	if (point == ibString::npos)
+		return operand;
+	size_t end = text.length();
+	while (end > point + 1 && text[end - 1] == ibT('0'))
+		--end;
+	int digits = 0;
+	for (size_t at = 0; at < end; ++at)
+		digits += text[at] >= ibT('0') && text[at] <= ibT('9');
+	const int scale = static_cast<int>(end - point - 1);
+	const int widest = static_cast<int>(dialect.m_maxNumberPrecision);
+	if (scale == 0 || (widest > 0 && digits > widest))
+		return operand;
+	return ibCast(operand, ibTypeNumber(widest > 0 ? widest : digits, scale));
+}
+
 // What the journal says about a statement's parameters: their COUNT — a bind list is data (a password, a
 // person's name), and a journal a developer mails back must not carry it.
 //
@@ -1234,18 +1276,19 @@ ibString ibQueryRenderer::RenderExpr(const ibQueryExprPtr& expr)
 		// `"(" + RenderExpr(lhs) + ... + RenderExpr(rhs) + ")"` reversed the
 		// plan per BinOp and crossed param bindings (e.g. a guid bound into a
 		// DATE column → FB type-mismatch crash). Sequence explicitly.
-		const ibString lhs = RenderExpr(expr->m_lhs);
-		// ⭐ A LIKE PATTERN IS A STRING OF ITS OWN LENGTH, not of the column's. Firebird types a bare
-		// `col LIKE ?` parameter by the column it faces, so `%` + text + `%` against a code of 8 was
-		// refused before any row was compared - "string right truncation", SQL -303 (typing a name into
-		// an account field, 2026-09-16). Every road to LIKE comes through here - the provider's
-		// conditions, the prefix search that builds its IR by hand - so the pattern is pinned here once.
-		const bool pinPattern = expr->m_binOp == ibQueryBinOp::Like && expr->m_rhs
-			&& expr->m_rhs->m_kind == ibQueryExprKind::Const && expr->m_rhs->m_const.GetType() == TYPE_STRING;
-		const int patternLength = pinPattern ? (int)expr->m_rhs->m_const.GetString().length() : 0;
-		const ibString rhs = pinPattern
-			? RenderExpr(ibCast(expr->m_rhs, ibTypeString(patternLength > 0 ? patternLength : 1)))
-			: RenderExpr(expr->m_rhs);
+		// A string compared is pinned to its own length, a fraction to its own scale (ibPinnedConst) — a LIKE's pattern,
+		// an equality's text alike.
+		const bool compares = expr->m_binOp == ibQueryBinOp::Eq || expr->m_binOp == ibQueryBinOp::Ne
+			|| expr->m_binOp == ibQueryBinOp::Lt || expr->m_binOp == ibQueryBinOp::Le || expr->m_binOp == ibQueryBinOp::Gt
+			|| expr->m_binOp == ibQueryBinOp::Ge || expr->m_binOp == ibQueryBinOp::Like;
+		const ibString lhs = RenderExpr(compares ? ibPinnedConst(expr->m_lhs, m_dialect) : expr->m_lhs);
+		const ibString rhs = RenderExpr(compares ? ibPinnedConst(expr->m_rhs, m_dialect) : expr->m_rhs);
+		// ⭐ …AND A LIKE IS ASKED WITH THE CASE ASIDE — "мол" finds "Молоко", as the rows in memory are compared (RamLike,
+		// ibCompositionCompare): both sides upper-cased, which every dialect spells alike. A bare LIKE answered by the
+		// base's own collation, and a filter's «contains» or a search typed into a list found in a value table what it did
+		// not find in a list (2026-11-15).
+		if (expr->m_binOp == ibQueryBinOp::Like)
+			return ibT("(UPPER(") + lhs + ibT(") LIKE UPPER(") + rhs + ibT("))");
 		return ibT("(") + lhs + ibT(" ") + BinOpText(expr->m_binOp) + ibT(" ") + rhs + ibT(")");
 	}
 
@@ -1299,7 +1342,7 @@ ibString ibQueryRenderer::RenderExpr(const ibQueryExprPtr& expr)
 		ibString s = ibT("(") + lhs + (expr->m_negated ? ibT(" NOT IN (") : ibT(" IN ("));
 		for (size_t i = 0; i < expr->m_args.size(); ++i) {
 			if (i) s += ibT(", ");
-			s += RenderExpr(expr->m_args[i]);
+			s += RenderExpr(ibPinnedConst(expr->m_args[i], m_dialect));
 		}
 		s += ibT("))");
 		return s;

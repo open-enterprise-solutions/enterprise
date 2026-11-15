@@ -280,6 +280,32 @@ ibDataComposer& ibDataComposer::ScopeTo(const ibString& path, const ibString& op
 	return *this;
 }
 
+// …a tree, the same act: held as the node it is, and joined to the filter where the read builds its condition.
+ibDataComposer& ibDataComposer::ScopeTo(const ibFilterNodeDescription& node)
+{
+	m_scopeNodes.push_back(node);
+	return *this;
+}
+
+ibFilterDescription ibDataComposer::GetScopedFilterDesc() const
+{
+	const ibFilterDescription& current = GetCurrentFilterDesc();
+	if (m_scopeNodes.empty())
+		return current;
+
+	// ANDed, whatever the filter's own root joins by: a filter whose root is OR goes in as one group of that kind, so
+	// the scope narrows the whole of it rather than becoming one more alternative.
+	ibFilterDescription scoped;
+	if (current.IsOk()) {
+		if (current.m_rootKind == ibFilterGroupKind_And)
+			scoped.m_nodes = current.m_nodes;
+		else
+			ibFilterDescription::AppendGroup(scoped.m_nodes, current.m_rootKind).m_children = current.m_nodes;
+	}
+	scoped.m_nodes.insert(scoped.m_nodes.end(), m_scopeNodes.begin(), m_scopeNodes.end());
+	return scoped;
+}
+
 // ===========================================================================
 //  A FILTER DESCRIPTION → THE CONDITION IT MEANS
 // ===========================================================================
@@ -342,7 +368,7 @@ ibQueryAstExprPtr ibBuildFilledCondition(ibDataComposer& composer, const ibFilte
 // still known, and not in the lowering's LIKE: the query language's own `LIKE` takes the pattern its
 // author wrote, literally. The row-side reading (ibCompositionCompare) wraps it with the same function
 // (ibComposerContainsPattern), so a list read from the base and the same list filtered in memory
-// select the same rows.
+// select the same rows. A value holding a `%` is a pattern already — `value%` looks from the start.
 //
 // 🛑 THIS USED TO REACH THE BASE AS `LIKE 'value'` — an exact match — so "Comment contains Оплат" found
 // nothing while "%Оплат%" found the rows, and only somebody who knew SQL could filter a list at all.
@@ -555,7 +581,7 @@ ibDataComposer& ibDataComposer::Parameter(const ibString& name, const ibValue& v
 ibDataComposer& ibDataComposer::ClearSettings()
 {
 	m_commonSelected.clear();
-	m_scopeConditions.clear();
+	ClearScope();
 	// THE FILTER AND THE ORDER ARE THE READER'S — see Filter() and Sort(). Dropping their setting
 	// altogether is what "back to the defaults" means: `m_variants[0]` composes again.
 	ClearUserSettings();
@@ -1144,7 +1170,7 @@ ibString ibDataDBComposer::RenderTextFor(const std::vector<const Output*>& outpu
 	// and the author's verbatim text is handed back unchanged, with the setting silently dropped.
 	const bool hasSettings = !ProjectionFor(output).empty()
 	                       || output.m_settings.m_filter.IsOk() || output.m_settings.m_sort.IsOk()
-	                       || !m_scopeConditions.empty()
+	                       || !m_scopeConditions.empty() || !m_scopeNodes.empty()
 	                       || !m_resources.empty() || !ChainFrom(output).empty()
 	                       || GetCurrentSettingsDesc().IsOk();   // …and whatever composes
 
@@ -1876,7 +1902,10 @@ void ibDataDBComposer::EnsureAst()
 	// condition never becomes text, so the text alone would say "nothing changed"
 	// after the user rewrote the whole filter.
 	const ibString text = RenderText();
-	if (m_rendered.m_ast != nullptr && text == m_rendered.m_text && GetCurrentFilterDesc() == m_rendered.m_filter)
+	// …and the condition is the filter WITH the read's tree scopes (a table's search): a scope pushed or popped is
+	// another condition as surely as another filter is.
+	const ibFilterDescription filter = GetScopedFilterDesc();
+	if (m_rendered.m_ast != nullptr && text == m_rendered.m_text && filter == m_rendered.m_filter)
 		return;   // same query, same condition — the cached parse stands
 
 	// ⭐⭐ AND WHAT THE COMPOSER WROTE IS JOURNALLED HERE, WHERE IT IS BORN. The engine's own `query
@@ -1904,7 +1933,20 @@ void ibDataDBComposer::EnsureAst()
 	//
 	// Built at the render, not when the setting was assigned: assigning is assigning (the old value
 	// is thrown away by the fact of `=`), and what a query needs is made when a query is made.
-	const ibQueryAstExprPtr condition = BuildFilterAst(GetCurrentFilterDesc());
+	//
+	// …and the values the last condition bound go with it: they are that condition's, which this one replaces
+	// (RenderedQuery::m_filterParams).
+	for (const ibString& param : m_rendered.m_filterParams)
+		m_params.erase(param);
+	m_rendered.m_filterParams.clear();
+	std::vector<ibString> boundBefore;
+	for (const auto& [name, value] : m_params)
+		boundBefore.push_back(name);
+	const ibQueryAstExprPtr condition = BuildFilterAst(filter);
+	for (const auto& [name, value] : m_params) {
+		if (std::find(boundBefore.begin(), boundBefore.end(), name) == boundBefore.end())
+			m_rendered.m_filterParams.push_back(name);
+	}
 
 	// THE TREE'S CONDITION GOES IN AS AN AST, ANDed with whatever the query text
 	// already asked for. No rendering, no re-parsing — the expression the filter
@@ -1912,7 +1954,7 @@ void ibDataDBComposer::EnsureAst()
 	AndWhere(*m_rendered.m_ast, condition);
 
 	m_rendered.m_text = text;
-	m_rendered.m_filter = GetCurrentFilterDesc();
+	m_rendered.m_filter = filter;
 }
 
 bool ibDataDBComposer::BuildPageSignature(const ibReadPageRequest& page, ibPageSignature& signature) const

@@ -130,6 +130,7 @@ constexpr ibPictureID g_picCutCLSID = picture_to_clsid("PC_CUT");
 constexpr ibPictureID g_picClipboardCopyCLSID = picture_to_clsid("PC_CLPCOPY");
 constexpr ibPictureID g_picPasteCLSID = picture_to_clsid("PC_PASTE");
 constexpr ibPictureID g_picFindCLSID = picture_to_clsid("PC_FIND");
+constexpr ibPictureID g_picFindCancelCLSID = picture_to_clsid("PC_FINDC");
 constexpr ibPictureID g_picGoBackCLSID = picture_to_clsid("PC_GOBACK");
 constexpr ibPictureID g_picGoForwardCLSID = picture_to_clsid("PC_GOFWD");
 constexpr ibPictureID g_picGoDirUpCLSID = picture_to_clsid("PC_GODIRUP");

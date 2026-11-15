@@ -1088,6 +1088,12 @@
     <ClInclude Include="win\dlgs\rowHeight.h">
       <Filter>win\dlgs</Filter>
     </ClInclude>
+    <ClCompile Include="win\dlgs\search.cpp">
+      <Filter>win\dlgs</Filter>
+    </ClCompile>
+    <ClInclude Include="win\dlgs\search.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
     <ClInclude Include="win\dlgs\rowValueCell.h">
       <Filter>win\dlgs</Filter>
     </ClInclude>

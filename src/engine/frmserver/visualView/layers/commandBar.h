@@ -88,6 +88,7 @@ public:
 	ibPictureDescription GetPictureDesc() const { return m_propertyPicture->GetValueAsPictureDesc(); }
 	ibString GetToolTip() const { return m_propertyTooltip->GetValueAsTranslateString(); }
 	bool IsEnabled() const { return m_propertyEnabled->GetValueAsBoolean(); }
+	void SetEnabled(bool value) { m_propertyEnabled->SetValue(value); }
 	bool IsVisible() const { return m_propertyVisible->GetValueAsBoolean(); }
 	bool IsDefault() const { return m_propertyDefault->GetValueAsBoolean(); }
 	// Available by the functional options it names — false while all of them are off in this base. Beside
@@ -237,6 +238,11 @@ public:
 	bool IsAutoFill() const { return m_propertyAutoFill->GetValueAsBoolean(); }
 	void SetAutoFill(bool value) { m_propertyAutoFill->SetValue(value); }
 
+	// ShowSearch: on -> the bar ends with a search field when what it serves looks for text (a table, or the table
+	// whose commands a list form's bar carries); off -> no field.
+	bool IsShowSearch() const { return m_propertyShowSearch->GetValueAsBoolean(); }
+	void SetShowSearch(bool value) { m_propertyShowSearch->SetValue(value); }
+
 	// The commands this bar consists of. AutoFill rebuilds them from the owner's
 	// action collection; otherwise returns the manually-stored ones.
 	const std::vector<ibCommandEntry>& BuildCommands();
@@ -247,12 +253,15 @@ public:
 	// …and one command of a GROUP: the entry `id` is the group, `member` the command's place among its members
 	// as the frame listed them. A group runs nothing by itself.
 	void ExecuteCommand(const ibActionID& id, size_t member);
+	// …and its search field typed into: the text handed to its owner, which looks for it (ibValueFrame::SetSearchText —
+	// a form passes it on to its command view). A bar showing no field takes nothing.
+	void Search(const ibString& text);
 
 	// ⭐ THE BAR AS IT STANDS NOW, one child of `state` per entry in order: a separator, or a command with its
 	// caption and picture as the representation chooses them, whether it is enabled, its tooltip, its kind —
 	// and for a group, its members with the same, greyed where a view-only form forbids a command that changes
 	// data. Everything a client needs to draw the bar and its submenus without asking again — the pictures by their
-	// ids (ibBackendPicture::SendPicture).
+	// ids (ibBackendPicture::SendPicture). And, ShowSearch on, its search field: `Search` holding the text.
 	void Update(ibDataNode& state);
 
 	// Reverse-lookup the child that produced the command with this id (built by BuildCommands).
@@ -270,7 +279,7 @@ public:
 		return nullptr;
 	}
 
-	// Serialization — AutoFill flag + the child command items (each as a sub-node).
+	// Serialization — the AutoFill and ShowSearch flags + the child command items (each as a sub-node).
 	bool WriteData(ibDataNode& node) const;
 	bool ReadData(const ibDataNode& node);
 
@@ -302,6 +311,9 @@ private:
 	ibPropertyCategory* m_category = ibPropertyObject::CreatePropertyCategory(ibT("CommandBar"), _("Command bar"));
 	ibPropertyBoolean* m_propertyAutoFill = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_category, ibT("AutoFill"), _("Auto fill"),
 		_("Whether the bar fills itself with its owner's standard commands (the form's or the table's: Add, Copy, Delete, Write and so on) and the commands of the owner's object. On by default. Off: the bar holds only the items added to it by hand."),
+		true);
+	ibPropertyBoolean* m_propertyShowSearch = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_category, ibT("ShowSearch"), _("Show search"),
+		_("Whether the bar ends with a search field when what it serves looks for text: a table, or the table whose commands a list form's bar carries. Typing into it narrows the rows to those holding the text. On by default."),
 		true);
 };
 

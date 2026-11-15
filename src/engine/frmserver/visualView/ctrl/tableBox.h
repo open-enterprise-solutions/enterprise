@@ -31,6 +31,7 @@ enum ibDataViewViewMode {
 #include "frmserver/visualView/ctrl/columnLayout.h"
 
 struct ibSettingsDescription;   // compositionDescription.h — the reader's setting a list is narrowed by
+struct ibFilterNodeDescription;   // …and one node of a filter — what a search narrows the table's read by
 
 //********************************************************************************************
 //*                                 define commom clsid									     *
@@ -68,7 +69,7 @@ class ibValueEnumTableBoxViewMode :
 private:
 };
 
-class ibValueModelTableBox : public ibValueWindowComposite,
+class ibValueModelTableBox : public ibValueWindowCompositeSearch,
 	public ibTypeControlFactory, public ibSourceObject {
 	public:
 
@@ -308,6 +309,11 @@ public:
 
 private:
 
+	// ⭐ THE SEARCH FIELD'S DOOR — the text typed into it (ibValueWindowCompositeSearch): the rows are read anew from the
+	// top, narrowed to the ones holding it. The narrowing is this table's READ's alone (Fetch scopes its reads to
+	// GetSearchCondition): a script walking the same rows — a posting over a tabular section — never meets it.
+	virtual void Search(const ibString& text) override;
+
 	// WHAT THE CLIENT DID — the table's model methods its events map onto (OnClientEvent); each keeps
 	// the model half of what the window's handler did.
 
@@ -331,6 +337,23 @@ private:
 	void OnColumnResized(const ibFormID& columnId, int width);
 	// The person switched list / tree / hierarchy.
 	void OnViewModeChanged(ibDataViewViewMode viewMode);
+	// …and the view the table shows NOW: the one its property holds, and while it is searched a flat List — a row
+	// found deep in a folder is shown where it is found, not behind the folder holding it.
+	ibDataViewViewMode GetViewMode() const;
+
+	// Something is looked for — the text typed or a condition of Find, Advanced search.
+	bool IsSearched() const;
+	// ⭐ THE CONDITION THE SEARCH IS — an AND group of what Find and Advanced search put on columns
+	// (m_searchConditions) and, while text is typed, what it looks for (m_searchTextCondition). A group with no lines
+	// while nothing is searched.
+	ibFilterNodeDescription GetSearchCondition() const;
+	// The fields of what a column shows that hold text, the ones text is looked for in — see the body. None: a number,
+	// a date, a flag — compared as values (Search).
+	std::vector<ibString> GetTextFields(const class ibValueModelTableBoxColumn* column) const;
+	// ⭐ FIND — Find pressed over the table (its event Find: Text, Down, MatchCase, WholeWord): the next row it shows —
+	// below the current one, or above it — holding the text in a cell shown, as the cell reads, becomes the current one;
+	// nothing is narrowed. None holds it: said.
+	void OnFind(const ibDataNode& args);
 	// Double-click / Enter on a row, which becomes the current line: choice → the row is returned; a row
 	// with an editable cell → that cell's editor opens (Edit); a read-only row → the model opens the row's
 	// value (a list opens its object form). Then the script's OnActivateRow.
@@ -350,8 +373,12 @@ private:
 	// model (no model → notifier shim).
 	void Command_Choose(ibBackendValueForm* srcForm);
 	void Command_ShowListSettings();
-	void Command_FilterByCurrentColumn();
-	void Command_ClearFilter();
+	// ⭐ THE SEARCH'S OWN COMMANDS — «Find: <column> - <value>»: the rows whose field holds what the current cell does;
+	// «Advanced search»: what to look for and where, asked in the client's window (ibRequest::ibSearch); «Cancel
+	// search»: the text and every condition gone. Each reads the rows anew as typing into the field does (Search).
+	void Command_Find();
+	void Command_FindAdvanced();
+	void Command_FindCancel();
 	// The reader's own saved settings — restore one, or save what is in force. Both open the
 	// composer world's shelf, under the List category.
 	void Command_ShowSavedSettings(bool restore);
@@ -361,6 +388,9 @@ private:
 	// driver into a spreadsheet document, which is then shown. `chosen` — the columns to print (control
 	// ids); empty = every shown column. See the body.
 	void Command_OutputList();
+	// THE CONTEXT MENU AS IT STANDS NOW — the desktop's OnContextMenu: the table's standard commands into `state`'s
+	// ContextMenu, a group's under one entry, each with its key; a view-only form greys the ones that modify data.
+	void UpdateContextMenu(ibDataNode& state);
 
 	// ⭐ WHERE THIS LIST'S SAVED SETTINGS LIVE — the guid of the METAOBJECT behind the attribute this
 	// box is bound to, asked of the attribute's own source (Max, 2026-08-26: *"the unique identifier
@@ -402,6 +432,9 @@ private:
 	// direction just fetched (`fromBack` after a backward fetch). `keep` — the top-level row the fetch was
 	// under, never forgotten by it.
 	void TrimRows(bool fromBack, std::int32_t keep);
+
+	// The columns under `parent` in the order they are shown — walked depth-first, a column group's too.
+	static void CollectColumns(const ibValueFrame* parent, std::vector<class ibValueModelTableBoxColumn*>& out);
 
 	// The model's view, defined in tableBox.cpp.
 	class ibTableModelView;
@@ -478,6 +511,8 @@ private:
 	// The row the client's cursor stands on — as it told (OnCurrentRowChanged) or was told (CurrentRow): what the
 	// current row is not said back as. 0 = none yet.
 	std::int32_t m_clientRow;
+	// …and the column, the same way: told (OnCurrentColumnChanged) or told it (CurrentColumn — one Find moved to).
+	ibFormID m_clientColumn;
 	// ⭐ THE CELL WHOSE EDITOR IS OPEN — what the window's editor was: opened by a row activated, the Edit
 	// command or the client's own Input the table took; over with the text committed (Change) or the cursor
 	// moved off it (Row). 0 = none.
@@ -486,6 +521,15 @@ private:
 	// A sort changed the order: the next reset reads from the top instead of around the current row,
 	// whose position was a position in the OLD order.
 	bool m_fetchFromTop;
+	// ⭐ WHAT FIND AND ADVANCED SEARCH LOOK FOR — a condition per column (by its control id), a second on the same
+	// column in the first one's place. The search's, as its text is: ANDed with it (GetSearchCondition), never the
+	// reader's setting, gone with Cancel search.
+	std::map<ibFormID, ibFilterNodeDescription> m_searchConditions;
+	// …and what the text typed looks for: an OR group, a line per field (Search) — read once as it is typed, since a
+	// reference is found by asking the base.
+	ibFilterNodeDescription m_searchTextCondition;
+	// IsSearched as of the last Search — a list form's bar is drawn again as it turns (Search).
+	bool m_searched = false;
 
 	// THE ROWS' VERSION — up whenever the model says its rows changed (a sort, a filter, a value written, a
 	// row added or deleted), written in the State: a client reads its rows again when it is another than it

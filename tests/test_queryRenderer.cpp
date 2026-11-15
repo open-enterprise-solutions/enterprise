@@ -271,7 +271,7 @@ TEST(QueryRenderer, Subquery_AsSoleFromSourceKeepsBindOrder)
 		ibBinOp(ibQueryBinOp::Like, ibCol(wxT("name_S")), ibParam(1)));
 	const ibRenderedQuery out = ibQueryRenderer(PgDialect()).Render(ibQueryIR(rel));
 	EXPECT_EQ(Sql(out),
-		"SELECT * FROM (SELECT * FROM Reference9 WHERE (code_S > $1)) AS sub WHERE (name_S LIKE $2)");
+		"SELECT * FROM (SELECT * FROM Reference9 WHERE (code_S > $1)) AS sub WHERE (UPPER(name_S) LIKE UPPER($2))");
 	ASSERT_EQ(out.m_params.size(), 2u);
 	EXPECT_EQ(out.m_params[0].m_externalIndex, 0);   // inner subquery param first ($1)
 	EXPECT_EQ(out.m_params[1].m_externalIndex, 1);   // outer WHERE param second ($2)

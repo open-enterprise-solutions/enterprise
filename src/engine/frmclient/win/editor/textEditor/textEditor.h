@@ -5,6 +5,8 @@
 #include <wx/print.h>
 #include "deskgui/univ/stc/stc.h"
 
+class wxFindDialogEvent;
+
 class ibTextCommandProcessor :
 	public wxCommandProcessor {
 public:
@@ -38,9 +40,15 @@ public:
 		const wxSize& size = wxDefaultSize, long style = 0,
 		const wxString& name = ibSTCNameStr);
 
+	// The next place holding the text, as the Find dialog's flags say (wxFR_*), selected; none — a box says so. The code
+	// editor's (ibCodeEditor::FindText).
+	void FindText(const wxString& findString, int wxflags);
+
 private:
 
 	void OnTextChange(wxCommandEvent& event);
+	// Find handed to the editor itself — a form's text box is asked through its window (ibVisualHostView).
+	void OnFind(wxFindDialogEvent& event);
 
 	//document — owning doc is just a back-link for SetModify on text change;
 	// downgraded from ibMetaDocument* to ibFrontendDocument* after Text/Help docs

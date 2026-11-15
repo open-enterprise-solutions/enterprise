@@ -167,9 +167,10 @@ ibQueryIR KeysetCursorIR()
 TEST(QueryBuilderShowcase, KeysetCursor_Firebird_OrOfAnd)
 {
 	const ibRenderedQuery out = ibQueryRenderer(FbDialect()).Render(KeysetCursorIR());
+	// The guid compared rides as a string of its own length (ibPinnedConst): Firebird types a bare `?` by the column.
 	EXPECT_EQ(Sql(out),
 		"SELECT FIRST 50 * FROM Reference17 "
-		"WHERE ((Code_S > ?) OR ((Code_S = ?) AND (Ref > ?))) "
+		"WHERE ((Code_S > ?) OR ((Code_S = ?) AND (Ref > CAST(? AS VARCHAR(10))))) "
 		"ORDER BY Code_S ASC, Ref ASC");
 }
 
@@ -181,7 +182,7 @@ TEST(QueryBuilderShowcase, KeysetCursor_GuidIsBoundNotInlined)
 	// the literal string never reaches the SQL text.
 	EXPECT_EQ(Sql(out),
 		"SELECT * FROM Reference17 "
-		"WHERE ((Code_S > $1) OR ((Code_S = $2) AND (Ref > $3))) "
+		"WHERE ((Code_S > $1) OR ((Code_S = $2) AND (Ref > CAST($3 AS VARCHAR(10))))) "
 		"ORDER BY Code_S ASC, Ref ASC LIMIT 50");
 
 	ASSERT_EQ(out.m_params.size(), 3u);

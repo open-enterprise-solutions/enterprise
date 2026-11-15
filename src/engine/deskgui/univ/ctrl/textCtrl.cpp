@@ -2593,9 +2593,12 @@ bool ibTextCtrlRemoveCommand::CanUndo() const
 
 bool ibTextCtrlRemoveCommand::Do(ibTextCtrl *text)
 {
-    text->SetSelection(m_from, m_to);
-    m_textDeleted = text->GetSelectionText();
-    text->RemoveSelection();
+    // ⭐ TAKEN AND REMOVED AS IT STANDS, NOT SELECTED FIRST (wx univ selected it): a selection is painted at once
+    // (SetSelection's Update), the removal waits for the next paint — and a handler of the change that asks the server
+    // (a table's search field) left a character erased by Backspace standing selected the while (2026-11-15). Replace
+    // puts the caret at `from` and clears the selection itself.
+    m_textDeleted = text->GetRange(m_from, m_to);
+    text->Remove(m_from, m_to);
 
     return true;
 }

@@ -75,9 +75,10 @@ std::vector<long> ibDataRamComposer::ComputeOrder() const
 
 	// THE FILTER IN FORCE — the tree, read by the one engine (see the note above the function). The USER's filter
 	// replaces the declared one, exactly as the sort above does; the scope conditions are separate and AND with it,
-	// as they do in the rendered query. Each field it names is split ONCE — a switched-off line's too
-	// (AppendFilterFields) — and read once per row into a slot that stays where it is while the condition reads it.
-	const ibFilterDescription& filter = settings.m_filter;
+	// as they do in the rendered query — the tree scopes (a table's search) inside the filter's own reading
+	// (GetScopedFilterDesc). Each field it names is split ONCE — a switched-off line's too (AppendFilterFields) — and
+	// read once per row into a slot that stays where it is while the condition reads it.
+	const ibFilterDescription filter = GetScopedFilterDesc();
 	std::vector<ibString> filterPaths;
 	for (const ibFilterNodeDescription& node : filter.m_nodes)
 		AppendFilterFields(filterPaths, node);

@@ -989,6 +989,51 @@ wa-dialog.answered-only::part(close-button) {
 	cursor: default;
 }
 
+/* A table's advanced search: where and what, a label and its field a line each — what, a text or a value of the
+   column's type (a settings window's cell); how, a group of four. */
+.search-fields {
+	display: grid;
+	gap: 0.5rem;
+	min-width: min(24rem, 80vw);
+}
+
+.search-fields > label {
+	display: grid;
+	grid-template-columns: 9rem 1fr;
+	align-items: center;
+	font-weight: normal;
+}
+
+/* The colour alone, not the background: a <select>'s arrow is the native styles' background image. */
+.search-fields :is(select, input[type="text"], input[type="number"], input[type="datetime-local"]) {
+	width: 100%;
+	box-sizing: border-box;
+	height: 1.75rem;
+	margin: 0;
+	padding: 0 4px;
+	border: 1px solid var(--oes-border);
+	background-color: var(--oes-table-bg);
+	color: var(--oes-editor-text);
+	font: inherit;
+}
+
+.search-fields select {
+	padding-inline-end: 1.75rem;
+}
+
+.search-fields fieldset {
+	display: grid;
+	gap: 0.25rem;
+	border: 1px solid var(--oes-border);
+}
+
+/* A command's key, at the line's end — as a menu writes it beside the caption. */
+.popup-menu .shortcut {
+	float: right;
+	margin-left: 2rem;
+	color: var(--oes-muted);
+}
+
 .popup-menu button.checked::before {
 	content: '✓';
 	margin-left: -1rem;
@@ -998,6 +1043,35 @@ wa-dialog.answered-only::part(close-button) {
 
 .popup-menu details > :not(summary) {
 	padding-left: 2.25rem;
+}
+
+/* …a group a line of the menu, not the panel the native styles make of a <details> (a frame, its padding when open, its
+   summary pulled out over it — wider than the menu, which then scrolled sideways; the space under it a block of text
+   keeps); its arrow the menu's own. */
+.popup-menu details,
+.popup-menu details[open] {
+	margin: 0;
+	padding: 0;
+	border: none;
+	border-radius: 0;
+	background: none;
+}
+
+/* The summary sits in the <details>' own slot and takes its box from it, not from the page: its width counted without
+   its padding, it ran past the menu's edge, the arrow with it. */
+.popup-menu details summary,
+.popup-menu details[open] summary {
+	box-sizing: border-box;
+	margin-inline: 0;
+	border-radius: 0;
+}
+
+.popup-menu details summary::after {
+	mask: none;
+	background: none;
+	width: auto;
+	height: auto;
+	rotate: none;
 }
 
 /* A quick choice — a menu's items dropped under the field pressed, the one the field holds marked. */

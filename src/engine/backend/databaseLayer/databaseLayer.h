@@ -230,6 +230,11 @@ struct ibDialectDictionary
 	// number of parameters: 32767").
 	unsigned int m_maxParameters = 0;
 
+	// ⭐ THE WIDEST EXACT NUMBER THE ENGINE DECLARES — NUMERIC(p, s)'s p at most. A fraction compared is pinned to its own
+	// scale at it (ibPinnedConst), so the comparison is made as wide as the engine goes. 0 = none known. Firebird 4+: 38
+	// (past 18 digits a 128-bit integer); PostgreSQL: 1000.
+	unsigned int m_maxNumberPrecision = 0;
+
 	// ⭐ A NAME WITHIN A LIMIT — itself when it fits, otherwise its head plus a hash of the WHOLE name. Deterministic,
 	// so whoever writes the name and whoever reads it back compute the same spelling, and two names that share
 	// the head still differ. The relation alias (ibQueryRenderer::AliasIdent) and the result label

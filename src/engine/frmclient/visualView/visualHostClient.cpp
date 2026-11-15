@@ -397,8 +397,8 @@ void ibVisualHostClient::Build(const ibProtocolNode& form)
 	// has it there with them, the whole card scrolling.
 	wxWindow* const window = GetBackgroundWindow();
 	wxWindow* const barParent = window == m_contentWindow ? this : window;
-	m_commandBar = std::make_unique<ibViewCommandBar>(barParent, *this, [this](const ibProtocolNode& args) {
-		Send(m_valueForm->GetControlID(), ibProtocol::ibEvent::ibKind::Command, args);
+	m_commandBar = std::make_unique<ibViewCommandBar>(barParent, *this, [this](ibProtocol::ibEvent::ibKind event, const ibProtocolNode& args) {
+		Send(m_valueForm->GetControlID(), event, args);
 	});
 	m_content = new wxBoxSizer(wxVERTICAL);
 	if (barParent == this) {

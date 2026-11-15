@@ -317,9 +317,11 @@ protected:
 
 	bool m_readOnly;
 
-	// The display order, as of the view generation it was read at — see DisplayNumberOf.
+	// The display order, as of the view generation it was read at and the tree scopes it was read under (a table's
+	// search: its fetch reads under it, a script's walk does not) — see DisplayNumberOf.
 	mutable std::vector<long> m_displayOrder;
 	mutable uint32_t          m_displayOrderGeneration = 0;
+	mutable size_t            m_displayOrderScopes = 0;
 	mutable bool              m_displayOrderRead = false;
 
 	const ibValueMetaObjectTableData* m_metaTable;

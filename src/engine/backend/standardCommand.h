@@ -19,6 +19,13 @@ struct ibCommandItem {
 	// The form's default command — the one its bar draws standing out (an object form's «… and close»). Read where the
 	// bar fills itself (BuildCommands, AutoFill); a bar's own item says it for itself (ibValueCommandBarItem::IsDefault).
 	bool                 m_default        = false;
+	// Whether it may be run now — off: drawn greyed (a table's «Cancel search» while nothing is searched).
+	bool                 m_enabled        = true;
+	// The submenu it is drawn in, by that submenu's caption — the commands of one group gather under one entry of a bar
+	// and of a context menu, where the first of them stands. Empty: it stands by itself.
+	ibString             m_group;
+	// The key it is run by on its control, as a menu writes it ("Ctrl+Alt+F"); empty — none.
+	ibString             m_shortcut;
 
 	ibCommandItem() {}
 	ibCommandItem(const ibActionID& actionId, const ibString& name, const ibString& caption,
@@ -31,6 +38,9 @@ struct ibCommandItem {
 	ibCommandItem& SetPictureAndText(bool value) { m_pictureAndText = value;    return *this; }
 	ibCommandItem& SetCreateInForm(bool value)   { m_createInForm   = value;    return *this; }
 	ibCommandItem& SetDefault(bool value)        { m_default        = value;    return *this; }
+	ibCommandItem& SetEnabled(bool value)        { m_enabled        = value;    return *this; }
+	ibCommandItem& SetGroup(const ibString& value)    { m_group    = value; return *this; }
+	ibCommandItem& SetShortcut(const ibString& value) { m_shortcut = value; return *this; }
 };
 
 class ibStandardCommandSource {
@@ -157,6 +167,21 @@ protected:
 		bool IsDefault(const ibActionID& lNumAction) const {
 			const ibCommandItem* act = FindByID(lNumAction);
 			return act != nullptr && act->m_default;
+		}
+
+		bool IsEnabled(const ibActionID& lNumAction) const {
+			const ibCommandItem* act = FindByID(lNumAction);
+			return act == nullptr || act->m_enabled;
+		}
+
+		ibString GetGroupByID(const ibActionID& lNumAction) const {
+			const ibCommandItem* act = FindByID(lNumAction);
+			return act != nullptr ? act->m_group : ibString();
+		}
+
+		ibString GetShortcutByID(const ibActionID& lNumAction) const {
+			const ibCommandItem* act = FindByID(lNumAction);
+			return act != nullptr ? act->m_shortcut : ibString();
 		}
 
 		ibValue* GetSourceDataByID(const ibActionID& lNumAction) const {

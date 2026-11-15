@@ -5,6 +5,9 @@
 //
 // ONE LINE, AND WHAT DOES NOT FIT GOES UNDER », as on the thin client's bar (wxAuiToolBar's overflow button): the
 // entries past the bar's end are hidden and offered in the menu of its last button, in their order.
+//
+// …AND A SEARCH FIELD AT ITS END when the State's CommandBar says Search (its text): what it holds goes back as the
+// owner's event Search {Text} at every change of it. The entries end where the field begins.
 
 import { EventKind } from './control.js';
 import { _ } from '../localization.js';
@@ -25,32 +28,67 @@ export class CommandBar {
 		/** @type {ProtocolNode[]} */
 		this.entries = [];
 		this.overflow = this.overflowMenu();
+		/** @type {HTMLElement | undefined} the search field, made the first time the bar has one */
+		this.search = undefined;
 		new ResizeObserver(() => this.fit()).observe(this.element);
 	}
 
 	/** @param {ProtocolNode | undefined} bar the State's CommandBar */
 	update(bar) {
 		const entries = bar?.NodeChildren ?? [];
+		const searched = typeof bar?.Search === 'string';
+		if (searched)
+			this.searchField(/** @type {string} */ (bar?.Search));
 		// Drawn anew only when what it shows changed: a frame that moved nothing on the bar leaves it, and a menu
-		// opened from it, alone.
-		const drawn = JSON.stringify(entries);
+		// opened from it, alone. The field's text is set, not drawn.
+		const drawn = JSON.stringify(entries) + (searched ? '|search' : '');
 		if (drawn === this.drawn)
 			return;
 		this.drawn = drawn;
 		this.entries = entries;
-		this.element.replaceChildren(...entries.map((entry) => this.entry(entry)), this.overflow);
-		this.element.hidden = entries.length === 0;
+		this.element.replaceChildren(...entries.map((entry) => this.entry(entry)), this.overflow,
+			...(searched && this.search ? [this.search] : []));
+		this.element.hidden = entries.length === 0 && !searched;
 		this.fit();
 	}
 
-	/** Hides the entries past the bar's end and offers them under ». */
+	/**
+	 * The search field, made once — the same element put back at every drawing, so what is being typed stays — and the
+	 * text the server holds put into it, unless the person is typing there: what they typed is newer than the answer.
+	 * @param {string} text
+	 */
+	searchField(text) {
+		if (!this.search) {
+			const input = document.createElement('wa-input');
+			input.className = 'search';
+			input.setAttribute('size', 's');
+			input.setAttribute('type', 'search');
+			input.setAttribute('with-clear', '');
+			input.setAttribute('placeholder', _('Search'));
+			input.setAttribute('aria-label', _('Search'));
+			// Every change of what it holds, the × too; the same text twice is nothing new to the server.
+			const send = () => this.owner.send(EventKind.Search, { Text: /** @type {any} */ (input).value ?? '' });
+			input.addEventListener('input', send);
+			input.addEventListener('wa-clear', send);
+			this.search = input;
+		}
+		const field = /** @type {any} */ (this.search);
+		if (document.activeElement !== this.search && field.value !== text)
+			field.value = text;
+	}
+
+	/** Hides the entries past the bar's end — the search field's beginning, when it has one — and offers them under ». */
 	fit() {
 		const drawn = /** @type {HTMLElement[]} */ ([...this.element.children].slice(0, this.entries.length));
 		for (const element of drawn)
 			element.hidden = false;
 		this.overflow.hidden = false;
 		const style = getComputedStyle(this.element);
-		const end = this.element.getBoundingClientRect().right - parseFloat(style.paddingRight) - parseFloat(style.borderRightWidth);
+		// The search field keeps at least its smallest width at the end (form.css): the entries end before it.
+		const search = this.search !== undefined && this.search.parentElement === this.element ? this.search : undefined;
+		const searchRoom = search ? parseFloat(getComputedStyle(search).minWidth) + (parseFloat(style.columnGap) || 0) : 0;
+		const end = this.element.getBoundingClientRect().right - parseFloat(style.paddingRight) - parseFloat(style.borderRightWidth)
+			- searchRoom;
 		// A dropdown has no box of its own (display: contents): its button is what stands on the bar.
 		const boxOf = (/** @type {Element} */ element) =>
 			(element.localName === 'wa-dropdown' ? element.querySelector(':scope > [slot="trigger"]') ?? element : element).getBoundingClientRect();

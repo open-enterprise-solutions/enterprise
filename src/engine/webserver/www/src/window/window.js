@@ -160,6 +160,17 @@ export class ClientWindow {
 			if (document.activeElement === document.body)
 				this.focusTable(this.currentDocument()?.element);
 		});
+		/**
+		 * @type {Element | null} the control the focus went into last — kept while it is in what no control is (Find, a
+		 * menu): Find looks in it (findOnShow), as the thin client's form keeps its active control
+		 */
+		this.focusedControl = null;
+		document.addEventListener('focusin', (event) => {
+			const control = event.composedPath().find((node) => node instanceof Element && node.localName.startsWith('oes-')
+				&& node.localName !== 'oes-clientform');
+			if (control instanceof Element)
+				this.focusedControl = control;
+		});
 	}
 
 	/**
@@ -505,17 +516,27 @@ export class ClientWindow {
 		input.click();
 	}
 
-	/** Edit → Find..., over the text on show — as the thin client's doc manager finds in its document's view. */
+	/** Edit → Find..., over what is on show — as the thin client's doc manager finds in its document's view. */
 	find() {
-		showFind(() => this.textOnShow(), this.questions);
+		showFind(() => this.findOnShow(), this.questions);
 	}
 
 	/**
-	 * The text of the tab on show — its first text box: a text document's — or none.
-	 * @returns {HTMLTextAreaElement | null}
+	 * What Find looks in on show — the thin client's form hands Find to its active control: the control of the tab the
+	 * person was in last, a table or a sheet looking by itself, a text box's text; else the tab's first text box (a text
+	 * document's) — or none.
+	 * @returns {HTMLTextAreaElement | import('./find.js').Finder | null}
 	 */
-	textOnShow() {
-		return this.currentDocument()?.element?.querySelector('oes-textbox textarea') ?? null;
+	findOnShow() {
+		const element = this.currentDocument()?.element;
+		const control = /** @type {any} */ (this.focusedControl);
+		if (control?.isConnected && element?.contains(control)) {
+			if (typeof control.find === 'function')
+				return control;
+			if (control.localName === 'oes-textbox')
+				return control.querySelector('textarea');
+		}
+		return element?.querySelector('oes-textbox textarea') ?? null;
 	}
 
 	/**

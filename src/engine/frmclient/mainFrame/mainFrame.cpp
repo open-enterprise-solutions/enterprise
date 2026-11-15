@@ -44,6 +44,7 @@
 #include "frmclient/win/dlgs/errorDialog.h"
 #include "frmclient/win/dlgs/formEditor.h"
 #include "frmclient/win/dlgs/generation.h"
+#include "frmclient/win/dlgs/search.h"
 #include "frmclient/win/dlgs/jobSchedule/jobScheduleSettings.h"
 #include "frmclient/win/editor/gridEditor/gridPrintout.h"   // a script's sheet printed — and the preview's page (ApplyFitToPageWidth)
 #include "frmclient/win/dlgs/settings/savedSettings.h"
@@ -125,11 +126,12 @@ int EditCommandOf(long long command)
 }
 
 // THE FIELD UNDER THE FOCUS DOES IT — wx's own command, which a text field answers (wxTextCtrl's EVT_MENU; its Delete is
-// wxID_CLEAR). To the field alone: not sent on up to the window, which is where an Edit menu's command came from.
+// wxID_CLEAR). To the field alone: not sent on up to the window, which is where an Edit menu's command came from — nor
+// to the window itself, holding the focus with no field in it (just opened): it would hand the command to itself again.
 void EditFocused(int command)
 {
 	wxWindow* const focus = wxWindow::FindFocus();
-	if (focus == nullptr || command == wxID_NONE)
+	if (focus == nullptr || focus->IsTopLevel() || command == wxID_NONE)
 		return;
 
 	wxCommandEvent event(wxEVT_MENU, command == wxID_DELETE ? wxID_CLEAR : command);
@@ -271,12 +273,14 @@ wxWindow* FocusedEditor(wxWindow* otherwise)
 	return wxWindow::FindFocus() != nullptr ? wxWindow::FindFocus() : otherwise;
 }
 
-// A SETTINGS WINDOW'S QUESTION — a list's or a report's: the one a value of the server's choosing is chosen for on the
-// way (ibProtocol::ibRequest::ibListSettings::ibAct::Choose), and asked again with it.
+// A SETTINGS WINDOW'S QUESTION — a list's or a report's, and a table's advanced search, a settings window over one
+// condition: the one a value of the server's choosing is chosen for on the way
+// (ibProtocol::ibRequest::ibListSettings::ibAct::Choose), and asked again with it.
 bool IsSettingsRequest(const ibProtocolNode& request)
 {
 	const ibProtocol::ibRequest::ibKind kind = static_cast<ibProtocol::ibRequest::ibKind>(request.GetInt(ibProtocol::ibRequest::Kind));
-	return kind == ibProtocol::ibRequest::ibKind::ListSettings || kind == ibProtocol::ibRequest::ibKind::ComposerSettings;
+	return kind == ibProtocol::ibRequest::ibKind::ListSettings || kind == ibProtocol::ibRequest::ibKind::ComposerSettings
+		|| kind == ibProtocol::ibRequest::ibKind::Search;
 }
 
 } // namespace
@@ -1685,6 +1689,10 @@ void ibFrontendMainFrame::ShowRequest(const ibProtocolNode& request, ibProtocolN
 		// THE DESKTOP'S ibDialogComposerSettings::ShowUserSettings over a report's model — the same road: the setting, the
 		// composition and its fields come in the question, the edited setting is the answer; cancelled — none.
 		ibDialogComposerSettings::ShowUserSettings(parent, request, response);
+		break;
+	case ibProtocol::ibRequest::ibKind::Search:
+		// A table's advanced search — where, what and how; Find answers them, closed — nothing.
+		ibDialogSearch::Show(parent, request, response);
 		break;
 	case ibProtocol::ibRequest::ibKind::FormEditor: {
 		// THE DESKTOP'S ibValueForm::ChangeForm — its editor over the form of the active tab; what a person may arrange of

@@ -21,10 +21,14 @@ long ibValueTabularSectionDataObjectBase::DisplayNumberOf(const ibDataViewItem& 
 	if (index < 0)
 		return 0;   // not a row of this table
 
-	if (!m_displayOrderRead || m_displayOrderGeneration != GetViewGeneration()) {
+	// A line's number while its table is searched is its place among the rows found (the fetch reads under the search);
+	// the same line asked by a script outside it is numbered among all of them — two orders, neither the other's.
+	const size_t scopes = GetModelComposer().MarkScope().nod;
+	if (!m_displayOrderRead || m_displayOrderGeneration != GetViewGeneration() || m_displayOrderScopes != scopes) {
 		Storage().SetColumns(GetColumnCollection());   // let the composer resolve field names → column ids
 		m_displayOrder = GetModelComposer().ComputeOrder();
 		m_displayOrderGeneration = GetViewGeneration();
+		m_displayOrderScopes = scopes;
 		m_displayOrderRead = true;
 	}
 

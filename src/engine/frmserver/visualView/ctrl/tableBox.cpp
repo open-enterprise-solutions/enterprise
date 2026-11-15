@@ -4,6 +4,7 @@
 #include "form.h"
 
 #include "backend/system/value/valueTable.h"
+#include "backend/system/value/valueArray.h"   // the references a search's text finds, as one list
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/metaData.h"                 // FindAnyObjectByFilter (dot-path metaID -> name)
 #include "backend/functionalOption/functionalOptionGate.h"   // ibFunctionalOptionGate::IsAvailable — a tabular section this base does not use
@@ -122,7 +123,7 @@ bool ibValueModelTableBox::SetControlValue(const ibValue& varControlVal)
 // A column is no longer always a direct child — it may sit inside a column GROUP, and
 // groups nest — so the table walks the tree instead of looping over its children,
 // which would silently see none of the grouped ones.
-static void CollectColumns(const ibValueFrame* parent,
+void ibValueModelTableBox::CollectColumns(const ibValueFrame* parent,
 	std::vector<ibValueModelTableBoxColumn*>& out)
 {
 	if (parent == nullptr)
@@ -427,7 +428,7 @@ bool ibValueModelTableBox::GetSourceList(std::vector<ibBackendFormAttributeValue
 // the other question — IsUnbound.)
 bool ibValueModelTableBox::IsAvailable() const
 {
-	if (!m_propertySource->IsAvailable() || !ibValueWindowComposite::IsAvailable())
+	if (!m_propertySource->IsAvailable() || !ibValueWindowCompositeSearch::IsAvailable())
 		return false;
 	if (m_tableModel == nullptr || m_propertySource->GetValueAsSourceDesc().GetHopCount() < 2)
 		return true;
@@ -452,9 +453,9 @@ ibClassID ibValueModelTableBox::GetSourceClassType() const
 //*                              ibValueModelTableBox                                     *
 //***********************************************************************************
 
-ibValueModelTableBox::ibValueModelTableBox() : ibValueWindowComposite(), ibTypeControlFactory(),
+ibValueModelTableBox::ibValueModelTableBox() : ibValueWindowCompositeSearch(), ibTypeControlFactory(),
 m_tableModel(nullptr), m_tableCurrentLine(nullptr),
-m_modelView(nullptr), m_nextRowHandle(1), m_currentColumn(0), m_clientRow(0), m_editRow(0), m_editColumn(0), m_fetchFromTop(false)
+m_modelView(nullptr), m_nextRowHandle(1), m_currentColumn(0), m_clientRow(0), m_clientColumn(0), m_editRow(0), m_editColumn(0), m_fetchFromTop(false)
 {
 	m_members.Bind(this, &ibValueModelTableBox::FillControlMembers);
 
@@ -696,10 +697,10 @@ void ibValueModelTableBox::OnRowDeleted(const ibDataViewItem& item)
 
 void ibValueModelTableBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 {
-	ibValueWindowComposite::OnUpdate(state, host);
+	ibValueWindowCompositeSearch::OnUpdate(state, host);
 
 	state.SetValue(ibProtocol::ibForm::ibTable::ChoiceMode, IsChoiceMode());
-	state.SetValue(ibProtocol::ibForm::ibTable::ViewMode, static_cast<std::int32_t>(m_propertyViewMode->GetValueAsEnum()));
+	state.SetValue(ibProtocol::ibForm::ibTable::ViewMode, static_cast<std::int32_t>(GetViewMode()));
 
 	// The designer's picture of the form must not attach the runtime data model (a read would issue SQL
 	// against a metadata table that doesn't exist yet, or that the designer session has no runtime to query
@@ -816,8 +817,11 @@ void ibValueModelTableBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 		state.SetValue(ibProtocol::ibForm::ibTable::CurrentRow, currentRow);
 		m_clientRow = currentRow;
 	}
-	if (m_currentColumn != 0)
+	// …and the column, the same way: one the server moved to (Find), not the client's own said back.
+	if (m_currentColumn != 0 && m_currentColumn != m_clientColumn) {
 		state.SetValue(ibProtocol::ibForm::ibTable::CurrentColumn, static_cast<std::int32_t>(m_currentColumn));
+		m_clientColumn = m_currentColumn;
+	}
 
 	// The cell whose editor is open — while its row is still one the client was given.
 	if (m_editRow != 0 && m_fetchedRows.contains(m_editRow)) {
@@ -826,23 +830,7 @@ void ibValueModelTableBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 		edit.SetValue(ibProtocol::ibForm::ibTable::Column, static_cast<std::int32_t>(m_editColumn));
 	}
 
-	// THE CONTEXT MENU — the desktop's OnContextMenu: the table's standard commands, picked back as Action {Id}; a
-	// view-only form greys the ones that modify data here too, as its toolbar does.
-	if (m_formOwner != nullptr) {
-		const ibStandardCommandSet actions = GetStandardCommands(m_formOwner->GetTypeForm());
-		const bool viewOnly = m_formOwner->IsViewOnly();
-		ibDataNode& menu = state.Child(ibProtocol::ibForm::ibTable::ContextMenu);
-		for (unsigned int idx = 0; idx < actions.GetCount(); idx++) {
-			const ibActionID id = actions.GetID(idx);
-			if (id == ibNOT_FOUND)
-				continue;
-			ibDataNode& entry = menu.AddChild(0, 0);
-			entry.SetValue(ibProtocol::ibForm::ibCommandBar::Id, static_cast<std::int32_t>(id));
-			entry.SetValue(ibProtocol::ibForm::ibCommandBar::Caption, actions.GetCaptionByID(id));
-			entry.SetValue(ibProtocol::ibForm::ibCommandBar::Picture, ibBackendPicture::SendPicture(actions.GetPictureByID(id), GetMetaData()));
-			entry.SetValue(ibProtocol::ibForm::ibCommandBar::Enabled, !(viewOnly && actions.GetModifiesDataByID(id)));
-		}
-	}
+	UpdateContextMenu(state);
 }
 
 //***********************************************************************************
@@ -966,6 +954,26 @@ void ibValueModelTableBox::TrimRows(bool fromBack, std::int32_t keep)
 //*                                    Fetch                                        *
 //***********************************************************************************
 
+namespace {
+
+// ⭐ WHAT THE PERSON LOOKS FOR NARROWS A READ, AND ONLY THAT ONE — the scope of the read on the model's composer, as a
+// drilled folder is, taken back however the read ends (a read that fails throws): a script walking the same rows between
+// two reads walks every one of them. A read of the rows shown (Fetch) and a walk over them (OnFind) are scoped alike.
+struct ibSearchScope {
+	ibSearchScope(ibDataComposer& composer, const ibFilterNodeDescription& searched)
+		: m_composer(composer), m_mark(composer.MarkScope())
+	{
+		if (!searched.m_children.empty())
+			m_composer.ScopeTo(searched);
+	}
+	~ibSearchScope() { m_composer.RestoreScope(m_mark); }
+
+	ibDataComposer&                     m_composer;
+	const ibDataComposer::SettingsScope m_mark;
+};
+
+} // namespace
+
 bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response)
 {
 	// Nothing is read in the designer (see Update).
@@ -977,6 +985,10 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 	// What the model says while this reads is this read's — not a change the client must read again for.
 	m_fetching = true;
 	ibON_BLOCK_EXIT_SET(m_fetching, false);
+
+	// What the person looks for narrows this read (ibSearchScope) — over the whole of it, the cells too, a tabular
+	// section's line number being the row's place among the rows found.
+	const ibSearchScope searchScope(m_tableModel->GetModelComposer(), GetSearchCondition());
 
 	const std::int32_t direction = request.GetValue<std::int32_t>(ibProtocol::ibForm::ibTable::Direction);
 	const std::int32_t anchorHandle = request.GetValue<std::int32_t>(ibProtocol::ibForm::ibTable::Anchor);
@@ -994,7 +1006,7 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 		if (!parentItem.IsOk())
 			ibBackendException::Error(_("The folder is no longer in the list."));
 	}
-	const ibDataViewViewMode viewMode = m_propertyViewMode->GetValueAsEnum();
+	const ibDataViewViewMode viewMode = GetViewMode();
 	const ibDataViewItem scope = parentItem.IsOk() ? parentItem
 		: (viewMode == ibDataViewList ? s_constIgnoreParent : ibDataViewItem());
 
@@ -1239,6 +1251,279 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 }
 
 //***********************************************************************************
+//*                                   Search                                        *
+//***********************************************************************************
+
+void ibValueModelTableBox::Search(const ibString& text)
+{
+	if (m_tableModel == nullptr)
+		return;
+
+	// ⭐ WHAT THE TEXT LOOKS FOR, read once, as it is typed: a reference is found the way typing it into a field finds
+	// one, which asks the base — so here, not at every page read (Fetch). A row holding it in a column shown, an OR group:
+	//   * a field holding text contains it (GetTextFields);
+	//   * a column of numbers equals it, the text being a number as a whole ("40.000", not "12x" — as a string becomes
+	//     a number, ibVariant::GetNumber);
+	//   * a column of dates holds it, the text being a date as a date reads (ibDateTime::ToString): "01.01.2025 08:00:00"
+	//     that moment, "01.01.2025" that day;
+	//   * a column of references holds one of those typing it into a field of each of its kinds finds (FindValue: the
+	//     manager's ChoiceDataGetProcessing, the searched fields, the presentation — what the cell shows and Copy gives);
+	//     a kind over the quick choice's ceiling finds none, and its searched fields answer alone.
+	m_searchTextCondition = ibFilterNodeDescription();
+	m_searchTextCondition.m_kind = ibFilterNodeKind_Group;
+	m_searchTextCondition.m_groupKind = ibFilterGroupKind_Or;
+	// The ends trimmed: a space typed before the word is not what is looked for.
+	const ibString looked = ibString(text).Trim(true).Trim(false);
+	if (!looked.IsEmpty()) {
+		ibNumber number;
+		size_t length = 0;
+		const bool isNumber = number.FromString(looked, length) && length == looked.length();
+		ibDateTime date;
+		const bool dated = date.FromString(looked);
+		const bool isMoment = dated && date.ToString() == looked,
+			isDay = dated && !isMoment && date == date.GetDayStart() && date.Format(ibT("%d.%m.%Y")) == looked;
+
+		const ibMetaData* const metaData = GetMetaData();
+		const ibDataNode textValue = ibStoreValue(ibValue(looked));
+		std::vector<ibFilterNodeDescription>& any = m_searchTextCondition.m_children;
+		std::set<ibString> contained, compared;   // a field two columns show is looked in once
+		std::vector<ibValueModelTableBoxColumn*> columns;
+		CollectColumns(this, columns);
+		for (const ibValueModelTableBoxColumn* column : columns) {
+			if (!column->IsColumnShown())
+				continue;
+			for (const ibString& field : GetTextFields(column)) {
+				if (contained.insert(field).second)
+					ibFilterDescription::Append(any, field, ibComparisonKind_Contains, textValue);
+			}
+			const ibString field = column->GetSourceFieldName();
+			if (field.IsEmpty() || !compared.insert(field).second)
+				continue;
+			const ibTypeDescription& type = column->GetTypeValueDesc();
+			if (isNumber && type.ContainType(ibValueTypes::TYPE_NUMBER))
+				ibFilterDescription::Append(any, field, ibComparisonKind_Equal, ibStoreValue(ibValue(number)));
+			if (isMoment && type.ContainType(ibValueTypes::TYPE_DATE))
+				ibFilterDescription::Append(any, field, ibComparisonKind_Equal, ibStoreValue(ibValue(date)));
+			if (isDay && type.ContainType(ibValueTypes::TYPE_DATE)) {
+				ibFilterNodeDescription& day = ibFilterDescription::AppendGroup(any);
+				ibFilterDescription::Append(day.m_children, field, ibComparisonKind_GreaterEqual, ibStoreValue(ibValue(date)));
+				ibFilterDescription::Append(day.m_children, field, ibComparisonKind_Less, ibStoreValue(ibValue(date.AddDays(1))));
+			}
+			std::vector<ibValue> found;
+			for (const ibClassID clsid : type.GetClsidList()) {
+				if (metaData == nullptr || !::IsReference(clsid) || clsid_is_any(clsid))
+					continue;
+				std::vector<ibValue> ofKind;
+				if (metaData->CreateObject(clsid).FindValue(looked, ibChoiceCondition(), ofKind))
+					found.insert(found.end(), ofKind.begin(), ofKind.end());
+			}
+			if (!found.empty()) {
+				const ibValuePtr<ibValueArray> list(new ibValueArray(found));
+				ibFilterDescription::Append(any, field, ibComparisonKind_In, ibStoreValue(ibValue(list)));
+			}
+		}
+	}
+
+	// Another set of rows altogether: read from the top, not around the row the cursor stood on before — and the folder
+	// drilled into is left, the rows found being a flat list (GetViewMode).
+	m_fetchFromTop = true;
+	m_drillItem = ibDataViewItem();
+	m_tableModel->RefetchAll();
+	// …AND THE CLIENT READS THEM ITSELF: the frame answering what was typed carries the new Version and no rows. The
+	// narrowing is a read like any other, made on the client's reading thread with the table saying it is busy; read
+	// into the frame, it would hold the window still until it was done, the field taking no keys meanwhile.
+	m_rowsSentVersion = m_rowsVersion;
+
+	// …and a list form's bar, which carries this table's commands, drawn again as the search goes on or off — Cancel
+	// search available or not. It is drawn with the form, the whole of it: so at the turn, not at every letter typed.
+	if (IsSearched() == m_searched)
+		return;
+	m_searched = !m_searched;
+	ibFormVisualDocument* const document = GetVisualDocument();
+	ibFormVisualEditView* const host = document != nullptr ? document->GetFirstView() : nullptr;
+	if (host != nullptr && m_formOwner != nullptr && m_formOwner->GetCommandProvider() == this)
+		host->UpdateControl(m_formOwner);
+}
+
+bool ibValueModelTableBox::IsSearched() const
+{
+	return !GetSearchText().IsEmpty() || !m_searchConditions.empty();
+}
+
+ibFilterNodeDescription ibValueModelTableBox::GetSearchCondition() const
+{
+	ibFilterNodeDescription all;
+	all.m_kind = ibFilterNodeKind_Group;
+	all.m_groupKind = ibFilterGroupKind_And;
+	for (const auto& [column, condition] : m_searchConditions)
+		all.m_children.push_back(condition);
+	if (!m_searchTextCondition.m_children.empty())
+		all.m_children.push_back(m_searchTextCondition);
+	return all;
+}
+
+// ⭐ WHICH FIELDS A COLUMN IS LOOKED IN BY — the fields of what it shows that hold text, so the database is asked what
+// the table in memory is:
+//   * a column of text — itself;
+//   * a column of a reference — the fields its kind is searched by (a catalog's code and description: what typing into
+//     a field of that kind matches, GetSearchedAttributeObjectArray), those of them holding text; of several kinds (a
+//     register's recorder) — each such field once, by its name: the walk through it reaches every kind that has it
+//     (ibMetaIRBuilder::BuildPathExists);
+//   * a column of a characteristic (a register's analytics) — as the types its chart lists (GetTypeValueDesc);
+//   * a column whose type nobody declared (a value table's) — itself: the table in memory compares a value by its text.
+// A number, a date, a flag is not looked in — a database is not asked for text in them (a number or a date typed is
+// compared with them as one, Search).
+std::vector<ibString> ibValueModelTableBox::GetTextFields(const ibValueModelTableBoxColumn* column) const
+{
+	std::vector<ibString> fields;
+	const ibString field = column->GetSourceFieldName();
+	if (field.IsEmpty())
+		return fields;
+
+	const ibTypeDescription& type = column->GetTypeValueDesc();
+	if (type.GetClsidCount() == 0 || type.ContainType(ibValueTypes::TYPE_STRING))
+		fields.push_back(field);
+	const ibMetaData* const metaData = GetMetaData();
+	if (metaData == nullptr)
+		return fields;
+	for (const ibClassID clsid : type.GetClsidList()) {
+		if (!::IsReference(clsid) || clsid_is_any(clsid))
+			continue;
+		const ibValueMetaObjectRecordDataRef* const kind =
+			metaData->FindAnyObjectByFilter<ibValueMetaObjectRecordDataRef>(static_cast<ibMetaID>(clsid_metaID(clsid)));
+		if (kind == nullptr)
+			continue;
+		for (const ibValueMetaObjectAttributeBase* attribute : kind->GetSearchedAttributeObjectArray()) {
+			if (attribute == nullptr || !attribute->ContainType(ibValueTypes::TYPE_STRING))
+				continue;
+			const ibString walked = field + ibT(".") + attribute->GetName();
+			if (std::find(fields.begin(), fields.end(), walked) == fields.end())
+				fields.push_back(walked);
+		}
+	}
+	return fields;
+}
+
+// ⭐ FIND WALKS THE ROWS SHOWN — read as Fetch reads them (the level the cursor stands in, the search's scope), a page at
+// a time from the current row, each row's cells shown compared as they read (UpdateCell's text: a reference's
+// presentation, a number as its format writes it), as the dialog asks: the case as written or aside, a word of its own or
+// any part of a cell. The rows are not narrowed to the text: a read narrowed to it steps from an anchor it does not hold,
+// which a list read from a base does (a keyset) and a table in memory does not (it reads from the top). Cell by cell, as
+// the sheet's (ibGridEditor::FindText): the cells after the cursor's in its row first (before it, up), then the rows
+// below (above), each row's cells in their order (back, up). The cell found becomes the current one, the client reading
+// around its row (Update: CurrentRow, CurrentColumn).
+void ibValueModelTableBox::OnFind(const ibDataNode& args)
+{
+	const ibString text = args.GetValue<ibString>(ibProtocol::ibEvent::Text);
+	const bool down = args.GetValue<bool>(ibProtocol::ibEvent::Down),
+		matchCase = args.GetValue<bool>(ibProtocol::ibEvent::MatchCase),
+		wholeWord = args.GetValue<bool>(ibProtocol::ibEvent::WholeWord);
+	const ibString looked = matchCase ? text : ibString(text).Lower();
+	if (m_tableModel == nullptr || looked.IsEmpty() || appData->DesignerMode())
+		return;
+
+	AttachModelView();
+	m_fetching = true;
+	ibON_BLOCK_EXIT_SET(m_fetching, false);
+	const ibSearchScope searchScope(m_tableModel->GetModelComposer(), GetSearchCondition());
+
+	// The level read — the whole table in a flat List, else the level of the current row (the folder drilled into).
+	const ibDataViewItem current = m_tableCurrentLine != nullptr ? m_tableCurrentLine->GetLineItem() : ibDataViewItem();
+	const ibDataViewItem scope = GetViewMode() == ibDataViewList ? s_constIgnoreParent
+		: current.IsOk() ? current.GetParentItem() : m_drillItem;
+
+	// The cells shown, each through its column's format, found once.
+	std::vector<ibValueModelTableBoxColumn*> columns;
+	CollectColumns(this, columns);
+	std::erase_if(columns, [](const ibValueModelTableBoxColumn* column) { return !column->IsColumnShown(); });
+	std::vector<std::optional<ibFormatString>> formats;
+	for (const ibValueModelTableBoxColumn* column : columns) {
+		const ibFormatString* format = column->GetCellFormat();
+		formats.push_back(format != nullptr ? std::optional<ibFormatString>(*format) : std::nullopt);
+	}
+	// A cell's text holds it — anywhere, or as a word of its own: no letter, digit or _ either side.
+	const auto holdsText = [&](const ibString& written) {
+		const ibString cellText = matchCase ? written : ibString(written).Lower();
+		const auto inWord = [&](size_t at) { return at < cellText.length() && (ibIsAlnum(cellText[at]) || cellText[at] == ibT('_')); };
+		for (size_t at = cellText.find(looked); at != ibString::npos; at = cellText.find(looked, at + 1)) {
+			if (!wholeWord || ((at == 0 || !inWord(at - 1)) && !inWord(at + looked.length())))
+				return true;
+		}
+		return false;
+	};
+	const auto cellHolds = [&](const ibDataViewItem& item, size_t col) {
+		if (col != 0 && !m_tableModel->HasValue(item, static_cast<unsigned int>(columns[col]->GetModelColumn())))
+			return false;
+		ibDataNode cell;
+		columns[col]->UpdateCell(item, cell, formats[col].has_value() ? &*formats[col] : nullptr, true);
+		return holdsText(cell.GetValue<ibString>(ibProtocol::ibForm::ibTable::Text));
+	};
+	// The first cell of a row holding it — from the place `from` on, down; from it back, up: its place, columns.size()
+	// when none does.
+	const size_t none = columns.size();
+	const auto cellOf = [&](const ibDataViewItem& item, size_t from) {
+		if (down) {
+			for (size_t col = from; col < columns.size(); col++)
+				if (cellHolds(item, col))
+					return col;
+		}
+		else {
+			for (size_t col = from + 1; col-- > 0; )
+				if (cellHolds(item, col))
+					return col;
+		}
+		return none;
+	};
+
+	// From the cell the cursor stands on — the rest of its row first.
+	ibDataViewItem anchor = current, found;
+	size_t foundColumn = none;
+	if (current.IsOk()) {
+		size_t at = none;
+		for (size_t col = 0; col < columns.size(); col++) {
+			if (columns[col]->GetControlID() == m_currentColumn)
+				at = col;
+		}
+		if (at != none && (down ? at + 1 < columns.size() : at > 0)) {
+			foundColumn = cellOf(current, down ? at + 1 : at - 1);
+			if (foundColumn != none)
+				found = current;
+		}
+	}
+	// …then the rows after it — none: from the top, down; a page at a time, the rows of a page in their order (a page read
+	// back is in display order, the nearest last).
+	while (!found.IsOk()) {
+		ibDataViewItemArray items;
+		const unsigned int fetched = !anchor.IsOk() ? (down ? m_tableModel->GetFirstFetch(scope, ibDataViewItem(), s_maxFetchCount, items) : 0)
+			: down ? m_tableModel->GetNextFetch(scope, anchor, s_maxFetchCount, items)
+			: m_tableModel->GetPrevFetch(scope, anchor, s_maxFetchCount, items);
+		const size_t count = items.GetCount();
+		for (size_t idx = 0; idx < count && !found.IsOk(); idx++) {
+			const ibDataViewItem& item = items[down ? idx : count - 1 - idx];
+			if (!item.IsOk())
+				continue;
+			foundColumn = cellOf(item, down ? 0 : columns.size() - 1);
+			if (foundColumn != none)
+				found = item;
+		}
+		// …the last page read, or one that does not step on.
+		const ibDataViewItem next = count > 0 ? items[down ? count - 1 : 0] : ibDataViewItem();
+		if (fetched < static_cast<unsigned int>(s_maxFetchCount) || !next.IsOk() || next == anchor)
+			break;
+		anchor = next;
+	}
+
+	// None — said in a box over Find, as the thin client's text view says it, not a line in the messages (Max, 2026-11-15:
+	// "не надо засорять сообщения ими").
+	if (!found.IsOk()) {
+		ibValueSystemFunction::Alert(ibString::Format(_("\"%s\" not found!"), text));
+		return;
+	}
+	m_currentColumn = columns[foundColumn]->GetControlID();
+	ApplyCurrentLine(m_tableModel->GetRowAt(found));
+}
+
+//***********************************************************************************
 //*                              What the client did                                *
 //***********************************************************************************
 
@@ -1278,6 +1563,9 @@ bool ibValueModelTableBox::OnClientEvent(ibProtocol::ibEvent::ibKind event, cons
 	case ibProtocol::ibEvent::ibKind::Resize:
 		OnColumnResized(args.GetValue<std::int32_t>(ibProtocol::ibEvent::Column), args.GetValue<std::int32_t>(ibProtocol::ibEvent::Width));
 		return true;
+	case ibProtocol::ibEvent::ibKind::Find:
+		OnFind(args);
+		return true;
 	case ibProtocol::ibEvent::ibKind::Action: {
 		// One of the commands its context menu offered — the desktop's OnCommandMenu; one it did not offer, or greyed
 		// there, is not done.
@@ -1294,7 +1582,7 @@ bool ibValueModelTableBox::OnClientEvent(ibProtocol::ibEvent::ibKind event, cons
 		return true;
 	}
 	default:
-		return ibValueWindowComposite::OnClientEvent(event, args);
+		return ibValueWindowCompositeSearch::OnClientEvent(event, args);
 	}
 }
 
@@ -1305,7 +1593,7 @@ bool ibValueModelTableBox::IsSubscribed(ibProtocol::ibEvent::ibKind event) const
 	// which cells take an editor (the frame's editable cells), so held, it rides with the Change it comes before.
 	case ibProtocol::ibEvent::ibKind::Input:
 	case ibProtocol::ibEvent::ibKind::Row:   return HasHandler(m_eventSelection);
-	default:                     return ibValueWindowComposite::IsSubscribed(event);
+	default:                     return ibValueWindowCompositeSearch::IsSubscribed(event);
 	}
 }
 
@@ -1376,6 +1664,7 @@ bool ibValueModelTableBox::OnCurrentRowChanged(std::int32_t rowHandle)
 void ibValueModelTableBox::OnCurrentColumnChanged(const ibFormID& columnId)
 {
 	m_currentColumn = FindColumn(columnId) != nullptr ? columnId : 0;
+	m_clientColumn = m_currentColumn;
 }
 
 bool ibValueModelTableBox::OnColumnClick(const ibFormID& columnId)
@@ -1470,6 +1759,11 @@ void ibValueModelTableBox::OnViewModeChanged(ibDataViewViewMode viewMode)
 	ibPropertyGate::SetValue(this, m_propertyViewMode, ibVariant(ibNumber(static_cast<long>(viewMode))));
 	// A drill is the Hierarchical view's own; the client reads the top again in whichever it now is.
 	m_drillItem = ibDataViewItem();
+}
+
+ibDataViewViewMode ibValueModelTableBox::GetViewMode() const
+{
+	return IsSearched() ? ibDataViewList : m_propertyViewMode->GetValueAsEnum();
 }
 
 void ibValueModelTableBox::OnRowActivated(std::int32_t rowHandle)
@@ -1586,7 +1880,7 @@ bool ibValueModelTableBox::ReadData(const ibDataNode& node)
 	m_eventOnDeleteRow->SetNodeValue(node.GetProperty(m_eventOnDeleteRow->GetName()));
 
 	// Chain to the composite base (reads the "Layers" block) → ibValueWindow.
-	return ibValueWindowComposite::ReadData(node);
+	return ibValueWindowCompositeSearch::ReadData(node);
 }
 
 bool ibValueModelTableBox::WriteData(ibDataNode& node) const
@@ -1614,7 +1908,7 @@ bool ibValueModelTableBox::WriteData(ibDataNode& node) const
 	node.SetProperty(m_eventOnDeleteRow->GetName(), m_eventOnDeleteRow->GetNodeValue());
 
 	// Chain to the composite base (writes the "Layers" block) → ibValueWindow.
-	return ibValueWindowComposite::WriteData(node);
+	return ibValueWindowCompositeSearch::WriteData(node);
 }
 
 //***********************************************************************************

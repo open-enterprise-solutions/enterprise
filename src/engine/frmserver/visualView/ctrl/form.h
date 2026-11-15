@@ -583,6 +583,10 @@ public:
 	//actionData
 	virtual ibStandardCommandSet GetStandardCommands(const ibFormID& formType);
 	virtual void CallAsAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm);
+	// …and the search field of its bar — its command view's, as its commands are (a list form's table's).
+	virtual bool HasSearch() const override;
+	virtual const ibString& GetSearchText() const override;
+	virtual void SetSearchText(const ibString& text) override;
 
 	// The form's COMMAND provider, resolved LIVE on every query (never cached — a stored pointer would go stale
 	// the moment the designer re-points the MAIN attribute without re-running any view's bind). A list form:

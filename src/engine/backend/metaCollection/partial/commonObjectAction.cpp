@@ -155,7 +155,7 @@ void ibValueMetaObjectRecordDataMutableRef::GetCommandCollection(const ibFormID&
 	commands.emplace_back(eCopyValue,    ibT("Copy"),         _("Copy"),          g_picCopyCLSID);
 	commands.emplace_back(eEditValue,    ibT("Edit"),         _("Edit"),          g_picEditCLSID);
 	commands.emplace_back(eDeleteValue,  ibT("Delete"),       _("Delete"),        g_picDeleteCLSID);
-	commands.emplace_back(eMarkAsDeleteValue, ibT("MarkAsDelete"), _("Mark as delete"), g_picMarkAsDeleteCLSID, true);
+	commands.emplace_back(eMarkAsDeleteValue, ibT("MarkAsDelete"), _("Mark as delete"), g_picMarkAsDeleteCLSID);
 }
 
 // ⭐⭐ BORN MATCHING THE LIST IT WAS ADDED TO — see ibChoiceLinkResolver::Fill. ONE place, because a record is

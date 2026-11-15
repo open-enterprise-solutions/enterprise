@@ -69,4 +69,33 @@ public:
 	virtual bool WriteData(ibDataNode& node) const override;
 };
 
+//********************************************************************************************
+//*                  Value Window — composite with a search field                            *
+//********************************************************************************************
+
+// A COMPOSITE THAT CARRIES A SEARCH FIELD — at its command bar's end; what is typed into it comes back as event Search
+// {Text} and is held here (GetSearchText), and what the text does is the control's own (Search): a table narrows its
+// rows to the ones holding it. A control opts in by deriving from here instead of ibValueWindowComposite (tableBox).
+// One whose search would mean another thing — a spreadsheet's, finding a cell — is not one of these.
+class ibValueWindowCompositeSearch : public ibValueWindowComposite {
+public:
+
+	virtual bool HasSearch() const override { return true; }
+	// What the search field holds — what the person is looking for, as typed; empty: nothing. The field is a command
+	// bar's (ibValueCommandBar: ShowSearch, Update, Search) — this control's own, or the list form's whose bar carries
+	// its commands (ibValueForm passes it on).
+	virtual const ibString& GetSearchText() const override { return m_searchText; }
+	// …and the text it holds now, looked for (Search): typed into the bar's field, or taken off by the control's own
+	// command (Cancel search).
+	virtual void SetSearchText(const ibString& text) override { m_searchText = text; Search(m_searchText); }
+
+private:
+
+	// ⭐ THE DOOR — what this control does with the text it now holds: a table reads its rows anew, narrowed to the
+	// ones holding it.
+	virtual void Search(const ibString& text) = 0;
+
+	ibString m_searchText;
+};
+
 #endif

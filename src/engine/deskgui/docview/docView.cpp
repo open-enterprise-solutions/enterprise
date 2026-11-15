@@ -980,6 +980,9 @@ ibFrontendDocManager::ibFrontendDocManager(long WXUNUSED(flags), bool initialize
     if ( initialize )
         Initialize();
 
+    // Find looks down from where the cursor stands — wx's data says up when given no flags.
+    m_findData.SetFlags(wxFR_DOWN);
+
 #if wxUSE_PRINTING_ARCHITECTURE
     // OES default: A4 portrait — was set in the former ibMetaDocManager ctor.
     wxPrintData printData;

@@ -95,15 +95,6 @@ void WriteListSourceFields(ibDataNode& into, ibMetaID mainTable, const ibString&
 // ibComposerCompositionView implementation
 // ----------------------------------------------------------------------------
 
-ibComposerCompositionView::~ibComposerCompositionView()
-{
-	// The cell a value was being chosen for — a choice form may still hold it; what it chooses then is nobody's.
-	if (m_choosing != nullptr) {
-		m_choosing->Detach();
-		m_choosing->ControlDecrRef();
-	}
-}
-
 void ibComposerCompositionView::OnDraw(ibDataNode& frame)
 {
 	const ibValueMetaObjectTemplate* const metaComposer =
@@ -120,8 +111,8 @@ void ibComposerCompositionView::OnDraw(ibDataNode& frame)
 	WriteQueryFields(frame, composition.m_query, metaComposer->GetMetaData(), composition.m_parameters);
 
 	// …and the value chosen for a cell of the panel (Select), as a settings window's question carries it.
-	if (m_choosing != nullptr)
-		m_choosing->WriteChosen(state);
+	if (m_choosing.m_choice != nullptr)
+		m_choosing.m_choice->WriteChosen(state);
 }
 
 bool ibComposerCompositionView::Fetch(const ibDataNode& request, ibDataNode& response)
@@ -159,7 +150,7 @@ bool ibComposerCompositionView::OnClientEvent(ibProtocol::ibEvent::ibKind event,
 		// A CELL'S "..." — a parameter's value, a condition's right side: the desktop's panel chose it through the
 		// configuration (ChooseValue → the declared-value window), which is here; a settings window's Act Choose,
 		// chosen as there (2026-10-29: the "..." opened nothing).
-		ibChooseSettingsValue(args, metaComposer->GetMetaData(), m_choosing);
+		ibChooseSettingsValue(args, metaComposer->GetMetaData(), m_choosing.m_choice);
 		return true;
 	default:
 		return false;

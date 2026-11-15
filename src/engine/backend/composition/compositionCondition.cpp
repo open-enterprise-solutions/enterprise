@@ -50,7 +50,7 @@ bool ibCompositionCompare(const ibValue& cell, const ibString& op, const ibValue
 
 ibString ibComposerContainsPattern(const ibString& value)
 {
-	return ibT("%") + value + ibT("%");
+	return value.Find(ibT('%')) != ibNOT_FOUND ? value : ibT("%") + value + ibT("%");
 }
 
 // ⭐ THE SAME COMPARISON, ASKED WITH THE KIND IT IS. A stored condition holds an ibComparisonKind,

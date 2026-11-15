@@ -192,6 +192,15 @@ class Gridbox extends Control {
 	}
 
 	/**
+	 * Edit → Find over the sheet (window.js, findOnShow): the next cell holding the text becomes the current one
+	 * (CellSelection.find).
+	 * @param {import('../window/find.js').Asked} asked
+	 */
+	find(asked) {
+		return this.selection.find(asked);
+	}
+
+	/**
 	 * Ctrl+V, Edit → Paste: a text pasted from the current cell on — a line a row, a tab a column (ibGridEditor::Paste,
 	 * a text's). False when the sheet takes none: read-only, no current cell, no text.
 	 * @param {string} text

@@ -30,7 +30,7 @@ private:
 	void OnPaste(wxCommandEvent& WXUNUSED(event)) { m_textEditor->Paste(); }
 	void OnSelectAll(wxCommandEvent& WXUNUSED(event)) { m_textEditor->SelectAll(); }
 
-	void OnFind(wxFindDialogEvent& event);
+	void OnFind(wxFindDialogEvent& event) { m_textEditor->FindText(event.GetFindString(), event.GetFlags()); }
 
 protected:
 

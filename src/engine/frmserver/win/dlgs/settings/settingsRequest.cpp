@@ -22,7 +22,7 @@
 #include <map>
 #include <set>
 
-void ibWriteSettingsField(ibDataNode& fields, const ibString& name, const ibString& presentation, ibMetaID id,
+ibDataNode& ibWriteSettingsField(ibDataNode& fields, const ibString& name, const ibString& presentation, ibMetaID id,
 	const ibTypeDescription& type, bool available, const ibPictureDescription& picture, const ibMetaData* metaData)
 {
 	ibDataNode& field = fields.AddChild(0, 0);
@@ -37,6 +37,7 @@ void ibWriteSettingsField(ibDataNode& fields, const ibString& name, const ibStri
 	ibDataValue written;
 	ibTypeDescriptionMemory::WriteNode(written, type);
 	field.SetProperty(ibProtocol::ibRequest::ibListSettings::Type, written);
+	return field;
 }
 
 void ibWriteSettingsReferences(ibDataNode& references, const std::vector<ibTypeDescription>& types,
@@ -242,16 +243,7 @@ bool ibRequestSettings(const ibDataNode& question, ibSettingsDescription& edited
 	ibDataNode request = SettingsRequest(question, shown, error);
 
 	// The cell a value is being chosen for — held while the window is up, let go with it.
-	ibListSettingsChoice* choosing = nullptr;
-	struct ibChoosingRelease {
-		ibListSettingsChoice*& choosing;
-		~ibChoosingRelease() {
-			if (choosing != nullptr) {
-				choosing->Detach();
-				choosing->ControlDecrRef();
-			}
-		}
-	} release{ choosing };
+	ibListSettingsChoosing choosing;
 
 	for (;;) {
 		ibDataNode response;
@@ -274,9 +266,9 @@ bool ibRequestSettings(const ibDataNode& question, ibSettingsDescription& edited
 					targets, metaData);
 			}
 			else if (act == ibProtocol::ibRequest::ibListSettings::ibAct::Choose) {
-				ibChooseSettingsValue(response, metaData, choosing);
-				if (choosing != nullptr)
-					choosing->WriteChosen(request);
+				ibChooseSettingsValue(response, metaData, choosing.m_choice);
+				if (choosing.m_choice != nullptr)
+					choosing.m_choice->WriteChosen(request);
 			}
 			continue;
 		}

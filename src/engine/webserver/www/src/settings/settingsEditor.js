@@ -166,7 +166,8 @@ export class SettingsEditor {
 
 	/**
 	 * A value in its cell, typed by its type: a flag, a number, a date, a text; a reference — how it reads, «…» to choose
-	 * one (the server's choice), «×» for the empty one of its kind.
+	 * one (the server's choice), «×» for the empty one of its kind; any other type — a characteristic's, whose values are
+	 * of the types it lists — as a reference, chosen by the type of the value held (the thin client's), else its own.
 	 * @param {string} type
 	 * @param {any} value the packed value
 	 * @param {string} text how a reference reads
@@ -206,6 +207,8 @@ export class SettingsEditor {
 			});
 			return input;
 		}
+		if (type !== Type.String)
+			return this.referenceCell(value?.t ?? type, value, text, write, choose);
 		input.type = 'text';
 		input.value = value?.v !== undefined ? String(value.v) : '';
 		input.addEventListener('change', () => put(input.value));

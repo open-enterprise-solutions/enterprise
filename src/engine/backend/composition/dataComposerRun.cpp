@@ -1021,7 +1021,7 @@ ibDataQueryResult* ibDataDBComposer::SharedReadFor(const Output& output,
 		// it admits. The branches have no filters of their own to add — an output that states one
 		// reads alone (BranchableOutputs), which is why there is a single call here and not one
 		// per branch.
-		AndWhere(*ast, BuildFilterAst(GetCurrentFilterDesc()));
+		AndWhere(*ast, BuildFilterAst(GetScopedFilterDesc()));
 
 		EnsureTempTables();
 		ibTempSourceScope     tempScope(m_prepared.m_sources);

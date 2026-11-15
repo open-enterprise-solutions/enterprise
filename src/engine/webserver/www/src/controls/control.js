@@ -25,7 +25,7 @@
 // The events a control sends (ibEvent::ibKind).
 export const EventKind = Object.freeze({
 	Focus: 1, Command: 2, Press: 3, Input: 4, Change: 5, Select: 6, Open: 7, Clear: 8, Toggle: 9, Page: 10, Move: 11,
-	Row: 12, Sort: 13, Cell: 14, Resize: 15, Action: 16,
+	Row: 12, Sort: 13, Cell: 14, Resize: 15, Action: 16, Search: 17, Find: 18,
 });
 
 /** @type {Map<string, string>} a node type → its element's tag */

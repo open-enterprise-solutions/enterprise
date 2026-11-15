@@ -10,13 +10,11 @@
 // Not the desktop's names — see docViewModuleEdit.h.
 
 #include "frmserver/docView/docView.h"
-
-class ibListSettingsChoice;
+#include "frmserver/win/dlgs/settings/settingsRequest.h"   // ibListSettingsChoosing — the cell a value is chosen for
 
 class FRMSERVER_API ibComposerCompositionView : public ibMetaView {
 public:
 	ibComposerCompositionView() : ibMetaView() {}
-	virtual ~ibComposerCompositionView();
 
 	// View.State {ReadOnly, Chosen — a value chosen for a cell}, View.Composition — the composer's description,
 	// View.Fields and View.References — what its query offers, as the settings windows have them; View.Error — why the
@@ -36,7 +34,7 @@ public:
 
 private:
 
-	ibListSettingsChoice* m_choosing = nullptr;   // the cell a value is being chosen for (Select), counted
+	ibListSettingsChoosing m_choosing;   // the cell a value is being chosen for (Select), held while the tab is up
 };
 
 // WHAT A COMPOSITION'S PANEL ASKS OF THE CONFIGURATION, on whichever designer tab it is — a composer's own, or a form's

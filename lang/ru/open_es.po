@@ -16751,14 +16751,6 @@ msgstr "Открытие"
 msgid "Choice processing"
 msgstr "Обработка выбора"
 
-#: src/engine/frmserver/visualView/ctrl/tableBoxAction.cpp:106
-msgid "Filter by column"
-msgstr "Фильтр по столбцу"
-
-#: src/engine/frmserver/visualView/ctrl/tableBoxAction.cpp:107
-msgid "Filter clear"
-msgstr "Очистить фильтр"
-
 #: src/engine/frmserver/visualView/ctrl/tableBoxAction.cpp:121
 msgid "Output list"
 msgstr "Вывести список"
@@ -17097,6 +17089,14 @@ msgstr "Автозаполнение"
 #: src/engine/frmserver/visualView/layers/commandBar.h:304
 msgid "Whether the bar fills itself with its owner's standard commands (the form's or the table's: Add, Copy, Delete, Write and so on) and the commands of the owner's object. On by default. Off: the bar holds only the items added to it by hand."
 msgstr "Заполняется ли панель сама стандартными командами своего владельца (формы или таблицы: Добавить, Копировать, Удалить, Записать и т. д.) и командами объекта владельца. По умолчанию включено. Выключено: на панели только элементы, добавленные вручную."
+
+#: src/engine/frmserver/visualView/layers/commandBar.h:315
+msgid "Show search"
+msgstr "Показывать поиск"
+
+#: src/engine/frmserver/visualView/layers/commandBar.h:316
+msgid "Whether the bar ends with a search field when what it serves looks for text: a table, or the table whose commands a list form's bar carries. Typing into it narrows the rows to those holding the text. On by default."
+msgstr "Есть ли в конце панели поле поиска, когда то, что она обслуживает, ищет текст: таблица или таблица, чьи команды несёт панель формы списка. Ввод в поле отбирает строки, содержащие текст. По умолчанию включено."
 
 #: src/engine/launcher/connectionDB.cpp:68
 msgid "Name IB:"
@@ -17855,3 +17855,43 @@ msgstr "Среднее: %s"
 #, c-format
 msgid "Sum: %s"
 msgstr "Сумма: %s"
+
+#: src/engine/frmserver/visualView/ctrl/tableBoxAction.cpp:146
+msgid "Configure list"
+msgstr "Настроить список"
+
+#: src/engine/frmserver/visualView/ctrl/tableBoxAction.cpp:120 src/engine/frmclient/win/dlgs/search.cpp:16 src/engine/webserver/www/src/window/questions.js:306
+msgid "Advanced search"
+msgstr "Расширенный поиск"
+
+#: src/engine/frmserver/visualView/ctrl/tableBoxAction.cpp:122
+msgid "Cancel search"
+msgstr "Отменить поиск"
+
+#: src/engine/frmclient/win/dlgs/search.cpp:41 src/engine/webserver/www/src/window/questions.js:299
+msgid "Where to look:"
+msgstr "Где искать:"
+
+#: src/engine/frmclient/win/dlgs/search.cpp:43 src/engine/webserver/www/src/window/questions.js:299
+msgid "What to look for:"
+msgstr "Что искать:"
+
+#: src/engine/frmclient/win/dlgs/search.cpp:48 src/engine/webserver/www/src/window/questions.js:285
+msgid "How to look"
+msgstr "Как искать"
+
+#: src/engine/frmclient/win/dlgs/search.cpp:47 src/engine/webserver/www/src/window/questions.js:287
+msgid "From the start of the line"
+msgstr "По началу строки"
+
+#: src/engine/frmclient/win/dlgs/search.cpp:47 src/engine/webserver/www/src/window/questions.js:287
+msgid "Anywhere in the line"
+msgstr "По части строки"
+
+#: src/engine/frmclient/win/dlgs/search.cpp:47 src/engine/webserver/www/src/window/questions.js:288
+msgid "Exact match"
+msgstr "По точному совпадению"
+
+#: src/engine/frmclient/win/dlgs/search.cpp:83 src/engine/webserver/www/src/window/searchWindow.js:52
+msgid "By value"
+msgstr "По значению"
