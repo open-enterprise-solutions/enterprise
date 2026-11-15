@@ -13,6 +13,7 @@
 #include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 
 #include <filesystem>
+#include <fstream>
 #include <memory>
 
 #include <wx/init.h>
@@ -132,17 +133,26 @@ ibMemoryBuffer ExternalFile(std::uint64_t sign, std::uint64_t treeId)
 	return ibMemoryBuffer(file.pointer(), file.size());
 }
 
-// What a reader of the kind says reading the bytes; empty when it said nothing.
+// What a reader of the kind says opening the bytes as a file of that name (its door, LoadFromFile); empty when it said
+// nothing.
 template<typename T>
-std::string RefusalOf(const ibMemoryBuffer& bytes, const wxChar* path)
+std::string RefusalOf(const ibMemoryBuffer& bytes, const char* name)
 {
+	const std::filesystem::path file = std::filesystem::temp_directory_path() / name;
+	{
+		std::ofstream out(file, std::ios::binary | std::ios::trunc);
+		out.write(static_cast<const char*>(bytes.GetData()), static_cast<std::streamsize>(bytes.GetDataLen()));
+	}
+	std::string refusal;
 	try {
-		ibMetaData::MakeShared<T>()->LoadFromBuffer(bytes, ibString(path));
+		ibMetaData::MakeShared<T>()->LoadFromFile(ibString(file.wstring()));
 	}
 	catch (const ibBackendException& err) {
-		return err.GetErrorDescription().ToStdString();
+		refusal = err.GetErrorDescription().ToStdString();
 	}
-	return std::string();
+	std::error_code ec;
+	std::filesystem::remove(file, ec);
+	return refusal;
 }
 
 } // namespace
@@ -284,15 +294,15 @@ TEST_F(MetadataMergeIds, AnExternalFileThisBuildCannotRead_IsRefusedInWords)
 {
 	const std::uint64_t unknownTree = 0x1234;   // no kind byte: no tree this build reads is kept under it
 
-	const std::string processor = RefusalOf<ibMetaDataDataProcessor>(ExternalFile(sign_dataProcessor, unknownTree), wxT("/files/Old.epf"));
+	const std::string processor = RefusalOf<ibMetaDataDataProcessor>(ExternalFile(sign_dataProcessor, unknownTree), "Old.epf");
 	EXPECT_NE(std::string::npos, processor.find("cannot read")) << processor;
 	EXPECT_NE(std::string::npos, processor.find("Old.epf")) << processor;
 
-	const std::string report = RefusalOf<ibMetaDataReport>(ExternalFile(sign_dataReport, unknownTree), wxT("/files/Old.erp"));
+	const std::string report = RefusalOf<ibMetaDataReport>(ExternalFile(sign_dataReport, unknownTree), "Old.erp");
 	EXPECT_NE(std::string::npos, report.find("cannot read")) << report;
 	EXPECT_NE(std::string::npos, report.find("Old.erp")) << report;
 
 	// A data processor's file opened as a report is not a report's at all — its header says so.
-	const std::string notReport = RefusalOf<ibMetaDataReport>(ExternalFile(sign_dataProcessor, g_metaExternalDataProcessorCLSID), wxT("/files/Processor.erp"));
+	const std::string notReport = RefusalOf<ibMetaDataReport>(ExternalFile(sign_dataProcessor, g_metaExternalDataProcessorCLSID), "Processor.erp");
 	EXPECT_NE(std::string::npos, notReport.find("cannot read")) << notReport;
 }
