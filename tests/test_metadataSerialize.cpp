@@ -128,6 +128,21 @@ TEST(MetadataSerialize, EveryBusinessObjectType_RoundTrip_BytesEqual) {
 	}
 }
 
+// ⭐ A SCHEDULED JOB SAVES (2026-11-15). Its default schedule and its row's own requisite were both written as
+// `Schedule` into one node, and since a node holds one field of a name the save refused — every apply after it too.
+// The default is stored as `DefaultSchedule` now; saved, read and saved again it is the same bytes.
+TEST(MetadataSerialize, ScheduledJob_RoundTrip_BytesEqual) {
+	ibMetaDataConfigurationFile cfg;
+	ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+	ASSERT_NE(root, nullptr);
+
+	ibValueMetaObject* job = cfg.CreateMetaObject(metadata_to_clsid(wxT("MD_SJOB")), root, /*runObject*/ false);
+	ASSERT_NE(job, nullptr);
+	cfg.RenameMetaObject(job, wxT("Cleanup"));
+
+	EXPECT_TRUE(RoundTripsByteEqual(cfg));
+}
+
 // One level deeper: a Catalog that OWNS an attribute. Exercises the child-walk
 // (SaveSubtree/LoadSubtree) plus the attribute's own field list (type descriptor
 // + qualifiers), still DB-free.

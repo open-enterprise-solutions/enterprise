@@ -486,8 +486,8 @@ go when the session does.
 
 ## Menu and commands
 
-The menu is a tree. An item is a separator; a command (`Command`, `Title`, `Shortcut`, `StockPicture`, `Enabled`) —
-done with `command`; a schema (`Schema`, `Title`, `Enabled`) — asked for with `schema`; or a submenu.
+The menu is a tree. An item is a separator; a command (`Command`, `Title`, `Shortcut`, `Picture`, `Enabled`) —
+done with `command`; a schema (`Schema`, `Title`, `Picture`, `Enabled`) — asked for with `schema`; or a submenu.
 
 **The routine is the client's, the document is the server's.** File, Edit and the toolbars are the client's own — the
 desktop's doc/view on the thin client: it enables them by a tab's `Commands` and asks nothing for that, keeps the
@@ -506,8 +506,22 @@ and Select all are done by the field under the client's focus. Closing the clien
 | 7 Cut, 8 Copy, 9 Paste, 10 Delete, 11 Select all | Ctrl+X, C, V, —, A | an Edit request |
 | 12 Save as | — | the active document saved as a file of `Name`, written as the name says — the tab's `File`, taken down with `download` |
 
-`StockPicture` names one of the client's own pictures, drawn its platform's way: 1 New, 2 Open, 3 Save, 4 Save as,
-5 Close, 6 Quit, 7 Undo, 8 Redo, 9 Cut, 10 Copy, 11 Paste, 12 Delete, 13 Find, 14 Print.
+An item's `Picture` is an engine picture's id, asked for with `picture` like any other. A command's is the stock
+picture the desktop draws for it — Undo, Redo, Save, Save as, Open, Close, Quit, Cut, Copy, Paste, Delete — one copy,
+in the engine, for every client; Close All and Select all have none.
+
+The stock pictures' ids are fixed (`picture_to_clsid` of their keys): a client that draws its own File, Edit and toolbar
+asks for them by these.
+
+| Picture | Id | Picture | Id |
+|---|---|---|---|
+| New | 645455583498007629 | Undo | 647948470173557467 |
+| Open | 579522350370119469 | Redo | 621101660022122845 |
+| Close (CloseForm) | 578857960503685103 | Cut | 618972745364732263 |
+| Save | 639324940303605204 | Copy (ClipboardCopy) | 644734463845928663 |
+| Save as | 607107136740286132 | Paste | 620234044208301452 |
+| Print | 645234176492903564 | Delete | 600229403872771988 |
+| Quit | 633285250358207106 | Find | 623288159307697294 |
 
 **A key from the server is a default.** The keys a person presses are theirs, kept by the client in their own
 directory and put over the defaults; the server keeps none. A key is written `Ctrl`/`Alt`/`Shift` + key; the client

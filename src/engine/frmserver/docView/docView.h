@@ -575,7 +575,7 @@ protected:
 
     void RegisterSchema(ibProtocol::ibSchema::ibKind kind, std::unique_ptr<ibClientSchema> schema);
     void RegisterCommand(ibDocCommand command, const ibString& title, const ibString& shortcut,
-        ibClientStockPicture picture);
+        ibPictureID picture);
 
     std::map<ibProtocol::ibSchema::ibKind, std::unique_ptr<ibClientSchema>> m_schemas;
     std::map<ibDocCommand, ibDocCommandInfo>                       m_commands;

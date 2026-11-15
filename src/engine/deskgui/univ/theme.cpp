@@ -31,6 +31,7 @@
 #include <wx/artprov.h>
 #include <wx/module.h>
 
+#include "deskgui/artProvider.h"   // ibStockArtProvider - wx's stock pictures, the core's
 #include "deskgui/univ/renderer.h"
 #include "deskgui/univ/inputHandler.h"
 #include "deskgui/univ/theme.h"
@@ -153,6 +154,9 @@ class ibThemeModule : public wxModule
 public:
     virtual bool OnInit() override
     {
+        // wx's stock pictures as the core draws them, under whatever theme is set over them - pushed once, deleted
+        // with the others as wx exits (wxArtProvider::CleanUpProviders).
+        wxArtProvider::Push(new ibStockArtProvider);
         return ibThemeEngine::CreateDefault();
     }
     virtual void OnExit() override {}

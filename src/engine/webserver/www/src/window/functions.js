@@ -3,6 +3,8 @@
 // {Item, Type}}, Type 100 — the object's default. A configuration has hundreds of them: the search over the tree
 // narrows it as it is typed.
 
+import { _ } from '../localization.js';
+
 /** @typedef {import('../protocol/session.js').Session} Session */
 /** @typedef {import('../protocol/pictures.js').Pictures} Pictures */
 
@@ -19,7 +21,7 @@ export async function showFunctions(session, pictures, refused) {
 	const answer = await session.call('schema', { Schema: schema });
 	await pictures.fetchFor(answer).catch(() => {});
 	const dialog = /** @type {any} */ (document.createElement('wa-dialog'));
-	dialog.label = 'All functions';
+	dialog.label = _('All functions');
 	dialog.className = 'functions';
 	const tree = document.createElement('wa-tree');
 	for (const group of answer.Groups?.NodeChildren ?? []) {
@@ -33,12 +35,12 @@ export async function showFunctions(session, pictures, refused) {
 	}
 	const search = /** @type {any} */ (document.createElement('wa-input'));
 	search.setAttribute('type', 'search');
-	search.setAttribute('placeholder', 'Search');
-	search.setAttribute('aria-label', 'Search');
+	search.setAttribute('placeholder', _('Search'));
+	search.setAttribute('aria-label', _('Search'));
 	search.setAttribute('autofocus', '');
 	const nothing = document.createElement('p');
 	nothing.className = 'nothing-found';
-	nothing.textContent = 'Nothing found';
+	nothing.textContent = _('Not found');
 	nothing.hidden = true;
 	search.addEventListener('input', () => {
 		nothing.hidden = narrow(tree, search.value ?? '') > 0;

@@ -4387,6 +4387,15 @@ static bool TotalsShapeFoldable(const ibDataQuerySpec& spec, bool rollup)
 			if (level.m_branch != nullptr)
 				RollupDecline(ibT("the totals fork (SPLIT) - ROLLUP states one ladder, and branches need GROUPING SETS"));
 
+		// 🛑 …AND A LADDER HAS NO TABLE'S BOTTOM LINE. A level that reads ACROSS the page is totalled under
+		// the ROOT as well — what each column adds up to over every row (the RAM folds' FoldAcross) — and no
+		// prefix of a ladder groups by a column's key alone. Folded here, a table came back with its bottom
+		// line empty: `0 key total(s)` in the journal, the word «Total» over nothing (2026-11-15). The RAM
+		// fold answers; the sets are again `GROUPING SETS` — the prefixes plus the column keys alone.
+		for (const ibTotalLevel& level : levels)
+			if (level.m_axis == ibTotalsAxis::Columns)
+				RollupDecline(ibT("a level reads across the page - its column totals stand under the root, which no ladder groups by"));
+
 		// ⚠ A DERIVED SOURCE AND A DOT-WALK CANNOT BOTH BE HONOURED. A source that is not a table puts
 		// its own relation in the FROM (GetDerivedRelation), and the reference JOIN chain a dot-walked
 		// key rides is built over the main TABLE — there is none to hang it on. Both are fine alone;

@@ -25,6 +25,7 @@
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/metadataDataProcessor.h"
+#include "backend/metadataReport.h"
 #include "backend/propertyManager/property/propertyCommandSource.h"
 #include "backend/propertyManager/property/propertySource.h"
 #include "backend/session/session.h"
@@ -114,6 +115,34 @@ bool NamesMetaID(const ibTypeDescription& type, ibMetaID id)
 		if (IsMetaValue(clsid) && (ibMetaID)clsid_metaID(clsid) == id)
 			return true;
 	return false;
+}
+
+// An external file as SaveCommonTree lays it out: the header (sign, version, guid), then the tree under an id.
+ibMemoryBuffer ExternalFile(std::uint64_t sign, std::uint64_t treeId)
+{
+	ibWriterMemory header;
+	header.w_u64(sign);
+	header.w_u32(1);
+	header.w_stringZ(ibString());
+	ibWriterMemory tree;
+	tree.w_u32(0);
+	ibWriterMemory file;
+	file.w_chunk(ibMetaData::eHeaderBlock, header.pointer(), header.size());
+	file.w_chunk(treeId, tree.pointer(), tree.size());
+	return ibMemoryBuffer(file.pointer(), file.size());
+}
+
+// What a reader of the kind says reading the bytes; empty when it said nothing.
+template<typename T>
+std::string RefusalOf(const ibMemoryBuffer& bytes, const wxChar* path)
+{
+	try {
+		ibMetaData::MakeShared<T>()->LoadFromBuffer(bytes, ibString(path));
+	}
+	catch (const ibBackendException& err) {
+		return err.GetErrorDescription().ToStdString();
+	}
+	return std::string();
 }
 
 } // namespace
@@ -246,4 +275,24 @@ TEST_F(MetadataMergeIds, ADataProcessorReadIntoTheConfiguration_ItsFormHoldsTheN
 	ASSERT_NE(main, nullptr);
 	EXPECT_TRUE(NamesMetaID(main->GetTypeDesc(), copy->GetMetaID()));
 	EXPECT_FALSE(NamesMetaID(main->GetTypeDesc(), (ibMetaID)dpId));
+}
+
+// A file this build cannot read is refused in words that name it. A quiet false was a report opened in the application
+// with no tab and nothing said, and the designer's File → Open the same (2026-11-15): one saved before the kind-typed ids
+// keeps its tree under an id this build does not look for.
+TEST_F(MetadataMergeIds, AnExternalFileThisBuildCannotRead_IsRefusedInWords)
+{
+	const std::uint64_t unknownTree = 0x1234;   // no kind byte: no tree this build reads is kept under it
+
+	const std::string processor = RefusalOf<ibMetaDataDataProcessor>(ExternalFile(sign_dataProcessor, unknownTree), wxT("/files/Old.epf"));
+	EXPECT_NE(std::string::npos, processor.find("cannot read")) << processor;
+	EXPECT_NE(std::string::npos, processor.find("Old.epf")) << processor;
+
+	const std::string report = RefusalOf<ibMetaDataReport>(ExternalFile(sign_dataReport, unknownTree), wxT("/files/Old.erp"));
+	EXPECT_NE(std::string::npos, report.find("cannot read")) << report;
+	EXPECT_NE(std::string::npos, report.find("Old.erp")) << report;
+
+	// A data processor's file opened as a report is not a report's at all — its header says so.
+	const std::string notReport = RefusalOf<ibMetaDataReport>(ExternalFile(sign_dataProcessor, g_metaExternalDataProcessorCLSID), wxT("/files/Processor.erp"));
+	EXPECT_NE(std::string::npos, notReport.find("cannot read")) << notReport;
 }

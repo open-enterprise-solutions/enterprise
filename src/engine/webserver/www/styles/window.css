@@ -17,9 +17,10 @@ html, body {
 .client-window {
 	display: grid;
 	grid-template-columns: auto minmax(0, 1fr);
-	grid-template-rows: auto auto 1fr auto auto;
+	grid-template-rows: auto auto auto 1fr auto auto;
 	grid-template-areas:
 		"header   header"
+		"toolbar  toolbar"
 		"sections tabs"
 		"sections views"
 		"sections messages"
@@ -29,6 +30,7 @@ html, body {
 }
 
 .client-window > header { grid-area: header; }
+.client-window > .toolbar { grid-area: toolbar; }
 .client-window > .sections { grid-area: sections; }
 .client-window > .tabs { grid-area: tabs; }
 .client-window > .views { grid-area: views; }
@@ -224,8 +226,8 @@ html, body {
 @media (max-width: 40rem) {
 	.client-window {
 		grid-template-columns: minmax(0, 1fr);
-		grid-template-rows: auto auto auto 1fr auto auto;
-		grid-template-areas: "header" "sections" "tabs" "views" "messages" "status";
+		grid-template-rows: auto auto auto auto 1fr auto auto;
+		grid-template-areas: "header" "toolbar" "sections" "tabs" "views" "messages" "status";
 	}
 
 	.sections {
@@ -323,6 +325,136 @@ html, body {
 .view-placeholder {
 	padding: 2rem;
 	color: var(--oes-muted);
+}
+
+/* The registration journal (src/docView/auditLog.js), as the thin client's: the filter strip, the tools — a command
+   bar with the live refresh on it, at its right —, and the rows as the theme's table (a tablebox's: the powder header,
+   every second row a step off white, the cursor in the highlight). */
+.audit-log {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	box-sizing: border-box;
+	padding: 3px;
+	color: var(--oes-form-text);
+}
+
+.audit-log-filter {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+}
+
+/* A caption beside its field — Web Awesome's own put a label with a field in it on a line of its own, its caption
+   bold, the field under it. The journal's filter and a schedule's window draw their fields as the thin client does. */
+:is(.audit-log-filter, .job-schedule, .find-dialog) label {
+	display: flex;
+	align-items: center;
+	gap: 3px;
+	width: auto;
+	margin: 3px;
+	color: inherit;
+	font-weight: inherit;
+	white-space: nowrap;
+}
+
+/* The search takes what is left of the line. */
+.audit-log-filter label:last-child {
+	flex: 1 1 10rem;
+}
+
+.audit-log-filter label:last-child input {
+	flex: 1 1 auto;
+	min-width: 6rem;
+}
+
+/* As wide as each holds — Web Awesome's own make a page's inputs as wide as their line. */
+:is(.audit-log-filter, .job-schedule, .find-dialog) :is(input:not([type="checkbox"], [type="radio"]), select) {
+	box-sizing: border-box;
+	width: auto;
+	height: 23px;
+	margin: 0;
+	padding: 0 3px;
+	border: 1px solid var(--oes-border);
+	border-radius: 0;
+	background: var(--oes-table-bg);
+	color: var(--oes-table-text);
+	font: inherit;
+}
+
+.audit-log-tools {
+	display: flex;
+	align-items: center;
+	background-color: var(--oes-window-bg);
+	background-image: linear-gradient(to bottom, var(--oes-bar-shine-top), var(--oes-bar-shine-bottom));
+	border-bottom: 1px solid var(--oes-border);
+}
+
+.audit-log-tools .command-bar {
+	flex: 1 1 auto;
+	min-width: 0;
+	background: none;
+	border-bottom: none;
+}
+
+.audit-log-tools label {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 0 0.5rem;
+	white-space: nowrap;
+}
+
+.audit-log-rows {
+	flex: 1 1 auto;
+	min-height: 0;
+	margin-top: 3px;
+	overflow: auto;
+	border: 1px solid var(--oes-border);
+	background: var(--oes-table-bg);
+	outline: none;
+}
+
+.audit-log-table {
+	table-layout: fixed;
+	border-collapse: collapse;
+	color: var(--oes-table-text);
+}
+
+.audit-log-table th {
+	position: sticky;
+	top: 0;
+	height: 22px;
+	padding: 0 4px;
+	border-right: 1px solid var(--oes-table-border);
+	border-bottom: 1px solid var(--oes-border);
+	background: var(--oes-table-header-bg);
+	color: var(--oes-table-header-text);
+	font-weight: 400;
+	text-align: start;
+	white-space: nowrap;
+}
+
+.audit-log-table td {
+	height: 22px;
+	padding: 0 4px;
+	overflow: hidden;
+	border-bottom: 1px solid var(--oes-table-border);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.audit-log-table tbody tr:nth-child(even) {
+	background: var(--oes-table-row-alt-bg);
+}
+
+.audit-log-table tbody tr.current {
+	background: var(--oes-table-row-current-bg);
+	color: var(--oes-table-current-text);
+}
+
+.audit-log-rows:not(:focus-within) .audit-log-table tbody tr.current {
+	background: var(--oes-table-current-idle-bg);
 }
 
 /* The start page (src/window/homePage.js): its columns side by side, the cells of each one under the other, each with its
@@ -591,6 +723,25 @@ wa-dialog.answered-only::part(close-button) {
 	display: none;
 }
 
+/* A dialog's buttons as the thin client's theme draws them (docs/private/ui-palette.md, «the buttons went white»): the
+   default one in the terracotta, its caption white; the others white, framed in the border, the powder under the
+   mouse. Find's too: a window of its own, not a wa-dialog. */
+:is(wa-dialog, .find-dialog) wa-button::part(base) {
+	background: var(--oes-panel-bg);
+	color: var(--oes-text);
+	border: 1px solid var(--oes-border);
+}
+
+:is(wa-dialog, .find-dialog) wa-button::part(base):hover {
+	background: var(--oes-button-hover-bg);
+}
+
+:is(wa-dialog, .find-dialog) wa-button[variant="brand"]::part(base) {
+	background: var(--oes-default-button-bg);
+	color: var(--oes-default-button-text);
+	border-color: var(--oes-default-button-bg);
+}
+
 /* One of a list or several (the thin client's ibSingleChoiceDialog, ibMultiChoiceDialog): an item a line, its mark before
    its caption; a long list scrolls inside the dialog. */
 .choice-list {
@@ -612,6 +763,166 @@ wa-dialog.answered-only::part(close-button) {
 
 .choice-list label:hover {
 	background: var(--oes-table-row-hover-bg);
+}
+
+/* A list whose line pressed is the answer (Questions.generation): its picture and caption. */
+.choice-list button {
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	gap: 0.5rem;
+	padding: 0.25rem 0.5rem;
+	border: none;
+	border-radius: var(--wa-border-radius-s, 3px);
+	background: none;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.choice-list button:hover,
+.choice-list button:focus-visible {
+	background: var(--oes-table-row-hover-bg);
+	outline: none;
+}
+
+.choice-list img {
+	width: 16px;
+	height: 16px;
+}
+
+/* A schedule edited (Questions.schedule, the thin client's ibDialogJobSchedule): its tabs at the window's size, their
+   lines of captions and fields, a group framed as a form's static box (oes-staticboxsizer), the checked lists boxed and
+   scrolled (ibCheckListBox); the sentence under the tabs. */
+.job-schedule-dialog {
+	--width: 32rem;
+}
+
+.job-schedule {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
+.job-schedule-page {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	min-height: 18rem;
+}
+
+.job-schedule-line {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.375rem;
+}
+
+.job-schedule input[type="number"] {
+	width: 6rem;
+}
+
+:is(.job-schedule, .find-dialog) input:is([type="checkbox"], [type="radio"]) {
+	margin: 0;
+	accent-color: var(--oes-accent);
+}
+
+:is(.job-schedule, .find-dialog) fieldset {
+	margin: 0;
+	padding: 0.25rem 0.5rem 0.5rem;
+	border: 1px solid var(--oes-border);
+	border-radius: 6px;
+}
+
+:is(.job-schedule, .find-dialog) legend {
+	padding: 0 0.25rem;
+	font-weight: 600;
+}
+
+.job-schedule-list {
+	display: flex;
+	flex-direction: column;
+	height: 9.5rem;
+	overflow: auto;
+	border: 1px solid var(--oes-border);
+	background: var(--oes-table-bg);
+	color: var(--oes-table-text);
+}
+
+.job-schedule-list label {
+	margin: 0;
+	padding: 1px 3px;
+}
+
+.job-schedule-columns {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 0.375rem;
+}
+
+.job-schedule-columns .job-schedule-list {
+	height: 14rem;
+}
+
+.job-schedule-sentence {
+	min-height: 1.25em;
+}
+
+/* Find (window/find.js) — not modal, as the thin client's: a window of its own over the top right of the tabs, its
+   look a dialog's, its fields the schedule's. */
+.find-dialog {
+	position: fixed;
+	inset: 4.5rem 1.5rem auto auto;
+	margin: 0;
+	padding: 0;
+	min-width: 26rem;
+	border: 1px solid var(--oes-border);
+	border-radius: 6px;
+	background: var(--oes-panel-bg);
+	color: var(--oes-text);
+	box-shadow: 0 6px 18px var(--oes-shadow-strong);
+	z-index: 5;
+}
+
+.find-dialog-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0.375rem 0.5rem 0.375rem 0.75rem;
+	font-weight: 600;
+}
+
+.find-dialog-header button {
+	border: none;
+	background: none;
+	color: inherit;
+	font-size: 1.125rem;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.find-dialog-body {
+	display: flex;
+	gap: 0.75rem;
+	padding: 0 0.75rem 0.75rem;
+}
+
+.find-dialog-sought input {
+	flex: 1 1 auto;
+}
+
+.find-dialog-options {
+	display: flex;
+	align-items: flex-start;
+	gap: 1rem;
+	margin-top: 0.375rem;
+}
+
+.find-dialog-buttons {
+	display: flex;
+	flex-direction: column;
+	gap: 0.375rem;
 }
 
 /* A popup menu the server asks — where the person pressed; a submenu opens in place, indented. */
@@ -779,6 +1090,633 @@ wa-dialog.answered-only::part(close-button) {
 	width: 16px;
 	height: 16px;
 	margin-inline-end: 0.375rem;
+}
+
+/* Change form (window/formEditor.js, the thin client's ibDialogFormEditor): Up and Down over the controls' tree and the
+   property grid side by side, the setting's two buttons and what they did under them. */
+.form-editor {
+	--width: 44rem;
+}
+
+.form-editor-tools,
+.form-editor-setting {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.25rem;
+}
+
+.form-editor-main {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 0.5rem;
+	height: 22rem;
+	margin: 0.375rem 0;
+}
+
+/* A narrow window: the form's tree over the taken control's properties. */
+@media (max-width: 40rem) {
+	.form-editor-main {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: 12rem minmax(0, 1fr);
+		height: 32rem;
+	}
+}
+
+.form-editor-main wa-tree {
+	min-height: 0;
+	overflow: auto;
+	border: 1px solid var(--oes-border);
+	background: var(--oes-table-bg);
+	--indent-guide-width: 0;
+}
+
+/* Folded and unfolded at once, as the thin client's tree. */
+.form-editor-main wa-tree-item {
+	--show-duration: 0s;
+	--hide-duration: 0s;
+}
+
+.form-editor-main wa-tree-item img {
+	width: 16px;
+	height: 16px;
+	margin-inline-end: 0.375rem;
+}
+
+.form-editor-main wa-tree-item[selected]::part(label) {
+	font-weight: 600;
+}
+
+.form-editor-status {
+	flex: 1;
+	margin-inline-start: 0.25rem;
+	color: var(--oes-muted);
+}
+
+/* The saved settings' shelf (window/savedSettings.js, the thin client's ibDialogSavedSettings): the names in one column,
+   the buttons beside them — the window's own act first, the housekeeping apart under it; the entry restored on open
+   bold, the one taken in the highlight. */
+.saved-settings {
+	--width: 30rem;
+}
+
+.saved-settings-body {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	gap: 0.5rem;
+	height: 15rem;
+}
+
+.saved-settings-list {
+	min-height: 0;
+	overflow: auto;
+	border: 1px solid var(--oes-border);
+	background: var(--oes-table-bg);
+	color: var(--oes-table-text);
+	outline: none;
+}
+
+.saved-settings-entry {
+	padding: 0.125rem 0.375rem;
+	cursor: default;
+	user-select: none;
+}
+
+.saved-settings-entry.default {
+	font-weight: 700;
+}
+
+.saved-settings-entry.taken {
+	background: var(--oes-table-cell-current-bg);
+	color: var(--oes-table-current-text);
+}
+
+.saved-settings-list:not(:focus-within) .saved-settings-entry.taken {
+	background: var(--oes-table-current-idle-bg);
+}
+
+.saved-settings-buttons {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+}
+
+.saved-settings-buttons .apart {
+	margin-bottom: 0.5rem;
+}
+
+/* A list's and a report's settings (src/settings, window/listSettings.js and window/composerSettings.js — the thin
+   client's ibDialogListSettings, 660×450, and ibDialogComposerSettings): a page each for what is set — the available
+   fields beside the lines, the tools over them, ruled as a table; the report's structure on the left of its pages; the
+   line, the node and the field taken in the highlight. */
+.list-settings {
+	--width: 41rem;
+}
+
+.composer-settings {
+	--width: 62rem;
+}
+
+/* A part of a conditional appearance's rule, in a window of its own over the settings (the thin client's: its condition
+   in the filter editor, 640×360; its fields; its appearance, the platform's six parameters). */
+.condition-window {
+	--width: 41rem;
+}
+
+.fields-window {
+	--width: 32rem;
+}
+
+.appearance-window {
+	--width: 38rem;
+}
+
+.appearance-window .settings-page {
+	height: auto;
+}
+
+/* A grouping composed before it is added (the thin client's grouping form, 430×220 of fields and their unfolds). */
+.grouping-window {
+	--width: 41rem;
+}
+
+/* A translated text, a box a language (the thin client's translation window: the language's name and code, a box of
+   two lines that grows with the window). */
+.translate-window {
+	--width: 32rem;
+}
+
+.translate-languages {
+	display: grid;
+	grid-template-columns: max-content 1fr;
+	gap: 0.375rem 0.5rem;
+	align-items: start;
+}
+
+.translate-languages label {
+	padding-block-start: 0.25rem;
+	font-weight: inherit;
+}
+
+.translate-languages textarea {
+	min-width: 0;
+	resize: vertical;
+	font: inherit;
+}
+
+/* A parameter not ticked keeps its value, not applied — grey, as the thin client's. */
+.settings-table tr.unticked .property-cell {
+	color: var(--oes-muted);
+}
+
+.settings-window wa-tab-panel {
+	--padding: 0.5rem 0 0;
+}
+
+.settings-page {
+	display: grid;
+	grid-template-columns: 13rem 1fr;
+	gap: 0.5rem;
+	height: 20rem;
+}
+
+.settings-page-alone {
+	grid-template-columns: 1fr;
+}
+
+.settings-composer {
+	display: grid;
+	grid-template-columns: 15rem 1fr;
+	gap: 0.75rem;
+}
+
+/* A narrow window: one under the other — the report's structure over its pages, a page's fields over its lines. */
+@media (max-width: 40rem) {
+	.settings-composer {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: 11rem auto;
+	}
+
+	.settings-page {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: 9rem minmax(0, 1fr);
+		height: 28rem;
+	}
+
+	.settings-page-alone {
+		grid-template-rows: minmax(0, 1fr);
+	}
+}
+
+.settings-structure,
+.settings-node-side {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+	min-width: 0;
+}
+
+.settings-structure-list {
+	flex: 1;
+	min-height: 0;
+	overflow: auto;
+	border: 1px solid var(--oes-border);
+	background: var(--oes-table-bg);
+	color: var(--oes-table-text);
+}
+
+.settings-header {
+	color: var(--oes-muted);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.settings-auto {
+	color: var(--oes-muted);
+	font-style: italic;
+}
+
+.settings-fields,
+.settings-editor {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+	min-width: 0;
+	min-height: 0;
+}
+
+.settings-pane-title {
+	color: var(--oes-muted);
+	user-select: none;
+}
+
+.settings-field-list,
+.settings-table-holder {
+	flex: 1;
+	min-height: 0;
+	overflow: auto;
+	border: 1px solid var(--oes-border);
+	background: var(--oes-table-bg);
+	color: var(--oes-table-text);
+}
+
+.settings-field {
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
+	min-height: 20px;
+	padding-inline-end: 0.375rem;
+	white-space: nowrap;
+	cursor: default;
+	user-select: none;
+}
+
+.settings-field img {
+	width: 16px;
+	height: 16px;
+}
+
+.settings-field-toggle {
+	flex: 0 0 auto;
+	width: 14px;
+	height: 14px;
+	padding: 0;
+	border: none;
+	background: none;
+	color: inherit;
+	font: inherit;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.settings-field.taken,
+.settings-table tr.taken {
+	background: var(--oes-table-cell-current-bg);
+	color: var(--oes-table-current-text);
+}
+
+.settings-table-holder {
+	outline: none;
+}
+
+/* The thin client's 16×16 toolbar over the lines: flat, a frame under the pointer. A caption is never squeezed under the
+   next one — a longer language («Додати групування») takes a second row instead. */
+.settings-tools {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 2px;
+}
+
+.settings-tools button {
+	flex: none;
+	white-space: nowrap;
+}
+
+.settings-tools button,
+:is(.settings-reference, .settings-part) button {
+	min-width: 22px;
+	height: 22px;
+	padding: 0 0.375rem;
+	border: 1px solid transparent;
+	border-radius: 2px;
+	background: none;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+}
+
+.settings-tools button:hover,
+:is(.settings-reference, .settings-part) button:hover {
+	border-color: var(--oes-border);
+	background: var(--oes-table-header-bg);
+}
+
+.settings-table {
+	width: 100%;
+	table-layout: fixed;
+	border-collapse: collapse;
+}
+
+.settings-table th {
+	position: sticky;
+	top: 0;
+	padding: 0 0.375rem;
+	border-bottom: 1px solid var(--oes-table-border);
+	background: var(--oes-table-header-bg);
+	color: var(--oes-table-header-text);
+	font-weight: 400;
+	text-align: start;
+	white-space: nowrap;
+	/* A caption wider than its column — «Use» in a longer language — is cut as the thin client's header cuts it. */
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.settings-table td {
+	height: 22px;
+	padding: 0 2px;
+	overflow: hidden;
+	border-bottom: 1px solid var(--oes-table-border);
+	white-space: nowrap;
+}
+
+.settings-table td.use {
+	text-align: center;
+}
+
+/* The root's and a group's join: beside its word, as wide as it needs. */
+.settings-table .settings-join {
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
+}
+
+.settings-table .settings-join select {
+	width: auto;
+}
+
+.settings-table :is(input[type="text"], input[type="number"], input[type="datetime-local"], select) {
+	width: 100%;
+	height: 20px;
+	padding: 0 2px;
+	border: 1px solid transparent;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+}
+
+/* As a property's field (.property-cell): the table's ground, the editor's ink. */
+.settings-table :is(input, select):focus {
+	border-color: var(--oes-border);
+	background: var(--oes-table-bg);
+	color: var(--oes-editor-text);
+	outline: none;
+}
+
+.settings-table input[type="checkbox"] {
+	accent-color: var(--oes-accent);
+}
+
+/* A reference as it reads, and a part of a rule as it reads (a conditional appearance's) — each with its buttons. */
+:is(.settings-reference, .settings-part) {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+}
+
+:is(.settings-reference, .settings-part) span {
+	flex: 1;
+	min-width: 6rem;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.settings-part span {
+	min-width: 0;
+	padding-inline-start: 0.25rem;
+}
+
+:is(.settings-reference, .settings-part) button {
+	min-width: 20px;
+	height: 20px;
+	padding: 0;
+}
+
+/* A property grid (properties/propertyGrid.js, the thin client's ibPropertyGridManager): a line a property — its title
+   and its cell halves of it, ruled as a table; the line taken in the highlight; a value changed and not applied bold;
+   what the line taken is, under the lines. */
+.property-grid {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	border: 1px solid var(--oes-border);
+	background: var(--oes-table-bg);
+	color: var(--oes-table-text);
+}
+
+.property-lines {
+	flex: 1;
+	min-height: 0;
+	overflow: auto;
+}
+
+.property {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	min-height: 22px;
+	border-bottom: 1px solid var(--oes-table-border);
+}
+
+.property-title {
+	align-self: stretch;
+	display: flex;
+	align-items: center;
+	padding: 0 0.375rem;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	border-right: 1px solid var(--oes-table-border);
+}
+
+.property.taken .property-title {
+	background: var(--oes-table-cell-current-bg);
+	color: var(--oes-table-current-text);
+}
+
+.property.modified {
+	font-weight: 600;
+}
+
+.property-cell {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	min-width: 0;
+	padding: 0 2px;
+}
+
+.property-cell :is(input[type="text"], input[type="number"], select) {
+	flex: 1;
+	min-width: 0;
+	height: 20px;
+	padding: 0 2px;
+	border: 1px solid transparent;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+}
+
+/* A field being typed in stands on the table's ground in the editor's ink, as the text editor does — not on paper, which
+   is white whatever the theme. */
+.property-cell :is(input[type="text"], input[type="number"], select):focus {
+	border-color: var(--oes-border);
+	background: var(--oes-table-bg);
+	color: var(--oes-editor-text);
+	outline: none;
+}
+
+.property-cell input[type="checkbox"] {
+	accent-color: var(--oes-accent);
+}
+
+/* A font's choice, under its cell (the thin client's font dialog, in place): the face, the size, how it is drawn. */
+.property-cell .font-choice {
+	position: fixed;
+	inset: auto;
+	margin: 0;
+	gap: 2px;
+	width: 16rem;
+	padding: 0.25rem;
+	border: 1px solid var(--oes-border);
+	background: var(--oes-panel-bg);
+	color: var(--oes-text);
+	box-shadow: 0 2px 8px var(--oes-shadow);
+}
+
+.property-cell .font-choice:popover-open {
+	display: flex;
+}
+
+.property-cell .font-choice input[type="text"] {
+	border-color: var(--oes-border);
+}
+
+.property-cell input.font-size {
+	flex: 0 0 3.25rem;
+	border-color: var(--oes-border);
+}
+
+.property-cell input[type="color"] {
+	flex: 0 0 auto;
+	width: 24px;
+	height: 18px;
+	padding: 0;
+	border: 1px solid var(--oes-border);
+	background: none;
+}
+
+.property-cell > span {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.property-cell.unset > span,
+.property-text {
+	color: var(--oes-muted);
+}
+
+.property-text {
+	align-self: center;
+	padding: 0 0.375rem;
+}
+
+.property-cell button {
+	flex: 0 0 auto;
+	width: 20px;
+	height: 20px;
+	padding: 0;
+	border: 1px solid transparent;
+	border-radius: 2px;
+	background: none;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+}
+
+.property-cell button:hover:not(:disabled),
+.property-cell button[aria-pressed="true"] {
+	border-color: var(--oes-border);
+	background: var(--oes-table-header-bg);
+}
+
+.property-cell button:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+/* By a class of its own, not its title — the title is said in the person's language. */
+.property-cell .toggle.bold {
+	font-weight: 700;
+}
+
+.property-cell .toggle.italic {
+	font-style: italic;
+}
+
+.property-cell .toggle.underlined {
+	text-decoration: underline;
+}
+
+.property-category > button {
+	display: block;
+	width: 100%;
+	min-height: 22px;
+	padding: 0 0.375rem;
+	border: none;
+	border-bottom: 1px solid var(--oes-table-border);
+	background: var(--oes-table-header-bg);
+	color: var(--oes-table-header-text);
+	font: inherit;
+	font-weight: 600;
+	text-align: start;
+	cursor: pointer;
+}
+
+.property-description {
+	flex: 0 0 auto;
+	min-height: 4.5rem;
+	max-height: 6rem;
+	overflow: auto;
+	padding: 0.25rem 0.375rem;
+	border-top: 1px solid var(--oes-border);
+}
+
+.property-description p {
+	margin: 0.125rem 0 0;
 }
 
 /* About: the platform and its build centred over the blocks, as the thin client's window. */

@@ -140,12 +140,13 @@ public:
 	inline	void		rewind() const { seek(0); }
 	CORE_API std::uint64_t 			    find_chunk(std::uint64_t ID, bool* bCompressed = nullptr) const;
 
-	// A chunk's content (8-byte id, 8-byte size, the content) into `dest`.
+	// A chunk's content (8-byte id, 8-byte size, the content) into `dest`. The size is read as an int, as the reader
+	// counts: find_chunk answers 0 or a size that ends inside the block (tell() + size <= length()), so it is one.
 	inline	bool		r_chunk(std::uint64_t ID, void* dest) const {
 		m_last_pos = tell();
-		std::uint32_t	dwSize = find_chunk(ID);
-		if (dwSize != 0) {
-			r(dest, dwSize);
+		const int size = static_cast<int>(find_chunk(ID));
+		if (size != 0) {
+			r(dest, size);
 			return true;
 		}
 		return false;
@@ -154,10 +155,10 @@ public:
 	// …appended to a buffer.
 	inline	bool		r_chunk(std::uint64_t ID, ibMemoryBuffer& dest) const {
 		m_last_pos = tell();
-		std::uint32_t	dwSize = find_chunk(ID);
-		if (dwSize != 0) {
-			r(dest.GetAppendBuf(dwSize), dwSize);
-			dest.UngetAppendBuf(dwSize);
+		const int size = static_cast<int>(find_chunk(ID));
+		if (size != 0) {
+			r(dest.GetAppendBuf(size), size);
+			dest.UngetAppendBuf(size);
 			return true;
 		}
 		return false;
@@ -166,10 +167,10 @@ public:
 	// …the same, the content's size asserted.
 	inline	bool		r_chunk_safe(std::uint64_t ID, void* dest, std::uint32_t dest_size) const {
 		m_last_pos = tell();
-		std::uint64_t	dwSize = find_chunk(ID);
-		if (dwSize != 0) {
-			ibASSERT(dwSize == dest_size);
-			r(dest, dwSize);
+		const int size = static_cast<int>(find_chunk(ID));
+		if (size != 0) {
+			ibASSERT(static_cast<std::uint32_t>(size) == dest_size);
+			r(dest, size);
 			return true;
 		}
 		return false;
@@ -177,11 +178,11 @@ public:
 
 	inline	bool		r_chunk_safe(std::uint64_t ID, ibMemoryBuffer& dest, std::uint32_t dest_size) const {
 		m_last_pos = tell();
-		std::uint64_t	dwSize = find_chunk(ID);
-		if (dwSize != 0) {
-			ibASSERT(dwSize == dest_size);
-			r(dest.GetAppendBuf(dwSize), dwSize);
-			dest.UngetAppendBuf(dwSize);
+		const int size = static_cast<int>(find_chunk(ID));
+		if (size != 0) {
+			ibASSERT(static_cast<std::uint32_t>(size) == dest_size);
+			r(dest.GetAppendBuf(size), size);
+			dest.UngetAppendBuf(size);
 			return true;
 		}
 		return false;

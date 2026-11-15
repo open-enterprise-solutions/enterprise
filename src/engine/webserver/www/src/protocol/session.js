@@ -22,6 +22,13 @@ import { applyPatch } from './patch.js';
 /** The newest protocol this page speaks. */
 const protocol = 6;
 
+/**
+ * THE MODE a client works in — the login's Mode (ibLogin::ibMode): which application's frame it gets, and what the
+ * client draws differently for it — the places the thin client asks DesignerMode(). This page is the application's;
+ * a designer in the browser would log in as one and bring its own documents, questions and property cells.
+ */
+export const Mode = Object.freeze({ Runtime: 1, Designer: 2 });
+
 // What comes beside a frame and is not the frame: the events, and the login's own answer.
 const besideFrame = ['Messages', 'Clear', 'Exit', 'Properties', 'Client', 'Protocol', 'Features', 'Token', 'Read', 'Locale',
 	'Since', 'Patch'];
@@ -36,12 +43,18 @@ const resumeFeature = 'resume';
 const resumeFor = 30 * 60 * 1000;
 
 export class Session extends EventTarget {
-	/** @param {Connection} connection */
-	constructor(connection) {
+	/**
+	 * @param {Connection} connection
+	 * @param {number} mode the one it logs in in (Mode)
+	 */
+	constructor(connection, mode) {
 		super();
 		this.connection = connection;
+		this.mode = mode;
 		/** @type {string | null} */
 		this.client = null;
+		/** the language the client's own words are said in — the login's Locale (the base's) */
+		this.locale = '';
 		/** @type {ProtocolNode | null} the frame held — its View the active tab's */
 		this.frame = null;
 		/** @type {Map<number, ProtocolNode>} the view last drawn for each tab */
@@ -63,6 +76,11 @@ export class Session extends EventTarget {
 		connection.onClose = (reason) => this.dropped(reason);
 	}
 
+	/** The session is the designer's — logged in as one (the thin client's DesignerMode). */
+	designerMode() {
+		return this.mode === Mode.Designer;
+	}
+
 	/** The names the login window offers — asked before the login, with no Client. */
 	async users() {
 		const answer = await this.connection.call('users', {});
@@ -79,9 +97,10 @@ export class Session extends EventTarget {
 		// frame asked for then goes once the Client is known. Sent with none, it was refused (401, no such client) and
 		// the session ended as it began (2026-11-04).
 		const next = this.queue.then(async () => {
-			const answer = await this.connection.call('login', { User: user, Password: password, Protocol: protocol,
-				Features: [resumeFeature] });
+			const answer = await this.connection.call('login', { User: user, Password: password, Mode: this.mode,
+				Protocol: protocol, Features: [resumeFeature] });
 			this.client = answer.Client;
+			this.locale = answer.Locale ?? '';
 			// The bearer comes once — and only from a server that offers to keep the session.
 			this.token = (answer.Features ?? []).includes(resumeFeature) ? answer.Token ?? null : null;
 			this.take(answer);

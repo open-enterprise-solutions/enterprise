@@ -5,6 +5,17 @@
 
 /** @typedef {import('./session.js').Session} Session */
 
+// THE ENGINE'S STOCK PICTURES, BY THEIR IDS — the core's (core/picturePredefined.h, picture_to_clsid of their keys), as
+// the wire says them; fixed, listed in docs/public/client-protocol.md. The page's own File, Edit and toolbar are drawn
+// with them, as the thin client's with wx's stock ids, which the core answers.
+export const Picture = Object.freeze({
+	New: '645455583498007629', Open: '579522350370119469', CloseForm: '578857960503685103',
+	Save: '639324940303605204', SaveAs: '607107136740286132', Print: '645234176492903564', Quit: '633285250358207106',
+	Undo: '647948470173557467', Redo: '621101660022122845', Cut: '618972745364732263',
+	ClipboardCopy: '644734463845928663', Paste: '620234044208301452', Delete: '600229403872771988',
+	Find: '623288159307697294',
+});
+
 export class Pictures {
 	/** @param {Session} session */
 	constructor(session) {

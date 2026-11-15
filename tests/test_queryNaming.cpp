@@ -11,6 +11,7 @@
 //   * settings left pointing at a field the source no longer has.
 
 #include <algorithm>
+#include <set>
 #include <gtest/gtest.h>
 #include <wx/string.h>   // wxT, wxString - the engine's headers include no wx
 #include "core/query/queryRefusal.h"   // ibQueryRefusal — what the core parser gives back for a text that does not read
@@ -1588,4 +1589,76 @@ TEST(QueryComposerTotals, AResourceWrittenAsAnExpressionFoldsOverAUnion)
 	const ibSelector totals = rows.Select(ibSelectKind::ibSelectKind_ByGroups);
 	const ibValue balanceTotal = figure->m_byAlias ? totals.GetTotalColumn(figure->m_alias) : totals.GetTotal(figure->m_col);
 	EXPECT_EQ(0, balanceTotal.GetNumber().Compare(ibNumber(120))) << "150 charged, 30 paid";
+}
+
+namespace {
+
+// What one output was handed: its columns, and the key of every heading it opened.
+class KeptOutput : public ibCompositionDriver
+{
+public:
+	void OnOutputBegin(const ibCompositionOutputInfo& info) override { m_schema = info.m_schema; }
+	void OnGroupBegin(const ibCompositionLine& /*line*/, const std::vector<ibValue>& values) override {
+		for (size_t at = 0; at < m_schema.size() && at < values.size(); ++at)
+			if (m_schema[at].m_role == ibQueryLowering::ibColumnRole::Dimension && !values[at].GetString().IsEmpty())
+				m_keys.insert(values[at].GetString().ToStdString());
+	}
+	void OnRow(const ibCompositionLine& /*line*/, const std::vector<ibValue>& /*values*/) override {}
+
+	size_t Keys() const {
+		return static_cast<size_t>(std::count_if(m_schema.begin(), m_schema.end(), [](const ibQueryLowering::ibQueryOutputColumn& column) {
+			return column.m_role == ibQueryLowering::ibColumnRole::Dimension;
+		}));
+	}
+
+	std::vector<ibQueryLowering::ibQueryOutputColumn> m_schema;
+	std::set<std::string>                             m_keys;
+};
+
+} // namespace
+
+// Two outputs of one read, each grouped by a field the selection does not carry. Such a field is read one level down
+// under a name nobody wrote (`q_carried0`), so a branch looking for its key BY NAME found none: every table of the
+// report lost its heading column and the caption of its total (a report given a second output, 2026-11-15). A branch
+// takes its keys by their place in the read — its own, and not its neighbour's.
+TEST(QueryComposerBranches, EachOutputKeepsItsOwnKeyWhenTheSelectionDoesNotCarryIt)
+{
+	RowsInMemory sales(ibT("Sale"),
+		{ { ibT("Partner"), ibValueTypes::TYPE_STRING }, { ibT("Warehouse"), ibValueTypes::TYPE_STRING }, { ibT("Amount"), ibValueTypes::TYPE_NUMBER } },
+		{ { ibValue(ibString(ibT("North"))), ibValue(ibString(ibT("Main"))), ibValue(100) },
+		  { ibValue(ibString(ibT("South"))), ibValue(ibString(ibT("Spare"))), ibValue(30) } });
+	OpenConfiguration cfg;
+	ASSERT_NE(nullptr, cfg.GetSourceFactory());
+	cfg.RegisterSource(&sales);
+	const ibSourceMetaDataScope scope(&cfg);
+
+	ibDataDBComposer composer;
+	composer.SetMetaData(&cfg);
+	composer.FromText(ibT("SELECT Sale.Partner AS Partner, Sale.Warehouse AS Warehouse, Sale.Amount AS Amount FROM Document.Sale AS Sale"));
+	composer.Resource(ibT("SUM"), ibT("Amount"));
+	composer.Select(ibT("Amount"));   // the figure alone: neither key is selected
+
+	ibVariantDescription zeroth;
+	zeroth.m_name = ibT("Main");
+	for (const ibString& field : { ibString(ibT("Partner")), ibString(ibT("Warehouse")) }) {
+		ibOutputDescription output;
+		ibLevelDescription level;
+		level.m_kind = ibCompositionLevelKind::Grouping;
+		level.m_settings.m_group.Append(field);
+		output.m_rowGroups.push_back(level);
+		zeroth.m_settings.m_structure.push_back(output);
+	}
+	composer.LoadVariants({ zeroth });
+	composer.ApplyAvailableStructure();
+	ASSERT_EQ(2u, composer.Outputs().size());
+
+	KeptOutput byPartner, byWarehouse;
+	composer.Outputs()[0].m_driver = &byPartner;
+	composer.Outputs()[1].m_driver = &byWarehouse;
+	ASSERT_NO_THROW(EXPECT_TRUE(composer.Run()));
+
+	EXPECT_EQ(1u, byPartner.Keys()) << "the first table's heading column";
+	EXPECT_EQ((std::set<std::string>{ "North", "South" }), byPartner.m_keys);
+	EXPECT_EQ(1u, byWarehouse.Keys()) << "the second table's — its own, not the first one's";
+	EXPECT_EQ((std::set<std::string>{ "Main", "Spare" }), byWarehouse.m_keys);
 }

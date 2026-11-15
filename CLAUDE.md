@@ -49,7 +49,7 @@ The runtime executes compiled bytecode, renders forms through wxWidgets, and sto
 
 ```
 enterprise/
-├── enterprise.sln           # MSBuild solution (19 C++ projects; folders: services / exec / plugins / 3rdparty)
+├── enterprise.sln           # MSBuild solution (22 C++ projects; folders: services / exec / plugins / 3rdparty)
 ├── Common.props             # Shared output paths and macros
 ├── ConfigurationDefs.props  # Per-configuration preprocessor defines
 ├── CLAUDE.md                # This file

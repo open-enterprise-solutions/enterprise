@@ -18,6 +18,8 @@
  *   file's PNG as its field holds it — '' when there is none
  * @property {(node: any) => Promise<void>} fetchPictures the pictures a node names, asked for before it is drawn — a
  *   table's page fetched after the frame
+ * @property {() => boolean} designerMode the session is the designer's (Session.designerMode) — what a control draws
+ *   differently there
  */
 
 // The events a control sends (ibEvent::ibKind).
@@ -293,8 +295,8 @@ function themedPair(text, background, [platformBackground, themedBackground]) {
 /**
  * A cell's text colour and fill, either perhaps unnamed. A fill named with no ink is read with the light theme's dark
  * ink, in any theme: the author chose it against that one, and the theme's light ink on yellow is not read. Ink named
- * alone stays alone: the fill under it is the row's - the current row, the current cell, a text spilled over its
- * neighbours - and papering it would break them.
+ * alone stays alone: the fill under it is the row's - the current row, the current cell - and papering it would break
+ * them. (A sheet's cells need none of it: its paper is the same in every theme.)
  * @param {string} text @param {string} fill
  * @returns {[string, string]}
  */
@@ -314,7 +316,7 @@ export function colour(text) {
  * A size's text, `width,height`, -1 for none.
  * @param {string | undefined} text
  */
-function readSize(text) {
+export function readSize(text) {
 	const [width, height] = String(text ?? '').split(',').map(Number);
 	return { width: Number.isFinite(width) ? width : -1, height: Number.isFinite(height) ? height : -1 };
 }
@@ -339,7 +341,7 @@ export function applyFont(element, text) {
  * A font's text — `face,style,weight,pointSize,family,underlined` (core/graphics/font.h); null when it names none.
  * @param {string | undefined} text
  */
-function readFont(text) {
+export function readFont(text) {
 	if (!text)
 		return null;
 	const [face, style, weight, size, , underlined] = String(text).split(',');

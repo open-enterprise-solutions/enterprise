@@ -18,7 +18,8 @@ class Desktop(PageTest):
         page = self.start(FORM)
         self.row('Item 1').wait_for()
         size = heights(page)
-        limits = {'field': 26, 'row': 27, 'header': 22, 'tool': 28, 'bar': 34, 'tab': 26, 'top': 28}
+        # The header is a row: the thin client's 22 pixels and its rule.
+        limits = {'field': 26, 'row': 27, 'header': 23, 'tool': 28, 'bar': 34, 'tab': 26, 'top': 28}
         self.assertEqual({name: size[name] for name in limits if size[name] > limits[name]}, {}, size)
 
     def test_a_field_is_not_cut(self):

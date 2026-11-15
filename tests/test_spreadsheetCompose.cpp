@@ -682,6 +682,30 @@ TEST(SpreadsheetCross, TheRowHeadingsOwnFiguresAreTheRowTotal)
 	EXPECT_EQ(wxT("100"), doc->GetCellValue(1, 3));
 }
 
+// ⭐ THE ROW TOTAL NAMES ITS MEASURES TOO (2026-11-15). With two figures «Total» is merged over two columns and
+// promises them underneath; the names stood under the keys' blocks alone, and the last two columns said nothing.
+TEST(SpreadsheetCross, TheRowTotalNamesItsMeasures)
+{
+	auto doc = MakeDocument();
+	ibSpreadsheetComposeDriver driver(doc.get());
+
+	driver.OnOutputBegin(CrossInfo({ Dim(wxT("Partner"), 0), Dim(wxT("Warehouse"), 1),
+		Measure(wxT("Amount")), Measure(wxT("Count")) }, 1));
+	driver.OnGroupBegin(HeadAt(1, ibSelectorNodeKind::Group, true, false), { ibValue(ibT("Alpha")), ibValue(), ibValue(100), ibValue(3) });
+	driver.OnGroupBegin(HeadAt(2, ibSelectorNodeKind::Group, false, false), { ibValue(), ibValue(ibT("North")), ibValue(60), ibValue(2) });
+	driver.OnGroupBegin(HeadAt(2, ibSelectorNodeKind::Group, false, false), { ibValue(), ibValue(ibT("South")), ibValue(40), ibValue(1) });
+	driver.OnOutputEnd(true);
+
+	// North over columns 1-2, South over 3-4, the row total over 5-6; the measures' names on the line under them.
+	EXPECT_EQ(wxT("Total"), doc->GetCellValue(0, 5));
+	for (const int block : { 1, 3, 5 }) {
+		EXPECT_EQ(wxT("Amount"), doc->GetCellValue(1, block)) << "the block at column " << block;
+		EXPECT_EQ(wxT("Count"),  doc->GetCellValue(1, block + 1)) << "the block at column " << block;
+	}
+	EXPECT_EQ(wxT("100"), doc->GetCellValue(2, 5));
+	EXPECT_EQ(wxT("3"),   doc->GetCellValue(2, 6));
+}
+
 // ⭐⭐ A DETAIL RECORD IS A LINE OF THE TABLE, WITH CELLS ACROSS IT (Max, 2026-08-26: "its own line,
 // cells by the columns").
 //
@@ -763,8 +787,8 @@ TEST(SpreadsheetCross, ColumnTotalsComeFromTheRootAndCloseTheTable)
 
 	driver.OnOutputEnd(true);
 
-	// Header, Alpha, Beta, then the bottom line.
-	EXPECT_EQ(wxT("Total"), doc->GetCellValue(3, 0));
+	// Header, Alpha, Beta, then the bottom line — the root's, in the streaming layout's word (WriteTotalLine).
+	EXPECT_EQ(wxT("Grand total"), doc->GetCellValue(3, 0));
 	EXPECT_EQ(wxT("60"),    doc->GetCellValue(3, 1));
 	EXPECT_EQ(wxT("40"),    doc->GetCellValue(3, 2));
 	EXPECT_EQ(wxT("100"),   doc->GetCellValue(3, 3));   // the corner

@@ -3,8 +3,12 @@
 
 import './controls/index.js';
 import './docView/index.js';
+// The application's property cells — a designer's page would import the designer's beside them (properties/index.js).
+import './properties/runtime.js';
+import { _, readDictionary } from './localization.js';
+import { readLanguages } from './properties/translate.js';
 import { Connection } from './protocol/connection.js';
-import { Session } from './protocol/session.js';
+import { Mode, Session } from './protocol/session.js';
 import { Pictures } from './protocol/pictures.js';
 import { logIn } from './window/login.js';
 import { hideSplash, showSplash } from './window/splash.js';
@@ -16,16 +20,18 @@ const root = /** @type {HTMLElement} */ (document.getElementById('client'));
 const publication = location.pathname.split('/').filter(Boolean)[0] ?? '';
 
 async function start() {
+	// Before the login the person is not known: the page speaks the browser's language and is painted as the machine is
+	// set, the splash too — as the thin client speaks the machine's before it has a base.
+	await readDictionary(navigator.language);
 	if (publication === '') {
-		root.textContent = 'No publication in the address: open /<publication>/.';
+		root.textContent = _('No publication in the address: open /<publication>/.');
 		hideSplash();
 		return;
 	}
 	document.title = publication;
-	// Before the login the person is not known: the page is painted as the machine is set, the splash too.
 	applyTheme(Theme.System);
 	moveDialogs();
-	showSplash('Connecting to the base');
+	showSplash(_('Connecting to the base'));
 	const connection = Connection.beside(location);
 	try {
 		await connection.open();
@@ -35,14 +41,17 @@ async function start() {
 		hideSplash();
 		return;
 	}
-	const session = new Session(connection);
+	// The application's client — appworkspace's in the browser: its documents are those docView/index.js registers.
+	const session = new Session(connection, Mode.Runtime);
 	const pictures = new Pictures(session);
-	showSplash('Logging in');
+	showSplash(_('Logging in'));
 	await logIn(root, session, publication);
 	addEventListener('pagehide', () => session.logout());
-	showSplash('Opening the window');
-	// The person's theme, before anything of theirs is drawn.
+	showSplash(_('Opening the window'));
+	// The person's theme and language, before anything of theirs is drawn.
 	await readTheme(session, session.frame);
+	await readDictionary(session.locale);
+	await readLanguages(session, session.frame);
 	// The login's answer is the first frame: the session holds it, and the window draws it as it comes up.
 	const clientWindow = new ClientWindow(root, session, pictures);
 	if (session.frame !== null)

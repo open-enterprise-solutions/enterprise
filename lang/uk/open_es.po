@@ -6685,6 +6685,12 @@ msgstr "У теці немає конфігурації."
 msgid "This configuration is stored in a format this build cannot read: it was written by an older or a different build. Nothing was loaded."
 msgstr "Цю конфігурацію збережено у форматі, який ця збірка не може прочитати: її записано старішою або іншою збіркою. Нічого не завантажено."
 
+#: src/engine/backend/metadataDataProcessor.cpp:411
+#: src/engine/backend/metadataReport.cpp:419
+#, c-format
+msgid "'%s' is stored in a format this build cannot read: it was written by an older or a different build. Nothing was loaded."
+msgstr "'%s' збережено у форматі, який ця збірка не може прочитати: його записано старішою або іншою збіркою. Нічого не завантажено."
+
 #: src/engine/backend/metadataConfiguration.cpp:686
 #, c-format
 msgid "The data was saved by a newer build (date form %u) that this build cannot read. Nothing was loaded."
@@ -17616,9 +17622,6 @@ msgstr "Усі файли зображень"
 #~ msgid "Some controls of this form could not be built:"
 #~ msgstr "Не вдалося побудувати деякі елементи цієї форми:"
 
-#~ msgid "All functions"
-#~ msgstr "Усі функції"
-
 #~ msgid "Loading..."
 #~ msgstr "Завантаження..."
 
@@ -17766,3 +17769,86 @@ msgstr "Плани"
 #: src/engine/appstudio/docManager/templates/docViewProfile.cpp:350
 msgid "Values"
 msgstr "Значення"
+
+#: src/engine/webserver/www/src/controls/commandBar.js:117
+#: src/engine/webserver/www/src/controls/commandBar.js:118
+msgid "More"
+msgstr "Більше"
+
+#: src/engine/webserver/www/src/docView/tabDocument.js:72
+msgid "This view is not in the browser yet."
+msgstr "Цього подання в браузері ще немає."
+
+#: src/engine/webserver/www/src/main.js:26
+msgid "No publication in the address: open /<publication>/."
+msgstr "В адресі немає публікації: відкрийте /<публікація>/."
+
+#: src/engine/webserver/www/src/main.js:33
+msgid "Connecting to the base"
+msgstr "Підключення до бази"
+
+#: src/engine/webserver/www/src/main.js:46
+msgid "Logging in"
+msgstr "Вхід"
+
+#: src/engine/webserver/www/src/main.js:49
+msgid "Opening the window"
+msgstr "Відкриття вікна"
+
+#: src/engine/webserver/www/src/window/functions.js:24
+msgid "All functions"
+msgstr "Усі функції"
+
+#: src/engine/webserver/www/src/window/login.js:50
+msgid "Password"
+msgstr "Пароль"
+
+#: src/engine/webserver/www/src/window/login.js:63
+msgid "Log in"
+msgstr "Увійти"
+
+#: src/engine/webserver/www/src/window/questions.js:152
+msgid "Not in the browser yet"
+msgstr "У браузері ще немає"
+
+#: src/engine/webserver/www/src/window/questions.js:153
+#, c-format
+msgid "This question (%d) cannot be asked here yet; it is answered as cancelled."
+msgstr "Це запитання (%d) тут ще не можна поставити; на нього відповіли як на скасоване."
+
+#: src/engine/webserver/www/src/window/window.js:101
+msgid "Clear the messages"
+msgstr "Очистити повідомлення"
+
+#: src/engine/webserver/www/src/window/window.js:122
+msgid "No connection - reconnecting..."
+msgstr "Немає з'єднання - перепідключення..."
+
+#: src/engine/webserver/www/src/window/window.js:315
+#, c-format
+msgid "%s: not in the browser yet"
+msgstr "%s: у браузері ще немає"
+
+#: src/engine/webserver/www/src/window/window.js:645
+#, c-format
+msgid "The session has ended: %s"
+msgstr "Сеанс завершено: %s"
+
+#: src/engine/webserver/www/src/window/window.js:648
+msgid "Log in again"
+msgstr "Увійти знову"
+
+#: src/engine/webserver/www/src/gridbox/selection.js:314
+#, c-format
+msgid "Count: %d"
+msgstr "Кількість: %d"
+
+#: src/engine/webserver/www/src/gridbox/selection.js:315
+#, c-format
+msgid "Average: %s"
+msgstr "Середнє: %s"
+
+#: src/engine/webserver/www/src/gridbox/selection.js:316
+#, c-format
+msgid "Sum: %s"
+msgstr "Сума: %s"

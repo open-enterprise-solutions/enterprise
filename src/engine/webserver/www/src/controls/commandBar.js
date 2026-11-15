@@ -7,6 +7,7 @@
 // entries past the bar's end are hidden and offered in the menu of its last button, in their order.
 
 import { EventKind } from './control.js';
+import { _ } from '../localization.js';
 
 /** @typedef {import('../protocol/patch.js').ProtocolNode} ProtocolNode */
 /** @typedef {import('./control.js').Control} Control */
@@ -113,8 +114,8 @@ export class CommandBar {
 		trigger.slot = 'trigger';
 		trigger.setAttribute('size', 's');
 		trigger.setAttribute('appearance', 'plain');
-		trigger.setAttribute('aria-label', 'More');
-		trigger.title = 'More';
+		trigger.setAttribute('aria-label', _('More'));
+		trigger.title = _('More');
 		trigger.textContent = '»';
 		dropdown.append(trigger);
 		dropdown.addEventListener('wa-select', (event) => {

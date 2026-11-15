@@ -42,7 +42,7 @@ tree, forms, the language, queries and reports, and the pitfalls.
 | Registers | **Information** (periodic, with slices) · **Accumulation** (balances and turnovers, trigger-maintained totals) · **Accounting** (chart of accounts, double entry, correspondence, analytics addressed by kind) · **Calculation** (payroll: displacement, base, recalculation) |
 | Charts | Chart of accounts · Chart of calculation types (displacing, base and leading types) |
 | Processing and reports | Data processor · Report with its own composers · external data processors and reports |
-| Configuration-wide | Common modules · common forms, templates and commands · common attributes · session parameters · roles · sections (the navigation panel) · languages · pictures · scheduled jobs |
+| Configuration-wide | Common modules · common forms, templates and commands · common attributes · session parameters · functional options · roles · sections (the navigation panel) · languages · pictures · scheduled jobs |
 
 ---
 
@@ -61,7 +61,7 @@ tree, forms, the language, queries and reports, and the pitfalls.
 - **Scripting language** — two dialects over one compiler (**CES**, C-flavoured, the default; **VES**,
   keyword-fenced), procedures and functions, lambdas with closure capture, `try … except`,
   multi-line strings for query texts, **LINQ** (`from … where … join … group by … orderby … select`)
-  compiled into the bytecode, 94 built-in functions and 7 procedures. Bytecode of 81 opcodes, kept
+  compiled into the bytecode, 106 built-in functions and 8 procedures. Bytecode of 81 opcodes, kept
   in an ahead-of-time cache so a module compiles once per configuration version and engine.
 - **Designer** — metadata tree, form designer (drag a field onto a form and a bound control
   appears), code editor with IntelliSense, a query constructor that edits the query inside the
@@ -81,7 +81,7 @@ tree, forms, the language, queries and reports, and the pitfalls.
   job runs once across a cluster; the platform's own housekeeping (totals folding and verification,
   Firebird sweep and backup) runs on the same manager.
 - **AI access over MCP** — an assistant's port in the designer and in the application client, the tools in
-  the engine (one MCP server per client, on the file base's or the application server's side), 132 tools across the platform: read and
+  the engine (one MCP server per client, on the file base's or the application server's side), 135 tools across the platform: read and
   edit metadata and modules; apply the configuration with a rehearsal; run code on the
   application; ask the data questions and compose reports; drive the debugger; read and write the
   registration journal. Protected by a token, listening on loopback by default; every call is
@@ -105,9 +105,10 @@ tree, forms, the language, queries and reports, and the pitfalls.
   ODBC; SQLite for tests and logging.
 - **Localisation** — the whole interface in English, Russian and Ukrainian; every caption of a
   configuration can be written per language.
-- **Web client — in progress.** `webserver` serves the same forms to a browser: it carries it to a
-  file base or to an application server's base over the client protocol, with TLS. List and
-  document forms draw today, on a desktop and on a phone; the rest of the controls are arriving.
+- **Web client** — `webserver` serves the application to a browser: it carries it to a file base or to
+  an application server's base over the client protocol, with TLS. The page draws what the thin client
+  draws — lists, forms, tables, reports and their settings, questions, print — in the person's language,
+  on a desktop and on a phone. The designer stays a desktop program.
 
 ### Measured
 
@@ -221,7 +222,7 @@ git submodule update --init --recursive
 
 ```
 enterprise/
-├── enterprise.sln            # MSBuild solution (19 projects, Mbed TLS, llhttp, LodePNG and expat among them)
+├── enterprise.sln            # MSBuild solution (22 projects, Mbed TLS, llhttp, LodePNG, expat, Scintilla and Lexilla among them)
 ├── CMakeLists.txt            # the cross-platform build, tests included
 ├── Common.props              # Shared MSBuild properties (paths, platforms)
 ├── ConfigurationDefs.props   # Preprocessor definitions per configuration
@@ -234,7 +235,7 @@ enterprise/
 │                             # organisation only and is empty for everyone else. The build never
 │                             # needs it, so links to docs/private/… will not open for you.
 └── src/
-    ├── 3rdparty/             # Git submodules: wxWidgets 3.3.4, Mbed TLS, Asio, llhttp, expat, LodePNG, NanoSVG, date, cpp-httplib, nlohmann/json
+    ├── 3rdparty/             # Git submodules: wxWidgets 3.3.4, Mbed TLS, Asio, llhttp, expat, LodePNG, NanoSVG, Lexilla, date, cpp-httplib, nlohmann/json; Scintilla in the tree
     └── engine/
         ├── core/             # What the engine and its clients share: values, strings, dates, nodes, the query text, the journal
         ├── backend/          # Core engine DLL

@@ -1,7 +1,9 @@
 // THE LOGIN — as the thin client's start: the login goes first with no name, and only a name refused asks the person —
 // a base with no users lets them in at once. Then the names the base offers (users, asked before the login) and the
-// password; a refusal is said where it was made, and the person tries again with the password typed anew.
+// password; a refusal is said where it was made, and the person tries again with the password typed anew. Its words are
+// said in the browser's language: the base's is not known before the login.
 
+import { _ } from '../localization.js';
 import { Refusal } from '../protocol/connection.js';
 import { hideSplash } from './splash.js';
 
@@ -33,7 +35,7 @@ export async function logIn(root, session, publication) {
 		heading.textContent = publication;
 
 		const user = /** @type {any} */ (document.createElement(users.length > 0 ? 'wa-select' : 'wa-input'));
-		user.label = 'User';
+		user.label = _('User');
 		user.setAttribute('name', 'user');
 		for (const name of users) {
 			const option = /** @type {any} */ (document.createElement('wa-option'));
@@ -45,7 +47,7 @@ export async function logIn(root, session, publication) {
 			user.value = users[0];
 
 		const password = /** @type {any} */ (document.createElement('wa-input'));
-		password.label = 'Password';
+		password.label = _('Password');
 		password.setAttribute('type', 'password');
 		password.setAttribute('password-toggle', '');
 		password.setAttribute('autocomplete', 'current-password');
@@ -58,7 +60,7 @@ export async function logIn(root, session, publication) {
 		const enter = document.createElement('wa-button');
 		enter.setAttribute('type', 'submit');
 		enter.setAttribute('variant', 'brand');
-		enter.textContent = 'Log in';
+		enter.textContent = _('Log in');
 
 		form.append(heading, user, password, refusal, enter);
 		form.addEventListener('submit', async (event) => {

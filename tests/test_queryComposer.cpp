@@ -969,6 +969,36 @@ TEST(QueryComposerGate, RollupTotals_DetailLevelNotLast_Refused)
 	EXPECT_FALSE(ibDbTableProvider::CanRollupTotalsShape(spec));
 }
 
+TEST(QueryComposerGate, RollupTotals_ColumnLevel_Refused)
+{
+	// A LEVEL ACROSS THE PAGE IS TOTALLED UNDER THE ROOT TOO — what each column adds up to over every row — and no
+	// prefix of a ladder groups by a column's key alone: folded on the server, a cross table came back with its bottom
+	// line empty, «Total» over nothing (2026-11-15). Neither the ROLLUP road nor the GROUP BY one takes it; the RAM
+	// fold does (FoldAcross).
+	ibBackendColumnRawDB region = ibBackendColumnRawDB::String(wxT("region"));
+	ibBackendColumnRawDB product = ibBackendColumnRawDB::String(wxT("product"));
+	ibBackendColumnRawDB amt = ibBackendColumnRawDB::Number(wxT("amt"));
+	TestQueryable A(wxT("TableA"), 1); A.AddCol(&region); A.AddCol(&product); A.AddCol(&amt);
+
+	SpecBuf buf;
+	buf.totals.push_back(ibTotalLevel::One(&region, ibDimensionKind::Elements));
+	buf.totals.push_back(ibTotalLevel::One(&product, ibDimensionKind::Elements));
+	buf.totals.back().m_axis = ibTotalsAxis::Columns;
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amt; sum.m_alias = wxT("total");
+	buf.totalAggs = { sum };
+	const ibDataQuerySpec spec = buf.Make(nullptr, &A);
+
+	EXPECT_FALSE(ibDbTableProvider::CanRollupTotalsShape(spec));
+	EXPECT_FALSE(ibDbTableProvider::CanFoldGroupByTotals(spec));
+
+	// …and the same two levels down the page are a ladder, which both roads take.
+	buf.totals.back().m_axis = ibTotalsAxis::Rows;
+	const ibDataQuerySpec ladder = buf.Make(nullptr, &A);
+	EXPECT_TRUE(ibDbTableProvider::CanRollupTotalsShape(ladder));
+	EXPECT_TRUE(ibDbTableProvider::CanFoldGroupByTotals(ladder));
+}
+
 TEST(QueryComposerGate, RollupTotals_HierarchyLevel_Refused)
 {
 	// A HIERARCHY unfold walks the reference's parent chain; no GROUP BY can do that, and folding it

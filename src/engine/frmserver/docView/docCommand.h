@@ -11,6 +11,7 @@
 // and what is the client's it asks of the client (ibClientFrame::DoCommand) — the field under the focus edited, a
 // file of the person's chosen.
 
+#include "core/core.h"      // ibPictureID
 #include "core/fstring.h"   // ibString
 
 #include <cstdint>   // std::int32_t
@@ -33,34 +34,15 @@ enum class ibDocCommand : std::int32_t {
 	                  // desktop's Window → Close All (wxAuiMDIParentFrame::CloseAll); Exit's first half
 };
 
-// THE PICTURE A COMMAND IS SHOWN WITH — one of the client's own stock pictures (the desktop's wxArtProvider ids, which
-// its art provider draws), named: a client draws its platform's, as it maps a key to its platform's. One command,
-// one picture, wherever it is pressed from — the menu and the toolbar alike. A number on the wire, never renumbered.
-enum class ibClientStockPicture : std::int32_t {
-	None   = 0,    // shown by its title alone
-	New    = 1,    // wxART_NEW
-	Open   = 2,    // wxART_FILE_OPEN
-	Save   = 3,    // wxART_FILE_SAVE
-	SaveAs = 4,    // wxART_FILE_SAVE_AS
-	Close  = 5,    // wxART_CLOSE
-	Quit   = 6,    // wxART_QUIT
-	Undo   = 7,    // wxART_UNDO
-	Redo   = 8,    // wxART_REDO
-	Cut    = 9,    // wxART_CUT
-	Copy   = 10,   // wxART_COPY
-	Paste  = 11,   // wxART_PASTE
-	Delete = 12,   // wxART_DELETE
-	Find   = 13,   // wxART_FIND
-	Print  = 14,   // wxART_PRINT
-};
-
 // What a client is told of a command: its name, the key it gives it BY DEFAULT — modifiers Ctrl / Alt / Shift and the
-// key, "Ctrl+Z"; a client maps them to its own platform's (Ctrl to Cmd on a Mac) — and its picture. The key a person
-// actually presses is theirs: the client puts what they chose, kept in their own directory, over this default.
+// key, "Ctrl+Z"; a client maps them to its own platform's (Ctrl to Cmd on a Mac) — and its picture: a core one, by its
+// id (core/picturePredefined.h), the one the desktop's menu draws for the same stock id (deskgui's ibStockArtProvider) —
+// one command, one picture, wherever it is pressed from; 0: shown by its title alone. The key a person actually
+// presses is theirs: the client puts what they chose, kept in their own directory, over this default.
 struct ibDocCommandInfo {
-	ibString             title;
-	ibString             shortcut;
-	ibClientStockPicture picture = ibClientStockPicture::None;
+	ibString    title;
+	ibString    shortcut;
+	ibPictureID picture = 0;
 };
 
 #endif

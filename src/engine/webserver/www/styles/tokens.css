@@ -8,24 +8,37 @@
 
 	--oes-window-bg: #f4f5f7;
 	--oes-panel-bg: #ffffff;
-	--oes-border: #d9d9d9;
+	/* The palette's border tier: a pane's outline, a field's frame, a table's frame and the rule under its header. */
+	--oes-border: #a8bac8;
 	--oes-text: #222222;
 	--oes-muted: #6b7280;
 	--oes-accent: #3b50a0;
 
+	/* A table as the thin client's theme paints one (docs/private/ui-palette.md, the tier table): its values, header and
+	   footer in the theme's alternate text; its header and its rules the powder (the rule round it and under its header
+	   is the border); every second row a step off white. */
 	--oes-table-bg: #ffffff;
-	--oes-table-text: #222222;
-	--oes-table-border: #d9d9d9;
-	--oes-table-header-bg: #f2f3f4;
-	--oes-table-header-text: #222222;
-	--oes-table-row-alt-bg: #f7f8f9;
+	--oes-table-text: #3f5c77;
+	--oes-table-border: #e6eef5;
+	--oes-table-header-bg: #e6eef5;
+	--oes-table-header-text: #3f5c77;
+	--oes-table-row-alt-bg: #f7f7f7;
 	--oes-table-row-hover-bg: #eaecee;
-	--oes-table-row-selected-bg: #e5f2fb;
-	/* The leading bar on the selected row: the fill alone is a shade off the row beside it, and the selected row is
-	   the one the server stands on — it has to be read at a glance. */
-	--oes-table-row-selected-accent: var(--oes-accent);
-	/* The cells taken on a sheet: a tint laid over a cell's own fill, which stays readable under it. */
-	--oes-sheet-cell-selected: rgb(59 80 160 / 0.15);
+	/* The row the current cell stands in — the theme's highlight 15 % over the white (the data view's row hint). */
+	--oes-table-row-selected-bg: #f9eae5;
+	/* The table's scroll bars, the theme's: the track the powder half way to white, the thumb the border most of the way
+	   to it, darker under the mouse, the border itself dragged. */
+	--oes-scroll-track: #f2f6fa;
+	--oes-scroll-thumb: #c2ced8;
+	--oes-scroll-thumb-hover: #b5c4d0;
+	--oes-scroll-thumb-pressed: #a8bac8;
+	/* A sheet's ink and paper, the same in every theme: what a template is made against, as the thin client's
+	   (ibDefaultSpreadsheetTextColour, ibDefaultSpreadsheetBackgroundColour). The cells taken on it: the highlight
+	   lightened to 172 over white (ibGrid's selection, #F4D9D0), as a tint laid over a cell's own fill, which stays
+	   readable under it. */
+	--oes-sheet-bg: #ffffff;
+	--oes-sheet-text: #000000;
+	--oes-sheet-cell-selected: rgb(217 119 87 / 0.28);
 
 	/* The section panel, as the thin client paints it: a light dusty column, the sections all but white on it, the open
 	   one white; its page's links in the forms' ink. Lifted toward white with the thin client's chrome (2026-11-12). */
@@ -43,11 +56,18 @@
 	/* The arrows under the splash, in the picture's blue. */
 	--oes-splash-arrow: #1c9ad6;
 
-	/* The cell the cursor stands on, its row tinted with the selected row's fill — and a row selected whole, stronger. */
-	--oes-table-cell-current-bg: #bcd9f2;
-	--oes-table-row-current-bg: #cfe4f7;
+	/* The cursor, as the theme's selection (ibThemeRenderer::DrawItemSelectionRect): the cell it stands on — or the row,
+	   selected whole — in the highlight, its text the highlight's; the highlight lightened by 30 % while the table is
+	   not the one the keys go to. */
+	--oes-table-cell-current-bg: #d97757;
+	--oes-table-row-current-bg: #d97757;
+	--oes-table-current-text: #ffffff;
+	--oes-table-current-idle-bg: #e49f89;
 	/* The folders a Hierarchical view stands in, the thin client's fill of them. */
 	--oes-table-crumb-bg: #c5dce8;
+
+	/* The text editor's ink (ibFontColorSettings' Default) — on the paper a field has. */
+	--oes-editor-text: #000000;
 
 	/* A field's width when nothing stretches it. */
 	--oes-field-width: 16rem;
@@ -70,7 +90,7 @@
 	/* What stands on a coloured fill - a message's mark, the offline strip. */
 	--oes-on-colour: #ffffff;
 	/* A form's colour named on one side alone - its text or its fill - is paired with the light theme's other side,
-	   whatever the theme: the author chose it against that one (control.js, sheet.js, rows.js). */
+	   whatever the theme: the author chose it against that one (control.js, rows.js). */
 	--oes-paper: #ffffff;
 	--oes-paper-text: #222222;
 	/* The light a command bar is lit by, from the top down - the thin client's: half the light it was lit by, its
@@ -81,6 +101,8 @@
 	   the terracotta of its theme, the caption white. */
 	--oes-default-button-bg: #d97757;
 	--oes-default-button-text: #ffffff;
+	/* A button under the mouse — the powder (its face at rest is the panel's white). */
+	--oes-button-hover-bg: #e6eef5;
 	/* What a raised thing throws: a dialog, a menu, a sheet's editor. */
 	--oes-shadow: rgb(0 0 0 / 0.12);
 	--oes-shadow-strong: rgb(0 0 0 / 0.15);
@@ -106,13 +128,17 @@
 
 		--oes-table-bg: #24272c;
 		--oes-table-text: #e4e6ea;
+		--oes-editor-text: #e4e6ea;
 		--oes-table-border: #3a3f46;
 		--oes-table-header-bg: #2c3036;
 		--oes-table-header-text: #e4e6ea;
 		--oes-table-row-alt-bg: #282b30;
 		--oes-table-row-hover-bg: #30343a;
-		--oes-table-row-selected-bg: #2b4a6b;
-		--oes-sheet-cell-selected: rgb(129 151 232 / 0.25);
+		--oes-table-row-selected-bg: #413636;
+		--oes-scroll-track: #24272c;
+		--oes-scroll-thumb: #4a525c;
+		--oes-scroll-thumb-hover: #5a636e;
+		--oes-scroll-thumb-pressed: #6b7480;
 
 		--oes-sections-bg: #1f2a33;
 		--oes-section-bg: #27333d;
@@ -126,8 +152,10 @@
 
 		--oes-splash-arrow: #3fb3ea;
 
-		--oes-table-cell-current-bg: #2f4d6e;
-		--oes-table-row-current-bg: #29425e;
+		--oes-table-cell-current-bg: #e58a6c;
+		--oes-table-row-current-bg: #e58a6c;
+		--oes-table-current-text: #16181b;
+		--oes-table-current-idle-bg: #9b6a5a;
 		--oes-table-crumb-bg: #2a3d4b;
 
 		--oes-form-text: #c9d6e2;
@@ -138,6 +166,7 @@
 		--oes-bar-shine-bottom: rgb(0 0 0 / 0.2);
 		--oes-default-button-bg: #e58a6c;
 		--oes-default-button-text: #16181b;
+		--oes-button-hover-bg: #30343a;
 		--oes-shadow: rgb(0 0 0 / 0.45);
 		--oes-shadow-strong: rgb(0 0 0 / 0.55);
 		--oes-veil: rgb(20 22 26 / 0.9);

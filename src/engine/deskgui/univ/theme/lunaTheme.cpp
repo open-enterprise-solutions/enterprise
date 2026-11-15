@@ -1323,8 +1323,8 @@ int ibLunaRenderer::GetFrameBorderWidth(int flags) const {
 // EVERY PICTURE HERE IS A PNG IN BASE64, one string each in private/picturePredefined.h: a master four times the size of
 // its drawing, scaled down here to the size asked. Its source is an SVG in tools/pictures/render.js, which draws the PNG
 // and writes the string; the groups are the debugger, the code editor and its autocomplete, the form designer, the
-// metadata tree, the service panes and the output window, the spreadsheet, the list commands and the query constructor,
-// and wx's own stock ids.
+// metadata tree, the service panes and the output window, the spreadsheet, the list commands and the query constructor.
+// wx's own stock ids are the core's pictures (ibStockArtProvider).
 
 // A master's PNG read from its Base64 - none when the text is no PNG.
 static wxImage ImageOfBase64(const wxString& png)
@@ -1338,27 +1338,14 @@ static wxImage ImageOfBase64(const wxString& png)
 	return wxImage(stream, wxBITMAP_TYPE_PNG);
 }
 
-// THE BUNDLE CARRIES THE MASTER AT THE SIZE ASKED AND AT TWICE AND FOUR TIMES IT, so a display scaled to 150 or
-// 200 % is handed a picture drawn for it rather than the small one stretched - never larger than the master,
-// which would only be stretched in its turn.
+// …at the size asked and at twice and four times it, as a stock picture is (ibStockArtProvider::BundleOf).
 static wxBitmapBundle BundleOf(const wxString& png, const wxSize& size)
 {
-	const wxImage master = ImageOfBase64(png);
-	if (!master.IsOk())
-		return wxBitmapBundle();
-
-	wxVector<wxBitmap> bitmaps;
-	for (const int times : { 1, 2, 4 }) {
-		const wxSize at(size.x * times, size.y * times);
-		if (times > 1 && (at.x > master.GetWidth() || at.y > master.GetHeight()))
-			break;
-		bitmaps.push_back(wxBitmap(at == master.GetSize() ? master : master.Scale(at.x, at.y, wxIMAGE_QUALITY_HIGH)));
-	}
-	return wxBitmapBundle::FromBitmaps(bitmaps);
+	return ibStockArtProvider::BundleOf(ImageOfBase64(png), size);
 }
 
-// THE THEME'S PICTURES (the canon's wxWin32ArtProvider): the product's own by their client and id (deskgui/artProvider.h)
-// and wx's stock ids for every client - pushed over wx's own as the theme is set (ibThemeEngine::Set).
+// THE THEME'S PICTURES (the canon's wxWin32ArtProvider): the product's own by their client and id (deskgui/artProvider.h),
+// pushed over wx's own as the theme is set (ibThemeEngine::Set). wx's stock ids are the core's (ibStockArtProvider).
 class ibLunaArtProvider : public wxArtProvider {
 protected:
 
@@ -1374,7 +1361,7 @@ protected:
 			{ wxART_VISUALHOST, wxART_NO_PICTURE, s_null_png },
 
 			// ******* wxART_FRONTEND ******* - moving a row is the stock arrow's act, so it is the stock arrow
-			// (wxART_EDIT and wxART_DELETE are stock ids themselves and are answered by the stock table below)
+			// (wxART_EDIT and wxART_DELETE are stock ids themselves and are answered by ibStockArtProvider)
 			{ wxART_FRONTEND, wxART_ADD, s_add_png },
 			{ wxART_FRONTEND, wxART_UP, s_goUp_png },
 			{ wxART_FRONTEND, wxART_DOWN, s_goDown_png },
@@ -1478,53 +1465,6 @@ protected:
 
 		for (const auto& entry : s_allPictures) {
 			if (entry.client == client && entry.id == id)
-				return BundleOf(entry.png, size.IsFullySpecified() ? size : wxSize(16, 16));
-		}
-
-		// ⭐ WX'S OWN PICTURES, FOR EVERY CLIENT. This provider stands first (pushed over wx's), so a stock id asked
-		// anywhere - a menu, a toolbar, a button, a list, a message window - gets this drawing instead of Tango's
-		// or an XPM of wx's, and not one call site changes.
-		static const struct { wxArtID id; const wxString& png; } s_stockPictures[] =
-		{
-			{ wxART_DELETE, s_delete_png },
-			{ wxART_NEW, s_new_png },
-			{ wxART_EDIT, s_edit_png },
-			{ wxART_GO_UP, s_goUp_png },
-			{ wxART_GO_DOWN, s_goDown_png },
-			{ wxART_GO_BACK, s_goBack_png },
-			{ wxART_GO_FORWARD, s_goForward_png },
-			{ wxART_GO_DIR_UP, s_goDirUp_png },
-			{ wxART_COPY, s_copy_png },
-			{ wxART_CUT, s_cut_png },
-			{ wxART_PASTE, s_paste_png },
-			{ wxART_UNDO, s_undo_png },
-			{ wxART_REDO, s_redo_png },
-			{ wxART_FIND, s_find_png },
-			{ wxART_PLUS, s_plus_png },
-			{ wxART_MINUS, s_minus_png },
-			{ wxART_FILE_OPEN, s_fileOpen_png },
-			{ wxART_FILE_SAVE, s_fileSave_png },
-			{ wxART_FILE_SAVE_AS, s_fileSaveAs_png },
-			{ wxART_NORMAL_FILE, s_normalFile_png },
-			{ wxART_FOLDER, s_folder_png },
-			{ wxART_LIST_VIEW, s_listView_png },
-			{ wxART_REPORT_VIEW, s_reportView_png },
-			{ wxART_FULL_SCREEN, s_fullScreen_png },
-			{ wxART_HELP_BOOK, s_helpBook_png },
-			{ wxART_HELP_SETTINGS, s_helpSettings_png },
-			{ wxART_TICK_MARK, s_tickMark_png },
-			{ wxART_STOP, s_stop_png },
-			{ wxART_QUIT, s_quit_png },
-			{ wxART_MISSING_IMAGE, s_missingImage_png },
-			{ wxART_WARNING, s_warning_png },
-			{ wxART_ERROR, s_error_png },
-			{ wxART_INFORMATION, s_information_png },
-			{ wxART_QUESTION, s_question_png },
-			{ wxART_TIP, s_tip_png }
-		};
-
-		for (const auto& entry : s_stockPictures) {
-			if (entry.id == id)
 				return BundleOf(entry.png, size.IsFullySpecified() ? size : wxSize(16, 16));
 		}
 

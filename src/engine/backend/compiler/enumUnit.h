@@ -288,8 +288,14 @@ public:
 	//
 	// emptyEnum is the member number that means "none" — the same one the enum column binds when the
 	// cell carries no value, so the packed form and the stored column agree.
+	//
+	// ⭐ THE MEMBER IS PACKED AND READ BY ITSELF (2026-11-15): the enumeration holding one hands it the node, and a reader
+	// takes the member out the usual way (GetEnumVariantValue, ConvertToEnumType). Made first by the door that makes
+	// members, which refuses a number none of them has.
 	virtual bool DoSerialize(class ibDataNode& node) const override {
-		node.SetValue(kValueFieldData, m_value != nullptr ? (std::int32_t)m_value->GetEnumValue() : (std::int32_t)emptyEnum);
+		if (m_value != nullptr)
+			return m_value->Serialize(node);
+		node.SetValue(kValueFieldData, (std::int32_t)emptyEnum);
 		return true;
 	}
 
@@ -300,7 +306,7 @@ public:
 			return true;
 		}
 		InitializeEnumeration(static_cast<valT>(member));
-		return true;
+		return m_value->Deserialize(node);
 	}
 
 	//create enumeration — the type's members, once (ibCtorEnumType::CreateObject)

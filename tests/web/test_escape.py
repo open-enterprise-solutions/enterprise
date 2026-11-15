@@ -99,7 +99,7 @@ class Escape(PageTest):
         page = self.start({'tabs': [tab()]})
         self.row('Item 1').wait_for()
         page.locator('.menu wa-button', has_text='File').click()
-        item = page.locator('wa-dropdown-item', has_text='Save')
+        item = self.menu_entry('File', 'Save')
         item.wait_for()
         page.keyboard.press('Escape')
         item.wait_for(state='hidden')

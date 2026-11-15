@@ -3,6 +3,8 @@
 // anew when they choose another (Tools → Theme...). The page is painted by data-theme on <html> (styles/tokens.css) and
 // Web Awesome's own components by its class, wa-dark or wa-light.
 
+import { _, labelText } from '../localization.js';
+
 /** @typedef {import('../protocol/session.js').Session} Session */
 /** @typedef {import('../protocol/patch.js').ProtocolNode} ProtocolNode */
 
@@ -14,10 +16,11 @@ const save = 4;
 // ibStyle::ibTheme.
 export const Theme = Object.freeze({ System: 0, Light: 1, Dark: 2 });
 
-const choices = [
-	[Theme.System, 'As the system is set'],
-	[Theme.Light, 'Light'],
-	[Theme.Dark, 'Dark'],
+// Said when drawn, in the person's language.
+const choices = () => [
+	[Theme.System, _('As the system is set')],
+	[Theme.Light, _('Light')],
+	[Theme.Dark, _('Dark')],
 ];
 
 const systemDark = matchMedia('(prefers-color-scheme: dark)');
@@ -74,11 +77,11 @@ export async function showTheme(session) {
 	const answer = await session.call('schema', { Schema: schema });
 	const current = Number(answer.Theme ?? Theme.System);
 	const dialog = /** @type {any} */ (document.createElement('wa-dialog'));
-	dialog.label = 'Theme';
+	dialog.label = _('Theme');
 	dialog.className = 'theme';
 	const list = document.createElement('div');
 	list.className = 'themes';
-	for (const [value, caption] of choices) {
+	for (const [value, caption] of choices()) {
 		const label = document.createElement('label');
 		const radio = document.createElement('input');
 		radio.type = 'radio';
@@ -94,11 +97,11 @@ export async function showTheme(session) {
 	ok.slot = 'footer';
 	ok.setAttribute('size', 's');
 	ok.setAttribute('variant', 'brand');
-	ok.textContent = 'OK';
+	ok.textContent = labelText('&OK');
 	const cancel = document.createElement('wa-button');
 	cancel.slot = 'footer';
 	cancel.setAttribute('size', 's');
-	cancel.textContent = 'Cancel';
+	cancel.textContent = _('Cancel');
 	dialog.append(ok, cancel);
 
 	// OK keeps the choice first and closes after: a refusal is then the menu's to show, and a second press while the
@@ -117,7 +120,7 @@ export async function showTheme(session) {
 					await session.call('schema', { Schema: schema, Command: save, Args: { Theme: picked } });
 				}
 				catch (error) {
-					refused = error ?? new Error('The theme could not be kept');
+					refused = error ?? new Error(_('The theme could not be kept'));
 				}
 				ok.removeAttribute('loading');
 			}

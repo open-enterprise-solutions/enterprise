@@ -943,6 +943,7 @@ TEST(AnyKinds, TypedParameterOfAKindCompiles) {
 #include "backend/system/value/valueArray.h"
 #include "backend/system/value/valueMap.h"
 #include "backend/system/value/valuePoint.h"
+#include "backend/system/value/valueSpreadsheet.h"   // an enumeration's member, packed and read back
 #include "core/serialize/dataBuilder.h"
 #include "backend/backend_exception.h"
 
@@ -989,6 +990,36 @@ TEST(ValueSerialize, ExactNumbersSurvive) {
 	const ibValue original(ibNumber(wxT("12345678901234.1234567891")));
 	const ibValue restored = RoundTrip(original);
 	EXPECT_EQ(wxT("12345678901234.1234567891"), restored.GetString());
+}
+
+// ⭐ AN ENUMERATION'S MEMBER COMES BACK HELD BY ITS FACTORY (2026-11-15). A value is made by its class, and a member's
+// class is its enumeration — the factory of its members — which hands the node to the member it makes; the member is
+// asked the factory's way. Packed again, it is the same number: what a factory writes is its member's.
+TEST(ValueSerialize, AnEnumerationMemberComesBackHeldByItsFactory) {
+	const ibValue member = ibValue::CreateEnumObject<ibValueEnumSpreadsheetHorizontalAlignment>(ibAlignmentHorz_Center);
+	ibDataNode packed(member.GetClassType(), 0);
+	ASSERT_TRUE(member.Serialize(packed));
+
+	const ibValue restored = ibValue::FromNode(packed);
+	EXPECT_EQ(member.GetClassType(), restored.GetClassType());
+	EXPECT_EQ(ibAlignmentHorz_Center, restored.ConvertToEnumType<ibSpreadsheetAlignmentHorz>());
+	ibValueEnumerationWrapper* factory = nullptr;
+	ASSERT_TRUE(restored.ConvertToValue(factory));
+	const ibValue held(factory->GetEnumVariantValue());
+	EXPECT_EQ(ibAlignmentHorz_Center, held.ConvertToEnumValue<ibSpreadsheetAlignmentHorz>());
+
+	ibDataNode again(restored.GetClassType(), 0);
+	ASSERT_TRUE(restored.Serialize(again));
+	EXPECT_EQ(packed.GetValue<std::int32_t>(kValueFieldData), again.GetValue<std::int32_t>(kValueFieldData));
+}
+
+// …and one holding no member comes back holding none — the number that means "no member", not a member of nothing.
+TEST(ValueSerialize, AnEnumerationWithNoMemberComesBackWithNone) {
+	const ibValue none = ibValue::CreateObject<ibValueEnumSpreadsheetHorizontalAlignment>();
+	const ibValue restored = RoundTrip(none);
+	ibValueEnumerationWrapper* factory = nullptr;
+	ASSERT_TRUE(restored.ConvertToValue(factory));
+	EXPECT_EQ(nullptr, factory->GetEnumVariantValue());
 }
 
 TEST(ValueSerialize, ArraysNestAndSurvive) {
