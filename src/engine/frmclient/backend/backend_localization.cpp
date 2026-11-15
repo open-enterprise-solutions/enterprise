@@ -6,6 +6,7 @@ static const ibString ms_strUserLanguage = ibT("en");
 // ⚠ THE CLIENT'S — one person's, the session's language as the server says it: the client is one session's window,
 // where the server's translate state is each session's own (ibSession::GetTranslateState).
 static ibString s_userLanguage;
+static ibString s_defaultLanguage;
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -19,6 +20,18 @@ const ibString& ibBackendLocalization::GetUserLanguage()
 	if (!s_userLanguage.IsEmpty())
 		return s_userLanguage;
 	return ms_strUserLanguage;
+}
+
+// ⚠ NOT "en" WHEN NONE IS SAID, unlike the user's: an empty code sends a reading straight to the first written,
+// which is what it did before the server said a configuration's language at all.
+void ibBackendLocalization::SetDefaultLanguage(const ibString& strDefaultLanguage)
+{
+	s_defaultLanguage = strDefaultLanguage;
+}
+
+const ibString& ibBackendLocalization::GetDefaultLanguage()
+{
+	return s_defaultLanguage;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

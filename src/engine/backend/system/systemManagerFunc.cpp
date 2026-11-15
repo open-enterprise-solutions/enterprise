@@ -389,7 +389,8 @@ ibString ibValueSystemFunction::TStr(const ibValue& cSource, const ibValue& cLan
 {
 	const ibString& language = cLanguage.GetString();
 	return ibLocalization::GetTranslateGetRawLocText(
-		!language.IsEmpty() ? language : ibBackendLocalization::GetUserLanguage(), cSource.GetString());
+		!language.IsEmpty() ? language : ibBackendLocalization::GetUserLanguage(),
+		ibBackendLocalization::GetDefaultLanguage(), cSource.GetString());
 }
 
 //--- Date and time:

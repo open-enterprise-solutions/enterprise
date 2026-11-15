@@ -118,8 +118,8 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
   nothing there raises, saying what that level offers, and a table bound so gets the columns of what it
   shows. A form attribute's name is now matched without regard to case, as a module meets it.
 - **`Tstr(text)` without a language reads the user's language.** It read the first language
-  written in the text, so every user saw the same one. A language the text does not carry still
-  falls back to the first written; a named language is read as before.
+  written in the text, so every user saw the same one. A language the text does not carry reads in
+  the configuration's own (see Fixes); a named language is read as before.
 - **XML: `XMLReader`, `XMLWriter`, `XMLNamespaceContext`, `XMLNodeType`.** A script reads a document
   node by node and writes one, to a file or to a string, in UTF-8, UTF-16, windows-1251 or cp866.
   The parser is expat, built into the engine; an external entity is refused, not read. A file the
@@ -369,6 +369,10 @@ Since [v2.0.0-preview.1](v2.0.0-preview.1.md).
 
 ## Fixes
 
+- **A caption with no text in your language is shown in the configuration's own language**, its *Default
+  language*, and only when it has none there either in the language written first. It was always the one written
+  first: with English as the configuration's language, a caption typed `ru = 'Tovary'; en = 'Goods';` showed a
+  Ukrainian user Russian. The same for `Tstr`, on the server and in the thin client (#471).
 - **A tab shows `*` as soon as an assistant changes what it holds**, and drops it when the assistant saves. The
   mark came only with the next thing you did in the designer, so a saved external report could still show `*`.
 - **A sequence with no dimensions moves its border.** Posting a document registered in it was refused: "an upsert

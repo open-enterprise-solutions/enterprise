@@ -543,10 +543,15 @@ ibString ibSpreadsheetObject::ComputeStringValueFromParameters(const ibString& s
 {
 	const ibString& strLangCode = strAskedLangCode.IsEmpty() ? m_docLangCode : strAskedLangCode;
 
+	// ⚠ NO CONFIGURATION'S LANGUAGE HERE. A document knows its own language (LanguageCode) and the one it is
+	// asked in, not its configuration's, so a text it lacks in that language still reads in the first written —
+	// the rule every other reading kept until the configuration's own came between the two (#471).
+	const ibString strDefaultLangCode;
+
 	if (type == ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter) {
 		ibVariant cVal;//scratch for one call — see the template below
 		if (!strValue.IsEmpty() && GetParameter(strValue, cVal))
-			return ibLocalization::GetTranslateGetRawLocText(strLangCode, cVal.GetString());
+			return ibLocalization::GetTranslateGetRawLocText(strLangCode, strDefaultLangCode, cVal.GetString());
 		return ibString();
 	}
 
@@ -554,7 +559,7 @@ ibString ibSpreadsheetObject::ComputeStringValueFromParameters(const ibString& s
 
 		if (!strValue.IsEmpty()) {
 
-			ibString strTemplateValue = ibLocalization::GetTranslateGetRawLocText(strLangCode, strValue);
+			ibString strTemplateValue = ibLocalization::GetTranslateGetRawLocText(strLangCode, strDefaultLangCode, strValue);
 
 			size_t start_pos = 0, end_pos = 0;
 
@@ -579,7 +584,7 @@ ibString ibSpreadsheetObject::ComputeStringValueFromParameters(const ibString& s
 						// one is cheap; the static was not a win.
 						ibVariant cVal;
 						const ibString replacement = GetParameter(token, cVal)
-							? ibLocalization::GetTranslateGetRawLocText(strLangCode, cVal.GetString())
+							? ibLocalization::GetTranslateGetRawLocText(strLangCode, strDefaultLangCode, cVal.GetString())
 							: ibString();
 						strTemplateValue.replace(start_pos, end_pos - start_pos + 1, replacement);
 
@@ -612,7 +617,7 @@ ibString ibSpreadsheetObject::ComputeStringValueFromParameters(const ibString& s
 		return ibString();
 	}
 
-	return ibLocalization::GetTranslateGetRawLocText(strLangCode, strValue);
+	return ibLocalization::GetTranslateGetRawLocText(strLangCode, strDefaultLangCode, strValue);
 }
 
 #pragma endregion 

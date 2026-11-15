@@ -2006,6 +2006,7 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 	// The language the session reads text in — drawn on its worker, so its own: a caption sent whole (an inspector's
 	// Synonym) is read by the client in it, as the desktop's grid read it in the configuration's.
 	state.SetValue(ibProtocol::ibFrame::Language, ibBackendLocalization::GetUserLanguage());
+	state.SetValue(ibProtocol::ibFrame::DefaultLanguage, ibBackendLocalization::GetDefaultLanguage());
 	// The active tab by its id, as every tab is named on the wire; 0 — none.
 	const ibClientChildFrame* const active = frame->Tab(frame->ActiveTab());
 	state.SetValue(ibProtocol::ibFrame::ActiveTab, active != nullptr ? active->GetId() : 0);

@@ -32,7 +32,8 @@ namespace {
 // answers with the text; this helper reads a text written in every language the
 // one way the platform reads it, for the tests about that form itself.
 ibString Translated(const ibString& raw) {
-	return ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), raw);
+	return ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(),
+		ibBackendLocalization::GetDefaultLanguage(), raw);
 }
 
 std::shared_ptr<ibSpreadsheetObject> MakeDocument() {
@@ -295,9 +296,9 @@ TEST(SpreadsheetDocument, FillTypeParameter_KeepsAnApostrophe)
 TEST(SpreadsheetDocument, LocalisedText_WithoutTheLastSemicolon)
 {
 	EXPECT_TRUE(ibLocalization::IsLocalizationString(wxT("en = 'June'; ru = 'Iyun'")));
-	EXPECT_EQ(wxT("June"), ibLocalization::GetTranslateGetRawLocText(wxT("en"), wxT("en = 'June'; ru = 'Iyun'")));
-	EXPECT_EQ(wxT("Iyun"), ibLocalization::GetTranslateGetRawLocText(wxT("ru"), wxT("en = 'June'; ru = 'Iyun'")));   // the last one is found
-	EXPECT_EQ(wxT("June"), ibLocalization::GetTranslateGetRawLocText(wxT("en"), wxT("ru = 'Iyun'; en = 'June'")));   // …whichever it is
+	EXPECT_EQ(wxT("June"), ibLocalization::GetTranslateGetRawLocText(wxT("en"), ibString(), wxT("en = 'June'; ru = 'Iyun'")));
+	EXPECT_EQ(wxT("Iyun"), ibLocalization::GetTranslateGetRawLocText(wxT("ru"), ibString(), wxT("en = 'June'; ru = 'Iyun'")));   // the last one is found
+	EXPECT_EQ(wxT("June"), ibLocalization::GetTranslateGetRawLocText(wxT("en"), ibString(), wxT("ru = 'Iyun'; en = 'June'")));   // …whichever it is
 	EXPECT_FALSE(ibLocalization::IsLocalizationString(wxT("June")));
 }
 

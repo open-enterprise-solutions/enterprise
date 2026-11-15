@@ -36,7 +36,8 @@ ibDataNode ibStoreValue(const ibValue& value)
 // A VARIANT'S CAPTION, in the CONFIGURATION's language — see the note beside the declaration.
 ibString ibVariantCaption(const ibVariantDescription& variant)
 {
-	const ibString caption = ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), variant.m_synonym);
+	const ibString caption = ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(),
+		ibBackendLocalization::GetDefaultLanguage(), variant.m_synonym);
 	return caption.IsEmpty() ? variant.m_name : caption;
 }
 

@@ -18,7 +18,8 @@ ibValueCompositionField::ibValueCompositionField(const ibString& path, const ibS
 
 ibString ibValueCompositionField::GetString() const {
 	// The presentation as the reader reads it, else the technical path — the engine's.
-	return m_presentation.IsEmpty() ? m_path : ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), m_presentation);
+	return m_presentation.IsEmpty() ? m_path : ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(),
+		ibBackendLocalization::GetDefaultLanguage(), m_presentation);
 }
 
 bool ibValueCompositionField::CompareValueEQ(const ibVariant& cParam) const {

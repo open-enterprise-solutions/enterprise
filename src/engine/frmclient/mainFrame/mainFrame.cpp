@@ -1084,6 +1084,8 @@ void ibFrontendMainFrame::Draw(const ibProtocolNode& answer)
 	// whole (a property's Synonym) reads in it, as the desktop's read in its configuration's.
 	if (whole || patch.Has(ibProtocol::ibFrame::Language))
 		ibBackendLocalization::SetUserLanguage(frame.GetString(ibProtocol::ibFrame::Language));
+	if (whole || patch.Has(ibProtocol::ibFrame::DefaultLanguage))
+		ibBackendLocalization::SetDefaultLanguage(frame.GetString(ibProtocol::ibFrame::DefaultLanguage));
 
 	if (whole || patch.Has(ibProtocol::ibFrame::Title)) {
 		const wxString title = frame.GetString(ibProtocol::ibFrame::Title);

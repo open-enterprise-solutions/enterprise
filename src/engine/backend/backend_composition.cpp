@@ -154,7 +154,8 @@ bool ibBackendTemplateDescriptionMemory::ReadNode(const ibDataValue& value, ibTe
 // and a synonym written plainly (no languages in it at all) is its own caption.
 ibString ibVariantCaption(const ibVariantDescription& variant)
 {
-	const ibString caption = ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), variant.m_synonym);
+	const ibString caption = ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(),
+		ibBackendLocalization::GetDefaultLanguage(), variant.m_synonym);
 	return caption.IsEmpty() ? variant.m_name : caption;
 }
 

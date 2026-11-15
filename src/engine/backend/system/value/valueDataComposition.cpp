@@ -786,7 +786,8 @@ bool ibValueDataComposition::Compose(ibSpreadsheetObject* target)
 	if (shows(ibOutputParameter::ShowTitle, true)) {
 		// A title a person wrote, read in the reader's language — else what the report is called.
 		const ibString title = ibStoredValue(other.ValueInForce(ibOutputParameter::Title), GetSourceMetaData()).GetString();
-		driver.SetTitle(title.IsEmpty() ? GetSourceCaption() : ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), title));
+		driver.SetTitle(title.IsEmpty() ? GetSourceCaption() : ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(),
+			ibBackendLocalization::GetDefaultLanguage(), title));
 	}
 	// …THE VALUES THE READER FILLED IN, as the query was given them — only the ones offered to the reader: a
 	// value the author settles is not a condition anybody chose.
@@ -814,7 +815,8 @@ bool ibValueDataComposition::Compose(ibSpreadsheetObject* target)
 		// consulted by nothing at all (audit, 2026-08-24). A heading is exactly where somebody's own
 		// phrasing of a condition belongs.
 		if (!node.m_presentation.IsEmpty()) {
-			driver.AddHeaderLine(ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), node.m_presentation));
+			driver.AddHeaderLine(ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(),
+				ibBackendLocalization::GetDefaultLanguage(), node.m_presentation));
 			continue;
 		}
 		// …and generated otherwise. A SIDE READS AS ITS OWN TEXT — a field as its presentation, a
@@ -824,7 +826,8 @@ bool ibValueDataComposition::Compose(ibSpreadsheetObject* target)
 		// read in the reader's, as the title above is — a heading line is text, not a cell PutArea reads.
 		auto side = [this](const ibFilterOperandDescription& operand) {
 			return operand.IsField()
-				? (operand.m_presentation.IsEmpty() ? operand.m_path : ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), operand.m_presentation))
+				? (operand.m_presentation.IsEmpty() ? operand.m_path : ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(),
+					ibBackendLocalization::GetDefaultLanguage(), operand.m_presentation))
 				: ibStoredValue(operand.m_value, GetSourceMetaData()).GetString();
 		};
 		driver.AddHeaderLine(side(node.m_left) + ibT(" ")

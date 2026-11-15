@@ -28,6 +28,11 @@ const ibString& ibBackendLocalization::GetUserLanguage()
 	return ms_strUserLanguage;
 }
 
+const ibString& ibBackendLocalization::GetDefaultLanguage()
+{
+	return ibSession::GetTranslateState()->m_defLanguageCode;
+}
+
 ////////////////////////////////////////////////////////////////////////
 
 void ibTranslateString::SetRawText(const ibString& strRawTranslate)

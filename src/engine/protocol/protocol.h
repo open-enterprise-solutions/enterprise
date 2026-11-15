@@ -238,6 +238,9 @@ namespace ibProtocol {
 		// reading them.
 		inline constexpr const char* Properties = "Properties";
 		inline constexpr const char* Language   = "Language";
+		// …and the configuration's own (its DefaultLanguage): a text with no cell in Language reads in it before the
+		// first one written. Absent from a server that does not send it — the client then reads as it did.
+		inline constexpr const char* DefaultLanguage = "DefaultLanguage";
 		inline constexpr const char* Tab        = "Tab";        // activate, close: the tab's id
 		inline constexpr const char* Command    = "Command";    // command: ibCommand
 		inline constexpr const char* Name       = "Name";       // …SaveAs: the file's name
